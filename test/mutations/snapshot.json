@@ -4805,15 +4805,28 @@
    }
   },
   "v92modulusencoder": {
-   "key": "4ea0f77652f9ebb2bcc08eab2a06925b9d87a7a654cd9568cf755098440c95bf",
-   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "aafa08c0e7babdd978c57ee6b215a12d8308362435e2ba7b810f1f1f179691d6",
+   "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "one of the thirteen is set to one, not zero": "caught",
+    "reset leaves the selector alone": "caught",
+    "the bit count is read from the wrong parameter word": "caught",
     "the cleared range runs one word too far": "caught",
-    "the cleared range starts one word lower": "caught",
+    "the cleared range starts below +0x18": "caught",
     "the cleared range stops one word short": "caught",
-    "the constructor also touches the six words below the range": "caught",
-    "the range is cleared with a memset over the whole object": "caught"
+    "the constructor also touches the words below the range": "caught",
+    "the exact product is shifted one place too few": "caught",
+    "the fitted-exactly arm is never taken": "caught",
+    "the high limb takes one bit too many": "caught",
+    "the last modulus is copied from one word past the block": "caught",
+    "the loop stops on a negative product rather than a positive one": "caught",
+    "the low limb is not masked to 63 bits": "caught",
+    "the low limb is shifted back by the loop count, not one more": "caught",
+    "the normalisation loop is allowed one shift more": "caught",
+    "the product is split seven and five, not six and six": "caught",
+    "the range is cleared with a memset over the whole object": "caught",
+    "the twelve moduli are copied one word high": "caught",
+    "the wrapping product misses its last factor": "caught"
    }
   },
   "v92p2info": {

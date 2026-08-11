@@ -50,6 +50,11 @@ void our_v92me(void *self) asm("_ZN17V92ModulusEncoderC1Ev");
 void our_v92me2(void *self) asm("_ZN17V92ModulusEncoderC2Ev");
 void ref_v92me(void *self) asm("ref__ZN17V92ModulusEncoderC1Ev");
 void ref_v92me2(void *self) asm("ref__ZN17V92ModulusEncoderC2Ev");
+
+void our_v92me_reset(void *self, void *params)
+	asm("_ZN17V92ModulusEncoder5resetEP16V92MappingParams");
+void ref_v92me_reset(void *self, void *params)
+	asm("ref__ZN17V92ModulusEncoder5resetEP16V92MappingParams");
 }
 
 #define MOD_SIZE	0x1c
@@ -183,6 +188,141 @@ run_v92me(void)
 	return diff_end();
 }
 
+/*
+ * V92ModulusEncoder::reset -- the parameter block in, the product out.
+ *
+ * WHAT THE SWEEP HAS TO REACH.  `reset` multiplies twelve moduli together in
+ * 64 bits and then decides, from whether that product ran into the sign bit,
+ * how to split it across two 63-bit limbs.  So the interesting axis is not
+ * the individual moduli but the SIZE of their product, and the sets below
+ * walk it from 1 (no product at all) through a product that fits in 63 bits
+ * with room to spare, one that fits exactly, one that overflows by a little
+ * and several that overflow by a lot.  A set of random 32-bit words reaches
+ * only the last of those, which is why the table is written out rather than
+ * generated.
+ *
+ * A ZERO MODULUS IS INCLUDED and is safe: `reset` only multiplies.  It is
+ * `progress` that divides, and its fixture keeps every modulus at 1 or more.
+ *
+ * THE PARAMETER BLOCK IS SEEDED NON-ZERO EVERYWHERE, and the thirteen words
+ * `reset` is supposed to read are then written over that seed, so a copy
+ * from the wrong offset lands on a seed byte and shows up as a difference
+ * rather than as a zero that happens to match.  It is also compared before
+ * and after, because `reset` must not write to it.
+ */
+
+#define PBLOCK_SIZE	0xb4
+
+static unsigned char pblock[PBLOCK_SIZE] __attribute__((aligned(8)));
+static unsigned char pblock_before[PBLOCK_SIZE];
+
+static const unsigned int modsets[][12] = {
+	/* product 1: the loop gives up at once and both limbs come out 0. */
+	{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+	/* 2^12, and 4^12: comfortably inside 63 bits. */
+	{ 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 },
+	{ 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4 },
+	/* 2^60 and 2^62: inside 63 bits, but only just. */
+	{ 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32 },
+	{ 64, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 64 },
+	/* 2^63 and 2^64 exactly: the first bit into and past the sign. */
+	{ 64, 64, 32, 32, 32, 32, 32, 32, 32, 32, 32, 64 },
+	{ 64, 64, 64, 32, 32, 32, 32, 32, 32, 32, 32, 64 },
+	/* Uneven, and reaching over 63 bits by a factor of a few. */
+	{ 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29 },
+	{ 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60 },
+	{ 12, 12, 14, 14, 16, 16, 18, 18, 20, 20, 22, 22 },
+	/* Lopsided: all of the magnitude in one half of the twelve. */
+	{ 1, 1, 1, 1, 1, 1, 1000, 1000, 1000, 1000, 1000, 1000 },
+	{ 1000, 1000, 1000, 1000, 1000, 1000, 1, 1, 1, 1, 1, 1 },
+	/* A zero, and a lone huge word. */
+	{ 6, 6, 6, 0, 6, 6, 6, 6, 6, 6, 6, 6 },
+	{ 0xffffffffu, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 },
+	/* Wide and pseudorandom: the product wraps several times over. */
+	{ 0x9e3779b9u, 0x85ebca6bu, 0xc2b2ae35u, 0x27d4eb2fu, 0x165667b1u,
+	  0x1b873593u, 0xcc9e2d51u, 0x2545f491u, 0x61c88647u, 0x3b9aca07u,
+	  0x7feb352du, 0x846ca68bu },
+};
+
+#define NMODSET	((int)(sizeof modsets / sizeof modsets[0]))
+
+/* The bit counts swept alongside them; reset only copies this one. */
+static const unsigned int nbits_set[] = { 0, 1, 62, 63, 64, 65, 80, 0xffffffffu };
+
+#define NNBITS	((int)(sizeof nbits_set / sizeof nbits_set[0]))
+
+static void
+put32(unsigned char *p, int off, unsigned int v)
+{
+	memcpy(p + off, &v, sizeof v);
+}
+
+/* Seed every byte, then lay the thirteen words reset reads over the top. */
+static void
+fill_params(int trial)
+{
+	unsigned lfsr = 0x1234u + 0x51edu * (unsigned)trial;
+	int i;
+
+	for (i = 0; i < PBLOCK_SIZE; i++) {
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		pblock[i] = (unsigned char)((lfsr >> 3) | 0x41u);
+	}
+
+	put32(pblock, 0x00, nbits_set[trial % NNBITS]);
+	for (i = 0; i < 12; i++)
+		put32(pblock, 0x1c + 4 * i, modsets[trial % NMODSET][i]);
+
+	memcpy(pblock_before, pblock, PBLOCK_SIZE);
+}
+
+static int
+run_v92me_reset(void)
+{
+	unsigned char first[V92ME_SIZE];
+	int differed = 0;
+	int trial;
+
+	diff_begin("V92ModulusEncoder::reset");
+
+	/* NMODSET and NNBITS are coprime, so this walks every pairing. */
+	for (trial = 0; trial < NMODSET * NNBITS; trial++) {
+		seed(trial + 64);
+		fill_params(trial);
+		harness_alloc_reset();
+
+		our_v92me_reset(ours, pblock);
+		ref_v92me_reset(theirs, pblock);
+
+		diff_eq_obj_(__FILE__, __LINE__, "after reset",
+			     "V92ModulusEncoder", ours, theirs, V92ME_SIZE,
+			     (long)trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    memcmp(ours + V92ME_SIZE, theirs + V92ME_SIZE,
+				   V92ME_SLOT - V92ME_SIZE) == 0, 1, trial);
+		diff_eq_int("the bytes past it keep their seed (trial %ld)",
+			    memcmp(ours + V92ME_SIZE, before + V92ME_SIZE,
+				   V92ME_SLOT - V92ME_SIZE) == 0, 1, trial);
+		diff_eq_int("reset wrote something (trial %ld)",
+			    memcmp(ours, before, V92ME_SIZE) != 0, 1, trial);
+		diff_eq_int("the parameter block is untouched (trial %ld)",
+			    memcmp(pblock, pblock_before, PBLOCK_SIZE) == 0,
+			    1, trial);
+		diff_eq_int("it allocated nothing (trial %ld)",
+			    harness_alloc.allocs, 0, trial);
+
+		if (trial == 0)
+			memcpy(first, ours, V92ME_SIZE);
+		else if (memcmp(first, ours, V92ME_SIZE) != 0)
+			differed = 1;
+	}
+
+	/* Not the same answer every time, which a stub would also give. */
+	diff_eq_int("reset does not produce one fixed object", differed, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -193,6 +333,7 @@ main(void)
 	bad |= run_modulus("ModulusDecoder::ModulusDecoder", our_mdec,
 			   our_mdec2, ref_mdec, ref_mdec2);
 	bad |= run_v92me();
+	bad |= run_v92me_reset();
 
 	return bad;
 }

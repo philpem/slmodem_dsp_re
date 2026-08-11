@@ -43512,3 +43512,81 @@ So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
 which is a note for whoever repairs it, not a reason not to.
 
 ======================================================================
+
+### 1376. THE V.92 MODULUS ENCODER'S FIRST SIX WORDS ARE THREE `long long`, AND ITS SELECTOR IS SIGNED
+
+The object map in `include/dsplib/V92ModulusEncoder.h` was written from the
+constructor alone, which touches +0x18..+0x48 and says nothing about the six
+words below or the two above.  `reset` (blob 0x550f0, 0x8a5) and `progress`
+(0x559a0, 0x11f9) settle all eight, and two of the answers are FORCED by the
+encoding rather than chosen:
+
+**+0x00, +0x08 and +0x10 are three 64-bit members, not six 32-bit ones.**
+`reset` writes each as a pair with a carry between the halves, and `progress`
+loads +0x08 and +0x10 as 64-bit values and shifts and divides them
+ARITHMETICALLY -- `sar`, `shrd`, and the add-the-sign-bit-then-`>>1` that GCC
+emits for a signed division by 2 -- so they are `long long` and not `unsigned
+long long`.  What they hold is the product of the twelve moduli: +0x00
+truncated to 64 bits, +0x08 and +0x10 the same product carried exactly as two
+limbs in base 2^63.  +0x10 is masked with `0x7fffffffffffffff` at both of
+`reset`'s exits and +0x08 takes exactly the bits above it (`u >> (62 - n)`
+against `(u << (n + 1)) & MASK`), which is what makes it a base and not two
+unrelated words.
+
+**+0x50 is SIGNED and +0x48 is UNSIGNED.**  `progress` opens
+`cmp $1 / je / jle / cmp $2 / je`, and GCC emits `jle`/`jg` for a switch over
+a signed index and `jbe`/`ja` over an unsigned one; case 0 then tests the bit
+count with `cmp $0x3f / jbe`, which is the other one.  Neither difference is
+observable by any test -- every value either field takes in service is small
+and positive -- so this is exactly the class of defect finding 613 is about,
+found by reading what the compiler was not free to choose.  The header was
+`unsigned int` for both and is now `int` for +0x50.
+
+**+0x18..+0x44 are twelve unsigned moduli and +0x48 is a bit count.**  Every
+one of the twelve is loaded zero-extended into a 64-bit multiply or pushed as
+the divisor of a `__divdi3` with an explicit zero high half, so unsigned is
+forced too.  +0x48 is the number of bits `progress` reads out of its byte
+array, one bit per byte, from `bytes[+0x48 - 1]` down to `bytes[0]`.
+
+======================================================================
+
+### 1377. THIRTEEN OF `V92ParamsInfo`'s TWENTY-THREE UNKNOWN WORDS ARE NAMED BY ITS READER
+
+`V92ParamsInfo` (finding 1321's identification of `V92MappingParams`) leaves
++0x00..+0x5b as `pad_00[0x5c]`, twenty-three slots whose only writer,
+`V92setParamsInfoFromCPUnPck`, does not say what they are.  `reset` is the
+first READER of that region in this tree, and it copies exactly thirteen of
+them into members whose use is known:
+
+    params +0x00              -> +0x48  the bit count
+    params +0x1c .. +0x48     -> +0x18 .. +0x44  the twelve moduli
+
+so the twelve consecutive words at +0x1c are a modulus table and +0x00 is a
+frame length in bits.  `include/dsplib/V92ParamsInfo.h` is not touched here --
+it belongs to a different batch and naming half a `pad` array from one reader
+is how a header acquires two conflicting stories -- but the offsets are
+recorded so that whoever does name them has a second, independent witness.
+
+======================================================================
+
+### 1378. GCC EMITS `x > 0` FOR A 64-BIT `x` AS `(x >> 63) - x` READ OFF BIT 63
+
+Both members contain this, four times over, and it does not look like a
+comparison at all:
+
+    mov %ebx,%esi ; mov %ebx,%edx        ; the high half, twice
+    sar $0x1f,%esi ; sar $0x1f,%edx      ; 0 or -1: that is x >> 63
+    sub %ecx,%esi ; sbb %ebx,%edx        ; (x >> 63) - x, 64 bits
+    mov %edx,%eax ; shr $0x1f,%eax       ; its bit 63, as a 0 or 1
+
+It is `emit_store_flag`'s expansion for `x > 0` where a VALUE and not a branch
+is wanted -- here because the `&& n <= 7` beside it was flattened into a
+`test %al,%bl` of two booleans.  It is that comparison exactly, over all 2^64
+inputs, and not an approximation of it: for `x > 0` the difference is `-x`,
+which is negative; for `x < 0` it is `~x`, which is not; and for `x == 0` it is
+`0`, which is not.  Written `> 0` in the reconstruction, which is the point --
+recovering the SOURCE means undoing this, not reproducing it.
+
+The same reading disposes of the other DImode oddity beside it, `n <= 7`
+compiled as `setle` into a byte that is then `test`ed against the first: the
+`&&` is not short-circuited because neither side can trap or have an effect.
