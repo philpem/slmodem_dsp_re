@@ -39733,3 +39733,74 @@ at a fixed configuration, rates varying threefold between successes).
 configuration, recording rate, ERL, pre-CONNECT `equerr` and connect success
 together, then test covariates against a sample that can actually reject one.
 The instrumentation for all of it already exists and runs at `-d9`.
+
+======================================================================
+
+### 1208. THIRTY CALLS AT ONE CONFIGURATION: THE ECHO IS EXONERATED, THE EQUALISER'S PRE-CONNECT ERROR SURVIVES, AND IT IS TRIMODAL
+
+*Task #108.  The sample the previous four covariate claims needed and did not
+have.  One fixed configuration, no sweep: modem `supra` (SupraExpress 56e PRO,
+ext 1901), IODELAY 240, V.34 automode, 30 calls.  `testbench/batch.sh`,
+`callstats.py`, `batchanalyse.py`.*
+
+**The sample.** 22 of 30 connected (73%); 14 of those 22 carried data both
+ways. **`our TX` was 33600 in 22 of 22.** `our RX` median 12000, range
+4800-26400. Symbol rates 3429/3429 on every call.
+
+So the asymmetry is now confirmed at n=22, with the transmit direction pinned
+at the V.34 maximum every single time.
+
+**Covariates, each reported with its worst-case leave-one-out r and a
+permutation p.** A covariate counts only if no single call carries it -- the
+rule exists because `equerr` at n=9 gave r = -0.787 that fell to -0.263 when one
+call was dropped (1207).
+
+| covariate | n | r | worst LOO r | p | verdict |
+|---|---|---|---|---|---|
+| **equaliser error, pre-CONNECT** | 22 | **-0.689** | **-0.650** | **0.0025** | **SURVIVES** |
+| equaliser error, post-CONNECT | 22 | -0.311 | -0.174 | 0.15 | no |
+| echo return loss | 22 | -0.170 | -0.077 | 0.45 | no |
+| signal-to-echo | 22 | -0.156 | -0.062 | 0.48 | no |
+| seconds dial to CONNECT | 22 | +0.217 | +0.021 | 0.26 | no |
+| echo lag | 22 | +0.021 | +0.015 | 0.89 | no |
+
+**The echo is exonerated properly.** ERL varied 16.2-22.9 dB across these calls
+and explains nothing (p = 0.45). Together with 1206's between-modem test -- 11 dB
+less echo, no better rate -- the echo can be set aside as a cause. It remains
+real, uncancellable and worth knowing about; it is not why we receive slowly.
+
+**That only the PRE-CONNECT error survives is a coherence check, not a
+coincidence.** V.34 fixes the rate in Phase 4, before `CONNECT`. A quantity
+measured afterwards cannot cause it, and indeed the post-CONNECT error does not
+survive. The one that can be causal is the one that is.
+
+**And it is TRIMODAL, which is the actual discovery:**
+
+| `equerr_pre` band | calls | rates |
+|---|---|---|
+| 182-466 | 3 | 26400, 24000, 9600 |
+| 1794 | 1 | 7200 |
+| **2413-3149** | **15** | **12000 x12, 14400 x3** |
+| 6178-9115 | 3 | 4800, 7200, 4800 |
+
+Fifteen of twenty-two calls land in a band 13% wide, and twelve of those
+produce exactly 12000. That is not a channel varying call to call -- a
+continuous impairment would give a continuous spread. It is a **discrete state
+the receiver settles into**, and it settles into the bad one about two thirds of
+the time.
+
+**Four discrete candidates for that state, checked and eliminated on the same
+22 calls:** the pre-emphasis filter (`V34PREEMPHASIS index is 6` on all 22),
+`txpreemp` (2 on all 22), the symbol rate (3429/3429 on all 22), and the AGC
+gain at S-S1 detection (1517-1704, r = -0.073 against `equerr_pre`). None of
+them is what differs.
+
+**What this leaves, and what it does not claim.** `equerr` is the receiver's own
+measurement of the channel, and V.34 derives the rate FROM that measurement, so
+"high `equerr_pre` predicts a low rate" is close to definitional: it confirms the
+receiver is behaving correctly, and moves the question back one step rather than
+answering it. The open question is now sharp and small: **why does the equaliser
+converge to ~2900 on two thirds of calls and ~200 on a few, with the same
+pre-emphasis, the same symbol rate, the same AGC gain and the same echo?** That
+is a question about Phase 3 training, and it is a much better question than the
+one this investigation started with.
