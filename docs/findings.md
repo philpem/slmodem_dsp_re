@@ -40159,3 +40159,69 @@ machine (`v34tx1_jatxmit`, "on J1TXMIT - forced freeze echo"). A freeze path
 therefore exists in the object. If the near canceller can be frozen from the
 start through that path, no symbol needs weakening at all -- which is a better
 answer than replacing `V34EchoAdapt`, and it should be tried first.
+
+======================================================================
+
+### 1215. THE ROUND TRIP IS 131 ms AND ALREADY INSIDE THE CANCELLER'S REACH — THE 48 ms THAT PUTS IT OUT OF REACH IS OUR OWN PIPELINE
+
+*Measured with a chirp at the RTP boundary, because the delay budget in 1205
+and the plan that followed from it were both assumed rather than measured, and
+the one term I could test turned out to be fiction.*
+
+**What was assumed** (and quoted as a plan): of the 205.6 ms echo, 40 ms was our
+jitter buffer, 80 ms the VG204's, 40 ms packetisation, 46 ms unexplained -- so
+shrinking the two buffers would bring the echo inside the canceller's window.
+**Cutting ours from 40 ms to 20 moved the measured echo not at all**: 205.62 ms
+before, 205.62/195.62 after, the same two discrete values. At least one term of
+that budget did not exist.
+
+**So it was measured instead.** `d-modem`'s `get_frame` and `put_frame` are the
+RTP boundary, so a signal injected and captured there times the network and ATA
+loop ALONE, excluding `slmodemd`'s pipeline. A 100 ms linear sweep, 600-3000 Hz,
+Hann-windowed, six bursts 2 s apart (`DMODEM_CHIRP`, `testbench/chirpdelay.py`).
+
+A sweep rather than a tone for two reasons: it pulse-compresses to one sharp
+peak where a steady tone gives a ridge a full period wide, and being broadband
+it cannot be mistaken for signalling -- 2100 ANSam, 1100 CNG, the V.21 pairs,
+1800 V.34 carrier, DTMF and call progress are all steady sinusoids, and the one
+V-series sweep (V.34's line probe) exists only inside a handshake this does not
+run in.
+
+```
+burst   left at    returned at   round trip
+1-5     2-10 s     +131.4 ms     131.38 ms
+6       12 s       +122.9 ms     122.88 ms
+                   median 131.38 ms, sd 3.47, n=6
+```
+
+Five of six identical to the sample.
+
+**The decomposition, both terms now measured rather than one assumed:**
+
+| | |
+|---|---|
+| round trip at the RTP boundary (network + ATA + hybrid) | **131.38 ms** |
+| echo lag as the DATAPUMP sees it (1204, 8 calls of 8) | **205.62 ms** |
+| difference = `slmodemd`'s own pipeline, both directions | **74.24 ms** |
+| | 37.1 ms each way |
+| the canceller's taps reach (`dlen - taps` at 9600 Hz) | 157.50 ms |
+
+**The external loop is already 26 ms INSIDE the canceller's reach.** The ATA,
+the network and the VG204's jitter buffer are not what puts the echo out of
+range. **Our own 74 ms is.** To bring the echo inside the window, 48.1 ms has to
+come out of a pipeline that is entirely `slmodemd` and `d-modem` -- code in this
+project, not a vendor device.
+
+**What this retires.** The proposal to shorten the VG204's jitter buffer is
+withdrawn: it addresses a term that was already small enough. The
+delay-line enlargement of 1205 remains valid but is no longer the only route --
+shedding 48 ms of internal latency reaches the same place without touching the
+object's data structures.
+
+**What it does not say.** Where the 74 ms sits is not yet known. IODELAY 240 is
+25 ms at 9600 Hz and is a candidate, but the earlier sweep saw the datapump echo
+lag move the WRONG way with IODELAY (205.62 ms at IODELAY 88, 195.62 at 164 and
+240), so it is not a simple additive term. The resampler between 8000 and 9600,
+the socket between the two processes, and frame-sized buffering on each side are
+all unmeasured. That decomposition is the next measurement, and it is the same
+technique: inject at one boundary, capture at another.
