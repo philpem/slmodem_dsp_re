@@ -276,9 +276,25 @@
   "src/pump/v90/V90SignBitsExtractor.cpp",
   "build/test/t_v90leaves"
  ],
+ "v90sddet": [
+  "src/pump/v90/V90SdDetector.cpp",
+  "build/test/t_v90spectral"
+ ],
  "v90sessionflag": [
   "src/pump/v90/V90SessionFlag.cpp",
   "build/test/t_v90sessionflag"
+ ],
+ "v90specshaper": [
+  "src/pump/v90/V90SpectralShaper.cpp",
+  "build/test/t_v90spectral"
+ ],
+ "v90specver": [
+  "src/pump/v90/V90SpectralVerifier.cpp",
+  "build/test/t_v90spectral"
+ ],
+ "v90ssfilter": [
+  "src/pump/v90/V90SpectralShapingFilter.cpp",
+  "build/test/t_v90spectral"
  ],
  "v92cp": [
   "src/pump/v90/V92CP.cpp",

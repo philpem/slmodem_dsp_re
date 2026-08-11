@@ -40250,3 +40250,135 @@ consistent with the shape they share (finding 1235) and with the CP classes'
 `printNofRecievedMpMpNot` existing at all in a message that carries no MP
 count under that name.  It also fixes which of the pair is the original: the
 label that travelled is MP's.
+
+### 1240. `V90SpectralVerifier`'s CONSTRUCTOR NAMES EVERY WORD BELOW +0x20 -- AND LEAVES TWO OF THE THREE WORDS `reset()` CLEARS UNINITIALISED
+
+162 bytes at .text+0x45a90, and it settles the whole `pad_00[0x20]` the header
+carried. Six of the eight words come out of the parameter block, one is
+computed and one is allocated-and-constructed:
+
+    +0x00  the `V90Parameters *` argument
+    +0x04  `sysdep_malloc(0x10)` and then `Psd::Psd` over it: length +0x0c,
+           window PARAMS+0x2b4, overlap PARAMS+0x2bc
+    +0x08  PARAMS+0x2ac  SPECTRAL_VERIFIER_SAMPLE_FREQ, a float
+    +0x0c  PARAMS+0x2b0  SPECTRAL_VERIFIER_FFT_LEN
+    +0x10  PARAMS+0x2b8  SPECTRAL_VERIFIER_PSD_LEN
+    +0x14  +0x08 / +0x0c
+    +0x18  `sysdep_malloc(4 * psdLength)`, left as allocated
+    +0x1c  `sysdep_malloc(4 * (fftLength / 2))`, the spectrum
+
+**+0x0c IS UNSIGNED, and the object says so twice.** It is converted to
+floating point with `push %edx` (zero) / `push %esi` / `fildll (%esp)` -- the
+zero-extending idiom, not `fildl` -- and halved with `shr $1`, not `sar`. A
+signed reading would have compiled to neither.
+
+**THE QUOTIENT IS THE ONE PLACE FINDING 245'S MNEMONIC TRAP BITES.** The
+divide is `de f9`, which objdump prints as `fdivrp` and which IS `FDIVP`, so
+the result is sampleFreq/fftLength and not fftLength/sampleFreq. Reading the
+mnemonic would have produced a reciprocal that no side-against-side test could
+catch, because BOTH sides would have computed it. t_v90spectral.cpp therefore
+computes the quotient itself and compares the bit pattern against the blob's
++0x14, which is what makes the direction a measured fact.
+
+**AND THE CONSTRUCTOR DOES NOT WRITE +0x20 OR +0x24.** `reset()` clears
++0x20, +0x24 and +0x28; the constructor writes only +0x28. A verifier that is
+constructed and never reset carries the allocator's bytes in its accumulation
+counter and in the flag `startAccumulation` and `process` both test. Asserted
+in the test against the seed, so it is a measurement and not a reading;
+docs/deviations.md D164 -- committed on this batch's branch as D162 and
+renumbered at the merge, because two other parallel batches took that number
+first.
+
+### 1241. `V90SdDetector`'s CONSTRUCTOR STORES ARGUMENTS 3 AND 4 OUT OF ORDER, AND ITS HISTORY IS TWELVE FLOATS WHATEVER IT IS ASKED FOR
+
+91 bytes at .text+0x3bc70, and it names the `pad_04[0x10]` the header carried:
+argument 1 to +0x08, argument 2 to +0x0c, argument 4 to +0x04 and argument 3 to
++0x10. The two that are stored out of order are the ones a test can most
+easily fail to distinguish, so every trial passes three DISTINCT bit patterns:
+with two arguments equal, a swapped pair agrees with the blob for ever.
+
+**NEITHER THE LENGTH NOR THE ALLOCATION COMES FROM AN ARGUMENT.**
+`movl $0xc,0x18(%ebx)` and `movl $0x30,(%esp)`: twelve floats, 48 bytes,
+whatever the fourth argument says. A reconstruction sizing either from the
+argument passes every trial where the argument happens to be 12, so the sweep
+runs 0, 1, 11, 12, 13, 0x80000000 and 0xffffffff and asserts both constants
+against each.
+
+The clearing loop then RE-READS `historyLength` from the object -- the reload
+after the `sysdep_malloc` call -- which is the same shape `reset()` has and is
+why the constant 12 does not appear in the loop bound.
+
+### 1242. A FLOAT MEMBER COPY IS `mov` IN THE BLOB AND `flds`/`fstps` IN OUR BUILD, AND EXACTLY ONE INPUT SEPARATES THEM
+
+`V90SdDetector`'s constructor copies three float arguments into three fields.
+GCC 3.4.2 emitted three integer `mov`s. Our toolchain, on the same source
+under the tree's derived `-mfpmath=387`, emits three `flds`/`fstps` pairs.
+
+An x87 round trip through single precision is bit-exact for every finite
+value, both zeros, both signs, denormals of both signs and quiet NaNs -- all
+of which the test sweeps and all of which pass. It is NOT bit-exact for a
+SIGNALLING NaN: 0x7fa00000 comes back 0x7fe00000. That was measured, not
+predicted: the first version of t_v90spectral.cpp had 0x7fa00000 in its sweep
+and the run reported our 0x7fe00000 against the blob's 0x7fa00000 at all three
+offsets.
+
+**WHAT WAS NOT DONE ABOUT IT.** A spelling that forces an integer move -- a
+`memcpy` or a punned store -- would make the instruction match and would be
+fitting the compiler, which CLAUDE.md's codegen rule forbids and which would
+put a shape in the record that no original wrote. The source stays an
+assignment, the pattern is out of the sweep, and both the source file and the
+test say why. The bound is the useful part: one pattern out of 2^32 separates
+the two spellings, and it is not one an audio path can carry.
+
+**A DIVERGENCE NEEDS BOTH HALVES, AND THIS COMMIT CONTAINS A CASE WHERE IT
+HAS ONLY ONE.** `V90SpectralVerifier`'s constructor assigns a float member the
+same way -- `sampleFreq = p->SPECTRAL_VERIFIER_SAMPLE_FREQ` -- and the BLOB
+renders it `flds 0x2ac(%ecx)` / `fsts 0x8(%ebx)`, an x87 round trip, because
+it wants the value in a register for the divide that follows. A signalling
+NaN through that slot is quietened on both sides and nothing diverges. So the
+generalisation to make is NOT "our build converts and the original copied":
+what was measured is that OUR build renders this kind of assignment through
+x87 in the one function tested, and that the original used an integer `mov`
+THERE and x87 elsewhere. A future test that feeds a signalling NaN through a
+float member assignment has to read the blob's instruction before predicting
+anything.
+
+### 1243. `V90SpectralShaper` IS 108 BYTES, AND ITS BYTE AT +0x38 IS A MEMBER-INITIALISER RATHER THAN A BODY STORE
+
+The size is pinned from OUTSIDE the class as well as inside. `V90Mapper`
+builds one at `%ebx+0x68c` (`lea 0x68c(%ebx),%eax` then
+`call _ZN17V90SpectralShaperC1Ev`), and the next displacement `V90Mapper::reset`
+and `V90Mapper::process` use above that is +0x6f8 = 0x68c + 0x6c. Inside, the
+largest anything reaches is the subobject at +0x48, which is 0x24 long. Both
+give 0x6c.
+
+**THE ORDER OF THE FIRST STORE PROVES ITS SYNTAX.** `movb $0x0,0x38(%ebx)`
+is emitted BEFORE the call to `ParallelDifferentialEncoder<unsigned char>`'s
+constructor on +0x3c. A constructor body cannot run before a member subobject
+is constructed, so that store is a member-initialiser -- which is also the
+declaration order the object requires, +0x38 before +0x3c. Written as one, it
+reproduces; written in the body, the compiler is not free to hoist it and the
+object's order becomes unreachable.
+
+**THE ALLOCATION SIZE IS NOT DERIVED FROM +0x34.** Both `sysdep_malloc` calls
+are `movl $0x30` and the store of 24 into +0x34 comes AFTER them, so the source
+cannot have read the field back. `advanceTrellis` indexes both buffers
+`movzwl (%reg,%edx,2)`, so the elements are two bytes wide and 0x30 bytes is
+24 of them -- which is what +0x34 holds, and the only reason to believe the
+two numbers are the same number.
+
+### 1244. `V90SpectralShapingFilter` HAS NO DESTRUCTOR AT ALL, AND THE SHAPER'S DESTRUCTOR IS WHERE THAT IS VISIBLE
+
+`nm` lists no `D0`, `D1` or `D2` for `V90SpectralShapingFilter`, which on its
+own only says none was emitted. `V90SpectralShaper::~V90SpectralShaper` says
+more: it frees two pointers and then calls
+`_ZN27ParallelDifferentialEncoderIhED1Ev` on +0x3c -- the implicit destruction
+of one member subobject -- and calls NOTHING on +0x48. A member with a
+destructor is destroyed whether or not the enclosing class wants it, so the
+absence of that call is the object asserting that the class has none.
+
+Its constructor is nine stores: +0x0c, +0x08, +0x04, +0x00 to zero (the
+right-to-left order a chained assignment evaluates in), then 2 into +0x20,
+then +0x10..+0x1c to zero. `setFilterCoeff(float, float, float, float)` writes
+its four arguments into +0x00..+0x0c in order, and `reset()` clears exactly
++0x10..+0x1c and nothing else, which is what names the two groups.

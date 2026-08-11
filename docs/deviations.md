@@ -4274,6 +4274,35 @@ out.  D-number blocks were assigned to the remaining batches when the second
 collision surfaced.  CLAUDE.md's rule for a renumbering is that the entry says
 what it used to be called, because a reference that still resolves but now
 points at the wrong entry is the one thing `tools/refcheck.py` cannot catch.
+## D164 ⚠ 💤 `V90SpectralVerifier`'s constructor initialises +0x28 but not +0x20 or +0x24 -- the accumulation counter and the running flag `startAccumulation` and `process` both test -- so a verifier that is constructed and never `reset()` runs on allocator garbage
+
+*Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: one store.*
+
+**Finding 1240.** Asserted in test/unit/t_v90spectral.cpp against the seeded
+bytes, so the omission is measured; whether any caller reaches an accumulation
+without a `reset()` first is not.
+
+**RENUMBERED at the merge**, from `D162`, the number this batch committed on its own branch: three of the nine parallel construction-path batches picked the same
+next-free number out of this file, and the two before it took D162 and D163.
+CLAUDE.md's rule is that the entry says what it used to be called, because a
+citation that still resolves but now points at the wrong entry is the one
+thing `tools/refcheck.py` cannot catch.
+
+---
+
+## D165 ⚠ 💤 `V90SdDetector`'s constructor stores its third float argument into +0x10 and no member of the class ever reads it
+
+*Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: none until a reader turns up.*
+
+**Finding 1241.** All six members were scanned for a load at +0x10 and none
+has one; a seventh reader outside the class would have to reach it through a
+`V90SdDetector *`, which has not been swept.
+
+**RENUMBERED at the merge**, from `D163`, the number this batch committed on its own branch: three of the nine parallel construction-path batches picked the same
+next-free number out of this file, and the two before it took D162 and D163.
+CLAUDE.md's rule is that the entry says what it used to be called, because a
+citation that still resolves but now points at the wrong entry is the one
+thing `tools/refcheck.py` cannot catch.
 
 ---
 

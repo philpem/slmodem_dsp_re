@@ -28,22 +28,58 @@
  *            reads it and no other writes it, so it gets an offset-derived
  *            name: naming it for a purpose would be inventing one.
  *
- * Everything below +0x20 is `pad_`.  It holds at least a pointer to the
- * parameter block (+0x00), a float the frequency-to-bin arithmetic divides by
- * (+0x14) and the spectrum buffer (+0x1c, indexed with `flds (%edx,%eax,4)`
- * by `getSpectrumOfBin`), none of which `reset()` touches.
+ * EVERYTHING BELOW +0x20 IS NAMED BY THE CONSTRUCTOR, which writes all eight
+ * words and takes six of them from the parameter block:
+ *
+ *     +0x00  the `V90Parameters *` argument, stored first and re-read out of
+ *            the object twice afterwards.
+ *     +0x04  a `Psd`, `sysdep_malloc(0x10)` and then `Psd::Psd` on the
+ *            result: length +0x0c, window PARAMS+0x2b4, overlap PARAMS+0x2bc.
+ *     +0x08  `SPECTRAL_VERIFIER_SAMPLE_FREQ` (PARAMS+0x2ac), a float.
+ *     +0x0c  `SPECTRAL_VERIFIER_FFT_LEN` (PARAMS+0x2b0).  UNSIGNED, twice
+ *            over: it is converted with `push 0` / `push` / `fildll`, the
+ *            zero-extending idiom, and halved with `shr $1`.
+ *     +0x10  `SPECTRAL_VERIFIER_PSD_LEN` (PARAMS+0x2b8).
+ *     +0x14  +0x08 divided by +0x0c.  The bytes are `de f9`, which objdump
+ *            prints as `fdivrp` and which IS `FDIVP` -- finding 245 -- so the
+ *            quotient is sampleFreq/fftLength and not its reciprocal.  A
+ *            sample rate over a transform length is a bin width, which is
+ *            what `freqToNearestBin` divides by.
+ *     +0x18  `sysdep_malloc(4 * psdLength)`, left as the allocator returned
+ *            it.  Nothing here says what goes in it, so it is named for its
+ *            offset.
+ *     +0x1c  `sysdep_malloc(4 * (fftLength / 2))`, the spectrum
+ *            `getSpectrumOfBin` indexes with `flds (%edx,%eax,4)`.
+ *
+ * THE CONSTRUCTOR DOES NOT WRITE +0x20 OR +0x24.  Only +0x28 of the three
+ * words `reset()` clears is initialised, so a verifier that is constructed
+ * and never reset carries whatever the allocator left in its accumulation
+ * counter and its running flag.  Recorded in docs/deviations.md, unmeasured.
  */
 
 #ifndef DSPLIB_V90SPECTRALVERIFIER_H
 #define DSPLIB_V90SPECTRALVERIFIER_H
 
+class Psd;
+class V90Parameters;
+
 class V90SpectralVerifier {
 public:
 	/* Defined in src/pump/v90/V90SpectralVerifier.cpp. */
+	V90SpectralVerifier(V90Parameters *params);
+	~V90SpectralVerifier();
+
 	void reset();
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
-	unsigned char pad_00[0x20];	/* +0x00 params, scale, spectrum    */
+	V90Parameters *params;		/* +0x00 the constructor's argument */
+	Psd *psd;			/* +0x04 owned, 16 bytes            */
+	float sampleFreq;		/* +0x08 PARAMS+0x2ac               */
+	unsigned int fftLength;		/* +0x0c PARAMS+0x2b0               */
+	unsigned int psdLength;		/* +0x10 PARAMS+0x2b8               */
+	float binWidth;			/* +0x14 sampleFreq / fftLength     */
+	float *buf_18;			/* +0x18 owned, psdLength floats    */
+	float *spectrum;		/* +0x1c owned, fftLength/2 floats  */
 	unsigned int accumCount;	/* +0x20 progress toward +0x10      */
 	unsigned int accumulating;	/* +0x24 1 while an accumulation runs */
 	unsigned int word_28;		/* +0x28 written only by reset()    */
