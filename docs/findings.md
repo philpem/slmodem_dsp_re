@@ -39567,8 +39567,10 @@ sd 1.96).  `testbench/echoscan.py` cross-correlates the two directions, which
 is involved and the lag is a real delay rather than two clocks drifting.
 Our transmit rate was 33600 in all nine; our receive 12000 in the majority.
 A ~20 dB echo caps receive SNR at ~20 dB, and ~20 dB is what V.34 needs for
-12000.  The ceiling is accounted for; the call-to-call variation around it is
-not, and nothing here explains it.
+12000.  **That last step is WRONG and finding 1206 retracts it** -- a second
+modem on the same path with 11 dB less echo receives no faster, so the
+agreement here was coincidence.  What this finding establishes is the echo's
+existence, delay and unreachability; the receive ceiling is NOT explained.
 
 **The bound, from the object.**  `V34InitializeImplementationSpecific` sets
 both cancellers to `dlen = 0x678` (1656) and `taps = 0x90` (144), and
@@ -39614,3 +39616,60 @@ Cutting both to nothing still leaves ~105 ms against a 172.5 ms line, so it
 would fit — but only in combination with pointing `lag` there, which is the
 same structure question.  As a standalone measure it lowers the delay without
 giving anything the ability to cancel at it.
+
+======================================================================
+
+### 1206. THE COURIER CONTROL CONFIRMS THE ECHO'S ORIGIN AND REFUTES ITS ROLE: 11 dB LESS ECHO, NO BETTER RECEIVE RATE
+
+*Task #106.  Corrects finding 1205's closing claim that the receive ceiling is
+"accounted for" by the echo.  The echo's existence, delay and origin all stand;
+its causal role does not.*
+
+A second modem on a second FXS port of the same VG204, dialled over the same
+path with the same settings, separates two things one modem cannot.
+
+| | echo lag | ERL | our TX | our RX |
+|---|---|---|---|---|
+| **USR Courier HST Dual Standard V.34** (ext 1902) | 205.39 ms, sd 0.16 | **29.91 dB**, sd 2.16 | 28800 | 7200, 14400, 12000, 19200 |
+| **SupraExpress 56e PRO** (ext 1901) | 205.56 ms, sd 0.14 | **18.48 dB**, sd 1.16 | 33600 | 12000 x4, 28800 |
+
+**Confirmed, both halves of the prediction.**
+
+- *The delay is the packet round trip.* Two modems of different manufacture,
+  different silicon and a decade apart in design return the echo at the SAME
+  lag, 0.17 ms apart -- less than the spread within either set. Neither modem
+  sits in that path twice; the VG204 and the RTP legs do.
+- *The magnitude is the hybrid meeting the modem's input impedance.* The two
+  differ by 11.4 dB, far outside either standard deviation.
+
+**Refuted: the echo is not what sets our receive rate.** 1205 argued a ~20 dB
+echo caps receive SNR at ~20 dB, that V.34 needs ~20 dB for 12000, and that
+12000 was therefore explained. If that held, the Courier's 29.9 dB should buy
+roughly two to three rate steps. It buys nothing: its rates are 7200-19200
+against the SupraExpress's 12000-28800, if anything slightly worse. An 11 dB
+improvement in the only quantity the account named produced no improvement in
+the quantity it was supposed to explain.
+
+So the aggregate agreement in 1205 was coincidence -- ~20 dB of echo and ~20 dB
+of required SNR happened to line up on one modem. This is the second time this
+link has failed a wider test: the per-call correlation went first (r = +0.43
+over nine calls, after looking convincing over five), and now the between-modem
+comparison. **The receive deficit is real, repeatable, one-sided and still
+unexplained.**
+
+**What is now known, and it is worth keeping separate from what is not:**
+
+- The echo is real, at 205.4-205.6 ms, present with both modems. (1204, here)
+- No `lag` can reach it: the delay line holds 172.5 ms. (1205)
+- Our transmit is unaffected -- 33600 or 28800, whatever the far end's receiver
+  will take, in every connected call across four sessions.
+- Our receive is depressed and varies 7200-28800 with no measured covariate.
+
+**The remaining candidate this cannot see.** `echoscan.py` correlates, so it
+finds only echo that is a scaled, delayed COPY of what we sent. G.711
+companding returns energy that is not, and neither is anything introduced by
+the two independent sample clocks -- the VG204's codec and our own resampler
+are not locked, so a slow slip is present by construction and V.34's timing
+recovery has to track it. The object publishes `pllcnt` and `rxsymcnt` for
+exactly that loop (finding at `V34RX.c`'s debug strings), which is where to
+look next rather than at the echo.
