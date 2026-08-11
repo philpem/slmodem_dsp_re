@@ -43752,6 +43752,28 @@ call -- `movzbl 0xa96b(%ebx),%eax; mov %al,0xb(%esp)` at the head and `movzbl
 0x410d2, AFTER `unitePhasesInfoOfUref` returns, for the clearing loop.  So the
 callee is allowed to change it and the clearing loop uses the new value.
 
+**THE OTHER TWELVE ARE ALMOST ALL LEAVES TOO, and that was measured rather
+than assumed** -- one grep over all 28 disassemblies for `R_386_PC32` gives
+the whole intra-class call graph, which is four edges:
+
+    setQcLinearMapping     566  -> updateAltRbsPhaseInDil
+    porcessSecondStudy     831  -> updateAltRbsPhaseInDil
+    updateUref             240  -> unitePhasesInfoOfUref
+    studyUrefHandler      5335  -> getAltVarThresh, unitePhasesInfoOfUref
+
+Everything else in the class calls only `linear2alaw`, `linear2ulaw`,
+`alaw2linear`, `ulaw2linear`, `memcpy`, `edprintf` and
+`dsplibs_debug_printf`, all of which this tree has.  So NINE of the remaining
+twelve are writable today -- `unitePhasesInfoOfUref` 748,
+`uniteLinMappInfoOfUnsuspectedPhases` 601, `getAltVarThresh` 581,
+`determineMaxUcode` 1189, `resetStudyUrefHandler` 976, `porcessFirstStudy`
+779, `updateAltRbsPhaseInDil` 1124, `findPadGain` 2879 and
+`setQcLinearMapping`'s and `porcessSecondStudy`'s blocker
+`updateAltRbsPhaseInDil` -- and the class closes in two waves, not in a
+chain.  `unitePhasesInfoOfUref` is a leaf, so it plus `updateUref` is 988
+bytes for one decode and retires the only item this batch had to leave
+blocked.
+
 **Three of the sixteen have a return type**, which the mangling does not carry
 and which therefore had to be read out of what the object leaves in %eax:
 `isAltRbs` and `isThereAnyAltRbsPhase` return a 0/1 built in a register zeroed
