@@ -107,6 +107,10 @@ void ref_updateUrefAlt(void *self)
 void ref_calculateLinearMeanAndVar(void *self, int v, int level,
 				   unsigned int phase)
 	asm("ref__ZN25V90AutoDigitalImpDetector25calculateLinearMeanAndVarEssj");
+void ref_unitePhasesInfoOfUref(void *self, int at)
+	asm("ref__ZN25V90AutoDigitalImpDetector21unitePhasesInfoOfUrefEs");
+void ref_updateUref(void *self)
+	asm("ref__ZN25V90AutoDigitalImpDetector10updateUrefEv");
 }
 
 /* The object, plus room past its end to catch a store that overruns it. */
@@ -1237,6 +1241,22 @@ run_signal(void)
 		diff_eq_obj("block: updateUrefAlt", V90AutoDigitalImpDetector,
 			    &ours_o, &theirs_o, block);
 
+		/*
+		 * `updateUref` folds the block's accumulators for the
+		 * reference code into the mapping, unites the phases and
+		 * clears the accumulators -- so from here the sequence
+		 * exercises the grouping over evolving state rather than over
+		 * a table.  The threshold is swept across the block number so
+		 * that the merge test goes both ways as the run proceeds; the
+		 * flag pattern above always leaves one of phases 0..4 clear,
+		 * which is what keeps D281's uninitialised read out of it.
+		 */
+		BOTH(short_a9a4, (short)(1 << (block % 12)));
+		ours_o.updateUref();
+		ref_updateUref(&theirs_o);
+		diff_eq_obj("block: updateUref", V90AutoDigitalImpDetector,
+			    &ours_o, &theirs_o, block);
+
 		ours_o.adjustUinfoToPhaseOffset((short)(block % NPHASE));
 		ref_adjustUinfoToPhaseOffset(&theirs_o, block % NPHASE);
 		diff_eq_obj("block: adjustUinfoToPhaseOffset",
@@ -1291,6 +1311,329 @@ run_signal(void)
 	return diff_end();
 }
 
+/*
+ * ==========================================================================
+ * `unitePhasesInfoOfUref` and `updateUref`.
+ *
+ * The method groups the phases that are NOT flagged at +0x2800 by how close
+ * their `linMapp` entries are, pools each group's accumulators into one mean
+ * and variance, and then hands the largest group's answer to every phase that
+ * IS flagged.  Nothing about that is reachable from a seeded object by
+ * accident: with random `linMapp` entries and a random threshold the merge
+ * test is either always true or always false, and with a random `short_2800`
+ * every phase is flagged.
+ *
+ * So the six mapping entries, the six flags, the threshold and the six pooled
+ * counts are all forced from tables chosen to straddle each decision, and the
+ * run asserts that each outcome was seen:
+ *
+ *   - at least one merge happened, and at least one trial merged nothing;
+ *   - at least one group had a zero pooled count, which is the arm that
+ *     writes NEITHER table, and at least one had a nonzero one;
+ *   - at least one flagged phase existed to receive the best group's answer,
+ *     and at least one trial had none.
+ *
+ * ONE ARM IS DELIBERATELY NOT REACHED.  If all five of phases 0..4 are
+ * flagged the object never forms a group, and it then reads an uninitialised
+ * local for the value it writes to every flagged phase -- see D281.  That is
+ * not a comparison of anything: the two sides read two different stack
+ * frames.  The flag pattern below always leaves at least one of 0..4 clear,
+ * and this comment is where that restriction is written down rather than
+ * being an accident of the tables.
+ * ==========================================================================
+ */
+static int
+run_unite(void)
+{
+	/* Six mapping entries per row: some within a threshold, some not. */
+	static const short maps[8][NPHASE] = {
+		{  100,  102,  400,  402, 1000,  100 },
+		{    0,    0,    0,    0,    0,    0 },
+		{ -100, -102,  100,  102,    0, 3000 },
+		{ 32767, -32768, 0, 1, -1, 2 },
+		{  500,  600,  700,  800,  900, 1000 },
+		{    7,    7,    7,    7,    7,    7 },
+		{ 1234, 1235, 1236, 1237, 1238, 1239 },
+		{ -5000, 5000, -5000, 5000, 0, 0 }
+	};
+	static const short thresh[] = { 0, 1, 3, 10, 200, 1000, 32767, -1 };
+	static const unsigned counts[8][NPHASE] = {
+		{ 1, 2, 3, 4, 5, 6 },
+		{ 0, 0, 0, 0, 0, 0 },
+		{ 0, 41, 0, 41, 0, 41 },
+		{ 10, 0, 0, 0, 0, 0 },
+		{ 25, 25, 25, 25, 25, 25 },
+		{ 0, 0, 7, 0, 0, 0 },
+		{ 100, 200, 300, 400, 500, 600 },
+		/*
+		 * 40,000 IS NOT AN ARBITRARY LARGE NUMBER.  The object pools
+		 * the counts into a `short` -- it loads the `unsigned int` at
+		 * +0x1c00 with `movswl`, which is the low half sign-extended
+		 * -- so a group of this size pools to -25,536, which is
+		 * nonzero and negative.  `total != 0` and `total > 0` are
+		 * different tests for it and identical for everything else in
+		 * this table.
+		 */
+		{ 40000, 0, 41, 0, 41, 0 }
+	};
+	int trial;
+	int merged = 0, unmerged = 0, zerototal = 0, nonzerototal = 0;
+	int anyflagged = 0, noneflagged = 0, moved = 0, distinct = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::unitePhasesInfoOfUref");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		short at = (short)((trial * 23) & 0x7f);
+		short t = thresh[IDX(trial, 1)];
+		const short *mp = maps[IDX(trial, 3)];
+		const unsigned *cp = counts[IDX(trial, 5)];
+		int p, q, sawpair = 0, sawflag = 0;
+
+		seed(trial, trial % 4);
+		BOTH(short_a9a4, t);
+
+		for (p = 0; p < NPHASE; p++) {
+			/*
+			 * Phase (trial % 5) is always clear, so a group can
+			 * always be formed and D281's uninitialised read is
+			 * never taken.
+			 */
+			short flag = (short)((p == trial % 5) ? 0
+					     : ((trial >> p) & 1));
+
+			BOTH(short_2800[p], flag);
+			BOTH(linMapp[p][at], mp[p]);
+			BOTH(uint_1c00[p][at], cp[p]);
+			BOTH(float_1000[p][at], (float)((int)cp[p] * 3));
+			BOTH(float_9118[p][at], (float)((int)cp[p] * 41));
+			BOTH(float_9d48[p][at], 0.25f * (float)p);
+
+			if (flag != 0)
+				sawflag = 1;
+			if (cp[p] != 0)
+				nonzerototal = 1;
+			else
+				zerototal = 1;
+		}
+
+		for (p = 0; p < NPHASE - 1; p++)
+			for (q = p + 1; q < NPHASE; q++)
+				if (ours_o.short_2800[p] == 0
+				    && ours_o.short_2800[q] == 0
+				    && (mp[p] - mp[q] < t)
+				    && (mp[q] - mp[p] < t))
+					sawpair = 1;
+
+		if (sawpair)
+			merged = 1;
+		else
+			unmerged = 1;
+		if (sawflag)
+			anyflagged = 1;
+		else
+			noneflagged = 1;
+
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.unitePhasesInfoOfUref(at);
+		ref_unitePhasesInfoOfUref(&theirs_o, at);
+
+		diff_eq_obj("after unitePhasesInfoOfUref",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.linMapp[0][at];
+		else if (ours_o.linMapp[0][at] != first)
+			distinct = 1;
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE CONVERGENCE CHECKSUM (D280).
+	 *
+	 * The object's checksum is six copies of `linMapp[5][at]`, so it goes
+	 * blind exactly when that entry is zero: the sum equals the initial
+	 * `prev` of zero and the loop stops after ONE round.  The obvious
+	 * spelling -- summing the six phases -- does not stop there, runs a
+	 * second round, and regroups by the MEANS the first round installed
+	 * rather than by the entries it started from.
+	 *
+	 * So: phase 5 flagged with a zero entry, and phases 0..4 arranged so
+	 * that the second round would merge two groups the first round kept
+	 * apart.  Entries 0 and 10 pool to 200; 100 and 110 pool to 210; 200
+	 * and 210 are 10 apart and the threshold is 20, so a second round
+	 * merges all four into 205.  One round leaves 200,200,210,210 and two
+	 * rounds leave 205,205,205,205 -- and the mutation that sums the six
+	 * phases is caught by that difference and by nothing else in this
+	 * file.
+	 */
+	{
+		static const short e[NPHASE] = { 0, 10, 100, 110, 500, 0 };
+		static const float fs[NPHASE] = {
+			150.0f, 250.0f, 200.0f, 220.0f, 500.0f, 0.0f
+		};
+		short at = 0x2b;
+		int p;
+
+		seed(901, 0);
+		BOTH(short_a9a4, 20);
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(short_2800[p], (short)(p == NPHASE - 1 ? 1 : 0));
+			BOTH(linMapp[p][at], e[p]);
+			BOTH(uint_1c00[p][at], 1u);
+			BOTH(float_1000[p][at], fs[p]);
+			BOTH(float_9118[p][at], fs[p] * 4.0f);
+			BOTH(float_9d48[p][at], 0.125f * (float)p);
+		}
+
+		ours_o.unitePhasesInfoOfUref(at);
+		ref_unitePhasesInfoOfUref(&theirs_o, at);
+		diff_eq_obj("unite: the one-round checksum",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store past the object (checksum block)",
+			    guard_equal(), 1, 0);
+	}
+
+	diff_eq_int("uniting changed the object", moved, 1, 0);
+	diff_eq_int("the united entry is not the same on every trial",
+		    distinct, 1, 0);
+	diff_eq_int("a mergeable pair was offered", merged, 1, 0);
+	diff_eq_int("a trial with nothing to merge was offered", unmerged, 1,
+		    0);
+	diff_eq_int("a zero pooled count was exercised", zerototal, 1, 0);
+	diff_eq_int("a nonzero pooled count was exercised", nonzerototal, 1,
+		    0);
+	diff_eq_int("a flagged phase was there to receive the answer",
+		    anyflagged, 1, 0);
+	diff_eq_int("a trial with no flagged phase was exercised", noneflagged,
+		    1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `updateUref`, which is the same three steps in sequence: form each phase's
+ * mean and variance for the reference code, unite the phases, then clear the
+ * accumulators.  Driven with the SAME table shapes as above so that the unite
+ * inside it reaches both arms, and with `ucode` swept -- it is the index for
+ * all three steps and the method takes no argument, so the field is the only
+ * way in.
+ */
+static int
+run_updateuref(void)
+{
+	static const unsigned counts[] = { 0, 1, 25, 41, 3, 0, 100, 7 };
+	int trial, moved = 0, distinct = 0, zero = 0, nonzero = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::updateUref");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		unsigned char at = (unsigned char)((trial * 19) & 0x7f);
+		int p;
+
+		seed(trial, trial % 4);
+		BOTH(ucode, at);
+		BOTH(short_a9a4, (short)(1 << (trial % 12)));
+
+		for (p = 0; p < NPHASE; p++) {
+			unsigned n = counts[(trial + p) % 8];
+
+			BOTH(short_2800[p], (short)((p == trial % 5) ? 0
+						    : ((trial >> p) & 1)));
+			BOTH(linMapp[p][at], (short)(100 * p + trial));
+			BOTH(uint_1c00[p][at], n);
+			BOTH(float_1000[p][at], (float)((int)n * 143));
+			BOTH(float_9118[p][at], (float)((int)n * 4001));
+			BOTH(float_9d48[p][at], 0.5f * (float)p);
+
+			if (n == 0)
+				zero = 1;
+			else
+				nonzero = 1;
+		}
+
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.updateUref();
+		ref_updateUref(&theirs_o);
+
+		diff_eq_obj("after updateUref", V90AutoDigitalImpDetector,
+			    &ours_o, &theirs_o, trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("updateUref cleared the count (trial %ld)",
+			    (long)ours_o.uint_1c00[0][at], 0, trial);
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.linMapp[0][at];
+		else if (ours_o.linMapp[0][at] != first)
+			distinct = 1;
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR updateUref's OWN ARITHMETIC.
+	 *
+	 * Everything the first loop writes is normally overwritten by the
+	 * unite that follows it -- a grouped phase gets its group's pooled
+	 * mean, and a flagged phase gets the best group's -- so the mean and
+	 * the variance this method computes are invisible in almost every
+	 * state.  Measured: the mutations that drop its rounding term and
+	 * reverse its variance both survived the sweep above.
+	 *
+	 * ONE PHASE ESCAPES, and it is phase 5.  The unite's outer loop runs
+	 * `i` over 0..4, so phase 5 can only ever be a group MEMBER; leave it
+	 * unflagged and further than the threshold from every other entry and
+	 * it is neither leader nor member, and `updateUref`'s own answer for
+	 * it survives to be compared.  The count of 2 against a sum of 287
+	 * makes the mean exactly 143.5, which rounds to 144 and truncates to
+	 * 143 -- one code apart.
+	 */
+	{
+		unsigned char at = 0x33;
+		int p;
+
+		seed(902, 0);
+		BOTH(ucode, at);
+		BOTH(short_a9a4, 2);
+		for (p = 0; p < NPHASE; p++) {
+			int last = (p == NPHASE - 1);
+
+			BOTH(short_2800[p], (short)(p < 4 ? 1 : 0));
+			BOTH(linMapp[p][at],
+			     (short)(last ? 30000 : 100 * p));
+			BOTH(uint_1c00[p][at], (unsigned)(last ? 2 : 4));
+			BOTH(float_1000[p][at], last ? 287.0f : 400.0f);
+			BOTH(float_9118[p][at], last ? 8000.0f : 100.0f);
+			BOTH(float_9d48[p][at], 0.0f);
+		}
+
+		ours_o.updateUref();
+		ref_updateUref(&theirs_o);
+		diff_eq_obj("updateUref: the phase the unite cannot reach",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store past the object (isolated block)",
+			    guard_equal(), 1, 0);
+	}
+
+	diff_eq_int("updateUref changed the object", moved, 1, 0);
+	diff_eq_int("the reference entry is not the same on every trial",
+		    distinct, 1, 0);
+	diff_eq_int("an empty cell was exercised", zero, 1, 0);
+	diff_eq_int("a filled cell was exercised", nonzero, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1305,6 +1648,8 @@ main(void)
 	rc |= run_means();
 	rc |= run_maptransforms();
 	rc |= run_queries();
+	rc |= run_unite();
+	rc |= run_updateuref();
 	rc |= run_signal();
 
 	return rc;

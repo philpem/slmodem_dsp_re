@@ -78,11 +78,14 @@ ADID_OFF(pcmType,      0xa95c, pcmtype);
  * +0xa956  `mov %al,0xa956(%edx,%ebx,1)` in setMaxUcodeArray, `edx` 0..5.
  * +0xa9a6  `movswl 0xa9a6(%ebx),%edx` in isAltRbs, compared against a
  *          non-negative distance with a SIGNED `jle`.
+ * +0xa9a4  `movswl 0xa9a4(%ebp),%edx` in unitePhasesInfoOfUref, compared
+ *          against a non-negative distance with a SIGNED `jge`.
  */
 ADID_OFF(prevLinMapp,  0x0c00, prevlinmapp);
 ADID_OFF(sampleStore,  0x2818, samplestore);
 ADID_OFF(padGain,      0xa94c, padgain);
 ADID_OFF(maxUcode,     0xa956, maxucode);
+ADID_OFF(short_a9a4,   0xa9a4, shorta9a4);
 ADID_OFF(short_a9a6,   0xa9a6, shorta9a6);
 ADID_OFF(ucode,        0xa96b, ucode);
 ADID_OFF(ucodeLevel,   0xa96c, ucodelevel);
@@ -648,4 +651,197 @@ V90AutoDigitalImpDetector::calculateLinearMeanAndVar(short v, short level,
 	float_1000[phase][at] += mag;
 	float_9118[phase][at] += mag * mag;
 	uint_1c00[phase][at]++;
+}
+
+/*
+ * ==========================================================================
+ * `unitePhasesInfoOfUref`, and the `updateUref` that was waiting on it.
+ *
+ * WHAT IT IS FOR.  Six RBS phases each measure the same reference code, and
+ * some of them are the same phase as far as the line is concerned -- the same
+ * digital impairment, the same level.  This method finds those groups: it
+ * takes the phases NOT flagged at +0x2800, merges any two whose `linMapp`
+ * entries for the reference code differ by less than the threshold at
+ * +0xa9a4, recomputes each group's mean and variance from the group's pooled
+ * accumulators, and writes the pooled answer back to every member.  Then it
+ * takes the LARGEST group's answer and gives it to every phase that IS
+ * flagged -- the ones whose own measurement is not trusted.
+ *
+ * IT REPEATS UNTIL IT STOPS CHANGING.  The whole of the above sits inside a
+ * do/while whose test is a checksum of `linMapp`, because merging rewrites
+ * the entries the next round's merging decisions are made from.
+ *
+ * THE CHECKSUM IS NOT WHAT IT LOOKS LIKE -- see D280.  It adds up SIX COPIES
+ * OF ONE ENTRY, `linMapp[5][at]`, because the index is the outer loop's
+ * variable left at its terminal value rather than the inner loop's.  That is
+ * visible in the object as a load hoisted clean out of the loop, which is
+ * only possible if the address does not vary.  It is written that way here.
+ *
+ * THE SENTINEL IS A NaN.  The best-group variance starts as the constant at
+ * `.rodata.cst4+0x328`, which is 0x7fc00000.  It is only observable if no
+ * group is ever formed, which needs all five of phases 0..4 flagged -- and in
+ * that case the paired `bestValue` is read uninitialised, so the object's
+ * behaviour there is not a function of its inputs at all.  D281.
+ * ==========================================================================
+ */
+
+/* Ungrouped.  The object writes and compares 0xffff as a `short`. */
+#define ADID_NO_GROUP	((short)-1)
+
+void
+V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
+{
+	short group[V90ADID_PHASES];
+	short sum = 0;
+	short prev;
+	short i = 0;
+
+	/*
+	 * `bestValue` is deliberately left uninitialised, because the object
+	 * leaves it uninitialised: the only path that reads it without having
+	 * written it is D281's, and giving it a value here would be inventing
+	 * behaviour the blob does not have rather than reproducing it.
+	 */
+	float bestVar = __builtin_nanf("");
+	float bestValue;
+
+	do {
+		short best = 0;
+		short p;
+
+		prev = sum;
+
+		for (p = 0; p < V90ADID_PHASES; p++)
+			group[p] = ADID_NO_GROUP;
+
+		/*
+		 * i stops at 4, not 5: the inner loops only ever look
+		 * FORWARD, so the last phase can never start a group.  The
+		 * value it is left with is what the checksum below reads.
+		 */
+		for (i = 0; i < V90ADID_PHASES - 1; i++) {
+			short total;
+			short count;
+			short j;
+			float fsum, fsq;
+
+			if (group[i] != ADID_NO_GROUP || short_2800[i] != 0)
+				continue;
+
+			/*
+			 * THE POOLED COUNT IS A `short`, and the count it is
+			 * pooled from is an `unsigned int`.  The object loads
+			 * it with `movswl`, which is the low half of the
+			 * 32-bit field sign-extended -- so a phase with more
+			 * than 32,767 samples in a cell pools as a negative
+			 * number.  That is the object's arithmetic.
+			 */
+			total = (short)uint_1c00[i][at];
+			fsum = float_1000[i][at];
+			fsq = float_9118[i][at];
+
+			for (j = (short)(i + 1); j < V90ADID_PHASES; j++) {
+				if (group[j] != ADID_NO_GROUP
+				    || short_2800[j] != 0)
+					continue;
+				if (adid_abs(linMapp[i][at] - linMapp[j][at])
+				    >= short_a9a4)
+					continue;
+
+				group[j] = i;
+				fsum += float_1000[j][at];
+				fsq += float_9118[j][at];
+				total = (short)(total + uint_1c00[j][at]);
+			}
+
+			/*
+			 * An empty group leaves both tables alone -- not even
+			 * a store of zero -- so its members keep whatever
+			 * `resetLinearMapping` gave them.
+			 */
+			if (total != 0) {
+				float inv = 1.0f / total;
+				float mean = fsum * inv;
+
+				linMapp[i][at] = (short)(mean + 0.5f);
+				float_9d48[i][at] = fsq * inv - mean * mean;
+			}
+
+			group[i] = i;
+			count = 1;
+
+			for (j = (short)(i + 1); j < V90ADID_PHASES; j++) {
+				if (group[j] != i)
+					continue;
+				linMapp[j][at] = linMapp[i][at];
+				float_9d48[j][at] = float_9d48[i][at];
+				count = (short)(count + 1);
+			}
+
+			if (count > best) {
+				best = count;
+				bestValue = linMapp[i][at];
+				bestVar = float_9d48[i][at];
+			}
+		}
+
+		/*
+		 * The convergence checksum.  `i` is 5 here and it is the
+		 * index -- D280.
+		 */
+		sum = 0;
+		for (p = 0; p < V90ADID_PHASES; p++)
+			sum = (short)(sum + linMapp[i][at]);
+	} while (sum != prev);
+
+	{
+		short v = (short)bestValue;
+		short p;
+
+		for (p = 0; p < V90ADID_PHASES; p++)
+			if (short_2800[p] != 0) {
+				linMapp[p][at] = v;
+				float_9d48[p][at] = bestVar;
+			}
+	}
+}
+
+/*
+ * Turn each phase's accumulators for the reference code into a mean and a
+ * variance, unite the phases, and then clear the accumulators.
+ *
+ * The three steps are in that order and the last one is unconditional, so a
+ * cell with no samples keeps its mapping entry and loses nothing, and every
+ * cell starts the next study empty.
+ *
+ * `ucode` IS RE-READ AFTER THE CALL.  The object loads it once at the head,
+ * keeps a copy on the stack for the call's argument, and then loads it AGAIN
+ * from +0xa96b at 0x410d2 for the clearing loop -- so `unitePhasesInfoOfUref`
+ * is allowed to change it and the clear follows the new value.  It does not
+ * change it today; the reload is reproduced because it is what the object
+ * does, not because the difference is reachable.
+ */
+void
+V90AutoDigitalImpDetector::updateUref()
+{
+	short phase;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		if (uint_1c00[phase][ucode] != 0) {
+			float inv = 1.0f / uint_1c00[phase][ucode];
+			float mean = float_1000[phase][ucode] * inv;
+
+			float_9d48[phase][ucode] =
+			    float_9118[phase][ucode] * inv - mean * mean;
+			linMapp[phase][ucode] = (short)(mean + 0.5f);
+		}
+	}
+
+	unitePhasesInfoOfUref(ucode);
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		float_1000[phase][ucode] = 0.0f;
+		uint_1c00[phase][ucode] = 0;
+		float_9118[phase][ucode] = 0.0f;
+	}
 }

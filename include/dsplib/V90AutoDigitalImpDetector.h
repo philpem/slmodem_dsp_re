@@ -23,14 +23,16 @@
  * and taking the largest displacement in each, then checking by hand that the
  * base register of the winner is `this`.  Finding 251.
  *
- * EIGHTEEN OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote `reset`
- * and `resetLinearMapping`; this one adds the sixteen processing methods
- * whose only callees are already written -- `linear2alaw`, `linear2ulaw` and
- * each other's absence.  The rest stay declared for the record and
+ * TWENTY OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote `reset`
+ * and `resetLinearMapping`; the first processing batch added the sixteen
+ * whose only callees were already written, and the second adds
+ * `unitePhasesInfoOfUref` -- a leaf -- and `updateUref`, which was blocked on
+ * exactly that one call.  The rest stay declared for the record and
  * deliberately undefined, because defining a method whose callees are not
- * written breaks the link for the entire test suite (docs/v90cpp.md).
- * `updateUref` is the nearest one out: it is decoded and would otherwise be
- * in this batch, but it calls `unitePhasesInfoOfUref`, which is not written.
+ * written breaks the link for the entire test suite (docs/v90cpp.md).  The
+ * intra-class call graph is four edges and is written down in finding 1367,
+ * so what each of the remaining ten waits on is a lookup rather than a
+ * measurement.
  *
  * THE OBJECT IS MOSTLY SIX-BY-ONE-HUNDRED-AND-TWENTY-EIGHT ARRAYS.  Six is
  * the number of RBS phases -- every loop in the class runs a `short` index
@@ -163,7 +165,7 @@ public:
 	void resetLinearMapping();
 
 	/*
-	 * THE SIXTEEN THIS BATCH DEFINES.  Their argument lists are the
+	 * THE EIGHTEEN THE PROCESSING BATCHES DEFINE.  Their argument lists are the
 	 * mangling's and so are not a guess; a return type is not mangled, so
 	 * where one is given below it comes from what the object leaves in
 	 * %eax at the `ret` and nothing else.  Three do so deliberately:
@@ -188,8 +190,10 @@ public:
 	void setMaxUcodeArray(unsigned char *);
 	void setPrevSessionLinearMapping(short *);
 	short unSuspectedPhaseNearestLinMapp(short, short);
+	void unitePhasesInfoOfUref(short);
 	void updateLinMappMeanAndVar(short, short);
 	void updateLinMappMeanAndVarAlt(short, short);
+	void updateUref();
 	void updateUrefAlt();
 
 	/*
@@ -211,9 +215,7 @@ public:
 	void setQcLinearMapping();
 	void studyUrefHandler(float, unsigned int);
 	void uniteLinMappInfoOfUnsuspectedPhases(unsigned char);
-	void unitePhasesInfoOfUref(short);
 	void updateAltRbsPhaseInDil();
-	void updateUref();
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -376,12 +378,21 @@ public:
 	float float_a980;					/* +0xa980 */
 
 	/*
-	 * 34 bytes still not modelled.  `resetStudyUrefHandler` fills
-	 * +0xa98c..+0xa998 from the parameter block and writes the shorts at
-	 * +0xa9a4 and +0xa9ae and the float at +0xa9a8; +0xa9ae is the
-	 * displacement the object's size comes from.
+	 * 32 bytes still not modelled.  `resetStudyUrefHandler` fills
+	 * +0xa98c..+0xa998 from the parameter block and writes the short at
+	 * +0xa9ae and the float at +0xa9a8; +0xa9ae is the displacement the
+	 * object's size comes from.
 	 */
-	unsigned char pad_a984[0x22];				/* +0xa984 */
+	unsigned char pad_a984[0x20];				/* +0xa984 */
+
+	/*
+	 * The grouping threshold: `unitePhasesInfoOfUref` merges two phases
+	 * when their `linMapp` entries for the reference code differ by
+	 * STRICTLY LESS than this.  Its neighbour at +0xa9a6 is the same shape
+	 * for a single sample against a single entry, and the two are set
+	 * together by `resetStudyUrefHandler`.
+	 */
+	short short_a9a4;					/* +0xa9a4 */
 
 	/*
 	 * The distance threshold `isAltRbs` compares against: it answers yes

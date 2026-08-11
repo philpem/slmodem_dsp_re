@@ -44459,3 +44459,154 @@ the method answers "yes" with a 32-bit accumulator and "no" with a 16-bit one.
 The mutation that widens it is caught by that one arm and by nothing else.
 
 ======================================================================
+
+### 1420. THE 748-BYTE GROUPER, AND THE THREE THINGS ITS x87 STACK SAYS THAT NO OTHER READING WOULD
+
+`unitePhasesInfoOfUref` is the class's argument for what an RBS phase IS.  Six
+phases each measure the same reference code; some of them are the same phase
+as far as the line is concerned.  The method:
+
+  1. clears a six-entry group map to -1;
+  2. for each phase `i` in 0..4 that is neither grouped nor flagged at
+     +0x2800, merges into `i` every later phase `j` whose `linMapp[j][at]` is
+     within +0xa9a4 of `linMapp[i][at]`, POOLING their counts and their two
+     float accumulators as it goes;
+  3. turns the pooled accumulators into one mean and one variance and writes
+     them to the leader, then copies the leader's pair to every member;
+  4. remembers the LARGEST group's pair; and
+  5. repeats all of the above until a checksum of `linMapp` stops changing,
+     then hands the largest group's pair to every FLAGGED phase.
+
+Step 5 is what makes it iterative: merging rewrites the entries the next
+round's merge decisions are made from.
+
+**Three facts came out of the x87 stack rather than out of the control flow,
+and none of them is guessable.**
+
+*The base stack is three registers deep for the whole function* -- `flds
+0x328`, `fld1`, `flds 0x324` in the prologue, leaving (0.5, 1.0, X) -- and X
+is a LIVE VARIABLE, not a constant.  The "record the best group" arm is
+
+    fstp %st(2)      ; discard X, shuffling 0.5 down into it
+    filds linMapp[i][at]
+    flds  float_9d48[i][at]
+    fxch  %st(1)
+    fstps 0xc(%esp)  ; the entry, to a stack slot
+    fxch  %st(2)     ; (0.5, 1.0, newX)
+
+so X is the best group's variance, carried in `st(2)` across the entire nested
+loop.  Reading it as a fourth constant would have made the final write-back
+store a constant.
+
+*Its initial value is a NaN* -- `.rodata.cst4+0x328` is 0x7fc00000 -- and its
+partner `0xc(%esp)` has no initial value at all.  D281.
+
+*The pooled count is a `short` and the field it is pooled from is an
+`unsigned int`.*  `movswl 0x1c00(%ebp,%eax,4)` loads the low half of a 32-bit
+field, sign-extended, and every subsequent add is truncated with `cwtl`.  So a
+cell with 40,000 samples pools as -25,536, and `total != 0` -- which is what
+the object tests -- is TRUE for it where `total > 0` would be false.  The test
+carries a 40,000 row for exactly that reason and the mutation that changes the
+test to `> 0` is caught by it and by nothing else.
+
+The reconstruction passed its differential test on the first run, which is
+worth recording only because the three facts above are the ones a plausible
+misreading gets wrong, and each of them would have failed it.
+
+======================================================================
+
+### 1421. A LOOP-INVARIANT LOAD IS A PROOF ABOUT THE SOURCE, NOT A HINT
+
+`unitePhasesInfoOfUref`'s convergence checksum is six iterations of one add,
+and the object hoists the load out:
+
+    40f1e: movzwl 0x0(%ebp,%edi,2),%ecx   ; before the loop
+    40f30: lea    0x1(%edx),%esi          ; the loop body: six adds of ecx
+           lea    (%ebx,%ecx,1),%eax
+           movswl %ax,%ebx
+
+GCC may hoist a load out of a loop only when its address does not vary.  So
+this is not "the disassembly suggests the index might be invariant" -- it is
+the compiler asserting that it IS, and the only way for the source to say that
+is to index with something other than the loop variable.  `edi` is
+`5 * 128 + at`, and 5 is where the enclosing grouping loop left `i`.
+
+**The rule this is an instance of is CLAUDE.md's:** act on what the compiler
+was FORCED to encode.  Hoisting is an optimisation and therefore looks like
+something the compiler was free to choose -- but the freedom is in whether to
+hoist, not in whether it MAY, and the permission is the fact.  Reading it as
+`sum += linMapp[p][at]` and calling the hoist a compiler artefact would have
+produced a function that behaves differently on exactly the inputs where the
+six entries differ, which is most of them.
+
+D280 records it as a defect in the original, because a convergence test that
+inspects one sixth of what it is testing is one whether or not it happens to
+be sufficient here.
+
+======================================================================
+
+### 1422. `updateUref` LANDED FROM A DECODE WRITTEN DOWN A BATCH EARLIER, AND THAT IS THE WHOLE POINT OF WRITING IT DOWN
+
+`updateUref` was decoded in the previous batch and could not be landed: it
+calls `unitePhasesInfoOfUref`, and defining a method whose callee is missing
+leaves an undefined symbol that breaks the link for EVERY test binary in the
+tree.  Rather than throw the decode away, it went into finding 1367 as source
+-- loops, indices, the hoisted `ucode`, the reload after the call.
+
+Landing it this batch cost one edit and no disassembly.  The reload was the
+part worth having written down:
+
+    41033: movzbl 0xa96b(%ebx),%eax     ; ucode, at the head
+    4103d: mov    %al,0xb(%esp)         ; kept for the call's argument
+    410cd: call   unitePhasesInfoOfUref
+    410d2: movzbl 0xa96b(%ebx),%edx     ; READ AGAIN, for the clearing loop
+
+-- the callee is allowed to change `ucode` and the clear follows the new
+value.  It does not change it today, so no test can see the difference; it is
+reproduced because it is what the object does, and the note says which of
+those two things is true.
+
+**The generalisable claim is about cost.** A decode is expensive and a
+paragraph is cheap, and the two are not the same artefact: the decode is
+worthless the moment the session ends and the paragraph is not.  Every
+function this tree leaves blocked should leave its decode behind, because the
+blocker is by definition going to be removed by someone.
+
+======================================================================
+
+### 1423. 114 MUTATIONS ON THE ONE FILE, AND THE UNIQUENESS GATE IN FRONT OF EVERY ADDITION
+
+The `v90adid` set is now 114 mutations over one source file holding twenty
+methods, eight of which are one of a near-identical pair.  Finding 1264's
+failure mode -- an anchor that comes to match twice, reported UNUSABLE, and
+UNUSABLE does not fail a run -- gets likelier with every method added, so the
+generator that writes this set asserts `src.count(find) == 1` for EVERY entry
+before it writes anything, and refuses to write the file otherwise.
+
+It has now fired twice for real: once on the previous batch's five
+`setConnectionType` anchors, and once here, where
+`uint_9d30[phase] = 0;` stopped being unique the moment `updateUrefAlt`
+landed beside `reset`.  In both cases the repair is to deepen the anchor until
+it spans something only one of the two has.
+
+    114 mutations: 114 caught, 0 NOT caught, 0 unusable, 0 equivalent
+
+`anchorcheck.py` is run after every registration rather than at the end of the
+batch, which is the same argument one level up: a check that is cheap and
+whose failure is silent should be run at the point where the thing it checks
+changes.
+
+**THREE OF THE NEW ONES SURVIVED THE FIRST RUN and each was a real gap, not a
+reason to claim equivalence.**  Two were `updateUref`'s own mean and variance,
+which the `unitePhasesInfoOfUref` call after them normally overwrites -- and
+the fix is a directed block built on the one phase the unite cannot reach:
+its outer loop runs to 4, so phase 5 can only ever be a group MEMBER, and an
+unflagged phase 5 further than the threshold from every other entry is neither
+leader nor member.  The third was D280's checksum, and the input that
+separates it is a `linMapp[5][at]` of ZERO -- the object's six-copy sum is
+then equal to its own initial value and the loop stops after one round, where
+the honest sum runs a second round and regroups by the MEANS the first
+installed.  All three are the same lesson as finding 1366: the witness has to
+be constructed from what the code does, and a sweep will not find it.
+
+======================================================================

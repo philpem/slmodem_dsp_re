@@ -436,5 +436,143 @@
   "label": "compand the signed level rather than its magnitude",
   "find": "linear2alaw(adid_abs(level))",
   "replace": "linear2alaw(level)"
+ },
+ {
+  "label": "NOTE: unitePhasesInfoOfUref and the updateUref it unblocked."
+ },
+ {
+  "label": "merge on an equal distance as well as a smaller one",
+  "find": "\t\t\t\t    >= short_a9a4)",
+  "replace": "\t\t\t\t    > short_a9a4)"
+ },
+ {
+  "label": "group the flagged phases rather than the unflagged ones",
+  "find": "\t\t\tif (group[i] != ADID_NO_GROUP || short_2800[i] != 0)",
+  "replace": "\t\t\tif (group[i] != ADID_NO_GROUP || short_2800[i] == 0)"
+ },
+ {
+  "label": "let a phase merge with itself",
+  "find": "\t\t\tfor (j = (short)(i + 1); j < V90ADID_PHASES; j++) {\n\t\t\t\tif (group[j] != ADID_NO_GROUP",
+  "replace": "\t\t\tfor (j = i; j < V90ADID_PHASES; j++) {\n\t\t\t\tif (group[j] != ADID_NO_GROUP"
+ },
+ {
+  "label": "run the grouping loop over all six phases, not five",
+  "find": "\t\tfor (i = 0; i < V90ADID_PHASES - 1; i++) {",
+  "replace": "\t\tfor (i = 0; i < V90ADID_PHASES; i++) {"
+ },
+ {
+  "label": "pool nothing into the group's count",
+  "find": "\t\t\ttotal = (short)uint_1c00[i][at];",
+  "replace": "\t\t\ttotal = 0;"
+ },
+ {
+  "label": "test the pooled count for positive rather than nonzero",
+  "find": "\t\t\tif (total != 0) {",
+  "replace": "\t\t\tif (total > 0) {"
+ },
+ {
+  "label": "form the group mean even when it pooled nothing",
+  "find": "\t\t\tif (total != 0) {\n\t\t\t\tfloat inv = 1.0f / total;",
+  "replace": "\t\t\tif (total != 0 || 1) {\n\t\t\t\tfloat inv = 1.0f / total;"
+ },
+ {
+  "label": "reverse the group variance's subtraction",
+  "find": "\t\t\t\tfloat_9d48[i][at] = fsq * inv - mean * mean;",
+  "replace": "\t\t\t\tfloat_9d48[i][at] = mean * mean - fsq * inv;"
+ },
+ {
+  "label": "drop the rounding term on the group mean",
+  "find": "\t\t\t\tlinMapp[i][at] = (short)(mean + 0.5f);",
+  "replace": "\t\t\t\tlinMapp[i][at] = (short)mean;"
+ },
+ {
+  "label": "pool the sum of squares into the mean",
+  "find": "\t\t\t\tfloat mean = fsum * inv;",
+  "replace": "\t\t\t\tfloat mean = fsq * inv;"
+ },
+ {
+  "label": "record the group under the member rather than the leader",
+  "find": "\t\t\t\tgroup[j] = i;",
+  "replace": "\t\t\t\tgroup[j] = j;"
+ },
+ {
+  "label": "do not propagate the leader's entry to the group",
+  "find": "\t\t\t\tlinMapp[j][at] = linMapp[i][at];",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "do not propagate the leader's variance to the group",
+  "find": "\t\t\t\tfloat_9d48[j][at] = float_9d48[i][at];",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "do not count the group's members",
+  "find": "\t\t\t\tcount = (short)(count + 1);",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "let a tie replace the best group",
+  "find": "\t\t\tif (count > best) {",
+  "replace": "\t\t\tif (count >= best) {"
+ },
+ {
+  "label": "remember the wrong group's entry",
+  "find": "\t\t\t\tbestValue = linMapp[i][at];",
+  "replace": "\t\t\t\tbestValue = (float)i;"
+ },
+ {
+  "label": "remember no variance for the best group",
+  "find": "\t\t\t\tbestVar = float_9d48[i][at];",
+  "replace": "\t\t\t\tbestVar = 0.0f;"
+ },
+ {
+  "label": "checksum the phase the inner loop names rather than the outer one (D280)",
+  "find": "\t\t\tsum = (short)(sum + linMapp[i][at]);",
+  "replace": "\t\t\tsum = (short)(sum + linMapp[p][at]);"
+ },
+ {
+  "label": "hand the best group's answer to the unflagged phases",
+  "find": "\t\t\tif (short_2800[p] != 0) {\n\t\t\t\tlinMapp[p][at] = v;",
+  "replace": "\t\t\tif (short_2800[p] == 0) {\n\t\t\t\tlinMapp[p][at] = v;"
+ },
+ {
+  "label": "write the best group's answer to the alternate table",
+  "find": "\t\t\t\tlinMapp[p][at] = v;",
+  "replace": "\t\t\t\tlinMappAlt[p][at] = v;"
+ },
+ {
+  "label": "do not hand the flagged phases a variance",
+  "find": "\t\t\t\tfloat_9d48[p][at] = bestVar;",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "invert updateUref's empty-cell test",
+  "find": "\t\tif (uint_1c00[phase][ucode] != 0) {",
+  "replace": "\t\tif (uint_1c00[phase][ucode] == 0) {"
+ },
+ {
+  "label": "do not unite the phases",
+  "find": "\tunitePhasesInfoOfUref(ucode);",
+  "replace": "\t/* deliberately removed */"
+ },
+ {
+  "label": "leave updateUref's count uncleared",
+  "find": "\t\tuint_1c00[phase][ucode] = 0;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "leave updateUref's sum uncleared",
+  "find": "\t\tfloat_1000[phase][ucode] = 0.0f;",
+  "replace": "\t\t/* deliberately removed */"
+ },
+ {
+  "label": "drop the rounding term on updateUref's mean",
+  "find": "\t\t\tlinMapp[phase][ucode] = (short)(mean + 0.5f);",
+  "replace": "\t\t\tlinMapp[phase][ucode] = (short)mean;"
+ },
+ {
+  "label": "reverse updateUref's variance subtraction",
+  "find": "\t\t\t    float_9118[phase][ucode] * inv - mean * mean;",
+  "replace": "\t\t\t    mean * mean - float_9118[phase][ucode] * inv;"
  }
 ]

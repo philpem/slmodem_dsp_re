@@ -4998,3 +4998,30 @@ Neither way of forcing the symbols out is right: an out-of-line definition canno
 *Batch of 2026-08-11, from `V90AutoDigitalImpDetector::addReceivedSampleToStorage` (blob 0x41ff0), +0x74. **Reachability: unmeasured** -- it needs a phase of 5 and a received code of 128 or more, and what codes reach this method is the caller's business. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1366.** The histogram increment is `movzwl 0x8b00(%edi,%ecx,2)` with `ecx = phase * 128 + code`, and `code` is the full `unsigned char` argument. The array is 6 x 128 shorts ending at +0x9100, which is `int_9100[0]` -- the sample-store index of phase 0. So a phase of 5 with a code of 128 increments the low half of phase 0's store index instead of a histogram bin, and codes 128..139 reach all six of those indices. The effect compounds: the corrupted index is what the NEXT sample stores at, and D256 says nothing bounds it. Both sides do it identically and `t_v90adid` compares them doing it, in `run_accumulate`, where the whole byte is swept one call at a time. The forty-block sequence masks the code to seven bits instead, and says why at the line that does it -- an index of 65,777 leaves the object, and a test that follows it there measures nothing.
+
+## D280 🐛 `unitePhasesInfoOfUref`'s convergence checksum adds six copies of one entry
+
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::unitePhasesInfoOfUref` (blob 0x40cb0, 748 bytes), +0x260. **Reachability: FIRES ON EVERY CALL** -- it is the loop test, not an error path. What it cannot do is make the loop wrong: the checksum is only ever compared against its own previous value. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1421.** The method repeats its grouping until `linMapp` stops changing, and the "has it changed" test is a six-iteration sum. The sum's addend does not vary:
+
+    40f14: shl    $0x7,%esi              ; esi = 5, the outer loop's terminal value
+    40f1b: lea    (%esi,%ecx,1),%edi     ; edi = 5*128 + at
+    40f1e: movzwl 0x0(%ebp,%edi,2),%ecx  ; HOISTED CLEAN OUT OF THE LOOP
+    40f30: lea    0x1(%edx),%esi         ; the loop: six adds of the same ecx
+           ...
+    40f42: cmp    0x18(%esp),%bx
+
+A load can only be hoisted out of a loop if its address is loop-invariant, so this is not a reading of the disassembly that could be wrong: the index is the OUTER loop's variable, left at 5 when it terminated, where the source plainly meant the inner one. The checksum is therefore `6 * linMapp[5][at]` truncated to a `short`, not the sum over the six phases.
+
+It does not make the method loop for ever or terminate early in any way that has been observed: phase 5 is grouped like any other, so its entry stops changing when the grouping settles. It is recorded because a checksum that reads one sixth of what it is checking is a defect whether or not it happens to be sufficient, and because a reader who assumes the obvious sum will not understand the object's iteration count.
+
+## D281 🐛 `unitePhasesInfoOfUref` reads an uninitialised local when every phase is flagged
+
+*Batch of 2026-08-11, same function, +0x2a1 (`flds 0xc(%esp)`) and the NaN at `.rodata.cst4+0x328`. **Reachability: needs `short_2800[0..4]` ALL nonzero**, which no written caller produces today -- `updateUref` passes the flags through untouched from whatever the study path set. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1420.** The method picks the largest group of unflagged phases and hands that group's mapping entry and variance to every flagged phase. Both are held in locals: the variance in an x87 register seeded with the constant at `.rodata.cst4+0x328`, which is 0x7fc00000 -- a quiet NaN -- and the entry in a stack slot at `0xc(%esp)` **seeded with nothing at all**.
+
+The grouping loop runs `i` over 0..4 and skips any phase that is flagged, so if all five are flagged it never executes, the two locals are never written, and the final loop stores a NaN and four bytes of stack residue into `linMapp` and `float_9d48` for all six phases. Reproduced as it is -- `bestValue` is declared and deliberately not initialised, because giving it a value would be inventing behaviour rather than reproducing it, and the blob's behaviour on that path is not a function of its inputs.
+
+**The test cannot compare that path and says so at the line that avoids it.** Two builds have two stack frames, so the residue differs between the sides for reasons that have nothing to do with the reconstruction; `t_v90adid` therefore always leaves at least one of phases 0..4 clear. Every other arm of the method is driven and compared.
