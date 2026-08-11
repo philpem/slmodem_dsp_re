@@ -107,6 +107,77 @@ V90Jd::~V90Jd()
 }
 
 /*
+ * ===========================================================================
+ * The three accessors, 0x1e8b0, 0x1e900 and 0x1e920 -- AND THEY DO NOT READ
+ * THE LAYOUT THE CONSTRUCTOR WRITES.
+ *
+ * The constructor and `getBitVector` build a FRAMED message: seventeen 1 bits,
+ * then a 0 at `bits[17]`, the low sixteen mask bits at `bits[18..33]`, a 0 at
+ * `bits[34]`, the high twelve at `bits[35..46]`, and the two small fields at
+ * `bits[47..48]` and `bits[49..50]`.  These three read
+ *
+ *     getRatesMask         +0x02..+0x11 and +0x12..+0x1d   bits[0..15], [16..27]
+ *     getConstelationSize  +0x1e, +0x1f                    bits[28], bits[29]
+ *     getMaxLookahead      +0x20, +0x21                    bits[30], bits[31]
+ *
+ * -- a payload-contiguous layout with no group markers in it, 28 rate bits
+ * then two and two, ending at `bits[31]`.  Nothing that PACKS in this class
+ * writes that, so the accessors and the packer disagree about where the same
+ * four quantities live.  Recorded as D270 rather than reconciled: the
+ * disassembly is unambiguous, both readings are reproduced as the object has
+ * them, and each is driven against the blob.
+ *
+ * A BYTE COUNTS AS SET IF IT IS NON-ZERO, and that is not the same rule the
+ * two small fields use.  `getRatesMask` tests `cmpb $0x0`, so a byte of 2
+ * contributes its bit; `getMaxLookahead` does `and $0x1` on both of its, so a
+ * byte of 2 contributes nothing.  The test seeds the vector with varied bytes
+ * rather than with 0 and 1 so that the two rules are told apart.
+ *
+ * THE RETURN TYPES ARE MEASURED, not assumed -- a return type is not mangled.
+ * `getRatesMask` leaves a 32-bit value in `%eax` (`mov %edx,%eax` on an
+ * accumulator built with `shl`/`or`), so it returns an `int`.
+ * `getMaxLookahead` ends `movzbl %dl,%eax` on a sum computed in a byte
+ * register, which is an `unsigned char` result widened at the return.
+ * `getConstelationSize` writes through both pointers and sets `%eax` to
+ * nothing, so it returns void.
+ * ===========================================================================
+ */
+int
+V90Jd::getRatesMask()
+{
+	int mask = 0;
+	int i;
+
+	for (i = 0; i <= 15; i++)
+		if (bits[i])
+			mask |= 1 << i;
+
+	for (i = 0; i <= 11; i++)
+		if (bits[16 + i])
+			mask |= 1 << (i + 16);
+
+	return mask;
+}
+
+void
+V90Jd::getConstelationSize(unsigned char *first, unsigned char *second)
+{
+	*first = bits[28];
+	*second = bits[29];
+}
+
+/*
+ * The high bit is `bits[31]` and the low one `bits[30]`, which is the order
+ * `setMaxLookahead` and the constructor use for the pair they write -- at
+ * `bits[50]` and `bits[49]`, nineteen bytes further on.
+ */
+unsigned char
+V90Jd::getMaxLookahead()
+{
+	return (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));
+}
+
+/*
  * The CRC-16 the message carries, as the object computes it: sixteen ints,
  * one per bit, shifting down toward crc[0], with the feedback
  *

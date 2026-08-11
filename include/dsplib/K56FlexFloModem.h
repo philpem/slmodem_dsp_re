@@ -44,11 +44,21 @@ struct _tagModemParameters;
 
 class K56FlexFloModem {
 public:
-	/* Defined in src/pump/v90/K56FlexFloModem.cpp.  All four are stubs. */
+	/* Defined in src/pump/v90/K56FlexFloModem.cpp.  All seven are stubs. */
 	int getK56FlexMpBits(short *);
 	int getK56FlexJaBits(short *);
 	void setMinMaxRates(int, int);
 	void enterPhase3FullDuplex();
+	void externalReset();
+	void internalReset();
+	void k56FlexEnterPhase3();
+
+	/*
+	 * The demodulator, and the one member of the class that returns
+	 * something other than zero: `mov $0x5,%eax; ret`.  `int` is measured
+	 * the same way the two bit getters' return type is and goes no further.
+	 */
+	int k56FlexRunDemodulator(float *, unsigned int, int *, int *);
 
 	/*
 	 * Declared, not defined.  Signatures are the mangling's, so this is a
@@ -56,7 +66,6 @@ public:
 	 * are spelled `void` here to say exactly that -- no `void` below was
 	 * measured.
 	 */
-	void k56FlexRunDemodulator(float *, unsigned int, int *, int *);
 	void getConstellation(int_complex *, unsigned long);
 	void getDFE(int_complex *, unsigned long);
 	void getDecisionErrors(int_complex *, unsigned long);
@@ -64,9 +73,6 @@ public:
 	void getLinearEqualizer(int_complex *, unsigned long);
 	void getResamplerOffset(int_complex *, unsigned long);
 	void getResamplerPhase(int_complex *, unsigned long);
-	void externalReset();
-	void internalReset();
-	void k56FlexEnterPhase3();
 };
 
 /*

@@ -90,13 +90,22 @@ public:
 	 */
 	void unPackData(int);
 	void packData();
-	void getRatesMask();
 	void setRatesMask(int);
 	void resetCrc();
-	void getMaxLookahead();
 	void setMaxLookahead(unsigned char);
-	void getConstelationSize(unsigned char *, unsigned char *);
 	void setConstelSize(unsigned char, unsigned char);
+
+	/*
+	 * DEFINED, and they read a DIFFERENT layout from the one the
+	 * constructor and `getBitVector` write: `bits[0..27]` for the rate
+	 * mask, `bits[28..29]` for the constellation size and `bits[30..31]`
+	 * for the lookahead, with none of the framing.  D270; V90Jd.cpp has the
+	 * offsets and the argument.  The return types are read off the object,
+	 * since the mangling does not carry one.
+	 */
+	int getRatesMask();
+	void getConstelationSize(unsigned char *, unsigned char *);
+	unsigned char getMaxLookahead();
 
 	/*
 	 * Data members are public because the original's access specifiers are

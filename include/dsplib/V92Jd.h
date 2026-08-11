@@ -76,14 +76,22 @@ public:
 	void unPackJdData(int);
 	void unPackJdPhaseData(int);
 	void setJdPhase(float);
-	void getJdPhase();
-	void getRatesMask();
 	void setRatesMask(int);
 	void resetCrc();
-	void getMaxLookahead();
 	void setMaxLookahead(unsigned char);
-	void getConstelationSize(unsigned char *, unsigned char *);
 	void setConstelSize(unsigned char, unsigned char);
+
+	/*
+	 * DEFINED.  Three of the four are V90Jd's byte for byte and read the
+	 * unframed layout D270 describes -- `bits[0..27]`, `bits[30..31]` --
+	 * and the phase comes out of `phaseBits[0..15]` as Q16.  The fourth,
+	 * `getConstelationSize`, reads `phaseBits[29..30]` where V90Jd's reads
+	 * `bits[28..29]`: D271.  Return types are measured, not mangled.
+	 */
+	float getJdPhase();
+	int getRatesMask();
+	void getConstelationSize(unsigned char *, unsigned char *);
+	unsigned char getMaxLookahead();
 
 	/* Public, and one access section, for the reasons V90Jd.h gives. */
 

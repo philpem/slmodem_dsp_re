@@ -45,6 +45,20 @@ unsigned char *ref_getBitVector(void *self)
 void ref_unPackReset(void *self) asm("ref__ZN5V90Jd11unPackResetEv");
 
 /*
+ * The three accessors.  Their return types are the ones V90Jd.cpp derives
+ * from the object -- `int`, void and `unsigned char` -- and the declarations
+ * here are what would fail if that reading were wrong on the blob's side: a
+ * function that left `%eax` alone would hand this fixture whatever the call
+ * left there, which varies between the two calls and would not compare equal.
+ */
+int ref_getRatesMask(void *self) asm("ref__ZN5V90Jd12getRatesMaskEv");
+void ref_getConstelationSize(void *self, unsigned char *first,
+			     unsigned char *second)
+	asm("ref__ZN5V90Jd19getConstelationSizeEPhS0_");
+unsigned char ref_getMaxLookahead(void *self)
+	asm("ref__ZN5V90Jd15getMaxLookaheadEv");
+
+/*
  * THE CONSTRUCTOR AND DESTRUCTOR ARE REACHED BY SYMBOL, on both sides, which
  * is the only way to drive them in place.  C++ offers no syntax for running a
  * constructor over storage that already exists -- placement `new` needs a
@@ -346,6 +360,169 @@ run_dtor(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * The three accessors, swept over the fields they decode.
+ *
+ * THE SWEEP IS OVER THE MESSAGE, NOT OVER THE SEED.  A seeded vector alone
+ * would drive `getRatesMask` with 28 bytes that are non-zero about 255 times
+ * in 256, so the answer would be 0x0fffffff on nearly every trial and a
+ * reconstruction that read the wrong 28 bytes would agree with the blob
+ * anyway.  Every position is therefore driven on its own, then in blocks, then
+ * pseudorandomly, with the REST of the object still holding seeded bytes so
+ * that a read one byte outside the payload diverges.
+ *
+ * WHAT A SET BIT LOOKS LIKE IN THE STORAGE IS PART OF THE SWEEP.  The object
+ * reads the 28 mask bytes with `cmpb $0x0` and the two lookahead bytes with
+ * `and $0x1`, so a byte of 2 sets a rate bit and clears a lookahead one.  A
+ * fixture that only ever stored 0 and 1 could not tell those two rules apart,
+ * and `mask & 1` in place of `mask != 0` is a mutation in v90jd.json.
+ *
+ * The accessors are also asserted to write NOTHING -- neither to the object
+ * nor past the two bytes `getConstelationSize` is given.
+ * ===========================================================================
+ */
+static void
+paint_payload(unsigned int mask, unsigned char c0, unsigned char c1,
+	      unsigned char l0, unsigned char l1, int style)
+{
+	static const unsigned char set_byte[4] = { 0x01, 0x02, 0x80, 0xff };
+	unsigned char one = set_byte[style & 3];
+	int i;
+
+	for (i = 0; i < 28; i++) {
+		unsigned char v = ((mask >> i) & 1u) != 0 ? one : 0x00;
+
+		OURS.bits[i] = v;
+		THEIRS.bits[i] = v;
+	}
+	OURS.bits[28] = THEIRS.bits[28] = c0;
+	OURS.bits[29] = THEIRS.bits[29] = c1;
+	OURS.bits[30] = THEIRS.bits[30] = l0;
+	OURS.bits[31] = THEIRS.bits[31] = l1;
+}
+
+#define NACC 64
+
+static int
+run_accessors(void)
+{
+	int trial;
+	int first_mask = 0, first_look = -1;
+	int mask_distinct = 0, mask_nonzero = 0, look_distinct = 0;
+	int look_same_bits = 0, look_diff_bits = 0;
+
+	diff_begin("V90Jd::getRatesMask / getConstelationSize / getMaxLookahead");
+
+	for (trial = 0; trial < NACC; trial++) {
+		unsigned char before[SLOT];
+		unsigned char pa[8], pb[8];
+		unsigned int mask;
+		unsigned char c0, c1, l0, l1;
+		int am, bm;
+		unsigned int i;
+
+		seed(trial, trial % 4);
+
+		if (trial < 28)
+			mask = 1u << trial;		/* one position   */
+		else if (trial < 32)
+			mask = 0x0ffffff0u >> (trial - 28);
+		else
+			mask = 0x9e3779b9u * (unsigned)(trial + 1);
+
+		c0 = (unsigned char)(trial * 37u + 1u);
+		c1 = (unsigned char)(trial * 53u + 7u);
+		/*
+		 * THE TWO LOOKAHEAD BYTES MUST NOT SHARE A LOW BIT, and the
+		 * first spelling of this fixture did: `trial * 11` and
+		 * `trial * 29 + 2` are both odd multiples, so bit 0 was
+		 * `trial & 1` in both and TRANSPOSING THE PAIR CHANGED
+		 * NOTHING.  The mutation tier caught the fixture rather than
+		 * the code -- v90jd.json's "getMaxLookahead transposes the two
+		 * bits" read NOT CAUGHT.  Bit 1 of the trial number is folded
+		 * into the second byte so that all four combinations occur,
+		 * and the two coverage counters below refuse to let the blind
+		 * spot come back quietly.
+		 */
+		l0 = (unsigned char)(trial * 11u);
+		l1 = (unsigned char)(trial * 29u + (((unsigned)trial >> 1) & 1u));
+		paint_payload(mask, c0, c1, l0, l1, trial);
+		memcpy(before, ours.raw, SLOT);
+
+		for (i = 0; i < sizeof(pa); i++) {
+			pa[i] = (unsigned char)(0x60u + i + trial);
+			pb[i] = pa[i];
+		}
+
+		am = OURS.getRatesMask();
+		bm = ref_getRatesMask(&THEIRS);
+		diff_eq_int("getRatesMask (trial %ld)", am, bm, trial);
+		/*
+		 * And an oracle the blob does not supply: the 28 bits that were
+		 * painted, and nothing above them.  This is what says the
+		 * fixture drove what it meant to drive.
+		 */
+		diff_eq_int("getRatesMask decodes the painted mask (trial %ld)",
+			    am, (int)(mask & 0x0fffffffu), trial);
+
+		OURS.getConstelationSize(&pa[2], &pa[5]);
+		ref_getConstelationSize(&THEIRS, &pb[2], &pb[5]);
+		diff_eq_int("getConstelationSize wrote the same bytes "
+			    "(trial %ld)", memcmp(pa, pb, sizeof(pa)), 0,
+			    trial);
+		diff_eq_int("getConstelationSize first out (trial %ld)",
+			    pa[2], c0, trial);
+		diff_eq_int("getConstelationSize second out (trial %ld)",
+			    pa[5], c1, trial);
+
+		{
+			unsigned char al = OURS.getMaxLookahead();
+			unsigned char bl = ref_getMaxLookahead(&THEIRS);
+
+			diff_eq_int("getMaxLookahead (trial %ld)", al, bl,
+				    trial);
+			diff_eq_int("getMaxLookahead is the two low bits "
+				    "(trial %ld)", al,
+				    (l0 & 1) + ((l1 & 1) << 1), trial);
+			if (trial == 0)
+				first_look = al;
+			else if (al != first_look)
+				look_distinct = 1;
+			if ((l0 & 1) == (l1 & 1))
+				look_same_bits = 1;
+			else
+				look_diff_bits = 1;
+		}
+
+		diff_eq_obj("after the accessors", V90Jd, &OURS, &THEIRS,
+			    trial);
+		diff_eq_int("the accessors wrote nothing (trial %ld)",
+			    memcmp(before, ours.raw, SLOT), 0, trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+
+		if (trial == 0)
+			first_mask = am;
+		else if (am != first_mask)
+			mask_distinct = 1;
+		if (am != 0)
+			mask_nonzero = 1;
+	}
+
+	diff_eq_int("the rate mask is not the same on every trial",
+		    mask_distinct, 1, 0);
+	diff_eq_int("the rate mask is not always zero", mask_nonzero, 1, 0);
+	diff_eq_int("the lookahead is not the same on every trial",
+		    look_distinct, 1, 0);
+	diff_eq_int("the two lookahead bits were driven equal", look_same_bits,
+		    1, 0);
+	diff_eq_int("and unequal, so a transposition is visible",
+		    look_diff_bits, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -355,6 +532,7 @@ main(void)
 	rc |= run_unpackreset();
 	rc |= run_ctor();
 	rc |= run_dtor();
+	rc |= run_accessors();
 
 	return rc;
 }

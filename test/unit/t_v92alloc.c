@@ -65,6 +65,33 @@ extern void *ref_K56FLEX_Create(void *, void *, void *, int);
 extern void ref_K56FLEX_Delete(void *obj);
 
 /*
+ * THREE MEMBERS OF `K56FlexFloModem`, REACHED FROM C BY THEIR MANGLED NAMES.
+ * They are tested here rather than beside the class's other five stubs in
+ * t_v90leaves.cpp for one reason: test/mutations/suites.json pairs
+ * `K56FlexFloModem.cpp` with THIS binary, so a mutation of the constant below
+ * is only caught if this binary is what reads it (finding 1264 is the same
+ * hazard from the other end).
+ *
+ * The convention is plain cdecl with `this` as the first stack argument
+ * (finding 215).  Calling a member this way is safe here BECAUSE not one
+ * instruction in any of the three touches `this` -- which is the claim under
+ * test, so the fixture hands both sides a seeded buffer as `this` and compares
+ * it afterwards.
+ */
+extern int k56_run(void *self, float *in, unsigned int n, int *a, int *b)
+	__asm__("_ZN15K56FlexFloModem21k56FlexRunDemodulatorEPfjPiS1_");
+extern int ref_k56_run(void *self, float *in, unsigned int n, int *a, int *b)
+	__asm__("ref__ZN15K56FlexFloModem21k56FlexRunDemodulatorEPfjPiS1_");
+extern void k56_internal_reset(void *self)
+	__asm__("_ZN15K56FlexFloModem13internalResetEv");
+extern void ref_k56_internal_reset(void *self)
+	__asm__("ref__ZN15K56FlexFloModem13internalResetEv");
+extern void k56_enter_phase3(void *self)
+	__asm__("_ZN15K56FlexFloModem18k56FlexEnterPhase3Ev");
+extern void ref_k56_enter_phase3(void *self)
+	__asm__("ref__ZN15K56FlexFloModem18k56FlexEnterPhase3Ev");
+
+/*
  * The block plus a guard region.  A store one slot past the end of the
  * constellation array lands in `guard` and fails the comparison, instead of
  * running off into whatever the stack held.
@@ -549,6 +576,84 @@ run_k56(void)
 	return diff_end();
 }
 
+/*
+ * The three K56flex members: `k56FlexRunDemodulator`, `internalReset` and
+ * `k56FlexEnterPhase3`.
+ *
+ * WHAT A STUB CLAIMS IS MOSTLY NEGATIVE, so that is what is driven.  Each side
+ * gets its own seeded 64-byte `this`, its own seeded sample buffer and its own
+ * seeded pair of output ints, and every one of those is compared afterwards
+ * against the other side's AND against its own value before the call.  The
+ * demodulator's return value is compared as well, and separately against 5:
+ * comparing only the two sides would pass a pair that both returned something
+ * else, and 5 is what .text+0x10200 stores into `%eax`.
+ *
+ * The buffers are driven at four lengths including zero, because `n` is the
+ * one argument a body would plausibly loop over.
+ */
+static int
+run_k56_members(void)
+{
+	static const unsigned int lens[] = { 0u, 1u, 8u, 64u };
+	unsigned int li;
+
+	diff_begin("K56FlexFloModem: the demodulator and the two resets");
+
+	for (li = 0; li < sizeof(lens) / sizeof(lens[0]); li++) {
+		unsigned char self_a[64], self_b[64], self0[64];
+		float in_a[64], in_b[64], in0[64];
+		int out_a[2], out_b[2], out0[2];
+		int ra, rb;
+
+		seedfill(self_a, sizeof(self_a), 0x51deu + li);
+		memcpy(self_b, self_a, sizeof(self_a));
+		memcpy(self0, self_a, sizeof(self_a));
+		seedfill(in_a, sizeof(in_a), 0x9e37u + li);
+		memcpy(in_b, in_a, sizeof(in_a));
+		memcpy(in0, in_a, sizeof(in_a));
+		seedfill(out_a, sizeof(out_a), 0x4f1bu + li);
+		memcpy(out_b, out_a, sizeof(out_a));
+		memcpy(out0, out_a, sizeof(out_a));
+
+		ra = k56_run(self_a, in_a, lens[li], &out_a[0], &out_a[1]);
+		rb = ref_k56_run(self_b, in_b, lens[li], &out_b[0],
+				 &out_b[1]);
+
+		diff_eq_int("k56FlexRunDemodulator returns the same (len %ld)",
+			    ra, rb, (long)lens[li]);
+		diff_eq_int("k56FlexRunDemodulator returns 5 (len %ld)", ra, 5,
+			    (long)lens[li]);
+		diff_eq_int("neither side wrote through `this` (len %ld)",
+			    memcmp(self_a, self_b, sizeof(self_a))
+			    | memcmp(self_a, self0, sizeof(self_a)), 0,
+			    (long)lens[li]);
+		diff_eq_int("neither side read or wrote the samples (len %ld)",
+			    memcmp(in_a, in_b, sizeof(in_a))
+			    | memcmp(in_a, in0, sizeof(in_a)), 0,
+			    (long)lens[li]);
+		diff_eq_int("neither side wrote its two outputs (len %ld)",
+			    memcmp(out_a, out_b, sizeof(out_a))
+			    | memcmp(out_a, out0, sizeof(out_a)), 0,
+			    (long)lens[li]);
+
+		k56_internal_reset(self_a);
+		ref_k56_internal_reset(self_b);
+		diff_eq_int("internalReset wrote nothing (len %ld)",
+			    memcmp(self_a, self_b, sizeof(self_a))
+			    | memcmp(self_a, self0, sizeof(self_a)), 0,
+			    (long)lens[li]);
+
+		k56_enter_phase3(self_a);
+		ref_k56_enter_phase3(self_b);
+		diff_eq_int("k56FlexEnterPhase3 wrote nothing (len %ld)",
+			    memcmp(self_a, self_b, sizeof(self_a))
+			    | memcmp(self_a, self0, sizeof(self_a)), 0,
+			    (long)lens[li]);
+	}
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -599,6 +704,7 @@ main(void)
 				V92_PARAMSINFO_FILTERCOEF_SZ);
 
 	rc |= run_k56();
+	rc |= run_k56_members();
 
 	return rc;
 }

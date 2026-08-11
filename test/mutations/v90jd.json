@@ -61,5 +61,55 @@
   "label": "the destructor is not empty",
   "find": "V90Jd::~V90Jd()\n{\n}",
   "replace": "V90Jd::~V90Jd()\n{\n\tunpackWord = 0x5a5a;\n}"
+ },
+ {
+  "label": "getRatesMask's second group reads the framed layout",
+  "find": "\tfor (i = 0; i <= 11; i++)\n\t\tif (bits[16 + i])",
+  "replace": "\tfor (i = 0; i <= 11; i++)\n\t\tif (bits[V90JD_GROUP2 + 1 + i])"
+ },
+ {
+  "label": "getRatesMask's second group is eleven bits, not twelve",
+  "find": "\tfor (i = 0; i <= 11; i++)\n\t\tif (bits[16 + i])",
+  "replace": "\tfor (i = 0; i <= 10; i++)\n\t\tif (bits[16 + i])"
+ },
+ {
+  "label": "getRatesMask's first group is fifteen bits, not sixteen",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tif (bits[i])\n\t\t\tmask |= 1 << i;",
+  "replace": "\tfor (i = 0; i <= 14; i++)\n\t\tif (bits[i])\n\t\t\tmask |= 1 << i;"
+ },
+ {
+  "label": "getRatesMask takes the low bit of each byte rather than testing it for zero",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tif (bits[i])\n\t\t\tmask |= 1 << i;",
+  "replace": "\tfor (i = 0; i <= 15; i++)\n\t\tif (bits[i] & 1)\n\t\t\tmask |= 1 << i;"
+ },
+ {
+  "label": "getRatesMask's second group is shifted from 0, not from 16",
+  "find": "\t\t\tmask |= 1 << (i + 16);",
+  "replace": "\t\t\tmask |= 1 << i;"
+ },
+ {
+  "label": "getConstelationSize reads the framed positions",
+  "find": "\t*first = bits[28];\n\t*second = bits[29];",
+  "replace": "\t*first = bits[47];\n\t*second = bits[48];"
+ },
+ {
+  "label": "getConstelationSize transposes its two outputs",
+  "find": "\t*first = bits[28];\n\t*second = bits[29];",
+  "replace": "\t*first = bits[29];\n\t*second = bits[28];"
+ },
+ {
+  "label": "getMaxLookahead transposes the two bits",
+  "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
+  "replace": "\treturn (unsigned char)((bits[31] & 1) + ((bits[30] & 1) << 1));"
+ },
+ {
+  "label": "getMaxLookahead tests each byte for zero rather than masking it",
+  "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
+  "replace": "\treturn (unsigned char)((bits[30] != 0) + ((bits[31] != 0) << 1));"
+ },
+ {
+  "label": "getMaxLookahead reads the framed positions",
+  "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
+  "replace": "\treturn (unsigned char)((bits[49] & 1) + ((bits[50] & 1) << 1));"
  }
 ]

@@ -70,6 +70,45 @@ K56FlexFloModem::externalReset()
 }
 
 /*
+ * The other reset and the phase-3 entry, .text+0x101e0 and +0x101c0.  One byte
+ * of `c3` each, like `externalReset` above and for the same reason: this class
+ * is a name list.  D154.
+ */
+void
+K56FlexFloModem::internalReset()
+{
+}
+
+void
+K56FlexFloModem::k56FlexEnterPhase3()
+{
+}
+
+/*
+ * `k56FlexRunDemodulator` -- SIX BYTES, `b8 05 00 00 00 c3`, and the five that
+ * are not the `ret` are the whole of what this build's K56flex receiver does:
+ * it returns the constant 5 and reads none of its four arguments.
+ *
+ * THE RETURN TYPE IS MEASURED THE SAME WAY THE TWO BIT GETTERS' ARE.  A
+ * function that leaves `%eax` alone returns void and one that sets it returns
+ * a value; this sets it to a value that is neither zero nor derived from
+ * anything, so the type is as far as `int` and no further -- `short`, `long`
+ * or an enum would compile to the same five bytes.
+ *
+ * WHAT 5 MEANS IS NOT SETTLED HERE and is not guessed.  D155 is the entry that
+ * matters: `k56FlexPhase34`'s completion arms test the values these stubs
+ * return, so the constant is load-bearing for a caller even though nothing in
+ * this class computes it.  The two `int *` outputs are NOT written, which is
+ * the interesting claim about a stub and is what the differential test checks
+ * -- both sides get a seeded pair and neither may touch it.
+ */
+int
+K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)
+{
+	return 5;
+}
+
+/*
  * ---------------------------------------------------------------------------
  * `K56FLEX_Create` and `K56FLEX_Delete`, .text+0x102a0 and +0x102c0.
  *

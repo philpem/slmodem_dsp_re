@@ -43511,4 +43511,138 @@ an embedded member of `VPcmFloModem` and the constructor's output includes it.
 So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
 which is a note for whoever repairs it, not a reason not to.
 
+### 1390. THE Jd ACCESSORS READ A DIFFERENT BIT LAYOUT FROM THE ONE THE PACKERS WRITE
+
+`V90Jd` and `V92Jd` each carry a 72-byte vector, one byte per bit, and each
+class has both the code that FILLS it for transmission and the code that
+DECODES it.  The two do not agree about where anything is.
+
+The constructor and `getBitVector`/`packJdData` build a framed message: 17 one
+bits, a zero at `bits[17]`, mask bits 0..15 at `bits[18..33]`, a zero at
+`bits[34]`, mask bits 16..27 at `bits[35..46]`, the constellation pair at
+`bits[47..48]`, the lookahead pair at `bits[49..50]`, a zero at `bits[51]`, the
+CRC at `bits[52..67]` and four trailing zeros.  That map is finding 1223's.
+
+The three accessors read, in `V90Jd` (0x1e8b0, 0x1e900, 0x1e920) and identically
+in `V92Jd` (0x11eb0, 0x11f20):
+
+    getRatesMask         +0x02..+0x11, +0x12..+0x1d   bits[0..15], bits[16..27]
+    getConstelationSize  +0x1e, +0x1f                 bits[28], bits[29]
+    getMaxLookahead      +0x20, +0x21                 bits[30], bits[31]
+
+-- 28 rate bits, then two, then two, contiguous from `bits[0]` with no framing
+at all.  `V92Jd::getJdPhase` (0x11e60) does the same to the second vector:
+sixteen bytes from `phaseBits[0]`, where the constructor writes the Q16 phase at
+`phaseBits[18..33]`.
+
+So the message a Jd object PACKS cannot be read back by the same object's own
+accessors, and vice versa.  Both readings are reproduced, both are driven
+against the blob, and neither is repaired: D270.  Whether the unframed layout is
+what an unpacker leaves behind is a question for `unPackData`, and the answer
+does not change what these three do.
+
+**A byte counts as set if it is non-zero, EXCEPT in the lookahead.**
+`getRatesMask` tests `cmpb $0x0`, so a byte of 2 contributes its bit;
+`getMaxLookahead` does `and $0x1` on each of its two, so a byte of 2 contributes
+nothing.  The two rules are three instructions apart in the object and the
+fixture seeds the vector with varied bytes so that a reconstruction cannot pass
+by conflating them.
+
+**The return types are measured.**  A return type is not mangled, so `int`,
+`unsigned char`, `float` and void here are read off `%eax` and `st(0)`:
+`getRatesMask` leaves a 32-bit accumulator in `%eax`, `getMaxLookahead` ends
+`movzbl %dl,%eax` on a byte-wide sum, `getConstelationSize` writes through both
+pointers and sets `%eax` to nothing, and `getJdPhase` ends `fstps`/`flds`, which
+is the x87 return convention with a float rounded once on the way out.
+
+### 1391. `V92Jd::getConstelationSize` READS THE OTHER VECTOR, AND ONE BYTE FURTHER ALONG
+
+Three of `V92Jd`'s four accessors are `V90Jd`'s instruction for instruction and
+read `bits`.  The fourth is not.  `V90Jd::getConstelationSize` reads +0x1e and
++0x1f -- `bits[28]`, `bits[29]`.  `V92Jd::getConstelationSize` reads +0x67 and
++0x68, and in this class's map that is `phaseBits[29]` and `phaseBits[30]`: the
+second vector, at an index one higher than its sibling's.
+
++0x67 is +0x1f + 0x48, and 0x48 is exactly the displacement `phaseBits`
+introduces -- V92Jd.h's "everything after it moves by 0x48".  So the difference
+between the two classes is one vector and one index, and neither can be told
+from the other by the size of the object.
+
+In the framed layout those two bytes are not a constellation size at all:
+`phaseBits[29..30]` is where `V92Jd`'s constructor puts bits 11 and 12 of the
+Q16 phase, and `packJdPhaseData` leaves both alone.  Recorded as D271 and
+reproduced; the differential test paints the two vectors with DIFFERENT values
+so that a reconstruction reading the right index in the wrong vector diverges
+rather than agreeing.
+
+### 1392. `packJdData` WRITES `bits[48]`, WHICH RETIRES D162
+
+D162 recorded that `V92Jd`'s constructor stores a literal 0 into `bits[47]` and
+never writes `bits[48]`, where `V90Jd`'s constructor fills both, and left the
+question open: "`packJdData` is not written yet and may fill `bits[48]` before
+anything transmits the vector."
+
+It does.  `packJdData` at 0x12220+0x4b is `movb $0x0,0x32(%edi)`, and +0x32 is
+`bits[48]` -- the line `bits[V90JD_GROUP2 + 14] = 0;` in our own
+`src/pump/v90/V92Jd.cpp`, written in an earlier batch as one of the seven bits
+the V.92 pack forces to zero before the CRC sees them.  `V90JD_GROUP2` is 34.
+
+**The measurement was already in the tree and nobody had read it that way.**
+`t_v92jd.cpp` seeds the whole slot with varied bytes, never zeroes it, drives
+`packJdData` and compares the object whole; the blob writes 0 over the seeded
+byte at +0x32 and so must we.  So the PASS that suite has been printing all
+along is the proof that the byte is written, and no new code was needed to
+settle it -- only the arithmetic on `V90JD_GROUP2 + 14`.
+
+D162's defect is therefore **unobservable through the packed message**: every
+transmission path runs `packJdData` (`getJdBitVector` is `packJdData` then
+`return bits`), and the pack overwrites the byte the constructor left.  It
+remains true that a reader of the object between construction and the first
+pack sees an uninitialised byte, and no such reader exists in the object.
+
+### 1393. FOUR `exit*` METHODS, AND NO RELOCATION IN THE BLOB NAMES ONE
+
+`V92Phase3Modulator`'s four `exit*` methods are 209 bytes that no relocation in
+the object names -- `readelf -r` finds not one relocation against ANY
+`V92Phase3Modulator` symbol, so `generateSymbol` and the class's whole
+interface are, in this partial link, referenced by nothing.  They are still
+worth writing: they are what the header's state diagram is read off, and each
+one is the only statement in the object of what follows the state it guards.
+
+All four have the same shape -- refuse a foreign state, refuse a zero
+`symbolCount`, then move -- and the two that end a state with no timeout
+(`exitJa` from 4, `exitSuSecond` from 9) round to a twelve-symbol boundary with
+an unsigned `% 12` and clear the count on it, while `exitSilence` clears the
+count with no boundary test and `exitTRN1u` does not clear it at all.  The
+division is `mul $0xaaaaaaab; shr $3` with no sign correction, which is
+`symbolCount`'s declared type showing through and agrees with `generateSymbol`'s
+own `% 12`.
+
+**The zero-count guard is the part a fixture forgets.**  Three quarters of what
+these methods do is refuse: fifteen of sixteen states leave the object alone,
+and a zero count refuses even in the right state.  `t_v92p3mod.cpp` drives all
+four from all sixteen states over fourteen counts -- 896 calls, the object
+compared whole after every one -- so the refusals are measured rather than
+assumed.
+
+### 1394. `k56FlexRunDemodulator` RETURNS 5, AND WHERE A STUB'S TEST HAS TO LIVE
+
+`K56FlexFloModem::k56FlexRunDemodulator` is `b8 05 00 00 00 c3`: six bytes that
+return the constant 5 and read none of the four arguments.  With
+`internalReset` and `k56FlexEnterPhase3`, both single `ret`s, that closes the
+class's members apart from the constructor and destructor, which this tree
+deliberately does not declare, and the seven three-byte `xor %eax,%eax`
+accessors.  D154 and D155 are the entries; nothing here changes them.
+
+**The interesting thing is where the test went.**  The class's other five stubs
+are driven from `t_v90leaves.cpp`, and putting these three beside them would
+have left the constant 5 untestable: `test/mutations/suites.json` pairs
+`src/pump/v90/K56FlexFloModem.cpp` with `build/test/t_v92alloc`, so a mutation
+of that constant is only caught if THAT binary reads it.  A suite is a
+(source, binary) pair and a test in the wrong binary is a test the mutation
+tier cannot see -- the same hazard as finding 1264 approached from the other
+end.  The three are therefore driven from `t_v92alloc.c`, by their mangled
+names through `asm()` labels, which is safe here precisely because the claim
+under test is that not one instruction touches `this`.
+
 ======================================================================

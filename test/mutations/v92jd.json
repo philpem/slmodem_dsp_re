@@ -71,5 +71,60 @@
   "label": "the destructor is not empty",
   "find": "V92Jd::~V92Jd()\n{\n}",
   "replace": "V92Jd::~V92Jd()\n{\n\tunpackWord = 0x5a5a;\n}"
+ },
+ {
+  "label": "getJdPhase reads the data vector, not the phase one",
+  "find": "\t\tif (phaseBits[i])\n\t\t\tphase |= 1u << i;",
+  "replace": "\t\tif (bits[i])\n\t\t\tphase |= 1u << i;"
+ },
+ {
+  "label": "getJdPhase's scale is one bit out",
+  "find": "\treturn (float)phase / 65536.0f;",
+  "replace": "\treturn (float)phase / 32768.0f;"
+ },
+ {
+  "label": "getJdPhase reads fifteen bits, not sixteen",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tif (phaseBits[i])",
+  "replace": "\tfor (i = 0; i <= 14; i++)\n\t\tif (phaseBits[i])"
+ },
+ {
+  "label": "getJdPhase reads the phase from the framed layout",
+  "find": "\t\tif (phaseBits[i])\n\t\t\tphase |= 1u << i;",
+  "replace": "\t\tif (phaseBits[V90JD_GROUP1 + 1 + i])\n\t\t\tphase |= 1u << i;"
+ },
+ {
+  "label": "getRatesMask reads the phase vector",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tif (bits[i])\n\t\t\tmask |= 1 << i;",
+  "replace": "\tfor (i = 0; i <= 15; i++)\n\t\tif (phaseBits[i])\n\t\t\tmask |= 1 << i;"
+ },
+ {
+  "label": "getRatesMask's second group is eleven bits, like the constructor's",
+  "find": "\tfor (i = 0; i <= 11; i++)\n\t\tif (bits[16 + i])",
+  "replace": "\tfor (i = 0; i <= 10; i++)\n\t\tif (bits[16 + i])"
+ },
+ {
+  "label": "getConstelationSize reads V90Jd's positions instead",
+  "find": "\t*first = phaseBits[29];\n\t*second = phaseBits[30];",
+  "replace": "\t*first = bits[28];\n\t*second = bits[29];"
+ },
+ {
+  "label": "getConstelationSize reads the phase vector one index lower",
+  "find": "\t*first = phaseBits[29];\n\t*second = phaseBits[30];",
+  "replace": "\t*first = phaseBits[28];\n\t*second = phaseBits[29];"
+ },
+ {
+  "label": "getConstelationSize transposes its two outputs",
+  "find": "\t*first = phaseBits[29];\n\t*second = phaseBits[30];",
+  "replace": "\t*first = phaseBits[30];\n\t*second = phaseBits[29];"
+ },
+ {
+  "label": "getMaxLookahead reads the phase vector",
+  "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
+  "replace": "\treturn (unsigned char)((phaseBits[30] & 1) + ((phaseBits[31] & 1) << 1));"
+ },
+ {
+  "label": "getMaxLookahead transposes the two bits",
+  "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
+  "replace": "\treturn (unsigned char)((bits[31] & 1) + ((bits[30] & 1) << 1));"
  }
 ]

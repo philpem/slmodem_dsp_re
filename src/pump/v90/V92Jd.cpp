@@ -108,6 +108,92 @@ V92Jd::~V92Jd()
 }
 
 /*
+ * ===========================================================================
+ * The four accessors, 0x11e60, 0x11eb0, 0x11f00 and 0x11f20.
+ *
+ * THREE OF THEM ARE V90Jd's, INSTRUCTION FOR INSTRUCTION, AND THE FOURTH IS
+ * NOT WHERE ITS SIBLING IS.  Reading the four `this`-relative displacements
+ * against this class's map:
+ *
+ *     getJdPhase           +0x4a..+0x59   phaseBits[0..15]
+ *     getRatesMask         +0x02..+0x1d   bits[0..15], bits[16..27]
+ *     getConstelationSize  +0x67, +0x68   phaseBits[29], phaseBits[30]
+ *     getMaxLookahead      +0x20, +0x21   bits[30], bits[31]
+ *
+ * `getRatesMask` and `getMaxLookahead` are byte-identical to V90Jd's and read
+ * `bits`; `getConstelationSize` reads the OTHER vector, and one index further
+ * along than V90Jd's does -- V90Jd's is `bits[28], bits[29]` and this one is
+ * `phaseBits[29], phaseBits[30]`, which is +0x48 (the second vector's
+ * displacement) plus one.  Reproduced and recorded as D271, not reconciled.
+ * In the FRAMED layout those two bytes are not a constellation size at all --
+ * `phaseBits[29..30]` is where the constructor puts bits 11 and 12 of the Q16
+ * phase, and `packJdPhaseData` leaves both alone.
+ *
+ * THE PHASE IS THE CONSTRUCTOR'S CONVERSION RUN BACKWARDS.  Sixteen bytes of
+ * `phaseBits` are gathered into an integer, least significant first, and
+ * scaled by `.rodata.cst4+0x9c` = 1.52587890625e-05 = 2**-16 -- the reciprocal
+ * of the constructor's `65536.0f` at +0x94.  So the field is Q16 and the round
+ * trip is exact for any phase the constructor's low sixteen bits carried.
+ *
+ * THE ACCUMULATOR IS UNSIGNED, and the object had to say so: it pushes a zero
+ * high word and loads the pair with `fildll`, which is how GCC converts an
+ * `unsigned int` to a float -- a signed `int` would have been one `fildl` of
+ * the value in place.  Sixteen bits cannot make the two differ in value; the
+ * declared type is what the codegen tier sees, so it is written as the object
+ * compiled it.  The counter is unsigned too (`jbe`), like the phase loop in
+ * the constructor and unlike the two mask loops.
+ *
+ * THE DIVISION IS THE SOURCE'S AND THE MULTIPLY IS THE COMPILER'S.  Dividing
+ * by 65536.0f and multiplying by 2**-16 are the same function of the same
+ * argument -- the scale is a power of two, so neither rounds -- and GCC turns
+ * the first into the second.  It is written as the division because the
+ * constructor states the same constant that way round.
+ * ===========================================================================
+ */
+float
+V92Jd::getJdPhase()
+{
+	unsigned int phase = 0;
+	unsigned int i;
+
+	for (i = 0; i <= 15; i++)
+		if (phaseBits[i])
+			phase |= 1u << i;
+
+	return (float)phase / 65536.0f;
+}
+
+int
+V92Jd::getRatesMask()
+{
+	int mask = 0;
+	int i;
+
+	for (i = 0; i <= 15; i++)
+		if (bits[i])
+			mask |= 1 << i;
+
+	for (i = 0; i <= 11; i++)
+		if (bits[16 + i])
+			mask |= 1 << (i + 16);
+
+	return mask;
+}
+
+void
+V92Jd::getConstelationSize(unsigned char *first, unsigned char *second)
+{
+	*first = phaseBits[29];
+	*second = phaseBits[30];
+}
+
+unsigned char
+V92Jd::getMaxLookahead()
+{
+	return (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));
+}
+
+/*
  * The same CRC-16 V90Jd.cpp computes: sixteen ints shifting down toward
  * crc[0], feedback t = <input bit> + crc[0] folded into positions 3, 10 and
  * 15.  Addition with a one-bit mask afterwards is XOR, which is why the input

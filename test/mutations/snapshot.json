@@ -170,15 +170,21 @@
    }
   },
   "k56flexalloc": {
-   "key": "fba1f22a849906c10bdc036ba85903cd8e8d8950c54d97d39fb59a02bbe6885a",
-   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "a9c918283687a0a14f9aafecc921ad4cab668e472559b96fa7b7f324527fce81",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "K56FLEX_Create allocates twice": "caught",
     "K56FLEX_Create asks for sixteen bytes": "caught",
     "K56FLEX_Create asks for twenty-four bytes": "caught",
     "K56FLEX_Create reads the argument it is not supposed to read": "caught",
     "K56FLEX_Delete frees nothing": "caught",
-    "K56FLEX_Delete loses its null test": "caught"
+    "K56FLEX_Delete loses its null test": "caught",
+    "internalReset writes through `this`": "caught",
+    "k56FlexEnterPhase3 writes through `this`": "caught",
+    "the demodulator returns 4, not 5": "caught",
+    "the demodulator returns zero like the two bit getters": "caught",
+    "the demodulator scales the samples it is handed": "caught",
+    "the demodulator writes its two outputs": "caught"
    }
   },
   "moduluscoder": {
@@ -4017,9 +4023,19 @@
    }
   },
   "v90jd": {
-   "key": "620ad28133b434c7191cd25ec084d8e6cd061c44a31c9e446ea144f0e1db4d07",
-   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "21eed53314c1c347f10a9338ffcc61af6e1443fb9531ed65930d804c848a749e",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "getConstelationSize reads the framed positions": "caught",
+    "getConstelationSize transposes its two outputs": "caught",
+    "getMaxLookahead reads the framed positions": "caught",
+    "getMaxLookahead tests each byte for zero rather than masking it": "caught",
+    "getMaxLookahead transposes the two bits": "caught",
+    "getRatesMask takes the low bit of each byte rather than testing it for zero": "caught",
+    "getRatesMask's first group is fifteen bits, not sixteen": "caught",
+    "getRatesMask's second group is eleven bits, not twelve": "caught",
+    "getRatesMask's second group is shifted from 0, not from 16": "caught",
+    "getRatesMask's second group reads the framed layout": "caught",
     "group 0 is one bit short": "caught",
     "the CRC's two feedback taps are transposed": "caught",
     "the constellation bits carry the whole word, not its low byte": "caught",
@@ -4692,9 +4708,20 @@
    }
   },
   "v92jd": {
-   "key": "6c2a0abea8b7d8775dc08db593ef662ba447e36ed5610c6c703a57826e8e0985",
-   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "9ff190821f6535cb141e59a0bec7596e21fdaaed10a00a9da14333a9d7170922",
+   "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "getConstelationSize reads V90Jd's positions instead": "caught",
+    "getConstelationSize reads the phase vector one index lower": "caught",
+    "getConstelationSize transposes its two outputs": "caught",
+    "getJdPhase reads fifteen bits, not sixteen": "caught",
+    "getJdPhase reads the data vector, not the phase one": "caught",
+    "getJdPhase reads the phase from the framed layout": "caught",
+    "getJdPhase's scale is one bit out": "caught",
+    "getMaxLookahead reads the phase vector": "caught",
+    "getMaxLookahead transposes the two bits": "caught",
+    "getRatesMask reads the phase vector": "caught",
+    "getRatesMask's second group is eleven bits, like the constructor's": "caught",
     "the data message's constant is set, not cleared": "caught",
     "the destructor is not empty": "caught",
     "the first rate group is one bit short": "caught",
@@ -4835,8 +4862,8 @@
    }
   },
   "v92p3mod": {
-   "key": "762a4d1b6f4ec3913a2c3926f4bede41735a9d52829fc86bc3a6b3d7439cd52a",
-   "summary": "58 mutations: 55 caught (55 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
+   "key": "de39ef91f8cf93362151b76203348532cc195b1c32b1eba73292fca4c594c31c",
+   "summary": "77 mutations: 74 caught (74 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "Ja indexes the vector from 24 rather than 25": "caught",
     "Ja leaves its constant-bit run one symbol early": "caught",
@@ -4877,6 +4904,25 @@
     "ctor: the scrambler tap pair is the wrong way round": "caught",
     "ctor: the upstream scrambler takes the downstream taps": "caught",
     "dtor: the scrambler's history is not freed": "caught",
+    "exitJa keeps the count on the boundary": "caught",
+    "exitJa loses its state guard": "caught",
+    "exitJa loses its zero-count guard": "caught",
+    "exitJa's boundary is six symbols, not twelve": "caught",
+    "exitJa's residue is signed": "caught",
+    "exitJa's two arms are swapped": "caught",
+    "exitSilence guards on the wrong state": "caught",
+    "exitSilence keeps the count": "caught",
+    "exitSilence loses its zero-count guard": "caught",
+    "exitSilence rounds to the twelve-symbol boundary as well": "caught",
+    "exitSuSecond guards on state 10, not 9": "caught",
+    "exitSuSecond loses its zero-count guard": "caught",
+    "exitSuSecond's boundary is six symbols, not twelve": "caught",
+    "exitSuSecond's residue is signed": "caught",
+    "exitSuSecond's two arms are swapped": "caught",
+    "exitTRN1u clears the count": "caught",
+    "exitTRN1u guards on state 13, not 12": "caught",
+    "exitTRN1u loses its zero-count guard": "caught",
+    "exitTRN1u rounds to the twelve-symbol boundary": "caught",
     "reset does not clear eventCode": "caught",
     "reset drops its last argument": "caught",
     "reset seeds the scrambler with a one bit": "caught",

@@ -50,6 +50,20 @@ unsigned char *ref_getJdBitVector(void *self)
 	asm("ref__ZN5V92Jd14getJdBitVectorEv");
 unsigned char *ref_getJdPhaseBitVector(void *self)
 	asm("ref__ZN5V92Jd19getJdPhaseBitVectorEv");
+/*
+ * The four accessors.  The return types are the ones V92Jd.cpp derives from
+ * the object: `float`, `int`, void and `unsigned char`.  `getJdPhase` really
+ * does return in `st(0)` -- it ends `fstps`/`flds` on a stack slot, which is
+ * the x87 return convention with the float rounded once on the way out.
+ */
+float ref_getJdPhase(void *self) asm("ref__ZN5V92Jd10getJdPhaseEv");
+int ref_getRatesMask(void *self) asm("ref__ZN5V92Jd12getRatesMaskEv");
+void ref_getConstelationSize(void *self, unsigned char *first,
+			     unsigned char *second)
+	asm("ref__ZN5V92Jd19getConstelationSizeEPhS0_");
+unsigned char ref_getMaxLookahead(void *self)
+	asm("ref__ZN5V92Jd15getMaxLookaheadEv");
+
 void ref_unPackJdReset(void *self) asm("ref__ZN5V92Jd13unPackJdResetEv");
 void ref_unPackJdPhaseReset(void *self)
 	asm("ref__ZN5V92Jd18unPackJdPhaseResetEv");
@@ -401,6 +415,204 @@ run_dtor(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * The four accessors, swept over the fields they decode.
+ *
+ * THEY DO NOT ALL READ THE SAME VECTOR, which is the property this fixture
+ * exists to hold: `getRatesMask` and `getMaxLookahead` read `bits`,
+ * `getJdPhase` reads `phaseBits[0..15]`, and `getConstelationSize` reads
+ * `phaseBits[29..30]` -- one vector further along than V90Jd's, and one index
+ * further along than that (D270, D271).  Both vectors are painted
+ * INDEPENDENTLY here, with different values, so a reconstruction that read the
+ * right index in the wrong vector diverges instead of agreeing.
+ *
+ * THE PHASE IS COMPARED AS BITS, not as a float, so that a sign or a rounding
+ * difference cannot hide inside a tolerance -- the contract is bit-exactness
+ * and 2**-16 scaling is exact for every one of the 65,536 inputs.  Every one
+ * of the sixteen positions is driven alone, so a phase byte read from the
+ * wrong place fails on its own trial.
+ * ===========================================================================
+ */
+static void
+paint_v92_payload(unsigned int mask, unsigned int phase, unsigned char c0,
+		  unsigned char c1, unsigned char l0, unsigned char l1,
+		  int style)
+{
+	static const unsigned char set_byte[4] = { 0x01, 0x02, 0x80, 0xff };
+	unsigned char one = set_byte[style & 3];
+	int i;
+
+	for (i = 0; i < 28; i++) {
+		unsigned char v = ((mask >> i) & 1u) != 0 ? one : 0x00;
+
+		OURS.bits[i] = v;
+		THEIRS.bits[i] = v;
+	}
+	OURS.bits[30] = THEIRS.bits[30] = l0;
+	OURS.bits[31] = THEIRS.bits[31] = l1;
+
+	for (i = 0; i < 16; i++) {
+		unsigned char v = ((phase >> i) & 1u) != 0 ? one : 0x00;
+
+		OURS.phaseBits[i] = v;
+		THEIRS.phaseBits[i] = v;
+	}
+	OURS.phaseBits[29] = THEIRS.phaseBits[29] = c0;
+	OURS.phaseBits[30] = THEIRS.phaseBits[30] = c1;
+}
+
+#define NACC 64
+
+static int
+run_accessors(void)
+{
+	int trial;
+	int first_mask = 0, first_look = -1;
+	unsigned first_phase = 0;
+	int mask_distinct = 0, mask_nonzero = 0, look_distinct = 0;
+	int phase_distinct = 0, phase_nonzero = 0;
+	int look_same_bits = 0, look_diff_bits = 0;
+
+	diff_begin("V92Jd::getJdPhase / getRatesMask / getConstelationSize / "
+		   "getMaxLookahead");
+
+	for (trial = 0; trial < NACC; trial++) {
+		unsigned char before[SLOT];
+		unsigned char pa[8], pb[8];
+		unsigned int mask, phase, abits, bbits;
+		unsigned char c0, c1, l0, l1;
+		float af, bf;
+		int am, bm;
+		unsigned int i;
+
+		seed(trial, trial % 4);
+
+		if (trial < 28)
+			mask = 1u << trial;
+		else if (trial < 32)
+			mask = 0x0ffffff0u >> (trial - 28);
+		else
+			mask = 0x9e3779b9u * (unsigned)(trial + 1);
+
+		if (trial < 16)
+			phase = 1u << trial;		/* one position   */
+		else if (trial < 20)
+			phase = 0xffffu >> (trial - 16);
+		else
+			phase = 0x85ebca6bu * (unsigned)(trial + 3);
+		phase &= 0xffffu;
+
+		c0 = (unsigned char)(trial * 37u + 1u);
+		c1 = (unsigned char)(trial * 53u + 7u);
+		/*
+		 * Bit 1 of the trial number is folded into the second
+		 * lookahead byte so that the two bytes' LOW BITS take all four
+		 * combinations; two odd multiples of `trial` would share bit 0
+		 * on every trial and a transposition of the pair would be
+		 * invisible.  t_v90jd.cpp carries the argument -- it was the
+		 * mutation tier that found it, in that file.
+		 */
+		l0 = (unsigned char)(trial * 11u);
+		l1 = (unsigned char)(trial * 29u + (((unsigned)trial >> 1) & 1u));
+		paint_v92_payload(mask, phase, c0, c1, l0, l1, trial);
+		memcpy(before, ours.raw, SLOT);
+
+		for (i = 0; i < sizeof(pa); i++) {
+			pa[i] = (unsigned char)(0x60u + i + trial);
+			pb[i] = pa[i];
+		}
+
+		af = OURS.getJdPhase();
+		bf = ref_getJdPhase(&THEIRS);
+		memcpy(&abits, &af, sizeof(abits));
+		memcpy(&bbits, &bf, sizeof(bbits));
+		diff_eq_int("getJdPhase bits (trial %ld)", (long)abits,
+			    (long)bbits, trial);
+		{
+			/* Q16: the painted word over 65536, exactly. */
+			float want = (float)phase / 65536.0f;
+			unsigned wantbits;
+
+			memcpy(&wantbits, &want, sizeof(wantbits));
+			diff_eq_int("getJdPhase is the painted word / 65536 "
+				    "(trial %ld)", (long)abits, (long)wantbits,
+				    trial);
+		}
+
+		am = OURS.getRatesMask();
+		bm = ref_getRatesMask(&THEIRS);
+		diff_eq_int("getRatesMask (trial %ld)", am, bm, trial);
+		diff_eq_int("getRatesMask decodes the painted mask (trial %ld)",
+			    am, (int)(mask & 0x0fffffffu), trial);
+
+		OURS.getConstelationSize(&pa[2], &pa[5]);
+		ref_getConstelationSize(&THEIRS, &pb[2], &pb[5]);
+		diff_eq_int("getConstelationSize wrote the same bytes "
+			    "(trial %ld)", memcmp(pa, pb, sizeof(pa)), 0,
+			    trial);
+		diff_eq_int("getConstelationSize reads phaseBits[29] "
+			    "(trial %ld)", pa[2], c0, trial);
+		diff_eq_int("getConstelationSize reads phaseBits[30] "
+			    "(trial %ld)", pa[5], c1, trial);
+
+		{
+			unsigned char al = OURS.getMaxLookahead();
+			unsigned char bl = ref_getMaxLookahead(&THEIRS);
+
+			diff_eq_int("getMaxLookahead (trial %ld)", al, bl,
+				    trial);
+			diff_eq_int("getMaxLookahead is the two low bits "
+				    "(trial %ld)", al,
+				    (l0 & 1) + ((l1 & 1) << 1), trial);
+			if (trial == 0)
+				first_look = al;
+			else if (al != first_look)
+				look_distinct = 1;
+			if ((l0 & 1) == (l1 & 1))
+				look_same_bits = 1;
+			else
+				look_diff_bits = 1;
+		}
+
+		diff_eq_obj("after the accessors", V92Jd, &OURS, &THEIRS,
+			    trial);
+		diff_eq_int("the accessors wrote nothing (trial %ld)",
+			    memcmp(before, ours.raw, SLOT), 0, trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+
+		if (trial == 0) {
+			first_mask = am;
+			first_phase = abits;
+		} else {
+			if (am != first_mask)
+				mask_distinct = 1;
+			if (abits != first_phase)
+				phase_distinct = 1;
+		}
+		if (am != 0)
+			mask_nonzero = 1;
+		if (af != 0.0f)
+			phase_nonzero = 1;
+	}
+
+	diff_eq_int("the rate mask is not the same on every trial",
+		    mask_distinct, 1, 0);
+	diff_eq_int("the rate mask is not always zero", mask_nonzero, 1, 0);
+	diff_eq_int("the phase is not the same on every trial", phase_distinct,
+		    1, 0);
+	diff_eq_int("the phase is not always zero", phase_nonzero, 1, 0);
+	diff_eq_int("the lookahead is not the same on every trial",
+		    look_distinct, 1, 0);
+	diff_eq_int("the two lookahead bits were driven equal", look_same_bits,
+		    1, 0);
+	diff_eq_int("and unequal, so a transposition is visible",
+		    look_diff_bits, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -411,6 +623,7 @@ main(void)
 	rc |= run_resets();
 	rc |= run_ctor();
 	rc |= run_dtor();
+	rc |= run_accessors();
 
 	return rc;
 }
