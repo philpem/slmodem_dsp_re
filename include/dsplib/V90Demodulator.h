@@ -87,6 +87,22 @@ public:
 	void enterPhase3();
 
 	/*
+	 * THE RETURN TYPE IS THE ONE THING THE MANGLING CANNOT GIVE, and it
+	 * came from the code generation instead.  The blob's tail is
+	 *
+	 *     1b919  df 3c 24        fistpll (%esp)
+	 *     1b920  8b 04 24        mov     (%esp),%eax
+	 *
+	 * -- a SIXTY-FOUR bit store with the low half taken, which is what
+	 * GCC emits for a float converted to `unsigned int`; a conversion to
+	 * `int` is a 32-bit `fistpl` and nothing else.  Both spellings were
+	 * put through the same flags to check that (see the .cpp).  This is
+	 * CLAUDE.md's forced/free rule: the store WIDTH was not the
+	 * compiler's to choose.
+	 */
+	unsigned int getBitRate() const;
+
+	/*
 	 * Declared for the record and not defined; return types are not
 	 * mangled, so `void` here is want of evidence.  The constructor and
 	 * destructor are not declared at all, for the reason
@@ -110,7 +126,6 @@ public:
 	void enterChannelVerification(short, short);
 	void enterFPE();
 	void enterPhase4();
-	void getBitRate() const;
 	void getRbsPattern(unsigned int *) const;
 	void reInit();
 	void indicateRemoteRateReneg() const;

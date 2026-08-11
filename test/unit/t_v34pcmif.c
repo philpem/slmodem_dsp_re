@@ -86,6 +86,8 @@ extern short ref_GetVPcmMinimalTxPowerReduction(void *obj);
 extern int ref_VPcmV34GetMaxUpstreamRateIndex(void *obj);
 extern void *ref_VPcmV34GetCleanedSamples(void *obj, int *n);
 extern int ref_VPcmV34GetCurrentSessionDP(void *obj);
+extern int ref_VPcmV34GetCurrentRxBitRate(void *obj);
+extern int ref_VPcmV34GetCurrentTxBitRate(void *obj);
 
 extern short ref_scrambleGPC(void *obj, short n);
 extern short ref_scrambleGPA(void *obj, short n);
@@ -529,6 +531,286 @@ check_session_chain(const char *what, int taken, int want_req, int want_flag,
 		diff_eq_int(what, touched, 0, tag);
 	}
 }
+
+/*
+ * --- and the fixture the two RATE getters need ----------------------------
+ *
+ * ADDITIVE ON PURPOSE.  Nothing above this point changes: `ptr_skip`,
+ * `sess_hole`, `compare_link` and `DEMOD_LEN` are exactly as the batch that
+ * wrote them left them, and two recorded mutation suites (`v34pcmif` and
+ * `v34datapump_rrn`) were measured against that fixture.  Widening
+ * `compare()`'s hole list or `seed_chain`'s wiring for the sake of two
+ * read-only functions would move bytes in every one of the cases above, which
+ * tiers.md's "adding a check to a file that has a mutation suite is not free"
+ * is exactly about.  So this block seeds its own links on top, re-points the
+ * one it shares, and does its own comparing.
+ *
+ * WHAT THE TWO REACH, and it is five chains rather than one:
+ *
+ *   Rx, role 0x66  p3548 +0x175c -> demodulator +0x18 -> a mapping block's
+ *                  +0x00, gated by the demodulator's +0x280
+ *   Rx, otherwise  pac18 +0x00, an int
+ *   Tx, role !0x66 p3548 +0x1758 -> +0x40 -> one more indirection -> +0x04,
+ *                  gated by +0x2c == 3
+ *   Tx, role 0x66  p3548 +0x6124 -> +0x4c -> one more indirection -> +0x04,
+ *                  gated by +0x2c == 3
+ *   both, default  the rate configuration at +0xaa84
+ *
+ * THE TWO "ONE MORE INDIRECTION" LINKS ARE SEPARATE BUFFERS FROM THE COUNTS
+ * THEY POINT AT, deliberately.  Folding each pair into one buffer whose first
+ * word points at itself would work, and would make the extra dereference
+ * invisible: a version that read `+0x04` of the FIRST pointer would land on
+ * the same bytes.  Kept apart, that version reads the fill and is caught.
+ */
+#define RSESS_DEMOD	0x175c
+#define RSESS_MOD	0x1758
+#define RSESS_V92	0x6124
+
+#define RDEM_LEN	0x2a0		/* indexed at +0x18 and +0x280   */
+#define RTX_LEN		0x80		/* +0x2c, +0x40 and +0x4c        */
+#define RSMALL_LEN	0x10		/* one word at +0x00 or +0x04    */
+
+#define RDEM_MPAR	0x18
+#define RDEM_GATE	0x280
+#define RTX_STATE	0x2c
+#define RTX_V90_FRAME	0x40
+#define RTX_V92_FRAME	0x4c
+#define RFRAME_BITS	0x04
+
+#define RATE_FILL	0x5a
+
+static unsigned char rdem_a[RDEM_LEN], rdem_b[RDEM_LEN];
+static unsigned char rmpar_a[RSMALL_LEN], rmpar_b[RSMALL_LEN];
+static unsigned char rmod_a[RTX_LEN], rmod_b[RTX_LEN];
+static unsigned char rv92_a[RTX_LEN], rv92_b[RTX_LEN];
+static unsigned char rl90_a[RSMALL_LEN], rl90_b[RSMALL_LEN];
+static unsigned char rl92_a[RSMALL_LEN], rl92_b[RSMALL_LEN];
+static unsigned char rf90_a[RSMALL_LEN], rf90_b[RSMALL_LEN];
+static unsigned char rf92_a[RSMALL_LEN], rf92_b[RSMALL_LEN];
+static unsigned char rp18_a[RSMALL_LEN], rp18_b[RSMALL_LEN];
+
+/* The two knobs each PCM arm has, applied to both sides at once. */
+static void
+rate_poke(void *a, void *b, unsigned off, int v)
+{
+	memcpy((unsigned char *)a + off, &v, sizeof(v));
+	memcpy((unsigned char *)b + off, &v, sizeof(v));
+}
+
+/*
+ * Seed every link this block owns and hang them off the session.  Runs after
+ * `setup()` and `seed_chain()`; it takes +0x175c away from `demod_a`, which
+ * is 0x240 long and cannot hold the gate byte at +0x280.
+ */
+static void
+seed_rates(void)
+{
+	memset(rdem_a, RATE_FILL, sizeof(rdem_a));
+	memset(rdem_b, RATE_FILL, sizeof(rdem_b));
+	memset(rmpar_a, RATE_FILL, sizeof(rmpar_a));
+	memset(rmpar_b, RATE_FILL, sizeof(rmpar_b));
+	memset(rmod_a, RATE_FILL, sizeof(rmod_a));
+	memset(rmod_b, RATE_FILL, sizeof(rmod_b));
+	memset(rv92_a, RATE_FILL, sizeof(rv92_a));
+	memset(rv92_b, RATE_FILL, sizeof(rv92_b));
+	memset(rl90_a, RATE_FILL, sizeof(rl90_a));
+	memset(rl90_b, RATE_FILL, sizeof(rl90_b));
+	memset(rl92_a, RATE_FILL, sizeof(rl92_a));
+	memset(rl92_b, RATE_FILL, sizeof(rl92_b));
+	memset(rf90_a, RATE_FILL, sizeof(rf90_a));
+	memset(rf90_b, RATE_FILL, sizeof(rf90_b));
+	memset(rf92_a, RATE_FILL, sizeof(rf92_a));
+	memset(rf92_b, RATE_FILL, sizeof(rf92_b));
+	memset(rp18_a, RATE_FILL, sizeof(rp18_a));
+	memset(rp18_b, RATE_FILL, sizeof(rp18_b));
+
+	put_ptr(sess_a, RSESS_DEMOD, rdem_a);
+	put_ptr(sess_b, RSESS_DEMOD, rdem_b);
+	put_ptr(sess_a, RSESS_MOD, rmod_a);
+	put_ptr(sess_b, RSESS_MOD, rmod_b);
+	put_ptr(sess_a, RSESS_V92, rv92_a);
+	put_ptr(sess_b, RSESS_V92, rv92_b);
+
+	put_ptr(rdem_a, RDEM_MPAR, rmpar_a);
+	put_ptr(rdem_b, RDEM_MPAR, rmpar_b);
+	put_ptr(rmod_a, RTX_V90_FRAME, rl90_a);
+	put_ptr(rmod_b, RTX_V90_FRAME, rl90_b);
+	put_ptr(rv92_a, RTX_V92_FRAME, rl92_a);
+	put_ptr(rv92_b, RTX_V92_FRAME, rl92_b);
+	put_ptr(rl90_a, 0, rf90_a);
+	put_ptr(rl90_b, 0, rf90_b);
+	put_ptr(rl92_a, 0, rf92_a);
+	put_ptr(rl92_b, 0, rf92_b);
+
+	poke_ptr(0xac18, rp18_a, rp18_b);
+}
+
+/*
+ * The whole object, as `compare()` does it, plus the one extra hole this
+ * block makes: `pac18` is a fixture pointer here and not in any case above,
+ * so it is skipped HERE rather than added to `ptr_skip`.  What justifies the
+ * hole is that the memory behind it is read back -- the Rx getter's middle
+ * arm returns it -- and that is asserted per case below.
+ */
+static void
+compare_rates(const char *what, long tag)
+{
+	const unsigned char *p = (const unsigned char *)&oa;
+	unsigned i;
+	int bad = 0;
+
+	for (i = 0; i < sizeof(oa); i++) {
+		if (p[i] == ob[i] || skipped(i)
+		    || (i >= 0xac18 && i < 0xac18 + 4))
+			continue;
+		bad++;
+		if (bad <= 8)
+			diff_eq_int(what, p[i], ob[i], (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+}
+
+/*
+ * And every link, with its own pointer word held out.  NEITHER GETTER WRITES
+ * ANYTHING, so this is the check that they do not -- and it is not free: the
+ * demodulator is reached through the same +0x175c that
+ * `VPcmV34InitiateHangUp` writes a request code down, and a getter that
+ * cleared a gate after reading it would look perfect from the return value.
+ */
+static void
+compare_rate_links(const char *what, long tag)
+{
+	unsigned i;
+	int bad = 0;
+
+	for (i = 0; i < SESS_LEN; i++) {
+		if (sess_a[i] == sess_b[i]
+		    || (i >= RSESS_MOD && i < RSESS_MOD + 4)
+		    || (i >= RSESS_DEMOD && i < RSESS_DEMOD + 4)
+		    || (i >= RSESS_V92 && i < RSESS_V92 + 4)
+		    || (i >= SESS_PCM && i < SESS_PCM + 4))
+			continue;
+		bad++;
+		if (bad <= 4)
+			diff_eq_int(what, sess_a[i], sess_b[i],
+				    (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+
+	compare_link(what, rdem_a, rdem_b, RDEM_LEN, RDEM_MPAR, tag);
+	compare_link(what, rmpar_a, rmpar_b, RSMALL_LEN, (unsigned)-1, tag);
+	compare_link(what, rmod_a, rmod_b, RTX_LEN, RTX_V90_FRAME, tag);
+	compare_link(what, rv92_a, rv92_b, RTX_LEN, RTX_V92_FRAME, tag);
+	compare_link(what, rl90_a, rl90_b, RSMALL_LEN, 0, tag);
+	compare_link(what, rl92_a, rl92_b, RSMALL_LEN, 0, tag);
+	compare_link(what, rf90_a, rf90_b, RSMALL_LEN, (unsigned)-1, tag);
+	compare_link(what, rf92_a, rf92_b, RSMALL_LEN, (unsigned)-1, tag);
+	compare_link(what, rp18_a, rp18_b, RSMALL_LEN, (unsigned)-1, tag);
+}
+
+/*
+ * One case: seed everything, set the six knobs, ask both getters on both
+ * sides, and check the four answers and every buffer.  `want_rx` and
+ * `want_tx` of -1 mean "agreement only"; everything else is the arm's answer
+ * worked out by hand, which is the second oracle -- two implementations that
+ * were wrong the same way would agree with each other for ever.
+ */
+struct rate_case {
+	short	role;		/* +0x359c                                  */
+	int	status;		/* +0x0000                                  */
+	short	rxbits;		/* the rate configuration's +0x14           */
+	short	txbits;		/* its +0x04                                */
+	int	pac18;		/* the int the Rx middle arm returns        */
+	int	gate;		/* the demodulator's +0x280, as a byte      */
+	unsigned int mpar;	/* the mapping block's +0x00                */
+	int	v90state;	/* the V.90 modulator's +0x2c               */
+	unsigned int v90bits;	/* its frame count                          */
+	int	v92state;	/* the V.92 object's +0x2c                  */
+	unsigned int v92bits;	/* its frame count                          */
+};
+
+/*
+ * THE SEVEN ANSWERS THE BASE CASE MAKES DISTINGUISHABLE, and the reason the
+ * base knobs are the values they are: no two arms can produce the same
+ * number, so "which arm ran" is readable off the return value alone and the
+ * role x status cross below can assert that ALL SEVEN were reached without
+ * restating the fork it is testing.  A cross that never left one arm would
+ * otherwise be a long green run proving one thing.
+ */
+#define RARM_RX_CFG	16800		/*  7 * 2400                        */
+#define RARM_RX_PAC18	0x1234		/*    the int behind pac18          */
+#define RARM_RX_DEMOD	56000		/* 42 * 8000/6                      */
+#define RARM_TX_CFG	21600		/*  9 * 2400                        */
+#define RARM_TX_V90	28000		/* 21 * 8000/6                      */
+#define RARM_TX_V92	22000		/* 33 * 8000/12                     */
+#define RARM_TX_K56	30000		/*    the constant                  */
+
+static int saw_rate_arm[7];
+static int last_rx, last_tx;
+
+static void
+note_rate_arm(int v)
+{
+	static const int arm[7] = {
+		RARM_RX_CFG, RARM_RX_PAC18, RARM_RX_DEMOD, RARM_TX_CFG,
+		RARM_TX_V90, RARM_TX_V92, RARM_TX_K56
+	};
+	int k;
+
+	for (k = 0; k < 7; k++)
+		if (v == arm[k])
+			saw_rate_arm[k] = 1;
+}
+
+static void
+run_rate_case(const struct rate_case *c, long want_rx, long want_tx, long tag)
+{
+	int ra, rb, ta, tb;
+
+	setup();
+	seed_chain();
+	seed_rates();
+
+	poke_short(0x359c, c->role);
+	poke_int(0x0000, c->status);
+	poke_short(0xaa84 + 0x14, c->rxbits);
+	poke_short(0xaa84 + 0x04, c->txbits);
+
+	rate_poke(rp18_a, rp18_b, 0, c->pac18);
+	rdem_a[RDEM_GATE] = (unsigned char)c->gate;
+	rdem_b[RDEM_GATE] = (unsigned char)c->gate;
+	rate_poke(rmpar_a, rmpar_b, 0, (int)c->mpar);
+	rate_poke(rmod_a, rmod_b, RTX_STATE, c->v90state);
+	rate_poke(rf90_a, rf90_b, RFRAME_BITS, (int)c->v90bits);
+	rate_poke(rv92_a, rv92_b, RTX_STATE, c->v92state);
+	rate_poke(rf92_a, rf92_b, RFRAME_BITS, (int)c->v92bits);
+
+	ra = VPcmV34GetCurrentRxBitRate(&oa);
+	rb = ref_VPcmV34GetCurrentRxBitRate(ob);
+	ta = VPcmV34GetCurrentTxBitRate(&oa);
+	tb = ref_VPcmV34GetCurrentTxBitRate(ob);
+
+	diff_eq_int("GetCurrentRxBitRate", ra, rb, tag);
+	diff_eq_int("GetCurrentTxBitRate", ta, tb, tag);
+	if (want_rx >= 0)
+		diff_eq_int("GetCurrentRxBitRate, worked out by hand",
+			    rb, want_rx, tag);
+	if (want_tx >= 0)
+		diff_eq_int("GetCurrentTxBitRate, worked out by hand",
+			    tb, want_tx, tag);
+
+	compare_rates("the rate getters write nothing", tag);
+	compare_rate_links("the rate getters write nothing down the chain",
+			   tag);
+
+	last_rx = rb;
+	last_tx = tb;
+}
+
+/* The knobs every sweep starts from; see the seven constants above. */
+static const struct rate_case rate_base = {
+	0x66, 1, 7, 9, RARM_RX_PAC18, 1, 42u, 3, 21u, 3, 33u
+};
 
 static void *
 ptr_at(const void *base, unsigned off)
@@ -1381,6 +1663,272 @@ main(void)
 				    da == 34 || da == 56 || da == 90
 				    || da == 92, 1, 2000 + tag);
 			compare("GetCurrentSessionDP", 2000 + tag);
+		}
+	}
+	rc |= diff_end();
+
+	/* --- the two rate getters ---------------------------------------- */
+
+	/*
+	 * `role` AND `status` ARE CROSSED, and that is the whole point of this
+	 * sweep: the two functions do NOT ask the same question of `status`,
+	 * and each asks it on the opposite side of the `role` fork from the
+	 * other.  The receiver takes its PCM arm when role IS 0x66, the
+	 * transmitter's V.90 arm when role is NOT; a reconstruction that put
+	 * either test on the wrong side of the other agrees with the blob on
+	 * every case where the two happen to select the same arm, which is
+	 * most of them, and differs here.  Both signed extremes of `status`
+	 * are in, because the object's `cmp`s are signed.
+	 *
+	 * ALL SEVEN ARMS ARE ASSERTED REACHED at the end, by the numbers the
+	 * base knobs make unique.  That is the anti-vacuity check for the
+	 * sweep itself, and it does not restate the fork: it says only that
+	 * seven distinguishable answers came back, which a cross stuck in one
+	 * arm cannot produce.
+	 */
+	diff_begin("v34 pcm interface: the two rate getters, role crossed "
+		   "with status");
+	{
+		static const short role_v[] = {
+			0x66, 0x65, 0, 1, 0x67, -1
+		};
+		static const int st_v[] = {
+			(-0x7fffffff - 1), -1, 0, 1, 2, 3, 4, 90, 92,
+			0x7fffffff
+		};
+		struct rate_case c;
+		unsigned r, s;
+
+		for (r = 0; r < sizeof(role_v) / sizeof(role_v[0]); r++)
+		for (s = 0; s < sizeof(st_v) / sizeof(st_v[0]); s++) {
+			c = rate_base;
+			c.role = role_v[r];
+			c.status = st_v[s];
+			run_rate_case(&c, -1, -1, 3000 + (long)(r * 10 + s));
+			note_rate_arm(last_rx);
+			note_rate_arm(last_tx);
+		}
+
+		diff_eq_int("the config arm answered the receiver",
+			    saw_rate_arm[0], 1, 3900);
+		diff_eq_int("the pac18 arm answered the receiver",
+			    saw_rate_arm[1], 1, 3901);
+		diff_eq_int("the demodulator arm answered the receiver",
+			    saw_rate_arm[2], 1, 3902);
+		diff_eq_int("the config arm answered the transmitter",
+			    saw_rate_arm[3], 1, 3903);
+		diff_eq_int("the V.90 arm answered the transmitter",
+			    saw_rate_arm[4], 1, 3904);
+		diff_eq_int("the V.92 arm answered the transmitter",
+			    saw_rate_arm[5], 1, 3905);
+		diff_eq_int("the K56flex arm answered the transmitter",
+			    saw_rate_arm[6], 1, 3906);
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE SEVEN ARMS, EACH NAMED, WITH ITS ANSWER WORKED OUT BY HAND.
+	 * Agreement with the blob is the oracle; this is the second one, and
+	 * it is what says the numbers above are the arithmetic they are meant
+	 * to be rather than two implementations agreeing about nonsense.
+	 */
+	diff_begin("v34 pcm interface: each rate arm, against a hand "
+		   "calculation");
+	{
+		struct rate_case c;
+
+		/* role 0x66, status 1 and 2: the demodulator, both ways. */
+		c = rate_base;
+		c.role = 0x66;
+		c.status = 1;
+		run_rate_case(&c, RARM_RX_DEMOD, RARM_TX_CFG, 3910);
+		c.status = 2;
+		run_rate_case(&c, RARM_RX_DEMOD, RARM_TX_V92, 3911);
+
+		/* role 0x66, status 3: K56flex out, and the config back. */
+		c.status = 3;
+		run_rate_case(&c, RARM_RX_CFG, RARM_TX_K56, 3912);
+
+		/* role 0x66, status 0 and 4: neither PCM arm on either side. */
+		c.status = 0;
+		run_rate_case(&c, RARM_RX_CFG, RARM_TX_CFG, 3913);
+		c.status = 4;
+		run_rate_case(&c, RARM_RX_CFG, RARM_TX_CFG, 3914);
+
+		/* role 0x65: the transmitter's V.90 arm, status 1 and 2. */
+		c.role = 0x65;
+		c.status = 1;
+		run_rate_case(&c, RARM_RX_CFG, RARM_TX_V90, 3915);
+		c.status = 2;
+		run_rate_case(&c, RARM_RX_CFG, RARM_TX_V90, 3916);
+
+		/* role 0x65, status 3: the receiver's pac18 arm. */
+		c.status = 3;
+		run_rate_case(&c, RARM_RX_PAC18, RARM_TX_CFG, 3917);
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE THREE GATES, EACH SWEPT PAST ITS BOUNDARY.
+	 *
+	 * The demodulator's is a BYTE tested `cmpb $0x0`, so any non-zero
+	 * value opens it and 0x80 is what separates that from a `signed char
+	 * > 0` reading.  The two transmit gates are `int`s tested against
+	 * exactly 3, so 2 and 4 must both close them -- a `>=` or a `!= 0`
+	 * reconstruction passes every sample that is 0 or 3.
+	 *
+	 * AND A CLOSED TRANSMIT GATE RETURNS ZERO rather than falling through
+	 * to the configuration, which is the one thing about these two arms a
+	 * plausible version gets wrong: 0 and 21600 are different answers and
+	 * only one of them is the object's.
+	 */
+	diff_begin("v34 pcm interface: the three rate gates");
+	{
+		static const int gate_v[] = { 0, 1, 2, 0x7f, 0x80, 0xff };
+		static const int st_v[] = {
+			(-0x7fffffff - 1), 0, 1, 2, 3, 4, 0x7fffffff
+		};
+		struct rate_case c;
+		unsigned i;
+
+		for (i = 0; i < sizeof(gate_v) / sizeof(gate_v[0]); i++) {
+			c = rate_base;
+			c.role = 0x66;
+			c.status = 1;
+			c.gate = gate_v[i];
+			run_rate_case(&c, gate_v[i] != 0 ? RARM_RX_DEMOD : 0,
+				      RARM_TX_CFG, 3920 + (long)i);
+		}
+
+		for (i = 0; i < sizeof(st_v) / sizeof(st_v[0]); i++) {
+			/* The V.90 transmit gate, role 0x65 status 1. */
+			c = rate_base;
+			c.role = 0x65;
+			c.status = 1;
+			c.v90state = st_v[i];
+			run_rate_case(&c, RARM_RX_CFG,
+				      st_v[i] == 3 ? RARM_TX_V90 : 0,
+				      3930 + (long)i);
+
+			/* And the V.92 one, role 0x66 status 2. */
+			c = rate_base;
+			c.role = 0x66;
+			c.status = 2;
+			c.v92state = st_v[i];
+			run_rate_case(&c, RARM_RX_DEMOD,
+				      st_v[i] == 3 ? RARM_TX_V92 : 0,
+				      3940 + (long)i);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE TWO FRAME GRANULARITIES, AND THE ROUNDING.
+	 *
+	 * 8000/6 for the V.90 arms and 8000/12 for the V.92 one, both as a
+	 * multiply by the nearest `float` to the reciprocal with 0.5 added
+	 * before the truncation.  8000 mod 6 is 2 and 8000 mod 12 is 8, so
+	 * the exact quotient's fraction is 0, 1/3 or 2/3 in both cases and
+	 * only the 2/3 residue rounds up -- dropping the constant is right
+	 * for two thirds of the inputs and wrong by one for the rest, which
+	 * is why every residue is present.  A version that used 1/6 where the
+	 * object uses 1/12 is out by a factor of two and caught by any of
+	 * them.
+	 *
+	 * THE COUNT IS UNSIGNED, and the sweep goes past where that starts to
+	 * matter: `n * 8000` crosses 2^31 at n = 268435.
+	 */
+	diff_begin("v34 pcm interface: the two PCM frame granularities");
+	{
+		static const unsigned int n_v[] = {
+			0u, 1u, 2u, 3u, 21u, 22u, 23u, 42u, 43u,
+			268434u, 268435u, 268436u, 0x7fffffffu, 0xffffffffu
+		};
+		/* n * 8000 / 6, rounded, for the first nine of those. */
+		static const long v90_bps[] = {
+			0, 1333, 2667, 4000, 28000, 29333, 30667, 56000,
+			57333, -1, -1, -1, -1, -1
+		};
+		/* And n * 8000 / 12. */
+		static const long v92_bps[] = {
+			0, 667, 1333, 2000, 14000, 14667, 15333, 28000,
+			28667, -1, -1, -1, -1, -1
+		};
+		struct rate_case c;
+		unsigned i;
+
+		for (i = 0; i < sizeof(n_v) / sizeof(n_v[0]); i++) {
+			c = rate_base;
+			c.role = 0x65;
+			c.status = 1;
+			c.v90bits = n_v[i];
+			run_rate_case(&c, RARM_RX_CFG, v90_bps[i],
+				      3960 + (long)i);
+
+			c = rate_base;
+			c.role = 0x66;
+			c.status = 2;
+			c.v92bits = n_v[i];
+			run_rate_case(&c, RARM_RX_DEMOD, v92_bps[i],
+				      3980 + (long)i);
+
+			/*
+			 * And the receiver's own, which is the same 8000/6
+			 * inside `V90Demodulator::getBitRate` reached through
+			 * two more pointers.
+			 */
+			c = rate_base;
+			c.role = 0x66;
+			c.status = 1;
+			c.mpar = n_v[i];
+			run_rate_case(&c, v90_bps[i], RARM_TX_CFG,
+				      4000 + (long)i);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND THE CONFIGURATION ARM, WHICH IS SIGNED.
+	 *
+	 * `rxbits` and `txbits` are `short` and the object loads both with
+	 * `movswl`, so 0x8000 gives -32768 * 2400 and not 32768 * 2400.  The
+	 * two readings agree over every rate index a session can hold -- 0 to
+	 * 14 -- so this is the only place the declared type is observable,
+	 * finding 1102's three-check case again.  The extremes overflow the
+	 * multiply; both sides overflow identically and the value is compared
+	 * for agreement rather than against a hand figure.
+	 */
+	diff_begin("v34 pcm interface: the rate configuration arm is signed");
+	{
+		static const short bits_v[] = {
+			0, 1, 7, 14, -1, 0x7fff, (short)0x8000,
+			(short)0xffff, (short)0x8001
+		};
+		struct rate_case c;
+		unsigned i;
+
+		for (i = 0; i < sizeof(bits_v) / sizeof(bits_v[0]); i++) {
+			c = rate_base;
+			c.role = 0x65;
+			c.status = 0;
+			c.rxbits = bits_v[i];
+			c.txbits = (short)-bits_v[i];
+			run_rate_case(&c, bits_v[i] >= 0
+				      ? (long)bits_v[i] * 2400 : -1,
+				      -1, 4020 + (long)i);
+
+			/*
+			 * AND THE `pac18` ARM, whose value is an int and is
+			 * returned whole -- no scaling, which is what makes it
+			 * distinguishable from the configuration one.
+			 */
+			c = rate_base;
+			c.role = 0x65;
+			c.status = 3;
+			c.pac18 = (int)bits_v[i] * 7 + 1;
+			run_rate_case(&c, (long)((int)bits_v[i] * 7 + 1) >= 0
+				      ? (long)((int)bits_v[i] * 7 + 1) : -1,
+				      -1, 4040 + (long)i);
 		}
 	}
 	rc |= diff_end();

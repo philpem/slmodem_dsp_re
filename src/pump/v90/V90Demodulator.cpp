@@ -44,6 +44,11 @@ extern "C" {
  */
 #include "dsplib/V90ConstellationDesigner.h"
 #include "dsplib/V90Demodulator.h"
+/*
+ * The header forward-declares this one too, and `getBitRate` DEREFERENCES it.
+ * Same argument as V90ConstellationDesigner above.
+ */
+#include "dsplib/V90MappingParams.h"
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -92,6 +97,15 @@ DEM_OFF(word_288,		0x288, word288);
 DEM_OFF(word_28c,		0x28c, word28c);
 DEM_OFF(word_290,		0x290, word290);
 DEM_OFF(word_294,		0x294, word294);
+
+/*
+ * `getBitRate` multiplies `mappingParamsAlt`'s FIRST word, and nothing in
+ * this tree can mutate that placement -- it is in another file's header --
+ * so the assert costs no empirical guarantee (tiers.md's rule about a static
+ * check displacing a mutation).
+ */
+typedef char v90dem_mpar_word0[
+    (__builtin_offsetof(V90MappingParams, word_0) == 0) ? 1 : -1];
 
 /* Settled by the allocation that precedes the constructor; finding 291. */
 typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
@@ -381,4 +395,65 @@ V90Demodulator::enterChannelVerification(short, short short414)
 	equalizer->enterChannelVerification();
 
 	word_40 = 0;
+}
+
+/*
+ * getBitRate -- the downstream rate in bit/s, or zero before there is one.
+ *
+ * EIGHTY-SEVEN BYTES AND NO CALL, because sixty of them are the x87
+ * rounding-mode dance.  What it computes is
+ *
+ *     0                                        if byte_280 == 0
+ *     (unsigned)(mpa->word_0 * 8000 / 6 + 0.5) otherwise
+ *
+ * and every part of that is read off the instructions rather than inferred:
+ *
+ *     1b8d9  80 ba 80 02 00 00 00  cmpb   $0x0,0x280(%edx)
+ *     1b8e0  74 41                 je     1b923            -> %eax is 0
+ *     1b8e2  d9 05 <cst4+0x10c>    flds   0.5f
+ *     1b8e8  8b 42 18              mov    0x18(%edx),%eax
+ *     1b8ed  69 08 40 1f 00 00     imul   $0x1f40,(%eax),%ecx
+ *     1b8fb  d8 0d <cst4+0x108>    fmuls  0.16666667f
+ *     1b90a  de c1                 faddp  %st,%st(1)
+ *     1b919  df 3c 24              fistpll (%esp)
+ *
+ * `cmpb $0x0` IS ANY-NON-ZERO, not `> 0`: a byte of 0x80 takes the computing
+ * arm, which is what separates this from a `signed char` reading and is in
+ * the sweep for that reason.
+ *
+ * THE TWO CONSTANTS ARE `float`, NOT `double`.  `flds`/`fmuls` are four-byte
+ * loads out of `.rodata.cst4`, whose words at +0x108 and +0x10c are
+ * 0x3e2aaaab and 0x3f000000 -- the nearest `float` to 1/6, and 0.5 exactly.
+ * A source that said `/ 6.0f` would have emitted `fdivs` and one that said
+ * `* (1.0 / 6.0)` an eight-byte `fmull`, so the spelling below is what the
+ * encoding leaves.
+ *
+ * THE ARITHMETIC IS UNSIGNED AT BOTH ENDS, and both halves of that are
+ * FORCED:
+ *
+ *   - going in, the product is pushed as a 64-bit pair whose high word was
+ *     zeroed at 0x1b8eb, BEFORE the multiply, and read with `fildll`.  A
+ *     signed `int` is converted with a bare 32-bit `fildl` and no push;
+ *   - coming out, `fistpll` stores SIXTY-FOUR bits and only the low half is
+ *     taken.  That is the float-to-`unsigned int` idiom; float-to-`int` is a
+ *     32-bit `fistpl`.  Both spellings were put through
+ *     `-m32 -O2 -mfpmath=387 -march=i386 -mtune=i686 -fomit-frame-pointer`
+ *     to confirm the pair, which is how the return type was settled: the
+ *     mangling `_ZNK14V90Demodulator10getBitRateEv` carries no return type
+ *     and the header's `void` was a placeholder.
+ *
+ * The difference is not academic.  `word_0 * 8000` passes 2^31 at word_0 =
+ * 268435, and above that the two readings disagree by 2^32/6 -- so the sweep
+ * carries values on both sides of it, on finding 613's argument that a
+ * signedness the reachable domain never exercises is a defect no test can
+ * see.
+ */
+unsigned int
+V90Demodulator::getBitRate() const
+{
+	if (byte_280 == 0)
+		return 0;
+
+	return (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)
+			      + 0.5f);
 }

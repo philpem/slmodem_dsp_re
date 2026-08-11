@@ -39,6 +39,14 @@
 #include "dsplib/v34rx.h"
 #include "dsplib/v34shell.h"
 #include "dsplib/VPcmFloModem.h"
+/*
+ * For `VPcmV34GetCurrentRxBitRate` and `VPcmV34GetCurrentTxBitRate` at the
+ * bottom.  `DSPLIB_VPCM_UNWRITTEN` is deliberately NOT defined here, for the
+ * reason v34pcmif.c's copy of this include gives: this file DEFINES two of
+ * the five, and a definition compiled under the weak macro would stop being
+ * one as soon as anything else defined the name.
+ */
+#include "dsplib/vpcm.h"
 
 /*
  * The session object's MP block.  Six flag bytes and seven shorts, read as a
@@ -1240,6 +1248,212 @@ indicateJaTransmission(void *objp)
 		sess->enterPhase3();
 	else if (obj->k56flex_receiver > 1)
 		k56->enterPhase3FullDuplex();
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE LAST TWO OF `vpcm_run`'s FIVE CALLEES THAT ARE NOT `VPcmV34Progress`.
+ *
+ * `include/dsplib/vpcm.h` declares all five WEAK; `src/pump/v34/v34pcmif.c`
+ * defines two of them and explains the mechanism at length -- the
+ * declarations are taken with `DSPLIB_VPCM_UNWRITTEN` empty, which is what
+ * makes a definition STRONG, and defining one under the weak macro would link
+ * identically today and stop being a definition the moment a real one
+ * appeared.  These two follow it exactly.
+ *
+ * THEY ARE HERE AND NOT IN THAT `.c` FOR ONE REASON: `VPcmV34GetCurrentRxBitRate`
+ * CALLS A C++ MEMBER.
+ *
+ *     6f89  e8 fc ff ff ff   call <R_386_PC32 _ZNK14V90Demodulator10getBitRateEv>
+ *
+ * A C translation unit cannot name that symbol -- CLAUDE.md's trap section,
+ * "the link line is necessary and not sufficient".  Its twin comes with it
+ * because the two share every offset they read and splitting them would put
+ * one table of session offsets in two files.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE TWO ACTUALLY ANSWER, and they are NOT each other's mirror: 90
+ * bytes against 213, with three arms on one side and five on the other.
+ *
+ * Both open on the same pair of tests, and the pair is CROSSED rather than
+ * nested -- `f359c` picks which question is asked of `status`, and the two
+ * questions are different:
+ *
+ *     6f48  cmpw   $0x66,0x359c(%edx)          Rx
+ *     6f62  je     6f78                          == 0x66 -> status in 1..2
+ *     6f64  cmpl   $0x3,(%edx)                   != 0x66 -> status == 3
+ *
+ *     6fad  cmpw   $0x66,0x359c(%edx)          Tx
+ *     6fb5  je     6fd1                          == 0x66 -> status 2, then 3
+ *     6fb7  mov    (%edx),%eax; dec; cmp $1; ja  != 0x66 -> status in 1..2
+ *
+ * `f359c` is the field v34fsk.h describes as selecting
+ * `setTimingStateParameters`' second parameter table and `VPcmV34InitiateRetrain`
+ * reads as `role`; 0x66 is the value its other readers pair with V.90 being
+ * available.  `(unsigned)(status - 1) <= 1` is the SAME test the three
+ * Initiate entry points fork on, which is where v34pcmif.c's comment says the
+ * meaning of status 1 and 2 comes from -- a PCM receiver has the line.
+ *
+ * AND EVERY PATH THAT IS NOT A PCM ONE ENDS IN THE SAME PLACE: the rate
+ * configuration at +0xaa84, times 2400.  `VPcmV34GetCurrentTxBitRate` reads
+ * its `txbits` at +0x04 and `...RxBitRate` its `rxbits` at +0x14, both with
+ * `movswl` -- so both are SIGNED and a negative index gives a negative rate
+ * rather than a huge one.  v34fsk.h's note on `struct v34_ratecfg` lists four
+ * "current" getters and names no reader for `rxbits`; this is that reader.
+ */
+
+/*
+ * `f359c`'s PCM value.  `VPcmV34InitiateRetrain` already switches on 0x65 and
+ * 0x66 of the same field a few hundred lines above and spells them inline;
+ * this is 0x66 given a name because two functions here now compare against
+ * it and a bare 0x66 in four places is four chances to transcribe 0x65.
+ */
+#define PCM_ROLE		0x66
+
+/*
+ * The transmit chain the two PCM arms walk, which is TWO DIFFERENT OBJECTS
+ * read at the same two shapes.  Neither is modelled anywhere in this tree, so
+ * these are offsets and not fields:
+ *
+ *     6fc7  83 7a 2c 03   cmpl $0x3,0x2c(%edx)    the gate, both arms
+ *     6ff1  8b 4a 40      mov  0x40(%edx),%ecx    V.90: the frame record
+ *     7057  8b 42 4c      mov  0x4c(%edx),%eax    V.92: the frame record
+ *     6ff8  69 48 04 ..   imul $0x1f40,0x4(%eax)  and its +0x04, both arms
+ *
+ * The last is one indirection deeper than it looks: +0x40 and +0x4c hold a
+ * pointer to a pointer, and the count is at +0x04 of what the SECOND one
+ * addresses.
+ */
+#define PCMTX_STATE		0x2c
+#define PCMTX_READY		3
+#define PCMTX_V90_FRAME		0x40
+#define PCMTX_V92_FRAME		0x4c
+#define PCMTX_FRAME_BITS	0x04
+
+/*
+ * 0x7530.  The K56flex transmit rate is a CONSTANT in this object -- there is
+ * no chain, no gate and nothing to read -- and finding 1090 is why naming the
+ * modulation is the whole of what a K56flex session does in this build.
+ */
+#define K56FLEX_TX_BITRATE	30000
+
+/*
+ * The receive rate.
+ *
+ * THREE ARMS, and the middle one is the only place in this file that
+ * dereferences `pac18` as an `int *`: `V34GiveINFO1aBits` reads +0xc of the
+ * same pointer as the local PCM type, so what is at +0 is not otherwise
+ * described and is spelled as an offset.
+ */
+extern "C" int
+VPcmV34GetCurrentRxBitRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+
+	if (obj->f359c == PCM_ROLE) {
+		if ((unsigned)(obj->status - 1) <= 1) {
+			VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+
+			return (int)sess->modem.demodulator->getBitRate();
+		}
+	} else if (obj->status == 3) {
+		return *(const int *)obj->pac18;
+	}
+
+	return cfg->rxbits * (int)RATE_STEP;
+}
+
+/*
+ * The transmit rate, which is where the PCM UPSTREAM rates come from.
+ *
+ * FIVE ARMS.  Two of them are the same eleven instructions over two different
+ * chains and two different constants, and the object SHARES THEIR TAIL --
+ * 0x7073 jumps back into 0x700d, so the rounding sequence exists once.  That
+ * is a code-generation fact and not a source one; what the source has to have
+ * is one expression written twice, which is what is below.
+ *
+ *   f359c != 0x66, status 1 or 2   the V.90 modulator at `modem.modulator`,
+ *                                  its +0x40, one indirection, +0x04 of that,
+ *                                  times 8000/6
+ *   f359c == 0x66, status 2        the object at the session's +0x6124, its
+ *                                  +0x4c, one indirection, +0x04 of that,
+ *                                  times 8000/12
+ *   f359c == 0x66, status 3        a flat 0x7530 -- 30000
+ *   everything else                `txbits` * 2400
+ *
+ * BOTH CHAINS ARE GATED ON `+0x2c == 3` AND RETURN ZERO OTHERWISE, and the
+ * zero is a RETURN and not a fall-through to the 2400 arm:
+ *
+ *     6fc5  31 c0              xor    %eax,%eax
+ *     6fc7  83 7a 2c 03        cmpl   $0x3,0x2c(%edx)
+ *     6fcb  74 24              je     6ff1
+ *     6fcd  83 c4 14  c3       add;ret                     <- 0 goes out
+ *
+ * Neither object is modelled anywhere in this tree, so both are reached as
+ * bytes; +0x2c is a state the two share and 3 is the only value either is
+ * tested against.
+ *
+ * 8000/6 AND 8000/12 ARE THE TWO PCM FRAME GRANULARITIES, and they are the
+ * whole reason the two arms differ -- see `V90Demodulator::getBitRate`, which
+ * computes the same expression with the same two `float` constants for the
+ * other direction.  Both are `* (1.0f/N)` and not `/ N.0f`, because the
+ * object multiplies (`fmuls`) by the nearest `float` to the reciprocal and a
+ * division would have been `fdivs`.
+ *
+ * The conversion in and out is UNSIGNED at both ends, by the same `fildll`
+ * off a zeroed high word and `fistpll` with the low half taken that settled
+ * `getBitRate`'s return type.  Written as `unsigned` here for that reason and
+ * not because a rate cannot be negative.
+ */
+extern "C" int
+VPcmV34GetCurrentTxBitRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	const unsigned char *tx;
+	unsigned int n;
+
+	/*
+	 * ONE `txbits` SITE AND NOT TWO.  The object reaches its
+	 * `movswl 0xaa88; imul $0x960` at 0x6fe0 from BOTH the role-0x66
+	 * switch falling through and the `ja` at 0x6fbd, so the arms that do
+	 * not answer fall out of the `if` rather than each returning the
+	 * configuration themselves.  Written that way here: a second copy is
+	 * a second thing to keep in step, and the mutation that made it read
+	 * `txbits` unsigned found only one of them.
+	 */
+	if (obj->f359c != PCM_ROLE) {
+		if ((unsigned)(obj->status - 1) <= 1) {
+			tx = (const unsigned char *)sess->modem.modulator;
+			if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
+				return 0;
+
+			n = *(const unsigned int *)
+			    (**(const unsigned char *const *const *)
+			       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);
+
+			return (int)(unsigned)(n * 8000u * (1.0f / 6.0f)
+					       + 0.5f);
+		}
+	} else if (obj->status == 2) {
+		tx = *(const unsigned char *const *)sess->pad_6124;
+		if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
+			return 0;
+
+		n = *(const unsigned int *)
+		    (**(const unsigned char *const *const *)
+		       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);
+
+		return (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.5f);
+	} else if (obj->status == 3) {
+		return K56FLEX_TX_BITRATE;
+	}
+
+	return cfg->txbits * (int)RATE_STEP;
 }
 
 /*

@@ -36,7 +36,24 @@
  * them and no other reconstructed function reaches this struct, so they are a
  * pad and are named as one rather than guessed into fields.  Neither is the
  * total size known: 0x650 is where the last member this tree can see ends,
- * not a measured `sizeof`.  The four bytes at +0 are in the same position.
+ * not a measured `sizeof`.
+ *
+ * THE FOUR BYTES AT +0 USED TO BE IN THE SAME POSITION AND NOW HAVE ONE
+ * READER, `V90Demodulator::getBitRate`:
+ *
+ *     1b8e8  8b 42 18              mov    0x18(%edx),%eax
+ *     1b8ed  69 08 40 1f 00 00     imul   $0x1f40,(%eax),%ecx
+ *     1b8f3  52 51 df 2c 24        push;push;fildll (%esp)
+ *
+ * with `%edx` the demodulator and +0x18 its `mappingParamsAlt`.  The `fildll`
+ * off a pushed pair whose high word was zeroed BEFORE the multiply is the
+ * unsigned-to-float idiom -- a signed `int` converts with a 32-bit `fildl`
+ * and no push at all -- so the value entering the arithmetic is UNSIGNED, and
+ * that is the whole of what is forced.  It is typed here and still named for
+ * its offset: 8000/6 is the V.90 downstream rate granularity, which makes
+ * this a bit count per six-sample frame, but that is an interpretation of the
+ * arithmetic rather than something the object states, and it belongs in
+ * finding 1160 and not in a member name in another batch's header.
  *
  * THE LENGTH'S SIGNEDNESS IS MEASURED, the index's is not.  Every use of the
  * length is an unsigned comparison -- `cmp %ebp,%esi; jb` in both mask
@@ -54,7 +71,7 @@
 
 class V90MappingParams {
 public:
-	unsigned char pad_0[4];					/* +0x000 */
+	unsigned int word_0;					/* +0x000 */
 	unsigned char constellation[V90_CONSTELLATIONS]
 				   [V90_CONSTELLATION_MAX];	/* +0x004 */
 	unsigned char codecConstellation[V90_CONSTELLATIONS]

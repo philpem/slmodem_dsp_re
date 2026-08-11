@@ -9,17 +9,18 @@
  * one endpoint, at the other, and at both, compared block by block against
  * the blob-blob run.
  *
- * WHAT IS AND IS NOT OURS.  `vpcm_run` is ours, and so are two of the five
+ * WHAT IS AND IS NOT OURS.  `vpcm_run` is ours, and so are FOUR of the five
  * entry points it calls: `VPcmV34GetCleanedSamples` and
- * `VPcmV34GetCurrentSessionDP` are defined in `src/pump/v34/v34pcmif.c` and
- * this binary links them.  The other three are still the blob's, and the
- * three forwarders below are how.  All five are declared WEAK in
- * `src/pump/v90/vpcm.c` so that a binary which supplies none of them links
- * anyway and `vpcm_run` aborts if it is called -- `t_vpcmguard.c` is the
- * binary that watches it abort.  So what is under test here is `vpcm_run`'s
- * own work -- the block quantisation, the two sample queues, the bit pipe in
- * both directions and the seventeen-arm dispatch -- plus those two callees,
- * driven for 8,000 blocks of a real call.
+ * `VPcmV34GetCurrentSessionDP` are defined in `src/pump/v34/v34pcmif.c`, the
+ * two rate getters in `src/pump/v34/v34pcmmain.cpp`, and this binary links
+ * both.  Only `VPcmV34Progress` is still the blob's, and the one forwarder
+ * below is how.  All five are declared WEAK in `src/pump/v90/vpcm.c` so that
+ * a binary which supplies none of them links anyway and `vpcm_run` aborts if
+ * it is called -- `t_vpcmguard.c` is the binary that watches it abort.  So
+ * what is under test here is `vpcm_run`'s own work -- the block
+ * quantisation, the two sample queues, the bit pipe in both directions and
+ * the seventeen-arm dispatch -- plus those four callees, driven for 8,000
+ * blocks of a real call.
  *
  * WHY THE COMPARISON IS PER BLOCK AND NOT ONLY AT THE END.  A run that
  * diverges at block 900 and re-converges by block 4,000 would pass every
@@ -78,8 +79,6 @@ extern int ref_vpcm_run(struct dp *dp, void *in, void *out, int count);
 
 extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
 			       int *rxbits, int *nrx, int *txbits, int *nbits);
-extern int ref_VPcmV34GetCurrentRxBitRate(void *obj);
-extern int ref_VPcmV34GetCurrentTxBitRate(void *obj);
 
 int
 VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
@@ -90,26 +89,21 @@ VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
 }
 
 /*
- * `VPcmV34GetCleanedSamples` AND `VPcmV34GetCurrentSessionDP` USED TO BE
- * FORWARDED HERE TOO, and they are not any more because they are WRITTEN:
- * `src/pump/v34/v34pcmif.c` defines both, this binary links that file, and a
- * forwarder beside it would be a duplicate symbol.  So the run below is no
- * longer "our `vpcm_run` on the blob's five callees" -- two of the five are
- * ours as well, and every block still has to agree with the blob-blob run.
- * That is a strengthening of this file's claim rather than a change to it.
+ * FOUR OF THE FIVE USED TO BE FORWARDED HERE AND ONE IS.  Each of the other
+ * four lost its forwarder on the batch that WROTE it, because a forwarder
+ * beside a real definition is a duplicate symbol:
+ * `VPcmV34GetCleanedSamples` and `VPcmV34GetCurrentSessionDP` are in
+ * `src/pump/v34/v34pcmif.c`, `VPcmV34GetCurrentRxBitRate` and
+ * `VPcmV34GetCurrentTxBitRate` in `src/pump/v34/v34pcmmain.cpp`, and this
+ * binary links both files.  So the run below is not "our `vpcm_run` on the
+ * blob's five callees": FOUR of the five are ours as well, and every block
+ * still has to agree with the blob-blob run.  That is a strengthening of this
+ * file's claim each time rather than a change to it.
+ *
+ * The two rate getters are also the first thing in this binary that puts OUR
+ * `V90Demodulator::getBitRate` on the path of a real connecting call --
+ * `VPcmV34GetCurrentRxBitRate` calls it whenever the session is a PCM one.
  */
-
-int
-VPcmV34GetCurrentRxBitRate(void *obj)
-{
-	return ref_VPcmV34GetCurrentRxBitRate(obj);
-}
-
-int
-VPcmV34GetCurrentTxBitRate(void *obj)
-{
-	return ref_VPcmV34GetCurrentTxBitRate(obj);
-}
 
 /* --- the call, and it is `t_v34link.c`'s ---------------------------------- */
 

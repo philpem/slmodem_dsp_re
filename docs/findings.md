@@ -37635,3 +37635,244 @@ the 56k bullet was measured on -- `MDMCTL_IODELAY` was later hardcoded to 48
 where the tested tree returned `MODEM_FRAMESIZE` (192), and `MDMPRM_CODECTYPE`
 was changed to an "unknown codec" value. Anyone treating the fork's README as
 a measurement of the fork's current behaviour is reading across that gap.
+
+### 1160. `V90Demodulator::getBitRate` IS EIGHTY-SEVEN BYTES OF ROUNDING, AND ITS RETURN TYPE CAME OUT OF THE STORE WIDTH
+
+The header carried `void getBitRate() const;` -- a placeholder, because a
+mangling carries no return type and `_ZNK14V90Demodulator10getBitRateEv` is
+all the object says about the signature.  The type was recovered from the code
+generation instead, and both halves of the recovery are CLAUDE.md's "forced,
+so act on it":
+
+```
+   1b8d9  80 ba 80 02 00 00 00  cmpb   $0x0,0x280(%edx)
+   1b8e0  74 41                 je     1b923              -> %eax stays 0
+   1b8e2  d9 05 <cst4+0x10c>    flds   0.5f
+   1b8e8  8b 42 18              mov    0x18(%edx),%eax    mappingParamsAlt
+   1b8eb  31 d2                 xor    %edx,%edx          the HIGH word, first
+   1b8ed  69 08 40 1f 00 00     imul   $0x1f40,(%eax),%ecx
+   1b8f3  52 51 df 2c 24        push;push;fildll (%esp)
+   1b8fb  d8 0d <cst4+0x108>    fmuls  0.16666667f
+   1b90a  de c1                 faddp  %st,%st(1)
+   1b919  df 3c 24              fistpll (%esp)
+   1b920  8b 04 24              mov    (%esp),%eax        the LOW half only
+```
+
+- **Going in.** The product is pushed as a 64-bit pair whose high word was
+  zeroed BEFORE the multiply and read with `fildll`.  A signed `int` converts
+  with a bare 32-bit `fildl` off the stack slot and no push at all.  So the
+  value entering the arithmetic is UNSIGNED.
+- **Coming out.** `fistpll` stores SIXTY-FOUR bits and only the low half is
+  taken.  That is GCC's float-to-`unsigned int` idiom; float-to-`int` is a
+  32-bit `fistpl` and nothing else.  Both were put through
+  `-m32 -O2 -mfpmath=387 -march=i386 -mtune=i686 -fomit-frame-pointer` to
+  confirm the pair rather than asserting it from memory.
+
+So the declaration is now `unsigned int getBitRate() const;`.
+
+**THE CONSTANTS ARE `float` AND THE OPERATION IS A MULTIPLY.**  `.rodata.cst4`
+holds 0x3e2aaaab at +0x108 and 0x3f000000 at +0x10c -- the nearest `float` to
+1/6, and 0.5 exactly -- and both are four-byte `flds`/`fmuls`.  A source that
+said `/ 6.0f` would have emitted `fdivs`; one that said `* (1.0 / 6.0)` an
+eight-byte `fmull` out of `.rodata.cst8`.
+
+**THE GATE IS ANY-NON-ZERO.**  `cmpb $0x0` on the byte at +0x280 -- the one
+`V90Demodulator.h` already described as zeroed by the constructor, by
+`enterPhase3` and by `reset` -- so 0x80 takes the computing arm and a
+`signed char > 0` reading would not.
+
+**AND +0x000 OF `V90MappingParams` HAS A READER NOW.**  It was
+`unsigned char pad_0[4]`; it is `unsigned int word_0`.  It is TYPED and still
+named for its offset, deliberately.  What is forced is that the value entering
+the conversion is unsigned; that `8000/6` is the V.90 downstream rate
+granularity and this is therefore a bit count per six-sample frame is an
+INTERPRETATION of the arithmetic, correct-looking and unstated by the object,
+and it belongs in this paragraph rather than in a member name in a header two
+other batches are merging against.
+
+### 1161. THE TWO RATE GETTERS ARE FIVE CHAINS AND ONE CROSSED FORK, AND 90 BYTES AGAINST 213 IS NOT AN ACCIDENT
+
+`VPcmV34GetCurrentRxBitRate` (0x6f40, 90 B) and `VPcmV34GetCurrentTxBitRate`
+(0x6fa0, 213 B) are the last two of `vpcm_run`'s five callees that are not
+`VPcmV34Progress`.  Both open on the same two tests and **neither asks the
+other's question**:
+
+```
+   6f48  cmpw   $0x66,0x359c(%edx)          Rx
+   6f62  je     6f78                          == 0x66 -> status in 1..2
+   6f64  cmpl   $0x3,(%edx)                   != 0x66 -> status == 3
+
+   6fad  cmpw   $0x66,0x359c(%edx)          Tx
+   6fb5  je     6fd1                          == 0x66 -> status 2, then 3
+   6fb7  mov (%edx),%eax; dec; cmp $1; ja     != 0x66 -> status in 1..2
+```
+
+The receiver takes its PCM arm when the role IS 0x66; the transmitter's V.90
+arm when it is NOT.  A reconstruction that put either test on the wrong side
+of the other agrees with the blob on most (role, status) pairs and differs on
+a few, which is why the test crosses six roles with ten statuses rather than
+sampling.
+
+`(unsigned)(status - 1) <= 1` is the same test the three Initiate entry points
+fork on -- v34pcmif.c's comment already said that is where the meaning of
+status 1 and 2 comes from -- and 0x66 is `f359c`, the field
+`VPcmV34InitiateRetrain` reads as `role`.
+
+**THE FIVE CHAINS.**
+
+```
+  Rx  role 0x66, status 1|2   p3548 +0x175c -> V90Demodulator::getBitRate(),
+                              gated inside it on the demodulator's +0x280
+  Rx  role != 0x66, status 3  pac18 +0x00, an int, returned WHOLE
+  Tx  role != 0x66, st 1|2    p3548 +0x1758 (modem.modulator) +0x40 -> * -> +4
+  Tx  role 0x66, status 2     p3548 +0x6124 +0x4c -> * -> +0x04
+  Tx  role 0x66, status 3     0x7530, a flat 30000
+  both, anything else         the rate configuration at +0xaa84, times 2400
+```
+
+**THE TWO TRANSMIT CHAINS ARE THREE DEREFERENCES, NOT TWO.**
+`mov 0x40(%edx),%ecx` then `mov (%ecx),%eax` then `0x4(%eax)`: the field at
++0x40 (and +0x4c) points at something whose FIRST word points at the record
+the count is in.  The first draft here read the count off the first pointer
+and was wrong by one level; the disassembly is what said so, and the test
+keeps the two links in separate buffers so that a version one dereference
+short reads fill rather than the same bytes.
+
+**BOTH TRANSMIT CHAINS ARE GATED ON `+0x2c == 3` AND ANSWER ZERO OTHERWISE**,
+and the zero is a `ret` rather than a fall-through to the 2400 arm:
+
+```
+   6fc5  31 c0        xor  %eax,%eax
+   6fc7  83 7a 2c 03  cmpl $0x3,0x2c(%edx)
+   6fcb  74 24        je   6ff1
+   6fcd  83 c4 14 c3  add;ret            <- 0 goes out, not txbits * 2400
+```
+
+**THE TWO GRANULARITIES ARE THE FINDING.**  The V.90 arm multiplies by the
+`float` nearest 1/6 and the V.92 one by the `float` nearest 1/12 --
+`.rodata.cst4` +0xc and +0x4 -- with 0.5 added before the truncation in both.
+8000/6 is the V.90 downstream step (28000, 29333, ... 56000) and 8000/12 the
+V.92 upstream one, so the arm selected by `role == 0x66 && status == 2` is the
+V.92 upstream rate and the one selected by `role != 0x66` is a V.90-style
+six-sample frame.  That is also why the pair is not symmetric: the receiver
+has one PCM chain and the transmitter two, plus a constant.
+
+**0x7530 IS A CONSTANT AND NOT A COMPUTATION.**  Status 3 is K56flex --
+finding 1101's `GetCurrentSessionDP` returns 56 there -- and the transmit rate
+for it is 30000 flat: no chain, no gate, nothing read.  Finding 1090 is why
+naming the modulation is the whole of what a K56flex session does in this
+build.
+
+**AND `rxbits` FINALLY HAS A READER.**  `struct v34_ratecfg`'s note in
+`v34fsk.h` lists four "current" getters and names a reader for `baud`,
+`txbits`, `carrier` and `rx_baud` but none for `rxbits` at +0x14.
+`VPcmV34GetCurrentRxBitRate`'s default arm is it: `movswl 0x14(%ecx)` with
+`%ecx = obj + 0xaa84`, times 0x960.  Both getters load their half with
+`movswl`, so both are SIGNED, and 0x8000 is the only value that separates that
+from `movzwl` -- finding 1102's three-check case again, and in the sweep for
+the same reason.
+
+**LINKAGE PUT THEM IN THE `.cpp`.**  `VPcmV34GetCurrentRxBitRate` carries an
+`R_386_PC32` against `_ZNK14V90Demodulator10getBitRateEv`, and a C translation
+unit cannot name that symbol, so the two live in `src/pump/v34/v34pcmmain.cpp`
+as `extern "C"` free functions beside `VPcmV34InitiateRetrain` rather than in
+`v34pcmif.c` with the other three exports.  CLAUDE.md's "the link line is
+necessary and not sufficient".
+
+### 1162. THE FIXTURE WAS BUILT BESIDE `t_v34pcmif.c`'s AND NOT INSIDE IT, AND AN EQUIVALENCE ARGUMENT WAS WRONG
+
+**2,066 new checks in `t_v34pcmif.c` and 592 in `t_v90demod.cpp`**, and both
+blocks are ADDITIVE on purpose.
+
+`t_v34pcmif.c`'s fixture is shared with fifteen existing blocks and two
+RECORDED mutation suites (`v34pcmif`, `v34datapump_rrn`).  The rate getters
+need five more links than it has -- a demodulator long enough to hold a gate
+byte at +0x280 where `DEMOD_LEN` is 0x240, a modulator, the object at the
+session's +0x6124, two two-level frame chains and a block behind `pac18`.
+Widening `ptr_skip`, `sess_hole`, `compare_link` or `DEMOD_LEN` would have
+moved bytes in every one of the existing cases, which is tiers.md's "adding a
+check to a file that has a mutation suite is not free, and the phase gate
+cannot see the cost".  So the block seeds its own links on top of
+`seed_chain()`, re-points the one it shares, and does its own comparing;
+`compare_rates` is a twenty-line copy of `compare()` with one more hole.  Not
+one existing helper changed.
+
+The same argument put `getBitRate`'s block outside `test/harness/v90demfix.h`:
+two loads and no writes do not justify teaching the shared `snap_dem` to
+neutralise a pointer it neutralises for nobody else, in a header
+`t_vpcmep3.cpp` also includes.
+
+**TWO NEW SUITES: `v34pcmrates` 38 of 38 CAUGHT, `v90getbitrate` 8 of 9 with
+1 equivalent.**  Both are new files; no existing suite was edited.
+`anchorcheck.py` passes at 69 suites and 3,667 mutations, which was not free
+either -- finding 1103's rule that a batch adding a function to a file with a
+suite must re-run it applies here twice over, and every anchor in
+`v34pcmrates` carries its own function's surrounding text because
+`obj->status == 2` appears verbatim inside `VPcmV34InitiateRetrain`.
+
+**ONE MUTATION ESCAPED, AND IT FOUND A REAL DUPLICATION.**  "txbits is read
+UNSIGNED" came back NOT CAUGHT: the first draft returned
+`cfg->txbits * RATE_STEP` from TWO places -- once when the role-0x65 status
+window was missed and once at the bottom -- and the anchor patched only the
+second.  The object has ONE such site, at 0x6fe0, reached from both the `ja`
+at 0x6fbd and the role-0x66 switch falling through.  The function was
+restructured to fall out of the `if` instead, which is both closer to the
+object and one place to keep in step; the mutation is caught now.  A
+duplication a differential test cannot see is exactly what the mutation tier
+is for.
+
+**AND ONE EQUIVALENCE ARGUMENT WAS WRONG.**  `v90getbitrate` filed "the
+reciprocal is a DOUBLE" as `equivalent`, on the argument that `fmuls` against
+`fmull` is an ENCODING difference and that under 80-bit x87 evaluation the two
+constants are too close to separate.  The runner answered `RECORDED AS
+EQUIVALENT AND CAUGHT ANYWAY` on the first pass.  The second half of the
+argument is arithmetic and it is false: the nearest `float` to 1/6 is high by
+5e-9 RELATIVE, this function multiplies it by a product reaching 4.3e9, and
+the absolute error therefore reaches ELEVEN -- far more than the one count a
+truncation can hide.  At `word_0` = 268435 the two spellings give 357913344
+and 357913333, and that input was already in the sweep for the signedness
+claim.  The flag was dropped and the argument replaced by what actually
+happened.  tiers.md says an equivalence argument is a claim about the harness
+rather than about the object; this one was a claim about neither, and only
+running it said so.
+
+**The one genuine equivalent is the return type.**  `(int)` for
+`(unsigned int)` changes `fistpll` to `fistpl`, and the two disagree only at
+or above 2^31; the value here is at most `(2^32-1)/6 + 0.5` = 715,827,882, so
+no input can reach the disagreement and no differential test ever will.  The
+evidence for `unsigned int` is the store width at 0x1b919 and the pair of test
+compilations -- tier 3, exactly as tiers.md's table says.
+
+### 1163. THE GUARD SURFACE IS ONE, AND WHAT THIS BATCH DID NOT DO
+
+`vpcm_run`'s five callees were five weak references; finding 1101 took them to
+three and this takes them to **one**.  `VPcmV34Progress` -- 7,278 bytes whose
+closure is the whole receive chain -- is the only entry point `t_vpcmguard.c`
+can still watch `vpcm_run` abort on, and that file now asserts one absent and
+four DEFINED rather than three and two.  `t_vpcmrun.c` lost two more of its
+forwarders for the reason finding 1102 gives, and its 8,000-block four-way
+comparison is now our `vpcm_run` on FOUR of its own callees -- and the first
+thing in the tree that puts our `V90Demodulator::getBitRate` on the path of a
+real connecting call.  It still agrees with the blob-blob run at every block.
+
+**NOT DONE, and named rather than left to be noticed:**
+
+- **The two transmit chain objects are not modelled and are not named.**
+  `p3548 + 0x1758` is `VPcmFloModem::modem.modulator`, a `V90Modulator *` this
+  tree forward-declares and nothing defines; `p3548 + 0x6124` is inside
+  `pad_6124` and has no name at all.  Both are reached as bytes with `+0x2c`,
+  `+0x40`/`+0x4c` and `+0x04` spelled out, because a struct for either would
+  be a guess from three offsets.  That the two are read at the SAME two shapes
+  is a hint that they are the same type and it is not evidence.
+- **`pac18 + 0x00` is not named either.**  `V34GiveINFO1aBits` reads +0xc of
+  the same pointer as the local PCM type; +0x00 has no other reader.
+- **Nothing was done about the codegen tier for these three.**  They are not
+  in `compare.py`'s matched set and no attempt was made to make them so.
+- **`tools/mutsnap.py --check` was failing at HEAD and not because of this
+  work.**  `v90conneval` was registered in `suites.json` with no recorded
+  verdicts, which `--check` calls MISSING and fails on, so `make phase` was
+  red at `refs` before this batch touched anything.  It is recorded now,
+  along with the two new suites, at 5 caught of 6 with 1 equivalent -- a
+  measurement of another batch's suite and not a change to it;
+  `v90conneval.json` is untouched.  The other 66 entries remain stale, as
+  they were.

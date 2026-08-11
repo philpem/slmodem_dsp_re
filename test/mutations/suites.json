@@ -49,6 +49,8 @@
  "v90p3dreset":    ["src/pump/v90/V90Phase3Demodulator.cpp", "build/test/t_v90p3dreset"],
  "scrambler":      ["include/dsplib/Scrambler.h", "build/test/t_scrambler"],
  "v90demod":       ["src/pump/v90/V90Demodulator.cpp", "build/test/t_v90demod"],
+ "v90getbitrate":  ["src/pump/v90/V90Demodulator.cpp", "build/test/t_v90demod"],
+ "v34pcmrates":    ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v34pcmif"],
  "v90p34":         ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v90p34"],
  "v34retrain":     ["src/pump/v34/v34pcmmain.cpp", "build/test/t_v34retrain"],
  "v34hstx1":       ["src/pump/v34/v34hstx1.cpp", "build/test/t_v34hstx1"],

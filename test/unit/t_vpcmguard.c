@@ -9,18 +9,19 @@
  * named after 7,278 bytes of the object it has not written.
  *
  * THIS BINARY IS THE ONE THAT DOES NOT SUPPLY THEM.  `t_vpcmrun.c` defines
- * the three that are still unwritten as forwarders to the blob's `ref_*`
- * copies; this file deliberately defines none, so all three are null here and
- * `vpcm_run`'s guard is on the only path there is.
+ * the one that is still unwritten as a forwarder to the blob's `ref_*` copy;
+ * this file deliberately defines none, so it is null here and `vpcm_run`'s
+ * guard is on the only path there is.
  *
- * TWO OF THE FIVE ARE NO LONGER UNWRITTEN.  `VPcmV34GetCleanedSamples` and
+ * FOUR OF THE FIVE ARE NO LONGER UNWRITTEN.  `VPcmV34GetCleanedSamples` and
  * `VPcmV34GetCurrentSessionDP` are reconstructed in
- * `src/pump/v34/v34pcmif.c`, which every test binary links, so they are
- * non-null even here and no forwarder can make them otherwise.  The block
- * below asserts that too: the guard surface is what this file is about, and
- * it has to be counted in both directions or a definition that silently
- * stopped being linked would go unremarked.  `VPcmV34Progress` is the one the
- * abort actually rides on and it is untouched.
+ * `src/pump/v34/v34pcmif.c` and the two rate getters in
+ * `src/pump/v34/v34pcmmain.cpp`, and every test binary links both, so all
+ * four are non-null even here and no forwarder can make them otherwise.  The
+ * block below asserts that too: the guard surface is what this file is
+ * about, and it has to be counted in both directions or a definition that
+ * silently stopped being linked would go unremarked.  `VPcmV34Progress` is
+ * the one the abort actually rides on and it is untouched.
  *
  * WHY IT HAS TO BE WATCHED RATHER THAN REASONED ABOUT.  gates.md's pattern:
  * a guard that silently returned would leave a `.process` running and
@@ -89,16 +90,17 @@ main(void)
 	for (i = 0; i < FRAG; i++)
 		in[i] = (short)(i * 37 - 500);
 
-	diff_begin("three VPcmV34* entry points are ABSENT from this binary "
-		   "and two are WRITTEN");
+	diff_begin("one VPcmV34* entry point is ABSENT from this binary and "
+		   "four are WRITTEN");
 	/*
-	 * Without the three the abort below proves nothing: a guard that
+	 * Without the null one the abort below proves nothing: a guard that
 	 * fired because the symbol was null is only interesting if the symbol
 	 * really is null, and a binary that had quietly linked the blob's
 	 * copies would abort for some other reason entirely.
 	 *
-	 * TWO OF THE FIVE ARE NOW DEFINED, in `src/pump/v34/v34pcmif.c`, and
-	 * this block is where that is recorded.  It is asserted rather than
+	 * FOUR OF THE FIVE ARE NOW DEFINED, two in `src/pump/v34/v34pcmif.c`
+	 * and two in `src/pump/v34/v34pcmmain.cpp`, and this block is where
+	 * that is recorded.  It is asserted rather than
 	 * dropped for the reason the weak attribute exists at all: the guard
 	 * surface is the claim, so it has to be counted in both directions.
 	 * A definition that quietly disappeared -- the file dropped from the
@@ -113,10 +115,10 @@ main(void)
 		    VPcmV34GetCleanedSamples != 0, 1, 0);
 	diff_eq_int("VPcmV34GetCurrentSessionDP is DEFINED",
 		    VPcmV34GetCurrentSessionDP != 0, 1, 0);
-	diff_eq_int("VPcmV34GetCurrentRxBitRate is unresolved",
-		    VPcmV34GetCurrentRxBitRate == 0, 1, 0);
-	diff_eq_int("VPcmV34GetCurrentTxBitRate is unresolved",
-		    VPcmV34GetCurrentTxBitRate == 0, 1, 0);
+	diff_eq_int("VPcmV34GetCurrentRxBitRate is DEFINED",
+		    VPcmV34GetCurrentRxBitRate != 0, 1, 0);
+	diff_eq_int("VPcmV34GetCurrentTxBitRate is DEFINED",
+		    VPcmV34GetCurrentTxBitRate != 0, 1, 0);
 	/* The layout the hand-built root depends on. */
 	diff_eq_int("the root is vpcm_create's allocation",
 		    (int)sizeof(struct vpcm_root), 0xd258, 0);
