@@ -40234,3 +40234,48 @@ lag move the WRONG way with IODELAY (205.62 ms at IODELAY 88, 195.62 at 164 and
 the socket between the two processes, and frame-sized buffering on each side are
 all unmeasured. That decomposition is the next measurement, and it is the same
 technique: inject at one boundary, capture at another.
+
+======================================================================
+
+### 1216. THE ATA'S PLAYOUT BUFFER HAS AN OPTIMUM AT 20 ms, AND SETTING IT THERE MOVED THE MEDIAN RATE 12000 -> 14400
+
+*The VG204 route, measured across four settings after 1215's correction
+established it was live. `playout-delay nominal N` on the voip dial-peer.*
+
+| `playout-delay` | chirp round trip | echo at the datapump | our RX | median |
+|---|---|---|---|---|
+| 80 (baseline) | ~141 ms | 205.62 ms | 12000 x12 of 22 | **12000** |
+| **20** | **~101 ms** | 165.62 / 175.62 | 14400, 14400, 14400, 4800 | **14400** |
+| 10 | ~106 ms | 175.3 / 175.6 | **33600**, 14400, 14400, 7200 | **14400** |
+| 0 | ~111 ms | 175.62 ms | 14400, 12000, 7200 | 12000 |
+
+**The buffer has a minimum, and it is not zero.** 80 -> 20 removed 40 ms of a
+60 ms nominal reduction; 20 -> 10 removed nothing; 0 was 10 ms WORSE than 20 on
+delay and back to baseline on rate. Below about 20 ms the ATA is presumably
+underrunning and concealing, which costs what the shorter buffer saves. The
+chirp at 0 was the cleanest measurement of the set -- six bursts, sd 0.00 -- so
+this is not measurement noise.
+
+**What it bought.** The median receive rate moved 12000 -> 14400, and the first
+33600 this bench has ever recorded appeared at nominal 10 (`equerr` 52 against
+the table's 50 threshold for 33600, so the mechanism is the expected one and not
+a fluke of some other kind). Equaliser error fell from the ~2900 modal value to
+1754-2360 across the good calls.
+
+**Why it worked, in the terms of 1205 and 1210.** The canceller covers delays up
+to `dlen` = 1656 samples = **172.5 ms** -- not 157.5 ms, which is where the
+furthest tap window STARTS, an error this finding corrects. At 205.62 ms the
+echo was outside that; at 165.62 ms it is inside. The equaliser then sees a
+cleaner signal, its error crosses the 2571 threshold, and the rate steps up.
+
+**Honest limits.** Three to five calls per setting against a 30-call control, so
+the ranking of 20 against 10 is NOT established -- both beat 80 and both beat 0,
+and that is all the data supports. This bench has retracted four claims made on
+samples this size, and the only reason to state anything at all here is that
+three independent measures moved together: chirp delay, datapump echo lag, and
+equaliser error.
+
+**And it does not finish the job.** The external loop has bottomed out at
+~101 ms while `slmodemd` and `d-modem` contribute ~74 ms internally (1215), so
+the echo sits at ~175 ms, about 3 ms outside the 172.5 ms window. Every further
+millisecond has to come from our own pipeline. **Recommended setting: 20.**
