@@ -42406,3 +42406,318 @@ something ours does not, and the emitted behaviour is the same.  Writing it as
 a call is also what keeps `v92ec`'s anchors unique -- the same three statements
 twice in one file would have put a third of the suite's `find` strings on two
 occurrences each, which is finding 1264's failure mode.
+### 1280. THE SIZE ORACLE SETTLED FOUR MORE OBJECTS IN ONE CHAIN, AND EACH ONE CAME OUT OF THE NEXT ONE UP
+
+Finding 1249's oracle is that a constructor which does
+`sysdep_malloc(sizeof(X))` immediately before constructing an `X` is handing
+you the ORIGINAL COMPILER'S OWN `sizeof`, not a displacement bound.  The V.92
+modulator chain is four classes deep and every link supplies the one below it,
+so the whole chain is measured rather than bounded:
+
+| class | size | who allocates it | at |
+|---|---|---|---|
+| `V92Transmitter` | 0x60 | `V92BitsToSymbol::V92BitsToSymbol` | .text+0x4deee |
+| `V92BitsToSymbol` | 0x20 | `V92Modulator::V92Modulator` | .text+0x15226 |
+| `V92Phase4Modulator` | 0x1cc | `V92Modulator::V92Modulator` | .text+0x152b9 |
+| `V92Modulator` | 0x90 | `V92Modem::V92Modem` | .text+0x13e6a |
+
+Every one of the four agrees with its own highest field: +0x58 ends at 0x5c
+inside 0x60, +0x1c ends at 0x1d inside 0x20, +0x1c8 ends at 0x1cc exactly, and
++0x8c ends at 0x90 exactly.  Two of the four therefore have TRAILING BYTES
+that nothing written here touches -- four in the transmitter and three of
+alignment in the bit-to-symbol stage -- and those bytes exist on the
+allocation's word alone.  That is worth stating because the opposite mistake
+is the cheap one: reading the highest displacement as the size would make the
+transmitter 0x5c and every array of them wrong.
+
+**The chain also cross-checks the sizes this tree already had.**
+`V92Transmitter`'s constructor allocates its five sub-objects with 0x54, 1,
+0x2008, 0x80 and 0x14, and four of those are `sizeof(V92ModulusEncoder)`,
+`sizeof(V92ConvolutionEncoder)`, `sizeof(V92Precoder)` and
+`sizeof(V92PreFilter)` as their own headers already record them, each from its
+own allocation site.  `V92Modulator`'s does the same for six more --
+`V92BitsToSymbol`, `ResamplerTimingOffset` 0x4c, `V92Phase3Modulator` 0x50,
+`V92Phase4Modulator`, `Queue<float>` 0x14 and `FloatFIR` 0x14.  Ten
+independently derived numbers, ten agreements, and all ten are now
+compile-time assertions in the two .cpp files rather than comments, so a later
+edit that moves one of those objects fails to build instead of silently
+allocating the wrong amount.
+
+======================================================================
+
+### 1281. THE V.92 TRANSMITTER OWNS SIX THINGS AND TREATS THEM THREE DIFFERENT WAYS, AND ONE OF THE THREE IS NOT A LEAK
+
+`V92Transmitter::V92Transmitter` (.text+0x53b90, 180 bytes) makes six
+allocations and `~V92Transmitter` (+0x53a30, 173 bytes) frees six pointers
+behind six null tests -- but only THREE of the six get a destructor call:
+
+    +0x08  malloc(0x50)      no constructor         free, no destructor
+    +0x48  malloc(0x54)      V92ModulusEncoder      free, NO DESTRUCTOR
+    +0x58  malloc(1), *p=0   no constructor         free, no destructor
+    +0x54  malloc(0x2008)    V92ConvolutionEncoder  destructor, then free
+    +0x4c  malloc(0x80)      V92Precoder(0x140)     destructor, then free
+    +0x50  malloc(0x14)      V92PreFilter(0x140)    destructor, then free
+
+The middle line is the one that looks wrong and is not.  **`readelf -sW`
+carries no `_ZN17V92ModulusEncoderD1Ev` or `D2Ev` of any kind**, so the class
+has no user-declared destructor for GCC to have emitted a call to; a bare
+`sysdep_free` is exactly what `delete p` compiles to over a trivially
+destructible `p`.  The absence of the symbol is the evidence, and it is the
+same argument finding 1254 makes from the other side -- a one-byte destructor
+is evidence that one was DECLARED.  No deviation number was spent on it.
+
+**The two orders are not the same, and that is a source fact.**  Construction
+runs +0x08, +0x48, +0x58, +0x54, +0x4c, +0x50; destruction runs +0x08, +0x48,
++0x58, +0x4c, +0x50, +0x54.  The last three are permuted between the two,
+which is what a hand-written destructor looks like and is not what implicit
+member destruction (the reverse of construction) would give.  Both were
+reproduced as found.
+
+**And exactly one of the six is nulled after its free**: `movl $0x0,0x4c(%esi)`
+at .text+0x53aa6, after the precoder and after nothing else.  D210.
+
+======================================================================
+
+### 1282. A CONSTRUCTOR WRITES A FIELD OF SOMEBODY ELSE'S OBJECT, AND IT IS THE ONLY WRITER OF THAT FIELD IN THE WHOLE BLOB
+
+`V92Phase4Modulator::V92Phase4Modulator` files its third argument away and
+then reaches straight back through it:
+
+    179ed:  89 7b 74           mov %edi,0x74(%ebx)     this->cp = cp
+    179f0:  89 b7 10 01 00 00  mov %esi,0x110(%edi)    cp->word_110 = 0
+
+`%esi` is zeroed at +0x179e5 for that store and for nothing else, so it is
+deliberate and not a spill.  `include/dsplib/V92CP.h` had +0x10c..+0x113 as
+`pad_10c[8]`, "read by methods not written"; +0x110 now has a name and the
+comment on it names the writer, because the writer is not a member of V92CP
+and nobody looking at that class would find it.
+
+**Testing a cross-object store needs the OPPOSITE of the shared-instance
+rule.**  The rule for an argument a constructor READS is one shared instance
+pointed at by both sides, so that a divergence in WHICH field was read is
+visible.  For an argument it WRITES, one shared instance hides everything: our
+side failing to clear +0x110 is covered up by the reference clearing it a
+moment later, and the final state is identical either way.  So `t_v92p4mod.cpp`
+runs the constructor pair twice -- once with one V92CP, which proves +0x74
+holds the third argument and that nothing else in the 2,328-byte V92CP moved,
+and once with a V92CP each, seeded identically and compared against one
+another afterwards, which is the only run in which our own store is the thing
+being measured.  Both runs also compare the V92CP against its seed everywhere
+outside +0x110..+0x113.
+
+======================================================================
+
+### 1283. `V92Modulator`'s CONSTRUCTOR INLINES `reset()` VERBATIM, AND THE STANDALONE SYMBOL IS WHAT PROVES IT
+
+`V92Modulator::reset` is its own 186-byte symbol at .text+0x15060.  The
+constructor's last 152 bytes are its body statement for statement: the same
+`Scrambler<int,unsigned char>::reset(this + 0x54, 0)`, the same five clears at
++0x2c, +0x30, +0x34, +0x38 and the copy of +0x00 into +0x08, the same
+`Queue<float>::reset`, the same two byte stores at +0x0c and +0x0d, the same
+`+0x28 = 0.0f`, the same `params->MODULATOR_QUEUE_LENGTH >> 1` into +0x04, the
+same priming loop and the same closing `FloatFIR::reset`.  The two even print
+the same "V92Modulator reset\r\n" behind the same `dsplibs_debug_level > 1`
+test -- which is how the duplication announces itself, since the constructor
+prints "V92Modulator constraction\r\n" at its head and then this a second
+time.
+
+The one difference is the tail: `reset` ends in `jmp FloatFIR::reset` and the
+constructor in `call`, which is the sibling-call optimisation and not a source
+difference.
+
+**`reset` is NOT written here.**  It belongs to whoever takes the other
+sixteen members of the class, and writing it would mean writing a body whose
+callers are not written -- docs/v90cpp.md's rule.  The constructor carries the
+body as a FILE-STATIC HELPER instead, which is the spelling
+`V92Phase3Modulator.cpp` already uses for the six generators that class
+inlines, and it keeps the duplication visible in the source rather than hidden
+in a comment.  When `reset` is written, the helper is what it turns into.
+
+======================================================================
+
+### 1284. THE QUEUE LENGTH IS A SIGNED PARAMETER SHIFTED ARITHMETICALLY INTO AN UNSIGNED LOOP BOUND, AND A NEGATIVE VALUE ASKS FOR TWO BILLION ITERATIONS
+
+`V92Modulator::reset` primes the sample queue:
+
+    150cb:  8b 81 d8 00 00 00  mov 0xd8(%ecx),%eax   params->MODULATOR_QUEUE_LENGTH
+    150d1:  d1 f8              sar $1,%eax           <- ARITHMETIC shift
+    150d3:  89 43 04           mov %eax,0x4(%ebx)
+    150d6:  83 f8 00           cmp $0x0,%eax
+    150d9:  77 07              ja  ...               <- UNSIGNED compare
+    ...
+    150f2:  39 73 04           cmp %esi,0x4(%ebx)
+    150f5:  77 e9              ja  ...               <- and again
+
+`sar` with no sign fixup is what GCC emits for `>> 1` over a SIGNED int, and
+`MODULATOR_QUEUE_LENGTH` is indeed `int` -- V92Parameters.h's block of 54
+four-byte slots, +0x004..+0x0d8, and this is the last of them.  Both
+comparisons that use the result are `ja`, which is unsigned.
+
+So the two readings of the same word disagree for exactly the negative
+parameters: `-2` shifts to `-1`, which as the loop's bound is 0xffffffff, and
+the object writes 4,294,967,295 floats into a ring built to hold `-1`.  The
+same word is also `Queue<float>`'s constructor argument, where it becomes
+`sysdep_malloc((n + 1) * 4)` with no check.
+
+Nothing here says a negative value can arrive -- `setToDefault` and
+`loadParams` are the two writers and neither has been read for this slot --
+so this is recorded as the shape of the code rather than as a defect, and
+t_v92mod.cpp keeps the parameter small and positive on every trial for the
+plain reason that a fixture which hangs reports nothing.
+
+======================================================================
+
+### 1285. THE MODULATOR'S BLOCK SIZE IS FIVE SIXTHS OF ITS ARGUMENT, ROUNDED, AND TWO OF THE FIVE BUFFERS ARE SIZED FROM THE ARGUMENT AND NOT FROM THE BLOCK
+
+`V92Modulator::V92Modulator`'s first act after the debug line is a float
+round-trip over its first argument:
+
+    15164:  52 53              push %edx(0) ; push %ebx(nSamples)
+    15166:  df 2c 24           fildll (%esp)          <- zero-extended: UNSIGNED
+    15170:  d8 0d ..           fmuls .rodata.cst4+0xc8 = 0x3f555555 = 5/6f
+    15183:  d8 05 ..           fadds .rodata.cst4+0xcc = 0.5f
+    15176/1518e/15193:         fnstcw / or $0xc00 / fldcw   <- round toward zero
+    15197:  df 7c 24 28        fistpll 0x28(%esp)     <- and keep the low half
+
+Both ends are unsigned and neither is a guess: `fildll` over a zero-extended
+64-bit push is GCC's unsigned-to-float, and `fistpll` with the control word
+forced to truncate and only the low 32 bits kept is its float-to-unsigned.
+There is no intermediate store, so the multiply and the add happen in the
+x87's extended precision.
+
+**The result is used five different ways and TWO OF THEM ARE NOT IT.**
+
+    +0x7c   (blockSize + 10) * 2      lea 0x14(%ebp,%ebp,1)
+    +0x80   (blockSize + 10) * 4      add $0xa ; shl $2
+    +0x88   blockSize * 8             shl $0x3, no slack at all
+    +0x84   (nSamples  + 10) * 4      lea 0x28(,%ebx,4)
+    +0x8c   (nSamples  + 10) * 4      the same register, reused
+    bits    3 * blockSize             lea (%eax,%eax,2)
+
+`%ebx` holds the CONSTRUCTOR ARGUMENT throughout and `%ebp` the derived block,
+and the object computes `4 * nSamples + 0x28` once and spends it twice.  A
+reconstruction that sized all five from `blockSize` is off by a sixth in two
+buffers and passes every test that only looks at the object's own bytes,
+because all five are heap pointers there.  What catches it is
+`harness_alloc.bytes` compared against the reference, and that is the only
+thing that does.
+
+`(x + 10) * sizeof(T)` is the shape of three of the five and `10` is the same
+slack in both spellings -- `add $0xa` before a shift, and `0x28` folded into a
+`lea` -- so the ten is the source's and the two encodings are the compiler's.
+
+======================================================================
+
+### 1286. ONE OF THE MODULATOR'S SIX SUB-OBJECTS IS RELEASED THROUGH ITS VTABLE, AND THAT IS WHAT SAYS `delete` IS THE ORIGINAL'S SPELLING
+
+`~V92Modulator` releases eleven pointers.  Ten of them look like this:
+
+    if (p) { T::~T(p); sysdep_free(p); }
+
+and the eleventh, `ResamplerTimingOffset *` at +0x50, looks like this:
+
+    14150:  8b 02              mov (%edx),%eax        <- the vptr
+    14152:  89 14 24           mov %edx,(%esp)
+    14155:  ff 50 04           call *0x4(%eax)        <- vtable slot ONE
+                                                      and no free at all
+
+Slot one of a GCC vtable is the DELETING destructor, `D0`, and the only C++
+that reaches it is `delete p`.  `Resampler` -- the base -- declares
+`static void operator delete(void *p) { sysdep_free(p); }` as a MEMBER, which
+is what its own header established from the three deleting destructors that
+end `jmp sysdep_free` and from there being no `_Zdl*` symbol in 1.2 MB.  So
+the free is inside the `D0` and the caller does not do one.
+
+**Which settles a question this tree has been answering the other way for
+several batches.**  `if (p) { p->~T(); sysdep_free(p); }` is exactly what
+`delete p` emits for a class with NO `operator delete` of its own and no
+virtual destructor, so all eleven of these are almost certainly `delete` in
+the original.  Ten of them still cannot be written that way here -- those ten
+classes have no member `operator delete`, so `delete` on them would reference
+the global form and leave `_ZdlPvj` undefined in every test binary (the
+reason V92Precoder.cpp gives) -- and the eleventh both can and must, because
+the explicit-destructor spelling would emit a DIRECT non-virtual call plus a
+`sysdep_free` and that is not the instruction sequence in front of us.
+
+So `V92Modulator.cpp` carries both spellings, one for the resampler and one
+for the other five, and the difference between them is the object's rather
+than a style.  `nm -C` on the result shows no `operator new` or `operator
+delete` reference of any kind, which is the check that the member form is
+really the one being reached.
+
+======================================================================
+
+### 1287. THREE CONSTRUCTORS IN ONE CHAIN LEAVE FIVE WORDS UNINITIALISED, AND A SEEDED FIXTURE IS THE ONLY THING THAT CAN SAY SO
+
+Finding 1240 found `V90SpectralVerifier`'s constructor initialising +0x28 and
+not the two words `reset` clears; 1248 found the hole in `V92ModulusEncoder`'s.
+The V.92 modulator chain has five more -- five WORDS across three
+constructors, in four places -- and they are worth listing together because
+the same fixture property catches all of them:
+
+| class | left alone | who fills it later |
+|---|---|---|
+| `V92BitsToSymbol` | +0x14 | `reset(V92MappingParams *)`, from `*(unsigned *)params` |
+| `V92Modulator` | +0x24 | nothing written here |
+| `V92Modulator` | +0x3c | nothing written here |
+| `V92Transmitter` | +0x00 and +0x5c | nothing written here |
+
+Alignment padding is not counted: `V92Modulator`'s +0x0e and
+`V92BitsToSymbol`'s +0x1d are two and three bytes between a byte field and
+the next word, and no constructor would write them.  The five above all sit
+at word boundaries between fields that ARE written.
+
+`V92BitsToSymbol`'s is the sharp one, because a member that READS it is
+written down: `nofBitsForNextTime` (.text+0x4e0c0) multiplies by +0x14, and
+the constructor sets +0x10, +0x18 and +0x1c around it and skips it.  A
+freshly constructed bit-to-symbol stage therefore reports a bit count
+computed from allocator garbage until `reset` has run.  D213.
+
+**What makes a hole testable at all is the rule about never zeroing.**  Both
+sides are seeded with the same varied non-zero bytes before every call, so
+these words compare equal BECAUSE nobody wrote them -- and a reconstruction
+that helpfully cleared any of them fails, immediately and by name.  Against a
+zero-filled slot the extra clear would be invisible and the hole would look
+like an initialisation.  Findings 223 and 224, and this is the third batch to
+depend on them for a claim rather than for a sanity check.
+
+======================================================================
+
+### 1288. DESTROYING THE COMPLEMENT IS HOW A NULL-GUARD SWEEP COVERS A GRAPH IT CANNOT POISON
+
+`t_v90cp.cpp` drives all 64 null/non-null combinations of `V90CP`'s six
+buffers by seeding them with WILD pointers and reading `harness_alloc`'s
+`bad_free` back, which works because the destructor only frees them.  That
+does not transfer to any of the four destructors in this batch: six of
+`~V92Modulator`'s eleven guarded pointers get a destructor call that
+DEREFERENCES them, so a wild value is a segfault rather than a counted bad
+free.
+
+The shape that does work, and that all three fixtures here use:
+
+1. construct a real object on both sides, and keep a copy of what the
+   constructor built;
+2. null the chosen subset and destroy -- the survivors are real, so the
+   sub-destructors run properly, and the nulled ones exercise the guard;
+3. restore the copy, null the COMPLEMENT, and destroy again.
+
+Step 3 is what keeps it bounded: the two calls between them free every
+allocation exactly once, so `harness_alloc.live == 0` afterwards is a
+statement about the sweep and not just about the object, and 2,048 subsets of
+an eleven-piece graph cost no more memory than one.  Without it, the same
+sweep leaks about 25 KB per subset.
+
+The one piece of bookkeeping the fixture has to do rather than assert is the
+scrambler: `~V92Modulator` destroys its member subobject unconditionally on
+both calls, so the second would double-free the scrambler's buffer.  Nulling
+`scrambler.pLimit` before the cleanup call is the fixture's own arithmetic and
+is commented as such, so that nobody later reads it as a claim about the
+object.
+
+**What the sweep is actually for.**  This tree's `sysdep_free` tolerates NULL,
+so dropping a null test leaves EVERY BYTE of the object unchanged and moves
+only `harness_alloc.free_null`.  Twenty guards over four destructors, every
+combination of eleven of them and of six more, and that counter asserted at
+zero on both sides is the whole of the evidence that the guards exist.
+
+======================================================================

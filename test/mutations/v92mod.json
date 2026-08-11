@@ -1,0 +1,211 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the three checks that exist only to reach it",
+  "why": "V92Modulator's constructor and destructor and t_v92mod.cpp were written by one hand at one sitting from one reading of .text+0x14050-0x153fb and of the standalone `reset` at +0x15060. Every entry below is a claim the disassembly makes: the five-sixths rounding, which of the five raw buffers is sized from the ARGUMENT and which from the derived block, the six sub-object sizes and their constructor arguments, the seven argument stores, the inlined `reset`'s nine writes and its priming loop, and eleven null tests. THREE OF THE CLAIMS ARE BEHIND POISONED POINTERS AND HAVE A CHECK OF THEIR OWN: the scrambler's near tap (compared as a DISTANCE between its pointers), the priming loop's trip count (read off the queue's write cursor), and every allocation size (compared as `harness_alloc.bytes` against the reference, which is the ONLY witness the five raw buffers have). WHAT NO ENTRY HERE CAN REACH: the resampler being released through its vtable rather than by an explicit destructor call and a free -- the two spellings free the same memory in the same order, and the difference is an instruction sequence, not a behaviour (finding 1286). Nor the order of the eleven releases, nor the sixteen members this batch does not write."
+ },
+ {
+  "label": "the two diagnostic lines are exchanged",
+  "find": "\t\tdsplibs_debug_printf(\"V92Modulator constraction\\r\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"V92Modulator reset\\r\\n\");"
+ },
+ {
+  "label": "the constructor's diagnostic is gated at the verbose level",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modulator constraction\\r\\n\");",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"V92Modulator constraction\\r\\n\");"
+ },
+ {
+  "label": "the inlined reset's diagnostic loses its carriage return",
+  "find": "\t\tdsplibs_debug_printf(\"V92Modulator reset\\r\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"V92Modulator reset\\n\");"
+ },
+ {
+  "label": "the block size is six fifths of the argument",
+  "find": "\t\t\t\t   * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)",
+  "replace": "\t\t\t\t   * (V92MOD_RATE_DEN / V92MOD_RATE_NUM)"
+ },
+ {
+  "label": "the block size truncates instead of rounding",
+  "find": "\t\t\t\t   + 0.5f);",
+  "replace": "\t\t\t\t   + 0.0f);"
+ },
+ {
+  "label": "the first buffer has no slack",
+  "find": "\tbuf_7c = (short *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n\t\t\t\t\t* sizeof(short));",
+  "replace": "\tbuf_7c = (short *)sysdep_malloc(blockSize * sizeof(short));"
+ },
+ {
+  "label": "the first buffer is a buffer of ints",
+  "find": "\tbuf_7c = (short *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n",
+  "replace": "\tbuf_7c = (short *)sysdep_malloc(2 * (blockSize + V92MOD_BUF_SLACK)\n"
+ },
+ {
+  "label": "the second buffer is a buffer of shorts",
+  "find": "\tbuf_80 = (int *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n\t\t\t\t      * sizeof(int));",
+  "replace": "\tbuf_80 = (int *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n\t\t\t\t      * sizeof(short));"
+ },
+ {
+  "label": "the third buffer carries the same ten elements of slack as its neighbours",
+  "find": "\tbuf_88 = sysdep_malloc(blockSize * 8);",
+  "replace": "\tbuf_88 = sysdep_malloc((blockSize + V92MOD_BUF_SLACK) * 8);"
+ },
+ {
+  "label": "the fourth buffer is sized from the block rather than from the argument",
+  "find": "\tbuf_84 = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)",
+  "replace": "\tbuf_84 = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)"
+ },
+ {
+  "label": "the fifth buffer is sized from the block rather than from the argument",
+  "find": "\tbuf_8c = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)",
+  "replace": "\tbuf_8c = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)"
+ },
+ {
+  "label": "the bit-to-symbol stage is given three times the argument",
+  "find": "\tv92mod_bts_ctor(p, 3 * blockSize, params);",
+  "replace": "\tv92mod_bts_ctor(p, 3 * nSamples, params);"
+ },
+ {
+  "label": "the bit-to-symbol stage is given twice the block",
+  "find": "\tv92mod_bts_ctor(p, 3 * blockSize, params);\n",
+  "replace": "\tv92mod_bts_ctor(p, 2 * blockSize, params);\n"
+ },
+ {
+  "label": "the resampler is given one more phase",
+  "find": "\tv92mod_rto_ctor(p, V92MOD_RS_PHASES, V92MOD_RS_PPMSCALE,",
+  "replace": "\tv92mod_rto_ctor(p, V92MOD_RS_PHASES + 1, V92MOD_RS_PPMSCALE,"
+ },
+ {
+  "label": "the resampler is given four more taps",
+  "why": "FOUR and not one: `Resampler`'s designing constructor does `taps = (nTaps >> 2) * 4`, so 17 and 16 are the same resampler and a one-tap mutation is genuinely unobservable rather than untested. The same masking `FloatFIR` does to its own tap count, which is D157.",
+  "find": "\t\t\tV92MOD_RS_TAPS, V92MOD_RS_CUTOFF, V92MOD_RS_PPM,",
+  "replace": "\t\t\tV92MOD_RS_TAPS + 4, V92MOD_RS_CUTOFF, V92MOD_RS_PPM,"
+ },
+ {
+  "label": "the queue is one slot shorter",
+  "find": "\tv92mod_queue_ctor(p, (unsigned int)params->MODULATOR_QUEUE_LENGTH);",
+  "replace": "\tv92mod_queue_ctor(p, (unsigned int)params->MODULATOR_QUEUE_LENGTH - 1);"
+ },
+ {
+  "label": "the transmit filter gets one fewer tap",
+  "find": "\tv92mod_fir_ctor(p, V92_TXPREFILTER_TAPS, v92TxPreFilter,",
+  "replace": "\tv92mod_fir_ctor(p, V92_TXPREFILTER_TAPS - 4, v92TxPreFilter,"
+ },
+ {
+  "label": "the transmit filter gets one fewer sample of block slack",
+  "find": "\t\t\tV92MOD_FIR_BLOCK);",
+  "replace": "\t\t\tV92MOD_FIR_BLOCK - 1);"
+ },
+ {
+  "label": "the transmit filter is given the echo pre-filter's numerator",
+  "find": "v92TxPreFilter,\n\t\t\tV92MOD_FIR_BLOCK);",
+  "replace": "v92TxPreFilter + 1,\n\t\t\tV92MOD_FIR_BLOCK);"
+ },
+ {
+  "label": "the sixth argument is filed where the fifth belongs",
+  "find": "\tcp = c;\n\tdil = d;",
+  "replace": "\tcp = (V92CP *)mp;\n\tdil = d;"
+ },
+ {
+  "label": "the second argument is not stored",
+  "find": "\tphase2Info = p2;\n",
+  "replace": ""
+ },
+ {
+  "label": "the phase 4 modulator is handed the mapping parameters as its CP",
+  "find": "\tv92mod_p4m_ctor(p, params, bitsToSymbol, cp, mappingParams);",
+  "replace": "\tv92mod_p4m_ctor(p, params, bitsToSymbol, mappingParams, cp);"
+ },
+ {
+  "label": "reset does not copy the block size into +0x08",
+  "find": "\tm->blockRemaining = m->blockSize;\n",
+  "replace": ""
+ },
+ {
+  "label": "reset leaves +0x2c alone",
+  "find": "\tm->word_2c = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "reset leaves +0x38 alone",
+  "find": "\tm->word_38 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "reset writes a one into the float at +0x28",
+  "find": "\tm->float_28 = 0.0f;",
+  "replace": "\tm->float_28 = 1.0f;"
+ },
+ {
+  "label": "the queue is primed with the whole parameter rather than half of it",
+  "find": "\tm->queuePrime = (unsigned int)(m->params->MODULATOR_QUEUE_LENGTH >> 1);",
+  "replace": "\tm->queuePrime = (unsigned int)(m->params->MODULATOR_QUEUE_LENGTH);"
+ },
+ {
+  "label": "the priming loop runs one extra time",
+  "find": "\tfor (i = 0; i < m->queuePrime; i++)",
+  "replace": "\tfor (i = 0; i <= m->queuePrime; i++)"
+ },
+ {
+  "label": "the priming loop does not run at all",
+  "find": "\tfor (i = 0; i < m->queuePrime; i++)\n\t\tm->queue->write(0.0f);",
+  "replace": "\t(void)i;"
+ },
+ {
+  "label": "reset seeds the scrambler with ones",
+  "find": "\tm->scrambler.reset(0);",
+  "replace": "\tm->scrambler.reset(1);"
+ },
+ {
+  "label": "reset does not put the scrambler back at all",
+  "equivalent": true,
+  "why": "PROVABLY unobservable THROUGH THE CONSTRUCTOR, and only there. `Scrambler<T,I>::Scrambler` ends in `reset(0)` -- see include/dsplib/Scrambler.h -- and `reset` writes only the three cursors, from `pInitOut`, `pInitTap1` and `pInitTap2`, and the history between them; none of those inputs changes between the member-initialiser and the end of the constructor body, so the second call stores exactly what the first did. Dropping it is the identity here. It is NOT the identity in `V92Modulator::reset`, which is the symbol this helper's body belongs to and which runs over a scrambler that has been processing, and whoever writes that member gets a catchable version of this entry for free. The idempotence is read out of Scrambler's source, not inferred from a green run.",
+  "find": "\tm->scrambler.reset(0);\n",
+  "replace": ""
+ },
+ {
+  "label": "the phase 3 modulator's null test is dropped",
+  "find": "\tif (phase3Modulator != 0) {",
+  "replace": "\tif (phase3Modulator != (V92Phase3Modulator *)1) {"
+ },
+ {
+  "label": "the bit-to-symbol stage's null test is dropped",
+  "find": "\tif (bitsToSymbol != 0) {",
+  "replace": "\tif (bitsToSymbol != (V92BitsToSymbol *)1) {"
+ },
+ {
+  "label": "the resampler's null test is dropped",
+  "equivalent": true,
+  "why": "PROVABLY unobservable, and by the language rather than by the optimiser. `delete p` over a null `p` is required to do nothing, so GCC emits its own `test`/`je` around the vtable call whatever we write; the explicit `if` in front of it folds into that one test, which is why the blob has exactly ONE `test %edx,%edx` here and not two. Removing ours therefore leaves the guard in place. It is kept in the source because it is the shape the other ten releases have and because the fixture drives this pointer null in 1,024 of its 2,048 subsets -- but the entry has to be marked rather than removed, so that nobody later reads a green run as evidence the spelling was tested. Verified by compiling both forms and comparing the text, not by reasoning alone.",
+  "find": "\tif (resampler != 0)\n\t\tdelete resampler;",
+  "replace": "\tdelete resampler;"
+ },
+ {
+  "label": "the third buffer's null test is dropped",
+  "find": "\tif (buf_88 != 0)\n\t\tsysdep_free(buf_88);",
+  "replace": "\tsysdep_free(buf_88);"
+ },
+ {
+  "label": "the last buffer is never released",
+  "find": "\tif (buf_8c != 0)\n\t\tsysdep_free(buf_8c);",
+  "replace": "\tif (buf_8c == 0)\n\t\tsysdep_free(buf_8c);"
+ },
+ {
+  "label": "the fourth buffer is released twice and the fifth never",
+  "find": "\tif (buf_8c != 0)\n\t\tsysdep_free(buf_8c);\n}",
+  "replace": "\tif (buf_8c != 0)\n\t\tsysdep_free(buf_84);\n}"
+ },
+ {
+  "label": "the phase 3 modulator is freed without being destroyed",
+  "find": "\t\tphase3Modulator->~V92Phase3Modulator();\n\t\tsysdep_free(phase3Modulator);",
+  "replace": "\t\tsysdep_free(phase3Modulator);"
+ },
+ {
+  "label": "the queue is freed without being destroyed",
+  "find": "\t\tqueue->~Queue();\n\t\tsysdep_free(queue);",
+  "replace": "\t\tsysdep_free(queue);"
+ },
+ {
+  "label": "the destructor nulls the transmit filter after freeing it",
+  "find": "\t\ttxFilter->~FloatFIR();\n\t\tsysdep_free(txFilter);\n\t}",
+  "replace": "\t\ttxFilter->~FloatFIR();\n\t\tsysdep_free(txFilter);\n\t\ttxFilter = 0;\n\t}"
+ }
+]

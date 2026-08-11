@@ -1,0 +1,96 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the one thing it cannot",
+  "why": "V92Transmitter's constructor and destructor and t_v92tx.cpp were written by one hand at one sitting from one reading of .text+0x53a30-0x53d04, so a green run says the two agree and not that either is right. Every entry below is a claim the disassembly makes: which allocation lands in which pointer, how big each one is, what the two sub-filters are built with, the byte that is cleared through a pointer before the pointer is stored, the six null tests, and the one pointer of six that is nulled after its free. WHAT NO ENTRY HERE CAN REACH: V92ConvolutionEncoder's destructor is empty and V92ModulusEncoder has none at all, so 'drop the destructor call' is genuinely unobservable for those two and is not written down as a mutation -- the claim that the modulus encoder is freed WITHOUT one rests on the absence of a D1 or D2 symbol in the blob (finding 1281) and not on this tier. Nor can anything here see the ORDER of the six releases, since the fixture counts frees and does not sequence them."
+ },
+ {
+  "label": "the raw buffer at +0x08 is a byte short",
+  "find": "\tbuf_08 = sysdep_malloc(V92TX_BUF08_BYTES);",
+  "replace": "\tbuf_08 = sysdep_malloc(V92TX_BUF08_BYTES - 1);"
+ },
+ {
+  "label": "+0x0c is not cleared",
+  "find": "\tword_0c = 0;\n\tword_04 = 0;",
+  "replace": "\tword_04 = 0;"
+ },
+ {
+  "label": "+0x04 is not cleared",
+  "find": "\tword_0c = 0;\n\tword_04 = 0;\n",
+  "replace": "\tword_0c = 0;\n"
+ },
+ {
+  "label": "the one-byte buffer is allocated and not cleared",
+  "find": "\tbyte_58 = (unsigned char *)sysdep_malloc(1);\n\t*byte_58 = 0;",
+  "replace": "\tbyte_58 = (unsigned char *)sysdep_malloc(1);"
+ },
+ {
+  "label": "the one-byte buffer is a word",
+  "find": "\tbyte_58 = (unsigned char *)sysdep_malloc(1);",
+  "replace": "\tbyte_58 = (unsigned char *)sysdep_malloc(4);"
+ },
+ {
+  "label": "the modulus encoder is given the pre-filter's size",
+  "find": "\tp = sysdep_malloc(sizeof(V92ModulusEncoder));",
+  "replace": "\tp = sysdep_malloc(sizeof(V92PreFilter));"
+ },
+ {
+  "label": "the convolution encoder's allocation is four bytes larger",
+  "find": "\tp = sysdep_malloc(sizeof(V92ConvolutionEncoder));",
+  "replace": "\tp = sysdep_malloc(sizeof(V92ConvolutionEncoder) + 4);"
+ },
+ {
+  "label": "the precoder's allocation is four bytes larger",
+  "find": "\tp = sysdep_malloc(sizeof(V92Precoder));",
+  "replace": "\tp = sysdep_malloc(sizeof(V92Precoder) + 4);"
+ },
+ {
+  "label": "the precoder is built with four fewer taps",
+  "find": "\tv92tx_precoder_ctor(p, V92TX_FILTER_TAPS);",
+  "replace": "\tv92tx_precoder_ctor(p, V92TX_FILTER_TAPS - 4);"
+ },
+ {
+  "label": "the pre-filter is built with four fewer taps",
+  "find": "\tv92tx_prefilter_ctor(p, V92TX_FILTER_TAPS);",
+  "replace": "\tv92tx_prefilter_ctor(p, V92TX_FILTER_TAPS - 4);"
+ },
+ {
+  "label": "the raw buffer's null test is dropped",
+  "find": "\tif (buf_08 != 0)\n\t\tsysdep_free(buf_08);",
+  "replace": "\tsysdep_free(buf_08);"
+ },
+ {
+  "label": "the modulus encoder's null test is dropped",
+  "find": "\tif (modulusEncoder != 0)\n\t\tsysdep_free(modulusEncoder);",
+  "replace": "\tsysdep_free(modulusEncoder);"
+ },
+ {
+  "label": "the one-byte buffer's null test is dropped",
+  "find": "\tif (byte_58 != 0)\n\t\tsysdep_free(byte_58);",
+  "replace": "\tsysdep_free(byte_58);"
+ },
+ {
+  "label": "the precoder's null test is dropped",
+  "find": "\tif (precoder != 0) {\n\t\tprecoder->~V92Precoder();",
+  "replace": "\tif (precoder == precoder) {\n\t\tprecoder->~V92Precoder();"
+ },
+ {
+  "label": "the precoder is not nulled after its free",
+  "find": "\t\tsysdep_free(precoder);\n\t\tprecoder = 0;",
+  "replace": "\t\tsysdep_free(precoder);"
+ },
+ {
+  "label": "the pre-filter is nulled after its free as well",
+  "find": "\t\tsysdep_free(preFilter);\n\t}",
+  "replace": "\t\tsysdep_free(preFilter);\n\t\tpreFilter = 0;\n\t}"
+ },
+ {
+  "label": "the destructor frees the precoder where it should free the pre-filter",
+  "find": "\t\tpreFilter->~V92PreFilter();\n\t\tsysdep_free(preFilter);",
+  "replace": "\t\tpreFilter->~V92PreFilter();\n\t\tsysdep_free(precoder);"
+ },
+ {
+  "label": "the convolution encoder is never released",
+  "find": "\tif (convolutionEncoder != 0) {\n\t\tconvolutionEncoder->~V92ConvolutionEncoder();\n\t\tsysdep_free(convolutionEncoder);\n\t}",
+  "replace": "\tif (convolutionEncoder == 0) {\n\t\tconvolutionEncoder->~V92ConvolutionEncoder();\n\t\tsysdep_free(convolutionEncoder);\n\t}"
+ }
+]

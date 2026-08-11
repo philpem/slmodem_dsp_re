@@ -4865,3 +4865,42 @@ new hardware.
 *Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x49..+0x85. **Reachability: CANNOT FIRE** at the shipped 180, for D228's reason. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1312.** The field is signed -- the object rounds it with `test/js/add $0x3/and $0xfffffffc`, which is `x / 4 * 4` on an `int` -- and the rounded value is then stored into an UNSIGNED `filterLength` and shifted left by two to size `echoCoeff`. Any negative parameter therefore asks `sysdep_malloc` for about 16 GB, and the result is used without a null test by the `reset()` this constructor tail-calls. Reproduced; the arm is the reason the signed rounding cannot be told apart from the `& ~3` that D72 and finding 1188 write, since no test that reaches it survives.
+---
+
+## D210 🐛 💤 `~V92Transmitter` nulls one of the six pointers it releases and leaves the other five dangling
+
+*V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only unless a caller is found that destroys twice.*
+
+**Finding 1281.** `movl $0x0,0x4c(%esi)` at .text+0x53aa6 follows the precoder's release and nothing follows the other five, so a second destruction frees +0x08, +0x48, +0x58, +0x50 and +0x54 again and skips +0x4c. The asymmetry is the object's; both halves are reproduced. D181 is the same shape one level down, and no path in the object reaches either -- hence 💤.
+
+---
+
+## D211 🐛 💤 `~V92BitsToSymbol`, `~V92Phase4Modulator` and `~V92Modulator` null nothing at all, so a second destruction double-frees fourteen buffers between them
+
+*V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only.*
+
+**Findings 1281, 1288.** Two pointers in the bit-to-symbol stage, one in the phase 4 modulator and eleven in the modulator, every one left holding a freed address; the modulator's own member scrambler is the fifteenth, through `Scrambler`'s destructor, which its header already records. The three fixtures drive every null combination of those pointers and assert `harness_alloc.free_null` at zero, which is what says the guards exist; nothing drives a second destruction, because a double free is what it would be measuring.
+
+---
+
+## D212 🐛 `V92Transmitter`, `V92BitsToSymbol`, `V92Phase4Modulator` and `V92Modulator` make twenty allocations between them and check none of them
+
+*V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: needs a decision -- the allocator never fails in the harness.*
+
+**Findings 1280, 1285.** Six, two, one and eleven `sysdep_malloc` calls, and in twelve of the twenty the very next instruction is a constructor call on the returned pointer -- `movl $0x60; call sysdep_malloc; call V92Transmitter::V92Transmitter` at .text+0x4deee is the shape. The same family as D171, D175 and D180, and the same reasoning: a null return faults at the sub-object's first store rather than being deferred. The five raw buffers are worse only in that nothing writes through them until a member this tree has not written runs.
+
+---
+
+## D213 ⚠ `V92BitsToSymbol`'s constructor initialises +0x10, +0x18 and +0x1c and skips +0x14, which `nofBitsForNextTime` multiplies by
+
+*V.92 modulator batch. **Reachability: UNMEASURED** -- it needs a call to `nofBitsForNextTime` or `setSymbolsBlockSize` before `reset`, and no caller has been read. Status: OBSERVED, not driven. Fix class: none proposed.*
+
+**Finding 1287.** `reset(V92MappingParams *)` at .text+0x4e070 fills +0x14 from the mapping parameters' first word and the constructor at +0x4ded0 does not, so between construction and the first `reset` the field holds whatever `sysdep_malloc` left. `nofBitsForNextTime` (+0x4e0c0) and `setSymbolsBlockSize` (+0x4e130) both `imul` by it and return the product. The same shape as D164 and as finding 1248's hole in `V92ModulusEncoder`.
+
+---
+
+## D214 ⚠ 💤 `V92Modulator`'s constructor and the `reset` it inlines write every word of the object except +0x24 and +0x3c
+
+*V.92 modulator batch. **Reachability: UNMEASURED** -- no member that reads either word has been written. Status: OBSERVED, not driven. Fix class: none proposed.*
+
+**Findings 1283, 1287.** Twenty-eight of the object's thirty-one declared fields are written between the constructor and the inlined `reset`; the other three are these two words and the two bytes of alignment at +0x0e, which no constructor would write. +0x24 and +0x3c sit between named fields on both sides rather than at the end where an alignment hole would be. Whether anything reads them before some other member fills them is a question the sixteen unwritten members hold the answer to -- hence 💤 rather than 🐛.

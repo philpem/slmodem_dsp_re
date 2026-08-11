@@ -1,0 +1,91 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and why the scrambler's near tap needed a new kind of check",
+  "why": "V92Phase4Modulator's constructor and destructor and t_v92p4mod.cpp were written by one hand at one sitting from one reading of .text+0x16de0-0x17ac4. Every entry below is a claim the disassembly makes: the three scrambler arguments, the mapper's allocation size, which of the four constructor arguments lands in which of the four pointer fields, the four zeroes and their widths, the store into the CALLER'S V92CP, and the mapper's null test. TWO OF THESE ARE ONLY CATCHABLE BECAUSE OF A CHECK BUILT FOR THEM. The near tap reaches nothing but `pInitTap1`, which is a heap address the comparison has to poison, so the fixture compares the DISTANCES between the scrambler's pointers instead; and the store into the V92CP is invisible with one shared V92CP, because the reference would make it a moment later, so the run is done a second time with a V92CP per side. WHAT NO ENTRY HERE CAN REACH: the 449 bytes of the object this batch does not model, and the order of the ten stores."
+ },
+ {
+  "label": "the scrambler's near tap is 6",
+  "find": "\t: scrambler(V92P4M_SCRAM_TAP1, V92P4M_SCRAM_TAP2, V92P4M_SCRAM_SLACK)",
+  "replace": "\t: scrambler(V92P4M_SCRAM_TAP1 + 1, V92P4M_SCRAM_TAP2, V92P4M_SCRAM_SLACK)"
+ },
+ {
+  "label": "the scrambler's two taps are exchanged",
+  "find": "\t: scrambler(V92P4M_SCRAM_TAP1, V92P4M_SCRAM_TAP2, V92P4M_SCRAM_SLACK)\n{",
+  "replace": "\t: scrambler(V92P4M_SCRAM_TAP2, V92P4M_SCRAM_TAP1, V92P4M_SCRAM_SLACK)\n{"
+ },
+ {
+  "label": "the scrambler's history has one element less of slack",
+  "find": "V92P4M_SCRAM_TAP2, V92P4M_SCRAM_SLACK)\n{\n\tvoid *m;",
+  "replace": "V92P4M_SCRAM_TAP2, V92P4M_SCRAM_SLACK - 1)\n{\n\tvoid *m;"
+ },
+ {
+  "label": "the mapper's allocation is four bytes larger",
+  "find": "\tm = sysdep_malloc(sizeof(V92Mapper));",
+  "replace": "\tm = sysdep_malloc(sizeof(V92Mapper) + 4);"
+ },
+ {
+  "label": "+0x1c0 is not cleared",
+  "find": "\tword_1c0 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "+0x1c4 is not cleared",
+  "find": "\tword_1c4 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "+0x18 is not cleared",
+  "find": "\tword_18 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "+0x1c is not cleared",
+  "find": "\tbyte_1c = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "+0x1c is cleared as a word rather than as a byte",
+  "find": "\tbyte_1c = 0;\n}",
+  "replace": "\t*(unsigned int *)&byte_1c = 0;\n}"
+ },
+ {
+  "label": "the fourth argument is filed where the first belongs",
+  "find": "\tmappingParams = mp;\n\tparams = p;",
+  "replace": "\tmappingParams = (V92MappingParams *)p;\n\tparams = p;"
+ },
+ {
+  "label": "the second and third arguments are exchanged",
+  "find": "\tbitsToSymbol = bts;",
+  "replace": "\tbitsToSymbol = (V92BitsToSymbol *)c;"
+ },
+ {
+  "label": "the caller's V92CP is left alone",
+  "find": "\tcp->word_110 = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the word cleared in the caller's V92CP is +0x114",
+  "find": "\tcp->word_110 = 0;",
+  "replace": "\t*(unsigned int *)((unsigned char *)cp + 0x114) = 0;"
+ },
+ {
+  "label": "the caller's V92CP is cleared through the mapping parameters instead",
+  "find": "\tcp = c;\n\tcp->word_110 = 0;",
+  "replace": "\tcp = c;\n\t((V92CP *)mp)->word_110 = 0;"
+ },
+ {
+  "label": "the mapper's null test is dropped",
+  "find": "\tif (mapper != 0) {\n\t\tmapper->~V92Mapper();",
+  "replace": "\tif (mapper != (V92Mapper *)1) {\n\t\tmapper->~V92Mapper();"
+ },
+ {
+  "label": "the destructor nulls the mapper after freeing it",
+  "find": "\t\tmapper->~V92Mapper();\n\t\tsysdep_free(mapper);\n\t}",
+  "replace": "\t\tmapper->~V92Mapper();\n\t\tsysdep_free(mapper);\n\t\tmapper = 0;\n\t}"
+ },
+ {
+  "label": "the destructor releases the caller's V92CP as well as the mapper",
+  "find": "\t\tsysdep_free(mapper);\n\t}\n}",
+  "replace": "\t\tsysdep_free(mapper);\n\t}\n\tsysdep_free(cp);\n}"
+ }
+]
