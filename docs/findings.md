@@ -40109,6 +40109,509 @@ over 15. So the equaliser IS capable of index-11 convergence on this path; it
 simply does not get there on a single pass, in eighteen attempts out of
 eighteen.
 
+======================================================================
+
+### 1211. A HOST-FORCED RETRAIN IMPROVES THE EQUALISER 7 OF 8, AND REACHES 24000-26400 — NO CHANGE TO THE BLOB
+
+> **Headline corrected by finding 1213.** The "7 of 8" is the equaliser error
+> and the rate inferred from it, measured just after the retrain. Directly-read
+> far-end rates at hangup are 2 improved / 1 worse of 3 clean readings, and
+> measure a different instant.
+
+*Task #109.  Confirms 1209's prediction, and it needs no code: `ATO1` is
+"return to online data mode AND retrain", so the second Phase 3 pass can be
+demanded from the far end's AT interface.*
+
+**Paired design, which is why 8 calls is enough here.** The rate before and the
+rate after the forced retrain come from the SAME call, over the same path,
+seconds apart. Every between-call confounder that has wrecked a claim on this
+bench -- and four have -- is held constant by construction rather than by
+sample size.
+
+`+++`, guard time, `ATO1`, then 45 s for the handshake. Equaliser error is
+measured per pass by splitting the `V34EQU` series at the second `S-S1 is
+detected`, and rates are read off the object's own threshold table (1210).
+
+| call | equerr before | after | rate before | rate after |
+|---|---|---|---|---|
+| rt-1 | 3340 | **239** | 12000 | **24000** |
+| rt-2 | 3026 | **175** | 12000 | **26400** |
+| rt-3 | 3042 | **257** | 12000 | **24000** |
+| rt-4 | 2807 | **733** | 12000 | **19200** |
+| rt-5 | 2712 | **152** | 12000 | **26400** |
+| rt-6 | 9293 | **120** | 7200 | **28800** |
+| rt-7 | 11337 | **6198** | 4800 | **9600** |
+| rt-8 | 49 | 220 | 33600 | 24000 |
+
+**Seven of eight improved**, typically by an order of magnitude -- from the
+~2900 that finding 1208 showed is the modal single-pass outcome, to 120-260,
+which is index 10-12 territory. That is the 14x that 1210 said 26400 requires,
+and it is being achieved on the same path, in the same call, a minute later.
+
+**Independently confirmed at the far end.** `AT&V1` persists until the next
+`ATZ`, so `rt-8`'s registers could be read after the run:
+
+```
+LAST TX rate ....... 24000 BPS      <- the far end's transmit, i.e. OUR RECEIVE
+LAST RX rate ....... 26400 BPS      <- our transmit
+HIGHEST RX rate .... 33600 BPS
+```
+
+Our receive ended at **24000**, and the threshold table applied to that call's
+post-retrain equaliser error predicts **exactly 24000**. Two independent routes
+-- our own equaliser diagnostics, and the far modem's own register -- agree.
+
+**The one that got worse is informative.** `rt-8` began at 49, already index-14
+territory, and the retrain took it to 220. Retraining from an excellent state
+can cost you; the intervention is for the modal call, not a blanket win.
+
+**What this does NOT change.** The blob is untouched, the reconstruction is
+untouched, and nothing here is a fix to either -- `ATO1` is a command to the
+FAR modem, over its own serial port. It is an operational finding about running
+V.34 across a packet path, not a defect and not a capability addition. The
+governing rule is not engaged.
+
+**And it retires the earlier candidates by demonstration.** The echo is still
+at 205.62 ms and still uncancellable during the second pass; the jitter buffers
+are unchanged; the clocks are as unlocked as ever. The rate doubles anyway. What
+was costing us two rate steps was the equaliser's first-pass convergence, and
+nothing else on the list.
+
+======================================================================
+
+### 1212. LOCALISED: THE NEAR ECHO CANCELLER ADAPTS TO A SPURIOUS SOLUTION ON THE FIRST PASS, AND COLLAPSES TO ZERO ON THE SECOND
+
+*The answer to "can this be localised and improved". It can, to one filter.*
+
+`v34FreezeEcho` (blob `0x5e200`, `src/pump/v34/v34rx.c:958`) sets
+`V34_EC_FROZEN` and then dumps both cancellers, so the coefficient reports in
+the log are each pass's FINAL ADAPTED STATE. Comparing pass 1 against pass 2 in
+the eight forced-retrain calls of 1211:
+
+| call | Near EC, pass 1 | Near EC, pass 2 |
+|---|---|---|
+| rt-1 | 80.1 | **2.6** |
+| rt-2 | 153.8 | **2.5** |
+| rt-3 | 157.2 | **10.9** |
+| rt-4 | 146.1 | **2.9** |
+| rt-5 | 146.1 | **2.7** |
+| rt-6 | 198.2 | **2.8** |
+| rt-8 | 196.3 | **3.4** |
+
+RMS over 144 taps; peaks run 340-530 on pass 1 and 9-29 on pass 2. **The near
+canceller's energy collapses by roughly fifty times, in eight calls out of
+eight**, and pass 2 is the pass whose equaliser error is fourteen times better.
+The FAR canceller does not collapse -- it sits at 230-270 RMS on both passes --
+so this is specific to the near one.
+
+**Why that is the wrong answer for this path.** The near echo canceller exists
+to cancel the reflection at the modem's OWN hybrid. Over SIP there is no local
+hybrid: our end is a socket. The only real reflection is the VG204's FXS hybrid
+at 205.62 ms, which is the FAR echo and is outside both cancellers' 172.5 ms
+delay line anyway (1205). So there is nothing for the near canceller to find,
+and on the second pass it correctly finds nothing. On the first pass it converges
+to a large solution instead, and a filter with 144 non-zero taps subtracting a
+shaped copy of our own transmit from the received signal is not a null
+operation: it injects exactly the kind of correlated interference that raises an
+equaliser's error floor.
+
+**This is association, not yet proof of cause.** Pass 2 differs from pass 1 in
+more than the canceller. The claim that the spurious taps CAUSE the poor
+equalisation is one experiment away, and the experiment is clean:
+
+> Override `V34EchoAdapt` with a no-op so the near canceller cannot adapt away
+> from zero, and measure whether a FIRST pass then behaves like a second one --
+> `equerr` ~200 rather than ~2900, and 24000-28800 rather than 12000.
+
+**The mechanism to do it already exists.** `V34EchoAdapt` is `T` (global text)
+at `0x71f50`, so `objcopy --weaken-symbol` plus a strong replacement -- task
+#99's machinery, `tools/blobfix.py` -- applies to it directly. #99 established
+that on data symbols; a function is the more usual case for `--weaken-symbol`,
+not the harder one.
+
+**It would be an opt-in extension, not a fix.** On a real PSTN line the near
+canceller is doing its job and disabling it would be actively wrong. This is a
+transport-specific configuration -- "there is no near hybrid on a packet path"
+-- and belongs off by default with `make phase` green when off, exactly like
+1205's delay-line enlargement. Nothing here is a defect in the object.
+
+**And there is already a working alternative needing no code at all:** the
+forced `ATO1` retrain of 1211, which reaches the same second-pass state from
+the far end's AT interface and doubles the receive rate today.
+
+======================================================================
+
+### 1213. TEMPERING 1211: THE FAR END'S OWN REGISTERS GIVE 2 IMPROVED, 1 WORSE OF 3 CLEAN READINGS — AND THEY MEASURE A DIFFERENT INSTANT
+
+*A correction to my own headline, before it hardens into a claim the data does
+not carry.*
+
+1211 reported "seven of eight improved". **That seven-of-eight is the equaliser
+error and the rate INFERRED from it via 1210's threshold table** -- both
+measured immediately after the forced retrain. It is not seven of eight
+directly-measured rates, and the title overstated it.
+
+A follow-up run read the far end's `AT&V1` per call instead of inferring:
+
+| call | our RX at connect | our RX at hangup |
+|---|---|---|
+| 1 | (not captured) | 14400 |
+| 5 | 12000 | **26400** |
+| 6 | 12000 | **4800** |
+| 8 | 12000 | **26400** |
+| 3, 4, 7 | 7200, 4800, 14400 | readback failed |
+| 2 | - | readback failed |
+
+Three clean paired rows: **two improved, one got worse.**
+
+**The two measurements are not the same question, which is the main point.**
+`LAST TX rate` is the rate at DISCONNECT, after the whole data phase; the
+equaliser error is the state moments after the retrain. V.34 renegotiates during
+data -- the original asymmetry run caught a link falling 12000 to 4800 mid-call
+(1101's row 5) -- so a call can retrain well and still end low. Call 6 is
+consistent with exactly that.
+
+**What survives, stated at the strength the evidence supports:**
+
+- The forced retrain reliably improves the EQUALISER: 7 of 8, typically an
+  order of magnitude, measured directly per pass. That is solid.
+- It reaches rates of 24000-26400 immediately afterwards, confirmed twice
+  against the far end's own register (rt-8 at 24000, matching the threshold
+  table exactly; a later call at 26400).
+- Whether the link HOLDS that rate to the end of the call is a separate
+  question, answered here 2 of 3, and this bench has no data on it beyond that.
+
+**Harness defect found doing this**: the `AT&V1` readback failed on 3 of 8 calls,
+almost certainly the same not-settled-yet fault that aborted the first n=30
+batch -- the modem is asked for its registers immediately after teardown. It
+needs the same retry the pre-flight got.
+
+======================================================================
+
+### 1214. DIGITAL TERMINATION IS A MODE, NOT A SIP WORKAROUND — AND THE PLANNED V.90 CONVERSION NEEDS THE SAME TOGGLE
+
+*A design note, recorded because it changes what a later piece of work should
+assume rather than what any current code does.*
+
+The near echo canceller exists to cancel the reflection at the modem's own
+2-wire hybrid. **An end that is digitally terminated has no hybrid**, so there
+is nothing for it to find, and 1212 measured what it does instead: adapts to
+80-198 RMS over 144 taps on the first pass, collapses to 2.5-10.9 on the second,
+and the second pass equalises fourteen times better.
+
+That reasoning is not about SIP. It is about digital termination, and it applies
+to:
+
+- **the SIP end today.** `d-modem` is a socket; the only real reflection is the
+  VG204's FXS hybrid at 205.62 ms, which is the FAR echo and outside both
+  cancellers' 172.5 ms delay line anyway (1205).
+- **the V.90 conversion planned for this tree.** V.90's whole premise is that
+  one end is digitally attached to the PSTN, which is precisely the condition
+  that makes a near echo canceller meaningless. Whatever that work does about
+  it, it should not rediscover this from scratch.
+
+So the lever wanted is a **mode** -- "digital termination: there is no near
+hybrid" -- and not a transport-specific hack. Task #110 carries it.
+
+**And it is a mode, not a bug fix.** On a real PSTN line the near canceller is
+doing its job; disabling it there would be actively wrong. The object is
+entitled to assume a hybrid, because in 1996 there was always a hybrid. This is
+the same class as 1205's delay-line enlargement: opt-in, off by default, with
+`make phase` green when off.
+
+**What this retires.** The forced `ATO1` retrain of 1211 reaches the same
+second-pass state and was worth running -- it is what proved the second pass is
+where the improvement lives -- but it is a workaround, not a solution: a second
+full handshake on every call, and 1213 found the link does not reliably hold the
+better rate afterwards. It should be read as the diagnostic that localised the
+mechanism, not as the fix.
+
+**Check the object's own lever first.** `v34FreezeEcho` (`0x5e200`) sets
+`V34_EC_FROZEN` in `obj->f25c2` and is already called from the handshake state
+machine (`v34tx1_jatxmit`, "on J1TXMIT - forced freeze echo"). A freeze path
+therefore exists in the object. If the near canceller can be frozen from the
+start through that path, no symbol needs weakening at all -- which is a better
+answer than replacing `V34EchoAdapt`, and it should be tried first.
+
+======================================================================
+
+### 1215. THE ROUND TRIP IS 131 ms AND ALREADY INSIDE THE CANCELLER'S REACH — THE 48 ms THAT PUTS IT OUT OF REACH IS OUR OWN PIPELINE
+
+*Measured with a chirp at the RTP boundary, because the delay budget in 1205
+and the plan that followed from it were both assumed rather than measured, and
+the one term I could test turned out to be fiction.*
+
+**What was assumed** (and quoted as a plan): of the 205.6 ms echo, 40 ms was our
+jitter buffer, 80 ms the VG204's, 40 ms packetisation, 46 ms unexplained -- so
+shrinking the two buffers would bring the echo inside the canceller's window.
+**Cutting ours from 40 ms to 20 moved the measured echo not at all**: 205.62 ms
+before, 205.62/195.62 after, the same two discrete values. At least one term of
+that budget did not exist.
+
+**So it was measured instead.** `d-modem`'s `get_frame` and `put_frame` are the
+RTP boundary, so a signal injected and captured there times the network and ATA
+loop ALONE, excluding `slmodemd`'s pipeline. A 100 ms linear sweep, 600-3000 Hz,
+Hann-windowed, six bursts 2 s apart (`DMODEM_CHIRP`, `testbench/chirpdelay.py`).
+
+A sweep rather than a tone for two reasons: it pulse-compresses to one sharp
+peak where a steady tone gives a ridge a full period wide, and being broadband
+it cannot be mistaken for signalling -- 2100 ANSam, 1100 CNG, the V.21 pairs,
+1800 V.34 carrier, DTMF and call progress are all steady sinusoids, and the one
+V-series sweep (V.34's line probe) exists only inside a handshake this does not
+run in.
+
+```
+burst   left at    returned at   round trip
+1-5     2-10 s     +131.4 ms     131.38 ms
+6       12 s       +122.9 ms     122.88 ms
+                   median 131.38 ms, sd 3.47, n=6
+```
+
+Five of six identical to the sample.
+
+**The decomposition, both terms now measured rather than one assumed:**
+
+| | |
+|---|---|
+| round trip at the RTP boundary (network + ATA + hybrid) | **131.38 ms** |
+| echo lag as the DATAPUMP sees it (1204, 8 calls of 8) | **205.62 ms** |
+| difference = `slmodemd`'s own pipeline, both directions | **74.24 ms** |
+| | 37.1 ms each way |
+| the canceller's taps reach (`dlen - taps` at 9600 Hz) | 157.50 ms |
+
+**The external loop is already 26 ms INSIDE the canceller's reach.** The ATA,
+the network and the VG204's jitter buffer are not what puts the echo out of
+range. **Our own 74 ms is.** To bring the echo inside the window, 48.1 ms has to
+come out of a pipeline that is entirely `slmodemd` and `d-modem` -- code in this
+project, not a vendor device.
+
+**What this changes.** The delay-line enlargement of 1205 is no longer the only
+route: shedding 48 ms of internal latency reaches the same place without
+touching the object's data structures.
+
+> **CORRECTION.** This finding first said the proposal to shorten the VG204's
+> jitter buffer was "withdrawn: it addresses a term that was already small
+> enough". That reasoning is wrong. "Already inside the reach" describes the
+> EXTERNAL loop alone, but the canceller sees external PLUS internal --
+> 131.38 + 74.24 = 205.62 ms. Cutting EITHER term moves the echo toward the
+> window, and if the ATA's buffer is a real ~60 ms of the 131, removing it puts
+> the datapump-seen echo near 146 ms, inside 157.5 ms without any change to our
+> pipeline. The ATA route is live; what this finding actually establishes is
+> that the internal 74 ms is a second, larger and previously unrecognised term,
+> not that the first one is worthless.
+
+**What it does not say.** Where the 74 ms sits is not yet known. IODELAY 240 is
+25 ms at 9600 Hz and is a candidate, but the earlier sweep saw the datapump echo
+lag move the WRONG way with IODELAY (205.62 ms at IODELAY 88, 195.62 at 164 and
+240), so it is not a simple additive term. The resampler between 8000 and 9600,
+the socket between the two processes, and frame-sized buffering on each side are
+all unmeasured. That decomposition is the next measurement, and it is the same
+technique: inject at one boundary, capture at another.
+
+======================================================================
+
+### 1216. THE ATA'S PLAYOUT BUFFER HAS AN OPTIMUM AT 20 ms, AND SETTING IT THERE MOVED THE MEDIAN RATE 12000 -> 14400
+
+*The VG204 route, measured across four settings after 1215's correction
+established it was live. `playout-delay nominal N` on the voip dial-peer.*
+
+| `playout-delay` | chirp round trip | echo at the datapump | our RX | median |
+|---|---|---|---|---|
+| 80 (baseline) | ~141 ms | 205.62 ms | 12000 x12 of 22 | **12000** |
+| **20** | **~101 ms** | 165.62 / 175.62 | 14400, 14400, 14400, 4800 | **14400** |
+| 10 | ~106 ms | 175.3 / 175.6 | **33600**, 14400, 14400, 7200 | **14400** |
+| 0 | ~111 ms | 175.62 ms | 14400, 12000, 7200 | 12000 |
+
+**The buffer has a minimum, and it is not zero.** 80 -> 20 removed 40 ms of a
+60 ms nominal reduction; 20 -> 10 removed nothing; 0 was 10 ms WORSE than 20 on
+delay and back to baseline on rate. Below about 20 ms the ATA is presumably
+underrunning and concealing, which costs what the shorter buffer saves. The
+chirp at 0 was the cleanest measurement of the set -- six bursts, sd 0.00 -- so
+this is not measurement noise.
+
+**What it bought.** The median receive rate moved 12000 -> 14400, and the first
+33600 this bench has ever recorded appeared at nominal 10 (`equerr` 52 against
+the table's 50 threshold for 33600, so the mechanism is the expected one and not
+a fluke of some other kind). Equaliser error fell from the ~2900 modal value to
+1754-2360 across the good calls.
+
+**Why it worked, in the terms of 1205 and 1210.** The canceller covers delays up
+to `dlen` = 1656 samples = **172.5 ms** -- not 157.5 ms, which is where the
+furthest tap window STARTS, an error this finding corrects. At 205.62 ms the
+echo was outside that; at 165.62 ms it is inside. The equaliser then sees a
+cleaner signal, its error crosses the 2571 threshold, and the rate steps up.
+
+**Honest limits.** Three to five calls per setting against a 30-call control, so
+the ranking of 20 against 10 is NOT established -- both beat 80 and both beat 0,
+and that is all the data supports. This bench has retracted four claims made on
+samples this size, and the only reason to state anything at all here is that
+three independent measures moved together: chirp delay, datapump echo lag, and
+equaliser error.
+
+**And it does not finish the job.** The external loop has bottomed out at
+~101 ms while `slmodemd` and `d-modem` contribute ~74 ms internally (1215), so
+the echo sits at ~175 ms, about 3 ms outside the 172.5 ms window. Every further
+millisecond has to come from our own pipeline. **Recommended setting: 20.**
+
+======================================================================
+
+### 1217. THE INTERNAL 74 ms DECOMPOSED: 4 ms IS THE RESAMPLER AND ~60 ms IS THE d-modem/slmodemd LINK
+
+*Task following 1215. No new instrumentation was needed -- `modem_main.c`
+already dumps all four points, and nobody had compared them.*
+
+`slmodemd` writes the SIP audio twice per direction: `modem_{rx,tx}_8k.raw` at
+8000 Hz, its socket end, before and after resampling; and
+`modem_{rx,tx}.raw` at 9600 Hz, the same audio as the datapump sees it.
+Running `echoscan` at BOTH boundaries on the same calls measures the segment
+between them directly, with no cross-file alignment problem: each pair is
+opened together and lives in one timebase.
+
+| call | 8k boundary | 9600 boundary | difference |
+|---|---|---|---|
+| n20-1 | 161.62 ms | 165.62 ms | **+4.00** |
+| n20-2 | 161.62 ms | 165.62 ms | **+4.00** |
+| n20-4 | 171.62 ms | 175.62 ms | **+4.00** |
+| n10-2 | 171.62 ms | 175.62 ms | **+4.00** |
+| n10-3 | 171.62 ms | 175.62 ms | **+4.00** |
+
+**Exactly 4.00 ms in five of five**, across two ATA settings and both values of
+the 10 ms quantum. That is the 8000<->9600 resampler, both directions, and it is
+not worth attacking.
+
+**The full budget, every term measured:**
+
+| segment | round trip | how |
+|---|---|---|
+| network + ATA + hybrid | **~101 ms** | chirp at the RTP boundary (1215) |
+| `d-modem` <-> `slmodemd` link and its framing | **~60 ms** | 8k boundary minus external |
+| 8000<->9600 resampler | **4 ms** | 9600 boundary minus 8k boundary |
+| = what the canceller sees | ~165-175 ms | `echoscan` on the datapump pair |
+| canceller covers up to | 172.5 ms | `dlen` at 9600 Hz |
+
+**So ~60 ms of round trip -- about 30 ms each way -- is in the hop between the
+two processes.** At 20 ms per frame that is roughly a frame and a half in each
+direction, which is what plain frame buffering plus one frame in flight would
+cost. Nothing about it is echo-canceller-specific and nothing about it is in the
+blob: `dmodem_put_frame` writes a frame to the socket, `dmodem_get_frame` reads
+one back, and `slmodemd` buffers on its side before the resampler.
+
+**Why this is the whole remaining problem.** The external loop has bottomed out
+(1216: 20 ms is the ATA's optimum, and 0 is worse). The resampler is 4 ms. The
+echo therefore sits ~3 ms outside a 172.5 ms window, and **shedding 10 ms of
+the 60 would put every call inside it** rather than straddling the edge, which
+is what the 4800/7200 outliers look like.
+
+That is an ordinary latency-reduction exercise in code this project owns, with
+a measurement already in place to confirm any change: run a call, `echoscan`
+the 8k pair, and see whether the number moved.
+
+======================================================================
+
+### 1218. HALVING THE PACKET TIME TOOK 20 ms OFF AND PUT THE ECHO INSIDE THE WINDOW — BUT ASTERISK WILL NOT HONOUR ptime AND THE RATES WENT BIMODAL
+
+*Task #111, and it is REPORTED INCOMPLETE on purpose: the delay half worked and
+is measured, the rate half is unstable and is not.*
+
+**The delay result, which is unambiguous.** `PTIME_MS` 20 -> 10 in `modem.h`
+halves `MODEM_FRAMESIZE` (192 -> 96) and `SIP_FRAMESIZE` (160 -> 80), both still
+whole and still 6:5 so the resampler is unaffected.
+
+| | 8k boundary | 9600 boundary |
+|---|---|---|
+| 20 ms framing | 161.6 / 171.6 ms | 165.6 / 175.6 ms |
+| **10 ms framing** | **141.6 / 151.6 ms** | **145.6 / 155.6 ms** |
+
+**Exactly 20 ms off the round trip**, which is what 1217 predicted: a frame plus
+the half-frame average phase offset between two unsynchronised loops, both
+proportional to the packet time. **The echo now sits inside the canceller's
+172.5 ms window with 17-27 ms of margin**, for the first time.
+
+**A correction to what I first concluded.** Seeing `a=ptime:20` in the log I
+said the ptime fix "did not take". Wrong: that was ASTERISK'S ANSWER. Our INVITE
+carried no `a=ptime` at all, because `pjsua` does not emit the attribute --
+`frm_per_pkt` changes what we PRODUCE, not what we ASK FOR, and only the second
+is visible to the far end. Separating TX from RX in the log is what showed it;
+grepping both together is what hid it.
+
+Fixed by adding the attribute in `on_call_sdp_created`, which is the sanctioned
+hook for touching the local SDP. **Our offer now says `ptime:10`. Asterisk still
+answers `ptime:20`.** With Direct Media not in effect (no re-INVITE, our RTP
+peer is Asterisk's own address) it sits in the media path and repacketises, so
+what returns to us is still 20 ms packets whatever we ask for.
+
+**The rate half is NOT settled.** Across the 10 ms runs: 33600, 21600, 16800,
+16800, 4800, 7200, 4800, and two calls that did not connect. Both ends of that
+range are new -- 16800 and 21600 had never been seen, and 33600 only once
+before -- but so is the instability, and the connect rate is worse than the 4-in-5
+baseline. One call reached `equerr` 250 and still came out at 4800, which the
+threshold table of 1210 cannot explain and nothing else here does either.
+
+**So the honest state is:** the delay objective of #111 is met and measured; the
+rate objective is unproven and the configuration is not one to ship. Generating
+10 ms frames while the far end repacketises to 20 is a mismatch nobody would
+choose deliberately, and it is the obvious suspect for the instability -- but
+that is a hypothesis, and this bench has killed five of those.
+
+**What would settle it**, in order of cost: get Asterisk to honour 10 ms (or get
+Direct Media working, which removes it from the path and makes the ATA's own
+packetisation the only one that matters -- `codec g711alaw bytes 80` on the
+VG204 dial-peer); then a 30-call batch against the n=30 control, because five
+calls cannot distinguish a rate distribution from a run of luck.
+
+======================================================================
+
+### 1219. DIRECT MEDIA WORKS AND IS WORTH ZERO MILLISECONDS — A NEGATIVE RESULT WORTH KEEPING
+
+*Recorded so nobody spends another afternoon on it. Four of my theories about
+why it would not engage were wrong; the one thing that found the answer was
+Asterisk's own debug log.*
+
+**Getting it working** took clearing one global FreePBX feature code. The chain
+of wrong guesses, in order: a codec mismatch forcing transcoding (refuted --
+`pjsip show channelstats` says `alaw` on both legs); the Dial options being set
+on the wrong extension (they were, but fixing that changed nothing); the Dial
+options at all (`D_OPTIONS=r` confirmed, still `simple_bridge`). What actually
+answered it was one line, after enabling `core set debug 3 bridge_native_rtp`:
+
+```
+can not use native RTP bridge as channel 'PJSIP/4242-...' has features which prevent it
+```
+
+`ast_bridge_channel_has_dtmf_features()` -- our channel carried `apprecord` in
+`DYNAMIC_FEATURES`, attached by FreePBX's global **In-Call Asterisk Toggle Call
+Recording** feature code. It is inherited (`__DYNAMIC_FEATURES`), so it rides
+every channel regardless of the extension's four recording policies, all of
+which had already been set to Never.
+
+**The result, once working:**
+
+| | |
+|---|---|
+| bridge technology | `native_rtp` |
+| RTP peer | 10.1.1.2, the VG204 itself, not 10.0.0.26 |
+| re-INVITEs | 2 |
+| chirp round trip | **101.38 ms, sd 0.00** |
+| chirp round trip, relayed | **101.38 ms** |
+
+**Zero difference.** Asterisk's relay contributed no measurable delay, which its
+own statistics had already said: 0% loss, 0.000 jitter, 1 ms RTT on a LAN. The
+hop was never the problem and the whole exercise bought nothing in latency.
+
+**What it did buy, and what then failed.** With Asterisk out of the path the
+ATA's own packetisation becomes the only one in the loop, which is the one thing
+that could not be changed while a repacketiser sat in the middle. `codec
+g711alaw bytes 80` on the VG204 dial-peer -- 10 ms at 8 kHz -- was applied and
+the ATA still offers `a=ptime:20` and the round trip still measures 101.38 ms.
+So the ATA is not honouring it either, and that avenue is closed too.
+
+**The lesson for the register.** Every delay term outside this project has now
+been measured and found either already minimal (network, 1 ms) or immovable
+(the ATA's 101 ms, which resists both its own playout setting below 20 ms and
+its packetisation setting entirely). **What remains is ours**: ~60 ms in the
+`d-modem` <-> `slmodemd` hop (1217), of which 20 ms has already been recovered
+by halving the packet time (1218).
+
 ### 1235. THE THREE MESSAGE-PARAMETER CLASSES' OBJECT MAPS, WITH EVERY SIZE PINNED FROM BOTH ENDS
 
 `V90CP`, `V92CP` and `V90MP` are the V.90/V.92 CP and MP message objects.  None
@@ -43766,3 +44269,182 @@ and the twelfth is the bare quotient the eleventh division leaves -- `out[11]
 in the case.  +0x44 is the one field of the object case 0 does not touch,
 while case 2 of the same function reports `m11 - 1` as that digit's range.
 docs/deviations.md D264.
+======================================================================
+
+### 1350. THE ATA PLAYOUT CHANGE, MEASURED PROPERLY: THE MODE MOVES 12000 -> 14400
+
+*Renumbered from 1220, which collided with the `ctorpath-complete` branch's
+1220-1344 block. Nothing referenced it before the renumber.*
+
+*Task #111's closing measurement. 30 calls at one fixed configuration against
+the 30-call control of 1208, one variable changed.*
+
+Everything the day tried that needed non-standard framing has been reverted:
+`d-modem` and `slmodemd` are back to their tracked sources, 20 ms RTP and 20 ms
+internally, which is what SIP uses and what every other box on the network
+offers. What remains changed from the control is the ATA's
+`playout-delay nominal` (80 -> 20, 1216) and Asterisk direct media (1219, worth
+zero milliseconds).
+
+| | control (playout 80) | this run (playout 20) |
+|---|---|---|
+| connected | 22 / 30 (73%) | **29 / 30 (97%)** |
+| data both ways | 14 of 22 | 19 of 29 |
+| our TX | 33600, all | 33600, all |
+| our RX median | 12000 | **14400** |
+| our RX mode | 12000, 12 calls | **14400, 16 calls** |
+| our RX range | 4800 - 26400 | 4800 - **33600** |
+
+**The connect rate is the surprise, and it was not predicted.** Nothing in the
+delay account says a shorter playout buffer should make calls *establish* more
+often. Two candidate explanations and no data separating them:
+
+- the ATA's 80 ms buffer was hurting the V.8/V.34 handshake, not just the rate
+- **the control is contaminated.** An orphaned `slmodemd` was registered to the
+  PBX as 4242 for six hours, including the whole of the control run. It was
+  found and killed after it. A duplicate registration is exactly the kind of
+  thing that costs an outbound call now and then.
+
+The second is at least as likely as the first, so **the 73% -> 97% figure should
+not be quoted as the ATA's doing** without re-running the control on a clean
+line. The rate distribution is unaffected by this: it is measured per call from
+each call's own logs.
+
+**The rate result stands on its own.** The mode moves one full step, 12000 to
+14400, and the top of the range moves from 26400 to 33600 -- the first 33600 in
+a batch rather than as a one-off.
+
+**Covariates, same discipline as 1208** (worst-case leave-one-out and a
+permutation p, and a covariate only counts if no single call carries it):
+
+| covariate | n | r | worst LOO | p | |
+|---|---|---|---|---|---|
+| **equaliser error, pre-CONNECT** | 29 | **-0.611** | **-0.585** | **0.0024** | **SURVIVES** |
+| equaliser error, post-CONNECT | 29 | -0.496 | -0.447 | 0.019 | no |
+| seconds dial to CONNECT | 29 | +0.586 | +0.461 | 0.0044 | no |
+| echo return loss | 29 | -0.060 | -0.002 | 0.75 | no |
+| signal-to-echo | 29 | -0.012 | -0.004 | 0.95 | no |
+| echo lag | 29 | +0.136 | -0.004 | 0.44 | no |
+
+`equerr_pre` survives a third time, on a third independent sample. The echo
+still explains nothing, which is now three batches saying so.
+
+**Two calls the threshold table of 1210 cannot explain.** `final-28` measured
+`equerr` 80 -- index-14 territory, worth 33600 -- and connected at 7200.
+`final-10` measured 2360, comfortably inside the 14400 threshold of 2571, and
+connected at 4800. The same shape appeared once before (`equerr` 250 -> 4800).
+So the table predicts the bulk and something occasionally overrides it, and that
+something is not in any covariate measured here.
+
+======================================================================
+
+### 1351. THE CLEAN CONTROL: THE RATE SHIFT IS REAL (p = 0.0008), THE CONNECT-RATE SHIFT IS NOT
+
+*Re-run of 1350's control at `playout-delay nominal 80` on a line with no
+orphaned `slmodemd`, because 1350 declined to claim the connect-rate figure
+until that confound was removed. Three runs of 30 calls, one variable.*
+
+| run | connected | median | mode | distribution |
+|---|---|---|---|---|
+| playout 80, ORPHAN present | 22/30 | 12000 | 12000 | 4800:2 7200:2 9600:1 **12000:12** 14400:3 24000:1 26400:1 |
+| playout 80, clean | 27/30 | 12000 | 12000 | 4800:5 7200:1 9600:1 **12000:15** 14400:3 26400:2 |
+| playout 20, clean | 29/30 | 14400 | 14400 | 4800:3 7200:3 12000:4 **14400:16** 26400:2 33600:1 |
+
+**The rate improvement is real and it is the ATA's.** With the orphan removed and
+one variable changed:
+
+```
+calls at >= 14400 :  19% (5/27)  ->  66% (19/29)   p = 0.0008
+rank-sum over the whole distribution                p = 0.0127
+mean rate           11733 -> 13820
+```
+
+**And it is specifically the GOOD calls getting better, not the bad ones going
+away**: calls reaching 12000 or more are 74% against 79%, p = 0.76 -- unchanged.
+The buffer reduction moves the modal call up one step; it does not rescue the
+calls that were already failing to converge.
+
+**The connect-rate figure of 1350 is withdrawn.** Neither comparison survives:
+
+```
+orphan 22/30 vs clean-80 27/30 : p = 0.18   the orphan's apparent cost
+clean-80 27/30 vs clean-20 29/30: p = 0.61   the ATA's apparent residual
+```
+
+So the 73% -> 97% that looked striking is consistent with one underlying connect
+rate and n = 30. 1350 was right to refuse to claim it, and it is now measured
+rather than merely doubted.
+
+**A methodological correction, recorded because this bench's discipline is the
+point.** The first test run on these two samples was a permutation test on the
+MEDIAN, which returned p = 0.28 and would have been reported as "no significant
+difference". That is the wrong statistic: the two medians are ADJACENT
+categories in a discrete distribution, so a large shift in where the mass sits
+barely moves them. The rank-sum over the full distribution, and the proportion
+above a threshold, both find the effect immediately. **Choosing a statistic that
+cannot see the effect is a way of being wrong that looks like rigour.**
+
+======================================================================
+
+### 1352. `round32`'s `volatile` IS A GCC 13 SHIM, NOT A TRANSCRIPTION — THE PERIOD COMPILER ROUNDS FROM PLAIN SOURCE
+
+*Asked because no 1990s DSP author would write `volatile float r = v;` to force
+a rounding, and that intuition is right. Investigation only; no code changed.*
+
+**What the object does**, `_ZN9Resampler8resampleEPKfjPfRj` at `.text+0x34da0`:
+
+```
+34f55:  flds  (%eax)        h[i]
+34f5a:  fmuls (%edx)        * c[i]
+34f60:  faddp %st,%st(2)    accumulate -- into st(2), NO store in the loop
+34f62:  jne   34f55
+...
+34f76:  fstps 0x34(%esp)    the spill, ONCE, after the loop
+```
+
+The running sum stays on the x87 stack at 80 bits for the whole inner product
+and is then stored **once** to a four-byte slot. That is ordinary register
+spilling of a variable whose declared type is `float`; the 24-bit rounding is a
+side effect of where GCC put it, not of anything in the source. The author wrote
+`float y0` and thought no more about it.
+
+**What our period compiler does with plain source.** `Resampler.cpp` was
+compiled in the tree's own GCC 3.4.2 container at the tree's flags, twice: once
+as it stands, and once with `round32`'s `volatile` removed so the helper is the
+identity function.
+
+| | accumulation | `fstps` | spill/reload pairs |
+|---|---|---|---|
+| the object | `faddp %st,%st(2)` | 4 | 2 |
+| **plain**, GCC 3.4.2 | **`faddp %st,%st(2)`** | 5 | 2 (`0x20`, `0x4c`, each stored then reloaded) |
+| with `volatile`, GCC 3.4.2 | `faddp %st,%st(1)` | 5 | 2 |
+
+**The plain source spills anyway.** GCC 3.4.2 runs out of x87 registers and
+stores the accumulators to four-byte slots with no help at all, and it does so
+using the same `faddp %st,%st(2)` stack discipline the object uses, which the
+`volatile` version does not.
+
+**So the `volatile` is a shim for the modern build only.** GCC 13 has the
+registers to keep both sums at 80 bits and therefore does not round; the helper
+forces what GCC 3.4.2 does for free. The existing comment says "the object
+rounds and our compiler will not", which is true but understates it: the ORIGINAL
+SOURCE almost certainly contained nothing of the kind, and the reconstruction is
+carrying a modern-toolchain artefact in a file whose purpose is to record what
+the author wrote.
+
+**What is NOT established.** The mnemonic similarity of the two variants against
+the blob is 38.4% (plain) against 36.9% (volatile) -- a 1.5-point gap that is
+far too small to lean on, and both are low because the blob's `resample` is 367
+instructions to our 263 with 18 `faddp` to our 4: its inner loop is unrolled and
+ours is not. The similarity tier cannot adjudicate this. Nor has it been shown
+that the plain GCC 3.4.2 build passes the differential test -- the harness builds
+with the modern toolchain, so running tier 1 against a period-compiled object
+would need harness work.
+
+**Options, given the above.** `-ffloat-store` and `-fexcess-precision=standard`
+are both wrong for a reason the disassembly settles: they round at every
+assignment, and the object's loop demonstrably does NOT round -- `faddp` with no
+store, `taps` times. Register allocation is not reachable by any flag. What is
+available is to make the shim's conditionality explicit, so the period build
+compiles the plain source the author wrote and only a modern compiler gets the
+helper. That is a source change and is not made here.
