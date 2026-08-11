@@ -8,7 +8,7 @@
  ],
  "suites": {
   "cadence": {
-   "key": "c7b80b2ba414e6d59d60140831786e9fa27ffda06a059ff775b0bbeb0eac44e9",
+   "key": "256fa9fcdcc2a906c9b91369193d0285eb0a18e55a8f31644dfcf470370aa9d1",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "correct the author's spelling of SERIRES": "caught",
@@ -20,7 +20,7 @@
    }
   },
   "callprog": {
-   "key": "e7569bdabbd622e827dc17a06d0b5760faa0050349b01a308665b4b28e11de50",
+   "key": "663090669942eddfe38e48bd6445e67b2c8ec2c1acfd2ada360eacdd603b99d8",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "corrupt 'CALLPROG: $ encountered.\\\\n'": "caught",
@@ -43,7 +43,7 @@
    }
   },
   "dialer": {
-   "key": "bcf2b78ea43fc7ac789ad5b731856c941448ad904e252d530f7c0c29c9cee35d",
+   "key": "edd35b6866abb93962e415f8c6c1f5e5acb66187894106c018bc2c6306f1badd",
    "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce 'Done Generating flash' before the timings are restored": "caught",
@@ -72,7 +72,7 @@
    }
   },
   "dialer_grading": {
-   "key": "779fb33046159b6a9dbf86af54f1ca772b848a8d4197c51c58c0ce630fbbdfa1",
+   "key": "161c9aefec5f0117d9a344a4a7004980d7b0af7477a9aad3328c31ecb3cc6bd9",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the 'got: %s' banner in IsDialStringInvalid": "caught",
@@ -80,7 +80,7 @@
    }
   },
   "dilpack": {
-   "key": "9fff92302ee4c0e8cd23d969a6c7faec09296452c7a2584843e2c46fb69ef7b8",
+   "key": "3326839969b81f16f3661cfe14d29910c2607b0211edf160541a20cde3b142c6",
    "summary": "8 mutations: 7 caught (7 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "CRC covers frame 0 too": "caught",
@@ -94,7 +94,7 @@
    }
   },
   "floatarma": {
-   "key": "79fce6c8268d78be54efed8b40bcdf435d6680fc7843abc2d35463521e7be35b",
+   "key": "a690230b52fafa9690f7b8674c01e9a350cc934996061eea3c1f44b6edf422cd",
    "summary": "30 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "den[0] is read once, before the loop the object re-reads it in": "equivalent",
@@ -130,7 +130,7 @@
    }
   },
   "psd": {
-   "key": "2ff792d5b36a6c35afa695fd15b41ead58a376c24b2dae94797355215d3cea46",
+   "key": "e93c6f05ba5f3450573a17663123ae05e86621416f4bbee2ca571d1cf597569f",
    "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "every bin gets the same frequency": "caught",
@@ -150,7 +150,7 @@
    }
   },
   "pulse": {
-   "key": "e334277425b1b764cc2627e5f54999e5d5dbe67bf22d62017aeb3c334578efb4",
+   "key": "c398820a09766c7f0cb7057b489d1c0348868eeb715600112d79f6d22524db55",
    "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the 'hook on' call site": "caught",
@@ -165,7 +165,7 @@
    }
   },
   "resampler": {
-   "key": "ffe8ca42a17ea3292c9746865708898feb1117575f947a4c244c70a5a3084798",
+   "key": "8fd02e94f936482a3f939efe3dd559d793deffd62b935bed4265b7254b9e2622",
    "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "copyHistoryTail copies one element too few": "caught",
@@ -197,7 +197,7 @@
    }
   },
   "resamplertiming": {
-   "key": "d15ebfb504217fc0004e5c3f7e7d76db3ba8aac2c1df1b25cc4fa3013467f61c",
+   "key": "79858504741845a41dd967fd8fea5770b9bec9770763619a1934da65577baad6",
    "summary": "57 mutations: 54 caught (54 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "addPhase accepts a zero or negative argument": "caught",
@@ -260,7 +260,7 @@
    }
   },
   "resamplerto": {
-   "key": "7b387db370e3a29dce268970a4809309fff8131348434b7356fbaf74bfcb48af",
+   "key": "efa9c6516e8eae052289118000398e1c69cc49e7b02da0597132fb16c447519a",
    "summary": "7 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "getTimingOffsetPPM multiplies by ppmScale instead of dividing": "caught",
@@ -273,7 +273,7 @@
    }
   },
   "scrambler": {
-   "key": "7dfb697251c00b2f4bde7c1128fc02e80c54f22a78a3dde67316d5abdd02e3c8",
+   "key": "175e4e8bc45f925490180f57c9393956df968541c6ce736286b7a45ec930235a",
    "summary": "36 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "D ctor: pInitOut sits at pLimit": "caught",
@@ -315,7 +315,7 @@
    }
   },
   "v34datapump": {
-   "key": "4a6d1cf9e2c80a6a4ad77d9a29292349e09c41509dcdc60d69ba0b3c6caa5716",
+   "key": "657b3eda30cb3ef85aac147a51b2aa5be16d9a259da4ac1d1a1352abbd531c09",
    "summary": "78 mutations: 72 caught (72 by test, 0 by strings), 4 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x124 is bumped after `receiver` rather than before it": "uncaught",
@@ -399,7 +399,7 @@
    }
   },
   "v34datapump_rrn": {
-   "key": "fe8ebb5adc39941402feccb8dc9ae3e884e6d57e08d27ad406f5fb0311b8ab6d",
+   "key": "43952c3aa0e611b8015e59d37b23cffecaf8a2f7571b33e4ff0472de4721d731",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "IndicateLocalRRN bumps the remote counter": "caught",
@@ -413,7 +413,7 @@
    }
   },
   "v34filters": {
-   "key": "9d13c129e2190aa00d5a0f894487beb770f674b836737383c5b8cad84548835b",
+   "key": "123716e72963edb661f1ea18a6605feae5dc8fbc841de958e07dde7fb51d7f5c",
    "summary": "30 mutations: 30 caught (29 by test, 1 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "carrier 1600 and 1680 lengths swapped": "caught",
@@ -449,7 +449,7 @@
    }
   },
   "v34hsfsk": {
-   "key": "f067da90b8cc7e0292f78ca27d1324de7a35547af21d7d4606af32bb25382d43",
+   "key": "cca48617bfb8975eaf1a24c0ea7901818bc6990b51e852fc6571c29fe6089eb7",
    "summary": "38 mutations: 36 caught (36 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x3588 is not touched at all": "caught",
@@ -493,7 +493,7 @@
    }
   },
   "v34hshak": {
-   "key": "9f30aa2a1501d78bc1e7dd5bde76f9ed9150ff92c273b71ca5c061efabde5ec5",
+   "key": "aea263501d87b8db99da4ebb51e43a4e648b072ca54cc76b3caff02ee24b7012",
    "summary": "209 mutations: 203 caught (203 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "HS_RXSTATE branch ctx1/ctx2 swapped": "caught",
@@ -708,7 +708,7 @@
    }
   },
   "v34hsmst44": {
-   "key": "23a9d641b02c6a375bde00a87db0d7bc8f2e8bd60dd4445f5f77c0a11a6d620c",
+   "key": "c32a2643b62f502e2a24d27b64ff9497f0c5ee460c1a4d663f5564fb158432b4",
    "summary": "214 mutations: 204 caught (204 by test, 0 by strings), 3 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x128 is not set": "caught",
@@ -928,7 +928,7 @@
    }
   },
   "v34hsrx4": {
-   "key": "0044f249c6a20e8e09b5a1959b9fa69f6055fc5fe5a1bd16eadfb20e0bded395",
+   "key": "ecf78f319dfabdde36573a26708f65080c734daaddfaa62df763f1696b14e559",
    "summary": "176 mutations: 170 caught (170 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa80 raises 0x100 rather than 0x200": "caught",
@@ -1110,7 +1110,7 @@
    }
   },
   "v34hsrx53": {
-   "key": "a58960eb0ef02a397510bc125d4e3fe0a6d35cf09d519e0937b38b86e9e0f3b0",
+   "key": "df5eb0579c7fc3a6447b9444c4e49dafd5b678a2cfde87d1dbff968390d48e5b",
    "summary": "62 mutations: 61 caught (61 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358c is not cleared": "caught",
@@ -1178,7 +1178,7 @@
    }
   },
   "v34hsrx72": {
-   "key": "093917072ce3b0dc57ea6a73107491bd6b9865e4e4317c3999cdc3dee603da5f",
+   "key": "c3d33c4cd3385ba82603529811dfe8bca1a0f899d3a01f69411d943d3b47f98b",
    "summary": "125 mutations: 124 caught (124 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358c is SET rather than toggled": "caught",
@@ -1309,7 +1309,7 @@
    }
   },
   "v34hsrxch": {
-   "key": "a0b8a04cd6efde8315933c0dba186a9f7f3cc276bed95e1efd0bd7c4f7d16949",
+   "key": "3a4437525133862828ea10ba24724b587cb4e58f8cee1d2807417c4d869a304e",
    "summary": "8 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "35 WAIT does not drain the receive queue": "caught",
@@ -1323,7 +1323,7 @@
    }
   },
   "v34hst346": {
-   "key": "bf29df46499ab57a4b77648d3a8d9fcc29a2798b738ffec41e3868b026ee66ef",
+   "key": "c6da28c031ad768a10f2353ed3025fc187c7cb8cdce84b5d0fa1ca505fe1c405",
    "summary": "75 mutations: 74 caught (74 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa7a is not stepped": "caught",
@@ -1404,7 +1404,7 @@
    }
   },
   "v34hst3core": {
-   "key": "d9d29ce76c24965bfbb94dc2447147cfbd259995b3fdf7a6da2f001c654e7383",
+   "key": "716b8beab22051af6147b6ce78898394229bae04b79912aaf014f93b5da1c717",
    "summary": "70 mutations: 69 caught (69 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x644c9 reports progress 1": "caught",
@@ -1480,7 +1480,7 @@
    }
   },
   "v34hst3m41": {
-   "key": "074be674bd46ff5eeb1b3f2dd43bef612db21079ec90fd4335b1944725d289cc",
+   "key": "3fa417626c9b1f48e6b90c86955ed52095018e0bb0c9c63d5bd52df047a187b9",
    "summary": "86 mutations: 84 caught (84 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358a's 1 and 2 select each other's body": "caught",
@@ -1572,7 +1572,7 @@
    }
   },
   "v34hst3mid": {
-   "key": "0f66ba1ba04d7318b4ef4b8451832dbfc3bc7faa8df21f36d6f3c840d2875e78",
+   "key": "1e244418162db9ebb87424b0f4e19f0892e0bf42ee96bc77adbc39136adc16ac",
    "summary": "443 mutations: 422 caught (422 by test, 0 by strings), 0 NOT caught, 0 unusable, 21 equivalent, 0 MIScounted",
    "verdicts": {
     "47 has no second guard": "caught",
@@ -2021,7 +2021,7 @@
    }
   },
   "v34hstb1": {
-   "key": "e229f6d8ec22501939cf634c48d957f76824ec1dd42f82da806b126c794f6fc7",
+   "key": "cf29492ef28821c2022f761586cc31b31822d250284fd66de1e967d23a8de26b",
    "summary": "9 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "54 SILENCEINFO does not share 5's entry": "caught",
@@ -2036,7 +2036,7 @@
    }
   },
   "v34hstx1": {
-   "key": "572d617e5b92e6beea7228db0843da9d74c4149c688774dfaf7e88a0d4ff624b",
+   "key": "831fa4d8e3d562496c01d03bbc36096e9c5882117f3b75a87e8226440d7f8493",
    "summary": "776 mutations: 751 caught (751 by test, 0 by strings), 2 NOT caught, 0 unusable, 23 equivalent, 0 MIScounted",
    "verdicts": {
     "18: only the first symbol is transmitted": "caught",
@@ -2818,7 +2818,7 @@
    }
   },
   "v34hstxblock": {
-   "key": "c00efd8c924fab4297062302696f3fd0ff38f572e331b3eb86f84f5d7b7454ba",
+   "key": "41d82b7bb0e578c3d053e27aa59c4cc4f610994725c4fec83fce49d508f4d1f5",
    "summary": "52 mutations: 50 caught (50 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x238 against +0x23c compared signed": "caught",
@@ -2876,7 +2876,7 @@
    }
   },
   "v34info": {
-   "key": "506488b2a5cda086a1583e19cdab734840c6d2a6be327beac29166b8c3ddbd80",
+   "key": "0f543efb25f4915e20ef46af02430664524a62e1b2e58858c2782c895f35c16c",
    "summary": "65 mutations: 62 caught (62 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "INFO0a: 'for %s' and 'for V.PCM' swapped": "caught",
@@ -2947,7 +2947,7 @@
    }
   },
   "v34info1a": {
-   "key": "18a47f7f213b3bc0ca99236e4cc826ecb307aa40a6158a43804d5ff6c344befa",
+   "key": "a361f149b1a01a5c40bbd2b9707fec47ccc999c7bbdfcd0fa066187fca221b5a",
    "summary": "44 mutations: 40 caught (40 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
    "verdicts": {
     "a short phase 2 asks for baud index 5, not 4": "caught",
@@ -2997,7 +2997,7 @@
    }
   },
   "v34info1d": {
-   "key": "a460f8c988302d509d316573496e665efaba75aabd96040703983c0ccf323f7a",
+   "key": "493d78afeac86017ee47fdfd42aea929e4d785d78728b456d00ff3a163a3c3f9",
    "summary": "42 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "a negative V.90 receiver counts as none": "caught",
@@ -3045,7 +3045,7 @@
    }
   },
   "v34ja": {
-   "key": "9fbba9140501f518cae075f9f0c1b77242e7a81d40b471d92305d0d2523f717e",
+   "key": "2c0949a32a3536beb5750ff4e9a1d531f218bb7b7eec7213fc49e6457558afe4",
    "summary": "13 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the K56flex arm goes FIRST, so it wins when both receivers are up": "caught",
@@ -3064,7 +3064,7 @@
    }
   },
   "v34k56": {
-   "key": "0ba409381168d4010f715d67ed19dc344f2788fc59bc156c26858dca73220ab0",
+   "key": "3c085e8d8041b8526eeeef3e40dacaea8a86c51d4eb2f09e8c00cbe05bce16b7",
    "summary": "28 mutations: 15 caught (15 by test, 0 by strings), 10 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store": "uncaught",
@@ -3098,7 +3098,7 @@
    }
   },
   "v34pcmif": {
-   "key": "dc8df0070ae4d29625bb6f39aa80b0072cf651cc9a2c41a08f01d727795bac93",
+   "key": "0814a84bb73d94ff0c09c96399061b8fb877f6aa07df26050e9d532b7470c9a5",
    "summary": "126 mutations: 120 caught (120 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "force: 2800 spoils only one of its two bins": "caught",
@@ -3230,7 +3230,7 @@
    }
   },
   "v34pcmrates": {
-   "key": "6c8aca3193528db00f9761b245bd92b08dca055a007138025ae18a06fbf9c2aa",
+   "key": "794f0b280f9333008573081c06d48980260a91583ffbb68b92c6e25f77a77000",
    "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "THE V.92 GATE IS CONSUMED BY READING IT -- caught by the LINK COMPARISON alone": "caught",
@@ -3275,7 +3275,7 @@
    }
   },
   "v34retrain": {
-   "key": "88dfe17f4f32c86075f120d036da65c8f63086bf8409923f03bdffedd5c6f58c",
+   "key": "aa03de10bf4199c9d584cd3bcc77285b6a6cb2c5121595ea7ed0b920e7979f71",
    "summary": "74 mutations: 67 caught (67 by test, 0 by strings), 0 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x2218 becomes 5": "caught",
@@ -3355,7 +3355,7 @@
    }
   },
   "v34rx": {
-   "key": "9c59fd2971abe96b1bb2b9d0034370500e012cbc9adc9ef5ebb5c4a4cdb9c5dc",
+   "key": "34ba319428d05737eccb174260710d47fa584d209dd88d47ce5eb789622eaea6",
    "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "NEC adaptation starts at count 1 rather than 0": "caught",
@@ -3392,7 +3392,7 @@
    }
   },
   "v34shell": {
-   "key": "8a300372a5183b351e1dfe03530854194b4c7d59b6c533d41170ed98f91f8dfd",
+   "key": "547152315d4cd9305e5f8d303d3f79cdf2773a9af0a9f99171156c90e08a45de",
    "summary": "24 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "depth and use_max read each other's bits": "caught",
@@ -3422,7 +3422,7 @@
    }
   },
   "v8agc": {
-   "key": "28f506693403e33ad740e9e5596f2d9e1b736266ed3dd3c03a7da27743aec397",
+   "key": "0e489d3b1e223e705ca74fc105cf3d2f52c3d21e3e68dc569416b52483c2cfa4",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the look-for-ANSam-again announcement": "caught",
@@ -3433,7 +3433,7 @@
    }
   },
   "v8dp": {
-   "key": "f8962819e28e123cb0bcc513da04fe18d2bbb50ce2c90d0d655528a8acdd182b",
+   "key": "4297eb2d4f3ab4c72c575d38da05699e3e1587568dca941e1de71f6a59c1da27",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the create before the rate is checked": "caught",
@@ -3443,7 +3443,7 @@
    }
   },
   "v8handshak": {
-   "key": "f04bb5a7b59b174084ae5ce1ba1fb08818374b4c99f5632fab5a286625992834",
+   "key": "89ad0a674d31f2d27a74772284b0f00af1789ce8ee41ad742dddd8bef220d23c",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the CM timeout on every block past the deadline": "caught",
@@ -3454,7 +3454,7 @@
    }
   },
   "v8hs": {
-   "key": "e386a882774fd34059e2140d3e51b0a6e3bd0fe894e26baf6a398acf9507f8e5",
+   "key": "31521422e5fcc5c9f0963ec3a4ef93f3b8ccf7b09878dbe464d8687978bbaeff",
    "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce LAPM even when a raw protocol is given": "caught",
@@ -3467,7 +3467,7 @@
    }
   },
   "v8hsrx": {
-   "key": "2853929d76e0189b4154def2bee88bc7c283641a82ce61e661616839b286f98f",
+   "key": "58a7b4453f6caa3a6ccef907446917aa7286d3034f19cfec7840db1983ece2a6",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the ANSam detection before the JM is checked for": "caught",
@@ -3484,7 +3484,7 @@
    }
   },
   "v8jm": {
-   "key": "f0f9e9bb695dd619e7fe070cd6f0ad7223e6c6357972f774b8b215a453fa12c6",
+   "key": "67eea109ea1f69b3cc5f9a5162cfdadac564362c6c17b77185553c14879e60e9",
    "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "abandon the marker word when the local extension fails to match": "caught",
@@ -3519,7 +3519,7 @@
    }
   },
   "v8proc": {
-   "key": "777b41c77d383d2dee1147bf7fdae26aa24990e049d3078058506fb15f02cdc9",
+   "key": "7b1a80cbd56cad5029ccfab0f2352c16811db60f70f2a0dcbb0d79f82b092c7b",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "accept a negotiation that agreed on nothing": "caught",
@@ -3542,7 +3542,7 @@
    }
   },
   "v8seq": {
-   "key": "625a7747cbd8973f2072d50b8d5057806ee6260756435e04760d5a156424b87f",
+   "key": "5def260d18cd55c7a799b6e5cb49b6c68ec2650c8f36775b074da6485bca6043",
    "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the banner before the selector is validated": "caught",
@@ -3557,7 +3557,7 @@
    }
   },
   "v8sig": {
-   "key": "15309f164c46b49ed73be2ac01d25926d86135f71b2264f7727b8fe5bbcb671f",
+   "key": "e61a01f33aab6da36355f89955cf452d53840f4bbd1fec655ec34e8f4fa53d54",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the phase-reversal announcement": "caught",
@@ -3571,7 +3571,7 @@
    }
   },
   "v90adid": {
-   "key": "1d8908f56b6267682d75a8137b7bb28e739d312da4c5d270cd407741deeb8aff",
+   "key": "735aaedd407f933a2631c5d2d7276c30542f413c25cf7d1e718426a5b32e95a3",
    "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "clear one code short in reset's inner loop": "caught",
@@ -3608,7 +3608,7 @@
    }
   },
   "v90cd": {
-   "key": "8a74d86a724891f377a922e58b4117683a0eb25064dfd0f5c345c177460ac444",
+   "key": "319ee5a1f3a41a3dcc0605446ebfd68cc80a14f40e41afedab4f512820a4652b",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "one gate around both diagnostics": "caught",
@@ -3618,7 +3618,7 @@
    }
   },
   "v90conneval": {
-   "key": "53f8b6b23fffd91ae934c941acda514a61e4aeae15d1801387d9399b361df57e",
+   "key": "12199d29625268ead85eac663dd35dd03c9c88b12ec76f2e4b150a7dff415c68",
    "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "RRN_UP and RRN_DOWN are swapped": "caught",
@@ -3630,7 +3630,7 @@
    }
   },
   "v90demapper": {
-   "key": "c80ddaf0c12cd812720508be350395c91a6d5a1b86b0f5f9595fe6abddab20a5",
+   "key": "174d23cf336a188a77c409e05a15d35e11ed9ad3db6db2aad8140e6315022d09",
    "summary": "13 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a level nothing landed on prints its raw error sum, not zero (transcript only)": "caught",
@@ -3649,7 +3649,7 @@
    }
   },
   "v90demod": {
-   "key": "1d0f224b10f8e7615dffe3ab726b2b9e23170312e1582c885cc439fa48180295",
+   "key": "587388230be7e243f4fe6d1b76a3933c8361359f13bfa66ad3d5c3eeb1043943",
    "summary": "31 mutations: 28 caught (28 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x280 is cleared as a word": "caught",
@@ -3686,7 +3686,7 @@
    }
   },
   "v90dil": {
-   "key": "006e98458af5a244744fd82eeba944e6d9d1d653a1a18cbc27061f7bee6004e1",
+   "key": "3a7b968379c1276f6db043d1cb17ece8686bb5a20321fb04418e253f0d3f8f52",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "always take the A-law row": "caught",
@@ -3707,7 +3707,7 @@
    }
   },
   "v90equ": {
-   "key": "8ae79806c525ebda53f6bb083e44f79d3813ddbe21415a03a8fe4a8fd31d58f1",
+   "key": "904602645636dd8d1267bb56db6cb3c5a544a25baf1bf1086a133fe29ac5ac46",
    "summary": "4 mutations: 1 caught (1 by test, 0 by strings), 2 NOT caught, 1 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "log10 via libm rather than the coprocessor": "unusable",
@@ -3717,7 +3717,7 @@
    }
   },
   "v90getbitrate": {
-   "key": "058d87dbc2d874a46ba959fb714bb52fb109ecb1b9767fc18f4e600b11ad3d48",
+   "key": "d9cd2ed225d7fabde2e9fffe3aed0bebbf476e82119af00c06d09f4fd97822a3",
    "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "THE READ IS A DRAIN: the count is consumed, and only the object comparison can see it": "caught",
@@ -3733,7 +3733,7 @@
    }
   },
   "v90p34": {
-   "key": "a56defcb90fbb7b437237557b91d5513dd1761593efe0c6e4f7eeba6d01c53e8",
+   "key": "106c63cae6447f4a6f5a726c8fcff9c129ec35cb9a4601b9881ddae36179668e",
    "summary": "70 mutations: 64 caught (64 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "case 10 does not consult the bit source": "caught",
@@ -3809,7 +3809,7 @@
    }
   },
   "v90p3dreset": {
-   "key": "ab2c8ea49f58540e3728ecc57d6e707e6fa336b050e11efb5d22945aefd34886",
+   "key": "2a3fd79ade2b3b07cea7aa72acc0f906042c3a68869aa89804abba41ed0ca80d",
    "summary": "29 mutations: 28 caught (28 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TRN1dKnownData forwards 0 like the rest": "caught",
@@ -3844,7 +3844,7 @@
    }
   },
   "v90params": {
-   "key": "47ce4e7c1ec94fa5dfd036848208956b9b9a948cad00170db283d87712d4b7b8",
+   "key": "6597c0521c9556f37f1466cecf8021f766467b66b0a78cbe58cd1abe7ecca839",
    "summary": "37 mutations: 34 caught (34 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "PROBING_MODE is set even when tempProbe is zero": "caught",
@@ -3887,7 +3887,7 @@
    }
   },
   "v90prefilter": {
-   "key": "4fa879f8fc7431a6193de7894d9acaa2217747d435f09d6458c6abc4dbffacbc",
+   "key": "4e59d7e857f44a81ce69a570561b995ab1bb20a8beb68847915a7f64e7ba5131",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "L2 read from the object itself, not through the pointer": "caught",
@@ -3897,7 +3897,7 @@
    }
   },
   "v90resampler": {
-   "key": "786131d98b002da591e2f2cee5dc62d540d199127c6e77cac5d5cacf0ab2e832",
+   "key": "26d4ed49110f7495bf0b937a865238d489a7417635f2cd217eb30fb16d859762",
    "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "FROZEN leaves the first-order gain alone": "caught",
@@ -3928,7 +3928,7 @@
    }
   },
   "v90rto": {
-   "key": "e83dac144c5aa2acf16e05ed68680811a9cbf34f6d1fd70cf765c33e1b360ed9",
+   "key": "a38770fd3c5ef5d756f6af4af64f53c0f7353fbdfd6ecaae01543ac259d60090",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "1e-6 as a double, not a float": "caught",
@@ -3938,7 +3938,7 @@
    }
   },
   "v90sbe": {
-   "key": "4b6857ccbed020f1038ea781a3f4284d0573fa6f2821241d3cec3bb46b4591d4",
+   "key": "d88cf4aa5f245ec3d84f0987b106fab473af18a52b7bb47ccda580a6bfdfcb0f",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x10 is left as the constructor found it": "caught",
@@ -3948,7 +3948,7 @@
    }
   },
   "v90sessionflag": {
-   "key": "fcbf625674fb86a8bb0cab679622d93ba1d20d9b59786667d25e74bf5c767976",
+   "key": "bf72c6c20449a402cc94308b61f8cf979ef2dba74f422693cef08b9ea21f3041",
    "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "demodulator prints after storing the flag": "uncaught",
@@ -3970,7 +3970,7 @@
    }
   },
   "v92ec": {
-   "key": "b1729ac670bc860c03537c0f55a1ff0a2473e05d599f7aa923f7300ed5669849",
+   "key": "8b46fdbaf740bd892fc9c316078034e204604ea0dbe073ce8936d63506949d3d",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "fold the delta in after the store (old delay lost)": "caught",
@@ -3980,7 +3980,7 @@
    }
   },
   "v92p3mod": {
-   "key": "90d0c56ecd1431b97381a612db6f76e6e72edc531720713a5af35ca271be5f3b",
+   "key": "3a253735aa917736772125f300bbf60aff937f399819b40c73f002930142747e",
    "summary": "47 mutations: 45 caught (45 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "Ja indexes the vector from 24 rather than 25": "caught",
@@ -4033,7 +4033,7 @@
    }
   },
   "v92params": {
-   "key": "b40b97029227854fded7c8af71dc18cf7e67cba2c39c85d2550774ffcb20a5f1",
+   "key": "a40a8ab1f17dbb0ad29ad0d35a4fca136f932360254b0969dc517cb2a8f90a33",
    "summary": "11 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "init does not call setToDefault": "caught",
@@ -4050,7 +4050,7 @@
    }
   },
   "vpcmep3": {
-   "key": "01682be788c7184f48ee7ad2e579d9b90528c61f081b7ab61c8a2327c5bb31ef",
+   "key": "7debfe7fca09b3f3c565ff269ead5596b44e2c77442d19afb4a037fbc46f0969",
    "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "externalReset writes the six flags only once": "equivalent",
@@ -4079,7 +4079,7 @@
    }
   },
   "vpcmflomodem": {
-   "key": "89c7cd68483f14511da8b7c81746296a98023b4669db389d5afc5a4e116a50a6",
+   "key": "64e85ec3edcfa0a9c4acef5a2b9168fa374227cf559f42a57d27dcdf8adce40d",
    "summary": "49 mutations: 48 caught (48 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "Cp: +0x20c is reached from the modem rather than the demodulator": "caught",
@@ -4134,7 +4134,7 @@
    }
   },
   "vpcmguard": {
-   "key": "e88206e86180b151dbc575b129578f5ec876059f7a98fad33c111dc3aee80be7",
+   "key": "29ef67cdb064e4c98a2daab63e0c6de8fbbc2864a3858c6e57e8775d899aeaa3",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the guard returns quietly instead of stopping": "caught",
@@ -4142,7 +4142,7 @@
    }
   },
   "vpcmrun": {
-   "key": "0c13d5710fc54ef2ab260b8b6b26e7bd14b8bebd73ee0f3fb8c60a3bc246eb23",
+   "key": "a834977994d9042a6be2b3e5bfe7fadfeddeb8c62a66578fa1c13a36ef878123",
    "summary": "18 mutations: 11 caught (11 by test, 0 by strings), 2 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
    "verdicts": {
     "`nbits` is not carried to the next block": "caught",
@@ -4166,7 +4166,7 @@
    }
   },
   "vpcmweak": {
-   "key": "4a2b92a74c045fd75c760a669aeff0fbcae96ee0346a6e1a788fba7cf3eb326d",
+   "key": "1a4f98b47c41fb64a96d4e78552b737c3fc2fff87796ddb746f576de68440960",
    "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the comparing translation unit declares the five plain, not weak": "caught"

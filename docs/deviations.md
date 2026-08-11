@@ -2804,71 +2804,62 @@ it silently.
 
 ---
 
-## D72 🐛 echo canceller history buffer may overrun at high IODELAY
+## D72 🐛 echo canceller history buffer overrun is unreachable at any real IODELAY
 
-*Task #98 sweep, from fix list §1. **Reachability: LATENT.** Status: SUSPECTED.*
+*Task #98 sweep, from fix list §1. **Reachability: CANNOT FIRE.** Status:
+CONFIRMED. Fix class: documentation only. Settled by task #97; the five numbers
+and the bound are finding 1188.*
 
 **Where** `V92EchoCanceller`, blob 0x111e0 (ctor), 0x10f90 (`resetEchoHistory`),
 0x10af0 (`setEchoDelay`).
 
-**The mechanism.** The history buffer at `+0x24` is allocated **once, in the
-constructor**, with a length computed from the delay AT THAT MOMENT:
+**The mechanism (CONFIRMED present).** The history buffer at `+0x24` is
+allocated **once, in the constructor**, with a length `N` at `+0x1c`:
 
 ```
-    delay0 = params[+0x70]                 initial echoDelay
-    L  = params[+0x6c] & ~3                coefficient count  (-> +0x14)
-    N  = (L-1 + delay0) + 2*blk + floor((L-1 + delay0)/blk)*blk + extra  (-> +0x1c)
-    +0x24 = malloc(N * 4)                  floats
+    delay0 = params[+0x70]  V92_ECHO_INITIAL_DELAY = 840
+    L      = params[+0x6c] & ~3   V92_ECHO_FILTER_LENGTH -> +0x14 = 180
+    N      = (L-1 + delay0) + 2*blk + floor((L-1 + delay0)/blk)*blk + extra
+    +0x24  = malloc(N * 4)   floats
 ```
 
-`setEchoDelay` is then called at runtime — from `v34handshak`, with
-`dmaDelay + 0x68`, which is derived from `MDMPRM_IODELAY` — and it updates the
-delay and the active tap count **without reallocating**:
+with the constructor's 3rd/4th arguments `blk = 40` and `extra = 199`, read at
+the two `VPcmFloModem` call sites (finding 1188).  `setEchoDelay` later changes
+the delay and tap count **without reallocating**, and `resetEchoHistory`
+(verified) zeroes `echoLength` floats of `+0x24` with the loop bound compared
+only to the index, never to `N`:
 
 ```
-    echoLength += newDelay - oldDelay      ; add %ecx,0x2c(%eax), delta unscaled
-    echoDelay   = newDelay
-```
-
-`resetEchoHistory` then zeroes `echoLength` floats of `+0x24`:
-
-```
-    echoLength = (L >> 1) + echoDelay + params[+0x74]
+    echoLength = (L >> 1) + echoDelay + params[+0x74] = echoDelay + 76
     for (i = 0; i < echoLength; i++) +0x24[i] = 0.0f;
 ```
 
-Nothing bounds `echoLength` against `N`. If the host raises `MDMPRM_IODELAY`
-far enough after construction, `echoLength` exceeds `N` and the loop writes
-past the end of the allocation.
+So the unclamped loop is real: D72's mechanism stands.
 
-**Why it is only SUSPECTED.** `params[+0x6c]`, `[+0x70]`, `[+0x74]` and the
-constructor's `blk`/`extra` arguments have not been read out for the
-configuration slmodemd builds, so the bound has not been computed. The
-mechanism is certain; whether the reachable IODELAY range crosses it is not.
+**Why it CANNOT FIRE.** `N >= 2239` for any `blk >= 1`
+(`N = 2237 + 2*blk - (1019 mod blk)`; shipped `blk = 40` gives `N = 2298`).
+`echoLength = echoDelay + 76` is invariant across both writers, and echoDelay
+is **largest at construction** (delay0 = 840 -> echoLength = 916) and only
+falls thereafter.  `setEchoDelay` is driven from `MDMPRM_IODELAY` via
+`echo_delay = IODELAY + 60`, so at slmodemd's validated cap IODELAY = 240,
+echoDelay = 300 -> echoLength = 376.  Max echoLength over all reachable states
+is 916 < 2239 <= N.  Overrunning needs echoDelay > N-76, i.e. IODELAY > ~2103 --
+about 9x above the validated 0..240 range (D74), and the buffer stays
+over-provisioned even with no host cap.
 
-**Why it matters now.** V.32 measurably works at `echo_delay` 108 and 180 and
-fails at 240 and 300 — a cliff between IODELAY 120 and 180. A heap overrun
-would produce exactly that, and would also explain why the failure is a
-training failure rather than a graceful rate reduction.
+**What this corrects.** The earlier "why it matters now" tied the V.32 cliff
+(failure at echo_delay 240/300, D74) to this overrun; **refuted** -- the
+overrun is nowhere near the reachable band, so the V.32 cliff has another
+cause.  The hoped-for pincer does not exist: the usable band is bounded below
+by D77's connect race (IODELAY 86) and is **not** bounded above by this
+mechanism.
 
-**To confirm:** read the five values, compute `N` and the maximum safe delay,
-and compare against the measured cliff. No hardware needed. Task #97.
-
-**If confirmed, the fix has two parts:**
-
-* *Host-side, immediately:* clamp `MDMCTL_IODELAY` in `slmodemd` to the
-  largest safe value. Cheap, correct, and needs no change to the object's
-  behaviour. (`SLMODEMD_IODELAY` already exists as the knob.)
-* *Opt-in extension, later:* size the history buffer for the delay the
-  transport actually needs. **This is the feature that would let the echo
-  canceller cover a SIP jitter buffer**, which the object was never built for
-  — its whole reachable delay range is 11–31 ms, a hybrid's echo, and a VoIP
-  path's is longer. Off by default; the faithful path keeps the original
-  arithmetic.
-
----
-
----
+**Fix class: documentation only.** A CONFIRMED defect that CANNOT FIRE is
+documentation. The opt-in "size the history buffer for the transport's delay"
+idea is still worth having -- it is what would let the echo canceller cover a
+SIP jitter buffer, which the object was never built for (its whole reachable
+delay range is a hybrid's echo, ~11-31 ms) -- but that is a capability
+addition, not a bug fix: nothing on the faithful path triggers the overrun.
 
 ## D73 🐛 `DP_V32BIS` (132) never connects
 

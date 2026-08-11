@@ -38967,3 +38967,114 @@ it, is what catches this.
   does not name -- which is the check that three batches adding functions to
   shared files could plausibly have broken.  It is not in `make phase`'s
   dependency list, so it was run by hand.
+
+
+### 1188. D72's echo-canceller overrun CANNOT FIRE: the buffer is sized for echoDelay ~ 840, and IODELAY reaches at most ~ 300
+
+*Task #97.  Settles D72: SUSPECTED -> CONFIRMED . CANNOT FIRE . documentation
+only.  All addresses in `slmodemd/dsplibs.o`.*
+
+The five numbers D72 was missing, read out of the object.
+
+**The three parameters** come from `V92Parameters::setToDefault`
+(`src/pump/v90/V92Parameters.cpp`), at the offsets the header fixes:
+
+- `V92_ECHO_FILTER_LENGTH` (+0x6c) = **180**  ->  `L = 180 & ~3 = 180`
+- `V92_ECHO_INITIAL_DELAY` (+0x70) = **840** = `delay0`
+- `V92_ECHO_DELAY_OFFSET`  (+0x74) = **-14**
+
+Nothing overrides these on the slmodemd path: `V92Parameters::init` loads a
+file only when `modemParams->paramFile` is non-null, which slmodemd leaves
+null (finding 879).
+
+**`blk` and `extra`** are the 3rd and 4th arguments to the constructor
+`_ZN16V92EchoCancellerC2EP13V92Parametersjj` (0x111e0).  The constructor loads
+them at its prologue -- `edi = 0x48(%esp)` (blk), `ebp = 0x4c(%esp)` (extra) --
+and `blk` is the `div` divisor (0x11278), `extra` the final addend (0x1128a),
+matching D72's `N` formula.  The `mov $0xc` into both edi and ebp at
+0x1128c/0x11291 is staged for the LATER `FloatARMA` call, exactly as the task
+warned; it is not blk/extra.
+
+Both construction sites are in `VPcmFloModem`'s constructors -- the only two
+references to `_ZN16V92EchoCancellerC1E...`, at reloc offsets 0xfb0b (in C1)
+and 0xff8b (in C2); `K56FlexFloModem`'s constructors are 1-byte stubs.  At both:
+
+- **extra = 0xc7 = 199**, a constant (set at 0xfac9 / 0xff6a; survives the
+  intervening `V92Modem` construction.  The `0x2580`, `0x32`, `0x63`, `0x1`
+  written next to the call are staged for later calls, per the same warning).
+- **blk = VPcmFloModem's own `j` argument** (arg4; `edi` from 0xfa78 / 0xfef8).
+  Threaded up: `VPCMXF_Create` computes `blk = (int)trunc(arg4*8.0 + 0.5)`
+  (`.rodata.cst4`+0x54 = 8.0f, +0x58 = 0.5f; 0xfd1c-0xfd56), and `vpcm_create`
+  computes that arg4 as `(arg5*1000)/9600` (0x3ac7-0x3ae7), with the sample
+  rate forced == 9600 (0x3a1c) and `arg5 <= 48` (0x3a37, else create bails to
+  null).  `arg5` is VPCM's block count; taking it at 48 -- consistent with the
+  object's 48-sample block architecture (finding 1002's mute path is 11x48) --
+  gives arg4 = 5 and **blk = (int)(40.5) = 40** for the shipped config.
+  Nothing below depends on this value.
+
+**N for the shipped config.**
+`N = (L-1+delay0) + 2*blk + floor((L-1+delay0)/blk)*blk + extra
+   = 1019 + 80 + 25*40 + 199 = 2298` floats (9192 bytes).
+
+**But the verdict does not depend on blk.**  Since
+`floor(1019/blk)*blk = 1019 - (1019 mod blk)`,
+`N = 2237 + 2*blk - (1019 mod blk) >= 2238 + blk >= 2239` for every `blk >= 1`.
+So **N >= 2239 whatever arg5 is.**  (`arg5 <= 9` gives blk = 0 and the
+`div %edi` at 0x11278 faults before the second malloc -- a divide-by-zero, a
+different defect, not an overrun; not on the shipped path where arg5 = 48.)
+
+**The zero-count is bounded by echoDelay, and echoDelay is small.**
+`resetEchoHistory` (0x10f90, verified) sets
+`echoLength = (L>>1) + echoDelay + params[+0x74] = 90 + echoDelay - 14
+ = echoDelay + 76` and zeroes that many floats of +0x24, the loop bound
+compared **only to the index**, never to N (+0x1c) -- confirming D72's
+"nothing bounds echoLength against N".  Both writers keep `echoLength` in
+lockstep with `echoDelay` (`setEchoDelay` does `+= new-old`;
+`resetEchoHistory` recomputes), so `echoLength = echoDelay + 76` is invariant
+and bounding echoDelay bounds the write for **every** consumer, not just the
+two loops read.  echoDelay is **largest at construction** (= delay0 = 840 ->
+echoLength = **916**) and only FALLS thereafter: `setEchoDelay` is driven from
+`MDMPRM_IODELAY` via `echo_delay = IODELAY + 60` (D72's trace-confirmed
+mapping), so at the validated cap IODELAY = 240, echoDelay = 300 ->
+echoLength = 376.  Max echoLength over all reachable states = 916 < 2239 <= N.
+**No overrun.**
+
+**The overrun bound is ~9x above the cap.**  Overrun needs `echoLength > N`,
+i.e. `echoDelay > N - 76`.  At the weakest N (2239): echoDelay > 2163, i.e.
+IODELAY > 2103; at the shipped N (2298): IODELAY > 2162.  The reachable
+IODELAY range is 0..240 (validated host-side by slmodemd, D74; this is not an
+object cap).  The verdict survives even with no host cap, since reaching the
+bound needs IODELAY ~ 2100+.
+
+**Conversion caveat, disclosed.**  `setEchoDelay`'s argument is spelled
+`dmaDelay + 0x68` (104) in `v34handshak`, while the trace-confirmed mapping is
+`IODELAY + 60`.  Under the larger reading IODELAY 240 -> echoDelay 344 ->
+echoLength 420, still ~5x below the 2222 bound.  The discrepancy changes
+nothing.
+
+**What this refutes in D72.**  Two sub-claims fall:
+- "V.32 fails at echo_delay 240/300 -- a heap overrun would produce exactly
+  that."  Refuted: the overrun is ~9x above the cap.  D74's observation (240
+  breaks V.32) stands but is now UNEXPLAINED by this mechanism.
+- The task's hoped-for pincer does not exist: the usable band is bounded below
+  by D77's connect race (IODELAY 86) and is **not** bounded above by this
+  overrun.
+
+**Corroboration route, not needed.**  The constructor prints
+`V92EchoCanceller: echoFilterLen = %d` (=180) and `echoDelay updated to: %d`
+(=840) via `edprintf`, but both sit behind `cmpl $0x1,0x0 / ja` on the global
+**`dsplibs_debug_level`** (R_386_32 against address 0), which skips them unless
+the host sets it <= 1.  Identified, not exercised; the printed values would
+match the defaults read above.
+
+**Verdict.**  CONFIRMED (the unclamped loop is present, verified by
+disassembly) . CANNOT FIRE (bound at IODELAY ~ 2100+ vs reachable <= 240) .
+fix class documentation only.
+
+*Correction applied at merge, which this batch could not have known:* the
+paragraph below referring to "the V.32 cliff" describes a cliff that HAS SINCE
+BEEN RETRACTED.  Task #92 re-ran that sweep at five calls per point and got
+48: 3/5, 120: 1/5, 180: 5/5, 240: 4/5 -- no monotonic pattern, and 180, the
+value the original single-sample sweep called a failure, scored best of the
+four.  There is no cliff, so there is no unexplained cause left over.  What
+survives is this finding's own result, which does not depend on it.
