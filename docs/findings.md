@@ -39998,3 +39998,65 @@ at 205.62 ms and still uncancellable during the second pass; the jitter buffers
 are unchanged; the clocks are as unlocked as ever. The rate doubles anyway. What
 was costing us two rate steps was the equaliser's first-pass convergence, and
 nothing else on the list.
+
+======================================================================
+
+### 1212. LOCALISED: THE NEAR ECHO CANCELLER ADAPTS TO A SPURIOUS SOLUTION ON THE FIRST PASS, AND COLLAPSES TO ZERO ON THE SECOND
+
+*The answer to "can this be localised and improved". It can, to one filter.*
+
+`v34FreezeEcho` (blob `0x5e200`, `src/pump/v34/v34rx.c:958`) sets
+`V34_EC_FROZEN` and then dumps both cancellers, so the coefficient reports in
+the log are each pass's FINAL ADAPTED STATE. Comparing pass 1 against pass 2 in
+the eight forced-retrain calls of 1211:
+
+| call | Near EC, pass 1 | Near EC, pass 2 |
+|---|---|---|
+| rt-1 | 80.1 | **2.6** |
+| rt-2 | 153.8 | **2.5** |
+| rt-3 | 157.2 | **10.9** |
+| rt-4 | 146.1 | **2.9** |
+| rt-5 | 146.1 | **2.7** |
+| rt-6 | 198.2 | **2.8** |
+| rt-8 | 196.3 | **3.4** |
+
+RMS over 144 taps; peaks run 340-530 on pass 1 and 9-29 on pass 2. **The near
+canceller's energy collapses by roughly fifty times, in eight calls out of
+eight**, and pass 2 is the pass whose equaliser error is fourteen times better.
+The FAR canceller does not collapse -- it sits at 230-270 RMS on both passes --
+so this is specific to the near one.
+
+**Why that is the wrong answer for this path.** The near echo canceller exists
+to cancel the reflection at the modem's OWN hybrid. Over SIP there is no local
+hybrid: our end is a socket. The only real reflection is the VG204's FXS hybrid
+at 205.62 ms, which is the FAR echo and is outside both cancellers' 172.5 ms
+delay line anyway (1205). So there is nothing for the near canceller to find,
+and on the second pass it correctly finds nothing. On the first pass it converges
+to a large solution instead, and a filter with 144 non-zero taps subtracting a
+shaped copy of our own transmit from the received signal is not a null
+operation: it injects exactly the kind of correlated interference that raises an
+equaliser's error floor.
+
+**This is association, not yet proof of cause.** Pass 2 differs from pass 1 in
+more than the canceller. The claim that the spurious taps CAUSE the poor
+equalisation is one experiment away, and the experiment is clean:
+
+> Override `V34EchoAdapt` with a no-op so the near canceller cannot adapt away
+> from zero, and measure whether a FIRST pass then behaves like a second one --
+> `equerr` ~200 rather than ~2900, and 24000-28800 rather than 12000.
+
+**The mechanism to do it already exists.** `V34EchoAdapt` is `T` (global text)
+at `0x71f50`, so `objcopy --weaken-symbol` plus a strong replacement -- task
+#99's machinery, `tools/blobfix.py` -- applies to it directly. #99 established
+that on data symbols; a function is the more usual case for `--weaken-symbol`,
+not the harder one.
+
+**It would be an opt-in extension, not a fix.** On a real PSTN line the near
+canceller is doing its job and disabling it would be actively wrong. This is a
+transport-specific configuration -- "there is no near hybrid on a packet path"
+-- and belongs off by default with `make phase` green when off, exactly like
+1205's delay-line enlargement. Nothing here is a defect in the object.
+
+**And there is already a working alternative needing no code at all:** the
+forced `ATO1` retrain of 1211, which reaches the same second-pass state from
+the far end's AT interface and doubles the receive rate today.
