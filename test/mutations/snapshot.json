@@ -4619,7 +4619,7 @@
    }
   },
   "v92convenc": {
-   "key": "805e69bb619c05bac35184843f9b15142733ad96ee42e364a9589a518c94f9b6",
+   "key": "82f694cf03a42c512580b5c512f5f576985dc2d9296bc5529a14cda946e1014b",
    "summary": "40 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "cosetMapping4D's first row has one entry wrong": "caught",
@@ -4758,7 +4758,7 @@
    }
   },
   "v92mapper": {
-   "key": "19c8f4a0edcb02758abe36ef29ecf35c6bd9e81ad4dad07d50c4cffa4a3c32da",
+   "key": "89ecfb351b7ec21b003192cd1d70437f5de319475be1f386f737f51831a23f52",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reset installs mode 0's power for mode 1 as well": "caught",
@@ -4869,7 +4869,7 @@
    }
   },
   "v92modulusencoder": {
-   "key": "18aef2d1506aa15c5d5a8911ae6aaa2239e26e17f6469780143e359e57b9f4c7",
+   "key": "e029569c15a3c084d4326a64231e0d2442090371694dca10e68bbaa5f7523cd9",
    "summary": "55 mutations: 55 caught (55 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a zero high limb goes down the long path": "caught",
@@ -5052,7 +5052,7 @@
    }
   },
   "v92precoder": {
-   "key": "1bafb8c33d1e920421b83df753a0eecfb82b36994d9d6740176f65f2b6bfb313",
+   "key": "89ca03972d4d53800814c646195bd5b0b21d7134c4808216cbabb63e8440c3d1",
    "summary": "34 mutations: 34 caught (34 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "process selects the constellation with the frame index rather than the block's": "caught",
@@ -5092,7 +5092,7 @@
    }
   },
   "v92prefilter": {
-   "key": "28ef29c13324d60bdc76abe01b52d2480abdfb12d233894d053b749872e643c3",
+   "key": "7254f108165951fb250626570f58865dada55ff35cf54da71837d59807cbcef5",
    "summary": "17 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "process chains the IIR into the FIR rather than the other way round": "caught",
