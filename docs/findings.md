@@ -41841,3 +41841,140 @@ outcomes identical, not the compiler, and that will stay true whatever flags
 change.
 
 ======================================================================
+### 1293. `V90Phase4Modulator`'s 12,204 BYTES WERE A DISPLACEMENT BOUND AND ARE NOW A `sizeof`
+
+The header for this class has carried a careful hedge since the V.90 session:
+0x2fac is "the maximum displacement plus the width of what sits at it", and
+"it is not a claim that +0x5c..+0x2f63 contains no larger member -- nothing
+reaches past +0x2fab, which is all a displacement scan can say".
+
+`V90Modulator`'s constructor settles it:
+
+    movl $0x2fac,(%esp) ; call sysdep_malloc ; ... ; call V90Phase4Modulator::C1
+
+which is the ORIGINAL COMPILER'S `sizeof`, not a scan of anything (finding
+1246).  The two numbers agree exactly, which is the first independent
+confirmation the bound has had -- and it is worth recording that the hedge was
+right to be there and that the answer came from a different translation unit
+rather than from more of the same evidence.
+
+The same call site does it for `V90Phase3Modulator` (0x398) in passing.
+
+======================================================================
+### 1294. AN OWNERSHIP BIT, AND A DESTRUCTOR THAT READS IT BEFORE THE POINTER
+
+`V90Phase4Modulator`'s third argument is a `V90BitsToSymbol *` that may be
+null, and the constructor branches on it:
+
+    non-null:  +0x44 = the argument ;  +0x2fa4 = 1
+    null:      +0x44 = new V90BitsToSymbol(0x140, params) ;  +0x2fa4 = 0
+
+and the destructor is
+
+    if (+0x2fa4 == 0 && +0x44 != 0) { destroy ; free }
+
+-- the FLAG FIRST, then the pointer.  So +0x2fa4 is an ownership bit whose
+sense is inverted from the obvious reading: **1 means "not ours"**.
+
+**`V90Modulator` only ever takes the borrowing arm.**  It builds one
+`V90BitsToSymbol` of its own, hands it to the phase 4 modulator, and destroys
+it itself, so the allocating arm of this constructor is dead on the only path
+in the object that reaches it.  Both arms are still reconstructed and both are
+driven, because the code is there and a reconstruction that only implements
+the reachable arm is not the same program.
+
+**What it costs a test.**  Four combinations of (flag, pointer) are needed, not
+two, and three of them must free exactly what the embedded scrambler frees and
+no more.  `t_v90modchain` drives all four and, in the borrowing arm, compares
+the shared converter byte for byte before and after -- because "the free count
+did not go up" and "the converter was not released" are different claims and
+only the second is the one being made.
+
+======================================================================
+### 1295. `V90Modulator` IS 0x70 BYTES, AND THE PARTIAL MAP THAT PREDATED THE CONSTRUCTOR WAS RIGHT IN EVERY OFFSET IT NAMED
+
+`V90Modem`'s constructor allocates 0x70 immediately before calling this class's
+`C1`, which is finding 1246's oracle again.  The highest field the constructor
+writes is the pointer at +0x6c, so nothing is unaccounted for.
+
+`V90SessionFlag.h` had already declared a four-field version of the class --
+`pad_00[0x28]`, `sessionFlag`, `pad_2c[0x0c]`, then `phase3Modulator` and
+`phase4Modulator` -- derived from `mov 0x38(%esi),%edx` being a LOAD where the
+two demodulators embed their phase blocks.  Filling it in from the constructor
+confirms all three named offsets and both pads.  The class has moved to its own
+header, as `V90Phase3Demodulator` and `V90Demodulator` did before it, and
+`src/pump/v90/V90SessionFlag.cpp` still asserts the same three offsets by the
+same three names.
+
+**THE TWELVE ARGUMENTS DO NOT LAND IN ORDER, AND NOTHING IN THE SIGNATURE SAYS
+SO.**  Arguments 2..5 go to +0x00..+0x0c in order; 6 and 7 to +0x10 and +0x14;
+then 8, 9, 10, 11 go to +0x18, +0x1c, +0x20, +0x24 -- with the `V90CP`
+(argument 9) landing ABOVE the `V90MP` (argument 10).  Argument 1 goes to
++0x64, not +0x00, and argument 12 to +0x28, which is the session flag
+`V90Modem` later writes through `setSessionFlag`.
+
+The three nested constructors read their arguments back OUT OF THE MEMBERS --
+`mov 0x24(%ebx),%edx` after each allocator call -- which the compiler would not
+emit if the source had named the parameters, since it cannot prove the
+allocation does not alias `this`.  The three MALLOC SIZES go the other way:
+`%ebp` is used directly and never reloaded from +0x64, so those name the
+parameter.  Neither reading is distinguishable by behaviour and both are
+written the blob's way.
+
+======================================================================
+### 1296. TWO ARGUMENTS OF THE SAME TYPE CROSS BETWEEN `V90Modulator` AND `V90Phase4Modulator`, AND ONLY TWO DISTINCT INSTANCES CAN SEE IT
+
+`V90Modulator` takes two `V90MappingParams *`.  Argument 6 is stored at +0x10
+and argument 7 at +0x14, in order.  It then passes them on:
+
+    V90Phase4Modulator(params, flag, bts, mp, this->+0x14, this->+0x10, cp, 0xc)
+
+-- argument 7 as the phase 4 modulator's FIFTH argument, landing at its +0x4c,
+and argument 6 as its SIXTH, landing at +0x50.  **They swap.**  Written in the
+order they arrived, which is what anyone would write, the reconstruction is
+wrong and every field still holds a `V90MappingParams *` of the right type at
+the right offset.
+
+**This is the shape of defect a differential test only catches if it is built
+to.**  Point both sides at ONE shared instance and pass it twice and the swap
+is invisible -- both fields hold the same address either way.  Seed two
+separate instances per trial and hand out two different addresses and it fails
+on the first trial.  `t_v90modchain` does the second, for all ten pointed-to
+arguments, and asserts the crossing explicitly as well as through the
+whole-object comparison of the nested phase 4 modulator.
+
+`test/mutations/v90modulator.json` carries "the two mapping parameters do NOT
+cross on the way down" as a mutation, so the property is not merely observed
+once but is checked to be checkable.
+
+======================================================================
+### 1297. AN EMBEDDED SCRAMBLER CAN BE COMPARED ACROSS TWO HEAPS WITHOUT BEING MASKED, BY SUBTRACTING ITS OWN BASE
+
+Three of the four classes in the V.90 modulator chain embed a `Scrambler`,
+which is seven pointers and a length.  All seven point into ONE allocation
+made by the scrambler's own constructor, so on two different heaps all seven
+differ and a naive whole-object comparison fails on 28 bytes.
+
+Masking all seven is the obvious fix and throws away most of what is there.
+The distances between them are the whole content of the object: `pInitOut` is
+`pLimit + c`, `pInitTap1` is `pInitOut + a`, `pInitTap2` is `pInitOut + b`,
+and `pOut`, `pTap1`, `pTap2` start equal to those three.  A constructor that
+put a tap at the wrong distance produces seven pointers that are all still
+pointers and all still inside the buffer.
+
+So `t_v90modchain` canonicalises instead: replace each of the six derived
+pointers by its DISTANCE FROM `pLimit`, and mask only `pLimit` itself.  One
+word is lost and 24 bytes stay under comparison, and `tailLength` was never a
+pointer and is compared as it stands.  Three of `test/mutations/v90p4mctor.json`'s
+mutations move a tap and all three are caught.
+
+**It also caught a real gap.**  The first version of the test compared the
+`V90Phase3Modulator` that `V90Modulator` builds by masking every word that
+held a LIVE ALLOCATION, which is exact for allocation bases and silently wrong
+for pointers derived from one: that class's scrambler at +0x20 failed on four
+of its seven, and the failure named offsets in DECIMAL that read as plausible
+hex offsets elsewhere in the object.  The rule is that a value-based mask
+finds bases and nothing else; a subobject with internal structure needs its
+own canonicaliser.
+
+======================================================================

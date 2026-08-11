@@ -272,6 +272,10 @@
   "src/pump/v90/V90Mapper.cpp",
   "build/test/t_v90modchain"
  ],
+ "v90modulator": [
+  "src/pump/v90/V90Modulator.cpp",
+  "build/test/t_v90modchain"
+ ],
  "v90mp": [
   "src/pump/v90/V90MP.cpp",
   "build/test/t_v90cp"
@@ -291,6 +295,10 @@
  "v90p3mod": [
   "src/pump/v90/V90Phase3Modulator.cpp",
   "build/test/t_v90p3mod"
+ ],
+ "v90p4mctor": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90modchain"
  ],
  "v90params": [
   "src/pump/v90/V90Parameters.cpp",

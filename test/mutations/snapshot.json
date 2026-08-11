@@ -3930,6 +3930,38 @@
     "dtor: the guard is inverted": "caught"
    }
   },
+  "v90modulator": {
+   "key": "f87cebd75d10cfc604cc0c9664623e19ba61a70e6f8c961e07a2867b571a3ec0",
+   "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "ctor: mappingParams2 takes the sixth argument as well": "caught",
+    "ctor: nofSymbols is not stored": "caught",
+    "ctor: the Jd and the V.92 Jd land in each other's fields": "caught",
+    "ctor: the V90CP and the V90MP land in each other's fields": "caught",
+    "ctor: the converter takes 2n + 0x1388 symbols, not 3n": "caught",
+    "ctor: the converter's constant is 0x1388 decimal, not hex": "caught",
+    "ctor: the frame buffer is four bytes per symbol, not eight": "caught",
+    "ctor: the phase 3 modulator is built with no session flag": "caught",
+    "ctor: the phase 3 modulator's allocation is short": "caught",
+    "ctor: the phase 4 modulator is given no converter": "caught",
+    "ctor: the phase 4 modulator is given no session flag": "caught",
+    "ctor: the phase 4 modulator's allocation is short": "caught",
+    "ctor: the phase 4 modulator's eighth argument is 0xd, not 0xc": "caught",
+    "ctor: the scrambler's far tap is 0x12, not 0x17": "caught",
+    "ctor: the scrambler's near tap is 5, not 0x12": "caught",
+    "ctor: the session flag is not stored": "caught",
+    "ctor: the symbol buffer is one byte per symbol": "caught",
+    "ctor: the two mapping parameters do NOT cross on the way down": "caught",
+    "ctor: the two mapping-parameter arguments are swapped on arrival": "caught",
+    "dtor: the converter is not released": "caught",
+    "dtor: the frame buffer is not released": "caught",
+    "dtor: the phase 3 modulator is destroyed and not freed": "caught",
+    "dtor: the phase 3 modulator's guard is dropped": "caught",
+    "dtor: the phase 4 modulator is freed without being destroyed": "caught",
+    "dtor: the symbol buffer's free is not guarded": "caught",
+    "dtor: the two buffers are nulled, which the blob does not do": "caught"
+   }
+  },
   "v90mp": {
    "key": "ffa5cfa6190fca95a8d30e355465f95f9fc2784c9d9f30468ed6bb870320d7e6",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -4088,6 +4120,32 @@
     "ctor: the session flag is stored after reset, not before": "caught",
     "ctor: the timeout base is 1, not 0": "caught",
     "dtor: the scrambler's history is not freed": "caught"
+   }
+  },
+  "v90p4mctor": {
+   "key": "b73886fcc9fb997507bf90f39d5bf7f78c51ba31a1ea2bb673501bbd291baa2c",
+   "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "ctor: +0x2f9c is left as it was found": "caught",
+    "ctor: +0x2fa0 is left as it was found": "caught",
+    "ctor: mappingParams2 takes the fifth argument as well": "caught",
+    "ctor: the V90MP and the V90CP land in each other's fields": "caught",
+    "ctor: the allocated converter is marked as borrowed": "caught",
+    "ctor: the converter is allocated whatever is supplied": "caught",
+    "ctor: the owned converter is built with no parameters": "caught",
+    "ctor: the owned converter takes 0x40 symbols, not 0x140": "caught",
+    "ctor: the ownership flag is the wrong way round": "caught",
+    "ctor: the scrambler's buffer offset is 0x53, not 0x63": "caught",
+    "ctor: the scrambler's far tap is 0x12, not 0x17": "caught",
+    "ctor: the scrambler's near tap is 5, not 0x12": "caught",
+    "ctor: the session flag and the eighth argument are swapped": "caught",
+    "ctor: the two mapping-parameter arguments are swapped": "caught",
+    "dtor: the converter is destroyed and not freed": "caught",
+    "dtor: the converter is freed without being destroyed": "caught",
+    "dtor: the null guard is dropped": "caught",
+    "dtor: the ownership flag is not consulted": "caught",
+    "dtor: the ownership flag is read the wrong way round": "caught",
+    "dtor: the pointer is nulled afterwards, which the blob does not do": "caught"
    }
   },
   "v90params": {
