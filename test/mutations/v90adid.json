@@ -1,13 +1,13 @@
 [
  {
   "label": "clear one code short in reset's inner loop",
-  "find": "\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;",
-  "replace": "\t\tfor (ci = 0; ci < V90ADID_CODES - 1; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;"
+  "find": "\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tuint_1c00[phase][ci] = 0;",
+  "replace": "\t\tfor (ci = 0; ci < V90ADID_CODES - 1; ci++) {\n\t\t\tuint_1c00[phase][ci] = 0;"
  },
  {
   "label": "clear one phase short in reset",
-  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;",
-  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tint_1c00[phase][ci] = 0;"
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tuint_1c00[phase][ci] = 0;",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\tshort ci;\n\n\t\tfor (ci = 0; ci < V90ADID_CODES; ci++) {\n\t\t\tuint_1c00[phase][ci] = 0;"
  },
  {
   "label": "clear the flag array rather than setting it",
@@ -26,13 +26,13 @@
  },
  {
   "label": "leave the int at +0x9d30 alone",
-  "find": "\t\tint_9d30[phase] = 0;",
-  "replace": "\t\t/* deliberately removed */"
+  "find": "\t\tshort_2800[phase] = 0;\n\t\tuint_9d30[phase] = 0;",
+  "replace": "\t\tshort_2800[phase] = 0;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave the float at +0x9d18 alone",
-  "find": "\t\tfloat_9d18[phase] = 0.0f;",
-  "replace": "\t\t/* deliberately removed */"
+  "find": "\t\tbyte_280c[phase] = 0;\n\t\tfloat_9d18[phase] = 0.0f;",
+  "replace": "\t\tbyte_280c[phase] = 0;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave the int at +0x9100 alone",
@@ -66,8 +66,8 @@
  },
  {
   "label": "seed the pad gain with zero rather than one",
-  "find": "\tfloat_a94c = 1.0f;",
-  "replace": "\tfloat_a94c = 0.0f;"
+  "find": "\tpadGain = 1.0f;",
+  "replace": "\tpadGain = 0.0f;"
  },
  {
   "label": "drop the third argument",
@@ -101,23 +101,23 @@
  },
  {
   "label": "swap the two +0xa97a constants",
-  "find": "\t\tshort_a97a = 88;",
-  "replace": "\t\tshort_a97a = 80;"
+  "find": "\t\tshort_a97a = 88;\n\t\tfloat_a97c = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;",
+  "replace": "\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 88;"
  },
  {
   "label": "swap the two +0xa97c constants",
-  "find": "\t\tfloat_a97c = 0.35f;",
-  "replace": "\t\tfloat_a97c = 0.25f;"
+  "find": "\t\tfloat_a97c = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;",
+  "replace": "\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.35f;"
  },
  {
   "label": "swap the two +0xa980 constants",
-  "find": "\t\tfloat_a980 = 1.75f;",
-  "replace": "\t\tfloat_a980 = 1.5f;"
+  "find": "\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.5f;",
+  "replace": "\t\tfloat_a980 = 1.5f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.75f;"
  },
  {
   "label": "set the +0xa978 flag on the wrong branch",
-  "find": "\t\tshort_a978 = 1;",
-  "replace": "\t\tshort_a978 = 0;"
+  "find": "CONNECTION_TYPE) == 2) {\n\t\tshort_a978 = 1;",
+  "replace": "CONNECTION_TYPE) == 2) {\n\t\tshort_a978 = 0;"
  },
  {
   "label": "clear one entry short in resetLinearMapping",
@@ -153,5 +153,288 @@
   "label": "seed the tables with the level negated",
   "find": "\tshort level = (short)ucodeLevel;",
   "replace": "\tshort level = (short)-ucodeLevel;"
+ },
+ {
+  "label": "NOTE: the sixteen processing methods below.  Every anchor here has to survive the fact that this file holds pairs of near-identical methods -- reset and setConnectionType share four stores verbatim, and the Alt half of each pair shares its shape with the plain half.  Finding 1264: an anchor that matches twice reads UNUSABLE and UNUSABLE does not fail a run."
+ },
+ {
+  "label": "leave the count in clearCamulativeVal",
+  "find": "\tuint_1c00[phase][code] = 0;\n\tfloat_1000[phase][code] = 0.0f;",
+  "replace": "\tfloat_1000[phase][code] = 0.0f;"
+ },
+ {
+  "label": "clear the variance rather than the sum of squares",
+  "find": "\tfloat_1000[phase][code] = 0.0f;\n\tfloat_9118[phase][code] = 0.0f;",
+  "replace": "\tfloat_1000[phase][code] = 0.0f;\n\tfloat_9d48[phase][code] = 0.0f;"
+ },
+ {
+  "label": "clear the phase's first code rather than the one asked for",
+  "find": "\tfloat_1000[phase][code] = 0.0f;\n\tfloat_9118",
+  "replace": "\tfloat_1000[phase][0] = 0.0f;\n\tfloat_9118"
+ },
+ {
+  "label": "leave the alternate sum in clearCamulativeAltVal",
+  "find": "\tuint_9d30[phase] = 0;\n\tfloat_9d18[phase] = 0.0f;\n}",
+  "replace": "\tuint_9d30[phase] = 0;\n}"
+ },
+ {
+  "label": "use clearCamulativeAltVal's second argument, which the object ignores",
+  "find": "clearCamulativeAltVal(short phase, short)\n{\n\tuint_9d30[phase] = 0;",
+  "replace": "clearCamulativeAltVal(short phase, short code)\n{\n\tuint_9d30[code & 5] = 0;"
+ },
+ {
+  "label": "copy the max-ucode array off by one",
+  "find": "\t\tmaxUcode[phase] = from[phase];",
+  "replace": "\t\tmaxUcode[phase] = from[phase ? phase - 1 : 0];"
+ },
+ {
+  "label": "copy one max-ucode byte short",
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++)\n\t\tmaxUcode[phase]",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++)\n\t\tmaxUcode[phase]"
+ },
+ {
+  "label": "reverse the previous session's mapping",
+  "find": "\t\tprevLinMapp[ci] = from[ci];",
+  "replace": "\t\tprevLinMapp[ci] = from[V90ADID_CODES - 1 - ci];"
+ },
+ {
+  "label": "copy one entry short of the previous session's mapping",
+  "find": "\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\tprevLinMapp[ci]",
+  "replace": "\tfor (ci = 0; ci < V90ADID_CODES - 1; ci++)\n\t\tprevLinMapp[ci]"
+ },
+ {
+  "label": "accumulate the signed value rather than the magnitude (Alt)",
+  "find": "\tfloat_9d18[phase] += adid_abs(v);",
+  "replace": "\tfloat_9d18[phase] += v;"
+ },
+ {
+  "label": "leave the alternate count alone",
+  "find": "\tuint_9d30[phase]++;",
+  "replace": "\t/* deliberately removed */"
+ },
+ {
+  "label": "invert setConnectionType's test",
+  "find": "\tif (type == 2) {\n\t\tshort_a978 = 1;",
+  "replace": "\tif (type != 2) {\n\t\tshort_a978 = 1;"
+ },
+ {
+  "label": "give setConnectionType's else arm the fourth store reset has (D255)",
+  "find": "\t} else {\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}",
+  "replace": "\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}"
+ },
+ {
+  "label": "swap setConnectionType's two thresholds",
+  "find": "\tif (type == 2) {\n\t\tshort_a978 = 1;\n\t\tshort_a97a = 88;",
+  "replace": "\tif (type == 2) {\n\t\tshort_a978 = 1;\n\t\tshort_a97a = 80;"
+ },
+ {
+  "label": "answer on a nonzero total rather than a positive one",
+  "find": "\treturn sum > 0 ? 1 : 0;",
+  "replace": "\treturn sum != 0 ? 1 : 0;"
+ },
+ {
+  "label": "count flagged phases rather than summing the flags",
+  "find": "\t\tsum = (short)(sum + short_2800[phase]);",
+  "replace": "\t\tsum = (short)(sum + (short_2800[phase] != 0));"
+ },
+ {
+  "label": "widen the flag total to an int",
+  "find": "\tshort sum = 0;\n\tshort phase;\n\n\tfor (phase = 0; phase < V90ADID_PHASES; phase++)\n\t\tsum = (short)(sum + short_2800[phase]);",
+  "replace": "\tint sum = 0;\n\tshort phase;\n\n\tfor (phase = 0; phase < V90ADID_PHASES; phase++)\n\t\tsum = sum + short_2800[phase];"
+ },
+ {
+  "label": "invert updateLinMappMeanAndVar's empty-cell test",
+  "find": "\tif (uint_1c00[phase][code] == 0)\n\t\treturn;",
+  "replace": "\tif (uint_1c00[phase][code] != 0)\n\t\treturn;"
+ },
+ {
+  "label": "reverse the variance's subtraction (finding 245)",
+  "find": "\tfloat_9d48[phase][code] = float_9118[phase][code] * inv - mean * mean;",
+  "replace": "\tfloat_9d48[phase][code] = mean * mean - float_9118[phase][code] * inv;"
+ },
+ {
+  "label": "drop the rounding term on the mean",
+  "find": "\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "replace": "\tlinMapp[phase][code] = (short)mean;"
+ },
+ {
+  "label": "form the mean from the sum of squares",
+  "find": "\tmean = float_1000[phase][code] * inv;",
+  "replace": "\tmean = float_9118[phase][code] * inv;"
+ },
+ {
+  "label": "divide directly where the object multiplies by a reciprocal",
+  "find": "\tinv = 1.0f / uint_1c00[phase][code];\n\tmean = float_1000[phase][code] * inv;",
+  "replace": "\tinv = 1.0f / uint_1c00[phase][code];\n\tmean = float_1000[phase][code] / uint_1c00[phase][code];"
+ },
+ {
+  "label": "invert updateLinMappMeanAndVarAlt's empty-phase test",
+  "find": "\tif (uint_9d30[phase] == 0)\n\t\treturn;",
+  "replace": "\tif (uint_9d30[phase] != 0)\n\t\treturn;"
+ },
+ {
+  "label": "multiply by a reciprocal where the object divides",
+  "find": "\t    (short)(float_9d18[phase] / uint_9d30[phase] + 0.5f);",
+  "replace": "\t    (short)(float_9d18[phase] * (1.0f / uint_9d30[phase]) + 0.5f);"
+ },
+ {
+  "label": "write the alternate mean into the plain table",
+  "find": "\tlinMappAlt[phase][code] =\n\t    (short)(float_9d18[phase]",
+  "replace": "\tlinMapp[phase][code] =\n\t    (short)(float_9d18[phase]"
+ },
+ {
+  "label": "take the sample's magnitude after the subtraction, not before",
+  "find": "\td = adid_abs(adid_abs((int)v) - linMapp[phase][code]);",
+  "replace": "\td = adid_abs((int)v - linMapp[phase][code]);"
+ },
+ {
+  "label": "make isAltRbs's threshold inclusive",
+  "find": "\treturn d > short_a9a6 ? 1 : 0;",
+  "replace": "\treturn d >= short_a9a6 ? 1 : 0;"
+ },
+ {
+  "label": "invert isAltRbs's flag test",
+  "find": "\tif (short_2800[phase] == 0)\n\t\treturn 0;",
+  "replace": "\tif (short_2800[phase] != 0)\n\t\treturn 0;"
+ },
+ {
+  "label": "measure isAltRbs against the alternate table",
+  "find": "- linMapp[phase][code]);\n\n\treturn d > short_a9a6",
+  "replace": "- linMappAlt[phase][code]);\n\n\treturn d > short_a9a6"
+ },
+ {
+  "label": "do not advance the store index",
+  "find": "\tint_9100[phase] = n + 1;",
+  "replace": "\tint_9100[phase] = n;"
+ },
+ {
+  "label": "store the signed sample rather than its magnitude",
+  "find": "\tsampleStore[phase][n] = (short)adid_abs(q);",
+  "replace": "\tsampleStore[phase][n] = q;"
+ },
+ {
+  "label": "drop the rounding term on the stored sample",
+  "find": "\tshort q = (short)(v + 0.5f);",
+  "replace": "\tshort q = (short)v;"
+ },
+ {
+  "label": "leave the code histogram alone",
+  "find": "\tshort_8b00[phase][code]++;",
+  "replace": "\t/* deliberately removed */"
+ },
+ {
+  "label": "pre-increment the store index rather than post-incrementing it",
+  "find": "\tint n = int_9100[phase];",
+  "replace": "\tint n = int_9100[phase] + 1;"
+ },
+ {
+  "label": "multiply by the pad gain rather than dividing by it",
+  "find": "\tfloat inv = 1.0f / padGain;",
+  "replace": "\tfloat inv = padGain;"
+ },
+ {
+  "label": "drop the rounding term in applyPadGainToLinMapp",
+  "find": "\t\t\t    (short)(linMapp[phase][ci] * inv + 0.5f);",
+  "replace": "\t\t\t    (short)(linMapp[phase][ci] * inv);"
+ },
+ {
+  "label": "leave the alternate table out of the pad gain",
+  "find": "\t\t\tlinMappAlt[phase][ci] =\n\t\t\t    (short)(linMappAlt[phase][ci] * inv + 0.5f);",
+  "replace": "\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "start the nearest-entry search at code 0",
+  "find": "\tfor (ci = 5; ci <= 0x74",
+  "replace": "\tfor (ci = 0; ci <= 0x74"
+ },
+ {
+  "label": "run the nearest-entry search to the end of the row",
+  "find": "<= 0x74; ci++) {",
+  "replace": "<= 0x7f; ci++) {"
+ },
+ {
+  "label": "keep the furthest entry rather than the nearest",
+  "find": "\t\tif (d < best) {",
+  "replace": "\t\tif (d > best) {"
+ },
+ {
+  "label": "search against the signed value rather than its magnitude",
+  "find": "\tint mag = adid_abs(v);",
+  "replace": "\tint mag = v;"
+ },
+ {
+  "label": "return the code rather than the entry",
+  "find": "\treturn linMapp[phase][at];",
+  "replace": "\treturn (short)at;"
+ },
+ {
+  "label": "read the column in phase order rather than from the offset",
+  "find": "\t\tsaved[i] = linMapp[phase][ucode];",
+  "replace": "\t\tsaved[i] = linMapp[i][ucode];"
+ },
+ {
+  "label": "write the rotated column back reversed",
+  "find": "\t\tlinMapp[i][ucode] = saved[i];",
+  "replace": "\t\tlinMapp[i][ucode] = saved[V90ADID_PHASES - 1 - i];"
+ },
+ {
+  "label": "wrap the phase with a modulus rather than the object's test (D258)",
+  "find": "\t\tphase = (short)(phase + 1) == V90ADID_PHASES\n\t\t\t    ? 0 : (short)(phase + 1);",
+  "replace": "\t\tphase = (short)((phase + 1) % V90ADID_PHASES);"
+ },
+ {
+  "label": "drop updateUrefAlt's flag test",
+  "find": "\t\tif (short_2800[phase] != 0 && uint_9d30[phase] != 0)",
+  "replace": "\t\tif (uint_9d30[phase] != 0)"
+ },
+ {
+  "label": "clear the alternate accumulators only when the phase updated",
+  "find": "\t\t\t\t    * (1.0f / uint_9d30[phase]) + 0.5f);\n\n\t\tfloat_9d18[phase] = 0.0f;",
+  "replace": "\t\t\t\t    * (1.0f / uint_9d30[phase]) + 0.5f);\n\t\telse\n\t\t\tcontinue;\n\n\t\tfloat_9d18[phase] = 0.0f;"
+ },
+ {
+  "label": "write updateUrefAlt's mean into the plain table",
+  "find": "\t\t\tlinMappAlt[phase][ucode] =",
+  "replace": "\t\t\tlinMapp[phase][ucode] ="
+ },
+ {
+  "label": "divide in updateUrefAlt where the object multiplies by a reciprocal",
+  "find": "\t\t\t\t    * (1.0f / uint_9d30[phase]) + 0.5f);",
+  "replace": "\t\t\t\t    / uint_9d30[phase] + 0.5f);"
+ },
+ {
+  "label": "invert calculateLinearMeanAndVar's companding test",
+  "find": "\tif (pcmType != PCM_TYPE_MU_LAW)",
+  "replace": "\tif (pcmType == PCM_TYPE_MU_LAW)"
+ },
+ {
+  "label": "use the mu-law mask on the A-law code",
+  "find": "\t\tat = (unsigned char)(linear2alaw(adid_abs(level)) ^ 0xd5);",
+  "replace": "\t\tat = (unsigned char)(linear2alaw(adid_abs(level)) ^ 0xff);"
+ },
+ {
+  "label": "leave the mu-law code uninverted",
+  "find": "\t\tat = (short)(0xff\n\t\t\t     - (unsigned char)linear2ulaw(adid_abs(level)));",
+  "replace": "\t\tat = (short)(unsigned char)linear2ulaw(adid_abs(level));"
+ },
+ {
+  "label": "transpose the sum and the sum of squares",
+  "find": "\tfloat_1000[phase][at] += mag;\n\tfloat_9118[phase][at] += mag * mag;",
+  "replace": "\tfloat_1000[phase][at] += mag * mag;\n\tfloat_9118[phase][at] += mag;"
+ },
+ {
+  "label": "leave the per-code count alone",
+  "find": "\tuint_1c00[phase][at]++;",
+  "replace": "\t/* deliberately removed */"
+ },
+ {
+  "label": "accumulate the signed value rather than the magnitude",
+  "find": "\tmag = adid_abs(v);",
+  "replace": "\tmag = v;"
+ },
+ {
+  "label": "compand the signed level rather than its magnitude",
+  "find": "linear2alaw(adid_abs(level))",
+  "replace": "linear2alaw(level)"
  }
 ]

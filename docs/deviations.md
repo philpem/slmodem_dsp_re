@@ -4968,3 +4968,33 @@ Each allocation is followed immediately by a constructor call or, for the 0xb4 p
 **AND NOTHING IN THE BLOB CALLS EITHER OF THEM.** `objdump -dr` over the whole 1.2 MB finds ZERO `R_386_PC32` relocations against `_ZN12VPcmFloModemD1Ev` or `D2Ev`; the blob's own `VPCMXF_Delete` at 0xf6c0 inlines the six calls exactly as ours does. So the blob's two symbols are DEAD CODE -- GCC 3.4.2 emitted an out-of-line copy of an inline function nothing referenced, and modern GCC does not -- and `tools/closure.py dp_vpcm_init --missing` reporting 0 symbols and 0 bytes is CORRECT rather than a measurement artefact, because the pair is in no call graph to be missing from. Neither `debugaudit.py --missing` nor `coverage.py` lists them either. It is filed as a deviation because the SYMBOL TABLES differ and a count taken symbol-by-symbol will see it; the behavioural consequence is nil, and 194 of the blob's own bytes are unreachable in the blob. `test/unit/t_vpcmctor.cpp` drives the blob's `D1` directly by symbol, so the code at 0xd0a0 is differentially tested against ours even though ours lives inside `VPCMXF_Delete`.
 
 Neither way of forcing the symbols out is right: an out-of-line definition cannot be inlined into `VPCMXF_Delete` and would turn its six calls into one, and an in-header one comes out weak and in a comdat group where the blob's are global.
+
+## D255 ⚠ `setConnectionType`'s else arm writes three fields where the if arm writes four
+
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::setConnectionType` (blob 0x40290, 97 bytes), +0x0f onwards. **Reachability: unmeasured** -- no caller of this method is written yet. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1362.** `reset` and `setConnectionType` install the same two sets of four values on the same test, and they do not agree about the fourth. `reset` writes +0xa978 on both arms -- 1 when the connection type is 2 and 0 otherwise. `setConnectionType` writes it only on the first arm: its else path is three stores, `0xa97c`, `0xa97a`, `0xa980`, and there is no fourth store anywhere in the ninety-seven bytes. So calling it with a type other than 2 leaves +0xa978 at whatever the last type-2 call put there, and the object's state after `setConnectionType(0)` depends on its history where after `reset(_, _, 0)` it does not. Reproduced exactly; the mutation that ADDS the missing store is caught by `t_v90adid`, which is what makes the asymmetry a measurement rather than a reading.
+
+## D256 🐛 `addReceivedSampleToStorage` has no bound on the store index
+
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::addReceivedSampleToStorage` (blob 0x41ff0, 149 bytes). **Reachability: unmeasured** -- no caller is written yet, so how many samples a phase is offered per session is not established here. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1363.** The method stores at `sampleStore[phase][int_9100[phase]]` and then increments `int_9100[phase]`, and there is no comparison against 0x83e -- or against anything else -- in the whole method. The row is 2,110 shorts; the 2,111th sample offered to a phase writes into the next phase's row, and a phase offered enough of them walks off the end of the 43,440-byte object entirely. Reproduced without a check, because adding one would be a different function. `t_v90adid` keeps the index inside the row deliberately and says so at the call site: a test that let it run away would be scribbling over its own memory rather than measuring the object's.
+
+## D257 ⚠ `clearCamulativeAltVal` takes two arguments and reads one
+
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::clearCamulativeAltVal` (blob 0x40270, 31 bytes). **Reachability: unmeasured.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1364.** The mangling is `Ess` -- two shorts -- and the second is never loaded: the thirty-one bytes touch `0x8(%esp)` and `0x4(%esp)` and nothing else. Its pair `clearCamulativeVal` uses both, as a (phase, code) index, so the shape of the alternate half is what explains it: the alternate accumulators are per phase and have no code dimension for a second argument to select. The parameter is declared and left unnamed in the reconstruction, and the mutation that starts using it is caught -- which is only possible because the test sweeps the second argument independently of the first.
+
+## D258 ⚠ `adjustUinfoToPhaseOffset` wraps by testing for 6, not by a modulus
+
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset` (blob 0x44940, 162 bytes), +0x54. **Reachability: unmeasured.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1365.** The walk is `cmp $0x6,%dx; setne %bl; neg %ebx; and %edx,%ebx` -- next = (phase + 1 == 6) ? 0 : phase + 1 -- so it folds back only from exactly 5. An offset of 6 reads `linMapp[6..11][ucode]`, which is inside the object but is `linMappAlt` and `prevLinMapp` rather than the mapping table, and a negative offset reads in front of the object. The write-back loop is unconditionally 0..5, so the damage is one-way. Reproduced as the object has it; `t_v90adid` sweeps the offset over 0..6 and asserts both the wrapping and the non-wrapping case were reached, and stops there because an offset of -1 would have the test reading memory it does not own.
+
+## D259 🐛 The code histogram's index is unmasked, and `short_8b00[5][128]` IS `int_9100[0]`
+
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::addReceivedSampleToStorage` (blob 0x41ff0), +0x74. **Reachability: unmeasured** -- it needs a phase of 5 and a received code of 128 or more, and what codes reach this method is the caller's business. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1366.** The histogram increment is `movzwl 0x8b00(%edi,%ecx,2)` with `ecx = phase * 128 + code`, and `code` is the full `unsigned char` argument. The array is 6 x 128 shorts ending at +0x9100, which is `int_9100[0]` -- the sample-store index of phase 0. So a phase of 5 with a code of 128 increments the low half of phase 0's store index instead of a histogram bin, and codes 128..139 reach all six of those indices. The effect compounds: the corrupted index is what the NEXT sample stores at, and D256 says nothing bounds it. Both sides do it identically and `t_v90adid` compares them doing it, in `run_accumulate`, where the whole byte is swept one call at a time. The forty-block sequence masks the code to seven bits instead, and says why at the line that does it -- an index of 65,777 leaves the object, and a test that follows it there measures nothing.
