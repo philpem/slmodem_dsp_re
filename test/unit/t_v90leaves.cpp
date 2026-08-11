@@ -605,14 +605,17 @@ run_sv(void)
  * destroys the slot implicitly; the raw bytes are seeded and the members are
  * called on them.
  */
-union ec_slot {
-	V92EchoCanceller o;
-	unsigned char raw[EC_SLOT];
-	ec_slot() { }
-	~ec_slot() { }
+struct ec_slot {
+	union {
+		unsigned char raw[EC_SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	V92EchoCanceller &o;
+
+	ec_slot() : o(*(V92EchoCanceller *)raw) { }
 };
 
-static union ec_slot ec_a, ec_b;
+static struct ec_slot ec_a, ec_b;
 
 static int
 run_ec(void)
@@ -1608,14 +1611,17 @@ run_ec_ctor(void)
  * which deletes a union's implicit ones.  Nothing here constructs the object;
  * the raw bytes are seeded and the member called on them, exactly as before.
  */
-union rt_slot {
-	ResamplerTimingOffset o;
-	unsigned char raw[RT_SLOT];
-	rt_slot() { }
-	~rt_slot() { }
+struct rt_slot {
+	union {
+		unsigned char raw[RT_SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	ResamplerTimingOffset &o;
+
+	rt_slot() : o(*(ResamplerTimingOffset *)raw) { }
 };
 
-static union rt_slot rt_a, rt_b;
+static struct rt_slot rt_a, rt_b;
 
 static void *const vptr_seed = (void *)0xdeadbeefu;
 

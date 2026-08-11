@@ -76,6 +76,7 @@
 #define DSPLIB_V90MODEM_H
 
 #include "dsplib/V90CP.h"
+#include "dsplib/V90Equalizer.h"	/* V90ComputationalMode lives there */
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90MP.h"
 
@@ -113,9 +114,24 @@ struct tagV90DILdescriptor;
  * the base agrees, so the duplicate is a check that the two headers still
  * agree and not a hazard.  V90Equalizer.h does reach the same translation
  * unit as this file, through V90SessionFlag.h, so the check runs.
+ *
+ * THAT LAST PARAGRAPH NO LONGER DESCRIBES THE CODE.  C++98 has no opaque
+ * enum, so the author cannot have written `enum X : int;`, and a DEFINITION
+ * may not be repeated where a declaration could be.  So the duplicate is
+ * gone: `V90ComputationalMode` lives in V90Equalizer.h, which this file now
+ * includes, and `V90ModemSide` lives here.  One type, one home.
+ * docs/method/compilers.md, V2.
+ *
+ * `V90ModemSide` MUST be unsigned: the destructor's range test is
+ * `cmpl $0x1,0x49bc(%esi); jbe` at 0x192c2, and a signed `side > 1` compiles
+ * to `jle`/`jg` instead -- confirmed under both compilers, which is what
+ * makes the assertion below one about the object rather than about a
+ * compiler version.  `_BASE_PIN` is ours; the object names no enumerator.
  */
-enum V90ModemSide : unsigned int;
-enum V90ComputationalMode : int;
+enum V90ModemSide { V90ModemSide_BASE_PIN = 0xffffffffu };
+
+typedef char v90modem_side_is_unsigned[
+    ((enum V90ModemSide)-1 > (enum V90ModemSide)0) ? 1 : -1];
 
 /*
  * The two values the code distinguishes, spelled as macros for V92Modem.h's

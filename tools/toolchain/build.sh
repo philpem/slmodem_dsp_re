@@ -9,8 +9,25 @@
 #
 set -e
 cd "$(dirname "$0")/../.."
-OUT=${TC_OUT:-/tmp/tc_out}
-FLAGS="-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude"
+#
+# UNDER build/, NOT UNDER /tmp, so `make clean` reaches it.  This defaulted to
+# /tmp/tc_out and wrote its manifest to /tmp/tc_manifest.txt -- 152 objects and
+# an index that nothing in the tree ever removed, and that two concurrent
+# worktrees would have written over each other.
+#
+OUT=${TC_OUT:-$PWD/build/tc_out}
+# THE SAME FLAGS `make period` USES, and they must stay the same.  The two
+# diverged once and it cost real coverage: this script passed neither
+# -D__SIZEOF_POINTER__=4 nor the compat header, so it compiled a smaller set
+# than the period differential AND silently elided the 81 offset assertions
+# guarded on that predefine -- V3 in docs/method/compilers.md, the variance
+# that fails OPEN.
+#
+# -std=gnu99 is NOT here and is not an oversight: it is the C dialect the
+# TEST HARNESS needs, and this script compiles only src/.
+# ONE LINE, deliberately: $FLAGS is interpolated into the `docker ... sh -c`
+# string below, where a newline ends the command rather than separating words.
+FLAGS="-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
 
 # MAKEFLAGS is cleared and the directory banner suppressed: run from inside a
 # make recipe, both leak `make[1]: Entering directory ...` and a jobserver
@@ -25,8 +42,15 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 # called `dp` produce the same string.  Record the mapping rather than guess it.
 for f in $SRC $CXXSRC; do
     echo "$(echo "$f" | tr / _).o $f"
-done > "$OUT/../tc_manifest.txt"
-docker run --rm --platform linux/386 \
+done > "$OUT/tc_manifest.txt"
+# See tools/toolchain/period.sh for why --rm alone is not the whole of
+# cleaning up: --name gives the trap a handle, and --user keeps root-owned
+# objects out of the tree.
+NAME="dsplibs-tcbuild-$$"
+cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
+trap cleanup EXIT INT TERM
+
+docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" --platform linux/386 \
   -v "$PWD:/src" -v "$OUT:/out" -w /src dsplibs-tc sh -c "
     fail=0
     for f in $SRC; do

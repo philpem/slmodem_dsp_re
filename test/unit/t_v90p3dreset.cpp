@@ -88,21 +88,25 @@ extern unsigned int ref_dsplibs_debug_level;
  * that constructs and destroys no variant member restores them and changes
  * nothing else.
  */
-union p3d_slot {
-	V90Phase3Demodulator o;
-	unsigned char raw[SLOT];
+struct p3d_slot {
+	union {
+		unsigned char raw[SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	V90Phase3Demodulator &o;
 
-	p3d_slot() {}
-	~p3d_slot() {}
+	p3d_slot() : o(*(V90Phase3Demodulator *)raw) {}
 };
 
 /* The same device, for the two hand-built descramblers driven directly. */
-union dsc_slot {
-	Descrambler<int, int> o;
-	unsigned char raw[sizeof(Descrambler<int, int>)];
+struct dsc_slot {
+	union {
+		unsigned char raw[sizeof(Descrambler<int, int>)];
+		double align_;		/* alignment only; trivial */
+	};
+	Descrambler<int, int> &o;
 
-	dsc_slot() {}
-	~dsc_slot() {}
+	dsc_slot() : o(*(Descrambler<int, int> *)raw) {}
 };
 
 /*
@@ -127,8 +131,8 @@ union dsc_slot {
 #define SDD_HIST	12u
 #define PARAMS_BYTES	0x504
 
-static union p3d_slot slot[2];
-static union dsc_slot dsc_a, dsc_b;
+static struct p3d_slot slot[2];
+static struct dsc_slot dsc_a, dsc_b;
 /*
  * Held as bytes, and cast through a macro so every call site below is
  * unchanged.  A class the blob gives a real constructor and a real destructor
@@ -264,41 +268,50 @@ seed(int trial)
 static void
 snap(unsigned char *dst, int side)
 {
-	union p3d_slot *s = (union p3d_slot *)dst;
+	/*
+	 * `dst` is raw storage holding a COPY of the object, so it is cast to
+	 * the object and not to a slot.  It used to be cast to the slot, which
+	 * worked only because the slot was a union -- `s->o` was then a
+	 * reinterpretation of the same bytes.  The slot is a struct with a
+	 * reference member now (V7 in docs/method/compilers.md), so `s->o`
+	 * would dereference a reference this buffer never had: it compiled,
+	 * and it segfaulted on the first store.
+	 */
+	V90Phase3Demodulator *s = (V90Phase3Demodulator *)dst;
 	V90Phase3Demodulator *l = &slot[side].o;
 
 	memcpy(dst, slot[side].raw, SLOT);
 
-	s->o.autoDigitalImpDetector = (V90AutoDigitalImpDetector *)(long)
+	s->autoDigitalImpDetector = (V90AutoDigitalImpDetector *)(long)
 	    (l->autoDigitalImpDetector == &adid[side]);
-	s->o.sdDetector = (V90SdDetector *)(long)(l->sdDetector == &sdd[side]);
-	s->o.dil = (tagV90DILdescriptor *)(long)
+	s->sdDetector = (V90SdDetector *)(long)(l->sdDetector == &sdd[side]);
+	s->dil = (tagV90DILdescriptor *)(long)
 	    (l->dil == NULL ? 2 : (l->dil == &dilo[side]));
-	s->o.jd = (V90Jd *)(long)(l->jd == NULL ? 2 : (l->jd == &jdo[side]));
-	s->o.jdV92 = (V92Jd *)(long)
+	s->jd = (V90Jd *)(long)(l->jd == NULL ? 2 : (l->jd == &jdo[side]));
+	s->jdV92 = (V92Jd *)(long)
 	    (l->jdV92 == NULL ? 2 : (l->jdV92 == &jd92o[side]));
 
-	s->o.descrambler.pLimit = (int *)(l->descrambler.pLimit - dbuf[side]);
-	s->o.descrambler.pInitOut = (int *)(l->descrambler.pInitOut - dbuf[side]);
-	s->o.descrambler.pInitTap1 = (int *)(l->descrambler.pInitTap1 - dbuf[side]);
-	s->o.descrambler.pInitTap2 = (int *)(l->descrambler.pInitTap2 - dbuf[side]);
-	s->o.descrambler.pOut = (int *)(l->descrambler.pOut - dbuf[side]);
-	s->o.descrambler.pTap1 = (int *)(l->descrambler.pTap1 - dbuf[side]);
-	s->o.descrambler.pTap2 = (int *)(l->descrambler.pTap2 - dbuf[side]);
+	s->descrambler.pLimit = (int *)(l->descrambler.pLimit - dbuf[side]);
+	s->descrambler.pInitOut = (int *)(l->descrambler.pInitOut - dbuf[side]);
+	s->descrambler.pInitTap1 = (int *)(l->descrambler.pInitTap1 - dbuf[side]);
+	s->descrambler.pInitTap2 = (int *)(l->descrambler.pInitTap2 - dbuf[side]);
+	s->descrambler.pOut = (int *)(l->descrambler.pOut - dbuf[side]);
+	s->descrambler.pTap1 = (int *)(l->descrambler.pTap1 - dbuf[side]);
+	s->descrambler.pTap2 = (int *)(l->descrambler.pTap2 - dbuf[side]);
 
-	s->o.phase3Modulator.scrambler.pLimit = (unsigned char *)
+	s->phase3Modulator.scrambler.pLimit = (unsigned char *)
 	    (l->phase3Modulator.scrambler.pLimit - sbuf[side]);
-	s->o.phase3Modulator.scrambler.pInitOut = (unsigned char *)
+	s->phase3Modulator.scrambler.pInitOut = (unsigned char *)
 	    (l->phase3Modulator.scrambler.pInitOut - sbuf[side]);
-	s->o.phase3Modulator.scrambler.pInitTap1 = (unsigned char *)
+	s->phase3Modulator.scrambler.pInitTap1 = (unsigned char *)
 	    (l->phase3Modulator.scrambler.pInitTap1 - sbuf[side]);
-	s->o.phase3Modulator.scrambler.pInitTap2 = (unsigned char *)
+	s->phase3Modulator.scrambler.pInitTap2 = (unsigned char *)
 	    (l->phase3Modulator.scrambler.pInitTap2 - sbuf[side]);
-	s->o.phase3Modulator.scrambler.pOut = (unsigned char *)
+	s->phase3Modulator.scrambler.pOut = (unsigned char *)
 	    (l->phase3Modulator.scrambler.pOut - sbuf[side]);
-	s->o.phase3Modulator.scrambler.pTap1 = (unsigned char *)
+	s->phase3Modulator.scrambler.pTap1 = (unsigned char *)
 	    (l->phase3Modulator.scrambler.pTap1 - sbuf[side]);
-	s->o.phase3Modulator.scrambler.pTap2 = (unsigned char *)
+	s->phase3Modulator.scrambler.pTap2 = (unsigned char *)
 	    (l->phase3Modulator.scrambler.pTap2 - sbuf[side]);
 
 	/* The detector's shared parameter block is the same address on both. */
