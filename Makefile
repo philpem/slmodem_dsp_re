@@ -145,7 +145,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage debugcov phase
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage debugcov phase blobfix blobfix-check
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -291,6 +291,28 @@ $(RUNTESTS): run-%: $(BUILD)/test/%
 	@./$<
 
 test: firewall strings offsets refs $(RUNTESTS)
+
+# --- repairing the blob we still depend on --------------------------------
+#
+# NOT part of `phase`, and that is the whole design.  The reconstruction's
+# contract is to behave IDENTICALLY to the blob, so a build that has fixed
+# the blob's defects is not the build the differential tier may test against.
+# `make phase` runs with both fixes off, and this target is the only thing
+# that ever turns one on.
+#
+# `make blobfix` writes build/blobfix/{blobfix.c,dsplibs_fixed.o}, which are
+# what `slmodemd` would link in place of `dsplibs.o`; nothing here writes to
+# ../slmodemd.  `make blobfix-check` builds six probes and reads the link
+# back.  docs/blobfix.md is the argument; tools/blobfix.py is the mechanism.
+#
+BLOBFIX ?= --fix D1 --fix D4
+
+blobfix:
+	@$(PYTHON) tools/blobfix.py --blob $(BLOB) generate \
+	    --outdir $(BUILD)/blobfix $(BLOBFIX)
+
+blobfix-check:
+	@sh test/blobfix/run.sh
 
 # The licence firewall, mechanically.  SpanDSP is LGPL and this tree is BSD,
 # and the rule is that no SpanDSP header, source, table or algorithm is

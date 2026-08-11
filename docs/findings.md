@@ -38967,3 +38967,227 @@ it, is what catches this.
   does not name -- which is the check that three batches adding functions to
   shared files could plausibly have broken.  It is not in `make phase`'s
   dependency list, so it was run by hand.
+
+### 1200. D1 IS FIXED IN THE BLOB, AND THE TEST HAD TO OBSERVE THE ACCESS BECAUSE THE ANSWER IS THE SAME EITHER WAY
+
+> **Deviation D1** (`docs/deviations.md`): `FPM_sqrt` reads one element past
+> the end of its table.
+
+Task #99. `objcopy --weaken-symbol=FPM_sqrt_table` on the blob, plus a strong
+193-entry definition linked alongside, moves the read at index 192 inside a
+table that has an index 192. `slmodemd/dsplibs.o` is not modified: md5 is
+still `1fd60268a1dcf5392f5520791f7a7059` and the derived object's `.text` is
+`d25e747af8636e4ee2250d33737bbc17`, which `docs/forkblob.md` records as the
+`.text` of all three copies the fork ships.
+
+**D1 was chosen first because fixing it cannot change anything.** The blob's
+overrun lands on `FPM_div_table[0]`, which already holds 32768 -- the value
+index 192 should hold, since that index is sqrt(256/256). So correct behaviour
+is known and identical, a working mechanism must produce a bit-identical
+result on all 32768 Q15 inputs, and any difference at all is proof the
+mechanism is broken rather than an argument about tolerance.
+
+**Which makes the obvious test worthless, and that is the finding.** Comparing
+results proves nothing when the results agree. That is exactly the shape of
+the fork's dead patch at `rebuildJMSequence+0x136` -- applied, inert, and
+invisible to anything that only looks at outcomes. Three checks were built
+that observe the ACCESS instead, and all three fire:
+
+- **static** -- `blobfix.py checklink` disassembles the *linked binary*,
+  extracts the displacement the linker actually wrote, and compares it against
+  the replacement table's address and size. Fails on the unpatched control,
+  passes on the fixed object, with no execution at all.
+- **sentinel** -- poison the new last entry with 0x1234 and sweep the domain.
+  The inputs whose result moves are exactly the inputs that read it: **85**,
+  the register's number, measured without the test knowing the index
+  expression. The invariant asserted is stronger than "returns the sentinel",
+  because `FPM_sqrt` shifts the entry down by half the exponent -- 21 of the
+  85 do not return 0x1234, and a first version of the check called them
+  failures. What holds is that ONE shift explains both sides at once,
+  `32768 >> k` becoming `0x1234 >> k`.
+- **watchpoint** -- a hardware read watchpoint on `FPM_div_table[0]`. The
+  control takes **85** hits inside `FPM_sqrt`; the fixed object takes
+  **zero**. This is the only check that observes the original defect directly
+  rather than by substitution, and it runs on the shipped configuration rather
+  than the sentinel one, which is what closes the inference the sentinel
+  leaves open.
+
+**What the fix does not do.** D2 -- inputs above `0x7fff`, where the index
+reaches 448 -- is not narrowed and is slightly altered: unpatched it reads the
+blob's `.rodata` past `FPM_div_table`, patched it reads past our 386-byte
+array. Both undefined; only which undefined bytes changed. D1's repair is
+bounded by D1's domain.
+
+### 1201. THE SAME MECHANISM FIXES D4, AND THE DIFFERENCE IS THAT D4's FIX CHANGES BEHAVIOUR
+
+> **Deviation D4** (`docs/deviations.md`): `FPM_div` reads past its table and
+> returns a zero reciprocal.
+
+Structurally identical to D1 -- a fixed-point table indexed one past its
+declared length -- and benign or harmful purely by what the linker put next.
+`FPM_div_table`'s neighbour is `FPM_xor_table`, whose first word is 0 where
+the generator gives 16384, so 255 of the 65535 denominators get a reciprocal
+of zero. `--fix D4` weakens `FPM_div_table` and links a 129-entry replacement.
+
+Measured on the sweep: **exactly 255 denominators change, every one of them
+from 0 to 16384, with the returned normalisation shift untouched**, and the
+watchpoint on `FPM_xor_table[0]` goes 255 -> 0.
+
+**The 129th value is generated, not read.** `floor(2^30 / ((i + 0x80) *
+0x100))` reproduces all 128 of the blob's own entries with zero mismatches --
+re-checked against the object on every run, and the tool refuses to emit
+anything if it fails -- and continued to i=128 gives 16384, which is 1.0 in
+the Q14 the table is written in, the reciprocal of 1.0, which is what index
+128 means. D1's 193rd entry comes the same way from
+`floor(32768 * sqrt((i + 64) / 256))` after reproducing all 192.
+
+**A table's reach is a claim about EVERY consumer, and `FPM_div_32` is the
+one nothing else in this tree drives.** `FPM_div_table` has two relocations:
+`FPM_div` at `0xa6c62` and `FPM_div_32` at `0xa6cff`. The bound "index reaches
+128, so 129 entries close it" was derived from the first, and the sqrt pair is
+the standing warning that the 32-bit sibling need not agree -- `FPM_sqrt_dp`
+truncates `x >> 15` to sixteen bits and can drive its index NEGATIVE, saved
+only by an unsigned clamp. Read out: `FPM_div_32` normalises until bit 31 is
+set, takes `x >> 16`, and forms the same expression, so its mantissa is in
+`[0x8000, 0xffff]` and its index runs 0..128 exactly. **It has no clamp** and
+no truncation hazard, because its mantissa comes from an already-normalised
+32-bit value.
+
+`FPM_div_32` has **no reconstruction**, so no differential test in this tree
+reaches it at all; `test/blobfix` is the only thing that drives it. It is
+swept over the MANTISSA rather than the input -- `x = m << 16` for m in
+`[0x8000, 0xffff]` enters the loop already normalised and covers every
+mantissa the function can form -- which makes the result exhaustive over the
+index domain rather than a sample: exactly **128** of 32768, all in
+`0xff80..0xffff`, all moving 0 -> 16384 with the shift untouched, and the
+watchpoint on `FPM_xor_table[0]` going 128 -> 0. For D1 the second consumer
+needs no sweep: `FPM_sqrt_dp` clamps at 191, so the 193rd entry is provably a
+no-op for it, and "all 32768 Q15 results bit-identical" is a `FPM_sqrt` claim.
+
+**D4 is where the rules diverge from D1's.** `src/dsp/fpm_div.c` reproduces
+the zero deliberately and still must, so this fix may not go into `src/`; the
+patched object legitimately diverges from the blob, which is what the opt-in
+rule exists for; and `make phase` passes with both fixes off, which was run
+before and after. The register's "reproduce, do not fix" decision is unchanged
+in substance -- it governs what the differential tier tests, and what changed
+is only that the *shipping* object no longer has to carry the defect.
+
+### 1202. `--weaken-symbol` REDIRECTS A RELOCATION INSIDE THE OBJECT, AND IT WORKS ON DATA, NOT ONLY ON FUNCTIONS
+
+`docs/forkblob.md` proves weaken-and-override on a FUNCTION of this object
+(`VPCMXF_Create`) and finding 879 proves it on two more. Neither says anything
+about a data symbol, and the whole of task #99 rests on one: the reference
+that has to move is `R_386_32 FPM_sqrt_table` at `.text 0xa9de6`, *inside the
+blob*, pointing at a definition *inside the blob*.
+
+It moves. Linked with the override the probe reports `FPM_sqrt_table` at
+0x80fd240 against `FPM_div_table` at 0x8109a80 -- different objects entirely --
+and `FPM_sqrt(0x7fff)` returns the sentinel. Order on the link line does not
+matter; both were tried, and strong beats weak either way because these are
+object files rather than archive members.
+
+**The check that had to be done first, and nearly was not.** Grepping
+`readelf -rW` for the symbol NAME finds two relocations and cannot see an
+`R_386_32` against the SECTION symbol with `0xc520` as an inline addend --
+CLAUDE.md's own trap, and the one that would make weakening redirect some
+accesses and not others: a fix that looks applied and is partly inert.
+`relocscan.py --range .rodata:0xc520-0xc7a0` answers it: **nothing points
+there section-relatively**, so the two named relocations are the whole
+population and the redirect is complete.
+
+**What the objcopy is verified to have done.** All sections byte-identical,
+all 18,317 relocations identical once resolved to `(offset, type, symbol
+name)`, and every symbol identical in name, value, size, type and section with
+exactly the named ones going `GLOBAL` -> `WEAK`. Relocations are compared
+semantically because `objcopy` renumbers the symbol table -- `FPM_sqrt_table`
+went from index 1081 to 1024 -- so raw `.rel` bytes differ by design and a
+byte comparison would bury a real difference in thousands of false ones.
+
+One accepted exception, named rather than tolerated: a modern `objcopy` drops
+the **57** `SECTION` symbols the 2003 binutils emitted for `.rel*`, `.symtab`,
+`.strtab` and `.shstrtab`. The fork's shipped blob lost 56 the same way, for
+the same reason, and none of them names any code or data.
+
+**Both arms of `checklink` are shown to fail.** `blobfix.py tamper` damages a
+copy of the fixed binary and the acceptance test requires the damage to be
+caught: a table reference moved by one entry reports `linker wrote 0x080fd282,
+table is at 0x080fd280`, and one flipped bit in the instruction reports `0f b7
+b4 01 ...` against the blob's `0f b7 b4 00 ...` -- which is
+`movzwl (%eax,%eax,1)` becoming `movzwl (%ecx,%eax,1)`, halving the index and
+picking up an unrelated register. That is exactly a patch that looks applied
+and does something else, and the arm that catches it had never fired in a
+passing run until it was made to. `extcheck.py` printing "(none)" through four
+dead versions is why that is not optional here.
+
+### 1203. PATCH A DECISION, OVERRIDE A MISSING VALUE -- AND D70 IS WHERE COPYING THIS BATCH WOULD DO REAL DAMAGE
+
+> **Deviation D70** (`docs/deviations.md`): `selectFilter`'s ISDN and PBX arms
+> do not clamp the row.
+
+The taxonomy the two fixes produce is sharper than "code patch for code, data
+override for data":
+
+**A code patch can only redistribute values that already exist.** D1 needs
+32768 at index 192 and the last entry the object has, 191, is 32703. The
+repair a patch can express is a clamp -- and that is not hypothetical, it is
+the clamp `FPM_sqrt_dp` already has, pinned at 191, so a patcher would very
+plausibly copy it. It changes the answer on all 85 inputs. **Mechanism B
+cannot express D1's fix at all**, which is why the data override is not the
+cheaper option here but the only faithful one.
+
+D70 is the mirror image, and was assessed as the next candidate and left
+undone. Measured: `preFilterCoefType1` 0x0c00/2480, `Type2` 0x15c0/2480,
+`Type3` 0x1f80/4960, all `GLOBAL` -- so the override mechanism *would reach
+them*, and that is the trap rather than the opportunity. Type1 ends at 0x15b0
+and Type2 begins at 0x15c0, so an overrun crosses sixteen bytes of padding
+into another bank's coefficients: plausible floats, no fault, wrong filter.
+The D4 pattern, not the D1 one. The clamps that ARE present sit in the same
+function (`cmp $0x1d`, `$0x31`, `$0x13` at `selectFilter+0x6c`, `+0x11c`,
+`+0x125`), the same "the sibling knows the bound" structure as `FPM_sqrt_dp`
+against `FPM_sqrt`.
+
+**Why an override there would be actively wrong.** The defect is a missing
+DECISION. There are no correct coefficients for row 100, so a longer bank
+could only be filled with invention -- and replacing one bank symbol also
+destroys the adjacency finding 235 records the reconstruction's own tests
+having had to enumerate `(bank, row)` candidates around. It would change
+behaviour on exactly the input in question, to a value we made up: the worst
+outcome available, and reachable by anyone who copies this batch's recipe
+without re-asking which kind of defect they have.
+
+| the defect is | the fix is | do it |
+|---|---|---|
+| a missing VALUE in a table | a longer table | **A**, override the data |
+| a missing DECISION on an input the caller controls | a check | **host-side** |
+| a missing DECISION the caller cannot reach | a clamp in the code | **B**, script-generated and `checklink`ed |
+| behaviour wrong wholesale | a replacement function | **A** on the function, reproducing ALL of it |
+
+D70's own entry already names the better answer -- validate the registry value
+in the host -- and that also covers the `getV90Capability` path `selectFilter`
+cannot reach, which no object-side patch of `selectFilter` would.
+
+### 1204. WHAT TASK #99 DID NOT DO, AND THE DEFECT CLASS NO SANITISER CAN FIND
+
+**Mechanism B was not used and is not established here.** Nothing in this
+batch patches an instruction. The next entry that needs one should expect to
+build `checklink`'s equivalent for code -- a disassembly of the patched output
+compared against the rule that generated the patch -- before trusting a byte
+of it, because the fork's `rebuildJMSequence+0x136` is what happens otherwise.
+
+**`../slmodemd` was not wired up.** `build/blobfix/{blobfix.c,dsplibs_fixed.o}`
+are what it would link in place of `dsplibs.o`, but this tree does not write
+into `../slmodemd` and did not start now. Two lines, and they belong to
+whoever owns that Makefile.
+
+**Neither fix was applied to `$(REF)`**, so no differential test sees one.
+`blobfix.py --prefix ref_` exists for a future batch that wants to, and is
+untested.
+
+**The defect class, and why it survived from 2003.** No memory checker can see
+either of these. The read leaves the bounds of a SYMBOL while staying inside a
+valid, mapped, correctly-permissioned `.rodata`; valgrind sees an ordinary
+load, and ASan cannot instrument a prebuilt object it has no source for. Both
+were found by reading an index expression against `nm -S`'s symbol size, and
+any future entry of this shape will have to be found the same way. That is
+also the honest answer to "could we have caught this earlier": not with tools,
+only with the arithmetic.
