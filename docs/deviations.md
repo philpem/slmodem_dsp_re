@@ -4653,3 +4653,9 @@ new hardware.
 * **What the far end's "33600/ARQ" actually names** — its transmit rate, the
   negotiated maximum, or the achieved receive rate. Three different claims, and
   which one it is decides whether there is an asymmetry to explain.
+
+## D200 ⚠ `sessionTermination`'s "EVALUATION DISABLED" notice ends in a bare `\n` where its four siblings in the same function end in `\r\n`
+
+*Batch of 2026-08-11, from `V90Demodulator::sessionTermination` (blob 0x1ab30). **Reachability: FIRES** whenever `TIMING_HISTORY_EVALUATION_ENABLED` is zero and the call reached the data state. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1274.** The other four strings this function passes to `edprintf` -- .rodata.str1.4 +0x4754, +0x47c0, +0x4814, +0x4868 and +0x48a0 -- all end `\r\n`; the one at +0x48ec ends `\n`. `edprintf` encodes its argument byte for byte, so the two produce a different character count on the diagnostic channel, and whether the manufacturer's decoder cares is not something this tree can measure. Reproduced rather than tidied.

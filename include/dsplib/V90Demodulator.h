@@ -103,6 +103,16 @@ public:
 	unsigned int getBitRate() const;
 
 	/*
+	 * NOT `void`, AND NOT DECIDABLE FURTHER.  The single exit clears
+	 * `%eax` -- `add $0x34,%esp; xor %eax,%eax; pop; pop; ret` -- which a
+	 * `void` member compiled through the same flags does not do, while
+	 * `int` and `unsigned int` both do and are byte-identical.  So the
+	 * constant zero is forced and its signedness is want of evidence; the
+	 * .cpp records the experiment.  No caller in this tree.
+	 */
+	int sessionTermination();
+
+	/*
 	 * Declared for the record and not defined; return types are not
 	 * mangled, so `void` here is want of evidence.  The constructor and
 	 * destructor are not declared at all, for the reason
@@ -118,7 +128,6 @@ public:
 	 */
 	void progress(int *, unsigned int &, float *, unsigned int);
 	void exitPhase3();
-	void sessionTermination();
 	void enterDataSteadyState();
 	void reset(unsigned int);
 	void enterDataPhase();
@@ -177,10 +186,17 @@ public:
 	unsigned int sessionFlag;
 
 	/*
-	 * +0x034  `enterPhase3` returns immediately when this is exactly 1 and
-	 * sets it to 1 otherwise, so it is the "phase 3 has been entered"
-	 * latch.  Testing for 1 rather than for non-zero is the blob's, and it
-	 * matters: any other non-zero value does NOT suppress the work.
+	 * +0x034  A STATE, NOT A LATCH, and the name is older than the
+	 * evidence.  `enterPhase3` returns immediately when this is exactly 1
+	 * and sets it to 1 otherwise, which reads as a latch until three other
+	 * members are in the tree: `enterChannelVerification` sets it to 5,
+	 * and `sessionTermination` tests it against 3 for an argument it
+	 * prints as `isDataState`.  So 1 is phase 3, 3 is the data state, 5 is
+	 * channel verification, and testing for 1 rather than for non-zero is
+	 * the blob's and matters -- any other value does NOT suppress
+	 * `enterPhase3`'s work.  The name is invented either way (finding 226)
+	 * and is left as it is rather than renamed under eight parallel
+	 * worktrees; finding 1273.
 	 */
 	unsigned int inPhase3;
 

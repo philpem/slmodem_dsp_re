@@ -59,6 +59,8 @@
 #include "dsplib/V90SdDetector.h"
 #include "dsplib/V90SpectralVerifier.h"
 #include "dsplib/V92EchoCanceller.h"
+/* `V92EchoCanceller::reset` resets the FloatARMA at its +0x04. */
+#include "dsplib/FloatARMA.h"
 #include "dsplib/ResamplerTimingOffset.h"
 #include "dsplib/V90Phase4Modulator.h"
 #include "dsplib/V90ConnectionEvaluator.h"
@@ -89,6 +91,19 @@ void ref_sd_reset(void *self) asm("ref__ZN13V90SdDetector5resetEv");
 void ref_sv_reset(void *self) asm("ref__ZN19V90SpectralVerifier5resetEv");
 void ref_ec_setEchoDelay(void *self, unsigned int d)
 	asm("ref__ZN16V92EchoCanceller12setEchoDelayEj");
+void ref_ec_reset(void *self) asm("ref__ZN16V92EchoCanceller5resetEv");
+/*
+ * BOTH SIDES BY MANGLED NAME, for the reason the connection evaluator's
+ * lifecycle block gives: a destructor written as `p->~V92EchoCanceller()` on
+ * our side and as a symbol on the blob's is not the same call, and the two
+ * must be exactly symmetric.  `D1` and `D2` are 195 bytes each in the blob and
+ * byte-identical to each other; both are driven, so the second copy is
+ * measured rather than assumed to be a copy of its twin (finding 1270).
+ */
+void our_ec_dtor(void *self) asm("_ZN16V92EchoCancellerD1Ev");
+void ref_ec_dtor(void *self) asm("ref__ZN16V92EchoCancellerD1Ev");
+void our_ec_dtor2(void *self) asm("_ZN16V92EchoCancellerD2Ev");
+void ref_ec_dtor2(void *self) asm("ref__ZN16V92EchoCancellerD2Ev");
 void ref_rt_setTimingOffset(void *self, float ppm)
 	asm("ref__ZN21ResamplerTimingOffset15setTimingOffsetEf");
 void ref_p4_setSessionFlag(void *self, unsigned int f)
@@ -528,9 +543,19 @@ run_sv(void)
 
 #define EC_SLOT 96
 
+/*
+ * The special members are written out because `V92EchoCanceller` now declares
+ * a destructor -- the object has `D1` and `D2` and this file drives both --
+ * and a union member with a non-trivial one deletes the union's.  Same shape
+ * as `rt_slot` below, and for the same reason: nothing here constructs or
+ * destroys the slot implicitly; the raw bytes are seeded and the members are
+ * called on them.
+ */
 union ec_slot {
 	V92EchoCanceller o;
 	unsigned char raw[EC_SLOT];
+	ec_slot() { }
+	~ec_slot() { }
 };
 
 static union ec_slot ec_a, ec_b;
@@ -626,6 +651,487 @@ run_ec(void)
 	diff_eq_int("the delay grew at least once", grew, 1, 0);
 	diff_eq_int("the delay shrank at least once", shrank, 1, 0);
 	diff_eq_int("the delay stood still at least once", still, 1, 0);
+	diff_eq_int("the diagnostic was reached", printed, 1, 0);
+
+	return diff_end();
+}
+
+/* ------------------------------------- V92EchoCanceller::reset (195 B) */
+
+/*
+ * WHAT THIS HAS TO PROVE THAT A WHOLE-OBJECT COMPARISON CANNOT.  `reset`
+ * clears two heap buffers whose lengths it computes, so the interesting
+ * failures are all off the end of the object: a loop one entry short, a loop
+ * one entry long, or the right count of the wrong buffer.  So both buffers
+ * get a compared GUARD past their declared length, seeded and never written,
+ * and the blob's guard is also compared against its own pre-call image -- the
+ * side-against-side check catches a divergence, the before-against-after
+ * check catches the two of us overrunning together.
+ *
+ * D72 IS WHAT THE HISTORY GUARD IS FOR and it is NOT driven.  `echoLength` is
+ * built from three inputs and used on `echoHistory` with no reference to what
+ * that buffer was allocated with; every trial here sizes the buffer to the
+ * largest `echoLength` it generates, so the guard proves the loop stops where
+ * the arithmetic says and nothing here ever asks the object to run past a
+ * real allocation.  D72 is CONFIRMED and CANNOT FIRE; this is not the place
+ * to re-open it.
+ *
+ * THE ARMA IS SYNTHETIC, and deliberately.  `FloatARMA::reset` is already
+ * differentially tested by t_floatarma.cpp; what is unproven here is that
+ * `V92EchoCanceller::reset` hands it the pointer at +0x04 and nothing else.
+ * A hand-built FloatARMA -- two histories pointing at this file's arrays, two
+ * lengths, two tap counts -- is enough for that, and it lets both sides share
+ * one seeded 0x34-byte image rather than two constructor runs.
+ *
+ * NOTHING IS ZEROED (finding 230).  Both buffers and both ARMA histories are
+ * seeded with varied bytes every trial, so "the loop wrote zeros" is visible;
+ * against a zero-filled buffer a loop one entry short passes.
+ */
+
+#define ECR_COEFF	64	/* declared floats in echoCoeff             */
+#define ECR_HIST	224	/* declared floats in echoHistory           */
+#define ECR_ARMA	24	/* declared floats in each ARMA history     */
+#define ECR_GUARD	8	/* compared floats past each of the four    */
+#define ECR_PARM	0xdc	/* sizeof(V92Parameters)                    */
+
+/*
+ * The one field of the parameter block `reset` reads:
+ * `V92Parameters::V92_ECHO_DELAY_OFFSET`, +0x074.  Reached by offset rather
+ * than by name so that this file need not carry the V.92 map beside the V.90
+ * one it already has (finding 1112's neighbourhood).
+ */
+#define ECR_DELAY_OFFSET	0x74
+
+static float ecr_coeff[2][ECR_COEFF + ECR_GUARD];
+static float ecr_hist[2][ECR_HIST + ECR_GUARD];
+static float ecr_x[2][ECR_ARMA + ECR_GUARD];
+static float ecr_y[2][ECR_ARMA + ECR_GUARD];
+static unsigned char ecr_arma[2][sizeof(FloatARMA)];
+static unsigned char ecr_parm[2][ECR_PARM];
+
+static int
+run_ec_reset(void)
+{
+	/* (filterLength, echoDelay, V92_ECHO_DELAY_OFFSET) */
+	static const unsigned int shape[][3] = {
+		{ 0u,  0u,  0u },	/* both loops skipped entirely      */
+		{ 1u,  0u,  0u },	/* coeff runs once, history skipped */
+		{ 0u,  1u,  0u },	/* coeff skipped, history runs once */
+		{ 0u,  0u,  1u },
+		{ 2u,  0u,  0u },	/* (2 >> 1) == 1: history runs once */
+		{ 3u,  0u,  0u },	/* the shift TRUNCATES              */
+		{ 8u,  4u,  3u },
+		{ 40u, 60u, 16u },
+		{ 63u, 17u, 5u },
+		{ ECR_COEFF, 100u, 12u },
+		{ ECR_COEFF, 0u, 0u },
+		{ 17u, 0u, ECR_HIST - 8u }
+	};
+	static const int allow[] = { 0x08, 0x28, 0x2c, 0x30, 0x34 };
+	int seen[5] = { 0, 0, 0, 0, 0 };
+	int trial, printed = 0;
+	int sawCoeff = 0, sawNoCoeff = 0, sawHist = 0, sawNoHist = 0;
+	unsigned lvl;
+	const int nshape = (int)(sizeof(shape) / sizeof(shape[0]));
+
+	diff_begin("V92EchoCanceller::reset");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+
+		for (trial = 0; trial < nshape * 4; trial++) {
+			unsigned char before[EC_SLOT], sa[EC_SLOT], sb[EC_SLOT];
+			unsigned char gbefore[2][sizeof(ecr_hist[0])];
+			const unsigned int *sh = shape[trial % nshape];
+			unsigned int fl = sh[0], ed = sh[1], doff = sh[2];
+			unsigned int want = (fl >> 1) + ed + doff;
+			long tag = (long)lvl * 1000 + trial;
+			int side, bad, first, i;
+
+			fill_pair(ec_a.raw, ec_b.raw, EC_SLOT, trial,
+				  trial & 3);
+			fill_pair(ecr_coeff[0], ecr_coeff[1],
+				  (unsigned)sizeof(ecr_coeff[0]), trial + 1,
+				  trial & 3);
+			fill_pair(ecr_hist[0], ecr_hist[1],
+				  (unsigned)sizeof(ecr_hist[0]), trial + 2,
+				  trial & 3);
+			fill_pair(ecr_x[0], ecr_x[1],
+				  (unsigned)sizeof(ecr_x[0]), trial + 3,
+				  trial & 3);
+			fill_pair(ecr_y[0], ecr_y[1],
+				  (unsigned)sizeof(ecr_y[0]), trial + 4,
+				  trial & 3);
+			fill_pair(ecr_arma[0], ecr_arma[1],
+				  (unsigned)sizeof(ecr_arma[0]), trial + 5,
+				  trial & 3);
+			fill_pair(ecr_parm[0], ecr_parm[1], ECR_PARM,
+				  trial + 6, trial & 3);
+
+			for (side = 0; side < 2; side++) {
+				V92EchoCanceller *e = side == 0 ? &ec_a.o
+								: &ec_b.o;
+				FloatARMA *m = (FloatARMA *)ecr_arma[side];
+
+				e->params = (V92Parameters *)ecr_parm[side];
+				e->arma = m;
+				e->echoCoeff = ecr_coeff[side];
+				e->echoHistory = ecr_hist[side];
+				e->filterLength = fl;
+				e->echoDelay = ed;
+				memcpy(&ecr_parm[side][ECR_DELAY_OFFSET],
+				       &doff, sizeof doff);
+
+				m->m_xhist = ecr_x[side];
+				m->m_yhist = ecr_y[side];
+				m->m_xlen = ECR_ARMA;
+				m->m_ylen = ECR_ARMA;
+				m->m_nA = 4u + (unsigned)(trial % 5);
+				m->m_nB = 8u + (unsigned)(trial % 3);
+			}
+
+			/* The bound must fit, or this test drives D72. */
+			diff_eq_int("the trial fits the buffers (%ld)",
+				    (fl <= ECR_COEFF && want <= ECR_HIST), 1,
+				    tag);
+
+			memcpy(before, ec_b.raw, EC_SLOT);
+			memcpy(gbefore[0], ecr_coeff[1],
+			       sizeof(ecr_coeff[0]));
+			memcpy(gbefore[1], ecr_hist[1], sizeof(ecr_hist[0]));
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			ec_a.o.reset();
+			ref_ec_reset(&ec_b.o);
+
+			dsplib_debug_capture_on = 0;
+
+			/*
+			 * The four pointers are each side's own address and
+			 * are not written by the method; they are checked
+			 * unchanged and then made equal so the rest of the
+			 * slot is compared rather than skipped.
+			 */
+			diff_eq_int("ours kept its four pointers (%ld)",
+				    ec_a.o.params ==
+					(V92Parameters *)ecr_parm[0]
+				    && ec_a.o.arma == (FloatARMA *)ecr_arma[0]
+				    && ec_a.o.echoCoeff == ecr_coeff[0]
+				    && ec_a.o.echoHistory == ecr_hist[0],
+				    1, tag);
+			diff_eq_int("the blob kept its four pointers (%ld)",
+				    ec_b.o.params ==
+					(V92Parameters *)ecr_parm[1]
+				    && ec_b.o.arma == (FloatARMA *)ecr_arma[1]
+				    && ec_b.o.echoCoeff == ecr_coeff[1]
+				    && ec_b.o.echoHistory == ecr_hist[1],
+				    1, tag);
+
+			memcpy(sa, ec_a.raw, EC_SLOT);
+			memcpy(sb, ec_b.raw, EC_SLOT);
+			memset(sa + 0x00, 0, 8);
+			memset(sb + 0x00, 0, 8);
+			memset(sa + 0x20, 0, 8);
+			memset(sb + 0x20, 0, 8);
+			diff_eq_obj_(__FILE__, __LINE__, "after reset",
+				     "V92EchoCanceller slot", sa, sb, EC_SLOT,
+				     tag);
+
+			diff_eq_obj_(__FILE__, __LINE__, "after reset",
+				     "echoCoeff and its guard", ecr_coeff[0],
+				     ecr_coeff[1], sizeof(ecr_coeff[0]), tag);
+			diff_eq_obj_(__FILE__, __LINE__, "after reset",
+				     "echoHistory and its guard", ecr_hist[0],
+				     ecr_hist[1], sizeof(ecr_hist[0]), tag);
+			diff_eq_obj_(__FILE__, __LINE__, "after reset",
+				     "the ARMA x history", ecr_x[0], ecr_x[1],
+				     sizeof(ecr_x[0]), tag);
+			diff_eq_obj_(__FILE__, __LINE__, "after reset",
+				     "the ARMA y history", ecr_y[0], ecr_y[1],
+				     sizeof(ecr_y[0]), tag);
+			{
+				unsigned char aa[sizeof(FloatARMA)];
+				unsigned char ab[sizeof(FloatARMA)];
+
+				memcpy(aa, ecr_arma[0], sizeof aa);
+				memcpy(ab, ecr_arma[1], sizeof ab);
+				/* m_xhist and m_yhist, +0x08 and +0x0c. */
+				memset(aa + 8, 0, 8);
+				memset(ab + 8, 0, 8);
+				diff_eq_obj_(__FILE__, __LINE__, "after reset",
+					     "the ARMA object", aa, ab,
+					     sizeof aa, tag);
+			}
+
+			/* Neither side may touch either guard. */
+			diff_eq_int("the blob left echoCoeff's guard (%ld)",
+				    memcmp(gbefore[0] + ECR_COEFF * 4,
+					   (unsigned char *)ecr_coeff[1]
+					   + ECR_COEFF * 4,
+					   ECR_GUARD * 4) == 0, 1, tag);
+			diff_eq_int("the blob left echoHistory's guard (%ld)",
+				    memcmp(gbefore[1] + ECR_HIST * 4,
+					   (unsigned char *)ecr_hist[1]
+					   + ECR_HIST * 4,
+					   ECR_GUARD * 4) == 0, 1, tag);
+
+			bad = only_wrote(before, ec_b.raw, EC_SLOT, allow, 5,
+					 seen, &first);
+			diff_eq_int("the blob wrote outside the five fields "
+				    "at +0x%lx", bad == 0 ? -1 : first, -1,
+				    tag);
+
+			/*
+			 * The arithmetic, spelled independently of the source
+			 * under test.  `>> 1` on the tap count, then two
+			 * additions, all unsigned.
+			 */
+			diff_eq_int("the blob's echoLength (%ld)",
+				    (long)ec_b.o.echoLength, (long)want, tag);
+			diff_eq_int("the blob's historyIndex (%ld)",
+				    (long)ec_b.o.historyIndex, 0, tag);
+			diff_eq_int("the blob's word_08 (%ld)",
+				    (long)ec_b.o.word_08, 0, tag);
+			diff_eq_int("the blob's echoBeta is +0.0f (%ld)",
+				    ec_b.o.echoBeta == 0.0f, 1, tag);
+			diff_eq_int("the blob's echoBetaDecay is +0.0f (%ld)",
+				    ec_b.o.echoBetaDecay == 0.0f, 1, tag);
+			diff_eq_int("the blob left filterLength (%ld)",
+				    (long)ec_b.o.filterLength, (long)fl, tag);
+			diff_eq_int("the blob left echoDelay (%ld)",
+				    (long)ec_b.o.echoDelay, (long)ed, tag);
+
+			/*
+			 * Exactly `fl` coefficients zeroed, and no more.  The
+			 * out-of-range half is checked against the SEED, not
+			 * against zero: a seeded word is zero often enough
+			 * that "it is not zero" is not the same claim as "it
+			 * was not written", and only the second one is true.
+			 */
+			for (i = 0; i < ECR_COEFF; i++) {
+				int ok;
+
+				if (i < (int)fl) {
+					ok = ecr_coeff[1][i] == 0.0f;
+					if (ok)
+						sawCoeff = 1;
+				} else {
+					ok = memcmp(gbefore[0] + i * 4,
+						    &ecr_coeff[1][i], 4) == 0;
+				}
+				diff_eq_int("coefficient cleared iff in "
+					    "range (%ld)", ok, 1,
+					    tag * 100 + i);
+			}
+			/*
+			 * The history loop is checked the same way, and
+			 * `sawHist` needs an entry that CHANGED -- a seeded
+			 * zero overwritten with zero is not evidence the loop
+			 * ran (findings 223, 224).
+			 */
+			for (i = 0; i < ECR_HIST; i++) {
+				int ok;
+
+				if (i < (int)want) {
+					ok = ecr_hist[1][i] == 0.0f;
+					if (ok && memcmp(gbefore[1] + i * 4,
+							 &ecr_hist[1][i], 4)
+					    != 0)
+						sawHist = 1;
+				} else {
+					ok = memcmp(gbefore[1] + i * 4,
+						    &ecr_hist[1][i], 4) == 0;
+				}
+				diff_eq_int("history cleared iff in range "
+					    "(%ld)", ok, 1, tag * 100 + i);
+			}
+			diff_eq_int("the first history entry past the bound "
+				    "is untouched (%ld)",
+				    want >= ECR_HIST
+				    || memcmp(&ecr_hist[1][want],
+					      gbefore[1] + want * 4, 4) == 0,
+				    1, tag);
+			if (fl == 0)
+				sawNoCoeff = 1;
+			if (want == 0)
+				sawNoHist = 1;
+
+			check_transcript(lvl, tag, &printed);
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("word_08 is written", seen[0], 1, 0);
+	diff_eq_int("historyIndex is written", seen[1], 1, 0);
+	diff_eq_int("echoLength is written", seen[2], 1, 0);
+	diff_eq_int("echoBeta is written", seen[3], 1, 0);
+	diff_eq_int("echoBetaDecay is written", seen[4], 1, 0);
+	diff_eq_int("the coefficient loop ran", sawCoeff, 1, 0);
+	diff_eq_int("the coefficient loop was skipped", sawNoCoeff, 1, 0);
+	diff_eq_int("the history loop ran", sawHist, 1, 0);
+	diff_eq_int("the history loop was skipped", sawNoHist, 1, 0);
+	diff_eq_int("both diagnostics were reached", printed, 1, 0);
+
+	return diff_end();
+}
+
+/* --------------------------------- V92EchoCanceller::~V92EchoCanceller */
+
+/*
+ * THE WHOLE FUNCTION IS THREE NULL TESTS, so a sweep that never passes a NULL
+ * -- or never passes a real pointer -- exercises one arm and reports success.
+ * All eight combinations of the three are driven, and both outcomes of each
+ * are required to have been seen.
+ *
+ * A SEEDED POINTER IS NOT A POINTER.  Left as `fill_pair` found them, all
+ * three fields are wild addresses handed straight to `sysdep_free`, which the
+ * harness swallows into `bad_free`; the run survives and proves nothing.  So
+ * every non-null arm gets a real `sysdep_malloc`, `bad_free` is asserted zero,
+ * and the free count is asserted against the number the mask predicts.
+ *
+ * THE ARMA COSTS FOUR FREES, NOT ONE.  `~FloatARMA` frees `m_a`, `m_b`,
+ * `m_xhist` and `m_yhist`, each guarded, and does NOT null them -- so the
+ * destroyed ARMA still holds four dangling addresses and cannot be compared
+ * between the sides.  It is built here with all four allocated, which makes
+ * the expected free count for a non-null `arma` five: four inside the ARMA
+ * and one for the ARMA itself.
+ */
+
+#define ECD_N	16u		/* floats in each allocated block */
+
+static int
+run_ec_dtor(void)
+{
+	static const int allow[] = { 0x04, 0x20, 0x24 };
+	int seen[3] = { 0, 0, 0 };
+	int trial, printed = 0;
+	int sawNull[3] = { 0, 0, 0 }, sawReal[3] = { 0, 0, 0 };
+	unsigned lvl;
+
+	diff_begin("V92EchoCanceller::~V92EchoCanceller");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+
+		for (trial = 0; trial < 8 * 2 * 2; trial++) {
+			unsigned char before[EC_SLOT];
+			int mask = trial & 7;
+			int useD2 = (trial >> 3) & 1;
+			long tag = (long)lvl * 1000 + trial;
+			int side, bad, first, k;
+			int wantFrees = ((mask & 1) ? 1 : 0)
+					+ ((mask & 2) ? 1 : 0)
+					+ ((mask & 4) ? 5 : 0);
+
+			fill_pair(ec_a.raw, ec_b.raw, EC_SLOT, trial,
+				  trial & 3);
+
+			harness_alloc_reset();
+
+			for (side = 0; side < 2; side++) {
+				V92EchoCanceller *e = side == 0 ? &ec_a.o
+								: &ec_b.o;
+
+				/*
+				 * `params` is never read by this method, so
+				 * both sides get the same value and the slot
+				 * compares whole.
+				 */
+				e->params = 0;
+				e->echoCoeff = (mask & 1)
+				    ? (float *)sysdep_malloc(ECD_N * 4) : 0;
+				e->echoHistory = (mask & 2)
+				    ? (float *)sysdep_malloc(ECD_N * 4) : 0;
+				if (mask & 4) {
+					FloatARMA *m = (FloatARMA *)
+					    sysdep_malloc(sizeof(FloatARMA));
+
+					m->m_a = (float *)
+					    sysdep_malloc(ECD_N * 4);
+					m->m_b = (float *)
+					    sysdep_malloc(ECD_N * 4);
+					m->m_xhist = (float *)
+					    sysdep_malloc(ECD_N * 4);
+					m->m_yhist = (float *)
+					    sysdep_malloc(ECD_N * 4);
+					e->arma = m;
+				} else {
+					e->arma = 0;
+				}
+			}
+
+			diff_eq_int("the fixture allocated what the mask "
+				    "says (%ld)", harness_alloc.allocs,
+				    2 * wantFrees, tag);
+
+			memcpy(before, ec_b.raw, EC_SLOT);
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			if (useD2) {
+				our_ec_dtor2(&ec_a.o);
+				ref_ec_dtor2(&ec_b.o);
+			} else {
+				our_ec_dtor(&ec_a.o);
+				ref_ec_dtor(&ec_b.o);
+			}
+
+			dsplib_debug_capture_on = 0;
+
+			diff_eq_obj("after the destructor", V92EchoCanceller,
+				    &ec_a.o, &ec_b.o, tag);
+			diff_eq_int("no store past the object (%ld)",
+				    memcmp(ec_a.raw + sizeof(ec_a.o),
+					   ec_b.raw + sizeof(ec_b.o),
+					   EC_SLOT - sizeof(ec_a.o)) == 0,
+				    1, tag);
+
+			bad = only_wrote(before, ec_b.raw, EC_SLOT, allow, 3,
+					 seen, &first);
+			diff_eq_int("the blob wrote outside +0x04/+0x20/+0x24 "
+				    "at +0x%lx", bad == 0 ? -1 : first, -1,
+				    tag);
+
+			diff_eq_int("the blob nulled echoCoeff (%ld)",
+				    ec_b.o.echoCoeff == 0, 1, tag);
+			diff_eq_int("the blob nulled echoHistory (%ld)",
+				    ec_b.o.echoHistory == 0, 1, tag);
+			diff_eq_int("the blob nulled arma (%ld)",
+				    ec_b.o.arma == 0, 1, tag);
+
+			diff_eq_int("both sides freed what they held (%ld)",
+				    harness_alloc.frees, 2 * wantFrees, tag);
+			diff_eq_int("nothing outstanding (%ld)",
+				    harness_alloc.live, 0, tag);
+			diff_eq_int("no wild free (%ld)",
+				    harness_alloc.bad_free, 0, tag);
+			diff_eq_int("no free of NULL reached the allocator "
+				    "(%ld)", harness_alloc.free_null, 0, tag);
+
+			for (k = 0; k < 3; k++) {
+				if (mask & (1 << k))
+					sawReal[k] = 1;
+				else
+					sawNull[k] = 1;
+			}
+
+			check_transcript(lvl, tag, &printed);
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("arma is nulled", seen[0], 1, 0);
+	diff_eq_int("echoCoeff is nulled", seen[1], 1, 0);
+	diff_eq_int("echoHistory is nulled", seen[2], 1, 0);
+	diff_eq_int("echoCoeff was null at least once", sawNull[0], 1, 0);
+	diff_eq_int("echoCoeff was real at least once", sawReal[0], 1, 0);
+	diff_eq_int("echoHistory was null at least once", sawNull[1], 1, 0);
+	diff_eq_int("echoHistory was real at least once", sawReal[1], 1, 0);
+	diff_eq_int("arma was null at least once", sawNull[2], 1, 0);
+	diff_eq_int("arma was real at least once", sawReal[2], 1, 0);
 	diff_eq_int("the diagnostic was reached", printed, 1, 0);
 
 	return diff_end();
@@ -1725,6 +2231,8 @@ main(void)
 	rc |= run_sd();
 	rc |= run_sv();
 	rc |= run_ec();
+	rc |= run_ec_reset();
+	rc |= run_ec_dtor();
 	rc |= run_rt();
 	rc |= run_p4();
 

@@ -120,8 +120,18 @@ OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
 # is "conditionally-supported" and GCC says so once per assertion.  GCC does
 # support it, the assertions are the only thing checking the maps, and the
 # alternative is 33 warnings out of V90Demodulator.cpp alone.
+#
+# -fno-lifetime-dse RESTORES A SEMANTIC THE ORIGINAL COMPILER HAD.  Modern GCC
+# ends an object's lifetime at the closing brace of its destructor and deletes
+# any store to a member that no call follows; GCC 3.4.2 has no such pass, so
+# the blob's `~V92EchoCanceller` really does write NULL over the pointer it
+# freed last and ours, compiled with the default, does not.  The differential
+# test caught it as a four-byte disagreement at +0x04 and nothing else would
+# have (finding 1272).  The flag is off by construction in every build this
+# tree compares against, so turning it off here narrows the gap rather than
+# widening it.
 CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++ \
-              -Wno-invalid-offsetof
+              -Wno-invalid-offsetof -fno-lifetime-dse
 
 # v34hsstep.c is the per-dispatch-case fixture for `v34handshak`.  It lives
 # here rather than inside one test file because #56-#58 are sixteen tests over
