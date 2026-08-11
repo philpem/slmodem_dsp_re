@@ -184,13 +184,52 @@ so no extra program header is needed. It costs a writable text section in a
 test binary. The alternative — a hand-written linker script with a `PHDRS`
 block — buys the same result and one more thing to maintain.
 
-### V7 — unrestricted unions are C++11 · 5 tests · PLUMBING
+### V7 — unrestricted unions are C++11 · 5 tests · PLUMBING · **CLOSED**
 
-`union slot { T o; unsigned char raw[N]; }` where `T` has a constructor is
-C++11. GCC 3.4.2: *"member with constructor not allowed in union"*. Affects
-`t_scrambler`, `t_v90leaves`, `t_v90p3dreset`, `t_v90p3mod`, `t_v92p3mod`.
-These are placement-control idioms in the tests and never reached the object.
-**Open.**
+`union slot { T o; unsigned char raw[N]; slot(){} ~slot(){} }` is C++11: the
+explicit empty pair is itself the C++11 workaround, and C++98 forbids a union
+member whose type has a non-trivial constructor or destructor outright. GCC
+3.4.2 said *"member with constructor not allowed in union"* for eight slots
+across `t_scrambler`, `t_v90leaves`, `t_v90p3dreset`, `t_v90p3mod` and
+`t_v92p3mod`.
+
+**613 use sites, 8 declarations — only the declarations changed.** `o` became
+a REFERENCE bound to the raw bytes, so every `x.o.member()` still reads as it
+did:
+
+```c
+struct mod_slot {
+	union {
+		unsigned char raw[SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	V92Phase3Modulator &o;
+
+	mod_slot() : o(*(V92Phase3Modulator *)raw) {}
+};
+```
+
+The `double` is not decoration. These tests compare object layouts byte for
+byte, and a bare `unsigned char` array guarantees alignment 1. `t_v90leaves`
+already used exactly this union for its `sd_slot` and `sv_slot`, so the idiom
+is the file's own.
+
+**AND IT HAS ONE SHARP EDGE, which cost a segfault before it was found.** A
+union can be *cast onto* raw memory, because `s->o` is then a reinterpretation
+of bytes that are already there. A struct with a reference member cannot: the
+reference is a stored pointer that only a real constructor ever writes.
+`t_v90p3dreset`'s `snap()` did
+
+```c
+struct p3d_slot *s = (struct p3d_slot *)dst;   /* dst is a raw buffer */
+s->o.field = ...;                              /* dereferences nothing */
+```
+
+It compiled and died on the first store. The repair is also the clearer
+spelling — `dst` holds a copy of the OBJECT, so it is cast to the object:
+`V90Phase3Demodulator *s = (V90Phase3Demodulator *)dst;`. One site in five
+files; grep for a cast to a slot pointer before applying this idiom
+anywhere else.
 
 ### V8 — flags that must NOT cross over
 
@@ -226,7 +265,7 @@ diagnosed yet.
 | | |
 |---|---|
 | `src/` under GCC 3.4.2 | **152 of 152** compile (was 132 of 152) |
-| period differential | **148 pass**, 5 fail to compile (V7), 2 fail against the blob (V9) |
+| period differential | **153 pass**, 2 fail against the blob (V9) |
 | `make phase` (GCC 13) | green, and still required |
 
 The modern build stays. It compiles in seconds against minutes, it is the
