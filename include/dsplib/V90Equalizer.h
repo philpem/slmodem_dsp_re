@@ -99,13 +99,15 @@ class V90PreFilter;
  * the base signed and every `int` representable, measured identical to the
  * C++11 spelling under both compilers.  docs/method/compilers.md, V2.
  *
- * Guarded because a definition may not be repeated where a declaration could
- * be: V90Modem.h carries the same one and both reach one translation unit.
+ * THIS HEADER IS THE TYPE'S ONLY HOME.  It used to be declared here AND in
+ * V90Modem.h, which an opaque declaration permits and a definition does not;
+ * V90Modem.h now includes this file instead.  One definition, one place, and
+ * the file's own include guard is the only guard needed.
  */
-#ifndef DSPLIB_ENUM_V90ComputationalMode
-#define DSPLIB_ENUM_V90ComputationalMode
 enum V90ComputationalMode { V90ComputationalMode_BASE_PIN = -0x7fffffff - 1 };
-#endif
+
+typedef char v90equ_compmode_is_signed[
+    ((enum V90ComputationalMode)-1 < (enum V90ComputationalMode)0) ? 1 : -1];
 
 #define V90EQU_COMP_MODE_1	1
 

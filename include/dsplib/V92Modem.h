@@ -72,17 +72,11 @@ struct tagV90DILdescriptor;
  * about.  `_BASE_PIN` is ours; the object names no enumerator.
  * docs/method/compilers.md, V2.
  */
-#ifndef DSPLIB_ENUM_V92ModemSide
-#define DSPLIB_ENUM_V92ModemSide
 enum V92ModemSide { V92ModemSide_BASE_PIN = 0xffffffffu };
-#endif
-#ifndef DSPLIB_ENUM_V92ComputationalMode
-#define DSPLIB_ENUM_V92ComputationalMode
 enum V92ComputationalMode { V92ComputationalMode_BASE_PIN = -0x7fffffff - 1 };
-#endif
 
 typedef char v92modem_side_is_unsigned[
-    ((V92ModemSide)-1 > (V92ModemSide)0) ? 1 : -1];
+    ((enum V92ModemSide)-1 > (enum V92ModemSide)0) ? 1 : -1];
 
 /*
  * The two the object names, from the string the constructor selects at

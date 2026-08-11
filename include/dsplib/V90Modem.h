@@ -76,6 +76,7 @@
 #define DSPLIB_V90MODEM_H
 
 #include "dsplib/V90CP.h"
+#include "dsplib/V90Equalizer.h"	/* V90ComputationalMode lives there */
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90MP.h"
 
@@ -114,33 +115,23 @@ struct tagV90DILdescriptor;
  * agree and not a hazard.  V90Equalizer.h does reach the same translation
  * unit as this file, through V90SessionFlag.h, so the check runs.
  *
- * THAT LAST PARAGRAPH NO LONGER DESCRIBES THE CODE, and the reason is worth
- * keeping.  C++98 has no opaque enum, so the author cannot have written
- * `enum X : int;` -- these are definitions now, guarded, because a definition
- * may not be repeated where a declaration could be.  A guard makes the
- * duplicate stop checking anything, so the property the duplicate existed to
- * protect is asserted directly below instead.  docs/method/compilers.md, V2.
+ * THAT LAST PARAGRAPH NO LONGER DESCRIBES THE CODE.  C++98 has no opaque
+ * enum, so the author cannot have written `enum X : int;`, and a DEFINITION
+ * may not be repeated where a declaration could be.  So the duplicate is
+ * gone: `V90ComputationalMode` lives in V90Equalizer.h, which this file now
+ * includes, and `V90ModemSide` lives here.  One type, one home.
+ * docs/method/compilers.md, V2.
+ *
+ * `V90ModemSide` MUST be unsigned: the destructor's range test is
+ * `cmpl $0x1,0x49bc(%esi); jbe` at 0x192c2, and a signed `side > 1` compiles
+ * to `jle`/`jg` instead -- confirmed under both compilers, which is what
+ * makes the assertion below one about the object rather than about a
+ * compiler version.  `_BASE_PIN` is ours; the object names no enumerator.
  */
-#ifndef DSPLIB_ENUM_V90ModemSide
-#define DSPLIB_ENUM_V90ModemSide
 enum V90ModemSide { V90ModemSide_BASE_PIN = 0xffffffffu };
-#endif
-#ifndef DSPLIB_ENUM_V90ComputationalMode
-#define DSPLIB_ENUM_V90ComputationalMode
-enum V90ComputationalMode { V90ComputationalMode_BASE_PIN = -0x7fffffff - 1 };
-#endif
 
-/*
- * The bases, asserted rather than restated.  `V90ModemSide` MUST be unsigned:
- * the destructor's range test is `cmpl $0x1,0x49bc(%esi); jbe` at 0x192c2,
- * and a signed `side > 1` compiles to `jle`/`jg` instead -- confirmed under
- * both compilers, which is what makes this an assertion about the object and
- * not about a compiler version.
- */
 typedef char v90modem_side_is_unsigned[
-    ((V90ModemSide)-1 > (V90ModemSide)0) ? 1 : -1];
-typedef char v90modem_compmode_is_signed[
-    ((V90ComputationalMode)-1 < (V90ComputationalMode)0) ? 1 : -1];
+    ((enum V90ModemSide)-1 > (enum V90ModemSide)0) ? 1 : -1];
 
 /*
  * The two values the code distinguishes, spelled as macros for V92Modem.h's
