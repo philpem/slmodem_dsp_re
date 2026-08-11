@@ -120,9 +120,20 @@ public:
 	};
 };
 
-/* Named by the constructor's and setFilter's manglings; values not recovered. */
-enum __tHardwareCodecTypes__ : int;
-enum PreFilterCoefType : int;
+/*
+ * Named by the constructor's and setFilter's manglings; values not recovered.
+ * Definitions rather than opaque declarations because C++98 has none, and the
+ * author's compiler was C++98; `_BASE_PIN` is ours and fixes only the
+ * underlying type.  docs/method/compilers.md, V2.
+ */
+#ifndef DSPLIB_ENUM___tHardwareCodecTypes__
+#define DSPLIB_ENUM___tHardwareCodecTypes__
+enum __tHardwareCodecTypes__ { __tHardwareCodecTypes___BASE_PIN = -0x7fffffff - 1 };
+#endif
+#ifndef DSPLIB_ENUM_PreFilterCoefType
+#define DSPLIB_ENUM_PreFilterCoefType
+enum PreFilterCoefType { PreFilterCoefType_BASE_PIN = -0x7fffffff - 1 };
+#endif
 
 class V90PreFilter {
 public:
