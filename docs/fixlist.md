@@ -111,9 +111,9 @@ it silently.
 constructor**, with a length computed from the delay AT THAT MOMENT:
 
 ```
-    D0 = params[+0x70]                     initial echoDelay
+    delay0 = params[+0x70]                 initial echoDelay
     L  = params[+0x6c] & ~3                coefficient count  (-> +0x14)
-    N  = (L-1 + D0) + 2*blk + floor((L-1 + D0)/blk)*blk + extra      (-> +0x1c)
+    N  = (L-1 + delay0) + 2*blk + floor((L-1 + delay0)/blk)*blk + extra  (-> +0x1c)
     +0x24 = malloc(N * 4)                  floats
 ```
 
