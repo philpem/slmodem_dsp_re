@@ -372,6 +372,10 @@
   "src/pump/v90/V92PreFilter.cpp",
   "build/test/t_v92precoder"
  ],
+ "vpcmcreate": [
+  "src/pump/v34/v34pcmcreate.cpp",
+  "build/test/t_vpcmcreate"
+ ],
  "vpcmep3": [
   "src/pump/v90/VPcmFloModem.cpp",
   "build/test/t_vpcmep3"

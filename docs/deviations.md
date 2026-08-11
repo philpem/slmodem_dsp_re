@@ -4392,6 +4392,19 @@ Reproduced, and DRIVEN: `t_v90equ.cpp`'s constructor sweep includes lengths 0 an
 *The constructor/destructor batch. **Reachability: unmeasured.** Status: CONFIRMED from the disassembly. Fix class: documentation only — reproduced, not repaired.*
 
 **Finding 1253.** Both sites are `div %edi` at 0x10704 and 0x1071b with `%edi` loaded straight from the argument slot at `0x58(%esp)`, and there is no test of it anywhere in the 267 bytes. `test/unit/t_gtonedet.cpp` sweeps seven nonzero divisors and says in its file comment that zero is excluded on purpose rather than avoiding it quietly. Nothing in this tree constructs a `GenericToneDetector`, so which callers exist and what they pass is unmeasured — that is what the marker means here, and it is why the entry claims a trap rather than a live defect.
+## D195 🐛 `VPcmV34Create`'s second `sysdep_memset` clears 0x79c bytes at +0x264 that the first one, 0xac4c bytes at +0, has already cleared — the receiver is zeroed twice and no path reaches the second without the first
+
+*Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
+
+**Finding 1260.** Transcribed and kept; `test/mutations/vpcmcreate.json`'s "the redundant second memset is dropped" is the recorded survivor that says it is unobservable.
+
+---
+
+## D196 🐛 `VPcmV34Create` re-loads `sess + 0x612c` between the two byte stores it makes through it, so the two stores are not guaranteed to reach the same record
+
+*Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
+
+**Finding 1260.** Read from the disassembly; the reconstruction keeps both loads rather than folding them.
 
 ---
 
