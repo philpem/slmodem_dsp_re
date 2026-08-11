@@ -3608,16 +3608,17 @@
    }
   },
   "v90cd": {
-   "key": "02a2af181aa249220e9b24e5c6e2aa07e1ac5dc675f4794a75476233517e7b4b",
-   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "8a74d86a724891f377a922e58b4117683a0eb25064dfd0f5c345c177460ac444",
+   "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "one gate around both diagnostics": "caught",
+    "the +0x0a store is 32 bits wide": "equivalent",
     "the second diagnostic prints minRate": "caught",
     "the two rates are swapped": "caught"
    }
   },
   "v90conneval": {
-   "key": "088bb72c13f9ae65b750cedaea0287449f67b80d11c38730b75408d4a152b303",
+   "key": "53f8b6b23fffd91ae934c941acda514a61e4aeae15d1801387d9399b361df57e",
    "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "RRN_UP and RRN_DOWN are swapped": "caught",
@@ -3648,8 +3649,8 @@
    }
   },
   "v90demod": {
-   "key": "8653c3a0a030da2e0b759107b6b2f62afe2038270d9d8e28b1e9df2892e2ed1e",
-   "summary": "30 mutations: 28 caught (28 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "1d0f224b10f8e7615dffe3ab726b2b9e23170312e1582c885cc439fa48180295",
+   "summary": "31 mutations: 28 caught (28 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x280 is cleared as a word": "caught",
     "+0x294 is copied before the reset that clears +0x410": "caught",
@@ -3662,6 +3663,7 @@
     "the eighth argument is not narrowed to short": "uncaught",
     "the entry diagnostic is gated one level too low": "caught",
     "the equaliser is not told about phase 3": "caught",
+    "the equaliser's cursor is halved with an arithmetic shift": "equivalent",
     "the evaluator is reached through +0x208": "caught",
     "the evaluator's +0x84 is left alone": "caught",
     "the last argument is Uinfo rather than the round trip delay": "caught",
@@ -4048,9 +4050,10 @@
    }
   },
   "vpcmep3": {
-   "key": "d8a60949176db5072e3c6f0fb289caa9de124a9af42749bd168e8cf92fed34a1",
-   "summary": "22 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "01682be788c7184f48ee7ad2e579d9b90528c61f081b7ab61c8a2327c5bb31ef",
+   "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
+    "externalReset writes the six flags only once": "equivalent",
     "no minimum: CP may give way immediately": "caught",
     "nofBits is not cleared before the packer runs": "equivalent",
     "one bit per CP symbol, not two": "caught",

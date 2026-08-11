@@ -36340,6 +36340,13 @@ better.  Left, deliberately.
 **Both closure-1 entry points are now written** (finding 1101), so the guard
 surface is three, not five.
 
+**SUPERSEDED IN ITS CONCLUSION, NOT IN ITS ARGUMENT.**  Task #91 was briefed to
+take `getBitRate` precisely because it blocks the rate pair, so the
+one-class-one-owner objection above was overruled by the batch that owned the
+decision rather than being wrong.  All three landed (findings 1160-1163) and
+**the guard surface is one**: `VPcmV34Progress`, whose own closure is 255
+symbols and 194,175 bytes.
+
 ### 1101. `VPcmV34GetCleanedSamples` IS A DRAIN AND `VPcmV34GetCurrentSessionDP` IS FOUR ARMS, ONE OF WHICH READS THE V.92 NEGOTIATION FROM BOTH ENDS
 
 Both are in `src/pump/v34/v34pcmif.c` -- the `extern "C"` half of
@@ -36464,6 +36471,14 @@ a file has to re-run `anchorcheck` even when it changed no mutation and no
 existing line.
 
 ### 1104. THE FOUR CLOSURE FIGURES, RECOMPUTED, AND WHAT THE 127 SYMBOLS ACTUALLY ARE
+
+**THE FOUR NUMBERS BELOW ARE SUPERSEDED -- see finding 1150.**  They were
+correct when written and stopped being correct within the same batch: #88 then
+landed the thirteen symbols of finding 1106 and nothing recomputed the span.
+1150 has the figures as of task #91, before and after.  Everything else in
+this finding -- the per-class grouping, the two named blockers, the cost
+argument about the thirty classes with neither file -- still stands, and both
+named blockers have since been retired (findings 1170-1174 and 1180-1186).
 
 Recomputed on a full build, per finding 330's rule.  All four are UNCHANGED
 from the numbers task #88 was briefed with:
@@ -36941,9 +36956,13 @@ Recorded as carefully as what it did.
   method** -- the eleven are self-contained.
 - **`V90Demodulator::getBitRate` was left**, per finding 1100.  It is still
   the only thing between `VPcmV34GetCurrentRxBitRate` /
-  `VPcmV34GetCurrentTxBitRate` and their definitions.
+  `VPcmV34GetCurrentTxBitRate` and their definitions.  *(Closed by task #91:
+  all three are written, findings 1160-1163.)*
 - **The `V90Parameters` duplication was not repaired**, finding 1112.
 - **`tools/mutsnap.py` was NOT re-recorded and no new suite was registered.**
+  *(This is the gap task #91 closed: the four survivors of finding 1115 were
+  re-derived from the blob's bytes and registered, and `V90ConnectionEvaluator`
+  got the suite it never had -- finding 1151.)*
   The mutations above were applied by hand and reverted;
   `test/mutations/v90demod.json` and `test/mutations/vpcmep3.json` had seven
   anchors deepened (finding 1114), which makes those two suites' snapshot
@@ -38492,3 +38511,137 @@ Three things are recorded as NOT settled, none of them blocking:
   this class reads it.  `enterPhase3` sources that argument from
   `*(int *)(V92Modulator->+0x10 + 4)`, an object this batch did not read.
 - **`V92Ja`'s size and its vector's length.**  See finding 1180.
+
+### 1150. THE FOUR CLOSURE FIGURES, RE-DERIVED A THIRD TIME: THE BRIEF WAS CURRENT AND FINDING 1104 WAS STALE
+
+Task #91 was briefed with 114 symbols / 22,043 bytes for `dp_vpcm_init` and
+told to re-derive rather than trust it, on the grounds that briefed numbers
+have been found stale before.  Re-derived on a full build, per finding 330's
+rule and closure.py's own requirement that `build/src/**/*.o` exists:
+
+```
+    dp_vpcm_init   114 symbols, 22,043 bytes     vpcm_create   110 / 21,818
+    vpcm_delete     47 symbols,  5,791 bytes     vpcm_op       113 / 21,971
+```
+
+**The brief was right to the byte and finding 1104 is the stale one.**  1104
+records 127 / 24,791 and says all four are UNCHANGED from what #88 was
+briefed with; #88 then landed thirteen symbols (finding 1106) and nothing
+recomputed the span afterwards.  The gap is exactly those thirteen.  This is
+the inverse of the failure the brief was guarding against, and it is the same
+mechanism: a number is stale from the moment the tree moves under it, whoever
+wrote it.
+
+**A closure figure computed in a fresh worktree is not stale, it is
+meaningless.**  `closure.py` reads what `src/` defines out of
+`build/src/**/*.o`, so before a build the have-set is empty and every symbol
+in the graph reports as unwritten -- 799 symbols and 432,840 bytes for
+`dp_vpcm_init`, thirty-six times the real number.  The tool says so on stderr
+and the line is easy to miss above a 700-line report.  Build first.
+
+**Two environment facts, because two of them cost this session turns.**  The
+blob is at `../slmodemd/dsplibs.o` relative to the MAIN checkout, so in a
+worktree under `.claude/worktrees/` every tool needs `BLOB=` set to an
+absolute path and every make needs `make BLOB=...`; and `third_party/spandsp`
+is gitignored, so a fresh worktree has to symlink it from the main checkout
+or `make phase` dies at `t_spandsp_b103` with the library missing -- which is
+an interop-tier failure that says nothing about the work in hand.
+
+**Where this batch left them** (findings 1160-1163, 1170-1174, 1180-1186):
+
+```
+    dp_vpcm_init   108 symbols, 19,704 bytes     vpcm_create   104 / 19,479
+    vpcm_delete     44 symbols,  5,284 bytes     vpcm_op       107 / 19,632
+```
+
+Six symbols and 2,339 bytes off `dp_vpcm_init`, which is finding 1104's two
+named blockers plus the destructor path each of them was blocking.  The three
+rate symbols are not in that count: they hang off `vpcm_run`'s weak entry
+points, not off `dp_vpcm_init`.
+
+### 1151. A HAND-APPLIED EQUIVALENCE IS PROSE UNTIL IT IS REGISTERED, AND ALL FOUR OF #88's WERE PROSE
+
+Finding 1115 records thirty mutations applied by hand, one at a time, each
+rebuilt and reverted.  Twenty-six broke a named check.  **Four survived and
+were recorded as equivalent with nothing registered to hold the claim**, and
+two of those four are equivalent only because of the STORE ORDER of a
+following statement, so a later reordering re-opens them.
+
+Finding 1000's alarm -- a recorded equivalent that is later caught fails the
+run -- is a property of `mutate.py` reading a `"equivalent": true` entry out
+of a suite JSON.  A mutation that was applied at a keyboard and reverted is
+not in any suite, so nothing can ever check it again.  The gap is not that
+#88 was careless; it is that **"applied by hand" and "registered" look
+identical in a findings table**, and only one of them survives the session.
+
+Each was re-derived from the blob's own encoding before being registered,
+because registering an unverified claim only records it:
+
+```
+  4abdd  66 c7 40 0a 00 00      movw $0x0,0xa(%eax)     designer  +0x0a
+  3e40e  66 89 8b 9c 00 00 00   mov  %cx,0x9c(%ebx)     evaluator +0x9c
+  1c1c2  d1 e9                  shr  $1,%ecx            the cursor halving
+  d6d8 .. d701, d786 .. d7a9    twelve movb, six each   the flags at +0x217
+```
+
+All four confirm what `src/` has: two 16-bit stores where the mutation widens
+to 32, a LOGICAL shift where the mutation makes it arithmetic, and two runs of
+six byte stores where the mutation deletes the second.  So every equivalence
+claim in 1115 is true, and **every one of them is a difference the codegen
+tier can see and the differential tier cannot** -- finding 613's class exactly.
+That is the honest statement of what "equivalent" means for these four: not
+"the same code", but "no reachable input separates them".
+
+Registered, with the argument in each `why`, and re-run on the final tree:
+
+```
+  v90conneval   6 mutations: 5 caught, 0 NOT caught, 0 unusable, 1 equivalent
+  v90cd         4 mutations: 3 caught, 0 NOT caught, 0 unusable, 1 equivalent
+  vpcmep3      23 mutations: 21 caught, 0 NOT caught, 0 unusable, 2 equivalent
+  v90demod     31 mutations: 28 caught, 2 NOT caught, 0 unusable, 1 equivalent
+```
+
+v90demod's two NOT caught are the pre-existing documented pair and did not
+move.  **The guard this buys is specific**: reorder the +0x0a and +0x0c stores,
+or move a reader between the two runs of six, and the mutation stops being
+equivalent, `mutate.py` reports `CAUGHT, recorded as equivalent`, and the run
+fails as MIScounted.  Prose cannot do that.
+
+**`V90ConnectionEvaluator.cpp` had no suite at all**, so one was created --
+and NOT with the equivalent mutation alone.  A set whose only member is an
+equivalent mutation is indistinguishable from a set pointed at the wrong
+binary, which is the failure `test/mutations/suites.json` exists to prevent
+and which six sets suffered before it did.  Five of #88's caught mutations
+are registered beside it as the anti-vacuity evidence that the pairing is
+real.
+
+**A registered suite with no recorded verdicts fails `make phase`.**
+Registering `v90conneval` in `suites.json` and committing without running
+`mutsnap.py --update` left the entry MISSING rather than stale, and MISSING is
+what `--check` fails on.  The commit that adds a suite must carry its
+snapshot entry; `make phase` after the edit, not after the run that preceded
+it, is what catches this.
+
+### 1152. WHAT TASK #91 DID NOT DO
+
+- **`t_vpcmrun.c` still builds its endpoints with `ref_vpcm_create`**, and
+  will until the last of `dp_vpcm_init`'s closure lands.  That is finding
+  1105, not an omission here: no version of that oracle compares a subset, and
+  this batch wrote nine symbols of a hundred-and-fourteen-symbol span.
+- **No codegen-tier work.**  Finding 1151 establishes that all four registered
+  equivalences are differences `make similarity` can see and no test can.
+  Nothing was run through the period compiler to check whether our spelling of
+  the four sites matches the object's, and `compare.py --ratchet` was not run
+  for this batch at all.
+- **The other sixteen `V90Demapper` members, eleven `V92Phase3Modulator`
+  members and eleven `V90ConnectionEvaluator` members** are declared and
+  undefined.  One class, one owner binds on methods, and taking a processing
+  method to make a closure figure smaller is taking another batch's work.
+- **`V90Demapper`'s constructor** is blocked on `ModulusDecoder`, which has no
+  header, no `.cpp` and no other symbol in this tree (finding 1174).
+- **The 69 pre-existing mutation snapshot entries are still stale.**  The key
+  is coarse by design -- it covers all of `src/`, `include/`, the Makefile and
+  `test/harness/` -- so adding four source files and six headers invalidates
+  every entry by construction.  Five entries are current: the four re-run for
+  finding 1151 and `v92p3mod`.  A full re-record is a run of all 72 suites and
+  was not attempted.
