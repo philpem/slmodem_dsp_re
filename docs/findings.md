@@ -1556,7 +1556,7 @@ returns, and says so.
 
 ## 30. `FPM_TONE_detect` — the detector half, and what it says about D6
 
-> **Fix list §5.11** (`docs/fixlist.md`): the slow AGC pair does not sum to unity.
+> **Fix list §5.10** (`docs/fixlist.md`): the slow AGC pair does not sum to unity.
 
 `FPM_TONE_detect` (`.text 0x0aaf80`, 488 bytes) is reconstructed and
 bit-exact. It closes out `fpm_tone.c` apart from `FPM_TONE_find_rev` and
@@ -4348,7 +4348,7 @@ symbol table rather than working from a list.
 
 ## 75. A whole negotiation, against something that has never seen this object
 
-> **Fix list §5.12** (`docs/fixlist.md`): the V.21 offer can never be withdrawn.
+> **Fix list §5.11** (`docs/fixlist.md`): the V.21 offer can never be withdrawn.
 
 Everything up to here proves the reconstruction agrees with the blob, plus a
 signal-layer check that our ANSam is ANSam. Neither answers the question the
@@ -14345,7 +14345,7 @@ Two smaller traps found alongside, both mine:
 
 ### 601. Four weak class templates, and a drift decision taken once for all of them
 
-> **Fix list §5.10** (`docs/fixlist.md`): `SineWave::generate` advances the phase once more than it emits.
+> **Fix list §7.31** (`docs/fixlist.md`): `SineWave::generate` advances the phase once more than it emits, and no caller is named.
 
 *Renumbered from **341** in the ninth collision; see finding 543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
@@ -15706,7 +15706,7 @@ call expensive. It is not done here.
 
 ### 622. Two of the three deviation gaps were not gaps
 
-> **Fix list §5.11** (`docs/fixlist.md`): the slow AGC pair does not sum to unity.
+> **Fix list §5.10** (`docs/fixlist.md`): the slow AGC pair does not sum to unity.
 
 *Renumbered from **362** in the ninth collision; see finding 543. Every reference in this tree was moved with it, but a reference in a branch written before the merge still resolves and now points somewhere else -- `refcheck.py` cannot see that.*
 
@@ -21189,7 +21189,7 @@ them.
 
 ### 402. The arm's inlined `SetINFO0dBits` drops the guard the real one has
 
-> **Fix list §5.13** (`docs/fixlist.md`): the restart's inlined `SetINFO0dBits` lost its guard.
+> **Fix list §5.12** (`docs/fixlist.md`): the restart's inlined `SetINFO0dBits` lost its guard.
 
 `v34handshakinit` mode 0 already contains
 

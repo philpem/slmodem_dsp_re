@@ -257,9 +257,14 @@ NOT get one: they are the record of things that are *not* fix list entries, so
 there is nothing for the finding to point at. `python3 tools/refcheck.py`
 passes, and it cannot see a citation that resolves to the wrong finding, so
 every number here was checked against the heading it lands on. Two were wrong
-on the first pass and are worth knowing about: the corroboration for §5.11 is
+on the first pass and are worth knowing about: the corroboration for §5.10 is
 finding 30, not 29 (`FPM_TONE_detect` is 30's subject), and §7.25's material
 sits in finding 231's *body* under a heading about `callgraph.py`.
+
+**§5 means what it says.** An entry is in §5 only if the record names the path
+it fires on. `SineWave::generate`'s measured phase drift was in §5 on the first
+draft and is now §7.31, because no caller for it is named anywhere in 37,637
+lines. A measured defect with no located caller is latent, not live.
 
 ---
 
@@ -398,22 +403,7 @@ adapting predictor at 0x5c5eb). The finding rules out intent:
 not separable from the rest of the receive chain without a full-path
 measurement nobody has made.
 
-### 5.10 CONFIRMED: `SineWave::generate` advances the phase once more than it emits
-
-**Finding 601.** The advance sits between the `cmp` and the `jb`, and the wrap
-happens only at the end, so a long call accumulates angle: measured **1.86 rad
-over 96,000 samples in one call against 0.03 rad over 2,000 calls of 48**.
-`generate(out, 0)` is not a no-op — it still rewrites `phase`.
-
-The same finding carries two more of the class: the parallel differential
-coders' constructor does not call `reset`, so `size_` is 0 and a freshly built
-coder processes nothing until somebody resets it; and `reset` fills only the
-new width, leaving capacity beyond it stale.
-
-*Fix class:* **documentation only**, unless a caller is found that generates in
-one long call.
-
-### 5.11 CONFIRMED, `D6`: the slow AGC pair does not sum to unity
+### 5.10 CONFIRMED, `D6`: the slow AGC pair does not sum to unity
 
 **Finding 622**, corroborated by **finding 30**. The Bell 103 and V.23 copies
 of `AGC_DEF_ALPHA` carry `16384, 1638` where the alpha should be 31130, so the
@@ -427,7 +417,7 @@ extension**; the register entry exists, the reachability is what this adds. No
 automated guard is possible — `ref_AGC_DEF_ALPHA` is file-static in six
 translation units, so a test naming it binds to whichever the linker picks.
 
-### 5.12 CONFIRMED, `D16`: the V.21 offer can never be withdrawn
+### 5.11 CONFIRMED, `D16`: the V.21 offer can never be withdrawn
 
 **Finding 75.** The test that should clear the V.21 bit reads the framing stop
 bit as well, so it is never true and the JM carries V.21 whatever the far end
@@ -437,7 +427,7 @@ deliberately narrowed offer.
 *Fix class:* **documentation only** — reproducing it is what keeps the
 handshake bit-exact, and no interop failure has been traced to it.
 
-### 5.13 CONFIRMED: the restart's inlined `SetINFO0dBits` lost its guard
+### 5.12 CONFIRMED: the restart's inlined `SetINFO0dBits` lost its guard
 
 **Finding 402.** Microstate 44's restart path contains a hand-inlined copy of
 `V34SetINFO0dBits` at 0x718fc that has **no `v90_receiver` test** — the
@@ -1056,6 +1046,19 @@ message shorts never carry a high byte cannot tell the difference, and none
 does. Finding 335 narrows it — the reader side takes the bit only through
 `testb $0x20` on the low byte — but does not close the writer-side clobber.
 Whether the protocol ever puts anything in that high byte is not established.
+
+**7.31 `SineWave::generate` advances the phase once more than it emits (finding
+601).** The advance sits between the `cmp` and the `jb` and the wrap happens
+only at the end, so a long call accumulates angle: measured **1.86 rad over
+96,000 samples in one call against 0.03 rad over 2,000 calls of 48**.
+`generate(out, 0)` is not a no-op — it still rewrites `phase`. **No caller is
+named anywhere in the record**, which is why this is here and not in §5: it is
+one of four weak class templates with a single instantiation, and until the
+caller is found the drift has no measured consequence. The same finding carries
+two more of the class: the parallel differential coders' constructor does not
+call `reset`, so `size_` is 0 and a freshly built coder processes nothing until
+somebody resets it, and `reset` fills only the new width, leaving capacity
+beyond it stale.
 
 **7.28 Two producers on the transmit queue account differently (finding
 116).** `txwritequeue` adds four to `count` per call; `txmit` open-codes the
