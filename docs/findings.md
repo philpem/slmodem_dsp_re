@@ -43115,3 +43115,388 @@ form and the named form now coexist because nothing forces them into the same
 translation unit, rather than because one of them was suppressed.
 
 ======================================================================
+
+### 1330. `dp_vpcm_init` NOW BUILDS THE WHOLE MODEM OUT OF THIS TREE, AND THE LAST NINE SYMBOLS COST 3,348 BYTES
+
+*The V.PCM construction path's final batch.  Findings 1330-1344 are its block.*
+
+Nine symbols, bottom-up: `V90Modem::V90Modem` (597 B), `V90Modem::~V90Modem`
+(321), `VPcmFloModem::VPcmFloModem` (651), `VPCMXF_Create` (495),
+`VPCMXF_Delete` (109), `vpcm_create` (969), `vpcm_delete` (110), `vpcm_op`
+(24) and `dp_vpcm_init` (72).  The chain `dp_vpcm_init -> vpcm_create ->
+VPCMXF_Create -> VPcmFloModem -> {V90Modem, V92Modem, V92EchoCanceller,
+ANSamToneDetector, SineWave, GenericIIR}` is now ours end to end, with the
+blob used only as the thing it is compared against.
+
+`docs/vpcmv34main.md` called this wave 5 and said it was genuinely last.  It
+was: finding 838 measured `dp_vpcm_init`'s closure at 394 missing symbols, and
+what made these nine writable was every batch below them landing first.
+
+======================================================================
+
+### 1331. FINDING 806 ASKED WHO WRITES `+0x2218` AND THE ANSWER IS THAT NOBODY IN THE CONSTRUCTION PATH DOES
+
+*The premise was wrong, and this is the retraction rather than a fix.*
+
+806 recorded that `VPcmV34Create` leaves the V.34 object's `+0x2218` at 0 and
+concluded "something must write 2".  The batch that owned the nine remaining
+construction-path symbols was briefed to find that writer among them.  It is
+not there.  Every access in the whole 1.2 MB object was enumerated -- eleven
+stores in seven functions, five reads in two -- and mapped to its symbol:
+
+    v34handshakinit                     0x5fad2      STORE
+    v34handshak                         0x63d4d      STORE, and four reads
+    datapumpv34                 0x71b60, 0x71bfa, 0x71c55, 0x71ccb  STORE
+    VPcmV34InitiateRateRenegotiation    0x065db      STORE
+    VPcmV34InitiateRetrain              0x068f6      STORE
+    VPcmV34InitiateHangUp               0x06c91      STORE
+    VPcmV34InitMOH                      0x06da8      STORE
+    VPcmV34SetV90RateReneg              0x0a1d2      STORE
+
+Not one of them is in `vpcm_create`, `VPCMXF_Create`, either constructor, or
+`VPcmV34Create`.  **The field is a RUN-TIME handshake state, not a
+construction-time one**, and 0 after construction is correct.
+
+**And the specific value 2 has a specific writer.**  `datapumpv34` at 0x71bf3:
+
+    movzbl %al,%ecx
+    add    $0x2,%ecx
+    mov    %ecx,0x2218(%ebx)
+
+so it stores `2 + <a byte>`, and 2 is what it stores when that byte is zero.
+This tree already has that code -- `src/pump/v34/v34hshak.c` calls the field
+`T3C_MODE` and `src/pump/v34/v34pcmif.c` writes 5 to it in three places.  So
+the answer to 806 was in the reconstruction the whole time, in a function
+nobody thought to look at because the question had been framed as a
+construction-path question.
+
+**The general lesson is about how the question was asked.**  "This field is 0
+and something must write 2" names a value and a place and invites a search of
+the place.  The cheap check is to enumerate every writer in the object FIRST
+and only then ask which of them the caller can reach -- fifteen minutes with
+`objdump | grep 0x2218(` and `nm` against the addresses, against a batch's
+worth of looking in the wrong function.
+
+======================================================================
+
+### 1332. `V90Modem`'s LAYOUT IS COMPLETE, AND EVERY FIELD IS PROVED TWICE
+
+`include/dsplib/V90SessionFlag.h` carried six fields and a `pad_0c[0x49a8]`.
+The constructor names all of it, and each field has two independent readings:
+what the constructor stores there, and which argument slot of `V90Modulator`
+or `V90Demodulator` it occupies -- and those two manglings spell the type of
+every one of their twelve and fourteen parameters.
+
+    +0x00 V90Modulator*   +0x04 V90Demodulator*  +0x08 V90Phase2Info*
+    +0x0c V90Jd*          +0x10 V92Jd*           +0x14 tagV90DILdescriptor*
+    +0x18 V90MappingParams  +0x668 V90MappingParams  (0x650 each)
+    +0xcb8 tagV90AdditionalCPinfo (0x18)
+    +0xcd0 V90MP (0x124)  +0xdf4 V90CP (0x3bc0)
+    +0x49b4 V90Parameters*  +0x49b8 sessionFlag  +0x49bc V90ModemSide
+
+**FIVE OF THE SIX EMBEDDED SIZES WERE ALREADY ASSERTED SOMEWHERE ELSE AND ALL
+FIVE AGREE.**  `sizeof(V90MappingParams)` is 0x650 from its own field map and
+0x668-0x18 is 0x650; `V90MP` is 0x124 and 0xdf4-0xcd0 is 0x124; `V90CP` is
+0x3bc0 and 0x49b4-0xdf4 is 0x3bc0, so the CP runs exactly up to the parameter
+pointer and NO unmodelled span is left anywhere in the object.  The four heap
+allocations are finding 1246's oracle four more times: 0x558, 0x24, 0x90,
+0xdc, 0x70 and 0x298 are the original compiler's own `sizeof` for
+`V90Parameters`, `V90Phase2Info`, `V90Jd`, `V92Jd`, `V90Modulator` and
+`V90Demodulator`, and every one matches this tree's existing assertion.
+
+**The one size that rests on adjacency alone** is
+`tagV90AdditionalCPinfo`'s 0x18, which is 0xcd0-0xcb8 and nothing else.  It is
+the only new type in the batch, its single member is a `pad_`, and no `sizeof`
+is asserted for it -- deliberately, so that the difference between a measured
+size and a bounded one stays visible in the source.
+
+`side` became a `V90ModemSide` with an `unsigned int` base, from the
+destructor's `cmpl $0x1,0x49bc(%esi); jbe` -- an UNSIGNED comparison where a
+signed `> 1` would be `jle`.  That is V92Modem.h's argument for `V92ModemSide`
+found again at the same place in the sibling class.  D235 is the arm it gates.
+
+======================================================================
+
+### 1333. `sizeof(VPcmFloModem)` IS 0x7f68, AND THE 64 BYTES PAST THE OLD FLOOR ARE FOUR MORE OBJECTS
+
+`VPcmFloModem.h` used to say "a floor is still not a size, so no size is
+asserted here", with the floor at 0x7f28 -- the end of the last of the four
+float arrays.  `VPCMXF_Create` allocates **0x7f68** and constructs into it with
+nothing between the two instructions, so the immediate is the original
+compiler's own `sizeof` (finding 1246).  The 64 bytes are accounted for
+exactly, and the accounting is what closed six spans at once:
+
+    +0x6124 V92Modem          0xaac   -> ends 0x6bd0, where the next ctor runs
+    +0x6bd0 V92EchoCanceller  0x3c    -> ends 0x6c0c, the memset's base
+    +0x6c0c block_6c0c        0x350   -> ends 0x6f5c, the next ctor
+    +0x6f5c ANSamToneDetector 0x3c    -> ends 0x6f98, a field externalReset zeroes
+    +0x6f9c SineWave<f,f>     0x10    -> ends 0x6fac, likewise
+    +0x7f28 GenericIIR<f,d>   0x34    -> ends 0x7f5c, likewise
+    +0x7f5c, +0x7f60, +0x7f64 and three bytes of alignment -> 0x7f68
+
+**Every one of those six sizes was already asserted in another translation
+unit, and every one lands on a boundary the constructor independently
+identifies.**  Six agreements and no disagreement, which is a stronger result
+than the sum of the parts: the `V92EchoCanceller`'s 0x3c and the memset's
+0x350 between them say that the 848 bytes at +0x6c0c are `VPcmFloModem`'s own
+and NOT the echo canceller's tail, which no single measurement could have
+said.
+
+Three fields the previous batch had read correctly were re-homed without
+moving: `v92Params` at +0x6128 and `v92Phase2Info` at +0x612c are
+`V92Modem::parameters` and `V92Modem::phase2Info`, +0x004 and +0x008 of the
+embedded modem; and `pad_6124`, which `v34pcmmain.cpp` read a pointer out of,
+is `V92Modem::modulator`.  That last one is the nicest: the V.90 arm of
+`VPcmV34GetCurrentTxBitRate` spells the same field `sess->modem.modulator` and
+the V.92 arm now spells it `sess->v92modem.modulator`, where it used to be a
+cast through a four-byte pad.
+
+======================================================================
+
+### 1334. THE MEMBER-INITIALISER LIST REPRODUCED A STORE-BEFORE-CONSTRUCTION THAT LOOKED IMPOSSIBLE
+
+`VPcmFloModem`'s constructor stores its first argument into +0x0000 at 0xfa7c,
+BEFORE the call to `V90Modem`'s constructor at 0xfaaa.  A mem-initialiser list
+runs before the body entire, so a `v34Object = arg;` statement in the body
+would put the store after all six constructions -- and there is no C++ that
+says "construct this member, then run a statement, then construct that one".
+
+The way out is that a list is ordered by DECLARATION and `v34Object` is the
+class's first member.  Initialising it IN the list rather than assigning it in
+the body gives exactly the object's sequence: store, V90Modem, V92Modem,
+V92EchoCanceller, ANSamToneDetector, SineWave, GenericIIR, body.  No
+deviation was needed and none was recorded; the first draft of the file did
+record one, and it was wrong.
+
+The same list also reproduces `mov 0x6128(%ebx),%ecx` -- the echo canceller's
+first argument is `v92modem.parameters`, READ BACK out of the member that was
+initialised two entries earlier rather than kept in a register.  That is well
+defined in the source for the same reason it is correct in the object: the
+member precedes it in the class.
+
+**The general shape is worth keeping.**  When the disassembly's order looks
+unreachable from C++, check whether the thing that must happen first is a
+MEMBER, because the initialiser list is a second ordering mechanism and it is
+the declaration order of the class rather than the order of the source text.
+
+======================================================================
+
+### 1335. `VPCMXF_Create`'s TWO MULTIPLIES ARE TWO SAMPLE RATES, AND THE NARROWING IS THE COMPILER'S
+
+    digitalSide != 0   fmuls .rodata.cst4+0x54   (8.0)
+    digitalSide == 0   fmull .rodata.cst8+0x10   (9.6)
+    both               fadds .rodata.cst4+0x58   (0.5), then a truncating fistpl
+
+8.0 samples per millisecond is 8000 Hz and 9.6 is 9600 Hz -- the codec rate and
+the V.PCM rate.  `vpcm_create` requires `srate == 9600` exactly and passes a
+literal 0 for `digitalSide`, so the shipped path is the second one and a
+`max_frag` of 48 goes in as 5 ms and comes back out as 48 samples.
+
+**The two constants are both `double` in the source and the four-byte loads
+are GCC's doing.**  A `double` constant exactly representable as a `float` is
+loaded with `fmuls`/`fadds`; 9.6 is not representable and gets `fmull`.  So
+the operand widths distinguish the VALUES and say nothing about the source's
+types, and writing `8.0f` would have claimed something the object does not
+support.  The shared `+ 0.5` being an `fadds` in both arms is the same fact
+seen once more -- it is the reason the two paths can converge on one tail at
+all.
+
+`fildll` with the high word ZEROED is what types the argument: widened to 64
+bits with no sign extension, which is an `unsigned int` conversion.
+
+======================================================================
+
+### 1336. `vpcm_create`'s MUTE COUNTER FIRES WHEN THE V.92 BIT IS CLEAR, WHICH IS THE OPPOSITE OF WHAT IT LOOKS LIKE
+
+    0x3bd4  cmp $0x1,%ecx
+    0x3bd7  sbb %edi,%edi
+    0x3bd9  and $0x210,%edi
+    0x3bdf  mov %edi,0xd250(%ebx)
+
+`sbb %edi,%edi` leaves -1 when the carry is set and 0 when it is not, and
+`cmp $1` sets the carry when the value is BELOW one.  So the 528-sample mask
+survives when the V.92 capability bit is **CLEAR** and is discarded when it is
+set: a modem that is not doing V.92 mutes its first 528 samples and one that
+is does not.
+
+The shape reads the other way at a glance, and a test that swept only one
+state of that bit could not tell the two apart -- which is why
+`test/unit/t_vpcmdp.c` asserts `mute == 528` ABSOLUTELY on both arms rather
+than comparing the two sides and calling it done.
+
+======================================================================
+
+### 1337. `vpcm_create` WRITES THE DMA DELAY TWICE AND THE FIRST STORE IS NOT DEAD
+
+    0x3c09  mov %eax,0x68(%ecx)      dmaDelay = hwDelay - 0x30
+    0x3c0c  mov %edx,0x64(%ecx)      hwDelay  = hwDelay
+    0x3c1e  mov %eax,0x68(%ecx)      dmaDelay = %eax + extradelay
+
+Two stores to the same word with a store to a neighbouring member between
+them, which is exactly the shape GCC's dead-store elimination removes -- so
+the first store must be READ, and the only reader is the second store.  The
+source is `p->dmaDelay = hwDelay - 0x30; p->hwDelay = hwDelay;
+p->dmaDelay += s->extradelay;`, and the `add %esi,%eax` on a register rather
+than a reload is the compiler keeping what it has just written.
+
+Written as one expression it would have been one store.  **A repeated store to
+one field is evidence of a `+=`, not of redundancy** -- the opposite reading
+from D221's, where the second store is in a different function and the first
+genuinely is dead.
+
+======================================================================
+
+### 1338. `vpcm_create` STORES TWO HANDLES INSIDE THE V.34 OBJECT AND `VPcmV34Create` PRESERVES EXACTLY THOSE TWO ACROSS A WHOLESALE MEMSET
+
+`VPCMXF_Create`'s answer goes to root +0x3574 and `K56FLEX_Create`'s to root
++0xac44.  The V.34 block starts at root +0x2c, so those are the V.34 object's
++0x3548 and +0xac18, which `tools/whichfield.py struct v34_object` already
+names `p3548` and `pac18`.
+
+**The confirmation is `VPcmV34Create`'s prologue and it is a strong one.**  At
+0xaa7f and 0xaa92 it SAVES both words; at 0xaad9 it memsets the whole 0xac4c
+to zero; at 0xaaf9 and 0xab15 it puts both back.  A constructor that preserves
+exactly two words across a wholesale clear is telling you those two were
+written before it ran and must survive it -- and it is the only statement in
+the object about the ORDER of the two constructions.
+
+`struct vpcm_root`'s `unsigned char v34[0xac4c]` became a
+`struct vpcm_v34` with those two as typed members and the rest as three
+opaque spans, so both are `__builtin_offsetof`-asserted.  `vpcm_run`'s five
+uses became `&s->v34` where they were `s->v34`, and nothing else changed.
+
+======================================================================
+
+### 1339. `V90Modem` COULD NOT HAVE BOTH DEFINITIONS OF `V90Parameters`, AND WHICH ONE IT TOOK WAS DECIDED BY WHICH MISTAKE IS SILENT
+
+Finding 1112's duplication: `V90Parameters.h` has the named 0x558-byte map and
+`V90PreFilter.h` has a block form bounded at 0x504, and they cannot sit in one
+translation unit.  `V90Modem::V90Modem` allocates `sizeof(V90Parameters)` and
+calls `V90Demodulator`'s constructor, and `V90Demodulator.h` reaches
+`V90PreFilter.h`.  So the file has to choose.
+
+It takes `V90Parameters.h`, forward-declares `V90Demodulator`, and names its
+constructor and destructor by their mangled symbols -- VPcmXfTerm.cpp's device
+for this exact collision.  **The direction was chosen by which wrong edit is
+loud.**  With the named header in scope `sizeof(V90Parameters)` is 0x558 and
+right; with the block form in scope it would be 0x504, and a later edit
+replacing this file's `0x298` literal with `sizeof(V90Demodulator)` would
+under-allocate the parameter block by 84 bytes and pass every test that does
+not run under a checking allocator.  `V90Demodulator` is INCOMPLETE in this
+file, so the same edit against it does not compile at all.
+
+A duplicated type definition is a wart either way; the useful question is not
+which copy is better but which copy makes the reachable mistakes fail loudly.
+
+======================================================================
+
+### 1340. THE SUB-OBJECT CONSTRUCTORS ARE REACHED BY `asm()` LABEL AND `VPCMXF_Create` IS WHERE THAT WOULD HAVE SHOWN
+
+The V.92 chain's rule -- `sysdep_malloc(n)` then the constructor with NO null
+test between them is `new` over an INLINE `operator new`, and this build is
+`-nostdinc++` with no `<new>`, so a user-declared placement form makes GCC
+emit a null test the blob does not have -- carries unchanged into
+`V90Modem::V90Modem` and `VPCMXF_Create`.
+
+**`VPCMXF_Create` is the one site in the whole chain where the difference is
+CONTROL FLOW rather than instruction count.**  Everywhere else a spurious null
+test in front of a constructor is a compare and a branch that never takes;
+here the object has a real null test AFTER the construction (D236), so
+placement `new` would have produced a function with the guard in front AND the
+guard behind, testing the same pointer twice with different consequences.  The
+usual argument for the `asm()` idiom is about fidelity; this instance of it is
+about not writing a different function.
+
+======================================================================
+
+### 1341. `VPCMXF_Create` CONTRADICTS THE CONSTRUCTOR IT JUST CALLED, ON FIVE FIELDS
+
+The constructor writes `flags_0217 = {1,1,1,1,1,1}`, `nofBitsPerSymbol = 0`
+and `minNofTransmitSequences = 0`.  `VPCMXF_Create` then writes
+`{1,0,1,1,1,0}`, `2` and `1` into the same fields before it returns the
+object.
+
+So **a constructed-and-returned `VPcmFloModem` never has the constructor's
+values for any of the five**, and a test that drove only the constructor would
+be measuring a state the program never sees.  Both are reproduced as found and
+`test/unit/t_vpcmctor.cpp` drives both, separately.
+
+The pattern is `VPcmFloModem::externalReset`'s -- the same six flags, the same
+five cleared bytes, the same three CP fields -- but it is NOT a call to it:
+`externalReset` also re-initialises both parameter blocks and prints, and does
+neither here.  The duplication is the original's, and it is why `VPCMXF_Create`
+is its own translation unit: finding 1264, one source file is one mutation
+suite's namespace, and a near-copy of `externalReset`'s tail inside
+`VPcmFloModem.cpp` would make anchors in both match twice.
+
+======================================================================
+
+### 1342. FOUR MUTATION SUITES, 178 MUTATIONS, AND THE TWO ARGUMENT SWAPS ARE PROVED CAUGHT
+
+    v90modemctor  26 mutations   24 caught, 0 NOT caught, 2 equivalent
+    vpcmctor      32             31 caught, 0 NOT caught, 1 equivalent
+    vpcmxfcreate  24             21 caught, 0 NOT caught, 3 equivalent
+    vpcmdp        96             88 caught, 0 NOT caught, 8 equivalent
+
+**The two same-typed adjacent pointer pairs were swapped in the source and
+watched to fail**, which is findings 1301 and 1307's defect made unshippable
+rather than merely warned about:
+
+- `&mappingParams` (+0x18) and `&mappingParamsAlt` (+0x668), arguments 6 and 7
+  of BOTH `V90Modulator` and `V90Demodulator`.  Swapped, the test failed in
+  both arms, at `V90Modulator+16/+20` and `V90Demodulator+20/+24`.  It is
+  catchable ONLY because the comparison descends into the heap-allocated 0x70
+  and 0x298 sub-objects where the callee stores them; a fixture that stopped
+  at the root would have passed.
+- `entFiltDen` (.data+0x120) and `entFiltNum` (.data+0xe0), arguments 3 and 4
+  of `GenericIIR<float,double>`.  These are BORROWED, not copied, so both
+  words hold static addresses that can never compare equal between the sides
+  and the obvious move -- excluding them -- would have made the swap
+  invisible.  Each is pinned to a named symbol pair instead, AND the two
+  targets are compared over the filter's declared order.  Swapped, both
+  mechanisms fired.
+
+======================================================================
+
+### 1343. A CONGRUENCE FIXTURE THAT TRANSLATES POINTERS CANNOT TELL A POINTER FROM AN INTEGER
+
+The fixture pattern findings 800-806 established -- run ours, snapshot the
+graph, tear it down, run the blob's over the same storage, compare -- has to
+TRANSLATE any word holding a heap address, because the two runs get different
+allocations even when they get the same ones back.  The translation is "does
+this word equal some live allocation's base".
+
+With heap randomisation, an ordinary integer occasionally EQUALS an allocation
+base on one side and not the other, and gets translated on one side only.  The
+symptom is a rare, unreproducible one-word difference.  Measured at 15 failures
+in 400 runs in one file and 1 in 150 in another -- which is exactly the rate
+that gets attributed to something else.
+
+**The fix is one line: a word whose RAW bytes already match is never
+translated.**  Translation can then only ever repair a difference, never
+create one.  0 in 300 and 0 in 150 after, with all three mutation suites
+re-verified unchanged.
+
+The general rule: a fixture that CANONICALISES before comparing must be
+idempotent on already-equal inputs, or it is a source of failures of its own.
+
+======================================================================
+
+### 1344. TWO INADVERTENT ORACLES: A FOLDED STRING LITERAL AND A SECOND HOME FOR FINDING 1250
+
+Two smaller things the batch's tests turned up, both about a check that looks
+like a check and is not:
+
+**`vpcm_op.name` is ONE address on both sides.**  The linker folds our `"VPCM"`
+and the reference object's into a single literal, so a cross-side `strcmp` of
+the two `name` pointers compares a string with itself and would pass however
+wrong either was.  Each side is pinned to its OWN literal instead.  Any
+cross-side comparison of a string POINTER is suspect for this reason.
+
+**Finding 1250 is now asserted in a second place.**  `t_vpcmctor` checks all
+four halves of the `GenericIIR` `m_i`/`m_acc` divergence, because the filter is
+an embedded member of `VPcmFloModem` and the constructor's output includes it.
+So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
+which is a note for whoever repairs it, not a reason not to.
+
+======================================================================

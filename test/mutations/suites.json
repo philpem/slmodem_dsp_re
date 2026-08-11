@@ -292,6 +292,10 @@
   "src/pump/v90/V90Mapper.cpp",
   "build/test/t_v90modchain"
  ],
+ "v90modemctor": [
+  "src/pump/v90/V90ModemCtor.cpp",
+  "build/test/t_v90modemctor"
+ ],
  "v90modulator": [
   "src/pump/v90/V90Modulator.cpp",
   "build/test/t_v90modchain"
@@ -420,9 +424,21 @@
   "src/pump/v90/VPcmFloModem.cpp",
   "build/test/t_vpcmflomodem"
  ],
+ "vpcmctor": [
+  "src/pump/v90/VPcmFloModemCtor.cpp",
+  "build/test/t_vpcmctor"
+ ],
+ "vpcmdp": [
+  "src/pump/v90/vpcm.c",
+  "build/test/t_vpcmdp"
+ ],
  "vpcmguard": [
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmguard"
+ ],
+ "vpcmxfcreate": [
+  "src/pump/v90/VPcmXfCreate.cpp",
+  "build/test/t_vpcmctor"
  ],
  "vpcmxfterm": [
   "src/pump/v90/VPcmXfTerm.cpp",

@@ -1,0 +1,195 @@
+[
+ {
+  "_": [
+   "`VPCMXF_Create` and `VPCMXF_Delete`, the extern \"C\" wrappers around",
+   "VPcmFloModem's construction and destruction.  A SECOND SET FOR A SECOND",
+   "SOURCE FILE: a suite names one source, and these two functions live in",
+   "src/pump/v90/VPcmXfCreate.cpp while the constructor they wrap lives in",
+   "VPcmFloModemCtor.cpp.  Both sets are caught by the same binary,",
+   "build/test/t_vpcmctor.",
+   "",
+   "FIVE ARGUMENTS AND ONLY THE FIRST TWO ARE OBVIOUS.  `digitalSide` is",
+   "tested for zero three times, never stored, and INVERTED on its way into",
+   "the modem, so a mutation that stops inverting it is the most valuable",
+   "entry here; `durationMs` is a duration converted to a sample count by",
+   "one of two multiplies chosen on the same argument, and `mode` is a",
+   "two-bit mask unpacked by a four-arm switch.",
+   "",
+   "TWO OF THESE ARE CAUGHT ONLY BY THE TRANSCRIPT PASS.  The announcement",
+   "chooses \"Digital\" or \"Analog\" on `digitalSide` while the modem gets",
+   "`(digitalSide == 0)`, so the string and the modem disagree BY",
+   "CONSTRUCTION and no comparison of memory can see which way round the",
+   "two are.  It also prints `maxDataBuffer`, which is the only place the",
+   "sample-count conversion appears as a number rather than as an",
+   "allocation length."
+  ]
+ },
+
+ {
+  "label": "the side handed to the modem is not inverted",
+  "find": "\tside = (V90ModemSide)(digitalSide == 0);",
+  "replace": "\tside = (V90ModemSide)(digitalSide != 0);"
+ },
+ {
+  "label": "the analog rate is used for the digital side too",
+  "find": "\t\tmaxDataBuffer = (int)(durationMs * 8.0 + 0.5);",
+  "replace": "\t\tmaxDataBuffer = (int)(durationMs * 9.6 + 0.5);"
+ },
+ {
+  "label": "the digital rate is used for the analog side too",
+  "find": "\t\tmaxDataBuffer = (int)(durationMs * 9.6 + 0.5);",
+  "replace": "\t\tmaxDataBuffer = (int)(durationMs * 8.0 + 0.5);"
+ },
+ {
+  "label": "the analog conversion truncates instead of rounding",
+  "find": "\t\tmaxDataBuffer = (int)(durationMs * 9.6 + 0.5);",
+  "replace": "\t\tmaxDataBuffer = (int)(durationMs * 9.6);"
+ },
+ {
+  "label": "the digital conversion rounds with 1.5 and not 0.5",
+  "find": "\t\tmaxDataBuffer = (int)(durationMs * 8.0 + 0.5);",
+  "replace": "\t\tmaxDataBuffer = (int)(durationMs * 8.0 + 1.5);"
+ },
+ {
+  "equivalent": true,
+  "why": [
+   "0.4 AND 0.5 CANNOT BE TOLD APART ON THIS ARM, for every input the type",
+   "admits.  `durationMs` is an `unsigned int`, so `durationMs * 8.0` is an",
+   "exact integer in a double for every value up to 2^53, and adding any",
+   "constant strictly between 0 and 1 to an integer leaves the truncation",
+   "unchanged.  The rounding term is therefore unobservable HERE and is",
+   "observable on the analog arm, where the multiplier is 9.6 and the",
+   "product has a fraction -- and that mutation, `9.6` truncated instead of",
+   "rounded, IS caught.",
+   "",
+   "Kept as the pair to it: the two entries together say that the +0.5 is",
+   "load-bearing on one arm and not on the other, which is a property of the",
+   "two rates and not of the test.  `+ 1.5` is mutated separately and is",
+   "caught, so the term is not untested -- only this VALUE of it is",
+   "indistinguishable."
+  ],
+  "label": "the digital conversion rounds with 0.4 and not 0.5",
+  "find": "\t\tmaxDataBuffer = (int)(durationMs * 8.0 + 0.5);",
+  "replace": "\t\tmaxDataBuffer = (int)(durationMs * 8.0 + 0.4);"
+ },
+ {
+  "label": "the sample count is the duration, unconverted",
+  "find": "\tvpcmxf_modem_ctor(self, v34Object, side, dpRuntime,\n\t\t\t  (unsigned int)maxDataBuffer, v90Mode, v92Mode);",
+  "replace": "\tvpcmxf_modem_ctor(self, v34Object, side, dpRuntime, durationMs,\n\t\t\t  v90Mode, v92Mode);"
+ },
+
+ {
+  "label": "mode 1 sets the V.92 mode and not the V.90 one",
+  "find": "\tcase 1:\n\t\tv90Mode = (V90ComputationalMode)1;\n\t\tv92Mode = (V92ComputationalMode)0;",
+  "replace": "\tcase 1:\n\t\tv90Mode = (V90ComputationalMode)0;\n\t\tv92Mode = (V92ComputationalMode)1;"
+ },
+ {
+  "label": "mode 2 sets the V.90 mode and not the V.92 one",
+  "find": "\tcase 2:\n\t\tv90Mode = (V90ComputationalMode)0;\n\t\tv92Mode = (V92ComputationalMode)1;",
+  "replace": "\tcase 2:\n\t\tv90Mode = (V90ComputationalMode)1;\n\t\tv92Mode = (V92ComputationalMode)0;"
+ },
+ {
+  "label": "mode 3 sets neither mode",
+  "find": "\tcase 3:\n\t\tv90Mode = (V90ComputationalMode)1;\n\t\tv92Mode = (V92ComputationalMode)1;",
+  "replace": "\tcase 3:\n\t\tv90Mode = (V90ComputationalMode)0;\n\t\tv92Mode = (V92ComputationalMode)0;"
+ },
+ {
+  "label": "the default arm sets both modes",
+  "find": "\tdefault:\n\t\tv90Mode = (V90ComputationalMode)0;\n\t\tv92Mode = (V92ComputationalMode)0;",
+  "replace": "\tdefault:\n\t\tv90Mode = (V90ComputationalMode)1;\n\t\tv92Mode = (V92ComputationalMode)1;"
+ },
+
+ {
+  "label": "the object is allocated 64 bytes short",
+  "find": "\tself = (VPcmFloModem *)sysdep_malloc(sizeof(VPcmFloModem));",
+  "replace": "\tself = (VPcmFloModem *)sysdep_malloc(sizeof(VPcmFloModem) - 64);"
+ },
+ {
+  "label": "the announcement's two sides are swapped",
+  "find": "\t\t    digitalSide != 0 ? \"Digital\" : \"Analog\", maxDataBuffer);",
+  "replace": "\t\t    digitalSide != 0 ? \"Analog\" : \"Digital\", maxDataBuffer);"
+ },
+ {
+  "label": "the announcement prints the duration and not the sample count",
+  "find": "\t\t    digitalSide != 0 ? \"Digital\" : \"Analog\", maxDataBuffer);",
+  "replace": "\t\t    digitalSide != 0 ? \"Digital\" : \"Analog\", (int)durationMs);"
+ },
+
+ {
+  "label": "nofBitsPerSymbol is left at the constructor's 0",
+  "find": "\tself->nofBitsPerSymbol = 2;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "minNofTransmitSequences is left at the constructor's 0",
+  "find": "\tself->minNofTransmitSequences = 1;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "flags_0217[1] keeps the constructor's 1",
+  "find": "\tself->flags_0217[1] = 0;",
+  "replace": "\tself->flags_0217[1] = 1;"
+ },
+ {
+  "label": "flags_0217[5] keeps the constructor's 1",
+  "find": "\tself->flags_0217[5] = 0;",
+  "replace": "\tself->flags_0217[5] = 1;"
+ },
+ {
+  "label": "flags_0217[2] is cleared where the object leaves it set",
+  "find": "\tself->flags_0217[2] = 1;",
+  "replace": "\tself->flags_0217[2] = 0;"
+ },
+ {
+  "label": "the bit pointer is not reset",
+  "find": "\tself->bitPointer = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "equivalent": true,
+  "why": [
+   "SIXTEEN OF THE TWENTY-ONE STORES AGREE WITH THE CONSTRUCTOR, and these",
+   "three are among them.  `VPcmFloModem::VPcmFloModem` has already written",
+   "`terminateJa`, `terminateCp` and `terminateCpNot` to zero",
+   "(src/pump/v90/VPcmFloModemCtor.cpp), the object under construction is",
+   "reached by nothing else between the two, and no side effect can restore",
+   "the storage's old bytes -- so removing the second write leaves exactly",
+   "the value the first one put there.  No observation of memory can",
+   "separate the two spellings.",
+   "",
+   "The duplication is the ORIGINAL'S and the object has both, so the",
+   "source keeps both: the second tier can see the difference even though",
+   "the first cannot.  This entry is conditional on VPcmFloModemCtor.cpp",
+   "keeping its own store, and if that ever changes this mutation will",
+   "start being caught, which is the notification.",
+   "",
+   "The five stores that CONTRADICT the constructor -- nofBitsPerSymbol,",
+   "minNofTransmitSequences and three of the six flags -- are the ones that",
+   "carry information, and every one of those is mutated above and caught."
+  ],
+  "label": "the three termination requests are not cleared",
+  "find": "\tself->terminateJa = 0;\n\tself->terminateCp = 0;\n\tself->terminateCpNot = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "equivalent": true,
+  "why": [
+   "The constructor has already written `cpNofBits` to zero; the argument",
+   "is the one above, applied to the fourth of the sixteen agreeing stores."
+  ],
+  "label": "the CP bit count is not cleared",
+  "find": "\tself->cpNofBits = 0;",
+  "replace": "\t(void)0;"
+ },
+
+ {
+  "label": "VPCMXF_Delete drops its null guard",
+  "find": "\tif (self != 0) {\n\t\tself->~VPcmFloModem();\n\t\tsysdep_free(self);\n\t}",
+  "replace": "\tself->~VPcmFloModem();\n\tsysdep_free(self);"
+ },
+ {
+  "label": "VPCMXF_Delete frees without destroying",
+  "find": "\t\tself->~VPcmFloModem();\n\t\tsysdep_free(self);",
+  "replace": "\t\tsysdep_free(self);"
+ }
+]

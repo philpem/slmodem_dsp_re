@@ -21,13 +21,26 @@
  * an empty one would be a change: with `-fno-lifetime-dse` in CXXFLAGS a
  * user-written body is not the same thing as no body at all.
  *
- * The symbols appear in our object anyway, because six members with
- * non-trivial destructors make the implicit one non-trivial, and they are
- * differentially tested -- test/unit/t_vpcmflomodemctor.cpp drives `D1` and
- * `D2` by symbol against `ref__ZN12VPcmFloModemD1Ev` and `D2`, exactly as it
- * drives the two constructors.  `VPCMXF_Delete` is the same six calls inlined
- * at its one call site (src/pump/v90/VPcmXfCreate.cpp), which is the other
- * half of the same reading.
+ * AND THE SYMBOLS DO NOT EXIST IN OUR OBJECT.  This paragraph used to claim
+ * they did and that a file named `t_vpcmflomodemctor.cpp` drove them; `nm`
+ * over `build/src/` finds no `_ZN12VPcmFloModemD*` and that file has never
+ * existed.  Both sentences were wrong and are retracted here rather than
+ * quietly deleted, because the retraction is the finding: an
+ * implicitly-declared destructor is implicitly INLINE, our build has exactly
+ * one call site for it -- `VPCMXF_Delete` -- and GCC inlines it there and
+ * emits no out-of-line copy at all.  The BLOB has both, as ordinary global
+ * `T` symbols, so 194 bytes of it are behaviourally reproduced (they are the
+ * six calls inside our `VPCMXF_Delete`, instruction for instruction) and
+ * symbolically absent.  Deviation D237, and the blob's `D1` is what
+ * test/unit/t_vpcmctor.cpp drives on our side's behalf -- through
+ * `VPCMXF_Delete`, which is where our copy of the code actually lives.
+ *
+ * Forcing the symbols out would cost more than it buys.  A destructor
+ * declared here and defined out of line cannot be inlined into
+ * `VPCMXF_Delete`, which would turn its six calls into one and make THAT
+ * function stop matching the blob; and one defined inline in the header comes
+ * out weak and in a comdat group, where the blob's are global.  Neither is
+ * the object's shape, and the object's shape is the specification.
  *
  * ===========================================================================
  * WHAT THE ARGUMENTS DO

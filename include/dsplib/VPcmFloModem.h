@@ -133,6 +133,14 @@ public:
 	 * GCC emits for an IMPLICITLY-DECLARED one over these six members.
 	 * Declaring an empty one would not be the same function: CXXFLAGS
 	 * carries `-fno-lifetime-dse`, so a written body is not elided.
+	 *
+	 * THE PRICE IS THAT OUR OBJECT HAS NEITHER SYMBOL.  An implicit
+	 * destructor is implicitly inline, our build has one call site for it
+	 * (`VPCMXF_Delete`), and GCC inlines it there and emits no out-of-line
+	 * copy -- so 194 bytes of the blob are behaviourally reproduced and
+	 * symbolically absent.  Deviation D237, and
+	 * src/pump/v90/VPcmFloModemCtor.cpp says why the two ways of forcing
+	 * the symbols out would each break something that currently matches.
 	 */
 	VPcmFloModem(void *v34Object, V90ModemSide side,
 		     _tagModemParameters *modemParams, unsigned int nSamples,

@@ -1,0 +1,206 @@
+[
+ {
+  "_": [
+   "V90Modem's lifecycle pair: six arguments, two embedded member",
+   "constructions, five allocations, six sub-constructor calls with thirteen",
+   "and fifteen arguments, and a destructor of six guarded arms.",
+   "",
+   "ALMOST NOTHING HERE IS A WRONG VALUE.  The whole class of defect this",
+   "pair can carry is a PERMUTATION -- an argument landing in a neighbouring",
+   "slot, a guard reading the field beside the one it releases -- so most of",
+   "these move a pointer rather than change a number.  They are catchable",
+   "only because t_v90modemctor.cpp compares the CONTENTS of all six",
+   "allocations and not merely the six pointers to them: `&mappingParams`",
+   "and `&mappingParamsAlt` are stored in the modulator or the demodulator",
+   "and in no field of V90Modem at all, so a swap of the two is invisible to",
+   "any comparison that stops at the object.",
+   "",
+   "TWO ARE CAUGHT ONLY BY THE TRANSCRIPT PASS and would survive every byte",
+   "comparison in the file.  The opening announcement chooses \"Analog\" or",
+   "\"Digital\" on the ARGUMENT, where the switch below it reloads the",
+   "MEMBER; the two readings agree on every value the object ends up",
+   "storing, so nothing in memory can tell them apart.  Same for the",
+   "destructor's `side > 1`, whose only effect is a line of text.",
+   "",
+   "ONE THING IS DELIBERATELY NOT MUTATED, and it is want of an observable",
+   "rather than an oversight: `compMode`, the constructor's fifth argument.",
+   "It is forwarded to `V90Demodulator` as argument 14 and reaches nothing",
+   "but the equaliser's eleventh argument (t_v90demctor.cpp), and the",
+   "equaliser is a block the DEMODULATOR allocates -- one level below the",
+   "six this file's test compares.  Handing it a different value would",
+   "change a byte no comparison here can see.  t_v90demctor.cpp is where",
+   "that claim is made and it is made there against the equaliser's own",
+   "contents."
+  ]
+ },
+
+ {
+  "label": "ctor: the modulator's mapping parameters are the other way round",
+  "find": "\t\t\t      &mappingParams, &mappingParamsAlt,\n\t\t\t      &additionalCPinfo, &cp, &mp, ptr_49b4,",
+  "replace": "\t\t\t      &mappingParamsAlt, &mappingParams,\n\t\t\t      &additionalCPinfo, &cp, &mp, ptr_49b4,"
+ },
+ {
+  "label": "ctor: the demodulator's mapping parameters are the other way round",
+  "find": "\t\t\t      &mappingParams, &mappingParamsAlt,\n\t\t\t      &additionalCPinfo, &cp, &mp,\n",
+  "replace": "\t\t\t      &mappingParamsAlt, &mappingParams,\n\t\t\t      &additionalCPinfo, &cp, &mp,\n"
+ },
+ {
+  "label": "ctor: the modulator's CP and MP records are the other way round",
+  "find": "&additionalCPinfo, &cp, &mp, ptr_49b4,",
+  "replace": "&additionalCPinfo, &mp, &cp, ptr_49b4,"
+ },
+ {
+  "label": "ctor: the demodulator's CP and MP records are the other way round",
+  "find": "\t\t\t      &additionalCPinfo, &cp, &mp,\n",
+  "replace": "\t\t\t      &additionalCPinfo, &mp, &cp,\n"
+ },
+ {
+  "label": "ctor: the modulator gets the additional CP info where the CP goes",
+  "find": "&additionalCPinfo, &cp, &mp, ptr_49b4,\n",
+  "replace": "&cp, &additionalCPinfo, &mp, ptr_49b4,\n"
+ },
+ {
+  "label": "ctor: the modulator gets the V.92 jitter detector first",
+  "find": "\t\tv90m_mod_ctor(p, nofSymbols, phase2Info, jd, jd92, dil,",
+  "replace": "\t\tv90m_mod_ctor(p, nofSymbols, phase2Info, jd92, jd, dil,"
+ },
+ {
+  "label": "ctor: the demodulator gets the V.92 jitter detector first",
+  "find": "\t\tv90m_dem_ctor(p, nofSymbols, phase2Info, jd, jd92, dil,",
+  "replace": "\t\tv90m_dem_ctor(p, nofSymbols, phase2Info, jd92, jd, dil,"
+ },
+ {
+  "label": "ctor: the demodulator's session flag is the symbol count",
+  "find": "\t\t\t      ptr_49b4, compMode, sessionFlag);",
+  "replace": "\t\t\t      ptr_49b4, compMode, nofSymbols);"
+ },
+ {
+  "label": "ctor: the demodulator's codec type is read from the minimum rate",
+  "find": "(__tHardwareCodecTypes__)modemParams->codecType,",
+  "replace": "(__tHardwareCodecTypes__)modemParams->minRate,"
+ },
+
+ {
+  "label": "ctor: the phase 2 record is allocated the jitter detector's size",
+  "find": "\tp = sysdep_malloc(sizeof(V90Phase2Info));",
+  "replace": "\tp = sysdep_malloc(sizeof(V90Jd));"
+ },
+ {
+  "label": "ctor: the demodulator is allocated 0x290 bytes and not 0x298",
+  "find": "#define V90DEMODULATOR_BYTES\t0x298",
+  "replace": "#define V90DEMODULATOR_BYTES\t0x290"
+ },
+ {
+  "label": "ctor: the jitter detector is built from the modem parameters",
+  "find": "\tv90m_jd_ctor(p, ptr_49b4);",
+  "replace": "\tv90m_jd_ctor(p, modemParams);"
+ },
+ {
+  "label": "ctor: the V.92 jitter detector is built from the phase 2 record",
+  "find": "\tv90m_jd92_ctor(p, ptr_49b4);",
+  "replace": "\tv90m_jd92_ctor(p, phase2Info);"
+ },
+ {
+  "label": "ctor: the session flag stored is the symbol count",
+  "find": "\tsessionFlag = flag;",
+  "replace": "\tsessionFlag = nofSymbols;"
+ },
+ {
+  "label": "ctor: the DIL descriptor is not stored",
+  "find": "\tdil = dilDescriptor;",
+  "replace": "\tdil = 0;"
+ },
+ {
+  "label": "ctor: the modulator arm leaves the demodulator holding the seed",
+  "find": "\t\tmodulator = (V90Modulator *)p;\n\t\tdemodulator = 0;",
+  "replace": "\t\tmodulator = (V90Modulator *)p;"
+ },
+ {
+  "label": "ctor: the demodulator arm leaves the modulator holding the seed",
+  "find": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tmodulator = 0;\n",
+  "replace": "\tcase V90_MODEM_SIDE_ANALOG:\n"
+ },
+
+ {
+  "label": "ctor: the announcement reads the member and not the argument",
+  "find": "\t\t\t\t     modemSide ? \"Analog\" : \"Digital\");",
+  "replace": "\t\t\t\t     side ? \"Analog\" : \"Digital\");"
+ },
+ {
+  "label": "ctor: the announcement's two sides are swapped",
+  "find": "modemSide ? \"Analog\" : \"Digital\");",
+  "replace": "modemSide ? \"Digital\" : \"Analog\");"
+ },
+ {
+  "label": "dtor: the illegal-side test is `> 2` and not `> 1`",
+  "find": "\tif (side > 1) {",
+  "replace": "\tif (side > 2) {"
+ },
+
+ {
+  "label": "dtor: the jitter detector's guard releases the V.92 one",
+  "find": "\tif (jd != 0) {\n\t\tjd->~V90Jd();\n\t\tsysdep_free(jd);",
+  "replace": "\tif (jd != 0) {\n\t\tjd->~V90Jd();\n\t\tsysdep_free(jd92);"
+ },
+ {
+  "label": "dtor: the phase 2 record is freed without its guard",
+  "find": "\tif (phase2Info != 0)\n\t\tsysdep_free(phase2Info);",
+  "replace": "\tsysdep_free(phase2Info);"
+ },
+ {
+  "label": "dtor: the modulator is freed without being destroyed",
+  "find": "\t\tmodulator->~V90Modulator();\n\t\tsysdep_free(modulator);",
+  "replace": "\t\tsysdep_free(modulator);"
+ },
+ {
+  "label": "dtor: the demodulator is freed without being destroyed",
+  "find": "\t\tv90m_dem_dtor(demodulator);\n\t\tsysdep_free(demodulator);",
+  "replace": "\t\tsysdep_free(demodulator);"
+ },
+ {
+  "equivalent": true,
+  "why": [
+   "`~V90Parameters` IS A SINGLE `ret` IN THE BLOB.  Disassembled:",
+   "`ref__ZN13V90ParametersD1Ev` at 0x279f0 is `c3` and `D2` at 0x279e0 is",
+   "`c3`, both followed only by alignment padding.  So the call this removes",
+   "does nothing at all, whichever side runs it, and no observation of",
+   "memory or of the allocator can separate the two spellings.",
+   "",
+   "The class earns that: src/pump/v90/V90Parameters.cpp's destructor has an",
+   "empty body and V90Parameters has no base and no member of class type, so",
+   "there is no sub-object destruction for the call to carry.",
+   "",
+   "It is NOT code-identical and that is the reason to keep the source as it",
+   "is: compiled both ways, the pristine form emits `push 0x49b4(%ebx);",
+   "call _ZN13V90ParametersD1Ev` and the mutated form emits neither, and the",
+   "blob has the call.  Removing it would cost a second-tier match to buy",
+   "nothing."
+  ],
+  "label": "dtor: the parameter block is released without being destroyed",
+  "find": "\t\tptr_49b4->~V90Parameters();\n\t\tsysdep_free(ptr_49b4);",
+  "replace": "\t\tsysdep_free(ptr_49b4);"
+ },
+
+ {
+  "equivalent": true,
+  "why": [
+   "`side = modemSide;` is executed before the switch, and NOTHING between",
+   "the two can change either: the four calls in between are handed `p` (a",
+   "fresh allocation), `modemParams` and `ptr_49b4`, and not one of them is",
+   "given `this`, so no callee can reach +0x49bc.  The two spellings",
+   "therefore select the same arm for every input, and no differential test",
+   "can separate them.",
+   "",
+   "It is recorded rather than deleted because the object DOES distinguish",
+   "them and the distinction is written into the source: 0x195de reloads",
+   "`0x49bc(%esi)` rather than reusing the register it stored from, which is",
+   "what a read of the member compiles to and not what a read of the",
+   "argument does.  That is a second-tier claim -- `make similarity`'s, not",
+   "`make phase`'s -- and this entry is the note that the first tier cannot",
+   "reach it."
+  ],
+  "label": "ctor: the switch is taken on the argument and not on the member",
+  "find": "\tswitch (side) {",
+  "replace": "\tswitch (modemSide) {"
+ }
+]

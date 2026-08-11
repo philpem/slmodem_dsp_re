@@ -4946,3 +4946,21 @@ Each allocation is followed immediately by a constructor call or, for the 0xb4 p
 *Batch of 2026-08-11, from `V90Demodulator::~V90Demodulator` (blob 0x1ad70/0x1b010) via `sessionTermination` (0x1ab30). **Reachability: FIRES** on every destruction. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1309.** The destructor's first act is an unconditional `sessionTermination()`, which is not a teardown helper: it emits four `edprintf` diagnostics and stores into `params->modemParams->clockDeviation`. So tearing a session down has a side effect on state that outlives the object, and it happens whether or not the caller wanted a session terminated -- a `delete` issued during error recovery writes the same parameter a clean shutdown does. Reproduced rather than repaired; D200 records a separate defect in one of the four strings.
+
+## D235 🐛 `V90Modem`'s constructor leaves BOTH the modulator and the demodulator pointers uninitialised on an illegal `side`, and the destructor then destroys and frees whatever it finds
+
+*Batch of 2026-08-11, from `V90Modem::V90Modem` (blob 0x194e0 / 0x19740), +0xfe onwards. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `VPcmFloModem`'s constructor, passes its own `side` argument through unchanged, and `VPCMXF_Create` computes that as `sete %al`, which is 0 or 1 and nothing else. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1332.** The same shape as D230 for `V92Modem`, one class up and twice as bad: `V92Modem`'s third arm leaves ONE word uninitialised, and this one leaves TWO. The switch is `test`/`je` for 0, `dec`/`je` for 1, then a fall-through that prints "V90Modem Constructor: Illegal modemSide" and returns; +0x00 and +0x04 keep whatever the storage held. `~V90Modem` then tests each, calls `_ZN12V90ModulatorD1Ev` or `_ZN14V90DemodulatorD1Ev` on it, and frees it. Reproduced exactly. `test/unit/t_v90modemctor.cpp` drives `side = 2` and asserts our allocator counters EQUAL the blob's rather than asserting they are zero, which is the only assertion that is true of the object.
+
+## D236 🐛 `VPCMXF_Create` constructs into its allocation before it tests it for NULL
+
+*Batch of 2026-08-11, from `VPCMXF_Create` (blob 0xfcf0), +0xaf and +0xe2. **Reachability: CANNOT FIRE** unless `sysdep_malloc` returns NULL, which slmodemd's wrapper does only on a failed `malloc`. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1333.** `call sysdep_malloc` at 0xfd9f, `call _ZN12VPcmFloModemC1E...` at 0xfdcd with nothing between them, and `test %ebx,%ebx` at 0xfdd2 -- so on a failed allocation the 651-byte constructor runs over a null pointer and the process is gone before the "new VPcmFloModem() failed." message it would have printed. The guard is real code and it is unreachable in the only circumstance it was written for. Reproduced where it is rather than moved to where it would work: moving it is a different function, and the same family as D232 for `V92Modem`'s five allocations.
+
+## D237 ⚠ `~VPcmFloModem` exists in the blob as two global symbols and in our object as none
+
+*Batch of 2026-08-11, from `VPcmFloModem::~VPcmFloModem` (blob 0xd0a0 D1, 0xd030 D2, 0x61 = 97 bytes each). **Reachability: n/a** -- this is a symbol-table difference, not a behavioural one. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1334.** The destructor is IMPLICITLY DECLARED on both sides -- it is six member destructor calls in reverse declaration order and nothing else, which is exactly what GCC generates and exactly what 0xd0a0 contains. An implicit destructor is implicitly inline, and our build has one call site for it, `VPCMXF_Delete`, into which GCC inlines it and then emits no out-of-line copy. The blob has both `D1` and `D2` as ordinary global `T` symbols. So 194 bytes of the object are behaviourally reproduced -- they are the six calls inside our `VPCMXF_Delete`, instruction for instruction, and `test/unit/t_vpcmctor.cpp` drives the blob's `D1` through that function -- and symbolically absent, which `debugaudit.py --missing` and `compare.py` will both count against us. Neither way of forcing the symbols out is right: an out-of-line definition cannot be inlined into `VPCMXF_Delete` and would turn its six calls into one, and an in-header one comes out weak and in a comdat group where the blob's are global.
