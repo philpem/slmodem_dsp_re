@@ -101,5 +101,189 @@
   "label": "the constructor also touches the words below the range",
   "find": "\t  field_40(0), field_44(0), field_48(0)\n{\n}\n",
   "replace": "\t  field_40(0), field_44(0), field_48(0)\n{\n\tproductLo = 0;\n}\n"
+ },
+ {
+  "label": "NOTE: what the progress entries are for",
+  "why": "progress is a coder with state, so the fixture drives eight calls in a row over one object per case and compares the twelve digits AND the whole object after every one. The entries below split into four claims: which moduli cases 1 and 2 report and where the zeros go; how the bit array is read (one bit per byte, most significant first, split at bit 62); the disparity bit at +0x4c and the complement it selects; and the 126-bit division itself, digit by digit. The read-back entry is the fixture's own self-test -- v is negative on the paths that run through 2^63, so a signed temporary in place of the round trip through out[k] gives different digits, and an entry that is NOT caught would mean the sweep never reached a negative remainder."
+ },
+ {
+  "label": "case 1 reports the second pair of each group, not the first",
+  "find": "\t\tout[0] = field_18 - 1;\n\t\tout[1] = field_1c - 1;\n\t\tout[2] = 0;\n\t\tout[3] = 0;",
+  "replace": "\t\tout[0] = 0;\n\t\tout[1] = 0;\n\t\tout[2] = field_20 - 1;\n\t\tout[3] = field_24 - 1;"
+ },
+ {
+  "label": "case 1 reports the modulus rather than the largest digit",
+  "find": "\t\tout[8] = field_38 - 1;\n\t\tout[9] = field_3c - 1;",
+  "replace": "\t\tout[8] = field_38;\n\t\tout[9] = field_3c;"
+ },
+ {
+  "label": "case 2 takes its last pair from the wrong two moduli",
+  "find": "\t\tout[10] = field_40 - 1;\n\t\tout[11] = field_44 - 1;",
+  "replace": "\t\tout[10] = field_3c - 1;\n\t\tout[11] = field_40 - 1;"
+ },
+ {
+  "label": "case 2 leaves the words it should zero alone",
+  "find": "\t\tout[4] = 0;\n\t\tout[5] = 0;\n\t\tout[6] = field_30 - 1;",
+  "replace": "\t\tout[6] = field_30 - 1;"
+ },
+ {
+  "label": "the split between the limbs is at bit 63, not 62",
+  "find": "\t\t\tfor (i = (int)(field_48 - 1); i > 62; i--)",
+  "replace": "\t\t\tfor (i = (int)(field_48 - 1); i > 63; i--)"
+ },
+ {
+  "label": "the low limb starts one bit high",
+  "find": "\t\t\ti = 62;\n\t\t} else",
+  "replace": "\t\t\ti = 63;\n\t\t} else"
+ },
+ {
+  "label": "the high limb is used for one bit count too few",
+  "find": "\t\tif (field_48 > 63) {",
+  "replace": "\t\tif (field_48 > 64) {"
+ },
+ {
+  "label": "the whole byte is taken, not its bottom bit",
+  "find": "\t\t\tlo = v92me_shl(lo, 1) | (bytes[i] & 1);",
+  "replace": "\t\t\tlo = v92me_shl(lo, 1) | bytes[i];"
+ },
+ {
+  "label": "the high limb takes the whole byte too",
+  "find": "\t\t\t\thi = v92me_shl(hi, 1) | (bytes[i] & 1);",
+  "replace": "\t\t\t\thi = v92me_shl(hi, 1) | bytes[i];"
+ },
+ {
+  "label": "the halfway point is the product, not half of it",
+  "find": "\t\thh = a / 2;",
+  "replace": "\t\thh = a;"
+ },
+ {
+  "label": "the odd bit of the high limb lands one place down",
+  "find": "\t\tll = v92me_add(v92me_shl(a % 2, 62), v92me_sub(b, 1) / 2);",
+  "replace": "\t\tll = v92me_add(v92me_shl(a % 2, 61), v92me_sub(b, 1) / 2);"
+ },
+ {
+  "label": "the halfway low limb is half the product, not half of one less",
+  "find": "\t\tll = v92me_add(v92me_shl(a % 2, 62), v92me_sub(b, 1) / 2);",
+  "replace": "\t\tll = v92me_add(v92me_shl(a % 2, 62), b / 2);"
+ },
+ {
+  "label": "the comparison at the halfway point excludes equality",
+  "find": "\t\tover = (hi > hh) || (hi == hh && lo >= ll);",
+  "replace": "\t\tover = (hi > hh) || (hi == hh && lo > ll);"
+ },
+ {
+  "label": "the disparity bit is set rather than toggled",
+  "find": "\t\tfield_4c = (unsigned int)(t ^ over);",
+  "replace": "\t\tfield_4c = (unsigned int)(t | over);"
+ },
+ {
+  "label": "the complement is taken on the wrong state of the bit",
+  "find": "\t\tt = (int)field_4c;\n\t\tif (t) {",
+  "replace": "\t\tt = (int)field_4c;\n\t\tif (!t) {"
+ },
+ {
+  "label": "the complement's high limb loses its guard on a zero product",
+  "find": "\t\t\td = a ? v92me_sub(a, hi) : 0;",
+  "replace": "\t\t\td = v92me_sub(a, hi);"
+ },
+ {
+  "label": "the complement is against the product, not one less than it",
+  "find": "\t\t\tc = v92me_sub(v92me_sub(b, lo), 1);",
+  "replace": "\t\t\tc = v92me_sub(b, lo);"
+ },
+ {
+  "label": "the borrow out of the low limb is not repaid",
+  "find": "\t\t\tc = v92me_add(c, V92ME_HALF);\n\t\t\td = v92me_sub(d, 1);",
+  "replace": "\t\t\tc = v92me_add(c, V92ME_HALF);"
+ },
+ {
+  "label": "the borrow is taken when the high limb is zero as well",
+  "find": "\t\tif (d > 0 && c < 0) {",
+  "replace": "\t\tif (d >= 0 && c < 0) {"
+ },
+ {
+  "label": "a zero high limb goes down the long path",
+  "find": "\t\tif (d > 0) {\n\t\t\tlong long r = d % field_18;",
+  "replace": "\t\tif (d >= 0) {\n\t\t\tlong long r = d % field_18;"
+ },
+ {
+  "label": "the correction is computed when the modulus divides exactly",
+  "find": "\t\t\tif (s > 1) {",
+  "replace": "\t\t\tif (s >= 0) {"
+ },
+ {
+  "label": "the first modulus's normalisation shifts one place too few",
+  "find": "\t\t\t\t\tlong long u = v92me_mul(s,\n\t\t\t\t\t\t\t        q >> (n + 1));",
+  "replace": "\t\t\t\t\tlong long u = v92me_mul(s,\n\t\t\t\t\t\t\t        q >> n);"
+ },
+ {
+  "label": "the first modulus's correction is not masked to 63 bits",
+  "find": "\t\t\t\t\tx = v92me_shl(u, n + 1) & V92ME_MASK;",
+  "replace": "\t\t\t\t\tx = v92me_shl(u, n + 1);"
+ },
+ {
+  "label": "the correction is the residue itself, not 2^63 less it",
+  "find": "\t\t\t\te = v92me_sub(V92ME_HALF, x) % field_18;",
+  "replace": "\t\t\t\te = x % field_18;"
+ },
+ {
+  "label": "the first digit drops the correction",
+  "find": "\t\t\tout[0] = (unsigned int)(v92me_add(e, c % field_18) %\n\t\t\t\t\t\tfield_18);",
+  "replace": "\t\t\tout[0] = (unsigned int)(c % field_18);"
+ },
+ {
+  "label": "the fitted-exactly arm of the first modulus is never taken",
+  "find": "\t\t\t\tif (n == 8)\n\t\t\t\t\tx = v92me_mul(v92me_mul(",
+  "replace": "\t\t\t\tif (n == 9)\n\t\t\t\t\tx = v92me_mul(v92me_mul("
+ },
+ {
+  "label": "the high limb is compared against the wrong modulus",
+  "find": "\t\t\tif (d < field_18) {",
+  "replace": "\t\t\tif (d < field_1c) {"
+ },
+ {
+  "label": "the short path forgets the low limb's own quotient",
+  "find": "\t\t\t\tv = v92me_add(c / field_18,\n\t\t\t\t\t      v92me_mul(d, V92ME_HALF /\n\t\t\t\t\t\t\t   field_18));",
+  "replace": "\t\t\t\tv = v92me_mul(d, V92ME_HALF / field_18);"
+ },
+ {
+  "label": "the long path multiplies by the high limb, not its remainder",
+  "find": "\t\t\t\t\t      v92me_mul(V92ME_HALF / field_18,\n\t\t\t\t\t\t\td % field_18));",
+  "replace": "\t\t\t\t\t      v92me_mul(V92ME_HALF / field_18,\n\t\t\t\t\t\t\td));"
+ },
+ {
+  "label": "the second modulus's correction is skipped altogether",
+  "find": "\t\t\t\tif (dq > 0) {",
+  "replace": "\t\t\t\tif (dq > 1000000) {"
+ },
+ {
+  "label": "the fitted-exactly arm of the second modulus is never taken",
+  "find": "\t\t\t\t\t\tif (n == 8)\n\t\t\t\t\t\t\tx1 = v92me_mul(",
+  "replace": "\t\t\t\t\t\tif (n == 9)\n\t\t\t\t\t\t\tx1 = v92me_mul("
+ },
+ {
+  "label": "the second modulus's correction is not masked to 63 bits",
+  "find": "\t\t\t\t\t\t\tx1 = v92me_shl(u1,\n\t\t\t\t\t\t\t\t       n + 1) &\n\t\t\t\t\t\t\t     V92ME_MASK;",
+  "replace": "\t\t\t\t\t\t\tx1 = v92me_shl(u1,\n\t\t\t\t\t\t\t\t       n + 1);"
+ },
+ {
+  "label": "the digit is subtracted as a signed remainder, not read back",
+  "find": "\t\tv = v92me_sub(v, out[2]) / field_20;",
+  "replace": "\t\tv = v92me_sub(v, v % field_20) / field_20;"
+ },
+ {
+  "label": "one digit in the middle takes the next modulus",
+  "find": "\t\tout[6] = (unsigned int)(v % field_30);",
+  "replace": "\t\tout[6] = (unsigned int)(v % field_34);"
+ },
+ {
+  "label": "the last digit is reduced modulo the twelfth modulus",
+  "find": "\t\tout[11] = (unsigned int)v;",
+  "replace": "\t\tout[11] = (unsigned int)(v % field_44);"
+ },
+ {
+  "label": "the last quotient is taken before its digit is removed",
+  "find": "\t\tv = v92me_sub(v, out[10]) / field_40;",
+  "replace": "\t\tv = v / field_40;"
  }
 ]

@@ -43548,6 +43548,13 @@ the divisor of a `__divdi3` with an explicit zero high half, so unsigned is
 forced too.  +0x48 is the number of bits `progress` reads out of its byte
 array, one bit per byte, from `bytes[+0x48 - 1]` down to `bytes[0]`.
 
+**AND +0x08 IS WRITTEN TWICE BY `reset`, THE FIRST TIME FOR NOTHING.**  The
+product of the first six moduli is stored there at 0x55418/0x55445 and both
+arms of the `if` that follows store over it before anything can read it.  It
+is a dead store, it is in the object because GCC 3.4.2 does not eliminate one
+made through a pointer, and it is reproduced rather than dropped:
+docs/deviations.md D263.
+
 ======================================================================
 
 ### 1377. THIRTEEN OF `V92ParamsInfo`'s TWENTY-THREE UNKNOWN WORDS ARE NAMED BY ITS READER
@@ -43590,3 +43597,53 @@ recovering the SOURCE means undoing this, not reproducing it.
 The same reading disposes of the other DImode oddity beside it, `n <= 7`
 compiled as `setle` into a byte that is then `test`ed against the first: the
 `&&` is not short-circuited because neither side can trap or have an effect.
+
+======================================================================
+
+### 1379. THE NORMALISATION BLOCK IS WRITTEN OUT THREE TIMES, AND THE PROOF IS A CALL THAT COULD NOT BE REMATERIALISED
+
+`V92ModulusEncoder::reset` contains it once and `progress` twice -- the same
+eight lines, shifting one factor right until the product stops wrapping:
+
+    n = 0;
+    while (a * (b >> n) > 0 && n <= 7) n++;
+    if (n == 8)  x = <the exact product, written again>;
+    else       { u = a * (b >> (n + 1)); x = (u << (n + 1)) & MASK; }
+
+It is tempting to reconstruct that as a function or a macro and call it three
+times, and the object says it was neither -- or at most a macro.  **The
+`n == 8` arm RE-ISSUES the divisions.**  In `progress` the arm's value is
+`(2^63 / m) * (d % m) * m`, and at 0x55f6a and 0x55fa8 the object calls
+`__divdi3` and `__moddi3` a second time for values it already has in `q` and
+`r` twenty instructions earlier.  GCC cannot do that: a call is not rematerial-
+isable, so it was in the source text twice.  A function would have had the
+value in a parameter; only textual substitution puts the expression back.  The
+same holds in `reset`, where the arm's value is the twelve-fold product spelled
+out for the second time.
+
+So the reconstruction writes it out three times too.  A `static inline` helper
+would behave identically and read better, and it would also evaluate the
+exact product on the path that does not need it -- which is a division by a
+modulus, on a path where the object performs none.
+
+**AND THE ARM IS REACHABLE, which took a mutation to establish.**  The first
+reading here was that it is dead: `2^63 / m` is negative for every modulus and
+`(d % m) * m` is not, so `a * (b >> n) > 0` should fail at the first test.
+That is wrong, because the product WRAPS -- the loop is an overflow detector
+and overflow is exactly what it is looking at.  A search over m and `d % m`
+finds m = 170 with a remainder of 128 keeps the wrapped product positive
+through all eight shifts, and the fixture now drives it as the first modulus
+and as the second.  The claim "unreachable" would have gone into the record as
+a derivation and been wrong; what caught it was that `if (n == 8)` -> `if (n
+== 9)` was NOT caught by a sweep of 3,203 comparisons, which is finding 134's
+argument in its usual form: a branch nothing distinguishes is a branch nothing
+is testing.  Five branches of `progress` were found that way and all five now
+have a value chosen for them.
+
+**A SECOND THING THE SAME READING SETTLES: `progress`'s case 0 never reads the
+twelfth modulus.**  Digits 0 to 10 are `v % m[k]` with `v` reduced after each,
+and the twelfth is the bare quotient the eleventh division leaves -- `out[11]
+= (v - out[10]) / m10`, with no reduction and no reference to +0x44 anywhere
+in the case.  +0x44 is the one field of the object case 0 does not touch,
+while case 2 of the same function reports `m11 - 1` as that digit's range.
+docs/deviations.md D264.

@@ -75,6 +75,12 @@ v92me_add(long long x, long long y)
 	return (long long)((unsigned long long)x + (unsigned long long)y);
 }
 
+static inline long long
+v92me_sub(long long x, long long y)
+{
+	return (long long)((unsigned long long)x - (unsigned long long)y);
+}
+
 /* One 32-bit load out of the parameter block, by offset. */
 static inline unsigned int
 v92me_param(const struct V92ParamsInfo *p, int off)
@@ -207,4 +213,250 @@ V92ModulusEncoder::reset(V92MappingParams *params)
 
 	field_4c = 0;
 	field_50 = 0;
+}
+
+/*
+ * progress -- turn a frame of bits into twelve digits, or report the digits'
+ * ranges.
+ *
+ * +0x50 SELECTS AMONG THREE THINGS, and anything else returns at once.  Cases
+ * 1 and 2 do not look at the bits at all: they write `modulus - 1` -- the
+ * largest digit each position can hold -- for six of the twelve and zero for
+ * the other six, case 1 taking the first two of every group of four and case
+ * 2 the last two.  Case 0 is the encoder proper.
+ *
+ * CASE 0 READS `+0x48` BITS, ONE PER BYTE, MOST SIGNIFICANT FIRST: `bytes[i]`
+ * contributes its bit 0 and nothing else, and `i` counts DOWN from the bit
+ * count to zero.  The result is a 126-bit integer in two limbs, `hi` taking
+ * everything above bit 62 and `lo` the low 63 bits, which is the same base
+ * 2^63 `reset` left the product in.
+ *
+ * THE MIDDLE OF IT IS A COMPLEMENT, and +0x4c is the state that decides.  The
+ * value is compared against half the product -- `productHi / 2` over
+ * `((productHi % 2) << 62) + (productLo - 1) / 2`, which is `(product - 1) / 2`
+ * carried in the same two limbs -- and +0x4c is exclusive-ORed with the
+ * answer.  When +0x4c was already set, the value used is `product - 1 - value`
+ * instead of `value`.  So consecutive calls alternate between the number and
+ * its complement whenever the number lands in the top half, which is a
+ * one-bit running disparity of exactly the kind V.90 and V.92 use to keep a
+ * transmitted sequence balanced.  ONE CALL CANNOT SEE IT: the fixture drives
+ * several in a row against the same object and compares after each.
+ *
+ * THE DIVISION IS THE MIXED-RADIX CONVERSION, and the awkward part is that
+ * the dividend is 126 bits and `__divdi3` is 64.  It is done with 2^63 held
+ * as the negative literal 0x8000000000000000, so
+ *
+ *     value / m  =  lo / m  +  (2^63 / m) * hi  +  correction
+ *
+ * where the correction only matters when `hi` is big enough to need it.  Every
+ * digit after the first two is a plain `v % m` then `v = (v - digit) / m`, and
+ * THE SUBTRACTION READS THE DIGIT BACK OUT OF `out[]`, where it has been
+ * truncated to 32 bits and is then widened UNSIGNED.  That is not the same as
+ * subtracting the remainder: `v` is negative on the paths that go through
+ * 2^63, so the remainder is negative too, and the round trip through
+ * `unsigned int` is what the object does and what makes the digits come out
+ * right.  A signed temporary gives different answers and the mutation set
+ * proves the fixture sees the difference.
+ *
+ * THE NORMALISATION BLOCK from `reset` appears here twice more, once for the
+ * first modulus and once for the second.  It cannot have been a function in
+ * the original: its `n == 8` arm RE-ISSUES `__divdi3` and `__moddi3` for
+ * values a function would have had in hand, and GCC cannot rematerialise a
+ * call -- so the text really was repeated, and it is repeated here (finding
+ * 1379).  The last modulus, +0x44, is never read by case 0 at all: `out[11]`
+ * is the bare quotient left over.  docs/deviations.md D264.
+ */
+void
+V92ModulusEncoder::progress(unsigned char *bytes, unsigned int *out)
+{
+	switch (field_50) {
+	case 0: {
+		long long hi = 0, lo = 0;
+		long long a, b, hh, ll, c, d, v;
+		int i, n, t, over;
+
+		if (field_48 > 63) {
+			for (i = (int)(field_48 - 1); i > 62; i--)
+				hi = v92me_shl(hi, 1) | (bytes[i] & 1);
+			i = 62;
+		} else
+			i = (int)(field_48 - 1);
+
+		for (; i >= 0; i--)
+			lo = v92me_shl(lo, 1) | (bytes[i] & 1);
+
+		/* (product - 1) / 2, in the same two limbs. */
+		a = productHi;
+		b = productLo;
+		hh = a / 2;
+		ll = v92me_add(v92me_shl(a % 2, 62), v92me_sub(b, 1) / 2);
+
+		over = (hi > hh) || (hi == hh && lo >= ll);
+
+		d = hi;
+		c = lo;
+		t = (int)field_4c;
+		if (t) {
+			d = a ? v92me_sub(a, hi) : 0;
+			c = v92me_sub(v92me_sub(b, lo), 1);
+		}
+		field_4c = (unsigned int)(t ^ over);
+
+		/* The complement above can leave the low limb borrowing. */
+		if (d > 0 && c < 0) {
+			c = v92me_add(c, V92ME_HALF);
+			d = v92me_sub(d, 1);
+		}
+
+		if (d > 0) {
+			long long r = d % field_18;
+			long long s = v92me_mul(r, field_18);
+			long long q = V92ME_HALF / field_18;
+			long long e = 0;
+
+			if (s > 1) {
+				long long x;
+
+				n = 0;
+				while (v92me_mul(s, q >> n) > 0 && n <= 7)
+					n++;
+
+				if (n == 8)
+					x = v92me_mul(v92me_mul(
+						V92ME_HALF / field_18,
+						d % field_18), field_18);
+				else {
+					long long u = v92me_mul(s,
+							        q >> (n + 1));
+
+					x = v92me_shl(u, n + 1) & V92ME_MASK;
+				}
+
+				e = v92me_sub(V92ME_HALF, x) % field_18;
+			}
+
+			out[0] = (unsigned int)(v92me_add(e, c % field_18) %
+						field_18);
+
+			if (d < field_18) {
+				v = v92me_add(c / field_18,
+					      v92me_mul(d, V92ME_HALF /
+							   field_18));
+				out[1] = (unsigned int)(v % field_1c);
+				v = v92me_sub(v, out[1]) / field_1c;
+			} else {
+				long long dq = d / field_18;
+
+				v = v92me_add(c / field_18,
+					      v92me_mul(V92ME_HALF / field_18,
+							d % field_18));
+
+				if (dq > 0) {
+					long long r1 = dq % field_1c;
+					long long s1 = v92me_mul(r1, field_1c);
+					long long q1 = V92ME_HALF / field_1c;
+					long long e1 = 0;
+
+					if (s1 > 1) {
+						long long x1;
+
+						n = 0;
+						while (v92me_mul(s1, q1 >> n) >
+						       0 && n <= 7)
+							n++;
+
+						if (n == 8)
+							x1 = v92me_mul(
+							     v92me_mul(
+							      V92ME_HALF /
+							       field_1c,
+							      dq % field_1c),
+							     field_1c);
+						else {
+							long long u1 =
+							  v92me_mul(s1, q1 >>
+								    (n + 1));
+
+							x1 = v92me_shl(u1,
+								       n + 1) &
+							     V92ME_MASK;
+						}
+
+						e1 = v92me_sub(V92ME_HALF, x1)
+						     % field_1c;
+					}
+
+					out[1] = (unsigned int)(v92me_add(e1,
+							v % field_1c) %
+							field_1c);
+					v = v92me_add(v / field_1c,
+						      v92me_mul(V92ME_HALF /
+								field_1c,
+								dq %
+								field_1c));
+				} else {
+					out[1] = (unsigned int)(v % field_1c);
+					v = v92me_sub(v, out[1]) / field_1c;
+				}
+			}
+		} else {
+			out[0] = (unsigned int)(c % field_18);
+			c = v92me_sub(c, out[0]);
+			v = c / field_18;
+			out[1] = (unsigned int)(v % field_1c);
+			v = v92me_sub(v, out[1]) / field_1c;
+		}
+
+		out[2] = (unsigned int)(v % field_20);
+		v = v92me_sub(v, out[2]) / field_20;
+		out[3] = (unsigned int)(v % field_24);
+		v = v92me_sub(v, out[3]) / field_24;
+		out[4] = (unsigned int)(v % field_28);
+		v = v92me_sub(v, out[4]) / field_28;
+		out[5] = (unsigned int)(v % field_2c);
+		v = v92me_sub(v, out[5]) / field_2c;
+		out[6] = (unsigned int)(v % field_30);
+		v = v92me_sub(v, out[6]) / field_30;
+		out[7] = (unsigned int)(v % field_34);
+		v = v92me_sub(v, out[7]) / field_34;
+		out[8] = (unsigned int)(v % field_38);
+		v = v92me_sub(v, out[8]) / field_38;
+		out[9] = (unsigned int)(v % field_3c);
+		v = v92me_sub(v, out[9]) / field_3c;
+		out[10] = (unsigned int)(v % field_40);
+		v = v92me_sub(v, out[10]) / field_40;
+		out[11] = (unsigned int)v;
+		break;
+	}
+
+	case 1:
+		out[0] = field_18 - 1;
+		out[1] = field_1c - 1;
+		out[2] = 0;
+		out[3] = 0;
+		out[4] = field_28 - 1;
+		out[5] = field_2c - 1;
+		out[6] = 0;
+		out[7] = 0;
+		out[8] = field_38 - 1;
+		out[9] = field_3c - 1;
+		out[10] = 0;
+		out[11] = 0;
+		break;
+
+	case 2:
+		out[0] = 0;
+		out[1] = 0;
+		out[2] = field_20 - 1;
+		out[3] = field_24 - 1;
+		out[4] = 0;
+		out[5] = 0;
+		out[6] = field_30 - 1;
+		out[7] = field_34 - 1;
+		out[8] = 0;
+		out[9] = 0;
+		out[10] = field_40 - 1;
+		out[11] = field_44 - 1;
+		break;
+	}
 }
