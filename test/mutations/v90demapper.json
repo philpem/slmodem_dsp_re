@@ -1,0 +1,70 @@
+[
+ {
+  "note": "V90Demapper::printErrorHistogramAndReset and ~V90Demapper.  The function has two halves and they are decided by two different tiers, so the mutations are written to hit both on purpose: the reset half by the arena comparison in t_v90leaves.cpp, the print half by the transcript comparison at debug level 2.  Five of the thirteen below are catchable ONLY through the transcript, and they are marked in their labels."
+ },
+ {
+  "label": "the reset loop stops at the row length instead of at 128",
+  "find": "\t\t\tfor (j = 0; j < V90DEMAPPER_LEVELS; j++) {",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {"
+ },
+ {
+  "label": "the row loop runs to 128 instead of to the row length (transcript only)",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {",
+  "replace": "\t\t\tfor (j = 0; j < V90DEMAPPER_LEVELS; j++) {"
+ },
+ {
+  "label": "the histogram number moves only when something was printed",
+  "find": "\t}\n\terrorHistogramCount++;\n}",
+  "replace": "\t\terrorHistogramCount++;\n\t}\n}"
+ },
+ {
+  "label": "the guard tests five constellations, not six",
+  "find": "\t    constellationSize[4] && constellationSize[5]) {",
+  "replace": "\t    constellationSize[4]) {"
+ },
+ {
+  "label": "the guard tests only the first constellation",
+  "find": "\tif (constellationSize[0] && constellationSize[1] &&\n\t    constellationSize[2] && constellationSize[3] &&\n\t    constellationSize[4] && constellationSize[5]) {",
+  "replace": "\tif (constellationSize[0]) {"
+ },
+ {
+  "label": "the count and the average are printed the other way round (transcript only)",
+  "find": "\t\t\t\t\t constellation[i][j], errorCount[i][j],\n\t\t\t\t\t mean);",
+  "replace": "\t\t\t\t\t constellation[i][j], mean,\n\t\t\t\t\t errorCount[i][j]);"
+ },
+ {
+  "label": "the constellation level is read unsigned (transcript only) -- the movswl at 0x30c69",
+  "find": "\t\t\t\t\t constellation[i][j], errorCount[i][j],",
+  "replace": "\t\t\t\t\t (unsigned short)constellation[i][j],\n\t\t\t\t\t errorCount[i][j],"
+ },
+ {
+  "label": "a level nothing landed on prints its raw error sum, not zero (transcript only)",
+  "find": "\t\t\t\tif (errorCount[i][j] != 0)\n\t\t\t\t\tmean = errorSum[i][j] / errorCount[i][j];",
+  "replace": "\t\t\t\tmean = errorCount[i][j] != 0\n\t\t\t\t\t? errorSum[i][j] / errorCount[i][j]\n\t\t\t\t\t: errorSum[i][j];"
+ },
+ {
+  "label": "the printed histogram number is the one after the increment (transcript only)",
+  "find": "\t\tedprintf(\"Error histogram #%d:\\r\\n\", errorHistogramCount);",
+  "replace": "\t\tedprintf(\"Error histogram #%d:\\r\\n\", errorHistogramCount + 1);"
+ },
+ {
+  "label": "the counts are cleared and the sums are not",
+  "find": "\t\t\t\terrorSum[i][j] = 0;\n\t\t\t\terrorCount[i][j] = 0;",
+  "replace": "\t\t\t\terrorCount[i][j] = 0;"
+ },
+ {
+  "label": "the destructor frees +0x1c whether or not it holds anything",
+  "find": "\tif (array_1c)\n\t\tsysdep_free(array_1c);",
+  "replace": "\tsysdep_free(array_1c);"
+ },
+ {
+  "label": "the destructor leaks the block at +0x20",
+  "find": "\tif (array_20)\n\t\tsysdep_free(array_20);",
+  "replace": "\t(void)array_20;"
+ },
+ {
+  "label": "the destructor prints the histogram when the parameter is CLEAR",
+  "find": "\tif (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM)",
+  "replace": "\tif (!params->DEBUG_DEMAPPER_ERROR_HISTOGRAM)"
+ }
+]

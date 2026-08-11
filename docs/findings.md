@@ -37899,3 +37899,280 @@ real connecting call.  It still agrees with the blob-blob run at every block.
   measurement of another batch's suite and not a change to it;
   `v90conneval.json` is untouched.  The other 66 entries remain stale, as
   they were.
+
+======================================================================
+### 1170. `V90Demapper` IS 0x1eb8 = 7,864 BYTES, AND FOUR PARALLEL `[6][128]` ARRAYS MEET EXACTLY THREE TIMES
+
+The class had no header and no `.cpp` in this tree -- the only mention of the
+name anywhere was one sentence in `V90Demodulator.h` -- so the whole cost of
+its destructor path was the layout, exactly as finding 1104 predicted for the
+thirty classes with neither file.
+
+**The size is an allocation, not a displacement bound**, which is finding
+1107's rule and the thing that cost `V90Equalizer` eight bytes:
+
+```
+   1c4d9:  c7 04 24 b8 1e 00 00   movl  $0x1eb8,(%esp)
+   1c4e0:  e8 ..                  call  sysdep_malloc
+   1c4e5:  89 c6                  mov   %eax,%esi
+   ...
+   1c503:  e8 ..                  call  V90Demapper::V90Demapper(unsigned,
+                                          V90Parameters *,
+                                          V90AutoDigitalImpDetector *)
+   1c508:  89 b3 e4 01 00 00      mov   %esi,0x1e4(%ebx)
+```
+
+inside `V90Demodulator::V90Demodulator`, and the same three instructions at
+0x1c8c9/0x1c8d0/0x1c8f3 inside its C2 twin.  **A displacement scan over all
+eleven `V90Demapper` symbols says 0x1e94**, because the last 0x24 bytes are
+touched only at mixed widths by `reset` and `linearMappingStudy` and the
+highest of those is +0x1eb4.  The two numbers differ by 36, and only the
+allocation is evidence.
+
+**Four arrays, three exact meetings.**  `printErrorHistogramAndReset` runs `i`
+over 0..5 (`cmpl $0x5,0x18(%esp)`, `jbe`) and `j` over 0..127 (`cmp $0x7f,%edx`,
+`jbe`), addressing with `edi = i * 128 + j` -- `shl $0x7` on `i` at 0x30c3c,
+then `inc %edi` per step:
+
+```
+    0x0030  short        constellation[6][128]   0x30   + 0x600 = 0x630
+    0x0630  unsigned     constellationSize[6]    0x630  +  0x18 = 0x648
+    0x0690  unsigned     errorSum[6][128]        0x690  + 0xc00 = 0x1290
+    0x1290  unsigned     errorCount[6][128]      0x1290 + 0xc00 = 0x1e90
+```
+
+Four independent bases -- `0x30(%ebx,%edi,2)`, `0x630(%ebx,%ecx,4)`,
+`0x690(%ebx,%edi,4)`, `0x1290(%ebx,%edi,4)` -- and each one's end is the next
+one's start.  Nothing else settles the shape: a `[6][128]` and a `[768]` are
+the same bytes, and the `shl $0x7` is what says which the author wrote.
+
+**Which of the two histogram arrays is which** comes from `hardDecision`, not
+from this function: it does `add` at +0x690 and `incl` at +0x1290, so +0x690
+accumulates and +0x1290 counts.  `printErrorHistogramAndReset` divides the
+first by the second, which agrees but does not by itself say which way round.
+
+**Three offsets that are NOT this object's, and the trap they set.**  A
+displacement scan that does not track the base register reports +0x1000 as a
+float array, +0x1c00 as a counter array and +0x2800 as a `short` -- all three
+inside the span the histogram arrays occupy, which cannot be.  They are
+offsets into the `V90AutoDigitalImpDetector` at +0x1ea0:
+`mov 0x1ea0(%eax),%esi` at 0x3130a, then `cmpw $0x0,0x2800(%esi,%edx,2)` at
+0x31323.  Track the base register or the map contradicts itself.
+
+**Two things the compiler was FORCED to encode**, so they are acted on:
+
+- `0f bf 54 7b 30   movswl 0x30(%ebx,%edi,2),%edx` at 0x30c69 SIGN-extends and
+  hands the 32-bit result to a varargs slot, so `constellation` is `short`.
+  Finding 613's class exactly: no test whose levels stay positive can see it.
+- `f7 f1   div %ecx` at 0x30c57, not `idiv`, and no signed-division fixup:
+  both histogram arrays are UNSIGNED.  The row bound agrees --
+  `cmp %ebp,0x630(%ebx,%eax,4)` followed by `ja`.
+
+### 1171. `printErrorHistogramAndReset` SUPPRESSES THE RESET AS WELL AS THE PRINT, AND THE RESET HALF IS DECIDED BY TIER 1
+
+The name says PRINT and the differential tier is blind to printing, so the
+batch was briefed to decide early which half is decidable where.  **The split
+is not down the middle, and this is where it falls.**
+
+The function's first act is six loads into six different registers, each with
+its own `test`/`je` to one join point -- %eax at 0x30b97, %edx at 0x30ba5,
+%ecx at 0x30bb3, %esi at 0x30bc1, %edi at 0x30bcf, %ebp at 0x30bdd.  A chain
+of `&&`, not a rolled loop; a rolled test would be one load, one compare and a
+back edge.  **The join point is 0x30cd0, which is past the zeroing loops as
+well as past the five `edprintf` calls.**  So a demapper with any one of its
+six constellations empty neither prints nor resets, and the only thing that
+happens is `incl 0x1e90(%ebx)`.
+
+What that buys is that most of the function is ordinary memory:
+
+- both 3,072-byte arrays are zeroed in full, over 6 * 128 entries;
+- `errorHistogramCount` at +0x1e90 moves on EVERY call, printing or not;
+- and the two bounds are different numbers.  The print loop runs
+  `constellationSize[i]` times; the zeroing loop runs 128 times with the row
+  length nowhere in it (`cmp $0x7f,%edx` at 0x30c9f is a constant).  A
+  constellation shorter than 128 separates them, and every case in
+  `t_v90leaves.cpp` is short.
+
+So the arena comparison decides the loop bounds, both bases, the guard and the
+position of the increment relative to it.  **The print half is not skipped
+either**: `t_v90leaves.cpp` already sweeps `dsplibs_debug_level` 0..2 across
+both sides and compares the captured text, and five of the thirteen mutations
+in `test/mutations/v90demapper.json` are caught by nothing else -- the row
+bound, the argument order, the unsigned read of a level, the average printed
+for a level nothing landed on, and an off-by-one on the printed histogram
+number.
+
+The line count is exact and was predicted before it was measured:
+**2 banners + 1 number + 6 headers + the sum of the six row lengths**, because
+`edprintf` makes exactly one `dsplibs_debug_printf` call (src/core/encode.c).
+`{1,2,3,4,5,6}` gives 30 lines and the test asserts that number, which is what
+makes "the row loop runs to 128" catchable at all.
+
+**THERE IS NO `DSPLIB_DEBUG_ON()` IN THIS FUNCTION.**  The five `edprintf`
+sites at 0x30beb, 0x30c0a, 0x30c26, 0x30c7a and 0x30cc4 are unconditional; the
+level gate lives inside `edprintf` itself.  Only two gates exist in the whole
+path and neither is the debug level -- see 1172 for the other.
+
+### 1172. THE DESTRUCTOR'S GATE IS A PARAMETER-BLOCK FIELD, AND A FIXTURE THAT SEEDS THAT BLOCK WITH THE HARNESS FILL TURNS IT ON AT EVERY DEBUG LEVEL
+
+`~V90Demapper` opens by dereferencing its own +0x00:
+
+```
+   30f58:  8b 13                 mov  (%ebx),%edx
+   30f5a:  8b 82 2c 05 00 00     mov  0x52c(%edx),%eax
+   30f60:  85 c0                 test %eax,%eax
+   30f62:  75 21                 jne  30f85          -> printErrorHistogram...
+```
+
+and +0x52c of `V90Parameters` is `DEBUG_DEMAPPER_ERROR_HISTOGRAM`, which
+`include/dsplib/V90Parameters.h` has carried by name since the `vparse.py`
+batch.  **It is not `dsplibs_debug_level` and it is not gated by it.**
+
+That is a trap for any fixture in this tree, and it is worth stating as a rule
+rather than as an anecdote.  Finding 230 says seed everything with varied
+non-zero bytes; `HARNESS_MALLOC_FILL` is 0xa5.  A parameter block seeded that
+way has `DEBUG_DEMAPPER_ERROR_HISTOGRAM == 0xa5a5a5a5`, so **the destructor
+enters the histogram at debug level 0** -- and once inside, the six-way guard
+reads `constellationSize[0..5]`, which the same fill makes non-zero, so the
+inner loop bound becomes 0xa5a5a5a5 while `edi` indexes a 3,072-byte array.
+The run walks off a 7,864-byte object within a few thousand iterations.
+
+So `dem_seed` in `t_v90leaves.cpp` sets the six lengths and the gate on every
+trial, and the gate is set to zero on a third of them -- which is the arm
+where the destructor must do nothing at all but free.
+
+**The three `if (p)` guards are invisible to every byte comparison.**  The
+destructor tests +0x1c and +0x20, and the member's destructor tests the
+decoder state, before each `sysdep_free`; this tree's `sysdep_free` tolerates
+NULL.  Dropping all three changes no byte anywhere.  `harness_alloc.free_null`
+is the only observable that separates them, and the null arm asserts its delta
+is 0 -- which is what catches the mutation "the destructor frees +0x1c whether
+or not it holds anything".
+
+### 1173. `V90SignBitsExtractor` IS 0x28 BY CONTAINMENT, WHICH IS WHAT TO DO WHEN THERE IS NO ALLOCATION TO READ
+
+Finding 1107 says to prefer the `sysdep_malloc` before the constructor's call
+site.  **For this class there is none**: every instance is embedded, and the
+one this tree can see is `V90Demapper`'s at +0x668 (`lea 0x668(%esi),%ecx` at
+0x30662, then a call to the constructor).
+
+The containment argument is as strong as an allocation here, because the next
+field is not a scan bound.  `V90Demapper::printErrorHistogramAndReset` indexes
+`0x690(%ebx,%edi,4)` over `edi` in 0..767, so +0x690 is the BASE of a
+3,072-byte array and not the highest displacement anybody happened to use.
+The extractor therefore occupies exactly 0x690 - 0x668 = 0x28 bytes.
+
+**And the other side agrees to the byte.**  The last member is the parallel
+differential decoder at +0x1c -- `add $0x1c,%eax` at 0x318e7, then a call to
+`ParallelDifferentialDecoder<unsigned char>::~ParallelDifferentialDecoder` --
+and that class is 12 bytes (`state_`, `capacity_`, `size_`, DiffCoder.h).
+0x1c + 0xc = 0x28, with no trailing padding.  Two derivations from opposite
+ends meeting is the check finding 1107 asks for and could not have on
+`V90Equalizer`.
+
+**The constructor was taken deliberately, and the reason is not size.**  It is
+44 bytes and its one call already exists and is already tested
+(`t_diffcoder`), but the point is that it is what allocates the block the
+destructor frees: construct-then-destruct is the only shape in which the free
+is provably freeing what the class itself took, rather than a pointer the test
+planted.  It is also the only evidence in the object for +0x10 and +0x18, on a
+class with no header at all.  `mov $0x6,%edx` at 0x31901 fixes the decoder's
+capacity at six -- one per sample of the V.90 frame -- which `DiffCoder.h`'s
+file comment had already recorded from the caller side.
+
+The destructor is 22 bytes and **every one of them is the compiler's**: an
+empty body, and GCC emits the member's destruction because the member's type
+has one.  That is also why `~V90Demapper`'s last instruction pair is
+`lea 0x668(%ebx),%ecx` and a call -- our compiler emits it, in that position,
+for free, and only because `signBits` is declared as a `V90SignBitsExtractor`
+and not as bytes.  The embedded `ModulusDecoder` at +0x648 gets no such call
+in the object, which is the evidence that ITS destructor is trivial and the
+reason that member CAN be bytes.
+
+### 1174. WHAT THIS BATCH DID NOT DO: `V90Demapper`'s CONSTRUCTOR IS BLOCKED ON `ModulusDecoder`, WHICH HAS NO SYMBOL IN THIS TREE
+
+Seven symbols landed, 740 bytes: `printErrorHistogramAndReset` (362),
+`V90Demapper` D1 and D2 (123 each), `V90SignBitsExtractor` C1 and C2 (44 each)
+and D1 and D2 (22 each).  `tools/closure.py --missing` now reports 0
+symbols and 0 bytes for **each of `_ZN11V90DemapperD1Ev`, its D2 twin,
+`_ZN11V90Demapper27printErrorHistogramAndResetEv`,
+`_ZN20V90SignBitsExtractorC1Ev` and `_ZN20V90SignBitsExtractorD1Ev`** -- the
+constructor included, because taking an optional symbol and not running its
+own closure is how a batch opens a hole while reporting one closed.  That
+retires the blocker finding 1104 named on `dp_vpcm_init`'s span.
+
+**`_ZN11V90DemapperC1EjP13V90ParametersP25V90AutoDigitalImpDetector` was
+offered to this batch and was left out.**  Its first act is
+
+```
+   3064d:  8d 86 48 06 00 00   lea  0x648(%esi),%eax
+   30656:  e8 ..               call ModulusDecoder::ModulusDecoder()
+```
+
+and `ModulusDecoder` has no header, no `.cpp` and no other symbol anywhere in
+`src/` or `include/`.  Defining the demapper's constructor would mean either
+writing that class -- another owner's work and another layout derivation -- or
+declaring the member as bytes, which would silently drop a call the object
+makes.  So the embedded decoder is `unsigned char modulusDecoder[0x1c]` and
+the constructor is declared in the header and not defined.  **The evidence its
+stores carry is not lost**: every offset it settles is written into
+`V90Demapper.h` beside the instruction that settles it, where it is evidence
+rather than code -- +0x1c and +0x20 sized from `lea 0x0(,%ebx,4)` and `%ebx`,
++0x24 the count, six words zeroed at +0x04..+0x18, +0x1ea0 the detector.
+
+Also not done, and deliberately: the other twelve `V90Demapper` members
+(`process`, `hardDecision`, `linearMappingStudy`, `updateConstelation`, the
+three resets, ...) and the other three `V90SignBitsExtractor` members.  They
+are declared in the two headers for the record, with the signatures the
+mangling gives and no return type, and left undefined.  One class, one owner.
+
+**Two regions of the demapper are honestly unmodelled** -- +0x1e94..+0x1e9f
+and +0x1ea4..+0x1eb7 -- and the second is bounded by the 0x1eb8 allocation
+alone.  An offset landing in either is itself the answer that it is not
+modelled yet.
+
+**The `ACTIONS` enum is named and empty.**
+`_ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_` gives the
+enum's name and not its enumerators, so the header declares it with one
+placeholder spelled `V90SBE_ACTION_NOT_YET_DERIVED`.  Nothing may read it
+until `applyFrameAction` is written.
+
+**Tier 1.**  `t_v90leaves.cpp` grew three blocks -- 304, 367 and 691 checks --
+on finding 1113's shape, with the addition that the demapper's histogram needs
+no arena at all: it produces and frees no pointer, so the two 7,928-byte slots
+compare RAW over their whole length.  Only the destructor excludes anything,
+and it excludes exactly three words (+0x1c, +0x20, +0x684) because each side
+frees its own blocks and two allocations are never the same address.
+
+**And it is worth being exact about which check pins the OFFSETS, because it
+is not the one it looks like.**  The seeding goes through the header's field
+names, so a header with `errorCount` at the wrong offset would seed both sides
+at the wrong offset and the absolute-offset partition -- "nothing below
++0x690 moved", "the fill was there to remove", "every error count is zero" --
+would still pass: the anti-vacuity check ranges over 3,072 bytes and one
+misplaced seeded word does not empty them.  What pins placement is the RAW
+whole-slot `memcmp(dem_a, dem_b, 0x1ef8)`: our code would clear the header's
+location and the blob would clear 0x1290, and the two can only agree where the
+two offsets do.  So the partition checks decide the EFFECT -- which regions
+moved, by how much, on which arm -- and the raw comparison decides the
+PLACEMENT.  Both are needed and neither substitutes for the other.
+
+**Tier 2, recorded and not quoted from scrollback.**  Two new suites,
+`v90demapper` (13) and `v90sbe` (4): 17 mutations, **17 caught, 0 NOT caught,
+0 unusable, 0 equivalent**.  Five of the thirteen are transcript-only and say
+so in their labels.  `tools/mutsnap.py --update v90demapper v90sbe` recorded
+both; the other 69 entries are stale as they were, because adding two files to
+`src/` and two to `include/` invalidates every key by construction and the
+Makefile's `refs` target does not fail on staleness for exactly that reason.
+
+**The C2 and D2 variants are driven on their own trials.**  GCC gives our D1
+and D2 one address, so on our side the alternation changes nothing; on the
+blob's they are separate functions and it is 189 more bytes that a test drives
+against the object rather than being assumed to be a copy of its twin.
+
+**One tool change.**  `tools/offcheck.py` compiles `include/dsplib/*.h` as C,
+so the two new C++ class headers join the forty-three already in its
+`SKIP_HEADERS`.  Their layouts are not unchecked, they are checked harder: the
+two `.cpp`s assert seventeen offsets and both sizes with
+`__builtin_offsetof`, and the test's region checks are absolute offsets rather
+than field names.

@@ -3628,6 +3628,25 @@
     "the phase 4 fallback error is truncated to an int": "caught"
    }
   },
+  "v90demapper": {
+   "key": "c80ddaf0c12cd812720508be350395c91a6d5a1b86b0f5f9595fe6abddab20a5",
+   "summary": "13 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "a level nothing landed on prints its raw error sum, not zero (transcript only)": "caught",
+    "the constellation level is read unsigned (transcript only) -- the movswl at 0x30c69": "caught",
+    "the count and the average are printed the other way round (transcript only)": "caught",
+    "the counts are cleared and the sums are not": "caught",
+    "the destructor frees +0x1c whether or not it holds anything": "caught",
+    "the destructor leaks the block at +0x20": "caught",
+    "the destructor prints the histogram when the parameter is CLEAR": "caught",
+    "the guard tests five constellations, not six": "caught",
+    "the guard tests only the first constellation": "caught",
+    "the histogram number moves only when something was printed": "caught",
+    "the printed histogram number is the one after the increment (transcript only)": "caught",
+    "the reset loop stops at the row length instead of at 128": "caught",
+    "the row loop runs to 128 instead of to the row length (transcript only)": "caught"
+   }
+  },
   "v90demod": {
    "key": "8653c3a0a030da2e0b759107b6b2f62afe2038270d9d8e28b1e9df2892e2ed1e",
    "summary": "30 mutations: 28 caught (28 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -3914,6 +3933,16 @@
     "drop ppmScale": "caught",
     "round the intermediate product to float": "uncaught",
     "scale by 1e6 rather than 1e-6": "caught"
+   }
+  },
+  "v90sbe": {
+   "key": "4b6857ccbed020f1038ea781a3f4284d0573fa6f2821241d3cec3bb46b4591d4",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x10 is left as the constructor found it": "caught",
+    "+0x18 is left as the constructor found it": "caught",
+    "the decoder is built with capacity five, not six": "caught",
+    "the extractor frees the decoder's state itself, as well as the decoder": "caught"
    }
   },
   "v90sessionflag": {
