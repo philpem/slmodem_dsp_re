@@ -1,0 +1,29 @@
+[
+ {
+  "label": "the constructor initialises the first byte of the object",
+  "find": "V90ConstellationPower::V90ConstellationPower()\n{\n}",
+  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\tpad_00[0] = 0;\n}"
+ },
+ {
+  "label": "the constructor clears the whole 144 bytes",
+  "find": "V90ConstellationPower::V90ConstellationPower()\n{\n}",
+  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\tint i;\n\n\tfor (i = 0; i < 0x90; i++)\n\t\tpad_00[i] = 0;\n}"
+ },
+ {
+  "label": "the constructor writes the LAST byte only",
+  "find": "V90ConstellationPower::V90ConstellationPower()\n{\n}",
+  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\tpad_00[0x8f] = 0;\n}"
+ },
+ {
+  "label": "the destructor clears the first byte",
+  "find": "V90ConstellationPower::~V90ConstellationPower()\n{\n}",
+  "replace": "V90ConstellationPower::~V90ConstellationPower()\n{\n\tpad_00[0] = 0;\n}",
+  "equivalent": true,
+  "why": "GCC ELIMINATES A DESTRUCTOR'S STORE TO ITS OWN MEMBER, so this mutation does not merely go unobserved -- it is not emitted. The object's lifetime ends when the destructor returns, so the store is dead, and -O2 removes it: the mutated source compiles to the same one-byte `ret` the original does, measured with objdump on exactly this replacement. It is registered rather than deleted because the next reader will otherwise write it again and read NOT CAUGHT as an untested claim. The `volatile` spelling in the entry after this one is the same defect in a form the compiler must emit, and that one IS caught -- which is what makes the destructor's claim tested rather than vacuous. Finding 1251."
+ },
+ {
+  "label": "the destructor clears the first byte, volatile so it survives",
+  "find": "V90ConstellationPower::~V90ConstellationPower()\n{\n}",
+  "replace": "V90ConstellationPower::~V90ConstellationPower()\n{\n\t*(volatile unsigned char *)&pad_00[0] = 0;\n}"
+ }
+]

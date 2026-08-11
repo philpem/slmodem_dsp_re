@@ -295,5 +295,29 @@
  "v92p3mod": [
   "src/pump/v90/V92Phase3Modulator.cpp",
   "build/test/t_v92p3mod"
+ ],
+ "gtonedet": [
+  "src/dsp/GenericToneDetector.cpp",
+  "build/test/t_gtonedet"
+ ],
+ "v90trn2": [
+  "src/pump/v90/V90TRN2Designer.cpp",
+  "build/test/t_v90designers"
+ ],
+ "v90rdet": [
+  "src/pump/v90/V90RDetector.cpp",
+  "build/test/t_v90designers"
+ ],
+ "v90cpower": [
+  "src/pump/v90/V90ConstellationPower.cpp",
+  "build/test/t_v90designers"
+ ],
+ "v90cdctor": [
+  "src/pump/v90/V90ConstellationDesigner.cpp",
+  "build/test/t_v90designers"
+ ],
+ "v90adidctor": [
+  "src/pump/v90/V90AutoDigitalImpDetector.cpp",
+  "build/test/t_v90designers"
  ]
 }

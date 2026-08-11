@@ -78,7 +78,40 @@ class V90Parameters;
 
 class V90AutoDigitalImpDetector {
 public:
-	/* The two this batch defines. */
+	/*
+	 * THE CONSTRUCTOR IS FIFTEEN BYTES AND ONE STORE (0x40200):
+	 *
+	 *     mov 0x8(%esp),%edx      ; argument 1
+	 *     mov 0x4(%esp),%eax      ; this
+	 *     mov %edx,0x2814(%eax)
+	 *
+	 * -- it plants the parameter block at +0x2814 and leaves all 43,425
+	 * remaining bytes of the object exactly as it found them.  So a freshly
+	 * constructed detector is unusable until `reset` and
+	 * `resetLinearMapping` have run, and the test's whole-object comparison
+	 * is what turns "leaves the rest alone" into a measured claim.
+	 * `_ZN25V90AutoDigitalImpDetectorC1EP13V90Parameters` is what types the
+	 * argument; the constructor never dereferences it.
+	 *
+	 * THE DESTRUCTOR IS ONE BYTE, a bare `ret` at 0x40220.  It is declared
+	 * because the blob HAS the symbol: GCC emits an out-of-line destructor
+	 * only for a user-declared one, so a class whose destructor were
+	 * implicit would contribute no `D1`/`D2` at all.  Both exist, one byte
+	 * each, so the original declared it and left the body empty.
+	 *
+	 * DECLARING THESE COSTS THE CALL SITES THEIR DEFAULT CONSTRUCTOR.  A
+	 * user-declared constructor removes the implicit one and a
+	 * user-declared destructor makes the class non-trivially-destructible,
+	 * so `static V90AutoDigitalImpDetector x;` no longer compiles and the
+	 * class may no longer be a union member.  `test/harness/v90demfix.h`,
+	 * `test/unit/t_v90p3dreset.cpp` and `test/unit/t_v90adid.cpp` all did
+	 * one or the other and now use a byte array plus a cast; see the note
+	 * at each site.
+	 */
+	V90AutoDigitalImpDetector(V90Parameters *params);
+	~V90AutoDigitalImpDetector();
+
+	/* The two the lifecycle batch defines. */
 
 	/*
 	 * Clear the per-phase measurement state and install the session's

@@ -101,7 +101,19 @@ static unsigned char blk[2][BLK_SLOT] __attribute__((aligned(8)));
 static unsigned char equ[2][EQU_SLOT] __attribute__((aligned(8)));
 static unsigned char ce[2][CE_SLOT] __attribute__((aligned(8)));
 
-static V90AutoDigitalImpDetector adid[2];
+/*
+ * `V90AutoDigitalImpDetector` gained a user-declared constructor and
+ * destructor when they were reconstructed, which removes its default
+ * constructor -- so `static V90AutoDigitalImpDetector adid[2];`, which is what
+ * this was, no longer compiles.  Storage plus a cast keeps every call site
+ * below unchanged: `adid[i]`, `&adid[i]` and `sizeof(adid[0])` all still mean
+ * what they meant.  The fixture wants raw seeded storage anyway -- it never
+ * wanted a constructor to run.
+ */
+static unsigned char adid_[2][sizeof(V90AutoDigitalImpDetector)]
+	__attribute__((aligned(8)));
+#define adid ((V90AutoDigitalImpDetector *)adid_)
+
 static V90SdDetector sdd[2];
 static float sdhist[2][SDD_HIST];
 static V90Jd jdo[2];
@@ -462,7 +474,15 @@ compare_all(const char *what, long tag)
 	diff_eq_obj_(__FILE__, __LINE__, what, "the block params points at",
 		     blk[0], blk[1], BLK_SLOT, tag);
 	{
-		static V90AutoDigitalImpDetector aa, ab;
+		/* Storage plus a cast, for the reason given at `adid_` above. */
+		static unsigned char aa_[sizeof(V90AutoDigitalImpDetector)]
+			__attribute__((aligned(8)));
+		static unsigned char ab_[sizeof(V90AutoDigitalImpDetector)]
+			__attribute__((aligned(8)));
+		V90AutoDigitalImpDetector &aa =
+			*(V90AutoDigitalImpDetector *)aa_;
+		V90AutoDigitalImpDetector &ab =
+			*(V90AutoDigitalImpDetector *)ab_;
 
 		/* Its `params` is each side's own block; everything else is
 		 * memory the detector's own reset writes. */

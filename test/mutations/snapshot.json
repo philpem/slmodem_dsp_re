@@ -129,6 +129,28 @@
     "the two sums land in the other member": "caught"
    }
   },
+  "gtonedet": {
+   "key": "00cda3fea8fe3f99fb0e8a6d12e7c9ef2e134f7f778d1d466eb9e26f76b858fa",
+   "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "blockLen is not kept, only used": "caught",
+    "flag is stored as its complement": "caught",
+    "one of the four accumulators is left as it was found": "caught",
+    "the answer is not cleared": "caught",
+    "the destructor frees nothing": "caught",
+    "the destructor nulls the pointer it just freed": "equivalent",
+    "the destructor nulls the pointer it just freed, volatile so it survives": "caught",
+    "the filter gets blockLen where it wanted blockSize": "caught",
+    "the filter is never reset": "equivalent",
+    "the filter's numerator and denominator arrays are swapped": "caught",
+    "the filter's two orders are swapped": "caught",
+    "the first duration rounds DOWN": "caught",
+    "the first duration rounds up even when it divides exactly": "caught",
+    "the second duration rounds DOWN": "caught",
+    "the two durations are swapped": "caught",
+    "the two floats are swapped": "caught"
+   }
+  },
   "psd": {
    "key": "e93c6f05ba5f3450573a17663123ae05e86621416f4bbee2ca571d1cf597569f",
    "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -3607,6 +3629,18 @@
     "use the mu-law xor mask under A-law": "caught"
    }
   },
+  "v90adidctor": {
+   "key": "ac85d48aab4514eab71bc90df8007023f5b455ae83b7035c77d08af53837a22f",
+   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the constructor also clears a field above the parameter block": "caught",
+    "the constructor also clears the first linear-mapping entry": "caught",
+    "the constructor stores nothing": "caught",
+    "the destructor clears the parameter block pointer": "equivalent",
+    "the destructor clears the parameter block pointer, volatile so it survives": "caught",
+    "the parameter block lands at +0x280c rather than +0x2814": "caught"
+   }
+  },
   "v90cd": {
    "key": "319ee5a1f3a41a3dcc0605446ebfd68cc80a14f40e41afedab4f512820a4652b",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -3615,6 +3649,20 @@
     "the +0x0a store is 32 bits wide": "equivalent",
     "the second diagnostic prints minRate": "caught",
     "the two rates are swapped": "caught"
+   }
+  },
+  "v90cdctor": {
+   "key": "e4f868a9d464a194a8f53ef81f1d972ffb23b825a61df5b420e7bbbb73750513",
+   "summary": "8 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x08 is cleared four bytes wide rather than one": "caught",
+    "+0x38 defaults to 0x15 rather than 0x16": "caught",
+    "the destructor clears the rate limits": "equivalent",
+    "the destructor clears the rate limits, volatile so it survives": "caught",
+    "the pre-filter and the power model are swapped": "caught",
+    "the pre-filter is not stored": "caught",
+    "the two rate defaults are swapped": "caught",
+    "word_48 is left as the constructor found it": "caught"
    }
   },
   "v90conneval": {
@@ -3627,6 +3675,17 @@
     "the constructor does not reset": "caught",
     "the evaluator's initial period is 1500": "caught",
     "the phase 4 fallback error is truncated to an int": "caught"
+   }
+  },
+  "v90cpower": {
+   "key": "9df399251b33002684c08f92f7cf5348c925f5a5a2bdb48a7365674001f7279c",
+   "summary": "5 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the constructor clears the whole 144 bytes": "caught",
+    "the constructor initialises the first byte of the object": "caught",
+    "the constructor writes the LAST byte only": "caught",
+    "the destructor clears the first byte": "equivalent",
+    "the destructor clears the first byte, volatile so it survives": "caught"
    }
   },
   "v90demapper": {
@@ -3896,6 +3955,18 @@
     "the signature starts one entry later": "caught"
    }
   },
+  "v90rdet": {
+   "key": "cb814aa68d8f3118acb68c5278e2ca85b499fc40b12549962f18a2f43d7562db",
+   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the constructor also clears the counter at +0x00": "caught",
+    "the constructor clears the shift register too": "caught",
+    "the constructor stores nothing": "caught",
+    "the destructor clears the parameter block pointer": "equivalent",
+    "the destructor clears the parameter block pointer, volatile so it survives": "caught",
+    "the parameter block lands at +0x24": "caught"
+   }
+  },
   "v90resampler": {
    "key": "26d4ed49110f7495bf0b937a865238d489a7417635f2cd217eb30fb16d859762",
    "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -3967,6 +4038,18 @@
     "the modem takes its two halves from the wrong offsets": "caught",
     "the modem's flag goes to +0x49bc, where the side is": "caught",
     "the modulator's flag goes to +0x2c": "caught"
+   }
+  },
+  "v90trn2": {
+   "key": "4950c5fb6d741fb8c98fc3ce8e2584c06513514e59d8dd79d97b86012434f227",
+   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "only the first is stored": "caught",
+    "only the second is stored": "caught",
+    "the constructor also writes at +0x08, past what four members reach": "caught",
+    "the destructor clears both pointers": "equivalent",
+    "the destructor clears both pointers, volatile so it survives": "caught",
+    "the two collaborators are swapped": "caught"
    }
   },
   "v92ec": {

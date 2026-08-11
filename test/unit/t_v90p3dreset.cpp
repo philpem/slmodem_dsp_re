@@ -129,7 +129,17 @@ union dsc_slot {
 
 static union p3d_slot slot[2];
 static union dsc_slot dsc_a, dsc_b;
-static V90AutoDigitalImpDetector adid[2];
+/*
+ * Storage plus a cast rather than `static V90AutoDigitalImpDetector adid[2];`.
+ * The class gained a user-declared constructor when it was reconstructed,
+ * which removes its default constructor; the cast keeps `adid[i]`,
+ * `&adid[i]` and `sizeof(adid[0])` meaning exactly what they meant, and this
+ * fixture never wanted a constructor to run over its seeded storage anyway.
+ */
+static unsigned char adid_[2][sizeof(V90AutoDigitalImpDetector)]
+	__attribute__((aligned(8)));
+#define adid ((V90AutoDigitalImpDetector *)adid_)
+
 static V90SdDetector sdd[2];
 static float sdhist[2][SDD_HIST];
 static V90Jd jdo[2];

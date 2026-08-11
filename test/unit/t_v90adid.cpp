@@ -68,12 +68,22 @@ unsigned int ref_calculateDilLength(void *dil, int law)
 #define OBJ_BYTES	0xa9b0
 #define SLOT		(OBJ_BYTES + 128)
 
-union adid_slot {
-	V90AutoDigitalImpDetector o;
+/*
+ * STORAGE PLUS A CAST, WHERE THIS WAS A UNION OF THE CLASS AND A BYTE ARRAY.
+ * `V90AutoDigitalImpDetector` gained a user-declared constructor and
+ * destructor when they were reconstructed, and a union may not hold a member
+ * with a non-trivial one -- so the union stopped compiling.  The alias below
+ * is the same reinterpretation the union performed, and it is what this
+ * fixture always wanted: raw seeded storage that no constructor has run over.
+ */
+struct adid_slot {
 	unsigned char raw[SLOT];
-};
+} __attribute__((aligned(8)));
 
-static union adid_slot ours, theirs;
+static struct adid_slot ours, theirs;
+
+#define ours_o		(*(V90AutoDigitalImpDetector *)ours.raw)
+#define theirs_o	(*(V90AutoDigitalImpDetector *)theirs.raw)
 
 /*
  * The parameter block.  Only +0x0c is read, but the whole of V90PreFilter.h's
@@ -136,8 +146,8 @@ seed(int trial, int mode)
 	for (i = 0; i < PARAMS_BYTES; i++)
 		params_block[i] = next_byte();
 
-	ours.o.params = (V90Parameters *)params_block;
-	theirs.o.params = (V90Parameters *)params_block;
+	ours_o.params = (V90Parameters *)params_block;
+	theirs_o.params = (V90Parameters *)params_block;
 }
 
 static int
@@ -195,15 +205,15 @@ run_resetlinearmapping(void)
 		seed(trial, trial % 4);
 		memcpy(before, ours.raw, SLOT);
 
-		ours.o.ucode = theirs.o.ucode = code[IDX(trial, 0)];
-		ours.o.ucodeLevel = theirs.o.ucodeLevel =
+		ours_o.ucode = theirs_o.ucode = code[IDX(trial, 0)];
+		ours_o.ucodeLevel = theirs_o.ucodeLevel =
 		    level[IDX(trial, 1)];
 
-		ours.o.resetLinearMapping();
-		ref_resetLinearMapping(&theirs.o);
+		ours_o.resetLinearMapping();
+		ref_resetLinearMapping(&theirs_o);
 
 		diff_eq_obj("after resetLinearMapping",
-			    V90AutoDigitalImpDetector, &ours.o, &theirs.o,
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
 			    trial);
 		diff_eq_int("no store past the object (trial %ld)",
 			    guard_equal(), 1, trial);
@@ -211,8 +221,8 @@ run_resetlinearmapping(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			first = ours.o.linMapp[0][0x2a];
-		else if (ours.o.linMapp[0][0x2a] != first)
+			first = ours_o.linMapp[0][0x2a];
+		else if (ours_o.linMapp[0][0x2a] != first)
 			distinct = 1;
 	}
 
@@ -258,11 +268,11 @@ run_reset(void)
 		memcpy(params_copy, params_block, PARAMS_BYTES);
 		memcpy(before, ours.raw, SLOT);
 
-		ours.o.reset(c, (PcmType)law, a);
-		ref_reset(&theirs.o, c, law, a);
+		ours_o.reset(c, (PcmType)law, a);
+		ref_reset(&theirs_o, c, law, a);
 
 		diff_eq_obj("after reset", V90AutoDigitalImpDetector,
-			    &ours.o, &theirs.o, trial);
+			    &ours_o, &theirs_o, trial);
 		diff_eq_int("no store past the object (trial %ld)",
 			    guard_equal(), 1, trial);
 		diff_eq_int("reset wrote nothing through params (trial %ld)",
@@ -272,8 +282,8 @@ run_reset(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			first = ours.o.ucodeLevel;
-		else if (ours.o.ucodeLevel != first)
+			first = ours_o.ucodeLevel;
+		else if (ours_o.ucodeLevel != first)
 			distinct = 1;
 	}
 
