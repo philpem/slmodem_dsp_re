@@ -62,11 +62,57 @@
  */
 #include "dsplib/Agc.h"
 #include "dsplib/V90ConnectionEvaluator.h"
+#include "dsplib/V90ConstellationPower.h"
 #include "dsplib/V90Phase2Info.h"
 #include "dsplib/V90Phase3Demodulator.h"
 #include "dsplib/V90PreFilter.h"
 #include "dsplib/V90SpectralVerifier.h"
 #include "dsplib/V92Jd.h"
+
+/*
+ * THE RESAMPLER AT +0x094 IS A `V90Resampler` AND HAS TO BE DECLARED AS ONE,
+ * and that is what the guard claim below is for.
+ *
+ * It used to be modelled as its `ResamplerTimingOffset` base plus 0x68 bytes
+ * of `pad_`, which was enough while nothing here had a lifecycle: no
+ * constructor named it and no destructor destroyed it.  It stops being enough
+ * the moment `V90Demodulator`'s pair is written, and not as a matter of taste
+ * -- `ResamplerTimingOffset` has a `virtual ~ResamplerTimingOffset()` and no
+ * default constructor, so with the old declaration the compiler DEMANDS a
+ * mem-initializer naming one of that base's two six-argument constructors and
+ * EMITS `_ZN21ResamplerTimingOffsetD1Ev` at the end of the destructor.  The
+ * blob calls `_ZN12V90ResamplerC1Ejfjffj`... `_ZN12V90ResamplerD1Ev`.  Two
+ * wrong symbols, neither of them suppressible.
+ *
+ * `V90Resampler.h` reaches for the NAMED `V90Parameters` map and this header
+ * already carries the BLOCK form, which V90PreFilter.h above defines -- finding
+ * 1112, the duplication that is a wart and not a design.  The guard is
+ * therefore CLAIMED here so that the second definition never arrives.  That is
+ * safe and it is not a new restriction: every translation unit that includes
+ * this header already had the block form and already could not include
+ * `V90Parameters.h`.  It is strictly less restrictive than what was here
+ * before, because a TU may now include `V90Resampler.h` after this header and
+ * get the class -- which `t_v90demod.cpp` records itself as unable to do.
+ *
+ * `V90Resampler.h` uses `V90Parameters` only as `V90Parameters *`, so the
+ * block form satisfies every one of its declarations.  0x4c + 0x68 == 0xb4 ==
+ * sizeof(V90Resampler), so nothing below +0x148 moves and the existing offset
+ * assertions in V90Demodulator.cpp catch it if it ever does.
+ *
+ * WHAT IT COSTS IS THE SHAPE OF THE ERROR, and that is worth knowing before
+ * you spend an hour on it.  A translation unit that wanted the NAMED map and
+ * included this header used to get a REDEFINITION error naming
+ * `V90Parameters`, which says exactly what happened.  It now silently gets the
+ * block form instead, and the first named field it reaches fails with "no
+ * member named ..." -- which points at the field rather than at the include.
+ * If you see that, the answer is that this header has claimed the guard, and
+ * the fix is to spell the access as an index (`params->w[0x170 / 4]`) the way
+ * V90Demodulator.cpp does.
+ */
+#ifndef DSPLIB_V90PARAMETERS_H
+#define DSPLIB_V90PARAMETERS_H
+#endif
+#include "dsplib/V90Resampler.h"
 
 /*
  * Named by the constructor manglings that pass them, and not modelled: this
@@ -79,6 +125,13 @@ class V90MP;
 class V90Demapper;
 class V90ConstellationDesigner;
 class V90Phase4Demodulator;
+
+/*
+ * Argument 8's type, out of the constructor's mangling
+ * (`P22tagV90AdditionalCPinfo`), and the same forward declaration
+ * V90Modulator.h makes for the same record on the transmit side.
+ */
+struct tagV90AdditionalCPinfo;
 
 class V90Demodulator {
 public:
@@ -113,31 +166,30 @@ public:
 	int sessionTermination();
 
 	/*
+	 * THE LIFECYCLE PAIR, C1/C2 at 0x1c2b0 and 0x1c6a0 (1002 B each) and
+	 * D1/D2 at 0x1ad70 and 0x1b010 (669 B each).  The whole of both is in
+	 * src/pump/v90/V90Demodulator.cpp; the argument names here are the
+	 * mangling's types with invented spellings, since a parameter's name is
+	 * no more recoverable than a data member's (finding 226).
+	 *
+	 * THE BLOCK THIS COMMENT USED TO CARRY IS GONE AND WAS RIGHT WHEN IT
+	 * WAS WRITTEN.  It said the pair was blocked on `V90Phase4Modulator`
+	 * and `ANSamToneDetector`, both then unwritten and both reached from
+	 * the transmit side as well.  Both are written now, so the block
+	 * expired rather than being argued away.
+	 */
+	V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
+		       V90Jd *jd, V92Jd *jdV92, tagV90DILdescriptor *dil,
+		       V90MappingParams *mappingParams1,
+		       V90MappingParams *mappingParams2,
+		       tagV90AdditionalCPinfo *cpInfo, V90CP *cp, V90MP *mp,
+		       __tHardwareCodecTypes__ codec, V90Parameters *params,
+		       V90ComputationalMode compMode, unsigned int flag);
+	~V90Demodulator();
+
+	/*
 	 * Declared for the record and not defined; return types are not
-	 * mangled, so `void` here is want of evidence.  The constructor and
-	 * destructor are not declared at all, for the reason
-	 * V90Phase3Modulator.h gives.
-	 *
-	 * THE LIFECYCLE PAIR IS BLOCKED, AND ON ONE SYMBOL.  Both were read in
-	 * full -- the constructor's fourteen arguments, its six embedded
-	 * constructions, its thirteen allocations and every offset each lands
-	 * at are in this file, and the five heap fields at +0x244 came out of
-	 * it -- but `~V90Demodulator` destroys a `V90Phase4Demodulator`, whose
-	 * own destructor calls `V90Phase4Modulator`'s, and that class has
-	 * neither constructor nor destructor written here.  The constructor is
-	 * blocked twice over: it also builds a `V90Phase3Demodulator`, whose
-	 * constructor calls `ANSamToneDetector`'s, equally unwritten.  Both
-	 * missing classes are reached from the TRANSMIT side as well
-	 * (`V90Modulator` and `VPcmFloModem` respectively), so they are not
-	 * this chain's to adopt.
-	 *
-	 *     V90Demodulator(unsigned int, V90Phase2Info *, V90Jd *, V92Jd *,
-	 *                    tagV90DILdescriptor *, V90MappingParams *,
-	 *                    V90MappingParams *, tagV90AdditionalCPinfo *,
-	 *                    V90CP *, V90MP *, __tHardwareCodecTypes__,
-	 *                    V90Parameters *, V90ComputationalMode,
-	 *                    unsigned int)              C1,C2   1002 B
-	 *     ~V90Demodulator()                         D1,D2    669 B
+	 * mangled, so `void` here is want of evidence.
 	 */
 	void progress(int *, unsigned int &, float *, unsigned int);
 	void exitPhase3();
@@ -154,7 +206,16 @@ public:
 
 	/* --- data members; see the file comment on the naming --- */
 
-	unsigned int word_00;		/* +0x000 nothing in wave 2 reads it */
+	/*
+	 * +0x000  WAS `word_00`, "nothing in wave 2 reads it", and the
+	 * constructor is what named it: argument 11 arrives at `0x8c(%esp)`,
+	 * is handed to `V90PreFilter`'s constructor as its
+	 * `__tHardwareCodecTypes__` first argument, and is then stored here
+	 * with `mov %edx,(%ebx)`.  So the OFFSET is the constructor's and the
+	 * TYPE is V90PreFilter's mangling, which is the only kind of name this
+	 * file trusts.  Nothing reads it back.
+	 */
+	__tHardwareCodecTypes__ codecType;
 
 	/*
 	 * +0x004  The constructor's second argument.  `enterPhase3` calls
@@ -178,7 +239,14 @@ public:
 	 * V90ConstellationPower *). */
 	V90TRN2Designer *trn2Designer;
 
-	unsigned char pad_20[4];	/* +0x020 nothing in wave 2 reads it */
+	/*
+	 * +0x020  WAS `pad_20`.  Argument 8 arrives at `0x80(%esp)` and is
+	 * stored here with `mov %edx,0x20(%ebx)`; the type is the constructor
+	 * mangling's `P22tagV90AdditionalCPinfo`, and the name is the one
+	 * V90Modulator.h already gives the same record at ITS +0x18.  Nothing
+	 * reconstructed reads it back.
+	 */
+	tagV90AdditionalCPinfo *additionalCPinfo;
 
 	/* +0x024, +0x028  V90Phase4Demodulator's fourth and fifth arguments. */
 	V90CP *cp;
@@ -252,19 +320,29 @@ public:
 	/*
 	 * +0x094  EMBEDDED, and it is a V90Resampler -- the constructor builds
 	 * one here with `V90Resampler(unsigned, float, unsigned, float,
-	 * V90Parameters *, float, unsigned)`.  Only its ResamplerTimingOffset
-	 * base subobject is modelled, because `enterPhase3` calls
-	 * `setTimingOffset` on this address and nothing in wave 2 reaches any
-	 * other part of it.  Finding 228 is why a base at offset 0 is what a
-	 * call on the derived object's address looks like.
+	 * V90Parameters *, float, unsigned)` and the destructor ends by calling
+	 * `_ZN12V90ResamplerD1Ev` on it.  It was modelled as its
+	 * `ResamplerTimingOffset` base plus 0x68 bytes of `pad_e0` until the
+	 * lifecycle pair was written; see the guard claim at the top of this
+	 * file for why that stopped working and what it costs to fix.  Finding
+	 * 228 is why a base at offset 0 is what a call on the derived object's
+	 * address looks like, which is still how `enterPhase3` reaches
+	 * `setTimingOffset` here.
 	 */
-	ResamplerTimingOffset resampler;
+	V90Resampler resampler;
 
-	unsigned char pad_e0[0x68];	/* +0x0e0 the rest of V90Resampler,
-					 *        which ends at +0x148       */
-
-	unsigned char pad_148[0x90];	/* +0x148 a V90ConstellationPower,
-					 *        not modelled               */
+	/*
+	 * +0x148  EMBEDDED, 0x90 bytes, ending exactly at the equaliser
+	 * pointer.  WAS `pad_148`, "a V90ConstellationPower, not modelled":
+	 * the constructor builds one here with `V90ConstellationPower()` and
+	 * hands this address to `V90TRN2Designer` and
+	 * `V90ConstellationDesigner` as their last argument, which is where
+	 * the type came from and why the pad said so.  The class itself is
+	 * still 0x90 unmodelled bytes (V90ConstellationPower.h); what changed
+	 * is that the compiler now constructs and destroys it, because a
+	 * `pad_` cannot.
+	 */
+	V90ConstellationPower constellationPower;
 
 	/*
 	 * +0x1d8  `sysdep_malloc(0x150)`, and V90Equalizer's largest modelled

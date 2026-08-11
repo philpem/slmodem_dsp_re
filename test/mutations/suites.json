@@ -252,6 +252,10 @@
   "src/pump/v90/V90Demapper.cpp",
   "build/test/t_v90demapctor"
  ],
+ "v90demctor": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90demctor"
+ ],
  "v90p3dctor": [
   "src/pump/v90/V90Phase3Demodulator.cpp",
   "build/test/t_v90rxctor"

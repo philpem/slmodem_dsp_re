@@ -42548,3 +42548,53 @@ identical. Keeping the first error line per failing file would have made this
 visible the day the first `: int` was written rather than some dozens of
 commits later. Finding 134's argument -- a tool must be shown to fire -- has a
 sibling here: a tool that reports only a count cannot be acted on.
+
+### 1309. TWO THINGS `V90Demodulator`'s LIFECYCLE PAIR SETTLES, AND WHY THEY SHARE A NUMBER
+
+This batch's block ran from 1300 to 1309 and both claims below arrived after
+1308 was spent, so they are recorded together rather than renumbered into
+somebody else's block.  They are related in one respect worth stating: each is
+about something the construction path does NOT establish.
+
+**(a) A FRESH `V90Demodulator` HAS SIX UNINITIALISED WORDS, AND TWO OF THEM
+ARE LATER READ AS STATE.**  The 1,002-byte constructor writes +0x000..+0x030,
+its six embedded subobjects, its thirteen allocated slots and eight zero
+stores.  It writes NOTHING at +0x034, +0x038, +0x03c, +0x040, +0x044 or
++0x048 -- a scan of the constructor for `0x3[4-9](%ebx)` and `0x4[0-8](%ebx)`
+returns zero hits.  `V90Modem`'s constructor hands it a bare
+`sysdep_malloc(0x298)` and nothing in the chain zeroes it, so on a fresh
+object `enterPhase3`'s `if (inPhase3 == 1)` and `sessionTermination`'s
+`inPhase3 == 3` both test allocator garbage.  Finding 1273 established that
++0x34 is a STATE and not a latch -- 1 phase 3, 3 data, 5 channel verification
+-- which is what makes reading it before a `reset` meaningful rather than
+merely untidy.  `V90Demodulator::reset` is the first thing that writes
++0x034..+0x044, so the object is only well defined after a reset the
+constructor does not perform.  This is the blob's, not a reconstruction
+artefact, and `t_v90demctor.cpp` asserts the seed survives at all six offsets
+on both sides so that a reconstruction which helpfully zeroed them would fail.
+
+**(b) THE DESTRUCTOR HAS A GUARD THE OBJECT CANNOT REACH.**
+`~V90Demodulator` opens with an unconditional
+`call _ZN14V90Demodulator18sessionTerminationEv`, and fifty-five bytes into
+that function is
+
+    1ab67:  8b 96 dc 01 00 00   mov  0x1dc(%esi),%edx
+    1ab6d:  89 14 24            mov  %edx,(%esp)
+    1ab70:  e8 ..               call V90Phase3Demodulator::
+                                        clearVerificationStatus()
+
+-- a load and a call with no `test` between them.  So by the time the
+destructor reaches its own `if (phase3Demodulator)` at +0x1dc, any object that
+could have taken the false arm has already faulted.  Eleven of the other
+twelve guards are drivable both ways and `t_v90demctor.cpp` drives them both
+ways; this one is exercised in the true direction only, and the slot table
+carries the reason rather than the test quietly running twelve cases and
+calling it thirteen.
+
+**The consequence is the uncomfortable one.**  A reconstruction that DROPPED
+this guard would pass every test in this tree, because the state it guards
+against cannot be constructed.  It is written anyway -- the `test`/`jne` is in
+the object at 0x1b02f -- which is CLAUDE.md's rule about reproducing what the
+blob does rather than what can be shown to matter.  The general shape is worth
+keeping: an unreachable guard is not the same as a dead store, because the
+differential tier can refute a dead store and cannot refute this.
