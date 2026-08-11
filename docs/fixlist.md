@@ -65,6 +65,44 @@ of what its index expression can produce*. It survives indefinitely while the
 adjacent data is benign and breaks the moment tables are regenerated or
 reordered.
 
+#### Tested: the toolchain did NOT collapse the tables
+
+A good hypothesis was put to this: perhaps the source DID declare 193 entries,
+and the toolchain noticed that the last entry of one table equals the first of
+the next and overlapped them. That would make it not a bug at all. It is
+testable with the period toolchain, so it was tested.
+
+**It does not happen.** GCC 3.4.4 in `tools/toolchain`:
+
+| flags | result |
+|---|---|
+| base project flags | `FPM_sqrt_table` 0x182 = 386 bytes, tables distinct |
+| `-fmerge-constants` | identical |
+| `-fmerge-all-constants` | identical |
+
+and `ld -r` over two separate translation units does not do it either — it
+placed the tables 0x1a0 apart, padded for alignment, 672 bytes total against
+642 of data. Constant merging in this toolchain works on whole identical
+constants and on string tails in `SHF_MERGE|SHF_STRINGS` sections; it does not
+overlap the tail of one named array with the head of another.
+
+**The same experiment weakens the "deliberate overlap" reading too.** GCC
+emitted the two tables in the OPPOSITE order to their declaration — `div_table`
+first — so an author who meant to rely on the adjacency would have been relying
+on something the compiler does not guarantee.
+
+**And it explains why the adjacency exists at all.** 384 bytes is a multiple of
+32, so a 192-entry table leaves `div_table` at the next aligned address with
+*zero* gap. At 193 entries the table is 386 bytes, alignment pushes `div_table`
+to the following 32-byte boundary, and the two are no longer adjacent — the
+out-of-bounds read would land in padding rather than on 32768. The bug is
+benign only because of an alignment coincidence, which is a more fragile
+accident than "the next table happens to start with the right value".
+
+*Caveat:* the container is GCC 3.4.4 and the object's `.comment` names 3.4.2.
+Constant-merging behaviour is not something that changed between those, but
+they are not the identical compiler.
+
 ### 0.2 CONFIRMED: `selectFilter`'s ISDN and PBX arms do not clamp the row
 
 **Finding around `docs/findings.md:13476`.** Both arms take the row straight
@@ -108,12 +146,14 @@ it silently.
 0x10af0 (`setEchoDelay`).
 
 **The mechanism.** The history buffer at `+0x24` is allocated **once, in the
-constructor**, with a length computed from the delay AT THAT MOMENT:
+constructor**, with a length computed from the delay AT THAT MOMENT.  (The variable is `delay0`, not `D0`: a bare
+`D<digits>` is read by refcheck.py as a citation into the D-series deviation
+register in docs/deviations.md, and three of them dangled.)
 
 ```
-    D0 = params[+0x70]                     initial echoDelay
+    delay0 = params[+0x70]                 initial echoDelay
     L  = params[+0x6c] & ~3                coefficient count  (-> +0x14)
-    N  = (L-1 + D0) + 2*blk + floor((L-1 + D0)/blk)*blk + extra      (-> +0x1c)
+    N  = (L-1 + delay0) + 2*blk + floor((L-1 + delay0)/blk)*blk + extra   (-> +0x1c)
     +0x24 = malloc(N * 4)                  floats
 ```
 
