@@ -129,11 +129,24 @@ union dsc_slot {
 
 static union p3d_slot slot[2];
 static union dsc_slot dsc_a, dsc_b;
-static V90AutoDigitalImpDetector adid[2];
-static V90SdDetector sdd[2];
+/*
+ * Held as bytes, and cast through a macro so every call site below is
+ * unchanged.  A class the blob gives a real constructor and a real destructor
+ * has no default constructor to declare an array with; test/harness/
+ * v90demfix.h carries the full argument.
+ */
+static unsigned char adid_[2][sizeof(V90AutoDigitalImpDetector)]
+	__attribute__((aligned(8)));
+static unsigned char sdd_[2][sizeof(V90SdDetector)]
+	__attribute__((aligned(8)));
 static float sdhist[2][SDD_HIST];
-static V90Jd jdo[2];
-static V92Jd jd92o[2];
+static unsigned char jdo_[2][sizeof(V90Jd)] __attribute__((aligned(8)));
+static unsigned char jd92o_[2][sizeof(V92Jd)] __attribute__((aligned(8)));
+
+#define adid	((V90AutoDigitalImpDetector *)adid_)
+#define sdd	((V90SdDetector *)sdd_)
+#define jdo	((V90Jd *)jdo_)
+#define jd92o	((V92Jd *)jd92o_)
 static tagV90DILdescriptor dilo[2];
 static int dbuf[2][DSC_WORDS];
 static unsigned char sbuf[2][SCR_BUF];

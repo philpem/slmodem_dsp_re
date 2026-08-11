@@ -42,6 +42,21 @@
 
 class V92Jd {
 public:
+	/*
+	 * Fill both messages in from the parameter block -- and the argument
+	 * really is a `V90Parameters *`, not a `V92Parameters *`: the mangling
+	 * is `_ZN5V92JdC1EP13V90Parameters`, and the three fields it reads
+	 * (`V92_DIGITAL_RATE_MASK`, `V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD`,
+	 * `V92_JD_PHASE`) all live in V90Parameters at +0x3c, +0x40 and +0x44.
+	 * The V.92 parameters are split across both blocks; this class reads
+	 * only the V.90 one.
+	 *
+	 * The destructor is a one-byte `ret` and exists for the reason
+	 * V90Jd.h gives for its own.
+	 */
+	V92Jd(V90Parameters *params);
+	~V92Jd();
+
 	/* Fill in the message and its CRC.  No return value is used. */
 	void packJdData();
 	void packJdPhaseData();

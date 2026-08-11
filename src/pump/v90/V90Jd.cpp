@@ -17,6 +17,7 @@
 #include <stddef.h>
 
 #include "dsplib/V90Jd.h"
+#include "dsplib/V90Parameters.h"	/* the constructor's five fields */
 
 /*
  * Hold the compiler to the map in the header.  `tools/offcheck.py` does this
@@ -34,6 +35,76 @@ V90JD_OFF(bits,       0x02, bits);
 V90JD_OFF(crc,        0x4c, crc);
 V90JD_OFF(unpackWord, 0x8c, unpackword);
 typedef char v90jd_size[(sizeof(V90Jd) == 0x90) ? 1 : -1];
+
+/*
+ * ===========================================================================
+ * The constructor, 0x1e790, and it is where the header's bit map comes from.
+ *
+ * Five fields of V90Parameters, and the author's own names for all five
+ * (finding 860's extraction of `loadParams`):
+ *
+ *     DIGITAL_RATE_MASK             +0x2c  28 bits, spread over two groups
+ *     MAX_SPECTRAL_SHAPER_LOOKAHEAD +0x30  two bits
+ *     V34_PHASE4_CONSTELLATION      +0x34  one byte
+ *     V34_RRN_CONSTELLATION         +0x38  one byte
+ *
+ * THE TWO GROUPS ARE 16 AND 12 BITS, NOT 14 AND 14.  The first loop is
+ * `cmp $0xf,%ecx; jle` and the second `cmp $0xb,%edx; jle`, so bits 0..15 of
+ * the mask land in `bits[18..33]` and bits 16..27 in `bits[35..46]` -- 28
+ * rates, with the group boundary falling inside the mask rather than between
+ * two halves of it.  V92Jd's second loop stops one earlier; see there.
+ *
+ * BOTH COUNTERS ARE SIGNED.  `jle`, not `jbe`, in both loops here, against
+ * V92Jd's `jbe` on its phase loop.  That is the induction variable's declared
+ * type showing through, which the codegen tier can see and the differential
+ * tier cannot, so it is written the way the object was compiled: `int` here.
+ *
+ * The store order below is the object's.  GCC is free to reorder it and does
+ * (CLAUDE.md's rule for reading a codegen difference); what is not free is
+ * which byte gets which value.
+ * ===========================================================================
+ */
+V90Jd::V90Jd(V90Parameters *params)
+{
+	int mask;
+	int i;
+
+	unpack[0] = 0;
+	unpack[1] = 0;
+	unpackWord = 0;
+
+	/*
+	 * The maximum lookahead, two bits.  `movzbl` then `and $1` and
+	 * `shr $1; and $1` -- the low two bits of the parameter's low byte,
+	 * and nothing above them can reach the message.
+	 */
+	bits[49] = (unsigned char)(params->MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);
+	bits[50] = (unsigned char)
+	    ((params->MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);
+
+	/*
+	 * The constellation size, two bits, one parameter each -- a whole-word
+	 * load and a byte store, so only the low byte of either is carried.
+	 */
+	bits[47] = (unsigned char)params->V34_PHASE4_CONSTELLATION;
+	bits[48] = (unsigned char)params->V34_RRN_CONSTELLATION;
+
+	mask = params->DIGITAL_RATE_MASK;
+	for (i = 0; i <= 15; i++)
+		bits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);
+	for (i = 0; i <= 11; i++)
+		bits[V90JD_GROUP2 + 1 + i] =
+		    (unsigned char)((mask >> (i + 16)) & 1);
+}
+
+/*
+ * One byte of `ret` in the blob, at 0x1e890 and 0x1e8a0.  It exists here
+ * because the object has the symbols and a caller that destroys a V90Jd needs
+ * them; see the header for why an implicit one would not do.
+ */
+V90Jd::~V90Jd()
+{
+}
 
 /*
  * The CRC-16 the message carries, as the object computes it: sixteen ints,

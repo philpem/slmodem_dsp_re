@@ -1488,8 +1488,22 @@ run_diagnostics(int v92)
 #define JD90_SLOT	192
 #define JD92_SLOT	256
 
-static union { V90Jd o; unsigned char raw[JD90_SLOT]; } jd90_ours, jd90_theirs;
-static union { V92Jd o; unsigned char raw[JD92_SLOT]; } jd92_ours, jd92_theirs;
+/*
+ * The object lives IN the byte array.  V90Jd and V92Jd have user-declared
+ * destructors -- the blob has `_ZN5V90JdD1Ev` and GCC emits no symbol for a
+ * trivial implicit one -- and a union with a non-trivially-destructible
+ * variant member has its own destructor deleted.  Only `raw` was ever used
+ * here in any case; `o` existed to give the slot its alignment and its type.
+ */
+static union { unsigned char raw[JD90_SLOT]; int align; }
+	jd90_ours, jd90_theirs;
+static union { unsigned char raw[JD92_SLOT]; int align; }
+	jd92_ours, jd92_theirs;
+
+#define JD90_O		(*(V90Jd *)jd90_ours.raw)
+#define JD90_T		(*(V90Jd *)jd90_theirs.raw)
+#define JD92_O		(*(V92Jd *)jd92_ours.raw)
+#define JD92_T		(*(V92Jd *)jd92_theirs.raw)
 
 /* Where the three pointers are parked before the call; see the comment. */
 #define PARK_JD90	40
@@ -1565,10 +1579,10 @@ compare_reset(long input)
 		    own_offset(ours.o.jdV92PhaseBits, &jd92_ours),
 		    own_offset(theirs.o.jdV92PhaseBits, &jd92_theirs), input);
 
-	diff_eq_obj("the V90Jd after reset", V90Jd, &jd90_ours.o,
-		    &jd90_theirs.o, input);
-	diff_eq_obj("the V92Jd after reset", V92Jd, &jd92_ours.o,
-		    &jd92_theirs.o, input);
+	diff_eq_obj("the V90Jd after reset", V90Jd, &JD90_O,
+		    &JD90_T, input);
+	diff_eq_obj("the V92Jd after reset", V92Jd, &JD92_O,
+		    &JD92_T, input);
 	diff_eq_int("no store past the V90Jd (case %ld)",
 		    memcmp(jd90_ours.raw + sizeof(V90Jd),
 			   jd90_theirs.raw + sizeof(V90Jd),
@@ -1612,9 +1626,9 @@ run_reset(void)
 
 				ours.o.reset(law, code,
 				    (Phase3ModulatorState)st, nsym[n],
-				    &jd90_ours.o, &jd92_ours.o, &desc, base);
+				    &JD90_O, &JD92_O, &desc, base);
 				ref_reset(&theirs.o, law, code, st, nsym[n],
-				    &jd90_theirs.o, &jd92_theirs.o, &desc,
+				    &JD90_T, &JD92_T, &desc,
 				    base);
 
 				compare_reset(input);
@@ -1675,9 +1689,9 @@ run_reset(void)
 	for (flag = 0; flag < 2; flag++, trial++) {
 		prepare_reset(trial, trial % 4, (unsigned int)flag);
 		ours.o.reset(PCM_TYPE_MU_LAW, 0x2a, P3M_STATE_SD, 0,
-		    &jd90_ours.o, &jd92_ours.o, NULL, 0);
+		    &JD90_O, &JD92_O, NULL, 0);
 		ref_reset(&theirs.o, PCM_TYPE_MU_LAW, 0x2a, 0, 0,
-		    &jd90_theirs.o, &jd92_theirs.o, NULL, 0);
+		    &JD90_T, &JD92_T, NULL, 0);
 		compare_reset(950000L + flag);
 		diff_eq_int("reset(NULL descriptor) cleared dilCount",
 			    ours.o.dilCount, 0, flag);

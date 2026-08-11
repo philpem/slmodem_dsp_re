@@ -39874,3 +39874,179 @@ question about `v34handshak`'s state machine rather than a parameter, and the
 prediction is specific enough to be wrong -- if forced second passes still
 cap at 14400, the extra pass is a symptom of whatever produced the good calls
 rather than its cause.
+
+======================================================================
+
+### 1220. THE CONSTRUCTION PATH IS 108 SYMBOLS AND 19,704 BYTES, NOT THE 394 THAT PUT IT LAST — AND FOUR OF ITS CONSTRUCTORS NOW EXIST
+
+*The first batch of the V.PCM construction path.  `docs/nextsteps.md` carries
+the recomputed queue this comes from and says how to reproduce it.*
+
+**The measurement that reopened this.** `docs/vpcmv34main.md` demotes the
+construction path to "Wave 5 — the construction path, LAST", on finding 838's
+count of what each of its four entry points still needed.  Recomputed against
+a fully built tree (finding 271's precondition — an unbuilt `build/src` makes
+every closure look enormous):
+
+| | finding 838 | now |
+|---|--:|--:|
+| `dp_vpcm_init` | 394 | **108** |
+| `vpcm_create` | 124 | **104** |
+| `VPCMXF_Create` | 66 | **59** |
+| `VPcmV34Create` | 11 | **1 — writable, and the largest single item in the set at 2,376 B** |
+
+The whole closure of `dp_vpcm_init`, `vpcm_create`, `VPCMXF_Create`,
+`VPcmV34Create` and `vpcm_delete` is **108 unwritten symbols over 19,704
+bytes**, of which **69 symbols and 9,198 bytes have a closure of 1** — nothing
+blocks them and they can be written in any order.  The shape is a wide flat
+base of 69 leaves under a strict chain: `V90Demodulator`'s constructor at 27,
+`V90Modem`'s at 34, `VPcmFloModem`'s at 58, `VPCMXF_Create` 59, `vpcm_create`
+104, `dp_vpcm_init` 108.  Nothing branches.
+
+**Do not quote those numbers again either.**  `vpcmv34main.md` says to
+recompute before quoting and this finding is why: its own wave-2 order
+(G, H, D, B first) is stale the same way — nineteen of
+`V90AutoDigitalImpDetector`'s twenty-two symbols are writable today and the
+table does not say so.  `tools/closure.py <roots> --missing` takes ninety
+seconds.
+
+**What this batch landed:** `V90Jd::V90Jd`, `V90Jd::~V90Jd`, `V92Jd::V92Jd`,
+`V92Jd::~V92Jd`, `V90Phase2Info::V90Phase2Info` and
+`V92Phase2Info::V92Phase2Info` — 476 bytes over six symbols, with four
+mutation suites (`v90jd`, `v92jd`, `v90p2info`, `v92p2info`: 45 mutations, 43
+caught, 0 NOT caught, 2 equivalent).
+
+======================================================================
+
+### 1221. A CLASS THAT GAINS ITS REAL CONSTRUCTOR STOPS BEING A UNION MEMBER, AND THAT IS THE STANDING COST OF THE CONSTRUCTION PATH
+
+*Not a defect in the object.  A property of the reconstruction that every
+later batch of this path will meet, written down once so nobody spends an
+afternoon on it twice.*
+
+**Why the destructors have to exist at all.**  The blob has
+`_ZN5V90JdD1Ev` and `_ZN5V90JdD2Ev` as one-byte `ret`s.  GCC emits an
+out-of-line destructor symbol ONLY for a user-declared destructor — a trivial
+implicit one produces no symbol whatsoever — so the original declared them,
+and a reconstruction that leaves them out leaves two symbols undefined for
+every caller that destroys a `V90Jd`.  The same argument runs for every
+one-byte destructor in the closure, and there are fifteen of them.
+
+**And what that breaks.**  A user-declared constructor removes the default
+constructor; a user-declared destructor makes the class non-trivially
+destructible.  Existing fixtures then stop compiling, in tests nobody touched:
+
+    static V90Jd jdo[2];                          -> no matching V90Jd::V90Jd()
+    union { V90Jd o; unsigned char raw[N]; } a;   -> deleted ctor AND dtor
+
+Five files in this tree had one shape or the other — `test/harness/
+v90demfix.h`, `t_v90p3dreset.cpp`, `t_v90p3mod.cpp`, `t_v90jd.cpp`,
+`t_v92jd.cpp` — and they surfaced one rebuild at a time, three rebuilds apart.
+**Grep `test/` for the class name before building, not after.**
+
+**The fix that costs nothing at the call sites** is a byte array and a cast
+macro, which is also more honest about what the fixture was always doing:
+
+    static unsigned char jdo_[2][sizeof(V90Jd)] __attribute__((aligned(8)));
+    #define jdo ((V90Jd *)jdo_)
+
+Rows are exactly `sizeof(class)`, so `&jdo[0]`, `sizeof(jdo[0])` and
+`jdo[side].field` are the same arithmetic the array notation did.  For a union
+fixture, keep the union to carry the alignment and reach the object through
+`#define OURS (*(V90Jd *)ours.raw)`.
+
+**A constructor cannot be driven any other way, either.**  C++ has no syntax
+for running a constructor over storage that already exists, so both sides are
+called BY SYMBOL through `asm()` labels — `_ZN5V90JdC1EP13V90Parameters` and
+`ref__ZN5V90JdC1EP13V90Parameters`.  `OURS = V90Jd(p);` is not a substitute
+and is actively wrong here: it constructs a temporary over uninitialised stack
+and copies the whole object, which destroys the property every fixture in this
+tree depends on — the slot is seeded and never zeroed, so a byte the
+constructor fails to write is a byte that differs.  t_diffcoder.cpp set the
+precedent for naming our own mangled symbols this way.
+
+**Drive C1 AND C2.**  GCC gives us one function under two names where the blob
+has two identical copies; testing one leaves the other's symbol asserted by
+nothing.
+
+======================================================================
+
+### 1222. `V92Phase2Info` IS 0x2c BYTES AND NOT 0x28, AND `pad_14[3]` IS THREE REAL FIELDS
+
+*Found by writing the constructor.  Corrects
+`include/dsplib/V92Phase2Info.h`, which had both from two readers that could
+not see them.*
+
+The header was assembled from `printInfo` and `VPcmFloModem::setPhaseIIinfo`,
+and recorded +0x14..+0x16 as `pad_14[3]`, "reached by neither reader", with
+the object ending at +0x28 after the fourth array pointer.  The constructor at
+0x15f70 is the third reader and it reaches both:
+
+    15fb4:  mov 0x5c(%ecx),%eax / mov %al,0x14(%edx)   V92_NOF_FILTER_SECTIONS
+    15fba:  mov 0x60(%ecx),%eax / mov %al,0x15(%edx)   V92_MAX_TOTAL_NOF_COEFFS
+    15fc0:  mov 0x64(%ecx),%eax / mov %al,0x16(%edx)   V92_MAX_NOF_COEFFS_IN_EACH_SECTION
+    15f7e:  mov %ecx,0x28(%edx)                        the V92Parameters itself
+
+So the three are the V.92 filter geometry, carried as bytes out of three `int`
+parameters, and `params` at +0x28 is a four-byte store that makes the object
+0x2c.  **A padding run is only padding until a third function is read**, which
+is the same lesson D7 and D10 taught in the other direction and the reason the
+header now says which member proved each offset.
+
+**The names are the parameters', not the class's.**  Neither `printInfo` nor
+`setPhaseIIinfo` touches these three, so no format string names them; what is
+recoverable is which parameter fills each.  `nofFilterSections`,
+`maxTotalNofCoeffs` and `maxNofCoeffsInEachSection` are named on that basis
+and the header says so.
+
+**Two consequences worth knowing.**  The class's offset assertions moved from
+`src/pump/v90/VPcmFloModem.cpp`, which had been carrying them because the
+class had no source file of its own, into the new
+`src/pump/v90/V92Phase2Info.cpp`; and `sizeof(V92Phase2Info)` changing from
+0x28 to 0x2c is safe only because nothing embeds one by value — every user
+holds a `V92Phase2Info *`.
+
+**And the constructor asserts a capability.**  `v92CapabilitiesLocal` is set
+to **1** at construction while both remote bytes and `shortPhase2Local` are
+cleared, so a V.92 capability is offered locally from the moment the object
+exists; `setPhaseIIinfo` fills the remote pair in later out of INFO0.
+
+======================================================================
+
+### 1223. THE TWO Jd MESSAGES DIFFER BY ONE RATE BIT, ONE CONSTELLATION FIELD AND A FIXED-POINT CONVERSION
+
+*The V.90 and V.92 Jd constructors read side by side.  Assembling either from
+the other gets three things wrong, so they are written down.*
+
+Both build a 72-byte one-bit-per-byte vector on a 17-byte group stride, both
+clear the unpacker, and both spread a rate mask over two groups.  The
+differences:
+
+| | `V90Jd` (0x1e790) | `V92Jd` (0x11c80) |
+|---|---|---|
+| rate mask | `DIGITAL_RATE_MASK`, **28 bits** — 16 into `bits[18..33]`, 12 into `bits[35..46]` | `V92_DIGITAL_RATE_MASK`, **27 bits** — 16, then **11** |
+| second-group bound | `cmp $0xb,%edx; jle` | `cmp $0xa,%edx; jle` |
+| constellation | `bits[47]`, `bits[48]` from `V34_PHASE4_CONSTELLATION` and `V34_RRN_CONSTELLATION` | `bits[47] = 0` and **`bits[48]` is never written** — D162 |
+| second message | none | `phaseBits`, with `[47] = 1`, `[48] = [49] = 0` |
+| phase | none | 16 bits of `V92_JD_PHASE` in Q16 |
+
+**The argument type is `V90Parameters *` for BOTH**, which the mangling
+settles: `_ZN5V92JdC1EP13V90Parameters`.  The V.92 fields it reads live in the
+V.90 block at +0x3c, +0x40 and +0x44, so the V.92 parameters are split across
+the two blocks and this class reads only the V.90 one.
+
+**The phase is a Q16 conversion through a SIXTY-FOUR bit truncation.**
+`flds 65536.0` from `.rodata.cst4+0x94`, `fmuls 0x44(%edi)`, then `fnstcw` /
+`or $0xc00` / `fldcw` — round toward zero, which is C's own rule for a
+float-to-integer conversion — and `fistpll`, of which only the low word is
+read back.  A 32-bit intermediate would have emitted `fistpl`, so the source's
+type is 64-bit, and that distinction is invisible to the differential test for
+any phase in range and matters for one that overflows an `int`.
+
+**Two induction variables have different signedness, and it is legible.**
+`V92Jd`'s phase loop is `cmp $0xf,%ecx; jbe` where both rate loops in both
+classes are `jle`.  That is the declared type of the counter showing through —
+the codegen tier can see it and the differential tier cannot — so it is
+written the way the object was compiled: `unsigned` there, `int` elsewhere.
+
+======================================================================

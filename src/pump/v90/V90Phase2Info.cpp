@@ -42,6 +42,7 @@
 #include <stddef.h>
 
 #include "dsplib/V90Phase2Info.h"
+#include "dsplib/V90Parameters.h"	/* the constructor's five fields  */
 #include "dsplib/V90Phase3Modulator.h"	/* PcmType, and only for that     */
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
@@ -79,6 +80,39 @@ V90P2I_OFF(params,			0x20, params);
 typedef char v90p2i_size[(sizeof(V90Phase2Info) == 0x24) ? 1 : -1];
 
 #endif /* 32-bit host */
+
+/*
+ * ===========================================================================
+ * The constructor, 0x2a990, and it is what SIZES the object: `params` at
+ * +0x20 is a four-byte store and nothing else in the class reaches that far,
+ * so 0x24 is the object and 0x1c is only as far as `printInfo` looks.
+ *
+ * FIVE COPIES, TWO OF THEM THROUGH A BOOLEAN.  `pcmType` and
+ * `txPowerMeasurementPoint` are `cmpl $0x0,...; setne %al` -- the parameter
+ * is tested, not carried, so a PHASE2_INFO_A_OR_MU of 7 arrives here as 1.
+ * The other three are plain copies, and two of those are a whole-word load
+ * with a byte store, so only the low byte of `PHASE2_INFO_UINFO` and
+ * `PHASE2_INFO_MAX_TX_POWER` survives.
+ *
+ * `pcmType` IS NOT `PcmType` HERE.  The header spells it `int` and this is
+ * why: what the object stores is a `setne` result, and PcmType's own
+ * PCM_TYPE_A_LAW happens to be 1, so the two agree on the value and not on
+ * the reasoning.
+ *
+ * The four `pad`/array fields between +0x10 and +0x1f are NOT written here.
+ * `VPcmFloModem::setPhaseIIinfo` installs them later; a caller that reads
+ * `L2` before that runs reads whatever was in the storage.
+ * ===========================================================================
+ */
+V90Phase2Info::V90Phase2Info(V90Parameters *p)
+{
+	params = p;
+	pcmType = (p->PHASE2_INFO_A_OR_MU != 0);
+	rtd = p->PHASE2_INFO_RTD;
+	Uinfo = (unsigned char)p->PHASE2_INFO_UINFO;
+	maxTxPower = (unsigned char)p->PHASE2_INFO_MAX_TX_POWER;
+	txPowerMeasurementPoint = (p->PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
+}
 
 /*
  * ===========================================================================

@@ -8,13 +8,13 @@
   "",
   "Use it:  tools/mutate.py --suite v8jm"
  ],
- "callprog": [
-  "src/callprog/callprog.c",
-  "build/test/t_callprog_progress"
- ],
  "cadence": [
   "src/callprog/cadence.c",
   "build/test/t_cadence"
+ ],
+ "callprog": [
+  "src/callprog/callprog.c",
+  "build/test/t_callprog_progress"
  ],
  "dialer": [
   "src/dialer/dialer.c",
@@ -24,9 +24,145 @@
   "src/dialer/dialer.c",
   "build/test/t_dialer"
  ],
+ "dilpack": [
+  "src/pump/v90/DILdescriptorPacker.cpp",
+  "build/test/t_dilpack"
+ ],
+ "floatarma": [
+  "src/dsp/FloatARMA.cpp",
+  "build/test/t_floatarma"
+ ],
+ "psd": [
+  "src/dsp/Psd.cpp",
+  "build/test/t_psd"
+ ],
  "pulse": [
   "src/call/pulse.c",
   "build/test/t_pulse"
+ ],
+ "resampler": [
+  "src/pump/v90/Resampler.cpp",
+  "build/test/t_resampler"
+ ],
+ "resamplertiming": [
+  "src/pump/v90/ResamplerTiming.cpp",
+  "build/test/t_resampler"
+ ],
+ "resamplerto": [
+  "src/pump/v90/ResamplerTimingOffset.cpp",
+  "build/test/t_resampler"
+ ],
+ "scrambler": [
+  "include/dsplib/Scrambler.h",
+  "build/test/t_scrambler"
+ ],
+ "v34datapump": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34datapump"
+ ],
+ "v34datapump_rrn": [
+  "src/pump/v34/v34pcmif.c",
+  "build/test/t_v34datapump"
+ ],
+ "v34filters": [
+  "src/pump/v34/v34filters.c",
+  "build/test/t_v34ec"
+ ],
+ "v34hsfsk": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsfsk"
+ ],
+ "v34hshak": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hshak"
+ ],
+ "v34hsmst44": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsmst44"
+ ],
+ "v34hsrx4": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrx4"
+ ],
+ "v34hsrx53": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrx53"
+ ],
+ "v34hsrx72": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrx72"
+ ],
+ "v34hsrxch": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hsrxch"
+ ],
+ "v34hst346": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst346"
+ ],
+ "v34hst3core": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst3core"
+ ],
+ "v34hst3m41": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst3m41"
+ ],
+ "v34hst3mid": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hst3mid"
+ ],
+ "v34hstb1": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hstb1"
+ ],
+ "v34hstx1": [
+  "src/pump/v34/v34hstx1.cpp",
+  "build/test/t_v34hstx1"
+ ],
+ "v34hstxblock": [
+  "src/pump/v34/v34hshak.c",
+  "build/test/t_v34hstbl2"
+ ],
+ "v34info": [
+  "src/pump/v34/v34info.c",
+  "build/test/t_v34info"
+ ],
+ "v34info1a": [
+  "src/pump/v34/v34info1a.cpp",
+  "build/test/t_v34info1a"
+ ],
+ "v34info1d": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v34info1d"
+ ],
+ "v34ja": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v34ja"
+ ],
+ "v34k56": [
+  "src/pump/v34/v34k56.cpp",
+  "build/test/t_v34k56"
+ ],
+ "v34pcmif": [
+  "src/pump/v34/v34pcmif.c",
+  "build/test/t_v34pcmif"
+ ],
+ "v34pcmrates": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v34pcmif"
+ ],
+ "v34retrain": [
+  "src/pump/v34/v34pcmmain.cpp",
+  "build/test/t_v34retrain"
+ ],
+ "v34rx": [
+  "src/pump/v34/v34rx.c",
+  "build/test/t_v34rx"
+ ],
+ "v34shell": [
+  "src/pump/v34/v34shell.c",
+  "build/test/t_v34shell"
  ],
  "v8agc": [
   "src/v8/v8agc.c",
@@ -64,97 +200,9 @@
   "src/v8/v8sig.c",
   "build/test/t_v8sig"
  ],
- "v34pcmif": [
-  "src/pump/v34/v34pcmif.c",
-  "build/test/t_v34pcmif"
- ],
- "v34hshak": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hshak"
- ],
- "v34hstxblock": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hstbl2"
- ],
- "v34hst3core": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hst3core"
- ],
- "v34datapump": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34datapump"
- ],
- "v34datapump_rrn": [
-  "src/pump/v34/v34pcmif.c",
-  "build/test/t_v34datapump"
- ],
- "v34k56": [
-  "src/pump/v34/v34k56.cpp",
-  "build/test/t_v34k56"
- ],
- "v34filters": [
-  "src/pump/v34/v34filters.c",
-  "build/test/t_v34ec"
- ],
- "v34info": [
-  "src/pump/v34/v34info.c",
-  "build/test/t_v34info"
- ],
- "v34info1a": [
-  "src/pump/v34/v34info1a.cpp",
-  "build/test/t_v34info1a"
- ],
- "v34info1d": [
-  "src/pump/v34/v34pcmmain.cpp",
-  "build/test/t_v34info1d"
- ],
- "v34rx": [
-  "src/pump/v34/v34rx.c",
-  "build/test/t_v34rx"
- ],
- "v34shell": [
-  "src/pump/v34/v34shell.c",
-  "build/test/t_v34shell"
- ],
  "v90adid": [
   "src/pump/v90/V90AutoDigitalImpDetector.cpp",
   "build/test/t_v90adid"
- ],
- "v90dil": [
-  "src/pump/v90/V90Dil.cpp",
-  "build/test/t_v90adid"
- ],
- "dilpack": [
-  "src/pump/v90/DILdescriptorPacker.cpp",
-  "build/test/t_dilpack"
- ],
- "v90equ": [
-  "src/pump/v90/V90Equalizer.cpp",
-  "build/test/t_v90equ"
- ],
- "v92ec": [
-  "src/pump/v90/V92EchoCanceller.cpp",
-  "build/test/t_v90leaves"
- ],
- "v90rto": [
-  "src/pump/v90/ResamplerTimingOffset.cpp",
-  "build/test/t_v90leaves"
- ],
- "resampler": [
-  "src/pump/v90/Resampler.cpp",
-  "build/test/t_resampler"
- ],
- "resamplerto": [
-  "src/pump/v90/ResamplerTimingOffset.cpp",
-  "build/test/t_resampler"
- ],
- "resamplertiming": [
-  "src/pump/v90/ResamplerTiming.cpp",
-  "build/test/t_resampler"
- ],
- "v90resampler": [
-  "src/pump/v90/V90Resampler.cpp",
-  "build/test/t_resampler"
  ],
  "v90cd": [
   "src/pump/v90/V90ConstellationDesigner.cpp",
@@ -168,132 +216,100 @@
   "src/pump/v90/V90Demapper.cpp",
   "build/test/t_v90leaves"
  ],
- "v90sbe": [
-  "src/pump/v90/V90SignBitsExtractor.cpp",
-  "build/test/t_v90leaves"
- ],
- "v90prefilter": [
-  "src/pump/v90/V90PreFilter.cpp",
-  "build/test/t_v90prefilter"
- ],
- "v90sessionflag": [
-  "src/pump/v90/V90SessionFlag.cpp",
-  "build/test/t_v90sessionflag"
- ],
- "vpcmflomodem": [
-  "src/pump/v90/VPcmFloModem.cpp",
-  "build/test/t_vpcmflomodem"
- ],
- "vpcmep3": [
-  "src/pump/v90/VPcmFloModem.cpp",
-  "build/test/t_vpcmep3"
- ],
- "vpcmrun": [
-  "src/pump/v90/vpcm.c",
-  "build/test/t_vpcmrun"
- ],
- "vpcmguard": [
-  "src/pump/v90/vpcm.c",
-  "build/test/t_vpcmguard"
- ],
- "vpcmweak": [
-  "test/unit/t_vpcmguard.c",
-  "build/test/t_vpcmguard"
- ],
- "v90p3dreset": [
-  "src/pump/v90/V90Phase3Demodulator.cpp",
-  "build/test/t_v90p3dreset"
- ],
- "scrambler": [
-  "include/dsplib/Scrambler.h",
-  "build/test/t_scrambler"
- ],
  "v90demod": [
   "src/pump/v90/V90Demodulator.cpp",
   "build/test/t_v90demod"
+ ],
+ "v90dil": [
+  "src/pump/v90/V90Dil.cpp",
+  "build/test/t_v90adid"
+ ],
+ "v90equ": [
+  "src/pump/v90/V90Equalizer.cpp",
+  "build/test/t_v90equ"
  ],
  "v90getbitrate": [
   "src/pump/v90/V90Demodulator.cpp",
   "build/test/t_v90demod"
  ],
- "v34pcmrates": [
-  "src/pump/v34/v34pcmmain.cpp",
-  "build/test/t_v34pcmif"
+ "v90jd": [
+  "src/pump/v90/V90Jd.cpp",
+  "build/test/t_v90jd"
+ ],
+ "v90p2info": [
+  "src/pump/v90/V90Phase2Info.cpp",
+  "build/test/t_v90p2info"
  ],
  "v90p34": [
   "src/pump/v34/v34pcmmain.cpp",
   "build/test/t_v90p34"
  ],
- "v34retrain": [
-  "src/pump/v34/v34pcmmain.cpp",
-  "build/test/t_v34retrain"
- ],
- "v34hstx1": [
-  "src/pump/v34/v34hstx1.cpp",
-  "build/test/t_v34hstx1"
- ],
- "v34ja": [
-  "src/pump/v34/v34pcmmain.cpp",
-  "build/test/t_v34ja"
- ],
- "v34hst3m41": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hst3m41"
- ],
- "v34hst346": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hst346"
- ],
- "v34hsmst44": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hsmst44"
- ],
- "v34hst3mid": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hst3mid"
- ],
- "v34hstb1": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hstb1"
- ],
- "v34hsrxch": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hsrxch"
- ],
- "v34hsfsk": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hsfsk"
- ],
- "v34hsrx53": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hsrx53"
- ],
- "v34hsrx4": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hsrx4"
- ],
- "v34hsrx72": [
-  "src/pump/v34/v34hshak.c",
-  "build/test/t_v34hsrx72"
+ "v90p3dreset": [
+  "src/pump/v90/V90Phase3Demodulator.cpp",
+  "build/test/t_v90p3dreset"
  ],
  "v90params": [
   "src/pump/v90/V90Parameters.cpp",
   "build/test/t_v90params"
  ],
- "v92params": [
-  "src/pump/v90/V92Parameters.cpp",
-  "build/test/t_v90params"
+ "v90prefilter": [
+  "src/pump/v90/V90PreFilter.cpp",
+  "build/test/t_v90prefilter"
  ],
- "floatarma": [
-  "src/dsp/FloatARMA.cpp",
-  "build/test/t_floatarma"
+ "v90resampler": [
+  "src/pump/v90/V90Resampler.cpp",
+  "build/test/t_resampler"
  ],
- "psd": [
-  "src/dsp/Psd.cpp",
-  "build/test/t_psd"
+ "v90rto": [
+  "src/pump/v90/ResamplerTimingOffset.cpp",
+  "build/test/t_v90leaves"
+ ],
+ "v90sbe": [
+  "src/pump/v90/V90SignBitsExtractor.cpp",
+  "build/test/t_v90leaves"
+ ],
+ "v90sessionflag": [
+  "src/pump/v90/V90SessionFlag.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "v92ec": [
+  "src/pump/v90/V92EchoCanceller.cpp",
+  "build/test/t_v90leaves"
+ ],
+ "v92jd": [
+  "src/pump/v90/V92Jd.cpp",
+  "build/test/t_v92jd"
+ ],
+ "v92p2info": [
+  "src/pump/v90/V92Phase2Info.cpp",
+  "build/test/t_v92p2info"
  ],
  "v92p3mod": [
   "src/pump/v90/V92Phase3Modulator.cpp",
   "build/test/t_v92p3mod"
+ ],
+ "v92params": [
+  "src/pump/v90/V92Parameters.cpp",
+  "build/test/t_v90params"
+ ],
+ "vpcmep3": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_vpcmep3"
+ ],
+ "vpcmflomodem": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_vpcmflomodem"
+ ],
+ "vpcmguard": [
+  "src/pump/v90/vpcm.c",
+  "build/test/t_vpcmguard"
+ ],
+ "vpcmrun": [
+  "src/pump/v90/vpcm.c",
+  "build/test/t_vpcmrun"
+ ],
+ "vpcmweak": [
+  "test/unit/t_vpcmguard.c",
+  "build/test/t_vpcmguard"
  ]
 }

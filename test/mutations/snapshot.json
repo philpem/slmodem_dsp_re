@@ -3732,6 +3732,37 @@
     "the sample rate is 7200 rather than 8000": "caught"
    }
   },
+  "v90jd": {
+   "key": "1b08c694d57fa9072a0866d4e4b5430fdb91aa8658d4cbed081d1b1aff41063f",
+   "summary": "12 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "group 0 is one bit short": "caught",
+    "the CRC's two feedback taps are transposed": "caught",
+    "the constellation bits carry the whole word, not its low byte": "caught",
+    "the destructor is not empty": "equivalent",
+    "the first rate group is one bit short": "caught",
+    "the rate mask is read from the wrong parameter": "caught",
+    "the second rate group starts one bit low in the mask": "caught",
+    "the second rate group stops where V92Jd's does": "caught",
+    "the two constellation parameters are transposed": "caught",
+    "the two lookahead bits are transposed": "caught",
+    "the unpacker's second byte is left as it was": "caught",
+    "the unpacker's word is left as it was": "caught"
+   }
+  },
+  "v90p2info": {
+   "key": "9fc2c6aa53c305f75422e985a79afa88ce4f9488df0403825671584ace8ec1fc",
+   "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Uinfo and maxTxPower are transposed": "caught",
+    "pcmType carries the parameter instead of testing it": "caught",
+    "rtd is not written": "caught",
+    "rtd is read from the neighbouring parameter": "caught",
+    "the parameter block is not kept": "caught",
+    "the two boolean copies are transposed": "caught",
+    "txPowerMeasurementPoint carries the parameter instead of testing it": "caught"
+   }
+  },
   "v90p34": {
    "key": "106c63cae6447f4a6f5a726c8fcff9c129ec35cb9a4601b9881ddae36179668e",
    "summary": "70 mutations: 64 caught (64 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
@@ -3977,6 +4008,44 @@
     "print the field rather than the argument": "caught",
     "the delta is subtracted, not added": "caught",
     "the tap count follows the delay, not the change": "caught"
+   }
+  },
+  "v92jd": {
+   "key": "3b2ccd99bd509bcbed3238f333d1fc52f5c64abc20a5c36c7fe7b33a572faa85",
+   "summary": "14 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the data message's constant is set, not cleared": "caught",
+    "the destructor is not empty": "equivalent",
+    "the first rate group is one bit short": "caught",
+    "the fixed-point scale is one bit out": "caught",
+    "the phase bits start one place up the word": "caught",
+    "the phase is read from the neighbouring parameter": "caught",
+    "the phase is rounded rather than truncated": "caught",
+    "the phase loop is one bit short": "caught",
+    "the phase message's leading constant is cleared, not set": "caught",
+    "the phase message's two trailing bytes are left as they were": "caught",
+    "the phase unpacker's word is left as it was": "caught",
+    "the rate mask is read from the V.90 parameter": "caught",
+    "the second rate group runs to V90Jd's twelve bits": "caught",
+    "the two lookahead bits are transposed": "caught"
+   }
+  },
+  "v92p2info": {
+   "key": "6124f0afed609e7518dedf74ce450638ec088e0357c79e2df4bebb77a0365da6",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Uinfo and maxTxPower are transposed": "caught",
+    "a filter count carries the whole word, not its low byte": "caught",
+    "pcmType carries the parameter instead of testing it": "caught",
+    "rtd is read from the neighbouring parameter": "caught",
+    "the local capability byte is cleared rather than set": "caught",
+    "the local capability byte is set on the wrong field": "caught",
+    "the parameter block is not kept": "caught",
+    "the remote pair is left as it was": "caught",
+    "the third filter count is not written": "caught",
+    "the three filter counts are rotated": "caught",
+    "txPowerMeasurementPoint carries the parameter instead of testing it": "caught",
+    "v90UseHighCarrier is left as it was": "caught"
    }
   },
   "v92p3mod": {

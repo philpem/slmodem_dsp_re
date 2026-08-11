@@ -15,6 +15,7 @@
 #include <stddef.h>
 
 #include "dsplib/V92Jd.h"
+#include "dsplib/V90Parameters.h"	/* the constructor's three fields */
 
 /* Hold the compiler to the header's map; offcheck.py cannot see a class. */
 #define V92JD_OFF(field, off, tag) \
@@ -28,6 +29,83 @@ V92JD_OFF(crc,             0x94, crc);
 V92JD_OFF(unpackWord,      0xd4, unpackword);
 V92JD_OFF(unpackPhaseWord, 0xd8, unpackphaseword);
 typedef char v92jd_size[(sizeof(V92Jd) == 0xdc) ? 1 : -1];
+
+/*
+ * ===========================================================================
+ * The constructor, 0x11c80.  Three fields of V90Parameters, and one of them
+ * goes through the coprocessor.
+ *
+ * THE PHASE IS A FIXED-POINT CONVERSION, 16 BITS OF FRACTION.  The object
+ * loads 65536.0f from .rodata.cst4+0x94, multiplies by `V92_JD_PHASE`, sets
+ * the x87 rounding mode to truncate (`fnstcw`, `or $0xc00`, `fldcw`) and
+ * stores with `fistpll` -- a SIXTY-FOUR bit store, of which it then reads only
+ * the low word back.  So the source's intermediate is a 64-bit integer type:
+ * a 32-bit one would have emitted `fistpl`.  That distinction is invisible to
+ * the differential test for any phase in range and is written the way the
+ * object was compiled, because the two spellings differ for a phase that
+ * overflows an `int` and the object's answer there is the one we want.
+ *
+ * The 0xc00 control word is round-toward-zero, which is C's own rule for a
+ * float-to-integer conversion, so the cast IS the sequence and no rounding
+ * helper is needed.
+ *
+ * THE RATE MASK IS ONE BIT SHORTER THAN V.90's.  `cmp $0xa,%edx; jle` -- 0
+ * through 10, eleven bits in the second group against V90Jd's twelve, so 27
+ * rates rather than 28.  Both loops are otherwise the same shape as V90Jd's
+ * and land on the same offsets in `bits`.
+ *
+ * AND THE PHASE LOOP'S COUNTER IS UNSIGNED where the two mask loops' are
+ * signed: `cmp $0xf,%ecx; jbe` against `jle`.  Written that way here for the
+ * codegen tier; the values are identical either way.
+ *
+ * `bits[48]` IS NOT WRITTEN.  V90Jd's constructor fills both constellation
+ * bits from two parameters; this one stores 0 into `bits[47]` and leaves
+ * `bits[48]` holding whatever was in the storage.  Recorded as D162,
+ * unmeasured -- `packJdData` is not written here and may fill it later.
+ * ===========================================================================
+ */
+V92Jd::V92Jd(V90Parameters *params)
+{
+	long long scaled;
+	int phase;
+	int mask;
+	unsigned u;
+	int i;
+
+	unpack[0] = 0;
+	unpack[1] = 0;
+	bits[47] = 0;
+	phaseBits[47] = 1;
+	unpackWord = 0;
+	unpackPhaseWord = 0;
+
+	scaled = (long long)(65536.0f * params->V92_JD_PHASE);
+	phase = (int)scaled;
+	for (u = 0; u <= 15; u++)
+		phaseBits[V90JD_GROUP1 + 1 + u] =
+		    (unsigned char)((phase & (1 << u)) != 0);
+
+	/* The maximum lookahead, two bits, high one stored first. */
+	bits[50] = (unsigned char)
+	    ((params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);
+	bits[49] = (unsigned char)
+	    (params->V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);
+
+	mask = params->V92_DIGITAL_RATE_MASK;
+	for (i = 0; i <= 15; i++)
+		bits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);
+	for (i = 0; i <= 10; i++)
+		bits[V90JD_GROUP2 + 1 + i] =
+		    (unsigned char)((mask >> (i + 16)) & 1);
+
+	phaseBits[48] = 0;
+	phaseBits[49] = 0;
+}
+
+/* One byte of `ret` in the blob, at 0x11e40 and 0x11e50. */
+V92Jd::~V92Jd()
+{
+}
 
 /*
  * The same CRC-16 V90Jd.cpp computes: sixteen ints shifting down toward

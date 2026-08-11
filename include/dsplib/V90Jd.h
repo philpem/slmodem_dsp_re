@@ -40,6 +40,13 @@
 #ifndef DSPLIB_V90JD_H
 #define DSPLIB_V90JD_H
 
+/*
+ * Declared, not defined: the constructor takes one only to read five fields
+ * out of it, and `V90Parameters.h` is a 342-slot header no user of this class
+ * should be made to parse.  `V90Jd.cpp` includes it.
+ */
+class V90Parameters;
+
 /* The 72 bit positions, by the 17-byte stride the accessors step in. */
 #define V90JD_BITS	72
 #define V90JD_GROUP	17
@@ -49,6 +56,24 @@
 
 class V90Jd {
 public:
+	/*
+	 * Fill the message in from the parameter block: the rate mask, the
+	 * constellation size and the maximum lookahead, plus the unpacker
+	 * cleared.  See the bit map above -- the constructor is where it comes
+	 * from.
+	 *
+	 * THE CLASS IS NO LONGER TRIVIAL, and that is a deliberate cost.  The
+	 * blob has `_ZN5V90JdD1Ev` and `_ZN5V90JdD2Ev` as one-byte `ret`s, and
+	 * GCC emits an out-of-line destructor symbol only for a user-declared
+	 * one -- a trivial implicit destructor produces no symbol at all.  So
+	 * the original declared this destructor, and a reconstruction that
+	 * leaves it out leaves two symbols undefined for every caller that
+	 * destroys a V90Jd.  The test fixture pays for it by holding the object
+	 * in a byte array rather than in a union; see t_v90jd.cpp.
+	 */
+	V90Jd(V90Parameters *params);
+	~V90Jd();
+
 	/*
 	 * Pack the CRC into the vector and hand it back.  Returns `this + 2`,
 	 * which is `bits`.

@@ -4237,6 +4237,32 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
+## D162 🐛 `V92Jd`'s constructor leaves one constellation bit unwritten
+
+**Where:** `src/pump/v90/V92Jd.cpp`, `V92Jd::V92Jd(V90Parameters *)`, from
+0x11c80.
+
+**What the original does:** stores a literal 0 into `bits[47]` and never
+writes `bits[48]`, so that byte keeps whatever was in the storage the object
+was built over.
+
+**Why it looks wrong:** `V90Jd`'s constructor, which is otherwise the same
+function, fills BOTH of those bytes — `bits[47]` from
+`V34_PHASE4_CONSTELLATION` and `bits[48]` from `V34_RRN_CONSTELLATION` — and
+the header's bit map calls the pair "constellation size, 2 bits".  A two-bit
+field with one bit initialised and one bit inherited is the shape of a slip.
+
+**Reachable?** On every construction.  Whether it can be OBSERVED is a
+different question and is not settled here: `packJdData` is not written yet
+and may fill `bits[48]` before anything transmits the vector.  **Unmeasured**,
+and it stays that way until that member is read.
+
+**Not fixed.** `t_v92jd.cpp` seeds the slot with varied bytes and compares the
+whole object, so a reconstruction that helpfully cleared `bits[48]` fails
+rather than passes.  Finding 1223.
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect
