@@ -79,46 +79,26 @@ struct V90CodecEntry {
 #include "dsplib/V90Phase2Info.h"
 
 /*
- * V90Parameters IS STILL NOT MODELLED.  The name is the original's, out of
- * the constructor's mangling; what is inside it is not recovered here, and the
- * number below is a BOUND -- the furthest these five methods reach -- rather
- * than a size.  A later batch that models it should replace this declaration
- * rather than add a second one.
- *
- * It is a word block because that is how the object treats it: `setParamEia6`
- * is forty-odd whole-word copies between fixed offsets inside V90Parameters
- * and one float store, and nothing here knows what any of them mean.  Keeping
- * the offsets numeric is the honest spelling.
- *
- * `V90Phase2Info.h` forward-declares this class, which is why including it
- * above and defining the class here are compatible: a declaration may precede
- * a definition, and `V90Phase2Info::params` is only ever a pointer.
+ * V90Parameters IS MODELLED, and this header used to carry a SECOND, SMALLER
+ * definition of it -- 0x504 against the real 0x558, from a scan of how far
+ * five methods happened to reach.  Two classes of different size under one
+ * name is undefined behaviour wherever both are visible, and it is what
+ * V90ModemCtor.cpp's long comment about which header it may not include is
+ * about.  One definition now; the raw word and float views the block form
+ * provided live in V90Parameters.h as V90PW()/V90PF()/V90PB().  Task #116,
+ * finding 1112.
  */
-#define V90PARAMETERS_BOUND 0x504	/* isV90WithEia6 reads +0x500 */
+#include "dsplib/V90Parameters.h"
 
-class V90Parameters {
-public:
-	/*
-	 * DECLARED HERE AND DEFINED IN src/pump/v90/V90Parameters.cpp,
-	 * against the OTHER definition of this class.  That is not a
-	 * contradiction: the two headers describe the same class -- the same
-	 * allocation, the same mangled names -- one of them as a named map and
-	 * one as a block, and a member takes only `this`.  So a translation
-	 * unit that has the block form can still call a member the named form
-	 * defines, and this is how `VPcmFloModem::externalReset` reaches
-	 * `initSession` and `init` without pulling in a second definition of
-	 * the class it is embedded in.  Finding 1112 is the duplication
-	 * itself, which is a wart and not a design.
-	 */
-	void	init();
-	void	initSession();
-
-	union {
-		unsigned char b[V90PARAMETERS_BOUND];
-		int w[V90PARAMETERS_BOUND / 4];
-		float f[V90PARAMETERS_BOUND / 4];
-	};
-};
+/*
+ * NOT A SIZE, AND IT NEVER WAS: the furthest the five V90PreFilter methods
+ * reach into V90Parameters, `isV90WithEia6` reading +0x500.  `sizeof
+ * (V90Parameters)` is 0x558.  The tests use this as the boundary of the
+ * region they exercise -- everything above it is a guard they assert stays
+ * untouched -- which is a real and different job from a size, and why it
+ * survives the reconciliation.
+ */
+#define V90PARAMETERS_BOUND 0x504
 
 /*
  * `__tHardwareCodecTypes__` has its own header because V90ModemCtor.cpp needs

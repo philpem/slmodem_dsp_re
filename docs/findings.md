@@ -44359,3 +44359,68 @@ at all** outside a comment, and every remaining `(double)` is an ordinary
 integer-to-double conversion, a `sizeof`, a libm argument, or `dftc.c`'s
 deliberate widening. Nine files still cite GCC 13 and all nine are
 explanation — mostly of why `-ffloat-store` is the wrong fix — not shims.
+
+### 1355. THE TWO `V90Parameters` ARE ONE — AND `whichfield.py` STARTED WORKING THE MOMENT THEY WERE
+
+Finding 1112 recorded that this tree defined `V90Parameters` twice: the named
+map in `V90Parameters.h` at 0x558, and a block of `b[]`/`w[]`/`f[]` arrays in
+`V90PreFilter.h` at 0x504. It called the duplication "a wart and not a
+design" and left it. Task #116 closed it.
+
+**0x504 was never a size.** It is how far the five `V90PreFilter` methods that
+existed at the time happened to reach — finding 215's "a displacement is not a
+size", 84 bytes short of the object's own `sysdep_malloc(0x558)`.
+`V90PreFilter.h`'s own comment already said a later batch that modelled the
+class "should replace this declaration rather than add a second one". That
+batch landed; the block was never retired.
+
+**IT WAS DOING DAMAGE, AND HERE IS THE MEASUREMENT.** Before:
+
+    $ tools/whichfield.py "class V90Parameters" 8
+    class V90Parameters + 8  ->  b[8]   (unsigned char, +8)
+
+After:
+
+    class V90Parameters + 8    ->  HW_CODEC_TYPE                (int, +8)
+    class V90Parameters + 376  ->  LINEAR_EQU_FADE_EDGES_CYCLE  (int, +376)
+
+`whichfield.py` is the tool CLAUDE.md points you at to turn a differential
+offset into a diagnosis. For this class it resolved against the *wrong*
+definition and produced no diagnosis at all — for as long as the duplicate
+existed, every failure reported against `V90Parameters` was unreadable.
+
+**THE SHAPE OF THE FIX: a VIEW, not a rival.** The raw arrays move into the
+owning header as `union V90ParamsRaw` with `V90PW()`/`V90PF()`/`V90PB()`
+accessors, so all 90 existing `p->w[0x1c0 / 4]` sites keep working — including
+those indexed by a variable or a symbolic constant — while there is exactly
+one class of exactly one size. `V90PARAMETERS_BOUND` survives, because the
+tests use it as the boundary of the region they exercise and assert the rest
+is untouched: that is a real and different job from a size, and the comment
+now says which it is.
+
+**AND THE TRADE IN `V90ModemCtor.cpp` EVAPORATED**, which was the prize. That
+file carried a long argument for why it could not include `V90Demodulator.h`
+— the header reaches `V90PreFilter.h`, which used to bring the 0x504 class
+into a translation unit that allocates 0x558 — and therefore forward-declared
+`V90Demodulator`, named its constructor by mangled symbol, and wrote its
+allocation size as the bare literal `0x298`. The header comes in now, the
+allocation is `sizeof(V90Demodulator)` again, and the size is asserted in the
+file that depends on it rather than trusted from another.
+
+The old argument is kept in the file because it names the failure mode
+exactly: *of two possible mistakes, one silent and one loud, arrange for only
+the loud one to be reachable.*
+
+**WHAT IT COST, and it is the part worth knowing.** Rewriting 90 access sites
+changed source text that mutation anchors quote, and 17 anchors across four
+suites went to "matches 0 times". `tools/anchorcheck.py` caught every one --
+this is the hazard `docs/method/tiers.md` warns about, that editing a file
+with a mutation suite is not free and the phase gate cannot see the cost, and
+it is the second time an anchor check has paid for itself. One mutation had to
+be RETARGETED rather than repaired: it replaced `#define V90DEMODULATOR_BYTES
+0x298` with `0x290`, and there is no literal to mutate now, so it became
+`sysdep_malloc(sizeof(V90Demodulator) - 8)` -- the same claim, that an
+8-byte under-allocation is caught. Re-run: 24 caught, 0 NOT caught.
+
+**One duplicate remains**, `V90Phase4Demodulator`, registered in
+`tools/onedef.py` with its reason.

@@ -281,8 +281,8 @@
 
  {
   "label": "ctor: the equaliser's two lengths come from each other's parameters",
-  "find": "\tv90dem_equ_ctor(equ, (unsigned int)params->w[PARAMS_LINEAR_EQU_LENGTH],\n\t\t\t(unsigned int)params->w[PARAMS_DFE_LENGTH],",
-  "replace": "\tv90dem_equ_ctor(equ, (unsigned int)params->w[PARAMS_DFE_LENGTH],\n\t\t\t(unsigned int)params->w[PARAMS_LINEAR_EQU_LENGTH],"
+  "find": "\tv90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],\n\t\t\t(unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],",
+  "replace": "\tv90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],\n\t\t\t(unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],"
  },
  {
   "label": "ctor: the equaliser's linear length comes from +0x174",
