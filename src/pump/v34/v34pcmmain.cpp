@@ -2039,7 +2039,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		{
 			int secs;
 
-			switch ((unsigned short)PROG_S16(obj, 0xabe0)) {
+			switch ((unsigned short)obj->fabe0) {
 			case 1:		secs = 0xa;	break;
 			case 2:		secs = 0x14;	break;
 			case 3:		secs = 0x1e;	break;
