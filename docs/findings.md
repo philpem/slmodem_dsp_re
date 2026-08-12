@@ -52337,3 +52337,64 @@ eight calls of the A/B every renegotiation was in the fix arm (3 of 4) and
 none in the bug arm (0 of 4) — p = 0.14 by Fisher's exact, which is nothing,
 and exactly the shape this bench has been fooled by four times. The run is
 still going.
+
+======================================================================
+
+### 1901. THE PRE-EMPHASIS A/B, RUN 2: THE CHANGE IS NOT AN IMPROVEMENT AND MAY BE HARMFUL — AND RUN 1 CONTRADICTED IT
+
+*Task #140. Twenty-four calls, twelve per arm, interleaved, each gated on a
+quiet machine, `ATI11` read from the far end after every one. Analysed by
+`abcompare.py` against `captures/preemph-ab2-ANALYSIS-PLAN.md`, committed
+before the first call was placed.*
+
+**THE RESULT.** Rank-sum is mean-rank(fix) − mean-rank(bug), so positive on
+`equerr` means the fix arm is WORSE.
+
+| | all calls (n=24) | rise-clean (n=20) |
+|---|---|---|
+| **`equerr` at the decision** (PRIMARY) | bug 2804, fix 3183, **p = 0.0355 SIGNIFICANT, fix worse** | bug 2766, fix 3210, p = 0.1039 |
+| receive rate, our `CONNECT` | 12000 vs 12000, p = 0.54 | p = 0.84 |
+| receive rate, far end's `ATI11` | 13200 vs 12000, p = 0.2385 | p = 0.5554 |
+| connect rate | **100% vs 75%**, p = 0.0721 | 100% vs 78%, p = 0.1244 |
+
+**THE TWO PANELS DISAGREE ON THE PRIMARY**, and the plan says that
+disagreement is the result: significant in all calls, not significant once
+four load-disturbed calls are removed. The direction is the same in both.
+
+**AND RUN 1 SAID THE OPPOSITE.** Finding 1476, eight per arm: fix `equerr`
+327 against bug 3201 (fix BETTER, p = 0.25) and a significant rate advantage
+to the fix arm at p = 0.0148. Run 2, twelve per arm: fix `equerr` 3183
+against bug 2804 (fix WORSE, p = 0.036) and no rate difference on either
+measure.
+
+**Two runs of the same experiment, opposite directions, one significant
+result each.** That is what a null looks like when it is sampled twice, and
+it is precisely the shape this bench has been fooled by four times before
+(findings 1206, 1207). Run 1's p = 0.0148 was noise. So, on this evidence, is
+run 2's p = 0.0355 — the honest reading is that neither run measured a real
+effect on `equerr` or on rate.
+
+**THE ONE ASYMMETRY WORTH KEEPING** is the connect rate: 12 of 12 for the bug
+arm against 9 of 12 for the fix arm, both panels, p = 0.07 and 0.12. Not
+significant, in the same direction twice, and it is the statistic where a
+difference would matter most. A change that connects less often is worse
+whatever it does to the rate.
+
+**SO THE PRE-EMPHASIS THREAD CLOSES, AND THE THEORY GOT THERE FIRST.**
+Finding 1477 established from the Recommendation that the change is wrong on
+its own terms: V.34 specifies pre-emphasis in two families (5.4.1), Table 4
+covers indices 6-10, `probe_preemph`'s counter addresses that range
+deliberately, and moving the increment shifts every bucket down one to buy a
+flat case this channel never presents. The measurement now agrees with the
+specification. **Do not promote the variant out of `DSPLIB_REPRODUCE_BUGS`.**
+
+D53 remains a real defect -- a genuinely flat channel cannot be told from a
+lightly tilted one -- and it remains unexercised here, because the ATA's codec
+puts several dB of real tilt at the band edge. Testing it needs a channel
+without that rolloff, which this bench does not have.
+
+**WHAT THE RUN BOUGHT THAT THE COMPARISON DID NOT.** Reading `ATI11` on every
+call is what exposed finding 1900: the rate renegotiates upward about eleven
+seconds after CONNECT and our `CONNECT` string never says so. That was
+invisible to twenty-four calls' worth of the statistic this experiment was
+built around, and it is worth more than the experiment's own answer.
