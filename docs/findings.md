@@ -49334,15 +49334,29 @@ chooses the far transmitter's pre-emphasis filter. Index 0 is flat. This modem
 cannot ask for flat. Every preemphasis index this bench has ever logged,
 across every call in `captures/`:
 
-| index | times logged |
-|---|---|
-| 6 | **2445** |
-| 7 | 35 |
+| baud rate | index 6 | index 7 |
+|---|--:|--:|
+| 2400 / 2800 / 3000 / 3200 (candidates) | 502 each | — |
+| **3429 (the rate every call actually uses)** | **463** | 40 |
 
 Nothing below 6, ever, on any channel — because nothing below 6 is
-reachable. On the same pair of FXS ports, minutes apart, a 1998 SupraExpress
+reachable.
+
+*(Corrected: an earlier version of this table pooled all five candidate baud
+rates into "2445 sixes and 35 sevens", which reads as though 6 were the
+operative index by a 70:1 margin. It is not pooled that way -- four of the
+five rows are candidates the call does not use. At the rate it does use the
+split is 463:40, which is 92% and still the right shape, but the number was
+wrong and is worth correcting rather than leaving to be re-derived.)* On the same pair of FXS ports, minutes apart, a 1998 SupraExpress
 asks the same Courier for filter **0** and we ask for **4** in the Courier's
 own units (1469, `ATI11: Preemphasis (-dB) 0/0` versus `0/4`).
+
+**THE FIX HAS NOW BEEN SEEN TO FIRE.** A build with the branch corrected
+(`DSPLIB_REPRODUCE_BUGS` off) produced `V34PREEMPHASIS, - index is 0` on its
+first call, at candidate rates 2400/2800/3000/3200 — the dead arm executing
+for the first time. It is the only log in `captures/` containing that string,
+across every call this bench has ever made. The stock build has still never
+produced it.
 
 **AND THE REQUEST ARRIVES.** The spectrum comparison in 1470 was read as
 exonerating the resampler, which it does — but the residual is this. Our
