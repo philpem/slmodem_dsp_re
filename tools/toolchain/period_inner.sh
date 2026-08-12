@@ -35,11 +35,30 @@ HARNESS="test/harness/harness.c test/harness/runtime.c
 
 obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 
+#
+# THE NEWEST HEADER, so that KEEP is safe to use as a gate.
+#
+# There is no -MMD dependency tracking here, so "is the object newer than its
+# .c" would happily keep an object built against a header that has since
+# changed -- which is exactly how a gate goes green on stale results.  The
+# cheap sound alternative is to treat ANY header edit as invalidating
+# everything: one `find`, and a rebuild that is no less correct than a clean
+# one.  Header edits are rare next to source edits, so the incremental case
+# still pays for itself.
+#
+# The newest header by mtime.  NOT `find -newer "$OUT"`: $OUT is written on
+# every build, so its own mtime is always fresher than any header and the test
+# would never fire.  An object is reusable only if it is newer than BOTH its
+# source and this.
+NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') 2>/dev/null | head -1)
+
 # --- compile ---------------------------------------------------------------
 : > "$OUT/failed"
 compile_one() {
 	f=$1; o=$(obj "$f")
-	[ -n "$KEEP" ] && [ -f "$o" ] && [ "$o" -nt "$f" ] && return 0
+	[ -n "$KEEP" ] && [ -f "$o" ] && [ "$o" -nt "$f" ] \
+		&& { [ -z "$NEWEST_HDR" ] || [ "$o" -nt "$NEWEST_HDR" ]; } \
+		&& return 0
 	case $f in
 	*.cpp)	g++ -c $CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
 	*)	gcc -c $CFLAGS   -o "$o" "$f" 2>"$o.log" ;;
@@ -61,6 +80,13 @@ fi
 
 OBJS=""
 for f in $SRC $CXXSRC $HARNESS; do OBJS="$OBJS $(obj "$f")"; done
+
+# The newest input any test binary has, so a relink can be skipped when
+# nothing it depends on moved.  The LINK is the expensive half here -- 155
+# static binaries against a 1.2 MB object -- and skipping it is sound because
+# the inputs are identical.  The RUN is never skipped: a cached pass is not a
+# pass, and running the binaries is the cheap part.
+NEWEST_IN=$(ls -t $OBJS "$REF" 2>/dev/null | head -1)
 
 # --- link and run ----------------------------------------------------------
 #
@@ -88,7 +114,10 @@ for t in $TESTS; do
 	# arise.  It costs a writable text section in a test binary, which is
 	# nothing.  The alternative -- a hand-written linker script with a
 	# PHDRS block -- buys the same result and one more thing to maintain.
-	if ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $OBJS "$REF" -lm \
+	if [ -n "$KEEP" ] && [ -x "$OUT/$t" ] && [ "$OUT/$t" -nt "$(obj "$src")" ] \
+	   && { [ -z "$NEWEST_IN" ] || [ "$OUT/$t" -nt "$NEWEST_IN" ]; }; then
+		:					# inputs unmoved; keep the binary
+	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $OBJS "$REF" -lm \
 	     > "$OUT/$t.link.log" 2>&1; then
 		echo "  LINK-FAIL    $t"; sed -n '1,3p' "$OUT/$t.link.log"
 		fail=$((fail + 1)); failed="$failed $t"; continue

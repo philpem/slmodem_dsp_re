@@ -441,7 +441,7 @@ refs:
 # passed and `make interop` had been broken for two commits.
 #
 # Run this at every phase boundary, not `make test`.
-phase: test check64 interop params coverage debugcov onedef
+phase: period test check64 interop params coverage debugcov onedef
 	@echo
 	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
 
@@ -588,13 +588,21 @@ onedef:
 
 #
 # THE PERIOD DIFFERENTIAL -- the same suite, built and run by GCC 3.4.2 and
-# linked against the blob by binutils 2.15.  This is the tier that decides;
-# `make phase` is a portability check and a faster inner loop.  See
-# tools/toolchain/period.sh, and docs/method/compilers.md for what moving
-# between the two compilers cost.
+# linked against the blob by binutils 2.15.  THIS IS THE TIER THAT DECIDES:
+# our source and the object compiled by the same compiler and compared at
+# runtime, so a difference is a difference in the code and not in the
+# toolchain.
 #
-# NOT part of `phase`: it needs docker and the tools/toolchain image, which
-# not every checkout has.  `make period T=t_resampler` for one binary.
+# PART OF `phase`, which means `make phase` now needs docker and the
+# tools/toolchain image.  That is deliberate.  The goal is to reconstruct the
+# source using PERIOD tools; making the tree build on a modern compiler is a
+# later step, and while the modern build was the only gate, every place the
+# two compilers disagreed had to be absorbed in the reconstruction's own
+# source.  docs/method/compilers.md is the register of what that cost.
+#
+# It is incremental and sound -- an object is reused only if it is newer than
+# its source and than every header -- so an unchanged tree relinks rather than
+# rebuilding.  `make period T=t_resampler` for one binary.
 #
 period: $(REF)
 	@REF=$(REF) tools/toolchain/period.sh
