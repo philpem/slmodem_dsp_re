@@ -52398,3 +52398,60 @@ call is what exposed finding 1900: the rate renegotiates upward about eleven
 seconds after CONNECT and our `CONNECT` string never says so. That was
 invisible to twenty-four calls' worth of the statistic this experiment was
 built around, and it is worth more than the experiment's own answer.
+
+======================================================================
+
+### 1902. A NINETY-SECOND CALL REACHES 24000 WHERE A SEVENTEEN-SECOND CALL REPORTS 12000 — AND 1900's "ELEVEN SECONDS" WAS WRONG
+
+*Task #143. Six calls, ninety seconds each, `--hold` so nothing is written,
+every `V34DATARATE ... finally` block recorded with its timestamp and the far
+end's `ATI11` read at the end.*
+
+| call | our `CONNECT` | final | far end's `ATI11` | steps after connect | first step |
+|---|--:|--:|--:|--:|--:|
+| hold-1 | none | 14400 | 14400 | 0 | — |
+| hold-2 | 12000 | **16800** | 16800 | 5 | +31.2 s |
+| hold-3 | 12000 | 12000 | 12000 | 0 | — |
+| hold-4 | 12000 | **19200** | 19200 | 1 | **+90.9 s** |
+| hold-5 | 12000 | **24000** | 24000 | 4 | +23.9 s |
+| hold-6 | 12000 | **21600** | 21600 | 7 | +23.4 s |
+
+**FOUR OF SIX CALLS ENDED WELL ABOVE THE RATE THEY REPORTED AT CONNECT**, and
+the far end's own instrument agrees with the final figure every time. The best
+reached **24000** against this Courier's 28800 ceiling.
+
+**1900's "+11 s" WAS BUILT ON TWO CALLS AND IS WRONG.** First steps here land
+at +23.4, +23.9, +31.2 and **+90.9 s**. There is no eleven-second timer; the
+climb is slower, spread wide, and one call took a minute and a half to move at
+all. A bench that holds calls 17.5 s sees almost none of this.
+
+**AND IT IS NOT A MONOTONIC CLIMB.** hold-2 went 12000 → 4800 → 16800 → 9600
+→ 16800; hold-6 went 19200 → 21600 → 24000 → 21600 → 24000 → 21600 → 21600.
+The modem renegotiates in BOTH directions and hunts around a level rather than
+settling on one. Calling this "upward renegotiation", as 1900 did, describes
+the net effect and not the mechanism.
+
+**WHAT THIS DOES TO THE RATE DEFICIT.** Every rate this bench has recorded
+came from a call torn down at ~17.5 s, reading the `CONNECT` string. Findings
+1466 and 1476 both rest on that. On this evidence a patient call reaches
+roughly **double** what those measurements report -- 21600-24000 against
+12000 -- which is most, though not all, of the gap to the far end's 28800.
+
+So the deficit is real but **smaller than every previous measurement implied,
+and part of what was attributed to our receiver was the bench hanging up on
+it.** 1469 still stands unaltered: its `ATI11 Speed 28800/12000` was ground
+truth on calls that genuinely ended at 12000 -- and those calls were short
+ones.
+
+**WHAT IT DOES NOT EXCUSE.** Reaching 24000 after ninety seconds is not the
+same as negotiating 24000 in the first place, and the two calls that never
+stepped at all show it is not reliable either. Task #144's levers -- the full
+eleven-filter set, a least-squares tilt estimate instead of a two-point step
+counter, and Phase 4 convergence -- are about getting the rate right at
+CONNECT, which is what a user actually experiences. This finding measures the
+size of the prize, not a substitute for winning it.
+
+**IMMEDIATE PRACTICAL CONSEQUENCE.** The bench's default hold is too short to
+measure a V.34 link honestly. Any future rate measurement should hold for at
+least sixty seconds and read the far end's `ATI11`, or state plainly that it
+is reporting the rate at CONNECT and that the figure is a lower bound.
