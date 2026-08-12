@@ -234,14 +234,32 @@ def cmd_update(args):
     snap.setdefault("suites", {})
     reg = registered()
     names = args.suite or sorted(reg)
+    failed = []
     for name in names:
         if name not in reg:
             print("  no such suite: %s" % name)
             return 1
         verdicts, summary, out = run_suite(name, args.jobs)
         if not verdicts and "FAILED" in summary:
-            print("  %-16s RUN FAILED -- not recorded\n%s" % (name, out[-800:]))
-            return 2
+            #
+            # DO NOT ABORT, AND DO NOT RECORD.  This used to `return 2` on the
+            # first suite that would not run, which threw away every suite
+            # already measured and never reached the rest -- one unrunnable
+            # suite cost the whole tier.  `psd` is the live example: `t_psd`
+            # is exempted from the modern build (finding 1453) so its baseline
+            # is not green, mutate.py rightly refuses to judge mutations
+            # against a test that already fails, and 122 healthy suites went
+            # unrecorded with it.
+            #
+            # Nothing is written for it, which is the honest outcome: no
+            # baseline exists, so the entry stays STALE and cannot be quoted.
+            # The run continues, the exit code is non-zero, and the names are
+            # printed again at the end so a long log cannot bury them.
+            #
+            print("  %-16s COULD NOT RUN -- left stale, not recorded" % name)
+            print("%s" % out[-400:])
+            failed.append(name)
+            continue
         snap["suites"][name] = {
             "key": suite_key(name, reg[name]),
             "summary": summary,
@@ -250,6 +268,11 @@ def cmd_update(args):
         print("  %-16s %s" % (name, summary))
     json.dump(snap, open(SNAP, "w"), indent=1, sort_keys=True)
     print("\n  wrote %s (%d suite(s) recorded)" % (SNAP, len(snap["suites"])))
+    if failed:
+        print("  %d suite(s) COULD NOT RUN and are still stale: %s"
+              % (len(failed), ", ".join(failed)))
+        print("  A suite with no baseline is not a suite that passed.")
+        return 2
     return 0
 
 
