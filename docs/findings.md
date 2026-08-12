@@ -49671,6 +49671,28 @@ modest — which is consistent with the pre-emphasis A/B coming out null on
 rate, and would make D53 a defect worth fixing for correctness rather than a
 lever on the rate deficit.
 
+**CONFIRMED AGAINST THE OBJECT, not merely derived (task #139 stage 1).** The
+table above came out of the constants; `t_v34hshak`'s "the pre-emphasis search
+is a tilt meter" block now drives channels whose band edge sits a known number
+of steps below the reference and checks the index that returns — three
+reference levels by six tilts, 36 checks, ours and the blob agreeing on every
+one. The arithmetic was right.
+
+Two further things the sweep settles:
+
+- **THE THRESHOLD IS HARD, not fuzzy.** The existing "pre-emphasis equality"
+  block already drives the candidate to the exact pre-image of the reference
+  and to the values either side, so the boundary is deterministic to one LSB
+  of bin energy. A channel sitting near a step edge therefore flips index on
+  whatever run-to-run variation the BIN ENERGIES have, not on anything inside
+  the search. How much they vary is not recorded in any log this bench keeps —
+  it needs stage 2, replaying real recordings through the probe analysis.
+- **INDICES 1–5 ARE UNREACHABLE BY EITHER VARIANT.** The original returns
+  6..10 and the fix returns 0 and 6..10. If V.34's filter table defines useful
+  shapes in that gap, this object selects from a subset of the standard's
+  options — which is a separate question from D53's off-by-one and has not
+  been looked at.
+
 **QUALIFICATION, from the far end's own instrument (task #89's A/B).** The
 "our line is three metres so the tilt is zero" reasoning is right about the
 CABLE and wrong about the CHANNEL. The channel is cable *plus* the ATA's
