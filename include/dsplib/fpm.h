@@ -59,9 +59,37 @@ void FPM_atan(short y, short x, short *angle);
 #define FPM_ATAN_TABLE 257
 extern const short FPM_atan_table[FPM_ATAN_TABLE];
 
+ * Base-10 logarithm of `mantissa * 2^-exponent`, result in Q12.
+ *
+ * The mantissa is normalised internally, so the exponent is whatever the
+ * caller has already taken out.  Zero returns zero and announces itself at
+ * debug level 2.  Reads one element past its table for mantissas of
+ * 0x7fc0..0x7fff -- reproduced; see src/dsp/fpm_log10.c.
+ */
+short FPM_log10(unsigned short mantissa, short exponent);
+
+short FPM_log10_table_generate(int index);
+int FPM_log10_table_derived(void);	/* entries the generator produces */
+short FPM_log10_table_entry(int index);
+int FPM_log10_table_size(void);
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);
 int FPM_sqrt_table_size(void);
+
+/*
+ * One LMS coefficient update.  `coeff` holds `taps` entries and `hist` is a
+ * circular buffer of the same length whose newest sample is at `widx`; the
+ * two are walked in opposite directions, so `coeff[0]` is paired with the
+ * newest sample and `coeff[taps-1]` with the oldest.  Every coefficient moves
+ * by `(hist * err + 0x20000) >> 18`, which is a round-to-nearest at 18
+ * fractional bits.
+ *
+ * `FPM_FSE_receive` calls it twice per symbol, once for each half of the
+ * complex filter.
+ */
+void FPM_lmsupd(short *coeff, const short *hist, short widx, short taps,
+		short err);
 
 #endif /* DSPLIB_FPM_H */

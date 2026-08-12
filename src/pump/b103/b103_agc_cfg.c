@@ -24,13 +24,15 @@
  * everywhere (16384 + 16384).  Element 1 does not:
  *
  *     .data:0x77bc/0x77b8    32604 +   164  = 32768   correct
+ *     .data:0x7664/0x7660    30491 +  2277  = 32768   correct (V.32's)
  *     .data:0x7810/0x780c    32604 +  1638  = 34242   1.045
  *     .data:0x778c/0x7788    32604 +  1638  = 34242   1.045
  *     .data:0x7794/0x7790    32604 +  1638  = 34242   1.045
- *     .data:0x7664/0x7660    32604 +  2277  = 34881   1.064
  *
- * One TU got alpha = 32768 - beta right; the rest kept that TU's alpha while
- * changing beta.  A smoother with DC gain 1.045 would make the level estimate
+ * TWO TUs got alpha = 32768 - beta right; the other three kept the 0x77b8
+ * TU's alpha while changing beta.  This list said 0x7664 carried 32604 and
+ * was a fourth broken pair until finding 1621 read the bytes: it is 30491,
+ * and V.32's is correct.  A smoother with DC gain 1.045 would make the level estimate
  * climb until it wrapped, and a wrapped (negative) estimate is exactly the
  * case that makes FPM_AGC_agc's shift go negative.  It is unreachable only
  * because nothing selects element 1.  Recorded as D6 in docs/deviations.md.

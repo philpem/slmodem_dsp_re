@@ -51250,3 +51250,738 @@ around it.
   worktree is the figure that was missing from it. Worktrees whose branches
   are merged should have their `build/` and `build-cov/` removed rather than
   being left to accumulate.
+
+### 1600. THE V.32/V.32bis MAP: 203 SYMBOLS, EVERY ONE WITH AN ORACLE, AND THE SIX BLOCKS THEY FALL INTO
+
+*Task: the V.32 / V.32bis datapump, entered at `dp_v32_init` / `dp_v32_exit`.
+This entry is the checkpoint the next session resumes from. **This block
+claims findings 1600–1649**; 1471 was the maximum on every branch when it was
+taken, so 1472–1599 are left for the sessions running concurrently.*
+
+**THE WORK LIST.** `python3 tools/closure.py dp_v32_init dp_v32_exit
+--missing`, run after `make`, is **203 symbols and 59,691 bytes** — 107
+functions (46,231 B), 48 `.data` (1,154 B) and 48 `.rodata` (12,306 B).
+`docs/remaining.md` quotes 202 / 59,642, measured one commit earlier; the
+difference is not a discrepancy to chase.
+
+**EVERY ONE OF THE 203 HAS A `ref_` ALIAS.** Intersected against
+`build/symmap.txt`: zero without one. That was worth checking before
+assigning anything, because the Makefile records that ten names used by more
+than one translation unit stay local and get no alias — a symbol in that set
+could not be differential-tested individually and would be a
+"leave-it-out-and-record-it" case rather than work. None of V.32's are. In
+particular the nine `FSE_decision_*` slicers, which look file-local from
+their names, are all aliased: `nm build/dsplibs_ref.o` shows
+`ref_FSE_decision_128pt` at 0x804e0.
+
+**THE OVERLAP WITH V.22 IS TWO SYMBOLS.** `dp_v22_init`/`dp_v22_exit`'s
+missing closure is 114 symbols / 32,808 B, and its intersection with V.32's
+is exactly `FPM_atan` (409 B) and `FPM_atan_table` (514 B) — 923 bytes. The
+two datapumps share no other unwritten code, so the two efforts can run
+concurrently with one file's worth of deconfliction. Whoever lands `FPM_atan`
+first should say so.
+
+**THE BLOCKS, largest first, and they are what a batch should own.** Grouped
+by symbol prefix, with each group's byte total; addresses are in the object.
+
+| block | syms | bytes | what it is |
+|---|--:|--:|---|
+| `VTB_*` + `VTBv32_*` | 19 | 10,320 | Viterbi trellis decoder; 9 KB of it is boundary/region tables |
+| `V32*NextState`, `V32_*` cfg | 23 | 9,245 | the five handshake state machines and their config |
+| `FSE_decision_*` + `FPM_FSE_*` + `FSEv32_*` | 15 | 7,987 | fractionally-spaced equaliser and its nine slicers |
+| `V32FP_*` | 7 | 6,464 | the front panel / control surface; `V32FP_recreate` is 3,733 B |
+| `RxHdx*` + `TxHdx*` | 20 | 4,359 | half-duplex handshake receive and transmit steps |
+| `FPM_SRE_*` + `SREv32_*` | 10 | 3,381 | symbol-timing recovery |
+| `FPM_ECC_*` + `ECCv32_*` + `ECC_CFG` | 7 | 2,852 | echo canceller |
+| `v32_*` (create/process/data/handshake/delete/ops) | 7 | 2,680 | the datapump object itself |
+| `DECv32_*` | 21 | 1,446 | decision-map tables |
+| `FPM_PPS_*` + `PPSv32_*` | 6 | 1,567 | passband prefilter |
+| `SMCv32_*` + `SDMv32_*` | 14 | 1,711 | trellis/differential encoders and the scrambler pair |
+| leaf math: `FPM_atan`, `FPM_log10`, `FPM_lmsupd` | 5 | 1,532 | shared with V.22 and fax |
+| the rest (`SetRxModeV32`, `DemodDataV32`, sequence coders, …) | 49 | 6,145 | glue around the state machines |
+
+The four `FPM_*` DSP blocks each own a private state struct and a private
+header, so they are the part that parallelises: `agents.md` §3's failure mode
+is batches that share a data structure, and these do not. Everything from
+`RxHdx*` upward touches the one V.32 state object and should be written by
+one hand, after its layout is settled.
+
+**`V32StateName` IS DONE AND THE HEADER'S FALLBACK STRING WAS WRONG.**
+`include/dsplib/v32state.h` has been in the tree since finding 145 with the
+35 state names read out of `statenames` at `.rodata+0x7e80`, and it said the
+out-of-range return is `"STATE_UNKNOWN"`. The function loads
+`.rodata.str1.1+0x3952`, which is **`"INVALID!"`**. The names themselves are
+confirmed correct. The bound is also unsigned — `cmp $0x22,%edx; ja` — so a
+negative index takes the fallback rather than indexing backwards, which the
+test now covers at `-1` and `INT_MIN`.
+
+**A WORKTREE NEEDS TWO THINGS BEFORE `make phase` CAN PASS IN IT**, and both
+cost a full run to discover:
+
+- `BLOB=/abs/path/to/slmodemd/dsplibs.o` on every `make` **and** on every
+  tool invocation. The default is `../slmodemd/dsplibs.o`, which resolves
+  only for a worktree that is a sibling of `slmodemd/`; the ones under
+  `.claude/worktrees/` are four levels down and it resolves to nothing.
+- **`third_party/spandsp` built.** It is gitignored, so a new worktree has
+  only the README, and `make phase` dies at `build/test/t_spandsp_b103` with
+  `libspandsp.a not built`. Rebuilding it is a bootstrap-plus-configure-plus-
+  make; `cp -a` of an existing tree's `third_party/spandsp` works and takes
+  seconds (36 MB).
+
+`FAIL Psd::process` in a `phase` log is **not** a failure: `t_psd` is the one
+entry in `tools/gccdiverge.json` (finding 1453) and the wrapper allows that
+check to fail under modern GCC. `make period` passes it.
+
+### 1601. THE FSE STATE IS 19,992 BYTES AND ITS CONFIG IS 56: THE EQUALISER BLOCK'S LAYOUT, SETTLED
+
+*Task: the V.32 fractionally spaced equaliser, finding 1600's third block.
+This entry claims 1601–1610.*
+
+**`FSEv32_CFG` IS AN INSTANCE OF THE FPM BLOCK'S OWN CONFIG STRUCT**, as
+`MRFv32_CFG` is of `fpm_mrf_cfg`, and `FPM_FSE_init` copies all 56 bytes of
+it into the state with one `rep movsl $0xe`. Every field boundary below is
+measured from a consumer, and the whole struct is proved by `t_fpm_fse`
+reading the blob's own 56 bytes through our declaration:
+
+| off | type | value in `FSEv32_CFG` | who proves it |
+|---|---|---|---|
+| +00 | short | 144 | `idiv` in init: `block / interp` |
+| +02 | short | 3 | same; also reloaded into `need` per symbol |
+| +04 | short * | `FSEv32_ICOFF` | init's 2-byte-stride copy |
+| +08 | short * | `FSEv32_QCOFF` | same |
+| +0c | short | 103 | malloc size `2*taps`, and both FIR loop bounds |
+| +0e | short[3] | 3243, 865, 0 | `movswl 0xe(%edx,%eax,2)` indexed by state+0x38 |
+| +14 | short * | `CRRv32_CLK` | `movswl (%eax,%edx,2)` indexed by the clk phase |
+| +18 | short | 4 | the clk phase's modulus |
+| +1a | short | 1 | the clk phase's step per input sample |
+| +1c | short | 1500 | 16-bit `cmp %dx,%cx; jg` against state+0x88 |
+| +1e | short | 6536 | 16-bit `cmp %ax,0x1e(%edx); jg` |
+| +20 | short | 1638 | 16-bit `cmp %ax,0x20(%ecx); jl` |
+| +24 | short * | `CRRv32_PLL_K1` | indexed by state+0x3a |
+| +28 | short * | `CRRv32_PLL_K2` | same |
+| +2c | void * | 0 | the slicers' context; patched by the caller |
+| +30 | fn ptr | 0 | THE SLICER; `call *0x30(%edx)` in receive |
+| +34 | ? | 0 | never read by anything reconstructed |
+
+**+1c, +1e AND +20 ARE SIGNED SHORTS, NOT UNSIGNED.** All three comparisons
+are 16-bit (`cmp %dx,%cx` with a `jg`/`jl`). Two `unsigned short`s promote to
+`int` and compare as a 32-bit `ja`/`jb`; only `short` operands give this
+shape. The inherited note in the task brief called +1c unsigned.
+
+**THE SLICER IS CHOSEN BY CODE, AND THE BRIEF'S REASON WAS RIGHT FOR THE
+WRONG STRUCT.** `FSEv32_CFG+0x30` is zero, so it holds no slicer — but
+`FSEv32_decision` at `.data 0x74cc` is 12 bytes, three pointers, and
+`FSE_decision_CD` and `FSE_decision_trn` each *store* a slicer into
+`cfg.decision` at +0x30 (`movl $FSE_decision_trn,0x30(%ecx)` and
+`movl $FSE_decision_4pt,0x30(%ebp)`). So the slicer is selected by code AND
+there is a table of three; both are true and neither is `FSEv32_CFG`.
+
+**THE STATE, 0x4e18 = 19,992 BYTES.** Init writes 0x00–0x8b and the three
+counters at the top; everything between is the two diagnostic logs, whose
+extents come from `FSE_getdiag` (0xa7d10, not in this batch): it copies
+`which==0` from +0x8c with the count at +0x4e0c bounded at 0x1df, and
+`which==1` from +0xf8c with the count at +0x4e14. 0x8c..0xf8c is exactly 480
+`{int i; int q;}` entries and 0xf8c..0x4e0c is exactly 2000, so the two arrays
+account for every byte and there is no unmodelled region. +0x4e10 is zeroed by
+init and read by nothing reconstructed so far.
+
+Fields: 0x38 mu index, 0x3a PLL-gain index, 0x3c PLL integrator, 0x40 force
+adapt, 0x44 PLL on, 0x48 tilt-filter on, 0x4c adapt on, 0x50 smoothed phase
+error, 0x52 smoothed squared error, 0x54/0x58 symbol I/Q out, 0x5c samples in,
+0x5e symbols out, 0x60/0x64 adapted coefficients, 0x68 input history, 0x6c
+write index, 0x70 phase accumulator, 0x74 clk phase, 0x76 tilt output, 0x78
+tilt coefficients[4], 0x80 tilt history[4], 0x88 symbol counter, 0x8a samples
+owed. 0x6e is never written by init or receive.
+
+**INIT'S TWO SIZES ARE COMPUTED IN 16 BITS.** MEASURED from the disassembly
+for both: `2*taps` is `add %esi,%esi; movswl %si,%edi` and
+`2*(block/interp)+4` is `lea 0x4(%eax,%eax,1); movswl %ax,%esi`.
+
+Only the SECOND is differentially covered. A `block` of 32767 over an `interp`
+of 1 asks for 2 bytes and not 65538; nothing in the resulting state records the
+request, so only `harness_alloc_reqsize` can see it, and `t_fpm_fse` drives
+exactly that case. The check was validated by removing both truncations and
+watching it fail, 65538 against 2 — and removing only ONE of them changes
+nothing, because the declared `short` and the cast each truncate on their own,
+which is how two earlier "mutations" both passed silently.
+
+**The `2*taps` truncation is NOT covered and cannot cheaply be.** It needs
+`taps >= 16384`, which makes the size negative, makes `sysdep_malloc` return
+null, and makes the copy loop immediately below write through it on both sides.
+That reading rests on the disassembly alone.
+
+**INIT HAS NO BUFFER-REUSE PATH**, unlike `FPM_MRF_init`. `fresh` non-zero
+skips the frees; zero frees all five and allocates all five again
+unconditionally. The announcement on that path is `"Reallocating FPM_FSE
+buffers"` at `.rodata.str1.1+0x4e99`, with no newline, gated on the usual
+`> 1`.
+
+**`FSEv32_ICOFF` AND `FSEv32_QCOFF` INTERLEAVE.** ICOFF is non-zero only at
+even indices and is antisymmetric about tap 51; QCOFF is non-zero only at odd
+indices and is symmetric about it. That is a T/2-spaced analytic bandpass
+pair, and it is why one 103-tap walk over one history produces both halves of
+the complex output.
+
+**THE LAYOUT ASSERTIONS ARE RUNTIME AND IN THE TEST, NOT `#if`-GUARDED IN THE
+HEADER.** `docs/method/compilers.md` records 78 files whose offset assertions
+are guarded on `__SIZEOF_POINTER__`, a GCC 4.6+ predefine, so under GCC 3.4.2
+the guard reads `#if 0` and every assertion silently vanishes. A
+`diff_eq_int` against the literal offset in `t_fpm_fse` cannot vanish: the
+unit tests are 32-bit only, `make check64` is `-fsyntax-only` over `src/` and
+never sees them, and `make period` runs them under the compiler that matters.
+Twenty of them, plus `sizeof` on both structs.
+
+**EMITTED OUT OF BATCH, because `FSEv32_CFG` points at them and nothing else
+in the tree defines them:** `CRRv32_CLK` (short[4]), `CRRv32_PLL_K1` and
+`CRRv32_PLL_K2` (short[3] each), in `src/pump/v32/v32fse_tables.c`. The shapes
+are measured, not assumed — `clk` is indexed modulo `cfg.clk_mod` = 4 and the
+two gain tables by state+0x3a ∈ {0,1,2}, and the object's sizes are 8, 6 and
+6. They belong to V.32's carrier recovery and should move there when that
+block is written.
+
+### 1602. THE NINE SLICERS ARE THREE FAMILIES, AND FOUR OF THEM NEED THE VITERBI DECODER
+
+Read from the disassembly of all nine at .text 0x80330-0x81600. The slicer's
+signature is settled by `FPM_FSE_receive`'s `call *0x30(%edx)` and by the nine
+prologues: `unsigned short (*)(struct fpm_fse *state, short *angle, short
+*mag)`. `angle` is IN and OUT -- the caller writes the measured angle and the
+slicer overwrites it with the ideal one, and receive's phase error is the
+difference -- `mag` is out only, and every one of the nine returns its value
+zero-extended from 16 bits.
+
+**WHAT EACH ONE NEEDS, which is what decides whether it can be written.**
+
+| slicer | tables | function |
+|---|---|---|
+| `_CD` | none | installs `_trn` |
+| `_trn` | `ANGL1200`, `MAP_TRN` | installs `_4pt` |
+| `_4pt` | `ANGL1200`, `IMAP4`, `QMAP4`, `SMCv32_{I,Q,P}MAP16` | — |
+| `_AB` | as `_4pt` | installs `_CD` |
+| `_16pt` | as `_4pt` plus `ANGL9600`, `{I,Q}MAP16`, `MAG9600` | — |
+| `_16Tpt` | `{I,Q}MAP16`, `MAG9600`, `ANGL9600` | **`VTB_decoder`** |
+| `_64pt` | `{I,Q}MAP64`, `MAG12000`, `ANGL12000` | **`VTB_decoder`** |
+| `_32pt` | `ANA_QMAP`, `ANGL9600T`, `MAG9600T`, `{SIN,COS}_ROT_ANGLE` | **`VTB_decoder`** |
+| `_128pt` | `ANA_{I,Q}MAP128`, `ANGL14400`, `MAG14400`, rot | **`VTB_decoder`** |
+
+`VTB_decoder` is 1,773 bytes at .text 0xab4d0 and its trellis tables are
+another ~10 KB (`VTB_BOUND_14400` alone is 3,712 B), so the four trellis
+slicers are gated on finding 1600's Viterbi batch and cannot be closed from
+this one. Nothing on any branch defines it, or any `DECv32_*` or `SMCv32_*`.
+
+**THE CHAIN IS THE RECEIVER'S HANDSHAKE.** Each slicer installs its successor
+in `cfg.decision`: AB (until the constellation scatters and 151 symbols have
+passed) -> CD (15 symbols) -> trn (1280 symbols) -> 4pt. `_trn` never looks at
+the received symbol at all: it regenerates the training sequence from its own
+shift register at `owner+0x70`, tapped at `owner+0x6c` and at bit 21, so the
+equaliser adapts against a known reference.
+
+**SIX OF THE NINE SHARE A PREAMBLE** -- everything except `_CD`, `_trn` and
+`_AB`. It squares the distance between this symbol and the one two back,
+smooths it into `owner+0x5e` as `eqm = (15*eqm + energy)/16`, and asks for a
+retrain (`owner+0x62`) when the count hits 60, or when 21 to 59 symbols have
+gone by with `eqm` below an eighth of that distance.
+
+**`fpm_fse_cfg::owner` IS THE V.32 DATAPUMP OBJECT** and nothing in the tree
+constructs it yet, so `struct v32_dec` in `include/dsplib/v32dec.h` names only
+the fields the slicers touch and pads the rest. Its size is 0x74 and the
+padding at +0x18 is bounded, not guessed: `_16Tpt` passes `owner+0x18` to
+`VTB_decoder` and `owner+0x50` is in use here, so the decoder's state there is
+at most 56 bytes. **When `v32_create` is written this type must become that
+object's type**, not a second declaration of it.
+
+**EMITTED OUT OF BATCH** to make the four closable slicers link:
+`DECv32_ANGL1200`, `DECv32_MAP_TRN`, `DECv32_IMAP4`, `DECv32_QMAP4`,
+`DECv32_MAG9600`, `DECv32_ANGL9600`, `DECv32_IMAP16`, `DECv32_QMAP16` (all
+`.data`, so not const in the original) and `SMCv32_IMAP16`, `SMCv32_QMAP16`,
+`SMCv32_PMAP16` (`.rodata`, const), in `src/pump/v32/v32dec_tables.c`. Every
+one is indexed `(%reg,%reg,1)` with a 16-bit load, so all eleven are `short`.
+The two `SMCv32_*MAP16` are 0x22 bytes -- seventeen entries, of which only
+0..15 is ever indexed and the last is zero.
+
+### 1603. `FSE_decision_16pt` INDEXES `DECv32_MAG9600` OUT OF BOUNDS AND CANNOT BE DIFFERENTIALLY TESTED
+
+`DECv32_MAG9600` is 6 bytes, three entries, and both `_16pt` and `_16Tpt`
+index it as `movzwl -0x2(%edi,%edi,1)` -- that is, `MAG9600[n - 1]` -- off the
+same quantity, `(short)(|I| + |Q|)` for the decided constellation point.
+`_16Tpt` shifts it right by 13 first (`sar $0xd`), which maps the three
+possible sums 8192, 16384 and 24576 onto n = 1, 2, 3 and so onto entries 0, 1
+and 2. **`_16pt` shifts by 1** (`d1 ff`, `sar $1`, at 0x80fcb), which maps them
+onto n = 4096, 8192 and 12288, and reads 8190, 16382 and 24574 bytes past the
+table.
+
+Only the first of those three is even inside `.data`, which is 0x9594 bytes:
+`.data+0x94f6` holds 0. The other two are past the end of the section
+entirely.
+
+So the function reads whatever the LINK put after the table, and our build and
+the blob cannot agree on that by construction. **`FSE_decision_16pt` is
+therefore left out**, per the rule: everything else about it is understood and
+written down here, and it is not committed asserted. The rest of the function
+-- the sixteen-point search, `ANGL9600`, the differential decode -- is
+straightforward and matches `_4pt`'s shape; only `*mag` is affected, and only
+because the value it writes is unreproducible, not because the decision is
+wrong.
+
+Whoever lands the Viterbi batch gets `_16Tpt` with the same code and the
+correct shift, which is the cross-check that this is a defect in `_16pt` and
+not a misreading.
+
+### 1604. TWO EMPTY LOOPS IN THE V.32 CODE, DELIBERATELY NOT REPRODUCED
+
+`FPM_FSE_receive+0x4d0` runs `xor %eax,%eax; inc %eax; cwtl; cmp $0x3,%ax;
+jle` -- three iterations of nothing -- immediately before the real loop that
+shifts `tilt_hist[]`. `FSE_decision_trn+0x9d` runs the same shape over
+`cfg.taps` before handing over to `_4pt`. Both are almost certainly a loop
+whose body was dead-code-eliminated (GCC 3.4.2 does not then delete the empty
+loop, and a `short` induction variable makes that more likely), and neither
+has any observable effect.
+
+They are NOT reproduced in `src/`. Writing `for (i = 1; i <= 3; i++) ;` would
+be inventing a source line to fit an artefact of the compiler, which is the
+opposite of what the reconstruction is for; the differential tests cannot see
+the difference either way.
+
+### 1605. `FPM_FSE_receive` READ END TO END BUT NOT WRITTEN: THE STRUCTURE, AND THE ONE SYMBOL THAT BLOCKS IT
+
+Read in full from .text 0xa7e00 (2,131 bytes). It is **not** in `src/`,
+because it calls `FPM_atan`, and `FPM_atan` is already reconstructed on branch
+`v22-v22a` (`src/dsp/fpm_atan.c`) — finding 1600 names it as the one symbol
+V.22 and V.32 share and says whoever lands it first should say so. Writing a
+second one here would be the duplicate that costs a merge; an unresolved
+reference in `src/` breaks the whole `phase` link and not just one test. So
+this entry is the analysis, and the function is a ten-minute write for whoever
+holds both halves.
+
+**SIGNATURE.** `unsigned short FPM_FSE_receive(struct fpm_fse *st, const short
+*in, short *out, unsigned short nsamp)`. The count is loaded `movzwl` and then
+narrowed `movswl %ax` for everything else, so the parameter is unsigned and
+the working copy is a `short` — the zero-extended value is what is added to
+the file-static sample counter. The return is `st->n_out`, zero-extended.
+
+**IT NEEDS THREE CALLEES**: `FPM_atan` (v22-v22a), `FPM_phasor` (already in
+`src/dsp/fpm_phasor.c`) and `FPM_lmsupd` (written in this batch, finding 1606).
+
+**THE V.22 SESSION'S `FPM_atan` IS THE RIGHT ONE, INDEPENDENTLY CONFIRMED.**
+Its commit `9b82992` (whose findings are on that branch, not this
+one) settles the signature as `void
+FPM_atan(short y, short x, short *angle)` -- void, with the angle coming back
+through the third argument -- from `FPM_atan`'s own two degenerate branches.
+Reading the call site here from the other end gives the same thing: receive
+pushes `qq` at (%esp), `ii` at 4(%esp) and `&local_74` at 8(%esp), and then
+uses `local_74` and never `%eax`. Two derivations from opposite directions,
+so neither is a convention guess. Landing receive is a cherry-pick of that
+one commit plus this pseudocode.
+
+**THE SHAPE.**
+
+    n = (short)nsamp;  avg_err_show += nsamp;
+    st->n_in = n;  st->n_out = 0;
+    while (n != 0) {
+        if (n < need) {                       /* short of a symbol       */
+            need -= n;
+            take n samples into the circular history;
+            advance clk_phase by n * clk_inc, modulo clk_mod;
+            break;
+        }
+        take `need` samples into hist[], widx wrapping at cfg.taps;
+        n -= need;
+        advance clk_phase by need * clk_inc, modulo clk_mod;
+        theta = cfg.clk[clk_phase] + ((phase_acc + 0x4000) >> 15);
+        I = (FIR of hist against icoeff, newest first) >> 15;
+        Q = (same against qcoeff) >> 15;
+        ii = 2*I;  qq = 2*Q;                      /* both re-narrowed    */
+        FPM_atan(qq, ii, &ang);                   /* ang is 16-bit out   */
+        FPM_phasor(&ang) -> cos, sin;
+        r  = (cos*ii + sin*qq) >> 15;
+        d  = wrap(((ang - theta) >> 1) - tilt_out, 0x4000);
+        FPM_phasor(2*d) -> cos, sin;
+        *out_i++ = (cos*r) >> 13;  *out_q++ = (sin*r) >> 13;
+        log both, halved, to diag[diag_n++]  (diag_n reset past 0x1df);
+        sym = cfg.decision(st, &ang2, &mag);      /* ang2 = 2*d in      */
+        *out++ = sym;  st->n_out++;
+        err = wrap(2*d - ang2, 0x4000);           /* the PLL's error    */
+        err_avg = (err*0x666 + err_avg*0x799a) >> 15;
+        if (pll_on) {
+            band select: sym_count counts to cfg.train_sym and stops;
+            below it pll_sel = 0, at it 1, above it 1 if |err_avg| >=
+            cfg.err_hi and 2 if |err_avg| <= cfg.err_lo;
+            phase_acc = wrap(phase_acc + k1[pll_sel]*err + freq, 0x20000000);
+            freq += k2[pll_sel]*err;
+            if (tilt_on) {
+                shift tilt_hist[3..1] down; tilt_hist[0] = err + tilt_out;
+                tilt_out = sum over 4 of tilt_coeff[k]*tilt_hist[k];
+            }
+        }
+        a2 = wrap((ang2 + theta) >> 1, 0x4000);
+        FPM_phasor(2*a2) -> cos, sin;
+        ei = ((cos*mag) >> 14) - ii;  eq = ((sin*mag) >> 14) - qq;
+        mse = (((ei*ei + eq*eq) >> 11)*0x666 + mse*0x799a) >> 15, saturated
+              at 0x7fff;
+        if ((mse > 0 && lms_on) || lms_force) {
+            mu = cfg.mu[mu_sel];
+            FPM_lmsupd(icoeff, hist, widx, taps, (ei*mu + 0x800) >> 12);
+            FPM_lmsupd(qcoeff, hist, widx, taps, (eq*mu + 0x800) >> 12);
+        }
+        if (avg_err_show > 0x1c1f) { announce the mse; avg_err_show = 0; }
+    }
+    st->widx = widx;  st->clk_phase = clk_phase;  st->need = need;
+    return st->n_out;
+
+`wrap(x, m)` is the object's two-compare idiom: add or subtract 2m until the
+value is in [-m, m). It appears four times with three different moduli.
+
+**THE FILE STATIC.** `avg_err_show.0` at `.bss+0x8d0`, four bytes, LOCAL — so
+it has no `ref_` alias and cannot be read from a test directly. It is
+observable only through the `"Decoder Error = %d\n"` announcement it gates at
+0x1c1f, which is 7200 samples: one report a second at V.32's sample rate. That
+transcript is also the only thing that decides the `unsigned short` reading of
+the count parameter, since `nsamp = 0xffff` adds 65535 on one reading and
+-1 on the other.
+
+**TWO CONSTANTS ARE INLINE AND NOT FROM THE CONFIG.** The smoothing pair
+0x666 and 0x799a (1638 and 32768-1638) is written as immediates in both IIRs,
+and `cfg.err_lo` at +0x20 is *also* 1638. They are not the same number twice
+by accident, but the code does not read the field.
+
+### 1606. `FPM_lmsupd` IS FIVE ARGUMENTS, THREE OF THEM SHORTS, AND IT IS UNCONTESTED
+
+Written out of batch, in `src/dsp/fpm_lmsupd.c`, because `FPM_FSE_receive`
+cannot link without it. It is in finding 1600's "leaf math" group but it is
+NOT one of the two symbols that group shares with V.22 — that intersection is
+exactly `FPM_atan` and `FPM_atan_table` — so nothing else in flight can be
+writing it.
+
+    void FPM_lmsupd(short *coeff, const short *hist, short widx, short taps,
+                    short err);
+
+The last three are **`short`, not `int`**: `movswl 0x24/0x28/0x2c(%esp)` at
+the top, and all three 32-bit results are used. Each coefficient moves by
+`(hist[k] * err + 0x20000) >> 18`, a round-to-nearest at eighteen fractional
+bits, and the walk is the same two-loop shape as the equaliser's own FIR —
+`k` from `widx` down to 0, then from `taps - 1` down to `widx + 1`, with
+`coeff` advancing monotonically across both. So coefficient order is paired
+against sample AGE, not against buffer position, and `widx = -1` is a legal
+call that takes only the second loop. Exactly `taps` entries are written; the
+test carries a canary past the end because the pairing check alone would not
+catch a walk one entry too long.
+
+The read-modify-write reads `movzwl` and stores 16 bits, so the load's
+extension is free — every use is truncated back by the store.
+
+
+### 1607. THE FOUR-POINT SLICER'S METRIC IS NOT THE NEAREST-POINT METRIC, AND THE FIRST COMMENT SAID IT WAS
+
+Correction to what commit `ec5a2eb` first said about `FSE_decision_4pt`. The
+comment claimed the two different shifts — `sar $0xf` on the in-phase squared
+error and `sar $0x10` on the quadrature one — "change no decision" because the
+constellation is symmetric. Both halves of that were wrong, and no differential
+test could catch it, because the CODE was right and only the prose was not.
+
+MEASURED, by evaluating the object's own expression over the four points:
+
+    received      object's metric              symmetric metric
+    (0, 0)        2816 4864 2816 4864  -> 0    2560 2560 2560 2560  -> 0
+    (0, 8192)      768 6912 6912 4864  -> 0     512 4608 6656 2560  -> 0
+    (2000, 2000)  2749 6797 3249 3297  -> 0    2182 3682 3182 1682  -> 3
+
+The four points are `(-4096, 12288)`, `(-12288, -4096)`, `(4096, -12288)` and
+`(12288, 4096)` — equidistant from the ORIGIN, not from the axes, and at about
+18.4 degrees plus multiples of 90, not at 45. So the one-place difference
+weights the in-phase error twice the quadrature one, the decision regions are
+ellipses rather than circles, and at `(2000, 2000)` the two metrics disagree
+outright. Recorded as D299.
+
+INHERITED from the same first draft and also corrected: `FSE_decision_AB`'s
+comment called `0x4000` a quarter cycle. `FPM_PHASOR_CYCLE` is `0x8000`, so it
+is a HALF cycle, which is what makes the A and B phases 180 degrees apart.
+
+`include/dsplib/v32dec.h` also prototyped `FSE_decision_16pt`, which no
+translation unit defines. A declaration with no definition is a claim the tree
+cannot honour, and it contradicted 1603 in the same file; it is gone.
+### 1621. D6's FOURTH BROKEN AGC PAIR IS NOT BROKEN — THE ROW THE ARGUMENT RESTS ON IS A MISREADING
+
+*Task: V.32/V.32bis, writing `AGCv32_CFG`. Found by reading the object for
+the configuration's own coefficients rather than by looking for this.*
+
+`docs/deviations.md` D6 says four of the nine `AGC_DEF_ALPHA`/`AGC_DEF_BETA`
+pairs in the blob break the smoother's unity DC gain, and the fourth row is
+
+    .data:0x7664 / 0x7660 (global)    32604   2277   34881   1.064 ✗
+
+**The object does not say that.** Three independent readings agree:
+
+```
+$ readelf -x .data dsplibs.o
+  0x00007660 0040e508 00401b77 ...
+             ^16384  ^2277   ^16384  ^30491
+$ python3 tools/tabdump.py $BLOB --at .data:0x7660 --type s16 --count 4
+        16384, 2277, 16384, 30491,
+```
+
+`nm` puts `AGC_DEF_BETA` at 0x7660 and `AGC_DEF_ALPHA` at 0x7664, so
+alpha[1] = **30491**, not 32604, and **30491 + 2277 = 32768 exactly**. The
+pair is correct in both elements.
+
+**This is the row the surrounding argument is derived from.** D6's next
+paragraph says "The intended values are plainly `32768 - beta`: 31130 for
+beta = 1638, **30491 for beta = 2277**" — and 30491 is what the object
+already holds at that address. The author fixed this one; the register
+recorded the fix as a fourth instance of the bug it fixes.
+
+**What survives.** The defect is real and the mechanism is unchanged: three
+pairs carry alpha = 32604 with beta = 1638 for a DC gain of 1.045
+(`.data:0x7810` Bell 103, `.data:0x778c` and `0x7794` V.23), and all three
+are dormant because every config field points at element 0. D6's count goes
+from four to three, and its "four wrong ones all carry alpha = 32604" becomes
+"three".
+
+**Why it was not caught before.** Nothing in this tree had a reason to read
+the *global* pair: it is the one object of the six that no reconstructed file
+owned, because the translation unit that owns it is V.32's and V.32 was not
+started. `src/pump/b103/b103_agc_cfg.c` carries its own file-static copy with
+different values, and its header comment repeats D6's table, so the wrong row
+is in two places. Both are corrected.
+
+**AND THE SAME CONFIGURATION SAYS `pad16` IS NOT PADDING.** `struct
+fpm_agc_cfg`'s last field was named `pad16` because Bell 103's and V.23's
+configurations all carry zero there. Both of V.32's carry **6553** — 0.2 in
+Q15 — with 158 at `f14` beside it, so `+0x16` is a real field that the
+`fpm_agc` functions do not read and some caller must. Renamed `f16`. No
+existing initialiser named it, so the rename is textual only.
+
+### 1622. `closure.py` COUNTS A FILE-STATIC OF THE SAME NAME AS THE GLOBAL, AND THAT HIDES REAL WORK
+
+*Task: V.32/V.32bis. Measured while checking whether `AGC_DEF_ALPHA` was
+already written.*
+
+`closure.py`'s `ours()` is
+
+```python
+for o in glob.glob("build/src/**/*.o", recursive=True):
+    out = subprocess.run(["nm", "--defined-only", o], ...)
+```
+
+`nm --defined-only` lists LOCAL symbols as well as global ones. So a
+`static const short AGC_DEF_ALPHA[2]` inside `src/pump/b103/b103_agc_cfg.c`
+— which is a faithful reconstruction of *Bell 103's* file-static copy —
+makes the name `AGC_DEF_ALPHA` count as written, and the blob's **global**
+`AGC_DEF_ALPHA` at `.data:0x7664`, which belongs to V.32's translation unit
+and has different values, drops out of every closure.
+
+It is in the V.32 closure's first run and not its second, and neither number
+is wrong about what it measured: the pre-build run reports everything as
+unwritten, the post-build run silently absorbs the collision.
+
+**How much it hides is bounded and small here** — 8 bytes across two symbols
+— but the shape is not: the blob has 18 `AGC_DEF_*` objects and 241 symbols
+that were file-local before `--globalize-symbols` promoted them, and the tool
+cannot distinguish "we wrote the global" from "we wrote a different static
+that happens to share its name". A tighter `ours()` would take only symbols
+whose `nm` type letter is upper case, plus an explicit list of the locals this
+tree deliberately reproduces as locals. Not changed here: it is a measurement
+tool used by several concurrent sessions and changing what it counts
+mid-flight would make two hand-overs disagree for a reason that is not about
+the code. Recorded so the next person reading a closure knows the failure mode.
+
+### 1623. V.32'S SCRAMBLER PAIR DIFFERS IN ONE `or`, AND ITS THREE DATA OBJECTS ARE UNREFERENCED
+
+*Task: V.32/V.32bis. Both functions reconstructed and driven against the
+blob over seventeen configurations; the data objects measured, not written
+from.*
+
+`SDMv32_scrambler` (0x85950) and `SDMv32_descrambler` (0x857f0) are 349 bytes
+each and the same 349 bytes twice over, except for which value is fed back:
+
+```
+    scrambler     out = (in ^ (reg >> tap1) ^ (reg >> tap2)) & outmask
+                  reg = ((reg << shift) & regmask) | out
+    descrambler   out = (in ^ (reg >> tap1) ^ (reg >> tap2)) & outmask
+                  reg = ((reg << shift) & regmask) | in
+```
+
+In the object that is literally one instruction: `or %eax,%ebx` against
+`or %ecx,%ebx`, where `eax` is the masked output and `ecx` the raw input.
+
+**FOUR THINGS THE ENCODING FORCES**, each of which a plausible rewrite gets
+wrong:
+
+- **`group == 6` is a special case, not arithmetic.** `cmp $0x6,%di` and
+  `mov $0x3,%edx` are literals. A 6-bit word is processed as two 3-bit
+  groups, most significant first, and the shift is 3. Writing it as
+  `group / 2` would agree at 6 and disagree at every other even width.
+- **The second half of a 6-bit word sees the register the first half already
+  updated.** The taps for it are read after the first `shl`/`and`/`or`, so
+  the two halves are not independent and the order matters.
+- **The result is truncated to 16 bits before `outmask` is applied**
+  (`movzwl %ax,%eax` then `and`), not after.
+- **The not-6 path xors the WHOLE 16-bit input word**, and the descrambler
+  feeds the whole word back into the register. It is not masked to `group`
+  bits first. For a caller that presents only `group` significant bits the
+  two readings agree over every input, which is exactly the class of defect
+  finding 613 is about.
+
+The state is 24 bytes: `group` at +0x00, `outmask` +0x08, `regmask` +0x0c,
+`reg` +0x10, `tap1` +0x14, `tap2` +0x16. **+0x02 through +0x07 are read by
+neither function** and nothing that writes this object is reconstructed, so
+they are left as named padding.
+
+**`SDMv32_GPA`, `SDMv32_GPC` AND `SDMv32_CFG` ARE UNREFERENCED.**
+`tools/relocscan.py --into SDMv32` resolves all 10,514 `R_386_32`
+relocations and finds nothing pointing at any of the three. They are global,
+so a translation unit outside this object could have used them; inside it
+they are dead. The consequence is that their SHAPE cannot be established —
+8 bytes is `short[4]` and two `short[2]` pairs equally — and the file says so
+rather than choosing.
+
+Their values are worth recording even so. V.32 §4.4 gives two scrambling
+polynomials, `GPA = 1 + x^-18 + x^-23` for the answering modem and
+`GPC = 1 + x^-5 + x^-23` for the calling one, and the two objects hold **5
+and 18 in the two orders** — the two non-trivial exponents, differing exactly
+as the polynomials differ, under the Recommendation's own names.
+`SDMv32_CFG` is `{4, 5, 23}` and 23 is the register length. What is NOT
+established is how either object reaches `tap1`/`tap2`: 23 is absent from
+both, so at least one tap cannot be a raw exponent, and the function that
+would settle it is not in the object.
+
+**The test drives the pair, not just each half.** Seventeen configurations —
+every `group` from 1 to 8, both tap orders, three register lengths, an
+`outmask` wider than the group, a register already full, and both taps on the
+same bit — each over 512 words in ragged chunks so that `reg` is carried
+rather than assumed. It also round-trips our scrambler through our
+descrambler from a DIFFERENT initial register and requires the input back
+after 32 words, which is the self-synchronising property the pair exists for
+and which neither function alone can demonstrate.
+
+### 1624. `make one` SPENDS THREE TO FOUR MINUTES IN `anchorcheck.py` BEFORE IT COMPILES ANYTHING
+
+*Task: V.32/V.32bis. Measured with `ps --ppid` on a stalled `make one`, twice.*
+
+`make one T=t_x` is documented here as the fast loop between commits, and it
+is — against `make phase`. But its prerequisite line is
+
+```
+one: firewall strings offsets refs
+```
+
+and `refs` runs `tools/anchorcheck.py`, which walks every mutation suite
+against every source file. On this tree that is **3 to 4 minutes of one core
+at 100%**, before the test being asked for is even looked at. It is the same
+cost whether one file changed or none.
+
+The loop that skips it is the binary itself:
+
+```sh
+make J=3 BLOB=$BLOB build/test/t_v32scram && ./build/test/t_v32scram
+```
+
+Seconds instead of minutes, and it is the same binary `make one` would build
+and run. What it does NOT run is the four gates — the licence firewall, the
+string audit, the `__builtin_offsetof` annotations and the reference checker
+— so the discipline that keeps it honest is:
+
+- **iterate** on `make build/test/t_x && ./build/test/t_x`;
+- **`make one T=t_x` once** before committing, which is what catches a
+  dangling finding reference or an offset annotation that has drifted;
+- **`make phase`** to commit.
+
+`refcheck` in particular fails loudly and usefully: a finding number cited in
+a header before the finding is written stops the build, which is how this
+session learned to write the finding first.
+
+**AND HEAVY BUILDS NOW TAKE TURNS.** This machine drives a real-time soft
+modem against live hardware in parallel with the reconstruction, and three
+concurrent agents took the load average to 42 on 12 cores — enough
+scheduling jitter to force sixteen bench calls to be discarded. Any full
+build goes behind a shared lock:
+
+```sh
+flock /tmp/claude_re_build.lock make J=3 BLOB=$BLOB phase
+```
+
+`flock` blocks until the lock is free, so it needs no coordination between
+sessions, but the path has to be that exact one or it does nothing. `J` stays
+at about half the cores; raising it is what caused the problem.
+
+### 1625. V.32'S THREE SYMBOL ENCODERS, AND WHAT SETTLES A TABLE'S ELEMENT WIDTH WHEN THE BYTES CANNOT
+
+*Task: V.32/V.32bis. All three functions and all five tables driven against
+the blob; the struct layouts are readings, and this entry says which parts
+are which.*
+
+`SMCv32_encoder_abs` (156 B), `SMCv32_encoder_dif` (357 B) and
+`SMCv32_encoder_tcm` (374 B) turn input words into constellation indices in a
+ring buffer. All three end the same way:
+
+```
+    quad = (quad + 3) & 3          one quadrant BACKWARDS per symbol
+    ring[widx] = (point + quad * 4) & 0xf | (mode << 8)
+    widx = (widx + 1 < limit) ? widx + 1 : 0
+```
+
+and differ in where `point` comes from: a table lookup (`abs`), a
+differential accumulator (`dif`), or the trellis (`tcm`). The `+ 3` is what
+the object writes — `add $0x3` then `and $0x3` — so the rotation is by minus
+one quadrant and not plus one.
+
+**`dif`'s two arms differ in ONE TERM.** Mode 0 adds a literal 1 to the
+accumulator; every other mode adds the input's low two bits. `state` is
+indexed by `mode`, so the modes carry independent accumulators.
+
+**THE ELEMENT WIDTH COMES FROM THE CONSUMER, AND HERE IT DECIDED THREE
+TABLES.** `SMCv32_MOD` is 16 bytes that dump as `70 61 61 70 42 53 53 42 …`
+— which is ASCII, "paapBSSB4%%4", and is not a string. `unsigned char[16]`
+and `unsigned short[8]` compare identically against `ref_` and only one of
+them is right. `SMCv32_encoder_tcm` settles it:
+
+```
+    7fc61:  movzwl 0x0(%eax,%eax,1),%eax   <== SMCv32_MOD
+```
+
+a scale of two, so **eight shorts** — each entry four 3-bit rotations
+selected by a shift of `quad * 4`. A test comparing bytes would have passed
+on the wrong one.
+
+**CORRECTION, made when this branch merged with `v32-fse`: the same argument
+does NOT establish SIGNEDNESS, and this entry originally claimed it did.**
+It said the `movzwl` that loads `SMCv32_PMAP16` makes it `unsigned short`.
+`FSE_decision_AB` at 0x814a9 and `FSE_decision_4pt` at 0x8121d load **the
+same object** with `movswl`. Two translation units, two readings — which is
+exactly what independent `extern` declarations look like, and it means the
+object does not carry one answer. Every value in both phase maps is positive,
+so the readings agree over every entry and nothing is forced; they are
+declared `short`, matching the neighbouring maps and the majority of the
+consumers.
+
+The width argument survives intact and is the one that mattered: a scale of
+two against a scale of one changes WHICH BYTES are read, and no value can
+hide that. Signedness only shows up on a value that has the top bit set, and
+these tables have none. Finding 613's rule is about a load "whose 32-bit
+result is used" — used in a way that can distinguish, which this is not. The
+duplicate definition the two branches produced is what forced the question:
+one file had `const short`, the other `const unsigned short`, and the link
+failed rather than silently picking one.
+
+**`SMCv32_encoder_tcm` WRITES BACK TO ITS INPUT BUFFER.** `in[i] &= mask_all`
+in place, before anything else, and the caller sees it — so `in` is not
+`const` and the test compares both sides' input buffers afterwards as well as
+their outputs. Its three masks all come from one field, `smc->f14`:
+`mask_low = (1 << n) - 1`, `bit_hi = 1 << (n + 2)`, `mask_all = bit_hi - 1`,
+each truncated to 16 bits where it is built.
+
+`TrellisEncodeDifTable` is a 4x4 Latin square — V.32 Figure 6's differential
+quadrant encoder — and `TrellisTransitionTable` is 8 states by 4 inputs with
+every entry even in its first half and odd in its second, which is the parity
+the convolutional encoder maintains. Both 2-D shapes are readings of how the
+code indexes them; the object states only the element width and the count.
+
+**WHAT IS MEASURED AND WHAT IS A READING.** Measured: every field offset the
+three functions read, the element widths above, and the behaviour, over 21
+configurations — every mode, both tap orders, shifts from 0 to 14 including
+one where the input's sign reaches the shift, ring lengths of 5, 7, 9, 13, 40
+and 64, and the `prev > 3` arm both taken and not. A reading: **that
+`state[]` has three elements.** `dif` indexes it with an unbounded `mode`,
+and what bounds it above is `tcm` reading +0x0e as a scalar, so it cannot
+reach past +0x0d. The test drives modes 0, 1 and 2, and that is the range
+over which the layout is established. Nothing that constructs either struct
+is reconstructed yet, so +0x02, +0x12 and the first eight bytes of the ring
+descriptor are named padding rather than guesses.

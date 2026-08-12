@@ -473,12 +473,19 @@ Element `[1]` is not:
 | `.data:0x7810` / `0x780c` (Bell 103) | 32604 | 1638 | 34242 | **1.045** ✗ |
 | `.data:0x778c` / `0x7788` (V.23) | 32604 | 1638 | 34242 | **1.045** ✗ |
 | `.data:0x7794` / `0x7790` (V.23) | 32604 | 1638 | 34242 | **1.045** ✗ |
-| `.data:0x7664` / `0x7660` (global) | 32604 | 2277 | 34881 | **1.064** ✗ |
+| `.data:0x7664` / `0x7660` (global, V.32's TU) | 30491 | 2277 | 32768 | 1.000 ✓ |
 
-The four wrong ones all carry α = 32604, which is `32768 - 164` — the value
+**That last row said 32604 / 34881 / 1.064 ✗ until finding 1621 read the
+object for it.** It is 30491, three readings agreeing (`readelf -x .data` at
+0x7660 gives `0040e508 00401b77`), so the pair sums to exactly 32768 and is
+correct. The count is **three** broken pairs, not four. The row mattered more
+than one row of a table normally would, because the next sentence derives the
+intended value from it and the object already holds that value.
+
+The three wrong ones all carry α = 32604, which is `32768 - 164` — the value
 that belongs with the β of the `0x77b8` pair. Someone copied that TU's α while
 changing β. The intended values are plainly `32768 - β`: 31130 for β = 1638,
-30491 for β = 2277.
+and 30491 for β = 2277 — which is what the V.32 pair above already has.
 
 **Why it is dormant.** All 6794 section-relative `R_386_32` relocations in the
 object were resolved; every config field that points at one of these objects
@@ -5468,3 +5475,114 @@ Written as the object has it. A bound here would be a behavioural difference on 
 `v22_mrf`, whose startup branch is otherwise the same shape, uses `phase * history_len` in BOTH branches — see D298, which is the other half of this pair. So the two files disagree, and this one is the odd one out.
 
 How much of that transient it actually changes is measured rather than reasoned: the earliest outputs run against an all-zero history and are zero whatever the coefficients are. Reproduced exactly; `t_v22_pps.c` compares from the first output and a mutation that "corrects" the base to `phase * history_len` fails 26 checks in each of its three drive patterns, so the difference is measured and not supposed.
+
+## D300 🐛 `FSE_decision_16pt` reads its magnitude table thousands of entries past the end
+
+**Renumbered from D298.** It was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the collision surfaced at the merge and the V.32 side moved. Citations written before that merge may still say D298 -- `refcheck.py` cannot catch those, because they still resolve, just to the wrong entry.
+
+*Batch of 2026-08-12, from `FSE_decision_16pt` (blob 0x80e90, 490 bytes) +0x13b (`sar $1,%edi`) feeding +0x13d (`movzwl DECv32_MAG9600-0x2(%edi,%edi,1),%eax`). **Reachability: FIRES on every call.** Status: `measured` — the three reachable indices are 4095, 8191 and 12287 into a three-entry table. Fix class: none proposed.*
+
+**Finding 1603.** `DECv32_MAG9600` has three entries and is indexed `[n - 1]` off `(short)(|I| + |Q|)` for the decided point, whose only three values are 8192, 16384 and 24576. `FSE_decision_16Tpt` divides that by 8192 first (`sar $0xd`) and lands on 0, 1 and 2. `_16pt` divides by 2 and lands on 4095, 8191 and 12287 — 8190, 16382 and 24574 bytes past a six-byte table. `.data` is 0x9594 bytes, so only the first of the three is even inside the section; `.data+0x94f6` holds 0 and the other two are past the end of it.
+
+The two functions are otherwise the same shape over the same table, which is what makes this a slip in `_16pt` rather than a misreading of either.
+
+It is the one thing in this batch that a differential test cannot decide, because what the function returns in `*mag` is a property of the LINK and not of the code: our build's bytes after the table are not the blob's and cannot be made to be. `FSE_decision_16pt` is therefore not reconstructed — the analysis is in finding 1603 and the function is left out rather than committed with a check steered around it.
+
+======================================================================
+
+## D301 🐛 `FSE_decision_4pt` weights the in-phase error twice the quadrature one, so it is not a nearest-point decision
+
+**Renumbered from D299.** It was allocated D299 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_PPS_filter`; the collision surfaced at the merge and the V.32 side moved. Citations written before that merge may still say D299 -- `refcheck.py` cannot catch those, because they still resolve, just to the wrong entry.
+
+*Batch of 2026-08-12, from `FSE_decision_4pt` (blob 0x81080, 468 bytes) +0xf4 and +0xf7 — `sar $0xf,%edx` on the in-phase squared error against `sar $0x10,%eax` on the quadrature one, summed and compared. **Reachability: FIRES on every call.** Status: `measured`. Fix class: none proposed.*
+
+**Finding 1607.** The two squared terms are scaled one place apart, so the metric is `(i-I)**2 / 2 + (q-Q)**2 / 4` and the decision regions are ellipses rather than circles. Every other slicer in the family shifts both terms alike — `_16Tpt` uses 16 and 16, `_64pt` 13 and 13 — which is what makes this one the odd one out rather than a family convention.
+
+It changes answers, not just margins. Evaluating the object's own expression at a received `(2000, 2000)` gives 2749, 6797, 3249, 3297 and picks point 0, where the symmetric metric gives 2182, 3682, 3182, 1682 and picks point 3. At the origin it gives 2816, 4864, 2816, 4864 where a symmetric metric ties all four, because the four points are equidistant from the origin.
+
+Reproduced as written, and covered by `t_v32fse`'s four-point passes — the differential test cannot tell a deliberate weighting from a slip, which is why this is recorded here rather than argued in a comment.
+
+======================================================================
+======================================================================
+
+## D65 🐛 `FPM_log10` reads one element past its table, and it is NOT the lucky one
+
+**Module** `src/dsp/fpm_log10.c` · original `FPM_log10`, `.text 0x0a8d20`,
+table at `.rodata 0x00c3a0`
+
+**Defect in the original, reproduced deliberately.** The mantissa is
+normalised into `[0x4000, 0xffff]` and then indexed with
+
+    idx = ((norm + 64) >> 7) - 128
+
+For a Q15 caller -- mantissa `0x0000..0x7fff`, which is the domain D4's
+analysis established for this layer -- `norm` lands in `[0x4000, 0x7fff]` and
+`idx` runs **0..128**. The table has 128 entries, `0..127`. So mantissas of
+`0x7fc0..0x7fff`, **64 of the 32768 Q15 values**, read one element past the
+end during ordinary operation.
+
+**`FPM_sqrt` has exactly this defect and escapes it.** What follows ITS table
+is a 32768, which is precisely the value `sqrt_table[192]` should hold, so the
+overrun returns the right answer by coincidence (D4's entry). This one is not
+so lucky. What follows this table at `.rodata:0xc4a0` is `FPM_PPS_CFG`, whose
+first short is **10**, where the correct entry -- `log10(1.0)` in Q15 -- is
+**0**. Shifted down by three that is 1 count in Q12, so the result is one low
+count high over that range rather than catastrophically wrong, which is
+presumably why nobody noticed.
+
+**Reachability: UNMEASURED.** The 64 mantissas are reachable *if* a caller
+presents them; no caller of `FPM_log10` is reconstructed yet, so whether the
+V.32 datapump ever normalises into `0x7fc0..0x7fff` is not established.
+
+**REPRODUCING IT NEEDED A 129TH TABLE ENTRY, AND THAT IS THE INTERESTING
+PART.** The reconstruction's table has 129 entries and the last is **10** --
+not a logarithm, but a transcription of the neighbouring object's first
+short. Without it, our overrun reads whatever our own linker placed after the
+array, and when this file was first written that happened to be a value in
+8..15, which agrees after the `>> 3`. **The test passed for that reason and
+nobody would have known.** It would have started failing the next time
+anything was added to the translation unit, and the failure would have looked
+like a defect in the logarithm.
+
+`FPM_sqrt` sets the precedent by adding a 193rd entry (D4). The difference is
+that its extra entry is the mathematically correct one and this one is a
+transcription of the defect, so the generator explicitly does not produce it:
+`FPM_log10_table_derived()` returns 128 and the test asserts entry 128
+separately, against 10, noting that the generator would have said 0.
+
+**ABOVE Q15 THERE IS NO REPRODUCTION AND NONE IS CLAIMED.** A mantissa of
+`0x8000..0xffff` needs no normalising and indexes up to 384, so the original
+reads up to 512 bytes past its table. The unit test deliberately does not
+compare that range: two builds disagreeing about memory neither of them owns
+is not a defect in either. An earlier version of the test did compare it and
+failed, which is how the luck above came to light.
+
+Reproduced as-is over the Q15 domain: `test/unit/t_fpm_log10.c` drives all
+32,767 non-zero Q15 mantissas against the blob, and the 64 that overrun again
+by name.
+
+======================================================================
+
+## D66 ⚠ `FPM_log10`'s exponent coefficient is 1228 where log10(2) is 1233
+
+**Module** `src/dsp/fpm_log10.c` · original `FPM_log10`, `.text 0x0a8dbe`
+
+**UNMEASURED.** The result is `(table[idx] >> 3) - e * 1228`, in Q12. The
+table half is Q15 log10 shifted down by three, which is Q12 exactly -- the
+derivation reproduces all 128 entries with no slack. The exponent half should
+therefore be `e * log10(2) * 4096 = e * 1233.2`, and the object multiplies by
+**1228** (`imul $0x4cc`): 0.29980 against 0.30103, 0.4% low.
+
+It is the only constant in the function that does not follow from the table,
+and the error is proportional to the exponent rather than bounded -- 5 counts
+in Q12 per octave of normalisation, about 0.0012 of a decade, or 0.024 dB per
+octave read as a power ratio. A signal normalised through ten octaves is half
+a count of Q12 short of where the table says it should be.
+
+Whether that matters depends on what reads the result, and nothing that does
+is reconstructed. Recorded because the two halves of one function disagreeing
+about the same constant is the shape of a transcription error, not of a
+deliberate approximation -- but "deliberate approximation" is not ruled out
+either, and neither reading is established.
+
+Reproduced exactly.

@@ -1834,7 +1834,14 @@ probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 
 	for (;;) {
 		x = (short)(((int)x * k) >> 14);
+#ifdef DSPLIB_REPRODUCE_BUGS
+		/*
+		 * D53.  Advancing the counter HERE, before the test below, is
+		 * what makes `i == 5` impossible and index 0 unreachable.  The
+		 * object does it in this order and so do we by default.
+		 */
 		i = (short)(i + 1);
+#endif
 
 		if (x > ref) {
 			if (i == 5) {
@@ -1850,6 +1857,25 @@ probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 				    "baudrate= %d\n", (int)i, (int)baud);
 			return i;
 		}
+#ifndef DSPLIB_REPRODUCE_BUGS
+		/*
+		 * THE FIX (D53, finding 1471).  Advancing AFTER the test makes
+		 * the author's own `i == 5` arm live: a band edge that the very
+		 * first scaling already brings above the reference needs no
+		 * pre-emphasis, and the function now says so by returning 0.
+		 *
+		 * The delta is exactly one outcome.  Everything the original
+		 * returns as 7..10 is unchanged; only the case it reports as 6
+		 * becomes 0 -- and that is 2445 of the 2480 pre-emphasis
+		 * decisions this bench has ever logged, i.e. nearly every call.
+		 * A modem that could not ask for a flat line now can.
+		 *
+		 * Indices 1..5 remain unreachable.  That is the original's
+		 * shape and there is no evidence about what it intended for
+		 * them, so nothing is invented here.
+		 */
+		i = (short)(i + 1);
+#endif
 		if (i > 9) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
