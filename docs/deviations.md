@@ -473,12 +473,19 @@ Element `[1]` is not:
 | `.data:0x7810` / `0x780c` (Bell 103) | 32604 | 1638 | 34242 | **1.045** ✗ |
 | `.data:0x778c` / `0x7788` (V.23) | 32604 | 1638 | 34242 | **1.045** ✗ |
 | `.data:0x7794` / `0x7790` (V.23) | 32604 | 1638 | 34242 | **1.045** ✗ |
-| `.data:0x7664` / `0x7660` (global) | 32604 | 2277 | 34881 | **1.064** ✗ |
+| `.data:0x7664` / `0x7660` (global, V.32's TU) | 30491 | 2277 | 32768 | 1.000 ✓ |
 
-The four wrong ones all carry α = 32604, which is `32768 - 164` — the value
+**That last row said 32604 / 34881 / 1.064 ✗ until finding 1621 read the
+object for it.** It is 30491, three readings agreeing (`readelf -x .data` at
+0x7660 gives `0040e508 00401b77`), so the pair sums to exactly 32768 and is
+correct. The count is **three** broken pairs, not four. The row mattered more
+than one row of a table normally would, because the next sentence derives the
+intended value from it and the object already holds that value.
+
+The three wrong ones all carry α = 32604, which is `32768 - 164` — the value
 that belongs with the β of the `0x77b8` pair. Someone copied that TU's α while
 changing β. The intended values are plainly `32768 - β`: 31130 for β = 1638,
-30491 for β = 2277.
+and 30491 for β = 2277 — which is what the V.32 pair above already has.
 
 **Why it is dormant.** All 6794 section-relative `R_386_32` relocations in the
 object were resolved; every config field that points at one of these objects

@@ -49449,3 +49449,88 @@ cost a full run to discover:
 `FAIL Psd::process` in a `phase` log is **not** a failure: `t_psd` is the one
 entry in `tools/gccdiverge.json` (finding 1453) and the wrapper allows that
 check to fail under modern GCC. `make period` passes it.
+
+### 1621. D6's FOURTH BROKEN AGC PAIR IS NOT BROKEN — THE ROW THE ARGUMENT RESTS ON IS A MISREADING
+
+*Task: V.32/V.32bis, writing `AGCv32_CFG`. Found by reading the object for
+the configuration's own coefficients rather than by looking for this.*
+
+`docs/deviations.md` D6 says four of the nine `AGC_DEF_ALPHA`/`AGC_DEF_BETA`
+pairs in the blob break the smoother's unity DC gain, and the fourth row is
+
+    .data:0x7664 / 0x7660 (global)    32604   2277   34881   1.064 ✗
+
+**The object does not say that.** Three independent readings agree:
+
+```
+$ readelf -x .data dsplibs.o
+  0x00007660 0040e508 00401b77 ...
+             ^16384  ^2277   ^16384  ^30491
+$ python3 tools/tabdump.py $BLOB --at .data:0x7660 --type s16 --count 4
+        16384, 2277, 16384, 30491,
+```
+
+`nm` puts `AGC_DEF_BETA` at 0x7660 and `AGC_DEF_ALPHA` at 0x7664, so
+alpha[1] = **30491**, not 32604, and **30491 + 2277 = 32768 exactly**. The
+pair is correct in both elements.
+
+**This is the row the surrounding argument is derived from.** D6's next
+paragraph says "The intended values are plainly `32768 - beta`: 31130 for
+beta = 1638, **30491 for beta = 2277**" — and 30491 is what the object
+already holds at that address. The author fixed this one; the register
+recorded the fix as a fourth instance of the bug it fixes.
+
+**What survives.** The defect is real and the mechanism is unchanged: three
+pairs carry alpha = 32604 with beta = 1638 for a DC gain of 1.045
+(`.data:0x7810` Bell 103, `.data:0x778c` and `0x7794` V.23), and all three
+are dormant because every config field points at element 0. D6's count goes
+from four to three, and its "four wrong ones all carry alpha = 32604" becomes
+"three".
+
+**Why it was not caught before.** Nothing in this tree had a reason to read
+the *global* pair: it is the one object of the six that no reconstructed file
+owned, because the translation unit that owns it is V.32's and V.32 was not
+started. `src/pump/b103/b103_agc_cfg.c` carries its own file-static copy with
+different values, and its header comment repeats D6's table, so the wrong row
+is in two places. Both are corrected.
+
+**AND THE SAME CONFIGURATION SAYS `pad16` IS NOT PADDING.** `struct
+fpm_agc_cfg`'s last field was named `pad16` because Bell 103's and V.23's
+configurations all carry zero there. Both of V.32's carry **6553** — 0.2 in
+Q15 — with 158 at `f14` beside it, so `+0x16` is a real field that the
+`fpm_agc` functions do not read and some caller must. Renamed `f16`. No
+existing initialiser named it, so the rename is textual only.
+
+### 1622. `closure.py` COUNTS A FILE-STATIC OF THE SAME NAME AS THE GLOBAL, AND THAT HIDES REAL WORK
+
+*Task: V.32/V.32bis. Measured while checking whether `AGC_DEF_ALPHA` was
+already written.*
+
+`closure.py`'s `ours()` is
+
+```python
+for o in glob.glob("build/src/**/*.o", recursive=True):
+    out = subprocess.run(["nm", "--defined-only", o], ...)
+```
+
+`nm --defined-only` lists LOCAL symbols as well as global ones. So a
+`static const short AGC_DEF_ALPHA[2]` inside `src/pump/b103/b103_agc_cfg.c`
+— which is a faithful reconstruction of *Bell 103's* file-static copy —
+makes the name `AGC_DEF_ALPHA` count as written, and the blob's **global**
+`AGC_DEF_ALPHA` at `.data:0x7664`, which belongs to V.32's translation unit
+and has different values, drops out of every closure.
+
+It is in the V.32 closure's first run and not its second, and neither number
+is wrong about what it measured: the pre-build run reports everything as
+unwritten, the post-build run silently absorbs the collision.
+
+**How much it hides is bounded and small here** — 8 bytes across two symbols
+— but the shape is not: the blob has 18 `AGC_DEF_*` objects and 241 symbols
+that were file-local before `--globalize-symbols` promoted them, and the tool
+cannot distinguish "we wrote the global" from "we wrote a different static
+that happens to share its name". A tighter `ours()` would take only symbols
+whose `nm` type letter is upper case, plus an explicit list of the locals this
+tree deliberately reproduces as locals. Not changed here: it is a measurement
+tool used by several concurrent sessions and changing what it counts
+mid-flight would make two hand-overs disagree for a reason that is not about
+the code. Recorded so the next person reading a closure knows the failure mode.
