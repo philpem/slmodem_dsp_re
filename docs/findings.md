@@ -48798,3 +48798,68 @@ frames. The concern was real — a relay closing can put an impulse 20–30 dB
 above the signal into the capture and wreck a peak-based level — but on this
 path it did not happen, and the median-based figures above would have been
 immune anyway.
+
+### 1460c. THE VG204'S FXS PORTS ARE SET TO US LINE IMPEDANCE ON A UK BENCH — AND IT REVISES 1460b's "ARTEFACT" CLAIM
+
+Read from the running configuration, `vg204-startconf-20260812`. Every voice
+port is:
+
+    voice-port 0/N
+     no echo-cancel enable      <- right for a modem path
+     no non-linear              <- right
+     compand-type a-law         <- right for UK
+     no comfort-noise           <- right
+     cptone GB                  <- right
+     bearer-cap 3100Hz          <- right
+
+and there is **no `impedance` line, no `input gain` and no `output
+attenuation` on any of the four**. So all four sit at the Cisco defaults:
+
+    impedance 600r          <- the US/Canada network
+    input gain 0
+    output attenuation 0
+
+`cptone GB` and `compand-type a-law` say the rest of the box was configured
+for the UK. The termination impedance was not. For a UK line the setting is
+`complex2` — Cisco's UK/BT three-element network — and 600r against a DAA
+expecting complex is a hybrid mismatch, which costs trans-hybrid loss
+directly.
+
+**AND THAT REVISES FINDING 1460b.** That entry dismissed the ERL difference
+between country profiles as "an artefact" of the far end being 7 dB louder in
+a relative measure. The impedance setting makes a REAL difference plausible
+and in the right direction:
+
+| Supra profile | its DAA expects | VG204 presents | ERL measured |
+|---|---|---|---|
+| US | 600 Ω | 600r | **34–39 dB** — matched |
+| UK | complex | 600r | **18–20 dB** — mismatched |
+
+So the echo really may be worse under UK, for a reason that is nothing to do
+with level. 1460b's arithmetic — that 7 dB of the change falls out of the
+relative measure alone — still holds, and the remaining 9–19 dB now has a
+candidate mechanism. **Neither reading is established**; what is established
+is that the earlier flat "artefact" claim was too strong.
+
+**AND THE PARADOX SHARPENS RATHER THAN RESOLVES.** The MATCHED case (US) has
+less echo and WORSE rates — 4800/4800/12000 against 14400/26400/33600. So
+echo is not what limits this path, which is consistent with findings 1206–1216
+having exonerated echo as a covariate for the receive deficit at n=22
+(p = 0.45).
+
+**WHAT TO CHANGE, and it is worth doing whatever the mechanism turns out to
+be**, because the box is currently mis-set for the line it is on:
+
+    voice-port 0/0
+     impedance complex2
+
+on each of 0/0 through 0/3. Then re-run the country comparison of 1459: with
+a UK impedance and a UK modem profile the hybrid is matched for the first
+time, and if the rates move again the level/echo question becomes answerable
+instead of confounded.
+
+Setting `input gain` and `output attenuation` EXPLICITLY is worth doing at the
+same time — not because 0 dB is wrong, but because a default that nobody chose
+is indistinguishable from a value that was considered, and this bench has now
+lost two diagnoses to settings nobody had read (the Supra's UK country profile
+and its `+MS` rejection, findings 1457 and 1458).
