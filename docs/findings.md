@@ -48742,3 +48742,59 @@ selects automatic again if anyone wants to repeat this.
 **n = 3 per arm.** The TX invariant moving is strong; treat the RX and ERL
 figures as indicative. `batch.sh` and `batchanalyse.py` exist for a real test
 and nothing below n = 20 should be quoted as a rate distribution.
+
+### 1460b. THE COUNTRY PROFILE CHANGES THE FAR END'S TRANSMIT LEVEL BY 7 dB — AND THAT IS NOT YET ENOUGH TO EXPLAIN THE RATES
+
+*Numbered 1460b because 1460 was taken by the parallel V.34 work; renumber on
+the next tidy if it grates.*
+
+Finding 1459 measured a large V.34 regression under the US country profile and
+did not explain it. `testbench/audiostats.py` was written for this and the
+levels are unambiguous. Per 20 ms frame, summarised by order statistics rather
+than peak, over the active window only:
+
+| | TX median | RX median | RX P99.9 | RX peak |
+|---|--:|--:|--:|--:|
+| UK, 3 calls | −23.7, −23.6, −23.4 | −23.7, −22.3, −22.5 | −15.8 | −8.0 to −8.3 |
+| US, 3 calls | −23.6, −22.4, −23.5 | **−16.6, −16.5, −20.7** | **−10.2** | **−0.1 to −3.1** |
+
+**Our transmit is identical between profiles. The far end's is 6–7 dB
+hotter under US.** So the country parameter set is changing the Supra's
+transmit level, which is what PTT limits differ over, and nothing else about
+our side moved.
+
+**WHAT THAT DOES NOT EXPLAIN.** Hotter should not be worse:
+
+- **It is not clipping.** `v34-us-1` reaches 32256 with **3 samples** at or
+  above 32000 out of 311,000 — 0.001%. The other two peak at 23040. UK peaks
+  at 12544. Hot, not clipped.
+- **It is not distortion.** Out-of-band energy (3500–3950 Hz) against in-band
+  (300–3400 Hz), measured only on frames within ±6 dB of the median so
+  silence and impulses cannot skew it: **−16.3, −16.3, −16.0 dB under UK
+  against −15.2, −16.3, −16.9 under US.** Indistinguishable.
+- **The ERL "improvement" is an artefact.** `echofit` reports 34–39 dB under
+  US against 18–20 under UK, which reads as far less echo. It is a RELATIVE
+  correlation measure, so a far end 7 dB louder mechanically raises it by
+  about 7 dB with no change in the echo itself. The rest is unexplained but
+  the number must not be quoted as an echo improvement.
+
+**SO THE MECHANISM IS OPEN.** What is established is that one country
+parameter — transmit level — moves by 7 dB and the receive rate collapses
+from 14400/26400/33600 to 4800/4800/12000, with equaliser error moving the
+same way. Candidates, none tested: our own AGC's operating point at −16 dBFS;
+gain staging in the VG204's FXS path; or the Supra's own RECEIVER doing worse
+under its US profile, which would also explain TX dropping 33600 → 31200 in
+all three calls.
+
+**THE RIGHT NEXT INSTRUMENT IS THE CHIRP.** `testbench/chirpdelay.py` measures
+echo delay and amplitude with a known signal, so it does not depend on the
+modem's own output being correlated with itself and is not fooled by a level
+change the way `echofit` is. Finding 1216's measurement of the round trip is
+the precedent.
+
+**AND NO RELAY CLICKS WERE FOUND.** `audiostats.py` flags frames more than
+12 dB above the median as impulses; all six calls report **zero**, 0.00% of
+frames. The concern was real — a relay closing can put an impulse 20–30 dB
+above the signal into the capture and wreck a peak-based level — but on this
+path it did not happen, and the median-based figures above would have been
+immune anyway.
