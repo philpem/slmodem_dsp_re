@@ -48910,3 +48910,144 @@ to be the lever for the receive deficit.
 permutation p precisely so one call cannot carry a conclusion — the instrument
 built after the equerr covariate moved from r = −0.787 to −0.263 on removing a
 single call. Three calls is a smoke test, not a measurement.
+
+======================================================================
+
+### 1466. THE RECEIVE DEFICIT IS OURS, NOT THE MODEM'S — TWO VENDORS, TWO FXS PORTS, THE SAME ONE-SIDED RESULT
+
+*Task #132, from the 30-call baseline `captures/base-cx2` plus archived
+Courier runs. No extra bench time: the second half was already on disk.*
+
+**OUR OWN DAEMON REPORTS THE ASYMMETRY**, so nothing rests on interpreting a
+vendor result code. Every connected call of the baseline:
+
+| | |
+|---|---|
+| `our_tx` | **33600 on 20 of 21** (one 26400) |
+| `our_rx` | median **14400**, range 4800–28800 |
+| `tx_baud` / `rx_baud` | 3429 / 3429 on every call |
+
+The symbol rate is identical in both directions, so this is a constellation
+and data-rate choice and not a symbol-rate fallback. In V.34 each receiver
+sets the FAR transmitter's rate from its own channel measurement — so our
+receiver measures a channel that the far modem's receiver, at the same moment
+on the same wire, measures as clean enough for the top rate.
+
+The far end corroborates: `CARRIER 33600`, `PROTOCOL: LAP-M`, `CONNECT
+33600/ARQ` on 21 of 22 calls with no variation at all. "The modem sends this
+result code when a 33600 bps data rate has been detected on the line"
+(Rockwell AT reference p. 3-41).
+
+**AND IT IS NOT THE SUPRA.** The archived `captures/ec3-courier-*` runs are a
+different modem, a different vendor and a different FXS port (0/1, ext 1902):
+
+| call | our RX | far end |
+|---|---|---|
+| ec3-courier-1 | 7200 | 28800/ARQ |
+| ec3-courier-2 | 14400 | 28800/ARQ |
+| ec3-courier-3 | 12000 | 28800/ARQ |
+| ec3-courier-4 | 19200 | 28800/ARQ |
+
+Same shape: the far end reaches its ceiling every call while we sit well
+below it. Those runs predate the `complex2` impedance and are not
+level-matched, so the *magnitude* is not comparable with the baseline — the
+asymmetry is what carries over, and it carries over completely. **A deficit
+that reproduces against a USR Courier is not explained by the SupraExpress
+being a poor unit**, and the Courier is also the modem that holds Bell 103 and
+passes data both ways (1456).
+
+**14400 IS A MODE, NOT A MEASUREMENT.** `n_pre` — the count of `V34EQU,
+equerr` reports before CONNECT, a proxy for how much Phase 3 training ran:
+
+| `n_pre` | calls | rates |
+|---|---|---|
+| 14 | 13 | 7200, 9600, 12000, and **14400 ten times** |
+| 15 | 4 | 12000, 14400, 14400, 14400 |
+| 19 | 1 | 7200 |
+| 20 | 1 | 26400 |
+| 23 | 1 | 28800 |
+| 30 | 1 | 14400 |
+| 39 | 1 | 4800 |
+| 61 | 1 | 26400 |
+
+Seventeen of twenty-three do the same fourteen-or-fifteen-report handshake,
+eleven of them land on exactly 14400, and their `equerr_pre` clusters at
+2000–2200 — just under the object's own 2571 threshold for that rate. A
+channel that genuinely varied would not spike like that. The boundary is
+clean: **no call with `n_pre` ≤ 19 ever exceeded 14400, and every rate above
+14400 came from a call with `n_pre` ≥ 20.** Extra training is necessary and
+not sufficient — 30, 39 and 61 reports gave 14400, 4800 and 26400.
+
+That reproduces 1209's "no single-pass call ever exceeded 14400 in eighteen"
+on a fourth independent sample.
+
+(Numbered 1466/1467 after `refcheck.py` caught a collision: 1461-1465 were
+already allocated by the parallel V.34 session. The numbers 1461 and 1462
+never referred to this work.)
+
+**WHAT THE BASELINE ITSELF READS**, for the record: 27 of 30 connected (90%),
+22 of 27 carried data both ways, `4800:1 7200:2 9600:1 12000:3 14400:17
+26400:2 28800:1`. No drift across the batch (r = −0.178, p = 0.38), so the
+calls are internally exchangeable. `equerr_pre` does NOT survive here (r =
+−0.473, worst LOO −0.432) where it survived on three earlier batches — and
+that is the mode again: with 17 of 27 calls on one value there is barely any
+variance left to correlate against.
+
+**WHAT THIS RETIRES.** The plan to swap the SupraExpress for another modem
+(#128) was written to ask "is the Supra the problem". Two archived batches
+against a different vendor already answer it, so that comparison is predicted
+null and is no longer worth 30 calls of bench time.
+
+**WHAT IS LEFT, and it is three separable things:** an asymmetric path (one
+direction of the SIP/RTP leg worse than the other), our receiver simply giving
+up on Phase 3 training where the Rockwell does not, or a level mismatch the
+far end tolerates and we do not — the VG204 has no `input gain` or `output
+attenuation` on any voice port and the Supra's S91 transmit attenuation has
+never been read. Against the first: echo lag and ERL are identical call to
+call (175.62 ms, ~19 dB) while the rate ranges over 4800–33600, and the
+`n_pre` mode is not what a varying channel looks like.
+
+**THE STOCK BLOB RAN THESE CALLS.** So if it is the receiver, it is the
+original datapump's own behaviour and not something the reconstruction did —
+which makes it a specification to match rather than a defect to find, and
+makes "what decides whether Phase 3 training continues" answerable in the
+object without the bench at all.
+
+======================================================================
+
+### 1467. `hw2hw.sh` NEVER TOUCHED THE SIP PATH — THE CISCO HAIRPINS THE CALL INSIDE ITSELF
+
+*Caught before it was used as the control experiment for 1461, where it would
+have "exonerated the path" by measuring a different one.*
+
+`hw2hw.sh` dials the Courier from the Supra with no slmodemd and no blob in
+the call, and its header claimed this ran "across the same PBX and the same
+SIP/RTP path". It does not. Both modems hang off the same VG204, and 1902
+matches
+
+    dial-peer voice 2 pots
+     destination-pattern 1902
+     port 0/1
+
+a local POTS peer far more specific than the `.T` voip peer that reaches
+Asterisk. **The gateway connects port 0/0 to port 0/1 internally.** Nothing
+leaves the box: no RTP, no jitter buffer, no codec round trip, none of the
+transport every other measurement on this bench includes. A result there is
+about the VG204's own analogue and companding stages, and comparing it against
+an slmodemd run compares two different channels.
+
+The script remains a legitimate ATA loopback test. It is not the control
+experiment its name suggests, and its header now says so.
+
+**WHAT THIS PROMOTES.** Forcing the media out of the gateway and back needs
+our own SIP endpoint to answer 1901, dial 1902 and relay RTP between the two
+legs — which is #94, and which was on the list as a convenience. It is now the
+only way to put two hardware modems on the path our calls actually take, so it
+is the gate on deciding 1461's first branch.
+
+**THE GENERAL LESSON, and this bench has now paid it twice.** A control
+experiment that shares a component with the thing under test is not a control.
+The first time was `AT&Q0`, whose failure to connect was read as evidence
+about error control when direct-mode async cannot complete a 300 bps call from
+a 115200 DTE (see #124). Both were refutations that could not have worked,
+believed because the command ran and produced a plausible-looking result.
