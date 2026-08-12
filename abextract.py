@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""abextract.py -- pull the rate decision out of a run's logs, correctly.
+
+    abextract.py captures/pab-*-*.run.log > captures/preemph-ab.csv
+
+WHY THIS EXISTS RATHER THAN A GREP IN THE RUNNER.  The obvious
+`grep 'equerr = [0-9]*'` is wrong and wrong in a way that looks plausible: a
+V.34 call logs `V34EQU, equerr = N` about 57 times as the equaliser trains,
+and `V34DATARATE, equerr = N,preerr=M` exactly once, when the rate is chosen.
+Taking the first match gets an early training sample -- 30431 on the first
+call of the pre-emphasis A/B, against a decision value in the low thousands --
+and 30431 next to a 28800 connection reads as a contradiction of the object's
+own threshold table rather than as a measurement error.
+
+So the anchor here is the full `V34DATARATE` line, which appears once and
+carries both figures together.
+
+THE PRE-EMPHASIS INDEX IS PER BAUD RATE.  `V34PREEMPHASIS, - index is N,
+baudrate= B` is emitted once for each candidate rate, ten times a call. Only
+the one at the baud rate actually used means anything, and this bench runs
+3429 throughout, so that is what is taken -- and the symbol rate is read from
+the log rather than assumed, so a call that fell back is not silently
+mislabelled.
+"""
+
+import csv
+import os
+import re
+import sys
+
+
+def read(path):
+    try:
+        return open(path, "rb").read().decode("latin-1")
+    except OSError:
+        return ""
+
+
+def main():
+    w = csv.writer(sys.stdout)
+    w.writerow(["call", "arm", "connect", "our_tx", "our_rx",
+                "equerr", "preerr", "preemph", "tx_baud", "rx_baud"])
+    for run in sorted(sys.argv[1:]):
+        base = run[:-len(".run.log")] if run.endswith(".run.log") else run
+        name = os.path.basename(base)
+        arm = name.split("-")[1] if "-" in name else ""
+        t = read(run)
+        sl = read(base + ".slmodemd.log")
+
+        m = re.search(r"pty +CONNECT (\d+)", t)
+        rx = m.group(1) if m else ""
+        m = re.search(r"TxRate: *(\d+)", t)
+        tx = m.group(1) if m else ""
+
+        # The one line that carries the decision.  Not `V34EQU`.
+        m = re.search(r"V34DATARATE, equerr = (\d+),preerr=(\d+)", sl)
+        eq, pe = (m.group(1), m.group(2)) if m else ("", "")
+
+        m = re.search(r"setfinalrate, txbaudrate = (\d+),\s*rxbaudrate = (\d+)", sl)
+        txb, rxb = (m.group(1), m.group(2)) if m else ("", "")
+
+        pp = ""
+        if txb:
+            m = re.search(r"V34PREEMPHASIS, - index is (\d+), baudrate= %s" % txb, sl)
+            if m:
+                pp = m.group(1)
+
+        w.writerow([name, arm, "1" if rx else "0", tx, rx, eq, pe, pp, txb, rxb])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
