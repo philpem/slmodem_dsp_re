@@ -50431,7 +50431,7 @@ false negative, so check with `objdump -r` before concluding a symbol is dead.
 
 `MRFv22_COFFS` is 270 `short`s and reads, in natural order, as one symmetric
 lowpass impulse response — palindromic about the pair at [134] and [135],
-peak 10239, first zero crossing near [78]. 270 = 9 phases x 30 taps, and the
+peak 10239, first zero crossing between [76] and [77]. 270 = 9 phases x 30 taps, and the
 filter's phase update settles which is which:
 
 	phase += 20;  need = 0;
@@ -50539,3 +50539,122 @@ anything lands. It is `readelf -rW` restricted to `.rel.text`, each function's
 relocation targets intersected with `closure.py --missing`, and the
 "already-written" set taken from `src/` rather than from `build/` so it
 answers correctly on an unbuilt tree.
+======================================================================
+
+### 1544. THE V.22 TRANSMIT PULSE SHAPER: FORTY PHASES, THREE TAPS, AND THE CARRIER FOLDED INTO THE COEFFICIENTS
+
+*Phase 6 (V.22/V.22bis), `v22_pps.c` — the author's translation-unit name,
+from the FILE symbol at index 481. Written, tested and committed as
+`src/pump/v22/v22_pps.c`.*
+
+`ModDataV22` (0x8e310) is the whole pipeline in nine instructions:
+`FPM_SMC_encoder(dp + 0x48, dp + 0xa0, bits, n)` and then
+`V22_PPS_filter(dp + 0x78, dp + 0xa0, out, n)` — bits to constellation points
+in a symbol ring, then that ring to samples. PPS is the second half.
+
+**The shape is `v22_mrf`'s** (1540): an 8-or-16-byte configuration, then
+`need`, `phase`, `widx`, `history_len`, then buffers; a SLIDING history of
+twice `history_len` with a memcpy-down instead of a ring; and an init that
+permutes its coefficients in place by the same rule (1541) with 40 phases and
+3 taps in place of 9 and 30. So `PPSv22_COFFS`, 120 entries, is 40 x 3.
+
+**The rate.** Each output does `phase += cfg.step + 3` and a wrap past 39 is
+what consumes a symbol, so outputs per symbol are `40 / (step + 3)`.
+`PPSv22_CFG` is sixteen bytes of zero, nothing in the object writes `step`,
+and `V22FP_create` patches only the two coefficient pointers in its stack
+copy — so the step is 3 and the ratio is **40/3 = 13.33 outputs per symbol**,
+which is 600 baud at 8000 samples/s.
+
+**Two filters, subtracted.** The configuration holds two coefficient arrays,
++0x04 and +0x08, and the state holds two history buffers and two constellation
+maps. Every output runs both three-tap filters and returns
+`(short)((acc_i >> 15) - (acc_q >> 15)) << 2`. That is I*cos - Q*sin with the
+carrier already inside the two coefficient sets — the same trick `v22_mrf`
+uses on the way back, where `V22FP_create` multiplies the prototype by
+`FPM_TONE_generate2`'s output before handing it over (1542). The shaper
+modulates and interpolates in one pass; the MRF demodulates and resamples in
+one pass.
+
+**Three things a caller has to know**, all of them in
+`include/dsplib/v22_pps.h`:
+
+  - init does NOT set `imap`/`qmap` at +0x20 and +0x24. `V22FP_create` writes
+    them itself at 0x87e8d and 0x87e93, with `SMCv22_IMAP_1200BPS` and
+    `SMCv22_QMAP_1200BPS`. A caller that only calls init leaves two null
+    pointers the filter dereferences on its first symbol.
+  - `count` is in SYMBOLS and the return is in SAMPLES, so the output buffer
+    has to be sized at thirteen times the input and not equal to it.
+  - both coefficient arrays are rewritten in place, so neither can be
+    `PPSv22_COFFS` itself, which is `.rodata`.
+
+**A contrast worth keeping.** `PPSv22_CFG` and `V22_MRF_CFG` are the same
+idea — an all-zero template whose pointers the caller patches — and they are
+in different sections: `PPSv22_CFG` is `const`, so `.rodata`; `V22_MRF_CFG`
+is not, so `.bss`. Reproducing that needs an explicit `= { 0, ... }` on the
+non-const one, since GCC's default `-fcommon` would otherwise put it in
+COMMON rather than `.bss`.
+
+======================================================================
+
+### 1545. THE TWO V.22 RESAMPLERS DISAGREE ABOUT THEIR OWN COEFFICIENT INDEXING, AND ONLY ONE OF THEM IS RIGHT
+
+*Same session. Recorded as D299; D298 is the other half.*
+
+Both `V22_MRF_filter` and `V22_PPS_filter` have two convolution branches, one
+for the filled window and one for the startup case where `widx` has not
+reached `history_len`. In `v22_mrf` the two differ ONLY in the history base:
+`history + widx - hlen` against `history + 0`, with `coeff + phase * hlen` in
+both. In `v22_pps` the startup branch also changes the coefficient base, to
+`coeff + phase`.
+
+After init the array is grouped as `[phase * taps + tap]`, so `coeff + phase`
+is only the right base when `taps` is 1. For `v22_pps`, `taps` is 3, and the
+startup outputs read three entries straddling whatever group boundary
+`phase` happens to land near.
+
+It is reachable — about forty outputs, because `widx` advances once per
+symbol and there are 13.33 outputs per symbol — and it is not masked by the
+zeroed history for all of them: the first two symbols leave two of the three
+taps multiplying zero, but the third symbol onwards is a real window read
+with mixed-phase coefficients.
+
+**This was worth stating carefully because it is the kind of thing a
+reconstruction quietly "fixes".** The mutation that makes the two branches
+agree — `ci[phase * hlen + k]` in both — fails 26 checks in each of
+`t_v22_pps.c`'s three drive patterns. So the differential tier sees it, the
+test was shown to fire on it, and the object's version is what is committed.
+
+======================================================================
+
+### 1546. THE SYMBOL RING BETWEEN `FPM_SMC_encoder` AND `V22_PPS_filter` NEEDED A HOME, AND IT IS NOT THE V.22 PUMP'S HEADER
+
+*Same session. A "one type, one home" decision, recorded because the next
+person to touch `fpm_smc.c` will find a header already there.*
+
+`V22_PPS_filter`'s second argument is not part of the PPS state: it is the
+object `ModDataV22` passes to `FPM_SMC_encoder` first and to the shaper
+second. Three fields are established, and only three:
+
+	+0x08  short *sym     loaded at V22_PPS_filter +0x8c, used at +0xc4 --
+	                      `movzbl (%ebx,%edi,2)`, a BYTE load at
+	                      `base + idx * 2`, so the stride is two and the
+	                      value used is the low byte
+	+0x0e  short rd       the index of that load, read at +0x84 and written
+	                      back at +0x222, advanced by one and wrapped to
+	                      zero on reaching
+	+0x10  short size     the bound of that wrap, read at +0x88; also read
+	                      by FPM_SMC_encoder at 0xa9c33
+
+`+0x00..+0x07` and `+0x0c` are not established. `FPM_SMC_encoder` reads +0x0c
+as a signed short at 0xa9c28, which is where a write cursor would sit, but
+that function has not been traced and a plausible position is not evidence —
+so they are named as padding. `sizeof` is not established either; nothing
+seen so far allocates one.
+
+**Where it went, and why.** `struct fpm_smc_syms` is defined in
+`include/dsplib/fpm_smc.h`, which is otherwise empty. Putting it in
+`v22_pps.h` would have made a future `fpm_smc.c` include the V.22 pump's
+header to get its own type, and the rule is one definition, so the second
+user could not simply repeat it. The header says in full which access
+established which field, so that the person who writes `fpm_smc.c` can extend
+it without having to re-derive the three fields that are already pinned.
