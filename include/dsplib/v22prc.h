@@ -39,6 +39,11 @@
 #define V22FP_CARRIER		0x130	/* int,   returned by CarrierDetect   */
 #define V22FP_QUALITY		0x186	/* unsigned short, GetSignalQuality   */
 
+/* Written only by SetAdaptEqV22; see the note on its three modes. */
+#define V22FP_EQ_ADAPT		0x10	/* int                                */
+#define V22FP_EQ_MODE		0x16c	/* short                              */
+#define V22FP_EQ_EXTRA		0x180	/* int, mode 3 only                   */
+
 /*
  * The datapump's block, in samples.  TxNOP emits exactly this many and then
  * reports the count, so the constant is in the code and not a parameter --
@@ -101,5 +106,20 @@ unsigned short GetSignalQuality(void *modem);
  * than as a contradiction.
  */
 void TxClockSync(void *modem);
+
+/*
+ * Equaliser adaptation control.  Three live modes and a silent default:
+ *
+ *   1  stop adapting              EQ_ADAPT = 0
+ *   2  adapt                      EQ_ADAPT = 1, EQ_MODE = 0
+ *   3  adapt, second mode         EQ_ADAPT = 1, EQ_MODE = 1, EQ_EXTRA = 1
+ *   anything else                 nothing at all, silently
+ *
+ * `mode` is loaded with `movzwl`, so it is sixteen bits wide and unsigned;
+ * a caller passing 0x10002 selects nothing, not mode 2.  Note also that mode
+ * 3 sets EQ_EXTRA and mode 2 does not CLEAR it, so the two are not
+ * symmetrical and the order the caller uses them in matters.
+ */
+void SetAdaptEqV22(void *modem, unsigned short mode);
 
 #endif /* DSPLIB_V22PRC_H */

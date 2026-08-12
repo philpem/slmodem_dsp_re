@@ -187,6 +187,38 @@ GetSignalQuality(void *modem)
 	return (unsigned short)(-32768 - (int)FIELD_USHORT(fp, V22FP_QUALITY));
 }
 
+/*
+ * Three modes, a `switch` in the object (compare, jg, dec, je -- GCC's shape
+ * for a dense switch of three), and no default action.  Written as a switch
+ * for the same reason.
+ */
+void
+SetAdaptEqV22(void *modem, unsigned short mode)
+{
+	void *fp;
+
+	switch (mode) {
+	case 1:
+		fp = FIELD_PTR(modem, V22_OBJ_FP);
+		FIELD_INT(fp, V22FP_EQ_ADAPT) = 0;
+		break;
+	case 2:
+		fp = FIELD_PTR(modem, V22_OBJ_FP);
+		FIELD_INT(fp, V22FP_EQ_ADAPT) = 1;
+		FIELD_SHORT(fp, V22FP_EQ_MODE) = 0;
+		break;
+	case 3:
+		fp = FIELD_PTR(modem, V22_OBJ_FP);
+		FIELD_INT(fp, V22FP_EQ_ADAPT) = 1;
+		FIELD_SHORT(fp, V22FP_EQ_MODE) = 1;
+		/* Set here and cleared by nothing -- mode 2 leaves it alone. */
+		FIELD_INT(fp, V22FP_EQ_EXTRA) = 1;
+		break;
+	default:
+		break;
+	}
+}
+
 void
 TxClockSync(void *modem)
 {

@@ -38,6 +38,7 @@ extern int ref_CarrierDetect(void *modem);
 extern int ref_SignalDetect(void *modem);
 extern unsigned short ref_GetSignalQuality(void *modem);
 extern void ref_TxClockSync(void *modem);
+extern void ref_SetAdaptEqV22(void *modem, unsigned short mode);
 
 /* Comfortably past V22FP_QUALITY at 0x186. */
 #define FP_SIZE		0x200
@@ -364,6 +365,71 @@ run_clocksync(void)
 	return rc;
 }
 
+/*
+ * SetAdaptEqV22 over the WHOLE 16-bit mode domain, because the interesting
+ * part is what it does NOT do: three modes act and 65,533 values silently do
+ * nothing.  A rewrite with a `default` that clears something, or with a
+ * signed comparison, differs only outside 1..3 -- so sampling 1..3 would
+ * prove nothing at all.
+ *
+ * The three fields are pre-loaded with a marker before each call, so "left
+ * alone" and "written with the value the marker happened to be" are
+ * distinguishable.  That is what shows mode 2 not clearing EQ_EXTRA.
+ */
+static int eq_acted, eq_ignored;
+
+static int
+run_adapteq(void)
+{
+	struct fixture a, b;
+	int rc, v;
+
+	diff_begin("SetAdaptEqV22, whole 16-bit mode domain");
+	for (v = 0; v < 0x10000; v++) {
+		fixture_init(&a);
+		fixture_init(&b);
+		put_int(a.fp, V22FP_EQ_ADAPT, MARK);
+		put_int(b.fp, V22FP_EQ_ADAPT, MARK);
+		put_short(a.fp, V22FP_EQ_MODE, (short)MARK);
+		put_short(b.fp, V22FP_EQ_MODE, (short)MARK);
+		put_int(a.fp, V22FP_EQ_EXTRA, MARK);
+		put_int(b.fp, V22FP_EQ_EXTRA, MARK);
+
+		ref_SetAdaptEqV22(&a, (unsigned short)v);
+		SetAdaptEqV22(&b, (unsigned short)v);
+
+		diff_eq_obj("mode %ld: the whole fp object", unsigned char,
+			    b.fp, a.fp, v);
+
+		if (*(int *)(void *)(a.fp + V22FP_EQ_ADAPT) == MARK)
+			eq_ignored++;
+		else
+			eq_acted++;
+	}
+	rc = diff_end();
+
+	/*
+	 * And the asymmetry, asserted on the ORIGINAL: mode 3 sets EQ_EXTRA,
+	 * mode 2 does not clear it.  Stated in the header comment, so it is
+	 * checked here rather than believed.
+	 */
+	fixture_init(&a);
+	put_int(a.fp, V22FP_EQ_EXTRA, MARK);
+	diff_begin("SetAdaptEqV22 mode 2 leaves EQ_EXTRA alone");
+	ref_SetAdaptEqV22(&a, 2);
+	diff_eq_int("EQ_EXTRA after mode 2 (%ld)",
+		    *(int *)(void *)(a.fp + V22FP_EQ_EXTRA), MARK, 0);
+	ref_SetAdaptEqV22(&a, 3);
+	diff_eq_int("EQ_EXTRA after mode 3 (%ld)",
+		    *(int *)(void *)(a.fp + V22FP_EQ_EXTRA), 1, 0);
+	ref_SetAdaptEqV22(&a, 2);
+	diff_eq_int("EQ_EXTRA after mode 3 then 2 (%ld)",
+		    *(int *)(void *)(a.fp + V22FP_EQ_EXTRA), 1, 0);
+	rc |= diff_end();
+
+	return rc;
+}
+
 /* --------------------------------------------------------------------- */
 
 int
@@ -380,6 +446,7 @@ main(void)
 	rc |= run_status();
 	rc |= run_quality();
 	rc |= run_clocksync();
+	rc |= run_adapteq();
 
 	/*
 	 * Guards, so none of the above can go vacuous.  A predicate that only
@@ -398,6 +465,8 @@ main(void)
 		    1, 0);
 	diff_eq_int("GetSignalQuality wrapped (%ld)", quality_wrapped > 0, 1, 0);
 	diff_eq_int("TxClockSync overflowed (%ld)", clock_overflowed > 0, 1, 0);
+	diff_eq_int("SetAdaptEqV22 acted (%ld)", eq_acted > 0, 1, 0);
+	diff_eq_int("SetAdaptEqV22 ignored a mode (%ld)", eq_ignored > 0, 1, 0);
 	rc |= diff_end();
 
 	return rc;

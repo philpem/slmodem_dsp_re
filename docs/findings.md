@@ -49672,3 +49672,70 @@ returns the new value — 20 ms is 160 samples at 8 kHz, the same block
 `+0x54`: `+0x78` is the transmit clock, `+0xec` the signal flag, `+0x12a` the
 baud figure that `+0x78` is three times, `+0x130` the carrier flag, `+0x186`
 the quality figure.
+
+### 1565. THE V.22 DATAPUMP IS A CLEAN DAG, AND THIS IS THE ORDER IT HAS TO BE WRITTEN IN
+
+`closure.py --missing` says what is left; it does not say what is *reachable*
+today. Because `symmap.py` renames every defined blob symbol to `ref_*`, a
+function whose callee we have not written leaves an undefined symbol and
+**all** test binaries fail to link, not just its own — so the closure has to
+be drained leaf-first, and knowing which leaves are exposed is the whole
+scheduling problem.
+
+Intersecting each unwritten function's outgoing `R_386_PC32` targets with the
+unwritten set answers it exactly. Measured on this branch at `3ec7899`, with
+`v22_iir`, `v22rxtab` and `v22prc` landed and the four parallel branches not
+yet merged:
+
+**Writable today — 25 functions, 5,524 bytes.** Their only dependencies are
+already reconstructed:
+
+    V22_PPS_filter  V22_MRF_filter  V22_FSE_init  V22_PPS_init  V22_MRF_init
+    V22_FSE_free  V22_PPS_free  V22_MRF_free  V22_SRE_free
+    FPM_SMC_encoder  FPM_SMC_init  FPM_SDM_scrambler  FPM_SDM_descrambler
+    FPM_SDM_init  FPM_TONE_generate2
+    Detect_v22  Detect_Retrain  Detect_Rmloop2_ACK  Detect_1s
+    SetAdaptEqV22  MakeTxData  V22_status  V22FP_modem
+    dp_v22_init  dp_v22_exit
+
+Four of them — `Detect_Retrain`, `Detect_Rmloop2_ACK`, `Detect_1s`,
+`SetAdaptEqV22`, 791 bytes — have **no relocations at all**: they call
+nothing and reference no data. `FPM_SMC_*` and `FPM_SDM_*` are the same.
+
+**The shape of what is blocked.** The dependency graph is a DAG four deep and
+it bottoms out fast:
+
+    tier 0  the tables, and the call-free leaves above
+    tier 1  FPM_atan -> FPM_atan_table
+            V22_SRE_init -> SREv22_COFFS
+            FSEv22_decision12/24 -> DECv22_* and SMCv22_*
+            ScrambleDataV22 -> FPM_SDM_scrambler
+            ModDataV22 -> FPM_SMC_encoder, V22_PPS_filter
+    tier 2  V22_SRE_recover, V22_FSE_receive -> FPM_atan
+            SetRxRate -> FSEv22_decision12/24
+            ResetRx -> V22_FSE_init, V22_SRE_init
+            V22FP_create -> the whole of tier 0 and 1
+            V22FP_delete -> the four _free functions
+    tier 3  DemodDataV22 -> V22_FSE_receive, V22_MRF_filter, V22_SRE_recover
+            v22_create -> V22FP_create;  v22_delete -> V22FP_delete
+    tier 4  the eight state functions -- v22_data, connect_1200, connect_2400,
+            v22_retrain, v22_org_rmloop2, v22_ans_rmloop2, v22_local_loop,
+            v22_answer, v22_originate -- 13,301 bytes, every one of which
+            needs DemodDataV22 and the Set*Rate pair
+            v22_process -> V22FP_modem
+
+**Nothing in V.22 is deep.** The longest chain is five links and the widest
+fan-in is `V22FP_create`'s eighteen. There is no `v34handshak` here — the
+largest single function is 2,655 bytes — so the phase is bounded by the
+number of functions, not by the size of any one of them, which is the shape
+that parallelises well. `V22_PROTOCOL`'s seven function pointers are the eight
+state functions minus one, so that table lands last, with them.
+
+**The one thing this measurement cannot see** is a call the original inlined,
+and a data reference that closure counts but no path takes. It is a link-time
+lower bound on what must exist, not a claim about run-time reachability.
+
+The script that produces this is eight lines of `readelf -rW` intersected with
+`closure.py --missing` output; it is worth re-running rather than trusting
+this list, because every landed function moves items from the second list to
+the first.
