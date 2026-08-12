@@ -49007,6 +49007,36 @@ never been read. Against the first: echo lag and ERL are identical call to
 call (175.62 ms, ~19 dB) while the rate ranges over 4800–33600, and the
 `n_pre` mode is not what a varying channel looks like.
 
+**THE PATH IS LEVEL-SYMMETRIC, MEASURED OVER ALL 27 CALLS.** `audiostats.py`
+per direction, mean ± sd across the batch:
+
+| | TX (we send) | RX (we receive) | RX−TX |
+|---|---|---|---|
+| median | −23.29 ± 0.62 | −22.36 ± 0.62 | **+0.93 dB** |
+| P90 | −22.10 ± 0.95 | −21.49 ± 0.15 | +0.61 dB |
+| P99.9 | −15.10 ± 0.00 | −15.71 ± 0.04 | −0.61 dB |
+| crest | 13.13 ± 0.52 | 15.25 ± 2.88 | +2.12 dB |
+
+Under a decibel apart in every order statistic, and **zero relay clicks in
+every call** (0.00% of frames above the +12 dB threshold, all 27). Whatever is
+one-sided, it is not gross level.
+
+**AND THE AUDIO DOES NOT DISTINGUISH A FAST CALL FROM A SLOW ONE**, which is
+the sharper statement:
+
+| RX statistic | >14400 (n=3) | =14400 (n=17) | <14400 (n=7) |
+|---|---|---|---|
+| median | −22.20 | −22.47 | −22.16 |
+| P99.9 | −15.70 | −15.71 | −15.74 |
+| crest | 13.87 | 15.61 | 14.99 |
+
+A 6:1 spread in delivered rate over a receive signal that measures the same to
+within a quarter of a decibel. This is 1460d's conclusion at n = 27 instead of
+n = 3, now split by outcome: **the level statistics have no signal about the
+rate in them at all.** It does not rule out an asymmetry in SNR, group delay
+or nonlinearity — those are not what these numbers see — but it does close the
+simplest version of branch 1.
+
 **THE STOCK BLOB RAN THESE CALLS.** So if it is the receiver, it is the
 original datapump's own behaviour and not something the reconstruction did —
 which makes it a specification to match rather than a defect to find, and
