@@ -49368,3 +49368,67 @@ thing itself, and nothing else on this bench can produce one.
 bug-for-bug by default; this goes on the deliberate-fix list beside the 8000
 samp/s work and the floating-point defects, off by default, with the
 differential tier defining bug-compatible behaviour. See D53.
+
+======================================================================
+
+### 1472. V.34 ON REAL HARDWARE WITH OUR DATAPUMP — CONNECT, DATA BOTH WAYS, AND THE SAME NUMBERS THE BLOB PRODUCES
+
+*Task #89. Bell 103 was done in an earlier session; this is V.34, which is
+the one that matters, and it is the reconstruction's first end-to-end V.34
+call against a real modem.*
+
+    BINARY: claude_re/build/hybrid-vpcm/slmodemd
+    tty  CONNECT 28800/ARQ/V34/LAPM/V42BIS
+    pty  CONNECT 12000
+    === DATA BOTH WAYS: PASS
+
+**THE BUILD.** `tools/hybrid.sh` intersects our objects' global definitions
+with the blob's, `objcopy --weaken-symbol`s every collision into a COPY, and
+checks the original's md5 before and after. For the V.PCM path the collision
+set is **616 symbols**, mostly tables, where the datapump looks like a handful
+of functions — which is why it must be computed and never hand-listed. In the
+linked binary `v34handshak`, `VPcmV34Create`, `adaptecho` and `agcadapt` are
+all ours by size.
+
+**TWO THINGS THE LINK TAUGHT.** `vpcm_create` is **LOCAL (`t`) in the blob**,
+so it never entered the collision set and its intra-object callers cannot be
+redirected at all — CLAUDE.md's rule about absent relocations, met in the
+wild. It does not matter here because `vpcm_create` reaches `VPcmV34Create`
+through a real `R_386_PC32`, and that one IS ours. And `VPcmXfCreate.o` has to
+be left out: the fork's `dp_vpcm_shim.c` defines a strong `VPCMXF_Create` of
+its own and `modem_main.c` calls `dp_vpcm_shim_init`, so the shim stays and
+the fork's blob is the base (it carries the `__blob_VPCMXF_Create` alias the
+shim forwards to; its `.text` is byte-identical to ours, `forkblob.md`).
+
+**AND IT BEHAVES LIKE THE BLOB, which is the whole contract.** Same modem,
+same AT settings, same extension:
+
+| | equerr | preerr | pre-emphasis @3429 | rates |
+|---|--:|--:|--:|---|
+| **ours** | 3452 | 748 | 7 | 28800 / 12000 |
+| stock, call 1 | 3187 | 731 | 7 | 28800 / 12000 |
+| stock, call 2 | 2544 | 935 | 7 | 28800 / 14400 |
+| stock, call 3 | 2762 | 621 | 7 | 28800 / 12000 |
+
+`preerr` lands mid-range, the pre-emphasis index is the same 7, and the rate
+outcome is one the blob produces two calls in three. `equerr` at 3452 is a
+little above the blob's observed 2544–3187, and that is NOT yet a claim of
+anything: n = 1 on each side, and this call was taken at load average ~5 with
+reconstruction agents building, where the stock calls were taken on an idle
+machine.
+
+**WHAT IS ESTABLISHED AND WHAT IS NOT.** Established: our V.34 datapump
+negotiates V.34 with a USR Courier over SIP, carries data both ways, and
+produces the blob's characteristic numbers rather than something else.
+NOT established: any quantitative equerr comparison. That needs matched
+conditions on an idle machine, and it is the measurement finding 1471's
+pre-emphasis experiment depends on.
+
+**WHY THAT EXPERIMENT IS NOW POSSIBLE AT ALL.** D53's off-by-one makes
+pre-emphasis index 0 unreachable, so this modem has never asked for a flat
+line (1471). The fix is one branch, behind `DSPLIB_REPRODUCE_BUGS`. With this
+build, the same call can be made twice differing only in that branch, on real
+hardware, comparing `equerr` and the negotiated rate — and `ATI11` on the far
+end reports the applied pre-emphasis per direction, so the change is visible
+from both sides. Nothing else on this bench can produce that, because the blob
+cannot be recompiled with a branch flipped.
