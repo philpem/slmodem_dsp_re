@@ -44,6 +44,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/dtmf_rx.h"
 
 extern int ref_band_pass(short *samples, short count, void *rx);
@@ -51,6 +52,8 @@ extern int ref_DTMF_MTD_detect(const short *samples, short count, void *rx);
 extern int ref_dtmf_modem(const short *samples, unsigned short count,
 			  void *rx);
 extern void *ref_reset_dtmf(void *rx);
+extern void *ref_create_cid_dtmf(void *rx);
+extern unsigned int ref_dsplibs_debug_level;
 
 extern const short ref_MTD1_COEF_8000[], ref_MTD2_COEF_8000[];
 extern const short ref_MTD3_COEF_8000[], ref_MTD4_COEF_8000[];
@@ -98,24 +101,30 @@ static int seen_modem_ret[8];		/* indexed by result + 2 */
 static int seen_string;
 static int seen_aligned;
 static int seen_unaligned;
+static int seen_reset_changed;		/* the reset had something to clear */
 
 /* ------------------------------------------------------------------ */
 
+/*
+ * The object comparison on its own, so that the two HEAP objects
+ * `create_cid_dtmf(NULL)` hands back can go through the same normalisation as
+ * the two stack ones -- they have no guard region and are not `struct box`.
+ */
 static void
-compare(const char *what, const struct box *a, const struct box *b, long tag)
+compare_obj(const char *what, struct dtmf_rx *a, struct dtmf_rx *b, long tag)
 {
-	struct dtmf_rx ca = a->rx;
-	struct dtmf_rx cb = b->rx;
+	struct dtmf_rx ca = *a;
+	struct dtmf_rx cb = *b;
 	char buf[128];
 
 	/*
 	 * Same PLACE, not same address: one arm of dtmf_modem points bufp at
-	 * a stack array, which is per-side by construction.
+	 * a stack array, which is per-side by construction, and two separately
+	 * allocated objects never agree on the address of their own window.
 	 */
 	snprintf(buf, sizeof(buf), "%s: bufp points at the window (%%ld)",
 		 what);
-	diff_eq_int(buf, ca.bufp == a->rx.samples, cb.bufp == b->rx.samples,
-		    tag);
+	diff_eq_int(buf, ca.bufp == a->samples, cb.bufp == b->samples, tag);
 	snprintf(buf, sizeof(buf), "%s: bufp is set (%%ld)", what);
 	diff_eq_int(buf, ca.bufp != 0, cb.bufp != 0, tag);
 	ca.bufp = 0;
@@ -123,6 +132,14 @@ compare(const char *what, const struct box *a, const struct box *b, long tag)
 
 	snprintf(buf, sizeof(buf), "%s: object after %%ld", what);
 	diff_eq_obj(buf, struct dtmf_rx, &ca, &cb, tag);
+}
+
+static void
+compare(const char *what, struct box *a, struct box *b, long tag)
+{
+	char buf[128];
+
+	compare_obj(what, &a->rx, &b->rx, tag);
 	snprintf(buf, sizeof(buf), "%s: guard after %%ld", what);
 	diff_eq_int(buf, memcmp(a->guard, b->guard, GUARD), 0, tag);
 }
@@ -342,6 +359,116 @@ tables(void)
 
 /* ------------------------------------------------------------------ */
 
+/*
+ * WHAT reset_dtmf AND create_cid_dtmf MUST LEAVE ALONE.
+ *
+ * A distinctive pattern in each such field, stamped on both sides before the
+ * call and checked afterwards on the REFERENCE side.  The differential
+ * comparison already fails if our clearing loop runs one iteration too far --
+ * but only while the seeded tail happens to be non-zero, so the loop bound is
+ * pinned here rather than incidentally observed.  `digits` is 20 bytes and
+ * the object clears 16 of them (D298); `pre_low` is D251.
+ */
+#define KEEP_DIGIT(k)	((char)(0x41 + (k)))
+#define KEEP_PRE_LOW_0	0x1234
+#define KEEP_PRE_LOW_1	0x5678
+#define KEEP_ALIGNED	0x7ace
+#define KEEP_SAMP_0	0x0123
+#define KEEP_SAMP_N	0x4567
+#define KEEP_HOLD_0	0x2345
+#define KEEP_HOLD_N	0x6789
+
+static void
+stamp_keeps(struct dtmf_rx *rx)
+{
+	int k;
+
+	for (k = 16; k < 20; k++)
+		rx->digits[k] = KEEP_DIGIT(k);
+	rx->pre_low[0] = KEEP_PRE_LOW_0;
+	rx->pre_low[1] = KEEP_PRE_LOW_1;
+	rx->aligned = KEEP_ALIGNED;
+	rx->samples[0] = KEEP_SAMP_0;
+	rx->samples[299] = KEEP_SAMP_N;
+	rx->hold[0] = KEEP_HOLD_0;
+	rx->hold[99] = KEEP_HOLD_N;
+}
+
+#define CK(what, rx, field, want, tag)					\
+	do {								\
+		char ckbuf[160];					\
+									\
+		snprintf(ckbuf, sizeof(ckbuf), "%s: " #field " (%%ld)",	\
+			 (what));					\
+		diff_eq_int(ckbuf, (long)((rx)->field), (long)(want),	\
+			    (tag));					\
+	} while (0)
+
+/* Every field the reset writes, and the two it is given rather than choosing. */
+static void
+check_reset_sets(const char *what, struct dtmf_rx *rx, short want_rate,
+		 short want_sens, long tag)
+{
+	char buf[160];
+	int k;
+
+	CK(what, rx, state, 1, tag);
+	CK(what, rx, ndigits, -1, tag);
+	CK(what, rx, last_digit, -1, tag);
+	CK(what, rx, stable, 0, tag);
+	CK(what, rx, quiet, 0, tag);
+	CK(what, rx, level, 1, tag);
+	CK(what, rx, nsamples, 0, tag);
+	CK(what, rx, f000, 0, tag);
+	CK(what, rx, f004, 0, tag);
+	CK(what, rx, f008, 0, tag);
+	CK(what, rx, bp_state[0], 0, tag);
+	CK(what, rx, bp_state[1], 0, tag);
+	CK(what, rx, pre_high[0], 0, tag);
+	CK(what, rx, pre_high[1], 0, tag);
+	CK(what, rx, f354[0], 0, tag);
+	CK(what, rx, f354[1], 0, tag);
+	CK(what, rx, f35c[0], 0, tag);
+	CK(what, rx, f35c[1], 0, tag);
+	CK(what, rx, rate, want_rate, tag);
+	CK(what, rx, sens, want_sens, tag);
+
+	snprintf(buf, sizeof(buf), "%s: bufp is the window (%%ld)", what);
+	diff_eq_int(buf, rx->bufp == rx->samples, 1, tag);
+
+	for (k = 0; k < 8; k++) {
+		snprintf(buf, sizeof(buf), "%s: tone_state[%%ld] cleared", what);
+		diff_eq_int(buf, rx->tone_state[k][0] | rx->tone_state[k][1],
+			    0, k);
+	}
+	for (k = 0; k < 16; k++) {
+		snprintf(buf, sizeof(buf), "%s: digits[%%ld] cleared", what);
+		diff_eq_int(buf, rx->digits[k], 0, k);
+	}
+}
+
+/* And the fields stamp_keeps marked, which must have come through untouched. */
+static void
+check_reset_keeps(const char *what, struct dtmf_rx *rx, long tag)
+{
+	char buf[160];
+	int k;
+
+	for (k = 16; k < 20; k++) {
+		snprintf(buf, sizeof(buf), "%s: digits[%%ld] survives", what);
+		diff_eq_int(buf, rx->digits[k], KEEP_DIGIT(k), k);
+	}
+	CK(what, rx, pre_low[0], KEEP_PRE_LOW_0, tag);
+	CK(what, rx, pre_low[1], KEEP_PRE_LOW_1, tag);
+	CK(what, rx, aligned, KEEP_ALIGNED, tag);
+	CK(what, rx, samples[0], KEEP_SAMP_0, tag);
+	CK(what, rx, samples[299], KEEP_SAMP_N, tag);
+	CK(what, rx, hold[0], KEEP_HOLD_0, tag);
+	CK(what, rx, hold[99], KEEP_HOLD_N, tag);
+}
+
+/* ------------------------------------------------------------------ */
+
 int
 main(void)
 {
@@ -357,6 +484,202 @@ main(void)
 
 	diff_begin("dtmf_rx: the tone bank's coefficient tables");
 	tables();
+	rc |= diff_end();
+
+	/* ---- reset_dtmf ---- */
+
+	/*
+	 * From DIRTIED objects, not from fresh ones: a reset that cleared
+	 * nothing would agree with the object over a zeroed struct and differ
+	 * over every real one.  `seed_object` fills all 0x38c bytes and then
+	 * puts the counters back into their ranges, and `stamp_keeps` marks
+	 * the fields the reset must not reach.
+	 */
+	diff_begin("dtmf_rx: reset_dtmf from dirtied objects");
+	for (i = 0; i < 60; i++) {
+		short rate = (short)((i & 1) ? 9600 : 8000);
+		short sens = (short)(i % 5);
+		struct dtmf_rx before;
+
+		seed_object(&a, &b, rate, sens);
+		stamp_keeps(&a.rx);
+		stamp_keeps(&b.rx);
+		before = b.rx;
+
+		reset_dtmf(&a.rx);
+		ref_reset_dtmf(&b.rx);
+
+		compare("reset dirty", &a, &b, i);
+		check_reset_sets("reset dirty", &b.rx, rate, sens, i);
+		check_reset_keeps("reset dirty", &b.rx, i);
+		if (memcmp(&before, &b.rx, sizeof(before)) != 0)
+			seen_reset_changed++;
+	}
+	rc |= diff_end();
+
+	/*
+	 * The two uniform states, which a random fill never produces: a block
+	 * straight out of the allocator, and one that is already all zero --
+	 * where every store the reset makes is a store of a value the field
+	 * already holds except `state`, `level` and the two -1s.
+	 */
+	diff_begin("dtmf_rx: reset_dtmf on a fresh and on a zeroed object");
+	for (i = 0; i < 2; i++) {
+		memset(&a, i ? 0 : HARNESS_MALLOC_FILL, sizeof(a));
+		memcpy(&b, &a, sizeof(a));
+		a.rx.rate = 9600;
+		b.rx.rate = 9600;
+		a.rx.sens = 4;
+		b.rx.sens = 4;
+		stamp_keeps(&a.rx);
+		stamp_keeps(&b.rx);
+
+		reset_dtmf(&a.rx);
+		ref_reset_dtmf(&b.rx);
+		compare("reset uniform", &a, &b, i);
+		check_reset_sets("reset uniform", &b.rx, 9600, 4, i);
+		check_reset_keeps("reset uniform", &b.rx, i);
+
+		/* and again, from the state it has just produced */
+		reset_dtmf(&a.rx);
+		ref_reset_dtmf(&b.rx);
+		compare("reset twice", &a, &b, i);
+		check_reset_sets("reset twice", &b.rx, 9600, 4, i);
+		check_reset_keeps("reset twice", &b.rx, i);
+	}
+	rc |= diff_end();
+
+	/* ---- create_cid_dtmf ---- */
+
+	/*
+	 * Into the caller's storage.  The rate and sensitivity `seed_object`
+	 * chose are OVERWRITTEN here -- 8000 and 0 whatever was there -- which
+	 * is the one thing this does that the reset does not.
+	 */
+	diff_begin("dtmf_rx: create_cid_dtmf into caller storage");
+	for (i = 0; i < 20; i++) {
+		struct dtmf_rx *pa, *pb;
+
+		seed_object(&a, &b, (short)((i & 1) ? 9600 : 8000),
+			    (short)(i % 5));
+		stamp_keeps(&a.rx);
+		stamp_keeps(&b.rx);
+
+		pa = create_cid_dtmf(&a.rx);
+		pb = (struct dtmf_rx *)ref_create_cid_dtmf(&b.rx);
+
+		diff_eq_int("create returns the storage it was given (%ld)",
+			    pa == &a.rx, pb == &b.rx, i);
+		compare("create in place", &a, &b, i);
+		check_reset_sets("create in place", &b.rx, 8000, 0, i);
+		check_reset_keeps("create in place", &b.rx, i);
+	}
+	rc |= diff_end();
+
+	/*
+	 * And the allocating arm.  The two sides get two different addresses
+	 * and always will, so the comparison is of the CONTENTS and of what
+	 * the allocator was asked for -- `harness_alloc_reqsize`, which is the
+	 * only check anywhere on the object's 0x38c.
+	 *
+	 * Both sides call the same allocator: `sysdep_malloc` is a
+	 * SHARED_IMPORT and is not renamed, so both blocks arrive filled with
+	 * HARNESS_MALLOC_FILL and the regions neither function initialises are
+	 * comparable rather than being two lots of heap litter.
+	 */
+	diff_begin("dtmf_rx: create_cid_dtmf allocates its own");
+	for (i = 0; i < 4; i++) {
+		struct dtmf_rx *pa, *pb;
+		int allocs = harness_alloc.allocs;
+		int k;
+
+		pa = create_cid_dtmf(NULL);
+		pb = (struct dtmf_rx *)ref_create_cid_dtmf(NULL);
+
+		diff_eq_int("both sides allocated (%ld)",
+			    harness_alloc.allocs - allocs, 2, i);
+		diff_eq_int("create(NULL) returned storage (%ld)",
+			    pa != NULL, pb != NULL, i);
+		diff_eq_int("the two sides asked for the same size (%ld)",
+			    harness_alloc_reqsize(pa),
+			    harness_alloc_reqsize(pb), i);
+		diff_eq_int("the object asks sysdep_malloc for 0x38c (%ld)",
+			    harness_alloc_reqsize(pb), 0x38c, i);
+
+		compare_obj("create allocated", pa, pb, i);
+		check_reset_sets("create allocated", pb, 8000, 0, i);
+		/*
+		 * Nothing wrote the tail of `digits`, so it still holds what
+		 * the allocator put there.  Same argument as check_reset_keeps
+		 * and a different witness for it.
+		 */
+		for (k = 16; k < 20; k++)
+			diff_eq_int("digits[%ld] is still allocator fill",
+				    (unsigned char)pb->digits[k],
+				    HARNESS_MALLOC_FILL, k);
+		diff_eq_int("pre_low is still allocator fill (%ld)",
+			    (unsigned short)pb->pre_low[0],
+			    (HARNESS_MALLOC_FILL << 8) | HARNESS_MALLOC_FILL, i);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The diagnostic paths.  Swept over four levels because the gate is
+	 * `> 1` and a `>= 1` spelling prints the same text at level 2: level 1
+	 * is the only place the two differ, and it has to be visited to be
+	 * measured.  `create` prints its own line and then the one the reset
+	 * prints, which is also the assertion that the reset happens second.
+	 */
+	diff_begin("dtmf_rx: the reset and create debug transcripts");
+	{
+		unsigned lvl;
+
+		dsplib_debug_capture_on = 1;
+		for (lvl = 0; lvl <= 3; lvl++) {
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+
+			seed_object(&a, &b, 8000, 0);
+			dsplib_debug_capture_reset();
+			reset_dtmf(&a.rx);
+			ref_reset_dtmf(&b.rx);
+			diff_eq_int("reset transcript at level %ld",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, lvl);
+			diff_eq_int("reset printed one line above 1 (%ld)",
+				    dsplib_debug_capture_lines(1),
+				    lvl > 1 ? 1 : 0, lvl);
+
+			seed_object(&a, &b, 9600, 3);
+			dsplib_debug_capture_reset();
+			(void)create_cid_dtmf(&a.rx);
+			(void)ref_create_cid_dtmf(&b.rx);
+			diff_eq_int("create transcript at level %ld",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, lvl);
+			diff_eq_int("create printed two lines above 1 (%ld)",
+				    dsplib_debug_capture_lines(1),
+				    lvl > 1 ? 2 : 0, lvl);
+			if (lvl > 1) {
+				/* the rate it reports is the one it just set */
+				diff_eq_int("the create line says Fs = 8000"
+					    " (%ld)",
+					    strstr(dsplib_debug_capture_text(1),
+						   "Fs = 8000") != NULL,
+					    1, lvl);
+				diff_eq_int("the create line says Threshold = 0"
+					    " (%ld)",
+					    strstr(dsplib_debug_capture_text(1),
+						   "Threshold = 0") != NULL,
+					    1, lvl);
+			}
+		}
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
 	rc |= diff_end();
 
 	/* ---- band_pass ---- */
@@ -862,6 +1185,12 @@ main(void)
 	diff_eq_int("the aligned window was used (%ld)", seen_aligned > 0, 1, 0);
 	diff_eq_int("the unaligned window was used (%ld)",
 		    seen_unaligned > 0, 1, 0);
+	/*
+	 * A reset over an object that was already in the reset state would
+	 * agree with the object while clearing nothing at all.
+	 */
+	diff_eq_int("reset_dtmf had something to clear (%ld)",
+		    seen_reset_changed > 0, 1, 0);
 	rc |= diff_end();
 
 	return rc;

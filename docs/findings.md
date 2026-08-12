@@ -49368,3 +49368,167 @@ thing itself, and nothing else on this bench can produce one.
 bug-for-bug by default; this goes on the deliberate-fix list beside the 8000
 samp/s work and the floating-point defects, off by default, with the
 differential tier defining bug-compatible behaviour. See D53.
+
+======================================================================
+
+### 1500. THE `Dtmf_Rx.c` CLOSURE IS COMPLETE: `reset_dtmf` AND `create_cid_dtmf`, AND WHAT THEIR CALLERS SETTLE ABOUT THEIR SIGNATURES
+
+*Both were read out of `tools/dis.py` and are in `src/service/dtmf_rx.c`
+beside `band_pass` and `dtmf_modem`, the two the same translation unit already
+had (finding 1410).*
+
+    reset_dtmf        .text 0x090a90   275 bytes
+    create_cid_dtmf   .text 0x090bb0   370 bytes
+
+**The signatures are settled by the call sites, not by the prologues.** Each
+function reads exactly one argument, and each is called from exactly one place
+in the object:
+
+| callee | caller | call site | what the caller does with it |
+|---|---|---|---|
+| `reset_dtmf` | `cid_reset` (0x8fce0) | +0x23 | pushes `*(void **)cid`; ignores the return |
+| `create_cid_dtmf` | `cid_create` (0x8fe10) | +0x55 | pushes `*(void **)cid`; stores `eax` back over it |
+
+So `create_cid_dtmf` returns its object -- it ends `mov %ebx,%eax` before the
+pop, and `cid_create` writes the result into the same slot it passed in. The
+caller passing the field it will overwrite is also what proves the "NULL means
+allocate" convention is in use here rather than the object being a fixed
+member: `cid_create` reaches the call only when that pointer needs filling.
+
+**`reset_dtmf` returns nothing, and the `eax = 1` on its exit is an
+artefact.** The last thing it does is `mov $0x1,%eax ; mov %ax,0x330(%ebx)` --
+materialising the constant 1 for a 16-bit store of `state` -- and then it
+pops and returns with that constant still in `eax`. `create_cid_dtmf`, which
+really does return a value, spends an instruction on it. Declaring
+`reset_dtmf` as returning `int` to "match" would be inventing a return value
+out of a leftover register, so it is `void`.
+
+**`create_cid_dtmf` HAS THE RESET INLINED INTO IT.** From +0x32 to +0x11d it
+is `reset_dtmf`'s body instruction for instruction, and the tell that this is
+the compiler rather than a copied paragraph is the debug gate: the object
+tests `dsplibs_debug_level` at +0x12, prints its own line at +0x124, and then
+tests `dsplibs_debug_level` AGAIN at +0x141 before printing the reset's line
+-- a reload GCC is obliged to make because the intervening call could have
+changed the global, and one no author writes twice by hand.
+
+The reconstruction calls rather than inlines, which reproduces that exactly:
+our `reset_dtmf` re-reads the level for itself, and on the quiet path there is
+no call between the two reads and nothing to observe. The gnu89 `inline` that
+would reproduce the CODEGEN -- an out-of-line definition plus inlining at the
+call site -- is not available: GCC 13 defaults to gnu17, where a plain
+`inline` definition with no `extern` declaration provides no external
+definition at all, and `t_dtmfrx.c`'s reference to `reset_dtmf` would go
+undefined in the modern half of `make phase`. A behavioural tier and a codegen
+tier disagreeing is exactly the case where the behavioural one decides.
+
+**Neither function has any argument beyond the object.** There is no rate
+parameter and no sensitivity parameter: `create_cid_dtmf` sets `rate` to 8000
+and `sens` to 0 unconditionally, so its whole branch space is {argument NULL,
+argument not NULL} crossed with {debug off, debug on}, and all four are
+driven. A caller wanting 9600 Hz or a trimmed threshold writes the field
+afterwards, which is what `t_dtmfrx.c` has always done through `fresh()`.
+
+**`fresh()` still seeds through `ref_reset_dtmf` and deliberately was not
+changed.** Every block in that file starts from a state the OBJECT produced;
+switching it to ours the moment ours exists would make roughly fifteen hundred
+existing checks compare our code against a state our own code chose.
+
+======================================================================
+
+### 1501. WHAT `reset_dtmf` DOES NOT CLEAR, AND WHY ONLY ONE OF THE FOUR IS A DEFECT
+
+The reset writes twenty-one scalars, eight resonator state pairs and sixteen
+bytes of digit string, and leaves the receiver armed:
+
+    f000 f004 f008 = 0        nsamples = 0        state = 1
+    stable = 0   quiet = 0    last_digit = -1     ndigits = -1
+    level = 1                 bufp = rx->samples
+    f354[2] bp_state[2] f35c[2] pre_high[2] = 0
+    tone_state[0..7][0..1] = 0
+    digits[0..15] = 0
+
+Four regions of the object are untouched, and they are not the same kind of
+thing:
+
+- **`digits[16..19]`** -- the loop's bound is `cmp $0xf,%ax ; jle` over a
+  twenty-byte array. This one is a defect: **D298**.
+- **`pre_low[2]`** -- the low group's pre-notch, where the high group's is
+  cleared eight instructions earlier. Already **D251**.
+- **`aligned`** -- and this one is harmless, which is worth stating because it
+  looks identical to `pre_low` in the disassembly. `state` comes out of the
+  reset as 1, and `dtmf_modem`'s state 1 writes `aligned` on both of the two
+  paths that can reach state 2, so the field is always stored before it is
+  read however random its initial value.
+- **`samples[300]` and `hold[100]`** -- 800 bytes of analysis window, which is
+  the bulk of the object and which the machine refills before it reads.
+
+`rate` and `sens` are untouched too, and that is the design rather than an
+omission: it is what lets `cid_reset` reset a receiver between rings without
+re-choosing its configuration.
+
+**How the last three are pinned rather than merely observed.** A differential
+comparison catches a clearing loop that runs too far only while the seeded
+tail happens to be non-zero, so `t_dtmfrx.c` stamps a distinctive pattern into
+`digits[16..19]`, `pre_low`, `aligned` and the ends of both buffers before
+every reset and asserts on the REFERENCE side that it comes through. The
+allocating arm of `create_cid_dtmf` gives a second, independent witness for
+the same claim: those bytes still read `HARNESS_MALLOC_FILL` after
+construction.
+
+======================================================================
+
+### 1502. `create_cid_dtmf`: 0x38c BYTES, 8000 Hz, THRESHOLD 0 -- AND THE TWO TRACE LINES THAT SAY SO
+
+*Third of the batch; **D299** is its unchecked allocation.*
+
+The function is small and every constant in it is now checked by a test:
+
+```
+   90bb8:  test   %ebx,%ebx              ; the argument
+   90bba:  je     90d0f                  ; -> allocate
+   90bc9:  mov    $0x1f40,%ecx           ; 8000
+   90bce:  mov    %cx,0x33c(%ebx)        ; rx->rate
+   90bd5:  mov    %dx,0x33e(%ebx)        ; rx->sens = 0
+   ...     <reset_dtmf inlined>
+   90cd0:  mov    %ebx,%eax              ; return the object
+   90d0f:  movl   $0x38c,(%esp)
+   90d16:  call   sysdep_malloc
+```
+
+**0x38c had never been checked by anything.** `include/dsplib/dtmf_rx.h` has
+carried the size since the header was written and `src/service/dtmf_rx.c`
+asserts `sizeof(struct dtmf_rx) == 0x38c` at compile time, but nothing tied
+either to the object -- the assertion pins OUR struct against a number read off
+a disassembly, and a number read wrongly would have silently narrowed every
+`diff_eq_obj` in the suite. `harness_alloc_reqsize` closes that: the test
+asserts the two sides ask their allocator for the same number of bytes, and
+that the reference's number is 0x38c.
+
+Both sides do reach the same allocator. `sysdep_malloc` is in `symmap.py`'s
+`SHARED_IMPORTS` and is not renamed, so the blob's call and ours both land on
+the harness shim, both blocks arrive filled with `HARNESS_MALLOC_FILL`, and
+the regions neither function initialises stay comparable instead of being two
+lots of heap litter.
+
+**The trace line is the author's own description of the two fields:**
+
+    DTMF Cid Creating   Fs = %d   Threshold = %d !
+
+-- so `rate` is a sampling frequency and `sens`, which `band_pass` uses to
+trim its energy threshold down by 7/8, 3/4 or 1/2, is a *threshold*. The
+reset's line is `DTMF CID Reset !`, and a construction prints both, in that
+order, which is also the assertion that the reset happens second.
+
+**What the object's encoding of that line does and does not settle.** `rate`
+is loaded back out of the object with `movzwl` -- an unsigned read of the
+value stored two instructions earlier, so it is written `(unsigned short)`
+here as it is in `dtmf_modem`. The second argument is a rematerialised
+constant zero, NOT a load from `rx->sens`, so whether the author wrote
+`rx->sens`, a local or a literal is not recoverable from the object; the value
+is 0 on every path either way and the transcript is identical. Written the
+plain way rather than asserted as derived.
+
+Both gates are `> 1`, and the transcript test sweeps levels 0 to 3 rather than
+comparing two level-2 transcripts, because a `>= 1` spelling prints the same
+text at level 2 and level 1 is the only place the two differ (finding 150's
+argument, and `t_dialercfg.c`'s).

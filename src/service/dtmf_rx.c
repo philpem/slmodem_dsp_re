@@ -1,22 +1,24 @@
 /*
- * dtmf_rx.c -- reconstructed from dsplibs.o Dtmf_Rx.c.
+ * dtmf_rx.c -- reconstructed from dsplibs.o Dtmf_Rx.c.  All four of it.
  *
- *   band_pass   .text 0x090d30  1187 bytes
- *   dtmf_modem  .text 0x0911e0  1729 bytes
+ *   reset_dtmf       .text 0x090a90   275 bytes
+ *   create_cid_dtmf  .text 0x090bb0   370 bytes
+ *   band_pass        .text 0x090d30  1187 bytes
+ *   dtmf_modem       .text 0x0911e0  1729 bytes
  *
- * The TU's other two functions, `reset_dtmf` (0x090a90) and
- * `create_cid_dtmf` (0x090bb0), are outside this closure -- `cid_reset` and
- * `cid_create` reach them, not `dtmf_modem` -- and are not reconstructed.
- * They are what pins the object's size at 0x38c and what
- * include/dsplib/dtmf_rx.h's field comments are checked against.
+ * The first two are not in `dtmf_modem`'s closure -- `cid_reset` and
+ * `cid_create` reach them, nothing here does -- and they are what pins the
+ * object's size at 0x38c and what include/dsplib/dtmf_rx.h's field comments
+ * are checked against.  Findings 1500, 1501 and 1502.
  *
- * See finding 1410 for why these two are Dtmf_Rx.c and not, as
+ * See finding 1410 for why these are Dtmf_Rx.c and not, as
  * docs/attribution.md guessed, `Data.c` or `Dtmf.c`.
  */
 
 #include "dsplib/dtmf_rx.h"
 #include "dsplib/debug.h"
 #include "dsplib/fpm_iir.h"
+#include "dsplib/sysdep.h"
 
 /*
  * `create_cid_dtmf` allocates 0x38c bytes for this object (blob 0x090d0f).
@@ -35,6 +37,115 @@
  */
 typedef char dtmf_rx_size_check[sizeof(struct dtmf_rx) == 0x38c ? 1 : -1];
 #endif
+
+/*
+ * Put the receiver back to the state a new one is in.
+ *
+ * Everything the state machine accumulates -- the digit string, the tone
+ * bank's eight resonator states, band_pass's biquad and its energy memory,
+ * the sample counter -- and nothing the CALLER chose: `rate` and `sens`
+ * survive, which is what makes this usable as `cid_reset`'s reset rather than
+ * only as part of construction.
+ *
+ * Four things it leaves alone are worth naming, because each is a fact about
+ * the original rather than an omission here:
+ *
+ *   digits[16..19]  the clearing loop stops at 15 and the array is 20 (D298)
+ *   pre_low         the low group's pre-notch, where pre_high is cleared
+ *                   (D251)
+ *   aligned         harmless: `state` comes out as 1, and state 1 writes
+ *                   `aligned` on both of the paths that can reach state 2
+ *   samples, hold   400 words of window that the machine refills before it
+ *                   reads them
+ */
+void
+reset_dtmf(struct dtmf_rx *rx)
+{
+	short i;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("DTMF CID Reset !\n");
+
+	rx->f000 = 0;
+	rx->f004 = 0;
+	rx->f008 = 0;
+	rx->nsamples = 0;
+
+	rx->last_digit = -1;
+	rx->stable = 0;
+	rx->ndigits = -1;		/* -1, not 0: "no string started" */
+	rx->quiet = 0;
+	rx->level = 1;			/* the energy memory's floor      */
+	rx->bufp = rx->samples;
+
+	/* The four biquad states, in pairs, in the object's own order. */
+	rx->f354[0] = 0;
+	rx->f354[1] = 0;
+	rx->bp_state[0] = 0;
+	rx->bp_state[1] = 0;
+	rx->f35c[0] = 0;
+	rx->f35c[1] = 0;
+	rx->pre_high[0] = 0;
+	rx->pre_high[1] = 0;
+
+	/* One state pair per tone: all eight of the bank's resonators. */
+	for (i = 0; i <= 7; i++) {
+		rx->tone_state[i][0] = 0;
+		rx->tone_state[i][1] = 0;
+	}
+
+	/* Sixteen, not twenty.  D298. */
+	for (i = 0; i <= 15; i++)
+		rx->digits[i] = 0;
+
+	rx->state = 1;			/* armed, hunting for an edge */
+}
+
+/*
+ * Construct one.  A NULL argument allocates; anything else is the caller's
+ * storage and is used in place.  The object is returned either way, so
+ * `cid_create` can write the result back over the pointer it passed.
+ *
+ * `sysdep_malloc`'s result is used without being checked -- D299, and the
+ * house style of this object: LowPassFIR and GenericToneDetector do the same.
+ *
+ * The two configuration fields are set BEFORE the reset, which is visible
+ * rather than incidental: the trace below reads `rate` back out of the
+ * object, and `reset_dtmf` does not touch either field.
+ */
+struct dtmf_rx *
+create_cid_dtmf(struct dtmf_rx *rx)
+{
+	if (rx == NULL)
+		rx = (struct dtmf_rx *)sysdep_malloc(sizeof(*rx));
+
+	rx->rate = DTMF_RX_RATE_8000;
+	rx->sens = 0;
+
+	/*
+	 * The object loads `rate` back with `movzwl`, so it is read unsigned
+	 * here as it is in dtmf_modem.  Unobservable -- the value it has just
+	 * stored is 8000 -- but it is the encoding the field's type forces.
+	 *
+	 * The second `%d` is a constant 0 in the object, materialised rather
+	 * than loaded, so which of `rx->sens`, a local or a literal the author
+	 * wrote is not recoverable.  Written the plain way.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("DTMF Cid Creating   Fs = %d   "
+				     "Threshold = %d !\n",
+				     (unsigned short)rx->rate, 0);
+
+	/*
+	 * Inlined at this site in the object, which is why the second debug
+	 * gate below it re-loads `dsplibs_debug_level`: the printf above could
+	 * have changed it.  A call reproduces that exactly, and the modern
+	 * build cannot spell the gnu89 `inline` that would reproduce the
+	 * codegen without losing the out-of-line definition the test needs.
+	 */
+	reset_dtmf(rx);
+	return rx;
+}
 
 /*
  * band_pass's four coefficient sets, all FPM_iir_filt sections in the order

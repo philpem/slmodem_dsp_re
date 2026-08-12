@@ -9,8 +9,7 @@
  *
  * Three translation units of the original meet in this object:
  *
- *   Dtmf_Rx.c        band_pass, dtmf_modem   (also reset_dtmf,
- *                                             create_cid_dtmf -- not here)
+ *   Dtmf_Rx.c        reset_dtmf, create_cid_dtmf, band_pass, dtmf_modem
  *   Dtmf_Detector.c  DTMF_MTD_detect
  *
  * `band_pass` is put in Dtmf_Rx.c by the link order, not by its name: see
@@ -70,6 +69,37 @@ struct dtmf_rx {
 
 /* dtmf_modem's rate field, and DTMF_MTD_detect's. */
 #define DTMF_RX_RATE_9600	9600
+
+/*
+ * What `create_cid_dtmf` puts there.  Nothing tests for it: `band_pass` and
+ * the tone bank ask only whether the rate IS 9600, so 8000 is the rate by
+ * being the other one.
+ */
+#define DTMF_RX_RATE_8000	8000
+
+/*
+ * Clear everything the state machine accumulates and arm it: `state` comes
+ * out as 1 (hunting), `ndigits` as -1 ("not started", distinct from 0),
+ * `last_digit` as -1, `level` as 1 and `bufp` as `rx->samples`.
+ *
+ * It does NOT touch `rate`, `sens`, `aligned`, `pre_low`, the two buffers, or
+ * `digits[16..19]` -- the digit-clearing loop stops at 15 where the array is
+ * 20 (D298), and `pre_low` is D251.  So it is a reset of the RECEIVER, not of
+ * the object: the configuration a caller put in survives it, which is what
+ * `cid_reset` relies on.
+ */
+void reset_dtmf(struct dtmf_rx *rx);
+
+/*
+ * Build a Caller ID DTMF receiver.  `rx` NULL allocates one, otherwise the
+ * caller's storage is used; either way the object is returned, which is what
+ * `cid_create` stores back over the pointer it passed in.
+ *
+ * Sets `rate` to 8000 and `sens` to 0 and then resets.  There is no rate or
+ * sensitivity argument -- a caller wanting 9600 or a trimmed threshold writes
+ * the field itself afterwards.
+ */
+struct dtmf_rx *create_cid_dtmf(struct dtmf_rx *rx);
 
 /*
  * The tone bank.  `count` samples in, one of the sixteen keypad codes out --

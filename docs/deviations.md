@@ -5450,3 +5450,56 @@ The reconstruction writes them, because the object does and because a differenti
 Written as the object has it. A bound here would be a behavioural difference on an input the differential tier cannot produce, and the arms are the V.90 and K56flex ones, which no test in this tree drives at all.
 
 ======================================================================
+
+## D298 🐛 `reset_dtmf` clears sixteen of the twenty bytes of the digit string
+
+*Batch of 2026-08-12, from `reset_dtmf` (blob 0x90a90) +0xdc-+0xef and the
+same loop inlined into `create_cid_dtmf` (0x90bb0) +0xfc-+0x10f -- `mov
+%cl,0x340(%eax,%ebx,1)` with `inc %eax ; cwtl ; cmp $0xf,%ax ; jle`, so the
+index runs 0..15 over an array whose length is 20. **Reachability: every
+reset and every construction, unconditionally.** **Observability: needs a
+string of seventeen or more digits that is then read without a terminator** --
+`dtmf_modem` writes `digits[ndigits]` for each digit and only writes the
+terminating zero when the string ends with 'C', so `digits[16..19]` is stale
+until a seventeenth digit overwrites it. Status: `unmeasured`. Fix class:
+none proposed.*
+
+**Finding 1501.** The array is twenty bytes and the object knows it: the next
+field starts at +0x354, `dtmf_modem` stores at `digits[ndigits]` without a
+bound and gives up when `ndigits` reaches 20, so all twenty are writable and
+the last four are reachable. Only the clearing loop stops at sixteen.
+
+The consequence needs a Caller ID string of seventeen digits or more that
+never terminates -- an unterminated string of sixteen or fewer still ends in a
+byte the loop cleared -- and then a consumer that reads it as a C string.
+Neither half is produced by anything in this tree, which is why the status is
+`unmeasured` rather than a defect with a measured effect.
+
+Reproduced as found: `src/service/dtmf_rx.c` clears `digits[0..15]`, and
+`test/unit/t_dtmfrx.c` stamps a known pattern into `digits[16..19]` before
+every reset and asserts it comes through. Without that assertion the loop
+bound would be pinned only while a random seed happened to leave those four
+bytes non-zero.
+
+======================================================================
+
+## D299 🐛 `create_cid_dtmf` writes through `sysdep_malloc`'s result without testing it
+
+*Batch of 2026-08-12, from `create_cid_dtmf` (blob 0x90bb0) +0x15f -- `movl
+$0x38c,(%esp) ; call sysdep_malloc ; mov %eax,%ebx ; jmp +0x10`, and +0x10 is
+`mov %cx,0x33c(%ebx)`, the store of the sample rate. The function's only
+`test` is of its PARAMETER, at +0x8, and the allocating branch rejoins after
+it. **Reachability: only when the allocation fails.** **Observability:
+immediate -- a write to offset 0x33c of a null pointer.** Status:
+`unmeasured`; the harness has no allocation-failure injection, so the path
+cannot be driven differentially at all. Fix class: none proposed.*
+
+**Finding 1502.** The same shape as D5's family, D171, D175, D180 and D220,
+and the same reasoning: there is nothing to reproduce, because the original's
+behaviour on a failed allocation is a fault and a differential test cannot
+compare against one. Unlike the three constructors in D62, ours does not add
+the check either -- D62's entries exist because hardening that the original
+lacks is itself a deviation, and this reconstruction had no reason to acquire
+a fourth.
+
+======================================================================
