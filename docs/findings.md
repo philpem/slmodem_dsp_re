@@ -49506,3 +49506,49 @@ denominator, and so are 511, 1023 and 2047. `t_fpm_atan` therefore *requires*
 `-DDSPLIB_REPRODUCE_BUGS` and says so with an `#error`, the same guard
 `t_fpm_div` carries. Without it the test fails on inputs that are not wrong.
 
+### 1503. `FPM_TONE_generate2` IS THE QUADRATURE PAIR OF ONE OSCILLATOR, NOT A SECOND TONE
+
+*Task: `fpm_tone.c`. Closed — .text 0x0aae30, 148 bytes.*
+
+The name and the surrounding module both suggest a two-tone generator, and the
+brief that opened this work said so. **It is not.** The signature is
+
+    short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
+                             short *sin_out, short count)
+
+— four arguments, two output buffers, and one oscillator between them. Per
+sample it calls `FPM_phasor` once and writes `(cfg.scale * p.cos) >> 14` to
+the first buffer and `(cfg.scale * p.sin) >> 14` to the second. The object
+still carries a single frequency, a single phase and a single increment, and
+only `phase` (+0x24) is written back.
+
+That places it between the two generators already reconstructed rather than
+beside them: `FPM_TONE_generate` takes the sine, `FPM_TONE_generate_demod`
+takes the cosine, this one takes both. Like `_generate_demod` and unlike
+`_generate` it does **no phase-reversal bookkeeping at all**, and it returns
+`count`. `t_fpm_tone` proves the identity directly — from one starting state,
+generate2's cosine half is `_generate_demod`'s output sample for sample, its
+sine half is `_generate`'s, and all three leave the accumulator at the same
+phase, which is what rules out the naive implementation that calls the phasor
+twice per sample.
+
+**TWO THINGS THE DISASSEMBLY SAYS THAT A READER WOULD NOT GUESS.**
+
+`state->cfg.scale` is re-loaded from the object for *each* of the two
+multiplies — two `movswl 0x2(%ebp)` in one iteration, either side of the
+16-bit store the compiler had to assume might alias it. Written the same way,
+so a caller whose output buffer overlaps the object sees what the original
+does.
+
+The counter is 16-bit and the loop tests `!= -1`, not `> 0`:
+
+    dec %eax ; movswl %ax,%edi ; inc %ax ; je exit
+    ... ; lea -0x1(%edi),%eax ; movswl %ax,%edi ; inc %ax ; jne loop
+
+so a count of 0 writes nothing and a count of **−1 writes 65535 samples to
+each buffer**. This is the only input that can tell the real loop apart from
+`for (i = 0; i < count; i++)` — every non-negative count agrees — so
+`t_fpm_tone` runs it, against 65600-word buffers sized to survive the loop
+being misread as well as read correctly. Same hazard as `FPM_TONE_detect` and
+`FPM_TONE_generate_demod`, and now the only one of the three with a test that
+would catch a regression.
