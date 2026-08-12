@@ -8,7 +8,7 @@
  ],
  "suites": {
   "ansamtone": {
-   "key": "6594c79965e55ab87f4e87d3d49a870d9274829010f291e5c19fa0565b6234cb",
+   "key": "6b0542fe25ce07e16b1125de8ef863c15e1723ac9b3bbf3971eb3d288b1b84a8",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "one coefficient of the 13-tap denominator is mistyped": "caught",
@@ -26,7 +26,7 @@
    }
   },
   "cadence": {
-   "key": "2b3a9356d2ee164456aed4fce9749ec2796d16f47d2b8b339dacb1ea9500c606",
+   "key": "8572a013f9ed583fb483834834d9c4800859a18c4fa9b18580f3538ccf013cd3",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "correct the author's spelling of SERIRES": "caught",
@@ -38,7 +38,7 @@
    }
   },
   "callprog": {
-   "key": "368ea142a0178405363a2b44509dd556a05b06876d7b30b3f62273f4850f8fda",
+   "key": "046abc8969aa9db6371f171893075347691a6fb581b4b38f8dcc6096c1964032",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "corrupt 'CALLPROG: $ encountered.\\\\n'": "caught",
@@ -61,7 +61,7 @@
    }
   },
   "dialer": {
-   "key": "0d61628585301629d60a8d1b6b2e6874bf959e90e17c2546211bae1d1baa3a7f",
+   "key": "d5baee78a696cab9dab56e33f8b1ef044b301a32fcc53b6f44e92efce21ec4bf",
    "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce 'Done Generating flash' before the timings are restored": "caught",
@@ -90,7 +90,7 @@
    }
   },
   "dialer_grading": {
-   "key": "07a7eac78e0009f163b485b0fcf115ebbc10cd1fda0b6a5f409d7dc9ceceed0d",
+   "key": "a2376672305b936158967834bd86388e5ad41e6abdf89f9d537eb276d92b7535",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the 'got: %s' banner in IsDialStringInvalid": "caught",
@@ -98,7 +98,7 @@
    }
   },
   "dilpack": {
-   "key": "9ddba93ddeb7713b7488083565b7f9223c36a526293182400ab6ce7712e67649",
+   "key": "78c66eb544161bd6c61ac5b9fb4ce782386323cf09ca54378adf97910b1760a9",
    "summary": "8 mutations: 7 caught (7 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "CRC covers frame 0 too": "caught",
@@ -112,7 +112,7 @@
    }
   },
   "dtmf": {
-   "key": "bce9b14b3b3e38bee97dd0e98663501c5534da2d39ef0353e15ec45b4d7fba6c",
+   "key": "ce934bbfbbc22b70cd8218f26a13d0f263274fc04d922ae5e874aec1278ed9a6",
    "summary": "38 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "Europe's block is the same length as the US's": "caught",
@@ -156,7 +156,7 @@
    }
   },
   "dtmfmtd": {
-   "key": "12d6fd66d5881fcb128a61f8a919d252b2531f86517acdffd2e5ea580e316e69",
+   "key": "99d912fd37afa9af0842de527d5041a1ed16580d1c9b5d8c8008e0b22933f6ed",
    "summary": "24 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a group with no survivor reports tone 0 instead of nothing": "caught",
@@ -186,7 +186,7 @@
    }
   },
   "dtmfrx": {
-   "key": "04eafaaa973a8245b4bead3190a5912fc12e42a5759e0cc4a257e7496c54f4b5",
+   "key": "9be2f18134b9de99e3d67c54f0c86aafa7a0eba0c0f88ffe6d6d4a2869e7e289",
    "summary": "49 mutations: 49 caught (49 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "'C' does not terminate the string": "caught",
@@ -241,7 +241,7 @@
    }
   },
   "floatarma": {
-   "key": "18e6c01e80398afe929a49dd5ad369fce4a9b41b84e661ee7ea0eabc1267dc80",
+   "key": "eeaa40b08549fc31c17668cecea3c5c6340ced312b1dd5fc3043cc8713cbd75a",
    "summary": "30 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "den[0] is read once, before the loop the object re-reads it in": "equivalent",
@@ -277,7 +277,7 @@
    }
   },
   "gtonedet": {
-   "key": "b59ba2f8b5539e5b19c4f84582de849fb191ed509503bd06e5439db9ac67d551",
+   "key": "2feecfaf8bf64aea0f9d8e30e27a4abc1a5c33d66247581b5893b7a1f4de954f",
    "summary": "16 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "blockLen is not kept, only used": "caught",
@@ -299,30 +299,54 @@
    }
   },
   "k56flexalloc": {
-   "key": "beea95102fe3b2056458cc80ceeb6e10ac071727aaf2bea931a65681f4b41d1b",
-   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "bcd75b30331b28c887abb1519ba449a33e6f47f7ebde24cd2d6930385b60e117",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "K56FLEX_Create allocates twice": "caught",
     "K56FLEX_Create asks for sixteen bytes": "caught",
     "K56FLEX_Create asks for twenty-four bytes": "caught",
     "K56FLEX_Create reads the argument it is not supposed to read": "caught",
     "K56FLEX_Delete frees nothing": "caught",
-    "K56FLEX_Delete loses its null test": "caught"
+    "K56FLEX_Delete loses its null test": "caught",
+    "internalReset writes through `this`": "caught",
+    "k56FlexEnterPhase3 writes through `this`": "caught",
+    "the demodulator returns 4, not 5": "caught",
+    "the demodulator returns zero like the two bit getters": "caught",
+    "the demodulator scales the samples it is handed": "caught",
+    "the demodulator writes its two outputs": "caught"
    }
   },
   "moduluscoder": {
-   "key": "5393d0b89492256159d7116eeeb1dc44a3490dbf8f91ed19e72d8923b89009ff",
-   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "4d63b08b1181008cdac64949604b67e9194be45c2bd61f9f5cc8b76458d8d2da",
+   "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the decoder clears one word that is not its own": "caught",
     "the decoder leaves its last word alone": "caught",
+    "the decoder loses its last stage": "caught",
+    "the decoder shifts by one too many": "caught",
+    "the decoder writes one bit too many": "caught",
+    "the decoder writes the whole low byte": "caught",
+    "the decoder's Horner starts at the wrong end": "caught",
+    "the decoder's accumulator is unsigned, so the shift is logical": "caught",
+    "the decoder's second stage takes the wrong digit": "caught",
+    "the decoder's second stage takes the wrong modulus": "caught",
     "the encoder leaves its first word alone": "caught",
     "the encoder leaves its last word alone": "caught",
-    "the encoder's middle word is set to one, not zero": "caught"
+    "the encoder reads the bit string the other way up": "caught",
+    "the encoder stops one bit short": "caught",
+    "the encoder takes the whole byte rather than its low bit": "caught",
+    "the encoder tests the byte for zero rather than masking it": "caught",
+    "the encoder's accumulator is unsigned": "caught",
+    "the encoder's middle word is set to one, not zero": "caught",
+    "the fifth modulus is sign-extended": "caught",
+    "the fourth digit is not divided out at all": "caught",
+    "the second digit is divided out by the first modulus": "caught",
+    "the second digit takes the third modulus": "caught",
+    "the sixth word is the fifth quotient's remainder instead": "caught"
    }
   },
   "notch": {
-   "key": "c8307dfd9d2df77bdb434619506df34c5c346f6c5d92ef2f9116dd9f2878c93b",
+   "key": "c25116f8b25daeae3bedbe0f745ef76f566c1a085a6a0a0d3710f04e51044a00",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the first state word takes the input rather than the gained input": "caught",
@@ -356,7 +380,7 @@
    }
   },
   "pulse": {
-   "key": "34c949172792ddf192e1427be13038291962edefdc2fd0e6eeadcd4dc5b952d4",
+   "key": "ac314ccd06b982848628f719cab149750a56b991e3520c5d08f42b10adba1d97",
    "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the 'hook on' call site": "caught",
@@ -371,7 +395,7 @@
    }
   },
   "resampler": {
-   "key": "94b47f3d86ee6cf8b088d71742f905eb3aafc9aaf47e144cd0880db89176bc04",
+   "key": "bdddd793687d25224ec53fb5edf8619a6e0a44c527427a5ac0e6026c7e9ab6c3",
    "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "copyHistoryTail copies one element too few": "caught",
@@ -403,7 +427,7 @@
    }
   },
   "resamplertiming": {
-   "key": "ca62f29ea8d39bb8de9af4f756301af31a3b9445a4c8988a101f554de9681e46",
+   "key": "8f460f2287caef173b23c1863cc3a73afe25edfeae5ec9a2dd67042e08ccde18",
    "summary": "57 mutations: 54 caught (54 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "addPhase accepts a zero or negative argument": "caught",
@@ -466,7 +490,7 @@
    }
   },
   "resamplerto": {
-   "key": "a4d00be170c37c76b92c1de557259f8289aa5bbcfa156033913ec72ed883f2ef",
+   "key": "346d0b50657cf93b195b27c93ff3799c019a67f7d73b74db1bbdd812a02fc8f0",
    "summary": "7 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "getTimingOffsetPPM multiplies by ppmScale instead of dividing": "caught",
@@ -479,7 +503,7 @@
    }
   },
   "scrambler": {
-   "key": "9d6409f57f8fff8ac1d06b762617c8fa13012c487d26e3bc0860139551585be9",
+   "key": "a398555a5c92826c0ab25625d13fbf449a9ed979027b8c4d2ed029d461e650df",
    "summary": "36 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "D ctor: pInitOut sits at pLimit": "caught",
@@ -521,7 +545,7 @@
    }
   },
   "v34datapump": {
-   "key": "faef30ae510953a7ac039f828fc900e48ba20cea3984c36bfc4da39049a2edc7",
+   "key": "f01fd489d9cd08294bda68389256163f0ffeb25ec99f358aa05a199d826ea623",
    "summary": "78 mutations: 72 caught (72 by test, 0 by strings), 4 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x124 is bumped after `receiver` rather than before it": "uncaught",
@@ -605,7 +629,7 @@
    }
   },
   "v34datapump_rrn": {
-   "key": "991927e2687e49372698d89251121c3dbcbd68baa41635760524e65c84d31e7a",
+   "key": "20832a2e59bcc92619e9adb29b244a650dee3a54602b7fa9eaf6c9fdc7f97f62",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "IndicateLocalRRN bumps the remote counter": "caught",
@@ -619,7 +643,7 @@
    }
   },
   "v34filters": {
-   "key": "e0780febadc1479527cf09b34730a65edc50773ac84787e32f345390117713f4",
+   "key": "b1583abe4ea86c289738dd145d9bf67e4c6b5bdf00dd657be19051e6e5306e61",
    "summary": "30 mutations: 30 caught (29 by test, 1 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "carrier 1600 and 1680 lengths swapped": "caught",
@@ -655,7 +679,7 @@
    }
   },
   "v34hsfsk": {
-   "key": "d7880ce945d9ea0a28fc900e3872c6c95b44393c988662dbe822650f4fa6bf2d",
+   "key": "c9e078016100cf2771ca083b484385195baa9efb2d31f5445d46839ffc816b5a",
    "summary": "38 mutations: 36 caught (36 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x3588 is not touched at all": "caught",
@@ -699,7 +723,7 @@
    }
   },
   "v34hshak": {
-   "key": "dea4c01908e6135e6a7cfe47083bc566f87579311eed78844e879c66c3522ad7",
+   "key": "0e5a091463fb59756867cdd6e0ebfdf4d661fbc9a9f42cb44132d070c355e54c",
    "summary": "209 mutations: 203 caught (203 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "HS_RXSTATE branch ctx1/ctx2 swapped": "caught",
@@ -914,7 +938,7 @@
    }
   },
   "v34hsmst44": {
-   "key": "9f007a1227cd771e0e3f6bcfcaf000907b49cf201a1c33d9577091ea35181a67",
+   "key": "cd1edc8ee829e0778618ae5c48ffac24c8a4f1e06667b03c5b970b53600b4d2d",
    "summary": "214 mutations: 204 caught (204 by test, 0 by strings), 3 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x128 is not set": "caught",
@@ -1134,7 +1158,7 @@
    }
   },
   "v34hsrx4": {
-   "key": "9de3a059aff7edfa2fb3c905f48fb53abf06bf7d12ede166c4eb35af62d294a2",
+   "key": "e3f6b08c1172a63925d4a3d3cfd832ddc2fefaac9c2af93cb3c859a93dd2cc95",
    "summary": "176 mutations: 170 caught (170 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa80 raises 0x100 rather than 0x200": "caught",
@@ -1316,7 +1340,7 @@
    }
   },
   "v34hsrx53": {
-   "key": "ca6779088efdf11dfbacb256922a88a866a8aafb23ba36dc61d65c0ddb7f9a99",
+   "key": "69e58fbdb5bbfc2bbc41a15f7f8ca1c809def2a893eb9e0018fa83d3131ae415",
    "summary": "62 mutations: 61 caught (61 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358c is not cleared": "caught",
@@ -1384,7 +1408,7 @@
    }
   },
   "v34hsrx72": {
-   "key": "e97c93d7ef36d53885ced83172fd03c02e53afb162c785743fcbbc4724530caa",
+   "key": "3486f77b9847519e52581062980d4eece842ef857afa227f5414ffc0348d65f3",
    "summary": "125 mutations: 124 caught (124 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358c is SET rather than toggled": "caught",
@@ -1515,7 +1539,7 @@
    }
   },
   "v34hsrxch": {
-   "key": "4762be6b8e5582b45ffd4e7787d6c01f5758d123a9b8a7bbedd3ec29cab6d9ac",
+   "key": "fffe13c37d9ee1aabcc9224d5e2e063d1dfdae24e8109bbc6554a0ffa04fb772",
    "summary": "8 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "35 WAIT does not drain the receive queue": "caught",
@@ -1529,7 +1553,7 @@
    }
   },
   "v34hst346": {
-   "key": "b9d81a12cb852b729dbf700f3ebfdcaa2100026efdfa31eb23d7c7fe9bb75878",
+   "key": "5f1b29785fd46c5958d3f4ab8a261cb2e911ef18857235623f63b1dedfb3d941",
    "summary": "75 mutations: 74 caught (74 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0xaa7a is not stepped": "caught",
@@ -1610,7 +1634,7 @@
    }
   },
   "v34hst3core": {
-   "key": "c393218f8048bf5bb64a907aadb4dade0eca7e10e2eaf2b89f6d5b94eade0661",
+   "key": "8012437c6e534ebe41da3dc821ba85d1090354076a05a93464c1745cac013a52",
    "summary": "70 mutations: 69 caught (69 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x644c9 reports progress 1": "caught",
@@ -1686,7 +1710,7 @@
    }
   },
   "v34hst3m41": {
-   "key": "29d023c29f165fb62a1a92ab646c164ef4aff66b963a8d837f7af95d5030297f",
+   "key": "4f4da0cf5031d3ddf4a9580d27b00306141f38b57eeac1a0150c9f8bef14f6d0",
    "summary": "86 mutations: 84 caught (84 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x358a's 1 and 2 select each other's body": "caught",
@@ -1778,7 +1802,7 @@
    }
   },
   "v34hst3mid": {
-   "key": "1e1051c060334fba4d466cadd2d3ea57baaab49bf7c2a8f3c87ed9d20d18fe17",
+   "key": "ebaff81e38520d924baa303ac263c4d6642abfe6d488098d466916b04aa8ffd5",
    "summary": "443 mutations: 422 caught (422 by test, 0 by strings), 0 NOT caught, 0 unusable, 21 equivalent, 0 MIScounted",
    "verdicts": {
     "47 has no second guard": "caught",
@@ -2227,7 +2251,7 @@
    }
   },
   "v34hstb1": {
-   "key": "97d0594ffe47d842e8f865322ec06a8f20ec12f156e8df150a43c437dd266695",
+   "key": "09876e6b73a47abc613ee0a52a380067dbdd86992d00d7a79e19e1c367346efc",
    "summary": "9 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "54 SILENCEINFO does not share 5's entry": "caught",
@@ -2242,7 +2266,7 @@
    }
   },
   "v34hstx1": {
-   "key": "7020b65f2954e7b5b5423eefe3189c0c1bab8a6963850a494c97c17880737c60",
+   "key": "0d50a92227ccd80b64135bb815d3a211cc63be59498912a8753e8051477534b1",
    "summary": "776 mutations: 751 caught (751 by test, 0 by strings), 2 NOT caught, 0 unusable, 23 equivalent, 0 MIScounted",
    "verdicts": {
     "18: only the first symbol is transmitted": "caught",
@@ -3024,7 +3048,7 @@
    }
   },
   "v34hstxblock": {
-   "key": "b48d1a868bd9e79d9ccde54bbb810049427264c42730d8df13af41bf331cb196",
+   "key": "6136862ba76069ad6cccca2436b8af42b4ba4d34791af2cc8321664ee0293832",
    "summary": "52 mutations: 50 caught (50 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x238 against +0x23c compared signed": "caught",
@@ -3082,7 +3106,7 @@
    }
   },
   "v34info": {
-   "key": "7a23e5fc7e82ac9af586e019c440b21cfa81f019d5ef21b447ee20f34f82f3b9",
+   "key": "b715e457d12b65382e0bd935bf386054e5cd15f2e944b2f0265fccc4932945c5",
    "summary": "65 mutations: 62 caught (62 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "INFO0a: 'for %s' and 'for V.PCM' swapped": "caught",
@@ -3153,7 +3177,7 @@
    }
   },
   "v34info1a": {
-   "key": "819e69164b3b8fc1a0734c24b09f8953c9972130d4c494881ab5b42a2d7f3bb9",
+   "key": "96fc491d8862d452a84553efaad68dc7e5be066778fc19f026276e098479e02b",
    "summary": "44 mutations: 40 caught (40 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
    "verdicts": {
     "a short phase 2 asks for baud index 5, not 4": "caught",
@@ -3203,7 +3227,7 @@
    }
   },
   "v34info1d": {
-   "key": "a9479b4d14bf989fccd8ef875830ac943728dff9b59e0f0b222ff16c2c35169f",
+   "key": "5f42b62769282c127599041ea73fca81b1a0891737fcb1938f7b76c5d6ecee32",
    "summary": "42 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "a negative V.90 receiver counts as none": "caught",
@@ -3251,7 +3275,7 @@
    }
   },
   "v34ja": {
-   "key": "227d68e0f25ffc3408528706467fd5f3b3885fbf9e357c40b78cea2e9a9b2451",
+   "key": "60568a12bf321a47c8ab9585d34fe156ce345da5ce97196fe36b80a266cf61d6",
    "summary": "13 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the K56flex arm goes FIRST, so it wins when both receivers are up": "caught",
@@ -3270,7 +3294,7 @@
    }
   },
   "v34k56": {
-   "key": "5acbddedee50ca79a7103ee23212925cc94c2dc1e5d5d6d990063e2b8004f3ed",
+   "key": "64eaeeea4b93c3283819a89a0792d930520c910ac5951cce5cee794f9e8a0948",
    "summary": "28 mutations: 15 caught (15 by test, 0 by strings), 10 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store": "uncaught",
@@ -3304,7 +3328,7 @@
    }
   },
   "v34pcmif": {
-   "key": "8e4d07230d0e83eea5c3bc1bf8acda572b5342114653fb3d7bd1f3ff098e781f",
+   "key": "b569dc64894dbad108f2eeb6f728f2ecd2789a4e673bf3d75a0cf86ce5d6e872",
    "summary": "126 mutations: 120 caught (120 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "force: 2800 spoils only one of its two bins": "caught",
@@ -3436,7 +3460,7 @@
    }
   },
   "v34pcmrates": {
-   "key": "57462ec798fef50ece9a03a08058710ceb75303950ccf4c65bcb41ea9d6257b4",
+   "key": "f3b15942f09978e7001e47a6b2c624a68d423d79a28927a0838bd2f4714e292f",
    "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "THE V.92 GATE IS CONSUMED BY READING IT -- caught by the LINK COMPARISON alone": "caught",
@@ -3481,7 +3505,7 @@
    }
   },
   "v34retrain": {
-   "key": "a4b3845bc85f4dfe2ddd8dd408c21cb8356b74f183451c98e5016b9d71d619fd",
+   "key": "80c3650915b0590d201131249cfa7dd6c497c42bcd789b5ee7440cd3f29a792a",
    "summary": "74 mutations: 67 caught (67 by test, 0 by strings), 0 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x2218 becomes 5": "caught",
@@ -3561,7 +3585,7 @@
    }
   },
   "v34rx": {
-   "key": "7af5651f50e9fdace3c052606a5eb01f26dce3826fd69660e3305c333c8f9a76",
+   "key": "3a8c159176179cbd283b577ec49df8173c23b12e892a003a9e7a35c51abfe917",
    "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "NEC adaptation starts at count 1 rather than 0": "caught",
@@ -3598,7 +3622,7 @@
    }
   },
   "v34shell": {
-   "key": "6be908e0ffa7f84d5c2f4326756f0a75bdb2ed3e14f20603dd02e001a38c8c68",
+   "key": "68a42c5906bd370fd5a4fd31bb23eca094a964d53d573c8c10e70c46121c6126",
    "summary": "24 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "depth and use_max read each other's bits": "caught",
@@ -3628,7 +3652,7 @@
    }
   },
   "v8agc": {
-   "key": "0566d8f1cd23145cbde9920e642bd7673632d6d4a66626fa9fa21dfd7b26ed4e",
+   "key": "20e22f94347863d57c333cf3cf2c0fe4342e02232c63703c82f1b855bed37630",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the look-for-ANSam-again announcement": "caught",
@@ -3639,7 +3663,7 @@
    }
   },
   "v8dp": {
-   "key": "715fc668f7c7173cb82772dfec723acc999c9b3bb295b950cf93796a1cd05a1e",
+   "key": "ca8216592578a0c953060c36e5dcf06b60cc1614283f5d20f8af57e0bc6d10a7",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the create before the rate is checked": "caught",
@@ -3649,7 +3673,7 @@
    }
   },
   "v8handshak": {
-   "key": "5461b78f2c51b76659a754c325b8a55b1e68885d6fb397d85af304ab6cc8c7c3",
+   "key": "ee7deb3af21286bd1d00716e70c05beb0b961e62d3b39a0f3fa2e13fc4f9b61d",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the CM timeout on every block past the deadline": "caught",
@@ -3660,7 +3684,7 @@
    }
   },
   "v8hs": {
-   "key": "4cbcb4c90bfddf91c4cf404f65405261da859a2ca3df1ac14a8f2fa0c112fdd6",
+   "key": "d44512fae650e831e92ed6e51594b32d9772dc64ac8f7b3cefaf102aa63fab59",
    "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce LAPM even when a raw protocol is given": "caught",
@@ -3673,7 +3697,7 @@
    }
   },
   "v8hsrx": {
-   "key": "f688a1deb9c7467d0873fcc54f7abc12c45350435863c98a59a714c92b4218b4",
+   "key": "1f99c4a35e196281a2455cc0be2458573da8e3c1bc754d086a9830e349587f0d",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the ANSam detection before the JM is checked for": "caught",
@@ -3690,7 +3714,7 @@
    }
   },
   "v8jm": {
-   "key": "d035ce808db3daee2ad56d1cf11ebbbe2f4b635b61dbf49548ca0536a30b69ca",
+   "key": "796615781105a3e2a8f475ecc09462157b821c9fa264cbd1050e96bc3b1ab2dd",
    "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "abandon the marker word when the local extension fails to match": "caught",
@@ -3725,7 +3749,7 @@
    }
   },
   "v8proc": {
-   "key": "3d326e8cb775db301ae2d7e020c291c2ec37ef78d63512c9d887b045bf0d0d49",
+   "key": "25bec4bf211d3f376ac0212af2d88e74a991407df10d94119b1ba8f339ec59da",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "accept a negotiation that agreed on nothing": "caught",
@@ -3748,7 +3772,7 @@
    }
   },
   "v8seq": {
-   "key": "64b3c299cdd429b1eef725e94f1900a5a79ae281992f5ec0daae54c5d1ebf205",
+   "key": "33e7aadda35d7e532e670dc5b101bf76d537dd702926a7500497cfcebec16c01",
    "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the banner before the selector is validated": "caught",
@@ -3763,7 +3787,7 @@
    }
   },
   "v8sig": {
-   "key": "681d1d514cd6b1c89a05c6b5f45205b95cde5465d7299a5de2abedc9d78e4da3",
+   "key": "1588320e5a2a3c4cd011f66848c795de7445c57bd9fe27cc53960eddf0cee7e8",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the phase-reversal announcement": "caught",
@@ -3777,7 +3801,7 @@
    }
   },
   "v90adid": {
-   "key": "b08281750ae67dea422f482a0ab3875307e6d0344076606eebdc1973cd46aabd",
+   "key": "35bd9d42ddda3a43205bbf01e0a09cbcb85cbd2ba4fa2063e81554e898ab4aca",
    "summary": "481 mutations: 464 caught (460 by test, 0 by strings), 0 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
    "verdicts": {
     "DIL: drop the redundant marked test inside the run": "equivalent",
@@ -4264,7 +4288,7 @@
    }
   },
   "v90adidctor": {
-   "key": "3a5a0cd18d277133b4ef7d9ac9f4cf7c2d4bc2d6a030941a8bae2f9795def0a5",
+   "key": "cb9959eb2ea650967fb24acc9c37bb7c0cf20f9604d8666bead670bfe4ef4d8f",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the constructor also clears a field above the parameter block": "caught",
@@ -4276,7 +4300,7 @@
    }
   },
   "v90bits": {
-   "key": "5632478b82de5ffa8cf652ccdf1b2503aa0593bcbe1daa6947e64495004cefd7",
+   "key": "af7a3f2b075fb07b5e4131bf174b2fc9c4d375a79cce053c731c38f53db3eac9",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: bitsPerFrame is initialised, which the blob does not do": "caught",
@@ -4297,7 +4321,7 @@
    }
   },
   "v90cd": {
-   "key": "c06336094469e7389589a5ea3484bf05f8256863b29b48cc60b15594e664d4cf",
+   "key": "ae38f2b20642c9437eac2b979ac7f844550a3f388fad2bdbc4109adaa5febdf5",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "one gate around both diagnostics": "caught",
@@ -4307,7 +4331,7 @@
    }
   },
   "v90cdctor": {
-   "key": "8af03e9c054300a00be4eef2920a765078dfdc7194e5cf213cbf317150cd7620",
+   "key": "0825ae8c69a13c26e8aab03815c6b0221a33a3a5d2742bf8e6730b0fd1a03962",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x08 is cleared four bytes wide rather than one": "caught",
@@ -4321,19 +4345,225 @@
    }
   },
   "v90conneval": {
-   "key": "eb252c1f5c796cd9e2fbf1daf61e99534ff87415e96f374965441c2630a817eb",
-   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "b1e40b99a1c3ee39a3a8083d3cb2c20b3076439f5437762305aa0c9aff2f195f",
+   "summary": "212 mutations: 208 caught (208 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
    "verdicts": {
+    "+0x08 fades on the retrain count": "caught",
+    "+0x0c fades on the remote-rrn count": "caught",
+    "+0x10 is not cleared when the rate up is not armed": "caught",
+    "+0x14 is not cleared when no rate down is armed": "caught",
+    "+0x18 is not cleared under the threshold": "caught",
+    "+0x1c is assigned rather than accumulated": "caught",
+    "+0x24 and the period are compared UNSIGNED": "caught",
+    "+0x80 == 1 is a retrain": "caught",
+    "+0x80 == 3 does not restart the cycle": "caught",
+    "+0x80 cases 0 and 2 do not share a body": "caught",
+    "+0x8c is not acknowledged": "caught",
+    "+0x90 is (word_8c > 4)": "caught",
+    "+0x98 is (word_8c == 4)": "caught",
+    "+0xac is not replaced on the retrain path": "caught",
+    "+0xac is replaced by PHASE4_ERROR_FOR_V34_FALLBACK": "caught",
+    "+0xb8 does not take the multiplier": "caught",
     "RRN_UP and RRN_DOWN are swapped": "caught",
+    "ce_param_float converts rather than reinterprets": "caught",
+    "code 3 does not clear +0x90": "caught",
+    "code 3 is a rate down": "caught",
+    "code 6 decides something": "caught",
+    "codes 1 and 2 are the no-restriction pair": "caught",
+    "curDmin is printed unsigned": "caught",
+    "evaluateMeanErrorStdPhase4 answers one": "caught",
+    "evaluateMeanErrorStdPhase4 answers with its first argument": "caught",
+    "indicateLocalRetrain does not restart its counter": "caught",
+    "indicateLocalRetrain gives up on both paths": "caught",
+    "indicateLocalRetrain leaves +0x18 alone on the ordinary path": "caught",
+    "indicateLocalRetrain reads the REMOTE limit": "caught",
+    "indicateLocalRetrain restarts its counter every time": "caught",
+    "indicateRemoteRateReneg leaves +0x90 alone": "caught",
+    "indicateRemoteRetrain counts the local retrains": "caught",
+    "indicateRemoteRetrain gives up on both paths": "caught",
+    "indicateRemoteRetrain reads the LOCAL limit": "caught",
+    "phase3 clears +0x18 on the accumulating path too": "caught",
+    "phase3 does not consume the average": "caught",
+    "phase3's arms are three ifs rather than a chain": "caught",
+    "phase3's early return consumes the average too": "caught",
+    "phase3's entry test is on the average, not the count": "caught",
+    "phase3's first arm compares its limit SIGNED": "caught",
+    "phase3's first arm is armed by +0xb0": "caught",
+    "phase3's first arm leaves +0x1c alone": "caught",
+    "phase3's first arm leaves altRbsDetectedOnQc set": "caught",
+    "phase3's first arm reads the REMOTE limit": "caught",
+    "phase3's first arm restarts the counter on both paths": "caught",
+    "phase3's first arm swaps its two verdicts": "caught",
+    "phase3's ordinary retrain limit is compared SIGNED": "caught",
+    "phase3's retrain duration is compared SIGNED": "caught",
+    "phase4 clears +0x18 on the accumulating path too": "caught",
+    "phase4 does not clear +0x10 below its threshold": "caught",
+    "phase4 does not consume the average": "caught",
+    "phase4 measures its duration against phase 3's +0x64": "caught",
+    "phase4's early return consumes the average too": "caught",
+    "phase4's entry test is on the average, not the count": "caught",
+    "phase4's fall-back does not restart the counter": "caught",
+    "phase4's fall-back leaves by the ordinary tail": "caught",
+    "phase4's fall-back threshold is the parameter, not the field": "caught",
+    "phase4's mean-error retrain limit is compared SIGNED": "caught",
+    "phase4's ordinary retrain limit is compared SIGNED": "caught",
+    "phase4's retrain duration is compared SIGNED": "caught",
+    "phase4's retrain duration is the parameter, not the copy": "caught",
+    "phase4's retrain uses the EIA6 threshold": "caught",
     "reset leaves +0xa8 alone": "caught",
+    "state 0 scales by 1.39": "caught",
+    "state 1 scales by 1.52": "caught",
     "the +0x9c store is 32 bits wide": "equivalent",
+    "the Echo_Rrn_State diagnostic is not gated": "caught",
+    "the V42 arm compares against initDmin, not twice it": "caught",
+    "the V42 one rate down does not take the parameter": "caught",
+    "the V42 rate down runs when it is disabled": "caught",
+    "the V42 retrain does not re-arm initDmin": "caught",
+    "the V42 retrain limit is compared SIGNED": "caught",
+    "the V42 retrain prints the renegotiation counter": "caught",
+    "the alternate debug arm assigns +0x24": "caught",
+    "the alternate debug arm is entered when its flag is clear": "caught",
+    "the alternate retrain does not advance +0x80": "caught",
+    "the average PDSNR is the reciprocal of the object's": "caught",
     "the constructor does not reset": "caught",
+    "the debug fall back is a retrain": "caught",
+    "the debug rate down does not take the parameter": "caught",
+    "the debug rate down is a rate up": "caught",
+    "the debug rate up is a rate down": "caught",
+    "the debug retrain is a fall back": "caught",
+    "the delayed retrain leaves +0x7c set": "caught",
+    "the delayed retrain needs only one half of its request": "caught",
+    "the delayed retrain restarts the counter on both paths": "caught",
+    "the delayed retrain's limit is compared SIGNED": "caught",
+    "the destructor clears a counter, volatile so it survives": "caught",
+    "the destructor clears the parameter pointer": "caught",
+    "the echo fire does not take the parameter": "caught",
+    "the echo state is set rather than advanced": "caught",
+    "the echo threshold diagnostic is not gated": "caught",
+    "the echo variant is selected the other way round": "caught",
+    "the echoRrnState diagnostic is not gated": "caught",
+    "the empty test is inverted": "caught",
+    "the end-of-TRN1d arm does not clear its duration": "caught",
+    "the end-of-TRN1d arm measures against phase 4's +0x68": "caught",
+    "the end-of-TRN1d arm uses the EIA6 threshold": "caught",
+    "the end-of-TRN1d duration is assigned rather than accumulated": "caught",
+    "the end-of-TRN1d fall-back does not restart the counter": "caught",
+    "the error diagnostic is not gated": "caught",
     "the evaluator's initial period is 1500": "caught",
-    "the phase 4 fallback error is truncated to an int": "caught"
+    "the external-demand arm falls through instead of returning": "caught",
+    "the external-demand override does not need +0x94": "caught",
+    "the external-demand override does not need verdict 2": "caught",
+    "the external-demand stage is skipped only at -1": "caught",
+    "the fade clock does not advance": "caught",
+    "the fade clock is read after it advances": "caught",
+    "the fade divisions are signed": "caught",
+    "the fade quotients are compared unsigned": "caught",
+    "the fire divisions are signed": "caught",
+    "the first call averages rather than assigns": "caught",
+    "the first echo guard multiplies by 2.0": "caught",
+    "the first echo guard wants state 1": "caught",
+    "the first fire condition uses a half, not a third": "caught",
+    "the first fire condition wants 1.6 dwells": "caught",
+    "the first-call test is on the average, not on the count": "caught",
+    "the fraction is the whole value, not the part after the point": "caught",
+    "the initDmin latch is unconditional": "caught",
+    "the keep-rate energies are the wrong way round": "caught",
+    "the latch copies zero rather than curDmin": "caught",
+    "the local fall-back diagnostic prints the limit, not the count": "caught",
+    "the local retrain limit is >=, not >": "caught",
+    "the local retrain limit is compared SIGNED": "caught",
+    "the mean-error arm falls through to the rest of the function": "caught",
+    "the mean-error arm has no ratio guard": "caught",
+    "the mean-error arm is armed by +0xb2": "caught",
+    "the mean-error arm leaves +0xb0 set": "caught",
+    "the mean-error arm uses the QC threshold": "caught",
+    "the mean-error arm's second ceiling admits equality": "caught",
+    "the mean-error arm's second ceiling is MAX_NOF_V90_RETRAINS": "caught",
+    "the mean-error arm's second ceiling is compared SIGNED": "caught",
+    "the new sample carries a weight of one": "caught",
+    "the ordinary phase-3 arm uses the EIA6 threshold": "caught",
+    "the phase 4 fallback error is truncated to an int": "caught",
+    "the phase-3 retrain does not clear its duration": "caught",
+    "the phase-3 retrain duration counts calls, not symbols": "caught",
+    "the phase-3 retrain duration is the parameter, not the copy": "caught",
+    "the phase-3 retrain test runs only when the fall-back did not": "caught",
+    "the phase-3 retrain uses phase 4's threshold": "caught",
+    "the printed decimals leave out the multiplier": "caught",
+    "the printed magnitude keeps its sign": "caught",
+    "the printed sign is '+' at zero": "caught",
+    "the printed thresholds are not scaled by ten": "caught",
+    "the product's decimals keep their sign": "caught",
+    "the product's decimals skip the round trip": "caught",
+    "the product's sign is inverted": "caught",
+    "the rate up does not clear +0x90 on its way out": "caught",
+    "the rate up does not restart +0x10": "caught",
+    "the rate up ignores its enable": "caught",
+    "the rate up wants an average OVER threshUp": "caught",
+    "the rate-down arm compares against initDmin, not twice it": "caught",
+    "the rate-down retrain does not re-arm initDmin": "caught",
+    "the rate-down retrain limit is compared SIGNED": "caught",
+    "the rate-down retrain prints the counter": "caught",
+    "the rate-renegotiation count is the local retrain count": "caught",
+    "the rate-up duration is >, not >=": "caught",
+    "the rate-up duration is compared SIGNED": "caught",
+    "the rate-up dwell is compared SIGNED": "caught",
+    "the rate-up dwell reads +0x10 rather than +0x1c": "caught",
+    "the ratio comparison admits equality": "caught",
+    "the remote fall-back diagnostic uses the local wording": "caught",
+    "the remote retrain limit is compared SIGNED": "caught",
+    "the renegotiation count is not restarted": "caught",
+    "the renegotiation fade runs when the counter is zero": "caught",
+    "the renegotiation limit is >, not >=": "caught",
+    "the renegotiation limit is compared SIGNED": "caught",
+    "the renegotiation retrain consults the retrain limit": "caught",
+    "the retrain accumulator assigns +0x18": "caught",
+    "the retrain case does not re-arm initDmin": "caught",
+    "the retrain does not restart +0x18": "caught",
+    "the retrain duration is >, not >=": "caught",
+    "the retrain duration is compared SIGNED": "caught",
+    "the retrain fall-back does not restart the count": "caught",
+    "the retrain limit is >=, not >": "caught",
+    "the retrain limit is compared SIGNED": "caught",
+    "the retrain reads threshDown": "caught",
+    "the round trip through int is dropped": "caught",
+    "the running average rounds at every step": "equivalent",
+    "the scale is a double, not a float": "equivalent",
+    "the scale is spelt as an int, or as a double": "equivalent",
+    "the scaled rate down compares the unscaled average": "caught",
+    "the second echo guard wants state 2": "caught",
+    "the second fire condition uses a quarter, not a fifth": "caught",
+    "the second fire condition wants a whole dwell": "caught",
+    "the second fire condition wants state 2": "caught",
+    "the second override does not need +0x94": "caught",
+    "the second override does not need verdict 2": "caught",
+    "the tail does not clear the symbol count": "caught",
+    "the terminal keep-rate energy is 1.0": "caught",
+    "the terminal state is 2": "caught",
+    "the terminal state skips the rate-down test": "caught",
+    "the terminal transition does not clear +0x14": "caught",
+    "the terminal transition is state < 2": "caught",
+    "the three decimals are scaled by a hundred": "caught",
+    "the three decimals keep their sign": "caught",
+    "the threshold diagnostic is not gated": "caught",
+    "the threshold diagnostic prints the average": "caught",
+    "the two decimals are three": "caught",
+    "the two decimals keep their sign": "caught",
+    "the two decimals skip the round trip": "caught",
+    "the two thresholds are stored in each other's slots": "caught",
+    "the unscaled arm ignores enableRrnDown": "caught",
+    "the unscaled rate down assigns +0x14": "caught",
+    "the unscaled rate down does not restart +0x14": "caught",
+    "the unscaled rate down does not take the parameter": "caught",
+    "the unscaled rate down wants an average UNDER threshDown": "caught",
+    "the unscaled rate-down duration is compared SIGNED": "caught",
+    "the unscaled rate-down dwell is compared SIGNED": "caught",
+    "the weight is a signed count": "caught",
+    "updateCurrentConstellationData leaves +0x90 alone": "caught",
+    "verdict 3 has a case in the switch": "caught"
    }
   },
   "v90cp": {
-   "key": "a5b4a1872105a6ec48d5b85f34aa51b9c1fdc3691a0531613c42d7e6c517e000",
+   "key": "375305e03a7c6fbed8600214a47bcdabad1122445c61f1ff7392955c7c92353d",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x13 left alone, as reset() leaves it": "caught",
@@ -4357,7 +4587,7 @@
    }
   },
   "v90cpower": {
-   "key": "e2bedad8d9f7e3702b9e4a8a8dd04e593ec9c8f97ca695cff4de9395aea6c6df",
+   "key": "ff34fe9952cbf821dbf65209ec04034a664fd8eccad6e9f3aff9e59c4510af70",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the constructor clears the whole 144 bytes": "caught",
@@ -4368,7 +4598,7 @@
    }
   },
   "v90demapctor": {
-   "key": "746eb563db2a1e5548bb0772f75f8fdc4ed825335a46e61a87727aa2f5ca4fd7",
+   "key": "a79f8bdf8791de54b0a78de9572f45fd21ff200eaec5d8f5ee5e722fb4b01b28",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x664 is cleared a word wide, taking the alignment with it": "caught",
@@ -4391,7 +4621,7 @@
    }
   },
   "v90demapper": {
-   "key": "0df0d571a844d7029ceda613116b5dcbf19649272af41185d734e27de06bb38b",
+   "key": "e2e3d3a6d391db18ae4550783e7f268919fea5e1fd8a3e293f68911a51de11d6",
    "summary": "13 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a level nothing landed on prints its raw error sum, not zero (transcript only)": "caught",
@@ -4410,7 +4640,7 @@
    }
   },
   "v90demctor": {
-   "key": "95500e0d1cea963d2eb19cedf7f99d9d1178cf572dcf9c695c4c7fbf14d5f1c0",
+   "key": "326cb6110ce6d1146fe6c867dc07c7442647b1fccc828d4fab5f52eedc9b2dc1",
    "summary": "74 mutations: 74 caught (74 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: +0x00 takes the session flag rather than the codec type": "caught",
@@ -4490,7 +4720,7 @@
    }
   },
   "v90demod": {
-   "key": "a2542228b4a821f6194b9bb8ddd7f0c2cbba0f25b5d47e5534a393a548fc44cf",
+   "key": "cacad818d5ba243dda12e6be4cfe34f586d10061ff24db28679c6b95a188d925",
    "summary": "56 mutations: 53 caught (53 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x280 is cleared as a word": "caught",
@@ -4552,7 +4782,7 @@
    }
   },
   "v90dil": {
-   "key": "7eff7267880c7368fca35f46cb1758e1094ea1ac080056afc4a29f75461adbbf",
+   "key": "d617328715afcceb9933a72d8edc2d77f7ab3b43e9057e995565b73a43aa2acb",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "always take the A-law row": "caught",
@@ -4573,7 +4803,7 @@
    }
   },
   "v90equ": {
-   "key": "30cc7bc93a6bbc2a05b12630e13e578ce11836535e194fe56de0e09be30f7476",
+   "key": "8dc039af5d55c5cb55234bf33619f0e5bc183e0e45b52df99982a69e20af9ce3",
    "summary": "15 mutations: 11 caught (10 by test, 0 by strings), 2 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "array_ec is sized like the equaliser's arrays rather than the history's": "caught",
@@ -4594,7 +4824,7 @@
    }
   },
   "v90getbitrate": {
-   "key": "8e9b12a61c9806c810904ff42589884e5c019c7323773fe7f87a7b51751844fe",
+   "key": "f65aab8cb4c7ac7e6a9cf448e99354f1795bdc6371d135894abae1d6fabf4af3",
    "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "THE READ IS A DRAIN: the count is consumed, and only the object comparison can see it": "caught",
@@ -4610,25 +4840,52 @@
    }
   },
   "v90jd": {
-   "key": "b3566ab7b8f96e5ae8ed017450654077f6b152242bed7fd6f28215abeaabaf46",
-   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "e9c6610cf870e8d8b742c331bf3f038578f5a035824f414b91fbafdcfa83dfc9",
+   "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "an unknown state clears the run length instead of keeping it": "caught",
+    "getConstelationSize reads the framed positions": "caught",
+    "getConstelationSize transposes its two outputs": "caught",
+    "getMaxLookahead reads the framed positions": "caught",
+    "getMaxLookahead tests each byte for zero rather than masking it": "caught",
+    "getMaxLookahead transposes the two bits": "caught",
+    "getRatesMask takes the low bit of each byte rather than testing it for zero": "caught",
+    "getRatesMask's first group is fifteen bits, not sixteen": "caught",
+    "getRatesMask's second group is eleven bits, not twelve": "caught",
+    "getRatesMask's second group is shifted from 0, not from 16": "caught",
+    "getRatesMask's second group reads the framed layout": "caught",
     "group 0 is one bit short": "caught",
+    "group 2's marker is accepted as a 1 rather than a 0": "caught",
     "the CRC's two feedback taps are transposed": "caught",
     "the constellation bits carry the whole word, not its low byte": "caught",
     "the destructor is not empty": "caught",
+    "the first payload run is fifteen bytes": "caught",
     "the first rate group is one bit short": "caught",
+    "the hunt accepts sixteen ones, not seventeen": "caught",
+    "the payload store takes the bit's truth, not its low byte": "caught",
     "the rate mask is read from the wrong parameter": "caught",
+    "the received CRC field is fifteen bytes": "caught",
+    "the received CRC is compared as a low bit, not a magnitude": "caught",
+    "the received CRC is read from the framed positions": "caught",
+    "the run length counts zero bits too": "caught",
+    "the run length restarts at one rather than accumulating": "caught",
+    "the second payload run is V92Jd's eleven": "caught",
     "the second rate group starts one bit low in the mask": "caught",
     "the second rate group stops where V92Jd's does": "caught",
+    "the third payload run is one byte short": "caught",
+    "the trailing count stops one bit early": "caught",
     "the two constellation parameters are transposed": "caught",
     "the two lookahead bits are transposed": "caught",
+    "the unpacker's CRC register starts at zero, not all ones": "caught",
+    "the unpacker's CRC runs over sixteen payload bytes, not thirty-two": "caught",
+    "the unpacker's CRC taps are transposed": "caught",
     "the unpacker's second byte is left as it was": "caught",
-    "the unpacker's word is left as it was": "caught"
+    "the unpacker's word is left as it was": "caught",
+    "unPackData reports a completed message on every call": "caught"
    }
   },
   "v90mapper": {
-   "key": "3e2764d82ede395ca05900c75565a1972fdd092d902c6569230bb022c6840436",
+   "key": "ef756ace5cbc4e4d312eef2993634544f67be996e989a4e1e7b3e0c9855b37ed",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: +0x04 is left as it was found": "caught",
@@ -4645,7 +4902,7 @@
    }
   },
   "v90modemctor": {
-   "key": "29b84bf05c7014782c71b3e0cd858d6c7b1eb9d1ae0b329436ffd36f2adf2e62",
+   "key": "219be2de1eef1095ce10eeed41328ea519d246865819f751dcef1bff67c79197",
    "summary": "26 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: the DIL descriptor is not stored": "caught",
@@ -4677,7 +4934,7 @@
    }
   },
   "v90modulator": {
-   "key": "29593cbb261ef47dbc7b70741b851e28d38b2882d492303fd2f1cb740e6e34ea",
+   "key": "4c90614bb022f8c268e5091a4c88a76813f15965572a0f8713144c9cdeba3033",
    "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: mappingParams2 takes the sixth argument as well": "caught",
@@ -4709,25 +4966,112 @@
    }
   },
   "v90mp": {
-   "key": "13b39c90df6fec14cf938a46c04390f9fe8f1615d7c8f6145694040fb7a75546",
-   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "ea7434cbf66d472559e509621a42031ce16d7bee6785ceb03351ca6eb074f7af",
+   "summary": "99 mutations: 98 caught (98 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
+    "\"modified good CRC\" is announced at level 2, not level 3": "caught",
     "+0x1b is four bytes wide, as it is in the CP classes": "caught",
     "+0x1b left alone": "caught",
     "+0x1b starts at 17, not 18": "caught",
+    "CPack is one bit of bits[0x21], not the whole byte": "caught",
+    "CPack is printed unsigned, in the arm where it is not zero": "caught",
+    "Ed answers 1 rather than 3": "caught",
+    "Ed does not care where the bit index is": "caught",
+    "Ed is one group of zeros, not two": "caught",
+    "MP and MPnot are told apart by Type rather than by CPack": "caught",
+    "NonLin is one bit of bits[0x1f], not the whole byte": "caught",
+    "NonLin is printed unsigned": "caught",
+    "Rate goes out most significant bit first": "caught",
+    "Rate is three bits, not four": "caught",
+    "Trellis 2 sets the low bit rather than the high one": "caught",
+    "Trellis is masked to the two bits it fits in": "caught",
+    "Type is printed unsigned": "caught",
+    "a bad CRC leaves the state machine where it was": "caught",
+    "a one counts as a one only in its low byte": "caught",
+    "a set bit prints as '0'": "caught",
+    "a type-zero message decodes the h values anyway": "caught",
+    "an MP answers 2 and an MPnot 1": "caught",
+    "another one in state 1 is ignored rather than starting again": "caught",
+    "bit 18 is the type flag reduced to 0 or 1": "caught",
+    "bitsToInfo takes the CRC's extent from +0x119, not from the type": "caught",
+    "evaluateInfo reads Rate from the other end": "caught",
+    "evaluateInfo takes Type from the message rather than from +0x18": "caught",
+    "h1 is printed as an unsigned short": "caught",
+    "h1Imag is packed into frame 3 with h1Real": "caught",
+    "h1Real sits one bit lower": "caught",
+    "h3Imag reads the framing bit at 0x99": "caught",
+    "infoToBits does not skip the framing bits": "caught",
+    "infoToBits feeds the CRC the bit alone, not the bit plus crc[0]": "caught",
+    "infoToBits rounds the length down": "caught",
+    "infoToBits rounds the sequence length up unconditionally": "caught",
+    "infoToBits taps the CRC at 4 and 11 rather than at 3 and 10": "caught",
+    "reset clears the detector's counter as a byte": "caught",
+    "reset leaves the MP counter alone": "caught",
+    "reset leaves the detector's counter alone": "caught",
+    "reset starts +0x1b at 17, not 18": "caught",
+    "sixteen ones are enough for the preamble": "caught",
+    "state 2 does not advance the bit index": "caught",
+    "state 2 leaves the receiver in state 3 only after the length": "caught",
+    "the CRC comparison sums into an int, not into a byte": "caught",
+    "the CRC covers one frame more": "caught",
+    "the CRC is compared against the sixteen bits before the end": "caught",
+    "the CRC lands one bit early": "caught",
+    "the CRC of a short message covers as much as a long one's": "caught",
+    "the CRC register starts at zero, not at one": "caught",
+    "the MP arm reports the rate in bit/s of 2400 twice over": "caught",
+    "the MP arm's h3 line needs only level 2": "caught",
+    "the MP arm's rate mask needs only level 2": "caught",
     "the MP counter left alone": "caught",
     "the MP counter starts at 1": "caught",
     "the MPNot counter left alone": "caught",
+    "the MPnot arm reports the rate unscaled": "caught",
+    "the MPnot arm's rate mask needs level 3": "caught",
+    "the MPnot counter is read as signed": "caught",
+    "the bit vector is the CRC register": "caught",
+    "the bit vector starts at the object, not at +0x1c": "caught",
+    "the counters are read as signed": "caught",
+    "the counters print in the other order": "caught",
     "the destructor clears the counters": "caught",
     "the destructor clears the counters, volatile so it survives": "caught",
     "the detector's counter cleared as a byte": "caught",
     "the detector's counter left alone": "caught",
     "the detector's first flag left alone": "caught",
-    "the detector's second flag left alone": "caught"
+    "the detector's second flag left alone": "caught",
+    "the diagnostic is not gated at all": "caught",
+    "the diagnostics stop after the first message, not the second": "caught",
+    "the first CRC pass does not skip the framing bits": "caught",
+    "the first CRC pass starts at bit 0, not bit 18": "caught",
+    "the first framing bit is a one": "caught",
+    "the framing zero goes straight to state 3": "caught",
+    "the gate is one level lower": "caught",
+    "the length is the byte SIGN-extended": "caught",
+    "the length reported is the group size, not the sequence length": "caught",
+    "the long sequence is 0xba bits, not 0xbb": "caught",
+    "the message ends when the index reaches the padded length": "caught",
+    "the message is evaluated without being decoded first": "caught",
+    "the padding is counted to the sequence length, not past it": "caught",
+    "the padding re-reads +0x118 instead of the register it was loaded into": "equivalent",
+    "the preamble is sixteen ones": "caught",
+    "the rate mask counts down from the top like the h values do": "caught",
+    "the rate mask goes out from the top": "caught",
+    "the rate mask is printed low bit first in the MPnot arm": "caught",
+    "the rate mask is printed sixteen bits wide": "caught",
+    "the rate mask is thirteen bits": "caught",
+    "the repair is tried on the short message too": "caught",
+    "the repaired bit is 0x71": "caught",
+    "the reserved frame 9 is left as it was": "caught",
+    "the second CRC pass taps 4 and 11": "caught",
+    "the short arm pads from after its CRC, as the long arm does": "caught",
+    "the short arm zeroes frame 3 but not its framing bit": "caught",
+    "the short sequence is as long as the long one": "caught",
+    "the two Trellis bits the other way round": "caught",
+    "the two run counters are swapped": "caught",
+    "the two spare bits of frame 2 are left alone": "caught",
+    "the type flag is reduced to 0 or 1 on the way in": "caught"
    }
   },
   "v90p2info": {
-   "key": "bef1b98f2f7c235657b2ff45c4e9ceda98b4d80fde7b043dee3518905833cc0c",
+   "key": "5f6800cc1222ae780be9c9bce17d54973f11711992149af6b38d5e14cdd56684",
    "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "Uinfo and maxTxPower are transposed": "caught",
@@ -4740,7 +5084,7 @@
    }
   },
   "v90p34": {
-   "key": "74409668e3a56482f34ce0e64eb73f6840ff2f81eb0e6ca375dcd1a9fc7956f4",
+   "key": "cea5175e799d89e19cf06def0d40ddac70d9e9b637df79892924ae5f5baffb4d",
    "summary": "70 mutations: 64 caught (64 by test, 0 by strings), 0 NOT caught, 0 unusable, 6 equivalent, 0 MIScounted",
    "verdicts": {
     "case 10 does not consult the bit source": "caught",
@@ -4816,7 +5160,7 @@
    }
   },
   "v90p3dctor": {
-   "key": "223bd43e598838f09e2e3df67c43e79797a32138321e37a6ab1aefa5a0c93576",
+   "key": "b7919db745583087f1bd25b36574b73ada92706f578f0a57e86c1be394d24f7d",
    "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "argument 2 is stored where the detector belongs": "caught",
@@ -4845,7 +5189,7 @@
    }
   },
   "v90p3dreset": {
-   "key": "c69ac5c816f38bdecb94eef0ddf6ee480507a19d442d84546444dc07b8631c2f",
+   "key": "eab26b9ec831c0ccdd0e9a5040651deea70dca059340759b90352f11d87ffe5f",
    "summary": "29 mutations: 28 caught (28 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TRN1dKnownData forwards 0 like the rest": "caught",
@@ -4880,8 +5224,8 @@
    }
   },
   "v90p3mod": {
-   "key": "d8a4c7fc00485a71432af536a9c87a28d4d8adafc9cb814cfb7971272c5b8ba6",
-   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "cfbd9daa4db61e00e4f7cd00f870725ff638370e00b6d57787bd3ab9aa737b7a",
+   "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: the V90Parameters * is not stored": "caught",
     "ctor: the code companded is 0x41, not 0x40": "caught",
@@ -4894,11 +5238,24 @@
     "ctor: the scrambler taps are the wrong way round": "caught",
     "ctor: the session flag is stored after reset, not before": "caught",
     "ctor: the timeout base is 1, not 0": "caught",
-    "dtor: the scrambler's history is not freed": "caught"
+    "dtor: the scrambler's history is not freed": "caught",
+    "exitDIL clears the count on the mid-segment arm too": "caught",
+    "exitDIL exits from any state": "caught",
+    "exitDIL exits with nothing sent": "caught",
+    "exitDIL guards on the state it exits TO": "caught",
+    "exitDIL leaves the event alone": "caught",
+    "exitDIL raises the wrong event": "caught",
+    "exitDIL runs the segment out into the wrong state": "caught",
+    "exitDIL terminates without clearing the count": "caught",
+    "exitDIL's two arms are swapped": "caught",
+    "generateSymbol dispatches the other way round": "caught",
+    "generateSymbol tests the flag for one rather than for non-zero": "caught",
+    "generateSymbol tests the low byte of the session flag": "caught",
+    "generateSymbol truncates the symbol to a byte": "caught"
    }
   },
   "v90p4dctor": {
-   "key": "832aad49bacf2384d501194548464a2b7e8b18fc006b494180e60ff287a163f1",
+   "key": "469d0363e10636dfffc22d2f9f6ef752240b6cec423d2a48762a49c52745952a",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the CP and MP records land in each other's fields": "caught",
@@ -4920,7 +5277,7 @@
    }
   },
   "v90p4mctor": {
-   "key": "5ac59cd99e7e0a58903dd59f2f8bf259a08be4f73f71c0159e0d386da990899a",
+   "key": "f25834cc6034f915f4f40f3147faa03e8d3afcdb4b78eb7c449536b7242e767c",
    "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: +0x2f9c is left as it was found": "caught",
@@ -4946,7 +5303,7 @@
    }
   },
   "v90params": {
-   "key": "1d388045b5366308573b852f8e51d8c179293cc0d5440654ee223df82625fc02",
+   "key": "6695a692f99d0982c7cacdd287ba300ceecbeca2d59d17a3bc3aa56ed67d2161",
    "summary": "37 mutations: 35 caught (35 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "PROBING_MODE is set even when tempProbe is zero": "caught",
@@ -4989,7 +5346,7 @@
    }
   },
   "v90prefilter": {
-   "key": "7b7945d39b3a77f208331d4d739751afedf47c7a2fc8f3052f9072b320379496",
+   "key": "9f84f43c3496ba63376e178ad8b7bcf63b9d3b37dadf0f8546480942f1a15bb0",
    "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "L2 read from the object itself, not through the pointer": "caught",
@@ -5005,9 +5362,36 @@
    }
   },
   "v90rdet": {
-   "key": "d80e6da953772b182c0112b803c827c1a8c31d38757e716ca1a8939b033ccd9d",
-   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "3510d2433fb558d25a5699aa968a83e41f3708d76c83ce2a6962e520a5c32d3e",
+   "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "detectR counts a zero sample as positive": "caught",
+    "detectR fires once the run is past the limit as well as on it": "caught",
+    "detectR leaves the sign register for the next group": "caught",
+    "detectR shifts the register the other way": "caught",
+    "detectR steps the positive run by one sample rather than by six": "caught",
+    "detectR's group is five samples": "caught",
+    "detectR's negative pattern leaves the polarity positive": "caught",
+    "detectR's neither-pattern branch clears only one counter": "caught",
+    "detectR's two patterns are each other's": "caught",
+    "detectRNot answers +1": "caught",
+    "detectRNot keeps its run counter across a group that did not match": "caught",
+    "detectRNot measures against the R limit": "caught",
+    "detectRNot picks its pattern the other way round": "caught",
+    "detectRNot treats a zero polarity as positive": "caught",
+    "detectRf looks for the six-bit patterns": "caught",
+    "detectRf measures against the six-sample limit": "caught",
+    "detectRf steps its run by six": "caught",
+    "detectRf's group is six samples, like detectR's": "caught",
+    "detectRfNot measures against the twelve-sample R limit": "caught",
+    "detectRfNot picks its pattern the other way round": "caught",
+    "detectRfNot steps its run by six": "caught",
+    "reset does not round at all": "caught",
+    "reset leaves the Not run counter": "caught",
+    "reset rounds signed": "caught",
+    "reset rounds the first limit to a twelve rather than a six": "caught",
+    "reset starts the polarity negative": "caught",
+    "reset takes the six-sample limits from each other's argument": "caught",
     "the constructor also clears the counter at +0x00": "caught",
     "the constructor clears the shift register too": "caught",
     "the constructor stores nothing": "caught",
@@ -5017,7 +5401,7 @@
    }
   },
   "v90resampler": {
-   "key": "9f39372cd905cef741a5c0b115faac27a7c2dacae1eb838869c50cb1ae480008",
+   "key": "14b482e2f24e094f5f321e98596cbf46a75776a758994127e3f9fa514d1156f9",
    "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "FROZEN leaves the first-order gain alone": "caught",
@@ -5048,7 +5432,7 @@
    }
   },
   "v90rto": {
-   "key": "ba4ad87e3fdefd78cc7af38248cbab30d8c081ec92104f580a77c55fec3e4595",
+   "key": "395bba7260f3f877a4dfdca72af0afc8c40a4ee948fda3e13d954a465baf7ddc",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "1e-6 as a double, not a float": "caught",
@@ -5058,7 +5442,7 @@
    }
   },
   "v90sbe": {
-   "key": "5225cb1765d4bfd18c3bfa04efa8d2e217cbf68938c41335a55f592e1eb79a16",
+   "key": "9045d9da4e333abcb01a4d510dabeecf5b66a683d0d4660204eae5abcbc18721",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x10 is left as the constructor found it": "caught",
@@ -5068,26 +5452,46 @@
    }
   },
   "v90sddet": {
-   "key": "4b266fdd04acf1bb8e4b27b8e950d36376a71338d207984632f5d110054f7ad7",
-   "summary": "13 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "18edf07dbb3066a4793b1c7a081c6a21c12ebbc91a68789c158ad2544614dade",
+   "summary": "33 mutations: 32 caught (32 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "argument 3 is stored where argument 1 belongs": "caught",
     "arguments 1 and 2 are stored into each other's fields": "caught",
+    "process leaves the oldest sample in place": "caught",
+    "process shifts the history the wrong way": "caught",
     "reset clears one element too many": "caught",
     "reset clears twelve elements rather than historyLength": "caught",
     "reset does not clear the counter": "caught",
+    "the band clears the counter on its way out": "caught",
+    "the band test admits the equal case": "caught",
+    "the band test uses the upper threshold twice": "caught",
     "the constructor does not clear the counter": "caught",
     "the constructor leaves the last element of the history": "caught",
+    "the correlation lag is five samples, not six": "caught",
+    "the correlation runs over five lags rather than six": "caught",
+    "the correlation runs over historyLength lags": "caught",
+    "the counter is compared before it is incremented": "caught",
     "the destructor frees nothing": "caught",
     "the destructor frees without testing the pointer": "caught",
     "the destructor nulls what it freed": "equivalent",
+    "the energy is compared against the other threshold": "caught",
+    "the energy sums the samples rather than their squares": "caught",
+    "the energy threshold admits the equal case": "caught",
     "the history is one float longer than the object asks for": "caught",
     "the history is sized from the fourth argument": "caught",
-    "the limit is the third argument rather than the fourth": "caught"
+    "the incoming sample lands at the far end of the history": "caught",
+    "the last exit leaves the counter alone": "caught",
+    "the limit is compared signed": "caught",
+    "the limit is reached one sample late": "caught",
+    "the limit is the third argument rather than the fourth": "caught",
+    "the quiet exit leaves the counter alone": "caught",
+    "the quotient is inverted": "caught",
+    "the ratio test admits the equal case": "caught",
+    "the ratio test is spelt the natural way, which parts company on 0/0": "caught"
    }
   },
   "v90sessionflag": {
-   "key": "7770ce62320e97294671f9c4e724877ff98cc8c097c8df0de9ab39f66c5ad8eb",
+   "key": "11c5ab179039b114090bdfe48374f9a451044233105aa4a4b53aa08329161a0b",
    "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "demodulator prints after storing the flag": "uncaught",
@@ -5109,7 +5513,7 @@
    }
   },
   "v90specshaper": {
-   "key": "ed446b68ad781c8a5c2b9fd280b05786547e3ca7c240588c07de50615b9ff223",
+   "key": "96c55036cbe4a1900aff5b6002b98f45c71d302ac19b03972635ece5773375b9",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "both buffers are one allocation shared": "caught",
@@ -5127,7 +5531,7 @@
    }
   },
   "v90specver": {
-   "key": "037199da95ad2e5a6a2ddc38bc8a47efd19a9a99db8179345e9f990a0113b813",
+   "key": "573e4272891c089c4a8dd29df8163a3688340863f26881c8feb9ba8d626d3cca",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reset clears the transform length instead of the counter": "caught",
@@ -5149,20 +5553,38 @@
    }
   },
   "v90ssfilter": {
-   "key": "95d9084c65eeb038b1affff1527dd524b06520c52374f7f895568687bfc8b1b2",
-   "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "4695ba262488f6ab5e8fecfbcdbc52d501d528e177177c2ec7a8a5355fb97bbd",
+   "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "getMetric runs one block too few": "caught",
+    "getMetric scores with the other section's zero": "caught",
+    "getMetric starts its accumulator at zero rather than at the object's": "caught",
+    "getMetric takes its inner bound from the block count": "caught",
+    "progress is the natural translation, which loads and stores over a zero-length block": "caught",
+    "reset clears the block length as well": "caught",
+    "reset clears the coefficients rather than the state": "caught",
+    "reset leaves the energy accumulator alone": "caught",
+    "setFilterCoeff drops its last argument into the state instead": "caught",
+    "setFilterCoeff swaps its first two arguments": "caught",
+    "the accumulator is restarted every block": "caught",
+    "the accumulator takes the output rather than its square": "caught",
+    "the bracketing moves, which is the same value and not the same rounding": "caught",
     "the coefficients are cleared and the state is not": "caught",
     "the constant at +0x20 is one rather than two": "caught",
     "the constant lands in the last state word instead": "caught",
     "the first coefficient is left as allocated": "caught",
+    "the first section adds where the object subtracts": "caught",
+    "the first section's feedback uses the second section's pole": "caught",
     "the fourth coefficient is left as allocated": "caught",
+    "the last two state words are stored into each other's slots": "caught",
+    "the second section feeds back its input rather than its output": "caught",
+    "the state is rounded to float on every sample rather than on every block": "caught",
     "the state's last word is left as allocated": "caught",
     "the state's second word is cleared twice and its third not at all": "caught"
    }
   },
   "v90trn2": {
-   "key": "377fbd46d12646bfe2365d09f30ddcbc84102e61075c6262cdf44183a0137030",
+   "key": "a12be0c3541ef210df3b26e2eb37500a1ef4fcb6fb65db3158a90866b3b16ffc",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "only the first is stored": "caught",
@@ -5174,7 +5596,7 @@
    }
   },
   "v92alloc": {
-   "key": "80cdee43b1dd93554ca3259d9874a629bbc22074cb062c215d9531cfb9e4d420",
+   "key": "1f2f8879bd35395acd5a49eb52ba4b6cf84498a912c763499d211ce00d7059d6",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "add a fifth coefficient bank the object does not allocate": "caught",
@@ -5191,7 +5613,7 @@
    }
   },
   "v92btos": {
-   "key": "a52130269ca8c6f0c7a6793c3520dda3f3cb1c5311129bc212149a47f7983891",
+   "key": "0ac6c1226d1204e1582c61d057d3922ad7c56a280bfb8ccd2fff1471adcdbcc0",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the block size is not cleared": "caught",
@@ -5212,7 +5634,7 @@
    }
   },
   "v92convenc": {
-   "key": "bd4fbcef59fd7bbcfe01425504e7ed654d0f94b852cdd53d73dfb21f7cf9ab5a",
+   "key": "3b91d725863c2e4ab1315b63dc04cda8a05055c0fc89bd0be9d12d2398f12b66",
    "summary": "40 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "cosetMapping4D's first row has one entry wrong": "caught",
@@ -5258,7 +5680,7 @@
    }
   },
   "v92cp": {
-   "key": "be515c8b050808b8b374e181311f49e9487281b406759fdd66a6c3c34f3ad0fb",
+   "key": "3d6a4e6b979598c00a269adc8ff6a16b7753def11c455949caade2e0aca9f0a2",
    "summary": "14 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x04 cleared as a word": "caught",
@@ -5278,13 +5700,17 @@
    }
   },
   "v92ec": {
-   "key": "d983e1a8371e09228732f640dab3095e90da11241188651a956fca8be7ea2e26",
-   "summary": "47 mutations: 47 caught (47 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "102cc439d490236d30da70d3798e9f5985781a9b4922bb50d8275211ea778fc5",
+   "summary": "97 mutations: 97 caught (97 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "a repeated state restarts the sample count anyway": "caught",
+    "fast training loads the slow beta": "caught",
+    "fast training takes the slow duration": "caught",
     "fold the delta in after the store (old delay lost)": "caught",
     "one coefficient of the ARMA denominator is mistyped": "caught",
     "one coefficient of the ARMA numerator is mistyped": "caught",
     "print the field rather than the argument": "caught",
+    "slow training loads the fast decay factor": "caught",
     "the ARMA behind the canceller is not reset": "caught",
     "the ARMA gets a different block size": "caught",
     "the ARMA gets eight denominator taps": "caught",
@@ -5292,22 +5718,46 @@
     "the ARMA is freed without being destroyed": "caught",
     "the ARMA pointer is freed but not nulled": "caught",
     "the ARMA pointer is nulled before it is freed": "caught",
+    "the beta does not decay": "caught",
     "the beta is cleared and the decay factor is not": "caught",
+    "the beta is printed and not stored": "caught",
+    "the block length replaces the sample count": "caught",
     "the coefficient array is freed but not nulled": "caught",
     "the coefficient array is sized in doubles": "caught",
     "the coefficient loop clears the history instead": "caught",
     "the coefficient loop is bounded by the tap count, not the filter length": "caught",
     "the coefficient loop runs one entry long": "caught",
     "the coefficient loop runs one entry short": "caught",
+    "the coefficient update reads the history from the front": "caught",
+    "the coefficient update subtracts": "caught",
+    "the compaction copies upward": "caught",
+    "the compaction keeps filterLength samples": "caught",
+    "the compaction reads one sample short of the newest": "caught",
+    "the compaction triggers one sample early": "caught",
     "the construction notice is gated one level too low": "caught",
     "the construction notice's typo is corrected": "caught",
     "the constructor does not reset what it built": "caught",
+    "the copy state does not reduce the cursor": "caught",
+    "the copy state's duration comparison is strict": "caught",
+    "the count-delay duration is the delay alone": "caught",
+    "the count-delay state hands on to slow training": "caught",
+    "the decay factor is printed and not stored": "caught",
     "the delay is stored without going through setEchoDelay": "caught",
     "the delta is subtracted, not added": "caught",
     "the destruction notice is gated one level too low": "caught",
+    "the dot product is unrolled eight ways": "caught",
+    "the dot product uses one accumulator": "caught",
+    "the dot product's tail is skipped": "caught",
+    "the dump is bounded by the tap count": "caught",
+    "the dump runs one coefficient long": "caught",
+    "the error is the difference the other way round": "caught",
+    "the filter is dumped leaving fast training only": "caught",
+    "the filter is dumped on every entry to FILTER_ONLY": "caught",
     "the filter length is not halved": "caught",
     "the filter length is not rounded to a multiple of four": "caught",
     "the filter length is quartered": "caught",
+    "the filter-only cursor wraps one entry early": "caught",
+    "the filter-only state adapts like a training one": "caught",
     "the history is allocated one float short": "caught",
     "the history is freed but not nulled": "caught",
     "the history is freed twice and the coefficients not at all": "caught",
@@ -5317,24 +5767,71 @@
     "the history loop uses the filter length, not the tap count": "caught",
     "the history's block term is not doubled": "caught",
     "the history's span leaves out the delay": "caught",
+    "the illegal-state message goes through the encoder": "caught",
+    "the illegal-state message is not gated": "caught",
     "the initial delay is taken from the delay offset": "caught",
     "the null guards are dropped": "caught",
     "the parameter block's delay offset is left out of the tap count": "caught",
+    "the printed fraction is scaled by 1e5": "caught",
+    "the printed fraction keeps its sign": "caught",
+    "the printed integer part keeps its sign": "caught",
+    "the printed sign is the ordered comparison, so a NaN prints '-'": "caught",
+    "the sample count survives a state change": "caught",
+    "the sentinel is 178.0f": "caught",
+    "the sentinel path does not step the read cursor": "caught",
+    "the sentinel test is C's equality, so a NaN filters": "caught",
     "the sign character folds to '+' rather than '-'": "caught",
+    "the state is left alone": "caught",
+    "the step size is the decay factor": "caught",
     "the tap count follows the delay, not the change": "caught",
     "the tap count is built from the initial delay, not the delay offset": "caught",
     "the tap count is left at zero after the loop that uses it": "caught",
+    "the training cursor wraps at the filter length": "caught",
+    "the training duration comparison is strict": "caught",
+    "the training states hand on the wrong way": "caught",
     "the two diagnostics print each other's format string": "caught",
+    "the two training arms store each other's state": "caught",
+    "the write cursor advances after a compaction as well": "caught",
     "the write cursor is not rewound": "caught",
-    "word_08 is left alone": "caught",
+    "the write cursor is not rewound after a compaction": "caught",
+    "the write pointer is not rewound after a compaction": "caught",
+    "the writer's fast loop re-reads the first sample": "caught",
+    "the writer's fast loop skips the ARMA": "caught",
+    "the writer's fast path forgets to advance the cursor": "caught",
+    "the writer's fast path is taken one sample too often": "caught",
     "word_18 is the filter length rather than one less": "caught"
    }
   },
   "v92jd": {
-   "key": "07a5544d5fad4b54d628c6073c231ece3bc0579d4b6515d37ef47fa8c4b8a580",
-   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "066b642b9dad7da497cf5dd7c9c3c471f3100677ac36e03e5dc034e89a74a278",
+   "summary": "51 mutations: 51 caught (51 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "getConstelationSize reads V90Jd's positions instead": "caught",
+    "getConstelationSize reads the phase vector one index lower": "caught",
+    "getConstelationSize transposes its two outputs": "caught",
+    "getJdPhase reads fifteen bits, not sixteen": "caught",
+    "getJdPhase reads the data vector, not the phase one": "caught",
+    "getJdPhase reads the phase from the framed layout": "caught",
+    "getJdPhase's scale is one bit out": "caught",
+    "getMaxLookahead reads the phase vector": "caught",
+    "getMaxLookahead transposes the two bits": "caught",
+    "getRatesMask reads the phase vector": "caught",
+    "getRatesMask's second group is eleven bits, like the constructor's": "caught",
     "the data message's constant is set, not cleared": "caught",
+    "the data unpacker compares its CRC as a low bit, not a magnitude": "caught",
+    "the data unpacker demands the phase message's tag": "caught",
+    "the data unpacker does not check its tag at all": "caught",
+    "the data unpacker fills the phase vector": "caught",
+    "the data unpacker never reports a completed message": "caught",
+    "the data unpacker's CRC field is fifteen bytes": "caught",
+    "the data unpacker's CRC runs over sixteen bytes, not thirty-two": "caught",
+    "the data unpacker's accepted state is the phase unpacker's eight": "caught",
+    "the data unpacker's hunt accepts sixteen ones": "caught",
+    "the data unpacker's restart clears the phase state word": "caught",
+    "the data unpacker's second rate run takes V.90's twelve": "caught",
+    "the data unpacker's tag is read from the framed position": "caught",
+    "the data unpacker's trailing count stops one bit early": "caught",
+    "the data unpacker's twelfth rate bit never advances the state": "caught",
     "the destructor is not empty": "caught",
     "the first rate group is one bit short": "caught",
     "the fixed-point scale is one bit out": "caught",
@@ -5344,6 +5841,18 @@
     "the phase loop is one bit short": "caught",
     "the phase message's leading constant is cleared, not set": "caught",
     "the phase message's two trailing bytes are left as they were": "caught",
+    "the phase unpacker compares its CRC as a low bit, not a magnitude": "caught",
+    "the phase unpacker demands the data message's tag": "caught",
+    "the phase unpacker does not check its tag at all": "caught",
+    "the phase unpacker fills the data vector": "caught",
+    "the phase unpacker reports a completed message on a bad tag": "caught",
+    "the phase unpacker switches on the data unpacker's state word": "caught",
+    "the phase unpacker's CRC field is fifteen bytes": "caught",
+    "the phase unpacker's CRC reads the data vector": "caught",
+    "the phase unpacker's hunt accepts sixteen ones": "caught",
+    "the phase unpacker's second rate run takes the data unpacker's eleven": "caught",
+    "the phase unpacker's tag is read from the framed position": "caught",
+    "the phase unpacker's trailing count stops one bit early": "caught",
     "the phase unpacker's word is left as it was": "caught",
     "the rate mask is read from the V.90 parameter": "caught",
     "the second rate group runs to V90Jd's twelve bits": "caught",
@@ -5351,7 +5860,7 @@
    }
   },
   "v92mapper": {
-   "key": "7eed6084968c9de2992d94cad55eb63f9631e720c5a958f15766dacc76ac59fb",
+   "key": "c33d9aebbc180e1feac228ec90abd92d74bf4fdb5bdf319fe04a02d77d73312f",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reset installs mode 0's power for mode 1 as well": "caught",
@@ -5369,7 +5878,7 @@
    }
   },
   "v92mod": {
-   "key": "3c4a028c323f7095bb73c28bdb669304344ba1c9850eb2115199a817b5c13459",
+   "key": "83d56d31dbaebdfbc1af0f1a44d15e26433419f368d507240012f3065488360c",
    "summary": "40 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "reset does not copy the block size into +0x08": "caught",
@@ -5415,7 +5924,7 @@
    }
   },
   "v92modem": {
-   "key": "84cb941ed64f186ffa33729a65a6639071f1e0047707d7e482e6a25ea4455df2",
+   "key": "a91148b6a594febee5a956cf1dd2706871dcd6dd8d3b3a40d58f4eea91f3fdaf",
    "summary": "41 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the CP is destroyed and not freed": "caught",
@@ -5462,19 +5971,68 @@
    }
   },
   "v92modulusencoder": {
-   "key": "43798d881fd080a522a3a6d171db213ee111f122440643565c07923373194f71",
-   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "a36d534a9b271002279c5bb714f70a086b38b8eb87af550d65d27974f90f621a",
+   "summary": "55 mutations: 55 caught (55 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "a zero high limb goes down the long path": "caught",
+    "case 1 reports the modulus rather than the largest digit": "caught",
+    "case 1 reports the second pair of each group, not the first": "caught",
+    "case 2 leaves the words it should zero alone": "caught",
+    "case 2 takes its last pair from the wrong two moduli": "caught",
+    "one digit in the middle takes the next modulus": "caught",
     "one of the thirteen is set to one, not zero": "caught",
+    "reset leaves the selector alone": "caught",
+    "the bit count is read from the wrong parameter word": "caught",
+    "the borrow is taken when the high limb is zero as well": "caught",
+    "the borrow out of the low limb is not repaid": "caught",
     "the cleared range runs one word too far": "caught",
-    "the cleared range starts one word lower": "caught",
+    "the cleared range starts below +0x18": "caught",
     "the cleared range stops one word short": "caught",
-    "the constructor also touches the six words below the range": "caught",
-    "the range is cleared with a memset over the whole object": "caught"
+    "the comparison at the halfway point excludes equality": "caught",
+    "the complement is against the product, not one less than it": "caught",
+    "the complement is taken on the wrong state of the bit": "caught",
+    "the complement's high limb loses its guard on a zero product": "caught",
+    "the constructor also touches the words below the range": "caught",
+    "the correction is computed when the modulus divides exactly": "caught",
+    "the correction is the residue itself, not 2^63 less it": "caught",
+    "the digit is subtracted as a signed remainder, not read back": "caught",
+    "the disparity bit is set rather than toggled": "caught",
+    "the exact product is shifted one place too few": "caught",
+    "the first digit drops the correction": "caught",
+    "the first modulus's correction is not masked to 63 bits": "caught",
+    "the first modulus's normalisation shifts one place too few": "caught",
+    "the fitted-exactly arm is never taken": "caught",
+    "the fitted-exactly arm of the first modulus is never taken": "caught",
+    "the fitted-exactly arm of the second modulus is never taken": "caught",
+    "the halfway low limb is half the product, not half of one less": "caught",
+    "the halfway point is the product, not half of it": "caught",
+    "the high limb is compared against the wrong modulus": "caught",
+    "the high limb is used for one bit count too few": "caught",
+    "the high limb takes one bit too many": "caught",
+    "the high limb takes the whole byte too": "caught",
+    "the last digit is reduced modulo the twelfth modulus": "caught",
+    "the last modulus is copied from one word past the block": "caught",
+    "the last quotient is taken before its digit is removed": "caught",
+    "the long path multiplies by the high limb, not its remainder": "caught",
+    "the loop stops on a negative product rather than a positive one": "caught",
+    "the low limb is not masked to 63 bits": "caught",
+    "the low limb is shifted back by the loop count, not one more": "caught",
+    "the low limb starts one bit high": "caught",
+    "the normalisation loop is allowed one shift more": "caught",
+    "the odd bit of the high limb lands one place down": "caught",
+    "the product is split seven and five, not six and six": "caught",
+    "the range is cleared with a memset over the whole object": "caught",
+    "the second modulus's correction is not masked to 63 bits": "caught",
+    "the second modulus's correction is skipped altogether": "caught",
+    "the short path forgets the low limb's own quotient": "caught",
+    "the split between the limbs is at bit 63, not 62": "caught",
+    "the twelve moduli are copied one word high": "caught",
+    "the whole byte is taken, not its bottom bit": "caught",
+    "the wrapping product misses its last factor": "caught"
    }
   },
   "v92p2info": {
-   "key": "826be58f98232c46c13d212a9ca5238731b0a951a3ced2d9947f4fb161a6745e",
+   "key": "8016d5a2186c8934c337d01fd02b1be0432e342712a6534e57a88f2a8387f73e",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "Uinfo and maxTxPower are transposed": "caught",
@@ -5492,8 +6050,8 @@
    }
   },
   "v92p3mod": {
-   "key": "08dc9f4e166e474f36718d9345aeeb1cd9a5fa0287ada076343bd1900780134d",
-   "summary": "58 mutations: 55 caught (55 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
+   "key": "85b11f6a41361edd79a54008b60738041e884378da3fbe8548c449de20563877",
+   "summary": "77 mutations: 74 caught (74 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "Ja indexes the vector from 24 rather than 25": "caught",
     "Ja leaves its constant-bit run one symbol early": "caught",
@@ -5534,6 +6092,25 @@
     "ctor: the scrambler tap pair is the wrong way round": "caught",
     "ctor: the upstream scrambler takes the downstream taps": "caught",
     "dtor: the scrambler's history is not freed": "caught",
+    "exitJa keeps the count on the boundary": "caught",
+    "exitJa loses its state guard": "caught",
+    "exitJa loses its zero-count guard": "caught",
+    "exitJa's boundary is six symbols, not twelve": "caught",
+    "exitJa's residue is signed": "caught",
+    "exitJa's two arms are swapped": "caught",
+    "exitSilence guards on the wrong state": "caught",
+    "exitSilence keeps the count": "caught",
+    "exitSilence loses its zero-count guard": "caught",
+    "exitSilence rounds to the twelve-symbol boundary as well": "caught",
+    "exitSuSecond guards on state 10, not 9": "caught",
+    "exitSuSecond loses its zero-count guard": "caught",
+    "exitSuSecond's boundary is six symbols, not twelve": "caught",
+    "exitSuSecond's residue is signed": "caught",
+    "exitSuSecond's two arms are swapped": "caught",
+    "exitTRN1u clears the count": "caught",
+    "exitTRN1u guards on state 13, not 12": "caught",
+    "exitTRN1u loses its zero-count guard": "caught",
+    "exitTRN1u rounds to the twelve-symbol boundary": "caught",
     "reset does not clear eventCode": "caught",
     "reset drops its last argument": "caught",
     "reset seeds the scrambler with a one bit": "caught",
@@ -5556,7 +6133,7 @@
    }
   },
   "v92p4mod": {
-   "key": "6c91fabe0e99a4258dc6d9a46e2a1d15fb4a2c13863e82bb194895abbcc61388",
+   "key": "c3750e68349c40aff63e1667d8056eb3d2306535902e97cb7276e2cb98603f7c",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x18 is not cleared": "caught",
@@ -5579,7 +6156,7 @@
    }
   },
   "v92params": {
-   "key": "4a21f0210694186bd63a6b5603391456a20246672ae4ca07fbbacb41d3aee441",
+   "key": "3cf004de74b9679a2a10f25ed92229ed5f11f3ddfc5bda9d890e19919307674b",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "init does not call setToDefault": "caught",
@@ -5596,31 +6173,62 @@
    }
   },
   "v92precoder": {
-   "key": "4c6388f86cae17e3b4ac5c81b1fc6ad7b0ec06d2c7153156e328e46eef627181",
-   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "1e37bd36d2a320127ad653c9e1b66e413a76f676485eb2015f1d0c96d08a0df2",
+   "summary": "34 mutations: 34 caught (34 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "process selects the constellation with the frame index rather than the block's": "caught",
+    "process takes the step from the selector rather than from n": "caught",
+    "reset copies tableA from one word too early": "caught",
+    "reset copies tableB from the six words above it": "caught",
+    "reset copies the constellations in reverse": "caught",
+    "reset leaves the second carried sample alone": "caught",
+    "reset takes the pointer to the block's start rather than to +0x9c": "caught",
+    "reset's diagnostic is gated one level lower": "caught",
+    "setCoefficients hands each filter the other's array": "caught",
+    "setCoefficients stores the two counts the other way round": "caught",
+    "the caller's float output gets the chosen point rather than the sum": "caught",
+    "the constellation entry is read as a signed int": "caught",
     "the constructor also clears the word at +0x00": "caught",
     "the destructor frees the first filter twice and the second never": "caught",
     "the destructor nulls the pointer it has just freed": "caught",
     "the filter allocation is four bytes larger than the object": "caught",
     "the first filter gets one more sample of slack": "caught",
+    "the first filter runs whatever its tap count is": "caught",
     "the first free's null test is dropped": "caught",
+    "the fourth symbol's index is not doubled": "caught",
+    "the fourth symbol's interval is over the step rather than twice it": "caught",
+    "the lower bound is not negated": "caught",
+    "the negative half is not negated": "caught",
+    "the negative half of the constellation is off by one": "caught",
+    "the parity ignores the caller's third argument": "caught",
+    "the running minimum is rounded to a float on each update": "caught",
+    "the search keeps the largest square rather than the smallest": "caught",
     "the second filter gets one fewer sample of slack": "caught",
     "the second filter is built with no taps": "caught",
     "the second free's null test is dropped": "caught",
-    "the two stores are swapped": "caught"
+    "the sum leaves out the second carried sample": "caught",
+    "the two filters are fed each other's value": "caught",
+    "the two stores are swapped": "caught",
+    "the upper bound uses the modulus rather than one less than it": "caught"
    }
   },
   "v92prefilter": {
-   "key": "bc0b7b29c689d4a589b37d7210cea05f2f0428e7e824af71f00d262dd45af1e9",
-   "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "a4831c11df1f59b0294fde1c1b078dee493e574d899b4ef1b236434fdbdce29b",
+   "summary": "17 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
+    "process chains the IIR into the FIR rather than the other way round": "caught",
+    "process gates the FIR on the IIR's count": "caught",
+    "process moves eleven samples through the FIR alone, not twelve": "caught",
+    "reset resets the FIR twice and the IIR never": "caught",
+    "setCoefficients hands each filter the other's array": "caught",
+    "setCoefficients stores the two counts the other way round": "caught",
     "the FIR allocation is four bytes larger than the object": "caught",
     "the FIR free's null test is dropped": "caught",
     "the FIR gets one more sample of slack": "caught",
     "the IIR free's null test is dropped": "caught",
     "the IIR gets one fewer sample of slack": "caught",
     "the IIR is built with no taps": "caught",
+    "the both-off arm copies eleven samples": "caught",
     "the constructor also clears the word at +0x00": "caught",
     "the destructor frees the FIR twice and the IIR never": "caught",
     "the second sub-object is a FloatFIR, not a FloatIIR": "equivalent",
@@ -5628,7 +6236,7 @@
    }
   },
   "v92tx": {
-   "key": "b80ad2b66d7943edc882d669b5188913b631df9598c21ae80789622c69c79ca4",
+   "key": "67a953421f9d208df9ac2b26e2ad016fd1bf838d22861b49c7ed66621a8fc466",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x04 is not cleared": "caught",
@@ -5652,7 +6260,7 @@
    }
   },
   "vpcmcreate": {
-   "key": "bc4dec9421e8745a75e91dedfb85b3cdbb4436b484e29cd23bb982fcb8e8ea46",
+   "key": "8d18d70ca0113bbc02dd7650afa538a376e40ac026265b734acaed5623f65ecc",
    "summary": "31 mutations: 29 caught (29 by test, 0 by strings), 1 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x254's offset is 10001 rather than 10000": "caught",
@@ -5689,7 +6297,7 @@
    }
   },
   "vpcmctor": {
-   "key": "3bb2fcb64476a41d04a007a88b73ac33d388d41d10606f94292bcb99557b63ad",
+   "key": "d7a2ad4e1aa5d19c9ff553585fdc26dd56bff6639fe2cf915121b4724cc92f56",
    "summary": "32 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "minNofTransmitSequences starts at VPCMXF_Create's 1 and not at 0": "caught",
@@ -5727,7 +6335,7 @@
    }
   },
   "vpcmdp": {
-   "key": "1f95df3ebd995235836035a8786f076c244f199121452583b13b45740e523240",
+   "key": "7c7eccd5b274b693040a5a98ef09402dd9cbfb74c62c4138d894668f130d3f77",
    "summary": "96 mutations: 88 caught (88 by test, 0 by strings), 0 NOT caught, 0 unusable, 8 equivalent, 0 MIScounted",
    "verdicts": {
     "MDMPRM_MIN_RATE and MDMPRM_MAX_RATE are swapped": "caught",
@@ -5829,7 +6437,7 @@
    }
   },
   "vpcmep3": {
-   "key": "4f802b4a7fa008d558c4e2511a26c00614128ea6d5d967543183c0c4055714d1",
+   "key": "5ea1e30f942821f52eabdace369d11cd695afa543b9c0976c1561c49a050195c",
    "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "externalReset writes the six flags only once": "equivalent",
@@ -5858,7 +6466,7 @@
    }
   },
   "vpcmflomodem": {
-   "key": "e5e0c901702766a316214bc38da9ce5a3619595ad4fe06f0f2de5db63b31357b",
+   "key": "a6535982a655cd99fc42eb53dccdda5dc92315c43d46e2cc67751a6a286750ec",
    "summary": "49 mutations: 48 caught (48 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "Cp: +0x20c is reached from the modem rather than the demodulator": "caught",
@@ -5913,7 +6521,7 @@
    }
   },
   "vpcmguard": {
-   "key": "0aaae0e8764ce3b63d39aefd37455fd010e0838582bd4f930e690d019088b4de",
+   "key": "5e0569665ef68266b14a4075396967fb6ff951f47228a399c207c4836712642c",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the guard returns quietly instead of stopping": "caught",
@@ -5921,7 +6529,7 @@
    }
   },
   "vpcmrun": {
-   "key": "25c49fba41456f961b22141d2b5279bbd9c5d1780291fa46d6fb2de0b889e476",
+   "key": "e3cdd0ba3d1aff82a0ae12ba1ebdca6530b1cc3290374f99ac789b65a2ad775c",
    "summary": "18 mutations: 11 caught (11 by test, 0 by strings), 2 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
    "verdicts": {
     "`nbits` is not carried to the next block": "caught",
@@ -5945,7 +6553,7 @@
    }
   },
   "vpcmtabs": {
-   "key": "c5d8b13ee733268231373ad69d4a2e703d22337f824c9ec1539e27fe7aa58dca",
+   "key": "98c5e2d9f065f3f075a7f54e8b2898785594283011fa77281ac6444b7345aaa4",
    "summary": "21 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "break v92TxPreFilter's mirror for real, on the high side only": "caught",
@@ -5972,14 +6580,14 @@
    }
   },
   "vpcmweak": {
-   "key": "a3d12af613ad6fdbefdfa7515f829649f64c99101bd0c50a81c8d63b20ab0e02",
+   "key": "a9f97747ea8ea9a3de320ae6b8ca84feb43abe31375f3b9f04787f66e0990d25",
    "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the comparing translation unit declares the five plain, not weak": "caught"
    }
   },
   "vpcmxfcreate": {
-   "key": "6325d32de1c72fda8843816293877284e14250e68cd024f35c07cdcdfda83e9c",
+   "key": "2b8f774693411a8181a1ab72d0fe1c1423cbd3612928497c9daf8c302c88d041",
    "summary": "24 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",
@@ -6009,7 +6617,7 @@
    }
   },
   "vpcmxfterm": {
-   "key": "444cb5c38a5e0c60071601ac44b463907a5972f1a1c894ec69bed36221680358",
+   "key": "a332ec80b6ad589012b18f7b9f068b5acf9391664fb91e032f169319b5bd884d",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "nothing is forwarded at all": "caught",

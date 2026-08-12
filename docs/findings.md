@@ -48176,3 +48176,50 @@ pass under GCC 13, so the entry recorded against it became false — and
 `gccdiverge.py` FAILED the gate saying `STALE ... and now PASSES`, rather than
 quietly excusing a test that no longer needs excusing. A register that cannot
 report its own obsolescence is where the next real failure hides.
+
+### 1454. A 33,600 CALL EXECUTES EXACTLY ONE UNWRITTEN SYMBOL — AND THE STATIC CLOSURE SAID 168
+
+`tools/closure.py VPcmV34Progress --missing` reports **168 symbols, 145,706
+bytes**. That is reachability, and for a dispatcher it over-answers
+enormously: `VPcmV34Progress` is the progress entry for the whole V.PCM
+family, so its closure contains the V.90 and V.92 arms as well as the V.34
+one. By symbol name the split is 72.8% V.90, 24.1% V.92, 3.1% shared.
+
+`tools/callgraph.py` cannot narrow it either, and it is worth saying why so
+nobody tries: it reads `R_386_PC32` relocations, so it is reachability too.
+**No static tool distinguishes the taken arm of a switch from the untaken
+one.** The question is dynamic and has to be answered by running the call.
+
+**`t_v34link` IS that call** — two endpoints, one delayed wire, V.8, the
+datapump change, V.34 startup, 33,600 each way at BER 0. Traced under
+callgrind and mapped back through the binary's symbol table:
+
+| | symbols | bytes |
+|---|--:|--:|
+| unwritten in the closure | 168 | 145,706 |
+| **executed by the call** | **1** | **7,278** |
+| never entered | 167 | 138,428 |
+
+The one is **`VPcmV34Progress` itself**. Every other unwritten symbol it can
+reach belongs to a protocol this call does not run.
+
+**THE TRAP, AND IT NEARLY SHIPPED A RIGHT ANSWER FOR A WRONG REASON.**
+Callgrind's default output records CALL instructions. GCC 3.4 tail-calls
+heavily, so a function entered by `jmp` never appears and its cost is charged
+to whoever jumped. The first trace used the default, saw **141** blob
+functions, and reported the same conclusion. With `--dump-instr=yes` the same
+call shows **282**. The conclusion survived; the evidence for it did not, and
+only a validation separated the two.
+
+So `tools/exectrace.py` refuses to report until named symbols that MUST run
+have been seen and named symbols that must NOT run have not. `v34handshak`
+and `receiver` are the ones that expose this: a V.34 connect cannot happen
+without either, and the call-only trace saw neither.
+
+**WHAT IT LICENSES.** The V.34 phase of the V.PCM run path is one function of
+7,278 bytes, not 145 KB. Write it and `t_vpcmrun`'s four-way comparison runs
+with nothing borrowed — the last blob code on a 33,600 call goes away.
+
+**WHAT IT DOES NOT.** One run, one test, one clean wire. A retrain, a rate
+renegotiation or a different symbol rate would enter arms this call does not,
+and they are unwritten work this list does not name. The number is a floor.
