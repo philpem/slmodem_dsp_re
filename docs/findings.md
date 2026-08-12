@@ -50991,3 +50991,60 @@ rule** in finding 215 -- every caller must write its callees first, and
 popular leaves have many callers. Before writing a prerequisite, it is worth
 one `git log --all --oneline -- src/dsp/<name>.c` and one message to the
 coordinator. That costs a minute; this cost two implementations.
+
+### 1571. TWO SESSIONS RECONSTRUCTED `FPM_atan` INDEPENDENTLY: THE SCHEDULING MISTAKE, AND WHAT IT ACCIDENTALLY PROVED
+
+`V22_SRE_recover` calls `FPM_atan`, and `symmap.py` renames the blob's copy to
+`ref_FPM_atan`, so the SRE session could not link without one. It wrote one.
+A parallel session had already written another, on a branch cut later. Three
+files collided on merge: `src/dsp/fpm_atan.c`, `test/unit/t_fpm_atan.c` and
+the declaration block in `include/dsplib/fpm.h`.
+
+**The mistake was mine and it was a sequencing one.** The SRE branch was cut
+from a commit that predated the `fpm_atan` merge, and the brief that dispatched
+it did not say which prerequisites already existed. Finding 1565's dependency
+map — the one thing that would have shown `V22_SRE_recover -> FPM_atan`
+immediately — was built *after* the agents were dispatched, not before. The
+cheap form is one command:
+
+    tools/dis.py $BLOB <start> <end> | grep R_386_PC32
+
+**Run it before assigning a function, not after.** That is the transferable
+rule, and it costs one command against a duplicated 409-byte function plus a
+three-file merge conflict.
+
+**What the duplication bought, which is not nothing.** The two reconstructions
+were derived independently from the same disassembly, and they agree on
+everything that matters:
+
+- the same signature, `void FPM_atan(short y, short x, short *angle)`;
+- the same 257-entry table;
+- the same **`0x7fff`** reflection in the fourth quadrant — a genuine one-count
+  error in the original, where the other three reflections (`0x4000 - t`,
+  `0x2000 - t`, `0x6000 - t`) are exact. Both sessions found it, neither
+  "fixed" it, and it is now D300.
+
+They differ only in expression: one names an `FPM_ATAN_SCALE` constant and
+splits the ratio into `unsigned short` intermediates, the other keeps it in a
+single `unsigned short ratio`. Same algorithm, different C.
+
+**And the merge produced a check neither session could have run alone.**
+`t_v22_sre` was written against the SRE session's own `FPM_atan`. The merge
+kept the OTHER session's implementation. All 24 SRE suites then passed against
+it unchanged — including `one sample at a time` at 388,800 checks and four
+noise and slip patterns — so the two independently-derived implementations
+agree on every input `V22_SRE_recover` samples, which is a stronger statement
+about `FPM_atan` than either session's own differential test made. Duplicated
+work is still waste; this is the consolation prize, not a reason to plan for it.
+
+**Resolution, for the record:** the already-gated copy was kept wholesale via
+`git checkout --ours` on those three files. That is finding 700's trap used
+deliberately and in the one case it is safe — one side's file wanted entire,
+verified afterwards by grepping for a distinctive string from each side and by
+confirming the surviving macro name (`FPM_ATAN_TABLE`, not the other's
+`FPM_ATAN_TABLE_LEN`) has no dangling references.
+
+**A numbering collision came with it.** Both sessions had claimed **D298** —
+one for `V22_MRF_filter`'s startup window, one for this. The later side was
+renumbered to **D300** by line, not by global substitution, because a blind
+replace would have hit both. `refcheck.py` caught it; nothing else would have.
