@@ -5182,3 +5182,11 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 **Finding 1441.** The chain is measured from the arms and not from the numbers.
 
 ======================================================================
+
+## D295 ⚠ Every floating-point compare in this class is signalling in the object and quiet in ours
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0) and `findPadGain` (blob 0x43620); `fcomp %st(1)` at 0x4446a and 0x44657, `fcomps` at 0x442a4, 0x442c0, 0x44347, 0x444eb. **Reachability: FIRES ON EVERY NaN** -- and NaNs are routine here, not exotic: `float_9d48` is a seeded variance and one 32-bit pattern in 128 is a NaN, and `findPadGain` forms gains from `ulaw2linear(0xff)`, which is 0. **Observability: NONE** -- nothing in the object, the library or the tests reads the x87 status word or unmasks the exception. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1447.** The object compares with the `fcom` family, which raises the invalid-operation exception on a QUIET NaN. Every comparison this tree emits for the same source is `fucom`/`fucomp`/`fucompp`, which raises it only for a SIGNALLING NaN. The two agree on every branch taken -- that is what the differential tier checks and it passes over seeded NaNs at all three of `determineMaxUcode`'s float tests -- and they disagree on the exception flags left behind.
+
+It is not a spelling that can be chosen away. It was first supposed that a relational operator would give `fcom` where `==` gives `fucom`, which would have made the D281-era respelling of the NaN test a fix for this as well; disassembling our own period-built object shows `fucomp` for `<` and `>` too, under **both** GCC 3.4.2 and GCC 13. GCC simply does not emit `fcom` from C comparisons. Reproducing it would take inline assembly at six sites for a difference no caller can observe, which is a worse trade than recording it.

@@ -46028,3 +46028,137 @@ where `trn1Sigma`, `linearMappingVar`, `uniteUrefDistanceThresh`,
 rather than drop them.
 
 ======================================================================
+
+### 1447. `__builtin_isnan` DOES NOT EXIST IN GCC 3.4.2, WHICH SETTLES WHAT THE AUTHOR WROTE
+
+`determineMaxUcode` skips a code whose variance is zero, and the object's test
+is `fcomp %st(1)` against a zero it has kept on the stack, then `je`.  An
+unordered compare sets C3, so ZF is set and **a NaN takes the branch too**.
+C's `v == 0.0f` is false for a NaN, so the reconstruction needed something
+else, and the obvious something else was `v == 0.0f || __builtin_isnan(v)`.
+
+That builtin postdates 3.4.2, and `V90AutoDigitalImpDetector.cpp` was the one
+translation unit in the tree the period compiler refused.  **Under this
+project's rule that is not a portability nuisance, it is evidence**: the
+author's own compiler cannot compile it, so the author cannot have written it.
+The same argument as finding 1352's `volatile`, arriving from the other
+direction -- there the modern compiler needed a shim the period one did not,
+here the modern compiler ACCEPTED a spelling the period one rejects.
+
+The replacement is
+
+    if (!(v < 0.0f) && !(v > 0.0f))
+
+which is true for a zero of either sign and for every NaN and false for
+everything else -- exactly the set `fcomp`/`je` accepts, over every one of the
+2^32 float bit patterns, with no builtin and no `<math.h>`.
+
+**A claim that looked good and did not survive being checked, recorded
+because it nearly went in.**  The tempting flourish was that the new spelling
+is also the closer transcription -- a relational operator compiles to `fcom`,
+which SIGNALS on a quiet NaN, where `==` compiles to the quiet `fucom`, and
+the object issues `fcomp`.  The first half is textbook and the second half is
+false in practice: disassembling our own period-built `determineMaxUcode`
+shows `fucomp`/`fucompp` at every one of those sites, for BOTH spellings and
+under both compilers.  GCC does not emit `fcom` for `<` and `>`.
+
+So the honest position is narrower and is now D295: the object raises the
+invalid-operation exception on these comparisons and we do not, whichever way
+they are written, and no test in this tree can see it because nothing reads
+the x87 status word.  **The builtin's absence is the whole of the argument for
+the change**; the signalling is a separate, unfixed difference that the
+investigation happened to turn up.
+
+======================================================================
+
+### 1448. GCC 3.x DOES NOT INLINE A PLAIN `static` AT -O2, AND ON x87 EVERY CALL IT LEAVES BEHIND ROUNDS A LIVE FLOAT FROM 64 BITS TO 24
+
+This is the first defect the period tier caught that the modern tier is
+STRUCTURALLY unable to see, and both halves of it are one mechanism.
+
+`-finline-functions` is an `-O3` flag in GCC 3.x.  At `-O2` the period
+compiler inlines only what is DECLARED `inline`, so three `static` helpers in
+this file -- `paramWord`, `paramShort` and `adid_abs` -- became out-of-line
+functions with twelve, one and nineteen call sites.  Modern GCC inlines all
+three without being asked, which is why nothing showed for a whole class's
+worth of work.
+
+On x87 a call is not free even when the callee is: the register stack must be
+surrendered across it, so **every live floating-point value gets spilled, and
+a `float` spill is `fstps` -- a round from 64 bits of significand to 24.**
+The object has none of these calls; it does the parameter loads and the
+magnitudes inline, and keeps its floats in registers.  So each call this tree
+introduced put a rounding where the object has none.
+
+Two of them were reachable and both were wrong:
+
+**+0xa9a6, `resetStudyUrefHandler`.**  The object divides at 0x408ca and first
+uses the quotient at 0x40929, with the six parameter-block loads in between --
+`mov 0x4a8(%edx),%eax` and friends, no call, `inv` never leaving the register.
+It is so unwilling to spill that when it finally does run out at 0x4095c it
+RECOMPUTES `1.0f / float_a950` rather than reload it.  Our source read those
+six words through `paramWord`, GCC 3.4.2 emitted `fstps 0x24(%esp)` before the
+first call, and the reciprocal came back rounded.  `(short)(inv * 50.0f +
+0.5f)` then fell from 1 to 0.  One byte, every trial, and `make phase` green.
+
+**`findPadGain`'s error report.**  The object computes `err = gain * gain *
+errSum` into `%st(0)` at 0x439c1, keeps it through the sign and fraction work
+by `fxch %st(2)`, and converts it with `fistl 0x4(%esp)` at 0x43a2d straight
+out of the register.  Our report calls `adid_abs` between the two, so 3.4.2
+spilled `err` with `fstps 0x20(%esp)` and reloaded it rounded -- and the
+printed error came back exactly one too high, sixteen times in 633 checks.
+
+The fix is `static inline` on all three, which is what the object's own code
+says the author had.
+
+**The rule, which generalises past this file:** a helper this tree introduces
+where the object has none is not neutral under the period compiler.  If a
+float can be live across it, `static` alone is a rounding.  `nm <obj> | grep
+" t "` on the period-built object lists every helper that stayed out of line,
+and is the check to run when a period-tier float mismatch has no other
+explanation.
+
+**And the three `volatile` locals of finding 1437 are now CONFIRMED rather
+than suspected.**  The natural worry was that they were a GCC 13 shim of
+exactly the kind finding 1352 condemns -- and worse, that they might be
+compensating for a spill these very calls were causing.  They are not: the
+object's own `fstps 0x94(%esp)` and `fstps 0x9c(%esp)` are in the blob, so it
+genuinely rounds `gain` and `errSum`, and the period build passes WITH the
+`volatile` in place and the calls gone.  The distinction is now clean and
+testable both ways -- `volatile` where the OBJECT rounds, `inline` where the
+object has no call.
+
+======================================================================
+
+### 1449. A STALE `dsplibs_ref.o` REPORTS ITSELF AS A LINK ERROR IN SOMEBODY ELSE'S CODE
+
+Reproducing the +0xa9a6 divergence began with `make period T=t_v90adid`
+failing to LINK, on three symbols with nothing to do with the class:
+
+    ref__ZTV12V90Resampler: discarded in section
+        `.gnu.linkonce.r._ZTV12V90Resampler' from build/dsplibs_ref.o
+
+The reflex reading is that the Resampler work on `master` broke something.
+It had not.  `tools/refrename.py` -- which moves 83 linkonce sections out of
+comdat so binutils 2.15 will keep them -- arrived WITH the period tier, and
+this worktree's `build/dsplibs_ref.o` predated it by ninety minutes.  Make
+would not rebuild it, because the recipe's prerequisites are the blob and the
+tools, and the file was newer than both: **the object was stale in a way its
+timestamp said it was not.**
+
+Two things are worth taking from it.
+
+**The control ran first and cost one command.**  `make period T=t_v90jd`, a
+test in a different class, failed identically.  That is what turned "my class
+broke the link" into "the link is broken for everything", which is a different
+investigation with a different answer.  A failure that looks like it belongs
+to the thing you just changed is worth one control before it is worth an hour.
+
+**A generated artefact under `build/` is not evidence of its own freshness.**
+The remedy was `rm -f build/dsplibs_ref.o && make build/dsplibs_ref.o`, and
+the diagnostic that named it was `readelf -S -W build/dsplibs_ref.o | grep -c
+linkonce` -- 8 before, 0 after.  Anyone resuming an older worktree against a
+newer `master` should delete that file before believing a period-tier link
+error.
+
+======================================================================
