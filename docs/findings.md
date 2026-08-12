@@ -48863,3 +48863,50 @@ same time — not because 0 dB is wrong, but because a default that nobody chose
 is indistinguishable from a value that was considered, and this bench has now
 lost two diagnoses to settings nobody had read (the Supra's UK country profile
 and its `+MS` rejection, findings 1457 and 1458).
+
+### 1460d. `complex2` CHANGED NOTHING MEASURABLE — AND THE CHANNEL IS STABLE WHILE THE RATES ARE NOT
+
+Finding 1460c recommended `impedance complex2` on the VG204's FXS ports, on
+the argument that 600r is the US network and the bench is UK. It was applied.
+Three more V.34 calls, same modem profile (UK), same daemon, same playout 20.
+
+**THE AUDIO IS INDISTINGUISHABLE:**
+
+| | 600r | complex2 |
+|---|---|---|
+| TX median | −23.7, −23.6, −23.4 | −22.8, −22.7, −22.8 |
+| RX median | −23.7, −22.3, −22.5 | −23.7, −22.1, −22.1 |
+| RX P99.9 | −15.8, −15.7, −15.7 | −15.7, −15.7, −15.7 |
+| RX peak | −8.3, −8.0, −8.3 | −8.3, −8.3, −8.3 |
+| ERL | 18.7, 18.0, 19.9 | 19.1, 20.8, 19.7 |
+| echo lag | 175.62 ms ×3 | **175.62 ms ×3** |
+
+Every figure is within its own run-to-run spread, and the echo lag is
+identical to the centisecond across all six.
+
+**THE RATES, HOWEVER, MOVED A LOT** — 14400/26400/33600 at 600r against
+14400/4800/7200 at complex2, with equerr 2096/263/75 against 2252/6579/8422.
+
+**SO THE RATE VARIANCE IS NOT IN THE CHANNEL.** The channel measures the same
+either way; what changed is which rate the two modems trained to. n = 3 per
+arm cannot separate a configuration effect from that variance, and this bench
+has refuted four covariates that looked convincing at n = 5–9 (findings 1206,
+1207). **Nothing here supports a claim that `complex2` is better or worse.**
+
+**WHAT IS WORTH KEEPING.** The path is remarkably stable: RX P99.9 is −15.7
+dBFS in five of six calls, peak −8.3 in five of six, echo lag identical in all
+six. Against that, the receive rate ranges over 4800–33600 and equerr over
+75–8422 on the same wire. Whatever limits the receive rate is in the modems'
+training or in something the level and echo statistics do not capture — not in
+the gross channel, which is what these measurements can see.
+
+**AND `complex2` SHOULD PROBABLY STAY** even on a null result: 600r is the
+wrong network for a UK line whatever the bench can measure, and the argument
+for setting it was never that it would show up here. But it is now known NOT
+to be the lever for the receive deficit.
+
+**WHAT WOULD ACTUALLY ANSWER IT.** `batch.sh` at n ≥ 20 per arm with
+`batchanalyse.py`, which reports a worst-case leave-one-out r and a
+permutation p precisely so one call cannot carry a conclusion — the instrument
+built after the equerr covariate moved from r = −0.787 to −0.263 on removing a
+single call. Three calls is a smoke test, not a measurement.
