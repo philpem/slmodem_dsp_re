@@ -48690,3 +48690,55 @@ invisible from the call logs and took one serial session to find; the `+MS`
 rejection had been silently invalidating the test configuration since the
 first run, because an ERROR inside a batched AT string does not stand out
 among the OKs.
+
+### 1459. THE UK COUNTRY PROFILE IS THE BETTER ONE FOR V.34 ON THIS BENCH — AND ONE CALL REACHED 33600 RECEIVE
+
+Finding 1458 set the Supra to automatic country detection, which chose US, and
+warned that every V.34 measurement this bench has taken was made under the UK
+profile. Checked, and the warning was worth making: the change is a large
+regression and it has been reverted.
+
+Two batches of three, same session, same daemon (stock), IODELAY 240, ATA at
+playout-delay 20. **Country is the only variable.**
+
+| | US (automatic) | UK (restored) |
+|---|---|---|
+| TX | 31200, 31200, 31200 | **33600, 33600, 33600** |
+| RX | 4800, 4800, 12000 | **14400, 26400, 33600** |
+| equerr pre-CONNECT | 1136, 2979, 2960 | 2096, **263, 75** |
+| ERL | 34.5, 37.1, 38.8 dB | 18.7, 18.0, 19.9 dB |
+
+**TX is the sharp one.** It had been 33600 in every connected call across four
+sessions — an invariant — and under the US profile it was 31200 in all three.
+An invariant moving in 3 of 3 is worth more than the count suggests. RX has
+always been variable, so those numbers say less on their own, but they move
+the same way and by more.
+
+**AND THE EQUALISER ERROR EXPLAINS IT, which is the satisfying part.** The
+object prints its own rate-selection rule at `dsplibs_debug_level > 1` --
+14=33600 needs equerr below 50, 13 below 84, 11=26400 below 205, 6=14400 below
+2571 (the table in the V.34 rate work). The UK run's 75 and 263 sit exactly
+where 33600 and 26400 require, and the US run's 1136-2979 sit where 4800-12000
+do. So the country profile is changing the LINE, not the rate logic, and the
+existing predictor reads the change correctly.
+
+**A FIRST: 33600 RECEIVE.** No call on this bench had previously received
+above 28800, and the receive-rate deficit is what findings 1206-1216 and
+1350-1351 were about. This one call had equerr 75. It is a single call and
+proves nothing by itself, but it is the first evidence the path CAN carry full
+rate in the receive direction, and it arrived with the ATA at playout 20 --
+which finding 1351 established as the better setting at p = 0.0008.
+
+**WHY THE ERL MOVES THE WRONG WAY** is not established and should not be
+guessed at. The US profile shows 15-20 dB MORE echo return loss -- less echo,
+which ought to be better -- while producing worse rates. Something else in the
+country parameter set (transmit level is the obvious candidate; UK and US PTT
+limits differ) is likely doing both.
+
+**STATE: the Supra is back on `*NC16`, UK, as it was for every historical
+measurement.** Findings 1206-1216, 1350 and 1351 stand unchanged. `AT*NC0`
+selects automatic again if anyone wants to repeat this.
+
+**n = 3 per arm.** The TX invariant moving is strong; treat the RX and ERL
+figures as indicative. `batch.sh` and `batchanalyse.py` exist for a real test
+and nothing below n = 20 should be quoted as a rate distribution.
