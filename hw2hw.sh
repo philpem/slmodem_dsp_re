@@ -10,6 +10,26 @@
 # the path carries V.8 and V.34 fine and the blob is the problem. If they fail
 # each other the same way, the path is the problem and the blob is exonerated.
 #
+# *** IT DOES NOT MEASURE THE SIP PATH, AND THE COMMENT ABOVE IS WRONG ***
+#
+# Both modems hang off the SAME VG204.  Dialling 1902 matches `dial-peer voice
+# 2 pots`, a local POTS peer with `destination-pattern 1902` and `port 0/1`,
+# which is far more specific than the `.T` voip peer that reaches Asterisk.
+# The Cisco therefore connects port 0/0 to port 0/1 INTERNALLY.  Nothing
+# leaves the box: no RTP, no jitter buffer, no codec round trip through
+# Asterisk, none of the transport that every other measurement on this bench
+# includes.
+#
+# So a result here is about the VG204's own analogue and companding stages and
+# says nothing about the path our calls actually take.  Comparing it against a
+# slmodemd run is comparing two different channels.
+#
+# To make two modems talk over the REAL path the media has to be forced out of
+# the gateway and back, which is #94: our own SIP endpoint answers 1901, dials
+# 1902 and relays RTP between the two legs.  Until that exists this script is
+# an ATA loopback test, which is a legitimate thing to want -- just not the
+# control experiment its name suggests.
+#
 # `call.py` opens both ends with the same open_raw(), so its `--pty` argument
 # takes a real serial port perfectly well; nothing else changes.
 #
