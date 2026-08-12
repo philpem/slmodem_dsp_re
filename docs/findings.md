@@ -49111,6 +49111,18 @@ reset it:
 | Recv/Xmit level | **−30 / −20 dB** |
 | Round-trip delay | **173 ms** |
 
+**REPEATED.** Three attempts, two calls placed (the third never dialled --
+the Courier had not recovered from the previous teardown when the harness
+probed it, which is a pacing bug in the ad-hoc loop and not a path result):
+
+| call | CONNECT | Speed rx/tx | Recv/Xmit (-dB) | RTT |
+|---|---|---|---|---|
+| rtp-1 | 28800/ARQ/V34/LAPM/V42BIS | 28800/28800 | 30/20 | 173 ms |
+| rtp-2 | 28800/ARQ/V34/LAPM/V42BIS | 28800/28800 | 31/20 | 172 ms |
+
+One decibel and one millisecond apart. Against that, our own receive rate over
+the same wire ranges 4800–28800 with a median of 14400 (finding 1466).
+
 28800 is this Courier's ceiling — it is a 1994 V.34 unit, and 28800 is also
 exactly what it reached as the far end of every archived slmodemd call. The
 same pairing hairpinned inside the VG204, with no network in the call at all,
