@@ -49514,8 +49514,11 @@ first and `near_i` last.
 ### 1612. FPM_ECC_cancel: THREE COEFFICIENT SETS AT THREE SAMPLES A SYMBOL, AND A FAR-UPDATE POINTER THAT ALIASES THE NEAR BLOCKS
 
 *`FPM_ECC_cancel` (0xa6e00, 2,051 B) is reconstructed and differentially
-tested: `t_fpm_ecc` is 9,077 checks over twenty-four cancel cases, comparing
-the whole state, both sample buffers and all eight arrays after every block.*
+tested: `t_fpm_ecc` is 9,278 checks in twenty-four suites -- twenty-two of
+them cancel cases -- comparing the whole state, both sample buffers and all
+eight arrays after every block. (Commit 641519e's message says "9,077 checks
+over twenty-four cancel cases"; both figures there were written before the run
+log was summed. The numbers here are the measured ones.)*
 
 **THE SHAPE.** `cancel(state, buf, count)` works IN PLACE and returns the
 number of symbols it consumed. Per sample: pick `coef[phase]`, convolve the
