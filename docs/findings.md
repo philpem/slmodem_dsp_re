@@ -49621,3 +49621,57 @@ six pointees have distinct contents, so ordering is still pinned, and indices
 The element widths are settled by `FPM_ECC_cancel`, which indexes a pointee
 with `movswl (%ecx,%eax,2)` -- `short`, and `SMCv32_IMAP16`'s 0x22 bytes are
 therefore 17 entries, not 16.
+
+### 1615. THE V.32 TIMING-RECOVERY TABLES ARE CLOSED; SREv32_CFG IS NOT, BECAUSE A BYTE TEST CANNOT PIN A FIELD BOUNDARY
+
+Six of the ten `FPM_SRE_*` / `SREv32_*` symbols are reconstructed and
+differentially tested (`t_fpm_sre`, 208 checks): `SREv32_COFFS` (181 shorts,
+.rodata, const) and the five in .data that are therefore NOT const --
+`SREv32_XB_COFFS` (11), `SREv32_PLL_K1` (3), `SREv32_PLL_K2` (3),
+`SREv32_xCLOCK` (3), `SREv32_yCLOCK` (3).
+
+**`xCLOCK` AND `yCLOCK` ARE A THREE-PHASE CLOCK PHASOR.** `{16384, -8192,
+-8192}` and `{0, 14189, -14189}` are cos and sin of 0, 120 and 240 degrees at
+a scale of 16384. That is the same three-samples-a-symbol structure the echo
+canceller's three coefficient sets carry (1612) -- 2400 baud at 7200 Hz -- and
+it is why the block can resolve timing phase from three samples.
+
+**ONLY `SREv32_COFFS`'s ELEMENT WIDTH IS MEASURED.** `FPM_SRE_init` copies it
+with `movzwl (%ecx,%edx,2)`, so 16-bit, and its 0x16a bytes are 181 entries --
+one MORE than the 180 the configuration carries as its length. The other five
+are touched only by `FPM_SRE_recover`, which is not reconstructed, so their
+width is asserted nowhere and the header says so.
+
+**`SREv32_CFG` IS DELIBERATELY LEFT OUT.** Its six pointers are measured --
+`+0x10 COFFS, +0x14 XB_COFFS, +0x18 xCLOCK, +0x1c yCLOCK, +0x20 PLL_K1,
++0x24 PLL_K2` -- and as 14 dwords it reads `0x00030003, 0x00460010,
+0x40002000, 180, <six pointers>, 0x00010002, 0x00C82666, 0x000905DC, 0`. But
+`FPM_SRE_init` copies the whole thing with a 14-dword `rep movsl` and reads
+exactly three shorts out of it (+0x02, +0x0c, +0x32), so every other field
+boundary is inferred from how the constants pack. A differential test of the
+table compares BYTES and would pass for every wrong split alike -- the
+`short[128]` versus `int[64]` trap. It stays out until `FPM_SRE_recover`
+settles the widths.
+
+**WHAT `FPM_SRE_init` (0xaa7c0) AND `FPM_SRE_free` (0xaa780) DO**, recorded so
+the next session need not re-read them:
+
+- `init(state, cfg, fresh)`. When `fresh` is zero it compares
+  `state[+0x0c] < cfg[+0x0c]` signed and, if the buffer is too small,
+  announces it (`.rodata.str1.1+0x4f07`, gated on `dsplibs_debug_level > 1`),
+  frees the four buffers at +0x58, +0x54, +0x50, +0x74 and proceeds as if
+  `fresh`. Exactly `FPM_MRF_init`'s grow-or-reuse shape.
+- The configuration is copied as 14 dwords into +0x00..+0x37.
+- Four allocations: `2*cfg[0x0c]` at +0x50, `2*(cfg[0x0c]/5)` at +0x54 (the
+  division is the `0x66666667` magic, so /5 exactly), a FIXED 12 bytes at
+  +0x58, and `2*cfg[0x32]` at +0x74.
+- `state[+0x4c] = cfg[0x0c] / 5` and `state[+0x68] = cfg[+0x02]`.
+- +0x50 is filled from `state[+0x10]` -- i.e. the buffer is a working COPY of
+  `SREv32_COFFS`, which is what makes the .rodata original const and the copy
+  writable. +0x54, +0x58 (six entries) and +0x74 are zeroed.
+- Scalars set: +0x40=0, +0x44=1, +0x48=1 (ints); +0x38, +0x3a, +0x3c, +0x3e,
+  +0x4e, +0x64, +0x66, +0x6a, +0x6c, +0x6e, +0x7a, +0x7e, +0x80, +0x82,
+  +0x86 = 0; +0x70, +0x78, +0x84, +0x8e = 1; +0x5c, +0x60 = 0 (ints).
+- **0x90 is a floor for the state size**, not a proven size.
+- `free` releases +0x58, +0x54, +0x50, +0x74 -- the same four, and NOT the
+  configuration's tables.
