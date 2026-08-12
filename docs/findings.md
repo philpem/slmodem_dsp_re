@@ -50821,7 +50821,6 @@ exported precisely for that — but the tools it invokes each carry their own
 copy of the relative default, and each one is a separate place for the
 accommodation to be incomplete. `debugaudit.py` and `coverage.py` were fixed;
 this is the failure mode when the export does not happen.
-======================================================================
 
 ### 1540. `V22_MRF` IS NOT `FPM_MRF`: THE SAME FOUR STATE WORDS, EIGHT BYTES EARLIER
 
@@ -51985,3 +51984,292 @@ reach past +0x0d. The test drives modes 0, 1 and 2, and that is the range
 over which the layout is established. Nothing that constructs either struct
 is reconstructed yet, so +0x02, +0x12 and the first eight bytes of the ring
 descriptor are named padding rather than guesses.
+
+### 1580. `struct v22_sre`: the layout, and what each field is for
+
+Settled from `V22_SRE_init`'s store set (every field it writes, in order) and
+from every use in `V22_SRE_recover`. `sizeof` is 0x3c. The object is
+**embedded**, not separately allocated: `V22FP_create+0x600` passes
+`dp + 0x128` and `DemodDataV22+0x0ff` passes the same, so the tail padding at
++0x3a sits inside a larger allocation and lands in any whole-object
+comparison. It is a named member for that reason (the `fpm_mrf.h`
+convention).
+
+    +00 mode        0..2, indexes all four three-entry tables
+    +02 pll_acc     loop-filter integrator
+    +04 err_avg     smoothed phase error out of FPM_atan
+    +06 mag_avg     smoothed |discriminant| -- the squelch
+    +08 active      int; set when mag_avg > 2, cleared at <= 1
+    +0c acquiring   int; 1 until mode 2 is entered.  Written here, read
+                    only by the caller
+    +10 adapt       int; caller's enable for the phase update.  Set by
+                    init to 1 and never written by recover
+    +14 taps        27; sizes both heap buffers
+    +16 fill        live entries in `hist`
+    +18 coeff       270 shorts, 10 polyphase branches of 27
+    +1c hist        54 shorts
+    +20 clk         6 shorts: three 2nd-order sections, each {now, prev}
+    +24 acc_x       int; discriminant . SREv22_xCLOCK
+    +28 acc_y       int; discriminant . SREv22_yCLOCK
+    +2c frac        sub-branch phase, 0..2047
+    +2e branch      polyphase branch, 0..9
+    +30 groups      six-sample groups per PLL update: 3, or 12 in mode 2
+    +32 settle      0..65; at 64 the loop leaves mode 0
+    +34 group       groups counted since the last update
+    +36 tick        0..5; indexes SREv22_xCLOCK / yCLOCK
+    +38 need        input samples owed before the next output
+    +3a pad3a
+
+`V22_SRE_free` frees +0x20, +0x1c and +0x18 in that order, the last as a tail
+call, which is the independent confirmation that exactly three of these are
+pointers.
+
+### 1581. `SREv22_xCLOCK` and `SREv22_yCLOCK` are one cycle of a complex exponential, and the cycle is one V.22 symbol
+
+Both are six entries of Q14 and both are exact:
+
+    xCLOCK[k] = 16384 * cos(k * 60 deg)   16384, 8192, -8192, -16384, ...
+    yCLOCK[k] = 16384 * sin(k * 60 deg)   0, 14189, 14189, 0, -14189, ...
+
+They are indexed by `tick`, which counts 0..5 and resets, and they multiply
+the timing discriminant before it is accumulated into `acc_x` and `acc_y`.
+So the pair is a six-point DFT bin, and six samples is 600 Hz at the 3600 Hz
+this block runs at -- exactly one V.22 symbol at 600 baud. `acc_x`/`acc_y`
+are therefore the real and imaginary parts of the timing tone, and `FPM_atan`
+of them is the sampling-phase error. Note the y term SUBTRACTS
+(`acc_y -= (d * yCLOCK[tick]) >> 3`), which is a conjugation and is easy to
+lose.
+
+### 1582. The V.22 timing loop is GEAR-SHIFTED, and mode 0 is first order
+
+`SREv22_PLL_K2 = { 0, 4, 4 }`. The zero is the finding: in mode 0 the
+integrator term is identically zero, and `sre_update` also holds `pll_acc` at
+zero throughout that mode, so the loop is purely proportional -- **first
+order**. Modes 1 and 2 are second order with the *same* gains
+(K1 = 762, K2 = 4) and differ only in how often they run: `groups` is 3
+(one update per 18 samples) against 12 (one per 72).
+
+The transitions, all from `settle` and `|err_avg|`:
+
+    mode 0 -> 1   when settle reaches 64.  settle counts PLL updates and
+                  stops being counted above 64
+    mode 1 -> 2   when |err_avg| <= 4.  pll_acc is scaled UP by 4 and
+                  `acquiring` is cleared
+    mode 2 -> 1   when |err_avg| > 0x7ff.  pll_acc is scaled DOWN by 4
+
+The x4 either way is the integrator's resolution following the update rate,
+and the two thresholds are 512 apart, so the hysteresis is wide.
+
+`SRE_ALPHA_AVG` and `SRE_BETA_AVG` carry no `v22` in their names because V.17
+and V.32 index the same two arrays. Each pair sums to exactly 32768, so both
+smoothers have unity DC gain: 29720 + 3048 and 31720 + 1048.
+
+### 1583. `SREv22_COFFS` has 271 entries against a 270-entry buffer, and both numbers are right
+
+`V22_SRE_init` mallocs 0x21c = 540 bytes = 270 shorts and copies
+`COFFS[0..269]`, leaving the 271st entry untouched. That looks like an
+off-by-one until the mode-2 interpolator at `+0x51f` is read: it computes
+
+    coeff[j] = (COFFS[k] * w0 >> 15) + (COFFS[k+1] * w1 >> 15)
+
+with `k` running up to 269, so `COFFS[270]` exists **solely** as the
+right-hand end of the last interpolation. Copy 271 into the buffer and you
+overrun it by two bytes; treat the table as 270 and the last branch
+interpolates against whatever follows it in `.rodata`.
+
+The permutation itself is a polyphase de-interleave: outer index 260..269,
+inner stepping DOWN by 10 to zero, so branch *b* holds the taps congruent to
+260 + b modulo 10 in reverse order. `recover` reads the history forwards
+against it, which is what the reversal is for.
+
+### 1584. `V22_SRE_init` clears 27 of the 54 history shorts it allocates, and the gap is not a second loop
+
+The allocation is `((short)(taps * 2)) * 2` = 108 bytes = 54 shorts; the
+clear loop is bounded by `taps` = 27. There are 14 bytes between the two
+loops at `0x8e072`, immediately before a 16-byte-aligned loop head, which is
+exactly where a second clear would live. They are
+`lea 0x0(%esi,%eiz,1),%esi` and `lea 0x0(%edi,%eiz,1),%edi` --
+`-falign-loops` NOPs. Checked byte by byte, because the whole buffer-length
+claim rests on it.
+
+It is not a defect. `recover`'s window starts at `hist[0]` while
+`fill < taps` and at `hist[fill - taps]` afterwards, so nothing above `fill`
+is ever read, and 54 is the real length because the slide
+(`memcpy(hist, hist + 27, 54 bytes)` when `fill + need > 54`) needs the room.
+
+The consequence for testing: after `init` alone, `hist[27..53]` is allocator
+fill. Under this harness that is `HARNESS_MALLOC_FILL` on both sides so it
+compares equal, and `t_v22_sre` asserts the upper half survives a marker --
+but a whole-buffer comparison against a zero-filled allocator would fail and
+would look like a layout bug.
+
+### 1585. `FPM_atan` is a HARD PREDECESSOR of `V22_SRE_recover`, and the reason is `--redefine-syms`
+
+`V22_SRE_recover` has five call relocations: four to `sysdep_memcpy`, which
+`symmap.py` lists in `SHARED_IMPORTS` and leaves alone, and one to
+`FPM_atan`, which this tree had not reconstructed.
+
+`Makefile:194` applies `objcopy --redefine-syms`, a RENAME and not an alias,
+so the blob's `FPM_atan` becomes `ref_FPM_atan` and nothing named `FPM_atan`
+is left for a `src/` caller to bind to. That is finding 217's shape exactly:
+the undefined symbol breaks **every** test binary, not just this one. So
+`recover` could not be committed until `FPM_atan` existed, and
+`src/dsp/fpm_atan.c` was written for that reason.
+
+Worth stating in general, because it is cheap to check and expensive to
+discover late: **before starting any function, list its call relocations and
+check each target is either in `SHARED_IMPORTS` or already in `src/`.**
+`python3 tools/dis.py $BLOB lo hi | grep R_386_PC32` is the whole check.
+
+### 1586. `FPM_atan`, and its off-by-one in the fourth quadrant
+
+`.text 0x0a6a50`, 409 bytes, with a 257-entry table at `.rodata 0x0c9a0`.
+Signature `void FPM_atan(short y, short x, short *angle)` -- argument order
+(y, x) like `atan2`, settled by the two degenerate cases: `x == 0` gives
+0x2000 or 0x6000 chosen by the sign of `y`, and `y == 0` gives 0 or 0x4000
+chosen by the sign of `x`. A full turn is 0x8000.
+
+The table is `round(atan(i / 256) * 32768)` for i = 0..256, exact on every
+entry checked, and the last is 25736 = `round(pi/4 * 32768)`. Below a Q15
+ratio of 127 the table is skipped and the ratio is used directly, which is
+the same value the first two entries would give.
+
+**Three of the four quadrant reflections are exact and one is not.**
+`0x4000 - t`, `0x2000 - t` and `0x6000 - t` are all correct; the fourth,
+for `y < 0` with `|x| > |y| > 0` and `x >= 0`, is **`0x7fff - t`** and not
+`0x8000 - t`. So a vector just below the positive x axis reports 0x7fff
+where 0 is correct -- one count out, in one wedge only, and reproduced.
+Entered in `docs/deviations.md`.
+
+### 1587. Both SRE smoothers store a 16-bit truncation, and the decisions then read the truncated value
+
+`mag_avg` and `err_avg` are both updated as
+
+    field = (short)(((field * ALPHA[mode]) >> 15) + ((x * BETA[mode]) >> 15))
+
+and in both cases the int sum genuinely leaves 16 bits: `err_avg`'s reaches
++-34006, because `e = (3 * angle) >> 1` reaches +-24576, and `mag_avg`'s
++-34768. The comparisons that follow -- `> 0x7ff` and `<= 4` for the gear
+shift, `> 2` and `<= 1` for the squelch -- all happen **after** the
+truncation; the object's `cwtl` at `+0x69c` is the truncation being applied
+before `abs`.
+
+Write `int s = ...; field = (short)s; if (abs(s) > 0x7ff)` and the two
+implementations agree on every sample except the ones that change gear. The
+same shape, one level down: the object stores the first term of each smoother
+to the field and then overwrites it with the sum, without reloading. That
+first store IS dead and the intermediate does fit a short, so dropping it is
+safe -- but only the intermediate. Not the sum.
+
+### 1588. `relocscan.py --range` and `--into` answer different questions, and only one of them is unreliable
+
+A parallel session found that `--into` under-reports, because it resolves
+only SECTION-symbol relocations and prints `unreferenced` for an object
+reached through a global symbol; it did so on `IIR_a_coeff` and on six
+`SMCv22_*` objects. It is written up on branch `v22-datapump` under the
+number 1566, which is **not merged into this branch** -- so it is named that
+way rather than cross-referenced, because a link would dangle here and
+resolve to the wrong thing after a merge. This paragraph is the only record
+of it that `v22-v22d` carries. It is about **who points AT a table**.
+
+`--range SECTION:LO-HI` is the other question -- which relocations have their
+r_offset INSIDE a range, i.e. which entries of a table are secretly pointers
+-- and it is not subject to that limitation. It is the check that matters
+before dumping anything with `tabdump.py --type s16`, and 1566 does not
+weaken it.
+
+Confirmed here independently with `readelf -rW`, which needs one care of its
+own: the output is a sequence of per-section blocks and a flat
+`awk '/^[0-9a-f]+ /'` sweeps `.rel.text` as well, which produced four
+confident false positives before the section header was tracked. Done
+properly, of 2129 `.rel.rodata` relocations none has an offset inside
+`0x8760-0x89ae` (the seven V.22 SRE tables) or `0xc9a0-0xcba2`
+(`FPM_atan_table`), so all eight are plain `s16`.
+
+### 1589. `FPM_atan` exists twice, on two branches, and the merge has to choose deliberately
+
+Written here on `v22-v22d` as `src/dsp/fpm_atan.c` because `V22_SRE_recover`
+could not link without it (1585). A parallel session landed its own
+`FPM_atan` on `v22-datapump` at about the same time. **Neither knew about the
+other until both were done**, so at merge time `src/dsp/fpm_atan.c`,
+`include/dsplib/fpm.h` and `test/unit/t_fpm_atan.c` all conflict.
+
+This is not a problem to resolve by taking one side wholesale, and
+`git checkout --ours` is exactly the wrong tool for it (finding 700). What
+the merge must preserve is:
+
+  - the **signature** `void FPM_atan(short y, short x, short *angle)`.
+    `src/pump/v22/v22_sre.c` calls it and will compile against a wrong one
+    only if the argument order is also (y, x).
+  - the **0x7fff** in the fourth quadrant (D300). A version that "fixes" it
+    to 0x8000 passes every test that does not visit `y < 0, x > 0,
+    |x| > |y|`, and `t_v22_sre` does visit it.
+  - whichever `t_fpm_atan` has the wider sweep. This branch's runs 200,000
+    random pairs, an exhaustive 97x97 square about the origin, a 79x79
+    strided grid over the whole plane and a 32x32 grid of boundary
+    magnitudes, and asserts all eight octants plus both table paths were
+    reached.
+
+The general point is worth more than the instance: **two sessions reaching
+the same unwritten leaf is a predictable consequence of the prerequisite
+rule** in finding 215 -- every caller must write its callees first, and
+popular leaves have many callers. Before writing a prerequisite, it is worth
+one `git log --all --oneline -- src/dsp/<name>.c` and one message to the
+coordinator. That costs a minute; this cost two implementations.
+
+### 1571. TWO SESSIONS RECONSTRUCTED `FPM_atan` INDEPENDENTLY: THE SCHEDULING MISTAKE, AND WHAT IT ACCIDENTALLY PROVED
+
+`V22_SRE_recover` calls `FPM_atan`, and `symmap.py` renames the blob's copy to
+`ref_FPM_atan`, so the SRE session could not link without one. It wrote one.
+A parallel session had already written another, on a branch cut later. Three
+files collided on merge: `src/dsp/fpm_atan.c`, `test/unit/t_fpm_atan.c` and
+the declaration block in `include/dsplib/fpm.h`.
+
+**The mistake was mine and it was a sequencing one.** The SRE branch was cut
+from a commit that predated the `fpm_atan` merge, and the brief that dispatched
+it did not say which prerequisites already existed. Finding 1565's dependency
+map — the one thing that would have shown `V22_SRE_recover -> FPM_atan`
+immediately — was built *after* the agents were dispatched, not before. The
+cheap form is one command:
+
+    tools/dis.py $BLOB <start> <end> | grep R_386_PC32
+
+**Run it before assigning a function, not after.** That is the transferable
+rule, and it costs one command against a duplicated 409-byte function plus a
+three-file merge conflict.
+
+**What the duplication bought, which is not nothing.** The two reconstructions
+were derived independently from the same disassembly, and they agree on
+everything that matters:
+
+- the same signature, `void FPM_atan(short y, short x, short *angle)`;
+- the same 257-entry table;
+- the same **`0x7fff`** reflection in the fourth quadrant — a genuine one-count
+  error in the original, where the other three reflections (`0x4000 - t`,
+  `0x2000 - t`, `0x6000 - t`) are exact. Both sessions found it, neither
+  "fixed" it, and it is now D300.
+
+They differ only in expression: one names an `FPM_ATAN_SCALE` constant and
+splits the ratio into `unsigned short` intermediates, the other keeps it in a
+single `unsigned short ratio`. Same algorithm, different C.
+
+**And the merge produced a check neither session could have run alone.**
+`t_v22_sre` was written against the SRE session's own `FPM_atan`. The merge
+kept the OTHER session's implementation. All 24 SRE suites then passed against
+it unchanged — including `one sample at a time` at 388,800 checks and four
+noise and slip patterns — so the two independently-derived implementations
+agree on every input `V22_SRE_recover` samples, which is a stronger statement
+about `FPM_atan` than either session's own differential test made. Duplicated
+work is still waste; this is the consolation prize, not a reason to plan for it.
+
+**Resolution, for the record:** the already-gated copy was kept wholesale via
+`git checkout --ours` on those three files. That is finding 700's trap used
+deliberately and in the one case it is safe — one side's file wanted entire,
+verified afterwards by grepping for a distinctive string from each side and by
+confirming the surviving macro name (`FPM_ATAN_TABLE`, not the other's
+`FPM_ATAN_TABLE_LEN`) has no dangling references.
+
+**A numbering collision came with it.** Both sessions had claimed **D298** —
+one for `V22_MRF_filter`'s startup window, one for this. The later side was
+renumbered to **D300** by line, not by global substitution, because a blind
+replace would have hit both. `refcheck.py` caught it; nothing else would have.

@@ -13,7 +13,7 @@
  * `_64pt` and `_128pt` all call `VTB_decoder`, which is 1,773 bytes of the
  * Viterbi block plus about 10 KB of trellis tables and belongs to a different
  * batch (finding 1602); `FSE_decision_16pt` indexes `DECv32_MAG9600` out of
- * bounds and cannot be reproduced across builds (finding 1603, D300).
+ * bounds and cannot be reproduced across builds (finding 1603, D302).
  * Neither group is prototyped here: a declaration with no definition would be
  * a claim this tree cannot honour.
  */

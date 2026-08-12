@@ -5476,9 +5476,9 @@ Written as the object has it. A bound here would be a behavioural difference on 
 
 How much of that transient it actually changes is measured rather than reasoned: the earliest outputs run against an all-zero history and are zero whatever the coefficients are. Reproduced exactly; `t_v22_pps.c` compares from the first output and a mutation that "corrects" the base to `phase * history_len` fails 26 checks in each of its three drive patterns, so the difference is measured and not supposed.
 
-## D300 🐛 `FSE_decision_16pt` reads its magnitude table thousands of entries past the end
+## D302 🐛 `FSE_decision_16pt` reads its magnitude table thousands of entries past the end
 
-**Renumbered from D298.** It was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the collision surfaced at the merge and the V.32 side moved. Citations written before that merge may still say D298 -- `refcheck.py` cannot catch those, because they still resolve, just to the wrong entry.
+**Renumbered twice: D298 -> D300 -> D302.** It was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the V.32 side moved to D300 at that merge. A later batch of V.22 work had meanwhile allocated D300 to `FPM_atan`, so it moved again. The V.22 entry stayed put both times because its own number is the product of a careful by-line renumber that its findings describe, and moving it would have falsified that account. Citations written before either merge may still say D298 or D300 -- it was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the collision surfaced at the merge and the V.32 side moved. Citations written before that merge may still say D298 -- `refcheck.py` cannot catch those, because they still resolve, just to the wrong entry.
 
 *Batch of 2026-08-12, from `FSE_decision_16pt` (blob 0x80e90, 490 bytes) +0x13b (`sar $1,%edi`) feeding +0x13d (`movzwl DECv32_MAG9600-0x2(%edi,%edi,1),%eax`). **Reachability: FIRES on every call.** Status: `measured` — the three reachable indices are 4095, 8191 and 12287 into a three-entry table. Fix class: none proposed.*
 
@@ -5586,3 +5586,10 @@ deliberate approximation -- but "deliberate approximation" is not ruled out
 either, and neither reading is established.
 
 Reproduced exactly.
+
+## D300 🐛 `FPM_atan` reflects the fourth quadrant through 0x7fff, where the other three are exact
+
+*V.22 SRE batch, from `FPM_atan` (blob 0x0a6a50) +0x0fa. **Reachability: FIRES**, on any vector with `y < 0`, `x > 0` and `|x| > |y|` -- a full 45-degree wedge, and `t_fpm_atan` visits it hundreds of thousands of times. Status: CONFIRMED. Fix class: none proposed; reproduced as measured.*
+
+**Finding 1586.** A full turn is 0x8000, so the reflection of an angle `t` about the positive x axis is `0x8000 - t`. The object computes `mov $0x7fff,%ebx; sub %ecx,%ebx` and uses that. The other three reflections in the same function -- `0x4000 - t`, `0x2000 - t` and `0x6000 - t` -- are all exact, which is what makes this one an error rather than a convention: a vector just below the positive x axis reports 0x7fff where the correct answer is 0 (or 0x8000, the same angle). The size of the error is one count everywhere in the wedge, so it is a constant bias of about 0.011 degrees and not a discontinuity. `V22_SRE_recover`, the only caller in the object, folds the result at 0x4000 immediately afterwards, so the bias reaches its timing loop as a one-count offset in `err_avg` and is swamped by the smoother's own truncation.
+
