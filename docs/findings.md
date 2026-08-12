@@ -48635,3 +48635,58 @@ ACTIVE profiles differ from their STORED ones, so `ATZ` does not give what
 be set per call and its acceptance CHECKED — an AT command that returns ERROR
 inside a batch is silent, and one did so for every Bell 103 run in this
 session's earlier findings.
+
+### 1458. THE SUPRA WAS MISCONFIGURED THREE WAYS — AND FIXING ALL THREE DOES NOT FIX THE BELL 103 DROP
+
+The chipset, from the modem itself: **`RCV56DPF-PLL L8571A Rev 33.00/33.00`**
+— a Rockwell RCV56DPF, sharing the RCV56ACx AT command set.
+
+**THREE REAL MISCONFIGURATIONS, each found and corrected:**
+
+1. **`AT+MS=B103` had never worked.** `+MS` on this family takes numeric
+   carriers: `AT+MS=?` gives
+   `(0,1,2,3,9,10,11,12,56,64,69),(0,1),(300-56000),...` and the mnemonic
+   returns ERROR. `0` is Bell 103, `2` is V.21. Every "Bell 103" run in
+   findings 1455 and 1456 actually had the modem on **carrier 12 in
+   automode** (`AT+MS?` → `12,1,300,56000,1,0,33600`).
+
+2. **The country was UK.** `ATI6` reported `016 UK`, and Rockwell's own table
+   (`*NCn`, AT Command Reference 3-33/3-34) gives United Kingdom 16, United
+   States 22. `*NC0` is reserved for automatic DAA country recognition;
+   setting it and resetting gave `022 US`.
+
+3. **The UK profile was forcing two things into every call.** Switching to
+   automatic changed, in one step:
+
+   | | UK | automatic |
+   |---|---|---|
+   | country | `016 UK` | `022 US` |
+   | mode | **`B0`** — ITU | **`B1`** — Bell |
+   | guard tone | **`&G2`** — 1800 Hz | **`&G0`** — none |
+
+   An 1800 Hz guard tone is a European V.22 requirement and has no business
+   in a Bell 103 or V.21 call. The modem had been putting one into transmit.
+
+**AND THE DROP SURVIVES ALL OF IT.** With the correct numeric carrier, the US
+profile, Bell mode, no guard tone, and flow control off, Bell 103 still ends
+at **CONNECT + 5.00 s**, exactly as before. `&Q0` — the Rockwell error-control
+control, which is what the earlier `AT\N0` should have been — does not connect
+at all. V.21 on the same modem holds 20 s.
+
+So #124 is not a configuration fault. It is the modem, the DAA against a VoIP
+ATA, or something in the Bell 103 answer path specific to this unit.
+
+**A WARNING ABOUT THE EXISTING V.34 MEASUREMENTS.** Every V.34 number this
+bench has taken on ext 1901 — findings 1206–1216, 1350, 1351, including the
+n=30 batches and the playout-delay result — was measured with this modem in
+the **UK country profile, `B0`, with the 1800 Hz guard tone enabled**. The
+profile is now US. That is the more correct setting for the hardware and for
+Bell/V.34 work, but it is a CHANGE TO THE INSTRUMENT: those figures were taken
+under a different configuration and a repeat may not reproduce them exactly.
+`AT*NC16` restores UK if a comparison is ever needed.
+
+**METHOD.** Read the instrument before trusting it. Three of these were
+invisible from the call logs and took one serial session to find; the `+MS`
+rejection had been silently invalidating the test configuration since the
+first run, because an ERROR inside a batched AT string does not stand out
+among the OKs.
