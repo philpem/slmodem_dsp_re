@@ -48301,3 +48301,59 @@ behaves exactly as the original does.
 `testbench/row.sh` gained `SLMODEMD=` so a hybrid build can be put on the
 bench without moving anything in a source tree, and every run now prints
 which binary it used.
+
+### 1456. BELL 103 CARRIES DATA BOTH WAYS WITH OUR DATAPUMP — THE FAULT WAS THE FAR END'S DTE RATE
+
+Finding 1455 left the 300 bps data path unproven for anyone: our build and the
+blob both reached CONNECT and neither passed a byte. Diagnosed from the
+recordings, and it was not the reconstruction.
+
+**OUR TRANSMIT ALWAYS HAD THE DATA IN IT.** Demodulating
+`captures/b103-ours-courier.modem_tx_8k.raw` as 300 baud 8N1 FSK — mark 1270,
+space 1070, the originate pair — recovers
+
+    GROM-PTY 9876543210 the quick bsown fox\r+++
+
+which is the harness's probe with two single-bit slips from a crude half-bit
+sampler (`F`/`G` and `r`/`s` differ in one bit each). So our Bell 103
+modulator put the probe on the line correctly, and had done all along.
+
+**THE FAR END NEVER TRANSMITTED AT ALL.** Separating mark from space per 50 ms
+window across the whole call:
+
+| | mark | space | mark/space flips |
+|---|--:|--:|--:|
+| tx — ours, originate | 350 | 17 | **14** |
+| rx — Courier, answer | 373 | **0** | **0** |
+
+A connected modem with nothing to send sits on continuous mark, which is
+exactly what the Courier did for the entire call. It was not failing to
+modulate; it had nothing to modulate.
+
+**BECAUSE ITS SERIAL PORT HAD FOLLOWED THE LINE RATE DOWN.** USRobotics
+`&B0` makes the DTE rate track the connection, so after `CONNECT 300` the
+Courier's port was at 300 baud while the harness went on writing at 115200 —
+every byte arriving as noise. `AT&B1` fixes the DTE rate, and with it:
+
+    18.98  pty  CONNECT 300
+    25.46  pty  FROM-TTY 0123456789 the quick brown fox
+    25.53  tty  FROM-PTY 9876543210 the quick brown fox
+    === DATA BOTH WAYS: PASS
+
+**So our reconstructed Bell 103 datapump, inside the real `slmodemd`, over
+SIP, against a USRobotics Courier, connects at 300 bit/s and carries data in
+both directions.** That is the whole of task #89's Bell 103 milestone, and it
+is the first end-to-end proof that this reconstruction drives real hardware
+rather than only agreeing with a blob in a test harness.
+
+**THE SUPRA IS A SEPARATE FAULT AND IS NOT THIS ONE.** The Rockwell
+equivalent (`AT\J0`) changes nothing there, and the Supra reports `CONNECT
+115200` — its DTE rate was never following the line. It drops carrier a
+consistent ~7 s after connect on every run, where the Courier holds 17.6 s.
+Whatever that is, it is not a DTE-rate problem and it remains open.
+
+**METHOD NOTE.** The measurement that settled this cost one demodulation of a
+recording the bench already captures on every call. Two modems failing
+identically looked like a path fault and was not; the recording said in one
+step which end was silent, and the tx demod said our side was not the
+problem. Where a link fails, demodulate the capture before theorising.
