@@ -39,7 +39,8 @@ def read(path):
 def main():
     w = csv.writer(sys.stdout)
     w.writerow(["call", "arm", "connect", "our_tx", "our_rx",
-                "equerr", "preerr", "preemph", "tx_baud", "rx_baud"])
+                "equerr", "preerr", "preemph", "tx_baud", "rx_baud",
+                "decisions", "retrains"])
     for run in sorted(sys.argv[1:]):
         base = run[:-len(".run.log")] if run.endswith(".run.log") else run
         name = os.path.basename(base)
@@ -52,9 +53,32 @@ def main():
         m = re.search(r"TxRate: *(\d+)", t)
         tx = m.group(1) if m else ""
 
-        # The one line that carries the decision.  Not `V34EQU`.
-        m = re.search(r"V34DATARATE, equerr = (\d+),preerr=(\d+)", sl)
-        eq, pe = (m.group(1), m.group(2)) if m else ("", "")
+        # PAIR THE DECISION WITH THE RATE THE CALL ACTUALLY CARRIED.
+        #
+        # A call can hold several decision blocks -- 84 of 247 stock calls do,
+        # up to five -- because a retrain or a renegotiation evaluates the rate
+        # again.  Neither "the first" nor "the last" is right, and both were
+        # tried and were wrong: `base-cx2-10` logs 7200 then 14400 and CONNECTs
+        # at 7200, while `base-cx2-2` logs 9600 then 4800 and CONNECTs at 4800.
+        # Some evaluations do not take effect.
+        #
+        # So match on the OUTCOME: find the `finally ... rxbitrate N` whose N
+        # equals the rate the DTE was actually told, and take the equerr from
+        # the decision immediately preceding it.  If nothing matches -- the
+        # call never connected -- fall back to the last block and say so with
+        # an empty rate rather than pairing something arbitrary.
+        blocks, pend = [], None
+        for m in re.finditer(r"V34DATARATE, (?:equerr = (\d+),preerr=(\d+)"
+                             r"|finally txbitrate \d+,rxbitrate (\d+))", sl):
+            if m.group(1):
+                pend = (m.group(1), m.group(2))
+            elif pend:
+                blocks.append((m.group(3), pend[0], pend[1]))
+        eq = pe = ""
+        if blocks:
+            hit = next((b for b in blocks if rx and b[0] == rx), blocks[-1])
+            eq, pe = hit[1], hit[2]
+        ndec = str(len(blocks))
 
         m = re.search(r"setfinalrate, txbaudrate = (\d+),\s*rxbaudrate = (\d+)", sl)
         txb, rxb = (m.group(1), m.group(2)) if m else ("", "")
@@ -65,7 +89,9 @@ def main():
             if m:
                 pp = m.group(1)
 
-        w.writerow([name, arm, "1" if rx else "0", tx, rx, eq, pe, pp, txb, rxb])
+        nret = str(len(re.findall(r"retrain request detected", sl)))
+        w.writerow([name, arm, "1" if rx else "0", tx, rx, eq, pe, pp, txb, rxb,
+                    ndec, nret])
     return 0
 
 
