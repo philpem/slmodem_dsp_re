@@ -101,23 +101,25 @@ extern unsigned int ref_dsplibs_debug_level;
  * whole-slot copy goes through `.raw` rather than `&slot` -- same bytes, and
  * it keeps -Wclass-memaccess quiet without disabling it.
  */
-union mod_slot {
-	V90Phase3Modulator o;
-	unsigned char raw[SLOT];
+struct mod_slot {
+	union {
+		unsigned char raw[SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	V90Phase3Modulator &o;
 
-	mod_slot() {}
-	~mod_slot() {}
+	mod_slot() : o(*(V90Phase3Modulator *)raw) {}
 };
 
-static union mod_slot ours, theirs;
+static struct mod_slot ours, theirs;
 
 /*
  * `drive` and `compare_reset` each want a scratch pair.  They are file-scope
  * rather than function-local statics because a non-trivial local static wants
  * `__cxa_guard_acquire`, and this tree links no libstdc++.
  */
-static union mod_slot drive_ca, drive_cb;
-static union mod_slot reset_ca, reset_cb;
+static struct mod_slot drive_ca, drive_cb;
+static struct mod_slot reset_ca, reset_cb;
 static tagV90DILdescriptor desc;
 
 static unsigned lfsr_state;
@@ -458,15 +460,17 @@ typedef Scrambler<unsigned char, int> ScramblerHI;
  * would allocate a buffer `scr_place` immediately overwrites the pointer to.
  * The union is the same device the object slot above uses.
  */
-union scr_slot {
-	ScramblerHI o;
-	unsigned char raw[sizeof(ScramblerHI)];
+struct scr_slot {
+	union {
+		unsigned char raw[sizeof(ScramblerHI)];
+		double align_;		/* alignment only; trivial */
+	};
+	ScramblerHI &o;
 
-	scr_slot() {}
-	~scr_slot() {}
+	scr_slot() : o(*(ScramblerHI *)raw) {}
 };
 
-static union scr_slot scr_a, scr_b;
+static struct scr_slot scr_a, scr_b;
 
 static unsigned char scr_ours[SCR_BUF], scr_theirs[SCR_BUF];
 
@@ -752,7 +756,7 @@ prepare(int trial, int mode, unsigned int st)
 static void
 drive(int v92, long input)
 {
-	union mod_slot &ca = drive_ca, &cb = drive_cb;
+	struct mod_slot &ca = drive_ca, &cb = drive_cb;
 	unsigned int st = (unsigned int)ours.o.state;
 	const unsigned char *before = ours.o.scrambler.pOut;
 	unsigned int pos_before = ours.o.segmentPos;
@@ -1557,7 +1561,7 @@ prepare_reset(int trial, int mode, unsigned int flag)
 static void
 compare_reset(long input)
 {
-	union mod_slot &ca = reset_ca, &cb = reset_cb;
+	struct mod_slot &ca = reset_ca, &cb = reset_cb;
 
 	memcpy(ca.raw, ours.raw, SLOT);
 	memcpy(cb.raw, theirs.raw, SLOT);
@@ -1782,7 +1786,7 @@ void ref_dtor2(void *self) asm("ref__ZN18V90Phase3ModulatorD2Ev");
 #define CTOR_C		99
 #define CTOR_WORDS	(1u + CTOR_B + CTOR_C)
 
-static union mod_slot ctor_ca, ctor_cb;
+static struct mod_slot ctor_ca, ctor_cb;
 
 /*
  * The parameter block.  ONE block for both sides, because the constructor
@@ -1797,7 +1801,7 @@ static unsigned char par_block[256] __attribute__((aligned(8)));
 static void
 ctor_compare(long input)
 {
-	union mod_slot &ca = ctor_ca, &cb = ctor_cb;
+	struct mod_slot &ca = ctor_ca, &cb = ctor_cb;
 	const ScramblerHI *a = &ours.o.scrambler;
 	const ScramblerHI *b = &theirs.o.scrambler;
 

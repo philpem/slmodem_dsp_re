@@ -482,4 +482,50 @@ public:
 	float	TEMP_FLOAT_PARAMETER4;	/* +0x554 */
 };
 
+/*
+ * THE RAW VIEW, which is what V90PreFilter.h used to provide by DEFINING A
+ * SECOND V90Parameters -- a different class, of a different size, under the
+ * same name (finding 1112).  That is undefined behaviour the moment both
+ * reach one translation unit, and it was doing real damage: the two sizes
+ * were 0x504 and 0x558, so a translation unit holding the smaller one and
+ * allocating from `sizeof` under-allocated by 84 bytes, and
+ * `tools/whichfield.py` -- the tool CLAUDE.md points you at to turn a
+ * differential offset into a diagnosis -- resolved every offset of this class
+ * to `b[8] (unsigned char)` and told you nothing.
+ *
+ * This is a VIEW rather than a rival: one class, one size, and the word and
+ * float arrays laid over it for the regions that are not modelled as fields
+ * yet.  The accessors below keep every existing `p->w[0x1c0 / 4]` spelling
+ * working, including the ones indexed by a variable or a symbolic constant.
+ *
+ * A SITE THAT USES THIS IS A SITE WITH WORK LEFT IN IT.  Where the offset
+ * lands on a field this header already names, the named field is the better
+ * spelling -- and for the forty-odd field-to-field copies in
+ * `V90PreFilter::setParamEia6` it is arguably the CORRECT one: those copy
+ * `float` parameters, and the int view forces the integer `mov` that finding
+ * 1242 says is a spelling to avoid reaching for, because it fits the compiler
+ * rather than recording the source.  `make period` can now adjudicate that,
+ * which it could not when 1242 was written.  Task #116.
+ */
+union V90ParamsRaw {
+	unsigned char	b[0x558];
+	int		w[0x558 / 4];
+	float		f[0x558 / 4];
+};
+
+/*
+ * Guarded on a 32-bit pointer for the reason every offset assertion in this
+ * tree is: the layout the blob has is a 32-bit layout, and `make check64`
+ * lays the class out differently because it holds pointers.  Asserting the
+ * equality on a host that cannot have it is asserting the wrong thing.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v90pr_size[(sizeof(union V90ParamsRaw)
+			 == sizeof(V90Parameters)) ? 1 : -1];
+#endif
+
+#define V90PB(p)	(((union V90ParamsRaw *)(p))->b)
+#define V90PW(p)	(((union V90ParamsRaw *)(p))->w)
+#define V90PF(p)	(((union V90ParamsRaw *)(p))->f)
+
 #endif /* DSPLIB_V90PARAMETERS_H */

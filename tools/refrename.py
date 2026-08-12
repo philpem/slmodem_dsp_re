@@ -36,10 +36,39 @@ import subprocess
 import sys
 
 
+#
+# EVERY KIND, not just `.t.`, and it took the period build to notice.
+#
+# This matched `.gnu.linkonce.t.` alone for a long time and reported success,
+# because the count it checks afterwards was of the same thing it renamed.
+# The blob also carries eight `.gnu.linkonce.r.*` -- read-only comdats, which
+# for GCC 3.4 is where a VTABLE lives -- and those went straight through.
+#
+# Nothing noticed while the modern build was the only consumer: GCC 13 emits
+# vtables into section groups with different names, so there was nothing for
+# them to collide with.  Compile our side with the period compiler and ours
+# are named `.gnu.linkonce.r._ZTV12V90Resampler` too; ours come first, the
+# blob's are discarded whole, and the link fails with
+#
+#	ref__ZTV12V90Resampler: discarded in section
+#	`.gnu.linkonce.r._ZTV12V90Resampler' from build/dsplibs_ref.o
+#
+# The letter says which ordinary section to move it to.  Keeping the kind
+# right matters: a vtable moved into `.text.ref_*` would be executable data.
+#
+KIND = {
+    "t": ".text",
+    "r": ".rodata",
+    "d": ".data",
+    "b": ".bss",
+    "s": ".sdata",
+}
+
+
 def sections(obj):
     out = subprocess.run(["readelf", "-SW", obj], capture_output=True,
                          text=True).stdout
-    return sorted(set(re.findall(r"\s(\.gnu\.linkonce\.t\.\S+)", out)))
+    return sorted(set(re.findall(r"\s(\.gnu\.linkonce\.[a-z]+\.\S+)", out)))
 
 
 def main():
@@ -52,8 +81,13 @@ def main():
 
     args = ["objcopy"]
     for n in names:
-        # `.gnu.linkonce.t.` is 16 characters; keep the mangled tail.
-        args += ["--rename-section", "%s=.text.ref_%s" % (n, n[16:])]
+        # `.gnu.linkonce.X.` is 16 characters; the letter at 14 says the kind
+        # and the mangled tail follows.
+        kind = KIND.get(n[14])
+        if kind is None:
+            sys.stderr.write("refrename: unknown linkonce kind in %s\n" % n)
+            return 1
+        args += ["--rename-section", "%s=%s.ref_%s" % (n, kind, n[16:])]
     args += [obj, obj + ".tmp"]
 
     r = subprocess.run(args, capture_output=True, text=True)
@@ -67,7 +101,13 @@ def main():
         sys.stderr.write("refrename: %d linkonce sections survived: %s\n"
                          % (len(left), left[:3]))
         return 1
-    print("  refrename: %d linkonce sections moved to .text.ref_*" % len(names))
+    kinds = {}
+    for n in names:
+        kinds[n[14]] = kinds.get(n[14], 0) + 1
+    print("  refrename: %d linkonce sections moved out of comdat (%s)"
+          % (len(names), ", ".join("%s%s -> %s.ref_*" % (c, "" if v == 1 else
+                                   " x%d" % v, KIND[c])
+                                   for c, v in sorted(kinds.items()))))
     return 0
 
 

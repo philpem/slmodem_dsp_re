@@ -99,7 +99,7 @@ V90PreFilter::isV90WithEia6() const
 	if (refLoop >= 0)
 		cap = (dataBase[codecType].loops[refLoop].capability == 2);
 
-	return (cap == 1) || (params->w[0x500 / 4] == 6);
+	return (cap == 1) || (V90PW(params)[0x500 / 4] == 6);
 }
 
 /*
@@ -193,19 +193,19 @@ V90PreFilter::selectFilter()
 
 	refLoop = 0;
 
-	if (p->w[0x0c / 4] == 1) {
+	if (V90PW(p)[0x0c / 4] == 1) {
 		edprintf("V90PreFilter: Connection Type is ISDN NT1 BOX "
 			 "(4.2kHz Null)\r\n");
-		g = p->w[0x54 / 4];
+		g = V90PW(p)[0x54 / 4];
 		type = dataBase[codecType].loops[0].coefType;
 		gain = g;
-	} else if (p->w[0x0c / 4] == 2) {
+	} else if (V90PW(p)[0x0c / 4] == 2) {
 		edprintf("V90PreFilter: Connection Type is PBX ISDN BOX "
 			 "(4kHz Null)\r\n");
-		g = p->w[0x58 / 4];
+		g = V90PW(p)[0x58 / 4];
 		type = dataBase[codecType].loops[0].coefType;
 		gain = g;
-	} else if (p->w[0x4c / 4] == -1) {
+	} else if (V90PW(p)[0x4c / 4] == -1) {
 		int want = autoSelection();
 		unsigned int len = 20;
 		int loop, row;
@@ -262,7 +262,7 @@ V90PreFilter::selectFilter()
 		edprintf("V90PreFilter: Filter Gain = %d\r\n", want);
 		return;
 	} else {
-		int force = p->w[0x50 / 4];
+		int force = V90PW(p)[0x50 / 4];
 		int wide;
 
 		if (force == 1) {
@@ -289,11 +289,11 @@ V90PreFilter::selectFilter()
 
 		p = params;
 		if (wide) {
-			int v = p->w[0x4c / 4];
+			int v = V90PW(p)[0x4c / 4];
 
 			g = (v > 49) ? 50 : ((v > 19) ? v : 20);
 		} else {
-			int v = p->w[0x4c / 4];
+			int v = V90PW(p)[0x4c / 4];
 
 			g = (v > 29) ? 30 : v;
 		}
@@ -349,35 +349,35 @@ V90PreFilter::setParamEia6()
 	edprintf("V90PreFilter: setParamEIA6 called\r\n");
 
 	p = params;
-	p->w[0x010 / 4] = p->w[0x014 / 4];
-	p->w[0x2a4 / 4] = p->w[0x2a8 / 4];
-	p->w[0x374 / 4] = p->w[0x388 / 4];
-	p->w[0x3a8 / 4] = p->w[0x3d8 / 4];
-	p->w[0x3ac / 4] = p->w[0x3dc / 4];
-	p->w[0x3b0 / 4] = p->w[0x3e0 / 4];
-	p->w[0x3b4 / 4] = p->w[0x3e4 / 4];
-	p->w[0x3b8 / 4] = p->w[0x3e8 / 4];
-	p->w[0x3bc / 4] = p->w[0x3ec / 4];
-	p->w[0x188 / 4] = p->w[0x1d4 / 4];
-	p->w[0x18c / 4] = p->w[0x1d8 / 4];
-	p->w[0x1c0 / 4] = p->w[0x1e4 / 4];
-	p->w[0x1c4 / 4] = p->w[0x1dc / 4];
-	p->w[0x1c8 / 4] = p->w[0x1e0 / 4];
-	p->w[0x190 / 4] = p->w[0x198 / 4];
-	p->w[0x194 / 4] = p->w[0x19c / 4];
-	p->w[0x210 / 4] = p->w[0x218 / 4];
-	p->w[0x214 / 4] = p->w[0x21c / 4];
-	p->w[0x078 / 4] = p->w[0x07c / 4];
-	p->w[0x1bc / 4] = p->w[0x1a0 / 4];
-	p->w[0x230 / 4] = p->w[0x220 / 4];
-	p->w[0x178 / 4] = p->w[0x1e8 / 4];
-	p->w[0x17c / 4] = p->w[0x1ec / 4];
-	p->w[0x180 / 4] = p->w[0x1f0 / 4];
-	p->w[0x204 / 4] = p->w[0x244 / 4];
-	p->w[0x20c / 4] = p->w[0x24c / 4];
+	V90PW(p)[0x010 / 4] = V90PW(p)[0x014 / 4];
+	V90PW(p)[0x2a4 / 4] = V90PW(p)[0x2a8 / 4];
+	V90PW(p)[0x374 / 4] = V90PW(p)[0x388 / 4];
+	V90PW(p)[0x3a8 / 4] = V90PW(p)[0x3d8 / 4];
+	V90PW(p)[0x3ac / 4] = V90PW(p)[0x3dc / 4];
+	V90PW(p)[0x3b0 / 4] = V90PW(p)[0x3e0 / 4];
+	V90PW(p)[0x3b4 / 4] = V90PW(p)[0x3e4 / 4];
+	V90PW(p)[0x3b8 / 4] = V90PW(p)[0x3e8 / 4];
+	V90PW(p)[0x3bc / 4] = V90PW(p)[0x3ec / 4];
+	V90PW(p)[0x188 / 4] = V90PW(p)[0x1d4 / 4];
+	V90PW(p)[0x18c / 4] = V90PW(p)[0x1d8 / 4];
+	V90PW(p)[0x1c0 / 4] = V90PW(p)[0x1e4 / 4];
+	V90PW(p)[0x1c4 / 4] = V90PW(p)[0x1dc / 4];
+	V90PW(p)[0x1c8 / 4] = V90PW(p)[0x1e0 / 4];
+	V90PW(p)[0x190 / 4] = V90PW(p)[0x198 / 4];
+	V90PW(p)[0x194 / 4] = V90PW(p)[0x19c / 4];
+	V90PW(p)[0x210 / 4] = V90PW(p)[0x218 / 4];
+	V90PW(p)[0x214 / 4] = V90PW(p)[0x21c / 4];
+	V90PW(p)[0x078 / 4] = V90PW(p)[0x07c / 4];
+	V90PW(p)[0x1bc / 4] = V90PW(p)[0x1a0 / 4];
+	V90PW(p)[0x230 / 4] = V90PW(p)[0x220 / 4];
+	V90PW(p)[0x178 / 4] = V90PW(p)[0x1e8 / 4];
+	V90PW(p)[0x17c / 4] = V90PW(p)[0x1ec / 4];
+	V90PW(p)[0x180 / 4] = V90PW(p)[0x1f0 / 4];
+	V90PW(p)[0x204 / 4] = V90PW(p)[0x244 / 4];
+	V90PW(p)[0x20c / 4] = V90PW(p)[0x24c / 4];
 
 	/* The block +0x00 points at; the deviation is the int at its +0x4c. */
-	blk = *(const int *const *)&p->b[0];
+	blk = *(const int *const *)&V90PB(p)[0];
 	x = (long double)blk[0x4c / 4] * 0.001f;
 	whole = (int)x;
 	frac = (int)(10000.0f * (x - (long double)whole));
@@ -399,16 +399,16 @@ V90PreFilter::setParamEia6()
 		edprintf("V90PreFilter: Setting timing parameters "
 			 "(registry)...\r\n");
 		p = params;
-		p->f[0x84 / 4] = xf;
+		V90PF(p)[0x84 / 4] = xf;
 		for (i = 0; i < 18; i++)
-			p->w[0x88 / 4 + i] = p->w[0x110 / 4 + i];
+			V90PW(p)[0x88 / 4 + i] = V90PW(p)[0x110 / 4 + i];
 	}
 
 	p = params;
-	p->w[0x460 / 4] = p->w[0x490 / 4];
-	p->w[0x40c / 4] = p->w[0x488 / 4];
-	p->w[0x410 / 4] = p->w[0x484 / 4];
-	p->w[0x414 / 4] = p->w[0x48c / 4];
+	V90PW(p)[0x460 / 4] = V90PW(p)[0x490 / 4];
+	V90PW(p)[0x40c / 4] = V90PW(p)[0x488 / 4];
+	V90PW(p)[0x410 / 4] = V90PW(p)[0x484 / 4];
+	V90PW(p)[0x414 / 4] = V90PW(p)[0x48c / 4];
 }
 
 /*
@@ -506,7 +506,7 @@ V90PreFilter::V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
 	phase2 = info;
 	params = parms;
 
-	if (params->w[0x008 / 4] < 0) {
+	if (V90PW(params)[0x008 / 4] < 0) {
 		codecType = (int)codec;
 	} else {
 		if (DSPLIB_DEBUG_ON())
@@ -514,7 +514,7 @@ V90PreFilter::V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
 					     " loaded by configuration"
 					     " parameters\r\n");
 
-		switch (params->w[0x008 / 4]) {
+		switch (V90PW(params)[0x008 / 4]) {
 		case 0:		codecType = 0;	break;
 		case 1:		codecType = 1;	break;
 		case 2:		codecType = 2;	break;

@@ -204,10 +204,10 @@ seed_all(long trial, int idx)
 	fill(adidblk, sizeof(adidblk));
 	ADID->params = PARAMS;
 
-	PARAMS->f[0x284 / 4] = sdv[idx % NSD];
-	PARAMS->f[0x288 / 4] = sdv[(idx + 1) % NSD];
-	PARAMS->f[0x28c / 4] = sdv[(idx + 2) % NSD];
-	PARAMS->w[0x290 / 4] = (int)(unsigned)(idx * 7u + 1u);
+	V90PF(PARAMS)[0x284 / 4] = sdv[idx % NSD];
+	V90PF(PARAMS)[0x288 / 4] = sdv[(idx + 1) % NSD];
+	V90PF(PARAMS)[0x28c / 4] = sdv[(idx + 2) % NSD];
+	V90PW(PARAMS)[0x290 / 4] = (int)(unsigned)(idx * 7u + 1u);
 }
 
 /* ============================================== V90Phase3Demodulator */

@@ -10,9 +10,9 @@ class of defect is most of the value; the rest is running them.
 
 | tier | decides | structurally blind to |
 |---|---|---|
-| differential | correctness over the reachable input domain | anything that does not change an output |
+| differential, **under GCC 3.4.2** | correctness over the reachable input domain | anything that does not change an output |
 | mutation | whether a claim is tested at all | whether the claim is *right* |
-| codegen vs. period compiler | what the compiler was forced to encode | anything the compiler was free to choose |
+| codegen vs. the object | what the compiler was forced to encode | anything the compiler was free to choose |
 | transcript / diagnostics | what the two sides *say* | anything that prints nothing |
 
 ---
@@ -22,6 +22,36 @@ class of defect is most of the value; the rest is running them.
 Reconstruction and blob linked into one binary, driven from one deterministic
 input, outputs compared sample by sample. Any test disagreeing with the blob
 is a hard failure, never a tolerance to widen.
+
+**AND IT IS THE PERIOD COMPILER THAT RUNS IT.** `make period` builds `src/`,
+`test/harness/` and `test/unit/` with GCC 3.4.2 in `tools/toolchain/`, links
+them against the blob with binutils 2.15, and runs the suite — our source and
+the object compiled by the *same* compiler, so a difference is a difference in
+the code and not in the toolchain. It is part of `make phase`.
+
+This was not always so, and the reason it changed is a failure mode worth
+naming. While GCC 13 was the only gate, every place the two compilers
+disagreed had to be absorbed **somewhere**, and the only place available was
+the reconstruction's own source: a `volatile` here, a `(double)` cast there,
+each one making the source less like what the author wrote in order to satisfy
+a compiler the author never used. Every gate stayed green while the artefact
+the project exists to produce drifted. Three such shims were found and removed
+once the period build could adjudicate; one of them had changed `float`
+arithmetic to `double`, which is an alteration of the program and not of its
+compilation (findings 1352, 1354; `docs/method/compilers.md`).
+
+The modern build still compiles and still runs, as a portability check and a
+faster inner loop. Where GCC 13 provably cannot reproduce the object from
+correct source, the site is declared in `tools/gccdiverge.json` — one entry
+today — rather than papered over in `src/`. **`make period` has no allow-list
+and is not getting one:** the period compiler has no excuse, being the one the
+object was built with.
+
+**A rejection in `src/` under GCC 3.4.2 is a finding.** The author wrote this
+code for that compiler, so anything it refuses is something the author cannot
+have written. A rejection in `test/` is plumbing. And where our own apparatus
+needs something the old compiler lacks, the shim goes in
+`tools/toolchain/period_compat.h`, outside the reconstruction.
 
 **What it cannot see, with the cases that proved each:**
 
@@ -135,6 +165,20 @@ cost.** It went green with the mutation broken.
 Not "does it behave the same" but "did the same compiler, given our source,
 emit what the original's compiler emitted". It reaches exactly the class tier 1
 cannot, and pays for itself the first time it does.
+
+**Tier 1 now uses the same toolchain, and these remain different questions.**
+`make period` runs the suite and asks whether the OUTPUTS agree; `make
+similarity` compares the INSTRUCTIONS. A function can pass the first and match
+none of the second — different factoring computes the same thing for ever —
+and the reverse is possible too. Sharing a compiler removes an excuse from
+both, nothing more.
+
+It also removed a measurement error. The two builds were compiling `src/` with
+different flag sets: `build.sh` passed neither `-D__SIZEOF_POINTER__=4` nor
+the compat header, so it built 20 fewer translation units *and* silently
+elided the 81 offset assertions guarded on that predefine. One flag set took
+the ratchet from 386 compared / 105 identical to **750 / 254**, almost entirely
+over C++ the codegen tier previously could not build at all.
 
 `.comment` named the compiler 279 times over — GCC 3.4.2, built 22 September
 2005 (finding 606). A container with gcc-3.4.3 and binutils 2.15 compiles 76

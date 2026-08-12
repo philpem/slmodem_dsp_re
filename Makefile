@@ -155,7 +155,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage debugcov phase blobfix blobfix-check
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage debugcov phase blobfix blobfix-check onedef period
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -297,8 +297,17 @@ one: firewall strings offsets refs
 #
 RUNTESTS := $(addprefix run-,$(TESTS) $(CXXTESTS))
 .PHONY: $(RUNTESTS)
+#
+# Through tools/gccdiverge.py rather than bare, so that a site where MODERN
+# GCC provably cannot reproduce the object can be declared instead of being
+# forced from the source.  The register is empty by default and the wrapper
+# is then exactly `./$<` with an extra process; see that tool for the
+# discipline, and docs/method/compilers.md for why it exists at all.
+#
+# `make period` has NO allow-list and is not getting one.
+#
 $(RUNTESTS): run-%: $(BUILD)/test/%
-	@./$<
+	@$(PYTHON) tools/gccdiverge.py $* ./$<
 
 test: firewall strings offsets refs $(RUNTESTS)
 
@@ -432,7 +441,7 @@ refs:
 # passed and `make interop` had been broken for two commits.
 #
 # Run this at every phase boundary, not `make test`.
-phase: test check64 interop params coverage debugcov
+phase: period test check64 interop params coverage debugcov onedef
 	@echo
 	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
 
@@ -567,6 +576,38 @@ check64:
 # The period-toolchain build and the similarity ratchet.  NOT part of `phase`:
 # it needs docker and the tools/toolchain image, which not every checkout will
 # have, and it answers a different question from correctness -- see finding 349.
+#
+# ONE TYPE, ONE HOME.  Two definitions of a class in two headers is undefined
+# behaviour the moment both reach a translation unit, and it silently picks a
+# winner -- so every offset and every sizeof in the losing half is wrong with
+# nothing failing.  Cheap, so it runs in `phase`.  tools/onedef.py for the two
+# entries this tree still carries and why.
+#
+onedef:
+	@$(PYTHON) tools/onedef.py
+
+#
+# THE PERIOD DIFFERENTIAL -- the same suite, built and run by GCC 3.4.2 and
+# linked against the blob by binutils 2.15.  THIS IS THE TIER THAT DECIDES:
+# our source and the object compiled by the same compiler and compared at
+# runtime, so a difference is a difference in the code and not in the
+# toolchain.
+#
+# PART OF `phase`, which means `make phase` now needs docker and the
+# tools/toolchain image.  That is deliberate.  The goal is to reconstruct the
+# source using PERIOD tools; making the tree build on a modern compiler is a
+# later step, and while the modern build was the only gate, every place the
+# two compilers disagreed had to be absorbed in the reconstruction's own
+# source.  docs/method/compilers.md is the register of what that cost.
+#
+# It is incremental and sound -- an object is reused only if it is newer than
+# its source and than every header -- so an unchanged tree relinks rather than
+# rebuilding.  `make period T=t_resampler` for one binary.
+#
+period: $(REF)
+	@REF=$(REF) tools/toolchain/period.sh
+
+# The period-toolchain build and the similarity ratchet.  NOT part of `phase`:
 .PHONY: similarity
 similarity:
 	tools/toolchain/build.sh

@@ -290,8 +290,7 @@ static void
 snap_parm(void *dst, int side)
 {
 	memcpy(dst, parm[side], V90PARAMETERS_BOUND);
-	((V90Parameters *)dst)->w[0] =
-	    (*(void **)&parm[side][0] == (void *)blk[side]);
+	V90PW(dst)[0] = (*(void **)&parm[side][0] == (void *)blk[side]);
 }
 
 /*

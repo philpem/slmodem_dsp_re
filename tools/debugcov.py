@@ -109,6 +109,7 @@ the first function's entry, which everything executes, and reading that as
 """
 
 import glob
+import json
 import os
 import re
 import subprocess
@@ -147,11 +148,31 @@ def build():
     return targets
 
 
+def gcc_diverges():
+    """The tests tools/gccdiverge.json excuses under THIS compiler.
+
+    Read here for the same reason the test runner reads it: a site where
+    modern GCC provably cannot reproduce the object fails identically in the
+    instrumented build, and this target would otherwise be the one thing left
+    holding the whole tree to a standard the compiler cannot meet.  The
+    register is empty unless something is declared in it, and `make period`
+    -- which has no allow-list -- is what actually decides.
+    """
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "gccdiverge.json")) as f:
+            return set(json.load(f))
+    except OSError:
+        return set()
+
+
 def run(targets):
     for f in glob.glob("%s/**/*.gcda" % BUILD, recursive=True):
         os.unlink(f)                        # counts must not carry over
+    excused = gcc_diverges()
     bad = [t for t in targets
-           if subprocess.run([t], capture_output=True).returncode != 0]
+           if subprocess.run([t], capture_output=True).returncode != 0
+           and os.path.basename(t) not in excused]
     if bad:
         #
         # THIS one is fatal, and it is the only thing here that is -- for the

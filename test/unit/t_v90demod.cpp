@@ -986,7 +986,7 @@ run_getbitrate(void)
  * summaries of the resampler's timing history, prints three numbers built out
  * of them, and on one arm writes a fourth into a block reached through TWO
  * pointers.  So the fixture has to supply a timing history, and the checks
- * have to reach the block `params->w[0]` points at -- which `compare_all`
+ * have to reach the block `V90PW(params)[0]` points at -- which `compare_all`
  * already compares, because `enterPhase3` reads a byte of it.
  *
  * THE HISTORY IS THE FIXTURE'S ONE ADDITION, and it is made here rather than

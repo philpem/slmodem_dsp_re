@@ -44131,6 +44131,369 @@ cannot see the effect is a way of being wrong that looks like rigour.**
 
 ======================================================================
 
+### 1352. `round32`'s `volatile` IS A GCC 13 SHIM, NOT A TRANSCRIPTION — THE PERIOD COMPILER ROUNDS FROM PLAIN SOURCE
+
+*Asked because no 1990s DSP author would write `volatile float r = v;` to force
+a rounding, and that intuition is right. Investigation only; no code changed.*
+
+**What the object does**, `_ZN9Resampler8resampleEPKfjPfRj` at `.text+0x34da0`:
+
+```
+34f55:  flds  (%eax)        h[i]
+34f5a:  fmuls (%edx)        * c[i]
+34f60:  faddp %st,%st(2)    accumulate -- into st(2), NO store in the loop
+34f62:  jne   34f55
+...
+34f76:  fstps 0x34(%esp)    the spill, ONCE, after the loop
+```
+
+The running sum stays on the x87 stack at 80 bits for the whole inner product
+and is then stored **once** to a four-byte slot. That is ordinary register
+spilling of a variable whose declared type is `float`; the 24-bit rounding is a
+side effect of where GCC put it, not of anything in the source. The author wrote
+`float y0` and thought no more about it.
+
+**What our period compiler does with plain source.** `Resampler.cpp` was
+compiled in the tree's own GCC 3.4.2 container at the tree's flags, twice: once
+as it stands, and once with `round32`'s `volatile` removed so the helper is the
+identity function.
+
+| | accumulation | `fstps` | spill/reload pairs |
+|---|---|---|---|
+| the object | `faddp %st,%st(2)` | 4 | 2 |
+| **plain**, GCC 3.4.2 | **`faddp %st,%st(2)`** | 5 | 2 (`0x20`, `0x4c`, each stored then reloaded) |
+| with `volatile`, GCC 3.4.2 | `faddp %st,%st(1)` | 5 | 2 |
+
+**The plain source spills anyway.** GCC 3.4.2 runs out of x87 registers and
+stores the accumulators to four-byte slots with no help at all, and it does so
+using the same `faddp %st,%st(2)` stack discipline the object uses, which the
+`volatile` version does not.
+
+**So the `volatile` is a shim for the modern build only.** GCC 13 has the
+registers to keep both sums at 80 bits and therefore does not round; the helper
+forces what GCC 3.4.2 does for free. The existing comment says "the object
+rounds and our compiler will not", which is true but understates it: the ORIGINAL
+SOURCE almost certainly contained nothing of the kind, and the reconstruction is
+carrying a modern-toolchain artefact in a file whose purpose is to record what
+the author wrote.
+
+**What is NOT established.** The mnemonic similarity of the two variants against
+the blob is 38.4% (plain) against 36.9% (volatile) -- a 1.5-point gap that is
+far too small to lean on, and both are low because the blob's `resample` is 367
+instructions to our 263 with 18 `faddp` to our 4: its inner loop is unrolled and
+ours is not. The similarity tier cannot adjudicate this. Nor has it been shown
+that the plain GCC 3.4.2 build passes the differential test -- the harness builds
+with the modern toolchain, so running tier 1 against a period-compiled object
+would need harness work.
+
+**Options, given the above.** `-ffloat-store` and `-fexcess-precision=standard`
+are both wrong for a reason the disassembly settles: they round at every
+assignment, and the object's loop demonstrably does NOT round -- `faddp` with no
+store, `taps` times. Register allocation is not reachable by any flag. What is
+available is to make the shim's conditionality explicit, so the period build
+compiles the plain source the author wrote and only a modern compiler gets the
+helper. That is a source change and is not made here.
+
+### 1353. THE TWO PERIOD-BUILD FAILURES WERE THE ALLOCATOR, NOT EITHER COMPILER — AND THE CHECKS WERE ASKING THE WRONG QUESTION
+
+The period differential's first two disagreements, and the diagnosis went the
+opposite way to the one the evidence first suggested. Both `t_v92precoder` and
+`t_v90equ` built and ran under GCC 3.4.2, disagreed with the blob, and passed
+every check under GCC 13:
+
+    t_v92precoder  "stored in the reference's allocation order"  got 0, ref 1
+    t_v90equ       "block size"                                  got 132, ref 140
+
+**Neither is a compiler difference, and the argument that settles it needs no
+disassembly.** Our `V92Precoder::V92Precoder` allocates `fir1` and then `fir2`
+in two sequenced statements — there is no freedom for a compiler to reorder
+them — and the blob is a fixed binary whose behaviour cannot vary with what
+compiles the other half of the process. So the only term left that can change
+between the two builds is the C library, and the period build links a **2005
+static glibc** where the modern one links glibc 2.3x dynamically.
+
+**Both allocators recycle LIFO, identically.** Forty trials of
+`a = malloc(0x14); b = malloc(0x14); free(a); free(b)`:
+
+| libc | non-monotonic pairs |
+|---|---|
+| 2005 static glibc (period) | **20 of 40** |
+| modern glibc | **20 of 40** |
+
+The destructor frees `fir1` then `fir2`, so the next construction is handed
+`fir2`'s chunk first and `fir1 < fir2` **inverts on alternate trials**. It is
+not that one libc is monotonic and the other is not; neither is, and whether
+our side happened to be in phase with the blob's was luck that held under one
+build and not the other.
+
+`malloc_usable_size` is the same mistake in a second costume. It reports the
+CHUNK the request was served from, and glibc hands over a remainder too small
+to split rather than wasting it — so two allocations that asked for the same
+number of bytes report 132 and 140. Recording the requested size proves they
+did ask for the same thing: with `harness_alloc_reqsize` the check passes.
+
+**WHAT THE CHECKS MEANT TO ASK IS REAL; THE PROXY WAS NOT.** "Did `fir1` get
+the FIRST of the two allocations, as the blob's does" is a genuine property of
+the reconstruction, and so is "is our block the same size as the blob's". An
+address comparison answers neither, and `malloc_usable_size` answers neither.
+The allocator is the only thing that knows, so it now records both:
+
+    unsigned long harness_alloc_ordinal(const void *p);   /* 1, 2, 3, ... */
+    unsigned      harness_alloc_reqsize(const void *p);   /* bytes asked for */
+
+With those, all four checks pass under both compilers and the period
+differential is **155 of 155**.
+
+**THE METHODOLOGICAL POINT, which is the durable part.** A differential check
+must compare something both sides *compute*, not something the environment
+hands them. Three properties of an allocation are visible to a test — its
+address, its usable size, and its ordinal — and only the last is a fact about
+the code under test. The first two are facts about the C library, and a test
+that reads them is green or red for reasons no one in this tree controls. That
+they were green for years under one libc is not evidence they were right; it
+is the same "passing for the wrong reason" that finding 134 is about, and it
+took changing the compiler to expose it.
+
+It also revises what task #114 was filed believing. Its triage said the
+runtime-derived expectation (`PT()->fir1 < PT()->fir2`, read from the
+reference object in the same process) ruled out the test being at fault and
+made this a finding about `src/`. That reasoning was wrong: reading the
+expectation from the reference at runtime removes a HARDCODED assumption but
+not a shared environmental one, because both sides read the same allocator.
+
+### 1354. `narrow32` IS NOT A GCC 13 SHIM AFTER ALL — THE PERIOD COMPILER NEEDS IT TOO, AND THE OBJECT HAS NOTHING LIKE IT
+
+Stage 2 of task #113 began by deleting what finding 1352 called a shim, and
+the period differential refused it. The rule the task was filed with — *a shim
+the period compiler also needs is a real finding about the object, not a thing
+to delete* — fired on the first removal attempted.
+
+**The three variants, each run through `make period`:**
+
+| `src/pump/v90/Resampler.cpp` | GCC 3.4.2 | GCC 13 |
+|---|---|---|
+| helper + `volatile` | pass | pass |
+| helper, plain | **pass** | fail — 100/15491 and 592/4356 |
+| **no helper at all** | **FAIL — 592/4356** | — |
+
+1352 could not distinguish these: it compared instruction sequences and said
+so (*"Nor has it been shown that the plain GCC 3.4.2 build passes the
+differential test... would need harness work"*). That harness now exists, and
+it moves the conclusion. The `volatile` was a GCC 13 shim and is gone; **the
+helper is not**, and 1352's implication that the author's plain `float y0`
+would do is refuted for OUR source.
+
+**The mechanism, and it is not excess precision as such.** GCC 3.4's `-O2`
+does not enable `-finline-functions` — that arrived at `-O3` — so the helper
+stays out of line as `_Z8narrow32f` and its argument is materialised in a
+four-byte slot. **That slot is the narrowing.** Modern GCC inlines it at `-O2`
+and narrows nothing. So the two compilers differ over *inlining policy*, not
+over floating point, and the `volatile` was compensating for the wrong thing.
+
+**Why our source needs it and the object does not.** The blob's `resample` is
+367 instructions to our 263, with 18 `faddp` to our 4 — its inner loop is
+unrolled and ours is not. The author's code ran out of x87 registers where
+ours does not, so GCC spilled the accumulator for free at `.text+0x34f76`.
+The helper compensates for **our factoring differing from the author's**, not
+for a compiler differing from the author's. That makes it a deviation of a
+better-understood kind, and it points at the real repair: match the object's
+loop structure and the helper becomes unnecessary. Filed.
+
+**IT IS ALSO NOT A ROUNDING CALL, and the name said it was.** It was
+`round32`, which reads like something the author wrote. Ruled out three ways:
+`roundf`/`trunc`/`rint` round to an INTEGER, which would destroy the
+`y0 + (y1 - y0) * frac` interpolation two lines later; the blob imports no
+libm function to inline from, its entire undefined list being
+`dsplibs_debug_printf`, `sysdep_sprintf` and `sysdep_vsnprintf`; and GCC 3.4
+does not compile a rounding call to a bare `fstps` — it emits the control-word
+dance the same function already shows for the `(int)phase` cast. Renamed
+`narrow32`, because what it does is drop 80-bit excess precision to 32 bits.
+
+**AND THEN THE HELPER WENT TOO, because the right spelling was ordinary C.**
+Asked whether a `float` assignment or a `double`-to-`float` conversion would
+not narrow anyway, the probe says: under `-mfpmath=387` with the default
+`-fexcess-precision=fast`, GCC 3.4.2 emits a four-byte store for **one** of
+these and not the others.
+
+| spelling | narrowing store emitted? |
+|---|---|
+| `float z = y;` — plain assignment | **no** |
+| `float z = (float)y;` — explicit cast | **no** |
+| accumulate in `double`, then `(float)` | **yes** |
+| `volatile float z = y;` | yes |
+
+An assignment or cast merely *permits* narrowing and fast mode declines it;
+a conversion from a value that really is a `double` is one the compiler must
+perform. So `resample` now accumulates into a `double` and narrows with an
+explicit conversion — **no helper, no `volatile`, and it satisfies BOTH
+compilers**, so `t_resampler` needs no allow-list entry after all. The
+accumulation stays wide (the object's `faddp`) and the narrowing is stated
+rather than left to whether the compiler runs out of registers.
+
+**src/dsp/fft.cpp, both shims, and the same test applied.** `make period`
+passes 155 of 155 with plain source:
+
+- `volatile float tempr, tempi` in `four1` — GCC 3.4.2 spills them from plain
+  source, running out of x87 registers exactly as the author's compiler did,
+  because this `four1` is Numerical Recipes' unchanged and has the same shape.
+- the four `(double)` casts in `realfft` — worse than a codegen hint, since
+  they changed FLOAT arithmetic to DOUBLE, altering what the author wrote and
+  not merely how it compiled. GCC 3.4.2 keeps h1r/h1i/h2r/h2i on the x87 stack
+  from the plain float expression, which is what the object does.
+
+`four1` does NOT yield to the `double`-conversion spelling: a named
+`double tr = wr * data[j] - ...; tempr = (float)tr;` gives byte-identical
+failure counts under GCC 13. There the 80-bit register survives the
+conversion and only `volatile` moves it. So `t_fft` is the one entry in
+`tools/gccdiverge.json`, at 47,955 of 476,100 words, and it is the honest
+kind: modern GCC cannot express what the object does, and the period build —
+which has no allow-list — proves the source right.
+
+`tools/debugcov.py` reads the same register; the instrumented build fails
+identically and was the last thing holding the tree to a standard the modern
+compiler cannot meet.
+
+**The sweep is complete.** `src/` and `include/` now contain **no `volatile`
+at all** outside a comment, and every remaining `(double)` is an ordinary
+integer-to-double conversion, a `sizeof`, a libm argument, or `dftc.c`'s
+deliberate widening. Nine files still cite GCC 13 and all nine are
+explanation — mostly of why `-ffloat-store` is the wrong fix — not shims.
+
+### 1355. THE TWO `V90Parameters` ARE ONE — AND `whichfield.py` STARTED WORKING THE MOMENT THEY WERE
+
+Finding 1112 recorded that this tree defined `V90Parameters` twice: the named
+map in `V90Parameters.h` at 0x558, and a block of `b[]`/`w[]`/`f[]` arrays in
+`V90PreFilter.h` at 0x504. It called the duplication "a wart and not a
+design" and left it. Task #116 closed it.
+
+**0x504 was never a size.** It is how far the five `V90PreFilter` methods that
+existed at the time happened to reach — finding 215's "a displacement is not a
+size", 84 bytes short of the object's own `sysdep_malloc(0x558)`.
+`V90PreFilter.h`'s own comment already said a later batch that modelled the
+class "should replace this declaration rather than add a second one". That
+batch landed; the block was never retired.
+
+**IT WAS DOING DAMAGE, AND HERE IS THE MEASUREMENT.** Before:
+
+    $ tools/whichfield.py "class V90Parameters" 8
+    class V90Parameters + 8  ->  b[8]   (unsigned char, +8)
+
+After:
+
+    class V90Parameters + 8    ->  HW_CODEC_TYPE                (int, +8)
+    class V90Parameters + 376  ->  LINEAR_EQU_FADE_EDGES_CYCLE  (int, +376)
+
+`whichfield.py` is the tool CLAUDE.md points you at to turn a differential
+offset into a diagnosis. For this class it resolved against the *wrong*
+definition and produced no diagnosis at all — for as long as the duplicate
+existed, every failure reported against `V90Parameters` was unreadable.
+
+**THE SHAPE OF THE FIX: a VIEW, not a rival.** The raw arrays move into the
+owning header as `union V90ParamsRaw` with `V90PW()`/`V90PF()`/`V90PB()`
+accessors, so all 90 existing `p->w[0x1c0 / 4]` sites keep working — including
+those indexed by a variable or a symbolic constant — while there is exactly
+one class of exactly one size. `V90PARAMETERS_BOUND` survives, because the
+tests use it as the boundary of the region they exercise and assert the rest
+is untouched: that is a real and different job from a size, and the comment
+now says which it is.
+
+**AND THE TRADE IN `V90ModemCtor.cpp` EVAPORATED**, which was the prize. That
+file carried a long argument for why it could not include `V90Demodulator.h`
+— the header reaches `V90PreFilter.h`, which used to bring the 0x504 class
+into a translation unit that allocates 0x558 — and therefore forward-declared
+`V90Demodulator`, named its constructor by mangled symbol, and wrote its
+allocation size as the bare literal `0x298`. The header comes in now, the
+allocation is `sizeof(V90Demodulator)` again, and the size is asserted in the
+file that depends on it rather than trusted from another.
+
+The old argument is kept in the file because it names the failure mode
+exactly: *of two possible mistakes, one silent and one loud, arrange for only
+the loud one to be reachable.*
+
+**WHAT IT COST, and it is the part worth knowing.** Rewriting 90 access sites
+changed source text that mutation anchors quote, and 17 anchors across four
+suites went to "matches 0 times". `tools/anchorcheck.py` caught every one --
+this is the hazard `docs/method/tiers.md` warns about, that editing a file
+with a mutation suite is not free and the phase gate cannot see the cost, and
+it is the second time an anchor check has paid for itself. One mutation had to
+be RETARGETED rather than repaired: it replaced `#define V90DEMODULATOR_BYTES
+0x298` with `0x290`, and there is no literal to mutate now, so it became
+`sysdep_malloc(sizeof(V90Demodulator) - 8)` -- the same claim, that an
+8-byte under-allocation is caught. Re-run: 24 caught, 0 NOT caught.
+
+**One duplicate remains**, `V90Phase4Demodulator`, registered in
+`tools/onedef.py` with its reason.
+
+### 1356. THE OBJECT'S `resample` IS HAND-UNROLLED BY FOUR INTO TWO SUMS — AND MATCHING IT DOES NOT BRING THE NARROWING WITH IT
+
+Task #117's premise was that our `Resampler::resample` never spills its
+accumulator because it is not unrolled where the object's is, and that
+matching the factoring would make the explicit narrowing (findings 1352, 1354)
+unnecessary. **Half right.** The factoring is recoverable and worth having;
+the inference about the narrowing is refuted.
+
+**WHAT THE OBJECT DOES.** `.text+0x34da0` opens each inner product by pushing
+three zeros and the phase:
+
+```
+34ece:  d9 ee     fldz
+34ed4:  d9 c0     fld    %st(0)
+34ed6:  d9 c1     fld    %st(1)
+34eda:  dd 47 0c  fldl   0xc(%edi)      <- phase, a double
+```
+
+then alternates its accumulations between two of them, four products to an
+iteration, walking both pointers by 0x10:
+
+```
+34f25:  flds  (%eax) ; fmuls  (%edx) ; faddp %st,%st(2)   <- a
+34f2e:  flds 4(%eax) ; fmuls 4(%edx) ; faddp %st,%st(3)   <- b
+34f36:  flds 8(%eax) ; fmuls 8(%edx) ; faddp %st,%st(2)   <- a
+34f3e:  flds c(%eax) ; fmuls c(%edx) ; faddp %st,%st(3)   <- b
+34f4a:  cmp $0x3,%ecx ; ja 34f25
+```
+
+with a one-at-a-time residue loop at 34f55 into `a` alone, the two sums joined
+at 34f6a, and the result narrowed once at 34f76.
+
+**IT IS IN THE SOURCE.** GCC 3.4's `-O2` does not imply `-funroll-loops` —
+that is `-O3` — so the author wrote the unrolling. Two accumulators rather
+than one is the standard reason: an x87 add has a latency the next add cannot
+hide, and alternating halves the dependent chain. A plain
+`for (i = 0; i < taps; i++)`, which is what this file had, was never what was
+compiled.
+
+**THE GAP CLOSED, MEASURED:**
+
+| | instructions | `faddp` |
+|---|---|---|
+| ours, plain loop | 263 | 4 |
+| **ours, the object's shape** | **328** | **18** |
+| the blob | 350 | **18** |
+
+The arithmetic structure now matches exactly.
+
+**AND THE NARROWING STILL HAS TO BE STATED, which is the finding.** With this
+exact shape GCC 3.4.2 emits the same alternating two-accumulator sequence and
+**still keeps both sums in x87 registers**: 100 of 15491 and 592 of 4356
+checks disagree with the blob, *the same counts as no narrowing at all*. So
+the pressure that makes the object spill is not in the loop. The object holds
+`phase` and three zeros on the x87 stack across it — four slots gone before
+the first product — where ours keeps phase in memory. Whatever produces that
+difference is elsewhere in the function and is not the unrolling.
+
+The accumulate-wide-convert-once spelling therefore stays, now inside the
+object's own shape. It is no worse for being explicit: it says what the object
+does and depends on no compiler's register allocator, which is the property
+that survived two compilers and three attempts.
+
+**The aggregate ratchet did not move** — 750 compared / 254 identical before
+and after — because `resample` was already outside the identical set and a
+closer miss is still a miss. The instruction and `faddp` counts are the
+measurement that shows the change did what it claimed.
+
+======================================================================
+
 ### 1360. THREE OF THE DETECTOR'S FIELD TYPES WERE WRONG AND NOTHING COULD HAVE CAUGHT IT
 
 `V90AutoDigitalImpDetector`'s object map was written from `reset` and

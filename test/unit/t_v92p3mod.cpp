@@ -98,31 +98,35 @@ extern unsigned int ref_dsplibs_debug_level;
  * union holding one.  A user-provided pair that constructs and destroys no
  * variant member restores them and changes nothing else.
  */
-union mod_slot {
-	V92Phase3Modulator o;
-	unsigned char raw[SLOT];
+struct mod_slot {
+	union {
+		unsigned char raw[SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	V92Phase3Modulator &o;
 
-	mod_slot() {}
-	~mod_slot() {}
+	mod_slot() : o(*(V92Phase3Modulator *)raw) {}
 };
 
-static union mod_slot ours, theirs;
-static union mod_slot cmp_a, cmp_b;
+static struct mod_slot ours, theirs;
+static struct mod_slot cmp_a, cmp_b;
 
 /*
  * The parameter block.  `reset` reads two ints out of it and writes nothing,
  * so ONE block serves both sides and the stored `params` pointer compares
  * equal with no neutralisation.
  */
-union par_slot {
-	V92Parameters o;
-	unsigned char raw[0xdc];
+struct par_slot {
+	union {
+		unsigned char raw[0xdc];
+		double align_;		/* alignment only; trivial */
+	};
+	V92Parameters &o;
 
-	par_slot() {}
-	~par_slot() {}
+	par_slot() : o(*(V92Parameters *)raw) {}
 };
 
-static union par_slot par;
+static struct par_slot par;
 
 /* The V92Ja: a count at +0x00 and the vector at +0x04. */
 #define JABITS	96u
@@ -252,7 +256,7 @@ set_state(unsigned int st)
 }
 
 static unsigned int
-get_state(const union mod_slot *m)
+get_state(const struct mod_slot *m)
 {
 	return *(const unsigned int *)(m->raw + 0x08);
 }
@@ -953,7 +957,7 @@ void ref_dtor2(void *self) asm("ref__ZN18V92Phase3ModulatorD2Ev");
 #define CTOR_C		99
 #define CTOR_WORDS	(1u + CTOR_B + CTOR_C)
 
-static union par_slot par_decoy;
+static struct par_slot par_decoy;
 
 static void
 ctor_compare(long input)

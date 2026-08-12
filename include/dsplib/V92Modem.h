@@ -60,13 +60,23 @@ struct tagV90DILdescriptor;
  * the two values below are.  Nothing anywhere fixes `V92ComputationalMode`'s,
  * because nothing in the object reads it; `int` there follows the V.90 file.
  *
- * Declaring them opaque rather than defining them has a second effect the
- * test depends on: with a fixed underlying type every value of that type is
- * a value of the enum, so `(V92ModemSide)2` is well defined and the "illegal
- * modemSide" arm both functions carry can actually be driven.
+ * Fixing the underlying type has a second effect the test depends on: every
+ * value of that type is then a value of the enum, so `(V92ModemSide)2` is
+ * well defined and the "illegal modemSide" arm both functions carry can
+ * actually be driven.
+ *
+ * THE OPAQUE DECLARATION THAT USED TO DO THAT IS C++11, so the author cannot
+ * have written it.  A C++98 definition keeps the property, but only with an
+ * enumerator to pin the base -- an EMPTY enum has the range 0..0, which would
+ * make `(V92ModemSide)2` exactly the undefined behaviour this comment is
+ * about.  `_BASE_PIN` is ours; the object names no enumerator.
+ * docs/method/compilers.md, V2.
  */
-enum V92ModemSide : unsigned int;
-enum V92ComputationalMode : int;
+enum V92ModemSide { V92ModemSide_BASE_PIN = 0xffffffffu };
+enum V92ComputationalMode { V92ComputationalMode_BASE_PIN = -0x7fffffff - 1 };
+
+typedef char v92modem_side_is_unsigned[
+    ((enum V92ModemSide)-1 > (enum V92ModemSide)0) ? 1 : -1];
 
 /*
  * The two the object names, from the string the constructor selects at

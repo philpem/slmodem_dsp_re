@@ -27,3 +27,8 @@ docs/mewt_survivors.txt
 
 # mutate.py holds this while a run is in progress (finding 705)
 test/mutations/.running
+
+# Other sessions work in worktrees under here.  `git add -A` swept nine of
+# them into a commit once; they are embedded git repositories and belong to
+# nobody in this tree.
+.claude/

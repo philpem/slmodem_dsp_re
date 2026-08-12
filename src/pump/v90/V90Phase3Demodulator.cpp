@@ -348,10 +348,10 @@ V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *p,
 	autoDigitalImpDetector = adid;
 
 	sd = (V90SdDetector *)sysdep_malloc(sizeof(V90SdDetector));
-	v90p3d_sd_ctor(sd, params->f[PARAMS_SD_THRESH_08],
-		       params->f[PARAMS_SD_THRESH_0C],
-		       params->f[PARAMS_SD_VALUE_10],
-		       (unsigned int)params->w[PARAMS_SD_LIMIT]);
+	v90p3d_sd_ctor(sd, V90PF(params)[PARAMS_SD_THRESH_08],
+		       V90PF(params)[PARAMS_SD_THRESH_0C],
+		       V90PF(params)[PARAMS_SD_VALUE_10],
+		       (unsigned int)V90PW(params)[PARAMS_SD_LIMIT]);
 	sdDetector = sd;
 
 	an = (ANSamToneDetector *)sysdep_malloc(sizeof(ANSamToneDetector));

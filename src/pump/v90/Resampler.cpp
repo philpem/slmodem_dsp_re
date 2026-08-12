@@ -236,33 +236,77 @@ Resampler::resetHistoryIndex()
 }
 
 /*
- * Round an x87 accumulator to `float`, and mean it.
+ * The inner product, UNROLLED BY FOUR INTO TWO PARTIAL SUMS -- which is the
+ * object's shape and not a performance idea of ours.
  *
- * THIS EXISTS BECAUSE THE OBJECT ROUNDS AND OUR COMPILER WILL NOT, and it is
- * a deviation rather than a transcription: GCC 3.4 ran out of x87 registers
- * across the second inner product and spilled the first sum to a `float`
- * stack slot -- `fstps 0x34(%esp)` at .text+0x34f76, and `fstps`/`flds
- * 0x30(%esp)` at +0x34fee/+0x34ff6 for the second -- which rounds it.  A
- * modern GCC at the tree's flags keeps both sums at 80 bits (-mfpmath=387,
- * -fexcess-precision=fast, and deliberately no -ffloat-store), and the
- * difference reaches the OUTPUT: rounding `y0` before `y0 + (y1 - y0) * frac`
- * moves the stored sample by up to one ULP.
+ * `Resampler::resample` at .text+0x34da0 opens each inner product by pushing
+ * three zeros and the phase:
  *
- * That is not a tolerance to widen -- any disagreement with the blob is a
- * hard failure -- so the rounding is forced here.  Declaring the sums `float`
- * does NOT do it, and neither does an inlined `float`-returning helper: both
- * were tried and neither emits a store.  `volatile` does, once, in exactly
- * the place the object does it, and nowhere else -- the accumulation inside
- * each loop stays at 80 bits on both sides, and so does everything after the
- * two roundings.
+ *      34ece:  d9 ee           fldz
+ *      34ed4:  d9 c0           fld    %st(0)
+ *      34ed6:  d9 c1           fld    %st(1)
+ *      34eda:  dd 47 0c        fldl   0xc(%edi)      <- phase
+ *
+ * and then alternates its accumulations between two of them, four products
+ * to an iteration, walking both pointers by 0x10:
+ *
+ *      34f25:  flds  (%eax) ; fmuls  (%edx) ; faddp %st,%st(2)   <- a
+ *      34f2e:  flds 4(%eax) ; fmuls 4(%edx) ; faddp %st,%st(3)   <- b
+ *      34f36:  flds 8(%eax) ; fmuls 8(%edx) ; faddp %st,%st(2)   <- a
+ *      34f3e:  flds c(%eax) ; fmuls c(%edx) ; faddp %st,%st(3)   <- b
+ *      34f4a:  cmp   $0x3,%ecx ; ja 34f25
+ *
+ * with a one-at-a-time residue loop at 34f55 accumulating into `a` alone,
+ * the two sums joined at 34f6a, and the result narrowed ONCE at 34f76 by
+ * `fstps 0x34(%esp)`.
+ *
+ * IT IS IN THE SOURCE, NOT IN THE COMPILER.  GCC 3.4's `-O2` does not imply
+ * `-funroll-loops`; that is `-O3`.  So the author wrote the unrolling, and a
+ * plain `for (i = 0; i < taps; i++)` here -- which is what this file had --
+ * was never what was compiled.  Two accumulators rather than one is the
+ * standard reason: an x87 add has a latency the next add cannot hide, and
+ * alternating halves the dependent chain.
+ *
+ * THE UNROLLING DOES NOT BRING THE NARROWING WITH IT, which was the thing
+ * worth finding out.  The object narrows once, `fstps 0x34(%esp)` at
+ * .text+0x34f76, because it has spilled a `float` accumulator; the guess was
+ * that our un-unrolled loop simply kept too few values live and that matching
+ * the shape would restore the pressure.  It does not.  With this exact shape
+ * GCC 3.4.2 emits the same alternating two-accumulator sequence and STILL
+ * keeps both sums in x87 registers -- 100 of 15491 and 592 of 4356 checks
+ * disagree with the blob, the same counts as no narrowing at all.
+ *
+ * The pressure is not in the loop.  The object holds `phase` AND three zeros
+ * on the x87 stack across it (34ece-34eda above), which is four slots gone
+ * before the first product; ours keeps phase in memory.  So the narrowing
+ * stays stated -- accumulate wide, convert once -- which is what the object
+ * does and now depends on no compiler's allocator.  Findings 1352, 1354, 1356.
+ *
+ * A macro and not an inline function, deliberately: GCC 3.4 at -O2 does not
+ * inline a function not declared `inline`, and an out-of-line call here would
+ * put a four-byte argument slot in the middle of the inner product -- exactly
+ * the accident this file spent two findings getting out of.
  */
-static float
-round32(float v)
-{
-	volatile float r = v;
-
-	return r;
-}
+#define DOT(dst, hp, cp)						\
+	do {								\
+		const float *h_ = (hp), *c_ = (cp);			\
+		double a_ = 0, b_ = 0;					\
+		unsigned int n_ = taps;					\
+									\
+		while (n_ > 3) {					\
+			a_ += h_[0] * c_[0];				\
+			b_ += h_[1] * c_[1];				\
+			a_ += h_[2] * c_[2];				\
+			b_ += h_[3] * c_[3];				\
+			h_ += 4;					\
+			c_ += 4;					\
+			n_ -= 4;					\
+		}							\
+		while (n_-- != 0)					\
+			a_ += *h_++ * *c_++;				\
+									\
+		(dst) = (float)(a_ + b_);				\
+	} while (0)
 
 /*
  * Turn `n` new input samples into however many output samples the phase
@@ -352,22 +396,42 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 		 * Two adjacent polyphase branches, linearly interpolated.
 		 * `ph` is the truncating cast the object spells out as
 		 * fnstcw / or $0xc00 / fldcw / fistl.
+		 *
+		 * THE ACCUMULATOR IS `double` AND THE RESULT IS NARROWED
+		 * EXPLICITLY, because that is what the object does and it is
+		 * the only spelling that says so portably.
+		 *
+		 * The blob accumulates at 80 bits -- `faddp %st,%st(2)`,
+		 * `taps` times, with NO store in the loop -- and then narrows
+		 * exactly once, `fstps 0x34(%esp)` at .text+0x34f76.  That
+		 * store is a spill of a variable the author declared `float`;
+		 * the narrowing was a side effect of GCC running out of x87
+		 * registers, not of anything written down (finding 1352).
+		 *
+		 * WRITING `float y0` AND HOPING FOR THE SAME SPILL DOES NOT
+		 * WORK, and it is worth knowing why before anyone tidies this
+		 * back.  Under -mfpmath=387 with the default
+		 * -fexcess-precision=fast, neither a plain assignment to a
+		 * `float` nor an explicit `(float)` cast emits a store --
+		 * measured on both compilers, and it is why this file once
+		 * carried a `volatile` helper.  A double-to-float conversion
+		 * is different: the value really is a `double`, so the
+		 * conversion is one the compiler must perform.
+		 *
+		 * So the accumulation stays wide and the narrowing is stated,
+		 * which is exactly the object's behaviour and depends on no
+		 * compiler's register pressure.  Finding 1354.
 		 */
 		ph = (int)phase;
 
 		h = history + historyIndex - taps;
 		c = coeffs + ph * taps;
-		y0 = 0;
-		for (i = 0; i < taps; i++)
-			y0 += h[i] * c[i];
-		y0 = round32(y0);
+		DOT(y0, h, c);
 
 		if ((unsigned int)(ph + 1) < phases) {
 			h = history + historyIndex - taps;
 			c = coeffs + (ph + 1) * taps;
-			y1 = 0;
-			for (i = 0; i < taps; i++)
-				y1 += h[i] * c[i];
+			DOT(y1, h, c);
 		} else {
 			/*
 			 * Branch `phases` IS branch 0 one input sample later,
@@ -377,11 +441,8 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 			history[historyIndex] = *in;
 			h = history + historyIndex - taps + 1;
 			c = coeffs;
-			y1 = 0;
-			for (i = 0; i < taps; i++)
-				y1 += h[i] * c[i];
+			DOT(y1, h, c);
 		}
-		y1 = round32(y1);
 
 		frac = (float)(phase - ph);
 		y = y0 + (y1 - y0) * frac;

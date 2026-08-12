@@ -76,6 +76,63 @@ now appends the input when the format string has no conversion for it, which
 repaired 819 call sites that were silently discarding the offset they computed
 (finding 220).
 
+## One type, one home
+
+A `class`, `struct`, `enum` or `union` is **defined in exactly one file**.
+Everyone else forward-declares it or includes that file. A forward declaration
+is not a definition and is never a problem.
+
+`make phase` gates this through `tools/onedef.py`, which carries the two
+duplicates this tree still has and the reason for each. Adding a third needs
+a reason written there; removing one is progress.
+
+It is not a style rule. Two definitions of one type is undefined behaviour the
+moment both reach a translation unit, and it fails silently -- the compiler
+picks one, and every offset, `sizeof` and allocation in the other half is
+quietly wrong. `V90Parameters` is 0x504 in one header and 0x558 in the other,
+and `V90ModemCtor.cpp` carries a long comment about which of the two it must
+not include, because allocating the smaller and using the larger
+under-allocates by 84 bytes and passes every test not run under a checking
+allocator.
+
+It was also a portability wall: six enums were spelled in two headers each,
+which is legal for the C++11 OPAQUE DECLARATION they were and illegal for the
+C++98 DEFINITION they had to become. See `docs/method/compilers.md`.
+
+## The compiler that decides is the PERIOD one
+
+`make period` builds `src/`, `test/harness/` and `test/unit/` with GCC 3.4.2
+in `tools/toolchain/`, links them against the blob with binutils 2.15, and
+runs the suite. Our source and the object, compiled by the same compiler,
+compared at runtime -- so a difference is a difference in the code and not in
+the toolchain.
+
+**`make phase` RUNS IT**, so `make phase` needs docker and the
+`tools/toolchain` image. It is incremental and sound -- an object is reused
+only if it is newer than its source and than every header -- so an unchanged
+tree relinks rather than rebuilding: about 34 s of the run. `make one T=...`
+is still the fast loop between commits.
+
+The modern build runs in the same `phase` and still has to pass. It is the
+portability check, and `make check64` proves the tree is 64-bit clean. Where
+GCC 13 provably cannot reproduce the object from correct source, the site is
+declared in `tools/gccdiverge.json` -- one entry today, `four1`'s butterfly --
+rather than papered over in `src/`. That register names CHECKS, not tests, and
+a stale entry (an allow-listed test that starts passing) fails the gate.
+**`make period` has no allow-list and is not getting one.**
+
+**A rejection in `src/` under GCC 3.4.2 is a finding, not a portability
+nuisance** -- the author wrote this code for that compiler, so anything it
+refuses is something the author cannot have written. A rejection in `test/` is
+plumbing; fix it freely. And where our own APPARATUS needs something the old
+compiler lacks, the shim goes in `tools/toolchain/period_compat.h`, outside
+the reconstruction -- never in the source being reconstructed.
+
+`docs/method/compilers.md` is the register of every variance found so far,
+including the one that was silent: 78 files guard their offset assertions on
+`__SIZEOF_POINTER__`, a GCC 4.6+ predefine, so under 3.4.2 the guard read
+`#if 0` and every assertion vanished while the file compiled clean.
+
 ## The second tier: comparing code generation
 
 `.comment` names the original's compiler 279 times over — **GCC 3.4.2**, built
