@@ -69,9 +69,17 @@ echo "=== starting the relay (registers 4242, bridges inbound -> $TO_EXT)"
 # `timeout` because relay.py's timers live inside a blocking read on pjsua's
 # stdout: once both legs are up pjsua can go quiet for a minute, and if
 # call.py dies early nothing ever unblocks the loop.
-timeout $((HOLD + 120)) python3 "$BENCH/relay.py" --dial "$TO_EXT" --hold "$HOLD" \
-	--rec "$LOG.conf.wav" \
-	--log "$LOG.relay.log" > "$LOG.relay.out" 2>&1 &
+# rtprelay.py by default: it FORWARDS RTP packets untouched, where relay.py
+# decodes and mixes them through pjsua's conference and so cannot carry a V.34
+# handshake (finding 1468).  RELAY=pjsua selects the old one for comparison.
+case "${RELAY:-rtp}" in
+pjsua)	timeout $((HOLD + 120)) python3 "$BENCH/relay.py" --dial "$TO_EXT" \
+		--hold "$HOLD" --rec "$LOG.conf.wav" \
+		--log "$LOG.relay.log" > "$LOG.relay.out" 2>&1 & ;;
+*)	timeout $((HOLD + 120)) python3 "$BENCH/rtprelay.py" --dial "$TO_EXT" \
+		--hold "$HOLD" --rec "$LOG" \
+		--log "$LOG.sip.log" > "$LOG.relay.out" 2>&1 & ;;
+esac
 RELAY=$!
 trap 'kill $RELAY 2>/dev/null' EXIT
 
