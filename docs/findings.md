@@ -49368,3 +49368,141 @@ thing itself, and nothing else on this bench can produce one.
 bug-for-bug by default; this goes on the deliberate-fix list beside the 8000
 samp/s work and the floating-point defects, off by default, with the
 differential tier defining bug-compatible behaviour. See D53.
+
+### 1500. `FPM_atan` RETURNS NOTHING, AND ITS TABLE IS THE ONE IN THIS LAYER THAT ROUNDS
+
+*Task: `fpm_atan.c`. Closed — `FPM_atan` .text 0x0a6a50, 409 bytes, and
+`FPM_atan_table` .rodata 0x00c9a0, 514 bytes.*
+
+**THE SIGNATURE IS `void FPM_atan(short y, short x, short *angle)`.** The
+hand-over into this session described it as `short FPM_atan(...)`, and it is
+not. All five exits converge on the same three instructions — load the third
+argument from `0x38(%esp)`, store a 16-bit value through it, return — and
+`%eax` holds a different leftover on each: the sign mask `(y<0)?0x4000:0` on
+the `x == 0` path, `x` itself on the `y == 0` path, the `0x145f` product on
+the general path. GCC 3.4.2 at `-O2` sets `%eax` on every exit of a function
+that returns one. There are three arguments, at `0x30`, `0x34` and `0x38`
+after a bare `sub $0x2c,%esp` with no pushes.
+
+**THE ARGUMENT ORDER IS atan2's, `y` FIRST.** Settled by the degenerate
+branches, not by convention: when the *second* argument is zero the answer is
+`0x2000 + ((first < 0) ? 0x4000 : 0)`, i.e. ±90°, so the second argument is
+`x`; when the *first* is zero the answer is `(second < 0) ? 0x4000 : 0`, i.e.
+0° or 180°. `FPM_atan(0, 0)` falls out of the first branch as `0x2000` rather
+than being special-cased.
+
+**UNITS.** fpm_phasor.c's: a full turn is `0x8000`, so `0x2000` is 90° and
+`0x1000` is 45°, anticlockwise from the positive x axis. The whole circle
+therefore fits a signed short with exactly one unit to spare, which is what
+1502 is about.
+
+**METHOD: OCTANT REDUCTION OVER `FPM_div`.** The smaller magnitude is divided
+by the larger, so the ratio is always in [0,1] and one eighth of a table
+serves the circle:
+
+    FPM_div(max, &recip, &shift);
+    ratio = (unsigned short)(((recip * min) >> 15) << shift);
+
+`recip` is `2^30 / (max << shift)`, so the whole expression is
+`32768 * min / max` — the ratio in Q15. The magnitudes are taken in 32 bits
+and then truncated to 16 (`cltd`/`xor`/`sub`/`movzwl`), so `|-32768|` is
+**32768** and not the −32768 a 16-bit negate would give, and every comparison
+on them is unsigned.
+
+**TABLE DERIVATION, EXACT ON ALL 257 ENTRIES:**
+
+    FPM_atan_table[i] = round(32768 * atan(i / 256))
+
+**ROUNDED, NOT TRUNCATED — and that is the point of recording it**, because it
+is the opposite of every neighbouring table. fpm_phasor.c's sine and cosine
+truncate (its own header says so), and so does fpm_div.c's reciprocal.
+Truncation here misses **147 of the 257** entries; rounding misses none. Entry
+256 is 25736 where `trunc(32768*atan(1))` is 25735.
+
+So the table holds atan in Q15 **radians**, and the `imul $0x145f` that
+follows converts to the phase unit: `32768 / (2*pi) = 5215.19`, truncated to
+5215 = `0x145f`. The `lea 0x4000(%eax)` before the `sar $0xf` rounds that
+product.
+
+**`FPM_atan_table` IS GLOBAL** — `nm` shows `R`, not `r`, and the relocation at
+`0x0a6b1e` names the symbol rather than `.rodata` + addend. So it is not a
+file static, and the reconstruction keeps it global, which also lets
+`t_fpm_atan` compare all 257 words against the blob's own copy through
+`ref_FPM_atan_table` rather than only against the closed form.
+
+**`fpm_atan.c` HOLDS THIS ONE FUNCTION.** docs/attribution.md brackets the
+translation unit as 0x0a6a50 - 0x0a6a50, and the only outbound relocations in
+the range are the two `FPM_div` calls and the one table reference.
+
+### 1501. `FPM_atan`'s LINEAR SHORTCUT IS OFF BY ONE: A RATIO OF EXACTLY 127 GIVES AN ANGLE OF ZERO
+
+*Task: `fpm_atan.c`. Reproduced, not repaired. Wants a `D` number from
+whoever next edits docs/deviations.md; not claimed here because deviation IDs
+are allocated globally and this session holds finding numbers only.*
+
+For small ratios `atan(r) ~= r`, so the code skips the table:
+
+    cmp    $0x7e,%ax
+    movswl %ax,%edx
+    jbe    <use the ratio itself as the Q15 radian value>
+    shr    $0x7,%eax
+    movswl FPM_atan_table(,%eax,2),%edx
+
+The index is `ratio >> 7`, so **entry 0 covers ratios 0..127** — and entry 0
+is **0**. The shortcut covers 0..126. A ratio of exactly 127 therefore falls
+through to the table and yields an angle of **0**, where 126 yields 20 and 128
+yields 20 again. A single-point notch to zero in the middle of a monotone
+curve.
+
+Had the compare been `0x7f` the shortcut would have covered the whole of entry
+0's range and there would be no discontinuity at all, which is why this reads
+as an off-by-one rather than as a design. It is reproduced: `t_fpm_atan`
+sweeps every pair inside a 401×401 box around the origin, which is where the
+shortcut lives, and 4.47 M differential checks pass against the blob.
+
+Reachability is unmeasured. The callers are `FPM_FSE_receive`,
+`FPM_SRE_recover` and the V.32 status path (docs/deviations.md), so the input
+is a phase-error estimate; a ratio of exactly 127/32768 is one value out of
+32769 and the error it introduces is 20 phase units out of 32768, about
+0.22°. Small, but it is a discontinuity in a timing-recovery loop's error
+term, which is the sort of thing that matters more than its size suggests.
+
+### 1502. `FPM_atan`'s WRAP-THROUGH-ZERO OCTANT IS ONE UNIT LOW — AND 257 ENTRIES IS EXACTLY ENOUGH, NOT ONE MORE
+
+*Task: `fpm_atan.c`. Both halves reproduced; the second half is the good news.*
+
+**THE OCTANT.** Seven of the eight folds use exact bases — `0x2000 ±`,
+`0x4000 ±`, `0x6000 ±`, and the bare angle. The eighth, `x > 0` with `y < 0`
+and `|x| > |y|`, is the only one whose base would have to be `0x8000`, and
+`0x8000` is not a positive short. The original uses **`0x7fff`**:
+
+    a6b4a: mov $0x7fff,%ebx
+    a6b4f: sub %ecx,%ebx
+
+so every angle in that eighth of the circle is one unit less than the other
+seven octants' convention gives. `FPM_atan(-1, 32767)` is `0x7fff`, not
+`0x8000` and not `0`. Reproduced verbatim; the alternative would have been to
+wrap to a negative short, which changes the type of the answer.
+
+**THE TABLE IS EXACTLY LONG ENOUGH.** The index is `ratio >> 7` and the ratio
+is nominally `32768 * min / max`, capped at 32768 — but `FPM_div` buckets its
+mantissa to the nearest 256 and can round it *down*, which makes the
+reciprocal a shade large and pushes the ratio past 32768. The largest value
+reachable is **32894**, at `max == min == 16447`, and `32894 >> 7` is **256**:
+the last entry, and not one past it. Established by sweeping all 32768 values
+of `max` with `min` equal to it, which is where the ratio is maximal because
+it is monotonic in `min`.
+
+So there is **no out-of-range read here**, unlike `FPM_sqrt` (D1) and
+`FPM_div` (D4), whose tables are each one entry short of what their own index
+expression produces. Same author, same era, third outcome — and the margin is
+one entry, so this was either checked or lucky.
+
+**A CONSEQUENCE FOR THE TEST TIER.** `FPM_atan` divides through `FPM_div`, so
+it inherits D4: about one denominator in 256 normalises to a mantissa of
+`0xff80` or above and reads `FPM_div`'s 129th entry, which the blob takes from
+`FPM_xor_table[0]` (zero) and our fixed build takes as 16384. 32767 is such a
+denominator, and so are 511, 1023 and 2047. `t_fpm_atan` therefore *requires*
+`-DDSPLIB_REPRODUCE_BUGS` and says so with an `#error`, the same guard
+`t_fpm_div` carries. Without it the test fails on inputs that are not wrong.
+
