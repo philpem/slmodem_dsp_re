@@ -534,6 +534,135 @@ translate_block(unsigned char *dst, const unsigned char *src, size_t n,
 }
 
 /*
+ * TRANSLATE THE TWO SIDES TOGETHER, AND LEAVE A WORD ALONE WHERE THEY ALREADY
+ * AGREE.  This is `translate_block` twice over, minus the one case that made
+ * the fixture flaky, and the argument that it is safe is exact:
+ *
+ *   TWO SEPARATELY ALLOCATED BLOCKS NEVER HAVE THE SAME ADDRESS.  So a word
+ *   whose raw value is IDENTICAL on both sides is not a pointer into either
+ *   side's allocations -- it is data, or a null, or a pointer to something the
+ *   two sides share -- and translating it can only turn an equality into an
+ *   inequality.  Skipping it cannot hide a difference, because equal bytes are
+ *   equal whatever is done to them afterwards.
+ *
+ * Words that DO differ are translated exactly as before, so every genuine
+ * pointer is still canonicalised and every claim the slot tags carry survives.
+ */
+static void
+translate_pair(unsigned char *da, unsigned char *db,
+	       const unsigned char *sa, const unsigned char *sb,
+	       size_t n, const struct ptrmap *m)
+{
+	size_t o;
+
+	memcpy(da, sa, n);
+	memcpy(db, sb, n);
+	for (o = 0; o + 4 <= n; o += 4) {
+		unsigned int wa, wb;
+
+		memcpy(&wa, da + o, sizeof wa);
+		memcpy(&wb, db + o, sizeof wb);
+		if (wa == wb)
+			continue;
+		wa = (unsigned int)translate((unsigned long)wa, 0, m);
+		wb = (unsigned int)translate((unsigned long)wb, 1, m);
+		memcpy(da + o, &wa, sizeof wa);
+		memcpy(db + o, &wb, sizeof wb);
+	}
+}
+
+/*
+ * DID THE TRANSLATION INVENT A DIFFERENCE?  Returns the first offset where the
+ * two translated blocks disagree and the two RAW blocks agreed, or -1.
+ *
+ * This is not a belt-and-braces check, it is the one this fixture was missing.
+ * `translate` decides whether a word is a pointer FROM ITS VALUE and against
+ * THAT SIDE'S live ranges, so a word that is not a pointer at all -- seeded
+ * data, a float, a counter -- is rewritten whenever its bit pattern happens to
+ * land inside some allocation.  The two sides' allocations are at different
+ * addresses, so the same coincidental value can come out as one side's slot
+ * and the other side's generic live block, and two blocks that were equal
+ * become unequal.  Nothing else in the fixture can tell that apart from a real
+ * disagreement: both arrive as a byte difference in `diff_eq_obj`.
+ */
+static long
+translation_invented(const unsigned char *ta, const unsigned char *tb,
+		     const unsigned char *ra, const unsigned char *rb,
+		     size_t n)
+{
+	size_t i;
+
+	for (i = 0; i < n; i++)
+		if (ta[i] != tb[i] && ra[i] == rb[i])
+			return (long)i;
+	return -1;
+}
+
+/*
+ * THE GUARD IS SHOWN TO FIRE, because a detector that has never fired is
+ * indistinguishable from a broken one -- finding 134, and this file is where
+ * that mattered.  The scenario below is the observed failure exactly: ONE
+ * value, the SAME on both sides, that lies inside a block side 0 knows as a
+ * numbered slot and side 1 knows only as some live allocation.  The old
+ * one-side-at-a-time translation turns it into 0x50000000 for side 0 and
+ * 0x60000000 for side 1 -- which is byte for byte what the flake reported,
+ * `60 50` against `00 60` in the high half of a word -- and `translate_pair`
+ * leaves it alone.
+ *
+ * Returns 0 if both halves of that hold.
+ */
+static int
+guard_selfcheck(void)
+{
+	unsigned char ra[64], rb[64], ta[64], tb[64];
+	static struct ptrmap m;
+	void *blk = sysdep_malloc(64);
+	unsigned int w;
+	int ok;
+
+	if (blk == 0)
+		return -1;
+
+	memset(&m, 0, sizeof m);
+	m.nslot = 1;
+	m.slot[0][0] = blk;			/* side 0: a numbered slot   */
+	m.slotend[0][0] = (unsigned long)blk + 64;
+	m.slot[1][0] = 0;			/* side 1: no such slot      */
+	m.slotend[1][0] = 0;
+	m.nlive = 1;
+	m.live[0] = blk;			/* but it IS live            */
+	m.liveend[0] = (unsigned long)blk + 64;
+
+	memset(ra, 0x11, sizeof ra);
+	memcpy(rb, ra, sizeof rb);
+	w = (unsigned int)(unsigned long)blk;
+	memcpy(ra + 16, &w, sizeof w);
+	memcpy(rb + 16, &w, sizeof w);
+
+	/*
+	 * The old way: one side at a time, unconditionally.  The invented
+	 * difference is INSIDE the planted word but not necessarily at its
+	 * first byte -- 0x50000000 and 0x60000000 agree in their low three --
+	 * which is why the real flake reported a two-byte run at +2 of a word
+	 * and not a four-byte one.
+	 */
+	translate_block(ta, ra, sizeof ra, 0, &m);
+	translate_block(tb, rb, sizeof rb, 1, &m);
+	{
+		long at = translation_invented(ta, tb, ra, rb, sizeof ra);
+
+		ok = at >= 16 && at < 20;
+	}
+
+	/* The new way: together, skipping the words that already agree. */
+	translate_pair(ta, tb, ra, rb, sizeof ra, &m);
+	ok = ok && translation_invented(ta, tb, ra, rb, sizeof ra) == -1;
+
+	sysdep_free(blk);
+	return ok ? 0 : -1;
+}
+
+/*
  * COMPARE A BLOCK THE CONSTRUCTOR ALLOCATED, not just the pointer to it.  The
  * thirteen pointers are excluded from the object comparison because the two
  * sides allocate separately, so without this nothing any of the thirteen
@@ -548,8 +677,20 @@ cmp_block(const char *what, const char *type, const void *pa, const void *pb,
 {
 	if (n > sizeof cmpa)
 		n = sizeof cmpa;
-	translate_block(cmpa, (const unsigned char *)pa, n, 0, m);
-	translate_block(cmpb, (const unsigned char *)pb, n, 1, m);
+	/*
+	 * PAIRWISE HERE TOO.  These blocks are the constructors' own buffers,
+	 * so most of what is in them is the allocator's 0xa5 fill, which is not
+	 * a plausible address -- but the ones the constructors fill with real
+	 * data have the same exposure the object had, and there is no reason to
+	 * leave one of the two call sites carrying the defect.
+	 */
+	translate_pair(cmpa, cmpb, (const unsigned char *)pa,
+		       (const unsigned char *)pb, n, m);
+	diff_eq_int("the translation invented a difference in the block, "
+		    "trial %ld -- got the offset",
+		    translation_invented(cmpa, cmpb, (const unsigned char *)pa,
+					 (const unsigned char *)pb, n),
+		    -1, trial);
 	diff_eq_obj_(__FILE__, __LINE__, what, type, cmpa, cmpb, n, trial);
 }
 
@@ -864,12 +1005,25 @@ run_ctor(void)
 			{
 				static unsigned char sa[DEM_SLOT], sb[DEM_SLOT];
 
-				translate_block(sa, demo[0], DEM_SLOT, 0, &pm);
-				translate_block(sb, demo[1], DEM_SLOT, 1, &pm);
+				translate_pair(sa, sb, demo[0], demo[1],
+					       DEM_SLOT, &pm);
 				memset(sa + OFF_FIR_COEFFICIENTS, 0, 4);
 				memset(sb + OFF_FIR_COEFFICIENTS, 0, 4);
 				memset(sa + OFF_RESAMPLER_VPTR, 0, 4);
 				memset(sb + OFF_RESAMPLER_VPTR, 0, 4);
+				/*
+				 * `got` is the OFFSET; the conversion in the
+				 * label takes the trial, which is how
+				 * diff_eq_int reads its arguments.
+				 */
+				diff_eq_int("the translation invented a "
+					    "difference, trial %ld -- got the "
+					    "offset",
+					    translation_invented(sa, sb,
+								 demo[0],
+								 demo[1],
+								 DEM_SIZE),
+					    -1, trial);
 				diff_eq_obj_(__FILE__, __LINE__,
 					     "after the constructor",
 					     "V90Demodulator", sa, sb, DEM_SIZE,
@@ -1315,6 +1469,16 @@ int
 main(void)
 {
 	int rc = 0;
+
+	/*
+	 * FIRST, because the two runs below are only worth what the comparison
+	 * they use is worth, and this fixture spent a while reporting a
+	 * difference its own canonicalisation had manufactured.
+	 */
+	diff_begin("the pointer canonicalisation, and the guard on it");
+	diff_eq_int("the guard fires on the old translation and not the new",
+		    guard_selfcheck(), 0, 0);
+	rc |= diff_end();
 
 	rc |= run_ctor();
 	rc |= run_dtor();

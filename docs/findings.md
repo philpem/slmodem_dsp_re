@@ -44874,3 +44874,145 @@ The suite is 212 mutations, 208 caught, 0 not caught, 0 unusable, 4 equivalent,
 neither failure is this class's.
 
 ======================================================================
+
+======================================================================
+
+### 1450. `t_v90demctor`'s FLAKE WAS ITS OWN POINTER CANONICALISATION INVENTING A DIFFERENCE, AND THE FIX IS THAT TWO SEPARATE ALLOCATIONS NEVER SHARE AN ADDRESS
+
+`t_v90demctor` failed about once in three hundred runs, at ONE check of 6,179,
+in `V90Demodulator::V90Demodulator`, and passed every time it was re-run. The
+first diagnosis offered -- ten bytes of uninitialised heap inside the compared
+sub-object -- was WRONG, and it was wrong for a reason worth keeping: the
+harness allocator `memset`s every block to `HARNESS_MALLOC_FILL` (0xa5) exactly
+so that a field no constructor writes is identical on both sides. Uninitialised
+memory cannot make this fixture flake. Something else varied.
+
+**WHAT THE FAILING BYTES SAID.** Every occurrence was a TWO-byte run at +2 of an
+aligned word, and the values were always drawn from the same small set:
+
+    V90Demodulator+358..+359   got 60 50, reference 00 60
+    V90Demodulator+562..+563   got 20 50, reference 00 60
+
+Little-endian, those are the HIGH halves of `0x5060xxxx` against `0x6000xxxx`,
+and `0x5020xxxx` against `0x6000xxxx`. Both are outputs of the fixture's own
+`translate()`: `0x50000000 + k * 0x100000 + off` is "inside slot k", and
+`0x60000000 + off` is "inside some other live allocation". So one word was
+being classified as a numbered slot on one side and as an anonymous live block
+on the other -- and the LOW halves agreeing says the two classifications were
+of the SAME block at the SAME offset.
+
+**THE MECHANISM.** `translate()` decides whether a word is a pointer FROM ITS
+VALUE, against THAT SIDE'S ranges, and `translate_block` applied it to every
+aligned word of the object. The two `demo[]` slots are static arrays seeded
+with the same pseudorandom bytes, so every word no constructor writes holds the
+same PLAUSIBLE-LOOKING 32-bit number on both sides. When ASLR happened to put
+one of the thirteen allocated blocks where such a number pointed, side 0 --
+which owns that block as slot k -- rewrote it to `0x50k00000 + off`, while side
+1 -- which has its own slot k somewhere else, but for which the block is still
+live -- rewrote the identical number to `0x60000000 + off`. Two equal bytes
+became two unequal ones. The offsets were scattered over `constellationPower.
+pad_00`, `pad_48`, `pad_274` and the like because those are precisely the
+regions the constructors leave holding the seed.
+
+**IT IS THE TEST AND NOT THE SOURCE, and that was measured rather than
+argued.** A guard was added first -- `translation_invented()`, which reports the
+first offset where the two TRANSLATED blocks disagree and the two RAW blocks
+agreed -- and the old translation was left in place. It fired, on a real
+occurrence, at exactly the offsets the object comparison then reported:
+
+    the translation invented a difference ... got 358
+    after the constructor [input 900005]: V90Demodulator+358..+359
+
+Raw bytes equal, translated bytes different. No byte the blob writes disagrees
+with ours.
+
+**THE FIX IS ONE OBSERVATION.** Two separately allocated blocks never have the
+same address, so **a word whose raw value is IDENTICAL on both sides is not a
+pointer into either side's allocations** -- it is data, a null, or a pointer to
+something the two sides share. `translate_pair()` translates the two sides
+together and skips those words. It cannot hide a difference, because equal
+bytes are equal whatever is done to them afterwards; and words that DO differ
+are translated exactly as before, so every genuine pointer is still
+canonicalised and the slot tags keep their claims. Both call sites were
+converted -- the object comparison and `compare_alloc`, which had the same
+exposure in the constructors' own buffers.
+
+**THE GUARD IS SHOWN TO FIRE**, which is finding 134's rule and the reason it is
+worth the twenty lines. `guard_selfcheck()` plants one value -- the same on both
+sides -- inside a block that side 0 knows as a numbered slot and side 1 knows
+only as live, and asserts that the OLD translation invents a difference inside
+that word and the NEW one does not. It runs first in `main`, before the two
+sweeps whose comparison it underwrites.
+
+**MEASURED, because one green run proves nothing about a one-in-three-hundred
+event.** Before the fix: 2 failures in 60 runs, then 0 in 120, then 1 in 300 --
+3 in 360 all told, and the 0-in-120 is why a single pass was never evidence.
+After the fix: 0 in 1,200.
+
+**THE GENERAL SHAPE.** A fixture that CANONICALISES before comparing can
+manufacture a difference as easily as it can hide one, and the two are
+indistinguishable in the output -- both arrive as a byte difference in
+`diff_eq_obj`. Any canonicalisation that classifies by VALUE rather than by
+POSITION, and that uses a DIFFERENT classifier for each side, has this defect
+by construction.
+
+**`t_v90rxctor.cpp` DOES NOT HAVE IT, and the difference is instructive.** It
+runs the same `discover_regions` walk over the same live set, but what it does
+with the result is `skip_words(sa, sb, ...)` -- it excludes the discovered
+offsets from BOTH sides at once. A coincidental hit there cannot invent a
+difference; it can only DROP a byte that should have been compared, which is a
+false negative rather than a flake and is bounded by `some words had to be
+excluded` asserting the set is non-empty. Symmetric-by-position is the property
+that matters, and skipping has it for free where translating had to be given
+it. That is also why this fixture translates rather than skips: it is strictly
+stronger when it is symmetric, because it keeps the pointer's offset within its
+block and the block's slot identity, which a skip throws away.
+
+======================================================================
+
+### 1451. SEVENTY OF THE 118 MUTATION SUITES CANNOT SEE THEIR OWN TEST CHANGE, BECAUSE THE SNAPSHOT KEY LOOKS FOR A `.c` DRIVER AND THEY HAVE A `.cpp`
+
+Found while repairing `t_v90demctor` (finding 1450), by asking the obvious
+follow-up: that repair changed a test binary a mutation suite is pointed at, so
+is the suite's recorded verdict now stale? It is not marked stale, and it
+should be.
+
+`tools/mutsnap.py`'s `suite_key()` is what decides whether a recorded result
+still describes the tree:
+
+    driver = os.path.join("test", "unit", os.path.basename(entry[1]) + ".c")
+    if os.path.exists(driver):
+        digest_path(h, driver)
+
+The `+ ".c"` is literal. A suite whose binary is `build/test/t_v90demctor` gets
+`test/unit/t_v90demctor.c`, which does not exist -- the file is
+`t_v90demctor.cpp` -- so `os.path.exists` is false and **the driver contributes
+nothing to the key.** Measured across the manifest: **118 suites, 70 of them
+driven by a `.cpp` with no `.c` beside it.** For those seventy, the source
+under mutation and the mutation set are hashed and the TEST IS NOT.
+
+**WHAT THAT COSTS.** The key's entire job is to say "these verdicts were true of
+a different tree" when something changes underneath them. For a C++-driven
+suite, a test can be rewritten, weakened, or have a whole block deleted, and
+every recorded `caught` stays marked CURRENT -- which is the one label that
+invites quoting it as a baseline. It is finding 1383's third case (repointing a
+suite moves an obligation with it) with the detector switched off for the
+majority of suites, and it is silent by construction: nothing prints, nothing
+fails, and `mutsnap` reports the same counts it always did.
+
+**NOT FIXED HERE, and the reason is arithmetic rather than ownership.** The
+repair is one line -- try `.c`, then `.cpp` -- but it changes the key of all
+seventy suites at once, so the next `mutsnap` run would flip every one of them
+from `current` to `stale`. That is the correct state and it is also a tree-wide
+re-record's worth of work, which §6 of `docs/remaining.md` already defers by the
+owner's decision. Landing it inside a batch that is about two V.90 classes would
+misattribute a large sweep to a small change. It belongs with the tree-wide
+re-record, and it should go in FIRST when that happens, because doing it
+afterwards would immediately invalidate the sweep that had just been paid for.
+
+**One interim consequence worth knowing.** Until it is fixed, "the snapshot says
+current" is evidence about the source and the mutation set for every suite, and
+about the test as well for only 48 of them. Anyone re-recording a C++-driven
+suite has to decide by reading the diff, not by reading the key --
+`v90demctor`'s entry was re-recorded by hand in the batch that found this, for
+exactly that reason.
