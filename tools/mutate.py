@@ -646,6 +646,28 @@ def take_lock(root=None):
     atexit.register(lambda: os.path.exists(lock) and os.remove(lock))
 
 
+#
+# HALF THE CORES, NOT ALL OF THEM.
+#
+# Every mutation is a build plus a test run in its own copy, so N jobs is N
+# concurrent compilers, and `--jobs $(nproc)` leaves nothing for the machine
+# to be used with.  A full re-record is 4653 mutations and takes tens of
+# minutes; making it unusable-for-anything-else for that whole time is a bad
+# trade for the last few percent of throughput.
+#
+# It is a DEFAULT and not a cap: pass `--jobs N` for whatever N suits.  Note
+# mutate.py's own note at the shard code that a real bug was found BECAUSE
+# jobs were high and lowering them would have hidden it -- so this is a load
+# choice, not a determinism one, and running higher deliberately is fine.
+#
+def default_jobs():
+    try:
+        return max(1, (os.cpu_count() or 2) // 2)
+    except Exception:
+        return 1
+
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Apply mutations one at a time and report which the "
@@ -667,10 +689,12 @@ def main():
                          "ITERATION: 1.4 s instead of a full suite.  The run "
                          "is marked SUBSET and cannot be recorded as a "
                          "baseline")
-    ap.add_argument("--jobs", type=int, metavar="N",
+    ap.add_argument("--jobs", type=int, metavar="N", default=default_jobs(),
                     help="run the suite over N copies at once; each costs "
                          "about 21 MB of temporary disk and the verdicts are "
-                         "identical to a serial run")
+                         "identical to a serial run.  Default is HALF the "
+                         "cores (%d here) -- see default_jobs()"
+                         % default_jobs())
     ap.add_argument("--shard", metavar="I/N",
                     help=argparse.SUPPRESS)   # set by --jobs on its workers
     args = ap.parse_args()

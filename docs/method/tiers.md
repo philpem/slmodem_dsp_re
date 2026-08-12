@@ -160,6 +160,20 @@ cost.** It went green with the mutation broken.
 
 ---
 
+### Running them without taking the machine hostage
+
+`tools/mutate.py --jobs` defaults to **half the cores**, not all of them.
+Every mutation is a build plus a test run in its own copy, so N jobs is N
+concurrent compilers, and a full re-record is 4,653 mutations over tens of
+minutes -- long enough that leaving the machine unusable for the duration is a
+bad trade for the last few percent. `tools/toolchain/period.sh` halves for a
+sharper reason: it NESTS, since `make phase` already runs at `-j$(nproc)` and
+one of its recipes is that script asking a container for another J.
+
+Both are defaults, not caps. Run higher deliberately when the machine is
+yours -- and note mutate.py's own record that a real bug was found BECAUSE
+jobs were high, so this is a load choice and not a determinism one.
+
 ## 3. Codegen against the period compiler
 
 Not "does it behave the same" but "did the same compiler, given our source,
