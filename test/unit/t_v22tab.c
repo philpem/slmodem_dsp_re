@@ -58,7 +58,7 @@ cmp_agc(const char *label, const struct fpm_agc_cfg *a,
 	diff_eq_int("f08 (%ld)", a->f08, b->f08, 0);
 	diff_eq_int("block_len (%ld)", a->block_len, b->block_len, 0);
 	diff_eq_int("f14 (%ld)", a->f14, b->f14, 0);
-	diff_eq_int("pad16 (%ld)", a->pad16, b->pad16, 0);
+	diff_eq_int("f16 (%ld)", a->f16, b->f16, 0);
 
 	/* By content, not by address: the two builds cannot agree on one. */
 	diff_eq_int("alpha is not null (%ld)", a->alpha != 0, 1, 0);
