@@ -465,7 +465,44 @@ refs:
 # passed and `make interop` had been broken for two commits.
 #
 # Run this at every phase boundary, not `make test`.
-phase: period test check64 interop params coverage debugcov onedef
+#
+# PREREQUISITES, CHECKED BEFORE ANYTHING RUNS.  Finding 1563: `make phase`
+# exited 2 in every agent worktree since the baseline and nobody noticed for
+# weeks, because `third_party/spandsp` is gitignored so `git worktree add` does
+# not bring it, the interop link failed in the first ten lines, and 1,573 PASS
+# lines scrolled past afterwards.  Every caller was reading grep's exit status
+# rather than make's.  A real defect shipped behind that (a missing declaration
+# in t_v32smc.c) and surfaced only at a merge.
+#
+# So this runs FIRST and refuses, rather than failing somewhere in the middle
+# of a log nobody reads to the end.
+#
+# It also FIXES the common case instead of only reporting it: a worktree can
+# borrow the main tree's spandsp with a symlink -- 36 MB not re-cloned and not
+# rebuilt -- and .gitignore's pattern is deliberately written without a
+# trailing slash so the symlink is ignored too.  `--git-common-dir` points at
+# the main repository's .git from inside any worktree, which is how the main
+# tree is located without hard-coding a path.
+#
+prereq:
+	@if [ ! -e $(SPANDSP) ]; then \
+	    main=$$(cd $$(git rev-parse --git-common-dir)/.. && pwd); \
+	    if [ -d "$$main/$(SPANDSP)" ]; then \
+	        mkdir -p $$(dirname $(SPANDSP)); \
+	        ln -s "$$main/$(SPANDSP)" $(SPANDSP); \
+	        echo "prereq: linked $(SPANDSP) -> $$main/$(SPANDSP)"; \
+	    fi; \
+	fi
+	@test -f $(SPANDSP_LIB) || { \
+	    echo "prereq: REFUSING to run -- $(SPANDSP_LIB) is missing."; \
+	    echo "  The interop tier cannot link, and a phase that cannot run"; \
+	    echo "  must say so rather than print PASS lines and exit non-zero"; \
+	    echo "  where nobody looks (finding 1563)."; \
+	    echo "  Fix: see third_party/README.md, or run make from a tree that"; \
+	    echo "  has it and this target will symlink it for you."; \
+	    exit 1; }
+
+phase: prereq period test check64 interop params coverage debugcov onedef
 	@echo
 	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
 
