@@ -132,10 +132,26 @@ def suite_key(name, entry):
     """The one string that says which tree these verdicts describe."""
     h = hashlib.sha256()
     h.update(closure_digest().encode())
-    # the suite's own driver, e.g. build/test/t_v34hshak -> test/unit/t_v34hshak.c
-    driver = os.path.join("test", "unit", os.path.basename(entry[1]) + ".c")
-    if os.path.exists(driver):
-        digest_path(h, driver)
+    #
+    # THE DRIVER MAY BE `.c` OR `.cpp`, AND ASSUMING `.c` TURNED THE DETECTOR
+    # OFF FOR MOST OF THE TREE.  This built the path as basename + ".c"
+    # literally, so for the 72 of 123 suites driven by a C++ test the
+    # `os.path.exists` below simply failed and the driver was hashed into the
+    # key not at all.  Their recorded verdicts then stayed CURRENT however the
+    # test changed -- a C++ test could be rewritten or gutted and every
+    # `caught` would still read as valid by construction, which is the one
+    # thing this file exists to prevent.  Finding 1451; it is finding 1383's
+    # third instance of a check that was silently not checking.
+    #
+    # Both extensions are tried and the first that exists is hashed.  A suite
+    # whose driver is missing entirely still keys on the closure and its own
+    # mutation set, as before.
+    #
+    base = os.path.join("test", "unit", os.path.basename(entry[1]))
+    for driver in (base + ".c", base + ".cpp"):
+        if os.path.exists(driver):
+            digest_path(h, driver)
+            break
     muts = os.path.join("test", "mutations", name + ".json")
     if os.path.exists(muts):
         digest_path(h, muts)
