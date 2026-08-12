@@ -419,7 +419,26 @@ def renumber(old, new, nth=None):
         rrep = "D" + n
     else:
         hpat = re.compile(r"(?m)^(#{2,4} )%s\." % re.escape(o))
-        rpat = re.compile(r"([Ff]indings?\s+(?:\d+[a-z]?(?:\s*(?:,|and)\s*)?)*?)"
+        #
+        # THE SEPARATOR IS REQUIRED INSIDE THE REPEAT, and that is the whole
+        # difference between this running in 20 ms and running in five and a
+        # half seconds.  It used to be optional --
+        #
+        #     (?:\d+[a-z]?(?:\s*(?:,|and)\s*)?)*?
+        #
+        # -- which lets `\d+` repeat directly against itself, so on a near-miss
+        # the engine tries every way of splitting a run of digits between
+        # repetitions.  That is the (a+)+ explosion, and on a 2.6 MB register it
+        # cost about five minutes per renumber: three required moves became a
+        # quarter of an hour of one core, and a batch of optional ones was
+        # abandoned rather than waited for.
+        #
+        # Requiring the separator makes each repetition consume at least one
+        # non-digit, so there is nothing to split and no backtracking to do.
+        # Measured over fifteen finding numbers with citations: 108.9 s before,
+        # 0.30 s after, byte-identical match spans on every one.
+        #
+        rpat = re.compile(r"([Ff]indings?\s+(?:\d+[a-z]?\s*(?:,|and)\s*)*?)"
                           r"\b%s\b" % re.escape(o))
         rrep = None
 
