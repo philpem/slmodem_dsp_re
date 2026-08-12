@@ -49603,3 +49603,53 @@ rather than assumed. It also round-trips our scrambler through our
 descrambler from a DIFFERENT initial register and requires the input back
 after 32 words, which is the self-synchronising property the pair exists for
 and which neither function alone can demonstrate.
+
+### 1624. `make one` SPENDS THREE TO FOUR MINUTES IN `anchorcheck.py` BEFORE IT COMPILES ANYTHING
+
+*Task: V.32/V.32bis. Measured with `ps --ppid` on a stalled `make one`, twice.*
+
+`make one T=t_x` is documented here as the fast loop between commits, and it
+is — against `make phase`. But its prerequisite line is
+
+```
+one: firewall strings offsets refs
+```
+
+and `refs` runs `tools/anchorcheck.py`, which walks every mutation suite
+against every source file. On this tree that is **3 to 4 minutes of one core
+at 100%**, before the test being asked for is even looked at. It is the same
+cost whether one file changed or none.
+
+The loop that skips it is the binary itself:
+
+```sh
+make J=3 BLOB=$BLOB build/test/t_v32scram && ./build/test/t_v32scram
+```
+
+Seconds instead of minutes, and it is the same binary `make one` would build
+and run. What it does NOT run is the four gates — the licence firewall, the
+string audit, the `__builtin_offsetof` annotations and the reference checker
+— so the discipline that keeps it honest is:
+
+- **iterate** on `make build/test/t_x && ./build/test/t_x`;
+- **`make one T=t_x` once** before committing, which is what catches a
+  dangling finding reference or an offset annotation that has drifted;
+- **`make phase`** to commit.
+
+`refcheck` in particular fails loudly and usefully: a finding number cited in
+a header before the finding is written stops the build, which is how this
+session learned to write the finding first.
+
+**AND HEAVY BUILDS NOW TAKE TURNS.** This machine drives a real-time soft
+modem against live hardware in parallel with the reconstruction, and three
+concurrent agents took the load average to 42 on 12 cores — enough
+scheduling jitter to force sixteen bench calls to be discarded. Any full
+build goes behind a shared lock:
+
+```sh
+flock /tmp/claude_re_build.lock make J=3 BLOB=$BLOB phase
+```
+
+`flock` blocks until the lock is free, so it needs no coordination between
+sessions, but the path has to be that exact one or it does nothing. `J` stays
+at about half the cores; raising it is what caused the problem.
