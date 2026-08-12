@@ -20,6 +20,21 @@ So every correlation printed here comes with:
     about small n in a way that a t-test on r is not.
 
 A covariate is reported as SURVIVING only if it holds with any one call removed.
+
+AND THE EQUERR CASE DID NOT STAY REFUTED, which is the other half of the
+lesson.  At n=22, n=29 and n=29 -- three independent batches -- `equerr_pre`
+came back r = -0.69, -0.61, -0.61, worst LOO -0.65, -0.59, -0.59, p < 0.003
+every time (findings 1208, 1209, and the `final` batch).  The n=9 result was
+not wrong about n=9; it was a sample too small to decide either way, and the
+LOO rule correctly declined to call it.  A covariate that fails here is not
+disposed of, it is undecided, and the honest thing is to say so and take more
+calls.
+
+Nor does surviving mean it explains anything.  V.34 derives the rate FROM the
+equaliser's own error measurement, so "high equerr_pre predicts a low rate" is
+close to definitional -- it says the receiver is working, and moves the
+question back a step to what makes the equaliser converge where it does
+(finding 1209: the number of Phase 3 training passes).
 """
 
 import argparse
