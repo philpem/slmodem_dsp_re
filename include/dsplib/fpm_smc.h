@@ -1,5 +1,4 @@
 /*
-<<<<<<< HEAD
  * fpm_smc.h -- Fixed Point Modem: SyMbol Coder.
  *
  * Turns scrambled data words into constellation-point indices.  For V.22bis
@@ -30,51 +29,11 @@
  *
  * Because it is one conditional subtract and not a modulo, an input outside
  * [0, 2*rot_mod) comes out unreduced.  That is the object's behaviour.
-=======
- * fpm_smc.h -- Fixed Point Modem: Symbol Mapper/Coder.
- *
- * ONLY THE SYMBOL RING IS MODELLED HERE, and only the part of it that two
- * traced functions read.  `fpm_smc.c` itself is unwritten; this header exists
- * because `v22_pps.c` takes one of these as a parameter and a type may be
- * defined in exactly one file.  Putting it in `v22_pps.h` would have made a
- * future `fpm_smc.c` include the V.22 pump's header for its own type, which
- * is backwards.
- *
- * `ModDataV22` (blob 0x8e310) shows what the object is for: it calls
- * `FPM_SMC_encoder(smc, syms, bits, nbits)` and then
- * `V22_PPS_filter(pps, syms, out, nsyms)` on the same second argument, so
- * this is the buffer the symbol coder fills and the modulator drains.  In the
- * V.22 modem both live in the datapump block, the SMC state at +0x48 and this
- * at +0xa0.
- *
- * WHAT EACH FIELD IS EVIDENCED BY.  Nothing below is inferred from a name or
- * from what a ring buffer usually looks like:
- *
- *   +0x08  loaded at `V22_PPS_filter` +0x8c and used at +0xc4 --
- *          `movzbl (%ebx,%edi,2),%ebp`, a BYTE load at `base + rd * 2`, so
- *          the element stride is two and the value used is the low byte.
- *   +0x0e  read at `V22_PPS_filter` +0x84 (`movswl 0xe(%esi),%ecx`) as the
- *          index of that load, and written back at +0x222
- *          (`mov %bx,0xe(%esi)`), advanced by one and wrapped to zero the
- *          moment `idx + 1` reaches +0x10.
- *   +0x10  the bound of that wrap, read at +0x88 as a signed short.  Also
- *          read by `FPM_SMC_encoder` at 0xa9c33.
- *
- * +0x00..+0x07 and +0x0c are NOT established.  `FPM_SMC_encoder` reads +0x0c
- * as a signed short at 0xa9c28, which is where a write cursor would live, but
- * that function has not been traced and a plausible position is not evidence.
- * They are named as padding so that nothing reads meaning into them.
- *
- * `sizeof` IS NOT ESTABLISHED EITHER.  Nothing seen so far allocates one, and
- * the highest byte any traced code touches is +0x11.  The declaration below
- * covers exactly that and no more, so it is a floor and not a measurement.
->>>>>>> v22-v22c
  */
 
 #ifndef DSPLIB_FPM_SMC_H
 #define DSPLIB_FPM_SMC_H
 
-<<<<<<< HEAD
 /*
  * 44 bytes, copied wholesale by init (`rep movsl`, 11 dwords).
  *
@@ -129,16 +88,33 @@ struct fpm_smc {
  * the stage that reads them (for V.22, V22_PPS_filter, which is handed the
  * same pointer immediately afterwards by ModDataV22).
  *
- * ONLY the three fields the encoder touches are modelled.  The real object is
- * at least 0x12 bytes and its true extent is not known from this TU, so
- * nothing here may be used to size an allocation.
+ * TWO SESSIONS EACH MODELLED HALF OF THIS AND THE HALVES FIT.  The one that
+ * wrote `fpm_smc.c` saw the encoder's WRITE cursor at +0x0c and read +0x0e as
+ * padding; the one that wrote `v22_pps.c` saw the filter's READ cursor at
+ * +0x0e and read +0x0c as padding.  Neither was wrong -- it is a ring buffer
+ * with a producer and a consumer, they advance independently, and +0x10
+ * bounds both.  Merged here rather than kept as two struct tags for one
+ * object, which `onedef.py` would have permitted and which would have been a
+ * silent second definition in everything but name.
+ *
+ * +0x00..+0x07 remain unestablished.  The real object is at least 0x12 bytes
+ * and its true extent is not known from either TU, so nothing here may be
+ * used to size an allocation.
  */
 struct fpm_smc_ring {
-	unsigned char pad00[8];	/* +0x00 not read by any fpm_smc function    */
-	short *sym;		/* +0x08 `len` symbol indices                */
-	short widx;		/* +0x0c write position, advanced per symbol */
-	short pad0e;		/* +0x0e not read by any fpm_smc function    */
-	short len;		/* +0x10 wrap point for widx                 */
+	unsigned char pad00[8];	/* +0x00 not read by anything traced yet     */
+	short *sym;		/* +0x08 `len` symbol indices.  V22_PPS_filter
+				 *       loads these with `movzbl (%ebx,%edi,2)`
+				 *       -- stride two, low byte used.       */
+	short widx;		/* +0x0c WRITE cursor, advanced per symbol by
+				 *       FPM_SMC_encoder                     */
+	short ridx;		/* +0x0e READ cursor, advanced per symbol by
+				 *       V22_PPS_filter: read at its +0x84,
+				 *       written back at +0x222, wrapped to
+				 *       zero when ridx + 1 reaches len      */
+	short len;		/* +0x10 wrap point for BOTH cursors.  Read by
+				 *       FPM_SMC_encoder at 0xa9c33 and by
+				 *       V22_PPS_filter at its +0x88.        */
 };
 
 /* Load a config and clear the quadrant and carrier accumulators. */
@@ -157,15 +133,4 @@ void FPM_SMC_init(struct fpm_smc *smc, const struct fpm_smc_cfg *cfg);
 void FPM_SMC_encoder(struct fpm_smc *smc, struct fpm_smc_ring *ring,
 		     const unsigned short *data, unsigned short count);
 
-=======
-struct fpm_smc_syms {
-	unsigned char pad_00[8];	/* +0x00 not established         */
-	short *sym;			/* +0x08 one symbol per entry,
-					 *       used as its low byte    */
-	unsigned char pad_0c[2];	/* +0x0c not established         */
-	short rd;			/* +0x0e read cursor             */
-	short size;			/* +0x10 wrap bound for `rd`     */
-};
-
->>>>>>> v22-v22c
 #endif /* DSPLIB_FPM_SMC_H */

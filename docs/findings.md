@@ -50658,3 +50658,66 @@ header to get its own type, and the rule is one definition, so the second
 user could not simply repeat it. The header says in full which access
 established which field, so that the person who writes `fpm_smc.c` can extend
 it without having to re-derive the three fields that are already pinned.
+
+### 1569. TWO SESSIONS MODELLED HALF OF THE SAME RING BUFFER EACH, AND THE HALVES FIT
+
+Merging the SMC work and the PPS work produced an add/add conflict on
+`include/dsplib/fpm_smc.h`: both had defined a struct for the symbol buffer
+that sits between the coder and the modulator. The two definitions were not
+rivals.
+
+| offset | the `fpm_smc.c` session saw | the `v22_pps.c` session saw |
+|---|---|---|
+| +0x00 | `pad00[8]` | `pad_00[8]` |
+| +0x08 | `short *sym` | `short *sym` |
+| **+0x0c** | **`widx`, write cursor** | `pad_0c[2]` |
+| **+0x0e** | `pad0e` | **`rd`, read cursor** |
+| +0x10 | `len`, wrap bound | `size`, wrap bound |
+
+**It is a ring buffer with a producer and a consumer.** `FPM_SMC_encoder`
+advances the write cursor at +0x0c; `V22_PPS_filter` advances the read cursor
+at +0x0e; +0x10 bounds both. Each session traced only its own function, and
+each correctly declined to guess at the field it never saw written — so each
+wrote the other's cursor down as padding. `ModDataV22` (blob 0x8e310) hands
+the same pointer to both in consecutive calls, which is what makes the two
+readings one object.
+
+Unified as `struct fpm_smc_ring` with both cursors named, and `v22_pps.c`
+retyped onto it.
+
+**The reason this is worth a finding is what the alternative looked like.**
+Keeping both — `struct fpm_smc_ring` and `struct fpm_smc_syms`, same offsets,
+same object, different tags — **passes `onedef.py`**, because that tool
+enforces one definition per *tag* and these were two tags. It would also have
+passed every differential test, because the offsets agree and each side only
+touches its own fields. The result would have been exactly the failure mode
+CLAUDE.md's "one type, one home" section describes — two descriptions of one
+object drifting independently — with no gate anywhere able to see it.
+
+So: **`onedef.py` catches a duplicated NAME, not a duplicated OBJECT.** When
+two parallel sessions model the same memory from two callers, the check that
+matters is offset-by-offset against each other, and it has to be done by hand
+at merge time. Finding 700's rule generalises here: a merge that compiles is
+not a merge that kept everything, and a merge that passes is not a merge that
+integrated anything.
+
+**The unification's own gate failed first, and that is the mechanism working.**
+`t_fpm_smc.c` asserted `ring pad0e untouched` — the encoder must not write
++0x0e — so renaming the field broke the build: `PHASE_EXIT=2`, three link
+errors, `period differential: 167 passed, 1 failed`. The assertion was right
+and stays, reworded: +0x0e is the CONSUMER's read cursor, so "untouched by the
+encoder" is a stronger claim than "this padding is not written". A producer
+that disturbed the consumer's position in the ring would now be caught by name.
+
+Worth contrasting with finding 1563: that `PHASE_EXIT=2` went unnoticed for
+four runs because the exit status was never read. This one was caught
+immediately, by the same command shape that finding recommends —
+`make phase; echo "PHASE_EXIT=$?"`, unpiped, in one command, with the answer
+`tee`d into the log so it survives the shell that produced it.
+
+**The lesson for scheduling parallel work**, which is the transferable part:
+the split that produced this was by TRANSLATION UNIT, which is the right axis
+for code and the wrong one for shared state. Two agents given adjacent stages
+of one pipeline will each model the shared buffer from their own end. That is
+not a mistake to prevent — neither could have done better with what it could
+see — it is a merge step to plan for.

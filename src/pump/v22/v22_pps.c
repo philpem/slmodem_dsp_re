@@ -88,7 +88,7 @@ V22_PPS_free(struct v22_pps *state)
 }
 
 short
-V22_PPS_filter(struct v22_pps *state, struct fpm_smc_syms *src, short *out,
+V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src, short *out,
 	       unsigned short count)
 {
 	const short *imap = state->imap;
@@ -98,8 +98,8 @@ V22_PPS_filter(struct v22_pps *state, struct fpm_smc_syms *src, short *out,
 	short *hi = state->hist_i;
 	short *hq = state->hist_q;
 	const short *sym = src->sym;
-	short size = src->size;
-	short rd = src->rd;
+	short size = src->len;
+	short rd = src->ridx;
 	short need = state->need;
 	short phase = state->phase;
 	short widx = state->widx;
@@ -176,7 +176,7 @@ V22_PPS_filter(struct v22_pps *state, struct fpm_smc_syms *src, short *out,
 	state->need = need;
 	state->phase = phase;
 	state->widx = widx;
-	src->rd = rd;
+	src->ridx = rd;
 	return produced;
 }
 

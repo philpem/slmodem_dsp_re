@@ -103,7 +103,7 @@ compare_coeffs(const char *fmt_i, const char *fmt_q)
 
 static void
 compare_state(const struct v22_pps *b, const struct v22_pps *a,
-	      const struct fpm_smc_syms *sb, const struct fpm_smc_syms *sa,
+	      const struct fpm_smc_ring *sb, const struct fpm_smc_ring *sa,
 	      long where)
 {
 	int n, i;
@@ -117,8 +117,8 @@ compare_state(const struct v22_pps *b, const struct v22_pps *a,
 	diff_eq_int("at %ld: cfg.pad02", b->cfg.pad02, a->cfg.pad02, where);
 	diff_eq_int("at %ld: cfg.aux", (long)b->cfg.aux, (long)a->cfg.aux,
 		    where);
-	diff_eq_int("at %ld: src->rd", sb->rd, sa->rd, where);
-	diff_eq_int("at %ld: src->size", sb->size, sa->size, where);
+	diff_eq_int("at %ld: src->ridx", sb->ridx, sa->ridx, where);
+	diff_eq_int("at %ld: src->len", sb->len, sa->len, where);
 
 	/*
 	 * Two allocations per side, so only the written region: everything up
@@ -149,8 +149,8 @@ tables(void)
 
 static void
 setup_pair(struct v22_pps *a, struct v22_pps *b, struct v22_pps_cfg *cfga,
-	   struct v22_pps_cfg *cfgb, struct fpm_smc_syms *sa,
-	   struct fpm_smc_syms *sb)
+	   struct v22_pps_cfg *cfgb, struct fpm_smc_ring *sa,
+	   struct fpm_smc_ring *sb)
 {
 	load_coeffs();
 	memset(a, 0, sizeof(*a));
@@ -176,9 +176,9 @@ setup_pair(struct v22_pps *a, struct v22_pps *b, struct v22_pps_cfg *cfga,
 	memset(sa, 0, sizeof(*sa));
 	memset(sb, 0, sizeof(*sb));
 	sa->sym = symbols;
-	sa->size = NSYM;
+	sa->len = NSYM;
 	sb->sym = symbols;
-	sb->size = NSYM;
+	sb->len = NSYM;
 }
 
 static int
@@ -186,7 +186,7 @@ setup(void)
 {
 	struct v22_pps a, b;
 	struct v22_pps_cfg cfga, cfgb;
-	struct fpm_smc_syms sa, sb;
+	struct fpm_smc_ring sa, sb;
 	int rc;
 
 	diff_begin("v22 pps init");
@@ -217,7 +217,7 @@ run(const char *label, const int *chunks, int nchunks)
 {
 	struct v22_pps a, b;
 	struct v22_pps_cfg cfga, cfgb;
-	struct fpm_smc_syms sa, sb;
+	struct fpm_smc_ring sa, sb;
 	int pos = 0, na = 0, nb = 0, ci = 0, rc;
 
 	setup_pair(&a, &b, &cfga, &cfgb, &sa, &sb);

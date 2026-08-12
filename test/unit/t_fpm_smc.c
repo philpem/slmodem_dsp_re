@@ -130,7 +130,14 @@ compare_ring(const struct fpm_smc_ring *a, const struct fpm_smc_ring *b,
 
 	diff_eq_int("ring widx (%ld)", a->widx, b->widx, input);
 	diff_eq_int("ring len untouched (%ld)", a->len, b->len, input);
-	diff_eq_int("ring pad0e untouched (%ld)", a->pad0e, b->pad0e, input);
+	/*
+	 * +0x0e was written down as padding when only the encoder had been
+	 * traced.  It is the CONSUMER's read cursor -- V22_PPS_filter drives
+	 * it (finding 1569) -- so this assertion is stronger than it was:
+	 * the producer must not disturb the consumer's position in the ring.
+	 */
+	diff_eq_int("ring ridx untouched by the encoder (%ld)", a->ridx,
+		    b->ridx, input);
 	for (i = 0; i < 8; i++)
 		diff_eq_int("ring pad00[%ld] untouched", a->pad00[i],
 			    b->pad00[i], i);

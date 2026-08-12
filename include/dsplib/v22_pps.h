@@ -44,7 +44,7 @@
 #ifndef DSPLIB_V22_PPS_H
 #define DSPLIB_V22_PPS_H
 
-struct fpm_smc_syms;
+struct fpm_smc_ring;
 
 /*
  * Literals in the object, not configured values -- see `v22_mrf.h` for the
@@ -111,11 +111,11 @@ void V22_PPS_free(struct v22_pps *state);
 
 /*
  * Consume `count` SYMBOLS from `src`, writing about 13.33 output samples per
- * symbol.  The return is the number of samples written, and `src->rd` is
+ * symbol.  The return is the number of samples written, and `src->ridx` is
  * advanced and wrapped.  `need`, `phase` and `widx` persist, so a symbol
  * stream may be handed over in any grouping.
  */
-short V22_PPS_filter(struct v22_pps *state, struct fpm_smc_syms *src,
+short V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src,
 		     short *out, unsigned short count);
 
 /* The template: sixteen bytes of zero, `const`, hence `.rodata`. */
