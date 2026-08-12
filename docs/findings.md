@@ -48085,3 +48085,49 @@ error.
 ======================================================================
 
 ======================================================================
+
+======================================================================
+
+### 1452. THE `t_psd` DECIBEL BOUND IS DEFERRED, AND THIS IS WHAT CLOSING IT NEEDS
+
+*Hand-over, not a result.  Recorded because an unrecorded observation is
+unrecoverable, and this one currently lives in a commit message and a source
+comment -- neither of which anyone greps.*
+
+**The state.**  `t_psd`'s `Psd::process` block FAILS in the modern build and
+passes under `make period`.  Nothing is wrong with the reconstruction: the
+divergence is `four1`/`realfft`'s excess precision arriving downstream, after
+master removed the shim that forced x87 intermediates to 32 bits (49f1ef2).
+
+**Why it was not closed with `t_fft`'s bound.**  `t_fft` compares the RAW
+transform and takes 1e-4 absolute, justified by measurement -- worst
+disagreement 6.104e-05 against values running to 431.3, which is about
+1.2e-06 dB once squared and logged.  By the time `m_fft` reaches `t_psd`'s
+comparison it holds DECIBELS, and there the same underlying divergence
+measures up to **0.043 dB**, because a bin near -85 dB is dominated by
+cancellation and the transform's fixed absolute error is large relative to
+that bin's own magnitude.  Carrying 1e-4 across would have been choosing a
+tolerance to make a test pass.
+
+**What closing it requires, and it is a measurement rather than a number.**
+The bound has to come from whatever DECIDES on those decibels:
+
+  - `V90PreFilter::autoSelection`, which matches a six-point signature from
+    `V90Phase2Info::L2` entries 15..20 against each reference loop -- the
+    quantity to measure is the smallest margin between the winning loop and
+    the runner-up, across the reference set.
+  - `V90SpectralVerifier`, whose thresholds come out of `V90Parameters`
+    (`SPECTRAL_VERIFIER_*`).
+
+If the smallest such margin is comfortably above 0.043 dB, the budget is
+justified and the number should be that margin with headroom, stated at the
+call site with the measurement beside it.  If it is not, then the excess
+precision CAN change a decision, and the answer is not a budget at all --
+it is that the modern build cannot be a differential oracle for this path and
+`t_psd` should be exempted from the modern tier outright.
+
+**Do not settle it by picking a tolerance that makes the test green.**  That
+is the failure this entry exists to prevent, and D162's retirement two merges
+ago is the counter-example worth copying: the measurement was already sitting
+in the test and nobody had done the arithmetic.
+
