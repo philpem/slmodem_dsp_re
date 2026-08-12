@@ -49433,3 +49433,178 @@ actually fired, per finding 134's argument. The mixer guard is exact rather
 than heuristic: it is measured under a synthetic identity filter
 (`b = {16384,0,0,0}`, `a = {16384,0,0,0}`), where `acc = (16384 * x) >> 14 = x`
 makes the product knowable without modelling the function under test.
+
+### 1561. V.22's STATIC CONFIGURATION: WHICH TABLES A RELOCATION TYPES, AND WHICH ONE ONLY LOOKS TYPED
+
+Fifteen of the V.22 closure's data symbols are static configuration, and the
+question for each is whether it may be written as a struct. **A relocation is
+the only thing that proves a pointer field**, so the answer splits cleanly:
+
+| symbol | relocations | written as |
+|---|---|---|
+| `AGCv22_CFG`, `AGCv22_CFG2` | +0x0c, +0x10 | `struct fpm_agc_cfg` |
+| `MTDv22_CFG`, `MTDv22_CFG2`, `MTDs1_CFG` | +0x00 | `struct fpm_mtd_cfg` |
+| `TONEv22_CFG`, `TONEv22INIT_CFG` | **none** | `short[18]` |
+| `V22_CFG` | none | `short[14]` |
+| the coefficient banks and PLL tables | none | `short[]` |
+
+The two AGC configurations reuse the shared `struct fpm_agc_cfg` unchanged:
+17000 and 12000 reference level, 36- and 40-sample measurement blocks, and one
+shared `{ alpha, beta }` pair. The three MTD configurations reuse
+`struct fpm_mtd_cfg`. Nothing new had to be defined for either, which is
+itself the finding — the `v22_*` DSP blocks have their own types, but the
+`fpm_*` blocks V.22 *calls* take the shared ones.
+
+**`TONEv22_CFG` and `TONEv22INIT_CFG` are byte-identical.** Same 36 bytes,
+two names, two addresses, both file-static, so this is the author writing the
+same table twice rather than a linker artefact. `t_v22tab` asserts the
+identity on the ORIGINAL's two copies, so it is a statement about the object.
+
+Neither carries a relocation, so if they are `struct fpm_tone_cfg` — which
+their size and their name both suggest — then `src` is NULL while `len` is
+53, and `FPM_TONE_create` would copy 53 words from address zero.
+
+**The field mapping is corroborated rather than assumed.** Word for word
+against the blob's own `FPM_TONE_CFG`, whose layout this tree already
+reconstructed and tested in `src/dsp/fpm_tone_cfg.c`:
+
+| offset | field | `FPM_TONE_CFG` | `TONEv22_CFG` |
+|---|---|--:|--:|
+| +0x00 | `freq` | 2100 | 2100 |
+| +0x08 | `f08` | 328 | 328 |
+| +0x0a | `min_level` | 1 | 1 |
+| +0x10 | `src` | `ToneLPF` | **NULL** |
+| +0x14 | `len` | 53 | 53 |
+| +0x1c | `f1c` | 16384 | **40** |
+| +0x1e | `f1e` | 40 | **0** |
+
+Four fields agree exactly, which is what fixes the layout: +0x14 really is
+`len` and the NULL at +0x10 really is `src`. The `fpm_mrf` configs solve
+exactly this by having the caller copy the static onto the stack and patch the
+pointer before use. That is the natural reading and it stays a reading:
+`V22FP_create` is not reconstructed, so these stay arrays.
+
+**The tail is the same two values shifted one word earlier**, which is the
+shape a copy-and-edit slip leaves. Both fields are unread by everything
+reconstructed so far, so which is intended is not decidable yet. Recorded
+because an unrecorded observation is unrecoverable, not because it is a defect
+report.
+
+**`CRRv22_CLK` is not a sixth of a cycle.** `round(k * 32768 / 6)` reproduces
+five of its six entries and gives 27307 where the object has 27306.
+`round(k * 65535 / 12)` — `round(k * 5461.25)` — reproduces all six.
+
+That is **a fit, not a recovered design**: two parameters over six points, and
+a design would have to come from a rate. Coefficient derivations are deferred
+here by `docs/fastpass.md` and this one is not an exception to that. Both
+readings are asserted in `t_v22tab`, the second in the negative — a comment
+saying "the obvious formula is wrong" rots; a check that fails if it ever
+becomes right does not. Note that **neither check is differential**: both
+sides read the original's copy, so they are transcription guards on a
+generator and the differential tier says nothing about either.
+
+`V22DiconnectThreshTable` (the author's spelling) and the two `IIR_*_coeff`
+arrays are in `.data`, not `.rodata`, so they are declared without `const`
+here to keep the section. Nothing in the object writes any of them.
+
+### 1562. `PROTOCOL` IS FILE-STATIC TWICE OVER, SO IT HAS NO `ref_` ALIAS AND CANNOT BE COMMITTED
+
+`tools/closure.py dp_v22_init dp_v22_exit --missing` lists a 14-byte
+`PROTOCOL` in `.rodata`. There are **two** symbols of that name in the object:
+
+    .rodata 0x008c0c  r  PROTOCOL   14 bytes   { 3, 0, 1, 2, 7, 8, 5 }
+    .data   0x007768  d  PROTOCOL   18 bytes   { 0, 1, 2, 9, 6, 6, 3, 7, 8 }
+
+Both are LOCAL — the name was file-static in the original and two translation
+units used it. `symmap.py` cannot alias a name that resolves to two different
+objects, and `nm build/dsplibs_ref.o | grep -c ref_PROTOCOL` returns **0**
+where every other symbol in this closure returns 1.
+
+**So `PROTOCOL` has no oracle**, and under the rule that nothing is committed
+without a differential test, it is left out. This is not the same situation as
+`getbit` or `ApplyBulkDelay`, which finding 221's two-pass `objcopy` rescued:
+those were single file-static symbols, and the two-pass trick works on them.
+It fails here for a reason no harness change fixes, because the ambiguity is
+in the object and not in the tooling. Note the checked v22 symbols that ARE
+file-static — `TONEv22_CFG`, `TONEv22INIT_CFG`, `V22DiconnectThreshTable`,
+`iSilenceAfter2100`, `rx_in_internal` — all do have aliases, so finding 221
+is doing its job; `PROTOCOL` is the one case it cannot reach.
+
+Recovering it would need the *referrer* rather than the symbol: whichever
+V.22 function indexes `.rodata:0x8c0c` fixes which of the two is wanted, and
+its bytes can then be committed as a file-static of our own with the test
+reaching them through that function. That is work for whoever writes
+`V22FP_modem`, which is the function whose call site references the sibling
+table `V22_PROTOCOL`.
+
+**Two further symbols are deliberately left out for a different reason.**
+`rx_in_internal` (`.bss`, 320 bytes) and `iSilenceAfter2100` (`.bss`, 2 bytes)
+are zero-initialised, so a differential test on them can only assert that zero
+equals zero. Their element type is not determined by anything yet — 320 bytes
+is 160 shorts, which is exactly one `V22_IIR_BLOCK`, but that is a
+coincidence until the code that indexes it is read. Committing a guessed
+element type for no test power is the wrong-but-plausible case the contract
+forbids; they wait for `DemodDataV22`.
+
+### 1563. `make phase` DOES NOT GATE A WORKTREE, BECAUSE `third_party/spandsp` IS GITIGNORED — AND THE FAILURE LOOKS GREEN
+
+Four `make phase` runs in this worktree were read as passing. All four exited
+**2**. The whole V.22 session's first two commits were made against a gate
+that was not gating.
+
+**The mechanism.** `third_party/spandsp` is a vendored checkout and is
+gitignored, so `git worktree add` does not bring it. Without
+`third_party/spandsp/src/.libs/libspandsp.a`, two link targets fail:
+
+    make: *** [Makefile:559: build/test/t_spandsp_b103] Error 1
+    make: *** [Makefile:501: build/test/t_spandsp_v23]  Error 1
+
+**Why it reads as green.** Those two lines are in the first ten lines of
+output. Everything after them — 1,540 `PASS` lines, `offsets ... OK`,
+`64-bit clean ... OK`, `period differential: 162 passed, 0 failed` — succeeds,
+because `make` keeps going and only the two SpanDSP interop binaries need the
+library. So the tail of the log, which is what anyone actually looks at, is
+perfect. `grep -c FAIL` finds one hit and it is the long-standing
+`Psd::process`, which is present in the baseline too and is not this.
+
+**Why it survived being checked.** Every invocation was of the shape
+
+    make phase > log 2>&1; echo "exit=$?"; tail -20 log
+
+run in the background. The harness reports the exit code of the LAST command
+in the compound — `tail`, or `grep`, both of which succeed — so the completion
+notification said "exit code 0" four times over a `make` that returned 2. The
+`echo` was in the command and its output was in the log, and it was never
+read, because the notification appeared to have answered the question.
+
+**The fix**, and it touches nothing tracked:
+
+    ln -s /home/philpem/dev/sip-D-modem/claude_re/third_party/spandsp \
+          <worktree>/third_party/spandsp
+
+Reading the built `.a` from several worktrees at once is safe; nothing writes
+it. Building it per worktree also works and costs a configure and a make.
+
+**Two things follow that are worth more than the fix.**
+
+First, this is the same class of defect as finding 134's dead detector and the
+`extcheck` that printed "(none)" through four broken versions: *a check that
+cannot be observed to fire is not a check.* A `make phase` whose exit status
+is never actually read is exactly that, and it stayed invisible because the
+noisy part of its output was healthy.
+
+Second, `Makefile` already learned this lesson once for the blob —
+`BLOB ?= ../slmodemd/dsplibs.o` was made overridable and exported so that a
+worktree somewhere other than beside `slmodemd/` could build, with a comment
+saying one session serialised its whole run believing that ruled out parallel
+trees. `third_party/spandsp` is the second instance of the same shape and has
+no equivalent accommodation. The cheap improvement would be for the SpanDSP
+targets to say *"not built — if this is a worktree, symlink the main tree's
+copy"*, since "run ./configure" is the wrong advice in a worktree that has a
+built copy fifty characters away.
+
+**Verify with the exit code and nothing else:**
+
+    BLOB=/abs/path/dsplibs.o make phase; echo "PHASE_EXIT=$?"
+
+in that order, in one command, with `make` unpiped.
