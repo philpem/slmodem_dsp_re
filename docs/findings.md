@@ -49303,3 +49303,68 @@ into a differential test.
 datapump's behaviour, not the reconstruction's. It remains a specification to
 match rather than a defect to fix — but it is now a *quantified* one, and the
 reconstruction can be measured against `equerr` directly.
+
+======================================================================
+
+### 1471. WHY WE ALWAYS ASK FOR PRE-EMPHASIS: INDEX 0 IS UNREACHABLE, AND THE MODEM HAS NEVER ONCE REQUESTED A FLAT LINE
+
+*Task #134, tracing 1469's preemphasis anomaly into the code. The mechanism
+was already recorded as D53; what is new is that it has a consequence on the
+wire, and the consequence is measurable.*
+
+**THE DEFECT, already established twice over (D53, findings 218/219).**
+`probe_preemph` keeps its counter preset to 5 and advances it BEFORE the
+comparison that leaves the loop:
+
+```
+   6128a:  movswl %si,%ebx           ; ebx = ebx + 1
+   61293:  cmp    %cx,%dx
+   61295:  jg     623a8              ; the early exit
+```
+
+so the counter is 6..10 at either exit. The author's own `if (i == 5) return
+0` arm — "the first scaling already brought it above the reference, so this
+line needs no pre-emphasis" — cannot execute, and its debug string is the one
+string in the object nothing can print. A sweep asserting 6..10 returned and
+0..5 never confirms it, and gcov marks the body NOT EXECUTABLE after 6,938
+executions of the test.
+
+**WHAT THAT MEANS ON THE WIRE, which D53 did not say.** In V.34 the RECEIVER
+chooses the far transmitter's pre-emphasis filter. Index 0 is flat. This modem
+cannot ask for flat. Every preemphasis index this bench has ever logged,
+across every call in `captures/`:
+
+| index | times logged |
+|---|---|
+| 6 | **2445** |
+| 7 | 35 |
+
+Nothing below 6, ever, on any channel — because nothing below 6 is
+reachable. On the same pair of FXS ports, minutes apart, a 1998 SupraExpress
+asks the same Courier for filter **0** and we ask for **4** in the Courier's
+own units (1469, `ATI11: Preemphasis (-dB) 0/0` versus `0/4`).
+
+**AND THE REQUEST ARRIVES.** The spectrum comparison in 1470 was read as
+exonerating the resampler, which it does — but the residual is this. Our
+received copy of the same transmitter runs **+1.5 dB hotter at 2800–3400 Hz**
+than the un-preemphasised reference, which is the filter we asked for, doing
+what we asked it to.
+
+**WHAT IS ESTABLISHED AND WHAT IS NOT.** Established: the modem requests
+non-flat pre-emphasis unconditionally, because of an off-by-one, and the far
+end applies it. NOT established: that this is what costs us the rate. A 1.5 dB
+tilt is real but modest, and the gap to be explained is equerr ~2700 against a
+threshold of 205. Pre-emphasis being wrong on every call is a defect worth
+fixing on its own terms; whether fixing it moves the rate is a separate
+question with a separate experiment.
+
+**THE EXPERIMENT IS #89**, and this is the first concrete reason to want it.
+With OUR datapump in slmodemd the fix can be put behind `DSPLIB_REPRODUCE_BUGS`
+and the same call made twice, differing in one branch, on real hardware —
+equerr with the bug and equerr without. That is a controlled experiment on the
+thing itself, and nothing else on this bench can produce one.
+
+**THE CONTRACT IS UNCHANGED.** The reconstruction still reproduces the object
+bug-for-bug by default; this goes on the deliberate-fix list beside the 8000
+samp/s work and the floating-point defects, off by default, with the
+differential tier defining bug-compatible behaviour. See D53.

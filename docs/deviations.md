@@ -2298,6 +2298,33 @@ is wrong, that assertion fails.
 ```
     19587: 1686:		if (x > ref) {
      6938: 1687:			if (i == 5) {
+
+**THE CONSEQUENCE, and it took the hardware bench to see it (finding 1471).**
+This entry treated the dead branch as a curiosity about an unprintable string.
+It is not. In V.34 the RECEIVER chooses the FAR TRANSMITTER's pre-emphasis
+filter, and index 0 means flat. **A modem whose search cannot return anything
+below 6 cannot ask for a flat line, ever, on any channel.** Every index this
+bench has logged across every call is 6 (2445 times) or 7 (35 times).
+
+On the same two FXS ports, minutes apart, a 1998 SupraExpress asks the same
+Courier for filter 0 where we ask for 4 in the Courier's own units — and the
+request arrives: our received copy of that transmitter runs 1.5 dB hotter at
+2800-3400 Hz than the un-preemphasised reference.
+
+**PROPOSED FIX — deliberate, flagged, and NOT YET APPLIED.** Make index 0
+reachable, so a channel that needs no pre-emphasis is told so. It belongs with
+the 8000 samp/s work and the floating-point defects on the list of things the
+reconstruction may deliberately do better, and it obeys the same rule as all
+of them: behind `DSPLIB_REPRODUCE_BUGS`, off by default, differential tier
+unchanged and still bit-exact against the blob.
+
+**DO NOT APPLY IT ON THE STRENGTH OF THIS ARGUMENT ALONE.** That the request
+is wrong is measured. That fixing it improves the connection is NOT: the gap
+to explain is equerr ~2700 against a threshold of 205, and 1.5 dB of tilt is
+unlikely to be all of it. The experiment is #89 -- our datapump in slmodemd,
+the same call made twice differing in one branch, on real hardware. Applying
+a fix whose benefit has not been measured is how a reconstruction acquires
+behaviour nobody can justify later.
         -: 1688:				if (DSPLIB_DEBUG_ON())
         -: 1689:					dsplibs_debug_printf(
         -: 1690:					    "V34PREEMPHASIS, - index is 0, "
