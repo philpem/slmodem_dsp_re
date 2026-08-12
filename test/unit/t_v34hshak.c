@@ -689,6 +689,100 @@ run_probe_preemph_edge(unsigned bin, int k, short ref, int delta, long tag)
 	probe_note();
 }
 
+/*
+ * THE PRE-EMPHASIS SEARCH IS A TILT METER.  Drive it with a channel whose
+ * band edge sits a KNOWN number of steps below the reference bin, and check
+ * the index that comes back is the number of steps -- which is what finding
+ * 1475 derived from the constants and this asserts against the object.
+ *
+ * `k` is a GAIN: 0x6626 is 26150, so `x * k >> 14` multiplies by 1.5961 and
+ * the loop steps the band edge UP until it passes mid-band.  One step is
+ * 20*log10(k/16384) dB -- 4.06 dB at 3429 baud.
+ *
+ * To need exactly `steps` iterations, divide the reference by the gain that
+ * many times and then nudge a quarter-step up: the result clears `ref` on
+ * iteration `steps` and not before, with half a step of margin either side so
+ * the loop's per-iteration truncation to short cannot flip the bucket.
+ *
+ * The counter is preset to 5 and advanced BEFORE the test (D53), so the index
+ * returned is steps + 5, saturating at 10.  That is the whole defect in one
+ * assertion: a channel needing ONE step -- no tilt worth correcting -- comes
+ * back as 6 rather than 0.
+ */
+static void
+run_preemph_tilt(unsigned bin, int k, short ref, int steps, long tag)
+{
+	unsigned i;
+	long long x = ref;
+	int expect = steps + 5;
+
+	if (expect > 10)
+		expect = 10;
+	for (i = 0; i < (unsigned)steps; i++)
+		x = x * 16384 / k;
+	x = x * 5 / 4;
+
+	probe_rng = 0x5eed1234u;
+	setup();
+	seed_rate_pointers();
+	seed_pwr(3, 1, 1, 4);
+	cfg_a[0x50] = cfg_b[0x50] = 0;
+
+	for (i = 0; i < V34_PROBE_BINS; i++) {
+		unsigned off = 0xa320 + i * sizeof(struct v34_dftbin);
+
+		poke_short(off + 0x0c, 0);
+		poke_short(off + 0x0e, (short)(probe_next() % 7));
+	}
+	poke_short(0xa320 + 4 * sizeof(struct v34_dftbin) + 0x0c, ref);
+	poke_short(0xa320 + bin * sizeof(struct v34_dftbin) + 0x0c, (short)x);
+
+	poke_int(0xaac4, 0);
+	poke_int(0xaac8, 0);
+	poke_short(0x264 + 0x136, 0x800);
+	poke_short(0x264 + 0x262, 0x100);
+	poke_byte(0xa97e, 0);
+	for (i = 0xa9de; i <= 0xa9ee; i++)
+		poke_byte(i, 0xff);
+	poke_short(0x359a, 0);
+	poke_short(0x359c, 0x65);
+
+	dsplib_debug_capture_reset();
+	probeselect(&oa);
+	ref_probeselect(ob);
+
+	compare("probeselect tilt sweep", tag);
+
+	/*
+	 * READ THE INDEX THE OBJECT ITSELF PRINTS, rather than inferring it
+	 * from a slot whose meaning would have to be assumed.  `compare` above
+	 * already proves ours and the blob's agree; this pins the VALUE, which
+	 * is the part a future change could alter while both sides still
+	 * matched each other.
+	 */
+	{
+		const char *txt = dsplib_debug_capture_text(1);
+		const char *m = strstr(txt, "index is ");
+		int got = -1;
+
+		/*
+		 * Forward, not backward from the baud rate: scanning back for
+		 * 'i' finds the one in "is" long before it reaches "index",
+		 * which is how the first version of this read -1 every time.
+		 */
+		while (m != NULL) {
+			const char *b = strstr(m, "baudrate= ");
+
+			if (b != NULL && atoi(b + 10) == 3429)
+				got = atoi(m + 9);
+			m = strstr(m + 1, "index is ");
+		}
+		diff_eq_int("tilt of N steps gives index N+5 (D53)",
+			    got, expect, tag);
+	}
+	probe_note();
+}
+
 /* --- setfinalrate's inputs ------------------------------------------------ */
 
 static void
@@ -2444,6 +2538,32 @@ main(void)
 		for (dd = -2; dd <= 2; dd++)
 			run_probe_preemph_edge(rate[r].bin, rate[r].k,
 					       refs[v], dd, tag++);
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE TILT SWEEP.  One step of the meter per row, over the range a real
+	 * channel can present, at the baud rate this bench actually uses.  It
+	 * pins the mapping finding 1475 derived, so a change to `probe_preemph`
+	 * that alters which channel gets which filter cannot land quietly.
+	 */
+	diff_begin("v34 handshake: the pre-emphasis search is a tilt meter");
+	{
+		static const short refs[] = { 4096, 8000, 0x4000 };
+		unsigned v;
+		int steps;
+		long tag = 96000;
+
+		dsplib_debug_capture_on = 1;
+		dsplibs_debug_level = 3;
+		ref_dsplibs_debug_level = 3;
+
+		for (v = 0; v < sizeof(refs) / sizeof(refs[0]); v++)
+		for (steps = 1; steps <= 6; steps++)
+			run_preemph_tilt(22, 0x6626, refs[v], steps, tag++);
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 	}
 	rc |= diff_end();
 
