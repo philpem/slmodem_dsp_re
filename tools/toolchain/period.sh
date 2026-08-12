@@ -57,7 +57,17 @@ cd "$(dirname "$0")/../.."
 
 IMG=${PERIOD_IMG:-dsplibs-tc}
 REF=${REF:-build/dsplibs_ref.o}
-J=${J:-$(nproc 2>/dev/null || echo 4)}
+#
+# HALF THE CORES, because this NESTS.  `make phase` already runs at -j$(nproc)
+# and one of its recipes is this script, which then asks the container for
+# another J compilers -- so a naive `nproc` here is up to twice the machine's
+# worth of concurrent GCC, and the box stops being usable for anything else
+# for the duration.
+#
+# `J=12 make period` if you want the machine to yourself.
+#
+J=${J:-$(( $(nproc 2>/dev/null || echo 4) / 2 ))}
+[ "$J" -ge 1 ] 2>/dev/null || J=1
 
 #
 # INCREMENTAL BY DEFAULT, and it is sound rather than merely fast.  An object

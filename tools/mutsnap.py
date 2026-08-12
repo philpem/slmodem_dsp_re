@@ -386,7 +386,10 @@ def main():
                          "pass; deliberately not what `make phase` runs, see "
                          "the comment above cmd_check")
     ap.add_argument("--jobs", type=int, metavar="N",
-                    help="passed through to mutate.py")
+                    help="passed through to mutate.py.  Unset means mutate.py "
+                         "picks, which is HALF the cores -- deliberately not "
+                         "all of them, since a full re-record is tens of "
+                         "minutes and should leave the machine usable")
     ap.add_argument("suite", nargs="*", help="default: all of them")
     args = ap.parse_args()
     if args.update:
