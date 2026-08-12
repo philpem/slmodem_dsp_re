@@ -2,11 +2,34 @@
  * harness.c -- Tier-1 differential test scaffolding.  See harness.h.
  */
 
+#include <stdlib.h>	/* getenv, strtol -- the report cap, below */
+#include <string.h>	/* memcpy, in the float comparison */
+
 #include "harness.h"
 
 int diff_checks;
 int diff_failures;
+/*
+ * Ten is right for reading a failure; it is wrong for MEASURING one.  A
+ * truncated failure list is not a sample of the failures -- the DTMF batch
+ * misdiagnosed a defective coefficient table from exactly that, because
+ * eleven failures at one rate and none at another printed as what looked like
+ * a mixture.  `DSPLIB_MAX_REPORT=0` lifts the cap for an investigation without
+ * changing what any test asserts.
+ */
 int diff_max_report = 10;
+
+__attribute__((constructor)) static void
+diff_max_report_from_env(void)
+{
+	const char *s = getenv("DSPLIB_MAX_REPORT");
+
+	if (s != 0 && *s != '\0') {
+		long v = strtol(s, 0, 0);
+
+		diff_max_report = (v <= 0) ? (1 << 30) : (int)v;
+	}
+}
 
 static const char *diff_name = "?";
 
@@ -123,6 +146,130 @@ diff_eq_int_(const char *file, int line, const char *fmt,
 		if (strchr(fmt, '%') == NULL)
 			fprintf(stderr, " [input %ld]", input);
 		fprintf(stderr, "  got %ld, reference %ld\n", got, want);
+	} else if (diff_failures == diff_max_report) {
+		fprintf(stderr, "  ... further mismatches suppressed\n");
+	}
+	diff_failures++;
+}
+
+/*
+ * ===========================================================================
+ * Comparing floats AS floats.
+ *
+ * WHY THIS EXISTS.  Float fields were being compared by punning them to `int`
+ * and calling `diff_eq_int`, which is exact -- correctly so -- but reports a
+ * one-ULP difference as
+ *
+ *     word 103007  got 1078160182, reference 1078160184
+ *
+ * Two nine-digit integers that share no visible relationship with each other
+ * or with the quantity.  Nothing in that line says the values are floats, that
+ * they differ in the last place, or that 3.6470108 and 3.6470113 are what is
+ * actually being disputed.  A reader has to know to reinterpret the bits.
+ *
+ * WHAT THIS DOES NOT DO IS RELAX EXACTNESS.  `ulp_budget` of 0 is the default
+ * and is a bit-for-bit comparison: the same test, better reported.  A budget
+ * above 0 is only correct where bit-exactness is UNACHIEVABLE rather than
+ * merely unmet -- the modern build carries x87 intermediates at 80 bits where
+ * the blob's compiler spilled them to 32, so it declines to discard precision
+ * the object discarded, and no amount of source change makes the two agree.
+ * Every budgeted call site must say why at the call.
+ *
+ * ULP DISTANCE, NOT RELATIVE ERROR, is the measure: it is exact in integers,
+ * it behaves sensibly across binades, and 1 ULP is the smallest difference a
+ * float can express, so a budget reads as "n representable values apart"
+ * rather than as a fraction someone has to calibrate.  Denormals and zero
+ * compare correctly under it; NaN is handled explicitly below.
+ * ===========================================================================
+ */
+static unsigned long
+float_ulps(float a, float b)
+{
+	long ia, ib;
+
+	memcpy(&ia, &a, sizeof ia < sizeof a ? sizeof ia : sizeof a);
+	memcpy(&ib, &b, sizeof ib < sizeof b ? sizeof ib : sizeof b);
+
+	/* Map the sign-magnitude float order onto a monotone integer order. */
+	if (ia < 0)
+		ia = (long)0x80000000L - ia;
+	if (ib < 0)
+		ib = (long)0x80000000L - ib;
+	return (unsigned long)(ia > ib ? ia - ib : ib - ia);
+}
+
+/*
+ * TWO BOUNDS, AND A CALL SITE STATES THE ONE THAT FITS.
+ *
+ * ULP is the right measure for a scalar field: it is exact in integers and 1
+ * ULP is the smallest expressible difference.  It is the WRONG measure near
+ * zero, and an FFT is the case that proves it -- measured over the whole
+ * failing set rather than the first ten, `four1`'s worst ULP distance is
+ * 121,933 and its worst ABSOLUTE error is 6.1e-05.  Those are different
+ * comparisons: the 121,933 is a value of -0.000618 against -0.000626, seven
+ * millionths apart, while the largest real disagreement anywhere is 2 ULP on
+ * a value of -295.7.  A ULP budget wide enough for the near-zero bins would
+ * be meaningless for the rest.
+ *
+ * So an absolute epsilon exists too, and the test a budget of either kind has
+ * to meet is not "how close can we get" but **would this change a decision
+ * downstream**.  An error beneath the resolution of everything that consumes
+ * the value is noise, and the call site should say what consumes it.
+ */
+void
+diff_eq_float_(const char *file, int line, const char *fmt, float got,
+	       float want, unsigned long ulp_budget, double abs_eps,
+	       long input)
+{
+	unsigned long d;
+	int got_nan = (got != got), want_nan = (want != want);
+	double diff;
+
+	diff_checks++;
+
+	/*
+	 * NaN is not ordered, so ULP distance is meaningless for it.  Two NaNs
+	 * count as equal -- the object produces them and a test that demanded
+	 * one bit pattern would be asserting which NaN the coprocessor chose,
+	 * which is not a property of the reconstruction.
+	 */
+	if (got_nan || want_nan) {
+		if (got_nan && want_nan)
+			return;
+		d = (unsigned long)-1;
+		diff = 0.0;
+	} else {
+		d = float_ulps(got, want);
+		diff = (double)got - (double)want;
+		if (diff < 0.0)
+			diff = -diff;
+		/* Either bound satisfies; both are 0 for an exact compare. */
+		if (d <= ulp_budget || diff <= abs_eps)
+			return;
+	}
+
+	if (diff_failures < diff_max_report) {
+		fprintf(stderr, "%s:%d: ", file, line);
+		fprintf(stderr, fmt, input);
+		if (strchr(fmt, '%') == NULL)
+			fprintf(stderr, " [input %ld]", input);
+		if (got_nan || want_nan)
+			fprintf(stderr, "  got %.9g, reference %.9g"
+				"  (one side is NaN)\n", (double)got,
+				(double)want);
+		else
+			fprintf(stderr, "  got %.9g, reference %.9g"
+				"  (%lu ULP, |diff| %.3g", (double)got,
+				(double)want, d, diff);
+		if (!(got_nan || want_nan)) {
+			if (ulp_budget)
+				fprintf(stderr, "; ULP budget %lu",
+					ulp_budget);
+			if (abs_eps > 0.0)
+				fprintf(stderr, "; |diff| budget %.3g",
+					abs_eps);
+			fprintf(stderr, ")\n");
+		}
 	} else if (diff_failures == diff_max_report) {
 		fprintf(stderr, "  ... further mismatches suppressed\n");
 	}

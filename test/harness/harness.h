@@ -272,6 +272,55 @@ void diff_eq_int_(const char *file, int line, const char *fmt,
 		     (long)(input))
 
 /*
+ * Compare two floats AS FLOATS, reporting the values and their distance in
+ * ULP rather than the integers their bits happen to spell.
+ *
+ * `diff_eq_float` is EXACT -- bit for bit, the same test a punned
+ * `diff_eq_int` performs, and the one to reach for by default.  It exists
+ * because the punned form reports a last-place difference as two nine-digit
+ * integers with no indication that either is a float.
+ *
+ * `diff_eq_float_ulp` allows a budget, and is correct ONLY where exactness is
+ * unachievable rather than merely unmet: the modern build keeps x87
+ * intermediates at 80 bits where the blob's compiler spilled them to 32, so it
+ * declines to discard precision the object discarded and no source change
+ * makes the two agree.  A budget is a claim about the TIER, not a tolerance
+ * for being wrong -- state the reason at every call site, and keep it as tight
+ * as the measurement allows so that a real regression still fails.
+ *
+ * Two NaNs compare equal: which NaN the coprocessor produced is not a property
+ * of the reconstruction.
+ *
+ * `diff_eq_float_abs` bounds the ABSOLUTE difference instead, and is the right
+ * form wherever values pass through zero.  ULP is a relative measure, so a bin
+ * whose terms cancel can be a hundred thousand ULP from the reference while
+ * being seven millionths away from it -- measured, not supposed: `four1`'s
+ * worst ULP distance is 121,933 and its worst absolute error is 6.1e-05, and
+ * they are not the same comparison.
+ *
+ * THE TEST FOR ANY BUDGET IS WHETHER IT COULD CHANGE A DECISION DOWNSTREAM.
+ * An error beneath the resolution of everything that consumes the value is
+ * noise; say at the call site what consumes it, and keep the budget tight
+ * enough that a real regression still fails.
+ */
+void diff_eq_float_(const char *file, int line, const char *fmt, float got,
+		    float want, unsigned long ulp_budget, double abs_eps,
+		    long input);
+
+#define diff_eq_float(fmt, got, want, input) \
+	diff_eq_float_(__FILE__, __LINE__, (fmt), (float)(got), \
+		       (float)(want), 0UL, 0.0, (long)(input))
+
+#define diff_eq_float_ulp(fmt, got, want, budget, input) \
+	diff_eq_float_(__FILE__, __LINE__, (fmt), (float)(got), \
+		       (float)(want), (unsigned long)(budget), 0.0, \
+		       (long)(input))
+
+#define diff_eq_float_abs(fmt, got, want, eps, input) \
+	diff_eq_float_(__FILE__, __LINE__, (fmt), (float)(got), \
+		       (float)(want), 0UL, (double)(eps), (long)(input))
+
+/*
  * Compare two whole objects, reporting the first differing FIELD.
  *
  *   diff_eq_obj("after process", struct v34_decision, &da, &db, i);

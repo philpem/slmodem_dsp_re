@@ -139,6 +139,7 @@ cmp_buf(const char *what, const float *a, const float *b, unsigned int n,
 	int trial)
 {
 	struct psd_buf ba, bb;
+	unsigned int i;
 
 	if (n > MAXLEN + 1)
 		n = MAXLEN + 1;
@@ -148,8 +149,44 @@ cmp_buf(const char *what, const float *a, const float *b, unsigned int n,
 		memcpy(&ba, a, n * sizeof(float));
 	if (b != 0)
 		memcpy(&bb, b, n * sizeof(float));
-	diff_eq_obj_(__FILE__, __LINE__, what, "struct psd_buf", &ba, &bb,
-		     sizeof(struct psd_buf), (long)trial);
+
+	/*
+	 * COMPARED AS FLOATS, NOT AS BYTES, and the reason is inherited rather
+	 * than local: `m_fft` holds `realfft`'s output, and under a modern
+	 * compiler that transform keeps x87 intermediates at 80 bits where the
+	 * blob's spilled them to 32.  A byte comparison therefore reports the
+	 * FFT's excess precision as a Psd defect, at an offset in a buffer,
+	 * which is the least legible place it could surface.
+	 *
+	 * NO BUDGET IS SET HERE, DELIBERATELY, and the reason is worth more
+	 * than a passing test.  t_fft's 1e-4 is justified against the RAW
+	 * transform -- worst measured disagreement 6.1e-05 against values
+	 * running to 431.3, which is ~1.2e-06 dB once squared and logged.  By
+	 * the time `m_fft` reaches this comparison it holds the DECIBEL
+	 * output, and there the same underlying divergence measures up to
+	 * **0.043 dB**: a low-power bin near -85 dB is dominated by
+	 * cancellation, so the transform's fixed absolute error is large
+	 * relative to that bin's own magnitude.
+	 *
+	 * Carrying t_fft's number across would be picking a tolerance to make
+	 * a test pass.  What a budget here needs is the threshold of whatever
+	 * decides on these decibels -- `V90PreFilter::autoSelection` matching
+	 * its six-point signature, and `V90SpectralVerifier` -- and that has
+	 * not been measured.  Until it is, this compares EXACTLY and fails in
+	 * the modern build, which is the honest state: `make period`, the
+	 * compiler that decides, passes it.
+	 *
+	 * The comparison is still float-wise rather than byte-wise, because
+	 * the reporting is the point independently of the budget: a byte
+	 * comparison prints `+12..+14 got 5d 50 21` where this prints the two
+	 * decibel figures and their difference.
+	 */
+	for (i = 0; i < sizeof(struct psd_buf) / sizeof(float); i++) {
+		const float *fa = (const float *)&ba, *fb = (const float *)&bb;
+
+		diff_eq_float(i < n ? "m_fft word %ld" : "m_fft tail word %ld",
+			      fa[i], fb[i], (long)i);
+	}
 }
 
 static void
