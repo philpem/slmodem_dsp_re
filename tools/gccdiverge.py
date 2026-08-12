@@ -10,10 +10,18 @@ WHAT THIS IS FOR, and it is a narrow thing.
 The reconstruction is compared against an object built by GCC 3.4.2.  At a few
 sites the modern compiler CANNOT reproduce that object from correct source --
 not because our source is wrong, but because the two compilers keep different
-intermediate precision.  `round32` in src/pump/v90/Resampler.cpp is the worked
-example (finding 1352): GCC 3.4.2 ran out of x87 registers and spilled an
-accumulator, which rounded it to `float`; GCC 13 keeps 80 bits; and the
-difference reaches the stored sample.
+intermediate precision.  `four1` in src/dsp/fft.cpp is the worked example
+(finding 1354): the object narrows its butterfly temporaries to `float`
+mid-loop because GCC 3.4.2 runs out of x87 registers, GCC 13 does not run out
+and keeps 80 bits, and NOTHING in standard C moves it -- not a plain
+assignment, not an explicit `(float)` cast, not a named `double` temporary.
+Only `volatile`, which is a shim for GCC 13 alone.
+
+AND MOST SITES DO NOT NEED AN ENTRY, which is the point of trying first.
+src/pump/v90/Resampler.cpp looked identical and was not: accumulating in a
+`double` and narrowing with an explicit conversion satisfies BOTH compilers,
+because a double-to-float conversion is one the compiler must really perform.
+Reach for this register only after that kind of spelling has failed.
 
 Before `make period` existed, the only way to keep the gate green was to force
 the store from the SOURCE -- a `volatile` that exists for the compiler and not
@@ -54,7 +62,16 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTER = os.path.join(HERE, "gccdiverge.json")
 
-FAILLINE = re.compile(r"^\s*FAIL\s+(\S.*?)\s{2,}", re.M)
+#
+# ANCHORED ON THE COUNT, not on whitespace.  This was `\s{2,}` -- two or more
+# spaces after the name -- which matched t_resampler's aligned output and NOT
+# t_fft's, where the count follows a single space.  The failure was silent and
+# the wrong way round: no names parsed meant an EMPTY failed-set, which is a
+# subset of any allow-list, so the entry excused every check in the file
+# instead of the four it names.  An allow-list that cannot parse a failure is
+# a blanket pass.
+#
+FAILLINE = re.compile(r"^\s*FAIL\s+(.*?)\s+\d+/\d+\s+checks failed", re.M)
 
 
 def load():

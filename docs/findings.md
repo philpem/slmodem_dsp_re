@@ -44310,7 +44310,52 @@ does not compile a rounding call to a bare `fstps` — it emits the control-word
 dance the same function already shows for the `(int)phase` cast. Renamed
 `narrow32`, because what it does is drop 80-bit excess precision to 32 bits.
 
-`tools/gccdiverge.json` carries the modern build's two divergent checks, and
-`tools/debugcov.py` reads the same register — the instrumented build fails
-identically and was the last thing holding the tree to a standard the
-compiler cannot meet. `make period` has no allow-list and passes 155 of 155.
+**AND THEN THE HELPER WENT TOO, because the right spelling was ordinary C.**
+Asked whether a `float` assignment or a `double`-to-`float` conversion would
+not narrow anyway, the probe says: under `-mfpmath=387` with the default
+`-fexcess-precision=fast`, GCC 3.4.2 emits a four-byte store for **one** of
+these and not the others.
+
+| spelling | narrowing store emitted? |
+|---|---|
+| `float z = y;` — plain assignment | **no** |
+| `float z = (float)y;` — explicit cast | **no** |
+| accumulate in `double`, then `(float)` | **yes** |
+| `volatile float z = y;` | yes |
+
+An assignment or cast merely *permits* narrowing and fast mode declines it;
+a conversion from a value that really is a `double` is one the compiler must
+perform. So `resample` now accumulates into a `double` and narrows with an
+explicit conversion — **no helper, no `volatile`, and it satisfies BOTH
+compilers**, so `t_resampler` needs no allow-list entry after all. The
+accumulation stays wide (the object's `faddp`) and the narrowing is stated
+rather than left to whether the compiler runs out of registers.
+
+**src/dsp/fft.cpp, both shims, and the same test applied.** `make period`
+passes 155 of 155 with plain source:
+
+- `volatile float tempr, tempi` in `four1` — GCC 3.4.2 spills them from plain
+  source, running out of x87 registers exactly as the author's compiler did,
+  because this `four1` is Numerical Recipes' unchanged and has the same shape.
+- the four `(double)` casts in `realfft` — worse than a codegen hint, since
+  they changed FLOAT arithmetic to DOUBLE, altering what the author wrote and
+  not merely how it compiled. GCC 3.4.2 keeps h1r/h1i/h2r/h2i on the x87 stack
+  from the plain float expression, which is what the object does.
+
+`four1` does NOT yield to the `double`-conversion spelling: a named
+`double tr = wr * data[j] - ...; tempr = (float)tr;` gives byte-identical
+failure counts under GCC 13. There the 80-bit register survives the
+conversion and only `volatile` moves it. So `t_fft` is the one entry in
+`tools/gccdiverge.json`, at 47,955 of 476,100 words, and it is the honest
+kind: modern GCC cannot express what the object does, and the period build —
+which has no allow-list — proves the source right.
+
+`tools/debugcov.py` reads the same register; the instrumented build fails
+identically and was the last thing holding the tree to a standard the modern
+compiler cannot meet.
+
+**The sweep is complete.** `src/` and `include/` now contain **no `volatile`
+at all** outside a comment, and every remaining `(double)` is an ordinary
+integer-to-double conversion, a `sizeof`, a libm argument, or `dftc.c`'s
+deliberate widening. Nine files still cite GCC 13 and all nine are
+explanation — mostly of why `-ffloat-store` is the wrong fix — not shims.

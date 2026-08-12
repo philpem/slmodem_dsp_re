@@ -1,10 +1,12 @@
 {
-  "t_resampler": {
+  "t_fft": {
     "finding": 1354,
     "checks": [
-      "Resampler::resample",
-      "V90Resampler::resample"
+      "four1: complex transform, both directions",
+      "realfft: real transform, both directions",
+      "four1/realfft: isign values other than +-1",
+      "four1/realfft: sixty fills at every length"
     ],
-    "why": "x87 excess precision. The object narrows its accumulator to float by spilling it (fstps 0x34(%esp)); src/pump/v90/Resampler.cpp does it with an out-of-line narrow32(), which GCC 3.4.2 keeps out of line because -O2 there does not imply -finline-functions. Modern GCC inlines it at -O2 and narrows nothing, so 80 bits reach the interpolation and the stored sample moves by up to one ULP. `make period` passes all 155."
+    "why": "x87 excess precision in four1's butterfly. The object narrows tempr/tempi to float mid-butterfly (fstps 0xc(%esp) at 0x537a0 and 0x537b4) because GCC 3.4.2 runs out of x87 registers; GCC 13 does not run out and keeps 80 bits, and neither a plain float assignment, an explicit (float) cast, nor a named double temporary moves it -- only volatile, which is a shim for GCC 13 alone and no longer in the source. `make period` passes all 155."
   }
 }

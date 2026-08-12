@@ -236,65 +236,6 @@ Resampler::resetHistoryIndex()
 }
 
 /*
- * Narrow an x87 accumulator from 80 bits to `float`.
- *
- * IT IS NOT A ROUNDING CALL AND THE OBJECT CONTAINS NO SUCH THING.  It was
- * named `round32`, which read like something the author wrote; nothing of the
- * kind is in the blob.  `roundf`/`trunc`/`rint` round to an INTEGER, which
- * would destroy the interpolation two lines later -- and the blob imports no
- * libm function to inline from, its whole undefined list being
- * dsplibs_debug_printf, sysdep_sprintf and sysdep_vsnprintf.  GCC 3.4 does
- * not compile a rounding call to a bare `fstps` either; it emits the
- * control-word dance this file already shows for the `(int)phase` cast.
- *
- * What it does is drop 80-bit excess precision to 32 bits, which is what a
- * store to a `float` does and is all the blob does.
- *
- * THE OBJECT HAS NO SUCH FUNCTION, and this comment used to explain the wrong
- * thing.  At `.text+0x34f76` the blob simply spills its accumulator --
- * `fstps 0x34(%esp)`, once, after the loop -- which is ordinary register
- * spilling of a variable whose declared type is `float`.  The author wrote
- * `float y0` and thought no more about it (finding 1352).
- *
- * SO WHY IS IT HERE.  Because the rounding is real and reaches the OUTPUT:
- * rounding `y0` before `y0 + (y1 - y0) * frac` moves the stored sample by up
- * to one ULP, and any disagreement with the blob is a hard failure.  The
- * blob's `resample` is 367 instructions to our 263, with 18 `faddp` to our 4
- * -- its inner loop is unrolled and ours is not -- so the author's code ran
- * out of x87 registers where ours does not.  This helper compensates for OUR
- * FACTORING DIFFERING FROM THE AUTHOR'S, not for a compiler difference.  It
- * is a deviation, and it is the honest kind: named, and explained by a
- * measurement rather than by a preference.
- *
- * AND UNDER THE PERIOD COMPILER IT IS A REAL CALL, which is the whole
- * mechanism.  GCC 3.4's `-O2` does not enable `-finline-functions` -- that
- * arrived at `-O3` -- so this stays out of line as `_Z8narrow32f` and the
- * argument is materialised in a four-byte slot.  That slot is the rounding.
- * Modern GCC inlines it at `-O2` and rounds nothing, which is why a
- * `volatile` was once needed here and is not any more.
- *
- * THE THREE VARIANTS, ALL RUN THROUGH `make period` (finding 1354):
- *
- *      helper + volatile   period PASS   modern PASS
- *      helper, plain       period PASS   modern FAIL   <- this one
- *      no helper at all    period FAIL   -
- *
- * The last line is why the helper stays: with the accumulators left plain,
- * the period compiler does not round either, and 592 of 4356 checks in
- * `V90Resampler::resample` disagree with the blob.  A shim the period
- * compiler also needs is a fact about the object, not a thing to delete.
- * The `volatile` on top of it was the part that only GCC 13 wanted, and that
- * part is gone; tools/gccdiverge.json carries what it cost the modern build.
- */
-static float
-narrow32(float v)
-{
-	float r = v;
-
-	return r;
-}
-
-/*
  * Turn `n` new input samples into however many output samples the phase
  * accumulator asks for.  This is the only member that reads `pending`,
  * `historyIndex` and `inputCredit`, and the only one that dispatches through
@@ -348,6 +289,7 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 		const float *c;
 		int ph;
 		float y0, y1, frac, y;
+		double acc;
 
 		/*
 		 * Shift in what the credit asks for, or all there is,
@@ -382,22 +324,47 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 		 * Two adjacent polyphase branches, linearly interpolated.
 		 * `ph` is the truncating cast the object spells out as
 		 * fnstcw / or $0xc00 / fldcw / fistl.
+		 *
+		 * THE ACCUMULATOR IS `double` AND THE RESULT IS NARROWED
+		 * EXPLICITLY, because that is what the object does and it is
+		 * the only spelling that says so portably.
+		 *
+		 * The blob accumulates at 80 bits -- `faddp %st,%st(2)`,
+		 * `taps` times, with NO store in the loop -- and then narrows
+		 * exactly once, `fstps 0x34(%esp)` at .text+0x34f76.  That
+		 * store is a spill of a variable the author declared `float`;
+		 * the narrowing was a side effect of GCC running out of x87
+		 * registers, not of anything written down (finding 1352).
+		 *
+		 * WRITING `float y0` AND HOPING FOR THE SAME SPILL DOES NOT
+		 * WORK, and it is worth knowing why before anyone tidies this
+		 * back.  Under -mfpmath=387 with the default
+		 * -fexcess-precision=fast, neither a plain assignment to a
+		 * `float` nor an explicit `(float)` cast emits a store --
+		 * measured on both compilers, and it is why this file once
+		 * carried a `volatile` helper.  A double-to-float conversion
+		 * is different: the value really is a `double`, so the
+		 * conversion is one the compiler must perform.
+		 *
+		 * So the accumulation stays wide and the narrowing is stated,
+		 * which is exactly the object's behaviour and depends on no
+		 * compiler's register pressure.  Finding 1354.
 		 */
 		ph = (int)phase;
 
 		h = history + historyIndex - taps;
 		c = coeffs + ph * taps;
-		y0 = 0;
+		acc = 0;
 		for (i = 0; i < taps; i++)
-			y0 += h[i] * c[i];
-		y0 = narrow32(y0);
+			acc += h[i] * c[i];
+		y0 = (float)acc;
 
 		if ((unsigned int)(ph + 1) < phases) {
 			h = history + historyIndex - taps;
 			c = coeffs + (ph + 1) * taps;
-			y1 = 0;
+			acc = 0;
 			for (i = 0; i < taps; i++)
-				y1 += h[i] * c[i];
+				acc += h[i] * c[i];
 		} else {
 			/*
 			 * Branch `phases` IS branch 0 one input sample later,
@@ -407,11 +374,11 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 			history[historyIndex] = *in;
 			h = history + historyIndex - taps + 1;
 			c = coeffs;
-			y1 = 0;
+			acc = 0;
 			for (i = 0; i < taps; i++)
-				y1 += h[i] * c[i];
+				acc += h[i] * c[i];
 		}
-		y1 = narrow32(y1);
+		y1 = (float)acc;
 
 		frac = (float)(phase - ph);
 		y = y0 + (y1 - y0) * frac;
