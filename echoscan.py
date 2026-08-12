@@ -32,9 +32,11 @@ import sys
 
 import numpy as np
 
+from capture_io import load
+
 
 def load(path):
-    a = np.fromfile(path, dtype="<i2").astype(np.float64)
+    a = load(path)[0].astype(np.float64)
     return a
 
 
@@ -72,8 +74,8 @@ def main():
     args = ap.parse_args()
 
     suffix = "" if args.rate == 9600 else "_8k"
-    prx = "%s.modem_rx%s.raw" % (args.prefix, suffix)
-    ptx = "%s.modem_tx%s.raw" % (args.prefix, suffix)
+    prx = "%s.modem_rx%s" % (args.prefix, suffix)
+    ptx = "%s.modem_tx%s" % (args.prefix, suffix)
     for p in (prx, ptx):
         if not os.path.exists(p):
             print("missing %s" % p, file=sys.stderr)

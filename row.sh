@@ -96,9 +96,17 @@ cleanup() {
 	# The blob reopens these every run, so a later call would overwrite the
 	# evidence for this one.  Three calls were analysed before this was
 	# noticed and the 48-versus-240 comparison was lost.
-	for f in modem_rx_8k modem_tx_8k modem_rx modem_tx; do
-		[ -f "/tmp/$f.raw" ] && cp "/tmp/$f.raw" "$LOG.$f.raw" 2>/dev/null
-	done
+	# NO .raw COPIES.  A .wav here is the same samples plus a 44-byte header,
+	# so keeping both doubled the size of every capture for nothing -- 2003
+	# files and 1.9 GB of it, on a disk that later hit 100% full and broke
+	# other sessions' builds.  The wav is the useful one: it carries its own
+	# sample rate and channel count, so anything can open it without being
+	# told 9600-versus-8000 out of band, which the raw always needed.
+	#
+	# The conversion reads /tmp directly and writes the wav in one step.  The
+	# blob reopens /tmp/modem_*.raw every run, so a later call overwrites the
+	# evidence for this one -- the wav written here IS the durable copy, and
+	# it must be written before the next call starts.
 	# Mono per direction, plus a STEREO pair per rate: left = received (the far
 	# end), right = transmitted (us).  Both directions are written from the same
 	# loop on the same timebase, so the two channels line up sample for sample
@@ -137,8 +145,8 @@ def write(path, chans, rate):
 
 
 for suffix, rate in (("_8k", 8000), ("", 9600)):
-    rx = read("%s.modem_rx%s.raw" % (log, suffix))
-    tx = read("%s.modem_tx%s.raw" % (log, suffix))
+    rx = read("/tmp/modem_rx%s.raw" % suffix)
+    tx = read("/tmp/modem_tx%s.raw" % suffix)
     for name, data in (("rx", rx), ("tx", tx)):
         if data:
             write("%s.modem_%s%s.wav" % (log, name, suffix), [data], rate)

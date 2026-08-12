@@ -47,6 +47,8 @@ import sys
 
 import numpy as np
 
+from capture_io import load
+
 FS = 8000.0
 FRAME = int(0.020 * FS)          # 20 ms, one RTP packet
 FULL = 32768.0
@@ -57,11 +59,20 @@ def db(x):
 
 
 def frames(path):
-    x = np.fromfile(path, dtype="<i2").astype(np.float64)
-    n = (len(x) // FRAME) * FRAME
+    """Frame a capture at its OWN sample rate, not an assumed one.
+
+    This used to `np.fromfile` a headerless `.raw` and frame it at a global
+    FS = 8000, which was right for the `_8k` files and silently wrong for the
+    datapump's native 9600 Hz captures.  The wav carries its rate, so the
+    frame length is derived per file and the 20 ms RTP unit stays 20 ms.
+    """
+    x, rate = load(path)
+    x = x.astype(np.float64)
+    fr = int(0.020 * rate)
+    n = (len(x) // fr) * fr
     if n == 0:
         return None, 0.0
-    return x[:n].reshape(-1, FRAME), len(x) / FS
+    return x[:n].reshape(-1, fr), len(x) / rate
 
 
 def stats(path):
@@ -104,8 +115,8 @@ def main():
         print("call,dir,active_s,median_dbfs,p10,p90,p999,peak,clicks,click_pct,crest_db")
     for pre in args.prefix:
         for d in ("tx", "rx"):
-            p = "%s.modem_%s_8k.raw" % (pre, d)
-            if not os.path.exists(p):
+            p = "%s.modem_%s_8k" % (pre, d)
+            if not os.path.exists(p + ".wav") and not os.path.exists(p + ".raw"):
                 continue
             s = stats(p)
             if s is None:

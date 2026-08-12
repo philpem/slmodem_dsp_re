@@ -25,6 +25,8 @@ import sys
 
 import numpy as np
 
+from capture_io import load
+
 RATE = 9600
 MAX_LAG_MS = 300.0
 
@@ -34,12 +36,17 @@ def main():
         print("usage: echofit.py <logprefix>", file=sys.stderr)
         return 1
     pre = sys.argv[1]
-    prx, ptx = pre + ".modem_rx.raw", pre + ".modem_tx.raw"
-    if not (os.path.exists(prx) and os.path.exists(ptx)):
+    prx, ptx = pre + ".modem_rx", pre + ".modem_tx"
+    # The captures are .wav now; capture_io resolves the extension, so the
+    # existence check has to as well.  Checking the bare prefix silently
+    # returned 1 for every call, which callstats.py reads as "no echo
+    # measurement" -- three CSV columns quietly went empty.
+    if not all(os.path.exists(q + ".wav") or os.path.exists(q + ".raw")
+               for q in (prx, ptx)):
         return 1
 
-    rx = np.fromfile(prx, dtype="<i2").astype(np.float64)
-    tx = np.fromfile(ptx, dtype="<i2").astype(np.float64)
+    rx = load(prx)[0].astype(np.float64)
+    tx = load(ptx)[0].astype(np.float64)
     n = min(len(rx), len(tx))
     if n < RATE:
         return 1
