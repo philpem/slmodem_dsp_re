@@ -39,11 +39,22 @@ CANDIDATES = [
     # Not a column -- synthesised below.  A 30-call batch is ~35 minutes of
     # continuous work for both modems and the ATA, and every covariate tested
     # so far has been a per-call property, so nothing has ever been able to
-    # see DRIFT: a modem warming up, a far end settling into or out of a
-    # state, the path changing over the afternoon.  If rate correlates with
-    # position in the batch then the calls are not exchangeable, and every
-    # between-batch comparison that assumes they are -- including
-    # batchcompare.py -- is measuring the clock as much as the change.
+    # see DRIFT WITHIN A BATCH: a modem warming up, a far end settling into or
+    # out of a state.  A trend here means the calls in one batch are not
+    # exchangeable with each other, which is worth knowing on its own.
+    #
+    # WHAT IT DOES NOT ESTABLISH, and the temptation is strong: this says
+    # nothing about whether two batches are comparable.  batchcompare.py
+    # permutes labels between batches taken an hour or a day apart, and the
+    # threat there is a LEVEL SHIFT between them -- line conditions, room
+    # temperature, PBX load, far-end state.  A perfectly flat slope inside
+    # each batch is entirely consistent with batch A sitting two rate steps
+    # above batch B for reasons that have nothing to do with the variable
+    # under test, and no within-batch covariate can see that by construction.
+    # The check for THAT is a null-vs-null control: two batches at the same
+    # configuration, separated in time, run through batchcompare.  If it calls
+    # a difference where there is none, its p-values are optimistic and the
+    # size of the error is the bench's between-batch floor.
     ("_ordinal",      "position in the batch"),
 ]
 
