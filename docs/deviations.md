@@ -5209,3 +5209,187 @@ Repairing it would mean passing `nofV90Retrains`, which is what the sibling line
 **WHAT WAS MEASURED SINCE.** `objdump -d` over our PERIOD-compiled `V90ConnectionEvaluator.o` (GCC 3.4.2, `build/period/src_pump_v90_V90ConnectionEvaluator.o`) finds no `jp`, `jnp` or `setp` anywhere in `evaluateConnection` -- neither does the GCC 13 object -- so neither of our builds tests for unordered explicitly, and any difference is in the compare DIRECTION and the condition code rather than in an added parity check. `make period` passes `t_v90conneval` at 155/157, but that says nothing about this: the fixture does not drive the input.
 
 **WHAT WAS NOT MEASURED, and it is the whole question.** Whether the divergence survives the period build. Both sides are GCC 3.4.2 output there, and the blob's own compiler emitted the `jae`, so it is likely that our period build emits it too and the two agree -- but likely is not measured, and the cheap experiment is to feed a NaN at those two sites under `make period T=t_v90conneval` and see. Whoever does it should record the answer here: if they agree, this entry becomes a note about `make phase` alone and the fixture can stop steering; if they do not, it is a real deviation and the source is wrong.
+
+## D280 🐛 `unitePhasesInfoOfUref`'s convergence checksum adds six copies of one entry
+
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::unitePhasesInfoOfUref` (blob 0x40cb0, 748 bytes), +0x260. **Reachability: FIRES ON EVERY CALL** -- it is the loop test, not an error path. What it cannot do is make the loop wrong: the checksum is only ever compared against its own previous value. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1421.** The method repeats its grouping until `linMapp` stops changing, and the "has it changed" test is a six-iteration sum. The sum's addend does not vary:
+
+    40f14: shl    $0x7,%esi              ; esi = 5, the outer loop's terminal value
+    40f1b: lea    (%esi,%ecx,1),%edi     ; edi = 5*128 + at
+    40f1e: movzwl 0x0(%ebp,%edi,2),%ecx  ; HOISTED CLEAN OUT OF THE LOOP
+    40f30: lea    0x1(%edx),%esi         ; the loop: six adds of the same ecx
+           ...
+    40f42: cmp    0x18(%esp),%bx
+
+A load can only be hoisted out of a loop if its address is loop-invariant, so this is not a reading of the disassembly that could be wrong: the index is the OUTER loop's variable, left at 5 when it terminated, where the source plainly meant the inner one. The checksum is therefore `6 * linMapp[5][at]` truncated to a `short`, not the sum over the six phases.
+
+It does not make the method loop for ever or terminate early in any way that has been observed: phase 5 is grouped like any other, so its entry stops changing when the grouping settles. It is recorded because a checksum that reads one sixth of what it is checking is a defect whether or not it happens to be sufficient, and because a reader who assumes the obvious sum will not understand the object's iteration count.
+
+## D281 🐛 `unitePhasesInfoOfUref` reads an uninitialised local when every phase is flagged
+
+*Batch of 2026-08-11, same function, +0x2a1 (`flds 0xc(%esp)`) and the NaN at `.rodata.cst4+0x328`. **Reachability: needs `short_2800[0..4]` ALL nonzero**, which no written caller produces today -- `updateUref` passes the flags through untouched from whatever the study path set. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1420.** The method picks the largest group of unflagged phases and hands that group's mapping entry and variance to every flagged phase. Both are held in locals: the variance in an x87 register seeded with the constant at `.rodata.cst4+0x328`, which is 0x7fc00000 -- a quiet NaN -- and the entry in a stack slot at `0xc(%esp)` **seeded with nothing at all**.
+
+The grouping loop runs `i` over 0..4 and skips any phase that is flagged, so if all five are flagged it never executes, the two locals are never written, and the final loop stores a NaN and four bytes of stack residue into `linMapp` and `float_9d48` for all six phases. Reproduced as it is -- `bestValue` is declared and deliberately not initialised, because giving it a value would be inventing behaviour rather than reproducing it, and the blob's behaviour on that path is not a function of its inputs.
+
+**The test cannot compare that path and says so at the line that avoids it.** Two builds have two stack frames, so the residue differs between the sides for reasons that have nothing to do with the reconstruction; `t_v90adid` therefore always leaves at least one of phases 0..4 clear. Every other arm of the method is driven and compared.
+
+## D282 🐛 `getAltVarThresh` divides by a count that can be zero
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::getAltVarThresh` (blob 0x40650, 581 bytes), +0x7c (`de fa`, which prints `fdivrp` and IS `FDIVP` -- finding 245). **Reachability: needs no entry strictly below the average of the six**, which SIX EQUAL VALUES give -- and six equal zeros is what `reset` leaves at +0x9d48 until a study has run. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1424.** The method averages the six per-phase variances, averages again over only the entries strictly below that average, and scales the second average by its caller's factor. The second average is `below / count` with `count` a `short` counted in the same loop that selects the entries, and there is nothing between the loop and the division -- no test, no default. If every entry equals the average, nothing is selected, `count` is zero, `below` is zero, and the division is 0.0f/0, which the x87 answers with the real indefinite 0xffc00000. That NaN survives the multiplication by the factor, survives the floor at `altMinVarThresh` -- an ordered `>` is false against a NaN -- and is what the method returns.
+
+The floor is what makes it look defended and is not: `if (altMinVarThresh > thresh)` fires only when the comparison is ordered, so the one value the floor exists to prevent is the one value it lets through.
+
+Reproduced as it is, and `t_v90adid` carries a row of six equal entries and a row of six zeros precisely to reach it. The return value is compared as a BIT PATTERN rather than with `==`, because `==` is false for a NaN on both sides and would have passed for ever on exactly this arm.
+
+## D283 🐛 `uniteLinMappInfoOfUnsuspectedPhases` never resets its running group size
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases` (blob 0x41550, 601 bytes), +0x4a. **Reachability: FIRES whenever more than one group forms**, which needs three unsuspected phases with two of them out of each other's tolerance. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1426.** The method groups the unsuspected phases, keeps the largest group, and pools that group's accumulators. The size counter is set to 1 exactly once, at 0x4159a, BEFORE the scan that uses it:
+
+    41586: mov    $0x1,%ebp
+    4159a: mov    %ebp,0x24(%esp)        ; count = 1, outside the loop
+    415a8: ...                           ; the scan over i starts here
+    41772: mov    %eax,0x24(%esp)        ; the only other write: count + 1
+
+`unitePhasesInfoOfUref`, which is the same shape, sets its own counter to 1 inside the loop beside `group[i] = i`. Here it is hoisted out, and a store of a constant cannot be hoisted out of a loop that also increments it -- so this is the source and not the optimiser. The consequence is that the second group starts counting from wherever the first finished: "the largest group" is really "the last group that merged anything", and a first group of three followed by a second group of two selects the second.
+
+`t_v90adid` separates the two spellings with a directed block -- two groups of two, phases 0-1 and 2-3, with different means. Reset-per-group makes both size 2 and keeps the first; the object's running counter makes the second size 3 and keeps IT, and the two write different means into every unsuspected phase.
+
+It also makes one of the method's other bounds untestable, which is recorded as a proven-equivalent mutation rather than as an uncaught one: because `count` never decreases, `best` always equals `count` by the end of an iteration, so letting the sixth phase lead a group can never beat the running best and the change cannot be observed. That argument is finding 1426's, above.
+
+## D284 🐛 `uniteLinMappInfoOfUnsuspectedPhases` reads an uninitialised group number
+
+*Batch of 2026-08-12, same function, +0xad (`mov 0x1c(%esp),%ebp`). **Reachability: needs `byte_280c[0..4]` ALL nonzero**, and unlike D281's condition this one has a producer -- `porcessFirstStudy` sets all six on a mapping smooth enough that no phase collects nine rough neighbours. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1427.** The scan writes `bestGroup` at 0x4178c and nothing else does; the pooling loop at 0x415fd reads it. The scan skips a phase that is suspected or already grouped, so if all five of phases 0..4 are suspected it never executes and the stack slot at `0x1c(%esp)` is read having never been written. The pooling then keeps whatever phases happen to match four bytes of stack residue, and the mean it writes into every unsuspected phase is a function of the frame rather than of the object.
+
+It is the same shape as D281 and reproduced the same way -- `bestGroup` is declared and deliberately left uninitialised, because giving it a value would invent behaviour the blob does not have. **The test cannot compare that path**, for D281's reason: two builds have two stack frames. `t_v90adid` always leaves phase `trial % 5` unsuspected in the sweep, and the forty-block sequence forces `byte_280c` explicitly before every call rather than letting `porcessFirstStudy`'s output arrange it -- which is exactly the state that would reach this.
+
+The difference from D281 is that this one is reachable from inside the class. D281 needs a caller to flag every phase at +0x2800; this needs `porcessFirstStudy` to find every phase smooth, which is what a clean line produces.
+
+## D285 ⚠ The scan for the unsuspected phase stops at five, so the arm that handles "there is none" is dead
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::porcessSecondStudy` (blob 0x41cb0, 831 bytes), +0x45 (`cmp $0x4,%bx ; jle 41cd9`), and from the character-identical loop in `setQcLinearMapping` (blob 0x44700) at +0x10c. **Reachability: the arm at +0x247 can never be entered** -- proved by the loop's own bound, not sampled. Status: `measured`. Fix class: none proposed.*
+
+**Finding 1429.** Both callers of `updateAltRbsPhaseInDil` open by finding the first RBS phase with a clear `byte_280c`, and both spell it the same way: store zero, test `byte_280c[0]`, then increment-store-test-bound until either the byte is zero or the index is above 4.
+
+    41cd9: movzwl 0xa968(%esi),%ebx
+    41ce0: inc    %ebx
+    41ce4: cmpb   $0x0,0x280c(%ecx,%esi,1)
+    41cec: mov    %bx,0xa968(%esi)         ; the member is the loop variable
+    41cf3: je     41cfb                    ; a clear phase: stop
+    41cf5: cmp    $0x4,%bx
+    41cf9: jle    41cd9                    ; otherwise keep going while <= 4
+
+So the largest value the loop can leave in +0xa968 is 5, reached when all six bytes are nonzero -- and 5 is also a perfectly good phase number. The very next instructions read the field back and branch on it being ABOVE five:
+
+    41cfb: movzwl 0xa968(%esi),%eax
+    41d02: cmp    $0x5,%ax
+    41d0b: jg     41ef7                    ; "no unsuspected phase": clear it and skip
+
+`41ef7` pops the sentinel off the FPU stack, stores zero into +0xa968 and into the stack slot the report prints, and jumps past the whole study. It is 18 bytes of code that no input can reach, and what it is FOR is legible: the author meant the scan to run to 6 and to spell "none found" as 6, which is what `for (i = 0; i <= 5 && byte_280c[i]; i++)` would have left. The bound is one short of that, so the "none found" case and the "phase 5" case are the same value and the phase-5 reading wins.
+
+Both spellings are reproduced: the scan with its `<= 4`, and the guard with its `> 5`. A modern `-O2` may prove the arm dead and delete it, which costs nothing at tier 1 -- the behaviour is identical either way, and `t_v90adid` asserts the scan's answer directly, sweeping all six stopping points and the all-nonzero row that lands on 5.
+
+## D286 🐛 `porcessSecondStudy` initialises its second-nearest distance once for the whole call
+
+*Batch of 2026-08-12, same function, +0x00 (`flds 0x358` -- the FIRST instruction, before the register saves) against +0xc4 (`fld %st(3)`, once per (code, phase)). **Reachability: FIRES on the second repair decision of every call** -- the carried value is what all 701 remaining (code, phase) pairs are judged against. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1431.** For each of 117 codes and each of the six phases, the method measures the distance from the phase's own mapping entry to three neighbouring entries of the reference phase's, keeps the nearest and the second nearest, and repairs the entry only if the nearest is unambiguous: exact, or beaten by a factor of more than two.
+
+The nearest distance is initialised per (code, phase) -- `fld %st(3)` copies the constant 32,256 into a fresh slot at the head of the phase loop. The second-nearest is not. It is loaded once, from `.rodata.cst4+0x358`, before the function has even pushed its registers, and the reg-stack allocator then REUSES that slot for the running value -- `fstp %st(6)` at 0x41e00 writes over it on the first update. An x87 slot can only be overwritten like that if the value in it is dead, so the load is a one-time initialisation and not a per-iteration one; there is no second `flds` anywhere in the 831 bytes.
+
+The consequence is that "the runner-up" is not this code's runner-up but the smallest runner-up seen since the method was entered, and it only ever decreases. The ratio test therefore gets monotonically harder as the call proceeds: an entry that would be repaired on its own merits at code 100 is refused because code 3 happened to have two near-equal candidates.
+
+The sentinel makes the first decision work at all. `.rodata.cst4+0x358` is 0x7fc00000, a NaN, and the update is guarded by `jae` -- which an unordered compare does not take -- so the first distance that fails to improve the nearest becomes the second-nearest whatever its size. Written as `!(d >= second)` rather than `d < second` for exactly that reason.
+
+`t_v90adid` separates the two spellings with a constructed witness, because a sweep cannot: three random distances are all 32,256 or more about once in a hundred million. Phase 0 is left unsuspected and given -31746 across its row against 32767 in every other phase's, so all three distances are 64,513 -- above the nearest's sentinel, and 2.000031 times it, which is over the threshold by three parts in a hundred thousand. With the NaN the entry is repaired; with any ordered sentinel, or with 32,257 in place of 32,256, it is not. A second witness primes the second-nearest to 499 at code 0 and then asserts that code 3 -- whose three distances are 65,535 -- is NOT repaired, which is the carry itself: a per-iteration reset repairs it.
+
+## D287 🐛 The DIL repair path indexes the sample store and the mapping table without bounds
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::updateAltRbsPhaseInDil` (blob 0x41840, 1124 bytes), +0x363 (`add %edx,0x60(%esp)`), and from `porcessSecondStudy` (blob 0x41cb0) +0x106 (`movswl 0x3c(%esp),%ebp`). **Reachability: the first needs a histogram that disagrees with what was stored, the second FIRES at codes 0 and 1 on every call.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1430.** Two unbounded indices in the same cluster, and neither is D256's.
+
+THE SAMPLE CURSOR. `updateAltRbsPhaseInDil` treats each phase's sample store as "the samples for the codes in scan order, end to end": it starts a cursor at zero and, for each of the 115 codes it visits, quantises `short_8b00[phase][code]` samples starting at the cursor and then advances the cursor by that count. Nothing compares the cursor against the row's 0x83e entries, and nothing compares it against `int_9100[phase]`, which is what `addReceivedSampleToStorage` actually filled. The two agree only because both are driven by the same call: one increments the histogram bin, the other appends to the row. Anything that puts a count in `short_8b00` without a matching sample -- and the class has no other writer, so this is a claim about callers -- walks the cursor past the row, into the next phase's samples and eventually out of the object. The test clamps the seeded histogram to sixteen per code for that reason, which is 1,840 against 2,110; the forty-block sequence needs no clamp at all, because six samples a phase for forty blocks is 240.
+
+THE NEIGHBOUR WINDOW. `porcessSecondStudy` chooses between the window [code, code+2] and the window [code-2, code] by which side of the reference the phase's own entry falls, and it runs `code` from 0. At codes 0 and 1 the second window indexes `linMapp[unSuspectedPhase][-2]` and `[-1]`, which for an unsuspected phase of 0 -- the commonest value, and what a clear `byte_280c[0]` gives -- is four bytes IN FRONT of the object. Above, the window reaches `linMapp[phase][118]` at the top code of 116, which is inside the row. The read is never a write, so nothing is corrupted; what the object gets is whatever precedes it in memory, and the repair decision for two codes out of 117 turns on it.
+
+`t_v90adid` puts a sixteen-byte guard in FRONT of the fixture, seeded alike on both sides and compared like the one behind it. Without it the two sides read two different pieces of unrelated memory and the comparison measures the linker's layout; with it, codes 0 and 1 are tested for real rather than steered around by forcing the unsuspected phase away from zero, which would have left the commonest path untested.
+
+## D288 🐛 `determineMaxUcode`'s report loop never ends at an argument of 255, and its scan window reads outside the row
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0, 1189 bytes), +0x1aa (`movzbl %bl,%ecx ; cmp %edi,%ecx ; jle`) and +0x25b (`lea 0x9d48(%ebp,%eax,4),%eax` followed by `subl $0x4,0x14(%esp)`). **Reachability: the first needs an argument of 255 or more, the second FIRES on every call whose scan reaches the bottom of the reference phase's row.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1438.** Two indices the method forms out of a `short` argument and never bounds.
+
+THE REPORT LOOP CANNOT END. It prints `linearMappingVar[unSuspectedPhase][k]` for `k` from `short_a97a + 1` up to the argument, and `k` is an `unsigned char` zero-extended for a SIGNED compare against the argument as an `int`. At an argument of 255 the counter reaches 255, wraps to 0, and 0 is still at or under the bound -- so the loop runs for ever, printing about thirty characters a pass through `edprintf`. The object has no other terminating condition and neither does this. The reconstruction reproduces it; `t_v90adid` keeps every argument it offers at 254 or below and says so at the table.
+
+THE SCAN WINDOW STRADDLES THE ROW. The five-entry window is `linearMappingVar[unSuspectedPhase][ci]` down to `[ci - 4]`, with `ci` an `unsigned char` walking down from the argument -- and the object forms each address by adding `unSuspectedPhase * 128 + ci` to the array base, so an index of 4 or less reaches BELOW the reference phase's row and an index above 127 reaches above it. Below phase 0 that is `uint_9d30`, four to twenty bytes in front of the array; above phase 5 it is past the object entirely, which is why the test picks the phase from the argument rather than sweeping the two against each other -- 793 is the last entry of `float_9d48` whose four bytes are still inside the 0xa9b0 the object occupies, and phase 5 plus a code of 154 is the first one out.
+
+Neither is a write, so nothing inside the object is corrupted by either; the second decides which code the method answers with, so it is behaviour and not merely a read.
+
+======================================================================
+
+## D289 🐛 `determineMaxUcode`'s backwards walk has no floor, and the entry that stops it is forced by hand
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0), +0x3d1 (`dec %dl ; movzbl %dl,%eax ; cmpb $0x0,0xd00(%ecx,%eax,1) ; je`) and +0x374 (`mov %bl,0xd00(%ecx,%edx,1)` with %bl = 1). **Reachability: the walk FIRES whenever an unflagged phase's own maximum code is marked unusable; the non-termination needs all 256 bytes of the window clear.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1438.** The last loop gives each unflagged phase the highest usable code at or below `byte_a954`, and it finds it by decrementing a BYTE until `byte_0d00[phase][d]` is nonzero. There is no floor and no counter: the index wraps from 0 to 255 and keeps going, so the walk covers all 256 values and then repeats them for ever if none of them is set.
+
+WHAT STOPS IT IS A STORE THE FILL MAKES ON PURPOSE. Immediately before, the fill sets `byte_0d00[phase][ucode]` to 1 for EVERY phase and whatever the variance test said about that code -- including for the flagged phases, whose 128 codes the fill skips entirely. That byte is one of the 256 the walk visits, so the walk always terminates in practice. It is the only guarantee there is, and it is a coincidence of the two loops being adjacent rather than a bound: change the reference code between them and the method hangs.
+
+THE WINDOW STAYS INSIDE THE OBJECT. `byte_0d00[phase][d]` with `d` up to 255 is `+0xd00 + phase * 128 + d`, which at phase 5 reaches +0x107f -- inside `float_1000`, whose first 128 bytes the walk therefore reads as flags, and whose first bytes the forced store writes when `ucode` is 128 or more. Nothing leaves the object, so the test exercises the whole of it rather than bounding it.
+
+======================================================================
+
+## D290 🐛 `findPadGain` reads its chosen code uninitialised, and hangs outright for five values of `byte_a954`
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::findPadGain` (blob 0x43620, 2879 bytes), +0x44 (`mov %dl,0xa1(%esp)`, the only write to that slot) and +0x38 (`sub $0x5,%eax ; mov %eax,%ebx` against `movzbl %dl,%eax ; cmp %ebx,%eax ; jg`). **Reachability: the uninitialised read needs five variances of 1e8 or more with no NaN among them; the hang needs `byte_a954` in 3..7.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1439.** Both come out of the same five-entry scan at the top of the method.
+
+THE CHOSEN CODE IS A STACK SLOT NOTHING NECESSARILY WRITES. The running minimum starts at the constant 1e8 and the slot at 0xa1(%esp) is written only when an entry beats it. Five entries of 1e8 or more leave the slot holding whatever the frame held, and that value is then clamped into [0x50, 0x5f] and used as the base code for the entire search -- so the pad gain the method reports is a function of the caller's stack and not of the object. An unordered compare TAKES, so a single NaN among the five is enough to write the slot; it is five ordered non-improvements that reach it. The local is left uninitialised here for D281's reason, and `t_v90adid` plants one small entry in every window it offers so that no trial can read it: two static objects have two different frames, and a trial that read the slot would be comparing the linker's layout rather than the reconstruction.
+
+THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 3)` and runs while the counter, zero-extended, is greater than `(int)start - 5` under a SIGNED compare. A `byte_a954` of 0, 1 or 2 wraps the start up to 253..255 and terminates normally; one of 3 to 7 puts the start at 0..4, the bound below zero, and a zero-extended byte can never fall under it -- so the loop decrements for ever, reading `float_9d48[unSuspectedPhase][d]` at every one of the 256 indices as it goes, which at phase 5 is past the end of the object. The reconstruction reproduces it and the test forces the field into [8, 0x9c].
+
+======================================================================
+
+## D291 🐛 `studyUrefHandler` prints a float through `%d`, twice, and the field and the report get two different roundings of it
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140, 5335 bytes), +0xb1f (`fsts 0xa964(%ebx)`) with +0x12fe (`fstpl 0x4(%esp)` under "first update : trn1Sigma = %d"), and +0xdaf with +0x12e9 for the second copy. **Reachability: FIRES on every call that completes state 3 or state 5 with the debug level above 1.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1443.** The report is the object's own and so is the mismatch.
+
+======================================================================
+
+## D292 🐛 The initial-variance loop divides by a count it never tests, where every other mean in the class tests it
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x120 (`mov 0x1c00(%ebx,%ecx,4),%ebp` straight into `push`/`fildll` with no `test`), against +0x320 in the same function (`mov 0x1c00(%ebx,%ecx,4),%edi ; test %edi,%edi ; je`). **Reachability: FIRES whenever a phase has no samples for the reference code at the end of state 0.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1442.** One loop out of five in this method omits the guard the other four have.
+
+======================================================================
+
+## D293 🐛 Two local arrays are filled by six loops and read by nothing
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x40c, +0x43c, +0x6dc, +0x70c, +0x9ec and +0xa1c -- six `mov %rX,0x50(%esp,%ecx,2)` stores into one twelve-byte slot, and not one read of it anywhere in the 5,335 bytes. **Reachability: FIRES at the end of states 1, 2 and 3; state 5's otherwise identical tail does not have it.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1444.** Dead stores the compiler kept because the locals are arrays.
+
+======================================================================
+
+## D294 🐛 The study's states are numbered out of the order it runs them in, and one of its six durations is read by nobody
+
+*Batch of 2026-08-12, from the jump table at `.rodata+0xd70` and `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140) +0x7cc (`mov $0x4,%esi ; mov %esi,0xa984(%ebx)` in the arm the table's entry 2 points at) with +0x1243 (`mov $0x3,%eax` in the arm entry 4 points at); and `int_a9a0` at +0xa9a0, copied in by `resetStudyUrefHandler` at 0x40913 and 0x40a94 and named in no displacement of any of the class's thirty-two members. **Reachability: the ordering FIRES on every study; the dead duration is never read at all.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1441.** The chain is measured from the arms and not from the numbers.
+
+======================================================================

@@ -21,8 +21,8 @@
  },
  {
   "label": "leave the byte at +0x280c alone",
-  "find": "\t\tbyte_280c[phase] = 0;",
-  "replace": "\t\t/* deliberately removed */"
+  "find": "\t\tuint_9d30[phase] = 0;\n\t\tbyte_280c[phase] = 0;",
+  "replace": "\t\tuint_9d30[phase] = 0;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave the int at +0x9d30 alone",
@@ -254,13 +254,13 @@
  },
  {
   "label": "drop the rounding term on the mean",
-  "find": "\tlinMapp[phase][code] = (short)(mean + 0.5f);",
-  "replace": "\tlinMapp[phase][code] = (short)mean;"
+  "find": "- mean * mean;\n\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "replace": "- mean * mean;\n\tlinMapp[phase][code] = (short)mean;"
  },
  {
   "label": "form the mean from the sum of squares",
-  "find": "\tmean = float_1000[phase][code] * inv;",
-  "replace": "\tmean = float_9118[phase][code] * inv;"
+  "find": "1.0f / uint_1c00[phase][code];\n\tmean = float_1000[phase][code] * inv;",
+  "replace": "1.0f / uint_1c00[phase][code];\n\tmean = float_9118[phase][code] * inv;"
  },
  {
   "label": "divide directly where the object multiplies by a reciprocal",
@@ -394,8 +394,8 @@
  },
  {
   "label": "write updateUrefAlt's mean into the plain table",
-  "find": "\t\t\tlinMappAlt[phase][ucode] =",
-  "replace": "\t\t\tlinMapp[phase][ucode] ="
+  "find": "\t\t\tlinMappAlt[phase][ucode] =\n",
+  "replace": "\t\t\tlinMapp[phase][ucode] =\n"
  },
  {
   "label": "divide in updateUrefAlt where the object multiplies by a reciprocal",
@@ -436,5 +436,2024 @@
   "label": "compand the signed level rather than its magnitude",
   "find": "linear2alaw(adid_abs(level))",
   "replace": "linear2alaw(level)"
+ },
+ {
+  "label": "NOTE: unitePhasesInfoOfUref and the updateUref it unblocked."
+ },
+ {
+  "label": "merge on an equal distance as well as a smaller one",
+  "find": "\t\t\t\t    >= short_a9a4)",
+  "replace": "\t\t\t\t    > short_a9a4)"
+ },
+ {
+  "label": "group the flagged phases rather than the unflagged ones",
+  "find": "\t\t\tif (group[i] != ADID_NO_GROUP || short_2800[i] != 0)",
+  "replace": "\t\t\tif (group[i] != ADID_NO_GROUP || short_2800[i] == 0)"
+ },
+ {
+  "label": "let a phase merge with itself",
+  "find": "\t\t\tfor (j = (short)(i + 1); j < V90ADID_PHASES; j++) {\n\t\t\t\tif (group[j] != ADID_NO_GROUP",
+  "replace": "\t\t\tfor (j = i; j < V90ADID_PHASES; j++) {\n\t\t\t\tif (group[j] != ADID_NO_GROUP"
+ },
+ {
+  "label": "run the grouping loop over all six phases, not five",
+  "find": "\t\tfor (i = 0; i < V90ADID_PHASES - 1; i++) {",
+  "replace": "\t\tfor (i = 0; i < V90ADID_PHASES; i++) {"
+ },
+ {
+  "label": "pool nothing into the group's count",
+  "find": "\t\t\ttotal = (short)uint_1c00[i][at];",
+  "replace": "\t\t\ttotal = 0;"
+ },
+ {
+  "label": "test the pooled count for positive rather than nonzero",
+  "find": "\t\t\tif (total != 0) {",
+  "replace": "\t\t\tif (total > 0) {"
+ },
+ {
+  "label": "form the group mean even when it pooled nothing",
+  "find": "\t\t\tif (total != 0) {\n\t\t\t\tfloat inv = 1.0f / total;",
+  "replace": "\t\t\tif (total != 0 || 1) {\n\t\t\t\tfloat inv = 1.0f / total;"
+ },
+ {
+  "label": "reverse the group variance's subtraction",
+  "find": "\t\t\t\tfloat_9d48[i][at] = fsq * inv - mean * mean;",
+  "replace": "\t\t\t\tfloat_9d48[i][at] = mean * mean - fsq * inv;"
+ },
+ {
+  "label": "drop the rounding term on the group mean",
+  "find": "\t\t\t\tlinMapp[i][at] = (short)(mean + 0.5f);",
+  "replace": "\t\t\t\tlinMapp[i][at] = (short)mean;"
+ },
+ {
+  "label": "pool the sum of squares into the mean",
+  "find": "\t\t\t\tfloat mean = fsum * inv;",
+  "replace": "\t\t\t\tfloat mean = fsq * inv;"
+ },
+ {
+  "label": "record the group under the member rather than the leader",
+  "find": "\t\t\t\tgroup[j] = i;",
+  "replace": "\t\t\t\tgroup[j] = j;"
+ },
+ {
+  "label": "do not propagate the leader's entry to the group",
+  "find": "\t\t\t\tlinMapp[j][at] = linMapp[i][at];",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "do not propagate the leader's variance to the group",
+  "find": "\t\t\t\tfloat_9d48[j][at] = float_9d48[i][at];",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "do not count the group's members",
+  "find": "\t\t\t\tcount = (short)(count + 1);",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "let a tie replace the best group",
+  "find": "\t\t\tif (count > best) {",
+  "replace": "\t\t\tif (count >= best) {"
+ },
+ {
+  "label": "remember the wrong group's entry",
+  "find": "\t\t\t\tbestValue = linMapp[i][at];",
+  "replace": "\t\t\t\tbestValue = (float)i;"
+ },
+ {
+  "label": "remember no variance for the best group",
+  "find": "\t\t\t\tbestVar = float_9d48[i][at];",
+  "replace": "\t\t\t\tbestVar = 0.0f;"
+ },
+ {
+  "label": "checksum the phase the inner loop names rather than the outer one (D280)",
+  "find": "\t\t\tsum = (short)(sum + linMapp[i][at]);",
+  "replace": "\t\t\tsum = (short)(sum + linMapp[p][at]);"
+ },
+ {
+  "label": "hand the best group's answer to the unflagged phases",
+  "find": "\t\t\tif (short_2800[p] != 0) {\n\t\t\t\tlinMapp[p][at] = v;",
+  "replace": "\t\t\tif (short_2800[p] == 0) {\n\t\t\t\tlinMapp[p][at] = v;"
+ },
+ {
+  "label": "write the best group's answer to the alternate table",
+  "find": "\t\t\t\tlinMapp[p][at] = v;",
+  "replace": "\t\t\t\tlinMappAlt[p][at] = v;"
+ },
+ {
+  "label": "do not hand the flagged phases a variance",
+  "find": "\t\t\t\tfloat_9d48[p][at] = bestVar;",
+  "replace": "\t\t\t\t/* deliberately removed */"
+ },
+ {
+  "label": "invert updateUref's empty-cell test",
+  "find": "\t\tif (uint_1c00[phase][ucode] != 0) {",
+  "replace": "\t\tif (uint_1c00[phase][ucode] == 0) {"
+ },
+ {
+  "label": "do not unite the phases",
+  "find": "\tunitePhasesInfoOfUref(ucode);",
+  "replace": "\t/* deliberately removed */"
+ },
+ {
+  "label": "leave updateUref's count uncleared",
+  "find": "\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tuint_1c00[phase][ucode] = 0;",
+  "replace": "\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\t/* deliberately removed */"
+ },
+ {
+  "label": "leave updateUref's sum uncleared",
+  "find": "\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tuint_1c00[phase][ucode] = 0;",
+  "replace": "\t\t/* deliberately removed */\n\t\tuint_1c00[phase][ucode] = 0;"
+ },
+ {
+  "label": "drop the rounding term on updateUref's mean",
+  "find": "\t\t\tlinMapp[phase][ucode] = (short)(mean + 0.5f);",
+  "replace": "\t\t\tlinMapp[phase][ucode] = (short)mean;"
+ },
+ {
+  "label": "reverse updateUref's variance subtraction",
+  "find": "\t\t\t    float_9118[phase][ucode] * inv - mean * mean;",
+  "replace": "\t\t\t    mean * mean - float_9118[phase][ucode] * inv;"
+ },
+ {
+  "label": "NOTE: the four study methods.  Several anchors below have to reach past the line they change: unitePhasesInfoOfUref and uniteLinMappInfoOfUnsuspectedPhases share whole statements, and so do the two clearing runs inside porcessFirstStudy.  Finding 1264 again -- an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
+ },
+ {
+  "label": "print the sign with the ordered test rather than its negation",
+  "find": "#define ADID_PRINT_SIGN(v)\t((0.0f >= (v)) ? '-' : '+')",
+  "replace": "#define ADID_PRINT_SIGN(v)\t(((v) > 0.0f) ? '+' : '-')"
+ },
+ {
+  "label": "drop the magnitude from the printed whole part",
+  "find": "#define ADID_PRINT_WHOLE(v)\t((int)__builtin_fabsf(v))",
+  "replace": "#define ADID_PRINT_WHOLE(v)\t((int)(v))"
+ },
+ {
+  "label": "print tenths where the object prints hundredths",
+  "find": "\tadid_abs((int)((scale) * ((v) - (float)(int)(v))))",
+  "replace": "\tadid_abs((int)((scale) * 0.1f * ((v) - (float)(int)(v))))"
+ },
+ {
+  "label": "drop the magnitude from the printed fraction",
+  "find": "\tadid_abs((int)((scale) * ((v) - (float)(int)(v))))",
+  "replace": "\t((int)((scale) * ((v) - (float)(int)(v))))"
+ },
+ {
+  "label": "average the six variances over five",
+  "find": "\tlim = sum * 0.16666667f;",
+  "replace": "\tlim = sum * 0.2f;"
+ },
+ {
+  "label": "take the average of the whole set rather than of the below-average half",
+  "find": "\tmean = below / count;",
+  "replace": "\tmean = sum / count;"
+ },
+ {
+  "label": "divide the below-average sum by six rather than by its own count",
+  "find": "\tmean = below / count;",
+  "replace": "\tmean = below / V90ADID_PHASES;"
+ },
+ {
+  "label": "include the entries equal to the average",
+  "find": "\t\tif (var[i] >= lim)\n\t\t\tcontinue;",
+  "replace": "\t\tif (var[i] > lim)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "keep the entries above the average instead",
+  "find": "\t\tif (var[i] >= lim)\n\t\t\tcontinue;",
+  "replace": "\t\tif (var[i] < lim)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "sum only five of the six variances",
+  "find": "\tfor (i = 0; i < V90ADID_PHASES; i++)\n\t\tsum += var[i];",
+  "replace": "\tfor (i = 0; i < V90ADID_PHASES - 1; i++)\n\t\tsum += var[i];"
+ },
+ {
+  "label": "add the factor to the mean rather than scaling by it",
+  "find": "\tthresh = factor * mean;",
+  "replace": "\tthresh = factor + mean;"
+ },
+ {
+  "label": "turn the floor at altMinVarThresh into a ceiling",
+  "find": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;",
+  "replace": "\tif (altMinVarThresh < thresh)\n\t\tthresh = altMinVarThresh;"
+ },
+ {
+  "label": "drop the floor at altMinVarThresh",
+  "find": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;",
+  "replace": "\tif (0)\n\t\tthresh = altMinVarThresh;"
+ },
+ {
+  "label": "return the unscaled mean",
+  "find": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;\n\n\treturn thresh;",
+  "replace": "\tif (altMinVarThresh > thresh)\n\t\tthresh = altMinVarThresh;\n\n\treturn mean;"
+ },
+ {
+  "label": "report the factor where getAltVarThresh reports the mean variance",
+  "find": "\t\t \"%c%d.%02d\\r\\n\", ADID_PRINT_SIGN(mean), ADID_PRINT_WHOLE(mean),\n\t\t ADID_PRINT_FRAC(mean, 100.0));",
+  "replace": "\t\t \"%c%d.%02d\\r\\n\", ADID_PRINT_SIGN(factor),\n\t\t ADID_PRINT_WHOLE(factor), ADID_PRINT_FRAC(factor, 100.0));"
+ },
+ {
+  "label": "misspell getAltVarThresh's first message",
+  "find": "getAltVarThresh: meanVar = \"",
+  "replace": "getAltVarThresh: meanvar = \""
+ },
+ {
+  "label": "report the mean where getAltVarThresh reports the scaled threshold",
+  "find": "\t\t \"= %c%d.%02d\\r\\n\", ADID_PRINT_SIGN(thresh),\n\t\t ADID_PRINT_WHOLE(thresh), ADID_PRINT_FRAC(thresh, 100.0));",
+  "replace": "\t\t \"= %c%d.%02d\\r\\n\", ADID_PRINT_SIGN(mean),\n\t\t ADID_PRINT_WHOLE(mean), ADID_PRINT_FRAC(mean, 100.0));"
+ },
+ {
+  "label": "group on the short at +0x2800 rather than the byte at +0x280c",
+  "find": "\t\tif (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)",
+  "replace": "\t\tif (short_2800[i] != 0 || group[i] != ADID_NO_GROUP)"
+ },
+ {
+  "label": "let an already-grouped phase lead a second group",
+  "find": "\t\tif (byte_280c[i] != 0 || group[i] != ADID_NO_GROUP)",
+  "replace": "\t\tif (byte_280c[i] != 0)"
+ },
+ {
+  "label": "let the last phase lead a group",
+  "find": "\tfor (i = 0; i < V90ADID_PHASES - 1; i++) {\n\t\tif (byte_280c[i] != 0",
+  "replace": "\tfor (i = 0; i < V90ADID_PHASES; i++) {\n\t\tif (byte_280c[i] != 0",
+  "equivalent": true,
+  "why": "`count` never decreases and `best` is set to `count` whenever it is exceeded, so after every group `best == count` and the test at a sixth leader can never fire.  Phase 5 would take a group number without ever becoming `bestGroup`, and the pooling compares against `bestGroup`, which is always one of 0..4 -- so nothing downstream reads the change.  The one path where it WOULD differ is the one where no group forms at all, and that path reads `bestGroup` uninitialised (D284).  The bound is real and D283's running counter is what makes it unobservable."
+ },
+ {
+  "label": "let a phase join a group it is already in",
+  "find": "\t\t\tif (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)",
+  "replace": "\t\t\tif (byte_280c[j] != 0)"
+ },
+ {
+  "label": "look backwards as well as forwards for group members",
+  "find": "\t\tfor (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {",
+  "replace": "\t\tfor (j = 0; j < V90ADID_PHASES; j++) {",
+  "equivalent": true,
+  "why": "A phase below the current leader is either suspected -- caught by the first half of the same test -- or was itself a leader and has a group number, which the second half catches.  There is no third state: the outer loop makes every unsuspected ungrouped phase a leader when it reaches it.  So the extra iterations j < i can only ever `continue`."
+ },
+ {
+  "label": "merge on a quarter of the CANDIDATE's variance",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d >= float_9d48[j][at] * 0.25f)"
+ },
+ {
+  "label": "merge on half the leader's variance",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d >= float_9d48[i][at] * 0.5f)"
+ },
+ {
+  "label": "merge when the difference EXCEEDS the tolerance",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d < float_9d48[i][at] * 0.25f)"
+ },
+ {
+  "label": "merge on an exactly equal difference too",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d * d > float_9d48[i][at] * 0.25f)"
+ },
+ {
+  "label": "merge on the distance rather than on its square",
+  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
+  "replace": "\t\t\tif (d >= float_9d48[i][at] * 0.25f)"
+ },
+ {
+  "label": "take the merge distance backwards",
+  "find": "\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);",
+  "replace": "\t\t\td = (float)(linMapp[j][at] - linMapp[i][at]);",
+  "equivalent": true,
+  "why": "The distance is used only as `d * d`, negation of a float is exact, and the difference of two shorts is exactly representable -- so (a-b)^2 and (b-a)^2 are the same bit pattern for every input.  The object's operand order is recorded in the source; it cannot be measured."
+ },
+ {
+  "label": "reset the running group size at every group, as the readable spelling would",
+  "find": "\n\n\t\tgroup[i] = i;\n\n\t\tfor (j = (unsigned char)(i + 1);",
+  "replace": "\n\n\t\tgroup[i] = i;\n\t\tcount = 1;\n\n\t\tfor (j = (unsigned char)(i + 1);"
+ },
+ {
+  "label": "start the running group size at zero",
+  "find": "\tshort count = 1;",
+  "replace": "\tshort count = 0;"
+ },
+ {
+  "label": "keep the FIRST group of the largest size rather than the last",
+  "find": "\t\tif (count > best) {\n\t\t\tbest = count;",
+  "replace": "\t\tif (count >= best) {\n\t\t\tbest = count;"
+ },
+ {
+  "label": "pool every unsuspected phase rather than the chosen group",
+  "find": "\t\tif (byte_280c[j] != 0 || group[j] != bestGroup)\n\t\t\tcontinue;",
+  "replace": "\t\tif (byte_280c[j] != 0)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "pool the chosen group's suspected members too",
+  "find": "\t\tif (byte_280c[j] != 0 || group[j] != bestGroup)\n\t\t\tcontinue;",
+  "replace": "\t\tif (group[j] != bestGroup)\n\t\t\tcontinue;",
+  "equivalent": true,
+  "why": "A suspected phase is never given a group number: the inner loop skips it before the assignment and `group[]` starts at -1.  `bestGroup` is one of 0..4, so `group[j] != bestGroup` already excludes every suspected phase and the flag test in front of it decides nothing.  It is written because the object writes it -- `cmpb $0x0,0x280c(%eax,%edi,1)` at 0x415f3 precedes the group compare -- not because it is reachable."
+ },
+ {
+  "label": "subtract the pooled samples rather than adding them",
+  "find": "\t\ttotal = (short)(total + uint_1c00[j][at]);\n\t}",
+  "replace": "\t\ttotal = (short)(total - uint_1c00[j][at]);\n\t}"
+ },
+ {
+  "label": "count one per pooled phase rather than its samples",
+  "find": "\t\ttotal = (short)(total + uint_1c00[j][at]);\n\t}",
+  "replace": "\t\ttotal = (short)(total + 1);\n\t}"
+ },
+ {
+  "label": "read the pooled count back as unsigned",
+  "find": "\tinv = 1.0f / total;",
+  "replace": "\tinv = 1.0f / (unsigned short)total;"
+ },
+ {
+  "label": "treat a negative pooled count as empty",
+  "find": "\tif (total == 0)\n\t\treturn;",
+  "replace": "\tif (total <= 0)\n\t\treturn;"
+ },
+ {
+  "label": "clear the accumulators even when the pool is empty",
+  "find": "\tif (total == 0)\n\t\treturn;\n\n\tinv = 1.0f / total;",
+  "replace": "\tif (total == 0) {\n\t\tfor (j = 0; j < V90ADID_PHASES; j++) {\n\t\t\tfloat_1000[j][at] = 0.0f;\n\t\t\tuint_1c00[j][at] = 0;\n\t\t\tfloat_9118[j][at] = 0.0f;\n\t\t}\n\t\treturn;\n\t}\n\n\tinv = 1.0f / total;"
+ },
+ {
+  "label": "divide by the pooled count rather than multiplying by its reciprocal",
+  "find": "\tinv = 1.0f / total;\n\tmean = fsum * inv;",
+  "replace": "\tinv = 1.0f / total;\n\tmean = fsum / total;"
+ },
+ {
+  "label": "reverse the pooled variance",
+  "find": "\tvar = fsq * inv - mean * mean;",
+  "replace": "\tvar = mean * mean - fsq * inv;"
+ },
+ {
+  "label": "drop the pooled mean's rounding term",
+  "find": "\tr = (short)(mean + 0.5f);",
+  "replace": "\tr = (short)mean;"
+ },
+ {
+  "label": "write the pooled answer only to the chosen group",
+  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = r;",
+  "replace": "\t\tif (byte_280c[j] == 0 && group[j] == bestGroup) {\n\t\t\tlinMapp[j][at] = r;"
+ },
+ {
+  "label": "write the pooled answer to the suspected phases instead",
+  "find": "\t\tif (byte_280c[j] == 0) {\n\t\t\tlinMapp[j][at] = r;",
+  "replace": "\t\tif (byte_280c[j] != 0) {\n\t\t\tlinMapp[j][at] = r;"
+ },
+ {
+  "label": "clear only the phases that got the pooled answer",
+  "find": "\t\tfloat_1000[j][at] = 0.0f;\n\t\tuint_1c00[j][at] = 0;\n\t\tfloat_9118[j][at] = 0.0f;\n\t}\n}",
+  "replace": "\t\tif (byte_280c[j] == 0) {\n\t\t\tfloat_1000[j][at] = 0.0f;\n\t\t\tuint_1c00[j][at] = 0;\n\t\t\tfloat_9118[j][at] = 0.0f;\n\t\t}\n\t}\n}"
+ },
+ {
+  "label": "write the pooled mean into the alternate table",
+  "find": "\t\t\tlinMapp[j][at] = r;\n\t\t\tfloat_9d48[j][at] = var;",
+  "replace": "\t\t\tlinMappAlt[j][at] = r;\n\t\t\tfloat_9d48[j][at] = var;"
+ },
+ {
+  "label": "study two sigma rather than two and a half",
+  "find": "\tt = trn1Sigma * 2.5f;",
+  "replace": "\tt = trn1Sigma * 2.0f;"
+ },
+ {
+  "label": "floor the squared-difference threshold at the MAXIMUM neighbour distance",
+  "find": "\tt = (t >= (float)neighborUcodeMinDistance)\n\t\t? t : (float)neighborUcodeMinDistance;",
+  "replace": "\tt = (t >= (float)neighborUcodeMaxDistance)\n\t\t? t : (float)neighborUcodeMaxDistance;"
+ },
+ {
+  "label": "take the smaller of sigma and the minimum neighbour distance",
+  "find": "\tt = (t >= (float)neighborUcodeMinDistance)\n\t\t? t : (float)neighborUcodeMinDistance;",
+  "replace": "\tt = (t >= (float)neighborUcodeMinDistance)\n\t\t? (float)neighborUcodeMinDistance : t;"
+ },
+ {
+  "label": "take the larger of the clamp and the maximum neighbour distance",
+  "find": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? t : (float)neighborUcodeMaxDistance;",
+  "replace": "\tsqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)\n\t\t? (float)neighborUcodeMaxDistance : t;"
+ },
+ {
+  "label": "report the threshold before the maximum clamp",
+  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(t + 0.5));"
+ },
+ {
+  "label": "drop the rounding from the reported threshold",
+  "find": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));",
+  "replace": "\t\t (short)(trn1Sigma * 2.5f + 0.5), (short)sqrDiffThresh);"
+ },
+ {
+  "label": "study one code fewer",
+  "find": "\t\tfor (code = 0x40; code <= 0x4f; code++) {",
+  "replace": "\t\tfor (code = 0x40; code <= 0x4e; code++) {"
+ },
+ {
+  "label": "study one code more",
+  "find": "\t\tfor (code = 0x40; code <= 0x4f; code++) {",
+  "replace": "\t\tfor (code = 0x40; code <= 0x50; code++) {"
+ },
+ {
+  "label": "start the studied window one code lower",
+  "find": "\t\tfor (code = 0x40; code <= 0x4f; code++) {",
+  "replace": "\t\tfor (code = 0x3f; code <= 0x4f; code++) {"
+ },
+ {
+  "label": "study only the reference code",
+  "find": "\t\t\tif (ucode == code)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (ucode != code)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "study the reference code as well",
+  "find": "\t\t\tif (ucode == code)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (0)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "study the cells with no samples",
+  "find": "\t\t\tif (uint_1c00[phase][code] == 0)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (uint_1c00[phase][code] != 0)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "reverse the first study's variance",
+  "find": "\t\t\tfloat_9d48[phase][code] =\n\t\t\t    inv * float_9118[phase][code] - mean * mean;",
+  "replace": "\t\t\tfloat_9d48[phase][code] =\n\t\t\t    mean * mean - inv * float_9118[phase][code];"
+ },
+ {
+  "label": "divide rather than multiply by the reciprocal in the first study",
+  "find": "\t\t\tinv = 1.0f / uint_1c00[phase][code];\n\t\t\tmean = float_1000[phase][code] * inv;",
+  "replace": "\t\t\tinv = 1.0f / uint_1c00[phase][code];\n\t\t\tmean = float_1000[phase][code] / uint_1c00[phase][code];"
+ },
+ {
+  "label": "drop the first study's rounding term",
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "replace": "\t\t\tlinMapp[phase][code] = (short)mean;"
+ },
+ {
+  "label": "write the first study's mean into the alternate table",
+  "find": "\t\t\tlinMapp[phase][code] = (short)(mean + 0.5f);",
+  "replace": "\t\t\tlinMappAlt[phase][code] = (short)(mean + 0.5f);"
+ },
+ {
+  "label": "count the roughness from zero",
+  "find": "\t\tshort n = 1;",
+  "replace": "\t\tshort n = 0;"
+ },
+ {
+  "label": "compare the difference rather than its square",
+  "find": "\t\t\t\tif (d * d > sqrDiffThresh)",
+  "replace": "\t\t\t\tif (d > sqrDiffThresh)"
+ },
+ {
+  "label": "count a difference exactly on the threshold as rough",
+  "find": "\t\t\t\tif (d * d > sqrDiffThresh)",
+  "replace": "\t\t\t\tif (d * d >= sqrDiffThresh)"
+ },
+ {
+  "label": "count the SMOOTH neighbours instead",
+  "find": "\t\t\t\tif (d * d > sqrDiffThresh)",
+  "replace": "\t\t\t\tif (d * d < sqrDiffThresh)"
+ },
+ {
+  "label": "take one difference fewer",
+  "find": "\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
+  "replace": "\t\t\tfor (code = 0x40; code <= 0x4d; code++) {"
+ },
+ {
+  "label": "take the difference backwards",
+  "find": "\t\t\t\tfloat d = (float)(linMapp[phase][code + 1]\n\t\t\t\t\t\t  - linMapp[phase][code]);",
+  "replace": "\t\t\t\tfloat d = (float)(linMapp[phase][code]\n\t\t\t\t\t\t  - linMapp[phase][code + 1]);",
+  "equivalent": true,
+  "why": "Same argument as the merge distance: `porcessFirstStudy` squares the neighbour difference before comparing it, so the two orders give the same bit pattern for every pair of shorts."
+ },
+ {
+  "label": "trust a phase with exactly nine rough neighbours",
+  "find": "\t\t\tif (n > 9) {",
+  "replace": "\t\t\tif (n >= 9) {"
+ },
+ {
+  "label": "need one more rough neighbour to trust the phase",
+  "find": "\t\t\tif (n > 9) {",
+  "replace": "\t\t\tif (n > 10) {"
+ },
+ {
+  "label": "count the roughness of an already-flagged phase too",
+  "find": "\t\tif (short_2800[phase] == 0) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
+  "replace": "\t\tif (short_2800[phase] != 1) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {"
+ },
+ {
+  "label": "suspect the trusted phases and trust the suspected ones",
+  "find": "\t\t\t\tbyte_280c[phase] = 0;\n\t\t\t\tcontinue;",
+  "replace": "\t\t\t\tbyte_280c[phase] = 1;\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "leave the suspected flag clear",
+  "find": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 1;",
+  "replace": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 0;"
+ },
+ {
+  "label": "start the suspected tally at one",
+  "find": "\tbyte_a96a = 0;",
+  "replace": "\tbyte_a96a = 1;"
+ },
+ {
+  "label": "count the trusted phases in the tally instead",
+  "find": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 1;",
+  "replace": "\t\tbyte_280c[phase] = 1;"
+ },
+ {
+  "label": "gate the study report on the verbose level",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \"",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \""
+ },
+ {
+  "label": "report the pattern ungated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \"",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector: suspected rbs \""
+ },
+ {
+  "label": "report the pattern in the wrong order",
+  "find": "\t\t\t\t     \"patern  %d%d%d%d%d%d\\r\\n\", byte_280c[0],\n\t\t\t\t     byte_280c[1], byte_280c[2], byte_280c[3],\n\t\t\t\t     byte_280c[4], byte_280c[5]);",
+  "replace": "\t\t\t\t     \"patern  %d%d%d%d%d%d\\r\\n\", byte_280c[5],\n\t\t\t\t     byte_280c[4], byte_280c[3], byte_280c[2],\n\t\t\t\t     byte_280c[1], byte_280c[0]);"
+ },
+ {
+  "label": "clear the reference code's mapping entry too",
+  "find": "\t\tuint_1c00[phase][ucode] = 0;\n\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tfloat_9118[phase][ucode] = 0.0f;",
+  "replace": "\t\tuint_1c00[phase][ucode] = 0;\n\t\tfloat_1000[phase][ucode] = 0.0f;\n\t\tfloat_9118[phase][ucode] = 0.0f;\n\t\tlinMapp[phase][ucode] = 0;"
+ },
+ {
+  "label": "clear up to and including the reference code",
+  "find": "\t\tfor (k = 0; k < ucode; k++) {",
+  "replace": "\t\tfor (k = 0; k <= ucode; k++) {"
+ },
+ {
+  "label": "start the second clearing run at the reference code",
+  "find": "\t\tfor (k = (unsigned char)(ucode + 1); k < V90ADID_CODES; k++) {",
+  "replace": "\t\tfor (k = ucode; k < V90ADID_CODES; k++) {"
+ },
+ {
+  "label": "leave the mapping alone in the first clearing run",
+  "find": "\t\t\tfloat_9118[phase][k] = 0.0f;\n\t\t\tlinMapp[phase][k] = 0;\n\t\t}\n\n\t\tuint_1c00[phase][ucode] = 0;",
+  "replace": "\t\t\tfloat_9118[phase][k] = 0.0f;\n\t\t}\n\n\t\tuint_1c00[phase][ucode] = 0;"
+ },
+ {
+  "label": "take the QC branch on a zero argument",
+  "find": "\tif (qc == 0) {\n\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN",
+  "replace": "\tif (qc != 0) {\n\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN"
+ },
+ {
+  "label": "read the QC block on the default branch",
+  "find": "\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x00);",
+  "replace": "\t\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x00);"
+ },
+ {
+  "label": "read the default block's second word twice",
+  "find": "\t\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x08);",
+  "replace": "\t\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x04);"
+ },
+ {
+  "label": "skip the default block's last word",
+  "find": "\t\tint_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x14);",
+  "replace": "\t\tint_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x18);"
+ },
+ {
+  "label": "read the QC block one word low",
+  "find": "\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x00);",
+  "replace": "\tint_a98c = paramWord(params, V90PARAMETERS_STUDY_QC - 0x04);"
+ },
+ {
+  "label": "swap two of the QC block's destinations",
+  "find": "\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x08);\n\tint_a998 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x0c);",
+  "replace": "\tint_a998 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x08);\n\tint_a994 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x0c);"
+ },
+ {
+  "label": "move the default unite threshold by one",
+  "find": "\t\tshort_a9a4 = 25;",
+  "replace": "\t\tshort_a9a4 = 26;"
+ },
+ {
+  "label": "move the default alt-RBS threshold by one",
+  "find": "\t\tshort_a9a6 = 50;",
+  "replace": "\t\tshort_a9a6 = 51;"
+ },
+ {
+  "label": "move the default variance floor by one",
+  "find": "\t\taltMinVarThresh = 4000.0f;",
+  "replace": "\t\taltMinVarThresh = 4001.0f;"
+ },
+ {
+  "label": "move the default minimum neighbour distance by one",
+  "find": "\t\tneighborUcodeMinDistance = 2500;",
+  "replace": "\t\tneighborUcodeMinDistance = 2501;"
+ },
+ {
+  "label": "move the default maximum neighbour distance by one",
+  "find": "\t\tneighborUcodeMaxDistance = 6000;",
+  "replace": "\t\tneighborUcodeMaxDistance = 6001;"
+ },
+ {
+  "label": "leave the default branch's two counters alone",
+  "find": "\t\tint_a984 = 0;\n\t\tint_a988 = 0;\n\t\treturn;",
+  "replace": "\t\tint_a988 = 0;\n\t\treturn;"
+ },
+ {
+  "label": "scale by the gain rather than by its reciprocal",
+  "find": "\tinv = 1.0f / float_a950;",
+  "replace": "\tinv = float_a950;"
+ },
+ {
+  "label": "drop the unite threshold's rounding term",
+  "find": "\tshort_a9a4 = (short)(inv * 25.0f + 0.5f);",
+  "replace": "\tshort_a9a4 = (short)(inv * 25.0f);"
+ },
+ {
+  "label": "scale the unite threshold by the alt-RBS constant",
+  "find": "\tshort_a9a4 = (short)(inv * 25.0f + 0.5f);",
+  "replace": "\tshort_a9a4 = (short)(inv * 50.0f + 0.5f);"
+ },
+ {
+  "label": "drop the alt-RBS threshold's rounding term",
+  "find": "\tshort_a9a6 = (short)(inv * 50.0f + 0.5f);",
+  "replace": "\tshort_a9a6 = (short)(inv * 50.0f);"
+ },
+ {
+  "label": "move the scaled variance constant",
+  "find": "\t\tfloat f = inv * 4444.4443f;",
+  "replace": "\t\tfloat f = inv * 4444.0f;"
+ },
+ {
+  "label": "turn the variance ceiling into a floor",
+  "find": "\t\tif (f > 4000.0f)\n\t\t\tf = 4000.0f;",
+  "replace": "\t\tif (f < 4000.0f)\n\t\t\tf = 4000.0f;"
+ },
+ {
+  "label": "drop the variance ceiling",
+  "find": "\t\tif (f > 4000.0f)\n\t\t\tf = 4000.0f;",
+  "replace": "\t\tif (0)\n\t\t\tf = 4000.0f;"
+ },
+ {
+  "label": "move the scaled minimum-distance constant",
+  "find": "\tv = (short)(inv * 2777.7778f + 0.5f);",
+  "replace": "\tv = (short)(inv * 2777.0f + 0.5f);"
+ },
+ {
+  "label": "drop the minimum neighbour distance's clamp",
+  "find": "\tif (v > 2500)\n\t\tv = 2500;",
+  "replace": "\tif (0)\n\t\tv = 2500;"
+ },
+ {
+  "label": "clamp the minimum neighbour distance one low",
+  "find": "\tif (v > 2500)\n\t\tv = 2500;",
+  "replace": "\tif (v > 2499)\n\t\tv = 2499;"
+ },
+ {
+  "label": "move the scaled maximum-distance constant",
+  "find": "\tv = (short)(inv * 6666.667f + 0.5f);",
+  "replace": "\tv = (short)(inv * 6666.0f + 0.5f);"
+ },
+ {
+  "label": "drop the maximum neighbour distance's clamp",
+  "find": "\tif (v > 6000)\n\t\tv = 6000;",
+  "replace": "\tif (0)\n\t\tv = 6000;"
+ },
+ {
+  "label": "seed the mapping only when the gain IS zero",
+  "find": "\tif (float_a950 != 0.0f) {",
+  "replace": "\tif (float_a950 == 0.0f) {"
+ },
+ {
+  "label": "seed the mapping whatever the gain",
+  "find": "\tif (float_a950 != 0.0f) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "drop the seeded level's rounding term",
+  "find": "\t\tshort seed = (short)(ucodeLevel * inv + 0.5f);",
+  "replace": "\t\tshort seed = (short)(ucodeLevel * inv);"
+ },
+ {
+  "label": "scale the seeded level by the gain rather than its reciprocal",
+  "find": "\t\tshort seed = (short)(ucodeLevel * inv + 0.5f);",
+  "replace": "\t\tshort seed = (short)(ucodeLevel * float_a950 + 0.5f);"
+ },
+ {
+  "label": "seed only the plain mapping table",
+  "find": "\t\t\tlinMapp[phase][ucode] = seed;\n\t\t\tlinMappAlt[phase][ucode] = seed;",
+  "replace": "\t\t\tlinMapp[phase][ucode] = seed;"
+ },
+ {
+  "label": "seed five of the six phases",
+  "find": "\t\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\t\tlinMapp[phase][ucode] = seed;",
+  "replace": "\t\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\t\tlinMapp[phase][ucode] = seed;"
+ },
+ {
+  "label": "leave the QC branch's two counters alone",
+  "find": "\tint_a984 = 0;\n\tint_a988 = 0;\n}",
+  "replace": "\tint_a984 = 0;\n}"
+ },
+ {
+  "label": "report the alternate table's reference column",
+  "find": "\t\t linMapp[0][ucode], linMapp[1][ucode], linMapp[2][ucode],\n\t\t linMapp[3][ucode], linMapp[4][ucode], linMapp[5][ucode]);",
+  "replace": "\t\t linMappAlt[0][ucode], linMappAlt[1][ucode], linMappAlt[2][ucode],\n\t\t linMappAlt[3][ucode], linMappAlt[4][ucode], linMappAlt[5][ucode]);"
+ },
+ {
+  "label": "report the two thresholds the other way round",
+  "find": "\tedprintf(\"uniteUrefDistanceThresh = %d\\r\\n\", short_a9a4);\n\tedprintf(\"altRbsDistanceThresh = %d\\r\\n\", short_a9a6);",
+  "replace": "\tedprintf(\"uniteUrefDistanceThresh = %d\\r\\n\", short_a9a6);\n\tedprintf(\"altRbsDistanceThresh = %d\\r\\n\", short_a9a4);"
+ },
+ {
+  "label": "report the neighbour distances the other way round",
+  "find": "\t\t neighborUcodeMinDistance, neighborUcodeMaxDistance);",
+  "replace": "\t\t neighborUcodeMaxDistance, neighborUcodeMinDistance);"
+ },
+ {
+  "label": "drop one of the two rules from the QC report",
+  "find": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"-------\\r\\n\");\n\tedprintf(\"V90AutoDigitalImpDetector::resetStudyUrefHandler QC report \"",
+  "replace": "\tedprintf(\"V90AutoDigitalImpDetector::resetStudyUrefHandler QC report \""
+ },
+ {
+  "label": "shorten the QC report's rule by one dash",
+  "find": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"-------\\r\\n\");\n\n\tint_a984 = 0;",
+  "replace": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"------\\r\\n\");\n\n\tint_a984 = 0;"
+ },
+ {
+  "label": "NOTE: the DIL batch.  porcessSecondStudy and setQcLinearMapping share their whole tail -- the same scan for the unsuspected phase, the same call, and the same three format strings -- and differ inside it by one token: the report runs to 0x7f in the first and to 0x74 in the second.  Every anchor below in that region therefore spans something only one of the two has.  Finding 1264: an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
+ },
+ {
+  "label": "start the DIL scan order at 62 instead of 63",
+  "find": "\t\t63, 61, 59, 57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33,",
+  "replace": "\t\t62, 61, 59, 57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33,"
+ },
+ {
+  "label": "drop the last code from the DIL scan order",
+  "find": "\t\tfor (i = 0; i < 115; i++) {",
+  "replace": "\t\tfor (i = 0; i < 114; i++) {"
+ },
+ {
+  "label": "repair the phases that are NOT flagged for alternate RBS",
+  "find": "\t\tif (short_2800[phase] == 0)\n\t\t\tcontinue;\n\n\t\tfor (i = 0;",
+  "replace": "\t\tif (short_2800[phase] != 0)\n\t\t\tcontinue;\n\n\t\tfor (i = 0;"
+ },
+ {
+  "label": "quantise onto the phase's own mapping, not the reference's",
+  "find": "\t\t\t\t    unSuspectedPhaseNearestLinMapp(\n\t\t\t\t\t    sampleStore[phase][base + j],\n\t\t\t\t\t    unSuspectedPhase);",
+  "replace": "\t\t\t\t    unSuspectedPhaseNearestLinMapp(\n\t\t\t\t\t    sampleStore[phase][base + j],\n\t\t\t\t\t    (short)phase);"
+ },
+ {
+  "label": "count the last sample of a code as a run of its own",
+  "find": "\t\t\tfor (m = 0; m < short_8b00[phase][at] - 1; m++) {",
+  "replace": "\t\t\tfor (m = 0; m < short_8b00[phase][at]; m++) {"
+ },
+ {
+  "label": "start the run length at zero rather than at one",
+  "find": "\t\t\t\tcount = 1;\n",
+  "replace": "\t\t\t\tcount = 0;\n"
+ },
+ {
+  "label": "let a later run of equal length take the alternate",
+  "find": "\t\t\t\tif (count > maxCount) {",
+  "replace": "\t\t\t\tif (count >= maxCount) {"
+ },
+ {
+  "label": "stop marking the duplicates the run counted",
+  "find": "\t\t\t\t\tsampleStore[phase][base + q] = -1;",
+  "replace": "\t\t\t\t\tsampleStore[phase][base + q] = -2;"
+ },
+ {
+  "label": "take the run's value from the wrong end of the run",
+  "find": "\t\t\t\t\tmaxValue = sampleStore[phase][base + m];",
+  "replace": "\t\t\t\t\tmaxValue = sampleStore[phase][base + m + 1];"
+ },
+ {
+  "label": "give every code a verdict, not only the ones with samples",
+  "find": "\t\t\tif (short_8b00[phase][at] != 0) {",
+  "replace": "\t\t\tif (short_8b00[phase][at] != 1) {"
+ },
+ {
+  "label": "swap the two arms of the alternate mapping's verdict",
+  "find": "\t\t\t\tlinMappAlt[phase][at] = maxCount != 0\n\t\t\t\t    ? maxValue : linMapp[unSuspectedPhase][at];",
+  "replace": "\t\t\t\tlinMappAlt[phase][at] = maxCount == 0\n\t\t\t\t    ? maxValue : linMapp[unSuspectedPhase][at];"
+ },
+ {
+  "label": "give the phase its own entry instead of the reference's",
+  "find": "\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t    linMapp[unSuspectedPhase][at];",
+  "replace": "\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t    linMappAlt[unSuspectedPhase][at];"
+ },
+ {
+  "label": "leave the sample cursor where it was",
+  "find": "\t\t\t\tbase += short_8b00[phase][at];",
+  "replace": "\t\t\t\tbase += 0 * short_8b00[phase][at];"
+ },
+ {
+  "label": "report only the codes the scan order visits",
+  "find": "\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\tfor (ci = 0; ci <= 0x74; ci++)\n\t\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "swap the two mappings in the AltUcode report",
+  "find": "\t\t\t\t\t    \"AltUcode[%d]  :  %d  %d\\n\", ci,\n\t\t\t\t\t    linMapp[phase][ci],\n\t\t\t\t\t    linMappAlt[phase][ci]);",
+  "replace": "\t\t\t\t\t    \"AltUcode[%d]  :  %d  %d\\n\", ci,\n\t\t\t\t\t    linMappAlt[phase][ci],\n\t\t\t\t\t    linMapp[phase][ci]);"
+ },
+ {
+  "label": "report the reference phase instead of the phase being repaired",
+  "find": "\t\t\t\t\t     \"  ----\\n\", phase);",
+  "replace": "\t\t\t\t\t     \"  ----\\n\", unSuspectedPhase);"
+ },
+ {
+  "label": "shorten the DIL rule by one dash",
+  "find": "\t\tdsplibs_debug_printf(\"--------------------------------------\"\n\t\t\t\t     \"----------------------------\\n\");\n\n\tfor (phase",
+  "replace": "\t\tdsplibs_debug_printf(\"--------------------------------------\"\n\t\t\t\t     \"---------------------------\\n\");\n\n\tfor (phase"
+ },
+ {
+  "label": "DIL: drop the redundant reference test inside the run",
+  "find": "\t\t\t\t\tif (w == linMapp[unSuspectedPhase][at])\n\t\t\t\t\t\tcontinue;\n",
+  "replace": "",
+  "equivalent": true,
+  "why": "Dead by construction: the loop reaches this line only after `w != v` has continued, so `w == v`, and `v` failed the identical test at the head of the same iteration.  Nothing writes `linMapp` between the two tests -- the only store in the method is after both loops -- so the second test can never fire.  The object encodes it anyway (`cmp 0x0(%ebp,%edx,2),%cx ; je` at 0x41ac7) and it is kept for that reason."
+ },
+ {
+  "label": "DIL: drop the redundant marked test inside the run",
+  "find": "\t\t\t\t\tif (w == -1)\n\t\t\t\t\t\tcontinue;\n",
+  "replace": "",
+  "equivalent": true,
+  "why": "Same argument as the reference test above: `w == v` and `v != -1` was tested at the head of the iteration, and `sampleStore[base + m]` cannot have changed because the inner loop only ever writes indices above `m`.  `inc %cx ; je` at 0x41ace is the object's."
+ },
+ {
+  "label": "let the unsuspected scan run to the sixth phase",
+  "find": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285",
+  "replace": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 5;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285"
+ },
+ {
+  "label": "scan for a phase that IS suspected",
+  "find": "\tfor (unSuspectedPhase = 0;\n\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285",
+  "replace": "\tfor (unSuspectedPhase = 0;\n\t     byte_280c[unSuspectedPhase] == 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285"
+ },
+ {
+  "label": "take the unreachable arm at five as well as above it",
+  "find": "\tif (unSuspectedPhase > 5) {",
+  "replace": "\tif (unSuspectedPhase >= 5) {"
+ },
+ {
+  "label": "second study: study one code fewer",
+  "find": "\t\tfor (at = 0; at <= 0x74; at++) {",
+  "replace": "\t\tfor (at = 0; at <= 0x73; at++) {"
+ },
+ {
+  "label": "start the nearest distance above the reachable maximum",
+  "find": "\t\t\t\tfloat nearest = 32256.0f;",
+  "replace": "\t\t\t\tfloat nearest = 32768.0f;"
+ },
+ {
+  "label": "start the second-nearest distance at zero rather than at a NaN",
+  "find": "\tfloat second = __builtin_nanf(\"\");",
+  "replace": "\tfloat second = 0.0f;"
+ },
+ {
+  "label": "reinitialise the second-nearest distance per code and phase",
+  "find": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;",
+  "replace": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;\n\t\t\t\tsecond = __builtin_nanf(\"\");"
+ },
+ {
+  "label": "take the second-nearest with an ordered compare",
+  "find": "\t\t\t\t\t} else if (!(d >= second)) {",
+  "replace": "\t\t\t\t\t} else if (d < second) {"
+ },
+ {
+  "label": "stop demoting the nearest to the second-nearest",
+  "find": "\t\t\t\t\t\tsecond = nearest;\n\t\t\t\t\t\tnearest = d;",
+  "replace": "\t\t\t\t\t\tnearest = d;"
+ },
+ {
+  "label": "remember the window rather than the entry that won it",
+  "find": "\t\t\t\t\t\tbestAt = (short)(from + k);",
+  "replace": "\t\t\t\t\t\tbestAt = from;"
+ },
+ {
+  "label": "look at two neighbours instead of three",
+  "find": "\t\t\t\tfor (k = 0; k <= 2; k++) {",
+  "replace": "\t\t\t\tfor (k = 0; k <= 1; k++) {"
+ },
+ {
+  "label": "centre the neighbour window instead of ending it",
+  "find": "\t\t\t\t    ? (short)at : (short)(at - 2);",
+  "replace": "\t\t\t\t    ? (short)at : (short)(at - 1);"
+ },
+ {
+  "label": "choose the window on the wrong side of the reference",
+  "find": "\t\t\t\tfrom = linMapp[phase][at]\n\t\t\t\t       > linMapp[unSuspectedPhase][at]",
+  "replace": "\t\t\t\tfrom = linMapp[phase][at]\n\t\t\t\t       < linMapp[unSuspectedPhase][at]"
+ },
+ {
+  "label": "choose the window on an inclusive comparison",
+  "find": "\t\t\t\t       > linMapp[unSuspectedPhase][at]\n\t\t\t\t    ? (short)at",
+  "replace": "\t\t\t\t       >= linMapp[unSuspectedPhase][at]\n\t\t\t\t    ? (short)at",
+  "equivalent": true,
+  "why": "The two spellings differ only when the phase's entry EQUALS the reference's, and then both windows -- [at, at+2] and [at-2, at] -- contain `at`, whose distance is zero.  So both take the exact-match arm, both leave `bestAt` at an index whose entry equals the value, and both stores write that value back over itself.  Both also leave the second-nearest at 32,256 or below, because the demotion at the final (zero-distance) improvement writes the nearest, which is at most the sentinel; and the second-nearest never rises again, since the demotion writes a value at most the sentinel and the else-if writes a strictly smaller one.  The only reader is the ratio, and it can only differ between the two while the nearest is still its sentinel -- any iteration that improves rewrites the second-nearest to 32,256 at its first improvement and then evolves identically over an identical window -- which needs a second-nearest above 64,512.  Unreachable after the equality that caused the difference.  Finding 1433."
+ },
+ {
+  "label": "demand a wider margin before repairing an entry",
+  "find": "\t\t\t\t    || (1.0f / nearest) * second > 2.0f)",
+  "replace": "\t\t\t\t    || (1.0f / nearest) * second > 2.0001f)"
+ },
+ {
+  "label": "repair on a narrower margin",
+  "find": "\t\t\t\t    || (1.0f / nearest) * second > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =",
+  "replace": "\t\t\t\t    || (1.0f / nearest) * second > 1.5f)\n\t\t\t\t\tlinMapp[phase][at] ="
+ },
+ {
+  "label": "repair with the entry the phase already had",
+  "find": "\t\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t\t    linMapp[unSuspectedPhase][bestAt];",
+  "replace": "\t\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t\t    linMappAlt[unSuspectedPhase][bestAt];"
+ },
+ {
+  "label": "second study: divide instead of multiplying by the reciprocal",
+  "find": "\t\t\t\t    || (1.0f / nearest) * second > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =\n",
+  "replace": "\t\t\t\t    || second / nearest > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =\n",
+  "equivalent": true,
+  "why": "Both operands are `(float)` of the magnitude of a difference of two shorts, so both are exact integers in 0..65535.  |second/nearest - 2| is either 0 -- when second == 2 * nearest -- or at least 1/nearest >= 1/65535 = 1.5e-5, which is ten orders of magnitude above the difference between the two spellings, so only second == 2 * nearest can separate them.  Confirmed once by exhausting all 32,767 such pairs in a throwaway program built -m32 -O2 -mfpmath=387, so that the intermediates stay in x87 registers as they do here: no separator.  fl(1/n) is within 2^-64 relative of 1/n and the spacing of extended-precision values at 2 is 2^-62, so 2*fl(1/n)*n rounds to exactly 2.0 for every n.  Finding 1433."
+ },
+ {
+  "label": "second study: drop the guard on an exact match",
+  "find": "\t\t\t\tif (nearest == 0.0f\n\t\t\t\t    || (1.0f / nearest) * second > 2.0f)",
+  "replace": "\t\t\t\tif ((1.0f / nearest) * second > 2.0f)",
+  "equivalent": true,
+  "why": "A nearest distance of zero means some k gave |v - linMapp[unSuspectedPhase][from + k]| == 0 and set `bestAt` to that k -- no later k can improve on zero, and nothing writes `linMapp` inside the (code, phase) iteration -- so `linMapp[unSuspectedPhase][bestAt]` still equals `linMapp[phase][at]` at the store and the repair writes the value back over itself.  Without the guard the ratio is (1/0) * second: +inf when second > 0, which repairs, and a NaN when second is 0 or a NaN, which does not.  Both outcomes are the same self-store, and neither `second` nor `bestAt` depends on the decision.  Finding 1433."
+ },
+ {
+  "label": "report the scan's starting point rather than where it stopped",
+  "find": "\tedprintf(\"V90AutoDigitalImpDetector: unSuspectedPhase = %d\\r\\n\",\n\t\t unSuspectedPhase);",
+  "replace": "\tedprintf(\"V90AutoDigitalImpDetector: unSuspectedPhase = %d\\r\\n\",\n\t\t 0);"
+ },
+ {
+  "label": "shorten the second study's rule by one dash",
+  "find": "\t\t unSuspectedPhase);\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"------------------\\r\\n\");",
+  "replace": "\t\t unSuspectedPhase);\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"-----------------\\r\\n\");"
+ },
+ {
+  "label": "shorten the second study's report banner by one dash",
+  "find": "\t\t\t\t     \"report --------------\\r\\n\");\n\n\t{\n\t\t/*",
+  "replace": "\t\t\t\t     \"report -------------\\r\\n\");\n\n\t{\n\t\t/*"
+ },
+ {
+  "label": "report the whole row as the QC mapping does",
+  "find": "\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"linearMapping[%d]  :  \"",
+  "replace": "\t\tfor (ci = 0; ci <= 0x74; ci++)\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"linearMapping[%d]  :  \""
+ },
+ {
+  "label": "swap two phases in the second study's report",
+  "find": "\t\t\t\t\t\t     linMapp[3][ci],\n\t\t\t\t\t\t     linMapp[4][ci],",
+  "replace": "\t\t\t\t\t\t     linMapp[4][ci],\n\t\t\t\t\t\t     linMapp[3][ci],"
+ },
+ {
+  "label": "rebuild the mapping for the phases that ARE flagged",
+  "find": "\t\tif (short_2800[phase] != 0)\n\t\t\tcontinue;\n\n\t\tif (byte_280c[phase] != 0) {",
+  "replace": "\t\tif (short_2800[phase] == 0)\n\t\t\tcontinue;\n\n\t\tif (byte_280c[phase] != 0) {"
+ },
+ {
+  "label": "swap the rebuild and the previous session's mapping",
+  "find": "\t\tif (byte_280c[phase] != 0) {\n\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tupdateLinMappMeanAndVar(phase, ci);",
+  "replace": "\t\tif (byte_280c[phase] == 0) {\n\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tupdateLinMappMeanAndVar(phase, ci);"
+ },
+ {
+  "label": "rebuild the alternate mapping instead of the mapping",
+  "find": "\t\t\t\tupdateLinMappMeanAndVar(phase, ci);",
+  "replace": "\t\t\t\tupdateLinMappMeanAndVarAlt(phase, ci);"
+ },
+ {
+  "label": "copy the previous session's mapping one entry short",
+  "find": "\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tlinMapp[phase][ci] = prevLinMapp[ci];",
+  "replace": "\t\t\tfor (ci = 0; ci < V90ADID_CODES - 1; ci++)\n\t\t\t\tlinMapp[phase][ci] = prevLinMapp[ci];"
+ },
+ {
+  "label": "index the previous session's mapping by phase",
+  "find": "\t\t\t\tlinMapp[phase][ci] = prevLinMapp[ci];",
+  "replace": "\t\t\t\tlinMapp[phase][ci] = prevLinMapp[phase];"
+ },
+ {
+  "label": "QC mapping: let the unsuspected scan run to the sixth phase",
+  "find": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 5;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();"
+ },
+ {
+  "label": "QC mapping: start the unsuspected scan at phase one",
+  "find": "\tfor (unSuspectedPhase = 0;\n\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\tfor (unSuspectedPhase = 1;\n\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();"
+ },
+ {
+  "label": "QC mapping: do not call the DIL repair",
+  "find": "\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\t     unSuspectedPhase++)\n\t\t;\n"
+ },
+ {
+  "label": "second study: do not call the DIL repair",
+  "find": "\t\t unSuspectedPhase);\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\t\t unSuspectedPhase);\n"
+ },
+ {
+  "label": "QC mapping: report the whole row",
+  "find": "\tfor (ci = 0; ci <= 0x74; ci++)\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "shorten the QC mapping's rule by one dash",
+  "find": "\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"------------------\\r\\n\");",
+  "replace": "\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"-----------------\\r\\n\");"
+ },
+ {
+  "label": "swap two phases in the QC mapping's report",
+  "find": "\t\t\t\t\t     linMapp[0][ci], linMapp[1][ci],",
+  "replace": "\t\t\t\t\t     linMapp[1][ci], linMapp[0][ci],"
+ },
+ {
+  "label": "NOTE: the pad-gain batch.  determineMaxUcode and findPadGain share the class's `ADID_PRINT_*` idiom with the four study methods and share `+ 0.5f`, `1.0f /` and `V90ADID_PHASES; phase++` with most of the file, so several anchors below reach past the line they change.  Finding 1264."
+ },
+ {
+  "label": "dmu: sum window starts at 41",
+  "find": "for (i = 40; i <= 59; i++)",
+  "replace": "for (i = 41; i <= 59; i++)"
+ },
+ {
+  "label": "dmu: sum window ends at 58",
+  "find": "i <= 59; i++)\n\t\t\tsum += __builtin_fabsf(",
+  "replace": "i <= 58; i++)\n\t\t\tsum += __builtin_fabsf("
+ },
+ {
+  "label": "dmu: sum without the magnitude",
+  "find": "sum += __builtin_fabsf(\n\t\t\t    float_9d48[unSuspectedPhase][i]);",
+  "replace": "sum += float_9d48[unSuspectedPhase][i];"
+ },
+ {
+  "label": "dmu: threshold scale 0.05 -> 0.06",
+  "find": "product = sum * float_a980 * 0.05f;",
+  "replace": "product = sum * float_a980 * 0.06f;"
+ },
+ {
+  "label": "dmu: threshold scaled by the wrong field",
+  "find": "product = sum * float_a980 * 0.05f;",
+  "replace": "product = sum * float_a97c * 0.05f;"
+ },
+ {
+  "label": "dmu: the first report's whole part from the rounded value",
+  "find": "origWhole = ADID_PRINT_WHOLE(product);\n\t\tvarThresh = product;",
+  "replace": "varThresh = product;\n\t\torigWhole = ADID_PRINT_WHOLE(varThresh);"
+ },
+ {
+  "label": "dmu: the first report's sign forced",
+  "find": "ADID_PRINT_SIGN(varThresh), origWhole,",
+  "replace": "'+', origWhole,"
+ },
+ {
+  "label": "dmu: the first report's fraction scale",
+  "find": "origWhole,\n\t\t ADID_PRINT_FRAC(varThresh, 100.0f));",
+  "replace": "origWhole,\n\t\t ADID_PRINT_FRAC(varThresh, 10.0f));"
+ },
+ {
+  "label": "dmu: the low clamp at 501",
+  "find": "if (!(varThresh >= 500.0f))",
+  "replace": "if (!(varThresh >= 501.0f))"
+ },
+ {
+  "label": "dmu: the low clamp installs 501",
+  "find": "\t\tvarThresh = 500.0f;",
+  "replace": "\t\tvarThresh = 501.0f;"
+ },
+ {
+  "label": "dmu: the low clamp sense",
+  "find": "if (!(varThresh >= 500.0f))",
+  "replace": "if ((varThresh >= 500.0f))"
+ },
+ {
+  "label": "dmu: the high clamp at 100001",
+  "find": "else if (!(varThresh <= 100000.0f))",
+  "replace": "else if (!(varThresh <= 100001.0f))"
+ },
+ {
+  "label": "dmu: the high clamp installs 100001",
+  "find": "\t\tvarThresh = 100000.0f;",
+  "replace": "\t\tvarThresh = 100001.0f;"
+ },
+ {
+  "label": "dmu: the second report's sign inverted",
+  "find": "varThresh > 0.0f ? '+' : '-', ADID_PRINT_WHOLE(varThresh),",
+  "replace": "varThresh > 0.0f ? '-' : '+', ADID_PRINT_WHOLE(varThresh),"
+ },
+ {
+  "label": "dmu: the second report loses its magnitude",
+  "find": "varThresh > 0.0f ? '+' : '-', ADID_PRINT_WHOLE(varThresh),",
+  "replace": "varThresh > 0.0f ? '+' : '-', (int)varThresh,",
+  "equivalent": true,
+  "why": "THE VALUE IS ALREADY NON-NEGATIVE AT THE SECOND REPORT.  `fabs` and the identity differ only below zero, and the clamp immediately above leaves `varThresh` in [500, 100000]: the first arm replaces anything that is not ordered-at-or-above 500 -- which includes every negative value and every NaN -- with 500, and the second caps it at 100000.  So the object does take `fabs` at 0x442e6 and no input can show it.  The first report is before the clamp and is where the same mutation IS caught."
+ },
+ {
+  "label": "dmu: the report loop starts at short_a97a",
+  "find": "for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)",
+  "replace": "for (k = (unsigned char)(short_a97a); (int)k <= maxCode; k++)"
+ },
+ {
+  "label": "dmu: the report loop stops one short",
+  "find": "for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)",
+  "replace": "for (k = (unsigned char)(short_a97a + 1); (int)k < maxCode; k++)"
+ },
+ {
+  "label": "dmu: the report's two indices swapped",
+  "find": "edprintf(\"linearMappingVar[%d][%d] = %d\\r\\n\", unSuspectedPhase,\n\t\t\t k, adid_abs((int)float_9d48[unSuspectedPhase][k]));",
+  "replace": "edprintf(\"linearMappingVar[%d][%d] = %d\\r\\n\", k,\n\t\t\t unSuspectedPhase,\n\t\t\t adid_abs((int)float_9d48[unSuspectedPhase][k]));"
+ },
+ {
+  "label": "dmu: the report prints a signed variance",
+  "find": "k, adid_abs((int)float_9d48[unSuspectedPhase][k]));",
+  "replace": "k, (int)float_9d48[unSuspectedPhase][k]);"
+ },
+ {
+  "label": "dmu: the scan starts above the argument",
+  "find": "for (ci = (unsigned char)maxCode; ci > minU; ci--) {",
+  "replace": "for (ci = (unsigned char)(maxCode + 1); ci > minU; ci--) {"
+ },
+ {
+  "label": "dmu: the scan runs one window too far",
+  "find": "for (ci = (unsigned char)maxCode; ci > minU; ci--) {",
+  "replace": "for (ci = (unsigned char)maxCode; ci >= minU; ci--) {"
+ },
+ {
+  "label": "dmu: the window is four entries wide",
+  "find": "\t\tfor (d = 0; d <= 4; d++) {\n\t\t\tfloat v = float_9d48[unSuspectedPhase][ci - d];",
+  "replace": "\t\tfor (d = 0; d <= 3; d++) {\n\t\t\tfloat v = float_9d48[unSuspectedPhase][ci - d];"
+ },
+ {
+  "label": "dmu: the window runs upwards",
+  "find": "float v = float_9d48[unSuspectedPhase][ci - d];",
+  "replace": "float v = float_9d48[unSuspectedPhase][ci + d];"
+ },
+ {
+  "label": "dmu: the small test is strict",
+  "find": "\t\t\tif (v >= varThresh)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (v > varThresh)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "dmu: the NaN half of the zero test dropped",
+  "find": "if (!(v < 0.0f) && !(v > 0.0f))",
+  "replace": "if (v == 0.0f)"
+ },
+ {
+  "label": "dmu: the zero half of the zero test dropped",
+  "find": "if (!(v < 0.0f) && !(v > 0.0f))",
+  "replace": "if (!(v < 0.0f) && (v > 0.0f))"
+ },
+ {
+  "label": "dmu: the first qualifying offset is the last",
+  "find": "\t\t\tif (n == 0)\n\t\t\t\tfirst = d;\n\t\t\tn++;",
+  "replace": "\t\t\tfirst = d;\n\t\t\tn++;"
+ },
+ {
+  "label": "dmu: a window qualifies at two",
+  "find": "if (n > 2) {\n\t\t\tat = (unsigned char)(ci - first);",
+  "replace": "if (n > 1) {\n\t\t\tat = (unsigned char)(ci - first);"
+ },
+ {
+  "label": "dmu: the answer is the window's top",
+  "find": "at = (unsigned char)(ci - first);",
+  "replace": "at = ci;"
+ },
+ {
+  "label": "dmu: the answer's offset is added",
+  "find": "at = (unsigned char)(ci - first);",
+  "replace": "at = (unsigned char)(ci + first);"
+ },
+ {
+  "label": "dmu: the fall-through answer is zero",
+  "find": "\tat = minU;\n\n\tfor (ci =",
+  "replace": "\tat = 0;\n\n\tfor (ci ="
+ },
+ {
+  "label": "dmu: the floor test is not strict",
+  "find": "if ((int)mu < (int)short_a97a) {",
+  "replace": "if ((int)mu <= (int)short_a97a) {"
+ },
+ {
+  "label": "dmu: the floor test is unsigned",
+  "find": "if ((int)mu < (int)short_a97a) {",
+  "replace": "if ((int)mu < (int)(unsigned short)short_a97a) {"
+ },
+ {
+  "label": "dmu: the floor report's two arguments swapped",
+  "find": "\t\t\t \"forced minimum maxUcode = %d\\n\", mu, short_a97a);",
+  "replace": "\t\t\t \"forced minimum maxUcode = %d\\n\", short_a97a, mu);"
+ },
+ {
+  "label": "dmu: the floor installs the old value",
+  "find": "\t\tbyte_a954 = (unsigned char)short_a97a;\n\t\tmu = (unsigned char)short_a97a;",
+  "replace": "\t\tbyte_a954 = mu;\n\t\tmu = (unsigned char)short_a97a;"
+ },
+ {
+  "label": "dmu: the mask threshold is not doubled",
+  "find": "float lim = varThresh + varThresh;",
+  "replace": "float lim = varThresh;"
+ },
+ {
+  "label": "dmu: the mask reference code is masked",
+  "find": "unsigned char ref = ucode;",
+  "replace": "unsigned char ref = ucode & 0x7f;"
+ },
+ {
+  "label": "dmu: the mask skips the unflagged phases",
+  "find": "\t\t\t\tif (short_2800[phase] != 0)\n\t\t\t\t\tcontinue;\n\n\t\t\t\tif ((int)code > (int)maxCode)",
+  "replace": "\t\t\t\tif (short_2800[phase] == 0)\n\t\t\t\t\tcontinue;\n\n\t\t\t\tif ((int)code > (int)maxCode)"
+ },
+ {
+  "label": "dmu: the reach test includes one more code",
+  "find": "if ((int)code > (int)maxCode)",
+  "replace": "if ((int)code >= (int)maxCode)"
+ },
+ {
+  "label": "dmu: the mask variance test is strict",
+  "find": "else if (__builtin_fabsf(float_9d48[phase][code])\n\t\t\t\t\t >= lim)",
+  "replace": "else if (__builtin_fabsf(float_9d48[phase][code])\n\t\t\t\t\t > lim)"
+ },
+ {
+  "label": "dmu: the mask variance test loses its magnitude",
+  "find": "else if (__builtin_fabsf(float_9d48[phase][code])\n\t\t\t\t\t >= lim)",
+  "replace": "else if (float_9d48[phase][code] >= lim)"
+ },
+ {
+  "label": "dmu: the mask's two verdicts swapped",
+  "find": "\t\t\t\telse\n\t\t\t\t\tbyte_0d00[phase][code] = 1;",
+  "replace": "\t\t\t\telse\n\t\t\t\t\tbyte_0d00[phase][code] = 0;"
+ },
+ {
+  "label": "dmu: the reference code is not forced usable",
+  "find": "byte_0d00[phase][ref] = 1;",
+  "replace": "byte_0d00[phase][ref] = 0;"
+ },
+ {
+  "label": "dmu: the read-back takes the flagged phases",
+  "find": "\t\tif (short_2800[phase] == 0) {\n\t\t\tmaxUcode[phase] = m;",
+  "replace": "\t\tif (short_2800[phase] != 0) {\n\t\t\tmaxUcode[phase] = m;"
+ },
+ {
+  "label": "dmu: the read-back walks when it should not",
+  "find": "if (byte_0d00[phase][m] == 0) {",
+  "replace": "if (byte_0d00[phase][m] != 0) {"
+ },
+ {
+  "label": "dmu: the read-back walks upwards",
+  "find": "\t\t\t\tdo {\n\t\t\t\t\td--;\n\t\t\t\t} while (byte_0d00[phase][d] == 0);",
+  "replace": "\t\t\t\tdo {\n\t\t\t\t\td++;\n\t\t\t\t} while (byte_0d00[phase][d] == 0);"
+ },
+ {
+  "label": "dmu: the read-back walk starts one lower",
+  "find": "\t\t\t\tunsigned char d = m;",
+  "replace": "\t\t\t\tunsigned char d = (unsigned char)(m - 1);"
+ },
+ {
+  "label": "dmu: the flagged phase's clamp is one short",
+  "find": "} else if ((int)m <= (int)maxCode - 2) {",
+  "replace": "} else if ((int)m <= (int)maxCode - 1) {"
+ },
+ {
+  "label": "dmu: the flagged phase's clamp installs one more",
+  "find": "maxUcode[phase] = (unsigned char)(maxCode - 2);",
+  "replace": "maxUcode[phase] = (unsigned char)(maxCode - 1);"
+ },
+ {
+  "label": "dmu: the per-phase report's two arguments swapped",
+  "find": "\t\t\t phase, maxUcode[phase]);",
+  "replace": "\t\t\t maxUcode[phase], phase);"
+ },
+ {
+  "label": "fpg: the scan sentinel is a hundred times smaller",
+  "find": "float bestVar = 100000000.0f;",
+  "replace": "float bestVar = 1000000.0f;",
+  "equivalent": true,
+  "why": "NO WELL-DEFINED INPUT SEPARATES THE TWO FORMS.  They differ only when the smallest of the five window entries is at or above 1e6, and in that case the mutant never writes its chosen-index slot at all and reads whatever its own stack frame held -- D290, where the two sides have two different frames and the comparison measures the linker's layout rather than the reconstruction.  Everywhere the object's behaviour IS defined some entry is below 1e6, and any entry that beats the smaller sentinel also beats the larger one -- so both forms pick the same index and the same value, whatever the other four are.  The test plants one small entry in every window it offers precisely so that no trial enters the undefined case."
+ },
+ {
+  "label": "fpg: the scan starts two below the maximum",
+  "find": "unsigned char d = (unsigned char)(byte_a954 - 3);",
+  "replace": "unsigned char d = (unsigned char)(byte_a954 - 2);"
+ },
+ {
+  "label": "fpg: the scan window is one narrower",
+  "find": "int lim = (int)d - 5;",
+  "replace": "int lim = (int)d - 4;"
+ },
+ {
+  "label": "fpg: the scan takes an unordered compare as a loss",
+  "find": "\t\t\tif (!(v >= bestVar)) {\n\t\t\t\tbestVar = v;",
+  "replace": "\t\t\tif (v < bestVar) {\n\t\t\t\tbestVar = v;"
+ },
+ {
+  "label": "fpg: the scan takes ties",
+  "find": "\t\t\tif (!(v >= bestVar)) {\n\t\t\t\tbestVar = v;",
+  "replace": "\t\t\tif (!(v > bestVar)) {\n\t\t\t\tbestVar = v;"
+ },
+ {
+  "label": "fpg: the scan runs upwards",
+  "find": "\t\t\td--;\n\t\t} while ((int)d > lim);",
+  "replace": "\t\t\td++;\n\t\t} while ((int)d > lim);"
+ },
+ {
+  "label": "fpg: the base clamp's top value",
+  "find": "\tif (base > 0x5f)\n\t\tbase = 0x5f;",
+  "replace": "\tif (base > 0x5f)\n\t\tbase = 0x60;"
+ },
+ {
+  "label": "fpg: the base clamp's floor value",
+  "find": "\telse if (base < 0x50)\n\t\tbase = 0x50;",
+  "replace": "\telse if (base < 0x50)\n\t\tbase = 0x4f;"
+ },
+ {
+  "label": "fpg: the base code's A-law mask",
+  "find": "aCode = (unsigned char)((base & 0x7f) ^ 0xd5);",
+  "replace": "aCode = (unsigned char)((base & 0x7f) ^ 0xff);"
+ },
+ {
+  "label": "fpg: the base code's mu-law mask",
+  "find": "uCode = (unsigned char)~(base & 0x7f);",
+  "replace": "uCode = (unsigned char)(base & 0x7f);"
+ },
+ {
+  "label": "fpg: only one companding law is tried",
+  "find": "for (codec = 0; codec <= 1; codec++) {",
+  "replace": "for (codec = 0; codec <= 0; codec++) {"
+ },
+ {
+  "label": "fpg: the high bucket's error starts lower",
+  "find": "float errHigh = 1000000.0f, gainHigh = 1.0f;",
+  "replace": "float errHigh = 100000.0f, gainHigh = 1.0f;"
+ },
+ {
+  "label": "fpg: the high bucket's gain starts at two",
+  "find": "float errHigh = 1000000.0f, gainHigh = 1.0f;",
+  "replace": "float errHigh = 1000000.0f, gainHigh = 2.0f;",
+  "equivalent": true,
+  "why": "THE INITIALISER IS DEAD.  `gainHigh` is read at one place, `gainValueALaw = gainHigh` under `errMid * 0.8f > errHigh`, and that test cannot fire while `errHigh` still holds its own initial 1e6: `errMid` starts at 1e6 and its only assignment is guarded by `!(err >= errMid)`, so it never rises above 1e6 and `errMid * 0.8f` never exceeds 8e5.  A NaN `errMid` fails the ordered `>` as well, and an error is never a NaN here in any case (see the three keeper entries).  So the read happens only after the high bucket has taken a candidate, which overwrites `gainHigh` first.  The object does store 0x3f800000 into %ebp before the loop at 0x4375a and it is kept for that reason.  `gainMid`'s initialiser is NOT dead and the same mutation on it is caught, which is what makes this an asymmetry of the object rather than a gap in the sweep."
+ },
+ {
+  "label": "fpg: the middle bucket's error starts lower",
+  "find": "float errMid = 1000000.0f, gainMid = 1.0f;",
+  "replace": "float errMid = 100000.0f, gainMid = 1.0f;"
+ },
+ {
+  "label": "fpg: the middle bucket's gain starts at two",
+  "find": "float errMid = 1000000.0f, gainMid = 1.0f;",
+  "replace": "float errMid = 1000000.0f, gainMid = 2.0f;"
+ },
+ {
+  "label": "fpg: the low bucket's error starts lower",
+  "find": "float errLow = 1000000.0f;",
+  "replace": "float errLow = 100000.0f;"
+ },
+ {
+  "label": "fpg: the range's start is scaled by the wrong field",
+  "find": "float scale = float_a97c;",
+  "replace": "float scale = float_a980;"
+ },
+ {
+  "label": "fpg: the range's A-law start mask",
+  "find": "\t\t\t\t\t\t       * scale))) ^ 0xd5);",
+  "replace": "\t\t\t\t\t\t       * scale))) ^ 0xff);"
+ },
+ {
+  "label": "fpg: the range's mu-law start is not inverted",
+  "find": "minU = (unsigned char)~linear2ulaw(",
+  "replace": "minU = (unsigned char)linear2ulaw("
+ },
+ {
+  "label": "fpg: the range's start loses its magnitude",
+  "find": "adid_abs((int)(ulaw2linear(uCode) * scale)));",
+  "replace": "((int)(ulaw2linear(uCode) * scale)));"
+ },
+ {
+  "label": "fpg: the range's floor test is strict",
+  "find": "if (minU <= 0x27)\n\t\t\tminU = 0x28;",
+  "replace": "if (minU < 0x27)\n\t\t\tminU = 0x28;"
+ },
+ {
+  "label": "fpg: the range's floor value",
+  "find": "if (minU <= 0x27)\n\t\t\tminU = 0x28;",
+  "replace": "if (minU <= 0x27)\n\t\t\tminU = 0x29;"
+ },
+ {
+  "label": "fpg: the range stops one short",
+  "find": "for (cur = minU; cur <= base; cur++) {",
+  "replace": "for (cur = minU; cur < base; cur++) {"
+ },
+ {
+  "label": "fpg: the reference level follows the candidate",
+  "find": "float ref = (float)linMapp[unSuspectedPhase][base];",
+  "replace": "float ref = (float)linMapp[unSuspectedPhase][cur];"
+ },
+ {
+  "label": "fpg: the candidate's A-law mask",
+  "find": "level = alaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xd5));",
+  "replace": "level = alaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xff));"
+ },
+ {
+  "label": "fpg: the candidate's mu-law mask",
+  "find": "level = ulaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xff));",
+  "replace": "level = ulaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xd5));"
+ },
+ {
+  "label": "fpg: the candidate gain is upside down",
+  "find": "gain = ref / (float)level;",
+  "replace": "gain = (float)level / ref;"
+ },
+ {
+  "label": "fpg: the projection starts one code up",
+  "find": "for (k = 0x40; k <= byte_a954; k++) {",
+  "replace": "for (k = 0x41; k <= byte_a954; k++) {"
+ },
+ {
+  "label": "fpg: the projection stops one short",
+  "find": "for (k = 0x40; k <= byte_a954; k++) {",
+  "replace": "for (k = 0x40; k < byte_a954; k++) {"
+ },
+ {
+  "label": "fpg: the projection multiplies by the gain",
+  "find": "\t\t\t\t    * (1.0f / gain) + 0.5f);",
+  "replace": "\t\t\t\t    * gain + 0.5f);"
+ },
+ {
+  "label": "fpg: the projection's rounding term",
+  "find": "\t\t\t\t    * (1.0f / gain) + 0.5f);",
+  "replace": "\t\t\t\t    * (1.0f / gain) + 0.4f);"
+ },
+ {
+  "label": "fpg: the projection is not narrowed to sixteen bits",
+  "find": "\t\t\t\tshort proj = (short)(",
+  "replace": "\t\t\t\tint proj = (int)("
+ },
+ {
+  "label": "fpg: the round trip's error is a sum",
+  "find": "d = (float)(proj - back);",
+  "replace": "d = (float)(proj + back);"
+ },
+ {
+  "label": "fpg: the round-trip error is not squared",
+  "find": "errSum += d * d;",
+  "replace": "errSum += d;"
+ },
+ {
+  "label": "fpg: the error is scaled by one power of the gain",
+  "find": "err = gain * gain * errSum;",
+  "replace": "err = gain * errSum;"
+ },
+ {
+  "label": "fpg: the per-candidate report prints the raw sum",
+  "find": "\"%c%d.%02d\\r\\n\", (int)err,",
+  "replace": "\"%c%d.%02d\\r\\n\", (int)errSum,"
+ },
+ {
+  "label": "fpg: the per-candidate report's fraction scale",
+  "find": "ADID_PRINT_FRAC(gain,\n\t\t\t\t\t\t\t\t     100.0f));",
+  "replace": "ADID_PRINT_FRAC(gain,\n\t\t\t\t\t\t\t\t     10.0f));"
+ },
+ {
+  "label": "fpg: the high bucket's boundary",
+  "find": "if (gain >= 2.7f) {",
+  "replace": "if (gain >= 2.8f) {"
+ },
+ {
+  "label": "fpg: the high bucket's keeper takes an unordered compare as a loss",
+  "find": "\t\t\t\tif (!(err >= errHigh)) {",
+  "replace": "\t\t\t\tif (err < errHigh) {",
+  "equivalent": true,
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+ },
+ {
+  "label": "fpg: the low bucket belongs to the other law",
+  "find": "} else if (codec == 1 && !(gain >= 1.2f)) {",
+  "replace": "} else if (codec == 0 && !(gain >= 1.2f)) {"
+ },
+ {
+  "label": "fpg: the low bucket's boundary",
+  "find": "} else if (codec == 1 && !(gain >= 1.2f)) {",
+  "replace": "} else if (codec == 1 && !(gain >= 1.3f)) {"
+ },
+ {
+  "label": "fpg: the low bucket's keeper takes an unordered compare as a loss",
+  "find": "if (!(err >= errLow))\n\t\t\t\t\terrLow = err;",
+  "replace": "if (err < errLow)\n\t\t\t\t\terrLow = err;",
+  "equivalent": true,
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+ },
+ {
+  "label": "fpg: the middle bucket's keeper takes an unordered compare as a loss",
+  "find": "\t\t\t\tif (!(err >= errMid)) {",
+  "replace": "\t\t\t\tif (err < errMid) {",
+  "equivalent": true,
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+ },
+ {
+  "label": "fpg: the best-of-three's margin",
+  "find": "if (errMid * 0.8f > errHigh) {",
+  "replace": "if (errMid * 0.9f > errHigh) {"
+ },
+ {
+  "label": "fpg: the best-of-three's test is not strict",
+  "find": "if (errMid * 0.8f > errHigh) {",
+  "replace": "if (errMid * 0.8f >= errHigh) {"
+ },
+ {
+  "label": "fpg: the best-of-three scales the wrong side",
+  "find": "if (errMid * 0.8f > errHigh) {",
+  "replace": "if (errMid > errHigh * 0.8f) {"
+ },
+ {
+  "label": "fpg: the mu-law pair is copied out on the wrong pass",
+  "find": "\t\tif (codec == 0) {\n\t\t\tgainValueMuLaw = gainValueALaw;",
+  "replace": "\t\tif (codec == 1) {\n\t\t\tgainValueMuLaw = gainValueALaw;"
+ },
+ {
+  "label": "fpg: the unity fallback's margin",
+  "find": "} else if (!(errLow * 0.85f >= minErrorALaw)) {",
+  "replace": "} else if (!(errLow * 0.9f >= minErrorALaw)) {"
+ },
+ {
+  "label": "fpg: the unity fallback takes an unordered compare as a loss",
+  "find": "} else if (!(errLow * 0.85f >= minErrorALaw)) {",
+  "replace": "} else if (errLow * 0.85f < minErrorALaw) {",
+  "equivalent": true,
+  "why": "SAME ARGUMENT AS THE THREE BUCKET KEEPERS.  `errLow` and `minErrorALaw` are both errors or the initial 1e6, and an error is never a NaN here -- see the proof recorded at the high bucket's keeper -- so `errLow * 0.85f` and `minErrorALaw` are always ordered and the negated test and the plain `<` agree on every input."
+ },
+ {
+  "label": "fpg: the unity fallback is not unity",
+  "find": "\t\t\tgainValueALaw = 1.0f;\n\t\t\tminErrorALaw = errLow;",
+  "replace": "\t\t\tgainValueALaw = 2.0f;\n\t\t\tminErrorALaw = errLow;"
+ },
+ {
+  "label": "fpg: the mu-law error report's fraction scale",
+  "find": "ADID_PRINT_FRAC(minErrorMuLaw, 100.0));",
+  "replace": "ADID_PRINT_FRAC(minErrorMuLaw, 10.0));"
+ },
+ {
+  "label": "fpg: the mu-law gain report's fraction scale",
+  "find": "ADID_PRINT_FRAC(gainValueMuLaw, 1000000.0));",
+  "replace": "ADID_PRINT_FRAC(gainValueMuLaw, 100000.0));"
+ },
+ {
+  "label": "fpg: the A-law error report's fraction scale",
+  "find": "ADID_PRINT_FRAC(minErrorALaw, 100.0));",
+  "replace": "ADID_PRINT_FRAC(minErrorALaw, 10.0));"
+ },
+ {
+  "label": "fpg: the A-law gain report prints the mu-law gain",
+  "find": "edprintf(\"gainValueALaw = %c%d.%06d\\r\\n\",\n\t\t ADID_PRINT_SIGN(gainValueALaw),\n\t\t ADID_PRINT_WHOLE(gainValueALaw),\n\t\t ADID_PRINT_FRAC(gainValueALaw, 1000000.0));",
+  "replace": "edprintf(\"gainValueALaw = %c%d.%06d\\r\\n\",\n\t\t ADID_PRINT_SIGN(gainValueMuLaw),\n\t\t ADID_PRINT_WHOLE(gainValueMuLaw),\n\t\t ADID_PRINT_FRAC(gainValueMuLaw, 1000000.0));"
+ },
+ {
+  "label": "fpg: the verdict is not strict",
+  "find": "if (minErrorMuLaw > minErrorALaw) {",
+  "replace": "if (minErrorMuLaw >= minErrorALaw) {"
+ },
+ {
+  "label": "fpg: the verdict is the wrong way round",
+  "find": "if (minErrorMuLaw > minErrorALaw) {",
+  "replace": "if (minErrorALaw > minErrorMuLaw) {"
+ },
+ {
+  "label": "fpg: the identified codec is recorded the wrong way round",
+  "find": "\t\tint_a960 = 1;\n\t\tedprintf(\"Final codec identified is ALaw\\r\\n\");",
+  "replace": "\t\tint_a960 = 0;\n\t\tedprintf(\"Final codec identified is ALaw\\r\\n\");"
+ },
+ {
+  "label": "fpg: the mu-law verdict does not take the mu-law gain",
+  "find": "\t\tedprintf(\"Final codec identified is MuLaw\\r\\n\");\n\t\tgainValueALaw = gainValueMuLaw;",
+  "replace": "\t\tedprintf(\"Final codec identified is MuLaw\\r\\n\");"
+ },
+ {
+  "label": "fpg: the pad gain is stored from the mu-law slot",
+  "find": "padGain = gainValueALaw;",
+  "replace": "padGain = gainValueMuLaw;"
+ },
+ {
+  "label": "fpg: the final report's fraction scale",
+  "find": "ADID_PRINT_FRAC(gainValueALaw, 1000000.0));\n\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "ADID_PRINT_FRAC(gainValueALaw, 100000.0));\n\n\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "fpg: the codec-type banner is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Codec type %d\\r\\n\", codec);",
+  "replace": "\t\t\tdsplibs_debug_printf(\"Codec type %d\\r\\n\", codec);"
+ },
+ {
+  "label": "fpg: the projection banner prints the wrong pair",
+  "find": "\t\t\t\t\t     \"%d\\r\\n\", base, minU);",
+  "replace": "\t\t\t\t\t     \"%d\\r\\n\", minU, base);"
+ },
+ {
+  "label": "NOTE: studyUrefHandler, the state machine.  Its seven arms repeat each other almost exactly -- four of them are `updateUref(); updateUrefAlt();` followed by two reports and a store into +0xa984, and states 3 and 5 differ only in a format string -- so almost every anchor below has to reach into the one report that separates its arm from the others.  Finding 1264, and the generator .scratch/addmut-suh.py refuses to write the file unless every anchor in it matches exactly once."
+ },
+ {
+  "label": "suh: the re-test skips one phase",
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\tif (o->short_2800[phase] == 0)\n\t\t\tcontinue;",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\tif (o->short_2800[phase] == 0)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "suh: the re-test runs on the unflagged phases instead",
+  "find": "\t\tif (o->short_2800[phase] == 0)\n\t\t\tcontinue;",
+  "replace": "\t\tif (o->short_2800[phase] != 0)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "suh: the re-test measures the plain mapping, not the alternate one",
+  "find": "\t\t    (float)o->linMappAlt[phase][o->ucode]);",
+  "replace": "\t\t    (float)o->linMapp[phase][o->ucode]);"
+ },
+ {
+  "label": "suh: the re-test inverts its own verdict",
+  "find": "\t\to->short_2800[phase] = (short)o->isAltRbs(phase, o->ucode,",
+  "replace": "\t\to->short_2800[phase] = (short)!o->isAltRbs(phase, o->ucode,"
+ },
+ {
+  "label": "suh: the false-detection report fires on the phases that kept the flag",
+  "find": "\t\tif (o->short_2800[phase] == 0)\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (o->short_2800[phase] != 0)\n\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "suh: the false-detection report is not gated",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector\"\n\t\t\t\t\t\t     \": alternate rbs false \"",
+  "replace": "\t\t\tif (1)\n\t\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector\"\n\t\t\t\t\t\t     \": alternate rbs false \""
+ },
+ {
+  "label": "suh: the false-detection wording",
+  "find": "\t\t\t\t\t\t     \": alternate rbs false \"",
+  "replace": "\t\t\t\t\t\t     \": alternate rbs FALSE \""
+ },
+ {
+  "label": "suh: the false-detection report names the wrong phase",
+  "find": "\t\t\t\t\t\t     \"!!!\\n\", phase);",
+  "replace": "\t\t\t\t\t\t     \"!!!\\n\", phase + 1);"
+ },
+ {
+  "label": "suh: trn1Sigma averages the flagged phases",
+  "find": "\t\tif (o->short_2800[phase] == 0) {\n\t\t\tsum += o->float_9d48[phase][o->ucode];",
+  "replace": "\t\tif (o->short_2800[phase] != 0) {\n\t\t\tsum += o->float_9d48[phase][o->ucode];"
+ },
+ {
+  "label": "suh: trn1Sigma averages the wrong array",
+  "find": "\t\t\tsum += o->float_9d48[phase][o->ucode];",
+  "replace": "\t\t\tsum += o->float_9118[phase][o->ucode];"
+ },
+ {
+  "label": "suh: trn1Sigma skips the last phase",
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++)\n\t\tif (o->short_2800[phase] == 0) {",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++)\n\t\tif (o->short_2800[phase] == 0) {"
+ },
+ {
+  "label": "suh: trn1Sigma counts by two",
+  "find": "\t\t\tn = (short)(n + 1);\n\t\t}\n\n\tsum = sum / n;",
+  "replace": "\t\t\tn = (short)(n + 2);\n\t\t}\n\n\tsum = sum / n;"
+ },
+ {
+  "label": "suh: trn1Sigma divides by one more than the count",
+  "find": "\tsum = sum / n;",
+  "replace": "\tsum = sum / (n + 1);"
+ },
+ {
+  "label": "suh: trn1Sigma is stored negated",
+  "find": "\to->trn1Sigma = sum;",
+  "replace": "\to->trn1Sigma = -sum;"
+ },
+ {
+  "label": "suh: the trn1Sigma report is rounded to a float first (finding 1443)",
+  "find": "\t\tdsplibs_debug_printf(fmt, sum);",
+  "replace": "\t\t{\n\t\t\tvolatile float r = sum;\n\t\t\tdsplibs_debug_printf(fmt, r);\n\t\t}"
+ },
+ {
+  "label": "suh: the trn1Sigma report is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(fmt, sum);",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(fmt, sum);"
+ },
+ {
+  "label": "suh: the sample is rounded rather than truncated",
+  "find": "\tshort sample = (short)v;\n\tint ret = 1;",
+  "replace": "\tshort sample = (short)(v + 0.5f);\n\tint ret = 1;"
+ },
+ {
+  "label": "suh: the default answer is 0 rather than 1",
+  "find": "\tshort sample = (short)v;\n\tint ret = 1;",
+  "replace": "\tshort sample = (short)v;\n\tint ret = 0;"
+ },
+ {
+  "label": "suh: state 0 does not count the sample",
+  "find": "\t\tint_a988++;\n\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a98c)",
+  "replace": "\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a98c)"
+ },
+ {
+  "label": "suh: state 0 accumulates the level rather than the sample",
+  "find": "\t\tint_a988++;\n\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a98c)",
+  "replace": "\t\tint_a988++;\n\t\tcalculateLinearMeanAndVar(ucodeLevel, sample, phase);\n\n\t\tif (int_a988 != int_a98c)"
+ },
+ {
+  "label": "suh: state 0 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a98c)\n\t\t\tbreak;",
+  "replace": "\t\tif (int_a988 != int_a990)\n\t\t\tbreak;"
+ },
+ {
+  "label": "suh: state 0 adds the square of the mean instead of subtracting it",
+  "find": "\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;",
+  "replace": "\t\t\tvar[p] = inv * float_9118[p][ucode] + mean * mean;"
+ },
+ {
+  "label": "suh: state 0 takes the variance off the wrong sum",
+  "find": "\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;",
+  "replace": "\t\t\tvar[p] = inv * float_1000[p][ucode] - mean * mean;"
+ },
+ {
+  "label": "suh: state 0 does not divide the sum by the count",
+  "find": "\t\t\tfloat mean = float_1000[p][ucode] * inv;\n\n\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;",
+  "replace": "\t\t\tfloat mean = float_1000[p][ucode];\n\n\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;"
+ },
+ {
+  "label": "suh: state 0 divides by one more than the count",
+  "find": "\t\t\tfloat inv = 1.0f / uint_1c00[p][ucode];\n\t\t\tfloat mean = float_1000[p][ucode] * inv;",
+  "replace": "\t\t\tfloat inv = 1.0f / (uint_1c00[p][ucode] + 1);\n\t\t\tfloat mean = float_1000[p][ucode] * inv;"
+ },
+ {
+  "label": "suh: state 0 gains the zero-count guard it does not have (D292)",
+  "find": "\t\tfor (p = 0; p < V90ADID_PHASES; p++) {\n\t\t\tfloat inv = 1.0f / uint_1c00[p][ucode];",
+  "replace": "\t\tfor (p = 0; p < V90ADID_PHASES; p++) {\n\t\t\tfloat inv;\n\t\t\tif (uint_1c00[p][ucode] == 0)\n\t\t\t\tcontinue;\n\t\t\tinv = 1.0f / uint_1c00[p][ucode];"
+ },
+ {
+  "label": "suh: the initial-variance report loses its double spaces",
+  "find": "\t\t\t\t\t     \"initail var (Trn1):  %d  %d  %d  \"",
+  "replace": "\t\t\t\t\t     \"initail var (Trn1): %d %d %d \""
+ },
+ {
+  "label": "suh: the initial-variance report swaps its first two arguments",
+  "find": "\"%d  %d  %d\\n\", (int)var[0],\n\t\t\t\t\t     (int)var[1], (int)var[2],",
+  "replace": "\"%d  %d  %d\\n\", (int)var[1],\n\t\t\t\t\t     (int)var[0], (int)var[2],"
+ },
+ {
+  "label": "suh: the initial-variance report is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail var (Trn1):",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail var (Trn1):"
+ },
+ {
+  "label": "suh: the variance threshold is scaled by the wrong factor",
+  "find": "\t\tthresh = getAltVarThresh(var, float_a970);",
+  "replace": "\t\tthresh = getAltVarThresh(var, float_a974);"
+ },
+ {
+  "label": "suh: the threshold report rounds instead of truncating",
+  "find": "\t\t\t\t\t     \"%d\\n\", (int)thresh);",
+  "replace": "\t\t\t\t\t     \"%d\\n\", (int)(thresh + 0.5f));"
+ },
+ {
+  "label": "suh: the threshold report is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail AltRbsVarThresh (Trn1) = \"",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail AltRbsVarThresh (Trn1) = \""
+ },
+ {
+  "label": "suh: a variance equal to the threshold flags its phase",
+  "find": "\t\t\tif (var[p] > thresh) {",
+  "replace": "\t\t\tif (var[p] >= thresh) {"
+ },
+ {
+  "label": "suh: the alternate-RBS flag is set to two",
+  "find": "\t\t\t\tn = (short)(n + 1);\n\t\t\t\tshort_2800[p] = 1;",
+  "replace": "\t\t\t\tn = (short)(n + 1);\n\t\t\t\tshort_2800[p] = 2;"
+ },
+ {
+  "label": "suh: the flag count does not advance",
+  "find": "\t\t\t\tn = (short)(n + 1);\n\t\t\t\tshort_2800[p] = 1;",
+  "replace": "\t\t\t\tshort_2800[p] = 1;"
+ },
+ {
+  "label": "suh: the accumulators are cleared whether or not anything was flagged",
+  "find": "\t\tif (n > 0)\n\t\t\tfor (p = 0; p < V90ADID_PHASES; p++) {",
+  "replace": "\t\tif (n >= 0)\n\t\t\tfor (p = 0; p < V90ADID_PHASES; p++) {"
+ },
+ {
+  "label": "suh: state 0 leaves the count behind when it clears",
+  "find": "\t\t\t\tfloat_1000[p][ucode] = 0.0f;\n\t\t\t\tuint_1c00[p][ucode] = 0;\n\t\t\t\tfloat_9118[p][ucode] = 0.0f;\n\t\t\t}",
+  "replace": "\t\t\t\tfloat_1000[p][ucode] = 0.0f;\n\t\t\t\tfloat_9118[p][ucode] = 0.0f;\n\t\t\t}"
+ },
+ {
+  "label": "suh: the initial-pattern report loses a conversion",
+  "find": "\t\t\t \"patern  %d%d%d%d%d%d\\n\", short_2800[0], short_2800[1],",
+  "replace": "\t\t\t \"patern  %d%d%d%d%d\\n\", short_2800[0], short_2800[1],"
+ },
+ {
+  "label": "suh: the initial-pattern report starts at the wrong phase",
+  "find": "\t\t\t short_2800[2], short_2800[3], short_2800[4],\n\t\t\t short_2800[5]);",
+  "replace": "\t\t\t short_2800[3], short_2800[2], short_2800[4],\n\t\t\t short_2800[5]);"
+ },
+ {
+  "label": "suh: state 0 hands on to state 2",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 1;\n\t\tbreak;\n\t}",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 2;\n\t\tbreak;\n\t}"
+ },
+ {
+  "label": "suh: state 0 does not reset the count when it hands on",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 1;\n\t\tbreak;\n\t}",
+  "replace": "\t\tint_a984 = 1;\n\t\tbreak;\n\t}"
+ },
+ {
+  "label": "suh: state 1 answers 0 for the phases that are NOT flagged",
+  "find": "\t\tret = short_2800[phase] == 0 ? 1 : 0;",
+  "replace": "\t\tret = short_2800[phase] != 0 ? 1 : 0;"
+ },
+ {
+  "label": "suh: state 1 answers on the wrong phase",
+  "find": "\t\tret = short_2800[phase] == 0 ? 1 : 0;",
+  "replace": "\t\tret = short_2800[(short)phase + 1] == 0 ? 1 : 0;"
+ },
+ {
+  "label": "suh: state 1 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a990)\n\t\t\tbreak;",
+  "replace": "\t\tif (int_a988 != int_a994)\n\t\t\tbreak;"
+ },
+ {
+  "label": "suh: state 1 folds the alternate accumulators instead",
+  "find": "\t\tupdateUref();\n\n\t\t/*\n\t\t * TWO LOCAL ARRAYS ARE FILLED HERE",
+  "replace": "\t\tupdateUrefAlt();\n\n\t\t/*\n\t\t * TWO LOCAL ARRAYS ARE FILLED HERE"
+ },
+ {
+  "label": "suh: the first-update report is gated",
+  "find": "\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update  :  %d  \"",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update  :  %d  \""
+ },
+ {
+  "label": "suh: the first-update report is spelled differently",
+  "find": "\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update  :  %d  \"",
+  "replace": "\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update :  %d  \""
+ },
+ {
+  "label": "suh: the first-update report prints the alternate table",
+  "find": "\t\t\t \"%d  %d  %d  %d  %d\\n\", linMapp[0][ucode],\n\t\t\t linMapp[1][ucode], linMapp[2][ucode], linMapp[3][ucode],\n\t\t\t linMapp[4][ucode], linMapp[5][ucode]);",
+  "replace": "\t\t\t \"%d  %d  %d  %d  %d\\n\", linMappAlt[0][ucode],\n\t\t\t linMappAlt[1][ucode], linMappAlt[2][ucode],\n\t\t\t linMappAlt[3][ucode], linMappAlt[4][ucode],\n\t\t\t linMappAlt[5][ucode]);"
+ },
+ {
+  "label": "suh: state 1 hands on to state 3",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 2;\n\t\tbreak;\n\n\tcase 2:",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 3;\n\t\tbreak;\n\n\tcase 2:"
+ },
+ {
+  "label": "suh: state 2 sends the near samples to the alternate accumulators",
+  "find": "\t\tif (isAltRbs((short)phase, ucode, v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 0;",
+  "replace": "\t\tif (!isAltRbs((short)phase, ucode, v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 0;"
+ },
+ {
+  "label": "suh: state 2 accepts the alternate-RBS sample",
+  "find": "\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 0;\n\t\t} else {",
+  "replace": "\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 1;\n\t\t} else {"
+ },
+ {
+  "label": "suh: state 2 rejects the plain sample",
+  "find": "\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\t\t\tret = 1;\n\t\t}",
+  "replace": "\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\t\t\tret = 0;\n\t\t}"
+ },
+ {
+  "label": "suh: state 2 tests the alternate distance against the wrong code",
+  "find": "\t\tif (isAltRbs((short)phase, ucode, v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);",
+  "replace": "\t\tif (isAltRbs((short)phase, (short)(ucode + 1), v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);"
+ },
+ {
+  "label": "suh: state 2 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a994)\n\t\t\tbreak;",
+  "replace": "\t\tif (int_a988 != int_a998)\n\t\t\tbreak;"
+ },
+ {
+  "label": "suh: state 2 does not fold the alternate accumulators",
+  "find": "\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"second update",
+  "replace": "\t\tupdateUref();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"second update"
+ },
+ {
+  "label": "suh: the second-update report is spelled differently",
+  "find": "\t\t\t\t\t     \"second update  :  %d  %d  %d  %d \"",
+  "replace": "\t\t\t\t\t     \"second update :  %d  %d  %d  %d \""
+ },
+ {
+  "label": "suh: the Alt first-update report is spelled differently",
+  "find": "\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" first update  :  %d  %d  %d  %d \"",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" first update  :  %d %d %d %d \""
+ },
+ {
+  "label": "suh: the Alt first-update report prints the plain table",
+  "find": "\t\t\t\t\t     \" %d  %d\\n\", linMappAlt[0][ucode],\n\t\t\t\t\t     linMappAlt[1][ucode],\n\t\t\t\t\t     linMappAlt[2][ucode],\n\t\t\t\t\t     linMappAlt[3][ucode],\n\t\t\t\t\t     linMappAlt[4][ucode],\n\t\t\t\t\t     linMappAlt[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;",
+  "replace": "\t\t\t\t\t     \" %d  %d\\n\", linMapp[0][ucode],\n\t\t\t\t\t     linMapp[1][ucode],\n\t\t\t\t\t     linMapp[2][ucode],\n\t\t\t\t\t     linMapp[3][ucode],\n\t\t\t\t\t     linMapp[4][ucode],\n\t\t\t\t\t     linMapp[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;"
+ },
+ {
+  "label": "suh: state 2 does not re-test the flags",
+  "find": "\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;",
+  "replace": "\t\tshort_a948 = 1;"
+ },
+ {
+  "label": "suh: state 2 clears the study flag instead of setting it",
+  "find": "\t\tshort_a948 = 1;\n\t\tint_a988 = 0;\n\t\tint_a984 = 4;",
+  "replace": "\t\tshort_a948 = 0;\n\t\tint_a988 = 0;\n\t\tint_a984 = 4;"
+ },
+ {
+  "label": "suh: state 2 hands on to state 3 rather than state 4",
+  "find": "\t\tshort_a948 = 1;\n\t\tint_a988 = 0;\n\t\tint_a984 = 4;",
+  "replace": "\t\tshort_a948 = 1;\n\t\tint_a988 = 0;\n\t\tint_a984 = 3;"
+ },
+ {
+  "label": "suh: state 3 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update",
+  "replace": "\t\tif (int_a988 != int_a99c)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update"
+ },
+ {
+  "label": "suh: state 3 accepts the alternate-RBS sample into the plain accumulators",
+  "find": "\t\tif (isAltRbs((short)phase, ucode, v))\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\telse\n\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update",
+  "replace": "\t\tif (!isAltRbs((short)phase, ucode, v))\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\telse\n\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update"
+ },
+ {
+  "label": "suh: the third-update report is spelled differently",
+  "find": "\t\t\t\t\t     \"third update  :  %d  %d  %d  %d  \"",
+  "replace": "\t\t\t\t\t     \"third update  :  %d  %d  %d %d  \""
+ },
+ {
+  "label": "suh: the Alt second-update report is spelled differently",
+  "find": "\t\t\t\t\t     \" second update  :  %d  %d  %d  %d\"",
+  "replace": "\t\t\t\t\t     \" second update  :  %d  %d  %d %d\""
+ },
+ {
+  "label": "suh: state 3 does not re-test the flags",
+  "find": "\t\tadid_recheckAltRbs(this);\n\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \"",
+  "replace": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \""
+ },
+ {
+  "label": "suh: state 3 reports the sigma under state 5's name",
+  "find": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");",
+  "replace": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");"
+ },
+ {
+  "label": "suh: state 3 hands on to state 4",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 5;\n\t\tbreak;\n\n\tcase 4: {",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 4;\n\t\tbreak;\n\n\tcase 4: {"
+ },
+ {
+  "label": "suh: the delay tests the count before incrementing it",
+  "find": "\t\tint next = int_a988 + 1;",
+  "replace": "\t\tint next = int_a988;"
+ },
+ {
+  "label": "suh: the delay runs against the wrong duration",
+  "find": "\t\tif (next == int_a99c) {",
+  "replace": "\t\tif (next == int_a998) {"
+ },
+ {
+  "label": "suh: the delay hands on to state 5",
+  "find": "\t\t\tint_a988 = 0;\n\t\t\tint_a984 = 3;",
+  "replace": "\t\t\tint_a988 = 0;\n\t\t\tint_a984 = 5;"
+ },
+ {
+  "label": "suh: the delay keeps its count when it hands on",
+  "find": "\t\t\tint_a988 = 0;\n\t\t\tint_a984 = 3;\n\t\t} else {",
+  "replace": "\t\t\tint_a988 = next;\n\t\t\tint_a984 = 3;\n\t\t} else {"
+ },
+ {
+  "label": "suh: the delay does not advance its count",
+  "find": "\t\t} else {\n\t\t\tint_a988 = next;\n\t\t}",
+  "replace": "\t\t} else {\n\t\t\tint_a988 = next - 1;\n\t\t}"
+ },
+ {
+  "label": "suh: state 5 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"final update",
+  "replace": "\t\tif (int_a988 != int_a994)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"final update"
+ },
+ {
+  "label": "suh: the final-update report is spelled differently",
+  "find": "\t\t\t\t\t     \"final update  :  %d  %d  %d  %d  \"",
+  "replace": "\t\t\t\t\t     \"final update  :  %d  %d  %d  %d \""
+ },
+ {
+  "label": "suh: the Alt final-update report is spelled differently",
+  "find": "\t\t\t\t\t     \" final update  :  %d  %d  %d  %d \"",
+  "replace": "\t\t\t\t\t     \" final update  :  %d  %d  %d  %d\""
+ },
+ {
+  "label": "suh: the Alt final-update report is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" final update",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" final update"
+ },
+ {
+  "label": "suh: state 5 re-tests the flags the way state 3 does",
+  "find": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \"",
+  "replace": "\t\tadid_recheckAltRbs(this);\n\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \""
+ },
+ {
+  "label": "suh: state 5 reports the sigma under state 3's name",
+  "find": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");",
+  "replace": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");"
+ },
+ {
+  "label": "suh: state 5 does not reach the terminal state",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 6;\n\t\tret = 2;",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 5;\n\t\tret = 2;"
+ },
+ {
+  "label": "suh: the completing call does not say the study is over",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 6;\n\t\tret = 2;",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 6;\n\t\tret = 1;"
+ },
+ {
+  "label": "suh: the terminal state answers 1",
+  "find": "\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 2;",
+  "replace": "\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 1;"
+ },
+ {
+  "label": "suh: the terminal state is reachable only through the default arm",
+  "find": "\tcase 6:\n\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 2;\n\t\tbreak;",
+  "replace": "\tcase 7:\n\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 2;\n\t\tbreak;"
  }
 ]
