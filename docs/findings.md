@@ -49671,6 +49671,25 @@ modest — which is consistent with the pre-emphasis A/B coming out null on
 rate, and would make D53 a defect worth fixing for correctness rather than a
 lever on the rate deficit.
 
+**QUALIFICATION, from the far end's own instrument (task #89's A/B).** The
+"our line is three metres so the tilt is zero" reasoning is right about the
+CABLE and wrong about the CHANNEL. The channel is cable *plus* the ATA's
+codec, a-law companding, and our 8000<->9600 resampler, and an a-law voice
+channel rolls off approaching 3.4 kHz. Bin 22 sits in that rolloff, so several
+dB down at the band edge is physically real rather than an artefact.
+
+Measured on the A/B calls: the bug arm requests index **7** and the fix arm
+requests **6** — two steps of apparent tilt, not one. And the Courier's
+`ATI11` confirms it responded: `Preemphasis (-dB) 0/2` on a fix-arm call
+against `0/4` on every stock call (1469). Our index, their filter, a
+measurable dB change: the chain holds end to end.
+
+So the defect's shape is simpler and more general than "we ask for 6 where 0
+is right": **the counter is always exactly one step too high, on every
+channel.** Where that lands depends on the tilt — 7-against-6 on this path,
+6-against-0 only where there is no rolloff at all. The 0 case is the most
+dramatic and it is not the common one.
+
 **WHY THIS MATTERS BEYOND THIS BENCH.** Any modern deployment of this modem is
 over VoIP, a codec, or a short line — never a long loop. The one regime in
 which the defect is harmless is the one that no longer exists.
