@@ -71,8 +71,13 @@ def report(rows, label):
         print("\n  too few calls to test.")
         return
 
+    # `far_xmit` is the same quantity as `our_rx` measured by the other end,
+    # and it is the honest one: our CONNECT string is emitted once and never
+    # revised, so a successful post-CONNECT renegotiation leaves it stale.
+    # Both are reported; if they disagree that IS the result (plan addendum).
     for field, name, better in (("equerr", "equerr at the decision", "lower"),
-                                ("our_rx", "receive rate", "higher")):
+                                ("our_rx", "receive rate (our CONNECT)", "higher"),
+                                ("far_xmit", "receive rate (far end's ATI11)", "higher")):
         vals = {a: np.array([float(r[field]) for r in rs
                              if r["connect"] == "1" and r[field]])
                 for a, rs in arms.items()}

@@ -40,7 +40,7 @@ def main():
     w = csv.writer(sys.stdout)
     w.writerow(["call", "arm", "connect", "our_tx", "our_rx",
                 "equerr", "preerr", "preemph", "tx_baud", "rx_baud",
-                "decisions", "retrains"])
+                "decisions", "retrains", "far_recv", "far_xmit"])
     for run in sorted(sys.argv[1:]):
         base = run[:-len(".run.log")] if run.endswith(".run.log") else run
         name = os.path.basename(base)
@@ -90,8 +90,19 @@ def main():
                 pp = m.group(1)
 
         nret = str(len(re.findall(r"retrain request detected", sl)))
+
+        # THE FAR END'S OWN ACCOUNT OF WHAT IT TRANSMITTED.  `pty CONNECT nnn`
+        # is emitted once and never revised, so a post-CONNECT upward
+        # renegotiation -- which does happen and does take effect -- leaves it
+        # stale: pab3-fix-3 said CONNECT 14400 while the Courier reported
+        # transmitting 26400.  ATI11's `Speed recv/xmit` is the other end's
+        # measurement and is not subject to that.
+        far_rx = far_tx = ""
+        m = re.search(r"Speed\s+(\d+)/(\d+)", read(base + ".lastlink.log"))
+        if m:
+            far_rx, far_tx = m.group(1), m.group(2)
         w.writerow([name, arm, "1" if rx else "0", tx, rx, eq, pe, pp, txb, rxb,
-                    ndec, nret])
+                    ndec, nret, far_rx, far_tx])
     return 0
 
 
