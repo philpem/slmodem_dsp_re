@@ -5150,3 +5150,35 @@ THE CHOSEN CODE IS A STACK SLOT NOTHING NECESSARILY WRITES. The running minimum 
 THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 3)` and runs while the counter, zero-extended, is greater than `(int)start - 5` under a SIGNED compare. A `byte_a954` of 0, 1 or 2 wraps the start up to 253..255 and terminates normally; one of 3 to 7 puts the start at 0..4, the bound below zero, and a zero-extended byte can never fall under it -- so the loop decrements for ever, reading `float_9d48[unSuspectedPhase][d]` at every one of the 256 indices as it goes, which at phase 5 is past the end of the object. The reconstruction reproduces it and the test forces the field into [8, 0x9c].
 
 ======================================================================
+
+## D291 🐛 `studyUrefHandler` prints a float through `%d`, twice, and the field and the report get two different roundings of it
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140, 5335 bytes), +0xb1f (`fsts 0xa964(%ebx)`) with +0x12fe (`fstpl 0x4(%esp)` under "first update : trn1Sigma = %d"), and +0xdaf with +0x12e9 for the second copy. **Reachability: FIRES on every call that completes state 3 or state 5 with the debug level above 1.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1443.** The report is the object's own and so is the mismatch.
+
+======================================================================
+
+## D292 🐛 The initial-variance loop divides by a count it never tests, where every other mean in the class tests it
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x120 (`mov 0x1c00(%ebx,%ecx,4),%ebp` straight into `push`/`fildll` with no `test`), against +0x320 in the same function (`mov 0x1c00(%ebx,%ecx,4),%edi ; test %edi,%edi ; je`). **Reachability: FIRES whenever a phase has no samples for the reference code at the end of state 0.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1442.** One loop out of five in this method omits the guard the other four have.
+
+======================================================================
+
+## D293 🐛 Two local arrays are filled by six loops and read by nothing
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x40c, +0x43c, +0x6dc, +0x70c, +0x9ec and +0xa1c -- six `mov %rX,0x50(%esp,%ecx,2)` stores into one twelve-byte slot, and not one read of it anywhere in the 5,335 bytes. **Reachability: FIRES at the end of states 1, 2 and 3; state 5's otherwise identical tail does not have it.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1444.** Dead stores the compiler kept because the locals are arrays.
+
+======================================================================
+
+## D294 🐛 The study's states are numbered out of the order it runs them in, and one of its six durations is read by nobody
+
+*Batch of 2026-08-12, from the jump table at `.rodata+0xd70` and `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140) +0x7cc (`mov $0x4,%esi ; mov %esi,0xa984(%ebx)` in the arm the table's entry 2 points at) with +0x1243 (`mov $0x3,%eax` in the arm entry 4 points at); and `int_a9a0` at +0xa9a0, copied in by `resetStudyUrefHandler` at 0x40913 and 0x40a94 and named in no displacement of any of the class's thirty-two members. **Reachability: the ordering FIRES on every study; the dead duration is never read at all.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1441.** The chain is measured from the arms and not from the numbers.
+
+======================================================================

@@ -23,19 +23,18 @@
  * and taking the largest displacement in each, then checking by hand that the
  * base register of the winner is `this`.  Finding 251.
  *
- * TWENTY-NINE OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote
- * `reset` and `resetLinearMapping`; the first processing batch added the
+ * ALL THIRTY-TWO ARE DEFINED, AND THE CLASS IS COMPLETE.  The lifecycle batch
+ * wrote `reset` and `resetLinearMapping`; the first processing batch added the
  * sixteen whose only callees were already written, the second added
  * `unitePhasesInfoOfUref` -- a leaf -- and `updateUref`, which was blocked on
  * exactly that one call, the study batch added the four that read and
- * write the study state at the top of the object, and the DIL batch added
+ * write the study state at the top of the object, the DIL batch added
  * `updateAltRbsPhaseInDil` with the two members that are its only callers,
- * and the pad-gain batch added `determineMaxUcode` and `findPadGain`.  The
- * rest stay declared and deliberately undefined, because defining a
- * method whose callees are not written breaks the link for the entire test
- * suite (docs/v90cpp.md).  The intra-class call graph is four edges and is
- * written down in finding 1367, so what the one remaining member waits on
- * is a lookup rather than a measurement.
+ * the pad-gain batch added `determineMaxUcode` and `findPadGain`, and the
+ * last batch added `studyUrefHandler`, which is the per-sample entry point
+ * the other thirty-one exist to serve.  Every one is differentially tested
+ * against the blob by test/unit/t_v90adid.cpp; the intra-class call graph is
+ * written down in finding 1367 and closed in finding 1446.
  *
  * THE OBJECT IS MOSTLY SIX-BY-ONE-HUNDRED-AND-TWENTY-EIGHT ARRAYS.  Six is
  * the number of RBS phases -- every loop in the class runs a `short` index
@@ -261,16 +260,37 @@ public:
 	void findPadGain();
 
 	/*
-	 * Declared, not defined -- see the file comment.
+	 * THE ONE THE LAST BATCH DEFINES, and the biggest member of the class:
+	 * 5,335 bytes, which is a third again the size of the next largest.
+	 * It is the per-sample entry point of the TRN1 study -- one call per
+	 * received sample, with the sample's RBS phase as the second argument
+	 * -- and it is a state machine on `int_a984` dispatched through a
+	 * seven-entry jump table at `.rodata+0xd70`.  The chain the arms name
+	 * is NOT in numeric order:
+	 *
+	 *   0 --a98c--> 1 --a990--> 2 --a994--> 4 --a99c--> 3 --a998--> 5
+	 *     --a998--> 6 (terminal)
+	 *
+	 * IT RETURNS AN int AND THE MANGLING DOES NOT SAY SO.  Every arm leaves
+	 * through `mov 0x3c(%esp),%eax` at 0x421a3, off a slot the prologue
+	 * seeds with 1.  Three values are reachable: 2 means the study is over,
+	 * 0 means "do not use this sample" -- state 1 on an already-flagged
+	 * phase, state 2 when the alternate-RBS test fires -- and 1 is
+	 * everything else.  Finding 1440.
+	 *
+	 * It calls five of the class's own members and the object inlines all
+	 * five: `calculateLinearMeanAndVar`, `calculateLinearMeanAndVarAlt`,
+	 * `isAltRbs`, `updateUref` and `updateUrefAlt`.  The two it really
+	 * calls are `getAltVarThresh` and `linear2alaw`/`linear2ulaw` through
+	 * the inlined accumulator.
 	 *
 	 * The constructor `V90AutoDigitalImpDetector(V90Parameters *)` and the
-	 * destructor are NOT declared, deliberately: declaring either makes
-	 * the class non-trivial, which deletes the default members of a union
-	 * holding one -- and the test fixture is exactly such a union -- and
-	 * makes `__builtin_offsetof` conditionally supported.  Their
-	 * signatures stay on the record in docs/findings.md.
+	 * destructor are declared above; they were not, once, because
+	 * declaring either makes the class non-trivial and deletes the default
+	 * members of a union holding one.  The test fixture uses a byte array
+	 * plus a cast for that reason.
 	 */
-	void studyUrefHandler(float, unsigned int);
+	int studyUrefHandler(float, unsigned int);
 
 	/*
 	 * Data members are public because the original's access specifiers are

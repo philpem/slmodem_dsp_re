@@ -2433,3 +2433,440 @@ V90AutoDigitalImpDetector::findPadGain()
 				     "------------------------------------"
 				     "-\r\n");
 }
+
+/*
+ * ==========================================================================
+ * `studyUrefHandler` -- the per-sample entry point of the whole study, and the
+ * last member of the class.
+ *
+ * WHAT THE STUDY DOES.  The far end sends the TRN1 segment: a long run of one
+ * PCM code, the "reference code" the class calls `ucode`.  Every sample of it
+ * arrives here with the RBS phase it belongs to, and the method's job is to
+ * decide, for each of the six phases, what linear level that one code actually
+ * comes back at -- and whether the phase is delivering a SECOND level as well,
+ * which is what "alternate RBS" means.  It does that in six timed passes, each
+ * ending in an update of `linMapp` and `linMappAlt` for the reference code, and
+ * it leaves behind the two things the rest of the class runs on: the per-phase
+ * alternate-RBS flags at +0x2800, and `trn1Sigma`, the mean variance of the
+ * unsuspected phases that `porcessFirstStudy` turns into its smoothness
+ * threshold.
+ *
+ * IT IS A STATE MACHINE ON +0xa984, AND THE STATES ARE NOT IN ORDER.  The
+ * object dispatches through a seven-entry jump table at `.rodata+0xd70` and
+ * each arm names its successor, so the chain is measured and not inferred:
+ *
+ *     0 --a98c--> 1 --a990--> 2 --a994--> 4 --a99c--> 3 --a998--> 5 --a998--> 6
+ *
+ * Six of the seven arms count samples in +0xa988 and fire their tail when the
+ * count reaches the duration named above the arrow; state 4 counts and does
+ * nothing else, and state 6 is terminal.  `resetStudyUrefHandler` copies SIX
+ * durations out of the parameter block and only five of them are ever read:
+ * states 3 and 5 share +0xa998 and +0xa9a0 is read by no member of the class.
+ * docs/deviations.md D294.
+ *
+ * IT RETURNS AN int, AND THE MANGLING DOES NOT SAY SO.  Every arm leaves
+ * through `mov 0x3c(%esp),%eax` at 0x421a3, and that slot holds 1 on entry.
+ * Three values are reachable and each means something: 2 is "the study is
+ * over" (state 6, and the call that enters it), 0 is "do not use this sample"
+ * -- state 1 when the phase is already flagged, state 2 when the alternate-RBS
+ * test fires -- and 1 is everything else.
+ *
+ * WHAT IT CALLS, AND WHAT THE OBJECT INLINED.  Five of the class's own members
+ * do the work -- `calculateLinearMeanAndVar`, `calculateLinearMeanAndVarAlt`,
+ * `isAltRbs`, `updateUref` and `updateUrefAlt` -- and the object inlines all
+ * five, which is most of why 5,335 bytes decode into this much source.  They
+ * are called here; the shapes match instruction for instruction and calling
+ * them is a factoring difference (finding 1440).  The two it really does call
+ * are `getAltVarThresh` and, through `updateUref`, `unitePhasesInfoOfUref`.
+ *
+ * NO LOCAL IS EVER READ BEFORE IT IS WRITTEN.  Unlike D281, D284 and D290,
+ * every one of this method's locals -- the return slot, the three alternate-RBS
+ * flags, `var[6]`, the threshold, the saved reference codes and both control
+ * words -- is written on every path that reads it, so every arm is fully
+ * comparable and the test needs no carve-out.
+ * ==========================================================================
+ */
+
+/*
+ * The re-test that closes the second and third updates: a phase that was
+ * flagged as carrying alternate RBS keeps the flag only if its alternate level
+ * is STILL further from its plain level than `short_a9a6` allows.
+ *
+ * The object writes this block out twice, at 0x42867 and 0x42b79, with
+ * `isAltRbs` inlined and its leading "is the phase flagged" test dropped --
+ * the caller has just tested it.  Calling the method reinstates a test whose
+ * answer is already known, which is why this is one function here and two
+ * copies there.
+ */
+static void
+adid_recheckAltRbs(V90AutoDigitalImpDetector *o)
+{
+	short phase;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		if (o->short_2800[phase] == 0)
+			continue;
+
+		o->short_2800[phase] = (short)o->isAltRbs(phase, o->ucode,
+		    (float)o->linMappAlt[phase][o->ucode]);
+
+		if (o->short_2800[phase] == 0)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90AutoDigitalImpDetector"
+						     ": alternate rbs false "
+						     "detection on phase %d "
+						     "!!!\n", phase);
+	}
+}
+
+/*
+ * `trn1Sigma`: the mean of the unsuspected phases' variances for the reference
+ * code.  The object has this twice as well, at 0x42c10 and 0x42ea9, differing
+ * only in the format string -- which is why the string is the parameter.
+ *
+ * THE FIELD AND THE PRINT GET TWO DIFFERENT ROUNDINGS OF ONE VALUE, and that
+ * is the whole reason this is written as it is.  The sum is accumulated in
+ * %st(0) and never spilled, so it and the quotient are at the x87's 64-bit
+ * significand; `fsts 0xa964` rounds to a float on the way into the field, and
+ * the print's `fstpl 0x4(%esp)` rounds the SAME register to a double on the way
+ * into the argument slot.  A float widened to a double has twenty-nine zero
+ * mantissa bits and the true value does not, so the two differ in exactly the
+ * half `%d` goes on to read.  Keeping the value in one C variable across both
+ * uses is what reproduces it; a `float` return or a `float` parameter would
+ * force a 32-bit slot and rounds it once for both.  Finding 1437's situation
+ * and finding 1443.
+ *
+ * NOTHING BOUNDS THE COUNT.  Six flagged phases give 0.0f/0, a NaN, which is
+ * then stored and printed -- the same shape as D282 and reachable the same way.
+ *
+ * THE FORMAT HAS NO CONVERSION FOR WHAT IT IS HANDED.  `%d` against a `float`
+ * promoted to a `double` is four bytes of mantissa read as an integer.  That is
+ * the object's call and it is reproduced; docs/deviations.md D291.
+ */
+static void
+adid_updateTrn1Sigma(V90AutoDigitalImpDetector *o, const char *fmt)
+{
+	float sum = 0.0f;
+	short n = 0;
+	short phase;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++)
+		if (o->short_2800[phase] == 0) {
+			sum += o->float_9d48[phase][o->ucode];
+			n = (short)(n + 1);
+		}
+
+	sum = sum / n;
+	o->trn1Sigma = sum;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(fmt, sum);
+}
+
+int
+V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
+{
+	/*
+	 * Formed once, before the dispatch, and truncating: the object's
+	 * `fists 0x46(%esp)` at 0x4217f sits between the control-word switch it
+	 * sets up for the whole function and the switch on the state.  The
+	 * float itself stays live -- only `isAltRbs` uses it, and only in three
+	 * of the seven arms.
+	 */
+	short sample = (short)v;
+	int ret = 1;
+
+	switch (int_a984) {
+	case 0: {
+		/*
+		 * The initial pattern.  Accumulate until +0xa98c samples have
+		 * arrived, then form each phase's variance for the reference
+		 * code, ask `getAltVarThresh` what counts as large, and flag
+		 * every phase over it as carrying alternate RBS.
+		 */
+		float var[V90ADID_PHASES];
+		float thresh;
+		short n = 0;
+		short p;
+
+		int_a988++;
+		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+
+		if (int_a988 != int_a98c)
+			break;
+
+		/*
+		 * NO ZERO-COUNT GUARD, where every other mean in the class has
+		 * one: a phase with no samples divides 1.0f by 0 here and its
+		 * variance comes out a NaN or an infinity, which then goes
+		 * straight into `getAltVarThresh`.  docs/deviations.md D292.
+		 */
+		for (p = 0; p < V90ADID_PHASES; p++) {
+			float inv = 1.0f / uint_1c00[p][ucode];
+			float mean = float_1000[p][ucode] * inv;
+
+			var[p] = inv * float_9118[p][ucode] - mean * mean;
+		}
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
+					     "initail var (Trn1):  %d  %d  %d  "
+					     "%d  %d  %d\n", (int)var[0],
+					     (int)var[1], (int)var[2],
+					     (int)var[3], (int)var[4],
+					     (int)var[5]);
+
+		thresh = getAltVarThresh(var, float_a970);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
+					     "initail AltRbsVarThresh (Trn1) = "
+					     "%d\n", (int)thresh);
+
+		/*
+		 * An ORDERED `>`: the object's `fcomps`/`jbe` skips on an
+		 * unordered compare, so a NaN variance -- which the missing
+		 * guard above can produce -- does NOT flag its phase.
+		 */
+		for (p = 0; p < V90ADID_PHASES; p++)
+			if (var[p] > thresh) {
+				n = (short)(n + 1);
+				short_2800[p] = 1;
+			}
+
+		/*
+		 * And the accumulators are emptied only if something was
+		 * flagged.  A study that finds no alternate RBS at all carries
+		 * this pass's samples forward into the next state.
+		 */
+		if (n > 0)
+			for (p = 0; p < V90ADID_PHASES; p++) {
+				float_1000[p][ucode] = 0.0f;
+				uint_1c00[p][ucode] = 0;
+				float_9118[p][ucode] = 0.0f;
+			}
+
+		edprintf("V90AutoDigitalImpDetector: Trn1 alternate rbs initial "
+			 "patern  %d%d%d%d%d%d\n", short_2800[0], short_2800[1],
+			 short_2800[2], short_2800[3], short_2800[4],
+			 short_2800[5]);
+
+		int_a988 = 0;
+		int_a984 = 1;
+		break;
+	}
+
+	case 1:
+		/*
+		 * The first update.  Same accumulation, and the answer to the
+		 * caller is now "was this phase already flagged" -- the index
+		 * is the RAW `unsigned int` argument here where every other arm
+		 * narrows it to a `short` first, because those arms reach the
+		 * flag through `isAltRbs` and this one does not.
+		 */
+		int_a988++;
+		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+		ret = short_2800[phase] == 0 ? 1 : 0;
+
+		if (int_a988 != int_a990)
+			break;
+
+		updateUref();
+
+		/*
+		 * TWO LOCAL ARRAYS ARE FILLED HERE AND NEVER READ.  The object
+		 * runs two six-iteration loops copying `linMapp[i][ucode]` and
+		 * then `linMappAlt[i][ucode]` into one twelve-byte stack slot
+		 * at 0x50(%esp) -- GCC gave both the same slot because the
+		 * first is dead before the second starts -- and the print below
+		 * reads the tables directly.  All six stores to that slot in
+		 * the whole function are writes and there is not one read, so
+		 * they are omitted; cases 2 and 3 have the same pair and case 5
+		 * does not.  docs/deviations.md D293.
+		 */
+		edprintf("V90AutoDigitalImpDetector trn1 first update  :  %d  "
+			 "%d  %d  %d  %d  %d\n", linMapp[0][ucode],
+			 linMapp[1][ucode], linMapp[2][ucode], linMapp[3][ucode],
+			 linMapp[4][ucode], linMapp[5][ucode]);
+
+		int_a988 = 0;
+		int_a984 = 2;
+		break;
+
+	case 2:
+		/*
+		 * The second update, and the first that splits the sample two
+		 * ways: a sample too far from this phase's established level
+		 * goes to the ALTERNATE accumulators and the caller is told 0,
+		 * anything else goes to the plain ones.
+		 */
+		int_a988++;
+
+		if (isAltRbs((short)phase, ucode, v)) {
+			calculateLinearMeanAndVarAlt(sample, phase);
+			ret = 0;
+		} else {
+			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+			ret = 1;
+		}
+
+		if (int_a988 != int_a994)
+			break;
+
+		updateUref();
+		updateUrefAlt();
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
+					     "second update  :  %d  %d  %d  %d "
+					     " %d  %d\n", linMapp[0][ucode],
+					     linMapp[1][ucode],
+					     linMapp[2][ucode],
+					     linMapp[3][ucode],
+					     linMapp[4][ucode],
+					     linMapp[5][ucode]);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
+					     " first update  :  %d  %d  %d  %d "
+					     " %d  %d\n", linMappAlt[0][ucode],
+					     linMappAlt[1][ucode],
+					     linMappAlt[2][ucode],
+					     linMappAlt[3][ucode],
+					     linMappAlt[4][ucode],
+					     linMappAlt[5][ucode]);
+
+		adid_recheckAltRbs(this);
+
+		short_a948 = 1;
+		int_a988 = 0;
+		int_a984 = 4;
+		break;
+
+	case 3:
+		/*
+		 * The third update.  The same split as state 2 -- but the
+		 * caller is told 1 either way, so an alternate-RBS sample is
+		 * no longer withheld from whatever is upstream.
+		 */
+		int_a988++;
+
+		if (isAltRbs((short)phase, ucode, v))
+			calculateLinearMeanAndVarAlt(sample, phase);
+		else
+			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+
+		if (int_a988 != int_a998)
+			break;
+
+		updateUref();
+		updateUrefAlt();
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
+					     "third update  :  %d  %d  %d  %d  "
+					     "%d  %d\n", linMapp[0][ucode],
+					     linMapp[1][ucode],
+					     linMapp[2][ucode],
+					     linMapp[3][ucode],
+					     linMapp[4][ucode],
+					     linMapp[5][ucode]);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
+					     " second update  :  %d  %d  %d  %d"
+					     "  %d  %d\n", linMappAlt[0][ucode],
+					     linMappAlt[1][ucode],
+					     linMappAlt[2][ucode],
+					     linMappAlt[3][ucode],
+					     linMappAlt[4][ucode],
+					     linMappAlt[5][ucode]);
+
+		adid_recheckAltRbs(this);
+		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector first "
+					   "update : trn1Sigma = %d\n");
+
+		int_a988 = 0;
+		int_a984 = 5;
+		break;
+
+	case 4: {
+		/*
+		 * A pure delay, and the only arm that does not look at the
+		 * sample at all: +0xa99c calls apart, it hands the machine on
+		 * to state 3.  The count that fires it is the incremented one
+		 * and what is stored on the firing pass is zero, not it.
+		 */
+		int next = int_a988 + 1;
+
+		if (next == int_a99c) {
+			int_a988 = 0;
+			int_a984 = 3;
+		} else {
+			int_a988 = next;
+		}
+		break;
+	}
+
+	case 5:
+		/*
+		 * The final update.  State 3's arm again, against the same
+		 * duration at +0xa998 -- and the tail has no re-test of the
+		 * flags, because there is nothing left to correct them for.
+		 */
+		int_a988++;
+
+		if (isAltRbs((short)phase, ucode, v))
+			calculateLinearMeanAndVarAlt(sample, phase);
+		else
+			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+
+		if (int_a988 != int_a998)
+			break;
+
+		updateUref();
+		updateUrefAlt();
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
+					     "final update  :  %d  %d  %d  %d  "
+					     "%d  %d\n", linMapp[0][ucode],
+					     linMapp[1][ucode],
+					     linMapp[2][ucode],
+					     linMapp[3][ucode],
+					     linMapp[4][ucode],
+					     linMapp[5][ucode]);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
+					     " final update  :  %d  %d  %d  %d "
+					     " %d  %d\n", linMappAlt[0][ucode],
+					     linMappAlt[1][ucode],
+					     linMappAlt[2][ucode],
+					     linMappAlt[3][ucode],
+					     linMappAlt[4][ucode],
+					     linMappAlt[5][ucode]);
+
+		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector second "
+					   "update : trn1Sigma = %d\n");
+
+		int_a988 = 0;
+		int_a984 = 6;
+		ret = 2;
+		break;
+
+	case 6:
+		/* Terminal: the study is over and says so on every call. */
+		ret = 2;
+		break;
+
+	default:
+		/*
+		 * The dispatch is `cmp $0x6; ja`, an UNSIGNED compare, so a
+		 * negative state word lands here rather than below the table.
+		 */
+		break;
+	}
+
+	return ret;
+}

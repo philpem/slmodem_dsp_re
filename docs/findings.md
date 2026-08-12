@@ -45303,3 +45303,365 @@ candidate is in the high bucket and the middle one stays at its 1e6 and lets
 the witness, rather than widen the sweep and hope.
 
 ======================================================================
+
+### 1440. `studyUrefHandler` READ END TO END: A STATE MACHINE, A RETURN PROTOCOL, AND FIVE METHODS THE COMPILER SWALLOWED
+
+The last and largest member of `V90AutoDigitalImpDetector`: 5,335 bytes at
+0x42140, a third again the size of the next biggest, and the per-sample entry
+point every other method in the class exists to serve. One call per received
+sample, with the sample as a `float` and its RBS phase as an `unsigned int`.
+
+IT IS A SWITCH ON +0xa984 WITH SEVEN ARMS, dispatched through a jump table at
+`.rodata+0xd70` under `cmp $0x6,%eax ; ja`. Six of the arms count samples in
++0xa988 and fire a tail when the count reaches a duration; the seventh is
+terminal.
+
+IT RETURNS AN `int`, AND THE MANGLING DOES NOT SAY SO.
+`_ZN25V90AutoDigitalImpDetector16studyUrefHandlerEfj` names the arguments and
+nothing else, and every arm leaves through `mov 0x3c(%esp),%eax` at 0x421a3 off
+a slot the prologue seeds with 1.  Three values are reachable and each is a
+message to the caller:
+
+- **2** -- the study is over.  State 6 says it on every call, and state 5 says
+  it once, on the call that completes the machine.
+- **0** -- do not use this sample.  State 1 says it when the phase is already
+  flagged as carrying alternate RBS, and state 2 says it when this sample's own
+  distance says so.
+- **1** -- everything else, including the default arm.
+
+That protocol is the whole of what the method tells its caller, it is invisible
+in the object's own type information, and a `void` alias in the test would have
+discarded it.  It is the reason the header declares the method `int`.
+
+FIVE OF THE CLASS'S OWN METHODS ARE INLINED INTO IT, and that is most of why
+5,335 bytes decode into as little source as they do:
+`calculateLinearMeanAndVar` (four sites), `calculateLinearMeanAndVarAlt`
+(three), `isAltRbs` (five), `updateUref` (four) and `updateUrefAlt` (three).
+Every one matches the out-of-line method instruction for instruction --
+`updateUref`'s three steps in order, including its reload of `ucode` after the
+`unitePhasesInfoOfUref` call, and `isAltRbs`'s two nested `cltd`/`xor`/`sub`
+magnitudes around a `movswl` of the mapping entry.  The inlined `isAltRbs`
+drops its leading "is the phase flagged" test at the two sites where the caller
+has just made it, which is the only difference any of the nineteen shows.  The
+reconstruction calls the methods; the differential test says that is a
+factoring difference and nothing more.
+
+The two calls it really makes are `getAltVarThresh`, once, at the end of state
+0, and -- through the inlined accumulator -- `linear2alaw` and `linear2ulaw`.
+`unitePhasesInfoOfUref` is reached only through the inlined `updateUref`.
+
+NOTHING HERE IS READ BEFORE IT IS WRITTEN.  Three of this class's methods read
+an uninitialised local on some path (D281, D284, D290) and no test can compare
+those paths, because two static objects have two different stack frames.  This
+one has none: the return slot, the three alternate-RBS flags at 0x30, 0x34 and
+0x38, the six-float `var[]` at 0x60, the threshold at 0x40, the saved reference
+codes at 0x2a..0x2f and both control words are all written on every path that
+reads them.  Every arm is comparable, and the test needs no carve-out of its
+own -- only the one D281 forces on it from inside `updateUref`.
+
+======================================================================
+
+### 1441. THE STATE NUMBERS ARE NOT THE STATE ORDER, AND ONE OF THE SIX DURATIONS IS READ BY NOBODY
+
+`resetStudyUrefHandler` copies six 32-bit words out of the parameter block into
++0xa98c..+0xa9a0 and starts the machine at state 0.  The obvious reading is
+that the six durations are the six states in order.  Both halves of that are
+wrong, and the arms say so.
+
+THE CHAIN, TAKEN FROM WHAT EACH ARM STORES INTO +0xa984:
+
+    0 --a98c--> 1 --a990--> 2 --a994--> 4 --a99c--> 3 --a998--> 5 --a998--> 6
+
+State 2 hands on to state **4**, and state 4 -- which is a bare counter that
+never looks at the sample at all -- hands on to state **3**.  So the numbering
+runs 0, 1, 2, 4, 3, 5, 6 in time, and reading the arms in numeric order
+describes a machine that does not exist.  The evidence is six stores:
+`mov $0x1,%eax` at 0x4239a, `mov $0x2,%eax` at 0x425ff, `mov $0x4,%esi` at
+0x42907, `mov $0x3,%eax` at 0x43383, `mov $0x5,%eax` at 0x42c6f and
+`mov $0x6,%ecx` at 0x42eff, each paired with a zero into +0xa988.
+
+STATES 3 AND 5 SHARE A DURATION.  Both compare +0xa988 against +0xa998 --
+0x42985 and 0x42d09 -- so the third update and the final update run for the
+same number of samples, and there is no sixth independent length.
+
+AND +0xa9a0 IS READ BY NOTHING.  It is copied in by `resetStudyUrefHandler` at
+0x40913 and 0x40a94 and it is named in no displacement of any of the class's
+thirty-two members.  That is a claim that could only be made once all
+thirty-two were disassembled, which is what this batch finishes; before it, the
+honest statement was the header's "read by nothing that is disassembled".  Its
+width is measured -- a 32-bit `mov` pair -- and nothing else about it is.
+
+docs/deviations.md D294.
+
+======================================================================
+
+### 1442. ONE MEAN IN FIVE HAS NO ZERO-COUNT GUARD, AND IT IS THE ONE WHOSE ANSWER SETS A THRESHOLD
+
+`studyUrefHandler` forms a per-phase mean and variance for the reference code
+in five places: once at the end of each of states 0, 1, 2, 3 and 5.  Four of
+them are the inlined `updateUref`, which opens with
+`mov 0x1c00(%ebx,%ecx,4),%edi ; test %edi,%edi ; je` and leaves a cell with no
+samples completely alone.  The fifth, at 0x42260, loads the same count and
+pushes it straight into `fildll` with no test at all.
+
+So at the end of state 0 a phase that saw no samples for the reference code
+divides 1.0f by zero, multiplies the resulting infinity by a sum of 0.0f, and
+puts a NaN in `var[phase]` -- which then goes into `getAltVarThresh` as one of
+its six inputs, and comes back out as the threshold every phase is compared
+against.  `getAltVarThresh` handles it the way finding 1436 describes: its
+accumulate is guarded by `jae`, which an unordered compare does not take, so a
+NaN variance JOINS the below-average average and poisons the answer, and the
+flagging test that follows -- an ordered `>` -- then flags nothing at all.
+
+The asymmetry is not a difference between two methods; it is a difference
+between the object's own state-0 tail and its own state-1 tail, five hundred
+bytes apart in the same function.  `t_v90adid` reaches it through the two zeros
+in its `counts[]` table and asserts that both an empty cell and a full one were
+exercised.  docs/deviations.md D292.
+
+======================================================================
+
+### 1443. ONE VALUE, TWO ROUNDINGS, AND A `%d` HANDED A DOUBLE
+
+The end of states 3 and 5 computes `trn1Sigma`: the mean of the variances of
+the phases NOT flagged as carrying alternate RBS.  The sum is accumulated in
+%st(0) from `fldz` and never spilled, and the count is pushed as a 16-bit
+integer and loaded with `filds`, so the quotient is formed at the x87's 64-bit
+significand.  Then, at 0x42c5f:
+
+    fsts  0xa964(%ebx)        ; the field, rounded to 24 bits
+    ja    4343e               ; and if the debug level is above 1
+    ...
+    fstpl 0x4(%esp)           ; the argument, rounded to 53 bits
+
+TWO DIFFERENT ROUNDINGS OF ONE REGISTER, and they are not the same bits.  A
+float widened to a double has twenty-nine zero mantissa bits; the true extended
+value does not, and `%d` reads exactly the four bytes those bits are in.  So
+the reported number is a function of the unrounded quotient and the stored
+field is a function of the rounded one, and a reconstruction that put the value
+through a `float` variable once would print the wrong thing.
+
+Reproducing it needs the value to stay in one C variable across both uses, and
+nothing more: `sum = sum / n; o->trn1Sigma = sum; ... printf(fmt, sum);`
+compiles to `fsts` then `fstpl` under `-mfpmath=387` with no `-ffloat-store`,
+which was checked by disassembling our own object and not assumed -- the same
+`de f9`, the same `fsts` with no pop, the same `fstp %st(0)` on the gated-off
+path.  What breaks it is any spelling that forces a 32-bit slot: a `float`
+return from a helper, a `float` parameter, a `volatile` local.  That is why the
+two duplicate copies of this block are factored as a helper which does the
+print itself and takes only the format string as a parameter.  Finding 1437 is
+the same trap from the other side, where three locals had to be pinned BECAUSE
+the object stored them; here one must not be.
+
+AND THE FORMAT HAS NO CONVERSION FOR WHAT IT IS GIVEN.  "trn1Sigma = %d"
+against a `float` promoted to a `double` in a variadic call prints four bytes
+of mantissa as an integer.  It is the object's call, it is reproduced, and the
+two transcripts agree on it.  docs/deviations.md D291.
+
+======================================================================
+
+### 1444. SIX STORE LOOPS INTO ONE STACK SLOT THAT NOTHING READS
+
+At the end of states 1, 2 and 3 the object runs two six-iteration loops that
+copy `linMapp[i][ucode]` and then `linMappAlt[i][ucode]` into the twelve bytes
+at 0x50(%esp) -- and both loops of each pair write the SAME twelve bytes,
+because GCC gave two local `short[6]` arrays one slot after finding the first
+dead before the second starts.  Across the whole 5,335 bytes there are six
+stores into that slot (0x4254c, 0x4257c, 0x4281c, 0x4284c, 0x42b2c, 0x42b5c)
+and not one load.  The prints that follow read the two tables directly out of
+`this`.
+
+So the source declared two arrays per site, filled them, and used neither.
+They are omitted here: dead stores to non-escaping locals are not behaviour,
+and no differential test in this tree can distinguish their presence from their
+absence.  What IS worth keeping is that state 5's otherwise identical tail does
+not have them -- three sites out of four -- which is the kind of asymmetry that
+says the four tails were written out by hand rather than generated.
+
+docs/deviations.md D293.
+
+======================================================================
+
+### 1445. WHAT THE STUDY'S TEST HAD TO FORCE, AND THE ONE PATH IT CANNOT REACH
+
+Running the machine from state 0 to state 6 costs the sum of six durations with
+the right accumulator state at each boundary -- on a real connection, thousands
+of samples.  The state word is a plain `int` at +0xa984 and the count is
+another at +0xa988, so `t_v90adid` forces both and reaches any arm in one call.
+That is docs/largefunctions.md's item 2 applied to an object's fields rather
+than to a dispatch, and it is what makes a 5,335-byte method testable arm by
+arm.  The sweep forces each of the seven arms, each with its tail firing and
+with it held, and asserts all fourteen were observed; a directed run then walks
+the whole chain end to end in sixty calls and compares the object after every
+one, because a divergence that appears at one state boundary and is washed out
+by the next is a defect a final-state comparison would miss.  `run_signal`
+drives it a fourth way, once per sample over forty blocks.
+
+THREE THINGS HAD TO BE CONSTRUCTED.
+
+The DEFAULT ARM needs a state word outside 0..6, and the interesting half of it
+is that the dispatch is `cmp $0x6 ; ja` -- an UNSIGNED compare, so a NEGATIVE
+state word lands in the default arm rather than below the table.  The test
+offers 7, 8, 100, -1 and INT_MIN and asserts the answer is 1 and that nothing
+in the object moved.
+
+STATE 0's FLAGGING GOES BOTH WAYS ONLY IF THE VARIANCES ARE PLANTED.  Six equal
+variances put every entry at the average `getAltVarThresh` computes, the answer
+comes back well above them all and nothing is flagged -- and the clear that
+follows is skipped, which is the only way to see that it is conditional.  One
+wild phase drags the average up, is the only entry above the answer and is
+flagged.  The two differ in one float.
+
+THE ALTERNATE-RBS TEST is asked its own answer before the call: `isAltRbs`
+reads and writes nothing, so calling it on the same object is how the sweep
+knows which arm of states 2, 3 and 5 the call is about to take.
+
+AND ONE PATH IS OUT OF REACH, DELIBERATELY.  `trn1Sigma` is `sum / count` over
+the phases that are NOT flagged, so a count of zero -- the divide the sigma
+block does not guard -- needs all six flagged.  But four of the seven arms call
+`updateUref`, which calls `unitePhasesInfoOfUref`, which reads an uninitialised
+local when all five of phases 0..4 are flagged (D281): two static objects have
+two different frames there and the comparison would be measuring the linker's
+layout.  So the test clears one of phases 0..4 before every call, in the sweep
+and in the chain and in `run_signal`, and the empty sigma is left untested and
+written down here instead.  The same arithmetic IS exercised, in state 0's
+unguarded variance loop, which needs nothing but a cell with no samples.
+
+AND ONE INSTRUMENT DID NOT WORK, WHICH IS WORTH WRITING DOWN BECAUSE IT IS THE
+ONLY ONE THERE IS.  Two of this method's reports go through `edprintf` and are
+NOT behind the debug gate -- state 0's alternate-RBS pattern and state 1's
+first update -- and no transcript can tell an ungated call from a gated one:
+at level 2 both spellings print, and at level 0 neither does, because
+`edprintf` gates its own final `dsplibs_debug_printf`.  What an `edprintf` DOES
+leave behind at level 0 is the rotating key: it sets `iEncodeOffset = 0` and
+advances it twice per formatted character, so two probes of `cEncodeChar` name
+the position and a skipped call leaves it at the previous one.  The key runs
+modulo TEN, so only five positions are reachable and two reports agree half the
+time -- which is why the probe has to be run five times with the report one
+character longer each.
+
+That works for state 1, whose report is the only `edprintf` its arm makes, and
+the mutation that puts it behind the gate is caught.  It does NOT work for
+state 0, and the measurement is this: at level 0 the key after state 0's arm
+sits where `getAltVarThresh`'s THIRD `edprintf` would leave it (offset 8, which
+is 2 * 74 mod 10) for every width, while the blob's sits where the pattern
+report would leave it (8, 0, 2, 4, 6 for widths of one to five digits, which is
+2 * (69 + k) mod 10).  At level 2 the same probe reads 8, 0, 2, 4, 6 on BOTH
+sides.  Both objects, both return values and both transcripts agree at both
+levels, so nothing about the method's behaviour is in question -- what differs
+is the number or the length of the `edprintf` calls the two sides make
+somewhere inside `getAltVarThresh`, which no transcript can see because the key
+is reset per call and only the LAST call's length is readable.  It is an open
+thread on `getAltVarThresh`, an earlier batch's method, and not on this one.
+
+So state 0's report is tested for its wording and its arguments and NOT for its
+ungatedness, and the mutation that would have tested that was removed rather
+than left standing as a claim nothing checks.  An assertion nobody can explain
+is worse than none.
+
+======================================================================
+
+### 1446. `V90AutoDigitalImpDetector` CLOSED: WHAT THE CLASS IS, ALL THIRTY-TWO MEMBERS OF IT
+
+With `studyUrefHandler` written, every member of the class is reconstructed and
+differentially tested against the blob.  This is what the whole of it does.
+
+THE PROBLEM.  On a V.90 downstream connection the far end is a digital source
+putting PCM codes straight onto the network, and the modem's job is to know
+which code arrived.  Two things get in the way.  Robbed-bit signalling steals
+the low bit of one sample in six, which makes the received level depend on
+which of SIX RBS PHASES the sample fell in -- so the class keeps everything
+six-wide, and every loop in it runs a `short` from 0 to 5 inclusive.  And the
+network may put a PAD in the path, a fixed attenuation that divides every level
+by a constant the modem is never told.  The class measures both, plus the
+per-code noise that says which measurements to believe, and hands out a
+128-entry linear mapping per phase.
+
+THE MEASUREMENT.  Per phase and per seven-bit code the object keeps a count
+(+0x1c00), a sum of magnitudes (+0x1000) and a sum of squares (+0x9118); per
+phase it keeps the same pair without the code (+0x9d30, +0x9d18) for the
+ALTERNATE-RBS hypothesis.  `calculateLinearMeanAndVar` and its `Alt` twin add a
+sample; `updateLinMappMeanAndVar` and its twin divide, round with an explicit
+`+ 0.5f` and a truncating `fistp`, and write the mean into `linMapp` or
+`linMappAlt` and the variance into `float_9d48` -- which the object's own format
+string calls `linearMappingVar`.  `clearCamulativeVal` and its twin empty the
+accumulators.  `addReceivedSampleToStorage` keeps the raw samples as well,
+2,110 per phase at +0x2818, with a per-code histogram at +0x8b00 beside them.
+
+THE ALTERNATE-RBS HYPOTHESIS is the class's central idea and the reason half of
+its fields come in pairs.  A phase may deliver TWO levels for one code rather
+than one, because the signalling bit is not always robbed the same way; so
+every measurement is kept twice, once pooled and once for the samples that fall
+far from the pooled answer.  `isAltRbs` is the test -- "is this sample further
+from the phase's established level than +0xa9a6 allows" -- and `short_2800[6]`
+is the verdict per phase.  `updateUrefAlt` folds the alternate accumulators
+into `linMappAlt`; `isThereAnyAltRbsPhase` asks whether any phase carries one.
+
+THE SIX PHASES OF THE STUDY are `studyUrefHandler`'s six live states, run over
+the TRN1 segment -- a long run of one reference code, `ucode`.  State 0
+accumulates and then decides which phases carry alternate RBS at all, using
+`getAltVarThresh` to turn the six variances into a threshold: the mean of the
+below-average half, floored at `altMinVarThresh`.  States 1, 2, 3 and 5 each
+accumulate for a while and then run `updateUref` -- mean, variance,
+`unitePhasesInfoOfUref`, clear -- with states 2, 3 and 5 splitting each sample
+between the plain and the alternate accumulators.  States 2 and 3 re-test the
+flags afterwards and print "alternate rbs false detection" for each one they
+withdraw; states 3 and 5 compute `trn1Sigma`.  State 4 is a pure delay.  State
+6 is terminal and answers 2 for ever.
+
+`unitePhasesInfoOfUref` is the other half of the idea: six phases measuring one
+code are often the same phase as far as the line is concerned, so it merges any
+two whose entries differ by less than +0xa9a4, pools their accumulators,
+recomputes, and gives the largest group's answer to every phase whose own
+measurement is not trusted.  It repeats until its checksum stops changing.
+
+WHAT HAPPENS AFTER THE STUDY.  `porcessFirstStudy` studies codes 0x40..0x4f,
+decides which phases are too rough to trust from fifteen adjacent differences
+against 2.5 * `trn1Sigma`, and writes that verdict into `byte_280c`.
+`porcessSecondStudy` and `setQcLinearMapping` each take the first phase with a
+clear verdict -- `unSuspectedPhase` -- and repair the others against it, the
+first one code at a time and the second wholesale, and both then call
+`updateAltRbsPhaseInDil`, which quantises each suspected phase's stored samples
+onto the reference phase's mapping and takes the most popular answer.
+`uniteLinMappInfoOfUnsuspectedPhases` is `unitePhasesInfoOfUref`'s shape again
+for one code, grouped on `byte_280c` and merged on a variance rather than a
+distance.  `determineMaxUcode` turns `linearMappingVar` into a per-cell
+usability mask at +0x0d00 and a highest-usable-code per phase; `findPadGain`
+starts from that, searches for the gain whose round trip through a companding
+law is cleanest, and names the law as well; `applyPadGainToLinMapp` divides
+both tables through by it.  `reset`, `resetLinearMapping`,
+`resetStudyUrefHandler`, `setConnectionType`, `setMaxUcodeArray`,
+`setPrevSessionLinearMapping` and `adjustUinfoToPhaseOffset` are the lifecycle
+and the setters.
+
+THE INTRA-CLASS CALL GRAPH, complete, measured over every `R_386_PC32` in the
+class and over every inlined body:
+
+    studyUrefHandler -> calculateLinearMeanAndVar, calculateLinearMeanAndVarAlt,
+                        isAltRbs, updateUref, updateUrefAlt, getAltVarThresh
+    updateUref       -> unitePhasesInfoOfUref
+    porcessSecondStudy -> updateAltRbsPhaseInDil
+    setQcLinearMapping -> updateAltRbsPhaseInDil, updateLinMappMeanAndVar
+    updateAltRbsPhaseInDil -> unSuspectedPhaseNearestLinMapp
+
+Everything else is a leaf, reaching only `alaw2linear`, `ulaw2linear`,
+`linear2alaw`, `linear2ulaw`, `memcpy`, `edprintf` and `dsplibs_debug_printf`.
+Finding 1367 recorded four of those edges when four were all that were visible;
+this is the closed version.
+
+WHAT THE CLASS TAUGHT.  Fourteen deviations (D255-D259, D280-D294), and the
+recurring shapes are worth naming: FIVE unbounded indices, of which two leave
+the object and one cannot terminate; THREE uninitialised locals, each of which
+puts a path out of a differential test's reach for good; FOUR fields whose type
+no test could settle, fixed from the disassembly alone (finding 1360); and a
+dozen floating-point branches whose C spelling is the negation of an ordered
+test, because an unordered compare goes the other way (findings 1436, 1439).
+The object names a dozen of its own fields through its format strings, which is
+where `trn1Sigma`, `linearMappingVar`, `uniteUrefDistanceThresh`,
+`altRbsDistanceThresh`, `altMinVarThresh`, `neighborUcodeMinDistance`,
+`neighborUcodeMaxDistance`, `unSuspectedPhase`, `maxUcode`,
+`projectionBaseUcode` and `minUcodeForCodecProjection` all came from -- finding
+1425's technique, and the single best reason to reconstruct the debug calls
+rather than drop them.
+
+======================================================================

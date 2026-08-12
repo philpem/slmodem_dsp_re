@@ -2037,5 +2037,423 @@
   "label": "fpg: the projection banner prints the wrong pair",
   "find": "\t\t\t\t\t     \"%d\\r\\n\", base, minU);",
   "replace": "\t\t\t\t\t     \"%d\\r\\n\", minU, base);"
+ },
+ {
+  "label": "NOTE: studyUrefHandler, the state machine.  Its seven arms repeat each other almost exactly -- four of them are `updateUref(); updateUrefAlt();` followed by two reports and a store into +0xa984, and states 3 and 5 differ only in a format string -- so almost every anchor below has to reach into the one report that separates its arm from the others.  Finding 1264, and the generator .scratch/addmut-suh.py refuses to write the file unless every anchor in it matches exactly once."
+ },
+ {
+  "label": "suh: the re-test skips one phase",
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++) {\n\t\tif (o->short_2800[phase] == 0)\n\t\t\tcontinue;",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++) {\n\t\tif (o->short_2800[phase] == 0)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "suh: the re-test runs on the unflagged phases instead",
+  "find": "\t\tif (o->short_2800[phase] == 0)\n\t\t\tcontinue;",
+  "replace": "\t\tif (o->short_2800[phase] != 0)\n\t\t\tcontinue;"
+ },
+ {
+  "label": "suh: the re-test measures the plain mapping, not the alternate one",
+  "find": "\t\t    (float)o->linMappAlt[phase][o->ucode]);",
+  "replace": "\t\t    (float)o->linMapp[phase][o->ucode]);"
+ },
+ {
+  "label": "suh: the re-test inverts its own verdict",
+  "find": "\t\to->short_2800[phase] = (short)o->isAltRbs(phase, o->ucode,",
+  "replace": "\t\to->short_2800[phase] = (short)!o->isAltRbs(phase, o->ucode,"
+ },
+ {
+  "label": "suh: the false-detection report fires on the phases that kept the flag",
+  "find": "\t\tif (o->short_2800[phase] == 0)\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (o->short_2800[phase] != 0)\n\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "suh: the false-detection report is not gated",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector\"\n\t\t\t\t\t\t     \": alternate rbs false \"",
+  "replace": "\t\t\tif (1)\n\t\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector\"\n\t\t\t\t\t\t     \": alternate rbs false \""
+ },
+ {
+  "label": "suh: the false-detection wording",
+  "find": "\t\t\t\t\t\t     \": alternate rbs false \"",
+  "replace": "\t\t\t\t\t\t     \": alternate rbs FALSE \""
+ },
+ {
+  "label": "suh: the false-detection report names the wrong phase",
+  "find": "\t\t\t\t\t\t     \"!!!\\n\", phase);",
+  "replace": "\t\t\t\t\t\t     \"!!!\\n\", phase + 1);"
+ },
+ {
+  "label": "suh: trn1Sigma averages the flagged phases",
+  "find": "\t\tif (o->short_2800[phase] == 0) {\n\t\t\tsum += o->float_9d48[phase][o->ucode];",
+  "replace": "\t\tif (o->short_2800[phase] != 0) {\n\t\t\tsum += o->float_9d48[phase][o->ucode];"
+ },
+ {
+  "label": "suh: trn1Sigma averages the wrong array",
+  "find": "\t\t\tsum += o->float_9d48[phase][o->ucode];",
+  "replace": "\t\t\tsum += o->float_9118[phase][o->ucode];"
+ },
+ {
+  "label": "suh: trn1Sigma skips the last phase",
+  "find": "\tfor (phase = 0; phase < V90ADID_PHASES; phase++)\n\t\tif (o->short_2800[phase] == 0) {",
+  "replace": "\tfor (phase = 0; phase < V90ADID_PHASES - 1; phase++)\n\t\tif (o->short_2800[phase] == 0) {"
+ },
+ {
+  "label": "suh: trn1Sigma counts by two",
+  "find": "\t\t\tn = (short)(n + 1);\n\t\t}\n\n\tsum = sum / n;",
+  "replace": "\t\t\tn = (short)(n + 2);\n\t\t}\n\n\tsum = sum / n;"
+ },
+ {
+  "label": "suh: trn1Sigma divides by one more than the count",
+  "find": "\tsum = sum / n;",
+  "replace": "\tsum = sum / (n + 1);"
+ },
+ {
+  "label": "suh: trn1Sigma is stored negated",
+  "find": "\to->trn1Sigma = sum;",
+  "replace": "\to->trn1Sigma = -sum;"
+ },
+ {
+  "label": "suh: the trn1Sigma report is rounded to a float first (finding 1443)",
+  "find": "\t\tdsplibs_debug_printf(fmt, sum);",
+  "replace": "\t\t{\n\t\t\tvolatile float r = sum;\n\t\t\tdsplibs_debug_printf(fmt, r);\n\t\t}"
+ },
+ {
+  "label": "suh: the trn1Sigma report is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(fmt, sum);",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(fmt, sum);"
+ },
+ {
+  "label": "suh: the sample is rounded rather than truncated",
+  "find": "\tshort sample = (short)v;\n\tint ret = 1;",
+  "replace": "\tshort sample = (short)(v + 0.5f);\n\tint ret = 1;"
+ },
+ {
+  "label": "suh: the default answer is 0 rather than 1",
+  "find": "\tshort sample = (short)v;\n\tint ret = 1;",
+  "replace": "\tshort sample = (short)v;\n\tint ret = 0;"
+ },
+ {
+  "label": "suh: state 0 does not count the sample",
+  "find": "\t\tint_a988++;\n\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a98c)",
+  "replace": "\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a98c)"
+ },
+ {
+  "label": "suh: state 0 accumulates the level rather than the sample",
+  "find": "\t\tint_a988++;\n\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a98c)",
+  "replace": "\t\tint_a988++;\n\t\tcalculateLinearMeanAndVar(ucodeLevel, sample, phase);\n\n\t\tif (int_a988 != int_a98c)"
+ },
+ {
+  "label": "suh: state 0 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a98c)\n\t\t\tbreak;",
+  "replace": "\t\tif (int_a988 != int_a990)\n\t\t\tbreak;"
+ },
+ {
+  "label": "suh: state 0 adds the square of the mean instead of subtracting it",
+  "find": "\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;",
+  "replace": "\t\t\tvar[p] = inv * float_9118[p][ucode] + mean * mean;"
+ },
+ {
+  "label": "suh: state 0 takes the variance off the wrong sum",
+  "find": "\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;",
+  "replace": "\t\t\tvar[p] = inv * float_1000[p][ucode] - mean * mean;"
+ },
+ {
+  "label": "suh: state 0 does not divide the sum by the count",
+  "find": "\t\t\tfloat mean = float_1000[p][ucode] * inv;\n\n\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;",
+  "replace": "\t\t\tfloat mean = float_1000[p][ucode];\n\n\t\t\tvar[p] = inv * float_9118[p][ucode] - mean * mean;"
+ },
+ {
+  "label": "suh: state 0 divides by one more than the count",
+  "find": "\t\t\tfloat inv = 1.0f / uint_1c00[p][ucode];\n\t\t\tfloat mean = float_1000[p][ucode] * inv;",
+  "replace": "\t\t\tfloat inv = 1.0f / (uint_1c00[p][ucode] + 1);\n\t\t\tfloat mean = float_1000[p][ucode] * inv;"
+ },
+ {
+  "label": "suh: state 0 gains the zero-count guard it does not have (D292)",
+  "find": "\t\tfor (p = 0; p < V90ADID_PHASES; p++) {\n\t\t\tfloat inv = 1.0f / uint_1c00[p][ucode];",
+  "replace": "\t\tfor (p = 0; p < V90ADID_PHASES; p++) {\n\t\t\tfloat inv;\n\t\t\tif (uint_1c00[p][ucode] == 0)\n\t\t\t\tcontinue;\n\t\t\tinv = 1.0f / uint_1c00[p][ucode];"
+ },
+ {
+  "label": "suh: the initial-variance report loses its double spaces",
+  "find": "\t\t\t\t\t     \"initail var (Trn1):  %d  %d  %d  \"",
+  "replace": "\t\t\t\t\t     \"initail var (Trn1): %d %d %d \""
+ },
+ {
+  "label": "suh: the initial-variance report swaps its first two arguments",
+  "find": "\"%d  %d  %d\\n\", (int)var[0],\n\t\t\t\t\t     (int)var[1], (int)var[2],",
+  "replace": "\"%d  %d  %d\\n\", (int)var[1],\n\t\t\t\t\t     (int)var[0], (int)var[2],"
+ },
+ {
+  "label": "suh: the initial-variance report is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail var (Trn1):",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail var (Trn1):"
+ },
+ {
+  "label": "suh: the variance threshold is scaled by the wrong factor",
+  "find": "\t\tthresh = getAltVarThresh(var, float_a970);",
+  "replace": "\t\tthresh = getAltVarThresh(var, float_a974);"
+ },
+ {
+  "label": "suh: the threshold report rounds instead of truncating",
+  "find": "\t\t\t\t\t     \"%d\\n\", (int)thresh);",
+  "replace": "\t\t\t\t\t     \"%d\\n\", (int)(thresh + 0.5f));"
+ },
+ {
+  "label": "suh: the threshold report is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail AltRbsVarThresh (Trn1) = \"",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector:  \"\n\t\t\t\t\t     \"initail AltRbsVarThresh (Trn1) = \""
+ },
+ {
+  "label": "suh: a variance equal to the threshold flags its phase",
+  "find": "\t\t\tif (var[p] > thresh) {",
+  "replace": "\t\t\tif (var[p] >= thresh) {"
+ },
+ {
+  "label": "suh: the alternate-RBS flag is set to two",
+  "find": "\t\t\t\tn = (short)(n + 1);\n\t\t\t\tshort_2800[p] = 1;",
+  "replace": "\t\t\t\tn = (short)(n + 1);\n\t\t\t\tshort_2800[p] = 2;"
+ },
+ {
+  "label": "suh: the flag count does not advance",
+  "find": "\t\t\t\tn = (short)(n + 1);\n\t\t\t\tshort_2800[p] = 1;",
+  "replace": "\t\t\t\tshort_2800[p] = 1;"
+ },
+ {
+  "label": "suh: the accumulators are cleared whether or not anything was flagged",
+  "find": "\t\tif (n > 0)\n\t\t\tfor (p = 0; p < V90ADID_PHASES; p++) {",
+  "replace": "\t\tif (n >= 0)\n\t\t\tfor (p = 0; p < V90ADID_PHASES; p++) {"
+ },
+ {
+  "label": "suh: state 0 leaves the count behind when it clears",
+  "find": "\t\t\t\tfloat_1000[p][ucode] = 0.0f;\n\t\t\t\tuint_1c00[p][ucode] = 0;\n\t\t\t\tfloat_9118[p][ucode] = 0.0f;\n\t\t\t}",
+  "replace": "\t\t\t\tfloat_1000[p][ucode] = 0.0f;\n\t\t\t\tfloat_9118[p][ucode] = 0.0f;\n\t\t\t}"
+ },
+ {
+  "label": "suh: the initial-pattern report loses a conversion",
+  "find": "\t\t\t \"patern  %d%d%d%d%d%d\\n\", short_2800[0], short_2800[1],",
+  "replace": "\t\t\t \"patern  %d%d%d%d%d\\n\", short_2800[0], short_2800[1],"
+ },
+ {
+  "label": "suh: the initial-pattern report starts at the wrong phase",
+  "find": "\t\t\t short_2800[2], short_2800[3], short_2800[4],\n\t\t\t short_2800[5]);",
+  "replace": "\t\t\t short_2800[3], short_2800[2], short_2800[4],\n\t\t\t short_2800[5]);"
+ },
+ {
+  "label": "suh: state 0 hands on to state 2",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 1;\n\t\tbreak;\n\t}",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 2;\n\t\tbreak;\n\t}"
+ },
+ {
+  "label": "suh: state 0 does not reset the count when it hands on",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 1;\n\t\tbreak;\n\t}",
+  "replace": "\t\tint_a984 = 1;\n\t\tbreak;\n\t}"
+ },
+ {
+  "label": "suh: state 1 answers 0 for the phases that are NOT flagged",
+  "find": "\t\tret = short_2800[phase] == 0 ? 1 : 0;",
+  "replace": "\t\tret = short_2800[phase] != 0 ? 1 : 0;"
+ },
+ {
+  "label": "suh: state 1 answers on the wrong phase",
+  "find": "\t\tret = short_2800[phase] == 0 ? 1 : 0;",
+  "replace": "\t\tret = short_2800[(short)phase + 1] == 0 ? 1 : 0;"
+ },
+ {
+  "label": "suh: state 1 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a990)\n\t\t\tbreak;",
+  "replace": "\t\tif (int_a988 != int_a994)\n\t\t\tbreak;"
+ },
+ {
+  "label": "suh: state 1 folds the alternate accumulators instead",
+  "find": "\t\tupdateUref();\n\n\t\t/*\n\t\t * TWO LOCAL ARRAYS ARE FILLED HERE",
+  "replace": "\t\tupdateUrefAlt();\n\n\t\t/*\n\t\t * TWO LOCAL ARRAYS ARE FILLED HERE"
+ },
+ {
+  "label": "suh: the first-update report is gated",
+  "find": "\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update  :  %d  \"",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update  :  %d  \""
+ },
+ {
+  "label": "suh: the first-update report is spelled differently",
+  "find": "\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update  :  %d  \"",
+  "replace": "\t\tedprintf(\"V90AutoDigitalImpDetector trn1 first update :  %d  \""
+ },
+ {
+  "label": "suh: the first-update report prints the alternate table",
+  "find": "\t\t\t \"%d  %d  %d  %d  %d\\n\", linMapp[0][ucode],\n\t\t\t linMapp[1][ucode], linMapp[2][ucode], linMapp[3][ucode],\n\t\t\t linMapp[4][ucode], linMapp[5][ucode]);",
+  "replace": "\t\t\t \"%d  %d  %d  %d  %d\\n\", linMappAlt[0][ucode],\n\t\t\t linMappAlt[1][ucode], linMappAlt[2][ucode],\n\t\t\t linMappAlt[3][ucode], linMappAlt[4][ucode],\n\t\t\t linMappAlt[5][ucode]);"
+ },
+ {
+  "label": "suh: state 1 hands on to state 3",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 2;\n\t\tbreak;\n\n\tcase 2:",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 3;\n\t\tbreak;\n\n\tcase 2:"
+ },
+ {
+  "label": "suh: state 2 sends the near samples to the alternate accumulators",
+  "find": "\t\tif (isAltRbs((short)phase, ucode, v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 0;",
+  "replace": "\t\tif (!isAltRbs((short)phase, ucode, v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 0;"
+ },
+ {
+  "label": "suh: state 2 accepts the alternate-RBS sample",
+  "find": "\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 0;\n\t\t} else {",
+  "replace": "\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\t\tret = 1;\n\t\t} else {"
+ },
+ {
+  "label": "suh: state 2 rejects the plain sample",
+  "find": "\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\t\t\tret = 1;\n\t\t}",
+  "replace": "\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\t\t\tret = 0;\n\t\t}"
+ },
+ {
+  "label": "suh: state 2 tests the alternate distance against the wrong code",
+  "find": "\t\tif (isAltRbs((short)phase, ucode, v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);",
+  "replace": "\t\tif (isAltRbs((short)phase, (short)(ucode + 1), v)) {\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);"
+ },
+ {
+  "label": "suh: state 2 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a994)\n\t\t\tbreak;",
+  "replace": "\t\tif (int_a988 != int_a998)\n\t\t\tbreak;"
+ },
+ {
+  "label": "suh: state 2 does not fold the alternate accumulators",
+  "find": "\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"second update",
+  "replace": "\t\tupdateUref();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"second update"
+ },
+ {
+  "label": "suh: the second-update report is spelled differently",
+  "find": "\t\t\t\t\t     \"second update  :  %d  %d  %d  %d \"",
+  "replace": "\t\t\t\t\t     \"second update :  %d  %d  %d  %d \""
+ },
+ {
+  "label": "suh: the Alt first-update report is spelled differently",
+  "find": "\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" first update  :  %d  %d  %d  %d \"",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" first update  :  %d %d %d %d \""
+ },
+ {
+  "label": "suh: the Alt first-update report prints the plain table",
+  "find": "\t\t\t\t\t     \" %d  %d\\n\", linMappAlt[0][ucode],\n\t\t\t\t\t     linMappAlt[1][ucode],\n\t\t\t\t\t     linMappAlt[2][ucode],\n\t\t\t\t\t     linMappAlt[3][ucode],\n\t\t\t\t\t     linMappAlt[4][ucode],\n\t\t\t\t\t     linMappAlt[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;",
+  "replace": "\t\t\t\t\t     \" %d  %d\\n\", linMapp[0][ucode],\n\t\t\t\t\t     linMapp[1][ucode],\n\t\t\t\t\t     linMapp[2][ucode],\n\t\t\t\t\t     linMapp[3][ucode],\n\t\t\t\t\t     linMapp[4][ucode],\n\t\t\t\t\t     linMapp[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;"
+ },
+ {
+  "label": "suh: state 2 does not re-test the flags",
+  "find": "\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;",
+  "replace": "\t\tshort_a948 = 1;"
+ },
+ {
+  "label": "suh: state 2 clears the study flag instead of setting it",
+  "find": "\t\tshort_a948 = 1;\n\t\tint_a988 = 0;\n\t\tint_a984 = 4;",
+  "replace": "\t\tshort_a948 = 0;\n\t\tint_a988 = 0;\n\t\tint_a984 = 4;"
+ },
+ {
+  "label": "suh: state 2 hands on to state 3 rather than state 4",
+  "find": "\t\tshort_a948 = 1;\n\t\tint_a988 = 0;\n\t\tint_a984 = 4;",
+  "replace": "\t\tshort_a948 = 1;\n\t\tint_a988 = 0;\n\t\tint_a984 = 3;"
+ },
+ {
+  "label": "suh: state 3 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update",
+  "replace": "\t\tif (int_a988 != int_a99c)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update"
+ },
+ {
+  "label": "suh: state 3 accepts the alternate-RBS sample into the plain accumulators",
+  "find": "\t\tif (isAltRbs((short)phase, ucode, v))\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\telse\n\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update",
+  "replace": "\t\tif (!isAltRbs((short)phase, ucode, v))\n\t\t\tcalculateLinearMeanAndVarAlt(sample, phase);\n\t\telse\n\t\t\tcalculateLinearMeanAndVar(sample, ucodeLevel, phase);\n\n\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"third update"
+ },
+ {
+  "label": "suh: the third-update report is spelled differently",
+  "find": "\t\t\t\t\t     \"third update  :  %d  %d  %d  %d  \"",
+  "replace": "\t\t\t\t\t     \"third update  :  %d  %d  %d %d  \""
+ },
+ {
+  "label": "suh: the Alt second-update report is spelled differently",
+  "find": "\t\t\t\t\t     \" second update  :  %d  %d  %d  %d\"",
+  "replace": "\t\t\t\t\t     \" second update  :  %d  %d  %d %d\""
+ },
+ {
+  "label": "suh: state 3 does not re-test the flags",
+  "find": "\t\tadid_recheckAltRbs(this);\n\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \"",
+  "replace": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \""
+ },
+ {
+  "label": "suh: state 3 reports the sigma under state 5's name",
+  "find": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");",
+  "replace": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");"
+ },
+ {
+  "label": "suh: state 3 hands on to state 4",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 5;\n\t\tbreak;\n\n\tcase 4: {",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 4;\n\t\tbreak;\n\n\tcase 4: {"
+ },
+ {
+  "label": "suh: the delay tests the count before incrementing it",
+  "find": "\t\tint next = int_a988 + 1;",
+  "replace": "\t\tint next = int_a988;"
+ },
+ {
+  "label": "suh: the delay runs against the wrong duration",
+  "find": "\t\tif (next == int_a99c) {",
+  "replace": "\t\tif (next == int_a998) {"
+ },
+ {
+  "label": "suh: the delay hands on to state 5",
+  "find": "\t\t\tint_a988 = 0;\n\t\t\tint_a984 = 3;",
+  "replace": "\t\t\tint_a988 = 0;\n\t\t\tint_a984 = 5;"
+ },
+ {
+  "label": "suh: the delay keeps its count when it hands on",
+  "find": "\t\t\tint_a988 = 0;\n\t\t\tint_a984 = 3;\n\t\t} else {",
+  "replace": "\t\t\tint_a988 = next;\n\t\t\tint_a984 = 3;\n\t\t} else {"
+ },
+ {
+  "label": "suh: the delay does not advance its count",
+  "find": "\t\t} else {\n\t\t\tint_a988 = next;\n\t\t}",
+  "replace": "\t\t} else {\n\t\t\tint_a988 = next - 1;\n\t\t}"
+ },
+ {
+  "label": "suh: state 5 fires on the wrong duration",
+  "find": "\t\tif (int_a988 != int_a998)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"final update",
+  "replace": "\t\tif (int_a988 != int_a994)\n\t\t\tbreak;\n\n\t\tupdateUref();\n\t\tupdateUrefAlt();\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 \"\n\t\t\t\t\t     \"final update"
+ },
+ {
+  "label": "suh: the final-update report is spelled differently",
+  "find": "\t\t\t\t\t     \"final update  :  %d  %d  %d  %d  \"",
+  "replace": "\t\t\t\t\t     \"final update  :  %d  %d  %d  %d \""
+ },
+ {
+  "label": "suh: the Alt final-update report is spelled differently",
+  "find": "\t\t\t\t\t     \" final update  :  %d  %d  %d  %d \"",
+  "replace": "\t\t\t\t\t     \" final update  :  %d  %d  %d  %d\""
+ },
+ {
+  "label": "suh: the Alt final-update report is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" final update",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector trn1 Alt\"\n\t\t\t\t\t     \" final update"
+ },
+ {
+  "label": "suh: state 5 re-tests the flags the way state 3 does",
+  "find": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \"",
+  "replace": "\t\tadid_recheckAltRbs(this);\n\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \""
+ },
+ {
+  "label": "suh: state 5 reports the sigma under state 3's name",
+  "find": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector second \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");",
+  "replace": "\t\tadid_updateTrn1Sigma(this, \"V90AutoDigitalImpDetector first \"\n\t\t\t\t\t   \"update : trn1Sigma = %d\\n\");"
+ },
+ {
+  "label": "suh: state 5 does not reach the terminal state",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 6;\n\t\tret = 2;",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 5;\n\t\tret = 2;"
+ },
+ {
+  "label": "suh: the completing call does not say the study is over",
+  "find": "\t\tint_a988 = 0;\n\t\tint_a984 = 6;\n\t\tret = 2;",
+  "replace": "\t\tint_a988 = 0;\n\t\tint_a984 = 6;\n\t\tret = 1;"
+ },
+ {
+  "label": "suh: the terminal state answers 1",
+  "find": "\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 2;",
+  "replace": "\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 1;"
+ },
+ {
+  "label": "suh: the terminal state is reachable only through the default arm",
+  "find": "\tcase 6:\n\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 2;\n\t\tbreak;",
+  "replace": "\tcase 7:\n\t\t/* Terminal: the study is over and says so on every call. */\n\t\tret = 2;\n\t\tbreak;"
  }
 ]

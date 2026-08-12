@@ -163,10 +163,36 @@ void ref_findPadGain(void *self)
 	asm("ref__ZN25V90AutoDigitalImpDetector11findPadGainEv");
 
 /*
+ * The last member of the class, and it RETURNS AN int the mangling does not
+ * mention: every arm leaves through `mov 0x3c(%esp),%eax` at 0x421a3 off a slot
+ * the prologue seeds with 1, and 0, 1 and 2 are all reachable.  Declaring the
+ * alias `int` is what makes the value compared at all -- the whole
+ * accept/reject/finished protocol between this method and its caller lives
+ * there and nowhere in the object.
+ *
+ * The `float` parameter is declared `float` for the reason above: it is not
+ * promoted in a prototyped call and the object reads it with `flds 0xa4(%esp)`.
+ */
+int ref_studyUrefHandler(void *self, float v, unsigned int phase)
+	asm("ref__ZN25V90AutoDigitalImpDetector16studyUrefHandlerEfj");
+
+/*
  * The reference side's copy of the debug level.  Raising ours alone would put
  * the two sides on different branches of `porcessFirstStudy`'s only gate.
  */
 extern unsigned int ref_dsplibs_debug_level;
+
+/*
+ * THE ONE THING AN `edprintf` LEAVES BEHIND WHEN NOBODY IS LISTENING.  Its
+ * final `dsplibs_debug_printf` is gated on the level, but the reset and
+ * advance of `iEncodeOffset` are not -- so at level 0 the number and the
+ * length of the calls a method makes is still observable, through the rotating
+ * key `cEncodeChar` reads.  Neither side exports the counter, and this is how
+ * `t_encode` reads it: two probes name the position.  It is what makes "this
+ * report is NOT behind the gate" a testable claim rather than an assertion.
+ */
+char cEncodeChar(unsigned char c);
+char ref_cEncodeChar(unsigned char c);
 }
 
 /* The object, plus room past its end to catch a store that overruns it. */
@@ -1313,6 +1339,19 @@ run_signal(void)
 	diff_eq_obj("after the run's resetStudyUrefHandler",
 		    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
 
+	/*
+	 * The study's six durations, forced short.  `resetStudyUrefHandler` has
+	 * just copied them out of the parameter block, which is seeded, so
+	 * without this the state machine below would sit in state 0 for two
+	 * billion samples.  At these lengths forty blocks walk the whole chain
+	 * 0 -> 1 -> 2 -> 4 -> 3 -> 5 -> 6 several times over.
+	 */
+	BOTH(int_a98c, 5);
+	BOTH(int_a990, 7);
+	BOTH(int_a994, 3);
+	BOTH(int_a998, 11);
+	BOTH(int_a99c, 4);
+
 	for (block = 0; block < 40; block++) {
 		int p, k;
 
@@ -1384,6 +1423,36 @@ run_signal(void)
 							 x),
 					    block * 100 + k * 10 + p);
 				calls += 4;
+
+				/*
+				 * AND THE STUDY ITSELF, ONE CALL PER SAMPLE,
+				 * which is what the class is for and what this
+				 * method is the entry point of.  Its tails call
+				 * `updateUref`, and `unitePhasesInfoOfUref`
+				 * reads an uninitialised local when all five of
+				 * phases 0..4 are flagged (D281) -- so one of
+				 * them is cleared before each call, rotating.
+				 * The state machine's own tails can only ADD
+				 * flags, and they add them after the call's
+				 * `updateUref` has already run, so clearing at
+				 * entry is enough.
+				 */
+				BOTH(short_2800[(block + k) % 5], 0);
+				{
+					int g = ours_o.studyUrefHandler(x,
+						    (unsigned int)p);
+					int r = ref_studyUrefHandler(&theirs_o,
+						    x, (unsigned int)p);
+
+					diff_eq_int("block: studyUrefHandler "
+						    "(%ld)", g, r,
+						    block * 100 + k * 10 + p);
+					diff_eq_obj("block: studyUrefHandler",
+						    V90AutoDigitalImpDetector,
+						    &ours_o, &theirs_o,
+						    block * 100 + k * 10 + p);
+					calls++;
+				}
 			}
 		}
 
@@ -4434,6 +4503,806 @@ run_padgain(void)
 	return diff_end();
 }
 
+/*
+ * ==========================================================================
+ * studyUrefHandler -- the per-sample entry point, the largest member of the
+ * class and the only one that is a state machine.
+ *
+ * THE STATE WORD IS A PLAIN FIELD, SO EVERY ARM IS ONE CALL AWAY.  Walking the
+ * chain 0 -> 1 -> 2 -> 4 -> 3 -> 5 -> 6 by running the machine costs the sum of
+ * six durations with the right accumulator state at each boundary; forcing
+ * +0xa984 and +0xa988 costs nothing and reaches the same code.  Both are done
+ * here: a sweep that forces each arm and each of its two outcomes, and a
+ * directed chain that walks the whole machine end to end and compares after
+ * every call.
+ *
+ * THE RETURN VALUE IS COMPARED, and it is a third of what this method does.
+ * 2 means the study is over, 0 means "do not use this sample", 1 is everything
+ * else, and the sweep asserts all three were seen.
+ *
+ * ONE OF PHASES 0..4 IS ALWAYS LEFT UNFLAGGED, on every path that reaches a
+ * tail.  Four of the seven arms call `updateUref`, which calls
+ * `unitePhasesInfoOfUref`, which reads an uninitialised local when no group is
+ * ever formed -- D281, and the two sides have two different stack frames there.
+ * All five of phases 0..4 flagged at +0x2800 on entry is exactly that
+ * condition, so the sweep clears one and the chain clears one before each call.
+ *
+ * WHAT THAT COSTS IS THE SIGMA BLOCK'S EMPTY CASE.  `trn1Sigma` is
+ * `sum / count` over the phases that are NOT flagged, so a count of zero needs
+ * all six flagged -- which needs all of 0..4 flagged, which is D281.  The
+ * divide-by-zero is therefore unreachable without an uncomparable frame and is
+ * deliberately not exercised; the missing guard in state 0's variance loop
+ * (D292) is the same arithmetic and IS exercised, through the zeros in
+ * `counts[]`.
+ *
+ * `ucode` STOPS AT 0x7f.  The sigma block reads `float_9d48[phase][ucode]` as
+ * `phase * 128 + ucode` and the last entry of that array inside the object is
+ * ADID_VAR_LAST = 793, so phase 5 with a code over 153 would compare memory
+ * past the rear guard.  Other sweeps in this file drive the unmasked code where
+ * it stays inside the object; here it would not.
+ * ==========================================================================
+ */
+
+/* The five durations five of the arms fire on.  +0xa9a0 is left seeded. */
+static void
+study_durations(int a98c, int a990, int a994, int a998, int a99c)
+{
+	BOTH(int_a98c, a98c);
+	BOTH(int_a990, a990);
+	BOTH(int_a994, a994);
+	BOTH(int_a998, a998);
+	BOTH(int_a99c, a99c);
+}
+
+/* Which of them the given state counts against; 0 for the two that do not. */
+static int
+study_duration(int st)
+{
+	switch (st) {
+	case 0:
+		return 11;
+	case 1:
+		return 13;
+	case 2:
+		return 7;
+	case 3:
+		return 17;
+	case 4:
+		return 5;
+	case 5:
+		return 17;
+	default:
+		return 0;
+	}
+}
+
+static int
+run_studyuref(void)
+{
+	static const unsigned char codes[] = {
+		0, 1, 0x2a, 0x40, 0x5a, 0x6f, 0x7e, 0x7f
+	};
+	static const short levels[] = {
+		0, 1, -1, 8031, 4096, -4096, 32767, (short)0x8000
+	};
+	static const unsigned counts[] = { 0, 1, 25, 41, 3, 0, 100, 7 };
+	static const short dists[] = { -1, 0, 1, 25, 50, 300, 4000, 30000 };
+	static const float factors[] = {
+		1.5f, 5.0f, 0.5f, 2.0f, 0.0f, -1.0f, 100.0f, 1.0f
+	};
+	int trial, i;
+	int moved = 0, distinct = 0;
+	int seen[8], fired[6], held[6];
+	int ret0 = 0, ret1 = 0, ret2 = 0;
+	int altyes = 0, altno = 0;
+	int flagged = 0, unflagged = 0, cleared = 0, kept = 0;
+	int emptycell = 0, fullcell = 0, talked = 0;
+	long gated = 0;
+	int keydrift = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::studyUrefHandler");
+	study_debug_on();
+
+	for (i = 0; i < 8; i++)
+		seen[i] = 0;
+	for (i = 0; i < 6; i++)
+		fired[i] = held[i] = 0;
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		short was[NPHASE];
+		int st = trial % 8;		/* 7 lands in the default arm */
+		int fire = (trial / 8) & 1;
+		int dur = study_duration(st);
+		unsigned char at = codes[IDX(trial, 1)];
+		float x = fsweep[IDX(trial, 5)];
+		unsigned int ph = (unsigned int)(trial % NPHASE);
+		int law = (trial >> 3) & 1;
+		int pat = (trial * 13 + 5) & 0x3f;
+		int alt, got, refgot, p, any;
+
+		/* D281 again: one of phases 0..4 has to stay clear. */
+		pat &= ~(1 << (trial % 5));
+
+		seed(trial, trial % 4);
+		BOTH(ucode, at);
+		BOTH(ucodeLevel, levels[IDX(trial, 3)]);
+		BOTH(pcmType, law ? PCM_TYPE_A_LAW : PCM_TYPE_MU_LAW);
+		BOTH(int_a984, st);
+		BOTH(int_a988, fire ? dur - 1 : dur - 4);
+		study_durations(11, 13, 7, 17, 5);
+		BOTH(short_a9a4, (short)(1 << (trial % 12)));
+		BOTH(short_a9a6, dists[IDX(trial, 7)]);
+		BOTH(float_a970, factors[IDX(trial, 3)]);
+		BOTH(altMinVarThresh, (float)(trial % 5) * 1000.0f);
+		BOTH(short_a948, (short)-1);
+		BOTH(trn1Sigma, -1.0f);
+
+		for (p = 0; p < NPHASE; p++) {
+			unsigned n = counts[(trial + p) % 8];
+
+			BOTH(short_2800[p], (short)((pat >> p) & 1));
+			BOTH(linMapp[p][at], (short)(100 * p + trial * 7));
+			BOTH(linMappAlt[p][at], (short)(50 * p - trial * 3));
+			BOTH(uint_1c00[p][at], n);
+			BOTH(float_1000[p][at], (float)((int)n * 143));
+			BOTH(float_9118[p][at], (float)((int)n * 4001));
+			BOTH(float_9d48[p][at], 0.5f * (float)p + (float)trial);
+			BOTH(uint_9d30[p], counts[(trial + p + 3) % 8]);
+			BOTH(float_9d18[p], (float)(trial * 11 + p));
+
+			was[p] = ours_o.short_2800[p];
+			if (n == 0)
+				emptycell = 1;
+			else
+				fullcell = 1;
+		}
+
+		/*
+		 * `isAltRbs` reads and writes nothing, so asking it here is how
+		 * the sweep knows which arm of states 2, 3 and 5 the call is
+		 * about to take.
+		 */
+		alt = ours_o.isAltRbs((short)ph, (short)at, x);
+
+		memcpy(before, ours.raw, SLOT);
+		dsplib_debug_capture_reset();
+
+		got = ours_o.studyUrefHandler(x, ph);
+		refgot = ref_studyUrefHandler(&theirs_o, x, ph);
+
+		diff_eq_int("studyUrefHandler returned the same (trial %ld)",
+			    got, refgot, trial);
+		diff_eq_obj("after studyUrefHandler", V90AutoDigitalImpDetector,
+			    &ours_o, &theirs_o, trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("the study transcript matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+
+		seen[st] = 1;
+		if (dsplib_debug_capture_lines(0) != 0)
+			talked = 1;
+		if (got == 0)
+			ret0 = 1;
+		else if (got == 1)
+			ret1 = 1;
+		else if (got == 2)
+			ret2 = 1;
+
+		if (st < 6) {
+			if (ours_o.int_a984 != st)
+				fired[st] = 1;
+			else
+				held[st] = 1;
+		}
+
+		if (st == 2 || st == 3 || st == 5) {
+			if (alt)
+				altyes = 1;
+			else
+				altno = 1;
+		}
+
+		if (st == 0 && ours_o.int_a984 != 0) {
+			any = 0;
+			for (p = 0; p < NPHASE; p++)
+				if (was[p] == 0 && ours_o.short_2800[p] != 0)
+					any = 1;
+			if (any)
+				flagged = 1;
+			else
+				unflagged = 1;
+		}
+
+		if ((st == 2 || st == 3) && ours_o.int_a984 != st)
+			for (p = 0; p < NPHASE; p++) {
+				if (was[p] == 0)
+					continue;
+				if (ours_o.short_2800[p] == 0)
+					cleared = 1;
+				else
+					kept = 1;
+			}
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.linMapp[0][at];
+		else if (ours_o.linMapp[0][at] != first)
+			distinct = 1;
+	}
+
+	/*
+	 * THE TERMINAL ARM AND THE DEFAULT ONE.  State 6 answers 2 and touches
+	 * nothing; anything above 6 falls through the jump table's bound.  The
+	 * dispatch is `cmp $0x6; ja`, an UNSIGNED compare, so a NEGATIVE state
+	 * word lands in the default arm and not below the table -- which is the
+	 * one reading of that instruction a test can separate from the other.
+	 */
+	{
+		static const int sts[] = {
+			6, 7, 8, 100, -1, -2147483647 - 1
+		};
+		int k;
+
+		for (k = 0; k < 6; k++) {
+			int got, refgot;
+
+			seed(700 + k, 0);
+			BOTH(ucode, 0x2a);
+			BOTH(int_a984, sts[k]);
+			BOTH(int_a988, 3);
+			dsplib_debug_capture_reset();
+
+			got = ours_o.studyUrefHandler(1.25f, 2u);
+			refgot = ref_studyUrefHandler(&theirs_o, 1.25f, 2u);
+
+			diff_eq_int("terminal/default: same answer (%ld)", got,
+				    refgot, sts[k]);
+			diff_eq_obj("terminal/default: after studyUrefHandler",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+			diff_eq_int("terminal/default: no store past the object "
+				    "(%ld)", guard_equal(), 1, k);
+			diff_eq_int("terminal/default: printed nothing (%ld)",
+				    (long)dsplib_debug_capture_lines(0), 0, k);
+			diff_eq_int("terminal/default: the state is untouched "
+				    "(%ld)", (long)ours_o.int_a984,
+				    (long)sts[k], k);
+			diff_eq_int("terminal/default: the count is untouched "
+				    "(%ld)", (long)ours_o.int_a988, 3, k);
+			diff_eq_int("terminal/default: the answer (%ld)", got,
+				    sts[k] == 6 ? 2 : 1, k);
+			if (got == 2)
+				ret2 = 1;
+			else
+				ret1 = 1;
+		}
+	}
+
+	/*
+	 * STATE 0's TAIL, BOTH WAYS.  Six equal variances put every entry at
+	 * the average, `getAltVarThresh` averages the five below a threshold
+	 * none of them reach and the answer is well above them all, so nothing
+	 * is flagged and the accumulators are NOT cleared.  One wild phase
+	 * drags the average up, is the only entry above the answer, and is
+	 * flagged -- and then the clear runs.  The two differ in one float.
+	 */
+	{
+		int k;
+
+		for (k = 0; k < 2; k++) {
+			unsigned char at = 0x33;
+			int p, got, refgot, any;
+			short was[NPHASE];
+
+			seed(710 + k, 0);
+			BOTH(ucode, at);
+			BOTH(ucodeLevel, 0);
+			BOTH(pcmType, PCM_TYPE_MU_LAW);
+			BOTH(int_a984, 0);
+			BOTH(int_a988, 4);
+			study_durations(5, 13, 7, 17, 3);
+			BOTH(float_a970, 1.5f);
+			BOTH(altMinVarThresh, 0.0f);
+
+			for (p = 0; p < NPHASE; p++) {
+				BOTH(short_2800[p], 0);
+				BOTH(uint_1c00[p][at], 4u);
+				BOTH(float_1000[p][at], 400.0f);
+				BOTH(float_9118[p][at],
+				     (k == 1 && p == 3) ? 4000000.0f
+							: 44000.0f);
+				was[p] = 0;
+			}
+
+			dsplib_debug_capture_reset();
+			got = ours_o.studyUrefHandler(0.0f, 1u);
+			refgot = ref_studyUrefHandler(&theirs_o, 0.0f, 1u);
+
+			diff_eq_int("state 0: same answer (%ld)", got, refgot, k);
+			diff_eq_obj("state 0: after studyUrefHandler",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+			diff_eq_int("state 0: transcript matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, k);
+			diff_eq_int("state 0: the tail fired (%ld)",
+				    (long)ours_o.int_a984, 1, k);
+
+			any = 0;
+			for (p = 0; p < NPHASE; p++)
+				if (was[p] == 0 && ours_o.short_2800[p] != 0)
+					any = 1;
+			if (any)
+				flagged = 1;
+			else
+				unflagged = 1;
+			diff_eq_int("state 0: the wild phase is the flagged one "
+				    "(%ld)", any, k, k);
+		}
+	}
+
+	/*
+	 * THE WHOLE MACHINE, END TO END, COMPARED AFTER EVERY CALL.  Six short
+	 * durations walk 0 -> 1 -> 2 -> 4 -> 3 -> 5 -> 6 in about twenty-two
+	 * calls, and sixty are made: a divergence that appears at one state
+	 * boundary and is washed out by the next is a defect, and a final-state
+	 * comparison would miss it.
+	 *
+	 * One phase is cleared before every call, rotating, for D281's reason.
+	 */
+	{
+		int step, p;
+		int chain[8];
+
+		for (p = 0; p < 8; p++)
+			chain[p] = 0;
+
+		seed(760, 0);
+		BOTH(ucode, 0x2a);
+		BOTH(ucodeLevel, 8031);
+		BOTH(pcmType, PCM_TYPE_A_LAW);
+		BOTH(int_a984, 0);
+		BOTH(int_a988, 0);
+		study_durations(3, 4, 3, 5, 2);
+		BOTH(short_a9a4, 40);
+		BOTH(short_a9a6, 60);
+		BOTH(float_a970, 1.5f);
+		BOTH(altMinVarThresh, 10.0f);
+		BOTH(short_a948, 0);
+		BOTH(trn1Sigma, 0.0f);
+
+		for (p = 0; p < NPHASE; p++) {
+			int c;
+
+			BOTH(short_2800[p], 0);
+			BOTH(uint_9d30[p], 0u);
+			BOTH(float_9d18[p], 0.0f);
+			for (c = 0; c < V90ADID_CODES; c++) {
+				BOTH(uint_1c00[p][c], 0u);
+				BOTH(float_1000[p][c], 0.0f);
+				BOTH(float_9118[p][c], 0.0f);
+				BOTH(float_9d48[p][c], (float)(c + p));
+				BOTH(linMapp[p][c], (short)(c * 64 + p * 5));
+				BOTH(linMappAlt[p][c], (short)(c * 64 - p * 9));
+			}
+		}
+
+		for (step = 0; step < 60; step++) {
+			float x = (float)(7800 + ((step * 371) % 1200))
+				  + 0.25f;
+			unsigned int ph = (unsigned int)(step % NPHASE);
+			int got, refgot;
+
+			BOTH(short_2800[step % 5], 0);
+
+			dsplib_debug_capture_reset();
+			got = ours_o.studyUrefHandler(x, ph);
+			refgot = ref_studyUrefHandler(&theirs_o, x, ph);
+
+			diff_eq_int("chain: same answer (step %ld)", got,
+				    refgot, step);
+			diff_eq_obj("chain: after studyUrefHandler",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, step);
+			diff_eq_int("chain: no store past the object (step %ld)",
+				    guard_equal(), 1, step);
+			diff_eq_int("chain: transcript matched (step %ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, step);
+
+			if (ours_o.int_a984 >= 0 && ours_o.int_a984 < 8)
+				chain[ours_o.int_a984] = 1;
+			if (got == 0)
+				ret0 = 1;
+			else if (got == 2)
+				ret2 = 1;
+		}
+
+		for (p = 0; p <= 6; p++)
+			diff_eq_int("chain: state %ld was reached", chain[p], 1,
+				    p);
+		diff_eq_int("chain: the machine ended in the terminal state",
+			    (long)ours_o.int_a984, 6, 0);
+		diff_eq_int("chain: trn1Sigma was written",
+			    ours_o.trn1Sigma != 0.0f, 1, 0);
+	}
+
+	/*
+	 * A VARIANCE EXACTLY ON THE THRESHOLD, AND A THRESHOLD EXACTLY ON A
+	 * QUARTER.  Two claims share one witness.
+	 *
+	 * Six counts of 1 with six sums of 0 make each phase's variance its own
+	 * sum of squares, so the six are planted directly: 1234.75 for phase 0
+	 * and 0 for the rest.  `getAltVarThresh` then averages the five that are
+	 * below a sixth of the total -- all five zeros -- and returns 0, which
+	 * the floor at `altMinVarThresh` raises to exactly 1234.75.  So
+	 * `var[0] == thresh` to the bit, which is the only input that separates
+	 * the object's `>` from a `>=`; and the report prints `(int)thresh`,
+	 * which is 1234 truncated and 1235 rounded.  Neither difference is
+	 * reachable by sweeping: a random variance never lands on the answer a
+	 * function of the other five produced, and a random threshold is under a
+	 * half as often as not.  Finding 1366's method.
+	 */
+	{
+		unsigned char at = 0x2a;
+		int p, got, refgot;
+
+		seed(730, 0);
+		BOTH(ucode, at);
+		BOTH(ucodeLevel, 0);
+		BOTH(pcmType, PCM_TYPE_MU_LAW);
+		BOTH(int_a984, 0);
+		BOTH(int_a988, 4);
+		study_durations(5, 13, 7, 17, 3);
+		BOTH(float_a970, 1.0f);
+		BOTH(altMinVarThresh, 1234.75f);
+
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(short_2800[p], 0);
+			BOTH(uint_1c00[p][at], 1u);
+			BOTH(float_1000[p][at], 0.0f);
+			BOTH(float_9118[p][at], (p == 0) ? 1234.75f : 0.0f);
+		}
+
+		dsplib_debug_capture_reset();
+		got = ours_o.studyUrefHandler(0.0f, 1u);
+		refgot = ref_studyUrefHandler(&theirs_o, 0.0f, 1u);
+
+		diff_eq_int("on the threshold: same answer (%ld)", got, refgot, 0);
+		diff_eq_obj("on the threshold: after studyUrefHandler",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("on the threshold: transcript matched",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, 0);
+		diff_eq_int("on the threshold: the tail fired",
+			    (long)ours_o.int_a984, 1, 0);
+		diff_eq_int("on the threshold: an equal variance does not flag",
+			    (long)ours_o.short_2800[0], 0, 0);
+		diff_eq_int("on the threshold: the report was made",
+			    dsplib_debug_capture_lines(0) > 0, 1, 0);
+	}
+
+	/*
+	 * A SIGMA THAT IS NOT A FLOAT.  `trn1Sigma` reaches its field through
+	 * `fsts` and its report through `fstpl`, two roundings of one extended
+	 * register (finding 1443, D291) -- and the two agree for every quotient
+	 * that happens to BE a float, which most seeded ones are.  Three
+	 * unflagged phases with variances 1, 1 and 0 make the quotient 2/3,
+	 * which is not, so the reported mantissa and the stored one differ.
+	 *
+	 * State 5 rather than state 3 because state 3 re-tests the flags first
+	 * and would change which phases the average is over.  Every count is
+	 * zero, so `updateUref` and `updateUrefAlt` write nothing, and the
+	 * mapping entries are a thousand apart against a merge threshold of 1,
+	 * so the unite forms no group and leaves the three variances alone.
+	 * Phases 0..2 are unflagged, which is also what keeps D281 out.
+	 */
+	{
+		unsigned char at = 0x2a;
+		int p, got, refgot;
+
+		seed(740, 0);
+		BOTH(ucode, at);
+		BOTH(ucodeLevel, 0);
+		BOTH(pcmType, PCM_TYPE_MU_LAW);
+		BOTH(int_a984, 5);
+		BOTH(int_a988, 16);
+		study_durations(11, 13, 7, 17, 5);
+		BOTH(short_a9a4, 1);
+		BOTH(short_a9a6, 30000);
+
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(short_2800[p], (short)(p >= 3 ? 1 : 0));
+			BOTH(uint_1c00[p][at], 0u);
+			BOTH(uint_9d30[p], 0u);
+			BOTH(float_9d18[p], 0.0f);
+			BOTH(linMapp[p][at], (short)(p * 1000));
+			BOTH(linMappAlt[p][at], (short)(p * 1000));
+			BOTH(float_9d48[p][at], (p < 2) ? 1.0f : 0.0f);
+		}
+
+		dsplib_debug_capture_reset();
+		got = ours_o.studyUrefHandler(0.0f, 0u);
+		refgot = ref_studyUrefHandler(&theirs_o, 0.0f, 0u);
+
+		diff_eq_int("two thirds: same answer (%ld)", got, refgot, 0);
+		diff_eq_obj("two thirds: after studyUrefHandler",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("two thirds: transcript matched",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, 0);
+		diff_eq_int("two thirds: the study finished",
+			    (long)ours_o.int_a984, 6, 0);
+		diff_eq_int("two thirds: and said so", got, 2, 0);
+	}
+
+	study_debug_off();
+
+	/*
+	 * AND ONCE WITH THE GATE SHUT, WITH THE CAPTURE STILL ON.  Half of what
+	 * this method prints is behind `dsplibs_debug_level > 1` and half -- the
+	 * two `edprintf` sites in states 0 and 1, and the three `getAltVarThresh`
+	 * makes on their behalf -- is not.  At level 2 both halves print and a
+	 * gate written the wrong way round is invisible; at level 0 only the
+	 * ungated half does, and the transcript separates them.  Finding 1428,
+	 * which is why the level has to be driven at 0 AND at 2 rather than
+	 * merely turned off at the end.
+	 */
+	{
+		int k;
+
+		dsplib_debug_capture_on = 1;
+
+		for (k = 0; k < 8; k++) {
+			int st = k % 7;
+			int dur = study_duration(st);
+			int p, got, refgot;
+
+			seed(780 + k, 0);
+			BOTH(ucode, (unsigned char)(0x21 + k));
+			BOTH(ucodeLevel, (short)(2000 + k * 91));
+			BOTH(pcmType, (k & 1) ? PCM_TYPE_A_LAW
+					      : PCM_TYPE_MU_LAW);
+			BOTH(int_a984, st);
+			BOTH(int_a988, dur - 1);
+			study_durations(11, 13, 7, 17, 5);
+			BOTH(short_a9a6, (short)(k * 40));
+			BOTH(float_a970, 1.5f);
+			BOTH(altMinVarThresh, 100.0f);
+
+			for (p = 0; p < NPHASE; p++) {
+				BOTH(short_2800[p], (short)(p == 0 ? 0
+							    : (k >> p) & 1));
+				BOTH(uint_1c00[p][0x21 + k], (unsigned)(p + 1));
+				BOTH(float_1000[p][0x21 + k],
+				     (float)(300 * (p + 1)));
+				BOTH(float_9118[p][0x21 + k],
+				     (float)(91000 * (p + 1)));
+				BOTH(uint_9d30[p], (unsigned)(k + p));
+				BOTH(float_9d18[p], (float)(k * 100 + p));
+			}
+
+			dsplib_debug_capture_reset();
+			got = ours_o.studyUrefHandler(1234.5f, (unsigned)(k % 6));
+			refgot = ref_studyUrefHandler(&theirs_o, 1234.5f,
+						      (unsigned)(k % 6));
+
+			diff_eq_int("gate shut: same answer (%ld)", got, refgot,
+				    k);
+			diff_eq_obj("gate shut: after studyUrefHandler",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+			diff_eq_int("gate shut: no store past the object (%ld)",
+				    guard_equal(), 1, k);
+			diff_eq_int("gate shut: transcript matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, k);
+			diff_eq_int("gate shut: nothing reached the transcript "
+				    "(%ld)",
+				    (long)dsplib_debug_capture_lines(0), 0, k);
+			gated += (long)dsplib_debug_capture_lines(0);
+
+			/*
+			 * AND THE UNGATED HALF STILL RAN.  `edprintf` gates
+			 * only its final call and advances the rotating key
+			 * whatever the level is, so two probes of the key say
+			 * how many characters the arm's `edprintf` sites
+			 * formatted -- which is the only way to see that
+			 * states 0 and 1 print unconditionally where every
+			 * other report is behind `DSPLIB_DEBUG_ON()`.
+			 */
+			{
+				int a1 = (unsigned char)cEncodeChar(0);
+				int a2 = (unsigned char)cEncodeChar(0);
+				int b1 = (unsigned char)ref_cEncodeChar(0);
+				int b2 = (unsigned char)ref_cEncodeChar(0);
+
+				diff_eq_int("gate shut: the encode key is in "
+					    "step (%ld)", a1 * 256 + a2,
+					    b1 * 256 + b2, k);
+				if (a1 != b1 || a2 != b2)
+					keydrift = 1;
+			}
+		}
+
+		/*
+		 * AND THE KEY PROBE NEEDS THE LENGTHS TO MOVE.  `iEncodeOffset`
+		 * runs modulo TEN and every `edprintf` leaves it at twice its
+		 * formatted length, so only five positions are reachable and two
+		 * different reports land on the same one half the time.  Sweeping
+		 * the width of what the report prints is what makes the probe
+		 * decide: five runs whose report is one character longer each
+		 * cover all five positions, so no alternative length matches them
+		 * all.  Without it a report moved behind the gate is invisible at
+		 * every level -- open, it prints either way; shut, the key happens
+		 * to agree.
+		 *
+		 * THIS IS STATE 1'S REPORT AND NOT STATE 0's, and the difference is
+		 * that state 1's is the only `edprintf` its arm makes.  State 0's
+		 * arm calls `getAltVarThresh`, which makes three of its own, and
+		 * measured at level 0 the key after that arm sits at the THIRD of
+		 * those and not at the pattern report -- for a reason this batch
+		 * did not run to ground, since the same probe reads the pattern
+		 * report correctly at level 2 and both transcripts and both objects
+		 * agree at both levels.  An assertion nobody can explain is worse
+		 * than none, so state 0's report is left with its wording and its
+		 * arguments tested and its ungatedness not.  Finding 1445.
+		 */
+		/*
+		 * Then state 1, whose report is the arm's only `edprintf` and
+		 * whose widths come out of `linMapp`.  Every count is zero and
+		 * no phase is flagged, so `updateUref` writes nothing and the
+		 * unite -- with the mapping entries a thousand apart against a
+		 * merge threshold of 1 -- forms no group and leaves them.
+		 */
+		for (k = 0; k < 5; k++) {
+			static const short widths[] = {
+				1, 12, 123, 1234, 12345
+			};
+			unsigned char at = 0x2a;
+			int p, got, refgot;
+			int a1, a2, b1, b2;
+
+			seed(830 + k, 0);
+			BOTH(ucode, at);
+			BOTH(ucodeLevel, 0);
+			BOTH(pcmType, PCM_TYPE_MU_LAW);
+			BOTH(int_a984, 1);
+			BOTH(int_a988, 6);
+			study_durations(5, 7, 3, 17, 5);
+			BOTH(short_a9a4, 1);
+
+			for (p = 0; p < NPHASE; p++) {
+				BOTH(short_2800[p], 0);
+				BOTH(uint_1c00[p][at], 0u);
+				BOTH(linMapp[p][at],
+				     (short)((p == 0) ? widths[k]
+					     : (short)(p * 1000 + 7)));
+			}
+
+			dsplib_debug_capture_reset();
+			got = ours_o.studyUrefHandler(0.0f, 2u);
+			refgot = ref_studyUrefHandler(&theirs_o, 0.0f, 2u);
+
+			a1 = (unsigned char)cEncodeChar(0);
+			a2 = (unsigned char)cEncodeChar(0);
+			b1 = (unsigned char)ref_cEncodeChar(0);
+			b2 = (unsigned char)ref_cEncodeChar(0);
+
+			diff_eq_int("width sweep: same answer (%ld)", got,
+				    refgot, k);
+			diff_eq_obj("width sweep: after studyUrefHandler",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+			diff_eq_int("width sweep: the key is in step (%ld)",
+				    a1 * 256 + a2, b1 * 256 + b2, k);
+			diff_eq_int("width sweep: still silent (%ld)",
+				    (long)dsplib_debug_capture_lines(0), 0, k);
+			diff_eq_int("width sweep: the tail fired (%ld)",
+				    (long)ours_o.int_a984, 2, k);
+			if (a1 != b1 || a2 != b2)
+				keydrift = 1;
+		}
+
+		/*
+		 * AND THE ONE GATED REPORT THAT NEEDS A WITNESS OF ITS OWN.
+		 * The false-detection line only fires when the re-test WITHDRAWS
+		 * a flag, which a seeded object reaches almost never: it needs
+		 * the phase's alternate entry within `short_a9a6` of its plain
+		 * one.  Both are planted equal here, so both flagged phases are
+		 * withdrawn and both would print -- which at level 0 is exactly
+		 * the difference between the object's gate and no gate.  Every
+		 * count is zero so the two updates before it write nothing, and
+		 * phase 0 is left clear for D281.
+		 */
+		{
+			unsigned char at = 0x2a;
+			int p, got, refgot;
+
+			seed(840, 0);
+			BOTH(ucode, at);
+			BOTH(ucodeLevel, 0);
+			BOTH(pcmType, PCM_TYPE_MU_LAW);
+			BOTH(int_a984, 2);
+			BOTH(int_a988, 2);
+			study_durations(5, 7, 3, 17, 5);
+			BOTH(short_a9a4, 1);
+			BOTH(short_a9a6, 100);
+
+			for (p = 0; p < NPHASE; p++) {
+				BOTH(short_2800[p],
+				     (short)((p == 1 || p == 2) ? 1 : 0));
+				BOTH(uint_1c00[p][at], 0u);
+				BOTH(uint_9d30[p], 0u);
+				BOTH(float_9d18[p], 0.0f);
+				BOTH(linMapp[p][at], 1234);
+				BOTH(linMappAlt[p][at], 1234);
+			}
+
+			dsplib_debug_capture_reset();
+			got = ours_o.studyUrefHandler(0.0f, 0u);
+			refgot = ref_studyUrefHandler(&theirs_o, 0.0f, 0u);
+
+			diff_eq_int("withdrawal: same answer (%ld)", got,
+				    refgot, 0);
+			diff_eq_obj("withdrawal: after studyUrefHandler",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, 0);
+			diff_eq_int("withdrawal: the gated report stayed shut",
+				    (long)dsplib_debug_capture_lines(0), 0, 0);
+			diff_eq_int("withdrawal: the first flag was withdrawn",
+				    (long)ours_o.short_2800[1], 0, 0);
+			diff_eq_int("withdrawal: the second flag was withdrawn",
+				    (long)ours_o.short_2800[2], 0, 0);
+			cleared = 1;
+		}
+
+		dsplib_debug_capture_on = 0;
+	}
+
+	/* At level 0 the gated half of the reports reaches nothing at all. */
+	diff_eq_int("the gated reports were silent with the gate shut", gated, 0,
+		    0);
+	diff_eq_int("the encode key never drifted", keydrift, 0, 0);
+
+	for (i = 0; i <= 7; i++)
+		diff_eq_int("the sweep entered arm %ld", seen[i], 1, i);
+	for (i = 0; i < 6; i++) {
+		diff_eq_int("arm %ld fired its tail", fired[i], 1, i);
+		diff_eq_int("arm %ld held its tail", held[i], 1, i);
+	}
+
+	diff_eq_int("studyUrefHandler changed the object", moved, 1, 0);
+	diff_eq_int("the reference entry is not the same on every trial",
+		    distinct, 1, 0);
+	diff_eq_int("an answer of 0 was seen", ret0, 1, 0);
+	diff_eq_int("an answer of 1 was seen", ret1, 1, 0);
+	diff_eq_int("an answer of 2 was seen", ret2, 1, 0);
+	diff_eq_int("the alternate-RBS test said yes", altyes, 1, 0);
+	diff_eq_int("the alternate-RBS test said no", altno, 1, 0);
+	diff_eq_int("state 0 flagged a phase", flagged, 1, 0);
+	diff_eq_int("state 0 flagged nothing", unflagged, 1, 0);
+	diff_eq_int("the re-test cleared a flag", cleared, 1, 0);
+	diff_eq_int("the re-test kept a flag", kept, 1, 0);
+	diff_eq_int("a cell with no samples was exercised", emptycell, 1, 0);
+	diff_eq_int("a cell with samples was exercised", fullcell, 1, 0);
+	diff_eq_int("the method printed", talked, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -4459,6 +5328,7 @@ main(void)
 	rc |= run_qcmapping();
 	rc |= run_maxucode();
 	rc |= run_padgain();
+	rc |= run_studyuref();
 	rc |= run_signal();
 
 	return rc;
