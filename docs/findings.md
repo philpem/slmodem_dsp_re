@@ -49081,3 +49081,79 @@ The first time was `AT&Q0`, whose failure to connect was read as evidence
 about error control when direct-mode async cannot complete a 300 bps call from
 a 115200 DTE (see #124). Both were refutations that could not have worked,
 believed because the command ran and produced a plausible-looking result.
+
+======================================================================
+
+### 1468. TWO HARDWARE MODEMS REACH 28800/28800 OVER THE SIP PATH — SO THE PATH IS NOT WHAT LIMITS US
+
+*Task #94. The control experiment 1466 was waiting for, and it took three
+attempts to build an instrument that did not itself destroy the thing it was
+measuring.*
+
+**THE RESULT.** Courier originating, Supra answering, media going
+VG204 → Asterisk → `rtprelay.py` → Asterisk → VG204 — the real path, with an
+extra RTP hop that an slmodemd call does not even have:
+
+    CARRIER 28800 / PROTOCOL: LAP-M / CONNECT 28800/ARQ
+    CONNECT 28800/ARQ/V34/LAPM/V42BIS
+    leg A rx 2639 tx 2500,  leg B rx 2500 tx 2639
+
+and from the Courier's own `ATI11`, read after the drop and before anything
+reset it:
+
+| | |
+|---|---|
+| Modulation | V.34 |
+| Speed | **28800/28800** |
+| Symbol rate | **3429/3429** |
+| Carrier freq | 1959/1959 Hz |
+| Trellis code | 64S-4D / 16S-4D |
+| Recv/Xmit level | **−30 / −20 dB** |
+| Round-trip delay | **173 ms** |
+
+28800 is this Courier's ceiling — it is a 1994 V.34 unit, and 28800 is also
+exactly what it reached as the far end of every archived slmodemd call. The
+same pairing hairpinned inside the VG204, with no network in the call at all,
+also gives 28800/ARQ/V34/LAPM/V42BIS. **The network path costs nothing
+measurable.**
+
+**WHICH SETTLES 1466 ON ITS CONCLUSIVE BRANCH.** The path carries V.34 to the
+modems' ceiling, symmetrically, at the same 3429 baud our calls use, with a
+173 ms round trip that matches the 175.62 ms echo lag measured on every
+slmodemd call. Our datapump transmits 33600 on that path and asks for 14400
+back. The deficit is our receiver.
+
+**THE INSTRUMENT DESTROYED THE MEASUREMENT TWICE FIRST**, and both failures
+are worth keeping:
+
+1. `hw2hw.sh` never left the VG204 (1467).
+2. `relay.py`, built on pjsua's conference bridge, could not carry a V.34
+   handshake at all. Supra originating gave V.8 CM (980/1180 Hz) into a
+   steady 2250 Hz tone — no common modulation for 50 s. Courier originating
+   got further: V.8 completed, Phase 2 probing ran (2699/3000/2398/1801 Hz),
+   training started — and **the whole sequence retried four times** before
+   S7 expired.
+
+   The cause is architectural, not a setting. A conference bridge DECODES
+   both legs to linear, mixes on its own clock, and re-encodes, so two
+   independent RTP senders with two independent crystals must be reconciled
+   to one local clock — and that reconciliation is frame drops and
+   insertions. `d-modem` never hits it because it has ONE RTP leg and is
+   itself the clock. `rtprelay.py` never hits it because it does not decode:
+   a packet arriving on leg A is written to leg B unchanged.
+
+   **A relay that resamples is not a relay for modem work.** This is the same
+   lesson as 1467 in a different disguise: a control experiment that shares a
+   component with the thing under test is not a control.
+
+**WHAT ELSE THE INSTRUMENT BOUGHT.** `ATI11` on a USR Courier reports carrier
+frequency, symbol rate, trellis code, preemphasis, round-trip delay and
+**receive and transmit level SEPARATELY per direction**. Nothing on this bench
+had ever read it. It works after any ordinary call, needs no relay, and the
+−30/−20 dB split is the first direct measurement of path loss per direction
+this bench has had — 1466's third branch, a level mismatch, is now testable
+without inference from a recording.
+
+`rtprelay.py --rec` also writes each direction's a-law payload to its own
+file, which the conference recording could never be: a mix cannot be analysed
+per direction, and per-direction audio was the point of #94.
