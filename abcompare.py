@@ -33,7 +33,7 @@ import os
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LOAD_LIMIT = 6.0
+RISE_LIMIT = 3.0   # plan: exclude on the RISE, not the absolute after-reading
 
 
 def perm_ranksum(a, b, iters=20000, seed=12345):
@@ -107,16 +107,20 @@ def main():
     # Load per call comes from the runner's CSV, not the logs.
     loads = {}
     try:
-        for r in csv.DictReader(open(os.path.join(HERE, "captures",
-                                                  "preemph-ab.csv"))):
-            loads[r["call"]] = (float(r["load_before"]), float(r["load_after"]))
+        for name in ("preemph-ab2.csv", "preemph-ab.csv"):
+            try:
+                for r in csv.DictReader(open(os.path.join(HERE, "captures", name))):
+                    loads[r["call"]] = float(r.get("load_rise") or
+                                             (float(r["load_after"]) -
+                                              float(r["load_before"])))
+            except OSError:
+                continue
     except OSError:
         pass
 
     report(rows, "ALL CALLS")
-    clean = [r for r in rows
-             if max(loads.get(r["call"], (99, 99))) < LOAD_LIMIT]
-    report(clean, "LOAD-CLEAN ONLY (before and after both < %.0f)" % LOAD_LIMIT)
+    clean = [r for r in rows if loads.get(r["call"], 99.0) <= RISE_LIMIT]
+    report(clean, "RISE-CLEAN ONLY (load rose by <= %.1f during the call)" % RISE_LIMIT)
 
     dropped = [r["call"] for r in rows if r not in clean]
     if dropped:
