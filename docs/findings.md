@@ -49534,3 +49534,72 @@ tree deliberately reproduces as locals. Not changed here: it is a measurement
 tool used by several concurrent sessions and changing what it counts
 mid-flight would make two hand-overs disagree for a reason that is not about
 the code. Recorded so the next person reading a closure knows the failure mode.
+
+### 1623. V.32'S SCRAMBLER PAIR DIFFERS IN ONE `or`, AND ITS THREE DATA OBJECTS ARE UNREFERENCED
+
+*Task: V.32/V.32bis. Both functions reconstructed and driven against the
+blob over seventeen configurations; the data objects measured, not written
+from.*
+
+`SDMv32_scrambler` (0x85950) and `SDMv32_descrambler` (0x857f0) are 349 bytes
+each and the same 349 bytes twice over, except for which value is fed back:
+
+```
+    scrambler     out = (in ^ (reg >> tap1) ^ (reg >> tap2)) & outmask
+                  reg = ((reg << shift) & regmask) | out
+    descrambler   out = (in ^ (reg >> tap1) ^ (reg >> tap2)) & outmask
+                  reg = ((reg << shift) & regmask) | in
+```
+
+In the object that is literally one instruction: `or %eax,%ebx` against
+`or %ecx,%ebx`, where `eax` is the masked output and `ecx` the raw input.
+
+**FOUR THINGS THE ENCODING FORCES**, each of which a plausible rewrite gets
+wrong:
+
+- **`group == 6` is a special case, not arithmetic.** `cmp $0x6,%di` and
+  `mov $0x3,%edx` are literals. A 6-bit word is processed as two 3-bit
+  groups, most significant first, and the shift is 3. Writing it as
+  `group / 2` would agree at 6 and disagree at every other even width.
+- **The second half of a 6-bit word sees the register the first half already
+  updated.** The taps for it are read after the first `shl`/`and`/`or`, so
+  the two halves are not independent and the order matters.
+- **The result is truncated to 16 bits before `outmask` is applied**
+  (`movzwl %ax,%eax` then `and`), not after.
+- **The not-6 path xors the WHOLE 16-bit input word**, and the descrambler
+  feeds the whole word back into the register. It is not masked to `group`
+  bits first. For a caller that presents only `group` significant bits the
+  two readings agree over every input, which is exactly the class of defect
+  finding 613 is about.
+
+The state is 24 bytes: `group` at +0x00, `outmask` +0x08, `regmask` +0x0c,
+`reg` +0x10, `tap1` +0x14, `tap2` +0x16. **+0x02 through +0x07 are read by
+neither function** and nothing that writes this object is reconstructed, so
+they are left as named padding.
+
+**`SDMv32_GPA`, `SDMv32_GPC` AND `SDMv32_CFG` ARE UNREFERENCED.**
+`tools/relocscan.py --into SDMv32` resolves all 10,514 `R_386_32`
+relocations and finds nothing pointing at any of the three. They are global,
+so a translation unit outside this object could have used them; inside it
+they are dead. The consequence is that their SHAPE cannot be established —
+8 bytes is `short[4]` and two `short[2]` pairs equally — and the file says so
+rather than choosing.
+
+Their values are worth recording even so. V.32 §4.4 gives two scrambling
+polynomials, `GPA = 1 + x^-18 + x^-23` for the answering modem and
+`GPC = 1 + x^-5 + x^-23` for the calling one, and the two objects hold **5
+and 18 in the two orders** — the two non-trivial exponents, differing exactly
+as the polynomials differ, under the Recommendation's own names.
+`SDMv32_CFG` is `{4, 5, 23}` and 23 is the register length. What is NOT
+established is how either object reaches `tap1`/`tap2`: 23 is absent from
+both, so at least one tap cannot be a raw exponent, and the function that
+would settle it is not in the object.
+
+**The test drives the pair, not just each half.** Seventeen configurations —
+every `group` from 1 to 8, both tap orders, three register lengths, an
+`outmask` wider than the group, a register already full, and both taps on the
+same bit — each over 512 words in ragged chunks so that `reg` is carried
+rather than assumed. It also round-trips our scrambler through our
+descrambler from a DIFFERENT initial register and requires the input back
+after 32 words, which is the self-synchronising property the pair exists for
+and which neither function alone can demonstrate.
