@@ -1,27 +1,28 @@
 /*
  * t_vpcmguard.c -- the unwritten boundary, watched STOPPING.
  *
- * `vpcm_run` calls five entry points in `VPcmV34Main.cpp` that this tree has
- * not reconstructed.  They are declared WEAK in `src/pump/v90/vpcm.c`, so a
- * binary that does not supply them links with the references resolved to
- * zero -- which is what lets the other 77 test binaries, none of which calls
- * `vpcm_run`, link at all, and what keeps this tree from DEFINING a symbol
- * named after 7,278 bytes of the object it has not written.
+ * THE BOUNDARY MOVED, AND THAT IS WHAT THIS FILE IS NOW ABOUT.  It used to
+ * watch `vpcm_run` stop on the five `VPcmV34Main.cpp` entry points it calls,
+ * because `VPcmV34Progress` -- 7,278 bytes and the whole V.PCM run path --
+ * was not reconstructed.  It is now, in `src/pump/v34/v34pcmmain.cpp`, and so
+ * are the other four, so every one of the five is a real definition in every
+ * binary and `vpcm_run`'s guards can no longer fire.  That claim is made
+ * below rather than dropped, for the reason it always was: a definition that
+ * quietly stopped being linked would put `vpcm_run` back on `vpcm_notwritten`
+ * and NOTHING else in this tree would notice.
  *
- * THIS BINARY IS THE ONE THAT DOES NOT SUPPLY THEM.  `t_vpcmrun.c` defines
- * the one that is still unwritten as a forwarder to the blob's `ref_*` copy;
- * this file deliberately defines none, so it is null here and `vpcm_run`'s
- * guard is on the only path there is.
+ * WHAT IS UNWRITTEN NOW IS ONE LEVEL DOWN.  `VPcmV34Progress` calls seven
+ * symbols nobody has reconstructed -- 7,922 bytes belonging to the V.90 and
+ * V.92 arms -- and carries the same weak-reference-plus-guard arrangement for
+ * them that `vpcm.c` carried for the five.  This binary is the one that
+ * DRIVES one of those guards: it puts the object in the line-verification
+ * state, whose `VPcmFloModem::qcLineVerification` is among the seven, and
+ * requires the child to have died of SIGABRT.
  *
- * FOUR OF THE FIVE ARE NO LONGER UNWRITTEN.  `VPcmV34GetCleanedSamples` and
- * `VPcmV34GetCurrentSessionDP` are reconstructed in
- * `src/pump/v34/v34pcmif.c` and the two rate getters in
- * `src/pump/v34/v34pcmmain.cpp`, and every test binary links both, so all
- * four are non-null even here and no forwarder can make them otherwise.  The
- * block below asserts that too: the guard surface is what this file is
- * about, and it has to be counted in both directions or a definition that
- * silently stopped being linked would go unremarked.  `VPcmV34Progress` is
- * the one the abort actually rides on and it is untouched.
+ * NONE OF THE SEVEN IS ON A V.34 CALL, which is finding 1454's measurement
+ * and the reason `t_vpcmrun`'s four-way comparison of a real 33,600 connect
+ * passes with all seven absent.  The guard is what stands between "a path
+ * this tree cannot take" and a call through a null pointer.
  *
  * WHY IT HAS TO BE WATCHED RATHER THAN REASONED ABOUT.  gates.md's pattern:
  * a guard that silently returned would leave a `.process` running and
@@ -32,10 +33,11 @@
  *
  * The soft half is `v34hshak.c`'s rule, and finding 547's argument: a test
  * that dies cannot then be asked WHICH path it took, so the stop is what a
- * test opts out of BY NAME -- `vpcm_unwritten_reset` -- and the code is
+ * test opts out of BY NAME -- `v34pcm_unwritten_reset` -- and the code is
  * always recorded either way.
  */
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,6 +48,8 @@
 #include "harness.h"
 
 #include "dsplib/dp.h"
+#include "dsplib/v34fsk.h"
+#include "dsplib/v34pcmif.h"
 /*
  * WEAK HERE TOO, AND IT COST A RUN TO FIND OUT.  A plain declaration lets GCC
  * assume the address of a function is never null and fold `f == 0` to false
@@ -57,25 +61,75 @@
 #define DSPLIB_VPCM_UNWRITTEN	__attribute__((weak))
 #include "dsplib/vpcm.h"
 
+/*
+ * THE SEVEN, BY THEIR LINK NAMES.  Five of them are C++ members and their
+ * mangled names are ordinary C identifiers, so a C file can name them
+ * directly and does -- declaring the class here would drag `VPcmFloModem.h`
+ * into a `.c`, and the point is the SYMBOL rather than the signature.  The
+ * parameter lists are deliberately empty: nothing here calls any of them.
+ *
+ * Weak for the reason above, and the reason is sharper here: every one of
+ * these is genuinely undefined in this binary, so a plain declaration would
+ * both fold the test and leave an undefined reference at the link.
+ */
+extern void _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_(void)
+	__attribute__((weak));
+extern void _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_(void)
+	__attribute__((weak));
+extern void _ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_(void)
+	__attribute__((weak));
+extern void _ZN12VPcmFloModem20vPcmResetPhase3ModemEv(void)
+	__attribute__((weak));
+extern void _ZN19GenericToneDetector7processEPfj(void) __attribute__((weak));
+extern void v90RateReneg(void *obj) __attribute__((weak));
+extern void v90RateRenegSilence(void *obj) __attribute__((weak));
+
 #define FRAG	48
 
 /*
  * A root object built by hand rather than by `ref_vpcm_create`, because the
  * point of this binary is that NOTHING of the blob's V.PCM side runs in it.
  * Zeroed is a valid starting state for everything `vpcm_run` reads before it
- * reaches the first guard: both queues empty, the mute counter clear, `nbits`
- * zero so the bit pipe is not entered, and `mode` and `status` at the values
- * `vpcm_create` leaves at 0x3a9c and 0x3aa3.
+ * reaches `VPcmV34Progress`: both queues empty, the mute counter clear,
+ * `nbits` zero so the bit pipe is not entered, and `mode` and `status` at the
+ * values `vpcm_create` leaves at 0x3a9c and 0x3aa3.
  */
 static struct vpcm_root root;
+
+/*
+ * The session `VPcmV34Progress` reads one byte of before it dispatches --
+ * `p3548->byte_7f5c`, the entrance-filter switch at .text+0xb4dc.  Zeroed, so
+ * the filter is off; it exists only because the load is unconditional and a
+ * null `p3548` would fault before any guard could fire.  0x7f68 is
+ * `sizeof(VPcmFloModem)`, spelled as a literal because this is a C file.
+ */
+static unsigned char session[0x7f68];
+
+/*
+ * +0x0000 is `status`, and 4 is the line-verification state -- the arm at
+ * .text+0xb9f7 whose one call is the unwritten `qcLineVerification`.
+ * +0x0262 is the running flag; zero makes `VPcmV34Progress` return at its
+ * first instruction and reach no guard at all.  Both are written through
+ * `struct v34_object` rather than by offset, which is what keeps this test
+ * honest if either field moves.
+ */
+#define GUARD_STATUS	4
 
 static void
 root_reset(void)
 {
+	struct v34_object *obj;
+
 	memset(&root, 0, sizeof(root));
+	memset(session, 0, sizeof(session));
 	root.dp.id = 34;
 	root.dp.modem = (void *)0xD1A1u;
 	root.dp.dp_data = &root;
+
+	obj = (struct v34_object *)&root.v34;
+	obj->status = GUARD_STATUS;
+	obj->p3548 = session;
+	*(short *)((unsigned char *)obj + 0x262) = 1;
 }
 
 int
@@ -90,27 +144,16 @@ main(void)
 	for (i = 0; i < FRAG; i++)
 		in[i] = (short)(i * 37 - 500);
 
-	diff_begin("one VPcmV34* entry point is ABSENT from this binary and "
-		   "four are WRITTEN");
+	diff_begin("all five VPcmV34* entry points are WRITTEN and the seven "
+		   "below them are not");
 	/*
-	 * Without the null one the abort below proves nothing: a guard that
-	 * fired because the symbol was null is only interesting if the symbol
-	 * really is null, and a binary that had quietly linked the blob's
-	 * copies would abort for some other reason entirely.
-	 *
-	 * FOUR OF THE FIVE ARE NOW DEFINED, two in `src/pump/v34/v34pcmif.c`
-	 * and two in `src/pump/v34/v34pcmmain.cpp`, and this block is where
-	 * that is recorded.  It is asserted rather than
-	 * dropped for the reason the weak attribute exists at all: the guard
-	 * surface is the claim, so it has to be counted in both directions.
-	 * A definition that quietly disappeared -- the file dropped from the
-	 * link, or the definition compiled under the weak macro and outranked
-	 * -- would put `vpcm_run` back on `vpcm_notwritten` and NOTHING else
-	 * in this tree would notice, because a run that never reaches the
-	 * connect arm never asks either of them anything.
+	 * ALL FIVE ARE NOW DEFINED, two in `src/pump/v34/v34pcmif.c` and
+	 * three in `src/pump/v34/v34pcmmain.cpp`, and this block is where
+	 * that is recorded.  It is asserted rather than dropped for the
+	 * reason the weak attribute exists at all: the guard surface is the
+	 * claim, so it has to be counted in both directions.
 	 */
-	diff_eq_int("VPcmV34Progress is unresolved", VPcmV34Progress == 0, 1,
-		    0);
+	diff_eq_int("VPcmV34Progress is DEFINED", VPcmV34Progress != 0, 1, 0);
 	diff_eq_int("VPcmV34GetCleanedSamples is DEFINED",
 		    VPcmV34GetCleanedSamples != 0, 1, 0);
 	diff_eq_int("VPcmV34GetCurrentSessionDP is DEFINED",
@@ -119,22 +162,44 @@ main(void)
 		    VPcmV34GetCurrentRxBitRate != 0, 1, 0);
 	diff_eq_int("VPcmV34GetCurrentTxBitRate is DEFINED",
 		    VPcmV34GetCurrentTxBitRate != 0, 1, 0);
+	/*
+	 * And the seven that are not.  Without the null one the abort below
+	 * proves nothing: a guard that fired because the symbol was null is
+	 * only interesting if the symbol really is null.
+	 */
+	diff_eq_int("runPcmModem is unresolved",
+		    _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_ == 0, 1,
+		    0);
+	diff_eq_int("v90RunDemodulator is unresolved",
+		    _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_ == 0, 1, 0);
+	diff_eq_int("qcLineVerification is unresolved",
+		    _ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_
+		    == 0, 1, 0);
+	diff_eq_int("vPcmResetPhase3Modem is unresolved",
+		    _ZN12VPcmFloModem20vPcmResetPhase3ModemEv == 0, 1, 0);
+	diff_eq_int("GenericToneDetector::process is unresolved",
+		    _ZN19GenericToneDetector7processEPfj == 0, 1, 0);
+	diff_eq_int("v90RateReneg is unresolved", v90RateReneg == 0, 1, 0);
+	diff_eq_int("v90RateRenegSilence is unresolved",
+		    v90RateRenegSilence == 0, 1, 0);
 	/* The layout the hand-built root depends on. */
 	diff_eq_int("the root is vpcm_create's allocation",
 		    (int)sizeof(struct vpcm_root), 0xd258, 0);
+	diff_eq_int("...and the V.34 object is the block vpcm_create clears",
+		    (int)sizeof(struct v34_object), VPCM_V34_BYTES, 0);
 	rc |= diff_end();
 
 	/* --- the guard STOPS ------------------------------------------- */
 
-	diff_begin("an unwritten entry point aborts, and it is watched doing "
-		   "it");
+	diff_begin("an unwritten callee inside VPcmV34Progress aborts, and it "
+		   "is watched doing it");
 	root_reset();
 	fflush(stdout);
 	fflush(stderr);
 	pid = fork();
 	if (pid == 0) {
 		/*
-		 * No `vpcm_unwritten_reset` here: this child has NOT said it
+		 * No `v34pcm_unwritten_reset` here: this child has NOT said it
 		 * intends to read the code afterwards, so the rule is that it
 		 * stops.  If it returns, `_exit(0)` records that it did and
 		 * the parent's claim fails on the exit status rather than on
@@ -165,25 +230,25 @@ main(void)
 	 * would make the assertion below true whatever this call did, which
 	 * is the vacuous shape gates.md is about.
 	 */
-	diff_eq_int("nothing recorded before the call", vpcm_unwritten(),
-		    VPCM_WRITTEN, 0);
-	vpcm_unwritten_reset();
-	diff_eq_int("...and the reset leaves it that way", vpcm_unwritten(),
-		    VPCM_WRITTEN, 0);
+	diff_eq_int("nothing recorded before the call", v34pcm_unwritten(),
+		    V34PCM_WRITTEN, 0);
+	v34pcm_unwritten_reset();
+	diff_eq_int("...and the reset leaves it that way", v34pcm_unwritten(),
+		    V34PCM_WRITTEN, 0);
 
 	memset(out, 0x5a, sizeof(out));
 	diff_eq_int("vpcm_run returns DPSTAT_OK in soft mode",
 		    vpcm_run(&root.dp, in, out, FRAG), DPSTAT_OK, 0);
 	/*
-	 * FIRST WINS, and the first is `VPcmV34Progress`: it is the only one
-	 * of the five on the path a block takes before the dispatch, and with
-	 * it stubbed the progress code is 0 and the connect arm -- where the
-	 * other three live -- is never reached.  So this fixture can reach
-	 * two of the five codes and records the earlier; the remaining three
-	 * are recorded here as UNREACHED rather than claimed.
+	 * FIRST WINS, and the first this fixture can reach is
+	 * `qcLineVerification`: state 4 is the one arm of the seventeen whose
+	 * only unwritten call is that member, and the arm it returns into
+	 * cannot reach any of the other six.  The remaining six are recorded
+	 * here as UNREACHED by this fixture rather than claimed -- each needs
+	 * a session object this file has no way to build.
 	 */
-	diff_eq_int("...having recorded the entry point it could not call",
-		    vpcm_unwritten(), VPCM_UNWRITTEN_PROGRESS, 0);
+	diff_eq_int("...having recorded the callee it could not reach",
+		    v34pcm_unwritten(), V34PCM_UNWRITTEN_QCLINE, 0);
 	/*
 	 * AND IT RAN TO THE END.  The tail at 0x3f19 moves `count` samples out
 	 * of the output queue and compacts it whether or not anything was
@@ -194,22 +259,35 @@ main(void)
 	 */
 	diff_eq_int("the input queue is empty again", root.inq.count, 0, 0);
 	diff_eq_int("...and so is the output queue", root.outq.count, 0, 0);
-	for (i = 0; i < FRAG; i++)
-		if (out[i] != 0)
-			break;
-	diff_eq_int("...and the caller's buffer was written, all 48 samples",
-		    i, FRAG, i);
 	/*
-	 * The five codes are five DIFFERENT codes.  Two of them equal would
+	 * AND VPcmV34Progress ITSELF RAN.  The line-verification arm sets
+	 * `f0004` to 10 when the unwritten member "returns" 0, and then walks
+	 * the whole block into the echo history at +0x2f58 -- so the progress
+	 * word and the history cursor are what say the arm was entered rather
+	 * than skipped.  `VPcmV34GetCleanedSamples` is called by `vpcm_run`
+	 * immediately afterwards and CLEARS the cursor, which is why the
+	 * assertion is on the samples it reported rather than on the field.
+	 */
+	diff_eq_int("...the line-verification arm set the progress code",
+		    ((struct v34_object *)&root.v34)->f0004,
+		    VPCM_PROG_SAME_LINE, 0);
+	diff_eq_int("...and the echo history took the whole block",
+		    ((struct v34_object *)&root.v34)->hist_2f58[FRAG - 1],
+		    in[FRAG - 1], 0);
+	/*
+	 * The eight codes are eight DIFFERENT codes.  Two of them equal would
 	 * make an unwritten path report the wrong one for ever, and nothing
 	 * else in this tree looks.
 	 */
-	diff_eq_int("the five codes are distinct",
-		    VPCM_UNWRITTEN_PROGRESS != VPCM_UNWRITTEN_CLEANED
-		    && VPCM_UNWRITTEN_CLEANED != VPCM_UNWRITTEN_SESSIONDP
-		    && VPCM_UNWRITTEN_SESSIONDP != VPCM_UNWRITTEN_RXBITRATE
-		    && VPCM_UNWRITTEN_RXBITRATE != VPCM_UNWRITTEN_TXBITRATE
-		    && VPCM_UNWRITTEN_PROGRESS != VPCM_WRITTEN, 1, 0);
+	diff_eq_int("the eight codes are distinct",
+		    V34PCM_WRITTEN != V34PCM_UNWRITTEN_RUNPCM
+		    && V34PCM_UNWRITTEN_RUNPCM != V34PCM_UNWRITTEN_V90RUN
+		    && V34PCM_UNWRITTEN_V90RUN != V34PCM_UNWRITTEN_QCLINE
+		    && V34PCM_UNWRITTEN_QCLINE != V34PCM_UNWRITTEN_RESETP3
+		    && V34PCM_UNWRITTEN_RESETP3 != V34PCM_UNWRITTEN_TONEPROC
+		    && V34PCM_UNWRITTEN_TONEPROC != V34PCM_UNWRITTEN_RRN
+		    && V34PCM_UNWRITTEN_RRN != V34PCM_UNWRITTEN_RRNSILENCE, 1,
+		    0);
 	rc |= diff_end();
 
 	return rc;

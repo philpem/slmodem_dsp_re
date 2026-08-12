@@ -24,6 +24,27 @@
  * allocates, which is what lets the test binaries link with $(CC).
  */
 
+/*
+ * THE THREE UNWRITTEN-CALLEE MACROS, AND THEY MUST COME BEFORE THE INCLUDES.
+ *
+ * `VPcmV34Progress` at the bottom of this file calls seven symbols nobody has
+ * reconstructed -- four `VPcmFloModem` members, `GenericToneDetector::process`
+ * and the two V.90 rate-renegotiation transmitters.  Their declarations wear
+ * these macros, so THIS translation unit makes a weak undefined reference to
+ * each: it resolves to zero instead of leaving every test binary with an
+ * undefined symbol, and each call site tests the pointer before using it.
+ * `include/dsplib/vpcm.h` sets the arrangement out at length for the five
+ * `VPcmV34*` entry points; this is the same one, one level further down.
+ *
+ * A translation unit that DEFINES any of the seven must not define these --
+ * a definition compiled under the macro would itself be weak.
+ */
+#define DSPLIB_VPCMFLO_UNWRITTEN	__attribute__((weak))
+#define DSPLIB_GTD_UNWRITTEN		__attribute__((weak))
+#define DSPLIB_V34HSHAK_UNWRITTEN	__attribute__((weak))
+
+#include <stdlib.h>
+
 #include "dsplib/K56FlexFloModem.h"
 #include "dsplib/V90ConstellationDesigner.h"
 #include "dsplib/V92EchoCanceller.h"
@@ -1461,6 +1482,1302 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 	}
 
 	return cfg->txbits * (int)RATE_STEP;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * `VPcmV34Progress` -- 0xb3c0, 7,278 bytes.  One block of samples through
+ * whichever of V.34, V.90, V.92 and K56flex has the line.
+ *
+ * IT IS THE WHOLE V.PCM RUN PATH.  `vpcm_run` (src/pump/v90/vpcm.c) converts
+ * the host's shorts to floats, fetches the transmit bits, calls this once per
+ * block and converts back; everything a connecting call does between those
+ * two conversions is here.  Finding 1454 measured what that means: traced
+ * under callgrind, a real 33,600 V.34 connect executes exactly ONE symbol
+ * this tree had not written, and it was this one.
+ *
+ * THE SHAPE IS THREE DISPATCHES, NOT ONE.
+ *
+ *   1. `obj->status`, 0 to 10, the jump table at .rodata+0x2d4 -- which modem
+ *      owns the line and what phase it is in.  Anything above 10 is a bug and
+ *      says so ("Illegal Modem State").
+ *   2. the modem's own answer -- `runPcmModem`, `k56FlexRunDemodulator` and
+ *      `v90RunDemodulator` each return a small code that the tables at
+ *      +0x300, +0x324 and +0x3bc turn into a new `f0004` or a retrain.
+ *   3. `obj->f0004` itself, the table at +0x340, reached only from the V.34
+ *      arm -- five of its seventeen entries do anything, and one of those is
+ *      a fourth table (+0x384) that turns a modem-on-hold code into a timeout
+ *      in seconds.
+ *
+ * `f0004` IS THE RETURN VALUE AND IS ALSO A LOCAL.  The object reads it into
+ * %esi at the top of each arm, switches on that copy, and returns THAT --
+ * `obj->f0004` is written by several arms after the copy is taken and the
+ * function still returns the older value.  `ret` below is that copy, assigned
+ * exactly where the object assigns it and nowhere else.  Two arms re-read it
+ * only when the debug level is up, which changes what the function returns;
+ * see D296.
+ *
+ * WHAT IS NOT WRITTEN, and how it is kept from breaking the link.  Seven
+ * symbols this function calls are unreconstructed -- four `VPcmFloModem`
+ * members, `GenericToneDetector::process`, and the two rate-renegotiation
+ * transmitters -- 7,922 bytes belonging to the V.90 and V.92 arms.  Each is
+ * declared WEAK by the three macros defined at the top of this file, so the
+ * reference resolves to zero rather than leaving 78 test binaries with an
+ * undefined symbol, and each call site tests the pointer first and records
+ * `v34pcm_notwritten` when it is null.  That is `vpcm.h`'s arrangement for
+ * the five `VPcmV34*` entry points, one level further down; the boundary
+ * moved, it did not go away.  `t_vpcmguard.c` is the binary that watches it
+ * stop.
+ *
+ * NONE OF THE SEVEN IS ON A V.34 CALL.  Finding 1454's trace is what says so
+ * and it is the reason this function could be written at all; a V.90 or V.92
+ * connect enters arms no test in this tree can yet drive.
+ */
+
+/*
+ * ---------------------------------------------------------------------------
+ * FIVE ALIASES THAT EXIST ONLY TO BE COMPARED WITH ZERO, and finding 1460 is
+ * why they have to.
+ *
+ * The five C++ members below are declared WEAK, `nm` shows all five as `w`,
+ * and the free functions beside them (`v90RateReneg`, `v90RateRenegSilence`)
+ * are weak in exactly the same way.  Test a free one for null and GCC leaves
+ * the comparison alone.  Test a MEMBER -- `&VPcmFloModem::runPcmModem == 0`
+ * -- and GCC 13 folds it to false and says so:
+ *
+ *     warning: the address 'VPcmFloModem::runPcmModem' will never be NULL
+ *
+ * which is finding 985's trap in a form the `weak` attribute does not fix:
+ * the guard would compile away and the call would go to address zero.  A
+ * pointer-to-member is not an address as far as that optimisation is
+ * concerned, and no spelling of the member reference avoids it.
+ *
+ * So the TEST is made through an ordinary function pointer wearing the
+ * member's mangled name -- `this` is a member's first stack argument on this
+ * ABI, so the declaration is the same function seen the other way round --
+ * and the CALL is still written as a call.  Nothing here is an alias for
+ * anything but the null test.
+ */
+extern int alias_runPcmModem(VPcmFloModem *, float *, float *, unsigned int,
+			     int *, int *, int *, int *)
+	__asm__("_ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_")
+	__attribute__((weak));
+extern int alias_v90RunDemodulator(VPcmFloModem *, float *, unsigned int,
+				   int *, int *)
+	__asm__("_ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_")
+	__attribute__((weak));
+extern int alias_qcLineVerification(VPcmFloModem *, float *, float *,
+				    unsigned int, int *, int *, int *, int *)
+	__asm__("_ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_")
+	__attribute__((weak));
+extern void alias_vPcmResetPhase3Modem(VPcmFloModem *)
+	__asm__("_ZN12VPcmFloModem20vPcmResetPhase3ModemEv")
+	__attribute__((weak));
+extern int alias_toneDetectorProcess(GenericToneDetector *, float *,
+				      unsigned int)
+	__asm__("_ZN19GenericToneDetector7processEPfj")
+	__attribute__((weak));
+
+/* `mov 0x...(%esi)` sites in regions v34fsk.h models as `unmapped_*`. */
+#define PROG_S16(o, off)	(*(short *)((unsigned char *)(o) + (off)))
+#define PROG_U16(o, off)	(*(unsigned short *)((unsigned char *)(o) + (off)))
+#define PROG_S32(o, off)	(*(int *)((unsigned char *)(o) + (off)))
+#define PROG_U8(o, off)		(*(unsigned char *)((unsigned char *)(o) + (off)))
+
+/*
+ * +0x0238  Samples this session has processed, masked to 31 bits on every
+ * block.  `datapumpv34` reads it at its true offset and v34fsk.h's note on
+ * `unmapped_0234` records the two other readers.
+ */
+#define O_SAMPLES	0x238
+/*
+ * +0x0240 and +0x0244.  The first is named by the object -- "On
+ * PHASE2_COMPLETE: added Silence = %d, p2DelayCntr = %d" -- and the second by
+ * "phase3halfDuplexLength = %d symbols (baud %d)".
+ */
+#define O_P2DELAY	0x240
+#define O_HDLENGTH	0xa244
+/*
+ * +0x0254 to +0x0258, adaptecho's DC estimator: a countdown, the estimate the
+ * loop subtracts from every sample, and the accumulator averaged into it
+ * every 128 samples.  "Estimated DC = %d  (acc = %d)" names the last two.
+ */
+#define O_DCCOUNT	0x254
+#define O_DCEST		0x256
+#define O_DCACC		0x258
+/* +0x0262.  Zero means the object is not running and the function returns. */
+#define O_RUNNING	0x262
+/* +0xa248.  Set with the half-duplex length and cleared by three arms. */
+#define O_HDSET		0xa248
+/* +0x0e4c.  A short set to 1 by each of the three "modem is up" arms. */
+#define O_MODEMUP	0xe4c
+/* +0xabc4.  Non-zero once the session has settled which PCM modem it is. */
+#define O_PCMCHOSEN	0xabc4
+/*
+ * +0xabd8 and +0xabdc.  "Modem On Hold approved by phase2 (ISP timeout is %d
+ * seconds)" names the first; the second counts samples against it.  -1 is
+ * "no limit" and is tested for as such.
+ */
+#define O_MOHLIMIT	0xabd8
+#define O_MOHCOUNT	0xabdc
+/* +0xabe9.  Gates the late ANSam case on an outgoing call. */
+#define O_ANSAMLATE	0xabe9
+/* +0xabfe and +0xabff.  The output-clear request, and the phase-2 substate. */
+#define O_CLEARREQ	0xabfe
+#define O_P2STATE	0xabff
+/*
+ * +0xac1c, the retrain detector's eleven words.  Four filter states, three
+ * coefficients, a signal counter and two energies with a block counter --
+ * "retrainDetector() notchDetectSigCnt = %d energyInp>>NOTCH_IN_OUT_RATIO_
+ * SHIFT = %d energyOut = %d" names the last three and the counter.
+ */
+#define O_NOTCH_S0	0xac1c
+#define O_NOTCH_S1	0xac1e
+#define O_NOTCH_S2	0xac20
+#define O_NOTCH_S3	0xac22
+#define O_NOTCH_CNT	0xac24
+#define O_NOTCH_K0	0xac28
+#define O_NOTCH_K1	0xac2a
+#define O_NOTCH_K2	0xac2c
+#define O_NOTCH_EIN	0xac30
+#define O_NOTCH_EOUT	0xac34
+#define O_NOTCH_BLK	0xac38
+/*
+ * +0xac40 to +0xac48, the three words `requestOutputSampleClear` writes and
+ * nothing here reads.  v34fsk.h's `unmapped_ac40` is the twelve bytes this
+ * arm is the only reason to model at all.
+ */
+#define O_CLR_FLAG	0xac40
+#define O_CLR_COUNT	0xac44
+#define O_CLR_DONE	0xac48
+
+/* +0x25c2, `testb $0x10` -- transmit through the datapump rather than the
+ * handshake.  v34fsk.h names it `f25c2`. */
+#define PROG_TXBIT_DATA		0x10
+
+/* The two `f359c` roles, `cmpw $0x65` and `$0x66` at 0xb50c and 0xb522. */
+#define PROG_ROLE_ORIGINATE	0x65
+#define PROG_ROLE_ANSWER	0x66
+
+/* The `+0x6c0c` block of VPcmFloModem, read as floats by the V.PCM arm. */
+#define SESS_OUTBLOCK		0x6c0c
+/* `V92Phase2Info::shortPhase2Local`, cleared through the session. */
+#define SESS_V92_P2INFO		0x612c
+
+/* `pac3c`'s flag bytes, `orb`/`andb`/`testb` sites. */
+#define CFG_FLAGS3		3
+#define CFG_FLAG3_RETRAIN	4
+#define CFG_FLAG3_PHASE2	2
+#define CFG_FLAGS2		2
+#define CFG_FLAG2_SAMELINE	0x20
+#define CFG_FLAGS51		0x51
+#define CFG_FLAG51_CLEAR	1
+#define CFG_SILENCE		0x6c
+
+/* The retrain detector's three thresholds and its block length. */
+#define NOTCH_BLOCK		0x40
+#define NOTCH_EIN_MIN		0x249f0
+#define NOTCH_EOUT_MAX		0x22550f
+#define NOTCH_SIGCNT_MAX	5
+
+/* `hist_2f58` wraps here; `cmp $0x257,%dx` and it is a 16-bit compare. */
+#define PROG_HIST_LAST		0x257
+
+/*
+ * ---------------------------------------------------------------------------
+ * The unwritten-path record.  `vpcm.c`'s `vpcm_notwritten` verbatim in shape,
+ * and for the reason `v34hshak.c`'s `t3m_notwritten` gives: an arm that
+ * returns quietly is indistinguishable from an arm that correctly did
+ * nothing, so the default is to STOP, and a test opts out of the stop BY NAME
+ * before it reads the code.
+ */
+static int v34pcm_unwritten_code;
+static int v34pcm_unwritten_soft;
+
+extern "C" int
+v34pcm_unwritten(void)
+{
+	return v34pcm_unwritten_code;
+}
+
+extern "C" void
+v34pcm_unwritten_reset(void)
+{
+	v34pcm_unwritten_code = V34PCM_WRITTEN;
+	v34pcm_unwritten_soft = 1;
+}
+
+static void
+v34pcm_notwritten(int what)
+{
+	if (v34pcm_unwritten_code == V34PCM_WRITTEN)
+		v34pcm_unwritten_code = what;
+	if (!v34pcm_unwritten_soft)
+		abort();
+}
+
+extern "C" int
+VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
+		int *nrx, int *txbits, int *nbits)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	K56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;
+	const int n = nin & ~3;
+	int st;
+	int ret;
+	int prev;
+	int r;
+	int i;
+	int t;
+
+	/*
+	 * 0xb41f.  A 16-bit test, and the only exit that does not go through
+	 * the tail: the object is not running, so nothing is consumed and the
+	 * last progress code is repeated.
+	 */
+	if (PROG_S16(obj, O_RUNNING) == 0)
+		return obj->f0004;
+
+	PROG_S32(obj, O_SAMPLES) = (PROG_S32(obj, O_SAMPLES) + n) & 0x7fffffff;
+
+	/*
+	 * 0xb46a-0xb52a.  The transmit bits are packed into whole 16-bit
+	 * words for the three cases that have a V.34 modulator on the line:
+	 * idle, the answerer in V.90/V.92, and the originator in K56flex.
+	 */
+	st = obj->status;
+	if (st == 0
+	    || (st == 1 && obj->f359c == PROG_ROLE_ANSWER)
+	    || (st == 3 && obj->f359c == PROG_ROLE_ORIGINATE)) {
+		int nwords = *nbits >> 4;
+
+		if (nwords > 0) {
+			int src = 0;
+			int done = 0;
+			int idx = obj->tx_n;
+
+			do {
+				unsigned int w = 0;
+				int b;
+
+				for (b = 0; b <= 15; b++)
+					w += (unsigned int)
+					     (txbits[src++] & 1) << b;
+				obj->tx_data[idx] = (int)w;
+				obj->tx_n = ++idx;
+				done++;
+			} while ((*nbits >> 4) > done);
+		}
+	}
+
+	/*
+	 * 0xb4d8.  One byte in the session turns the entrance filter on; it
+	 * runs in place over the caller's buffer, and the state is re-read
+	 * afterwards because the filter is allowed to change it.
+	 */
+	if (sess->byte_7f5c != 0) {
+		sess->entFilt.process(in, in, (unsigned int)n);
+		st = obj->status;
+	}
+
+	if ((unsigned int)st > 10) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34Main: Illegal Modem "
+					     "State !!!!\r\n");
+		goto reload;
+	}
+
+	switch (st) {
+
+	/* --- 0: V.34, and the only arm that reaches the +0x340 table ----- */
+	case 0:
+		ret = obj->f0004;
+		prev = ret;
+		if (n != 0) {
+			int left = n;
+
+			do {
+				obj->f260 = (short)*in++;
+				modem_serrint(obj);
+				*out++ = (float)obj->f25e;
+				if (obj->txq.count < obj->f2aa0
+				    || obj->rxq.count > 5) {
+					if (obj->f25c2 & PROG_TXBIT_DATA)
+						datapumpv34(obj);
+					else
+						v34handshak(obj);
+				}
+			} while (--left != 0);
+			ret = obj->f0004;
+		}
+		/*
+		 * 0xc100.  A code that CHANGED to 4 or 5 during the block --
+		 * the two connect codes -- arms the retrain bit; the code is
+		 * then re-read because `pac3c` is shared with the handshake.
+		 */
+		if (ret != prev) {
+			if ((unsigned int)(ret - 4) <= 1) {
+				PROG_U8(obj->pac3c, CFG_FLAGS3)
+				    |= CFG_FLAG3_RETRAIN;
+				ret = obj->f0004;
+			}
+		}
+		/*
+		 * 0xc127.  Still idle, and the session has been running for
+		 * between 4,800 and 4,800 + n samples: the window is one
+		 * block wide, so it fires exactly once.  "Masking CAS
+		 * detection after %d in train".
+		 */
+		if (ret == 0) {
+			int since = PROG_S32(obj, O_SAMPLES)
+				    - PROG_S32(obj, 0x244);
+
+			if ((unsigned int)since > 0x12bfu
+			    && (unsigned int)since < (unsigned int)(n + 0x12c0)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Masking CAS "
+					    "detection after %d in train..."
+					    "\r\n", since);
+				PROG_U8(obj->pac3c, CFG_FLAGS3)
+				    &= (unsigned char)~CFG_FLAG3_RETRAIN;
+				ret = obj->f0004;
+			}
+		}
+
+		/* 0xc172, the transmit queue compaction. */
+		{
+			int rd = obj->tx_rd;
+			int wr = obj->tx_n;
+			int k = 0;
+
+			while ((unsigned int)wr > (unsigned int)rd)
+				obj->tx_data[k++] = obj->tx_data[rd++];
+			obj->tx_rd = 0;
+			obj->tx_n = k;
+		}
+
+		if (ret <= 3) {
+			*nbits = 0;
+		} else {
+			int avail = obj->nof_tx_bits;
+
+			if (avail != 0) {
+				avail -= obj->tx_n;
+				if (avail <= 0)
+					avail = 0;
+				else
+					avail <<= 4;
+			}
+			*nbits = avail;
+		}
+
+		/* 0xc1e7, the receive queue unpacked one bit per int. */
+		{
+			int *p = rxbits;
+			unsigned int k = 0;
+
+			while ((unsigned int)obj->rx_n > k) {
+				unsigned int w = (unsigned int)obj->rx_data[k];
+				int b;
+
+				for (b = 15; b >= 0; b--) {
+					*p++ = (int)(w & 1);
+					w >>= 1;
+				}
+				k++;
+			}
+			*nrx = obj->rx_n << 4;
+			obj->rx_n = 0;
+		}
+
+		if ((unsigned int)ret > 0x10)
+			goto done;
+
+		switch (ret) {
+
+		/* Phase 2 completed.  0xc360. */
+		case 1:
+			if (prev == 0) {
+				int baud = PROG_S16(obj, V34_RATECFG);
+				int ofs = PROG_S16(obj, V34_RATECFG + 2);
+				int len;
+
+				PROG_U8(obj, O_P2STATE) = 0;
+				PROG_S32(obj, O_P2DELAY) = 0;
+				if ((PROG_U8(obj->pac3c, CFG_FLAGS3)
+				     & CFG_FLAG3_PHASE2) != 0
+				    && PROG_S16(obj, O_PCMCHOSEN) != 0
+				    && PROG_S16(obj, O_HDSET) == 0) {
+					/*
+					 * 0xc3ae.  Five symbol periods per
+					 * baud unit plus the configured
+					 * offset, less 588 -- and this is the
+					 * only path that latches +0xa248.
+					 */
+					PROG_S16(obj, O_HDSET) = 1;
+					len = baud * 5 + ofs - 0x24c;
+				} else {
+					/*
+					 * 0xcff9, the other length: fifteen
+					 * eighths of the baud unit.
+					 */
+					len = (((baud << 4) - baud) >> 3)
+					      + ofs - 0x24c;
+				}
+				PROG_S32(obj, O_HDLENGTH) = len;
+				edprintf("VPcmV34Main: phase3halfDuplexLength"
+					 " = %d symbols (baud %d)\r\n",
+					 len, baud);
+				if (obj->v90_receiver > 1) {
+					if (alias_vPcmResetPhase3Modem == 0)
+						v34pcm_notwritten(
+						    V34PCM_UNWRITTEN_RESETP3);
+					else
+						sess->vPcmResetPhase3Modem();
+				} else if (obj->k56flex_receiver > 1) {
+					k56->k56FlexEnterPhase3();
+				}
+			}
+			t = PROG_S32(obj, O_P2DELAY) + n;
+			PROG_S32(obj, O_P2DELAY) = t;
+			r = PROG_U8(obj, O_P2STATE);
+			if (r == 0) {
+				if (t <= 0x5f) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "VPcmV34Main: Wait (before"
+						    " P2 COMPLETE)...\r\n");
+					return 0;
+				}
+				PROG_U8(obj, O_P2STATE) = 1;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Indicating First P2 "
+					    "COMPLETE... (after %d)\r\n",
+					    PROG_S32(obj, O_P2DELAY));
+				return 1;
+			}
+			if (r == 1) {
+				/* 0xcfa3, the configured extra silence. */
+				int sil = PROG_S32(obj->pac3c, CFG_SILENCE);
+
+				t += sil;
+				PROG_S32(obj, O_P2DELAY) = t;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "On PHASE2_COMPLETE: added Silence"
+					    " = %d, p2DelayCntr = %d\r\n",
+					    PROG_S32(obj->pac3c, CFG_SILENCE),
+					    t);
+			}
+			if (PROG_S32(obj, O_P2DELAY) <= 0x240) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Wait (after P2 "
+					    "COMPLETE)...\r\n");
+				PROG_U8(obj, O_P2STATE)++;
+				return 1;
+			}
+			if (prev != 1)
+				goto reload;
+			/*
+			 * 0xcf1d.  The same move as case 2 below and NOT the
+			 * same code: this copy has no V.90 branch at all --
+			 * a session whose `pcmSessionType` is 0 falls
+			 * straight through to the K56flex test.  Written
+			 * twice because the object has it twice.
+			 */
+			if (obj->v90_receiver > 1
+			    && sess->pcmSessionType != 0) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Moving to Phase3 "
+					    "Modem V92..\r\n");
+				obj->status = 2;
+			}
+			if (obj->k56flex_receiver > 1) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Moving to Phase3 "
+					    "Modem K56Flex..\r\n");
+				obj->status = 3;
+				PROG_S16(obj, O_DCCOUNT) = 0;
+			}
+			goto reload;
+
+		/* Move to phase 3.  0xc2d2. */
+		case 2:
+			if (obj->v90_receiver > 1) {
+				if (sess->pcmSessionType != 0) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "VPcmV34Main: Moving to "
+						    "Phase3 Modem V92..\r\n");
+					obj->status = 2;
+				} else {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "VPcmV34Main: Moving to "
+						    "Phase3 Modem V90..\r\n");
+					obj->status = 1;
+				}
+			}
+			if (obj->k56flex_receiver > 1) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Moving to Phase3 "
+					    "Modem K56Flex..\r\n");
+				obj->status = 3;
+				PROG_S16(obj, O_DCCOUNT) = 0;
+			}
+			goto reload;
+
+		/* Modem on hold approved.  0xc481 and the +0x384 table. */
+		case 13:
+		{
+			int secs;
+
+			switch ((unsigned short)obj->fabe0) {
+			case 1:		secs = 0xa;	break;
+			case 2:		secs = 0x14;	break;
+			case 3:		secs = 0x1e;	break;
+			case 4:		secs = 0x28;	break;
+			case 5:		secs = 0x3c;	break;
+			case 6:		secs = 0x78;	break;
+			case 7:		secs = 0xb4;	break;
+			case 8:		secs = 0xf0;	break;
+			case 9:		secs = 0x168;	break;
+			case 10:	secs = 0x1e0;	break;
+			case 11:	secs = 0x2d0;	break;
+			case 12:	secs = 0x3c0;	break;
+			case 13:	secs = -1;	break;
+			default:	secs = 0;	break;
+			}
+			PROG_S32(obj, O_MOHLIMIT) = secs;
+			PROG_S32(obj, O_MOHCOUNT) = 0;
+			if (DSPLIB_DEBUG_ON()) {
+				dsplibs_debug_printf(
+				    "VPcmV34Main: Modem On Hold approved by "
+				    "phase2 (ISP timeout is %d seconds) !!\r\n",
+				    secs);
+				ret = obj->f0004;
+				secs = PROG_S32(obj, O_MOHLIMIT);
+			}
+			if (secs > 0)
+				PROG_S32(obj, O_MOHLIMIT) = secs * 0x2580;
+			obj->status = 7;
+			goto done;
+		}
+
+		/* V.90 handshake gave up.  0xc272. */
+		case 15:
+		{
+			int lim;
+
+			obj->status = 8;
+			lim = ((unsigned short)obj->fabe2 < 1u ? 0xbb80 : 0)
+			      + 0x2580;
+			obj->faa74 = 0;
+			PROG_S32(obj, O_MOHCOUNT) = lim;
+			obj->f0004 = 0;
+			/*
+			 * 0xc2a8, `xor %esi,%esi`, and it is easy to miss:
+			 * this arm returns 0 and not the 13 it switched on.
+			 * The debug path reaches the same 0 by re-reading
+			 * `f0004` at 0xb53d, which is the only reason the two
+			 * paths agree.
+			 */
+			ret = 0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmV34Main: Reconnect request indicated "
+				    "from phase2 (waiting min time = %d before"
+				    " reconenct request)...\r\n", lim);
+			goto done;
+		}
+
+		/* 0xc252. */
+		case 16:
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmV34Main: End Transmission indicated "
+				    "by V.34 / Handshake...\r\n");
+			obj->status = 10;
+			goto done;
+
+		default:
+			goto done;
+		}
+
+	/* --- 1: V.90 -------------------------------------------------- */
+	case 1:
+		r = obj->v90_receiver;
+		if (r <= 1) {
+			ret = obj->f0004;
+			goto wrongstate;
+		}
+		ret = obj->f0004;
+		if (ret <= 1)
+			goto wrongstate;
+		obj->f2aa0 = (short)n;
+		while (obj->txq.count < obj->f2aa0) {
+			r = obj->v90_receiver;
+			if (r > 14) {
+				if (v90RateRenegSilence == 0)
+					v34pcm_notwritten(
+					    V34PCM_UNWRITTEN_RRNSILENCE);
+				else
+					v90RateRenegSilence(obj);
+			} else if (r > 10) {
+				if (v90RateReneg == 0)
+					v34pcm_notwritten(
+					    V34PCM_UNWRITTEN_RRN);
+				else
+					v90RateReneg(obj);
+			} else if (obj->f25c2 & PROG_TXBIT_DATA) {
+				modulatevector(obj);
+			} else {
+				v34handshak(obj);
+			}
+		}
+		/* 0xc642, the echo canceller and the DC estimator. */
+		if (n != 0) {
+			int left = n;
+
+			do {
+				int s;
+				int idx;
+
+				obj->f260 = (short)*in;
+				adaptecho(obj);
+				s = obj->f260;
+				if (PROG_U16(obj, O_DCCOUNT) != 0) {
+					int acc = PROG_S32(obj, O_DCACC) + s;
+
+					PROG_U16(obj, O_DCCOUNT)--;
+					if ((PROG_U16(obj, O_DCCOUNT) & 0x7f)
+					    == 0) {
+						int e = (PROG_S16(obj, O_DCEST)
+							 >> 1) + (acc >> 8);
+
+						PROG_S16(obj, O_DCEST) =
+						    (short)e;
+						if (DSPLIB_DEBUG_ON()) {
+							PROG_S32(obj, O_DCACC)
+							    = acc;
+							dsplibs_debug_printf(
+							    "Estimated DC = %d"
+							    "  (acc = %d)\n",
+							    (int)(short)e, acc);
+						}
+						PROG_S32(obj, O_DCACC) = 0;
+					} else {
+						PROG_S32(obj, O_DCACC) = acc;
+					}
+					s = obj->f260;
+				}
+				s = (short)(s - PROG_S16(obj, O_DCEST));
+				idx = obj->f2aa6;
+				obj->hist_2f58[idx] = (short)s;
+				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
+					obj->f2aa6 = (short)(idx + 1);
+				else
+					obj->f2aa6 = 0;
+				*in++ = (float)(short)s;
+				*out++ = (float)obj->f25e;
+			} while (--left != 0);
+		}
+		in -= n;
+		if (alias_v90RunDemodulator == 0) {
+			v34pcm_notwritten(V34PCM_UNWRITTEN_V90RUN);
+			r = 0;
+		} else {
+			r = sess->v90RunDemodulator(in, (unsigned int)n,
+						    rxbits, nrx);
+		}
+		switch ((unsigned int)r) {
+		case 1:
+			obj->f0004 = 3;
+			break;
+		case 2:
+			PROG_S16(obj, O_MODEMUP) = 1;
+			if (obj->rates_latched == 0)
+				obj->rx_bps = (int)sess->modem.demodulator
+						  ->getBitRate();
+			if (PROG_S16(obj, O_PCMCHOSEN) == 0) {
+				int both = 0;
+
+				if (obj->local_v92 != 0
+				    && obj->remote_v92 != 0)
+					both = 1;
+				PROG_S16(obj, O_PCMCHOSEN) = (short)both;
+			}
+			PROG_S16(obj, O_HDSET) = 0;
+			break;
+		case 3:
+			PROG_S16(obj, O_MODEMUP) = 1;
+			obj->f0004 = 5;
+			PROG_S16(obj, O_HDSET) = 0;
+			break;
+		case 4:
+			obj->f0004 = 0xb;
+			obj->status = 5;
+			PROG_S32(obj, O_SAMPLES) = 0;
+			break;
+		case 5:
+			VPcmV34InitiateRetrain(obj, VPCM_DP_V90);
+			break;
+		case 7:
+			VPcmV34InitiateRetrain(obj, VPCM_DP_V34);
+			break;
+		case 8:
+			obj->status = 10;
+			obj->f0004 = 0x10;
+			break;
+		default:
+			obj->f0004 = 2;
+			break;
+		}
+		/* 0xc91b, requestOutputSampleClear. */
+		if (PROG_U8(obj, O_CLEARREQ) != 0
+		    && (unsigned int)n > 0x30u) {
+			int want = n * 2;
+
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmV34Main: requestOutputSampleClear "
+				    "(asking %d samples clear) !!!\r\n", want);
+			PROG_U8(obj, O_CLEARREQ) = 0;
+			out -= n;
+			sysdep_memset(out, 0, (size_t)n * sizeof(float));
+			PROG_S32(obj, O_CLR_COUNT) = want;
+			PROG_S32(obj, O_CLR_FLAG) = 1;
+			PROG_S32(obj, O_CLR_DONE) = 0;
+			PROG_U8(obj->pac3c, CFG_FLAGS51) |= CFG_FLAG51_CLEAR;
+			V34EchoHistoryBackwardClean(obj,
+						    (unsigned)(want + n));
+		}
+		goto compact;
+
+	/* --- 2: V.92 -------------------------------------------------- */
+	case 2:
+		if (alias_runPcmModem == 0) {
+			v34pcm_notwritten(V34PCM_UNWRITTEN_RUNPCM);
+			r = 0;
+		} else {
+			r = sess->runPcmModem(in, out, (unsigned int)n, rxbits,
+					      nrx, txbits, nbits);
+		}
+		switch ((unsigned int)r) {
+		case 1:
+			obj->f0004 = 3;
+			break;
+		case 2:
+			if (obj->rates_latched == 0) {
+				const unsigned char *tx;
+				unsigned int bits;
+
+				obj->rx_bps = (int)sess->modem.demodulator
+						  ->getBitRate();
+				tx = (const unsigned char *)
+				     sess->v92modem.modulator;
+				bits = 0;
+				if (*(const int *)(tx + PCMTX_STATE)
+				    == PCMTX_READY)
+					bits = *(const unsigned int *)
+					       (**(const unsigned char *const *
+						  const *)
+						  (tx + PCMTX_V92_FRAME)
+						+ PCMTX_FRAME_BITS);
+				obj->tx_bps = (*(const int *)(tx + PCMTX_STATE)
+					       == PCMTX_READY)
+					      ? (int)(unsigned)
+						(bits * 8000u * (1.0f / 12.0f)
+						 + 0.5f)
+					      : 0;
+				obj->rates_latched = 1;
+			}
+			PROG_S16(obj, O_PCMCHOSEN) = 1;
+			obj->f0004 = 4;
+			PROG_S16(obj, O_HDSET) = 0;
+			break;
+		case 3:
+			PROG_S16(obj, O_PCMCHOSEN) = 1;
+			obj->f0004 = 5;
+			PROG_S16(obj, O_HDSET) = 0;
+			break;
+		case 4:
+			obj->f0004 = 0xb;
+			obj->status = 5;
+			PROG_S32(obj, O_SAMPLES) = 0;
+			break;
+		case 5:
+			VPcmV34InitiateRetrain(obj, VPCM_DP_V92);
+			break;
+		case 6:
+			VPcmV34InitiateRetrain(obj, VPCM_DP_V90);
+			break;
+		case 7:
+			VPcmV34InitiateRetrain(obj, VPCM_DP_V34);
+			break;
+		case 8:
+			obj->status = 10;
+			obj->f0004 = 0x10;
+			break;
+		default:
+			obj->f0004 = 2;
+			break;
+		}
+		/* 0xc564: the modem's own output block goes into the echo
+		 * history, not the caller's input. */
+		for (i = 0; i < n; i++) {
+			int idx = obj->f2aa6;
+
+			obj->hist_2f58[idx] = (short)
+			    ((const float *)((unsigned char *)sess
+					     + SESS_OUTBLOCK))[i];
+			if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
+				obj->f2aa6 = (short)(idx + 1);
+			else
+				obj->f2aa6 = 0;
+		}
+		goto reload;
+
+	/* --- 3: K56flex ----------------------------------------------- */
+	case 3:
+		obj->f2aa0 = (short)n;
+		while (obj->txq.count < obj->f2aa0) {
+			if (obj->f25c2 & PROG_TXBIT_DATA)
+				modulatevector(obj);
+			else
+				v34handshak(obj);
+		}
+		/* 0xbf38, the same loop as the V.90 arm's. */
+		if (n != 0) {
+			int left = n;
+
+			do {
+				int s;
+				int idx;
+
+				obj->f260 = (short)*in;
+				adaptecho(obj);
+				s = obj->f260;
+				if (PROG_U16(obj, O_DCCOUNT) != 0) {
+					int acc = PROG_S32(obj, O_DCACC) + s;
+
+					PROG_U16(obj, O_DCCOUNT)--;
+					if ((PROG_U16(obj, O_DCCOUNT) & 0x7f)
+					    == 0) {
+						int e = (PROG_S16(obj, O_DCEST)
+							 >> 1) + (acc >> 8);
+
+						PROG_S16(obj, O_DCEST) =
+						    (short)e;
+						if (DSPLIB_DEBUG_ON()) {
+							PROG_S32(obj, O_DCACC)
+							    = acc;
+							dsplibs_debug_printf(
+							    "Estimated DC = %d"
+							    "  (acc = %d)\n",
+							    (int)(short)e, acc);
+						}
+						PROG_S32(obj, O_DCACC) = 0;
+					} else {
+						PROG_S32(obj, O_DCACC) = acc;
+					}
+					s = obj->f260;
+				}
+				s = (short)(s - PROG_S16(obj, O_DCEST));
+				idx = obj->f2aa6;
+				obj->hist_2f58[idx] = (short)s;
+				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
+					obj->f2aa6 = (short)(idx + 1);
+				else
+					obj->f2aa6 = 0;
+				*in++ = (float)(short)s;
+				*out++ = (float)obj->f25e;
+			} while (--left != 0);
+		}
+		in -= n;
+		r = k56->k56FlexRunDemodulator(in, (unsigned int)n, rxbits,
+					       nrx);
+		switch ((unsigned int)r) {
+		case 1:
+			obj->f0004 = 3;
+			break;
+		case 3:
+			obj->f0004 = 5;
+			/* FALLTHROUGH -- 0xc8c1 falls into 0xc8cc. */
+		case 2:
+			PROG_S16(obj, O_MODEMUP) = 1;
+			if (obj->rates_latched == 0) {
+				obj->rx_bps = *(const int *)k56;
+				obj->rates_latched = 1;
+			}
+			PROG_U8(obj->pac3c, CFG_FLAGS3) |= CFG_FLAG3_RETRAIN;
+			break;
+		case 4:
+			VPcmV34InitiateRetrain(obj, 0x38);
+			break;
+		case 5:
+			VPcmV34InitiateRetrain(obj, VPCM_DP_V34);
+			break;
+		case 6:
+			obj->status = 10;
+			obj->f0004 = 0x10;
+			break;
+		default:
+			obj->f0004 = 2;
+			break;
+		}
+		goto compact;
+
+	/* --- 4: line verification ------------------------------------- */
+	case 4:
+		if (alias_qcLineVerification == 0) {
+			v34pcm_notwritten(V34PCM_UNWRITTEN_QCLINE);
+			r = 0;
+		} else {
+			r = sess->qcLineVerification(in, out, (unsigned int)n,
+						     rxbits, nrx, txbits,
+						     nbits);
+		}
+		if (r == 0) {
+			obj->f0004 = 10;
+		} else {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmV34Main: Line verification period "
+				    "completed !!!\r\n");
+			if ((PROG_U8(obj->pac3c, CFG_FLAGS2)
+			     & CFG_FLAG2_SAMELINE) == 0) {
+				obj->is_short = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Moving to full "
+					    "phase2 upon DP Manager setting..."
+					    "\r\n");
+			} else if (obj->local_short
+				   == (int)sess->word_6fb4) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Moving to short "
+					    "phase2 due to same line "
+					    "verification...\r\n");
+				obj->is_short = 1;
+			} else {
+				obj->is_short = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Moving to full "
+					    "phase2 due to false same line "
+					    "verification...\r\n");
+			}
+			if (obj->is_short == 0) {
+				PROG_U8(sess->v92modem.phase2Info, 0x10) = 0;
+				obj->local_short = 0;
+				sess->modem.ptr_49b4->init();
+			}
+			obj->status = 0;
+			obj->f0004 = 0;
+		}
+		goto hist_from_in;
+
+	/* --- 5: waiting for the user --------------------------------- */
+	case 5:
+		for (i = 0; i < n; i++)
+			out[i] = 0.0f;
+		if ((unsigned int)PROG_S32(obj, O_SAMPLES) > 0x464ffu) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmV34Main: waiting for user response "
+				    "for 30sec, initiating retrain !\r\n");
+			VPcmV34InitiateRetrain(obj, 0);
+		}
+		*nrx = 0;
+		obj->f0004 = 0xc;
+		*nbits = 0;
+		goto hist_from_in;
+
+	/* --- 6: the reconnect delay, which falls into 7 --------------- */
+	case 6:
+	{
+		int held = PROG_S32(obj, O_MOHCOUNT);
+		int want = obj->faa74;
+
+		if (held < want) {
+			obj->f0004 = 0xd;
+		} else {
+			if ((unsigned int)(held - n) < (unsigned int)want
+			    && DSPLIB_DEBUG_ON()) {
+				dsplibs_debug_printf(
+				    "VPcmV34Main: ANSam not detected on "
+				    "out-going, assuming 3-way call "
+				    "supported !\r\n");
+				st = obj->status;
+			}
+			obj->f0004 = 0xe;
+		}
+		goto on_hold;
+	}
+
+	/* --- 7: modem on hold ----------------------------------------- */
+	case 7:
+	on_hold:
+		for (i = 0; i < n; i++)
+			out[i] = 0.0f;
+		*nrx = 0;
+		*nbits = 0;
+		if (st == 7)
+			obj->f0004 = 0xd;
+		{
+			int held = PROG_S32(obj, O_MOHCOUNT);
+			int lim = PROG_S32(obj, O_MOHLIMIT);
+
+			PROG_S32(obj, O_MOHCOUNT) = held + n;
+			if (lim != -1 && (held + n) >= lim) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: Modem On Hold "
+					    "Timeout expired , ending session"
+					    " !!!\r\n");
+				obj->f0004 = 0x10;
+				obj->status = 0xa;
+			}
+		}
+		if (alias_toneDetectorProcess == 0) {
+			v34pcm_notwritten(V34PCM_UNWRITTEN_TONEPROC);
+			r = 0;
+		} else {
+			r = sess->ansam.process(in, (unsigned int)n);
+		}
+		if (r != 0) {
+			if (obj->status == 7) {
+				int held = PROG_S32(obj, O_MOHCOUNT);
+
+				if (PROG_U8(obj, O_ANSAMLATE) != 0
+				    && held <= 0xbb7f) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "VPcmV34Main: ANSam "
+						    "detected on out going "
+						    "call (later case, after "
+						    "%d smp) ! assuming no "
+						    "3-way call...\r\n", held);
+					obj->fabe2 = 2;
+				} else if (DSPLIB_DEBUG_ON()) {
+					dsplibs_debug_printf(
+					    "VPcmV34Main: ANSam detected on "
+					    "hold ! requesting Reconnect..."
+					    "\r\n");
+				}
+			} else {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmV34Main: ANSam detected on "
+					    "out going call ! assuming no "
+					    "3-way call...\r\n");
+				obj->fabe2 = 2;
+			}
+			obj->f0004 = 0xf;
+			obj->status = 9;
+		}
+		goto hist_from_in;
+
+	/* --- 8: waiting out the minimum reconnect delay --------------- */
+	case 8:
+		for (i = 0; i < n; i++)
+			out[i] = 0.0f;
+		*nrx = 0;
+		*nbits = 0;
+		t = obj->faa74 + n;
+		obj->faa74 = t;
+		if (t < PROG_S32(obj, O_MOHCOUNT)) {
+			obj->f0004 = 0;
+			ret = 0;
+			goto done;
+		}
+		obj->status = 9;
+		if (DSPLIB_DEBUG_ON()) {
+			obj->f0004 = 0;
+			dsplibs_debug_printf("VPcmV34Main: Delay ended, "
+					     "indicating reconnect request..."
+					     "\r\n");
+		}
+		ret = 0xf;
+		obj->f0004 = 0xf;
+		goto done;
+
+	/* --- 9: reconnect requested ----------------------------------- */
+	case 9:
+		for (i = 0; i < n; i++)
+			out[i] = 0.0f;
+		*nrx = 0;
+		*nbits = 0;
+		ret = 0xf;
+		obj->f0004 = 0xf;
+		goto done;
+
+	/* --- 10: the session is over ---------------------------------- */
+	case 10:
+		for (i = 0; i < n; i++)
+			out[i] = 0.0f;
+		*nrx = 0;
+		*nbits = 0;
+		ret = 0x10;
+		obj->f0004 = 0x10;
+		goto done;
+	}
+
+hist_from_in:
+	for (i = 0; i < n; i++) {
+		int idx = obj->f2aa6;
+
+		obj->hist_2f58[idx] = (short)in[i];
+		if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
+			obj->f2aa6 = (short)(idx + 1);
+		else
+			obj->f2aa6 = 0;
+	}
+	goto reload;
+
+wrongstate:
+	if (DSPLIB_DEBUG_ON()) {
+		dsplibs_debug_printf("VPcmV34Main: BUG BUG, Wrong state & "
+				     "statuses... (v90receiver = %d, cond = "
+				     "%d ; DPstatus = %d, cond = %d)\r\n",
+				     r, 2, ret, 2);
+		goto reload;
+	}
+	goto done;
+
+compact:
+	{
+		int rd = obj->tx_rd;
+		int wr = obj->tx_n;
+		int k = 0;
+
+		while ((unsigned int)wr > (unsigned int)rd)
+			obj->tx_data[k++] = obj->tx_data[rd++];
+		obj->tx_rd = 0;
+		obj->tx_n = k;
+	}
+	ret = obj->f0004;
+	if (ret <= 3) {
+		*nbits = 0;
+	} else {
+		int avail = obj->nof_tx_bits;
+
+		if (avail != 0) {
+			avail -= obj->tx_n;
+			if (avail <= 0)
+				avail = 0;
+			else
+				avail <<= 4;
+		}
+		*nbits = avail;
+	}
+	goto done;
+
+reload:
+	ret = obj->f0004;
+
+done:
+	/*
+	 * 0xb53f.  Codes 3 to 6 are the four "a modem is up" ones, and they
+	 * are the only ones that run the retrain detector -- a second-order
+	 * notch whose input and output energies are compared over 64-sample
+	 * blocks.  Four times the output energy below the input, with the
+	 * input above 150,000, counts once; six counts in a row is a retrain.
+	 */
+	if ((unsigned int)(ret - 3) <= 3) {
+		const short *hist = obj->hist_2f58;
+		int limit = obj->f2aa6;
+		int k0 = PROG_S16(obj, O_NOTCH_K0);
+		int k1 = PROG_S16(obj, O_NOTCH_K1);
+		int k2 = PROG_S16(obj, O_NOTCH_K2);
+		int retrain = 0;
+
+		for (i = 0; i < limit; i++) {
+			int t1 = (PROG_S16(obj, O_NOTCH_S1) * k2 + 0x2000)
+				 >> 14;
+			int x = *hist++;
+			int s0 = PROG_S16(obj, O_NOTCH_S0);
+			int t2;
+			int s2;
+			int t3;
+			int y;
+			int ein;
+			int eout;
+			int blk;
+
+			PROG_S16(obj, O_NOTCH_S1) = (short)s0;
+			t2 = (s0 * k1 + 0x2000) >> 14;
+			s2 = PROG_S16(obj, O_NOTCH_S2);
+			PROG_S16(obj, O_NOTCH_S2) = (short)x;
+			t3 = (s2 * k0 + 0x2000) >> 14;
+			y = (short)(x + (short)t2 - (short)t1 - (short)t3
+				    + PROG_U16(obj, O_NOTCH_S3));
+			PROG_S16(obj, O_NOTCH_S3) = (short)s2;
+			PROG_S16(obj, O_NOTCH_S0) = (short)y;
+
+			ein = PROG_S32(obj, O_NOTCH_EIN) + ((x * x + 0x20) >> 6);
+			eout = PROG_S32(obj, O_NOTCH_EOUT)
+			       + ((y * y + 0x20) >> 6);
+			blk = PROG_S32(obj, O_NOTCH_BLK) + 1;
+			if (blk == NOTCH_BLOCK) {
+				int ratio = ein >> 2;
+
+				if (ratio > eout && ein > NOTCH_EIN_MIN
+				    && eout <= NOTCH_EOUT_MAX) {
+					int cnt;
+
+					PROG_S32(obj, O_NOTCH_EIN) = ein;
+					cnt = PROG_S32(obj, O_NOTCH_CNT);
+					PROG_S32(obj, O_NOTCH_EOUT) = eout;
+					PROG_S32(obj, O_NOTCH_BLK) =
+					    NOTCH_BLOCK;
+					PROG_S32(obj, O_NOTCH_CNT) = ++cnt;
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "********** "
+						    "retrainDetector() "
+						    "notchDetectSigCnt = %d "
+						    "energyInp>>NOTCH_IN_OUT_"
+						    "RATIO_SHIFT = %d "
+						    "energyOut = %d\r\n",
+						    cnt, ratio, eout);
+				} else {
+					PROG_S32(obj, O_NOTCH_CNT) = 0;
+				}
+				PROG_S32(obj, O_NOTCH_EIN) = 0;
+				PROG_S32(obj, O_NOTCH_EOUT) = 0;
+				PROG_S32(obj, O_NOTCH_BLK) = 0;
+			} else {
+				PROG_S32(obj, O_NOTCH_BLK) = blk;
+				PROG_S32(obj, O_NOTCH_EOUT) = eout;
+				PROG_S32(obj, O_NOTCH_EIN) = ein;
+			}
+			if (PROG_S32(obj, O_NOTCH_CNT) > NOTCH_SIGCNT_MAX) {
+				retrain = 1;
+				break;
+			}
+		}
+
+		if (retrain != 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmV34Main: Retrain Detected by Tone "
+				    "detector !\r\n");
+			VPcmV34InitiateRetrain(obj, 0);
+		}
+		return obj->f0004;
+	}
+
+	return ret;
 }
 
 /*
