@@ -49653,3 +49653,69 @@ flock /tmp/claude_re_build.lock make J=3 BLOB=$BLOB phase
 `flock` blocks until the lock is free, so it needs no coordination between
 sessions, but the path has to be that exact one or it does nothing. `J` stays
 at about half the cores; raising it is what caused the problem.
+
+### 1625. V.32'S THREE SYMBOL ENCODERS, AND WHAT SETTLES A TABLE'S ELEMENT WIDTH WHEN THE BYTES CANNOT
+
+*Task: V.32/V.32bis. All three functions and all five tables driven against
+the blob; the struct layouts are readings, and this entry says which parts
+are which.*
+
+`SMCv32_encoder_abs` (156 B), `SMCv32_encoder_dif` (357 B) and
+`SMCv32_encoder_tcm` (374 B) turn input words into constellation indices in a
+ring buffer. All three end the same way:
+
+```
+    quad = (quad + 3) & 3          one quadrant BACKWARDS per symbol
+    ring[widx] = (point + quad * 4) & 0xf | (mode << 8)
+    widx = (widx + 1 < limit) ? widx + 1 : 0
+```
+
+and differ in where `point` comes from: a table lookup (`abs`), a
+differential accumulator (`dif`), or the trellis (`tcm`). The `+ 3` is what
+the object writes — `add $0x3` then `and $0x3` — so the rotation is by minus
+one quadrant and not plus one.
+
+**`dif`'s two arms differ in ONE TERM.** Mode 0 adds a literal 1 to the
+accumulator; every other mode adds the input's low two bits. `state` is
+indexed by `mode`, so the modes carry independent accumulators.
+
+**THE ELEMENT WIDTH COMES FROM THE CONSUMER, AND HERE IT DECIDED THREE
+TABLES.** `SMCv32_MOD` is 16 bytes that dump as `70 61 61 70 42 53 53 42 …`
+— which is ASCII, "paapBSSB4%%4", and is not a string. `unsigned char[16]`
+and `unsigned short[8]` compare identically against `ref_` and only one of
+them is right. `SMCv32_encoder_tcm` settles it:
+
+```
+    7fc61:  movzwl 0x0(%eax,%eax,1),%eax   <== SMCv32_MOD
+```
+
+`movzwl` with a scale of two, so **`unsigned short[8]`** — each entry four
+3-bit rotations selected by a shift of `quad * 4`. The same reading makes
+`SMCv32_PMAP16` and `SMCv32_PMAP_ABS16` `unsigned short` (`movzwl`) and the
+two Trellis tables `short` (`movswl`). A test comparing bytes would have
+passed on every wrong one of those.
+
+**`SMCv32_encoder_tcm` WRITES BACK TO ITS INPUT BUFFER.** `in[i] &= mask_all`
+in place, before anything else, and the caller sees it — so `in` is not
+`const` and the test compares both sides' input buffers afterwards as well as
+their outputs. Its three masks all come from one field, `smc->f14`:
+`mask_low = (1 << n) - 1`, `bit_hi = 1 << (n + 2)`, `mask_all = bit_hi - 1`,
+each truncated to 16 bits where it is built.
+
+`TrellisEncodeDifTable` is a 4x4 Latin square — V.32 Figure 6's differential
+quadrant encoder — and `TrellisTransitionTable` is 8 states by 4 inputs with
+every entry even in its first half and odd in its second, which is the parity
+the convolutional encoder maintains. Both 2-D shapes are readings of how the
+code indexes them; the object states only the element width and the count.
+
+**WHAT IS MEASURED AND WHAT IS A READING.** Measured: every field offset the
+three functions read, the element widths above, and the behaviour, over 21
+configurations — every mode, both tap orders, shifts from 0 to 14 including
+one where the input's sign reaches the shift, ring lengths of 5, 7, 9, 13, 40
+and 64, and the `prev > 3` arm both taken and not. A reading: **that
+`state[]` has three elements.** `dif` indexes it with an unbounded `mode`,
+and what bounds it above is `tcm` reading +0x0e as a scalar, so it cannot
+reach past +0x0d. The test drives modes 0, 1 and 2, and that is the range
+over which the layout is established. Nothing that constructs either struct
+is reconstructed yet, so +0x02, +0x12 and the first eight bytes of the ring
+descriptor are named padding rather than guesses.
