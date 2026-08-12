@@ -59,6 +59,7 @@ void FPM_atan(short y, short x, short *angle);
 #define FPM_ATAN_TABLE 257
 extern const short FPM_atan_table[FPM_ATAN_TABLE];
 
+/*
  * Base-10 logarithm of `mantissa * 2^-exponent`, result in Q12.
  *
  * The mantissa is normalised internally, so the exponent is whatever the
