@@ -72,12 +72,22 @@ class V90Parameters;
  * edprintf` in `updateCurrentConstellationData` proves nothing of the kind,
  * because a void function tail-jumping to a non-void one is ordinary output.
  *
- * THE ENUMERATION IS NOT COMPLETE.  `evaluateConnection` is 3,857 bytes and
- * is not reconstructed here; whatever else this returns is in it.  These two
- * names are what the two paths of two 136-byte functions establish and
- * nothing more, which is why they are macros with a prefix rather than an
- * `enum` claiming to be the whole type.
+ * A THIRD ANSWER, ADDED BY `evaluatePhase3` AND `evaluatePhase4`: zero, and it
+ * is a real answer rather than an artefact.  Both functions clear the register
+ * on entry (`xor %esi,%esi`, `xor %eax,%eax`) and both have paths that reach a
+ * `ret` without ever loading an immediate into it -- the early return on a
+ * zero symbol count, and the ordinary "nothing crossed a threshold" tail.  A
+ * caller therefore sees 0 far more often than 4 or 5.  THE NAME IS OURS; the
+ * object names no enumerator anywhere, and 4 and 5 are named only because a
+ * string on each path says what it means.
+ *
+ * THE ENUMERATION IS STILL NOT COMPLETE.  `evaluateConnection` is 3,857 bytes
+ * and is not reconstructed here; whatever else this returns is in it.  These
+ * three names are what four functions establish and nothing more, which is why
+ * they are macros with a prefix rather than an `enum` claiming to be the whole
+ * type.
  */
+#define V90CE_VERDICT_NONE		0
 #define V90CE_VERDICT_RETRAIN		4
 #define V90CE_VERDICT_FALLBACK_V34	5
 
@@ -109,6 +119,16 @@ public:
 	int indicateRemoteRetrain();
 
 	/*
+	 * TWO MORE, DEFINED, and both were on the undefined list below with a
+	 * `void` return until the batch that wrote them read the epilogues.
+	 * Both build %eax and both answer 0, 4 or 5; see the verdict block
+	 * above.  `evaluatePhase4`'s argument is named after the two strings
+	 * that print it and nothing else.
+	 */
+	int evaluatePhase3();
+	int evaluatePhase4(float meanErrBefToAftUpdateRatio);
+
+	/*
 	 * Declared for the record and deliberately left undefined -- their
 	 * signatures come from the mangling, so this list is a specification
 	 * rather than a guess, and a return type is not mangled and is
@@ -117,9 +137,7 @@ public:
 	 * `evaluateConnection` alone is 3,857 bytes.
 	 */
 	void evaluateConnection();
-	void evaluatePhase3();
 	void evaluateMeanErrorStdPhase3(float);
-	void evaluatePhase4(float);
 	void printStatus() const;
 
 	/*
@@ -171,13 +189,44 @@ public:
 	 */
 	unsigned int nofRemoteRetrains;
 
+	/*
+	 * +0x10  A DURATION IN SYMBOLS, and `evaluatePhase3` and
+	 * `evaluatePhase4` are what say so: each adds `word_74` -- the count
+	 * of symbols the running average covers -- to it whenever the average
+	 * is over its fall-back threshold, clears it outright whenever the
+	 * average is not, and gives up on V.90 when it reaches the 1600 at
+	 * +0x64 (phase 3) or +0x68 (phase 4).  So it measures how long the
+	 * error has been too large, in symbols, and the two 1600s are the two
+	 * patiences.  Unsigned: `cmp 0x64(%ebx),%eax; jb` at 0x3f6a0.
+	 *
+	 * IT KEEPS ITS OFFSET NAME.  "How long the error has been large" is a
+	 * reading of what the arithmetic does, not the author's word for it,
+	 * and finding 226's rule is that a reading does not earn a name.
+	 */
 	unsigned int word_10;
 	unsigned int word_14;
 	/*
 	 * +0x18 and +0x1c  Zeroed by BOTH `indicateLocalRetrain` and
 	 * `indicateRemoteRetrain`, on both of their paths, and by nothing
-	 * else read here.  Two counters a retrain of either kind restarts;
-	 * what they count is in `evaluateConnection`.
+	 * else the lifecycle batch read.
+	 *
+	 * +0x18 IS THE SECOND DURATION, and it is +0x10's twin: both
+	 * evaluators add `word_74` to it while the average is over
+	 * `PDSNR_THRESHOLD_IN_PHASE3` or `..._IN_PHASE4`, clear it when the
+	 * average is not, and ask for a retrain when it reaches the +0x60 copy
+	 * of `RETRAIN_DETECT_DURATION`.  `cmp 0x60(%ebx),%eax; jb` at 0x3f797
+	 * is unsigned against a slot the parameter map calls `int`, which is
+	 * what fixes the field's own signedness.
+	 *
+	 * IT IS NOT CLEARED WHEN IT MERELY ACCUMULATES.  0x3f797 and 0x3fd12
+	 * both jump PAST the store that zeroes it, so the clear happens on
+	 * exactly two paths -- the average fell below the threshold, or the
+	 * duration ran out and a verdict was printed.  A version that cleared
+	 * it every call could never accumulate past one call and would still
+	 * agree with the blob on any single-call test.
+	 *
+	 * What +0x1c counts is still in `evaluateConnection`; both evaluators
+	 * clear it on every path that decides anything and never read it.
 	 */
 	unsigned int word_18;
 	unsigned int word_1c;
@@ -206,6 +255,14 @@ public:
 	int rateDownDetectDuration;		/* +0x58                     */
 	int minDurationInDataBeforeRrnDown;	/* +0x5c                     */
 	int retrainDetectDuration;		/* +0x60                     */
+	/*
+	 * +0x64 and +0x68  THE TWO 1600s ARE TWO DIFFERENT LIMITS, which only
+	 * the disassembly separates because `reset` gives them the same value:
+	 * `evaluatePhase3` compares +0x10 against +0x64 (0x3f69a, 0x3f879) and
+	 * `evaluatePhase4` compares it against +0x68 (0x3fb13).  A
+	 * reconstruction that read the wrong one of the pair would pass every
+	 * test that left them at 1600.
+	 */
 	unsigned int word_64;			/* +0x64 reset plants 1600   */
 	unsigned int word_68;			/* +0x68 reset plants 1600   */
 	int debugPeriod;			/* +0x6c                     */
@@ -241,6 +298,17 @@ public:
 	 * second function that touches this object: `getV90CpBits` copies
 	 * +0x78 to +0x7c each time a CP sequence finishes.  Two batches, two
 	 * functions, one object -- neither would have found both.
+	 *
+	 * A THIRD FUNCTION SAYS WHAT THE PAIR IS FOR.  `evaluatePhase4`'s last
+	 * arm runs only when BOTH are non-zero, prints "Initiating retrain
+	 * (delayed)...", clears both, and then counts a retrain exactly as the
+	 * other arms do -- so this is a retrain that was asked for earlier and
+	 * is honoured here, and it is the only thing in the class that reads
+	 * either slot.  The pair is a request and its acknowledgement, which is
+	 * why `getV90CpBits` copying one to the other arms it.
+	 *
+	 * THE NAMES ARE NOT CHANGED: `VPcmFloModem.cpp` refers to both by their
+	 * offset names and belongs to other work.
 	 */
 	unsigned int word_78;		/* +0x78 copied to word_7c           */
 	unsigned int word_7c;		/* +0x7c                             */
@@ -309,6 +377,31 @@ public:
 	 * word and never loaded into the x87 stack, so it is moved as a float
 	 * rather than converted -- the same shape as V90Phase3Demodulator's
 	 * +0x418 and V90Equalizer's +0x90.
+	 *
+	 * THE AUTHOR'S OWN NAME FOR IT IS `pdsnrCurrentV34DropThreshPhase4`,
+	 * and `evaluatePhase4` is where that is legible: 0x3fd38 is
+	 * `fsts 0xac(%ebx)` and the diagnostic that announces exactly that
+	 * store reads "V90ConnectionEvaluator (phase4):
+	 * pdsnrCurrentV34DropThreshPhase4 set to = %c%d.%03d".  It is the same
+	 * derivation `curDmin` above rests on -- a store and a string naming
+	 * the value stored.
+	 *
+	 * THE FIELD KEEPS THE NAME THE LIFECYCLE BATCH GAVE IT.  That name is
+	 * a derivation too (it is the parameter `reset` copies in), and
+	 * `test/unit/t_v90leaves.cpp` refers to the field by it and belongs to
+	 * other work; renaming here would edit a file this batch does not own.
+	 * The two names are consistent -- `reset` initialises the threshold
+	 * from `PHASE4_ERROR_FOR_V34_FALLBACK` and `evaluatePhase4` replaces it
+	 * with `params->unnamed_434` (250.0f by default, finding 878) the first
+	 * time it asks for a retrain, so the slot is the CURRENT threshold and
+	 * the parameter is only where it starts.
+	 *
+	 * `params->unnamed_434` IS A FLOAT.  `flds 0x434(%ecx)` into `fsts
+	 * 0xac(%ebx)` is a float load and a float store with no conversion
+	 * between them, and 0x437a0000 is 250.0f.  `V90Parameters.h` types the
+	 * slot `int`; that header is a shared frozen type this batch does not
+	 * own, so `V90ConnectionEvaluator.cpp` reads the four bytes through a
+	 * union rather than retyping it.
 	 */
 	float phase4ErrorForV34Fallback;
 
@@ -316,6 +409,21 @@ public:
 	 * +0xb0 .. +0xb4  Three 16-bit flags, 1, 0 and 0.  +0xb4 is the
 	 * highest byte anything written here touches; the object runs to
 	 * 0xbc.
+	 *
+	 * +0xb0 IS THE ONE-SHOT THAT ARMS `evaluatePhase4`'s MEAN-ERROR ARM.
+	 * `reset` sets it to 1 and nothing else in the class sets it again;
+	 * `evaluatePhase4` tests it first of three guards and clears it when
+	 * all three pass, so the arm fires at most once per reset.  Sixteen
+	 * bits: `cmpw $0x0,0xb0(%ebx)` and `mov %dx,0xb0(%ebx)`.
+	 *
+	 * +0xb2 IS `altRbsDetectedOnQc`, and that is the object's own word for
+	 * it: `evaluatePhase3`'s first arm runs when +0xb2 is non-zero, clears
+	 * it, and prints "V90ConnectionEvaluator (phase3): altRbsDetectedOnQc
+	 * => initiating Retrain" -- the flag is the detection and the arm is
+	 * what services it.  THE FIELD KEEPS ITS OFFSET NAME for the same
+	 * reason +0xac does: `t_v90leaves.cpp` uses `short_b2` and is not this
+	 * batch's file.  Nothing reconstructed so far SETS it, so whatever
+	 * detects alternate RBS on the QC path is somewhere still unread.
 	 */
 	short short_b0;
 	short short_b2;

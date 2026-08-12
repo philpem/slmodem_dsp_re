@@ -991,6 +991,1357 @@ run_ce_meanerr4(void)
 	return diff_end();
 }
 
+/* ------------------- evaluatePhase3 (980 B) / evaluatePhase4 (1353 B) */
+
+/*
+ * WHAT THESE TWO NEED THAT THE SMALL MEMBERS DID NOT
+ *
+ *   THEY ACCUMULATE.  +0x10 and +0x18 are durations in symbols that grow by
+ *   `word_74` per call, and both evaluators CONSUME the average on the way out
+ *   -- +0x74 and +0x70 are zeroed on every path that got past the entry test.
+ *   So a block below is "one measurement": set the count and the average, call,
+ *   compare.  Sixty of them in a run, compared after EVERY one, because a
+ *   divergence at the fortieth that the sixtieth washes out is still a defect.
+ *
+ *   THE CLEAR IS NOT ON THE ACCUMULATING PATH.  0x3f797 and 0x3fd12 jump PAST
+ *   the store that zeroes +0x18, so a reconstruction that cleared it every call
+ *   would still agree with the blob on any single-call trial and never
+ *   accumulate.  The runs below are the only thing that can see it.
+ *
+ *   EVERY SLOT THEY READ HAS A DIFFERENT VALUE.  `p34_params` and the setup in
+ *   each block give distinct values to +0x64 against +0x68, to the +0x60 COPY
+ *   of `RETRAIN_DETECT_DURATION` against the parameter itself, to
+ *   `MAX_NOF_V90_RETRAINS` against `MAX_NOF_REMOTE_RETRAINS` and against
+ *   `unnamed_45c`, and to all six float thresholds -- otherwise "it read +0x64
+ *   and not +0x68" is not a claim any test makes.  The `EIA6_*` thresholds the
+ *   task predicted are set to +FLT_MAX: neither function reads one, and a run
+ *   that read one instead would never cross a threshold at all.
+ *
+ *   THEY DECIDE THREE WAYS, not two.  0, 4 and 5 are all reachable and the
+ *   coverage flags at the bottom of `main` assert every one was observed for
+ *   both functions, plus the paths that only exist in one of them.
+ *
+ *   ONE TRANSCRIPT CANNOT BE COMPARED, and it is the object's fault rather than
+ *   the harness's.  0x3ffcf calls `edprintf` with a format that has a `%d` and
+ *   stores nothing to 0x4(%esp), so `vsnprintf` formats whatever the outgoing
+ *   argument slot held -- a different frame on each side.  That one path
+ *   compares state, verdict and LINE COUNT and not the text.  Finding 1388.
+ *
+ *   NO NaN IS FED AS `evaluatePhase4`'s ARGUMENT.  Its comparison is the one
+ *   place in either function where the parameter is the LEFT operand
+ *   (`flds 0x438(%ecx); fcomp %st(1); jae`), and `jae` is false when the
+ *   compare is unordered, so the blob RUNS the arm for a NaN where C says it
+ *   must not.  That is GCC 3.4.2's choice of complement, which GCC 13 does not
+ *   repeat, so a NaN argument would disagree between `make period` and `make
+ *   phase` for a reason that is not in our source.  NaN IS fed as the average:
+ *   every +0x70 comparison is `flds; fcoms; ja/jbe`, which is unordered-correct
+ *   on both compilers, and it exercises the else arms.
+ */
+
+extern "C" {
+int ref_ce_phase3(void *) asm("ref__ZN22V90ConnectionEvaluator14evaluatePhase3Ev");
+int ref_ce_phase4(void *, float)
+	asm("ref__ZN22V90ConnectionEvaluator14evaluatePhase4Ef");
+}
+
+#define PB	((V90Parameters *)parm_b)
+
+#define SET_P(f, v)	do { PA->f = (v); PB->f = (v); } while (0)
+#define SET_PF(f, bits)	do { unsigned int b_ = (bits); \
+			     memcpy(&PA->f, &b_, 4); \
+			     memcpy(&PB->f, &b_, 4); } while (0)
+#define SET_CE(f, v)	do { CEA->f = (v); CEB->f = (v); } while (0)
+#define SET_CEF(f, bits) do { unsigned int b_ = (bits); \
+			      memcpy(&CEA->f, &b_, 4); \
+			      memcpy(&CEB->f, &b_, 4); } while (0)
+
+/* 0 / 4 / 5, indexed 0 / 1 / 2. */
+static int p3_verdict[3];
+static int p4_verdict[3];
+
+/* The paths each function has that the verdict alone does not distinguish. */
+static int p3_altrbs, p3_trn1d, p3_large, p3_retrain, p3_none, p3_empty;
+static int p3_five_then_four, p3_cleared_10, p3_cleared_18;
+static int p4_mean_arm, p4_mean_skipped, p4_large, p4_retrain, p4_none;
+static int p4_empty, p4_delayed, p4_delayed_over, p4_thresh_replaced;
+static int p4_cleared_10, p4_cleared_18, p4_guard_b0, p4_guard_ratio;
+static int p4_guard_count, p4_delayed_half, p4_missing_arg;
+static int p3_unsigned_dur, p3_unsigned_max;
+static int p4_unsigned_dur, p4_unsigned_max;
+static int p4_unsigned_45c, p4_unsigned_delayed;
+
+static const unsigned int fzero = 0u;
+
+/*
+ * The values every slot either evaluator reads, all different from each other
+ * and from the ones they must not read.
+ */
+static void
+p34_params(void)
+{
+	SET_PF(TRN1D_ERROR_FOR_V34_FALLBACK,		0x41200000u); /* 10 */
+	SET_PF(PHASE3_ERROR_FOR_V34_FALLBACK,		0x41300000u); /* 11 */
+	SET_PF(PDSNR_THRESHOLD_IN_PHASE3,		0x41400000u); /* 12 */
+	SET_PF(PDSNR_THRESHOLD_IN_PHASE4,		0x41500000u); /* 13 */
+	SET_PF(PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH,
+							0x41600000u); /* 14 */
+	SET_PF(unnamed_434,				0x437a0000u); /* 250 */
+
+	/*
+	 * The slots neither function reads.  +FLT_MAX, so a comparison that
+	 * picked one of these up would never fire and every accumulating run
+	 * below would answer 0 instead of 4 or 5.
+	 */
+	SET_PF(PHASE4_ERROR_FOR_V34_FALLBACK,		0x7f7fffffu);
+	SET_PF(QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH,
+							0x7f7fffffu);
+	SET_PF(EIA6_PDSNR_THRESHOLD_IN_PHASE3,		0x7f7fffffu);
+	SET_PF(EIA6_PDSNR_THRESHOLD_IN_PHASE4,		0x7f7fffffu);
+	SET_PF(EIA6_TRN1D_ERROR_FOR_V34_FALLBACK,	0x7f7fffffu);
+	SET_PF(TRN1D_MAX_MEAN_ERROR_STD_IN_PHASE3,	0x7f7fffffu);
+	SET_PF(TRN2D_MAX_MEAN_ERROR_STD_IN_PHASE4,	0x7f7fffffu);
+
+	/*
+	 * The parameter `RETRAIN_DETECT_DURATION`, which is NOT what either
+	 * evaluator reads -- both read the +0x60 copy.  One symbol, so a
+	 * reconstruction reading the parameter would trip on the first call of
+	 * every run.
+	 */
+	SET_P(RETRAIN_DETECT_DURATION, 1);
+	SET_P(NOF_REMOTE_RATE_RENEG_BEFORE_RETRAIN, 1);
+	SET_P(MAX_NOF_RATES_DIFF_BEFORE_RETRAIN, 1);
+}
+
+static int
+p3_call(long tag, int cmp_text)
+{
+	int va, vb;
+
+	dsplib_debug_capture_on = 1;
+	dsplib_debug_capture_reset();
+
+	va = CEA->evaluatePhase3();
+	vb = ref_ce_phase3(ce_b);
+
+	dsplib_debug_capture_on = 0;
+
+	diff_eq_obj("after evaluatePhase3", V90ConnectionEvaluator, CEA, CEB,
+		    tag);
+	guard_intact(tag);
+	diff_eq_int("the verdict matches (%ld)", va, vb, tag);
+	diff_eq_int("the verdict is 0, 4 or 5 (%ld)",
+		    vb == 0 || vb == 4 || vb == 5, 1, tag);
+	if (cmp_text)
+		transcript_matches(tag);
+	else
+		diff_eq_int("line counts match (%ld)",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1), tag);
+	if (dsplib_debug_capture_lines(1) > 0)
+		transcripts_seen = 1;
+
+	p3_verdict[vb == 0 ? 0 : (vb == 4 ? 1 : 2)] = 1;
+	return vb;
+}
+
+static int
+p4_call(long tag, float arg, int cmp_text)
+{
+	int va, vb;
+
+	dsplib_debug_capture_on = 1;
+	dsplib_debug_capture_reset();
+
+	va = CEA->evaluatePhase4(arg);
+	vb = ref_ce_phase4(ce_b, arg);
+
+	dsplib_debug_capture_on = 0;
+
+	diff_eq_obj("after evaluatePhase4", V90ConnectionEvaluator, CEA, CEB,
+		    tag);
+	guard_intact(tag);
+	diff_eq_int("the verdict matches (%ld)", va, vb, tag);
+	diff_eq_int("the verdict is 0, 4 or 5 (%ld)",
+		    vb == 0 || vb == 4 || vb == 5, 1, tag);
+	if (cmp_text)
+		transcript_matches(tag);
+	else
+		diff_eq_int("line counts match (%ld)",
+			    (int)dsplib_debug_capture_lines(0),
+			    (int)dsplib_debug_capture_lines(1), tag);
+	if (dsplib_debug_capture_lines(1) > 0)
+		transcripts_seen = 1;
+
+	p4_verdict[vb == 0 ? 0 : (vb == 4 ? 1 : 2)] = 1;
+	return vb;
+}
+
+/* The average consumed at the end of every call: +0x74 and +0x70 both zero. */
+static void
+consumed(long tag)
+{
+	diff_eq_int("the count was consumed (%ld)", (long)CEB->word_74, 0, tag);
+	diff_eq_int("the average was cleared (%ld)",
+		    memcmp(&CEB->word_70, &fzero, 4) == 0, 1, tag);
+}
+
+/*
+ * The averages fed in.  Spanning both signs, both zeros, a denormal, a
+ * NaN -- which every `flds; fcoms; ja` reads as "not above", so it drives the
+ * else arms -- and values chosen to sit above and below the thresholds
+ * `p34_params` plants.
+ */
+static const unsigned int avg_bits[] = {
+	0x41a00000u,	/*  20.0f  above all four phase thresholds */
+	0x41200000u,	/*  10.0f  exactly TRN1D's, so NOT above it */
+	0x41400000u,	/*  12.0f  exactly PDSNR_P3's                */
+	0x41480000u,	/*  12.5f  above PDSNR_P3 and below PDSNR_P4 */
+	0x00000000u,	/*  +0.0f                                    */
+	0x80000000u,	/*  -0.0f                                    */
+	0x00000001u,	/*  denormal                                 */
+	0xc1a00000u,	/* -20.0f                                    */
+	0x7fc00000u,	/*  NaN: every compare says "not above"      */
+	0x7f7fffffu,	/*  FLT_MAX                                  */
+	0x42fe0000u,	/* 127.0f                                    */
+	0x3dcccccdu,	/*   0.1f                                    */
+	0xbdcccccdu,	/*  -0.1f: a '-' sign with a zero magnitude  */
+	0xc1480000u	/* -12.5f: a '-' sign and 500 decimals       */
+};
+#define NAVG ((unsigned)(sizeof(avg_bits) / sizeof(avg_bits[0])))
+
+static int
+run_ce_phase3(void)
+{
+	int lvl, trial, c;
+
+	diff_begin("V90ConnectionEvaluator::evaluatePhase3");
+
+	for (lvl = 0; lvl <= 3; lvl++) {
+		set_level((unsigned)lvl);
+
+		/*
+		 * A ZERO SYMBOL COUNT RETURNS AT ONCE AND WRITES NOTHING.  The
+		 * average is left alone too, which is what makes the entry test
+		 * be on the count and not on the average.
+		 */
+		for (trial = 0; trial < 4; trial++) {
+			unsigned char before[CE_SLOT];
+			long tag = (long)lvl * 100000 + trial;
+			int vb;
+
+			seed_pair(trial + 2000, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 2001,
+				  trial & 3);
+			p34_params();
+			SET_CE(word_74, 0u);
+			SET_CE(short_b2, (short)1);
+			SET_CE(word_88, 1u);
+			SET_CE(word_84, 1u);
+			memcpy(before, ce_b, CE_SLOT);
+
+			vb = p3_call(tag, 1);
+			diff_eq_int("the empty call answered nothing (%ld)", vb,
+				    0, tag);
+			diff_eq_int("and wrote nothing (%ld)",
+				    memcmp(before, ce_b, CE_SLOT) == 0, 1, tag);
+			diff_eq_int("and printed nothing (%ld)",
+				    (int)dsplib_debug_capture_lines(1), 0, tag);
+			p3_empty = 1;
+		}
+
+		/*
+		 * NO ARM ARMED: all three flags zero.  The verdict is 0 and the
+		 * only thing that moved is the average.
+		 */
+		for (trial = 0; trial < 4; trial++) {
+			unsigned char before[CE_SLOT];
+			long tag = (long)lvl * 100000 + 100 + trial;
+			int vb;
+
+			seed_pair(trial + 2100, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 2101,
+				  trial & 3);
+			p34_params();
+			SET_CE(word_74, 37u);
+			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+			SET_CE(short_b2, (short)0);
+			SET_CE(word_88, 0u);
+			SET_CE(word_84, 0u);
+			memcpy(before, ce_b, CE_SLOT);
+
+			vb = p3_call(tag, 1);
+			diff_eq_int("no arm answered nothing (%ld)", vb, 0, tag);
+			consumed(tag);
+			diff_eq_int("and touched nothing else (%ld)",
+				    memcmp(before, ce_b, 0x70) == 0, 1, tag);
+			diff_eq_int("and printed nothing (%ld)",
+				    (int)dsplib_debug_capture_lines(1), 0, tag);
+			p3_none = 1;
+		}
+
+		/*
+		 * THE altRbsDetectedOnQc ARM, over the same limit table the two
+		 * `indicate*` members use -- including the two rows where `ja`
+		 * and `jg` disagree.  +0x88 and +0x84 are BOTH set, so the arm
+		 * also proves the chain is `else if` and not three `if`s.
+		 */
+		for (c = 0; c < NLIMITS; c++) {
+			int call;
+
+			seed_pair(c + 2200, c & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, c + 2201, c & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, limits[c].limit);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, ~limits[c].limit);
+			SET_P(unnamed_45c, ~limits[c].limit);
+			SET_CE(nofV90Retrains, limits[c].start);
+			SET_CE(word_88, 1u);
+			SET_CE(word_84, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 1u);	/* would trip at once */
+			SET_CE(retrainDetectDuration, 1);
+
+			for (call = 0; call < limits[c].calls; call++) {
+				long tag = (long)lvl * 100000 + 200
+					   + (long)c * 100 + call;
+				unsigned int b10 = CEB->word_10;
+				unsigned int b18 = CEB->word_18;
+				int vb;
+
+				SET_CE(word_74, 11u + (unsigned)call);
+				SET_CEF(word_70,
+					avg_bits[(unsigned)call % NAVG]);
+				SET_CE(short_b2, (short)(1 + call));
+
+				vb = p3_call(tag, 1);
+				diff_eq_int("the arm decided (%ld)",
+					    vb == 4 || vb == 5, 1, tag);
+				diff_eq_int("altRbs was cleared (%ld)",
+					    (long)CEB->short_b2, 0, tag);
+				diff_eq_int("word_1c was cleared (%ld)",
+					    (long)CEB->word_1c, 0, tag);
+				diff_eq_int("word_90 was cleared (%ld)",
+					    (long)CEB->word_90, 0, tag);
+				diff_eq_int("the arm did not accumulate +0x10 "
+					    "(%ld)",
+					    (long)CEB->word_10, (long)b10, tag);
+				diff_eq_int("the arm did not accumulate +0x18 "
+					    "(%ld)",
+					    (long)CEB->word_18, (long)b18, tag);
+				consumed(tag);
+				if (vb == V90CE_VERDICT_FALLBACK_V34)
+					diff_eq_int("the counter restarted "
+						    "(%ld)",
+						    (long)CEB->nofV90Retrains, 0,
+						    tag);
+				else
+					diff_eq_int("the counter kept counting "
+						    "(%ld)",
+						    CEB->nofV90Retrains != 0, 1,
+						    tag);
+				p3_altrbs = 1;
+			}
+		}
+
+		/*
+		 * THE end-of-TRN1d ARM, driven as a run.  +0x10 grows by the
+		 * symbol count while the average is over
+		 * `TRN1D_ERROR_FOR_V34_FALLBACK` and is cleared outright when it
+		 * is not; the fall-back fires when it reaches +0x64.  +0x68 is
+		 * given a DIFFERENT value, so reading phase 4's slot here would
+		 * change the block the verdict lands on.
+		 */
+		{
+			int block;
+			unsigned int want10 = 0;
+
+			seed_pair(2300 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 2301 + lvl,
+				  lvl & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100000);
+			SET_CE(nofV90Retrains, 3u);
+			SET_CE(short_b2, (short)0);
+			SET_CE(word_88, 1u);
+			SET_CE(word_84, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 500u);
+			SET_CE(word_68, 999u);
+			SET_CE(retrainDetectDuration, 7);
+
+			for (block = 0; block < 60; block++) {
+				long tag = (long)lvl * 100000 + 3000 + block;
+				unsigned int n = 40u + (unsigned)(block % 3);
+				int above = (block % 20) != 19;
+				int vb;
+
+				SET_CE(word_74, n);
+				SET_CEF(word_70, above ? 0x41a00000u
+						       : 0x40000000u);
+				vb = p3_call(tag, 1);
+
+				if (above) {
+					want10 += n;
+					if (want10 >= 500u)
+						diff_eq_int("the duration ran "
+							    "out (%ld)", vb, 5,
+							    tag);
+					else
+						diff_eq_int("still counting "
+							    "(%ld)", vb, 0, tag);
+				} else {
+					want10 = 0;
+					diff_eq_int("below the threshold "
+						    "answered nothing (%ld)",
+						    vb, 0, tag);
+					p3_cleared_10 = 1;
+				}
+				diff_eq_int("+0x10 is the running duration "
+					    "(%ld)",
+					    (long)CEB->word_10, (long)want10,
+					    tag);
+				diff_eq_int("+0x18 never moved (%ld)",
+					    (long)CEB->word_18, 0, tag);
+				consumed(tag);
+				if (vb == 5)
+					p3_trn1d = 1;
+			}
+		}
+
+		/*
+		 * THE ORDINARY PHASE-3 ARM, and the one place where a single
+		 * call takes two decisions.  The average is above BOTH
+		 * `PHASE3_ERROR_FOR_V34_FALLBACK` and
+		 * `PDSNR_THRESHOLD_IN_PHASE3`, so when +0x10 runs out the
+		 * fall-back prints and sets 5, and the code then falls into the
+		 * retrain test which sets 4 -- the call returns 4 having printed
+		 * the fall-back message.
+		 */
+		{
+			int block;
+			unsigned int want10 = 0, want18 = 0;
+
+			seed_pair(2400 + lvl, (lvl + 1) & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 2401 + lvl,
+				  (lvl + 1) & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 3);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, -4);
+			SET_P(unnamed_45c, -4);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b2, (short)0);
+			SET_CE(word_88, 0u);
+			SET_CE(word_84, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 300u);
+			SET_CE(word_68, 999u);
+			SET_CE(retrainDetectDuration, 120);
+
+			for (block = 0; block < 60; block++) {
+				long tag = (long)lvl * 100000 + 4000 + block;
+				unsigned int n = 25u;
+				int lines;
+				int vb;
+
+				SET_CE(word_74, n);
+				SET_CEF(word_70, 0x41a00000u);	/* 20.0f */
+				vb = p3_call(tag, 1);
+				lines = (int)dsplib_debug_capture_lines(1);
+
+				want10 += n;
+				want18 += n;
+				if (want18 >= 120u)
+					want18 = 0;
+				diff_eq_int("+0x10 accumulated (%ld)",
+					    (long)CEB->word_10, (long)want10,
+					    tag);
+				diff_eq_int("+0x18 accumulated (%ld)",
+					    (long)CEB->word_18, (long)want18,
+					    tag);
+				consumed(tag);
+				/*
+				 * TWO DECISIONS IN ONE CALL.  Two lines out and
+				 * a verdict of 4 can only mean the fall-back
+				 * message was printed with %esi = 5 and then 4
+				 * was written over it at 0x3f93f -- no other
+				 * path in the function prints twice.
+				 */
+				if (lvl > 1 && vb == 4 && lines == 2)
+					p3_five_then_four = 1;
+				if (vb == 4)
+					p3_retrain = 1;
+				if (vb == 5)
+					p3_large = 1;
+			}
+		}
+
+		/*
+		 * THE SAME ARM WITH THE AVERAGE BELOW THE RETRAIN THRESHOLD, so
+		 * +0x18 is cleared rather than accumulated and the fall-back
+		 * half runs on its own.
+		 */
+		for (trial = 0; trial < (int)NAVG; trial++) {
+			long tag = (long)lvl * 100000 + 5000 + trial;
+			int vb;
+
+			seed_pair(trial + 2500, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 2501,
+				  trial & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100000);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b2, (short)0);
+			SET_CE(word_88, 0u);
+			SET_CE(word_84, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 4444u);
+			SET_CE(word_64, 100000u);
+			SET_CE(retrainDetectDuration, 3);
+			SET_CE(word_74, 17u);
+			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+
+			vb = p3_call(tag, 1);
+			if (avg_bits[(unsigned)trial % NAVG] == 0x41a00000u
+			    || avg_bits[(unsigned)trial % NAVG] == 0x41480000u
+			    || avg_bits[(unsigned)trial % NAVG] == 0x7f7fffffu
+			    || avg_bits[(unsigned)trial % NAVG] == 0x42fe0000u)
+				diff_eq_int("above the retrain threshold "
+					    "(%ld)", vb, 4, tag);
+			else {
+				diff_eq_int("not above it (%ld)", vb, 0, tag);
+				diff_eq_int("+0x18 was cleared (%ld)",
+					    (long)CEB->word_18, 0, tag);
+				p3_cleared_18 = 1;
+			}
+			consumed(tag);
+		}
+
+		/*
+		 * THE PRINTED NUMBER, over the whole range of averages.  The
+		 * threshold is put at -FLT_MAX and +0x64 at one symbol so that
+		 * EVERY average reaches the diagnostic -- including both zeros,
+		 * which the object prints with a '-' because its sign test is
+		 * `0.0f < v` and not `0.0f <= v`, and the negatives, where the
+		 * magnitude and the three decimals are both taken through an
+		 * absolute value.  A NaN cannot get here: `flds; fcoms; ja` is
+		 * false for it, which is itself worth driving.
+		 */
+		for (trial = 0; trial < (int)NAVG; trial++) {
+			long tag = (long)lvl * 100000 + 8000 + trial;
+			int vb;
+
+			seed_pair(trial + 2600, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 2601,
+				  trial & 3);
+			p34_params();
+			SET_PF(TRN1D_ERROR_FOR_V34_FALLBACK, 0xff7fffffu);
+			SET_P(MAX_NOF_V90_RETRAINS, 100000);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b2, (short)0);
+			SET_CE(word_88, 1u);
+			SET_CE(word_84, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 1u);
+			SET_CE(word_68, 100000u);
+			SET_CE(word_74, 1u);
+			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+
+			vb = p3_call(tag, 1);
+			if (avg_bits[(unsigned)trial % NAVG] == 0x7fc00000u) {
+				diff_eq_int("a NaN is not above anything (%ld)",
+					    vb, 0, tag);
+				diff_eq_int("and +0x10 was cleared (%ld)",
+					    (long)CEB->word_10, 0, tag);
+			} else {
+				diff_eq_int("everything else printed (%ld)", vb,
+					    5, tag);
+				if (lvl > 1)
+					diff_eq_int("one line (%ld)",
+						    (int)
+						    dsplib_debug_capture_lines(1),
+						    1, tag);
+			}
+			consumed(tag);
+		}
+
+		/*
+		 * THE FOUR UNSIGNED COMPARISONS PHASE 3 MAKES, driven where `ja`
+		 * and `jb` DISAGREE with `jg` and `jl`.  Every ordinary value
+		 * hides the difference; a negative limit does not, because the
+		 * unsigned reading turns it into a number no counter reaches and
+		 * the signed one into a number every counter is already past.
+		 * Both slots the map calls `int` get one.
+		 */
+		{
+			int call;
+			long tag = (long)lvl * 100000 + 9000;
+
+			seed_pair(2700 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 2701 + lvl,
+				  lvl & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100000);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b2, (short)0);
+			SET_CE(word_88, 0u);
+			SET_CE(word_84, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			/*
+			 * -1 as UNSIGNED is 0xffffffff, which nothing reaches;
+			 * as SIGNED it is below every count and the retrain
+			 * fires on the first call.
+			 */
+			SET_CE(retrainDetectDuration, -1);
+
+			for (call = 0; call < 6; call++) {
+				int vb;
+
+				SET_CE(word_74, 100u);
+				SET_CEF(word_70, 0x41a00000u);	/* 20.0f */
+				vb = p3_call(tag + call, 1);
+				diff_eq_int("a negative duration is never "
+					    "reached (%ld)", vb, 0, tag + call);
+				diff_eq_int("and +0x18 kept accumulating (%ld)",
+					    (long)CEB->word_18,
+					    (long)(100 * (call + 1)),
+					    tag + call);
+				consumed(tag + call);
+			}
+			p3_unsigned_dur = 1;
+		}
+
+		{
+			long tag = (long)lvl * 100000 + 9100;
+			int vb;
+
+			seed_pair(2800 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 2801 + lvl,
+				  lvl & 3);
+			p34_params();
+			/* -1 unsigned: no counter is ever over it. */
+			SET_P(MAX_NOF_V90_RETRAINS, -1);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b2, (short)0);
+			SET_CE(word_88, 0u);
+			SET_CE(word_84, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(retrainDetectDuration, 10);
+			SET_CE(word_74, 20u);
+			SET_CEF(word_70, 0x41a00000u);		/* 20.0f */
+
+			vb = p3_call(tag, 1);
+			diff_eq_int("a negative retrain limit is never "
+				    "exceeded (%ld)", vb, 4, tag);
+			diff_eq_int("so the counter kept counting (%ld)",
+				    (long)CEB->nofV90Retrains, 1, tag);
+			consumed(tag);
+			p3_unsigned_max = 1;
+		}
+	}
+
+	set_level(0);
+	return diff_end();
+}
+
+static int
+run_ce_phase4(void)
+{
+	static const unsigned int arg_bits[] = {
+		0x00000000u,	/*  +0.0f                       */
+		0x80000000u,	/*  -0.0f                       */
+		0x00000001u,	/*  denormal                    */
+		0x80000001u,	/* -denormal                    */
+		0x3f800000u,	/*   1.0f                       */
+		0xbf800000u,	/*  -1.0f                       */
+		0x41600000u,	/*  14.0f, the threshold exactly */
+		0x41600001u,	/*  a ulp above it              */
+		0x415fffffu,	/*  a ulp below it              */
+		0x42c80000u,	/* 100.0f                       */
+		0xc2c80000u,	/* -100.0f                      */
+		0x7f7fffffu,	/*  FLT_MAX                     */
+		0xff7fffffu,	/* -FLT_MAX                     */
+		0x7f800000u,	/*  +inf                        */
+		0xff800000u,	/*  -inf                        */
+		0x4b7fffffu,	/* 16777215.0f                  */
+		0x39a2b3c4u	/*  small positive              */
+	};
+	unsigned narg = sizeof(arg_bits) / sizeof(arg_bits[0]);
+	int lvl, trial;
+
+	diff_begin("V90ConnectionEvaluator::evaluatePhase4");
+
+	for (lvl = 0; lvl <= 3; lvl++) {
+		set_level((unsigned)lvl);
+
+		/* A zero symbol count: nothing, whatever the argument is. */
+		for (trial = 0; trial < (int)narg; trial++) {
+			unsigned char before[CE_SLOT];
+			long tag = (long)lvl * 100000 + trial;
+			int vb;
+
+			seed_pair(trial + 3000, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3001,
+				  trial & 3);
+			p34_params();
+			SET_CE(word_74, 0u);
+			SET_CE(short_b0, (short)1);
+			SET_CE(word_78, 1u);
+			SET_CE(word_7c, 1u);
+			memcpy(before, ce_b, CE_SLOT);
+
+			vb = p4_call(tag, as_float(arg_bits[trial]), 1);
+			diff_eq_int("the empty call answered nothing (%ld)", vb,
+				    0, tag);
+			diff_eq_int("and wrote nothing (%ld)",
+				    memcmp(before, ce_b, CE_SLOT) == 0, 1, tag);
+			diff_eq_int("and printed nothing (%ld)",
+				    (int)dsplib_debug_capture_lines(1), 0, tag);
+			p4_empty = 1;
+		}
+
+		/*
+		 * THE ARGUMENT SWEEP AGAINST THE MEAN-ERROR ARM.  +0xb0 is
+		 * re-armed every trial and the counter is kept below
+		 * `unnamed_45c`, so the arm fires for exactly the arguments
+		 * strictly above 14.0f and for no others.  The average is put
+		 * ABOVE +0xac and +0x10 one short of +0x68, so a call that took
+		 * the arm and did NOT skip the rest of the function would fall
+		 * back to V.34 instead of retraining -- which is how "the arm
+		 * skips everything" is tested rather than assumed.
+		 */
+		for (trial = 0; trial < (int)narg; trial++) {
+			long tag = (long)lvl * 100000 + 200 + trial;
+			unsigned int bits = arg_bits[trial];
+			int fires = (bits == 0x41600001u || bits == 0x42c80000u
+				     || bits == 0x7f7fffffu
+				     || bits == 0x7f800000u
+				     || bits == 0x4b7fffffu);
+			int vb;
+
+			seed_pair(trial + 3100, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3101,
+				  trial & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, -101);
+			SET_P(unnamed_45c, 100);
+			SET_CE(nofV90Retrains, 5u);
+			SET_CE(short_b0, (short)1);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 990u);
+			SET_CE(word_18, 777u);
+			SET_CE(word_64, 12345u);
+			SET_CE(word_68, 1000u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CE(word_74, 20u);
+			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+			SET_CEF(phase4ErrorForV34Fallback, 0x41a00000u);
+
+			vb = p4_call(tag, as_float(bits), 1);
+			{
+				unsigned int thr;
+
+				memcpy(&thr, &CEB->phase4ErrorForV34Fallback,
+				       4);
+				diff_eq_int("+0xac was left alone (%ld)",
+					    thr == 0x41a00000u, 1, tag);
+			}
+			if (fires) {
+				diff_eq_int("the arm fired (%ld)", vb, 4, tag);
+				diff_eq_int("and cleared +0xb0 (%ld)",
+					    (long)CEB->short_b0, 0, tag);
+				diff_eq_int("and skipped the rest: +0x10 stood "
+					    "still (%ld)",
+					    (long)CEB->word_10, 990, tag);
+				diff_eq_int("and it cleared +0x18 (%ld)",
+					    (long)CEB->word_18, 0, tag);
+				p4_mean_arm = 1;
+			} else {
+				/*
+				 * The arm did not fire, so the fall-back half
+				 * ran instead: +0x10 reached +0x68 and the
+				 * function left by its own epilogue WITHOUT
+				 * reaching the +0x18 half at all.
+				 */
+				diff_eq_int("the arm did not fire (%ld)", vb, 5,
+					    tag);
+				diff_eq_int("and +0xb0 still stands (%ld)",
+					    (long)CEB->short_b0, 1, tag);
+				diff_eq_int("and +0x10 accumulated (%ld)",
+					    (long)CEB->word_10, 1010, tag);
+				diff_eq_int("and +0x18 was never reached (%ld)",
+					    (long)CEB->word_18, 777, tag);
+				p4_mean_skipped = 1;
+				p4_guard_ratio = 1;
+			}
+			consumed(tag);
+		}
+
+		/*
+		 * THE OTHER TWO GUARDS, one at a time.  The argument is over the
+		 * threshold in both, so whichever guard is false is the only
+		 * reason the arm does not fire.
+		 */
+		for (trial = 0; trial < 4; trial++) {
+			long tag = (long)lvl * 100000 + 300 + trial;
+			int b0 = (trial & 1) != 0;
+			int room = (trial & 2) != 0;
+			int vb;
+
+			seed_pair(trial + 3200, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3201,
+				  trial & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100);
+			SET_P(unnamed_45c, room ? 100 : 5);
+			SET_CE(nofV90Retrains, 5u);
+			SET_CE(short_b0, (short)(b0 ? 1 : 0));
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CE(word_74, 20u);
+			SET_CEF(word_70, 0x40000000u);		/* 2.0f */
+			SET_CEF(phase4ErrorForV34Fallback, 0x42c80000u);
+
+			vb = p4_call(tag, as_float(0x42c80000u), 1);
+			if (b0 && room) {
+				diff_eq_int("all three guards passed (%ld)", vb,
+					    4, tag);
+			} else {
+				diff_eq_int("a guard blocked it (%ld)", vb, 0,
+					    tag);
+				diff_eq_int("+0xb0 was left alone (%ld)",
+					    (long)CEB->short_b0, b0 ? 1 : 0,
+					    tag);
+				if (!b0)
+					p4_guard_b0 = 1;
+				else
+					p4_guard_count = 1;
+			}
+			consumed(tag);
+		}
+
+		/*
+		 * THE FALL-BACK WITH ITS OWN EPILOGUE.  +0x10 runs out against
+		 * +0x68 -- NOT +0x64, which is given a different value -- and the
+		 * function returns 5 from an immediate rather than from %esi,
+		 * having cleared neither +0x10 nor +0x18.
+		 */
+		{
+			int block;
+			unsigned int want10 = 0, want18 = 8888u;
+
+			seed_pair(3300 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 3301 + lvl,
+				  lvl & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100000);
+			SET_CE(nofV90Retrains, 9u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 8888u);
+			SET_CE(word_64, 3u);		/* would trip at once */
+			SET_CE(word_68, 400u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CEF(phase4ErrorForV34Fallback, 0x41200000u);
+
+			for (block = 0; block < 40; block++) {
+				long tag = (long)lvl * 100000 + 6000 + block;
+				unsigned int n = 30u + (unsigned)(block % 5);
+				int above = (block % 20) != 19;
+				int vb;
+
+				SET_CE(word_74, n);
+				SET_CEF(word_70, above ? 0x41a00000u
+						       : 0x3f800000u);
+				vb = p4_call(tag, as_float(0x00000000u), 1);
+
+				if (above) {
+					want10 += n;
+					if (want10 >= 400u) {
+						diff_eq_int("the fall-back "
+							    "epilogue (%ld)", vb,
+							    5, tag);
+						diff_eq_int("the counter "
+							    "restarted (%ld)",
+							    (long)
+							    CEB->nofV90Retrains,
+							    0, tag);
+						p4_large = 1;
+					} else {
+						/*
+						 * The early return never
+						 * happened, so the +0x18 half
+						 * ran: 20.0f is over
+						 * PDSNR_THRESHOLD_IN_PHASE4.
+						 */
+						want18 += n;
+						diff_eq_int("still counting "
+							    "(%ld)", vb, 0, tag);
+					}
+				} else {
+					want10 = 0;
+					want18 = 0;
+					p4_cleared_10 = 1;
+				}
+				diff_eq_int("+0x10 is the running duration "
+					    "(%ld)", (long)CEB->word_10,
+					    (long)want10, tag);
+				diff_eq_int("+0x18 moves only when the early "
+					    "return does not (%ld)",
+					    (long)CEB->word_18, (long)want18,
+					    tag);
+				consumed(tag);
+			}
+		}
+
+		/*
+		 * THE PHASE-4 RETRAIN, and the store into +0xac that comes with
+		 * it.  The first retrain replaces the threshold with
+		 * `params->unnamed_434` -- 250.0f -- which the next block's
+		 * comparison then uses, so this also proves the field is read
+		 * back and not only written.
+		 */
+		{
+			int block;
+			unsigned int want18 = 0;
+			int replaced = 0;
+
+			seed_pair(3400 + lvl, (lvl + 2) & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 3401 + lvl,
+				  (lvl + 2) & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 4);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, -5);
+			SET_P(unnamed_45c, -5);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 7u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 90);
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			for (block = 0; block < 60; block++) {
+				long tag = (long)lvl * 100000 + 7000 + block;
+				unsigned int n = 20u;
+				unsigned int got;
+				int vb;
+
+				SET_CE(word_74, n);
+				SET_CEF(word_70, 0x42c80000u);	/* 100.0f */
+				vb = p4_call(tag, as_float(0x00000000u), 1);
+
+				want18 += n;
+				if (want18 >= 90u) {
+					want18 = 0;
+					p4_cleared_18 = 1;
+					diff_eq_int("a decision was taken "
+						    "(%ld)",
+						    vb == 4 || vb == 5, 1, tag);
+					if (vb == 4) {
+						memcpy(&got,
+						    &CEB->
+						    phase4ErrorForV34Fallback,
+						    4);
+						diff_eq_int("+0xac took "
+							    "unnamed_434 (%ld)",
+							    got == 0x437a0000u,
+							    1, tag);
+						replaced = 1;
+						p4_thresh_replaced = 1;
+						p4_retrain = 1;
+					} else {
+						diff_eq_int("the counter "
+							    "restarted (%ld)",
+							    (long)
+							    CEB->nofV90Retrains,
+							    0, tag);
+					}
+					if (lvl > 1 && vb == 4)
+						diff_eq_int("the gated line came "
+							    "out too (%ld)",
+							    (int)
+							    dsplib_debug_capture_lines(1),
+							    2, tag);
+					if (lvl <= 1)
+						diff_eq_int("below the gate "
+							    "nothing printed "
+							    "(%ld)",
+							    (int)
+							    dsplib_debug_capture_lines(1),
+							    0, tag);
+				} else {
+					diff_eq_int("still counting (%ld)", vb,
+						    0, tag);
+				}
+				diff_eq_int("+0x18 is the running duration "
+					    "(%ld)", (long)CEB->word_18,
+					    (long)want18, tag);
+				consumed(tag);
+
+				/*
+				 * Once +0xac holds 250.0f the average at 100.0f
+				 * is below it, so the fall-back half stays
+				 * quiet and +0x10 is cleared every call.
+				 */
+				if (replaced)
+					diff_eq_int("+0x10 stays clear (%ld)",
+						    (long)CEB->word_10, 0, tag);
+			}
+		}
+
+		/*
+		 * THE DELAYED RETRAIN.  Both slots must be non-zero; the three
+		 * other combinations must leave both alone.
+		 */
+		for (trial = 0; trial < 4; trial++) {
+			long tag = (long)lvl * 100000 + 400 + trial;
+			unsigned int w78 = (trial & 1) ? 7u : 0u;
+			unsigned int w7c = (trial & 2) ? 9u : 0u;
+			int vb;
+
+			seed_pair(trial + 3500, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3501,
+				  trial & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100);
+			SET_CE(nofV90Retrains, 2u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, w78);
+			SET_CE(word_7c, w7c);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CE(word_74, 5u);
+			SET_CEF(word_70, 0x3f800000u);
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			vb = p4_call(tag, as_float(0x00000000u), 1);
+			if (w78 != 0 && w7c != 0) {
+				diff_eq_int("the delayed retrain fired (%ld)",
+					    vb, 4, tag);
+				diff_eq_int("+0x78 was cleared (%ld)",
+					    (long)CEB->word_78, 0, tag);
+				diff_eq_int("+0x7c was cleared (%ld)",
+					    (long)CEB->word_7c, 0, tag);
+				diff_eq_int("the counter kept counting (%ld)",
+					    (long)CEB->nofV90Retrains, 3, tag);
+				p4_delayed = 1;
+			} else {
+				diff_eq_int("half a request is nothing (%ld)",
+					    vb, 0, tag);
+				diff_eq_int("+0x78 was left alone (%ld)",
+					    (long)CEB->word_78, (long)w78, tag);
+				diff_eq_int("+0x7c was left alone (%ld)",
+					    (long)CEB->word_7c, (long)w7c, tag);
+				p4_delayed_half = 1;
+			}
+			consumed(tag);
+		}
+
+		/*
+		 * THE DELAYED RETRAIN OVER ITS LIMIT -- and the one transcript
+		 * this file does not compare.  0x3ffcf's format has a `%d` and
+		 * the object stores no argument for it, so `vsnprintf` formats
+		 * the outgoing-argument slot of whichever frame it is in.  State,
+		 * verdict and line count are compared; the text is not.
+		 */
+		for (trial = 0; trial < 4; trial++) {
+			long tag = (long)lvl * 100000 + 500 + trial;
+			int vb;
+
+			seed_pair(trial + 3600, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3601,
+				  trial & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, trial);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, ~trial);
+			SET_CE(nofV90Retrains, (unsigned int)trial);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 1u);
+			SET_CE(word_7c, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CE(word_74, 5u);
+			SET_CEF(word_70, 0x3f800000u);
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			vb = p4_call(tag, as_float(0x00000000u), 0);
+			diff_eq_int("over the limit it gives up (%ld)", vb, 5,
+				    tag);
+			diff_eq_int("the counter restarted (%ld)",
+				    (long)CEB->nofV90Retrains, 0, tag);
+			diff_eq_int("+0x78 was cleared (%ld)",
+				    (long)CEB->word_78, 0, tag);
+			diff_eq_int("+0x7c was cleared (%ld)",
+				    (long)CEB->word_7c, 0, tag);
+			if (lvl > 1)
+				diff_eq_int("two lines came out (%ld)",
+					    (int)dsplib_debug_capture_lines(1),
+					    2, tag);
+			consumed(tag);
+			p4_delayed_over = 1;
+		}
+
+		/*
+		 * A RETRAIN AND THE DELAYED GIVE-UP IN ONE CALL -- four lines out
+		 * of one invocation, which no other setup here produces.
+		 *
+		 * THE ATTEMPT TO MAKE THE MISSING ARGUMENT COMPARABLE IS
+		 * RECORDED HERE BECAUSE IT FAILED.  The absent `%d` formats
+		 * 0x4(%esp), the second outgoing-argument slot, so the idea was
+		 * to have the call immediately before it -- the phase-4 retrain,
+		 * which passes `nofV90Retrains` in exactly that slot -- leave a
+		 * known value there on both sides.  It was measured and the two
+		 * transcripts still differ, and only in that one line: GCC 13
+		 * does not leave our frame's slot holding what GCC 3.4's leaves
+		 * in the object's.  So the text is not compared here either, and
+		 * the claim is a note in the mutation set rather than a mutation.
+		 * Finding 1388.
+		 */
+		{
+			long tag = (long)lvl * 100000 + 700;
+			int vb;
+
+			seed_pair(3800 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 3801 + lvl,
+				  lvl & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 3);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, -4);
+			SET_P(unnamed_45c, -4);
+			SET_CE(nofV90Retrains, 2u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 1u);
+			SET_CE(word_7c, 1u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 10);
+			SET_CE(word_74, 50u);
+			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			vb = p4_call(tag, as_float(0x00000000u), 0);
+			diff_eq_int("a retrain and then the delayed give-up "
+				    "(%ld)", vb, 5, tag);
+			diff_eq_int("the counter restarted (%ld)",
+				    (long)CEB->nofV90Retrains, 0, tag);
+			if (lvl > 1)
+				diff_eq_int("four lines came out (%ld)",
+					    (int)dsplib_debug_capture_lines(1),
+					    4, tag);
+			consumed(tag);
+			p4_missing_arg = 1;
+		}
+
+		/* Nothing armed at all: the verdict is 0 and the average goes. */
+		for (trial = 0; trial < (int)NAVG; trial++) {
+			long tag = (long)lvl * 100000 + 600 + trial;
+			int vb;
+
+			seed_pair(trial + 3700, trial & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3701,
+				  trial & 3);
+			p34_params();
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CE(word_74, 13u);
+			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			vb = p4_call(tag, as_float(0xbf800000u), 1);
+			diff_eq_int("nothing to decide (%ld)", vb, 0, tag);
+			consumed(tag);
+			p4_none = 1;
+		}
+
+		/*
+		 * THE FOUR UNSIGNED COMPARISONS PHASE 4 MAKES, each driven at a
+		 * negative limit -- the only kind of value on which `jb`/`ja`
+		 * and `jl`/`jg` answer differently.  +0x45c gets one too: it is
+		 * `jae` at 0x3fbf4 and it gates the mean-error arm, so a signed
+		 * reading would BLOCK the arm where the object runs it.
+		 */
+		{
+			int call;
+			long tag = (long)lvl * 100000 + 9000;
+
+			seed_pair(3900 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 3901 + lvl,
+				  lvl & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100000);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, -1);
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			for (call = 0; call < 6; call++) {
+				int vb;
+
+				SET_CE(word_74, 100u);
+				SET_CEF(word_70, 0x42c80000u);	/* 100.0f */
+				vb = p4_call(tag + call, as_float(0u), 1);
+				diff_eq_int("a negative duration is never "
+					    "reached (%ld)", vb, 0, tag + call);
+				diff_eq_int("and +0x18 kept accumulating (%ld)",
+					    (long)CEB->word_18,
+					    (long)(100 * (call + 1)),
+					    tag + call);
+				consumed(tag + call);
+			}
+			p4_unsigned_dur = 1;
+		}
+
+		{
+			long tag = (long)lvl * 100000 + 9100;
+			int vb;
+
+			seed_pair(4000 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 4001 + lvl,
+				  lvl & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, 100000);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 10);
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+			SET_CE(word_74, 20u);
+			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+			SET_P(MAX_NOF_V90_RETRAINS, -1);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
+
+			vb = p4_call(tag, as_float(0u), 1);
+			diff_eq_int("a negative retrain limit is never "
+				    "exceeded (%ld)", vb, 4, tag);
+			diff_eq_int("so the counter kept counting (%ld)",
+				    (long)CEB->nofV90Retrains, 1, tag);
+			consumed(tag);
+			p4_unsigned_max = 1;
+		}
+
+		{
+			long tag = (long)lvl * 100000 + 9200;
+			int vb;
+
+			seed_pair(4100 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 4101 + lvl,
+				  lvl & 3);
+			p34_params();
+			/*
+			 * BOTH of the arm's integer limits negative at once:
+			 * +0x45c gates it (`jae`) and +0x460 ends it (`ja`), so
+			 * one trial has to make each of them unsigned or the
+			 * other's mutation survives.
+			 */
+			SET_P(MAX_NOF_V90_RETRAINS, -1);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
+			SET_P(unnamed_45c, -1);
+			SET_CE(nofV90Retrains, 7u);
+			SET_CE(short_b0, (short)1);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CE(word_74, 20u);
+			SET_CEF(word_70, 0x40000000u);		/* 2.0f */
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			vb = p4_call(tag, as_float(0x42c80000u), 1);
+			diff_eq_int("a negative second ceiling admits every "
+				    "count (%ld)", vb, 4, tag);
+			diff_eq_int("so the arm fired and cleared +0xb0 (%ld)",
+				    (long)CEB->short_b0, 0, tag);
+			consumed(tag);
+			p4_unsigned_45c = 1;
+		}
+
+		{
+			long tag = (long)lvl * 100000 + 9300;
+			int vb;
+
+			seed_pair(4200 + lvl, lvl & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 4201 + lvl,
+				  lvl & 3);
+			p34_params();
+			SET_P(MAX_NOF_V90_RETRAINS, -1);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 3u);
+			SET_CE(word_7c, 4u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 100000u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 100000);
+			SET_CE(word_74, 5u);
+			SET_CEF(word_70, 0x3f800000u);		/* 1.0f */
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+
+			vb = p4_call(tag, as_float(0u), 1);
+			diff_eq_int("the delayed arm's limit is unsigned too "
+				    "(%ld)", vb, 4, tag);
+			diff_eq_int("so the counter kept counting (%ld)",
+				    (long)CEB->nofV90Retrains, 1, tag);
+			consumed(tag);
+			p4_unsigned_delayed = 1;
+		}
+	}
+
+	set_level(0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1004,6 +2355,8 @@ main(void)
 	rc |= run_ce_retrain(0);
 	rc |= run_ce_retrain(1);
 	rc |= run_ce_meanerr4();
+	rc |= run_ce_phase3();
+	rc |= run_ce_phase4();
 
 	set_level(0);
 	dsplib_debug_capture_on = 0;
@@ -1026,6 +2379,77 @@ main(void)
 	diff_eq_int("and the two verdicts are different numbers",
 		    V90CE_VERDICT_RETRAIN != V90CE_VERDICT_FALLBACK_V34, 1, 0);
 	diff_eq_int("some transcript was captured", transcripts_seen, 1, 0);
+
+	/*
+	 * THE TWO EVALUATORS DECIDE THREE WAYS AND HAVE MORE PATHS THAN
+	 * VERDICTS, so "all three answers were seen" is necessary and nowhere
+	 * near sufficient.  Every named path below is one the run above claims
+	 * to have driven; an assertion here that fails means the fixture stopped
+	 * reaching it and the checks that looked green were vacuous.
+	 */
+	diff_eq_int("evaluatePhase3 answered 0", p3_verdict[0], 1, 0);
+	diff_eq_int("evaluatePhase3 answered 4", p3_verdict[1], 1, 0);
+	diff_eq_int("evaluatePhase3 answered 5", p3_verdict[2], 1, 0);
+	diff_eq_int("evaluatePhase4 answered 0", p4_verdict[0], 1, 0);
+	diff_eq_int("evaluatePhase4 answered 4", p4_verdict[1], 1, 0);
+	diff_eq_int("evaluatePhase4 answered 5", p4_verdict[2], 1, 0);
+
+	diff_eq_int("phase3: the empty call", p3_empty, 1, 0);
+	diff_eq_int("phase3: no arm armed", p3_none, 1, 0);
+	diff_eq_int("phase3: the altRbsDetectedOnQc arm", p3_altrbs, 1, 0);
+	diff_eq_int("phase3: the end-of-TRN1d fall-back", p3_trn1d, 1, 0);
+	diff_eq_int("phase3: the ordinary fall-back", p3_large, 1, 0);
+	diff_eq_int("phase3: the ordinary retrain", p3_retrain, 1, 0);
+	diff_eq_int("phase3: +0x10 cleared below its threshold", p3_cleared_10,
+		    1, 0);
+	diff_eq_int("phase3: +0x18 cleared below its threshold", p3_cleared_18,
+		    1, 0);
+	diff_eq_int("phase3: one call printed the fall-back and returned 4",
+		    p3_five_then_four, 1, 0);
+
+	diff_eq_int("phase4: the empty call", p4_empty, 1, 0);
+	diff_eq_int("phase4: no arm armed", p4_none, 1, 0);
+	diff_eq_int("phase4: the mean-error arm fired", p4_mean_arm, 1, 0);
+	diff_eq_int("phase4: and skipped the rest when it did",
+		    p4_mean_skipped, 1, 0);
+	diff_eq_int("phase4: the +0xb0 guard blocked it", p4_guard_b0, 1, 0);
+	diff_eq_int("phase4: the ratio guard blocked it", p4_guard_ratio, 1, 0);
+	diff_eq_int("phase4: the unnamed_45c guard blocked it", p4_guard_count,
+		    1, 0);
+	diff_eq_int("phase4: the fall-back with its own epilogue", p4_large, 1,
+		    0);
+	diff_eq_int("phase4: the retrain", p4_retrain, 1, 0);
+	diff_eq_int("phase4: +0xac was replaced by unnamed_434",
+		    p4_thresh_replaced, 1, 0);
+	diff_eq_int("phase4: +0x10 cleared below its threshold", p4_cleared_10,
+		    1, 0);
+	diff_eq_int("phase4: +0x18 accumulated and was cleared", p4_cleared_18,
+		    1, 0);
+	diff_eq_int("phase4: the delayed retrain", p4_delayed, 1, 0);
+	diff_eq_int("phase4: half a delayed request does nothing",
+		    p4_delayed_half, 1, 0);
+	diff_eq_int("phase4: the delayed retrain over its limit",
+		    p4_delayed_over, 1, 0);
+	diff_eq_int("phase4: the missing-argument print, with the slot made "
+		    "deterministic", p4_missing_arg, 1, 0);
+
+	/*
+	 * THE FIVE UNSIGNED COMPARISONS, each driven at a negative limit --
+	 * the only place `ja`/`jb` and `jg`/`jl` part company.
+	 */
+	diff_eq_int("phase3: a negative retrain duration", p3_unsigned_dur, 1,
+		    0);
+	diff_eq_int("phase3: a negative retrain limit", p3_unsigned_max, 1, 0);
+	diff_eq_int("phase4: a negative retrain duration", p4_unsigned_dur, 1,
+		    0);
+	diff_eq_int("phase4: a negative retrain limit", p4_unsigned_max, 1, 0);
+	diff_eq_int("phase4: a negative second ceiling", p4_unsigned_45c, 1, 0);
+	diff_eq_int("phase4: a negative limit in the delayed arm",
+		    p4_unsigned_delayed, 1, 0);
+
+	diff_eq_int("and 0 is not one of the other two verdicts",
+		    V90CE_VERDICT_NONE != V90CE_VERDICT_RETRAIN
+		    && V90CE_VERDICT_NONE != V90CE_VERDICT_FALLBACK_V34, 1, 0);
 	rc |= diff_end();
 
 	return rc;

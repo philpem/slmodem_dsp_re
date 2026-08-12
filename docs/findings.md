@@ -44633,3 +44633,123 @@ re-run before believing anything the run said.  A partial failure -- some
 binaries passing -- is a real result; a total one is almost certainly this.
 
 ======================================================================
+
+### 1388. THE TWO PHASE EVALUATORS DECIDE THREE WAYS, AND ONE OF THEIR NINE DIAGNOSTICS HAS A `%d` WITH NOTHING BEHIND IT
+
+`V90ConnectionEvaluator::evaluatePhase3` (0x3f5f0, 980 bytes) and
+`::evaluatePhase4(float)` (0x3fad0, 1,353 bytes), reconstructed and
+differentially tested.  Seven things came out of them that were not known
+before, and one of them is a defect in the original.
+
+**BOTH RETURN `int`, AND ZERO IS A REAL THIRD ANSWER.**  The header had them
+`void`.  Each clears the answer register on entry -- `xor %eax,%eax` at
+0x3f5f3 and 0x3fad1 -- loads an immediate 4 or 5 into `%esi` on every path
+that decides something, and moves `%esi` to `%eax` at the tail.  Paths that
+decide nothing reach the same `ret` with the register still zero, and there
+are several: the early return on a zero symbol count, and the ordinary "no
+threshold was crossed" tail.  So 0 is what a caller sees most of the time, and
+it is not an artefact of a `void` function leaving a register clear -- the
+`mov %esi,%eax` is there to build it.  `V90CE_VERDICT_NONE` is OUR name; 4 and
+5 keep theirs because a string on each path says what they mean.
+
+**PHASE 4 HAS THREE EPILOGUES AND ONE OF THEM IS A LITERAL.**  0x3fbaa is
+`mov $0x5,%eax` into its own `ret` at 0x3fbcf with `%esi` never consulted,
+which is why that arm is written as an early `return` rather than as an
+assignment to the verdict.  It is the "fall back due to large error" path, and
+it leaves +0x10 and +0x18 exactly as it found them while every other deciding
+path clears at least one of them.
+
+**THE DURATIONS ARE NOT CLEARED WHEN THEY MERELY ACCUMULATE**, and this is the
+one a single-call test cannot see.  +0x10 and +0x18 both grow by `word_74` --
+the symbol count the running average covers -- per call, and both are cleared
+in exactly two places: the arm where the average fell below its threshold, and
+the arm where the duration ran out and a verdict was printed.  0x3f797 and
+0x3fd12 jump PAST the store that zeroes +0x18.  A reconstruction that cleared
+it every call agrees with the blob on every first call, never accumulates, and
+passes anything short of a multi-block run; `test/unit/t_v90conneval.cpp`
+drives sixty-block runs and compares the whole object after every one.
+
+**FIVE COMPARISONS ARE UNSIGNED AGAINST SLOTS THE PARAMETER MAP CALLS `int`,
+and that is what fixes the counters' own types.**  `cmp 0x60(%ebx),%eax; jb`
+twice for the durations, `cmp 0x460(%ecx),%edx; ja` four times for the retrain
+limit and `cmp 0x45c(%ecx),%eax; jae` for the mean-error arm's second ceiling:
+a signed left operand would have given `jl`/`jg`/`jge` throughout.  None of
+them is visible on an ordinary value -- the two readings part company only at a
+negative limit, where the unsigned one becomes a number no counter reaches and
+the signed one a number every counter is already past.  Six small trials in the
+fixture drive exactly that, and the `jae` one is the sharpest because it GATES
+an arm rather than ending one: read signed, a negative ceiling blocks the arm
+the object runs.
+
+**A SINGLE CALL CAN PRINT ONE VERDICT AND RETURN THE OTHER.**  In phase 3's
++0x84 arm the fall-back test and the retrain test are not alternatives: 0x3f87f
+jumps back to the retrain test when the duration has NOT run out, and 0x3f926 --
+the tail of the fall-back diagnostic -- jumps to the same place.  So a call can
+load 5, print "initiating fall back to V34 due to large error", fall into the
+retrain test, load 4 over it and return 4, having printed two lines.  The
+fixture asserts that combination was observed.
+
+**FOUR FIELDS GOT THE AUTHOR'S OWN NAMES AND NONE OF THEM COULD BE RENAMED.**
++0xb2 is `altRbsDetectedOnQc` -- phase 3's first arm runs when it is non-zero,
+clears it, and prints "altRbsDetectedOnQc => initiating Retrain".  +0xac is
+`pdsnrCurrentV34DropThreshPhase4` -- 0x3fd38 is `fsts 0xac(%ebx)` and the
+diagnostic announcing that very store names it.  The argument of
+`evaluatePhase4` is `meanErrBefToAftUpdateRatio`, from the two strings that
+print it and nothing else.  +0x78 and +0x7c are a delayed-retrain request and
+its acknowledgement: phase 4's last arm runs only when both are non-zero,
+prints "Initiating retrain (delayed)...", and clears both.  Every one of those
+four slots is referred to by its offset name in a file this batch does not own
+(`t_v90leaves.cpp`, `VPcmFloModem.cpp`), so the derivations are recorded in
+`include/dsplib/V90ConnectionEvaluator.h` and no field was renamed.  A name is
+worth less than a file another batch is editing.
+
+**`params->unnamed_434` IS A FLOAT AND `V90Parameters.h` CALLS IT `int`.**
+0x3fd2b is `flds 0x434(%ecx)` feeding `fsts 0xac(%ebx)` -- a float load into a
+float store with no conversion -- and the 0x437a0000 `setToDefault` plants
+there (finding 878) is 250.0f.  Two measurements, one answer.  The header is a
+shared frozen type, so the reconstruction reads the four bytes through a union
+instead of retyping it; whoever next owns `V90Parameters.h` should make it
+`float`.  The task's brief also predicted `EIA6_PDSNR_THRESHOLD_IN_PHASE3` and
+`..._PHASE4` would appear here.  **They do not** -- neither function reads
+either slot, nor `EIA6_TRN1D_ERROR_FOR_V34_FALLBACK`, nor
+`QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH`.  The fixture plants
++FLT_MAX in all four so that a comparison picking one up would never fire, and
+four mutations do exactly that and are caught.
+
+**AND THE DEFECT: 0x3ffcf CALLS `edprintf` WITH A `%d` AND NO ARGUMENT.**  The
+string at .rodata.str1.4+0xab34 is "V90ConnectionEvaluator (phase4): initiating
+fall back to V34 due to %d V90 retrains (last one delayed)", and the call site
+stores only the format pointer -- nothing goes to 0x4(%esp).  Its sibling
+forty-four bytes later, 0x3fffb, stores `nofV90Retrains` there for a string
+with the same conversion, so it is one line written without its argument and
+not a different calling convention.  `edprintf` formats with `vsnprintf`, so
+the number printed is whatever the outgoing-argument slot held.  D267.
+
+**THAT DEFECT IS ALSO THE ONE CLAIM IN THIS BATCH THAT COULD NOT BE GIVEN A
+MUTATION, and the attempt is worth recording.**  A mutation that ADDS the
+missing argument cannot fail a differential transcript comparison, because the
+comparison is already failing on that line for the correct source: the two
+sides read different frames.  The construction that should have fixed that was
+tried -- arrange a call in which phase 4's retrain arm fires FIRST, since it
+passes `nofV90Retrains` in exactly the slot the broken format later reads, so
+both sides would pick up the same known value.  Measured, the transcripts still
+differ and differ ONLY in that line: GCC 13 does not leave our frame's second
+outgoing-argument slot holding what GCC 3.4 leaves in the object's.  The test
+therefore compares state, verdict and line count on that path and not the text,
+the case is kept because it is the only one that produces four diagnostics from
+one call, and the mutation set carries the claim as a NOTE rather than as a
+mutation that would report `0 NOT caught` while testing nothing.
+
+**ONE INPUT IS DELIBERATELY NOT FED.**  Every `word_70` comparison in both
+functions is `flds; fcoms <param>; ja/jbe`, which is false for an unordered
+compare and therefore agrees with C on a NaN -- so a NaN average is driven, and
+it exercises the else arms.  `evaluatePhase4`'s ARGUMENT comparison is the one
+place where the parameter is the left operand (`flds 0x438(%ecx); fcomp %st(1);
+jae`), and `jae` is false when unordered, so the object ENTERS the arm for a NaN
+argument where C says it must not.  That is GCC 3.4's complement of `>=`, which
+GCC 13 does not repeat; a NaN argument would therefore disagree between `make
+period` and `make phase` for a reason that is not in our source, so the sweep
+covers both zeros, both denormals, both infinities, FLT_MAX, the threshold
+itself and one ulp either side of it, and stops there.
+
+======================================================================
