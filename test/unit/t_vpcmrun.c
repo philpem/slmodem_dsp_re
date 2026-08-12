@@ -77,6 +77,10 @@ extern unsigned int dsplibs_debug_level;
  */
 extern int ref_vpcm_run(struct dp *dp, void *in, void *out, int count);
 
+/* Compared with ours in the fixture block below; never called. */
+extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
+			       int *rxbits, int *nrx, int *txbits, int *nbits);
+
 /*
  * ALL FIVE USED TO BE FORWARDED HERE AND NONE IS NOW.  Each lost its
  * forwarder on the batch that WROTE it, because a forwarder beside a real
@@ -643,6 +647,25 @@ main(void)
 		    (void *)ops34->process == (void *)ref_vpcm_run, 1, 0);
 	diff_eq_int("...under the name VPCM",
 		    ops34->name != 0 && strcmp(ops34->name, "VPCM") == 0, 1,
+		    0);
+	/*
+	 * AND OUR `VPcmV34Progress` IS NOT THE BLOB'S.  It became a real
+	 * definition in `src/pump/v34/v34pcmmain.cpp` on the batch that
+	 * removed this file's forwarder, and the two are now two functions:
+	 * a link that had somehow resolved ours to the blob's copy would make
+	 * every comparison below trivially true and nothing else would say so.
+	 *
+	 * IT IS ALSO WHAT PUTS IT IN `tools/coverage.py`'s `tested` SET,
+	 * which counts a symbol as driven against the blob only when a
+	 * compiled test object REFERENCES its `ref_` alias.  This binary
+	 * drives it for 8,000 blocks at two endpoints -- but through
+	 * `ref_vpcm_run`, one call deeper than the tool can see, so without
+	 * this line the record would read `translated, alias exists, and NOT
+	 * tested` for the one function this file exists to test.  The same
+	 * indirection is why `ref_vpcm_run` is called by name above.
+	 */
+	diff_eq_int("our VPcmV34Progress is not the blob's",
+		    (void *)VPcmV34Progress != (void *)ref_VPcmV34Progress, 1,
 		    0);
 	diff_eq_int("the root object is vpcm_create's allocation",
 		    (int)sizeof(struct vpcm_root), 0xd258, 0);
