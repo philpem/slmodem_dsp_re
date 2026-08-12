@@ -48,6 +48,25 @@
 #include "dsplib/fpm_iir.h"
 
 /*
+ * `create_cid` allocates 0x160 bytes for this object (blob 0x91b64).
+ * `make offsets` checks every field's offset and nothing checks the TOTAL, so
+ * the size is asserted here: `diff_eq_obj` compares `sizeof(type)` bytes, and
+ * a pad read short by eighteen would quietly narrow every comparison in
+ * t_cid_mtd and t_cid_fsd while every annotated offset still matched.
+ *
+ * 32-bit only, following `dtmf_rx.c`'s reasoning: 0x160 is a claim about the
+ * ABI the blob was built for, and the object really does hold a pointer --
+ * the `fpm_mrf` at +0x0c has one at +0x24 (finding 1510).  This header hides
+ * it inside `pad_000`, so the assertion would happen to hold at 64 bits today
+ * and would stop holding the moment a later batch names that field.
+ * `make check64` is where that would surface, and the guard is what keeps it
+ * a real check there rather than an accident.
+ */
+#if defined(__i386__)
+typedef char cid_size_check[sizeof(struct cid) == 0x160 ? 1 : -1];
+#endif
+
+/*
  * Declared in the object's own .data order, 0x7858 upwards: the 8000 pair
  * first and, within each pair, the 1300 Hz table before the 1200 Hz one.
  */

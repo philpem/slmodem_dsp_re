@@ -49834,3 +49834,41 @@ it points.
 
 **`cid + 0x8e` is the mark-tone confidence counter**, incremented by
 `cid->f02c` (9) on a zero from `CID_MTD_detect` and cleared on anything else.
+
+======================================================================
+
+### 1511. THE CALLER ID BATCH UNDER NEGATIVE CONTROL: FOUR MUTATIONS, AND THE ONE THAT COMMUTES
+
+26,728 differential checks agreeing proves the two sides agree. It does not
+prove the checks would DISAGREE if the source were wrong, and this batch has
+its own evidence that the distinction is live: `t_cid_fsd.c`'s dead-zone
+counter read zero -- the state it was watching never happened -- while every
+comparison in the file was green.
+
+So each claim was broken on purpose and the suite re-run:
+
+| mutation | caught by |
+|---|---|
+| `cid_mtd.c`: swap the two notches in the cascade | 446/1143 at 8000, 370/1189 at 9600 |
+| `cid_fsd.c`: the low-end seed shifts `>> 3` not `>> 4` | 258/13364 at 7200, 2768/13364 at 9600 |
+| `cid_fsd.c`: drop `cid->dead = 0` | 3403/13364 at 7200, 3220/13364 at 9600 |
+| `cid_mtd.c`: `sizeof(struct cid)` asserted as 0x158 | compile error, as intended |
+
+**The first is the one worth having.** Two IIR sections in cascade COMMUTE:
+swapping them leaves the overall transfer function, and therefore
+`CID_MTD_detect`'s return value, unchanged. A test that compared only the
+answer would pass it. What catches it is `diff_eq_obj` over the whole `struct
+cid`, because the two biquads' state words at +0x7e and +0x82 end up holding
+each other's contents -- so the object comparison is not belt-and-braces here,
+it is the only thing standing between a transposed cascade and a green suite.
+
+The second and third live in the level tracking, which only the long sampled
+run reaches at all: 400 samples of mark to arm `high_level` and 2000 of data
+after it. A block-at-a-time test would have found neither.
+
+The size assertion is the fourth, and it exists because `offcheck.py` checks
+every ANNOTATED OFFSET and nothing checks the total: `pad_086` written
+eighteen bytes short passes `make offsets` and silently narrows every
+`diff_eq_obj` in both new files. Same gap finding 1502 recorded for
+`struct dtmf_rx`, same spelling of the fix, and `create_cid`'s
+`movl $0x160,(%esp)` is the oracle for the number.
