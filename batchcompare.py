@@ -59,6 +59,22 @@ def load(path, field):
     return np.array(out)
 
 
+def load_flag(path, field):
+    """Every attempted call as 1/0 -- NOT filtered on connect.
+
+    The rate comparison can only see calls that connected, so a modem that
+    connects less often looks identical to one that connects always.  That is
+    the wrong way round: reliability is the first thing a replacement unit has
+    to beat, and #124 is a reliability failure with a perfectly good rate on
+    the calls that survive.
+    """
+    out = []
+    for r in csv.DictReader(open(path)):
+        v = r.get(field)
+        out.append(1.0 if v == "1" else 0.0)
+    return np.array(out)
+
+
 def perm_p(a, b, stat, iters=20000, seed=12345):
     rng = np.random.default_rng(seed)
     obs = stat(a, b)
@@ -112,6 +128,20 @@ def main():
     print("  share >= %-8.0f %+8.1f%%   p = %.4f   %s"
           % (t, 100 * d, p, "significant" if p < 0.05 else "not significant"))
     print("     A %.0f%%, B %.0f%%" % (100 * (a >= t).mean(), 100 * (b >= t).mean()))
+
+    # Reliability, over ALL attempted calls.  Separate from everything above
+    # because the rate tests are conditioned on connecting, so they are blind
+    # to a modem that simply fails more often.
+    print()
+    for field, label in (("connect", "connected"), ("data_both_ways", "data both ways")):
+        fa, fb = load_flag(args.csv_a, field), load_flag(args.csv_b, field)
+        if len(fa) == 0 or len(fb) == 0:
+            continue
+        d, p = perm_p(fa, fb, lambda x, y: y.mean() - x.mean())
+        print("  %-16s %+8.1f%%   p = %.4f   %s"
+              % (label, 100 * d, p, "significant" if p < 0.05 else "not significant"))
+        print("     A %d/%d, B %d/%d"
+              % (fa.sum(), len(fa), fb.sum(), len(fb)))
 
     if min(len(a), len(b)) < 20:
         print("\n  UNDERPOWERED: %d and %d connected calls.  This bench's receive"
