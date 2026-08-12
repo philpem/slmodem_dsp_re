@@ -40,6 +40,25 @@ int FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift);
 unsigned short FPM_div_table_entry(int i);
 unsigned short FPM_div_table_generate(int i);
 
+/*
+ * Four-quadrant arctangent, built on FPM_div.  Argument order is atan2's:
+ * `y` first, then `x`.  The answer goes through the pointer -- the function
+ * returns nothing.
+ *
+ * The angle is in fpm_phasor.c's phase units, a full turn being 0x8000, and
+ * runs anticlockwise from the positive x axis.  Both arguments zero gives
+ * 0x2000, which is what the x == 0 branch does rather than a special case.
+ *
+ * Not exact at two places, faithfully: a ratio of exactly 127/32768 returns
+ * zero, and the octant with x > 0, y < 0, |x| > |y| is one unit low.  Both
+ * are explained in src/dsp/fpm_atan.c.
+ */
+void FPM_atan(short y, short x, short *angle);
+
+/* atan of i/256 in Q15 radians, rounded.  Global in the original. */
+#define FPM_ATAN_TABLE 257
+extern const short FPM_atan_table[FPM_ATAN_TABLE];
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);

@@ -49857,3 +49857,1396 @@ index 10 and 5 dB of correction. Table 3 offers up to 10 dB and the object
 never uses it. Whether that is a deliberate restriction, a limitation of the
 transmitter's filter set, or another defect is not answered here — but it is a
 better question than the one this task started with.
+
+### 1560. V.22 HAS ITS OWN IIR, IT IS THIRD ORDER, AND ITS DENOMINATOR STARTS AT `a[1]`
+
+The V.22/V.22bis phase opens here. `tools/tumap.py` recovers thirteen V.22
+translation units by name — `V22.c`, `V22Dec.c`, `v22mod.c`, `v22prc.c`,
+`v22rxtab.c`, `v22stc.c`, `v22txtab.c`, `v22_fse.c`, `v22_iir.c`, `v22_mrf.c`,
+`v22_pps.c`, `v22_sre.c`, `V22int.c`, plus `v22.c` at `.text 0x004fb0` for the
+datapump registration — and `src/pump/v22/` now mirrors those names rather
+than inventing a layout.
+
+**The `v22_*` blocks are not the `fpm_*` blocks.** The original keeps
+`fpm_iir.c` and `v22_iir.c`, `fpm_mrf.c` and `v22_mrf.c`, `fpm_pps.c` and
+`v22_pps.c`, `fpm_sre.c` and `v22_sre.c` as separate translation units with
+separate symbols. For the IIR the difference is settled and is not cosmetic:
+
+|  | `FPM_iir_filt_II` | `V22_iir_filt_demod` |
+|---|---|---|
+| structure | cascade of biquads | one third-order section |
+| coefficients | `{b0,b2,b1,a2,a1}` per section | `b[0..3]`, `a[0..3]` |
+| state | 4 words per section | `x[0..3]`, `y[0..2]` |
+| block length | argument | **constant 160 in the code** |
+| output | filtered | filtered **and mixed down** |
+
+`V22_iir_filt_demod`'s denominator loop is `movswl 0x2(%edx,%ecx,2)` with
+`ecx` running 0..2 — `a[1]`, `a[2]`, `a[3]`. **`a[0]` is copied into the state
+by the init and then never loaded by anything**, because it holds 16384 and
+the `>> 14` already divides by it. Reading the denominator from `a[0]` instead
+gives a stable filter with the wrong response, and at ordinary receive levels
+the two agree closely enough that only a long run separates them.
+
+**The mixer is part of the filter.** `DemodDataV22 +0x1f2` calls
+`FPM_TONE_generate_demod` into a stack buffer and passes that buffer as the
+sixth argument; the filtered sample is multiplied by it at `>> 12` and stored
+back over the input. The filtered signal never exists as an array, so there is
+no seam at which to compare "the filter" against anything — the differential
+test drives the pair.
+
+Three arithmetic details are load-bearing and all three are preserved:
+
+- **each product is shifted down by 14 separately** before joining the
+  accumulator, so a block truncates seven times per sample rather than once;
+- **the accumulator is truncated to 16 bits exactly once**, where it is stored
+  into `y[0]`, and the mixer multiplies that truncation — `mov %bx,(%esi)` and
+  `movswl %bx,%eax` read the same low half;
+- **nothing saturates anywhere.** An over-driven filter wraps. This is the
+  opposite of `FPM_iir_filt`, which clamps, and asymmetrically.
+
+Both call sites settle the signatures rather than leaving them inferred:
+`V22FP_create +0x858` calls `V22IIRFilterInit(state, IIR_b_coeff, IIR_a_coeff)`
+and `DemodDataV22` passes `state+0, state+4, state+8, state+12`, which is what
+fixes the sixteen-word state layout: `b[4] a[4] x[4] y[4]`. The init clears
+four y words and the filter uses three, so `y[3]` is written by the init and
+by nothing else.
+
+`IIR_b_coeff` and `IIR_a_coeff` are in **`.data`, not `.rodata`**, so they are
+declared without `const` here to keep the section. Nothing writes them.
+
+`t_v22_iir` covers it: both coefficient tables, the init against a `0x5ead`
+prefill so a word the reconstruction fails to write cannot pass, and eight
+blocks each of five drive conditions. The two overflow paths — the mixer
+product leaving 16 bits, and the accumulator wrapping — are asserted to have
+actually fired, per finding 134's argument. The mixer guard is exact rather
+than heuristic: it is measured under a synthetic identity filter
+(`b = {16384,0,0,0}`, `a = {16384,0,0,0}`), where `acc = (16384 * x) >> 14 = x`
+makes the product knowable without modelling the function under test.
+
+### 1561. V.22's STATIC CONFIGURATION: WHICH TABLES A RELOCATION TYPES, AND WHICH ONE ONLY LOOKS TYPED
+
+Fifteen of the V.22 closure's data symbols are static configuration, and the
+question for each is whether it may be written as a struct. **A relocation is
+the only thing that proves a pointer field**, so the answer splits cleanly:
+
+| symbol | relocations | written as |
+|---|---|---|
+| `AGCv22_CFG`, `AGCv22_CFG2` | +0x0c, +0x10 | `struct fpm_agc_cfg` |
+| `MTDv22_CFG`, `MTDv22_CFG2`, `MTDs1_CFG` | +0x00 | `struct fpm_mtd_cfg` |
+| `TONEv22_CFG`, `TONEv22INIT_CFG` | **none** | `short[18]` |
+| `V22_CFG` | none | `short[14]` |
+| the coefficient banks and PLL tables | none | `short[]` |
+
+The two AGC configurations reuse the shared `struct fpm_agc_cfg` unchanged:
+17000 and 12000 reference level, 36- and 40-sample measurement blocks, and one
+shared `{ alpha, beta }` pair. The three MTD configurations reuse
+`struct fpm_mtd_cfg`. Nothing new had to be defined for either, which is
+itself the finding — the `v22_*` DSP blocks have their own types, but the
+`fpm_*` blocks V.22 *calls* take the shared ones.
+
+**`TONEv22_CFG` and `TONEv22INIT_CFG` are byte-identical.** Same 36 bytes,
+two names, two addresses, both file-static, so this is the author writing the
+same table twice rather than a linker artefact. `t_v22tab` asserts the
+identity on the ORIGINAL's two copies, so it is a statement about the object.
+
+Neither carries a relocation, so if they are `struct fpm_tone_cfg` — which
+their size and their name both suggest — then `src` is NULL while `len` is
+53, and `FPM_TONE_create` would copy 53 words from address zero.
+
+**The field mapping is corroborated rather than assumed.** Word for word
+against the blob's own `FPM_TONE_CFG`, whose layout this tree already
+reconstructed and tested in `src/dsp/fpm_tone_cfg.c`:
+
+| offset | field | `FPM_TONE_CFG` | `TONEv22_CFG` |
+|---|---|--:|--:|
+| +0x00 | `freq` | 2100 | 2100 |
+| +0x08 | `f08` | 328 | 328 |
+| +0x0a | `min_level` | 1 | 1 |
+| +0x10 | `src` | `ToneLPF` | **NULL** |
+| +0x14 | `len` | 53 | 53 |
+| +0x1c | `f1c` | 16384 | **40** |
+| +0x1e | `f1e` | 40 | **0** |
+
+Four fields agree exactly, which is what fixes the layout: +0x14 really is
+`len` and the NULL at +0x10 really is `src`. The `fpm_mrf` configs solve
+exactly this by having the caller copy the static onto the stack and patch the
+pointer before use. That is the natural reading and it stays a reading:
+`V22FP_create` is not reconstructed, so these stay arrays.
+
+**The tail is the same two values shifted one word earlier**, which is the
+shape a copy-and-edit slip leaves. Both fields are unread by everything
+reconstructed so far, so which is intended is not decidable yet. Recorded
+because an unrecorded observation is unrecoverable, not because it is a defect
+report.
+
+**`CRRv22_CLK` is not a sixth of a cycle.** `round(k * 32768 / 6)` reproduces
+five of its six entries and gives 27307 where the object has 27306.
+`round(k * 65535 / 12)` — `round(k * 5461.25)` — reproduces all six.
+
+That is **a fit, not a recovered design**: two parameters over six points, and
+a design would have to come from a rate. Coefficient derivations are deferred
+here by `docs/fastpass.md` and this one is not an exception to that. Both
+readings are asserted in `t_v22tab`, the second in the negative — a comment
+saying "the obvious formula is wrong" rots; a check that fails if it ever
+becomes right does not. Note that **neither check is differential**: both
+sides read the original's copy, so they are transcription guards on a
+generator and the differential tier says nothing about either.
+
+`V22DiconnectThreshTable` (the author's spelling) and the two `IIR_*_coeff`
+arrays are in `.data`, not `.rodata`, so they are declared without `const`
+here to keep the section. Nothing in the object writes any of them.
+
+### 1562. `PROTOCOL` IS FILE-STATIC TWICE OVER, SO IT HAS NO `ref_` ALIAS AND CANNOT BE COMMITTED
+
+`tools/closure.py dp_v22_init dp_v22_exit --missing` lists a 14-byte
+`PROTOCOL` in `.rodata`. There are **two** symbols of that name in the object:
+
+    .rodata 0x008c0c  r  PROTOCOL   14 bytes   { 3, 0, 1, 2, 7, 8, 5 }
+    .data   0x007768  d  PROTOCOL   18 bytes   { 0, 1, 2, 9, 6, 6, 3, 7, 8 }
+
+Both are LOCAL — the name was file-static in the original and two translation
+units used it. `symmap.py` cannot alias a name that resolves to two different
+objects, and `nm build/dsplibs_ref.o | grep -c ref_PROTOCOL` returns **0**
+where every other symbol in this closure returns 1.
+
+**So `PROTOCOL` has no oracle**, and under the rule that nothing is committed
+without a differential test, it is left out. This is not the same situation as
+`getbit` or `ApplyBulkDelay`, which finding 221's two-pass `objcopy` rescued:
+those were single file-static symbols, and the two-pass trick works on them.
+It fails here for a reason no harness change fixes, because the ambiguity is
+in the object and not in the tooling. Note the checked v22 symbols that ARE
+file-static — `TONEv22_CFG`, `TONEv22INIT_CFG`, `V22DiconnectThreshTable`,
+`iSilenceAfter2100`, `rx_in_internal` — all do have aliases, so finding 221
+is doing its job; `PROTOCOL` is the one case it cannot reach.
+
+Recovering it would need the *referrer* rather than the symbol: whichever
+V.22 function indexes `.rodata:0x8c0c` fixes which of the two is wanted, and
+its bytes can then be committed as a file-static of our own with the test
+reaching them through that function. That is work for whoever writes
+`V22FP_modem`, which is the function whose call site references the sibling
+table `V22_PROTOCOL`.
+
+**Two further symbols are deliberately left out for a different reason.**
+`rx_in_internal` (`.bss`, 320 bytes) and `iSilenceAfter2100` (`.bss`, 2 bytes)
+are zero-initialised, so a differential test on them can only assert that zero
+equals zero. Their element type is not determined by anything yet — 320 bytes
+is 160 shorts, which is exactly one `V22_IIR_BLOCK`, but that is a
+coincidence until the code that indexes it is read. Committing a guessed
+element type for no test power is the wrong-but-plausible case the contract
+forbids; they wait for `DemodDataV22`.
+
+### 1563. `make phase` DOES NOT GATE A WORKTREE, BECAUSE `third_party/spandsp` IS GITIGNORED — AND THE FAILURE LOOKS GREEN
+
+Four `make phase` runs in this worktree were read as passing. All four exited
+**2**. The whole V.22 session's first two commits were made against a gate
+that was not gating.
+
+**The mechanism.** `third_party/spandsp` is a vendored checkout and is
+gitignored, so `git worktree add` does not bring it. Without
+`third_party/spandsp/src/.libs/libspandsp.a`, two link targets fail:
+
+    make: *** [Makefile:559: build/test/t_spandsp_b103] Error 1
+    make: *** [Makefile:501: build/test/t_spandsp_v23]  Error 1
+
+**Why it reads as green.** Those two lines are in the first ten lines of
+output. Everything after them — 1,540 `PASS` lines, `offsets ... OK`,
+`64-bit clean ... OK`, `period differential: 162 passed, 0 failed` — succeeds,
+because `make` keeps going and only the two SpanDSP interop binaries need the
+library. So the tail of the log, which is what anyone actually looks at, is
+perfect. `grep -c FAIL` finds one hit and it is the long-standing
+`Psd::process`, which is present in the baseline too and is not this.
+
+**Why it survived being checked.** Every invocation was of the shape
+
+    make phase > log 2>&1; echo "exit=$?"; tail -20 log
+
+run in the background. The harness reports the exit code of the LAST command
+in the compound — `tail`, or `grep`, both of which succeed — so the completion
+notification said "exit code 0" four times over a `make` that returned 2. The
+`echo` was in the command and its output was in the log, and it was never
+read, because the notification appeared to have answered the question.
+
+**The fix**, and it touches nothing tracked:
+
+    ln -s /home/philpem/dev/sip-D-modem/claude_re/third_party/spandsp \
+          <worktree>/third_party/spandsp
+
+Reading the built `.a` from several worktrees at once is safe; nothing writes
+it. Building it per worktree also works and costs a configure and a make.
+
+**Two things follow that are worth more than the fix.**
+
+First, this is the same class of defect as finding 134's dead detector and the
+`extcheck` that printed "(none)" through four broken versions: *a check that
+cannot be observed to fire is not a check.* A `make phase` whose exit status
+is never actually read is exactly that, and it stayed invisible because the
+noisy part of its output was healthy.
+
+Second, `Makefile` already learned this lesson once for the blob —
+`BLOB ?= ../slmodemd/dsplibs.o` was made overridable and exported so that a
+worktree somewhere other than beside `slmodemd/` could build, with a comment
+saying one session serialised its whole run believing that ruled out parallel
+trees. `third_party/spandsp` is the second instance of the same shape and has
+no equivalent accommodation. The cheap improvement would be for the SpanDSP
+targets to say *"not built — if this is a worktree, symlink the main tree's
+copy"*, since "run ./configure" is the wrong advice in a worktree that has a
+built copy fifty characters away.
+
+**Verify with the exit code and nothing else:**
+
+    BLOB=/abs/path/dsplibs.o make phase; echo "PHASE_EXIT=$?"
+
+in that order, in one command, with `make` unpiped.
+
+### 1564. TEN V.22 LEAVES THAT NEEDED NO OBJECT LAYOUT, AND THE FIVE EDGES IN THEM
+
+*(Written as nine and extended to ten: `SetAdaptEqV22` was added after the
+first draft, so the original heading's count was stale.)*
+
+`V22FP_create` is 2,449 bytes and lays out the datapump instance, so the
+obvious reading is that nothing which touches that instance can be written
+before it. Nine functions disprove that: they call nothing, they touch at
+most two fields each, and the field OFFSETS are readable directly off the
+loads. They are written with `void *` parameters and named offset constants,
+exactly as `src/dsp/fpm_tone.c` treats its own 0x108-byte object, and they get
+retyped when `V22FP_create` lands.
+
+    ReadGTimer  TxNOP  RxClampV22  RxTrained1200  RxTrained2400
+    CarrierDetect  SignalDetect  GetSignalQuality  TxClockSync
+    SetAdaptEqV22
+
+**573 bytes, and five of them have an edge the obvious rewrite gets wrong.**
+
+**One: `TxNOP` and `RxClampV22` write n+1 entries.** The count is held in a
+16-bit register and tested BEFORE the decrement:
+
+    lea -0x1(%ecx),%eax      eax = n - 1
+    movswl %ax,%ecx          n   = (short)(n - 1)
+    inc %ax                  ax  = (short)n_old
+    jne                      loop while n_old != 0
+
+so `mov $0x9f,%ecx` produces **160** writes and `mov $0xb,%ecx` produces
+**12** — and both then store that same 160 or 12 into the count. The two
+readings agree on the count and disagree only on the array, by one entry, so
+`t_v22prc` checks the entry one past a naive loop's end was written and the
+one after that was not. Without that check the idiom is untested.
+
+**Two: `RxTrained1200` calls an empty array trained.** The object's first
+comparison is `0 >= n`, which jumps straight to the `i == n` test with `i`
+still zero, so `*count == 0` returns 1. "No symbols yet" reading as "training
+complete" is exactly what a rewrite quietly changes.
+
+**Three: `RxTrained2400` counts BACKWARDS and wants strictly more than seven.**
+It starts at `symbols[*count - 1]`, walks down while entries equal 15, and
+exits on a mismatch *or* on running out — both exits land on the same
+`cmp $0x7` — so eight trailing 15s pass and seven do not. The threshold is
+`> 7`, not `>= 7`, and a `for` loop written forwards gets a different answer
+on any array with 15s at the front.
+
+**Four: two arithmetic wraps, both reachable, both swept whole.**
+`GetSignalQuality` loads `0xffff8000` into a 32-bit register, subtracts the
+stored figure, and zero-extends the low half: a stored figure of 0 gives
+32768, one of 0x8000 gives 0, and anything above 0x8000 gives a LARGE answer
+rather than a negative one. `TxClockSync` multiplies a short by three and
+stores a short, so it overflows above 10922. Both are tested over all 65,536
+inputs rather than sampled, and both wraps are asserted to have actually
+occurred.
+
+**One thing the object does not settle**, recorded so a later contradiction
+reads as evidence: `TxClockSync` leaves the product in `eax`, which is what a
+`short`-returning function would also do, and there is no extension either way
+to tell `void` from `short`. Declared `void`. The store is identical under
+both readings, so nothing observable turns on it.
+
+**Five: `SetAdaptEqV22`'s three modes are not symmetrical.** Mode 3 sets
+`EQ_EXTRA` and mode 2 does not clear it, so a connection that has ever been in
+mode 3 keeps that flag for the rest of its life. `mode` is loaded with
+`movzwl`, so it is sixteen bits and unsigned: 65,533 of the 65,536 possible
+values do nothing at all, silently. `t_v22prc` sweeps the whole domain, which
+is the only way to test a function whose defining property is what it declines
+to do — sampling 1..3 would not distinguish it from a version whose `default`
+clears something.
+
+**A trap in that test, which a PASS concealed.** Its first version compared
+the receiver object with `diff_eq_obj("...", unsigned char, b.fp, a.fp, v)`.
+The macro sizes the comparison with `sizeof(type)`, so `unsigned char`
+compared exactly **one byte** of a 0x200-byte buffer and passed for every
+mode. Replaced with the three fields by name plus a whole-buffer identity
+check. The lesson generalises past this test: `diff_eq_obj` is for an object
+with a reconstructed TYPE, and reaching for a primitive to satisfy the macro
+silently shrinks the comparison to that primitive's width. Nothing warns.
+
+**The offsets, which are the durable part.** In the instance:
+`+0x50` is an `int *` shared millisecond clock (`ReadGTimer` adds 20 to it and
+returns the new value — 20 ms is 160 samples at 8 kHz, the same block
+`v22_iir.c` runs); `+0x54` is the V22FP receiver/transmitter. In the object at
+`+0x54`: `+0x78` is the transmit clock, `+0xec` the signal flag, `+0x12a` the
+baud figure that `+0x78` is three times, `+0x130` the carrier flag, `+0x186`
+the quality figure. `SetAdaptEqV22` adds three more in that same object:
+`+0x10` (int) the adapt enable, `+0x16c` (short) the mode, and `+0x180` (int)
+the flag only mode 3 writes.
+
+### 1565. THE V.22 DATAPUMP IS A CLEAN DAG, AND THIS IS THE ORDER IT HAS TO BE WRITTEN IN
+
+`closure.py --missing` says what is left; it does not say what is *reachable*
+today. Because `symmap.py` renames every defined blob symbol to `ref_*`, a
+function whose callee we have not written leaves an undefined symbol and
+**all** test binaries fail to link, not just its own — so the closure has to
+be drained leaf-first, and knowing which leaves are exposed is the whole
+scheduling problem.
+
+Intersecting each unwritten function's outgoing `R_386_PC32` targets with the
+unwritten set answers it exactly. Measured on this branch at `3ec7899`, with
+`v22_iir`, `v22rxtab` and `v22prc` landed and the four parallel branches not
+yet merged:
+
+**Writable today — 25 functions, 5,524 bytes.** Their only dependencies are
+already reconstructed:
+
+    V22_PPS_filter  V22_MRF_filter  V22_FSE_init  V22_PPS_init  V22_MRF_init
+    V22_FSE_free  V22_PPS_free  V22_MRF_free  V22_SRE_free
+    FPM_SMC_encoder  FPM_SMC_init  FPM_SDM_scrambler  FPM_SDM_descrambler
+    FPM_SDM_init  FPM_TONE_generate2
+    Detect_v22  Detect_Retrain  Detect_Rmloop2_ACK  Detect_1s
+    SetAdaptEqV22  MakeTxData  V22_status  V22FP_modem
+    dp_v22_init  dp_v22_exit
+
+Four of them — `Detect_Retrain`, `Detect_Rmloop2_ACK`, `Detect_1s`,
+`SetAdaptEqV22`, 791 bytes — have **no relocations at all**: they call
+nothing and reference no data. `FPM_SMC_*` and `FPM_SDM_*` are the same.
+
+**The shape of what is blocked.** The dependency graph is a DAG four deep and
+it bottoms out fast:
+
+    tier 0  the tables, and the call-free leaves above
+    tier 1  FPM_atan -> FPM_atan_table
+            V22_SRE_init -> SREv22_COFFS
+            FSEv22_decision12/24 -> DECv22_* and SMCv22_*
+            ScrambleDataV22 -> FPM_SDM_scrambler
+            ModDataV22 -> FPM_SMC_encoder, V22_PPS_filter
+    tier 2  V22_SRE_recover, V22_FSE_receive -> FPM_atan
+            SetRxRate -> FSEv22_decision12/24
+            ResetRx -> V22_FSE_init, V22_SRE_init
+            V22FP_create -> the whole of tier 0 and 1
+            V22FP_delete -> the four _free functions
+    tier 3  DemodDataV22 -> V22_FSE_receive, V22_MRF_filter, V22_SRE_recover
+            v22_create -> V22FP_create;  v22_delete -> V22FP_delete
+    tier 4  the eight state functions -- v22_data, connect_1200, connect_2400,
+            v22_retrain, v22_org_rmloop2, v22_ans_rmloop2, v22_local_loop,
+            v22_answer, v22_originate -- 13,301 bytes, every one of which
+            needs DemodDataV22 and the Set*Rate pair
+            v22_process -> V22FP_modem
+
+**Nothing in V.22 is deep.** The longest chain is five links and the widest
+fan-in is `V22FP_create`'s eighteen. There is no `v34handshak` here — the
+largest single function is 2,655 bytes — so the phase is bounded by the
+number of functions, not by the size of any one of them, which is the shape
+that parallelises well. `V22_PROTOCOL`'s seven function pointers are the eight
+state functions minus one, so that table lands last, with them.
+
+**The one thing this measurement cannot see** is a call the original inlined,
+and a data reference that closure counts but no path takes. It is a link-time
+lower bound on what must exist, not a claim about run-time reachability.
+
+The script that produces this is eight lines of `readelf -rW` intersected with
+`closure.py --missing` output; it is worth re-running rather than trusting
+this list, because every landed function moves items from the second list to
+the first.
+### 1500. `FPM_atan` RETURNS NOTHING, AND ITS TABLE IS THE ONE IN THIS LAYER THAT ROUNDS
+
+*Task: `fpm_atan.c`. Closed — `FPM_atan` .text 0x0a6a50, 409 bytes, and
+`FPM_atan_table` .rodata 0x00c9a0, 514 bytes.*
+
+**THE SIGNATURE IS `void FPM_atan(short y, short x, short *angle)`.** The
+hand-over into this session described it as `short FPM_atan(...)`, and it is
+not. All five exits converge on the same three instructions — load the third
+argument from `0x38(%esp)`, store a 16-bit value through it, return — and
+`%eax` holds a different leftover on each: the sign mask `(y<0)?0x4000:0` on
+the `x == 0` path, `x` itself on the `y == 0` path, the `0x145f` product on
+the general path. GCC 3.4.2 at `-O2` sets `%eax` on every exit of a function
+that returns one. There are three arguments, at `0x30`, `0x34` and `0x38`
+after a bare `sub $0x2c,%esp` with no pushes.
+
+**THE ARGUMENT ORDER IS atan2's, `y` FIRST.** Settled by the degenerate
+branches, not by convention: when the *second* argument is zero the answer is
+`0x2000 + ((first < 0) ? 0x4000 : 0)`, i.e. ±90°, so the second argument is
+`x`; when the *first* is zero the answer is `(second < 0) ? 0x4000 : 0`, i.e.
+0° or 180°. `FPM_atan(0, 0)` falls out of the first branch as `0x2000` rather
+than being special-cased.
+
+**UNITS.** fpm_phasor.c's: a full turn is `0x8000`, so `0x2000` is 90° and
+`0x1000` is 45°, anticlockwise from the positive x axis. The whole circle
+therefore fits a signed short with exactly one unit to spare, which is what
+1502 is about.
+
+**METHOD: OCTANT REDUCTION OVER `FPM_div`.** The smaller magnitude is divided
+by the larger, so the ratio is always in [0,1] and one eighth of a table
+serves the circle:
+
+    FPM_div(max, &recip, &shift);
+    ratio = (unsigned short)(((recip * min) >> 15) << shift);
+
+`recip` is `2^30 / (max << shift)`, so the whole expression is
+`32768 * min / max` — the ratio in Q15. The magnitudes are taken in 32 bits
+and then truncated to 16 (`cltd`/`xor`/`sub`/`movzwl`), so `|-32768|` is
+**32768** and not the −32768 a 16-bit negate would give, and every comparison
+on them is unsigned.
+
+**TABLE DERIVATION, EXACT ON ALL 257 ENTRIES:**
+
+    FPM_atan_table[i] = round(32768 * atan(i / 256))
+
+**ROUNDED, NOT TRUNCATED — and that is the point of recording it**, because it
+is the opposite of every neighbouring table. fpm_phasor.c's sine and cosine
+truncate (its own header says so), and so does fpm_div.c's reciprocal.
+Truncation here misses **147 of the 257** entries; rounding misses none. Entry
+256 is 25736 where `trunc(32768*atan(1))` is 25735.
+
+So the table holds atan in Q15 **radians**, and the `imul $0x145f` that
+follows converts to the phase unit: `32768 / (2*pi) = 5215.19`, truncated to
+5215 = `0x145f`. The `lea 0x4000(%eax)` before the `sar $0xf` rounds that
+product.
+
+**`FPM_atan_table` IS GLOBAL** — `nm` shows `R`, not `r`, and the relocation at
+`0x0a6b1e` names the symbol rather than `.rodata` + addend. So it is not a
+file static, and the reconstruction keeps it global, which also lets
+`t_fpm_atan` compare all 257 words against the blob's own copy through
+`ref_FPM_atan_table` rather than only against the closed form.
+
+**`fpm_atan.c` HOLDS THIS ONE FUNCTION.** docs/attribution.md brackets the
+translation unit as 0x0a6a50 - 0x0a6a50, and the only outbound relocations in
+the range are the two `FPM_div` calls and the one table reference.
+
+### 1501. `FPM_atan`'s LINEAR SHORTCUT IS OFF BY ONE: A RATIO OF EXACTLY 127 GIVES AN ANGLE OF ZERO
+
+*Task: `fpm_atan.c`. Reproduced, not repaired. Wants a `D` number from
+whoever next edits docs/deviations.md; not claimed here because deviation IDs
+are allocated globally and this session holds finding numbers only.*
+
+For small ratios `atan(r) ~= r`, so the code skips the table:
+
+    cmp    $0x7e,%ax
+    movswl %ax,%edx
+    jbe    <use the ratio itself as the Q15 radian value>
+    shr    $0x7,%eax
+    movswl FPM_atan_table(,%eax,2),%edx
+
+The index is `ratio >> 7`, so **entry 0 covers ratios 0..127** — and entry 0
+is **0**. The shortcut covers 0..126. A ratio of exactly 127 therefore falls
+through to the table and yields an angle of **0**, where 126 yields 20 and 128
+yields 20 again. A single-point notch to zero in the middle of a monotone
+curve.
+
+Had the compare been `0x7f` the shortcut would have covered the whole of entry
+0's range and there would be no discontinuity at all, which is why this reads
+as an off-by-one rather than as a design. It is reproduced: `t_fpm_atan`
+sweeps every pair inside a 401×401 box around the origin, which is where the
+shortcut lives, and 4.47 M differential checks pass against the blob.
+
+**REACHABILITY IS EXACTLY FOUR INPUT PAIRS, AND THE REASON IS WORTH MORE THAN
+THE DEFECT.** (This paragraph corrects the first version of this finding,
+which called it "one value out of 32769" and left reachability unmeasured.
+That was wrong, and wrong in a way that mattered: the same misunderstanding
+had already killed a whole section of the test — see 1502.)
+
+The ratio is `q << shift`, so it is **even whenever `shift >= 1`**. `shift` is
+zero only when the larger magnitude is normalised already, top bit set as a
+16-bit value, and magnitudes cap at 32768 — so `shift == 0` requires the
+larger magnitude to be exactly **32768**, which requires an argument of
+exactly **−32768**. There `recip` is `fpm_div_table[0]` = 32768 and the ratio
+is the smaller magnitude itself.
+
+So every odd ratio, this notch included, is reachable only through a −32768
+argument, and the notch fires on exactly four pairs: `FPM_atan(-32768, ±127)`
+and `FPM_atan(±127, -32768)`. `FPM_atan(-32768, 127)` returns `0x6000` where
+the true angle is about `0x6014` — 20 phase units, 0.22°. Small, but it is a
+discontinuity in a timing-recovery loop's error term, which is the sort of
+thing that matters more than its size suggests. The callers are
+`FPM_FSE_receive`, `FPM_SRE_recover` and the V.32 status path
+(docs/deviations.md); whether any of them ever presents a full-negative-scale
+component is not measured.
+
+### 1502. `FPM_atan`'s WRAP-THROUGH-ZERO OCTANT IS ONE UNIT LOW — AND 257 ENTRIES IS EXACTLY ENOUGH, NOT ONE MORE
+
+*Task: `fpm_atan.c`. Both halves reproduced; the second half is the good news.*
+
+**THE OCTANT.** Seven of the eight folds use exact bases — `0x2000 ±`,
+`0x4000 ±`, `0x6000 ±`, and the bare angle. The eighth, `x > 0` with `y < 0`
+and `|x| > |y|`, is the only one whose base would have to be `0x8000`, and
+`0x8000` is not a positive short. The original uses **`0x7fff`**:
+
+    a6b4a: mov $0x7fff,%ebx
+    a6b4f: sub %ecx,%ebx
+
+so every angle in that eighth of the circle is one unit less than the other
+seven octants' convention gives. `FPM_atan(-1, 32767)` is `0x7fff`, not
+`0x8000` and not `0`. Reproduced verbatim; the alternative would have been to
+wrap to a negative short, which changes the type of the answer.
+
+**THE TABLE IS EXACTLY LONG ENOUGH.** The index is `ratio >> 7` and the ratio
+is nominally `32768 * min / max`, capped at 32768 — but `FPM_div` buckets its
+mantissa to the nearest 256 and can round it *down*, which makes the
+reciprocal a shade large and pushes the ratio past 32768. The largest value
+reachable is **32894**, at `max == min == 16447`, and `32894 >> 7` is **256**:
+the last entry, and not one past it. Established by sweeping all 32768 values
+of `max` with `min` equal to it, which is where the ratio is maximal because
+it is monotonic in `min`.
+
+So there is **no out-of-range read here**, unlike `FPM_sqrt` (D1) and
+`FPM_div` (D4), whose tables are each one entry short of what their own index
+expression produces. Same author, same era, third outcome — and the margin is
+one entry, so this was either checked or lucky.
+
+**WHAT INHERITING D4 DOES TO AN ANGLE.** `FPM_atan` divides through `FPM_div`,
+so about one denominator in 256 — 255 of them — normalises to a mantissa of
+`0xff80` or above and reads `FPM_div`'s 129th entry, which the blob takes from
+`FPM_xor_table[0]` (zero) and our fixed build takes as 16384. 32767 is such a
+denominator, and so are 511, 1023, 2047 and 32766. In the blob, whenever
+`max(|y|, |x|)` is one of them the reciprocal is zero, so the ratio is zero
+and **the angle snaps to the octant base** — the nearest axis or 45° line.
+`FPM_atan(y, 32767, *)` returns 0 or 0x7fff for every `y` but three: at
+`y = ±32767` the magnitudes are equal, so the fold takes the other branch and
+the answer snaps to `0x2000` or `0x6000` instead — still an octant base — and
+at `y = -32768` the magnitude 32768 becomes the larger, `FPM_div` is asked
+about *that* instead, and a real angle comes out. Measured, not reasoned: over
+all 65536 values of `y` the ratio takes exactly two values, 0 and 32767. Same
+defect class
+as the one that silences an AGC block and drops a Bell 103 call (finding 40),
+now in a timing-recovery error term; the non-REPRODUCE build gets it right.
+
+`t_fpm_atan` therefore *requires* `-DDSPLIB_REPRODUCE_BUGS` and says so with an
+`#error`, the same guard `t_fpm_div` carries. Without it the test fails on
+inputs that are not wrong.
+
+**AND IT KILLED A WHOLE TEST SECTION BEFORE ANYONE NOTICED.** The first
+version of `t_fpm_atan`'s "table index sweep" pinned the larger magnitude at
+32767, on the reasoning that the widest denominator gives the widest sweep of
+the ratio. It gives the narrowest: `recip` is zero, so all 98304 pairs had a
+ratio of zero, all took the linear shortcut, and the section never read the
+table at all while reporting PASS. It now pins at **16384**, which normalises
+to `0x8000` with a shift of one, so `recip` is exactly 32768 and the ratio is
+exactly twice the smaller magnitude — sweeping that over 0..16384 walks the
+index over all 257 entries. A second loop with an argument of −32768 covers
+the odd ratios, which nothing else can reach (1501).
+
+**AND THE REPLACEMENT HAD TO BE SHOWN TO FIRE**, per finding 134, because a
+section that compares nothing is exactly what had just been found. Perturbing
+one table entry by **+1** does *not* fail it: `0x145f / 32768` is 0.159, so a
+single-LSB change to a table entry is absorbed by the rounding of the
+conversion to phase units and the angle is unchanged — the entry is caught
+only by the word-for-word comparison against `ref_FPM_atan_table`. Perturbing
+by +8 moves the angle and the sweep fails. Worth knowing in its own right:
+**the table carries about three bits more precision than the output uses**, so
+a differential test on `FPM_atan` alone can never pin the table exactly, and
+the direct comparison against the blob's copy is not redundant with it.
+
+### 1503. `FPM_TONE_generate2` IS THE QUADRATURE PAIR OF ONE OSCILLATOR, NOT A SECOND TONE
+
+*Task: `fpm_tone.c`. Closed — .text 0x0aae30, 148 bytes.*
+
+The name and the surrounding module both suggest a two-tone generator, and the
+brief that opened this work said so. **It is not.** The signature is
+
+    short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
+                             short *sin_out, short count)
+
+— four arguments, two output buffers, and one oscillator between them. Per
+sample it calls `FPM_phasor` once and writes `(cfg.scale * p.cos) >> 14` to
+the first buffer and `(cfg.scale * p.sin) >> 14` to the second. The object
+still carries a single frequency, a single phase and a single increment, and
+only `phase` (+0x24) is written back.
+
+That places it between the two generators already reconstructed rather than
+beside them: `FPM_TONE_generate` takes the sine, `FPM_TONE_generate_demod`
+takes the cosine, this one takes both. Like `_generate_demod` and unlike
+`_generate` it does **no phase-reversal bookkeeping at all**, and it returns
+`count`. `t_fpm_tone` proves the identity directly — from one starting state,
+generate2's cosine half is `_generate_demod`'s output sample for sample, its
+sine half is `_generate`'s, and all three leave the accumulator at the same
+phase, which is what rules out the naive implementation that calls the phasor
+twice per sample.
+
+**TWO THINGS THE DISASSEMBLY SAYS THAT A READER WOULD NOT GUESS.**
+
+`state->cfg.scale` is re-loaded from the object for *each* of the two
+multiplies — two `movswl 0x2(%ebp)` in one iteration, either side of the
+16-bit store the compiler had to assume might alias it. Written the same way,
+so a caller whose output buffer overlaps the object sees what the original
+does.
+
+The counter is 16-bit and the loop tests `!= -1`, not `> 0`:
+
+    dec %eax ; movswl %ax,%edi ; inc %ax ; je exit
+    ... ; lea -0x1(%edi),%eax ; movswl %ax,%edi ; inc %ax ; jne loop
+
+so a count of 0 writes nothing and a count of **−1 writes 65535 samples to
+each buffer**. This is the only input that can tell the real loop apart from
+`for (i = 0; i < count; i++)` — every non-negative count agrees — so
+`t_fpm_tone` runs it, against 65600-word buffers sized to survive the loop
+being misread as well as read correctly. Same hazard as `FPM_TONE_detect` and
+`FPM_TONE_generate_demod`, and now the only one of the three with a test that
+would catch a regression.
+
+### 1504. TWO COMMIT MESSAGES IN THIS BRANCH SAY "make phase GREEN" AND IT WAS NOT — THE EXIT CODE WAS CAPTURED AND NEVER READ
+
+*Task: `fpm_atan.c` / `fpm_tone.c`. A correction to commits `9b82992` and
+`5cb4ff6`, left in history rather than amended, because this file's own rule
+is to append and not to renumber and the same applies to the log.*
+
+Both messages end "make phase green, period differential 161/161." The second
+half was true and verified. **The first half was not.** Both runs exited
+non-zero, and the log says so plainly:
+
+    make: *** [Makefile:559: build/test/t_spandsp_b103] Error 1
+
+at line 2016 of the first run's log and line 1653 of the second's.
+
+**THE ENVIRONMENTAL CAUSE, which a parallel session diagnosed and fixed.**
+`third_party/spandsp` is gitignored, so `git worktree add` does not bring it
+along, and without it `t_spandsp_b103` and `t_spandsp_v23` fail to *link*.
+Those two errors land in the first few hundred lines, thousands of lines above
+the PASS summary and the `period differential:` line, so **the tail of the log
+looks perfectly green while make exits 2**. A symlink to the main tree's built
+copy closes it; the path stays gitignored and nothing tracked changes.
+
+**THE PROCEDURAL CAUSE, which is mine and is the more useful half.** The
+command did put `; echo "PHASE_EXIT=$?"` immediately after the make. But the
+make's output was redirected to a log file and the echo went to the terminal,
+and every subsequent inspection was `grep`/`tail` **of the log** — so the exit
+code was correctly captured and then never looked at. Capturing the number is
+not the same as reading it, and a redirect is enough to separate the two.
+Belongs beside the trap this file already records about piping make into grep.
+
+**A THIRD WORKTREE TRAP, found on the way and not previously recorded.**
+`make`'s `strings` target runs `tools/debugaudit.py --invented`, which locates
+the blob as `os.environ.get("BLOB", "../slmodemd/dsplibs.o")`. Inside a
+worktree under `.claude/worktrees/` that relative default resolves to nothing
+and the target dies with
+
+    objdump: '../slmodemd/dsplibs.o': No such file
+    INVENTED STRING: the lines above are in src/ and not in the blob
+
+which reads as a source defect and is not one. It fires only when `BLOB` is a
+*shell* variable rather than an exported one: `BLOB=... && make ...` sets a
+shell variable that make never sees, while `BLOB=... make ...` and
+`export BLOB` both work. The message names neither the variable nor the
+worktree, so it is worth knowing before meeting it.
+
+**WHAT IS NOW VERIFIED, verbatim.** From the worktree, with the symlink in
+place and serialised behind the shared build lock a parallel session asked for:
+
+    export BLOB=/home/philpem/dev/sip-D-modem/slmodemd/dsplibs.o
+    flock /tmp/claude_re_build.lock make phase > /tmp/v22a_phase3.log 2>&1
+    echo "PHASE_EXIT=$?"           ->   PHASE_EXIT=0
+
+with `period differential: 161 passed, 0 failed`, `64-bit clean, both
+configurations: OK`, `5007 references checked, 0 resolve to nothing`, and no
+`Error`, `undefined reference` or `FAILED TO COMPILE` line anywhere in the log.
+### 1520. THE V.22bis SCRAMBLER IS WORD-PARALLEL, AND THAT IS WHY ITS TAPS ARE STORED BIASED
+
+`fpm_sdm.c` is three functions and 399 bytes, and every one of the object's
+oddities follows from one decision: it scrambles a whole symbol's worth of
+bits per iteration rather than one bit.
+
+`SDMv22_CFG` is `{4, 14, 17}` -- four bits per word, taps at 14 and 17, which
+is ITU-T V.22bis section 2.5's calling-modem generating polynomial
+`1 + x^-14 + x^-17`. Those numbers appear nowhere in the object at run time.
+What `FPM_SDM_init` stores is `tap - nbits`: `+0x14 = 10` and `+0x16 = 13`.
+
+The bias is forced by the parallelism. Number the stream bits in
+transmission order; the register holds them so that
+
+    reg bit p  ==  b[n * nbits - 1 - p]
+
+-- bit 0 the most recent, and each word's own bits reversed within the low
+`nbits`, so a word's MSB is the EARLIEST of its bits in time. Substituting
+that into `out[k] = in[k] ^ out[k-t1] ^ out[k-t2]` gives every output bit of
+the word at once as
+
+    (reg >> (t1 - nbits)) ^ word ^ (reg >> (t2 - nbits))
+
+masked to `nbits`. Hence three shifts, two XORs and no per-bit loop -- and
+hence the implementation's only constraint, `tap >= nbits`: a tap shorter
+than a word would need a bit of the word being formed.
+
+**The register is 32 bits and is never truncated to the polynomial's length.**
+Bits shifted past 31 are simply lost, which is harmless because nothing above
+bit `tap2 - 1` is ever read. `notmask` (`+0x0c`, `~mask`) is computed, stored
+and applied to `reg << nbits` -- where it is a *no-op*, the shift having
+already cleared those bits. Reproduced because the object does it.
+
+The descrambler is the feed-forward inverse and takes the RECEIVED word into
+the register, not the one it produced. It takes it **whole and
+zero-extended**, without the mask: a word carrying rubbish above `nbits`
+corrupts the register for `ceil(tap2 / nbits)` symbols. That is the one place
+in either function where the data pointer's signedness is forced rather than
+free -- `movzwl` at `0xa9b1e` feeding `or %eax,%esi` -- so the buffers are
+`unsigned short *`, and `t_fpm_sdm` drives words with bit 15 set specifically
+to pin it.
+
+There is no reset entry point and no resync branch: self-synchronisation is
+the feed-forward property alone, and clearing the register means re-running
+`FPM_SDM_init`. `t_fpm_sdm` proves both -- a deliberately wrong register
+tracks the blob step for step and produces the original plaintext from word
+`ceil(tap2/nbits)` onward.
+
+`SDM_scrambler`/`SDM_descrambler`/`SDM_init` at `0x9f150` are a second,
+separate copy of this module with its own `SDM_CFG` in `.data`; not touched
+here.
+
+### 1521. THE SYMBOL CODER IS A QUADRANT ACCUMULATOR WITH A CARRIER ROTATION V.22 DOES NOT USE
+
+`FPM_SMC_encoder` (367 bytes) turns scrambled data words into constellation
+indices. Per word:
+
+    quadrant = (quadrant + pmap[(word >> qshift) & qmask]) & pmask
+    index    = quadrant | (word & amask)
+    out[widx] = (acc + index) wrapped at rot_mod
+    acc      = (acc + rot_step) wrapped at rot_mod
+    widx     = (widx + 1 < len) ? widx + 1 : 0
+
+That is V.22bis section 2.4 exactly: the first dibit selects a quadrant
+*change*, the rest select a point inside it. `SMCv22_PMAP`'s entries are
+multiples of four, so the quadrant lands in bits 2..3 and the amplitude bits
+in 0..1 of a four-bit index into the 16-entry I/Q maps -- **which this TU
+never reads**. It only ever produces the index.
+
+Four things are decidable only from configurations V.22 does not build, and
+`t_fpm_smc` builds them:
+
+- `+0x04` non-zero takes the quadrant straight from the word instead of
+  accumulating (`if (obj->direct)`, hoisted out of the loop at `0xa9cd3`).
+  `SMCv22_CFG` sets it to 0.
+- **Both wraps are a single conditional subtract, not a modulo.** An index at
+  or above `2 * rot_mod` comes out unreduced. `%` agrees with the object over
+  every value V.22 can produce and disagrees outside it.
+- `rot_mod` is loaded with `movswl`, so the test is signed and a negative
+  modulus makes it always true.
+- The quadrant is masked as a 32-bit value and truncated to a `short` only for
+  the *next* symbol; the index is formed from the untruncated one, so the two
+  disagree above bit 15.
+
+The write index wraps on `widx + 1 < len` tested AFTER the store, so a `widx`
+seeded at or past `len` puts one symbol out of range and snaps to 0 for the
+next -- one write past the end, not a run of them.
+
+`SMCv22_CFG` leaves the rotation inert: `rot_step` is 0, so `acc` never moves
+from whatever `FPM_SMC_init` left (0), and `rot_mod` of 16 only wraps the sum.
+The mechanism exists for a modulator whose carrier advances a whole number of
+constellation steps per symbol.
+
+`FPM_SMC_init` is `cld; rep movsl` with `ecx = 11` -- a 44-byte struct
+assignment -- followed by two 16-bit zero stores, which is what fixes the
+object at 0x30 bytes with `quad` at `+0x2c` and `acc` at `+0x2e`.
+
+### 1522. WHAT SELECTS THE 2400 bit/s MAPS: `SetTxRate`, AND IT PATCHES THE OTHER OBJECT
+
+`SMCv22_CFG` names `SMCv22_IMAP_1200BPS` and `SMCv22_QMAP_1200BPS` and there
+is no relocation anywhere pointing a config at the 2400 pair. The switch is
+`SetTxRate` at `.text 0x08e120`, 205 bytes, `SetTxRate(modem, rate)` with
+`rate` 0 for 1200 bit/s and 1 for 2400 and an early `ret` for anything else.
+It reaches the V.22 state block through `modem->0x54` and writes, at 1200 /
+2400 respectively:
+
+    v22+0x28  0  / -        rate flag V22FP_create reads back
+    v22+0x30  2  / 4        SDM tx object +0x00, nbits
+    v22+0x38  3  / 15       SDM tx object +0x08, mask
+    v22+0x3c  -4 / -16      SDM tx object +0x0c, notmask
+    v22+0x40  0  / 0        SDM tx object +0x10, register cleared
+    v22+0x44  tap1 - nbits  SDM tx object +0x14
+    v22+0x46  tap2 - nbits  SDM tx object +0x16
+    v22+0x54  0  / 2        SMC object +0x0c, qshift
+    v22+0x58  0  / 3        SMC object +0x10, amask
+    v22+0x98  IMAP_1200 / IMAP_2400     PPS filter object +0x20
+    v22+0x9c  QMAP_1200 / QMAP_2400     PPS filter object +0x24
+
+The object bases are read off the callers: `ScrambleDataV22` passes
+`v22+0x30`, `DescrambleDataV22` passes `v22+0x1cc`, `ModDataV22` passes
+`v22+0x48` to `FPM_SMC_encoder` and `v22+0x78` to `V22_PPS_filter`, both with
+`v22+0xa0` as the shared symbol ring. So `0x98`/`0x9c` are `PPS+0x20`/`+0x24`,
+which `V22_PPS_filter` loads in its prologue at `0x8d3de`/`0x8d3e8`.
+
+**The point worth recording is which object does NOT get patched.** The SMC
+object's own `imap`/`qmap` at `smc+0x18`/`+0x1c`, filled from `SMCv22_CFG` by
+`FPM_SMC_init`, stay on the 1200 bit/s pair for the life of the connection
+whatever the rate. Nothing reads them; the pulse-shaping filter keeps its own
+copy of the pointers and that is the copy the rate switch moves.
+
+`SetTxRate` also *inlines* `FPM_SDM_init`'s arithmetic -- it recomputes mask,
+notmask and both biased shifts from the new `nbits` rather than calling init
+-- which is an independent confirmation of the `struct fpm_sdm` layout in
+1520, arrived at from a different function.
+
+The 1200/2400 split for the scrambler is made once more, elsewhere:
+`V22FP_create+0x3ca..+0x411` copies `SDMv22_CFG` onto the stack (as
+dword-plus-word, which is what says the config is a 6-byte struct and not
+three scalars), overwrites `nbits` with 2 or 4 according to `v22->0x28`, and
+calls `FPM_SDM_init`. The taps are the only part of `SDMv22_CFG` that never
+varies.
+
+### 1523. THE V.22 TRANSMIT MAPS ARE V.22bis TABLES 1 AND 2 SCALED BY 8192
+
+Every coordinate in the four I/Q maps is 8192 or 24576, signed -- 1 and 3 in
+units of 8192, which is ITU-T V.22bis Table 2's odd coordinates verbatim.
+Read as (I, Q) pairs the 2400 bit/s maps are
+
+    index 0..3    (1,1) (3,1) (1,3) (3,3)              first quadrant
+    index 4..7    (-1,1) (-1,3) (-3,1) (-3,3)          each group the
+    index 8..11   (-1,-1) (-3,-1) (-1,-3) (-3,-3)      previous one turned
+    index 12..15  (1,-1) (1,-3) (3,-1) (3,-3)          90 degrees
+
+so `(I, Q) -> (-Q, I)` holds across every group of four, which `t_fpm_smc`
+asserts as a property rather than as bytes.
+
+The 1200 bit/s maps carry `(3,1)` and its three rotations, **each replicated
+four times**. That is not redundancy: at 1200 bit/s `amask` is 0, so bits 0..1
+of the index are always clear and only 0, 4, 8 and 12 are ever formed. The
+replication lets one 16-entry table serve an index that steps in fours and one
+that does not, and it is why the same map shape works for both rates.
+
+`SMCv22_PMAP` is `{4, 0, 8, 12}` -- V.22bis Table 1, dibit to quadrant change,
+in the same quarter-quadrant units: 00 -> +90, 01 -> 0, 10 -> +180,
+11 -> +270 degrees.
+
+The closed form of the 8192 scale is deferred with every other coefficient
+derivation; `t_fpm_smc` proves the bytes.
+
+### 1524. `relocscan.py` CALLS A REFERENCED OBJECT "unreferenced" WHEN THE RELOCATION NAMES A SYMBOL
+
+`relocscan.py --into SMCv22` reports all six `SMCv22_*` objects as
+`unreferenced`, and `--at .rodata:0x8de0` reports "(nothing points there)" for
+`SMCv22_PMAP`. Both are wrong: `readelf -rW` shows twenty-four relocations
+naming those six objects, three of them from inside `SMCv22_CFG` itself.
+
+The cause is the filter at line 67 of the tool -- it keeps only relocations
+**against a section symbol**, because resolving a section-plus-addend to a
+name is the problem it was written for (finding 604). A relocation against a
+GLOBAL symbol already carries the name and is discarded, so every reference to
+a global becomes invisible. `dsplibs.o` has 10,514 `R_386_32` relocations of
+which 6,794 are against a section symbol; the other 3,720 are the blind spot.
+
+This is finding 134's argument again, and the same shape as the four broken
+versions of `extcheck` that printed "(none)": the tool has no way to say "I do
+not model this kind of reference", so absence of evidence prints as evidence
+of absence. **Nothing may conclude "unreferenced" from `relocscan` alone.**
+Cross-check with `readelf -rW | grep <name>` before believing it.
+
+Not fixed here: the tool is used by other sessions in flight and a behaviour
+change to it belongs in its own commit.
+
+### 1525. A `*/` INSIDE A COMMENT, AND THE GATE THAT CAUGHT IT
+
+`include/dsplib/fpm_smc.h` opened with a paragraph naming the four maps as
+`SMCv22_IMAP_*/SMCv22_QMAP_*`. The `*/` in the middle of that closed the
+block comment, so the rest of the paragraph became declarations and the header
+did not compile -- and the way it surfaced is worth recording, because it was
+not as a compile error.
+
+`make one` failed at `offsets`, two lines:
+
+      MISMATCH  struct fpm_smc.quad says +0x2c
+      MISMATCH  struct fpm_smc.acc says +0x2e
+
+which reads exactly like a struct laid out wrong, and sent the first minute of
+diagnosis at the config's size rather than at a comment. `offcheck.py`
+compiles a generated translation unit that includes every header; a header
+that does not parse produces mismatches, not a build failure, because the tool
+reports what it could not confirm rather than what it could not compile.
+
+Two things follow. The annotation gate is load-bearing beyond its stated job:
+it is the only check in the tree that reads every header for meaning rather
+than for symbols. And a `MISMATCH` from it means "this claim is unconfirmed",
+which includes "the header is not valid C" -- so `gcc -m32 -Iinclude
+-fsyntax-only` on the header itself is the first thing to try, not the last.
+
+### 1566. `relocscan.py --into` UNDER-REPORTS: IT ONLY SEES SECTION-SYMBOL RELOCATIONS
+
+`tools/relocscan.py --into <pattern>` prints `unreferenced` for any object
+that is referenced through a **global** symbol, because it resolves only the
+section-symbol form. That is half the relocations in the object: the header
+itself says "10514 R_386_32 relocations, 6794 against a section symbol", so
+3,720 are named and invisible to `--into`.
+
+It fired twice in one session and was dismissed once:
+
+- `relocscan --into IIR_` reported `IIR_a_coeff … unreferenced` and
+  `IIR_b_coeff … unreferenced`. `tools/dis.py` on `V22FP_create +0x858`
+  shows `mov $0x0,%ebx <== R_386_32 IIR_a_coeff` and the same for `_b`, two
+  instructions before the call that consumes them. The disassembly was
+  believed and the tool's answer set aside as not mattering.
+- A parallel session hit it on all six `SMCv22_*` objects, which read as
+  `unreferenced` while `readelf -rW` names them in 24 relocations.
+
+**It does matter, and the reason is what makes this worth a number.** The
+same tool was used to certify that ten V.22 SRE tables carry *no* relocations,
+and that certification was passed to another session as established fact. For
+plain coefficient arrays the conclusion is almost certainly right — but it was
+stronger than the tool supports, and "I ran relocscan over all ten" is exactly
+the sentence that turns a partly-dead detector into a false record.
+
+**The rule this implies.** `--into` answers "which SECTION-relative
+relocations land in this object". To ask "does anything reference this at
+all", use `readelf -rW` and match the symbol name column as well. `--at` and
+`--range` are unaffected; it is `--into`'s direction that is partial.
+
+The tool is deliberately left unchanged for now, because parallel sessions are
+using it and a mid-flight change to shared tooling is worse than a documented
+limit. Whoever next needs it should widen it and re-run the claims above.
+This is finding 134's argument again: a detector that has not been shown to
+fire on a case it should catch is not a detector, and `--into` has now been
+shown NOT to fire on two.
+
+### 1567. `make strings` DIES IN A WORKTREE WITH AN ERROR THAT NAMES A SOURCE DEFECT
+
+`tools/debugaudit.py` finds the blob with
+`os.environ.get("BLOB", "../slmodemd/dsplibs.o")`. Under
+`.claude/worktrees/<name>/` that relative default resolves to nothing, so
+`make strings` reports
+
+    INVENTED STRING: the lines above are in src/ and not in the blob
+
+which reads as a defect in the reconstruction and is not one — it is an empty
+blob compared against a populated `src/`.
+
+**It only fires when `BLOB` is a SHELL variable rather than an exported one.**
+`BLOB=... make phase` and `export BLOB=...; make phase` both work, because the
+Makefile exports `BLOB` to its recipes. `BLOB=... && make phase` sets a
+variable `make` never sees, and that is the form that fails. The message names
+neither the variable nor the worktree, so the natural response is to go
+looking in `src/` for a string that is not there.
+
+Same family as finding 1563: the Makefile was already taught that a worktree
+may sit somewhere other than beside `slmodemd/` — `BLOB ?=` is overridable and
+exported precisely for that — but the tools it invokes each carry their own
+copy of the relative default, and each one is a separate place for the
+accommodation to be incomplete. `debugaudit.py` and `coverage.py` were fixed;
+this is the failure mode when the export does not happen.
+======================================================================
+
+### 1540. `V22_MRF` IS NOT `FPM_MRF`: THE SAME FOUR STATE WORDS, EIGHT BYTES EARLIER
+
+*Phase 6 (V.22/V.22bis), `v22_mrf.c` — the author's translation-unit name,
+recovered from the FILE symbol at index 480. Written, tested and committed as
+`src/pump/v22/v22_mrf.c`.*
+
+The tree already had `struct fpm_mrf`, and the two look alike enough to be
+worth settling before a line was written: `need`, `phase`, `widx`,
+`history_len`, `history` in that order in both, `_init`/`_free`/`_filter` in
+both, a polyphase resampler in both. **They are different types**, and sharing
+one would have mis-offset every field by eight bytes.
+
+The evidence is the configuration in front of the state words.
+`V22_MRF_init` (0x8d060) copies exactly two dwords —
+
+	8d080: mov 0x4(%esi),%edx        8d08d: mov %edx,0x4(%edi)
+	8d083: mov (%esi),%ecx           8d090: mov %ecx,(%edi)
+
+— and then writes `need` to +0x08 and `history_len` to +0x0e, where
+`FPM_MRF_init` copies sixteen bytes and writes them to +0x10 and +0x16.
+`V22_MRF_free` (0x8d150) frees +0x10; `FPM_MRF_free` frees +0x18. So
+`sizeof` is 20 against 28, and `V22_MRF_CFG` being an 8-byte OBJECT in the
+symbol table confirms the configuration's size independently of the code.
+
+The reason for the split is that **every ratio `fpm_mrf` reads out of its
+configuration is a literal here**: 9 and 20 in the phase update
+(`lea 0x14(%edi),%ebx`, `cmp $0x8,%di`, `lea -0x9(%edi),%edx`), 30 in the tap
+loop (`cmp $0x1d,%cx`), 30 and 60 in the buffer management (`sub $0x1e`,
+`cmp $0x3c`), and 30 again in init's `movw $0x1e,0xe(%edi)`. What is left to
+configure is the coefficient pointer and one dword nothing reads, which is
+exactly what the 8-byte `struct v22_mrf_cfg` holds.
+
+Two behavioural differences follow from the same specialisation, and both are
+in `include/dsplib/v22_mrf.h`: init has two paths rather than three (no
+too-small check, no `Reallocate` message, no free), and the history is a
+60-entry SLIDING buffer rather than a 30-entry circular one — see 1543.
+
+======================================================================
+
+### 1541. `V22_MRF_init` REWRITES ITS COEFFICIENT ARRAY IN PLACE, AND `V22_MRF_CFG` IS NEVER WRITTEN BY ANYTHING
+
+*Same session. Two facts that only make sense together.*
+
+**The permutation.** The second half of `V22_MRF_init` is two loops nobody
+would expect in an initialiser. It walks the array at `state->cfg.coeff`
+(`mov (%edi),%ecx` at 0x8d0ce) into a 540-byte stack buffer and copies it
+straight back:
+
+	for (j = 261; j <= 269; j++)
+	    for (i = j; i >= 0; i -= 9)
+	        work[k++] = coeff[i];
+	for (i = 0; i <= 269; i++)
+	    coeff[i] = work[i];
+
+which is, in closed form,
+
+	after[p * 30 + t]  =  before[9 * (29 - t) + p]      p 0..8, t 0..29
+
+— natural impulse-response order in, nine contiguous phases of thirty taps
+out, each phase reversed in time. That is what lets `V22_MRF_filter` run an
+output as one contiguous dot product with the oldest sample first.
+
+It is done through the caller's pointer, so **`coeff` cannot be `const`**, and
+`MRFv22_COFFS` — which is in `.rodata` — can never be the array passed in. It
+is not: `V22FP_create` at 0x87ef0 multiplies `MRFv22_COFFS[i]` by
+`FPM_TONE_generate2`'s output, shifts right by 14, and stores the product into
+a heap buffer at `modem->0x1e4`, which is what it hands to init. The
+permutation is therefore also not idempotent-safe by accident — the original
+gets away with re-initialising because it regenerates the buffer immediately
+before every call.
+
+**`V22_MRF_CFG`.** It is an 8-byte GLOBAL OBJECT at `.bss:0x6a0`, so
+zero-initialised, and the question was who fills it in at run time. **Nothing
+does.** Its only two references in the whole object are a pair of *loads*, at
+0x87f3a and 0x87f3f, which copy both dwords to `V22FP_create`'s stack and then
+overwrite the first with `modem->0x1e4` before calling init. So both members
+are read as zero on every call the object can make, and the second dword —
+copied into the state by init and read by nothing, ever — has no evidence for
+its type at all. The header says so rather than guessing.
+
+**A note on `relocscan.py`, because this nearly went in as a wrong finding.**
+`relocscan.py --into V22_MRF_CFG`, `--at .bss:0x6a0` and `--range` all report
+`unreferenced`, and `objdump -rj .text` shows the two `R_386_32` relocations
+plainly. The tool scans data sections for pointers *between* objects; it does
+not report references from `.text`. It is the right tool for "what does this
+table point at" and the wrong one for "who uses this object". `--into` printing
+`unreferenced` for something with two relocations against it is a silent
+false negative, so check with `objdump -r` before concluding a symbol is dead.
+
+======================================================================
+
+### 1542. THE RATIOS: 9:20 FOR THE V.22 MRF, AND THE `.rodata` PROTOTYPE IS NOT THE FILTER THAT RUNS
+
+*Same session. What the coefficient tables encode, which the brief asked for.*
+
+`MRFv22_COFFS` is 270 `short`s and reads, in natural order, as one symmetric
+lowpass impulse response — palindromic about the pair at [134] and [135],
+peak 10239, first zero crossing between [76] and [77]. 270 = 9 phases x 30 taps, and the
+filter's phase update settles which is which:
+
+	phase += 20;  need = 0;
+	while (phase >= 9) { phase -= 9; need++; }
+
+so the interpolation factor is **9**, the decimation factor is **20**, and
+each output consumes 20/9 = 2.22 inputs on average — `need` alternating 2, 2,
+3. Driven at the datapump's 8000 samples/s that puts the output at **3600**,
+six samples per 600-baud V.22 symbol. (The 9:20 and the 30-tap phase are hard
+evidence from the literals; the 8000 and the 600 baud are inference from the
+datapump interface rate.)
+
+The prototype's cutoff looks too low for a 2400 Hz answer-channel carrier, and
+the reason is that **the prototype is not the filter that runs**.
+`V22FP_create` multiplies it sample-by-sample by `FPM_TONE_generate2` before
+passing it to init (1541), so the coefficients in the buffer are the
+*modulated* set: the MRF resamples and downconverts in one pass, and the
+lowpass in `.rodata` is the baseband prototype of a bandpass filter that only
+exists at run time.
+
+`PPSv22_COFFS` is 120 `short`s and the same reading applies to it — 120 = 40
+phases x 3 taps, and `V22_PPS_init` permutes it by the same rule with 40 in
+place of 9. See 1544.
+
+======================================================================
+
+### 1543. THE V.22 MRF'S HISTORY IS A 60-ENTRY SLIDING BUFFER, NOT A RING — AND ITS STARTUP WINDOW IS WRONG
+
+*Same session. Recorded as D298.*
+
+`V22_MRF_init` mallocs a literal 0x78 = 120 bytes, which is 60 `short`s, while
+`history_len` is 30 and the zeroing loop clears only 30. The extra half is not
+slack: samples are appended at `widx` with no wrap at all, and when an append
+would run past 60 the object memcpys the upper 30 entries down over the lower
+and drops `widx` by 30 (0x8d2f4 and 0x8d382, both `memcpy(h, h + 30, 60)`).
+So the newest 30 samples are always contiguous and the convolution is a
+straight `for (k = 0; k < 30; k++)` with no second loop — where `fpm_mrf`,
+with a 30-entry ring, needs two loops and a wrap.
+
+The cost is the startup case. While `widx < history_len` the object convolves
+`history[0 .. 29]` instead of `history[widx - 30 .. widx - 1]`, which reads
+only zeroed memory but puts the newest samples at the *front* of the window,
+weighted by the oldest taps of the phase. It fires for the first thirteen
+outputs of a stream and then never again. `fpm_mrf` does not have this — its
+ring wraps correctly — so it is specific to the V.22 copy and a consequence of
+the sliding buffer. Reproduced; D298 carries the reachability.
+
+`t_v22_mrf.c` compares from the first output for exactly this reason, and
+compares `history[0 .. widx - 1]` by content after every call, since a
+one-entry error in the slide would otherwise surface only as an output
+difference several samples later.
+
+### 1568. THE V.22 DAG RE-MEASURED AFTER THE FIRST FOUR MODULES, AND WHAT IT SAYS ABOUT ORDERING
+
+Finding 1565 measured the dependency graph before any of the parallel work
+landed. Re-measured on the merged branch, with `v22_iir`, `v22rxtab`,
+`v22prc`, `fpm_atan`, `FPM_TONE_generate2`, `fpm_sdm`, `fpm_smc`, `v22txtab`
+and `v22_mrf` in the tree:
+
+| | before | after |
+|---|--:|--:|
+| unwritten in the closure | 95 | **65** |
+| writable today, functions | 25 | 19 |
+| writable today, bytes | 5,524 | **5,767** |
+| blocked, bytes | ~26,600 | 20,930 |
+
+**The writable-today figure went UP while the closure went down**, and that is
+the whole point of measuring it. Landing `FPM_atan` alone unblocked
+`V22_FSE_receive` (1,885 bytes, now the largest available function); landing
+`FPM_SDM_*` unblocked `ScrambleDataV22` and `DescrambleDataV22`; landing
+`FPM_SMC_encoder` left `ModDataV22` waiting on nothing but `V22_PPS_filter`.
+A closure count alone would have shown steady progress and said nothing about
+where the next session should start.
+
+**The nineteen available now**, largest first:
+
+    V22_FSE_receive 1885   V22_PPS_filter 722   Detect_v22 375
+    V22_FSE_init 372   V22FP_modem 346   V22_status 310
+    V22_PPS_init 290   Detect_Retrain 288   Detect_Rmloop2_ACK 209
+    SetTxRate 205   Detect_1s 199   MakeTxData 195   V22_FSE_free 90
+    dp_v22_init 72   dp_v22_exit 70   V22_SRE_free 46   V22_PPS_free 35
+    DescrambleDataV22 30   ScrambleDataV22 28
+
+**And the five that are one function away** — worth knowing because each is a
+single-item unblock rather than a batch: `v22_process` needs only
+`V22FP_modem`; `V22_SRE_init` needs only the `SREv22_COFFS` table;
+`v22_create` needs only `V22FP_create`; `ModDataV22` needs only
+`V22_PPS_filter`; `v22_delete` needs only `V22FP_delete`.
+
+**The critical path is now visible and it is short.** Nine of the ten largest
+remaining functions are the state machine, and every one of them waits on
+`DemodDataV22`, which waits on `V22_FSE_receive` and `V22_SRE_recover`, which
+wait on `FPM_atan` — already landed. So the sequence that unlocks 13,301 bytes
+of state machine in one step is:
+
+    V22_FSE_receive  ->  V22_SRE_recover  ->  DemodDataV22  ->  the eight
+    state functions and V22_PROTOCOL
+
+with `V22FP_create` (2,449 bytes, eighteen dependencies, the widest fan-in in
+the whole datapump) as the other half of the fork, feeding `v22_create` and
+the datapump registration.
+
+Re-run the measurement rather than trusting this table; it moves every time
+anything lands. It is `readelf -rW` restricted to `.rel.text`, each function's
+relocation targets intersected with `closure.py --missing`, and the
+"already-written" set taken from `src/` rather than from `build/` so it
+answers correctly on an unbuilt tree.
+======================================================================
+
+### 1544. THE V.22 TRANSMIT PULSE SHAPER: FORTY PHASES, THREE TAPS, AND THE CARRIER FOLDED INTO THE COEFFICIENTS
+
+*Phase 6 (V.22/V.22bis), `v22_pps.c` — the author's translation-unit name,
+from the FILE symbol at index 481. Written, tested and committed as
+`src/pump/v22/v22_pps.c`.*
+
+`ModDataV22` (0x8e310) is the whole pipeline in nine instructions:
+`FPM_SMC_encoder(dp + 0x48, dp + 0xa0, bits, n)` and then
+`V22_PPS_filter(dp + 0x78, dp + 0xa0, out, n)` — bits to constellation points
+in a symbol ring, then that ring to samples. PPS is the second half.
+
+**The shape is `v22_mrf`'s** (1540): an 8-or-16-byte configuration, then
+`need`, `phase`, `widx`, `history_len`, then buffers; a SLIDING history of
+twice `history_len` with a memcpy-down instead of a ring; and an init that
+permutes its coefficients in place by the same rule (1541) with 40 phases and
+3 taps in place of 9 and 30. So `PPSv22_COFFS`, 120 entries, is 40 x 3.
+
+**The rate.** Each output does `phase += cfg.step + 3` and a wrap past 39 is
+what consumes a symbol, so outputs per symbol are `40 / (step + 3)`.
+`PPSv22_CFG` is sixteen bytes of zero, nothing in the object writes `step`,
+and `V22FP_create` patches only the two coefficient pointers in its stack
+copy — so the step is 3 and the ratio is **40/3 = 13.33 outputs per symbol**,
+which is 600 baud at 8000 samples/s.
+
+**Two filters, subtracted.** The configuration holds two coefficient arrays,
++0x04 and +0x08, and the state holds two history buffers and two constellation
+maps. Every output runs both three-tap filters and returns
+`(short)((acc_i >> 15) - (acc_q >> 15)) << 2`. That is I*cos - Q*sin with the
+carrier already inside the two coefficient sets — the same trick `v22_mrf`
+uses on the way back, where `V22FP_create` multiplies the prototype by
+`FPM_TONE_generate2`'s output before handing it over (1542). The shaper
+modulates and interpolates in one pass; the MRF demodulates and resamples in
+one pass.
+
+**Three things a caller has to know**, all of them in
+`include/dsplib/v22_pps.h`:
+
+  - init does NOT set `imap`/`qmap` at +0x20 and +0x24. `V22FP_create` writes
+    them itself at 0x87e8d and 0x87e93, with `SMCv22_IMAP_1200BPS` and
+    `SMCv22_QMAP_1200BPS`. A caller that only calls init leaves two null
+    pointers the filter dereferences on its first symbol.
+  - `count` is in SYMBOLS and the return is in SAMPLES, so the output buffer
+    has to be sized at thirteen times the input and not equal to it.
+  - both coefficient arrays are rewritten in place, so neither can be
+    `PPSv22_COFFS` itself, which is `.rodata`.
+
+**A contrast worth keeping.** `PPSv22_CFG` and `V22_MRF_CFG` are the same
+idea — an all-zero template whose pointers the caller patches — and they are
+in different sections: `PPSv22_CFG` is `const`, so `.rodata`; `V22_MRF_CFG`
+is not, so `.bss`. Reproducing that needs an explicit `= { 0, ... }` on the
+non-const one, since GCC's default `-fcommon` would otherwise put it in
+COMMON rather than `.bss`.
+
+======================================================================
+
+### 1545. THE TWO V.22 RESAMPLERS DISAGREE ABOUT THEIR OWN COEFFICIENT INDEXING, AND ONLY ONE OF THEM IS RIGHT
+
+*Same session. Recorded as D299; D298 is the other half.*
+
+Both `V22_MRF_filter` and `V22_PPS_filter` have two convolution branches, one
+for the filled window and one for the startup case where `widx` has not
+reached `history_len`. In `v22_mrf` the two differ ONLY in the history base:
+`history + widx - hlen` against `history + 0`, with `coeff + phase * hlen` in
+both. In `v22_pps` the startup branch also changes the coefficient base, to
+`coeff + phase`.
+
+After init the array is grouped as `[phase * taps + tap]`, so `coeff + phase`
+is only the right base when `taps` is 1. For `v22_pps`, `taps` is 3, and the
+startup outputs read three entries straddling whatever group boundary
+`phase` happens to land near.
+
+It is reachable — about forty outputs, because `widx` advances once per
+symbol and there are 13.33 outputs per symbol — and it is not masked by the
+zeroed history for all of them: the first two symbols leave two of the three
+taps multiplying zero, but the third symbol onwards is a real window read
+with mixed-phase coefficients.
+
+**This was worth stating carefully because it is the kind of thing a
+reconstruction quietly "fixes".** The mutation that makes the two branches
+agree — `ci[phase * hlen + k]` in both — fails 26 checks in each of
+`t_v22_pps.c`'s three drive patterns. So the differential tier sees it, the
+test was shown to fire on it, and the object's version is what is committed.
+
+======================================================================
+
+### 1546. THE SYMBOL RING BETWEEN `FPM_SMC_encoder` AND `V22_PPS_filter` NEEDED A HOME, AND IT IS NOT THE V.22 PUMP'S HEADER
+
+*Same session. A "one type, one home" decision, recorded because the next
+person to touch `fpm_smc.c` will find a header already there.*
+
+`V22_PPS_filter`'s second argument is not part of the PPS state: it is the
+object `ModDataV22` passes to `FPM_SMC_encoder` first and to the shaper
+second. Three fields are established, and only three:
+
+	+0x08  short *sym     loaded at V22_PPS_filter +0x8c, used at +0xc4 --
+	                      `movzbl (%ebx,%edi,2)`, a BYTE load at
+	                      `base + idx * 2`, so the stride is two and the
+	                      value used is the low byte
+	+0x0e  short rd       the index of that load, read at +0x84 and written
+	                      back at +0x222, advanced by one and wrapped to
+	                      zero on reaching
+	+0x10  short size     the bound of that wrap, read at +0x88; also read
+	                      by FPM_SMC_encoder at 0xa9c33
+
+`+0x00..+0x07` and `+0x0c` are not established. `FPM_SMC_encoder` reads +0x0c
+as a signed short at 0xa9c28, which is where a write cursor would sit, but
+that function has not been traced and a plausible position is not evidence —
+so they are named as padding. `sizeof` is not established either; nothing
+seen so far allocates one.
+
+**Where it went, and why.** `struct fpm_smc_syms` is defined in
+`include/dsplib/fpm_smc.h`, which is otherwise empty. Putting it in
+`v22_pps.h` would have made a future `fpm_smc.c` include the V.22 pump's
+header to get its own type, and the rule is one definition, so the second
+user could not simply repeat it. The header says in full which access
+established which field, so that the person who writes `fpm_smc.c` can extend
+it without having to re-derive the three fields that are already pinned.
+
+### 1569. TWO SESSIONS MODELLED HALF OF THE SAME RING BUFFER EACH, AND THE HALVES FIT
+
+Merging the SMC work and the PPS work produced an add/add conflict on
+`include/dsplib/fpm_smc.h`: both had defined a struct for the symbol buffer
+that sits between the coder and the modulator. The two definitions were not
+rivals.
+
+| offset | the `fpm_smc.c` session saw | the `v22_pps.c` session saw |
+|---|---|---|
+| +0x00 | `pad00[8]` | `pad_00[8]` |
+| +0x08 | `short *sym` | `short *sym` |
+| **+0x0c** | **`widx`, write cursor** | `pad_0c[2]` |
+| **+0x0e** | `pad0e` | **`rd`, read cursor** |
+| +0x10 | `len`, wrap bound | `size`, wrap bound |
+
+**It is a ring buffer with a producer and a consumer.** `FPM_SMC_encoder`
+advances the write cursor at +0x0c; `V22_PPS_filter` advances the read cursor
+at +0x0e; +0x10 bounds both. Each session traced only its own function, and
+each correctly declined to guess at the field it never saw written — so each
+wrote the other's cursor down as padding. `ModDataV22` (blob 0x8e310) hands
+the same pointer to both in consecutive calls, which is what makes the two
+readings one object.
+
+Unified as `struct fpm_smc_ring` with both cursors named, and `v22_pps.c`
+retyped onto it.
+
+**The reason this is worth a finding is what the alternative looked like.**
+Keeping both — `struct fpm_smc_ring` and `struct fpm_smc_syms`, same offsets,
+same object, different tags — **passes `onedef.py`**, because that tool
+enforces one definition per *tag* and these were two tags. It would also have
+passed every differential test, because the offsets agree and each side only
+touches its own fields. The result would have been exactly the failure mode
+CLAUDE.md's "one type, one home" section describes — two descriptions of one
+object drifting independently — with no gate anywhere able to see it.
+
+So: **`onedef.py` catches a duplicated NAME, not a duplicated OBJECT.** When
+two parallel sessions model the same memory from two callers, the check that
+matters is offset-by-offset against each other, and it has to be done by hand
+at merge time. Finding 700's rule generalises here: a merge that compiles is
+not a merge that kept everything, and a merge that passes is not a merge that
+integrated anything.
+
+**The unification's own gate failed first, and that is the mechanism working.**
+`t_fpm_smc.c` asserted `ring pad0e untouched` — the encoder must not write
++0x0e — so renaming the field broke the build: `PHASE_EXIT=2`, three link
+errors, `period differential: 167 passed, 1 failed`. The assertion was right
+and stays, reworded: +0x0e is the CONSUMER's read cursor, so "untouched by the
+encoder" is a stronger claim than "this padding is not written". A producer
+that disturbed the consumer's position in the ring would now be caught by name.
+
+Worth contrasting with finding 1563: that `PHASE_EXIT=2` went unnoticed for
+four runs because the exit status was never read. This one was caught
+immediately, by the same command shape that finding recommends —
+`make phase; echo "PHASE_EXIT=$?"`, unpiped, in one command, with the answer
+`tee`d into the log so it survives the shell that produced it.
+
+**The lesson for scheduling parallel work**, which is the transferable part:
+the split that produced this was by TRANSLATION UNIT, which is the right axis
+for code and the wrong one for shared state. Two agents given adjacent stages
+of one pipeline will each model the shared buffer from their own end. That is
+not a mistake to prevent — neither could have done better with what it could
+see — it is a merge step to plan for.
+
+### 1570. A FULL DISK READS AS A LINK ERROR IN AN UNRELATED MODULE, AND `make phase` REPORTS IT AS A FAILED TARGET
+
+A `make phase` run failed with five `collect2: error: ld returned 1 exit
+status` lines against `t_v90adid`, `t_v90demctor`, `t_v90cp`, `t_v90equ` and
+`t_v90demod` — V.90 coverage binaries, in a session that had touched nothing
+but V.22. The natural readings are all wrong: a missing symbol, a bad merge, a
+header that moved. The actual diagnostic is thirty lines further on:
+
+    /usr/bin/ld: final link failed: No space left on device
+
+**There is no `undefined reference` anywhere in the log**, which is the
+distinguishing feature and the thing to grep for first. `ld` reports ENOSPC in
+its own voice and then `collect2` reports only that `ld` failed, so the useful
+line and the alarming lines are far apart in a 1.1 MB log.
+
+**Why it is easy to hit here.** Six worktrees were live, each carrying its own
+`build/` and `build-cov/` — 4.9 GB in total, with individual `build/` trees at
+763–881 MB and `build-cov/` at 590–611 MB. `make phase` links every test
+binary statically against the whole tree plus `dsplibs_ref.o`, and `debugcov`
+does it a second time with coverage instrumentation. Several worktrees gating
+concurrently multiplies the peak. The filesystem sat at 90% before the run.
+
+**The failure is also asymmetric in a way that matters.** Only `debugcov`
+failed. All 1,603 differential checks passed, including the eight V.22 SRE
+suites the run existed to validate. So the correct reading is "this run proves
+the code and does not prove the coverage build", not "this run failed" — but
+`make phase` exits non-zero, and under the rule that nothing is committed
+without a passing gate, the honest move is to re-run rather than to reason
+around it.
+
+**Two practical consequences.**
+
+- **Grep `No space left on device` before diagnosing any `collect2` failure.**
+  It costs one command and it is not the first thing anyone thinks of.
+- **A parallel-worktree session should budget disk, not just cores.** The
+  machine-etiquette rule in this tree is about `-j` and CPU; ~1.5 GB per
+  worktree is the figure that was missing from it. Worktrees whose branches
+  are merged should have their `build/` and `build-cov/` removed rather than
+  being left to accumulate.

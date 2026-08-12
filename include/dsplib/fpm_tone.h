@@ -143,6 +143,15 @@ short FPM_TONE_generate_demod(struct fpm_tone *state, short *out,
 			      short count);
 
 /*
+ * The QUADRATURE pair from one oscillator: `cos_out` and `sin_out` get the
+ * cosine and the sine of the same phase, sample for sample.  Two outputs, not
+ * two tones -- the object still holds a single frequency.  No phase
+ * reversals, and it returns `count`.
+ */
+short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
+			 short *sin_out, short count);
+
+/*
  * Verdicts.  NOTE THE POLARITY -- zero means the tone IS present.
  *
  * This was recorded the other way round at first, by analogy with

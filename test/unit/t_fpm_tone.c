@@ -25,6 +25,8 @@ extern void ref_FPM_TONE_generate(void *state, short *out, short count);
 extern short ref_FPM_TONE_CFG[];
 extern short ref_FPM_TONE_generate_demod(void *state, short *out,
 					 short count);
+extern short ref_FPM_TONE_generate2(void *state, short *cos_out,
+				    short *sin_out, short count);
 extern short ref_FPM_TONE_detect(void *state, const short *samples,
 				 short count);
 extern void ref_FPM_TONE_delete(void *state);
@@ -396,6 +398,154 @@ main(void)
 			if (oa[i] != ob[i])
 				k++;
 		diff_eq_int("waveforms differ (%ld)", k > 900, 1, k);
+	}
+	rc |= diff_end();
+
+	/*
+	 * FPM_TONE_generate2: the quadrature pair from one oscillator.
+	 *
+	 * Two things need proving beyond sample equality.  First that the two
+	 * buffers really are cosine and sine of the SAME phase and not two
+	 * copies of one of them -- so the cosine half is checked against
+	 * FPM_TONE_generate_demod and the sine half against FPM_TONE_generate,
+	 * from an identical starting state.  Second that the phase advances
+	 * once per sample and not twice, which is what a naive two-call
+	 * implementation would do; the phase comparison against the other two
+	 * generators covers that.
+	 */
+	diff_begin("FPM_TONE_generate2");
+	{
+		static short ca[8192], sa[8192], cb[8192], sb[8192];
+		int i;
+
+		memcpy(a, built, sizeof(a));
+		memcpy(b, built, sizeof(b));
+		ref_FPM_TONE_set_freq((struct fpm_tone *)a, 1800);
+		FPM_TONE_set_freq((struct fpm_tone *)b, 1800);
+		ref_FPM_TONE_set_scale((struct fpm_tone *)a, 32767);
+		FPM_TONE_set_scale((struct fpm_tone *)b, 32767);
+
+		for (k = 0; k < 400; k++) {
+			int n = (k % 37) + 1;
+			short ra, rb;
+
+			ra = ref_FPM_TONE_generate2((struct fpm_tone *)a,
+						    ca, sa, (short)n);
+			rb = FPM_TONE_generate2((struct fpm_tone *)b,
+						cb, sb, (short)n);
+
+			diff_eq_int("returned count (%ld)", rb, ra, n);
+			for (i = 0; i < n; i++) {
+				diff_eq_int("cos sample %ld", cb[i], ca[i], i);
+				diff_eq_int("sin sample %ld", sb[i], sa[i], i);
+			}
+			compare_state(b, a, "generate2");
+		}
+
+		/* Ragged scale settings, including negative and zero gain. */
+		for (k = -32768; k < 32768; k += 997) {
+			ref_FPM_TONE_set_scale((struct fpm_tone *)a, (short)k);
+			FPM_TONE_set_scale((struct fpm_tone *)b, (short)k);
+			ref_FPM_TONE_generate2((struct fpm_tone *)a,
+					       ca, sa, 17);
+			FPM_TONE_generate2((struct fpm_tone *)b, cb, sb, 17);
+			for (i = 0; i < 17; i++) {
+				diff_eq_int("scaled cos %ld", cb[i], ca[i], i);
+				diff_eq_int("scaled sin %ld", sb[i], sa[i], i);
+			}
+			compare_state(b, a, "generate2 scaled");
+		}
+	}
+	rc |= diff_end();
+
+	/* Zero count writes the phase back unchanged and returns zero. */
+	diff_begin("FPM_TONE_generate2 zero count");
+	{
+		static short ca[8], sa[8], cb[8], sb[8];
+		short ra = ref_FPM_TONE_generate2((struct fpm_tone *)a,
+						  ca, sa, 0);
+		short rb = FPM_TONE_generate2((struct fpm_tone *)b,
+					      cb, sb, 0);
+
+		diff_eq_int("returned (%ld)", rb, ra, 0);
+		compare_state(b, a, "generate2 zero");
+	}
+	rc |= diff_end();
+
+	/*
+	 * A NEGATIVE count, which is the only input that can tell the loop's
+	 * real shape apart from `for (i = 0; i < count; i++)`.  The counter is
+	 * 16-bit and the exit test is `!= -1`, so a count of -1 starts at -2
+	 * and wraps the whole way round: 65535 samples out of a call that asks
+	 * for none.  The buffers are sized for that, and sized the same under
+	 * any misreading of the loop, because they have to survive being wrong.
+	 */
+	diff_begin("FPM_TONE_generate2 negative count");
+	{
+		static short ca[65600], sa[65600], cb[65600], sb[65600];
+		int i;
+		short ra, rb;
+
+		memcpy(a, built, sizeof(a));
+		memcpy(b, built, sizeof(b));
+		ref_FPM_TONE_set_freq((struct fpm_tone *)a, 1800);
+		FPM_TONE_set_freq((struct fpm_tone *)b, 1800);
+		ref_FPM_TONE_set_scale((struct fpm_tone *)a, 32767);
+		FPM_TONE_set_scale((struct fpm_tone *)b, 32767);
+
+		ra = ref_FPM_TONE_generate2((struct fpm_tone *)a, ca, sa, -1);
+		rb = FPM_TONE_generate2((struct fpm_tone *)b, cb, sb, -1);
+
+		diff_eq_int("returned (%ld)", rb, ra, -1);
+		for (i = 0; i < 65535; i++) {
+			diff_eq_int("wrapped cos %ld", cb[i], ca[i], i);
+			diff_eq_int("wrapped sin %ld", sb[i], sa[i], i);
+		}
+		compare_state(b, a, "generate2 negative");
+	}
+	rc |= diff_end();
+
+	/*
+	 * And that it is the quadrature pair of the same oscillator: from one
+	 * starting state, generate2's cosine is generate_demod's output and
+	 * its sine is generate's, sample for sample, with all three leaving
+	 * the accumulator at the same phase.  Well inside one reversal period,
+	 * so generate's extra bookkeeping does not enter.
+	 */
+	diff_begin("FPM_TONE_generate2 is the quadrature pair");
+	{
+		unsigned char qa[FPM_TONE_STATE_SIZE];
+		unsigned char qb[FPM_TONE_STATE_SIZE];
+		unsigned char qc[FPM_TONE_STATE_SIZE];
+		static short cq[2048], sq[2048];
+		int i;
+
+		memcpy(qa, built, sizeof(qa));
+		memcpy(qb, built, sizeof(qb));
+		memcpy(qc, built, sizeof(qc));
+		for (i = 0; i < 3; i++) {
+			unsigned char *p = i == 0 ? qa : (i == 1 ? qb : qc);
+
+			ref_FPM_TONE_set_freq((struct fpm_tone *)p, 1800);
+			ref_FPM_TONE_set_scale((struct fpm_tone *)p, 32767);
+		}
+
+		FPM_TONE_generate2((struct fpm_tone *)qa, cq, sq, 1000);
+		FPM_TONE_generate_demod((struct fpm_tone *)qb, oa, 1000);
+		FPM_TONE_generate((struct fpm_tone *)qc, ob, 1000);
+
+		for (i = 0; i < 1000; i++) {
+			diff_eq_int("cos half is generate_demod at %ld",
+				    cq[i], oa[i], i);
+			diff_eq_int("sin half is generate at %ld",
+				    sq[i], ob[i], i);
+		}
+		diff_eq_int("phase matches generate_demod (%ld)",
+			    ((struct fpm_tone *)qa)->phase,
+			    ((struct fpm_tone *)qb)->phase, 0);
+		diff_eq_int("phase matches generate (%ld)",
+			    ((struct fpm_tone *)qa)->phase,
+			    ((struct fpm_tone *)qc)->phase, 0);
 	}
 	rc |= diff_end();
 
