@@ -15,6 +15,205 @@
 #include "dsplib/fpm_ecc.h"
 #include "dsplib/sysdep.h"
 
+/*
+ * One section against one coefficient block.  The history is circular with
+ * the newest entry at `idx`, so it is walked backwards from `idx` to 0 and
+ * then from the top down to `idx + 1`, while the coefficients run forwards
+ * across both halves.  Each product is shifted down 3 before it is
+ * accumulated -- the taps carry more than 16 bits of headroom would allow
+ * otherwise -- and the caller takes the remaining 14.
+ */
+static int
+ecc_filter(const short *hist, short idx, short len, const short *c)
+{
+	int acc = 0;
+	short i;
+
+	for (i = idx; i >= 0; i--)
+		acc += (hist[i] * *c++) >> 3;
+	for (i = (short)(len - 1); i > idx; i--)
+		acc += (hist[i] * *c++) >> 3;
+	return acc;
+}
+
+/*
+ * The sign-sign-free LMS update over the same walk: each coefficient moves by
+ * the residual times the history sample it multiplied, scaled by `mu`.  Both
+ * halves round rather than truncate, and the intermediate is squeezed back
+ * into 16 bits between the two multiplies.
+ */
+static void
+ecc_adapt(short *c, const short *hist, short idx, short len, int mu, int e)
+{
+	short i;
+	int t;
+
+	for (i = idx; i >= 0; i--) {
+		t = (short)((hist[i] * mu + 0x10) >> 5);
+		*c = (short)(((t * e + 0x10000) >> 17) + *c);
+		c++;
+	}
+	for (i = (short)(len - 1); i > idx; i--) {
+		t = (short)((hist[i] * mu + 0x10) >> 5);
+		*c = (short)(((t * e + 0x10000) >> 17) + *c);
+		c++;
+	}
+}
+
+short
+FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count)
+{
+	const short *const *imap = state->cfg.imap;
+	const short *const *qmap = state->cfg.qmap;
+	short *near_i = state->near_i;
+	short *near_q = state->near_q;
+	short *far_i = state->far_i;
+	short *far_q = state->far_q;
+	short *line = state->line;
+	short cfg_near = state->cfg.near_taps;
+	short cfg_far = state->cfg.far_taps;
+	short near_idx = state->near_idx;
+	short near_len = state->near_len;
+	short far_idx = state->far_idx;
+	short far_len = state->far_len;
+	short near_rd = state->near_rd;
+	short far_rd = state->far_rd;
+	short line_len = state->line_len;
+	short mu = state->mu;
+	unsigned short phase = state->phase;
+	unsigned short symbols = 0;
+	short energy = 0;
+	int n;
+
+	/*
+	 * Input power, before anything is taken out of it.  The meter is a
+	 * one-pole smoother with the pole at 0x666/0x8000, so it follows the
+	 * block mean square at about a twentieth of its distance per block.
+	 */
+	if (state->hold_power == 0) {
+		short acc = 0;
+		short i;
+
+		for (i = 0; i < count; i++)
+			acc = (short)(acc + ((buf[i] * buf[i]) >> 15));
+		state->pwr_in = (short)(acc +
+			(((state->pwr_in - acc) * 0x666) >> 15));
+	}
+
+	for (n = count; n != 0; n--) {
+		short *coef = state->coef[phase];
+		short *fcoef;
+		short *ucoef;
+		int est = 0;
+		int e;
+		short r;
+
+		if (cfg_near != 0) {
+			r = (short)(ecc_filter(near_i, near_idx, near_len,
+					       coef) >> 14);
+			est = (short)((ecc_filter(near_q, near_idx, near_len,
+						  coef + cfg_near) >> 14) + r);
+			fcoef = coef + 2 * cfg_near;
+		} else {
+			fcoef = coef;
+		}
+
+		r = (short)(ecc_filter(far_i, far_idx, far_len, fcoef) >> 14);
+		est += (short)((ecc_filter(far_q, far_idx, far_len,
+					   fcoef + cfg_far) >> 14) + r);
+
+		e = (short)(*buf - est);
+		*buf++ = (short)e;
+
+		/* Residual power, the same meter on the other side. */
+		if (state->hold_power == 0)
+			energy = (short)(energy + ((e * e) >> 15));
+
+		if (state->freeze == 0) {
+			/*
+			 * NOTE the aliasing, which is the original's and is
+			 * reproduced deliberately: the far update starts from
+			 * wherever the near update left off, and when the near
+			 * update is skipped that is the START of the set, not
+			 * the far blocks.  So with `adapt_near` off,
+			 * `adapt_far` on and a non-zero `near_taps`, the far
+			 * sections adapt the NEAR coefficients.  Only when
+			 * `near_taps` is zero do the two coincide.
+			 */
+			ucoef = coef;
+			if (state->adapt_near == 1 && cfg_near != 0) {
+				ecc_adapt(coef, near_i, near_idx, near_len,
+					  mu, e);
+				ecc_adapt(coef + cfg_near, near_q, near_idx,
+					  near_len, mu, e);
+				ucoef = coef + 2 * cfg_near;
+			}
+			if (state->adapt_far == 1) {
+				ecc_adapt(ucoef, far_i, far_idx, far_len,
+					  mu, e);
+				ecc_adapt(ucoef + cfg_far, far_q, far_idx,
+					  far_len, mu, e);
+			}
+		}
+
+		phase = (unsigned short)(phase + 1);
+		if (phase > 2) {
+			unsigned short usym;
+			short ssym;
+			short next;
+			short si, sq;
+
+			phase = 0;
+
+			/*
+			 * The near tap.  Read UNSIGNED, and the map index is
+			 * masked out of the high byte.  The far tap below
+			 * reads the same array SIGNED and shifts arithmetically
+			 * -- both forced by the object, both indexing a
+			 * pointer array, and no test can tell them apart while
+			 * the line holds anything under 0x8000.  Writing the
+			 * two the same way would be a defect of exactly the
+			 * kind finding 613 records.
+			 */
+			usym = (unsigned short)line[near_rd];
+			si = imap[(usym >> 8) & 0xff][usym & 0xff];
+			sq = (short)-qmap[(usym >> 8) & 0xff][usym & 0xff];
+			next = (short)(near_rd + 1);
+			near_rd = (next < line_len) ? next : 0;
+			if (cfg_near != 0) {
+				next = (short)(near_idx + 1);
+				near_idx = (next < near_len) ? next : 0;
+				near_i[near_idx] = si;
+				near_q[near_idx] = sq;
+			}
+
+			/* The far tap, `far_lag` symbols behind. */
+			ssym = line[far_rd];
+			si = imap[ssym >> 8][ssym & 0xff];
+			sq = (short)-qmap[ssym >> 8][ssym & 0xff];
+			next = (short)(far_idx + 1);
+			far_idx = (next < far_len) ? next : 0;
+			far_i[far_idx] = si;
+			far_q[far_idx] = sq;
+			next = (short)(far_rd + 1);
+			far_rd = (next < line_len) ? next : 0;
+			symbols++;
+		}
+	}
+
+	if (state->hold_power == 0)
+		state->pwr_out = (short)(energy +
+			(((state->pwr_out - energy) * 0x666) >> 15));
+
+	state->far_idx = far_idx;
+	state->mu = mu;
+	state->phase = phase;
+	state->near_rd = near_rd;
+	state->near_idx = near_idx;
+	state->far_rd = far_rd;
+	return (short)symbols;
+}
+
 void
 FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg, int fresh)
 {

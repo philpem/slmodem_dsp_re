@@ -49510,3 +49510,114 @@ against `ref_ECC_CFG` as an object, and again through
 `FPM_MRF_init`, it inspects no existing pointer and frees nothing, so a second
 `fresh` init leaks all eight buffers. `FPM_ECC_free` releases `coef[2]`
 first and `near_i` last.
+
+### 1612. FPM_ECC_cancel: THREE COEFFICIENT SETS AT THREE SAMPLES A SYMBOL, AND A FAR-UPDATE POINTER THAT ALIASES THE NEAR BLOCKS
+
+*`FPM_ECC_cancel` (0xa6e00, 2,051 B) is reconstructed and differentially
+tested: `t_fpm_ecc` is 9,077 checks over twenty-four cancel cases, comparing
+the whole state, both sample buffers and all eight arrays after every block.*
+
+**THE SHAPE.** `cancel(state, buf, count)` works IN PLACE and returns the
+number of symbols it consumed. Per sample: pick `coef[phase]`, convolve the
+four sections, subtract, adapt, then `phase = (phase + 1) & 0xffff` and, when
+it exceeds 2, reset it to 0 and pull one symbol off the delay line. Three
+samples a symbol, one coefficient set each -- V.32's 7200 Hz against 2400
+baud.
+
+**THE ARITHMETIC, MEASURED.** Each section accumulates `(hist[i] * c[j]) >> 3`
+over a circular walk (newest at `idx` down to 0, then top down to `idx+1`,
+coefficients running forwards across both halves) and the result is taken down
+by a further 14. The estimate is
+`(short)((nearI>>14) + (nearQ>>14)) + (short)((farI>>14) + (farQ>>14))`, and
+the residual is `(short)(*buf - estimate)`, stored back over the input.
+
+The update is `c += ((short)((hist[i]*mu + 0x10) >> 5) * e + 0x10000) >> 17`,
+both halves rounding rather than truncating, with the intermediate squeezed
+back into 16 bits between the two multiplies. `mu` is `state->mu`, 0x29 out
+of init, and is written back unchanged.
+
+**THE BLOCK STRIDE IS `cfg.near_taps` / `cfg.far_taps`; THE LOOP COUNT IS
+`near_len` / `far_len`.** init makes each pair equal, so nothing distinguishes
+them until the lengths are patched smaller by hand -- which `t_fpm_ecc` does,
+and which fails if the stride is taken from the length.
+
+**THE ALIASING, AND IT IS THE ORIGINAL'S.** The pointer the far update starts
+from is initialised to the START of the coefficient set *before* the near
+update's guard, and is only advanced by `2 * cfg.near_taps` inside that guard.
+So with `adapt_near != 1`, `adapt_far == 1` and a non-zero `near_taps`, the
+far sections adapt the NEAR coefficient blocks. A tidy rewrite that computes
+`coef + 2*near_taps` at the far update is wrong, and the test case named "far
+adapting, near frozen" is what catches it: it failed 359 checks against that
+rewrite and passes against the faithful one.
+
+**TWO POWER METERS, BOTH ONE-POLE, BOTH GATED BY `hold_power`.** `pwr_in` is
+the block's mean square before cancellation, `pwr_out` after it, each folded
+in as `new + ((old - new) * 0x666 >> 15)` -- a pole at 0.05, so about a
+twentieth of the distance a block. Both accumulators truncate to 16 bits every
+sample, so they saturate rather than grow.
+
+**THE SAME ARRAY IS READ SIGNED AND UNSIGNED.** The near tap reads
+`line[near_rd]` with `movzwl` and masks the map index out with `movzbl %ah`;
+the far tap reads `line[far_rd]` with `movswl` and shifts it out with `sar
+$0x8`. Both extensions are FORCED -- the result indexes a 4-byte pointer array
+-- so the two are written differently in `src/dsp/fpm_ecc.c` even though no
+test can separate them while the line holds anything below 0x8000. Finding
+613's class of defect.
+
+### 1613. `far_taps == 0` MAKES THE ORIGINAL RUN OFF THE END OF ITS OWN COEFFICIENT SET, SO THAT CONFIGURATION IS NOT TESTABLE
+
+A coefficient set is `2 * (near_taps + far_taps)` shorts and the four blocks
+sit at 0, `near_taps`, `2*near_taps` and `2*near_taps + far_taps`. With
+`far_taps == 0` the last two both land at `2*near_taps`, which is the END of
+the allocation: the far filter reads one entry past it and the far update
+writes one past it. The symbol push compounds it -- the far history store is
+NOT guarded by a tap count the way the near one is by `cfg.near_taps`, so it
+writes `far_i[0]` and `far_q[0]` into two `sysdep_malloc(0)` blocks.
+
+Both builds do all of this, into different heap blocks, so they disagree on
+whatever garbage each one finds: the case showed up as a one-count difference
+in the residual, in `pwr_out` and in a coefficient. That is a genuine defect
+in the original and not a reconstruction error, and it is why `t_fpm_ecc`
+tests a single far tap rather than none. `near_taps == 0` is safe and IS
+tested: the near push is guarded and the far blocks then start at 0.
+
+### 1614. ECCv32_IMAP / ECCv32_QMAP / ECCv32_CFG ARE LEFT OUT: THEY CANNOT BE DEFINED WITHOUT TEN TABLES BELONGING TO THE VITERBI AND ENCODER BATCHES
+
+`ECCv32_IMAP` and `ECCv32_QMAP` are not coefficient tables. Each is **six
+pointers**, and `relocscan` resolves them to, in order:
+
+    [0] SMCv32_IMAP16   [1] SMCv32_IMAP16   [2] VTBv32_IMAP32
+    [3] VTBv32_IMAP16T  [4] VTBv32_IMAP64   [5] VTBv32_IMAP128
+
+and the same six spellings with `Q`. Index 0 and 1 are the SAME table --
+measured, not inferred from a coincidence of values, because these are
+relocations. `ECCv32_CFG` is then
+`{far_lag 480, near_taps 40, far_taps 40, pad, &ECCv32_IMAP, &ECCv32_QMAP,
+fill 16, pad, aux 0}`; those field boundaries are no longer a reading of the
+bytes, they are what `FPM_ECC_init`'s disassembly does with them (1611).
+
+**Why they are not in the tree.** Defining the two pointer arrays needs all
+ten pointees to be real definitions, and `nm` puts them squarely in other
+batches of finding 1600's table -- `SMCv32_*` in the encoder/scrambler group,
+`VTBv32_*` in the Viterbi group, 1,028 bytes in total. The harness renames
+every symbol the blob defines to `ref_*`, so an `extern const short
+SMCv32_IMAP16[]` resolves to nothing and the link fails; there is no way to
+declare the pointer arrays without owning the data. A session was observed
+building `t_v32smc` while this batch was running, so emitting `SMCv32_IMAP16`
+and `SMCv32_QMAP16` here would have collided with live work over the same two
+symbols.
+
+**What the next person has to do**, once the ten maps exist anywhere in
+`src/`: add `src/pump/v32/v32ecc_tables.c` with
+
+    const short *const ECCv32_IMAP[6] = { SMCv32_IMAP16, SMCv32_IMAP16,
+        VTBv32_IMAP32, VTBv32_IMAP16T, VTBv32_IMAP64, VTBv32_IMAP128 };
+
+the `Q` twin, and an `ECCv32_CFG` of the six fields above. Test the pointer
+arrays by the CONTENT of each pointee against `ref_`, never by address: the
+six pointees have distinct contents, so ordering is still pinned, and indices
+0 and 1 are settled by the relocation dump rather than by the test.
+
+The element widths are settled by `FPM_ECC_cancel`, which indexes a pointee
+with `movswl (%ecx,%eax,2)` -- `short`, and `SMCv32_IMAP16`'s 0x22 bytes are
+therefore 17 entries, not 16.
