@@ -1,184 +1,248 @@
 # What is reconstructed, and what is left
 
-*Measured at `f0112ff`, after the construction-path run. Every figure here
-comes from a tool in `tools/`; the commands are given so they can be re-run
-rather than trusted. Nothing in this document is an estimate.*
+*Measured at `d367962`. Every figure here comes from a tool in `tools/`; the
+commands are given so they can be re-run rather than trusted. Nothing in this
+document is an estimate.*
+
+*The per-function enumeration is `docs/worklist.md` (`make worklist`). This
+document is the shape of the work; that one is the list.*
 
 ## 1. Where it stands
 
     make coverage
+    make worklist
 
 | | |
 |---|--:|
 | `.text` in the blob | 734,605 bytes / 1,861 symbols |
-| translated | **38.8%** — 285,048 bytes / 749 symbols |
-| driven against the blob | **100%** of what can be — 285,009 bytes, 740 of 749 |
-| `make phase` | exit 0, **1,436 PASS, 0 FAIL** |
-| codegen tier | 105 of 386 shared symbols identical on instruction sequence |
+| translated | **48.5%** — 356,597 bytes / 892 symbols |
+| driven against the blob | **100%** of what can be — 356,574 bytes, 885 of 892 |
+| still to write | **969 symbols / 363,528 bytes** |
+| `make phase` | exit 0, 1,436 PASS, 0 FAIL *(last recorded; not re-run here)* |
+| codegen tier | *not re-measured — see below* |
 
-The gap between the first two rows is the honest one: 38.8% is how much
-exists, and 100% is the share of that which some test compares against the
-original rather than merely reading well.
+The codegen row is left unfilled deliberately: `CLAUDE.md` records 92 of 365
+shared symbols and the previous revision of this document recorded 105 of 386,
+which cannot both be current. `make similarity` settles it and was not run
+here, because it needs the period toolchain and a build this measurement did
+not otherwise require.
 
-## 2. "Done" means a closed closure, not a percentage
+The two byte figures do not sum to `.text`: 356,597 + 363,528 is 720,125, and
+the 14,480-byte remainder is alignment padding and zero-size symbols. The
+sum-of-symbol-sizes figure is the one to quote for work, because it is what
+anyone will actually open.
 
-`tools/closure.py <entry> --missing` answers a sharper question than coverage
-does: *what does this entry point still need that nobody has written?* Four
-datapumps — now five — answer zero.
+The previous revision of this document reported 38.8% and 749 symbols,
+measured at `f0112ff`, 168 commits back. Every table below has moved.
 
-| datapump | unwritten in its closure |
-|---|--:|
-| Bell 103 / V.21 | **0** |
-| V.23 | **0** |
-| V.8 negotiation | **0** |
-| call progress / dialler | **0** |
-| **V.PCM construction** (`dp_vpcm_init` → `vpcm_create` → `VPCMXF_Create` → `VPcmV34Create`) | **0** |
+## 2. The three categories, and why the third is not optional
 
-That last row is what this run bought. It was **108 symbols and 19,704
-bytes** when the run started. `dp_vpcm_init` now registers a datapump, builds
-a `VPcmFloModem`, both `Modem` halves, the modulators, the demodulator, the
-equaliser, the message classes and the 53,848-byte V.34 object — all from this
-tree's own code, with the blob used only as the thing it is compared against.
+A symbol-by-symbol count sorts the object into two buckets and there are
+three.
 
-Combined with the V.34 data path (README step 2: two endpoints, both ours,
-33,600 bit/s each way, BER 0 over 8,000 blocks), **a V.34 modem is now ours
-from registration through to carried data.**
+| | symbols | bytes |
+|---|--:|--:|
+| **not written** — the blob defines it, `src/` does not | 969 | 363,528 |
+| **written** | 892 | 356,597 |
+| **written, with unreconstructed regions** | 3 | *(see below)* |
 
-## 3. What is left, and the column that should decide the order
+The third is a subset of the second, not a fourth column, and it is invisible
+to every count taken per symbol. `coverage.py` counts a symbol as translated
+when "a function of the same name now exists" — a name is the whole test — so
+a function that exists, links, and passes its differential test still counts
+as done while routing some of its arms into a `*_notwritten()` stub.
 
-    python3 tools/closure.py <entry points> --missing
+Three functions do this today. The convention and its rule — always record
+the code, and abort unless a test opted out by name — are finding 547.
 
-`exclusive` is the part **only** that entry point needs — bytes no other
-entry point would pay for anyway. It is the number that says what a phase
-actually costs, and it is invisible in any coverage percentage.
+| function | blob bytes | live stub sites | where |
+|---|--:|--:|---|
+| `VPcmV34Progress` | 7,278 | 7 | `src/pump/v34/v34pcmmain.cpp` |
+| `vpcm_run` | 1,662 | 5 | `src/pump/v90/vpcm.c` |
+| `v34handshak` | 61,541 | 1 | `src/pump/v34/v34hshak.c` |
 
-| entry point | closure | exclusive | symbols |
-|---|--:|--:|--:|
-| **V.PCM run** (V.34 + V.90 + V.92) | 193,980 | **193,980** | 254 |
-| **fax Class 1** | 109,268 | 92,392 | 545 |
-| **V.32 / V.32bis** | 59,642 | 42,782 | 202 |
-| **V.22 / V.22bis** | 32,738 | 31,815 | 113 |
-| **voice** | 20,437 | 16,978 | 72 |
-| **Caller ID** | 12,207 | 8,168 | 46 |
-| **DTMF detect / generate** | 5,596 | **17** | 27 |
-| **beep / DTMF generator** | 2,372 | 469 | 6 |
+**`v34handshak`'s one site is the table-3 `default:`, and it is unreachable** —
+forty labels over the forty values the range test admits. It is not open work;
+it stays so that a mutation to either the range test or the label set lands
+somewhere. `docs/v34handshak.md` is the live tracker: tables 1 and 2 are done,
+all sixteen table-3 targets are landed, and what is still open is inside
+microstate 44 (`DET_INFO`, 6,046 bytes) rather than beside it.
 
-Three things fall out of that column.
+**The other twelve sites are real, and five of them name work with no symbol
+to be missing.** `V34PCM_UNWRITTEN_RUNPCM`, `_V90RUN`, `_QCLINE`, `_RESETP3`
+and `_TONEPROC` name `runPcmModem`, `v90RunDemodulator`, `qcLineVerification`,
+`vPcmResetPhase3Modem` and `GenericToneDetector` — and none of those five is a
+symbol in the blob. GCC inlined them into `VPcmV34Progress`, so they cannot
+appear in the 969 and cannot appear in any closure. Only `v90RateReneg` and
+`v90RateRenegSilence` survive as symbols; both are unwritten and both are in
+the list.
 
-**V.PCM cannot be made cheaper by doing something else first.** Every one of
-its 193,980 bytes is exclusive: no other entry point shares a single one. It
-is the end goal and it is also the only item on this list that no amount of
-sequencing reduces.
+    python3 tools/worklist.py            # the stub sites, from the source
 
-**DTMF is 17 bytes of its own.** Its closure is 5,596 bytes, of which 5,579
-belong to pumps that are already written or are on the list anyway. It is
-effectively free the moment its neighbours land, and scheduling it as a
-"phase" would misrepresent it by two orders of magnitude.
+## 3. What is left, by translation-unit span
 
-**Fax Class 1 is the second largest by closure and by exclusive cost**, and
-its 545 symbols are the largest symbol count of anything left — many small
-functions rather than a few large ones, which is the shape that parallelises
-best.
+    make worklist
 
-## 4. Inside the largest item
+The span is from `tumap.json`, measured from the object. It is better
+grouping than a call graph for deciding what to take next: a TU is the unit
+the original was written in, and finding 330 is what happens when a graph walk
+crosses one — a single call to `edprintf` used to drag `call_op` and the whole
+`dp_*_init` family into every closure computed.
 
-    python3 tools/closure.py dp_vpcm_init vpcm_create VPCMXF_Create \
-        VPcmV34Create vpcm_delete VPcmV34Progress \
-        VPcmV34GetCurrentRxBitRate VPcmV34GetCurrentTxBitRate \
-        VPcmV34GetCurrentSessionDP --missing
+| span | symbols | bytes |
+|---|--:|--:|
+| `VPcmV34Main.cpp +72` | 360 | **176,330** |
+| `class1tx.c +94` | 321 | 87,067 |
+| `V32mod.c +39` | 92 | 46,071 |
+| `Dialer.c +18` | 46 | 14,602 |
+| `voice.c#3 +3` | 21 | 9,373 |
+| `Fdspkrnl.c +13` | 29 | 7,635 |
+| `Beepgen.c +3` | 27 | 6,546 |
+| `class1.c` | 14 | 4,626 |
+| `b103.c +2` | 24 | 4,471 |
+| `class1rx.c` | 5 | 2,495 |
+| `v32.c` | 5 | 1,691 |
+| `dp_init.c +2` | 9 | 1,452 |
+| `v22.c` | 5 | 1,071 |
+| `vpcm.c` | 1 | 70 |
+| `call.c` | 1 | 28 |
+| `pow.S#279 +1` | 9 | 0 |
 
-The V.PCM **run** path is 254 symbols / 193,980 bytes, entered through
-`VPcmV34Progress` (7,278 bytes, itself unwritten). By class, largest first:
+**The ten largest single functions left are all in `VPcmV34Main.cpp`, and all
+ten are V.90 or V.92.** Nothing in fax, V.32 or V.22 comes close — the largest
+outside this span is `V32FP_recreate` at 3,733 bytes, which would place
+seventh.
 
-| class | bytes | symbols | writable today |
-|---|--:|--:|--:|
-| `V90ConstellationDesigner` | 20,432 | 6 | 3 |
-| `V90Equalizer` (its processing half) | 18,361 | 9 | 5 |
-| free functions and data | 17,491 | 26 | 22 |
-| `V90Phase3Demodulator` | 17,322 | 7 | 2 |
-| `V90AutoDigitalImpDetector` | 16,712 | 20 | 17 |
-| `V90Demodulator` | 9,179 | 6 | 2 |
-| `V90Phase4Demodulator` | 7,417 | 11 | 4 |
-| `V90CP` | 7,257 | 5 | 4 |
-| `V90Phase4Modulator` | 7,128 | 7 | 2 |
-| `V92Phase4Modulator` | 6,878 | 19 | 9 |
-| `V92ModulusEncoder` | 6,814 | 2 | 2 |
-| `V90ConnectionEvaluator` | 6,767 | 9 | **9 — the whole class** |
-| *(16 further classes, each under 5,200 B)* | ~32,000 | 108 | most |
+| bytes | symbol |
+|--:|---|
+| 9,364 | `V90Equalizer::process` |
+| 8,616 | `V90Phase3Demodulator::getV92Decision` |
+| 8,379 | `V90Phase3Demodulator::getV90Decision` |
+| 7,894 | `V90Parameters::loadParams` |
+| 7,276 | `V90Demodulator::progress` |
+| 4,887 | `V90ConstellationDesigner::adjustConstellationsToNewK` |
+| 4,434 | `V90ConstellationDesigner::setConstellationToNoise_forceRate` |
+| 4,055 | `V92Phase4Modulator::generateSymbol` |
+| 3,922 | `V90Phase4Modulator::generateV92Symbol` |
+| 3,767 | `V90TRN2Designer::V90TRN2Design` |
 
-Every class here already has its constructor, destructor and object map
-written and asserted — that was this run's work. What remains is the
-*processing*: the methods that run per block. That is a materially easier
-starting position than the constructors were, because the layout is settled
-and the fixtures exist.
+Anything over about 6 KB needs `docs/largefunctions.md` before it is started.
 
-## 5. The 341 symbols no entry point reaches
+## 4. Two corrections to how this was measured before
 
-    python3 tools/closure.py … --missing     (union of all twelve entry sets)
+Both concern `closure.py`, and neither is a defect in it — it answers the
+question it was built for, which is "what must this batch define before it
+will link". Neither reading survives being used to measure *remaining work*.
 
-Of the 1,103 unwritten symbols, **762 (375,705 bytes) are reachable** from one
-of the twelve entry points above and **341 (59,372 bytes) are not.**
+### The walk stops at what is already written, so "unreachable" over-counts
 
-**They are not dead code, and the label matters.** The largest are
-`V90Parameters::loadParams` (7,894), `V92CP::bitsToInfo` (1,957),
-`V92Parameters::loadParams` (1,384), `V92CP::evaluateInfo` (1,124),
-`RingDetector_Process` (1,045), `VPcmV34GetVisualDiagnostics` (1,023),
-`V90Phase4Modulator::setRfSymbols` (1,005),
-`GetNextDigitAndReturnNextState` (895), `VPcmV34GetDiagnostics` (821).
+`closure.py:299` is `if n in have and n not in roots: continue`, and the
+comment above it argues the case: a symbol `src/` already defines cannot leave
+anything undefined, and walking through it would import the BLOB's callees
+rather than ours. Finding 330.
 
-That is **exported API surface the host calls directly** rather than through a
-datapump — diagnostics, parameter loading, ring detection — plus a
-ring-detector entry set not enumerated here. A first pass of this measurement
-put 413 symbols in this bucket and included `VOICE_process`, `dtmf_modem` and
-`cid_modem`; those are real services whose entry points were simply missing
-from the list. **Anything counted here should be checked for a missing entry
-point before being called unreachable.**
+The consequence for a *coverage* question is that every written function is a
+wall. An unwritten symbol reachable only through a written one is reported as
+reached by nothing.
 
-`V90Parameters::loadParams` is the one genuinely-inert member: findings
-860–862 show both its callees are three-byte stubs, so the method has no
-observable behaviour, and `tools/vparse.py` already extracts everything it
-encodes.
+**The previous revision's "341 symbols (59,372 bytes) no entry point reaches"
+is that artefact and not an unreachability claim.** The worked example is the
+largest unwritten function in the object:
 
-## 6. What these numbers do not cover
+    python3 tools/closure.py VPcmV34Progress --missing   # V90Equalizer::process PRESENT
+    python3 tools/closure.py <every entry point> --missing   # ABSENT
+
+`V90Equalizer::process` is 9,364 bytes, it is needed, and it is unwritten.
+`VPcmV34Progress` is written, so a walk from the entry points stops one call
+short of it. The same happens to most of the V.90 receive chain.
+
+To ask "what does the original need behind this entry point", give
+`closure.py` the entry point *and* the written functions on the path as roots
+— roots are always expanded — or read `docs/worklist.md`, which does not use a
+graph at all.
+
+### A function pointer in a table is never followed
+
+The `.rel.data` pass adds D and R symbols, so a pointer to a *function* parked
+in a dispatch table or a C++ vtable is not walked. Those pointers are
+`R_386_32` against a section symbol with the addend inline, so `objdump`
+prints `.text` and names nothing — the same trap as finding 604's strings.
+
+    python3 tools/indirect.py ../slmodemd/dsplibs.o
+
+reports **125 functions reached only that way**, out of 1,922 relocations into
+`.text` from data sections; the other 1,759 land mid-function and are switch
+jump tables rather than entry points. They include all seven datapump
+op-structs —
+
+    call_op  v8_op  vpcm_op  v32_ops  v23_ops  v22_ops  b103_ops
+
+each `{name, create, delete, run}` — the `*NextState` state-machine tables for
+B.103 and V.32, the `FSE_decision_*` families, and the `Resampler` vtables.
+This is why an entry-point list has to be written down rather than derived
+from calls alone: `dp_vpcm_init`'s entire closure is itself and `vpcm_op`,
+96 bytes, and every datapump hangs off the far side of that table.
+
+The host-facing API is derivable and is 22 symbols — what the rest of
+`slmodemd` leaves undefined and the blob defines:
+
+    CID_{create,delete,process}   dcr_{create,delete,process}
+    dp_runtime_{create,delete}    FAX_{create,delete,process}
+    FAX_class1_command            prop_dp_{init,exit}
+    RD_{create,delete,process}    RD_ring_details
+    VOICE_{create,delete,process} VOICE_command
+
+## 5. What these numbers do not cover
 
 - **Byte counts are the blob's, not ours.** They size the reading, not the
   writing.
-- **`closure.py` is a LINK closure**, deliberately pessimistic about run-time
-  reachability: it lists branches nothing takes. It also cannot see members
-  GCC inlined out of existence (finding 64).
-- **A C++ header's `/* +0xNNN */` comments are checked by nothing.** Every one
-  is in `offcheck.py`'s `SKIP_HEADERS`, and `make offsets` counts the same
-  annotations with or without them. What pins a C++ layout is the
-  `__builtin_offsetof` typedefs in the `.cpp`. "offsets clean" is not "the
-  header was validated".
-- **The codegen tier is no evidence for five classes**, not weak evidence: ten
-  of fifteen period-toolchain failures are one C++11 construct (`enum X : int`)
-  in three headers, which excludes `V90Equalizer`, `V90PreFilter`,
-  `VPcmFloModem`, `V90Demodulator` and `V90Phase3Demodulator` — the classes
-  this run added most to. Finding 1308.
+- **A count per symbol cannot see inside one.** §2 is the part of this that
+  has been chased down; there is no tool that proves a written function
+  reproduces all of its original's behaviour, only tests that fail when it
+  does not. `debugaudit.py --missing` is the nearest per-function view, and
+  its own caveat applies — the blob has 262 diagnostic call sites in
+  `v34handshak` and we have 1, but a missing `edprintf` is not by itself an
+  unreconstructed region, because the level ships at zero and the two behave
+  identically (finding 134).
+- **A C++ header's `/* +0xNNN */` comments are checked by nothing.** What
+  pins a C++ layout is the `__builtin_offsetof` typedefs in the `.cpp`.
+- **The codegen tier is no evidence for five classes** — ten of fifteen
+  period-toolchain failures are one C++11 construct in three headers, which
+  excludes `V90Equalizer`, `V90PreFilter`, `VPcmFloModem`, `V90Demodulator`
+  and `V90Phase3Demodulator`. Finding 1308.
 - **The mutation snapshot is stale tree-wide** (roughly 1 current of 117) by
-  the owner's decision; the full sweep is deferred. Stale is not MISSING and
-  fails no gate, but no entry should be quoted as a baseline until it is
-  re-run.
+  the owner's decision. Stale is not missing and fails no gate, but no entry
+  should be quoted as a baseline until it is re-run.
+- **This was measured against `build/` as it stood at `d367962`.** The symbol
+  tables are the object's and do not move; what a concurrent edit in another
+  worktree could change is which functions `src/` defines, so re-run
+  `make worklist` rather than quoting a stale list.
 
-## 7. The order this suggests
+## 6. The order this suggests
 
-1. **V.PCM run — `VPcmV34Progress` and the receive chain's processing
-   methods.** 193,980 bytes, all exclusive, and the project's stated end goal.
-   Start where `cl=1` is dense: `V90ConnectionEvaluator` (whole class),
-   `V90AutoDigitalImpDetector` (17 of 20), the free functions (22 of 26).
-   `V90Demodulator`'s own methods stay last — closure 142 is a hub.
-2. **V.90 answer side.** Deliberately last within V.PCM: `VPCMXF_Create`
-   derives its side from a null argument its one caller always passes, so the
-   digital-side sender is code the blob never enters and cannot be driven
-   differentially. Only the codegen tier applies, and §6 bounds what that is
-   worth here.
-3. **Fax Class 1** — 92,392 exclusive over 545 symbols, the best-shaped
-   remaining work for parallel batches.
-4. **V.32 / V.32bis**, then **V.22 / V.22bis** — 42,782 and 31,815 exclusive.
-5. **voice, Caller ID, ring detect** — 16,978 and 8,168 exclusive.
-6. **DTMF and the beep generator** — 17 and 469 exclusive. Take them whenever
-   their neighbours land; they are not a phase.
+Unchanged in shape from the previous revision, because the exclusive-cost
+argument still holds and V.PCM is still the end goal — but the starting
+position inside it has moved a long way.
 
-And one piece of maintenance that is owed rather than optional: **the
-tree-wide mutation re-record**, once reconstruction stops moving.
+1. **The V.90 receive chain**, which is now the bulk of `VPcmV34Main.cpp`'s
+   176,330 bytes. The constructors, destructors and object maps are written
+   and asserted; what is left is the per-block processing, and the four
+   largest items in the whole project — `V90Equalizer::process`,
+   both `V90Phase3Demodulator` decisions, and `V90Demodulator::progress` —
+   are 34 KB of it between them.
+2. **The twelve live stub sites in `VPcmV34Progress` and `vpcm_run`**, taken
+   with the chain above rather than after it: five of them are inlined work
+   that will otherwise never appear on any list, and they sit on the path
+   every V.90 call takes.
+3. **Fax Class 1** — `class1tx.c +94`, 321 symbols over 87,067 bytes. The
+   largest symbol count left, which is the shape that parallelises best.
+4. **V.32 / V.32bis then V.22 / V.22bis** — `V32mod.c +39`, 92 symbols.
+5. **Dialler, voice, Caller ID, ring detect, beep** — the `Dialer.c`,
+   `voice.c`, `Fdspkrnl.c` and `Beepgen.c` spans, 38 KB together.
+6. **`microstate 44` inside `v34handshak`**, per `docs/v34handshak.md`, and
+   the tree-wide mutation re-record once reconstruction stops moving.
+
+`V90Parameters::loadParams` (7,894 bytes) is the one genuinely-inert item on
+the list: findings 860–862 show both its callees are three-byte stubs, so it
+has no observable behaviour, and `tools/vparse.py` already extracts everything
+it encodes. It is fourth-largest by bytes and should not be fourth by order.

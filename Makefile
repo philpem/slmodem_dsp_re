@@ -172,7 +172,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage debugcov phase blobfix blobfix-check onedef period
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase blobfix blobfix-check onedef period
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -676,6 +676,13 @@ similarity:
 
 coverage: $(BUILD)/tumap.json $(OBJ) $(REF)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md
+
+# The same measurement enumerated rather than summarised: which functions,
+# not what percentage.  Deliberately NOT in `phase` -- it gates nothing, and
+# a list that changes on every landed function would make every commit touch
+# a generated file.
+worklist: $(BUILD)/tumap.json $(OBJ)
+	@$(PYTHON) tools/worklist.py --md docs/worklist.md
 
 $(BUILD)/tumap.json: tools/tumap.py $(BLOB) | $(BUILD)
 	@$(PYTHON) tools/tumap.py $(BLOB) --json $@ >/dev/null
