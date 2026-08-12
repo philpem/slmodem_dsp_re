@@ -107,6 +107,79 @@ V90Jd::~V90Jd()
 }
 
 /*
+ * ===========================================================================
+ * The three accessors, 0x1e8b0, 0x1e900 and 0x1e920 -- AND THEY DO NOT READ
+ * THE LAYOUT THE CONSTRUCTOR WRITES.
+ *
+ * The constructor and `getBitVector` build a FRAMED message: seventeen 1 bits,
+ * then a 0 at `bits[17]`, the low sixteen mask bits at `bits[18..33]`, a 0 at
+ * `bits[34]`, the high twelve at `bits[35..46]`, and the two small fields at
+ * `bits[47..48]` and `bits[49..50]`.  These three read
+ *
+ *     getRatesMask         +0x02..+0x11 and +0x12..+0x1d   bits[0..15], [16..27]
+ *     getConstelationSize  +0x1e, +0x1f                    bits[28], bits[29]
+ *     getMaxLookahead      +0x20, +0x21                    bits[30], bits[31]
+ *
+ * -- a payload-contiguous layout with no group markers in it, 28 rate bits
+ * then two and two, ending at `bits[31]`.  Nothing that PACKS in this class
+ * writes that.  `unPackData` DOES: it strips the framing off an incoming
+ * message and fills `bits[0..47]` flat, which is why these three read where
+ * they read.  The class has two layouts because it has two directions, and
+ * D270 -- opened here when the accessors landed and the unpacker had not --
+ * says so now.  Both are reproduced as the object has them and each is driven
+ * against the blob.
+ *
+ * A BYTE COUNTS AS SET IF IT IS NON-ZERO, and that is not the same rule the
+ * two small fields use.  `getRatesMask` tests `cmpb $0x0`, so a byte of 2
+ * contributes its bit; `getMaxLookahead` does `and $0x1` on both of its, so a
+ * byte of 2 contributes nothing.  The test seeds the vector with varied bytes
+ * rather than with 0 and 1 so that the two rules are told apart.
+ *
+ * THE RETURN TYPES ARE MEASURED, not assumed -- a return type is not mangled.
+ * `getRatesMask` leaves a 32-bit value in `%eax` (`mov %edx,%eax` on an
+ * accumulator built with `shl`/`or`), so it returns an `int`.
+ * `getMaxLookahead` ends `movzbl %dl,%eax` on a sum computed in a byte
+ * register, which is an `unsigned char` result widened at the return.
+ * `getConstelationSize` writes through both pointers and sets `%eax` to
+ * nothing, so it returns void.
+ * ===========================================================================
+ */
+int
+V90Jd::getRatesMask()
+{
+	int mask = 0;
+	int i;
+
+	for (i = 0; i <= 15; i++)
+		if (bits[i])
+			mask |= 1 << i;
+
+	for (i = 0; i <= 11; i++)
+		if (bits[16 + i])
+			mask |= 1 << (i + 16);
+
+	return mask;
+}
+
+void
+V90Jd::getConstelationSize(unsigned char *first, unsigned char *second)
+{
+	*first = bits[28];
+	*second = bits[29];
+}
+
+/*
+ * The high bit is `bits[31]` and the low one `bits[30]`, which is the order
+ * `setMaxLookahead` and the constructor use for the pair they write -- at
+ * `bits[50]` and `bits[49]`, nineteen bytes further on.
+ */
+unsigned char
+V90Jd::getMaxLookahead()
+{
+	return (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));
+}
+
+/*
  * The CRC-16 the message carries, as the object computes it: sixteen ints,
  * one per bit, shifting down toward crc[0], with the feedback
  *
@@ -181,4 +254,211 @@ V90Jd::unPackReset()
 	unpack[1] = 0;
 	unpackWord = 0;
 	unpack[0] = 0;
+}
+
+/*
+ * ===========================================================================
+ * The unpacker, 0x1eba0, 879 bytes -- AND IT IS THE PRODUCER THE THREE
+ * ACCESSORS WERE WRITTEN FOR.  D270 asked whether anything writes the
+ * payload-contiguous layout `getRatesMask` and friends read.  This does, and
+ * nothing else in the class does:
+ *
+ *     bits[ 0..15]   `mov %cl,0x2(%ebx,%esi,1)` in the case at 0x1ec51
+ *     bits[16..27]   the same store at 0x1ec89
+ *     bits[28..31]   the same store at 0x1ecaf
+ *     bits[32..47]   the same store at 0x1ecfd -- the CRC as received
+ *
+ * -- written strictly in arrival order, one byte per received bit, starting
+ * at `bits[0]`, and no group marker is ever stored.  So the class has two
+ * layouts because it has two directions: the constructor and `getBitVector`
+ * build the FRAMED message for the wire, and the unpacker strips the framing
+ * off an incoming one and leaves the payload flat for the accessors.  Framed
+ * position 18+p is payload p for p in 0..15, 35+(p-16) for p in 16..31 and
+ * 52+(p-32) for p in 32..47, which is exactly the run the two sides agree on.
+ *
+ * THE THREE STATE FIELDS, now that something reads them.  `unpack[0]` is the
+ * length of the current run of 1 bits -- the entry sequence is `test %ecx;
+ * je` over `movzbl (%ebx); inc %al`, so it is set to `unpack[0] + 1` on a
+ * non-zero bit and to 0 on a zero one, as a BYTE, wrapping at 255.
+ * `unpack[1]` is how many payload bytes have been stored, and `unpackWord` is
+ * the state: `cmp $0x8,%eax; ja <default>` over a nine-entry jump table at
+ * .rodata+0x794, so `switch` on an `int` with cases 0 through 8.
+ *
+ * THE RETURN TYPE IS `int`, measured: every path but one reaches `xor %edx,
+ * %edx` before `mov %edx,%eax`, and the case-8 completion at 0x1ec18 jumps
+ * past it with `%edx` holding 1.  A return type is not mangled, so this is
+ * the only way to know it.
+ *
+ * The state machine walks the framing the packer writes:
+ *
+ *     0  hunt          `cmp $0x10,%dl; jbe` -- seventeen 1 bits, unsigned
+ *     1  group 1's 0   a 1 here restarts
+ *     2  16 payload    `cmp $0x10,%al`
+ *     3  group 2's 0   a 1 here restarts
+ *     4  12 payload    `cmp $0x1c,%al`   (V92Jd's data unpacker splits this)
+ *     5  4 payload     `cmp $0x20,%al`   -- constellation size and lookahead
+ *     6  group 3's 0   a 1 here restarts
+ *     7  16 payload    `cmp $0x30,%al`, then the CRC is checked
+ *     8  4 trailing    `cmp $0x34,%al`, then 1 is returned
+ *
+ * THE RESTART IS `unPackReset()`'s THREE STORES IN ITS ORDER, byte for byte,
+ * at 0x1ec40: `movb $0x0,0x1(%ebx)`, then the word, then `movb $0x0,(%ebx)`.
+ * That is consistent with an inlined call to it and is written as one; the
+ * run length computed on the way in is discarded, so a stray 1 where a marker
+ * belongs does not count toward the next seventeen.
+ *
+ * THE CRC IS `getBitVector`'s, over ONE run of thirty-two rather than two of
+ * sixteen: `cmpl $0x1f,0x3c(%esp)` where the packer's helper stops at 15 and
+ * is called twice with a 17-byte stride.  The payload is contiguous here, so
+ * the two are the same thirty-two bytes in the same order and the register
+ * agrees with what the packer put on the wire.  It is written inline rather
+ * than through `v90jd_crc_bits` because the object's loop bound is 31.
+ *
+ * THE COMPARISON IS A SUM OF ABSOLUTE DIFFERENCES, not a bitwise test:
+ * `sub %edi,%edx; mov %edx,%eax; sar $0x1f,%eax; xor %eax,%edx; sub %eax,%edx`
+ * accumulated over sixteen and tested for zero.  Since the received byte is
+ * stored unmasked, a CRC byte of 2 fails here where `(x ^ y) & 1` would pass,
+ * and the test drives exactly that.
+ * ===========================================================================
+ */
+int
+V90Jd::unPackData(int bit)
+{
+	unsigned char ones = 0;
+	unsigned char n;
+	int sum;
+	int i, k;
+
+	if (bit)
+		ones = (unsigned char)(unpack[0] + 1);
+
+	switch (unpackWord) {
+	case 0:
+		/* Group 0: seventeen 1 bits, counted as an unsigned byte. */
+		unpack[0] = ones;
+		if (ones > 16)
+			unpackWord = 1;
+		break;
+
+	case 1:
+		/* Group 1's leading 0. */
+		if (bit) {
+			unPackReset();
+			break;
+		}
+		unpack[0] = ones;
+		unpackWord = 2;
+		break;
+
+	case 2:
+		/* The low sixteen rate bits. */
+		n = unpack[1];
+		bits[n] = (unsigned char)bit;
+		unpack[0] = ones;
+		n++;
+		unpack[1] = n;
+		if (n == 16)
+			unpackWord = 3;
+		break;
+
+	case 3:
+		/* Group 2's leading 0. */
+		if (bit) {
+			unPackReset();
+			break;
+		}
+		unpack[0] = ones;
+		unpackWord = 4;
+		break;
+
+	case 4:
+		/* The high twelve rate bits. */
+		n = unpack[1];
+		bits[n] = (unsigned char)bit;
+		unpack[0] = ones;
+		n++;
+		unpack[1] = n;
+		if (n == 28)
+			unpackWord = 5;
+		break;
+
+	case 5:
+		/* The constellation size and the maximum lookahead. */
+		n = unpack[1];
+		bits[n] = (unsigned char)bit;
+		unpack[0] = ones;
+		n++;
+		unpack[1] = n;
+		if (n == 32)
+			unpackWord = 6;
+		break;
+
+	case 6:
+		/* Group 3's leading 0. */
+		if (bit) {
+			unPackReset();
+			break;
+		}
+		unpackWord = 7;
+		unpack[0] = ones;
+		break;
+
+	case 7:
+		/* The sixteen CRC bits, then the check. */
+		n = unpack[1];
+		bits[n] = (unsigned char)bit;
+		n++;
+		if (n != 48) {
+			unpack[1] = n;
+			unpack[0] = ones;
+			break;
+		}
+
+		for (i = 0; i <= 15; i++)
+			crc[i] = 1;
+
+		for (k = 0; k <= 31; k++) {
+			int t = bits[k] + crc[0];
+			int tap3 = (crc[4] + t) & 1;
+			int tap10 = (crc[11] + t) & 1;
+
+			for (i = 0; i <= 14; i++)
+				crc[i] = crc[i + 1];
+			crc[3] = tap3;
+			crc[10] = tap10;
+			crc[15] = t & 1;
+		}
+
+		sum = 0;
+		for (i = 0; i <= 15; i++) {
+			int d = crc[i] - bits[32 + i];
+
+			sum += d < 0 ? -d : d;
+		}
+		if (sum != 0) {
+			unPackReset();
+			break;
+		}
+
+		unpack[1] = 48;
+		unpackWord = 8;
+		unpack[0] = ones;
+		break;
+
+	case 8:
+		/* The four trailing bits, whose values are not looked at. */
+		n = unpack[1];
+		unpack[0] = ones;
+		n++;
+		unpack[1] = n;
+		if (n == 0x34)
+			return 1;
+		break;
+
+	default:
+		unpack[0] = ones;
+		break;
+	}
+
+	return 0;
 }

@@ -80,8 +80,8 @@
   "replace": "\tfor (i = 0; i < (filterLength >> 1) + echoDelay\n\t\t     + (unsigned int)params->V92_ECHO_DELAY_OFFSET; i++)\n\t\techoHistory[i] = 0.0f;\n\techoLength = 0;"
  },
  {
-  "label": "word_08 is left alone",
-  "find": "\tword_08 = 0;\n\n\techoBeta = 0.0f;",
+  "label": "the state is left alone",
+  "find": "\tstate = V92_ECHO_FILTER_ONLY;\n\n\techoBeta = 0.0f;",
   "replace": "\techoBeta = 0.0f;"
  },
  {
@@ -233,5 +233,255 @@
   "label": "the constructor does not reset what it built",
   "find": "\tarma = m;\n\n\treset();",
   "replace": "\tarma = m;"
+ },
+ {
+  "label": "a repeated state restarts the sample count anyway",
+  "find": "\tif (state == newState)\n\t\treturn;\n\n",
+  "replace": ""
+ },
+ {
+  "label": "the printed sign is the ordered comparison, so a NaN prints '-'",
+  "find": "\treturn !(v <= 0.0f) ? '+' : '-';",
+  "replace": "\treturn (0.0f < v) ? '+' : '-';"
+ },
+ {
+  "label": "the printed integer part keeps its sign",
+  "find": "\treturn (int)__builtin_fabsf(v);",
+  "replace": "\treturn (int)v;"
+ },
+ {
+  "label": "the printed fraction is scaled by 1e5",
+  "find": "\t\t\t\t   * 1.0e6f));",
+  "replace": "\t\t\t\t   * 1.0e5f));"
+ },
+ {
+  "label": "the printed fraction keeps its sign",
+  "find": "\treturn __builtin_abs((int)(((long double)v - (long double)(int)v)\n\t\t\t\t   * 1.0e6f));",
+  "replace": "\treturn (int)(((long double)v - (long double)(int)v)\n\t\t\t     * 1.0e6f);"
+ },
+ {
+  "label": "the beta is printed and not stored",
+  "find": "\tself->echoBeta = beta;\n",
+  "replace": ""
+ },
+ {
+  "label": "the decay factor is printed and not stored",
+  "find": "\tself->echoBetaDecay = decay;\n",
+  "replace": ""
+ },
+ {
+  "label": "the filter is dumped on every entry to FILTER_ONLY",
+  "find": "\t\tif (state == V92_ECHO_FAST_TRAINING\n\t\t    || state == V92_ECHO_SLOW_TRAINING) {",
+  "replace": "\t\tif (state != V92_ECHO_FILTER_ONLY) {"
+ },
+ {
+  "label": "the filter is dumped leaving fast training only",
+  "find": "\t\tif (state == V92_ECHO_FAST_TRAINING\n\t\t    || state == V92_ECHO_SLOW_TRAINING) {",
+  "replace": "\t\tif (state == V92_ECHO_FAST_TRAINING) {"
+ },
+ {
+  "label": "the dump runs one coefficient long",
+  "find": "\t\t\tfor (i = 0; i < filterLength; i++)\n\t\t\t\tedprintf(\"   = %c%d.%06d\\r\\n\",",
+  "replace": "\t\t\tfor (i = 0; i <= filterLength; i++)\n\t\t\t\tedprintf(\"   = %c%d.%06d\\r\\n\","
+ },
+ {
+  "label": "the dump is bounded by the tap count",
+  "find": "\t\t\tfor (i = 0; i < filterLength; i++)\n\t\t\t\tedprintf(\"   = %c%d.%06d\\r\\n\",",
+  "replace": "\t\t\tfor (i = 0; i < echoLength; i++)\n\t\t\t\tedprintf(\"   = %c%d.%06d\\r\\n\","
+ },
+ {
+  "label": "the count-delay duration is the delay alone",
+  "find": "\t\tupdateDuration = echoDelay + 400u;",
+  "replace": "\t\tupdateDuration = echoDelay;"
+ },
+ {
+  "label": "fast training loads the slow beta",
+  "find": "\t\tec_set_echo_beta(this, params->V92_ECHO_FAST_BETA_FACTOR);",
+  "replace": "\t\tec_set_echo_beta(this, params->V92_ECHO_SLOW_BETA_FACTOR);"
+ },
+ {
+  "label": "slow training loads the fast decay factor",
+  "find": "\t\tec_set_decay_factor(this, params->V92_ECHO_SLOW_DECAY_FACTOR);",
+  "replace": "\t\tec_set_decay_factor(this, params->V92_ECHO_FAST_DECAY_FACTOR);"
+ },
+ {
+  "label": "fast training takes the slow duration",
+  "find": "\t\tupdateDuration =\n\t\t\t(unsigned int)params->V92_ECHO_FAST_UPDATE_DURATION;",
+  "replace": "\t\tupdateDuration =\n\t\t\t(unsigned int)params->V92_ECHO_SLOW_UPDATE_DURATION;"
+ },
+ {
+  "label": "the two training arms store each other's state",
+  "find": "\t\tstate = V92_ECHO_FAST_TRAINING;",
+  "replace": "\t\tstate = V92_ECHO_SLOW_TRAINING;"
+ },
+ {
+  "label": "the illegal-state message is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V92EchoCanceller: setState \"",
+  "replace": "\t\tif (dsplibs_debug_level > 0)\n\t\t\tdsplibs_debug_printf(\"V92EchoCanceller: setState \""
+ },
+ {
+  "label": "the illegal-state message goes through the encoder",
+  "find": "\t\t\tdsplibs_debug_printf(\"V92EchoCanceller: setState \"\n\t\t\t\t\t     \"ERROR: illegal state\\r\\n\");",
+  "replace": "\t\t\tedprintf(\"V92EchoCanceller: setState \"\n\t\t\t\t \"ERROR: illegal state\\r\\n\");"
+ },
+ {
+  "label": "the sample count survives a state change",
+  "find": "\tword_10 = 0;\n}",
+  "replace": "}"
+ },
+ {
+  "label": "the writer's fast path is taken one sample too often",
+  "find": "\tif (echoLength + count < historyAlloc) {",
+  "replace": "\tif (echoLength + count <= historyAlloc) {"
+ },
+ {
+  "label": "the writer's fast path forgets to advance the cursor",
+  "find": "\t\techoLength += count;\n\t\treturn;",
+  "replace": "\t\treturn;"
+ },
+ {
+  "label": "the writer's fast loop re-reads the first sample",
+  "find": "\t\t\t*w++ = arma->process(in[i]);",
+  "replace": "\t\t\t*w++ = arma->process(in[0]);"
+ },
+ {
+  "label": "the writer's fast loop skips the ARMA",
+  "find": "\t\t\t*w++ = arma->process(in[i]);",
+  "replace": "\t\t\t*w++ = in[i];"
+ },
+ {
+  "label": "the compaction triggers one sample early",
+  "find": "\t\tif (echoLength + 1 == historyAlloc) {",
+  "replace": "\t\tif (echoLength + 2 == historyAlloc) {"
+ },
+ {
+  "label": "the compaction keeps filterLength samples",
+  "find": "\t\t\tunsigned int n = filterLength - 1;",
+  "replace": "\t\t\tunsigned int n = filterLength;"
+ },
+ {
+  "label": "the compaction copies upward",
+  "find": "\t\t\tdo {\n\t\t\t\t*dst-- = *src--;\n\t\t\t} while (--n != 0);",
+  "replace": "\t\t\tdst -= n - 1;\n\t\t\tsrc -= n - 1;\n\t\t\tdo {\n\t\t\t\t*dst++ = *src++;\n\t\t\t} while (--n != 0);"
+ },
+ {
+  "label": "the compaction reads one sample short of the newest",
+  "find": "\t\t\tfloat *src = &echoHistory[echoLength];",
+  "replace": "\t\t\tfloat *src = &echoHistory[echoLength - 1];"
+ },
+ {
+  "label": "the write cursor is not rewound after a compaction",
+  "find": "\t\t\techoLength = filterLength - 1;",
+  "replace": "\t\t\techoLength = filterLength;"
+ },
+ {
+  "label": "the write pointer is not rewound after a compaction",
+  "find": "\t\t\tw = &echoHistory[filterLength - 1];",
+  "replace": "\t\t\tw = &echoHistory[filterLength];"
+ },
+ {
+  "label": "the write cursor advances after a compaction as well",
+  "find": "\t\t\tw = &echoHistory[filterLength - 1];\n\t\t} else {\n\t\t\techoLength++;\n\t\t}",
+  "replace": "\t\t\tw = &echoHistory[filterLength - 1];\n\t\t}\n\t\techoLength++;"
+ },
+ {
+  "label": "the sentinel is 178.0f",
+  "find": "\tif (!(out[0] < 177.0f || out[0] > 177.0f)) {",
+  "replace": "\tif (!(out[0] < 178.0f || out[0] > 178.0f)) {"
+ },
+ {
+  "label": "the sentinel test is C's equality, so a NaN filters",
+  "find": "\tif (!(out[0] < 177.0f || out[0] > 177.0f)) {",
+  "replace": "\tif (out[0] == 177.0f) {"
+ },
+ {
+  "label": "the sentinel path does not step the read cursor",
+  "find": "\t\t\tout[i] = in[i];\n\t\t\tif (historyIndex + 1 == mod)\n\t\t\t\thistoryIndex = 0;\n\t\t\telse\n\t\t\t\thistoryIndex = historyIndex + 1;",
+  "replace": "\t\t\tout[i] = in[i];"
+ },
+ {
+  "label": "the filter-only state adapts like a training one",
+  "find": "\tif (state == V92_ECHO_FILTER_ONLY) {",
+  "replace": "\tif (0) {"
+ },
+ {
+  "label": "the dot product uses one accumulator",
+  "find": "\t\ts1 += (long double)h[1] * c[1];\n\t\ts0 += (long double)h[2] * c[2];\n\t\ts1 += (long double)h[3] * c[3];",
+  "replace": "\t\ts0 += (long double)h[1] * c[1];\n\t\ts0 += (long double)h[2] * c[2];\n\t\ts0 += (long double)h[3] * c[3];"
+ },
+ {
+  "label": "the dot product is unrolled eight ways",
+  "find": "\twhile (n > 3) {",
+  "replace": "\twhile (n > 7) {"
+ },
+ {
+  "label": "the dot product's tail is skipped",
+  "find": "\twhile (n != 0) {\n\t\ts0 += (long double)*h++ * *c++;\n\t\tn--;\n\t}\n",
+  "replace": ""
+ },
+ {
+  "label": "the error is the difference the other way round",
+  "find": "\t\terr = in[i] - sum;",
+  "replace": "\t\terr = sum - in[i];"
+ },
+ {
+  "label": "the coefficient update subtracts",
+  "find": "\t\t\techoCoeff[j] += echoHistory[historyIndex + j] * mu;",
+  "replace": "\t\t\techoCoeff[j] -= echoHistory[historyIndex + j] * mu;"
+ },
+ {
+  "label": "the coefficient update reads the history from the front",
+  "find": "\t\t\techoCoeff[j] += echoHistory[historyIndex + j] * mu;",
+  "replace": "\t\t\techoCoeff[j] += echoHistory[j] * mu;"
+ },
+ {
+  "label": "the step size is the decay factor",
+  "find": "\t\tmu = err * echoBeta;",
+  "replace": "\t\tmu = err * echoBetaDecay;"
+ },
+ {
+  "label": "the beta does not decay",
+  "find": "\t\techoBeta = echoBeta * echoBetaDecay;\n",
+  "replace": ""
+ },
+ {
+  "label": "the training cursor wraps at the filter length",
+  "find": "\n\t\tif (historyIndex + 1 == historyAlloc - word_18)",
+  "replace": "\n\t\tif (historyIndex + 1 == historyAlloc - filterLength)"
+ },
+ {
+  "label": "the filter-only cursor wraps one entry early",
+  "find": "\t\t\tif (historyIndex + 1 == historyAlloc - word_18)",
+  "replace": "\t\t\tif (historyIndex + 2 == historyAlloc - word_18)"
+ },
+ {
+  "label": "the copy state does not reduce the cursor",
+  "find": "\t\tif (historyIndex >= mod)\n\t\t\thistoryIndex -= mod;",
+  "replace": ""
+ },
+ {
+  "label": "the count-delay state hands on to slow training",
+  "find": "\t\t\tsetState(V92_ECHO_FAST_TRAINING);",
+  "replace": "\t\t\tsetState(V92_ECHO_SLOW_TRAINING);"
+ },
+ {
+  "label": "the training states hand on the wrong way",
+  "find": "\t\tsetState(state == V92_ECHO_FAST_TRAINING\n\t\t\t ? V92_ECHO_SLOW_TRAINING : V92_ECHO_FILTER_ONLY);",
+  "replace": "\t\tsetState(state == V92_ECHO_FAST_TRAINING\n\t\t\t ? V92_ECHO_FILTER_ONLY : V92_ECHO_SLOW_TRAINING);"
+ },
+ {
+  "label": "the block length replaces the sample count",
+  "find": "\tword_10 += count;\n\tif (word_10 >= updateDuration)",
+  "replace": "\tword_10 = count;\n\tif (word_10 >= updateDuration)"
+ },
+ {
+  "label": "the copy state's duration comparison is strict",
+  "find": "\t\tif (word_10 >= updateDuration)\n\t\t\tsetState(V92_ECHO_FAST_TRAINING);",
+  "replace": "\t\tif (word_10 > updateDuration)\n\t\t\tsetState(V92_ECHO_FAST_TRAINING);"
+ },
+ {
+  "label": "the training duration comparison is strict",
+  "find": "\tif (word_10 >= updateDuration)\n\t\tsetState(state ==",
+  "replace": "\tif (word_10 > updateDuration)\n\t\tsetState(state =="
  }
 ]

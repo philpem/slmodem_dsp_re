@@ -98,31 +98,35 @@ extern unsigned int ref_dsplibs_debug_level;
  * union holding one.  A user-provided pair that constructs and destroys no
  * variant member restores them and changes nothing else.
  */
-union mod_slot {
-	V92Phase3Modulator o;
-	unsigned char raw[SLOT];
+struct mod_slot {
+	union {
+		unsigned char raw[SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	V92Phase3Modulator &o;
 
-	mod_slot() {}
-	~mod_slot() {}
+	mod_slot() : o(*(V92Phase3Modulator *)raw) {}
 };
 
-static union mod_slot ours, theirs;
-static union mod_slot cmp_a, cmp_b;
+static struct mod_slot ours, theirs;
+static struct mod_slot cmp_a, cmp_b;
 
 /*
  * The parameter block.  `reset` reads two ints out of it and writes nothing,
  * so ONE block serves both sides and the stored `params` pointer compares
  * equal with no neutralisation.
  */
-union par_slot {
-	V92Parameters o;
-	unsigned char raw[0xdc];
+struct par_slot {
+	union {
+		unsigned char raw[0xdc];
+		double align_;		/* alignment only; trivial */
+	};
+	V92Parameters &o;
 
-	par_slot() {}
-	~par_slot() {}
+	par_slot() : o(*(V92Parameters *)raw) {}
 };
 
-static union par_slot par;
+static struct par_slot par;
 
 /* The V92Ja: a count at +0x00 and the vector at +0x04. */
 #define JABITS	96u
@@ -252,7 +256,7 @@ set_state(unsigned int st)
 }
 
 static unsigned int
-get_state(const union mod_slot *m)
+get_state(const struct mod_slot *m)
 {
 	return *(const unsigned int *)(m->raw + 0x08);
 }
@@ -953,7 +957,7 @@ void ref_dtor2(void *self) asm("ref__ZN18V92Phase3ModulatorD2Ev");
 #define CTOR_C		99
 #define CTOR_WORDS	(1u + CTOR_B + CTOR_C)
 
-static union par_slot par_decoy;
+static struct par_slot par_decoy;
 
 static void
 ctor_compare(long input)
@@ -1128,6 +1132,160 @@ run_ctor_dtor(void)
 }
 
 
+/* ======================================================================= */
+/* the four exit* methods                                                  */
+/* ======================================================================= */
+
+/*
+ * EACH ONE IS DRIVEN FROM EVERY STATE, not only from its own.  Three quarters
+ * of what these methods do is REFUSE: fifteen of the sixteen states leave the
+ * object alone, and a reconstruction that dropped the guard would pass a
+ * fixture that only ever called `exitJa` with the state already 4.  The sweep
+ * below is 16 states by 14 symbol counts by 4 methods, and the object is
+ * compared whole after every one of the 896 calls.
+ *
+ * THE COUNTS STRADDLE THE TWELVE-SYMBOL BOUNDARY IN BOTH DIRECTIONS and go
+ * past 0x7fffffff, because `symbolCount % 12` is unsigned in the object: at
+ * 0x80000004 the unsigned residue is 0 and the signed one is not, so a
+ * reconstruction that declared the counter `int` diverges there and nowhere
+ * below it.  That is the same argument run_generate makes for its own `% 12`.
+ *
+ * ZERO IS ITS OWN CASE.  Every one of the four refuses to move a state whose
+ * `symbolCount` is 0 -- `test %ebx,%ebx; je` -- so the count sweep starts
+ * there and the coverage assertions below insist the refusal was seen.
+ */
+extern "C" {
+void ref_exitJa(void *self) asm("ref__ZN18V92Phase3Modulator6exitJaEv");
+void ref_exitSilence(void *self)
+	asm("ref__ZN18V92Phase3Modulator11exitSilenceEv");
+void ref_exitSuSecond(void *self)
+	asm("ref__ZN18V92Phase3Modulator12exitSuSecondEv");
+void ref_exitTRN1u(void *self)
+	asm("ref__ZN18V92Phase3Modulator9exitTRN1uEv");
+}
+
+/*
+ * SIX, EIGHTEEN AND 2046 ARE HERE BECAUSE OF A MUTATION, and they are the
+ * whole difference between a boundary of twelve and one of six: every other
+ * count below is either divisible by both or by neither.  v92p3mod.json's
+ * "exitJa's boundary is six symbols, not twelve" read NOT CAUGHT until these
+ * three were added -- the fixture had 12, 24, 144 and 2040, all multiples of
+ * twelve, and 11, 13, 23 and 2039, none of them multiples of six.
+ */
+static const unsigned int exit_counts[] = {
+	0u, 1u, 2u, 6u, 11u, 12u, 13u, 18u, 23u, 24u, 144u, 2039u, 2040u,
+	2046u, 0x7fffffffu, 0x80000004u, 0xfffffffbu
+};
+
+#define NEXITCOUNT ((int)(sizeof(exit_counts) / sizeof(exit_counts[0])))
+
+static int
+run_exits(void)
+{
+	int method, st, ci;
+	int cov_moved[4], cov_refused_state[4], cov_refused_zero[4];
+	int cov_boundary[4], cov_offboundary[4];
+
+	diff_begin("V92Phase3Modulator::exitJa / exitSilence / exitSuSecond / "
+		   "exitTRN1u");
+
+	for (method = 0; method < 4; method++) {
+		cov_moved[method] = 0;
+		cov_refused_state[method] = 0;
+		cov_refused_zero[method] = 0;
+		cov_boundary[method] = 0;
+		cov_offboundary[method] = 0;
+	}
+
+	for (method = 0; method < 4; method++) {
+		for (st = 0; st < 16; st++) {
+			for (ci = 0; ci < NEXITCOUNT; ci++) {
+				long input = (method * 16 + st) * 100 + ci;
+				unsigned int count = exit_counts[ci];
+				unsigned int was;
+
+				/*
+				 * `prepare` is run_generate's own setup: it
+				 * seeds both slots, points the two Ja vectors
+				 * and the two scrambler histories at their own
+				 * side's storage, and shares the parameter
+				 * block -- which is what `compare_object`
+				 * expects to find when it neutralises the
+				 * pointers that can never agree.
+				 */
+				prepare(st * NEXITCOUNT + ci, ci % 4,
+					(unsigned int)st, count, 0);
+
+				switch (method) {
+				case 0:
+					ours.o.exitJa();
+					ref_exitJa(&theirs.o);
+					was = 4u;
+					break;
+				case 1:
+					ours.o.exitSilence();
+					ref_exitSilence(&theirs.o);
+					was = 6u;
+					break;
+				case 2:
+					ours.o.exitSuSecond();
+					ref_exitSuSecond(&theirs.o);
+					was = 9u;
+					break;
+				default:
+					ours.o.exitTRN1u();
+					ref_exitTRN1u(&theirs.o);
+					was = 12u;
+					break;
+				}
+
+				compare_object("after the exit", input);
+				diff_eq_int("the state agrees (case %ld)",
+					    (long)get_state(&ours),
+					    (long)get_state(&theirs), input);
+				diff_eq_int("the symbol count agrees (case %ld)",
+					    (long)ours.o.symbolCount,
+					    (long)theirs.o.symbolCount, input);
+
+				if ((unsigned int)st != was) {
+					diff_eq_int("a foreign state is left "
+						    "alone (case %ld)",
+						    (long)get_state(&ours),
+						    (long)st, input);
+					cov_refused_state[method] = 1;
+				} else if (count == 0u) {
+					diff_eq_int("a zero count is left "
+						    "alone (case %ld)",
+						    (long)get_state(&ours),
+						    (long)st, input);
+					cov_refused_zero[method] = 1;
+				} else {
+					cov_moved[method] = 1;
+					if (count % 12u == 0u)
+						cov_boundary[method] = 1;
+					else
+						cov_offboundary[method] = 1;
+				}
+			}
+		}
+	}
+
+	for (method = 0; method < 4; method++) {
+		diff_eq_int("the exit moved its own state (method %ld)",
+			    cov_moved[method], 1, method);
+		diff_eq_int("the exit refused a foreign state (method %ld)",
+			    cov_refused_state[method], 1, method);
+		diff_eq_int("the exit refused a zero count (method %ld)",
+			    cov_refused_zero[method], 1, method);
+		diff_eq_int("a twelve-symbol boundary was driven (method %ld)",
+			    cov_boundary[method], 1, method);
+		diff_eq_int("and a count off the boundary too (method %ld)",
+			    cov_offboundary[method], 1, method);
+	}
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1138,6 +1296,7 @@ main(void)
 	rc |= run_reset();
 	rc |= run_diagnostics();
 	rc |= run_ctor_dtor();
+	rc |= run_exits();
 
 	return rc;
 }

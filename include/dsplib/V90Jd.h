@@ -31,10 +31,19 @@
  * +0x31 and +0x32, `setMaxLookahead` +0x33 and +0x34.  The names are the
  * author's own, from the method names the mangling preserves.
  *
- * Only `getBitVector` and `unPackReset` are written here; the rest of the
- * class is declared for the record and deliberately left undefined, because
- * defining a method whose callees are not yet written breaks the link for the
- * whole test suite (docs/v90cpp.md).  Nothing calls the undefined ones.
+ * THAT MAP IS THE TRANSMIT SIDE ONLY.  `unPackData` fills a second, flat one
+ * in the same bytes -- `bits[0..27]` the rate mask, `bits[28..29]` the
+ * constellation size, `bits[30..31]` the lookahead and `bits[32..47]` the CRC
+ * as received, with no group markers anywhere -- and the three accessors read
+ * that one.  Framed position 18+p is payload p for p in 0..15, 35+(p-16) for
+ * 16..31 and 52+(p-32) for 32..47.  D270 recorded the two as an unexplained
+ * inconsistency; they are the two directions.
+ *
+ * Eight of the class's thirteen methods are written; the five that set the
+ * message's fields and `packData` are declared for
+ * the record and deliberately left undefined, because defining a method whose
+ * callees are not yet written breaks the link for the whole test suite
+ * (docs/v90cpp.md).  Nothing calls the undefined ones.
  */
 
 #ifndef DSPLIB_V90JD_H
@@ -84,19 +93,41 @@ public:
 	void unPackReset();
 
 	/*
+	 * Feed the receiver one bit and say whether that completed a message.
+	 * DEFINED, and it is the one thing in the class that WRITES the
+	 * payload-contiguous layout the three accessors below read: the
+	 * framing is stripped and `bits[0..47]` filled in arrival order, so
+	 * the class's two layouts are its two directions rather than a
+	 * contradiction.  V90Jd.cpp has the state machine and the offsets.
+	 *
+	 * `int` is measured, not mangled: the completion path at 0x1ec18
+	 * jumps past the `xor %edx,%edx` every other path runs through, and
+	 * `%eax` is set from `%edx` at the return.
+	 */
+	int unPackData(int);
+
+	/*
 	 * Declared, not defined -- see the file comment.  Their signatures are
 	 * the mangling's, so this list is a specification rather than a guess;
 	 * a return type is not mangled and is therefore unknown for all of them.
 	 */
-	void unPackData(int);
 	void packData();
-	void getRatesMask();
 	void setRatesMask(int);
 	void resetCrc();
-	void getMaxLookahead();
 	void setMaxLookahead(unsigned char);
-	void getConstelationSize(unsigned char *, unsigned char *);
 	void setConstelSize(unsigned char, unsigned char);
+
+	/*
+	 * DEFINED, and they read a DIFFERENT layout from the one the
+	 * constructor and `getBitVector` write: `bits[0..27]` for the rate
+	 * mask, `bits[28..29]` for the constellation size and `bits[30..31]`
+	 * for the lookahead, with none of the framing.  D270; V90Jd.cpp has the
+	 * offsets and the argument.  The return types are read off the object,
+	 * since the mangling does not carry one.
+	 */
+	int getRatesMask();
+	void getConstelationSize(unsigned char *, unsigned char *);
+	unsigned char getMaxLookahead();
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -107,10 +138,11 @@ public:
 	 */
 
 	/*
-	 * The unpacker's state.  `unPackReset()`, the constructor and
-	 * `unPackData(int)` are the only things that touch these three, and
-	 * what each holds is not settled here: `unPackData` is not in this
-	 * batch.  Named for the one method whose whole body is clearing them.
+	 * The unpacker's state, and `unPackData` says what each byte holds.
+	 * `unpack[0]` is the length of the current run of 1 bits, kept as a
+	 * byte and wrapping at 255; `unpack[1]` counts the payload bytes
+	 * stored so far, and then the four trailing bits; `unpackWord` is the
+	 * state, 0 to 8.  `unPackReset()` and the constructor clear all three.
 	 */
 	unsigned char unpack[2];	/* +0x00 */
 

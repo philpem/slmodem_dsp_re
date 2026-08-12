@@ -71,5 +71,190 @@
   "label": "the destructor is not empty",
   "find": "V92Jd::~V92Jd()\n{\n}",
   "replace": "V92Jd::~V92Jd()\n{\n\tunpackWord = 0x5a5a;\n}"
+ },
+ {
+  "label": "getJdPhase reads the data vector, not the phase one",
+  "find": "\t\tif (phaseBits[i])\n\t\t\tphase |= 1u << i;",
+  "replace": "\t\tif (bits[i])\n\t\t\tphase |= 1u << i;"
+ },
+ {
+  "label": "getJdPhase's scale is one bit out",
+  "find": "\treturn (float)phase / 65536.0f;",
+  "replace": "\treturn (float)phase / 32768.0f;"
+ },
+ {
+  "label": "getJdPhase reads fifteen bits, not sixteen",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tif (phaseBits[i])",
+  "replace": "\tfor (i = 0; i <= 14; i++)\n\t\tif (phaseBits[i])"
+ },
+ {
+  "label": "getJdPhase reads the phase from the framed layout",
+  "find": "\t\tif (phaseBits[i])\n\t\t\tphase |= 1u << i;",
+  "replace": "\t\tif (phaseBits[V90JD_GROUP1 + 1 + i])\n\t\t\tphase |= 1u << i;"
+ },
+ {
+  "label": "getRatesMask reads the phase vector",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tif (bits[i])\n\t\t\tmask |= 1 << i;",
+  "replace": "\tfor (i = 0; i <= 15; i++)\n\t\tif (phaseBits[i])\n\t\t\tmask |= 1 << i;"
+ },
+ {
+  "label": "getRatesMask's second group is eleven bits, like the constructor's",
+  "find": "\tfor (i = 0; i <= 11; i++)\n\t\tif (bits[16 + i])",
+  "replace": "\tfor (i = 0; i <= 10; i++)\n\t\tif (bits[16 + i])"
+ },
+ {
+  "label": "getConstelationSize reads V90Jd's positions instead",
+  "find": "\t*first = phaseBits[29];\n\t*second = phaseBits[30];",
+  "replace": "\t*first = bits[28];\n\t*second = bits[29];"
+ },
+ {
+  "label": "getConstelationSize reads the phase vector one index lower",
+  "find": "\t*first = phaseBits[29];\n\t*second = phaseBits[30];",
+  "replace": "\t*first = phaseBits[28];\n\t*second = phaseBits[29];"
+ },
+ {
+  "label": "getConstelationSize transposes its two outputs",
+  "find": "\t*first = phaseBits[29];\n\t*second = phaseBits[30];",
+  "replace": "\t*first = phaseBits[30];\n\t*second = phaseBits[29];"
+ },
+ {
+  "label": "getMaxLookahead reads the phase vector",
+  "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
+  "replace": "\treturn (unsigned char)((phaseBits[30] & 1) + ((phaseBits[31] & 1) << 1));"
+ },
+ {
+  "label": "getMaxLookahead transposes the two bits",
+  "find": "\treturn (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));",
+  "replace": "\treturn (unsigned char)((bits[31] & 1) + ((bits[30] & 1) << 1));"
+ },
+ {
+  "label": "the data unpacker's second rate run takes V.90's twelve",
+  "find": "\t\tif (n == 27)\n\t\t\tunpackWord = 5;",
+  "replace": "\t\tif (n == 28)\n\t\t\tunpackWord = 5;"
+ },
+ {
+  "label": "the data unpacker's twelfth rate bit never advances the state",
+  "find": "\t\tbits[n] = (unsigned char)bit;\n\t\tunpackWord = 6;",
+  "replace": "\t\tbits[n] = (unsigned char)bit;"
+ },
+ {
+  "label": "the phase unpacker's second rate run takes the data unpacker's eleven",
+  "find": "\t\tif (n == 28)\n\t\t\tunpackPhaseWord = 5;",
+  "replace": "\t\tif (n == 27)\n\t\t\tunpackPhaseWord = 5;"
+ },
+ {
+  "label": "the data unpacker demands the phase message's tag",
+  "find": "\t\tif (bits[28] != 0) {",
+  "replace": "\t\tif (bits[28] != 1) {"
+ },
+ {
+  "label": "the data unpacker does not check its tag at all",
+  "find": "\t\tif (bits[28] != 0) {\n\t\t\tunPackJdReset();\n\t\t\tbreak;\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "label": "the phase unpacker demands the data message's tag",
+  "find": "\t\tif (phaseBits[28] != 1) {",
+  "replace": "\t\tif (phaseBits[28] != 0) {"
+ },
+ {
+  "label": "the phase unpacker does not check its tag at all",
+  "find": "\t\tif (phaseBits[28] != 1) {\n\t\t\tunPackJdPhaseReset();\n\t\t\tbreak;\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "label": "the data unpacker's tag is read from the framed position",
+  "find": "\t\tif (bits[28] != 0) {\n\t\t\tunPackJdReset();",
+  "replace": "\t\tif (bits[47] != 0) {\n\t\t\tunPackJdReset();"
+ },
+ {
+  "label": "the phase unpacker's tag is read from the framed position",
+  "find": "\t\tif (phaseBits[28] != 1) {\n\t\t\tunPackJdPhaseReset();",
+  "replace": "\t\tif (phaseBits[47] != 1) {\n\t\t\tunPackJdPhaseReset();"
+ },
+ {
+  "label": "the data unpacker fills the phase vector",
+  "find": "\t\tbits[n] = (unsigned char)bit;\n\t\tunpack[0] = ones;\n\t\tn++;\n\t\tunpack[1] = n;\n\t\tif (n == 16)",
+  "replace": "\t\tphaseBits[n] = (unsigned char)bit;\n\t\tunpack[0] = ones;\n\t\tn++;\n\t\tunpack[1] = n;\n\t\tif (n == 16)"
+ },
+ {
+  "label": "the phase unpacker fills the data vector",
+  "find": "\t\tphaseBits[n] = (unsigned char)bit;\n\t\tunpack[0] = ones;\n\t\tn++;\n\t\tunpack[1] = n;\n\t\tif (n == 16)",
+  "replace": "\t\tbits[n] = (unsigned char)bit;\n\t\tunpack[0] = ones;\n\t\tn++;\n\t\tunpack[1] = n;\n\t\tif (n == 16)"
+ },
+ {
+  "label": "the phase unpacker switches on the data unpacker's state word",
+  "find": "\tswitch (unpackPhaseWord) {",
+  "replace": "\tswitch (unpackWord) {"
+ },
+ {
+  "label": "the data unpacker's restart clears the phase state word",
+  "find": "\tcase 1:\n\t\tif (bit) {\n\t\t\tunPackJdReset();",
+  "replace": "\tcase 1:\n\t\tif (bit) {\n\t\t\tunPackJdPhaseReset();"
+ },
+ {
+  "label": "the data unpacker's hunt accepts sixteen ones",
+  "find": "\t\tif (ones > 16)\n\t\t\tunpackWord = 1;",
+  "replace": "\t\tif (ones >= 16)\n\t\t\tunpackWord = 1;"
+ },
+ {
+  "label": "the phase unpacker's hunt accepts sixteen ones",
+  "find": "\t\tif (ones > 16)\n\t\t\tunpackPhaseWord = 1;",
+  "replace": "\t\tif (ones >= 16)\n\t\t\tunpackPhaseWord = 1;"
+ },
+ {
+  "label": "the data unpacker's CRC field is fifteen bytes",
+  "find": "\t\tbits[n] = (unsigned char)bit;\n\t\tn++;\n\t\tif (n != 48) {",
+  "replace": "\t\tbits[n] = (unsigned char)bit;\n\t\tn++;\n\t\tif (n != 47) {"
+ },
+ {
+  "label": "the phase unpacker's CRC field is fifteen bytes",
+  "find": "\t\tphaseBits[n] = (unsigned char)bit;\n\t\tn++;\n\t\tif (n != 48) {",
+  "replace": "\t\tphaseBits[n] = (unsigned char)bit;\n\t\tn++;\n\t\tif (n != 47) {"
+ },
+ {
+  "label": "the phase unpacker's CRC reads the data vector",
+  "find": "\t\t\tint t = phaseBits[k] + crc[0];",
+  "replace": "\t\t\tint t = bits[k] + crc[0];"
+ },
+ {
+  "label": "the data unpacker's CRC runs over sixteen bytes, not thirty-two",
+  "find": "\t\tfor (k = 0; k <= 31; k++) {\n\t\t\tint t = bits[k] + crc[0];",
+  "replace": "\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[k] + crc[0];"
+ },
+ {
+  "label": "the data unpacker compares its CRC as a low bit, not a magnitude",
+  "find": "\t\t\tint d = crc[i] - bits[32 + i];\n\n\t\t\tsum += d < 0 ? -d : d;",
+  "replace": "\t\t\tint d = (crc[i] ^ bits[32 + i]) & 1;\n\n\t\t\tsum += d;"
+ },
+ {
+  "label": "the phase unpacker compares its CRC as a low bit, not a magnitude",
+  "find": "\t\t\tint d = crc[i] - phaseBits[32 + i];\n\n\t\t\tsum += d < 0 ? -d : d;",
+  "replace": "\t\t\tint d = (crc[i] ^ phaseBits[32 + i]) & 1;\n\n\t\t\tsum += d;"
+ },
+ {
+  "label": "the data unpacker's trailing count stops one bit early",
+  "find": "\t\tif (n != 0x34) {\n\t\t\tunpack[1] = n;\n\t\t\tunpack[0] = ones;\n\t\t\tbreak;\n\t\t}\n\t\tif (bits[28] != 0) {",
+  "replace": "\t\tif (n != 0x33) {\n\t\t\tunpack[1] = n;\n\t\t\tunpack[0] = ones;\n\t\t\tbreak;\n\t\t}\n\t\tif (bits[28] != 0) {"
+ },
+ {
+  "label": "the phase unpacker's trailing count stops one bit early",
+  "find": "\t\tif (n != 0x34) {\n\t\t\tunpack[1] = n;\n\t\t\tunpack[0] = ones;\n\t\t\tbreak;\n\t\t}\n\t\tif (phaseBits[28] != 1) {",
+  "replace": "\t\tif (n != 0x33) {\n\t\t\tunpack[1] = n;\n\t\t\tunpack[0] = ones;\n\t\t\tbreak;\n\t\t}\n\t\tif (phaseBits[28] != 1) {"
+ },
+ {
+  "label": "the data unpacker's accepted state is the phase unpacker's eight",
+  "find": "\t\tunpack[0] = ones;\n\t\tunpackWord = 9;",
+  "replace": "\t\tunpack[0] = ones;\n\t\tunpackWord = 8;"
+ },
+ {
+  "label": "the data unpacker never reports a completed message",
+  "find": "\t\t\tunPackJdReset();\n\t\t\tbreak;\n\t\t}\n\t\tunpack[1] = 0x34;\n\t\tunpack[0] = ones;\n\t\treturn 1;",
+  "replace": "\t\t\tunPackJdReset();\n\t\t\tbreak;\n\t\t}\n\t\tunpack[1] = 0x34;\n\t\tunpack[0] = ones;\n\t\treturn 0;"
+ },
+ {
+  "label": "the phase unpacker reports a completed message on a bad tag",
+  "find": "\t\tif (phaseBits[28] != 1) {\n\t\t\tunPackJdPhaseReset();\n\t\t\tbreak;\n\t\t}\n\t\tunpack[1] = 0x34;",
+  "replace": "\t\tif (phaseBits[28] != 1) {\n\t\t\tunPackJdPhaseReset();\n\t\t\treturn 1;\n\t\t}\n\t\tunpack[1] = 0x34;"
  }
 ]

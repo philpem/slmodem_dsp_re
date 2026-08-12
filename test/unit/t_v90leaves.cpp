@@ -96,6 +96,33 @@ void ref_ec_setEchoDelay(void *self, unsigned int d)
 	asm("ref__ZN16V92EchoCanceller12setEchoDelayEj");
 void ref_ec_reset(void *self) asm("ref__ZN16V92EchoCanceller5resetEv");
 /*
+ * The state machine and the two signal paths.  `setState` takes the enum,
+ * which is `int`-wide and passed as one word; declaring the parameter `int`
+ * here lets the sweep pass values outside the four enumerators without a cast
+ * at every call.
+ */
+void ref_ec_setState(void *self, int newState)
+	asm("ref__ZN16V92EchoCanceller8setStateE21V92EchoCancellerState");
+void ref_ec_update(void *self, float *in, unsigned int count)
+	asm("ref__ZN16V92EchoCanceller17updateEchoHistoryEPfj");
+void ref_ec_process(void *self, float *in, float *out, unsigned int count)
+	asm("ref__ZN16V92EchoCanceller7processEPfS0_j");
+/*
+ * `updateEchoHistory` runs every sample through the ARMA at +0x04, so its
+ * test needs a REAL one on each side -- `FloatARMA::process(float)` is
+ * differentially tested by t_floatarma.cpp, and what is unproven here is that
+ * this class hands it the right pointer and the right sample.  Both sides
+ * build theirs with their own constructor, from the same coefficients.
+ */
+void our_arma_ctor(void *self, unsigned int nDen, unsigned int nNum,
+		   float *den, float *num, unsigned int blockSize)
+	asm("_ZN9FloatARMAC1EjjPfS0_j");
+void ref_arma_ctor(void *self, unsigned int nDen, unsigned int nNum,
+		   float *den, float *num, unsigned int blockSize)
+	asm("ref__ZN9FloatARMAC1EjjPfS0_j");
+void our_arma_dtor(void *self) asm("_ZN9FloatARMAD1Ev");
+void ref_arma_dtor(void *self) asm("ref__ZN9FloatARMAD1Ev");
+/*
  * BOTH SIDES BY MANGLED NAME, for the reason the connection evaluator's
  * lifecycle block gives: a destructor written as `p->~V92EchoCanceller()` on
  * our side and as a symbol on the blob's is not the same call, and the two
@@ -578,14 +605,17 @@ run_sv(void)
  * destroys the slot implicitly; the raw bytes are seeded and the members are
  * called on them.
  */
-union ec_slot {
-	V92EchoCanceller o;
-	unsigned char raw[EC_SLOT];
-	ec_slot() { }
-	~ec_slot() { }
+struct ec_slot {
+	union {
+		unsigned char raw[EC_SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	V92EchoCanceller &o;
+
+	ec_slot() : o(*(V92EchoCanceller *)raw) { }
 };
 
-static union ec_slot ec_a, ec_b;
+static struct ec_slot ec_a, ec_b;
 
 static int
 run_ec(void)
@@ -919,8 +949,8 @@ run_ec_reset(void)
 				    (long)ec_b.o.echoLength, (long)want, tag);
 			diff_eq_int("the blob's historyIndex (%ld)",
 				    (long)ec_b.o.historyIndex, 0, tag);
-			diff_eq_int("the blob's word_08 (%ld)",
-				    (long)ec_b.o.word_08, 0, tag);
+			diff_eq_int("the blob's state (%ld)",
+				    (long)ec_b.o.state, 0, tag);
 			diff_eq_int("the blob's echoBeta is +0.0f (%ld)",
 				    ec_b.o.echoBeta == 0.0f, 1, tag);
 			diff_eq_int("the blob's echoBetaDecay is +0.0f (%ld)",
@@ -990,7 +1020,7 @@ run_ec_reset(void)
 	}
 
 	set_level(0);
-	diff_eq_int("word_08 is written", seen[0], 1, 0);
+	diff_eq_int("the state is written", seen[0], 1, 0);
 	diff_eq_int("historyIndex is written", seen[1], 1, 0);
 	diff_eq_int("echoLength is written", seen[2], 1, 0);
 	diff_eq_int("echoBeta is written", seen[3], 1, 0);
@@ -1581,14 +1611,17 @@ run_ec_ctor(void)
  * which deletes a union's implicit ones.  Nothing here constructs the object;
  * the raw bytes are seeded and the member called on them, exactly as before.
  */
-union rt_slot {
-	ResamplerTimingOffset o;
-	unsigned char raw[RT_SLOT];
-	rt_slot() { }
-	~rt_slot() { }
+struct rt_slot {
+	union {
+		unsigned char raw[RT_SLOT];
+		double align_;		/* alignment only; trivial */
+	};
+	ResamplerTimingOffset &o;
+
+	rt_slot() : o(*(ResamplerTimingOffset *)raw) { }
 };
 
-static union rt_slot rt_a, rt_b;
+static struct rt_slot rt_a, rt_b;
 
 static void *const vptr_seed = (void *)0xdeadbeefu;
 
@@ -2665,6 +2698,968 @@ run_dem_lifecycle(void)
 	return diff_end();
 }
 
+/* ------------------- V92EchoCanceller: the state machine and the signal --
+ *
+ * `setState` (1104 B), `updateEchoHistory` (244 B) and `process` (794 B), the
+ * three that carry a sample.  One fixture, because they share an object and
+ * because `process` calls `setState`.
+ *
+ * WHY THE COMPARISON HAS TO BE PER BLOCK AND BIT-EXACT.  `process` ADAPTS:
+ * every sample changes `echoCoeff` and `echoBeta`, and the next sample's
+ * output depends on them.  A divergence in the last bit of one coefficient at
+ * block 40 that is swamped by convergence at block 60 is still a defect, so
+ * the whole object, both buffers and both output blocks are compared after
+ * EVERY call and floats are compared by their BYTES.  A tolerance is exactly
+ * how an adapting filter's slow drift hides.
+ *
+ * THE ECHO PATH IS REAL.  `echoHistory` is filled with a persistently
+ * exciting +-0.5 sequence and the input is a near-end signal plus that
+ * sequence run through a six-tap response, taken from the same window the
+ * canceller is about to look at -- so the LMS update has something to
+ * converge to and the coefficients really move.  `ecx_moved` asserts they
+ * did, and `ecx_varied` that consecutive blocks did not produce one repeated
+ * answer (findings 223, 224): a `process` that never touched a coefficient
+ * would otherwise pass as two identical do-nothings.
+ *
+ * NOTHING IS ZEROED (finding 230), and the parts the methods must not touch
+ * keep their seed: `echoCoeff` past `filterLength`, `echoHistory` past
+ * `historyAlloc`, `out` past `count`, and a compared GUARD past every buffer.
+ * D72's overrun would land in one of those and fail rather than pass quietly.
+ * The seed is also why `out[0]` is set explicitly on every block -- a seeded
+ * word is a NaN often enough, and a NaN in `out[0]` takes the 177.0f path.
+ */
+
+#define ECX_COEFF	40		/* declared floats in echoCoeff     */
+#define ECX_HIST	320		/* declared floats in echoHistory   */
+#define ECX_GUARD	8		/* compared floats past each buffer */
+#define ECX_LEAD	8		/* and BEFORE the history           */
+#define ECX_BLK		128		/* longest block driven             */
+#define ECX_ECHO	6		/* taps in the test's echo path     */
+
+/* The six V92Parameters fields `setState` reads, by offset (finding 1112). */
+#define ECX_FAST_BETA	0x78
+#define ECX_FAST_DECAY	0x7c
+#define ECX_SLOW_BETA	0x80
+#define ECX_SLOW_DECAY	0x84
+#define ECX_FAST_DUR	0x88
+#define ECX_SLOW_DUR	0x8c
+
+static float ecx_coeff[2][ECX_COEFF + ECX_GUARD];
+/*
+ * THE HISTORY HAS A GUARD AT BOTH ENDS, and the leading one is not
+ * decoration: `updateEchoHistory`'s compaction copies DOWNWARD to
+ * `echoHistory[filterLength - 2]`, so a count one too long walks off the
+ * FRONT of the buffer, where a trailing guard sees nothing.  `ECX_H` is the
+ * pointer the object is given; the comparisons cover the whole array.
+ */
+static float ecx_hist[2][ECX_LEAD + ECX_HIST + ECX_GUARD];
+#define ECX_H(side)	(&ecx_hist[side][ECX_LEAD])
+static float ecx_out[2][ECX_BLK + ECX_GUARD];
+static float ecx_in[ECX_BLK];
+static unsigned char ecx_parm[2][ECR_PARM];
+static unsigned char ecx_arma[2][sizeof(FloatARMA)];
+
+/* A float from its bytes: the table below is bit patterns, not decimals. */
+static float
+ecx_bits(unsigned int u)
+{
+	float f;
+
+	memcpy(&f, &u, sizeof f);
+	return f;
+}
+
+static int
+ecx_same_bits(float a, float b)
+{
+	return memcmp(&a, &b, sizeof a) == 0;
+}
+
+/*
+ * The values the two beta parameters are swept over.  Written as bytes
+ * because the interesting ones -- both zeroes, a NaN, both infinities, a
+ * denormal -- have no decimal spelling, and because the diagnostic prints a
+ * SIGN, an integer part and a scaled fraction of each: `sign_of` takes the
+ * '+' arm for a NaN where `0.0f < v` would take the '-' one, and only a NaN
+ * in the parameter block can tell those apart.
+ */
+static const unsigned int ecx_pat[] = {
+	0x00000000u,	/* +0.0f, which prints as NEGATIVE zero      */
+	0x80000000u,	/* -0.0f                                     */
+	0x3f800000u,	/* +1.0f                                     */
+	0xbf800000u,	/* -1.0f                                     */
+	0x3c23d70au,	/* +0.01f                                    */
+	0xbb03126fu,	/* -0.002f                                   */
+	0x42f6e979u,	/* +123.456f                                 */
+	0x7fc00000u,	/* a quiet NaN                               */
+	0x7f800000u,	/* +infinity                                 */
+	0xff800000u,	/* -infinity                                 */
+	0x00000001u,	/* the smallest denormal                     */
+	0x4b189680u,	/* +1e7f, past what the %d field can hold     */
+	0xc2f6e979u	/* -123.456f: a NEGATIVE with a whole part    */
+};
+#define ECX_NPAT ((int)(sizeof(ecx_pat) / sizeof(ecx_pat[0])))
+
+static void
+ecx_param_word(unsigned int off, unsigned int v)
+{
+	memcpy(&ecx_parm[0][off], &v, sizeof v);
+	memcpy(&ecx_parm[1][off], &v, sizeof v);
+}
+
+/*
+ * The transcript check the three share.  `check_transcript` cannot be used:
+ * it demands that the blob printed at level 2, and both `setState`'s no-op
+ * arm and every `process` block that does not change state are legitimately
+ * silent.  So non-emptiness is asserted once per run instead.
+ */
+static void
+ecx_transcript(unsigned lvl, long tag, int *printed)
+{
+	diff_eq_int("transcript matches (%ld)",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+	diff_eq_int("line counts match (%ld)",
+		    (int)dsplib_debug_capture_lines(0),
+		    (int)dsplib_debug_capture_lines(1), tag);
+	if (lvl > 1) {
+		if (dsplib_debug_capture_lines(1) > 0) {
+			*printed = 1;
+			transcripts_seen = 1;
+		}
+	} else {
+		diff_eq_int("below the gate ours was silent (%ld)",
+			    (int)dsplib_debug_capture_lines(0), 0, tag);
+		diff_eq_int("below the gate the blob was silent (%ld)",
+			    (int)dsplib_debug_capture_lines(1), 0, tag);
+	}
+}
+
+/*
+ * The two slot images, with the four words that are each side's own address
+ * neutralised -- params, arma, echoCoeff, echoHistory.  Everything else is
+ * compared, including the two cursors and the two betas.
+ */
+static void
+ecx_cmp_slot(const char *what, long tag)
+{
+	unsigned char sa[EC_SLOT], sb[EC_SLOT];
+
+	memcpy(sa, ec_a.raw, EC_SLOT);
+	memcpy(sb, ec_b.raw, EC_SLOT);
+	memset(sa + 0x00, 0, 8);
+	memset(sb + 0x00, 0, 8);
+	memset(sa + 0x20, 0, 8);
+	memset(sb + 0x20, 0, 8);
+	diff_eq_obj_(__FILE__, __LINE__, what, "V92EchoCanceller slot", sa, sb,
+		     EC_SLOT, tag);
+}
+
+/* --------------------------------- V92EchoCanceller::setState (1104 B) */
+
+/*
+ * EVERY VALUE THE DISPATCH TESTS, FROM EVERY VALUE IT COULD BE IN, and four
+ * that are outside it.  The illegal arm, the no-op arm and the coefficient
+ * dump are each reachable only from particular pairs, so the sweep is the
+ * whole 8x8 square rather than a diagonal: the dump needs old in {2,3} and
+ * new == 0, the no-op needs old == new, and the illegal arm needs a new
+ * outside 0..3.  All three are asserted to have been reached.
+ *
+ * THE FILTER LENGTH IS SWEPT WITH IT because the dump is `filterLength` calls
+ * to `edprintf` -- zero of them when the length is zero, which is a different
+ * transcript, and one per coefficient otherwise.  The coefficients are
+ * whatever the seed left, so the printed floats are wild by construction.
+ */
+static int
+run_ec_setstate(void)
+{
+	static const int st[] = { 0, 1, 2, 3, -1, 4, 7, 0x7fffffff };
+	static const unsigned int flen[] = { 0u, 1u, 3u, 8u, ECX_COEFF };
+	static const int allow[] = { 0x08, 0x0c, 0x10, 0x30, 0x34 };
+	const int nst = (int)(sizeof(st) / sizeof(st[0]));
+	const int nfl = (int)(sizeof(flen) / sizeof(flen[0]));
+	int seen[5] = { 0, 0, 0, 0, 0 };
+	int printed = 0, sawSame = 0, sawDump = 0, sawNoDump = 0, sawIllegal = 0;
+	int o, n, v;
+	unsigned lvl;
+	int trial = 0;
+
+	diff_begin("V92EchoCanceller::setState");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+
+		for (o = 0; o < nst; o++)
+		for (n = 0; n < nst; n++)
+		for (v = 0; v < 2; v++, trial++) {
+			unsigned char before[EC_SLOT];
+			float gbefore[ECX_COEFF + ECX_GUARD];
+			unsigned int fl = flen[(o + n + v) % nfl];
+			unsigned int dur = 0x30000000u + 7u * (unsigned)trial;
+			long tag = (long)lvl * 100000 + trial;
+			int side, bad, first, i;
+			int dump = (st[o] == 2 || st[o] == 3) && st[n] == 0;
+
+			fill_pair(ec_a.raw, ec_b.raw, EC_SLOT, trial, trial & 3);
+			fill_pair(ecx_coeff[0], ecx_coeff[1],
+				  (unsigned)sizeof(ecx_coeff[0]), trial + 1,
+				  trial & 3);
+			fill_pair(ecx_parm[0], ecx_parm[1], ECR_PARM,
+				  trial + 2, trial & 3);
+
+			/*
+			 * The six the method reads, the same into both.
+			 *
+			 * INDEXED BY `o` AND `v`, NOT BY THE TRIAL NUMBER.
+			 * Only two of the eight new states load a beta at
+			 * all, so a schedule that walks the patterns with the
+			 * trial reaches those two arms on a fixed residue and
+			 * never shows them the rest -- the first spelling
+			 * here stepped by five modulo twelve and could not
+			 * reach the NaN in either training arm, which left
+			 * `sign_of`'s unordered arm untested and a mutation
+			 * of it alive.  `o * 2 + v` runs 0..15 inside each
+			 * arm, so every pattern reaches both.  Same trap as
+			 * the unsatisfiable `still` schedule in `run_ec`.
+			 */
+			ecx_param_word(ECX_FAST_BETA,
+				       ecx_pat[(o * 2 + v + 0) % ECX_NPAT]);
+			ecx_param_word(ECX_FAST_DECAY,
+				       ecx_pat[(o * 2 + v + 3) % ECX_NPAT]);
+			ecx_param_word(ECX_SLOW_BETA,
+				       ecx_pat[(o * 2 + v + 6) % ECX_NPAT]);
+			ecx_param_word(ECX_SLOW_DECAY,
+				       ecx_pat[(o * 2 + v + 9) % ECX_NPAT]);
+			ecx_param_word(ECX_FAST_DUR, dur);
+			ecx_param_word(ECX_SLOW_DUR, dur ^ 0x0f0f0f0fu);
+
+			/*
+			 * The dump prints whatever the coefficients hold, and
+			 * a seed is a NaN, or a negative with a whole part,
+			 * only by luck -- which is what `sign_of`'s unordered
+			 * arm and `whole_of`'s magnitude turn on.  The first
+			 * `filterLength` entries are the patterns; past them
+			 * the seed stands, so a dump one entry long is still
+			 * a different transcript.
+			 */
+			for (i = 0; i < (int)fl; i++)
+				ecx_coeff[0][i] = ecx_coeff[1][i] =
+					ecx_bits(ecx_pat[(i + trial)
+							 % ECX_NPAT]);
+
+			for (side = 0; side < 2; side++) {
+				V92EchoCanceller *e = side == 0 ? &ec_a.o
+								: &ec_b.o;
+
+				e->params = (V92Parameters *)ecx_parm[side];
+				e->arma = 0;
+				e->echoCoeff = ecx_coeff[side];
+				e->echoHistory = 0;
+				e->filterLength = fl;
+				e->state = (V92EchoCancellerState)st[o];
+				e->echoDelay = 500u + 13u * (unsigned)trial;
+				/*
+				 * A value the arms that clear it can never
+				 * leave behind, so `only_wrote` sees the
+				 * store even when the field held zero.
+				 */
+				e->word_10 = 0x11223344u;
+			}
+
+			memcpy(before, ec_b.raw, EC_SLOT);
+			memcpy(gbefore, ecx_coeff[1], sizeof gbefore);
+
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+
+			ec_a.o.setState((V92EchoCancellerState)st[n]);
+			ref_ec_setState(&ec_b.o, st[n]);
+
+			dsplib_debug_capture_on = 0;
+
+			ecx_cmp_slot("after setState", tag);
+			diff_eq_obj_(__FILE__, __LINE__, "after setState",
+				     "echoCoeff and its guard", ecx_coeff[0],
+				     ecx_coeff[1], sizeof(ecx_coeff[0]), tag);
+			diff_eq_int("no store past the object (%ld)",
+				    memcmp(ec_a.raw + sizeof(ec_a.o),
+					   ec_b.raw + sizeof(ec_b.o),
+					   EC_SLOT - sizeof(ec_a.o)) == 0,
+				    1, tag);
+			/*
+			 * THE METHOD READS THE COEFFICIENTS AND MUST NOT WRITE
+			 * THEM.  Compared against the pre-call image, not
+			 * against the other side, so the two of us dumping and
+			 * corrupting together would still fail.
+			 */
+			diff_eq_int("the blob left echoCoeff alone (%ld)",
+				    memcmp(gbefore, ecx_coeff[1],
+					   sizeof gbefore) == 0, 1, tag);
+
+			bad = only_wrote(before, ec_b.raw, EC_SLOT, allow, 5,
+					 seen, &first);
+			diff_eq_int("the blob wrote outside the five fields "
+				    "at +0x%lx", bad == 0 ? -1 : first, -1,
+				    tag);
+
+			/*
+			 * What the blob's object holds, spelled independently
+			 * of the source under test.
+			 */
+			if (st[o] == st[n]) {
+				diff_eq_int("a repeated state writes nothing "
+					    "(%ld)",
+					    memcmp(before, ec_b.raw, EC_SLOT)
+					    == 0, 1, tag);
+				sawSame = 1;
+			} else {
+				diff_eq_int("the sample count restarted (%ld)",
+					    (long)ec_b.o.word_10, 0, tag);
+			}
+
+			if (st[n] == 0 && st[o] != 0) {
+				diff_eq_int("the blob's state is FILTER_ONLY "
+					    "(%ld)", (long)ec_b.o.state, 0,
+					    tag);
+				diff_eq_int("the blob cleared echoBeta (%ld)",
+					    ecx_same_bits(ec_b.o.echoBeta,
+							  ecx_bits(0u)), 1,
+					    tag);
+				diff_eq_int("the blob cleared echoBetaDecay "
+					    "(%ld)",
+					    ecx_same_bits(ec_b.o.echoBetaDecay,
+							  ecx_bits(0u)), 1,
+					    tag);
+				diff_eq_int("and left the duration alone "
+					    "(%ld)",
+					    memcmp(before + 0x0c,
+						   ec_b.raw + 0x0c, 4) == 0,
+					    1, tag);
+				if (dump && fl > 0)
+					sawDump = 1;
+				else
+					sawNoDump = 1;
+			} else if (st[n] == 1 && st[o] != 1) {
+				diff_eq_int("the blob's state is COUNT_DELAY "
+					    "(%ld)", (long)ec_b.o.state, 1,
+					    tag);
+				diff_eq_int("the duration is the delay plus "
+					    "400 (%ld)",
+					    (long)ec_b.o.updateDuration,
+					    (long)(ec_b.o.echoDelay + 400u),
+					    tag);
+			} else if ((st[n] == 2 || st[n] == 3)
+				   && st[o] != st[n]) {
+				unsigned int bo = st[n] == 2 ? ECX_FAST_BETA
+							     : ECX_SLOW_BETA;
+				unsigned int co = st[n] == 2 ? ECX_FAST_DECAY
+							     : ECX_SLOW_DECAY;
+				unsigned int du = st[n] == 2 ? ECX_FAST_DUR
+							     : ECX_SLOW_DUR;
+
+				diff_eq_int("the blob's state is the training "
+					    "one (%ld)", (long)ec_b.o.state,
+					    st[n], tag);
+				diff_eq_int("echoBeta is the parameter (%ld)",
+					    memcmp(&ec_b.o.echoBeta,
+						   &ecx_parm[1][bo], 4) == 0,
+					    1, tag);
+				diff_eq_int("echoBetaDecay is the parameter "
+					    "(%ld)",
+					    memcmp(&ec_b.o.echoBetaDecay,
+						   &ecx_parm[1][co], 4) == 0,
+					    1, tag);
+				diff_eq_int("the duration is the parameter "
+					    "(%ld)",
+					    memcmp(&ec_b.o.updateDuration,
+						   &ecx_parm[1][du], 4) == 0,
+					    1, tag);
+			} else if (st[n] > 3 || st[n] < 0) {
+				diff_eq_int("an illegal state leaves the "
+					    "state alone (%ld)",
+					    (long)ec_b.o.state, st[o], tag);
+				diff_eq_int("and the two betas (%ld)",
+					    memcmp(before + 0x30,
+						   ec_b.raw + 0x30, 8) == 0,
+					    1, tag);
+				diff_eq_int("and the duration (%ld)",
+					    memcmp(before + 0x0c,
+						   ec_b.raw + 0x0c, 4) == 0,
+					    1, tag);
+				sawIllegal = 1;
+			}
+
+			/*
+			 * The dump is `filterLength` lines on top of the
+			 * three the transition prints, so at level 2 a
+			 * transition that dumps a long filter cannot be
+			 * confused with one that does not.
+			 */
+			if (lvl > 1 && dump && fl >= 8)
+				diff_eq_int("the blob dumped the filter "
+					    "(%ld)",
+					    dsplib_debug_capture_lines(1)
+					    > fl, 1, tag);
+
+			ecx_transcript(lvl, tag, &printed);
+
+			/* Nothing may have crept past the guard either. */
+			for (i = ECX_COEFF; i < ECX_COEFF + ECX_GUARD; i++)
+				diff_eq_int("the coefficient guard is intact "
+					    "(%ld)",
+					    memcmp(&gbefore[i],
+						   &ecx_coeff[1][i], 4) == 0,
+					    1, tag);
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("the state is written", seen[0], 1, 0);
+	diff_eq_int("the duration is written", seen[1], 1, 0);
+	diff_eq_int("the sample count is written", seen[2], 1, 0);
+	diff_eq_int("echoBeta is written", seen[3], 1, 0);
+	diff_eq_int("echoBetaDecay is written", seen[4], 1, 0);
+	diff_eq_int("the no-op arm was reached", sawSame, 1, 0);
+	diff_eq_int("the coefficient dump ran", sawDump, 1, 0);
+	diff_eq_int("and was skipped", sawNoDump, 1, 0);
+	diff_eq_int("the illegal arm was reached", sawIllegal, 1, 0);
+	diff_eq_int("the diagnostics were reached", printed, 1, 0);
+
+	return diff_end();
+}
+
+/* -------------------------- V92EchoCanceller::updateEchoHistory (244 B) */
+
+/*
+ * THE FAST PATH AND THE COMPACTION ARE DIFFERENT CODE and the guard between
+ * them is `echoLength + count < historyAlloc`, so the shapes below straddle
+ * it: one that fits by a single sample, one that misses by one, and two that
+ * compact several times in one call.  Each shape is driven for six
+ * consecutive calls with the object carried over, because the compaction is
+ * the only thing that moves `echoLength` DOWN and one call is not enough to
+ * reach it twice.
+ *
+ * `historyAlloc` IS SET BELOW THE DECLARED BUFFER on two shapes, so the
+ * region between it and the guard is a second, wider guard: the writer must
+ * never touch a word at or past `historyAlloc`, and that is checked against
+ * the pre-call image rather than against the other side.
+ *
+ * THE COMPACTION IS NOT DRIVEN WITH `filterLength < 2`.  Its loop is
+ * bottom-tested with a count of `filterLength - 1` (D273), so one tap would
+ * ask it to copy four billion words over the top of everything; the two
+ * shapes with a short filter stay on the fast path, where the count is never
+ * used.
+ */
+
+/* den[0] is exactly 1.0f, so FloatARMA's constructor skips the rescale. */
+static float ecx_den[2][4] = {
+	{ 1.0f, -0.4f, 0.15f, 0.05f },
+	{ 1.0f, -0.4f, 0.15f, 0.05f }
+};
+static float ecx_num[2][4] = {
+	{ 0.5f, 0.3f, 0.2f, 0.1f },
+	{ 0.5f, 0.3f, 0.2f, 0.1f }
+};
+
+static int
+run_ec_update(void)
+{
+	static const struct {
+		unsigned int fl, alloc, len, count;
+	} shape[] = {
+		{ 16u, ECX_HIST,	0u,		40u },
+		{ 16u, ECX_HIST,	100u,		40u },
+		{ 16u, ECX_HIST,	ECX_HIST - 41u,	40u },	/* fits by 1 */
+		{ 16u, ECX_HIST,	ECX_HIST - 40u,	40u },	/* misses by 1 */
+		{ 16u, ECX_HIST,	ECX_HIST - 1u,	1u },
+		{ 16u, ECX_HIST,	ECX_HIST - 1u,	40u },
+		{ 16u, 64u,		60u,		40u },
+		{ 2u,  64u,		60u,		40u },
+		/*
+		 * THE ONE SHAPE THAT MAKES THE COPY'S DIRECTION VISIBLE.  The
+		 * compaction moves `filterLength - 1` samples from the top of
+		 * the buffer to the bottom, and the two regions only OVERLAP
+		 * when `historyAlloc - 1 <= 2 * (filterLength - 2)`: 40 taps
+		 * in 64 words is source [25,63] into destination [0,38], and
+		 * the object's downward copy reads words it has already
+		 * written where an upward one would not.  Every other shape
+		 * here has them disjoint, where the two directions agree.
+		 */
+		{ 40u, 64u,		60u,		40u },
+		{ 40u, ECX_HIST,	ECX_HIST - 1u,	128u },
+		{ 16u, ECX_HIST,	0u,		0u },
+		{ 1u,  ECX_HIST,	0u,		40u },
+		{ 0u,  ECX_HIST,	0u,		40u }
+	};
+	const int nshape = (int)(sizeof(shape) / sizeof(shape[0]));
+	int printed = 0, sawFast = 0, sawCompact = 0, sawWrote = 0;
+	int trial;
+	unsigned lvl;
+
+	diff_begin("V92EchoCanceller::updateEchoHistory");
+
+	for (lvl = 0; lvl <= 2; lvl += 2) {
+		set_level(lvl);
+
+		for (trial = 0; trial < nshape; trial++) {
+			unsigned int fl = shape[trial].fl;
+			unsigned int alloc = shape[trial].alloc;
+			unsigned int count = shape[trial].count;
+			int side, call, i;
+			float hbefore[ECX_LEAD + ECX_HIST + ECX_GUARD];
+
+			fill_pair(ec_a.raw, ec_b.raw, EC_SLOT, trial, trial & 3);
+			fill_pair(ecx_hist[0], ecx_hist[1],
+				  (unsigned)sizeof(ecx_hist[0]), trial + 1,
+				  trial & 3);
+			fill_pair(ecx_arma[0], ecx_arma[1],
+				  (unsigned)sizeof(ecx_arma[0]), trial + 2,
+				  trial & 3);
+
+			our_arma_ctor(ecx_arma[0], 4u, 4u, ecx_den[0],
+				      ecx_num[0], 64u);
+			ref_arma_ctor(ecx_arma[1], 4u, 4u, ecx_den[1],
+				      ecx_num[1], 64u);
+
+			for (side = 0; side < 2; side++) {
+				V92EchoCanceller *e = side == 0 ? &ec_a.o
+								: &ec_b.o;
+
+				e->params = 0;
+				e->arma = (FloatARMA *)ecx_arma[side];
+				e->echoCoeff = 0;
+				e->echoHistory = ECX_H(side);
+				e->filterLength = fl;
+				e->word_18 = fl - 1u;
+				e->historyAlloc = alloc;
+				e->echoLength = shape[trial].len;
+				e->historyIndex = 0x55aa55aau;
+			}
+
+			for (call = 0; call < 6; call++) {
+				long tag = (long)lvl * 100000 + trial * 100
+					   + call;
+				unsigned int lenBefore = ec_b.o.echoLength;
+				FloatARMA *ma = (FloatARMA *)ecx_arma[0];
+				FloatARMA *mb = (FloatARMA *)ecx_arma[1];
+				unsigned char aa[sizeof(FloatARMA)];
+				unsigned char ab[sizeof(FloatARMA)];
+
+				for (i = 0; i < (int)count; i++)
+					ecx_in[i] = (float)((i & 7) - 3)
+						    * 0.125f
+						    + (float)(call + trial)
+						      * 0.0625f;
+
+				memcpy(hbefore, ecx_hist[1], sizeof hbefore);
+
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+
+				ec_a.o.updateEchoHistory(ecx_in, count);
+				ref_ec_update(&ec_b.o, ecx_in, count);
+
+				dsplib_debug_capture_on = 0;
+
+				ecx_cmp_slot("after updateEchoHistory", tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after updateEchoHistory",
+					     "echoHistory and its guard",
+					     ecx_hist[0], ecx_hist[1],
+					     sizeof(ecx_hist[0]), tag);
+
+				/* The ARMA the writer runs every sample. */
+				memcpy(aa, ecx_arma[0], sizeof aa);
+				memcpy(ab, ecx_arma[1], sizeof ab);
+				memset(aa, 0, 16);
+				memset(ab, 0, 16);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after updateEchoHistory",
+					     "the ARMA object", aa, ab,
+					     sizeof aa, tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after updateEchoHistory",
+					     "the ARMA x history", ma->m_xhist,
+					     mb->m_xhist, ma->m_xlen * 4, tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after updateEchoHistory",
+					     "the ARMA y history", ma->m_yhist,
+					     mb->m_yhist, ma->m_ylen * 4, tag);
+
+				/*
+				 * NOTHING AT OR PAST `historyAlloc`, ever.
+				 * This is the bound D72 says the other
+				 * consumers do not share, checked against the
+				 * seed so that both sides overrunning
+				 * together is still a failure.
+				 */
+				diff_eq_int("the blob wrote nothing past "
+					    "historyAlloc (%ld)",
+					    memcmp(&hbefore[ECX_LEAD + alloc],
+						   &ecx_hist[1][ECX_LEAD
+								+ alloc],
+						   (ECX_HIST + ECX_GUARD
+						    - alloc) * 4) == 0,
+					    1, tag);
+				diff_eq_int("or before the buffer (%ld)",
+					    memcmp(hbefore, ecx_hist[1],
+						   ECX_LEAD * 4) == 0, 1,
+					    tag);
+				diff_eq_int("the write cursor stayed inside "
+					    "(%ld)",
+					    ec_b.o.echoLength < alloc
+					    || count == 0, 1, tag);
+				/* The reader's cursor is not this one's. */
+				diff_eq_int("historyIndex is untouched (%ld)",
+					    (long)ec_b.o.historyIndex,
+					    (long)0x55aa55aau, tag);
+
+				if (count != 0) {
+					if (ec_b.o.echoLength
+					    == lenBefore + count)
+						sawFast = 1;
+					if (ec_b.o.echoLength < lenBefore)
+						sawCompact = 1;
+					if (memcmp(hbefore, ecx_hist[1],
+						   sizeof hbefore) != 0)
+						sawWrote = 1;
+				}
+
+				ecx_transcript(lvl, tag, &printed);
+			}
+
+			our_arma_dtor(ecx_arma[0]);
+			ref_arma_dtor(ecx_arma[1]);
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("the fast path ran", sawFast, 1, 0);
+	diff_eq_int("the compaction ran", sawCompact, 1, 0);
+	diff_eq_int("the history was written", sawWrote, 1, 0);
+	diff_eq_int("neither side printed anything", printed, 0, 0);
+
+	return diff_end();
+}
+
+/* ----------------------------------- V92EchoCanceller::process (794 B) */
+
+/*
+ * The echo path the input carries: six taps, alternating sign, decaying.
+ * Applied to the same window the canceller is about to read, so the LMS
+ * update has an optimum to walk towards and `sawMoved` is not an accident of
+ * arithmetic on garbage.
+ */
+static float
+ecx_echo_of(const float *hist, unsigned int at)
+{
+	static const float g[ECX_ECHO] = {
+		0.60f, -0.42f, 0.29f, -0.20f, 0.14f, -0.10f
+	};
+	double s = 0.0;
+	int k;
+
+	for (k = 0; k < ECX_ECHO; k++)
+		s += (double)g[k] * (double)hist[at + k];
+	return (float)s;
+}
+
+static int
+run_ec_process(void)
+{
+	static const struct {
+		int state;
+		unsigned int fl, blocks, count, dur;
+		int wide;
+	} shape[] = {
+		{ 2, 16u, 12u, 40u, 200u, 0 },	/* fast training -> slow    */
+		{ 3, 16u, 12u, 40u, 200u, 0 },	/* slow training -> filter  */
+		{ 0, 16u,  6u, 40u, 200u, 0 },	/* filter only: no counter  */
+		{ 1, 16u,  6u, 40u, 120u, 0 },	/* count delay -> fast      */
+		{ 2,  0u,  4u, 40u, 200u, 0 },	/* the zero-length arm      */
+		{ 2,  1u,  4u, 40u, 200u, 0 },	/* tail loop only           */
+		{ 2,  3u,  4u, 40u, 200u, 0 },	/* tail loop, three         */
+		{ 2,  4u,  4u, 40u, 200u, 0 },	/* one unrolled pass        */
+		{ 2,  5u,  4u, 40u, 200u, 0 },	/* one pass and a tail      */
+		{ 7, 16u,  4u, 40u, 100u, 0 },	/* an illegal state adapts  */
+		{ 2, 16u,  3u,  0u,  60u, 0 },	/* an empty block           */
+		{ 2, 16u,  6u,  1u,   3u, 0 },	/* one sample at a time     */
+		{ 1, 16u,  3u, 128u, 300u, 0 },	/* a block past the modulus */
+		{ 2, 16u, 44u,  8u, 400u, 0 },	/* enough blocks to wrap    */
+		/*
+		 * THE ONE SHAPE THAT CAN SEE THE SUMMATION ORDER.  The
+		 * object's dot product runs two accumulators and adds them at
+		 * the end, and over ordinary data that is INVISIBLE: a
+		 * product of two floats needs 48 significand bits and the
+		 * accumulator has 64, so sixteen taps of similar magnitude
+		 * sum EXACTLY however they are grouped, and a merged-
+		 * accumulator mutation passes every check.  What the grouping
+		 * decides is where a cancellation lands, so this shape gives
+		 * the filter a uniform history and coefficients spanning
+		 * 2**100: the even taps cancel each other exactly and the odd
+		 * ones are far below the rounding of the pair.  Two
+		 * accumulators keep the small terms, one loses all but the
+		 * last of them.  Recorded because the merged form is a
+		 * mutation that must be caught rather than argued about.
+		 */
+		{ 2, 16u,  6u, 40u, 400u, 1 }	/* wide dynamic range       */
+	};
+	const int nshape = (int)(sizeof(shape) / sizeof(shape[0]));
+	int printed = 0, sawMoved = 0, sawVaried = 0, sawWrap = 0;
+	int sawSentinel = 0, sawNan = 0, sawTransition = 0, sawCut = 0;
+	int trial;
+	unsigned lvl;
+
+	diff_begin("V92EchoCanceller::process");
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		set_level(lvl);
+
+		for (trial = 0; trial < nshape; trial++) {
+			unsigned int fl = shape[trial].fl;
+			unsigned int count = shape[trial].count;
+			unsigned int mod = ECX_HIST - (fl - 1u);
+			unsigned int lfsr = 0xace1u + 7u * (unsigned)trial;
+			float prev[ECX_COEFF + ECX_GUARD];
+			float lastOut = 0.0f;
+			int side, blk, i;
+
+			fill_pair(ec_a.raw, ec_b.raw, EC_SLOT, trial, trial & 3);
+			fill_pair(ecx_coeff[0], ecx_coeff[1],
+				  (unsigned)sizeof(ecx_coeff[0]), trial + 1,
+				  trial & 3);
+			fill_pair(ecx_hist[0], ecx_hist[1],
+				  (unsigned)sizeof(ecx_hist[0]), trial + 2,
+				  trial & 3);
+			fill_pair(ecx_parm[0], ecx_parm[1], ECR_PARM,
+				  trial + 3, trial & 3);
+			ecx_param_word(ECX_FAST_BETA, 0x3ca3d70au);/* 0.02f */
+			ecx_param_word(ECX_FAST_DECAY, 0x3f7ff972u);/* .99990 */
+			ecx_param_word(ECX_SLOW_BETA, 0x3c23d70au);/* 0.01f */
+			ecx_param_word(ECX_SLOW_DECAY, 0x3f7fbe77u);/* .99900 */
+			ecx_param_word(ECX_FAST_DUR, shape[trial].dur);
+			ecx_param_word(ECX_SLOW_DUR, shape[trial].dur);
+
+			/*
+			 * The history is the echo SOURCE: a persistently
+			 * exciting +-0.5 sequence, identical on both sides,
+			 * written over the seed only as far as `historyAlloc`
+			 * so the guard past it keeps its varied bytes.
+			 */
+			for (i = 0; i < ECX_HIST; i++) {
+				float s;
+
+				lfsr = (lfsr >> 1)
+				       ^ (-(int)(lfsr & 1u) & 0xb400u);
+				s = (lfsr & 1u) ? 0.5f : -0.5f;
+				if (shape[trial].wide)
+					s = 0.5f;
+				ECX_H(0)[i] = ECX_H(1)[i] = s;
+			}
+			/* Small, varied, and never zero -- finding 230. */
+			for (i = 0; i < (int)fl; i++) {
+				float c = (float)((i % 5) - 2) * 0.03125f
+					  + 0.015625f;
+
+				if (shape[trial].wide)
+					c = (i & 1) ? 1.0e-10f
+					    : ((i & 2) ? -1.0e20f : 1.0e20f);
+				ecx_coeff[0][i] = ecx_coeff[1][i] = c;
+			}
+
+			for (side = 0; side < 2; side++) {
+				V92EchoCanceller *e = side == 0 ? &ec_a.o
+								: &ec_b.o;
+
+				e->params = (V92Parameters *)ecx_parm[side];
+				e->arma = 0;
+				e->echoCoeff = ecx_coeff[side];
+				e->echoHistory = ECX_H(side);
+				e->filterLength = fl;
+				e->word_18 = fl - 1u;
+				e->historyAlloc = ECX_HIST;
+				e->echoLength = 0x33333333u;
+				e->historyIndex = 0u;
+				e->state = (V92EchoCancellerState)
+					   shape[trial].state;
+				e->echoDelay = 120u;
+				e->updateDuration = shape[trial].dur;
+				e->word_10 = 0u;
+				e->echoBeta = ecx_bits(0x3ca3d70au);
+				e->echoBetaDecay = ecx_bits(0x3f7ff972u);
+			}
+			memcpy(prev, ecx_coeff[1], sizeof prev);
+
+			for (blk = 0; blk < (int)shape[trial].blocks; blk++) {
+				long tag = (long)lvl * 1000000 + trial * 1000
+					   + blk;
+				unsigned int at = ec_b.o.historyIndex;
+				unsigned int hi0 = ec_b.o.historyIndex;
+				unsigned int stBefore = (unsigned int)
+							ec_b.o.state;
+				float hbefore[ECX_LEAD + ECX_HIST
+					      + ECX_GUARD];
+				int sentinel = (blk % 7) == 6
+					       ? 1 + (blk % 2) : 0;
+
+				/*
+				 * The input: near end plus the echo of the
+				 * window the canceller is about to walk.
+				 */
+				for (i = 0; i < (int)count; i++) {
+					unsigned int a = at;
+
+					ecx_in[i] = 0.05f
+						    * (float)(((blk + i) % 9)
+							      - 4)
+						    + ecx_echo_of(ECX_H(1),
+								  a);
+					at = (at + 1u == mod) ? 0u : at + 1u;
+				}
+
+				fill_pair(ecx_out[0], ecx_out[1],
+					  (unsigned)sizeof(ecx_out[0]),
+					  trial * 40 + blk, blk & 3);
+				/*
+				 * `out[0]` DECIDES THE PATH, so it is never
+				 * left to the seed: 0.25f for the ordinary
+				 * one, 177.0f for the sentinel, and a NaN for
+				 * the arm that only an UNORDERED compare
+				 * reaches.
+				 */
+				ecx_out[0][0] = ecx_out[1][0] =
+					sentinel == 0 ? 0.25f
+					: sentinel == 1 ? 177.0f
+					: ecx_bits(0x7fc00000u);
+				if (sentinel == 1)
+					sawSentinel = 1;
+				if (sentinel == 2)
+					sawNan = 1;
+
+				memcpy(hbefore, ecx_hist[1], sizeof hbefore);
+
+				dsplib_debug_capture_on = 1;
+				dsplib_debug_capture_reset();
+
+				ec_a.o.process(ecx_in, ecx_out[0], count);
+				ref_ec_process(&ec_b.o, ecx_in, ecx_out[1],
+					       count);
+
+				dsplib_debug_capture_on = 0;
+
+				ecx_cmp_slot("after process", tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after process",
+					     "the output block and its guard",
+					     ecx_out[0], ecx_out[1],
+					     sizeof(ecx_out[0]), tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after process",
+					     "echoCoeff and its guard",
+					     ecx_coeff[0], ecx_coeff[1],
+					     sizeof(ecx_coeff[0]), tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after process",
+					     "echoHistory and its guard",
+					     ecx_hist[0], ecx_hist[1],
+					     sizeof(ecx_hist[0]), tag);
+				diff_eq_int("no store past the object (%ld)",
+					    memcmp(ec_a.raw + sizeof(ec_a.o),
+						   ec_b.raw + sizeof(ec_b.o),
+						   EC_SLOT - sizeof(ec_a.o))
+					    == 0, 1, tag);
+
+				/*
+				 * `process` READS the history and never
+				 * writes it -- checked against the pre-call
+				 * image, so both sides writing it together
+				 * still fails.
+				 */
+				diff_eq_int("the blob left echoHistory alone "
+					    "(%ld)",
+					    memcmp(hbefore, ecx_hist[1],
+						   sizeof hbefore) == 0, 1,
+					    tag);
+				/* The writer's cursor is not this one's. */
+				diff_eq_int("echoLength is untouched (%ld)",
+					    (long)ec_b.o.echoLength,
+					    (long)0x33333333u, tag);
+				diff_eq_int("the read cursor stayed inside "
+					    "the modulus (%ld)",
+					    ec_b.o.historyIndex < mod, 1, tag);
+				/*
+				 * The window it will read next must fit: this
+				 * is D72's arithmetic on the OTHER cursor,
+				 * and the guard past ECX_HIST is what would
+				 * catch it if it did not.
+				 */
+				diff_eq_int("and the window past it fits "
+					    "(%ld)",
+					    ec_b.o.historyIndex + fl
+					    <= ECX_HIST, 1, tag);
+
+				if (sentinel != 0) {
+					diff_eq_int("the sentinel copied the "
+						    "block (%ld)",
+						    count == 0
+						    || memcmp(ecx_in + 1,
+							      &ecx_out[1][1],
+							      (count - 1) * 4)
+						       == 0, 1, tag);
+					diff_eq_int("and left the state alone "
+						    "(%ld)",
+						    (unsigned int)
+						    ec_b.o.state, stBefore,
+						    tag);
+				} else {
+					if ((unsigned int)ec_b.o.state
+					    != stBefore)
+						sawTransition = 1;
+					if (memcmp(prev, ecx_coeff[1],
+						   sizeof prev) != 0)
+						sawMoved = 1;
+					if (count != 0 && fl != 0
+					    && memcmp(ecx_in, ecx_out[1],
+						      count * 4) != 0)
+						sawCut = 1;
+					if (count != 0
+					    && !ecx_same_bits(lastOut,
+							      ecx_out[1][0]))
+						sawVaried = 1;
+				}
+				if (count != 0)
+					lastOut = ecx_out[1][0];
+				/*
+				 * THE CURSOR WENT BACKWARDS, which it can
+				 * only do by wrapping.  `at` is this file's
+				 * own copy and ends where the object's does,
+				 * so comparing against IT proves nothing --
+				 * the flag it fed was satisfied by the empty
+				 * block at the start of a trial and never by
+				 * a wrap.
+				 */
+				if (count != 0 && ec_b.o.historyIndex < hi0)
+					sawWrap = 1;
+
+				memcpy(prev, ecx_coeff[1], sizeof prev);
+				ecx_transcript(lvl, tag, &printed);
+			}
+		}
+	}
+
+	set_level(0);
+	diff_eq_int("the adaptation moved the coefficients", sawMoved, 1, 0);
+	diff_eq_int("and did not produce one repeated answer", sawVaried, 1, 0);
+	diff_eq_int("the output differs from the input", sawCut, 1, 0);
+	diff_eq_int("the read cursor wrapped", sawWrap, 1, 0);
+	diff_eq_int("the 177.0f path was taken", sawSentinel, 1, 0);
+	diff_eq_int("and its unordered arm too", sawNan, 1, 0);
+	diff_eq_int("process drove a state transition", sawTransition, 1, 0);
+	diff_eq_int("the transitions were announced", printed, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2675,6 +3670,9 @@ main(void)
 	rc |= run_sv();
 	rc |= run_ec();
 	rc |= run_ec_reset();
+	rc |= run_ec_setstate();
+	rc |= run_ec_update();
+	rc |= run_ec_process();
 	rc |= run_ec_dtor();
 	rc |= run_ec_ctor();
 	rc |= run_rt();

@@ -50,6 +50,40 @@
 
 static void *alloc_slots[HARNESS_ALLOC_SLOTS];
 
+/*
+ * The ORDINAL of each live allocation -- 1 for the first sysdep_malloc of the
+ * run, 2 for the second, and so on.
+ *
+ * WHY IT EXISTS.  A test that wants "fir1 holds the FIRST of the two
+ * allocations and fir2 the second" was asking it as `fir1 < fir2`, and an
+ * address comparison does not answer that question.  Both this tree's
+ * allocators recycle LIFO: free(a) then free(b), and the next two mallocs
+ * hand back b's chunk and then a's, so the comparison INVERTS on alternate
+ * trials.  Measured at 20 non-monotonic pairs in 40 on 2005 static glibc and
+ * 20 in 40 on a modern one -- identical behaviour, which is why the check
+ * that depended on it passed on one and failed on the other for reasons that
+ * had nothing to do with either compiler.
+ *
+ * The ordinal is what the question was always about, and the allocator is the
+ * only thing that knows it.
+ */
+static unsigned long alloc_ord[HARNESS_ALLOC_SLOTS];
+static unsigned long alloc_next_ord;
+
+/*
+ * The size each live allocation was ASKED for.
+ *
+ * `malloc_usable_size` is not that number and cannot be substituted for it.
+ * It reports the chunk the allocator happened to serve the request from, so
+ * two identical requests differ whenever one was split from the top and the
+ * other recycled a larger freed chunk -- glibc hands over a remainder it
+ * cannot split rather than wasting it.  A test comparing our block's size
+ * against the blob's was reading that, and got 132 against 140 for two
+ * allocations that had asked for the same thing.  Finding 1353.
+ */
+static unsigned alloc_size[HARNESS_ALLOC_SLOTS];
+static unsigned alloc_insert_size;
+
 struct alloc_log harness_alloc;
 
 static unsigned
@@ -69,6 +103,8 @@ alloc_insert(void *p)
 
 		if (alloc_slots[k] == 0) {
 			alloc_slots[k] = p;
+			alloc_ord[k] = ++alloc_next_ord;
+			alloc_size[k] = alloc_insert_size;
 			return;
 		}
 	}
@@ -87,8 +123,50 @@ alloc_remove(void *p)
 
 		if (alloc_slots[k] == p) {
 			alloc_slots[k] = 0;
+			alloc_ord[k] = 0;
+			alloc_size[k] = 0;
 			return 1;
 		}
+	}
+	return 0;
+}
+
+/*
+ * Which sysdep_malloc handed this pointer out: 1 for the run's first, 2 for
+ * its second, and 0 if the pointer is not live.  See `alloc_ord` above for
+ * what this is instead of, and why an address comparison is not it.
+ */
+unsigned long
+harness_alloc_ordinal(const void *p)
+{
+	unsigned i = alloc_hash((void *)p);
+	unsigned n;
+
+	for (n = 0; n < HARNESS_ALLOC_SLOTS; n++) {
+		unsigned k = (i + n) % HARNESS_ALLOC_SLOTS;
+
+		if (alloc_slots[k] == p)
+			return alloc_ord[k];
+	}
+	return 0;
+}
+
+/*
+ * The number of bytes this pointer's sysdep_malloc was ASKED for, or 0 if it
+ * is not live.  See `alloc_size` above for why malloc_usable_size is not a
+ * substitute.
+ */
+unsigned
+harness_alloc_reqsize(const void *p)
+{
+	unsigned i = alloc_hash((void *)p);
+	unsigned n;
+
+	for (n = 0; n < HARNESS_ALLOC_SLOTS; n++) {
+		unsigned k = (i + n) % HARNESS_ALLOC_SLOTS;
+
+		if (alloc_slots[k] == p)
+			return alloc_size[k];
 	}
 	return 0;
 }
@@ -116,6 +194,9 @@ void
 harness_alloc_reset(void)
 {
 	memset(alloc_slots, 0, sizeof(alloc_slots));
+	memset(alloc_ord, 0, sizeof(alloc_ord));
+	memset(alloc_size, 0, sizeof(alloc_size));
+	alloc_next_ord = 0;
 	memset(&harness_alloc, 0, sizeof(harness_alloc));
 }
 
@@ -136,6 +217,7 @@ sysdep_malloc(unsigned int size)
 		harness_alloc.allocs++;
 		harness_alloc.live++;
 		harness_alloc.bytes += size;
+		alloc_insert_size = size;
 		alloc_insert(p);
 	}
 	return p;

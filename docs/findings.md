@@ -44014,6 +44014,141 @@ an embedded member of `VPcmFloModem` and the constructor's output includes it.
 So repairing `src/dsp/FloatIIR.cpp` will now fail TWO files rather than one --
 which is a note for whoever repairs it, not a reason not to.
 
+### 1390. THE Jd ACCESSORS READ A DIFFERENT BIT LAYOUT FROM THE ONE THE PACKERS WRITE
+
+`V90Jd` and `V92Jd` each carry a 72-byte vector, one byte per bit, and each
+class has both the code that FILLS it for transmission and the code that
+DECODES it.  The two do not agree about where anything is.
+
+The constructor and `getBitVector`/`packJdData` build a framed message: 17 one
+bits, a zero at `bits[17]`, mask bits 0..15 at `bits[18..33]`, a zero at
+`bits[34]`, mask bits 16..27 at `bits[35..46]`, the constellation pair at
+`bits[47..48]`, the lookahead pair at `bits[49..50]`, a zero at `bits[51]`, the
+CRC at `bits[52..67]` and four trailing zeros.  That map is finding 1223's.
+
+The three accessors read, in `V90Jd` (0x1e8b0, 0x1e900, 0x1e920) and identically
+in `V92Jd` (0x11eb0, 0x11f20):
+
+    getRatesMask         +0x02..+0x11, +0x12..+0x1d   bits[0..15], bits[16..27]
+    getConstelationSize  +0x1e, +0x1f                 bits[28], bits[29]
+    getMaxLookahead      +0x20, +0x21                 bits[30], bits[31]
+
+-- 28 rate bits, then two, then two, contiguous from `bits[0]` with no framing
+at all.  `V92Jd::getJdPhase` (0x11e60) does the same to the second vector:
+sixteen bytes from `phaseBits[0]`, where the constructor writes the Q16 phase at
+`phaseBits[18..33]`.
+
+So the message a Jd object PACKS cannot be read back by the same object's own
+accessors, and vice versa.  Both readings are reproduced, both are driven
+against the blob, and neither is repaired: D270.  Whether the unframed layout is
+what an unpacker leaves behind is a question for `unPackData`, and the answer
+does not change what these three do.  **It is yes -- finding 1395**, which is
+why D270 is retracted rather than standing.
+
+**A byte counts as set if it is non-zero, EXCEPT in the lookahead.**
+`getRatesMask` tests `cmpb $0x0`, so a byte of 2 contributes its bit;
+`getMaxLookahead` does `and $0x1` on each of its two, so a byte of 2 contributes
+nothing.  The two rules are three instructions apart in the object and the
+fixture seeds the vector with varied bytes so that a reconstruction cannot pass
+by conflating them.
+
+**The return types are measured.**  A return type is not mangled, so `int`,
+`unsigned char`, `float` and void here are read off `%eax` and `st(0)`:
+`getRatesMask` leaves a 32-bit accumulator in `%eax`, `getMaxLookahead` ends
+`movzbl %dl,%eax` on a byte-wide sum, `getConstelationSize` writes through both
+pointers and sets `%eax` to nothing, and `getJdPhase` ends `fstps`/`flds`, which
+is the x87 return convention with a float rounded once on the way out.
+
+### 1391. `V92Jd::getConstelationSize` READS THE OTHER VECTOR, AND ONE BYTE FURTHER ALONG
+
+Three of `V92Jd`'s four accessors are `V90Jd`'s instruction for instruction and
+read `bits`.  The fourth is not.  `V90Jd::getConstelationSize` reads +0x1e and
++0x1f -- `bits[28]`, `bits[29]`.  `V92Jd::getConstelationSize` reads +0x67 and
++0x68, and in this class's map that is `phaseBits[29]` and `phaseBits[30]`: the
+second vector, at an index one higher than its sibling's.
+
++0x67 is +0x1f + 0x48, and 0x48 is exactly the displacement `phaseBits`
+introduces -- V92Jd.h's "everything after it moves by 0x48".  So the difference
+between the two classes is one vector and one index, and neither can be told
+from the other by the size of the object.
+
+In the framed layout those two bytes are not a constellation size at all:
+`phaseBits[29..30]` is where `V92Jd`'s constructor puts bits 11 and 12 of the
+Q16 phase, and `packJdPhaseData` leaves both alone.  Recorded as D271 and
+reproduced; the differential test paints the two vectors with DIFFERENT values
+so that a reconstruction reading the right index in the wrong vector diverges
+rather than agreeing.
+
+### 1392. `packJdData` WRITES `bits[48]`, WHICH RETIRES D162
+
+D162 recorded that `V92Jd`'s constructor stores a literal 0 into `bits[47]` and
+never writes `bits[48]`, where `V90Jd`'s constructor fills both, and left the
+question open: "`packJdData` is not written yet and may fill `bits[48]` before
+anything transmits the vector."
+
+It does.  `packJdData` at 0x12220+0x4b is `movb $0x0,0x32(%edi)`, and +0x32 is
+`bits[48]` -- the line `bits[V90JD_GROUP2 + 14] = 0;` in our own
+`src/pump/v90/V92Jd.cpp`, written in an earlier batch as one of the seven bits
+the V.92 pack forces to zero before the CRC sees them.  `V90JD_GROUP2` is 34.
+
+**The measurement was already in the tree and nobody had read it that way.**
+`t_v92jd.cpp` seeds the whole slot with varied bytes, never zeroes it, drives
+`packJdData` and compares the object whole; the blob writes 0 over the seeded
+byte at +0x32 and so must we.  So the PASS that suite has been printing all
+along is the proof that the byte is written, and no new code was needed to
+settle it -- only the arithmetic on `V90JD_GROUP2 + 14`.
+
+D162's defect is therefore **unobservable through the packed message**: every
+transmission path runs `packJdData` (`getJdBitVector` is `packJdData` then
+`return bits`), and the pack overwrites the byte the constructor left.  It
+remains true that a reader of the object between construction and the first
+pack sees an uninitialised byte, and no such reader exists in the object.
+
+### 1393. FOUR `exit*` METHODS, AND NO RELOCATION IN THE BLOB NAMES ONE
+
+`V92Phase3Modulator`'s four `exit*` methods are 209 bytes that no relocation in
+the object names -- `readelf -r` finds not one relocation against ANY
+`V92Phase3Modulator` symbol, so `generateSymbol` and the class's whole
+interface are, in this partial link, referenced by nothing.  They are still
+worth writing: they are what the header's state diagram is read off, and each
+one is the only statement in the object of what follows the state it guards.
+
+All four have the same shape -- refuse a foreign state, refuse a zero
+`symbolCount`, then move -- and the two that end a state with no timeout
+(`exitJa` from 4, `exitSuSecond` from 9) round to a twelve-symbol boundary with
+an unsigned `% 12` and clear the count on it, while `exitSilence` clears the
+count with no boundary test and `exitTRN1u` does not clear it at all.  The
+division is `mul $0xaaaaaaab; shr $3` with no sign correction, which is
+`symbolCount`'s declared type showing through and agrees with `generateSymbol`'s
+own `% 12`.
+
+**The zero-count guard is the part a fixture forgets.**  Three quarters of what
+these methods do is refuse: fifteen of sixteen states leave the object alone,
+and a zero count refuses even in the right state.  `t_v92p3mod.cpp` drives all
+four from all sixteen states over fourteen counts -- 896 calls, the object
+compared whole after every one -- so the refusals are measured rather than
+assumed.
+
+### 1394. `k56FlexRunDemodulator` RETURNS 5, AND WHERE A STUB'S TEST HAS TO LIVE
+
+`K56FlexFloModem::k56FlexRunDemodulator` is `b8 05 00 00 00 c3`: six bytes that
+return the constant 5 and read none of the four arguments.  With
+`internalReset` and `k56FlexEnterPhase3`, both single `ret`s, that closes the
+class's members apart from the constructor and destructor, which this tree
+deliberately does not declare, and the seven three-byte `xor %eax,%eax`
+accessors.  D154 and D155 are the entries; nothing here changes them.
+
+**The interesting thing is where the test went.**  The class's other five stubs
+are driven from `t_v90leaves.cpp`, and putting these three beside them would
+have left the constant 5 untestable: `test/mutations/suites.json` pairs
+`src/pump/v90/K56FlexFloModem.cpp` with `build/test/t_v92alloc`, so a mutation
+of that constant is only caught if THAT binary reads it.  A suite is a
+(source, binary) pair and a test in the wrong binary is a test the mutation
+tier cannot see -- the same hazard as finding 1264 approached from the other
+end.  The three are therefore driven from `t_v92alloc.c`, by their mangled
+names through `asm()` labels, which is safe here precisely because the claim
+under test is that not one instruction touches `this`.
+
 ======================================================================
 
 ### 1370. `V92Mapper::process` KEEPS A SIXTEEN-BIT ACCUMULATOR, AND NO CALLER CAN MAKE IT MATTER
@@ -45245,3 +45380,308 @@ plain one.
 **And the mutation is what makes either measurement mean anything.** A test
 passing proves the two agree; it does not prove the test could see a
 difference. One entry in `test/mutations/psd.json` is that second question.
+### 1353. THE TWO PERIOD-BUILD FAILURES WERE THE ALLOCATOR, NOT EITHER COMPILER — AND THE CHECKS WERE ASKING THE WRONG QUESTION
+
+The period differential's first two disagreements, and the diagnosis went the
+opposite way to the one the evidence first suggested. Both `t_v92precoder` and
+`t_v90equ` built and ran under GCC 3.4.2, disagreed with the blob, and passed
+every check under GCC 13:
+
+    t_v92precoder  "stored in the reference's allocation order"  got 0, ref 1
+    t_v90equ       "block size"                                  got 132, ref 140
+
+**Neither is a compiler difference, and the argument that settles it needs no
+disassembly.** Our `V92Precoder::V92Precoder` allocates `fir1` and then `fir2`
+in two sequenced statements — there is no freedom for a compiler to reorder
+them — and the blob is a fixed binary whose behaviour cannot vary with what
+compiles the other half of the process. So the only term left that can change
+between the two builds is the C library, and the period build links a **2005
+static glibc** where the modern one links glibc 2.3x dynamically.
+
+**Both allocators recycle LIFO, identically.** Forty trials of
+`a = malloc(0x14); b = malloc(0x14); free(a); free(b)`:
+
+| libc | non-monotonic pairs |
+|---|---|
+| 2005 static glibc (period) | **20 of 40** |
+| modern glibc | **20 of 40** |
+
+The destructor frees `fir1` then `fir2`, so the next construction is handed
+`fir2`'s chunk first and `fir1 < fir2` **inverts on alternate trials**. It is
+not that one libc is monotonic and the other is not; neither is, and whether
+our side happened to be in phase with the blob's was luck that held under one
+build and not the other.
+
+`malloc_usable_size` is the same mistake in a second costume. It reports the
+CHUNK the request was served from, and glibc hands over a remainder too small
+to split rather than wasting it — so two allocations that asked for the same
+number of bytes report 132 and 140. Recording the requested size proves they
+did ask for the same thing: with `harness_alloc_reqsize` the check passes.
+
+**WHAT THE CHECKS MEANT TO ASK IS REAL; THE PROXY WAS NOT.** "Did `fir1` get
+the FIRST of the two allocations, as the blob's does" is a genuine property of
+the reconstruction, and so is "is our block the same size as the blob's". An
+address comparison answers neither, and `malloc_usable_size` answers neither.
+The allocator is the only thing that knows, so it now records both:
+
+    unsigned long harness_alloc_ordinal(const void *p);   /* 1, 2, 3, ... */
+    unsigned      harness_alloc_reqsize(const void *p);   /* bytes asked for */
+
+With those, all four checks pass under both compilers and the period
+differential is **155 of 155**.
+
+**THE METHODOLOGICAL POINT, which is the durable part.** A differential check
+must compare something both sides *compute*, not something the environment
+hands them. Three properties of an allocation are visible to a test — its
+address, its usable size, and its ordinal — and only the last is a fact about
+the code under test. The first two are facts about the C library, and a test
+that reads them is green or red for reasons no one in this tree controls. That
+they were green for years under one libc is not evidence they were right; it
+is the same "passing for the wrong reason" that finding 134 is about, and it
+took changing the compiler to expose it.
+
+It also revises what task #114 was filed believing. Its triage said the
+runtime-derived expectation (`PT()->fir1 < PT()->fir2`, read from the
+reference object in the same process) ruled out the test being at fault and
+made this a finding about `src/`. That reasoning was wrong: reading the
+expectation from the reference at runtime removes a HARDCODED assumption but
+not a shared environmental one, because both sides read the same allocator.
+
+### 1395. THE UNPACKER IS THE PRODUCER THE ACCESSORS WERE WRITTEN FOR, AND D270 IS TWO DIRECTIONS
+
+Finding 1390 left one question open: the seven Jd accessors read a
+payload-contiguous layout that no packer in either class writes, and whether
+anything writes it was a question for `unPackData`.  It does.
+
+`V90Jd::unPackData` (0x1eba0) strips the framing off an incoming message and
+fills `bits[0..47]` FLAT, one byte per received bit, in arrival order, storing
+no group marker anywhere.  The stores are `mov %cl,0x2(%ebx,%esi,1)` at
+0x1ec51 (the sixteen low mask bits), 0x1ec89 (the twelve high ones), 0x1ecaf
+(the constellation and lookahead pairs) and 0x1ecfd (the sixteen CRC bits as
+received).  The two V.92 unpackers do the same to their own vector at 0x12989,
+0x129bd, 0x129e3, 0x12a0a, 0x12a4f and at 0x125b1, 0x125e9, 0x1260f, 0x1265d.
+
+That range is exactly what `getRatesMask` (0..27), `getConstelationSize`
+(28..29), `getMaxLookahead` (30..31) and `V92Jd::getJdPhase` (phase 0..15)
+read.  The mapping between the two layouts is
+
+    framed 18 + p        for payload p in 0..15
+    framed 35 + (p - 16) for payload p in 16..31
+    framed 52 + (p - 32) for payload p in 32..47
+
+and it is the same in all three unpackers.  **So the class has two layouts
+because it has two directions**: the constructor and the packs build the
+framed message for the wire, the unpacker leaves the payload flat for the
+accessors, and D270 -- opened when the accessors landed and the unpacker had
+not -- is explained rather than repaired.  The round trip is now driven end to
+end: `t_v90jd.cpp` and `t_v92jd.cpp` pack a message with the code this tree
+already tests, feed it back one bit at a time, and read it out through the
+accessors.
+
+**Half of D271 goes with it and half does not.**  In the phase message,
+payload 28 is the always-1 tag (finding 1396), so the constellation pair sits
+one position later there than in the data message -- which accounts for
+`V92Jd::getConstelationSize` reading index 29..30 where `V90Jd`'s reads 28..29.
+What no reading accounts for is that it takes them out of `phaseBits` while
+its two siblings read `bits`: a `V92Jd` that has received a DATA message
+answers `getConstelationSize` out of the phase vector.  D271 is that half.
+
+### 1396. THE Jd RECEIVER: A NINE-STATE MACHINE, A CRC COMPARED BY MAGNITUDE, AND A ONE-BYTE MESSAGE TAG
+
+What the three state bytes hold, measured from the three unpackers:
+
+- `unpack[0]` is the length of the current run of 1 bits, kept as a BYTE and
+  wrapping at 255 (`movzbl (%ebx); inc %al` against `test %ecx,%ecx; je`).
+- `unpack[1]` is how many payload bytes have been stored.
+- `unpackWord` / `unpackPhaseWord` is the state: `cmp $0x8,%eax; ja` over a
+  nine-entry jump table at .rodata+0x794 (V.90) and +0x598 (V.92 phase), and
+  `cmp $0x9` over a TEN-entry table at +0x5bc (V.92 data).
+
+The return type is not mangled and is measured as `int`, 0 or 1: every path
+reaches `xor %edx,%edx` before `mov %edx,%eax` and the completion path jumps
+past it (0x1ec18, 0x12cc6, 0x128d1).  The restart block at 0x1ec40 / 0x1297e /
+0x125a6 is the matching `unPackReset` method's three stores in that method's
+order, byte for byte -- an inlined call, and written as one.
+
+**THE CRC IS THE PACKER'S, OVER ONE RUN OF 32 INSTEAD OF TWO OF 16.**
+`cmpl $0x1f,0x3c(%esp)` where the packer's helper stops at 15 and is called
+twice with a 17-byte stride.  The payload is contiguous here, so the same 32
+bytes arrive in the same order and the register agrees with what the packer
+put on the wire; the round trip closes on the message's 72nd bit.
+
+**AND IT IS COMPARED AS A SUM OF ABSOLUTE DIFFERENCES, NOT BITWISE.**
+`sub %edi,%edx; mov %edx,%eax; sar $0x1f,%eax; xor %eax,%edx; sub %eax,%edx`
+accumulated over sixteen positions and tested for zero.  Since the received
+byte is stored unmasked, a CRC byte of 2 FAILS here where `(x ^ y) & 1` would
+pass.  Driven directly.
+
+**EACH V.92 UNPACKER VERIFIES A CONSTANT TAG BYTE BEFORE DECLARING A
+MESSAGE.**  `cmpb $0x0,0x1e(%ebx)` at 0x12cac is `bits[28]`; `cmpb $0x1,
+0x66(%ebx)` at 0x128bc is `phaseBits[28]`.  A mismatch takes the reset path
+and returns 0.  Payload 28 is framed 47 -- exactly the byte each constructor
+writes as a constant and neither pack touches (`bits[47] = 0`,
+`phaseBits[47] = 1`).  So the pair is a MESSAGE-TYPE TAG: the two messages are
+otherwise interchangeable (same framing, same CRC coverage), and feeding one
+to the other's unpacker walks the whole message, passes the CRC and is refused
+on that one byte.  Both directions are driven.  `V90Jd::unPackData` has no
+such check.
+
+It also completes D162 from the other side: `bits[47]` MUST be written by the
+V.92 constructor because it is the tag the data unpacker demands, and
+`bits[48]` need not be because `packJdData` clears it (finding 1392).
+
+**V.92's DATA UNPACKER SPLITS THE SECOND RATE RUN 11 + 1.**  `cmp $0x1b,%al`
+at 0x129cd takes eleven bytes and then a state of its own at 0x129e3 takes the
+twelfth with NO comparison at all, storing one byte and advancing
+unconditionally -- which is the extra jump-table entry.  V90Jd's unpacker and
+V92Jd's phase unpacker take twelve in one state (`cmp $0x1c` at 0x1ec99 and
+0x125f9).  It is the same eleven the V.92 constructor writes (finding 1223),
+so the twelfth bit -- payload 27, framed 46 -- is the one V.92 does not use as
+a rate bit and `packJdData` forces to zero.  **The bytes written are
+identical; only the state number differs, so the split is observable in
+`unpackWord` alone** -- which is why the fixture compares the whole object
+after every bit rather than the vector at the end.
+
+### 1397. THREE DEFECTS IN THE Jd RECEIVERS THAT HAVE NO DEVIATION NUMBER YET
+
+All three are measured, reproduced and driven; none is repaired.  They are
+recorded here rather than in `docs/deviations.md` because this batch's
+allocated block was D270-D274 and the echo canceller's three (D272-D274) are
+already committed into source comments.  **Whoever allocates the next block
+should give these three entries numbers of their own; this finding is their
+text.**
+
+**The two V.92 directions cannot receive concurrently.**  `V92Jd` has ONE pair
+of state bytes and two state words: both unpackers store to +0x00 and +0x01
+(`mov %dl,(%ebx)`, `mov %al,0x1(%ebx)` in each) while one switches on +0xd4
+and the other on +0xd8.  A data bit fed part-way through a phase message
+advances the phase message's own run length and payload count.  Measured from
+the offsets; that a receiver cannot therefore run both at once is the
+one-line inference.
+
+**A preamble longer than seventeen 1 bits desynchronises the message.**  State
+0 leaves on the seventeenth (`cmp $0x10,%dl; jbe`), state 1 treats a 1 as an
+error, and the reset stores `movb $0x0,(%ebx)` -- ZERO, not one -- so the
+offending bit is not counted toward the next run.  A receiver that sees
+eighteen 1 bits must wait for a fresh seventeen.  Driven in both test files.
+
+**The accepting state has no exit.**  V.90 state 8 and V.92 states 9 and 8
+only increment `unpack[1]`; nothing changes the state word and there is no
+transition out of it.  A caller that keeps feeding after a completed message
+gets a spurious completion every 256 bits, on stale payload, because the byte
+counter wraps back to 0x34.  The tests' `late_complete` counter asserts
+exactly that.
+
+**One hazard that is deliberately NOT one of the three.**
+`vec[unpack[1]] = bit` is bounds-checked nowhere in any of the three
+unpackers.  It is unreachable in normal use -- from a constructed or reset
+object the counter is capped by each storing state (16 / 27-28 / 32 / 48), and
+the only state that walks it past 71 is the accepting one, which never returns
+to a storing state without an explicit reset.  It is written down because the
+next reader will see the unbounded index and reach for a fix; the tests clamp
+seeded `unpack[1]` below 72 for the same reason.
+
+### 1398. THE ECHO CANCELLER'S FOUR STATES, ITS CLOCK, AND ITS TWO CURSORS
+
+**THE OBJECT NAMES ITS OWN STATES.**  `setState`'s arms open with
+"V92EchoCanceller: echo state set to filter only" (0), "... to count delay
+before training" (1), "... to fast echo training" (2), "... to slow echo
+training" (3), and anything else prints "V92EchoCanceller: setState ERROR:
+illegal state".  States 2 and 3 are confirmed twice over, because 2 loads
+`V92_ECHO_FAST_BETA_FACTOR`, `_FAST_DECAY_FACTOR` and `_FAST_UPDATE_DURATION`
+and 3 the three `_SLOW_` fields.  The enum's underlying type is SIGNED and
+that is forced: the dispatch is `cmp $0x1,%eax; je; jle`, and `jle` is the
+signed branch where an enum of 0..3 would have given GCC `unsigned int` and
+`jbe`.  C++98 has no fixed base, so it is pinned with a negative enumerator of
+ours (docs/method/compilers.md, V2).
+
+The state machine `process` drives is 1 -> 2 -> 3 -> 0, and **0 is terminal**:
+the FILTER_ONLY arm filters and returns without touching the sample counter,
+so a canceller that has finished training never changes state again.  The
+illegal-state message is the one diagnostic here besides the destructor's that
+goes through `dsplibs_debug_printf` directly, gated at the call site by
+`cmpl $0x1,dsplibs_debug_level; ja`, so it is readable text where every other
+message in the class is encoded.
+
+**+0x0c AND +0x10 ARE THE STATE'S CLOCK, AND IT RESTARTS ONLY ON A REAL
+CHANGE.**  `setState` stores the duration at +0x0c -- the parameter block's for
+2 and 3, and `echoDelay + 400` for 1, the only place the field is built rather
+than read, which is what names it `updateDuration`.  `process` adds each
+block's length to +0x10 and asks for the next state when it reaches +0x0c.
+And `cmp %eax,0x8(%ebx); je` jumps past the `movl $0x0,0x10(%ebx)` every other
+arm falls into, so a `setState` to the state already held writes NOTHING,
+while a change to the illegal arm still clears the count without changing the
+state.  The comparison `cmp 0xc(%edi),%esi; jb` is unsigned, which needs one
+unsigned operand; which of the two the object cannot say.  That closes the
+class's one unexplored hole: `pad_0c[8]` is `updateDuration` and `word_10`,
+and +0x08 -- `word_08`, "cleared by reset" -- is the state itself.
+
+**TWO CURSORS, AND ONE NUMBER REACHED TWO WAYS.**  `updateEchoHistory` appends
+at `echoHistory[echoLength]` and moves +0x2c; `process` reads a
+`filterLength`-long window at `echoHistory[historyIndex]` and moves +0x28,
+wrapping at `historyAlloc - word_18`.  Neither touches the other's, which
+settles +0x28's invented name (finding 226) in the reader's direction and
+makes +0x2c a FILL LEVEL rather than a tap count.  The geometry is exact: a
+maximum cursor of `historyAlloc - filterLength` plus a window of
+`filterLength - 1` is `historyAlloc - 1`.  And `word_18` is a member the
+constructor could not have folded away, because the same quantity is reached
+two ways -- `process` loads +0x18 while the compaction loads +0x14 and
+computes `filterLength - 1` on the fly.
+
+**A D72 DATAPOINT, AND THE VERDICT DOES NOT MOVE.**  The writer bounds the
+buffer by `historyAlloc` where `reset` bounds it by `echoLength` -- but that
+bound is conditional and unrecoverable.  Entered with
+`echoLength <= historyAlloc - 1` the writer never passes `historyAlloc - 1`.
+Entered with `echoLength >= historyAlloc`, which is precisely what D72 says
+`setEchoDelay` can leave behind, the fast guard `echoLength + count <
+historyAlloc` is false, the slow path's first store is already past the end,
+and the compaction trigger is an EQUALITY (`cmp 0x1c(%ecx),%eax; je` at
+0x117c7, not `jae`) against a cursor that only grows -- so it never matches
+again and the writer runs `count` words off the end with nothing to stop it.
+D72's CANNOT FIRE verdict stands on the delay's real range; this says what the
+consequence would be if it ever did.
+
+### 1399. FOUR THINGS THE ECHO CANCELLER'S TESTS HAD TO BE SHAPED TO SEE
+
+**A TWO-ACCUMULATOR DOT PRODUCT IS INVISIBLE OVER ORDINARY DATA.**  The object
+steps four taps at a time into two alternating x87 accumulators (`faddp
+%st,%st(1)` for the even terms, `%st(2)` for the odd) and adds them at the end,
+with the one-at-a-time tail feeding the even one.  No flag this object was
+built with lets GCC invent that, so the unrolling is the original's source --
+and a mutation that merged the two accumulators passed the ENTIRE differential
+suite.  The reason is arithmetic: a product of two floats needs 48 significand
+bits and an x87 accumulator has 64, so a filter whose taps are within a factor
+of 2**16 sums exactly however it is grouped.  What the grouping decides is
+where a cancellation lands, so the fixture now carries a shape with a uniform
+history and coefficients spanning 2**100, on which the merged form and an
+unroll-by-eight both die.  **The last bits agreed because the arithmetic was
+exact, not because the order had been copied**, and only a shape chosen to
+break the exactness could tell the two apart.
+
+**THE PRINTED SIGN IS `!(v <= 0.0f)` AND THE DIFFERENCE IS A NaN.**
+`fldz; fcomps v; sahf; sbb %edx,%edx; and $0xfffffffe,%edx; add $0x2d,%edx`
+selects on CF alone; CF is C0, and FCOM sets C0 for less-than AND for
+unordered, so the object prints '+' for a NaN where `0.0f < v` prints '-'.
+Zero prints as '-'.  Confirmed against the codegen -- the `!(v <= 0.0f)`
+spelling compiles to exactly that `sbb`-on-CF sequence and the other to
+`fcomip`/`cmovbe` -- and it is the same reading `V90Equalizer::setLinearEquBeta`
+carries.  It is now TESTED rather than argued: the mutation only died once a
+NaN could reach a training arm.
+
+**A MODULAR SWEEP SCHEDULE CAN BE PROVABLY UNABLE TO REACH AN ARM.**  The
+first parameter sweep stepped the interesting float patterns by five modulo
+twelve.  Only two of the eight destination states load a beta at all, and
+those two fall on a fixed residue, so the NaN pattern could never reach either
+and the sign reading above went untested with a live mutation to prove it.
+Indexing by `o * 2 + v` instead covers every pattern in every arm.  The same
+shape as `run_ec`'s unsatisfiable schedule; it is a recurring trap and worth
+naming.
+
+**A TRAILING GUARD CANNOT SEE A LOOP THAT RUNS DOWNWARD.**  The history
+compaction copies TOWARD THE FRONT of the buffer, so a count one too long
+walks off the front, and the mutation for it survived a fixture whose guard
+was only past the end.  Both history arrays now carry a compared guard at both
+ends.  The general form: a guard is a claim about a direction, and a buffer
+that is written in two directions needs two.
+
+================================================================

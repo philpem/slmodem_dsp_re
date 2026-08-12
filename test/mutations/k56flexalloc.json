@@ -28,5 +28,35 @@
   "label": "K56FLEX_Delete frees nothing",
   "find": "\tif (obj != 0)\n\t\tsysdep_free(obj);",
   "replace": "\tif (obj == 0)\n\t\tsysdep_free(obj);"
+ },
+ {
+  "label": "the demodulator returns 4, not 5",
+  "find": "\treturn 5;",
+  "replace": "\treturn 4;"
+ },
+ {
+  "label": "the demodulator returns zero like the two bit getters",
+  "find": "\treturn 5;",
+  "replace": "\treturn 0;"
+ },
+ {
+  "label": "the demodulator writes its two outputs",
+  "find": "K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)\n{\n\treturn 5;",
+  "replace": "K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *a, int *b)\n{\n\t*a = 0;\n\t*b = 0;\n\treturn 5;"
+ },
+ {
+  "label": "the demodulator scales the samples it is handed",
+  "find": "K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)\n{\n\treturn 5;",
+  "replace": "K56FlexFloModem::k56FlexRunDemodulator(float *in, unsigned int n, int *, int *)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < n; i++)\n\t\tin[i] *= 2.0f;\n\treturn 5;"
+ },
+ {
+  "label": "internalReset writes through `this`",
+  "find": "K56FlexFloModem::internalReset()\n{\n}",
+  "replace": "K56FlexFloModem::internalReset()\n{\n\t*(int *)this = 0;\n}"
+ },
+ {
+  "label": "k56FlexEnterPhase3 writes through `this`",
+  "find": "K56FlexFloModem::k56FlexEnterPhase3()\n{\n}",
+  "replace": "K56FlexFloModem::k56FlexEnterPhase3()\n{\n\t*(int *)this = 0;\n}"
  }
 ]

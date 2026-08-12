@@ -4408,6 +4408,76 @@ Reproduced, and DRIVEN: `t_v90equ.cpp`'s constructor sweep includes lengths 0 an
 
 ---
 
+## D275 🐛 `V92Jd`'s two receive directions share one pair of state bytes, so they cannot run concurrently
+
+**Where:** `src/pump/v90/V92Jd.cpp`, `unPackJdData` and `unPackJdPhaseData`.
+
+**What the original does:** both unpackers store their state to +0x00 and
++0x01 (`mov %dl,(%ebx)`, `mov %al,0x1(%ebx)` in each) while switching on two
+DIFFERENT state words, +0xd4 and +0xd8.
+
+**Why it looks wrong:** a data bit fed part-way through a phase message
+advances the phase message's own run length and payload count.  The two
+directions are separately switched and jointly stated.
+
+**Reachable?** Only if a caller interleaves the two unpackers.  **Unmeasured**
+-- nothing this tree has written does, and whether the object's own callers can
+is not established.  The offsets are measured; that a receiver cannot run both
+at once is the one-line inference from them.
+
+**Not fixed.**  Finding 1397, which is this entry's text; allocated here from
+the leaf-sweep batch's unused block.
+
+---
+
+## D276 🐛 A preamble longer than seventeen 1 bits desynchronises the Jd message
+
+**Where:** `src/pump/v90/V90Jd.cpp` and `V92Jd.cpp`, the unpackers' state 0/1.
+
+**What the original does:** state 0 leaves on the seventeenth 1 bit
+(`cmp $0x10,%dl; jbe`); state 1 treats a further 1 as an error and resets with
+`movb $0x0,(%ebx)` -- ZERO, not one -- so the offending bit is NOT counted
+toward the next run.
+
+**Why it looks wrong:** a transmitter whose preamble runs to eighteen ones
+leaves the receiver needing a fresh seventeen.  Counting the offending bit
+would have resynchronised on the next.
+
+**Reachable?**  **Unmeasured** against a real peer; V.90's own preamble length
+is not established here.  Driven in both test files, so the behaviour is
+reproduced deliberately rather than by accident.
+
+**Not fixed.**  Finding 1397.
+
+---
+
+## D277 🐛 The Jd unpackers' accepting state has no exit, and completes again every 256 bits
+
+**Where:** `src/pump/v90/V90Jd.cpp` state 8; `V92Jd.cpp` states 9 and 8.
+
+**What the original does:** the accepting state only increments `unpack[1]`.
+Nothing writes the state word and there is no transition out.
+
+**Why it looks wrong:** a caller that keeps feeding bits after a completed
+message gets a spurious completion every 256 bits, on stale payload, because
+the byte counter wraps back to 0x34.
+
+**Reachable?**  On any caller that does not stop or reset at completion.
+**Unmeasured** -- whether the object's callers do is not established.  The
+tests' `late_complete` counter asserts exactly this behaviour.
+
+**Not fixed.**  Finding 1397.
+
+**And one hazard that is deliberately NOT an entry:** `vec[unpack[1]] = bit`
+is bounds-checked nowhere in any of the three unpackers, and it is
+UNREACHABLE in normal use -- from a constructed or reset object the counter is
+capped by each storing state (16 / 27-28 / 32 / 48), and the only state that
+walks it past 71 is the accepting one, which never returns to a storing state
+without a reset.  Written down because the next reader will see the unbounded
+index and reach for a fix.
+
+---
+
 ---
 
 # Part III — looked at and judged NOT a defect
@@ -5075,3 +5145,34 @@ And what that one caller passes is NOT a constant:
 *Batch of 2026-08-11, from `V92ModulusEncoder::progress` (blob 0x559a0, 0x11f9 = 4,601 bytes), 0x565b3 against 0x55aa1. **Reachability: FIRES** whenever the bit count admits a value at or above the product -- the parameter block carries the count and the twelve moduli as independent fields, so nothing in the object ties them together. Status: `unmeasured`. Fix class: none proposed.*
 
 **Finding 1379.** Case 0 extracts eleven digits with `out[k] = v % m[k]` and then stores the leftover quotient: `out[11] = (v - out[10]) / m10`, with no reduction modulo the twelfth modulus and no reference to +0x44 anywhere in the case -- it is the ONE field of the object that case 0 never reads. Cases 1 and 2 of the same function, which exist to report each digit's range, do read it: case 2 writes `out[11] = m11 - 1`. So a caller that trusts case 2's answer and feeds case 0 more bits than the product holds gets a twelfth digit past the range it was told to expect, and the eleven below it are all correctly reduced. Reproduced exactly; `test/unit/t_moduluscoder.cpp` drives bit counts both under and over the product, and the mutation that reduces `out[11]` modulo the twelfth modulus is caught, so the difference is measured rather than assumed.
+## D270 ❌ RETRACTED -- the Jd accessors read a payload-contiguous bit layout and the packers write a framed one, and that is the two DIRECTIONS rather than a defect
+
+*Message and echo batch of 2026-08-11, from `V90Jd::getRatesMask` (blob 0x1e8b0), `getConstelationSize` (0x1e900), `getMaxLookahead` (0x1e920) and their `V92Jd` counterparts at 0x11eb0, 0x11f00, 0x11f20, plus `V92Jd::getJdPhase` (0x11e60). **RETRACTED the same day it was opened**, by the unpackers landing: `unPackData` and both V.92 unpackers strip the framing and fill `bits[0..47]` flat, which is precisely the layout the accessors read (finding 1395). The entry is kept because a reference in `V90Jd.cpp` and both headers points at it, and because the reasoning is worth keeping: the accessors were written before anything was known to WRITE what they read, and the honest entry at that moment was this one. Status: EXPLAINED, both layouts driven against the blob. Fix class: none; there is nothing wrong.*
+
+**Findings 1390 and 1395.** The constructors and the packers put the rate mask at `bits[18..33]` and `bits[35..46]`, the constellation pair at `bits[47..48]` and the lookahead pair at `bits[49..50]`, around a 17-byte group frame; the accessors read `bits[0..27]`, `bits[28..29]` and `bits[30..31]`, with no frame at all, and `getJdPhase` reads `phaseBits[0..15]` where the constructor writes the Q16 phase at `phaseBits[18..33]`.  The two layouts differ by the framing and by 18 or 19 positions, so a Jd object cannot decode the message it just packed -- **and it never has to.** `unPackData` fills the flat one from the wire and the accessors read it; the packs fill the framed one and `getBitVector` hands it out.  The mapping is framed `18 + p` for payload 0..15, `35 + (p - 16)` for 16..31 and `52 + (p - 32)` for 32..47, identical in all three unpackers.  Both halves are reproduced exactly as the object has them, each is driven against the blob, and the ROUND TRIP -- pack, feed back one bit at a time, read out through the accessors -- is driven end to end in `t_v90jd.cpp` and `t_v92jd.cpp`.
+
+## D271 ⚠ 💤 `V92Jd::getConstelationSize` reads `phaseBits[29..30]` where `V90Jd`'s otherwise identical accessor reads `bits[28..29]`
+
+*Message and echo batch of 2026-08-11, from `V92Jd::getConstelationSize` (blob 0x11f00), +0x08 and +0x12. **Reachability: unmeasured** -- no caller has been read. Status: CONFIRMED. Fix class: none proposed.*
+
+**Findings 1391, 1395 and 1396.** Three of `V92Jd`'s four accessors are `V90Jd`'s instruction for instruction and read `bits`; this one reads +0x67 and +0x68, which in `V92Jd`'s map is the SECOND vector, and at one index higher than `V90Jd`'s reads in the first.  +0x67 is +0x1f plus the 0x48 that `phaseBits` displaces everything after it by.
+
+**THE INDEX IS NOW EXPLAINED AND THE VECTOR IS NOT, so this entry narrows rather than closing.**  All four accessors read the layout the unpackers fill, and in the PHASE message payload 28 is the constant tag byte `unPackJdPhaseData` checks (`cmpb $0x1,0x66(%ebx)` at 0x128bc), so the constellation pair sits one position later there -- 29..30 -- than in the data message.  What no reading accounts for is the vector: this accessor takes the pair out of `phaseBits` while `getRatesMask` and `getMaxLookahead` take theirs out of `bits`, so a `V92Jd` that has received a DATA message answers `getConstelationSize` from the phase vector.  Reproduced; the fixture paints the two vectors with different values so that reading the right index in the wrong vector diverges.
+
+## D272 🐛 `V92EchoCanceller::process` decides whether to filter at all by comparing the OUTPUT buffer's first sample with 177.0f
+
+*Message and echo batch, from `V92EchoCanceller::process` (blob 0x11870), +0x00. **Reachability: unmeasured** -- it depends on what the caller leaves in the output buffer, and no caller has been read. Status: CONFIRMED. Fix class: none proposed; reproduced as measured.*
+
+**Finding 1398.** `flds (%edx); fcomps <.rodata.cst4+0x8c = 177.0f>` is the FIRST thing the function does, before it looks at `count`, so a call with `count == 0` still dereferences the second buffer. When the comparison holds, the block is copied through unfiltered, the read cursor is stepped one per sample as though it had been filtered, and none of the state machine runs -- no counter, no `setState`. The constant is referenced from that one instruction and from nowhere else in the 1.2 MB object (`relocscan.py --at .rodata.cst4:0x8c`), so nothing in the blob says what it means. The comparison is spelled `!(out[0] < 177.0f || out[0] > 177.0f)` because the object branches on ZF alone and FCOM sets C3 for equal AND for unordered: a NaN in `out[0]` takes the copy path where C's `==` takes the filter path. `t_v90leaves.cpp` drives both the exact match and the NaN.
+
+## D273 🐛 `updateEchoHistory`'s compaction loop is bottom-tested with a count that underflows below two taps
+
+*Message and echo batch, from `V92EchoCanceller::updateEchoHistory` (blob 0x11770). **Reachability: CANNOT FIRE** at the shipped `V92_ECHO_FILTER_LENGTH` of 180. Status: CONFIRMED. Fix class: none proposed.*
+
+**Finding 1398.** `lea -0x1(%esi),%edx` then `dec %edx; jne` with no guard, so the loop always runs at least once and a `filterLength` below 2 makes the count 2**32 - 1, copying four billion words downward over everything below the buffer. The same shape as D72 one field along, and the same verdict for the same reason: the length is a parameter-block constant.
+
+## D274 🐛 the COUNT_DELAY cursor advance is one conditional subtraction, not a modulo
+
+*Message and echo batch, from `V92EchoCanceller::process` (blob 0x11870), the state-1 arm. **Reachability: CANNOT FIRE** at any block length the modem uses. Status: CONFIRMED. Fix class: none proposed.*
+
+**Finding 1398.** `cmp %eax,%edx; jae; sub %eax,%edx` subtracts the wrap length ONCE, so a block longer than `historyAlloc - word_18` leaves the read cursor past the end of the buffer and the object does not loop back. Reproduced; a modulo would be a different function.

@@ -523,3 +523,98 @@ V92Phase3Modulator::V92Phase3Modulator(V92Parameters *p)
 V92Phase3Modulator::~V92Phase3Modulator()
 {
 }
+
+/*
+ * ===========================================================================
+ * The four `exit*` methods, .text+0x162b0, +0x16300, +0x16330 and +0x16380.
+ *
+ * EACH ONE IS A GUARD ON EXACTLY ONE STATE, and none of them is reached from
+ * anywhere in the blob -- no relocation names any of the four, and
+ * `generateSymbol` moves the state itself.  They are the interface the phase-3
+ * driver would call to leave a state that has no symbol count to expire on,
+ * and the header's state diagram is read off them.
+ *
+ * ALL FOUR HAVE THE SAME SHAPE, and it is a three-way guard rather than two:
+ *
+ *     if (state != <its own>)     return;      cmpl $n,0x8(%ecx); jne
+ *     if (symbolCount == 0)       return;      test %ebx,%ebx; je
+ *
+ * The second test is not a formality.  `generateSymbol` increments
+ * `symbolCount` before it emits, so zero means the state has been entered and
+ * nothing generated yet, and the exit is refused until at least one symbol has
+ * gone out.
+ *
+ * TWO OF THEM ROUND TO A TWELVE-SYMBOL BOUNDARY and two do not.  `exitJa` and
+ * `exitSuSecond` divide `symbolCount` by twelve (`mul $0xaaaaaaab; shr $3`,
+ * which is unsigned division by 12) and multiply back, so the test is
+ * `symbolCount % 12 == 0`: on the boundary they go to the next state and clear
+ * the count, off it they go to the "run on to the boundary" state and leave
+ * the count alone -- which is what makes states 5 and 10 terminate on their
+ * own in `generateSymbol`.  `exitSilence` clears the count without any
+ * boundary test, and `exitTRN1u` does not clear it at all.
+ *
+ * THE DIVISION IS UNSIGNED, which is `symbolCount`'s declared type showing
+ * through: a signed `%` by 12 would have carried the sign correction GCC emits
+ * for it, and the object has none.
+ * ===========================================================================
+ */
+void
+V92Phase3Modulator::exitJa()
+{
+	if (state != V92P3M_STATE_JA)
+		return;
+	if (symbolCount == 0)
+		return;
+
+	if (symbolCount % 12u == 0) {
+		state = V92P3M_STATE_SILENCE;
+		symbolCount = 0;
+	} else {
+		state = V92P3M_STATE_JA_END;
+	}
+}
+
+void
+V92Phase3Modulator::exitSilence()
+{
+	if (state != V92P3M_STATE_SILENCE)
+		return;
+	if (symbolCount == 0)
+		return;
+
+	state = V92P3M_STATE_SU;
+	symbolCount = 0;
+}
+
+void
+V92Phase3Modulator::exitSuSecond()
+{
+	if (state != V92P3M_STATE_SU_SECOND)
+		return;
+	if (symbolCount == 0)
+		return;
+
+	if (symbolCount % 12u == 0) {
+		state = V92P3M_STATE_SU_SECOND_NOT;
+		symbolCount = 0;
+	} else {
+		state = V92P3M_STATE_SU_SECOND_END;
+	}
+}
+
+/*
+ * The one that leaves the count alone: state 12 becomes 13 and `symbolCount`
+ * keeps running, which is what state 13's arm in `generateSymbol` needs -- it
+ * ends the state on `symbolCount > 2039 && symbolCount % 12 == 0`, and that
+ * count is still the one state 12 started.
+ */
+void
+V92Phase3Modulator::exitTRN1u()
+{
+	if (state != V92P3M_STATE_TRN1U_SECOND)
+		return;
+	if (symbolCount == 0)
+		return;
+
+	state = V92P3M_STATE_TRN1U_SECOND_END;
+}

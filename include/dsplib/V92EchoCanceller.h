@@ -1,11 +1,17 @@
 /*
  * V92EchoCanceller.h -- the V.92 upstream echo canceller's state.
  *
- * Reconstructed from dsplibs.o.  Twelve members, 3,622 bytes; four of them
+ * Reconstructed from dsplibs.o.  Twelve members, 3,622 bytes; seven of them
  * are written here -- the constructor, which the object emits as the
  * byte-identical pair `C1` and `C2`, `setEchoDelay`, which is the one
- * `v34handshak` reaches, `reset`, and the destructor, which it emits as the
- * byte-identical pair `D1` and `D2` (finding 1270).
+ * `v34handshak` reaches, `reset`, the destructor, which it emits as the
+ * byte-identical pair `D1` and `D2` (finding 1270), and the three that carry
+ * the signal: `setState`, `updateEchoHistory` and `process`.
+ *
+ * THE FIVE THAT ARE NOT WRITTEN are `setEchoParams`, `setEchoBeta`,
+ * `setDecayFactor`, `zeroEchoCoeff` and `resetEchoHistory`.  The last four
+ * are all inlined into members that ARE written, so their bodies are here
+ * even though their symbols are not -- see the .cpp.
  *
  * THE CONSTRUCTOR IS WHERE THE SIZING HAPPENS, which is D72's whole premise
  * made concrete: it allocates `echoHistory` once, `historyAlloc` floats long,
@@ -55,19 +61,26 @@
  *          object also emits standalone as `zeroEchoCoeff`.
  *   +0x24  a 4-byte-stride array zeroed for `echoLength` entries by the body
  *          the object also emits standalone as `resetEchoHistory`.
- *   +0x28  set to zero beside +0x24's loop.  `updateEchoHistory` is what
- *          would prove it is the write cursor; the name is invented on the
- *          strength of the pairing alone (finding 226).
+ *   +0x28  set to zero beside +0x24's loop.  IT IS A CURSOR AND IT IS NOT
+ *          THE WRITE CURSOR: `process` steps it one per sample, wraps it at
+ *          `historyAlloc - word_18`, and uses it to index `echoHistory` for
+ *          the filter -- while `updateEchoHistory`, the writer, indexes by
+ *          `echoLength` at +0x2c and never reads or writes +0x28 at all.  So
+ *          the name is now use-derived, in the reader's direction.
  *   +0x30, +0x34  `echoBeta` and `echoBetaDecay`, NAMED BY THE OBJECT: the
  *          format strings `setEchoBeta` and `setDecayFactor` print are
  *          "V92EchoCanceller: echoBeta = %c%d.%06d\r\n" and
  *          "V92EchoCanceller: echoBetaDecay = %c%d.%06d\r\n".
  *
- * ONE HOLE IS LEFT, +0x0c..+0x13, and it is the only part of the object no
- * member written here touches -- the constructor initialises everything else,
- * so eight bytes it leaves alone is a measured statement rather than an
- * unexplored gap.  D72's +0x1c and the `filterLength - 1` beside it are named
- * below now that the constructor that writes them has been read.
+ * THE HOLE AT +0x0c..+0x13 IS NOW TWO FIELDS, and it is the state machine's:
+ * `setState` writes +0x0c, `process` reads it and accumulates into +0x10, and
+ * `setState` clears +0x10.  Neither is touched by the constructor, by `reset`
+ * or by the destructor, which is why the four members written first left the
+ * region unexplained rather than unexplored.  D72's +0x1c and the
+ * `filterLength - 1` beside it are named below now that the constructor that
+ * writes them has been read.
+ *
+ * THE OBJECT IS NOW FULLY MAPPED: fifteen fields, no `pad_*` left.
  *
  * A CORRECTION TO D72's DERIVATION, not to its verdict.  D72 and finding 1188
  * both spell the filter length `V92_ECHO_FILTER_LENGTH & ~3`.  The object
@@ -84,6 +97,43 @@
 
 class FloatARMA;
 class V92Parameters;
+
+/*
+ * THE FOUR STATES ARE `setState`'s OWN DISPATCH, AND THE OBJECT NAMES EVERY
+ * ONE OF THEM.  The method compares its argument against 0, 1, 2 and 3 and
+ * opens each arm with a message that says what that arm is:
+ *
+ *     0  "V92EchoCanceller: echo state set to filter only"
+ *     1  "V92EchoCanceller: echo state set to count delay before training"
+ *     2  "V92EchoCanceller: echo state set to fast echo training"
+ *     3  "V92EchoCanceller: echo state set to slow echo training"
+ *
+ * and anything else "V92EchoCanceller: setState ERROR: illegal state".  The
+ * two training arms are told apart by the parameters they load as well as by
+ * their messages: 2 takes `V92_ECHO_FAST_BETA_FACTOR`, `..._FAST_DECAY_FACTOR`
+ * and `..._FAST_UPDATE_DURATION`, 3 the three `..._SLOW_...` fields.
+ *
+ * THE UNDERLYING TYPE IS SIGNED, and that is measured rather than assumed:
+ * the dispatch is `cmp $0x1,%eax; je; jle; cmp $0x2 ...`, and `jle` is the
+ * SIGNED branch.  An enum whose enumerators are 0..3 gets `unsigned int` from
+ * GCC by default and would have compared with `jbe`, so the parameter is an
+ * `int` and the base is pinned here to say so.  Pinning it also makes every
+ * `int` value representable, so the differential test may sweep outside the
+ * four without reaching for undefined behaviour -- the argument
+ * `V90Phase3Demodulator.h` gives for `Phase3DemodulatorState`.
+ *
+ * SPELLED AS A PIN RATHER THAN `: int`, because a fixed base is C++11 and the
+ * author's compiler was C++98 (docs/method/compilers.md, V2).  `_BASE_PIN` is
+ * OURS: the object names no enumerator -- the mangling carries the type's name
+ * and nothing about its contents -- and the pin claims only the base.
+ */
+enum V92EchoCancellerState {
+	V92_ECHO_FILTER_ONLY = 0,	/* filter, do not adapt             */
+	V92_ECHO_COUNT_DELAY = 1,	/* count the delay before training  */
+	V92_ECHO_FAST_TRAINING = 2,	/* adapt with the FAST parameters   */
+	V92_ECHO_SLOW_TRAINING = 3,	/* adapt with the SLOW parameters   */
+	V92EchoCancellerState_BASE_PIN = -0x7fffffff - 1  /* ours: the base */
+};
 
 class V92EchoCanceller {
 public:
@@ -105,6 +155,23 @@ public:
 	void reset();
 
 	/*
+	 * The state machine and the two signal paths.
+	 *
+	 * `process` is the only caller of `setState` in this class, and it
+	 * drives the sequence the four messages describe: 1 counts out the
+	 * delay and then asks for 2, 2 adapts fast and then asks for 3, 3
+	 * adapts slow and then asks for 0, and 0 filters for ever without
+	 * touching a coefficient or the sample counter.
+	 *
+	 * `updateEchoHistory` is the WRITER into `echoHistory` and `process`
+	 * is the READER; they use different cursors -- +0x2c and +0x28 -- and
+	 * neither touches the other's.  See the .cpp.
+	 */
+	void setState(V92EchoCancellerState newState);
+	void updateEchoHistory(float *in, unsigned int count);
+	void process(float *in, float *out, unsigned int count);
+
+	/*
 	 * DECLARING THIS COSTS THE CLASS ITS TRIVIALITY, and that is not free:
 	 * a class with a user-declared destructor cannot be a union member, so
 	 * `test/unit/t_v90leaves.cpp`'s `union ec_slot` had to become a byte
@@ -117,8 +184,36 @@ public:
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	V92Parameters *params;		/* +0x00 not owned                  */
 	FloatARMA *arma;		/* +0x04 OWNED; freed by ~this       */
-	unsigned int word_08;		/* +0x08 cleared by `reset`          */
-	unsigned char pad_0c[0x08];	/* +0x0c                             */
+	/*
+	 * +0x08 IS THE STATE, and `setState` is what names it: the method
+	 * stores 0, 1, 2 or 3 here -- one per arm, each beside that arm's
+	 * message -- returns without doing anything else when the field
+	 * already holds the argument, and `process` switches on it.  `reset`
+	 * clears it, which is `V92_ECHO_FILTER_ONLY`.
+	 */
+	V92EchoCancellerState state;	/* +0x08                             */
+	/*
+	 * +0x0c IS HOW LONG THE CURRENT STATE LASTS, IN SAMPLES, and the
+	 * parameter block names it: `setState` stores
+	 * `V92_ECHO_FAST_UPDATE_DURATION` into it for state 2 and
+	 * `V92_ECHO_SLOW_UPDATE_DURATION` for state 3.  State 1 stores
+	 * `echoDelay + 400` instead, which is the same quantity built from
+	 * the delay rather than read from the block.
+	 *
+	 * +0x10 IS WHAT IS COMPARED AGAINST IT, and NOTHING NAMES IT.
+	 * `process` adds its block length to it and, when the sum reaches
+	 * +0x0c, asks `setState` for the next state; `setState` clears it on
+	 * every state CHANGE and only on a change.  So its role is forced and
+	 * its name is not recoverable -- finding 226, and `word_10` is the
+	 * honest spelling.
+	 *
+	 * BOTH ARE UNSIGNED BECAUSE THE COMPARISON IS.  `cmp 0xc(%edi),%esi;
+	 * jb` is the unsigned branch, which needs one unsigned operand; which
+	 * of the two it is the object cannot say, so both are written that
+	 * way and the `int` parameters are converted on the way in.
+	 */
+	unsigned int updateDuration;	/* +0x0c samples in this state       */
+	unsigned int word_10;		/* +0x10 samples so far in it        */
 	unsigned int filterLength;	/* +0x14 taps in `echoCoeff`         */
 	/*
 	 * +0x18 IS `filterLength - 1` AND IS NOTHING ELSE.  The constructor
@@ -143,8 +238,17 @@ public:
 	unsigned int historyAlloc;	/* +0x1c floats in `echoHistory`     */
 	float *echoCoeff;		/* +0x20 OWNED; freed by ~this       */
 	float *echoHistory;		/* +0x24 OWNED; freed by ~this       */
-	unsigned int historyIndex;	/* +0x28 invented; see the comment   */
-	unsigned int echoLength;	/* +0x2c active taps               */
+	unsigned int historyIndex;	/* +0x28 `process`'s READ cursor     */
+	/*
+	 * +0x2c IS ALSO A CURSOR, and `updateEchoHistory` is what shows it.
+	 * The writer stores its ARMA's output at `echoHistory[echoLength]`
+	 * and increments the field once per sample, so what the tap count
+	 * counts is how much of the history is filled; `reset` and
+	 * `setEchoDelay` set the starting distance between this and +0x28,
+	 * which is the echo delay.  The name is the one the first four
+	 * members were written under and is left alone.
+	 */
+	unsigned int echoLength;	/* +0x2c the WRITE cursor            */
 	float echoBeta;			/* +0x30                             */
 	float echoBetaDecay;		/* +0x34                             */
 	unsigned int echoDelay;		/* +0x38                            */

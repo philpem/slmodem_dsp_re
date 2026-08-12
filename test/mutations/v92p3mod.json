@@ -302,5 +302,100 @@
   "label": "dtor: the scrambler's history is not freed",
   "find": "V92Phase3Modulator::~V92Phase3Modulator()\n{\n}",
   "replace": "V92Phase3Modulator::~V92Phase3Modulator()\n{\n\tscrambler.pLimit = NULL;\n}"
+ },
+ {
+  "label": "exitJa loses its state guard",
+  "find": "\tif (state != V92P3M_STATE_JA)\n\t\treturn;",
+  "replace": "\tif (0)\n\t\treturn;"
+ },
+ {
+  "label": "exitJa loses its zero-count guard",
+  "find": "\tif (state != V92P3M_STATE_JA)\n\t\treturn;\n\tif (symbolCount == 0)\n\t\treturn;",
+  "replace": "\tif (state != V92P3M_STATE_JA)\n\t\treturn;"
+ },
+ {
+  "label": "exitJa's two arms are swapped",
+  "find": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_SILENCE;\n\t\tsymbolCount = 0;\n\t} else {\n\t\tstate = V92P3M_STATE_JA_END;\n\t}",
+  "replace": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_JA_END;\n\t} else {\n\t\tstate = V92P3M_STATE_SILENCE;\n\t\tsymbolCount = 0;\n\t}"
+ },
+ {
+  "label": "exitJa keeps the count on the boundary",
+  "find": "\t\tstate = V92P3M_STATE_SILENCE;\n\t\tsymbolCount = 0;",
+  "replace": "\t\tstate = V92P3M_STATE_SILENCE;"
+ },
+ {
+  "label": "exitJa's boundary is six symbols, not twelve",
+  "find": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_SILENCE;",
+  "replace": "\tif (symbolCount % 6u == 0) {\n\t\tstate = V92P3M_STATE_SILENCE;"
+ },
+ {
+  "label": "exitJa's residue is signed",
+  "find": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_SILENCE;",
+  "replace": "\tif ((int)symbolCount % 12 == 0) {\n\t\tstate = V92P3M_STATE_SILENCE;"
+ },
+ {
+  "label": "exitSilence guards on the wrong state",
+  "find": "\tif (state != V92P3M_STATE_SILENCE)\n\t\treturn;",
+  "replace": "\tif (state != V92P3M_STATE_SU)\n\t\treturn;"
+ },
+ {
+  "label": "exitSilence loses its zero-count guard",
+  "find": "\tif (state != V92P3M_STATE_SILENCE)\n\t\treturn;\n\tif (symbolCount == 0)\n\t\treturn;",
+  "replace": "\tif (state != V92P3M_STATE_SILENCE)\n\t\treturn;"
+ },
+ {
+  "label": "exitSilence keeps the count",
+  "find": "\tstate = V92P3M_STATE_SU;\n\tsymbolCount = 0;",
+  "replace": "\tstate = V92P3M_STATE_SU;"
+ },
+ {
+  "label": "exitSilence rounds to the twelve-symbol boundary as well",
+  "find": "\tstate = V92P3M_STATE_SU;\n\tsymbolCount = 0;",
+  "replace": "\tif (symbolCount % 12u != 0)\n\t\treturn;\n\tstate = V92P3M_STATE_SU;\n\tsymbolCount = 0;"
+ },
+ {
+  "label": "exitSuSecond's two arms are swapped",
+  "find": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_SU_SECOND_NOT;\n\t\tsymbolCount = 0;\n\t} else {\n\t\tstate = V92P3M_STATE_SU_SECOND_END;\n\t}",
+  "replace": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_SU_SECOND_END;\n\t} else {\n\t\tstate = V92P3M_STATE_SU_SECOND_NOT;\n\t\tsymbolCount = 0;\n\t}"
+ },
+ {
+  "label": "exitSuSecond guards on state 10, not 9",
+  "find": "\tif (state != V92P3M_STATE_SU_SECOND)\n\t\treturn;",
+  "replace": "\tif (state != V92P3M_STATE_SU_SECOND_END)\n\t\treturn;"
+ },
+ {
+  "label": "exitSuSecond loses its zero-count guard",
+  "find": "\tif (state != V92P3M_STATE_SU_SECOND)\n\t\treturn;\n\tif (symbolCount == 0)\n\t\treturn;",
+  "replace": "\tif (state != V92P3M_STATE_SU_SECOND)\n\t\treturn;"
+ },
+ {
+  "label": "exitTRN1u clears the count",
+  "find": "\tstate = V92P3M_STATE_TRN1U_SECOND_END;\n}",
+  "replace": "\tstate = V92P3M_STATE_TRN1U_SECOND_END;\n\tsymbolCount = 0;\n}"
+ },
+ {
+  "label": "exitTRN1u guards on state 13, not 12",
+  "find": "\tif (state != V92P3M_STATE_TRN1U_SECOND)\n\t\treturn;",
+  "replace": "\tif (state != V92P3M_STATE_TRN1U_SECOND_END)\n\t\treturn;"
+ },
+ {
+  "label": "exitTRN1u loses its zero-count guard",
+  "find": "\tif (state != V92P3M_STATE_TRN1U_SECOND)\n\t\treturn;\n\tif (symbolCount == 0)\n\t\treturn;",
+  "replace": "\tif (state != V92P3M_STATE_TRN1U_SECOND)\n\t\treturn;"
+ },
+ {
+  "label": "exitTRN1u rounds to the twelve-symbol boundary",
+  "find": "\tstate = V92P3M_STATE_TRN1U_SECOND_END;\n}",
+  "replace": "\tif (symbolCount % 12u != 0)\n\t\treturn;\n\tstate = V92P3M_STATE_TRN1U_SECOND_END;\n}"
+ },
+ {
+  "label": "exitSuSecond's boundary is six symbols, not twelve",
+  "find": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_SU_SECOND_NOT;",
+  "replace": "\tif (symbolCount % 6u == 0) {\n\t\tstate = V92P3M_STATE_SU_SECOND_NOT;"
+ },
+ {
+  "label": "exitSuSecond's residue is signed",
+  "find": "\tif (symbolCount % 12u == 0) {\n\t\tstate = V92P3M_STATE_SU_SECOND_NOT;",
+  "replace": "\tif ((int)symbolCount % 12 == 0) {\n\t\tstate = V92P3M_STATE_SU_SECOND_NOT;"
  }
 ]

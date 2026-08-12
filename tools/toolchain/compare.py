@@ -12,7 +12,7 @@ Build the objects first, with the period toolchain (see the Dockerfile here and
 finding 606):
 
     docker build --platform linux/386 -t dsplibs-tc tools/toolchain
-    tools/toolchain/build.sh            # writes /tmp/tc_out/*.o
+    tools/toolchain/build.sh            # writes build/tc_out/*.o
     tools/toolchain/compare.py
 
 THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
@@ -105,7 +105,7 @@ TU_GROUPS = (
 )
 
 BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
-OURS = os.environ.get("TC_OUT", "/tmp/tc_out")
+OURS = os.environ.get("TC_OUT", "build/tc_out")
 
 
 def sizes(path):
@@ -213,7 +213,7 @@ def main():
     # reversible (`dp_wrapper.c` would come back as `dp/wrapper.c`).
     manifest = {}
     try:
-        for line in open(os.path.join(OURS, "..", "tc_manifest.txt")):
+        for line in open(os.path.join(OURS, "tc_manifest.txt")):
             o, s = line.split()
             manifest[o] = s
     except OSError:

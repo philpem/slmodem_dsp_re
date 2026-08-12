@@ -83,7 +83,29 @@ fi
 OUT=${PERIOD_OUT:-build/period}
 mkdir -p "$OUT"
 
-docker run --rm --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
+#
+# CLEANING UP AFTER ITSELF, three ways, because `--rm` alone covers only one.
+#
+#   --rm      the container goes when it exits.  Necessary, not sufficient:
+#             it is the DAEMON that honours it on exit, so a run killed
+#             before the container is up -- Ctrl-C, a `timeout`, an agent
+#             giving up -- can still leave one behind.
+#   --name    so the trap below has something to name.  $$ is in it because
+#             sibling worktrees run this concurrently and a fixed name would
+#             have them killing each other's container.
+#   --user    so nothing ROOT-OWNED is left in the tree.  The container is
+#             root by default and $OUT is bind-mounted, so every object it
+#             wrote landed owned by root inside build/.  `rm -rf` still works
+#             (deletion needs write on the DIRECTORY, which is ours), so
+#             nothing was broken -- but a build tree salted with root-owned
+#             files is a thing to hand someone else, and it only takes a flag.
+#
+NAME="dsplibs-period-$$"
+cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
+trap cleanup EXIT INT TERM
+
+docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" \
+    --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
     -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
     -e "KEEP=${KEEP:-}" \
     "$IMG" sh /src/tools/toolchain/period_inner.sh
