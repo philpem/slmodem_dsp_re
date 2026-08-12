@@ -1834,14 +1834,12 @@ probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 
 	for (;;) {
 		x = (short)(((int)x * k) >> 14);
-#ifdef DSPLIB_REPRODUCE_BUGS
 		/*
 		 * D53.  Advancing the counter HERE, before the test below, is
 		 * what makes `i == 5` impossible and index 0 unreachable.  The
-		 * object does it in this order and so do we by default.
+		 * object does it in this order and so does this.
 		 */
 		i = (short)(i + 1);
-#endif
 
 		if (x > ref) {
 			if (i == 5) {
@@ -1857,37 +1855,20 @@ probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 				    "baudrate= %d\n", (int)i, (int)baud);
 			return i;
 		}
-#ifndef DSPLIB_REPRODUCE_BUGS
 		/*
-		 * THIS VARIANT IS KNOWN TO BE WRONG.  DO NOT ENABLE IT AS "THE
-		 * FIX" -- see finding 1477.
+		 * NO SECOND INCREMENT HERE, and that is the whole of D53: the
+		 * counter is advanced only above, before the test, so `i == 5`
+		 * cannot hold and the author's own `return 0` arm is dead.
 		 *
-		 * It was written to make the author's dead `i == 5` arm live, so
-		 * that a channel needing no pre-emphasis could return index 0
-		 * (D53, finding 1471).  It does that.  It also shifts EVERY
-		 * OTHER BUCKET DOWN ONE: two steps of tilt returns 6 instead of
-		 * 7, three returns 7 instead of 8, and the top bucket no longer
-		 * reaches 10 until six steps.
-		 *
-		 * That matters because 6..10 is not an arbitrary range.  V.34
-		 * specifies pre-emphasis in TWO families (5.4.1): Table 3 covers
-		 * indices 0-5 with one parameter alpha, and Table 4 covers 6-10
-		 * with two, beta and gamma.  The original's counter, preset to 5
-		 * and advanced before the test, yields exactly Table 4's range --
-		 * five tilt buckets onto five filters, complete and exact.  This
-		 * variant buys the flat case by corrupting that mapping for
-		 * every non-flat channel.
-		 *
-		 * A correct fix asks "did the FIRST scaling already clear the
-		 * reference" separately, instead of reusing the loop counter to
-		 * answer two different questions.  Nobody has written that yet.
-		 *
-		 * Kept, not deleted, because the A/B in finding 1476 was run
-		 * against this exact code and its result cannot be read without
-		 * it.
+		 * A variant that advanced here instead -- making index 0
+		 * reachable -- was written, measured over forty calls across two
+		 * A/B runs, and REMOVED from master.  It shifts every other
+		 * bucket down one, which finding 1477 shows is wrong on the
+		 * Recommendation's own terms (V.34 5.4.1 puts indices 6-10 in
+		 * Table 4 and this counter addresses that range deliberately),
+		 * and finding 1901 measured it as no better and probably worse.
+		 * It lives on `improve/v34-training`.
 		 */
-		i = (short)(i + 1);
-#endif
 		if (i > 9) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
