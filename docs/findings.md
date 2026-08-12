@@ -49368,3 +49368,84 @@ thing itself, and nothing else on this bench can produce one.
 bug-for-bug by default; this goes on the deliberate-fix list beside the 8000
 samp/s work and the floating-point defects, off by default, with the
 differential tier defining bug-compatible behaviour. See D53.
+
+### 1600. THE V.32/V.32bis MAP: 203 SYMBOLS, EVERY ONE WITH AN ORACLE, AND THE SIX BLOCKS THEY FALL INTO
+
+*Task: the V.32 / V.32bis datapump, entered at `dp_v32_init` / `dp_v32_exit`.
+This entry is the checkpoint the next session resumes from. **This block
+claims findings 1600–1649**; 1471 was the maximum on every branch when it was
+taken, so 1472–1599 are left for the sessions running concurrently.*
+
+**THE WORK LIST.** `python3 tools/closure.py dp_v32_init dp_v32_exit
+--missing`, run after `make`, is **203 symbols and 59,691 bytes** — 107
+functions (46,231 B), 48 `.data` (1,154 B) and 48 `.rodata` (12,306 B).
+`docs/remaining.md` quotes 202 / 59,642, measured one commit earlier; the
+difference is not a discrepancy to chase.
+
+**EVERY ONE OF THE 203 HAS A `ref_` ALIAS.** Intersected against
+`build/symmap.txt`: zero without one. That was worth checking before
+assigning anything, because the Makefile records that ten names used by more
+than one translation unit stay local and get no alias — a symbol in that set
+could not be differential-tested individually and would be a
+"leave-it-out-and-record-it" case rather than work. None of V.32's are. In
+particular the nine `FSE_decision_*` slicers, which look file-local from
+their names, are all aliased: `nm build/dsplibs_ref.o` shows
+`ref_FSE_decision_128pt` at 0x804e0.
+
+**THE OVERLAP WITH V.22 IS TWO SYMBOLS.** `dp_v22_init`/`dp_v22_exit`'s
+missing closure is 114 symbols / 32,808 B, and its intersection with V.32's
+is exactly `FPM_atan` (409 B) and `FPM_atan_table` (514 B) — 923 bytes. The
+two datapumps share no other unwritten code, so the two efforts can run
+concurrently with one file's worth of deconfliction. Whoever lands `FPM_atan`
+first should say so.
+
+**THE BLOCKS, largest first, and they are what a batch should own.** Grouped
+by symbol prefix, with each group's byte total; addresses are in the object.
+
+| block | syms | bytes | what it is |
+|---|--:|--:|---|
+| `VTB_*` + `VTBv32_*` | 19 | 10,320 | Viterbi trellis decoder; 9 KB of it is boundary/region tables |
+| `V32*NextState`, `V32_*` cfg | 23 | 9,245 | the five handshake state machines and their config |
+| `FSE_decision_*` + `FPM_FSE_*` + `FSEv32_*` | 15 | 7,987 | fractionally-spaced equaliser and its nine slicers |
+| `V32FP_*` | 7 | 6,464 | the front panel / control surface; `V32FP_recreate` is 3,733 B |
+| `RxHdx*` + `TxHdx*` | 20 | 4,359 | half-duplex handshake receive and transmit steps |
+| `FPM_SRE_*` + `SREv32_*` | 10 | 3,381 | symbol-timing recovery |
+| `FPM_ECC_*` + `ECCv32_*` + `ECC_CFG` | 7 | 2,852 | echo canceller |
+| `v32_*` (create/process/data/handshake/delete/ops) | 7 | 2,680 | the datapump object itself |
+| `DECv32_*` | 21 | 1,446 | decision-map tables |
+| `FPM_PPS_*` + `PPSv32_*` | 6 | 1,567 | passband prefilter |
+| `SMCv32_*` + `SDMv32_*` | 14 | 1,711 | trellis/differential encoders and the scrambler pair |
+| leaf math: `FPM_atan`, `FPM_log10`, `FPM_lmsupd` | 5 | 1,532 | shared with V.22 and fax |
+| the rest (`SetRxModeV32`, `DemodDataV32`, sequence coders, …) | 49 | 6,145 | glue around the state machines |
+
+The four `FPM_*` DSP blocks each own a private state struct and a private
+header, so they are the part that parallelises: `agents.md` §3's failure mode
+is batches that share a data structure, and these do not. Everything from
+`RxHdx*` upward touches the one V.32 state object and should be written by
+one hand, after its layout is settled.
+
+**`V32StateName` IS DONE AND THE HEADER'S FALLBACK STRING WAS WRONG.**
+`include/dsplib/v32state.h` has been in the tree since finding 145 with the
+35 state names read out of `statenames` at `.rodata+0x7e80`, and it said the
+out-of-range return is `"STATE_UNKNOWN"`. The function loads
+`.rodata.str1.1+0x3952`, which is **`"INVALID!"`**. The names themselves are
+confirmed correct. The bound is also unsigned — `cmp $0x22,%edx; ja` — so a
+negative index takes the fallback rather than indexing backwards, which the
+test now covers at `-1` and `INT_MIN`.
+
+**A WORKTREE NEEDS TWO THINGS BEFORE `make phase` CAN PASS IN IT**, and both
+cost a full run to discover:
+
+- `BLOB=/abs/path/to/slmodemd/dsplibs.o` on every `make` **and** on every
+  tool invocation. The default is `../slmodemd/dsplibs.o`, which resolves
+  only for a worktree that is a sibling of `slmodemd/`; the ones under
+  `.claude/worktrees/` are four levels down and it resolves to nothing.
+- **`third_party/spandsp` built.** It is gitignored, so a new worktree has
+  only the README, and `make phase` dies at `build/test/t_spandsp_b103` with
+  `libspandsp.a not built`. Rebuilding it is a bootstrap-plus-configure-plus-
+  make; `cp -a` of an existing tree's `third_party/spandsp` works and takes
+  seconds (36 MB).
+
+`FAIL Psd::process` in a `phase` log is **not** a failure: `t_psd` is the one
+entry in `tools/gccdiverge.json` (finding 1453) and the wrapper allows that
+check to fail under modern GCC. `make period` passes it.
