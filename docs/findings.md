@@ -48272,10 +48272,31 @@ the test's configuration, not the reconstruction.** That is the result this
 task wanted: on a real line our datapump is indistinguishable from the
 original, including where the original is bad.
 
+**THE COURIER SAYS THE SAME THING, WHICH RULES OUT THE MODEM.** Ext 1902, a
+USRobotics Courier HST Dual Standard, put into Bell mode with `ATB1`:
+
+| | Supra (1901) | Courier (1902) |
+|---|--:|--:|
+| CONNECT 300 | 26.5 s | **18.3 s** |
+| carrier held | 7 s | **17.6 s** |
+| data both ways | FAIL | FAIL |
+
+Two different modems, two different vendors, both connect and neither carries
+data. So it is not the far end.
+
+**AND IT IS NOT THE HARNESS'S TIMING EITHER**, which was the obvious next
+suspect at 300 bps. The Courier run sends both probes 5.0 s after CONNECT and
+does not hang up until 10.1 s after that. Forty characters at 300 bit/s is
+40 x 10 / 300 = **1.33 s**. There was seven times the margin needed and
+neither side saw a byte.
+
 **WHAT IS NOT ESTABLISHED.** That Bell 103 carries data over this path at
-all — neither build managed it, so there is no working baseline to compare
-against, and the 300 bps data path remains unproven end to end for either.
-That is a separate defect and it belongs to the bench, not to `src/`.
+all. Neither build managed it against either modem, so there is no working
+baseline. This bench DOES carry V.34 data both ways (task #93), so the fault
+is specific to the 300 bps path rather than general to the SIP transport. It
+is a separate defect, it predates this work, and it belongs to the bench and
+the daemon rather than to `src/` — our datapump reaches CONNECT and then
+behaves exactly as the original does.
 
 `testbench/row.sh` gained `SLMODEMD=` so a hybrid build can be put on the
 bench without moving anything in a source tree, and every run now prints
