@@ -49609,7 +49609,10 @@ built copy fifty characters away.
 
 in that order, in one command, with `make` unpiped.
 
-### 1564. NINE V.22 LEAVES THAT NEEDED NO OBJECT LAYOUT, AND THE FOUR EDGES IN THEM
+### 1564. TEN V.22 LEAVES THAT NEEDED NO OBJECT LAYOUT, AND THE FIVE EDGES IN THEM
+
+*(Written as nine and extended to ten: `SetAdaptEqV22` was added after the
+first draft, so the original heading's count was stale.)*
 
 `V22FP_create` is 2,449 bytes and lays out the datapump instance, so the
 obvious reading is that nothing which touches that instance can be written
@@ -49621,8 +49624,9 @@ retyped when `V22FP_create` lands.
 
     ReadGTimer  TxNOP  RxClampV22  RxTrained1200  RxTrained2400
     CarrierDetect  SignalDetect  GetSignalQuality  TxClockSync
+    SetAdaptEqV22
 
-**478 bytes, and four of them have an edge the obvious rewrite gets wrong.**
+**573 bytes, and five of them have an edge the obvious rewrite gets wrong.**
 
 **One: `TxNOP` and `RxClampV22` write n+1 entries.** The count is held in a
 16-bit register and tested BEFORE the decrement:
@@ -49665,13 +49669,33 @@ reads as evidence: `TxClockSync` leaves the product in `eax`, which is what a
 to tell `void` from `short`. Declared `void`. The store is identical under
 both readings, so nothing observable turns on it.
 
+**Five: `SetAdaptEqV22`'s three modes are not symmetrical.** Mode 3 sets
+`EQ_EXTRA` and mode 2 does not clear it, so a connection that has ever been in
+mode 3 keeps that flag for the rest of its life. `mode` is loaded with
+`movzwl`, so it is sixteen bits and unsigned: 65,533 of the 65,536 possible
+values do nothing at all, silently. `t_v22prc` sweeps the whole domain, which
+is the only way to test a function whose defining property is what it declines
+to do — sampling 1..3 would not distinguish it from a version whose `default`
+clears something.
+
+**A trap in that test, which a PASS concealed.** Its first version compared
+the receiver object with `diff_eq_obj("...", unsigned char, b.fp, a.fp, v)`.
+The macro sizes the comparison with `sizeof(type)`, so `unsigned char`
+compared exactly **one byte** of a 0x200-byte buffer and passed for every
+mode. Replaced with the three fields by name plus a whole-buffer identity
+check. The lesson generalises past this test: `diff_eq_obj` is for an object
+with a reconstructed TYPE, and reaching for a primitive to satisfy the macro
+silently shrinks the comparison to that primitive's width. Nothing warns.
+
 **The offsets, which are the durable part.** In the instance:
 `+0x50` is an `int *` shared millisecond clock (`ReadGTimer` adds 20 to it and
 returns the new value — 20 ms is 160 samples at 8 kHz, the same block
 `v22_iir.c` runs); `+0x54` is the V22FP receiver/transmitter. In the object at
 `+0x54`: `+0x78` is the transmit clock, `+0xec` the signal flag, `+0x12a` the
 baud figure that `+0x78` is three times, `+0x130` the carrier flag, `+0x186`
-the quality figure.
+the quality figure. `SetAdaptEqV22` adds three more in that same object:
+`+0x10` (int) the adapt enable, `+0x16c` (short) the mode, and `+0x180` (int)
+the flag only mode 3 writes.
 
 ### 1565. THE V.22 DATAPUMP IS A CLEAN DAG, AND THIS IS THE ORDER IT HAS TO BE WRITTEN IN
 
@@ -50245,3 +50269,66 @@ it is the only check in the tree that reads every header for meaning rather
 than for symbols. And a `MISMATCH` from it means "this claim is unconfirmed",
 which includes "the header is not valid C" -- so `gcc -m32 -Iinclude
 -fsyntax-only` on the header itself is the first thing to try, not the last.
+
+### 1566. `relocscan.py --into` UNDER-REPORTS: IT ONLY SEES SECTION-SYMBOL RELOCATIONS
+
+`tools/relocscan.py --into <pattern>` prints `unreferenced` for any object
+that is referenced through a **global** symbol, because it resolves only the
+section-symbol form. That is half the relocations in the object: the header
+itself says "10514 R_386_32 relocations, 6794 against a section symbol", so
+3,720 are named and invisible to `--into`.
+
+It fired twice in one session and was dismissed once:
+
+- `relocscan --into IIR_` reported `IIR_a_coeff … unreferenced` and
+  `IIR_b_coeff … unreferenced`. `tools/dis.py` on `V22FP_create +0x858`
+  shows `mov $0x0,%ebx <== R_386_32 IIR_a_coeff` and the same for `_b`, two
+  instructions before the call that consumes them. The disassembly was
+  believed and the tool's answer set aside as not mattering.
+- A parallel session hit it on all six `SMCv22_*` objects, which read as
+  `unreferenced` while `readelf -rW` names them in 24 relocations.
+
+**It does matter, and the reason is what makes this worth a number.** The
+same tool was used to certify that ten V.22 SRE tables carry *no* relocations,
+and that certification was passed to another session as established fact. For
+plain coefficient arrays the conclusion is almost certainly right — but it was
+stronger than the tool supports, and "I ran relocscan over all ten" is exactly
+the sentence that turns a partly-dead detector into a false record.
+
+**The rule this implies.** `--into` answers "which SECTION-relative
+relocations land in this object". To ask "does anything reference this at
+all", use `readelf -rW` and match the symbol name column as well. `--at` and
+`--range` are unaffected; it is `--into`'s direction that is partial.
+
+The tool is deliberately left unchanged for now, because parallel sessions are
+using it and a mid-flight change to shared tooling is worse than a documented
+limit. Whoever next needs it should widen it and re-run the claims above.
+This is finding 134's argument again: a detector that has not been shown to
+fire on a case it should catch is not a detector, and `--into` has now been
+shown NOT to fire on two.
+
+### 1567. `make strings` DIES IN A WORKTREE WITH AN ERROR THAT NAMES A SOURCE DEFECT
+
+`tools/debugaudit.py` finds the blob with
+`os.environ.get("BLOB", "../slmodemd/dsplibs.o")`. Under
+`.claude/worktrees/<name>/` that relative default resolves to nothing, so
+`make strings` reports
+
+    INVENTED STRING: the lines above are in src/ and not in the blob
+
+which reads as a defect in the reconstruction and is not one — it is an empty
+blob compared against a populated `src/`.
+
+**It only fires when `BLOB` is a SHELL variable rather than an exported one.**
+`BLOB=... make phase` and `export BLOB=...; make phase` both work, because the
+Makefile exports `BLOB` to its recipes. `BLOB=... && make phase` sets a
+variable `make` never sees, and that is the form that fails. The message names
+neither the variable nor the worktree, so the natural response is to go
+looking in `src/` for a string that is not there.
+
+Same family as finding 1563: the Makefile was already taught that a worktree
+may sit somewhere other than beside `slmodemd/` — `BLOB ?=` is overridable and
+exported precisely for that — but the tools it invokes each carry their own
+copy of the relative default, and each one is a separate place for the
+accommodation to be incomplete. `debugaudit.py` and `coverage.py` were fixed;
+this is the failure mode when the export does not happen.

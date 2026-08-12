@@ -375,6 +375,15 @@ run_clocksync(void)
  * The three fields are pre-loaded with a marker before each call, so "left
  * alone" and "written with the value the marker happened to be" are
  * distinguishable.  That is what shows mode 2 not clearing EQ_EXTRA.
+ *
+ * NOT `diff_eq_obj` HERE, AND THE REASON MATTERS.  That macro takes a TYPE
+ * and sizes the comparison with `sizeof(type)`; the receiver object has no
+ * reconstructed type yet (see v22prc.h), and passing `unsigned char` to get
+ * past the macro would have compared exactly ONE byte of a 0x200-byte buffer
+ * and passed for every mode.  So: the three known fields by name, plus a
+ * whole-buffer identity check that catches a store anywhere else.  When
+ * V22FP_create lands and the object has a real type, this becomes one
+ * diff_eq_obj call.
  */
 static int eq_acted, eq_ignored;
 
@@ -398,8 +407,17 @@ run_adapteq(void)
 		ref_SetAdaptEqV22(&a, (unsigned short)v);
 		SetAdaptEqV22(&b, (unsigned short)v);
 
-		diff_eq_obj("mode %ld: the whole fp object", unsigned char,
-			    b.fp, a.fp, v);
+		diff_eq_int("mode %ld: EQ_ADAPT",
+			    *(int *)(void *)(b.fp + V22FP_EQ_ADAPT),
+			    *(int *)(void *)(a.fp + V22FP_EQ_ADAPT), v);
+		diff_eq_int("mode %ld: EQ_MODE",
+			    *(short *)(void *)(b.fp + V22FP_EQ_MODE),
+			    *(short *)(void *)(a.fp + V22FP_EQ_MODE), v);
+		diff_eq_int("mode %ld: EQ_EXTRA",
+			    *(int *)(void *)(b.fp + V22FP_EQ_EXTRA),
+			    *(int *)(void *)(a.fp + V22FP_EQ_EXTRA), v);
+		diff_eq_int("mode %ld: nothing else in the object moved",
+			    memcmp(b.fp, a.fp, FP_SIZE) == 0, 1, v);
 
 		if (*(int *)(void *)(a.fp + V22FP_EQ_ADAPT) == MARK)
 			eq_ignored++;
