@@ -52455,3 +52455,75 @@ size of the prize, not a substitute for winning it.
 measure a V.34 link honestly. Any future rate measurement should hold for at
 least sixty seconds and read the far end's `ATI11`, or state plainly that it
 is reporting the rate at CONNECT and that the figure is a lower bound.
+
+======================================================================
+
+### 1903. THE RECORDED DEFECTS DO NOT EXPLAIN THE V.34 RATE — THE FIXED-POINT LIBRARY IS NOT ON THAT PATH AT ALL, AND D29 IS FORTY SYMBOLS IN SEVENTY THOUSAND
+
+*Asked before starting task #144: are the known defects worth fixing first,
+and would they affect the equaliser or the training? Measured rather than
+assumed, and the answer is no on both counts — but the tracing was worth
+doing for what it ruled IN as well as out.*
+
+**THE FIXED-POINT LIBRARY IS UNREACHABLE FROM V.34.** `src/pump/v34/` has
+**zero** call sites for `FPM_div`, `FPM_sqrt`, `FPM_atan`, `FPM_log10` or
+`FPM_rms`. V.34 is floating-point — this tree is `-mfpmath=387` and the object
+carries 5300 x87 instructions. So none of these can touch the equaliser or the
+rate:
+
+| | |
+|---|---|
+| D76 / D4 | `FPM_div` reads past its table and returns a reciprocal of ZERO |
+| D65 | `FPM_log10` reads one element past its table |
+| D132 | `FPM_sqrt_dp`'s mantissa can be 17 bits |
+| D300 | `FPM_atan` reflects the fourth quadrant through 0x7fff |
+| D133 | the AGC's block partition exceeds what `FPM_rms` is dimensioned for |
+
+They are real and they belong to Bell 103, V.23, V.22, DTMF and Caller ID.
+**D85** — the AGC alpha pair summing to 34242 instead of 32768, a DC gain of
+1.045 — is the same story: the register says it is live in the Bell 103 and
+V.23 receivers and that the V.21 copy has the correct shape.
+
+**D29 IS ON THE PATH, AND IS SMALLER THAN IT SOUNDS.** `V34TimingFiltersInit`
+zeroes eighty shorts from +0x024, which covers the forty-short high-pass
+history and then only the first **twenty** of the prefilter's forty ints; the
+upper twenty keep what was there.
+
+Tracing where that lands:
+
+  * The object IS memset at create (`v34pcmcreate.cpp:270`), so the FIRST
+    init genuinely starts from zero. Only re-inits inherit stale state.
+  * `rxtiminginit` has three callers. One is `VPcmV34Create`'s mode; the other
+    two are both `V34SetupDemodulator(obj, 2400, 1800)` followed by a
+    transition to `RX_L1` — the entry to **Phase 2 line probing**.
+  * **The prefilter does NOT feed the probe DFT.** `dftupdate` takes raw
+    `samples`. `V34TimingPrefilter`'s output goes straight into
+    `V34EqualizerUpdateDelayLine`, and only on odd outputs.
+
+So D29 contaminates **the equaliser's input**, not the tilt measurement — which
+was the reason to look, and it clears `probe_preemph` and the pre-emphasis work
+of any dependency on it.
+
+**AND THE EXPOSURE IS FORTY SYMBOLS.** Twenty stale taps flush after twenty
+prefilter steps, and the prefilter is stepped on odd outputs only, so forty
+symbols. Against a measured training span of **~72,000 symbols** (29 `equerr`
+reports at 0.749 s spacing, 3429 baud, on `pab3-fix-3`), that is **0.06%** of
+acquisition, twice per call.
+
+**CONCLUSION: FIX NOTHING FIRST.** No recorded defect on the V.34 path is
+large enough to explain a rate that sits at 12000 where the channel carries
+28800. D29 is genuine, now has its reachability measured for the first time —
+the register said "the consequence is unmeasured" and it no longer is — and is
+immaterial at forty symbols in seventy-two thousand.
+
+**THE TRAP IF ANYONE EVER FIXES D29**: `t_v34ec` asserts the upper twenty
+entries still hold the harness fill after init, so a reconstruction that
+helpfully zeroed all forty FAILS the differential test rather than passing it.
+Any fix belongs on `improve/v34-training`, behind the flag.
+
+**WHAT IS LEFT IS WHAT #144 ALREADY SAYS.** The rate is not being lost to a
+recorded defect. It is being lost to a tilt estimator that reads two bins of
+twenty-two and quantises to 4.06 dB, a filter set restricted to five of
+eleven, and a rate decided while Phase 4 is still converging. Those are design
+characteristics of the original, not bugs in the reconstruction, and they are
+the only things left that are big enough to matter.
