@@ -35,7 +35,18 @@
 set -u
 
 CORES=$(nproc)
-THRESH=${1:-$(( CORES / 2 ))}
+#
+# EIGHT ON A TWELVE-CORE BOX, not six.  Raised from half the cores at Phil's
+# request after watching a run spend more time waiting for the gate than
+# placing calls: with a browser running, the one-minute average sits around
+# 5-6 by itself, so a threshold of 6 was gating on the desktop rather than on
+# anything that would disturb a call.  Two thirds still leaves four cores
+# clear, which is more than slmodemd needs.
+#
+# Override per-run with the first argument or WAITQUIET_THRESH; the point of
+# the default moving is that the common case should not need either.
+#
+THRESH=${1:-${WAITQUIET_THRESH:-$(( CORES * 2 / 3 ))}}
 HOLD=${2:-30}
 GIVEUP=${3:-1800}
 
