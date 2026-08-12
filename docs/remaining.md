@@ -192,7 +192,52 @@ The host-facing API is derivable and is 22 symbols — what the rest of
     RD_{create,delete,process}    RD_ring_details
     VOICE_{create,delete,process} VOICE_command
 
-## 5. What these numbers do not cover
+## 5. Work that is written but not on `master`
+
+`docs/worklist.md` is measured against `master`, so anything sitting on an
+unmerged branch is counted as still to do. Two branches hold real work, and
+between them they are **8 symbols / 4,856 bytes of the 969 / 363,528**. Both
+were checked by content, not by branch name: their source files do not exist
+on `master` and their symbols are in the unwritten list.
+
+| branch | commits | symbols | bytes | files `master` lacks |
+|---|--:|--:|--:|---|
+| `cid-dtmf` | 6 | 5 | 2,100 | `cid.h`, `cid_fsd.c`, `cid_mtd.c`, 2 tests |
+| `v32-ecc` | 4 | 3 | 2,756 | `fpm_ecc.{c,h}`, `fpm_sre.h`, `v32sre_tables.c`, 2 tests |
+
+`cid-dtmf` is `CID_FSD_demodulate` (1,049), `create_cid_dtmf`, `reset_dtmf`,
+`CID_MTD_detect` and `FPM_div_32`. `v32-ecc` is `FPM_ECC_cancel` (2,051),
+`FPM_ECC_init` and `FPM_ECC_free`.
+
+**`v32-ecc` overlaps work in flight.** The `agent-v32` worktree has all six of
+its files staged as additions on `v32-datapump` right now, so the two are
+being landed twice. Whoever merges first should check the other rather than
+resolve a conflict blind — finding 700 is what a merge that compiles but
+drops half a side costs.
+
+Two further branches are ahead of `master` and are **superseded, not
+pending**:
+
+- `worktree-agent-af64acb43cfd06605` — "The V.92 modulator chain", one
+  commit, and `master` carries the identical content as `e6fc686`.
+  `git cherry` marks it unmerged because the patch-ids differ; the files are
+  byte-identical. It has no worktree.
+- `review/nextsteps-2026-08-11` — recomputed the queue at 108 symbols /
+  19,704 bytes for the construction path, which is exactly what `master`
+  then landed.
+
+Everything else is merged: all three V.90/V.92 method branches
+(`v90adid-methods`, `v92convenc-methods`, `v92modenc-methods`), both
+`ctorpath` branches, `leafsweep-a937`, all four `v22-*`, `v32-datapump`,
+`v32-fse`, `task96`/`98`/`99` and every `worktree-agent-*` are ancestors of
+`master`. Neither repository has a stash, and the four branches in the outer
+`sip-D-modem` repository are all level with its `master`.
+
+    for b in $(git for-each-ref --format='%(refname:short)' refs/heads/); do
+        git merge-base --is-ancestor $b master || echo "$b is ahead"
+    done
+
+## 6. What these numbers do not cover
 
 - **Byte counts are the blob's, not ours.** They size the reading, not the
   writing.
@@ -218,7 +263,7 @@ The host-facing API is derivable and is 22 symbols — what the rest of
   worktree could change is which functions `src/` defines, so re-run
   `make worklist` rather than quoting a stale list.
 
-## 6. The order this suggests
+## 7. The order this suggests
 
 Unchanged in shape from the previous revision, because the exclusive-cost
 argument still holds and V.PCM is still the end goal — but the starting
