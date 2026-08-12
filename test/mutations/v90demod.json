@@ -28,22 +28,22 @@
   "label": "the EIA-6 answer is cached across setParamEia6",
   "find": "\tif (preFilter.isV90WithEia6()) {",
   "replace": "\tint eia6 = preFilter.isV90WithEia6();\n\n\tif (eia6) {",
-  "note": "EXPECTED UNCAUGHT, AND EQUIVALENT: isV90WithEia6 is `(cap == 1) || (params->w[0x500/4] == 6)` where `cap` comes from refLoop, codecType and the static dataBase.  Between the two calls the object runs setParamEia6, which writes thirty words of the parameter block and NONE of them is +0x500, and displayParamEia6, which is one `ret`.  Neither touches refLoop or codecType.  Held fixed: those bodies, which t_v90prefilter.cpp checks.  The second call stays because the blob makes it."
+  "note": "EXPECTED UNCAUGHT, AND EQUIVALENT: isV90WithEia6 is `(cap == 1) || (V90PW(params)[0x500/4] == 6)` where `cap` comes from refLoop, codecType and the static dataBase.  Between the two calls the object runs setParamEia6, which writes thirty words of the parameter block and NONE of them is +0x500, and displayParamEia6, which is one `ret`.  Neither touches refLoop or codecType.  Held fixed: those bodies, which t_v90prefilter.cpp checks.  The second call stays because the blob makes it."
  },
  {
   "label": "the resampler sits at +0x90",
-  "find": "\t\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);",
-  "replace": "\t\t((ResamplerTimingOffset *)((char *)this + 0x90))\n\t\t    ->setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);"
+  "find": "\t\tresampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);",
+  "replace": "\t\t((ResamplerTimingOffset *)((char *)this + 0x90))\n\t\t    ->setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);"
  },
  {
   "label": "the timing offset comes from +0x88 of the parameter block",
-  "find": "\t\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);",
-  "replace": "\t\tresampler.setTimingOffset(params->f[0x088 / 4]);"
+  "find": "\t\tresampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);",
+  "replace": "\t\tresampler.setTimingOffset(V90PF(params)[0x088 / 4]);"
  },
  {
   "label": "the timing offset is set whether or not EIA-6 is in force",
-  "find": "\t\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);\n\t}",
-  "replace": "\t}\n\n\tresampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);"
+  "find": "\t\tresampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);\n\t}",
+  "replace": "\t}\n\n\tresampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);"
  },
  {
   "label": "the spectral verifier sits at +0x214",
@@ -92,8 +92,8 @@
  },
  {
   "label": "the two words copied out of the parameter block are swapped",
-  "find": "\tword_288 = params->w[PARAMS_WORD_264];\n\tword_290 = params->w[PARAMS_WORD_278];",
-  "replace": "\tword_288 = params->w[PARAMS_WORD_278];\n\tword_290 = params->w[PARAMS_WORD_264];"
+  "find": "\tword_288 = V90PW(params)[PARAMS_WORD_264];\n\tword_290 = V90PW(params)[PARAMS_WORD_278];",
+  "replace": "\tword_288 = V90PW(params)[PARAMS_WORD_278];\n\tword_290 = V90PW(params)[PARAMS_WORD_264];"
  },
  {
   "label": "the evaluator's +0x84 is left alone",
@@ -117,8 +117,8 @@
  },
  {
   "label": "the early exit takes its pointer from +0x04 of the block",
-  "find": "\tblock = *(const signed char *const *)&params->b[0];",
-  "replace": "\tblock = *(const signed char *const *)&params->b[4];"
+  "find": "\tblock = *(const signed char *const *)&V90PB(params)[0];",
+  "replace": "\tblock = *(const signed char *const *)&V90PB(params)[4];"
  },
  {
   "label": "the early exit does not exit",
@@ -149,7 +149,7 @@
   "label": "the eighth argument is not narrowed to short",
   "find": "\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,",
   "replace": "\t\t\t\t (short)(int)preFilter.isV90WithEia6(), 1, 0.0f,",
-  "note": "EXPECTED UNCAUGHT: `isV90WithEia6` returns `(cap == 1) || (params->w[0x500/4] == 6)`, which is 0 or 1, so no input can give it a non-zero high half-word and the narrowing can never be observed.  Held fixed: that isV90WithEia6's body is what src/pump/v90/V90PreFilter.cpp says it is, which t_v90prefilter.cpp checks.  The `(short)` stays because the blob's `cwtl` is there."
+  "note": "EXPECTED UNCAUGHT: `isV90WithEia6` returns `(cap == 1) || (V90PW(params)[0x500/4] == 6)`, which is 0 or 1, so no input can give it a non-zero high half-word and the narrowing can never be observed.  Held fixed: that isV90WithEia6's body is what src/pump/v90/V90PreFilter.cpp says it is, which t_v90prefilter.cpp checks.  The `(short)` stays because the blob's `cwtl` is there."
  },
  {
   "label": "the equaliser's cursor is halved with an arithmetic shift",
@@ -185,13 +185,13 @@
  },
  {
   "label": "sessionTermination: the evaluation gate is read from +0x164",
-  "find": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL] != 0) {",
-  "replace": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL + 1] != 0) {"
+  "find": "\t\tif (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {",
+  "replace": "\t\tif (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL + 1] != 0) {"
  },
  {
   "label": "sessionTermination: the evaluation gate is inverted",
-  "find": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL] != 0) {",
-  "replace": "\t\tif (params->w[PARAMS_TIMING_HISTORY_EVAL] == 0) {"
+  "find": "\t\tif (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {",
+  "replace": "\t\tif (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] == 0) {"
  },
  {
   "label": "sessionTermination: the mean and the deviation are swapped",
@@ -230,23 +230,23 @@
  },
  {
   "label": "sessionTermination: the save threshold is strict",
-  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
-  "replace": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] > std) {"
+  "find": "\t\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] > std) {"
  },
  {
   "label": "sessionTermination: the save threshold is the other way round",
-  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
-  "replace": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] <= std) {"
+  "find": "\t\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] <= std) {"
  },
  {
   "label": "sessionTermination: the threshold is compared against the mean",
-  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
-  "replace": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= mean) {"
+  "find": "\t\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= mean) {"
  },
  {
   "label": "sessionTermination: the threshold comes from the timing offset slot",
-  "find": "\t\t\tif (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
-  "replace": "\t\t\tif (params->f[PARAMS_TIMING_OFFSET] >= std) {"
+  "find": "\t\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {",
+  "replace": "\t\t\tif (V90PF(params)[PARAMS_TIMING_OFFSET] >= std) {"
  },
  {
   "label": "sessionTermination: the deviation is saved unscaled",
@@ -265,8 +265,8 @@
  },
  {
   "label": "sessionTermination: the deviation is written into the parameter block itself",
-  "find": "\t\t\t\tmodemParams = *(int *const *)&params->b[0];",
-  "replace": "\t\t\t\tmodemParams = &params->w[0];"
+  "find": "\t\t\t\tmodemParams = *(int *const *)&V90PB(params)[0];",
+  "replace": "\t\t\t\tmodemParams = &V90PW(params)[0];"
  },
  {
   "label": "sessionTermination: the verification status is cleared only on the saving arm",

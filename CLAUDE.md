@@ -107,9 +107,19 @@ runs the suite. Our source and the object, compiled by the same compiler,
 compared at runtime -- so a difference is a difference in the code and not in
 the toolchain.
 
-`make phase` stays required. It compiles in seconds rather than minutes, it is
-the portability check, and `make check64` proves the tree is 64-bit clean. It
-is no longer the thing that decides.
+**`make phase` RUNS IT**, so `make phase` needs docker and the
+`tools/toolchain` image. It is incremental and sound -- an object is reused
+only if it is newer than its source and than every header -- so an unchanged
+tree relinks rather than rebuilding: about 34 s of the run. `make one T=...`
+is still the fast loop between commits.
+
+The modern build runs in the same `phase` and still has to pass. It is the
+portability check, and `make check64` proves the tree is 64-bit clean. Where
+GCC 13 provably cannot reproduce the object from correct source, the site is
+declared in `tools/gccdiverge.json` -- one entry today, `four1`'s butterfly --
+rather than papered over in `src/`. That register names CHECKS, not tests, and
+a stale entry (an allow-listed test that starts passing) fails the gate.
+**`make period` has no allow-list and is not getting one.**
 
 **A rejection in `src/` under GCC 3.4.2 is a finding, not a portability
 nuisance** -- the author wrote this code for that compiler, so anything it

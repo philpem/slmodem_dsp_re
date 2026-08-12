@@ -21,8 +21,8 @@
  },
  {
   "label": "the registry's codec type is rejected at zero as well as below it",
-  "find": "\tif (params->w[0x008 / 4] < 0) {",
-  "replace": "\tif (params->w[0x008 / 4] <= 0) {"
+  "find": "\tif (V90PW(params)[0x008 / 4] < 0) {",
+  "replace": "\tif (V90PW(params)[0x008 / 4] <= 0) {"
  },
  {
   "label": "the table's length is not decremented before the range check",
@@ -47,6 +47,6 @@
  {
   "label": "the switch's default keeps the value instead of falling back to zero",
   "find": "\t\tdefault:\tcodecType = 0;\tbreak;",
-  "replace": "\t\tdefault:\tcodecType = params->w[0x008 / 4];\tbreak;"
+  "replace": "\t\tdefault:\tcodecType = V90PW(params)[0x008 / 4];\tbreak;"
  }
 ]

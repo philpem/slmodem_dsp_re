@@ -194,13 +194,35 @@ typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
 #define V90PARAMETERS_STUDY_QC		0x4a8
 #define V90PARAMETERS_STUDY_PLAIN	0x348
 
-static short
+/*
+ * BOTH ARE `inline`, AND IT IS NOT A STYLE PREFERENCE -- IT IS THE ONLY
+ * SPELLING THAT SURVIVES THE PERIOD COMPILER.
+ *
+ * The object has no such helper: every read of the parameter block is a plain
+ * `mov 0x4a8(%edx),%eax` in the caller's own instruction stream.  Modern GCC
+ * inlines a `static` function used twelve times without being asked, so the
+ * modern build looks the same.  **GCC 3.4.2 does not**: `-finline-functions`
+ * is an -O3 flag in 3.x, so at -O2 it inlines only what is DECLARED `inline`,
+ * and it emitted an out-of-line copy plus twelve calls.
+ *
+ * That is not a cosmetic difference. `resetStudyUrefHandler` holds
+ * `1.0f / float_a950` in an x87 register ACROSS these reads -- the object does
+ * the divide at 0x408ca and the first use at 0x40929, with the six parameter
+ * loads in between -- and a call forces the register to be spilled, which on
+ * x87 means ROUNDED FROM 64 BITS OF SIGNIFICAND TO 24.  GCC 3.4.2 duly emitted
+ * `fstps 0x24(%esp)`, the reciprocal came back four bits short, and
+ * `(short)(inv * 50.0f + 0.5f)` fell from 1 to 0 at +0xa9a6.  `make phase` was
+ * green throughout, because the modern build had no call to spill across.
+ * Finding 1448, and it is the first defect the period tier caught that the
+ * modern tier could not see.
+ */
+static inline short
 paramShort(const V90Parameters *p, unsigned int off)
 {
 	return *(const short *)((const unsigned char *)p + off);
 }
 
-static int
+static inline int
 paramWord(const V90Parameters *p, unsigned int off)
 {
 	return *(const int *)((const unsigned char *)p + off);
@@ -378,8 +400,15 @@ V90AutoDigitalImpDetector::resetLinearMapping()
  * emits that sequence (or `mov`/`sar`/`xor`/`sub`, which is the same
  * arithmetic) for it.  Written here rather than calling `abs` because this
  * translation unit is built `-nostdinc++`.
+ *
+ * `inline`, FOR THE SAME REASON `paramWord` IS -- see the note there.  GCC
+ * 3.4.2 does not inline a plain `static` function at -O2, and the object has
+ * no such call anywhere; the one in `findPadGain`'s report sits between the
+ * computation of `err` and the `(int)err` that prints it, so the call spilled
+ * `err` from an x87 register to a four-byte slot and the printed error came
+ * back one too high.  Finding 1448.
  */
-static int
+static inline int
 adid_abs(int v)
 {
 	return v < 0 ? -v : v;
@@ -1833,10 +1862,17 @@ V90AutoDigitalImpDetector::setQcLinearMapping()
  * floating-point branch in both methods is an `fcom`, and an unordered
  * compare sets CF and ZF -- so wherever the object skips on `jae` a NaN does
  * NOT skip, wherever it takes on `jb` a NaN DOES take, and wherever it tests
- * with `je` a NaN compares EQUAL.  The first two are written as the negation
- * of the ordered test, which is what the branch encodes.  The third has no C
- * spelling at all -- `v == 0.0f` is false for a NaN in C and the object's
- * `fcomp`/`je` takes it -- so that one site says so with `__builtin_isnan`.
+ * with `je` a NaN compares EQUAL.  All three are written as the negation of
+ * an ordered test, which is what the branch encodes; the third has no direct
+ * C spelling, because `v == 0.0f` is false for a NaN in C and the object's
+ * `fcomp`/`je` takes it, so it is `!(v < 0.0f) && !(v > 0.0f)` -- true for
+ * both zeroes and every NaN and false for everything else (finding 1447).
+ *
+ * WHAT IS *NOT* REPRODUCED IS THE SIGNALLING.  The object compares with
+ * `fcomp`, which raises #IA on a quiet NaN; both of this tree's compilers
+ * emit `fucomp`, which does not, for every spelling tried.  Nothing here
+ * reads the x87 status word, so no test can see it -- docs/deviations.md
+ * D295.
  * A seeded `float_9d48` reaches all three: one 32-bit pattern in 128 is a
  * NaN.  Finding 1436.
  *
@@ -1999,18 +2035,14 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 			 * against the zero it has kept on the stack since
 			 * 0x4443c, then `je` -- and an unordered compare sets
 			 * C3, so ZF is set and the entry is skipped.  C's
-			 * `v == 0.0f` is false for a NaN, so it is not what
-			 * the branch encodes.  Finding 1436.
-			 *
-			 * SPELT AS "NEITHER BELOW NOR ABOVE", which is what ZF
-			 * means here, rather than as `v == 0.0f ||
-			 * __builtin_isnan(v)`.  That builtin does not exist in
-			 * GCC 3.4.2 and the period build rejects it -- and a
-			 * rejection by the author's own compiler means the
-			 * author cannot have written it (CLAUDE.md).  The two
-			 * forms are exactly equivalent over every float
-			 * including -0.0, and this one needs no builtin, no
-			 * <math.h> and no shim.
+			 * `v == 0.0f` is false for a NaN, so the test has to
+			 * be written as "not less and not greater": true for
+			 * a zero of either sign and for every NaN, false for
+			 * everything else.  Findings 1436 and 1447 -- the
+			 * obvious `__builtin_isnan` spelling does not exist
+			 * in GCC 3.4.2, and the object's own compiler
+			 * refusing it is the evidence that settles what was
+			 * written here.
 			 */
 			if (!(v < 0.0f) && !(v > 0.0f))
 				continue;

@@ -402,7 +402,7 @@ seed_all(long trial, const struct trial_args *t)
 	 * observable at all.  `init()` leaves it at its default and the
 	 * default is not always negative.
 	 */
-	PARAMS->w[PARAMS_HARDWARE_CODEC_TYPE] = -1;
+	V90PW(PARAMS)[PARAMS_HARDWARE_CODEC_TYPE] = -1;
 
 	/*
 	 * The equaliser's two lengths, which are the ONLY two words this
@@ -412,13 +412,13 @@ seed_all(long trial, const struct trial_args *t)
 	 * `V90Equalizer`'s constructor walks the history backwards from it
 	 * over `linearEquLength` entries.
 	 */
-	PARAMS->w[PARAMS_LINEAR_EQU_LENGTH] = t->linearEquLen;
-	PARAMS->w[PARAMS_DFE_LENGTH] = t->dfeLen;
-	PARAMS->w[PARAMS_LINEAR_EQU_HISTORY_LEN] = 512;
+	V90PW(PARAMS)[PARAMS_LINEAR_EQU_LENGTH] = t->linearEquLen;
+	V90PW(PARAMS)[PARAMS_DFE_LENGTH] = t->dfeLen;
+	V90PW(PARAMS)[PARAMS_LINEAR_EQU_HISTORY_LEN] = 512;
 
 	/* Which of `sessionTermination`'s two arms the destructor takes. */
-	PARAMS->w[PARAMS_TIMING_HISTORY_EVAL] = t->timingEval;
-	PARAMS->f[PARAMS_TIMING_MIN_STD_FOR_SAVE] = 0.1f;
+	V90PW(PARAMS)[PARAMS_TIMING_HISTORY_EVAL] = t->timingEval;
+	V90PF(PARAMS)[PARAMS_TIMING_MIN_STD_FOR_SAVE] = 0.1f;
 }
 
 /* ============================================ comparing across the two sides */

@@ -30,20 +30,22 @@
  * thing -- `movl $0x558,(%esp); call sysdep_malloc` at 0x19551 -- so it has to
  * have the one whose `sizeof` is the allocation.  It takes `V90Parameters.h`.
  *
- * The cost is that `V90Demodulator.h` cannot come in, because it reaches
- * `V90PreFilter.h`.  So `V90Demodulator` is forward-declared and its
- * constructor is named by its MANGLED SYMBOL, which is VPcmXfTerm.cpp's
- * device for exactly this collision.  That leaves its allocation size as a
- * literal, and the literal is documented at its use.
+ * THE COST USED TO BE that `V90Demodulator.h` could not come in, because it
+ * reaches `V90PreFilter.h`, which carried a SECOND and SMALLER V90Parameters
+ * -- 0x504 against the 0x558 this file allocates.  `sizeof(V90Parameters)`
+ * would then have been wrong by 84 bytes, silently, in a file whose whole job
+ * is allocating it.  So `V90Demodulator` was forward-declared, named by its
+ * mangled symbol, and its allocation size written as a literal.
  *
- * THE DIRECTION OF THE TRADE IS DELIBERATE.  With `V90Parameters.h` in scope
- * `sizeof(V90Parameters)` is 0x558 and right; with `V90PreFilter.h`'s in
- * scope it would be 0x504 and a later edit replacing the literal with
- * `sizeof` would under-allocate by 84 bytes and pass every test that does not
- * run under a checking allocator.  `V90Demodulator` is INCOMPLETE here, so
- * the same edit against it does not compile at all.  One of the two mistakes
- * is silent and the other is not, and this file is arranged so that only the
- * loud one is reachable.
+ * THERE IS NO LONGER A TRADE.  The duplicate V90Parameters is gone (task
+ * #116): one class, one size, one header.  `V90Demodulator.h` is included
+ * below and the allocation is `sizeof(V90Demodulator)` again, asserted at
+ * 0x298 in this file rather than trusted from another.
+ *
+ * The reasoning is kept because it is the argument that made the arrangement
+ * defensible while it lasted, and because it names the failure mode exactly:
+ * of two possible mistakes, one silent and one loud, arrange for only the
+ * loud one to be reachable.
  */
 
 #include <stddef.h>
@@ -55,6 +57,7 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90CodecType.h"
+#include "dsplib/V90Demodulator.h"
 #include "dsplib/V90Jd.h"
 #include "dsplib/V90Modulator.h"
 #include "dsplib/V90Parameters.h"
@@ -73,15 +76,22 @@
  */
 
 /*
- * `sizeof(V90Demodulator)`, which this translation unit cannot spell; the
- * constructor's own `movl $0x298,(%esp)` at 0x196a6 is the measurement
- * (finding 291 and finding 1246: the allocation immediately before the
- * constructor IS the original compiler's `sizeof`), and
- * src/pump/v90/V90Demodulator.cpp asserts `sizeof(V90Demodulator) == 0x298`
- * in a translation unit that does have the type.  So the number is checked;
- * it is just not checked here.
+ * `sizeof(V90Demodulator)` -- AND THIS TRANSLATION UNIT CAN SPELL IT NOW.
+ *
+ * It was a bare literal, `V90DEMODULATOR_BYTES 0x298`, because V90Demodulator.h
+ * could not be included: it reaches V90PreFilter.h, which used to define a
+ * SECOND, SMALLER V90Parameters than the one this file needs.  That duplicate
+ * is gone (task #116), so the header comes in and the allocation is sized by
+ * the type again.
+ *
+ * The measurement is unchanged and still worth recording: the constructor's
+ * own `movl $0x298,(%esp)` at 0x196a6 is the original compiler's `sizeof`
+ * (findings 291 and 1246 -- the allocation immediately before a constructor
+ * IS the sizeof), and it is asserted here rather than in another file.
  */
-#define V90DEMODULATOR_BYTES	0x298
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v90m_dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
+#endif
 
 /*
  * The two sub-object constructors and the demodulator's destructor, by the
@@ -254,7 +264,7 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 
 	case V90_MODEM_SIDE_ANALOG:
 		modulator = 0;
-		p = sysdep_malloc(V90DEMODULATOR_BYTES);
+		p = sysdep_malloc(sizeof(V90Demodulator));
 		v90m_dem_ctor(p, nofSymbols, phase2Info, jd, jd92, dil,
 			      &mappingParams, &mappingParamsAlt,
 			      &additionalCPinfo, &cp, &mp,

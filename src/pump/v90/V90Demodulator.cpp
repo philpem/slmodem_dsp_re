@@ -10,7 +10,7 @@
  *
  * `V90PreFilter::isV90WithEia6()` IS CALLED TWICE, and the second call is
  * kept because the blob makes it -- NOT because the answer can change.  It
- * cannot: `isV90WithEia6` is `(cap == 1) || (params->w[0x500/4] == 6)`, and
+ * cannot: `isV90WithEia6` is `(cap == 1) || (V90PW(params)[0x500/4] == 6)`, and
  * between the two calls the object runs `setParamEia6`, which writes thirty
  * words of the parameter block and none of them is +0x500, and
  * `displayParamEia6`, which is one `ret`.  Neither touches `refLoop` or
@@ -255,7 +255,7 @@ V90Demodulator::enterPhase3()
 		 * -- and the offset is read out of the parameter block, not
 		 * out of this object.
 		 */
-		resampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);
+		resampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);
 	}
 
 	spectralVerifier.reset();
@@ -279,8 +279,8 @@ V90Demodulator::enterPhase3()
 
 	equalizer->enterPhase3();
 
-	word_288 = params->w[PARAMS_WORD_264];
-	word_290 = params->w[PARAMS_WORD_278];
+	word_288 = V90PW(params)[PARAMS_WORD_264];
+	word_290 = V90PW(params)[PARAMS_WORD_278];
 
 	/*
 	 * Four words of the evaluator, all zero.  The blob writes them
@@ -301,7 +301,7 @@ V90Demodulator::enterPhase3()
 	 * class it points at is not modelled and this is the only thing in
 	 * wave 2 that reaches it.
 	 */
-	block = *(const signed char *const *)&params->b[0];
+	block = *(const signed char *const *)&V90PB(params)[0];
 	if (block[2] < 0)
 		return;
 
@@ -377,7 +377,7 @@ int
 V90Demodulator::sessionTermination()
 {
 	if (inPhase3 == 3 && !preFilter.isV90WithEia6()) {
-		if (params->w[PARAMS_TIMING_HISTORY_EVAL] != 0) {
+		if (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {
 			float mean = v90resampler_timingHistoryMean(&resampler);
 			float std = v90resampler_timingHistoryStd(&resampler);
 			int frac;
@@ -408,14 +408,14 @@ V90Demodulator::sessionTermination()
 			 * called it TIMING_OFFESET_MIN_STD_FOR_SAVE and uses
 			 * it as a maximum.
 			 */
-			if (params->f[PARAMS_MIN_STD_FOR_SAVE] >= std) {
+			if (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {
 				int *modemParams;
 
 				edprintf("V90Demodulator on "
 					 "sessionTermination: Timing offset "
 					 "saved in Registry!\r\n");
 
-				modemParams = *(int *const *)&params->b[0];
+				modemParams = *(int *const *)&V90PB(params)[0];
 				modemParams[MODEM_CLOCK_DEVIATION] =
 				    (int)(1000.0f * mean);
 			}
@@ -505,12 +505,12 @@ V90Demodulator::reset(unsigned int quickConnect)
 	descrambler.reset(0);
 
 	agc.reset();
-	agc.blockLen = params->w[PARAMS_AGC_BLOCK_LEN];
-	agc.ref = params->f[PARAMS_AGC_NOMINAL_ENERGY];
+	agc.blockLen = V90PW(params)[PARAMS_AGC_BLOCK_LEN];
+	agc.ref = V90PF(params)[PARAMS_AGC_NOMINAL_ENERGY];
 
 	preFilter.reset();
 
-	offset = params->f[PARAMS_TIMING_OFFSET];
+	offset = V90PF(params)[PARAMS_TIMING_OFFSET];
 	whole = (int)offset;
 	frac = (int)((offset - (float)whole) * 1000.0f);
 	edprintf("V90Demodulator reset: Baud Offset = %c%d.%03d\r\n",
@@ -519,9 +519,9 @@ V90Demodulator::reset(unsigned int quickConnect)
 		 (frac < 0) ? -frac : frac);
 
 	v90resampler_reset(&resampler);
-	resampler.setTimingOffset(params->f[PARAMS_TIMING_OFFSET]);
+	resampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);
 
-	cursor = params->w[PARAMS_LINEAR_EQU_CURSOR_PLACE];
+	cursor = V90PW(params)[PARAMS_LINEAR_EQU_CURSOR_PLACE];
 	if (cursor < 0)
 		equalizer->reset(equalizer->linearEquLength >> 1);
 	else
@@ -896,8 +896,8 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 	phase4Demodulator = p4d;
 
 	equ = (V90Equalizer *)sysdep_malloc(sizeof(V90Equalizer));
-	v90dem_equ_ctor(equ, (unsigned int)params->w[PARAMS_LINEAR_EQU_LENGTH],
-			(unsigned int)params->w[PARAMS_DFE_LENGTH],
+	v90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],
+			(unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],
 			phase3Demodulator, phase4Demodulator, demapper,
 			connectionEvaluator, &spectralVerifier, params,
 			&resampler, &preFilter, compMode);

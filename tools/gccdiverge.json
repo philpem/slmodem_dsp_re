@@ -1,1 +1,12 @@
-{}
+{
+  "t_fft": {
+    "finding": 1354,
+    "checks": [
+      "four1: complex transform, both directions",
+      "realfft: real transform, both directions",
+      "four1/realfft: isign values other than +-1",
+      "four1/realfft: sixty fills at every length"
+    ],
+    "why": "x87 excess precision in four1's butterfly. The object narrows tempr/tempi to float mid-butterfly (fstps 0xc(%esp) at 0x537a0 and 0x537b4) because GCC 3.4.2 runs out of x87 registers; GCC 13 does not run out and keeps 80 bits, and neither a plain float assignment, an explicit (float) cast, nor a named double temporary moves it -- only volatile, which is a shim for GCC 13 alone and no longer in the source. `make period` passes all 155."
+  }
+}

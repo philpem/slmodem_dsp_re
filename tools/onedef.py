@@ -12,11 +12,14 @@ WHY IT IS A GATE AND NOT A STYLE NOTE.  Two definitions of one type is
 undefined behaviour the moment both reach a translation unit, and the failure
 is silent until it is catastrophic: the compiler picks one, and every offset,
 every `sizeof` and every allocation in the other half of the program is
-quietly wrong.  This tree already has one of those -- `V90Parameters` is
-0x504 in one header and 0x558 in the other, and V90ModemCtor.cpp carries a
-long comment about which of the two it must not include, because allocating
-the smaller and using the larger under-allocates by 84 bytes and passes every
-test that does not run under a checking allocator.
+quietly wrong.  This tree HAD one of those.  `V90Parameters` was 0x504 in one
+header and 0x558 in the other, so a translation unit holding the smaller and
+allocating from `sizeof` under-allocated by 84 bytes and passed every test not
+run under a checking allocator.  It also broke `tools/whichfield.py`, which
+resolved every offset of that class to `b[8] (unsigned char)` -- the tool
+CLAUDE.md points you at to turn a differential offset into a diagnosis, giving
+no diagnosis.  Reconciled by task #116; the gate reported it STALE the moment
+it was, which is how a resolved debt is supposed to surface.
 
 IT WAS ALSO A REAL PORTABILITY WALL.  Six enums were spelled `enum X : int;`
 in two headers each.  That is legal for an OPAQUE DECLARATION, which is what
@@ -25,12 +28,12 @@ for the period compiler to accept them at all.  So the duplication was not a
 tidiness question; it was the thing standing between this tree and building
 under the compiler that built the object.  See docs/method/compilers.md.
 
-THE TWO ENTRIES BELOW ARE DEBTS, NOT EXEMPTIONS.  Each is a class modelled
-twice at two different sizes, which is a gap in the reconstruction rather
-than a mistake in the headers -- reconciling them means establishing which
-size is right, which is reverse-engineering and not refactoring.  They are
-listed so the gate can pass today and so a THIRD one cannot appear quietly.
-Removing an entry is progress; adding one needs a reason written here.
+THE ENTRY BELOW IS A DEBT, NOT AN EXEMPTION.  It is a class modelled twice at
+two different sizes, which is a gap in the reconstruction rather than a
+mistake in the headers -- reconciling it means establishing which size is
+right, which is reverse-engineering and not refactoring.  It is listed so the
+gate can pass today and so a SECOND one cannot appear quietly.  Removing an
+entry is progress; adding one needs a reason written here.
 """
 
 import argparse
@@ -41,11 +44,6 @@ import sys
 
 # type name -> why two definitions are tolerated, for now.
 KNOWN = {
-    "V90Parameters":
-        "two incompatible models: the named 0x558 map in V90Parameters.h and "
-        "the 0x504 block in V90PreFilter.h (finding 1112).  Five consumers "
-        "need the block form, so it cannot simply move into a .cpp.  Closing "
-        "this means settling the size, not moving the text.",
     "V90Phase4Demodulator":
         "a partial model in V90SessionFlag.h -- sessionFlag plus an embedded "
         "V90Phase4Modulator, bounded at 0x2ffc and explicitly 'a floor, not a "

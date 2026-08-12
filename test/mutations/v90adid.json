@@ -1594,7 +1594,7 @@
  {
   "label": "dmu: the zero half of the zero test dropped",
   "find": "if (!(v < 0.0f) && !(v > 0.0f))",
-  "replace": "if (!(v < 0.0f) && (v > 0.0f))"
+  "replace": "if (v != v)"
  },
  {
   "label": "dmu: the first qualifying offset is the last",

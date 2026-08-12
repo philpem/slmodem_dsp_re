@@ -76,30 +76,35 @@
  * was ABLATED -- removed, rebuilt, watched fail, put back (finding 833).
  * Neither is decoration and neither may be tidied away.
  *
+ * BOTH ARE GONE NOW, AND THE PERIOD COMPILER IS WHY (finding 1354).  They
+ * were ablated under GCC 13 only, which could show that GCC 13 needs them
+ * and could not show that the author wrote them.  `make period` can, and it
+ * passes 155 of 155 with the plain source:
+ *
  *   `volatile float tempr, tempi` in four1.  The object spills both to a
  *   single-precision stack slot in the middle of each butterfly --
  *   `fstps 0xc(%esp)` at 0x537a0 and 0x537b4, `flds` back at 0x537aa and
- *   0x537bb -- so the single-precision rounding between the two halves of a
- *   butterfly is real behaviour and not a spill artefact we may ignore.  GCC
- *   3.4.2 did it because it ran out of x87 registers; GCC 13 does not run
- *   out, keeps both at 80 bits, and disagrees with the blob in 47,662 of
- *   476,100 compared words.  A plain `float` declaration does NOT force the
- *   store and neither does a cast: `volatile` does, in exactly the two places
- *   the object does it.  Same argument and same remedy as `round32` in
- *   src/pump/v90/Resampler.cpp.
+ *   0x537bb -- so the narrowing between the two halves of a butterfly is real
+ *   behaviour.  GCC 3.4.2 does it FROM PLAIN SOURCE, running out of x87
+ *   registers exactly as the author's compiler did, because this file's
+ *   `four1` is Numerical Recipes' unchanged and so has the same shape.  The
+ *   `volatile` only ever spoke to GCC 13.
  *
  *   `(double)` ON ONE OPERAND of each of realfft's four half-transform
- *   temporaries.  The object never narrows h1r/h1i/h2r/h2i -- they live on
- *   the x87 stack from 0x538e9 to 0x5394a and are never stored -- but
- *   `c1 * (data[i1] + data[i3])` is a FLOAT expression in C, whatever the
- *   variable it is assigned to is declared as, and GCC 13 duly spills it with
- *   `fstps`.  That is a 24-bit rounding the object does not perform, and it
- *   costs 2,509 of 476,100 words.  The cast makes the arithmetic double, and
- *   double is exact here for the reason the object's extended arithmetic is:
- *   every one of the four is `(a +- b) * 0.5` over exactly-representable
- *   floats.  `c1` and `c2` stay `float` because the object says so -- `flds`
- *   from .rodata.cst4 and `fmuls` operands, and c2's own float stack slot at
- *   0x44(%esp) -- and a `float` times a `double` is still emitted as `fmuls`.
+ *   temporaries.  This one was worse than a codegen hint: it changed FLOAT
+ *   arithmetic to DOUBLE, which is an alteration of what the author wrote and
+ *   not merely of how it is compiled.  The object never narrows
+ *   h1r/h1i/h2r/h2i -- they live on the x87 stack from 0x538e9 to 0x5394a and
+ *   are never stored -- and GCC 3.4.2 keeps them there from the plain float
+ *   expression.  The casts are out; `c1` and `c2` are `float` as the object
+ *   has them, and so is the arithmetic.
+ *
+ * WHAT IT COSTS THE MODERN BUILD is 47,955 of 476,100 words, declared in
+ * tools/gccdiverge.json.  A double temporary was tried for four1 --
+ * `double tr = wr * data[j] - ...; tempr = (float)tr;` -- on the strength of
+ * that spelling fixing src/pump/v90/Resampler.cpp, and it does not help here:
+ * identical failure counts.  Under -fexcess-precision=fast GCC 13 keeps the
+ * 80-bit register across the conversion, and only `volatile` moves it.
  *
  * WHAT WAS ABLATED AND TURNED OUT NOT TO MATTER is recorded too, because a
  * deviation nothing can see is worse than none.  Forcing realfft's `wi`,
@@ -148,7 +153,7 @@ four1(float *data, unsigned long nn, int isign)
 {
 	unsigned long n, mmax, m, j, istep, i;
 	double wtemp, wr, wpr, wpi, wi, theta;
-	volatile float tempr, tempi;
+	float tempr, tempi;
 
 	n = nn << 1;
 	j = 1;
@@ -227,10 +232,10 @@ realfft(float *data, unsigned long n, int isign)
 	np3 = n + 3;
 	for (i = 2; i <= (n >> 2); i++) {
 		i4 = 1 + (i3 = np3 - (i2 = 1 + (i1 = i + i - 1)));
-		h1r = c1 * ((double)data[i1] + data[i3]);
-		h1i = c1 * ((double)data[i2] - data[i4]);
-		h2r = -c2 * ((double)data[i2] + data[i4]);
-		h2i = c2 * ((double)data[i1] - data[i3]);
+		h1r = c1 * (data[i1] + data[i3]);
+		h1i = c1 * (data[i2] - data[i4]);
+		h2r = -c2 * (data[i2] + data[i4]);
+		h2i = c2 * (data[i1] - data[i3]);
 		data[i1] = h1r + wr * h2r - wi * h2i;
 		data[i2] = h1i + wr * h2i + wi * h2r;
 		data[i3] = h1r - wr * h2r + wi * h2i;

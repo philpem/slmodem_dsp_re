@@ -301,20 +301,30 @@ The modern build stays. It compiles in seconds against minutes, it is the
 portability check, and `make check64` still proves the tree is 64-bit clean.
 It is no longer the thing that decides.
 
-## Still to remove — the shims the period build makes unnecessary
+## The shims are gone
 
-Stage 2 of task #113. Each removal is gated on the period differential, and
-**a shim the period compiler also needs is a real finding about the object,
-not a thing to delete**:
+Stage 2 of task #113, all of it gated on the period differential. Finding 1354.
 
-- `src/pump/v90/Resampler.cpp` — `round32`'s `volatile` (finding 1352)
-- `src/dsp/fft.cpp` — `volatile float tempr, tempi`
-- `src/dsp/fft.cpp` — four `(double)` casts on realfft's half-transform
-  temporaries. These change `float` arithmetic to `double`, which is a
-  **semantic** alteration of what the author wrote, not a codegen hint.
-- ten files cite GCC 13 or excess precision as justification; most are
-  explanation rather than shim, and each needs checking
+| site | outcome |
+|---|---|
+| `Resampler.cpp` `round32`'s `volatile` | removed — **and so was the helper**; a `double` accumulator narrowed by explicit conversion satisfies both compilers |
+| `fft.cpp` `volatile float tempr, tempi` | removed; GCC 3.4.2 spills from plain source |
+| `fft.cpp` four `(double)` casts in `realfft` | removed; they had changed float arithmetic to double, a semantic alteration |
+| nine files citing GCC 13 | all explanation, no shims |
 
-Expect `tools/toolchain/compare.py --ratchet` to move as they come out. That
-is the point: source needing no shim to compile correctly under the period
-compiler is closer to what the author wrote.
+`src/` and `include/` contain **no `volatile` outside a comment**. Every
+remaining `(double)` is an integer conversion, a `sizeof`, a libm argument or
+`dftc.c`'s deliberate widening.
+
+**What one removal cost the modern build**, and it is the only one:
+`tools/gccdiverge.json` declares `t_fft`'s four checks, 47,955 of 476,100
+words. `four1`'s butterfly narrowing is not expressible in standard C under
+`-fexcess-precision=fast` — not by assignment, not by `(float)` cast, not by
+a named `double` temporary. Only `volatile`, which speaks to GCC 13 alone.
+
+**The rule that made the difference**, and it fired on the very first removal:
+*a shim the period compiler also needs is a fact about the object, not a thing
+to delete*. Deleting `round32` outright failed the period gate at 592/4356 —
+our `resample` is not unrolled where the object's is, so it never runs out of
+registers. That sent the search toward a spelling that states the narrowing
+instead of hoping for it.

@@ -59,6 +59,18 @@ IMG=${PERIOD_IMG:-dsplibs-tc}
 REF=${REF:-build/dsplibs_ref.o}
 J=${J:-$(nproc 2>/dev/null || echo 4)}
 
+#
+# INCREMENTAL BY DEFAULT, and it is sound rather than merely fast.  An object
+# is reused only if it is newer than its source AND newer than the newest
+# header in the tree, so a header edit rebuilds everything -- see
+# period_inner.sh.  That is what lets this be a GATE: `make phase` runs it on
+# every invocation, and on an unchanged tree it relinks rather than
+# recompiling 156 translation units.
+#
+# `KEEP= make period` for a full rebuild, if ever a doubt needs settling.
+#
+KEEP=${KEEP-1}
+
 [ -f "$REF" ] || { echo "period: $REF is missing -- run 'make $REF' first" >&2; exit 1; }
 
 # MAKEFLAGS is cleared and the banner suppressed: run from inside a make
