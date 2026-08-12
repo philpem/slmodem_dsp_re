@@ -44424,3 +44424,71 @@ be RETARGETED rather than repaired: it replaced `#define V90DEMODULATOR_BYTES
 
 **One duplicate remains**, `V90Phase4Demodulator`, registered in
 `tools/onedef.py` with its reason.
+
+### 1356. THE OBJECT'S `resample` IS HAND-UNROLLED BY FOUR INTO TWO SUMS — AND MATCHING IT DOES NOT BRING THE NARROWING WITH IT
+
+Task #117's premise was that our `Resampler::resample` never spills its
+accumulator because it is not unrolled where the object's is, and that
+matching the factoring would make the explicit narrowing (findings 1352, 1354)
+unnecessary. **Half right.** The factoring is recoverable and worth having;
+the inference about the narrowing is refuted.
+
+**WHAT THE OBJECT DOES.** `.text+0x34da0` opens each inner product by pushing
+three zeros and the phase:
+
+```
+34ece:  d9 ee     fldz
+34ed4:  d9 c0     fld    %st(0)
+34ed6:  d9 c1     fld    %st(1)
+34eda:  dd 47 0c  fldl   0xc(%edi)      <- phase, a double
+```
+
+then alternates its accumulations between two of them, four products to an
+iteration, walking both pointers by 0x10:
+
+```
+34f25:  flds  (%eax) ; fmuls  (%edx) ; faddp %st,%st(2)   <- a
+34f2e:  flds 4(%eax) ; fmuls 4(%edx) ; faddp %st,%st(3)   <- b
+34f36:  flds 8(%eax) ; fmuls 8(%edx) ; faddp %st,%st(2)   <- a
+34f3e:  flds c(%eax) ; fmuls c(%edx) ; faddp %st,%st(3)   <- b
+34f4a:  cmp $0x3,%ecx ; ja 34f25
+```
+
+with a one-at-a-time residue loop at 34f55 into `a` alone, the two sums joined
+at 34f6a, and the result narrowed once at 34f76.
+
+**IT IS IN THE SOURCE.** GCC 3.4's `-O2` does not imply `-funroll-loops` —
+that is `-O3` — so the author wrote the unrolling. Two accumulators rather
+than one is the standard reason: an x87 add has a latency the next add cannot
+hide, and alternating halves the dependent chain. A plain
+`for (i = 0; i < taps; i++)`, which is what this file had, was never what was
+compiled.
+
+**THE GAP CLOSED, MEASURED:**
+
+| | instructions | `faddp` |
+|---|---|---|
+| ours, plain loop | 263 | 4 |
+| **ours, the object's shape** | **328** | **18** |
+| the blob | 350 | **18** |
+
+The arithmetic structure now matches exactly.
+
+**AND THE NARROWING STILL HAS TO BE STATED, which is the finding.** With this
+exact shape GCC 3.4.2 emits the same alternating two-accumulator sequence and
+**still keeps both sums in x87 registers**: 100 of 15491 and 592 of 4356
+checks disagree with the blob, *the same counts as no narrowing at all*. So
+the pressure that makes the object spill is not in the loop. The object holds
+`phase` and three zeros on the x87 stack across it — four slots gone before
+the first product — where ours keeps phase in memory. Whatever produces that
+difference is elsewhere in the function and is not the unrolling.
+
+The accumulate-wide-convert-once spelling therefore stays, now inside the
+object's own shape. It is no worse for being explicit: it says what the object
+does and depends on no compiler's register allocator, which is the property
+that survived two compilers and three attempts.
+
+**The aggregate ratchet did not move** — 750 compared / 254 identical before
+and after — because `resample` was already outside the identical set and a
+closer miss is still a miss. The instruction and `faddp` counts are the
+measurement that shows the change did what it claimed.
