@@ -10,6 +10,12 @@ dsplibs.o -- the work that is left, function by function
 
   Sizes are the BLOB's.  They size the reading, not the writing.
 
+  The two halves have two different sources and can drift.  The
+  counts are from the object and the built objects under
+  /home/philpem/dev/sip-D-modem/claude_re/build/src; the stub sites are read from the SOURCE
+  under . -- which under `make worklist` is the working
+  tree, so an uncommitted edit moves those line numbers.
+
 ======================================================================
 NOT WRITTEN, by translation-unit span
 ======================================================================

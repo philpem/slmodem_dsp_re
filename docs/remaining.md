@@ -231,9 +231,18 @@ position inside it has moved a long way.
    both `V90Phase3Demodulator` decisions, and `V90Demodulator::progress` —
    are 34 KB of it between them.
 2. **The twelve live stub sites in `VPcmV34Progress` and `vpcm_run`**, taken
-   with the chain above rather than after it: five of them are inlined work
-   that will otherwise never appear on any list, and they sit on the path
-   every V.90 call takes.
+   with the chain above rather than after it: they sit on the path every V.90
+   call takes, and five of them are work that will otherwise never appear on
+   any list.
+
+   **These are not twelve functions to open.** There is no `runPcmModem` in
+   the object to disassemble — it and the other four inlined names are arms
+   *inside* `VPcmV34Progress`'s own 7,278 bytes, so the disassembly to read is
+   `tools/dis.py VPcmV34Progress`, and the stub call site in
+   `v34pcmmain.cpp` marks where in our version that arm belongs.
+   `vpcm_run`'s five are the same shape inside its 1,662 bytes. Only
+   `v90RateReneg` and `v90RateRenegSilence` are separate symbols with their
+   own entry in `docs/worklist.md`.
 3. **Fax Class 1** — `class1tx.c +94`, 321 symbols over 87,067 bytes. The
    largest symbol count left, which is the shape that parallelises best.
 4. **V.32 / V.32bis then V.22 / V.22bis** — `V32mod.c +39`, 92 symbols.

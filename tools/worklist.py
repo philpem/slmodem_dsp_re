@@ -105,9 +105,7 @@ def stub_sites(root):
 def main():
     ap = argparse.ArgumentParser(
         description="Enumerate the functions still to be reconstructed.")
-    ap.add_argument("--obj", default=coverage.__dict__.get("OBJ",
-                                                           "../slmodemd/"
-                                                           "dsplibs.o"))
+    ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
     ap.add_argument("--build", default="build")
     ap.add_argument("--tumap", default="build/tumap.json")
     ap.add_argument("--root", default=".",
@@ -121,6 +119,16 @@ def main():
     addr = coverage.blob_addresses(args.obj)
     ours = coverage.our_symbols(args.build)
     tus = coverage.load_tus(args.tumap)
+
+    # An unreadable --obj is the same failure from the other end: `nm` writes
+    # to stderr, returns nothing, and every count comes out ZERO rather than
+    # wrong-looking.  The default is relative, so running this from anywhere
+    # but the tree root hits it.  Refuse.
+    if not blob:
+        sys.exit("worklist.py: %s defines no T/t/W symbols -- unreadable, or\n"
+                 "not the blob.  The default is RELATIVE to the tree root;\n"
+                 "pass --obj with a full path when running from elsewhere."
+                 % args.obj)
 
     # `our_symbols()` reads build/src/**/*.o, so in a fresh `git worktree add`
     # -- where build/ does not exist yet -- it comes back empty and EVERY
@@ -164,6 +172,12 @@ def main():
         % (len(blob) - len(rows), written_b))
     add()
     add("  Sizes are the BLOB's.  They size the reading, not the writing.")
+    add()
+    add("  The two halves have two different sources and can drift.  The")
+    add("  counts are from the object and the built objects under")
+    add("  %s/src; the stub sites are read from the SOURCE" % args.build)
+    add("  under %s -- which under `make worklist` is the working" % args.root)
+    add("  tree, so an uncommitted edit moves those line numbers.")
     add()
 
     add("=" * 70)
