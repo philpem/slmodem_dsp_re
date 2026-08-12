@@ -1975,13 +1975,19 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 	diff_eq_int("word_68 (%ld)", (long)o->word_68, 1600, tag);
 	diff_eq_int("word_8c (%ld)", (long)o->word_8c, -1, tag);
 	diff_eq_int("short_9c (%ld)", (long)o->short_9c, -1, tag);
-	diff_eq_int("short_9e (%ld)", (long)o->short_9e, 0, tag);
+	diff_eq_int("curDmin (%ld)", (long)o->curDmin, 0, tag);
 	diff_eq_int("short_b0 (%ld)", (long)o->short_b0, 1, tag);
 	diff_eq_int("short_b2 (%ld)", (long)o->short_b2, 0, tag);
 	diff_eq_int("short_b4 (%ld)", (long)o->short_b4, 0, tag);
-	diff_eq_int("word_04 (%ld)", (long)o->word_04, 0, tag);
+	diff_eq_int("nofV90Retrains (%ld)", (long)o->nofV90Retrains, 0, tag);
 	diff_eq_int("word_24 (%ld)", (long)o->word_24, 0, tag);
-	diff_eq_int("word_a8 (%ld)", (long)o->word_a8, 0, tag);
+	/* A float now, so the bit pattern and not the value: -0.0f is not 0. */
+	{
+		static const unsigned int zero = 0;
+
+		diff_eq_int("threshRetrain (%ld)",
+			    memcmp(&o->threshRetrain, &zero, 4) == 0, 1, tag);
+	}
 }
 
 static int

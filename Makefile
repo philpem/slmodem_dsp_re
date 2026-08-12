@@ -182,7 +182,14 @@ $(SYMMAP): tools/symmap.py $(BLOB) | $(BUILD)
 # reachable only through a caller.  Ten names are used by more than one
 # translation unit and stay local; symmap.py names them each run.
 #
-$(REF): $(SYMMAP) $(BLOB)
+# `tools/refrename.py` IS A PREREQUISITE, and leaving it out cost three
+# separate people an hour each this round.  The recipe runs it, so a change to
+# it must rebuild the reference object -- and when it does not, `make period`
+# reports `0 passed, 157 failed` with every binary dying on a message that
+# names a `.gnu.linkonce.r.*` vtable section and nothing else.  It reads
+# exactly like "the merge broke everything", and the fix is `rm $(REF)`.
+# Finding 1387.
+$(REF): $(SYMMAP) $(BLOB) tools/refrename.py
 	objcopy --globalize-symbols=$(GLOBALS) $(BLOB) $(BUILD)/dsplibs_glob.o
 	objcopy --redefine-syms=$(SYMMAP) $(BUILD)/dsplibs_glob.o $@
 	@# The blob's linkonce sections carry the SAME names our objects would

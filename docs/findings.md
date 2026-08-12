@@ -45181,6 +45181,389 @@ object, and never a property of the file.
 incoming parameter slot and reloads that.  Both round to `float` at the same
 points, so nothing observable turns on it; it is a register-allocation
 difference of the kind CLAUDE.md says to ignore.
+### 1380. THREE MEMBERS OF `V90ConnectionEvaluator` RETURN A VERDICT, THE TAIL CALL THAT LOOKS LIKE THE SAME EVIDENCE IS NOT, AND THE COUNTER RESTARTS ONLY WHEN THEY GIVE UP
+
+The header said, of all eleven undefined members, that "a return type is not
+mangled and is therefore unknown", and declared every one of them `void`.  For
+three of the six written in this batch that is wrong, and the disassembly says
+so without ambiguity.
+
+**Two constants, one per branch, both reaching `%eax`.**
+`indicateLocalRetrain` (0x40020) and `indicateRemoteRetrain` (0x400b0) each
+load one of a pair of immediates into `%esi` and move it out:
+
+    40031:  be 04 00 00 00   mov $0x4,%esi     the path that just counts
+    40074:  be 05 00 00 00   mov $0x5,%esi     the path that also prints
+                                              "initiating fall back to V34"
+
+There is no reading of that which is not a return value, and a void function
+has no reason to build one.  The strings name the two: 5 is "give up on V.90",
+4 is "retrain and carry on".  `evaluateMeanErrorStdPhase4` (0x3fac0) is the
+third and is three bytes, `31 c0 c3` -- `xor %eax,%eax; ret` -- and the `xor`
+is the whole argument, because a void function does not clear `%eax` before
+returning.  Its phase 3 twin at 0x3f9d0 is 234 bytes and really computes
+something, so the pair is an asymmetry in the ORIGINAL: two members with the
+same name doing the same job in two phases, one of which was never written.
+Same shape as `V90Parameters::loadParams`' three-byte callees (findings
+860-862), and it means anything downstream branching on the phase 4 mean error
+is branching on a constant.
+
+**THE CONTRAST IS THE POINT, because a fourth function looks like the same
+evidence and is not.**  `updateCurrentConstellationData` ends in `jmp
+edprintf`, a tail call into a function that returns `int`, so `%eax` on exit
+holds `edprintf`'s answer.  That proves nothing whatever about the caller's
+return type: a `void` function tail-jumping to a non-void one is ordinary GCC
+output and this object is full of it.  The rule that separates the two cases is
+CLAUDE.md's -- act on what the compiler was FORCED to encode.  Building a
+constant into `%eax` on two different paths is forced.  Leaving whatever a tail
+call left there is free.
+
+The three are `int` now, and the two verdicts are `V90CE_VERDICT_RETRAIN` and
+`V90CE_VERDICT_FALLBACK_V34` in the header -- deliberately macros with a
+prefix rather than an `enum` claiming to be the whole type, since
+`evaluateConnection` is 3,857 unread bytes and whatever else the enumeration
+holds is in there.
+
+**AND THE COUNTER RESTARTS ONLY ON THE PATH THAT GIVES UP.**  Both functions
+clear +0x18 and +0x1c on BOTH paths and clear their own counter on ONE:
+0x40085 stores zero to +0x04 after the diagnostic, and the ordinary path does
+not.  So the object counts up to `MAX_NOF_V90_RETRAINS`, reports once, and
+starts again from zero; it neither resets every time nor saturates.
+
+**A test that compared only the verdict would agree with the blob for ever
+while getting that wrong**, because the verdict is a function of the counter
+BEFORE the branch and the restart happens after it -- the divergence appears
+only on the call AFTER the limit is first passed.  That is why
+`t_v90conneval.cpp` drives each limit case several calls past its own limit
+rather than stopping at the first 5, and why the mutations "does not restart
+its counter" and "restarts its counter every time" are both caught; both would
+have survived a one-call-per-case fixture.  Findings 149 and 223 in their
+smallest form: an evaluator that always answers the same thing agrees with
+anything.
+
+======================================================================
+
+### 1381. SEVEN FIELDS OF THE CONNECTION EVALUATOR ARE NAMED BY ONE FORMAT STRING AND TWO PARAMETER SLOTS
+
+`reset` could only number most of this object, because a store of zero says
+nothing about what a field holds (the header's own words).  The six small
+members of the processing half name seven of them outright, from evidence that
+is the original author's rather than ours.
+
+**One string names four.**  `updateCurrentConstellationData` passes its
+arguments to
+
+    "V90ConnectionEvaluator UPDATE: curDmin = %d, 10*threshUp = %d,
+     10*threshDown = %d, 10*threshRetrain = %d"
+
+and stores the same four values, in the same order, to +0x9e, +0xa0, +0xa4 and
++0xa8.  The three `fsts` fix the order beyond doubt -- 0x3e61c takes the first
+float argument, 0x3e624 the second, 0x3e62c the third -- so +0xa0 is
+`threshUp`, +0xa4 `threshDown`, +0xa8 `threshRetrain` and +0x9e `curDmin`.
+All four carried offset names; three of them are FLOATS, which the four-byte
+x87 stores prove and which no zero-filling `reset` could have shown.
+
+**Two parameter comparisons name two more, and a third string names the last.**
++0x04 is compared against `params->MAX_NOF_V90_RETRAINS` and printed as "%d V90
+retrains"; +0x0c against `params->MAX_NOF_REMOTE_RETRAINS` and printed as "%d
+remote retrains"; +0x08 is printed as "(rrn no %d)".  They are
+`nofV90Retrains`, `nofRemoteRetrains` and `nofRemoteRateReneg`.
+
+**AND THE COMPARISON'S BRANCH FIXES THEIR SIGNEDNESS.**  0x40045 is `cmp
+0x460(%eax),%edx; ja` -- an UNSIGNED branch against a slot `V90Parameters.h`
+declares `int`.  That is what GCC emits when the left operand is `unsigned
+int`; a signed counter would have given `jg`.  The forced case again, and not
+decorative: the two readings disagree exactly when the limit is negative or the
+counter has passed 2^31, and `t_v90conneval.cpp` drives both -- a negative
+limit, where the unsigned reading never fires and the signed one always does,
+and a counter stepped across 2^31, where it is the other way round.
+
+**Two fields were deliberately NOT renamed.**  +0x70 and +0x74 are the running
+average PDSNR and its weight (finding 1382), but `V90Demodulator.cpp` and
+`VPcmFloModem.cpp` refer to +0x70, +0x74, +0x78, +0x7c, +0x84 and +0x88 by
+their offset names and belong to other work; renaming them would edit files
+this batch does not own, and the derivation is recorded in the header instead.
+What did change is the TYPE of +0x70, from `unsigned int` to `float`, and that
+is invisible to both files: each assigns it a literal 0, and `0` into a float
+is the same four zero bytes.
+
+======================================================================
+
+### 1382. THE AVERAGE PDSNR IS A WEIGHTED MEAN WITH AN UNSIGNED WEIGHT, AND objdump PRINTS ITS DIVIDE BACKWARDS
+
+`updateAvePdsnr` is 113 bytes and contains all three of the traps this tree
+keeps a list of.
+
+**It is a weighted mean and not an exponential one.**  The zero test at 0x3e599
+is on the COUNT at +0x74, not on the average at +0x70, so the FIRST call
+assigns outright and every later one folds in:
+
+    +0x74 == 0  ->  +0x70 = pdsnr;  +0x74 = nofSymbols
+    otherwise   ->  +0x70 = (+0x74 * +0x70 + pdsnr * nofSymbols)
+                            / (+0x74 + nofSymbols);   +0x74 += nofSymbols
+
+**`de f9` IS `FDIVP` AND objdump PRINTS `fdivrp`** -- finding 245's swap, and
+this is the case it was written for.  Read the mnemonic and the quotient comes
+out as count/sum instead of sum/count: a plausible float, and one that NO
+side-against-side comparison could catch, because both sides would be wrong
+together.  The registered mutation "the average PDSNR is the reciprocal of the
+object's" is caught only because the fixture asserts what the first call leaves
+behind, bit for bit, rather than only comparing the two sides.
+
+**THE WEIGHT IS UNSIGNED AND THE PROOF IS THE CONVERSION SEQUENCE.**  Both
+conversions of the count are
+
+    push %edx        (%edx = 0)
+    push %eax
+    fildll (%esp)
+
+-- a 64-bit load whose high word is a hard zero, which is what GCC emits for
+`unsigned int` to floating point and never for `int`, which needs no high word
+at all.  The two readings agree on every total below 2^31 and disagree above
+it, and the count really can get there: it is a sum of symbol counts that only
+`reset` and `V90Demodulator::enterPhase3` clear.  Three of the fixture's runs
+start it near the boundary and the run asserts it crossed.
+
+**One rounding, at the end.**  The whole expression stays on the x87 stack at
+80-bit and `fstps` rounds once, which is why it is written as a single
+expression.  Our GCC produced the same instruction sequence -- `fildll`,
+`fmuls`, `fmulp`, `faddp`, `fildll`, `de f9` and all.
+
+======================================================================
+
+### 1383. THREE WAYS A MUTATION SUITE STOPS TESTING ANYTHING WITHOUT FAILING A RUN
+
+All three cost this batch a re-run, none of them would have failed a gate, and
+all three are general.
+
+**1. THE SOURCE GREW A SECOND COPY OF THE TEXT THE ANCHORS POINT AT.**  Finding
+1237 established that `V90MP::reset` (0x1f3e0) and `V90MP::V90MP` (0x1f410) are
+the same forty bytes instruction for instruction, and that the original
+repeated the assignments rather than calling one from the other -- so the
+reconstruction repeats them too.  The moment `reset` landed, the six
+assignments existed TWICE in `V90MP.cpp`, verbatim, and all ten of the set's
+constructor anchors -- `"\tword_14 = 0;\n"`, `"\tbyte_1b = 18;"` -- started
+matching twice.  `mutate.py` calls that UNUSABLE and **UNUSABLE DOES NOT FAIL A
+RUN**: the suite would have gone from twelve caught to two caught and ten
+unusable while still printing `0 NOT caught` and exiting zero.  Finding 1264 is
+the same failure at `v34handshak` scale.  The general form is worth stating:
+**a set is stale the moment its source grows a second copy of the text it
+anchors on, and what makes the second copy appear is precisely a finding like
+1237 -- "the original repeated this" -- being acted on.**  Landing the repeated
+function and re-anchoring the set are one change, not two.  Every anchor now
+carries its function's signature; four new entries mutate the `reset` copy, so
+both forty-byte functions are separately proved tested.
+
+**2. A DESTRUCTOR MUTATION IS INVISIBLE ON A CONSTRUCTED OBJECT.**  `t_v90mp.cpp`
+was written to construct and then destroy the same storage, which is the
+natural shape -- and both destructor mutations came back NOT CAUGHT, because
+`nofRecievedMp = 0` in a destructor writes the value the constructor has just
+written.  The store is real, `-fno-lifetime-dse` keeps it (finding 1224), the
+object changes -- from 0 to 0.  The same trap was waiting in
+`t_v90conneval.cpp`, where every field a destructor might plausibly clear is
+one `reset` has already zeroed.  The fix is to destroy storage NO CONSTRUCTOR
+HAS TOUCHED, comparing each side against the seed rather than against the
+other, since the mutation lands on OUR side and the blob's object would not
+move.  Generally: **a mutation that stores a constant is testable only against
+a state that does not already hold that constant** -- the never-zero rule
+(finding 230) applied to the ORDER of calls rather than to the seed.
+
+**3. REPOINTING A SUITE MOVES AN OBLIGATION WITH IT.**  `suites.json` gives each
+set ONE source and ONE binary, and both of this batch's sets had to move --
+`v90conneval` from `t_v90leaves`, which cannot reach `updateAvePdsnr` or either
+`indicate*Retrain`, and `v90mp` from `t_v90cp`, which drives only the
+lifecycle.  The moment a set is repointed, **every mutation already recorded
+against it becomes a claim about the NEW binary**: eighteen lifecycle
+mutations would have reported NOT CAUGHT, which is exactly the output an
+untested claim gives.  So `t_v90conneval.cpp` and `t_v90mp.cpp` each drive
+their class's constructor, destructor and `reset` as well, duplicating what the
+old binaries do.  The duplication is the mechanism and not waste -- the old
+binaries keep their coverage -- and the check that the repoint was safe is
+arithmetic: `v90conneval` had 5 caught + 1 equivalent before and has the same
+six verdicts among its 36 after; `v90mp` had 12 caught and has the same twelve
+among its 23.
+
+======================================================================
+
+### 1384. TWO MUTATIONS THAT CANNOT FAIL, AND ONE OF THEM DISPROVED A SENTENCE IN OUR OWN SOURCE
+
+Two of `v90conneval`'s new entries survived.  Both were proven equivalent the
+way the rule requires -- by compiling the mutated form with this tree's own
+`CXXFLAGS` and diffing `objdump -d` over the affected symbol.  Both diffs are
+EMPTY, operands included.
+
+**"the running average rounds at every step" is equivalent because a `float`
+LOCAL is not a rounding point.**  The mutation cuts the single expression into
+two named temporaries and a divide, which reads like three roundings instead of
+one -- and produces identical instruction text, because with `-mfpmath=387` and
+no `-ffloat-store` GCC keeps the temporaries in x87 registers at 80-bit and
+rounds only where a value reaches memory.  Assign to a MEMBER instead of a
+local and it becomes a real defect.  This is worth knowing beyond this file:
+naming a temporary does not create a rounding point on this target, so a
+reconstruction is free to name one for legibility.
+
+**"the scale is a double, not a float" is equivalent, and the comment it was
+testing was WRONG.**  The source said the `flds` from `.rodata.cst4` proved the
+ten was written as an `int` rather than as `10.0`, since a double would have
+landed in `.rodata.cst8`.  It would not: ten is exactly representable, GCC
+narrows the constant back, and the mutated form gives the same four-byte
+`.rodata.cst4` and the same instructions.  The comment now says what the four
+bytes actually rule out, which is a double that is NOT exactly representable.
+
+That is the second half of the rule finding 1305 established: **an uncatchable
+mutation may mean the RECORD is wrong rather than the test.**  Here it did, and
+the mutation set is what found it -- nothing else in the tree examines a claim
+of that shape.
+
+======================================================================
+
+### 1385. THE V.90 MP MESSAGE IS ELEVEN 17-BIT FRAMES, AND ONE FORMAT STRING NAMES THIRTEEN FIELDS AT ONCE
+
+`V90MP`'s `pad_00[0x14]` was the whole of the decoded message and nobody had a
+name for any of it.  `bitsToInfo` prints six of the thirteen fields by name in
+one line:
+
+    V90MP: MP detected. Type%d,Rate%d,Trellis%d,NonLin%d,Shaping%d,CPack%d
+
+with the arguments loaded, in that order, from +0x00, +0x01 (multiplied by
+`imul $0x960` = 2400, so `Rate` is in units of 2400 bit/s), +0x02, +0x03,
++0x04 and +0x05 -- every one with `movsbl`, which is what makes the six of them
+`char` and not `unsigned char`.  Three more strings name the rest: `Rate Mask
+- %s` for +0x06, printed base 2 from the mask 0x2000 and therefore fourteen
+bits wide, and `h1 real = %d, imag = %d` (h2, h3) for the six `short`s at
++0x08..+0x12, loaded with `movswl`.  That is 6 + 14 = 20 = 0x14 bytes with no
+padding, which is also why `word_14` stays four-aligned and `sizeof` stays
+0x124.
+
+**THE LAYOUT `infoToBits` WRITES IS THE V.90 MP SEQUENCE, and reading it is
+what turns thirteen offsets into a message.**  Seventeen ones, then 17-bit
+frames of one zero framing bit and sixteen data bits:
+
+    0x00..0x10 ones          0x11 framing   0x12 Type      0x13..0x17 zero
+    0x18..0x1b Rate          0x1c zero      0x1d..0x1e Trellis
+    0x1f NonLin  0x20 Shaping  0x21 CPack   0x22..0x23 zero
+    0x24..0x31 rate mask      0x32..0x33 zero
+    0x34..0x43 h1Real   0x45..0x54 h1Imag   0x56..0x65 h2Real
+    0x67..0x76 h2Imag   0x78..0x87 h3Real   0x89..0x98 h3Imag
+    0x9a..0xa9 zero           0xab..0xba the CRC
+
+Eleven frames, 0xbb bits, which is exactly the byte the object puts at +0x119.
+A message whose `Type` is zero stops after frame 4: the h-values are never sent,
+the CRC lands at 0x45..0x54, and +0x119 is 0x55.  **The type flag is therefore
+three things at once** -- the first data bit, the sequence length, and the
+extent of the CRC (`type ? 0xaa : 0x44`, which is +0x119 minus 0x11) -- and it
+is kept at +0x18 separately from `Type` at +0x00 because the receiver needs it
+in state 2, long before `evaluateInfo` runs.
+
+Two things the object was forced to encode and that no test could have found:
+
+  - **`nofRecievedMp` is UNSIGNED.**  `printNofRecievedMpMpNot` prints it with
+    `%d` and that settles nothing, but `bitsToInfo` gates its diagnostics on
+    `cmp $0x2,%ebp; ja` (0x20a34) -- and `ja` is unsigned.  The two readings
+    part at 0x80000000, where the unsigned one is above two and suppresses the
+    transcript while the signed one is below two and prints it, so the header's
+    `int` was wrong and `t_v90mp.cpp` now drives exactly that value.
+
+  - **`bitsToInfo` returns `int`**, which the mangled name does not record and
+    the header had as `void`.  %edi is zeroed at entry (0x201ab) and set to 3
+    for Ed, 1 for MP and 2 for MPnot, and it is moved to %eax at both returns.
+    The four outcomes are separately reachable and the test asserts each was
+    seen.
+
+**The MP and MPnot arms do not log at the same level.**  Both announce the
+message at level 2, but the MP arm's four follow-ups (rate mask, h1, h2, h3)
+compare `cmpl $0x2` and need level 3 while the MPnot arm's compare `cmpl $0x1`
+and need only level 2.  That is finding 150's trap in a class that has one
+`DSPLIB_DEBUG_ON` and one `DSPLIB_DEBUG_VERBOSE` site side by side, and it is
+invisible to any test that runs at a single level.
+
+**A SWEEP INDEXED BY ONE COUNTER IS NOT A SWEEP, and the mutation set caught
+it twice in this one file.**  Both blocks below looked like they covered
+everything and covered a proper subset, because the table sizes share a factor
+with each other:
+
+  - `word_14 = trial % 6` and `bit = bit_vals[trial % 9]` -- six states, nine
+    arguments, and 3 divides both.  `trial % 6 == 1` and `trial % 9 == 0` never
+    coincide, so state 1 was never once handed a zero, which is the only value
+    it reacts to.  `the framing zero goes straight to state 3` survived.
+  - `h1Real = info_vals[(trial + 6) % 14]` with the counter's start taken from
+    a table of 7.  The MP arm takes even trials, `info_vals`' negative entries
+    sit at odd indices, and every even trial reaching an odd index landed on
+    the one counter start that suppresses the diagnostic.  Every h1 line ever
+    printed at level 3 carried a positive value, and `h1 is printed as an
+    unsigned short` survived.
+
+Neither is visible by reading the test, both were invisible to 10,000 passing
+differential checks, and the fix in each case is the cross product (`st =
+trial % 6`, `bit = bit_vals[(trial / 6) % 9]`) or an explicit assignment.  This
+is finding 1383's family: the run stays green and the coverage quietly is not
+there.
+
+**AND A GATE THAT PASSES ON A FILE IT NEVER READS.**  `make offsets` reported
+"957 annotations, all match" over this batch, and it was not looking: a
+`/* +0xNNN */` in `V90MP.h` was deliberately falsified and the count and the
+verdict did not move.  `tools/offcheck.py` matches `^struct\s+(\w+)\s*\{` and
+therefore has NEVER covered a single C++ class -- not `V90MP`, not `V90CP`, not
+any of the sixty-odd classes under `src/pump/v90`.  What actually holds this
+class's map is the `V90MP_OFF` block in `V90MP.cpp`, a `typedef char x[cond ?
+1 : -1]` per field, which WAS shown to fire: the same falsified offset turns
+into `narrowing conversion of '-1'` and the translation unit does not build.
+Finding 134's argument, in the place it is easiest to miss -- the gate is
+green either way, so only breaking something on purpose tells the two apart.
+The two counts are not interchangeable and a batch that lands a class should
+quote the compile-time assertions, not the 957.
+
+======================================================================
+
+### 1386. THE SHORT MP MESSAGE DESTROYS ITS OWN CRC, AND THE LONG ONE REPAIRS A BIT BY GUESSING
+
+Two defects of the original, both reproduced deliberately because the goal is a
+replacement that behaves identically.
+
+**`infoToBits` overwrites the CRC it has just written, whenever `Type` is
+zero.**  The two arms end the same way -- copy the sixteen CRC bits into
+`bits`, zero the one bit after them, then pad to the sequence length -- and the
+long arm's constants are right: CRC at 0xab..0xba, `movb $0x0,0xd7(%ebx)` is
+bits[0xbb], the pad loop starts at 0xbc.  The short arm puts the CRC at
+0x45..0x54 and then writes `movb $0x0,0x61(%ebx)`, which is bits[0x45], and
+starts its pad loop at 0x45 as well.  Both constants are the FIRST CRC bit
+rather than the one after the last, so a type-zero message goes out with its
+CRC zeroed from the front.  It is not a boundary case: +0x118 is the sequence
+length rounded up from 0x56, so it exceeds 0x45 for every non-zero group size
+and the loop always runs.  One slip explains both constants -- an index
+advanced through the CRC copy and then not advanced past it.
+
+**`bitsToInfo` inverts bits[0x70] and re-checks.**  When the sixteen received
+CRC bits do not match the computed ones and the message is the long one
+(+0x119 above 0x6f), the object does `cmpb $0x0,0x8c(%ebx); sete 0x8c(%ebx)`,
+recomputes the whole CRC and compares again, reporting `recieved MP with
+modified good CRC` if that rescued it and `recieved MP with bad CRC` if it did
+not.  bits[0x70] is inside h2Imag.  The flip is destructive and unconditional
+on failure: the bit stays inverted whether or not it helped, so the message the
+caller eventually reads is not the one that arrived.
+
+**A third thing that looked like a defect, and turned out to be a lesson about
+the mutation tier instead.**  The pad loop reads +0x118 ONCE, into %edx, before
+it starts, and it can reach index 0xfc, which IS +0x118 -- so a loop written
+`i < byte_118` in C should re-read the field it had just zeroed and stop early,
+and the local copy our source keeps should be load-bearing.  It is not.  `bits`
+is declared 0xe6 long, GCC uses that bound to conclude that `bits[i]` cannot
+alias the member at +0x118, and hoists the load in BOTH forms: compiled with
+this tree's own `CXXFLAGS`, the two differ in exactly one line of
+`objdump -d --no-show-raw-insn`, which is the file name in objdump's banner.
+The mutation is recorded as `equivalent` with that diff as its proof, which is
+the honest verdict -- and the underlying reason is worth writing down, because
+it means an out-of-bounds subscript in this tree is not merely undefined in
+principle: the compiler is ALREADY using the bound to reason with.  A group
+size of 254 does reach index 0xfc, and the test asserts what the object does
+there.
+
+The whole batch also rests on finding 1237's argument three times over:
+`resetCRC`, `calcCRC` and `PrintBase2` are all plain GLOBAL symbols in `.text`,
+GCC 3.4 at -O2 does not inline one of those, and there is no call to any of
+them in these 5,027 bytes -- so the original wrote the CRC shift register out
+three times and the base-2 printer twice, exactly as it wrote the
+constructor's body again for `reset`.
 
 ======================================================================
 
@@ -45685,3 +46068,293 @@ ends.  The general form: a guard is a claim about a direction, and a buffer
 that is written in two directions needs two.
 
 ================================================================
+### 1387. `make period` REPORTED 0 PASSED, 157 FAILED, AND THE CAUSE WAS A STALE ARTEFACT NO PREREQUISITE COVERS
+
+The first `make period` run on a branch merged up to the period-toolchain work
+gave:
+
+    period differential: 0 passed, 157 failed
+
+with every binary failing at LINK and every failure reading
+
+    ref__ZTV12V90Resampler: discarded in section
+        `.gnu.linkonce.r._ZTV12V90Resampler' from build/dsplibs_ref.o
+
+**Nothing was wrong with the branch.**  `build/dsplibs_ref.o` had been built an
+hour earlier by `make phase`, before the merge, and the merge brought a new
+`tools/refrename.py` -- the fix for variance V5 in `docs/method/compilers.md`,
+which moves the blob's 83 linkonce sections out of COMDAT so the period
+linker does not discard them.  The Makefile's recipe RUNS `refrename.py`:
+
+    $(REF): $(SYMMAP) $(BLOB)
+        objcopy --globalize-symbols=... ; objcopy --redefine-syms=... 
+        python3 tools/refrename.py $@
+
+but `tools/refrename.py` is not among its prerequisites, so make saw an
+up-to-date target and did not re-run it.  `rm -f build/dsplibs_ref.o
+build/dsplibs_glob.o build/symmap.txt` and a re-run gave **155 passed, 2
+failed**, the two being `t_v90equ` and `t_v92precoder` and neither belonging to
+this branch.
+
+**THE FAILURE MODE IS WHAT MAKES THIS WORTH A NUMBER.**  A total, uniform
+failure of every binary, whose message names a vtable section and a file in
+`build/`, arriving immediately after a merge and a batch of new work, reads
+exactly like "the merge broke the tree" or "my new code did this".  It is
+neither, and there is nothing in the output that says so.  Every agent who
+merges master and runs `make period` for the first time will meet it once.
+
+The general rule this tree already applies elsewhere and not here: **a recipe
+that runs a tool must list that tool as a prerequisite**, or the tool's own
+changes are invisible to `make`.  `$(SYMMAP)` does this correctly --
+`$(SYMMAP): tools/symmap.py $(BLOB)` -- so the pattern is present in the same
+file, eight lines above the recipe that omits it.  The one-line repair belongs
+to whoever owns the Makefile; it is recorded here rather than made, because a
+branch that edits the Makefile is a branch that collides with every other one.
+
+**And a diagnostic worth keeping:** if `make period` fails *uniformly* at link,
+delete `build/dsplibs_ref.o`, `build/dsplibs_glob.o` and `build/symmap.txt` and
+re-run before believing anything the run said.  A partial failure -- some
+binaries passing -- is a real result; a total one is almost certainly this.
+
+======================================================================
+
+### 1388. THE TWO PHASE EVALUATORS DECIDE THREE WAYS, AND ONE OF THEIR NINE DIAGNOSTICS HAS A `%d` WITH NOTHING BEHIND IT
+
+`V90ConnectionEvaluator::evaluatePhase3` (0x3f5f0, 980 bytes) and
+`::evaluatePhase4(float)` (0x3fad0, 1,353 bytes), reconstructed and
+differentially tested.  Seven things came out of them that were not known
+before, and one of them is a defect in the original.
+
+**BOTH RETURN `int`, AND ZERO IS A REAL THIRD ANSWER.**  The header had them
+`void`.  Each clears the answer register on entry -- `xor %eax,%eax` at
+0x3f5f3 and 0x3fad1 -- loads an immediate 4 or 5 into `%esi` on every path
+that decides something, and moves `%esi` to `%eax` at the tail.  Paths that
+decide nothing reach the same `ret` with the register still zero, and there
+are several: the early return on a zero symbol count, and the ordinary "no
+threshold was crossed" tail.  So 0 is what a caller sees most of the time, and
+it is not an artefact of a `void` function leaving a register clear -- the
+`mov %esi,%eax` is there to build it.  `V90CE_VERDICT_NONE` is OUR name; 4 and
+5 keep theirs because a string on each path says what they mean.
+
+**PHASE 4 HAS THREE EPILOGUES AND ONE OF THEM IS A LITERAL.**  0x3fbaa is
+`mov $0x5,%eax` into its own `ret` at 0x3fbcf with `%esi` never consulted,
+which is why that arm is written as an early `return` rather than as an
+assignment to the verdict.  It is the "fall back due to large error" path, and
+it leaves +0x10 and +0x18 exactly as it found them while every other deciding
+path clears at least one of them.
+
+**THE DURATIONS ARE NOT CLEARED WHEN THEY MERELY ACCUMULATE**, and this is the
+one a single-call test cannot see.  +0x10 and +0x18 both grow by `word_74` --
+the symbol count the running average covers -- per call, and both are cleared
+in exactly two places: the arm where the average fell below its threshold, and
+the arm where the duration ran out and a verdict was printed.  0x3f797 and
+0x3fd12 jump PAST the store that zeroes +0x18.  A reconstruction that cleared
+it every call agrees with the blob on every first call, never accumulates, and
+passes anything short of a multi-block run; `test/unit/t_v90conneval.cpp`
+drives sixty-block runs and compares the whole object after every one.
+
+**FIVE COMPARISONS ARE UNSIGNED AGAINST SLOTS THE PARAMETER MAP CALLS `int`,
+and that is what fixes the counters' own types.**  `cmp 0x60(%ebx),%eax; jb`
+twice for the durations, `cmp 0x460(%ecx),%edx; ja` four times for the retrain
+limit and `cmp 0x45c(%ecx),%eax; jae` for the mean-error arm's second ceiling:
+a signed left operand would have given `jl`/`jg`/`jge` throughout.  None of
+them is visible on an ordinary value -- the two readings part company only at a
+negative limit, where the unsigned one becomes a number no counter reaches and
+the signed one a number every counter is already past.  Six small trials in the
+fixture drive exactly that, and the `jae` one is the sharpest because it GATES
+an arm rather than ending one: read signed, a negative ceiling blocks the arm
+the object runs.
+
+**A SINGLE CALL CAN PRINT ONE VERDICT AND RETURN THE OTHER.**  In phase 3's
++0x84 arm the fall-back test and the retrain test are not alternatives: 0x3f87f
+jumps back to the retrain test when the duration has NOT run out, and 0x3f926 --
+the tail of the fall-back diagnostic -- jumps to the same place.  So a call can
+load 5, print "initiating fall back to V34 due to large error", fall into the
+retrain test, load 4 over it and return 4, having printed two lines.  The
+fixture asserts that combination was observed.
+
+**FOUR FIELDS GOT THE AUTHOR'S OWN NAMES AND NONE OF THEM COULD BE RENAMED.**
++0xb2 is `altRbsDetectedOnQc` -- phase 3's first arm runs when it is non-zero,
+clears it, and prints "altRbsDetectedOnQc => initiating Retrain".  +0xac is
+`pdsnrCurrentV34DropThreshPhase4` -- 0x3fd38 is `fsts 0xac(%ebx)` and the
+diagnostic announcing that very store names it.  The argument of
+`evaluatePhase4` is `meanErrBefToAftUpdateRatio`, from the two strings that
+print it and nothing else.  +0x78 and +0x7c are a delayed-retrain request and
+its acknowledgement: phase 4's last arm runs only when both are non-zero,
+prints "Initiating retrain (delayed)...", and clears both.  Every one of those
+four slots is referred to by its offset name in a file this batch does not own
+(`t_v90leaves.cpp`, `VPcmFloModem.cpp`), so the derivations are recorded in
+`include/dsplib/V90ConnectionEvaluator.h` and no field was renamed.  A name is
+worth less than a file another batch is editing.
+
+**`params->unnamed_434` IS A FLOAT AND `V90Parameters.h` CALLS IT `int`.**
+0x3fd2b is `flds 0x434(%ecx)` feeding `fsts 0xac(%ebx)` -- a float load into a
+float store with no conversion -- and the 0x437a0000 `setToDefault` plants
+there (finding 878) is 250.0f.  Two measurements, one answer.  The header is a
+shared frozen type, so the reconstruction reads the four bytes through a union
+instead of retyping it; whoever next owns `V90Parameters.h` should make it
+`float`.  The task's brief also predicted `EIA6_PDSNR_THRESHOLD_IN_PHASE3` and
+`..._PHASE4` would appear here.  **They do not** -- neither function reads
+either slot, nor `EIA6_TRN1D_ERROR_FOR_V34_FALLBACK`, nor
+`QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH`.  The fixture plants
++FLT_MAX in all four so that a comparison picking one up would never fire, and
+four mutations do exactly that and are caught.
+
+**AND THE DEFECT: 0x3ffcf CALLS `edprintf` WITH A `%d` AND NO ARGUMENT.**  The
+string at .rodata.str1.4+0xab34 is "V90ConnectionEvaluator (phase4): initiating
+fall back to V34 due to %d V90 retrains (last one delayed)", and the call site
+stores only the format pointer -- nothing goes to 0x4(%esp).  Its sibling
+forty-four bytes later, 0x3fffb, stores `nofV90Retrains` there for a string
+with the same conversion, so it is one line written without its argument and
+not a different calling convention.  `edprintf` formats with `vsnprintf`, so
+the number printed is whatever the outgoing-argument slot held.  D267.
+
+**THAT DEFECT IS ALSO THE ONE CLAIM IN THIS BATCH THAT COULD NOT BE GIVEN A
+MUTATION, and the attempt is worth recording.**  A mutation that ADDS the
+missing argument cannot fail a differential transcript comparison, because the
+comparison is already failing on that line for the correct source: the two
+sides read different frames.  The construction that should have fixed that was
+tried -- arrange a call in which phase 4's retrain arm fires FIRST, since it
+passes `nofV90Retrains` in exactly the slot the broken format later reads, so
+both sides would pick up the same known value.  Measured, the transcripts still
+differ and differ ONLY in that line: GCC 13 does not leave our frame's second
+outgoing-argument slot holding what GCC 3.4 leaves in the object's.  The test
+therefore compares state, verdict and line count on that path and not the text,
+the case is kept because it is the only one that produces four diagnostics from
+one call, and the mutation set carries the claim as a NOTE rather than as a
+mutation that would report `0 NOT caught` while testing nothing.
+
+**ONE INPUT IS DELIBERATELY NOT FED.**  Every `word_70` comparison in both
+functions is `flds; fcoms <param>; ja/jbe`, which is false for an unordered
+compare and therefore agrees with C on a NaN -- so a NaN average is driven, and
+it exercises the else arms.  `evaluatePhase4`'s ARGUMENT comparison is the one
+place where the parameter is the left operand (`flds 0x438(%ecx); fcomp %st(1);
+jae`), and `jae` is false when unordered, so the object ENTERS the arm for a NaN
+argument where C says it must not.  That is GCC 3.4's complement of `>=`, which
+GCC 13 does not repeat; a NaN argument would therefore disagree between `make
+period` and `make phase` for a reason that is not in our source, so the sweep
+covers both zeros, both denormals, both infinities, FLT_MAX, the threshold
+itself and one ulp either side of it, and stops there.
+
+======================================================================
+
+### 1389. THE CONNECTION EVALUATOR ANSWERS SIX THINGS, NAMES ITS LAST TWO UNMODELLED SLOTS, AND CORRECTS TWO CLAIMS ABOUT x87 ROUNDING THAT WERE MADE AND WERE WRONG
+
+`V90ConnectionEvaluator::evaluateConnection` (0x3e6d0, 3,857 bytes),
+reconstructed and differentially tested.  It is the class's whole decision
+half; with it the class is fourteen members minus two, and the object has no
+unmodelled region left.
+
+**THE VERDICT SET IS {0, 1, 2, 3, 4, 5} AND -1 IS NOT IN IT.**  Finding 1388
+left the enumeration explicitly incomplete at {0, 4, 5} and named this function
+as the one that would finish it.  There are TWO epilogues.  0x3e8b7 is reached
+from the empty call, where `xor %eax,%eax` at 0x3e6ee still stands, and from
+`mov %ecx,%eax` at 0x3e8a2, where `%ecx` is 4 (0x3e80d), 2 (0x3e857), 5
+(0x3f014) or 4 (0x3f2f0).  0x3ed18 is `mov %ebp,%eax` at 0x3ed0c, and twenty
+immediates reach `%ebp`: 0 twice (0x3e6d1, 0x3ed7a), 1 four times, 2 four
+times, 3 once (0x3ef20), 4 six times and 5 three times.  The strings name the
+three new ones -- 1 is a rate up, 2 a rate down, 3 the single
+"Initiating No Restriction RRN (external demand)".
+
+**THE TWO NEGATIVE IMMEDIATES NEAR THE EPILOGUES ARE NOT VERDICTS**, which is
+worth writing down because they look like the fourth one.  `mov $0x0,%esi` at
+0x3ed07 feeds `mov %esi,0x70(%edi)` -- the average, cleared -- and `mov
+$0xffffffff,%esi` at 0x3ede4 feeds `mov %si,0x9c(%edi)`, a SIXTEEN-bit store
+into +0x9c.  `mov $0xffffffff,%ebp` at 0x3f1f3 does the same before `%ebp` is
+reloaded with 4 at 0x3f292.  Working backward from the two `ret`s is what
+separates them from the answer; grepping for `mov $imm,%eax` across the
+function finds float bit patterns and nothing else.
+
+**+0x98 AND +0xb8, THE LAST TWO UNMODELLED SLOTS, BOTH BELONG TO THIS
+FUNCTION.**  +0x98 was `pad_98[4]` and this is its only writer: four plain
+zeroes and, at 0x3ee4f, `cmp $0x5,%edx; sete %al; mov %eax,0x98(%edi)` -- the
+value of `word_8c == 5`.  Every store sits beside a store to +0x90, so the two
+travel as a pair; nothing READS it anywhere reconstructed, so it keeps an
+offset name.  +0xb8 was the middle of `pad_b6[6]` and is a FLOAT: `fsts
+0xb8(%edi)` at 0x3e9e8 stores the rate-down multiplier the instant it is
+chosen, and `fmuls 0xb8(%edi)` at 0x3f041 reads it back to print `avePdsnr *
+that`.  Nothing initialises it -- `reset` stops at +0xb4 -- so the diagnostic
+on the path where no multiplier was chosen prints whatever the slot last held,
+which is why the test plants a value rather than letting the seed decide.
+
+**TWO FIELDS GET THE AUTHOR'S OWN NAMES IN THE RECORD AND KEEP THEIR OFFSET
+NAMES IN THE CODE.**  +0x9c is `initDmin`: 0x9d84 is "before EC RRN: curDmin =
+%d, initDmin = %d" and 0xa348 is "on Rate Down: curDmin = %d, initDmin = %d",
+and at both sites the second conversion is `movswl 0x9e` and the third `movswl
+0x9c`.  +0xb4 is `echoRrnState`: 0x3ea9c stores `%ebx + 1` into it and 0x3f48e
+prints exactly that value under "V90-mod3 CHANGE echoRrnState = %d".  Neither
+was renamed, because `test/unit/t_v90leaves.cpp` uses `short_9c` and `short_b4`
+and belongs to other work -- the third and fourth time this class has recorded
+a derivation instead of renaming.
+
+**+0x24 IS `int` AND EVERY OTHER COUNTER IN THE CLASS IS `unsigned`.**  All
+five debug arms do `word_24 += word_74; cmp 0x6c(%edi),%eax; jl` -- 0x3ec92,
+0x3ed39, 0x3ef02, 0x3efda, 0x3f3ba -- a SIGNED branch against `debugPeriod`.
+An unsigned +0x24 would have made the sum unsigned and the branch `jb`.  It
+needs two trials to pin, not one: a negative period fires signed and never
+unsigned, and a negative +0x24 is the other way round.
+
+**THE FADE CLOCK DIVIDES UNSIGNED AND COMPARES SIGNED**, which is not a
+contradiction and is the shape here a reader would spell wrong.  0x3e715 and
+0x3e720 are `divl 0x48(%edi)` and 0x3e727 is `jg`: an unsigned quotient stored
+into an `int`, and two `int`s compared.  Writing the condition as one unsigned
+expression gives `ja`.  Both halves need their own trial -- the clock at 2^31
+with a fade count of 2^30 separates `divl` from `idivl`, and a fade count of 1
+with the clock at 0x7fffffff separates `jg` from `ja`.
+
+**IT WRITES A PARAMETER, and it is the only member of the class that does.**
+`params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE` at +0x404 takes 2.0f
+(0x3eecc), 0.65f or 1.8f (0x3ead8).  `movl $0x40000000` into a `float` slot is
+how GCC stores a float constant to memory, so these are float stores.  The test
+could not keep using "the parameter block was not written" as its guard: it
+snapshots the block, runs ours, keeps what ours wrote, restores, runs the blob
+and compares the two, and asserts at the end that some trial really did write
+it.
+
+**TWO CLAIMS ABOUT x87 ROUNDING WERE MADE IN THIS FUNCTION'S COMMENTS AND BOTH
+WERE WRONG.  The mutation set is what found that out**, which is finding 3's
+rule in the task brief -- an uncatchable mutation may mean the record is wrong
+rather than the test.
+
+  * `(unsigned)(float)minDur` was said to round at 2^24 where the object's
+    `fildll`/`fistpll` round trip does not.  Driven at 16777217, the first
+    integer a `float` cannot hold, the two spellings AGREE.  FLT_EVAL_METHOD is
+    2 on an x87 target, so the cast is evaluated at 80 bits and never narrows;
+    the mutant emits a visibly different instruction sequence and computes the
+    same number.
+  * `ce_frac3(word_70 * word_b8)` was said to round the product at the `float`
+    parameter, where the object reads it three times at 80 bits.  It does not,
+    for the same reason.  10.0f * 2.3f is 22.99999952 unrounded and 23.0
+    rounded and the test plants exactly those values, and both spellings print
+    "22.999".
+
+  The two-argument helper is kept -- it is the one spelling no compiler can
+  round -- but its comment now says it is belt and braces and says what was
+  measured.  Both entries were replaced: one by a NOTE recording the failed
+  claim, one by a mutation that IS caught.
+
+**ONE INPUT IS KEPT AWAY FROM ONE COMPARISON, and it is the mirror image of
+1388's.**  0x3e933 is `fcomps 0xa0(%edi); jae`, the complement of `avePdsnr <
+threshUp` taken without consulting the parity flag, so the blob RUNS the
+rate-up arm for a NaN average where C says it must not.  GCC 13 complements the
+same source correctly, so a NaN there would disagree between `make phase` and
+`make period` for a reason that is not in our source.  The other four `word_70`
+comparisons are `ja`/`jbe`, which agree on both compilers, so NaN is fed
+wherever `enableRrnUp` is zero -- and kept away from the paths that PRINT the
+average, because the sign character is `sbb` off the carry and reads unordered
+as '+'.
+
+**AND ONE EXISTING MUTATION ANCHOR HAD TO BE REPAIRED, NOT WEAKENED.**  `find`
+is a plain substring search, and this function writes `short_9c = -1;` at three
+deeper indentations, so "the +0x9c store is 32 bits wide" went from one match
+to four -- and an ambiguous anchor is reported UNUSABLE, which does not fail a
+run.  The entry gained `word_84 = 0;` as leading context and says so in its
+`why`; the claim, the site and the replacement are unchanged.  The same trap
+caught four more anchors of ours and cost a rewrap of two `if`s: three tabs
+followed by four spaces is a SUBSTRING of four tabs followed by four spaces.
+
+The suite is 212 mutations, 208 caught, 0 not caught, 0 unusable, 4 equivalent,
+0 miscounted, and `make period` is 155 passed and 2 failed -- the baseline, and
+neither failure is this class's.
+
+======================================================================
