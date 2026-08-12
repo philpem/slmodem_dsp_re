@@ -50029,3 +50029,219 @@ place and serialised behind the shared build lock a parallel session asked for:
 with `period differential: 161 passed, 0 failed`, `64-bit clean, both
 configurations: OK`, `5007 references checked, 0 resolve to nothing`, and no
 `Error`, `undefined reference` or `FAILED TO COMPILE` line anywhere in the log.
+### 1520. THE V.22bis SCRAMBLER IS WORD-PARALLEL, AND THAT IS WHY ITS TAPS ARE STORED BIASED
+
+`fpm_sdm.c` is three functions and 399 bytes, and every one of the object's
+oddities follows from one decision: it scrambles a whole symbol's worth of
+bits per iteration rather than one bit.
+
+`SDMv22_CFG` is `{4, 14, 17}` -- four bits per word, taps at 14 and 17, which
+is ITU-T V.22bis section 2.5's calling-modem generating polynomial
+`1 + x^-14 + x^-17`. Those numbers appear nowhere in the object at run time.
+What `FPM_SDM_init` stores is `tap - nbits`: `+0x14 = 10` and `+0x16 = 13`.
+
+The bias is forced by the parallelism. Number the stream bits in
+transmission order; the register holds them so that
+
+    reg bit p  ==  b[n * nbits - 1 - p]
+
+-- bit 0 the most recent, and each word's own bits reversed within the low
+`nbits`, so a word's MSB is the EARLIEST of its bits in time. Substituting
+that into `out[k] = in[k] ^ out[k-t1] ^ out[k-t2]` gives every output bit of
+the word at once as
+
+    (reg >> (t1 - nbits)) ^ word ^ (reg >> (t2 - nbits))
+
+masked to `nbits`. Hence three shifts, two XORs and no per-bit loop -- and
+hence the implementation's only constraint, `tap >= nbits`: a tap shorter
+than a word would need a bit of the word being formed.
+
+**The register is 32 bits and is never truncated to the polynomial's length.**
+Bits shifted past 31 are simply lost, which is harmless because nothing above
+bit `tap2 - 1` is ever read. `notmask` (`+0x0c`, `~mask`) is computed, stored
+and applied to `reg << nbits` -- where it is a *no-op*, the shift having
+already cleared those bits. Reproduced because the object does it.
+
+The descrambler is the feed-forward inverse and takes the RECEIVED word into
+the register, not the one it produced. It takes it **whole and
+zero-extended**, without the mask: a word carrying rubbish above `nbits`
+corrupts the register for `ceil(tap2 / nbits)` symbols. That is the one place
+in either function where the data pointer's signedness is forced rather than
+free -- `movzwl` at `0xa9b1e` feeding `or %eax,%esi` -- so the buffers are
+`unsigned short *`, and `t_fpm_sdm` drives words with bit 15 set specifically
+to pin it.
+
+There is no reset entry point and no resync branch: self-synchronisation is
+the feed-forward property alone, and clearing the register means re-running
+`FPM_SDM_init`. `t_fpm_sdm` proves both -- a deliberately wrong register
+tracks the blob step for step and produces the original plaintext from word
+`ceil(tap2/nbits)` onward.
+
+`SDM_scrambler`/`SDM_descrambler`/`SDM_init` at `0x9f150` are a second,
+separate copy of this module with its own `SDM_CFG` in `.data`; not touched
+here.
+
+### 1521. THE SYMBOL CODER IS A QUADRANT ACCUMULATOR WITH A CARRIER ROTATION V.22 DOES NOT USE
+
+`FPM_SMC_encoder` (367 bytes) turns scrambled data words into constellation
+indices. Per word:
+
+    quadrant = (quadrant + pmap[(word >> qshift) & qmask]) & pmask
+    index    = quadrant | (word & amask)
+    out[widx] = (acc + index) wrapped at rot_mod
+    acc      = (acc + rot_step) wrapped at rot_mod
+    widx     = (widx + 1 < len) ? widx + 1 : 0
+
+That is V.22bis section 2.4 exactly: the first dibit selects a quadrant
+*change*, the rest select a point inside it. `SMCv22_PMAP`'s entries are
+multiples of four, so the quadrant lands in bits 2..3 and the amplitude bits
+in 0..1 of a four-bit index into the 16-entry I/Q maps -- **which this TU
+never reads**. It only ever produces the index.
+
+Four things are decidable only from configurations V.22 does not build, and
+`t_fpm_smc` builds them:
+
+- `+0x04` non-zero takes the quadrant straight from the word instead of
+  accumulating (`if (obj->direct)`, hoisted out of the loop at `0xa9cd3`).
+  `SMCv22_CFG` sets it to 0.
+- **Both wraps are a single conditional subtract, not a modulo.** An index at
+  or above `2 * rot_mod` comes out unreduced. `%` agrees with the object over
+  every value V.22 can produce and disagrees outside it.
+- `rot_mod` is loaded with `movswl`, so the test is signed and a negative
+  modulus makes it always true.
+- The quadrant is masked as a 32-bit value and truncated to a `short` only for
+  the *next* symbol; the index is formed from the untruncated one, so the two
+  disagree above bit 15.
+
+The write index wraps on `widx + 1 < len` tested AFTER the store, so a `widx`
+seeded at or past `len` puts one symbol out of range and snaps to 0 for the
+next -- one write past the end, not a run of them.
+
+`SMCv22_CFG` leaves the rotation inert: `rot_step` is 0, so `acc` never moves
+from whatever `FPM_SMC_init` left (0), and `rot_mod` of 16 only wraps the sum.
+The mechanism exists for a modulator whose carrier advances a whole number of
+constellation steps per symbol.
+
+`FPM_SMC_init` is `cld; rep movsl` with `ecx = 11` -- a 44-byte struct
+assignment -- followed by two 16-bit zero stores, which is what fixes the
+object at 0x30 bytes with `quad` at `+0x2c` and `acc` at `+0x2e`.
+
+### 1522. WHAT SELECTS THE 2400 bit/s MAPS: `SetTxRate`, AND IT PATCHES THE OTHER OBJECT
+
+`SMCv22_CFG` names `SMCv22_IMAP_1200BPS` and `SMCv22_QMAP_1200BPS` and there
+is no relocation anywhere pointing a config at the 2400 pair. The switch is
+`SetTxRate` at `.text 0x08e120`, 205 bytes, `SetTxRate(modem, rate)` with
+`rate` 0 for 1200 bit/s and 1 for 2400 and an early `ret` for anything else.
+It reaches the V.22 state block through `modem->0x54` and writes, at 1200 /
+2400 respectively:
+
+    v22+0x28  0  / -        rate flag V22FP_create reads back
+    v22+0x30  2  / 4        SDM tx object +0x00, nbits
+    v22+0x38  3  / 15       SDM tx object +0x08, mask
+    v22+0x3c  -4 / -16      SDM tx object +0x0c, notmask
+    v22+0x40  0  / 0        SDM tx object +0x10, register cleared
+    v22+0x44  tap1 - nbits  SDM tx object +0x14
+    v22+0x46  tap2 - nbits  SDM tx object +0x16
+    v22+0x54  0  / 2        SMC object +0x0c, qshift
+    v22+0x58  0  / 3        SMC object +0x10, amask
+    v22+0x98  IMAP_1200 / IMAP_2400     PPS filter object +0x20
+    v22+0x9c  QMAP_1200 / QMAP_2400     PPS filter object +0x24
+
+The object bases are read off the callers: `ScrambleDataV22` passes
+`v22+0x30`, `DescrambleDataV22` passes `v22+0x1cc`, `ModDataV22` passes
+`v22+0x48` to `FPM_SMC_encoder` and `v22+0x78` to `V22_PPS_filter`, both with
+`v22+0xa0` as the shared symbol ring. So `0x98`/`0x9c` are `PPS+0x20`/`+0x24`,
+which `V22_PPS_filter` loads in its prologue at `0x8d3de`/`0x8d3e8`.
+
+**The point worth recording is which object does NOT get patched.** The SMC
+object's own `imap`/`qmap` at `smc+0x18`/`+0x1c`, filled from `SMCv22_CFG` by
+`FPM_SMC_init`, stay on the 1200 bit/s pair for the life of the connection
+whatever the rate. Nothing reads them; the pulse-shaping filter keeps its own
+copy of the pointers and that is the copy the rate switch moves.
+
+`SetTxRate` also *inlines* `FPM_SDM_init`'s arithmetic -- it recomputes mask,
+notmask and both biased shifts from the new `nbits` rather than calling init
+-- which is an independent confirmation of the `struct fpm_sdm` layout in
+1520, arrived at from a different function.
+
+The 1200/2400 split for the scrambler is made once more, elsewhere:
+`V22FP_create+0x3ca..+0x411` copies `SDMv22_CFG` onto the stack (as
+dword-plus-word, which is what says the config is a 6-byte struct and not
+three scalars), overwrites `nbits` with 2 or 4 according to `v22->0x28`, and
+calls `FPM_SDM_init`. The taps are the only part of `SDMv22_CFG` that never
+varies.
+
+### 1523. THE V.22 TRANSMIT MAPS ARE V.22bis TABLES 1 AND 2 SCALED BY 8192
+
+Every coordinate in the four I/Q maps is 8192 or 24576, signed -- 1 and 3 in
+units of 8192, which is ITU-T V.22bis Table 2's odd coordinates verbatim.
+Read as (I, Q) pairs the 2400 bit/s maps are
+
+    index 0..3    (1,1) (3,1) (1,3) (3,3)              first quadrant
+    index 4..7    (-1,1) (-1,3) (-3,1) (-3,3)          each group the
+    index 8..11   (-1,-1) (-3,-1) (-1,-3) (-3,-3)      previous one turned
+    index 12..15  (1,-1) (1,-3) (3,-1) (3,-3)          90 degrees
+
+so `(I, Q) -> (-Q, I)` holds across every group of four, which `t_fpm_smc`
+asserts as a property rather than as bytes.
+
+The 1200 bit/s maps carry `(3,1)` and its three rotations, **each replicated
+four times**. That is not redundancy: at 1200 bit/s `amask` is 0, so bits 0..1
+of the index are always clear and only 0, 4, 8 and 12 are ever formed. The
+replication lets one 16-entry table serve an index that steps in fours and one
+that does not, and it is why the same map shape works for both rates.
+
+`SMCv22_PMAP` is `{4, 0, 8, 12}` -- V.22bis Table 1, dibit to quadrant change,
+in the same quarter-quadrant units: 00 -> +90, 01 -> 0, 10 -> +180,
+11 -> +270 degrees.
+
+The closed form of the 8192 scale is deferred with every other coefficient
+derivation; `t_fpm_smc` proves the bytes.
+
+### 1524. `relocscan.py` CALLS A REFERENCED OBJECT "unreferenced" WHEN THE RELOCATION NAMES A SYMBOL
+
+`relocscan.py --into SMCv22` reports all six `SMCv22_*` objects as
+`unreferenced`, and `--at .rodata:0x8de0` reports "(nothing points there)" for
+`SMCv22_PMAP`. Both are wrong: `readelf -rW` shows twenty-four relocations
+naming those six objects, three of them from inside `SMCv22_CFG` itself.
+
+The cause is the filter at line 67 of the tool -- it keeps only relocations
+**against a section symbol**, because resolving a section-plus-addend to a
+name is the problem it was written for (finding 604). A relocation against a
+GLOBAL symbol already carries the name and is discarded, so every reference to
+a global becomes invisible. `dsplibs.o` has 10,514 `R_386_32` relocations of
+which 6,794 are against a section symbol; the other 3,720 are the blind spot.
+
+This is finding 134's argument again, and the same shape as the four broken
+versions of `extcheck` that printed "(none)": the tool has no way to say "I do
+not model this kind of reference", so absence of evidence prints as evidence
+of absence. **Nothing may conclude "unreferenced" from `relocscan` alone.**
+Cross-check with `readelf -rW | grep <name>` before believing it.
+
+Not fixed here: the tool is used by other sessions in flight and a behaviour
+change to it belongs in its own commit.
+
+### 1525. A `*/` INSIDE A COMMENT, AND THE GATE THAT CAUGHT IT
+
+`include/dsplib/fpm_smc.h` opened with a paragraph naming the four maps as
+`SMCv22_IMAP_*/SMCv22_QMAP_*`. The `*/` in the middle of that closed the
+block comment, so the rest of the paragraph became declarations and the header
+did not compile -- and the way it surfaced is worth recording, because it was
+not as a compile error.
+
+`make one` failed at `offsets`, two lines:
+
+      MISMATCH  struct fpm_smc.quad says +0x2c
+      MISMATCH  struct fpm_smc.acc says +0x2e
+
+which reads exactly like a struct laid out wrong, and sent the first minute of
+diagnosis at the config's size rather than at a comment. `offcheck.py`
+compiles a generated translation unit that includes every header; a header
+that does not parse produces mismatches, not a build failure, because the tool
+reports what it could not confirm rather than what it could not compile.
+
+Two things follow. The annotation gate is load-bearing beyond its stated job:
+it is the only check in the tree that reads every header for meaning rather
+than for symbols. And a `MISMATCH` from it means "this claim is unconfirmed",
+which includes "the header is not valid C" -- so `gcc -m32 -Iinclude
+-fsyntax-only` on the header itself is the first thing to try, not the last.
