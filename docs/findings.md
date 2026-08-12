@@ -50332,3 +50332,154 @@ exported precisely for that — but the tools it invokes each carry their own
 copy of the relative default, and each one is a separate place for the
 accommodation to be incomplete. `debugaudit.py` and `coverage.py` were fixed;
 this is the failure mode when the export does not happen.
+======================================================================
+
+### 1540. `V22_MRF` IS NOT `FPM_MRF`: THE SAME FOUR STATE WORDS, EIGHT BYTES EARLIER
+
+*Phase 6 (V.22/V.22bis), `v22_mrf.c` — the author's translation-unit name,
+recovered from the FILE symbol at index 480. Written, tested and committed as
+`src/pump/v22/v22_mrf.c`.*
+
+The tree already had `struct fpm_mrf`, and the two look alike enough to be
+worth settling before a line was written: `need`, `phase`, `widx`,
+`history_len`, `history` in that order in both, `_init`/`_free`/`_filter` in
+both, a polyphase resampler in both. **They are different types**, and sharing
+one would have mis-offset every field by eight bytes.
+
+The evidence is the configuration in front of the state words.
+`V22_MRF_init` (0x8d060) copies exactly two dwords —
+
+	8d080: mov 0x4(%esi),%edx        8d08d: mov %edx,0x4(%edi)
+	8d083: mov (%esi),%ecx           8d090: mov %ecx,(%edi)
+
+— and then writes `need` to +0x08 and `history_len` to +0x0e, where
+`FPM_MRF_init` copies sixteen bytes and writes them to +0x10 and +0x16.
+`V22_MRF_free` (0x8d150) frees +0x10; `FPM_MRF_free` frees +0x18. So
+`sizeof` is 20 against 28, and `V22_MRF_CFG` being an 8-byte OBJECT in the
+symbol table confirms the configuration's size independently of the code.
+
+The reason for the split is that **every ratio `fpm_mrf` reads out of its
+configuration is a literal here**: 9 and 20 in the phase update
+(`lea 0x14(%edi),%ebx`, `cmp $0x8,%di`, `lea -0x9(%edi),%edx`), 30 in the tap
+loop (`cmp $0x1d,%cx`), 30 and 60 in the buffer management (`sub $0x1e`,
+`cmp $0x3c`), and 30 again in init's `movw $0x1e,0xe(%edi)`. What is left to
+configure is the coefficient pointer and one dword nothing reads, which is
+exactly what the 8-byte `struct v22_mrf_cfg` holds.
+
+Two behavioural differences follow from the same specialisation, and both are
+in `include/dsplib/v22_mrf.h`: init has two paths rather than three (no
+too-small check, no `Reallocate` message, no free), and the history is a
+60-entry SLIDING buffer rather than a 30-entry circular one — see 1543.
+
+======================================================================
+
+### 1541. `V22_MRF_init` REWRITES ITS COEFFICIENT ARRAY IN PLACE, AND `V22_MRF_CFG` IS NEVER WRITTEN BY ANYTHING
+
+*Same session. Two facts that only make sense together.*
+
+**The permutation.** The second half of `V22_MRF_init` is two loops nobody
+would expect in an initialiser. It walks the array at `state->cfg.coeff`
+(`mov (%edi),%ecx` at 0x8d0ce) into a 540-byte stack buffer and copies it
+straight back:
+
+	for (j = 261; j <= 269; j++)
+	    for (i = j; i >= 0; i -= 9)
+	        work[k++] = coeff[i];
+	for (i = 0; i <= 269; i++)
+	    coeff[i] = work[i];
+
+which is, in closed form,
+
+	after[p * 30 + t]  =  before[9 * (29 - t) + p]      p 0..8, t 0..29
+
+— natural impulse-response order in, nine contiguous phases of thirty taps
+out, each phase reversed in time. That is what lets `V22_MRF_filter` run an
+output as one contiguous dot product with the oldest sample first.
+
+It is done through the caller's pointer, so **`coeff` cannot be `const`**, and
+`MRFv22_COFFS` — which is in `.rodata` — can never be the array passed in. It
+is not: `V22FP_create` at 0x87ef0 multiplies `MRFv22_COFFS[i]` by
+`FPM_TONE_generate2`'s output, shifts right by 14, and stores the product into
+a heap buffer at `modem->0x1e4`, which is what it hands to init. The
+permutation is therefore also not idempotent-safe by accident — the original
+gets away with re-initialising because it regenerates the buffer immediately
+before every call.
+
+**`V22_MRF_CFG`.** It is an 8-byte GLOBAL OBJECT at `.bss:0x6a0`, so
+zero-initialised, and the question was who fills it in at run time. **Nothing
+does.** Its only two references in the whole object are a pair of *loads*, at
+0x87f3a and 0x87f3f, which copy both dwords to `V22FP_create`'s stack and then
+overwrite the first with `modem->0x1e4` before calling init. So both members
+are read as zero on every call the object can make, and the second dword —
+copied into the state by init and read by nothing, ever — has no evidence for
+its type at all. The header says so rather than guessing.
+
+**A note on `relocscan.py`, because this nearly went in as a wrong finding.**
+`relocscan.py --into V22_MRF_CFG`, `--at .bss:0x6a0` and `--range` all report
+`unreferenced`, and `objdump -rj .text` shows the two `R_386_32` relocations
+plainly. The tool scans data sections for pointers *between* objects; it does
+not report references from `.text`. It is the right tool for "what does this
+table point at" and the wrong one for "who uses this object". `--into` printing
+`unreferenced` for something with two relocations against it is a silent
+false negative, so check with `objdump -r` before concluding a symbol is dead.
+
+======================================================================
+
+### 1542. THE RATIOS: 9:20 FOR THE V.22 MRF, AND THE `.rodata` PROTOTYPE IS NOT THE FILTER THAT RUNS
+
+*Same session. What the coefficient tables encode, which the brief asked for.*
+
+`MRFv22_COFFS` is 270 `short`s and reads, in natural order, as one symmetric
+lowpass impulse response — palindromic about the pair at [134] and [135],
+peak 10239, first zero crossing near [78]. 270 = 9 phases x 30 taps, and the
+filter's phase update settles which is which:
+
+	phase += 20;  need = 0;
+	while (phase >= 9) { phase -= 9; need++; }
+
+so the interpolation factor is **9**, the decimation factor is **20**, and
+each output consumes 20/9 = 2.22 inputs on average — `need` alternating 2, 2,
+3. Driven at the datapump's 8000 samples/s that puts the output at **3600**,
+six samples per 600-baud V.22 symbol. (The 9:20 and the 30-tap phase are hard
+evidence from the literals; the 8000 and the 600 baud are inference from the
+datapump interface rate.)
+
+The prototype's cutoff looks too low for a 2400 Hz answer-channel carrier, and
+the reason is that **the prototype is not the filter that runs**.
+`V22FP_create` multiplies it sample-by-sample by `FPM_TONE_generate2` before
+passing it to init (1541), so the coefficients in the buffer are the
+*modulated* set: the MRF resamples and downconverts in one pass, and the
+lowpass in `.rodata` is the baseband prototype of a bandpass filter that only
+exists at run time.
+
+`PPSv22_COFFS` is 120 `short`s and the same reading applies to it — 120 = 40
+phases x 3 taps, and `V22_PPS_init` permutes it by the same rule with 40 in
+place of 9. See 1544.
+
+======================================================================
+
+### 1543. THE V.22 MRF'S HISTORY IS A 60-ENTRY SLIDING BUFFER, NOT A RING — AND ITS STARTUP WINDOW IS WRONG
+
+*Same session. Recorded as D298.*
+
+`V22_MRF_init` mallocs a literal 0x78 = 120 bytes, which is 60 `short`s, while
+`history_len` is 30 and the zeroing loop clears only 30. The extra half is not
+slack: samples are appended at `widx` with no wrap at all, and when an append
+would run past 60 the object memcpys the upper 30 entries down over the lower
+and drops `widx` by 30 (0x8d2f4 and 0x8d382, both `memcpy(h, h + 30, 60)`).
+So the newest 30 samples are always contiguous and the convolution is a
+straight `for (k = 0; k < 30; k++)` with no second loop — where `fpm_mrf`,
+with a 30-entry ring, needs two loops and a wrap.
+
+The cost is the startup case. While `widx < history_len` the object convolves
+`history[0 .. 29]` instead of `history[widx - 30 .. widx - 1]`, which reads
+only zeroed memory but puts the newest samples at the *front* of the window,
+weighted by the oldest taps of the phase. It fires for the first thirteen
+outputs of a stream and then never again. `fpm_mrf` does not have this — its
+ring wraps correctly — so it is specific to the V.22 copy and a consequence of
+the sliding buffer. Reproduced; D298 carries the reachability.
+
+`t_v22_mrf.c` compares from the first output for exactly this reason, and
+compares `history[0 .. widx - 1]` by content after every call, since a
+one-entry error in the slide would otherwise surface only as an output
+difference several samples later.
