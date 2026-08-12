@@ -29,6 +29,18 @@ ROOT=${ROOT:-/home/philpem/dev/D-Modem-fork}
 # for an ordinary run.
 #
 SLMODEMD=${SLMODEMD:-$ROOT/slmodemd/slmodemd}
+# HOLD DEFAULTS TO SIXTY SECONDS, and it is not politeness to the modem.
+#
+# Finding 1902: four of six ninety-second calls ended at roughly DOUBLE the
+# rate they reported at CONNECT -- 16800, 19200, 21600, 24000 against 12000 --
+# with the far end's ATI11 confirming the final figure every time.  The first
+# renegotiation lands anywhere from +23 s to +91 s.  This bench used to tear
+# calls down about 17.5 s after CONNECT, so it saw almost none of that, and
+# every rate it has ever recorded is a lower bound of unknown tightness
+# (which limits findings 1466 and 1476).
+#
+# `HOLD=0` restores the old behaviour for a test that genuinely wants a short
+# call -- but a rate measurement is not one of those.
 BENCH=/home/philpem/dev/sip-D-modem/testbench
 . "$BENCH/modems.sh"
 # `supra` is the SupraExpress 56e PRO on ext 1901, `courier` the USR on 1902.
@@ -201,7 +213,7 @@ echo "=== call: $WHO originates, dialling $DIAL"
 python3 "$BENCH/call.py" --tty "$TTY" --pty "$PTY" \
 	--originator "$WHO" --dial "$DIAL" --log "$LOG.call.log" \
 	--tty-extra "$TTY_EXTRA" --pty-extra "${PTY_EXTRA:-}" \
-	--tty-retrain "${TTY_RETRAIN:-0}" ${HOLD:+--hold "$HOLD"}
+	--tty-retrain "${TTY_RETRAIN:-0}" --hold "${HOLD:-60}"
 CALLRC=$?
 [ "$CALLRC" -ne 0 ] && echo "=== call.py exited $CALLRC"
 
