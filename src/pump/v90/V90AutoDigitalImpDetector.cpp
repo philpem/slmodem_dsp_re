@@ -154,6 +154,24 @@ ADID_OFF(neighborUcodeMaxDistance, 0xa9ae, neighborucodemax);
  */
 ADID_OFF(unSuspectedPhase, 0xa968, unsuspectedphase);
 
+/*
+ * THE TWO THE PAD-GAIN BATCH ADDS, and they are the last two gaps outside the
+ * sample store.  No test in this tree can see either -- the first is a byte in
+ * a two-byte `pad_` region and the second is four bytes nothing else reads --
+ * so the disassembly is the whole of the evidence, which is finding 1360's
+ * situation exactly.
+ *
+ * +0xa954  `movzbl 0xa954(%esi)` at 0x4363e and `cmpb $0x3f,0xa954(%esi)` at
+ *          0x43801 in findPadGain, `mov %bl,0xa954(%ebp)` at 0x4449f in
+ *          determineMaxUcode -- seven accesses, all eight bits and all
+ *          unsigned, so one byte and not the two the region held.
+ * +0xa960  `mov %ecx,0xa960(%esi)` at 0x43e93 and `mov %edi,0xa960(%esi)` at
+ *          0x440c4 in findPadGain -- 32-bit stores of 0 and 1, which is what
+ *          makes the whole four-byte region one `int`.
+ */
+ADID_OFF(byte_a954,    0xa954, bytea954);
+ADID_OFF(int_a960,     0xa960, inta960);
+
 typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
 
 #endif /* 32-bit */
@@ -1788,4 +1806,630 @@ V90AutoDigitalImpDetector::setQcLinearMapping()
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("------------------------------------"
 				     "------------------\r\n");
+}
+
+/*
+ * ==========================================================================
+ * THE PAD-GAIN BATCH: `determineMaxUcode` and `findPadGain`.
+ *
+ * WHAT THE TWO ARE FOR, AND WHY THEY ARE ONE READING.  By this point the
+ * class knows, for every RBS phase and every seven-bit code, how noisy that
+ * cell's measured mapping is -- `float_9d48`, which the object's own format
+ * string calls `linearMappingVar`.  `determineMaxUcode` turns that into two
+ * answers: a per-cell "is this code usable" mask in `byte_0d00`, and the
+ * highest usable code for each phase in `maxUcode[6]`, both hung off one
+ * scalar at +0xa954 that it also leaves behind.  `findPadGain` then starts
+ * from that scalar, assumes a pad in the line, and searches for the gain that
+ * makes the reference phase's mapping come back through a companding law
+ * unchanged -- storing the winner in `padGain`, which is the only thing that
+ * ever makes `applyPadGainToLinMapp`'s division do anything, because `reset`
+ * seeds the gain with 1.0f.
+ *
+ * SO +0x0d00 IS DECIDABLE HERE and nowhere else: `determineMaxUcode` is the
+ * only member besides `reset` that touches it, and it both fills it and reads
+ * it back in the same call.  Finding 1435.
+ *
+ * THE UNORDERED COMPARE IS THE WHOLE OF THE CARE THESE TWO NEED.  Every
+ * floating-point branch in both methods is an `fcom`, and an unordered
+ * compare sets CF and ZF -- so wherever the object skips on `jae` a NaN does
+ * NOT skip, wherever it takes on `jb` a NaN DOES take, and wherever it tests
+ * with `je` a NaN compares EQUAL.  The first two are written as the negation
+ * of the ordered test, which is what the branch encodes.  The third has no C
+ * spelling at all -- `v == 0.0f` is false for a NaN in C and the object's
+ * `fcomp`/`je` takes it -- so that one site says so with `__builtin_isnan`.
+ * A seeded `float_9d48` reaches all three: one 32-bit pattern in 128 is a
+ * NaN.  Finding 1436.
+ *
+ * THREE OF THE LOCALS HERE ARE `volatile`, AND IT IS NOT A HINT.  The object
+ * is `-mfpmath=387` and this tree is deliberately not `-ffloat-store`, so a
+ * `float` local lives in an x87 register at 64 bits of significand until
+ * something makes it spill -- and the value the ORIGINAL goes on to use is
+ * whichever of the two its own compiler happened to leave in reach.  Where
+ * the object stored a float and read it back, reproducing the ROUNDING is not
+ * optional: `determineMaxUcode`'s threshold at twenty variances of 1e9 is
+ * 1000000014.9 unrounded and 1000000000 rounded, and it prints the number.
+ * Measured, not assumed -- `volatile` was added to exactly the three locals
+ * whose transcripts disagreed and to no others, and each names the object's
+ * store below.  Finding 1437.
+ * ==========================================================================
+ */
+
+/*
+ * Decide how far up the companding law each phase may be driven.
+ *
+ * FIVE STEPS, and the third is the one the method is named for:
+ *
+ *   1. a variance threshold, from the sum of |`linearMappingVar`| over codes
+ *      40..59 of the reference phase, scaled by `float_a980` and by 0.05f,
+ *      which is the 1/20 of the twenty entries written out;
+ *   2. two reports of that threshold, either side of a clamp into
+ *      [500, 100000];
+ *   3. a scan DOWNWARDS from the argument for the first window of five
+ *      adjacent codes containing more than two "small but not zero"
+ *      variances, whose top becomes `byte_a954`, floored at `short_a97a`;
+ *   4. `byte_0d00[phase][code]` set to 1 exactly where the code is within the
+ *      argument's reach and the variance is under twice the threshold;
+ *   5. `maxUcode[phase]` read back out of that mask.
+ *
+ * THE SECOND REPORT'S SIGN TEST IS THE ORDERED ONE.  The first prints through
+ * the class's usual `fldz`/`fcomps`/`sbb` idiom, where an unordered compare
+ * yields '+' (ADID_PRINT_SIGN); the second is `flds`/`fcomps 0.0f`/`ja` at
+ * 0x44347, which yields '-'.  The clamp between them leaves the threshold in
+ * [500, 100000], so no reachable value separates the two spellings -- but
+ * they are different instructions and this is written as the one the object
+ * has.
+ *
+ * THE REPORT HEADER IS HANDED THREE ARGUMENTS IT HAS NO CONVERSIONS FOR.
+ * "linearMappingVar report:" contains no `%`, and the object still stores
+ * `unSuspectedPhase`, `short_a97a + 1` and the argument into the outgoing
+ * argument slots at 0x44373, 0x4437f and 0x44391 before the call.  GCC does
+ * not emit dead stores into an argument area, so they are the call's and they
+ * are written; no transcript can see the difference, so the disassembly is
+ * the whole of the evidence for this one.
+ *
+ * THREE OF THE INDICES ARE UNBOUNDED -- docs/deviations.md D288 for the two
+ * loops the argument drives off the end of the row, D289 for the backwards
+ * walk that can never terminate.
+ */
+void
+V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
+{
+	/* `fsts 0x1c(%esp)` at 0x4424b, reloaded with `flds` eight times. */
+	volatile float varThresh;
+	int origWhole;
+	unsigned char minU = (unsigned char)short_a97a;
+	unsigned char mu;
+	unsigned char at;
+	unsigned char phase;
+	unsigned char k;
+	unsigned char ci;
+
+	{
+		/*
+		 * Twenty entries, codes 40..59 of the reference phase: the
+		 * object counts a byte down from 0x13 and walks a pointer up
+		 * from +0x9de8, which is entry 40 of the row.  The running
+		 * total stays in %st(1) for the whole loop, so it accumulates
+		 * at extended precision and rounds once -- which is why the
+		 * Makefile is deliberately not -ffloat-store.
+		 */
+		float sum = 0.0f;
+		float product;
+		short i;
+
+		for (i = 40; i <= 59; i++)
+			sum += __builtin_fabsf(
+			    float_9d48[unSuspectedPhase][i]);
+
+		/*
+		 * AND THE FIRST REPORT PRINTS THE PRODUCT AT BOTH PRECISIONS
+		 * AT ONCE.  The object stores the float at 0x4424b and then
+		 * takes `fabs` of the value STILL IN %st(0) -- the unrounded
+		 * one -- while the sign, the truncation and the fractional
+		 * part all come from `flds 0x1c(%esp)`, the rounded one.  At a
+		 * threshold of 1000000014.9 that is "1000000014.00" against
+		 * "1000000000.00", so the split is printed and has to be
+		 * written.  Everything from the clamp onwards uses the rounded
+		 * value alone.  Finding 1437.
+		 */
+		product = sum * float_a980 * 0.05f;
+		origWhole = ADID_PRINT_WHOLE(product);
+		varThresh = product;
+	}
+
+	edprintf("V90AutoDigitalImpDetector: original varThresh = %c%d.%02d\r\n",
+		 ADID_PRINT_SIGN(varThresh), origWhole,
+		 ADID_PRINT_FRAC(varThresh, 100.0f));
+
+	/*
+	 * Both tests are the object's `jae` and `jbe`, so a NaN threshold
+	 * fails the first and comes out as 500 -- which is what leaves the
+	 * ordered sign test below unreachable on anything but a real number.
+	 */
+	if (!(varThresh >= 500.0f))
+		varThresh = 500.0f;
+	else if (!(varThresh <= 100000.0f))
+		varThresh = 100000.0f;
+
+	edprintf("V90AutoDigitalImpDetector: final varThresh = %c%d.%02d\r\n",
+		 varThresh > 0.0f ? '+' : '-', ADID_PRINT_WHOLE(varThresh),
+		 ADID_PRINT_FRAC(varThresh, 100.0f));
+
+	edprintf("--------------------------------------------------------\r\n");
+	edprintf("V90AutoDigitalImpDetector: linearMappingVar report:\r\n",
+		 unSuspectedPhase, short_a97a + 1, maxCode);
+
+	/*
+	 * A BYTE COUNTER AGAINST A SIGNED INT BOUND.  `k` is zero-extended for
+	 * the compare, so a `maxCode` of 255 or more never ends the loop --
+	 * the counter wraps to 0 and 0 is still under the bound -- and a
+	 * negative one skips it entirely.  D288.
+	 */
+	for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)
+		edprintf("linearMappingVar[%d][%d] = %d\r\n", unSuspectedPhase,
+			 k, adid_abs((int)float_9d48[unSuspectedPhase][k]));
+
+	edprintf("--------------------------------------------------------\r\n");
+
+	/*
+	 * The scan.  Five adjacent codes ending at `ci`, and the answer is the
+	 * top of the first window in which more than two of them have a
+	 * variance that is small and not zero.  What is stored is the top
+	 * MINUS the offset of the first qualifying entry, so it is the highest
+	 * code that actually qualified and not the window's top.
+	 *
+	 * `ci` and the window offsets are bytes and the row is 128 wide, so
+	 * the window reads outside the reference phase's row at both ends --
+	 * D288.
+	 */
+	at = minU;
+
+	for (ci = (unsigned char)maxCode; ci > minU; ci--) {
+		unsigned char first = 0;
+		unsigned char n = 0;
+		unsigned char d;
+
+		for (d = 0; d <= 4; d++) {
+			float v = float_9d48[unSuspectedPhase][ci - d];
+
+			if (v >= varThresh)
+				continue;
+			/*
+			 * THE OBJECT'S ZERO TEST TAKES A NaN.  `fcomp %st(1)`
+			 * against the zero it has kept on the stack since
+			 * 0x4443c, then `je` -- and an unordered compare sets
+			 * C3, so ZF is set and the entry is skipped.  C's
+			 * `v == 0.0f` is false for a NaN, so the disjunction
+			 * is what the branch actually encodes.  Finding 1436.
+			 */
+			if (v == 0.0f || __builtin_isnan(v))
+				continue;
+
+			if (n == 0)
+				first = d;
+			n++;
+		}
+
+		if (n > 2) {
+			at = (unsigned char)(ci - first);
+			break;
+		}
+	}
+
+	byte_a954 = at;
+
+	/*
+	 * The floor.  The compare is signed and against the whole `short`, so
+	 * a `short_a97a` above 255 forces the byte every time.
+	 */
+	mu = byte_a954;
+
+	if ((int)mu < (int)short_a97a) {
+		edprintf("V90AutoDigitalImpDetector: original maxUcode = %d  "
+			 "forced minimum maxUcode = %d\n", mu, short_a97a);
+		byte_a954 = (unsigned char)short_a97a;
+		mu = (unsigned char)short_a97a;
+	}
+
+	/*
+	 * The usability mask.  The per-phase test is loop-invariant and GCC
+	 * unswitched it -- which is why a flagged phase still spends 128
+	 * iterations doing nothing at 0x44560, an empty `inc`/`jns` spin -- so
+	 * it is written where the object's source had it and not where the
+	 * object's code has it.
+	 *
+	 * THE REFERENCE CODE IS FORCED BACK TO 1 AFTERWARDS, for every phase
+	 * and whatever the variance said, and `ucode` is a byte the object
+	 * never masks: a reference code of 128 or more marks a cell in the
+	 * next phase's row.  docs/deviations.md D289.
+	 */
+	{
+		float lim = varThresh + varThresh;
+		unsigned char ref = ucode;
+
+		for (phase = 0; phase < V90ADID_PHASES; phase++) {
+			unsigned char code;
+
+			for (code = 0; code < V90ADID_CODES; code++) {
+				if (short_2800[phase] != 0)
+					continue;
+
+				if ((int)code > (int)maxCode)
+					byte_0d00[phase][code] = 0;
+				else if (__builtin_fabsf(float_9d48[phase][code])
+					 >= lim)
+					byte_0d00[phase][code] = 0;
+				else
+					byte_0d00[phase][code] = 1;
+			}
+
+			byte_0d00[phase][ref] = 1;
+		}
+	}
+
+	/*
+	 * And the read-back.  An unflagged phase takes the scan's answer and
+	 * then walks DOWNWARDS until it finds a usable code; a flagged one
+	 * takes the answer clamped to two below the argument, and never looks
+	 * at the mask at all.
+	 *
+	 * THE WALK HAS NO FLOOR.  It decrements a byte, so it wraps at 0 into
+	 * the previous 128 indices -- which for phases 0..4 is the next
+	 * phase's row and for phase 5 is the start of `float_1000`, both
+	 * inside the object -- and if all 256 of those bytes are zero it never
+	 * ends.  docs/deviations.md D289.
+	 */
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		unsigned char m = byte_a954;
+
+		if (short_2800[phase] == 0) {
+			maxUcode[phase] = m;
+
+			if (byte_0d00[phase][m] == 0) {
+				unsigned char d = m;
+
+				do {
+					d--;
+				} while (byte_0d00[phase][d] == 0);
+
+				maxUcode[phase] = d;
+			}
+		} else if ((int)m <= (int)maxCode - 2) {
+			maxUcode[phase] = m;
+		} else {
+			maxUcode[phase] = (unsigned char)(maxCode - 2);
+		}
+
+		edprintf("V90AutoDigitalImpDetector: phase %d maxUcode is %d\r\n",
+			 phase, maxUcode[phase]);
+	}
+}
+
+/*
+ * Find the gain of the pad in the line, and which companding law is on the
+ * other end of it.
+ *
+ * THE IDEA.  If the network puts a pad -- a fixed attenuation -- between the
+ * digital source and this modem, every level the modem measures is the
+ * transmitted level divided by that gain.  So: pick a code, ASSUME its
+ * measured level is really the level of some OTHER code sent at full scale,
+ * and the ratio of the two is a candidate gain.  Divide the reference phase's
+ * whole mapping by that candidate, push each entry through the companding law
+ * and straight back again, and add up the squares of what does not survive
+ * the round trip.  The right gain is the one whose codes land on codec levels,
+ * so it is the one with the smallest error.  Do the whole thing twice, once
+ * per law, and the smaller of the two errors names the law as well.
+ *
+ * FOUR THINGS ABOUT IT ARE WORTH KNOWING BEFORE READING IT.
+ *
+ * THE SEARCH FOR THE STARTING CODE IS FIVE ENTRIES WIDE AND ITS RESULT IS
+ * THEN CLAMPED INTO SIXTEEN.  `projectionBaseUcode` is the code with the
+ * smallest variance among the five ending at `byte_a954 - 3`, and it is then
+ * forced into [0x50, 0x5f] -- so the search only shows through the clamp, and
+ * only when it lands inside that window.  Both names are the object's own:
+ * it prints them as "projectionBaseUcode" and "minUcodeForCodecProjection".
+ *
+ * THE ERRORS ARE BUCKETED BY GAIN, THREE WAYS, AND THE BUCKETS ARE NOT
+ * SYMMETRIC.  A candidate above 2.7 goes in one bucket, one below 1.2 in
+ * another -- but only for A-law -- and everything else in a third.  The
+ * best-of-three then prefers the middle bucket unless the high bucket beats
+ * it by a fifth (0.8f), and A-law additionally falls back to a gain of
+ * exactly 1.0f if the low bucket beats the answer by 0.15 (0.85f).  So
+ * "no pad at all" is a hypothesis the method holds separately and only for
+ * one of the two laws.
+ *
+ * THE LOW BUCKET KEEPS NO GAIN.  There are five slots and not six: the
+ * fallback it feeds is the constant 1.0f, so the candidate that filled it is
+ * never needed.
+ *
+ * `bestAt` IS READ UNINITIALISED IF NOTHING EVER WINS.  The running minimum
+ * starts at 1e8 and the five entries are compared against it with the
+ * object's `jb` -- so five variances of 1e8 or more, with no NaN among them,
+ * leave the object taking `projectionBaseUcode` off a stack slot it never
+ * wrote.  It is left uninitialised here for D281's reason and the test is
+ * constructed to keep off it.  docs/deviations.md D290, which is also where
+ * the two ways this method fails to terminate are written down.
+ */
+void
+V90AutoDigitalImpDetector::findPadGain()
+{
+	unsigned char base;		/* the object's projectionBaseUcode */
+	unsigned char minU;		/* minUcodeForCodecProjection */
+	unsigned char aCode, uCode;
+	unsigned char codec;
+	float minErrorMuLaw, gainValueMuLaw;
+	float minErrorALaw, gainValueALaw;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------------------------"
+				     "-\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90AutoDigitalImpDetector::findPadGain()"
+				     " Report :\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------------------------"
+				     "-\r\n");
+
+	{
+		/*
+		 * Five codes ending at `byte_a954 - 3`, and the one with the
+		 * smallest variance wins.  Every index is a BYTE, recomputed
+		 * from the counter rather than walked as a pointer -- 0x43674
+		 * forms the address afresh each pass -- so a counter that
+		 * wraps at zero reads entry 255 of the row and not the entry
+		 * in front of it.
+		 *
+		 * The bound is `(int)start - 5` and the counter is compared
+		 * against it zero-extended with a SIGNED `jg`, so a `byte_a954`
+		 * of 3 to 7 inclusive makes the bound negative and the loop
+		 * never ends.  D290.
+		 */
+		float bestVar = 100000000.0f;
+		unsigned char bestAt;
+		unsigned char d = (unsigned char)(byte_a954 - 3);
+		int lim = (int)d - 5;
+
+		do {
+			float v = float_9d48[unSuspectedPhase][d];
+
+			/* `jb` takes an unordered compare -- finding 1436. */
+			if (!(v >= bestVar)) {
+				bestVar = v;
+				bestAt = d;
+			}
+			d--;
+		} while ((int)d > lim);
+
+		base = bestAt;
+	}
+
+	if (base > 0x5f)
+		base = 0x5f;
+	else if (base < 0x50)
+		base = 0x50;
+
+	/*
+	 * The two companded spellings of the base code, formed once: the
+	 * sign/company bits are supplied exactly as `reset` supplies them,
+	 * `^ 0xd5` for A-law and `~` -- which is `^ 0xff` on a byte -- for
+	 * mu-law.
+	 */
+	aCode = (unsigned char)((base & 0x7f) ^ 0xd5);
+	uCode = (unsigned char)~(base & 0x7f);
+
+	for (codec = 0; codec <= 1; codec++) {
+		/*
+		 * The three buckets and their two gains.  Five slots, reset
+		 * for each law: the low bucket's fallback is a constant, so it
+		 * needs no gain of its own.
+		 */
+		float errHigh = 1000000.0f, gainHigh = 1.0f;
+		float errMid = 1000000.0f, gainMid = 1.0f;
+		float errLow = 1000000.0f;
+		float scale = float_a97c;
+		unsigned char cur;
+
+		/*
+		 * The bottom of the candidate range: the base code's level cut
+		 * by `float_a97c`, companded back, and floored at 0x28.  The
+		 * object loads the scale before the call and spills it, which
+		 * is a spill and not an ordering the arithmetic depends on.
+		 */
+		if (codec != 0)
+			minU = (unsigned char)(
+			    linear2alaw(adid_abs((int)(alaw2linear(aCode)
+						       * scale))) ^ 0xd5);
+		else
+			minU = (unsigned char)~linear2ulaw(
+			    adid_abs((int)(ulaw2linear(uCode) * scale)));
+
+		if (minU <= 0x27)
+			minU = 0x28;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Codec type %d\r\n", codec);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("projectionBaseUcode = %d "
+					     "minUcodeForCodecProjection = "
+					     "%d\r\n", base, minU);
+
+		for (cur = minU; cur <= base; cur++) {
+			/*
+			 * `fstps 0x9c(%esp)` on every pass of the inner loop,
+			 * so the running total is rounded to a float 93 times
+			 * over and not accumulated at 64 bits.
+			 */
+			volatile float errSum = 0.0f;
+			float ref = (float)linMapp[unSuspectedPhase][base];
+			/*
+			 * `fstps 0x94(%esp)` at 0x437fa and `flds`/`fdivs`/
+			 * `fmuls` of that slot at every one of its six uses --
+			 * including the reciprocal, which the object forms
+			 * afresh inside the loop where a plain local lets the
+			 * compiler hoist it and round it once.
+			 */
+			volatile float gain;
+			float err;
+			int level;
+			unsigned char k;
+
+			if (codec != 0)
+				level = alaw2linear(
+				    (unsigned char)((cur & 0x7f) ^ 0xd5));
+			else
+				level = ulaw2linear(
+				    (unsigned char)((cur & 0x7f) ^ 0xff));
+
+			/*
+			 * The candidate.  `ulaw2linear(0xff)` is 0, so an
+			 * infinite or NaN gain is routine here and not exotic;
+			 * every comparison below is written for it.
+			 */
+			gain = ref / (float)level;
+
+			/*
+			 * The round trip, over codes 0x40 up to `byte_a954`.
+			 * The reciprocal is formed INSIDE the loop -- the
+			 * object issues `flds 1.0f` and `fdivs` on every pass
+			 * at 0x4382b -- and the projected level is stored
+			 * through a SIXTEEN-bit `fistps`, so a projection out
+			 * of a `short`'s range comes back as 0x8000 rather
+			 * than as the low half of a 32-bit conversion.
+			 */
+			for (k = 0x40; k <= byte_a954; k++) {
+				short proj = (short)(
+				    linMapp[unSuspectedPhase][k]
+				    * (1.0f / gain) + 0.5f);
+				short back;
+				float d;
+
+				if (codec != 0)
+					back = (short)alaw2linear(
+					    linear2alaw(proj));
+				else
+					back = (short)ulaw2linear(
+					    linear2ulaw(proj));
+
+				d = (float)(proj - back);
+				errSum += d * d;
+			}
+
+			err = gain * gain * errSum;
+
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("error = %d, gain = "
+						     "%c%d.%02d\r\n", (int)err,
+						     ADID_PRINT_SIGN(gain),
+						     ADID_PRINT_WHOLE(gain),
+						     ADID_PRINT_FRAC(gain,
+								     100.0f));
+
+			/*
+			 * The three buckets.  Each keeper is the negation of
+			 * an ordered `>=`, because the object guards it with
+			 * `jae` and an unordered compare does not take that
+			 * branch.  NOTHING SEPARATES THE TWO READINGS HERE and
+			 * the negation is written anyway: `err` is a product
+			 * of a finite gain and a sum of at most 93 squared
+			 * `short` differences, so it is never a NaN and never
+			 * an infinity, and the four `equivalent` verdicts in
+			 * test/mutations/v90adid.json carry the arithmetic.
+			 * The two bucket TESTS are ordered `>=` as they stand:
+			 * a NaN gain -- which needs a mapping this class
+			 * cannot produce -- would fall to the last arm for
+			 * A-law and to the middle one for mu-law, which is
+			 * where the object's `jb` and `jae` send it.
+			 */
+			if (gain >= 2.7f) {
+				if (!(err >= errHigh)) {
+					errHigh = err;
+					gainHigh = gain;
+				}
+			} else if (codec == 1 && !(gain >= 1.2f)) {
+				if (!(err >= errLow))
+					errLow = err;
+			} else {
+				if (!(err >= errMid)) {
+					errMid = err;
+					gainMid = gain;
+				}
+			}
+		}
+
+		/*
+		 * Best of the three.  The A-law pair doubles as the working
+		 * pair -- the object writes +0x90 and +0x98 on both passes and
+		 * copies them out to the mu-law pair only on the first, which
+		 * is why the A-law values are the ones still standing at the
+		 * print below.
+		 */
+		gainValueALaw = gainMid;
+		minErrorALaw = errMid;
+
+		if (errMid * 0.8f > errHigh) {
+			gainValueALaw = gainHigh;
+			minErrorALaw = errHigh;
+		}
+
+		if (codec == 0) {
+			gainValueMuLaw = gainValueALaw;
+			minErrorMuLaw = minErrorALaw;
+		} else if (!(errLow * 0.85f >= minErrorALaw)) {
+			gainValueALaw = 1.0f;
+			minErrorALaw = errLow;
+		}
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------ Final conclusions -------\r\n");
+
+	/*
+	 * Four reports, and the scale is a DOUBLE at all four -- `.rodata.cst8`
+	 * +0xf0 and +0xf8, where `determineMaxUcode` above uses the float at
+	 * `.rodata.cst4+0x390`.  Six fractional digits for a gain and two for
+	 * an error.
+	 */
+	edprintf("minErrorMuLaw = %c%d.%02d\r\n",
+		 ADID_PRINT_SIGN(minErrorMuLaw),
+		 ADID_PRINT_WHOLE(minErrorMuLaw),
+		 ADID_PRINT_FRAC(minErrorMuLaw, 100.0));
+	edprintf("gainValueMuLaw = %c%d.%06d\r\n",
+		 ADID_PRINT_SIGN(gainValueMuLaw),
+		 ADID_PRINT_WHOLE(gainValueMuLaw),
+		 ADID_PRINT_FRAC(gainValueMuLaw, 1000000.0));
+	edprintf("minErrorALaw = %c%d.%02d\r\n",
+		 ADID_PRINT_SIGN(minErrorALaw),
+		 ADID_PRINT_WHOLE(minErrorALaw),
+		 ADID_PRINT_FRAC(minErrorALaw, 100.0));
+	edprintf("gainValueALaw = %c%d.%06d\r\n",
+		 ADID_PRINT_SIGN(gainValueALaw),
+		 ADID_PRINT_WHOLE(gainValueALaw),
+		 ADID_PRINT_FRAC(gainValueALaw, 1000000.0));
+
+	/*
+	 * The verdict.  An ordered `>` -- a NaN mu-law error names mu-law,
+	 * which is what the object's `ja` does.
+	 */
+	if (minErrorMuLaw > minErrorALaw) {
+		int_a960 = 1;
+		edprintf("Final codec identified is ALaw\r\n");
+	} else {
+		int_a960 = 0;
+		edprintf("Final codec identified is MuLaw\r\n");
+		gainValueALaw = gainValueMuLaw;
+	}
+
+	padGain = gainValueALaw;
+
+	edprintf("Final padGain identified is = %c%d.%06d\r\n",
+		 ADID_PRINT_SIGN(gainValueALaw),
+		 ADID_PRINT_WHOLE(gainValueALaw),
+		 ADID_PRINT_FRAC(gainValueALaw, 1000000.0));
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------------------------"
+				     "-\r\n");
 }

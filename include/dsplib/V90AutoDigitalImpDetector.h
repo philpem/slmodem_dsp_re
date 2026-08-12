@@ -23,17 +23,18 @@
  * and taking the largest displacement in each, then checking by hand that the
  * base register of the winner is `this`.  Finding 251.
  *
- * TWENTY-SEVEN OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote
+ * TWENTY-NINE OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote
  * `reset` and `resetLinearMapping`; the first processing batch added the
  * sixteen whose only callees were already written, the second added
  * `unitePhasesInfoOfUref` -- a leaf -- and `updateUref`, which was blocked on
  * exactly that one call, the study batch added the four that read and
  * write the study state at the top of the object, and the DIL batch added
- * `updateAltRbsPhaseInDil` with the two members that are its only callers.
- * The rest stay declared and deliberately undefined, because defining a
+ * `updateAltRbsPhaseInDil` with the two members that are its only callers,
+ * and the pad-gain batch added `determineMaxUcode` and `findPadGain`.  The
+ * rest stay declared and deliberately undefined, because defining a
  * method whose callees are not written breaks the link for the entire test
  * suite (docs/v90cpp.md).  The intra-class call graph is four edges and is
- * written down in finding 1367, so what each of the remaining three waits on
+ * written down in finding 1367, so what the one remaining member waits on
  * is a lookup rather than a measurement.
  *
  * THE OBJECT IS MOSTLY SIX-BY-ONE-HUNDRED-AND-TWENTY-EIGHT ARRAYS.  Six is
@@ -236,6 +237,30 @@ public:
 	void updateAltRbsPhaseInDil();
 
 	/*
+	 * THE TWO THE PAD-GAIN BATCH DEFINES, and they are the two ends of one
+	 * story.  Both are LEAVES -- measured over every `R_386_PC32` in the
+	 * class, `findPadGain` calls only the four companding routines,
+	 * `edprintf` and `dsplibs_debug_printf`, and `determineMaxUcode` calls
+	 * only `edprintf`.
+	 *
+	 * `determineMaxUcode` fills `byte_0d00` and reads it back to give every
+	 * phase a `maxUcode`, and it is what leaves `byte_a954` behind.
+	 * `findPadGain` starts from that byte, projects the reference phase's
+	 * mapping through both companding laws at a range of assumed gains,
+	 * takes the gain whose round-trip error is smallest, and stores it in
+	 * `padGain` -- which is the only thing that ever makes
+	 * `applyPadGainToLinMapp`'s division do anything, because `reset` seeds
+	 * the gain with 1.0f.
+	 *
+	 * Neither returns anything: `determineMaxUcode` ends in a plain `ret`
+	 * with %eax holding the last thing it happened to load, and
+	 * `findPadGain` ends either in a plain `ret` or in a tail `jmp` to
+	 * `dsplibs_debug_printf`.
+	 */
+	void determineMaxUcode(short);
+	void findPadGain();
+
+	/*
 	 * Declared, not defined -- see the file comment.
 	 *
 	 * The constructor `V90AutoDigitalImpDetector(V90Parameters *)` and the
@@ -245,8 +270,6 @@ public:
 	 * makes `__builtin_offsetof` conditionally supported.  Their
 	 * signatures stay on the record in docs/findings.md.
 	 */
-	void determineMaxUcode(short);
-	void findPadGain();
 	void studyUrefHandler(float, unsigned int);
 
 	/*
@@ -278,10 +301,21 @@ public:
 	short prevLinMapp[V90ADID_CODES];			/* +0x0c00 */
 
 	/*
-	 * One flag per phase per code, set to 1 by `reset`.
-	 * `determineMaxUcode` is the only other member that touches it and it
-	 * both tests it against 0 and writes 0 and 1, so it is a boolean; what
-	 * it means is not established here.
+	 * ONE FLAG PER PHASE PER CODE: "this cell's measured mapping is good
+	 * enough to use".  `reset` sets all 768 of them to 1 and
+	 * `determineMaxUcode` is the only other member that touches it -- which
+	 * is what settles the meaning, because that method both fills it and
+	 * reads it back in the same call.  It writes 1 into
+	 * `[phase][code]` when the code is within the argument's reach AND the
+	 * phase's variance for it is small -- `code <= arg` and
+	 * `|linearMappingVar[phase][code]| < 2 * varThresh` -- and 0 otherwise,
+	 * and then walks the row DOWNWARDS from `byte_a954` looking for the
+	 * first 1, which becomes that phase's `maxUcode`.  So a 1 is "usable"
+	 * and the array is the per-code mask the per-phase maximum is read out
+	 * of.  Finding 1435.
+	 *
+	 * The reference code's entry is forced back to 1 for every phase at the
+	 * end of that fill, whatever the variance said -- see D289.
 	 */
 	unsigned char byte_0d00[V90ADID_PHASES][V90ADID_CODES];	/* +0x0d00 */
 
@@ -352,7 +386,16 @@ public:
 	float float_9d18[V90ADID_PHASES];			/* +0x9d18 */
 	unsigned int uint_9d30[V90ADID_PHASES];			/* +0x9d30 */
 
-	/* The variance `updateLinMappMeanAndVar` and `updateUref` store. */
+	/*
+	 * The variance `updateLinMappMeanAndVar` and `updateUref` store.
+	 *
+	 * THE OBJECT NAMES IT `linearMappingVar`: `determineMaxUcode` prints
+	 * exactly this array through "linearMappingVar[%d][%d] = %d\r\n" with
+	 * `unSuspectedPhase` and the loop counter as the two indices.  The
+	 * identifier is left offset-derived because it is spelled in five files
+	 * and a rename buys nothing the comment does not, which is the same
+	 * decision finding 1425 records for +0xa9a4 and +0xa9a6.
+	 */
 	float float_9d48[V90ADID_PHASES][V90ADID_CODES];	/* +0x9d48 */
 
 	/* Cleared by `reset`; `studyUrefHandler` is the only other writer. */
@@ -379,19 +422,51 @@ public:
 	 * scale rather than an offset.  What sets it is not written yet.
 	 */
 	float float_a950;					/* +0xa950 */
-	unsigned char pad_a954[2];				/* +0xa954 */
+
+	/*
+	 * THE OBJECT CALLS THIS ONE `maxUcode` TOO, and it is the scalar the
+	 * six-byte array below is derived from: `determineMaxUcode` prints it
+	 * as "original maxUcode = %d" while forcing it up to `short_a97a`, and
+	 * then gives every phase a `maxUcode[phase]` at or below it.
+	 *
+	 * ONE BYTE.  `determineMaxUcode` writes it with `mov %bl,0xa954(%ebp)`
+	 * at 0x4449f, 0x444d7, 0x4450a and 0x4468a and reads it back with
+	 * `movzbl 0xa954(%ebp)`; `findPadGain` reads it three ways --
+	 * `movzbl 0xa954(%esi)` at 0x4363e, `cmpb $0x3f,0xa954(%esi)` at
+	 * 0x43801 and `cmp %bl,0xa954(%esi)` at 0x438c9 and 0x43986 -- and
+	 * every one of the seven accesses is eight bits wide and unsigned.  It
+	 * is the top of both of that method's scans.  Finding 1434.
+	 *
+	 * +0xa955 stays `pad_`: no member of the class names it in any
+	 * displacement, so it is memory this batch did not model rather than
+	 * memory known to be unused.
+	 */
+	unsigned char byte_a954;				/* +0xa954 */
+	unsigned char pad_a955[1];				/* +0xa955 */
 
 	/*
 	 * Six bytes -- one per phase -- that `setMaxUcodeArray` copies in from
-	 * its argument with a `short` loop to 5 inclusive.  What the values
-	 * mean is `determineMaxUcode`'s business and is not established here.
+	 * its argument with a `short` loop to 5 inclusive.  THE VALUES ARE THE
+	 * HIGHEST PCM CODE EACH PHASE MAY BE DRIVEN AT: `determineMaxUcode`
+	 * fills them from `byte_a954` above, walking each phase's `byte_0d00`
+	 * row down to the first usable code, and clamping a flagged phase to
+	 * two below its own argument.
 	 */
 	unsigned char maxUcode[V90ADID_PHASES];			/* +0xa956 */
 
 	/* The companding law, stored as a full 32-bit copy of the argument. */
 	PcmType pcmType;					/* +0xa95c */
 
-	unsigned char pad_a960[4];				/* +0xa960 */
+	/*
+	 * WHICH COMPANDING LAW `findPadGain` DECIDED THE LINE IS USING, and the
+	 * only thing that writes it: `mov %ecx,0xa960(%esi)` with %ecx zeroed
+	 * at 0x43e93, beside the "Final codec identified is MuLaw" print, and
+	 * `mov %edi,0xa960(%esi)` with %edi = 1 at 0x440c4, beside "Final codec
+	 * identified is ALaw".  Both stores are 32 bits, which is what makes
+	 * this an `int` and not a byte, and they retire the whole of what was
+	 * `pad_a960[4]`.  Nothing in the class reads it.  Finding 1434.
+	 */
+	int int_a960;						/* +0xa960 */
 
 	/*
 	 * THE OBJECT NAMES THIS ONE ITSELF.  `porcessFirstStudy` reaches it

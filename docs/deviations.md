@@ -5112,3 +5112,41 @@ THE SAMPLE CURSOR. `updateAltRbsPhaseInDil` treats each phase's sample store as 
 THE NEIGHBOUR WINDOW. `porcessSecondStudy` chooses between the window [code, code+2] and the window [code-2, code] by which side of the reference the phase's own entry falls, and it runs `code` from 0. At codes 0 and 1 the second window indexes `linMapp[unSuspectedPhase][-2]` and `[-1]`, which for an unsuspected phase of 0 -- the commonest value, and what a clear `byte_280c[0]` gives -- is four bytes IN FRONT of the object. Above, the window reaches `linMapp[phase][118]` at the top code of 116, which is inside the row. The read is never a write, so nothing is corrupted; what the object gets is whatever precedes it in memory, and the repair decision for two codes out of 117 turns on it.
 
 `t_v90adid` puts a sixteen-byte guard in FRONT of the fixture, seeded alike on both sides and compared like the one behind it. Without it the two sides read two different pieces of unrelated memory and the comparison measures the linker's layout; with it, codes 0 and 1 are tested for real rather than steered around by forcing the unsuspected phase away from zero, which would have left the commonest path untested.
+
+## D288 🐛 `determineMaxUcode`'s report loop never ends at an argument of 255, and its scan window reads outside the row
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0, 1189 bytes), +0x1aa (`movzbl %bl,%ecx ; cmp %edi,%ecx ; jle`) and +0x25b (`lea 0x9d48(%ebp,%eax,4),%eax` followed by `subl $0x4,0x14(%esp)`). **Reachability: the first needs an argument of 255 or more, the second FIRES on every call whose scan reaches the bottom of the reference phase's row.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1438.** Two indices the method forms out of a `short` argument and never bounds.
+
+THE REPORT LOOP CANNOT END. It prints `linearMappingVar[unSuspectedPhase][k]` for `k` from `short_a97a + 1` up to the argument, and `k` is an `unsigned char` zero-extended for a SIGNED compare against the argument as an `int`. At an argument of 255 the counter reaches 255, wraps to 0, and 0 is still at or under the bound -- so the loop runs for ever, printing about thirty characters a pass through `edprintf`. The object has no other terminating condition and neither does this. The reconstruction reproduces it; `t_v90adid` keeps every argument it offers at 254 or below and says so at the table.
+
+THE SCAN WINDOW STRADDLES THE ROW. The five-entry window is `linearMappingVar[unSuspectedPhase][ci]` down to `[ci - 4]`, with `ci` an `unsigned char` walking down from the argument -- and the object forms each address by adding `unSuspectedPhase * 128 + ci` to the array base, so an index of 4 or less reaches BELOW the reference phase's row and an index above 127 reaches above it. Below phase 0 that is `uint_9d30`, four to twenty bytes in front of the array; above phase 5 it is past the object entirely, which is why the test picks the phase from the argument rather than sweeping the two against each other -- 793 is the last entry of `float_9d48` whose four bytes are still inside the 0xa9b0 the object occupies, and phase 5 plus a code of 154 is the first one out.
+
+Neither is a write, so nothing inside the object is corrupted by either; the second decides which code the method answers with, so it is behaviour and not merely a read.
+
+======================================================================
+
+## D289 🐛 `determineMaxUcode`'s backwards walk has no floor, and the entry that stops it is forced by hand
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0), +0x3d1 (`dec %dl ; movzbl %dl,%eax ; cmpb $0x0,0xd00(%ecx,%eax,1) ; je`) and +0x374 (`mov %bl,0xd00(%ecx,%edx,1)` with %bl = 1). **Reachability: the walk FIRES whenever an unflagged phase's own maximum code is marked unusable; the non-termination needs all 256 bytes of the window clear.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1438.** The last loop gives each unflagged phase the highest usable code at or below `byte_a954`, and it finds it by decrementing a BYTE until `byte_0d00[phase][d]` is nonzero. There is no floor and no counter: the index wraps from 0 to 255 and keeps going, so the walk covers all 256 values and then repeats them for ever if none of them is set.
+
+WHAT STOPS IT IS A STORE THE FILL MAKES ON PURPOSE. Immediately before, the fill sets `byte_0d00[phase][ucode]` to 1 for EVERY phase and whatever the variance test said about that code -- including for the flagged phases, whose 128 codes the fill skips entirely. That byte is one of the 256 the walk visits, so the walk always terminates in practice. It is the only guarantee there is, and it is a coincidence of the two loops being adjacent rather than a bound: change the reference code between them and the method hangs.
+
+THE WINDOW STAYS INSIDE THE OBJECT. `byte_0d00[phase][d]` with `d` up to 255 is `+0xd00 + phase * 128 + d`, which at phase 5 reaches +0x107f -- inside `float_1000`, whose first 128 bytes the walk therefore reads as flags, and whose first bytes the forced store writes when `ucode` is 128 or more. Nothing leaves the object, so the test exercises the whole of it rather than bounding it.
+
+======================================================================
+
+## D290 🐛 `findPadGain` reads its chosen code uninitialised, and hangs outright for five values of `byte_a954`
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::findPadGain` (blob 0x43620, 2879 bytes), +0x44 (`mov %dl,0xa1(%esp)`, the only write to that slot) and +0x38 (`sub $0x5,%eax ; mov %eax,%ebx` against `movzbl %dl,%eax ; cmp %ebx,%eax ; jg`). **Reachability: the uninitialised read needs five variances of 1e8 or more with no NaN among them; the hang needs `byte_a954` in 3..7.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1439.** Both come out of the same five-entry scan at the top of the method.
+
+THE CHOSEN CODE IS A STACK SLOT NOTHING NECESSARILY WRITES. The running minimum starts at the constant 1e8 and the slot at 0xa1(%esp) is written only when an entry beats it. Five entries of 1e8 or more leave the slot holding whatever the frame held, and that value is then clamped into [0x50, 0x5f] and used as the base code for the entire search -- so the pad gain the method reports is a function of the caller's stack and not of the object. An unordered compare TAKES, so a single NaN among the five is enough to write the slot; it is five ordered non-improvements that reach it. The local is left uninitialised here for D281's reason, and `t_v90adid` plants one small entry in every window it offers so that no trial can read it: two static objects have two different frames, and a trial that read the slot would be comparing the linker's layout rather than the reconstruction.
+
+THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 3)` and runs while the counter, zero-extended, is greater than `(int)start - 5` under a SIGNED compare. A `byte_a954` of 0, 1 or 2 wraps the start up to 253..255 and terminates normally; one of 3 to 7 puts the start at 0..4, the bound below zero, and a zero-extended byte can never fall under it -- so the loop decrements for ever, reading `float_9d48[unSuspectedPhase][d]` at every one of the 256 indices as it goes, which at phase 5 is past the end of the object. The reconstruction reproduces it and the test forces the field into [8, 0x9c].
+
+======================================================================

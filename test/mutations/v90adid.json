@@ -935,8 +935,8 @@
  },
  {
   "label": "count the roughness of an already-flagged phase too",
-  "find": "\t\tif (short_2800[phase] == 0) {",
-  "replace": "\t\tif (short_2800[phase] != 1) {"
+  "find": "\t\tif (short_2800[phase] == 0) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {",
+  "replace": "\t\tif (short_2800[phase] != 1) {\n\t\t\tfor (code = 0x40; code <= 0x4e; code++) {"
  },
  {
   "label": "suspect the trusted phases and trust the suspected ones",
@@ -1460,5 +1460,582 @@
   "label": "swap two phases in the QC mapping's report",
   "find": "\t\t\t\t\t     linMapp[0][ci], linMapp[1][ci],",
   "replace": "\t\t\t\t\t     linMapp[1][ci], linMapp[0][ci],"
+ },
+ {
+  "label": "NOTE: the pad-gain batch.  determineMaxUcode and findPadGain share the class's `ADID_PRINT_*` idiom with the four study methods and share `+ 0.5f`, `1.0f /` and `V90ADID_PHASES; phase++` with most of the file, so several anchors below reach past the line they change.  Finding 1264."
+ },
+ {
+  "label": "dmu: sum window starts at 41",
+  "find": "for (i = 40; i <= 59; i++)",
+  "replace": "for (i = 41; i <= 59; i++)"
+ },
+ {
+  "label": "dmu: sum window ends at 58",
+  "find": "i <= 59; i++)\n\t\t\tsum += __builtin_fabsf(",
+  "replace": "i <= 58; i++)\n\t\t\tsum += __builtin_fabsf("
+ },
+ {
+  "label": "dmu: sum without the magnitude",
+  "find": "sum += __builtin_fabsf(\n\t\t\t    float_9d48[unSuspectedPhase][i]);",
+  "replace": "sum += float_9d48[unSuspectedPhase][i];"
+ },
+ {
+  "label": "dmu: threshold scale 0.05 -> 0.06",
+  "find": "product = sum * float_a980 * 0.05f;",
+  "replace": "product = sum * float_a980 * 0.06f;"
+ },
+ {
+  "label": "dmu: threshold scaled by the wrong field",
+  "find": "product = sum * float_a980 * 0.05f;",
+  "replace": "product = sum * float_a97c * 0.05f;"
+ },
+ {
+  "label": "dmu: the first report's whole part from the rounded value",
+  "find": "origWhole = ADID_PRINT_WHOLE(product);\n\t\tvarThresh = product;",
+  "replace": "varThresh = product;\n\t\torigWhole = ADID_PRINT_WHOLE(varThresh);"
+ },
+ {
+  "label": "dmu: the first report's sign forced",
+  "find": "ADID_PRINT_SIGN(varThresh), origWhole,",
+  "replace": "'+', origWhole,"
+ },
+ {
+  "label": "dmu: the first report's fraction scale",
+  "find": "origWhole,\n\t\t ADID_PRINT_FRAC(varThresh, 100.0f));",
+  "replace": "origWhole,\n\t\t ADID_PRINT_FRAC(varThresh, 10.0f));"
+ },
+ {
+  "label": "dmu: the low clamp at 501",
+  "find": "if (!(varThresh >= 500.0f))",
+  "replace": "if (!(varThresh >= 501.0f))"
+ },
+ {
+  "label": "dmu: the low clamp installs 501",
+  "find": "\t\tvarThresh = 500.0f;",
+  "replace": "\t\tvarThresh = 501.0f;"
+ },
+ {
+  "label": "dmu: the low clamp sense",
+  "find": "if (!(varThresh >= 500.0f))",
+  "replace": "if ((varThresh >= 500.0f))"
+ },
+ {
+  "label": "dmu: the high clamp at 100001",
+  "find": "else if (!(varThresh <= 100000.0f))",
+  "replace": "else if (!(varThresh <= 100001.0f))"
+ },
+ {
+  "label": "dmu: the high clamp installs 100001",
+  "find": "\t\tvarThresh = 100000.0f;",
+  "replace": "\t\tvarThresh = 100001.0f;"
+ },
+ {
+  "label": "dmu: the second report's sign inverted",
+  "find": "varThresh > 0.0f ? '+' : '-', ADID_PRINT_WHOLE(varThresh),",
+  "replace": "varThresh > 0.0f ? '-' : '+', ADID_PRINT_WHOLE(varThresh),"
+ },
+ {
+  "label": "dmu: the second report loses its magnitude",
+  "find": "varThresh > 0.0f ? '+' : '-', ADID_PRINT_WHOLE(varThresh),",
+  "replace": "varThresh > 0.0f ? '+' : '-', (int)varThresh,",
+  "equivalent": true,
+  "why": "THE VALUE IS ALREADY NON-NEGATIVE AT THE SECOND REPORT.  `fabs` and the identity differ only below zero, and the clamp immediately above leaves `varThresh` in [500, 100000]: the first arm replaces anything that is not ordered-at-or-above 500 -- which includes every negative value and every NaN -- with 500, and the second caps it at 100000.  So the object does take `fabs` at 0x442e6 and no input can show it.  The first report is before the clamp and is where the same mutation IS caught."
+ },
+ {
+  "label": "dmu: the report loop starts at short_a97a",
+  "find": "for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)",
+  "replace": "for (k = (unsigned char)(short_a97a); (int)k <= maxCode; k++)"
+ },
+ {
+  "label": "dmu: the report loop stops one short",
+  "find": "for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)",
+  "replace": "for (k = (unsigned char)(short_a97a + 1); (int)k < maxCode; k++)"
+ },
+ {
+  "label": "dmu: the report's two indices swapped",
+  "find": "edprintf(\"linearMappingVar[%d][%d] = %d\\r\\n\", unSuspectedPhase,\n\t\t\t k, adid_abs((int)float_9d48[unSuspectedPhase][k]));",
+  "replace": "edprintf(\"linearMappingVar[%d][%d] = %d\\r\\n\", k,\n\t\t\t unSuspectedPhase,\n\t\t\t adid_abs((int)float_9d48[unSuspectedPhase][k]));"
+ },
+ {
+  "label": "dmu: the report prints a signed variance",
+  "find": "k, adid_abs((int)float_9d48[unSuspectedPhase][k]));",
+  "replace": "k, (int)float_9d48[unSuspectedPhase][k]);"
+ },
+ {
+  "label": "dmu: the scan starts above the argument",
+  "find": "for (ci = (unsigned char)maxCode; ci > minU; ci--) {",
+  "replace": "for (ci = (unsigned char)(maxCode + 1); ci > minU; ci--) {"
+ },
+ {
+  "label": "dmu: the scan runs one window too far",
+  "find": "for (ci = (unsigned char)maxCode; ci > minU; ci--) {",
+  "replace": "for (ci = (unsigned char)maxCode; ci >= minU; ci--) {"
+ },
+ {
+  "label": "dmu: the window is four entries wide",
+  "find": "\t\tfor (d = 0; d <= 4; d++) {\n\t\t\tfloat v = float_9d48[unSuspectedPhase][ci - d];",
+  "replace": "\t\tfor (d = 0; d <= 3; d++) {\n\t\t\tfloat v = float_9d48[unSuspectedPhase][ci - d];"
+ },
+ {
+  "label": "dmu: the window runs upwards",
+  "find": "float v = float_9d48[unSuspectedPhase][ci - d];",
+  "replace": "float v = float_9d48[unSuspectedPhase][ci + d];"
+ },
+ {
+  "label": "dmu: the small test is strict",
+  "find": "\t\t\tif (v >= varThresh)\n\t\t\t\tcontinue;",
+  "replace": "\t\t\tif (v > varThresh)\n\t\t\t\tcontinue;"
+ },
+ {
+  "label": "dmu: the NaN half of the zero test dropped",
+  "find": "if (v == 0.0f || __builtin_isnan(v))",
+  "replace": "if (v == 0.0f)"
+ },
+ {
+  "label": "dmu: the zero half of the zero test dropped",
+  "find": "if (v == 0.0f || __builtin_isnan(v))",
+  "replace": "if (__builtin_isnan(v))"
+ },
+ {
+  "label": "dmu: the first qualifying offset is the last",
+  "find": "\t\t\tif (n == 0)\n\t\t\t\tfirst = d;\n\t\t\tn++;",
+  "replace": "\t\t\tfirst = d;\n\t\t\tn++;"
+ },
+ {
+  "label": "dmu: a window qualifies at two",
+  "find": "if (n > 2) {\n\t\t\tat = (unsigned char)(ci - first);",
+  "replace": "if (n > 1) {\n\t\t\tat = (unsigned char)(ci - first);"
+ },
+ {
+  "label": "dmu: the answer is the window's top",
+  "find": "at = (unsigned char)(ci - first);",
+  "replace": "at = ci;"
+ },
+ {
+  "label": "dmu: the answer's offset is added",
+  "find": "at = (unsigned char)(ci - first);",
+  "replace": "at = (unsigned char)(ci + first);"
+ },
+ {
+  "label": "dmu: the fall-through answer is zero",
+  "find": "\tat = minU;\n\n\tfor (ci =",
+  "replace": "\tat = 0;\n\n\tfor (ci ="
+ },
+ {
+  "label": "dmu: the floor test is not strict",
+  "find": "if ((int)mu < (int)short_a97a) {",
+  "replace": "if ((int)mu <= (int)short_a97a) {"
+ },
+ {
+  "label": "dmu: the floor test is unsigned",
+  "find": "if ((int)mu < (int)short_a97a) {",
+  "replace": "if ((int)mu < (int)(unsigned short)short_a97a) {"
+ },
+ {
+  "label": "dmu: the floor report's two arguments swapped",
+  "find": "\t\t\t \"forced minimum maxUcode = %d\\n\", mu, short_a97a);",
+  "replace": "\t\t\t \"forced minimum maxUcode = %d\\n\", short_a97a, mu);"
+ },
+ {
+  "label": "dmu: the floor installs the old value",
+  "find": "\t\tbyte_a954 = (unsigned char)short_a97a;\n\t\tmu = (unsigned char)short_a97a;",
+  "replace": "\t\tbyte_a954 = mu;\n\t\tmu = (unsigned char)short_a97a;"
+ },
+ {
+  "label": "dmu: the mask threshold is not doubled",
+  "find": "float lim = varThresh + varThresh;",
+  "replace": "float lim = varThresh;"
+ },
+ {
+  "label": "dmu: the mask reference code is masked",
+  "find": "unsigned char ref = ucode;",
+  "replace": "unsigned char ref = ucode & 0x7f;"
+ },
+ {
+  "label": "dmu: the mask skips the unflagged phases",
+  "find": "\t\t\t\tif (short_2800[phase] != 0)\n\t\t\t\t\tcontinue;\n\n\t\t\t\tif ((int)code > (int)maxCode)",
+  "replace": "\t\t\t\tif (short_2800[phase] == 0)\n\t\t\t\t\tcontinue;\n\n\t\t\t\tif ((int)code > (int)maxCode)"
+ },
+ {
+  "label": "dmu: the reach test includes one more code",
+  "find": "if ((int)code > (int)maxCode)",
+  "replace": "if ((int)code >= (int)maxCode)"
+ },
+ {
+  "label": "dmu: the mask variance test is strict",
+  "find": "else if (__builtin_fabsf(float_9d48[phase][code])\n\t\t\t\t\t >= lim)",
+  "replace": "else if (__builtin_fabsf(float_9d48[phase][code])\n\t\t\t\t\t > lim)"
+ },
+ {
+  "label": "dmu: the mask variance test loses its magnitude",
+  "find": "else if (__builtin_fabsf(float_9d48[phase][code])\n\t\t\t\t\t >= lim)",
+  "replace": "else if (float_9d48[phase][code] >= lim)"
+ },
+ {
+  "label": "dmu: the mask's two verdicts swapped",
+  "find": "\t\t\t\telse\n\t\t\t\t\tbyte_0d00[phase][code] = 1;",
+  "replace": "\t\t\t\telse\n\t\t\t\t\tbyte_0d00[phase][code] = 0;"
+ },
+ {
+  "label": "dmu: the reference code is not forced usable",
+  "find": "byte_0d00[phase][ref] = 1;",
+  "replace": "byte_0d00[phase][ref] = 0;"
+ },
+ {
+  "label": "dmu: the read-back takes the flagged phases",
+  "find": "\t\tif (short_2800[phase] == 0) {\n\t\t\tmaxUcode[phase] = m;",
+  "replace": "\t\tif (short_2800[phase] != 0) {\n\t\t\tmaxUcode[phase] = m;"
+ },
+ {
+  "label": "dmu: the read-back walks when it should not",
+  "find": "if (byte_0d00[phase][m] == 0) {",
+  "replace": "if (byte_0d00[phase][m] != 0) {"
+ },
+ {
+  "label": "dmu: the read-back walks upwards",
+  "find": "\t\t\t\tdo {\n\t\t\t\t\td--;\n\t\t\t\t} while (byte_0d00[phase][d] == 0);",
+  "replace": "\t\t\t\tdo {\n\t\t\t\t\td++;\n\t\t\t\t} while (byte_0d00[phase][d] == 0);"
+ },
+ {
+  "label": "dmu: the read-back walk starts one lower",
+  "find": "\t\t\t\tunsigned char d = m;",
+  "replace": "\t\t\t\tunsigned char d = (unsigned char)(m - 1);"
+ },
+ {
+  "label": "dmu: the flagged phase's clamp is one short",
+  "find": "} else if ((int)m <= (int)maxCode - 2) {",
+  "replace": "} else if ((int)m <= (int)maxCode - 1) {"
+ },
+ {
+  "label": "dmu: the flagged phase's clamp installs one more",
+  "find": "maxUcode[phase] = (unsigned char)(maxCode - 2);",
+  "replace": "maxUcode[phase] = (unsigned char)(maxCode - 1);"
+ },
+ {
+  "label": "dmu: the per-phase report's two arguments swapped",
+  "find": "\t\t\t phase, maxUcode[phase]);",
+  "replace": "\t\t\t maxUcode[phase], phase);"
+ },
+ {
+  "label": "fpg: the scan sentinel is a hundred times smaller",
+  "find": "float bestVar = 100000000.0f;",
+  "replace": "float bestVar = 1000000.0f;",
+  "equivalent": true,
+  "why": "NO WELL-DEFINED INPUT SEPARATES THE TWO FORMS.  They differ only when the smallest of the five window entries is at or above 1e6, and in that case the mutant never writes its chosen-index slot at all and reads whatever its own stack frame held -- D290, where the two sides have two different frames and the comparison measures the linker's layout rather than the reconstruction.  Everywhere the object's behaviour IS defined some entry is below 1e6, and any entry that beats the smaller sentinel also beats the larger one -- so both forms pick the same index and the same value, whatever the other four are.  The test plants one small entry in every window it offers precisely so that no trial enters the undefined case."
+ },
+ {
+  "label": "fpg: the scan starts two below the maximum",
+  "find": "unsigned char d = (unsigned char)(byte_a954 - 3);",
+  "replace": "unsigned char d = (unsigned char)(byte_a954 - 2);"
+ },
+ {
+  "label": "fpg: the scan window is one narrower",
+  "find": "int lim = (int)d - 5;",
+  "replace": "int lim = (int)d - 4;"
+ },
+ {
+  "label": "fpg: the scan takes an unordered compare as a loss",
+  "find": "\t\t\tif (!(v >= bestVar)) {\n\t\t\t\tbestVar = v;",
+  "replace": "\t\t\tif (v < bestVar) {\n\t\t\t\tbestVar = v;"
+ },
+ {
+  "label": "fpg: the scan takes ties",
+  "find": "\t\t\tif (!(v >= bestVar)) {\n\t\t\t\tbestVar = v;",
+  "replace": "\t\t\tif (!(v > bestVar)) {\n\t\t\t\tbestVar = v;"
+ },
+ {
+  "label": "fpg: the scan runs upwards",
+  "find": "\t\t\td--;\n\t\t} while ((int)d > lim);",
+  "replace": "\t\t\td++;\n\t\t} while ((int)d > lim);"
+ },
+ {
+  "label": "fpg: the base clamp's top value",
+  "find": "\tif (base > 0x5f)\n\t\tbase = 0x5f;",
+  "replace": "\tif (base > 0x5f)\n\t\tbase = 0x60;"
+ },
+ {
+  "label": "fpg: the base clamp's floor value",
+  "find": "\telse if (base < 0x50)\n\t\tbase = 0x50;",
+  "replace": "\telse if (base < 0x50)\n\t\tbase = 0x4f;"
+ },
+ {
+  "label": "fpg: the base code's A-law mask",
+  "find": "aCode = (unsigned char)((base & 0x7f) ^ 0xd5);",
+  "replace": "aCode = (unsigned char)((base & 0x7f) ^ 0xff);"
+ },
+ {
+  "label": "fpg: the base code's mu-law mask",
+  "find": "uCode = (unsigned char)~(base & 0x7f);",
+  "replace": "uCode = (unsigned char)(base & 0x7f);"
+ },
+ {
+  "label": "fpg: only one companding law is tried",
+  "find": "for (codec = 0; codec <= 1; codec++) {",
+  "replace": "for (codec = 0; codec <= 0; codec++) {"
+ },
+ {
+  "label": "fpg: the high bucket's error starts lower",
+  "find": "float errHigh = 1000000.0f, gainHigh = 1.0f;",
+  "replace": "float errHigh = 100000.0f, gainHigh = 1.0f;"
+ },
+ {
+  "label": "fpg: the high bucket's gain starts at two",
+  "find": "float errHigh = 1000000.0f, gainHigh = 1.0f;",
+  "replace": "float errHigh = 1000000.0f, gainHigh = 2.0f;",
+  "equivalent": true,
+  "why": "THE INITIALISER IS DEAD.  `gainHigh` is read at one place, `gainValueALaw = gainHigh` under `errMid * 0.8f > errHigh`, and that test cannot fire while `errHigh` still holds its own initial 1e6: `errMid` starts at 1e6 and its only assignment is guarded by `!(err >= errMid)`, so it never rises above 1e6 and `errMid * 0.8f` never exceeds 8e5.  A NaN `errMid` fails the ordered `>` as well, and an error is never a NaN here in any case (see the three keeper entries).  So the read happens only after the high bucket has taken a candidate, which overwrites `gainHigh` first.  The object does store 0x3f800000 into %ebp before the loop at 0x4375a and it is kept for that reason.  `gainMid`'s initialiser is NOT dead and the same mutation on it is caught, which is what makes this an asymmetry of the object rather than a gap in the sweep."
+ },
+ {
+  "label": "fpg: the middle bucket's error starts lower",
+  "find": "float errMid = 1000000.0f, gainMid = 1.0f;",
+  "replace": "float errMid = 100000.0f, gainMid = 1.0f;"
+ },
+ {
+  "label": "fpg: the middle bucket's gain starts at two",
+  "find": "float errMid = 1000000.0f, gainMid = 1.0f;",
+  "replace": "float errMid = 1000000.0f, gainMid = 2.0f;"
+ },
+ {
+  "label": "fpg: the low bucket's error starts lower",
+  "find": "float errLow = 1000000.0f;",
+  "replace": "float errLow = 100000.0f;"
+ },
+ {
+  "label": "fpg: the range's start is scaled by the wrong field",
+  "find": "float scale = float_a97c;",
+  "replace": "float scale = float_a980;"
+ },
+ {
+  "label": "fpg: the range's A-law start mask",
+  "find": "\t\t\t\t\t\t       * scale))) ^ 0xd5);",
+  "replace": "\t\t\t\t\t\t       * scale))) ^ 0xff);"
+ },
+ {
+  "label": "fpg: the range's mu-law start is not inverted",
+  "find": "minU = (unsigned char)~linear2ulaw(",
+  "replace": "minU = (unsigned char)linear2ulaw("
+ },
+ {
+  "label": "fpg: the range's start loses its magnitude",
+  "find": "adid_abs((int)(ulaw2linear(uCode) * scale)));",
+  "replace": "((int)(ulaw2linear(uCode) * scale)));"
+ },
+ {
+  "label": "fpg: the range's floor test is strict",
+  "find": "if (minU <= 0x27)\n\t\t\tminU = 0x28;",
+  "replace": "if (minU < 0x27)\n\t\t\tminU = 0x28;"
+ },
+ {
+  "label": "fpg: the range's floor value",
+  "find": "if (minU <= 0x27)\n\t\t\tminU = 0x28;",
+  "replace": "if (minU <= 0x27)\n\t\t\tminU = 0x29;"
+ },
+ {
+  "label": "fpg: the range stops one short",
+  "find": "for (cur = minU; cur <= base; cur++) {",
+  "replace": "for (cur = minU; cur < base; cur++) {"
+ },
+ {
+  "label": "fpg: the reference level follows the candidate",
+  "find": "float ref = (float)linMapp[unSuspectedPhase][base];",
+  "replace": "float ref = (float)linMapp[unSuspectedPhase][cur];"
+ },
+ {
+  "label": "fpg: the candidate's A-law mask",
+  "find": "level = alaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xd5));",
+  "replace": "level = alaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xff));"
+ },
+ {
+  "label": "fpg: the candidate's mu-law mask",
+  "find": "level = ulaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xff));",
+  "replace": "level = ulaw2linear(\n\t\t\t\t    (unsigned char)((cur & 0x7f) ^ 0xd5));"
+ },
+ {
+  "label": "fpg: the candidate gain is upside down",
+  "find": "gain = ref / (float)level;",
+  "replace": "gain = (float)level / ref;"
+ },
+ {
+  "label": "fpg: the projection starts one code up",
+  "find": "for (k = 0x40; k <= byte_a954; k++) {",
+  "replace": "for (k = 0x41; k <= byte_a954; k++) {"
+ },
+ {
+  "label": "fpg: the projection stops one short",
+  "find": "for (k = 0x40; k <= byte_a954; k++) {",
+  "replace": "for (k = 0x40; k < byte_a954; k++) {"
+ },
+ {
+  "label": "fpg: the projection multiplies by the gain",
+  "find": "\t\t\t\t    * (1.0f / gain) + 0.5f);",
+  "replace": "\t\t\t\t    * gain + 0.5f);"
+ },
+ {
+  "label": "fpg: the projection's rounding term",
+  "find": "\t\t\t\t    * (1.0f / gain) + 0.5f);",
+  "replace": "\t\t\t\t    * (1.0f / gain) + 0.4f);"
+ },
+ {
+  "label": "fpg: the projection is not narrowed to sixteen bits",
+  "find": "\t\t\t\tshort proj = (short)(",
+  "replace": "\t\t\t\tint proj = (int)("
+ },
+ {
+  "label": "fpg: the round trip's error is a sum",
+  "find": "d = (float)(proj - back);",
+  "replace": "d = (float)(proj + back);"
+ },
+ {
+  "label": "fpg: the round-trip error is not squared",
+  "find": "errSum += d * d;",
+  "replace": "errSum += d;"
+ },
+ {
+  "label": "fpg: the error is scaled by one power of the gain",
+  "find": "err = gain * gain * errSum;",
+  "replace": "err = gain * errSum;"
+ },
+ {
+  "label": "fpg: the per-candidate report prints the raw sum",
+  "find": "\"%c%d.%02d\\r\\n\", (int)err,",
+  "replace": "\"%c%d.%02d\\r\\n\", (int)errSum,"
+ },
+ {
+  "label": "fpg: the per-candidate report's fraction scale",
+  "find": "ADID_PRINT_FRAC(gain,\n\t\t\t\t\t\t\t\t     100.0f));",
+  "replace": "ADID_PRINT_FRAC(gain,\n\t\t\t\t\t\t\t\t     10.0f));"
+ },
+ {
+  "label": "fpg: the high bucket's boundary",
+  "find": "if (gain >= 2.7f) {",
+  "replace": "if (gain >= 2.8f) {"
+ },
+ {
+  "label": "fpg: the high bucket's keeper takes an unordered compare as a loss",
+  "find": "\t\t\t\tif (!(err >= errHigh)) {",
+  "replace": "\t\t\t\tif (err < errHigh) {",
+  "equivalent": true,
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+ },
+ {
+  "label": "fpg: the low bucket belongs to the other law",
+  "find": "} else if (codec == 1 && !(gain >= 1.2f)) {",
+  "replace": "} else if (codec == 0 && !(gain >= 1.2f)) {"
+ },
+ {
+  "label": "fpg: the low bucket's boundary",
+  "find": "} else if (codec == 1 && !(gain >= 1.2f)) {",
+  "replace": "} else if (codec == 1 && !(gain >= 1.3f)) {"
+ },
+ {
+  "label": "fpg: the low bucket's keeper takes an unordered compare as a loss",
+  "find": "if (!(err >= errLow))\n\t\t\t\t\terrLow = err;",
+  "replace": "if (err < errLow)\n\t\t\t\t\terrLow = err;",
+  "equivalent": true,
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+ },
+ {
+  "label": "fpg: the middle bucket's keeper takes an unordered compare as a loss",
+  "find": "\t\t\t\tif (!(err >= errMid)) {",
+  "replace": "\t\t\t\tif (err < errMid) {",
+  "equivalent": true,
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+ },
+ {
+  "label": "fpg: the best-of-three's margin",
+  "find": "if (errMid * 0.8f > errHigh) {",
+  "replace": "if (errMid * 0.9f > errHigh) {"
+ },
+ {
+  "label": "fpg: the best-of-three's test is not strict",
+  "find": "if (errMid * 0.8f > errHigh) {",
+  "replace": "if (errMid * 0.8f >= errHigh) {"
+ },
+ {
+  "label": "fpg: the best-of-three scales the wrong side",
+  "find": "if (errMid * 0.8f > errHigh) {",
+  "replace": "if (errMid > errHigh * 0.8f) {"
+ },
+ {
+  "label": "fpg: the mu-law pair is copied out on the wrong pass",
+  "find": "\t\tif (codec == 0) {\n\t\t\tgainValueMuLaw = gainValueALaw;",
+  "replace": "\t\tif (codec == 1) {\n\t\t\tgainValueMuLaw = gainValueALaw;"
+ },
+ {
+  "label": "fpg: the unity fallback's margin",
+  "find": "} else if (!(errLow * 0.85f >= minErrorALaw)) {",
+  "replace": "} else if (!(errLow * 0.9f >= minErrorALaw)) {"
+ },
+ {
+  "label": "fpg: the unity fallback takes an unordered compare as a loss",
+  "find": "} else if (!(errLow * 0.85f >= minErrorALaw)) {",
+  "replace": "} else if (errLow * 0.85f < minErrorALaw) {",
+  "equivalent": true,
+  "why": "SAME ARGUMENT AS THE THREE BUCKET KEEPERS.  `errLow` and `minErrorALaw` are both errors or the initial 1e6, and an error is never a NaN here -- see the proof recorded at the high bucket's keeper -- so `errLow * 0.85f` and `minErrorALaw` are always ordered and the negated test and the plain `<` agree on every input."
+ },
+ {
+  "label": "fpg: the unity fallback is not unity",
+  "find": "\t\t\tgainValueALaw = 1.0f;\n\t\t\tminErrorALaw = errLow;",
+  "replace": "\t\t\tgainValueALaw = 2.0f;\n\t\t\tminErrorALaw = errLow;"
+ },
+ {
+  "label": "fpg: the mu-law error report's fraction scale",
+  "find": "ADID_PRINT_FRAC(minErrorMuLaw, 100.0));",
+  "replace": "ADID_PRINT_FRAC(minErrorMuLaw, 10.0));"
+ },
+ {
+  "label": "fpg: the mu-law gain report's fraction scale",
+  "find": "ADID_PRINT_FRAC(gainValueMuLaw, 1000000.0));",
+  "replace": "ADID_PRINT_FRAC(gainValueMuLaw, 100000.0));"
+ },
+ {
+  "label": "fpg: the A-law error report's fraction scale",
+  "find": "ADID_PRINT_FRAC(minErrorALaw, 100.0));",
+  "replace": "ADID_PRINT_FRAC(minErrorALaw, 10.0));"
+ },
+ {
+  "label": "fpg: the A-law gain report prints the mu-law gain",
+  "find": "edprintf(\"gainValueALaw = %c%d.%06d\\r\\n\",\n\t\t ADID_PRINT_SIGN(gainValueALaw),\n\t\t ADID_PRINT_WHOLE(gainValueALaw),\n\t\t ADID_PRINT_FRAC(gainValueALaw, 1000000.0));",
+  "replace": "edprintf(\"gainValueALaw = %c%d.%06d\\r\\n\",\n\t\t ADID_PRINT_SIGN(gainValueMuLaw),\n\t\t ADID_PRINT_WHOLE(gainValueMuLaw),\n\t\t ADID_PRINT_FRAC(gainValueMuLaw, 1000000.0));"
+ },
+ {
+  "label": "fpg: the verdict is not strict",
+  "find": "if (minErrorMuLaw > minErrorALaw) {",
+  "replace": "if (minErrorMuLaw >= minErrorALaw) {"
+ },
+ {
+  "label": "fpg: the verdict is the wrong way round",
+  "find": "if (minErrorMuLaw > minErrorALaw) {",
+  "replace": "if (minErrorALaw > minErrorMuLaw) {"
+ },
+ {
+  "label": "fpg: the identified codec is recorded the wrong way round",
+  "find": "\t\tint_a960 = 1;\n\t\tedprintf(\"Final codec identified is ALaw\\r\\n\");",
+  "replace": "\t\tint_a960 = 0;\n\t\tedprintf(\"Final codec identified is ALaw\\r\\n\");"
+ },
+ {
+  "label": "fpg: the mu-law verdict does not take the mu-law gain",
+  "find": "\t\tedprintf(\"Final codec identified is MuLaw\\r\\n\");\n\t\tgainValueALaw = gainValueMuLaw;",
+  "replace": "\t\tedprintf(\"Final codec identified is MuLaw\\r\\n\");"
+ },
+ {
+  "label": "fpg: the pad gain is stored from the mu-law slot",
+  "find": "padGain = gainValueALaw;",
+  "replace": "padGain = gainValueMuLaw;"
+ },
+ {
+  "label": "fpg: the final report's fraction scale",
+  "find": "ADID_PRINT_FRAC(gainValueALaw, 1000000.0));\n\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "ADID_PRINT_FRAC(gainValueALaw, 100000.0));\n\n\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "fpg: the codec-type banner is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"Codec type %d\\r\\n\", codec);",
+  "replace": "\t\t\tdsplibs_debug_printf(\"Codec type %d\\r\\n\", codec);"
+ },
+ {
+  "label": "fpg: the projection banner prints the wrong pair",
+  "find": "\t\t\t\t\t     \"%d\\r\\n\", base, minU);",
+  "replace": "\t\t\t\t\t     \"%d\\r\\n\", minU, base);"
  }
 ]

@@ -149,6 +149,20 @@ void ref_setQcLinearMapping(void *self)
 	asm("ref__ZN25V90AutoDigitalImpDetector18setQcLinearMappingEv");
 
 /*
+ * The pad-gain batch.  Neither returns anything -- `determineMaxUcode` ends
+ * in a plain `ret` with %eax holding the last thing it loaded and
+ * `findPadGain` ends either in a plain `ret` or in a tail `jmp` to
+ * `dsplibs_debug_printf` -- so `void` is what they leave, and the whole of
+ * what each does is in the object and in the transcript.  The `short`
+ * parameter is `int` here for the usual reason: the object reads it with
+ * `movswl 0x54(%esp)`, which is what a promoted slot holds either way.
+ */
+void ref_determineMaxUcode(void *self, int maxCode)
+	asm("ref__ZN25V90AutoDigitalImpDetector17determineMaxUcodeEs");
+void ref_findPadGain(void *self)
+	asm("ref__ZN25V90AutoDigitalImpDetector11findPadGainEv");
+
+/*
  * The reference side's copy of the debug level.  Raising ours alone would put
  * the two sides on different branches of `porcessFirstStudy`'s only gate.
  */
@@ -570,6 +584,76 @@ sane_sample_counts(int trial)
 /* Force one field to the same value on both sides. */
 #define BOTH(field, value) \
 	do { ours_o.field = theirs_o.field = (value); } while (0)
+
+/*
+ * The four helpers the pad-gain batch needs.  They live up here rather than
+ * beside their own sweeps because `run_signal` uses three of them; the long
+ * argument for what each bound is for is at the head of `run_maxucode`.
+ */
+
+/* The last `float_9d48` entry whose four bytes are still inside the object. */
+#define ADID_VAR_LAST	793
+
+/*
+ * `determineMaxUcode` indexes that array as `phase * 128 + code` with a code
+ * that reaches the argument, so phase 5 plus anything over 153 leaves the
+ * object.  The phase is therefore chosen FROM the argument.
+ */
+static short
+safe_usp(int arg, int want)
+{
+	if (want == 5 && (arg & 0xff) > ADID_VAR_LAST - 5 * V90ADID_CODES)
+		return 4;
+	return (short)want;
+}
+
+/* One flag per phase from a bit pattern, the same on both sides. */
+static void
+adid_set_2800(int pattern)
+{
+	int p;
+
+	for (p = 0; p < NPHASE; p++)
+		ours_o.short_2800[p] = theirs_o.short_2800[p] =
+		    (short)((pattern >> p) & 1);
+}
+
+/*
+ * Plant the five variances `findPadGain`'s scan reads -- the entries at
+ * `byte_a954 - 3` and the four below it -- with the smallest at a chosen
+ * offset.  That does two things: it fixes `projectionBaseUcode`, which is
+ * otherwise a function of seeded bytes and unobservable behind the
+ * [0x50, 0x5f] clamp, and it guarantees the scan's take happens at all, which
+ * is what keeps the run off the uninitialised index of D290.
+ */
+static void
+plant_window(short usp, unsigned char a954, int minoff, float minval,
+	     float other)
+{
+	unsigned char s = (unsigned char)(a954 - 3);
+	int d;
+
+	for (d = 0; d <= 4; d++) {
+		unsigned char at = (unsigned char)(s - d);
+		float v = (d == minoff) ? minval : other;
+
+		ours_o.float_9d48[usp][at] = v;
+		theirs_o.float_9d48[usp][at] = v;
+	}
+}
+
+/* Where that planting puts the base code, clamp included. */
+static unsigned char
+planted_base(unsigned char a954, int minoff)
+{
+	unsigned char b = (unsigned char)((unsigned char)(a954 - 3) - minoff);
+
+	if (b > 0x5f)
+		b = 0x5f;
+	else if (b < 0x50)
+		b = 0x50;
+	return b;
+}
 
 /*
  * The three that only move bytes about: two array copies and the connection
@@ -1361,6 +1445,51 @@ run_signal(void)
 			    block);
 
 		if ((block & 7) == 7) {
+			/*
+			 * THE HONEST VERSION OF THE PAD GAIN: compute it from
+			 * the variances the block just produced instead of
+			 * planting one.  `determineMaxUcode` leaves +0xa954
+			 * behind and `findPadGain` reads it, so the pair runs
+			 * in that order and `applyPadGainToLinMapp` then
+			 * divides by what they decided rather than by a table
+			 * value -- which is the sequence the class is for.
+			 *
+			 * THE THREE FIELDS FORCED HERE ARE THE THREE THAT
+			 * DECIDE WHETHER EITHER METHOD TERMINATES OR STAYS
+			 * INSIDE THE OBJECT, and they are the same bounds the
+			 * two dedicated sweeps above use: the argument is
+			 * under 255, +0xa954 is in [8, 0x9c], and the phase
+			 * comes from `safe_usp`.  `determineMaxUcode` runs
+			 * first and rewrites +0xa954 itself, so the value is
+			 * put back before `findPadGain` is called.
+			 */
+			short mc = (short)(0x40 + block % 0x40);
+
+			BOTH(unSuspectedPhase, safe_usp(mc, block % NPHASE));
+			BOTH(short_a97a, (short)(0x30 + block % 8));
+			BOTH(float_a980, 1.0f + (float)(block % 5));
+			ours_o.determineMaxUcode(mc);
+			ref_determineMaxUcode(&theirs_o, mc);
+			diff_eq_obj("block: determineMaxUcode",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+
+			BOTH(byte_a954, (unsigned char)(0x50 + block % 0x28));
+			plant_window(ours_o.unSuspectedPhase,
+				     ours_o.byte_a954, block % 5, 1.0f,
+				     1.0e9f);
+			ours_o.findPadGain();
+			ref_findPadGain(&theirs_o);
+			diff_eq_obj("block: findPadGain",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+
+			ours_o.applyPadGainToLinMapp();
+			ref_applyPadGainToLinMapp(&theirs_o);
+			diff_eq_obj("block: applyPadGainToLinMapp (computed)",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+
 			BOTH(padGain, 1.0f + (float)block * 0.125f);
 			ours_o.applyPadGainToLinMapp();
 			ref_applyPadGainToLinMapp(&theirs_o);
@@ -1383,7 +1512,7 @@ run_signal(void)
 			diff_eq_obj("block: clearCamulativeAltVal",
 				    V90AutoDigitalImpDetector, &ours_o,
 				    &theirs_o, block);
-			calls += 3;
+			calls += 6;
 		}
 
 		/*
@@ -3460,6 +3589,851 @@ run_qcmapping(void)
 	return diff_end();
 }
 
+/*
+ * ==========================================================================
+ * THE PAD-GAIN BATCH: `determineMaxUcode` and `findPadGain`.
+ *
+ * WHAT HAS TO BE BOUNDED BEFORE EITHER CAN BE CALLED AT ALL, and none of it
+ * is a weakening -- each bound is a place the object walks out of its own
+ * 43,440 bytes, which is two different pieces of the test's memory and
+ * therefore a measurement of nothing.  docs/deviations.md D288 and D290 are
+ * where the four are written down.
+ *
+ *   `float_9d48` RUNS OUT AT ENTRY 793.  It is 768 entries long but the
+ *   object indexes it as `phase * 128 + code` with a code that reaches 255,
+ *   and the object is 0xa9b0 bytes, so the last entry still inside is
+ *   (0xa9b0 - 0x9d48) / 4 - 1 = 793.  Phase 5 plus a code of 154 is the first
+ *   one out, so an argument above 153 is only ever offered to phases 0..4 --
+ *   which is what `safe_usp` below does, and why the phase is chosen from the
+ *   argument rather than swept against it.
+ *
+ *   `determineMaxUcode`'s REPORT LOOP COUNTS AN `unsigned char` UP TO THE
+ *   ARGUMENT, so an argument of 255 or more never ends it -- the counter
+ *   wraps from 255 to 0 and 0 is still under the bound.  Every argument here
+ *   is 254 or less.
+ *
+ *   `findPadGain`'s SCAN BOUND IS `(int)(byte_a954 - 3) - 5` COMPARED AGAINST
+ *   A ZERO-EXTENDED BYTE, so a `byte_a954` of 3..7 makes the bound negative
+ *   and the loop never ends.  Every trial forces the field into [8, 0x9c],
+ *   whose top keeps the window's own index inside entry 793 at phase 5.
+ *
+ *   `findPadGain` READS ITS BEST INDEX UNINITIALISED if none of the five
+ *   window entries beats the 1e8 sentinel (D290, D281's situation).  Every
+ *   trial plants the window with `plant_window`, so exactly one entry is
+ *   small and the take always happens -- two static objects have two
+ *   different stack frames and a trial that read the slot would be comparing
+ *   the linker's layout.
+ *
+ * `determineMaxUcode`'s OTHER TWO UNBOUNDED INDICES NEED NO GUARD and are
+ * exercised for real.  The five-entry scan window reads below the start of
+ * the reference phase's row and the backwards walk in the last loop wraps a
+ * byte through 256 values -- but the deepest either reaches is +0x107f, which
+ * is inside the object, so both are left alone.  The walk cannot spin
+ * forever either: the fill immediately before it sets
+ * `byte_0d00[phase][ucode]` to 1 for every phase, and that byte is one of the
+ * 256 the walk visits.
+ * ==========================================================================
+ */
+
+/*
+ * determineMaxUcode.
+ *
+ * THE METHOD IS FIVE DECISIONS DEEP AND A SEEDED OBJECT REACHES ONE SIDE OF
+ * MOST OF THEM, so the sweep forces the six fields the answers turn on --
+ * `unSuspectedPhase`, `short_a97a`, `float_a980`, `ucode`, the six flags at
+ * +0x2800, and the argument -- and then four directed grids drive the arms a
+ * sweep cannot reach.
+ *
+ * THE THRESHOLD'S TWO CLAMPS NEED A CONSTRUCTED INPUT.  It is the mean of
+ * twenty variances times `float_a980`, and a seeded `float_9d48` puts that
+ * mean somewhere astronomical almost every time -- so the grid sets those
+ * twenty entries directly: all zero clamps it up to 500, all 1e9 clamps it
+ * down to 100000, and a middling set leaves it alone.
+ *
+ * THE TWO SKIPS IN THE SCAN ARE WHERE THE UNORDERED COMPARE LIVES.  An entry
+ * joins the count when it is smaller than the threshold AND is not zero --
+ * and the object's zero test is an `fcomp`/`je`, which a NaN satisfies.  Two
+ * grids plant exactly three NaNs and exactly three zeros in a five-entry
+ * window with two small entries beside them, so the count is 2 and the window
+ * does NOT qualify; a reading that counted either would make it 5 and qualify,
+ * and the answer moves.  Finding 1436.
+ */
+static int
+run_maxucode(void)
+{
+	static const short mcv[] = {
+		0x5a, 0x40, 0x2a, 0x60, 0x50, 0x33, 0x4c, 0x55
+	};
+	static const short a97av[] = {
+		80, 88, 0x28, 0x3c, 300, 0x30, 0x35, 0x48
+	};
+	static const float a980v[] = {
+		1.5f, 1.75f, 0.0f, 100.0f, -2.0f, 1.0f, 1.0e6f, 1.0e-3f
+	};
+	static const unsigned char ucv[] = {
+		0, 1, 0x2a, 0x40, 0x7f, 0x80, 0xd5, 0xff
+	};
+	int trial;
+	int moved = 0, distinct = 0;
+	int forced = 0, unforced = 0;
+	int mask0 = 0, mask1 = 0;
+	int walked = 0, direct = 0;
+	int level2 = 0, level0 = 0;
+	unsigned char first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::determineMaxUcode");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		short mc = mcv[IDX(trial, 1)];
+		short a97a = a97av[IDX(trial, 3)];
+		short usp = safe_usp(mc, trial % NPHASE);
+		int p;
+
+		seed(trial, trial % 4);
+		BOTH(unSuspectedPhase, usp);
+		BOTH(short_a97a, a97a);
+		BOTH(float_a980, a980v[IDX(trial, 5)]);
+		BOTH(ucode, ucv[IDX(trial, 7)]);
+
+		/*
+		 * A pattern in 1..62 is never all clear and never all set, so
+		 * both arms of every per-phase test are taken inside every
+		 * single call rather than only across the sweep.
+		 */
+		adid_set_2800(1 + trial % 62);
+
+		/* Half the sweep at level 2 and half at level 0. */
+		if ((trial & 1) != 0) {
+			study_debug_on();
+			level2 = 1;
+		} else {
+			study_debug_off();
+			level0 = 1;
+		}
+		dsplib_debug_capture_reset();
+		memcpy(params_copy, params_block, PARAMS_BYTES);
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.determineMaxUcode(mc);
+		ref_determineMaxUcode(&theirs_o, mc);
+
+		diff_eq_obj("after determineMaxUcode",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("determineMaxUcode wrote nothing through params "
+			    "(trial %ld)",
+			    memcmp(params_copy, params_block, PARAMS_BYTES), 0,
+			    trial);
+		diff_eq_int("the maxUcode report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.byte_a954;
+		else if (ours_o.byte_a954 != first)
+			distinct = 1;
+
+		if (a97a == 300)
+			forced = 1;
+		else if (ours_o.byte_a954 > (unsigned char)a97a)
+			unforced = 1;
+
+		for (p = 0; p < NPHASE; p++) {
+			int c;
+
+			if (ours_o.short_2800[p] != 0)
+				continue;
+			if (ours_o.maxUcode[p] == ours_o.byte_a954)
+				direct = 1;
+			else
+				walked = 1;
+			for (c = 0; c < V90ADID_CODES; c++) {
+				if (ours_o.byte_0d00[p][c] == 0)
+					mask0 = 1;
+				else
+					mask1 = 1;
+			}
+		}
+	}
+
+	/*
+	 * THE THRESHOLD GRID.  Twenty entries decide it, and each row here
+	 * makes the answer land on one side of one of the two clamps: zeros
+	 * give a threshold of 0 and the 500 floor, 1e9 gives 1e9 and the
+	 * 100000 ceiling, and 2000 with a gain of 1 gives 2000 and neither.
+	 * The mask the last loop reads is built from twice that threshold, so
+	 * the same grid moves what `maxUcode` comes out as.
+	 */
+	{
+		/*
+		 * The last three rows are just inside a boundary rather than
+		 * far from it: twenty entries of `f` and a gain of one give a
+		 * threshold of `f` almost exactly, so 500.5 and 100000.5 land
+		 * between each clamp's test and the value one above it, and
+		 * 6666.6 is the only row with a fractional part for the two
+		 * reports to print.  A table of round numbers cannot see a
+		 * constant moved by one -- finding 1423's lesson, met again.
+		 */
+		static const float fill[] = {
+			0.0f, 1.0e9f, 2000.0f, 40000.0f, 6666.6f, 500.5f,
+			100000.5f
+		};
+		int g;
+
+		study_debug_on();
+		for (g = 0; g < 7; g++) {
+			int i;
+
+			seed(700 + g, 0);
+			BOTH(unSuspectedPhase, (short)(g % NPHASE));
+			BOTH(short_a97a, 0x30);
+			BOTH(float_a980, 1.0f);
+			BOTH(ucode, (unsigned char)(0x41 + g));
+			adid_set_2800(0x15);
+
+			for (i = 0; i < V90ADID_CODES; i++) {
+				ours_o.float_9d48[g % NPHASE][i] =
+				    theirs_o.float_9d48[g % NPHASE][i] = fill[g];
+			}
+
+			dsplib_debug_capture_reset();
+			ours_o.determineMaxUcode(0x5a);
+			ref_determineMaxUcode(&theirs_o, 0x5a);
+			diff_eq_obj("maxucode: the threshold grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, g);
+			diff_eq_int("the threshold grid's report matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, g);
+		}
+	}
+
+	/*
+	 * THE WINDOW GRID.  Five entries decide whether a window qualifies and
+	 * the count has to exceed two, so a window of exactly three small
+	 * entries qualifies and one of exactly two does not -- and the two
+	 * skips are separated by planting NaNs and zeros where the small
+	 * entries would otherwise be.  Row `w` of the table is the five
+	 * variances at codes 0x5a down to 0x56, top first.
+	 */
+	{
+		static const unsigned int win[6][5] = {
+			/* three small: qualifies, and the first is at the top */
+			{ 0x3f800000u, 0x3f800000u, 0x3f800000u, 0x7f7fffffu,
+			  0x7f7fffffu },
+			/* three small, the first one entry down */
+			{ 0x7f7fffffu, 0x3f800000u, 0x3f800000u, 0x3f800000u,
+			  0x7f7fffffu },
+			/* three small, the first at the BOTTOM of the window */
+			{ 0x7f7fffffu, 0x7f7fffffu, 0x3f800000u, 0x3f800000u,
+			  0x3f800000u },
+			/* two small and three NaN: must NOT qualify */
+			{ 0x7fc00000u, 0x3f800000u, 0x7fc00000u, 0x3f800000u,
+			  0x7fc00000u },
+			/* two small and three zeros: must NOT qualify */
+			{ 0x00000000u, 0x3f800000u, 0x00000000u, 0x3f800000u,
+			  0x00000000u },
+			/* nothing small at all */
+			{ 0x7f7fffffu, 0x7f7fffffu, 0x7f7fffffu, 0x7f7fffffu,
+			  0x7f7fffffu }
+		};
+		int w;
+		unsigned char seen[6];
+
+		study_debug_on();
+		for (w = 0; w < 6; w++) {
+			int i;
+
+			seed(760 + w, 0);
+			BOTH(unSuspectedPhase, 2);
+			BOTH(short_a97a, 0x30);
+			BOTH(float_a980, 1.0f);
+			BOTH(ucode, 0x41);
+			adid_set_2800(0x15);
+
+			/*
+			 * Everything outside the window is huge, so only the
+			 * planted window can ever qualify and the answer is a
+			 * function of the five entries alone.  0x4f000000 is
+			 * 2^31, which is over the threshold the twenty entries
+			 * at 40..59 produce and is not a NaN.
+			 */
+			for (i = 0; i < V90ADID_CODES; i++)
+				ours_o.float_9d48[2][i] =
+				    theirs_o.float_9d48[2][i] = 1.0e9f;
+			for (i = 0; i < 5; i++) {
+				float v;
+
+				memcpy(&v, &win[w][i], sizeof v);
+				ours_o.float_9d48[2][0x5a - i] =
+				    theirs_o.float_9d48[2][0x5a - i] = v;
+			}
+
+			dsplib_debug_capture_reset();
+			ours_o.determineMaxUcode(0x5a);
+			ref_determineMaxUcode(&theirs_o, 0x5a);
+			diff_eq_obj("maxucode: the window grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, w);
+			diff_eq_int("the window grid's report matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, w);
+			seen[w] = ours_o.byte_a954;
+		}
+
+		/*
+		 * The three qualifying rows put the highest small entry at
+		 * three different places, so the answer has to move with it;
+		 * the three that do not qualify all fall through to the floor.
+		 */
+		diff_eq_int("a window qualifying at its top gives that code",
+			    seen[0], 0x5a, 0);
+		diff_eq_int("a window qualifying one down gives that code",
+			    seen[1], 0x59, 0);
+		diff_eq_int("a window qualifying at its foot gives that code",
+			    seen[2], 0x58, 0);
+		diff_eq_int("three NaNs do not make a window qualify",
+			    seen[3] != 0x5a && seen[3] != 0x59, 1, 0);
+		diff_eq_int("three zeros do not make a window qualify",
+			    seen[4] != 0x5a && seen[4] != 0x59, 1, 0);
+		diff_eq_int("no small entry at all falls through to the floor",
+			    seen[5], 0x30, 0);
+	}
+
+	/*
+	 * THREE CORNERS THAT ONLY A CONSTRUCTED INPUT REACHES, and each of the
+	 * three is invisible in the OBJECT and visible only in the transcript
+	 * -- which is the whole argument for comparing the transcript at all.
+	 *
+	 * ROW 0, THE WINDOW AT THE VERY BOTTOM OF THE SCAN.  Three small
+	 * entries at codes 0x2c..0x2e and a floor at 0x30: the window ending at
+	 * 0x31 holds two of them and does not qualify, and the window ending at
+	 * 0x30 holds all three and does -- but the scan's test is `ci > minU`
+	 * and never evaluates it.  A test of `ci >= minU` would qualify there,
+	 * answer 0x2e, and then have that answer forced back up to 0x30 by the
+	 * floor -- so `byte_a954` is 0x30 either way and the only difference is
+	 * the "original maxUcode ... forced minimum maxUcode" line.
+	 *
+	 * ROW 1, A NEGATIVE FLOOR.  `short_a97a` of -1 makes the byte 0xff, so
+	 * the scan never runs and the answer is 0xff -- and the floor test is a
+	 * SIGNED compare against the whole `short`, so 255 < -1 is false and
+	 * nothing is forced.  Read unsigned it would be 255 < 65535, which
+	 * forces, prints, and stores (unsigned char)(-1) -- the same 0xff.
+	 * That row is also the deepest the backwards walk in the last loop
+	 * ever gets here, and it terminates by construction and not by luck:
+	 * all three unflagged phases start the walk at 0xff, `ucode` is 0x41,
+	 * and the fill immediately before sets `byte_0d00[phase][0x41]` to 1
+	 * for every phase -- so each walk stops after at most 190 steps
+	 * without wrapping, whatever the seed put in the rest of the row.
+	 *
+	 * ROW 2, A VARIANCE EXACTLY ON THE MASK'S THRESHOLD.  Twenty entries of
+	 * 1000 give a threshold of 1000 exactly and a mask limit of 2000
+	 * exactly, and sixteen codes below the argument are set to 2000 -- so
+	 * `>=` marks them unusable where `>` would mark them usable, and
+	 * `maxUcode` moves with them.
+	 */
+	{
+		int r;
+
+		study_debug_on();
+		for (r = 0; r < 3; r++) {
+			int i;
+
+			seed(830 + r, 0);
+			BOTH(unSuspectedPhase, 1);
+			BOTH(float_a980, 1.0f);
+			BOTH(ucode, 0x41);
+			adid_set_2800(0x15);
+
+			for (i = 0; i < V90ADID_CODES; i++)
+				ours_o.float_9d48[1][i] =
+				    theirs_o.float_9d48[1][i] =
+				    (r == 2) ? 1000.0f : 1.0e9f;
+
+			if (r == 0) {
+				BOTH(short_a97a, 0x30);
+				for (i = 0x2c; i <= 0x2e; i++)
+					ours_o.float_9d48[1][i] =
+					    theirs_o.float_9d48[1][i] = 1.0f;
+			} else if (r == 1) {
+				BOTH(short_a97a, -1);
+			} else {
+				BOTH(short_a97a, 0x30);
+				for (i = 0x10; i <= 0x1f; i++)
+					ours_o.float_9d48[1][i] =
+					    theirs_o.float_9d48[1][i] = 2000.0f;
+			}
+
+			dsplib_debug_capture_reset();
+			ours_o.determineMaxUcode(0x5a);
+			ref_determineMaxUcode(&theirs_o, 0x5a);
+			diff_eq_obj("maxucode: the corner grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, r);
+			diff_eq_int("the corner grid's report matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, r);
+		}
+	}
+
+	/*
+	 * THE ARGUMENT'S OWN ARMS.  A negative argument skips the report loop
+	 * and makes every code fail `code <= arg`, so the mask comes out all
+	 * zero except the reference code the fill forces back to 1 -- which is
+	 * the only thing that stops the backwards walk in the last loop.  An
+	 * argument at or below `short_a97a` skips the scan entirely.  Both are
+	 * only offered to phases 0..4, because a byte-wide argument of 0xff at
+	 * phase 5 would index past the object.
+	 */
+	{
+		static const short arg[] = { -1, -32768, 0x20, 0, 0xfe, 0x99 };
+		int a;
+
+		study_debug_off();
+		for (a = 0; a < 6; a++) {
+			seed(800 + a, a % 4);
+			BOTH(unSuspectedPhase, (short)(a % 5));
+			BOTH(short_a97a, 0x30);
+			BOTH(float_a980, 1.0f);
+			BOTH(ucode, (unsigned char)(0x20 + a));
+			adid_set_2800(1 + a * 7 % 62);
+
+			ours_o.determineMaxUcode(arg[a]);
+			ref_determineMaxUcode(&theirs_o, arg[a]);
+			diff_eq_obj("maxucode: the argument grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, a);
+			diff_eq_int("no store past the object (argument %ld)",
+				    guard_equal(), 1, a);
+		}
+	}
+
+	study_debug_off();
+
+	diff_eq_int("determineMaxUcode changed the object", moved, 1, 0);
+	diff_eq_int("the maxUcode is not the same on every trial", distinct, 1,
+		    0);
+	diff_eq_int("the floor was forced", forced, 1, 0);
+	diff_eq_int("the floor was not forced", unforced, 1, 0);
+	diff_eq_int("a code was marked unusable", mask0, 1, 0);
+	diff_eq_int("a code was marked usable", mask1, 1, 0);
+	diff_eq_int("a phase took the scan's answer directly", direct, 1, 0);
+	diff_eq_int("a phase had to walk down for a usable code", walked, 1, 0);
+	diff_eq_int("the report was exercised", level2, 1, 0);
+	diff_eq_int("the gate was exercised shut", level0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * findPadGain.
+ *
+ * FIVE THINGS ARE FORCED AND ONE IS PLANTED.  `byte_a954` sets both scans'
+ * extent and has to stay in [8, 0x9c] for the method to terminate at all;
+ * `unSuspectedPhase` picks the row everything is read from; `float_a97c`
+ * decides where the candidate range starts; `linMapp[phase][base]` is the
+ * numerator of every candidate gain and therefore the only lever on which of
+ * the three error buckets a candidate lands in; and the five-entry variance
+ * window is planted outright, because `projectionBaseUcode` is otherwise
+ * invisible behind the [0x50, 0x5f] clamp.
+ *
+ * THAT LAST POINT IS WHY THE GRID EXISTS.  A seeded window puts the smallest
+ * variance somewhere arbitrary, the clamp swallows the difference, and a
+ * mutation on the window's width, on the `-3`, or on the sense of the
+ * comparison survives a perfect sweep -- finding 1366's shape.  The grid
+ * plants the minimum at each of the five offsets in turn with the base code
+ * inside the clamp window, and asserts the gain that comes out is not the
+ * same for all five.
+ *
+ * THE GAIN IS ROUTINELY A NUMBER NOTHING SENSIBLE COMES OF.  `ref` is swept
+ * through zero and both signs, so `1.0f / gain` is an infinity on some passes
+ * and the projected level saturates to 0x8000 through the object's sixteen-bit
+ * `fistps`; that is the object's arithmetic and it is exercised rather than
+ * avoided.
+ */
+static int
+run_padgain(void)
+{
+	static const unsigned char a954v[] = {
+		0x5a, 0x62, 0x70, 0x08, 0x3f, 0x53, 0x9c, 0x40
+	};
+	static const float a97cv[] = {
+		0.25f, 0.35f, 1.0f, 2.0f, 8.0f, 0.0f, -1.0f, 0.03f
+	};
+	static const short refv[] = {
+		1000, 8031, 32000, 0, -8000, 100, 4000, 20000
+	};
+	int trial;
+	int moved = 0, distinct = 0;
+	int mulaw = 0, alaw = 0;
+	int gainhigh = 0, gainmid = 0, gainlow = 0, gainone = 0;
+	int clamplo = 0, clamphi = 0, noclamp = 0;
+	int shortscan = 0, longscan = 0;
+	int level2 = 0, level0 = 0;
+	float first = 0.0f;
+
+	diff_begin("V90AutoDigitalImpDetector::findPadGain");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		unsigned char a954 = a954v[IDX(trial, 1)];
+		short usp = (short)(trial % NPHASE);
+		int minoff = trial % 5;
+		unsigned char base = planted_base(a954, minoff);
+		float g;
+
+		seed(trial, trial % 4);
+		BOTH(unSuspectedPhase, usp);
+		BOTH(byte_a954, a954);
+		BOTH(float_a97c, a97cv[IDX(trial, 3)]);
+		plant_window(usp, a954, minoff, 1.0f, 1.0e9f);
+		ours_o.linMapp[usp][base] = theirs_o.linMapp[usp][base] =
+		    refv[IDX(trial, 5)];
+
+		if ((trial & 1) != 0) {
+			study_debug_on();
+			level2 = 1;
+		} else {
+			study_debug_off();
+			level0 = 1;
+		}
+		dsplib_debug_capture_reset();
+		memcpy(params_copy, params_block, PARAMS_BYTES);
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.findPadGain();
+		ref_findPadGain(&theirs_o);
+
+		diff_eq_obj("after findPadGain", V90AutoDigitalImpDetector,
+			    &ours_o, &theirs_o, trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("findPadGain wrote nothing through params "
+			    "(trial %ld)",
+			    memcmp(params_copy, params_block, PARAMS_BYTES), 0,
+			    trial);
+		diff_eq_int("the pad-gain report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.padGain;
+		else if (fbits(ours_o.padGain) != fbits(first))
+			distinct = 1;
+
+		if (ours_o.int_a960 == 0)
+			mulaw = 1;
+		else if (ours_o.int_a960 == 1)
+			alaw = 1;
+
+		g = ours_o.padGain;
+		if (fbits(g) == fbits(1.0f))
+			gainone = 1;
+		else if (g >= 2.7f)
+			gainhigh = 1;
+		else if (g >= 1.2f)
+			gainmid = 1;
+		else
+			gainlow = 1;
+
+		if (base == 0x50)
+			clamplo = 1;
+		else if (base == 0x5f)
+			clamphi = 1;
+		else
+			noclamp = 1;
+
+		/*
+		 * The candidate scan prints one line per pass, so the line
+		 * count is what says whether it ran at all: a call whose
+		 * starting code is already above the base code prints only its
+		 * fixed lines, and every other call prints tens more.
+		 */
+		if ((trial & 1) != 0) {
+			if (dsplib_debug_capture_lines(0) < 20)
+				shortscan = 1;
+			else
+				longscan = 1;
+		}
+	}
+
+	/*
+	 * THE WINDOW GRID.  Five offsets, the same everything else, and the
+	 * base code inside the clamp window at all five -- so the only thing
+	 * that moves is which entry of the window the scan picked, and the pad
+	 * gain has to move with it.  Without this the width of the window, the
+	 * `- 3`, and the sense of the comparison are all unobservable.
+	 */
+	{
+		float got[5];
+		int w;
+
+		study_debug_on();
+		for (w = 0; w < 5; w++) {
+			int i;
+			unsigned char base = planted_base(0x62, w);
+
+			seed(860 + w, 0);
+			BOTH(unSuspectedPhase, 1);
+			BOTH(byte_a954, 0x62);
+			BOTH(float_a97c, 0.25f);
+			plant_window(1, 0x62, w, 1.0f, 1.0e9f);
+
+			/*
+			 * A mapping that rises with the code, so the candidate
+			 * gain falls as the scan proceeds and the three error
+			 * buckets are all reached inside one call.
+			 */
+			for (i = 0; i < V90ADID_CODES; i++)
+				ours_o.linMapp[1][i] = theirs_o.linMapp[1][i] =
+				    (short)(i * 137 + 200);
+
+			dsplib_debug_capture_reset();
+			ours_o.findPadGain();
+			ref_findPadGain(&theirs_o);
+			diff_eq_obj("padgain: the window grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, w);
+			diff_eq_int("the window grid's report matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, w);
+			got[w] = ours_o.padGain;
+			(void)base;
+		}
+
+		diff_eq_int("the window offset moves the pad gain",
+			    fbits(got[0]) != fbits(got[4])
+			    || fbits(got[1]) != fbits(got[3]), 1, 0);
+	}
+
+	/*
+	 * THE TIE AND THE NaN, which are the two readings of the scan's
+	 * comparison that no ordinary window separates.
+	 *
+	 * The scan walks DOWNWARDS and keeps the entry that is strictly
+	 * smaller than the best so far, so two equal minima leave the HIGHER
+	 * code standing; a `<=` would leave the lower one.  And the object's
+	 * `jb` is taken by an unordered compare, so a NaN in the window
+	 * becomes the running best and then loses to nothing -- every entry
+	 * after it wins -- which puts the answer at the BOTTOM of the window
+	 * where a C `<` would have left it above.  Finding 1436.
+	 */
+	{
+		static const unsigned int probe[2][5] = {
+			{ 0x3f800000u, 0x4f000000u, 0x3f800000u, 0x4f000000u,
+			  0x4f000000u },
+			{ 0x4f000000u, 0x7fc00000u, 0x4f000000u, 0x4f000000u,
+			  0x4f000000u }
+		};
+		int t;
+
+		study_debug_on();
+		for (t = 0; t < 2; t++) {
+			int i;
+
+			seed(880 + t, 0);
+			BOTH(unSuspectedPhase, 0);
+			BOTH(byte_a954, 0x62);
+			BOTH(float_a97c, 0.25f);
+
+			for (i = 0; i < V90ADID_CODES; i++)
+				ours_o.linMapp[0][i] = theirs_o.linMapp[0][i] =
+				    (short)(i * 137 + 200);
+			for (i = 0; i < 5; i++) {
+				float v;
+
+				memcpy(&v, &probe[t][i], sizeof v);
+				ours_o.float_9d48[0][0x5f - i] =
+				    theirs_o.float_9d48[0][0x5f - i] = v;
+			}
+
+			dsplib_debug_capture_reset();
+			ours_o.findPadGain();
+			ref_findPadGain(&theirs_o);
+			diff_eq_obj("padgain: the tie and the NaN",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, t);
+			diff_eq_int("the probe's report matched (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, t);
+		}
+	}
+
+	/*
+	 * A FINE GRID OVER THE CANDIDATE GAIN AND OVER THE RANGE'S FLOOR.
+	 *
+	 * Everything above is a table, and a table of round numbers never puts
+	 * a value just inside a boundary: the buckets split at 2.7 and 1.2, the
+	 * two best-of-three margins are 0.8 and 0.85, and the range's floor is
+	 * an exact `minU <= 0x27` -- so a constant moved by a tenth, or a
+	 * comparison made strict, has to be STRADDLED to be seen.  Measured:
+	 * five such mutations survived the tables and are caught here.
+	 *
+	 * The gain is `linMapp[phase][base] / level(cur)` with `level` fixed
+	 * per candidate, so stepping the mapping by 37 a call steps every
+	 * candidate gain in that call by a few hundredths and walks it across
+	 * each boundary many times.  `float_a97c` is swept in thousandths over
+	 * the range that puts the companded floor in the low forties, which is
+	 * where `minU` can be exactly 0x27.
+	 */
+	{
+		int k;
+
+		study_debug_off();
+		for (k = 0; k < 200; k++) {
+			unsigned char a954 = (unsigned char)(0x53 + k % 16);
+			short usp = (short)(k % NPHASE);
+			int i;
+
+			seed(900 + k, 0);
+			BOTH(unSuspectedPhase, usp);
+			BOTH(byte_a954, a954);
+			BOTH(float_a97c, 0.001f + 0.002f * (float)(k % 80));
+			plant_window(usp, a954, k % 5, 1.0f, 1.0e9f);
+			for (i = 0; i < V90ADID_CODES; i++)
+				ours_o.linMapp[usp][i] =
+				    theirs_o.linMapp[usp][i] =
+				    (short)((i * 61 + 40 + k * 37) % 20000);
+
+			ours_o.findPadGain();
+			ref_findPadGain(&theirs_o);
+			diff_eq_obj("padgain: the gain grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+		}
+		diff_eq_int("no store past the object (gain grid)",
+			    guard_equal(), 1, 0);
+	}
+
+	/*
+	 * AND THE SAME GRID WITH THE PROJECTION LOOP EMPTY.  A `byte_a954`
+	 * under 0x40 skips the round trip entirely, so every candidate's error
+	 * is exactly zero -- and then the best-of-three's `errMid * 0.8f >
+	 * errHigh` is `0 > 0`, which is the one input that separates it from
+	 * `>=`.  Both buckets have to be filled for that to be visible, which
+	 * is what the gain sweep is for.
+	 */
+	{
+		int k;
+
+		study_debug_off();
+		for (k = 0; k < 64; k++) {
+			short usp = (short)(k % NPHASE);
+			int i;
+
+			seed(1100 + k, 0);
+			BOTH(unSuspectedPhase, usp);
+			BOTH(byte_a954, 0x20);
+			BOTH(float_a97c, 0.25f);
+			plant_window(usp, 0x20, k % 5, 1.0f, 1.0e9f);
+			for (i = 0; i < V90ADID_CODES; i++)
+				ours_o.linMapp[usp][i] =
+				    theirs_o.linMapp[usp][i] =
+				    (short)((i * 7 + 100 + k * 211) % 24000);
+
+			ours_o.findPadGain();
+			ref_findPadGain(&theirs_o);
+			diff_eq_obj("padgain: the empty-projection grid",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, k);
+		}
+		diff_eq_int("no store past the object (empty-projection grid)",
+			    guard_equal(), 1, 0);
+	}
+
+	/*
+	 * THE RANGE'S FLOOR, WHICH IS AN EXACT EQUALITY AND NEEDED SOLVING FOR.
+	 *
+	 * `if (minU <= 0x27) minU = 0x28;` differs from `< 0x27` at ONE value
+	 * of `minU`, and `minU` is a companded code -- so no sweep of a scaling
+	 * factor lands on it by luck.  It was solved for instead: at a base
+	 * code of 0x50 and mu-law, `~linear2ulaw(|(int)(620 * a97c)|)` is 0x27
+	 * for `float_a97c` anywhere in [0.14775, 0.15525], which a throwaway
+	 * program built -m32 -mfpmath=387 against this tree's own `pcm.c`
+	 * enumerated.  Eight values inside that band are swept here.
+	 *
+	 * AND THE DIFFERENCE HAS TO BE MADE TO REACH `padGain`.  With the
+	 * projection loop empty every candidate's error is zero, so the first
+	 * candidate wins its bucket and no later one displaces it -- which
+	 * makes the bottom of the range the whole answer.  A reference level of
+	 * 20000 against companded levels of 620..4092 keeps every candidate
+	 * gain above 2.7, so the middle bucket is never filled, its error stays
+	 * at 1e6, `errMid * 0.8f > errHigh` fires, and the pad gain is the
+	 * high bucket's -- which is `20000 / 620` under one reading of the
+	 * floor and `20000 / 652` under the other.
+	 */
+	{
+		int j;
+
+		study_debug_off();
+		for (j = 0; j < 8; j++) {
+			short usp = (short)(j % NPHASE);
+			int i;
+
+			seed(1200 + j, 0);
+			BOTH(unSuspectedPhase, usp);
+			BOTH(byte_a954, 0x20);
+			BOTH(float_a97c, 0.148f + 0.001f * (float)j);
+			plant_window(usp, 0x20, j % 5, 1.0f, 1.0e9f);
+			for (i = 0; i < V90ADID_CODES; i++)
+				ours_o.linMapp[usp][i] =
+				    theirs_o.linMapp[usp][i] = 20000;
+
+			ours_o.findPadGain();
+			ref_findPadGain(&theirs_o);
+			diff_eq_obj("padgain: the range's floor",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, j);
+			diff_eq_int("the floor grid put the gain in the high "
+				    "bucket (%ld)",
+				    ours_o.padGain > 2.7f, 1, j);
+		}
+		diff_eq_int("no store past the object (floor grid)",
+			    guard_equal(), 1, 0);
+	}
+
+	study_debug_off();
+
+	diff_eq_int("findPadGain changed the object", moved, 1, 0);
+	diff_eq_int("the pad gain is not the same on every trial", distinct, 1,
+		    0);
+	diff_eq_int("mu-law was identified", mulaw, 1, 0);
+	diff_eq_int("A-law was identified", alaw, 1, 0);
+	diff_eq_int("a gain above 2.7 was chosen", gainhigh, 1, 0);
+	diff_eq_int("a gain between 1.2 and 2.7 was chosen", gainmid, 1, 0);
+	diff_eq_int("a gain below 1.2 was chosen", gainlow, 1, 0);
+	diff_eq_int("a gain of exactly one was chosen", gainone, 1, 0);
+	diff_eq_int("the base code was clamped up", clamplo, 1, 0);
+	diff_eq_int("the base code was clamped down", clamphi, 1, 0);
+	diff_eq_int("the base code needed no clamp", noclamp, 1, 0);
+	diff_eq_int("a call whose candidate range was empty", shortscan, 1, 0);
+	diff_eq_int("a call whose candidate range was not", longscan, 1, 0);
+	diff_eq_int("the report was exercised", level2, 1, 0);
+	diff_eq_int("the gate was exercised shut", level0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -3483,6 +4457,8 @@ main(void)
 	rc |= run_dilrepair();
 	rc |= run_secondstudy();
 	rc |= run_qcmapping();
+	rc |= run_maxucode();
+	rc |= run_padgain();
 	rc |= run_signal();
 
 	return rc;

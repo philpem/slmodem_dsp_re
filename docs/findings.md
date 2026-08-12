@@ -45048,3 +45048,258 @@ to be caught, was not, and the proof came afterwards; the alternative would have
 been to leave `1 NOT caught` standing, which is the thing this file is for.
 
 ======================================================================
+
+### 1434. THE LAST TWO GAPS IN THE DETECTOR'S MAP, AND WHY NO TEST CAN SEE EITHER
+
+`V90AutoDigitalImpDetector` had two `pad_` regions left outside the sample
+store when the pad-gain batch started, and the two methods that batch wrote are
+the only members of the class that touch either.
+
++0xa954 IS ONE BYTE AND THE OBJECT CALLS IT `maxUcode`. Seven accesses name it
+and every one is eight bits wide and unsigned: `determineMaxUcode` writes it
+with `mov %bl,0xa954(%ebp)` at 0x4449f, 0x444d7, 0x4450a and 0x4468a and reads
+it back with `movzbl`; `findPadGain` reads it as `movzbl 0xa954(%esi)` at
+0x4363e, as `cmpb $0x3f,0xa954(%esi)` at 0x43801 and as `cmp %bl,0xa954(%esi)`
+at 0x438c9 and 0x43986. The name is the original author's -- the format string
+at `.rodata.str1.4+0xb808` is "V90AutoDigitalImpDetector: original maxUcode =
+%d  forced minimum maxUcode = %d" and its first argument is `movzbl` of exactly
+this byte -- but the identifier stays offset-derived, because `maxUcode[6]` at
++0xa956 already has the name and the two are not the same thing: this is the
+scalar every phase's entry in that array is derived from. +0xa955 is left
+`pad_`, because no displacement in the class names it.
+
++0xa960 IS AN `int` AND IT IS THE IDENTIFIED COMPANDING LAW. Two stores and no
+reads anywhere in the class: `mov %ecx,0xa960(%esi)` with %ecx zeroed at
+0x43e93, immediately before "Final codec identified is MuLaw", and `mov
+%edi,0xa960(%esi)` with %edi = 1 at 0x440c4, immediately before "Final codec
+identified is ALaw". Both are 32 bits, which is what makes the whole four-byte
+region one field rather than a byte and three spare.
+
+NEITHER IS TESTABLE AS A TYPE. `make offsets` checks offsets and the
+differential tests check behaviour, and a `pad_` split that keeps every
+existing offset true and the size at 0xa9b0 changes neither -- the bytes are
+written and compared identically whether they are spelled as one `int` or four
+`unsigned char`. This is finding 1360's situation for the third and fourth
+time in this class, and the disassembly is the whole of the evidence.
+
+======================================================================
+
+### 1435. WHAT +0x0d00 IS: A PER-CODE USABILITY MASK, DECIDABLE IN ONE METHOD
+
+The header carried "one flag per phase per code, set to 1 by `reset`; what it
+means is not established here" from the lifecycle batch onwards. It is
+decidable in `determineMaxUcode` and nowhere else, because that method is the
+only other member of the class that touches the array and it both FILLS it and
+READS IT BACK in the same call.
+
+THE FILL. For every phase not flagged at +0x2800 and every code 0..127, the
+byte is set to 1 when the code is within the argument's reach AND the phase's
+variance for it is small -- `code <= arg` and
+`|linearMappingVar[phase][code]| < 2 * varThresh` -- and to 0 otherwise. A
+flagged phase's 128 codes are skipped entirely and keep whatever they held.
+
+THE READ-BACK. For every phase not flagged, `maxUcode[phase]` starts at
+`byte_a954` and, if that code's byte is clear, walks DOWNWARDS to the first
+code whose byte is set. So a 1 means "this phase's mapping for this code is
+trustworthy enough to drive", the array is the per-code mask, and
+`maxUcode[phase]` is the highest usable code in it. `reset` setting all 768 to
+1 is "assume everything is usable until a study says otherwise", which is the
+same shape as `resetLinearMapping` seeding the tables with the reference level.
+
+ONE ENTRY IS FORCED BACK TO 1 AFTER THE FILL, for every phase and whatever the
+variance said: `byte_0d00[phase][ucode]`. It is what stops the read-back's
+backwards walk running for ever (D289), and the reference code is the one code
+the class trusts by construction everywhere else -- `porcessFirstStudy` spares
+exactly that entry when it clears the mapping, for the same reason.
+
+======================================================================
+
+### 1436. THREE SHAPES OF UNORDERED COMPARE IN ONE PAIR OF METHODS, AND ONLY TWO HAVE A C SPELLING
+
+Every floating-point branch in `determineMaxUcode` and `findPadGain` is an
+`fcom`, and an unordered compare sets CF, ZF and PF. That gives three distinct
+readings, all three of which occur here, and the third has no direct C
+equivalent at all.
+
+`jae` SKIPS ON ORDERED-GREATER-OR-EQUAL, SO A NaN DOES NOT SKIP. Six sites: the
+small-variance test in `determineMaxUcode`'s scan, its mask test against twice
+the threshold, and the four keepers in `findPadGain`'s error buckets. Each is
+written as the negation of the ordered test -- `!(err >= errHigh)`, not
+`err < errHigh` -- which is the tree's existing rule and needs no new
+machinery. FOUR OF THE SIX CANNOT BE SEPARATED BY ANY INPUT, and that was
+predicted rather than discovered: an error in `findPadGain` is a finite gain
+squared times a sum of at most 93 squared `short` differences, so it is never a
+NaN, never an infinity and never `0 * inf`. The four mutations on those keepers
+carry `equivalent` with that arithmetic; the negation is written anyway,
+because what the object encodes is `jae` and the reader should not have to
+re-derive the range argument to know why the two agree.
+
+`jb` TAKES ON ORDERED-LESS, SO A NaN DOES TAKE. One site: `findPadGain`'s
+search for the smallest of five variances, at 0x43686. A NaN in the window
+becomes the running minimum and then loses to nothing, because every later
+entry is `!(v >= NaN)` and therefore also takes -- so the answer ends at the
+BOTTOM of the window where a C `v < best` would have left it above. Written
+`!(v >= bestVar)`, and `t_v90adid` separates the two readings with a
+constructed window: four entries at 2^31 and a NaN in second place.
+
+`je` TAKES ON EQUAL **OR** UNORDERED, SO A NaN COMPARES EQUAL TO ZERO. One
+site, at 0x4446f: `determineMaxUcode`'s scan skips an entry whose variance is
+zero, and it tests that with `fcomp %st(1)` against a zero the object has kept
+on the x87 stack since 0x4443c. C's `v == 0.0f` is FALSE for a NaN, so no
+spelling of the C operator agrees with the branch; the reconstruction writes
+the disjunction the branch encodes, `v == 0.0f || __builtin_isnan(v)`, and says
+so at the line. The two readings are separated by a window of two small entries
+and three NaNs: the object counts two and the window does not qualify, a
+reading that counted the NaNs would count five and it would.
+
+======================================================================
+
+### 1437. A THRESHOLD PRINTED AT TWO PRECISIONS AT ONCE, AND THE THREE LOCALS THAT HAD TO BE PINNED
+
+The object is `-mfpmath=387` and this tree is deliberately not `-ffloat-store`,
+so a `float` local lives in an x87 register with a 64-bit significand until
+something makes it spill. Which of the two values a use sees is the compiler's
+choice, it is not semantics-preserving, and in this pair of methods it is
+PRINTED. Modern GCC and GCC 3.4.2 made that choice differently at four places
+and the transcript comparison caught all four.
+
+THE WORST OF THEM PRINTS BOTH VALUES IN ONE CALL. `determineMaxUcode` forms
+`sum * float_a980 * 0.05f`, stores the float at 0x4424b with `fsts` -- which
+does NOT pop -- and then takes `fabs` of the value still in %st(0), the
+unrounded one, while the sign, the truncation and the fractional part all come
+from `flds 0x1c(%esp)`, the rounded one. At twenty variances of 1e9 and a gain
+of 1 the product is 1000000014.90116 unrounded and 1000000000 rounded, so the
+line reads "+1000000014.00" where a single-precision reading gives
+"+1000000000.00". Reproducing it needs the split written out: the whole part
+comes from the unrounded expression and everything from the clamp onwards from
+a `volatile float`.
+
+THE OTHER THREE ARE PLAIN ROUNDINGS THE OBJECT MAKES AND WE DID NOT.
+`findPadGain`'s candidate gain is stored by `fstps 0x94(%esp)` and every one of
+its six uses reads that slot back, INCLUDING the reciprocal, which the object
+forms afresh on every pass of the inner loop where a plain local lets the
+compiler hoist it out and round it once. Its error sum is stored by
+`fstps 0x9c(%esp)` on every one of up to ninety-three passes, so it is rounded
+to a float ninety-three times over rather than accumulated at 64 bits.
+
+`volatile` IS WHAT PINS THEM, AND IT WAS MEASURED RATHER THAN SPRINKLED. Three
+locals carry it -- `varThresh`, `gain` and `errSum` -- they are exactly the
+three whose transcripts disagreed and no others, and each names in a comment
+the object's own store. It is a statement about the ORIGINAL's arithmetic and
+not about ours: without it the reconstruction is a legal compilation of the
+same source that computes different numbers, which is the one thing this
+project does not accept. The Makefile's "deliberately NOT -ffloat-store" note
+is unaffected -- the accumulator in `determineMaxUcode`'s twenty-entry sum and
+the error `err` itself are still carried at extended precision, because the
+object carries them there too.
+
+======================================================================
+
+### 1438. `determineMaxUcode` READ END TO END
+
+1,189 bytes at 0x441f0, a leaf that calls only `edprintf`, and five steps.
+
+ONE, A VARIANCE THRESHOLD. The sum of `|linearMappingVar[unSuspectedPhase][k]|`
+over k = 40..59 -- twenty entries, counted down from a byte at 0x13 with the
+pointer walking up from +0x9de8 -- times `float_a980`, times 0.05f, which is
+the 1/20 of the twenty entries written out as a constant.
+
+TWO, TWO REPORTS EITHER SIDE OF A CLAMP into [500, 100000]. Both branches are
+the object's `jae` and `jbe`, so a NaN threshold fails the first and comes out
+as 500. The two reports do not print their sign the same way: the first uses
+the class's `fldz`/`fcomps`/`sbb` idiom, where an unordered compare yields '+',
+and the second is `flds`/`fcomps 0.0f`/`ja` at 0x44347, which yields '-'. The
+clamp between them makes the difference unreachable, and both are written as
+the object has them. Between the reports the object hands its "linearMappingVar
+report:" banner THREE ARGUMENTS it has no conversions for -- the format string
+contains no `%` and the object still fills the outgoing slots at 0x44373,
+0x4437f and 0x44391 -- and since GCC does not emit dead stores into an argument
+area they are the call's. No transcript can see them, so that one line is a
+disassembly-only claim and deliberately carries no mutation.
+
+THREE, THE SCAN THE METHOD IS NAMED FOR. Walking `ci` down from the argument to
+`short_a97a`, take the first five-entry window [ci-4, ci] in which more than two
+entries are small and not zero, and answer with `ci` minus the offset of the
+FIRST such entry -- the highest code that actually qualified, not the window's
+top. Nothing qualifying anywhere leaves the answer at `short_a97a`. The answer
+is then floored at `short_a97a` under a SIGNED compare against the whole
+`short`, which is why a `short_a97a` above 255 forces the byte every time, and
+the forcing is what the "original maxUcode ... forced minimum maxUcode" line
+reports. Neither index in this step is bounded -- D288.
+
+FOUR, THE MASK. `byte_0d00[phase][code]` for every unflagged phase and every
+code 0..127 (finding 1435). The per-phase test is loop-invariant and GCC
+unswitched it, which is why a flagged phase still spends 128 iterations doing
+nothing at 0x44560 -- an empty `inc %dl ; jns` spin, and the clearest single
+piece of evidence in the class for where a test sat in the original source.
+
+FIVE, THE READ-BACK, and it is where D289's unbounded backwards walk lives. A
+flagged phase never looks at the mask at all: it takes the scalar clamped to
+two below the argument.
+
+======================================================================
+
+### 1439. `findPadGain` READ END TO END, AND THE THREE LEVERS ITS TEST NEEDED
+
+2,879 bytes at 0x43620, the second largest method in the class, a leaf over the
+four companding routines and the two printers.
+
+WHAT IT IS FOR. If the network puts a pad between the digital source and the
+modem, every level the modem measures is the transmitted level divided by the
+pad's gain. So the method picks a base code, assumes its measured level is
+really some other code's level sent at full scale, and calls the ratio a
+candidate gain; it divides the reference phase's whole mapping by the
+candidate, pushes each entry through a companding law and straight back, and
+sums the squares of what does not survive. The right gain is the one whose
+codes land on codec levels. It does the whole thing twice, once per law, and
+the smaller of the two errors names the law as well as the gain -- which is why
+one method writes both `padGain` at +0xa94c and the identified codec at
++0xa960.
+
+TWO OF ITS LOCALS ARE NAMED BY THE OBJECT ITSELF. "projectionBaseUcode = %d
+minUcodeForCodecProjection = %d" at `.rodata.str1.4+0xb5f8` is printed with the
+base code and the bottom of the candidate range as its two arguments, so those
+are the author's names for the stack slots at 0x57(%esp) and %bl. Four more --
+`minErrorMuLaw`, `gainValueMuLaw`, `minErrorALaw`, `gainValueALaw` -- come off
+the four reports at the end, and they settle something the code alone leaves
+ambiguous: the A-law pair doubles as the working pair, written on both passes
+of the codec loop and copied out to the mu-law pair only on the first.
+
+THE BUCKETS ARE NOT SYMMETRIC. A candidate above 2.7 goes in one bucket, one
+below 1.2 in another -- but only for A-law -- and everything else in a third.
+The best-of-three prefers the middle bucket unless the high bucket beats it by
+a fifth, and A-law alone then falls back to a gain of exactly 1.0f if the low
+bucket beats the answer by 0.15. So "there is no pad at all" is a hypothesis
+the method holds separately and for one law only, and the low bucket keeps no
+gain of its own because the fallback it feeds is a constant.
+
+THREE THINGS HAD TO BE PLANTED BEFORE ANY OF THAT COULD BE TESTED, and the
+first is finding 1366's shape all over again. The base code is the argmin of a
+five-entry variance window and is then CLAMPED into [0x50, 0x5f], so on a
+seeded object the search is invisible: mutations on the window's width, on the
+`- 3` that positions it and on the sense of its comparison would all survive a
+perfect sweep. `t_v90adid` plants the window with the minimum at each of the
+five offsets in turn and asserts the pad gain moves with it. The second is
+`linMapp[unSuspectedPhase][base]`, which is the numerator of every candidate
+gain and therefore the only lever on which bucket a candidate lands in; a
+mapping rising with the code makes the gain fall as the scan proceeds and
+reaches all three inside one call. The third is `byte_a954` itself, which has
+to stay in [8, 0x9c] for the method to terminate at all and to stay inside the
+object -- D290.
+
+ONE CONSTANT HAD TO BE SOLVED FOR RATHER THAN SWEPT. The bottom of the
+candidate range is floored by `if (minU <= 0x27) minU = 0x28;`, which differs
+from `< 0x27` at exactly one value of a COMPANDED code -- so no sweep of the
+scaling factor lands on it by luck, and the mutation survived two hundred
+directed calls. A throwaway program built -m32 -mfpmath=387 against this
+tree's own `pcm.c` enumerated it instead: at a base code of 0x50 and mu-law,
+`minU` is 0x27 for every `float_a97c` in [0.14775, 0.15525]. Making the
+difference REACH `padGain` took a second step -- an empty projection loop, so
+every candidate's error is zero and the first one wins its bucket, and a
+reference level of 20000 against companded levels of 620..4092, so every
+candidate is in the high bucket and the middle one stays at its 1e6 and lets
+`errMid * 0.8f > errHigh` carry the high bucket's gain out. This is finding
+1366's method as much as its shape: mirror enough of the function to construct
+the witness, rather than widen the sweep and hope.
+
+======================================================================
