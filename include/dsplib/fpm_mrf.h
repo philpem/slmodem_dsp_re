@@ -55,7 +55,7 @@ void FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg,
 void FPM_MRF_free(struct fpm_mrf *state);
 
 /* The library default: 9:10, no coefficients.  A template, not a filter. */
-extern const struct fpm_mrf_cfg FPM_MRF_CFG_data;
+extern const struct fpm_mrf_cfg FPM_MRF_CFG;
 
 /*
  * Resample `count` input samples.  Returns the number of outputs produced,

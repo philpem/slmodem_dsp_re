@@ -49532,3 +49532,305 @@ Both gates are `> 1`, and the transcript test sweeps levels 0 to 3 rather than
 comparing two level-2 transcripts, because a `>= 1` spelling prints the same
 text at level 2 and level 1 is the only place the two differ (finding 150's
 argument, and `t_dialercfg.c`'s).
+
+======================================================================
+
+### 1505. `FPM_div_32`: THE SAME ROUTINE ONE WORD WIDER, THE SAME TABLE, THE SAME OVERRUN
+
+*Reconstructed into `src/dsp/fpm_div.c` beside `FPM_div`, which is where the
+object has it: 0x0a6bf0 and 0x0a6c90 are adjacent and both relocate against
+`FPM_div_table`.*
+
+The difference between the two is entirely in the normalisation:
+
+```
+   a6cb8:  test   %eax,%eax        ; the whole 32-bit word ...
+   a6cc2:  js     a6cdc            ; ... already normalised, shift stays 0
+   a6cd0:  lea    0x1(%ecx),%edx
+   a6cd3:  add    %eax,%eax
+   a6cd7:  jns    a6cd0
+   a6cdc:  shr    $0x10,%eax       ; mantissa = the top 16 bits
+```
+
+against `FPM_div`'s `test %ax,%ax` and `movzwl %ax,%eax`. `shr` and not `sar`,
+so the denominator is `unsigned`; the `js` says the loop test is written on the
+signed reading of it, exactly as `FPM_div`'s is.
+
+Everything after that is instruction-for-instruction the same, index included:
+
+```
+   a6ce6:  movzwl 0x12(%esp),%eax   ; mantissa
+   a6ceb:  sub    $0xffffff80,%eax  ; + 0x80
+   a6cee:  sar    $0x8,%eax
+   a6cf1:  add    $0xffffff80,%eax  ; - 0x80
+   a6cf4:  movzwl %ax,%esi
+   a6cfb:  movzwl FPM_div_table(%esi,%esi,1),%ebx
+```
+
+So **D4 applies unchanged**: the mantissa is in [0x8000, 0xffff], the index
+runs 0..128, and 128 is one past the end of a 128-entry table. `t_fpm_div.c`
+now drives every denominator of the form `m` and `m << 16` -- between them
+every (mantissa, shift) pair the routine can reach -- and counts 510 zero
+reciprocals, which is the same 255 mantissas seen once in each half.
+
+**The two routines do not share the string.** `FPM_div` complains through
+`.rodata.str1.4` 0x12de0 and `FPM_div_32` through 0x12e00, and both spell
+`Fatal error: Division by zero!\n`. Two identical strings that were not
+merged: `.str1.4` is 4-byte-aligned, the first is 32 bytes long, and merging
+them would have been a link-time job that this partial link did not do. Both
+copies are now driven at debug levels 1 to 3 and compared against ours, which
+is what `make phase`'s `strings` gate cannot do on its own.
+
+======================================================================
+
+### 1506. `FPM_div_table` AND `FPM_MRF_CFG`: THIS TREE HAD RENAMED TWO EXPORTED SYMBOLS
+
+Both were defined here under invented names -- `fpm_div_table` (static, in
+`fpm_div.c`) and `FPM_MRF_CFG_data` (in `fpm_mrf.c`) -- while the object
+exports them as `FPM_div_table` (`R`, .rodata 0x0c6a0, 256 bytes) and
+`FPM_MRF_CFG` (`D`, .data 0x081a0, 16 bytes). Renamed to the object's
+spelling, contents untouched.
+
+**Byte-verified before the rename and again at runtime after it.** The
+pre-check was
+
+```
+tabdump.py $BLOB --sym FPM_div_table --type u16 --per-line 8
+tabdump.py $BLOB --sym FPM_MRF_CFG   --type s16 --per-line 8
+relocscan.py $BLOB --range .data:0x81a0-0x81b0
+```
+
+-- 128 entries identical to ours, and `{9, 10, 0, 0, 270, 0, 0, 0}` with no
+relocation anywhere in the range, so `coeff` and `aux` are genuinely null and
+not a section-relative pointer misread as two coefficients. The evidence that
+counts is the runtime one: `t_fpm_div.c` compares all 128 entries against
+`ref_FPM_div_table` and `t_fpm_mrf.c` compares the whole 16-byte
+configuration against `ref_FPM_MRF_CFG` with `diff_eq_obj`, padding included.
+
+`FPM_div_table` stays `static`, which `tools/closure.py` counts as written --
+`ours()` reads `nm --defined-only`, and a file-scope static that survives -O2
+appears there with a lower-case letter and three fields like any other. The
+accessor `FPM_div_table_entry` therefore stays too, since a static has no
+`ref_` alias and the test can only reach it that way.
+
+======================================================================
+
+### 1507. `CID_MTD_detect`: A MARK-TONE GATE THAT ANSWERS BACKWARDS, OVER 1200 Hz AND 1300 Hz
+
+*`Cidmtd.c`, .text 0x0926a0, 259 bytes -- one function and four file-static
+tables, reconstructed whole into `src/service/cid_mtd.c`.*
+
+Two notches in cascade, then one comparison:
+
+```
+   926c2:  cmpw   $0x2580,0x2a(%eax)   ; rate == 9600 ?
+   9272f:  add    $0x20,%ecx           ; wide += (x*x + 32) >> 6
+   9273f:  call   FPM_iir_filt         ; x  through coef1, state at +0x7e
+   92761:  call   FPM_iir_filt         ; y  through coef2, state at +0x82
+   9276a:  add    $0x20,%eax           ; narrow += (y*y + 32) >> 6
+   92781:  shr    $1,%esi              ; wide / 2
+   92785:  seta   %dl                  ;   > narrow
+   9278a:  cmp    $0x96,%edi           ; wide > 150
+   92795:  sete   %bl                  ; return NOT (both)
+```
+
+**Zero means the tone is there.** That is not an inference from the shape: it
+is what `cid_modem` does with the answer at 0x91fe6 -- `test %ax,%ax`, and the
+zero is the branch that adds `cid->f02c` (9) to its confidence counter at
++0x8e while anything else clears the counter.
+
+**The four tables are 1200 Hz and 1300 Hz.** Solving each back through the
+notch form `b = g{1, -2cos w0, 1}`, `a = {1, 2r cos w0, -r^2}` in
+`FPM_iir_filt`'s `{a2, b2, a1, b1, b0}` order, from the zeros and from the
+poles independently:
+
+| table | zeros | poles | r | g |
+|---|---|---|---|---|
+| `MTD_COEF_1_8000` | 1200.03 Hz | 1200.06 Hz | 0.95 | 0.95 |
+| `MTD_COEF_2_8000` | 1300.01 Hz | 1300.00 Hz | 0.90 | 1.00 |
+| `MTD_COEF_1_9600` | 1200.03 Hz | 1200.03 Hz | 0.90 | 1.00 |
+| `MTD_COEF_2_9600` | 1300.03 Hz | 1299.99 Hz | 0.90 | 1.00 |
+
+1200 Hz is Bell 202's mark and 1300 Hz is V.23's, so one gate serves both
+regions' Caller ID, and cascading rather than summing them is what lets a
+single energy ratio answer for either.
+
+**`MTD_COEF_1_8000` is the odd one and is recorded, not explained.** Its poles
+sit at 0.95 where every other table in the object's CID and DTMF banks uses
+0.9, and its numerator is scaled by the same 0.95 so the notch keeps unity
+gain away from 1200 Hz. It is internally consistent -- zeros and poles agree
+to 0.03 Hz -- so unlike `MTD7_COEF_9600` (D250) there is nothing defective
+about it. Why one of four was designed tighter is not recoverable from the
+object.
+
+The tables are file-static (`nm` shows `d`, not `D`), which is how finding
+1410 separates this translation unit from `Dtmf_Detector.c` next door in
+.data. That also means no test can name them, so `cid_mtd.c` exports
+`CID_MTD_coeff` for the differential comparison -- the same arrangement
+`fpm_div.c` uses, and for the same reason.
+
+======================================================================
+
+### 1508. `CID_FSD_demodulate`: A DELAY-LINE DISCRIMINATOR, AN ADAPTIVE SLICER, AND TWO ARMS THAT CANNOT RUN
+
+*`Cidfsd.c`, .text 0x092280, 1049 bytes, reconstructed whole into
+`src/service/cid_fsd.c`.*
+
+Four stages, and the middle two are where the size is.
+
+**1. The discriminator.** Five samples of history at +0x54 with a write index
+at +0x52, correlated circularly -- down from the index to zero, then round
+from the top -- and the result multiplied by the newest sample and shifted
+down 15. Both coefficient tables are a single non-zero tap, so the general
+five-tap machinery is doing the work of a delay line:
+
+    AUTOCOR_COEF_7200   { 0, 32767, 0, 0, 0 }    delay 1, +1.0
+    AUTOCOR_COEF_9600   { 0, 0, 0, 0, -29491 }   delay 4, -0.9
+
+x[n]·x[n-D] is a frequency discriminator, and the two spellings agree on
+sign. At 7200 Hz one sample of 1200 Hz mark is 60 degrees, cos = +0.5,
+against 2200 Hz space at 110 degrees, cos = -0.34. At 9600 Hz four samples of
+mark is 180 degrees, cos = -1, which the negative tap turns to +0.9 against
+the space's -0.78. **Mark is positive at both rates.**
+
+**2. `fix_LPF`**, seventeen symmetric taps summing to 32768, over a second
+circular buffer at +0x30 with its index at +0x2e -- unity gain in Q15, which
+is why the correlation ends in a plain `sar $0xf` with no other scaling.
+
+**3. The slicing level, which is most of the branching.** The mean of the
+first 128 filtered values above the current threshold becomes `high_level`
+(+0x68); the running total of the negative ones (+0x6c) becomes the other
+end; the threshold (+0x64) is the midpoint of the two. It is seeded once at
+16 negatives and re-derived every 128 after that -- and the "every 128" is
+spelt as a **byte** test on a 16-bit counter:
+
+```
+   9260f:  movzbl 0x62(%ebp),%edi
+   92613:  cmp    $0x80,%edi
+   92619:  sete   %dl
+   9261c:  test   %edi,%edi
+   9261e:  sete   %al
+   92621:  or     %edx,%eax
+```
+
+so 0x00 and 0x80 of every 256, which is 128 apart. Nothing else in the
+function reads a field narrower than it was written.
+
+**4. The slicer.** +-22 either side of `threshold >> 3` is a dead zone; three
+bit times inside it writes `-baud` into both timing counters, which costs two
+further bit times before anything can be emitted. Outside it, a decision that
+AGREES with the last emitted bit is emitted once it has held a whole bit
+(+0x78 reaches `baud`), and one that DISAGREES is emitted after half a bit
+(+0x7a reaches `baud/2`) -- the second is what re-times the receiver on every
+transition, and it is why an FSK stream stays aligned without a PLL.
+
+**Two arms cannot execute, and both are reproduced.**
+
+- `if (k < 0) k += 5` before the delay-line read at 0x92376. `ac_idx` is
+  0..4 by construction one instruction earlier, so the branch is dead.
+- the hysteresis arm at 0x92480, `(d > -23) ? last_bit : 0`, computed with
+  `setg`/`neg`/`and`. The dead-zone test at 0x92478 has already sent every
+  value in [-22, 22] elsewhere, so what reaches it is either `d > 22` or
+  `d < -22` and the middle result is never chosen. GCC 3.4 had no value-range
+  propagation, which is why it emitted the arm at all.
+
+Neither is a defect and neither gets a D number; they are recorded here so
+that a later reader does not "simplify" them out of `src/` and lose the
+correspondence with the object.
+
+======================================================================
+
+### 1509. THE FSK HALF OF CALLER ID RUNS AT 7200 Hz, AND ITS OWN OBJECT SAYS 8000
+
+`cid->rate` (+0x2a) holds 8000 or 9600 and `create_cid` puts 8000 there. Both
+CID leaves test it, and they do not mean the same thing by it.
+
+`CID_FSD_demodulate` reads it twice: once to choose between
+`AUTOCOR_COEF_9600` and `AUTOCOR_COEF_7200`, and once to choose a bit length
+of 8 or 6 (`lea 0x6(%eax,%eax,1)` at 0x92471, with `eax` the result of
+`sete`). Caller ID FSK is 1200 baud in both regions, so six samples to the bit
+is 7200 Hz and eight is 9600 Hz. **The name of the table is not a mistake and
+the 8000 path never sees 8000 Hz.**
+
+**The resampler that does it is in the same object, and it reads the
+configuration this batch renamed.** `reset_cid` (0x918b0) copies
+`FPM_MRF_CFG` onto its stack, patches the coefficient pointer to
+`V23_MRF_FILT` (.rodata 0x9240, 180 bytes, file-local) and writes its own
+ratio and tap count over the template's:
+
+```
+   918d7:  mov    FPM_MRF_CFG,%edx        ; the 16-byte template
+   918f2:  mov    $0x9240,%edx            ; coeff = V23_MRF_FILT
+   91906:  movw   $0x9,0x10(%esp)         ; branches = 9
+   9190d:  movw   $0xa,0x12(%esp)         ; decimate = 10
+   91916:  movw   $0x5a,0x18(%esp)        ; taps     = 90
+   91937:  call   FPM_MRF_init            ; state at cid + 0x0c
+```
+
+9:10 of 8000 Hz is **7200 Hz**, and it is the same engine Bell 103 runs the
+other way at 10:9 to lift 7200 to 8000 (finding 24). `cid_modem` then applies
+it, and **only at the other rate**:
+
+```
+   91e05:  cmpw   $0x2580,0x2a(%ecx)      ; rate == 9600 ?
+   91e0b:  je     91e3d                   ; yes: straight to the demodulator
+   91e25:  call   FPM_MRF_filter          ; no: 8000 -> 7200, in place
+```
+
+and the count `FPM_MRF_filter` returns is the one passed to
+`CID_FSD_demodulate` at 0x9207d. So the demodulator sees 7200 Hz or 9600 Hz
+and never 8000, which is exactly what its two tables are named after. The
+reading was an inference from the bit length when this finding was first
+written and is now a derivation.
+
+`CID_MTD_detect` does not: solving its coefficients back gives 1200.0 Hz and
+1300.0 Hz **at 8000 Hz** for the tables named `_8000` (finding 1507). So the
+tone gate runs on the unresampled stream and the demodulator on a resampled
+one, off the same field and the same object.
+
+That is worth having in writing before the `cid_*` layer is reconstructed: a
+reading of `rate` as "the rate everything here runs at" would put the
+resampler in the wrong place, and every table in both files would still be
+byte-correct.
+
+======================================================================
+
+### 1510. THE CALLER ID OBJECT IS 0x160 BYTES, AND THE FSK RECEIVER LIVES IN 0x2a..0x86
+
+`create_cid` (0x91ac0) asks `sysdep_malloc` for 0x160 when it is passed a null
+pointer, then writes three constants: `rate` = 0x1f40 (8000) at +0x2a, 2 at
++0x28 and 9 at +0x2c. Everything this batch touches is inside that
+allocation:
+
+| offset | what |
+|---|---|
+| +0x2a | the rate, 8000 or 9600 |
+| +0x2e, +0x30 | `fix_LPF`'s write index and its 17-word history |
+| +0x52, +0x54 | the discriminator's write index and its 5-word delay line |
+| +0x5e | the last bit emitted |
+| +0x60, +0x62 | the two level-tracking counters |
+| +0x64 .. +0x70 | threshold, high level, low total, high total (all `int`) |
+| +0x78, +0x7a, +0x7c | run, opposite and dead-zone timers |
+| +0x7e, +0x82 | `CID_MTD_detect`'s two biquad states |
+
+`include/dsplib/cid.h` names those and pads the rest, and `tools/offcheck.py`
+checks every one of the offsets above against what the compiler lays out.
+
+Three things are known about the padded part and are written down rather than
+guessed at later.
+
+**`cid + 0x0c` is a `struct fpm_mrf`**, the 8000-to-7200 resampler of finding
+1509. `reset_cid` passes that address to `FPM_MRF_init`, and the `fresh`
+decision one instruction earlier is `mov 0x24(%ebx),%eax ; test ; je` -- which
+is the `history` pointer of an `fpm_mrf` placed at +0x0c, since that member
+sits at +0x18 of a 0x1c-byte object. So 0x0c..0x27 is spoken for and the
+first named field of this batch, at +0x28, is a real boundary rather than a
+convenient one.
+
+**`cid + 0x90` is the bit buffer.** `cid_modem` passes it to
+`CID_FSD_demodulate`, so the demodulated bits land inside the object; the
+function itself takes the buffer as an argument and knows nothing about where
+it points.
+
+**`cid + 0x8e` is the mark-tone confidence counter**, incremented by
+`cid->f02c` (9) on a zero from `CID_MTD_detect` and cleared on anything else.

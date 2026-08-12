@@ -1,8 +1,12 @@
 /*
  * fpm_div.c -- Fixed Point Modem: reciprocal lookup for division.
  *
- * Reconstructed from dsplibs.o fpm_div.c, .text 0x0a6bf0, table at
- * .rodata 0x0c6a0.
+ * Reconstructed from dsplibs.o fpm_div.c:
+ *
+ *   FPM_div     .text 0x0a6bf0   150 bytes
+ *   FPM_div_32  .text 0x0a6c90   147 bytes
+ *
+ * with the table both of them read at .rodata 0x0c6a0.
  *
  * Rather than divide, callers normalise the denominator and look up its
  * reciprocal, then multiply.  FPM_div does the normalisation and the lookup:
@@ -12,6 +16,11 @@
  * leaving `recip` as an approximate 1/denom and `shift` as the number of left
  * shifts normalisation needed, so the caller can correct the exponent.
  * Returns 0 on success, 1 if `denom` is zero.
+ *
+ * FPM_div_32 is the same routine over a 32-bit denominator: it normalises the
+ * whole word, takes the top 16 bits as the mantissa, and indexes the SAME
+ * table -- so `shift` counts up to 31 rather than 15 and everything else,
+ * including the out-of-range read below, is identical.
  *
  * Table derivation, exact for all 128 entries:
  *
@@ -49,7 +58,7 @@
  */
 #define FPM_DIV_TABLE_REAL 128
 
-static const unsigned short fpm_div_table[FPM_DIV_TABLE_REAL + 1] = {
+static const unsigned short FPM_div_table[FPM_DIV_TABLE_REAL + 1] = {
 	32768, 32513, 32263, 32017, 31775, 31536, 31300, 31068,
 	30840, 30615, 30393, 30174, 29959, 29746, 29537, 29330,
 	29127, 28926, 28728, 28532, 28339, 28149, 27962, 27776,
@@ -88,7 +97,7 @@ static const unsigned short fpm_div_table[FPM_DIV_TABLE_REAL + 1] = {
 unsigned short
 FPM_div_table_entry(int i)
 {
-	return (i >= 0 && i <= FPM_DIV_TABLE_REAL) ? fpm_div_table[i] : 0;
+	return (i >= 0 && i <= FPM_DIV_TABLE_REAL) ? FPM_div_table[i] : 0;
 }
 
 unsigned short
@@ -119,7 +128,45 @@ FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift)
 
 	index = (int)((mantissa + 0x80) >> 8) - 0x80;
 
-	*recip = fpm_div_table[index];
+	*recip = FPM_div_table[index];
 	*shift = (unsigned short)count;
+	return 0;
+}
+
+/*
+ * The 32-bit denominator.  Same contract, same table, same D4 overrun: the
+ * mantissa is the top 16 bits of the normalised word, so it lies in
+ * [0x8000, 0xffff] exactly as FPM_div's does and the index runs 0..128.
+ *
+ * The two differences from FPM_div are both in the normalisation: the shift
+ * count can reach 31, and the loop tests the whole 32-bit word rather than a
+ * 16-bit one, so a denominator whose top bit is already set is returned with
+ * a shift of zero without the loop running at all.
+ */
+int
+FPM_div_32(unsigned int denom, unsigned short *recip, unsigned short *shift)
+{
+	unsigned short count = 0;
+	unsigned short mantissa;
+	int index;
+
+	if (denom == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"Fatal error: Division by zero!\n");
+		return 1;
+	}
+
+	/* Left-normalise until the top bit is set, counting the shifts. */
+	while ((int)denom >= 0) {
+		denom += denom;
+		count++;
+	}
+
+	mantissa = (unsigned short)(denom >> 16);
+	index = (int)((mantissa + 0x80) >> 8) - 0x80;
+
+	*recip = FPM_div_table[index];
+	*shift = count;
 	return 0;
 }

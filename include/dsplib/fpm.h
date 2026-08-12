@@ -37,6 +37,13 @@ short FPM_rms(const short *samples, unsigned short count);
  */
 int FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift);
 
+/*
+ * The same over a 32-bit denominator, off the same table: the mantissa is the
+ * top 16 bits after normalisation, so *shift can reach 31.
+ */
+int FPM_div_32(unsigned int denom, unsigned short *recip,
+	       unsigned short *shift);
+
 unsigned short FPM_div_table_entry(int i);
 unsigned short FPM_div_table_generate(int i);
 

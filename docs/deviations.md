@@ -5503,3 +5503,89 @@ lacks is itself a deviation, and this reconstruction had no reason to acquire
 a fourth.
 
 ======================================================================
+
+## D300 🐛 `CID_FSD_demodulate` tests its sample count *before* decrementing it, so a negative count runs 65535 times
+
+*Batch of 2026-08-12, from `CID_FSD_demodulate` (blob 0x92280) +0x9..+0x1b and
+the loop bottom at +0x25f..+0x26b:*
+
+```
+   92289:  movswl 0x38(%esp),%eax     ; count, as a SHORT
+   92292:  dec    %eax
+   92293:  movswl %ax,%edx            ; the counter is a short too
+   92299:  inc    %ax
+   9229b:  je     924f1               ; exit only if it WAS zero
+```
+
+*so the loop is `while (count-- != 0)`, not `while (count > 0)`.
+**Reachability: any caller passing a negative count.** **Observability: 65535
+iterations, each reading one sample past the caller's array and each able to
+write a bit past the caller's bit buffer.** This batch did not trace where
+`cid_modem`'s count comes from, so it is not claimed to be unreachable in
+practice -- only that nothing here produces it. Status: `unmeasured`. Fix
+class: host-side, by not passing one.*
+
+The same idiom appears at both ends of the loop and the counter is truncated
+to a short on every pass, so a count of -1 runs 65535 further iterations
+before the value comes back to zero. It is reproduced as `while (count-- !=
+0)` in `src/service/cid_fsd.c` with the count declared `short`, and the test
+does not drive it: both sides would agree while scribbling over the harness.
+
+======================================================================
+
+## D301 🐛 `CID_FSD_demodulate`'s "first 128 samples" counter is a short that keeps counting, and re-arms when it wraps
+
+*Batch of 2026-08-12, from `CID_FSD_demodulate` (blob 0x92280) +0x18c..+0x1ad:*
+
+```
+   9240c:  movzwl 0x60(%ecx),%edi     ; high_count
+   92413:  cmp    $0x7f,%di
+   92417:  mov    %dx,0x60(%ecx)      ; stored INCREMENTED either way
+   9241b:  jg     925bd               ; > 127: skip the accumulation
+   92426:  add    $0xff80,%dx
+   9242d:  je     92665               ; == 128: derive high_level
+```
+
+***Reachability: 32768 samples above the slicing threshold in one uninterrupted
+receiver session -- about 4.5 s at 7200 Hz if every sample qualified.**
+**Observability: `high_sum` starts accumulating again from whatever it holds,
+and 128 samples later `high_level` -- the top end of the slicing range -- is
+replaced by a number derived from a total that was never cleared.** Status:
+`unmeasured`. Fix class: none proposed.*
+
+The counter is incremented on every above-threshold sample for ever, and the
+guard that stops the accumulation is `<= 127` on the SIGNED 16-bit value. So
+after 32768 such samples it is negative, the guard passes again, and
+`high_sum += y` resumes on top of the total from the first pass; 128 samples
+after that, `high_level` is set to `(high_sum + 64) >> 7` of a sum of 256-odd
+values divided by 128.
+
+A Caller ID message is about 1.5 s and is preceded by a channel seizure, so
+reaching 32768 qualifying samples means a receiver left running on a live
+line rather than one demodulating a message. Reproduced as found;
+`t_cid_fsd.c` asserts the reference derives `high_level` at all, which is what
+would silently stop happening if the counter were widened.
+
+======================================================================
+
+## D302 🐛 `CID_MTD_detect`'s energy accumulators wrap after 257 full-scale samples
+
+*Batch of 2026-08-12, from `CID_MTD_detect` (blob 0x926a0) +0x8f..+0xd0 --
+`imul` then `add $0x20` then `sar $0x6` into a 32-bit accumulator, twice, with
+the comparison at +0xdf..+0xf5 done with `seta`, so both accumulators are
+unsigned. **Reachability: 257 samples at full scale, 1030 at half, in one
+call.** **Observability: the gate compares two wrapped totals, so a loud block
+can read as quiet and be rejected.** Status: `unmeasured` -- the wrap is
+arithmetic and certain, the effect on the answer depends on the block. Fix
+class: none proposed.*
+
+`(x*x + 32) >> 6` is 16777216 for a sample of -32768, so 256 of them are
+exactly 2^32 and the accumulator is back at zero. Both totals wrap the same
+way, so the ratio test survives in the common case where they wrap together;
+what does not survive is the `> 150` energy gate, which can pass or fail on
+the residue rather than on the energy.
+
+`cid_modem` builds its block in a stack array inside a 0x1dc-byte frame, which
+bounds it well below 257 samples, so this is out of contract for the only
+caller in the object. `t_cid_mtd.c` drives 256 and 300 full-scale samples so
+both sides are compared either side of the wrap.

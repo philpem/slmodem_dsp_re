@@ -1017,7 +1017,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	dsp = fp->dsp;
 
 	/* Transmit rate conversion, 7200 -> 8000. */
-	mrf = FPM_MRF_CFG_data;
+	mrf = FPM_MRF_CFG;
 	mrf.branches = 10;
 	mrf.decimate = 9;
 	mrf.coeff = B103_MRF_FILT_TX;
