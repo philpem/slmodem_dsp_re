@@ -48223,3 +48223,60 @@ with nothing borrowed — the last blob code on a 33,600 call goes away.
 **WHAT IT DOES NOT.** One run, one test, one clean wire. A retrain, a rate
 renegotiation or a different symbol rate would enter arms this call does not,
 and they are unwritten work this list does not name. The number is a floor.
+
+### 1455. OUR BELL 103 CONNECTED TO REAL HARDWARE OVER SIP — AND FAILED IDENTICALLY TO THE BLOB AFTERWARDS
+
+The first time this reconstruction has driven a real modem. `slmodemd` built
+with our Bell 103 datapump in place of the blob's, dialling ext 1901 on the
+PBX, connected to the SupraExpress 56e PRO at **CONNECT 300**.
+
+**THE SUBSTITUTION.** `objcopy --weaken-symbol` on a COPY of the blob for
+every symbol our link set redefines — 66 of them, mostly tables — then our
+objects on the link line. The blob's definitions go `W`, ours stay `T`, and
+the linker prefers the strong one. Only the registration boundary needs
+redirecting: `dp_b103_init` and `dp_b103_exit` carry one relocation each,
+while `b103_ops`, `b103_create`, `b103_process` and `b103_delete` carry NONE
+— intra-object displacements that cannot be redirected and do not need to be,
+because ours registers our `b103_ops` and the blob's Bell 103 becomes dead
+code in the image.
+
+Verified by SIZE rather than by hope: all **77** symbols our link set defines
+are present in the binary at OUR size, 14,778 bytes, none displaced.
+
+**THE LIBRARY IS COMPLETE FOR THIS DATAPUMP.** Of the 18 external symbols the
+set still needs, we define 16 ourselves — the extra five objects are
+`dp_wrapper`, `fpm_agc`, `fpm_iir`, `fpm_mtd`, `fpm_tone`. The remaining two,
+`dsplibs_debug_level` and `dsplibs_debug_printf`, are **`U` in the blob too**:
+the blob consumes them and the daemon defines them, exactly like
+`sysdep_malloc`. There is nothing there for us to implement, and implementing
+it would collide with the operator's logging.
+
+`FPM_div` is ours as well, built WITHOUT `-DDSPLIB_REPRODUCE_BUGS`, so the
+daemon gets the D4 fix — the out-of-range table read that "silences an AGC
+block and drops a Bell 103 connection" (finding 40). Shipping the bug-compatible
+build into a real modem would have been the wrong half of the switch.
+
+**AND THEN IT DROPPED, EXACTLY AS THE BLOB DOES.** Data both ways FAILED and
+the link fell over about seven seconds after connecting. A control run with
+the stock daemon on the same path, same AT configuration:
+
+| | ours | the blob |
+|---|--:|--:|
+| CONNECT 300 | 26.49 s | 26.21 s |
+| far end CONNECT 115200 | 28.39 | 28.10 |
+| NO CARRIER | 33.39 | 33.10 |
+| DATA BOTH WAYS | FAIL | FAIL |
+
+Within 0.3 s at every step, and the same failure. **The drop is the path or
+the test's configuration, not the reconstruction.** That is the result this
+task wanted: on a real line our datapump is indistinguishable from the
+original, including where the original is bad.
+
+**WHAT IS NOT ESTABLISHED.** That Bell 103 carries data over this path at
+all — neither build managed it, so there is no working baseline to compare
+against, and the 300 bps data path remains unproven end to end for either.
+That is a separate defect and it belongs to the bench, not to `src/`.
+
+`testbench/row.sh` gained `SLMODEMD=` so a hybrid build can be put on the
+bench without moving anything in a source tree, and every run now prints
+which binary it used.
