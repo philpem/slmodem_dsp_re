@@ -40,6 +40,21 @@ int FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift);
 unsigned short FPM_div_table_entry(int i);
 unsigned short FPM_div_table_generate(int i);
 
+/*
+ * Base-10 logarithm of `mantissa * 2^-exponent`, result in Q12.
+ *
+ * The mantissa is normalised internally, so the exponent is whatever the
+ * caller has already taken out.  Zero returns zero and announces itself at
+ * debug level 2.  Reads one element past its table for mantissas of
+ * 0x7fc0..0x7fff -- reproduced; see src/dsp/fpm_log10.c.
+ */
+short FPM_log10(unsigned short mantissa, short exponent);
+
+short FPM_log10_table_generate(int index);
+int FPM_log10_table_derived(void);	/* entries the generator produces */
+short FPM_log10_table_entry(int index);
+int FPM_log10_table_size(void);
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);

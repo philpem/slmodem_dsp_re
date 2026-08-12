@@ -5457,3 +5457,87 @@ The reconstruction writes them, because the object does and because a differenti
 Written as the object has it. A bound here would be a behavioural difference on an input the differential tier cannot produce, and the arms are the V.90 and K56flex ones, which no test in this tree drives at all.
 
 ======================================================================
+
+======================================================================
+
+## D65 🐛 `FPM_log10` reads one element past its table, and it is NOT the lucky one
+
+**Module** `src/dsp/fpm_log10.c` · original `FPM_log10`, `.text 0x0a8d20`,
+table at `.rodata 0x00c3a0`
+
+**Defect in the original, reproduced deliberately.** The mantissa is
+normalised into `[0x4000, 0xffff]` and then indexed with
+
+    idx = ((norm + 64) >> 7) - 128
+
+For a Q15 caller -- mantissa `0x0000..0x7fff`, which is the domain D4's
+analysis established for this layer -- `norm` lands in `[0x4000, 0x7fff]` and
+`idx` runs **0..128**. The table has 128 entries, `0..127`. So mantissas of
+`0x7fc0..0x7fff`, **64 of the 32768 Q15 values**, read one element past the
+end during ordinary operation.
+
+**`FPM_sqrt` has exactly this defect and escapes it.** What follows ITS table
+is a 32768, which is precisely the value `sqrt_table[192]` should hold, so the
+overrun returns the right answer by coincidence (D4's entry). This one is not
+so lucky. What follows this table at `.rodata:0xc4a0` is `FPM_PPS_CFG`, whose
+first short is **10**, where the correct entry -- `log10(1.0)` in Q15 -- is
+**0**. Shifted down by three that is 1 count in Q12, so the result is one low
+count high over that range rather than catastrophically wrong, which is
+presumably why nobody noticed.
+
+**Reachability: UNMEASURED.** The 64 mantissas are reachable *if* a caller
+presents them; no caller of `FPM_log10` is reconstructed yet, so whether the
+V.32 datapump ever normalises into `0x7fc0..0x7fff` is not established.
+
+**REPRODUCING IT NEEDED A 129TH TABLE ENTRY, AND THAT IS THE INTERESTING
+PART.** The reconstruction's table has 129 entries and the last is **10** --
+not a logarithm, but a transcription of the neighbouring object's first
+short. Without it, our overrun reads whatever our own linker placed after the
+array, and when this file was first written that happened to be a value in
+8..15, which agrees after the `>> 3`. **The test passed for that reason and
+nobody would have known.** It would have started failing the next time
+anything was added to the translation unit, and the failure would have looked
+like a defect in the logarithm.
+
+`FPM_sqrt` sets the precedent by adding a 193rd entry (D4). The difference is
+that its extra entry is the mathematically correct one and this one is a
+transcription of the defect, so the generator explicitly does not produce it:
+`FPM_log10_table_derived()` returns 128 and the test asserts entry 128
+separately, against 10, noting that the generator would have said 0.
+
+**ABOVE Q15 THERE IS NO REPRODUCTION AND NONE IS CLAIMED.** A mantissa of
+`0x8000..0xffff` needs no normalising and indexes up to 384, so the original
+reads up to 512 bytes past its table. The unit test deliberately does not
+compare that range: two builds disagreeing about memory neither of them owns
+is not a defect in either. An earlier version of the test did compare it and
+failed, which is how the luck above came to light.
+
+Reproduced as-is over the Q15 domain: `test/unit/t_fpm_log10.c` drives all
+32,767 non-zero Q15 mantissas against the blob, and the 64 that overrun again
+by name.
+
+======================================================================
+
+## D66 ⚠ `FPM_log10`'s exponent coefficient is 1228 where log10(2) is 1233
+
+**Module** `src/dsp/fpm_log10.c` · original `FPM_log10`, `.text 0x0a8dbe`
+
+**UNMEASURED.** The result is `(table[idx] >> 3) - e * 1228`, in Q12. The
+table half is Q15 log10 shifted down by three, which is Q12 exactly -- the
+derivation reproduces all 128 entries with no slack. The exponent half should
+therefore be `e * log10(2) * 4096 = e * 1233.2`, and the object multiplies by
+**1228** (`imul $0x4cc`): 0.29980 against 0.30103, 0.4% low.
+
+It is the only constant in the function that does not follow from the table,
+and the error is proportional to the exponent rather than bounded -- 5 counts
+in Q12 per octave of normalisation, about 0.0012 of a decade, or 0.024 dB per
+octave read as a power ratio. A signal normalised through ten octaves is half
+a count of Q12 short of where the table says it should be.
+
+Whether that matters depends on what reads the result, and nothing that does
+is reconstructed. Recorded because the two halves of one function disagreeing
+about the same constant is the shape of a transcription error, not of a
+deliberate approximation -- but "deliberate approximation" is not ruled out
+either, and neither reading is established.
+
+Reproduced exactly.
