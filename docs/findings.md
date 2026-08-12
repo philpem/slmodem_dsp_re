@@ -48569,3 +48569,69 @@ on an input the differential tier cannot produce, and both arms belong to
 protocols no test in this tree drives.
 
 ======================================================================
+
+### 1457. BOTH BENCH MODEMS VETTED — AND `AT+MS=B103` HAD BEEN FAILING SILENTLY ON THE SUPRA
+
+Asked for after #124 stalled. Both modems' active and stored profiles read
+directly over the serial port, no call involved.
+
+**THE SUPRA WAS NEVER IN BELL 103 MODE.** Its `+MS` takes NUMERIC carriers
+and rejects the mnemonic:
+
+    AT+MS=?                 (0,1,2,3,9,10,11,12,56,64,69),(0,1),(300-56000),...
+    AT+MS?                  12,1,300,56000,1,0,33600
+    AT+MS=B103,0,300,300    ERROR
+
+So every "Bell 103" run against ext 1901 in findings 1455 and 1456 had the
+Supra sitting on **carrier 12 in automode**, not Bell 103 — which is why it
+answered with a long 2100 Hz ANSam and behaved oddly. `0` is Bell 103, `2` is
+V.21. The command had been erroring since the first run, and the error was
+invisible because the AT batch's `OK`s and `ERROR` interleave in the log.
+
+**AND FIXING IT DOES NOT FIX #124**, which is the useful part. With both ends
+correctly configured for the first time:
+
+| our side | Supra | outcome |
+|---|---|---|
+| Bell 103 `+MS=103` | Bell 103 `+MS=0` | **drops at CONNECT + 5.00 s** |
+| V.21 `+MS=21` | V.21 `+MS=2` | **held 20 s, both ends connected** |
+
+The Bell-specific result of #124 therefore survives correct configuration
+rather than being explained by it.
+
+**SUPRA — SupraExpress 56e PRO, Rev 2.000-01, Rockwell.** Active profile:
+
+    B0 E1 L1 M1 N1 Q0 T V1 W0 X4 Y0 &C1 &D2 &G2 &J0 &K3 &Q5 &R1 &S0 &T5 &X0 &Y0
+    S07:050 S10:014 S36:007 S37:000 S46:138 S48:007 S95:000
+
+- **`&K3` — RTS/CTS flow control**, and the harness does NOT do hardware flow
+  control: `atprobe.open_raw` sets `CS8 | CREAD | CLOCAL` and no `CRTSCTS`.
+  The working modem is `&H0 &I0`, flow control off. Not the carrier drop —
+  `&K0` was tried and changed nothing — but a standing risk to data.
+- **`&Q5` — negotiate an error-corrected link**, with `S48:007` (V.42
+  detection) and `S36:007` (MNP then fallback). **Error control is NOT ruled
+  out for #124**: the earlier `AT\N0` returned OK but `\N` is a USR/Hayes
+  control, not this modem's. The Rockwell control is `&Q0`, and it has not
+  been tried.
+- **`&G2` — 1800 Hz guard tone.** A European V.22 setting on a US modem; it
+  has no business in a Bell 103 or V.21 call and puts a tone in transmit.
+- `&D2` hangs up on DTR loss; `S10:014` disconnects 1.4 s after carrier loss.
+
+**COURIER — USRobotics Courier HST Dual Standard V.34.** Active vs NVRAM:
+
+    active   B0 &A1 &B0 &C1 &D2 &H0 &I0 &K1 &L0 &M4 &N0 &R1 &S0 &T5 &X0 &Y1
+    NVRAM       &A3 &B1      &H1 &I0 &K1 &L0 &M4 &N0 &R2 &S0 &T5 &X0 &Y1
+
+- **The active profile is `&B0` while NVRAM holds `&B1`.** `&B0` makes the
+  DTE rate follow the connection, which is precisely the fault finding 1456
+  spent a diagnosis cycle on. `ATZ` does not restore the good value, so every
+  run must set `AT&B1` explicitly — or `AT&B1&W` should be written once so it
+  survives.
+- `&H0` active against `&H1` stored is a second active/stored divergence.
+
+**THE GENERAL LESSON, which is worth more than either list.** Both modems'
+ACTIVE profiles differ from their STORED ones, so `ATZ` does not give what
+`AT&V` or `ATI5` would lead you to expect. Anything the bench depends on must
+be set per call and its acceptance CHECKED — an AT command that returns ERROR
+inside a batch is silent, and one did so for every Bell 103 run in this
+session's earlier findings.
