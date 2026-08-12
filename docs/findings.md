@@ -49169,3 +49169,66 @@ without inference from a recording.
 `rtprelay.py --rec` also writes each direction's a-law payload to its own
 file, which the conference recording could never be: a mix cannot be analysed
 per direction, and per-direction audio was the point of #94.
+
+======================================================================
+
+### 1469. THE FAR END'S OWN INSTRUMENT: IT SENDS US 12000 AND SENDS A 1994 SUPRAEXPRESS 28800, OVER THE SAME WIRE
+
+*Task #133. Three ordinary `row.sh` calls, slmodemd originating to the
+Courier on 1902, with `ATI11` read after each one. The same instrument as
+1468 with exactly one component swapped: ours.*
+
+| | Courier ↔ SupraExpress (1468) | Courier ↔ **slmodemd** |
+|---|---|---|
+| Courier `Speed` recv/xmit | 28800 / **28800** | 28800 / **12000, 14400, 12000** |
+| Courier `Recv Level` | −30, −31 dB | −20, −16, −20 dB |
+| Courier `Xmit Level` | −20 dB | −18, −17, −17 dB |
+| `Preemphasis` | **0 / 0** | **0 / 4** |
+| Symbol rate | 3429 / 3429 | 3429 / 3429 |
+| Round-trip delay | 173, 172 ms | 151, 152 ms |
+| Modulation | V.34 | V.34 |
+
+Read the second column carefully. `Speed 28800/12000` means the Courier
+RECEIVES us at 28800 — it accepts our transmit at its own ceiling, every call
+— and TRANSMITS to us at 12000, because that is what our receiver asked for.
+
+**SO THE COMPARISON IS AS CLEAN AS THIS BENCH GETS.** The same far-end
+transmitter, the same modulation, the same 3429 baud, on the same pair of FXS
+ports. Its signal reaches us at −17 to −18 dB over a 151 ms path. A
+SupraExpress from 1998, receiving that same Courier at a level 10–14 dB
+*lower* (−30 dB) over a *longer* path (173 ms, with an extra RTP hop in it),
+asks for **28800**. We ask for **12000**.
+
+That is not a channel. That is our receiver, and it is two and a half rate
+steps down.
+
+**AND THE PREEMPHASIS IS THE SHARPEST LINE IN THE TABLE.** In V.34 the
+RECEIVER chooses the far transmitter's preemphasis filter and tells it which
+to use, during Phase 2/3. The Courier sends the Supra filter **0** and sends
+us filter **4** — on the same physical channel, minutes apart. Our receiver's
+channel estimate therefore disagrees with the Supra's about the shape of the
+line, not just about how much of it to use: we are asking for high-frequency
+emphasis that the other receiver does not think it needs.
+
+That makes the open question narrow and answerable in the object: **what does
+our Phase 2/3 channel estimate compute, and why does it choose preemphasis 4
+and a rate two steps below what the same channel supports?** `V34PREEMPHASIS`
+is already one of the object's own debug categories, and it is emitted 15
+times per call in the logs already on disk.
+
+**AN INTERNAL CONTROL, worth keeping.** The Courier's own receiver managed
+28800 at −30 dB and at −16 dB alike, a 14 dB range, so nothing here is a
+level threshold being crossed. Ours had the better signal of the two and did
+worse.
+
+**WHAT THIS CLOSES.** Findings 1206–1216, 1350–1351, 1460b–d and 1466 all
+circled the question "is the receive deficit the bench or us". It is us. The
+path carries 28800 symmetrically between two hardware modems (1468); the far
+end accepts our transmit at its ceiling; the level statistics of a fast call
+and a slow call are identical to a quarter of a decibel (1466); and the far
+end's own instrument now says it is sending us less because we asked for less.
+
+**THE STOCK BLOB RAN ALL THREE CALLS**, so this is the original datapump's
+behaviour and not something the reconstruction introduced. It is a
+specification to match, not a defect to fix — but it does mean the
+reconstruction has a measurable target that is nothing to do with the bench.
