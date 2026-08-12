@@ -49537,3 +49537,75 @@ stays at 12000. Either renegotiation is not being attempted or it needs
 something more than the threshold being crossed. A modem that could
 renegotiate upward on this evidence would reach a far better rate without any
 change to the initial decision at all.
+
+======================================================================
+
+### 1474. CORRECTION TO 1473 — THE EQUALISER IS NOT UNSTABLE, IT IS RE-TRAINED AT THE PHASE 3/4 BOUNDARY AND THE RATE IS DECIDED BEFORE THE SECOND TRAINING FINISHES
+
+*1473 read a "converge, diverge, decide" trajectory as instability. It is not.
+The gap it could not explain contains the explanation, and the log says it in
+words.*
+
+**WHAT IS ACTUALLY IN THE GAP.** Between the converged sample and the jump to
+~16000, on every call:
+
+    V34EQU, equerr = 54, preerr = 48
+    V34TXSCALE, power reduction requested by remote modem is 3 dB
+    V34SetupModulator: baudrate 3429, carrier 1959, preemp 0, V90=0. fullReset=1
+    Agc gain estimate at the end of phase 3 is 856
+    V34HSHAKE: txstate SSEG=>SBARSEG=>PPSEG=>TRNSEG4
+    VPcmV34Main: Echo adapt start reported...
+    V34SetupDemodulator: baudrate 3429, carrier 1959
+    S-S1 is detected, rxsymcnt= 126
+    V34EQU, equerr = 16766, preerr = 13225
+
+`equerr = 54` is the **end of Phase 3**. The modulator and demodulator are then
+**fully reset** (`fullReset=1`), Phase 4 begins with TRN training and echo
+adaptation, and the equaliser starts again from scratch. 16766 is not a
+divergence; it is a *new* training pass at its beginning.
+
+**MEASURED ON EVERY CALL ON DISK: 256 of 256 (100%)** have their last Phase 3
+`equerr` lower than their first Phase 4 one. There is nothing unstable about
+it — it is the protocol's own structure, and 1473 mistook a phase boundary for
+an oscillation.
+
+**WHAT SURVIVES 1473, RESTATED CORRECTLY.** The rate is still decided too
+early, but the precise claim is narrower and stronger:
+
+| | typical |
+|---|--:|
+| `equerr` at the end of Phase 3 | ~50 |
+| `equerr` at the START of Phase 4 | ~16000 |
+| `equerr` when `V34DATARATE` decides | ~3000 |
+| `equerr` after CONNECT, once Phase 4 settles | 74–208 |
+
+The decision is taken while the **Phase 4** equaliser is still descending, and
+that equaliser goes on to reach 74–208 — 26400 and 33600 territory — minutes
+of symbols later, with the rate already locked. The calls that came out at
+31200 are the ones where the decision happened to fall after it had got there
+(`equerr` 56 and 85 at decision).
+
+So 1473's headline stands and its explanation does not. Do not cite 1473's
+"unstable equaliser" language; cite this.
+
+**AND THE PRE-EMPHASIS QUESTION IS NOW SETTLED BY THE FAR END'S OWN
+MEASUREMENT.** The same log line that revealed the phase boundary carries
+`preemp 0` — the filter the FAR END asked OUR transmitter to use. Over every
+call on disk, at 3429 baud:
+
+| | index 0 | 1 | 2 | … | 6 | 7 |
+|---|--:|--:|--:|--:|--:|--:|
+| **the far end asks US for** | 42 | 105 | 299 | — | — | — |
+| **we ask the far end for** | — | — | — | — | 463 | 40 |
+
+Two different modems — a USR Courier and a Rockwell SupraExpress — measuring
+the same channel both conclude it needs essentially none. We conclude it needs
+six or seven steps of it. **And the physical argument agrees with them and not
+with us:** the "line" here is a few metres of cable into an ATA and then
+digital transport. There is no loop to tilt the spectrum. It should be flat,
+they say flat, and D53's off-by-one means we cannot say flat.
+
+That makes the pre-emphasis request wrong on three independent grounds — the
+code (D53's unreachable index 0), the far end's own measurement of the same
+wire, and the physics of a three-metre cable. It does not yet make it the
+CAUSE of the rate deficit; the A/B still has to say that.
