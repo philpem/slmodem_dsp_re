@@ -50721,3 +50721,43 @@ for code and the wrong one for shared state. Two agents given adjacent stages
 of one pipeline will each model the shared buffer from their own end. That is
 not a mistake to prevent — neither could have done better with what it could
 see — it is a merge step to plan for.
+
+### 1570. A FULL DISK READS AS A LINK ERROR IN AN UNRELATED MODULE, AND `make phase` REPORTS IT AS A FAILED TARGET
+
+A `make phase` run failed with five `collect2: error: ld returned 1 exit
+status` lines against `t_v90adid`, `t_v90demctor`, `t_v90cp`, `t_v90equ` and
+`t_v90demod` — V.90 coverage binaries, in a session that had touched nothing
+but V.22. The natural readings are all wrong: a missing symbol, a bad merge, a
+header that moved. The actual diagnostic is thirty lines further on:
+
+    /usr/bin/ld: final link failed: No space left on device
+
+**There is no `undefined reference` anywhere in the log**, which is the
+distinguishing feature and the thing to grep for first. `ld` reports ENOSPC in
+its own voice and then `collect2` reports only that `ld` failed, so the useful
+line and the alarming lines are far apart in a 1.1 MB log.
+
+**Why it is easy to hit here.** Six worktrees were live, each carrying its own
+`build/` and `build-cov/` — 4.9 GB in total, with individual `build/` trees at
+763–881 MB and `build-cov/` at 590–611 MB. `make phase` links every test
+binary statically against the whole tree plus `dsplibs_ref.o`, and `debugcov`
+does it a second time with coverage instrumentation. Several worktrees gating
+concurrently multiplies the peak. The filesystem sat at 90% before the run.
+
+**The failure is also asymmetric in a way that matters.** Only `debugcov`
+failed. All 1,603 differential checks passed, including the eight V.22 SRE
+suites the run existed to validate. So the correct reading is "this run proves
+the code and does not prove the coverage build", not "this run failed" — but
+`make phase` exits non-zero, and under the rule that nothing is committed
+without a passing gate, the honest move is to re-run rather than to reason
+around it.
+
+**Two practical consequences.**
+
+- **Grep `No space left on device` before diagnosing any `collect2` failure.**
+  It costs one command and it is not the first thing anyone thinks of.
+- **A parallel-worktree session should budget disk, not just cores.** The
+  machine-etiquette rule in this tree is about `-j` and CPU; ~1.5 GB per
+  worktree is the figure that was missing from it. Worktrees whose branches
+  are merged should have their `build/` and `build-cov/` removed rather than
+  being left to accumulate.
