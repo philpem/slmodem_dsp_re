@@ -52273,3 +52273,67 @@ confirming the surviving macro name (`FPM_ATAN_TABLE`, not the other's
 one for `V22_MRF_filter`'s startup window, one for this. The later side was
 renumbered to **D300** by line, not by global substitution, because a blind
 replace would have hit both. `refcheck.py` caught it; nothing else would have.
+
+======================================================================
+
+### 1900. THE MODEM RENEGOTIATES UPWARD ELEVEN SECONDS AFTER CONNECT, ROUGHLY DOUBLING THE RATE — AND EVERY MEASUREMENT THIS BENCH HAS TAKEN MISSED IT
+
+*Tasks #134 and #140. Found while the second pre-emphasis A/B was running,
+from the far end's `ATI11` being read on every call for the first time.*
+
+**THE `CONNECT` STRING IS EMITTED ONCE AND NEVER REVISED.**
+
+    pab3-fix-3   rate 14400 @ 874.5   CONNECT @ 875.5   ->  26400 @ 886.3
+    pab3-fix-4   rate 12000 @  65.8   CONNECT @  66.8   ->  21600 @  77.7
+    pab3-bug-1   rate 12000           CONNECT           ->  (none)
+
+A second `V34DATARATE ... finally txbitrate/rxbitrate` block lands about
+**eleven seconds after CONNECT** and roughly doubles the receive rate. The
+DTE is never told. `pty CONNECT 14400` stands while the link carries 26400.
+
+**AND IT REALLY IS CARRIED**, which is the part that could not be established
+before. The Courier's `ATI11 Speed recv/xmit` is the far end's own account of
+what it transmitted, and it agrees with the second block, not the first:
+
+| call | our `CONNECT` | Courier's `Speed` xmit |
+|---|--:|--:|
+| pab3-fix-2 | **none** | 19200 |
+| pab3-fix-3 | 14400 | **26400** |
+| pab3-fix-4 | 12000 | **21600** |
+| pab3-bug-1..4 | 12000, 12000, 14400, 14400 | identical |
+
+`pab3-fix-2` is the sharpest case: our side never issued CONNECT at all, and
+the far end transmitted 19200 for the duration.
+
+**WHAT THIS LIMITS.** Every rate on this bench has come from the `CONNECT`
+string. Finding 1466's table and 1476's rate comparison both use it, and both
+understate any call that renegotiated. **1469 is unaffected** — it rests on
+`ATI11 Speed 28800/12000`, ground truth, and confirms those particular calls
+really did carry 12000. So the deficit is real; its size is now uncertain on
+any call that was not measured at the far end.
+
+Recomputable without new calls: the `finally` blocks are in every recorded
+log. `testbench/abextract.py` now emits `far_recv`/`far_xmit` beside `our_rx`,
+and `abcompare.py` reports both rate measures side by side.
+
+**THE HOLD TIME IS UNCOMFORTABLY CLOSE TO THE RENEGOTIATION.** Calls are held
+about **17.5 s** after CONNECT, and the renegotiation lands at **+11 s** —
+six and a half seconds of margin. A call that renegotiated slightly later
+would be torn down before it happened and would look like a call that never
+did. Nothing distinguishes those two cases in any log this bench keeps.
+
+**THE OBVIOUS EXPERIMENT, AND IT IS CHEAP.** Hold a call for sixty seconds
+instead of seventeen and watch whether the rate keeps climbing. V.34 rate
+renegotiation is not one-shot; if the equaliser keeps improving — and 1474
+showed `equerr` reaching 74-208 well after CONNECT, far under the object's own
+`renegUpthresh` of 2571 — there may be further steps this bench has never
+been on the line long enough to see. `call.py --hold` already exists.
+
+That is a bigger lever than anything in the pre-emphasis work: it needs no
+code change at all, only patience on the wire.
+
+**WHY IT FIRES ON SOME CALLS AND NOT OTHERS IS UNANSWERED.** In the first
+eight calls of the A/B every renegotiation was in the fix arm (3 of 4) and
+none in the bug arm (0 of 4) — p = 0.14 by Fisher's exact, which is nothing,
+and exactly the shape this bench has been fooled by four times. The run is
+still going.
