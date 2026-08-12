@@ -5401,3 +5401,25 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 **Finding 1447.** The object compares with the `fcom` family, which raises the invalid-operation exception on a QUIET NaN. Every comparison this tree emits for the same source is `fucom`/`fucomp`/`fucompp`, which raises it only for a SIGNALLING NaN. The two agree on every branch taken -- that is what the differential tier checks and it passes over seeded NaNs at all three of `determineMaxUcode`'s float tests -- and they disagree on the exception flags left behind.
 
 It is not a spelling that can be chosen away. It was first supposed that a relational operator would give `fcom` where `==` gives `fucom`, which would have made the D281-era respelling of the NaN test a fix for this as well; disassembling our own period-built object shows `fucomp` for `<` and `>` too, under **both** GCC 3.4.2 and GCC 13. GCC simply does not emit `fcom` from C comparisons. Reproducing it would take inline assembly at six sites for a difference no caller can observe, which is a worse trade than recording it.
+
+======================================================================
+
+## D296 🐛 The retrain detector stores the three accumulators it is about to clear
+
+*Batch of 2026-08-12, from `VPcmV34Progress` (blob 0xb3c0) +0x30b, +0x311 and +0x314 -- `mov %eax,0x14(%ebp)`, `mov %edx,0x18(%ebp)` and `movl $0x40,0x1c(%ebp)` into the object's +0xac30, +0xac34 and +0xac38 -- against +0x349, +0x350 and +0x357, which write zero into all three unconditionally eight instructions later on every path out of the block. **Reachability: FIRES once every 64 samples of every call whose progress code is 3 to 6, on the arm where the input/output energy ratio counts a block.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1464.** The block that decides a notch has been detected saves the two energies and the block counter, increments the signal count, prints them, and then falls into the same three-word clear the *undetected* path uses. Nothing reads any of the three between the store and the clear, and the compiler kept them because they are member stores through a live pointer.
+
+The reconstruction writes them, because the object does and because a differential test cannot tell a dead store from a live one -- only the same three writes in the same order keeps `make similarity` honest about what the source contained.
+
+======================================================================
+
+## D297 🐛 Two of the transmit loops have no iteration bound, and neither callee is obliged to make progress
+
+*Batch of 2026-08-12, from `VPcmV34Progress` (blob 0xb3c0) +0x7bc-+0x7fd (the K56flex arm) and +0x2b4-+0x8e7 (the V.90 arm) -- `cmp %si,(%edx) ; jge` around calls to `modulatevector`, `v34handshak`, `v90RateReneg` and `v90RateRenegSilence`, with the loop's only exit the transmit queue reaching `f2aa0` and nothing counting the turns. **Reachability: hangs only if a callee returns without enqueueing, which no test in this tree has produced.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1465.** The V.34 arm beside them is bounded -- it runs exactly `nin & ~3` times and calls the same two functions once each -- so the shape is not the file's habit; it is these two arms. `f2aa0` is set to the block length immediately above the loop, so the ordinary case terminates in one or two turns.
+
+Written as the object has it. A bound here would be a behavioural difference on an input the differential tier cannot produce, and the arms are the V.90 and K56flex ones, which no test in this tree drives at all.
+
+======================================================================

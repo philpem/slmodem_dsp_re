@@ -48223,3 +48223,216 @@ with nothing borrowed — the last blob code on a 33,600 call goes away.
 **WHAT IT DOES NOT.** One run, one test, one clean wire. A retrain, a rate
 renegotiation or a different symbol rate would enter arms this call does not,
 and they are unwritten work this list does not name. The number is a floor.
+
+======================================================================
+
+### 1460. GCC FOLDS A NULL TEST ON A POINTER-TO-MEMBER TO FALSE EVEN WHEN THE MEMBER IS WEAK
+
+Finding 985 recorded the trap that a plain declaration lets GCC assume a
+function's address is never null, so `f == 0` folds to false and a guard
+compiles away. `__attribute__((weak))` is the fix, and `vpcm.c` has relied on
+it for the five `VPcmV34*` entry points ever since.
+
+**It does not work for a C++ MEMBER, and the compiler says so.** Declare
+`VPcmFloModem::runPcmModem` weak -- `nm` confirms it as `w`, undefined -- and
+write the same guard:
+
+    if (&VPcmFloModem::runPcmModem == 0)
+
+GCC 13 answers
+
+    warning: the address 'VPcmFloModem::runPcmModem' will never be NULL
+             [-Waddress]
+
+and folds it. All five members `VPcmV34Progress` calls behaved identically;
+the two weak FREE functions beside them, `v90RateReneg` and
+`v90RateRenegSilence`, drew no warning and kept their comparisons. A
+pointer-to-member is not an address as far as that optimisation is concerned,
+and no spelling of the member reference avoids it.
+
+**WHAT WORKS IS AN ORDINARY FUNCTION POINTER WEARING THE MANGLED NAME.** On
+this ABI a non-static member takes `this` as its first stack argument, so
+
+    extern int alias_runPcmModem(VPcmFloModem *, float *, float *,
+                                 unsigned int, int *, int *, int *, int *)
+        __asm__("_ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_")
+        __attribute__((weak));
+
+is the same function seen the other way round, and `alias_runPcmModem == 0` is
+a comparison GCC leaves alone. `src/pump/v34/v34pcmmain.cpp` declares five of
+these and uses them for the TEST only; the call is still written as a call.
+
+Spiked under GCC 3.4.4 in `tools/toolchain` before any of it was written, on
+the advice that a rejection there is a finding rather than a nuisance. Both
+forms compile and both resolve to zero under the period compiler: it is only
+the modern one's folding that decides between them, and the mangled-name form
+is what both accept.
+
+**AND A C FILE CAN NAME THEM TOO.** `_ZN12VPcmFloModem11runPcmModemEPfS0_j-
+PiS1_S1_S1_` is a valid C identifier, so `test/unit/t_vpcmguard.c` asserts all
+five are unresolved without including a single C++ header -- the claim is
+about the SYMBOL and a signature would only be a way to get it wrong.
+
+======================================================================
+
+### 1461. `VPcmV34Progress` IS THREE DISPATCHES AND SIX JUMP TABLES, AND IT WENT IN AT THE FIRST ATTEMPT
+
+7,278 bytes at 0xb3c0, reconstructed in `src/pump/v34/v34pcmmain.cpp`. It is
+the whole of `vpcm_run`'s work between the two sample conversions, so with it
+written `t_vpcmrun`'s four-way comparison of a real 33,600 V.34 connect runs
+with **nothing borrowed** -- 8,000 blocks, two endpoints, blob/blob against
+ours/blob, blob/ours and ours/ours, identical at every block on the first run
+of the finished function.
+
+The shape, which the byte count hides:
+
+| dispatch | on | table | entries |
+|---|---|---|---|
+| the modem that owns the line | `obj->status` | `.rodata+0x2d4` | 11 |
+| `VPcmFloModem::runPcmModem`'s answer | its return | `+0x300` | 9 |
+| `K56FlexFloModem::k56FlexRunDemodulator`'s | its return | `+0x324` | 7 |
+| the progress code itself | `obj->f0004` | `+0x340` | 17 |
+| the modem-on-hold timeout | `obj->fabe0` | `+0x384` | 14 |
+| `VPcmFloModem::v90RunDemodulator`'s answer | its return | `+0x3bc` | 9 |
+
+**THE FOURTH TABLE IS REACHED FROM ONE ARM ONLY.** `.rodata+0x340` switches on
+`f0004` and is entered from `status == 0` -- the V.34 arm -- and from nowhere
+else; twelve of its seventeen entries point straight at the function's tail.
+The fifth is inside its case 13 and is a pure value table: fourteen
+modem-on-hold codes mapped to 0, 10, 20, 30, 40, 60, 120, 180, 240, 360, 480,
+720, 960 seconds and -1 for "no limit", multiplied by 9,600 to become samples.
+
+**`f0004` IS THE RETURN VALUE AND ALSO A LOCAL COPY, AND THE TWO ARE KEPT IN
+STEP BY HAND.** The object reads the field into `%esi` at the head of an arm,
+switches on that copy, and returns THAT -- so an arm that writes `obj->f0004`
+without re-reading `%esi` would return the older value, and the difference is
+invisible to any test that only inspects the object afterwards.
+
+**Three arms were read as doing exactly that and all three were wrong**, which
+is worth recording because the mistake is cheap to make and expensive to
+carry:
+
+- case 13 of the fourth table looked like "leaves 7 in the field and returns
+  13". `mov 0x80(%esp),%ecx ; movl $0x7,(%ecx)` at 0xca50 is `obj->status`,
+  not `f0004` -- `%ecx` is the object, not `obj + 4` -- so the field is
+  untouched and both paths return 13.
+- case 15 looked like "returns 15 on the quiet path and 0 under debug",
+  because only the debug path re-reads the field at 0xb53d. `xor %esi,%esi`
+  at 0xc2a8, four instructions earlier and easy to read past, sets the local
+  to 0 as well. Both paths return 0.
+- case 16 sets `obj->status` and not `f0004`, and its debug path's re-read is
+  therefore also a no-op.
+
+So on every path traced the local and the field agree at the return, and the
+copy is a copy rather than a divergence. That is the weaker claim and it is
+the one the disassembly supports; `ret` in the reconstruction is assigned
+exactly where the object assigns `%esi` so that a future arm which does
+diverge would show up rather than be absorbed.
+
+**THE TAIL IS A RETRAIN DETECTOR**, and only the four codes 3 to 6 run it: a
+second-order notch over the echo history, comparing input and output energy
+over 64-sample blocks, counting a block whose output is four times below its
+input with the input above 150,000, and calling `VPcmV34InitiateRetrain` at
+six consecutive counts. It shares its format string with a `retrainDetector()`
+at .text+0x60fb, which is where the field names in it come from.
+
+======================================================================
+
+### 1462. THE UNWRITTEN BOUNDARY MOVED ONE LEVEL DOWN, AND IT IS 7,922 BYTES OF V.90 AND V.92
+
+`VPcmV34Progress` calls seven symbols nobody has reconstructed:
+
+    VPcmFloModem::v90RunDemodulator     3,013     v90RateRenegSilence   983
+    VPcmFloModem::runPcmModem           2,041     v90RateReneg          555
+    VPcmFloModem::qcLineVerification      779     GenericToneDetector::
+    VPcmFloModem::vPcmResetPhase3Modem    149       process(float*,unsigned)  422
+
+**Every one of them belongs to the V.90 or V.92 arm, and finding 1454's trace
+is what says a V.34 call reaches none of them.** That is the whole reason the
+function could be written now rather than after another 145 KB.
+
+They carry `vpcm.h`'s arrangement one level down: weak declarations behind
+three macros that only `v34pcmmain.cpp` defines, a null test at every call
+site, and `v34pcm_notwritten` recording which one was reached and aborting
+unless a test has said by name that it will read the code afterwards.
+
+`t_vpcmguard.c` is rebuilt around this. It used to watch `vpcm_run` stop on
+`VPcmV34Progress` itself; it now asserts all five `VPcmV34*` entry points are
+DEFINED, asserts all seven of the above are unresolved, and drives the guard
+by putting the object in state 4 -- line verification, whose one unwritten
+call is `qcLineVerification` -- and requiring the child to die of SIGABRT.
+
+**THE FIXTURE NEEDS ONE REAL BUFFER AND NO MORE.** `VPcmV34Progress` reads
+`p3548->byte_7f5c` unconditionally before it dispatches, so a null session
+faults before any guard can fire; 0x7f68 zeroed bytes is the whole of what
+state 4 needs, and none of the object's other pointers is dereferenced on that
+path.
+
+======================================================================
+
+### 1463. THE OBJECT IS 0xac4c BYTES AND `struct v34_object` STOPPED TWELVE SHORT OF IT
+
+`vpcm.h`'s `VPCM_V34_BYTES` has said 0xac4c since `vpcm_run` was written --
+`VPcmV34Create` memsets exactly that much at 0xaa7f-0xab15 -- and
+`struct v34_object` ended at 0xac40, because nothing reconstructed had ever
+reached past `pac3c`.
+
+`VPcmV34Progress`'s `requestOutputSampleClear` arm reaches all three of the
+missing words: .text+0xc98e writes a sample count at +0xac44, +0xc99f a flag
+of 1 at +0xac40, and +0xc9a7 a zero at +0xac48. They are modelled as
+`unmapped_ac40` rather than named, for the reason the regions around them are:
+one writer and no reader in this tree says nothing about what they hold.
+
+Growing the struct is safe in both directions and was checked in both: nothing
+asserts its size, and the eighteen test files that allocate
+`sizeof(struct v34_object)` as backing store get twelve bytes more of an
+object that was always that big.
+
+======================================================================
+
+======================================================================
+
+### 1464. THE RETRAIN DETECTOR SAVES THE THREE ACCUMULATORS IT IS ABOUT TO CLEAR
+
+`VPcmV34Progress`'s tail runs a second-order notch over the echo history and
+compares input and output energy every 64 samples. Both outcomes of that
+comparison end in the same three-word clear at +0xb709:
+
+    b709  movl $0x0,0x14(%ebp)      obj +0xac30, energyInp
+    b710  movl $0x0,0x18(%ebp)      obj +0xac34, energyOut
+    b717  movl $0x0,0x1c(%ebp)      obj +0xac38, the block counter
+
+The DETECTED arm writes all three first -- `mov %eax,0x14(%ebp)` at 0xb6cb,
+`mov %edx,0x18(%ebp)` at 0xb6d1 and `movl $0x40,0x1c(%ebp)` at 0xb6d4 -- and
+nothing reads any of them in the eight instructions between. The undetected
+arm at 0xb702 writes only the signal counter and falls into the same clear.
+
+Three dead stores, then, and the compiler kept them because they are member
+stores through a live pointer. They are reproduced: a differential test cannot
+tell a dead store from a live one, and only the same three writes in the same
+order keeps `make similarity` honest about what the source contained.
+Deviation D296.
+
+======================================================================
+
+### 1465. TWO OF `VPcmV34Progress`'s TRANSMIT LOOPS HAVE NO ITERATION BOUND
+
+The V.90 arm (0xbc5e-0xbce0) and the K56flex arm (0xbb7c-0xbbdf) each fill the
+transmit queue by looping until `txq.count` reaches `f2aa0`, which is set to
+the block length immediately above the loop:
+
+    bc74  cmp %bp,(%edi)   jl        the loop test, 16-bit and signed
+    bccc  cmp $0xe,%eax    jle       v90RateRenegSilence above 14
+    bc7e  cmp $0xa,%eax    jg        v90RateReneg above 10
+    bc8b  testb $0x10,0x3a6(%ecx)    modulatevector, else v34handshak
+
+Nothing counts the turns, and none of the four callees is obliged to enqueue
+anything. **The V.34 arm beside them is bounded** -- it runs exactly
+`nin & ~3` times and calls the same two functions once each -- so this is the
+shape of these two arms and not the file's habit.
+
+Recorded rather than fixed, as D297: a bound would be a behavioural difference
+on an input the differential tier cannot produce, and both arms belong to
+protocols no test in this tree drives.
+
+======================================================================

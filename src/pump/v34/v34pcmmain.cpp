@@ -2082,13 +2082,19 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			obj->faa74 = 0;
 			PROG_S32(obj, O_MOHCOUNT) = lim;
 			obj->f0004 = 0;
-			if (DSPLIB_DEBUG_ON()) {
+			/*
+			 * 0xc2a8, `xor %esi,%esi`, and it is easy to miss:
+			 * this arm returns 0 and not the 13 it switched on.
+			 * The debug path reaches the same 0 by re-reading
+			 * `f0004` at 0xb53d, which is the only reason the two
+			 * paths agree.
+			 */
+			ret = 0;
+			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "VPcmV34Main: Reconnect request indicated "
 				    "from phase2 (waiting min time = %d before"
 				    " reconenct request)...\r\n", lim);
-				goto reload;
-			}
 			goto done;
 		}
 

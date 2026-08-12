@@ -86,12 +86,21 @@ extern int ref_vpcm_run(struct dp *dp, void *in, void *out, int count);
  * `VPcmV34Progress` in `src/pump/v34/v34pcmmain.cpp`.  This binary links
  * both files.
  *
- * SO NOTHING IS BORROWED.  The run below is no longer "our `vpcm_run` on the
- * blob's five callees" and it is no longer "four of the five are ours": every
- * instruction the OURS side executes on a 33,600 V.34 call is this tree's,
- * and every block still has to agree with the blob-blob run.  Finding 1454 is
- * what says the claim is that strong -- traced under callgrind, the call
- * entered exactly one unwritten symbol and it was `VPcmV34Progress`.
+ * SO THE WHOLE RUN PATH IS OURS.  The run below is no longer "our `vpcm_run`
+ * on the blob's five callees" and it is no longer "four of the five are
+ * ours": on a 33,600 V.34 call every instruction the OURS side executes
+ * BETWEEN THE TWO SAMPLE CONVERSIONS is this tree's, and every block still
+ * has to agree with the blob-blob run.  Finding 1454 is what says the claim
+ * is that strong -- traced under callgrind, the call entered exactly one
+ * unwritten symbol and it was `VPcmV34Progress`.
+ *
+ * CONSTRUCTION IS STILL BORROWED, AND DELIBERATELY.  Both endpoints are built
+ * by `ref_dp_vpcm_init` and so by the blob's `ref_vpcm_create`, which is
+ * findings 800-806's golden-object oracle rather than an omission: a
+ * blob-constructed V.34 object is a valid differential fixture, and using it
+ * is what lets the run path be compared at all.  `t_vpcmctor` and
+ * `t_vpcmxfcreate` are where OUR construction is tested.  So the honest claim
+ * for this file is about `.process`, not about the datapump's whole life.
  *
  * `VPcmV34Progress` also puts OUR `V90Demodulator::getBitRate`,
  * `GenericIIR<float,double>::process` and `V90Parameters::init` on the path of
