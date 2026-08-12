@@ -49232,3 +49232,74 @@ end's own instrument now says it is sending us less because we asked for less.
 behaviour and not something the reconstruction introduced. It is a
 specification to match, not a defect to fix — but it does mean the
 reconstruction has a measurable target that is nothing to do with the bench.
+
+======================================================================
+
+### 1470. THE SIGNAL WE RECEIVE IS FINE — THREE DELIVERY-PATH EXPLANATIONS TESTED AND ALL THREE REFUTED
+
+*Following 1469, which put the receive deficit in our receiver. Before
+touching the datapump, everything BETWEEN the wire and it was checked. None of
+it is the cause, and each is written down so nobody spends a session on it
+again.*
+
+**1. NO JITTER-BUFFER STARVATION DURING THE HANDSHAKE.** A call logs 50
+`Underflow, buf_cnt=0, will generate 1 frame` from d-modem's port, which looks
+alarming and is not: every one falls in two bursts, 25 at `Kicking off audio!`
+when the buffer primes and 24 at `current hookstate: 0` when the call is torn
+down. The handshake window is clean. This is the same conclusion #103 reached
+from a different direction and it survives a second look.
+
+**2. THE 8000↔9600 RESAMPLER IS NOT EATING THE TOP OF THE BAND.** `d-modem.c:216`
+registers its media port at **9600 Hz** while the RTP is 8000 Hz PCMA, so
+pjmedia resamples in both directions on every call — and the two hardware
+modems of 1468 have no resampler anywhere in their path. It is the obvious
+suspect, and it is innocent. Power spectra of the SAME transmitter (the
+Courier at 3429 baud), normalised at 800–1200 Hz:
+
+| band | relay leg B, a-law 8 kHz, **no resampler** | our `modem_rx`, 9600 Hz, **after the resampler** |
+|---|---|---|
+| 300–600 | −1.0 dB | −0.4 dB |
+| 1500–2000 | +0.3 | +0.4 |
+| 2400–2800 | +1.0 | +1.6 |
+| 2800–3200 | +0.6 | +2.1 |
+| 3200–3400 | −0.3 | +2.1 |
+| 3400–3600 | −2.4 | −0.0 |
+| 3600–3800 | −11.3 | −11.0 |
+
+Flat to about a decibel across the V.34 band and the band edge falls at the
+same place by the same amount. If anything our copy is *hotter* at
+2800–3400 Hz — which is the preemphasis filter 4 that our own receiver asked
+for (1469), arriving exactly as requested.
+
+**3. SO IT IS NOT LEVEL EITHER**, which 1466 had already shown from the other
+side: the receive statistics of a 28800 call and a 4800 call are identical to
+a quarter of a decibel.
+
+**WHAT IS ACTUALLY LEFT, and the object says it in its own words.** From
+`V34DATARATE` on these calls:
+
+    equerr = 2762, preerr=621      ->  automatic: 12000
+    equerr = 2544, preerr=935      ->  automatic: 14400
+    equerr = 3187, preerr=731      ->  automatic: 12000
+
+    Final choice data rate = 5, retrainThresh = 8218,
+    renegDownthresh = 5361, renegUpthresh = 2571
+
+The rate is not chosen badly — it is chosen correctly from an equaliser error
+that is simply large. `renegUpthresh` is 2571 and our equerr sits at
+2544–3187, straddling it, which is why the outcome flickers between 12000 and
+14400. To reach 26400 the object's own table wants equerr below 205, and 33600
+below 50. We are an order of magnitude away, on a channel a 1998 SupraExpress
+equalises well enough to ask for 28800.
+
+**THE QUESTION IS NOW ENTIRELY INSIDE THE OBJECT**, which is where this
+project has an oracle for every function: what does the Phase 3 equaliser
+converge to, and why does it settle an order of magnitude worse than a
+contemporary modem on the same signal? That needs no bench time at all — the
+recorded `modem_rx` at 9600 Hz is the receiver's own input and can be replayed
+into a differential test.
+
+**THE STOCK BLOB RAN EVERY CALL CITED HERE.** So this is the original
+datapump's behaviour, not the reconstruction's. It remains a specification to
+match rather than a defect to fix — but it is now a *quantified* one, and the
+reconstruction can be measured against `equerr` directly.
