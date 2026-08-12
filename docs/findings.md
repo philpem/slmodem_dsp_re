@@ -49608,3 +49608,67 @@ built copy fifty characters away.
     BLOB=/abs/path/dsplibs.o make phase; echo "PHASE_EXIT=$?"
 
 in that order, in one command, with `make` unpiped.
+
+### 1564. NINE V.22 LEAVES THAT NEEDED NO OBJECT LAYOUT, AND THE FOUR EDGES IN THEM
+
+`V22FP_create` is 2,449 bytes and lays out the datapump instance, so the
+obvious reading is that nothing which touches that instance can be written
+before it. Nine functions disprove that: they call nothing, they touch at
+most two fields each, and the field OFFSETS are readable directly off the
+loads. They are written with `void *` parameters and named offset constants,
+exactly as `src/dsp/fpm_tone.c` treats its own 0x108-byte object, and they get
+retyped when `V22FP_create` lands.
+
+    ReadGTimer  TxNOP  RxClampV22  RxTrained1200  RxTrained2400
+    CarrierDetect  SignalDetect  GetSignalQuality  TxClockSync
+
+**478 bytes, and four of them have an edge the obvious rewrite gets wrong.**
+
+**One: `TxNOP` and `RxClampV22` write n+1 entries.** The count is held in a
+16-bit register and tested BEFORE the decrement:
+
+    lea -0x1(%ecx),%eax      eax = n - 1
+    movswl %ax,%ecx          n   = (short)(n - 1)
+    inc %ax                  ax  = (short)n_old
+    jne                      loop while n_old != 0
+
+so `mov $0x9f,%ecx` produces **160** writes and `mov $0xb,%ecx` produces
+**12** — and both then store that same 160 or 12 into the count. The two
+readings agree on the count and disagree only on the array, by one entry, so
+`t_v22prc` checks the entry one past a naive loop's end was written and the
+one after that was not. Without that check the idiom is untested.
+
+**Two: `RxTrained1200` calls an empty array trained.** The object's first
+comparison is `0 >= n`, which jumps straight to the `i == n` test with `i`
+still zero, so `*count == 0` returns 1. "No symbols yet" reading as "training
+complete" is exactly what a rewrite quietly changes.
+
+**Three: `RxTrained2400` counts BACKWARDS and wants strictly more than seven.**
+It starts at `symbols[*count - 1]`, walks down while entries equal 15, and
+exits on a mismatch *or* on running out — both exits land on the same
+`cmp $0x7` — so eight trailing 15s pass and seven do not. The threshold is
+`> 7`, not `>= 7`, and a `for` loop written forwards gets a different answer
+on any array with 15s at the front.
+
+**Four: two arithmetic wraps, both reachable, both swept whole.**
+`GetSignalQuality` loads `0xffff8000` into a 32-bit register, subtracts the
+stored figure, and zero-extends the low half: a stored figure of 0 gives
+32768, one of 0x8000 gives 0, and anything above 0x8000 gives a LARGE answer
+rather than a negative one. `TxClockSync` multiplies a short by three and
+stores a short, so it overflows above 10922. Both are tested over all 65,536
+inputs rather than sampled, and both wraps are asserted to have actually
+occurred.
+
+**One thing the object does not settle**, recorded so a later contradiction
+reads as evidence: `TxClockSync` leaves the product in `eax`, which is what a
+`short`-returning function would also do, and there is no extension either way
+to tell `void` from `short`. Declared `void`. The store is identical under
+both readings, so nothing observable turns on it.
+
+**The offsets, which are the durable part.** In the instance:
+`+0x50` is an `int *` shared millisecond clock (`ReadGTimer` adds 20 to it and
+returns the new value — 20 ms is 160 samples at 8 kHz, the same block
+`v22_iir.c` runs); `+0x54` is the V22FP receiver/transmitter. In the object at
+`+0x54`: `+0x78` is the transmit clock, `+0xec` the signal flag, `+0x12a` the
+baud figure that `+0x78` is three times, `+0x130` the carrier flag, `+0x186`
+the quality figure.
