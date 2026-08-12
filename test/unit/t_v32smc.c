@@ -18,6 +18,13 @@
 
 #include "harness.h"
 #include "dsplib/v32smc.h"
+/*
+ * For `SMCv32_PMAP16`, which lives in v32dec.h: the object holds ONE
+ * table and two translation units read it two ways, so the tree keeps a
+ * single declaration and v32smc.h points here rather than repeating it
+ * with the other signedness (D305).
+ */
+#include "dsplib/v32dec.h"
 
 extern void ref_SMCv32_encoder_abs(void *smc, void *out, const short *in,
 				   unsigned short count);
