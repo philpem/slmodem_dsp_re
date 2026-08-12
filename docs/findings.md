@@ -49449,3 +49449,64 @@ cost a full run to discover:
 `FAIL Psd::process` in a `phase` log is **not** a failure: `t_psd` is the one
 entry in `tools/gccdiverge.json` (finding 1453) and the wrapper allows that
 check to fail under modern GCC. `make period` passes it.
+
+### 1611. THE V.32 ECHO CANCELLER'S STATE: 0x68 BYTES, EIGHT BUFFERS, AND A DELAY LINE THAT HOLDS SYMBOLS RATHER THAN SAMPLES
+
+*`FPM_ECC_init` (0xa7610), `FPM_ECC_free` (0xa7870) and `ECC_CFG`
+(.data:0x8114) are reconstructed and differentially tested; `t_fpm_ecc`
+is 232 checks over eleven configurations. Findings 1611-1620 belong to this
+batch.*
+
+**THE CANCELLER IS DRIVEN BY SYMBOLS, NOT BY THE TRANSMITTED WAVEFORM.**
+`line` (+0x38) holds `line_len` PACKED symbols -- high byte selects one of six
+constellation maps in `cfg.imap` / `cfg.qmap`, low byte is the point inside it
+-- and two read taps walk it, `near_rd` (+0x30) and `far_rd` (+0x32),
+`cfg.far_lag` apart. Each tap feeds a two-element complex history
+(`near_i`/`near_q`, `far_i`/`far_q`), and those short histories are what the
+adaptive coefficients see. So a 200 ms round-trip echo costs 480 shorts of
+delay line and 40 complex taps, not 1,440 taps.
+
+`cfg.fill` presets the whole line, and `ECCv32_CFG` sets it to **16**, which
+resolves to `SMCv32_IMAP16[16]`. That table is 0x22 bytes = 17 entries, so
+the preset is the one point PAST a 16-point constellation -- independent
+confirmation of the packing, since any other reading of `fill` would index
+somewhere meaningless.
+
+**THE LAYOUT, MEASURED.** `struct fpm_ecc_cfg` is 24 bytes, copied wholesale
+into the state by init as six dwords: `far_lag`(+0), `near_taps`(+2),
+`far_taps`(+4), pad, `imap`(+8), `qmap`(+0xc), `fill`(+0x10), pad,
+`aux`(+0x14, read by nothing). `struct fpm_ecc` runs cfg, `hold_power`(0x18),
+`unk1a`, `enabled`(0x1c, int, set to 1 and never read here),
+`pwr_in`(0x20), `pwr_out`(0x22), `freeze`(0x24), pad, `adapt_near`(0x28,
+int), `adapt_far`(0x2c, int), `near_rd`, `far_rd`, `line_len`(0x34), pad,
+`line`(0x38), `near_idx`/`near_len`(0x3c/0x3e), `near_i`/`near_q`(0x40/0x44),
+`far_idx`/`far_len`(0x48/0x4a), `far_i`/`far_q`(0x4c/0x50), `coef[3]`(0x54),
+`mu`(0x60, init 0x29), `phase`(0x62, UNSIGNED -- `movzwl` and a `jbe`
+bound), `near_delay`(0x64), `far_delay`(0x66). **0x68 is a floor, not a
+proven size**: the three functions touch nothing above 0x67.
+
+**`near_delay` AND `far_delay` ARE INPUTS.** init READS 0x64 and 0x66 and
+never writes them, so the owner of the object sets them before calling.
+`line_len = far_lag + near_delay + far_delay`; `back = line_len -
+near_delay`; `near_rd = back % line_len` (a real `idiv`, so **`line_len` must
+be non-zero or both sides take SIGFPE**) and `far_rd = back - far_lag`, which
+is NOT reduced modulo the length.
+
+**EACH COEFFICIENT SET IS 2*(near_taps+far_taps) SHORTS AND THERE ARE THREE
+OF THEM**, `coef[0..2]` at 0x54/0x58/0x5c, one per sample phase: V.32 is 2400
+baud at 7200 Hz, and `cancel` cycles `phase` 0,1,2 and pulls a new symbol off
+the line each wrap. The layout inside a set is near-I, near-Q, far-I, far-Q,
+each block strided by `cfg.near_taps` or `cfg.far_taps`.
+
+**`ECC_CFG` IS `{480, 40, 4, 0, NULL, NULL, 0, 0, NULL}` AND IS NOT CONST.**
+It is in `.data`, where a const object would have gone to `.rodata` -- the
+same evidence that puts `ECCv32_CFG` in `.rodata`. Four far taps and no maps
+make it a template rather than a usable configuration, the same relationship
+`FPM_MRF_CFG_data` has to `MRFv32_CFG`. It is proven twice over: compared
+against `ref_ECC_CFG` as an object, and again through
+`FPM_ECC_init(state, NULL, 1)`, which takes it as the configuration.
+
+**init ALLOCATES UNCONDITIONALLY WHEN `fresh` IS SET** -- unlike
+`FPM_MRF_init`, it inspects no existing pointer and frees nothing, so a second
+`fresh` init leaks all eight buffers. `FPM_ECC_free` releases `coef[2]`
+first and `near_i` last.
