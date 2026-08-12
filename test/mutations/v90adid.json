@@ -1172,5 +1172,293 @@
   "label": "shorten the QC report's rule by one dash",
   "find": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"-------\\r\\n\");\n\n\tint_a984 = 0;",
   "replace": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"------\\r\\n\");\n\n\tint_a984 = 0;"
+ },
+ {
+  "label": "NOTE: the DIL batch.  porcessSecondStudy and setQcLinearMapping share their whole tail -- the same scan for the unsuspected phase, the same call, and the same three format strings -- and differ inside it by one token: the report runs to 0x7f in the first and to 0x74 in the second.  Every anchor below in that region therefore spans something only one of the two has.  Finding 1264: an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
+ },
+ {
+  "label": "start the DIL scan order at 62 instead of 63",
+  "find": "\t\t63, 61, 59, 57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33,",
+  "replace": "\t\t62, 61, 59, 57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33,"
+ },
+ {
+  "label": "drop the last code from the DIL scan order",
+  "find": "\t\tfor (i = 0; i < 115; i++) {",
+  "replace": "\t\tfor (i = 0; i < 114; i++) {"
+ },
+ {
+  "label": "repair the phases that are NOT flagged for alternate RBS",
+  "find": "\t\tif (short_2800[phase] == 0)\n\t\t\tcontinue;\n\n\t\tfor (i = 0;",
+  "replace": "\t\tif (short_2800[phase] != 0)\n\t\t\tcontinue;\n\n\t\tfor (i = 0;"
+ },
+ {
+  "label": "quantise onto the phase's own mapping, not the reference's",
+  "find": "\t\t\t\t    unSuspectedPhaseNearestLinMapp(\n\t\t\t\t\t    sampleStore[phase][base + j],\n\t\t\t\t\t    unSuspectedPhase);",
+  "replace": "\t\t\t\t    unSuspectedPhaseNearestLinMapp(\n\t\t\t\t\t    sampleStore[phase][base + j],\n\t\t\t\t\t    (short)phase);"
+ },
+ {
+  "label": "count the last sample of a code as a run of its own",
+  "find": "\t\t\tfor (m = 0; m < short_8b00[phase][at] - 1; m++) {",
+  "replace": "\t\t\tfor (m = 0; m < short_8b00[phase][at]; m++) {"
+ },
+ {
+  "label": "start the run length at zero rather than at one",
+  "find": "\t\t\t\tcount = 1;\n",
+  "replace": "\t\t\t\tcount = 0;\n"
+ },
+ {
+  "label": "let a later run of equal length take the alternate",
+  "find": "\t\t\t\tif (count > maxCount) {",
+  "replace": "\t\t\t\tif (count >= maxCount) {"
+ },
+ {
+  "label": "stop marking the duplicates the run counted",
+  "find": "\t\t\t\t\tsampleStore[phase][base + q] = -1;",
+  "replace": "\t\t\t\t\tsampleStore[phase][base + q] = -2;"
+ },
+ {
+  "label": "take the run's value from the wrong end of the run",
+  "find": "\t\t\t\t\tmaxValue = sampleStore[phase][base + m];",
+  "replace": "\t\t\t\t\tmaxValue = sampleStore[phase][base + m + 1];"
+ },
+ {
+  "label": "give every code a verdict, not only the ones with samples",
+  "find": "\t\t\tif (short_8b00[phase][at] != 0) {",
+  "replace": "\t\t\tif (short_8b00[phase][at] != 1) {"
+ },
+ {
+  "label": "swap the two arms of the alternate mapping's verdict",
+  "find": "\t\t\t\tlinMappAlt[phase][at] = maxCount != 0\n\t\t\t\t    ? maxValue : linMapp[unSuspectedPhase][at];",
+  "replace": "\t\t\t\tlinMappAlt[phase][at] = maxCount == 0\n\t\t\t\t    ? maxValue : linMapp[unSuspectedPhase][at];"
+ },
+ {
+  "label": "give the phase its own entry instead of the reference's",
+  "find": "\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t    linMapp[unSuspectedPhase][at];",
+  "replace": "\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t    linMappAlt[unSuspectedPhase][at];"
+ },
+ {
+  "label": "leave the sample cursor where it was",
+  "find": "\t\t\t\tbase += short_8b00[phase][at];",
+  "replace": "\t\t\t\tbase += 0 * short_8b00[phase][at];"
+ },
+ {
+  "label": "report only the codes the scan order visits",
+  "find": "\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\tfor (ci = 0; ci <= 0x74; ci++)\n\t\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "swap the two mappings in the AltUcode report",
+  "find": "\t\t\t\t\t    \"AltUcode[%d]  :  %d  %d\\n\", ci,\n\t\t\t\t\t    linMapp[phase][ci],\n\t\t\t\t\t    linMappAlt[phase][ci]);",
+  "replace": "\t\t\t\t\t    \"AltUcode[%d]  :  %d  %d\\n\", ci,\n\t\t\t\t\t    linMappAlt[phase][ci],\n\t\t\t\t\t    linMapp[phase][ci]);"
+ },
+ {
+  "label": "report the reference phase instead of the phase being repaired",
+  "find": "\t\t\t\t\t     \"  ----\\n\", phase);",
+  "replace": "\t\t\t\t\t     \"  ----\\n\", unSuspectedPhase);"
+ },
+ {
+  "label": "shorten the DIL rule by one dash",
+  "find": "\t\tdsplibs_debug_printf(\"--------------------------------------\"\n\t\t\t\t     \"----------------------------\\n\");\n\n\tfor (phase",
+  "replace": "\t\tdsplibs_debug_printf(\"--------------------------------------\"\n\t\t\t\t     \"---------------------------\\n\");\n\n\tfor (phase"
+ },
+ {
+  "label": "DIL: drop the redundant reference test inside the run",
+  "find": "\t\t\t\t\tif (w == linMapp[unSuspectedPhase][at])\n\t\t\t\t\t\tcontinue;\n",
+  "replace": "",
+  "equivalent": true,
+  "why": "Dead by construction: the loop reaches this line only after `w != v` has continued, so `w == v`, and `v` failed the identical test at the head of the same iteration.  Nothing writes `linMapp` between the two tests -- the only store in the method is after both loops -- so the second test can never fire.  The object encodes it anyway (`cmp 0x0(%ebp,%edx,2),%cx ; je` at 0x41ac7) and it is kept for that reason."
+ },
+ {
+  "label": "DIL: drop the redundant marked test inside the run",
+  "find": "\t\t\t\t\tif (w == -1)\n\t\t\t\t\t\tcontinue;\n",
+  "replace": "",
+  "equivalent": true,
+  "why": "Same argument as the reference test above: `w == v` and `v != -1` was tested at the head of the iteration, and `sampleStore[base + m]` cannot have changed because the inner loop only ever writes indices above `m`.  `inc %cx ; je` at 0x41ace is the object's."
+ },
+ {
+  "label": "let the unsuspected scan run to the sixth phase",
+  "find": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285",
+  "replace": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 5;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285"
+ },
+ {
+  "label": "scan for a phase that IS suspected",
+  "find": "\tfor (unSuspectedPhase = 0;\n\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285",
+  "replace": "\tfor (unSuspectedPhase = 0;\n\t     byte_280c[unSuspectedPhase] == 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\t/*\n\t * D285"
+ },
+ {
+  "label": "take the unreachable arm at five as well as above it",
+  "find": "\tif (unSuspectedPhase > 5) {",
+  "replace": "\tif (unSuspectedPhase >= 5) {"
+ },
+ {
+  "label": "second study: study one code fewer",
+  "find": "\t\tfor (at = 0; at <= 0x74; at++) {",
+  "replace": "\t\tfor (at = 0; at <= 0x73; at++) {"
+ },
+ {
+  "label": "start the nearest distance above the reachable maximum",
+  "find": "\t\t\t\tfloat nearest = 32256.0f;",
+  "replace": "\t\t\t\tfloat nearest = 32768.0f;"
+ },
+ {
+  "label": "start the second-nearest distance at zero rather than at a NaN",
+  "find": "\tfloat second = __builtin_nanf(\"\");",
+  "replace": "\tfloat second = 0.0f;"
+ },
+ {
+  "label": "reinitialise the second-nearest distance per code and phase",
+  "find": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;",
+  "replace": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;\n\t\t\t\tsecond = __builtin_nanf(\"\");"
+ },
+ {
+  "label": "take the second-nearest with an ordered compare",
+  "find": "\t\t\t\t\t} else if (!(d >= second)) {",
+  "replace": "\t\t\t\t\t} else if (d < second) {"
+ },
+ {
+  "label": "stop demoting the nearest to the second-nearest",
+  "find": "\t\t\t\t\t\tsecond = nearest;\n\t\t\t\t\t\tnearest = d;",
+  "replace": "\t\t\t\t\t\tnearest = d;"
+ },
+ {
+  "label": "remember the window rather than the entry that won it",
+  "find": "\t\t\t\t\t\tbestAt = (short)(from + k);",
+  "replace": "\t\t\t\t\t\tbestAt = from;"
+ },
+ {
+  "label": "look at two neighbours instead of three",
+  "find": "\t\t\t\tfor (k = 0; k <= 2; k++) {",
+  "replace": "\t\t\t\tfor (k = 0; k <= 1; k++) {"
+ },
+ {
+  "label": "centre the neighbour window instead of ending it",
+  "find": "\t\t\t\t    ? (short)at : (short)(at - 2);",
+  "replace": "\t\t\t\t    ? (short)at : (short)(at - 1);"
+ },
+ {
+  "label": "choose the window on the wrong side of the reference",
+  "find": "\t\t\t\tfrom = linMapp[phase][at]\n\t\t\t\t       > linMapp[unSuspectedPhase][at]",
+  "replace": "\t\t\t\tfrom = linMapp[phase][at]\n\t\t\t\t       < linMapp[unSuspectedPhase][at]"
+ },
+ {
+  "label": "choose the window on an inclusive comparison",
+  "find": "\t\t\t\t       > linMapp[unSuspectedPhase][at]\n\t\t\t\t    ? (short)at",
+  "replace": "\t\t\t\t       >= linMapp[unSuspectedPhase][at]\n\t\t\t\t    ? (short)at",
+  "equivalent": true,
+  "why": "The two spellings differ only when the phase's entry EQUALS the reference's, and then both windows -- [at, at+2] and [at-2, at] -- contain `at`, whose distance is zero.  So both take the exact-match arm, both leave `bestAt` at an index whose entry equals the value, and both stores write that value back over itself.  Both also leave the second-nearest at 32,256 or below, because the demotion at the final (zero-distance) improvement writes the nearest, which is at most the sentinel; and the second-nearest never rises again, since the demotion writes a value at most the sentinel and the else-if writes a strictly smaller one.  The only reader is the ratio, and it can only differ between the two while the nearest is still its sentinel -- any iteration that improves rewrites the second-nearest to 32,256 at its first improvement and then evolves identically over an identical window -- which needs a second-nearest above 64,512.  Unreachable after the equality that caused the difference.  Finding 1433."
+ },
+ {
+  "label": "demand a wider margin before repairing an entry",
+  "find": "\t\t\t\t    || (1.0f / nearest) * second > 2.0f)",
+  "replace": "\t\t\t\t    || (1.0f / nearest) * second > 2.0001f)"
+ },
+ {
+  "label": "repair on a narrower margin",
+  "find": "\t\t\t\t    || (1.0f / nearest) * second > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =",
+  "replace": "\t\t\t\t    || (1.0f / nearest) * second > 1.5f)\n\t\t\t\t\tlinMapp[phase][at] ="
+ },
+ {
+  "label": "repair with the entry the phase already had",
+  "find": "\t\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t\t    linMapp[unSuspectedPhase][bestAt];",
+  "replace": "\t\t\t\t\tlinMapp[phase][at] =\n\t\t\t\t\t    linMappAlt[unSuspectedPhase][bestAt];"
+ },
+ {
+  "label": "second study: divide instead of multiplying by the reciprocal",
+  "find": "\t\t\t\t    || (1.0f / nearest) * second > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =\n",
+  "replace": "\t\t\t\t    || second / nearest > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =\n",
+  "equivalent": true,
+  "why": "Both operands are `(float)` of the magnitude of a difference of two shorts, so both are exact integers in 0..65535.  |second/nearest - 2| is either 0 -- when second == 2 * nearest -- or at least 1/nearest >= 1/65535 = 1.5e-5, which is ten orders of magnitude above the difference between the two spellings, so only second == 2 * nearest can separate them.  Confirmed once by exhausting all 32,767 such pairs in a throwaway program built -m32 -O2 -mfpmath=387, so that the intermediates stay in x87 registers as they do here: no separator.  fl(1/n) is within 2^-64 relative of 1/n and the spacing of extended-precision values at 2 is 2^-62, so 2*fl(1/n)*n rounds to exactly 2.0 for every n.  Finding 1433."
+ },
+ {
+  "label": "second study: drop the guard on an exact match",
+  "find": "\t\t\t\tif (nearest == 0.0f\n\t\t\t\t    || (1.0f / nearest) * second > 2.0f)",
+  "replace": "\t\t\t\tif ((1.0f / nearest) * second > 2.0f)",
+  "equivalent": true,
+  "why": "A nearest distance of zero means some k gave |v - linMapp[unSuspectedPhase][from + k]| == 0 and set `bestAt` to that k -- no later k can improve on zero, and nothing writes `linMapp` inside the (code, phase) iteration -- so `linMapp[unSuspectedPhase][bestAt]` still equals `linMapp[phase][at]` at the store and the repair writes the value back over itself.  Without the guard the ratio is (1/0) * second: +inf when second > 0, which repairs, and a NaN when second is 0 or a NaN, which does not.  Both outcomes are the same self-store, and neither `second` nor `bestAt` depends on the decision.  Finding 1433."
+ },
+ {
+  "label": "report the scan's starting point rather than where it stopped",
+  "find": "\tedprintf(\"V90AutoDigitalImpDetector: unSuspectedPhase = %d\\r\\n\",\n\t\t unSuspectedPhase);",
+  "replace": "\tedprintf(\"V90AutoDigitalImpDetector: unSuspectedPhase = %d\\r\\n\",\n\t\t 0);"
+ },
+ {
+  "label": "shorten the second study's rule by one dash",
+  "find": "\t\t unSuspectedPhase);\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"------------------\\r\\n\");",
+  "replace": "\t\t unSuspectedPhase);\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"-----------------\\r\\n\");"
+ },
+ {
+  "label": "shorten the second study's report banner by one dash",
+  "find": "\t\t\t\t     \"report --------------\\r\\n\");\n\n\t{\n\t\t/*",
+  "replace": "\t\t\t\t     \"report -------------\\r\\n\");\n\n\t{\n\t\t/*"
+ },
+ {
+  "label": "report the whole row as the QC mapping does",
+  "find": "\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"linearMapping[%d]  :  \"",
+  "replace": "\t\tfor (ci = 0; ci <= 0x74; ci++)\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"linearMapping[%d]  :  \""
+ },
+ {
+  "label": "swap two phases in the second study's report",
+  "find": "\t\t\t\t\t\t     linMapp[3][ci],\n\t\t\t\t\t\t     linMapp[4][ci],",
+  "replace": "\t\t\t\t\t\t     linMapp[4][ci],\n\t\t\t\t\t\t     linMapp[3][ci],"
+ },
+ {
+  "label": "rebuild the mapping for the phases that ARE flagged",
+  "find": "\t\tif (short_2800[phase] != 0)\n\t\t\tcontinue;\n\n\t\tif (byte_280c[phase] != 0) {",
+  "replace": "\t\tif (short_2800[phase] == 0)\n\t\t\tcontinue;\n\n\t\tif (byte_280c[phase] != 0) {"
+ },
+ {
+  "label": "swap the rebuild and the previous session's mapping",
+  "find": "\t\tif (byte_280c[phase] != 0) {\n\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tupdateLinMappMeanAndVar(phase, ci);",
+  "replace": "\t\tif (byte_280c[phase] == 0) {\n\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tupdateLinMappMeanAndVar(phase, ci);"
+ },
+ {
+  "label": "rebuild the alternate mapping instead of the mapping",
+  "find": "\t\t\t\tupdateLinMappMeanAndVar(phase, ci);",
+  "replace": "\t\t\t\tupdateLinMappMeanAndVarAlt(phase, ci);"
+ },
+ {
+  "label": "copy the previous session's mapping one entry short",
+  "find": "\t\t\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\t\t\tlinMapp[phase][ci] = prevLinMapp[ci];",
+  "replace": "\t\t\tfor (ci = 0; ci < V90ADID_CODES - 1; ci++)\n\t\t\t\tlinMapp[phase][ci] = prevLinMapp[ci];"
+ },
+ {
+  "label": "index the previous session's mapping by phase",
+  "find": "\t\t\t\tlinMapp[phase][ci] = prevLinMapp[ci];",
+  "replace": "\t\t\t\tlinMapp[phase][ci] = prevLinMapp[phase];"
+ },
+ {
+  "label": "QC mapping: let the unsuspected scan run to the sixth phase",
+  "find": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 5;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();"
+ },
+ {
+  "label": "QC mapping: start the unsuspected scan at phase one",
+  "find": "\tfor (unSuspectedPhase = 0;\n\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\tfor (unSuspectedPhase = 1;\n\t     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;\n\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();"
+ },
+ {
+  "label": "QC mapping: do not call the DIL repair",
+  "find": "\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\t     unSuspectedPhase++)\n\t\t;\n"
+ },
+ {
+  "label": "second study: do not call the DIL repair",
+  "find": "\t\t unSuspectedPhase);\n\n\tupdateAltRbsPhaseInDil();",
+  "replace": "\t\t unSuspectedPhase);\n"
+ },
+ {
+  "label": "QC mapping: report the whole row",
+  "find": "\tfor (ci = 0; ci <= 0x74; ci++)\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tfor (ci = 0; ci < V90ADID_CODES; ci++)\n\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "shorten the QC mapping's rule by one dash",
+  "find": "\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"------------------\\r\\n\");",
+  "replace": "\t     unSuspectedPhase++)\n\t\t;\n\n\tupdateAltRbsPhaseInDil();\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"------------------------------------\"\n\t\t\t\t     \"-----------------\\r\\n\");"
+ },
+ {
+  "label": "swap two phases in the QC mapping's report",
+  "find": "\t\t\t\t\t     linMapp[0][ci], linMapp[1][ci],",
+  "replace": "\t\t\t\t\t     linMapp[1][ci], linMapp[0][ci],"
  }
 ]

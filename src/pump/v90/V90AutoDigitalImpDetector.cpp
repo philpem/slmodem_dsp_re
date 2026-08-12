@@ -140,6 +140,20 @@ ADID_OFF(altMinVarThresh,          0xa9a8, altminvarthresh);
 ADID_OFF(neighborUcodeMinDistance, 0xa9ac, neighborucodemin);
 ADID_OFF(neighborUcodeMaxDistance, 0xa9ae, neighborucodemax);
 
+/*
+ * THE ONE THE DIL BATCH ADDS -- one of the three gaps finding 1424 left, and
+ * the only one of them any member of the class reads.
+ *
+ * +0xa968  `mov %ax,0xa968(%esi)` at 0x41cd0 and `mov %bx,0xa968(%esi)` at
+ *          0x41cec in porcessSecondStudy, and the same pair in
+ *          setQcLinearMapping -- sixteen-bit stores.  The three readers
+ *          sign-extend: `movswl 0xa968(%ebp),%esi` at 0x418ff in
+ *          updateAltRbsPhaseInDil, and the same instruction four times in
+ *          findPadGain and five times in determineMaxUcode.  Two bytes, and
+ *          `byte_a96a` at +0xa96a is what bounds it above.
+ */
+ADID_OFF(unSuspectedPhase, 0xa968, unsuspectedphase);
+
 typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
 
 #endif /* 32-bit */
@@ -1389,4 +1403,389 @@ V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 
 	int_a984 = 0;
 	int_a988 = 0;
+}
+
+/*
+ * ==========================================================================
+ * THE DIL BATCH: `updateAltRbsPhaseInDil` and the two members that call it.
+ *
+ * WHAT THE THREE ARE FOR.  By the time these run, `porcessFirstStudy` has
+ * decided which of the six RBS phases are too rough to trust and written that
+ * verdict into `byte_280c`.  These three take the FIRST phase that is clear --
+ * `unSuspectedPhase` at +0xa968, which both callers scan for with the same
+ * loop -- and use its mapping as the reference every other phase is repaired
+ * against.  `updateAltRbsPhaseInDil` does the repair; `setQcLinearMapping`
+ * builds the mapping to repair from the accumulators (or, for a phase with no
+ * verdict, from the previous session's), and `porcessSecondStudy` tries to
+ * repair the suspected phases' entries one code at a time first.
+ *
+ * THE TWO CALLERS SHARE A TAIL, AND IT IS NOT QUITE THE SAME TAIL.  Both scan
+ * for `unSuspectedPhase`, call `updateAltRbsPhaseInDil`, and then print the
+ * whole mapping table under the same three format strings -- but
+ * `porcessSecondStudy` prints codes 0..0x7f and `setQcLinearMapping` prints
+ * 0..0x74, and the counters are not even the same type: a byte whose sign bit
+ * ends the loop in the first, a `short` compared against 0x74 in the second.
+ * The two are written out rather than factored into a helper because that
+ * difference is the only thing separating them and a helper would hide it.
+ * ==========================================================================
+ */
+
+/*
+ * Rebuild the suspected phases' mapping from the samples they actually
+ * received, using the unsuspected phase's mapping as the reference.
+ *
+ * FOR EACH SUSPECTED PHASE, AND EACH CODE IN A FIXED SCAN ORDER: quantise
+ * every sample this phase stored for that code to the nearest entry of the
+ * reference phase's mapping, find the most popular value among them, and give
+ * the phase the reference's entry for the mapping and the popular value for
+ * the alternate mapping.
+ *
+ * THE SCAN ORDER IS A TABLE AND NOT A RANGE.  115 codes: the odd ones
+ * descending from 63 to 3, then 2, then the even ones ascending from 4 to 64,
+ * then 65 to 116 in order.  Codes 0 and 1 are not in it and neither is
+ * anything above 116.  The object holds it as an automatic array `memcpy`d
+ * from `.rodata+0xcfc`, which is what a local array with an initialiser
+ * compiles to, and it is written that way here.
+ *
+ * THE SAMPLE-STORE CURSOR IS UNBOUNDED, and it is a different unbounded index
+ * from D256's: `base` walks forward by the histogram count of every code it
+ * visits, and nothing compares it against 0x83e.  The store is laid out as
+ * "phase p's samples for the codes in scan order, end to end", so the cursor
+ * only stays inside the row while the histogram agrees with what
+ * `addReceivedSampleToStorage` actually stored.  docs/deviations.md D287.
+ *
+ * THE POPULAR VALUE IS FOUND DESTRUCTIVELY.  Each run of equal samples is
+ * counted and then overwritten with -1 so that the next pass does not count it
+ * again, which is why -1 is skipped on the way in and why the sample store is
+ * left full of them.  A sample equal to the reference entry is skipped too, so
+ * "popular" means "popular among the samples that disagree with the
+ * reference".
+ */
+void
+V90AutoDigitalImpDetector::updateAltRbsPhaseInDil()
+{
+	/*
+	 * 115 bytes, `memcpy`d from `.rodata+0xcfc` at 0x4186d.  Not `static
+	 * const`: the object copies it to the stack on every call, which is
+	 * what an automatic array with an initialiser does.
+	 */
+	unsigned char order[115] = {
+		63, 61, 59, 57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 37, 35, 33,
+		31, 29, 27, 25, 23, 21, 19, 17, 15, 13, 11,  9,  7,  5,  3,  2,
+		 4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34,
+		36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 65,
+		66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
+		82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97,
+		98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+		111, 112, 113, 114, 115, 116
+	};
+	unsigned short phase;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("--------------------------------------"
+				     "----------------------------\n");
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		unsigned short i;
+		int base = 0;
+
+		/* Only the phases flagged at +0x2800, and they print too. */
+		if (short_2800[phase] == 0)
+			continue;
+
+		for (i = 0; i < 115; i++) {
+			unsigned char at = order[i];
+			unsigned short maxCount = 0;
+			short maxValue = 0;
+			unsigned short m;
+			unsigned short j;
+
+			/*
+			 * Quantise this code's samples onto the reference
+			 * phase's mapping.  The object inlines
+			 * `unSuspectedPhaseNearestLinMapp` here -- the same
+			 * 1,000,000 sentinel and the same 5..0x74 window -- so
+			 * calling it is a factoring difference and not a
+			 * behavioural one.
+			 */
+			for (j = 0; j < short_8b00[phase][at]; j++)
+				sampleStore[phase][base + j] =
+				    unSuspectedPhaseNearestLinMapp(
+					    sampleStore[phase][base + j],
+					    unSuspectedPhase);
+
+			for (m = 0; m < short_8b00[phase][at] - 1; m++) {
+				short v = sampleStore[phase][base + m];
+				unsigned short count;
+				unsigned short q;
+
+				if (v == linMapp[unSuspectedPhase][at])
+					continue;
+				if (v == -1)
+					continue;
+
+				count = 1;
+
+				for (q = (unsigned short)(m + 1);
+				     q < short_8b00[phase][at]; q++) {
+					short w = sampleStore[phase][base + q];
+
+					if (w != v)
+						continue;
+					/*
+					 * Both of these are already known
+					 * false -- `w` equals `v` and `v`
+					 * passed the same two tests -- and the
+					 * object tests them anyway, which is
+					 * why they are here.
+					 */
+					if (w == linMapp[unSuspectedPhase][at])
+						continue;
+					if (w == -1)
+						continue;
+
+					sampleStore[phase][base + q] = -1;
+					count = (unsigned short)(count + 1);
+				}
+
+				/* An UNSIGNED sixteen-bit compare. */
+				if (count > maxCount) {
+					maxCount = count;
+					maxValue = sampleStore[phase][base + m];
+				}
+			}
+
+			if (short_8b00[phase][at] != 0) {
+				linMapp[phase][at] =
+				    linMapp[unSuspectedPhase][at];
+				linMappAlt[phase][at] = maxCount != 0
+				    ? maxValue : linMapp[unSuspectedPhase][at];
+				base += short_8b00[phase][at];
+			}
+		}
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("\n----  AltPhase %d : "
+					     "linearMapping  linearMappingAlt"
+					     "  ----\n", phase);
+
+		{
+			unsigned short ci;
+
+			for (ci = 0; ci < V90ADID_CODES; ci++)
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "AltUcode[%d]  :  %d  %d\n", ci,
+					    linMapp[phase][ci],
+					    linMappAlt[phase][ci]);
+		}
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("--------------------------------------"
+				     "----------------------------\n");
+}
+
+/*
+ * The second study: repair each suspected phase's mapping entry from the
+ * unsuspected phase's, one code at a time, where the repair is unambiguous.
+ *
+ * FOR EACH CODE AND EACH SUSPECTED PHASE, three entries of the reference
+ * phase's mapping are considered -- the code itself and its two neighbours, or
+ * the code and the two BELOW it, depending on which side of the reference this
+ * phase's own entry falls -- and the nearest of the three is taken.  It is
+ * taken only if it is unambiguously the nearest: either it is exact, or the
+ * second nearest is more than twice as far away.
+ *
+ * THE SECOND-NEAREST DISTANCE IS INITIALISED ONCE FOR THE WHOLE CALL, and the
+ * nearest is initialised per (code, phase).  So the ratio test compares this
+ * code's best against the best runner-up seen since the method started, not
+ * against this code's runner-up, and it gets harder to satisfy as the call
+ * proceeds.  The object loads the sentinel with `flds` at 0x41cb0, before the
+ * prologue's pushes, and reuses that x87 slot for the running value -- which
+ * it could only do if the value were dead after one use.  docs/deviations.md
+ * D286.
+ *
+ * THE SENTINEL IS A NaN, and that is what makes the first comparison against
+ * it succeed: the update is guarded by a `jae` that an unordered compare does
+ * not take, so the first distance that is not an improvement becomes the
+ * second-nearest whatever its size.  Written as the negation of the ordered
+ * test, which is what the branch encodes -- `!(d >= second)`, not `d < second`.
+ *
+ * THE NEIGHBOUR WINDOW REACHES BEFORE THE TABLE.  At codes 0 and 1 the "two
+ * below" case indexes `linMapp[unSuspectedPhase][-2]`, which for an
+ * unsuspected phase of 0 is four bytes in front of the object.  The object
+ * does not guard it and neither does this.  docs/deviations.md D287.
+ */
+void
+V90AutoDigitalImpDetector::porcessSecondStudy()
+{
+	/*
+	 * Both of these are initialised once, before the scan, and the object
+	 * initialises them there: the NaN at 0x41cb0 and the zero at 0x41cc5.
+	 * A stale `bestAt` is reachable -- three distances of 32,256 or more
+	 * leave the nearest at its sentinel -- and it is a deterministic zero
+	 * rather than an uninitialised read.
+	 */
+	float second = __builtin_nanf("");
+	short bestAt = 0;
+	unsigned char at;
+
+	for (unSuspectedPhase = 0;
+	     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;
+	     unSuspectedPhase++)
+		;
+
+	/*
+	 * D285: the scan above cannot leave a value above 5, so this arm is
+	 * unreachable.  It is the object's and it is written.
+	 */
+	if (unSuspectedPhase > 5) {
+		unSuspectedPhase = 0;
+	} else {
+		for (at = 0; at <= 0x74; at++) {
+			unsigned char phase;
+
+			for (phase = 0; phase < V90ADID_PHASES; phase++) {
+				float nearest = 32256.0f;
+				short from;
+				short v;
+				unsigned char k;
+
+				if (byte_280c[phase] == 0)
+					continue;
+				if (short_2800[phase] != 0)
+					continue;
+
+				from = linMapp[phase][at]
+				       > linMapp[unSuspectedPhase][at]
+				    ? (short)at : (short)(at - 2);
+				v = linMapp[phase][at];
+
+				for (k = 0; k <= 2; k++) {
+					float d = (float)adid_abs(v
+					    - linMapp[unSuspectedPhase][from + k]);
+
+					if (!(d >= nearest)) {
+						second = nearest;
+						nearest = d;
+						bestAt = (short)(from + k);
+					} else if (!(d >= second)) {
+						second = d;
+					}
+				}
+
+				if (nearest == 0.0f
+				    || (1.0f / nearest) * second > 2.0f)
+					linMapp[phase][at] =
+					    linMapp[unSuspectedPhase][bestAt];
+			}
+		}
+	}
+
+	edprintf("V90AutoDigitalImpDetector: unSuspectedPhase = %d\r\n",
+		 unSuspectedPhase);
+
+	updateAltRbsPhaseInDil();
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("-----------------  Linear Mapping "
+				     "report --------------\r\n");
+
+	{
+		/*
+		 * A BYTE, and the loop ends on its SIGN BIT -- so this covers
+		 * the whole 128-wide row where `setQcLinearMapping`'s
+		 * otherwise identical loop stops at 0x74.
+		 */
+		unsigned char ci;
+
+		for (ci = 0; ci < V90ADID_CODES; ci++)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("linearMapping[%d]  :  "
+						     "%d  %d  %d  %d  %d  "
+						     "%d\r\n", ci,
+						     linMapp[0][ci],
+						     linMapp[1][ci],
+						     linMapp[2][ci],
+						     linMapp[3][ci],
+						     linMapp[4][ci],
+						     linMapp[5][ci]);
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------\r\n");
+}
+
+/*
+ * Build the mapping the QC session starts from.
+ *
+ * EVERY PHASE THAT IS NOT FLAGGED AT +0x2800 GETS A MAPPING, from one of two
+ * places: its own accumulators if it has a verdict at +0x280c, and the
+ * PREVIOUS SESSION's mapping if it has not.  So +0x280c is read here as "this
+ * phase was studied" rather than as "this phase is suspected", which is the
+ * opposite of how `uniteLinMappInfoOfUnsuspectedPhases` reads it -- the object
+ * uses the same byte both ways and the two methods are not a pair.
+ *
+ * The per-code work is `updateLinMappMeanAndVar` and the object inlines it:
+ * the same `1.0f / count`, the same `E[x^2] - E[x]^2`, the same `+ 0.5f` and
+ * the same truncating `fistp`.  Calling it is a factoring difference.
+ *
+ * `prevLinMapp` IS ONE ROW FOR ALL SIX PHASES.  The copy loop reads
+ * `prevLinMapp[code]` with no phase term at all, so every unstudied phase gets
+ * the same 128 entries -- which is what makes +0x0c00 128 shorts rather than
+ * 6 * 128 (finding 1361).
+ */
+void
+V90AutoDigitalImpDetector::setQcLinearMapping()
+{
+	short phase;
+	short ci;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		if (short_2800[phase] != 0)
+			continue;
+
+		if (byte_280c[phase] != 0) {
+			for (ci = 0; ci < V90ADID_CODES; ci++)
+				updateLinMappMeanAndVar(phase, ci);
+		} else {
+			for (ci = 0; ci < V90ADID_CODES; ci++)
+				linMapp[phase][ci] = prevLinMapp[ci];
+		}
+	}
+
+	for (unSuspectedPhase = 0;
+	     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;
+	     unSuspectedPhase++)
+		;
+
+	updateAltRbsPhaseInDil();
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("-----------------  Linear Mapping "
+				     "report --------------\r\n");
+
+	/*
+	 * 0x74, not 0x7f: this loop stops seventeen codes short of the row
+	 * where `porcessSecondStudy`'s prints the whole of it.
+	 */
+	for (ci = 0; ci <= 0x74; ci++)
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("linearMapping[%d]  :  %d  %d  "
+					     "%d  %d  %d  %d\r\n", ci,
+					     linMapp[0][ci], linMapp[1][ci],
+					     linMapp[2][ci], linMapp[3][ci],
+					     linMapp[4][ci], linMapp[5][ci]);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------\r\n");
 }

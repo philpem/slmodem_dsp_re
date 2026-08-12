@@ -23,17 +23,18 @@
  * and taking the largest displacement in each, then checking by hand that the
  * base register of the winner is `this`.  Finding 251.
  *
- * TWENTY-FOUR OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote
+ * TWENTY-SEVEN OF THE THIRTY-TWO ARE DEFINED.  The lifecycle batch wrote
  * `reset` and `resetLinearMapping`; the first processing batch added the
  * sixteen whose only callees were already written, the second added
  * `unitePhasesInfoOfUref` -- a leaf -- and `updateUref`, which was blocked on
- * exactly that one call, and the study batch added the four that read and
- * write the study state at the top of the object.  The rest stay declared and
- * deliberately undefined, because defining a method whose callees are not
- * written breaks the link for the entire test suite (docs/v90cpp.md).  The
- * intra-class call graph is four edges and is written down in finding 1367,
- * so what each of the remaining ten waits on is a lookup rather than a
- * measurement.
+ * exactly that one call, the study batch added the four that read and
+ * write the study state at the top of the object, and the DIL batch added
+ * `updateAltRbsPhaseInDil` with the two members that are its only callers.
+ * The rest stay declared and deliberately undefined, because defining a
+ * method whose callees are not written breaks the link for the entire test
+ * suite (docs/v90cpp.md).  The intra-class call graph is four edges and is
+ * written down in finding 1367, so what each of the remaining three waits on
+ * is a lookup rather than a measurement.
  *
  * THE OBJECT IS MOSTLY SIX-BY-ONE-HUNDRED-AND-TWENTY-EIGHT ARRAYS.  Six is
  * the number of RBS phases -- every loop in the class runs a `short` index
@@ -217,6 +218,24 @@ public:
 	void uniteLinMappInfoOfUnsuspectedPhases(unsigned char);
 
 	/*
+	 * THE THREE THE DIL BATCH DEFINES, and they are one cluster on purpose:
+	 * `porcessSecondStudy` and `setQcLinearMapping` are the only two
+	 * members that call `updateAltRbsPhaseInDil` -- measured over every
+	 * `R_386_PC32` in the class -- and beyond that call the three reach
+	 * only `memcpy`, `edprintf` and `dsplibs_debug_printf`.
+	 *
+	 * The two callers share a prologue and an epilogue almost exactly:
+	 * each scans `byte_280c` for the first unsuspected phase into
+	 * +0xa968, calls `updateAltRbsPhaseInDil`, and then prints the whole
+	 * mapping table.  The print loops are NOT the same length -- 0..0x7f
+	 * in `porcessSecondStudy` and 0..0x74 in `setQcLinearMapping` -- which
+	 * is the one token that separates two otherwise identical blocks.
+	 */
+	void porcessSecondStudy();
+	void setQcLinearMapping();
+	void updateAltRbsPhaseInDil();
+
+	/*
 	 * Declared, not defined -- see the file comment.
 	 *
 	 * The constructor `V90AutoDigitalImpDetector(V90Parameters *)` and the
@@ -228,10 +247,7 @@ public:
 	 */
 	void determineMaxUcode(short);
 	void findPadGain();
-	void porcessSecondStudy();
-	void setQcLinearMapping();
 	void studyUrefHandler(float, unsigned int);
-	void updateAltRbsPhaseInDil();
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -388,7 +404,30 @@ public:
 	 * whether a phase's mapping is smooth enough to trust.
 	 */
 	float trn1Sigma;					/* +0xa964 */
-	unsigned char pad_a968[2];				/* +0xa968 */
+
+	/*
+	 * THE OBJECT NAMES THIS ONE ITSELF TOO, and it is a PHASE INDEX rather
+	 * than a flag.  `porcessSecondStudy` saves it into a stack slot at
+	 * 0x41d06 and prints exactly that slot through
+	 * "V90AutoDigitalImpDetector: unSuspectedPhase = %d\r\n", so the name
+	 * is the original author's; finding 1425 is the same situation for
+	 * two fields the study batch met, and this one is spelled with the
+	 * object's own name because a field nothing else refers to yet costs
+	 * nothing to name properly.
+	 *
+	 * It is the FIRST phase whose `byte_280c` is clear -- the two writers
+	 * both scan for it with the same loop -- and the three readers use it
+	 * as a row index into `linMapp`: `movswl 0xa968(%ebp),%esi ; shl
+	 * $0x7,%esi` in `updateAltRbsPhaseInDil` at 0x418ff, and the same
+	 * `movswl` in `findPadGain` (four times) and `determineMaxUcode`
+	 * (five).  Every access in the class is sixteen bits wide, and the
+	 * readers sign-extend, so it is a `short`.
+	 *
+	 * THE SCAN CANNOT REACH 6.  Both writers stop the increment at 5 --
+	 * `cmp $0x4; jle` -- so "no unsuspected phase at all" is spelled 5,
+	 * which is also a valid phase.  docs/deviations.md D285.
+	 */
+	short unSuspectedPhase;					/* +0xa968 */
 
 	/*
 	 * How many of the six phases `porcessFirstStudy` ended up calling

@@ -5062,3 +5062,53 @@ It also makes one of the method's other bounds untestable, which is recorded as 
 It is the same shape as D281 and reproduced the same way -- `bestGroup` is declared and deliberately left uninitialised, because giving it a value would invent behaviour the blob does not have. **The test cannot compare that path**, for D281's reason: two builds have two stack frames. `t_v90adid` always leaves phase `trial % 5` unsuspected in the sweep, and the forty-block sequence forces `byte_280c` explicitly before every call rather than letting `porcessFirstStudy`'s output arrange it -- which is exactly the state that would reach this.
 
 The difference from D281 is that this one is reachable from inside the class. D281 needs a caller to flag every phase at +0x2800; this needs `porcessFirstStudy` to find every phase smooth, which is what a clean line produces.
+
+## D285 ⚠ The scan for the unsuspected phase stops at five, so the arm that handles "there is none" is dead
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::porcessSecondStudy` (blob 0x41cb0, 831 bytes), +0x45 (`cmp $0x4,%bx ; jle 41cd9`), and from the character-identical loop in `setQcLinearMapping` (blob 0x44700) at +0x10c. **Reachability: the arm at +0x247 can never be entered** -- proved by the loop's own bound, not sampled. Status: `measured`. Fix class: none proposed.*
+
+**Finding 1429.** Both callers of `updateAltRbsPhaseInDil` open by finding the first RBS phase with a clear `byte_280c`, and both spell it the same way: store zero, test `byte_280c[0]`, then increment-store-test-bound until either the byte is zero or the index is above 4.
+
+    41cd9: movzwl 0xa968(%esi),%ebx
+    41ce0: inc    %ebx
+    41ce4: cmpb   $0x0,0x280c(%ecx,%esi,1)
+    41cec: mov    %bx,0xa968(%esi)         ; the member is the loop variable
+    41cf3: je     41cfb                    ; a clear phase: stop
+    41cf5: cmp    $0x4,%bx
+    41cf9: jle    41cd9                    ; otherwise keep going while <= 4
+
+So the largest value the loop can leave in +0xa968 is 5, reached when all six bytes are nonzero -- and 5 is also a perfectly good phase number. The very next instructions read the field back and branch on it being ABOVE five:
+
+    41cfb: movzwl 0xa968(%esi),%eax
+    41d02: cmp    $0x5,%ax
+    41d0b: jg     41ef7                    ; "no unsuspected phase": clear it and skip
+
+`41ef7` pops the sentinel off the FPU stack, stores zero into +0xa968 and into the stack slot the report prints, and jumps past the whole study. It is 18 bytes of code that no input can reach, and what it is FOR is legible: the author meant the scan to run to 6 and to spell "none found" as 6, which is what `for (i = 0; i <= 5 && byte_280c[i]; i++)` would have left. The bound is one short of that, so the "none found" case and the "phase 5" case are the same value and the phase-5 reading wins.
+
+Both spellings are reproduced: the scan with its `<= 4`, and the guard with its `> 5`. A modern `-O2` may prove the arm dead and delete it, which costs nothing at tier 1 -- the behaviour is identical either way, and `t_v90adid` asserts the scan's answer directly, sweeping all six stopping points and the all-nonzero row that lands on 5.
+
+## D286 🐛 `porcessSecondStudy` initialises its second-nearest distance once for the whole call
+
+*Batch of 2026-08-12, same function, +0x00 (`flds 0x358` -- the FIRST instruction, before the register saves) against +0xc4 (`fld %st(3)`, once per (code, phase)). **Reachability: FIRES on the second repair decision of every call** -- the carried value is what all 701 remaining (code, phase) pairs are judged against. Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1431.** For each of 117 codes and each of the six phases, the method measures the distance from the phase's own mapping entry to three neighbouring entries of the reference phase's, keeps the nearest and the second nearest, and repairs the entry only if the nearest is unambiguous: exact, or beaten by a factor of more than two.
+
+The nearest distance is initialised per (code, phase) -- `fld %st(3)` copies the constant 32,256 into a fresh slot at the head of the phase loop. The second-nearest is not. It is loaded once, from `.rodata.cst4+0x358`, before the function has even pushed its registers, and the reg-stack allocator then REUSES that slot for the running value -- `fstp %st(6)` at 0x41e00 writes over it on the first update. An x87 slot can only be overwritten like that if the value in it is dead, so the load is a one-time initialisation and not a per-iteration one; there is no second `flds` anywhere in the 831 bytes.
+
+The consequence is that "the runner-up" is not this code's runner-up but the smallest runner-up seen since the method was entered, and it only ever decreases. The ratio test therefore gets monotonically harder as the call proceeds: an entry that would be repaired on its own merits at code 100 is refused because code 3 happened to have two near-equal candidates.
+
+The sentinel makes the first decision work at all. `.rodata.cst4+0x358` is 0x7fc00000, a NaN, and the update is guarded by `jae` -- which an unordered compare does not take -- so the first distance that fails to improve the nearest becomes the second-nearest whatever its size. Written as `!(d >= second)` rather than `d < second` for exactly that reason.
+
+`t_v90adid` separates the two spellings with a constructed witness, because a sweep cannot: three random distances are all 32,256 or more about once in a hundred million. Phase 0 is left unsuspected and given -31746 across its row against 32767 in every other phase's, so all three distances are 64,513 -- above the nearest's sentinel, and 2.000031 times it, which is over the threshold by three parts in a hundred thousand. With the NaN the entry is repaired; with any ordered sentinel, or with 32,257 in place of 32,256, it is not. A second witness primes the second-nearest to 499 at code 0 and then asserts that code 3 -- whose three distances are 65,535 -- is NOT repaired, which is the carry itself: a per-iteration reset repairs it.
+
+## D287 🐛 The DIL repair path indexes the sample store and the mapping table without bounds
+
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::updateAltRbsPhaseInDil` (blob 0x41840, 1124 bytes), +0x363 (`add %edx,0x60(%esp)`), and from `porcessSecondStudy` (blob 0x41cb0) +0x106 (`movswl 0x3c(%esp),%ebp`). **Reachability: the first needs a histogram that disagrees with what was stored, the second FIRES at codes 0 and 1 on every call.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1430.** Two unbounded indices in the same cluster, and neither is D256's.
+
+THE SAMPLE CURSOR. `updateAltRbsPhaseInDil` treats each phase's sample store as "the samples for the codes in scan order, end to end": it starts a cursor at zero and, for each of the 115 codes it visits, quantises `short_8b00[phase][code]` samples starting at the cursor and then advances the cursor by that count. Nothing compares the cursor against the row's 0x83e entries, and nothing compares it against `int_9100[phase]`, which is what `addReceivedSampleToStorage` actually filled. The two agree only because both are driven by the same call: one increments the histogram bin, the other appends to the row. Anything that puts a count in `short_8b00` without a matching sample -- and the class has no other writer, so this is a claim about callers -- walks the cursor past the row, into the next phase's samples and eventually out of the object. The test clamps the seeded histogram to sixteen per code for that reason, which is 1,840 against 2,110; the forty-block sequence needs no clamp at all, because six samples a phase for forty blocks is 240.
+
+THE NEIGHBOUR WINDOW. `porcessSecondStudy` chooses between the window [code, code+2] and the window [code-2, code] by which side of the reference the phase's own entry falls, and it runs `code` from 0. At codes 0 and 1 the second window indexes `linMapp[unSuspectedPhase][-2]` and `[-1]`, which for an unsuspected phase of 0 -- the commonest value, and what a clear `byte_280c[0]` gives -- is four bytes IN FRONT of the object. Above, the window reaches `linMapp[phase][118]` at the top code of 116, which is inside the row. The read is never a write, so nothing is corrupted; what the object gets is whatever precedes it in memory, and the repair decision for two codes out of 117 turns on it.
+
+`t_v90adid` puts a sixteen-byte guard in FRONT of the fixture, seeded alike on both sides and compared like the one behind it. Without it the two sides read two different pieces of unrelated memory and the comparison measures the linker's layout; with it, codes 0 and 1 are tested for real rather than steered around by forcing the unsuspected phase away from zero, which would have left the commonest path untested.

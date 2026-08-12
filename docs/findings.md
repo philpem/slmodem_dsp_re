@@ -44840,3 +44840,211 @@ catches it is reading the UNUSABLE list -- which is why the count is quoted
 here with the unusable figure in it and not just the caught one.
 
 ======================================================================
+
+### 1429. THE LAST PAD REGION IS A PHASE INDEX, AND THE OBJECT NAMES IT
+
++0xa968 was one of the three small gaps finding 1424 left -- `pad_a954[2]`,
+`pad_a960[4]`, `pad_a968[2]` -- and the only one of the three that any member
+of the class reads.  Five of them touch it and every access is sixteen bits
+wide: `porcessSecondStudy` and `setQcLinearMapping` write it with
+`mov %ax,0xa968(%esi)`, and `updateAltRbsPhaseInDil`, `findPadGain` and
+`determineMaxUcode` read it with `movswl` -- four times in the second and five
+in the third.  The readers say what it is for:
+
+    418ff: movswl 0xa968(%ebp),%esi
+    41914: shl    $0x7,%esi
+    41963: movswl 0x0(%ebp,%edx,2),%eax        ; linMapp[a968][...]
+
+A shift of seven and a use as the row of a `[6][128]` table is a phase number,
+and the sign extension is what makes it a `short` rather than an `unsigned
+short`.
+
+**THE NAME IS THE OBJECT'S OWN.**  `porcessSecondStudy` saves the field into a
+stack slot at 0x41d06 and prints exactly that slot through
+`"V90AutoDigitalImpDetector: unSuspectedPhase = %d\r\n"`, so the field is
+declared `unSuspectedPhase` and not `short_a968`.  Finding 1425 is the same
+situation for six fields the study batch met, two of which kept their
+offset-derived names because a rename would have touched three files and a
+mutation set; this one was new, so there was nothing to rename and no reason
+not to use the author's word.
+
+What it holds is the FIRST phase whose `byte_280c` is clear -- the phase whose
+own measurement `porcessFirstStudy` was willing to trust -- and both writers
+find it with the same six-instruction loop.  That loop cannot return 6, which
+is D285: its bound is `cmp $0x4; jle`, so "no unsuspected phase" and "phase 5"
+are the same answer, and the 18-byte arm the object keeps for the first of them
+is unreachable.  It is written anyway, because it is in the object.
+
+======================================================================
+
+### 1430. THE DIL REPAIR IS A SCAN-ORDER TABLE, A CURSOR AND A POPULARITY VOTE
+
+`updateAltRbsPhaseInDil` (0x41840, 1124 bytes) repairs the mapping of every
+phase flagged at +0x2800 from the samples that phase actually received, and
+three things about it are not guessable from its name.
+
+**THE SCAN ORDER IS A TABLE.**  The first thing the method does is `memcpy` 115
+bytes from `.rodata+0xcfc` onto its own stack, and the loop that follows runs an
+index 0..0x72 over them.  The bytes are the odd codes descending from 63 to 3,
+then 2, then the even codes ascending from 4 to 64, then 65 to 116 in order --
+exactly the set 2..116, in an order that starts in the middle of the companding
+law and works outwards.  Codes 0, 1 and 117..127 are not in it and are never
+repaired.  It is an automatic array rather than a `static const` one: the
+object copies it on every call, which is what a local array with an initialiser
+compiles to, and it is written that way.
+
+**THE SAMPLE STORE IS READ AS A CONCATENATION.**  There is a cursor, starting
+at zero per phase, and for each code the method quantises
+`short_8b00[phase][code]` samples starting at the cursor and then advances the
+cursor by that count.  So the store is "the samples for the codes in scan
+order, end to end" and the histogram is the index into it -- which is only true
+because `addReceivedSampleToStorage` increments the bin and appends the sample
+in the same call.  Nothing bounds the cursor: D287.
+
+**THE VOTE IS DESTRUCTIVE.**  Every sample is first replaced by the nearest
+entry of `linMapp[unSuspectedPhase]` -- the object inlines
+`unSuspectedPhaseNearestLinMapp` here, same 1,000,000 sentinel, same 5..0x74
+window -- and then the method counts runs of equal values, overwriting each
+counted duplicate with -1 so the next pass cannot count it again.  Samples
+equal to the reference entry are skipped, and so are the -1s.  The most popular
+survivor goes into `linMappAlt[phase][code]` and the reference entry itself
+goes into `linMapp[phase][code]`; with no survivors, both get the reference.
+The store is left full of -1s, which is observable and is compared.
+
+The last sample of a code can never win: the outer loop stops at `n - 1`
+because a run needs something after it to count, so a value appearing once at
+the end is never even considered.  Two of the three tests inside the inner loop
+are dead -- see finding 1433 -- and the object encodes them anyway.
+
+======================================================================
+
+### 1431. READING TWO MINIMA OFF AN x87 STACK, AND THE NaN THAT SAYS WHICH IS WHICH
+
+`porcessSecondStudy` (0x41cb0, 831 bytes) has no memory operands for its two
+running values at all: they live in x87 registers for the whole of a
+702-iteration double loop, and the only way to read the method is to track the
+stack by hand.  Five values are live at the loop head -- 1.0, 2.0, 0.0, 32256.0
+and the value loaded by the very first instruction of the function -- and a
+sixth is pushed per iteration by `fld %st(3)`, which copies the 32,256.
+
+Two comparison sites, `fcom %st(1)` and `fcom %st(6)`, and a pair of
+`fstp %st(6)` / `fxch %st(5)` shuffles between them, are what give the reading:
+the fresh copy is the NEAREST distance and the once-loaded value is the SECOND
+nearest, the improve path moves the old nearest into the second's slot before
+overwriting it, and the two sites are the same abstract test in two physical
+layouts.  It is the textbook two-smallest scan, and the repair fires when the
+nearest is exact or beats the second by more than a factor of two.
+
+**THE FIRST INSTRUCTION OF THE FUNCTION IS THE PROOF THAT THE SECOND-NEAREST IS
+NOT RE-INITIALISED.**  `flds 0x358` at 0x41cb0 runs before the register saves,
+and the reg-stack allocator then reuses that same slot for the running value at
+0x41e00.  An x87 slot can only be overwritten like that if what was in it is
+dead, so the load happens once for the whole call -- there is no second `flds`
+anywhere in the function.  D286 is the consequence.
+
+**AND `.rodata.cst4+0x358` IS 0x7fc00000.**  The sentinel is a NaN, which is
+what makes the first comparison against it work: the update is guarded by `jae`
+and an unordered compare sets CF, so the first distance that fails to improve
+the nearest becomes the second-nearest whatever its size.  Written as
+`!(d >= second)` and not as `d < second`, for the reason finding 1424 gives at
+`getAltVarThresh`.
+
+Neither claim is reachable by sweeping.  Both need all three candidate
+distances to be 32,256 or more, which three random shorts manage about once in
+a hundred million, so `t_v90adid` carries three constructed states instead: one
+where the three distances are 64,513 -- 2.000031 times the sentinel, which pins
+the 32,256 to within one and the 2.0 to within a ten-thousandth, and which is
+repaired ONLY because an unordered compare takes the NaN; one where an earlier
+code leaves the second-nearest at 499 and a later code with three distances of
+65,535 is then NOT repaired, which is the carry itself; and one with two
+successive improvements, which is the only state where the demotion of the
+nearest into the second is observable.  All three land where they were aimed.
+
+======================================================================
+
+### 1432. THE TWO CALLERS SHARE A TAIL AND DIFFER INSIDE IT BY ONE TOKEN
+
+`porcessSecondStudy` and `setQcLinearMapping` are the only two members that call
+`updateAltRbsPhaseInDil`, and each of them ends the same way: scan `byte_280c`
+for the unsuspected phase, call the repair, then print all six phases' mapping
+under `"linearMapping[%d]  :  %d  %d  %d  %d  %d  %d\r\n"` between two rules.
+The scan loops are character-identical.  The report loops are not: the second
+study prints codes 0..0x7f with a byte counter whose SIGN BIT ends the loop, and
+the QC mapping prints 0..0x74 with a `short` compared against 0x74.  128 lines
+against 117, and nothing else separates the two blocks.
+
+That is a mutation-anchor problem before it is anything else (finding 1264: an
+ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run), so every
+anchor in the shared tail reaches past the line it changes -- into the
+`edprintf` that only the second study has, or into the scan loop's `;` and the
+call that follows it.  The uniqueness gate in front of the mutation file is what
+made that visible: it refused three anchors on the first pass.
+
+What `setQcLinearMapping` itself does is choose, per phase, between three
+things: a phase flagged at +0x2800 is left entirely alone, a phase with a study
+verdict at +0x280c has all 128 of its mapping entries rebuilt from its
+accumulators -- the object inlines `updateLinMappMeanAndVar`, `1.0f / count` and
+all -- and a phase WITHOUT a verdict is given `prevLinMapp`, the same 128
+entries every such phase gets.  That last arm is the confirmation of finding
+1361's reading of +0x0c00: the copy loop indexes it with the code alone and has
+no phase term, so the region really is one row of 128 and not six.
+
+Note that +0x280c is read here as "this phase was studied" where
+`uniteLinMappInfoOfUnsuspectedPhases` reads it as "this phase is suspected".
+Same byte, opposite senses, two methods; the pair is not a copy of anything.
+
+======================================================================
+
+### 1433. FIVE MUTATIONS THAT PROVABLY CANNOT FAIL, AND WHAT EACH PROOF IS
+
+This batch's mutation set is 55 entries, of which five survive and are recorded
+`equivalent`.  That is more than the four the whole rest of the file had, and
+each one is a proof rather than a shrug -- the standard being that an
+`equivalent` verdict is argued from the object or from the arithmetic, never
+from "the test did not catch it".
+
+**TWO DEAD TESTS INSIDE THE POPULARITY VOTE.**  The inner loop of
+`updateAltRbsPhaseInDil` reaches its second and third tests only after
+`w != v` has continued, so `w == v` -- and `v` failed the identical two tests at
+the head of the same iteration, with nothing writing `linMapp` or
+`sampleStore[base + m]` in between.  The object encodes both anyway
+(`cmp 0x0(%ebp,%edx,2),%cx ; je` at 0x41ac7 and `inc %cx ; je` at 0x41ace) and
+they are reproduced; they cannot be made to fire.
+
+**THE RECIPROCAL IN THE RATIO TEST.**  `(1.0f / nearest) * second` and
+`second / nearest` are the same predicate here, which is the opposite of
+finding 1366's result for the mean -- and for a reason that is specific to this
+comparison.  Both operands are exact integers in 0..65535, so
+`|second/nearest - 2|` is either zero, when `second == 2 * nearest`, or at least
+`1/nearest >= 1.5e-5` -- ten orders of magnitude above the difference between
+the two spellings.  Only the exact-double case can separate them, and it does
+not: `fl(1/n)` is within `2^-64` relative of `1/n` and the spacing of
+extended-precision values at 2 is `2^-62`, so `2 * fl(1/n) * n` rounds to
+exactly 2.0.  The argument is the durable half; it was confirmed once by
+exhausting all 32,767 such pairs, and a coarse grid over the whole square, in
+a throwaway program built the way this tree builds -- `-m32 -O2 -mfpmath=387`,
+so the intermediates stay in x87 registers as they do in the method -- which
+found no separator.
+
+**THE GUARD ON AN EXACT MATCH.**  `nearest == 0.0f ||` cannot change an
+outcome: a nearest distance of zero means some k gave a zero distance and set
+`bestAt` to it, nothing can improve on zero afterwards, and nothing writes
+`linMapp` inside the iteration -- so the repair writes the entry back over
+itself.  Without the guard the ratio is `(1/0) * second`, which is +inf when
+`second` is positive and repairs anyway, and a NaN when `second` is zero or a
+NaN and does not; both outcomes are the same self-store, and neither `second`
+nor `bestAt` depends on the decision.
+
+**THE INCLUSIVE COMPARISON IN THE WINDOW CHOICE.**  `>` and `>=` differ only
+when the phase's entry equals the reference's, and then both windows contain the
+code itself at zero distance -- so both take the exact-match arm, both
+self-store, and both leave the second-nearest at 32,256 or below, because the
+demotion at the final improvement writes the nearest and the nearest is at most
+the sentinel.  The second-nearest never rises again, and the only reader is the
+ratio, which can only differ while the nearest is still its sentinel and then
+needs a second-nearest above 64,512.  Unreachable from that point on.  This one
+was found by the mutation run rather than predicted -- it was written expecting
+to be caught, was not, and the proof came afterwards; the alternative would have
+been to leave `1 NOT caught` standing, which is the thing this file is for.
+
+======================================================================

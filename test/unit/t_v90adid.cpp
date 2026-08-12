@@ -135,6 +135,20 @@ void ref_resetStudyUrefHandler(void *self, unsigned int qc)
 	asm("ref__ZN25V90AutoDigitalImpDetector21resetStudyUrefHandlerEj");
 
 /*
+ * The DIL batch.  None of the three returns anything: the first ends in a
+ * plain `ret` with %eax holding the last thing it happened to load, and the
+ * other two end in a tail `jmp` to `dsplibs_debug_printf` -- so `void` is what
+ * they leave, and the whole of what each does is in the object and in the two
+ * transcripts.
+ */
+void ref_updateAltRbsPhaseInDil(void *self)
+	asm("ref__ZN25V90AutoDigitalImpDetector22updateAltRbsPhaseInDilEv");
+void ref_porcessSecondStudy(void *self)
+	asm("ref__ZN25V90AutoDigitalImpDetector18porcessSecondStudyEv");
+void ref_setQcLinearMapping(void *self)
+	asm("ref__ZN25V90AutoDigitalImpDetector18setQcLinearMappingEv");
+
+/*
  * The reference side's copy of the debug level.  Raising ours alone would put
  * the two sides on different branches of `porcessFirstStudy`'s only gate.
  */
@@ -153,7 +167,21 @@ extern unsigned int ref_dsplibs_debug_level;
  * is the same reinterpretation the union performed, and it is what this
  * fixture always wanted: raw seeded storage that no constructor has run over.
  */
+/*
+ * A GUARD IN FRONT OF THE OBJECT AS WELL AS BEHIND IT.
+ * `porcessSecondStudy` reads `linMapp[unSuspectedPhase][code - 2]` at codes 0
+ * and 1, which for an unsuspected phase of 0 is four bytes IN FRONT of `this`
+ * (D287).  Two static objects have two different sets of bytes in front of
+ * them, so without this the two sides would read different memory and the
+ * comparison would be measuring the linker's layout.  Sixteen bytes is four
+ * times the deepest reach, it is seeded alike on both sides, and
+ * `guard_equal()` compares it -- a store in front of the object fails here
+ * exactly as a store past its end does.
+ */
+#define PRE	16
+
 struct adid_slot {
+	unsigned char pre[PRE];
 	unsigned char raw[SLOT];
 } __attribute__((aligned(8)));
 
@@ -223,6 +251,19 @@ seed(int trial, int mode)
 	for (i = 0; i < PARAMS_BYTES; i++)
 		params_block[i] = next_byte();
 
+	/*
+	 * The front guard, filled from the trial and NOT from the LFSR: taking
+	 * bytes off the stream here would have moved every seeded byte in
+	 * every suite above by sixteen places.
+	 */
+	for (i = 0; i < PRE; i++) {
+		unsigned char v = (unsigned char)(0x5au ^ (unsigned)(i * 31)
+						  ^ (unsigned)(trial * 13)
+						  ^ (unsigned)(mode * 7));
+
+		ours.pre[i] = theirs.pre[i] = v;
+	}
+
 	ours_o.params = (V90Parameters *)params_block;
 	theirs_o.params = (V90Parameters *)params_block;
 }
@@ -246,7 +287,8 @@ static int
 guard_equal(void)
 {
 	return memcmp(ours.raw + OBJ_BYTES, theirs.raw + OBJ_BYTES,
-		      SLOT - OBJ_BYTES) == 0;
+		      SLOT - OBJ_BYTES) == 0
+	    && memcmp(ours.pre, theirs.pre, PRE) == 0;
 }
 
 /*
@@ -1417,6 +1459,67 @@ run_signal(void)
 			ours_o.porcessFirstStudy();
 			ref_porcessFirstStudy(&theirs_o);
 			diff_eq_obj("block: porcessFirstStudy",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+			calls++;
+
+			/*
+			 * The second study, on the verdict the first study
+			 * just wrote.  It scans `byte_280c` for the reference
+			 * phase itself, so nothing has to be forced here -- and
+			 * it calls `updateAltRbsPhaseInDil`, which walks the
+			 * sample store with a cursor that is the histogram's
+			 * running sum.  Forty blocks of six samples a phase is
+			 * 240 against the row's 2,110, so the cursor stays
+			 * inside the row for the whole run without a clamp.
+			 *
+			 * Codes 0 and 1 reach four bytes in front of the
+			 * object (D287); the fixture's front guard is what
+			 * makes that comparable.
+			 */
+			ours_o.porcessSecondStudy();
+			ref_porcessSecondStudy(&theirs_o);
+			diff_eq_obj("block: porcessSecondStudy",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+			calls++;
+		}
+
+		/*
+		 * The QC mapping, off the phase of the first study: it rebuilds
+		 * every unflagged phase's mapping from the accumulators the
+		 * block just filled, or from `prevLinMapp` where the phase has
+		 * no verdict -- which is seeded once, here, so that the copy
+		 * arm has something recognisable to copy.
+		 */
+		if (block % 10 == 4) {
+			int c;
+
+			if (block == 4)
+				for (c = 0; c < V90ADID_CODES; c++)
+					BOTH(prevLinMapp[c],
+					     (short)(c * 61 - 3000));
+
+			ours_o.setQcLinearMapping();
+			ref_setQcLinearMapping(&theirs_o);
+			diff_eq_obj("block: setQcLinearMapping",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, block);
+			calls++;
+		}
+
+		/*
+		 * And the repair on its own, with the reference phase forced:
+		 * `reset` does not clear +0xa968 and the two callers are what
+		 * normally leave a value there, so a direct call has to supply
+		 * one -- a seeded 16-bit row index would walk the mapping
+		 * table straight out of the object.
+		 */
+		if (block % 5 == 2) {
+			BOTH(unSuspectedPhase, (short)(block % NPHASE));
+			ours_o.updateAltRbsPhaseInDil();
+			ref_updateAltRbsPhaseInDil(&theirs_o);
+			diff_eq_obj("block: updateAltRbsPhaseInDil",
 				    V90AutoDigitalImpDetector, &ours_o,
 				    &theirs_o, block);
 			calls++;
@@ -2715,6 +2818,648 @@ run_firststudy(void)
 	return diff_end();
 }
 
+/*
+ * ==========================================================================
+ * THE DIL BATCH: `updateAltRbsPhaseInDil` and the two members that call it.
+ *
+ * THE SAMPLE-STORE CURSOR IS THE THING TO BE CAREFUL WITH.
+ * `updateAltRbsPhaseInDil` walks a cursor forward by `short_8b00[phase][code]`
+ * for each of the 115 codes in its scan order and writes
+ * `sampleStore[phase][cursor + j]`, and nothing anywhere compares the cursor
+ * against the row's 0x83e entries -- D287.  A seeded histogram holds random
+ * shorts whose sum over 115 codes is around 1.9 million, so the writes would
+ * leave the object inside the first few codes and the two sides would be
+ * scribbling on two different pieces of unrelated memory.  That is not a test
+ * of anything, so the histogram is clamped, and the clamp is the reason the
+ * per-code counts below are small.
+ *
+ * THE REFERENCE ROW IS DELIBERATELY COARSE ON HALF THE TRIALS.  Every sample
+ * is quantised onto `linMapp[unSuspectedPhase]` before the popularity count
+ * runs, so a row of 112 distinct random entries makes runs of equal samples
+ * vanishingly unlikely -- and then the count, the -1 marking and the
+ * `maxCount` comparison never do anything at all.  Three distinct levels make
+ * runs the common case.
+ * ==========================================================================
+ */
+
+/*
+ * Sixteen samples per code at most: 115 codes of that is 1,840 against the
+ * row's 2,110, and the zeros in the sequence are what exercise the empty-code
+ * arm.
+ */
+static void
+sane_histogram(int trial)
+{
+	int p, c;
+
+	for (p = 0; p < NPHASE; p++)
+		for (c = 0; c < V90ADID_CODES; c++) {
+			short n = (short)((unsigned)(trial * 7 + p * 13
+						     + c * 5) % 17u);
+
+			ours_o.short_8b00[p][c] = theirs_o.short_8b00[p][c] = n;
+		}
+}
+
+/*
+ * updateAltRbsPhaseInDil.
+ *
+ * ONLY THE PHASES FLAGGED AT +0x2800 ARE TOUCHED, and they are also the only
+ * ones that print -- the flag test jumps past the report as well as past the
+ * work.  Both arms are swept and both are asserted.
+ *
+ * THE TRANSCRIPT IS 128 LINES PER FLAGGED PHASE and the capture buffer is
+ * 16 KB a side, so a level-2 trial flags exactly one phase and the wider flag
+ * patterns are carried by the level-0 trials.  Six flagged phases would print
+ * about 23 KB and the comparison would be of two truncations.
+ */
+static int
+run_dilrepair(void)
+{
+	static const short lev[3] = { 96, 1024, -4000 };
+	int trial, moved = 0, distinct = 0;
+	int flagged = 0, unflagged = 0, empty = 0, filled = 0;
+	int popular = 0, unpopular = 0, level0 = 0, level2 = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::updateAltRbsPhaseInDil");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		short u = (short)(trial % NPHASE);
+		int p, c;
+
+		seed(trial, trial % 4);
+
+		/*
+		 * The reference phase is a ROW INDEX into `linMapp` and the
+		 * object does not bound it: a seeded 16-bit value would read
+		 * and write 8 KB either side of the table.  It is what the two
+		 * callers leave behind, so the sweep leaves what they can
+		 * leave -- 0 to 5.
+		 */
+		BOTH(unSuspectedPhase, u);
+		sane_histogram(trial);
+
+		if ((trial & 1) == 0) {
+			for (p = 0; p < NPHASE; p++)
+				BOTH(short_2800[p],
+				     (short)(p == (trial / 2) % NPHASE ? 3 : 0));
+			study_debug_on();
+			level2 = 1;
+		} else {
+			for (p = 0; p < NPHASE; p++)
+				BOTH(short_2800[p],
+				     (short)(((trial >> p) & 1) ? p + 1 : 0));
+			level0 = 1;
+		}
+
+		if ((trial & 2) == 0)
+			for (c = 0; c < V90ADID_CODES; c++)
+				BOTH(linMapp[u][c], lev[(c + trial) % 3]);
+
+		for (p = 0; p < NPHASE; p++) {
+			if (ours_o.short_2800[p] != 0)
+				flagged = 1;
+			else
+				unflagged = 1;
+		}
+
+		dsplib_debug_capture_reset();
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.updateAltRbsPhaseInDil();
+		ref_updateAltRbsPhaseInDil(&theirs_o);
+
+		diff_eq_obj("after updateAltRbsPhaseInDil",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store outside the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("the AltUcode report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+		diff_eq_int("the report is 131 lines for one flagged phase "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (trial & 1) == 0 ? 131 : 0, trial);
+		study_debug_off();
+
+		/*
+		 * The scan order is exactly the codes 2..116, so those are the
+		 * ones a verdict can have been written for.
+		 */
+		for (p = 0; p < NPHASE; p++) {
+			if (ours_o.short_2800[p] == 0)
+				continue;
+
+			for (c = 2; c <= 116; c++) {
+				if (ours_o.short_8b00[p][c] == 0) {
+					empty = 1;
+					continue;
+				}
+				filled = 1;
+				if (ours_o.linMappAlt[p][c]
+				    != ours_o.linMapp[p][c])
+					popular = 1;
+				else
+					unpopular = 1;
+			}
+		}
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.linMappAlt[0][63];
+		else if (ours_o.linMappAlt[0][63] != first)
+			distinct = 1;
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR THE POPULARITY COUNT, which the sweep can only
+	 * reach by accident.
+	 *
+	 * Phase 4 is given five samples that quantise onto two levels, two of
+	 * one and three of the other, and a reference entry equal to neither.
+	 * The three win: `linMappAlt` gets 5000 where `linMapp` gets the
+	 * reference's 777, and the sample store is left with the duplicates
+	 * marked -1 -- which is the whole of how the count works and none of
+	 * which a random row reaches.
+	 *
+	 * Phase 5 is the other arm: two samples that quantise onto the
+	 * reference entry itself, so both are skipped, `maxCount` stays 0 and
+	 * `linMappAlt` gets the reference rather than the unset `maxValue`.
+	 *
+	 * 63 IS THE FIRST CODE IN THE SCAN ORDER, which is what puts both
+	 * phases' samples at cursor 0.
+	 */
+	{
+		static const short samp[5] = { 100, 100, 5000, 5000, 5000 };
+		int p, c, k;
+
+		seed(940, 0);
+		BOTH(unSuspectedPhase, 1);
+
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(short_2800[p], (short)(p >= 4 ? 1 : 0));
+			for (c = 0; c < V90ADID_CODES; c++)
+				BOTH(short_8b00[p][c], 0);
+		}
+		BOTH(short_8b00[4][63], 5);
+		BOTH(short_8b00[5][63], 2);
+
+		for (c = 0; c < V90ADID_CODES; c++)
+			BOTH(linMapp[1][c], (short)(c <= 60 ? 100 : 5000));
+		BOTH(linMapp[1][63], 777);
+
+		for (k = 0; k < 5; k++)
+			BOTH(sampleStore[4][k], samp[k]);
+		BOTH(sampleStore[5][0], 777);
+		BOTH(sampleStore[5][1], 777);
+		BOTH(linMappAlt[4][63], 12345);
+		BOTH(linMappAlt[5][63], 12345);
+
+		ours_o.updateAltRbsPhaseInDil();
+		ref_updateAltRbsPhaseInDil(&theirs_o);
+
+		diff_eq_obj("updateAltRbsPhaseInDil: the popularity count",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store outside the object (popularity)",
+			    guard_equal(), 1, 0);
+		diff_eq_int("the reference entry is copied into the mapping",
+			    ours_o.linMapp[4][63], 777, 0);
+		diff_eq_int("the most popular sample wins the alternate",
+			    ours_o.linMappAlt[4][63], 5000, 0);
+		diff_eq_int("the counted duplicates are marked",
+			    ours_o.sampleStore[4][1] == -1
+			    && ours_o.sampleStore[4][3] == -1
+			    && ours_o.sampleStore[4][4] == -1, 1, 0);
+		diff_eq_int("the run's first sample is left alone",
+			    ours_o.sampleStore[4][2], 5000, 0);
+		diff_eq_int("no popular sample gives the reference instead",
+			    ours_o.linMappAlt[5][63], 777, 0);
+
+		if (ours_o.linMappAlt[4][63] != ours_o.linMapp[4][63])
+			popular = 1;
+		if (ours_o.linMappAlt[5][63] == ours_o.linMapp[5][63])
+			unpopular = 1;
+	}
+
+	diff_eq_int("updateAltRbsPhaseInDil changed the object", moved, 1, 0);
+	diff_eq_int("the alternate mapping is not the same on every trial",
+		    distinct, 1, 0);
+	diff_eq_int("a flagged phase was exercised", flagged, 1, 0);
+	diff_eq_int("an unflagged phase was exercised", unflagged, 1, 0);
+	diff_eq_int("a code with no samples was exercised", empty, 1, 0);
+	diff_eq_int("a code with samples was exercised", filled, 1, 0);
+	diff_eq_int("a popular sample was found", popular, 1, 0);
+	diff_eq_int("a code with no popular sample was exercised", unpopular, 1,
+		    0);
+	diff_eq_int("the report was exercised", level2, 1, 0);
+	diff_eq_int("the gate was exercised shut", level0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * porcessSecondStudy.
+ *
+ * THE TWO SENTINELS ARE THE WHOLE OF THIS METHOD'S READING AND A SWEEP CANNOT
+ * REACH EITHER.  The nearest distance starts at 32,256 per (code, phase) and
+ * the second-nearest starts at a NaN ONCE for the whole call (D286), and both
+ * only show when all three candidate distances are 32,256 or more -- which
+ * three random shorts do about once in a hundred million.  The two directed
+ * blocks below are constructed for exactly that state, one for each claim.
+ *
+ * THE FRONT GUARD IS WHAT MAKES CODES 0 AND 1 TESTABLE.  Their window reaches
+ * `linMapp[unSuspectedPhase][-2]`, which at an unsuspected phase of 0 is four
+ * bytes in front of the object; the fixture seeds sixteen bytes there alike on
+ * both sides, so the two calls read the same memory and the comparison means
+ * something.  Forcing the unsuspected phase away from 0 instead would have
+ * left the commonest state untested.
+ */
+static int
+run_secondstudy(void)
+{
+	int trial, moved = 0, distinct = 0;
+	int scanstop = 0, scanfull = 0, repaired = 0, kept = 0;
+	int above = 0, below = 0, level0 = 0, level2 = 0;
+	int atzero = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::porcessSecondStudy");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		short linbefore[NPHASE][V90ADID_CODES];
+		int stop = trial % 7;
+		int p, c;
+
+		seed(trial, trial % 4);
+		sane_histogram(trial);
+
+		/*
+		 * `stop` is where the scan for the unsuspected phase should
+		 * stop, and 6 is the row that has nowhere to stop: all six
+		 * bytes nonzero, which leaves the scan at 5 rather than at 6.
+		 */
+		for (p = 0; p < NPHASE; p++)
+			BOTH(byte_280c[p],
+			     (unsigned char)(p == stop ? 0 : 1));
+
+		if ((trial & 1) == 0) {
+			for (p = 0; p < NPHASE; p++)
+				BOTH(short_2800[p],
+				     (short)(p == (trial / 2) % NPHASE ? 7 : 0));
+			study_debug_on();
+			level2 = 1;
+		} else {
+			for (p = 0; p < NPHASE; p++)
+				BOTH(short_2800[p],
+				     (short)(((trial >> p) & 3) == 3 ? 1 : 0));
+			level0 = 1;
+		}
+
+		memcpy(linbefore, ours_o.linMapp, sizeof linbefore);
+		dsplib_debug_capture_reset();
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.porcessSecondStudy();
+		ref_porcessSecondStudy(&theirs_o);
+
+		diff_eq_obj("after porcessSecondStudy",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store outside the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("the mapping report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+		study_debug_off();
+
+		diff_eq_int("the scan stopped where the flags said (trial %ld)",
+			    ours_o.unSuspectedPhase, stop < 6 ? stop : 5,
+			    trial);
+		if (stop < 6)
+			scanstop = 1;
+		else
+			scanfull = 1;
+		if (ours_o.unSuspectedPhase == 0)
+			atzero = 1;
+
+		for (p = 0; p < NPHASE; p++) {
+			if (ours_o.byte_280c[p] == 0
+			    || ours_o.short_2800[p] != 0)
+				continue;
+
+			for (c = 0; c <= 0x74; c++) {
+				short u = ours_o.unSuspectedPhase;
+
+				if (linbefore[p][c] > linbefore[u][c])
+					above = 1;
+				else
+					below = 1;
+				if (ours_o.linMapp[p][c] != linbefore[p][c])
+					repaired = 1;
+				else
+					kept = 1;
+			}
+		}
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.linMapp[1][7];
+		else if (ours_o.linMapp[1][7] != first)
+			distinct = 1;
+	}
+
+	/*
+	 * TWO CONSTRUCTED WITNESSES, both in the state where all three
+	 * candidate distances are 65,535 -- above the 32,256 the nearest
+	 * distance starts at, so the nearest never improves and the decision
+	 * is made entirely by what the SECOND-nearest holds.
+	 *
+	 * Witness 0: the second-nearest is still its sentinel, so the first
+	 * distance takes it -- because the update is guarded by a `jae` that
+	 * an unordered compare does not take, and the sentinel is a NaN.  The
+	 * ratio is then 65535/32256 = 2.032, over the 2.0 the object compares
+	 * against, and the entry is replaced with `linMapp[0][bestAt]` --
+	 * where `bestAt` is the ZERO it was initialised with at the head of
+	 * the method, because nothing has improved the nearest distance yet.
+	 * Any ordered sentinel, and any sentinel below 65,535, leaves the
+	 * entry alone.
+	 *
+	 * Witness 1: the same state, but preceded at code 0 by an iteration
+	 * that leaves the second-nearest at 499.  The object initialises the
+	 * second-nearest ONCE for the whole call, so 499 is what code 3 sees;
+	 * the ratio is 499/32256 and the entry is KEPT.  A second-nearest
+	 * reinitialised per (code, phase) would see the sentinel again and
+	 * replace it, which is the difference the assertion measures.
+	 */
+	{
+		int w;
+
+		for (w = 0; w < 2; w++) {
+			int p, c;
+
+			seed(950 + w, 0);
+			for (p = 0; p < NPHASE; p++) {
+				BOTH(short_2800[p], 0);
+				BOTH(byte_280c[p], (unsigned char)(p == 0 ? 0
+								   : 1));
+				for (c = 0; c < V90ADID_CODES; c++)
+					BOTH(short_8b00[p][c], 0);
+			}
+
+			for (c = 0; c < V90ADID_CODES; c++) {
+				int q;
+
+				BOTH(linMapp[0][c], (short)-32768);
+				for (q = 1; q < NPHASE; q++)
+					BOTH(linMapp[q][c], 32767);
+			}
+
+			if (w == 1) {
+				/*
+				 * The primer at code 0: distances of 1, 499
+				 * and 501, so the nearest ends at 1 and the
+				 * second-nearest at 499.  Both windows below
+				 * stay clear of code 3.
+				 */
+				BOTH(linMapp[0][0], 0);
+				BOTH(linMapp[0][1], 500);
+				BOTH(linMapp[0][2], -500);
+				BOTH(linMapp[1][0], 1);
+			}
+
+			ours_o.porcessSecondStudy();
+			ref_porcessSecondStudy(&theirs_o);
+
+			diff_eq_obj("porcessSecondStudy: the sentinel witness",
+				    V90AutoDigitalImpDetector, &ours_o,
+				    &theirs_o, w);
+			diff_eq_int("no store outside the object (witness %ld)",
+				    guard_equal(), 1, w);
+
+			if (w == 0) {
+				diff_eq_int("an unordered second-nearest takes "
+					    "the first distance",
+					    ours_o.linMapp[1][0], -32768, 0);
+				repaired = 1;
+			} else {
+				diff_eq_int("the primer took its own nearest",
+					    ours_o.linMapp[1][0], 0, 0);
+				diff_eq_int("the second-nearest carries across "
+					    "the codes",
+					    ours_o.linMapp[1][3], 32767, 0);
+				kept = 1;
+			}
+		}
+	}
+
+	diff_eq_int("porcessSecondStudy changed the object", moved, 1, 0);
+	diff_eq_int("the mapping is not the same on every trial", distinct, 1,
+		    0);
+	diff_eq_int("the scan stopped at a clear phase", scanstop, 1, 0);
+	diff_eq_int("the scan ran off the end", scanfull, 1, 0);
+	diff_eq_int("an unsuspected phase of zero was exercised", atzero, 1, 0);
+	diff_eq_int("an entry above the reference was exercised", above, 1, 0);
+	diff_eq_int("an entry below the reference was exercised", below, 1, 0);
+	diff_eq_int("an entry was repaired", repaired, 1, 0);
+	diff_eq_int("an entry was kept", kept, 1, 0);
+	diff_eq_int("the report was exercised", level2, 1, 0);
+	diff_eq_int("the gate was exercised shut", level0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * setQcLinearMapping.
+ *
+ * THREE ARMS PER PHASE and the sweep drives all three: a phase flagged at
+ * +0x2800 is left entirely alone, one with a study verdict at +0x280c has its
+ * mapping rebuilt from its accumulators, and one WITHOUT a verdict is given
+ * the previous session's mapping -- the same 128 entries for every such phase,
+ * because `prevLinMapp` has no phase dimension.
+ *
+ * The rebuild is `updateLinMappMeanAndVar`, which the object inlines and this
+ * calls; its own arithmetic is pinned by `run_means` and by finding 1366's
+ * witness there, so what this suite has to establish is which cells it is
+ * applied to.  The zero-count arm is swept here too, because a cell with no
+ * samples keeps whatever it had and that is only visible against a seeded
+ * mapping.
+ */
+static int
+run_qcmapping(void)
+{
+	int trial, moved = 0, distinct = 0;
+	int meaned = 0, copied = 0, skipped = 0;
+	int zerocount = 0, nonzerocount = 0, level0 = 0, level2 = 0;
+	short first = 0;
+
+	diff_begin("V90AutoDigitalImpDetector::setQcLinearMapping");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		int p, c;
+
+		seed(trial, trial % 4);
+		sane_histogram(trial);
+
+		for (c = 0; c < V90ADID_CODES; c++)
+			BOTH(prevLinMapp[c],
+			     (short)((c * 517 + trial * 29) & 0x3fff));
+
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(byte_280c[p],
+			     (unsigned char)(((trial >> p) & 1) ? 1 : 0));
+
+			for (c = 0; c < V90ADID_CODES; c++) {
+				unsigned n = ((trial + c + p) & 3) == 0
+					     ? 0u : (unsigned)(1 + ((c + p) & 7));
+
+				BOTH(uint_1c00[p][c], n);
+				BOTH(float_1000[p][c],
+				     (float)n * (60.5f + 11.0f * (float)p));
+				BOTH(float_9118[p][c],
+				     (float)((int)n * (3000 + 7 * c)));
+
+				if (n == 0)
+					zerocount = 1;
+				else
+					nonzerocount = 1;
+			}
+		}
+
+		if ((trial & 1) == 0) {
+			for (p = 0; p < NPHASE; p++)
+				BOTH(short_2800[p],
+				     (short)(p == (trial / 2) % NPHASE ? 9 : 0));
+			study_debug_on();
+			level2 = 1;
+		} else {
+			for (p = 0; p < NPHASE; p++)
+				BOTH(short_2800[p],
+				     (short)(((trial >> p) & 3) == 3 ? 1 : 0));
+			level0 = 1;
+		}
+
+		for (p = 0; p < NPHASE; p++) {
+			if (ours_o.short_2800[p] != 0)
+				skipped = 1;
+			else if (ours_o.byte_280c[p] != 0)
+				meaned = 1;
+			else
+				copied = 1;
+		}
+
+		dsplib_debug_capture_reset();
+		memcpy(before, ours.raw, SLOT);
+
+		ours_o.setQcLinearMapping();
+		ref_setQcLinearMapping(&theirs_o);
+
+		diff_eq_obj("after setQcLinearMapping",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
+			    trial);
+		diff_eq_int("no store outside the object (trial %ld)",
+			    guard_equal(), 1, trial);
+		diff_eq_int("the mapping report matched (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, trial);
+		diff_eq_int("both sides printed the same number of lines "
+			    "(trial %ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+		study_debug_off();
+
+		if (memcmp(before, ours.raw, SLOT) != 0)
+			moved = 1;
+		if (trial == 0)
+			first = ours_o.linMapp[2][11];
+		else if (ours_o.linMapp[2][11] != first)
+			distinct = 1;
+	}
+
+	/*
+	 * A DIRECTED BLOCK FOR WHICH ROW GOES WHERE.
+	 *
+	 * Phase 0 is flagged and must keep its seeded mapping exactly; phase 1
+	 * has a verdict and one nonzero count, so exactly one of its entries
+	 * moves and the rest keep theirs; phase 2 has no verdict and must come
+	 * out as `prevLinMapp` from end to end -- all 128 of them, which is
+	 * what makes the copy's bound a tested claim.
+	 *
+	 * Count 41 against a sum of 143.5 is finding 1366's witness: the
+	 * division is exactly 3.5 and rounds to 4, the reciprocal is a hair
+	 * under and truncates to 3.  It is here as well as in `run_means`
+	 * because this is where the call site is.
+	 */
+	{
+		int p, c, ok = 1;
+
+		seed(960, 0);
+		for (p = 0; p < NPHASE; p++) {
+			BOTH(short_2800[p], (short)(p == 0 ? 1 : 0));
+			BOTH(byte_280c[p], (unsigned char)(p == 1 ? 1 : 0));
+			for (c = 0; c < V90ADID_CODES; c++) {
+				BOTH(short_8b00[p][c], 0);
+				BOTH(uint_1c00[p][c], 0u);
+				BOTH(linMapp[p][c], (short)(1000 + c + p * 7));
+			}
+		}
+		for (c = 0; c < V90ADID_CODES; c++)
+			BOTH(prevLinMapp[c], (short)(c * 3 - 100));
+
+		BOTH(uint_1c00[1][40], 41u);
+		BOTH(float_1000[1][40], 143.5f);
+		BOTH(float_9118[1][40], 600.0f);
+
+		ours_o.setQcLinearMapping();
+		ref_setQcLinearMapping(&theirs_o);
+
+		diff_eq_obj("setQcLinearMapping: the three arms",
+			    V90AutoDigitalImpDetector, &ours_o, &theirs_o, 0);
+		diff_eq_int("no store outside the object (three arms)",
+			    guard_equal(), 1, 0);
+		diff_eq_int("a flagged phase keeps its mapping",
+			    ours_o.linMapp[0][40], 1040, 0);
+		diff_eq_int("the reciprocal witness truncates to three",
+			    ours_o.linMapp[1][40], 3, 0);
+		diff_eq_int("a cell with no samples keeps its mapping",
+			    ours_o.linMapp[1][41], 1048, 0);
+
+		for (c = 0; c < V90ADID_CODES; c++)
+			if (ours_o.linMapp[2][c] != (short)(c * 3 - 100))
+				ok = 0;
+		diff_eq_int("a phase with no verdict gets all 128 of the "
+			    "previous session's entries", ok, 1, 0);
+	}
+
+	diff_eq_int("setQcLinearMapping changed the object", moved, 1, 0);
+	diff_eq_int("the mapping is not the same on every trial", distinct, 1,
+		    0);
+	diff_eq_int("a flagged phase was skipped", skipped, 1, 0);
+	diff_eq_int("a phase with a verdict was rebuilt", meaned, 1, 0);
+	diff_eq_int("a phase without one took the previous session", copied, 1,
+		    0);
+	diff_eq_int("a zero count was exercised", zerocount, 1, 0);
+	diff_eq_int("a nonzero count was exercised", nonzerocount, 1, 0);
+	diff_eq_int("the report was exercised", level2, 1, 0);
+	diff_eq_int("the gate was exercised shut", level0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2735,6 +3480,9 @@ main(void)
 	rc |= run_altvarthresh();
 	rc |= run_uniteunsuspected();
 	rc |= run_firststudy();
+	rc |= run_dilrepair();
+	rc |= run_secondstudy();
+	rc |= run_qcmapping();
 	rc |= run_signal();
 
 	return rc;
