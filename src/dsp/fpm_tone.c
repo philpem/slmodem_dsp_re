@@ -94,6 +94,55 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 	state->phase = (short)p.phase;
 }
 
+/*
+ * FPM_TONE_generate2 -- .text 0x0aae30, 148 bytes.
+ *
+ * The QUADRATURE pair, not a second tone: one call fills two buffers with the
+ * cosine and the sine of the same oscillator at the same instant.  Named
+ * "generate2" for the two outputs; the object still carries one frequency and
+ * one phase, and only `phase` is written back.
+ *
+ * So it sits between the other two generators rather than beside them --
+ * FPM_TONE_generate takes the sine, FPM_TONE_generate_demod takes the cosine,
+ * this one takes both.  Like _generate_demod and unlike _generate it does no
+ * phase-reversal bookkeeping at all, and it returns `count`.
+ *
+ * `state->cfg.scale` is re-read from the object on each of the two multiplies,
+ * which is what the original does (two `movswl 0x2(%ebp)` in one iteration,
+ * around a 16-bit store the compiler had to assume might alias).  Written the
+ * same way, so a caller whose output buffer overlaps the object sees the same
+ * thing we do.
+ *
+ * The counter is 16-bit and the loop tests for -1 rather than for zero, so a
+ * count of 0 writes nothing and a NEGATIVE count runs about 65536 times --
+ * the same shape, and the same hazard, as FPM_TONE_detect and
+ * FPM_TONE_generate_demod.
+ *
+ * The original leaves the phasor's cos and sin uninitialised on the stack;
+ * they are cleared here so the reconstruction has no indeterminate reads.
+ * FPM_phasor writes both before either is read, so this cannot differ.
+ */
+short
+FPM_TONE_generate2(struct fpm_tone *state, short *cos_out, short *sin_out,
+		   short count)
+{
+	struct fpm_phasor p;
+	int i;
+
+	p.phase = state->phase;
+	p.inc = state->inc;
+	p.cos = p.sin = 0;
+
+	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+		FPM_phasor(&p);
+		*cos_out++ = (short)((state->cfg.scale * p.cos) >> 14);
+		*sin_out++ = (short)((state->cfg.scale * p.sin) >> 14);
+	}
+
+	state->phase = p.phase;
+	return count;
+}
+
 /* Pointer-sized field access, for the slots that hold buffers. */
 /* The built-in configuration: the ITU-T V.25 answer tone. */
 

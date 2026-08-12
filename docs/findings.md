@@ -49739,3 +49739,293 @@ The script that produces this is eight lines of `readelf -rW` intersected with
 `closure.py --missing` output; it is worth re-running rather than trusting
 this list, because every landed function moves items from the second list to
 the first.
+### 1500. `FPM_atan` RETURNS NOTHING, AND ITS TABLE IS THE ONE IN THIS LAYER THAT ROUNDS
+
+*Task: `fpm_atan.c`. Closed — `FPM_atan` .text 0x0a6a50, 409 bytes, and
+`FPM_atan_table` .rodata 0x00c9a0, 514 bytes.*
+
+**THE SIGNATURE IS `void FPM_atan(short y, short x, short *angle)`.** The
+hand-over into this session described it as `short FPM_atan(...)`, and it is
+not. All five exits converge on the same three instructions — load the third
+argument from `0x38(%esp)`, store a 16-bit value through it, return — and
+`%eax` holds a different leftover on each: the sign mask `(y<0)?0x4000:0` on
+the `x == 0` path, `x` itself on the `y == 0` path, the `0x145f` product on
+the general path. GCC 3.4.2 at `-O2` sets `%eax` on every exit of a function
+that returns one. There are three arguments, at `0x30`, `0x34` and `0x38`
+after a bare `sub $0x2c,%esp` with no pushes.
+
+**THE ARGUMENT ORDER IS atan2's, `y` FIRST.** Settled by the degenerate
+branches, not by convention: when the *second* argument is zero the answer is
+`0x2000 + ((first < 0) ? 0x4000 : 0)`, i.e. ±90°, so the second argument is
+`x`; when the *first* is zero the answer is `(second < 0) ? 0x4000 : 0`, i.e.
+0° or 180°. `FPM_atan(0, 0)` falls out of the first branch as `0x2000` rather
+than being special-cased.
+
+**UNITS.** fpm_phasor.c's: a full turn is `0x8000`, so `0x2000` is 90° and
+`0x1000` is 45°, anticlockwise from the positive x axis. The whole circle
+therefore fits a signed short with exactly one unit to spare, which is what
+1502 is about.
+
+**METHOD: OCTANT REDUCTION OVER `FPM_div`.** The smaller magnitude is divided
+by the larger, so the ratio is always in [0,1] and one eighth of a table
+serves the circle:
+
+    FPM_div(max, &recip, &shift);
+    ratio = (unsigned short)(((recip * min) >> 15) << shift);
+
+`recip` is `2^30 / (max << shift)`, so the whole expression is
+`32768 * min / max` — the ratio in Q15. The magnitudes are taken in 32 bits
+and then truncated to 16 (`cltd`/`xor`/`sub`/`movzwl`), so `|-32768|` is
+**32768** and not the −32768 a 16-bit negate would give, and every comparison
+on them is unsigned.
+
+**TABLE DERIVATION, EXACT ON ALL 257 ENTRIES:**
+
+    FPM_atan_table[i] = round(32768 * atan(i / 256))
+
+**ROUNDED, NOT TRUNCATED — and that is the point of recording it**, because it
+is the opposite of every neighbouring table. fpm_phasor.c's sine and cosine
+truncate (its own header says so), and so does fpm_div.c's reciprocal.
+Truncation here misses **147 of the 257** entries; rounding misses none. Entry
+256 is 25736 where `trunc(32768*atan(1))` is 25735.
+
+So the table holds atan in Q15 **radians**, and the `imul $0x145f` that
+follows converts to the phase unit: `32768 / (2*pi) = 5215.19`, truncated to
+5215 = `0x145f`. The `lea 0x4000(%eax)` before the `sar $0xf` rounds that
+product.
+
+**`FPM_atan_table` IS GLOBAL** — `nm` shows `R`, not `r`, and the relocation at
+`0x0a6b1e` names the symbol rather than `.rodata` + addend. So it is not a
+file static, and the reconstruction keeps it global, which also lets
+`t_fpm_atan` compare all 257 words against the blob's own copy through
+`ref_FPM_atan_table` rather than only against the closed form.
+
+**`fpm_atan.c` HOLDS THIS ONE FUNCTION.** docs/attribution.md brackets the
+translation unit as 0x0a6a50 - 0x0a6a50, and the only outbound relocations in
+the range are the two `FPM_div` calls and the one table reference.
+
+### 1501. `FPM_atan`'s LINEAR SHORTCUT IS OFF BY ONE: A RATIO OF EXACTLY 127 GIVES AN ANGLE OF ZERO
+
+*Task: `fpm_atan.c`. Reproduced, not repaired. Wants a `D` number from
+whoever next edits docs/deviations.md; not claimed here because deviation IDs
+are allocated globally and this session holds finding numbers only.*
+
+For small ratios `atan(r) ~= r`, so the code skips the table:
+
+    cmp    $0x7e,%ax
+    movswl %ax,%edx
+    jbe    <use the ratio itself as the Q15 radian value>
+    shr    $0x7,%eax
+    movswl FPM_atan_table(,%eax,2),%edx
+
+The index is `ratio >> 7`, so **entry 0 covers ratios 0..127** — and entry 0
+is **0**. The shortcut covers 0..126. A ratio of exactly 127 therefore falls
+through to the table and yields an angle of **0**, where 126 yields 20 and 128
+yields 20 again. A single-point notch to zero in the middle of a monotone
+curve.
+
+Had the compare been `0x7f` the shortcut would have covered the whole of entry
+0's range and there would be no discontinuity at all, which is why this reads
+as an off-by-one rather than as a design. It is reproduced: `t_fpm_atan`
+sweeps every pair inside a 401×401 box around the origin, which is where the
+shortcut lives, and 4.47 M differential checks pass against the blob.
+
+**REACHABILITY IS EXACTLY FOUR INPUT PAIRS, AND THE REASON IS WORTH MORE THAN
+THE DEFECT.** (This paragraph corrects the first version of this finding,
+which called it "one value out of 32769" and left reachability unmeasured.
+That was wrong, and wrong in a way that mattered: the same misunderstanding
+had already killed a whole section of the test — see 1502.)
+
+The ratio is `q << shift`, so it is **even whenever `shift >= 1`**. `shift` is
+zero only when the larger magnitude is normalised already, top bit set as a
+16-bit value, and magnitudes cap at 32768 — so `shift == 0` requires the
+larger magnitude to be exactly **32768**, which requires an argument of
+exactly **−32768**. There `recip` is `fpm_div_table[0]` = 32768 and the ratio
+is the smaller magnitude itself.
+
+So every odd ratio, this notch included, is reachable only through a −32768
+argument, and the notch fires on exactly four pairs: `FPM_atan(-32768, ±127)`
+and `FPM_atan(±127, -32768)`. `FPM_atan(-32768, 127)` returns `0x6000` where
+the true angle is about `0x6014` — 20 phase units, 0.22°. Small, but it is a
+discontinuity in a timing-recovery loop's error term, which is the sort of
+thing that matters more than its size suggests. The callers are
+`FPM_FSE_receive`, `FPM_SRE_recover` and the V.32 status path
+(docs/deviations.md); whether any of them ever presents a full-negative-scale
+component is not measured.
+
+### 1502. `FPM_atan`'s WRAP-THROUGH-ZERO OCTANT IS ONE UNIT LOW — AND 257 ENTRIES IS EXACTLY ENOUGH, NOT ONE MORE
+
+*Task: `fpm_atan.c`. Both halves reproduced; the second half is the good news.*
+
+**THE OCTANT.** Seven of the eight folds use exact bases — `0x2000 ±`,
+`0x4000 ±`, `0x6000 ±`, and the bare angle. The eighth, `x > 0` with `y < 0`
+and `|x| > |y|`, is the only one whose base would have to be `0x8000`, and
+`0x8000` is not a positive short. The original uses **`0x7fff`**:
+
+    a6b4a: mov $0x7fff,%ebx
+    a6b4f: sub %ecx,%ebx
+
+so every angle in that eighth of the circle is one unit less than the other
+seven octants' convention gives. `FPM_atan(-1, 32767)` is `0x7fff`, not
+`0x8000` and not `0`. Reproduced verbatim; the alternative would have been to
+wrap to a negative short, which changes the type of the answer.
+
+**THE TABLE IS EXACTLY LONG ENOUGH.** The index is `ratio >> 7` and the ratio
+is nominally `32768 * min / max`, capped at 32768 — but `FPM_div` buckets its
+mantissa to the nearest 256 and can round it *down*, which makes the
+reciprocal a shade large and pushes the ratio past 32768. The largest value
+reachable is **32894**, at `max == min == 16447`, and `32894 >> 7` is **256**:
+the last entry, and not one past it. Established by sweeping all 32768 values
+of `max` with `min` equal to it, which is where the ratio is maximal because
+it is monotonic in `min`.
+
+So there is **no out-of-range read here**, unlike `FPM_sqrt` (D1) and
+`FPM_div` (D4), whose tables are each one entry short of what their own index
+expression produces. Same author, same era, third outcome — and the margin is
+one entry, so this was either checked or lucky.
+
+**WHAT INHERITING D4 DOES TO AN ANGLE.** `FPM_atan` divides through `FPM_div`,
+so about one denominator in 256 — 255 of them — normalises to a mantissa of
+`0xff80` or above and reads `FPM_div`'s 129th entry, which the blob takes from
+`FPM_xor_table[0]` (zero) and our fixed build takes as 16384. 32767 is such a
+denominator, and so are 511, 1023, 2047 and 32766. In the blob, whenever
+`max(|y|, |x|)` is one of them the reciprocal is zero, so the ratio is zero
+and **the angle snaps to the octant base** — the nearest axis or 45° line.
+`FPM_atan(y, 32767, *)` returns 0 or 0x7fff for every `y` but three: at
+`y = ±32767` the magnitudes are equal, so the fold takes the other branch and
+the answer snaps to `0x2000` or `0x6000` instead — still an octant base — and
+at `y = -32768` the magnitude 32768 becomes the larger, `FPM_div` is asked
+about *that* instead, and a real angle comes out. Measured, not reasoned: over
+all 65536 values of `y` the ratio takes exactly two values, 0 and 32767. Same
+defect class
+as the one that silences an AGC block and drops a Bell 103 call (finding 40),
+now in a timing-recovery error term; the non-REPRODUCE build gets it right.
+
+`t_fpm_atan` therefore *requires* `-DDSPLIB_REPRODUCE_BUGS` and says so with an
+`#error`, the same guard `t_fpm_div` carries. Without it the test fails on
+inputs that are not wrong.
+
+**AND IT KILLED A WHOLE TEST SECTION BEFORE ANYONE NOTICED.** The first
+version of `t_fpm_atan`'s "table index sweep" pinned the larger magnitude at
+32767, on the reasoning that the widest denominator gives the widest sweep of
+the ratio. It gives the narrowest: `recip` is zero, so all 98304 pairs had a
+ratio of zero, all took the linear shortcut, and the section never read the
+table at all while reporting PASS. It now pins at **16384**, which normalises
+to `0x8000` with a shift of one, so `recip` is exactly 32768 and the ratio is
+exactly twice the smaller magnitude — sweeping that over 0..16384 walks the
+index over all 257 entries. A second loop with an argument of −32768 covers
+the odd ratios, which nothing else can reach (1501).
+
+**AND THE REPLACEMENT HAD TO BE SHOWN TO FIRE**, per finding 134, because a
+section that compares nothing is exactly what had just been found. Perturbing
+one table entry by **+1** does *not* fail it: `0x145f / 32768` is 0.159, so a
+single-LSB change to a table entry is absorbed by the rounding of the
+conversion to phase units and the angle is unchanged — the entry is caught
+only by the word-for-word comparison against `ref_FPM_atan_table`. Perturbing
+by +8 moves the angle and the sweep fails. Worth knowing in its own right:
+**the table carries about three bits more precision than the output uses**, so
+a differential test on `FPM_atan` alone can never pin the table exactly, and
+the direct comparison against the blob's copy is not redundant with it.
+
+### 1503. `FPM_TONE_generate2` IS THE QUADRATURE PAIR OF ONE OSCILLATOR, NOT A SECOND TONE
+
+*Task: `fpm_tone.c`. Closed — .text 0x0aae30, 148 bytes.*
+
+The name and the surrounding module both suggest a two-tone generator, and the
+brief that opened this work said so. **It is not.** The signature is
+
+    short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
+                             short *sin_out, short count)
+
+— four arguments, two output buffers, and one oscillator between them. Per
+sample it calls `FPM_phasor` once and writes `(cfg.scale * p.cos) >> 14` to
+the first buffer and `(cfg.scale * p.sin) >> 14` to the second. The object
+still carries a single frequency, a single phase and a single increment, and
+only `phase` (+0x24) is written back.
+
+That places it between the two generators already reconstructed rather than
+beside them: `FPM_TONE_generate` takes the sine, `FPM_TONE_generate_demod`
+takes the cosine, this one takes both. Like `_generate_demod` and unlike
+`_generate` it does **no phase-reversal bookkeeping at all**, and it returns
+`count`. `t_fpm_tone` proves the identity directly — from one starting state,
+generate2's cosine half is `_generate_demod`'s output sample for sample, its
+sine half is `_generate`'s, and all three leave the accumulator at the same
+phase, which is what rules out the naive implementation that calls the phasor
+twice per sample.
+
+**TWO THINGS THE DISASSEMBLY SAYS THAT A READER WOULD NOT GUESS.**
+
+`state->cfg.scale` is re-loaded from the object for *each* of the two
+multiplies — two `movswl 0x2(%ebp)` in one iteration, either side of the
+16-bit store the compiler had to assume might alias it. Written the same way,
+so a caller whose output buffer overlaps the object sees what the original
+does.
+
+The counter is 16-bit and the loop tests `!= -1`, not `> 0`:
+
+    dec %eax ; movswl %ax,%edi ; inc %ax ; je exit
+    ... ; lea -0x1(%edi),%eax ; movswl %ax,%edi ; inc %ax ; jne loop
+
+so a count of 0 writes nothing and a count of **−1 writes 65535 samples to
+each buffer**. This is the only input that can tell the real loop apart from
+`for (i = 0; i < count; i++)` — every non-negative count agrees — so
+`t_fpm_tone` runs it, against 65600-word buffers sized to survive the loop
+being misread as well as read correctly. Same hazard as `FPM_TONE_detect` and
+`FPM_TONE_generate_demod`, and now the only one of the three with a test that
+would catch a regression.
+
+### 1504. TWO COMMIT MESSAGES IN THIS BRANCH SAY "make phase GREEN" AND IT WAS NOT — THE EXIT CODE WAS CAPTURED AND NEVER READ
+
+*Task: `fpm_atan.c` / `fpm_tone.c`. A correction to commits `9b82992` and
+`5cb4ff6`, left in history rather than amended, because this file's own rule
+is to append and not to renumber and the same applies to the log.*
+
+Both messages end "make phase green, period differential 161/161." The second
+half was true and verified. **The first half was not.** Both runs exited
+non-zero, and the log says so plainly:
+
+    make: *** [Makefile:559: build/test/t_spandsp_b103] Error 1
+
+at line 2016 of the first run's log and line 1653 of the second's.
+
+**THE ENVIRONMENTAL CAUSE, which a parallel session diagnosed and fixed.**
+`third_party/spandsp` is gitignored, so `git worktree add` does not bring it
+along, and without it `t_spandsp_b103` and `t_spandsp_v23` fail to *link*.
+Those two errors land in the first few hundred lines, thousands of lines above
+the PASS summary and the `period differential:` line, so **the tail of the log
+looks perfectly green while make exits 2**. A symlink to the main tree's built
+copy closes it; the path stays gitignored and nothing tracked changes.
+
+**THE PROCEDURAL CAUSE, which is mine and is the more useful half.** The
+command did put `; echo "PHASE_EXIT=$?"` immediately after the make. But the
+make's output was redirected to a log file and the echo went to the terminal,
+and every subsequent inspection was `grep`/`tail` **of the log** — so the exit
+code was correctly captured and then never looked at. Capturing the number is
+not the same as reading it, and a redirect is enough to separate the two.
+Belongs beside the trap this file already records about piping make into grep.
+
+**A THIRD WORKTREE TRAP, found on the way and not previously recorded.**
+`make`'s `strings` target runs `tools/debugaudit.py --invented`, which locates
+the blob as `os.environ.get("BLOB", "../slmodemd/dsplibs.o")`. Inside a
+worktree under `.claude/worktrees/` that relative default resolves to nothing
+and the target dies with
+
+    objdump: '../slmodemd/dsplibs.o': No such file
+    INVENTED STRING: the lines above are in src/ and not in the blob
+
+which reads as a source defect and is not one. It fires only when `BLOB` is a
+*shell* variable rather than an exported one: `BLOB=... && make ...` sets a
+shell variable that make never sees, while `BLOB=... make ...` and
+`export BLOB` both work. The message names neither the variable nor the
+worktree, so it is worth knowing before meeting it.
+
+**WHAT IS NOW VERIFIED, verbatim.** From the worktree, with the symlink in
+place and serialised behind the shared build lock a parallel session asked for:
+
+    export BLOB=/home/philpem/dev/sip-D-modem/slmodemd/dsplibs.o
+    flock /tmp/claude_re_build.lock make phase > /tmp/v22a_phase3.log 2>&1
+    echo "PHASE_EXIT=$?"           ->   PHASE_EXIT=0
+
+with `period differential: 161 passed, 0 failed`, `64-bit clean, both
+configurations: OK`, `5007 references checked, 0 resolve to nothing`, and no
+`Error`, `undefined reference` or `FAILED TO COMPILE` line anywhere in the log.
