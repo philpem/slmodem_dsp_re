@@ -1,0 +1,11 @@
+# Call recordings and their CSVs.  Every 30-call batch is ~200 MB of raw
+# audio and the analysis scripts regenerate every number from it, so the
+# repository keeps the instruments and not the readings.  Copy a batch out
+# by hand if a finding needs to cite the audio itself.
+captures/
+
+# Built from v8analyse.c, which is tracked.
+v8analyse
+
+__pycache__/
+*.pyc
