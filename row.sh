@@ -193,7 +193,7 @@ echo "=== call: $WHO originates, dialling $DIAL"
 python3 "$BENCH/call.py" --tty "$TTY" --pty "$PTY" \
 	--originator "$WHO" --dial "$DIAL" --log "$LOG.call.log" \
 	--tty-extra "$TTY_EXTRA" --pty-extra "${PTY_EXTRA:-}" \
-	--tty-retrain "${TTY_RETRAIN:-0}"
+	--tty-retrain "${TTY_RETRAIN:-0}" ${HOLD:+--hold "$HOLD"}
 CALLRC=$?
 [ "$CALLRC" -ne 0 ] && echo "=== call.py exited $CALLRC"
 
