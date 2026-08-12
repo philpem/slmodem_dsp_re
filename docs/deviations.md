@@ -5458,6 +5458,29 @@ Written as the object has it. A bound here would be a behavioural difference on 
 
 ======================================================================
 
+## D298 🐛 `FSE_decision_16pt` reads its magnitude table thousands of entries past the end
+
+*Batch of 2026-08-12, from `FSE_decision_16pt` (blob 0x80e90, 490 bytes) +0x13b (`sar $1,%edi`) feeding +0x13d (`movzwl DECv32_MAG9600-0x2(%edi,%edi,1),%eax`). **Reachability: FIRES on every call.** Status: `measured` — the three reachable indices are 4095, 8191 and 12287 into a three-entry table. Fix class: none proposed.*
+
+**Finding 1603.** `DECv32_MAG9600` has three entries and is indexed `[n - 1]` off `(short)(|I| + |Q|)` for the decided point, whose only three values are 8192, 16384 and 24576. `FSE_decision_16Tpt` divides that by 8192 first (`sar $0xd`) and lands on 0, 1 and 2. `_16pt` divides by 2 and lands on 4095, 8191 and 12287 — 8190, 16382 and 24574 bytes past a six-byte table. `.data` is 0x9594 bytes, so only the first of the three is even inside the section; `.data+0x94f6` holds 0 and the other two are past the end of it.
+
+The two functions are otherwise the same shape over the same table, which is what makes this a slip in `_16pt` rather than a misreading of either.
+
+It is the one thing in this batch that a differential test cannot decide, because what the function returns in `*mag` is a property of the LINK and not of the code: our build's bytes after the table are not the blob's and cannot be made to be. `FSE_decision_16pt` is therefore not reconstructed — the analysis is in finding 1603 and the function is left out rather than committed with a check steered around it.
+
+======================================================================
+
+## D299 🐛 `FSE_decision_4pt` weights the in-phase error twice the quadrature one, so it is not a nearest-point decision
+
+*Batch of 2026-08-12, from `FSE_decision_4pt` (blob 0x81080, 468 bytes) +0xf4 and +0xf7 — `sar $0xf,%edx` on the in-phase squared error against `sar $0x10,%eax` on the quadrature one, summed and compared. **Reachability: FIRES on every call.** Status: `measured`. Fix class: none proposed.*
+
+**Finding 1607.** The two squared terms are scaled one place apart, so the metric is `(i-I)**2 / 2 + (q-Q)**2 / 4` and the decision regions are ellipses rather than circles. Every other slicer in the family shifts both terms alike — `_16Tpt` uses 16 and 16, `_64pt` 13 and 13 — which is what makes this one the odd one out rather than a family convention.
+
+It changes answers, not just margins. Evaluating the object's own expression at a received `(2000, 2000)` gives 2749, 6797, 3249, 3297 and picks point 0, where the symmetric metric gives 2182, 3682, 3182, 1682 and picks point 3. At the origin it gives 2816, 4864, 2816, 4864 where a symmetric metric ties all four, because the four points are equidistant from the origin.
+
+Reproduced as written, and covered by `t_v32fse`'s four-point passes — the differential test cannot tell a deliberate weighting from a slip, which is why this is recorded here rather than argued in a comment.
+
+======================================================================
 ======================================================================
 
 ## D65 🐛 `FPM_log10` reads one element past its table, and it is NOT the lucky one

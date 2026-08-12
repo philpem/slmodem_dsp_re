@@ -54,22 +54,38 @@
  *    or a negative one leaves `widx` at 0 rather than running away.
  */
 
+#include "dsplib/v32dec.h"
 #include "dsplib/v32smc.h"
 
 /*
- * The four quadrant-phase increments, and the four absolute phases.  Both are
- * multiples of four in the low nibble, which is what makes `point + quad * 4`
- * land on a constellation index.
+ * The four absolute phases.  `SMCv32_PMAP16`, its differential counterpart,
+ * is defined in v32dec_tables.c beside the other V.32 maps and declared in
+ * v32dec.h; both are multiples of four in the low nibble, which is what makes
+ * `point + quad * 4` land on a constellation index.
+ *
+ * SIGNED, and that is NOT settled by the object -- see the note on widths
+ * below and finding 1625's correction.  `SMCv32_encoder_abs` loads this one
+ * with `movzwl`; every value in it is positive, so the two readings agree
+ * over the whole table and nothing forces the choice.  `short` is what the
+ * neighbouring maps use.
  */
-const unsigned short SMCv32_PMAP16[4] = { 4, 0, 8, 12 };
-const unsigned short SMCv32_PMAP_ABS16[4] = { 1, 5, 13, 9 };
+const short SMCv32_PMAP_ABS16[4] = { 1, 5, 13, 9 };
 
 /*
  * The trellis coder's three tables.  Widths are taken from the loads, not
  * from the symbol sizes: the two Trellis ones are read with `movswl` and a
- * scale of 2, so they are `short`; `SMCv32_MOD` is read with `movzwl` and a
- * scale of 2, so it is `unsigned short[8]` and not the `unsigned char[16]`
- * its bytes would also fit.
+ * scale of 2, so they are `short`; `SMCv32_MOD` is read with a scale of 2
+ * as well, so it is EIGHT SHORTS and not the `unsigned char[16]` its bytes
+ * would also fit.
+ *
+ * SIGNEDNESS IS A WEAKER CLAIM THAN WIDTH, and the phase maps are the worked
+ * example.  `SMCv32_encoder_dif` loads `SMCv32_PMAP16` with `movzwl` and
+ * `FSE_decision_AB` and `FSE_decision_4pt` load the SAME object with
+ * `movswl` -- two translation units, two readings, which is what independent
+ * `extern` declarations look like.  Every value in both maps is positive, so
+ * the readings agree over every entry and neither is forced.  Width is
+ * different: a scale of 2 against a scale of 1 changes which bytes are read,
+ * and no value can hide that.
  *
  * `TrellisEncodeDifTable` is the differential quadrant encoder V.32 Figure 6
  * specifies -- a 4x4 Latin square, each row a permutation of 0..3.

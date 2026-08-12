@@ -62,12 +62,14 @@ struct v32_symout {
 };
 
 /*
- * Phase maps, four entries each: index by the two selected bits.
- * UNSIGNED, and that is forced: both encoders load an element with `movzwl`
- * and use the 32-bit result in the addition that follows.
+ * The absolute phase map, four entries: index by the two selected bits.  Its
+ * differential counterpart `SMCv32_PMAP16` is declared in v32dec.h, which is
+ * where the rest of the V.32 maps live -- one object, one declaration, and
+ * two of them with different signedness is the defect this note exists to
+ * prevent a return of.  Signedness here is not settled by the object; see
+ * src/pump/v32/v32smc.c.
  */
-extern const unsigned short SMCv32_PMAP16[4];
-extern const unsigned short SMCv32_PMAP_ABS16[4];
+extern const short SMCv32_PMAP_ABS16[4];
 
 /*
  * The trellis coder's tables.  `short` and `unsigned short` are taken from

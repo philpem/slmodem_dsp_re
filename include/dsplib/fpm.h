@@ -60,4 +60,18 @@ unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);
 int FPM_sqrt_table_size(void);
 
+/*
+ * One LMS coefficient update.  `coeff` holds `taps` entries and `hist` is a
+ * circular buffer of the same length whose newest sample is at `widx`; the
+ * two are walked in opposite directions, so `coeff[0]` is paired with the
+ * newest sample and `coeff[taps-1]` with the oldest.  Every coefficient moves
+ * by `(hist * err + 0x20000) >> 18`, which is a round-to-nearest at 18
+ * fractional bits.
+ *
+ * `FPM_FSE_receive` calls it twice per symbol, once for each half of the
+ * complex filter.
+ */
+void FPM_lmsupd(short *coeff, const short *hist, short widx, short taps,
+		short err);
+
 #endif /* DSPLIB_FPM_H */
