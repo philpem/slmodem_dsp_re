@@ -49609,3 +49609,68 @@ That makes the pre-emphasis request wrong on three independent grounds — the
 code (D53's unreachable index 0), the far end's own measurement of the same
 wire, and the physics of a three-metre cable. It does not yet make it the
 CAUSE of the rate deficit; the A/B still has to say that.
+
+======================================================================
+
+### 1475. `probe_preemph` IS A TILT METER WITH A 4 dB GRID, AND D53's OFF-BY-ONE IS HARMLESS ON A REAL LOOP AND MAXIMALLY WRONG ON A CLEAN ONE
+
+*Task #134. Derived analytically from the constants, prompted by the user's
+observation that the bench's "line" is three metres of cable into an ATA and
+so should have essentially no tilt to correct.*
+
+**WHAT THE LOOP ACTUALLY COMPUTES.** The per-rate constant is a GAIN, not a
+loss: `k = 0x6626 = 26150`, and `x * k >> 14` multiplies by **1.5961**. So the
+band-edge bin starts BELOW the reference bin (bin 4, mid-band) and is stepped
+UP until it exceeds it. The count is how far the band edge sits below
+mid-band — the loop is a tilt meter, and its resolution is one step:
+
+| baud | bin | k | step |
+|---|--:|---|--:|
+| 3429 | 22 | 0x6626 | **4.06 dB** |
+| 3200 | 20 | 0x639f | 3.84 dB |
+| 3000 | 19 | 0x656f | 4.00 dB |
+| 2800 | 18 | 0x6789 | 4.18 dB |
+
+**THE MAPPING, AND WHY THIS SHIPPED.** With the counter advanced before the
+test (D53), the returned index is *steps + 5*; with it advanced after, the
+author's `i == 5` arm makes one step return 0:
+
+| tilt at the band edge | original | fixed |
+|---|--:|--:|
+| 0 – 4.1 dB | **6** | **0** |
+| 4.1 – 8.1 dB | 7 | 6 |
+| 8.1 – 12.2 dB | 8 | 7 |
+| 12.2 – 16.2 dB | 9 | 8 |
+| 16.2 – 20.3 dB | 10 | 9 |
+
+On a 1998 subscriber loop — kilometres of twisted pair, where 8–12 dB of
+tilt at 3.4 kHz is ordinary — the original returns 8 where 7 is right. **One
+step out on a 4 dB grid, on a quantity nobody measures directly, against a
+far end that will equalise the difference away.** It is invisible, and that is
+why a defect this stark survived into shipped firmware: on every line the
+authors could plausibly have had, it was very nearly correct.
+
+On three metres of cable into an ATA followed by digital transport, the tilt
+is ~0 dB. That is one step, the answer is 0, and 0 is the single value the
+code cannot produce. **The error is not constant across channels — it is
+worst exactly where the channel is cleanest.**
+
+**THE OBSERVED DATA AGREES.** At 3429 baud this bench reads index 6 on 463
+calls and 7 on 40 — "0–4 dB of tilt, occasionally 4–8" — which is what a flat
+line reads as through this meter. And the Courier and the SupraExpress,
+running their own algorithms on the same wire, ask us for 0, 1 and 2 (finding
+1474). Everything is consistent: the line is flat, they say flat, the meter
+says flat, and the off-by-one turns "flat" into "six".
+
+**A DISTINCTION WORTH KEEPING.** The 4.06 dB is the granularity of the
+DETECTION. It is not the depth of the filter that gets applied: the index
+selects one of V.34's defined pre-emphasis shapes, and what the far end
+actually applied measured **+1.5 dB** at 2800–3400 Hz in our recordings
+(1470). So the request is badly wrong while its measured consequence is
+modest — which is consistent with the pre-emphasis A/B coming out null on
+rate, and would make D53 a defect worth fixing for correctness rather than a
+lever on the rate deficit.
+
+**WHY THIS MATTERS BEYOND THIS BENCH.** Any modern deployment of this modem is
+over VoIP, a codec, or a short line — never a long loop. The one regime in
+which the defect is harmless is the one that no longer exists.
