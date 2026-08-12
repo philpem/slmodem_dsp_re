@@ -108,3 +108,36 @@ interesting there is a hypothesis for a later run, not a result of this one.
 - The primary null and the secondary significant, as in run 1. That is a
   suggestive result and it is not a finding; it would want a third run before
   anything is claimed.
+
+## Addendum, written mid-run at call 8 of 24 — the CONNECT string is not the rate
+
+`pab3-fix-3` reported `CONNECT 14400` while the Courier's own `ATI11` says it
+**transmitted 26400**. `pab3-fix-2` never reported CONNECT at all and the
+Courier says it transmitted **19200**. Both logged a second, higher
+`V34DATARATE ... finally` block after the first.
+
+So post-CONNECT upward renegotiation **happens, and takes effect**, and our
+`pty CONNECT nnn` string is emitted once and never revised. Every rate this
+bench has measured from that string understates the rate actually carried
+whenever a renegotiation succeeds.
+
+**THE PLAN ALREADY COVERS THIS AND THAT IS LUCK, NOT FORESIGHT.** `Speed
+recv/xmit` is listed above as a pre-specified secondary — "the far end's own
+view of both directions, independent of our CONNECT string" — so analysing it
+is sanctioned. It was listed as a cross-check, not because anyone knew the
+CONNECT string was wrong.
+
+**WHAT DOES NOT CHANGE.** The pre-registered PRIMARY stays `equerr` at the
+decision, and the pre-registered SECONDARY stays `our_rx` from CONNECT. Those
+are what was fixed before the data existed and they are reported as such.
+
+**WHAT IS ADDED, as a pre-specified secondary and clearly labelled:** the same
+rank-sum on the Courier's `Speed` xmit field. If the two rate measures
+disagree, the disagreement is reported and neither is quoted alone — the same
+rule the two load panels already follow.
+
+**AND IT PUTS A LIMIT ON EARLIER FINDINGS.** 1466's table and 1476's rate
+comparison both used the CONNECT string. 1469 is unaffected — it rests on
+`ATI11 Speed 28800/12000`, which is ground truth. Any re-reading of 1466 and
+1476 must say which measure it used. The recorded logs still hold the
+`finally` blocks, so both can be recomputed without new calls.
