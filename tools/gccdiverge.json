@@ -1,12 +1,9 @@
 {
-  "t_fft": {
-    "finding": 1354,
+  "t_psd": {
+    "finding": 1453,
     "checks": [
-      "four1: complex transform, both directions",
-      "realfft: real transform, both directions",
-      "four1/realfft: isign values other than +-1",
-      "four1/realfft: sixty fills at every length"
+      "Psd::process"
     ],
-    "why": "x87 excess precision in four1's butterfly. The object narrows tempr/tempi to float mid-butterfly (fstps 0xc(%esp) at 0x537a0 and 0x537b4) because GCC 3.4.2 runs out of x87 registers; GCC 13 does not run out and keeps 80 bits, and neither a plain float assignment, an explicit (float) cast, nor a named double temporary moves it -- only volatile, which is a shim for GCC 13 alone and no longer in the source. `make period` passes all 155."
+    "why": "x87 excess precision in four1/realfft reaching Psd's decibels. Under -fexcess-precision=fast modern GCC keeps 80-bit intermediates the object narrows to 32 bits mid-butterfly, and by the time the transform reaches a decibel the divergence is up to 0.043 dB on bins near -85 dB, where cancellation dominates. It is NOT closable with a tolerance: the smallest separation between two V90PreFilter reference loops that give DIFFERENT answers is SSD 0.00268 dB^2 (AscendNULL vs AscendNULLCodec2, refLoopsType2), a distance of 0.0518 dB, and 0.043 dB on six points moves a signature by 0.105 dB -- four times the separation, so the excess precision can flip autoSelection's winner. `make period` passes all 160: the period compiler has no divergence here, and it is the tier that decides."
   }
 }

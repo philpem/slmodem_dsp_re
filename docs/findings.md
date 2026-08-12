@@ -48131,3 +48131,48 @@ is the failure this entry exists to prevent, and D162's retirement two merges
 ago is the counter-example worth copying: the measurement was already sitting
 in the test and nobody had done the arithmetic.
 
+
+### 1453. THE `t_psd` BOUND CANNOT BE A TOLERANCE — THE REFERENCE LOOPS ARE FOUR TIMES CLOSER THAN THE DIVERGENCE
+
+Finding 1452 deferred this and said exactly what would settle it: measure the
+margin `V90PreFilter::autoSelection` decides on, and *"if it is not comfortably
+above 0.043 dB, the answer is not a budget at all"*. Measured, and it is not.
+
+`autoSelection` scores each reference loop by the sum of squared differences
+between a six-point signature and the measurement. A decision flips when the
+perturbation is large enough to reorder the two best scores, so the quantity
+that matters is the separation between loops that give **different answers** —
+two loops with the same gain may swap freely and change nothing.
+
+Over all six reference tables, 197 loops:
+
+| table | loops | closest pair giving different answers |
+|---|--:|---|
+| `refLoopsType1` | 23 | SSD 0.1997 |
+| **`refLoopsType2`** | 34 | **SSD 0.00268** — `AscendNULL` vs `AscendNULLCodec2` |
+| `refLoopsType4` | 36 | SSD 0.00638 |
+| `refLoopsType5` | 36 | SSD 0.0317 |
+| `refLoopsType6` | 34 | SSD 0.0278 |
+| `refLoopsType7` | 34 | SSD 0.0123 |
+
+The smallest separation anywhere is **SSD 0.00268 dB²** — a distance of
+0.0518 dB, or 0.0211 dB RMS per point. A 0.043 dB error on all six points
+moves a signature by `sqrt(6 × 0.043²)` = **0.105 dB**, and roughly half the
+separation in the wrong direction is enough to reorder the pair.
+
+**The perturbation is four times the separation.** So the excess precision can
+change which reference loop wins, which changes the filter selected, which is
+a behavioural difference and not a numerical one. There is no honest tolerance
+here: any bound wide enough to pass is wide enough to hide a decision flip.
+
+`t_psd` is therefore exempted from the MODERN tier in
+`tools/gccdiverge.json`, not given a budget. `make period` passes all 160 —
+the period compiler narrows where the object narrows, so there is no
+divergence for it to tolerate, and it is the tier that decides.
+
+**AND `t_fft`'s ENTRY CAME OUT IN THE SAME PASS**, which is the allow-list
+behaving as designed. The 1e-4 absolute bound this round gave `t_fft` made it
+pass under GCC 13, so the entry recorded against it became false — and
+`gccdiverge.py` FAILED the gate saying `STALE ... and now PASSES`, rather than
+quietly excusing a test that no longer needs excusing. A register that cannot
+report its own obsolescence is where the next real failure hides.
