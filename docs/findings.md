@@ -49786,3 +49786,74 @@ The reconstruction's contract is bug-compatibility by default, the primary
 statistic did not fire, and one significant secondary on seven calls per arm
 is exactly the shape of result this bench has already refuted four times
 (findings 1206, 1207).
+
+======================================================================
+
+### 1477. CORRECTION — V.34 HAS TWO PRE-EMPHASIS FAMILIES, THE OBJECT DELIBERATELY USES THE GENTLE ONE, AND MY PROPOSED FIX WOULD BREAK IT
+
+*Task #139. The user asked why indices 1-5 are unreachable. The answer is in
+the Recommendation and it overturns a good deal of 1471, 1474 and 1475.*
+
+**V.34 SPECIFIES TWO DIFFERENT FILTER FAMILIES** (V.34 02/98, section 5.4.1):
+
+| | indices | parameterisation | range |
+|---|---|---|---|
+| Table 3 / Figure 1 | **0-5** | one parameter, α | 0, 2, 4, 6, 8, 10 dB |
+| Table 4 / Figure 2 | **6-10** | two parameters, β and γ | β 0.5-2.5, γ 1.0-5.0 dB |
+
+They are not one ladder of eleven strengths. They are two templates of
+different SHAPE — Figure 1 rises to α, Figure 2 is a shelf described by β and
+γ — and the index selects both the family and the member.
+
+**SO INDICES 1-5 ARE NOT UNREACHABLE BY ACCIDENT.** `probe_preemph`'s counter
+is preset to 5 and advanced before the test, which yields exactly **6..10** —
+Table 4's index range, five tilt buckets onto five filters, complete and
+exact. That is a deliberate choice to use the shelf family, not an off-by-one
+that happens to start in the wrong place. The five per-rate `k` constants are
+tuned to bucket the tilt across precisely those five.
+
+**AND IT DESTROYS THE SEVERITY I ATTACHED TO D53.** Index 6 is the GENTLEST
+member of its family — β = 0.5 dB, γ = 1.0 dB — not "six steps of boost out of
+ten". Findings 1471 and 1475 read it as the latter and were wrong to. The
+measured consequence has been consistent with the correct reading all along:
+the far end's applied response measured **+1.5 dB** at 2800-3400 Hz (1470),
+which is what index 6 IS, not a symptom of a badly wrong request.
+
+**THE DEFECT THAT REMAINS IS REAL BUT SMALL.** The author's dead
+`if (i == 5) return 0` arm is a path to index 0 — flat, Table 3's first entry
+— for a channel needing no correction. It cannot execute (D53), so a flat
+channel receives index 6 and about 1 dB of unwanted shelf. That is a defect.
+It is *flat versus 1 dB*, not *flat versus six steps*.
+
+**AND MY PROPOSED FIX IS WRONG.** Moving the increment after the test does
+make index 0 reachable — and shifts EVERY OTHER BUCKET DOWN ONE: two steps of
+tilt returns 6 instead of 7, three returns 7 instead of 8, and the top bucket
+stops reaching 10 until six steps. It buys the flat case by corrupting the
+tilt-to-Table-4 mapping for every non-flat channel. That is not a fix, it is a
+different bug.
+
+The only defensible change makes the flat case return 0 while leaving 6..10
+where they are — which needs the "did the FIRST scaling already clear the
+reference" question asked separately, not by reusing the loop counter.
+
+**WHICH PUTS FINDING 1476'S A/B RESULT IN A DIFFERENT LIGHT.** The fix arm
+requested index 6 where the bug arm requested 7, and came out faster
+(p = 0.0148 on rate). Under this reading that is not "the fix corrected an
+error" — it is "one step LESS pre-emphasis suited this channel better", which
+is a statement about the tilt bucketing being one step too aggressive on a
+codec-limited path, not about D53 at all. The result stands; my explanation of
+it does not.
+
+**WHAT TO DO WITH THE THREE FINDINGS THIS CORRECTS.** 1471, 1474 and 1475 are
+not retracted — their measurements hold, and the observation that this modem
+has never once requested index 0 is still true and still worth having. What
+is withdrawn is the characterisation of index 6 as a large or aggressive
+request, and the implication that D53 costs several dB. Cite this finding
+alongside any of them.
+
+**AND THE OPEN QUESTION IS NOW SHARPER.** Table 4 tops out at γ = 5.0 dB while
+the tilt meter's range runs past 20 dB. A channel with 12 dB of tilt gets
+index 10 and 5 dB of correction. Table 3 offers up to 10 dB and the object
+never uses it. Whether that is a deliberate restriction, a limitation of the
+transmitter's filter set, or another defect is not answered here — but it is a
+better question than the one this task started with.
