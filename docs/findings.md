@@ -49521,7 +49521,13 @@ so about one denominator in 256 — 255 of them — normalises to a mantissa of
 denominator, and so are 511, 1023, 2047 and 32766. In the blob, whenever
 `max(|y|, |x|)` is one of them the reciprocal is zero, so the ratio is zero
 and **the angle snaps to the octant base** — the nearest axis or 45° line.
-`FPM_atan(y, 32767, *)` returns 0 or 0x7fff for *every* `y`. Same defect class
+`FPM_atan(y, 32767, *)` returns 0 or 0x7fff for every `y` but three: at
+`y = ±32767` the magnitudes are equal, so the fold takes the other branch and
+the answer snaps to `0x2000` or `0x6000` instead — still an octant base — and
+at `y = -32768` the magnitude 32768 becomes the larger, `FPM_div` is asked
+about *that* instead, and a real angle comes out. Measured, not reasoned: over
+all 65536 values of `y` the ratio takes exactly two values, 0 and 32767. Same
+defect class
 as the one that silences an AGC block and drops a Bell 103 call (finding 40),
 now in a timing-recovery error term; the non-REPRODUCE build gets it right.
 
@@ -49597,3 +49603,59 @@ each buffer**. This is the only input that can tell the real loop apart from
 being misread as well as read correctly. Same hazard as `FPM_TONE_detect` and
 `FPM_TONE_generate_demod`, and now the only one of the three with a test that
 would catch a regression.
+
+### 1504. TWO COMMIT MESSAGES IN THIS BRANCH SAY "make phase GREEN" AND IT WAS NOT — THE EXIT CODE WAS CAPTURED AND NEVER READ
+
+*Task: `fpm_atan.c` / `fpm_tone.c`. A correction to commits `9b82992` and
+`5cb4ff6`, left in history rather than amended, because this file's own rule
+is to append and not to renumber and the same applies to the log.*
+
+Both messages end "make phase green, period differential 161/161." The second
+half was true and verified. **The first half was not.** Both runs exited
+non-zero, and the log says so plainly:
+
+    make: *** [Makefile:559: build/test/t_spandsp_b103] Error 1
+
+at line 2016 of the first run's log and line 1653 of the second's.
+
+**THE ENVIRONMENTAL CAUSE, which a parallel session diagnosed and fixed.**
+`third_party/spandsp` is gitignored, so `git worktree add` does not bring it
+along, and without it `t_spandsp_b103` and `t_spandsp_v23` fail to *link*.
+Those two errors land in the first few hundred lines, thousands of lines above
+the PASS summary and the `period differential:` line, so **the tail of the log
+looks perfectly green while make exits 2**. A symlink to the main tree's built
+copy closes it; the path stays gitignored and nothing tracked changes.
+
+**THE PROCEDURAL CAUSE, which is mine and is the more useful half.** The
+command did put `; echo "PHASE_EXIT=$?"` immediately after the make. But the
+make's output was redirected to a log file and the echo went to the terminal,
+and every subsequent inspection was `grep`/`tail` **of the log** — so the exit
+code was correctly captured and then never looked at. Capturing the number is
+not the same as reading it, and a redirect is enough to separate the two.
+Belongs beside the trap this file already records about piping make into grep.
+
+**A THIRD WORKTREE TRAP, found on the way and not previously recorded.**
+`make`'s `strings` target runs `tools/debugaudit.py --invented`, which locates
+the blob as `os.environ.get("BLOB", "../slmodemd/dsplibs.o")`. Inside a
+worktree under `.claude/worktrees/` that relative default resolves to nothing
+and the target dies with
+
+    objdump: '../slmodemd/dsplibs.o': No such file
+    INVENTED STRING: the lines above are in src/ and not in the blob
+
+which reads as a source defect and is not one. It fires only when `BLOB` is a
+*shell* variable rather than an exported one: `BLOB=... && make ...` sets a
+shell variable that make never sees, while `BLOB=... make ...` and
+`export BLOB` both work. The message names neither the variable nor the
+worktree, so it is worth knowing before meeting it.
+
+**WHAT IS NOW VERIFIED, verbatim.** From the worktree, with the symlink in
+place and serialised behind the shared build lock a parallel session asked for:
+
+    export BLOB=/home/philpem/dev/sip-D-modem/slmodemd/dsplibs.o
+    flock /tmp/claude_re_build.lock make phase > /tmp/v22a_phase3.log 2>&1
+    echo "PHASE_EXIT=$?"           ->   PHASE_EXIT=0
+
+with `period differential: 161 passed, 0 failed`, `64-bit clean, both
+configurations: OK`, `5007 references checked, 0 resolve to nothing`, and no
+`Error`, `undefined reference` or `FAILED TO COMPILE` line anywhere in the log.
