@@ -44,9 +44,26 @@ export BLOB
 # their PASS lines into nonsense.  It needs GNU make 4.0, and the spelling is
 # `target`; `recipe` is not a sync type and make rejects it outright.
 #
-# `make J=1` for a serial build when a failure needs reading in order.
+# `make J=1` for a serial build when a failure needs reading in order, and
+# `make J=$(nproc)` when you genuinely have the machine to yourself.
 #
-J          ?= $(shell nproc 2>/dev/null || echo 4)
+# HALF THE CORES, NOT ALL OF THEM, and it is not politeness -- it is a
+# correctness constraint on the bench.  This is a development box that also
+# drives a REAL-TIME soft modem against live hardware over SIP: slmodemd has
+# to produce and consume 9600 samples a second on schedule, and compilers
+# occupying every core add scheduling jitter that shows up as sample slips.
+# Sixteen calls of a pre-emphasis A/B were taken at load 10-11 and had to be
+# discarded (testbench/captures/pab-DISCARDED.txt); the same class of jitter
+# is what stopped a pjsua conference bridge carrying a V.34 handshake at all
+# (finding 1468).  A build that finishes 20% sooner and invalidates the
+# afternoon's measurements is not faster.
+#
+# It also NESTS.  `tools/toolchain/period.sh` spawns its own compilers and
+# halves for exactly this reason -- with `nproc` here that was up to twice the
+# machine's worth at once, which is the arithmetic that produced load 42 on
+# twelve cores with three agents running.
+J          ?= $(shell echo $$(( $$(nproc 2>/dev/null || echo 4) / 2 )) )
+J          := $(if $(filter 0,$(J)),1,$(J))
 MAKEFLAGS  += -j$(J) --output-sync=target
 BUILD      := build
 

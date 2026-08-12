@@ -1859,20 +1859,32 @@ probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 		}
 #ifndef DSPLIB_REPRODUCE_BUGS
 		/*
-		 * THE FIX (D53, finding 1471).  Advancing AFTER the test makes
-		 * the author's own `i == 5` arm live: a band edge that the very
-		 * first scaling already brings above the reference needs no
-		 * pre-emphasis, and the function now says so by returning 0.
+		 * THIS VARIANT IS KNOWN TO BE WRONG.  DO NOT ENABLE IT AS "THE
+		 * FIX" -- see finding 1477.
 		 *
-		 * The delta is exactly one outcome.  Everything the original
-		 * returns as 7..10 is unchanged; only the case it reports as 6
-		 * becomes 0 -- and that is 2445 of the 2480 pre-emphasis
-		 * decisions this bench has ever logged, i.e. nearly every call.
-		 * A modem that could not ask for a flat line now can.
+		 * It was written to make the author's dead `i == 5` arm live, so
+		 * that a channel needing no pre-emphasis could return index 0
+		 * (D53, finding 1471).  It does that.  It also shifts EVERY
+		 * OTHER BUCKET DOWN ONE: two steps of tilt returns 6 instead of
+		 * 7, three returns 7 instead of 8, and the top bucket no longer
+		 * reaches 10 until six steps.
 		 *
-		 * Indices 1..5 remain unreachable.  That is the original's
-		 * shape and there is no evidence about what it intended for
-		 * them, so nothing is invented here.
+		 * That matters because 6..10 is not an arbitrary range.  V.34
+		 * specifies pre-emphasis in TWO families (5.4.1): Table 3 covers
+		 * indices 0-5 with one parameter alpha, and Table 4 covers 6-10
+		 * with two, beta and gamma.  The original's counter, preset to 5
+		 * and advanced before the test, yields exactly Table 4's range --
+		 * five tilt buckets onto five filters, complete and exact.  This
+		 * variant buys the flat case by corrupting that mapping for
+		 * every non-flat channel.
+		 *
+		 * A correct fix asks "did the FIRST scaling already clear the
+		 * reference" separately, instead of reusing the loop counter to
+		 * answer two different questions.  Nobody has written that yet.
+		 *
+		 * Kept, not deleted, because the A/B in finding 1476 was run
+		 * against this exact code and its result cannot be read without
+		 * it.
 		 */
 		i = (short)(i + 1);
 #endif
