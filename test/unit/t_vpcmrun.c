@@ -77,32 +77,25 @@ extern unsigned int dsplibs_debug_level;
  */
 extern int ref_vpcm_run(struct dp *dp, void *in, void *out, int count);
 
-extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
-			       int *rxbits, int *nrx, int *txbits, int *nbits);
-
-int
-VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
-		int *nrx, int *txbits, int *nbits)
-{
-	return ref_VPcmV34Progress(obj, in, out, nin, rxbits, nrx, txbits,
-				   nbits);
-}
-
 /*
- * FOUR OF THE FIVE USED TO BE FORWARDED HERE AND ONE IS.  Each of the other
- * four lost its forwarder on the batch that WROTE it, because a forwarder
- * beside a real definition is a duplicate symbol:
- * `VPcmV34GetCleanedSamples` and `VPcmV34GetCurrentSessionDP` are in
- * `src/pump/v34/v34pcmif.c`, `VPcmV34GetCurrentRxBitRate` and
- * `VPcmV34GetCurrentTxBitRate` in `src/pump/v34/v34pcmmain.cpp`, and this
- * binary links both files.  So the run below is not "our `vpcm_run` on the
- * blob's five callees": FOUR of the five are ours as well, and every block
- * still has to agree with the blob-blob run.  That is a strengthening of this
- * file's claim each time rather than a change to it.
+ * ALL FIVE USED TO BE FORWARDED HERE AND NONE IS NOW.  Each lost its
+ * forwarder on the batch that WROTE it, because a forwarder beside a real
+ * definition is a duplicate symbol: `VPcmV34GetCleanedSamples` and
+ * `VPcmV34GetCurrentSessionDP` are in `src/pump/v34/v34pcmif.c`, and
+ * `VPcmV34GetCurrentRxBitRate`, `VPcmV34GetCurrentTxBitRate` and
+ * `VPcmV34Progress` in `src/pump/v34/v34pcmmain.cpp`.  This binary links
+ * both files.
  *
- * The two rate getters are also the first thing in this binary that puts OUR
- * `V90Demodulator::getBitRate` on the path of a real connecting call --
- * `VPcmV34GetCurrentRxBitRate` calls it whenever the session is a PCM one.
+ * SO NOTHING IS BORROWED.  The run below is no longer "our `vpcm_run` on the
+ * blob's five callees" and it is no longer "four of the five are ours": every
+ * instruction the OURS side executes on a 33,600 V.34 call is this tree's,
+ * and every block still has to agree with the blob-blob run.  Finding 1454 is
+ * what says the claim is that strong -- traced under callgrind, the call
+ * entered exactly one unwritten symbol and it was `VPcmV34Progress`.
+ *
+ * `VPcmV34Progress` also puts OUR `V90Demodulator::getBitRate`,
+ * `GenericIIR<float,double>::process` and `V90Parameters::init` on the path of
+ * a real connecting call, and the two rate getters already did the first.
  */
 
 /* --- the call, and it is `t_v34link.c`'s ---------------------------------- */

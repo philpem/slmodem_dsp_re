@@ -478,6 +478,33 @@ int k56FlexPhase34(void *obj);
 int v90Phase34(void *obj);
 
 /*
+ * The two rate-renegotiation transmitters, 0x95d0 (983 B) and 0x99b0 (555 B),
+ * NEITHER OF THEM WRITTEN.  They sit immediately below `v90Phase34` in the
+ * object, which is why they are declared beside it.
+ *
+ * `VPcmV34Progress` is their only caller and it picks between them by how far
+ * the V.90 receiver has got: `v90_receiver > 14` takes the silence one,
+ * `> 10` the other, and anything lower goes to `modulatevector` or
+ * `v34handshak` instead (.text+0xbccc).
+ *
+ * DECLARED WEAK IN THE ONE TRANSLATION UNIT THAT CALLS THEM, on the
+ * arrangement `include/dsplib/vpcm.h` sets out for the five `VPcmV34*` entry
+ * points: `src/pump/v34/v34pcmmain.cpp` defines `DSPLIB_V34HSHAK_UNWRITTEN`
+ * before including this file, so the reference resolves to zero instead of
+ * breaking the link of every test binary, and the caller tests the pointer
+ * before it calls through it.  A TU that DEFINES either must not define the
+ * macro, or the definition itself becomes weak.
+ *
+ * `void` is what the object supports: `VPcmV34Progress` discards the result
+ * of both.
+ */
+#ifndef DSPLIB_V34HSHAK_UNWRITTEN
+#define DSPLIB_V34HSHAK_UNWRITTEN
+#endif
+void v90RateReneg(void *obj) DSPLIB_V34HSHAK_UNWRITTEN;
+void v90RateRenegSilence(void *obj) DSPLIB_V34HSHAK_UNWRITTEN;
+
+/*
  * Send whichever PCM receiver is past phase 2 into phase 3, at the point in
  * the handshake where the JA is about to go out.  Two tail calls and nothing
  * else: `VPcmFloModem::enterPhase3` when `v90_receiver > 1`, otherwise

@@ -196,6 +196,47 @@ public:
 	 */
 	void externalReset();
 
+	/*
+	 * --- FOUR MEMBERS THIS TREE HAS NOT WRITTEN --------------------------
+	 *
+	 * `VPcmV34Progress` calls all four and nothing else does, so they are
+	 * declared here and defined nowhere.  They are marked WEAK in the one
+	 * translation unit that calls them -- `src/pump/v34/v34pcmmain.cpp`
+	 * defines `DSPLIB_VPCMFLO_UNWRITTEN` before including this file -- so
+	 * the reference resolves to zero rather than failing the link of all
+	 * 78 test binaries, and the caller tests the pointer-to-member before
+	 * it calls through it.  `include/dsplib/vpcm.h` carries the same
+	 * arrangement for the five `VPcmV34*` entry points and says why at
+	 * length; the rule is the same one, one level further down.
+	 *
+	 * A TU that DEFINES one of these must not define the macro, or the
+	 * definition itself becomes weak.
+	 *
+	 * The signatures are the manglings and nothing else:
+	 *
+	 *   _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_       2,041 B
+	 *   _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_          3,013 B
+	 *   _ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_  779 B
+	 *   _ZN12VPcmFloModem20vPcmResetPhase3ModemEv               149 B
+	 *
+	 * The return types are not mangled; `int` is what `VPcmV34Progress`
+	 * switches on for the first three (`cmp $0x8,%eax` and friends at
+	 * .text+0xbc30, 0xc7fc, 0xba46) and `vPcmResetPhase3Modem`'s result is
+	 * discarded, so it is spelled `void`.
+	 */
+#ifndef DSPLIB_VPCMFLO_UNWRITTEN
+#define DSPLIB_VPCMFLO_UNWRITTEN
+#endif
+	int runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
+			int *nrx, int *txbits, int *nbits)
+		DSPLIB_VPCMFLO_UNWRITTEN;
+	int v90RunDemodulator(float *in, unsigned int n, int *rxbits, int *nrx)
+		DSPLIB_VPCMFLO_UNWRITTEN;
+	int qcLineVerification(float *in, float *out, unsigned int n,
+			       int *rxbits, int *nrx, int *txbits, int *nbits)
+		DSPLIB_VPCMFLO_UNWRITTEN;
+	void vPcmResetPhase3Modem() DSPLIB_VPCMFLO_UNWRITTEN;
+
 	/* --- data members; see the file comment on the naming --- */
 
 	/*

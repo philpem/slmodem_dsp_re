@@ -216,15 +216,15 @@
  },
  {
   "label": "is_short is left alone",
-  "find": "\tobj->is_short = 0;",
-  "replace": "\t(void)0;",
+  "find": "\tobj->is_short = 0;\n\tobj->local_short = 0;",
+  "replace": "\t(void)0;\n\tobj->local_short = 0;",
   "equivalent": true,
   "why": "THE STORE IS DEAD IN THE COMPOSED PROGRAM, and this is the masking finding 253 warns about rather than a hole in the sweep.  Every path through this function ends in `v34handshakinit(obj, 1)`; mode 1 unconditionally calls `v34modeminit`, and `v34modeminit` unconditionally does `obj->is_short = 0` (src/pump/v34/v34hshak.c:416).  Nothing between the two reads +0xabcc.  So no caller can observe the difference, and no test can either.  MEASURED, not read: delete `v34modeminit`'s clear and this mutation flips to CAUGHT while the unmutated test still passes, which is what tells a masked store apart from a sweep that never reached one.  WHAT IS HELD FIXED is that call: `local_short` at +0xabca is the neighbouring store, `v34modeminit` does NOT re-clear it, and the matching mutation on it IS caught -- which is what shows the fixture sees this pair of shorts at all.  The store stays because the object makes it."
  },
  {
   "label": "local_short is left alone",
-  "find": "\tobj->local_short = 0;",
-  "replace": "\t(void)0;"
+  "find": "\tobj->is_short = 0;\n\tobj->local_short = 0;",
+  "replace": "\tobj->is_short = 0;\n\t(void)0;"
  },
  {
   "label": "the session's +0x6fb4 is left alone",
@@ -323,8 +323,8 @@
  },
  {
   "label": "status is not cleared",
-  "find": "\tobj->status = 0;",
-  "replace": "\t(void)0;"
+  "find": "\tobj->f0004 = 7;\n\tobj->status = 0;",
+  "replace": "\tobj->f0004 = 7;\n\t(void)0;"
  },
  {
   "label": "+0x2218 becomes 5",

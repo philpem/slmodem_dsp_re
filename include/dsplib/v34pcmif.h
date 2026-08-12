@@ -125,6 +125,53 @@ void VPcmV34ReportStartOfEchoAdapt(void *obj);
 void VPcmV34ReportMiddleOfEchoAdapt(void *obj);
 
 /*
+ * ---------------------------------------------------------------------------
+ * `VPcmV34Progress`, 0xb3c0 and 7,278 bytes: one block of samples through
+ * whichever of V.34, V.90, V.92 and K56flex owns the line.  It is the whole
+ * of `vpcm_run`'s work between the two sample conversions, and finding 1454
+ * measured that a real 33,600 V.34 connect executes no other unwritten
+ * symbol.  Defined in `src/pump/v34/v34pcmmain.cpp` because seven of its
+ * callees are C++ members; the head of that block is the map.
+ *
+ * Declared in `include/dsplib/vpcm.h` as well, WEAK, because `vpcm_run` is a
+ * C file that must link whether or not this one is present.  The two
+ * declarations describe one ABI and never meet in a translation unit -- and
+ * this one is the definition's, so it is not weak.
+ */
+int VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
+		    int *nrx, int *txbits, int *nbits);
+
+/*
+ * ---------------------------------------------------------------------------
+ * The unwritten-path record for `VPcmV34Progress`'s seven unreconstructed
+ * callees.  `vpcm.h`'s block of the same shape says why it exists and why the
+ * default is to abort; the codes below are that file's, one level down.
+ *
+ * Everything named here belongs to the V.90 and V.92 arms.  A V.34 call
+ * reaches none of them, which is what makes `t_vpcmrun`'s four-way comparison
+ * meaningful with them absent.
+ */
+#define V34PCM_WRITTEN			0
+#define V34PCM_UNWRITTEN_RUNPCM		1	/* runPcmModem          */
+#define V34PCM_UNWRITTEN_V90RUN		2	/* v90RunDemodulator    */
+#define V34PCM_UNWRITTEN_QCLINE		3	/* qcLineVerification   */
+#define V34PCM_UNWRITTEN_RESETP3	4	/* vPcmResetPhase3Modem */
+#define V34PCM_UNWRITTEN_TONEPROC	5	/* GenericToneDetector  */
+#define V34PCM_UNWRITTEN_RRN		6	/* v90RateReneg         */
+#define V34PCM_UNWRITTEN_RRNSILENCE	7	/* v90RateRenegSilence  */
+
+/* Which unwritten callee was reached, or V34PCM_WRITTEN for none. */
+int v34pcm_unwritten(void);
+
+/*
+ * "I am going to read the code afterwards."  Clears the record AND turns the
+ * abort off; without this call an unwritten path stops the process, because
+ * an arm that returns quietly is indistinguishable from an arm that correctly
+ * did nothing.
+ */
+void v34pcm_unwritten_reset(void);
+
+/*
  * Cap the V.34 symbol rate the line probe is allowed to choose, by writing
  * `shift` on the bins that stand for the rates the configuration bars.
  *

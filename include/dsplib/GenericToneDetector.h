@@ -104,6 +104,22 @@ public:
 	~GenericToneDetector();
 
 	/*
+	 * `_ZN19GenericToneDetector7processEPfj`, 422 bytes, NOT WRITTEN.
+	 * `VPcmV34Progress` is the only caller in the object -- it runs the
+	 * `ANSamToneDetector` embedded at `VPcmFloModem + 0x6f5c` over one
+	 * block on the modem-on-hold arm -- so it is declared here and defined
+	 * nowhere, weak in that one translation unit.  VPcmFloModem.h's block
+	 * on its own four says why at length; the arrangement is identical.
+	 *
+	 * The result is the detector's answer at +0x38, which both overloads
+	 * return; `int` for the reason the file comment gives for the other.
+	 */
+#ifndef DSPLIB_GTD_UNWRITTEN
+#define DSPLIB_GTD_UNWRITTEN
+#endif
+	int process(float *samples, unsigned int n) DSPLIB_GTD_UNWRITTEN;
+
+	/*
 	 * Public for `offsetof`; the original's access specifiers are not
 	 * recoverable, and one access section is what keeps `offsetof`
 	 * meaningful.  See V90ConstellationDesigner.h.

@@ -1039,6 +1039,20 @@ struct v34_object {
 	 * guess, and the object never states one.
 	 */
 	void *pac3c;					/* +0xac3c */
+	/*
+	 * +0xac40 to +0xac4c.  THE OBJECT IS 0xac4c BYTES AND THIS STRUCT
+	 * USED TO STOP AT 0xac40, twelve bytes short of it: `vpcm.h`'s
+	 * `VPCM_V34_BYTES` is 0xac4c and `VPcmV34Create` memsets exactly that
+	 * much (0xaa7f-0xab15).  Nothing had reached past +0xac3c until
+	 * `VPcmV34Progress`, whose `requestOutputSampleClear` arm writes all
+	 * three words at .text+0xc98e, +0xc99f and +0xc9a7: a sample count, a
+	 * flag set to 1 beside it, and a third word cleared to 0.
+	 *
+	 * Unmapped rather than named for the reason the regions above are:
+	 * one writer and no reader in this tree says nothing about what they
+	 * hold, and an offset is honest where a name would not be.
+	 */
+	unsigned char unmapped_ac40[0xac4c - 0xac40];	/* +0xac40 */
 };
 
 /*

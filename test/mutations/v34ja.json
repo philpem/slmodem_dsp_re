@@ -49,8 +49,8 @@
  },
  {
   "label": "the two pointers change places: phase 3 is entered on the K56flex block",
-  "find": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;",
-  "replace": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->pac18;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->p3548;"
+  "find": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;\n\n\tif (obj->v90_receiver > 1)",
+  "replace": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->pac18;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->p3548;\n\n\tif (obj->v90_receiver > 1)"
  },
  {
   "label": "the demodulator is entered directly, skipping the modem's own twenty-one stores",
