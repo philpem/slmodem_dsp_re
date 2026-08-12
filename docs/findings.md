@@ -49368,3 +49368,68 @@ thing itself, and nothing else on this bench can produce one.
 bug-for-bug by default; this goes on the deliberate-fix list beside the 8000
 samp/s work and the floating-point defects, off by default, with the
 differential tier defining bug-compatible behaviour. See D53.
+
+### 1560. V.22 HAS ITS OWN IIR, IT IS THIRD ORDER, AND ITS DENOMINATOR STARTS AT `a[1]`
+
+The V.22/V.22bis phase opens here. `tools/tumap.py` recovers thirteen V.22
+translation units by name — `V22.c`, `V22Dec.c`, `v22mod.c`, `v22prc.c`,
+`v22rxtab.c`, `v22stc.c`, `v22txtab.c`, `v22_fse.c`, `v22_iir.c`, `v22_mrf.c`,
+`v22_pps.c`, `v22_sre.c`, `V22int.c`, plus `v22.c` at `.text 0x004fb0` for the
+datapump registration — and `src/pump/v22/` now mirrors those names rather
+than inventing a layout.
+
+**The `v22_*` blocks are not the `fpm_*` blocks.** The original keeps
+`fpm_iir.c` and `v22_iir.c`, `fpm_mrf.c` and `v22_mrf.c`, `fpm_pps.c` and
+`v22_pps.c`, `fpm_sre.c` and `v22_sre.c` as separate translation units with
+separate symbols. For the IIR the difference is settled and is not cosmetic:
+
+|  | `FPM_iir_filt_II` | `V22_iir_filt_demod` |
+|---|---|---|
+| structure | cascade of biquads | one third-order section |
+| coefficients | `{b0,b2,b1,a2,a1}` per section | `b[0..3]`, `a[0..3]` |
+| state | 4 words per section | `x[0..3]`, `y[0..2]` |
+| block length | argument | **constant 160 in the code** |
+| output | filtered | filtered **and mixed down** |
+
+`V22_iir_filt_demod`'s denominator loop is `movswl 0x2(%edx,%ecx,2)` with
+`ecx` running 0..2 — `a[1]`, `a[2]`, `a[3]`. **`a[0]` is copied into the state
+by the init and then never loaded by anything**, because it holds 16384 and
+the `>> 14` already divides by it. Reading the denominator from `a[0]` instead
+gives a stable filter with the wrong response, and at ordinary receive levels
+the two agree closely enough that only a long run separates them.
+
+**The mixer is part of the filter.** `DemodDataV22 +0x1f2` calls
+`FPM_TONE_generate_demod` into a stack buffer and passes that buffer as the
+sixth argument; the filtered sample is multiplied by it at `>> 12` and stored
+back over the input. The filtered signal never exists as an array, so there is
+no seam at which to compare "the filter" against anything — the differential
+test drives the pair.
+
+Three arithmetic details are load-bearing and all three are preserved:
+
+- **each product is shifted down by 14 separately** before joining the
+  accumulator, so a block truncates seven times per sample rather than once;
+- **the accumulator is truncated to 16 bits exactly once**, where it is stored
+  into `y[0]`, and the mixer multiplies that truncation — `mov %bx,(%esi)` and
+  `movswl %bx,%eax` read the same low half;
+- **nothing saturates anywhere.** An over-driven filter wraps. This is the
+  opposite of `FPM_iir_filt`, which clamps, and asymmetrically.
+
+Both call sites settle the signatures rather than leaving them inferred:
+`V22FP_create +0x858` calls `V22IIRFilterInit(state, IIR_b_coeff, IIR_a_coeff)`
+and `DemodDataV22` passes `state+0, state+4, state+8, state+12`, which is what
+fixes the sixteen-word state layout: `b[4] a[4] x[4] y[4]`. The init clears
+four y words and the filter uses three, so `y[3]` is written by the init and
+by nothing else.
+
+`IIR_b_coeff` and `IIR_a_coeff` are in **`.data`, not `.rodata`**, so they are
+declared without `const` here to keep the section. Nothing writes them.
+
+`t_v22_iir` covers it: both coefficient tables, the init against a `0x5ead`
+prefill so a word the reconstruction fails to write cannot pass, and eight
+blocks each of five drive conditions. The two overflow paths — the mixer
+product leaving 16 bits, and the accumulator wrapping — are asserted to have
+actually fired, per finding 134's argument. The mixer guard is exact rather
+than heuristic: it is measured under a synthetic identity filter
+(`b = {16384,0,0,0}`, `a = {16384,0,0,0}`), where `acc = (16384 * x) >> 14 = x`
+makes the product knowable without modelling the function under test.
