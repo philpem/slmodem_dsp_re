@@ -50483,3 +50483,59 @@ the sliding buffer. Reproduced; D298 carries the reachability.
 compares `history[0 .. widx - 1]` by content after every call, since a
 one-entry error in the slide would otherwise surface only as an output
 difference several samples later.
+
+### 1568. THE V.22 DAG RE-MEASURED AFTER THE FIRST FOUR MODULES, AND WHAT IT SAYS ABOUT ORDERING
+
+Finding 1565 measured the dependency graph before any of the parallel work
+landed. Re-measured on the merged branch, with `v22_iir`, `v22rxtab`,
+`v22prc`, `fpm_atan`, `FPM_TONE_generate2`, `fpm_sdm`, `fpm_smc`, `v22txtab`
+and `v22_mrf` in the tree:
+
+| | before | after |
+|---|--:|--:|
+| unwritten in the closure | 95 | **65** |
+| writable today, functions | 25 | 19 |
+| writable today, bytes | 5,524 | **5,767** |
+| blocked, bytes | ~26,600 | 20,930 |
+
+**The writable-today figure went UP while the closure went down**, and that is
+the whole point of measuring it. Landing `FPM_atan` alone unblocked
+`V22_FSE_receive` (1,885 bytes, now the largest available function); landing
+`FPM_SDM_*` unblocked `ScrambleDataV22` and `DescrambleDataV22`; landing
+`FPM_SMC_encoder` left `ModDataV22` waiting on nothing but `V22_PPS_filter`.
+A closure count alone would have shown steady progress and said nothing about
+where the next session should start.
+
+**The nineteen available now**, largest first:
+
+    V22_FSE_receive 1885   V22_PPS_filter 722   Detect_v22 375
+    V22_FSE_init 372   V22FP_modem 346   V22_status 310
+    V22_PPS_init 290   Detect_Retrain 288   Detect_Rmloop2_ACK 209
+    SetTxRate 205   Detect_1s 199   MakeTxData 195   V22_FSE_free 90
+    dp_v22_init 72   dp_v22_exit 70   V22_SRE_free 46   V22_PPS_free 35
+    DescrambleDataV22 30   ScrambleDataV22 28
+
+**And the five that are one function away** — worth knowing because each is a
+single-item unblock rather than a batch: `v22_process` needs only
+`V22FP_modem`; `V22_SRE_init` needs only the `SREv22_COFFS` table;
+`v22_create` needs only `V22FP_create`; `ModDataV22` needs only
+`V22_PPS_filter`; `v22_delete` needs only `V22FP_delete`.
+
+**The critical path is now visible and it is short.** Nine of the ten largest
+remaining functions are the state machine, and every one of them waits on
+`DemodDataV22`, which waits on `V22_FSE_receive` and `V22_SRE_recover`, which
+wait on `FPM_atan` — already landed. So the sequence that unlocks 13,301 bytes
+of state machine in one step is:
+
+    V22_FSE_receive  ->  V22_SRE_recover  ->  DemodDataV22  ->  the eight
+    state functions and V22_PROTOCOL
+
+with `V22FP_create` (2,449 bytes, eighteen dependencies, the widest fan-in in
+the whole datapump) as the other half of the fork, feeding `v22_create` and
+the datapump registration.
+
+Re-run the measurement rather than trusting this table; it moves every time
+anything lands. It is `readelf -rW` restricted to `.rel.text`, each function's
+relocation targets intersected with `closure.py --missing`, and the
+"already-written" set taken from `src/` rather than from `build/` so it
+answers correctly on an unbuilt tree.
