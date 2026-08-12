@@ -49446,3 +49446,94 @@ hardware, comparing `equerr` and the negotiated rate — and `ATI11` on the far
 end reports the applied pre-emphasis per direction, so the change is visible
 from both sides. Nothing else on this bench can produce that, because the blob
 cannot be recompiled with a branch flipped.
+
+======================================================================
+
+### 1473. THE EQUALISER IS NOT BAD, IT IS UNSTABLE — IT CONVERGES BELOW THE 26400 THRESHOLD IN 88% OF CALLS AND THE RATE IS DECIDED AFTER IT DIVERGES AGAIN
+
+*Task #134. Prompted by the user listening to the modem speaker and saying a
+call "sounded really rough at the beginning" — which turned out to be the
+whole finding.*
+
+**THE TRAJECTORY.** `V34EQU, equerr` on one call, in order, with the rate
+decision marked:
+
+    t=815.91   30996        (reset)
+    t=816.21     145
+    t=816.51      66        <- 33600 territory
+    t=818.79   16562        <- diverges
+    t=819.09    7381
+    t=819.69    4729
+    t=819.99    3097
+    t=820.59    3474
+    t=820.81   ===== V34DATARATE decides, using 3474 -> 12000 =====
+    t=827.81     133
+    t=828.11      74
+    t=832.41     147
+    t=833.01     146
+    t=837.53      90
+
+The mechanism is not stale data: the decision uses the most recent sample, and
+that is correct. The problem is what the most recent sample happens to be.
+
+**AND IT IS NOT ONE CALL.** Over **249 calls** on this bench:
+
+| | |
+|---|--:|
+| best `equerr` before the decision, median | **46** |
+| `equerr` AT the decision, median | **2817** |
+| reached below 205 (the 26400 threshold) at some point | 245 / 249 — 98% |
+| reached below 50 (the 33600 threshold) at some point | 171 / 249 — 69% |
+
+**THE ARTEFACT THAT WOULD EXPLAIN THIS AWAY, AND WHY IT DOES NOT.** `equerr`
+accumulates over 1024 symbols, so a partial window reads low, and the
+`30996 → 145 → 66` pattern right after a reset is exactly what a warm-up
+transient looks like. If every low reading were one or two samples after a
+reset, the table above would mean nothing.
+
+So the test was re-run counting only **runs of three or more CONSECUTIVE
+samples below 205** — a length no warm-up produces. **219 of 249 calls (88%)
+have one.** Six-sample runs in the 146–208 range are not an accumulator
+filling up; they are convergence.
+
+**WHAT THE EXCEPTIONS PROVE.** The calls that came out fast are the calls
+where the decision happened to land while the equaliser was converged:
+
+| call | sustained run | `equerr` at decision | rate |
+|---|--:|--:|--:|
+| b80-1 | 6 | **56** | **31200** |
+| (another) | — | **85** | **31200** |
+| asym-1 | 5 | 3038 | 12000 |
+| asym-3 | 5 | 20644 | 4800 |
+
+Same channel, same equaliser, same code. The difference between 31200 and
+12000 on this bench is *when the rate happened to be sampled*.
+
+**SO #134'S QUESTION WAS WRONG.** It asked why our equaliser settles an order
+of magnitude worse than a contemporary modem. It does not settle worse — it
+reaches 46 in the median call, which is 33600 territory. It reaches there,
+leaves, and the rate is chosen after it has left. The question is now: **what
+disturbs it, and why is the decision taken during the disturbance?**
+
+**ONE CANDIDATE, AND IT WOULD TIE 1471 TO ALL OF THIS.** The divergence
+follows the point where the far end would begin applying the pre-emphasis
+filter our receiver just asked for. An equaliser converged on an
+un-pre-emphasised signal, handed a differently-shaped one, would do exactly
+this. If that is the mechanism, then D53's unreachable index 0 is not a
+cosmetic defect after all: we ask for a filter we do not need, the far end
+applies it, our equaliser is knocked off convergence, and the rate is decided
+before it recovers.
+
+That is a hypothesis, not a finding. It is testable and the test is already
+running: the pre-emphasis A/B (`testbench/preemph_ab.sh`) puts a build that
+can request flat against one that cannot, interleaved, on a gated quiet
+machine. If the mechanism is right, the fix arm's decision-time `equerr`
+should be markedly lower. If the arms come out the same, the divergence has
+another cause and this paragraph should be struck.
+
+**A SEPARATE STRAND, worth its own look.** After CONNECT the equaliser
+returns to 74–208 repeatedly, well under `renegUpthresh` (2571), and the rate
+stays at 12000. Either renegotiation is not being attempted or it needs
+something more than the threshold being crossed. A modem that could
+renegotiate upward on this evidence would reach a far better rate without any
+change to the initial decision at all.
