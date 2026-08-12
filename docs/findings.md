@@ -49371,7 +49371,9 @@ differential tier defining bug-compatible behaviour. See D53.
 
 ======================================================================
 
-### 1500. THE `Dtmf_Rx.c` CLOSURE IS COMPLETE: `reset_dtmf` AND `create_cid_dtmf`, AND WHAT THEIR CALLERS SETTLE ABOUT THEIR SIGNATURES
+### 1700. THE `Dtmf_Rx.c` CLOSURE IS COMPLETE: `reset_dtmf` AND `create_cid_dtmf`, AND WHAT THEIR CALLERS SETTLE ABOUT THEIR SIGNATURES
+
+*Renumbered: this was numbered **1500** until 2026-08-12. `v22-datapump` had independently taken 1500-1502 and reached master first, so this session's first three findings moved to 1700-1702. Nothing else about the finding changed.*
 
 *Both were read out of `tools/dis.py` and are in `src/service/dtmf_rx.c`
 beside `band_pass` and `dtmf_modem`, the two the same translation unit already
@@ -49435,7 +49437,9 @@ existing checks compare our code against a state our own code chose.
 
 ======================================================================
 
-### 1501. WHAT `reset_dtmf` DOES NOT CLEAR, AND WHY ONLY ONE OF THE FOUR IS A DEFECT
+### 1701. WHAT `reset_dtmf` DOES NOT CLEAR, AND WHY ONLY ONE OF THE FOUR IS A DEFECT
+
+*Renumbered: this was numbered **1501** until 2026-08-12. `v22-datapump` had independently taken 1500-1502 and reached master first, so this session's first three findings moved to 1700-1702. Nothing else about the finding changed.*
 
 The reset writes twenty-one scalars, eight resonator state pairs and sixteen
 bytes of digit string, and leaves the receiver armed:
@@ -49451,7 +49455,7 @@ Four regions of the object are untouched, and they are not the same kind of
 thing:
 
 - **`digits[16..19]`** -- the loop's bound is `cmp $0xf,%ax ; jle` over a
-  twenty-byte array. This one is a defect: **D298**.
+  twenty-byte array. This one is a defect: **D302**.
 - **`pre_low[2]`** -- the low group's pre-notch, where the high group's is
   cleared eight instructions earlier. Already **D251**.
 - **`aligned`** -- and this one is harmless, which is worth stating because it
@@ -49477,9 +49481,11 @@ construction.
 
 ======================================================================
 
-### 1502. `create_cid_dtmf`: 0x38c BYTES, 8000 Hz, THRESHOLD 0 -- AND THE TWO TRACE LINES THAT SAY SO
+### 1702. `create_cid_dtmf`: 0x38c BYTES, 8000 Hz, THRESHOLD 0 -- AND THE TWO TRACE LINES THAT SAY SO
 
-*Third of the batch; **D299** is its unchecked allocation.*
+*Renumbered: this was numbered **1502** until 2026-08-12. `v22-datapump` had independently taken 1500-1502 and reached master first, so this session's first three findings moved to 1700-1702. Nothing else about the finding changed.*
+
+*Third of the batch; **D303** is its unchecked allocation.*
 
 The function is small and every constant in it is now checked by a test:
 
@@ -49869,6 +49875,71 @@ after it. A block-at-a-time test would have found neither.
 The size assertion is the fourth, and it exists because `offcheck.py` checks
 every ANNOTATED OFFSET and nothing checks the total: `pad_086` written
 eighteen bytes short passes `make offsets` and silently narrows every
-`diff_eq_obj` in both new files. Same gap finding 1502 recorded for
+`diff_eq_obj` in both new files. Same gap finding 1702 recorded for
 `struct dtmf_rx`, same spelling of the fix, and `create_cid`'s
 `movl $0x160,(%esp)` is the oracle for the number.
+
+======================================================================
+
+### 1703. THIS SESSION'S NUMBERS, AND WHY `refcheck.py --renumber` CANNOT MOVE A FINDING AS IT STANDS
+
+**The numbers.** This session (Caller ID / DTMF, branch `cid-dtmf`) holds
+**1700-1703** and **1505-1511**, and the split is deliberate rather than a
+gap left by accident. It opened by claiming 1500-1511; `v22-datapump` had
+independently claimed 1500-1504 and reached master first, so the first three
+moved to 1700-1702 at the coordinator's request. 1505-1511 did NOT move: they
+are claimed by nothing on `master`, `v22-datapump` or `v32-datapump`, checked
+on 2026-08-12 with
+
+```sh
+for b in master v32-datapump v22-datapump; do
+  git show $b:docs/findings.md | grep -oE "^### 1(50[0-9]|51[01])\." ; done
+```
+
+which returns 1500-1504 twice and nothing else. The deviation register moved
+wholesale: this session's five entries, numbered 298-302, became
+**302-306**, because V.22 and V.32 had each allocated 298 and 299 and master
+had taken 300 and 301. Every renumbered entry says so
+in its own first paragraph, which is the only protection a reader has -- a
+citation that was not moved still RESOLVES, and no tool can see that it now
+names someone else's finding.
+
+**The tool could not do the finding half.** `tools/refcheck.py --renumber
+1500 1700` ran **11 minutes of CPU without writing a byte** and was killed
+(safely: `/proc/PID/fd` held nothing but the three standard descriptors, and
+no tracked file's mtime had moved). The five deviation renumbers in front of
+it took seconds each. The difference is the citation pattern, which for a
+finding nests an unbounded lazy quantifier:
+
+```python
+rpat = re.compile(r"([Ff]indings?\s+(?:\d+[a-z]?(?:\s*(?:,|and)\s*)?)*?)"
+                  r"\b%s\b" % re.escape(o))
+```
+
+and `SCAN_EXT` is `(".c", ".h", ".md", ".py")`, so it is applied to
+`src/**/*_tables.c` -- files that are thousands of comma-separated numbers.
+Where the word "finding" precedes such a table, the group can consume the
+table one element at a time and the engine explores the splits exponentially.
+Measured on `docs/findings.md` alone, the same pattern costs 0.01 s over the
+first 1.2 MB and 10.5 s over the first 1.6 MB: the blow-up is real and is a
+property of the text, not of the size.
+
+**Bounding the repetition fixes it and changes nothing else.** With
+`{0,10}?` in place of `*?` -- ten list elements, where the longest real
+citation in the tree uses three -- the three renumbers took **0.57 s** in
+total, touched the same files, and left no stale citation:
+
+```sh
+grep -rnE "[Ff]indings? 150[0-2]\b" --include=*.c --include=*.h --include=*.md .
+```
+
+returns nothing. The bound is applied in `tools/refcheck.py`, and the
+residual risk is stated rather than hidden: a citation listing more than ten
+findings before the one being moved would not be rewritten. Nothing in the
+tree is close, and the grep above is the check that catches it.
+
+**Why this is worth a finding rather than a commit message.** The tool exists
+because renumbering by hand missed six references once (its own docstring
+says so), and a tool that cannot be run is a tool that will be worked around
+by hand the next time a merge collides -- which is the ninth collision this
+tree has had, and they are not getting rarer.

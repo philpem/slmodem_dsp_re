@@ -80,7 +80,7 @@ CID_FSD_demodulate(const short *samples, short *bits, short count,
 
 	/*
 	 * `count` is a short and the test is against the value BEFORE the
-	 * decrement, so a negative count runs it 65535 times over.  D300.
+	 * decrement, so a negative count runs it 65535 times over.  D304.
 	 */
 	while (count-- != 0) {
 		const short *coef;
@@ -145,7 +145,7 @@ CID_FSD_demodulate(const short *samples, short *bits, short count,
 		 * The high end: the mean of the first 128 samples above the
 		 * threshold, computed once.  `high_count` keeps counting
 		 * afterwards and is a short, so it eventually wraps negative
-		 * and this arms itself again -- D301.
+		 * and this arms itself again -- D305.
 		 */
 		if (thresh < y) {
 			if (cid->high_count++ <= 127) {

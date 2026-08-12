@@ -9,7 +9,7 @@
  * The first two are not in `dtmf_modem`'s closure -- `cid_reset` and
  * `cid_create` reach them, nothing here does -- and they are what pins the
  * object's size at 0x38c and what include/dsplib/dtmf_rx.h's field comments
- * are checked against.  Findings 1500, 1501 and 1502.
+ * are checked against.  Findings 1700, 1701 and 1702.
  *
  * See finding 1410 for why these are Dtmf_Rx.c and not, as
  * docs/attribution.md guessed, `Data.c` or `Dtmf.c`.
@@ -50,7 +50,7 @@ typedef char dtmf_rx_size_check[sizeof(struct dtmf_rx) == 0x38c ? 1 : -1];
  * Four things it leaves alone are worth naming, because each is a fact about
  * the original rather than an omission here:
  *
- *   digits[16..19]  the clearing loop stops at 15 and the array is 20 (D298)
+ *   digits[16..19]  the clearing loop stops at 15 and the array is 20 (D302)
  *   pre_low         the low group's pre-notch, where pre_high is cleared
  *                   (D251)
  *   aligned         harmless: `state` comes out as 1, and state 1 writes
@@ -94,7 +94,7 @@ reset_dtmf(struct dtmf_rx *rx)
 		rx->tone_state[i][1] = 0;
 	}
 
-	/* Sixteen, not twenty.  D298. */
+	/* Sixteen, not twenty.  D302. */
 	for (i = 0; i <= 15; i++)
 		rx->digits[i] = 0;
 
@@ -106,7 +106,7 @@ reset_dtmf(struct dtmf_rx *rx)
  * storage and is used in place.  The object is returned either way, so
  * `cid_create` can write the result back over the pointer it passed.
  *
- * `sysdep_malloc`'s result is used without being checked -- D299, and the
+ * `sysdep_malloc`'s result is used without being checked -- D303, and the
  * house style of this object: LowPassFIR and GenericToneDetector do the same.
  *
  * The two configuration fields are set BEFORE the reset, which is visible

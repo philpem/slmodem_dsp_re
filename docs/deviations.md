@@ -5451,7 +5451,9 @@ Written as the object has it. A bound here would be a behavioural difference on 
 
 ======================================================================
 
-## D298 🐛 `reset_dtmf` clears sixteen of the twenty bytes of the digit string
+## D302 🐛 `reset_dtmf` clears sixteen of the twenty bytes of the digit string
+
+*Renumbered: this was numbered **298** in this register until 2026-08-12. V.22 and V.32 had each independently allocated 298 and 299, and master took 300 and 301, so this session's five entries moved up to 302-306. Nothing else about the entry changed.*
 
 *Batch of 2026-08-12, from `reset_dtmf` (blob 0x90a90) +0xdc-+0xef and the
 same loop inlined into `create_cid_dtmf` (0x90bb0) +0xfc-+0x10f -- `mov
@@ -5464,7 +5466,7 @@ terminating zero when the string ends with 'C', so `digits[16..19]` is stale
 until a seventeenth digit overwrites it. Status: `unmeasured`. Fix class:
 none proposed.*
 
-**Finding 1501.** The array is twenty bytes and the object knows it: the next
+**Finding 1701.** The array is twenty bytes and the object knows it: the next
 field starts at +0x354, `dtmf_modem` stores at `digits[ndigits]` without a
 bound and gives up when `ndigits` reaches 20, so all twenty are writable and
 the last four are reachable. Only the clearing loop stops at sixteen.
@@ -5483,7 +5485,9 @@ bytes non-zero.
 
 ======================================================================
 
-## D299 🐛 `create_cid_dtmf` writes through `sysdep_malloc`'s result without testing it
+## D303 🐛 `create_cid_dtmf` writes through `sysdep_malloc`'s result without testing it
+
+*Renumbered: this was numbered **299** in this register until 2026-08-12. V.22 and V.32 had each independently allocated 298 and 299, and master took 300 and 301, so this session's five entries moved up to 302-306. Nothing else about the entry changed.*
 
 *Batch of 2026-08-12, from `create_cid_dtmf` (blob 0x90bb0) +0x15f -- `movl
 $0x38c,(%esp) ; call sysdep_malloc ; mov %eax,%ebx ; jmp +0x10`, and +0x10 is
@@ -5494,7 +5498,7 @@ immediate -- a write to offset 0x33c of a null pointer.** Status:
 `unmeasured`; the harness has no allocation-failure injection, so the path
 cannot be driven differentially at all. Fix class: none proposed.*
 
-**Finding 1502.** The same shape as D5's family, D171, D175, D180 and D220,
+**Finding 1702.** The same shape as D5's family, D171, D175, D180 and D220,
 and the same reasoning: there is nothing to reproduce, because the original's
 behaviour on a failed allocation is a fault and a differential test cannot
 compare against one. Unlike the three constructors in D62, ours does not add
@@ -5504,7 +5508,9 @@ a fourth.
 
 ======================================================================
 
-## D300 🐛 `CID_FSD_demodulate` tests its sample count *before* decrementing it, so a negative count runs 65535 times
+## D304 🐛 `CID_FSD_demodulate` tests its sample count *before* decrementing it, so a negative count runs 65535 times
+
+*Renumbered: this was numbered **300** in this register until 2026-08-12. V.22 and V.32 had each independently allocated 298 and 299, and master took 300 and 301, so this session's five entries moved up to 302-306. Nothing else about the entry changed.*
 
 *Batch of 2026-08-12, from `CID_FSD_demodulate` (blob 0x92280) +0x9..+0x1b and
 the loop bottom at +0x25f..+0x26b:*
@@ -5533,7 +5539,9 @@ does not drive it: both sides would agree while scribbling over the harness.
 
 ======================================================================
 
-## D301 🐛 `CID_FSD_demodulate`'s "first 128 samples" counter is a short that keeps counting, and re-arms when it wraps
+## D305 🐛 `CID_FSD_demodulate`'s "first 128 samples" counter is a short that keeps counting, and re-arms when it wraps
+
+*Renumbered: this was numbered **301** in this register until 2026-08-12. V.22 and V.32 had each independently allocated 298 and 299, and master took 300 and 301, so this session's five entries moved up to 302-306. Nothing else about the entry changed.*
 
 *Batch of 2026-08-12, from `CID_FSD_demodulate` (blob 0x92280) +0x18c..+0x1ad:*
 
@@ -5568,7 +5576,9 @@ would silently stop happening if the counter were widened.
 
 ======================================================================
 
-## D302 🐛 `CID_MTD_detect`'s energy accumulators wrap after 257 full-scale samples
+## D306 🐛 `CID_MTD_detect`'s energy accumulators wrap after 257 full-scale samples
+
+*Renumbered: this was numbered **302** in this register until 2026-08-12. V.22 and V.32 had each independently allocated 298 and 299, and master took 300 and 301, so this session's five entries moved up to 302-306. Nothing else about the entry changed.*
 
 *Batch of 2026-08-12, from `CID_MTD_detect` (blob 0x926a0) +0x8f..+0xd0 --
 `imul` then `add $0x20` then `sar $0x6` into a 32-bit accumulator, twice, with

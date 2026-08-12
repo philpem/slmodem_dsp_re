@@ -219,7 +219,7 @@ run_rate(short rate, double fs)
 
 	/*
 	 * 257 full-scale samples wrap the 32-bit energy accumulator, which is
-	 * D302.  Driven at 256 and at 300 so both sides are compared either
+	 * D306.  Driven at 256 and at 300 so both sides are compared either
 	 * side of the wrap rather than only inside it.
 	 */
 	fresh(&a, &b, rate);

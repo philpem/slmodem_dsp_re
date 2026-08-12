@@ -114,7 +114,7 @@ CID_MTD_detect(const short *samples, short count, struct cid *cid)
 		 * Both energies are accumulated with the same rounding shift,
 		 * so the comparison at the bottom is scale-free.  x*x cannot
 		 * overflow -- 0x8000 squared is 2^30 -- but the SUM can, and
-		 * 257 full-scale samples are enough to do it; see D302.
+		 * 257 full-scale samples are enough to do it; see D306.
 		 */
 		wide += (unsigned int)(((int)x * x + 32) >> 6);
 

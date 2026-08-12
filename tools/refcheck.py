@@ -419,7 +419,18 @@ def renumber(old, new, nth=None):
         rrep = "D" + n
     else:
         hpat = re.compile(r"(?m)^(#{2,4} )%s\." % re.escape(o))
-        rpat = re.compile(r"([Ff]indings?\s+(?:\d+[a-z]?(?:\s*(?:,|and)\s*)?)*?)"
+        #
+        # {0,10}? AND NOT *?, WHICH IS EXPONENTIAL HERE.  SCAN_EXT includes
+        # `.c`, so this runs over `src/**/*_tables.c` -- thousands of
+        # comma-separated numbers.  Unbounded, the group consumes such a
+        # table one element at a time and the engine explores the splits:
+        # `--renumber 1500 1700` burned 11 minutes of CPU without writing a
+        # byte.  Bounded, the same three renumbers took 0.57 s in total.
+        # Ten is more than three times the longest real citation list in the
+        # tree; a longer one would not be rewritten, and the grep in finding
+        # 1703 is what catches that.
+        #
+        rpat = re.compile(r"([Ff]indings?\s+(?:\d+[a-z]?(?:\s*(?:,|and)\s*)?){0,10}?)"
                           r"\b%s\b" % re.escape(o))
         rrep = None
 

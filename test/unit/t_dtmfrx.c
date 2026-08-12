@@ -367,7 +367,7 @@ tables(void)
  * comparison already fails if our clearing loop runs one iteration too far --
  * but only while the seeded tail happens to be non-zero, so the loop bound is
  * pinned here rather than incidentally observed.  `digits` is 20 bytes and
- * the object clears 16 of them (D298); `pre_low` is D251.
+ * the object clears 16 of them (D302); `pre_low` is D251.
  */
 #define KEEP_DIGIT(k)	((char)(0x41 + (k)))
 #define KEEP_PRE_LOW_0	0x1234

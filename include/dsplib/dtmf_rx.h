@@ -84,7 +84,7 @@ struct dtmf_rx {
  *
  * It does NOT touch `rate`, `sens`, `aligned`, `pre_low`, the two buffers, or
  * `digits[16..19]` -- the digit-clearing loop stops at 15 where the array is
- * 20 (D298), and `pre_low` is D251.  So it is a reset of the RECEIVER, not of
+ * 20 (D302), and `pre_low` is D251.  So it is a reset of the RECEIVER, not of
  * the object: the configuration a caller put in survives it, which is what
  * `cid_reset` relies on.
  */
