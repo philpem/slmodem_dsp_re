@@ -49674,3 +49674,74 @@ lever on the rate deficit.
 **WHY THIS MATTERS BEYOND THIS BENCH.** Any modern deployment of this modem is
 over VoIP, a codec, or a short line — never a long loop. The one regime in
 which the defect is harmless is the one that no longer exists.
+
+======================================================================
+
+### 1476. THE PRE-EMPHASIS A/B: THE RATE MOVED, THE PRIMARY STATISTIC DID NOT, AND THE CONFIRMATORY PANEL WAS CRIPPLED BY MY OWN EXCLUSION RULE
+
+*Tasks #89 and #134. Sixteen calls, eight per arm, interleaved, each gated on
+a quiet machine. Analysed by `testbench/abcompare.py` against the plan in
+`testbench/captures/preemph-ab-ANALYSIS-PLAN.md`, which was committed before
+the run finished.*
+
+**THE ARMS.** Identical source, identical flags, differing only in
+`DSPLIB_REPRODUCE_BUGS` — one branch, the counter advanced before or after the
+comparison in `probe_preemph` (D53). The fix arm can request pre-emphasis
+index 0; the bug arm cannot.
+
+    bug   9600, 19200, 12000, 12000, 12000, 12000, 9600      7 of 8 connected
+    fix   12000, 12000, 26400, 21600, 21600, 12000, 21600    7 of 8 connected
+
+| | bug | fix | p | |
+|---|--:|--:|--:|---|
+| **`equerr` at the decision** (PRIMARY) | 3201 | **327** | 0.2549 | not significant |
+| **receive rate** (secondary) | 12000 | **21600** | **0.0148** | significant |
+| connect rate (tertiary) | 88% | 88% | 0.77 | no difference |
+
+**READ IT HONESTLY, WHICH MEANS NOT CLAIMING IT.** The pre-registered PRIMARY
+statistic did not fire. The secondary did, at p = 0.0148, with a median rate
+of 21600 against 12000 — a large effect in the predicted direction. Those two
+facts together are *suggestive and not established*, and the plan's own
+wording applies: a run whose answer depends on which statistic you privilege
+has not answered the question.
+
+**AND THE CONFIRMATORY PANEL COULD NOT ARBITRATE**, for a reason that is my
+fault and was recorded mid-run before the result was known. The load-clean
+subset excludes any call whose load reading exceeded half the cores — but the
+`load_after` reading includes **the call's own cost**, so a call starting at a
+quiet 4.8 finishes at 6.7 and fails a test the machine never failed. It threw
+out 8 of 16 calls and left 3 and 4, below the plan's own floor of six.
+
+    load-clean:  rate p = 0.1702, equerr p = 0.6283, UNDERPOWERED
+
+That panel neither confirms nor refutes. It is uninformative by construction,
+and the construction was mine.
+
+**MY STATED PRIOR WAS A NULL AND THE DATA LEANS THE OTHER WAY.** Recorded in
+1471 and 1475: 1.5 dB of measured tilt against a gap from `equerr` ~2800 to a
+threshold of 205 did not look like enough. It may yet not be — but the rate
+result is not what I expected and saying so is the point of having written the
+prediction down.
+
+**WHAT WOULD SETTLE IT**, and none of it is expensive:
+
+1. **Replicate at 12 per arm with the corrected exclusion rule** — exclude on
+   the RISE (`load_after − load_before`) against a threshold calibrated from
+   idle calls, not on the absolute after-value. That was written into the plan
+   as the fix for next time, before this result existed.
+2. **Check the far end's view.** `ATI11` on the Courier reports the applied
+   pre-emphasis per direction. If the fix arm's calls show the Courier
+   applying filter 0 where the bug arm's show 4, the mechanism is visible from
+   both sides rather than inferred from our own log.
+3. **Look at where the decision lands.** 1474 showed the rate is sampled while
+   the Phase 4 equaliser is still descending. If the fix arm's `equerr` at the
+   decision is genuinely an order of magnitude lower (3201 → 327 in the
+   medians), the mechanism may be that a correctly-shaped signal lets Phase 4
+   converge faster, not that the equaliser ends up better — a distinction the
+   trajectories on disk can already answer.
+
+**DO NOT PROMOTE THE FIX OUT OF `DSPLIB_REPRODUCE_BUGS` ON THIS EVIDENCE.**
+The reconstruction's contract is bug-compatibility by default, the primary
+statistic did not fire, and one significant secondary on seven calls per arm
+is exactly the shape of result this bench has already refuted four times
+(findings 1206, 1207).
