@@ -5450,3 +5450,10 @@ The reconstruction writes them, because the object does and because a differenti
 Written as the object has it. A bound here would be a behavioural difference on an input the differential tier cannot produce, and the arms are the V.90 and K56flex ones, which no test in this tree drives at all.
 
 ======================================================================
+
+## D298 🐛 `FPM_atan` reflects the fourth quadrant through 0x7fff, where the other three are exact
+
+*V.22 SRE batch, from `FPM_atan` (blob 0x0a6a50) +0x0fa. **Reachability: FIRES**, on any vector with `y < 0`, `x > 0` and `|x| > |y|` -- a full 45-degree wedge, and `t_fpm_atan` visits it hundreds of thousands of times. Status: CONFIRMED. Fix class: none proposed; reproduced as measured.*
+
+**Finding 1586.** A full turn is 0x8000, so the reflection of an angle `t` about the positive x axis is `0x8000 - t`. The object computes `mov $0x7fff,%ebx; sub %ecx,%ebx` and uses that. The other three reflections in the same function -- `0x4000 - t`, `0x2000 - t` and `0x6000 - t` -- are all exact, which is what makes this one an error rather than a convention: a vector just below the positive x axis reports 0x7fff where the correct answer is 0 (or 0x8000, the same angle). The size of the error is one count everywhere in the wedge, so it is a constant bias of about 0.011 degrees and not a discontinuity. `V22_SRE_recover`, the only caller in the object, folds the result at 0x4000 immediately afterwards, so the bias reaches its timing loop as a one-count offset in `err_avg` and is swamped by the smoother's own truncation.
+

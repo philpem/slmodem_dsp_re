@@ -40,6 +40,23 @@ int FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift);
 unsigned short FPM_div_table_entry(int i);
 unsigned short FPM_div_table_generate(int i);
 
+/*
+ * Four-quadrant arctangent.  Arguments are (y, x) like atan2, and the result
+ * is written to *angle in units of 0x8000 per turn -- 0x2000 is 90 degrees.
+ *
+ * Bit-exact with the original, including its off-by-one in the fourth
+ * quadrant: y < 0 with x > 0 reflects through 0x7fff, not 0x8000.  See
+ * src/dsp/fpm_atan.c.
+ */
+void FPM_atan(short y, short x, short *angle);
+
+/*
+ * atan(i / 256) in radians at Q15, 257 entries.  Global in the original, so
+ * global here.
+ */
+#define FPM_ATAN_TABLE_LEN 257
+extern const short FPM_atan_table[FPM_ATAN_TABLE_LEN];
+
 /* Table introspection, for the generator self-check in the unit tests. */
 unsigned short FPM_sqrt_table_generate(int index);
 unsigned short FPM_sqrt_table_entry(int index);
