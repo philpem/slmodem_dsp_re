@@ -439,7 +439,515 @@
 
  {"label": "the +0x9c store is 32 bits wide",
   "equivalent": true,
-  "why": "0x3e40e is `66 89 8b 9c 00 00 00` -- `mov %cx,0x9c(%ebx)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x9e, which `curDmin = 0;` seventeen statements later sets to 0 anyway and which nothing between the two reads. EQUIVALENT ONLY BECAUSE OF THAT ORDER: move the +0x9e store above the +0x9c one, or make anything between them read +0x9e, and this mutation becomes a real defect. It will then be CAUGHT and reported MIScounted, which is the point of registering it.",
-  "find": "\tshort_9c = -1;",
-  "replace": "\t*(int *)&short_9c = -1;"}
+  "why": "0x3e40e is `66 89 8b 9c 00 00 00` -- `mov %cx,0x9c(%ebx)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x9e, which `curDmin = 0;` seventeen statements later sets to 0 anyway and which nothing between the two reads. EQUIVALENT ONLY BECAUSE OF THAT ORDER: move the +0x9e store above the +0x9c one, or make anything between them read +0x9e, and this mutation becomes a real defect. It will then be CAUGHT and reported MIScounted, which is the point of registering it. THE ANCHOR CARRIES `word_84 = 0;` ONLY TO STAY UNIQUE: `evaluateConnection` re-latches +0x9c on three of its paths and writes the same statement at three deeper indentations, and `find` is a plain substring search, so the bare statement matched four times once that function was added. The claim, the site and the replacement are unchanged.",
+  "find": "\tword_84 = 0;\n\tshort_9c = -1;",
+  "replace": "\tword_84 = 0;\n\t*(int *)&short_9c = -1;"},
+
+ {"note": "evaluateConnection, 3,857 bytes.  Five stages, six verdicts and two epilogues; the entries below follow the object in that order.  Eight comparisons are unsigned against a slot the map calls `int` and one is signed against a slot that is not, and each of the nine has its own trial at a negative value because that is the only place the two readings part."},
+
+ {"label": "the initDmin latch is unconditional",
+  "why": "0x3e6dd is `cmpw $0xffff,0x9c(%edi); je`, so the copy from +0x9e happens only when +0x9c is -1.  Caught by the trial that plants 12 in +0x9c and 77 in +0x9e and asserts 12 survives.",
+  "find": "\tif (short_9c == -1)\n\t\tshort_9c = curDmin;",
+  "replace": "\tshort_9c = curDmin;"},
+
+ {"label": "the latch copies zero rather than curDmin",
+  "find": "\t\tshort_9c = curDmin;\n\n\tnofSymbols = word_74;",
+  "replace": "\t\tshort_9c = 0;\n\n\tnofSymbols = word_74;"},
+
+ {"label": "the empty test is inverted",
+  "find": "\tnofSymbols = word_74;\n\tif (nofSymbols == 0)",
+  "replace": "\tnofSymbols = word_74;\n\tif (nofSymbols != 0)"},
+
+ {"label": "+0x1c is assigned rather than accumulated",
+  "why": "`add %ebx,0x1c(%edi)` at 0x3e6f8.  Caught only by a run: one call cannot tell an assignment from an accumulation that starts at zero.",
+  "find": "\tword_1c += nofSymbols;",
+  "replace": "\tword_1c = nofSymbols;"},
+
+ {"label": "the fade clock is read after it advances",
+  "why": "0x3e706 loads +0x20 ONCE into %ecx and all three fade tests use that value; the store of `%ecx + %ebx` is at 0x3e75d, after them.",
+  "find": "\tfadeClock = word_20;",
+  "replace": "\tfadeClock = word_20 + nofSymbols;"},
+
+ {"label": "the fade clock does not advance",
+  "find": "\tword_20 = fadeClock + nofSymbols;",
+  "replace": "\tword_20 = fadeClock;"},
+
+ {"label": "the fade divisions are signed",
+  "why": "0x3e715 and 0x3e720 are `divl 0x48(%edi)`, unsigned.  `idivl` and `divl` agree on every ordinary value, so this is caught only by the trial that puts the clock at 2^31 and the fade count at 2^30, where the unsigned quotients are 2 and 2 and the signed ones are -2 and -1.",
+  "find": "\tif (nofV90Retrains != 0) {\n\t\tint now = (fadeClock + nofSymbols) / retrainCounterFadeCount;\n\t\tint was = fadeClock / retrainCounterFadeCount;",
+  "replace": "\tif (nofV90Retrains != 0) {\n\t\tint now = (int)(fadeClock + nofSymbols) / retrainCounterFadeCount;\n\t\tint was = (int)fadeClock / retrainCounterFadeCount;"},
+
+ {"label": "the fade quotients are compared unsigned",
+  "why": "0x3e727 is `jg`, SIGNED, on the result of two UNSIGNED divisions -- which is what an unsigned quotient stored into an `int` compiles to.  Caught by the trial with a fade count of 1 and the clock at 0x7fffffff, where the new quotient crosses 2^31 and `jg` says it did not advance.",
+  "find": "\t\tif (now > was)\n\t\t\tnofV90Retrains--;",
+  "replace": "\t\tif ((unsigned int)now > (unsigned int)was)\n\t\t\tnofV90Retrains--;"},
+
+ {"label": "+0x0c fades on the remote-rrn count",
+  "why": "0x3e73c is `divl 0x4c(%edi)` and 0x3e71c is `divl 0x48(%edi)`: the remote RETRAIN counter fades on the retrain count and only the RENEGOTIATION counter fades on the other one.  The fade run gives the two counts 100 and 250 so the answers differ.",
+  "find": "\t\tint now = (fadeClock + nofSymbols) / retrainCounterFadeCount;\n\t\tint was = fadeClock / retrainCounterFadeCount;\n\n\t\tif (now > was)\n\t\t\tnofRemoteRetrains--;",
+  "replace": "\t\tint now = (fadeClock + nofSymbols) / remoteRrnCounterFadeCount;\n\t\tint was = fadeClock / remoteRrnCounterFadeCount;\n\n\t\tif (now > was)\n\t\t\tnofRemoteRetrains--;"},
+
+ {"label": "+0x08 fades on the retrain count",
+  "find": "\t\tint now = (fadeClock + nofSymbols) / remoteRrnCounterFadeCount;",
+  "replace": "\t\tint now = (fadeClock + nofSymbols) / retrainCounterFadeCount;"},
+
+ {"label": "the renegotiation fade runs when the counter is zero",
+  "find": "\tif (nofRemoteRateReneg != 0) {\n\t\tint now",
+  "replace": "\tif (nofRemoteRateReneg == 0) {\n\t\tint now"},
+
+ {"label": "the external-demand stage is skipped only at -1",
+  "why": "0x3e760 is `cmp $0xffffffff,%ecx; jle`, so every value below zero skips the stage and not just -1.  Caught by the trial that plants -2 and asserts +0x8c is still -2 afterwards.",
+  "find": "\tif (word_8c > -1) {",
+  "replace": "\tif (word_8c != -1) {"},
+
+ {"label": "codes 1 and 2 are the no-restriction pair",
+  "why": "0x3ee0e is `cmp $0x1,%ecx; sete %bl; cmp $0x4,%ecx; sete %cl; or %cl,%bl`.  Caught by the sweep over every code from -2 to 7.",
+  "find": "\t\t\tif (word_8c == 1 || word_8c == 4) {",
+  "replace": "\t\t\tif (word_8c == 1 || word_8c == 2) {"},
+
+ {"label": "+0x90 is (word_8c > 4)",
+  "why": "0x3ee3b is `cmp $0x3,%edx; setg %cl`.  Caught by the code 4 trial, where the two readings give 1 and 0.",
+  "find": "\t\t\tword_90 = (word_8c > 3);",
+  "replace": "\t\t\tword_90 = (word_8c > 4);"},
+
+ {"label": "+0x98 is (word_8c == 4)",
+  "why": "0x3ee43 is `cmp $0x5,%edx; sete %al`.  Caught by the code 4 and code 5 trials together.",
+  "find": "\t\t\tword_98 = (word_8c == 5);",
+  "replace": "\t\t\tword_98 = (word_8c == 4);"},
+
+ {"label": "code 3 is a rate down",
+  "find": "\t\tcase 3:\n\t\t\tverdict = V90CE_VERDICT_RRN_UP;",
+  "replace": "\t\tcase 3:\n\t\t\tverdict = V90CE_VERDICT_RRN_DOWN;"},
+
+ {"label": "code 3 does not clear +0x90",
+  "find": "\t\t\t\t \"(external demand)\\r\\n\");\n\t\t\tword_90 = 0;",
+  "replace": "\t\t\t\t \"(external demand)\\r\\n\");\n\t\t\tword_90 = 1;"},
+
+ {"label": "code 6 decides something",
+  "why": "0x3eff1 loads the string and jumps straight to the acknowledgement; %ebp is never touched, so the answer is whatever it already was.",
+  "find": "\t\tcase 6:\n\t\t\tedprintf(",
+  "replace": "\t\tcase 6:\n\t\t\tverdict = V90CE_VERDICT_RETRAIN;\n\t\t\tedprintf("},
+
+ {"label": "the V42 rate down runs when it is disabled",
+  "find": "\t\t\tif (enableRrnDown == 0) {",
+  "replace": "\t\t\tif (enableRrnDown != 0) {"},
+
+ {"label": "the V42 arm compares against initDmin, not twice it",
+  "why": "0x3e7cb is `add %ebp,%ebp` before the compare.  Caught by the trial with curDmin 5 and initDmin 10, where 5 >= 10 is false and 5 >= 20 is false, and its sibling with curDmin 25.",
+  "find": "\t\t\tif (curDmin >= 2 * short_9c) {",
+  "replace": "\t\t\tif (curDmin >= short_9c) {"},
+
+ {"label": "the V42 retrain prints the renegotiation counter",
+  "why": "0x3e7e7 loads `0x47c(%edx)` from the PARAMETER BLOCK, not +0x08 from the object.",
+  "find": "\t\t\t\t\t nofV90Retrains,\n\t\t\t\t\t params->\n\t\t\t\t\t MAX_NOF_RATES_DIFF_BEFORE_RETRAIN);",
+  "replace": "\t\t\t\t\t nofV90Retrains,\n\t\t\t\t\t nofRemoteRateReneg);"},
+
+ {"label": "the V42 retrain does not re-arm initDmin",
+  "find": "\t\t\t\tword_1c = 0;\n\t\t\t\tshort_9c = -1;",
+  "replace": "\t\t\t\tword_1c = 0;"},
+
+ {"label": "the V42 retrain limit is compared SIGNED",
+  "why": "0x3e829 is `ja`.  Caught by the trial that makes MAX_NOF_V90_RETRAINS -1, where the unsigned reading is never exceeded and the signed one always is.",
+  "find": "\t\t\t\tif (nofV90Retrains\n\t\t\t\t    > (unsigned int)\n\t\t\t\t      params->MAX_NOF_V90_RETRAINS) {",
+  "replace": "\t\t\t\tif ((int)nofV90Retrains\n\t\t\t\t    > params->MAX_NOF_V90_RETRAINS) {"},
+
+ {"label": "the V42 one rate down does not take the parameter",
+  "why": "0x3e863 is `mov 0x3f0(%eax),%ebp` -- `RRN_SILENCE_REQUESTED` out of the parameter block, planted at 0xabcdef by the fixture so a zero is visible.",
+  "find": "\t\t\t\tword_1c = 0;\n\t\t\t\tword_98 = 0;\n\t\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;",
+  "replace": "\t\t\t\tword_1c = 0;\n\t\t\t\tword_98 = 0;\n\t\t\t\tword_90 = 0;"},
+
+ {"label": "the external-demand override does not need +0x94",
+  "why": "0x3e875 is `mov 0x94(%edi),%esi; test %esi,%esi; setne %dl` ANDed with `cmp $0x2,%ecx; sete %bl`.",
+  "find": "\t\t\tif (word_94 != 0\n\t\t\t    && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "replace": "\t\t\tif (verdict == V90CE_VERDICT_RRN_DOWN) {"},
+
+ {"label": "the external-demand override does not need verdict 2",
+  "find": "\t\t\tif (word_94 != 0\n\t\t\t    && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "replace": "\t\t\tif (word_94 != 0) {"},
+
+ {"label": "the external-demand arm falls through instead of returning",
+  "why": "0x3e8b7 is a second `ret` and the only paths to it are the empty call and this arm.  Caught by the trial that arms `debugFallBack` with a period of one before entering the arm: falling through would answer 5.",
+  "find": "\t\t\tword_74 = 0;\n\t\t\tword_70 = 0;\n\t\t\tword_8c = -1;\n\t\t\treturn verdict;",
+  "replace": "\t\t\tword_8c = -1;\n\t\t\tbreak;"},
+
+ {"label": "+0x8c is not acknowledged",
+  "find": "\t\tword_8c = -1;\n\t}",
+  "replace": "\t}"},
+
+ {"label": "the rate up ignores its enable",
+  "find": "\tif (enableRrnUp != 0 && word_70 < threshUp) {",
+  "replace": "\tif (word_70 < threshUp) {"},
+
+ {"label": "the rate up wants an average OVER threshUp",
+  "find": "\tif (enableRrnUp != 0 && word_70 < threshUp) {",
+  "replace": "\tif (enableRrnUp != 0 && word_70 > threshUp) {"},
+
+ {"label": "the rate-up duration is >, not >=",
+  "why": "0x3e940 is `jb`, so the arm fires when the two are equal; the run reaches exactly 300 against a limit of 300.",
+  "find": "\t\tif (word_10 >= (unsigned int)rateUpDetectDuration",
+  "replace": "\t\tif (word_10 > (unsigned int)rateUpDetectDuration"},
+
+ {"label": "the rate-up duration is compared SIGNED",
+  "find": "\t\tif (word_10 >= (unsigned int)rateUpDetectDuration",
+  "replace": "\t\tif ((int)word_10 >= rateUpDetectDuration"},
+
+ {"label": "the rate-up dwell reads +0x10 rather than +0x1c",
+  "find": "\t\t    && word_1c >= (unsigned int)minDurationInDataBeforeRrnUp) {",
+  "replace": "\t\t    && word_10 >= (unsigned int)minDurationInDataBeforeRrnUp) {"},
+
+ {"label": "the rate-up dwell is compared SIGNED",
+  "find": "\t\t    && word_1c >= (unsigned int)minDurationInDataBeforeRrnUp) {",
+  "replace": "\t\t    && (int)word_1c >= minDurationInDataBeforeRrnUp) {"},
+
+ {"label": "the rate up does not restart +0x10",
+  "find": "\t\t\tword_10 = 0;\n\t\t\tverdict = V90CE_VERDICT_RRN_UP;\n\t\t\tword_1c = 0;",
+  "replace": "\t\t\tverdict = V90CE_VERDICT_RRN_UP;\n\t\t\tword_1c = 0;"},
+
+ {"label": "+0x10 is not cleared when the rate up is not armed",
+  "find": "\t} else {\n\t\tword_10 = 0;\n\t}",
+  "replace": "\t} else {\n\t}"},
+
+ {"label": "the echo variant is selected the other way round",
+  "why": "0x3e97b is `mov 0x4f4(%esi),%ebx; test %ebx,%ebx; je` -- `HIGH_LEVEL_TX_ACTIVE` non-zero picks the scaled reading.",
+  "find": "\tif (params->HIGH_LEVEL_TX_ACTIVE != 0) {",
+  "replace": "\tif (params->HIGH_LEVEL_TX_ACTIVE == 0) {"},
+
+ {"label": "the first echo guard multiplies by 2.0",
+  "why": "`fmuls .rodata.cst4+0x2e0` at 0x3e9a5 and the four bytes there are 0x40133333.  Caught by the trial with +0x1c at 900, which is under 400 * 2.3f (919 truncated) and over 400 * 2.0f.",
+  "find": "\t\tif (word_1c < (unsigned int)(minDur * 2.3f) && short_b4 == 0)",
+  "replace": "\t\tif (word_1c < (unsigned int)(minDur * 2.0f) && short_b4 == 0)"},
+
+ {"label": "the first echo guard wants state 1",
+  "find": "\t\tif (word_1c < (unsigned int)(minDur * 2.3f) && short_b4 == 0)",
+  "replace": "\t\tif (word_1c < (unsigned int)(minDur * 2.3f) && short_b4 == 1)"},
+
+ {"label": "state 0 scales by 1.39",
+  "find": "\t\t\tscale = 1.52f;",
+  "replace": "\t\t\tscale = 1.39f;"},
+
+ {"note": "THE ENTRY THAT USED TO BE HERE CLAIMED `(unsigned)(float)minDur` WOULD ROUND AT 2^24 AND BE CAUGHT.  It was not caught, and the record was what was wrong: driven at 16777217, the first integer a `float` cannot hold, the two spellings agree, because FLT_EVAL_METHOD is 2 on an x87 target and the cast is evaluated at 80 bits.  The mutant emits a different instruction sequence -- `fildll` and `fistpll` where the source has an integer compare -- and computes the same number, so it is neither a defect nor an equivalence the object settles.  The comment in the source was corrected rather than the test widened.  Finding 1389."},
+
+ {"label": "the second echo guard wants state 2",
+  "find": "\t\telse if (word_1c < minDur && short_b4 == 1)",
+  "replace": "\t\telse if (word_1c < minDur && short_b4 == 2)"},
+
+ {"label": "state 1 scales by 1.52",
+  "find": "\t\t\tscale = 1.39f;",
+  "replace": "\t\t\tscale = 1.52f;"},
+
+ {"label": "the terminal transition is state < 2",
+  "why": "0x3ee9b is `cmp $0x2,%bx; jg`.  Caught by the trial that enters at state 2.",
+  "find": "\t\t\tif (short_b4 <= 2) {",
+  "replace": "\t\t\tif (short_b4 < 2) {"},
+
+ {"label": "the terminal state is 2",
+  "find": "\t\t\t\tshort_b4 = 3;",
+  "replace": "\t\t\t\tshort_b4 = 2;"},
+
+ {"label": "the terminal transition does not clear +0x14",
+  "find": "\t\t\t\tword_14 = 0;\n\t\t\t\tshort_b4 = 3;",
+  "replace": "\t\t\t\tshort_b4 = 3;"},
+
+ {"label": "the terminal keep-rate energy is 1.0",
+  "why": "0x3eec7 is `mov $0x40000000,%edx` into `0x404(%esi)`, which is how GCC stores a float constant.",
+  "find": "\t\t\t\t    = 2.0f;",
+  "replace": "\t\t\t\t    = 1.0f;"},
+
+ {"label": "the Echo_Rrn_State diagnostic is not gated",
+  "why": "0x3eea5 is `cmpl $0x1,dsplibs_debug_level; ja` and the call at 0x3f02c is `dsplibs_debug_printf`, not `edprintf`.  Caught at levels 0 and 1.",
+  "find": "\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V90-mod3  Echo_Rrn_State = %d \",",
+  "replace": "\t\t\t\tif (1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V90-mod3  Echo_Rrn_State = %d \","},
+
+ {"label": "the terminal state skips the rate-down test",
+  "why": "0x3ee9f and 0x3eed2 both jump to 0x3ebc7, which is the unscaled test, so a state-3 machine still evaluates a rate down.",
+  "find": "\t\t} else if (ce_plain_rate_down(this, nofSymbols)) {\n\t\t\tverdict = V90CE_VERDICT_RRN_DOWN;\n\t\t}",
+  "replace": "\t\t}"},
+
+ {"label": "the unscaled arm ignores enableRrnDown",
+  "find": "\t} else if (enableRrnDown != 0) {\n\t\tif (ce_plain_rate_down(this, nofSymbols))",
+  "replace": "\t} else if (enableRrnDown == 0) {\n\t\tif (ce_plain_rate_down(this, nofSymbols))"},
+
+ {"label": "+0x14 is not cleared when no rate down is armed",
+  "find": "\t} else {\n\t\tword_14 = 0;\n\t}",
+  "replace": "\t} else {\n\t}"},
+
+ {"label": "the unscaled rate down wants an average UNDER threshDown",
+  "find": "\tif (ce->word_70 > ce->threshDown) {",
+  "replace": "\tif (ce->word_70 < ce->threshDown) {"},
+
+ {"label": "the unscaled rate down assigns +0x14",
+  "find": "\t\tce->word_14 += nofSymbols;\n\t\tif (ce->word_14 >= (unsigned int)ce->rateDownDetectDuration",
+  "replace": "\t\tce->word_14 = nofSymbols;\n\t\tif (ce->word_14 >= (unsigned int)ce->rateDownDetectDuration"},
+
+ {"label": "the unscaled rate-down duration is compared SIGNED",
+  "find": "\t\tif (ce->word_14 >= (unsigned int)ce->rateDownDetectDuration",
+  "replace": "\t\tif ((int)ce->word_14 >= ce->rateDownDetectDuration"},
+
+ {"label": "the unscaled rate-down dwell is compared SIGNED",
+  "find": "\t\t    && ce->word_1c\n\t\t       >= (unsigned int)ce->minDurationInDataBeforeRrnDown) {",
+  "replace": "\t\t    && (int)ce->word_1c\n\t\t       >= ce->minDurationInDataBeforeRrnDown) {"},
+
+ {"label": "the unscaled rate down does not restart +0x14",
+  "why": "The anchor carries the +0x90 store above it because the scaled arm's fire ends with the same three statements and `find` is a substring search.",
+  "find": "\t\t\tce->word_90 = ce->params->RRN_SILENCE_REQUESTED;\n\t\t\tce->word_14 = 0;\n\t\t\tce->word_1c = 0;\n\t\t\tdemanded = 1;",
+  "replace": "\t\t\tce->word_90 = ce->params->RRN_SILENCE_REQUESTED;\n\t\t\tce->word_1c = 0;\n\t\t\tdemanded = 1;"},
+
+ {"label": "the unscaled rate down does not take the parameter",
+  "find": "\t\t\tce->word_98 = 0;\n\t\t\tce->word_90 = ce->params->RRN_SILENCE_REQUESTED;\n\t\t\tce->word_14 = 0;",
+  "replace": "\t\t\tce->word_98 = 0;\n\t\t\tce->word_90 = 0;\n\t\t\tce->word_14 = 0;"},
+
+ {"label": "the scaled rate down compares the unscaled average",
+  "why": "0x3e9ee is `fmul %st(1),%st` before `fcomps 0xa4(%edi)`.  Caught by the trial with an average of 12.0f, which is under `threshDown` and over it once multiplied by 1.52.",
+  "find": "\tif (ce->word_70 * scale > ce->threshDown) {",
+  "replace": "\tif (ce->word_70 > ce->threshDown) {"},
+
+ {"label": "+0xb8 does not take the multiplier",
+  "why": "0x3e9e8 is `fsts 0xb8(%edi)` on the constant that was just loaded.",
+  "find": "\tce->word_b8 = scale;",
+  "replace": "\tce->word_b8 = 1.0f;"},
+
+ {"label": "the first fire condition uses a half, not a third",
+  "why": "0x3ea0c is `mov $0xaaaaaaab,%edx; mul %edx; shr $1,%edx`, the reciprocal sequence for an unsigned divide by three.  Caught by the trial with +0x14 at 210 against a duration of 600.",
+  "find": "\t\tif ((ce->word_14 >= dur / 3 && ce->word_1c >= minDur * 1.3)",
+  "replace": "\t\tif ((ce->word_14 >= dur / 2 && ce->word_1c >= minDur * 1.3)"},
+
+ {"label": "the first fire condition wants 1.6 dwells",
+  "why": "`fmull .rodata.cst8+0xc8` and the eight bytes there are 1.3 -- a DOUBLE, because 1.3 is not exactly representable in four.",
+  "find": "\t\tif ((ce->word_14 >= dur / 3 && ce->word_1c >= minDur * 1.3)",
+  "replace": "\t\tif ((ce->word_14 >= dur / 3 && ce->word_1c >= minDur * 1.6)"},
+
+ {"label": "the second fire condition uses a quarter, not a fifth",
+  "why": "0x3ea4d is `mov $0xcccccccd,%edx; mul %edx; shr $2,%edx`.  Caught by the trial with +0x14 at 130 against a duration of 600.",
+  "find": "\t\t    || (ce->word_14 >= dur / 5 && ce->short_b4 == 1",
+  "replace": "\t\t    || (ce->word_14 >= dur / 4 && ce->short_b4 == 1"},
+
+ {"label": "the second fire condition wants state 2",
+  "find": "\t\t    || (ce->word_14 >= dur / 5 && ce->short_b4 == 1",
+  "replace": "\t\t    || (ce->word_14 >= dur / 5 && ce->short_b4 == 2"},
+
+ {"label": "the second fire condition wants a whole dwell",
+  "find": "\t\t\t&& ce->word_1c >= minDur * 0.6)) {",
+  "replace": "\t\t\t&& ce->word_1c >= minDur * 1.0)) {"},
+
+ {"label": "the fire divisions are signed",
+  "why": "Both are `mul` and a shift, never `imul`.  Caught by the trial with a rate-down duration of -1, where the unsigned third is 1431655765 and the signed one is 0.",
+  "find": "\tunsigned int dur = (unsigned int)ce->rateDownDetectDuration;",
+  "replace": "\tint dur = ce->rateDownDetectDuration;"},
+
+ {"label": "the echo state is set rather than advanced",
+  "why": "0x3ea99 is `lea 0x1(%ebx),%eax`.  Caught by the trial that enters at state 1 and leaves at 2.",
+  "find": "\t\t\tce->short_b4++;",
+  "replace": "\t\t\tce->short_b4 = 1;"},
+
+ {"label": "the keep-rate energies are the wrong way round",
+  "why": "0x3eab2 is `cmpw $0x1,0xb4(%edi)` AFTER the increment, and 0x3f266666 is 0.65f against 0x3fe66666 for 1.8f.",
+  "find": "\t\t\t    (ce->short_b4 == 1) ? 0.65f : 1.8f;",
+  "replace": "\t\t\t    (ce->short_b4 == 1) ? 1.8f : 0.65f;"},
+
+ {"label": "the echo fire does not take the parameter",
+  "find": "\t\t\tce->word_98 = 0;\n\t\t\tce->word_90 = ce->params->RRN_SILENCE_REQUESTED;\n\t\t\tce->params->",
+  "replace": "\t\t\tce->word_98 = 0;\n\t\t\tce->word_90 = 0;\n\t\t\tce->params->"},
+
+ {"label": "the echoRrnState diagnostic is not gated",
+  "why": "0x3ea92 is `cmpl $0x1,dsplibs_debug_level; ja 0x3f482` and the call there is `dsplibs_debug_printf`.",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V90-mod3 CHANGE echoRrnState = %d\",",
+  "replace": "\t\t\tif (1)\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V90-mod3 CHANGE echoRrnState = %d\","},
+
+ {"label": "the error diagnostic is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"error -- = %c%d.%03d\\r\\n\",",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"error -- = %c%d.%03d\\r\\n\","},
+
+ {"label": "the echo threshold diagnostic is not gated",
+  "why": "0x3f0d6 is a THIRD `cmpl $0x1,dsplibs_debug_level`, separate from the two before it, so the object tests the level once per line.",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"threshold -- = %c%d.%03d\\r\\n\",",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"threshold -- = %c%d.%03d\\r\\n\","},
+
+ {"label": "the threshold diagnostic prints the average",
+  "why": "0x3f0e3 is `flds 0xa4(%edi)`, the raw threshold, against the SCALED average the line before it prints.",
+  "find": "\t\t    (int)__builtin_fabsf(ce->threshDown),",
+  "replace": "\t\t    (int)__builtin_fabsf(ce->word_70),"},
+
+ {"label": "the product's sign is inverted",
+  "find": "\t\t    (0.0f < ce->word_70 * ce->word_b8) ? '+' : '-',",
+  "replace": "\t\t    (0.0f < ce->word_70 * ce->word_b8) ? '-' : '+',"},
+
+ {"label": "the printed decimals leave out the multiplier",
+  "why": "0x3f03e is `flds 0x70(%edi); fmuls 0xb8(%edi)` and the decimals come off that product, not off the average.  Caught by the trial that plants 2.3f in +0xb8 and 10.0f in +0x70, where the product's decimals are 999 and the average's are 0.  A SECOND ENTRY HERE USED TO CLAIM the product must not be rounded to `float` and was NOT caught; the measurement is in the source comment and in finding 1389 -- FLT_EVAL_METHOD is 2, so neither the cast nor the parameter narrows it.",
+  "find": "\t\t    ce_frac3_of(ce->word_70, ce->word_b8));",
+  "replace": "\t\t    ce_frac3_of(ce->word_70, 1.0f));"},
+
+ {"label": "the product's decimals skip the round trip",
+  "find": "\tint thousandths = (int)((a * b - (float)(int)(a * b)) * 1000.0);",
+  "replace": "\tint thousandths = (int)((a * b) * 1000.0);"},
+
+ {"label": "the product's decimals keep their sign",
+  "why": "`cltd; xor %edx,%eax; sub %edx,%eax` at 0x3f0a5.  Caught by the trial that drives the terminal arm with an average of -12.5f.",
+  "find": "\treturn (thousandths < 0) ? -thousandths : thousandths;",
+  "replace": "\treturn thousandths;"},
+
+ {"label": "the two decimals are three",
+  "why": "`.rodata.cst4+0x2ec` is 100.0f and all five `%02d` sites load it; the two phase evaluators load 1000.0f instead.",
+  "find": "\tint hundredths = (int)((v - (float)(int)v) * 100.0f);",
+  "replace": "\tint hundredths = (int)((v - (float)(int)v) * 1000.0f);"},
+
+ {"label": "the two decimals skip the round trip",
+  "find": "\tint hundredths = (int)((v - (float)(int)v) * 100.0f);",
+  "replace": "\tint hundredths = (int)(v * 100.0f);"},
+
+ {"label": "the two decimals keep their sign",
+  "why": "Caught by the rate-up run, whose average is -12.5f for exactly this reason.",
+  "find": "\treturn (hundredths < 0) ? -hundredths : hundredths;",
+  "replace": "\treturn hundredths;"},
+
+ {"label": "the retrain accumulator assigns +0x18",
+  "find": "\tif (word_70 > threshRetrain) {\n\t\tword_18 += nofSymbols;",
+  "replace": "\tif (word_70 > threshRetrain) {\n\t\tword_18 = nofSymbols;"},
+
+ {"label": "the retrain reads threshDown",
+  "find": "\tif (word_70 > threshRetrain) {",
+  "replace": "\tif (word_70 > threshDown) {"},
+
+ {"label": "the retrain duration is compared SIGNED",
+  "why": "0x3eb0d is `jb` against the +0x60 copy of a slot the map calls `int`.  The anchor carries the accumulation above it because both phase evaluators have the same test one tab deeper.",
+  "find": "\t\tword_18 += nofSymbols;\n\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
+  "replace": "\t\tword_18 += nofSymbols;\n\t\tif ((int)word_18 >= retrainDetectDuration) {"},
+
+ {"label": "the retrain duration is >, not >=",
+  "why": "0x3eb0d is `jb`; the run reaches exactly 900 against a duration of 900.",
+  "find": "\t\tword_18 += nofSymbols;\n\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
+  "replace": "\t\tword_18 += nofSymbols;\n\t\tif (word_18 > (unsigned int)retrainDetectDuration) {"},
+
+ {"label": "the retrain limit is compared SIGNED",
+  "find": "\t\t\tif (nofV90Retrains\n\t\t\t    > (unsigned int)\n\t\t\t      params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;",
+  "replace": "\t\t\tif ((int)nofV90Retrains\n\t\t\t    > params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;"},
+
+ {"label": "the retrain limit is >=, not >",
+  "why": "0x3eb20 is `ja`.  Caught by the trial that stops at exactly the limit and expects a retrain rather than a fall-back.",
+  "find": "\t\t\tif (nofV90Retrains\n\t\t\t    > (unsigned int)\n\t\t\t      params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;",
+  "replace": "\t\t\tif (nofV90Retrains\n\t\t\t    >= (unsigned int)\n\t\t\t      params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;"},
+
+ {"label": "the retrain fall-back does not restart the count",
+  "find": "\t\t\t\t\t ce_frac2(word_70));\n\t\t\t\tnofV90Retrains = 0;",
+  "replace": "\t\t\t\t\t ce_frac2(word_70));"},
+
+ {"label": "the retrain does not restart +0x18",
+  "find": "\t\t\tword_1c = 0;\n\t\t\tword_18 = 0;\n\t\t}\n\t} else {\n\t\tword_18 = 0;\n\t}",
+  "replace": "\t\t\tword_1c = 0;\n\t\t}\n\t} else {\n\t\tword_18 = 0;\n\t}"},
+
+ {"label": "+0x18 is not cleared under the threshold",
+  "find": "\t\t}\n\t} else {\n\t\tword_18 = 0;\n\t}",
+  "replace": "\t\t}\n\t} else {\n\t}"},
+
+ {"label": "the renegotiation limit is >, not >=",
+  "why": "0x3ec42 is `jae`.  Caught by the trial that sets the count and the limit both to 3.",
+  "find": "\tif (nofRemoteRateReneg\n\t    >= (unsigned int)nofRemoteRateRenegBeforeRetrain) {",
+  "replace": "\tif (nofRemoteRateReneg\n\t    > (unsigned int)nofRemoteRateRenegBeforeRetrain) {"},
+
+ {"label": "the renegotiation limit is compared SIGNED",
+  "find": "\tif (nofRemoteRateReneg\n\t    >= (unsigned int)nofRemoteRateRenegBeforeRetrain) {",
+  "replace": "\tif ((int)nofRemoteRateReneg\n\t    >= nofRemoteRateRenegBeforeRetrain) {"},
+
+ {"label": "the renegotiation retrain consults the retrain limit",
+  "why": "IT DOES NOT, and it is the only retrain path in the class that does not: 0x3edb0 increments +0x04 and prints, with no `cmp 0x460`.  Caught by the trial that enters with the count already at 10 against a limit of 4 and expects a retrain rather than a fall-back.",
+  "find": "\t\tnofRemoteRateReneg = 0;\n\t\tword_1c = 0;\n\t\tword_18 = 0;\n\t}",
+  "replace": "\t\tnofRemoteRateReneg = 0;\n\t\tword_1c = 0;\n\t\tword_18 = 0;\n\t\tif (nofV90Retrains\n\t\t    > (unsigned int)params->MAX_NOF_V90_RETRAINS)\n\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t}"},
+
+ {"label": "the renegotiation count is not restarted",
+  "find": "\t\t\t nofV90Retrains, nofRemoteRateReneg);\n\t\tnofRemoteRateReneg = 0;",
+  "replace": "\t\t\t nofV90Retrains, nofRemoteRateReneg);"},
+
+ {"label": "the rate up does not clear +0x90 on its way out",
+  "find": "\t\t\t (int)__builtin_fabsf(word_70), ce_frac2(word_70));\n\t\tword_90 = 0;",
+  "replace": "\t\t\t (int)__builtin_fabsf(word_70), ce_frac2(word_70));"},
+
+ {"label": "the rate-down arm compares against initDmin, not twice it",
+  "why": "0x3f1ca is `add %esi,%esi`.  The anchor carries the diagnostic above it because the V42 arm has the same test three tabs deeper and `find` is a substring search.",
+  "find": "\t\t\t \"initDmin = %d\\r\\n\", curDmin, short_9c);\n\t\tif (curDmin >= 2 * short_9c) {",
+  "replace": "\t\t\t \"initDmin = %d\\r\\n\", curDmin, short_9c);\n\t\tif (curDmin >= short_9c) {"},
+
+ {"label": "the rate-down retrain prints the counter",
+  "why": "0x3f256 loads `0x47c(%edx)` from the parameter block.",
+  "find": "\t\t\t\t params->MAX_NOF_RATES_DIFF_BEFORE_RETRAIN,",
+  "replace": "\t\t\t\t nofV90Retrains,"},
+
+ {"label": "the rate-down retrain does not re-arm initDmin",
+  "find": "\t\t\tword_18 = 0;\n\t\t\tshort_9c = -1;\n\t\t\tverdict = V90CE_VERDICT_RETRAIN;",
+  "replace": "\t\t\tword_18 = 0;\n\t\t\tverdict = V90CE_VERDICT_RETRAIN;"},
+
+ {"label": "the rate-down retrain limit is compared SIGNED",
+  "why": "0x3f297 is `jbe`.  Caught by the trial that drives this arm with MAX_NOF_V90_RETRAINS at -1.",
+  "find": "\t\t\tif (nofV90Retrains\n\t\t\t    > (unsigned int)\n\t\t\t      params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tedprintf(\"V90ConnectionEvaluator: initiating \"\n\t\t\t\t\t \"fall back to V34 due to %d V90 \"\n\t\t\t\t\t \"retrains\\r\\n\", nofV90Retrains);",
+  "replace": "\t\t\tif ((int)nofV90Retrains\n\t\t\t    > params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tedprintf(\"V90ConnectionEvaluator: initiating \"\n\t\t\t\t\t \"fall back to V34 due to %d V90 \"\n\t\t\t\t\t \"retrains\\r\\n\", nofV90Retrains);"},
+
+ {"label": "the retrain case does not re-arm initDmin",
+  "find": "\tcase V90CE_VERDICT_RETRAIN:\n\t\tshort_9c = -1;\n\t\tword_90 = 0;\n\t\tbreak;",
+  "replace": "\tcase V90CE_VERDICT_RETRAIN:\n\t\tword_90 = 0;\n\t\tbreak;"},
+
+ {"label": "verdict 3 has a case in the switch",
+  "why": "0x3ec48 tests 2, 0x3ec51 branches above it and 0x3ee03 tests 4; nothing tests 3, so a no-restriction RRN prints nothing here.  Caught by the trial that carries verdict 3 all the way out.",
+  "find": "\tswitch (verdict) {\n\tcase V90CE_VERDICT_RRN_UP:",
+  "replace": "\tswitch (verdict) {\n\tcase V90CE_VERDICT_RRN_NO_RESTRICT:\n\tcase V90CE_VERDICT_RRN_UP:"},
+
+ {"label": "the second override does not need +0x94",
+  "find": "\tif (word_94 != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "replace": "\tif (verdict == V90CE_VERDICT_RRN_DOWN) {"},
+
+ {"label": "the second override does not need verdict 2",
+  "find": "\tif (word_94 != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "replace": "\tif (word_94 != 0) {"},
+
+ {"label": "the alternate debug arm is entered when its flag is clear",
+  "find": "\tif (debugAlternateDebug != 0) {\n\t\tword_24 += nofSymbols;",
+  "replace": "\tif (debugAlternateDebug == 0) {\n\t\tword_24 += nofSymbols;"},
+
+ {"label": "the alternate debug arm assigns +0x24",
+  "find": "\tif (debugAlternateDebug != 0) {\n\t\tword_24 += nofSymbols;",
+  "replace": "\tif (debugAlternateDebug != 0) {\n\t\tword_24 = nofSymbols;"},
+
+ {"label": "+0x24 and the period are compared UNSIGNED",
+  "why": "0x3ec92 and the four arms after it are all `jl`, SIGNED, against `debugPeriod` -- which is what makes +0x24 an `int` and not the `unsigned int` the other eight counters are.  Caught twice over: a period of -1, which fires signed and never unsigned, and a +0x24 of -1000, which is the other way round.",
+  "find": "\t} else if (debugRetrain != 0) {\n\t\tword_24 += nofSymbols;\n\t\tif (word_24 >= debugPeriod) {",
+  "replace": "\t} else if (debugRetrain != 0) {\n\t\tword_24 += nofSymbols;\n\t\tif ((unsigned int)word_24 >= (unsigned int)debugPeriod) {"},
+
+ {"label": "+0x80 cases 0 and 2 do not share a body",
+  "why": "0x3eca3 is `jb 0x3f17e` and 0x3ecac is `je 0x3f17e` -- below one and equal to two both reach the same string.",
+  "find": "\t\t\tcase 0:\n\t\t\tcase 2:",
+  "replace": "\t\t\tcase 0:"},
+
+ {"label": "the alternate retrain does not advance +0x80",
+  "find": "\t\t\t\t\t \"Debug Retrain\\r\\n\");\n\t\t\t\tword_80++;",
+  "replace": "\t\t\t\t\t \"Debug Retrain\\r\\n\");"},
+
+ {"label": "+0x80 == 1 is a retrain",
+  "find": "\t\t\tcase 1:\n\t\t\t\tverdict = V90CE_VERDICT_RRN_UP;",
+  "replace": "\t\t\tcase 1:\n\t\t\t\tverdict = V90CE_VERDICT_RETRAIN;"},
+
+ {"label": "+0x80 == 3 does not restart the cycle",
+  "find": "\t\t\t\tword_80 = 0;\n\t\t\t\tword_98 = 0;",
+  "replace": "\t\t\t\tword_98 = 0;"},
+
+ {"label": "the debug fall back is a retrain",
+  "find": "\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug fall back to \"",
+  "replace": "\t\t\tverdict = V90CE_VERDICT_RETRAIN;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug fall back to \""},
+
+ {"label": "the debug retrain is a fall back",
+  "find": "\t\t\tverdict = V90CE_VERDICT_RETRAIN;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug initiating \"",
+  "replace": "\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug initiating \""},
+
+ {"label": "the debug rate up is a rate down",
+  "find": "\t\t\tverdict = V90CE_VERDICT_RRN_UP;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Up\\r\\n\");",
+  "replace": "\t\t\tverdict = V90CE_VERDICT_RRN_DOWN;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Up\\r\\n\");"},
+
+ {"label": "the debug rate down is a rate up",
+  "find": "\t\t\tverdict = V90CE_VERDICT_RRN_DOWN;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Down\\r\\n\");",
+  "replace": "\t\t\tverdict = V90CE_VERDICT_RRN_UP;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Down\\r\\n\");"},
+
+ {"label": "the debug rate down does not take the parameter",
+  "find": "\t\t\tword_98 = 0;\n\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}",
+  "replace": "\t\t\tword_98 = 0;\n\t\t\tword_90 = 0;\n\t\t}\n\t}"},
+
+ {"label": "the tail does not clear the symbol count",
+  "why": "0x3ed00 is `movl $0x0,0x74(%edi)` and 0x3ed0e stores a zero word to +0x70, on both epilogues.  Caught at once: the next call in any run would see a count that never resets.",
+  "find": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tword_74 = 0;\n\tword_70 = 0;\n\treturn verdict;\n}",
+  "replace": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tword_70 = 0;\n\treturn verdict;\n}"}
 ]

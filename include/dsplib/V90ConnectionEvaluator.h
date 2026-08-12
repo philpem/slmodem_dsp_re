@@ -81,13 +81,38 @@ class V90Parameters;
  * object names no enumerator anywhere, and 4 and 5 are named only because a
  * string on each path says what it means.
  *
- * THE ENUMERATION IS STILL NOT COMPLETE.  `evaluateConnection` is 3,857 bytes
- * and is not reconstructed here; whatever else this returns is in it.  These
- * three names are what four functions establish and nothing more, which is why
- * they are macros with a prefix rather than an `enum` claiming to be the whole
- * type.
+ * THE ENUMERATION IS NOW COMPLETE, and `evaluateConnection` is what completes
+ * it.  That function has TWO epilogues and between them SIX distinct values
+ * reach %eax:
+ *
+ *   0x3e8b7  `xor %eax,%eax` at 0x3e6ee      the empty call, 0
+ *            `mov %ecx,%eax` at 0x3e8a2      %ecx is 4 (0x3e80d), 2 (0x3e857),
+ *                                            5 (0x3f014) or 4 (0x3f2f0)
+ *   0x3ed18  `mov %ebp,%eax` at 0x3ed0c      %ebp is 0 (0x3e6d1, 0x3ed7a),
+ *                                            1, 2, 3, 4 or 5 -- twenty
+ *                                            immediates in all
+ *
+ * so the set is {0, 1, 2, 3, 4, 5} and -1 IS NOT ONE OF THEM.  The two
+ * negative-looking immediates near the epilogues belong to fields and not to
+ * the answer: `mov $0x0,%esi` at 0x3ed07 feeds `mov %esi,0x70(%edi)` (the
+ * average, cleared), `mov $0xffffffff,%esi` at 0x3ede4 feeds `mov
+ * %si,0x9c(%edi)` (+0x9c, set to -1), and `mov $0xffffffff,%ebp` at 0x3f1f3
+ * does the same before %ebp is reloaded with 4 at 0x3f292.
+ *
+ * THE THREE NEW NAMES ARE THE STRINGS' -- four diagnostics each:
+ *
+ *   1  "Initiating RRN up (external demand)", "Debug One Rate Up", "Alternate
+ *      Debug RRN up", "initiating One Rate Up demand"
+ *   2  "Initiating RRN Down (external demand)", "Debug One Rate Down",
+ *      "Alternate Debug RRN down", "initiating One Rate Down demand"
+ *   3  "Initiating No Restriction RRN (external demand)" -- one string, and
+ *      the only path that reaches it is the external-demand arm for +0x8c
+ *      values 1 and 4
  */
 #define V90CE_VERDICT_NONE		0
+#define V90CE_VERDICT_RRN_UP		1
+#define V90CE_VERDICT_RRN_DOWN		2
+#define V90CE_VERDICT_RRN_NO_RESTRICT	3
 #define V90CE_VERDICT_RETRAIN		4
 #define V90CE_VERDICT_FALLBACK_V34	5
 
@@ -129,14 +154,21 @@ public:
 	int evaluatePhase4(float meanErrBefToAftUpdateRatio);
 
 	/*
+	 * THE BIG ONE, 3,857 BYTES AT 0x3e6d0, AND IT RETURNS `int`.  Both of
+	 * its epilogues build %eax -- `mov %ecx,%eax` at 0x3e8a2 and `mov
+	 * %ebp,%eax` at 0x3ed0c -- and the entry `xor %ebp,%ebp` at 0x3e6d1
+	 * gives the do-nothing paths their 0.  See the verdict block above for
+	 * the six values and where each comes from.
+	 */
+	int evaluateConnection();
+
+	/*
 	 * Declared for the record and deliberately left undefined -- their
 	 * signatures come from the mangling, so this list is a specification
 	 * rather than a guess, and a return type is not mangled and is
-	 * therefore unknown for all of them.  They belong to whichever batch
-	 * writes the rest of this class's processing half;
-	 * `evaluateConnection` alone is 3,857 bytes.
+	 * therefore unknown for both of them.  They belong to whichever batch
+	 * writes the last two members of this class's processing half.
 	 */
-	void evaluateConnection();
 	void evaluateMeanErrorStdPhase3(float);
 	void printStatus() const;
 
@@ -225,13 +257,36 @@ public:
 	 * it every call could never accumulate past one call and would still
 	 * agree with the blob on any single-call test.
 	 *
-	 * What +0x1c counts is still in `evaluateConnection`; both evaluators
-	 * clear it on every path that decides anything and never read it.
+	 * WHAT +0x1c COUNTS IS SYMBOLS SINCE THE LAST DECISION, and
+	 * `evaluateConnection` is what says so: `add %ebx,0x1c(%edi)` at
+	 * 0x3e6f8 adds the symbol count of every non-empty call, and every arm
+	 * that decides anything clears it.  It is a MINIMUM DWELL rather than a
+	 * patience: three tests read it -- against
+	 * `minDurationInDataBeforeRrnUp` (0x3e949), against
+	 * `minDurationInDataBeforeRrnDown` (0x3ebec) and against a 2.3x, 1.3x
+	 * and 0.6x of the same slot on the echo-RRN path -- and all three
+	 * BLOCK a rate change that has otherwise been earned.  It keeps its
+	 * offset name; "how long since the last decision" is a reading of the
+	 * arithmetic and finding 226's rule is that a reading does not earn a
+	 * name.
+	 *
+	 * +0x20 IS THE FADE CLOCK, read only at 0x3e706..0x3e754: the three
+	 * retrain/reneg counters each lose one whenever `word_20 / fadeCount`
+	 * crosses an integer, and +0x20 then advances by the symbol count.
+	 *
+	 * +0x24 IS `int` AND NOT `unsigned`, which is the one place in these
+	 * eight where the two readings part.  All five debug arms of
+	 * `evaluateConnection` do `word_24 += word_74; cmp 0x6c(%edi),%eax;
+	 * jl` (0x3ec92, 0x3ed39, 0x3ef02, 0x3efda, 0x3f3ba) -- a SIGNED branch
+	 * against `debugPeriod`, which the map calls `int`.  An `unsigned int`
+	 * +0x24 would have made the sum unsigned and the branch `jb`; the
+	 * signed compare needs the sum stored back into an `int` first, which
+	 * is exactly the `+=` the object emits before the compare.
 	 */
 	unsigned int word_18;
 	unsigned int word_1c;
 	unsigned int word_20;
-	unsigned int word_24;
+	int word_24;
 
 	/*
 	 * +0x28 .. +0x6c  The configuration, copied out of the parameter
@@ -334,13 +389,47 @@ public:
 	 */
 	unsigned int word_90;		/* +0x90 zeroed by reset and by four */
 	unsigned int word_94;		/* +0x94 zeroed by reset             */
-	unsigned char pad_98[4];	/* +0x98 reset does not reach it     */
+	/*
+	 * +0x98  WAS `pad_98[4]` AND `evaluateConnection` IS ITS ONLY WRITER.
+	 * Five 32-bit stores, four of them a plain zero (0x3e869, 0x3eac0,
+	 * 0x3ec02, 0x3ece1) and one at 0x3ee4f the value of `word_8c == 5`:
+	 *
+	 *     3ee43:  83 fa 05        cmp    $0x5,%edx
+	 *     3ee4c:  0f 94 c0        sete   %al
+	 *     3ee4f:  89 87 98 00 00  mov    %eax,0x98(%edi)
+	 *
+	 * Every store is beside a store to +0x90, and the four zeroes are on
+	 * exactly the paths that also set +0x90 -- so the two travel together
+	 * and +0x98 is a second flag of whatever +0x90 is the first of.
+	 * Nothing reconstructed so far READS it, which is why it keeps an
+	 * offset name: a store with no reader says how wide the slot is and
+	 * nothing about what it means.  Four bytes, `movl`, so `unsigned int`
+	 * -- and the width is what retires the pad.
+	 */
+	unsigned int word_98;
 
 	/*
 	 * +0x9c, +0x9e  A 16-bit pair, -1 and 0.  The store widths are the
 	 * evidence: `mov %cx,0x9c(%ebx)` with %ecx holding 0xffffffff writes
 	 * two bytes and leaves 0xffff, which is a different value from the
 	 * -1 at +0x8c even though the source constant is the same.
+	 *
+	 * THE AUTHOR'S OWN NAME FOR +0x9c IS `initDmin`.  Two diagnostics in
+	 * `evaluateConnection` print the pair together and name both halves:
+	 * 0x9d84 is "before EC RRN: curDmin = %d, initDmin = %d" and 0xa348 is
+	 * "on Rate Down: curDmin = %d, initDmin = %d", and at both sites the
+	 * second conversion is `movswl 0x9e(%edi)` and the third is `movswl
+	 * 0x9c(%edi)` (0x3e79b, 0x3f19a).  It is the initial minimum distance:
+	 * the entry test at 0x3e6dd copies +0x9e into it the first time it is
+	 * -1, and both arms that ask for a retrain put it back to -1 so the
+	 * next call re-latches.  What the pair decides is `curDmin >= 2 *
+	 * initDmin` -- the distance having doubled since the connection
+	 * settled is what turns a rate-down demand into a retrain.
+	 *
+	 * THE FIELD KEEPS ITS OFFSET NAME.  `test/unit/t_v90leaves.cpp` refers
+	 * to it as `short_9c` and belongs to other work; renaming here would
+	 * edit a file this batch does not own, which is the reason +0xac and
+	 * +0xb2 kept theirs.
 	 */
 	short short_9c;
 
@@ -424,12 +513,60 @@ public:
 	 * reason +0xac does: `t_v90leaves.cpp` uses `short_b2` and is not this
 	 * batch's file.  Nothing reconstructed so far SETS it, so whatever
 	 * detects alternate RBS on the QC path is somewhere still unread.
+	 *
+	 * +0xb4 IS `echoRrnState`, and that is the object's own word for it
+	 * too.  `evaluateConnection` increments it at 0x3ea9c and then prints
+	 * exactly the value it stored:
+	 *
+	 *     3ea99:  8d 43 01        lea    0x1(%ebx),%eax
+	 *     3ea9c:  66 89 87 b4 ..  mov    %ax,0xb4(%edi)
+	 *     3f489:  98              cwtl
+	 *     3f48e:  e8 ..           call   dsplibs_debug_printf
+	 *                             "V90-mod3 CHANGE echoRrnState = %d"
+	 *
+	 * -- a store and a diagnostic naming the value stored, the derivation
+	 * `curDmin` rests on.  A second string, 0xa2f4, prints the same slot as
+	 * "V90-mod3  Echo_Rrn_State = %d", and `reset`'s unconditional
+	 * " *********** Echo Rrn Mechanism *********** " is the third mention.
+	 * It is a four-state machine: 0 and 1 pick the 1.52 and 1.39
+	 * multipliers the rate-down threshold is scaled by, the increment at
+	 * 0x3ea9c advances it every time a rate down is demanded, and 3 --
+	 * planted at 0x3eec0 -- is the terminal state in which the multiplier
+	 * is dropped altogether.  SIXTEEN BITS AND SIGNED: `cmpw $0x1`,
+	 * `cmpw $0x2; jg` and `movswl %bx,%esi` before the diagnostic.
+	 *
+	 * THE FIELD KEEPS ITS OFFSET NAME, for the third time and the same
+	 * reason: `t_v90leaves.cpp` says `short_b4`.
 	 */
 	short short_b0;
 	short short_b2;
 	short short_b4;
 
-	unsigned char pad_b6[6];	/* +0xb6 .. +0xbb                    */
+	unsigned char pad_b6[2];	/* +0xb6 .. +0xb7                    */
+
+	/*
+	 * +0xb8  WAS INSIDE `pad_b6[6]`, AND IT IS A FLOAT.
+	 * `evaluateConnection` stores the rate-down multiplier there with a
+	 * four-byte x87 store the instant it picks it --
+	 *
+	 *     3e9dd:  d9 05 ..        flds   .rodata.cst4+0x2e4   1.52f
+	 *     3e9e8:  d9 97 b8 ..     fsts   0xb8(%edi)
+	 *
+	 * -- and reads it back with `fmuls 0xb8(%edi)` (0x3f041, 0x3f4a3) to
+	 * print `avePdsnr * that` as "error -- =" beside the raw `threshDown`
+	 * as "threshold -- =".  Never an integer move in either direction, so
+	 * `float`; and the two accesses are the whole of what is known, so it
+	 * keeps an offset name.
+	 *
+	 * NOTHING INITIALISES IT.  `reset` stops at +0xb4, and the diagnostic
+	 * at 0x3f041 is on the path where no multiplier was chosen this call,
+	 * so it prints whatever the slot last held -- which is why the test
+	 * plants a value in it rather than letting the seed decide.
+	 *
+	 * +0xb8..+0xbb IS THE LAST FOUR BYTES OF THE 0xbc OBJECT, so the class
+	 * now has no unmodelled region at all.
+	 */
+	float word_b8;
 };
 
 #endif /* DSPLIB_V90CONNECTIONEVALUATOR_H */

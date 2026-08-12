@@ -2342,6 +2342,1106 @@ run_ce_phase4(void)
 	return diff_end();
 }
 
+/* ------------------------------------- evaluateConnection (3,857 bytes) */
+
+/*
+ * WHAT THIS ONE NEEDS THAT THE TWO PHASE EVALUATORS DID NOT
+ *
+ *   IT ANSWERS SIX THINGS, not three.  0, 1, 2, 3, 4 and 5 all reach %eax,
+ *   from twenty-four immediates across two epilogues, and the block at the
+ *   bottom of `main` asserts every one was OBSERVED -- findings 149 and 223
+ *   are twice over the same failure, a decider that always decides the same
+ *   way agreeing with anything.  VERDICT 3 IS THE FRAGILE ONE: it is raised
+ *   only by the external-demand arm for +0x8c in {1, 4} and then survives
+ *   three later stages any of which would overwrite it, so it is driven with
+ *   every one of them deliberately quiet.
+ *
+ *   THERE ARE TWO EPILOGUES AND ONLY ONE IS ON THE ORDINARY PATH.  0x3e8b7 is
+ *   reached from the empty call and from the external-demand default arm --
+ *   the only place the answer travels in %ecx -- and that arm RETURNS, so
+ *   stages 3 to 5 never run.  The block that drives it arms `debugFallBack`
+ *   with a period of one first: a version that fell through instead of
+ *   returning would answer 5 and be caught on the spot.
+ *
+ *   IT WRITES THROUGH THE PARAMETER POINTER, which nothing else in the class
+ *   does.  `RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE` takes 2.0f, 0.65f or
+ *   1.8f on three different paths, so `guard_intact`'s "the parameter block
+ *   was not written" is the wrong check here.  `ec_call` snapshots the block,
+ *   runs ours, keeps what ours wrote, RESTORES the block, runs the blob and
+ *   compares the two results -- so the claim is that the two sides write it
+ *   alike, and `ec_param_written` asserts at the end that some trial really
+ *   did write it.
+ *
+ *   IT ACCUMULATES FIVE COUNTERS, so a block below is one measurement -- set
+ *   +0x74 and +0x70, call, compare -- and the runs are up to a dozen of them
+ *   with the whole object compared after EVERY one.  +0x20 in particular is a
+ *   clock that only the run can move.
+ *
+ *   THE UNSIGNED READINGS ARE INVISIBLE AT ORDINARY VALUES.  Seven
+ *   comparisons are `jb`/`ja` against slots the map calls `int`, and one --
+ *   the debug period at 0x3ec92 -- is `jl`, SIGNED, which is what makes +0x24
+ *   an `int`.  Each is driven at a negative limit, where the two readings
+ *   part company, and the +0x24 one is driven from a negative counter as well
+ *   because a negative limit alone does not separate them.
+ *
+ *   THE FADE COMPARISON IS SIGNED ON AN UNSIGNED DIVISION, which no ordinary
+ *   value can show either: `divl` twice and then `jg`.  One trial puts the
+ *   clock at 0x7fffffff with a fade count of 1, where the quotient crosses
+ *   2^31 and `jg` says "did not advance" while `ja` says it did.
+ *
+ *   TWO x87 ROUNDINGS ARE REACHABLE AND BOTH ARE DRIVEN.  `avePdsnr *
+ *   word_b8` is read three times at 80 bits and 10.0f * 2.3f is 22.99999952,
+ *   which prints "22.999" unrounded and "23.000" rounded; and +0x5c reaches
+ *   the x87 through `fildll`, so 16777217 stays itself where a round trip
+ *   through `float` would make it 16777216 and take a different arm.
+ *
+ *   NO NaN GOES NEAR `threshUp`.  0x3e933 is `fcomps 0xa0(%edi); jae`, the
+ *   complement of `avePdsnr < threshUp` taken without the parity flag, so the
+ *   blob runs the rate-up arm for an unordered compare and GCC 13 does not.
+ *   NaN IS fed wherever `enableRrnUp` is zero: the other four float
+ *   comparisons are `ja`/`jbe`, which agree on both compilers.  It is also
+ *   kept away from any path that PRINTS the average, because the sign
+ *   character is `sbb` off the carry and reads unordered as '+'.  Finding
+ *   1389.
+ */
+
+extern "C" {
+int ref_ce_evalconn(void *)
+	asm("ref__ZN22V90ConnectionEvaluator18evaluateConnectionEv");
+}
+
+static int ec_verdict[6];
+static int ec_param_written, ec_epilogue_ecx, ec_epilogue_ebp;
+static int ec_empty, ec_quiet, ec_faded, ec_fade_signed, ec_fade_unsigned;
+static int ec_echo_23, ec_echo_thirds_only, ec_retrain_at_limit;
+static int ec_echo_scaled_cmp, ec_echo_neg_dur, ec_case2_neg_max;
+static int ec_verdict5_no_case, ec_ext_no_override, ec_rateup_two_counters;
+static int ec_neg_max_4b, ec_no_ratedown_clears;
+static int ec_ext_blocked, ec_ext_down, ec_ext_retrain, ec_ext_fallback;
+static int ec_ext_override, ec_ext_returned_early, ec_ext_untouched;
+static int ec_ext_code[8];
+static int ec_rateup, ec_rateup_wait, ec_ratedown, ec_ratedown_wait;
+static int ec_case2_retrain, ec_case2_fallback, ec_case2_down;
+static int ec_retrain, ec_retrain_fallback, ec_retrain_wait;
+static int ec_reneg_forced, ec_reneg_no_fallback, ec_override;
+static int ec_echo_152, ec_echo_139, ec_echo_terminal, ec_echo_after3;
+static int ec_echo_fire_thirds, ec_echo_fire_fifths, ec_echo_065, ec_echo_18;
+static int ec_alt[5], ec_dbg_fallback, ec_dbg_retrain, ec_dbg_up, ec_dbg_down;
+static int ec_dbg_chain, ec_dbg_wait;
+static int ec_neg_max, ec_neg_retrain_dur, ec_neg_rateup_dur, ec_neg_rateup_min;
+static int ec_neg_ratedown_dur, ec_neg_ratedown_min, ec_neg_reneg_limit;
+static int ec_neg_period, ec_neg_word24;
+static int ec_prod_exact, ec_mindur_exact, ec_nan_fed;
+
+static unsigned char ec_parm_pre[PARM_SLOT];
+static unsigned char ec_parm_ours[PARM_SLOT];
+
+/* the guard past the object; the parameter block is compared separately */
+static void
+ec_guard(long tag)
+{
+	unsigned o = (unsigned)sizeof(V90ConnectionEvaluator);
+	unsigned n = CE_SLOT - o;
+
+	diff_eq_int("ours stored past the object (%ld)",
+		    memcmp(ce_a + o, ce_s + o, n) == 0, 1, tag);
+	diff_eq_int("the blob stored past the object (%ld)",
+		    memcmp(ce_b + o, ce_s + o, n) == 0, 1, tag);
+}
+
+static int
+ec_call(long tag)
+{
+	int va, vb;
+
+	memcpy(ec_parm_pre, parm_a, PARM_SLOT);
+
+	dsplib_debug_capture_on = 1;
+	dsplib_debug_capture_reset();
+
+	va = CEA->evaluateConnection();
+	memcpy(ec_parm_ours, parm_a, PARM_SLOT);
+	memcpy(parm_a, ec_parm_pre, PARM_SLOT);
+	vb = ref_ce_evalconn(ce_b);
+
+	dsplib_debug_capture_on = 0;
+
+	diff_eq_obj("after evaluateConnection", V90ConnectionEvaluator, CEA,
+		    CEB, tag);
+	ec_guard(tag);
+	diff_eq_int("the two sides wrote the parameter block alike (%ld)",
+		    memcmp(parm_a, ec_parm_ours, PARM_SLOT) == 0, 1, tag);
+	diff_eq_int("the verdict matches (%ld)", va, vb, tag);
+	diff_eq_int("the verdict is one of the six (%ld)",
+		    vb >= 0 && vb <= 5, 1, tag);
+	transcript_matches(tag);
+
+	if (dsplib_debug_capture_lines(1) > 0)
+		transcripts_seen = 1;
+	if (memcmp(parm_a, ec_parm_pre, PARM_SLOT) != 0)
+		ec_param_written = 1;
+	if (vb >= 0 && vb <= 5)
+		ec_verdict[vb] = 1;
+
+	memcpy(parm_b, parm_a, PARM_SLOT);
+	return vb;
+}
+
+/*
+ * Everything the function reads, planted.  The seven fields it must NOT read
+ * -- +0x64, +0x68, +0x78, +0x7c, +0x84, +0x88, +0xac, +0xb0, +0xb2 -- are
+ * left at their seeded random values, so a reconstruction that read one of
+ * them would diverge on the first trial.  Every parameter that has a copy in
+ * the object gets 1, which is a value no run below crosses: reading the
+ * parameter instead of the copy fires on the first call.
+ */
+static void
+ec_base(int trial)
+{
+	seed_pair(trial + 400, trial & 3);
+	fill_pair(parm_a, parm_b, PARM_SLOT, trial + 7000, trial & 3);
+
+	SET_P(RRN_SILENCE_REQUESTED, 0x00abcdef);
+	SET_P(MAX_NOF_V90_RETRAINS, 4);
+	SET_P(MAX_NOF_RATES_DIFF_BEFORE_RETRAIN, 9);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 0);
+	SET_PF(RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE, 0x11223344u);
+	SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
+
+	SET_P(ENABLE_RRN_DOWN, 1);
+	SET_P(ENABLE_RRN_UP, 1);
+	SET_P(NOF_REMOTE_RATE_RENEG_BEFORE_RETRAIN, 1);
+	SET_P(DEBUG_CONNECTION_EVALUATOR_ALTERNATE_DEBUG, 1);
+	SET_P(DEBUG_CONNECTION_EVALUATOR_FALL_BACK, 1);
+	SET_P(DEBUG_CONNECTION_EVALUATOR_RETRAIN, 1);
+	SET_P(DEBUG_CONNECTION_EVALUATOR_RATE_UP, 1);
+	SET_P(DEBUG_CONNECTION_EVALUATOR_RATE_DOWN, 1);
+	SET_P(RETRAIN_COUNTER_FADE_COUNT, 1);
+	SET_P(REMOTE_RRN_COUNTER_FADE_COUNT, 1);
+	SET_P(RATE_UP_DETECT_DURATION, 1);
+	SET_P(MINIMUM_DURATION_IN_DATA_BEFORE_RRN_UP, 1);
+	SET_P(RATE_DOWN_DETECT_DURATION, 1);
+	SET_P(MINIMUM_DURATION_IN_DATA_BEFORE_RRN_DOWN, 1);
+	SET_P(RETRAIN_DETECT_DURATION, 1);
+	SET_P(DEBUG_CONNECTION_EVALUATOR_PERIOD, 1);
+
+	SET_CE(word_8c, -1);
+	SET_CE(short_9c, -1);
+	SET_CE(curDmin, 0);
+	SET_CE(nofV90Retrains, 0);
+	SET_CE(nofRemoteRetrains, 0);
+	SET_CE(nofRemoteRateReneg, 0);
+	SET_CE(word_10, 0);
+	SET_CE(word_14, 0);
+	SET_CE(word_18, 0);
+	SET_CE(word_1c, 0);
+	SET_CE(word_20, 0);
+	SET_CE(word_24, 0);
+	SET_CE(word_80, 0);
+	SET_CE(word_90, 0);
+	SET_CE(word_94, 0);
+	SET_CE(word_98, 0);
+	SET_CE(short_b4, 0);
+
+	SET_CE(enableRrnDown, 0);
+	SET_CE(enableRrnUp, 0);
+	SET_CE(nofRemoteRateRenegBeforeRetrain, 1000);
+	SET_CE(debugAlternateDebug, 0);
+	SET_CE(debugFallBack, 0);
+	SET_CE(debugRetrain, 0);
+	SET_CE(debugRateUp, 0);
+	SET_CE(debugRateDown, 0);
+	SET_CE(retrainCounterFadeCount, 1000000);
+	SET_CE(remoteRrnCounterFadeCount, 1000001);
+	SET_CE(rateUpDetectDuration, 300);
+	SET_CE(minDurationInDataBeforeRrnUp, 200);
+	SET_CE(rateDownDetectDuration, 600);
+	SET_CE(minDurationInDataBeforeRrnDown, 400);
+	SET_CE(retrainDetectDuration, 800);
+	SET_CE(debugPeriod, 500);
+
+	SET_CEF(threshUp, 0x41200000u);		/* 10.0f */
+	SET_CEF(threshDown, 0x41700000u);	/* 15.0f */
+	SET_CEF(threshRetrain, 0x41a00000u);	/* 20.0f */
+	SET_CEF(word_b8, 0x3f800000u);		/*  1.0f */
+	SET_CEF(word_70, 0);
+	SET_CE(word_74, 0);
+}
+
+#define EC_5	0x40a00000u	/*  5.0f, below every threshold      */
+#define EC_18	0x41900000u	/* 18.0f, over threshDown only       */
+#define EC_25	0x41c80000u	/* 25.0f, over threshRetrain too     */
+#define EC_10	0x41200000u	/* 10.0f, the product trial          */
+#define EC_12	0x41400000u	/* 12.0f, under threshDown but over
+				 * threshDown / 1.52                 */
+#define EC_M125	0xc1480000u	/* -12.5f, a '-' sign and 50 decimals */
+
+static int
+ec_step(long tag, unsigned int n, unsigned int avg)
+{
+	SET_CE(word_74, n);
+	SET_CEF(word_70, avg);
+	return ec_call(tag);
+}
+
+static void
+ec_is(const char *what, long got, long want, long tag)
+{
+	diff_eq_int(what, got, want, tag);
+}
+
+static void
+ec_bits(const char *what, const void *got, unsigned int bits, long tag)
+{
+	diff_eq_int(what, memcmp(got, &bits, 4) == 0, 1, tag);
+}
+
+static void
+ec_scenarios(int lvl)
+{
+	long b = (long)lvl * 100000;
+	int v, i;
+
+	/* ---------------------------------------------- the empty call */
+	ec_base(1);
+	SET_CE(curDmin, 77);
+	v = ec_call(b + 1);
+	ec_is("the empty call answers 0 (%ld)", v, 0, b + 1);
+	ec_is("and latched initDmin anyway (%ld)", (long)CEB->short_9c, 77,
+	      b + 1);
+	ec_is("and printed nothing (%ld)",
+	      (long)dsplib_debug_capture_lines(1), 0, b + 1);
+	ec_empty = 1;
+
+	/* an empty call with initDmin already set leaves it alone */
+	ec_base(2);
+	SET_CE(curDmin, 77);
+	SET_CE(short_9c, 12);
+	v = ec_call(b + 2);
+	ec_is("initDmin latches only once (%ld)", (long)CEB->short_9c, 12,
+	      b + 2);
+
+	/* ------------------------------------------- a call with nothing on */
+	ec_base(3);
+	v = ec_step(b + 3, 100, EC_5);
+	ec_is("a quiet call answers 0 (%ld)", v, 0, b + 3);
+	ec_is("the average was consumed (%ld)", (long)CEB->word_74, 0, b + 3);
+	ec_bits("the average was cleared (%ld)", &CEB->word_70, 0u, b + 3);
+	ec_is("+0x1c counted the symbols (%ld)", (long)CEB->word_1c, 100,
+	      b + 3);
+	ec_is("+0x20 advanced (%ld)", (long)CEB->word_20, 100, b + 3);
+	ec_quiet = 1;
+	ec_epilogue_ebp = 1;		/* it ran to 0x3ed18 */
+
+	/* ---------------------------------------------- 1: the fade clock */
+	ec_base(4);
+	SET_CE(retrainCounterFadeCount, 100);
+	SET_CE(remoteRrnCounterFadeCount, 250);
+	SET_CE(nofV90Retrains, 3);
+	SET_CE(nofRemoteRetrains, 3);
+	SET_CE(nofRemoteRateReneg, 3);
+	for (i = 0; i < 12; i++)
+		ec_step(b + 40 + i, 60, EC_5);
+	ec_is("the fade clock ran (%ld)", (long)CEB->word_20, 720, b + 60);
+	ec_is("+0x04 faded out (%ld)", (long)CEB->nofV90Retrains, 0, b + 60);
+	ec_is("+0x0c faded on the SAME count (%ld)",
+	      (long)CEB->nofRemoteRetrains, 0, b + 60);
+	ec_is("+0x08 faded on the OTHER count (%ld)",
+	      (long)CEB->nofRemoteRateReneg, 1, b + 60);
+	ec_faded = 1;
+
+	/* the quotient comparison is SIGNED: at 2^31 it says "no advance" */
+	ec_base(5);
+	SET_CE(retrainCounterFadeCount, 1);
+	SET_CE(word_20, 0x7fffffffu);
+	SET_CE(nofV90Retrains, 3);
+	ec_step(b + 61, 100, EC_5);
+	ec_is("the fade quotient is compared signed (%ld)",
+	      (long)CEB->nofV90Retrains, 3, b + 61);
+	ec_fade_signed = 1;
+
+	/*
+	 * And the division itself is UNSIGNED, which is a separate claim: at a
+	 * clock of 2^31 and a fade count of 2^30 the unsigned quotients are
+	 * 2 and 2 and the signed ones are -2 and -1, so `divl` says the clock
+	 * did not advance and `idivl` says it did.
+	 */
+	ec_base(66);
+	SET_CE(retrainCounterFadeCount, 0x40000000);
+	SET_CE(word_20, 0x80000000u);
+	SET_CE(nofV90Retrains, 3);
+	ec_step(b + 62, 100, EC_5);
+	ec_is("the fade division is unsigned (%ld)",
+	      (long)CEB->nofV90Retrains, 3, b + 62);
+	ec_fade_unsigned = 1;
+
+	/* --------------------------------------- 2: every +0x8c code */
+	{
+		static const int code[9] = { -2, 0, 1, 2, 3, 4, 5, 6, 7 };
+		static const int want[9] = {  0, 0, 3, 2, 1, 3, 2, 0, 0 };
+
+		for (i = 0; i < 9; i++) {
+			long t = b + 70 + i;
+
+			ec_base(6 + i);
+			SET_CE(word_8c, code[i]);
+			SET_CE(short_9c, 10);
+			SET_CE(curDmin, 5);
+			v = ec_step(t, 100, EC_5);
+			ec_is("the external demand decided (%ld)", v, want[i],
+			      t);
+			ec_is("+0x8c was acknowledged (%ld)",
+			      (long)CEB->word_8c, code[i] > -1 ? -1 : code[i],
+			      t);
+			if (code[i] >= 0 && code[i] <= 7)
+				ec_ext_code[code[i] > 7 ? 7 : code[i]] = 1;
+			if (code[i] == -2)
+				ec_ext_untouched = 1;
+		}
+		/*
+		 * +0x90 and +0x98 are what the code 5 arm computes -- and
+		 * initDmin has to be planted, because code 5 raises verdict 2
+		 * and stage 4d then runs the rate-down arm, which clears
+		 * +0x90 outright on the path where the distance has doubled.
+		 * Left at -1 the entry latch makes initDmin equal to curDmin
+		 * and `curDmin >= 2 * initDmin` is 0 >= 0, which is that path.
+		 */
+		ec_base(20);
+		SET_CE(word_8c, 5);
+		SET_CE(short_9c, 10);
+		SET_CE(curDmin, 5);
+		ec_step(b + 80, 100, EC_5);
+		ec_is("+0x90 is (word_8c > 3) (%ld)", (long)CEB->word_90, 1,
+		      b + 80);
+		ec_is("+0x98 is (word_8c == 5) (%ld)", (long)CEB->word_98, 1,
+		      b + 80);
+		ec_base(21);
+		SET_CE(word_8c, 4);
+		ec_step(b + 81, 100, EC_5);
+		ec_is("+0x90 is 1 for code 4 (%ld)", (long)CEB->word_90, 1,
+		      b + 81);
+		ec_is("+0x98 is 0 for code 4 (%ld)", (long)CEB->word_98, 0,
+		      b + 81);
+		ec_base(22);
+		SET_CE(word_8c, 1);
+		ec_step(b + 82, 100, EC_5);
+		ec_is("+0x90 is 0 for code 1 (%ld)", (long)CEB->word_90, 0,
+		      b + 82);
+	}
+
+	/* -------------------- 2b: the default arm, which has its own return */
+
+	/* blocked, because the object is already at its lowest rate */
+	ec_base(23);
+	SET_CE(word_8c, 0);
+	SET_CE(enableRrnDown, 0);
+	v = ec_step(b + 90, 100, EC_5);
+	ec_is("the blocked arm answers 0 (%ld)", v, 0, b + 90);
+	ec_ext_blocked = 1;
+
+	/*
+	 * One rate down, with `debugFallBack` armed and a period of one: the
+	 * arm RETURNS, so stage 5 never runs and the answer stays 2.
+	 */
+	ec_base(24);
+	SET_CE(word_8c, 7);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 5);
+	SET_CE(debugFallBack, 1);
+	SET_CE(debugPeriod, 1);
+	v = ec_step(b + 91, 100, EC_5);
+	ec_is("the EC rate down answers 2 (%ld)", v, 2, b + 91);
+	ec_is("and stage 5 did not run (%ld)", (long)CEB->word_24, 0, b + 91);
+	ec_is("+0x90 took RRN_SILENCE_REQUESTED (%ld)", (long)CEB->word_90,
+	      0x00abcdef, b + 91);
+	ec_is("+0x8c was acknowledged (%ld)", (long)CEB->word_8c, -1, b + 91);
+	ec_ext_down = 1;
+	ec_ext_returned_early = 1;
+	ec_epilogue_ecx = 1;
+
+	/*
+	 * A CODE 3 THAT SURVIVES TO A VERDICT 5, which is the only way the
+	 * arm's own `+0x90 = 0` is observable: verdict 1 always runs the
+	 * rate-up case, which clears +0x90 again, and the retrain and
+	 * rate-down cases write it too -- but 5 has no case at all.
+	 */
+	ec_base(71);
+	SET_CE(word_8c, 3);
+	SET_CE(retrainDetectDuration, 100);
+	SET_CE(nofV90Retrains, 4);
+	v = ec_step(b + 96, 300, EC_25);
+	ec_is("a code 3 that becomes a fall-back (%ld)", v, 5, b + 96);
+	ec_is("and +0x90 is what the code 3 arm left (%ld)",
+	      (long)CEB->word_90, 0, b + 96);
+	ec_verdict5_no_case = 1;
+
+	/* the V42 override needs verdict 2, not merely +0x94 */
+	ec_base(72);
+	SET_CE(word_8c, 0);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 25);
+	SET_CE(word_94, 1);
+	v = ec_step(b + 97, 100, EC_5);
+	ec_is("the V42 retrain is not overridden (%ld)", v, 4, b + 97);
+	ec_ext_no_override = 1;
+
+	/* the same, overridden by +0x94 */
+	ec_base(25);
+	SET_CE(word_8c, 0);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 5);
+	SET_CE(word_94, 1);
+	v = ec_step(b + 92, 100, EC_5);
+	ec_is("+0x94 turns the rate down into a retrain (%ld)", v, 4, b + 92);
+	ec_is("and clears +0x90 (%ld)", (long)CEB->word_90, 0, b + 92);
+	ec_ext_override = 1;
+
+	/* the distance doubled: a retrain instead */
+	ec_base(26);
+	SET_CE(word_8c, 0);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 25);
+	v = ec_step(b + 93, 100, EC_5);
+	ec_is("the doubled distance retrains (%ld)", v, 4, b + 93);
+	ec_is("and counted one (%ld)", (long)CEB->nofV90Retrains, 1, b + 93);
+	ec_is("and re-armed initDmin (%ld)", (long)CEB->short_9c, -1, b + 93);
+	ec_ext_retrain = 1;
+
+	/* and once too often, a fall-back */
+	ec_base(27);
+	SET_CE(word_8c, 0);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 25);
+	SET_CE(nofV90Retrains, 4);
+	v = ec_step(b + 94, 100, EC_5);
+	ec_is("the fifth retrain falls back (%ld)", v, 5, b + 94);
+	ec_is("and restarted the count (%ld)", (long)CEB->nofV90Retrains, 0,
+	      b + 94);
+	ec_ext_fallback = 1;
+
+	/* the limit is UNSIGNED: a negative one is never exceeded */
+	ec_base(28);
+	SET_CE(word_8c, 0);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 25);
+	SET_CE(nofV90Retrains, 4);
+	SET_P(MAX_NOF_V90_RETRAINS, -1);
+	v = ec_step(b + 95, 100, EC_5);
+	ec_is("a negative retrain limit is never exceeded (%ld)", v, 4,
+	      b + 95);
+	ec_neg_max = 1;
+
+	/*
+	 * 3: rate up.  THE AVERAGE IS NEGATIVE ON PURPOSE -- the arm's own
+	 * diagnostic prints it as `%c%d.%02d`, and the decimals go through an
+	 * integer absolute value in the object, so -12.5f is the only kind of
+	 * input that can tell `abs` from no `abs`.
+	 */
+	ec_base(30);
+	SET_CE(enableRrnUp, 1);
+	for (i = 0; i < 4; i++) {
+		long t = b + 100 + i;
+
+		v = ec_step(t, 100, EC_M125);
+		if (i < 2) {
+			ec_is("the rate up is still waiting (%ld)", v, 0, t);
+			ec_is("and +0x10 accumulated (%ld)", (long)CEB->word_10,
+			      100 * (i + 1), t);
+			ec_rateup_wait = 1;
+		} else if (i == 2) {
+			ec_is("the rate up fired (%ld)", v, 1, t);
+			ec_is("and +0x10 restarted (%ld)", (long)CEB->word_10,
+			      0, t);
+			ec_is("and +0x1c restarted (%ld)", (long)CEB->word_1c,
+			      0, t);
+			ec_is("and +0x90 was cleared (%ld)",
+			      (long)CEB->word_90, 0, t);
+			ec_rateup = 1;
+		}
+	}
+
+	/* the average at or above threshUp clears +0x10 instead */
+	ec_base(31);
+	SET_CE(enableRrnUp, 1);
+	SET_CE(word_10, 250);
+	ec_step(b + 110, 100, EC_18);
+	ec_is("an average over threshUp clears +0x10 (%ld)",
+	      (long)CEB->word_10, 0, b + 110);
+
+	/* both rate-up limits are unsigned */
+	ec_base(32);
+	SET_CE(enableRrnUp, 1);
+	SET_CE(rateUpDetectDuration, -1);
+	SET_CE(word_1c, 5000);
+	v = ec_step(b + 111, 100, EC_5);
+	ec_is("a negative rate-up duration never fires (%ld)", v, 0, b + 111);
+	ec_neg_rateup_dur = 1;
+
+	ec_base(33);
+	SET_CE(enableRrnUp, 1);
+	SET_CE(minDurationInDataBeforeRrnUp, -1);
+	SET_CE(word_10, 5000);
+	v = ec_step(b + 112, 100, EC_5);
+	ec_is("a negative rate-up dwell never fires (%ld)", v, 0, b + 112);
+	ec_neg_rateup_min = 1;
+
+	/*
+	 * THE DWELL IS ON +0x1c AND THE DURATION ON +0x10, which the ordinary
+	 * run cannot separate because both counters reach 300 together.  Here
+	 * they are 350 and 600 against limits of 300 and 400.
+	 */
+	ec_base(73);
+	SET_CE(enableRrnUp, 1);
+	SET_CE(minDurationInDataBeforeRrnUp, 400);
+	SET_CE(word_10, 250);
+	SET_CE(word_1c, 500);
+	v = ec_step(b + 113, 100, EC_5);
+	ec_is("the two rate-up counters are different counters (%ld)", v, 1,
+	      b + 113);
+	ec_rateup_two_counters = 1;
+
+	/* ----------------------------------------- 4: the plain rate down */
+	ec_base(34);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 5);
+	for (i = 0; i < 4; i++) {
+		long t = b + 120 + i;
+
+		v = ec_step(t, 200, EC_18);
+		if (i < 2) {
+			ec_is("the rate down is still waiting (%ld)", v, 0, t);
+			ec_ratedown_wait = 1;
+		} else if (i == 2) {
+			ec_is("the rate down fired (%ld)", v, 2, t);
+			ec_is("+0x90 took the parameter (%ld)",
+			      (long)CEB->word_90, 0x00abcdef, t);
+			ec_is("+0x98 was cleared (%ld)", (long)CEB->word_98, 0,
+			      t);
+			ec_ratedown = 1;
+			ec_case2_down = 1;
+		}
+	}
+
+	/* an average at or below threshDown clears +0x14 */
+	ec_base(35);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(word_14, 500);
+	ec_step(b + 130, 100, EC_5);
+	ec_is("an average under threshDown clears +0x14 (%ld)",
+	      (long)CEB->word_14, 0, b + 130);
+
+	/* the rate down turning into a retrain, and then a fall-back */
+	ec_base(36);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 25);
+	SET_CE(word_14, 500);
+	SET_CE(word_1c, 500);
+	v = ec_step(b + 131, 200, EC_18);
+	ec_is("the rate down retrains when the distance doubled (%ld)", v, 4,
+	      b + 131);
+	ec_is("and re-armed initDmin (%ld)", (long)CEB->short_9c, -1, b + 131);
+	ec_case2_retrain = 1;
+
+	ec_base(37);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 25);
+	SET_CE(word_14, 500);
+	SET_CE(word_1c, 500);
+	SET_CE(nofV90Retrains, 4);
+	v = ec_step(b + 132, 200, EC_18);
+	ec_is("and falls back once too often (%ld)", v, 5, b + 132);
+	ec_case2_fallback = 1;
+
+	/* the rate-down arm's own copy of the unsigned limit */
+	ec_base(70);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 25);
+	SET_CE(word_14, 500);
+	SET_CE(word_1c, 500);
+	SET_CE(nofV90Retrains, 4);
+	SET_P(MAX_NOF_V90_RETRAINS, -1);
+	v = ec_step(b + 135, 200, EC_18);
+	ec_is("the rate-down retrain limit is unsigned too (%ld)", v, 4,
+	      b + 135);
+	ec_case2_neg_max = 1;
+
+	/* both rate-down limits are unsigned */
+	ec_base(38);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(rateDownDetectDuration, -1);
+	SET_CE(word_1c, 5000);
+	v = ec_step(b + 133, 200, EC_18);
+	ec_is("a negative rate-down duration never fires (%ld)", v, 0,
+	      b + 133);
+	ec_neg_ratedown_dur = 1;
+
+	ec_base(39);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(minDurationInDataBeforeRrnDown, -1);
+	SET_CE(word_14, 5000);
+	v = ec_step(b + 134, 200, EC_18);
+	ec_is("a negative rate-down dwell never fires (%ld)", v, 0, b + 134);
+	ec_neg_ratedown_min = 1;
+
+	/* ------------------------------------------- 4: the echo-RRN state */
+	ec_base(40);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(enableRrnDown, 0);	/* the echo arm ignores it */
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 5);
+	for (i = 0; i < 7; i++) {
+		long t = b + 140 + i;
+
+		v = ec_step(t, 200, EC_18);
+		if (i == 0) {
+			ec_bits("state 0 scales by 1.52 (%ld)", &CEB->word_b8,
+				0x3fc28f5cu, t);
+			ec_echo_152 = 1;
+		} else if (i == 2) {
+			ec_is("the scaled rate down fired (%ld)", v, 2, t);
+			ec_is("and advanced the state (%ld)",
+			      (long)CEB->short_b4, 1, t);
+			ec_bits("and set the keep-rate energy to 0.65 (%ld)",
+				&PA->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE,
+				0x3f266666u, t);
+			ec_echo_fire_thirds = 1;
+			ec_echo_065 = 1;
+		} else if (i == 3) {
+			ec_bits("state 1 scales by 1.39 (%ld)", &CEB->word_b8,
+				0x3fb1eb85u, t);
+			ec_echo_139 = 1;
+		} else if (i == 4) {
+			ec_is("the dwell ran out and the state went to 3 "
+			      "(%ld)", (long)CEB->short_b4, 3, t);
+			ec_bits("and the keep-rate energy went to 2.0 (%ld)",
+				&PA->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE,
+				0x40000000u, t);
+			ec_echo_terminal = 1;
+		} else if (i == 6) {
+			ec_is("state 3 uses the unscaled test (%ld)", v, 2, t);
+			ec_echo_after3 = 1;
+		}
+	}
+
+	/*
+	 * THE 2.3 IN THE FIRST GUARD, on its own trial: +0x1c at 900 is under
+	 * 400 * 2.3f (which truncates to 919) and over 400 * 2.0f, so the
+	 * multiplier decides between the 1.52 scale and the terminal arm.
+	 */
+	ec_base(64);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(word_1c, 850);
+	ec_step(b + 153, 50, EC_18);
+	ec_bits("the 2.3 guard kept state 0 (%ld)", &CEB->word_b8,
+		0x3fc28f5cu, b + 153);
+	ec_is("and the state did not go terminal (%ld)", (long)CEB->short_b4,
+	      0, b + 153);
+	ec_echo_23 = 1;
+
+	/*
+	 * THE THIRDS CONDITION ON ITS OWN: +0x14 at 210 is over 600/3 and
+	 * under 600/2, and state 0 keeps the fifths alternative shut, so this
+	 * is the only trial where a third really is a third.
+	 */
+	ec_base(65);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(word_1c, 400);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 5);
+	v = ec_step(b + 154, 210, EC_18);
+	ec_is("a third of the duration fired it (%ld)", v, 2, b + 154);
+	ec_is("and advanced the state (%ld)", (long)CEB->short_b4, 1, b + 154);
+	ec_echo_thirds_only = 1;
+
+	/* the second fire condition: a fifth of the duration, in state 1 */
+	ec_base(41);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(short_b4, 1);
+	SET_CE(word_1c, 250);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 5);
+	v = ec_step(b + 150, 130, EC_18);
+	ec_is("the fifths condition fired (%ld)", v, 2, b + 150);
+	ec_is("and advanced the state to 2 (%ld)", (long)CEB->short_b4, 2,
+	      b + 150);
+	ec_bits("and set the keep-rate energy to 1.8 (%ld)",
+		&PA->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE, 0x3fe66666u,
+		b + 150);
+	ec_echo_fire_fifths = 1;
+	ec_echo_18 = 1;
+
+	/*
+	 * +0x5c REACHES THE x87 EXACTLY.  16777217 is the first integer a
+	 * `float` cannot hold; the object's `fildll` keeps it, so state 1 with
+	 * +0x1c exactly 16777216 takes the 1.39 arm.  A round trip through
+	 * `float` would make the two equal and take the terminal arm instead.
+	 */
+	ec_base(42);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(short_b4, 1);
+	SET_CE(minDurationInDataBeforeRrnDown, 16777217);
+	SET_CE(word_1c, 16777116);
+	SET_CE(word_14, 0);
+	ec_step(b + 151, 100, EC_18);
+	ec_bits("+0x5c is not rounded through float (%ld)", &CEB->word_b8,
+		0x3fb1eb85u, b + 151);
+	ec_is("and the state did not go terminal (%ld)", (long)CEB->short_b4,
+	      1, b + 151);
+	ec_mindur_exact = 1;
+
+	/*
+	 * THE PRODUCT IS NOT ROUNDED EITHER.  10.0f * 2.3f is 22.99999952 at
+	 * 80 bits and 23.0 at 32, and the terminal arm's diagnostic prints
+	 * `(int)` of it and its first three decimals.
+	 */
+	ec_base(43);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(short_b4, 2);
+	SET_CEF(word_b8, 0x40133333u);		/* 2.3f */
+	ec_step(b + 152, 100, EC_10);
+	ec_is("the terminal arm ran (%ld)", (long)CEB->short_b4, 3, b + 152);
+	if (lvl > 1)
+		ec_prod_exact = 1;
+
+	/* and the same diagnostic on a negative product, for the `abs` */
+	ec_base(67);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(short_b4, 2);
+	ec_step(b + 155, 100, EC_M125);
+	ec_is("the terminal arm ran on a negative average (%ld)",
+	      (long)CEB->short_b4, 3, b + 155);
+
+	/*
+	 * THE COMPARISON IS AGAINST THE SCALED AVERAGE.  12.0f is under
+	 * `threshDown` and 12.0f * 1.52f is over it, so this is the only
+	 * trial where dropping the scale changes the answer.
+	 */
+	ec_base(68);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	ec_step(b + 156, 100, EC_12);
+	ec_is("the scaled average is what is compared (%ld)",
+	      (long)CEB->word_14, 100, b + 156);
+	ec_echo_scaled_cmp = 1;
+
+	/*
+	 * THE THIRDS AND FIFTHS DIVISIONS ARE UNSIGNED.  A duration of -1
+	 * gives 1431655765 unsigned and 0 signed, so a signed divide makes
+	 * "+0x14 has reached a third of it" true on the first call.
+	 */
+	ec_base(69);
+	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
+	SET_CE(rateDownDetectDuration, -1);
+	SET_CE(word_1c, 600);
+	v = ec_step(b + 157, 50, EC_18);
+	ec_is("a negative echo duration never fires (%ld)", v, 0, b + 157);
+	ec_echo_neg_dur = 1;
+
+	/* ------------------------------------------------------ 4b: retrain */
+	ec_base(44);
+	SET_CE(retrainDetectDuration, 900);	/* the third call hits it
+						 * exactly, so `>=` fires and
+						 * `>` does not */
+	for (i = 0; i < 3; i++) {
+		long t = b + 160 + i;
+
+		v = ec_step(t, 300, EC_25);
+		if (i < 2) {
+			ec_is("the retrain is still waiting (%ld)", v, 0, t);
+			ec_is("and +0x18 accumulated (%ld)", (long)CEB->word_18,
+			      300 * (i + 1), t);
+			ec_retrain_wait = 1;
+		} else {
+			ec_is("the retrain fired (%ld)", v, 4, t);
+			ec_is("and counted one (%ld)",
+			      (long)CEB->nofV90Retrains, 1, t);
+			ec_is("and +0x18 restarted (%ld)", (long)CEB->word_18,
+			      0, t);
+			ec_is("and initDmin was re-armed (%ld)",
+			      (long)CEB->short_9c, -1, t);
+			ec_retrain = 1;
+		}
+	}
+
+	ec_base(45);
+	SET_CE(nofV90Retrains, 4);
+	SET_CE(word_18, 600);
+	v = ec_step(b + 170, 300, EC_25);
+	ec_is("the retrain falls back once too often (%ld)", v, 5, b + 170);
+	ec_retrain_fallback = 1;
+
+	/* the limit is `>` and not `>=`: a count that reaches it is allowed */
+	ec_base(63);
+	SET_CE(nofV90Retrains, 3);
+	SET_CE(word_18, 600);
+	v = ec_step(b + 173, 300, EC_25);
+	ec_is("reaching the limit is not exceeding it (%ld)", v, 4, b + 173);
+	ec_is("and the count stands (%ld)", (long)CEB->nofV90Retrains, 4,
+	      b + 173);
+	ec_retrain_at_limit = 1;
+
+	ec_base(46);
+	SET_CE(retrainDetectDuration, -1);
+	SET_CE(word_18, 600);
+	v = ec_step(b + 171, 300, EC_25);
+	ec_is("a negative retrain duration never fires (%ld)", v, 0, b + 171);
+	ec_neg_retrain_dur = 1;
+
+	/* the 4b arm has its own copy of the unsigned limit */
+	ec_base(74);
+	SET_CE(retrainDetectDuration, 100);
+	SET_CE(nofV90Retrains, 4);
+	SET_P(MAX_NOF_V90_RETRAINS, -1);
+	v = ec_step(b + 174, 300, EC_25);
+	ec_is("the 4b retrain limit is unsigned too (%ld)", v, 4, b + 174);
+	ec_neg_max_4b = 1;
+
+	/* +0x14 is cleared when neither rate-down arm is armed */
+	ec_base(75);
+	SET_CE(word_14, 500);
+	ec_step(b + 175, 100, EC_5);
+	ec_is("+0x14 is cleared with no rate down armed (%ld)",
+	      (long)CEB->word_14, 0, b + 175);
+	ec_no_ratedown_clears = 1;
+
+	/* an average at or below threshRetrain clears +0x18 */
+	ec_base(47);
+	SET_CE(word_18, 600);
+	ec_step(b + 172, 300, EC_18);
+	ec_is("an average under threshRetrain clears +0x18 (%ld)",
+	      (long)CEB->word_18, 0, b + 172);
+
+	/* ------------------------------- 4c: too many renegotiations */
+	ec_base(48);
+	SET_CE(nofRemoteRateReneg, 3);
+	SET_CE(nofRemoteRateRenegBeforeRetrain, 3);
+	SET_CE(nofV90Retrains, 10);
+	v = ec_step(b + 180, 100, EC_5);
+	ec_is("the renegotiation count forces a retrain (%ld)", v, 4, b + 180);
+	ec_is("and does NOT check the retrain limit (%ld)",
+	      (long)CEB->nofV90Retrains, 11, b + 180);
+	ec_is("and restarted the renegotiation count (%ld)",
+	      (long)CEB->nofRemoteRateReneg, 0, b + 180);
+	ec_reneg_forced = 1;
+	ec_reneg_no_fallback = 1;
+
+	ec_base(49);
+	SET_CE(nofRemoteRateReneg, 3);
+	SET_CE(nofRemoteRateRenegBeforeRetrain, -1);
+	v = ec_step(b + 181, 100, EC_5);
+	ec_is("a negative renegotiation limit never fires (%ld)", v, 0,
+	      b + 181);
+	ec_neg_reneg_limit = 1;
+
+	/* -------------------------------------- 4d: the +0x94 override */
+	ec_base(50);
+	SET_CE(enableRrnDown, 1);
+	SET_CE(word_94, 1);
+	SET_CE(short_9c, 10);
+	SET_CE(curDmin, 5);
+	SET_CE(word_14, 500);
+	SET_CE(word_1c, 500);
+	v = ec_step(b + 190, 200, EC_18);
+	ec_is("+0x94 overrides a rate down (%ld)", v, 4, b + 190);
+	ec_is("and clears +0x90 (%ld)", (long)CEB->word_90, 0, b + 190);
+	ec_override = 1;
+
+	/* ---------------------------------------------- 5: the debug arms */
+	{
+		static const int want[10] = { 0, 4, 0, 1, 0, 4, 0, 2, 0, 4 };
+
+		ec_base(51);
+		SET_CE(debugAlternateDebug, 1);
+		for (i = 0; i < 10; i++) {
+			long t = b + 200 + i;
+
+			v = ec_step(t, 300, EC_5);
+			ec_is("the alternate debug arm cycles (%ld)", v,
+			      want[i], t);
+			if (i == 1)
+				ec_alt[0] = 1;
+			if (i == 3)
+				ec_alt[1] = 1;
+			if (i == 5)
+				ec_alt[2] = 1;
+			if (i == 7) {
+				ec_alt[3] = 1;
+				ec_is("the RRN down arm took the parameter "
+				      "(%ld)", (long)CEB->word_90, 0x00abcdef,
+				      t);
+				ec_is("and cleared +0x98 (%ld)",
+				      (long)CEB->word_98, 0, t);
+			}
+			if (i == 0)
+				ec_dbg_wait = 1;
+		}
+
+		/* +0x80 out of range: the switch does nothing at all */
+		ec_base(52);
+		SET_CE(debugAlternateDebug, 1);
+		SET_CE(word_80, 4);
+		SET_CE(word_24, 400);
+		v = ec_step(b + 210, 300, EC_5);
+		ec_is("an out-of-range +0x80 decides nothing (%ld)", v, 0,
+		      b + 210);
+		ec_is("and does not even restart +0x24 (%ld)",
+		      (long)CEB->word_24, 700, b + 210);
+		ec_alt[4] = 1;
+	}
+
+	ec_base(53);
+	SET_CE(debugFallBack, 1);
+	SET_CE(word_24, 400);
+	SET_CE(debugPeriod, 600);	/* reached exactly: `>=` fires, `>`
+					 * does not */
+	v = ec_step(b + 211, 200, EC_5);
+	ec_is("the debug fall back (%ld)", v, 5, b + 211);
+	ec_is("and restarted +0x24 (%ld)", (long)CEB->word_24, 0, b + 211);
+	ec_dbg_fallback = 1;
+
+	ec_base(54);
+	SET_CE(debugRetrain, 1);
+	SET_CE(word_24, 400);
+	v = ec_step(b + 212, 300, EC_5);
+	ec_is("the debug retrain (%ld)", v, 4, b + 212);
+	ec_dbg_retrain = 1;
+
+	ec_base(55);
+	SET_CE(debugRateUp, 1);
+	SET_CE(word_24, 400);
+	v = ec_step(b + 213, 300, EC_5);
+	ec_is("the debug rate up (%ld)", v, 1, b + 213);
+	ec_dbg_up = 1;
+
+	ec_base(56);
+	SET_CE(debugRateDown, 1);
+	SET_CE(word_24, 400);
+	v = ec_step(b + 214, 300, EC_5);
+	ec_is("the debug rate down (%ld)", v, 2, b + 214);
+	ec_is("and took the parameter (%ld)", (long)CEB->word_90, 0x00abcdef,
+	      b + 214);
+	ec_dbg_down = 1;
+
+	/* the five are an else-if chain: the first non-zero flag wins */
+	ec_base(57);
+	SET_CE(debugFallBack, 1);
+	SET_CE(debugRetrain, 1);
+	SET_CE(debugRateUp, 1);
+	SET_CE(debugRateDown, 1);
+	SET_CE(word_24, 400);
+	v = ec_step(b + 215, 300, EC_5);
+	ec_is("the debug arms are an else-if chain (%ld)", v, 5, b + 215);
+	ec_dbg_chain = 1;
+
+	/*
+	 * +0x24 IS SIGNED AND SO IS THE PERIOD.  A negative period fires at
+	 * once signed and never unsigned; a negative +0x24 is the other way
+	 * round.  Nothing else in the function separates `jl` from `jb`.
+	 */
+	ec_base(58);
+	SET_CE(debugRetrain, 1);
+	SET_CE(debugPeriod, -1);
+	v = ec_step(b + 216, 100, EC_5);
+	ec_is("a negative debug period fires at once (%ld)", v, 4, b + 216);
+	ec_neg_period = 1;
+
+	ec_base(59);
+	SET_CE(debugRetrain, 1);
+	SET_CE(debugPeriod, 100);
+	SET_CE(word_24, -1000);
+	v = ec_step(b + 217, 100, EC_5);
+	ec_is("a negative +0x24 does not (%ld)", v, 0, b + 217);
+	ec_is("and it stayed negative (%ld)", (long)CEB->word_24, -900,
+	      b + 217);
+	ec_neg_word24 = 1;
+}
+
+/*
+ * The accumulating run: a dozen configurations driven for a dozen
+ * measurements each with the object compared after every one, so a
+ * divergence at the fourth that the tenth washes out is still caught.
+ * `enableRrnUp` is zero throughout the NaN half; see the note above.
+ */
+static void
+ec_sweep(int lvl)
+{
+	static const unsigned int avg[10] = {
+		0x40a00000u, 0x41900000u, 0x41c80000u, 0x00000000u,
+		0x80000000u, 0x00000001u, 0xc1a00000u, 0x42fe0000u,
+		0x3dcccccdu, 0xbdcccccdu
+	};
+	static const unsigned int nan_avg[4] = {
+		0x7fc00000u, 0xffc00000u, 0x7f800000u, 0xff800000u
+	};
+	long b = (long)lvl * 100000 + 500;
+	int cfg, i;
+
+	for (cfg = 0; cfg < 12; cfg++) {
+		ec_base(60 + cfg);
+		SET_CE(enableRrnUp, (cfg & 1) ? 1 : 0);
+		SET_CE(enableRrnDown, (cfg & 2) ? 1 : 0);
+		SET_P(HIGH_LEVEL_TX_ACTIVE, (cfg & 4) ? 1 : 0);
+		SET_CE(word_94, (cfg == 5) ? 1 : 0);
+		SET_CE(retrainCounterFadeCount, 700 + cfg);
+		SET_CE(remoteRrnCounterFadeCount, 900 + cfg);
+		SET_CE(nofV90Retrains, cfg % 5);
+		SET_CE(nofRemoteRetrains, cfg % 3);
+		SET_CE(nofRemoteRateReneg, cfg % 4);
+		SET_CE(nofRemoteRateRenegBeforeRetrain, 6);
+		SET_CE(short_9c, 8 + cfg);
+		SET_CE(curDmin, 3 * cfg);
+		SET_CE(debugAlternateDebug, (cfg == 9) ? 1 : 0);
+		SET_CE(debugRateDown, (cfg == 10) ? 1 : 0);
+		SET_CE(debugPeriod, 900);
+		SET_CE(rateUpDetectDuration, 250 + 10 * cfg);
+		SET_CE(rateDownDetectDuration, 450 + 10 * cfg);
+		SET_CE(retrainDetectDuration, 650 + 10 * cfg);
+		SET_CE(minDurationInDataBeforeRrnUp, 120 + cfg);
+		SET_CE(minDurationInDataBeforeRrnDown, 220 + cfg);
+
+		for (i = 0; i < 12; i++) {
+			long t = b + cfg * 20 + i;
+			unsigned int a;
+
+			if ((cfg & 1) == 0 && i == 6) {
+				a = nan_avg[cfg % 4];
+				ec_nan_fed = 1;
+			} else {
+				a = avg[(cfg * 3 + i) % 10];
+			}
+			if (i == 4)
+				SET_CE(word_8c, (cfg % 9) - 1);
+			ec_step(t, 70u + 23u * (unsigned)i, a);
+		}
+	}
+}
+
+static int
+run_ce_evalconn(void)
+{
+	int lvl;
+
+	diff_begin("V90ConnectionEvaluator::evaluateConnection");
+
+	for (lvl = 0; lvl <= 3; lvl++) {
+		set_level((unsigned)lvl);
+		ec_scenarios(lvl);
+		ec_sweep(lvl);
+	}
+
+	set_level(0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2357,6 +3457,7 @@ main(void)
 	rc |= run_ce_meanerr4();
 	rc |= run_ce_phase3();
 	rc |= run_ce_phase4();
+	rc |= run_ce_evalconn();
 
 	set_level(0);
 	dsplib_debug_capture_on = 0;
@@ -2450,6 +3551,158 @@ main(void)
 	diff_eq_int("and 0 is not one of the other two verdicts",
 		    V90CE_VERDICT_NONE != V90CE_VERDICT_RETRAIN
 		    && V90CE_VERDICT_NONE != V90CE_VERDICT_FALLBACK_V34, 1, 0);
+
+	/*
+	 * `evaluateConnection` ANSWERS SIX THINGS AND HAS FIVE STAGES.  Every
+	 * one of the six is asserted to have been observed, and so is every
+	 * arm the verdict alone cannot separate -- an evaluator that always
+	 * answered the same thing would agree with the blob on all of it
+	 * (findings 149 and 223), and an assertion that fails here means the
+	 * fixture stopped reaching an arm and the checks that looked green
+	 * were vacuous.
+	 */
+	diff_eq_int("evaluateConnection answered 0", ec_verdict[0], 1, 0);
+	diff_eq_int("evaluateConnection answered 1", ec_verdict[1], 1, 0);
+	diff_eq_int("evaluateConnection answered 2", ec_verdict[2], 1, 0);
+	diff_eq_int("evaluateConnection answered 3", ec_verdict[3], 1, 0);
+	diff_eq_int("evaluateConnection answered 4", ec_verdict[4], 1, 0);
+	diff_eq_int("evaluateConnection answered 5", ec_verdict[5], 1, 0);
+	diff_eq_int("and the six are six different numbers",
+		    V90CE_VERDICT_NONE == 0 && V90CE_VERDICT_RRN_UP == 1
+		    && V90CE_VERDICT_RRN_DOWN == 2
+		    && V90CE_VERDICT_RRN_NO_RESTRICT == 3
+		    && V90CE_VERDICT_RETRAIN == 4
+		    && V90CE_VERDICT_FALLBACK_V34 == 5, 1, 0);
+
+	diff_eq_int("evalconn: both epilogues were reached",
+		    ec_epilogue_ecx && ec_epilogue_ebp, 1, 0);
+	diff_eq_int("evalconn: the parameter block really was written",
+		    ec_param_written, 1, 0);
+	diff_eq_int("evalconn: the empty call", ec_empty, 1, 0);
+	diff_eq_int("evalconn: a call with nothing armed", ec_quiet, 1, 0);
+	diff_eq_int("evalconn: the fade clock faded all three counters",
+		    ec_faded, 1, 0);
+	diff_eq_int("evalconn: the fade quotients are compared signed",
+		    ec_fade_signed, 1, 0);
+	diff_eq_int("evalconn: the fade divisions are unsigned",
+		    ec_fade_unsigned, 1, 0);
+	diff_eq_int("evalconn: the 2.3 guard on its own", ec_echo_23, 1, 0);
+	diff_eq_int("evalconn: a third of the duration on its own",
+		    ec_echo_thirds_only, 1, 0);
+	diff_eq_int("evalconn: reaching the retrain limit is allowed",
+		    ec_retrain_at_limit, 1, 0);
+	diff_eq_int("evalconn: the scaled average is what is compared",
+		    ec_echo_scaled_cmp, 1, 0);
+	diff_eq_int("evalconn: a negative duration on the echo path",
+		    ec_echo_neg_dur, 1, 0);
+	diff_eq_int("evalconn: a negative retrain limit in the rate-down arm",
+		    ec_case2_neg_max, 1, 0);
+	diff_eq_int("evalconn: a negative retrain limit in the retrain arm",
+		    ec_neg_max_4b, 1, 0);
+	diff_eq_int("evalconn: verdict 5 has no case in the switch",
+		    ec_verdict5_no_case, 1, 0);
+	diff_eq_int("evalconn: +0x94 alone does not override a retrain",
+		    ec_ext_no_override, 1, 0);
+	diff_eq_int("evalconn: the rate up reads two different counters",
+		    ec_rateup_two_counters, 1, 0);
+	diff_eq_int("evalconn: +0x14 cleared with no rate down armed",
+		    ec_no_ratedown_clears, 1, 0);
+
+	diff_eq_int("evalconn: +0x8c code 0", ec_ext_code[0], 1, 0);
+	diff_eq_int("evalconn: +0x8c code 1", ec_ext_code[1], 1, 0);
+	diff_eq_int("evalconn: +0x8c code 2", ec_ext_code[2], 1, 0);
+	diff_eq_int("evalconn: +0x8c code 3", ec_ext_code[3], 1, 0);
+	diff_eq_int("evalconn: +0x8c code 4", ec_ext_code[4], 1, 0);
+	diff_eq_int("evalconn: +0x8c code 5", ec_ext_code[5], 1, 0);
+	diff_eq_int("evalconn: +0x8c code 6", ec_ext_code[6], 1, 0);
+	diff_eq_int("evalconn: +0x8c code 7", ec_ext_code[7], 1, 0);
+	diff_eq_int("evalconn: +0x8c below -1 is left alone",
+		    ec_ext_untouched, 1, 0);
+	diff_eq_int("evalconn: the blocked V42 rate down", ec_ext_blocked, 1,
+		    0);
+	diff_eq_int("evalconn: the V42 rate down", ec_ext_down, 1, 0);
+	diff_eq_int("evalconn: and it returned before stage 5",
+		    ec_ext_returned_early, 1, 0);
+	diff_eq_int("evalconn: the V42 retrain", ec_ext_retrain, 1, 0);
+	diff_eq_int("evalconn: the V42 fall-back", ec_ext_fallback, 1, 0);
+	diff_eq_int("evalconn: the V42 rate down overridden by +0x94",
+		    ec_ext_override, 1, 0);
+
+	diff_eq_int("evalconn: the rate up accumulated", ec_rateup_wait, 1, 0);
+	diff_eq_int("evalconn: the rate up fired", ec_rateup, 1, 0);
+	diff_eq_int("evalconn: the rate down accumulated", ec_ratedown_wait, 1,
+		    0);
+	diff_eq_int("evalconn: the rate down fired", ec_ratedown, 1, 0);
+	diff_eq_int("evalconn: the rate down printed its demand",
+		    ec_case2_down, 1, 0);
+	diff_eq_int("evalconn: the rate down became a retrain",
+		    ec_case2_retrain, 1, 0);
+	diff_eq_int("evalconn: and then a fall-back", ec_case2_fallback, 1, 0);
+
+	diff_eq_int("evalconn: echo state 0 scaled by 1.52", ec_echo_152, 1,
+		    0);
+	diff_eq_int("evalconn: echo state 1 scaled by 1.39", ec_echo_139, 1,
+		    0);
+	diff_eq_int("evalconn: the thirds fire condition",
+		    ec_echo_fire_thirds, 1, 0);
+	diff_eq_int("evalconn: the fifths fire condition",
+		    ec_echo_fire_fifths, 1, 0);
+	diff_eq_int("evalconn: the keep-rate energy took 0.65", ec_echo_065, 1,
+		    0);
+	diff_eq_int("evalconn: the keep-rate energy took 1.8", ec_echo_18, 1,
+		    0);
+	diff_eq_int("evalconn: the echo machine went terminal",
+		    ec_echo_terminal, 1, 0);
+	diff_eq_int("evalconn: and state 3 uses the unscaled test",
+		    ec_echo_after3, 1, 0);
+	diff_eq_int("evalconn: +0x5c is not rounded through float",
+		    ec_mindur_exact, 1, 0);
+	diff_eq_int("evalconn: the printed product is not rounded either",
+		    ec_prod_exact, 1, 0);
+
+	diff_eq_int("evalconn: the retrain accumulated", ec_retrain_wait, 1,
+		    0);
+	diff_eq_int("evalconn: the retrain fired", ec_retrain, 1, 0);
+	diff_eq_int("evalconn: the retrain fell back", ec_retrain_fallback, 1,
+		    0);
+	diff_eq_int("evalconn: the renegotiation count forced a retrain",
+		    ec_reneg_forced, 1, 0);
+	diff_eq_int("evalconn: and did NOT consult the retrain limit",
+		    ec_reneg_no_fallback, 1, 0);
+	diff_eq_int("evalconn: the +0x94 override", ec_override, 1, 0);
+
+	diff_eq_int("evalconn: the debug arm waited out its period",
+		    ec_dbg_wait, 1, 0);
+	diff_eq_int("evalconn: alternate debug +0x80 == 0", ec_alt[0], 1, 0);
+	diff_eq_int("evalconn: alternate debug +0x80 == 1", ec_alt[1], 1, 0);
+	diff_eq_int("evalconn: alternate debug +0x80 == 2", ec_alt[2], 1, 0);
+	diff_eq_int("evalconn: alternate debug +0x80 == 3", ec_alt[3], 1, 0);
+	diff_eq_int("evalconn: alternate debug +0x80 out of range", ec_alt[4],
+		    1, 0);
+	diff_eq_int("evalconn: the debug fall back", ec_dbg_fallback, 1, 0);
+	diff_eq_int("evalconn: the debug retrain", ec_dbg_retrain, 1, 0);
+	diff_eq_int("evalconn: the debug rate up", ec_dbg_up, 1, 0);
+	diff_eq_int("evalconn: the debug rate down", ec_dbg_down, 1, 0);
+	diff_eq_int("evalconn: the debug arms are an else-if chain",
+		    ec_dbg_chain, 1, 0);
+
+	diff_eq_int("evalconn: a negative retrain limit", ec_neg_max, 1, 0);
+	diff_eq_int("evalconn: a negative retrain duration",
+		    ec_neg_retrain_dur, 1, 0);
+	diff_eq_int("evalconn: a negative rate-up duration",
+		    ec_neg_rateup_dur, 1, 0);
+	diff_eq_int("evalconn: a negative rate-up dwell", ec_neg_rateup_min, 1,
+		    0);
+	diff_eq_int("evalconn: a negative rate-down duration",
+		    ec_neg_ratedown_dur, 1, 0);
+	diff_eq_int("evalconn: a negative rate-down dwell",
+		    ec_neg_ratedown_min, 1, 0);
+	diff_eq_int("evalconn: a negative renegotiation limit",
+		    ec_neg_reneg_limit, 1, 0);
+	diff_eq_int("evalconn: a negative debug period", ec_neg_period, 1, 0);
+	diff_eq_int("evalconn: a negative +0x24", ec_neg_word24, 1, 0);
+	diff_eq_int("evalconn: a NaN average was fed", ec_nan_fed, 1, 0);
+
 	rc |= diff_end();
 
 	return rc;

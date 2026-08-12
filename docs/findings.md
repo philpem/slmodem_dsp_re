@@ -44753,3 +44753,124 @@ covers both zeros, both denormals, both infinities, FLT_MAX, the threshold
 itself and one ulp either side of it, and stops there.
 
 ======================================================================
+
+### 1389. THE CONNECTION EVALUATOR ANSWERS SIX THINGS, NAMES ITS LAST TWO UNMODELLED SLOTS, AND CORRECTS TWO CLAIMS ABOUT x87 ROUNDING THAT WERE MADE AND WERE WRONG
+
+`V90ConnectionEvaluator::evaluateConnection` (0x3e6d0, 3,857 bytes),
+reconstructed and differentially tested.  It is the class's whole decision
+half; with it the class is fourteen members minus two, and the object has no
+unmodelled region left.
+
+**THE VERDICT SET IS {0, 1, 2, 3, 4, 5} AND -1 IS NOT IN IT.**  Finding 1388
+left the enumeration explicitly incomplete at {0, 4, 5} and named this function
+as the one that would finish it.  There are TWO epilogues.  0x3e8b7 is reached
+from the empty call, where `xor %eax,%eax` at 0x3e6ee still stands, and from
+`mov %ecx,%eax` at 0x3e8a2, where `%ecx` is 4 (0x3e80d), 2 (0x3e857), 5
+(0x3f014) or 4 (0x3f2f0).  0x3ed18 is `mov %ebp,%eax` at 0x3ed0c, and twenty
+immediates reach `%ebp`: 0 twice (0x3e6d1, 0x3ed7a), 1 four times, 2 four
+times, 3 once (0x3ef20), 4 six times and 5 three times.  The strings name the
+three new ones -- 1 is a rate up, 2 a rate down, 3 the single
+"Initiating No Restriction RRN (external demand)".
+
+**THE TWO NEGATIVE IMMEDIATES NEAR THE EPILOGUES ARE NOT VERDICTS**, which is
+worth writing down because they look like the fourth one.  `mov $0x0,%esi` at
+0x3ed07 feeds `mov %esi,0x70(%edi)` -- the average, cleared -- and `mov
+$0xffffffff,%esi` at 0x3ede4 feeds `mov %si,0x9c(%edi)`, a SIXTEEN-bit store
+into +0x9c.  `mov $0xffffffff,%ebp` at 0x3f1f3 does the same before `%ebp` is
+reloaded with 4 at 0x3f292.  Working backward from the two `ret`s is what
+separates them from the answer; grepping for `mov $imm,%eax` across the
+function finds float bit patterns and nothing else.
+
+**+0x98 AND +0xb8, THE LAST TWO UNMODELLED SLOTS, BOTH BELONG TO THIS
+FUNCTION.**  +0x98 was `pad_98[4]` and this is its only writer: four plain
+zeroes and, at 0x3ee4f, `cmp $0x5,%edx; sete %al; mov %eax,0x98(%edi)` -- the
+value of `word_8c == 5`.  Every store sits beside a store to +0x90, so the two
+travel as a pair; nothing READS it anywhere reconstructed, so it keeps an
+offset name.  +0xb8 was the middle of `pad_b6[6]` and is a FLOAT: `fsts
+0xb8(%edi)` at 0x3e9e8 stores the rate-down multiplier the instant it is
+chosen, and `fmuls 0xb8(%edi)` at 0x3f041 reads it back to print `avePdsnr *
+that`.  Nothing initialises it -- `reset` stops at +0xb4 -- so the diagnostic
+on the path where no multiplier was chosen prints whatever the slot last held,
+which is why the test plants a value rather than letting the seed decide.
+
+**TWO FIELDS GET THE AUTHOR'S OWN NAMES IN THE RECORD AND KEEP THEIR OFFSET
+NAMES IN THE CODE.**  +0x9c is `initDmin`: 0x9d84 is "before EC RRN: curDmin =
+%d, initDmin = %d" and 0xa348 is "on Rate Down: curDmin = %d, initDmin = %d",
+and at both sites the second conversion is `movswl 0x9e` and the third `movswl
+0x9c`.  +0xb4 is `echoRrnState`: 0x3ea9c stores `%ebx + 1` into it and 0x3f48e
+prints exactly that value under "V90-mod3 CHANGE echoRrnState = %d".  Neither
+was renamed, because `test/unit/t_v90leaves.cpp` uses `short_9c` and `short_b4`
+and belongs to other work -- the third and fourth time this class has recorded
+a derivation instead of renaming.
+
+**+0x24 IS `int` AND EVERY OTHER COUNTER IN THE CLASS IS `unsigned`.**  All
+five debug arms do `word_24 += word_74; cmp 0x6c(%edi),%eax; jl` -- 0x3ec92,
+0x3ed39, 0x3ef02, 0x3efda, 0x3f3ba -- a SIGNED branch against `debugPeriod`.
+An unsigned +0x24 would have made the sum unsigned and the branch `jb`.  It
+needs two trials to pin, not one: a negative period fires signed and never
+unsigned, and a negative +0x24 is the other way round.
+
+**THE FADE CLOCK DIVIDES UNSIGNED AND COMPARES SIGNED**, which is not a
+contradiction and is the shape here a reader would spell wrong.  0x3e715 and
+0x3e720 are `divl 0x48(%edi)` and 0x3e727 is `jg`: an unsigned quotient stored
+into an `int`, and two `int`s compared.  Writing the condition as one unsigned
+expression gives `ja`.  Both halves need their own trial -- the clock at 2^31
+with a fade count of 2^30 separates `divl` from `idivl`, and a fade count of 1
+with the clock at 0x7fffffff separates `jg` from `ja`.
+
+**IT WRITES A PARAMETER, and it is the only member of the class that does.**
+`params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE` at +0x404 takes 2.0f
+(0x3eecc), 0.65f or 1.8f (0x3ead8).  `movl $0x40000000` into a `float` slot is
+how GCC stores a float constant to memory, so these are float stores.  The test
+could not keep using "the parameter block was not written" as its guard: it
+snapshots the block, runs ours, keeps what ours wrote, restores, runs the blob
+and compares the two, and asserts at the end that some trial really did write
+it.
+
+**TWO CLAIMS ABOUT x87 ROUNDING WERE MADE IN THIS FUNCTION'S COMMENTS AND BOTH
+WERE WRONG.  The mutation set is what found that out**, which is finding 3's
+rule in the task brief -- an uncatchable mutation may mean the record is wrong
+rather than the test.
+
+  * `(unsigned)(float)minDur` was said to round at 2^24 where the object's
+    `fildll`/`fistpll` round trip does not.  Driven at 16777217, the first
+    integer a `float` cannot hold, the two spellings AGREE.  FLT_EVAL_METHOD is
+    2 on an x87 target, so the cast is evaluated at 80 bits and never narrows;
+    the mutant emits a visibly different instruction sequence and computes the
+    same number.
+  * `ce_frac3(word_70 * word_b8)` was said to round the product at the `float`
+    parameter, where the object reads it three times at 80 bits.  It does not,
+    for the same reason.  10.0f * 2.3f is 22.99999952 unrounded and 23.0
+    rounded and the test plants exactly those values, and both spellings print
+    "22.999".
+
+  The two-argument helper is kept -- it is the one spelling no compiler can
+  round -- but its comment now says it is belt and braces and says what was
+  measured.  Both entries were replaced: one by a NOTE recording the failed
+  claim, one by a mutation that IS caught.
+
+**ONE INPUT IS KEPT AWAY FROM ONE COMPARISON, and it is the mirror image of
+1388's.**  0x3e933 is `fcomps 0xa0(%edi); jae`, the complement of `avePdsnr <
+threshUp` taken without consulting the parity flag, so the blob RUNS the
+rate-up arm for a NaN average where C says it must not.  GCC 13 complements the
+same source correctly, so a NaN there would disagree between `make phase` and
+`make period` for a reason that is not in our source.  The other four `word_70`
+comparisons are `ja`/`jbe`, which agree on both compilers, so NaN is fed
+wherever `enableRrnUp` is zero -- and kept away from the paths that PRINT the
+average, because the sign character is `sbb` off the carry and reads unordered
+as '+'.
+
+**AND ONE EXISTING MUTATION ANCHOR HAD TO BE REPAIRED, NOT WEAKENED.**  `find`
+is a plain substring search, and this function writes `short_9c = -1;` at three
+deeper indentations, so "the +0x9c store is 32 bits wide" went from one match
+to four -- and an ambiguous anchor is reported UNUSABLE, which does not fail a
+run.  The entry gained `word_84 = 0;` as leading context and says so in its
+`why`; the claim, the site and the replacement are unchanged.  The same trap
+caught four more anchors of ours and cost a rewrap of two `if`s: three tabs
+followed by four spaces is a SUBSTRING of four tabs followed by four spaces.
+
+The suite is 212 mutations, 208 caught, 0 not caught, 0 unusable, 4 equivalent,
+0 miscounted, and `make period` is 155 passed and 2 failed -- the baseline, and
+neither failure is this class's.
+
+======================================================================

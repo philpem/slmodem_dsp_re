@@ -90,6 +90,12 @@ CE_OFF(word_84,				0x84, word84);
 CE_OFF(word_88,				0x88, word88);
 CE_OFF(word_8c,				0x8c, word8c);
 CE_OFF(word_90,				0x90, word90);
+/*
+ * +0x98 and +0xb8 were `pad_98[4]` and the middle of `pad_b6[6]` until
+ * `evaluateConnection` was read; the header carries the store that proves
+ * each.  With them the class has no unmodelled region left.
+ */
+CE_OFF(word_98,				0x98, word98);
 CE_OFF(short_9c,			0x9c, short9c);
 CE_OFF(curDmin,				0x9e, curdmin);
 CE_OFF(threshUp,			0xa0, threshup);
@@ -99,6 +105,7 @@ CE_OFF(phase4ErrorForV34Fallback,	0xac, p4err);
 CE_OFF(short_b0,			0xb0, shortb0);
 CE_OFF(short_b2,			0xb2, shortb2);
 CE_OFF(short_b4,			0xb4, shortb4);
+CE_OFF(word_b8,				0xb8, wordb8);
 typedef char v90ce_size[(sizeof(V90ConnectionEvaluator) == 0xbc) ? 1 : -1];
 #endif
 
@@ -449,6 +456,25 @@ ce_frac3(float v)
 	int frac = (int)((v - (float)(int)v) * 1000.0f);
 
 	return (frac < 0) ? -frac : frac;
+}
+
+/*
+ * TWO decimals, for `evaluateConnection`'s five `%c%d.%02d` sites.  Same
+ * shape, same round trip, `100.0f` out of `.rodata.cst4+0x2ec` rather than a
+ * thousand -- 0x3eb38, 0x3ef44, 0x3f21f, 0x3f33d and 0x3f42b all load it.
+ * The two evaluators print three decimals and this function prints two; that
+ * is a real difference between them and not a transcription slip.
+ *
+ * The local is `hundredths` rather than `frac` so that the mutation set can
+ * anchor on this function's absolute value and on `ce_frac3`'s separately;
+ * the two bodies are otherwise the same text.
+ */
+static int
+ce_frac2(float v)
+{
+	int hundredths = (int)((v - (float)(int)v) * 100.0f);
+
+	return (hundredths < 0) ? -hundredths : hundredths;
 }
 
 /*
@@ -840,6 +866,671 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 			}
 			word_1c = 0;
 			word_90 = 0;
+		}
+	}
+
+	word_74 = 0;
+	word_70 = 0;
+	return verdict;
+}
+
+/*
+ * ===========================================================================
+ * evaluateConnection -- 3,857 bytes, 0x3e6d0
+ * ===========================================================================
+ *
+ * The whole of the class's decision making, and the only member that answers
+ * anything but 0, 4 and 5.  Six values reach %eax and the header's verdict
+ * block lists every immediate that produces one; -1 is NOT among them.
+ *
+ * IT IS FIVE STAGES, in this order, and every one of them can raise a verdict
+ * that a later one then overrides:
+ *
+ *   1  the fade clock          three counters lose one each time +0x20
+ *                              crosses a multiple of their fade count
+ *   2  the external demand     +0x8c holds a code somebody else planted;
+ *                              THIS STAGE RETURNS on its own default arm
+ *   3  rate up                 avePdsnr below `threshUp` for long enough
+ *   4  rate down and retrain   avePdsnr above `threshDown` / `threshRetrain`,
+ *                              with an alternative "echo RRN" reading of the
+ *                              rate-down threshold selected by a parameter
+ *   5  the debug arms          five mutually exclusive forced verdicts
+ *
+ * THE EXTERNAL-DEMAND STAGE HAS ITS OWN EPILOGUE.  0x3e8b7 is reached only
+ * from the empty call and from that stage's default arm, and that arm is the
+ * only place in the function where the answer travels in %ecx rather than
+ * %ebp.  It is written as a `return` below because that is what it is: the
+ * arm clears the average, plants -1 in +0x8c and answers, and stages 3 to 5
+ * never run.
+ *
+ * WHAT THE SWITCH ON +0x8c IS.  0x3e760 tests `word_8c > -1` and 0x3e769
+ * range-checks 0..6 before a bit-test dispatch, so the two comparisons are
+ * two source-level things: an `if` that skips the whole stage when nothing is
+ * pending, and a `switch` whose default arm catches 0 and everything above 6.
+ *
+ *     mov $0x1,%eax; shl %cl,%eax
+ *     test $0x36,%al   ->  1, 2, 4, 5      the external RRN demands
+ *     test $0x08,%al   ->  3               RRN up
+ *     test $0x40,%al   ->  6               fast parameter exchange
+ *
+ * `word_8c = -1` IS THE ACKNOWLEDGEMENT and every arm reaches it -- the three
+ * cases through 0x3ed63 and the default arm through its own epilogue at
+ * 0x3e8a4.
+ *
+ * THE FADE DIVISIONS ARE UNSIGNED AND THE COMPARISON IS SIGNED, which is not
+ * a contradiction and is the one shape here a reader would spell wrong.
+ * `divl 0x48(%edi)` twice and then `cmp %eax,0x1c(%esp); jg` (0x3e715 ..
+ * 0x3e727): an unsigned quotient stored into an `int`, and two `int`s
+ * compared.  Writing the condition as one unsigned expression would have
+ * given `ja`.
+ *
+ * THE ECHO-RRN VARIANT IS SELECTED BY A PARAMETER AND NOT BY A FIELD.
+ * `params->HIGH_LEVEL_TX_ACTIVE` at 0x3e97b chooses between scaling
+ * `avePdsnr` by 1.52 or 1.39 before the `threshDown` comparison and not
+ * scaling it at all, and the state machine that picks which is +0xb4, the
+ * `echoRrnState` the header names.  Its terminal state 3 falls back to the
+ * unscaled reading -- 0x3ee9f jumps straight into the plain arm -- which is
+ * why the plain arm is a helper here rather than written out twice.
+ *
+ * IT WRITES A PARAMETER.  `params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE`
+ * takes 2.0f at 0x3eecc and 0.65f or 1.8f at 0x3ead8, depending on whether
+ * the new `echoRrnState` is 1.  A `movl $0x40000000` into a `float` slot is
+ * how GCC stores a float constant to memory, so these are float stores and
+ * not integer ones.  It is the only member of the class that writes through
+ * the parameter pointer, which is why the test compares the two sides'
+ * parameter blocks against each other rather than against a shadow.
+ *
+ * THREE DIAGNOSTICS ARE GATED AND THE OTHER TWENTY-ONE ARE NOT.  `edprintf`
+ * encodes whether or not anything is listening; the three
+ * `dsplibs_debug_printf` calls at 0x3f02c, 0x3f0d1 and 0x3f174 -- and their
+ * duplicates at 0x3f48e, 0x3f533 and 0x3f5d7 -- each sit behind their OWN
+ * `cmpl $0x1,dsplibs_debug_level`, three separate tests and not one.
+ *
+ * `%02d` HERE, `%03d` IN THE TWO PHASE EVALUATORS.  Five sites load 100.0f
+ * and the two echo-RRN diagnostics load 1000.0 as a DOUBLE (`.rodata.cst8
+ * +0xd8`, and once built on the stack as 0x408f4000 in the high word).  A
+ * thousand is exact in both formats and the product is formed at 80 bits
+ * either way, so `ce_frac3` serves the double sites too; the spelling is
+ * recorded here rather than in the code.
+ *
+ * WHAT IS NOT MODELLED, AND IT IS THE COMPILER'S RATHER THAN OURS.  0x3e933
+ * is `fcomps 0xa0(%edi); jae`, the complement of `avePdsnr < threshUp` taken
+ * without consulting the parity flag -- so the blob RUNS the rate-up arm for
+ * a NaN average, where C says it must not.  GCC 13 complements the same
+ * source correctly.  Finding 1389; the test keeps NaN away from that one
+ * comparison and feeds it to the other four, which are `ja`/`jbe` and agree.
+ */
+
+/*
+ * The two diagnostics the echo-RRN machine prints after whichever of its two
+ * headline lines applies -- byte for byte the same code at 0x3f03e and
+ * 0x3f4a0, and again at 0x3f0e3 and 0x3f545.  Each has its own gate.
+ *
+ * THE PRODUCT IS NOT ROUNDED TO `float` BETWEEN THE THREE USES.  The object
+ * forms `avePdsnr * word_b8` in an x87 register and reads it three times at 80
+ * bits; the exact product of two floats needs up to 48 mantissa bits, so
+ * rounding it back to a float would change `(int)` of it wherever it sits just
+ * under an integer -- 10.0f * 2.3f is 22.99999952, which truncates to 22
+ * unrounded and to 23 rounded, and the test plants exactly those two values.
+ *
+ * THE TWO-ARGUMENT HELPER IS BELT AND BRACES AND NOT A NECESSITY, which was
+ * measured rather than assumed: `ce_frac3((float)(word_70 * word_b8))` was
+ * compiled beside this and it computes the SAME number, because
+ * FLT_EVAL_METHOD is 2 on an x87 target and neither the cast nor the
+ * parameter narrows the value.  The multiply is kept inside anyway, because
+ * that is the one spelling no compiler can round, and the object's own
+ * factoring is not recoverable either way.  Finding 1389.
+ *
+ * THE THOUSAND IS A DOUBLE HERE.  0x3f08b is `fldl .rodata.cst8+0xd8`, eight
+ * bytes, where `ce_frac3`'s sites in the two phase evaluators load four -- but
+ * a thousand is exact in both formats and the product is formed at 80 bits, so
+ * this is a difference in the source and not in the answer.
+ */
+static int
+ce_frac3_of(float a, float b)
+{
+	int thousandths = (int)((a * b - (float)(int)(a * b)) * 1000.0);
+
+	return (thousandths < 0) ? -thousandths : thousandths;
+}
+
+static void
+ce_echo_rrn_debug(V90ConnectionEvaluator *ce)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("error -- = %c%d.%03d\r\n",
+		    (0.0f < ce->word_70 * ce->word_b8) ? '+' : '-',
+		    (int)__builtin_fabsf(ce->word_70 * ce->word_b8),
+		    ce_frac3_of(ce->word_70, ce->word_b8));
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("threshold -- = %c%d.%03d\r\n",
+		    (0.0f < ce->threshDown) ? '+' : '-',
+		    (int)__builtin_fabsf(ce->threshDown),
+		    ce_frac3(ce->threshDown));
+}
+
+/*
+ * The unscaled rate-down test, reached from two places -- the ordinary
+ * `enableRrnDown` arm at 0x3ebc0 and the echo-RRN machine's terminal state,
+ * which jumps into the middle of it at 0x3ebc7.  A helper because the object
+ * has one copy and two entries, and "did it fire" is all the caller needs.
+ */
+static int
+ce_plain_rate_down(V90ConnectionEvaluator *ce, unsigned int nofSymbols)
+{
+	int demanded = 0;
+
+	if (ce->word_70 > ce->threshDown) {
+		ce->word_14 += nofSymbols;
+		if (ce->word_14 >= (unsigned int)ce->rateDownDetectDuration
+		    && ce->word_1c
+		       >= (unsigned int)ce->minDurationInDataBeforeRrnDown) {
+			ce->word_98 = 0;
+			ce->word_90 = ce->params->RRN_SILENCE_REQUESTED;
+			ce->word_14 = 0;
+			ce->word_1c = 0;
+			demanded = 1;
+		}
+	} else {
+		ce->word_14 = 0;
+	}
+
+	return demanded;
+}
+
+/*
+ * The echo-RRN machine's rate-down test: the same accumulation against a
+ * `threshDown` the average has first been SCALED against, and a fire
+ * condition that is two alternatives rather than one.  0x3e9dd .. 0x3eaf0.
+ *
+ * `word_14 >= rateDownDetectDuration / 3` AND `word_14 >= .../ 5` ARE BOTH
+ * UNSIGNED DIVISIONS: 0x3ea0c is `mov $0xaaaaaaab,%edx; mul %edx; shr $1,%edx`
+ * and 0x3ea4d is `mov $0xcccccccd,%edx; mul %edx; shr $2,%edx`, the reciprocal
+ * sequences for an unsigned divide by three and by five.  A signed divide by
+ * three is `imul $0x55555556` and a different shift.
+ *
+ * THE DWELL COMPARISONS ARE IN DOUBLE, and 1.3 and 0.6 are eight-byte
+ * constants (`.rodata.cst8+0xc8` and `+0xd0`) because neither is exactly
+ * representable -- so unlike the tens and thousands elsewhere in this file the
+ * section really does fix the type.  `word_1c` reaches the x87 through `push
+ * $0; push %eax; fildll`, the zero-extending form, which is what an
+ * `unsigned int` converts with.
+ */
+static int
+ce_echo_rate_down(V90ConnectionEvaluator *ce, unsigned int nofSymbols,
+		  float scale)
+{
+	unsigned int minDur =
+	    (unsigned int)ce->minDurationInDataBeforeRrnDown;
+	unsigned int dur = (unsigned int)ce->rateDownDetectDuration;
+	int demanded = 0;
+
+	ce->word_b8 = scale;
+
+	if (ce->word_70 * scale > ce->threshDown) {
+		ce->word_14 += nofSymbols;
+		if ((ce->word_14 >= dur / 3 && ce->word_1c >= minDur * 1.3)
+		    || (ce->word_14 >= dur / 5 && ce->short_b4 == 1
+			&& ce->word_1c >= minDur * 0.6)) {
+			ce->short_b4++;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V90-mod3 CHANGE echoRrnState = %d",
+				    ce->short_b4);
+			ce_echo_rrn_debug(ce);
+			ce->word_98 = 0;
+			ce->word_90 = ce->params->RRN_SILENCE_REQUESTED;
+			ce->params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE =
+			    (ce->short_b4 == 1) ? 0.65f : 1.8f;
+			ce->word_14 = 0;
+			ce->word_1c = 0;
+			demanded = 1;
+		}
+	} else {
+		ce->word_14 = 0;
+	}
+
+	return demanded;
+}
+
+int
+V90ConnectionEvaluator::evaluateConnection()
+{
+	int verdict = V90CE_VERDICT_NONE;
+	unsigned int nofSymbols;
+	unsigned int fadeClock;
+
+	/*
+	 * The first non-empty call after a retrain latches the distance the
+	 * connection settled at; 0x3e6dd, and both retrain arms put it back.
+	 */
+	if (short_9c == -1)
+		short_9c = curDmin;
+
+	nofSymbols = word_74;
+	if (nofSymbols == 0)
+		return V90CE_VERDICT_NONE;
+
+	word_1c += nofSymbols;
+
+	/* ----------------------------------------------- 1: the fade clock */
+
+	fadeClock = word_20;
+
+	if (nofV90Retrains != 0) {
+		int now = (fadeClock + nofSymbols) / retrainCounterFadeCount;
+		int was = fadeClock / retrainCounterFadeCount;
+
+		if (now > was)
+			nofV90Retrains--;
+	}
+	if (nofRemoteRetrains != 0) {
+		int now = (fadeClock + nofSymbols) / retrainCounterFadeCount;
+		int was = fadeClock / retrainCounterFadeCount;
+
+		if (now > was)
+			nofRemoteRetrains--;
+	}
+	if (nofRemoteRateReneg != 0) {
+		int now = (fadeClock + nofSymbols) / remoteRrnCounterFadeCount;
+		int was = fadeClock / remoteRrnCounterFadeCount;
+
+		if (now > was)
+			nofRemoteRateReneg--;
+	}
+
+	word_20 = fadeClock + nofSymbols;
+
+	/* ------------------------------------------- 2: the external demand */
+
+	if (word_8c > -1) {
+		switch (word_8c) {
+		case 1:
+		case 2:
+		case 4:
+		case 5:
+			if (word_8c == 1 || word_8c == 4) {
+				verdict = V90CE_VERDICT_RRN_NO_RESTRICT;
+				edprintf("V90ConnectionEvaluator: Initiating "
+					 "No Restriction RRN (external "
+					 "demand)\r\n");
+			} else {
+				verdict = V90CE_VERDICT_RRN_DOWN;
+				edprintf("V90ConnectionEvaluator: Initiating "
+					 "RRN Down (external demand)\r\n");
+			}
+			word_90 = (word_8c > 3);
+			word_98 = (word_8c == 5);
+			word_1c = 0;
+			word_14 = 0;
+			word_10 = 0;
+			word_18 = 0;
+			break;
+
+		case 3:
+			verdict = V90CE_VERDICT_RRN_UP;
+			edprintf("V90ConnectionEvaluator: Initiating RRN up "
+				 "(external demand)\r\n");
+			word_90 = 0;
+			word_1c = 0;
+			word_14 = 0;
+			word_10 = 0;
+			word_18 = 0;
+			break;
+
+		case 6:
+			edprintf("V90ConnectionEvaluator: Initiating Fast "
+				 "Parameters Exchange called - NOT "
+				 "IMPLEMENTED\r\n");
+			break;
+
+		default:
+			/*
+			 * The V.42 error corrector asked for a rate down.  The
+			 * only arm of the function with its own epilogue.
+			 */
+			if (enableRrnDown == 0) {
+				edprintf("V90ConnectionEvaluator: can't "
+					 "responed to V42 RRN down because "
+					 "currently at min allowed rate.\r\n");
+				break;
+			}
+
+			edprintf("V90ConnectionEvaluator: before EC RRN: "
+				 "curDmin = %d, initDmin = %d\r\n",
+				 curDmin, short_9c);
+
+			if (curDmin >= 2 * short_9c) {
+				nofV90Retrains++;
+				edprintf("V90ConnectionEvaluator: error "
+					 "correction mechanism demanded rate "
+					 "down,\r\n");
+				edprintf("V90ConnectionEvaluator: initiating "
+					 "retrain (retrain no %d), due to %d "
+					 "rate renegotiations down.\r\n",
+					 nofV90Retrains,
+					 params->
+					 MAX_NOF_RATES_DIFF_BEFORE_RETRAIN);
+				word_18 = 0;
+				verdict = V90CE_VERDICT_RETRAIN;
+				word_1c = 0;
+				short_9c = -1;
+				if (nofV90Retrains
+				    > (unsigned int)
+				      params->MAX_NOF_V90_RETRAINS) {
+					edprintf("V90ConnectionEvaluator: "
+						 "initiating fall back to V34 "
+						 "due to %d V90 retrains\r\n",
+						 nofV90Retrains);
+					nofV90Retrains = 0;
+					verdict = V90CE_VERDICT_FALLBACK_V34;
+				}
+				word_90 = 0;
+			} else {
+				edprintf("V90ConnectionEvaluator: initiating "
+					 "One Rate Down, due to error "
+					 "correction mechanism demand.\r\n");
+				word_14 = 0;
+				word_10 = 0;
+				verdict = V90CE_VERDICT_RRN_DOWN;
+				word_1c = 0;
+				word_98 = 0;
+				word_90 = params->RRN_SILENCE_REQUESTED;
+			}
+
+			/* the external-demand copy of the override */
+			if (word_94 != 0
+			    && verdict == V90CE_VERDICT_RRN_DOWN) {
+				edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+					 "@@@@@@@@@@\r\n");
+				edprintf("V90ConnectionEvaluator: initiating "
+					 "Retrain instead of One Rate Down "
+					 "!!\r\n");
+				edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+					 "@@@@@@@@@@\r\n");
+				word_90 = 0;
+				verdict = V90CE_VERDICT_RETRAIN;
+			}
+
+			word_74 = 0;
+			word_70 = 0;
+			word_8c = -1;
+			return verdict;
+		}
+
+		word_8c = -1;
+	}
+
+	/* ------------------------------------------------------ 3: rate up */
+
+	if (enableRrnUp != 0 && word_70 < threshUp) {
+		word_10 += nofSymbols;
+		if (word_10 >= (unsigned int)rateUpDetectDuration
+		    && word_1c >= (unsigned int)minDurationInDataBeforeRrnUp) {
+			word_10 = 0;
+			verdict = V90CE_VERDICT_RRN_UP;
+			word_1c = 0;
+		}
+	} else {
+		word_10 = 0;
+	}
+
+	/* ---------------------------------------------------- 4: rate down */
+
+	if (params->HIGH_LEVEL_TX_ACTIVE != 0) {
+		/*
+		 * +0x5c REACHES THE x87 ZERO-EXTENDED: 0x3e98c is `xor
+		 * %ebx,%ebx; push %ebx; push %ecx; fildll (%esp)`, the 64-bit
+		 * form GCC uses for `unsigned int` and never for `int`, so the
+		 * scaled threshold is computed from the UNSIGNED reading of a
+		 * slot the map calls `int`.  The cast is here rather than on
+		 * the field because `t_v90leaves.cpp` names the field and is
+		 * not this batch's file.
+		 *
+		 * THE SECOND COMPARISON IS PLAIN INTEGER.  0x3ee7d converts
+		 * the same x87 value back with `fistpll` and compares that,
+		 * which is exact for every 32-bit input -- `fildll` and
+		 * `fistpll` round-trip a 32-bit integer through a 64-bit
+		 * mantissa without loss -- so `word_1c < minDur` is what it
+		 * computes.
+		 *
+		 * A FIRST VERSION OF THIS COMMENT SAID SPELLING IT AS
+		 * `(unsigned)(float)minDur` WOULD ROUND AT 2^24 AND BE WRONG.
+		 * IT WOULD NOT, and the mutation set is what found that out:
+		 * driven at 16777217, the first integer a `float` cannot
+		 * hold, the two spellings agree.  On an x87 target
+		 * FLT_EVAL_METHOD is 2, so the cast to `float` is evaluated at
+		 * 80 bits and never narrows -- the mutant emits a different
+		 * instruction sequence and computes the same thing.  The plain
+		 * compare is written because it is what the object's
+		 * arithmetic reduces to, not because the other one is unsafe.
+		 * Finding 1389.
+		 */
+		unsigned int minDur =
+		    (unsigned int)minDurationInDataBeforeRrnDown;
+		float scale = 0.0f;
+		int scaled = 1;
+
+		if (word_1c < (unsigned int)(minDur * 2.3f) && short_b4 == 0)
+			scale = 1.52f;
+		else if (word_1c < minDur && short_b4 == 1)
+			scale = 1.39f;
+		else {
+			scaled = 0;
+			if (short_b4 <= 2) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90-mod3  Echo_Rrn_State = %d ",
+					    short_b4);
+				ce_echo_rrn_debug(this);
+				word_14 = 0;
+				short_b4 = 3;
+				params->
+				    RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
+				    = 2.0f;
+			}
+		}
+
+		if (scaled) {
+			if (ce_echo_rate_down(this, nofSymbols, scale))
+				verdict = V90CE_VERDICT_RRN_DOWN;
+		} else if (ce_plain_rate_down(this, nofSymbols)) {
+			verdict = V90CE_VERDICT_RRN_DOWN;
+		}
+	} else if (enableRrnDown != 0) {
+		if (ce_plain_rate_down(this, nofSymbols))
+			verdict = V90CE_VERDICT_RRN_DOWN;
+	} else {
+		word_14 = 0;
+	}
+
+	/* ------------------------------------------------------ 4b: retrain */
+
+	if (word_70 > threshRetrain) {
+		word_18 += nofSymbols;
+		if (word_18 >= (unsigned int)retrainDetectDuration) {
+			nofV90Retrains++;
+			if (nofV90Retrains
+			    > (unsigned int)
+			      params->MAX_NOF_V90_RETRAINS) {
+				verdict = V90CE_VERDICT_FALLBACK_V34;
+				edprintf("V90ConnectionEvaluator: initiating "
+					 "fall back to V34 due to %d V90 "
+					 "retrains, avePdsnr = %c%d.%02d\r\n",
+					 nofV90Retrains,
+					 (0.0f < word_70) ? '+' : '-',
+					 (int)__builtin_fabsf(word_70),
+					 ce_frac2(word_70));
+				nofV90Retrains = 0;
+			} else {
+				verdict = V90CE_VERDICT_RETRAIN;
+				edprintf("V90ConnectionEvaluator: initiating "
+					 "Retrain (retrain no %d) due to "
+					 "avePdsnr = %c%d.%02d\r\n",
+					 nofV90Retrains,
+					 (0.0f < word_70) ? '+' : '-',
+					 (int)__builtin_fabsf(word_70),
+					 ce_frac2(word_70));
+			}
+			word_1c = 0;
+			word_18 = 0;
+		}
+	} else {
+		word_18 = 0;
+	}
+
+	/* ------------------------------ 4c: too many remote renegotiations */
+
+	if (nofRemoteRateReneg
+	    >= (unsigned int)nofRemoteRateRenegBeforeRetrain) {
+		nofV90Retrains++;
+		verdict = V90CE_VERDICT_RETRAIN;
+		edprintf("V90ConnectionEvaluator: initiating Retrain (retrain "
+			 "no %d) due to %d remote rate reneg\r\n",
+			 nofV90Retrains, nofRemoteRateReneg);
+		nofRemoteRateReneg = 0;
+		word_1c = 0;
+		word_18 = 0;
+	}
+
+	/* ----------------------------- 4d: what the verdict so far implies */
+
+	switch (verdict) {
+	case V90CE_VERDICT_RRN_UP:
+		edprintf("V90ConnectionEvaluator: initiating One Rate Up "
+			 "demand, avePdsnr = %c%d.%02d\r\n",
+			 (0.0f < word_70) ? '+' : '-',
+			 (int)__builtin_fabsf(word_70), ce_frac2(word_70));
+		word_90 = 0;
+		break;
+
+	case V90CE_VERDICT_RRN_DOWN:
+		edprintf("V90ConnectionEvaluator: on Rate Down: curDmin = %d, "
+			 "initDmin = %d\r\n", curDmin, short_9c);
+		if (curDmin >= 2 * short_9c) {
+			nofV90Retrains++;
+			edprintf("V90ConnectionEvaluator: initiating retrain, "
+				 "due to %d rate renegotiations down, "
+				 "avePdsnr = %c%d.%02d\r\n",
+				 params->MAX_NOF_RATES_DIFF_BEFORE_RETRAIN,
+				 (0.0f < word_70) ? '+' : '-',
+				 (int)__builtin_fabsf(word_70),
+				 ce_frac2(word_70));
+			edprintf("V90ConnectionEvaluator: retrain no %d\r\n",
+				 nofV90Retrains);
+			word_18 = 0;
+			short_9c = -1;
+			verdict = V90CE_VERDICT_RETRAIN;
+			if (nofV90Retrains
+			    > (unsigned int)
+			      params->MAX_NOF_V90_RETRAINS) {
+				edprintf("V90ConnectionEvaluator: initiating "
+					 "fall back to V34 due to %d V90 "
+					 "retrains\r\n", nofV90Retrains);
+				verdict = V90CE_VERDICT_FALLBACK_V34;
+				nofV90Retrains = 0;
+			}
+			word_90 = 0;
+		} else {
+			edprintf("V90ConnectionEvaluator: initiating One Rate "
+				 "Down demand, avePdsnr = %c%d.%02d\r\n",
+				 (0.0f < word_70) ? '+' : '-',
+				 (int)__builtin_fabsf(word_70),
+				 ce_frac2(word_70));
+		}
+		break;
+
+	case V90CE_VERDICT_RETRAIN:
+		short_9c = -1;
+		word_90 = 0;
+		break;
+	}
+
+	/* the rate-down override, the second of its two copies */
+	if (word_94 != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {
+		edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+			 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n");
+		edprintf("V90ConnectionEvaluator: initiating Retrain instead "
+			 "of One Rate Down !!\r\n");
+		edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+			 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n");
+		word_90 = 0;
+		verdict = V90CE_VERDICT_RETRAIN;
+	}
+
+	/* ------------------------------------------------ 5: the debug arms */
+
+	if (debugAlternateDebug != 0) {
+		word_24 += nofSymbols;
+		if (word_24 >= debugPeriod) {
+			switch (word_80) {
+			case 0:
+			case 2:
+				verdict = V90CE_VERDICT_RETRAIN;
+				edprintf("V90ConnectionEvaluator: Alternate "
+					 "Debug Retrain\r\n");
+				word_80++;
+				word_24 = 0;
+				word_90 = 0;
+				break;
+			case 1:
+				verdict = V90CE_VERDICT_RRN_UP;
+				edprintf("V90ConnectionEvaluator: Alternate "
+					 "Debug RRN up\r\n");
+				word_80++;
+				word_24 = 0;
+				word_90 = 0;
+				break;
+			case 3:
+				edprintf("V90ConnectionEvaluator: Alternate "
+					 "Debug RRN down\r\n");
+				word_24 = 0;
+				verdict = V90CE_VERDICT_RRN_DOWN;
+				word_80 = 0;
+				word_98 = 0;
+				word_90 = params->RRN_SILENCE_REQUESTED;
+				break;
+			}
+		}
+	} else if (debugFallBack != 0) {
+		word_24 += nofSymbols;
+		if (word_24 >= debugPeriod) {
+			verdict = V90CE_VERDICT_FALLBACK_V34;
+			edprintf("V90ConnectionEvaluator: Debug fall back to "
+				 "V34\r\n");
+			word_24 = 0;
+			word_90 = 0;
+		}
+	} else if (debugRetrain != 0) {
+		word_24 += nofSymbols;
+		if (word_24 >= debugPeriod) {
+			verdict = V90CE_VERDICT_RETRAIN;
+			edprintf("V90ConnectionEvaluator: Debug initiating "
+				 "Retrain\r\n");
+			word_24 = 0;
+			word_90 = 0;
+		}
+	} else if (debugRateUp != 0) {
+		word_24 += nofSymbols;
+		if (word_24 >= debugPeriod) {
+			verdict = V90CE_VERDICT_RRN_UP;
+			edprintf("V90ConnectionEvaluator: Debug One Rate "
+				 "Up\r\n");
+			word_24 = 0;
+			word_90 = 0;
+		}
+	} else if (debugRateDown != 0) {
+		word_24 += nofSymbols;
+		if (word_24 >= debugPeriod) {
+			verdict = V90CE_VERDICT_RRN_DOWN;
+			edprintf("V90ConnectionEvaluator: Debug One Rate "
+				 "Down\r\n");
+			word_24 = 0;
+			word_98 = 0;
+			word_90 = params->RRN_SILENCE_REQUESTED;
 		}
 	}
 
