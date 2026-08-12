@@ -49460,12 +49460,28 @@ as an off-by-one rather than as a design. It is reproduced: `t_fpm_atan`
 sweeps every pair inside a 401×401 box around the origin, which is where the
 shortcut lives, and 4.47 M differential checks pass against the blob.
 
-Reachability is unmeasured. The callers are `FPM_FSE_receive`,
-`FPM_SRE_recover` and the V.32 status path (docs/deviations.md), so the input
-is a phase-error estimate; a ratio of exactly 127/32768 is one value out of
-32769 and the error it introduces is 20 phase units out of 32768, about
-0.22°. Small, but it is a discontinuity in a timing-recovery loop's error
-term, which is the sort of thing that matters more than its size suggests.
+**REACHABILITY IS EXACTLY FOUR INPUT PAIRS, AND THE REASON IS WORTH MORE THAN
+THE DEFECT.** (This paragraph corrects the first version of this finding,
+which called it "one value out of 32769" and left reachability unmeasured.
+That was wrong, and wrong in a way that mattered: the same misunderstanding
+had already killed a whole section of the test — see 1502.)
+
+The ratio is `q << shift`, so it is **even whenever `shift >= 1`**. `shift` is
+zero only when the larger magnitude is normalised already, top bit set as a
+16-bit value, and magnitudes cap at 32768 — so `shift == 0` requires the
+larger magnitude to be exactly **32768**, which requires an argument of
+exactly **−32768**. There `recip` is `fpm_div_table[0]` = 32768 and the ratio
+is the smaller magnitude itself.
+
+So every odd ratio, this notch included, is reachable only through a −32768
+argument, and the notch fires on exactly four pairs: `FPM_atan(-32768, ±127)`
+and `FPM_atan(±127, -32768)`. `FPM_atan(-32768, 127)` returns `0x6000` where
+the true angle is about `0x6014` — 20 phase units, 0.22°. Small, but it is a
+discontinuity in a timing-recovery loop's error term, which is the sort of
+thing that matters more than its size suggests. The callers are
+`FPM_FSE_receive`, `FPM_SRE_recover` and the V.32 status path
+(docs/deviations.md); whether any of them ever presents a full-negative-scale
+component is not measured.
 
 ### 1502. `FPM_atan`'s WRAP-THROUGH-ZERO OCTANT IS ONE UNIT LOW — AND 257 ENTRIES IS EXACTLY ENOUGH, NOT ONE MORE
 
@@ -49498,13 +49514,42 @@ So there is **no out-of-range read here**, unlike `FPM_sqrt` (D1) and
 expression produces. Same author, same era, third outcome — and the margin is
 one entry, so this was either checked or lucky.
 
-**A CONSEQUENCE FOR THE TEST TIER.** `FPM_atan` divides through `FPM_div`, so
-it inherits D4: about one denominator in 256 normalises to a mantissa of
+**WHAT INHERITING D4 DOES TO AN ANGLE.** `FPM_atan` divides through `FPM_div`,
+so about one denominator in 256 — 255 of them — normalises to a mantissa of
 `0xff80` or above and reads `FPM_div`'s 129th entry, which the blob takes from
 `FPM_xor_table[0]` (zero) and our fixed build takes as 16384. 32767 is such a
-denominator, and so are 511, 1023 and 2047. `t_fpm_atan` therefore *requires*
-`-DDSPLIB_REPRODUCE_BUGS` and says so with an `#error`, the same guard
-`t_fpm_div` carries. Without it the test fails on inputs that are not wrong.
+denominator, and so are 511, 1023, 2047 and 32766. In the blob, whenever
+`max(|y|, |x|)` is one of them the reciprocal is zero, so the ratio is zero
+and **the angle snaps to the octant base** — the nearest axis or 45° line.
+`FPM_atan(y, 32767, *)` returns 0 or 0x7fff for *every* `y`. Same defect class
+as the one that silences an AGC block and drops a Bell 103 call (finding 40),
+now in a timing-recovery error term; the non-REPRODUCE build gets it right.
+
+`t_fpm_atan` therefore *requires* `-DDSPLIB_REPRODUCE_BUGS` and says so with an
+`#error`, the same guard `t_fpm_div` carries. Without it the test fails on
+inputs that are not wrong.
+
+**AND IT KILLED A WHOLE TEST SECTION BEFORE ANYONE NOTICED.** The first
+version of `t_fpm_atan`'s "table index sweep" pinned the larger magnitude at
+32767, on the reasoning that the widest denominator gives the widest sweep of
+the ratio. It gives the narrowest: `recip` is zero, so all 98304 pairs had a
+ratio of zero, all took the linear shortcut, and the section never read the
+table at all while reporting PASS. It now pins at **16384**, which normalises
+to `0x8000` with a shift of one, so `recip` is exactly 32768 and the ratio is
+exactly twice the smaller magnitude — sweeping that over 0..16384 walks the
+index over all 257 entries. A second loop with an argument of −32768 covers
+the odd ratios, which nothing else can reach (1501).
+
+**AND THE REPLACEMENT HAD TO BE SHOWN TO FIRE**, per finding 134, because a
+section that compares nothing is exactly what had just been found. Perturbing
+one table entry by **+1** does *not* fail it: `0x145f / 32768` is 0.159, so a
+single-LSB change to a table entry is absorbed by the rounding of the
+conversion to phase units and the angle is unchanged — the entry is caught
+only by the word-for-word comparison against `ref_FPM_atan_table`. Perturbing
+by +8 moves the angle and the sweep fails. Worth knowing in its own right:
+**the table carries about three bits more precision than the output uses**, so
+a differential test on `FPM_atan` alone can never pin the table exactly, and
+the direct comparison against the blob's copy is not redundant with it.
 
 ### 1503. `FPM_TONE_generate2` IS THE QUADRATURE PAIR OF ONE OSCILLATOR, NOT A SECOND TONE
 

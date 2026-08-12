@@ -179,16 +179,41 @@ main(void)
 	rc |= diff_end();
 
 	/*
-	 * Walk the ratio across the whole table.  With the larger magnitude
-	 * pinned at 32767, sweeping the smaller over its whole range moves the
-	 * index over all 257 entries, so no entry of the table is unexercised
-	 * by this file even before the random pass.
+	 * Walk the ratio across the whole table.
+	 *
+	 * THE OBVIOUS WAY TO DO THIS DOES NOT WORK, and the first version of
+	 * this section was dead for exactly that reason.  Pinning the larger
+	 * magnitude at 32767 looks like the widest sweep available and is in
+	 * fact the narrowest: 32767 normalises to 0xfffe, whose FPM_div index
+	 * is 128 -- the D4 slot, zero under -DDSPLIB_REPRODUCE_BUGS -- so
+	 * `recip` is zero, the ratio is zero, and every pair takes the linear
+	 * shortcut without ever reading the table.  98304 checks that compared
+	 * nothing while reporting PASS.  511, 1023, 2047, 32766 and 32767 in
+	 * `fixed` above are all this same denominator class; they are useful
+	 * for covering D4 itself and are not table coverage.  Finding 1502.
+	 *
+	 * 16384 is the value that works.  It normalises to 0x8000 with a shift
+	 * of one, so `recip` is exactly 32768 and the ratio is exactly twice
+	 * the smaller magnitude: sweeping that over 0..16384 walks the index
+	 * over 0..256 -- all 257 entries, the last one included.
+	 *
+	 * Even ratios are all that gives, though.  An ODD ratio needs a shift
+	 * of zero, which needs the larger magnitude to be normalised already,
+	 * and magnitudes cap at 32768 -- so it needs an argument of exactly
+	 * -32768, where the ratio is the smaller magnitude itself.  That is
+	 * the second loop, and it is the only way to reach the ratio of 127
+	 * that finding 1501 is about.
 	 */
 	diff_begin("FPM_atan table index sweep");
-	for (i = 0; i < 32768; i++) {
-		check(i, 32767);
-		check(32767, i);
-		check(-i, 32767);
+	for (i = 0; i <= 16384; i++) {
+		check(i, 16384);
+		check(16384, i);
+		check(-i, 16384);
+		check(16384, -i);
+	}
+	for (i = -32768; i < 32768; i++) {
+		check(-32768, i);
+		check(i, -32768);
 	}
 	rc |= diff_end();
 
