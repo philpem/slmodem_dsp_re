@@ -5450,3 +5450,11 @@ The reconstruction writes them, because the object does and because a differenti
 Written as the object has it. A bound here would be a behavioural difference on an input the differential tier cannot produce, and the arms are the V.90 and K56flex ones, which no test in this tree drives at all.
 
 ======================================================================
+
+## D298 🐛 `V22_MRF_filter`'s startup window is not the window a wrapping buffer would give
+
+*Batch of 2026-08-12, from `V22_MRF_filter` (blob 0x8d160) +0xf2 — the branch taken when `widx < history_len`, which convolves `history[0 .. 29]` against `coeff[phase * 30 .. +29]`, where the branch at +0xab convolves `history[widx - 30 .. widx - 1]` against the same coefficients. **Reachability: FIRES on the first thirteen outputs of every stream, because `widx` climbs by two or three per output and the branch is taken until it reaches 30.** Status: `unmeasured`. Fix class: none proposed.*
+
+**Finding 1543.** The buffer is 60 entries and only the first 30 are zeroed, so the clamped branch is reading exactly the zeroed startup region — it cannot read uninitialised memory. What it gets wrong is *where in the window the new samples sit*. With `widx` at 2, the sliding form would want `history[-28 .. 1]`; the object gives `history[0 .. 29]`, so the two newest samples are weighted by the OLDEST two taps of the phase rather than the newest two. The transient is thirteen outputs long and then the branch is never taken again for the life of the state.
+
+`FPM_MRF_filter` does NOT do this — its buffer is genuinely circular, hlen entries with a two-part walk that wraps, so its startup window is the correct one with zeros in the tail. The clamp is specific to the V.22 copy, and is a consequence of its buffer being a 60-entry sliding one rather than a 30-entry ring. Reproduced exactly; a differential test that fed a stream and compared only the steady state would not see it, which is why `t_v22_mrf.c` compares from the first sample.
