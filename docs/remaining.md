@@ -5,7 +5,9 @@ commands are given so they can be re-run rather than trusted. Nothing in this
 document is an estimate.*
 
 *The per-function enumeration is `docs/worklist.md` (`make worklist`). This
-document is the shape of the work; that one is the list.*
+document is the shape of the work, that one is the list, and `docs/plan.md`
+is the order to take it in -- which is NOT this document's sec 7 order, because
+sec 7 ranks by value and 477 of the 969 cannot be started yet.*
 
 ## 1. Where it stands
 
