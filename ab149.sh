@@ -18,6 +18,11 @@ BENCH=/home/philpem/dev/sip-D-modem/testbench
 export SLMODEMD=${SLMODEMD:-/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit}
 export DMODEM_VARIANT=jb
 HOLD=${HOLD:-60}
+# REPS per arm per far end, and the label stem.  Parameterised rather than
+# forked so the replication runs the SAME harness as the batch it replicates --
+# a second copy would drift and the comparison would quietly stop being one.
+REPS=${REPS:-6}
+TAG=${TAG:-ab149}
 GIVEUP=${GIVEUP:-14400}          # 4 h to wait for the bench to come free
 
 # Processes that make a call unmeasurable.  Firefox and Xorg are the ordinary
@@ -53,18 +58,18 @@ wait_quiet() {
 	return 1
 }
 
-echo "ab149: 24 calls, 6/arm/far-end, interleaved.  binary $(basename "$SLMODEMD")"
-echo "ab149: waiting for a quiet machine (load<3.00, no busy process)..."
+echo "$TAG: $((REPS*4)) calls, $REPS/arm/far-end, interleaved.  binary $(basename "$SLMODEMD")"
+echo "$TAG: waiting for a quiet machine (load<3.00, no busy process)..."
 
 n=0
 for dest in 1901 1902; do
 	case $dest in 1901) role=supra ;; 1902) role=courier ;; esac
-	for i in 1 2 3 4 5 6; do
+	for i in $(seq 1 "$REPS"); do
 		for arm in 0 1; do
 			n=$((n+1))
-			lbl="ab149-$dest-a$arm-$i"
+			lbl="$TAG-$dest-a$arm-$i"
 			wait_quiet || exit 1
-			echo "[$n/24] $lbl  (arm=$arm dest=$dest $(date +%H:%M:%S))"
+			echo "[$n/$((REPS*4))] $lbl  (arm=$arm dest=$dest $(date +%H:%M:%S))"
 			DSPLIB_V34_RRN_ON_BADBLOCK=$arm TTY=$role HOLD=$HOLD \
 				timeout 260 "$BENCH/row.sh" "$BENCH/captures/$lbl" pty "$dest" \
 				> "$BENCH/captures/$lbl.run.txt" 2>&1
@@ -74,4 +79,4 @@ for dest in 1901 1902; do
 		done
 	done
 done
-echo "ab149: DONE $(date -Is)"
+echo "$TAG: DONE $(date -Is)"
