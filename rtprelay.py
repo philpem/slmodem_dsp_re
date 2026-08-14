@@ -64,7 +64,7 @@ import sys
 import time
 import uuid
 
-ALLOWED = ("1901", "1902", "4242")
+ALLOWED = ("1901", "1902", "1903", "4242")   # 1903 = Oli'Net, added 2026-08-13
 SECRET = "/home/philpem/dev/sip-D-modem/asterisk-login-4242.secret"
 
 

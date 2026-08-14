@@ -60,7 +60,7 @@ import sys
 import tempfile
 import time
 
-ALLOWED = ("1901", "1902", "4242")
+ALLOWED = ("1901", "1902", "1903", "4242")   # 1903 = Oli'Net, added 2026-08-13
 
 ROOT = "/home/philpem/dev/sip-D-modem"
 PJSUA = ROOT + "/pjproject-2.11.1/pjsip-apps/bin/pjsua-x86_64-unknown-linux-gnu"

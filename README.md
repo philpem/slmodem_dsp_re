@@ -121,6 +121,42 @@ handshake is audible.
 
 This is the only way to see what the sealed hardware modem actually said.
 
+## The tools
+
+A lab notebook is not an index, so here is one. Every script carries its
+reasoning in its own header; this is only the map.
+
+**Placing calls.** `row.sh` runs one call (the workhorse), `hw2hw.sh` puts two
+hardware modems together with no software in the path, `relaycall.sh` bridges
+two SIP legs. `dial.sh` is the low-level dialler. `waitquiet.sh` blocks until
+the machine is quiet enough to measure on — a call taken on a loaded box
+degrades silently, which is worse than failing.
+
+**Batches.** `ab149.sh` is the pre-registered A/B harness (gates on a quiet
+machine before *every* call, not just the first); `ladder.sh` walks one
+modulation per call; `preemph_ab.sh` / `preemph_ab2.sh` / `preemph_fit_ab.sh`
+are the pre-emphasis arms; the `*-sweep.sh` scripts vary one parameter.
+
+**No hardware needed.** `chanshim.py` puts two live datapumps on an emulated
+channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
+`CHAN_SLIP`, the jitter-buffer underrun model. `replay.py` feeds a recording
+to slmodemd in d-modem's place, `replaydte.py` acts as the DTE, `replaycmp.sh`
+compares two builds on one recording. `linesim.py` is the offline line model.
+
+**Reading the results.** `ab149scan.py` scores an A/B exactly as its
+pre-registration says (connect success first, then the fixed window).
+`batchanalyse.py`, `abcompare.py`, `abextract.py`, `callstats.py` handle the
+older batch formats. `freezescan.py` tests equaliser-freeze clustering against
+a null. `echoscan.py` / `echofit.py` / `chirpdelay.py` measure the path.
+`modemid.py` asks a modem what it is before trusting an init string.
+`v21decode.py` and `v8analyse.c` decode V.8 out of a recording.
+`probeplot.py` / `fitplot.py` plot probe bins and pre-emphasis fits.
+
+**Keeping things.** `archive.py` copies the captures a finding or a tool
+actually names to the ZFS store, in `<family>/<prefix>/` subdirectories, and
+indexes them. See `records/README.md` for why `captures/` is ignored but
+`records/` is not.
+
 ## Three harness defects worth not repeating
 
 **The serial port must stay open for the whole call.** The first harness

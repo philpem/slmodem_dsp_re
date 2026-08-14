@@ -39,7 +39,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from atprobe import open_raw, command                      # noqa: E402
 
-QUERIES = ["ATI6", "ATI4", "ATI3", "ATS86?", "ATS91?", "ATI11"]
+QUERIES = ["ATI6", "ATI4", "ATI3", "ATS86?", "ATS91?", "ATI11", "AT&V1"]
+#
+# AT&V1 IS THE CONEXANT/ROCKWELL LINK REPORT and it is the one that matters
+# on anything that is not a USR.  ATI11 does not error on the Conexant -- it
+# prints the product name and OK -- so its absence from this list looked like
+# a modem with no diagnostics rather than a query we never sent.  &V1 gives
+# TERMINATION REASON, LAST/HIGHEST TX and RX rate, which caught a link
+# reaching 19200 and collapsing to 4800 on a retrain failure while the
+# CONNECT string said 14400 (finding 1916).
+
 
 
 def main():

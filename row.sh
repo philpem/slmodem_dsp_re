@@ -61,13 +61,23 @@ PIDF=""		# set before slmodemd starts; cleanup() runs on early exits too
 # THIRD guard, and the only one that covers the hardware modem.  When the
 # SupraExpress originates (row 1) the number goes straight from the AT command
 # to the PBX: dmodem-guard-fork.sh never sees it and d-modem's allow-list is on
-# the wrong side of the call.  1901 is the SupraExpress, 4242 is our own SIP
-# registration -- both internal, and they are the only two numbers this bench
-# is authorised to dial.
-case " 1901 1902 4242 " in
+# the wrong side of the call.
+#
+# The authorised numbers, and NOTHING ELSE.  This PBX can reach the PSTN, so a
+# typo in a harness is a real call to a real number.  Each entry is here
+# because Phil named it:
+#
+#     1901  SupraExpress 56e PRO   (Rockwell RCV56DPF)
+#     1902  USR Courier            (USR's own DSP)
+#     1903  Oli'Net V92 Ready      (Conexant CX06827-11), added 2026-08-13
+#     4242  our own SIP registration
+#
+# This guard caught four calls to 1903 before it was authorised, which is
+# exactly what it is for -- do not widen it to a pattern.
+case " 1901 1902 1903 4242 " in
 	*" $DIAL "*) ;;
 	*)
-		echo "REFUSING to dial '$DIAL': not 1901, 1902 or 4242" >&2
+		echo "REFUSING to dial '$DIAL': not 1901, 1902, 1903 or 4242" >&2
 		exit 2 ;;
 esac
 
@@ -186,7 +196,26 @@ echo "  BINARY: $SLMODEMD"
 # pgid) and then execs, so the value is exact and cannot go stale.
 PIDF="$LOG.pgid"
 rm -f "$PIDF"
-setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
+#
+# THE CLOCK ANCHOR, written into the log as its first line.
+#
+# slmodemd stamps `<NNN.NNN>`; pjmedia and d-modem stamp wall clock, and both
+# land in this one file.  This line was added believing the two could not be
+# converted.  They can: finding 1952 established that slmodemd's stamp is
+# **Unix epoch seconds modulo 1000** -- `epoch % 1000` equals a log's first
+# `<t>` in 24 of 24 logs checked -- so the clocks were always the same clock.
+#
+# THE ANCHOR IS STILL WORTH WRITING.  Modulo 1000 wraps every 16 minutes, and
+# resolving which window a call sat in otherwise means trusting the file's
+# mtime, which a copy, an rsync or an archive run destroys.  One line here
+# makes each capture self-describing instead.
+#
+# Do NOT align these logs by file position: d-modem's stdout is a FILE, so
+# glibc gives it 4 KB block buffering and a burst of its lines can land
+# anywhere relative to slmodemd's.  That part of the original reasoning holds.
+printf 'BENCHANCHOR wallclock=%s epoch=%s slmodemd=%s\n' \
+	"$(date -Is)" "$(date +%s.%N)" "$SLMODEMD" > "$LOG.slmodemd.log"
+setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" >> "$4" 2>&1' \
 	_ "$PIDF" "$SLMODEMD" "$BENCH/dmodem-guard-fork.sh" \
 	"$LOG.slmodemd.log" &
 sleep 4

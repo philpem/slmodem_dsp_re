@@ -43,10 +43,27 @@ BYID=/dev/serial/by-id
 
 # role      ext   by-id glob                      identity substring
 # The globs are the LAST resort; modems.conf pins these by serial number.
-_modem_glob_supra='*FTDI*'
+#
+# THESE GLOBS NAME THE USB-RS232 ADAPTER, NOT THE MODEM.  The modems are
+# ordinary serial modems sitting behind USB adapters, so `FTDI` and `Prolific`
+# are adapter makes and the serial number in the by-id string is the ADAPTER's.
+# Move a modem to a different adapter and it silently inherits that adapter's
+# role -- which is exactly what `_modem_expect_*` below exists to catch, since
+# only the modem's own ATI response identifies the modem.
+#
+# THE SERIAL NUMBERS ARE NOT FUSSINESS.  `supra` was '*FTDI*' while only one
+# FTDI adapter was attached.  A third modem arrived on 2026-08-13 behind a
+# second FTDI adapter, and '*FTDI*' immediately matched two devices, which
+# `modem_resolve` refuses as AMBIGUOUS -- breaking every supra run until the
+# glob was narrowed.  Any new device behind an FTDI adapter must be added WITH
+# its adapter serial, and the existing ones left specific.
+#
+_modem_glob_supra='*FTDI*BG00D17G*'
 _modem_glob_courier='*Prolific*'
+_modem_glob_olinet='*FTDI*B002XHV6*'
 _modem_ext_supra=1901
 _modem_ext_courier=1902
+_modem_ext_olinet=1903
 # What the modem itself must say it is.  These are STATED, not derived from
 # whatever happened to be plugged in when `pin` last ran -- `pin` checks the
 # attached modem against them and refuses on a mismatch, so swapping the two
@@ -54,6 +71,92 @@ _modem_ext_courier=1902
 # definition of the role.
 _modem_expect_supra='SupraExpress'
 _modem_expect_courier='Courier'
+#
+# The Oli'Net answers ATI3/ATI7 with "Oli'Net V92 Ready" and ATI0/ATI with
+# "56000 V5.015DS".  The apostrophe is real and would need quoting, so the
+# identity substring is the half without it.
+#
+_modem_expect_olinet='V92 Ready'
+#
+# WHAT THE OLI'NET ACTUALLY IS, because a third far end is only useful if it
+# is independent of the other two.  Conexant CX06827-11 with an SST 39SF020
+# flash (256 KB) and an IDT 71024 SRAM beside it -- a CONTROLLER-BASED modem
+# running its own firmware out of flash, not a host-driven softmodem.
+# Conexant is the Rockwell lineage, which makes it a different DSP heritage
+# from both the USR Courier and from Smart Link.  So a behaviour seen against
+# the Courier AND the Oli'Net is a property of our end; one seen against only
+# one of them is an interop quirk.
+#
+
+# THE INIT STRING IS PER MODEM, because AT commands are not portable.
+# `AT&A3` (extended result codes) and `AT&B1` (fixed DTE rate) are USR
+# commands; the Oli'Net answers ERROR to both, and a run that ignores that
+# proceeds with a modem in an unknown state.  Seen on 2026-08-13.
+#
+# ORDER MATTERS AND `AT&F` MUST COME FIRST.  The harness sets ATS0=1 for
+# autoanswer BEFORE sending this string, so an `AT&F` anywhere but the front
+# resets S0 back to its factory value and the modem never picks up.  That is
+# exactly what happened to four Oli'Net calls.
+_modem_init_supra='AT&F'
+_modem_init_courier='AT&F;AT&A3;AT&B1'
+_modem_init_olinet='AT&F'
+
+# NOT ATTACHED, but available if a question needs another far end.  Chipsets
+# unknown -- run modemid.py once each and record what it says rather than
+# guessing from the badge.  The SupraExpress is the worked example: nothing
+# about the name says Rockwell, and ATI7 reporting RCV56DPF-PLL is the only
+# reason anyone here knows it is one.  Chipsets below are UNVERIFIED:
+#
+#   Hayes Accura 56K model 15400        Hayes liquidated Jan 1999, so late
+#                                       production; plausibly Rockwell
+#   US Robotics 56K Faxmodem            64-245630-04R, possibly model 5630D;
+#                                       USR badge does not guarantee USR silicon
+#   Diamond (Phil's)                    Rockwell
+#
+# NO LUCENT/AGERE PART IS AVAILABLE, so any claim of the form "every modem
+# does X" is really "every Rockwell-family modem and one USR does X".  Lucent
+# was one of the three big V.34/V.90 chipset families and this bench cannot
+# see it.
+
+# ASK THE MODEM FIRST, fall back to the table.  The by-id path names the
+# ADAPTER, so the table above is keyed on the wrong thing: move a modem to
+# another adapter and it inherits a dialect it does not speak.  modemid.py
+# sends ATI0/ATI3/ATI7 and classifies from the reply, which is keyed on the
+# device that has to run the commands.  The table survives as the fallback for
+# a modem that will not answer a probe -- better a safe `AT&F` than no run.
+_modem_dialect() {
+	local role=$1 field=$2 path out
+	path=$(modem_resolve "$role" 2>/dev/null) || return 1
+	out=$(timeout 20 python3 "$BENCH/modemid.py" "$path" --field "$field" \
+	      2>/dev/null) || return 1
+	[ -n "$out" ] || return 1
+	echo "$out"
+}
+
+modem_init() {
+	local t
+	if t=$(_modem_dialect "$1" init); then echo "$t"; return 0; fi
+	case "$1" in
+	supra)   echo "$_modem_init_supra" ;;
+	courier) echo "$_modem_init_courier" ;;
+	olinet)  echo "$_modem_init_olinet" ;;
+	*) echo "modem_init: unknown role '$1'" >&2; return 1 ;;
+	esac
+}
+
+# The link-diagnostic command, which is NOT portable and fails SILENTLY when
+# it is wrong: ATI11 on a USR prints a full link report, and on the Conexant it
+# prints the product name and OK.  Four Oli'Net calls were recorded with an
+# empty far-end rate before anyone noticed the command was the problem rather
+# than the modem.
+modem_diag() {
+	local t
+	if t=$(_modem_dialect "$1" diag); then echo "$t"; return 0; fi
+	case "$1" in
+	courier) echo "ATI11" ;;
+	*)       echo "AT&V1" ;;
+	esac
+}
 
 # The extension each role answers on.  Kept here so a script that needs both
 # cannot pair the right modem with the wrong number.
@@ -61,6 +164,7 @@ modem_ext() {
 	case "$1" in
 	supra)   echo "$_modem_ext_supra" ;;
 	courier) echo "$_modem_ext_courier" ;;
+	olinet)  echo "$_modem_ext_olinet" ;;
 	*) echo "modem_ext: unknown role '$1'" >&2; return 1 ;;
 	esac
 }
@@ -88,7 +192,8 @@ modem_resolve() {
 	case "$role" in
 	supra)   env_override=${SUPRA_TTY:-} ;;
 	courier) env_override=${COURIER_TTY:-} ;;
-	*) echo "modem_resolve: unknown role '$role' (supra|courier|/dev/...)" >&2
+	olinet)  env_override=${OLINET_TTY:-} ;;
+	*) echo "modem_resolve: unknown role '$role' (supra|courier|olinet|/dev/...)" >&2
 	   return 1 ;;
 	esac
 

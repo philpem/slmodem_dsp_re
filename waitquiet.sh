@@ -16,7 +16,7 @@
 #
 # Sixteen calls of a pre-emphasis A/B were discarded for precisely this:
 # taken at load 10-11 while three reconstruction agents compiled, on a machine
-# that reached 42.  See captures/pab-DISCARDED.txt.
+# that reached 42.  See records/pab-DISCARDED.txt.
 #
 # WHY "HELD FOR 30 SECONDS" AND NOT A SINGLE READING.  /proc/loadavg's first
 # field is a one-minute exponential average, so it FALLS SLOWLY after a spike

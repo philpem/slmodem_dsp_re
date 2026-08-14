@@ -3,6 +3,12 @@
 # repository keeps the instruments and not the readings.  Copy a batch out
 # by hand if a finding needs to cite the audio itself.
 captures/
+# ...but records/ IS tracked: pre-registrations, scored results and discard
+# notices are the provenance of a finding, not a reading, and two tracked
+# scripts already cited a file in here that no clone ever received.  See
+# records/README.md.  Captures worth keeping go to the ZFS store via
+# archive.py, whose index is mirrored into records/ so the tree knows what is
+# in the store without mounting it.
 
 # Built from v8analyse.c, which is tracked.
 v8analyse

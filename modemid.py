@@ -1,85 +1,113 @@
 #!/usr/bin/env python3
-"""
-Interrogate the modem on a serial port: identity, capabilities, and the
-settings that decide whether it will negotiate V.8 at all.
+"""modemid.py -- ask a modem what it is, and derive its AT dialect from that.
 
-Nothing here dials.  The port is opened ONCE and held, so nothing the modem
-prints is lost and DTR never drops mid-sequence.
+    modemid.py /dev/serial/by-id/usb-...    # kind, init string, diagnostic cmd
+    modemid.py <port> --field init
+
+WHY ASK RATHER THAN LOOK IT UP.  The bench identifies modems through
+`/dev/serial/by-id`, which names the **USB-RS232 adapter**, not the modem
+plugged into it.  Move a modem to a different adapter and it silently inherits
+that adapter's role, along with whatever AT dialect the table says that role
+speaks.  Asking the modem removes the indirection: the answer comes from the
+device that has to execute the commands.
+
+WHAT GOES WRONG WHEN THE DIALECT IS ASSUMED.  `AT&A3` and `AT&B1` are
+USRobotics commands.  Sent to the Oli'Net they return ERROR, and a harness that
+ignores the ERROR proceeds with the modem in a state it did not choose.  The
+link diagnostic is worse, because it fails silently: `ATI11` on a USR prints a
+full link report, and on the Conexant it prints the product name and OK.  Four
+Oli'Net calls were recorded with an empty far-end rate for exactly that reason
+-- not a missing measurement, a measurement taken with the wrong command.
+
+THE DIALECTS, and what identifies each:
+
+  usr        ATI7 contains "Configuration Profile" / "Product type"
+             init  AT&F;AT&A3;AT&B1      diag  ATI11   (link diagnostics)
+  conexant   ATI3/ATI7 contains "V92 Ready", or ATI0 reports "V5.0"
+             init  AT&F                  diag  AT&V1   (last-call report)
+  rockwell   ATI7 contains "RCV" (e.g. RCV56DPF-PLL)
+             init  AT&F                  diag  AT&V1
+  unknown    init  AT&F                  diag  ATI11   -- the safe subset
+
+`AT&F` ALONE IS THE SAFE INIT and it must come FIRST.  The harness sets
+`ATS0=1` for autoanswer before sending the init string, so an `AT&F` anywhere
+but the front resets S0 to its factory value and the modem never answers.
 """
-import os
-import select
-import subprocess
+
+import argparse
 import sys
-import termios
 import time
 
-# Resolve through modems.sh so a role name works and ttyUSBn renumbering
-# cannot silently point this at the other modem.
-if len(sys.argv) > 1:
-    PORT = sys.argv[1]
-else:
-    PORT = subprocess.run(
-        [os.path.join(os.path.dirname(os.path.abspath(__file__)), "modems.sh"),
-         "resolve", "supra"],
-        capture_output=True, text=True).stdout.strip() or "/dev/ttyUSB0"
+DIALECTS = {
+    "usr":      {"init": "AT&F;AT&A3;AT&B1", "diag": "ATI11"},
+    "conexant": {"init": "AT&F",             "diag": "AT&V1"},
+    "rockwell": {"init": "AT&F",             "diag": "AT&V1"},
+    "unknown":  {"init": "AT&F",             "diag": "ATI11"},
+}
 
-QUERIES = [
-    ("ATI0", "product code"),
-    ("ATI1", "checksum"),
-    ("ATI2", "self test"),
-    ("ATI3", "firmware"),
-    ("ATI4", "capabilities"),
-    ("ATI5", "country/profile"),
-    ("ATI6", "modem data pump"),
-    ("ATI7", "manufacturer"),
-    ("AT+MS?", "current modulation selection"),
-    ("AT+MS=?", "SUPPORTED modulations -- V.8 needs V.34 or V.90 here"),
-    ("AT+A8E?", "V.8 configuration (if the chipset implements it)"),
-    ("AT+A8E=?", "V.8 configuration, permitted values"),
-    ("ATS27?", "S27: modulation/handshake control on some chipsets"),
-    ("ATS32?", "S32"),
-    ("ATS109?", "S109: line rate/modulation on Rockwell parts"),
-    ("AT&V", "ACTIVE PROFILE -- the whole configuration"),
-]
+
+def classify(replies):
+    """replies: {command: text}. Order matters -- USR is checked first because
+    its ATI7 is unmistakable, and a Rockwell part number can appear in a modem
+    whose command set is someone else's."""
+    blob = " ".join(replies.values())
+    if "Configuration Profile" in blob or "Product type" in blob:
+        return "usr"
+    if "V92 Ready" in blob or "V5.0" in blob:
+        return "conexant"
+    if "RCV" in blob:
+        return "rockwell"
+    return "unknown"
+
+
+def probe(port, timeout=1.0):
+    try:
+        import serial
+    except ImportError:
+        sys.exit("modemid: pyserial not installed")
+    try:
+        s = serial.Serial(port, 115200, timeout=timeout)
+    except Exception as e:
+        sys.exit("modemid: cannot open %s: %s" % (port, e))
+    try:
+        s.write(b"\r")
+        time.sleep(0.3)
+        s.reset_input_buffer()
+        out = {}
+        for cmd in ("ATI0", "ATI3", "ATI7"):
+            s.write(cmd.encode() + b"\r")
+            time.sleep(1.0)
+            raw = s.read(s.in_waiting or 1).decode("latin-1", "replace")
+            out[cmd] = " ".join(x.strip() for x in raw.splitlines()
+                                if x.strip() and x.strip() != cmd)
+        return out
+    finally:
+        s.close()
 
 
 def main():
-    fd = os.open(PORT, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-    a = termios.tcgetattr(fd)
-    a[0] = 0
-    a[1] = 0
-    a[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
-    a[3] = 0
-    a[4] = a[5] = termios.B115200
-    a[6][termios.VMIN] = 0
-    a[6][termios.VTIME] = 0
-    termios.tcsetattr(fd, termios.TCSANOW, a)
-    termios.tcflush(fd, termios.TCIOFLUSH)
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("port")
+    ap.add_argument("--field", choices=("kind", "init", "diag", "all"),
+                    default="all")
+    args = ap.parse_args()
 
-    def ask(cmd, secs=1.5):
-        os.write(fd, (cmd + "\r").encode())
-        out = b""
-        end = time.time() + secs
-        while time.time() < end:
-            if select.select([fd], [], [], 0.2)[0]:
-                try:
-                    c = os.read(fd, 4096)
-                except OSError:
-                    break
-                if c:
-                    out += c
-                    end = time.time() + 0.4      # keep reading while it talks
-        return out.decode(errors="replace")
+    replies = probe(args.port)
+    kind = classify(replies)
+    d = DIALECTS[kind]
 
-    ask("ATZ", 2.0)
-    ask("ATE0", 1.0)                              # echo off, so the reply is the reply
-    for cmd, why in QUERIES:
-        r = ask(cmd, 2.5 if cmd == "AT&V" else 1.5)
-        lines = [l.strip() for l in r.replace("\r", "\n").split("\n") if l.strip()]
-        print("\n%-10s %s" % (cmd, why))
-        for l in lines:
-            print("    %s" % l)
-    os.close(fd)
+    if args.field == "kind":
+        print(kind)
+    elif args.field in ("init", "diag"):
+        print(d[args.field])
+    else:
+        print("kind %s" % kind)
+        print("init %s" % d["init"])
+        print("diag %s" % d["diag"])
+        for c, t in replies.items():
+            print("  %-5s %s" % (c, t[:90]))
+    return 0
 
 
-main()
+if __name__ == "__main__":
+    raise SystemExit(main())

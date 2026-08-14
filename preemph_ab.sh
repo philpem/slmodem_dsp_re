@@ -25,7 +25,7 @@
 #   GATED ON LOAD.  slmodemd is real-time DSP; a loaded box degrades BOTH arms
 #   and the degradation is larger than the effect being looked for, so
 #   interleaving alone does not rescue it.  Sixteen calls were discarded for
-#   exactly this (captures/pab-DISCARDED.txt).  `waitquiet.sh` blocks before
+#   exactly this (records/pab-DISCARDED.txt).  `waitquiet.sh` blocks before
 #   every call until the load has stayed under half the cores for 30 s, and
 #   the load is recorded again AFTER the call so one that started quiet and
 #   finished loaded can be dropped at analysis time rather than believed.
