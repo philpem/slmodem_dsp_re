@@ -59290,3 +59290,56 @@ every template is therefore nearly equally ineffective.
 Figure 2, which is a template with a +/-1 dB tolerance band, not an equation.
 The residual differences being compared are smaller than that tolerance. The
 RANKING is probably sound; the absolute numbers are not.
+
+### 1957. CORRECTION TO 1956: THE TABLE 4 TEMPLATE TOPS OUT AT beta + gamma, NOT gamma, AND THE 0.4-0.8 SEGMENT IS UNCONSTRAINED
+
+Phil, reading Figure 2/V.34: *"the grey bands define the tolerance. It seems
+like from 0.4 to 0.8 f/S the line could have any reasonable shape so long as at
+f/S=0.4 it was 0dB and at f/S=0.8 it was beta, then at f/S=1.2 it was
+beta+gamma."* Both halves are right and 1956's template was wrong on both.
+
+**RE-READ AT 400 dpi, the two dimension arrows are plainly STACKED.** The beta
+arrow runs from the 0 line up to the tick where the diagonal begins; the gamma
+arrow runs from **that same tick** up to the top dashed line. So the top of the
+template is `beta + gamma`. 1956 read the top as gamma, understating every
+Table 4 curve by beta:
+
+    index   beta  gamma    1956 top   correct top
+      6     0.5    1.0       1.0          1.5
+      7     1.0    2.0       2.0          3.0
+      8     1.5    3.0       3.0          4.5
+      9     2.0    4.0       4.0          6.0
+     10     2.5    5.0       5.0          7.5
+
+**AND THE TOLERANCE BANDS BOUND ONLY TWO SEGMENTS.** Grey is drawn around 0 dB
+out to f/S = 0.4, and along the diagonal from f/S = 0.8. Between 0.4 and 0.8
+there is no band at all, so the Recommendation constrains only the endpoints
+and any reasonable monotonic shape conforms. 1956 modelled a flat run to 0.7
+and a STEP to beta, which is one arbitrary choice among many and not what the
+figure says. `preemphshape.py` now interpolates linearly across that segment
+and says in the docstring that the choice is arbitrary and changes the
+residuals.
+
+**THE NUMBERS MOVE BUT THE CONCLUSION DOES NOT.** Same call as 1956:
+
+    index  7  b=1.0 g=2.0 top=3.0   rms 1.37 dB   <- object chose this
+    index  8  b=1.5 g=3.0 top=4.5   rms 1.27 dB
+    index  9  b=2.0 g=4.0 top=6.0   rms 1.24 dB   <- best
+
+The gap between the object's choice and the best is **0.13 dB**, up from the
+0.07 dB reported in 1956 -- nearly double, and still nothing. Across five real
+bench calls the object picks 7 every time and the shape match prefers 7, 8, 8,
+9 and 9: it agrees once and under-corrects by one or two indices otherwise.
+
+**SO 1956's DIRECTION STANDS AND ITS MAGNITUDE WAS UNDERSTATED.** The selector
+does systematically under-correct, by rather more than 1956 said, and it is
+still worth well under a quarter of a decibel on this path because the path has
+no tilt to correct. The recommendation not to spend bench calls on it is
+unchanged; so is the expectation that it would matter on a line with real
+broadband tilt.
+
+**METHOD NOTE.** This is the second time in this investigation that a figure
+read at page resolution gave the wrong answer and a re-render settled it -- the
+first was Figure 2 itself, where the 150 dpi render was too coarse to separate
+the two arrowheads meeting at the beta/gamma tick. Render spec figures at 400
+dpi and crop before reading a value off one.
