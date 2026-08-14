@@ -825,7 +825,27 @@ struct v34_object {
 	 * sets f218 accordingly -- so it is a frame length in symbols and the
 	 * two tests are "half way" and "at the end".
 	 */
-	short faa96;					/* +0xaa96 */
+	/*
+	 * THE SYMBOL RATE IN BAUD, not an index and not a block count.
+	 * `V34SetupDemodulator`'s caller compares it against 0xd65, 0xc80,
+	 * 0xbb8 and 0xaf0 -- 3429, 3200, 3000 and 2800 -- so it holds the
+	 * rate itself.  Written once, from T3M_TXBAUD.
+	 *
+	 * THAT MAKES EVERY THRESHOLD BUILT ON IT A TIME.  Multiplying by
+	 * the baud converts seconds into symbols, which is what the
+	 * recovery tests in `datapumpv34` are really expressing:
+	 *
+	 *     baud_rate >> 1   0.5 s of bad blocks -> FULL RETRAIN (~10 s)
+	 *     2 * baud_rate    2 s                 -> renegotiate down
+	 *     7 * baud_rate    7 s                 -> handshake timeout
+	 *     8 * baud_rate    8 s of good blocks  -> renegotiate up
+	 *
+	 * Reading them as times is what shows the ladder is inverted: half
+	 * a second of trouble buys a ten-second retrain, while the two-to-
+	 * three-second renegotiation waits four times as long and never
+	 * arrives.  Finding 1933.
+	 */
+	short baud_rate;				/* +0xaa96 */
 	unsigned char unmapped_aa98[0xaad0 - 0xaa98];
 	struct v34_fsk fsk;				/* +0xaad0 */
 	short fsk_interp[V34_FSK_TAPS + 1];		/* +0xaae6 */
@@ -1062,7 +1082,7 @@ struct v34_object {
  * initV34 for the context at +0x25e0 while the receive one feeds +0xa00.
  * `bits` counts units of 2400 bps, so the bit rate is 2400 times it.
  *
- * `rx_baud` IS `faa96` above -- one store, two readings, the same situation
+ * `rx_baud` IS `baud_rate` above -- one store, two readings, the same situation
  * as the echo array that is also the FSK delay line (finding 100).  It is
  * declared in both places on purpose; there is no third field.
  *

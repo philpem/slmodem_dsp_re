@@ -167,8 +167,8 @@
  },
  {
   "label": "the tail doubles +0xaa96 instead of tripling it",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);",
-  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->faa96);",
+  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);",
+  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->baud_rate);",
   "fn": "t3m_tail"
  },
  {

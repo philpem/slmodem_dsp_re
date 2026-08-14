@@ -974,7 +974,7 @@
  },
  {
   "label": "the rate tables read the transmit baud rate",
-  "find": "\tbaud = obj->faa96;",
+  "find": "\tbaud = obj->baud_rate;",
   "replace": "\tbaud = hs_get(obj, T44_TXBAUD);",
   "fn": "t44_accept_len26"
  },
@@ -1190,8 +1190,8 @@
  },
  {
   "label": "the probeselect diagnostic swaps its two rates",
-  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->faa96);",
-  "replace": "\t\t\t\t     (int)obj->faa96,\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->baud_rate);",
+  "replace": "\t\t\t\t     (int)obj->baud_rate,\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
   "note": "NOT CAUGHT, and it is a gap.  `probeselect` settles both rates at 2400 on every case this file drives -- it is the bottom of its ladder and the fixture's probe bins do not admit anything higher -- so the two arguments are equal and the order between them is invisible.  The two mutations below check WHICH field each argument reads, which is the half that can be seen; a case that steered `probeselect` to two different rates would close the rest.",
   "fn": "t44_accept_len4d"
  },
@@ -1294,13 +1294,13 @@
  },
  {
   "label": "the probeselect diagnostic prints the carrier as the transmit rate",
-  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->faa96);",
-  "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)obj->faa96);",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->baud_rate);",
+  "replace": "\t\t\t\t     (int)hs_get(obj, T44_CARRIER),\n\t\t\t\t     (int)obj->baud_rate);",
   "fn": "t44_accept_len4d"
  },
  {
   "label": "the probeselect diagnostic prints the carrier as the receive rate",
-  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->faa96);",
+  "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->baud_rate);",
   "replace": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)hs_get(obj, T44_CARRIER));",
   "fn": "t44_accept_len4d"
  },

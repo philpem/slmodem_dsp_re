@@ -10091,7 +10091,7 @@ could go unnoticed for so long.
 than `struct v34_object` claimed: the declared end at 0xac10 was the largest
 offset anything reconstructed had touched, and `initdigital` writes a byte
 at 0xac16, so the struct now runs to 0xac18 and that is still a floor.  And
-the rate config's `rx_baud` at +0xaa96 IS `faa96` -- one store, two
+the rate config's `rx_baud` at +0xaa96 IS `baud_rate` -- one store, two
 readings, the same situation as the echo array that is also the FSK delay
 line (finding 100), declared in both places on purpose.
 
@@ -25634,7 +25634,7 @@ does not take it for a limit of the kind 81 and 86 have.
 +0xaa84 and publishes the answer in the capability record at +0xaa3c. The
 field names came out of `struct v34_ratecfg`, which already had them: +0xaa84
 is `baud`, +0xaa86 `period`, +0xaa88 `txbits`, +0xaa96 `rx_baud` (which is
-also `faa96`), +0xaa98 `rxbits`, +0xaaa6 `rx_use_max` and **+0xaaac
+also `baud_rate`), +0xaa98 `rxbits`, +0xaaa6 `rx_use_max` and **+0xaaac
 `rx_divtab`**. That last one is the whole shape of the second half.
 
 **The predictor, kept or thrown away.** Bit 5 of the receiver's flags is a
@@ -26298,7 +26298,7 @@ before acting, and the 23 rows and their offsets are exactly as 540 had them.
 
 **The sixteen exact.**  `DP_PROGRESS` `f0004`; `T41_V90RX` `v90_receiver`;
 `HS_TRACE_1` and `T41_TRACE_1` `vect_idx`; `T41_F359C` `f359c`; `T41_FA24A`
-`retrain_state`; `T44_RXBAUD` `faa96`; `T3C_FAADC` `fsk.phase`; `T3C_FAAE0`
+`retrain_state`; `T44_RXBAUD` `baud_rate`; `T3C_FAADC` `fsk.phase`; `T3C_FAAE0`
 and `T41_FAAE0` `fsk.nbits`; `T41_FAAE2` `fsk.sr`; `T41_FABCA` `local_short`;
 `T41_FABCC` `is_short`; `T3C_FABF0`, `T41_FABF0` and `T44_FABF0`
 `moh_message`.  Three names for one field twice over, which is what the
@@ -27250,7 +27250,7 @@ $ python3 tools/dis.py ../slmodemd/dsplibs.o 0x62b45 0x62b6c
    62b66:  c7 00 04 00 00 00      movl   $0x4,(%eax)
 ```
 
-0x62b45 is where the `mode == 1` branch lands and where `faa96` is read;
+0x62b45 is where the `mode == 1` branch lands and where `baud_rate` is read;
 **the reload is 0x62b5f** and it is ZERO-extended, which is the same spelling
 0x62a70's `cmp $0x4a,%cx` uses and is why one `short` still models both
 (the equivalent mutation next to this one).  Every use in `src/`, in
@@ -27511,7 +27511,7 @@ trust the list, which is the only reason they were.
 2. **"550's own 0x62b45 address which was actually 0x62b5f."** The correction
    is finding **591**'s, not 550's. 550 quotes `0x62b45` in a column header and
    in its argument about arm 48; 591 is where the bytes were read --
-   `0x62b45` is where the `mode == 1` branch lands and where `faa96` is read,
+   `0x62b45` is where the `mode == 1` branch lands and where `baud_rate` is read,
    and **the reload is `0x62b5f`**. 550's own separate failure, an instruction
    that could not be obeyed as written because a third copy existed, is
    correctly cited and is a different lesson.
@@ -29806,7 +29806,7 @@ which is which.
 and 0x65427 compares that against a sign-extended +0x124.  Every legal baud
 is inside a short -- 7 * 3429 is 23,853 -- so a sixteen-bit spelling agrees
 with the object on every input a fixture would pick.  `suite_entry` drives it
-at +0xaa96 = 20,000, where `7 * faa96` is 140,000 and its low halfword is
+at +0xaa96 = 20,000, where `7 * baud_rate` is 140,000 and its low halfword is
 8,928, so a counter of 10,000 stays in the body and a truncating reading
 retrains; and at -20,000, where the object retrains and BOTH a truncating and
 an unsigned reading decline.  Finding 724's shape in a second arm, and the
@@ -36228,7 +36228,7 @@ case 0xab7:		/* 2743, and the only arm that REPLACES the rate */
 	T3M_U16(f, T3M_TXBAUD) = 0xaf0;
 ```
 
-so by the time `:4002` copies `T3M_TXBAUD` into `faa96`, 2743 has become 2800.
+so by the time `:4002` copies `T3M_TXBAUD` into `baud_rate`, 2743 has become 2800.
 The object does not merely fail to produce 2743; it **detects it and refuses
 it, with its own diagnostic string**. That is positive evidence where D35 had
 only the absence of a writer, and it is a much better answer than the one the
@@ -52826,7 +52826,6 @@ changed.** Every block in that file starts from a state the OBJECT produced;
 switching it to ours the moment ours exists would make roughly fifteen hundred
 existing checks compare our code against a state our own code chose.
 
-======================================================================
 
 ### 1701. WHAT `reset_dtmf` DOES NOT CLEAR, AND WHY ONLY ONE OF THE FOUR IS A DEFECT
 
@@ -56397,3 +56396,2772 @@ tier being retired in favour of the period one.  Until then these checks are
 verified by `make period`, on the object's own compiler with the object's own
 flags, which is the tier CLAUDE.md says decides -- and they are verified
 there over the same inputs, not a subset.
+=======
+
+### 1904. THE RATE DECISION READS APPROXIMATELY THE CORRECT PHASE-4 ERROR — THE "FORTY TIMES WORSE" READING COMPARED TWO OPERATING POINTS AND IS WITHDRAWN
+
+**The rate decision reads approximately the CORRECT Phase-4 error. The "forty
+times worse than the equaliser achieves" reading was an artefact of comparing
+across two operating points, and is withdrawn.**
+
+The mechanism half stands and is worth having. `equerr` is not an instantaneous
+reading: `v34rx.c:2640` accumulates `mag = dr*dr + di*di` into `rx->f220` under a
+counter `rx->f21c` that wraps at `0x3ff`, publishing `rx->f21a = mag >> 16` once
+per **1024 symbols** -- 0.30 s at 3429 baud, exactly the `V34EQU` spacing in
+every log. The rate ladder at `v34hstx1.cpp:2624` walks `rate` down while
+`TX1_RX250` exceeds a per-rate threshold, and `TX1_RX250` is fed `rx->f21a`
+verbatim (2539, 2858). So the rate IS decided from a single block average.
+
+**WHAT WAS WRONG.** Comparing that block against the minimum `V34EQU` seen
+earlier in the call gave ratios of 36x (ours) and 53x (blob), which looked like
+the decision sampling a transient. It is not a like-for-like comparison, for two
+reasons already established on this thread:
+
+* The Phase 3 -> 4 boundary applies `V34TXSCALE` power reduction with
+  `fullReset=1`. `equerr` is **raw error, never normalised by signal power** --
+  the code tracks power separately in `f24c`/`f248` precisely because of that.
+  A Phase-3 value and a Phase-4 value are different quantities.
+* Multi-attempt calls pool every earlier attempt's samples into the minimum.
+  probe-2's three re-handshakes grew the window 10 -> 23 -> 44 samples.
+
+**THE CHECK THAT DISCRIMINATES.** Look FORWARD from each decision instead --
+the next 8 blocks are in the same regime by construction, needing no reset
+heuristic and no cross-phase comparison. Saturated (32767) decisions excluded:
+
+| datapump | decisions | at decision | min of next 8 blocks | ratio | next 8 all >1000 |
+|---|---|---|---|---|---|
+| blob (`base-cx2`) | 41 | 2320 | 1698 | **1.4x** | 61% |
+| ours (`pab3`+`probe`) | 69 | 1208 | 254 | **2.3x** | 33% |
+
+The error does not fall away after the decision. Both datapumps genuinely sit
+near their decision value through Phase 4. There is no transient to avoid and no
+"wait for stability" fix to write.
+
+**WHAT THIS COSTS AND WHAT IT BUYS.** It removes the explanation for the rate
+deficit that this thread spent a day building toward. It also removes a fix that
+would have been actively harmful: `tx1_ts_scale` thresholds are calibrated for a
+block-MEAN statistic, and feeding them a min-over-window would have passed every
+rate and selected rates the link cannot carry -- failing as "connects at 28800
+then retrains", which reads as a win on `equerr` and a loss on the link.
+
+**AND IT INVERTS THE RECEIVER CLAIM, PROVISIONALLY.** On this comparison OUR
+Phase-4 error is LOWER than the blob's, not higher -- 1208 vs 2320 at the
+decision, 254 vs 1698 forward. That is the opposite of the "best before"
+reading (44 blob, 58 ours) and of task #132's framing. **Neither direction is
+established**: `base-cx2` and `pab3` are different batches taken on different
+days, and task #129 exists because the between-batch floor has not been measured.
+See #145.
+
+**A NULL ON THIS THREAD THAT MUST NOT BE QUOTED.** The pre-emphasis convergence
+comparison (0.30 s to equerr<200, 0.60 s to <100, p = 0.44/0.48) is quantised to
+ONE 1024-symbol block and every call hit the gate on its second sample. That
+measurement cannot resolve differences below 0.30 s; it did not find the arms
+equal, it was unable to tell them apart.
+
+Provenance is `row.sh`'s `BINARY:` line -- `base-cx2` is
+`D-Modem-fork/slmodemd` (blob), `pab3` is `build/hybrid-vpcm/slmodemd-{bug,fix}`.
+
+### 1905. THE LEAST-SQUARES TILT ESTIMATOR AGREES WITH ITS OFFLINE MODEL TO TWO DECIMAL PLACES ON A LIVE CALL, AND FOUR CALLS SAY NOTHING ABOUT WHETHER IT HELPS
+
+`probe_preemph_fit` (branch `improve/v34-training`, task #144) fits a line
+through the probe bins that carry a tone and maps the slope to a Table 3 index.
+Offline, over 33 probes from 9 recorded calls, it answered **1.46-1.55 dB** on
+31 of them. On the wire it answered **1.53 dB over 18 bins -> index 1**, on both
+calls that reached the probe. The estimator is doing exactly what the model of
+it said, which is worth stating because the previous two things this thread
+believed about pre-emphasis both turned out to be artefacts (1904).
+
+It also asks for **index 0 at the narrower baud rates** -- the span from the
+reference bin to the band edge is shorter there, so the fitted loss across it
+is smaller. That is the first time anything on this bench has requested index 0,
+which D53 makes unreachable through the object's own counter.
+
+| call | estimator | index | equerr min | rate blocks (tx/rx) | CONNECT |
+|---|---|---|---|---|---|
+| fit-fit-1 | fit, 1.53 dB | 0,1 | 23 | 28800/14400, 28800/26400, 21600/14400 | none |
+| fit-fit-2 | fit, 1.53 dB | 0,1 | 53 | 28800/12000 | 12000 |
+| fit-off-1 | two-point | 6,7 | 59 | 28800/12000, 21600/21600, 24000/24000 | 12000 |
+| fit-off-2 | -- | -- | -- | never reached the probe | none |
+
+**NOTHING ABOUT PERFORMANCE MAY BE READ FROM THIS.** Four calls, one failure per
+arm, and both connected calls reported 12000. `fit-fit-1` reached `rxbitrate
+26400` while reporting no CONNECT at all, which is 1900's defect -- the string
+is emitted once and never revised -- so "CONNECT none" here is a REPORTING
+failure and not necessarily a call failure. The pre-registered plan
+(`preemph-ab2-ANALYSIS-PLAN.md`) calls twelve per arm the minimum and this is
+two.
+
+**AND THESE FOUR CARRY NO FAR-END GROUND TRUTH.** The runner did not call
+`lastlink.py`, so there is no `ATI11` for them. That is the one measurement
+1900 showed to be trustworthy when the CONNECT string is not, and its absence
+is why the table above stops at the log's own numbers. Any real A/B of this
+estimator must read ATI11 on every call.
+
+**THE PRIOR IS STILL A NULL.** Convergence time does not move with
+pre-emphasis index -- and that comparison could not resolve below one
+1024-symbol block (1904), so it is "cannot tell", not "equal". The case for the
+fitted estimator remains spec-correctness of shape and family, not rate.
+
+BUILD NOTE, because it cost four bench calls. The bench runs **D-Modem-fork's**
+slmodemd, the only one carrying the `-e` option. A hybrid linked against this
+repo's front-end does not recognise `-e`, takes the guard script as the
+positional DEVICE argument, creates a pty and exits -- indistinguishable in the
+logs from a modem that failed to train. The fork's `socket_start` also passes
+THREE trailing arguments (dial string, audio socket, call-info socket), so the
+audio fd is `argv[-2]`.
+
+### 1906. OUR V.34 RECEIVER IS BIT-IDENTICAL TO THE BLOB'S OVER 354 BLOCKS OF SIX RECORDINGS — THE HARNESS IS VALIDATED, AND IT STRUCTURALLY CANNOT TEST PRE-EMPHASIS
+
+`testbench/replay.py` stands in for d-modem on slmodemd's socket and feeds a
+recorded call; `replaycmp.sh` runs two binaries over the same file and diffs
+their equaliser trajectories. Over `base-cx2-3`:
+
+    recording      blocks   rate decisions   result
+    base-cx2-1         42          2           IDENTICAL
+    base-cx2-2         75          3           IDENTICAL
+    base-cx2-3         25          1           IDENTICAL
+    base-cx2-4         89          4           IDENTICAL
+    base-cx2-5         98          2           IDENTICAL
+    base-cx2-6         25          1           IDENTICAL
+    ----------------------------------------------------
+    six recordings    354         13           no divergence anywhere
+
+Every block of every recording agrees, and the block COUNTS agree too -- the
+two receivers do not merely track each other, they publish the same number of
+blocks and reach the same number of rate decisions.
+
+That is the fidelity answer 1904 could not get statistically: on byte-identical
+input our V.34 receiver produces the same `equerr` as the blob's, block for
+block, over 354 blocks and 13 rate decisions in six independent recordings. The "blob 44 / ours 58" and "blob 1698 / ours 254" splits were batch
+noise, exactly as 1904 suspected, and neither should be quoted again.
+
+**THE SENSITIVITY CONTROL DID NOT PASS, AND THE REASON IS INSTRUCTIVE.**
+CLAUDE.md requires a tool be shown to fire. Re-running with
+`DSPLIB_V34_FIT_PREEMPH=1` changed the requested filter from the object's
+**index 6** to the estimator's **index 0** -- about as large a change as this
+knob has -- and the 25 blocks stayed byte-identical.
+
+That is correct behaviour, not a blind harness. **Pre-emphasis is a request to
+the FAR END about ITS transmit.** A recording cannot comply: the far end in the
+file said what it said months ago. So our own `equerr` is necessarily unchanged,
+and the harness CANNOT measure any pre-emphasis effect, on this or any other
+recording. Anything downstream of what we ask the far end for is out of its
+reach, permanently.
+
+**AND THE HARNESS IS NOW VALIDATED FOR RECEIVER-SIDE CHANGES.** An identical
+result is worth only as much as the demonstration that a different one would
+show, so `dsplib_v34_seed_defect` was added (v34rx.c, set only by
+tools/benchflags.c from `DSPLIB_V34_SEED_DEFECT`, linked only into the bench
+hybrid). It halves the equaliser's adaptation error -- a small, realistic
+defect that adapts slower without breaking the handshake. Same recording:
+
+    identical for the first 1 block(s); they diverge at block 1
+        blob:  32767   119    56    49    46
+        ours:  32767   233    85    65    58
+
+The harness sees it immediately and the signature is the expected one. So the
+byte-identical result above IS evidence of fidelity, not evidence of a blind
+instrument. Finding 134's argument, satisfied rather than merely cited.
+
+**A DISCREPANCY, AND THE OBVIOUS EXPLANATION IS WRONG.** The estimator reads
+**0.00 dB of tilt** on the replayed 8 kHz capture where the same code reads
+**1.53 dB** live (1905). The first guess -- the capture lost the band -- is
+false: the wav is full to the band edge (-3.7 dB at 3300 Hz, -6.2 at 3400,
+rolling off above 3.5 kHz exactly as the VG204's 3100 Hz bearer should). The
+second guess -- the open-loop replay measures the wrong segment -- is also
+false: bins 6, 8, 12 and 16 read zero in BOTH, and those are V.34 Table 17's
+deliberately omitted tones, a pattern no misaligned window could fake.
+
+What differs is the SHAPE:
+
+    bin:        4     8    12    16    19    22
+    LIVE      423   414   411   396   371   323    falls, ~ -1.2 dB
+    REPLAY    388   421   457   534   541   395    RISES, ~ +1.4 dB
+
+~2.6 dB of differential tilt, in the rising direction. The estimator clamps
+negative tilt to zero, so 0.00 dB is a faithful reading of a differently-shaped
+signal rather than a failure to read. Leading hypothesis (#146): the `_8k`
+capture comes from slmodemd's INTERNAL 9600 stream rather than the socket
+bytes, so a replay traverses the 8k<->9600 resampler two extra times. The 8k
+file being HOTTER at 3500 Hz than the 9600 one (-6.9 against -8.5 dB) supports
+that -- backwards for a plain decimation.
+
+**THIS DOES NOT TOUCH THE RESULT ABOVE**: both binaries received identical
+bytes whatever shaped them. Nor does it touch 1905's live 1.53 dB or
+`probeplot.py`'s channel shape, both of which come from live logs at one
+resampler pass. What is not quotable is a probe-derived number from a REPLAY.
+
+**AND THE SYMBOLS ON THAT PATH ARE DEMONSTRABLY OURS.** An identical result
+would be worth nothing if the receive path were silently resolving to the blob
+in both arms -- `--allow-multiple-definition` over a weakened blob copy makes
+that a real possibility rather than a paranoid one. A link map settles it:
+`V34EqualizerAdapt`, `V34EqualizerCenterAdapt` and `V34SetupModulator` come
+from our `v34filters.o`, `dftenergy` from our `dftc.o`, `v34tx1_dataxmit` from
+our `v34hstx1.o`; `probe_preemph` is static and local to our `v34hshak.o`.
+258 symbols in the link come from our objects and 1253 from the weakened blob,
+which is the expected shape -- the blob still supplies everything we have not
+reconstructed.
+
+ONE LINK STEP IS NOT INHERITED FROM THE KNOWN-GOOD BINARY. This build adds
+`objcopy --redefine-sym VPCMXF_Create=__blob_VPCMXF_Create` to satisfy the
+fork's `dp_vpcm_shim`, which the earlier `slmodemd-probe` arm did not need.
+Startup is identical to that binary and the seeded-defect run behaves
+correctly, so it is probably benign, but it is an unverified divergence from
+how the previous arms were built and should be reconciled before anything
+depends on it.
+
+PROTOCOL, recorded because two wrong guesses about it cost real bench time. The
+audio socket carries `struct socket_frame` (modem.h), NOT raw PCM: a 4-byte
+type followed by a 320-byte union, **324 bytes** per frame on 32-bit x86, at
+**8000 Hz** (SIP_RATE) rather than the datapump's 9600. slmodemd primes with an
+AUDIO frame then a VOLUME frame. And slmodemd is a modem -- it starts no
+datapump until a DTE issues AT commands, so `replaydte.py` drives the pty; a
+harness that only feeds audio waits forever for an equaliser that never runs.
+
+### 1907. THE RECEIVED TILT IS NOT THE CHANNEL'S — IT IS DOMINATED BY THE FAR END'S PRE-EMPHASIS, AND IT SWINGS 26 dB ACROSS ONE CALL
+
+Chasing 1906's replay-versus-live discrepancy killed three hypotheses and
+produced a better fact than any of them.
+
+**NOT the capture.** `base-cx2-3.modem_rx_8k.wav` is full to the band edge:
+-3.7 dB at 3300 Hz, -6.2 at 3400, rolling off above 3.5 kHz exactly as the
+VG204's `bearer-cap 3100Hz` should.
+
+**NOT the resampler chain.** D-Modem-fork's `rx8k_dump_write` is called on
+`socket_frame.data.audio.buf` immediately BEFORE `RcFixed_Resample`
+(modem_main.c:1104), so the `_8k` capture is the socket bytes verbatim. A
+replay of it delivers byte-identical input through one resampler pass, the
+same as live. The header comment says so and the call site proves it.
+
+**IT IS WHERE IN THE CALL THE MEASUREMENT LANDS.** Tilt of the received signal
+over 600-3400 Hz, per second of `base-cx2-3`:
+
+    t(s)     3      9     10     11     12     15     20     25     30
+    tilt  -3.80  -5.36 -18.82  -6.49  +7.68  +3.05  +2.03  +3.21  +3.14
+
+The signal falls with frequency early -- the channel's own shape, which is what
+the line probe is there to measure -- and from about t=12 onward it RISES by
++2 to +3.7 dB and stays there for the remaining 25 seconds. That is the far end
+applying the pre-emphasis it was asked for (this call negotiated index 6/7,
+Table 4). **A 26 dB swing within one call**, from -18.8 to +7.7.
+
+**WHAT THIS MEANS FOR EVERY TILT NUMBER ON THIS PROJECT.** "The channel's tilt"
+is only meaningful for the pre-negotiation window. After that, what we receive
+is the channel's shape PLUS whatever shaping we ourselves requested, and the
+second term is the larger one. Any measurement of received spectrum must say
+where in the call it was taken. 1904's spectrum work and 1905's live 1.53 dB
+are safe -- both come from `V34PROBEBINS`, emitted at the probe, in the right
+window -- but nothing that averages over a call is.
+
+**AND IT CONFIRMS THE PRE-EMPHASIS REQUEST REACHES THE WIRE.** The far end is
+demonstrably shaping its transmit by several dB in response to what we ask.
+No earlier finding on this thread had measured it. It also means the estimator's choice is
+not cosmetic: asking for index 0 instead of 6/7 would remove roughly 3 dB of
+HF lift from everything we receive after negotiation.
+
+**CONSEQUENCE FOR THE REPLAY HARNESS (1906).** A replay's probe measurement
+depends on its own timeline aligning with the recording's, and it does not:
+the recording's far end cannot wait for us. So probe-derived numbers from a
+replay are not comparable to live ones -- not because anything is broken, but
+because they are measurements of different moments. 1906's fidelity result is
+untouched: both binaries received identical bytes and produced identical
+`equerr` over 354 blocks.
+
+### 1908. THE OBJECT OVER-EMPHASISES BY ABOUT 3 dB, AND THE FITTED ESTIMATOR MEASURABLY FLATTENS THE RECEIVED SPECTRUM — THE FIRST EVIDENCE IT DOES ANYTHING AT ALL
+
+1907 established that what we receive after negotiation carries the far end's
+pre-emphasis, and that the term is larger than the channel's own shape. That
+makes the pre-emphasis request directly measurable from the capture, without
+waiting for a rate to move -- and it turns "does the estimator help" from a
+noisy statistical question into a physical one.
+
+Steady-state received tilt, 600-3400 Hz, over the data phase:
+
+| arm | datapump | index | tilt |
+|---|---|---|---|
+| blob, 5 calls | blob | 6/7 | **+3.17, +3.10, +3.11, +3.11, +3.15** |
+| off | ours | 6/7 | +2.35 |
+| fit | ours | 1 | **+0.97** |
+
+**The index-6/7 baseline has a spread of 0.07 dB across five independent
+calls** -- ±0.04 -- so it is not a noisy quantity, and +0.97 is nowhere near
+it. The fitted estimator cuts the residual tilt from about 3.1 dB to about
+1.0 dB.
+
+**WHAT IS ACTUALLY WRONG WITH THE OBJECT'S CHOICE.** The channel falls roughly
+1.5 dB across the band (1905, measured at the probe where 1907 says it is
+meaningful). The object asks for index 6/7, which lifts about 3 dB. The result
+is a received signal tilted UP by ~3 dB -- the correction is roughly double
+the loss and in net terms overshoots by more than the original defect. The
+equaliser then has to undo the overshoot. That is a coherent mechanism for the
+estimator mattering, and it is the first one this thread has had that survives
+checking.
+
+**WHAT THIS IS NOT.** It is not a rate result. n=1 for the fit arm's connected
+calls, no ATI11 ground truth on those four (1905), and 1904 established that
+the equaliser reaches its floor regardless. It says the estimator controls the
+quantity it was written to control, not that the link goes faster. The
+pre-registered twelve-per-arm A/B with ATI11 on every call is still the thing
+that would answer that, and this finding is a reason to run it rather than a
+substitute for it.
+
+**TWO CALLS EXCLUDED, and why.** `fit-fit-1` and `fit-off-2` both read -0.27,
+and both are calls that never reported CONNECT -- there is no data phase to
+measure, so the number is of something else. Reporting them beside the others
+would have made the fit arm look better than it is.
+
+### 1909. `probe_preemph_fit` REPORTS DOUBLE THE REAL TILT — 20·log10 OF A POWER QUANTITY — AND A SIMULATED LOOP FOUND IT WHERE THE BENCH STRUCTURALLY COULD NOT
+
+The fitted estimator converts each probe bin to dB with
+
+    y = 6.0205999 * ilog2(energy)          /* = 20 * log10(energy) */
+
+but `energy` is `dftenergy`'s published `(short)(e >> 16)` where
+`e = re*re + im*im`. That is a POWER quantity, so the conversion must be
+**10 * log10**. Every tilt the estimator has reported is exactly twice the
+real one.
+
+Measured against a simulated loop (`testbench/linesim.py`), over 400 trials at
+each of three tilts:
+
+    true trend   1.68 dB  ->  reported  3.21   (1.91x)
+    true trend   4.38 dB  ->  reported  8.95   (2.04x)
+    true trend   8.71 dB  ->  reported 17.45   (2.00x)
+
+**THE BENCH COULD NOT HAVE FOUND THIS.** Its channel is a fixed digital filter
+-- two metres of desk lead into a VG204 at `bearer-cap 3100Hz` -- so a
+constant factor-of-two error presents as a stable, repeatable reading. 1905
+quoted "1.46-1.55 dB on 31 of 33 probes" as evidence the estimator was sound;
+that consistency was real and told us nothing about accuracy. It took a
+channel whose true answer was known, which required simulating one.
+
+**IT ALSO EXPLAINS AN AGREEMENT THAT WAS TAKEN AS CONFIRMATION.**
+`probeplot.py` measures the trend with a correct `10*log10` and reads ~0.77 dB
+across the band including the edge; the estimator reported 1.53. That was
+treated as two methods agreeing. It was one method and its double.
+
+**CONSEQUENCE FOR THE INDEX CHOSEN.** Corrected, the estimator reads ~0.77 dB
+on this bench, which maps to **index 0** at 3429 baud rather than index 1 --
+flat, no shaping, which is what both hardware modems request of us and what
+Phil predicted would let the equaliser converge faster. The uncorrected
+estimator asks for index 1 and so has never tested that.
+
+**WHAT IT DOES NOT INVALIDATE.** 1908's measurement stands: the received tilt
+really did fall from ~3.1 dB to ~0.97 when the estimator was switched in,
+because that was measured from the capture and not from the estimator's own
+arithmetic. What changes is which index the corrected estimator would choose,
+and therefore what a future A/B is testing.
+
+**THE RUN IN FLIGHT IS TESTING THE UNCORRECTED ESTIMATOR** -- index 1 against
+the object's index 7 -- and remains a valid experiment, but it is not a test of
+the corrected one. Say which is which when reporting it.
+
+Also open from the same simulation, and NOT yet acted on: the two-point method
+beat both fits at 1.7 and 4.4 dB of true tilt in that first sweep. That
+comparison was made with the buggy conversion in place and must be re-run
+before anything is read into it.
+
+### 1910. THE FITTED ESTIMATOR HALVES THE RESIDUAL TILT (p = 0.0006) AND THE FAR END'S TRANSMIT RATE RISES 14400 -> 21600, WHICH IS SUGGESTIVE AND NOT SIGNIFICANT
+
+Pre-registered plan: `captures/preemph-fit-ANALYSIS-PLAN.md`, written before
+any call. 24 calls, 12 per arm, interleaved, one binary and two environments so
+the compiler cannot differ between arms as it could in runs 1 and 2 (1901).
+ATI11 read after every call.
+
+    arms: off = the object's two-point counter, index 7 at 3429 baud
+          fit = probe_preemph_fit, index 1 at 3429 baud
+
+    PRIMARY   |received tilt| dB   off  2.82 (n=10)   fit  1.13 (n=11)  p=0.0006  SIGNIFICANT
+    SECONDARY far ATI11 xmit       off 14400 (n=10)   fit 21600 (n=11)  p=0.0781  not significant
+    TERTIARY  connect rate         off 10/12          fit 11/12         p=0.63    not significant
+
+Both load panels are identical: no call exceeded the rise-3.0 exclusion, so
+"all calls" and "rise-clean" are the same 24.
+
+**THE PRIMARY IS THE RESULT.** The estimator more than halves the tilt the far
+end's transmit is left with, which is exactly what it was written to do, at
+p = 0.0006. This is the first positive result on this thread; runs 1 and 2
+(1476, 1901) were both null, and 1904 explained why -- they manipulated things
+upstream of a quantity that was not the constraint, and measured `equerr`,
+which 1904 withdrew as the interesting variable.
+
+**THE SECONDARY IS NOT SIGNIFICANT AND MUST NOT BE REPORTED AS IF IT WERE.**
+p = 0.0781 by the pre-registered permutation rank-sum. What can be said is the
+distribution:
+
+    off   7200  9600 12000 12000 12000 16800 19200 19200 26400 26400
+    fit  12000 16800 16800 16800 21600 21600 24000 26400 26400 28800 28800
+
+The fit arm's WORST call equals the off arm's MEDIAN; 7200 and 9600 vanish;
+only the fit arm reaches 28800. A 50% median shift on the exact quantity #132
+opened. It needs a second run at this size to confirm, and the plan says so in
+advance.
+
+**THIS TESTED THE BUGGY ESTIMATOR.** 1909 -- the 20*log10-of-a-power-quantity
+error, reporting double the true tilt -- was found after this run began. The
+arm measured here asked for index 1. The CORRECTED estimator reads ~0.77 dB on
+this bench and asks for **index 0**, which is untested, and which is what both
+hardware modems request of us.
+
+**THE MECHANISM IS NOW COHERENT END TO END**, which no earlier attempt on this
+thread managed: the object over-requests lift (1908: ~3 dB against ~1.5 dB of
+real loss) -> the far end transmits tilted -> that tilt is directly measurable
+in the capture (1907) -> correcting the request flattens it (this finding) ->
+the carried rate appears to follow. Every step but the last is measured.
+
+### 1911. ON A SIMULATED LOOP THE FIT BEATS THE TWO-POINT METHOD BY UP TO 5x — BUT PLAIN LEAST SQUARES LOSES TO IT ONCE BINS GO DUD, AND THEIL-SEN WINS EVERYWHERE
+
+`testbench/linesim.py` models a subscriber loop the bench cannot provide:
+sqrt(f) skin-effect roll-off, a codec corner above 3400 Hz matching what the
+VG204 measurably does, noise as an SNR against the probe tones, V.34 Table 17's
+four omitted tones, occasional dud bins, and `dftenergy`'s
+`energy = (short)(e >> 16)` quantisation. Estimators are scored not on the dB
+they report -- those are not in the same units -- but on **the residual tilt
+left after the filter each one picks**, against the band TREND, which is what a
+ramp filter can cancel.
+
+Residual dB, 3000 trials per cell, after the 1909 fix:
+
+| true trend | SNR | duds | two-point | least squares | Theil-Sen |
+|---|---|---|---|---|---|
+| 1.7 | 30 | 0    | 0.58 | **0.32** | **0.32** |
+| 4.4 | 30 | 0    | 1.74 | **0.39** | 0.40 |
+| 8.7 | 30 | 0    | 4.14 | **0.82** | 0.83 |
+| 1.7 | 18 | 0    | **0.63** | 0.66 | 0.69 |
+| 4.4 | 18 | 0    | 1.85 | **0.82** | **0.82** |
+| 8.7 | 18 | 0    | 4.54 | **1.11** | **1.11** |
+| 1.7 | 18 | 0.08 | 0.85 | 1.36 | **0.83** |
+| 4.4 | 18 | 0.08 | 1.85 | 1.69 | **1.03** |
+| 8.7 | 18 | 0.08 | 4.71 | 1.46 | **1.24** |
+
+**THE FIT'S ADVANTAGE GROWS WITH TILT**, which is the case the bench cannot
+show: at 8.7 dB the two-point method leaves 4.14 dB uncorrected against the
+fit's 0.82, because 4.06 dB quantisation cannot express the answer and it
+samples the one bin the codec corner attenuates hardest. This bench's channel
+is ~1.5 dB, the cell where the two methods are closest.
+
+**PLAIN LEAST SQUARES IS THE WORST CHOICE WHEN BINS GO DUD.** At 1.7 dB with
+8% duds it leaves 1.36 dB against the two-point method's 0.85 -- an unweighted
+fit gives a wrecked bin full leverage. That is not hypothetical: 1 real probe
+in 90 produced a 6.22 dB reading against a 1.5 dB norm.
+
+**THEIL-SEN IS BEST OR JOINT-BEST IN EVERY CELL WITH DUDS** and never
+materially worse without them. The median of pairwise slopes cannot be moved by
+one wild bin. Cost is 153 pairwise slopes and a median over 18 points, five
+times per handshake -- nothing on a path that already runs floating point.
+
+**RECOMMENDATION: Theil-Sen, not OLS.** The estimator shipped in 1910's A/B was
+OLS with the 1909 bug; both are superseded.
+
+METHOD NOTE. The first run of this simulation ranked two-point ABOVE both fits
+at low tilt. That run carried the 1909 conversion bug AND scored every
+estimator against a single ground truth when they target different quantities
+(edge loss versus band trend). Both were fixed before the table above. A
+simulation is only as good as its ground truth, and this one was wrong twice
+before it was right.
+
+### 1912. RUN 2 REPLICATES: THE FIT HALVES THE TILT AGAIN (p = 0.0004) AND RAISES THE CARRIED RATE 12000 -> 21600 — BUT INDEX 0 RETRAINS TWICE AS OFTEN, AND THAT REFRAMES THE OBJECT'S "ERROR" AS A TRADE
+
+Plan and addendum: `captures/preemph-fit-ANALYSIS-PLAN.md`, both written before
+their runs. Run 2 tests the CORRECTED estimator -- 1909's 10*log10 fix and
+1911's Theil-Sen -- which asks **index 0** at 3429 baud. Run 1 tested the
+uncorrected OLS estimator at index 1. Same design, same measures, different
+treatment.
+
+|  | run 1 (index 1 vs 7) | run 2 (index 0 vs 7) |
+|---|---|---|
+| PRIMARY \|received tilt\| | 2.82 -> 1.13 dB, **p = 0.0006** | 2.56 -> 0.89 dB, **p = 0.0004** |
+| SECONDARY far ATI11 xmit | 14400 -> 21600, p = 0.0781 | 12000 -> 21600, p = 0.0667 |
+| TERTIARY connect rate | 10/12 vs 11/12, p = 0.63 | 12/12 vs 12/12, p = 0.50 |
+| covariate handshakes/call | not counted | 1.5 -> 3.0, p = 0.0517 |
+
+Both load panels identical in both runs; no call hit the rise-3.0 exclusion.
+
+**THE PRIMARY REPLICATES AND IS NOT IN DOUBT.** Two independent pre-registered
+runs, p = 0.0006 and p = 0.0004. The estimator controls the quantity it was
+built to control.
+
+**THE SECONDARY IS CONSISTENT AND STILL NOT SIGNIFICANT ALONE.** Same
+direction, same magnitude, p = 0.0781 and p = 0.0667. Fisher's method combines
+them to **p = 0.033**, which is worth stating and worth distrusting in equal
+measure: the two runs used DIFFERENT treatments (index 1, index 0), so the
+combination tests "our estimator versus the object" and not any one index. It
+was not pre-specified. Treat it as motivation for a third run, not as a result.
+
+    far-end xmit, run 2
+      off  12000 x7, 21600 x2, 26400 x3          median 12000
+      fit  4800, 16800, 19200 x2, 21600 x2, 24000, 28800 x4   median 21600
+
+**AND HERE IS THE FINDING THAT MATTERS MORE.** Index 0 needs **twice the
+handshakes**: median 3.0 against 1.5, p = 0.0517, and the distributions barely
+overlap at the top (off reaches 7 once; fit sits at 5-7 on a third of calls).
+Phil heard this before it was measured -- "that one sounded like at least two
+re-trains" -- and the probe count confirms it.
+
+**SO THE OBJECT'S OVER-REQUEST IS PROBABLY NOT A MISTAKE.** Asking for no
+pre-emphasis on a channel with real roll-off means the far end transmits flat,
+the top of the band arrives weakest, and the handshake -- which must survive on
+the worst part of the band BEFORE any equaliser has converged -- is more
+fragile. Once training succeeds the channel is better conditioned and the rate
+is higher. That is a trade between robustness and steady-state rate, and 1908's
+reading of "the object overshoots by more than the original defect" describes
+the arithmetic correctly while missing what the arithmetic was for.
+
+It also explains why a 5x-biased two-point estimator (1911) never killed these
+modems in the field: it errs toward more pre-emphasis, which errs toward
+connecting at all.
+
+**WHAT THIS DOES NOT SETTLE.** Whether an intermediate index -- 1, or Table 4's
+6 -- gets most of the rate without the retrains. That is the experiment worth
+running next, and it is a three-arm design rather than another A/B.
+
+### 1913. THE DATAPUMP DOES MEASURE SNR — AT THE BOTTOM OF THE BAND, AGAINST MID-BAND NOISE, AND IT FEEDS POWER REDUCTION RATHER THAN THE RATE DECISION. 13% OF THE MEASUREMENTS COLLAPSE TO ZERO
+
+Chasing "why do the hardware modems converge faster on the same path" found
+machinery this thread had not looked at. `t72_measure` (`v34hshak.c:8744`)
+computes, per line probe:
+
+    noise  = sum of nl_noise_bins[0..3].energy          900, 1200, 1800, 2400 Hz
+    signal = sum of probe_bins[0..3].energy << 8        150,  300,  450,  600 Hz
+    ratio  = round(256 * signal / noise)                +0xaac4 (L1), +0xaac8 (L2)
+
+The four noise bins are V.34 Table 17's deliberately omitted tones, which is
+exactly what they are for. So a signal-to-noise ratio IS computed, twice, and
+the L2/L1 ratio is converted to dB (`0x509 >> 10` = 1.2588, one dB of power per
+step) and becomes `powerReductionReq`.
+
+**FOUR THINGS ARE WRONG WITH IT.**
+
+**1. It measures signal at the BOTTOM of the band and noise in the MIDDLE.**
+Signal is bins 1-4 -- 150 to 600 Hz. Noise is 900 to 2400 Hz. Nothing above
+2400 Hz enters the calculation at all. The part of the band that decides
+whether 3429 baud is viable, where the channel rolls off and where the outer
+constellation points live, is not measured. It is not a per-band SNR and it
+cannot become one without new bins.
+
+**2. It does not reach the rate decision.** The rate ladder
+(`v34hstx1.cpp:2624`) walks down on `TX1_RX250`, which is fed raw `equerr`
+(1904). The only SNR the modem computes is spent on power reduction.
+
+**3. IT COLLAPSES ON 13% OF PROBES.** Across both pre-emphasis A/B runs, 144
+probe SNR measurements:
+
+    snr_L1 == 0 :  0
+    snr_L2 == 0 : 19      (13%)
+    ratio  == 0 : 20      (14%)
+
+A zero L2 sends the whole comparison down the divide-by-zero guard and the
+power-reduction decision is made on nothing.
+
+**4. `powerReductionReq` PRODUCES GARBAGE ON ~3% OF PROBES.** Observed values
+across the same 144:
+
+    0 x103,  1 x20,  2 x13,  3 x3,  then 370, 419, 468, 470
+
+A power reduction request is a small integer of dB. 370 and 470 are not
+plausible values and are not a saturation of anything -- they are four
+measurements that went somewhere else entirely. Not yet traced.
+
+**WHY THIS PROBABLY EXPLAINS THE CONVERGENCE GAP.** The USR Courier and the
+Oli'Net connect quickly and accurately across the same ATA. A modem that
+measures SNR per sub-band can choose its symbol rate and data rate with
+confidence on the first attempt. This datapump chooses from a low-band SNR it
+does not use for rate, plus a two-point tilt reading that is 5x biased (1911),
+and then discovers in Phase 4 whether it was right -- which is what a retrain
+IS. Finding 1912 measured index 0 doubling the handshake count; the mechanism
+is the same one.
+
+**[INFERRED]** and stated as such: that a per-band SNR would reduce retrains is
+reasoning, not measurement. The measurable prediction is that retrains cluster
+on calls whose probe SNR collapsed or whose tilt reading was an outlier, and
+that is checkable against captures already recorded.
+
+### 1914. THE PROBE'S NOISE BINS CARRY NO INFORMATION IN THE BANK WE DUMP — SO PER-BAND SNR IS NOT EVALUABLE OFFLINE, AND AN EARLIER "NOISE FLOOR" FIGURE WAS AN ARTEFACT
+
+1913 proposed feeding the rate decision a per-sub-band SNR, and claimed it
+could be evaluated on captures already recorded because `V34PROBEBINS` dumps
+all 25 bins including V.34's four omitted-tone slots. **That claim was wrong**
+and the attempt is what showed why.
+
+Across 20 calls, the four noise bins of `probe_bins` (indices 5, 7, 11, 15 =
+900/1200/1800/2400 Hz) read:
+
+    energy : 0   on every bin of every call
+    shift  : 12  on every bin of every call, standard deviation 0.000
+
+against signal bins reading `energy` ~413 with `shift` 0. The noise slots hold
+a CONSTANT, not a measurement. A per-band SNR computed from them is a ratio
+against a fixed number: measured over 48 calls it gave low 17.0, mid 17.1,
+high 16.4 dB with variation in the second decimal, and correlated with the
+carried rate at r = -0.10 and with handshake count at r = -0.05. Null, and
+necessarily so.
+
+**AN EARLIER FIGURE MUST BE WITHDRAWN.** `probeplot.py` reconstructs floored
+bins as `2 ** (31 - shift)` and reports "NOISE FLOOR %+.1f dB below the tones".
+With `shift` pinned at 12 that number is a constant dressed as a measurement.
+The observation that "the noise floor does not track rate -- 16.9 dB on a
+24000 call and on three 12000 calls" is therefore not evidence about noise: it
+is the same constant seen four times. The SNR hypothesis it was used to kill
+may still be dead, but not for that reason.
+
+**THE OBJECT DOES NOT USE THIS BANK FOR NOISE ANYWAY.** `t72_measure` reads
+`nl_noise_bins` at `+0xa76c` -- a SEPARATE four-bin bank with its own
+`dftenergy(..., 6)` scaling, distinct from the main probe bank's. That is the
+one with a chance of carrying real magnitude, and it is not dumped.
+
+**CONSEQUENCE FOR THE PLAN.** Both improvements 1913 proposed need
+instrumentation and bench calls; neither is evaluable on what exists:
+
+* item 1 (SNR instead of raw `equerr` for the rate decision) -- `V34EQU` logs
+  `equerr` and `preerr` but NOT `f248`, the signal power computed in the same
+  block. Add it to the debug line.
+* item 2 (per-band SNR) -- dump `nl_noise_bins` alongside `probe_bins`, and
+  only then can the noise floor be read at all.
+
+Both are one debug line each. The lesson is the cheaper one: **a field that is
+published does not mean a field that is measured**, and 48 calls of a constant
+look exactly like 48 calls of a stable measurement until the variance is
+checked.
+
+### 1915. THE AGC ALREADY NORMALISES `equerr` — SIGNAL POWER IS CONSTANT TO 0.004% WHILE THE ERROR SWINGS 1700x — SO "USE AN SNR FOR THE RATE DECISION" IS DEAD. THE NOISE BANK, HOWEVER, IS REAL AND RUNS ON 2-3 BITS
+
+1913 ranked two improvements first: feed the rate decision an SNR rather than
+raw `equerr`, and measure SNR per sub-band. 1914 showed neither was evaluable
+on existing captures and named the two debug lines needed. Both were added
+(`V34EQUPOW`, `V34NLBINS`, gated on `dsplib_v34_dump_probe_bins`, declared in
+`docs/invented_strings.txt`) and eight calls placed.
+
+**ITEM 1 IS DEAD, AND THE DATA IS UNAMBIGUOUS.** Within one call:
+
+    V34EQUPOW, sigpow = 163828, equerr = 30358
+    V34EQUPOW, sigpow = 163823, equerr =   141
+    V34EQUPOW, sigpow = 163830, equerr =    61
+    V34EQUPOW, sigpow = 163821, equerr = 17537
+    V34EQUPOW, sigpow = 163832, equerr =  7532
+    V34EQUPOW, sigpow = 163829, equerr =  4952
+
+`sigpow` spans 163820-163832 -- a range of 12 counts on 163825, **0.004%** --
+while `equerr` moves over three orders of magnitude. The AGC holds the received
+signal power constant by construction, so `equerr` is ALREADY an SNR with a
+fixed denominator, and dividing by `f248` would change nothing but the units.
+
+That kills the mechanism 1913 proposed and, with it, the last part of 1904's
+story that had survived: the concern was that `V34TXSCALE`'s power reduction at
+the phase 3->4 boundary moves the metric's scale. It does not reach the metric
+-- the AGC absorbs it. The phase-3-versus-phase-4 `equerr` difference is a real
+change in the receiver's error, not a scale artefact.
+
+**ITEM 2 IS ALIVE, and now measurable.** Unlike `probe_bins`' noise slots
+(constant `0/12`, finding 1914), `nl_noise_bins` genuinely varies:
+
+    sig: 1696/6 1673/6 1645/6 1594/6   noise: 2/15 2/15 7/14 11/13   sum_noise=22
+    sig:  422/8  415/8  415/8  398/8   noise: 4/14 2/15 1/16  2/15   sum_noise=9
+    sig: 1332/6 1302/6 1304/6 1251/6   noise: 6/14 3/15 0/17  7/14   sum_noise=16
+    sig:  333/8  329/8  325/8  315/8   noise: 0/17 2/15 0/18  0/19   sum_noise=2
+
+**BUT IT RUNS AT THE BOTTOM OF ITS RESOLUTION.** `sum_noise` takes values 2 to
+33 against `sum_sig` of 333,312 to 1,691,648. The individual noise bins read
+0, 1, 2, 4, 6, 7, 11, 18 -- two to three bits. A ratio computed from that is
+quantised to a handful of levels, and one bin reading zero moves it hard.
+
+**THAT IS ALMOST CERTAINLY THE 13% COLLAPSE.** 1913 measured `snr_L2 == 0` on
+19 of 144 probes. The fourth row above is one step away from it: `0/17, 2/15,
+0/18, 0/19`, sum 2. When all four land on zero the sum is zero, the
+divide-by-zero guard fires and the power-reduction decision is made on nothing.
+It is not a rare fault -- it is the expected behaviour of a measurement running
+this close to its floor.
+
+**SO THE IMPROVEMENT CHANGES SHAPE.** Not "compute an SNR" -- one exists and
+`equerr` is already normalised. The real weakness is that the only noise
+measurement this modem has is four bins of 2-3 bits, taken at 900-2400 Hz, and
+nothing above 2400 Hz is measured at all. Any per-band SNR worth having needs
+more resolution or more integration first, and that is a question about
+`dftenergy`'s scaling (`dftenergy(..., 6)` for this bank against the main
+bank's shift), not about the rate decision.
+
+### 1916. THE LINK DIAGNOSTIC IS NOT PORTABLE AND FAILS SILENTLY — `ATI11` ON THE CONEXANT RETURNS THE PRODUCT NAME AND OK. ITS REAL REPORT SHOWS A RETRAIN FAILURE DROPPING 19200 TO 4800
+
+A third far end was added on 2026-08-13: an **Oli'Net V92 Ready**, Conexant
+CX06827-11 with SST 39SF020 flash and IDT 71024 SRAM -- a controller-based
+modem running firmware from flash, on extension 1903.
+
+**FOUR LAYERS GUARD THE DIAL AND ALL FOUR MUST BE UPDATED.** Adding the
+extension to `row.sh` alone was not enough; the number never reached pjsua.
+The layers are `row.sh`, `dmodem-guard-fork.sh`, `dmodem_dest_allowed()` inside
+the d-modem binary (which the guard feeds through `DMODEM_ALLOWED_DEST`), and
+`relay.py`/`rtprelay.py` for the relay path. Eight bench calls were spent
+before that was traced, and the symptom looked like a modem fault: slmodemd
+reached `DP_ESTAB` and held for 77 s, which reads as a call in progress but is
+only slmodemd's own datapump state -- no SIP call existed.
+
+**THE AT DIALECT IS NOT PORTABLE.** `AT&A3` and `AT&B1` are USRobotics
+commands and the Oli'Net answers ERROR to both. Worse, `AT&F` was sent AFTER
+the harness set `ATS0=1`, so it reset autoanswer and the modem never picked up.
+
+**AND THE DIAGNOSTIC FAILS SILENTLY, WHICH IS THE ONE THAT MATTERS.** `ATI11`
+on a USR prints a full link report. On the Conexant it prints "Oli'Net V92
+Ready" and OK -- no error, no report. Four calls were recorded with an empty
+far-end rate and it looked like a missing measurement rather than a wrong
+command. The Conexant's equivalent is `AT&V1`:
+
+    TERMINATION REASON.......... RETRAIN FAILURE
+    LAST TX rate................ 4800 BPS
+    HIGHEST TX rate............. 19200 BPS
+
+**THAT IS A NEW FAILURE MODE AND THE CONNECT STRING HID IT.** The call reported
+`CONNECT 14400`. The far end says it reached 19200, then fell to 4800 on a
+retrain failure. 1900 established that the CONNECT string understates a
+successful renegotiation; this shows it also overstates a failed one.
+
+**THE FIX IS TO ASK THE MODEM, NOT THE TABLE** (Phil's suggestion).
+`testbench/modemid.py` sends ATI0/ATI3/ATI7 and classifies:
+
+    usr        "Configuration Profile" / "Product type"   init AT&F;AT&A3;AT&B1   diag ATI11
+    conexant   "V92 Ready" or "V5.0"                      init AT&F               diag AT&V1
+    rockwell   "RCV" (e.g. RCV56DPF-PLL)                  init AT&F               diag AT&V1
+
+Verified against all three: courier -> usr, olinet -> conexant, and the
+SupraExpress -> **rockwell** (`RCV56DPF-PLL L8571A`). `modem_init` and
+`modem_diag` now probe first and fall back to the static table.
+
+**THE BENCH IS ROCKWELL-HEAVY AND THAT WAS NOT KNOWN.** Supra is Rockwell, the
+Oli'Net is Conexant (Rockwell's successor), and Phil's Diamond is Rockwell too.
+The USR Courier, which nearly all V.34 work has been done against, is the only
+independent design. Any interop result should say which lineage it was seen
+against.
+
+Reference, from Phil: USR->Oli'Net connects at 33600 and Diamond->Oli'Net at
+28800, both across the ATA. So the Oli'Net is capable of 33600 with a good
+peer, and our 14400 against it is ours, not the far end's.
+
+### 1917. OUR TRANSMIT REACHES 33600 TO EVERY FAR END, EVERY CALL. OUR RECEIVE REACHES IT TOO — AND THEN LOSES IT TO A FAILED RETRAIN
+
+Eight calls, two far ends, with the far end's own link report read using the
+command that modem actually implements (1916). The Diamond and the
+SupraExpress are the same unit -- a Diamond-badged SupraExpress 56e PRO,
+extension 1901.
+
+    far end                    their TX (= our RX)      our TX (= their RX)   termination
+    Supra/Diamond  fit-1       14400                    33600                 RETRAIN FAILURE
+    (Rockwell      fit-2        7200                    33600                 RETRAIN FAILURE
+     RCV56DPF)     off-1       24000  (peak 33600)      24000                 LOCAL REQUEST
+                   off-2       31200                    33600                 RETRAIN FAILURE
+    Oli'Net        fit-1       peak 33600 -> 21600      33600                 RETRAIN FAILURE
+    (Conexant      off-1       peak 24000 ->  4800      33600                 RETRAIN FAILURE
+     CX06827)      off-2       peak 24000 ->  4800      33600                 RETRAIN FAILURE
+                   fit-2       peak 26400 ->  4800      33600                 GSTN CLEARDOWN
+
+**OUR TRANSMIT IS NOT THE PROBLEM AND CAN BE RETIRED AS A SUSPECT.** Both far
+ends report receiving 33600 from us, on essentially every call. The channel
+carries 33600 in both directions and our modulator delivers it.
+
+**AND OUR RECEIVER IS NOT INCAPABLE EITHER, WHICH IS NEW.** Our own
+`V34DATARATE ... finally` trajectories:
+
+    m3-olinet-fit-1   33600/14400  33600/4800  **33600/33600**  33600/21600
+    m3-supra-off-2    33600/14400  33600/19200  33600/31200
+    m3-olinet-off-1   33600/16800  33600/24000  33600/24000  33600/4800
+
+`33600/33600` is full rate in both directions, reached and then lost. 31200 was
+reached against the Supra. So the receiver can get there; it cannot stay there.
+That reframes task #132: not "we choose 14400", but "we reach 24000-33600 and
+fall back", and the `CONNECT` string reports whichever moment it was emitted in
+(1900, 1916).
+
+**THE FAILURE MODE IS THE SAME ON BOTH CHIPSET FAMILIES, AND IT DOMINATES.**
+Six of the eight calls ended in `RETRAIN FAILURE`, split identically:
+
+    Supra/Diamond (Rockwell)   3 RETRAIN FAILURE   1 LOCAL REQUEST
+    Oli'Net       (Conexant)   3 RETRAIN FAILURE   1 GSTN CLEARDOWN
+
+`LOCAL REQUEST` is the one normal ending in the set -- our own hangup at the
+end of the hold. Phil predicted the two
+would behave alike because both are Rockwell-family (Conexant is Rockwell's
+successor), and they do -- the Oli'Net collapses further (4800 against the
+Supra's 14400-31200) but the mode is identical. So this is not a fault in
+either unit, and it is not specific to the USR either: the Courier shows the
+same direction (task #132).
+
+**WHICH MAKES TAP DRIFT THE LEADING SUSPECT.** `docs/training.md` §4.5 records
+that the equaliser has **no leakage term**: 80 taps adapting on a signal with
+nothing above ~3.5 kHz is the textbook near-singular case where un-excited taps
+wander. A receiver that converges, holds, then degrades until a retrain is
+triggered -- and whose retrain then fails -- is what tap drift looks like from
+the outside. That is [INFERRED], not measured, and the measurement that would
+settle it is a long hold with the equaliser error logged throughout (#143),
+which now has a specific prediction to test: `equerr` should creep upward
+between rate steps.
+
+**METHOD NOTE.** Every far-end number here comes from `AT&V1` on the Rockwell
+and Conexant parts. `ATI11` returns the product name and OK on those, without
+erroring, so the earlier Oli'Net batch recorded an empty far-end rate that
+looked like a missing measurement rather than a wrong command (1916).
+
+### 1918. NEITHER TAP DRIFT NOR RATE OVERSHOOT SURVIVES ITS OWN TEST — WE STILL DO NOT KNOW WHAT TRIGGERS THE RETRAINS, AND THAT IS NOW THE GAP
+
+1917 established that we reach 33600 and lose it, with `RETRAIN FAILURE`
+ending 6 of 8 calls. Two mechanisms were proposed for that. Both were tested
+on captures already recorded, before any code was written, and neither holds.
+
+**TAP DRIFT: NOT SUPPORTED.** `docs/training.md` §4.5 notes the equaliser has
+no leakage term, and predicted that `equerr` should creep upward before a
+retrain. Over **69 retrains in 24 calls**, comparing the median of the six
+blocks before each retrain against the six before those:
+
+    median equerr, first half   1885
+    median equerr, second half  2124
+    rose before the retrain     29 of 69  (42%)
+
+42% is below chance. There is no systematic creep. The individual deltas are
+step changes, not ramps -- one call goes 588 -> 14282 between adjacent
+halves -- which is the signature of an abrupt event, not gradual degradation.
+The leakage argument may still be right on its own terms, but THIS is not
+evidence for it and must not be cited as such.
+
+**RATE OVERSHOOT: NOT ESTABLISHED EITHER.** If we climbed to a rate the link
+could not hold, the step before a retrain should be upward. Over 39 retrains
+with a preceding rate pair:
+
+    rate had just gone UP    22  (56%)
+    rate had just gone DOWN  12  (31%)
+    unchanged                 5  (13%)
+
+22 against 12 is p ~ 0.12 on a binomial -- a lean, not a result. Some
+individual steps are extreme (`4800 -> 33600` in one move, then a retrain;
+`19200 -> 31200`), so the hypothesis is not dead, but 39 samples cannot carry
+it.
+
+**THE ACTUAL GAP: NOTHING RECORDS WHY A RETRAIN STARTS.** V.34 lets either end
+initiate. If the far end initiates, our receiver is signalling distress and the
+question is what it is unhappy about. If we initiate, our own logic decided to
+and the condition is in our code. Those lead to opposite fixes and no capture
+distinguishes them. That is the next instrumentation, and it is one or two
+debug lines rather than an experiment.
+
+**AND A TENSION THAT NOW MATTERS FOR #144.** 1912 measured the fitted
+estimator doubling the handshake count (1.5 -> 3.0, p = 0.0517) while improving
+tilt (p = 0.0004) and probably rate. With `RETRAIN FAILURE` established as the
+dominant way these calls end (1917), *more handshakes is a cost, not a
+neutral covariate*. The estimator should NOT be promoted to master until the
+retrain trigger is understood -- the tilt win may be paid for in the failure
+mode that actually kills the link.
+
+### 1919. MINIMISING RECEIVED TILT IS THE WRONG OBJECTIVE — PRE-EMPHASIS BUYS SNR THAT AN EQUALISER CANNOT, AND OVER-REQUESTING IS THE CHEAP MISTAKE
+
+Phil's question -- "we would want to request the best possible V.34 filter
+shape for the line so that the equaliser has to do as little work as possible"
+-- is right in direction and exposes an error in how 1908, 1910 and 1912 were
+framed.
+
+**THE TWO CORRECTIONS ARE NOT EQUIVALENT, AND THE ORDER IS WHY.** Noise is
+added by the channel, between the far end's transmitter and our receiver.
+
+* Pre-emphasis boosts the signal BEFORE the noise is added. The received SNR
+  at the boosted frequencies genuinely improves.
+* A receive equaliser boosts signal AND noise together, because by then they
+  are the same waveform. Correcting 3 dB of tilt at the receiver lifts the
+  noise at those frequencies by 3 dB too, and buys nothing in SNR.
+
+So the objective is **maximise the worst-case SNR across the band**, not
+minimise the residual tilt. Those disagree, and the disagreement has a
+direction:
+
+    over-request  -- the equaliser flattens the excess, and the noise was
+                     already shaped favourably.  Costs little.
+    under-request -- the equaliser must BOOST the weak band edge, amplifying
+                     the noise there.  Costs margin exactly where the outer
+                     constellation points live.
+
+**THAT ASYMMETRY PREDICTS WHAT 1912 MEASURED.** Index 0 against the object's
+index 7 doubled the handshake count, 1.5 -> 3.0, p = 0.0517, while improving
+the tilt figure. Flat transmit leaves the top of the band weakest; the
+equaliser lifts it with its noise; margin collapses where it matters; retrains
+follow. The covariate was the result and the primary was the artefact.
+
+**SO 1908's PRIMARY WAS THE WRONG QUANTITY.** "Steady-state received tilt" was
+pre-registered as the primary for two runs and moved significantly in both
+(p = 0.0006, p = 0.0004). The measurement is sound and reproducible. What it
+measures is not what should be optimised: a flat received spectrum with a poor
+edge SNR is worse than a tilted one with a good edge SNR, and nothing in those
+runs distinguished the two.
+
+**AND IT REHABILITATES THE OBJECT'S BIAS.** 1911 measured the two-point
+estimator reading ~5x high. Under this asymmetry a high-biased estimator errs
+in the SAFE direction, which is a defensible engineering choice for a modem
+that must connect on unknown lines -- not merely a defect. 1912 already
+suspected this ("probably a deliberate trade"); this gives the mechanism.
+
+**WHAT WOULD SETTLE IT.** The right primary is a margin measure, not a shape
+measure: symbol error rate, or `equerr` normalised per rate, or the far end's
+retrain count -- all at the SAME carried rate, so that a lower rate cannot
+buy a better score. That comparison has not been run. Until it is, the fitted
+estimator must not be promoted (1918 already said so for a different reason).
+
+**[INFERRED], and flagged.** The SNR argument above is signal-processing
+reasoning, not a measurement taken on this bench. The measurement that
+supports it is 1912's handshake count, which was a covariate at p = 0.0517.
+
+### 1920. THE COLLAPSE IS INSTANTANEOUS — equerr GOES FROM ~220 TO SATURATION IN ONE 1024-SYMBOL BLOCK. FOUR MECHANISMS TESTED AND KILLED; THE SURVIVING CANDIDATE IS RENEGOTIATION HANDLING
+
+Six 120-second holds with new instrumentation (`V34EQFREEZE` counting every
+adaptation freeze, `V34RTNCOUNT` reading the stillness counter before the
+object clears it).
+
+**THE ONE FACT THAT CONSTRAINS EVERYTHING.** The rate collapse is not a
+degradation. A representative retrain, `equerr` per 0.30 s block:
+
+    327  341  290  240  233  239  220  ->  32767
+
+Healthy, healthy, healthy, saturated. One block. And at every retrain the
+stillness counter reads exactly 141 -- the threshold -- with `equerr` between
+14352 and 32767. So the sequence is: the receiver loses the signal completely,
+its equalised output stops moving because there is nothing to track, and the
+retrain detector (`v34rx.c:2290`) reads that stillness as a far-end retrain
+request. **The detector is not faulty; it is reporting a corpse.**
+
+**FOUR MECHANISMS TESTED ON DATA, ALL DEAD:**
+
+| hypothesis | prediction | result |
+|---|---|---|
+| tap drift (no leakage) | `equerr` creeps up before retrains | 42% of 69 retrains -- below chance (1918) |
+| rate overshoot | rate stepped UP before retrains | 56% of 39, p ~ 0.12 (1918) |
+| equaliser freeze -> retrain | freezes cluster before retrains | **0.00x** -- no freeze within 2 s of ANY retrain |
+| buffer underflow -> loss | underflows precede saturations | r = -0.15; counts bimodal at 50/25, a startup burst, matching #103's own demotion |
+
+The freeze hypothesis is worth a note: a preliminary pass on older captures,
+using the object's undercounted message, gave a 4.89x clustering and did not
+replicate against full counting on fresh calls. That is what a small-sample
+artefact looks like and why the null was worth computing.
+
+**FREEZES ARE REAL BUT DO SOMETHING ELSE.** `V34EQFREEZE` recorded up to
+**5.34 per second** (248 in one call). Adaptation is being disabled far more
+often than the object's message suggests. That call connected at 12000 and
+had ZERO retrains -- so frequent freezing looks like a mechanism for POOR
+CONVERGENCE (low rate), separate from the collapse mechanism. Not established;
+n is small and two calls had 248 and 0 freezes with similar rates.
+
+**THE SURVIVING CANDIDATE: RENEGOTIATION HANDLING.** V.34 renegotiation is
+normal and expected -- 1900 measured a post-CONNECT renegotiation roughly
+doubling the rate. When the far end changes its transmit parameters, a
+receiver still configured for the old ones sees garbage IMMEDIATELY, which is
+exactly the one-block collapse observed. Our own code detects this
+("V34RENEG, may be renegotiation, equalizer adaptation disabled", 110
+occurrences) and responds by freezing adaptation. If the renegotiation is then
+not completed correctly, the far end reports `RETRAIN FAILURE` -- which is what
+6 of 8 calls did (1917) -- and the rate collapses.
+
+**THIS IS [INFERRED] AND THE TEST IS SPECIFIC:** log the renegotiation state
+machine's transitions and check whether each one-block collapse coincides with
+a renegotiation attempt rather than following one. If collapses occur WITHOUT
+a renegotiation in progress, this dies like the other four.
+
+### 1921. THE CAUSE OF THE POOR SPEEDS: 66% OF CONNECTED TIME IS SPENT RE-HANDSHAKING, AND EVERY RETRAIN IS A FULL ~10 s HANDSHAKE THAT RESTARTS THE RATE LADDER FROM THE BOTTOM
+
+The answer to "why is Smart Link slow against hardware modems" is not the
+rate decision, the pre-emphasis estimator or the equaliser. It is the duty
+cycle.
+
+**MEASURED OVER 12 CALLS, BOTH FAR ENDS, BOTH ESTIMATOR ARMS:**
+
+    call                retrains  handshake   data    % handshake
+    frz-olinet-1               4     49.8 s    6.3 s      89%
+    frz-olinet-3               5     38.3 s    5.1 s      88%
+    m3-supra-fit-2             5     58.9 s    8.6 s      87%
+    m3-olinet-off-1            4     38.3 s    4.4 s      90%
+    m3-olinet-fit-1            5     38.5 s   12.3 s      76%
+    frz-olinet-2               8     68.3 s   56.9 s      55%
+    m3-supra-off-1             2     18.6 s   40.7 s      31%
+    ...
+    ACROSS ALL 12                              **66%**
+
+Two thirds of the time the link is up, it is not carrying data. A negotiated
+26400 that is only in data mode a third of the time is an effective ~8000.
+
+**AND EVERY RETRAIN RESTARTS THE CLIMB.** The rate sequence within one call:
+
+    14400 -> 24000 -> 26400 -> 26400 -> 4800 -> 28800 -> 4800
+
+Each retrain begins again near the bottom (12000-16800) and ratchets up
+through further retrains. The link never stays at a high rate long enough for
+it to matter, which is why 1917 saw "reaches 33600 and loses it" -- that was
+this, seen one cycle at a time.
+
+**WHY EACH RETRAIN COSTS ~10 SECONDS: THE SHORT PATH IS UNREACHABLE ON A V.34
+CALL.** The object has one -- `local_short`, "requesting short phase2",
+`prev_bulk_delay` reused instead of re-measuring the round trip
+(`v34hshak.c:4116`). Across every call recorded here:
+
+    "requesting short phase2"   0 occurrences
+    SILENCERETRAIN            264 occurrences
+
+`local_short` is set from `quick` in `v34pcmcreate.cpp:343`, `quick` comes from
+`(cfg[CFG_V92LITE] & CFG_QUICKCONNECT)`, and that assignment sits inside the
+`sessionType == 2` arm -- a **V.92 session**. Every bench call forces
+`AT+MS=34,1`, so there is no V.92, `local_short` stays 0, and the full silence
+retrain is the only path available. **The fast retrain is tied to V.92 Quick
+Connect and is structurally unavailable to a V.34-only connection.**
+
+**WHAT THIS RETIRES.** Five mechanisms were proposed and tested against data
+before this: tap drift (1918), rate overshoot (1918), equaliser freeze ->
+retrain (1920), buffer underflow (1920), renegotiation mishandling (1920, 13%
+and 1.59x). All failed. They were all looking for a defect in the receiver's
+signal processing, and the receiver's signal processing reaches 33600 -- it
+just never gets to keep it.
+
+**AND IT PUTS THE PRE-EMPHASIS WORK IN PROPORTION.** 1908-1912 measured the
+fitted estimator halving residual tilt with p = 0.0004. Against a 66% duty-cycle
+loss, that is a second-order effect on a first-order problem -- and 1912's
+covariate (index 0 DOUBLING the handshake count) is now clearly the more
+important number, because handshakes are what the link cannot afford. 1919
+argued on signal-processing grounds that the estimator's objective was wrong;
+this says the whole line of work was aimed at the wrong term.
+
+### 1922. THE DUTY CYCLE IS BIMODAL — SOME CALLS SETTLE AND RUN 88% IN DATA AT 26400. ALLOWING V.92 DOES NOT REACH THE SHORT RETRAIN PATH
+
+Four calls with `AT+MS=34,1` removed, so the session is free to negotiate V.92
+and reach the `sessionType == 2` arm that sets `local_short` (1921).
+
+    call            retrains   handshake   data     % hs   rates
+    qk-courier-2           3      16.5 s  117.8 s    12%   12000->26400
+    qk-olinet-2            3      28.5 s   97.4 s    23%   14400->24000->26400->21600->24000->26400
+    qk-olinet-1            3      28.4 s   17.5 s    62%   14400->19200->28800
+    qk-courier-1          13     122.6 s    6.5 s    95%   12000->28800->14400->9600->12000->2400
+
+**THE SHORT PATH IS STILL NEVER REACHED.** `requesting short phase2` appears
+**0** times in all four. Permitting V.92 is not sufficient -- either the far
+ends do not negotiate it, or `sessionType` never becomes 2 on this path. So
+1921's structural finding stands and the fix is not a configuration change.
+
+**BUT THE IMPORTANT RESULT IS THE SPREAD.** 12%, 23%, 62%, 95%. `qk-courier-2`
+spent **117.8 seconds in data at 26400** -- 88% of the call carrying data at a
+good rate. That is what this modem looks like when it works, and it happens on
+the same bench, same binary, same far end as a call that spent 95% of its time
+retraining with thirteen retrains and ended at 2400.
+
+**SO THE PROBLEM IS NOT STRUCTURAL AND NOT ALWAYS PRESENT.** Something
+distinguishes a call that settles from one that thrashes, and it is not the
+estimator arm (both appear in both groups), not the far end (both far ends
+appear in both groups), and not the modulation forcing (the 66% V.34-forced
+figure and this 45% both contain each mode).
+
+**DO NOT READ 45% vs 66% AS AN IMPROVEMENT.** n = 4 against n = 12, with a
+per-call spread of 12-95%. The difference is well inside the variance and the
+modulation may differ; this experiment tested whether the short path is
+reachable, and the answer to that is no.
+
+**THE NEXT QUESTION IS NOW WELL POSED**, which it was not before: what
+distinguishes a settling call from a thrashing one? Both modes are reproducible
+on demand, so the comparison is cheap -- collect a batch, split on duty cycle,
+and diff everything recorded. That is a better-shaped question than any of the
+five mechanisms tested and killed in 1918 and 1920, because it starts from two
+populations that demonstrably differ rather than from a guess about why.
+
+### 1923. RETRAIN FAILURE HAPPENS HARDWARE-TO-HARDWARE ON THIS PATH — ONE OF THREE MODEM PAIRS FAILS WITH NO slmodemd INVOLVED
+
+Phil's control, and it was the right one to insist on: before concluding that
+the retrain thrashing localises to "the real path" or to our datapump, run the
+three hardware pairs across the same ATA. All three ports are configured
+identically.
+
+    originator -> answerer     result
+    courier -> olinet          28800/26400, answerer LOCAL REQUEST      clean
+    courier -> supra           28800/28800, answerer LOCAL REQUEST      clean
+    supra   -> olinet          **RETRAIN FAILURE**, LAST TX 7200        fails
+
+**THE FAILURE SIGNATURE IS NOT OURS ALONE.** `RETRAIN FAILURE` with a collapse
+to 7200 occurs between two hardware modems, no slmodemd and no blob anywhere
+in the path. That is the same termination reason that ended 6 of 8 of our
+calls (1917) and the same collapse-to-low-rate shape.
+
+**SO THE ATTRIBUTION IN 1921 NEEDS QUALIFYING.** The 66% handshake duty cycle
+is measured and stands. What cannot now be claimed is that the retrains are
+purely a defect of this datapump: this path induces the same failure between
+devices that have nothing to do with us.
+
+**BUT WE ARE STILL WORSE THAN THE HARDWARE.** The Courier is clean against
+BOTH other modems, 28800 both ways in one case. Our datapump shows
+`RETRAIN FAILURE` against BOTH the Courier and the Oli'Net (1917). So the
+ordering on this path is: Courier robust > Supra (fails in one direction) >
+our datapump (fails against both). Whatever the path contributes, we are the
+least tolerant of it.
+
+**AND IT IS DIRECTIONAL, WHICH IS INFORMATIVE.** `courier -> supra` is clean
+while `supra -> olinet` fails, so it is not a bad ATA port -- the Supra answers
+perfectly for the Courier. It is specific to the Supra ORIGINATING to the
+Oli'Net, i.e. Rockwell originating to Conexant.
+
+**WHAT THIS MEANS FOR THE PROGRAMME.** Two things now need separating that
+were being measured together:
+
+* the component of the retrain rate the PATH contributes, which hardware pairs
+  show is non-zero;
+* the component OUR receiver contributes, which is the gap between us and the
+  Courier on the same path.
+
+Only the second is ours to fix, and only the second should be used to judge any
+change to the datapump. Every A/B in 1910, 1912 and 1922 measured the sum.
+
+### 1924. THERE IS NO SHORT PHASE 2 IN V.34 — THE OBJECT GATES IT ON V.92 BECAUSE THE RECOMMENDATION DOES. #150 CLOSES WITH NOTHING TO FIX
+
+1921 found every retrain costs a full ~10 s handshake and that the object's
+short path (`local_short`, "requesting short phase2", `prev_bulk_delay` reused
+instead of re-measuring the round trip) is reachable only from the
+`sessionType == 2` arm at `v34pcmcreate.cpp:343` -- a V.92 session. That was
+recorded as a defect to fix. It is not one.
+
+**V.34 (02/98) Table 14 defines the INFO0 bits and allocates all of 0:48:**
+
+    0:3     fill 1111
+    4:11    frame sync
+    12:14   symbol rates 2743 / 2800 / 3429 supported
+    15:18   carrier frequency / symbol rate combinations
+    19      3429 disallowed
+    20      able to reduce transmit power
+    21:23   maximum symbol-rate difference between directions
+    24      CME modem
+    25      1664-point constellations
+    26:27   transmit clock source
+    28      acknowledge INFO0 during error recovery
+    29:44   CRC
+    45:48   fill 1111
+
+**No bit requests an abbreviated Phase 2**, and the words "short Phase 2",
+"shortened" and "abbreviated" do not appear anywhere in the Recommendation
+(62 occurrences of "retrain", none of them offering a short form). V.34 is
+1998; V.92 Quick Connect is 2000. The capability did not exist yet.
+
+**SO THE OBJECT IS RIGHT AND #150 CLOSES.** A V.34-only connection must
+perform a full Phase 2 on every retrain, by specification. Making
+`local_short` reachable from a V.34 session would send a bit the far end
+cannot interpret, which is an interop break traded for a duty-cycle gain --
+strictly worse than the problem.
+
+**WHICH SHARPENS THE REMAINING WORK.** If the cost of a retrain cannot be
+reduced, the only levers on the 66% duty cycle (1921) are:
+
+* **retrain less often** -- which needs #148 first, because 1923 showed the
+  path contributes retrains that are not ours;
+* **lose less when one happens** -- #149, carrying the rate forward instead of
+  restarting the ladder at 12000-16800, if V.34 permits it.
+
+METHOD NOTE. This was answered from the Recommendation in `itu-specs/` before
+any code was written, and it took one search. The task that proposed the fix
+was written with "FIRST QUESTION, BEFORE ANY CODE: does V.34 itself permit a
+short Phase 2" at the top; that instruction is what stopped the wrong change.
+
+### 1925. V.34 §11.6 PROVIDES RATE RENEGOTIATION EXPLICITLY TO "RESYNCHRONIZE THE RECEIVER WITHOUT GOING THROUGH A COMPLETE RETRAIN" — WE USE THE COMPLETE RETRAIN INSTEAD, AND THAT IS THE 66% DUTY CYCLE
+
+1924 closed the short-Phase-2 idea: V.34 has no abbreviated Phase 2 and the
+object is right to gate it on V.92. But V.34 has something better, and we are
+not using it.
+
+**ITU-T V.34 (02/98) §11.6, verbatim:**
+
+> The rate renegotiation procedure can be initiated at any time during data
+> mode to change to a new data signalling rate. **This procedure can also be
+> used to resynchronize the receiver without going through a complete
+> retrain.** In this case, signal TRN is transmitted until the receiver is
+> prepared to enter data mode. Then the Modulation Parameters (MP) sequence is
+> sent.
+
+**THE COST DIFFERENCE IS THE WHOLE PROBLEM.** §11.6.1.1.1: the initiating
+modem transmits S for 128T, then S-bar for 16T, then TRN for **at most 2000 ms
+plus a round trip delay**, then MP. That is roughly two to three seconds, and
+it does NOT return to Phase 1 or re-probe the line.
+
+A full retrain (§11.5) goes back through Phase 1 and Phase 2. Measured on this
+bench it costs **~10 seconds**, and 1921 measured the consequence: 66% of
+connected time spent re-handshaking, with the rate ladder restarting near the
+bottom each time.
+
+**WHAT THE LOGS SHOW WE ACTUALLY DO:**
+
+    SILENCERETRAIN                  264 occurrences
+    RX_PHASE1_CALL on every retrain  -- Phase 1, then Phase 2 probing again
+    "V34RENEG, RRN request detected"  19 occurrences
+
+So the heavy mechanism dominates. The receiver even HAS the light one's
+detector -- `v34rx.c:2347` sets `V34_RX_FLAG_RENEG` when the stillness counter
+passes back down through -0x84..-0x78 -- but the calls are ending up in full
+retrains regardless.
+
+**THIS IS THE IMPROVEMENT, AND IT NEEDS NO SPEC VIOLATION.** Unlike the short
+Phase 2 (1924), rate renegotiation is V.34's own mechanism, defined for
+exactly this purpose, and both hardware families on this bench implement it --
+1900 measured a post-CONNECT renegotiation roughly doubling the rate, which is
+§11.6 working as designed.
+
+**WHAT IS NOT YET ESTABLISHED**, and must be before any code changes:
+
+* whether WE initiate the full retrains or merely respond to the far end's
+  (1923 showed the path induces retrains between hardware pairs too);
+* which condition in our receiver chooses retrain over renegotiation;
+* whether the 19 RRN detections are being acted on at all.
+
+Those are three readings of the same state machine and none of them needs a
+bench call. #149 is re-pointed at this.
+
+### 1926. THE FULL RETRAIN HAS A SECOND TRIGGER THAT NOBODY REQUESTED — A TIMEOUT ON `f124 > 7 * baud_rate` WITH FLAG 0x80 CLEAR
+
+Reading the retrain path for 1925/#149. `v34hshak.c:8563`, the only consumer of
+`V34_RX_FLAG_RETRAIN`:
+
+    if ((flags & V34_RX_FLAG_RETRAIN) != 0
+        || ((int)rx->f124 > 7 * (int)obj->baud_rate && (flags & 0x80) == 0)) {
+            v34handshakinit(obj, 1);      /* FULL handshake */
+
+**TWO WAYS INTO A FULL HANDSHAKE, NOT ONE.** The first is the far end asking
+(the stillness detector, 1920). The second is a **local timeout**: if `f124`
+exceeds seven frame lengths while flag 0x80 is clear, this modem forces a
+complete retrain on its own initiative, with nobody having requested it.
+
+That is a candidate for 1921's 66% duty cycle that no earlier hypothesis
+covered, and it is OURS -- unlike the retrains 1923 showed the path inducing
+between hardware pairs.
+
+**RENEGOTIATION IS IMPLEMENTED, and an earlier suspicion of mine was wrong.**
+`V34_RX_FLAG_RENEG` (0x0020) looked unconsumed on a first grep. It is not:
+`rx->flags & 0x20` is tested at six sites in `v34hstx1.cpp` (1681, 1875, 1878,
+1887, 2791, 2854), where it selects a shorter MP sequence -- `nbits` 0x30
+against 0x90, `rec[12]` 0x30 against 0x90 -- which matches §11.6's 4-point
+constellation renegotiation. So the light mechanism exists in the code and the
+question of 1925 stands: why do calls end up in the heavy one.
+
+**WHAT IS NOT YET KNOWN, and is the next reading:** flag 0x80 has no name in
+`v34recv.h` and no `flags |= 0x80` site was found, so what clears or sets it --
+and therefore what arms this timeout -- is unidentified. Until that is known,
+the timeout is a candidate and not a cause. `f124` is the symbol counter the
+step-size schedule also keys on (`docs/training.md` §4.3) and `baud_rate` is the
+frame length.
+
+**HOW TO TEST IT WITHOUT GUESSING:** log which of the two arms fires on every
+full retrain. One gated debug line distinguishes "the far end asked" from "we
+timed out", and 1921's 66% then splits into a part we cause and a part we
+answer. That is the same shape as #148 and settles both.
+
+### 1927. THE FULL SIX-PAIR MATRIX IS CLEAN — 1923 IS WITHDRAWN. THE PATH IS NOT AT FAULT AND THE RETRAINS ARE OURS
+
+1923 concluded that `RETRAIN FAILURE` occurs hardware-to-hardware on this path,
+on the strength of ONE call: `supra -> olinet` collapsing to 7200. Phil asked
+for the whole matrix, both directions. It does not reproduce.
+
+    originator -> answerer      result                          termination
+    courier -> supra            28800/28800                     --
+    courier -> olinet           28800/28800                     --
+    supra   -> courier          28800/28800                     LOCAL REQUEST
+    supra   -> olinet           28800/28800                     LOCAL REQUEST
+    olinet  -> courier          28800/28800                     LOCAL REQUEST
+    olinet  -> supra            **33600/33600**                 LOCAL REQUEST
+
+**Six of six pairs clean, 28800 to 33600 in both directions, every one ending
+in a normal hangup.** The `supra -> olinet` leg that carried 1923's entire
+argument now runs at 28800/28800 with `LOCAL REQUEST`.
+
+**SO 1923 IS WITHDRAWN AND THE ATTRIBUTION GOES BACK TO US.** The claims that
+must go with it:
+
+* "RETRAIN FAILURE is not ours alone" -- it was one call, and it did not
+  reproduce.
+* "the path induces the same failure between devices that have nothing to do
+  with us" -- not supported.
+* "every A/B measured the sum of path and datapump" -- the path's contribution
+  now measures as zero across six ordered pairs, so the A/Bs were measuring
+  our component after all.
+
+**WHAT STANDS.** 1921's 66% handshake duty cycle, measured over 12 of our own
+calls, is unaffected -- and now has no competing explanation. Hardware modems
+cross this ATA and this SIP path at 28800-33600 with normal terminations while
+our datapump spends two thirds of its time re-handshaking and ends 6 of 8 calls
+in `RETRAIN FAILURE` (1917). The path carries what a good modem asks of it.
+
+**METHOD, AND THE REASON THIS MATTERS BEYOND THE RESULT.** A single control
+call produced a confident, wrong conclusion that reallocated blame away from
+the code we can fix, and it survived being written up as a finding. What caught
+it was running every ordered pair rather than the three that seemed sufficient.
+n = 1 controls are worth no more than n = 1 experiments.
+
+**CONSEQUENCE FOR #148.** The task exists to separate the path's retrain
+contribution from ours. Six clean pairs say the path's contribution is not
+measurable here, so #148 collapses to its simpler form: compare our datapump
+against the Courier on the same far end, and the whole difference is ours.
+
+### 1928. THE RETRAIN BRANCH I INSTRUMENTED IS NOT THE ONE THAT FIRES — FOURTEEN CALL SITES REACH `v34handshakinit` AND I MEASURED ONE
+
+1926 identified two ways into a full handshake at `v34hshak.c`'s
+`V34_RX_FLAG_RETRAIN` branch: the far end asking, or a local timeout on
+`f124 > 7 * baud_rate` with flag 0x80 clear. `V34RTNWHY` was added to say which,
+and six 120-second calls were placed.
+
+**IT FIRED ZERO TIMES.** Not once, on either arm, across all six calls:
+
+    call            CONNECT   ASKED  TIMEOUT   probes  RX_PHASE1  SILENCERETRAIN
+    why-courier-1    12000      0       0         1        3            0
+    why-courier-2    12000      0       0         2        8            6
+    why-courier-3     4800      0       0         1        8            6
+    why-olinet-1     14400      0       0         2        8            6
+    why-olinet-2     28800      0       0         3       13           12
+    why-olinet-3      none      0       0         1        3            0
+
+The retrains were unmistakably real -- 3 to 13 `RX_PHASE1_CALL` entries per
+call and up to twelve SILENCERETRAINs. They simply do not come through that
+branch.
+
+**THE REASON IS COUNTABLE.** `v34handshakinit` has **fourteen call sites**
+across `v34hshak.c`, `v34hstx1.cpp`, `v34pcmmain.cpp`, `v34pcmif.c` and
+`v34pcmcreate.cpp`, carrying four distinct `mode` values (0, 1, 2, 3). One of
+them was instrumented. The other thirteen were not.
+
+**WHAT THIS INVALIDATES.** 1926's "second trigger that nobody requested" is
+not withdrawn -- the code is there and the timeout is real -- but it is
+demoted to a branch that does not execute on these calls, so it explains none
+of 1921's 66% duty cycle. Any weight put on it was misplaced.
+
+**THE FIX IS TO INSTRUMENT THE CALLEE.** `V34HSINIT` now logs every entry to
+`v34handshakinit` with its `mode` argument and the receiver's state. Fourteen
+doors, one place to watch them.
+
+**METHOD NOTE.** This is the second time in this investigation that a
+carefully-argued mechanism turned out to be watching the wrong code
+(cf. 1918, 1920, and 1927's withdrawal of 1923). The pattern is consistent:
+reading a plausible branch and assuming it is the live one. Counting the call
+sites first would have cost one grep.
+
+### 1929. THE RETRAIN TRIGGER, NAMED AT LAST: `v34hshak.c:10017`, AND HALF THE FULL HANDSHAKES ARE A BAD-BLOCK RUN WE DECIDE ON OURSELVES
+
+1928 established that instrumenting one of fourteen `v34handshakinit` call
+sites measured nothing. Logging the callee with `__builtin_return_address(0)`,
+and matching the low 12 bits of the return address against the binary's call
+sites (page-aligned ASLR preserves them; a `call rel32` is 5 bytes so
+return = call + 5), names the doors:
+
+    return low12   call site       mode   what it is
+    0x07b          0x33076         1      v34hshak.c:10017  -- the dominant one
+    0x0d8          0x330d3         3      v34hshak.c:10041  -- rate renegotiation
+    0x1ab          0x331a6         2      v34hshak.c:10058
+
+**THE DOMINANT ENTRY, `v34hshak.c:10017`:**
+
+    if ((T3C_RX(obj)->flags & 0x40)                               /* far end asked */
+        || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) { /* BAD-BLOCK RUN */
+            v34handshakinit(obj, 1);
+
+Two conditions. The first is the far end requesting a retrain. **The second is
+ours**: `DP_RX_BAD` counts a run of blocks whose receive error exceeded
+threshold A, and passing half the block rate forces a complete handshake with
+nobody having asked.
+
+**THE SPLIT, over six 120-second calls, read from the `rxflags` logged at each
+entry:**
+
+    far end asked (flag 0x40 set)   5    equerr 334, 569, 627, 669, 6193
+    our own bad-block run           6    equerr 800, 1452, 5384, 8790, 12963, 21213
+
+**ROUGHLY HALF THE FULL RETRAINS ARE SELF-INFLICTED**, and the equerr column
+separates them cleanly. When WE trigger, the receiver is usually genuinely
+struggling (5384 to 21213). When the FAR END asks, our receive is healthy --
+334, 569, 627, 669 -- so it is unhappy with what it receives from us, which
+sits oddly beside 1917's finding that every far end reports receiving 33600
+from us and deserves its own investigation.
+
+**WHAT THIS MAKES ACTIONABLE.** 1925 established V.34 §11.6 exists to
+"resynchronize the receiver without going through a complete retrain", at
+2-3 s against ~10. Both halves of this split are candidates for it:
+
+* **our half** -- a bad-block run is exactly the resynchronisation case §11.6
+  describes, and we answer it with the heaviest mechanism available;
+* **the far end's half** -- we must respond, but §11.6 may satisfy the request
+  more cheaply than a full Phase 1/2.
+
+With 1921's 66% duty cycle and ~10 s per retrain, converting even our own half
+to §11.6 would return several seconds per event to data.
+
+**METHOD.** Eight mechanisms were proposed across this investigation and seven
+died on their own evidence. This one is not a mechanism -- it is the code that
+runs, identified by address, with the condition read from the flags logged at
+the moment it fired.
+
+### 1930. RECONCILING 1917 AND 1929: ONE HALF WAS A FRAMING ERROR, THE OTHER HALF MAKES 1929's SPLIT UNSAFE
+
+Phil: "these results don't make sense". 1917 measured every far end reporting
+it received **33600 from us**; 1929 measured the far end requesting retrains
+while our `equerr` was **334-669**, healthy. Both cannot obviously be true.
+They are two different problems.
+
+**PART ONE -- MY FRAMING WAS WRONG, AND THERE IS NO PARADOX THERE.**
+`equerr` is the error in what **WE RECEIVE**. A retrain request from the far
+end is about what **IT** receives, i.e. our TRANSMIT. The two directions are
+independent and measured at opposite ends of the link, so "our equerr was
+healthy when they asked" says nothing whatever about whether our transmit was
+healthy. 1929 presented that as a puzzle needing its own investigation. It is
+not a puzzle; it is a category error in the write-up.
+
+**PART TWO -- THE RESIDUAL TENSION WITH 1917, AND IT IS WEAKER THAN IT LOOKS.**
+`AT&V1`'s `LAST RX rate` and `HIGHEST RX rate` are end-of-call summaries, not
+instantaneous measurements. A link that ends at 33600, and peaked there, can
+still have passed through moments bad enough for the far end to request a
+retrain. So 1917's "our transmit is fine" is properly read as "our transmit
+ENDS fine", which is a much weaker claim than the one 1917 made and than the
+one 1921 and 1929 leaned on.
+
+**PART THREE -- AND THIS IS THE REAL DEFECT IN 1929.** The split of eleven
+retrains into "far end asked" (5) and "our bad-block run" (6) was read from
+bit 0x40 of `rx->flags` logged at entry to `v34handshakinit`. That bit is
+cleared at `v34hshak.c:1546`:
+
+    rx->flags = (unsigned short)((rx->flags & ~0x1d8) | 0x18);
+
+`~0x1d8` clears bits 3, 4, **6 (0x40)**, 7 and 8 -- but that line sits inside
+`case 1:` of the `switch (mode)`, within the arm `if ((rx->flags & 0x40) ||
+m[0xac17] != 0)`. **Modes 0, 2 and 3 do not pass through it.** So a retrain
+request arriving while the modem is in a mode-3 renegotiation or a mode-2
+entry is not consumed there, and can still be set when a later mode-1 entry
+reads it.
+
+The logged data is consistent with that: in `src-courier-1` the flag reads
+clear, clear, then set, set, set -- monotonic, which is what an unconsumed
+flag looks like and NOT what independent per-event requests look like.
+
+**SO 1929's SPLIT IS WITHDRAWN AS A PROPORTION.** What survives is:
+
+* the trigger site is `v34hshak.c:10017` and its two conditions are the far
+  end's flag and our own `DP_RX_BAD > baud_rate/2` bad-block run -- that is read
+  from the code and stands;
+* at least some full retrains are caused by our own bad-block run, since six
+  entries had 0x40 CLEAR and a clear flag cannot be stale;
+* the "5 asked / 6 ours" ratio is not trustworthy, because the five may
+  include flags set earlier and never consumed.
+
+**WHAT WOULD MEASURE IT PROPERLY:** log at the moment the flag is SET
+(`v34rx.c:2350`, where the stillness detector raises it) rather than at the
+moment it is read, and pair each set with the next handshake entry. A counter
+of sets, versus a counter of mode-1 entries with the flag clear, gives the
+proportion without depending on when it is cleared.
+
+### 1931. MEASURED AT THE POINT THE FLAG IS PRODUCED: AT LEAST 6 OF 11 FULL RETRAINS ARE SELF-INFLICTED, AND TWO CALLS RETRAINED WITH NO FAR-END REQUEST AT ALL
+
+1930 withdrew 1929's "5 asked / 6 ours" split because bit 0x40 is cleared only
+inside `case 1:`'s consuming arm at `v34hshak.c:1546`, so a flag read at
+handshake entry may have been set during an earlier mode-0/2/3 entry and never
+consumed. The fix is to count where the flag is SET rather than where it is
+read -- `V34RTNCOUNT` already logs exactly that, at the stillness detector in
+`v34rx.c`.
+
+    call             flag sets   mode-1 entries at 10017   entries with flag CLEAR
+    src-courier-1        4                5                        2
+    src-courier-2        0                0                        0
+    src-courier-3        0                1                        1
+    src-olinet-1         1                1                        1
+    src-olinet-2         0                2                        2
+    src-olinet-3         2                2                        0
+    ----------------------------------------------------------------------
+    TOTAL                7               11                        6
+
+**AT LEAST 6 OF 11 ARE OURS, AND THAT IS A FLOOR RATHER THAN AN ESTIMATE.**
+A flag that is CLEAR at entry cannot be a leftover, so those six entered
+`v34handshakinit(obj, 1)` purely on `dp_rxget(obj, DP_RX_BAD) > baud_rate >> 1` --
+our own bad-block run. The remaining five had the flag set and cannot be
+attributed either way, because staleness is possible.
+
+**TWO CALLS SETTLE IT WITHOUT ANY INFERENCE.** `src-olinet-2` ran two full
+handshakes with **zero** flag sets in the entire call; `src-courier-3` ran one
+with zero. Nobody asked. Those are ~10 seconds of Phase 1/2 each, spent on our
+own initiative, on a path that carries 28800-33600 between hardware modems
+(1927).
+
+**ONE ENTRY IS INFORMATIVE IN THE OTHER DIRECTION.** `src-olinet-1` recorded
+one flag set AND one mode-1 entry whose flag was CLEAR. So the request was
+consumed somewhere other than this site, and the handshake that followed was a
+separate, self-inflicted event. That is direct evidence that the two causes
+coexist within a single call.
+
+**SO THE ANSWER TO "WHY IS IT SLOW" IS NOW SPECIFIC:** the modem spends 66% of
+connected time re-handshaking (1921); a majority of those handshakes are
+triggered by its own bad-block counter rather than by the far end; each costs
+~10 s because V.34 has no short Phase 2 (1924); and V.34 §11.6 provides a
+2-3 s resynchronisation for exactly this case that the code does not use for
+this trigger (1925).
+
+**THE CHANGE THAT FOLLOWS**, and it is now precisely located: route the
+`DP_RX_BAD > baud_rate/2` arm of `v34hshak.c:10017` to a §11.6 rate renegotiation
+instead of `v34handshakinit(obj, 1)`. The far end's arm keeps the full retrain,
+because responding to a request is not ours to reinterpret. That is #149.
+
+### 1932. ROUTING THE BAD-BLOCK RUN TO A §11.6 RENEGOTIATION IS A REGRESSION AS IMPLEMENTED — 1 OF 4 CALLS CONNECTED, AND THE RATE RATCHETS DOWNWARD
+
+#149's change, behind `dsplib_v34_rrn_on_badblock`: when our own bad-block run
+trips and the far end has NOT asked, call
+`VPcmV34InitiateRateRenegotiation(obj, 0)` instead of
+`v34handshakinit(obj, 1)`. Eight 120-second calls, both far ends, interleaved.
+
+    connect rate    OFF 4 of 4        ON 1 of 4
+    rrn-olinet-on-1 rate sequence: 14400 -> 12000 -> 9600 -> 7200
+
+**IT DOES NOT WORK AND THE DUTY-CYCLE NUMBER IS A TRAP.** The arms measure 34%
+handshake OFF against 19% ON, which looks like a win and is not: three of the
+four ON calls never connected, so they contribute almost no data time and the
+ratio is computed over the two that did. Quoting 19% against 1921's 66% would
+be exactly the error this thread has made four times already.
+
+**TWO DEFECTS, BOTH MINE, BOTH SPECIFIC.**
+
+1. **The branch is not gated on data mode.** V.34 §11.6's first sentence is
+   "can be initiated at any time **during data mode**". The bad-block counter
+   trips during training too, and initiating a renegotiation outside data mode
+   is a protocol violation the far end cannot answer -- which is what 3 of 4
+   failed connects look like. The object's own renegotiation sites are reached
+   from paths where data mode is already established; mine is not.
+
+2. **`req` 0 steps the rate DOWN every time.** `rrn-olinet-on-1` shows
+   14400 -> 12000 -> 9600 -> 7200: each bad-block run ratchets one index
+   lower, with nothing stepping back up, so a burst of errors walks the link
+   to the floor. The object's step-down renegotiation is paired with a
+   step-up at another site; mine has no counterpart.
+
+**WHAT SURVIVES.** The diagnosis is untouched -- 1921's 66% duty cycle, 1931's
+finding that at least 6 of 11 full retrains are self-inflicted, and 1925's
+reading that §11.6 exists for exactly this case. What is refuted is this
+particular way of reaching it.
+
+**WHAT A CORRECT VERSION NEEDS**, and neither is speculative:
+
+* a data-mode guard, so the renegotiation is only initiated where §11.6 permits
+  it -- `DP_MODE` or the receiver's DATA flag is the obvious test;
+* a rate policy that is not monotonically downward -- either `req` 4 (no
+  particular rate, `rate_want = -1`) so the ladder re-decides, or a step-up
+  path when blocks are clean again.
+
+The flag stays default-off and master is untouched, so nothing is at risk
+while that is worked out.
+
+### 1933. THE RECOVERY LADDER IS INVERTED: A FULL RETRAIN NEEDS A QUARTER THE EVIDENCE A CHEAP RENEGOTIATION DOES, SO THE CHEAP PATH IS STARVED
+
+1932's fix failed, and reading the rest of `datapumpv34` shows why: the object
+already has a layered recovery and I added a fourth path without reading the
+other three.
+
+    v34hshak.c:10017   DP_RX_BAD      > baud_rate / 2   ->  FULL RETRAIN  (~10 s)
+    v34hshak.c:10088   flags & 0x20                 ->  renegotiation (remote asked)
+    v34hshak.c:10107   DP_RX_BAD_LONG > 2 * baud_rate   ->  renegotiation DOWN, "large error"
+    v34hshak.c:10122   DP_RX_GOOD     > 8 * baud_rate   ->  renegotiation UP,   "small error"
+
+The design is sound in shape -- a bad run steps down, a good run steps up, and
+a request from the far end is honoured. **The thresholds are the wrong way
+round.**
+
+**THE EXPENSIVE RESPONSE IS THE CHEAPEST TO TRIGGER.** A full Phase 1/2
+retrain needs `DP_RX_BAD` past **half** a frame length. The renegotiation that
+V.34 §11.6 provides for exactly this purpose -- 2-3 s against ~10 -- needs
+`DP_RX_BAD_LONG` past **twice** a frame length, four times the evidence.
+
+The two counters are not the same, which is what makes this survivable rather
+than absurd: `DP_RX_BAD` increments on `err > THR_A` every block, while
+`DP_RX_BAD_LONG` increments on `err > THR_B` and only once the call has been
+up past `DP_TIMER_MID`. So the long counter is both slower to start and held
+to a different threshold. But on the evidence of this bench the short counter
+reaches its limit first essentially always, the retrain fires, all three
+counters are cleared, and the renegotiation-down path never gets to run.
+
+**THIS EXPLAINS 1921 AND 1932 TOGETHER.** 66% of connected time in handshakes
+(1921) is the full-retrain path winning every race. And 1932's failure was
+adding a fifth path that bypassed the layering rather than correcting it --
+initiating a renegotiation from the retrain site while the object's own
+renegotiation sites sit forty lines below, with their own counters and their
+own `DP_MODE` bookkeeping that my branch did not perform.
+
+**THE CORRECTION IS A THRESHOLD, NOT A NEW CALL.** Make the full retrain
+require MORE evidence than the renegotiation rather than less, so the cheap
+recovery gets first refusal and the expensive one becomes the fallback it was
+presumably meant to be. That is one constant, behind the existing flag, and it
+leaves every code path the object already has intact.
+
+**ALSO CORRECTED: 1932's "not gated on data mode" is wrong.** `datapumpv34`
+returns early when `DP_MODE > 1` (line 9976), so everything from the retrain
+test onward runs ONLY in data mode. The failed connects had another cause,
+most likely the missing `DP_MODE`/`DP_RX_WHY`/`DP_RX_RATE` bookkeeping that
+the object's own renegotiation sites perform and my branch omitted.
+
+### 1934. `faa96` IS THE SYMBOL RATE IN BAUD — SO EVERY RECOVERY THRESHOLD BUILT ON IT IS A TIME, AND READING THEM AS TIMES IS WHAT SHOWS THE LADDER INVERTED
+
+The field at `+0xaa96` was carried as `faa96` and described variously in
+comments as "the block rate" and "the frame length". Neither is right.
+
+**IT HOLDS THE SYMBOL RATE ITSELF.** `v34hshak.c:8307` compares it against
+`0xd65`, `0xc80`, `0xbb8` and `0xaf0` -- **3429, 3200, 3000 and 2800** -- which
+are V.34 symbol rates in baud, not indices. It is written once, from
+`T3M_TXBAUD` (`v34hshak.c:4428`), aliases `rx_baud` in the shell's record
+(`v34shell.c:2287`), and `V34SetupDemodulator` passes it straight to
+`t44_setup_rate` as `baud`. Renamed to **`baud_rate`** across 106 uses in ten
+files, including the mutation JSON that anchors on the text.
+
+**AND THAT REWRITES THE RECOVERY TESTS AS TIMES -- BUT NOT THE TIMES I FIRST
+WROTE.** This finding originally said "multiplying by the baud converts
+seconds into symbols" and gave the thresholds as a clean 0.5 / 2 / 7 / 8
+seconds. **That is wrong** and a falsification pass caught it.
+
+`DP_RX_BAD` is advanced by `dp_run` once per `receiver()` call, and
+`receiver()` consumes `rx->f128` samples per call. `f128` is **4** at every
+one of its four write sites (`v34rx.c:1087`, `v34hshak.c:521`, `771`, `6909`),
+on a 9600 Hz stream -- so the counter ticks at a FIXED **2400 per second**,
+independent of the negotiated baud. The thresholds scale with `baud_rate`;
+the counter does not.
+
+                       counts      at 2400 baud   at 3429 baud
+    baud_rate >> 1      1714          0.50 s        0.71 s   -> FULL RETRAIN
+    2 * baud_rate       6858          2.0  s        2.86 s   -> renegotiate DOWN
+    7 * baud_rate      24003          7.0  s       10.0  s   -> handshake timeout
+    8 * baud_rate      27432          8.0  s       11.4  s   -> renegotiate UP
+
+They are exactly N seconds ONLY at 2400 baud -- V.34's reference symbol rate,
+which happens to equal the counter's tick rate. At every higher rate they
+stretch by `baud / 2400`, so **the recovery timeouts get LONGER the faster the
+link runs**, which is arguably backwards: a faster link has more to lose per
+second and reacts more slowly.
+
+**THE INVERSION IS UNAFFECTED.** `2 * baud_rate` against `baud_rate >> 1` is a
+factor of four whatever the units, so finding 1933 stands on the ratio alone
+and never depended on the absolute times.
+
+**THE INVERSION IS OBVIOUS ONCE THE UNITS ARE.** Seven tenths of a second of
+trouble (at 3429 baud) buys a ten-second full retrain. The cheap two-to-three-second renegotiation waits
+for two seconds of trouble -- four times as much evidence -- and never arrives,
+because the retrain has already fired and cleared all three counters. That is
+finding 1933 stated in the units the code is actually working in, and 1921's
+66% duty cycle follows from it directly.
+
+**METHOD NOTE.** The name was the obstacle. `7 * faa96` invites no question;
+`7 * baud_rate` reads immediately as seven seconds and makes the comparison
+with `baud_rate >> 1` look wrong on sight. Two earlier attempts at this fix
+(1932, and the ternary rewrite `anchorcheck.py` rejected) were both made
+without knowing the units.
+
+### 1935. WE TRANSMIT 2.4 dB BELOW THE FAR END IN RMS (10 dB IN PEAK -- A CREST-FACTOR DIFFERENCE) — BUT THE PATH NOISE FLOOR IS -72 dBFS, SO IT COSTS NOTHING, AND THE FAR END IS ASKING US TO GO QUIETER STILL
+
+Phil's question: "it's possible we may not be using all the dynamic range."
+Measured from the 8 kHz socket captures, 14 calls:
+
+    our transmit    peak median 10044   (-10.3 dBFS)   rms -25.0 dBFS
+    their transmit  peak median 32256   ( -0.1 dBFS)   rms -22.6 dBFS
+    gap in PEAK                          10.1 dB
+    gap in RMS                            2.4 dB   <- the honest figure
+
+**THE 10 dB IS A CREST-FACTOR DIFFERENCE, NOT A LEVEL DIFFERENCE**, and this
+finding's first draft led with the peak, which overstated it. In RMS -- the
+quantity that sets SNR -- we transmit only **2.4 dB** below the far end. Their
+peaks reach 32256 where ours sit at ~10044, so their signal is far peakier,
+but the delivered power is nearly the same.
+
+    noise floor, our TX     -90.3 dBFS   (digital silence -- we synthesise it)
+    noise floor, our RX     -72.5 dBFS   (the real path's noise, arriving)
+
+**THE GAP IS REAL AND IT IS NOT THE LIMITER.** Against a -72.5 dBFS floor, a
+-10.3 dBFS signal still carries about **62 dB of SNR** into the path. V.34
+needs roughly 35 dB for 33600. Spending 10 dB of headroom leaves an enormous
+margin, so the unused dynamic range is not what costs us rate.
+
+**AND THE FAR END WANTS US QUIETER, NOT LOUDER.** The transmit scale is set by
+`settxlevel` (`v34hshak.c:2745`) from the power-reduction field of the far
+end's MP message, and the logs are unambiguous:
+
+    txscale before is 5793, reduced txscale is 3 dB, final txscale is 4099   x20
+    txscale before is 5793, reduced txscale is 2 dB, final txscale is 4600   x17
+    txscale before is 5793, reduced txscale is 1 dB, final txscale is 5162   x4
+    txscale before is 5793, reduced txscale is 6 dB, final txscale is 2900   x2
+
+The far end REQUESTS 1 to 6 dB of reduction, which is V.34's own mechanism
+(INFO0 bit 20, "able to reduce transmit power"), and we comply. A receiver
+asking for less power is telling us our signal is strong enough. That agrees
+with 1917: every far end reports receiving 33600 from us.
+
+**SO THIS HYPOTHESIS CLOSES.** Raising the transmit level would override a
+reduction the far end explicitly asked for -- an interop change made against
+the peer's stated wishes, to buy margin on a link that already has 62 dB.
+
+**ONE THING WORTH KEEPING FROM IT.** Our transmit noise floor is -90 dBFS
+against the received -72.5 dBFS. The 18 dB difference is the path's own noise,
+measured directly, and it is the first honest noise-floor figure this project
+has -- 1914 established the probe cannot produce one, and 1913's SNR is taken
+in the wrong bands. `CHAN_SNR` for the emulator can now be grounded on this
+rather than on the probe proxy.
+
+
+### 1936. NO AGC SIGNATURE FROM THE VG204 — TWO DIFFERENT CHIPSETS ARRIVE AT THE SAME -23 dBFS, WHICH IS A FIXED GAIN, NOT A HUNTING ONE
+
+Phil asked whether the Cisco VG204 has an AGC that should be disabled. The
+gateway's configuration has not been read, so this is measured from the
+captures rather than from the device.
+
+Received level in 1-second windows, loud windows only:
+
+    frz-olinet-2   (Conexant far end)   mean -23.0 dBFS   sd 2.93 dB   settles -20..-24
+    m3-supra-off-2 (Rockwell far end)   mean -23.7 dBFS   sd 5.29 dB   settles ~-22
+
+**TWO DIFFERENT FAR-END CHIPSETS LAND AT THE SAME LEVEL.** An AGC shows as
+slow drift toward a target and would differ per source and per starting level.
+A fixed gain applied to two modems that both transmit at V.34's nominal power
+produces exactly what is seen: the same arrival level from both. The excursions
+to -37 and -43 dBFS are handshake transitions, not gain hunting.
+
+**SO THERE IS NO EVIDENCE FOR AN AGC TO DISABLE**, and 1935 already showed the
+level is not the limiter anyway -- 62 dB of SNR against a -72.5 dBFS floor,
+where V.34 needs about 35.
+
+**THE GATEWAY SETTINGS THAT WOULD MATTER, none of them AGC**, and none checked
+against the device: echo cancellation and especially its non-linear processor
+(which suppresses low-level signals and is actively harmful to a modem),
+VAD/silence suppression, comfort-noise generation, and any per-port input gain
+or output attenuation. `modem passthrough` forces G.711 clear channel and
+disables EC and VAD for the call, which is the usual remedy. The
+`bearer-cap 3100Hz` Phil has configured is the right declaration that the call
+is not speech.
+
+**ONE THING THE CAPTURES DO RULE OUT.** The received signal never falls to
+digital silence -- its floor is -72.5 dBFS of real noise (1935) -- so VAD and
+silence suppression are not active on this path. If they were, the quiet
+stretches would read -90 dBFS as our own transmit does.
+
+### 1937. STATIONARY NOISE NEVER CAUSES A RETRAIN — BURSTY LOSS DOES. 1% PACKET LOSS AT 24 dB SNR REPRODUCES THE BENCH'S SIGNATURE
+
+Step 1 of testing 1933's inverted-ladder theory: find an impairment that makes
+the bad-block arm fire, starting from measured inputs rather than invented
+ones -- the VG204's fitted frequency response, the measured 141-152 ms round
+trip, and SNR grounded on the object's own probe (median 24.3 dB).
+
+**THE SNR SWEEP PRODUCES A CLEAN RATE CURVE AND NO RETRAINS AT ALL:**
+
+    clean / 45 / 40 dB -> 33600      21 dB -> 14400
+    30 dB -> 24000                   18 dB ->  9600
+    24 dB -> 16800                   15 dB ->  9600
+
+    retrains: ZERO at every SNR from 30 down to 15 dB
+
+At the measured 24.3 dB the emulator gives **16800**, squarely in the range the
+bench produces against real modems -- the channel model validating against
+reality. But the link simply negotiates lower and sits there. **Stationary
+additive noise does not cause retraining.**
+
+**BURSTY LOSS DOES.** At 24 dB SNR with packet loss:
+
+    0.2% loss  ->  CONNECT 16800   1 handshake    0 retrains
+    1%   loss  ->  CONNECT  7200   4 handshakes   1 retrain
+    3%   loss  ->  no connect      1 handshake    0 retrains
+
+1% is the operating point for step 2 (#151): it reproduces the bench's
+signature -- repeated handshakes, a retrain, and the rate collapsing to 7200 --
+while still connecting.
+
+**AND IT NARROWS WHAT CAUSES THE BENCH'S 66%.** Whatever drives the real
+link's re-handshaking is TIME-VARYING and discontinuous, not a steady noise
+floor. That is consistent with 1935/1936: the level is stable at -23 dBFS from
+both far ends, the noise floor is a quiet -72.5 dBFS, and neither is the
+limiter. It also puts #103 (jitter buffers) and #111 (the socket hop) back in
+scope, having been demoted on an underflow count that 1920 showed is a
+startup burst.
+
+**TWO MEASUREMENT BUGS OF MINE, both the same kind.** The first SNR sweep read
+`CONNECT` from `.origin.log`, but slmodemd logs `modem report result: 1
+(CONNECT)` and drops the speed -- the rate exists only in the `.dte` capture,
+which the agent's report had stated explicitly. Every call had connected. I
+then briefly suspected my rebuilt binary had broken the emulator; it had not.
+Reading the wrong place has now cost time three times in this investigation
+(cf. 1928, 1930).
+
+### 1938. THE "Underflow" IS pjmedia's DELAY BUFFER, NOT slmodemd — AND ON A LAN IT IS THE ONLY REMAINING SOURCE OF THE DISCONTINUITY THAT REPRODUCES RETRAINS
+
+1937 found that stationary noise never causes a retrain but ~1% of substituted
+frames does. Phil's objection: this is a LAN, there should be no packet loss.
+That is right, and it locates the real source.
+
+`CHAN_LOSS` in the emulator substitutes a frame of SILENCE. The thing that does
+exactly that on the bench is not the network:
+
+    pjproject-2.15.1/pjmedia/src/pjmedia/delaybuf.c:335
+      PJ_LOG(4,(b->obj_name,"Underflow, buf_cnt=%d, will generate 1 frame", ...))
+
+**It is pjmedia's adaptive delay buffer -- d-modem's jitter buffer -- running
+dry and FABRICATING a frame.** Not slmodemd's code, and not the LAN. Observed
+25 to 50 times per call across every capture (1920).
+
+**THIS REHABILITATES #103 AND #111.** The jitter-buffer theory was demoted on
+an underflow count that correlated poorly (r = -0.15) with equerr saturation.
+That test was weak for a reason worth stating: **the `Underflow` line carries
+no timestamp**, so only counts per call could be compared, never timing against
+events. A burst of underruns at the moment of a collapse is invisible to a
+count-based test. The correlation being poor is therefore not evidence of
+absence.
+
+**AND THE COUNTS ARE ODD IN A WAY NOTHING EXPLAINS YET.** Bimodal at exactly
+50 or 25 per call, a clean 2:1, and not split by far end (both appear against
+both the Courier and the Oli'Net). That looks like fixed buffer behaviour
+rather than random drops.
+
+**WHAT WOULD SETTLE IT:** timestamp that message, then correlate underruns
+against `equerr` saturation and `V34HSINIT`. It is a pjsip log-decor change
+(`pj_log_set_decor` with `PJ_LOG_HAS_TIME`) or a one-line patch to
+`delaybuf.c`, either of which needs a pjproject rebuild -- `d-modem.c` neither
+creates the delay buffer nor sets the decor, so there is no shortcut through
+our own code.
+
+**REPOSITORY STATE, checked rather than assumed.** `D-Modem-fork`'s remote is
+already `https://github.com/cryan209/D-Modem.git`; upstream is
+`origin/pjsip2.15` at `902c79aa`; `HEAD..origin/pjsip2.15` is EMPTY, so nothing
+is available to pull. We are three commits ahead on `testbench-safety` with the
+destination allow-list, audio capture and IODELAY work. The only local
+modifications are pjproject build artefacts.
+
+### 1939. THE UNDERFLOW INVENTS WAVEFORM, NOT SILENCE — WSOLA CONCEALMENT ON `scombdb-up`, AND pjmedia HAS A SUPPORTED FLAG TO TURN IT OFF
+
+Following 1938 into `pjmedia/src/pjmedia/delaybuf.c`, the underflow path is
+worse for a modem than the "generate 1 frame" message suggests:
+
+    if (b->wsola) {
+        status = pjmedia_wsola_generate(b->wsola, frame);   /* invents waveform */
+    ...
+    /* Give all what delay buffer has, then pad with zeroes */
+
+**WSOLA is Waveform Similarity Overlap-Add.** On a starved buffer it
+synthesises a frame by stretching and overlapping recent audio. For speech that
+is good concealment. For a modem it is the worst available failure: it
+fabricates PLAUSIBLE-LOOKING signal carrying wrong symbols, which the equaliser
+adapts to and the decoder slices as if it were real. Silence would at least be
+recognisable as absence.
+
+**WHICH BUFFER, EXACTLY.** The log carries the object name and it is
+unambiguous -- 47 of 50 underflows in a representative call are `scombdb-up`,
+the UPSTREAM buffer created at `splitcomb.c:410`, which is the direction
+carrying audio toward the modem. (Three more appear with a `!` log-level
+marker; `scombdb-dn` does not appear.)
+
+**AND IT IS SWITCHABLE WITHOUT PATCHING pjmedia's LOGIC.**
+`delaybuf.h:74` defines `PJMEDIA_DELAY_BUF_SIMPLE_FIFO = 1`, and
+`delaybuf.c:125` gates WSOLA creation on it:
+
+    if (!(options & PJMEDIA_DELAY_BUF_SIMPLE_FIFO)) {
+        /* Create WSOLA */
+
+`splitcomb.c` already threads the value through rather than hardcoding zero:
+
+    line 337   unsigned buf_options;
+    line 391   buf_options = (options >> 8U) & 0xFF;
+    lines 402, 415   passed to both delay buffers
+
+**So the option is carried in the HIGH BYTE of splitcomb's own `options`
+word.** Setting bit 8 of the splitcomb options -- `PJMEDIA_DELAY_BUF_SIMPLE_FIFO
+<< 8` -- disables WSOLA on both delay buffers with no pjmedia source change at
+all. Only the caller that creates the splitcomb port needs to pass it.
+
+**THIS IS A BETTER FIRST MOVE THAN TIMESTAMPING (#153).** Phil's framing is the
+right one: waiting for a late frame is acceptable, inventing rubbish is not.
+Turning WSOLA off does not stop the underruns -- the buffer still pads with
+zeroes -- but it removes the fabricated waveform, which is the part that can
+mislead a receiver into adapting to noise. Whether zero-padding is itself
+survivable is then a separate, measurable question.
+
+**NOT YET DONE, and not to be claimed:** the splitcomb creation site in
+d-modem's media path has not been located, no flag has been set, and nothing
+has been rebuilt or measured. The above is a code reading.
+
+### 1940. THE SPLITCOMB IS THE MODEM'S MONITOR LOUDSPEAKER — `scombdb-up` FEEDS ALSA, NOT THE DATAPUMP, AND 1939's DIRECTION CLAIM WAS BACKWARDS
+
+Finding 1939 said `scombdb-up` was "the direction carrying audio toward the
+modem". **That is wrong, and the correction changes what the underflow means.**
+
+**WHY A STEREO PORT EXISTS IN A MONO MODEM CALL.** `d-modem.c:570` creates a
+two-channel splitter/combiner and hands it to a real ALSA player:
+
+    pjmedia_splitcomb_create(pool, SIP_RATE, 2, SIP_FRAMESIZE, 16, 0, &sc)
+    // left:  SIP call -> monitor/playback.
+    // right: d-modem  -> monitor/playback.
+    pjmedia_aud_dev_lookup("ALSA", "default", &devidx);
+    pjmedia_snd_port_create_player(pool, devidx, SIP_RATE, 2, SIP_FRAMESIZE, 16, 0, &audiodev);
+    pjmedia_snd_port_connect(audiodev, sc);
+
+It is **the modem's speaker** -- the thing `ATM`/`ATL` control on a real modem
+-- and stereo so the two ends are separable by ear: far end in one channel, our
+own transmit in the other. The volume is live, not decorative: slmodemd relays
+the AT speaker setting as a `SOCKET_FRAME_VOLUME` frame and `d-modem.c:483`
+turns it into `pjsua_conf_adjust_tx_level` on both monitor ports.
+
+The whole block sits under `#ifdef WITH_AUDIO`, and the Makefile passes
+`-DWITH_AUDIO` unconditionally, so every build has it.
+
+**THE DATA PATH DOES NOT TOUCH IT.** The modem's audio is two direct
+conference-bridge connections, `d-modem.c:573-576`:
+
+    pjsua_conf_connect(ci.conf_slot,   modem_audio_id);   /* SIP  -> modem */
+    pjsua_conf_connect(modem_audio_id, ci.conf_slot);     /* modem -> SIP  */
+
+`left_audio_id` and `right_audio_id` are connected one-way only, as listeners.
+They are taps. Nothing the splitcomb does can alter a sample the datapump
+receives.
+
+**WHICH BUFFER IS WHICH, read off the code rather than the name.**
+`splitcomb.c` puts and gets each buffer from exactly one side:
+
+  * `scombdb-dn` (`DIR_DOWNSTREAM`) -- put by the splitcomb's `put_frame`
+    (line 589/642), i.e. by a sound-device **recorder**; got by
+    `rport_get_frame` (line 850), i.e. by the conference bridge.
+  * `scombdb-up` (`DIR_UPSTREAM`) -- put by `rport_put_frame` (line 796/821),
+    i.e. by the **conference bridge**; got by the splitcomb's `get_frame`
+    (line 699), i.e. by the sound-device **player**.
+
+So `scombdb-up` is bridge -> **loudspeaker**. `scombdb-dn` is microphone ->
+bridge, and there is no microphone: `create_player` opens playback only.
+
+**THE LOG CONFIRMS IT EXACTLY.** Across all 1669 captures:
+
+    scombdb-up   20921 underflows
+    scombdb-dn       0
+
+Zero is the prediction of a player-only device, and it is what the bench shows.
+477 of 1669 calls report at least one. (1939 read "47 of 50 `scombdb-up`, three
+with a `!` marker" from one call; the `!` is pj_log's level marker on the same
+`scombdb-up` name, not a second buffer.)
+
+**THE 10 ms CADENCE ALSO CHECKS OUT.** The splitcomb is 160 samples of stereo,
+so each reverse channel is 160/2 = 80 samples = 10 ms, while the bridge runs at
+`audio_frame_ptime = 20` ms. In `base-cx2-12` the sustained stretch is two
+underflows every ~10.7 ms -- both monitor channels, once per ALSA period --
+plus a 25-line burst inside a single millisecond at media-state change.
+
+**WHAT 1939 GOT RIGHT AND WHAT IT LOSES.** WSOLA does fabricate waveform rather
+than silence, and `PJMEDIA_DELAY_BUF_SIMPLE_FIFO << 8` does switch it off
+through splitcomb's options word. But it fabricates that waveform **for the
+speaker**. The claim that it "fabricates plausible signal carrying wrong symbols,
+which the equaliser adapts to" is withdrawn: no equaliser is downstream of it.
+
+**WHAT SURVIVES AS A REAL EFFECT, magnitude UNMEASURED.** The monitor adds a
+second clock domain (the sound card, free-running against pjsua's null-snd
+software clock), a second audio thread, and a shared lock: `delaybuf.c:327-376`
+holds a recursive mutex across the whole of `pjmedia_delay_buf_get`, and
+`pjmedia_wsola_generate` runs **inside** it (line 339). The ALSA thread and the
+conference-bridge thread therefore contend on that mutex 200 times a second.
+Expected stall is microseconds against a 20 ms budget; it has NOT been measured
+and should not be quoted as a mechanism.
+
+**THE MORE USEFUL READING IS THE INVERSE ONE.** `dmodem_get_frame` does a
+BLOCKING read on slmodemd's socket (`d-modem.c:461`), on the bridge thread. So
+the bridge tick is paced by slmodemd, not by the software clock, while the ALSA
+player is not. Sustained `scombdb-up` starvation is therefore a **witness that
+the bridge thread was late** -- an independent, already-timestamped record of
+when our own datapump failed to produce a frame on time. That makes it a
+diagnostic to read, not a fault to fix, and it is a better use of #153 than
+treating the underflow as a cause.
+
+**BUILT, NOT YET RUN.** `/home/philpem/dev/D-Modem-fork/d-modem-noaudio` is the
+same source compiled without `-DWITH_AUDIO`; the existing `d-modem` is
+untouched. Its error strings for the splitcomb and the ALSA player are both
+absent, so the call sites are genuinely gone. The prediction to check on the
+first call is **zero `scombdb-*` lines of any kind**; if any survive, this model
+of the media graph is wrong and nothing here should be relied on. No call has
+been placed with it.
+
+**NOT A DELETION.** Phil listens to these calls -- "that one sounded like at
+least two re-trains" is how a defect got reported. The speaker is in use. This
+is a build-time switch to A/B, and if it wins it wants to become a runtime flag,
+not a removal.
+
+### 1941. MEASURED: THE RTP JITTER BUFFER STARVES AND INJECTS ~0.5% FABRICATED FRAMES INTO OUR RECEIVE PATH, WITH ZERO NETWORK LOSS — AND THE "FIXED" PREFETCH IS WHY
+
+First direct measurement of d-modem's jitter buffer, via new `JBSTAT`
+instrumentation in `d-modem.c` (public `pjsua_call_get_stream_stat`, which
+returns BOTH the RTCP stats and `pjmedia_jb_state` -- no pjsip change).
+One call, `jb-base-1`, hybrid `slmodemd-fit` originating to the SupraExpress on
+1901, CONNECT 31200, 60 s hold.
+
+**THE PREDICTION I MADE WAS WRONG, and it is worth saying first.** I expected
+`jbuf_discard_progressive` to delete ~1% of frames on a clean link, because it
+drops a frame whenever buffer depth exceeds the measured burst level. It does
+not. **`discard` stayed at 0 for the entire connected period.** The algorithm
+is self-limiting in a way the code reading did not show: `burst` oscillates
+between 2 and 4 and any tick where `cur_size <= burst_level` resets the
+schedule, so the discard never matures. Progressive discard is NOT the
+mechanism. (The `discard=837` in the final tick is the separate buffer-full
+path at `jbuf.c:1056`, and it only runs AFTER carrier loss, once slmodemd has
+stopped consuming and the buffer hits `jb_max`. It is teardown noise.)
+
+**WHAT IS ACTUALLY HAPPENING IS THE OPPOSITE OF A BACKLOG — THE BUFFER DRAINS.**
+Over the call, with the far end sending continuously:
+
+    time      lost  empty  size   avg_delay
+    19:05:43     0      1     4      40 ms
+    19:06:00     4      5     4      39 ms
+    19:06:29    13     13     3      39 ms
+    19:06:43    15     15     1      38 ms
+    19:06:58    18     19     2      38 ms
+
+`size` decays 4 -> 3 -> 2 -> 1 frames and `avg_delay` follows it down, 40 -> 38
+ms. Roughly **one `lost` and one `empty` every four seconds**, sustained.
+
+**AND THE NETWORK DELIVERED EVERYTHING.** In the same lines: `rtp: loss=0
+discard=0 reorder=0 jitter=0.3-0.7ms` for all but one packet in the whole call.
+Phil's point stands exactly -- this is a LAN and there is no packet loss. The
+frames are not being lost in transit. **The consumer is outrunning the
+producer**, and the jitter buffer reports the shortfall as `lost` (the next
+sequence number has not arrived yet, so the framelist declares it missing) and
+`empty` (nothing at all to hand over).
+
+**BOTH LAND ON THE MODEM'S RECEIVE PATH.** `lost` yields
+`PJMEDIA_JB_MISSING_FRAME` and `empty` yields `PJMEDIA_JB_ZERO_EMPTY_FRAME`
+(`stream.c:594,633`), which is where the stream fabricates or zeroes a frame.
+This is the concealment problem 1939 described -- but in the RIGHT buffer.
+1940 established the splitcomb's WSOLA feeds only the loudspeaker; this one is
+upstream of the equaliser.
+
+**MAGNITUDE.** Frames here are 10 ms, not 20 (`prefetch=4` for a 40 ms setting,
+`avg_delay=40ms`), so ~100 frames/s. About 37 bad frames in ~75 s of carrier is
+**~0.5%**. Finding 1937 measured that 1% frame substitution in the emulator
+produced CONNECT 7200 with 4 handshakes and a retrain, while stationary noise
+at ANY SNR produced none. Same order, same kind of defect, on the real bench.
+
+**WHY IT STARVES, and this is the part that indicts our own configuration.**
+`d-modem.c` sets `jb_min_pre == jb_max_pre == jb_init == 40 ms`, with the stated
+intent of a fixed, non-adaptive buffer. pjmedia's adaptive algorithm absorbs
+clock skew between the sender's crystal and ours by GROWING the prefetch when
+it detects starvation. Pinning min == max leaves it nothing to grow into. So
+the setting chosen to protect modem data from an adaptive buffer is what
+prevents that buffer from covering the skew, and the cost is a fabricated frame
+every four seconds. (`stream.c:2858` calls `pjmedia_jbuf_set_adaptive`
+unconditionally in any case -- there is no fixed mode to select, as recorded in
+the corrected comment now in `d-modem.c`.)
+
+**RATE BEHAVIOUR IN THE SAME CALL, for context rather than as proof:** tx was
+33600 at every one of the six rate decisions; rx was 4800, 7200, 7200, 9600,
+31200, 33600. Transmit is solid, receive thrashes -- consistent with #132, and
+now with a measured receive-path defect to explain it.
+
+**LIMITS. This is ONE call.** It establishes the mechanism exists and its size;
+it does NOT establish that it causes the retrains. Correlating the `lost`/
+`empty` timestamps against retrain times is the next step and has not been done.
+Nine mechanisms have been proposed in this investigation and five withdrawn on
+their own evidence, including my prediction at the top of this finding.
+
+**NOT YET TESTED:** whether letting the prefetch adapt (`jb_max_pre` >
+`jb_min_pre`) removes the starvation, and at what latency cost. `DISCARD_NONE`
+is NOT the fix -- discard was never the problem.
+
+### 1942. THE JITTER BUFFER SETTLES AT ~35 ms WHATEVER PREFETCH IT IS GIVEN, AND UNDERRUNS 0.3-0.5 TIMES A SECOND WITH ZERO NETWORK LOSS — OUR CONSUMER BURSTS AS DEEP AS THE BUFFER
+
+**CORRECTION, MADE BEFORE THIS WAS REPORTED.** The first draft of this finding
+was titled "we consume ~0.6% faster than the far end sends -- a rate error" and
+that is WRONG. It rested on 62 ms of buffer disappearing in 10 s in arm C,
+which is 6200 ppm. RTP arrival rate, measured against our own clock over each
+arm's whole carrier window, refutes it outright:
+
+    arm            window     arrival pkt/s     vs nominal 50
+    jb-base-1      118.0 s       49.985           -0.031%
+    jb-adapt-1      88.0 s       50.009           +0.017%
+    jb-deep-1       73.0 s       49.999           -0.003%
+
+**50.000 packets/s to within 0.03% in all three arms.** A 0.6% consumption
+excess would show here as ~49.7 and it does not. The average rates match. The
+62 ms was a ONE-OFF TRANSIENT -- the buffer refilled to arm C's 120 ms prefetch
+after an underrun and bled back to its operating point -- not a steady drain.
+The shape of the data says so too: `lost` sat flat at 9 from 19:13:58 to
+19:14:38 while `avg_delay` crept 43 -> 33 ms, then jumped 9 -> 17 in one 10 s
+window. Bursty, not linear. A rate error produces evenly spaced events.
+
+What follows is the corrected reading.
+
+Three calls to the SupraExpress on 1901, hybrid `slmodemd-fit`, identical
+except for the jitter buffer prefetch. `DMODEM_JB_MIN_PRE` / `_INIT` / `_MAX_PRE`
+in `d-modem.c` (no pjsip change).
+
+    arm            prefetch      buffer settled at   lost+empty   per second
+    jb-base-1      40/40/40 ms   4 frames, 38 ms      57 total     0.483 /s
+    jb-adapt-1     40/60/240 ms  4 frames, 36 ms      40 total     0.455 /s
+    jb-deep-1      120/120/240   3 frames, 34 ms      20 total     0.274 /s
+
+**RAISING THE CEILING DID NOTHING (arm B).** With `jb_max_pre` at 240 ms the
+prefetch never left 4 frames. pjmedia sizes prefetch from the measured PUT
+burst -- network jitter -- and this LAN has 0.3 ms of it. There is nothing for
+the adaptive algorithm to react to, so it sits at the floor. Any plan that
+relies on pjmedia noticing and growing the buffer is dead.
+
+**RAISING THE FLOOR EXPOSED THE REAL MECHANISM (arm C).** Asked for 120 ms, the
+buffer did start there -- and then drained straight back:
+
+    19:13:48   size=9   avg_delay=105 ms
+    19:13:58   size=3   avg_delay=43 ms      <- 62 ms of buffer gone in 10.0 s
+    19:14:38   size=3   avg_delay=33 ms
+    19:14:48   size=4   ... lost jumps 9 -> 17
+
+**62 ms lost in 10 s is 0.62%.** The buffer does not settle at 120 ms, or at
+40 ms; it settles at whatever three or four frames is, because that is the
+floor at which underruns start resetting it. Every arm converges to the same
+~35 ms regardless of what it was told.
+
+**THE MECHANISM THE DATA SUPPORTS: BURST DEPTH ~= BUFFER DEPTH.** `burst`
+reads 2-4 frames in every arm, and the buffer settles at 3-4. A consumer whose
+bursts are as deep as the buffer underruns on the tail of each burst, which is
+what an event rate of 0.3-0.5/s with zero network loss looks like.
+
+`dmodem_get_frame` does a BLOCKING read on slmodemd's socket, on the
+conference-bridge thread (`d-modem.c:461`). So the consumption pattern is
+slmodemd's scheduling pattern -- a userspace DSP process on a desktop kernel --
+not a clock. That is the burst source, and it is on our side of the socket.
+
+**A FOURTH ARM WITHDRAWS THE "DEPTH HELPS" CLAIM -- see 1943.** This finding
+first read 0.483 -> 0.455 -> 0.274 /s across 40/60/120 ms as depth giving
+partial relief. A shallow arm at 20 ms then produced 0.297 /s, statistically
+the same as the 120 ms arm with a SIXTH of the buffer. There is no monotonic
+trend; the spread is call-to-call noise at n=1 per arm. Prefetch does not
+measurably control the underrun rate.
+
+**COUNTS ARE OVER THE CARRIER WINDOW ONLY.** Ticks where `size=50` are the
+buffer pinned at `jb_max` AFTER carrier loss, when slmodemd has stopped
+consuming and the buffer-full path at `jbuf.c:1056` runs; they are teardown
+artefacts and are excluded. The per-arm totals above (57, 40, 20 events) are
+recomputed on that basis and supersede the raw counters quoted in 1941.
+
+**WHY THIS MATTERS MORE THAN THE BUFFER TUNING.** Each drain event hands the
+datapump a `PJMEDIA_JB_MISSING_FRAME` or `ZERO_EMPTY_FRAME`, i.e. 10 ms of
+fabricated or silent audio in the middle of a V.34 carrier, roughly every two
+to three seconds, forever, on a link with zero packet loss. Finding 1937 showed
+1% frame substitution in the emulator produced CONNECT 7200 with four
+handshakes; this is the same class of insult at 0.3-0.5%.
+
+**WHAT THESE THREE CALLS DO NOT SHOW.** CONNECT was 31200, 14400 and 12000 for
+arms A, B and C respectively. That ordering is the OPPOSITE of the lost+empty
+ordering and it is n=1 per arm: it is noise, and nothing about connect rate
+should be read from it. These calls measure the buffer, not the modem.
+Nine mechanisms have been proposed in this investigation and five withdrawn,
+including progressive discard in 1941 one call ago.
+
+### 1943. PREFETCH CONTROLS NEITHER THE LATENCY NOR THE UNDERRUN RATE — THE BUFFER SITS AT ~35 ms ACROSS A SIXFOLD RANGE OF SETTINGS, SO IT IS NOT A LEVER
+
+Phil asked whether the prefetch is where the round-trip delay is going, and
+whether turning it off would help. A fourth arm at the shallow end answers
+both, and withdraws a claim made in 1942 one call earlier.
+
+    arm            asked for       prefetch   avg_delay (median/min)   events/s
+    jb-shallow-1   10/10/40 ms      2 frames        37 / 26 ms          0.297
+    jb-base-1      40/40/40 ms      4 frames        38 / 37 ms          0.483
+    jb-adapt-1     40/60/240 ms     4 frames        36 / 33 ms          0.455
+    jb-deep-1      120/120/240 ms  12 frames        34 / 33 ms          0.274
+
+**LATENCY DOES NOT MOVE.** Across a SIXFOLD range of prefetch -- 2 frames to 12
+-- the measured delay is 34 to 38 ms. Asking for 120 ms gives 34; asking for 10
+gives 37. The buffer sits at its dynamic floor in every case, held there by the
+consumer's burst behaviour rather than by the setting, so **there is no latency
+to reclaim here.** Turning the prefetch down does not turn the delay down.
+
+**AND THE UNDERRUN RATE DOES NOT TRACK DEPTH EITHER.** 0.297 /s at 2 frames
+against 0.274 /s at 12: the same, with a sixth of the buffer. 1942 read
+0.483 -> 0.455 -> 0.274 as depth helping sub-linearly; the shallow arm shows
+that was **call-to-call noise at n=1 per arm**, not a trend. Withdrawn.
+
+**SO THE JITTER BUFFER IS NOT THE LEVER, IN EITHER DIRECTION.** It cannot be
+tuned shallower for latency and it cannot be tuned deeper for reliability. Both
+of those were plausible and both are now measured false. What remains is the
+burst that holds it at the floor, which is #155.
+
+**WHERE THE ROUND TRIP ACTUALLY IS, arithmetic not measurement.** The far end
+reports 141-152 ms (finding 1916). Our jitter buffer is ~35 ms of that, one
+way. #103 recorded the VG204 holding ~80 ms. Two 20 ms packetisation intervals
+account for most of the rest. **The largest single contributor is the ATA's own
+buffer, not ours** -- so anyone chasing round-trip delay should start at the
+VG204's playout configuration, not at d-modem.
+
+**AND DELAY IS PROBABLY NOT THE COMPLAINT ANYWAY.** V.34 is specified to work
+over satellite paths of several hundred milliseconds; 150 ms is unremarkable
+for it, and nothing in the retrain evidence points at delay. The damage on this
+path is the fabricated frames (1941), not the latency.
+
+**CAVEAT CARRIED FORWARD:** CONNECT was 12000 on this arm, against 31200,
+14400 and 12000 on the others. Still n=1 per arm, still noise, and still not a
+rate measurement.
+
+### 1944. CHECKED: THE ECHO CANCELLER'S DELAY SPAN IS NOT EXCEEDED ON THIS PATH — BUT THE CHECK FOUND THE OPPOSITE FAILURE, AND A LINK TO 1941
+
+1943 asserted that 150 ms is unremarkable for V.34 because the Recommendation
+targets satellite paths. Phil's objection was that this holds only if the echo
+canceller can span it. That was asserted rather than checked, so here is the
+check.
+
+**THE MECHANISM IS REAL AND IS IN THE CODE.** `ApplyBulkDelay`
+(`v34hshak.c:3024`) points the far echo canceller at the measured round-trip
+delay, and rejects it two ways:
+
+    if (d <= 0)              d = 0x90;   /* prints "bulk delay first estimation" */
+    if ((unsigned)d >= (unsigned)obj->bulk_len) d = 0;   /* same message */
+    ...
+    if ((short)d > 0x1d) obj->fa23c = 1;                 /* far EC stays on */
+    else  /* "RTD (%d) lower than min (%d), masking Far EC..."  */
+
+So a round trip at or beyond `bulk_len` -- the ring at +0x35b8 that feeds the
+far canceller -- is rejected to zero, which then falls into the else arm and
+**masks the far echo canceller**. Exactly the failure mode Phil described.
+
+**IT HAS NEVER FIRED ON THIS BENCH.** Across 1677 captures:
+
+    "V34 bulk delay first estimation"   0 logs
+    "masking Far EC"                    1 log
+
+**AND THE PRINT PATH IS PROVABLY LIVE**, which is what makes the zero mean
+something. Both messages are guarded by `DSPLIB_DEBUG_ON()`, i.e.
+`dsplibs_debug_level > 1` -- the identical condition guarding `V34DATARATE`,
+which appears 125 times in a single bench log. The gate is open; the messages
+are absent because the condition is absent.
+
+**THE SPEC IMPOSES NO FIXED CEILING EITHER.** Every V.34 timeout that involves
+the round trip is written as a constant PLUS a round trip delay -- 650 ms plus
+RTD for Tone A, 2000 ms plus two RTDs for sequence J, "2000 ms plus a round
+trip delay" for TRN (§11.2, §11.3). The protocol scales with the delay rather
+than bounding it, which is how it works over satellite. 150 ms costs a little
+handshake time and violates nothing.
+
+**BUT THE ONE HIT IS INTERESTING, AND IT IS THE OPPOSITE FAULT.**
+`cal-loss003.answer.log` -- an EMULATOR call at 0.3% frame loss, not a bench
+call -- reads:
+
+    RTD (1) lower than min (30), masking Far EC...
+    ...Modifying dma delay from 1356 to 1340
+
+RTD came back as **1**, not as something too large. The measurement collapsed,
+the far canceller was masked, and the DMA delay was yanked. The V.34 round-trip
+estimate is derived from detecting Tone A/B phase reversals (§11.2.1.1.7-8), a
+short window of a few hundred milliseconds; a fabricated or silent frame landing
+in it can plausibly wreck the estimate.
+
+**WHICH CONNECTS TO 1941.** The jitter buffer injects a fabricated or silent
+10 ms frame 0.3-0.5 times a second, so a several-hundred-millisecond detection
+window has a material chance of containing one. **This is a HYPOTHESIS, not a
+result** -- it rests on one emulator call at a loss rate we do not have on the
+bench, and no bench call has ever shown a corrupted RTD.
+
+**THE TEST IS CHEAP AND EXISTS ALREADY:** the emulator reproduces it. Sweep
+`CHAN_LOSS` and count "masking Far EC" against loss rate. If the RTD estimate
+degrades at the 0.3-0.5% the bench actually sees, that is a second, independent
+route by which 1941's fabricated frames damage a call -- and unlike a retrain it
+happens once, at handshake, and poisons everything after it.
+
+**THE STANDING ADJACENT POINT IS #110.** On a SIP path our end is 4-wire and
+digital: there is no hybrid and no near-end echo to cancel at all. The far
+canceller is adapting against a path with nothing to find. That is a real
+open question about wasted or harmful adaptation, and it is not this finding.
+
+### 1945. THE ECHO CANCELLER SPANS THE DELAY — 1084 MEASUREMENTS SAY SO — BUT ON 3% OF CALLS IT IS AIMED 100+ ms WRONG AND LEFT SWITCHED ON
+
+1944 showed the rejection path had never fired. The object also prints the
+ACCEPTED value, `"V34 bulk delay estimation %d (FAR=%d)"`, which no one had
+read. 1084 of them exist across 470 captures. Units are samples at the
+datapump's 9600 Hz.
+
+    n = 1084     min      1  (  0.1 ms)
+                 p50   1496  (155.8 ms)
+                 p95   1876  (195.4 ms)
+                 max   3128  (325.8 ms)
+    FAR=1: 1082      FAR=0: 2
+
+**PHIL'S QUESTION IS ANSWERED, NEGATIVELY.** The median round trip is 155.8 ms,
+which independently corroborates the far end's own 141-152 ms (1916) from a
+completely different measurement. Not one of the 1084 was rejected for reaching
+`bulk_len`, and the far canceller was left enabled in 1082 of them. The
+canceller spans this path with room to spare -- even the 325.8 ms worst case.
+
+**BUT THE ESTIMATE IS NOT ALWAYS RIGHT, AND THE FAILURE IS SILENT.** 270 calls
+produced more than one estimate. Their median within-call spread is 10.0 ms --
+stable -- but seven of them (3%) opened with a first estimate under 60% of a
+later one:
+
+    first     later     call                    (all .slmodemd.log = BENCH,
+      7.5 ->  205.0 ms  cbase3                   except cal-loss001, emulator)
+      7.9 ->  155.8 ms  cn0
+      8.8 ->  145.8 ms  cjb20a3
+     17.5 ->  185.8 ms  cbase2
+     24.2 ->  155.8 ms  cjb20a2
+     55.0 ->  155.8 ms  cal-loss001
+    144.6 ->  325.8 ms  n10-5
+
+A first estimate of 7.5 ms where the truth is 205 ms points the far echo
+canceller **197 ms away from the echo it exists to cancel**.
+
+**AND IT IS NOT CAUGHT, BECAUSE THE GUARD ONLY CATCHES ZERO.** `ApplyBulkDelay`
+masks the canceller when `d <= 0x1d`, i.e. below 30 samples = 3.1 ms. Every
+one of the bad estimates above CLEARS that threshold. So the canceller is not
+disabled -- it is left ENABLED and mis-aimed, which is arguably the worse of
+the two: a canceller adapting at a lag where no echo exists subtracts
+uncorrelated signal from the receive path rather than removing an echo from it.
+The guard distinguishes "no measurement" from "a measurement", not "a right
+measurement" from "a wrong one".
+
+**WHY THE FAR ECHO IS REAL ON THIS PATH, contra a natural objection.** Our end
+is 4-wire and digital, so there is no near-end hybrid (that is #110). The FAR
+echo is different: our transmit crosses the ATA, goes analog, meets the far
+modem's 2-wire hybrid, and a reflection returns. That echo exists and V.34's
+full-duplex operation depends on cancelling it.
+
+**LIMITS, and they matter.** 3% is a minority, and this shows MIS-AIMING, not
+harm -- no call here has been shown to connect worse because of it, and the
+seven include one emulator call. The 9600 Hz assumption for the units is from
+the datapump's own rate (the `f128 = 4` derivation behind 1933) and is
+corroborated by the p50 landing on the far end's independent figure, but it has
+not been proved from `ApplyBulkDelay` itself.
+
+**WHAT WOULD SETTLE IT:** the estimate is re-derived on retrain, so a call that
+opens mis-aimed and later corrects gives a within-call before/after on the same
+link. Compare `equerr` and the rate ladder either side of the correction in the
+six bench calls above. That needs no new calls -- the captures already exist.
+
+**ADDENDUM TO 1945 -- THE HARM TEST RAN, AND IT IS UNDERPOWERED.** Every RTD
+estimate was classified mis-aimed (< 50% of its own call's maximum) or normal,
+and scored on whether another handshake followed within 15 s:
+
+    mis-aimed   9/9    = 100%     median gap  9.4 s
+    normal    435/604  =  72%     median gap 11.6 s
+
+**This is NOT evidence and must not be quoted as such.** Under the 72% base
+rate, 9 for 9 has p = 0.72^9 = 0.052 -- marginal, one-tailed, on a metric
+chosen AFTER seeing `cbase3`. n = 9. Five mechanisms in this investigation have
+already been withdrawn on their own evidence and this one is weaker at birth
+than several of them were.
+
+**The base rate is the more important number in that table.** 72% of all
+handshakes are followed by another handshake within 15 seconds. That is finding
+1921's "66% of connected time is re-handshaking" arriving again from a
+completely independent direction -- the object's own echo-canceller
+instrumentation, which nobody had read. Whatever the mis-aiming does, it is a
+rounding error against a link that re-handshakes constantly anyway.
+
+**So 1945 stands as: the canceller spans the delay (settled), the estimate is
+sometimes 100+ ms wrong and the guard does not catch it (measured), and whether
+that costs anything is UNKNOWN and not answerable from these captures.**
+
+### 1946. INDEPENDENT CORROBORATION OF 1921 FROM THE BLOB'S OWN STRINGS: 72% OF HANDSHAKES ARE FOLLOWED BY ANOTHER WITHIN 15 SECONDS
+
+Finding 1921 -- 66% of connected time is spent re-handshaking, the answer to
+why the rates are poor -- rested on instrumentation this project added. This is
+the same conclusion from a source that cannot share a bug with it: a diagnostic
+string the BLOB prints, `"V34 bulk delay estimation %d (FAR=%d)"`, emitted by
+`ApplyBulkDelay` once per handshake, which nobody had read until 1945.
+
+    1084 estimates across 470 captures
+     614 consecutive-estimate intervals
+     435 of 604 scored intervals had another handshake within 15 s  =  72%
+     median gap 11.6 s
+
+**EACH ESTIMATE IS A SEPARATE HANDSHAKE, checked rather than assumed.** There
+are two `ApplyBulkDelay` call sites (`v34hshak.c:4170`, `:4623`) and a short
+retrain reuses `prev_bulk_delay`, so one handshake emitting two estimates would
+inflate the interval count and make this incomparable with 1921. It does not:
+of 614 intervals, **614 contain a handshake state transition and 0 contain
+nothing**. `cbase3`'s first interval is explicit --
+`SILENCE=>SILENCERETRAIN`, `SILENCERETRAIN=>TONE_AB` -- a retrain, not a second
+call into the same one.
+
+**WHY THIS MATTERS MORE THAN ITS SIZE.** 72% against 1921's 66% is not a better
+number; it is a number from a different instrument. Every other line of this
+investigation has been measured with apparatus this project wrote, on captures
+this project chose, and five of nine proposed mechanisms have been withdrawn on
+their own evidence. This one is the object's own accounting of its own
+handshakes, across nearly every capture ever taken here, and it says the same
+thing. 1921 is not an artefact of our instrumentation.
+
+**IT ALSO REFRAMES THE ECHO-CANCELLER QUESTION OF 1945.** The mis-aimed RTD
+estimates looked alarming at 9-for-9, but against a 72% base rate that is
+p = 0.052 post-hoc on n = 9 and means nothing. The base rate swallows it. Any
+future mechanism proposed on this bench has to beat 72%, and that is a high
+floor -- it is the single most useful thing this finding provides.
+
+**UNITS CAVEAT CARRIED FROM 1945 AND NOT CLOSED.** The RTD-to-milliseconds
+conversion assumes the datapump's 9600 Hz. The p50 of 155.8 ms landing on the
+far end's independently reported 141-152 ms (1916) is corroboration but not
+proof, and no capture in the set contains a far-end round-trip read on the same
+call as an anomalous estimate -- `n10-5`, whose estimate spiked to 325.8 ms,
+has no `ATI11` or `&V1` capture. **The 72% above does not depend on the units.**
+
+### 1947. QUANTIFIED, ACROSS THE WHOLE CAPTURE HISTORY: EVERY RETRAIN COSTS RATE, AND FOUR OR MORE HALVES IT — 24000 vs 12000 SPAN-MATCHED
+
+1946 established an independent handshake counter from the blob's own strings.
+Applied to every capture ever taken here, with the datapump's own
+`V34DATARATE, finally ... rxbitrate` as the outcome, it answers the question
+this investigation was opened to answer.
+
+**90 calls that survived 45 s of carrier, counted over a FIXED 45 s window** so
+that call length cannot manufacture the trend:
+
+    handshakes   n     median FINAL rx   median BEST rx   best - final
+         1        7        24000             24000              0
+         2       30        24000             24000              0
+         3       10        24000             26400           2400
+         4       24        18000             26400           8400
+         5       19        14400             21600           7200
+
+**Monotonic in the final rate, and flat-to-RISING in the best rate.** That
+second column is the mechanism made visible: calls that retrain more do reach
+just as high -- 26400, higher than the quiet calls manage -- and then get
+knocked back down. The `best - final` gap is zero for calls that handshake
+twice or less and 7000-8400 bit/s for calls that handshake four or five times.
+The retrains do not stop the ladder climbing; they restart it near the bottom
+and the call ends before it can climb again. That is finding 1921's mechanism,
+confirmed from the object's own numbers rather than ours.
+
+**SPAN-MATCHED, the effect is larger, not smaller.** Restricting to calls whose
+carrier lasted 55-95 s, so both groups had comparable time to recover:
+
+    <= 2 handshakes   n=21   median final rx  24000
+    >= 4 handshakes   n=27   median final rx  12000
+
+**Twice the throughput.** Median spans across the handshake bands are 94/61/65/
+61/57 s -- the 2-band and the 4-band are both 61 s -- so length is not carrying
+this.
+
+**AND IT IS NOT THE FAR END.** Every band contains a mix of all three
+destinations (e.g. the 4-handshake band is 1901:10, 1902:9, 1903:5), and the
+span-controlled handshake counts by destination are 3.11, 3.37 and 2.94 --
+indistinguishable. Consistent with #148's six-pair matrix, which exonerated the
+path by a completely different route.
+
+**THE INTERVALS ARE GENUINE RETRAINS, checked.** Of 614 consecutive-handshake
+intervals, **612 contain an explicit `*RETRAIN*` state transition**
+(`SILENCE=>SILENCERETRAIN`, `SILENCERETRAIN=>TONE_AB`). Only 2 do not, and
+those are 0.1 s apart -- the two `ApplyBulkDelay` call sites firing inside one
+handshake, which is the double-count that would have invalidated this. It is
+2 in 614.
+
+**LIMITS, and they are real.** This is OBSERVATIONAL, over a convenience sample
+of calls run for many different purposes with many different settings. It shows
+association; it cannot by itself exclude a common cause driving both the
+retrains and the rate. What weakens that objection here is that the two obvious
+common causes -- the far end and the call length -- are both controlled above,
+and the path was independently exonerated in #148.
+
+**THE FILTER BIASES AGAINST THE EFFECT.** Requiring 45 s of surviving carrier
+discards exactly the calls that thrashed themselves to death, including the
+`jb-base-1` arm that dropped unprompted. The true cost of retraining is
+therefore at least this large.
+
+**WHAT THIS SETTLES FOR THE PROJECT.** Reducing retrains is worth up to a
+doubling of throughput on this bench, and that is now a measured number rather
+than an inference from one instrumented batch. #149 (the §11.6 renegotiation in
+place of a full retrain) and #151 are the work that cashes it in.
+
+### 1948. THE EMULATOR WAS RUNNING ONE CALL EIGHT TIMES — A HARDCODED SEED, WHICH ALSO MEANS 1937'S CALIBRATION IS SINGLE SAMPLES
+
+#151's A/B of the inverted-ladder fix ran, and the first result looked
+excellent: 8 calls per arm at `CHAN_SNR=24 CHAN_LOSS=0.01 CHAN_DELAY_MS=70`,
+8/8 connected in both arms, handshakes per call **3.0 -> 1.0**.
+
+**It was one call reported eight times.** `chanshim.py` created its noise
+generator as `np.random.default_rng(12345)`, a constant, so every emulated call
+on a given configuration is bit-identical. The giveaway was zero variance: all
+eight rates exactly 7200, all eight handshake counts exactly 3, then exactly 1.
+Real measurements do not do that. Now seedable via `CHAN_SEED`, threaded
+through `chancall.sh` to both shims (they model ONE channel, so both sides must
+get the SAME seed).
+
+**RE-RUN WITH EIGHT DIFFERENT SEEDS, SAME SETTINGS, AND THE EFFECT VANISHES:**
+
+    arm         connected   rates                        handshakes (total)
+    control        4/8       16800,16800,16800,19200       1,0,1,1,1,0,4,1  (9)
+    treatment      4/8       16800,16800,16800,19200       1,0,1,1,1,0,3,1  (8)
+
+Identical rates, 9 handshakes against 8, and the same 4 connects. **A null.**
+
+**WHY IT IS NULL, AND IT IS NOT THAT THE FIX DOES NOTHING.** The emulator at
+this operating point barely retrains: median 1 handshake per call, and five of
+eight calls have 0 or 1. There is nothing for a retrain-suppressing change to
+suppress. The single seed that did retrain (707) went 4 -> 3. Compare the real
+bench, where the median is 3 handshakes in a fixed 45 s window and a quarter of
+calls have 5 (1947). **The emulator does not reproduce the phenomenon under
+test**, so #151 cannot settle this and #152 -- the bench -- is not optional.
+
+**THE ONE THING THE A/B DID ESTABLISH IS WORTH KEEPING: NO CONNECT REGRESSION.**
+1932's attempt collapsed to 1 connect in 4 and ratcheted rates 14400 -> 7200.
+This version -- a threshold on the existing arm, not a fifth code path --
+connects exactly as often as the control in both runs (8/8 fixed-seed, 4/8
+seeded) and never once produced a lower rate than its control. The regression
+that killed the first attempt is gone. That was the primary safety question and
+it passes.
+
+**AND IT CORRECTS 1937.** That finding's calibration -- the SNR sweep giving
+33600/24000/16800/14400/9600/9600, and "1% frame loss produces CONNECT 7200
+with 4 handshakes and 1 retrain" -- was taken with the hardcoded seed. Every
+point on that curve is a SINGLE SAMPLE, not a characterisation. At the very
+settings 1937 quotes, eight different seeds give CONNECT 16800 or 19200, never
+7200, and half the calls fail to connect at all. **Seed 12345 is a pessimistic
+outlier.** The curve's shape may well survive re-measurement, but no number on
+it should be quoted until it has been re-run across seeds, and the "1% loss
+reproduces the bench symptom" claim -- which motivated a good deal of this
+investigation -- rests on that one draw.
+
+**METHOD NOTE.** The fixed seed was not a bug in the ordinary sense; it was
+correct for what `chanshim.py` was first built to do, which is reproduce ONE
+call deterministically for A/B-ing a code change. It became wrong the moment
+the emulator was used to characterise a distribution. Default remains 12345 so
+earlier results reproduce exactly.
+
+### 1949. A FRAME INSERTION IS A CATEGORICALLY WORSE IMPAIRMENT THAN A LOST FRAME — WHICH IS WHY THE EMULATOR NEVER REPRODUCED THE RETRAINING
+
+1948 left the emulator unable to produce the phenomenon under test. The reason
+is in one line of `chanshim.py`:
+
+    if ch.loss and ch.rng.random() < ch.loss:
+        out = silence            # a lost packet is silence, not a gap
+
+**`CHAN_LOSS` substitutes IN PHASE.** 20 ms of wrong samples, then the real
+signal resumes exactly where the receiver expects it. That is a dropped RTP
+packet, and it is not what this bench suffers from.
+
+**A JITTER BUFFER UNDERRUN INSERTS.** pjmedia hands the consumer a frame it
+invented and everything afterwards arrives 10 ms LATER than it would have. At
+3429 baud that is a step of roughly 34 symbols for the timing recovery to
+chase, on top of the bad samples. 1941 measured that happening **0.3-0.5 times
+a second on the real bench with zero packet loss**.
+
+`CHAN_SLIP` now models it: insert 10 ms of concealment (a REPEAT of the
+previous 10 ms, because WSOLA produces plausible waveform rather than a hole),
+with the resulting queue capped the way `jbuf.c:1056` caps it.
+
+**THE DIFFERENCE IS NOT SUBTLE.** Six seeds each, `CHAN_SNR=24
+CHAN_DELAY_MS=70`, no packet loss in either arm:
+
+    slip 0/s      6/6 connected, ALL at 16800, handshakes 1,1,1,1,1,1  (median 1)
+    slip 0.4/s    1/6 connected,     one 16800, handshakes 4,2,1,1,5,2  (median 2)
+
+At the very rate the bench sustains all day, insertion takes a link that
+connects six times out of six down to one, and three seeds never completed a
+handshake at all. Substitution at 1% (1948) did nothing comparable. **The
+impairment that matters here is a TIMING discontinuity, not a dropout** -- and
+the emulator has been modelling the harmless one throughout.
+
+**BUT THE MODEL IS TOO HARSH, AND THE REASON IS INSTRUCTIVE.** A real underrun
+happens BECAUSE the buffer is empty, so it is self-correcting: inserting a
+frame is how the consumer catches up with audio that never arrived, and no
+delay accumulates. Mine fires on a timer regardless of queue depth, so every
+slip adds 10 ms that is never given back -- about 180 ms over a 45 s call
+before the cap bites. That is why 0.4/s destroys the emulated link while the
+real bench, at the same event rate, connects nearly every time.
+
+**SO IT IS NOT CALIBRATED AND MUST NOT BE USED AS IF IT WERE.** Do not tune the
+ladder against `CHAN_SLIP=0.4`; it is a harsher channel than the bench. The fix
+is to make the slip queue-state-dependent -- slip only when the modelled buffer
+is short, which is both what pjmedia does and what makes it self-correcting.
+Until then `CHAN_SLIP` is a demonstration that insertion matters, not a
+measurement of how much.
+
+**WHAT IT ALREADY SETTLES.** Two of this investigation's emulator results were
+obtained with the wrong impairment: 1937's "1% frame loss reproduces the bench
+symptom" and 1948's null A/B. 1937 was already downgraded to single samples by
+the seed bug; this downgrades what it was sampling as well.
+
+### 1950. slmodemd IS NOT THE BURST SOURCE — 2.3 ms OF WORK PER 20 ms FRAME, p99 2.5 ms, NOTHING OVER 20 ms
+
+1942 proposed that the jitter buffer empties because "the consumption pattern is
+slmodemd's scheduling pattern". #155 was opened to measure that. It is now
+measured, and the hypothesis is wrong.
+
+`chanshim.py` gained `CHAN_TIMING=1`, which records the interval from the
+instant a frame is handed to slmodemd to the instant slmodemd produces the next
+one. In the lock-step shim slmodemd is blocked on us the rest of the time, so
+this is its own processing latency and nothing else. A V.34 call at
+`CHAN_SNR=24 CHAN_DELAY_MS=70`, CONNECT 16800, reported every 500 frames:
+
+    CHANLAT n=500 p50=2.16 p90=2.22 p99=2.48 max=3719.23 ms  over20=0.2%
+    CHANLAT n=500 p50=2.28 p90=2.36 p99=2.47 max=3.24        over20=0.0%
+    CHANLAT n=500 p50=2.28 p90=2.35 p99=2.61 max=2.91        over20=0.0%
+    CHANLAT n=500 p50=2.28 p90=2.35 p99=2.50 max=8.57        over20=0.0%
+    CHANLAT n=500 p50=2.29 p90=2.36 p99=2.45 max=2.88        over20=0.0%
+    CHANLAT n=500 p50=2.28 p90=2.36 p99=2.45 max=2.64        over20=0.0%
+
+**2.3 ms of work per 20 ms frame -- an 11% duty cycle -- with a p99 of 2.5 ms
+and, after the first block, not one frame over 20 ms.** The single 3719 ms
+outlier is the startup wait for the peer to appear, and the 8.57 ms is the
+worst thing in 3000 frames. This datapump is nowhere near its deadline.
+
+**SO THE BURST IS NOT IN slmodemd, AND #155 WAS POINTED AT THE WRONG PROCESS.**
+A consumer that finishes in 2.3 ms cannot, by itself, empty a 40 ms buffer.
+Whatever makes consumption bursty on the real bench is between the RTP socket
+and slmodemd's socket -- i.e. in d-modem and pjsua, not in the datapump.
+
+**CANDIDATES, now that the datapump is excluded:**
+
+  * pjsua's conference bridge tick. `snd_use_sw_clock = true` with a null sound
+    device means a software timer thread drives the graph; its jitter is the
+    consumer's jitter, and it is not measured.
+  * The shared recursive mutex found in 1940: `delaybuf.c:327-376` holds a lock
+    across the whole of `pjmedia_delay_buf_get` with `pjmedia_wsola_generate`
+    INSIDE it, and the ALSA monitor thread contends on it 200 times a second.
+    1940 declined to call that a mechanism because the magnitude was unmeasured;
+    it is now the leading candidate rather than an aside, and #154's no-audio
+    build tests it directly.
+  * The socket hop itself (#111).
+
+**WHAT THIS MEASUREMENT CANNOT SEE.** It was taken with `chanshim.py` in
+d-modem's place -- a lock-step Python shim, not pjsua -- on a machine running
+the usual desktop. That is exactly right for isolating the datapump's own cost
+and exactly wrong for reproducing the real consumer. It says slmodemd is
+innocent; it says nothing about what pjsua does with the same work.
+
+**AND IT RAISES THE VALUE OF #154.** The monitor speaker's ALSA thread and its
+lock were a curiosity when the underflow looked cosmetic (1940). With slmodemd
+excluded as the burst source, an audio thread contending on a mutex held across
+WSOLA, 200 times a second, on the same lock the bridge thread needs, is the
+most concrete remaining candidate -- and `d-modem-noaudio` is already built.
+
+### 1951. 1940's MEDIA-GRAPH MODEL CONFIRMED — NO-AUDIO BUILD PRODUCES ZERO `scombdb` LINES — BUT THE JITTER BUFFER STILL UNDERRUNS WITHOUT IT
+
+1940 predicted that a d-modem built without `-DWITH_AUDIO` would produce **zero
+`scombdb-*` lines of any kind**, and said that if any survived, the model of the
+media graph was wrong and nothing in that finding should be relied on. Tested:
+
+    with    -DWITH_AUDIO (jb-base-1)   scombdb lines: 50
+    without -DWITH_AUDIO (na-check-1)  scombdb lines:  0   Underflow: 0
+
+**The model holds.** The splitcomb, its two delay buffers and their WSOLA
+instances are genuinely absent, not merely quiet, and the monitor speaker is
+the only thing that created them.
+
+**BUT THE JITTER BUFFER STILL UNDERRUNS WITHOUT THE SPEAKER.** The same call
+reports `lost=15 empty=15` on the RTP jitter buffer with `rtp: loss=0
+discard=0 jitter=0.4ms`. So removing the ALSA thread and its contended mutex
+did **not** remove the underruns that 1941 measured. That is evidence against
+the leading candidate 1950 promoted -- the shared `delaybuf` lock -- though not
+yet conclusive evidence, for the reason below.
+
+**THIS CALL IS NOT A MEASUREMENT AND MUST NOT BE USED AS ONE.** `MTGA.exe` was
+using 122% CPU throughout. The bench rule exists precisely for this: slmodemd
+is real-time DSP and a loaded machine invalidates a rate. CONNECT was 4800, the
+worst figure recorded all day against 31200/14400/12000 on the same far end
+with a quiet machine. **Nothing about rate, underrun count or handshake count
+from `na-check-1` may be quoted.**
+
+What IS usable from it is the structural fact, because whether a splitcomb gets
+constructed does not depend on CPU load. That part stands; the rest waits for
+an idle machine.
+
+**AND IT IS A FREE DATA POINT ON A QUESTION 1950 LEFT OPEN.** 1950 asked whether
+slmodemd's 2.3 ms/frame tail is load-sensitive, since the bench normally runs
+with a desktop up. A call placed with a game running returned the worst rate of
+the day. That is n=1 and confounded with everything else, but it is the first
+hint that the "idle machine" rule is protecting something real and measurable
+rather than being a precaution, and it is worth a deliberate loaded-vs-quiet
+pair when the bench is next free.
+
+### 1952. slmodemd's `<t>` IS UNIX EPOCH MOD 1000, NOT SECONDS SINCE START — SO THE TWO LOG CLOCKS WERE ALWAYS ALIGNABLE
+
+Every analysis in this investigation that wanted to put slmodemd's `<NNN.NNN>`
+stamps beside pjmedia's wall-clock ones was told the same thing, by me: that
+they were on different clocks and could not be converted, and that aligning by
+file position does not work because d-modem's stdout is block-buffered. The
+second half is true. **The first half is wrong.**
+
+The `BENCHANCHOR` line `row.sh` now writes gives the epoch at slmodemd's exec,
+and it lines up exactly:
+
+    BENCHANCHOR ... epoch=1786663207.676137779
+    <207.679991> v8shim: installed shim around proprietary DP_V8 ops
+
+`207.679991` against `207.676137779` -- 3.8 ms apart, which is the exec. Checked
+mechanically across the batch: **`epoch % 1000` equals the log's first `<t>` in
+24 of 24 logs, none disagreeing.**
+
+So slmodemd stamps **Unix epoch seconds modulo 1000**. A call at `<723.49>` was
+not 12 minutes into slmodemd's life; it was at epoch ...723.49. Values in the
+hundreds looked like uptime and are not.
+
+**CONSEQUENCES.**
+
+  * The keystone correlation is computable on **every historical capture**,
+    not only anchored ones -- the file's mtime resolves which 1000-second
+    window applies. #153's premise, and the reason the correlation had never
+    been attempted, was mistaken.
+  * The anchor is still worth writing: it resolves the mod-1000 wrap without
+    relying on mtime, which a copied or rsynced file loses.
+  * **The first keystone number this batch produced, a 0.02x ratio, was an
+    artefact of my wrong conversion** and is withdrawn. It would have been
+    reported as "underruns are 50x DEPLETED before retrains", which is not a
+    result, it is a bug. The corrected figure is in 1954.
+
+### 1953. THE #149 LADDER FIX WORKS ON THE BENCH: RETRAINS 3.0 -> 1.0, p = 0.036 ON THE PRE-REGISTERED OUTCOME
+
+24 calls overnight, per `testbench/records/ab149-PREREG.txt`, written before any call
+existed. 6 per arm per far end, 1901 and 1902, arms interleaved, both arms on
+`d-modem-jb` so they differ by one environment variable. Machine gated quiet
+before every call (it paused and re-gated 9 times).
+
+**CONNECT SUCCESS, checked first because that is where 1932 died:**
+
+    control    11/12
+    treatment   9/12
+
+Not the collapse that killed the first attempt (1 in 4), and not significant at
+n=12 -- but the direction is unfavourable and must be watched in any
+replication. The pre-registered abandon threshold was not reached.
+
+**PRIMARY OUTCOME -- handshakes in a fixed 45 s window, from the BLOB's own
+string:**
+
+    control    [2, 3, 3, 3, 5]   median 3.0
+    treatment  [1, 1, 1, 2, 3]   median 1.0
+
+    Mann-Whitney U = 22, exact one-tailed p = 0.036
+
+Directional and pre-registered, so one-tailed is the right test. **The change
+does what it was designed to do: the full retrain stops firing on our own
+bad-block run, and the cheap §11.6 renegotiation gets first refusal.**
+
+**RATE, secondary, and the two far ends behave differently:**
+
+    1901 (SupraExpress)  control  [4800, 7200, 12000, 14400, 14400]  median 12000
+                         treat    [14400, 14400, 14400, 14400]       median 14400
+    1902 (USR Courier)   control  [24000, 28800 x5]                  median 28800
+                         treat    [28800 x5]                         median 28800
+
+On the Courier both arms sit at 28800 and there is no room to improve. On the
+SupraExpress the control is scattered from 4800 to 14400 while every treatment
+call lands on 14400 -- **the variance collapses**, which is what removing a
+ladder-restart should do.
+
+**THE HONEST LIMITS, and they are not small.**
+
+  * **n = 5 per arm on the primary.** Only 10 of 24 calls carried 45 s of
+    carrier; the rest died early, which is this bench's normal behaviour and
+    the reason the window was fixed in advance.
+  * **The exclusion criterion is outcome-adjacent.** Dropping calls with < 45 s
+    of carrier conditions on something the treatment could itself affect, which
+    is a collider. It was pre-registered, which stops it being a fishing
+    expedition, but it does not stop it being a bias. Treatment spans are
+    slightly shorter than control's.
+  * One night, one operator, one batch. p = 0.036 at n = 5 is a first result,
+    not a settled one.
+
+**WHAT WOULD SETTLE IT:** a replication at 12+ per arm scoring a window short
+enough that few calls are excluded, plus connect success tracked as a primary
+rather than a gate.
+
+### 1954. KEYSTONE ANSWERED, NEGATIVELY: JITTER-BUFFER UNDERRUNS DO NOT CLUSTER BEFORE RETRAINS
+
+With 1952's conversion, the correlation that motivated findings 1941, 1943 and
+1949 can finally be computed. Across the same 24 anchored calls:
+
+    underruns/s in the 2 s before a retrain : 0.659
+    underruns/s over the whole call         : 0.597
+    ratio                                    : 1.10x
+
+**1.10x is noise.** Underruns are simply common -- 0.6 a second, all call long
+-- and the handful that land before a retrain are what that base rate predicts.
+This is precisely how the tap-drift and rate-overshoot hypotheses died (1918),
+and it is the same test applied to my own.
+
+**SO THE CAUSAL CHAIN I HAVE BEEN BUILDING FOR SEVERAL TURNS IS BROKEN AT ITS
+LAST LINK.** The jitter buffer really does inject 0.3-0.5 fabricated frames a
+second into the receive path with zero network loss (1941, unaffected). A frame
+insertion really is a categorically worse impairment than a dropout (1949,
+unaffected). But **those insertions are not what triggers the retrains**, and
+every proposal to fix the retrain problem by fixing the jitter buffer is now
+unsupported.
+
+**WHAT SURVIVES, AND IT IS THE MORE IMPORTANT HALF.** The retrains are still
+triggered by our own bad-block run at `v34hshak.c:10017` (1931), the ladder is
+still inverted (1933/1934), retraining still costs up to half the throughput
+(1947), and raising that threshold still reduced retrains 3.0 -> 1.0 on the
+bench (1953). That line needed no jitter-buffer mechanism to justify it and
+does not lose anything here.
+
+**AND IT REDIRECTS THE REMAINING JITTER-BUFFER WORK.** #157 (calibrating
+`CHAN_SLIP`) was justified by the emulator needing to reproduce a
+retrain-causing impairment. It does not cause retrains, so that justification
+is gone. The underruns remain a real defect worth removing on their own merits
+-- they corrupt data mid-carrier -- but they are no longer on the critical path
+to the speed problem, and #157 should be demoted accordingly.

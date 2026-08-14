@@ -21,10 +21,10 @@
  *
  * THE TWO CLAIMS NO ORDINARY VALUE CAN TEST, and the trials built for them:
  *
- *   0x65427 is a THIRTY-TWO-BIT signed compare and `7 * faa96` is not
+ *   0x65427 is a THIRTY-TWO-BIT signed compare and `7 * baud_rate` is not
  *   truncated.  Over every legal baud -- 7 * 3429 is 23,853 -- a sixteen-bit
  *   spelling agrees with the object on every input.  `suite_entry` drives
- *   faa96 at 20,000, where `7 * faa96` is 140,000 and its low halfword is
+ *   baud_rate at 20,000, where `7 * baud_rate` is 140,000 and its low halfword is
  *   8,928, so the object takes the BODY and a truncating reading retrains;
  *   and at -20,000, where the object retrains and both a truncating and an
  *   unsigned reading decline.  Finding 724's shape in a second arm.

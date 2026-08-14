@@ -2284,7 +2284,7 @@ V34OB_ASSERT(rates_latched, 0xac16);
 
 /*
  * The rate config's own offsets, and the one that ties it to the object:
- * `rx_baud` sits exactly on `faa96`, which is the same store seen twice.
+ * `rx_baud` sits exactly on `baud_rate`, which is the same store seen twice.
  */
 #define V34RC_ASSERT(field, off) \
 	typedef char v34rc_off_##field[ \
@@ -2300,9 +2300,9 @@ V34RC_ASSERT(rxbits, 0x14);
 V34RC_ASSERT(rx_use_max, 0x22);
 V34RC_ASSERT(rx_divtab, 0x28);
 
-typedef char v34rc_aliases_faa96[
+typedef char v34rc_aliases_baud_rate[
 	((int)(V34_RATECFG + __builtin_offsetof(struct v34_ratecfg, rx_baud))
-	 == (int)__builtin_offsetof(struct v34_object, faa96)) ? 1 : -1];
+	 == (int)__builtin_offsetof(struct v34_object, baud_rate)) ? 1 : -1];
 
 /* The three memsets' lengths are the object's own, so pin those too. */
 typedef char v34sh_len_cost[(sizeof(((struct v34_shell *)0)->cost)

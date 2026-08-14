@@ -67,6 +67,7 @@ import argparse
 import os
 import glob
 import re
+import ast
 import subprocess
 import sys
 from collections import defaultdict
@@ -415,13 +416,37 @@ def main():
         #
         bad = [(p, n, t) for p, n, t in found
                if t.encode("latin1") + b"\0" not in haystack]
+        #
+        # DECLARED BRANCH-ONLY STRINGS.  A branch may add instrumentation the
+        # blob never had; it declares it in docs/invented_strings.txt and the
+        # entry is reported separately instead of failing.  An UNdeclared
+        # string still fails, which is the whole value of the gate.  See that
+        # file's header for why the declaration is not just an allow-list.
+        #
+        declared = {}
+        decl_path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "docs", "invented_strings.txt")
+        try:
+            for line in open(decl_path):
+                if line.startswith("#") or not line.strip():
+                    continue
+                br, lit, why = line.rstrip("\n").split("\t", 2)
+                declared[ast.literal_eval(lit)] = (br, why)
+        except OSError:
+            pass
+        ok = [(p, n, t) for p, n, t in bad if t in declared]
+        bad = [(p, n, t) for p, n, t in bad if t not in declared]
         print("String literals in this tree that are not WHOLE strings of "
               "the object's\n.rodata or .data -- so they were invented, or "
               "truncated.  Findings 180, 201.\n")
         for p, n, t in bad:
             print("  INVENTED  %s:%d\n            %r" % (p, n, t))
-        print("\n  %d checked, %d not present in the object"
-              % (len(found), len(bad)))
+        for p, n, t in ok:
+            print("  declared  %s:%d  [%s]\n            %r"
+                  % (p, n, declared[t][0], t))
+        print("\n  %d checked, %d not present in the object, "
+              "%d of those declared in docs/invented_strings.txt"
+              % (len(found), len(bad) + len(ok), len(ok)))
         return 1 if bad else 0
 
     if args.strings is not None:

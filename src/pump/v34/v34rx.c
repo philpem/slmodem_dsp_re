@@ -1598,6 +1598,26 @@ decoderv34(void *objp)
 				dsplibs_debug_printf(
 					"V34RENEG, may be renegotiation,"
 					"equalizer adaptation disabled\n");
+			/*
+			 * THE OBJECT'S OWN MESSAGE UNDERCOUNTS THIS, and the
+			 * comment above says why: the flag is set for every
+			 * f798 < -64, but the message prints only in the
+			 * six-wide band -70 < f798 < -64.  So the log shows a
+			 * fraction of the freezes and there is no way to tell
+			 * what fraction.
+			 *
+			 * That matters because this DISABLES EQUALISER
+			 * ADAPTATION.  A receiver that stops adapting cannot
+			 * track the channel, and 1917 measured links reaching
+			 * 33600 and then collapsing through failed retrains.
+			 * Counting every freeze, with the counter that caused
+			 * it, is what tells us whether the two are the same
+			 * event.
+			 */
+			if (dsplib_v34_dump_probe_bins)
+				dsplibs_debug_printf(
+				    "V34EQFREEZE, f798 = %d\n",
+				    (int)(short)rx->f798);
 		}
 
 		rx->f218 = 0x2000;
@@ -1635,9 +1655,9 @@ decoderv34(void *objp)
 		rx->best_index = (short)V34descrambler(rx, (short)diff, 2);
 	}
 
-	if (rx->f124 == (short)(obj->faa96 >> 1))
+	if (rx->f124 == (short)(obj->baud_rate >> 1))
 		rx->f218 = 0x4000;
-	else if (rx->f124 == obj->faa96)
+	else if (rx->f124 == obj->baud_rate)
 		rx->f218 = 0x2000;
 }
 
@@ -1838,7 +1858,7 @@ setTimingStateParameters(void *objp)
 
 	/* State 2 alone also sets the dwell from the frame length. */
 	if ((unsigned short)rx->f1c0 == 2)
-		rx->f1d2 = (short)(obj->faa96 >> 3);
+		rx->f1d2 = (short)(obj->baud_rate >> 3);
 }
 
 
@@ -2328,6 +2348,19 @@ receiver(void *objp)
 				rx->f798 = (short)n;
 			} else {
 				flags |= V34_RX_FLAG_RETRAIN;
+				/*
+				 * `rtncount` in the object's message below is
+				 * ALWAYS ZERO: f798 is cleared on the line
+				 * above, and the printf reads it afterwards.
+				 * The diagnostic cannot report the count that
+				 * triggered it, which is the only number worth
+				 * having here.  Captured before the clear.
+				 */
+				if (dsplib_v34_dump_probe_bins)
+					dsplibs_debug_printf(
+					    "V34RTNCOUNT, triggered at %d, "
+					    "equerr = %d\n", (int)n,
+					    (int)rx->f21a);
 				rx->f798 = 0;
 				rx->flags = (unsigned short)flags;
 				if (DSPLIB_DEBUG_ON()) {
@@ -2634,6 +2667,30 @@ carrier_loop:
 				 - (unsigned short)rx->target_im);
 		int er = (dr * (short)rx->f218) >> 16;
 		int ei = (di * (short)rx->f218) >> 16;
+
+		/*
+		 * HARNESS SELF-TEST, and nothing else.  Zero unless
+		 * `DSPLIB_V34_SEED_DEFECT` is set in the environment by
+		 * tools/benchflags.c, which is linked ONLY into the bench
+		 * hybrid -- never into the library, the unit tests or either
+		 * differential tier.
+		 *
+		 * It exists because `replaycmp.sh` reported our receiver
+		 * byte-identical to the blob's over 25 blocks (finding 1906),
+		 * and an identical result is worth exactly as much as the
+		 * demonstration that a DIFFERENT one would have shown.  Halving
+		 * the equaliser's adaptation error is a small, realistic
+		 * receiver defect: it does not break the handshake, it just
+		 * adapts slower.  If the replay cannot see that, it cannot see
+		 * anything, and 1906's headline is unsupported.
+		 *
+		 * CLAUDE.md: "Any tool here must be shown to fire."  This is
+		 * how this one is shown to fire.
+		 */
+		if (dsplib_v34_seed_defect) {
+			er /= 2;
+			ei /= 2;
+		}
 		int mag = dr * dr + di * di + rx->f220;
 		int n;
 
@@ -2665,6 +2722,32 @@ carrier_loop:
 				dsplibs_debug_printf(
 					"V34EQU, equerr = %d, preerr = %d,\n",
 					(int)rx->f21a, (int)rx->f224);
+				/*
+				 * THE SIGNAL POWER, on its own line.
+				 *
+				 * `equerr` is raw error and is never divided by
+				 * anything; the rate ladder compares it against
+				 * absolute thresholds, so its SCALE moves with
+				 * the transmit level (V34TXSCALE at the phase
+				 * 3->4 boundary) and the same equaliser reads
+				 * ~50 in phase 3 and ~2200 in phase 4.  f248 is
+				 * that scale, computed in THIS block from the
+				 * same symbols, and it has never been logged --
+				 * so no capture on this bench can be used to
+				 * ask what the rate decision would have been on
+				 * an SNR.  Findings 1904, 1913, 1914.
+				 *
+				 * A SEPARATE LINE, not an edit to V34EQU above:
+				 * the differential tier compares debug
+				 * transcripts character for character, and the
+				 * object's own format string has to stay
+				 * exactly what the object emits.
+				 */
+				if (dsplib_v34_dump_probe_bins)
+					dsplibs_debug_printf(
+					    "V34EQUPOW, sigpow = %d, equerr = "
+					    "%d\n", (int)rx->f248,
+					    (int)rx->f21a);
 				flags = rx->flags;
 			}
 		}

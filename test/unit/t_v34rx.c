@@ -1471,7 +1471,7 @@ main(void)
 			ra->f124 = rb->f124 = 20;
 			ra->f798 = rb->f798 = (short)(-60 - (re / 3000));
 			ra->scrambler_sr = rb->scrambler_sr = 0x2a2a2a2a;
-			oa.faa96 = ob.faa96 = 40;
+			oa.baud_rate = ob.baud_rate = 40;
 
 			for (it = 0; it < 10; it++) {
 				long tag = ((long)fl * 100
@@ -1743,7 +1743,7 @@ main(void)
 			rb = (struct v34_receiver *)((char *)&ob + 0x264);
 
 			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
-			oa.faa96 = ob.faa96 = 400;
+			oa.baud_rate = ob.baud_rate = 400;
 			ra->f1c0 = rb->f1c0 = states[si];
 			ra->f1d0 = rb->f1d0 = (short)d0;
 			ra->f232 = rb->f232 = 0;
@@ -1801,7 +1801,7 @@ main(void)
 						   : -700 + k * 30);
 
 			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
-			oa.faa96 = ob.faa96 = 400;
+			oa.baud_rate = ob.baud_rate = 400;
 			oa.fac0c = ob.fac0c = 0;
 			ra->f1c0 = rb->f1c0 = (short)st;
 			ra->f1c8 = rb->f1c8 = skip;
@@ -2664,7 +2664,7 @@ main(void)
 			ra->f1e0 = rb->f1e0 = 0;
 			ra->f230 = rb->f230 = 0;
 			oa2.f359c = ob2.f359c = 0x65;
-			oa2.faa96 = ob2.faa96 = 400;
+			oa2.baud_rate = ob2.baud_rate = 400;
 			oa2.fac0c = ob2.fac0c = 0;
 
 			setInitialPhase(&oa2);
