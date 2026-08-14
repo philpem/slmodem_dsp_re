@@ -59165,3 +59165,42 @@ retrain-causing impairment. It does not cause retrains, so that justification
 is gone. The underruns remain a real defect worth removing on their own merits
 -- they corrupt data mid-carrier -- but they are no longer on the critical path
 to the speed problem, and #157 should be demoted accordingly.
+
+### 1955. 1953's p = 0.036 DEPENDS ON THE EXCLUSION — THE OUTCOMES THAT KEEP ALL THE CALLS GIVE p ≈ 0.085
+
+Before designing the replication 1953 called for, the same 24 calls were
+re-scored with outcomes chosen to maximise RETENTION -- not to maximise the
+effect, which is the distinction that makes this legitimate:
+
+    outcome                       kept    control     treatment   p (exact, 1-tailed)
+    fixed 45 s window (pre-reg)   10/23   [2,3,3,3,5] [1,1,1,2,3]     0.036
+    fixed 15 s window             19/23   med 2.0     med 1.0         0.090
+    handshakes per minute         23/23   med 5.28    med 2.58        0.085
+
+**The smallest p comes from the outcome that discards the most data**, which is
+the signature of a fragile result. On the two outcomes that use all or nearly
+all of the calls, this batch does not reach p < 0.05.
+
+**WHAT SURVIVES IS THE EFFECT SIZE**, and it is consistent: the median roughly
+HALVES however it is measured -- 3.0 -> 1.0, 2.0 -> 1.0, 5.28 -> 2.58 per
+minute. That is what an underpowered measurement of a real effect looks like.
+It is also what a lenient metric on a small sample looks like when there is no
+effect. **This batch cannot distinguish those, and no re-analysis of it can.**
+
+**WHY THE PRE-REGISTERED OUTCOME WAS THE WEAK ONE.** The 45 s window was chosen
+so that a call had to survive long enough for a window to exist, which seemed
+conservative. It is the opposite: requiring 45 s of carrier conditions on
+something the treatment can itself affect, and it threw away 13 of 23 calls to
+do it. Retention should have been the design criterion from the start.
+
+**THE REPLICATION THEREFORE CHANGES THE PRIMARY OUTCOME** to handshakes per
+minute of carrier -- zero exclusion, every call that reached carrier at all --
+and doubles the sample. At the observed effect size, 24 per arm should settle
+it either way. Pre-registered in `testbench/records/ab149r-PREREG.txt` before
+any call of that batch exists.
+
+**AND IT DOES NOT TOUCH §3-4 OF THE WRITE-UP.** The inverted ladder is read
+from the code, the 72%-of-handshakes and the 24000-vs-12000 figures come from
+470 captures via the blob's own counter, and none of that depends on the A/B.
+What is unestablished is whether OUR CHANGE fixes it, not whether the defect is
+real.

@@ -1,8 +1,10 @@
 # V.34 rate collapse over SIP: root cause and remedy
 
-**Status:** root cause identified and quantified; remedy implemented, gated
-default-off, and supported by one pre-registered bench A/B (p = 0.036, n = 5
-per arm). Not yet replicated. See §7 for what this does *not* settle.
+**Status:** root cause identified and quantified; remedy implemented and gated
+default-off. One pre-registered bench A/B is **suggestive but not conclusive** —
+the effect size is a halving of handshakes on every way of measuring it, but
+significance depends on the outcome that excludes most of the calls (§6.1).
+Replication is required, not optional. See §7.
 
 Evidence key, as elsewhere in these docs:
 `[CODE]` read from our source or the object · `[MEASURED]` from bench or
@@ -218,6 +220,29 @@ restart should look like.
 
 ---
 
+### 6.1 The significance depends on the exclusion, and that is a problem
+
+The pre-registered outcome excluded 13 of 23 calls for carrying less than 45 s
+of carrier. Re-scoring the same batch with outcomes that exclude less — chosen
+to maximise RETENTION, not to maximise the effect — gives:
+
+    outcome                 calls kept   control        treatment      p (exact, 1-tailed)
+    fixed 45 s window (pre-reg)  10/23   [2,3,3,3,5]    [1,1,1,2,3]    0.036
+    fixed 15 s window            19/23   med 2.0        med 1.0        0.090
+    handshakes per minute        23/23   med 5.28       med 2.58       0.085
+
+**The smallest p comes from the metric that discards the most data.** That is
+the signature of a fragile result, and it must be said plainly: on the two
+outcomes that use all or nearly all of the calls, this batch does **not** reach
+p < 0.05.
+
+What survives is the effect SIZE, which is consistent and substantial across
+all three — the median roughly halves however it is measured (3.0 → 1.0,
+2.0 → 1.0, 5.28 → 2.58 per minute). That pattern is what an underpowered
+measurement of a real effect looks like, and it is also what a null looks like
+when a lenient metric is applied to a small sample. **This batch cannot
+distinguish those two, and neither can any re-analysis of it.**
+
 ## 7. What this does not settle
 
 * **n = 5 per arm on the primary outcome.** Only 10 of 24 calls carried 45 s
@@ -230,7 +255,8 @@ restart should look like.
   the collapse that killed the earlier attempt, but the direction is
   unfavourable and must be a primary outcome in any replication.
 * **One night, one operator, one batch.** p = 0.036 at n = 5 is a first
-  result.
+  result, and §6.1 shows it does not survive a less exclusionary outcome.
+  Treat the effect size as the finding and the significance as unestablished.
 * **The flag stays default-off** until replicated at 12+ per arm with a
   shorter scoring window (so fewer calls are excluded) and connect success
   tracked as a primary.
