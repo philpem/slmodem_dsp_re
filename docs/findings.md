@@ -59204,3 +59204,89 @@ from the code, the 72%-of-handshakes and the 24000-vs-12000 figures come from
 470 captures via the blob's own counter, and none of that depends on the A/B.
 What is unestablished is whether OUR CHANGE fixes it, not whether the defect is
 real.
+
+### 1956. BOTH PRE-EMPHASIS COMPLAINTS ARE CORRECT — INDICES 0-5 ARE UNREACHABLE AND THE SELECTOR MATCHES A TILT, NOT A SHAPE — BUT ON THIS PATH FIXING BOTH IS WORTH 0.07 dB
+
+Phil: *"we can never request some of the lower-numbered pre-emphasis curve
+indexes, and I don't think we match the best pre-emphasis curve by shape
+either."* Both are true. The third finding is that neither matters here.
+
+**1. INDICES 0-5 ARE UNREACHABLE, exhaustively.** `probe_preemph` starts its
+counter at 5 and advances it BEFORE the test, so the first reachable value is
+6. Sweeping the entire input space of (x, ref) returns exactly
+**{6, 7, 8, 9, 10}**; the author's own `return 0` arm is dead code. This is
+deviation D53 and the object does the same, so the reconstruction is faithful
+and the ORIGINAL is what is wrong.
+
+**2. IT MEASURES IN TABLE 3's UNITS AND INDEXES INTO TABLE 4.** The loop
+multiplies the band-edge bin by `k` until it exceeds the reference. Decoding
+`k` for each symbol rate:
+
+    k=0x6626 (2400 baud)  step 1.5961x in POWER = 2.03 dB
+    k=0x639f (2743 baud)  step 1.5566x           = 1.92 dB
+    k=0x656f (3200 baud)  step 1.5849x           = 2.00 dB
+
+**A 2 dB quantum -- exactly Table 3's alpha spacing (0, 2, 4, 6, 8, 10 dB).**
+It counts 2 dB steps of tilt, which is the natural criterion for Table 3, and
+then returns `6 + steps`, which indexes Table 4. The two tables are not the
+same shape at all (Figures 1 and 2/V.34, read from the rendered pages):
+
+  * **Figure 1, indices 0-5:** a straight line, 0 dB at f/S = 0 rising to alpha
+    at f/S = 1.0. A BROADBAND tilt across the whole band.
+  * **Figure 2, indices 6-10:** flat at 0 dB to f/S ~ 0.7, a step to beta, then
+    linear from beta at 0.8 to gamma at 1.2. A TOP-OF-BAND shelf only.
+
+So a measured broadband tilt of 2n dB is answered with a top-of-band shelf of
+gamma = (1+n) dB. Wrong shape, and half the magnitude.
+
+**3. AND IT UNDER-CORRECTS IN PRACTICE, consistently.** `testbench/
+preemphshape.py` reconstructs the channel from all 25 probe bins and scores all
+11 templates by RMS residual over the conformance band. On real bench calls the
+object chooses **7** every time and the shape match prefers **8 or 9**.
+
+**THE DECODE IS VALIDATED, NOT ASSERTED.** Bin energy is taken as
+`energy * 2^-shift`. Run against an EMULATED call, where `chanshim.py` imposed
+a known response, it recovers flat within +/-0.4 dB from 450 to 3150 Hz and
+then a cliff -- which is the filter that was imposed. A wrong decode would give
+noise.
+
+**NOW THE NUMBER THAT DECIDES IT.** The full residual table for a real call:
+
+    index  0  Table 3 alpha= 0.0   rms 1.77 dB      index  6  b=0.5 g=1.0  1.60
+    index  1  Table 3 alpha= 2.0   rms 1.54         index  7  b=1.0 g=2.0  1.47  <- object
+    index  2  Table 3 alpha= 4.0   rms 1.48         index  8  b=1.5 g=3.0  1.40
+    index  3  Table 3 alpha= 6.0   rms 1.62         index  9  b=2.0 g=4.0  1.40  <- best
+    index  4  Table 3 alpha= 8.0   rms 1.92         index 10  b=2.5 g=5.0  1.45
+    index  5  Table 3 alpha=10.0   rms 2.32
+
+**Best 1.40 against the object's 1.47: 0.07 dB.** The whole spread across all
+eleven templates is 1.40 to 2.32 dB. Fixing both defects buys seven hundredths
+of a decibel on this path.
+
+**WHY SO LITTLE, and this is the useful part.** The measured channel is flat to
+within +/-0.4 dB from 450 Hz to 3150 Hz. There is essentially no tilt to
+correct. Its one real defect is a band-edge cliff -- -1.5 dB at 3300 Hz,
+**-18.3 dB at 3450** -- and the largest correction any template offers is 5 dB.
+The dominant impairment is beyond the authority of the entire mechanism, and
+every template is therefore nearly equally ineffective.
+
+**CONSEQUENCES.**
+
+  * It explains why the earlier pre-emphasis work found nothing: 1906 measured
+    that switching the requested index from 6 to 0 changed nothing across 25
+    blocks. That was read as a limitation of replay. It is also simply true.
+  * **Do not spend bench calls on this.** The effect is 0.07 dB against a
+    call-to-call rate variance of thousands of bits per second.
+  * **It would matter on a different line.** A real subscriber loop has genuine
+    broadband tilt, which is what Table 3 exists for and what this selector can
+    never request. The defect is real and worth fixing for correctness; this
+    bench simply cannot show it, and any A/B run here would be measuring noise.
+  * The cliff at 3450 Hz sits INSIDE V.34's conformance band at 3429 baud
+    (415-3502 Hz). The ATA's band limit eats the top of the band the symbol
+    rate needs. That is a bigger lever than pre-emphasis and is not a datapump
+    problem at all.
+
+**LIMIT ON THE TEMPLATE MODEL.** The breakpoints (0.7, 0.8, 1.2) are read off
+Figure 2, which is a template with a +/-1 dB tolerance band, not an equation.
+The residual differences being compared are smaller than that tolerance. The
+RANKING is probably sound; the absolute numbers are not.
