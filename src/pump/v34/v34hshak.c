@@ -1880,6 +1880,8 @@ int dsplib_v34_fit_preemph;		/* see include/dsplib/debug.h */
 int dsplib_v34_dump_probe_bins;	/* likewise */
 int dsplib_v34_seed_defect;	/* likewise -- harness self-test */
 int dsplib_v34_rrn_on_badblock;	/* likewise -- see debug.h */
+int dsplib_v34_shape_preemph;	/* likewise -- findings 1956, 1957 */
+int dsplib_v34_dump_eq_taps;	/* likewise -- equaliser workload */
 
 #define PROBE_FIT_MAX		32	/* bins 1..25, comfortably */
 #define PROBE_NOISE_SLOT(i)	((i) == 5 || (i) == 7 || (i) == 11 || (i) == 15)
@@ -2021,6 +2023,159 @@ probe_preemph_fit(const struct v34_dftbin *bins, unsigned edge, short baud)
 	return idx;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * `probe_preemph_shape` -- choose the filter whose SHAPE fits the channel.
+ *
+ * WHAT IS WRONG WITH BOTH OF THE ALTERNATIVES ABOVE.  The object reduces the
+ * channel to a two-point tilt; `probe_preemph_fit` reduces it to a least-
+ * squares tilt.  A tilt is one number, and only one of the two filter families
+ * IS a tilt.  Findings 1956 and 1957:
+ *
+ *   Figure 1/V.34, indices 0-5:  a straight line, 0 dB at f/S = 0 rising to
+ *                                alpha at f/S = 1.0.  A BROADBAND tilt.
+ *   Figure 2/V.34, indices 6-10: 0 dB out to f/S = 0.4, a free transition to
+ *                                beta at 0.8, then linear to beta + gamma at
+ *                                1.2.  A TOP-OF-BAND shelf.
+ *
+ * Two shapes, and the object measures a tilt in Table 3's own 2 dB quantum
+ * (the multiplier works out at 2.03 dB in power) and then returns 6 + steps,
+ * which indexes Table 4.  It also cannot return 0-5 at all: the counter starts
+ * at 5 and is advanced before the test, so the reachable set is {6..10} and
+ * the author's own `return 0` arm is dead (D53).
+ *
+ * So this scores ALL ELEVEN templates against the measured bins and returns
+ * the one with the smallest residual.  A channel with real broadband tilt gets
+ * a Table 3 answer; a flat-then-cliff channel gets Table 4; the magnitude comes
+ * from the fit rather than from a counter.
+ *
+ * THE RESIDUAL IS A VARIANCE, NOT A MEAN-SQUARE, deliberately.  Pre-emphasis
+ * cannot change the far end's overall transmit power -- only its shape -- so a
+ * constant offset between the corrected channel and flat is not an error the
+ * filter is able to fix, and including it would rank every template by how
+ * much gain it happens to add.  Subtracting the mean scores flatness alone.
+ *
+ * ON THIS BENCH IT IS WORTH ALMOST NOTHING, and that is measured rather than
+ * hoped: the path is flat to +/-0.4 dB from 450 to 3150 Hz, so there is no tilt
+ * to correct, and its one real defect is a band-edge cliff far beyond the 7.5 dB
+ * the largest template offers.  The gap between the object's choice and the
+ * best available is about 0.13 dB (1957).  This is here for CORRECTNESS and for
+ * lines that have a tilt; do not expect it to move a rate on the ATA path.
+ */
+#define PROBE_BIN_HZ	150.0
+
+/* Table 2/V.34 carrier ratio d/e; the band is (d/e -+ 0.45) normalised. */
+static double
+probe_de_ratio(short baud)
+{
+	switch (baud) {
+	case 2400:			return 2.0 / 3.0;
+	case 2743: case 2800: case 3000: return 3.0 / 5.0;
+	default:			return 4.0 / 7.0;   /* 3200, 3429 */
+	}
+}
+
+static double
+probe_template_db(int idx, double fs)
+{
+	static const double alpha[6] = { 0.0, 2.0, 4.0, 6.0, 8.0, 10.0 };
+	static const double bg[5][2] = { { 0.5, 1.0 }, { 1.0, 2.0 },
+					 { 1.5, 3.0 }, { 2.0, 4.0 },
+					 { 2.5, 5.0 } };
+	double beta, top;
+
+	if (idx <= 5)
+		return alpha[idx] * fs;
+	beta = bg[idx - 6][0];
+	top  = beta + bg[idx - 6][1];	/* NOT gamma -- the arrows stack */
+	if (fs <= 0.4)
+		return 0.0;
+	/*
+	 * 0.4 to 0.8 carries NO tolerance band in Figure 2, so the
+	 * Recommendation constrains only the endpoints and any reasonable
+	 * monotonic shape conforms.  Linear is a choice, not a reading.
+	 */
+	if (fs <= 0.8)
+		return beta * (fs - 0.4) / 0.4;
+	if (fs >= 1.2)
+		return top;
+	return beta + (top - beta) * (fs - 0.8) / 0.4;
+}
+
+static short
+probe_preemph_shape(const struct v34_dftbin *bins, unsigned edge, short baud)
+{
+	double y[PROBE_FIT_MAX], fsv[PROBE_FIT_MAX];
+	double de, lo, hi, bestvar = 0.0;
+	unsigned i, cnt = 0;
+	int idx, best = -1;
+
+	if (baud <= 0)
+		return -1;
+	de = probe_de_ratio(baud);
+	lo = de - 0.45;
+	hi = de + 0.45;
+
+	for (i = 1; i <= edge && cnt < PROBE_FIT_MAX; i++) {
+		unsigned e;
+		int b = 0;
+		double fs;
+
+		if (PROBE_NOISE_SLOT(i))
+			continue;
+		if (bins[i].energy <= 0)
+			continue;
+		/* bins[] is 0-based on 150 Hz: bins[i] is (i+1)*150 Hz. */
+		fs = ((double)(i + 1) * PROBE_BIN_HZ) / (double)baud;
+		if (fs < lo || fs > hi)
+			continue;
+		e = (unsigned)bins[i].energy;
+		while (e >> (b + 1))
+			b++;
+		/* 10*log10 -- energy is a POWER quantity (1909). */
+		y[cnt] = 3.0102999566
+		       * ((double)b + ((double)e / (double)(1u << b) - 1.0))
+		       - 3.0102999566 * (double)bins[i].shift;
+		fsv[cnt] = fs;
+		cnt++;
+	}
+	if (cnt < 6)
+		return -1;			/* caller falls back */
+
+	for (idx = 0; idx <= 10; idx++) {
+		double s = 0.0, ss = 0.0, m, var;
+
+		for (i = 0; i < cnt; i++) {
+			double c = y[i] + probe_template_db(idx, fsv[i]);
+
+			s += c;
+			ss += c * c;
+		}
+		m = s / (double)cnt;
+		var = ss / (double)cnt - m * m;
+		if (var < 0.0)
+			var = 0.0;
+		if (best < 0 || var < bestvar) {
+			bestvar = var;
+			best = idx;
+		}
+	}
+
+	/*
+	 * VARIANCE, not RMS.  Printing an RMS would mean sqrt(), and the
+	 * datapump does not otherwise link libm -- adding that dependency for
+	 * one diagnostic would be a poor trade.  The number is in dB^2 and is
+	 * for ranking arms against each other, not for quoting.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PREEMPHASIS, - SHAPE index %d over %d "
+				     "bins, var %d.%02d dB2, baudrate= %d\n",
+				     best, (int)cnt, (int)bestvar,
+				     (int)((bestvar - (int)bestvar) * 100.0),
+				     (int)baud);
+	return (short)best;
+}
+
 static short
 probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 {
@@ -2050,6 +2205,19 @@ probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 * worth anything on the wire is an open question and NOT assumed here:
 	 * finding 1904 withdrew the mechanism that predicted it would be.
 	 */
+	/*
+	 * SHAPE FIRST, then the tilt fit, then the object's counter.  Ordered
+	 * most-informed to least: the shape matcher uses every usable bin and
+	 * both filter families, the tilt fit uses every bin and one family,
+	 * the counter uses two bins and half of one family.  Each falls
+	 * through to the next when it has too little to work with.
+	 */
+	if (dsplib_v34_shape_preemph) {
+		short f = probe_preemph_shape(bins, n, baud);
+
+		if (f >= 0)
+			return f;		/* else fall through */
+	}
 	if (dsplib_v34_fit_preemph) {
 		short f = probe_preemph_fit(bins, n, baud);
 

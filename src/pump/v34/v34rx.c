@@ -2748,6 +2748,72 @@ carrier_loop:
 					    "V34EQUPOW, sigpow = %d, equerr = "
 					    "%d\n", (int)rx->f248,
 					    (int)rx->f21a);
+				/*
+				 * HOW MUCH WORK THE EQUALISER IS DOING.
+				 *
+				 * `equerr` says how well the receiver is
+				 * decoding; it does not say how hard the
+				 * equaliser had to work to get there.  Those
+				 * are different questions, and the second is
+				 * the one that answers whether a pre-emphasis
+				 * choice was any good: a filter that matches
+				 * the channel leaves the equaliser with
+				 * nothing to do, and a filter that does not
+				 * leaves it correcting the shortfall itself.
+				 *
+				 * A perfectly matched channel needs the CENTRE
+				 * tap and nothing else, so energy in the
+				 * off-centre taps is precisely the work.  The
+				 * ratio is what to compare between arms --
+				 * the absolute figures move with the transmit
+				 * level, exactly as `equerr` does.
+				 *
+				 * Integer parts only.  The fractional halves
+				 * would add a bit of precision to a number
+				 * that is being used to rank two arms against
+				 * each other, and would cost 64-bit arithmetic
+				 * in a routine that runs every 1024 symbols.
+				 *
+				 * Sum-of-magnitudes rather than sum-of-squares
+				 * for the same reason: 80 taps of squared
+				 * shorts overflows a 32-bit accumulator only
+				 * at implausible tap values, but the magnitude
+				 * sum cannot overflow at all and ranks
+				 * identically.
+				 */
+				if (dsplib_v34_dump_eq_taps) {
+					unsigned long ctr = 0, off = 0;
+					int t;
+
+					for (t = 0; t < V34_EQ_TAPS; t++) {
+						int a = eq->re[t];
+						int b = eq->im[t];
+						unsigned long m;
+
+						/*
+						 * By hand rather than abs():
+						 * this file does not include
+						 * <stdlib.h> and the period
+						 * compiler will not invent it.
+						 */
+						if (a < 0)
+							a = -a;
+						if (b < 0)
+							b = -b;
+						m = (unsigned long)a
+						  + (unsigned long)b;
+
+						/* centre run: 8 taps at 36 */
+						if (t >= 36 && t < 44)
+							ctr += m;
+						else
+							off += m;
+					}
+					dsplibs_debug_printf(
+					    "V34EQTAPS, centre = %lu, off = %lu"
+					    ", equerr = %d\n", ctr, off,
+					    (int)rx->f21a);
+				}
 				flags = rx->flags;
 			}
 		}

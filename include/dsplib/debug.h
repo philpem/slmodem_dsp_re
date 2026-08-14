@@ -76,6 +76,22 @@ extern int dsplib_v34_seed_defect;
  */
 extern int dsplib_v34_rrn_on_badblock;
 
+/*
+ * Choose the pre-emphasis filter by matching the measured channel against all
+ * eleven transmit-spectrum templates, instead of reducing it to a tilt and
+ * indexing a counter that can only reach 6-10.  Set only by
+ * tools/benchflags.c from DSPLIB_V34_SHAPE_PREEMPH.  Findings 1956, 1957.
+ */
+extern int dsplib_v34_shape_preemph;
+
+/*
+ * Log the equaliser's tap energy, split centre-run against off-centre, every
+ * 1024-symbol block.  Off-centre energy IS the work the equaliser is doing to
+ * undo a channel the pre-emphasis failed to match, which `equerr` alone cannot
+ * distinguish from a simply noisier line.  DSPLIB_V34_DUMP_EQ_TAPS.
+ */
+extern int dsplib_v34_dump_eq_taps;
+
 int dsplibs_debug_printf(const char *fmt, ...);
 
 /*
