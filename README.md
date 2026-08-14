@@ -157,7 +157,7 @@ actually names to the ZFS store, in `<family>/<prefix>/` subdirectories, and
 indexes them. See `records/README.md` for why `captures/` is ignored but
 `records/` is not.
 
-## Three harness defects worth not repeating
+## Four harness defects worth not repeating
 
 **The serial port must stay open for the whole call.** The first harness
 opened the serial port, sent one AT command and closed it again, for each
@@ -181,6 +181,30 @@ i.e. *after* the dial had gone out, and it did not stop the run. Hence the
 pre-flight above, which is exercised in both directions rather than assumed to
 work: a missing node, a node with nothing behind it (a silent pty), a modem
 whose identity does not match the role, and the live modem.
+
+### `pgrep -f <pattern>` always matches itself
+
+Checking whether something is running with `pgrep -f ab149.sh` reports a match
+whether or not it is running, because the shell invoking pgrep has the pattern
+in its own command line and `/proc/*/cmdline` is exactly what `-f` searches.
+pgrep excludes its own pid, not its parent's. Demonstrated in one line:
+
+    $ pgrep -f "zzz-no-such-process-zzz" | wc -l
+    1
+
+This has twice sent someone hunting a process that had already exited. Use:
+
+  * `pgrep -x slmodemd` -- matches the executable NAME, so a shell holding the
+    string cannot match. `relaycall.sh` already does this.
+  * a pidfile written by the process itself. `row.sh` does this so teardown is
+    by PID, which also avoids the older trap in its header comment: `pkill -f
+    d-modem` matches this repository's PATH and once killed an unrelated agent.
+  * `pgrep -f "[a]b149"` where only `-f` will do -- the regex matches `ab149`
+    while the literal text in the command line is `[a]b149`, which does not
+    match itself.
+
+`pgrep -f X | grep -v $$` does not reliably help: the self-match is usually the
+parent wrapper, not `$$`.
 
 ## Results
 

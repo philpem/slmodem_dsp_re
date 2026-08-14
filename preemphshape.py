@@ -18,9 +18,12 @@ the counter.  Two consequences, both verified rather than argued:
     the reconstruction is faithful and the ORIGINAL is what is wrong).
   * Tables 3 and 4 are not the same shape.  Figure 1/V.34 is a straight line
     from 0 dB at f/S = 0 to alpha at f/S = 1.0 -- a BROADBAND tilt.  Figure
-    2/V.34 is flat at 0 dB to f/S ~ 0.7, steps to beta, then rises to gamma by
-    f/S = 1.2 -- a TOP-OF-BAND shelf.  A two-point tilt is the natural
-    criterion for the first family and is being used to choose from the second.
+    2/V.34 holds 0 dB out to f/S = 0.4, transitions freely to beta at 0.8, then
+    rises to **beta + gamma** at 1.2 -- a TOP-OF-BAND shelf.  A two-point tilt
+    is the natural criterion for the first family and is being used to choose
+    from the second.  (Phil read the stacked dimension arrows correctly and I
+    did not: the top is beta + gamma, and the 0.4-0.8 segment is unconstrained.
+    See template_db().)
 
 WHAT THIS DOES INSTEAD.  Reconstruct the channel from all 25 probe bins,
 evaluate every one of the 11 templates against it, and pick the index whose
@@ -63,21 +66,33 @@ def template_db(idx, fs):
     Figure 1 (0-5): straight line, 0 dB at f/S = 0 to alpha at f/S = 1.0,
     continuing at the same slope past 1.0 (the figure draws it to 1.2).
 
-    Figure 2 (6-10): 0 dB to f/S = 0.7; a step to beta; then linear from beta
-    at 0.8 to gamma at 1.2.  The breakpoints are read off Figure 2/V.34 and are
-    the weakest part of this model -- the figure is a template with a +/-1 dB
-    tolerance band, not an equation.
+    Figure 2 (6-10): 0 dB out to f/S = 0.4, then a free transition to beta at
+    f/S = 0.8, then linear to **beta + gamma** at f/S = 1.2.
+
+    THE TOP OF THE TEMPLATE IS beta + gamma, NOT gamma.  At 400 dpi the two
+    dimension arrows are plainly stacked: beta runs from the 0 line up to the
+    tick where the diagonal begins, and gamma runs from that SAME tick up to
+    the top dashed line.  Reading the top as gamma understates every Table 4
+    curve by beta -- index 10 tops at 7.5 dB, not 5.0.
+
+    THE 0.4-TO-0.8 SEGMENT IS UNCONSTRAINED and is modelled as a straight line
+    for want of anything better.  The grey tolerance bands bound 0 dB only out
+    to 0.4 and resume along the diagonal from 0.8; between them the
+    Recommendation draws no band, so any reasonable monotonic shape conforms.
+    A different interpolation there changes the residuals below, and nothing in
+    V.34 says which one a transmitter uses.
     """
     if idx <= 5:
         return ALPHA[idx] * fs
     beta, gamma = BETA_GAMMA[idx - 6]
-    if fs <= 0.7:
+    top = beta + gamma
+    if fs <= 0.4:
         return 0.0
     if fs <= 0.8:
-        return beta
+        return beta * (fs - 0.4) / 0.4          # unconstrained; linear default
     if fs >= 1.2:
-        return gamma
-    return beta + (gamma - beta) * (fs - 0.8) / 0.4
+        return top
+    return beta + (top - beta) * (fs - 0.8) / 0.4
 
 
 def parse_bins(text):
@@ -144,9 +159,11 @@ def main():
         rms = math.sqrt(sum((c - mean) ** 2 for c in corr) / len(corr))
         scores.append((rms, idx))
         fam = "Table 3 alpha=%4.1f" % ALPHA[idx] if idx <= 5 else \
-              "Table 4 b=%.1f g=%.1f" % BETA_GAMMA[idx - 6]
+              "Table 4 b=%.1f g=%.1f top=%.1f" % (BETA_GAMMA[idx - 6][0],
+                                                 BETA_GAMMA[idx - 6][1],
+                                                 sum(BETA_GAMMA[idx - 6]))
         star = "  <-- object chose this" if idx == chose else ""
-        print("    index %2d  %-22s  rms %6.2f dB%s" % (idx, fam, rms, star))
+        print("    index %2d  %-30s  rms %6.2f dB%s" % (idx, fam, rms, star))
     best = min(scores)[1]
     print("\n  best by shape : index %d" % best)
     print("  object chose  : index %s" % chose)
