@@ -1,12 +1,12 @@
-# A plan for the 969 functions that are left
+# A plan for the 961 functions that are left
 
 *Companion to `docs/remaining.md`, which says what is left, and
 `docs/worklist.md`, which lists it. This says in what order, and why that
 order rather than the obvious one.*
 
-*Measured at `d367962`. Re-run `tools/readyqueue.py` and `tools/service.py`
-before trusting any count here; the whole point of the ordering is that it
-moves as work lands.*
+*Measured at `93270f9`, after phase 0 landed. Re-run `tools/readyqueue.py`
+and `tools/service.py` before trusting any count here; the whole point of the
+ordering is that it moves as work lands.*
 
 **The priority is complete data mode. Fax Class 1 is last.** That is the
 owner's decision and it is what the phase order implements — but it cannot be
@@ -20,8 +20,8 @@ executed by deferring a translation-unit span, and §2 is why.
 
 | | symbols | bytes |
 |---|--:|--:|
-| **READY** — closure needs nothing unwritten but itself | 483 | **106,504** |
-| **BLOCKED** — needs 1 or more unwritten symbols first | 477 | 257,024 |
+| **READY** — closure needs nothing unwritten but itself | 481 | **105,516** |
+| **BLOCKED** — needs 1 or more unwritten symbols first | 471 | 253,156 |
 
 A batch has to be **closed** before it can be committed: every dependency of
 every member is in the set or already written. This is not a style
@@ -32,7 +32,7 @@ that fails all 92 binaries, and `make` stops at the first, which is
 hatch (rename only what we define) and **declined** it deliberately; it is
 not to be reintroduced.
 
-**There is no bottleneck to unlock.** 106 KB is startable today and exactly
+**There is no bottleneck to unlock.** 105 KB is startable today and exactly
 one dependency in the object is worth sequencing around (phase 1). The work
 parallelises; the limit is review and machine time, not the graph.
 
@@ -42,17 +42,17 @@ parallelises; the limit is review and machine time, not the graph.
 
 | who needs it | symbols | bytes |
 |---|--:|--:|
-| **data mode** — V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8/call progress | 288 | **211,823** |
+| **data mode** — V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8/call progress | 285 | **209,067** |
 | **fax only** — nothing in data mode reaches it | 286 | 78,718 |
-| voice / Caller ID / ring detect only | 74 | 26,292 |
-| no entry point reaches it | 312 | 46,695 |
+| voice / Caller ID / ring detect only | 70 | 24,467 |
+| no entry point reaches it | 311 | 46,420 |
 
 Deferring fax takes **78,718 bytes off the critical path**, a little over a
-fifth of what is left. But 218 of the 312 unreached symbols are data mode by
+fifth of what is left. But most of the 311 unreached symbols are data mode by
 name — `V92CP::bitsToInfo`, `VPcmV34GetDiagnostics`, the V.90/V.92 CRC
-methods — 32,798 bytes the host calls directly rather than through a
+methods — roughly 32,800 bytes the host calls directly rather than through a
 datapump. **Complete data mode includes those**, so the target is about
-244,600 bytes rather than 211,823, and phase 8 is where they are picked up.
+242,000 bytes rather than 209,067, and phase 8 is where they are picked up.
 
 ## 2. The trap in "leave fax until last"
 
@@ -99,22 +99,35 @@ calls, through `fax_class1_create`, `FAXVMI_create`, `vxx_create` and
 `v17rx_create`. It is not in the tool, and that is recorded so nobody adds it
 back without a case that measures differently.
 
-## Phase 0 — land what is already written
+## Phase 0 — land what is already written  ✅ DONE
 
-Two branches hold finished, differentially-tested work that `master` lacks:
-**8 symbols / 4,856 bytes**, at the cost of a merge.
+**Landed 2026-08-15 at `93270f9`.** Both branches merged, `make phase` passed
+(phase boundary reached, 0 FAIL), and coverage went 48.5% -> **49.2%**: 900
+symbols, 361,453 bytes, which is exactly the 8 symbols / 4,856 bytes the two
+branches carried, so nothing was lost in the conflict resolutions.
+
+Three conflicts were resolved by hand rather than by `--ours`, and one number
+moved: `cid-dtmf`'s **D302 became D307**, because master had independently
+allocated D302 to `FSE_decision_16pt` (itself already renumbered D298 -> D300
+-> D302). Its companions D303-D306 were free and did not move. Both sides of
+`tools/refcheck.py` had independently fixed the same catastrophic-backtracking
+bug; master's unbounded fix won over `cid-dtmf`'s `{0,10}` bound, which would
+silently stop rewriting citation lists longer than ten.
 
 | branch | symbols | bytes | |
 |---|--:|--:|---|
 | `v32-ecc` | 3 | 2,756 | **data mode** — 3 of the 13 shared-DSP symbols above |
 | `cid-dtmf` | 5 | 2,100 | Caller ID; phase 9 work, but written already |
 
-**`v32-ecc` first needs its duplication resolved.** The `agent-v32` worktree
-has all six of its files staged as additions on `v32-datapump` right now.
-Read both sides before merging either; finding 700 is what a merge that
-compiles but silently drops half a side costs.
-`worktree-agent-af64acb…` and `review/nextsteps-2026-08-11` are superseded
-and want deleting, not merging — see `remaining.md` §5.
+The feared `v32-ecc` duplication was a non-event: all six of its files were
+**byte-identical** to what the `agent-v32` worktree has staged on
+`v32-datapump`, so it was the same work in two places rather than two
+readings of it. That worktree's staged copies are now redundant and will
+merge as a no-op.
+
+Eighteen merged branches were deleted with them. `worktree-agent-af64acb…`
+and `review/nextsteps-2026-08-11` are superseded rather than merged — they
+are one commit ahead each and need `-D`, so they were left alone.
 
 ## Phase 1 — the one keystone, and the 17 KB behind it
 
