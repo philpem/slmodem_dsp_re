@@ -1,7 +1,7 @@
 # A plan for the 961 functions that are left
 
 *Companion to `docs/remaining.md`, which says what is left, and
-`docs/worklist.md`, which lists it. This says in what order, and why that
+`make worklist`, which lists it. This says in what order, and why that
 order rather than the obvious one.*
 
 *Measured at `93270f9`, after phase 0 landed. Re-run `tools/readyqueue.py`
@@ -56,7 +56,7 @@ datapump. **Complete data mode includes those**, so the target is about
 
 ## 2. The trap in "leave fax until last"
 
-`docs/worklist.md` groups by translation-unit span, and the span printed as
+`make worklist` groups by translation-unit span, and the span printed as
 `class1tx.c +94` is a **bracket over 95 translation units** — `class1tx.c`,
 `faxvmi*.c`, `T30frames.c`, `V17rx.c`, `V17tx.c` and so on. Reading that as
 "the fax span" and deferring it would block V.32.
@@ -208,7 +208,7 @@ schedules them.
   **inlined**, with no blob symbol of their own. There is nothing separate to
   disassemble: read `tools/dis.py VPcmV34Progress` and place each arm at the
   stub call site in `v34pcmmain.cpp`. The other two, `v90RateReneg` and
-  `v90RateRenegSilence`, *are* symbols and are in `worklist.md`.
+  `v90RateRenegSilence`, *are* symbols and appear in `make worklist`.
 - **`vpcm_run`, 5 sites** — the same shape inside its 1,662 bytes.
 - **`v34handshak`, 1 site** — the table-3 `default:`, **unreachable**, kept so
   a mutation to the range test or the label set lands somewhere. Not work.
@@ -320,7 +320,7 @@ running — the DSP is real-time and a loaded machine invalidates the run.
 
 ## Re-deriving all of this
 
-    python3 tools/worklist.py --md docs/worklist.md   # what is left
+    make worklist                                     # what is left
     python3 tools/readyqueue.py                       # what is startable
     python3 tools/service.py                          # data mode vs fax
     python3 tools/closure.py <members> --batch        # is my batch closed

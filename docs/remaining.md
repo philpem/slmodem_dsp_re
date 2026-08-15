@@ -4,7 +4,9 @@
 commands are given so they can be re-run rather than trusted. Nothing in this
 document is an estimate.*
 
-*The per-function enumeration is `docs/worklist.md` (`make worklist`). This
+*The per-function enumeration is `make worklist`, generated on demand and
+deliberately not committed -- a checked-in copy would rot, because `make phase`
+regenerates `coverage.md` and not this. This
 document is the shape of the work, that one is the list, and `docs/plan.md`
 is the order to take it in -- which is NOT this document's sec 7 order, because
 sec 7 ranks by value and 477 of the 969 cannot be started yet.*
@@ -160,7 +162,7 @@ short of it. The same happens to most of the V.90 receive chain.
 
 To ask "what does the original need behind this entry point", give
 `closure.py` the entry point *and* the written functions on the path as roots
-— roots are always expanded — or read `docs/worklist.md`, which does not use a
+— roots are always expanded — or run `make worklist`, which does not use a
 graph at all.
 
 ### A function pointer in a table is never followed
@@ -196,7 +198,7 @@ The host-facing API is derivable and is 22 symbols — what the rest of
 
 ## 5. Work that is written but not on `master`
 
-`docs/worklist.md` is measured against `master`, so anything sitting on an
+`make worklist` measures against `master`, so anything sitting on an
 unmerged branch is counted as still to do. Two branches hold real work, and
 between them they are **8 symbols / 4,856 bytes of the 969 / 363,528**. Both
 were checked by content, not by branch name: their source files do not exist
@@ -289,7 +291,7 @@ position inside it has moved a long way.
    `v34pcmmain.cpp` marks where in our version that arm belongs.
    `vpcm_run`'s five are the same shape inside its 1,662 bytes. Only
    `v90RateReneg` and `v90RateRenegSilence` are separate symbols with their
-   own entry in `docs/worklist.md`.
+   own entry in `make worklist`'s output.
 3. **Fax Class 1** — `class1tx.c +94`, 321 symbols over 87,067 bytes. The
    largest symbol count left, which is the shape that parallelises best.
 4. **V.32 / V.32bis then V.22 / V.22bis** — `V32mod.c +39`, 92 symbols.

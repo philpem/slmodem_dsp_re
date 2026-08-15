@@ -39882,6 +39882,13 @@ rather than its cause.
 *The first batch of the V.PCM construction path.  `docs/nextsteps.md` carries
 the recomputed queue this comes from and says how to reproduce it.*
 
+*[2026-08-16: `docs/nextsteps.md` no longer exists.  Its queue was superseded
+by the construction path landing -- `docs/remaining.md` and `docs/plan.md`
+carry the current one -- and the one part of it that was NOT superseded, the
+join between Appendix C and findings 1204-1209, was folded into the end of
+`docs/deviations.md`'s Appendix C.  The original is commit `c391a9b`, tagged
+nowhere; the branch that held it was `review/nextsteps-2026-08-11`.]*
+
 **The measurement that reopened this.** `docs/vpcmv34main.md` demotes the
 construction path to "Wave 5 — the construction path, LAST", on finding 838's
 count of what each of its four entry points still needed.  Recomputed against

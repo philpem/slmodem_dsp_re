@@ -32,3 +32,7 @@ test/mutations/.running
 # them into a commit once; they are embedded git repositories and belong to
 # nobody in this tree.
 .claude/
+
+# generated on demand by `make worklist`; a committed copy would rot,
+# because `make phase` deliberately does not regenerate it (unlike coverage.md)
+docs/worklist.md

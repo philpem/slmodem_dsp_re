@@ -5888,3 +5888,117 @@ it null, sets state 0x19 and prints "ERROR: Null JdDetector" instead. State 2
 loads the same pointer and calls straight through it. `t_v90p3ddec.cpp` drives
 the guarded arm with a null Jd; the unguarded one is left alone because
 exercising it is a crash and not a comparison.
+
+## Read against findings 1204-1209: the register and the bench are the same investigation
+
+*Salvaged from `review/nextsteps-2026-08-11`, which was deleted as a stray;
+this was the only part of it not superseded. Written 2026-08-11 -- the counts
+below are that sitting's and have not been re-measured.*
+
+Everything above was written **before** findings 1204-1209, and ranks the
+register against exactly the bench problem those findings have been chasing.
+Nobody had read the two together. Doing so changes what the next bench sitting
+should do.
+
+**The register is a register of the blob's defects, and the bench is measuring
+the blob.** The reconstruction is unfinished, so `slmodemd` on the bench links
+`dsplibs.o`. This appendix is therefore not adjacent evidence — it is a list of
+candidate causes for the thing being measured, written from the disassembly of
+the code under test.
+
+### What the bench has settled
+
+| | |
+|---|---|
+| the asymmetry | **confirmed, n = 22.** `our TX` 33600 on 22 of 22; `our RX` median 12000, range 4800–26400 |
+| echo | **exonerated.** ERL 16.2–22.9 dB, p = 0.45; and 11 dB less echo on a second modem bought nothing (1206) |
+| jitter buffer, per-call ERL, between-modem ERL, clock slip | all proposed, all refuted (1206–1208) |
+| pre-CONNECT equaliser error | **survives** — r = −0.689, worst LOO −0.650, p = 0.0025 |
+| and it is **trimodal** | 15 of 22 calls in a band 13% wide; 12 of those produce exactly 12000 |
+| ruled out as the discrete difference | pre-emphasis index (6 on all 22), `txpreemp` (2 on all 22), symbol rate (3429 on all 22), AGC gain at S-S1 |
+
+### The join, and it is one sentence
+
+**Trimodality is what a discrete difference in initial conditions produces,
+and it is not what a continuous channel impairment produces — and Appendix C
+already ranks a family of defects that gives V.34 acquisition a discrete,
+run-to-run-varying initial condition, with the experiment to test it, and that
+experiment has not been run.**
+
+Item 5 above is D29/D30/D32, *"three places where V.34 acquisition starts
+from heap garbage"*, and it says in terms: *"This is the cheapest hypothesis to
+test and I would test it first."* Its experiment 1 is heap poisoning —
+`MALLOC_PERTURB_`, twenty calls, *"one afternoon and it is decisive either
+way."* `grep -n 'MALLOC_PERTURB' docs/findings.md` returns nothing. Four
+transport-level covariates were measured instead, and all four failed.
+
+D29 is the concrete one and it is not speculative: `V34TimingFiltersInit`
+zeroes eighty **shorts** across a region holding forty shorts followed by forty
+**ints**, so the upper twenty entries of the timing prefilter keep whatever was
+in that memory. It fires on every setup. `t_v34ec` asserts the harness fill
+survives, so it is proven live in our build too. **It lands in timing recovery
+during acquisition, which is the loop that decides where the equaliser
+converges** — the exact quantity 1208 found trimodal.
+
+**And here is the weakness in it, stated rather than left for the next reader
+to find.** D29's own entry bounds the damage at *"about 20 symbols"* — 5.8 ms
+at 3429 baud — after which the uninitialised entries have shifted out of the
+prefilter. Whether a 20-symbol disturbance at the start of timing recovery is
+enough to decide which of three states the equaliser settles into is
+**unmeasured**, and nothing in the register or on the bench measures it. D29 is
+a mechanism with the right shape and an unknown magnitude, not a diagnosis.
+
+That argues for running the experiment, not against it. `MALLOC_PERTURB_` tests
+the **family** — D29, D30's cursor seeded from a field not yet written, D32's
+stale delay-line shift, and any uninitialised read nobody has catalogued —
+because it changes what every such read returns at once. A null result retires
+all of them together, which no amount of further reading can do.
+
+### The three experiments now have a priority order, and two are one shift
+
+1. **Poison the heap.** `MALLOC_PERTURB_` at two or three distinct values,
+   fifteen calls each, through `testbench/batch.sh` and `batchanalyse.py`
+   unchanged. **If the trimodal band positions move with the fill value, the
+   D29/D30/D32 family is the answer.** If they do not, the family is out and
+   item 3 above (D137/D61 — placement dependence) moves up. Decisive
+   either way, and the analysis code already exists.
+
+   **What the process structure does and does not settle.** Checked rather
+   than assumed: `row.sh:159` `setsid`s a fresh `slmodemd` per call and
+   `batch.sh` calls `row.sh` once per row, so **every bench call is its own
+   process** and no call inherits the previous call's heap. That removes the
+   simplest version of the mechanism — but not the mechanism. Pages the kernel
+   hands over are zero-filled only until something touches them, and slmodemd
+   has done its own start-up allocation before `vpcm_create` asks for
+   265,520 bytes across 127 regions. Whether D29's twenty ints land on a
+   pristine page or on a recycled one is exactly what varies call to call, and
+   it is not predictable from the source.
+
+   This is also why `MALLOC_PERTURB_` is the right instrument rather than a
+   proxy: it fills every allocation with a nonzero pattern, so it converts
+   *"happens to read zeros"* into *"reads 0xNN"* whether or not the page was
+   pristine. A distribution that moves when the fill value changes is a
+   distribution that depends on uninitialised memory, and no further argument
+   is needed.
+
+2. **Force 2400 baud.** D112 (`PPSEG` adds symbols-at-baud to a count of
+   4-sample ticks) is dimensionally correct at 2400 and wrong in proportion to
+   baud above it. 1208 reports **3429/3429 on all 22 calls** — so every call in
+   the sample sits at D112's maximum error, which is precisely why the sample
+   cannot see it. Forcing 2400 makes D112 exactly correct: the rate ceiling
+   must drop, and if **the variance collapses with it**, that is D112.
+
+3. **Sweep `IODELAY`.** Lower-priority now: 1208's thirty calls were all at
+   240 and connected 73%, so the D77 connect race at the bottom of the band is
+   not what these calls are hitting. Still worth doing for the D72 question at
+   the top, but it no longer competes with 1 and 2.
+
+### And one caveat of this appendix's own is now weaker
+
+This appendix opens by warning that the asymmetry may not be a defect at all —
+V.34 negotiates the two directions independently, and *"if the link really is
+asymmetric then nothing below applies"*. 1208 weakens that: a channel that
+merely differed direction-to-direction would not hold **our transmit at exactly
+33600 on 22 of 22 calls** while our receive is trimodal at 4800–26400 with echo
+exonerated. Something one-sided and discrete is in our receiver. The appendix's
+own ranking is the right list to work down.
