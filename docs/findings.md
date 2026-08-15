@@ -59406,3 +59406,44 @@ the same design would need roughly 100 per arm on this variance, which is not a
 good use of the bench. The better next move is a mechanism that helps the bad
 calls too -- the ones where the far end is asking for the retrain -- rather than
 more n on this one.
+
+### 1959. STEP 1 ANSWERED, NEGATIVELY: WE DO IMPLEMENT ALL ELEVEN TRANSMIT PRE-EMPHASIS FILTERS — THE GAP I SUSPECTED DOES NOT EXIST
+
+The worry was that we choose a filter for the far end but ignore the one the
+far end chooses for us, which would be a functional gap in what we put on the
+wire rather than a 0.13 dB optimisation of what we receive. **It is not there.**
+The whole chain is implemented:
+
+    far end's MP  ->  cfg->f06 in struct v34_ratecfg
+                  ->  V34SetupModulator(m, baud, carrier, preemp_index, ...)
+                  ->  m->preemp = p<baud> + (preemp_index - 1) * 16
+                  ->  acc += mixed * preemp[i]      (v34filters.c:1424)
+
+with `preemp0[16]` as the flat filter for index 0 and five per-rate tables --
+`p2400`, `p2800`, `p3000`, `p3200`, `p3429`, each **160 shorts = ten rows of
+16**, indexed from one. Ten shaped filters plus flat is exactly the eleven of
+Tables 3 and 4. Applied at `v34hstx1.cpp:638` in data mode, with 0 (flat) at
+the INFO/600-baud setup where flat is correct.
+
+**WHY I MISSED IT, and the lesson is worth more than the result.** I grepped
+for `preemph` and `pre_emph`. The code spells it **`preemp`** -- one 'h' short.
+A whole implemented subsystem was invisible to three separate searches, and I
+came within one step of reporting "we never comply with what the far end asks"
+as a finding. The object's own name for the selector is `preempindex`, which
+is in `v34hshak.c`'s header comment and which I had read several times without
+connecting it.
+
+**RULE:** before concluding a subsystem is absent, grep for the SHORTENED and
+misspelled forms of its name. Reconstructed symbol names come from the object,
+not from English, and `preemp`/`prem`/`pre` are all in this tree
+(`ec_prem_coef_B3429` is a third spelling of a related thing).
+
+**WHAT THIS MEANS FOR THE PLAN.** The pre-emphasis work is now purely about the
+SELECTOR -- which filter we ask the far end for -- and 1956's bound stands: on
+this bench that is worth about 0.13 dB because the path is flat to +/-0.4 dB.
+Step 1 was the item that could have been worth much more, and it is closed.
+
+**ONE SMALL FOLLOW-UP.** `cfg->f06` is still an unnamed offset. It is the
+received pre-emphasis index and should be named, in the same way `faa96` became
+`baud_rate` -- the threshold arithmetic in 1953 was unreadable until that field
+had a name, and this one is in the same position.
