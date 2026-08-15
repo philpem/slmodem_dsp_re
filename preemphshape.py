@@ -95,6 +95,59 @@ def template_db(idx, fs):
     return beta + (top - beta) * (fs - 0.8) / 0.4
 
 
+def inband_bins(baud):
+    """The in-band probe bins for `baud`: [(bin index, normalised freq)]."""
+    de = DE.get(baud, 4.0 / 7)
+    lo, hi = de - 0.45, de + 0.45
+    return [(i, (i + 1) * BIN_HZ / baud) for i in range(25)
+            if i not in NOISE_BINS and lo <= (i + 1) * BIN_HZ / baud <= hi]
+
+
+def reject_outliers(pairs):
+    """Drop bins that are an interferer rather than a measurement of the line.
+
+    UPWARD ONLY, and that asymmetry is the whole point.  An interferer -- a
+    tone leaking into a probe slot -- ADDS energy to one bin.  A channel defect
+    -- a band-edge roll-off, a notch -- REMOVES it.  Symmetric rejection cannot
+    tell them apart and throws away the cliff at 3450 Hz, which is the single
+    most important feature of this bench's channel: with it dropped the answer
+    moved from index 9 to 7.  Rejecting only bins ABOVE the median keeps every
+    genuine defect and discards only the thing that cannot be one.
+
+    Median absolute deviation, limit max(6 dB, 5*MAD).  Mirrors
+    probe_preemp_shape() in v34hshak.c.  Without it a single corrupted bin
+    moves the answer by eight indices, worse than the counter it replaces.
+    """
+    if len(pairs) < 6:
+        return pairs
+    import statistics as _st
+    lv = [d for _, d in pairs]
+    med = _st.median(lv)
+    mad = _st.median([abs(d - med) for d in lv]) or 0.0
+    lim = max(6.0, 5.0 * mad)
+    keep = [(i, d) for i, d in pairs if d - med <= lim]
+    return keep if len(keep) >= 6 else pairs
+
+
+def score_templates(level_of_bin, baud, reject=True):
+    """`level_of_bin` maps bin index -> dB.  Returns [(rms, index)] sorted."""
+    pairs = [(i, level_of_bin(i)) for i, _ in inband_bins(baud)]
+    if reject:
+        pairs = reject_outliers(pairs)
+    fs = dict(inband_bins(baud))
+    out = []
+    for idx in range(11):
+        c = [d + template_db(idx, fs[i]) for i, d in pairs]
+        m = sum(c) / len(c)
+        out.append((math.sqrt(sum((x - m) ** 2 for x in c) / len(c)), idx))
+    out.sort()
+    return out
+
+
+def best_template(level_of_bin, baud, reject=True):
+    return score_templates(level_of_bin, baud, reject)[0][1]
+
+
 def parse_bins(text):
     """Last V34PROBEBINS block in a log -> [(bin_index, dB or None)]."""
     blocks = re.findall(r"V34PROBEBINS, n=(\d+):(.*?)(?=<[\d.]+>\s*V34)",
@@ -147,24 +200,22 @@ def main():
         print("    bin %2d  %6.0f Hz  f/S %.3f  %7.2f dB%s"
               % (i + 1, f, fs, d - ref, mark))
 
-    # score every template over the in-band bins
     inband = [(i, d - ref) for i, d in good
               if lo <= (i + 1) * BIN_HZ / baud <= hi]
     print("\n  residual after applying each template (RMS dB over %d in-band bins):"
           % len(inband))
-    scores = []
+    lvl = dict(inband)
+    scores = score_templates(lambda i: lvl.get(i, 0.0), baud)
+    rms_of = {i: r for r, i in scores}
     for idx in range(11):
-        corr = [d + template_db(idx, (i + 1) * BIN_HZ / baud) for i, d in inband]
-        mean = sum(corr) / len(corr)
-        rms = math.sqrt(sum((c - mean) ** 2 for c in corr) / len(corr))
-        scores.append((rms, idx))
         fam = "Table 3 alpha=%4.1f" % ALPHA[idx] if idx <= 5 else \
               "Table 4 b=%.1f g=%.1f top=%.1f" % (BETA_GAMMA[idx - 6][0],
                                                  BETA_GAMMA[idx - 6][1],
                                                  sum(BETA_GAMMA[idx - 6]))
         star = "  <-- object chose this" if idx == chose else ""
-        print("    index %2d  %-30s  rms %6.2f dB%s" % (idx, fam, rms, star))
-    best = min(scores)[1]
+        print("    index %2d  %-30s  rms %6.2f dB%s"
+              % (idx, fam, rms_of[idx], star))
+    best = scores[0][1]
     print("\n  best by shape : index %d" % best)
     print("  object chose  : index %s" % chose)
     if chose is not None and best != chose:
