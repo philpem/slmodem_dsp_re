@@ -6559,10 +6559,10 @@
    }
   },
   "vpcmguard": {
-   "key": "5e0569665ef68266b14a4075396967fb6ff951f47228a399c207c4836712642c",
-   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "75078e3a04a8411703915dbafb14b657f411b9bfd9997bb07c33b85bb0502cea",
+   "summary": "2 mutations: 1 caught (1 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "the guard returns quietly instead of stopping": "caught",
+    "the guard returns quietly instead of stopping": "uncaught",
     "the mute path is always taken, so the guard is never reached": "caught"
    }
   },

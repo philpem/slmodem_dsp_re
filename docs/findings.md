@@ -53328,6 +53328,89 @@ says so), and a tool that cannot be run is a tool that will be worked around
 by hand the next time a merge collides -- which is the ninth collision this
 tree has had, and they are not getting rarer.
 
+### 1980. A RECIPROCAL MULTIPLY CAN BE TOLD FROM A DIVISION, AND FORTY-ONE UNIT SAMPLES IS HOW
+
+*From `GenericToneDetector::process`, both overloads, where the object forms
+`1.0f / blockLen` once with `d8 3d` (`D8 /7`, FDIVR against a 1.0f in
+`.rodata.cst4`) and MULTIPLIES by it twice. Recorded as a technique because
+this object does the same thing wherever it divides by a block length, and
+until now there was no way to put a test behind any of them.*
+
+**The problem.** `in * fl80(1/n)` and `in / n` differ by at most about
+`2^-63` relative — two roundings at 80 bits — and **a store to `float`
+erases that**, because a `float` mantissa is 24 bits. So a differential test
+that compares stored fields will agree whichever the source says, over
+essentially every input, and the choice looks untestable. It is not a
+tolerance question: the two are genuinely different functions and one of them
+is what the object does.
+
+**The precondition.** There must be a COMPARISON made at 80 bits that reaches
+the value BEFORE any store rounds it. Here that is `meanOut >= threshold`,
+compiled as `fcomps 0x4(%ebx)` against the register the multiply left. Without
+such a comparison downstream the difference is unobservable no matter what
+inputs are chosen, and this technique does not apply.
+
+**The construction.** Choose `n` and an accumulator value `in` such that
+
+- every partial sum of `in` is exactly representable, so the accumulator
+  arrives at `in` exactly and the test is not measuring the accumulation; and
+- `in / n` is exactly representable as a `float`, so a threshold can be set
+  equal to it; and
+- `in * fl80(1/n) != in / n` at 80 bits.
+
+`n = 41` with `in = 41.0` does all three: forty-one samples of magnitude 1
+accumulate through 1.0, 2.0 … 41.0, every one a small integer; `41.0 / 41` is
+exactly 1.0; and `41.0 * fl80(1/41)` is one part in `2^64` BELOW 1.0. So with
+`threshold` at 1.0f every block MISSES, and would hit if the object divided.
+`t_gtonedet` tags 207 and 408 assert exactly that.
+
+**MOST `n` DO NOT WORK, and that is the part worth carrying.** `n = 3` with
+`in = 3.0` looks like it should and does not: `fl80(1/3)` rounds DOWN, so
+`3 * fl80(1/3)` is `1 - 0.375 ulp`, and 0.375 of an ulp is under half of one,
+so it rounds back to exactly 1.0 and the two forms agree. A search over
+`n` in 2..199 for a float32 `in` meeting all three conditions gives 15/45.0,
+30/45.0, 41/41.0, 43/301.0, 45/45.0, 51/357.0, 55/55.0 and 59/1829.0 — eight
+in the first fifty-eight values of `n`. Search rather than guess.
+
+======================================================================
+
+### 1982. `vpcm_notwritten`'s STOP IS NO LONGER PINNED BY ANYTHING, AND A STALE SNAPSHOT WAS HIDING IT
+
+*Measured while re-recording `vpcmguard`'s baseline after `t_vpcmguard.c` was
+edited in the `GenericToneDetector` batch. Not caused by that batch and not
+repaired by it — this is a report, and the repair belongs to whoever owns
+`vpcm.c`'s suites.*
+
+`test/mutations/vpcmguard.json` carries two mutations, described in its own
+note as "the two ends" of the claim that the unwritten-path guard is watched
+STOPPING: the stop removed (`if (!vpcm_unwritten_soft) abort();` becomes
+`if (0)`), and the guard never reached (`vpcm_run`'s mute path always taken).
+The recorded verdict was **2 of 2 caught**. Re-run, it is **1 of 2**: the
+mute-path mutation is still caught and **the removed `abort()` is not**.
+
+**Why, and it is not subtle.** `t_vpcmguard` used to reach `vpcm_notwritten`
+because all five `VPcmV34*` entry points were absent from its binary. All five
+are now written, and the file's own header says so — "every one of the five is
+a real definition in every binary and `vpcm_run`'s guards can no longer fire".
+The abort that binary still observes comes from `v34pcm_notwritten` one level
+down, on `qcLineVerification`. So removing `vpcm_notwritten`'s `abort()`
+changes nothing this suite can see, and it stopped being able to see it on the
+batch that wrote the fifth entry point.
+
+**Nothing else pins it.** `src/pump/v90/vpcm.c` is in three suites —
+`vpcmdp`, `vpcmguard`, `vpcmrun` — and a search of all three for a mutation
+whose `find` mentions `abort` returns only this one. So the stop that finding
+987 argues has to be watched rather than reasoned about is, today, watched by
+nothing.
+
+**The general point is finding 347's, one turn further on.** A mutation does
+not have to become UNUSABLE to stop pinning anything; it can keep applying,
+keep compiling and keep running while the path it covered quietly leaves the
+binary. The only thing that catches that is re-measuring, and the only reason
+this was found is that `mutsnap.py --update` was run on a suite whose source
+had been touched for an unrelated reason. **Every entry in that snapshot is
+stale except two.**
+
 ### 1990. THE ORIGINAL WAS BUILT `-mno-ieee-fp`, AND WITHOUT IT EVERY FLOAT COMPARISON IN EVERY FUNCTION READ AS A CODEGEN MISMATCH
 
 *Found while reviewing `GenericToneDetector`, whose two `process` overloads
