@@ -85,6 +85,16 @@ void our_gtd_d1(void *) asm("_ZN19GenericToneDetectorD1Ev");
 void our_gtd_d2(void *) asm("_ZN19GenericToneDetectorD2Ev");
 void ref_gtd_d1(void *) asm("ref__ZN19GenericToneDetectorD1Ev");
 void ref_gtd_d2(void *) asm("ref__ZN19GenericToneDetectorD2Ev");
+
+/*
+ * BY SYMBOL FOR OUR SIDE TOO, and not only for the blob's.  `ours->reset()`
+ * would let the compiler inline the body and then the test would be measuring
+ * an inlined copy rather than the function the linker will ship; the blob has
+ * one symbol for it and so must we.  Same plain cdecl as the constructor,
+ * `this` first on the stack.
+ */
+void our_gtd_reset(void *) asm("_ZN19GenericToneDetector5resetEv");
+void ref_gtd_reset(void *) asm("ref__ZN19GenericToneDetector5resetEv");
 }
 
 #define OBJ	((int)sizeof(GenericToneDetector))
@@ -366,7 +376,191 @@ compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
 		    (long)(outLen * sizeof(double)));
 }
 
+/*
+ * DIRTYING, WHICH IS WHAT MAKES `reset` AND `process` TESTABLE AT ALL.
+ *
+ * A constructed detector is a detector with every field already at the value
+ * `reset` would put there, so calling `reset` on one proves nothing: a body
+ * that did nothing would pass.  Both sides are therefore disturbed in the same
+ * way before the call -- the same bytes into the object, the same doubles into
+ * both history buffers, the same junk into the filter's two write positions --
+ * and what is then compared is the recovery.
+ *
+ * TWO THINGS ARE DELIBERATELY LEFT ALONE.  `filter` at +0x00 is the pointer
+ * each side owns and must keep, and the filter's `m_i`/`m_acc` at +0x28 are
+ * left in their post-construction state so that `compare_filters_`'s
+ * exclusion -- which is an ASSERTION about finding 1250's divergence, not a
+ * blind skip -- goes on saying what it says.  Neither our `GenericIIR::reset`
+ * nor the blob's writes `m_acc`, and the blob's leaves `m_i` holding
+ * `m_outLen` exactly as its constructor does, so the four checks in there hold
+ * across a reset for the same reasons and would fail if either changed.
+ */
+#define IIR_INPOS	0x20
+#define IIR_OUTPOS	0x24
+
+static void
+dirty_object(void)
+{
+	int i;
+
+	for (i = 4; i < OBJ; i++) {
+		unsigned char v;
+
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		v = (unsigned char)(lfsr >> 3) | 1u;
+		ours[i] = v;
+		theirs[i] = v;
+	}
+}
+
+static void
+dirty_filter(unsigned int nden, unsigned int nnum, unsigned int blockSize)
+{
+	unsigned char *fa = (unsigned char *)((GenericToneDetector *)ours)
+				->filter;
+	unsigned char *fb = (unsigned char *)((GenericToneDetector *)theirs)
+				->filter;
+	double *ina, *inb, *outa, *outb;
+	unsigned int inLen = nnum + blockSize;
+	unsigned int outLen = nden + blockSize;
+	unsigned int k, pos;
+
+	memcpy(&ina, fa + IIR_INHIST, sizeof ina);
+	memcpy(&inb, fb + IIR_INHIST, sizeof inb);
+	memcpy(&outa, fa + IIR_OUTHIST, sizeof outa);
+	memcpy(&outb, fb + IIR_OUTHIST, sizeof outb);
+
+	for (k = 0; k < inLen; k++) {
+		double d;
+
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		d = (double)(int)(lfsr | 1u) / 17.0;
+		ina[k] = d;
+		inb[k] = d;
+	}
+	for (k = 0; k < outLen; k++) {
+		double d;
+
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		d = (double)(int)(lfsr | 1u) / 23.0;
+		outa[k] = d;
+		outb[k] = d;
+	}
+
+	lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+	pos = (lfsr & 7u) + 1u;
+	memcpy(fa + IIR_INPOS, &pos, sizeof pos);
+	memcpy(fb + IIR_INPOS, &pos, sizeof pos);
+	memcpy(fa + IIR_OUTPOS, &pos, sizeof pos);
+	memcpy(fb + IIR_OUTPOS, &pos, sizeof pos);
+}
+
+/*
+ * The whole-object comparison, with the two heap pointers stood aside.  Three
+ * call sites want it now, so it is one function rather than three copies of
+ * the same six lines.
+ */
+static void
+compare_objects_(const char *what, int tag)
+{
+	GenericIIR<float, double> *pa = ((GenericToneDetector *)ours)->filter;
+	GenericIIR<float, double> *pb = ((GenericToneDetector *)theirs)->filter;
+
+	((GenericToneDetector *)ours)->filter = 0;
+	((GenericToneDetector *)theirs)->filter = 0;
+	diff_eq_obj_(__FILE__, __LINE__, what, "GenericToneDetector",
+		     ours, theirs, OBJ, (long)tag);
+	((GenericToneDetector *)ours)->filter = pa;
+	((GenericToneDetector *)theirs)->filter = pb;
+}
+
 #define NTRIAL	40
+
+/*
+ * reset() -- one call into the filter and eight fields to zero, and the two
+ * claims worth making are that it clears everything the blob clears and that
+ * it leaves everything the blob leaves.  The second is the one a fill of
+ * zeros would hide, which is why the configuration is dirtied with nonzero
+ * bytes and then asserted to have survived on the BLOB's side: that makes
+ * "reset does not touch the configuration" a measurement of the object rather
+ * than a description of our source.
+ */
+static int
+run_reset(void)
+{
+	int trial, moved = 0;
+
+	diff_begin("GenericToneDetector::reset");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned int nden = 1u + (unsigned)(trial % 4);
+		unsigned int nnum = 1u + (unsigned)((trial + 2) % 4);
+		unsigned int blockSize = (unsigned)(trial % 3);
+		unsigned int blockLen = blocklens[trial % NBLOCKLEN];
+		unsigned int flag = (unsigned)(trial * 7);
+		float thr = as_float(floatbits[trial % NFLOATS]);
+		float rat = as_float(floatbits[(trial + 5) % NFLOATS]);
+		unsigned char dirty[SLOT];
+		int tag = trial;
+
+		seed(trial);
+		our_gtd_c1(ours, nden, nnum, den, num, durations[trial % NDUR],
+			   durations[(trial + 3) % NDUR], thr, flag, rat,
+			   blockLen, blockSize);
+		ref_gtd_c1(theirs, nden, nnum, den, num,
+			   durations[trial % NDUR],
+			   durations[(trial + 3) % NDUR], thr, flag, rat,
+			   blockLen, blockSize);
+
+		dirty_object();
+		dirty_filter(nden, nnum, blockSize);
+		memcpy(dirty, theirs, SLOT);
+
+		our_gtd_reset(ours);
+		ref_gtd_reset(theirs);
+
+		compare_filters_(nden, nnum, blockSize, 0, tag);
+		compare_objects_("after reset", tag);
+
+		diff_eq_int("no store past the object (%ld)", guard_intact(),
+			    1, tag);
+
+		/*
+		 * The six configuration fields, on the blob's side, byte for
+		 * byte against what they held before the call.  +0x04 and
+		 * +0x08 (threshold, ratio), +0x1c and +0x20 (the two block
+		 * limits), +0x28 (blockLen) and +0x34 (flag).
+		 */
+		diff_eq_int("the blob's reset leaves threshold and ratio "
+			    "(%ld)",
+			    memcmp(theirs + 0x04, dirty + 0x04, 8) == 0, 1,
+			    tag);
+		diff_eq_int("the blob's reset leaves both block limits (%ld)",
+			    memcmp(theirs + 0x1c, dirty + 0x1c, 8) == 0, 1,
+			    tag);
+		diff_eq_int("the blob's reset leaves blockLen (%ld)",
+			    memcmp(theirs + 0x28, dirty + 0x28, 4) == 0, 1,
+			    tag);
+		diff_eq_int("the blob's reset leaves flag (%ld)",
+			    memcmp(theirs + 0x34, dirty + 0x34, 4) == 0, 1,
+			    tag);
+
+		/*
+		 * And that it did something at all: the dirtied object is not
+		 * the reset object.  Without this the whole run would pass
+		 * against an empty body.
+		 */
+		if (memcmp(dirty, theirs, OBJ) != 0)
+			moved = 1;
+
+		our_gtd_d1(ours);
+		ref_gtd_d1(theirs);
+	}
+
+	diff_eq_int("reset changed the object", moved, 1, 0);
+
+	return diff_end();
+}
 
 static int
 run_ctor(void)
@@ -784,6 +978,7 @@ main(void)
 	rc |= run_ctor();
 	rc |= run_dtor();
 	rc |= run_ansam();
+	rc |= run_reset();
 
 	return rc;
 }

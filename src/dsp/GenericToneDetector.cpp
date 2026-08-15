@@ -25,20 +25,18 @@
  * what a delete-expression gives and a hand-written free would not.
  *
  * ---------------------------------------------------------------------------
- * THE CONSTRUCTOR'S TAIL IS `reset()` INLINED, and `reset()` IS NOT
- * RECONSTRUCTED HERE.  `_ZN19GenericToneDetector5resetEv` exists in the blob at
- * 0x10640, 68 bytes, and its body is: call `GenericIIR<float,double>::reset` on
- * +0x00, then zero +0x2c, +0x0c, +0x10, +0x14, +0x18, +0x30, +0x24, +0x38.
- * The constructor ends with a call to the SAME `GenericIIR` member and stores
- * to exactly those eight fields and no others -- in a different order, which is
- * scheduling and free (CLAUDE.md).  Set intersection over eight fields and one
- * call is not a coincidence, so the original's constructor said `reset();` and
- * GCC inlined it.
+ * THE CONSTRUCTOR'S TAIL IS `reset()` INLINED, and it is now spelled that way.
+ * `_ZN19GenericToneDetector5resetEv` is in the blob at 0x10640, 68 bytes, and
+ * its body is: call `GenericIIR<float,double>::reset` on +0x00, then zero
+ * +0x2c, +0x0c, +0x10, +0x14, +0x18, +0x30, +0x24, +0x38.  The constructor
+ * ends with a call to the SAME `GenericIIR` member and stores to exactly those
+ * eight fields and no others -- in a different order, which is scheduling and
+ * free (CLAUDE.md).  Set intersection over eight fields and one call is not a
+ * coincidence, so the original's constructor said `reset();` and GCC inlined
+ * it.
  *
- * It is written out below rather than called, because `reset()` is not in this
- * batch and a member that no test drives may not be committed.  A later batch
- * that lands `reset()` should replace the tail with the call: the generated
- * code will not change, and the blob's `reset` symbol will start being matched.
+ * It was written out here while `reset()` was a later batch.  That batch has
+ * landed, the tail is the call, and the generated code is the same code.
  *
  * ---------------------------------------------------------------------------
  * ROUNDING UP IS A MULTIPLY, NOT A REMAINDER.  Both duration arguments are
@@ -129,13 +127,30 @@ GenericToneDetector::GenericToneDetector(unsigned int nden, unsigned int nnum,
 
 	flag = flag_;
 
-	/* reset(), inlined -- see the file comment. */
+	reset();
+}
+
+/*
+ * ONE CALL AND EIGHT ZEROES, in the object's own order: +0x2c first, then the
+ * four accumulators out of one zeroed register, then +0x30, +0x24, +0x38.
+ * Storing an integer zero into a `float` is what the compiler does for `= 0`
+ * and says nothing about the field's type; GenericToneDetector.h reads those
+ * types off the `fadds`/`fsts` in `process` instead.
+ *
+ * What it does NOT touch is the whole of the configuration -- `threshold`,
+ * `ratio`, `blocks1`, `blocks2`, `blockLen` and `flag` -- so a reset detector
+ * is the same detector, and the test asserts that rather than only asserting
+ * the eight zeroes.
+ */
+void GenericToneDetector::reset()
+{
 	filter->reset();
+
+	count_2c = 0;
 	acc_0c = 0;
 	acc_10 = 0;
 	acc_14 = 0;
 	acc_18 = 0;
-	count_2c = 0;
 	count_30 = 0;
 	sampleCount = 0;
 	detected = 0;

@@ -46,10 +46,9 @@
  },
  {
   "label": "the filter is never reset",
-  "find": "\tfilter->reset();\n\tacc_0c = 0;",
-  "replace": "\tacc_0c = 0;",
-  "equivalent": true,
-  "why": "EQUIVALENT ONLY BECAUSE `GenericIIR`'s OWN CONSTRUCTOR ALREADY RESETS. `src/dsp/FloatIIR.cpp`'s GenericIIR(...) ends with `reset();`, so by the time this line runs every field that reset writes already holds the value it would write: both history buffers are zero and both positions are at their start. Calling it a second time is idempotent, so removing the call leaves the filter in a state no comparison can distinguish. THE OBJECT'S CALL IS REAL AND IS REPRODUCED -- `call _ZN10GenericIIRIfdE5resetEv` at 0x1073d, with its own R_386_PC32 -- and what is untestable is only whether removing it changes anything here. Registered rather than deleted because the equivalence is CONDITIONAL: let GenericIIR's constructor stop resetting, or give reset() a field it does not idempotently rewrite, and this becomes a real defect that will then be CAUGHT and reported MIScounted -- which is the notification this entry exists to produce."
+  "find": "\tfilter->reset();\n\n\tcount_2c = 0;",
+  "replace": "\tcount_2c = 0;",
+  "why": "IT WAS REGISTERED EQUIVALENT AND IT IS NOT ONE ANY MORE, which is the notification the old entry said it existed to produce. The equivalence was conditional on this line being reachable only from the constructor: `GenericIIR`'s own constructor ends with `reset()`, so a second call over freshly constructed state rewrites every field with the value already in it and no comparison can see the difference. `reset()` is now a member in its own right, `t_gtonedet`'s run_reset dirties both history buffers and both write positions before calling it, and dropping the call leaves ours holding the dirt while the blob's clears it. Killed, not survived."
  },
  {
   "label": "one of the four accumulators is left as it was found",

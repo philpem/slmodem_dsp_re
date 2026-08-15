@@ -2,10 +2,46 @@
  * GenericToneDetector.h -- an energy-in-band tone detector built on one
  * `GenericIIR<float, double>`.
  *
- * Reconstructed from dsplibs.o.  Five members; TWO are written here, the
- * constructor (0x10690, 267 bytes) and the destructor (0x102f0, 40 bytes).
- * `reset` and the two `process` overloads are read below for the object map
- * and are NOT reconstructed.
+ * Reconstructed from dsplibs.o.  Five members, and ALL FIVE are now written:
+ * the constructor (0x10690, 267 bytes), the destructor (0x102f0, 40 bytes),
+ * `reset` (0x10640, 68 bytes), `process(float)` (0x10350, 318 bytes) and
+ * `process(float *, unsigned)` (0x10490, 422 bytes).
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE CLASS DOES, now that the three that do it are read.  It is a
+ * two-counter hysteresis machine over blocks of `blockLen` samples.  Each
+ * sample is run through the filter; the block accumulates the mean square of
+ * the INPUT at +0x0c and of the FILTER OUTPUT at +0x10.  At the end of a block
+ * both are turned into means by multiplying by 1/blockLen, and each is fed
+ * into a one-pole smoother -- `0.7f * old + 0.3f * mean` -- at +0x14 (input)
+ * and +0x18 (output).  The block then scores as a HIT or a MISS; a hit
+ * advances +0x2c and clears +0x30, a miss advances +0x30, and +0x30 reaching
+ * +0x20 clears +0x2c and the answer.  +0x2c reaching +0x1c sets the answer.
+ * So +0x1c is "how many good blocks in a row declare the tone" and +0x20 is
+ * "how many bad blocks in a row withdraw it".
+ *
+ * ---------------------------------------------------------------------------
+ * THE TWO `process` OVERLOADS ARE NOT THE SAME ALGORITHM, and that is the
+ * single most important thing about this class.  They agree exactly on the
+ * accumulation, on the smoother, on both constants and on the hit/miss
+ * bookkeeping, and they differ in how a block SCORES:
+ *
+ *   process(float)          hit iff  mean_out >= threshold  AND
+ *                                    (flag == 0 || acc_18 > ratio * acc_14)
+ *
+ *   process(float *, n)     the same, PLUS a second, weaker arm: a block
+ *                           whose mean_out fell short of `threshold` but
+ *                           reached HALF of it still scores as a hit when
+ *                           `flag` is set and acc_18 exceeds 0.85 * acc_14.
+ *
+ * The weak arm is 0x105a0..0x105d8 and it exists in the array overload only:
+ * `process(float)` has no `0.5f`, no `0.85` and no third comparison, and the
+ * two functions reference SEPARATE literal-pool slots for the constants they
+ * do share (0x5c/0x60/0x64 against 0x68/0x6c/0x70 in `.rodata.cst4`).  So
+ * they are not one body called twice and must not be factored into one here.
+ *
+ * They also differ in one piece of bookkeeping, which is recorded as a
+ * deviation rather than smoothed over: see docs/deviations.md.
  *
  * NOT POLYMORPHIC: the destructor appears with the `D1` and `D2` variants and
  * no `D0`, and GCC emits a deleting destructor only for a virtual one, so
@@ -104,15 +140,33 @@ public:
 	~GenericToneDetector();
 
 	/*
-	 * `_ZN19GenericToneDetector7processEPfj`, 422 bytes, NOT WRITTEN.
-	 * `VPcmV34Progress` is the only caller in the object -- it runs the
-	 * `ANSamToneDetector` embedded at `VPcmFloModem + 0x6f5c` over one
-	 * block on the modem-on-hold arm -- so it is declared here and defined
-	 * nowhere, weak in that one translation unit.  VPcmFloModem.h's block
-	 * on its own four says why at length; the arrangement is identical.
+	 * `_ZN19GenericToneDetector5resetEv`, 68 bytes.  `GenericIIR::reset()`
+	 * on the filter, then the four accumulators, the two block counters,
+	 * the sample counter and the answer back to zero -- eight fields, and
+	 * NOT `blocks1`, `blocks2`, `blockLen`, `threshold`, `ratio` or
+	 * `flag`, which are configuration and survive a reset.
+	 */
+	void reset();
+
+	/*
+	 * `_ZN19GenericToneDetector7processEf`, 318 bytes.  One sample in, the
+	 * answer at +0x38 out.  `int` because the object returns +0x38 in
+	 * `%eax` and nothing narrows it.
+	 */
+	int process(float sample);
+
+	/*
+	 * `_ZN19GenericToneDetector7processEPfj`, 422 bytes.  `n` samples from
+	 * `samples`, and the answer as it stands after the last of them --
+	 * with `n == 0` returning it without touching the filter at all.
 	 *
-	 * The result is the detector's answer at +0x38, which both overloads
-	 * return; `int` for the reason the file comment gives for the other.
+	 * `VPcmV34Progress` is the only caller in the object: it runs the
+	 * `ANSamToneDetector` embedded at `VPcmFloModem + 0x6f5c` over one
+	 * block on the modem-on-hold arm.  `DSPLIB_GTD_UNWRITTEN` is what that
+	 * translation unit used to make its reference weak while this was
+	 * undefined; it is defined here as nothing, it stays because
+	 * `v34pcmmain.cpp` still spells it, and a weak reference against a real
+	 * definition resolves to that definition.
 	 */
 #ifndef DSPLIB_GTD_UNWRITTEN
 #define DSPLIB_GTD_UNWRITTEN
