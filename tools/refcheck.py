@@ -420,6 +420,14 @@ def renumber(old, new, nth=None):
     else:
         hpat = re.compile(r"(?m)^(#{2,4} )%s\." % re.escape(o))
         #
+        # BOTH SIDES OF A MERGE FOUND THIS BUG INDEPENDENTLY, and this is
+        # the one that survived.  `cid-dtmf` bounded the repeat to {0,10}?
+        # instead, which also kills the backtracking but stops rewriting a
+        # citation list longer than ten -- silently.  Requiring the
+        # separator has no cap and no such blind spot, so it wins.  Finding
+        # 1703 describes the bounded version and no longer matches this
+        # code; it is left as written, because findings are a record.
+        #
         # THE SEPARATOR IS REQUIRED INSIDE THE REPEAT, and that is the whole
         # difference between this running in 20 ms and running in five and a
         # half seconds.  It used to be optional --

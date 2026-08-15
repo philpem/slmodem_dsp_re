@@ -23,6 +23,7 @@ extern void ref_FPM_MRF_init(void *state, const void *cfg, int fresh);
 extern void ref_FPM_MRF_free(void *state);
 extern short ref_B103_MRF_FILT_TX[];
 extern short ref_B103_MRF_FILT_RX[];
+extern const struct fpm_mrf_cfg ref_FPM_MRF_CFG;
 
 static void
 compare(const struct fpm_mrf *ours, const struct fpm_mrf *ref, const char *tag)
@@ -104,6 +105,17 @@ int
 main(void)
 {
 	int rc = 0;
+
+	/*
+	 * The library's default configuration, under the name the blob
+	 * exports for it.  Sixteen bytes with two null pointers in them, so
+	 * the whole object is compared rather than field by field: the
+	 * padding after `taps` is part of what init copies.
+	 */
+	diff_begin("FPM_MRF_CFG against the blob");
+	diff_eq_obj("FPM_MRF_CFG", struct fpm_mrf_cfg, &FPM_MRF_CFG,
+		    &ref_FPM_MRF_CFG, 0);
+	rc |= diff_end();
 
 	/* Bell 103 transmit: 7200 -> 8000. */
 	rc |= run("MRF 10:9 (7200->8000)", 10, 9, ref_B103_MRF_FILT_TX, 270);

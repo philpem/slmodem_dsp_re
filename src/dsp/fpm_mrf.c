@@ -151,7 +151,7 @@ FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out, short count)
  * caller supplies its own filter and ratio, so this is a template rather than
  * a usable converter.
  */
-const struct fpm_mrf_cfg FPM_MRF_CFG_data = {
+const struct fpm_mrf_cfg FPM_MRF_CFG = {
 	.branches = 9,
 	.decimate = 10,
 	.taps = 270
