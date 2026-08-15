@@ -30,13 +30,16 @@ WHAT IT PINS, and why each case is here rather than being a nice idea.
    the interferer lands on the reference bin or the band edge, its answer moves
    by whole indices.  A fit over every bin should barely notice.
 
-5. A NOTCH -- one bin sharply DOWN.  This is the case Phil rates as the more
-   likely of the two, and it is the one the outlier rejection must NOT catch.
-   The rejection is deliberately UPWARD ONLY: an interferer adds energy, a
-   channel defect removes it, and a passive line cannot amplify.  A symmetric
-   rule discarded the 3450 Hz band-edge cliff -- the single most important
-   feature of this bench's channel -- and moved the answer from index 9 to 7.
-   So this case asserts the opposite of case 4: the notch must SURVIVE.
+5. AN ISOLATED NOTCH must NOT move the answer either.  Pre-emphasis matches
+   the channel's GENERAL SHAPE; residual resonance and per-bin error are the
+   equaliser's job, and it has 80 complex taps adapting every symbol, which is
+   the right tool for a notch a few hundred hertz wide.  So the discriminator
+   is not up-versus-down -- both an interferer and a narrow notch are things to
+   ignore -- it is NARROWBAND versus BROADBAND.
+
+6. A BROAD ROLL-OFF, by contrast, MUST move it.  That IS the general shape, and
+   a selector that ignored it would be ignoring its whole purpose.  Cases 5 and
+   6 together are what stop the smoothing being tuned into uselessness.
 
 THIS TESTS THE PYTHON MODEL, NOT THE C.  `preemphshape.py` and
 `probe_preemp_shape()` in v34hshak.c were written from the same figures but not
@@ -55,7 +58,7 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0])
 # reimplemented the scorer and so tested itself: a fix to preemphshape.py left
 # it failing, because the two had drifted apart the moment they were written.
 from preemphshape import (template_db, DE, BIN_HZ,           # noqa: E402
-                          inband_bins, best_template, reject_outliers)
+                          inband_bins, best_template, median_smooth)
 
 BAUDS = (2400, 2743, 3000, 3200, 3429)
 EDGE = {2400: 18, 2743: 18, 3000: 19, 3200: 20, 3429: 22}   # 0-based
@@ -152,7 +155,9 @@ def main():
     print("\n4. one corrupted bin -- a tone leaking into a single probe slot")
     # +12 dB into one in-band bin, swept over every in-band bin, flat channel.
     for baud in (2400, 3429):
-        bins = [i for i, _ in inband(baud)]
+        # INTERIOR bins only: the endpoints are deliberately left raw, see
+        # median_smooth()'s docstring for the measurement that decided it.
+        bins = [i for i, _ in inband(baud)][1:-1]
         worst_shape = worst_obj = 0
         for b in bins:
             s = shape_pick(lambda fs: 0.0, baud, bump=(b, 12.0))
@@ -167,27 +172,29 @@ def main():
         check("one bad bin moves the fit at most 1 index, %d baud" % baud,
               worst_shape <= 1, True)
 
-    print("\n5. a notch -- one bin sharply DOWN -- must NOT be rejected")
+    print("\n5. an ISOLATED notch must not move the answer -- that is the "
+          "equaliser's job")
+    for baud in (2400, 3429):
+        bins = [i for i, _ in inband_bins(baud)][1:-1]
+        worst = 0
+        for b in bins:
+            worst = max(worst, abs(shape_pick(lambda fs: 0.0, baud,
+                                              bump=(b, -18.0))))
+        print("  %-58s %d" % ("worst index error from one -18 dB bin, %d baud"
+                              % baud, worst))
+        check("one isolated notch moves the fit at most 1 index, %d baud"
+              % baud, worst <= 1, True)
+
+    print("\n6. a BROAD roll-off must move it -- that IS the general shape")
     for baud in (2400, 3429):
         fsm = dict(inband_bins(baud))
-        bins = [i for i, _ in inband_bins(baud)]
-        # A deep notch on the highest in-band bin is a roll-off, and must pull
-        # the answer UP the scale (more top-end correction), not be discarded.
-        edge = max(bins)
         flat = shape_pick(lambda fs: 0.0, baud)
-        notched = shape_pick(lambda fs: 0.0, baud, bump=(edge, -18.0))
-        print("  %-58s flat %d -> notched %d"
-              % ("deep notch on the top in-band bin, %d baud" % baud,
-                 flat, notched))
-        check("a notch changes the answer (it is not discarded), %d baud"
-              % baud, notched != flat, True)
-        # And a notch in the MIDDLE must not be thrown away either: assert the
-        # bin survives rejection rather than asserting a particular index.
-        mid = bins[len(bins) // 2]
-        kept = reject_outliers([(i, -18.0 if i == mid else 0.0)
-                                for i in bins])
-        check("a mid-band notch survives outlier rejection, %d baud" % baud,
-              any(i == mid for i, _ in kept), True)
+        # -10 dB linear across the band: unmistakably a shape, not a defect.
+        sloped = shape_pick(lambda fs: -10.0 * fs, baud)
+        print("  %-58s flat %d -> sloped %d"
+              % ("linear -10 dB/band roll-off, %d baud" % baud, flat, sloped))
+        check("a broad roll-off changes the answer, %d baud" % baud,
+              sloped != flat, True)
 
     print("\n%s" % ("ALL PASS" if not FAILED else "FAILURES:"))
     for f in FAILED:

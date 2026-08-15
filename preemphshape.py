@@ -103,37 +103,67 @@ def inband_bins(baud):
             if i not in NOISE_BINS and lo <= (i + 1) * BIN_HZ / baud <= hi]
 
 
-def reject_outliers(pairs):
-    """Drop bins that are an interferer rather than a measurement of the line.
+def median_smooth(pairs):
+    """Drop NARROWBAND features; keep the general shape of the channel.
 
-    UPWARD ONLY, and that asymmetry is the whole point.  An interferer -- a
-    tone leaking into a probe slot -- ADDS energy to one bin.  A channel defect
-    -- a band-edge roll-off, a notch -- REMOVES it.  Symmetric rejection cannot
-    tell them apart and throws away the cliff at 3450 Hz, which is the single
-    most important feature of this bench's channel: with it dropped the answer
-    moved from index 9 to 7.  Rejecting only bins ABOVE the median keeps every
-    genuine defect and discards only the thing that cannot be one.
+    Pre-emphasis exists to match the channel's broad shape.  Residual
+    resonance and per-bin error are the equaliser's job -- it has 80 complex
+    taps and adapts every symbol, which is the right tool for a notch a few
+    hundred hertz wide.  So the selector must not chase an isolated bin: an
+    interferer leaking into one probe slot and a narrow notch are BOTH things
+    it should ignore, and an earlier version of this code moved eight indices
+    on the first and ten on the second.
 
-    Median absolute deviation, limit max(6 dB, 5*MAD).  Mirrors
-    probe_preemp_shape() in v34hshak.c.  Without it a single corrupted bin
-    moves the answer by eight indices, worse than the counter it replaces.
+    The discriminator is not up-versus-down, it is NARROW versus BROAD.  A
+    three-point median over the level-vs-bin sequence does exactly that:
+    isolated impulses of either sign vanish, while monotone edges survive
+    untouched.  Verified on the cases that matter --
+
+        flat + one +12 dB bin   -> flat
+        flat + one -18 dB notch -> flat
+        band-edge cliff         -> unchanged
+        broad roll-off          -> unchanged
+
+    THE ENDPOINTS ARE DELIBERATELY LEFT RAW, and this was measured rather
+    than assumed.  Filtering them looks strictly better at 3429 baud --
+    immunity to an isolated tone AND an isolated notch goes from (2, 10) index
+    errors to (0, 0) for the cost of one index on the real capture.  It also
+    BREAKS the identity property at 2400 baud, because for a monotone ramp
+    `median(v0, v1, v2) == v1`: filtering an endpoint pulls a ramp's end inward
+    and distorts the very shapes the templates are.  At 2400 there are only ten
+    in-band bins, so damaging two of them is 20% of the evidence, and the
+    selector stopped being able to name templates 5, 7, 8 and 10 at all.
+
+    Correctness first.  Identity is the property that makes this thing worth
+    having; edge-bin immunity is a hardening.  So:
+
+        KNOWN LIMIT -- an isolated bad bin EXACTLY at a band edge can still
+        move the answer, by up to ten indices for a deep notch.  The fifteen
+        of seventeen interior bins are immune.  Fixing this needs an endpoint
+        rule that preserves monotone ramps -- a linear extrapolation guard
+        rather than a median -- and that has not been written.
+
+    KNOWN LIMIT: a three-point median removes runs of ONE bin.  Two adjacent
+    corrupted bins survive it.  Widening to five would catch those and would
+    also start blurring genuinely narrow channel features, which is the trade
+    this deliberately does not make -- a real two-bin defect is 300 Hz wide and
+    is a channel, not an interferer.
     """
-    if len(pairs) < 6:
+    if len(pairs) < 3:
         return pairs
-    import statistics as _st
+    idx = [i for i, _ in pairs]
     lv = [d for _, d in pairs]
-    med = _st.median(lv)
-    mad = _st.median([abs(d - med) for d in lv]) or 0.0
-    lim = max(6.0, 5.0 * mad)
-    keep = [(i, d) for i, d in pairs if d - med <= lim]
-    return keep if len(keep) >= 6 else pairs
+    out = list(lv)
+    for k in range(1, len(lv) - 1):
+        out[k] = sorted(lv[k - 1:k + 2])[1]
+    return list(zip(idx, out))
 
 
-def score_templates(level_of_bin, baud, reject=True):
+def score_templates(level_of_bin, baud, smooth=True):
     """`level_of_bin` maps bin index -> dB.  Returns [(rms, index)] sorted."""
     pairs = [(i, level_of_bin(i)) for i, _ in inband_bins(baud)]
-    if reject:
-        pairs = reject_outliers(pairs)
+    if smooth:
+        pairs = median_smooth(pairs)
     fs = dict(inband_bins(baud))
     out = []
     for idx in range(11):
@@ -144,8 +174,8 @@ def score_templates(level_of_bin, baud, reject=True):
     return out
 
 
-def best_template(level_of_bin, baud, reject=True):
-    return score_templates(level_of_bin, baud, reject)[0][1]
+def best_template(level_of_bin, baud, smooth=True):
+    return score_templates(level_of_bin, baud, smooth)[0][1]
 
 
 def parse_bins(text):
