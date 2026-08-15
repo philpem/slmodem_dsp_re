@@ -79,5 +79,100 @@
   "label": "the destructor nulls the pointer it just freed, volatile so it survives",
   "find": "\tdelete filter;",
   "replace": "\tdelete filter;\n\t*(GenericIIR<float, double> * volatile *)&filter = 0;"
+ },
+ {
+  "label": "the two per-sample squares are crossed",
+  "find": "\tfloat in = acc_0c + sample * sample;\n\tfloat out = acc_10 + y * y;",
+  "replace": "\tfloat in = acc_0c + y * y;\n\tfloat out = acc_10 + sample * sample;"
+ },
+ {
+  "label": "the filter's output is never squared; the input is, twice",
+  "find": "\tfloat out = acc_10 + y * y;",
+  "replace": "\tfloat out = acc_10 + sample * sample;"
+ },
+ {
+  "label": "the block boundary is tested a sample late",
+  "find": "\tif (++sampleCount != blockLen) {",
+  "replace": "\tif (sampleCount++ != blockLen) {"
+ },
+ {
+  "label": "the reciprocal becomes a division",
+  "find": "\t\tfloat inv = 1.0f / sampleCount;\n\t\tfloat meanIn = in * inv;\n\t\tfloat meanOut = out * inv;",
+  "replace": "\t\tfloat meanIn = in / sampleCount;\n\t\tfloat meanOut = out / sampleCount;"
+ },
+ {
+  "label": "the smoother's two constants are swapped",
+  "find": "\t\tacc_14 = 0.7f * acc_14 + 0.3f * meanIn;",
+  "replace": "\t\tacc_14 = 0.3f * acc_14 + 0.7f * meanIn;"
+ },
+ {
+  "label": "the two smoothers take each other's mean",
+  "find": "\t\tacc_14 = 0.7f * acc_14 + 0.3f * meanIn;\n\t\tacc_18 = 0.7f * acc_18 + 0.3f * meanOut;",
+  "replace": "\t\tacc_14 = 0.7f * acc_14 + 0.3f * meanOut;\n\t\tacc_18 = 0.7f * acc_18 + 0.3f * meanIn;"
+ },
+ {
+  "label": "the threshold test is strict",
+  "find": "\t\tif (meanOut >= threshold) {",
+  "replace": "\t\tif (meanOut > threshold) {"
+ },
+ {
+  "label": "the threshold is compared against the input mean",
+  "find": "\t\tif (meanOut >= threshold) {",
+  "replace": "\t\tif (meanIn >= threshold) {"
+ },
+ {
+  "label": "the ratio test is not strict",
+  "find": "if (flag == 0 || acc_18 > ratio * acc_14) {",
+  "replace": "if (flag == 0 || acc_18 >= ratio * acc_14) {"
+ },
+ {
+  "label": "the ratio scales the wrong smoother",
+  "find": "if (flag == 0 || acc_18 > ratio * acc_14) {",
+  "replace": "if (flag == 0 || ratio * acc_18 > acc_14) {"
+ },
+ {
+  "label": "flag is tested the wrong way round",
+  "find": "if (flag == 0 || acc_18 > ratio * acc_14) {",
+  "replace": "if (flag != 0 || acc_18 > ratio * acc_14) {"
+ },
+ {
+  "label": "the hit arm does not clear the miss counter",
+  "find": "\t\t\t\tcount_2c++;\n\t\t\t\tcount_30 = 0;",
+  "replace": "\t\t\t\tcount_2c++;"
+ },
+ {
+  "label": "the strong arm's withdrawal uses blocks1",
+  "find": "\n\t\t\t} else if (++count_30 >= blocks2) {",
+  "replace": "\n\t\t\t} else if (++count_30 >= blocks1) {"
+ },
+ {
+  "label": "the below-threshold arm's withdrawal uses blocks1",
+  "find": "\n\t\t} else if (++count_30 >= blocks2) {",
+  "replace": "\n\t\t} else if (++count_30 >= blocks1) {"
+ },
+ {
+  "label": "withdrawal drops the answer but keeps the hit count",
+  "find": "\t\t\t\tcount_2c = 0;\n\t\t\t\tdetected = 0;",
+  "replace": "\t\t\t\tdetected = 0;"
+ },
+ {
+  "label": "the answer is set on a strict comparison",
+  "find": "\t\t\tif (count_2c >= blocks1)\n\t\t\t\tdetected = 1;",
+  "replace": "\t\t\tif (count_2c > blocks1)\n\t\t\t\tdetected = 1;"
+ },
+ {
+  "label": "the below-threshold arm reaches blocks1 too, so the two arms agree",
+  "find": "\n\t\t} else if (++count_30 >= blocks2) {\n\t\t\tcount_2c = 0;\n\t\t\tdetected = 0;\n\t\t}\n",
+  "replace": "\n\t\t} else {\n\t\t\tif (++count_30 >= blocks2) {\n\t\t\t\tcount_2c = 0;\n\t\t\t\tdetected = 0;\n\t\t\t}\n\t\t\tif (count_2c >= blocks1)\n\t\t\t\tdetected = 1;\n\t\t}\n"
+ },
+ {
+  "label": "the block cleanup leaves both accumulators standing",
+  "find": "\t\tsampleCount = 0;\n\t\tacc_0c = 0;\n\t\tacc_10 = 0;",
+  "replace": "\t\tsampleCount = 0;"
+ },
+ {
+  "label": "the sample counter is not cleared at the boundary",
+  "find": "\t\tsampleCount = 0;\n\t\tacc_0c = 0;",
+  "replace": "\t\tacc_0c = 0;"
  }
 ]

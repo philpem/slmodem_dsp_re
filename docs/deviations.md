@@ -5741,3 +5741,31 @@ the residue rather than on the energy.
 bounds it well below 257 samples, so this is out of contract for the only
 caller in the object. `t_cid_mtd.c` drives 256 and 300 full-scale samples so
 both sides are compared either side of the wrap.
+
+======================================================================
+
+## D320 🐛 `GenericToneDetector::process` withdraws the answer and puts it straight back when `blocks1` is zero
+
+*Batch of 2026-08-15, from `_ZN19GenericToneDetector7processEf` (blob 0x10350)
+0x103fb..0x10420 against 0x10453..0x1047d, and the same shape in
+`_ZN19GenericToneDetector7processEPfj` (0x10490) at 0x105e4 against 0x10572.
+**Reachability: `samples1 == 0` at construction, which rounds up to
+`blocks1 == 0`.** **Observability: the answer at +0x38 reads 1 after a block
+that missed, on one arm and not on the other.** Status: `unmeasured` -- no
+caller in the object has been traced for a zero `samples1`. Fix class: none
+proposed; reproduced as found.*
+
+A block that MISSES advances `count_30`, and `count_30` reaching `blocks2`
+clears `count_2c` and the answer. On the arm the threshold passed the object
+then falls through to `if (count_2c >= blocks1) detected = 1`, and the
+comparison is unsigned, so a `blocks1` of zero makes it true of the zero that
+withdrawal has just written and the answer goes back up in the same block. The
+below-threshold arm jumps to the per-block cleanup at 0x10420 without loading
+`blocks1` at all and leaves it down. The array overload's weak arm does the
+same at 0x105e4.
+
+So with `blocks1 == 0` the object's answer depends on WHICH KIND of miss the
+block was, which nothing else about the class suggests it should. `t_gtonedet`
+drives it -- tag 206 constructs with `samples1 == 0` and requires the blob's
+answer to be down after a below-threshold block -- so the asymmetry is
+reproduced and pinned rather than only noticed.

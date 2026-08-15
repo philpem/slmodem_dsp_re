@@ -95,6 +95,9 @@ void ref_gtd_d2(void *) asm("ref__ZN19GenericToneDetectorD2Ev");
  */
 void our_gtd_reset(void *) asm("_ZN19GenericToneDetector5resetEv");
 void ref_gtd_reset(void *) asm("ref__ZN19GenericToneDetector5resetEv");
+
+int our_gtd_process1(void *, float) asm("_ZN19GenericToneDetector7processEf");
+int ref_gtd_process1(void *, float) asm("ref__ZN19GenericToneDetector7processEf");
 }
 
 #define OBJ	((int)sizeof(GenericToneDetector))
@@ -562,6 +565,528 @@ run_reset(void)
 	return diff_end();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * DRIVING THE TWO `process`ES.
+ *
+ * These are the only members with STATE THAT CARRIES, so a single call proves
+ * almost nothing: the whole class is a hysteresis machine whose interesting
+ * behaviour is fifty blocks long.  Both sides are therefore run over a stream
+ * and the WHOLE OBJECT is compared after EVERY call, not once at the end --
+ * an end-only comparison says a divergence exists, a per-call one says which
+ * sample caused it and everything after is consequence.
+ *
+ * THE FILTER IS MADE TRIVIAL FOR THE DESIGNED SCENARIOS.  `nden = nnum = 1`
+ * with `den[0] = 1` and `num[0] = gain` makes `GenericIIR` compute exactly
+ * `y = gain * x` with no history term at all, so the mean of y^2 over a block
+ * of constant |x| = a is `gain^2 * a^2` and the arm a block takes can be
+ * CHOSEN rather than hoped for.  That is what makes the coverage assertions at
+ * the bottom of each run possible; a pseudorandom sweep alone would never
+ * enter the narrow arms, would pass, and would be measuring nothing.
+ *
+ * The random sweep is kept as well, and its coefficients are deliberately
+ * unbounded: an unstable filter drives the accumulators to infinity and then
+ * to NaN, which is the only thing that exercises the UNORDERED side of every
+ * comparison in these bodies.  The object's `fcom`/`sahf`/`ja` pairs and our
+ * `>=`/`>` spellings agree there or they do not, and that is worth knowing.
+ */
+#define NSAMP	192
+
+static float stream[NSAMP];
+
+/* Blocks of constant magnitude, sign alternating so the stream is not DC. */
+static void
+fill_blocks(unsigned int blockLen, const float *amps, int namps)
+{
+	int i;
+
+	for (i = 0; i < NSAMP; i++) {
+		int blk = (int)((unsigned)i / blockLen);
+		float a = amps[blk % namps];
+
+		stream[i] = (i & 1) ? -a : a;
+	}
+}
+
+/*
+ * Alternating PHASES of constant sign and alternating sign, at one magnitude
+ * throughout.  Against the three-tap comb `y = x[k] + x[k-1] + x[k-2]` the
+ * first phase has a gain of 3 and the second a gain of 1, so `acc_18 /
+ * acc_14` swings between 9 and 1 while `meanOut` stays well over any small
+ * threshold.  That is the only way to reach the STRONG arm's miss -- a block
+ * that passed the threshold and failed the ratio -- with `count_2c` already
+ * standing, which is what the withdrawal there needs in order to be visible.
+ */
+static void
+fill_phases(unsigned int blockLen, int blocksPerPhase, float amp)
+{
+	int i;
+
+	for (i = 0; i < NSAMP; i++) {
+		int blk = (int)((unsigned)i / blockLen);
+		int phase = (blk / blocksPerPhase) & 1;
+
+		stream[i] = (phase && (i & 1)) ? -amp : amp;
+	}
+}
+
+/*
+ * What the blob did with each block, read off ITS OWN state rather than
+ * recomputed.  A hit advances +0x2c and clears +0x30; a miss advances +0x30.
+ * That is enough to say which of the two the object chose, and the designed
+ * scenarios are what say WHY it chose it.
+ */
+struct arms {
+	int boundary;
+	int inblock;
+	int hit;
+	int miss;
+	int set;
+	int cleared;
+};
+
+static void
+note_arm(const unsigned char *pre, const unsigned char *post, struct arms *a)
+{
+	const GenericToneDetector *b = (const GenericToneDetector *)pre;
+	const GenericToneDetector *c = (const GenericToneDetector *)post;
+
+	if (c->sampleCount == 0 && b->sampleCount + 1 == b->blockLen) {
+		a->boundary++;
+		if (c->count_2c != b->count_2c && c->count_30 == 0)
+			a->hit++;
+		else if (c->count_30 == b->count_30 + 1)
+			a->miss++;
+		if (c->detected != 0 && b->detected == 0)
+			a->set++;
+		if (c->detected == 0 && b->detected != 0)
+			a->cleared++;
+	} else {
+		a->inblock++;
+	}
+}
+
+/*
+ * The filter after a stream, compared as a whole with only the two history
+ * POINTERS stood aside.  `m_i` and `m_acc` are NOT excluded here, unlike in
+ * `compare_filters_`: that exclusion is about what the two CONSTRUCTORS leave
+ * behind, and after a `process` both sides have written both of them, so
+ * excluding them would be looking away from live state rather than from a
+ * known divergence.
+ */
+static void
+compare_filters_after_(unsigned int nden, unsigned int nnum,
+		       unsigned int blockSize, int tag)
+{
+	unsigned char *fa = (unsigned char *)((GenericToneDetector *)ours)
+				->filter;
+	unsigned char *fb = (unsigned char *)((GenericToneDetector *)theirs)
+				->filter;
+	unsigned char ca[IIR_BYTES], cb[IIR_BYTES];
+	double *ina, *inb, *outa, *outb;
+	unsigned int inLen = nnum + blockSize;
+	unsigned int outLen = nden + blockSize;
+
+	memcpy(&ina, fa + IIR_INHIST, sizeof ina);
+	memcpy(&inb, fb + IIR_INHIST, sizeof inb);
+	memcpy(&outa, fa + IIR_OUTHIST, sizeof outa);
+	memcpy(&outb, fb + IIR_OUTHIST, sizeof outb);
+
+	memcpy(ca, fa, IIR_BYTES);
+	memcpy(cb, fb, IIR_BYTES);
+	memset(ca + IIR_INHIST, 0, 2 * sizeof(void *));
+	memset(cb + IIR_INHIST, 0, 2 * sizeof(void *));
+	diff_eq_obj_(__FILE__, __LINE__, "the filter after the stream",
+		     "GenericIIR<float, double>", ca, cb, IIR_BYTES,
+		     (long)tag);
+
+	diff_eq_int("the input history matches, all %ld of it",
+		    memcmp(ina, inb, inLen * sizeof(double)) == 0, 1,
+		    (long)(inLen * sizeof(double)));
+	diff_eq_int("the output history matches, all %ld of it",
+		    memcmp(outa, outb, outLen * sizeof(double)) == 0, 1,
+		    (long)(outLen * sizeof(double)));
+}
+
+/*
+ * One stream through `process(float)`, both sides, compared every sample.
+ * Returns the number of hits the BLOB scored, which is what the designed
+ * scenarios assert against.
+ */
+static int
+drive_scalar(unsigned int nden, unsigned int nnum, unsigned int blockSize,
+	     unsigned int s1, unsigned int s2, float thr, unsigned int flag,
+	     float rat, unsigned int blockLen, int nsamp, int tag,
+	     struct arms *a)
+{
+	unsigned char pre[SLOT];
+	int i, live = harness_alloc.live;
+
+	our_gtd_c1(ours, nden, nnum, den, num, s1, s2, thr, flag, rat,
+		   blockLen, blockSize);
+	ref_gtd_c1(theirs, nden, nnum, den, num, s1, s2, thr, flag, rat,
+		   blockLen, blockSize);
+
+	for (i = 0; i < nsamp; i++) {
+		int ra, rb;
+
+		memcpy(pre, theirs, SLOT);
+		ra = our_gtd_process1(ours, stream[i]);
+		rb = ref_gtd_process1(theirs, stream[i]);
+
+		diff_eq_int("process(float) returns the blob's answer (%ld)",
+			    ra, rb, tag * 1000 + i);
+		diff_eq_int("and it is the field at +0x38 (%ld)", rb,
+			    (int)((GenericToneDetector *)theirs)->detected,
+			    tag * 1000 + i);
+		compare_objects_("after process(float)", tag * 1000 + i);
+		note_arm(pre, theirs, a);
+	}
+
+	compare_filters_after_(nden, nnum, blockSize, tag);
+	diff_eq_int("no store past the object (%ld)", guard_intact(), 1, tag);
+	our_gtd_d1(ours);
+	ref_gtd_d1(theirs);
+	diff_eq_int("the stream leaked nothing (%ld)",
+		    harness_alloc.live - live, 0, tag);
+
+	return a->hit;
+}
+
+/*
+ * The designed scenarios.  `gain` goes into num[0] and den[0] is 1, so
+ * `meanOut == gain^2 * meanIn` and `acc_18 == gain^2 * acc_14` block after
+ * block (both smoothers start at zero and the recurrence is linear).  That
+ * turns each of the object's three tests into arithmetic that can be chosen:
+ *
+ *   meanOut >= threshold        gain^2 * a^2  against  thr
+ *   acc_18 > ratio * acc_14     gain^2        against  ratio
+ *   acc_14 * 0.85 >= acc_18     0.85          against  gain^2   (array only)
+ *
+ * so gain 1.0 passes the ratio test at ratio 0.5 and fails the 0.85 test,
+ * while gain 0.5 -- meanOut a quarter of meanIn -- fails both.
+ */
+#define AMP_STRONG	1.0f	/* a^2 = 1.00, over thr = 0.5           */
+#define AMP_BAND	0.6f	/* a^2 = 0.36, under 0.5 and over 0.25  */
+#define AMP_SILENT	0.1f	/* a^2 = 0.01, under both               */
+#define SCEN_THR	0.5f
+
+static int
+run_process1(void)
+{
+	struct arms a;
+	int trial, flag0hits, flag1hits;
+
+	diff_begin("GenericToneDetector::process(float)");
+
+	memset(&a, 0, sizeof a);
+
+	/*
+	 * The random sweep: varied orders, varied block lengths, varied
+	 * durations, and coefficients large enough that some of these filters
+	 * run away to infinity and NaN on purpose.
+	 */
+	for (trial = 0; trial < 12; trial++) {
+		unsigned int nden = 1u + (unsigned)(trial % 4);
+		unsigned int nnum = 1u + (unsigned)((trial + 2) % 4);
+		unsigned int blockSize = (unsigned)(trial % 3);
+		unsigned int blockLen = 1u + (unsigned)(trial % 7);
+		unsigned int flag = (unsigned)(trial & 1);
+		float thr = as_float(floatbits[trial % NFLOATS]);
+		float rat = as_float(floatbits[(trial + 5) % NFLOATS]);
+		int i;
+
+		seed(trial);
+		for (i = 0; i < NSAMP; i++) {
+			lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+			stream[i] = (float)(int)(lfsr - 0x8000u) / 4096.0f;
+		}
+		drive_scalar(nden, nnum, blockSize, 3u * blockLen,
+			     2u * blockLen, thr, flag, rat, blockLen, NSAMP,
+			     100 + trial, &a);
+	}
+
+	/*
+	 * Sustained tone: every block over threshold, so `count_2c` climbs to
+	 * `blocks1` and the answer is set and then held.
+	 */
+	{
+		static const float amps[1] = { AMP_STRONG };
+
+		seed(0);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(8u, amps, 1);
+		drive_scalar(1u, 1u, 2u, 24u, 16u, SCEN_THR, 1u, 0.5f, 8u,
+			     NSAMP, 200, &a);
+		diff_eq_int("a sustained tone sets the answer (%ld)",
+			    a.set > 0, 1, 200);
+	}
+
+	/*
+	 * Tone, then silence: the answer is set and then WITHDRAWN once
+	 * `count_30` reaches `blocks2`.
+	 */
+	{
+		static const float amps[8] = {
+			AMP_STRONG, AMP_STRONG, AMP_STRONG, AMP_STRONG,
+			AMP_SILENT, AMP_SILENT, AMP_SILENT, AMP_SILENT
+		};
+		int before = a.cleared;
+
+		seed(1);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(8u, amps, 8);
+		/*
+		 * blocks1 is 3 and blocks2 is 2 ON PURPOSE and not for
+		 * variety: with the two equal, every mutation that reads one
+		 * where the object reads the other is invisible.
+		 */
+		drive_scalar(1u, 1u, 2u, 24u, 16u, SCEN_THR, 1u, 0.5f, 8u,
+			     NSAMP, 201, &a);
+		diff_eq_int("silence after a tone withdraws the answer (%ld)",
+			    a.cleared > before, 1, 201);
+	}
+
+	/*
+	 * THE `flag` ARM, as a pair.  Same stream, same everything except
+	 * `flag`, and a gain of 0.5 so that `acc_18` is a quarter of `acc_14`
+	 * and the ratio test at 0.5 CANNOT pass.  With `flag` set every block
+	 * must miss; with it clear the ratio test is not reached and every
+	 * block over threshold must hit.  Neither half means anything alone.
+	 */
+	{
+		static const float amps[1] = { 4.0f };	/* meanOut = 4.0 */
+		struct arms f0, f1;
+
+		memset(&f0, 0, sizeof f0);
+		memset(&f1, 0, sizeof f1);
+
+		seed(2);
+		den[0] = 1.0;
+		num[0] = 0.5;
+		fill_blocks(8u, amps, 1);
+		flag1hits = drive_scalar(1u, 1u, 2u, 24u, 800u, SCEN_THR, 1u,
+					 0.5f, 8u, NSAMP, 202, &f1);
+		flag0hits = drive_scalar(1u, 1u, 2u, 24u, 800u, SCEN_THR, 0u,
+					 0.5f, 8u, NSAMP, 203, &f0);
+
+		diff_eq_int("with flag set and the smoothers a quarter apart, "
+			    "no block hits (%ld)", flag1hits, 0, 202);
+		diff_eq_int("and every block missed instead (%ld)",
+			    f1.miss, f1.boundary, 202);
+		diff_eq_int("with flag clear the ratio test is not reached "
+			    "and the same blocks hit (%ld)",
+			    flag0hits, f0.boundary, 203);
+		a.hit += f0.hit;
+		a.miss += f1.miss;
+		a.boundary += f0.boundary + f1.boundary;
+		a.inblock += f0.inblock + f1.inblock;
+	}
+
+	/*
+	 * EXACTLY AT THE THRESHOLD, which is the only input that can tell
+	 * `>=` from `>`.  Eight samples of magnitude 1 give `in = 8.0` and
+	 * `inv = 0.125`, both exact, so `meanOut` is 1.0 to the bit and a
+	 * `threshold` of 1.0f sits precisely on it.  `flag` is clear so the
+	 * ratio test is not reached and the threshold is the only thing being
+	 * asked about.
+	 */
+	{
+		static const float amps[1] = { 1.0f };
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(3);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(8u, amps, 1);
+		drive_scalar(1u, 1u, 2u, 24u, 800u, 1.0f, 0u, 0.5f, 8u, NSAMP,
+			     204, &e);
+		diff_eq_int("a mean exactly equal to the threshold is a hit "
+			    "(%ld)", e.hit, e.boundary, 204);
+		a.hit += e.hit;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+		a.set += e.set;
+	}
+
+	/*
+	 * EXACTLY AT THE RATIO, the same argument one test down.  A gain of 1
+	 * makes the two smoothers hold the same bits as each other block after
+	 * block, so a `ratio` of 1.0f puts `acc_18 > ratio * acc_14` exactly on
+	 * its boundary: strictly greater is false, and every block must miss.
+	 */
+	{
+		static const float amps[1] = { 1.0f };
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(4);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(8u, amps, 1);
+		drive_scalar(1u, 1u, 2u, 24u, 800u, 0.5f, 1u, 1.0f, 8u, NSAMP,
+			     205, &e);
+		diff_eq_int("smoothers exactly in the ratio do not hit (%ld)",
+			    e.hit, 0, 205);
+		diff_eq_int("every block missed instead (%ld)", e.miss,
+			    e.boundary, 205);
+		a.miss += e.miss;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	/*
+	 * `blocks1 == 0`, WHICH IS WHERE THE TWO ARMS STOP AGREEING.  A
+	 * `samples1` of zero rounds up to zero blocks, so `count_2c >= blocks1`
+	 * is true of every value `count_2c` can hold -- including the zero the
+	 * withdrawal has just written.  The strong arm reaches that test after
+	 * withdrawing and puts the answer straight back; the below-threshold
+	 * arm never loads `blocks1` and leaves it down.  The stream ends on a
+	 * silent block and the blob's answer is asserted to be DOWN, which is
+	 * the whole of deviation D-GTD1 stated as a measurement.
+	 */
+	{
+		static const float amps[8] = {
+			AMP_STRONG, AMP_STRONG, AMP_STRONG, AMP_STRONG,
+			AMP_SILENT, AMP_SILENT, AMP_SILENT, AMP_SILENT
+		};
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(5);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(8u, amps, 8);
+		drive_scalar(1u, 1u, 2u, 0u, 8u, SCEN_THR, 0u, 0.5f, 8u,
+			     NSAMP, 206, &e);
+		diff_eq_int("with blocks1 zero the answer still goes up "
+			    "(%ld)", e.set > 0, 1, 206);
+		diff_eq_int("and a below-threshold block leaves it down, "
+			    "because that arm never reaches blocks1 (%ld)",
+			    (int)((GenericToneDetector *)theirs)->detected, 0,
+			    206);
+		a.hit += e.hit;
+		a.miss += e.miss;
+		a.set += e.set;
+		a.cleared += e.cleared;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	/*
+	 * THE RECIPROCAL, CAUGHT IN THE ACT.  `d8 /7` divides 1.0f by the
+	 * count and MULTIPLIES twice; a source that had divided twice would
+	 * agree with it over almost every input and not over this one.
+	 * Forty-one samples of magnitude 1 accumulate to exactly 41.0 -- every
+	 * partial sum is a whole number a `float` holds exactly -- and at 80
+	 * bits `41.0 * (1.0f/41)` falls one part in 2^64 SHORT of 1.0 while
+	 * `41.0 / 41` is exactly 1.0.  So with `threshold` at 1.0f every block
+	 * MISSES, and would hit if the object divided.  The assertion below is
+	 * that measurement and nothing softer.
+	 */
+	{
+		static const float amps[1] = { 1.0f };
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(6);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(41u, amps, 1);
+		drive_scalar(1u, 1u, 2u, 82u, 82u, 1.0f, 0u, 0.5f, 41u, NSAMP,
+			     207, &e);
+		diff_eq_int("the mean of 41 unit samples falls SHORT of 1.0, "
+			    "so every block misses (%ld)", e.hit, 0, 207);
+		diff_eq_int("blocks of 41 completed (%ld)", e.boundary > 0, 1,
+			    207);
+		a.miss += e.miss;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	/*
+	 * THE THRESHOLD IS THE OUTPUT'S MEAN AND NOT THE INPUT'S.  A gain of
+	 * 0.5 puts a factor of four between them -- meanIn 4.0, meanOut 1.0 --
+	 * and a threshold of 2.0f sits between the two, so the object's answer
+	 * says which one it looked at.  With `flag` clear the ratio test is
+	 * not reached and the threshold is the only question asked.
+	 */
+	{
+		static const float amps[1] = { 2.0f };
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(7);
+		den[0] = 1.0;
+		num[0] = 0.5;
+		fill_blocks(8u, amps, 1);
+		drive_scalar(1u, 1u, 2u, 24u, 800u, 2.0f, 0u, 0.5f, 8u, NSAMP,
+			     208, &e);
+		diff_eq_int("a threshold between the two means follows the "
+			    "OUTPUT, so every block misses (%ld)", e.hit, 0,
+			    208);
+		a.miss += e.miss;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	/*
+	 * THE STRONG ARM'S MISS, WITH SOMETHING TO LOSE.  A three-tap comb and
+	 * a stream that alternates between constant sign and alternating sign
+	 * swings the smoothers' ratio between 9 and 1 across a `ratio` of 8,
+	 * while `meanOut` never goes near the threshold.  So the first phase
+	 * hits until the answer is up and the second takes the arm that passed
+	 * the threshold and failed the ratio -- with `count_2c` standing at
+	 * three, which is what makes `count_2c = 0` in the withdrawal a store
+	 * with a consequence rather than a write of zero over zero.
+	 * blocks1 = 3, blocks2 = 2.
+	 */
+	{
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(8);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		num[1] = 1.0;
+		num[2] = 1.0;
+		fill_phases(8u, 8, 1.0f);
+		drive_scalar(1u, 3u, 2u, 24u, 16u, SCEN_THR, 1u, 8.0f, 8u,
+			     NSAMP, 209, &e);
+		diff_eq_int("the comb's first phase hits (%ld)", e.hit > 0, 1,
+			    209);
+		diff_eq_int("its second phase misses on the ratio (%ld)",
+			    e.miss > 0, 1, 209);
+		diff_eq_int("the answer went up (%ld)", e.set > 0, 1, 209);
+		diff_eq_int("and was withdrawn again (%ld)", e.cleared > 0, 1,
+			    209);
+		a.hit += e.hit;
+		a.miss += e.miss;
+		a.set += e.set;
+		a.cleared += e.cleared;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	/*
+	 * The arms, asserted rather than hoped for.  Every one of these was
+	 * zero at some point while this test was being written, and a run that
+	 * cannot say which arms it entered is a run that proves nothing about
+	 * the ones it did not.
+	 */
+	diff_eq_int("blocks completed (%ld)", a.boundary > 0, 1, 0);
+	diff_eq_int("samples inside a block (%ld)", a.inblock > 0, 1, 0);
+	diff_eq_int("the hit arm was reached (%ld)", a.hit > 0, 1, 0);
+	diff_eq_int("the miss arm was reached (%ld)", a.miss > 0, 1, 0);
+	diff_eq_int("the answer was set (%ld)", a.set > 0, 1, 0);
+	diff_eq_int("the answer was withdrawn (%ld)", a.cleared > 0, 1, 0);
+
+	return diff_end();
+}
+
 static int
 run_ctor(void)
 {
@@ -979,6 +1504,7 @@ main(void)
 	rc |= run_dtor();
 	rc |= run_ansam();
 	rc |= run_reset();
+	rc |= run_process1();
 
 	return rc;
 }

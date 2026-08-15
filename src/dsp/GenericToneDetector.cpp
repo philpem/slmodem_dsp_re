@@ -157,6 +157,101 @@ void GenericToneDetector::reset()
 }
 
 /*
+ * ONE SAMPLE.  0x10350, 318 bytes.
+ *
+ * The sample goes through the filter; the block accumulates the square of the
+ * INPUT at +0x0c and of the OUTPUT at +0x10; and on the `blockLen`th sample
+ * both are turned into means, smoothed into +0x14 and +0x18, and scored.
+ *
+ * ---------------------------------------------------------------------------
+ * WHERE THE ROUNDING HAPPENS, because it is not uniform and the object is
+ * explicit about it.  `-mfpmath=387` with GCC's default `-fexcess-precision=
+ * fast`, so a value stays at 80 bits until something stores it.
+ *
+ *   - `in` and `out` are stored to +0x0c/+0x10 and reloaded next sample, so
+ *     the accumulators round to `float` ONCE PER SAMPLE.  `fstps` on the
+ *     not-a-boundary arm, `fadds` on the way back in.
+ *   - on a boundary they are NOT stored -- the object writes zero to both --
+ *     so the means are taken from the UNROUNDED 80-bit sums.  That is why
+ *     they are locals here and not `acc_0c += ...`: the store has to be on
+ *     one arm only, exactly as `fstps 0xc(%ebx)` is.
+ *   - `acc_14` and `acc_18` are stored with `fsts`, which does NOT pop, and
+ *     the ratio test that follows uses the register.  So the comparison is
+ *     made at 80 bits against the value the store rounded.
+ *
+ * ---------------------------------------------------------------------------
+ * THE RECIPROCAL IS A RECIPROCAL.  `d8 3d` is `D8 /7`, FDIVR against a
+ * `float` in `.rodata.cst4` holding 1.0f: ST(0) = 1.0f / ST(0).  So the object
+ * forms 1/blockLen once and MULTIPLIES by it twice; `in / sampleCount` would
+ * be a different answer in the last place and is not what is written here.
+ * (Read from the ModR/M byte and not from the mnemonic -- finding 245 is about
+ * the popping forms, and this is the memory form, but the rule is the rule.)
+ *
+ * The count is converted with `push $0; push %ecx; fildll`, a 64-bit load of a
+ * zero-extended `sampleCount`, which is what an UNSIGNED-to-float conversion
+ * compiles to.  Keeping the operand `unsigned` is what keeps that encoding.
+ *
+ * ---------------------------------------------------------------------------
+ * 0.7 AND 0.3 ARE `float` CONSTANTS at `.rodata.cst4` +0x60 and +0x64, loaded
+ * with `flds`/`fmuls`.  The smoother is a one-pole low pass with a 0.3
+ * coefficient, and the same pair is spelled again at +0x6c/+0x70 for the array
+ * overload -- separate slots, which is one of the things saying the two bodies
+ * are separate code.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SCORING, and the one shape in it that is not symmetric.  A block scores
+ * as a hit when the mean output reaches `threshold` and either `flag` is clear
+ * or the output smoother leads the input smoother by `ratio`.  A hit advances
+ * +0x2c and clears +0x30; a miss advances +0x30, and +0x30 reaching `blocks2`
+ * withdraws the answer.  `count_2c >= blocks1` then sets it -- but ONLY on the
+ * arm the threshold passed.  The below-threshold arm jumps straight to the
+ * per-block cleanup at 0x10420 and never loads `blocks1` at all.  Reproduced
+ * as written; deviation D320 says what it costs.
+ */
+int GenericToneDetector::process(float sample)
+{
+	float y = filter->process(sample);
+	float in = acc_0c + sample * sample;
+	float out = acc_10 + y * y;
+
+	if (++sampleCount != blockLen) {
+		acc_0c = in;
+		acc_10 = out;
+		return detected;
+	}
+
+	{
+		float inv = 1.0f / sampleCount;
+		float meanIn = in * inv;
+		float meanOut = out * inv;
+
+		acc_14 = 0.7f * acc_14 + 0.3f * meanIn;
+		acc_18 = 0.7f * acc_18 + 0.3f * meanOut;
+
+		if (meanOut >= threshold) {
+			if (flag == 0 || acc_18 > ratio * acc_14) {
+				count_2c++;
+				count_30 = 0;
+			} else if (++count_30 >= blocks2) {
+				count_2c = 0;
+				detected = 0;
+			}
+			if (count_2c >= blocks1)
+				detected = 1;
+		} else if (++count_30 >= blocks2) {
+			count_2c = 0;
+			detected = 0;
+		}
+
+		sampleCount = 0;
+		acc_0c = 0;
+		acc_10 = 0;
+	}
+
+	return detected;
+}
+
+/*
  * One `delete`, and nothing else: the object is not written, so `filter` is
  * left dangling rather than nulled.  The test asserts that, because "the
  * destructor leaves the object alone" is a claim about forty bytes of code and
