@@ -17,17 +17,8 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/v32dec.h"	/* SMCv32_PMAP16, declared once, see D308 */
 #include "dsplib/v32smc.h"
-/*
- * For `SMCv32_PMAP16`, which lives in v32dec.h: the object holds ONE
- * table and two translation units read it two ways, so the tree keeps a
- * single declaration and v32smc.h points here rather than repeating it
- * with the other signedness.  The V.32 work records the load-site census
- * behind that choice -- three sites read it signed, two unsigned, so signed
- * leaves the fewest differing -- in a deviation entry that has not been
- * merged here yet; do not cite it by number until it has.
- */
-#include "dsplib/v32dec.h"
 
 extern void ref_SMCv32_encoder_abs(void *smc, void *out, const short *in,
 				   unsigned short count);
