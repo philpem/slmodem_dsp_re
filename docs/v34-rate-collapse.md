@@ -177,7 +177,7 @@ lets every existing mechanism run exactly as it already does.
 | `faa96` renamed `baud_rate` (106 uses) | It is the symbol rate in baud. The threshold arithmetic above is unreadable until the field is named, and the "N × baud_rate = N seconds" reading it invites is wrong — see §3.2. |
 | `dsplib_v34_rrn_on_badblock` + `tools/benchflags.c` | The change is **default-off**, switched by `DSPLIB_V34_RRN_ON_BADBLOCK` at runtime, so master's behaviour is bit-identical and an A/B differs by one environment variable. |
 | `V34HSINIT`, `V34RTNCOUNT`, `V34EQFREEZE`, `V34EQUPOW` | Instrumentation at the *callee* `v34handshakinit` with `__builtin_return_address(0)`. An earlier version instrumented 1 of 14 call sites and reported zero events. |
-| `probe_preemph_fit` (Theil–Sen) | Second-order, and gated separately — see §7. |
+| `probe_preemp_fit` (Theil–Sen) | Second-order, and gated separately — see §7. |
 | `tools/hybrid_link.sh` | The final hybrid link was hand-run and recorded nowhere; the binary on the bench was an hour older than the source it was meant to be testing. |
 
 Every declared instrumentation string is registered in

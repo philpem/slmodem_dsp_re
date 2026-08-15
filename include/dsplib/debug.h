@@ -37,14 +37,14 @@ extern unsigned int dsplibs_debug_level;
 /*
  * EXPERIMENTAL KNOB, branch `improve/v34-training` only, default 0.
  *
- * Non-zero selects the least-squares tilt estimator in `probe_preemph` instead
+ * Non-zero selects the least-squares tilt estimator in `probe_preemp` instead
  * of the object's two-point counter.  It is a runtime flag rather than a
  * compile-time one so a single hybrid build can serve both arms of an A/B and
  * the two arms cannot differ in anything else -- the pre-emphasis A/B runs so
  * far used two separate binaries, which leaves the compiler as an uncontrolled
  * variable.  Set from the environment by the caller; never set in library code.
  */
-extern int dsplib_v34_fit_preemph;
+extern int dsplib_v34_fit_preemp;
 
 /*
  * Dump all 25 probe DFT bins (V34PROBEBINS).  Default 0 for the same reason
@@ -80,9 +80,9 @@ extern int dsplib_v34_rrn_on_badblock;
  * Choose the pre-emphasis filter by matching the measured channel against all
  * eleven transmit-spectrum templates, instead of reducing it to a tilt and
  * indexing a counter that can only reach 6-10.  Set only by
- * tools/benchflags.c from DSPLIB_V34_SHAPE_PREEMPH.  Findings 1956, 1957.
+ * tools/benchflags.c from DSPLIB_V34_SHAPE_PREEMP.  Findings 1956, 1957.
  */
-extern int dsplib_v34_shape_preemph;
+extern int dsplib_v34_shape_preemp;
 
 /*
  * Log the equaliser's tap energy, split centre-run against off-centre, every

@@ -10,22 +10,22 @@
  * (finding 1901 could not rule it out).  One binary, two environments, cannot
  * have that problem.
  *
- *   DSPLIB_V34_FIT_PREEMPH=1      least-squares tilt estimator (#144)
+ *   DSPLIB_V34_FIT_PREEMP=1      least-squares tilt estimator (#144)
  *   DSPLIB_V34_DUMP_PROBE_BINS=1  print all 25 probe DFT bins at level 3
  *   DSPLIB_V34_SEED_DEFECT=1      halve the equaliser error: proves the
  *                                 replay harness can see a difference
- *   DSPLIB_V34_SHAPE_PREEMPH=1    pick the pre-emphasis filter by matching
+ *   DSPLIB_V34_SHAPE_PREEMP=1    pick the pre-emphasis filter by matching
  *                                 all 11 spectrum templates (1956, 1957)
  *   DSPLIB_V34_RRN_ON_BADBLOCK=1  our bad-block run renegotiates (V.34
  *                                 §11.6) instead of retraining (#149)
  */
 #include <stdlib.h>
 
-extern int dsplib_v34_fit_preemph;
+extern int dsplib_v34_fit_preemp;
 extern int dsplib_v34_dump_probe_bins;
 extern int dsplib_v34_seed_defect;
 extern int dsplib_v34_rrn_on_badblock;
-extern int dsplib_v34_shape_preemph;
+extern int dsplib_v34_shape_preemp;
 extern int dsplib_v34_dump_eq_taps;
 
 static int
@@ -40,10 +40,10 @@ __attribute__((constructor))
 static void
 dsplib_benchflags_init(void)
 {
-	dsplib_v34_fit_preemph = flag("DSPLIB_V34_FIT_PREEMPH");
+	dsplib_v34_fit_preemp = flag("DSPLIB_V34_FIT_PREEMP");
 	dsplib_v34_dump_probe_bins = flag("DSPLIB_V34_DUMP_PROBE_BINS");
 	dsplib_v34_seed_defect = flag("DSPLIB_V34_SEED_DEFECT");
 	dsplib_v34_rrn_on_badblock = flag("DSPLIB_V34_RRN_ON_BADBLOCK");
-	dsplib_v34_shape_preemph  = flag("DSPLIB_V34_SHAPE_PREEMPH");
+	dsplib_v34_shape_preemp  = flag("DSPLIB_V34_SHAPE_PREEMP");
 	dsplib_v34_dump_eq_taps   = flag("DSPLIB_V34_DUMP_EQ_TAPS");
 }

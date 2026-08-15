@@ -1193,79 +1193,79 @@
   "label": "probe: the search reads the bins' shift, not their energy",
   "find": "\tshort ref = bins[PROBE_REF_BIN].energy;\n\tshort x = bins[n].energy;",
   "replace": "\tshort ref = bins[PROBE_REF_BIN].shift;\n\tshort x = bins[n].shift;",
-  "fn": "probe_preemph"
+  "fn": "probe_preemp"
  },
  {
   "label": "probe: the search keeps 32 bits",
   "find": "\t\tx = (short)(((int)x * k) >> 14);",
   "replace": "\t\tx = (short)(((int)x * k) >> 13);",
-  "fn": "probe_preemph"
+  "fn": "probe_preemp"
  },
  {
   "label": "probe: the search's comparison includes equality",
   "find": "\t\tif (x > ref) {",
   "replace": "\t\tif (x >= ref) {",
-  "fn": "probe_preemph"
+  "fn": "probe_preemp"
  },
  {
   "label": "probe: the search runs one step further",
   "find": "\t\tif (i > 9) {",
   "replace": "\t\tif (i > 10) {",
-  "fn": "probe_preemph"
+  "fn": "probe_preemp"
  },
  {
   "label": "probe: the search starts from four",
   "find": "\tshort i = 5;",
   "replace": "\tshort i = 4;",
-  "fn": "probe_preemph"
+  "fn": "probe_preemp"
  },
  {
   "label": "probe: the search's early exit reports the un-advanced counter",
   "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)i, (int)baud);\n\t\t\treturn i;",
   "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)(short)(i - 1),\n\t\t\t\t    (int)baud);\n\t\t\treturn (short)(i - 1);",
-  "fn": "probe_preemph"
+  "fn": "probe_preemp"
  },
  {
   "label": "probe: the two index-10 reports are the same string",
   "find": "\t\t\t\t    \"V34PREEMPHASIS, - index is 10, \"\n\t\t\t\t    \"baudrate= %d \\n\", (int)baud);",
   "replace": "\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)i, (int)baud);",
-  "fn": "probe_preemph"
+  "fn": "probe_preemp"
  },
  {
   "label": "probe: 3429's search constant is 3200's",
-  "find": "\t\tidx = probe_preemph(bins, 22, 0x6626, 0xd65);\n\t\t*pe3429 = idx;\n\t\tmp_or(msg, 7,",
-  "replace": "\t\tidx = probe_preemph(bins, 22, 0x639f, 0xd65);\n\t\t*pe3429 = idx;\n\t\tmp_or(msg, 7,",
+  "find": "\t\tidx = probe_preemp(bins, 22, 0x6626, 0xd65);\n\t\t*pe3429 = idx;\n\t\tmp_or(msg, 7,",
+  "replace": "\t\tidx = probe_preemp(bins, 22, 0x639f, 0xd65);\n\t\t*pe3429 = idx;\n\t\tmp_or(msg, 7,",
   "fn": "probeselect"
  },
  {
   "label": "probe: 3000's search bin is 20",
-  "find": "\t\tidx = probe_preemph(bins, 19, 0x656f, 0xbb8);\n\t\t*pe3000 = idx;\n\t\tmp_or(msg, 5,",
-  "replace": "\t\tidx = probe_preemph(bins, 20, 0x656f, 0xbb8);\n\t\t*pe3000 = idx;\n\t\tmp_or(msg, 5,",
+  "find": "\t\tidx = probe_preemp(bins, 19, 0x656f, 0xbb8);\n\t\t*pe3000 = idx;\n\t\tmp_or(msg, 5,",
+  "replace": "\t\tidx = probe_preemp(bins, 20, 0x656f, 0xbb8);\n\t\t*pe3000 = idx;\n\t\tmp_or(msg, 5,",
   "fn": "probeselect"
  },
  {
   "label": "probe: 2400's search constant is 2800's",
-  "find": "\t\tidx = probe_preemph(bins, 18, 0x7da7, 0x960);\n\t\t*pe2400 = idx;\n\t\tmp_put_preemph(msg, idx);\n\t\treturn;",
-  "replace": "\t\tidx = probe_preemph(bins, 18, 0x6789, 0x960);\n\t\t*pe2400 = idx;\n\t\tmp_put_preemph(msg, idx);\n\t\treturn;",
+  "find": "\t\tidx = probe_preemp(bins, 18, 0x7da7, 0x960);\n\t\t*pe2400 = idx;\n\t\tmp_put_preemp(msg, idx);\n\t\treturn;",
+  "replace": "\t\tidx = probe_preemp(bins, 18, 0x6789, 0x960);\n\t\t*pe2400 = idx;\n\t\tmp_put_preemp(msg, idx);\n\t\treturn;",
   "fn": "probeselect"
  },
  {
   "label": "probe: the shared tail's two halves are transposed",
   "find": "\tmp_or(msg, 1, rev >> 2);\n\tmp_or(msg, 2, (rev << 6) & 0xff);",
   "replace": "\tmp_or(msg, 2, rev >> 2);\n\tmp_or(msg, 1, (rev << 6) & 0xff);",
-  "fn": "mp_put_preemph"
+  "fn": "mp_put_preemp"
  },
  {
   "label": "probe: the shared tail shifts by five",
   "find": "\tmp_or(msg, 2, (rev << 6) & 0xff);",
   "replace": "\tmp_or(msg, 2, (rev << 5) & 0xff);",
-  "fn": "mp_put_preemph"
+  "fn": "mp_put_preemp"
  },
  {
   "label": "probe: the shared tail does not reverse",
   "find": "\tunsigned rev = (unsigned short)bitreverse((unsigned short)idx, 4);",
   "replace": "\tunsigned rev = (unsigned short)idx;",
-  "fn": "mp_put_preemph"
+  "fn": "mp_put_preemp"
  },
  {
   "label": "probe: the message is not cleared first",

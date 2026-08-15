@@ -102,7 +102,7 @@ not notch correctors for one frequency.
 
 ### 3.2 What the object does
 
-**[CODE]** `probe_preemph` in `v34hshak.c`. It is a **two-point tilt meter**:
+**[CODE]** `probe_preemp` in `v34hshak.c`. It is a **two-point tilt meter**:
 
     ref = bins[4].energy            /* 750 Hz  */
     x   = bins[edge].energy         /* the band edge for this baud rate */
@@ -137,8 +137,8 @@ than accidental: five tilt buckets onto five filters, complete and exact
 
 ### 3.4 The fitted alternative (branch `improve/v34-training`)
 
-**[CODE]** `probe_preemph_fit`, reachable only through
-`dsplib_v34_fit_preemph` (default 0, set from the environment by
+**[CODE]** `probe_preemp_fit`, reachable only through
+`dsplib_v34_fit_preemp` (default 0, set from the environment by
 `tools/benchflags.c`, which is linked only into the bench hybrid — never into
 the library or any test tier).
 

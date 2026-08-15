@@ -1851,7 +1851,7 @@ txmitquadbit(void *obj, short bits)
 /*
  * THE LEAST-SQUARES ESTIMATOR (branch `improve/v34-training`, task #144
  * "improve the training itself").  Reachable only through
- * `dsplib_v34_fit_preemph`, which defaults to zero.
+ * `dsplib_v34_fit_preemp`, which defaults to zero.
  *
  * The object measures tilt from TWO bins: the band edge against bin 4, counted
  * in 4.06 dB steps.  Measured on this bench, that reads **2.13 dB** on a
@@ -1876,18 +1876,18 @@ txmitquadbit(void *obj, short bits)
  * (31 - shift), refined by the mantissa in `energy`.  No log function is
  * needed and none is called.
  */
-int dsplib_v34_fit_preemph;		/* see include/dsplib/debug.h */
+int dsplib_v34_fit_preemp;		/* see include/dsplib/debug.h */
 int dsplib_v34_dump_probe_bins;	/* likewise */
 int dsplib_v34_seed_defect;	/* likewise -- harness self-test */
 int dsplib_v34_rrn_on_badblock;	/* likewise -- see debug.h */
-int dsplib_v34_shape_preemph;	/* likewise -- findings 1956, 1957 */
+int dsplib_v34_shape_preemp;	/* likewise -- findings 1956, 1957 */
 int dsplib_v34_dump_eq_taps;	/* likewise -- equaliser workload */
 
 #define PROBE_FIT_MAX		32	/* bins 1..25, comfortably */
 #define PROBE_NOISE_SLOT(i)	((i) == 5 || (i) == 7 || (i) == 11 || (i) == 15)
 
 static short
-probe_preemph_fit(const struct v34_dftbin *bins, unsigned edge, short baud)
+probe_preemp_fit(const struct v34_dftbin *bins, unsigned edge, short baud)
 {
 	/*
 	 * Ordinary least squares of level against bin number, over the bins
@@ -2025,10 +2025,10 @@ probe_preemph_fit(const struct v34_dftbin *bins, unsigned edge, short baud)
 
 /*
  * ---------------------------------------------------------------------------
- * `probe_preemph_shape` -- choose the filter whose SHAPE fits the channel.
+ * `probe_preemp_shape` -- choose the filter whose SHAPE fits the channel.
  *
  * WHAT IS WRONG WITH BOTH OF THE ALTERNATIVES ABOVE.  The object reduces the
- * channel to a two-point tilt; `probe_preemph_fit` reduces it to a least-
+ * channel to a two-point tilt; `probe_preemp_fit` reduces it to a least-
  * squares tilt.  A tilt is one number, and only one of the two filter families
  * IS a tilt.  Findings 1956 and 1957:
  *
@@ -2103,7 +2103,7 @@ probe_template_db(int idx, double fs)
 }
 
 static short
-probe_preemph_shape(const struct v34_dftbin *bins, unsigned edge, short baud)
+probe_preemp_shape(const struct v34_dftbin *bins, unsigned edge, short baud)
 {
 	double y[PROBE_FIT_MAX], fsv[PROBE_FIT_MAX];
 	double de, lo, hi, bestvar = 0.0;
@@ -2177,7 +2177,7 @@ probe_preemph_shape(const struct v34_dftbin *bins, unsigned edge, short baud)
 }
 
 static short
-probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
+probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 {
 	short ref = bins[PROBE_REF_BIN].energy;
 	short x = bins[n].energy;
@@ -2212,14 +2212,14 @@ probe_preemph(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 * the counter uses two bins and half of one family.  Each falls
 	 * through to the next when it has too little to work with.
 	 */
-	if (dsplib_v34_shape_preemph) {
-		short f = probe_preemph_shape(bins, n, baud);
+	if (dsplib_v34_shape_preemp) {
+		short f = probe_preemp_shape(bins, n, baud);
 
 		if (f >= 0)
 			return f;		/* else fall through */
 	}
-	if (dsplib_v34_fit_preemph) {
-		short f = probe_preemph_fit(bins, n, baud);
+	if (dsplib_v34_fit_preemp) {
+		short f = probe_preemp_fit(bins, n, baud);
 
 		if (f >= 0)
 			return f;		/* else fall through */
@@ -2281,7 +2281,7 @@ mp_or(short *msg, unsigned i, unsigned bits)
 
 /* The tail four of the five rates share: the index, reversed, split in two. */
 static void
-mp_put_preemph(short *msg, short idx)
+mp_put_preemp(short *msg, short idx)
 {
 	unsigned rev = (unsigned short)bitreverse((unsigned short)idx, 4);
 
@@ -2646,7 +2646,7 @@ band_edges:
 
 	if (role == 0x65) {
 		mp_or(msg, 8, 0xe0);
-		idx = probe_preemph(bins, 22, 0x6626, 0xd65);
+		idx = probe_preemp(bins, 22, 0x6626, 0xd65);
 		*pe3429 = idx;
 		mp_or(msg, 7, (unsigned)(unsigned short)
 			      bitreverse((unsigned short)idx, 4) << 1);
@@ -2668,9 +2668,9 @@ band_edges:
 	*rx_baud = 0xd65;
 	*rx_carrier = 0x7a7;
 	mp_or(msg, 2, 0x24);
-	idx = probe_preemph(bins, 22, 0x6626, 0xd65);
+	idx = probe_preemp(bins, 22, 0x6626, 0xd65);
 	*pe3429 = idx;
-	mp_put_preemph(msg, idx);
+	mp_put_preemp(msg, idx);
 	return;
 
 rate_3200:
@@ -2690,7 +2690,7 @@ rate_3200:
 			mp_or(msg, 6, 2);
 			mp_or(msg, 7, 0xc0);
 		}
-		idx = probe_preemph(bins, 20, 0x639f, 0xc80);
+		idx = probe_preemp(bins, 20, 0x639f, 0xc80);
 		*pe3200 = idx;
 		mp_or(msg, 6, (unsigned)(unsigned short)
 			      bitreverse((unsigned short)idx, 4) << 2);
@@ -2716,9 +2716,9 @@ rate_3200:
 			*rx_carrier = 0x780;
 		}
 		mp_or(msg, 2, 0x24);
-		idx = probe_preemph(bins, 20, 0x639f, 0xc80);
+		idx = probe_preemp(bins, 20, 0x639f, 0xc80);
 		*pe3200 = idx;
-		mp_put_preemph(msg, idx);
+		mp_put_preemp(msg, idx);
 		return;
 	}
 
@@ -2748,7 +2748,7 @@ rate_3000_body:
 			mp_or(msg, 5, 4);
 		mp_or(msg, 6, 0x80);
 
-		idx = probe_preemph(bins, 19, 0x656f, 0xbb8);
+		idx = probe_preemp(bins, 19, 0x656f, 0xbb8);
 		*pe3000 = idx;
 		mp_or(msg, 5, (unsigned)(unsigned short)
 			      bitreverse((unsigned short)idx, 4) << 3);
@@ -2775,9 +2775,9 @@ rate_3000_body:
 			mp_or(msg, 1, 4);
 		}
 		mp_or(msg, 2, 0x24);
-		idx = probe_preemph(bins, 19, 0x656f, 0xbb8);
+		idx = probe_preemp(bins, 19, 0x656f, 0xbb8);
 		*pe3000 = idx;
-		mp_put_preemph(msg, idx);
+		mp_put_preemp(msg, idx);
 		return;
 	}
 
@@ -2806,7 +2806,7 @@ rate_2800_body:
 		if (bins[20].shift <= 5 && bins[2].shift <= 5)
 			mp_or(msg, 3, 1);
 		mp_or(msg, 4, 0xd);
-		idx = probe_preemph(bins, 18, 0x6789, 0xaf0);
+		idx = probe_preemp(bins, 18, 0x6789, 0xaf0);
 		*pe2800 = idx;
 		mp_or(msg, 4,
 		      ((unsigned)(unsigned short)
@@ -2835,17 +2835,17 @@ rate_2800_body:
 		*rx_carrier = 0x74b;
 	}
 	mp_or(msg, 2, 0x24);
-	idx = probe_preemph(bins, 18, 0x6789, 0xaf0);
+	idx = probe_preemp(bins, 18, 0x6789, 0xaf0);
 	*pe2800 = idx;
-	mp_put_preemph(msg, idx);
+	mp_put_preemp(msg, idx);
 	return;
 
 rate_2400:
 	if (role == 0x65) {
 		mp_or(msg, 2, 0x24);
-		idx = probe_preemph(bins, 18, 0x7da7, 0x960);
+		idx = probe_preemp(bins, 18, 0x7da7, 0x960);
 		*pe2400 = idx;
-		mp_put_preemph(msg, idx);
+		mp_put_preemp(msg, idx);
 		return;
 	}
 	if ((*(unsigned short *)(m + 0xa9e0) & 0x3c) == 0)
@@ -2864,9 +2864,9 @@ rate_2400:
 	*rx_scale = scale2400;
 	*rx_cdesc = c1600;
 	mp_or(msg, 2, 0x24);
-	idx = probe_preemph(bins, 18, 0x7da7, 0x960);
+	idx = probe_preemp(bins, 18, 0x7da7, 0x960);
 	*pe2400 = idx;
-	mp_put_preemph(msg, idx);
+	mp_put_preemp(msg, idx);
 }
 
 /*
