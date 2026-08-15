@@ -1,10 +1,10 @@
 # V.34 rate collapse over SIP: root cause and remedy
 
-**Status:** root cause identified and quantified; remedy implemented and gated
-default-off. One pre-registered bench A/B is **suggestive but not conclusive** —
-the effect size is a halving of handshakes on every way of measuring it, but
-significance depends on the outcome that excludes most of the calls (§6.1).
-Replication is required, not optional. See §7.
+**Status:** root cause identified and quantified. The remedy is implemented and
+gated default-off, and **its pre-registered replication came back null** — 48
+calls at 24 per arm, handshakes per minute of carrier p = 0.130, connect success
+p = 0.416 (§6.2). The DEFECT is established from code and from 470 captures
+(§3, §4); that THIS CHANGE fixes it is not. The flag should stay off.
 
 Evidence key, as elsewhere in these docs:
 `[CODE]` read from our source or the object · `[MEASURED]` from bench or
@@ -242,6 +242,25 @@ all three — the median roughly halves however it is measured (3.0 → 1.0,
 measurement of a real effect looks like, and it is also what a null looks like
 when a lenient metric is applied to a small sample. **This batch cannot
 distinguish those two, and neither can any re-analysis of it.**
+
+### 6.2 The replication: null
+
+48 calls per `testbench/records/ab149r-PREREG.txt`, 24 per arm, both far ends,
+interleaved, with the primary outcome changed to one that excludes nothing.
+
+    connect success                 control 22/24  treatment 19/24   p = 0.416
+    handshakes per minute of carrier  4.62 median    3.31 median      p = 0.130
+
+**Doubling the sample moved p the wrong way** — 0.085 at 12 per arm, 0.130 at
+24. A real effect of the size the 45 s window implied would have sharpened, not
+blurred. §6.1's warning was right: that significance came from the exclusion.
+
+The distributions show the one thing worth keeping. The treatment's best ten
+calls run 0.8-2.2 handshakes/min against the control's 1.6-3.3, while its worst
+call is the worst in either arm at 16.4. **It appears to help typical calls and
+do nothing for bad ones** — consistent with its mechanism, since suppressing our
+own bad-block counter cannot help when the far end is the one demanding the
+retrain (flag 0x40 is exempt by design).
 
 ## 7. What this does not settle
 

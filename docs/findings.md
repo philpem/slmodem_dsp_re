@@ -59343,3 +59343,66 @@ read at page resolution gave the wrong answer and a re-render settled it -- the
 first was Figure 2 itself, where the 150 dpi render was too coarse to separate
 the two arrowheads meeting at the beta/gamma tick. Render spec figures at 400
 dpi and crop before reading a value off one.
+
+### 1958. THE REPLICATION IS A NULL: THE LADDER FIX DOES NOT SHOW A DEMONSTRABLE EFFECT AT 24 PER ARM
+
+48 calls, per `testbench/records/ab149r-PREREG.txt`, written before the batch
+existed. Both co-primary outcomes, scored exactly as registered:
+
+    CONNECT SUCCESS      control 22/24   treatment 19/24
+                         Fisher exact two-tailed p = 0.4158
+
+    HANDSHAKES PER MINUTE OF CARRIER   (zero exclusion, 47 of 48 calls)
+                         control   n=24  median 4.62  mean 4.96
+                         treatment n=23  median 3.31  mean 4.51
+                         permutation one-tailed p = 0.1303
+
+**NEITHER REACHES p < 0.05, AND THE PRE-REGISTRATION SAYS THAT IS AN ANSWER.**
+"At this sample size a null is a real answer, not an underpowered one, and it
+should be reported as such rather than re-scored until something moves." It is
+reported as such.
+
+**DOUBLING THE SAMPLE DID NOT RESOLVE IT, WHICH IS ITSELF INFORMATIVE.**
+The first batch gave p = 0.085 on this same metric at 12 per arm; 24 per arm
+gives p = 0.130. If the effect were as large as the original 45 s-window
+scoring implied (3.0 -> 1.0, p = 0.036), doubling n would have driven p down,
+not up. It did not. The most likely reading is that the 45 s window's
+significance came from its exclusion, exactly as 1955 warned, and the true
+effect is smaller than that scoring suggested -- possibly zero.
+
+**THE MEDIAN MOVES AND THE MEAN DOES NOT, and the distributions say why:**
+
+    control   1.6 1.6 2.2 2.2 2.4 2.5 2.6 2.7 3.0 3.3 4.0 4.4 4.9 5.1 5.6 5.6
+              6.3 7.1 7.1 7.9 8.2 8.2 8.2 12.3
+    treatment 0.8 0.9 0.9 1.3 1.9 1.9 1.9 2.1 2.1 2.2 3.3 3.3 3.9 3.9 3.9 6.2
+              7.1 7.1 8.2 8.2 8.2 8.2 16.4
+
+The treatment's lower half is clearly better -- its best ten calls run 0.8 to
+2.2 against the control's 1.6 to 3.3 -- and its upper half is not, ending in a
+16.4 that is the worst call in either arm. **The change appears to help typical
+calls and to do nothing for bad ones**, which is consistent with its mechanism:
+suppressing our own bad-block counter helps when the line is merely marginal
+and cannot help when the far end is demanding retrains, since flag 0x40 is
+exempt by design.
+
+**SECONDARIES, none of which rescue it.** The 15 s window gives median 1.0 in
+both arms. Rate on 1902 is 28800 in every single call of both arms -- that far
+end has no headroom and can show nothing. Rate on 1901 is median 14400 in both
+arms, with the control holding the batch's only 33600 and the treatment its
+only 26400.
+
+**WHAT THIS DOES AND DOES NOT OVERTURN.** Sections 3 and 4 of
+`docs/v34-rate-collapse.md` are untouched: the inverted ladder is read from the
+code, and the 72%-of-handshakes and 24000-vs-12000 figures come from 470
+captures through the blob's own counter. The defect is real. **What is now
+unsupported is that THIS CHANGE fixes it.** The flag stays default-off, and it
+should not be turned on for anyone.
+
+**THE HONEST POSITION AFTER TWO BATCHES.** Directionally favourable both times,
+significant neither time, and the effect shrank when the exclusion was removed.
+Either it is a small real effect that needs a sample this bench cannot
+practically supply, or it is nothing. Deciding between those with more calls of
+the same design would need roughly 100 per arm on this variance, which is not a
+good use of the bench. The better next move is a mechanism that helps the bad
+calls too -- the ones where the far end is asking for the retrain -- rather than
+more n on this one.
