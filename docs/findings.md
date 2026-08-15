@@ -51697,6 +51697,234 @@ is a HALF cycle, which is what makes the A and B phases 180 degrees apart.
 `include/dsplib/v32dec.h` also prototyped `FSE_decision_16pt`, which no
 translation unit defines. A declaration with no definition is a claim the tree
 cannot honour, and it contradicted 1603 in the same file; it is gone.
+### 1611. THE V.32 ECHO CANCELLER'S STATE: 0x68 BYTES, EIGHT BUFFERS, AND A DELAY LINE THAT HOLDS SYMBOLS RATHER THAN SAMPLES
+
+*`FPM_ECC_init` (0xa7610), `FPM_ECC_free` (0xa7870) and `ECC_CFG`
+(.data:0x8114) are reconstructed and differentially tested; `t_fpm_ecc`
+is 232 checks over eleven configurations. Findings 1611-1620 belong to this
+batch.*
+
+**THE CANCELLER IS DRIVEN BY SYMBOLS, NOT BY THE TRANSMITTED WAVEFORM.**
+`line` (+0x38) holds `line_len` PACKED symbols -- high byte selects one of six
+constellation maps in `cfg.imap` / `cfg.qmap`, low byte is the point inside it
+-- and two read taps walk it, `near_rd` (+0x30) and `far_rd` (+0x32),
+`cfg.far_lag` apart. Each tap feeds a two-element complex history
+(`near_i`/`near_q`, `far_i`/`far_q`), and those short histories are what the
+adaptive coefficients see. So a 200 ms round-trip echo costs 480 shorts of
+delay line and 40 complex taps, not 1,440 taps.
+
+`cfg.fill` presets the whole line, and `ECCv32_CFG` sets it to **16**, which
+resolves to `SMCv32_IMAP16[16]`. That table is 0x22 bytes = 17 entries, so
+the preset is the one point PAST a 16-point constellation -- independent
+confirmation of the packing, since any other reading of `fill` would index
+somewhere meaningless.
+
+**THE LAYOUT, MEASURED.** `struct fpm_ecc_cfg` is 24 bytes, copied wholesale
+into the state by init as six dwords: `far_lag`(+0), `near_taps`(+2),
+`far_taps`(+4), pad, `imap`(+8), `qmap`(+0xc), `fill`(+0x10), pad,
+`aux`(+0x14, read by nothing). `struct fpm_ecc` runs cfg, `hold_power`(0x18),
+`unk1a`, `enabled`(0x1c, int, set to 1 and never read here),
+`pwr_in`(0x20), `pwr_out`(0x22), `freeze`(0x24), pad, `adapt_near`(0x28,
+int), `adapt_far`(0x2c, int), `near_rd`, `far_rd`, `line_len`(0x34), pad,
+`line`(0x38), `near_idx`/`near_len`(0x3c/0x3e), `near_i`/`near_q`(0x40/0x44),
+`far_idx`/`far_len`(0x48/0x4a), `far_i`/`far_q`(0x4c/0x50), `coef[3]`(0x54),
+`mu`(0x60, init 0x29), `phase`(0x62, UNSIGNED -- `movzwl` and a `jbe`
+bound), `near_delay`(0x64), `far_delay`(0x66). **0x68 is a floor, not a
+proven size**: the three functions touch nothing above 0x67.
+
+**`near_delay` AND `far_delay` ARE INPUTS.** init READS 0x64 and 0x66 and
+never writes them, so the owner of the object sets them before calling.
+`line_len = far_lag + near_delay + far_delay`; `back = line_len -
+near_delay`; `near_rd = back % line_len` (a real `idiv`, so **`line_len` must
+be non-zero or both sides take SIGFPE**) and `far_rd = back - far_lag`, which
+is NOT reduced modulo the length.
+
+**EACH COEFFICIENT SET IS 2*(near_taps+far_taps) SHORTS AND THERE ARE THREE
+OF THEM**, `coef[0..2]` at 0x54/0x58/0x5c, one per sample phase: V.32 is 2400
+baud at 7200 Hz, and `cancel` cycles `phase` 0,1,2 and pulls a new symbol off
+the line each wrap. The layout inside a set is near-I, near-Q, far-I, far-Q,
+each block strided by `cfg.near_taps` or `cfg.far_taps`.
+
+**`ECC_CFG` IS `{480, 40, 4, 0, NULL, NULL, 0, 0, NULL}` AND IS NOT CONST.**
+It is in `.data`, where a const object would have gone to `.rodata` -- the
+same evidence that puts `ECCv32_CFG` in `.rodata`. Four far taps and no maps
+make it a template rather than a usable configuration, the same relationship
+`FPM_MRF_CFG_data` has to `MRFv32_CFG`. It is proven twice over: compared
+against `ref_ECC_CFG` as an object, and again through
+`FPM_ECC_init(state, NULL, 1)`, which takes it as the configuration.
+
+**init ALLOCATES UNCONDITIONALLY WHEN `fresh` IS SET** -- unlike
+`FPM_MRF_init`, it inspects no existing pointer and frees nothing, so a second
+`fresh` init leaks all eight buffers. `FPM_ECC_free` releases `coef[2]`
+first and `near_i` last.
+
+### 1612. FPM_ECC_cancel: THREE COEFFICIENT SETS AT THREE SAMPLES A SYMBOL, AND A FAR-UPDATE POINTER THAT ALIASES THE NEAR BLOCKS
+
+*`FPM_ECC_cancel` (0xa6e00, 2,051 B) is reconstructed and differentially
+tested: `t_fpm_ecc` is 9,278 checks in twenty-four suites -- twenty-two of
+them cancel cases -- comparing the whole state, both sample buffers and all
+eight arrays after every block. (Commit 641519e's message says "9,077 checks
+over twenty-four cancel cases"; both figures there were written before the run
+log was summed. The numbers here are the measured ones.)*
+
+**THE SHAPE.** `cancel(state, buf, count)` works IN PLACE and returns the
+number of symbols it consumed. Per sample: pick `coef[phase]`, convolve the
+four sections, subtract, adapt, then `phase = (phase + 1) & 0xffff` and, when
+it exceeds 2, reset it to 0 and pull one symbol off the delay line. Three
+samples a symbol, one coefficient set each -- V.32's 7200 Hz against 2400
+baud.
+
+**THE ARITHMETIC, MEASURED.** Each section accumulates `(hist[i] * c[j]) >> 3`
+over a circular walk (newest at `idx` down to 0, then top down to `idx+1`,
+coefficients running forwards across both halves) and the result is taken down
+by a further 14. The estimate is
+`(short)((nearI>>14) + (nearQ>>14)) + (short)((farI>>14) + (farQ>>14))`, and
+the residual is `(short)(*buf - estimate)`, stored back over the input.
+
+The update is `c += ((short)((hist[i]*mu + 0x10) >> 5) * e + 0x10000) >> 17`,
+both halves rounding rather than truncating, with the intermediate squeezed
+back into 16 bits between the two multiplies. `mu` is `state->mu`, 0x29 out
+of init, and is written back unchanged.
+
+**THE BLOCK STRIDE IS `cfg.near_taps` / `cfg.far_taps`; THE LOOP COUNT IS
+`near_len` / `far_len`.** init makes each pair equal, so nothing distinguishes
+them until the lengths are patched smaller by hand -- which `t_fpm_ecc` does,
+and which fails if the stride is taken from the length.
+
+**THE ALIASING, AND IT IS THE ORIGINAL'S.** The pointer the far update starts
+from is initialised to the START of the coefficient set *before* the near
+update's guard, and is only advanced by `2 * cfg.near_taps` inside that guard.
+So with `adapt_near != 1`, `adapt_far == 1` and a non-zero `near_taps`, the
+far sections adapt the NEAR coefficient blocks. A tidy rewrite that computes
+`coef + 2*near_taps` at the far update is wrong, and the test case named "far
+adapting, near frozen" is what catches it: it failed 359 checks against that
+rewrite and passes against the faithful one.
+
+**TWO POWER METERS, BOTH ONE-POLE, BOTH GATED BY `hold_power`.** `pwr_in` is
+the block's mean square before cancellation, `pwr_out` after it, each folded
+in as `new + ((old - new) * 0x666 >> 15)` -- a pole at 0.05, so about a
+twentieth of the distance a block. Both accumulators truncate to 16 bits every
+sample, so they saturate rather than grow.
+
+**THE SAME ARRAY IS READ SIGNED AND UNSIGNED.** The near tap reads
+`line[near_rd]` with `movzwl` and masks the map index out with `movzbl %ah`;
+the far tap reads `line[far_rd]` with `movswl` and shifts it out with `sar
+$0x8`. Both extensions are FORCED -- the result indexes a 4-byte pointer array
+-- so the two are written differently in `src/dsp/fpm_ecc.c` even though no
+test can separate them while the line holds anything below 0x8000. Finding
+613's class of defect.
+
+### 1613. `far_taps == 0` MAKES THE ORIGINAL RUN OFF THE END OF ITS OWN COEFFICIENT SET, SO THAT CONFIGURATION IS NOT TESTABLE
+
+A coefficient set is `2 * (near_taps + far_taps)` shorts and the four blocks
+sit at 0, `near_taps`, `2*near_taps` and `2*near_taps + far_taps`. With
+`far_taps == 0` the last two both land at `2*near_taps`, which is the END of
+the allocation: the far filter reads one entry past it and the far update
+writes one past it. The symbol push compounds it -- the far history store is
+NOT guarded by a tap count the way the near one is by `cfg.near_taps`, so it
+writes `far_i[0]` and `far_q[0]` into two `sysdep_malloc(0)` blocks.
+
+Both builds do all of this, into different heap blocks, so they disagree on
+whatever garbage each one finds: the case showed up as a one-count difference
+in the residual, in `pwr_out` and in a coefficient. That is a genuine defect
+in the original and not a reconstruction error, and it is why `t_fpm_ecc`
+tests a single far tap rather than none. `near_taps == 0` is safe and IS
+tested: the near push is guarded and the far blocks then start at 0.
+
+### 1614. ECCv32_IMAP / ECCv32_QMAP / ECCv32_CFG ARE LEFT OUT: THEY CANNOT BE DEFINED WITHOUT TEN TABLES BELONGING TO THE VITERBI AND ENCODER BATCHES
+
+`ECCv32_IMAP` and `ECCv32_QMAP` are not coefficient tables. Each is **six
+pointers**, and `relocscan` resolves them to, in order:
+
+    [0] SMCv32_IMAP16   [1] SMCv32_IMAP16   [2] VTBv32_IMAP32
+    [3] VTBv32_IMAP16T  [4] VTBv32_IMAP64   [5] VTBv32_IMAP128
+
+and the same six spellings with `Q`. Index 0 and 1 are the SAME table --
+measured, not inferred from a coincidence of values, because these are
+relocations. `ECCv32_CFG` is then
+`{far_lag 480, near_taps 40, far_taps 40, pad, &ECCv32_IMAP, &ECCv32_QMAP,
+fill 16, pad, aux 0}`; those field boundaries are no longer a reading of the
+bytes, they are what `FPM_ECC_init`'s disassembly does with them (1611).
+
+**Why they are not in the tree.** Defining the two pointer arrays needs all
+ten pointees to be real definitions, and `nm` puts them squarely in other
+batches of finding 1600's table -- `SMCv32_*` in the encoder/scrambler group,
+`VTBv32_*` in the Viterbi group, 1,028 bytes in total. The harness renames
+every symbol the blob defines to `ref_*`, so an `extern const short
+SMCv32_IMAP16[]` resolves to nothing and the link fails; there is no way to
+declare the pointer arrays without owning the data. A session was observed
+building `t_v32smc` while this batch was running, so emitting `SMCv32_IMAP16`
+and `SMCv32_QMAP16` here would have collided with live work over the same two
+symbols.
+
+**What the next person has to do**, once the ten maps exist anywhere in
+`src/`: add `src/pump/v32/v32ecc_tables.c` with
+
+    const short *const ECCv32_IMAP[6] = { SMCv32_IMAP16, SMCv32_IMAP16,
+        VTBv32_IMAP32, VTBv32_IMAP16T, VTBv32_IMAP64, VTBv32_IMAP128 };
+
+the `Q` twin, and an `ECCv32_CFG` of the six fields above. Test the pointer
+arrays by the CONTENT of each pointee against `ref_`, never by address: the
+six pointees have distinct contents, so ordering is still pinned, and indices
+0 and 1 are settled by the relocation dump rather than by the test.
+
+The element widths are settled by `FPM_ECC_cancel`, which indexes a pointee
+with `movswl (%ecx,%eax,2)` -- `short`, and `SMCv32_IMAP16`'s 0x22 bytes are
+therefore 17 entries, not 16.
+
+### 1615. THE V.32 TIMING-RECOVERY TABLES ARE CLOSED; SREv32_CFG IS NOT, BECAUSE A BYTE TEST CANNOT PIN A FIELD BOUNDARY
+
+Six of the ten `FPM_SRE_*` / `SREv32_*` symbols are reconstructed and
+differentially tested (`t_fpm_sre`, 208 checks): `SREv32_COFFS` (181 shorts,
+.rodata, const) and the five in .data that are therefore NOT const --
+`SREv32_XB_COFFS` (11), `SREv32_PLL_K1` (3), `SREv32_PLL_K2` (3),
+`SREv32_xCLOCK` (3), `SREv32_yCLOCK` (3).
+
+**`xCLOCK` AND `yCLOCK` ARE A THREE-PHASE CLOCK PHASOR.** `{16384, -8192,
+-8192}` and `{0, 14189, -14189}` are cos and sin of 0, 120 and 240 degrees at
+a scale of 16384. That is the same three-samples-a-symbol structure the echo
+canceller's three coefficient sets carry (1612) -- 2400 baud at 7200 Hz -- and
+it is why the block can resolve timing phase from three samples.
+
+**ONLY `SREv32_COFFS`'s ELEMENT WIDTH IS MEASURED.** `FPM_SRE_init` copies it
+with `movzwl (%ecx,%edx,2)`, so 16-bit, and its 0x16a bytes are 181 entries --
+one MORE than the 180 the configuration carries as its length. The other five
+are touched only by `FPM_SRE_recover`, which is not reconstructed, so their
+width is asserted nowhere and the header says so.
+
+**`SREv32_CFG` IS DELIBERATELY LEFT OUT.** Its six pointers are measured --
+`+0x10 COFFS, +0x14 XB_COFFS, +0x18 xCLOCK, +0x1c yCLOCK, +0x20 PLL_K1,
++0x24 PLL_K2` -- and as 14 dwords it reads `0x00030003, 0x00460010,
+0x40002000, 180, <six pointers>, 0x00010002, 0x00C82666, 0x000905DC, 0`. But
+`FPM_SRE_init` copies the whole thing with a 14-dword `rep movsl` and reads
+exactly three shorts out of it (+0x02, +0x0c, +0x32), so every other field
+boundary is inferred from how the constants pack. A differential test of the
+table compares BYTES and would pass for every wrong split alike -- the
+`short[128]` versus `int[64]` trap. It stays out until `FPM_SRE_recover`
+settles the widths.
+
+**WHAT `FPM_SRE_init` (0xaa7c0) AND `FPM_SRE_free` (0xaa780) DO**, recorded so
+the next session need not re-read them:
+
+- `init(state, cfg, fresh)`. When `fresh` is zero it compares
+  `state[+0x0c] < cfg[+0x0c]` signed and, if the buffer is too small,
+  announces it (`.rodata.str1.1+0x4f07`, gated on `dsplibs_debug_level > 1`),
+  frees the four buffers at +0x58, +0x54, +0x50, +0x74 and proceeds as if
+  `fresh`. Exactly `FPM_MRF_init`'s grow-or-reuse shape.
+- The configuration is copied as 14 dwords into +0x00..+0x37.
+- Four allocations: `2*cfg[0x0c]` at +0x50, `2*(cfg[0x0c]/5)` at +0x54 (the
+  division is the `0x66666667` magic, so /5 exactly), a FIXED 12 bytes at
+  +0x58, and `2*cfg[0x32]` at +0x74.
+- `state[+0x4c] = cfg[0x0c] / 5` and `state[+0x68] = cfg[+0x02]`.
+- +0x50 is filled from `state[+0x10]` -- i.e. the buffer is a working COPY of
+  `SREv32_COFFS`, which is what makes the .rodata original const and the copy
+  writable. +0x54, +0x58 (six entries) and +0x74 are zeroed.
+- Scalars set: +0x40=0, +0x44=1, +0x48=1 (ints); +0x38, +0x3a, +0x3c, +0x3e,
+  +0x4e, +0x64, +0x66, +0x6a, +0x6c, +0x6e, +0x7a, +0x7e, +0x80, +0x82,
+  +0x86 = 0; +0x70, +0x78, +0x84, +0x8e = 1; +0x5c, +0x60 = 0 (ints).
+- **0x90 is a floor for the state size**, not a proven size.
+- `free` releases +0x58, +0x54, +0x50, +0x74 -- the same four, and NOT the
+  configuration's tables.
 ### 1621. D6's FOURTH BROKEN AGC PAIR IS NOT BROKEN — THE ROW THE ARGUMENT RESTS ON IS A MISREADING
 
 *Task: V.32/V.32bis, writing `AGCv32_CFG`. Found by reading the object for
