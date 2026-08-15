@@ -50,6 +50,21 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+ap = argparse.ArgumentParser(
+    description="Partition the unwritten symbols by service.")
+ap.add_argument("--obj", default=os.environ.get("BLOB",
+                                                "../slmodemd/dsplibs.o"),
+                help="the blob; also exported as BLOB for closure.py")
+ap.add_argument("--tumap", default="build/tumap.json")
+ap.add_argument("--list", choices=["data", "fax", "other", "none"],
+                help="print the members of one class instead of the summary")
+args = ap.parse_args()
+
+# `closure.py` reads its blob from $BLOB AT IMPORT TIME, so --obj has to reach
+# the environment before the import or the two halves read different objects.
+# readyqueue.py carries the same three lines for the same reason.
+os.environ["BLOB"] = args.obj
+
 # `coverage` before `closure`: closure.py strips tools/ from sys.path at
 # import time (the `dis.py` shadow fix), after which `import coverage` finds
 # the system code-coverage package instead.  See tools/readyqueue.py.
@@ -78,16 +93,6 @@ MUST_BE_DATA = ["FPM_ECC_cancel", "V32OrgNextState", "v22_originate",
 
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="Partition the unwritten symbols by service.")
-    ap.add_argument("--obj", default=os.environ.get("BLOB",
-                                                    "../slmodemd/dsplibs.o"))
-    ap.add_argument("--tumap", default="build/tumap.json")
-    ap.add_argument("--list", choices=["data", "fax", "other", "none"],
-                    help="print the members of one class instead of the "
-                         "summary")
-    args = ap.parse_args()
-
     if not os.path.exists(args.obj):
         sys.exit("service.py: no blob at %s.  The default is RELATIVE to the "
                  "tree root." % args.obj)
