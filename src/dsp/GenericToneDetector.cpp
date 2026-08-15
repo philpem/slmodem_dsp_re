@@ -252,6 +252,110 @@ int GenericToneDetector::process(float sample)
 }
 
 /*
+ * `n` SAMPLES.  0x10490, 422 bytes.
+ *
+ * Everything above about rounding, about the reciprocal and about the
+ * bookkeeping holds here word for word -- the accumulation is the same, the
+ * smoother is the same, the constants are the same values in different
+ * literal-pool slots (`.rodata.cst4` +0x68/+0x6c/+0x70 against +0x5c/+0x60/
+ * +0x64), and the hit and miss arms are the same arms.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT IS DIFFERENT IS A THIRD ARM, and it is why these are two functions and
+ * not one called twice.  0x105a0..0x105d8:
+ *
+ *     fmuls  0x74(.rodata.cst4)     ; 0.5f * threshold
+ *     fcomp  %st(3)                 ; against the block's mean output
+ *     ja     ...                    ; short of half -- a miss
+ *     mov    0x34(%ebx),%ecx        ; flag
+ *     test   %ecx,%ecx
+ *     je     ...                    ; clear -- a miss
+ *     fmull  0x18(.rodata.cst8)     ; acc_14 * 0.85, a DOUBLE
+ *     fcompp                        ; against acc_18
+ *     jae    ...                    ; acc_18 no higher -- a miss
+ *     ...                           ; otherwise a HIT
+ *
+ * So a block whose mean output fell short of `threshold` but reached HALF of
+ * it still scores, provided `flag` is set and the output smoother stands more
+ * than 0.85 of the input smoother.  `process(float)` has none of this: no
+ * 0.5f, no 0.85, no third comparison.  0x105ba is the only `fmull` in the
+ * class and 0.85 is the only double constant it uses.
+ *
+ * ---------------------------------------------------------------------------
+ * THE THREE COMPARISONS ARE SPELLED THE WAY THE BRANCHES ARE, and NaN is the
+ * reason.  `ja` after `fcomp` is false when the compare is unordered, so
+ * `0.5f * threshold > meanOut` sending a block to the miss arm keeps a NaN
+ * mean OUT of that arm; and `jae` on `acc_14 * 0.85 >= acc_18` likewise sends
+ * a NaN to the HIT.  Writing the second as `acc_18 > acc_14 * 0.85` would read
+ * identically over every ordered input and take the other arm on a NaN, which
+ * an accumulator that has reached infinity produces.  The test drives it.
+ *
+ * ---------------------------------------------------------------------------
+ * THE WEAK ARM'S MISS DOES NOT REACH `blocks1`, exactly as the below-threshold
+ * arm in the other overload does not -- 0x105e4 falls into the per-block
+ * cleanup at 0x10600 while the strong arm's miss at 0x10572 goes to 0x10625
+ * and loads it.  Deviation D320.
+ *
+ * `n == 0` returns the answer at +0x38 without touching the filter: the object
+ * tests it at 0x104a2 before anything else.
+ */
+int GenericToneDetector::process(float *samples, unsigned int n)
+{
+	unsigned int k;
+
+	for (k = 0; k < n; k++) {
+		float sample = *samples++;
+		float y = filter->process(sample);
+		float in = acc_0c + sample * sample;
+		float out = acc_10 + y * y;
+
+		if (++sampleCount != blockLen) {
+			acc_0c = in;
+			acc_10 = out;
+			continue;
+		}
+
+		{
+			float inv = 1.0f / sampleCount;
+			float meanIn = in * inv;
+			float meanOut = out * inv;
+
+			acc_14 = 0.7f * acc_14 + 0.3f * meanIn;
+			acc_18 = 0.7f * acc_18 + 0.3f * meanOut;
+
+			if (meanOut >= threshold) {
+				if (flag == 0 || acc_18 > ratio * acc_14) {
+					count_2c++;
+					count_30 = 0;
+				} else if (++count_30 >= blocks2) {
+					count_2c = 0;
+					detected = 0;
+				}
+				if (count_2c >= blocks1)
+					detected = 1;
+			} else if (threshold * 0.5f > meanOut || flag == 0 ||
+				   acc_14 * 0.85 >= acc_18) {
+				if (++count_30 >= blocks2) {
+					count_2c = 0;
+					detected = 0;
+				}
+			} else {
+				count_30 = 0;
+				count_2c++;
+				if (count_2c >= blocks1)
+					detected = 1;
+			}
+
+			sampleCount = 0;
+			acc_0c = 0;
+			acc_10 = 0;
+		}
+	}
+
+	return detected;
+}
+
+/*
  * One `delete`, and nothing else: the object is not written, so `filter` is
  * left dangling rather than nulled.  The test asserts that, because "the
  * destructor leaves the object alone" is a claim about forty bytes of code and

@@ -87,13 +87,13 @@
  },
  {
   "label": "the filter's output is never squared; the input is, twice",
-  "find": "\tfloat out = acc_10 + y * y;",
-  "replace": "\tfloat out = acc_10 + sample * sample;"
+  "find": "\n\tfloat out = acc_10 + y * y;",
+  "replace": "\n\tfloat out = acc_10 + sample * sample;"
  },
  {
   "label": "the block boundary is tested a sample late",
-  "find": "\tif (++sampleCount != blockLen) {",
-  "replace": "\tif (sampleCount++ != blockLen) {"
+  "find": "\n\tif (++sampleCount != blockLen) {",
+  "replace": "\n\tif (sampleCount++ != blockLen) {"
  },
  {
   "label": "the reciprocal becomes a division",
@@ -102,8 +102,8 @@
  },
  {
   "label": "the smoother's two constants are swapped",
-  "find": "\t\tacc_14 = 0.7f * acc_14 + 0.3f * meanIn;",
-  "replace": "\t\tacc_14 = 0.3f * acc_14 + 0.7f * meanIn;"
+  "find": "\n\t\tacc_14 = 0.7f * acc_14 + 0.3f * meanIn;",
+  "replace": "\n\t\tacc_14 = 0.3f * acc_14 + 0.7f * meanIn;"
  },
  {
   "label": "the two smoothers take each other's mean",
@@ -112,28 +112,28 @@
  },
  {
   "label": "the threshold test is strict",
-  "find": "\t\tif (meanOut >= threshold) {",
-  "replace": "\t\tif (meanOut > threshold) {"
+  "find": "\n\t\tif (meanOut >= threshold) {",
+  "replace": "\n\t\tif (meanOut > threshold) {"
  },
  {
   "label": "the threshold is compared against the input mean",
-  "find": "\t\tif (meanOut >= threshold) {",
-  "replace": "\t\tif (meanIn >= threshold) {"
+  "find": "\n\t\tif (meanOut >= threshold) {",
+  "replace": "\n\t\tif (meanIn >= threshold) {"
  },
  {
   "label": "the ratio test is not strict",
-  "find": "if (flag == 0 || acc_18 > ratio * acc_14) {",
-  "replace": "if (flag == 0 || acc_18 >= ratio * acc_14) {"
+  "find": "\n\t\t\tif (flag == 0 || acc_18 > ratio * acc_14) {",
+  "replace": "\n\t\t\tif (flag == 0 || acc_18 >= ratio * acc_14) {"
  },
  {
   "label": "the ratio scales the wrong smoother",
-  "find": "if (flag == 0 || acc_18 > ratio * acc_14) {",
-  "replace": "if (flag == 0 || ratio * acc_18 > acc_14) {"
+  "find": "\n\t\t\tif (flag == 0 || acc_18 > ratio * acc_14) {",
+  "replace": "\n\t\t\tif (flag == 0 || ratio * acc_18 > acc_14) {"
  },
  {
   "label": "flag is tested the wrong way round",
-  "find": "if (flag == 0 || acc_18 > ratio * acc_14) {",
-  "replace": "if (flag != 0 || acc_18 > ratio * acc_14) {"
+  "find": "\n\t\t\tif (flag == 0 || acc_18 > ratio * acc_14) {",
+  "replace": "\n\t\t\tif (flag != 0 || acc_18 > ratio * acc_14) {"
  },
  {
   "label": "the hit arm does not clear the miss counter",
@@ -174,5 +174,100 @@
   "label": "the sample counter is not cleared at the boundary",
   "find": "\t\tsampleCount = 0;\n\t\tacc_0c = 0;",
   "replace": "\t\tacc_0c = 0;"
+ },
+ {
+  "label": "the array overload stops one sample short",
+  "find": "\tfor (k = 0; k < n; k++) {",
+  "replace": "\tfor (k = 0; k + 1 < n; k++) {"
+ },
+ {
+  "label": "the array overload reads the same sample every time",
+  "find": "\t\tfloat sample = *samples++;",
+  "replace": "\t\tfloat sample = *samples;"
+ },
+ {
+  "label": "the array overload crosses its two squares",
+  "find": "\t\tfloat in = acc_0c + sample * sample;\n\t\tfloat out = acc_10 + y * y;",
+  "replace": "\t\tfloat in = acc_0c + y * y;\n\t\tfloat out = acc_10 + sample * sample;"
+ },
+ {
+  "label": "the array overload divides instead of multiplying by the reciprocal",
+  "find": "\t\t\tfloat inv = 1.0f / sampleCount;\n\t\t\tfloat meanIn = in * inv;\n\t\t\tfloat meanOut = out * inv;",
+  "replace": "\t\t\tfloat meanIn = in / sampleCount;\n\t\t\tfloat meanOut = out / sampleCount;"
+ },
+ {
+  "label": "the array overload's smoother constants are swapped",
+  "find": "\n\t\t\tacc_14 = 0.7f * acc_14 + 0.3f * meanIn;",
+  "replace": "\n\t\t\tacc_14 = 0.3f * acc_14 + 0.7f * meanIn;"
+ },
+ {
+  "label": "the array overload's threshold test is inverted",
+  "find": "\n\t\t\tif (meanOut >= threshold) {",
+  "replace": "\n\t\t\tif (threshold >= meanOut) {"
+ },
+ {
+  "label": "the array overload's ratio test is not strict",
+  "find": "\n\t\t\t\tif (flag == 0 || acc_18 > ratio * acc_14) {",
+  "replace": "\n\t\t\t\tif (flag == 0 || acc_18 >= ratio * acc_14) {"
+ },
+ {
+  "label": "the array overload's strong arm withdraws on blocks1",
+  "find": "\n\t\t\t\t} else if (++count_30 >= blocks2) {",
+  "replace": "\n\t\t\t\t} else if (++count_30 >= blocks1) {"
+ },
+ {
+  "label": "the weak arm's half of the threshold becomes the whole of it",
+  "find": "\t\t\t} else if (threshold * 0.5f > meanOut || flag == 0 ||",
+  "replace": "\t\t\t} else if (threshold * 1.0f > meanOut || flag == 0 ||"
+ },
+ {
+  "label": "the weak arm's half becomes a fifth",
+  "find": "\t\t\t} else if (threshold * 0.5f > meanOut || flag == 0 ||",
+  "replace": "\t\t\t} else if (threshold * 0.2f > meanOut || flag == 0 ||"
+ },
+ {
+  "label": "the weak arm's flag test is inverted",
+  "find": "\t\t\t} else if (threshold * 0.5f > meanOut || flag == 0 ||",
+  "replace": "\t\t\t} else if (threshold * 0.5f > meanOut || flag != 0 ||"
+ },
+ {
+  "label": "the weak arm's 0.85 becomes 0.8",
+  "find": "\t\t\t\t   acc_14 * 0.85 >= acc_18) {",
+  "replace": "\t\t\t\t   acc_14 * 0.8 >= acc_18) {"
+ },
+ {
+  "label": "the weak arm's 0.85 becomes 0.9",
+  "find": "\t\t\t\t   acc_14 * 0.85 >= acc_18) {",
+  "replace": "\t\t\t\t   acc_14 * 0.9 >= acc_18) {"
+ },
+ {
+  "label": "the weak arm weighs the wrong smoother",
+  "find": "\t\t\t\t   acc_14 * 0.85 >= acc_18) {",
+  "replace": "\t\t\t\t   acc_18 * 0.85 >= acc_14) {"
+ },
+ {
+  "label": "the weak arm's hit does not clear the miss counter",
+  "find": "\t\t\t\tcount_30 = 0;\n\t\t\t\tcount_2c++;",
+  "replace": "\t\t\t\tcount_2c++;"
+ },
+ {
+  "label": "the weak arm's hit never sets the answer",
+  "find": "\t\t\t\tcount_2c++;\n\t\t\t\tif (count_2c >= blocks1)\n\t\t\t\t\tdetected = 1;",
+  "replace": "\t\t\t\tcount_2c++;"
+ },
+ {
+  "label": "the weak arm's withdrawal uses blocks1",
+  "find": "\n\t\t\t\tif (++count_30 >= blocks2) {",
+  "replace": "\n\t\t\t\tif (++count_30 >= blocks1) {"
+ },
+ {
+  "label": "the weak arm's miss reaches blocks1 too, so it agrees with the strong one",
+  "find": "\n\t\t\t\tif (++count_30 >= blocks2) {\n\t\t\t\t\tcount_2c = 0;\n\t\t\t\t\tdetected = 0;\n\t\t\t\t}\n",
+  "replace": "\n\t\t\t\tif (++count_30 >= blocks2) {\n\t\t\t\t\tcount_2c = 0;\n\t\t\t\t\tdetected = 0;\n\t\t\t\t}\n\t\t\t\tif (count_2c >= blocks1)\n\t\t\t\t\tdetected = 1;\n"
+ },
+ {
+  "label": "the array overload's block cleanup leaves the accumulators",
+  "find": "\t\t\tsampleCount = 0;\n\t\t\tacc_0c = 0;\n\t\t\tacc_10 = 0;",
+  "replace": "\t\t\tsampleCount = 0;"
  }
 ]

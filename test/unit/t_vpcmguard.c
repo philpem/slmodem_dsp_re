@@ -11,18 +11,23 @@
  * quietly stopped being linked would put `vpcm_run` back on `vpcm_notwritten`
  * and NOTHING else in this tree would notice.
  *
- * WHAT IS UNWRITTEN NOW IS ONE LEVEL DOWN.  `VPcmV34Progress` calls seven
- * symbols nobody has reconstructed -- 7,922 bytes belonging to the V.90 and
- * V.92 arms -- and carries the same weak-reference-plus-guard arrangement for
- * them that `vpcm.c` carried for the five.  This binary is the one that
- * DRIVES one of those guards: it puts the object in the line-verification
- * state, whose `VPcmFloModem::qcLineVerification` is among the seven, and
- * requires the child to have died of SIGABRT.
+ * WHAT IS UNWRITTEN NOW IS ONE LEVEL DOWN, AND IT IS SIX.  `VPcmV34Progress`
+ * called seven symbols nobody had reconstructed -- 7,922 bytes belonging to
+ * the V.90 and V.92 arms -- and carries the same weak-reference-plus-guard
+ * arrangement for them that `vpcm.c` carried for the five.
+ * `GenericToneDetector::process(float *, unsigned)` has since been written,
+ * 422 of those bytes, so its weak reference resolves and the modem-on-hold
+ * arm calls the detector rather than stopping.  Six remain, 7,500 bytes.
  *
- * NONE OF THE SEVEN IS ON A V.34 CALL, which is finding 1454's measurement
- * and the reason `t_vpcmrun`'s four-way comparison of a real 33,600 connect
- * passes with all seven absent.  The guard is what stands between "a path
- * this tree cannot take" and a call through a null pointer.
+ * This binary is the one that DRIVES one of those guards: it puts the object
+ * in the line-verification state, whose `VPcmFloModem::qcLineVerification` is
+ * among the six, and requires the child to have died of SIGABRT.
+ *
+ * NONE OF THEM IS ON A V.34 CALL, which is finding 1454's measurement and the
+ * reason `t_vpcmrun`'s four-way comparison of a real 33,600 connect passed
+ * with all seven absent -- and still passes now that one of them is present.
+ * The guard is what stands between "a path this tree cannot take" and a call
+ * through a null pointer.
  *
  * WHY IT HAS TO BE WATCHED RATHER THAN REASONED ABOUT.  gates.md's pattern:
  * a guard that silently returned would leave a `.process` running and
@@ -62,15 +67,19 @@
 #include "dsplib/vpcm.h"
 
 /*
- * THE SEVEN, BY THEIR LINK NAMES.  Five of them are C++ members and their
- * mangled names are ordinary C identifiers, so a C file can name them
- * directly and does -- declaring the class here would drag `VPcmFloModem.h`
- * into a `.c`, and the point is the SYMBOL rather than the signature.  The
- * parameter lists are deliberately empty: nothing here calls any of them.
+ * THE SEVEN, BY THEIR LINK NAMES -- six still unresolved and one, the tone
+ * detector's, now defined and declared here so that its crossing is asserted.
  *
- * Weak for the reason above, and the reason is sharper here: every one of
- * these is genuinely undefined in this binary, so a plain declaration would
- * both fold the test and leave an undefined reference at the link.
+ * Five of them are C++ members and their mangled names are ordinary C
+ * identifiers, so a C file can name them directly and does -- declaring the
+ * class here would drag `VPcmFloModem.h` into a `.c`, and the point is the
+ * SYMBOL rather than the signature.  The parameter lists are deliberately
+ * empty: nothing here calls any of them.
+ *
+ * Weak for the reason above, and the reason is sharper here: six of these are
+ * genuinely undefined in this binary, so a plain declaration would both fold
+ * the test and leave an undefined reference at the link.  The seventh is weak
+ * only so that the two claims are made the same way.
  */
 extern void _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_(void)
 	__attribute__((weak));
@@ -144,8 +153,8 @@ main(void)
 	for (i = 0; i < FRAG; i++)
 		in[i] = (short)(i * 37 - 500);
 
-	diff_begin("all five VPcmV34* entry points are WRITTEN and the seven "
-		   "below them are not");
+	diff_begin("all five VPcmV34* entry points are WRITTEN, and of the "
+		   "seven below them six are not");
 	/*
 	 * ALL FIVE ARE NOW DEFINED, two in `src/pump/v34/v34pcmif.c` and
 	 * three in `src/pump/v34/v34pcmmain.cpp`, and this block is where
@@ -163,7 +172,7 @@ main(void)
 	diff_eq_int("VPcmV34GetCurrentTxBitRate is DEFINED",
 		    VPcmV34GetCurrentTxBitRate != 0, 1, 0);
 	/*
-	 * And the seven that are not.  Without the null one the abort below
+	 * And the six that are not.  Without the null ones the abort below
 	 * proves nothing: a guard that fired because the symbol was null is
 	 * only interesting if the symbol really is null.
 	 */
@@ -177,8 +186,22 @@ main(void)
 		    == 0, 1, 0);
 	diff_eq_int("vPcmResetPhase3Modem is unresolved",
 		    _ZN12VPcmFloModem20vPcmResetPhase3ModemEv == 0, 1, 0);
-	diff_eq_int("GenericToneDetector::process is unresolved",
-		    _ZN19GenericToneDetector7processEPfj == 0, 1, 0);
+	/*
+	 * SIX NOW, BECAUSE ONE OF THE SEVEN HAS BEEN WRITTEN.
+	 * `GenericToneDetector::process(float *, unsigned)` is 422 bytes in
+	 * `src/dsp/GenericToneDetector.cpp` with its own differential test,
+	 * so the weak reference `v34pcmmain.cpp` holds for it now RESOLVES
+	 * and the modem-on-hold arm of `VPcmV34Progress` calls the detector
+	 * instead of stopping.  The assertion is inverted rather than deleted,
+	 * which is this file's whole argument applied in the other direction:
+	 * the guard surface is the claim, so a symbol crossing it is counted
+	 * on the side it crossed to.  If this ever reads null again, something
+	 * has stopped linking `GenericToneDetector.o` and `VPcmV34Progress`
+	 * has quietly gone back to the stub.
+	 */
+	diff_eq_int("GenericToneDetector::process is now DEFINED, so the "
+		    "seven are six",
+		    _ZN19GenericToneDetector7processEPfj != 0, 1, 0);
 	diff_eq_int("v90RateReneg is unresolved", v90RateReneg == 0, 1, 0);
 	diff_eq_int("v90RateRenegSilence is unresolved",
 		    v90RateRenegSilence == 0, 1, 0);

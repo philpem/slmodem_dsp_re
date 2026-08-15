@@ -98,6 +98,10 @@ void ref_gtd_reset(void *) asm("ref__ZN19GenericToneDetector5resetEv");
 
 int our_gtd_process1(void *, float) asm("_ZN19GenericToneDetector7processEf");
 int ref_gtd_process1(void *, float) asm("ref__ZN19GenericToneDetector7processEf");
+int our_gtd_processn(void *, float *, unsigned int)
+	asm("_ZN19GenericToneDetector7processEPfj");
+int ref_gtd_processn(void *, float *, unsigned int)
+	asm("ref__ZN19GenericToneDetector7processEPfj");
 }
 
 #define OBJ	((int)sizeof(GenericToneDetector))
@@ -1087,6 +1091,382 @@ run_process1(void)
 	return diff_end();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * THE ARRAY OVERLOAD, WHICH IS A DIFFERENT ALGORITHM.
+ *
+ * It agrees with `process(float)` on the accumulation, the smoother and the
+ * bookkeeping and disagrees about how a block SCORES: a block that fell short
+ * of `threshold` but reached HALF of it still hits, if `flag` is set and the
+ * output smoother stands above 0.85 of the input smoother.  So the test that
+ * matters most here is not "does ours match the blob" -- that is the same
+ * per-call comparison as before -- but "is that third arm ENTERED", because
+ * the band it lives in is narrow and a pseudorandom sweep never finds it.
+ *
+ * It is driven deliberately, and the proof that it was entered is the SCALAR
+ * OVERLOAD run over the same stream: the array's hits on a block the scalar
+ * misses can only have come from the weak arm.  That is a comparison of the
+ * blob against itself and needs nothing from our side to be true.
+ */
+static unsigned char alt[SLOT];
+
+/* The blob's own `process(float)` over the whole stream; returns count_2c. */
+static unsigned int
+blob_scalar_hits(unsigned int nden, unsigned int nnum, unsigned int blockSize,
+		 unsigned int s1, unsigned int s2, float thr,
+		 unsigned int flag, float rat, unsigned int blockLen,
+		 int nsamp)
+{
+	unsigned int hits;
+	int i;
+
+	memcpy(alt, before, SLOT);
+	ref_gtd_c1(alt, nden, nnum, den, num, s1, s2, thr, flag, rat,
+		   blockLen, blockSize);
+	for (i = 0; i < nsamp; i++)
+		ref_gtd_process1(alt, stream[i]);
+	hits = ((GenericToneDetector *)alt)->count_2c;
+	ref_gtd_d1(alt);
+
+	return hits;
+}
+
+/*
+ * One stream through `process(float *, unsigned)`.  `chunk` is how many
+ * samples a call takes; zero means "a varying number, including none", which
+ * is what drives the `n == 0` early return inside a live stream as well as at
+ * the start of one.  Arms are only counted at one sample a call, because a
+ * per-block reading of the object cannot be taken across a chunk that spans
+ * several blocks.
+ */
+static void
+drive_array(unsigned int nden, unsigned int nnum, unsigned int blockSize,
+	    unsigned int s1, unsigned int s2, float thr, unsigned int flag,
+	    float rat, unsigned int blockLen, int nsamp, int chunk, int tag,
+	    struct arms *a)
+{
+	unsigned char pre[SLOT];
+	int i = 0, step = 0, live = harness_alloc.live;
+
+	our_gtd_c1(ours, nden, nnum, den, num, s1, s2, thr, flag, rat,
+		   blockLen, blockSize);
+	ref_gtd_c1(theirs, nden, nnum, den, num, s1, s2, thr, flag, rat,
+		   blockLen, blockSize);
+
+	while (i < nsamp) {
+		int cnt = chunk > 0 ? chunk : step % 5;
+		int ra, rb;
+
+		if (cnt > nsamp - i)
+			cnt = nsamp - i;
+
+		memcpy(pre, theirs, SLOT);
+		ra = our_gtd_processn(ours, stream + i, (unsigned int)cnt);
+		rb = ref_gtd_processn(theirs, stream + i, (unsigned int)cnt);
+
+		diff_eq_int("process(float *, n) returns the blob's answer "
+			    "(%ld)", ra, rb, tag * 1000 + i);
+		diff_eq_int("and it is the field at +0x38 (%ld)", rb,
+			    (int)((GenericToneDetector *)theirs)->detected,
+			    tag * 1000 + i);
+		compare_objects_("after process(float *, n)", tag * 1000 + i);
+		if (cnt == 1)
+			note_arm(pre, theirs, a);
+		i += cnt;
+		step++;
+	}
+
+	compare_filters_after_(nden, nnum, blockSize, tag);
+	diff_eq_int("no store past the object (%ld)", guard_intact(), 1, tag);
+	our_gtd_d1(ours);
+	ref_gtd_d1(theirs);
+	diff_eq_int("the stream leaked nothing (%ld)",
+		    harness_alloc.live - live, 0, tag);
+}
+
+/*
+ * A designed block-scoring scenario, run twice: once through the array
+ * overload counting arms, and once through the scalar overload on the blob
+ * alone.  `hit` is what the array did with every block and `scalarHits` is
+ * what the scalar did, so the two together say WHICH arm the array took.
+ */
+static void
+weak_case(const char *what, double gain, float amp, float thr,
+	  unsigned int flag, int expectHit, int tag, struct arms *a)
+{
+	struct arms e;
+	unsigned int scalarHits;
+
+	memset(&e, 0, sizeof e);
+	seed(tag);
+	den[0] = 1.0;
+	num[0] = gain;
+	fill_blocks(8u, &amp, 1);
+
+	drive_array(1u, 1u, 2u, 24u, 800u, thr, flag, 0.5f, 8u, NSAMP, 1, tag,
+		    &e);
+	scalarHits = blob_scalar_hits(1u, 1u, 2u, 24u, 800u, thr, flag, 0.5f,
+				      8u, NSAMP);
+
+	diff_eq_int(what, expectHit ? (e.hit == e.boundary) : (e.hit == 0), 1,
+		    tag);
+	diff_eq_int("the block count is not zero (%ld)", e.boundary > 0, 1,
+		    tag);
+	/*
+	 * The mean is under the threshold in every one of these, so the scalar
+	 * overload -- which has no weak arm -- must score nothing at all.  Any
+	 * hit the array scored above is therefore a WEAK hit and cannot be
+	 * anything else.
+	 */
+	diff_eq_int("the scalar overload, which has no weak arm, scores "
+		    "nothing on the same stream (%ld)", (int)scalarHits, 0,
+		    tag);
+
+	a->hit += e.hit;
+	a->miss += e.miss;
+	a->set += e.set;
+	a->cleared += e.cleared;
+	a->boundary += e.boundary;
+	a->inblock += e.inblock;
+}
+
+static int
+run_processn(void)
+{
+	struct arms a, w;
+	int trial;
+
+	diff_begin("GenericToneDetector::process(float *, unsigned)");
+
+	memset(&a, 0, sizeof a);
+	memset(&w, 0, sizeof w);
+
+	/*
+	 * `n == 0` FIRST, on a fresh object and on a used one.  The object
+	 * tests it at 0x104a2 before it has touched anything, so the claim is
+	 * that nothing moves and the answer still comes back.
+	 */
+	{
+		static const float amps[1] = { AMP_STRONG };
+		int ra, rb, i;
+		unsigned char snap[SLOT];
+
+		seed(9);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(8u, amps, 1);
+
+		our_gtd_c1(ours, 1u, 1u, den, num, 24u, 16u, SCEN_THR, 1u,
+			   0.5f, 8u, 2u);
+		ref_gtd_c1(theirs, 1u, 1u, den, num, 24u, 16u, SCEN_THR, 1u,
+			   0.5f, 8u, 2u);
+
+		for (i = 0; i < 2; i++) {
+			memcpy(snap, theirs, SLOT);
+			ra = our_gtd_processn(ours, stream, 0u);
+			rb = ref_gtd_processn(theirs, stream, 0u);
+
+			diff_eq_int("n == 0 returns the answer (%ld)", ra, rb,
+				    300 + i);
+			diff_eq_int("and it is the field at +0x38 (%ld)", rb,
+				    (int)((GenericToneDetector *)theirs)
+					->detected, 300 + i);
+			diff_eq_int("n == 0 moved nothing (%ld)",
+				    memcmp(snap, theirs, SLOT) == 0, 1,
+				    300 + i);
+			compare_objects_("after n == 0", 300 + i);
+
+			/* Run a while, then ask again on a used object. */
+			our_gtd_processn(ours, stream, 40u);
+			ref_gtd_processn(theirs, stream, 40u);
+			compare_objects_("after 40 samples", 300 + i);
+		}
+		our_gtd_d1(ours);
+		ref_gtd_d1(theirs);
+	}
+
+	/*
+	 * The random sweep, at varying chunk sizes so that block boundaries
+	 * fall inside a call as often as on one, and with the same deliberately
+	 * unbounded coefficients as the scalar sweep -- the accumulators reach
+	 * infinity and NaN, and the weak arm's two comparisons are spelled the
+	 * way the object's branches are precisely because of what happens
+	 * there.
+	 */
+	for (trial = 0; trial < 12; trial++) {
+		unsigned int nden = 1u + (unsigned)(trial % 4);
+		unsigned int nnum = 1u + (unsigned)((trial + 2) % 4);
+		unsigned int blockSize = (unsigned)(trial % 3);
+		unsigned int blockLen = 1u + (unsigned)(trial % 7);
+		unsigned int flag = (unsigned)(trial & 1);
+		float thr = as_float(floatbits[trial % NFLOATS]);
+		float rat = as_float(floatbits[(trial + 5) % NFLOATS]);
+		int i;
+
+		seed(trial);
+		for (i = 0; i < NSAMP; i++) {
+			lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+			stream[i] = (float)(int)(lfsr - 0x8000u) / 4096.0f;
+		}
+		drive_array(nden, nnum, blockSize, 3u * blockLen,
+			    2u * blockLen, thr, flag, rat, blockLen, NSAMP,
+			    trial & 1 ? 1 : 0, 100 + trial, &a);
+	}
+
+	/*
+	 * THE WEAK ARM, ALL FOUR OF ITS DECISIONS.  A gain of `g` makes
+	 * meanOut = g^2 * amp^2 and acc_18 = g^2 * acc_14, so each of the
+	 * arm's three tests can be put on either side of its constant by
+	 * choosing `g` and `amp`.  The threshold is 1.0f throughout and every
+	 * mean below is UNDER it, which is what keeps the scalar overload
+	 * scoring nothing and makes each hit unambiguously a weak one.
+	 *
+	 *   0.64  in the band, flag set, ratio 1.00 over 0.85  -> HIT
+	 *   0.45  under half the threshold                     -> miss
+	 *   0.64  in the band but flag clear                   -> miss
+	 *   0.64  in the band, ratio 0.25 under 0.85           -> miss
+	 *
+	 * and then the constant itself, from both sides, because 0.8 and 0.9
+	 * would both pass everything above:
+	 *
+	 *   0.83  in the band, ratio 0.8281 UNDER 0.85         -> miss
+	 *   0.86  in the band, ratio 0.8649 OVER 0.85          -> HIT
+	 */
+	weak_case("a mean in the upper half of the threshold hits (%ld)",
+		  1.0, 0.8f, 1.0f, 1u, 1, 400, &w);
+	weak_case("a mean below half the threshold does not (%ld)",
+		  1.0, 0.671f, 1.0f, 1u, 0, 401, &w);
+	weak_case("nor does one in the band with flag clear (%ld)",
+		  1.0, 0.8f, 1.0f, 0u, 0, 402, &w);
+	weak_case("nor one whose smoothers stand at a quarter (%ld)",
+		  0.5, 1.6f, 1.0f, 1u, 0, 403, &w);
+	weak_case("nor one whose smoothers stand at 0.8281, just under 0.85 "
+		  "(%ld)", 0.91, 1.0f, 1.0f, 1u, 0, 404, &w);
+	weak_case("one at 0.8649, just over it, does (%ld)",
+		  0.93, 1.0f, 1.0f, 1u, 1, 405, &w);
+
+	diff_eq_int("the weak arm scored (%ld)", w.hit > 0, 1, 0);
+	diff_eq_int("and declined to score (%ld)", w.miss > 0, 1, 0);
+
+	/*
+	 * THE WEAK ARM'S OWN BOOKKEEPING, which the six cases above cannot
+	 * reach because each of them takes one arm for every block of its
+	 * stream.  Four blocks in the band and four below half, repeating, so
+	 * the weak hit's `count_30 = 0` has a counter to clear and the weak
+	 * miss's withdrawal has a `count_2c` to drop.  `blocks1` is ZERO here,
+	 * which makes the weak miss's silence about `blocks1` visible in the
+	 * same way tag 206 makes the below-threshold arm's: the answer goes
+	 * down at the withdrawal and stays down until a block actually hits.
+	 * blocks2 is 2.
+	 */
+	{
+		static const float amps[8] = {
+			0.8f, 0.8f, 0.8f, 0.8f,
+			0.671f, 0.671f, 0.671f, 0.671f
+		};
+		struct arms e;
+		unsigned int scalarHits;
+
+		memset(&e, 0, sizeof e);
+		seed(11);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(8u, amps, 8);
+		drive_array(1u, 1u, 2u, 0u, 16u, 1.0f, 1u, 0.5f, 8u, NSAMP, 1,
+			    407, &e);
+		scalarHits = blob_scalar_hits(1u, 1u, 2u, 0u, 16u, 1.0f, 1u,
+					      0.5f, 8u, NSAMP);
+
+		diff_eq_int("the weak arm hits on the loud blocks (%ld)",
+			    e.hit > 0, 1, 407);
+		diff_eq_int("and misses on the quiet ones (%ld)", e.miss > 0,
+			    1, 407);
+		diff_eq_int("the answer goes up (%ld)", e.set > 0, 1, 407);
+		diff_eq_int("and is withdrawn (%ld)", e.cleared > 0, 1, 407);
+		diff_eq_int("none of it is the scalar overload's doing (%ld)",
+			    (int)scalarHits, 0, 407);
+		a.hit += e.hit;
+		a.miss += e.miss;
+		a.set += e.set;
+		a.cleared += e.cleared;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	/*
+	 * The reciprocal, in this body too -- 41 unit samples, a mean that
+	 * falls short of 1.0, and a threshold of 1.0f.  The weak arm is
+	 * disarmed with `flag` clear so the block's fate rests on the
+	 * threshold alone; see the same scenario in run_process1 for the
+	 * arithmetic.
+	 */
+	{
+		static const float amps[1] = { 1.0f };
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(12);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		fill_blocks(41u, amps, 1);
+		drive_array(1u, 1u, 2u, 82u, 82u, 1.0f, 0u, 0.5f, 41u, NSAMP,
+			    1, 408, &e);
+		diff_eq_int("the mean of 41 unit samples falls SHORT of 1.0 "
+			    "here too (%ld)", e.hit, 0, 408);
+		diff_eq_int("blocks of 41 completed (%ld)", e.boundary > 0, 1,
+			    408);
+		a.miss += e.miss;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	a.hit += w.hit;
+	a.miss += w.miss;
+	a.set += w.set;
+	a.cleared += w.cleared;
+	a.boundary += w.boundary;
+	a.inblock += w.inblock;
+
+	/*
+	 * The strong arm and the withdrawal, reached through this overload
+	 * too: the same comb and the same phases as the scalar run, so the
+	 * shared bookkeeping is driven on both bodies and not only on one.
+	 */
+	{
+		struct arms e;
+
+		memset(&e, 0, sizeof e);
+		seed(10);
+		den[0] = 1.0;
+		num[0] = 1.0;
+		num[1] = 1.0;
+		num[2] = 1.0;
+		fill_phases(8u, 8, 1.0f);
+		drive_array(1u, 3u, 2u, 24u, 16u, SCEN_THR, 1u, 8.0f, 8u,
+			    NSAMP, 1, 406, &e);
+		diff_eq_int("the comb hits through this overload (%ld)",
+			    e.hit > 0, 1, 406);
+		diff_eq_int("misses on the ratio (%ld)", e.miss > 0, 1, 406);
+		diff_eq_int("sets the answer (%ld)", e.set > 0, 1, 406);
+		diff_eq_int("and withdraws it (%ld)", e.cleared > 0, 1, 406);
+		a.hit += e.hit;
+		a.miss += e.miss;
+		a.set += e.set;
+		a.cleared += e.cleared;
+		a.boundary += e.boundary;
+		a.inblock += e.inblock;
+	}
+
+	diff_eq_int("blocks completed (%ld)", a.boundary > 0, 1, 0);
+	diff_eq_int("samples inside a block (%ld)", a.inblock > 0, 1, 0);
+	diff_eq_int("the hit arm was reached (%ld)", a.hit > 0, 1, 0);
+	diff_eq_int("the miss arm was reached (%ld)", a.miss > 0, 1, 0);
+	diff_eq_int("the answer was set (%ld)", a.set > 0, 1, 0);
+	diff_eq_int("the answer was withdrawn (%ld)", a.cleared > 0, 1, 0);
+
+	return diff_end();
+}
+
 static int
 run_ctor(void)
 {
@@ -1505,6 +1885,7 @@ main(void)
 	rc |= run_ansam();
 	rc |= run_reset();
 	rc |= run_process1();
+	rc |= run_processn();
 
 	return rc;
 }
