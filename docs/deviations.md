@@ -5483,7 +5483,7 @@ Reproduced as written, and covered by `t_v32fse`'s four-point passes — the dif
 ======================================================================
 ======================================================================
 
-## D65 🐛 `FPM_log10` reads one element past its table, and it is NOT the lucky one
+## D303 🐛 `FPM_log10` reads one element past its table, and it is NOT the lucky one
 
 **Module** `src/dsp/fpm_log10.c` · original `FPM_log10`, `.text 0x0a8d20`,
 table at `.rodata 0x00c3a0`
@@ -5541,7 +5541,7 @@ by name.
 
 ======================================================================
 
-## D66 ⚠ `FPM_log10`'s exponent coefficient is 1228 where log10(2) is 1233
+## D304 ⚠ `FPM_log10`'s exponent coefficient is 1228 where log10(2) is 1233
 
 **Module** `src/dsp/fpm_log10.c` · original `FPM_log10`, `.text 0x0a8dbe`
 
@@ -5564,3 +5564,47 @@ deliberate approximation -- but "deliberate approximation" is not ruled out
 either, and neither reading is established.
 
 Reproduced exactly.
+
+## D305 ⚠ `SMCv32_PMAP16` is read signed by three functions and unsigned by two, and one declaration cannot match both
+
+Bit-exact; the difference is in the mnemonic, not the value.
+
+The object loads this four-entry phase map from five places:
+
+| site | load | function |
+|------|------|----------|
+| 0x7f9ea | `movzwl` | `SMCv32_encoder_dif` |
+| 0x7fa6b | `movzwl` | `SMCv32_encoder_dif`, second path |
+| 0x81044 | `movswl` | `FSE_decision_16pt` |
+| 0x8121d | `movswl` | `FSE_decision_4pt` |
+| 0x814a9 | `movswl` | `FSE_decision_AB` |
+
+One object, two signednesses, which is what two translation units with
+independent `extern` declarations look like -- and is almost certainly how
+the original was written, one header per pump stage.
+
+WE DO NOT REPRODUCE THAT, because two `extern` declarations of one object
+with incompatible types is undefined behaviour: C99 6.2.7p2 requires all
+declarations of the same object to have compatible type, `short` and
+`unsigned short` are not compatible, and no diagnostic is required across
+translation units.  `tools/onedef.py` would not catch it either -- it tracks
+type definitions, not object declarations -- so it would pass review looking
+checked when nothing had checked it.  The tree has somewhere to record a
+mnemonic difference and nowhere to make undefined behaviour safe.
+
+So it is declared once, `const short` in v32dec.h, and the two encoder loads
+in `SMCv32_encoder_dif` come out `movswl` where the object has `movzwl`.
+Signed is the majority reading, three sites against two, so this is the
+choice that leaves the fewest sites differing; it is also what master already
+had before this branch merged.
+
+NOTHING OBSERVABLE CHANGES.  The table is `{ 4, 0, 8, 12 }` -- every value
+positive, so sign-extension and zero-extension agree on every entry, and the
+differential tier is silent by construction.  This is a codegen-tier entry
+and `compare.py` is where it will show.
+
+`SMCv32_PMAP_ABS16` is NOT this case and is `unsigned short`: one consumer,
+`movzwl`, nothing contradicting it.  An earlier revision of this branch
+flipped it to `short` for symmetry with its neighbour, which had finding
+613's rule backwards -- that a difference is unobservable is why the codegen
+evidence is worth having, not a reason to set it aside.

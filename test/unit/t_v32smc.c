@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/v32dec.h"	/* SMCv32_PMAP16, declared once, see D305 */
 #include "dsplib/v32smc.h"
 
 extern void ref_SMCv32_encoder_abs(void *smc, void *out, const short *in,

@@ -48,7 +48,7 @@
  * from the table.  The error is proportional to the exponent, so it grows
  * with how far the input had to be normalised: 5 in Q12 per octave, about
  * 0.0012 of a decade, or 0.024 dB per octave if the result is read as a
- * power ratio.  Recorded as D66 in docs/deviations.md, unmeasured;
+ * power ratio.  Recorded as D304 in docs/deviations.md, unmeasured;
  * reproduced exactly.
  *
  * The one-past-the-end read
@@ -79,7 +79,7 @@
  * is the mathematically correct one and this one is a transcription of the
  * defect.
  *
- * Recorded as D65 in docs/deviations.md; the test drives all 64 of those
+ * Recorded as D303 in docs/deviations.md; the test drives all 64 of those
  * mantissas explicitly.
  *
  * ABOVE Q15 THERE IS NO REPRODUCTION AND NONE IS CLAIMED.  A mantissa of
@@ -122,7 +122,7 @@ static const short FPM_log10_table[129] = {
 	 * Entry 128 is NOT log10 of anything.  The original's table stops at
 	 * 127 and its index reaches 128 for mantissas 0x7fc0..0x7fff; what it
 	 * reads there is the first short of `FPM_PPS_CFG` at .rodata:0xc4a0.
-	 * Transcribed so the overrun is reproduced deterministically.  D65.
+	 * Transcribed so the overrun is reproduced deterministically.  D303.
 	 */
 	10
 };

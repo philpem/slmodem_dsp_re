@@ -42,7 +42,7 @@ main(void)
 	 * And one that is not derived.  Entry 128 is the neighbouring
 	 * object's first short, transcribed so that the original's overrun is
 	 * reproduced deliberately rather than by whatever our linker happens
-	 * to place after the array.  D65.
+	 * to place after the array.  D303.
 	 */
 	diff_eq_int("129 entries in all (%ld)", FPM_log10_table_size(), 129,
 		    0);
@@ -119,7 +119,7 @@ main(void)
 	 * defect in either, and an earlier version of this file asserted they
 	 * agreed and failed exactly there.  Reproducing it would mean
 	 * transcribing a quarter of .rodata, and nothing in the object says a
-	 * caller ever passes one.  See D65.
+	 * caller ever passes one.  See D303.
 	 */
 
 	diff_begin("FPM_log10: log10 of zero announces itself at level 2");

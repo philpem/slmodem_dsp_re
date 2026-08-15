@@ -54,7 +54,7 @@
  *    or a negative one leaves `widx` at 0 rather than running away.
  */
 
-#include "dsplib/v32dec.h"
+#include "dsplib/v32dec.h"	/* SMCv32_PMAP16, declared once, see D305 */
 #include "dsplib/v32smc.h"
 
 /*
@@ -63,13 +63,14 @@
  * v32dec.h; both are multiples of four in the low nibble, which is what makes
  * `point + quad * 4` land on a constellation index.
  *
- * SIGNED, and that is NOT settled by the object -- see the note on widths
- * below and finding 1625's correction.  `SMCv32_encoder_abs` loads this one
- * with `movzwl`; every value in it is positive, so the two readings agree
- * over the whole table and nothing forces the choice.  `short` is what the
- * neighbouring maps use.
+ * UNSIGNED, and that IS settled: `SMCv32_encoder_abs` is its only consumer
+ * and loads it with `movzwl` into a 32-bit result that is used.  That every
+ * value is positive -- so no test can see the difference -- is finding 613's
+ * point and the reason the codegen evidence is worth having, not a reason to
+ * discount it.  Contrast `SMCv32_PMAP16`, where five load sites disagree three to two
+ * and the majority reading wins -- see D305.
  */
-const short SMCv32_PMAP_ABS16[4] = { 1, 5, 13, 9 };
+const unsigned short SMCv32_PMAP_ABS16[4] = { 1, 5, 13, 9 };
 
 /*
  * The trellis coder's three tables.  Widths are taken from the loads, not
