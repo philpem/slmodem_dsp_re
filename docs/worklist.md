@@ -13,7 +13,7 @@ dsplibs.o -- the work that is left, function by function
   The two halves have two different sources and can drift.  The
   counts are from the object and the built objects under
   build/src; the stub sites are read from the SOURCE
-  under /home/philpem/dev/sip-D-modem/claude_re/.claude/worktrees/agent-remaining -- which under `make worklist` is the working
+  under . -- which under `make worklist` is the working
   tree, so an uncommitted edit moves those line numbers.
 
 ======================================================================

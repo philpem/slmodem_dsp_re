@@ -173,10 +173,15 @@ def main():
     add()
     add("  Sizes are the BLOB's.  They size the reading, not the writing.")
     add()
+    # RELATIVE, deliberately.  This file is committed, so an absolute path
+    # here makes it churn on whoever regenerated it last and from where --
+    # `make worklist` would show a diff every time it ran from a worktree.
     add("  The two halves have two different sources and can drift.  The")
     add("  counts are from the object and the built objects under")
-    add("  %s/src; the stub sites are read from the SOURCE" % args.build)
-    add("  under %s -- which under `make worklist` is the working" % args.root)
+    add("  %s/src; the stub sites are read from the SOURCE"
+        % os.path.relpath(args.build))
+    add("  under %s -- which under `make worklist` is the working"
+        % os.path.relpath(args.root))
     add("  tree, so an uncommitted edit moves those line numbers.")
     add()
 

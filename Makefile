@@ -682,7 +682,7 @@ coverage: $(BUILD)/tumap.json $(OBJ) $(REF)
 # a list that changes on every landed function would make every commit touch
 # a generated file.
 worklist: $(BUILD)/tumap.json $(OBJ)
-	@$(PYTHON) tools/worklist.py --md docs/worklist.md
+	@$(PYTHON) tools/worklist.py --obj $(BLOB) --md docs/worklist.md
 
 $(BUILD)/tumap.json: tools/tumap.py $(BLOB) | $(BUILD)
 	@$(PYTHON) tools/tumap.py $(BLOB) --json $@ >/dev/null
