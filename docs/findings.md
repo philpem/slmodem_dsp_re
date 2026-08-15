@@ -59447,3 +59447,55 @@ Step 1 was the item that could have been worth much more, and it is closed.
 received pre-emphasis index and should be named, in the same way `faa96` became
 `baud_rate` -- the threshold arithmetic in 1953 was unreadable until that field
 had a name, and this one is in the same position.
+
+### 1960. STEP 2 PASSED: THE SHAPE MATCHER RUNS, AGREES WITH THE PYTHON TO 0.04 dB2, AND REQUESTS INDEX 0 FOR THE FIRST TIME
+
+`probe_preemp_shape` had never executed. Three checks, all clean.
+
+**IT FIRES, and it reaches the indices the object cannot.** One emulated call,
+`DSPLIB_V34_SHAPE_PREEMP=1`, CONNECT 19200:
+
+    V34PREEMPHASIS, - SHAPE index 10 over 17 bins, var 13.28 dB2, baudrate= 3429
+    V34PREEMPHASIS, - SHAPE index  0 over 15 bins, var  0.01 dB2, baudrate= 3200
+    V34PREEMPHASIS, - SHAPE index  0 over 14 bins, var  0.01 dB2, baudrate= 3000
+
+**Index 0 has never been requested by this datapump before.** The object's
+counter starts at 5 and advances before its test, so {6..10} was the whole
+reachable set (D53) and "this channel needs no pre-emphasis" was inexpressible.
+It is now expressible and is being expressed.
+
+**AND THE SPLIT BETWEEN RATES IS THE MODEL WORKING, not noise.** 3429's
+conformance band runs to f/S = 1.021, i.e. 3502 Hz, which INCLUDES the ATA's
+band-edge cliff at 3450 Hz; no template can correct 18 dB, so the residual is
+large (13.28 dB2) and the matcher reaches for the strongest filter it has.
+3200 and 3000 baud have narrower bands that stop short of the cliff, see a
+channel flat to hundredths of a dB, and correctly ask for nothing.
+
+**CROSS-CHECK AGAINST THE INDEPENDENT IMPLEMENTATION.**
+`testbench/preemphshape.py` on the same capture:
+
+    best by shape : index 10, rms 3.65 dB  ->  variance 13.32 dB2
+    the C         : index 10,               variance 13.28 dB2
+
+Same index, same bin count (17), and the residuals agree to **0.04 dB2**. The
+two were written from the same figures but not from each other, and they differ
+in arithmetic: the C uses an integer log2 with a linear mantissa term and no
+libm, the Python uses `math.log10`. Agreement at that level means the template
+encoding, the band limits, the bin-to-frequency mapping and the variance
+scoring are all consistent between them.
+
+**V34EQTAPS WORKS TOO**, 591 lines in one call:
+
+    V34EQTAPS, centre = 5094, off = 38643, equerr = 666
+
+Off-centre energy is 7.6x the centre run on this channel -- the equaliser is
+doing a great deal of work, which is what a band-edge cliff no filter can
+correct should look like. That is the baseline the A/B will compare against.
+
+**ONE BUG FOUND AND FIXED IN THE TOOLING.** `tools/hybrid_link.sh` guarded the
+benchflags compile with `[ -f ... ] ||`, so the object was built once and kept
+for ever. After the rename the link failed on an undefined reference to
+`dsplib_v34_fit_preemph` -- a symbol that no longer existed anywhere -- because
+a months-old `benchflags.o` was still being handed to the linker. A stale-object
+bug in the script whose entire purpose is stopping the bench from running stale
+binaries. It now always recompiles.

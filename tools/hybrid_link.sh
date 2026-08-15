@@ -85,8 +85,16 @@ done
 objcopy --redefine-sym VPCMXF_Create=__blob_VPCMXF_Create \
 	"$OUT/dsplibs_hybrid.o" "$OUT/dsplibs_hybrid_r.o"
 
-[ -f "$OUT/benchflags.o" ] || \
-	cc -m32 -c -O2 -o "$OUT/benchflags.o" "$(dirname "$0")/benchflags.c"
+#
+# ALWAYS RECOMPILED, never reused.  This was `[ -f ... ] ||`, which meant the
+# object was built once and then kept for ever -- so after the preemph rename
+# the link failed with an undefined reference to `dsplib_v34_fit_preemph`, a
+# symbol that no longer existed anywhere, because a months-old benchflags.o was
+# still being handed to the linker.  A stale-object bug in the script whose
+# whole purpose is stopping the bench from running stale binaries.  It is one
+# small file and costs nothing to rebuild.
+#
+cc -m32 -c -O2 -o "$OUT/benchflags.o" "$(dirname "$0")/benchflags.c"
 
 cc -m32 -o "$OUT/slmodemd-fit" \
 	$OBJS $OURS "$OUT/dsplibs_hybrid_r.o" "$OUT/benchflags.o" \
