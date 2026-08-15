@@ -59499,3 +59499,83 @@ for ever. After the rename the link failed on an undefined reference to
 a months-old `benchflags.o` was still being handed to the linker. A stale-object
 bug in the script whose entire purpose is stopping the bench from running stale
 binaries. It now always recompiles.
+
+### 1961. THE SHAPE MATCHER IDENTIFIES ALL ELEVEN TEMPLATES (THE OBJECT MANAGES 2-3), AND AT 6 dB OF TILT THE EQUALISER DOES 16% LESS WORK
+
+Three results, offline then emulated.
+
+**1. IDENTITY: can the selector name the filter the channel needs?** Set the
+channel to the exact inverse of template i and ask which index it returns.
+
+    baud      0   1   2   3   4   5   6   7   8   9  10
+    2400      0   1   2   3   4   5   6   7   8   9  10    11/11
+    2743      0   1   2   3   4   5   6   7   8   9  10    11/11
+    3000      0   1   2   3   4   5   6   7   8   9  10    11/11
+    3200      0   1   2   3   4   5   6   7   8   9  10    11/11
+    3429      0   1   2   3   4   5   6   7   8   9  10    11/11
+
+**The object's two-point counter on the same test gets 2 or 3 of 11:**
+
+    2400      6   6   7   8   9  10   6   7   8   8   9     3/11
+    3429      6   6   7   8   9   9   6   7   7   8   8     2/11
+
+It answers a Table 3 channel with a Table 4 index, exactly as 1956 predicted
+from the arithmetic. Note it returns 6 for a channel that needs 0 -- asking for
+1.5 dB of boost on a flat line.
+
+**2. ROBUSTNESS**, per-bin Gaussian measurement error, 3429 baud, 400 trials:
+
+    noise sd   exact   within 1   mean |error|
+     0.00 dB    100%     100%       0.00
+     0.25 dB    100%     100%       0.03
+     0.50 dB     85%      92%       0.53
+     1.00 dB     56%      77%       1.56
+     2.00 dB     32%      59%       2.51
+
+Exact to a quarter of a dB of noise and degrading gracefully rather than
+collapsing -- at 1 dB it is still within one index 77% of the time.
+
+**3. WHAT THE ATA's OWN CHANNEL WANTS, and this is the useful surprise.**
+Scoring finding 1907's measured VG204 curve:
+
+    baud   conformance band   best   rms    object would say
+    2400     520-2680 Hz       0     0.00      6 or 7
+    2743     411-2880 Hz       0     0.00      6 or 7
+    3000     450-3150 Hz       0     0.00      6 or 7
+    3200     389-3269 Hz       0     0.00      6 or 7
+    3429     416-3502 Hz       8     1.58      6 or 7
+
+**Below 3429 baud the band stops short of the 3450 Hz cliff, the channel is
+flat, and the right answer is index 0 -- which the object cannot express.** It
+asks for 6 or 7 and so ADDS 1.5-3 dB of top-end tilt to a flat line. Only at
+3429 does the band reach the cliff and make 6-7 near-optimal, which is exactly
+why 1956 measured the whole prize at 0.13 dB: this bench negotiates 3429 and
+never visits the rates where the defect bites.
+
+**4. THE TILT SWEEP, live in the emulator**, `CHAN_TILT` added to `chanshim.py`
+(linear dB slope from 300 to 3400 Hz on top of the VG204 response), scored on
+the equaliser workload of 1958:
+
+    tilt   ctl index  shp index   ctl off/centre   shp off/centre
+      0       10         10           5.86            5.86
+     -3        7         10           5.70            5.94
+     -6        8          5           5.63            4.76
+     -9        9          5           5.72            4.92
+
+At 6 dB of tilt and beyond the shape matcher selects **index 5 -- Table 3,
+which the object can never reach** -- and the equaliser's off-centre tap energy
+falls. Repeated at -9 dB across three further seeds: control 5.80, shape 4.87,
+**16% less equaliser work**, consistent in all three.
+
+**LIMITS, and they matter.** One call per cell in the sweep proper, three at the
+headline point. Connect was 24000 in all twelve calls, so no rate difference is
+visible and none is claimed. At -3 dB the shape matcher was slightly WORSE
+(5.94 against 5.70) -- at that tilt the 3429 band's cliff still dominates the
+residual and the tilt does not, so it reaches for a Table 4 filter and gets it
+wrong. And this is the emulator: Smart Link against Smart Link, not against a
+Rockwell. Do not quote an emulated ratio as a bench figure.
+
+**WHAT IT ESTABLISHES.** The mechanism works and is worth having: given a
+channel with real tilt, the selector finds the right family and the equaliser
+measurably does less work. The reason it is worth ~0.13 dB on THIS bench is
+that this bench has no tilt, not that the fix is empty.
