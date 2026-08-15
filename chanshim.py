@@ -62,7 +62,7 @@ FRAME_AUDIO = 0
 RATE = 8000
 
 
-def band_filter():
+def band_filter(tilt_db=0.0):
     """FIR matching the VG204's measured response.
 
     Fitted to the points finding 1907 measured, not to a textbook template:
@@ -72,6 +72,20 @@ def band_filter():
     """
     f = np.array([0, 300, 3000, 3300, 3400, 3700, 3900, 4000], float)
     d = np.array([0, 0, 0, 0, -6.2, -15.5, -33.6, -40.0], float)
+    #
+    # CHAN_TILT adds a linear slope in dB across the voice band, on top of the
+    # VG204's measured response.  This bench has none of its own -- finding
+    # 1956 measured it flat to +/-0.4 dB from 450 to 3150 Hz -- and a channel
+    # with no tilt cannot show whether a tilt corrector works.  A real
+    # subscriber loop has several dB of it, which is what Table 3 exists for.
+    #
+    # Sign: NEGATIVE is the physical case, high frequencies attenuated.
+    # The slope is applied from 300 Hz to 3400 Hz and held flat outside, so it
+    # does not fight the band limit at the top or the DC block at the bottom.
+    #
+    if tilt_db:
+        lo, hi = 300.0, 3400.0
+        d = d + np.clip((f - lo) / (hi - lo), 0.0, 1.0) * tilt_db
     n = 129
     grid = np.linspace(0, RATE / 2, 512)
     mag = 10 ** (np.interp(grid, f, d) / 20.0)
@@ -84,7 +98,8 @@ def band_filter():
 
 class Channel:
     def __init__(self):
-        self.h = band_filter()
+        self.tilt_db = float(os.environ.get("CHAN_TILT", "0"))
+        self.h = band_filter(self.tilt_db)
         self.tail = np.zeros(len(self.h) - 1)
         self.delay_ms = float(os.environ.get("CHAN_DELAY_MS", "70"))
         self.snr = os.environ.get("CHAN_SNR")
@@ -213,9 +228,10 @@ def main():
     fd = int(sys.argv[-2])
     ch = Channel()
     peer = peer_socket()
-    sys.stderr.write("chanshim: role=%s delay=%.0fms snr=%s loss=%.3f slip=%.2f/s\n"
+    sys.stderr.write("chanshim: role=%s delay=%.0fms snr=%s loss=%.3f slip=%.2f/s "
+                     "tilt=%.1fdB\n"
                      % (os.environ.get("CHAN_ROLE"), ch.delay_ms,
-                        ch.snr or "off", ch.loss, ch.slip))
+                        ch.snr or "off", ch.loss, ch.slip, ch.tilt_db))
     silence = b"\0" * AUDIO_BYTES
     nf = 0
     timing = os.environ.get("CHAN_TIMING") == "1"

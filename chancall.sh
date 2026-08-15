@@ -50,8 +50,9 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	# independent noise, which no real line does.
 	CHAN_ROLE=$1 CHAN_PORT=$PORT CHAN_SEED=${CHAN_SEED:-12345} \
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
+	CHAN_TILT=${CHAN_TILT:-0} \
 	DSPLIB_V34_DUMP_PROBE_BINS=${DSPLIB_V34_DUMP_PROBE_BINS:-1} \
-	DSPLIB_V34_FIT_PREEMPH=${DSPLIB_V34_FIT_PREEMPH:-0} \
+	DSPLIB_V34_FIT_PREEMP=${DSPLIB_V34_FIT_PREEMP:-0} \
 		setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
 		_ "$pidf" "$SL" "$BENCH/chanshim.py" "$OUT.$2.log" &
 	sleep 2

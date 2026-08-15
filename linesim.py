@@ -39,7 +39,7 @@ THE ESTIMATORS, all scored on the same synthetic bins:
     it exceeds bin 4, count the steps. One bin against one bin, quantised to
     4.06 dB.
   * `ols`        -- least squares over every tone-carrying bin. What
-    `probe_preemph_fit` does today.
+    `probe_preemp_fit` does today.
   * `theil_sen`  -- median of pairwise slopes. Same data, but a single wild
     bin cannot move the median. Proposed because the OLS arm passed a 6.22 dB
     outlier straight through on 1 of 90 real probes.

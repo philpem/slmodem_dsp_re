@@ -26,7 +26,7 @@ for arm in off fit; do
 	LB=$(bash "$BENCH/waitquiet.sh" 8 30 1800) || { echo "never quiet" >&2; exit 3; }
 	[ "$arm" = fit ] && F=1 || F=0
 
-	DSPLIB_V34_FIT_PREEMPH=$F DSPLIB_V34_DUMP_PROBE_BINS=1 \
+	DSPLIB_V34_FIT_PREEMP=$F DSPLIB_V34_DUMP_PROBE_BINS=1 \
 	SLMODEMD=$FIT SLMODEMD_IODELAY=240 TTY=courier HOLD=45 \
 	TTY_EXTRA="AT&F;AT&A3;AT&B1" PTY_EXTRA="AT+MS=34,1;ATS70=7" \
 		timeout 220 bash "$BENCH/row.sh" "$L" pty 1902 > "$L.run.log" 2>&1

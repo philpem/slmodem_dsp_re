@@ -6,7 +6,7 @@ object's tilt meter made of it.
     probeplot.py captures/*.slmodemd.log --out shape.png  # several, overlaid
 
 WHY THIS EXISTS.  Everything this project has said about the channel's tilt is
-inferred from the INDEX `probe_preemph` reports -- a two-point slope, one
+inferred from the INDEX `probe_preemp` reports -- a two-point slope, one
 band-edge bin against bin 4, quantised to 4.06 dB steps (finding 1475).  The
 probe measures TWENTY-FIVE bins and the search reads two of them.  Nobody has
 ever looked at the other twenty-three.

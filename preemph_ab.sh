@@ -4,7 +4,7 @@
 #
 #   preemph_ab.sh [pairs]        # default 8 pairs = 16 calls
 #
-# THE QUESTION.  `probe_preemph` advances its counter before the comparison
+# THE QUESTION.  `probe_preemp` advances its counter before the comparison
 # that leaves the loop, so it returns 6..10 and the author's own
 # `if (i == 5) return 0` arm is dead (D53).  In V.34 the RECEIVER chooses the
 # far transmitter's pre-emphasis filter and index 0 is flat, so this modem has
