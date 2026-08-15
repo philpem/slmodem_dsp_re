@@ -59579,3 +59579,63 @@ Rockwell. Do not quote an emulated ratio as a bench figure.
 channel with real tilt, the selector finds the right family and the equaliser
 measurably does less work. The reason it is worth ~0.13 dB on THIS bench is
 that this bench has no tilt, not that the fix is empty.
+
+### 1962. THE REGRESSION TEST FOUND A DEFECT IN THE SHAPE MATCHER ON ITS FIRST RUN: ONE CORRUPTED BIN MOVED IT EIGHT INDICES
+
+A regression test was written for the selector: every template reachable, the
+identity property, broadband noise, and one corrupted bin. Three cases passed.
+**The fourth failed, and it was a real defect.**
+
+    worst index error from ONE +12 dB bin, flat channel
+      shape matcher   8 indices (2400 baud), 7 (3429)
+      object's counter 4
+
+**The shape matcher was WORSE than the thing it replaces.** A least-variance
+fit has no outlier rejection: a bin 12 dB out of line dominates the variance,
+and the template that best "explains" a spike is a strong tilt. The object is
+accidentally robust because it looks at only two of the twenty-five bins, so an
+interferer usually misses it entirely -- when it does land, the object is badly
+wrong, but the probability is 2/17 rather than 17/17.
+
+`probe_preemp_fit` had already learned this and uses Theil-Sen precisely for
+outlier robustness (finding 1911). `probe_preemp_shape` was written without
+inheriting it.
+
+**THE FIX IS UPWARD-ONLY MEDIAN-ABSOLUTE-DEVIATION REJECTION, and the asymmetry
+is the whole of it.** The first attempt rejected symmetrically and was wrong in
+a way that matters here: it discarded the 3450 Hz band-edge cliff -- the single
+most important feature of this bench's channel -- and moved the answer on a
+real capture from index 9 to 7.
+
+Phil's framing settled the design: *"We could see a leaking tone or a channel
+defect - though a channel defect is perhaps more likely."* An interferer ADDS
+energy to a bin; a notch or roll-off REMOVES it; a passive line cannot amplify.
+So reject only bins more than `max(6 dB, 5*MAD)` ABOVE the median. Every
+genuine defect survives, a real 4-5 dB resonance survives, and only what cannot
+be a channel is discarded.
+
+    after the fix:   worst error from one +12 dB bin   0 indices
+                     identity                          11/11 at five rates
+                     real capture                      index 9, unchanged
+
+**A NOTCH CASE WAS ADDED because the test only covered the less likely fault.**
+A deep notch on the top in-band bin moves the answer from 0 to 10 -- the
+selector sees it and asks for maximum correction -- and a mid-band notch is
+asserted to survive rejection directly rather than through an index that might
+coincidentally agree.
+
+**AND THE TEST HAD TO BE FIXED BEFORE IT COULD FIND ANYTHING.** Its first
+version reimplemented the scorer instead of calling it, so it tested a copy:
+the fix to `preemphshape.py` left it still failing, because the two had drifted
+apart the moment they were written. Both now share `score_templates()`.
+
+**WHAT THE TEST PINS**, `testbench/test_preempshape.py`, all passing:
+
+  * identity, 11/11 at 2400/2743/3000/3200/3429
+  * the object's reachable set is exactly {6,7,8,9,10} -- so D53 coming back
+    would fail the test rather than pass unnoticed
+  * broadband noise: 99% exact at 0.25 dB, 88% at 0.5, 58% at 1.0
+  * one +12 dB bin moves the fit at most one index
+  * a notch is NOT rejected, and does change the answer
+
+`make phase` green with the C-side rejection in place.

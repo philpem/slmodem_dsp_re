@@ -2142,6 +2142,79 @@ probe_preemp_shape(const struct v34_dftbin *bins, unsigned edge, short baud)
 	if (cnt < 6)
 		return -1;			/* caller falls back */
 
+	/*
+	 * REJECT INTERFERERS BEFORE FITTING.
+	 *
+	 * A least-variance fit has no outlier rejection: one bin 12 dB out of
+	 * line -- a tone leaking into a probe slot, which is what a constant
+	 * or intermittent interferer does -- dominates the variance, and the
+	 * template that best "explains" a spike is a strong tilt.  Measured
+	 * before this existed: one corrupted bin moved the answer by up to
+	 * EIGHT indices at 2400 baud and seven at 3429, which is worse than
+	 * the object's two-point counter manages (four).  The counter is
+	 * accidentally robust -- it only looks at two bins, so an interferer
+	 * usually misses it entirely.
+	 *
+	 * `probe_preemp_fit` already learned this and uses Theil-Sen for the
+	 * same reason (finding 1911); this arm was written without inheriting
+	 * it.  Median absolute deviation is the cheaper answer here because
+	 * the fit is over levels rather than slopes.
+	 *
+	 * UPWARD ONLY, and that asymmetry is the whole point.  An interferer
+	 * ADDS energy to a bin; a channel defect -- a roll-off, a notch --
+	 * REMOVES it.  Symmetric rejection cannot tell them apart and throws
+	 * away the band-edge cliff, which on this bench is the single most
+	 * important feature of the channel: with it dropped the answer moved
+	 * from index 9 to 7.  Rejecting only bins ABOVE the median keeps every
+	 * genuine defect and discards only what cannot be one.
+	 *
+	 * A bin more than max(6 dB, 5*MAD) ABOVE the median level is not a
+	 * measurement of the line and is dropped.  If that would leave too few
+	 * to fit, keep them all: a channel genuinely spread over more than
+	 * 6 dB is a channel, not an interferer.
+	 */
+	{
+		double sorted[PROBE_FIT_MAX], med, mad, lim;
+		unsigned a, b, keep = 0;
+
+		for (a = 0; a < cnt; a++)
+			sorted[a] = y[a];
+		for (a = 1; a < cnt; a++) {	/* insertion sort */
+			double v = sorted[a];
+			for (b = a; b > 0 && sorted[b - 1] > v; b--)
+				sorted[b] = sorted[b - 1];
+			sorted[b] = v;
+		}
+		med = (cnt & 1) ? sorted[cnt / 2]
+				: 0.5 * (sorted[cnt / 2 - 1] + sorted[cnt / 2]);
+		for (a = 0; a < cnt; a++) {
+			double d = y[a] - med;
+
+			sorted[a] = d < 0 ? -d : d;
+		}
+		for (a = 1; a < cnt; a++) {
+			double v = sorted[a];
+			for (b = a; b > 0 && sorted[b - 1] > v; b--)
+				sorted[b] = sorted[b - 1];
+			sorted[b] = v;
+		}
+		mad = (cnt & 1) ? sorted[cnt / 2]
+				: 0.5 * (sorted[cnt / 2 - 1] + sorted[cnt / 2]);
+		lim = 5.0 * mad;
+		if (lim < 6.0)
+			lim = 6.0;
+
+		for (a = 0; a < cnt; a++) {
+			if (y[a] - med <= lim) {	/* upward only */
+				y[keep] = y[a];
+				fsv[keep] = fsv[a];
+				keep++;
+			}
+		}
+		if (keep >= 6)
+			cnt = keep;	/* else fit through everything */
+	}
+
 	for (idx = 0; idx <= 10; idx++) {
 		double s = 0.0, ss = 0.0, m, var;
 
