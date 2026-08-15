@@ -59639,3 +59639,73 @@ apart the moment they were written. Both now share `score_templates()`.
   * a notch is NOT rejected, and does change the answer
 
 `make phase` green with the C-side rejection in place.
+
+### 1963. THE SELECTOR MUST IGNORE A SINGLE BIN, NOT REJECT IT BY SIGN — AND THE FIX IS NOW THE DEFAULT
+
+Two corrections to 1962, both from Phil, and both changed the design.
+
+**1. THE DISCRIMINATOR IS NARROW VERSUS BROAD, NOT UP VERSUS DOWN.** 1962
+rejected only upward outliers, reasoning that an interferer adds energy and a
+channel defect removes it. True, and the wrong rule: *"we're trying to use the
+pre-emphasis to match the general channel shape, the equaliser should be
+dealing with remaining channel resonance and error"*. A narrow NOTCH is as much
+the equaliser's problem as a narrow tone -- it has 80 complex taps adapting
+every symbol, which is the right tool for a defect a few hundred hertz wide --
+and chasing it with a broadband filter is exactly the mistake.
+
+A three-point median over the level-vs-bin sequence separates them:
+
+    flat + one +12 dB bin   -> flat        band-edge cliff -> unchanged
+    flat + one -18 dB notch -> flat        broad roll-off  -> unchanged
+
+Isolated impulses of either sign vanish; monotone edges survive untouched.
+
+**THE ENDPOINTS ARE LEFT RAW, and that was measured, not assumed.** Filtering
+them looks strictly better at 3429 -- immunity to an isolated tone and notch
+goes from (2, 10) index errors to (0, 0) for one index on the real capture --
+and it BREAKS identity at 2400 baud. For a monotone ramp
+`median(v0,v1,v2) == v1`, so filtering an endpoint pulls a ramp's end inward
+and distorts the very shapes the templates are. At 2400 there are ten in-band
+bins, so damaging two is a fifth of the evidence, and the selector could no
+longer name templates 5, 7, 8 or 10. **Correctness first**: identity is what
+makes the thing worth having, edge immunity is a hardening. The limit is stated
+in the code rather than hidden -- an isolated bad bin exactly at a band edge can
+still move the answer; the interior is immune.
+
+I had measured the endpoint variant at 3429 only and generalised from it.
+
+**2. THE FIX IS NOW THE DEFAULT, not an opt-in.** *"we shouldn't be rejecting
+indices 0..5 unless we're in 'emulate the blob' mode"* -- which is this tree's
+own rule for a deliberate fix (`deviations.md`: every one is behind
+`DSPLIB_REPRODUCE_BUGS`, "the differential tier defines it and everything else
+... gets the fix"). Rejecting five of eleven filters is a defect, not a
+behaviour to preserve. D53 is rewritten from PROPOSED to APPLIED.
+
+**AND THE OBVIOUS WAY TO DO THAT IS WRONG HERE.** An `#ifndef
+DSPLIB_REPRODUCE_BUGS` around the call site removed the shape matcher from the
+BENCH HYBRID as well as the differential tier, because this tree has exactly
+one compilation rule and it passes `$(REPRODUCE)` to everything. The first
+emulated call after the flip ran the object's counter with no SHAPE line in the
+log. It is now a runtime flag whose default the define sets -- 1 under
+REPRODUCE, 0 otherwise -- with `benchflags.c`, linked only into the hybrid,
+overriding from the environment. Verified both ways:
+
+    default                     SHAPE index 10 ... var 13.22 dB2, 3429 baud
+    DSPLIB_V34_BLOB_PREEMP=1    0 SHAPE lines, "index is 10"
+
+**A SEPARATE GAP THIS EXPOSED, worth its own task.** The Makefile says
+"anyone linking this library for real gets the fix", but `$(REPRODUCE)` is
+passed by the single general `$(BUILD)/%.o` rule, so **no target in this tree
+produces a fixed build** -- `FPM_div`'s D4 included. The stated policy is not
+implemented by the build system.
+
+**AND `hybrid_link.sh` LINKED A STALE OBJECT.** It takes .o files as given and
+does not build them, so editing a source and running only `gcc -fsyntax-only`
+left the old object in place: `nm` showed `probe_preemp_shape` absent from the
+binary entirely. Same class as the `benchflags.o` bug of 1960, one level up. It
+now refuses to link any object older than its source.
+
+`make phase` green. `testbench/test_preempshape.py` covers identity, the
+object's reachable set, broadband noise, an isolated tone, an isolated notch,
+and a broad roll-off -- the last two being the pair that stops the smoothing
+from being tuned into uselessness.

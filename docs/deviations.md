@@ -2318,7 +2318,39 @@ Courier for filter 0 where we ask for 4 in the Courier's own units — and the
 request arrives: our received copy of that transmitter runs 1.5 dB hotter at
 2800-3400 Hz than the un-preemphasised reference.
 
-**PROPOSED FIX — deliberate, flagged, and NOT YET APPLIED.** Make index 0
+**APPLIED, 2026-08-16, and it is now the default.** Shape matching over all
+eleven templates replaces the counter in every build that does not define
+`DSPLIB_REPRODUCE_BUGS` — so the differential tier still proves bit-exactness
+against the blob, and the interop tier, the bench and anyone linking this
+library for real get the fix. `probe_preemp_shape` in `v34hshak.c`.
+`DSPLIB_V34_BLOB_PREEMP=1` forces the counter at runtime for A/B work; that is
+a bench convenience and not part of the contract.
+
+**WHAT CHANGED THE VERDICT.** The paragraph below said not to apply this
+without measuring, and that was right. What has since been measured:
+
+  * given a channel that is the exact inverse of template i, the selector
+    answers i — 11/11 at all five symbol rates. The counter manages 2–3 of 11
+    (finding 1961).
+  * on the bench's OWN ATA, the correct answer is index 0 at every symbol rate
+    below 3429, because the conformance band stops short of the 3450 Hz cliff
+    and the line is flat. The counter asks for 6 or 7 and so ADDS 1.5–3 dB of
+    tilt to a flat channel (1961).
+  * with 6 dB of tilt in the emulator the selector reaches a Table 3 index the
+    counter cannot, and the equaliser's off-centre tap energy falls 16% across
+    three seeds (1961).
+  * a regression test pins identity, noise robustness and interferer rejection
+    (1962), and caught a real defect — an unrejected outlier moved the fit
+    eight indices — before it reached the bench.
+
+**STILL NOT MEASURED: a rate improvement against real hardware.** On this bench
+the whole effect is ~0.13 dB (1956) because the path is flat and negotiates
+3429, the one rate where the counter is near-optimal. The fix is applied
+because rejecting five of eleven filters is a defect and the evidence above
+shows the replacement is correct and robust — not because a bench call got
+faster. It has not.
+
+**SUPERSEDED PROPOSAL, kept for the reasoning.** Make index 0
 reachable, so a channel that needs no pre-emphasis is told so. It belongs with
 the 8000 samp/s work and the floating-point defects on the list of things the
 reconstruction may deliberately do better, and it obeys the same rule as all

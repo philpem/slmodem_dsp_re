@@ -1880,7 +1880,17 @@ int dsplib_v34_fit_preemp;		/* see include/dsplib/debug.h */
 int dsplib_v34_dump_probe_bins;	/* likewise */
 int dsplib_v34_seed_defect;	/* likewise -- harness self-test */
 int dsplib_v34_rrn_on_badblock;	/* likewise -- see debug.h */
-int dsplib_v34_shape_preemp;	/* likewise -- findings 1956, 1957 */
+/*
+ * Default 1 for the differential tier, 0 for everyone else.  See the note in
+ * probe_preemp() for why this is a flag with a define-set default rather than
+ * an #ifndef around the call site.
+ */
+int dsplib_v34_blob_preemp =
+#ifdef DSPLIB_REPRODUCE_BUGS
+	1;
+#else
+	0;
+#endif
 int dsplib_v34_dump_eq_taps;	/* likewise -- equaliser workload */
 
 #define PROBE_FIT_MAX		32	/* bins 1..25, comfortably */
@@ -2143,76 +2153,66 @@ probe_preemp_shape(const struct v34_dftbin *bins, unsigned edge, short baud)
 		return -1;			/* caller falls back */
 
 	/*
-	 * REJECT INTERFERERS BEFORE FITTING.
+	 * DROP NARROWBAND FEATURES; KEEP THE CHANNEL'S GENERAL SHAPE.
 	 *
-	 * A least-variance fit has no outlier rejection: one bin 12 dB out of
-	 * line -- a tone leaking into a probe slot, which is what a constant
-	 * or intermittent interferer does -- dominates the variance, and the
-	 * template that best "explains" a spike is a strong tilt.  Measured
-	 * before this existed: one corrupted bin moved the answer by up to
-	 * EIGHT indices at 2400 baud and seven at 3429, which is worse than
-	 * the object's two-point counter manages (four).  The counter is
-	 * accidentally robust -- it only looks at two bins, so an interferer
-	 * usually misses it entirely.
+	 * Pre-emphasis exists to match the broad shape of the line.  Residual
+	 * resonance and per-bin error are the EQUALISER's job -- it has 80
+	 * complex taps and adapts every symbol, which is the right tool for a
+	 * notch a few hundred hertz wide.  So the selector must not chase an
+	 * isolated bin.  Before this existed, one corrupted bin moved the
+	 * answer by EIGHT indices (a +12 dB interferer) and TEN (a -18 dB
+	 * notch), which is worse than the object's two-point counter manages.
+	 * The counter is accidentally robust: it reads two of twenty-five
+	 * bins, so an interferer usually misses it entirely.
 	 *
-	 * `probe_preemp_fit` already learned this and uses Theil-Sen for the
-	 * same reason (finding 1911); this arm was written without inheriting
-	 * it.  Median absolute deviation is the cheaper answer here because
-	 * the fit is over levels rather than slopes.
+	 * THE DISCRIMINATOR IS NARROW VERSUS BROAD, not up versus down.  An
+	 * earlier version rejected only upward outliers, on the reasoning that
+	 * an interferer adds energy and a channel defect removes it.  That is
+	 * true and it is the wrong rule: a narrow NOTCH is just as much the
+	 * equaliser's problem as a narrow tone, and chasing it with a
+	 * broadband filter is exactly the mistake.
 	 *
-	 * UPWARD ONLY, and that asymmetry is the whole point.  An interferer
-	 * ADDS energy to a bin; a channel defect -- a roll-off, a notch --
-	 * REMOVES it.  Symmetric rejection cannot tell them apart and throws
-	 * away the band-edge cliff, which on this bench is the single most
-	 * important feature of the channel: with it dropped the answer moved
-	 * from index 9 to 7.  Rejecting only bins ABOVE the median keeps every
-	 * genuine defect and discards only what cannot be one.
+	 * A three-point median over the level-vs-bin sequence does it: an
+	 * isolated impulse of either sign vanishes, and a monotone edge --
+	 * a band-edge cliff, a tilt -- survives untouched.
 	 *
-	 * A bin more than max(6 dB, 5*MAD) ABOVE the median level is not a
-	 * measurement of the line and is dropped.  If that would leave too few
-	 * to fit, keep them all: a channel genuinely spread over more than
-	 * 6 dB is a channel, not an interferer.
+	 * THE ENDPOINTS ARE LEFT RAW, and that was measured rather than
+	 * assumed.  Filtering them buys immunity to an isolated tone AND notch
+	 * at the band edge, and BREAKS the identity property at 2400 baud:
+	 * for a monotone ramp median(v0,v1,v2) == v1, so filtering an endpoint
+	 * pulls a ramp's end inward and distorts the very shapes the templates
+	 * are.  At 2400 there are ten in-band bins, so damaging two is a fifth
+	 * of the evidence, and the selector could no longer name templates 5,
+	 * 7, 8 or 10.  Correctness first: identity is what makes this worth
+	 * having, edge immunity is a hardening.
+	 *
+	 * KNOWN LIMIT: an isolated bad bin EXACTLY at a band edge can still
+	 * move the answer.  The interior bins are immune.  A fix needs an
+	 * endpoint rule that preserves ramps -- a linear-extrapolation guard
+	 * rather than a median -- and is not written.
+	 *
+	 * KNOWN LIMIT: a three-point median removes runs of ONE bin; two
+	 * adjacent corrupted bins survive.  Widening to five would catch those
+	 * and start blurring genuinely narrow channel features, which is a
+	 * trade this deliberately does not make -- a real two-bin defect is
+	 * 300 Hz wide and is a channel, not an interferer.
 	 */
-	{
-		double sorted[PROBE_FIT_MAX], med, mad, lim;
-		unsigned a, b, keep = 0;
+	if (cnt >= 3) {
+		double sm[PROBE_FIT_MAX];
+		unsigned a;
 
+		sm[0] = y[0];
+		sm[cnt - 1] = y[cnt - 1];
+		for (a = 1; a + 1 < cnt; a++) {
+			double p = y[a - 1], q = y[a], r = y[a + 1], t;
+
+			if (p > q) { t = p; p = q; q = t; }
+			if (q > r) { t = q; q = r; r = t; }
+			if (p > q) { t = p; p = q; q = t; }
+			sm[a] = q;			/* median of three */
+		}
 		for (a = 0; a < cnt; a++)
-			sorted[a] = y[a];
-		for (a = 1; a < cnt; a++) {	/* insertion sort */
-			double v = sorted[a];
-			for (b = a; b > 0 && sorted[b - 1] > v; b--)
-				sorted[b] = sorted[b - 1];
-			sorted[b] = v;
-		}
-		med = (cnt & 1) ? sorted[cnt / 2]
-				: 0.5 * (sorted[cnt / 2 - 1] + sorted[cnt / 2]);
-		for (a = 0; a < cnt; a++) {
-			double d = y[a] - med;
-
-			sorted[a] = d < 0 ? -d : d;
-		}
-		for (a = 1; a < cnt; a++) {
-			double v = sorted[a];
-			for (b = a; b > 0 && sorted[b - 1] > v; b--)
-				sorted[b] = sorted[b - 1];
-			sorted[b] = v;
-		}
-		mad = (cnt & 1) ? sorted[cnt / 2]
-				: 0.5 * (sorted[cnt / 2 - 1] + sorted[cnt / 2]);
-		lim = 5.0 * mad;
-		if (lim < 6.0)
-			lim = 6.0;
-
-		for (a = 0; a < cnt; a++) {
-			if (y[a] - med <= lim) {	/* upward only */
-				y[keep] = y[a];
-				fsv[keep] = fsv[a];
-				keep++;
-			}
-		}
-		if (keep >= 6)
-			cnt = keep;	/* else fit through everything */
+			y[a] = sm[a];
 	}
 
 	for (idx = 0; idx <= 10; idx++) {
@@ -2284,8 +2284,37 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 * both filter families, the tilt fit uses every bin and one family,
 	 * the counter uses two bins and half of one family.  Each falls
 	 * through to the next when it has too little to work with.
+	 *
+	 * DELIBERATE FIX, AND IT IS THE DEFAULT.  D53: the object's counter
+	 * starts at 5 and is advanced before its test, so indices 0-5 are
+	 * unreachable and it cannot ask for a flat line on a flat channel --
+	 * it asks for 6 or 7 and ADDS 1.5-3 dB of tilt (finding 1961 measures
+	 * this as the right answer at every symbol rate below 3429 on the
+	 * bench's own ATA).  Rejecting five of the eleven filters is a defect,
+	 * not a behaviour to preserve, so it follows this tree's rule for
+	 * every deliberate fix: `DSPLIB_REPRODUCE_BUGS` restores the object,
+	 * the differential tier defines it and stays bit-exact, and everything
+	 * else -- the interop tier, the bench, anyone linking this for real --
+	 * gets the fix.  See docs/deviations.md D53 and `FPM_div`'s table for
+	 * the same shape.
+	 *
+	 * A RUNTIME FLAG WHOSE DEFAULT THE DEFINE SETS, rather than an
+	 * `#ifndef` around the call.  That was tried and is wrong here: this
+	 * tree has ONE compilation rule (`$(BUILD)/%.o`) and it passes
+	 * `$(REPRODUCE)` to everything, so a compile-time exclusion removes
+	 * the arm from the bench hybrid as well as from the differential tier
+	 * -- the binary that most needs it.  It was removed silently and the
+	 * first emulated call after the change ran the object's counter with
+	 * no SHAPE line in the log at all.
+	 *
+	 * So: `dsplib_v34_blob_preemp` defaults to 1 under
+	 * DSPLIB_REPRODUCE_BUGS and 0 otherwise, and `tools/benchflags.c`
+	 * -- linked only into the bench hybrid -- overrides it from
+	 * DSPLIB_V34_BLOB_PREEMP, defaulting to 0.  The differential tier
+	 * does not link benchflags, so it keeps the object's counter and
+	 * stays bit-exact.
 	 */
-	if (dsplib_v34_shape_preemp) {
+	if (!dsplib_v34_blob_preemp) {
 		short f = probe_preemp_shape(bins, n, baud);
 
 		if (f >= 0)

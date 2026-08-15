@@ -46,6 +46,27 @@ FORK=${FORK:-/home/philpem/dev/D-Modem-fork/slmodemd}
 # and quietly run the BLOB's code while claiming to test ours.
 [ $# -gt 0 ] || { echo "hybrid_link: no object files given" >&2; exit 2; }
 
+# REFUSE A STALE OBJECT.  This script links whatever .o files it is handed and
+# does not build them, so `gcc -fsyntax-only` on a source it has just edited
+# leaves the OLD object in place and the bench silently tests the old code.
+# That happened: probe_preemp_shape was absent from the linked binary entirely
+# and an emulated call ran the object's counter with no SHAPE line in the log.
+# The same class of bug as the benchflags.o one below, one level up.
+stale=0
+for o in "$@"; do
+	src=$(echo "$o" | sed 's|.*/build/src/|src/|; s|\.o$|.c|')
+	[ -f "$src" ] || src=${src%.c}.cpp
+	[ -f "$src" ] || continue
+	if [ "$src" -nt "$o" ]; then
+		echo "hybrid_link: STALE $o is older than $src" >&2
+		stale=1
+	fi
+done
+[ "$stale" -eq 0 ] || {
+	echo "hybrid_link: run make first -- refusing to link stale objects" >&2
+	exit 2
+}
+
 # VPcmXfCreate.o IS DROPPED, deliberately.  The fork's dp_vpcm_shim.o DEFINES
 # `VPCMXF_Create` (it is slmodemd's entry point) and REFERENCES
 # `__blob_VPCMXF_Create`, which the objcopy below supplies from the blob.  Our
