@@ -330,11 +330,9 @@ subobject_compare(long tag)
 	 */
 	memcpy(qa, m->mappingParams, sizeof(qa));
 	memcpy(qb, r->mappingParams, sizeof(qb));
-	memset(qa + __builtin_offsetof(struct V92ParamsInfo,
-				       filterCoefficients), 0x77,
+	memset(qa + __builtin_offsetof(struct V92ParamsInfo, z1), 0x77,
 	       V92_PARAMSINFO_FILTERCOEFS * sizeof(void *));
-	memset(qb + __builtin_offsetof(struct V92ParamsInfo,
-				       filterCoefficients), 0x77,
+	memset(qb + __builtin_offsetof(struct V92ParamsInfo, z1), 0x77,
 	       V92_PARAMSINFO_FILTERCOEFS * sizeof(void *));
 	memset(qa + __builtin_offsetof(struct V92ParamsInfo, constellations),
 	       0x77, V92_PARAMSINFO_CONSTELLATIONS * sizeof(void *));
@@ -343,9 +341,14 @@ subobject_compare(long tag)
 	diff_eq_obj_(__FILE__, __LINE__, "the parameter block it filled",
 		     "V92ParamsInfo", qa, qb, (size_t)PISZ, tag);
 
+	/*
+	 * The four coefficient pointers are four named fields since the
+	 * unpacker was read -- z1, p1, z2, p2 -- and still one contiguous run
+	 * of four, which t_v92alloc.c asserts field by field.
+	 */
 	for (i = 0; i < V92_PARAMSINFO_FILTERCOEFS; i++)
 		owned[i] = (unsigned)__builtin_offsetof(struct V92ParamsInfo,
-							filterCoefficients)
+							z1)
 			 + i * (unsigned)sizeof(void *);
 	for (i = 0; i < V92_PARAMSINFO_CONSTELLATIONS; i++)
 		owned[V92_PARAMSINFO_FILTERCOEFS + i] =

@@ -1,0 +1,164 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and what only the transcript run can",
+  "why": "V92setParamsInfoFromCPUnPck and t_v92unpck.c were written by one hand from one reading of .text+0x12f00, so a green run says the two agree and not that either is right. Every entry below is a claim the disassembly makes: which source offset feeds which destination offset, which of the three flags gates which half, both clamp ceilings and the UNSIGNEDNESS of both clamps, the two filter scale factors and which arrays get which, and the single rounding of the gain. THE LAST ONE IS ONLY KILLABLE AT LEVEL 0 BY AN ARITHMETIC DIFFERENCE OF ONE ULP -- it was a live defect for one build and the block comparison caught it, which is why the fixture compares the block byte for byte rather than field by field. Entries that only change a format string are killable only by the level-2 transcript run; that is deliberate, since half this function is unreachable without it (finding 3544)."
+ },
+ {
+  "label": "K is the drn without the offset",
+  "find": "\tp->K = 2 * (cp->drn + 17);",
+  "replace": "\tp->K = 2 * cp->drn;"
+ },
+ {
+  "label": "K is the offset drn and not twice it",
+  "find": "\tp->K = 2 * (cp->drn + 17);",
+  "replace": "\tp->K = cp->drn + 17;"
+ },
+ {
+  "label": "drn is read unsigned",
+  "find": "\tp->K = 2 * (cp->drn + 17);",
+  "replace": "\tp->K = 2 * ((unsigned char)cp->drn + 17);"
+ },
+ {
+  "label": "trellisType comes from extendEu",
+  "find": "\tp->trellisType = cp->trellisState;",
+  "replace": "\tp->trellisType = cp->extendEu;"
+ },
+ {
+  "label": "the gain skips the Lu multiplication",
+  "find": "\tp->gain = p->gain * V92PI_GAIN_LU;",
+  "replace": "\tp->gain = p->gain;"
+ },
+ {
+  "label": "the gain's narrowing is left to the compiler",
+  "find": "\tp->gain = (float)((double)cp->prefilterGain\n\t\t\t  * (double)V92PI_GAIN_SCALE);",
+  "replace": "\tp->gain = cp->prefilterGain * V92PI_GAIN_SCALE;",
+  "why": "This is the defect finding 3543 is about, spelled the way it actually occurred: the plain assignment lets the product stay in an 80-bit x87 register across the debug branch, so the multiplication by 4000 sees more than 24 bits of it. It cost six of 1,530 checks before the narrowing was stated. It is caught by the block comparison and not by any named check, which is why that comparison is byte for byte over the whole block."
+ },
+ {
+  "label": "the moduli are gated on the wrong flag",
+  "find": "\tif (p->modulosEncoderPresent != 0) {",
+  "replace": "\tif (p->constellationPresent != 0) {"
+ },
+ {
+  "label": "the flags are tested in the source rather than the copy",
+  "find": "\tif (p->prefilterPrecoderPresent != 0) {",
+  "replace": "\tif (cp->constellationPresent != 0) {"
+ },
+ {
+  "label": "the moduli are copied one word high",
+  "find": "\t\tp->m[0] = cp->M[0];",
+  "replace": "\t\tp->m[0] = cp->M[1];"
+ },
+ {
+  "label": "the last modulus is not copied",
+  "find": "\t\tp->m[11] = cp->M[11];",
+  "replace": "\t\tp->m[11] = p->m[11];"
+ },
+ {
+  "label": "lp1 and lz2 are swapped on the way in",
+  "find": "\t\tp->lp1 = cp->lp1;\n\t\tp->lz2 = cp->lz2;",
+  "replace": "\t\tp->lp1 = cp->lz2;\n\t\tp->lz2 = cp->lp1;"
+ },
+ {
+  "label": "the filter clamp is one too high",
+  "find": "\t\tif (p->lz1 > V92_PARAMSINFO_MAX_FILTER_LEN)\n\t\t\tp->lz1 = V92_PARAMSINFO_MAX_FILTER_LEN;",
+  "replace": "\t\tif (p->lz1 > V92_PARAMSINFO_MAX_FILTER_LEN + 1)\n\t\t\tp->lz1 = V92_PARAMSINFO_MAX_FILTER_LEN + 1;"
+ },
+ {
+  "label": "the filter clamp is signed",
+  "find": "\t\tif (p->lp2 > V92_PARAMSINFO_MAX_FILTER_LEN)\n\t\t\tp->lp2 = V92_PARAMSINFO_MAX_FILTER_LEN;",
+  "replace": "\t\tif ((int)p->lp2 > V92_PARAMSINFO_MAX_FILTER_LEN)\n\t\t\tp->lp2 = V92_PARAMSINFO_MAX_FILTER_LEN;"
+ },
+ {
+  "label": "the lz2 clamp is dropped",
+  "find": "\t\tif (p->lz2 > V92_PARAMSINFO_MAX_FILTER_LEN)\n\t\t\tp->lz2 = V92_PARAMSINFO_MAX_FILTER_LEN;\n",
+  "replace": ""
+ },
+ {
+  "label": "the zeros are scaled like the poles",
+  "find": "\t\t\tp->z1[i] = cp->z1[i] * V92PI_ZERO_SCALE;",
+  "replace": "\t\t\tp->z1[i] = cp->z1[i] * V92PI_POLE_SCALE;"
+ },
+ {
+  "label": "the poles are scaled like the zeros",
+  "find": "\t\t\tp->p2[i] = cp->p2[i] * V92PI_POLE_SCALE;",
+  "replace": "\t\t\tp->p2[i] = cp->p2[i] * V92PI_ZERO_SCALE;"
+ },
+ {
+  "label": "the second precoder array is bounded by the first's length",
+  "find": "\t\tfor (i = 0; i < p->lp1; i++)\n\t\t\tp->p1[i] = cp->p1[i] * V92PI_POLE_SCALE;",
+  "replace": "\t\tfor (i = 0; i < p->lz1; i++)\n\t\t\tp->p1[i] = cp->p1[i] * V92PI_POLE_SCALE;"
+ },
+ {
+  "label": "the coefficient source is read as unsigned",
+  "find": "\t\t\tp->z2[i] = cp->z2[i] * V92PI_ZERO_SCALE;",
+  "replace": "\t\t\tp->z2[i] = (unsigned short)cp->z2[i] * V92PI_ZERO_SCALE;"
+ },
+ {
+  "label": "the constellation clamp is one too high",
+  "find": "\t\tif (p->LC[0] > V92_PARAMSINFO_MAX_LC)\n\t\t\tp->LC[0] = V92_PARAMSINFO_MAX_LC;",
+  "replace": "\t\tif (p->LC[0] > V92_PARAMSINFO_MAX_LC + 1)\n\t\t\tp->LC[0] = V92_PARAMSINFO_MAX_LC + 1;"
+ },
+ {
+  "label": "the constellation clamp is signed",
+  "find": "\t\tif (p->LC[3] > V92_PARAMSINFO_MAX_LC)\n\t\t\tp->LC[3] = V92_PARAMSINFO_MAX_LC;",
+  "replace": "\t\tif ((int)p->LC[3] > V92_PARAMSINFO_MAX_LC)\n\t\t\tp->LC[3] = V92_PARAMSINFO_MAX_LC;"
+ },
+ {
+  "label": "indexConstel is copied from LC",
+  "find": "\t\t\tp->indexConstel[i] = cp->indexConstel[i];",
+  "replace": "\t\t\tp->indexConstel[i] = (int)cp->LC[i];"
+ },
+ {
+  "label": "indexConstel is gated on the constellation sizes",
+  "find": "\t\tfor (i = 0; i < V92_CPUNPCK_CONSTELS; i++)\n\t\t\tp->indexConstel[i] = cp->indexConstel[i];",
+  "replace": "\t\tfor (i = 0; i < V92_CPUNPCK_CONSTELS; i++)\n\t\t\tif (p->LC[i] != 0)\n\t\t\t\tp->indexConstel[i] = cp->indexConstel[i];"
+ },
+ {
+  "label": "the third constellation is copied from the fourth",
+  "find": "\t\tfor (i = 0; i < p->LC[2]; i++)\n\t\t\tp->constellations[2][i] = cp->const3[i];",
+  "replace": "\t\tfor (i = 0; i < p->LC[2]; i++)\n\t\t\tp->constellations[2][i] = cp->const4[i];"
+ },
+ {
+  "label": "the last constellation copy runs one element long",
+  "find": "\t\tfor (i = 0; i < p->LC[5]; i++)\n\t\t\tp->constellations[5][i] = cp->const6[i];",
+  "replace": "\t\tfor (i = 0; i <= p->LC[5]; i++)\n\t\t\tp->constellations[5][i] = cp->const6[i];"
+ },
+ {
+  "label": "the drn print says the upstream rate is per drn and not per drn+17",
+  "find": "\t\tdsplibs_debug_printf(\"Upstream rate = %d\\r\\n\",\n\t\t\t\t     (int)((cp->drn + 17)\n\t\t\t\t\t   * V92PI_RATE_PER_DRN));",
+  "replace": "\t\tdsplibs_debug_printf(\"Upstream rate = %d\\r\\n\",\n\t\t\t\t     (int)(cp->drn * V92PI_RATE_PER_DRN));"
+ },
+ {
+  "label": "the gain print loses its sign character",
+  "find": "\t\t\t\t     sign_of(p->gain), whole_of(p->gain),\n\t\t\t\t     frac_of(p->gain));\n\tp->gain = p->gain * V92PI_GAIN_LU;",
+  "replace": "\t\t\t\t     '+', whole_of(p->gain),\n\t\t\t\t     frac_of(p->gain));\n\tp->gain = p->gain * V92PI_GAIN_LU;"
+ },
+ {
+  "label": "zero prints as positive",
+  "find": "\treturn (0.0f < v) ? '+' : '-';",
+  "replace": "\treturn (0.0f <= v) ? '+' : '-';"
+ },
+ {
+  "label": "the fraction is scaled for %05d and not %06d",
+  "find": "\t\t\t\t   * 1.0e6f));",
+  "replace": "\t\t\t\t   * 1.0e5f));"
+ },
+ {
+  "label": "the whole part keeps its sign",
+  "find": "\treturn (int)__builtin_fabsf(v);",
+  "replace": "\treturn (int)v;",
+  "equivalent": true,
+  "why": "EQUIVALENT BY PROOF, and the proof is the type of the source field. `gain` is `cp->prefilterGain * 2^-18 * 4000`; `prefilterGain` is UNSIGNED -- the object loads it with an explicitly zeroed high half and `fildll`, which is the unsigned conversion and not the signed one -- and both constants are positive. So `gain` is never negative, `(int)gain` and `(int)fabsf(gain)` agree over every value it can hold, and no fixture can separate them through THIS function. The sibling in V92Transmitter::reset is a different matter and is killed there, because the coefficients it prints are signed. Its two neighbours here -- the sign character and `sign_of`'s boundary -- ARE killable and are killed, by a case that forces prefilterGain to zero: zero is the one non-positive value gain can take, and the object prints it as '-'."
+ },
+ {
+  "label": "the LC dump loop is indexed from the destination",
+  "find": "\t\t\t\tdsplibs_debug_printf(\"CPObj->LC[%d] = %d\\r\\n\",\n\t\t\t\t\t\t     i, cp->LC[i]);",
+  "replace": "\t\t\t\tdsplibs_debug_printf(\"CPObj->LC[%d] = %d\\r\\n\",\n\t\t\t\t\t\t     i, p->LC[i]);"
+ },
+ {
+  "label": "the debug gates are collapsed into one",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"CPObj->drn = %d\\r\\n\", cp->drn);",
+  "replace": "\tif (DSPLIB_DEBUG_ON() && dsplibs_debug_level != 2)\n\t\tdsplibs_debug_printf(\"CPObj->drn = %d\\r\\n\", cp->drn);"
+ }
+]

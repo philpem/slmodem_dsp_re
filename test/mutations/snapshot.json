@@ -6443,6 +6443,68 @@
     "the raw buffer's null test is dropped": "caught"
    }
   },
+  "v92txreset": {
+   "key": "0102f7d11aab10b352532ffbd18a0afaca024960cb81dd4e992c1e60655901e6",
+   "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x0c is not zeroed on the way out": "caught",
+    "+0x40 is not zeroed on the way out": "caught",
+    "K is taken from the gain's neighbour": "caught",
+    "the convolution encoder is reset from extendEu": "caught",
+    "the fraction is scaled for %06d and not %07d": "caught",
+    "the gain is not copied in": "caught",
+    "the gain is printed from the block rather than from the object": "caught",
+    "the lz2 and lp2 prints are swapped": "caught",
+    "the moduli are printed one word high": "caught",
+    "the modulus encoder is reset with the transmitter and not the block": "caught",
+    "the one-byte buffer is not cleared": "caught",
+    "the p2 dump reads z2": "caught",
+    "the pre-filter is given the precoder's coefficients": "caught",
+    "the precoder is given the pre-filter's coefficients": "caught",
+    "the precoder's lengths are swapped but not its arrays": "caught",
+    "the precoder's zeros and poles are swapped": "caught",
+    "the rules are printed even for an empty filter": "caught",
+    "the z1 dump is bounded by lp1": "caught",
+    "zero prints as positive": "caught"
+   }
+  },
+  "v92unpck": {
+   "key": "6ee21268566c98dd4fe5980472bb0744caca12ec9b17377affac1ee50a26dff7",
+   "summary": "31 mutations: 30 caught (30 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "K is the drn without the offset": "caught",
+    "K is the offset drn and not twice it": "caught",
+    "drn is read unsigned": "caught",
+    "indexConstel is copied from LC": "caught",
+    "indexConstel is gated on the constellation sizes": "caught",
+    "lp1 and lz2 are swapped on the way in": "caught",
+    "the LC dump loop is indexed from the destination": "caught",
+    "the coefficient source is read as unsigned": "caught",
+    "the constellation clamp is one too high": "caught",
+    "the constellation clamp is signed": "caught",
+    "the debug gates are collapsed into one": "caught",
+    "the drn print says the upstream rate is per drn and not per drn+17": "caught",
+    "the filter clamp is one too high": "caught",
+    "the filter clamp is signed": "caught",
+    "the flags are tested in the source rather than the copy": "caught",
+    "the fraction is scaled for %05d and not %06d": "caught",
+    "the gain print loses its sign character": "caught",
+    "the gain skips the Lu multiplication": "caught",
+    "the gain's narrowing is left to the compiler": "caught",
+    "the last constellation copy runs one element long": "caught",
+    "the last modulus is not copied": "caught",
+    "the lz2 clamp is dropped": "caught",
+    "the moduli are copied one word high": "caught",
+    "the moduli are gated on the wrong flag": "caught",
+    "the poles are scaled like the zeros": "caught",
+    "the second precoder array is bounded by the first's length": "caught",
+    "the third constellation is copied from the fourth": "caught",
+    "the whole part keeps its sign": "equivalent",
+    "the zeros are scaled like the poles": "caught",
+    "trellisType comes from extendEu": "caught",
+    "zero prints as positive": "caught"
+   }
+  },
   "vpcmcreate": {
    "key": "8d18d70ca0113bbc02dd7650afa538a376e40ac026265b734acaed5623f65ecc",
    "summary": "31 mutations: 29 caught (29 by test, 0 by strings), 1 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -6776,9 +6838,6 @@
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",
     "VPCMXF_Delete frees without destroying": "caught",
-    "v34BaudAllow[1] keeps the constructor's 1": "caught",
-    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
-    "v34BaudAllow[5] keeps the constructor's 1": "caught",
     "minNofTransmitSequences is left at the constructor's 0": "caught",
     "mode 1 sets the V.92 mode and not the V.90 one": "caught",
     "mode 2 sets the V.90 mode and not the V.92 one": "caught",
@@ -6797,7 +6856,10 @@
     "the object is allocated 64 bytes short": "caught",
     "the sample count is the duration, unconverted": "caught",
     "the side handed to the modem is not inverted": "caught",
-    "the three termination requests are not cleared": "equivalent"
+    "the three termination requests are not cleared": "equivalent",
+    "v34BaudAllow[1] keeps the constructor's 1": "caught",
+    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
+    "v34BaudAllow[5] keeps the constructor's 1": "caught"
    }
   },
   "vpcmxfterm": {

@@ -1,14 +1,22 @@
 /*
  * V92Transmitter.h -- the V.92 upstream transmit chain: six owned pieces.
  *
- * Reconstructed from dsplibs.o.  Four of the class's six symbols are written
+ * Reconstructed from dsplibs.o.  Five of the class's six symbols are written
  * in src/pump/v90/V92Transmitter.cpp -- the constructor (C1 at .text+0x53b90
- * and C2 at +0x53c50, 180 bytes each) and the destructor (D2 at +0x53a30 and
- * D1 at +0x53ae0, 173 bytes each).  `reset(V92MappingParams *)` (+0x53d10,
- * 2,161 bytes) and `process(unsigned char *, unsigned int, short *, unsigned
- * int &)` (+0x54590, 355 bytes) are declared here and deliberately left
+ * and C2 at +0x53c50, 180 bytes each), the destructor (D2 at +0x53a30 and
+ * D1 at +0x53ae0, 173 bytes each) and `reset(V92MappingParams *)` (+0x53d10,
+ * 2,161 bytes).  `process(unsigned char *, unsigned int, short *, unsigned
+ * int &)` (+0x54590, 355 bytes) is declared here and deliberately left
  * undefined: defining a member whose callers are not written re-opens the
- * link closure for the whole suite, and neither has been read.
+ * link closure for the whole suite, and it has not been read.
+ *
+ * `reset` IS WHERE THREE OF THIS CLASS'S NAMES COME FROM.  It prints its own
+ * +0x04 as "K" and its own +0x44 as "Gain", and it prints the parameter block
+ * field by field -- which is what named most of
+ * include/dsplib/V92ParamsInfo.h.  What it does to the object itself is small:
+ * two words in from the parameter block, one byte cleared through +0x58, two
+ * words zeroed on the way out, and six calls that push the rest of the work
+ * into the five sub-objects.
  *
  * THE OBJECT IS 0x60 BYTES, AND IT IS MEASURED RATHER THAN BOUNDED.
  * `V92BitsToSymbol::V92BitsToSymbol` allocates it and hands the block
@@ -85,9 +93,11 @@ public:
 	~V92Transmitter();
 
 	/*
-	 * Declared, not defined.  The argument types are the mangling's and
-	 * exact; the return types are not mangled and `void` here means "not
-	 * established" rather than "measured".
+	 * The argument types are the mangling's and exact; the return types
+	 * are not mangled and `void` here means "not established" rather than
+	 * "measured" -- `reset` leaves whatever the last call left in %eax.
+	 *
+	 * `process` is declared, not defined.
 	 */
 	void reset(V92MappingParams *params);
 	void process(unsigned char *bits, unsigned int nbits, short *out,
@@ -104,8 +114,16 @@ public:
 	 */
 	unsigned char pad_00[4];
 
-	/* +0x04  Cleared by the constructor; its role is not established. */
-	unsigned int word_04;
+	/*
+	 * +0x04  Cleared by the constructor and refilled by `reset` from the
+	 * parameter block's +0x00.  "K = %d" (.rodata.str1.1:0x26b6) is the
+	 * author's name for it, printed off THIS field -- `mov 0x4(%edi),%eax`
+	 * at .text+0x54279 -- which makes it one of the few names in this
+	 * class that is not an inference.  What K counts is not established;
+	 * the unpacker builds it as twice (drn + 17) and that is all the
+	 * object says.  See include/dsplib/V92ParamsInfo.h.
+	 */
+	int K;
 
 	/*
 	 * +0x08  `sysdep_malloc(0x50)` with no constructor call after it, so
@@ -119,11 +137,29 @@ public:
 	unsigned int word_0c;
 
 	/*
-	 * +0x10 .. +0x47  Fifty-six bytes the constructor does not touch.
-	 * `reset` and `process` are not written, so nothing here can say what
-	 * lives in them.
+	 * +0x10 .. +0x3f  Forty-eight bytes neither the constructor nor
+	 * `reset` touches.  `process` is still not written, so nothing here
+	 * can say what lives in them.  This region was 56 bytes until `reset`
+	 * was read; the last two words of it are below.
 	 */
-	unsigned char pad_10[0x38];
+	unsigned char pad_10[0x30];
+
+	/*
+	 * +0x40  Zeroed by `reset`, in the same pair of stores as +0x0c and at
+	 * every one of its three exits.  Nothing reads it in anything written
+	 * here and no string names it, so its role is not established and the
+	 * neutral name stays.  Four bytes, stored as a word.
+	 */
+	unsigned int word_40;
+
+	/*
+	 * +0x44  The constellation gain, copied by `reset` from the parameter
+	 * block's +0x18 -- the FIRST thing reset does, before any of the six
+	 * calls.  "Gain = %c%d.%07d" (.rodata.str1.1:0x26a3) is printed from
+	 * this field, `flds 0x44(%edi)` at .text+0x541e6, so both the name and
+	 * `float` are the author's rather than inferred.
+	 */
+	float gain;
 
 	/* +0x48  V92ModulusEncoder, 0x54 bytes, constructed and freed with no
 	 * destructor call -- see the file comment. */
