@@ -6471,3 +6471,162 @@ and stops there.  Fix class: none proposed; reproduced as found.*
 Recorded rather than driven because the return is a saturating index and not a
 failure code -- 0 is a legal answer, so nothing downstream can tell the NaN
 apart.  Finding 3051.
+
+## D351 🐛 `adjustConstellationsToNewK` writes one past a constellation row when it has exactly 128 points
+
+`V90ConstellationDesigner::adjustConstellationsToNewK` refuses to add a point
+when the row would exceed 128 -- `cmp $0x80,%eax; ja` at 0x4c726, so 128 is
+ACCEPTED -- and the shift that follows then runs
+
+```c
+for (j = mappingParams->constellationSize[minIndex]; j != 0; j--) {
+	mappingParams->codecConstellation[minIndex][j] = ...[j - 1];
+	mappingParams->constellation[minIndex][j] = ...[j - 1];
+}
+```
+
+with `j` reaching 128, which is one past the row.  `V90MappingParams` tiles
+exactly, so the write is not off the end of the object and lands on a
+NEIGHBOUR:
+
+    constellation[k][128]        is  constellation[k + 1][0]        (k < 5)
+    constellation[5][128]        is  codecConstellation[0][0]
+    codecConstellation[k][128]   is  codecConstellation[k + 1][0]   (k < 5)
+    codecConstellation[5][128]   is  the low byte of constellationSize[0]
+
+**Reachability: a row that reaches 128 points, which the add pass produces
+whenever the constellations start large enough that the product cannot cross
+the next power of two before one row fills.** **Observability: the next
+member to read that neighbour reads a value the design never chose, and the
+`constellationSize[0]` case turns a length into an arbitrary byte.** Status:
+measured -- reproduced under the fixture of `test/unit/t_v90cdadjust.cpp` with
+constellation lengths above 60, and read off the core dump the follow-on
+non-termination (D352) produced.  Fix class: bound the shift at 127, or
+refuse at 128 rather than above it.  Reproduced as found; the differential
+test keeps every length at 45 or below so that the pass cannot reach 128, and
+the test's header says so.
+
+## D352 🐛 `reconstructInitialConditions` decrements a length more times than the row has points, and the next round never terminates
+
+D342 records that the search in
+`V90ConstellationDesigner::reconstructInitialConditions` has no bound.  This
+is what happens when it overshoots.  The member is
+
+```c
+while (p->constellation[k][drop] != target)
+	drop++;
+while (drop != 0) {
+	unsigned int n = p->constellationSize[k];
+	unsigned char i;
+	for (i = 0; i < n; i++) { ... }
+	p->constellationSize[k]--;
+	drop--;
+}
+```
+
+so `drop` larger than `constellationSize[k]` decrements an UNSIGNED length
+past zero.  The round after that has `n == 0xFFFFFFFF` and an `unsigned char`
+index, `i < n` is true for every one of the 256 values `i` can take, and the
+loop runs for ever.
+
+**Reachability: any caller whose saved first byte is no longer within the
+first `constellationSize[k]` entries of the row -- which D351 produces
+directly, by overwriting `constellation[k + 1][0]` with a value from row
+`k`.** **Observability: total, the modem stops.** Status: measured -- the
+combination hangs, and `#0 reconstructInitialConditions ... n = 4294967295,
+k = 5` is off the core.  Fix class: bound `drop` by the length, or widen `i`.
+Reproduced as found.
+
+## D353 ⚠ `process` shifts the digital rate mask by a negative count
+
+`V90ConstellationDesigner::process` tests the provider's rate mask with
+
+```c
+if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0)
+```
+
+-- `sub $0x15,%ecx; sar %cl,%eax` at 0x4ce54 -- and the test is made BEFORE
+the `word_0 <= 20` check that would have ruled the value out.  A `word_0`
+below 21 therefore shifts by a negative count, which is undefined in C; the
+i386 masks the count to five bits and both sides do the same thing, so the
+differential test cannot see it.
+
+**Reachability: any design that lands under the minimum, which is the arm
+whose own diagnostic is "Connection design ERROR, D choosen is smaller than
+minimum".** **Observability: the banner is printed or not printed on the
+strength of an arbitrary bit; nothing else depends on it.** Status:
+unmeasured on the wire.  Fix class: test the floor first.  Reproduced as
+found, and the differential test drives `word_0` below 21.
+
+## D354 ⚠ `adjustConstellationsToNewK` leaves its removed-point count naming a point it has put back nowhere
+
+The removal pass ends by restoring the last point it took out, and the whole
+restore -- INCLUDING the `removed--` -- is skipped when the row is down to a
+single point:
+
+```c
+if (mappingParams->constellationSize[maxIndex] != 1) {
+	...restore...
+	removed--;
+}
+edprintf("... nof points removed %d \r\n", removed);
+```
+
+`cmp $0x1,%eax; je` at 0x4c4ce jumps straight to the diagnostic.  So on that
+path the count is one larger than the number of points actually gone, and the
+constellation keeps a point the member's own accounting says it returned.
+
+**Reachability: a removal pass that empties a row down to one point, which
+needs a constellation the design has already cut hard.** **Observability: the
+count is a diagnostic only; nothing reads it back.** Status: unmeasured.  Fix
+class: decrement outside the guard, or guard only the shift.  Reproduced as
+found.
+
+## D355 🐛 `constellationDesign` and `process` drop an argument on the arm that does not force the rate
+
+Both members pass seven-argument and six-argument forms of the same design
+call, and on the six-argument arm the argument that goes into
+`setConstellationToNoise`'s `unsigned char *` slot is the SIXTH they were
+handed and not the fifth -- which is never passed at all.  In
+`constellationDesign` the fifth is never stored to the outgoing frame (%ecx
+holds it from 0x54(%esp) at 0x4cad3 and is written nowhere); in `process` the
+ninth is not (0x84(%esp) is loaded only on the forced arm, at 0x4cf13).
+
+**Reachability: `FORCE_RATE_ENABLE` clear, which is the ordinary case.**
+**Observability: `setConstellationToNoise` reads that argument as the
+per-phase top ucode and bounds its staging loop with it, so the wrong one
+changes which points enter every constellation.** Status: unmeasured against
+the standard -- what the two arrays hold in a live session is not known here.
+Fix class: pass the fifth.  Reproduced as found; `test/unit/t_v90cdadjust.cpp`
+gives the two arrays different per-phase spans so that the reading is
+measured rather than assumed, and the mutation set carries the swap.
+
+## D356 🐛 `constellationDesign` divides by zero when the design it just made leaves a phase empty
+
+`setConstellationToNoise` sets `constellationSize[k]` to the number of ucodes
+its staging loop accepted, and that number is ZERO whenever no index in
+`[unnamed_360, lastUcode[k]]` clears the phase's threshold -- there is no
+floor on it and D341 records the sibling case where a phase is left unwritten
+altogether.  `constellationDesign` then calls `adjustConstellationsPower` if
+`ENABLE_DIGITAL_POWER_REDUCTION` is set, whose first act is
+
+    power->getPower(mappingParams, 1, word_2c)
+
+and whose `calcModulusParameters` computes `remaining[i] %
+constellationSize[i]` through `__moddi3`.  A zero divisor there is a divide
+error and the process takes SIGFPE.  `process` reaches the same call the same
+way.
+
+**Reachability: any design that leaves one of the six phases with no points,
+which needs only a threshold above every ucode in that phase's span.**
+**Observability: total, and immediate -- the modem dies rather than
+misbehaving.** Status: measured, in the sense that it was REPRODUCED: the
+first composed sweep in `test/unit/t_v90cdadjust.cpp` took SIGFPE with
+`constellationSize = {0, 8, 0, 18, 1, 22}`, and `coredumpctl debug` put the
+top frame in `__moddi3` under `calcModulusParameters` under
+`adjustConstellationsPower` under `constellationDesign`.  What is NOT measured
+is whether a live session can produce an empty phase; nothing here bounds the
+ucode tables a real detector fills.  Fix class: floor the length at one, or
+skip the power pass on an empty phase.  Reproduced as found; the test's
+composed groups use a fixture that cannot produce an empty phase and its
+header says why.

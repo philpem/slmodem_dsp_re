@@ -7,10 +7,16 @@
  * the eleven leaves, `determineDminForRrn`, `setConstellationToNoise` and
  * `setConstellationToNoise_forceRate` followed -- the fourteen-member batch
  * finding 2140 measured, and TWENTY of the class's twenty-four defined
- * symbols.  The four still unwritten are `constellationDesign`,
- * `adjustConstellationsPower`, `adjustConstellationsToNewK` and `process`,
- * every one of which reaches `V90ConstellationPower` and none of which is in
- * this batch.
+ * symbols.
+ *
+ * AND THE CLASS IS NOW CLOSED.  The last four -- `adjustConstellationsPower`,
+ * `adjustConstellationsToNewK`, `constellationDesign` and `process`, 8,869
+ * bytes -- all reach `V90ConstellationPower`, which is why they waited for it,
+ * and they are what turns the class from a set of leaves nothing calls into
+ * one entry point (`process`) with a call graph under it.  Four of the eleven
+ * "nothing in the object calls any of them" leaves now HAVE a caller, inlined:
+ * `maxK`, `realK`, `findMinValueIndex`, `findConstelMaxValueIndex` and
+ * `reconstructInitialConditions` are all expanded inside the new four.
  *
  * NOT POLYMORPHIC.  `tools/cppstruct.py` lists the destructor with the `D1`
  * and `D2` variants and no `D0`, and GCC emits a deleting destructor only for
@@ -69,6 +75,13 @@
 #include "dsplib/V90SpectralConditions.h"
 
 /*
+ * `process`' twelfth parameter, and the type is part of its mangled name
+ * (`23__tHardwareCodecTypes__`), so this include is what makes the symbol come
+ * out right.  That header holds the enum and nothing else, for exactly this.
+ */
+#include "dsplib/V90CodecType.h"
+
+/*
  * A POINTER ONLY, so a forward declaration is what belongs here.  Two
  * different definitions of `V90Parameters` exist in this tree -- the 0x504
  * word block in `V90PreFilter.h` and the 0x558 named map in
@@ -94,6 +107,13 @@ class V90ConstellationPower;
  * all that is needed here.
  */
 class V90MappingParams;
+
+/*
+ * `process`' second parameter -- and, as that member proves, what `+0x14`
+ * points at.  A pointer is all the declaration needs; the .cpp includes the
+ * definition, because `process` reads two of its fields.
+ */
+class V90AutoDigitalImpDetector;
 
 class V90ConstellationDesigner {
 public:
@@ -200,6 +220,72 @@ public:
 					       unsigned char (*)[128]);
 
 	/*
+	 * THE FOUR THAT CLOSE THE CLASS.  Their argument lists are the
+	 * mangling's; the two return types are read from the object.
+	 */
+
+	/*
+	 * Shrink the constellations until the frame's average power is at or
+	 * under the ladder entry `byte_08` selects, then put one point back if
+	 * that took `mappingParams->word_0` below 21.  `void`: the single
+	 * epilogue is reached with `dsplibs_debug_printf`'s return in %eax on
+	 * one path and `edprintf`'s on another, which is finding 2140's
+	 * two-`ret` argument at one `ret`.
+	 */
+	void adjustConstellationsPower();
+
+	/*
+	 * Add or remove constellation points until K reaches the target the
+	 * parameter block's `UP_ROUND_K` selects.  `void` for the same reason.
+	 *
+	 * THE FOURTH ARGUMENT IS NEVER READ.  `0xe0(%esp)` is not referenced
+	 * anywhere in the 4,887 bytes, and that is a claim the test drives:
+	 * it is pointed at its own buffer and asserted unchanged.  The other
+	 * three are the two `short (*)[128]` tables and the per-constellation
+	 * `short *`, all three indexed FLAT as `(k << 7) + u` exactly as
+	 * `constelBuild`'s are.
+	 */
+	void adjustConstellationsToNewK(short (*)[128], short (*)[128], short *,
+					unsigned char (*)[128]);
+
+	/*
+	 * One design pass: choose the constellations for the noise, then the
+	 * two optional refinements the parameter block gates.
+	 *
+	 * THE FIFTH ARGUMENT IS DROPPED ON ONE ARM.  With `FORCE_RATE_ENABLE`
+	 * clear the object calls `setConstellationToNoise` with the SIXTH
+	 * argument in the fifth outgoing slot and never stores the fifth --
+	 * both are `unsigned char *`, so a fixture that fills them alike
+	 * cannot tell that reading from passing the fifth.  The test counts the
+	 * trials that take the arm and the mutation set encodes the swap.
+	 */
+	void constellationDesign(float, short (*)[128], short (*)[128],
+				 short *, unsigned char *, unsigned char *,
+				 unsigned char (*)[128]);
+
+	/*
+	 * THE ENTRY POINT, and the only member of the class with a caller
+	 * inside it: it runs `constellationDesign`'s three steps in a loop of
+	 * at most three passes, forcing the rate to `minRate` or `maxRate`
+	 * whenever the design lands outside them.
+	 *
+	 * IT RETURNS A VALUE, and that is read from the object rather than
+	 * assumed: the single epilogue at 0x4d0a5 is `mov 0x34(%esp),%eax`
+	 * ahead of the pops, and that slot is seeded 0 on entry and set to 1
+	 * on exactly one path -- the one whose diagnostic is "D choosen is
+	 * smaller than minimum".  So this is not another `void` like the three
+	 * whose two `ret` paths disagree; the value is deliberately loaded.
+	 *
+	 * The ninth argument is dropped on the same arm `constellationDesign`
+	 * drops its fifth on, and for the same reason.
+	 */
+	int process(unsigned int, V90AutoDigitalImpDetector *, float, int,
+		    V90MappingParams *, short (*)[128], short (*)[128],
+		    short *, unsigned char *, unsigned char *, unsigned char,
+		    __tHardwareCodecTypes__, unsigned int,
+		    V90SpecialSpectralConditions);
+
+	/*
 	 * Data members are public because the original's access specifiers are
 	 * not recoverable from the mangling, and because a single access
 	 * section is what keeps the class POD and __builtin_offsetof well
@@ -290,15 +376,28 @@ public:
 	 * 16-bit table at +0, a byte table at +0xd00 and six more bytes at
 	 * +0x280c, from two members that share nothing else.
 	 *
-	 * WHAT THE POINTED-AT OBJECT IS is still NOT known, and two
-	 * displacements do not make it known.  0xd00 is 13 rows of 128 shorts
-	 * and 0x280c is 0x2812 bytes short of nothing in particular; reading a
-	 * shape out of either would be inference.  Nothing writes this field
-	 * anywhere in the object, so there is no assignment to type it from
-	 * either, and no struct is invented for it.  It used to be inside
-	 * `pad_12`.
+	 * AND NOW THE POINTED-AT OBJECT IS KNOWN, from the one member that
+	 * WRITES this field.  `process` stores its second argument here --
+	 * `mov 0x68(%esp),%edi` then `mov %edi,0x14(%ebp)` -- and the mangling
+	 * types that argument `V90AutoDigitalImpDetector *`.  Every one of the
+	 * three displacements above then lands on a named member of that class
+	 * (see include/dsplib/V90AutoDigitalImpDetector.h):
+	 *
+	 *     +0        linMapp[6][128]     short   the 16-bit table
+	 *     +0xd00    byte_0d00[6][128]   uchar   the byte table
+	 *     +0x280c   byte_280c[6]        uchar   the per-phase flags
+	 *
+	 * -- so the "13 rows of 128 shorts" and "0x2812 bytes short of nothing
+	 * in particular" reading that used to stand here is RETRACTED, and so
+	 * is the claim that nothing in the object writes this field.
+	 *
+	 * THE DECLARED TYPE STAYS `short (*)[128]` AND THAT IS NOT A
+	 * COMPROMISE: `linMapp` is at detector offset 0 and is exactly
+	 * `short[6][128]`, so `&detector->linMapp[0]` IS this pointer, with the
+	 * same value and the same type.  `process` assigns it that way and the
+	 * three readers are unchanged.
 	 */
-	short (*constelTable)[128];	/* +0x14                            */
+	short (*constelTable)[128];	/* +0x14 = &detector->linMapp[0]    */
 
 	/*
 	 * +0x18 .. +0x20  Three floats, and `setConstellationToNoise` is the
@@ -345,14 +444,25 @@ public:
 	 * that is the only thing about it the object fixes:
 	 * `setConstellationToNoise` loads `mov 0x2c(%ecx),%edx` and then
 	 * `cmp 0x28(%ecx),%edx`, a 32-bit compare with no operand-size
-	 * prefix, so the two slots are the same width.  Nothing reads it
-	 * apart from that comparison and nothing anywhere in the object
-	 * writes it, so what it MEANS is not known: the equality picks
-	 * between two ways of filling `codecConstellation` and says only
-	 * that both slots hold the same kind of thing.  It used to be
+	 * prefix, so the two slots are the same width.  It used to be
 	 * `pad_28[4]`.
+	 *
+	 * AND BOTH SLOTS NOW HAVE THEIR WRITER, which is `process`, and it
+	 * copies them out of the detector it is handed:
+	 *
+	 *     mov 0xa95c(%edi),%eax ; mov %eax,0x28(%ebp)   pcmType
+	 *     mov 0xa960(%edi),%esi ; mov %esi,0x2c(%ebp)   int_a960
+	 *
+	 * So the "nothing anywhere in the object writes it" sentence that used
+	 * to stand here is retracted for both, `word_28` is the session's
+	 * companding law as `V90AutoDigitalImpDetector::reset` stored it, and
+	 * the equality test between the two asks whether the detector's second
+	 * flag agrees with it.  The types stay as the widths measure them: what
+	 * the object forces is four bytes and a 32-bit compare, and naming
+	 * `PcmType` here would make this header depend on the one that defines
+	 * the enum for no measured gain.
 	 */
-	int word_28;			/* +0x28  compared against word_2c  */
+	int word_28;			/* +0x28 = detector->pcmType        */
 
 	/*
 	 * +0x2c  The companding law, and a four-byte load: `mov 0x2c(%edx),%esi
@@ -365,8 +475,14 @@ public:
 	 * the width and the `!= 0`, and naming the type would make this header
 	 * depend on the one that defines the enum for no measured gain.  It
 	 * used to be inside `pad_28`.
+	 *
+	 * IT IS ALSO WHAT THE THREE NEW MEMBERS HAND TO `getPower` as its
+	 * `PcmType` argument, which is the same reading from a second
+	 * direction: `mov 0x2c(%ebp),%edx ; mov %edx,0xc(%esp)` ahead of every
+	 * one of the five `V90ConstellationPower::getPower` calls.  See
+	 * `word_28` above for where `process` gets it from.
 	 */
-	int word_2c;			/* +0x2c non-zero selects A-law     */
+	int word_2c;			/* +0x2c = detector->int_a960       */
 
 	/*
 	 * +0x30 and +0x44  The constructor's third and second arguments,
@@ -386,10 +502,32 @@ public:
 	 * +0x38  `movb $0x16,0x38(%eax)`, again a byte by its encoding
 	 * (`c6 40 38 16`).  22 is not one of the rate-ladder constants and
 	 * nothing here reads it, so it is offset-named too.
+	 *
+	 * IT NOW HAS A WRITER AND A READER.  `process` stores its eleventh
+	 * argument into it (`mov %dl,0x38(%ebp)`, and the mangling makes that
+	 * argument an `unsigned char`), and `adjustConstellationsPower` reads
+	 * it as the index into `V90ConstellationPower::averagePowerLimits` --
+	 * clamped by `cmp $0x15,%al; ja` to the constructor's own 22, which is
+	 * why the seed is that value.  So the field is a power-ladder index and
+	 * the default is the ladder entry the design starts from; it keeps its
+	 * offset name because nothing in the object names the quantity.
 	 */
-	unsigned char byte_38;		/* +0x38 defaults to 22             */
+	unsigned char byte_38;		/* +0x38 a power-ladder index, 22   */
 
-	unsigned char pad_39[11];	/* +0x39                            */
+	unsigned char pad_39[3];	/* +0x39                            */
+
+	/*
+	 * +0x3c and +0x40  `process`' twelfth and thirteenth arguments, stored
+	 * and read by nothing reconstructed here.  What types them is the
+	 * mangling of the member that writes them and nothing else:
+	 * `...h23__tHardwareCodecTypes__j...` makes argument 12 the codec enum
+	 * and argument 13 an `unsigned int`, and the object puts 12 at +0x3c
+	 * (`mov 0x90(%esp),%edx ; mov %edx,0x3c(%ebp)`) and 13 at +0x40 (`mov
+	 * 0x94(%esp),%ecx ; mov %ecx,0x40(%ebp)`).  Both are `movl`, so both
+	 * are four bytes.  They used to be inside `pad_39[11]`.
+	 */
+	__tHardwareCodecTypes__ codecType;	/* +0x3c                    */
+	unsigned int word_40;			/* +0x40                    */
 
 	V90PreFilter *preFilter;	/* +0x44 = constructor argument 2   */
 
