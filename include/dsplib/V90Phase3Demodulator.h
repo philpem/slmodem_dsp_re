@@ -149,7 +149,26 @@ public:
 	 * for want of evidence rather than because the blob returns nothing.
 	 */
 	void getV90Decision(float);
-	void getV92Decision(float);
+
+	/*
+	 * WRITTEN, AND IT RETURNS A `short` -- THE ONE RETURN TYPE IN THIS
+	 * CLASS THAT IS NOT A GUESS.  `getDecision` is 52 bytes and is nothing
+	 * but a two-way dispatch on `sessionFlag`:
+	 *
+	 *     call getV92Decision ; cwtl ; add $0xc,%esp ; ret
+	 *     call getV90Decision ; cwtl ; add $0xc,%esp ; ret
+	 *
+	 * `cwtl` sign-extends `%ax` into `%eax`, so the callee's answer is
+	 * sixteen bits wide and SIGNED, and `getDecision` itself returns the
+	 * widened `int`.  A return type is not mangled, so `void` linked and
+	 * would have gone on linking; nothing but this caller settles it.
+	 *
+	 * The same two lines say `getV90Decision` returns `short` too.  Its
+	 * declaration is left as it stands because it is another session's
+	 * function and this one must not move under it.
+	 */
+	short getV92Decision(float);
+
 	void getDecision(float);
 	void twoLevelDemod(float, int &);
 	void exitDIL();
@@ -170,7 +189,31 @@ public:
 	 */
 	V90AutoDigitalImpDetector *autoDigitalImpDetector;
 
-	/* +0x004  Zeroed by `reset`; nothing else in the batch reads it. */
+	/*
+	 * +0x004  Zeroed by `reset`.  `getV92Decision` runs it 0,1,2,3,4,5,0
+	 * and uses it to index the impairment detector's six per-phase rows,
+	 * and the author's own diagnostic there is
+	 *
+	 *     "V90Phase3Demodulator: waitForJd framePosition = %d\n"
+	 *
+	 * with this field as the argument -- so the author's name for it is
+	 * `framePosition`, on the same footing as `sessionFlag` below.  IT IS
+	 * NOT RENAMED HERE: `getV90Decision` is being written concurrently
+	 * against `word_04`, and a rename would move the ground under it.  The
+	 * name is recorded rather than applied.
+	 *
+	 * IT IS READ AT THREE WIDTHS and all three are in the object, which is
+	 * why the reconstruction spells a cast at every site rather than
+	 * letting the compiler choose:
+	 *
+	 *   `mov 0x4(%ebx),%eax`     32 bits -- the increment, the
+	 *                            `short_2800[]` index, and the third
+	 *                            argument of `calculateLinearMeanAndVar`
+	 *   `movswl 0x4(%ebx),%esi`  the `short` first argument of `isAltRbs`
+	 *                            and `addReceivedSampleToStorage`
+	 *   `movzwl 0x4(%ebx),%eax`  the row index into `linMapp`/`linMappAlt`,
+	 *                            always followed by `shl $0x7`
+	 */
 	unsigned int word_04;
 
 	/*
@@ -274,6 +317,26 @@ public:
 	 * comparison.  The argument above stands on the instruction ordering
 	 * alone, which is weaker evidence than 1302 had, and saying so is the
 	 * point of this paragraph.
+	 *
+	 * AND IT IS NOW CORROBORATED FROM THE OTHER END.  `getV92Decision`
+	 * passes `this + 0x3cc` as the `this` of
+	 * `SerialDifferentialDecoder<int>::process` five times over --
+	 * `lea 0x3cc(%ebx),%ebp` then
+	 * `call _ZN25SerialDifferentialDecoderIiE7processEi` -- and that class
+	 * is exactly one `int prev_` with no constructor of its own (see
+	 * DiffCoder.h, which already records that
+	 * `SerialDifferentialDecoder<int>` is called ten times from this
+	 * class).  So +0x3cc is a SUBOBJECT with one `int` in it, a trivial
+	 * class value-initialised in the initializer list is exactly the
+	 * `mov $0,0x3cc(%ebx)` seen between the two neighbouring
+	 * constructions, and this field is the differential decoder that pairs
+	 * with the `Descrambler<int,int>` immediately below it.
+	 *
+	 * THE DECLARED TYPE IS LEFT AS `unsigned int` and `getV92Decision`
+	 * casts at its five call sites, for the same reason `word_04` is not
+	 * renamed: `getV90Decision` is being written concurrently against this
+	 * declaration.  Correcting the type is the right end state and belongs
+	 * to whoever lands second.
 	 */
 	unsigned int word_3cc;
 
@@ -291,7 +354,17 @@ public:
 	 */
 	V90SdDetector *sdDetector;
 
-	unsigned char pad_3f4[5];	/* +0x3f4 nothing reaches it     */
+	/*
+	 * +0x3f4  A 32-bit slot `getV92Decision` writes and nothing in wave 2
+	 * reached, so it used to be the head of `pad_3f4[5]`.  It is loaded
+	 * from the parameter block beside +0x420 and always at the same time:
+	 * `params->unnamed_4a4` when +0x410 is set and `params->unnamed_344`
+	 * when it is not.  Written and never read in the 8,616 bytes, so what
+	 * it is FOR is not established here -- only its width and its source.
+	 */
+	unsigned int word_3f4;
+
+	unsigned char pad_3f8[1];	/* +0x3f8 alignment              */
 
 	/* +0x3f9  Zeroed by `reset`. */
 	unsigned char byte_3f9;
@@ -337,7 +410,16 @@ public:
 	 */
 	unsigned int verificationStatus;
 
-	unsigned char pad_420[4];	/* +0x420 nothing reaches it     */
+	/*
+	 * +0x420  A 32-bit slot, likewise unreached in wave 2 and likewise no
+	 * longer padding.  `getV92Decision` loads it from
+	 * `params->TRN1_QC_DD_LENGTH` when +0x410 is set and from
+	 * `params->TRN1D_DD_LENGTH` when it is not, and then COMPARES the
+	 * frame counter +0x2c against it in the state-5 arm -- so unlike
+	 * +0x3f4 this one is both written and read, and it holds a length in
+	 * symbols.
+	 */
+	unsigned int word_420;
 
 	/* +0x424  Zeroed by `reset`, before anything else it does. */
 	unsigned char byte_424;

@@ -5769,3 +5769,27 @@ block was, which nothing else about the class suggests it should. `t_gtonedet`
 drives it -- tag 206 constructs with `samples1 == 0` and requires the blob's
 answer to be down after a below-threshold block -- so the asymmetry is
 reproduced and pinned rather than only noticed.
+
+## D-V92DEC-1 🐛 `getV92Decision` returns an uninitialised register on states 6, 18 and out of range
+
+`unmeasured.` The 34-entry jump table sends states 6 and 18 straight to the
+epilogue, as does the `ja` for anything above 0x21, and the epilogue is
+`mov %edi,%eax` over an `%edi` no arm on those paths has written. The caller's
+register value is returned as the PCM decision. Reproduced rather than
+repaired -- a chosen value would be behaviour the object does not have -- and
+`t_v92dec.cpp` compares object state but not the return value on those three.
+Finding 2101. Whether any caller can reach a phase 3 state of 6, 18 or above
+33 is not measured here.
+
+## D-V92DEC-2 🐛 `getV92Decision` tests three `int`-returning callees at less than 32 bits
+
+`unmeasured.` `V90AutoDigitalImpDetector::isAltRbs` and
+`::isThereAnyAltRbsPhase` are declared `int` and the object tests their result
+with `test %ax,%ax`; `V92Jd::unPackJdData` and `::unPackJdPhaseData` are
+declared `int` and are tested with `test %al,%al`. So a return value whose low
+half or low byte is zero while the rest is not reads as false here and as true
+anywhere the full word is tested. The reconstruction spells the narrowing the
+object performs. The likeliest explanation is that the header the author
+compiled this file against declared those four narrower than the header the
+callees' own translation units used; whether any of the four can return such a
+value is not measured.

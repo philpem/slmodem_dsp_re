@@ -53603,3 +53603,159 @@ the five is what buys the right to set it, and doing so also converts a tier
 that currently cannot see a whole class of reconstruction error into one that
 can.  `determineMaxUcode` is the worked example and the cheapest place to
 start.
+
+### 2100. `getV92Decision` RETURNS A `short`, AND THE ONLY THING THAT SAYS SO IS ITS CALLER
+
+`V90Phase3Demodulator.h` spelled every unwritten member `void` "for want of
+evidence rather than because the blob returns nothing", and for twelve of the
+thirteen that is still where it stands. `getV92Decision` is the exception.
+
+`getDecision` is 52 bytes at 0x258f0 and is nothing but a dispatch on
+`sessionFlag`:
+
+    mov 0x8(%eax),%ecx ; test %ecx,%ecx ; je ...
+    call getV92Decision ; cwtl ; add $0xc,%esp ; ret
+    call getV90Decision ; cwtl ; add $0xc,%esp ; ret
+
+`cwtl` sign-extends `%ax` into `%eax`. A caller only widens sixteen bits if
+sixteen bits is what it was given, and it only SIGN-extends if the type is
+signed, so both callees return `short` and `getDecision` returns the widened
+`int`. A return type is not mangled, so `void` linked and would have gone on
+linking for ever; nothing inside either function could have settled it.
+
+The same two lines settle `getV90Decision`, which is another session's
+function; its declaration is left alone and this finding is the record.
+
+### 2101. THREE OF `getV92Decision`'s THIRTY-FOUR STATES RETURN AN UNWRITTEN REGISTER
+
+The dispatch is `cmp $0x21,%eax; ja 217b0` over a 34-entry table at
+`.rodata+0x7cc`, and 217b0 is the epilogue:
+
+    217b0: mov %edi,%eax ; mov 0x9c(%esp),%ebx ; ... ; ret
+
+`%edi` is the decision. Two table entries -- states 6 and 18 -- point AT
+217b0, as does the out-of-range default, and on those three paths no
+instruction has written `%edi`. So the function returns whatever the caller
+left in that register.
+
+That is what GCC emits for a C function with a declared-but-unassigned local
+and no `default:` label, so it is reproduced by writing exactly that rather
+than by choosing a value: choosing one would be inventing behaviour the object
+does not have. `t_v92dec.cpp` therefore compares the OBJECT STATE on those
+three states and not the return value, and asserts that all three were
+reached so the exclusion stays narrow. docs/deviations.md D-V92DEC-1.
+
+### 2102. +0x3cc OF `V90Phase3Demodulator` IS A `SerialDifferentialDecoder<int>`, WHICH CORROBORATES 1302's MEM-INITIALIZER ARGUMENT FROM THE OTHER END
+
+The constructor has `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sitting BETWEEN
+the constructions of the two neighbouring subobjects, and finding 1302's
+argument made that a mem-initializer rather than a body statement -- a store
+to `this + 0x3cc` can be moved across neither call, and body statements run
+after every member construction. The header conceded that `make similarity`
+could not corroborate it, because this translation unit is one of the fifteen
+the period toolchain cannot compile.
+
+`getV92Decision` corroborates it differently. Five times it does
+
+    lea 0x3cc(%ebx),%ebp ; mov %ebp,(%esp) ; call _ZN25SerialDifferential
+                                             DecoderIiE7processEi
+
+so +0x3cc is the `this` of a class member, and `SerialDifferentialDecoder<int>`
+is exactly one `int prev_` with no constructor of its own (DiffCoder.h, which
+already recorded that this class calls it ten times). A trivial class
+value-initialised in an initializer list compiles to precisely that one store
+in precisely that position.
+
+The declared type is NOT changed, because `getV90Decision` is being written
+against `unsigned int word_3cc` concurrently; `getV92Decision` casts at its
+five call sites and the header says why. Correcting the type belongs to
+whoever lands second.
+
+### 2103. OUR `GenericIIR` AND THE BLOB'S DISAGREE ABOUT `m_i` AND `m_acc`, AND NO SUITE HAD LOOKED
+
+`t_v92dec` drives a real `ANSamToneDetector` per side, which owns a
+`GenericIIR<float,double>` each side allocates and runs. Comparing the two
+filters whole, the twelve bytes at +0x28 differ on every trial that processes
+a sample: the blob leaves `m_i` at the loop bound (0x70) and `m_acc` at the
+allocator's fill, and our reconstruction leaves both zero.
+
+Those two are the scratch members GenericIIR.h already calls "a loop counter,
+a member in the original" and "an accumulator, likewise" -- so the header knew
+they were members and the reconstruction still treats them as locals. It is
+invisible to `t_geniir` and `t_gtonedet`, which compare what the filter
+COMPUTES rather than the 52 bytes it leaves behind, and it is invisible to
+every caller because nothing reads them across a call.
+
+**It is not this batch's to fix.** `t_v92dec` excludes exactly those twelve
+bytes, says so at the exclusion, and this finding is the pointer. Anyone
+picking it up should start by comparing `GenericIIR<float,double>::process`
+byte for byte rather than by editing the header.
+
+### 2104. `V90Phase3Demodulator+0x04` IS THE AUTHOR'S `framePosition`, AND IT IS READ AT THREE WIDTHS
+
+`reset` only zeroes +0x04, so wave 2 called it `word_04` and could say nothing
+more. `getV92Decision` runs it 0,1,2,3,4,5,0 and indexes the impairment
+detector's six per-phase rows with it, and one of its diagnostics is
+
+    "V90Phase3Demodulator: waitForJd framePosition = %d\n"
+
+with that field as the argument. So the name is the author's, on the same
+footing as `sessionFlag`, and `V90Phase3Demodulator::incrementFramePosition`
+at 0x20ec0 is the third witness.
+
+**THE FIELD IS NOT RENAMED**, because `getV90Decision` is being written
+against `word_04` concurrently and a rename would move the ground under it.
+
+The three widths are the interesting part and all three are in one function:
+
+    mov 0x4(%ebx),%eax      32 bits: the increment, the `short_2800[]` index,
+                            and the third argument of calculateLinearMeanAndVar
+    movswl 0x4(%ebx),%esi   the `short` first argument of isAltRbs and of
+                            addReceivedSampleToStorage
+    movzwl 0x4(%ebx),%eax   the row index into linMapp/linMappAlt, always
+                            followed by `shl $0x7`
+
+A 32-bit field with a 16-bit signed read and a 16-bit UNSIGNED read of the
+same bytes is not something one C declaration produces on its own, so the
+reconstruction spells the cast at every site and the differential test decides.
+Over 0..5 all three agree, which is why no test could have found this and why
+it is recorded rather than resolved.
+
+### 2105. +0x3f4 AND +0x420 OF `V90Phase3Demodulator` ARE FIELDS, NOT PADDING
+
+Both were inside `pad_` runs because nothing in wave 2 reached them. Both are
+32-bit and both are loaded from the parameter block, always together and
+always on the same condition:
+
+    +0x410 set    +0x420 = params->TRN1_QC_DD_LENGTH   +0x3f4 = params[0x4a4]
+    +0x410 clear  +0x420 = params->TRN1D_DD_LENGTH     +0x3f4 = params[0x344]
+
+so +0x410 is the short-TRN1 selector and the pair is the length that goes with
+it. They are not symmetrical in use: the state-4 arm COMPARES the frame
+counter against +0x420 -- `cmp 0x420(%ebx),%eax` -- and nothing in 8,616 bytes
+ever reads +0x3f4 back. So +0x420 holds a length in symbols and what +0x3f4 is
+FOR is still open; only its width and its source are settled.
+
+### 2106. THE JUMP TABLE IS THE ORDER, NOT THE DIAGNOSTICS -- TWO DEFECTS, BOTH FOUND BY THE DIFFERENTIAL TEST
+
+Both mistakes in this reconstruction came from reading the arms in the order
+the compiler laid them out rather than from the table at `.rodata+0x7cc`, and
+both survived a careful read of the disassembly:
+
+  - **states 29 and 30 were swapped.** The table says 29 is at +0x34c and 30
+    at +0x3df; the arms are adjacent, both begin `flds; mov %esi,%edi; fstps;
+    call GenericToneDetector::process`, and they diverge only after the call.
+    Swapped, the reconstruction left state 29 one call early, which showed up
+    as the ANSam detector's sample counter differing by one two calls later --
+    three objects away from the mistake.
+  - **state 9's timeout took state 0's constant.** `.rodata.cst4+0x154` is
+    12000.0f and +0x160 is 38760.0f; the two `fadds` differ in one nibble of
+    the displacement, and the target state differs too (0x14 against 0x17).
+
+Neither is a reading anyone would defend once stated, and neither was
+detectable by inspection at the point it was made. What found them was the
+sweep in `t_v92dec.cpp` that puts `word_2c` one below every value the
+thirty-four arms compare against and runs all of them against all of the
+states -- so the timeout branch of every arm is entered on purpose rather than
+by luck. A per-state test that only drove each arm's ordinary path would have
+passed with both defects in place.
