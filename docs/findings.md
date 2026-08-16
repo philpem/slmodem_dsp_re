@@ -61625,3 +61625,205 @@ wrong compiler is detectable (`.comment`), a wrong flag set is detectable
 is detectable only by asking. Findings 134, 2400, 2401, 3100, 3110, 3122 are
 the same argument six times; this is the seventh and the last one that was
 still open.
+### 3525. THE V.90 SPECTRAL VERIFIER MULTIPLIES BY A RECIPROCAL WHERE ITS OWN ACCESSOR DIVIDES, AND GCC 3.4.2 CANNOT HAVE DONE THAT
+
+`V90SpectralVerifier::getSpectrumOfNearestBin` is four instructions --
+`flds`, `fdivs 0x14(%ecx)`, `fadds 0.5f`, `fistpll` at 0x45ec0 -- so a bin is
+`(unsigned)(freq / binWidth + 0.5f)`.  `checkSpecialSpectralConditions` reads
+seven bins with the divisor never changing and **divides three times, not
+seven**: each of its three blocks opens `fld1` / `fdivs 0x14(%edi)` (0x45f37,
+0x460e1, 0x4629a) and then `fmul`s that reciprocal at every probe.
+
+That cannot be the compiler.  `x / y` -> `x * (1/y)` needs
+`-funsafe-math-optimizations`, which `tools/toolchain/build.sh` does not set,
+and the tree-ssa pass that rewrites a repeated divisor is not in GCC 3.4 at
+all -- so the reciprocal is in the source, computed once per block.  Three
+blocks means three separate lifetimes: GCC will spill a live value across a
+call rather than recompute a division, so one function-wide local would have
+produced one divide, not three.
+
+**IT IS OBSERVABLE, WHICH IS WHY IT IS WORTH GETTING RIGHT.**  A reciprocal
+multiply and a division disagree in the last place for most divisors, and the
+`+ 0.5f` and the truncation turn a last-place disagreement into a bin index
+that is one out -- a different spectrum sample, a different delta, a
+different printed line and sometimes a different detection.  The mutation
+`the bins are found by dividing rather than by the reciprocal` is caught, and
+it is caught only because the sweep in `t_v90specialcond.cpp` drives widths
+with no exact binary reciprocal (0.3, 1/3, 0.7, 2.4, 9.6, 0.037) at offsets
+sitting on and either side of the half-bin boundary.  Over a table of round
+numbers the two readings agree everywhere and the mutation would have read
+`equivalent`, which is the same output an untested claim gives.
+
+The general point is finding 245's, one tier up: the class's own accessor is
+not evidence about what its callers do, and "it calls `getSpectrumOfNearest-
+Bin` seven times" is the reading the instruction stream refutes.
+
+### 3526. SIX SITES COMPUTE THE SAME FRACTION AND TWO OF THEM SUBTRACT THE OTHER WAY ROUND; NO TEST CAN EVER SEE IT
+
+`checkSpecialSpectralConditions` prints six floats as `%c%d.%02d`, and the
+hundredths are `abs((int)(100.0 * <fraction>))` at all six.  The fraction is
+spelled two ways and the encodings are forced:
+
+    0x45ff5   de ea   FSUBP ST(2),ST(0)      ST(2) = ST(0) - ST(2)
+    0x46186   de eb   FSUBP ST(3),ST(0)      ST(3) = ST(0) - ST(3)
+        with %st(0) = (float)(int)v and the deeper slot = v, so `(int)v - v`
+
+    0x46072   d8 6c 24 4c   FSUBR ST(0),m32  ST(0) = m32 - ST(0)
+    0x4621a   d8 6c 24 50   the same
+    0x46353   d8 e9   FSUBR ST(0),ST(1)      ST(0) = ST(1) - ST(0)
+    0x46497   d8 e9   the same
+        so `v - (int)v`
+
+reg-stack picks which register dies and therefore which mnemonic, but it can
+never flip the sign of a subtraction, so the two spellings are in the source.
+The two that come out reversed are **both LEFT peak deltas** -- the German
+ISDN NT1 box's and the German PBX's -- which is a pattern and not a slip.
+
+**THE `abs()` OUTSIDE MAKES THEM AGREE FOR EVERY VALUE.**  So this is a
+codegen-tier claim and the differential tier is structurally blind to it.
+It is written the object's way, and the mutation that unifies the two is
+**pre-registered as `equivalent`** rather than left out -- because a
+mutation set that quietly omits the one claim it cannot test looks exactly
+like a mutation set that tested it.  That is finding 3509's rule applied to a
+claim we are choosing to make anyway: state it, say which tier can see it,
+and put the entry in the register so a future reader can tell "unfalsifiable
+here" from "never considered".
+
+### 3527. THE V.90 PARAMETER BLOCK'S +0x74 AND +0x78 ARE NAMED BY `V90TRN2Design`'s OWN DIAGNOSTICS, AND THIS BATCH COULD NOT RENAME THEM
+
+`include/dsplib/V90Parameters.h` calls +0x074, +0x078 and +0x080
+`unnamed_074`, `unnamed_078` and `unnamed_080`, each with the comment
+`setToDefault only` -- true when it was written and no longer true.
+`V90TRN2Designer::V90TRN2Design` (0x3cb60, 3,767 bytes, **not written by this
+batch**) reads all three, and two of its `edprintf` format strings name what
+it read.  The evidence is `tools/dis.py` and the `.rodata` strings, nothing
+else:
+
+  - **+0x074 is `maxUcode`.**  0x3cdef loads `params` out of the designer and
+    0x3cdf1 reads +0x74 into the second argument slot of
+    `"V90TRN2Design: ...hence max ucode (after factor) = %d, by params
+    maxUcode = %d\r\n"` (`.rodata.str1.4+0x9a14`).  Three instructions later
+    0x3ce14 clamps the computed ucode against the same byte, which is what a
+    ceiling called `maxUcode` does.
+
+  - **+0x078 is the number of ucodes in TRN2 -- the "trn2 size".**  0x3d9bc
+    reads it into `"trn2 size  :  %d\r\n"` (`.rodata.str1.1+0x2472`).  Three
+    other members corroborate: `setNofUcodesInTrn2` (0x3ca10) writes it,
+    `setTrn2DummyConstel` (0x3cb00) loops `while (i < params->+0x78)` filling
+    a constellation, and `V90TRN2Design` uses it as the target count its
+    design loop has to reach or fail.
+
+  - **+0x080 is where `setNofUcodesInTrn2` takes that count from** when its
+    `short` argument is non-zero -- `mov 0x80(%edx),%eax ; mov %eax,0x78(%edx)`
+    -- so it is the configured value and +0x78 the working one.  No string
+    names it, so it gets no name here.
+
+**NOTHING WAS RENAMED, DELIBERATELY.**  That header belongs to the
+`v90-demapper` branch in this round and was treated read-only, which is
+finding 3511's rule: two branches with no shared file and no git conflict
+merged cleanly and did not compile, because one renamed struct fields while
+the other wrote assertions against the old names.  Recorded here so the
+rename lands in one commit with its `V90ModemCtor.cpp` two-definition
+partner, and so the next reader of `unnamed_074` does not have to rediscover
+that the object names it out loud.
+
+`V90Parameters` +0x360 is read by the same function twice at two different
+widths -- `movzbl 0x360(%ebp)` at 0x3d839 and a signed `cmp %esi,0x360(%ebp)`
+at 0x3d003 -- and no string names it.  It is left alone in both senses.
+
+### 3528. `V90SpectralVerifier` +0x24 IS A THREE-STATE AND +0x28 IS AN ENUM, AND THE SECOND CORROBORATES A NAME DERIVED SOMEWHERE ELSE ENTIRELY
+
+`include/dsplib/V90SpectralVerifier.h` bounded +0x24 as "the gate that says an
+accumulation is running" and +0x28 as "stored zero here and nowhere else".
+Both are now measured and both paragraphs are retracted in the header.
+
+**+0x24 takes three values.**  `reset` stores 0 (0x45ca4), `startAccumulation`
+stores 1 (0x45cec), `process` stores 2 (0x46659) on the sample that completes
+the accumulation, and `checkSpecialSpectralConditions` opens
+`cmpl $0x2,0x24(%edi)` and returns unless it holds 2.  The old sentence was
+true of 1 and silent about 2 -- which is the failure mode a bound has when
+only two of its three writers have been read.
+
+**+0x28 is the detected `V90SpecialSpectralConditions`,** and the object names
+all four values in `edprintf` strings stored beside the writes: 0 "No special
+conditions", 1 "German ISDN NT1 box conditions detected!", 2 "German PBX
+conditions detected!", 3 "Severe Codec conditions detected!".
+
+**THE 2 IS DERIVED TWICE, INDEPENDENTLY.**
+`include/dsplib/V90SpectralConditions.h` already carried
+`V90_SPECTRAL_GERMAN_PBX = 2`, reached from `V90ConstellationDesigner::
+spectralDesign` -- which compares its argument against the literal 2 and
+copies the `GERMAN_PBX_SPECTRAL_SHAPER_*` run of parameters -- and knew
+nothing about this class.  `movl $0x2,0x28(%edi)` at 0x46588 sits beside the
+string that says German PBX.  Two functions, two kinds of evidence, one
+answer; that is a stronger warrant than either had alone, and it is the
+reason the remaining two enumerators (1 and 3) can be added with confidence
+whenever someone owns that header.
+
+**NEITHER FIELD WAS RENAMED**, and the reason is not the header this time.
+`src/pump/v90/V90Equalizer.cpp` reads `spectralVerifier->word_28 == 2` at
+three sites, `t_v90equ.cpp` and `t_v90leaves.cpp` name both fields, and
+`test/mutations/v90specver.json` carries `word_28 = 0;` and
+`accumCount = 0;\n\taccumulating = 0;\n\tword_28 = 0;` inside `find` strings.
+`make phase` does not run `mutate.py`, so a rename would leave those entries
+matching nothing, with no failure anywhere and a mutation register that reads
+the same as one that was never run.  That is finding 3511's mechanism with
+the register standing in for the header, and it is the reason a rename has to
+move all five files in one commit rather than arriving with a batch.
+
+### 3529. GCC 3.4.2 SWAPS A COMPARISON'S OPERANDS WHEN ONE IS A PLAIN LOCAL, AND UNDER `-mno-ieee-fp` THAT CHANGES WHAT A NaN DOES
+
+`checkSpecialSpectralConditions` passed the modern differential with 2,928
+checks green and **failed `make period`** on one case out of twenty-two: the
+one that puts a NaN in the bin both deltas are measured against.  Ours printed
+ten diagnostics where the blob printed eight -- our GCC 3.4.2 build detected
+all three special conditions on a NaN and the blob detected none.
+
+The cause is not the arithmetic.  It is `tree_swap_operands_p` in
+`fold-const.c`, which returns "swap" when operand 0 is a `DECL_P` and operand
+1 is not.  `leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA` is a
+plain local against a `COMPONENT_REF`, so it is canonicalised to
+`params->... < leftDelta`, the THRESHOLD is what gets loaded into `%st(0)`,
+and the branch becomes
+
+    flds   0x2d0(%ebx)        ; the threshold
+    fcomps 0x58(%esp)         ; the delta
+    sahf ; jb  <detect>       ; CF -- "below OR UNORDERED"
+
+`jb` is taken for a NaN.  Under `-mieee-fp` GCC would add the parity test that
+excludes it; `-mno-ieee-fp` -- which this object provably is (finding 1990:
+406 `fcom` against four `fucom`) -- licenses it not to.  The object instead
+has the DELTA in `%st(0)` at all four sites (0x460d5 `ja`, 0x46553 `jbe`,
+0x4627d `jbe`, 0x4628c `ja`), and `ja`/`jbe` are the ordered pair, so a NaN
+delta detects nothing.
+
+**READING THE THRESHOLD INTO A LOCAL FIRST IS THE FIX**, because then both
+operands are `DECL_P`, `tree_swap_operands_p` returns 0 at its first test, no
+swap happens, and the delta is what is loaded.  All six comparison sites then
+carry the object's own condition codes, including the two severe-codec ones
+that were already right because their threshold is a common subexpression
+GCC had to keep in a register.
+
+**FIVE SPELLINGS WERE COMPILED AND RUN BEFORE THIS WAS BELIEVED**, in the
+period container against a real NaN: the plain form and a nested-`if` form
+detect on a NaN; a local threshold, a local array of deltas and a local struct
+of deltas do not.  Swapping the source operands (`params->X < leftDelta`)
+changes NOTHING -- both spellings fold to one RTL, which is what says the
+canonicalisation and not the source order is doing the work.  An isolated
+probe whose call GCC folded away (`printf("")`) reproduced none of it and
+nearly retired the whole line of enquiry; the probe has to keep a real call so
+the values are really spilled.
+
+**THE MODERN TIER IS STRUCTURALLY BLIND TO THIS.**  GCC 13 honours IEEE for
+`>` whichever operand order it picks, so `make one`, `make test` and
+`mutate.py` -- which all build with it -- pass either spelling.  Only
+`make period` sees it, and `make period` has no allow-list, which is the whole
+argument for it in CLAUDE.md made concrete: this is a real behavioural defect
+that every modern-toolchain check called correct.  The mutation that inlines
+the thresholds back is registered as `equivalent` with that stated, so the
+next reader can tell "cannot fail here" from "never considered".
+
+Findings 2300 and 2301 are the same family -- an idiom written for the wrong
+flag, and a compare whose operand order came from a declaration order -- and
+this is the third member: **an operand order that comes from whether the
+operand is a variable.**

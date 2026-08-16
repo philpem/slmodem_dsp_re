@@ -5724,6 +5724,42 @@
     "the modulator's flag goes to +0x2c": "caught"
    }
   },
+  "v90specialcond": {
+   "key": "4fb3fd491d5513f8f92781f8d6079510ebd9e8bda6783f83db79e375a5e13319",
+   "summary": "30 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the ISDN and PBX diagnostics are swapped": "caught",
+    "the ISDN condition reports the German PBX value": "caught",
+    "the ISDN deltas are measured from the left peak, not the null": "caught",
+    "the ISDN deltas are subtracted the other way round": "caught",
+    "the ISDN test admits a delta exactly on its threshold": "caught",
+    "the ISDN test needs either delta rather than both": "caught",
+    "the ISDN thresholds are compared as direct member reads": "equivalent",
+    "the ISDN thresholds are read out of each other's slots": "caught",
+    "the PBX deltas are measured from its left peak, not its null": "caught",
+    "the PBX test admits a delta exactly on its threshold": "caught",
+    "the PBX test needs either delta rather than both": "caught",
+    "the bin is truncated rather than rounded": "caught",
+    "the bins are found by dividing rather than by the reciprocal": "caught",
+    "the guard admits anything that is not idle": "caught",
+    "the guard admits the running state rather than the complete one": "caught",
+    "the hundredths are tenths": "caught",
+    "the hundredths keep their sign": "caught",
+    "the last diagnostic is not behind the debug gate": "caught",
+    "the last diagnostic prints whatever was detected": "caught",
+    "the printed magnitude is the value, not its absolute value": "caught",
+    "the probe frequency printed is the bin rather than the hertz": "caught",
+    "the result is cleared inside the guard rather than before it": "caught",
+    "the severe codec compares the two levels against each other": "caught",
+    "the severe codec differences are taken from the test frequencies": "caught",
+    "the severe codec test admits a difference exactly on its threshold": "caught",
+    "the severe codec test needs either difference rather than both": "caught",
+    "the sign is the readable spelling, which a NaN separates": "caught",
+    "the three tests are an else chain, so the first match wins": "caught",
+    "the two ISDN peaks are swapped": "caught",
+    "the two fractional spellings are unified": "equivalent"
+   }
+  },
   "v90specshaper": {
    "key": "96c55036cbe4a1900aff5b6002b98f45c71d302ac19b03972635ece5773375b9",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
