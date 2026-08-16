@@ -55723,7 +55723,10 @@ Period build against the blob, at THIS BRANCH's flags. **The number below is an
 prompted by `determineDminForRrn`'s own inlining measurement in 2163 -- so it
 is not comparable with anything taken after that landed, and it was not
 redone here because this branch does not carry the change and `tools/` is not
-this batch's to edit:
+this batch's to edit.  **AND IT IS THE NUMBER MOST LIKELY TO MOVE**: the split
+below is +125 bytes against -78 instructions, which is a spill pattern, and a
+spill pattern is exactly what a level change rewrites.  Whoever re-measures
+should expect the direction to change, not just the magnitude:
 
     4,559 B / 1,039 instructions   against the object's 4,434 / 1,117
 
@@ -55746,7 +55749,9 @@ the rate multiplier with `fldl` and multiplies with `fmulp`; we emit a single
 only the addressing form differs -- and GCC did NOT narrow this one to `fmuls`
 the way it narrowed every spelling of 2175's 100.0, because 0.0007500001875…
 is not exactly representable as a float. That is the control 2175 lacked: the
-narrowing is about the constant, not about the source.
+narrowing is about the constant, not about the source. 2175's own conclusion about
+the sign printer rests on `-mno-ieee-fp` against `-mieee-fp` at `-O2` and is
+NOT asserted here to survive the level change; it has not been re-measured.
 
 Nothing in the list is the forced kind. `movswl` +2 against `movzwl` -4 is
 614's free kind again, on values that feed 16-bit compares.
@@ -55785,6 +55790,15 @@ those on which `j == 0x74` is the sole match -- and there the mutant's loop has
 NO EXIT. 0x4a5ab falls straight back into the `while` test with nothing
 changed (D338), so the difference can appear as a non-termination and never as
 a value. A hang is not a comparison, so the claim rests on the encoding.
+
+The precise claim is weaker than "cannot be driven" and is written that way
+deliberately: **cannot be driven without an input on which the object may not
+terminate.** One combination might separate them by TRANSCRIPT rather than by
+value -- a `constellation[k][0]` of exactly 0x74 reaching the extend arm, where
+the object gives up and emits an encoded frame and the mutant does not -- and
+that combination was NOT constructed, because the neighbouring inputs are the
+non-terminating ones (D338).  It is left unbuilt rather than claimed
+impossible.
 
 **THE RATE CONSTANT ONLY BECAME VISIBLE AFTER THE FIXTURE GREW TWO ABSURD
 RATES**, and that is 2164's lesson again. 0.0007500001875000469 and a rounded
