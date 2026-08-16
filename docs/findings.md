@@ -55078,7 +55078,9 @@ That is the argument for the second tier in one line. The tie-break in 2147
 was mutated the same way and the differential test caught it 22,273 times over;
 this one it cannot catch at all.
 
-### 2145. THE FLOAT-TO-INTEGER CONVERSIONS IN THIS CLASS ARE `unsigned int`, AND THE ENCODING SAYS SO
+### 2190. THE FLOAT-TO-INTEGER CONVERSIONS IN THIS CLASS ARE `unsigned int`, AND THE ENCODING SAYS SO
+
+*Renumbered before merge: this was **2145** on `v90-constellation-designer`, where it was written while the `V90Equalizer` batch had independently taken 2145-2151. That batch landed on master first; nothing else about this entry changed.*
 
 `maxK` and `calcMtoMatchKtarget` both truncate with
 
@@ -55092,10 +55094,12 @@ is a 32-bit `fistpl` and one instruction shorter. So the casts are
 widening, which is the same idiom `V90MappingParams`' `word_0` is typed from.
 
 This is the "forced, so act on it" kind of codegen reading: no test can see it
-over any value either function can produce, and it is what makes D324's
+over any value either function can produce, and it is what makes D343's
 2^32-iteration loop a consequence of the declared type rather than a guess.
 
-### 2146. GCC 13 QUIETENS A SIGNALLING NaN WHERE GCC 3.4.2 COPIES BITS, AND IT COST ONE TEST FAILURE
+### 2191. GCC 13 QUIETENS A SIGNALLING NaN WHERE GCC 3.4.2 COPIES BITS, AND IT COST ONE TEST FAILURE
+
+*Renumbered before merge: this was **2146** on `v90-constellation-designer`, where it was written while the `V90Equalizer` batch had independently taken 2145-2151. That batch landed on master first; nothing else about this entry changed.*
 
 `spectralDesign`'s six stores are `mov`, which is what GCC 3.4.2 emits for a
 `float` member assignment. GCC 13 with `-mfpmath=387` emits `flds`/`fstps` for
@@ -55109,13 +55113,15 @@ Two things about the resolution. First, spelling the copy as `memcpy` makes
 both builds agree and is exactly the "papered over in `src/`" that CLAUDE.md
 forbids, so the assignment stands. Second, the exclusion in the test is the
 sNaN ENCODING and not a range or a tolerance: the eight fields are filled by
-`Vparser_read_float` from a configuration file and cannot hold one. D328.
+`Vparser_read_float` from a configuration file and cannot hold one. D347.
 
 The general lesson is worth more than the case: a pseudorandom fill over a
 struct containing floats is testing the compiler's float-move idiom as well as
 the reconstruction, and the two are not the same claim.
 
-### 2147. `findMinValueIndex` IS MIN-VALUE/MAX-SIZE, AND ITS TIE-BREAK IS THE SAME AS THE MAXIMUM'S
+### 2192. `findMinValueIndex` IS MIN-VALUE/MAX-SIZE, AND ITS TIE-BREAK IS THE SAME AS THE MAXIMUM'S
+
+*Renumbered before merge: this was **2147** on `v90-constellation-designer`, where it was written while the `V90Equalizer` batch had independently taken 2145-2151. That batch landed on master first; nothing else about this entry changed.*
 
 `findMinValueIndex` and `findConstelMaxValueIndex` are 86 bytes each and
 differ in exactly one condition code — `jae` against `jbe` on the first
@@ -55135,7 +55141,9 @@ have passed over the whole equal arm.
 The comparisons are also all UNSIGNED (`jae`, `jbe`, `ja`), which is forced: a
 `movzbl`-loaded byte held in an `int` would have compared signed.
 
-### 2148. `constelBuild`'S TWO TABLES SHARE ONE BASE REGISTER, WHICH IS WHAT TYPES `+0x14` AND WHAT DOES NOT
+### 2193. `constelBuild`'S TWO TABLES SHARE ONE BASE REGISTER, WHICH IS WHAT TYPES `+0x14` AND WHAT DOES NOT
+
+*Renumbered before merge: this was **2148** on `v90-constellation-designer`, where it was written while the `V90Equalizer` batch had independently taken 2145-2151. That batch landed on master first; nothing else about this entry changed.*
 
 `constelBuild` loads `0x14(%ebx)` once and then addresses two things off it: a
 16-bit table at `(%edi,%eax,2)` with `%eax = (k << 7) + i`, and an 8-bit table
@@ -55152,7 +55160,9 @@ records the displacement and declines the row count. Nothing writes the field
 anywhere in the object either (2141), so there is no assignment to type it
 from.
 
-### 2149. `maxK`'S CORRECTION IS ABSOLUTE AND ITS ERROR IS RELATIVE, SO IT STOPS WORKING AT 2^22
+### 2194. `maxK`'S CORRECTION IS ABSOLUTE AND ITS ERROR IS RELATIVE, SO IT STOPS WORKING AT 2^22
+
+*Renumbered before merge: this was **2149** on `v90-constellation-designer`, where it was written while the `V90Equalizer` batch had independently taken 2145-2151. That batch landed on master first; nothing else about this entry changed.*
 
 `maxK` computes `log10(prod) / (float)log10(2) + 1e-6f` and truncates toward
 zero. The divisor reaches memory as a FLOAT before the divide -- one
@@ -55169,13 +55179,15 @@ the six constellation sizes, the object returns
 and our reconstruction agrees with it everywhere. 21 is where a relative error
 of ~4.5e-8 first exceeds 1e-6/K. Nothing in the object calls `maxK` (2141), so
 whether a real constellation product ever reaches 2^22 is not knowable from
-here; D329 records it.
+here; D348 records it.
 
 The test asserts the reading rather than the intent -- `gi == i || gi == i-1`,
 plus an assertion that BOTH regimes were reached -- because "maxK of 2^i is i"
 is what a reader expects and is not what either side does.
 
-### 2150. TWO MUTATIONS, ONE CAUGHT AND ONE INVISIBLE, AND THAT IS THE SHAPE OF THE TWO TIERS
+### 2195. TWO MUTATIONS, ONE CAUGHT AND ONE INVISIBLE, AND THAT IS THE SHAPE OF THE TWO TIERS
+
+*Renumbered before merge: this was **2150** on `v90-constellation-designer`, where it was written while the `V90Equalizer` batch had independently taken 2145-2151. That batch landed on master first; nothing else about this entry changed.*
 
 CLAUDE.md's rule for `extcheck` -- a tool that reports a negative must be shown
 to fire -- applies to a test as much as to a tool, so the two claims this batch
@@ -55196,7 +55208,9 @@ longer claims the test would catch it.
 
 Both mutations were reverted; neither is in the tree.
 
-### 2151. THE CODEGEN TIER FOUND TWO THINGS NO TEST COULD, AND BOTH WERE ONE WORD
+### 2196. THE CODEGEN TIER FOUND TWO THINGS NO TEST COULD, AND BOTH WERE ONE WORD
+
+*Renumbered before merge: this was **2151** on `v90-constellation-designer`, where it was written while the `V90Equalizer` batch had independently taken 2145-2151. That batch landed on master first; nothing else about this entry changed.*
 
 Per-symbol comparison of the eleven small members against the blob, built with
 the period compiler, before and after acting on what it reported:
@@ -55288,7 +55302,7 @@ point that does not settle it either.
 
 Three deviations: D330 (an uninitialised read when the rate-down loop does not
 run once), D331 (a reciprocal of a count nothing stops being zero, which is
-D324's 2^31-iteration hazard reached twice per call), D332 (a 32-bit size
+D343's 2^31-iteration hazard reached twice per call), D332 (a 32-bit size
 truncated to a byte and then compared against the untruncated one).
 
 ### 2161. THE TWO HALVES SPELL THE SAME LOGARITHM TWO DIFFERENT WAYS, AND NO TEST CAN TELL

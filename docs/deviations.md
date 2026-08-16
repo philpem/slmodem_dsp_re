@@ -6131,6 +6131,10 @@ as the object has it.*
 
 ## D323 🐛 `reconstructInitialConditions` searches a constellation row with no bound
 
+## D342 🐛 `reconstructInitialConditions` searches a constellation row with no bound
+
+*Renumbered before merge: this was **D323**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
+
 *Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner28reconstructInitialConditionsEP16V90MappingParamsPh`
 (blob 0x4b6d0) at 0x4b6f0..0x4b70d. **Reachability: a `ucode[k]` byte that does
 not appear anywhere in `constellation[k][]`.** **Observability: the search runs
@@ -6145,13 +6149,15 @@ but 256 bytes past a 128-byte row is already the next constellation's data.
 `t_v90cdesign.cpp` always plants the ucode value inside its row: both sides
 would walk off identically and a matching crash is not a comparison.
 
-## D324 🐛 `calcMtoMatchKtarget` loops about 2^32 times when the target is below log2(m)
+## D343 🐛 `calcMtoMatchKtarget` loops about 2^32 times when the target is below log2(m)
+
+*Renumbered before merge: this was **D324**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
 
 *Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner19calcMtoMatchKtargetEff`
 (blob 0x47be0) at 0x47c3c..0x47c53. **Reachability: `kTarget < log2(m)`.**
 **Observability: a hang of seconds to minutes, then a nonsense result.**
 Status: `unmeasured` -- nothing in the object calls this function at all (see
-D326), so no caller's range is known. Fix class: none proposed; reproduced as
+D345), so no caller's range is known. Fix class: none proposed; reproduced as
 found.*
 
 `(kTarget - log2(m)) / 6` is truncated toward zero into an `unsigned int`, so a
@@ -6161,7 +6167,9 @@ fractional part reads the same low dword as unsigned again. The test keeps
 `kTarget` above `log2(m)`: both sides hang identically and a timeout says
 nothing about the reconstruction.
 
-## D325 🐛 `constelBuild` and `findNextUcodeToAdd` index a 128-entry row with a byte
+## D344 🐛 `constelBuild` and `findNextUcodeToAdd` index a 128-entry row with a byte
+
+*Renumbered before merge: this was **D325**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
 
 *Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner12constelBuildEss`
 (blob 0x47b40) and `_ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h`
@@ -6177,7 +6185,9 @@ NEGATIVE as a `signed char`, which is 0x80, so it reads element 128 by
 construction whenever it runs to its bound. The test allocates seven rows
 where six are used, so that both sides read the same defined bytes.
 
-## D326 ⚠ Eleven of `V90ConstellationDesigner`'s members have no caller in the object
+## D345 ⚠ Eleven of `V90ConstellationDesigner`'s members have no caller in the object
+
+*Renumbered before merge: this was **D326**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
 
 *Batch of 2026-08-16, from a sweep of every `R_386_PC32` relocation in
 `.text`. **Reachability: none from inside the object.** **Observability:
@@ -6192,7 +6202,9 @@ linkage. Recorded because it bounds what can ever be learned about them: no
 call site types an argument, fixes a return, or constrains an input range, so
 every deviation above is `unmeasured` for a reason that will not change.
 
-## D327 ⚠ `maxK` and `realK` add a fudge before truncating, and the two fudges differ
+## D346 ⚠ `maxK` and `realK` add a fudge before truncating, and the two fudges differ
+
+*Renumbered before merge: this was **D327**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
 
 *Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams`
 (blob 0x47a10, `fadds` 1e-6f) and `_ZN24V90ConstellationDesigner5realKEP16V90MappingParams`
@@ -6207,7 +6219,9 @@ arriving as 11.9999995 and truncating to 11. `realK` returns a float and
 truncates nothing, so its 1e-9f changes only the last place -- the same
 correction applied where it cannot matter. Both are reproduced as written.
 
-## D328 ⚠ GCC 13 quietens a signalling NaN where the blob's compiler copies bits
+## D347 ⚠ GCC 13 quietens a signalling NaN where the blob's compiler copies bits
+
+*Renumbered before merge: this was **D328**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
 
 *Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner14spectralDesignEj28V90SpecialSpectralConditions`
 (blob 0x47950) against `build/src/pump/v90/V90ConstellationDesigner.o`.
@@ -6225,7 +6239,9 @@ make both builds agree and would be papering over a compiler divergence in
 one encoding from its fill -- the eight fields are read by
 `Vparser_read_float` from a configuration file and cannot hold one.
 
-## D329 🐛 `maxK` returns one less than the exponent from 2^22 upwards
+## D348 🐛 `maxK` returns one less than the exponent from 2^22 upwards
+
+*Renumbered before merge: this was **D329**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
 
 *Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams`
 (blob 0x47a10) at 0x47a94..0x47ac6. **Reachability: a constellation-size
@@ -6238,8 +6254,8 @@ dividend keeps the register's full precision, so the quotient carries a
 relative error of a few times 1e-8. The `fadds` correction that follows is
 1e-6f, an absolute quantity, and truncation is toward zero — so the correction
 covers the error up to K = 21 and stops covering it at 22. `realK` returns a
-float and truncates nothing, so its own 1e-9f never matters (D327). Finding
-2149.
+float and truncates nothing, so its own 1e-9f never matters (D346). Finding
+2194.
 
 ## D330 🐛 `determineDminForRrn` reads `prevNofUcodes` and `prevDmin` uninitialised when its rate-down search does not run once
 
@@ -6249,7 +6265,7 @@ float and truncates nothing, so its own 1e-9f never matters (D327). Finding
 while `pParams->m[phase] > maxM` — that is, a constellation size above 255,
 since the count is truncated to a byte (D332) and the outer test is not.**
 **Observability: `rrnDownDmin` set from a stack slot the function never wrote.**
-Status: unmeasured; nothing in the object calls this member (D326), so no
+Status: unmeasured; nothing in the object calls this member (D345), so no
 caller's range is known. The differential test EXCLUDES it — two sides reading
 two different stack frames disagree for a reason that is not the
 reconstruction. Fix class: none proposed; reproduced as found.*
@@ -6268,7 +6284,7 @@ which each of the two doubling loops runs about 2^31 times.** Status:
 unmeasured; the search's guard byte is written by nothing reconstructed. The
 test plants a zero in one of the six every trial. Fix class: none proposed.*
 
-The same shape as D324 and reached twice per call, because the 2^((kTarget -
+The same shape as D343 and reached twice per call, because the 2^((kTarget -
 log2 m)/6) computation is spelled out in each half rather than called. Finding
 2160.
 
@@ -6293,7 +6309,7 @@ the frame at 0x48b80 (`sub $0x14c,%esp`) which leaves 0x8c bytes above 0xc0.
 **Reachability: `arg5[k] - params->unnamed_360` of 128 or more with most
 entries accepted.** **Observability: the store walks past the local into the
 rest of the frame and then past the frame into the caller's.** Status:
-unmeasured; nothing in the object calls this member (D326), so no caller's
+unmeasured; nothing in the object calls this member (D345), so no caller's
 range is known. Fix class: none proposed; reproduced as found.*
 
 The loop runs `for (i = params->unnamed_360; i <= arg5[k]; i++)` with `arg5`
@@ -6339,12 +6355,12 @@ cannot reproduce the branchless select at either setting of `-mieee-fp`.
 0.00075 + 0.5) + mappingParams->shaperSR - 6` below zero, which needs only a
 small forced rate and a `shaperSR` under 6.** **Observability: a hang of
 minutes, then a nonsense target.** Status: unmeasured; nothing in the object
-calls this member (D326). Fix class: none proposed; reproduced as found.*
+calls this member (D345). Fix class: none proposed; reproduced as found.*
 
 `cmp $0x1,%eax; je` is an EQUALITY test, not `jle`, so the guard that skips the
 loop only catches `n == 1`; the `dec/dec/jne` that follows counts a negative
 `n` down through zero and round the whole 32-bit range. The same shape as
-D324. `t_v90cdnoise.cpp` solves for the `n` it wants and never lets it go
+D343. `t_v90cdnoise.cpp` solves for the `n` it wants and never lets it go
 below zero.
 
 ## D337 🐛 `setConstellationToNoise_forceRate`'s refinement loop has no bound
