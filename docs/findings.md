@@ -56339,10 +56339,14 @@ above.
 which took `t_agc`, `t_v90equ` and `t_v90leaves` fully green.  **Rejected, and
 the reason is a measurement**: the same run put `t_v90adid` into three NEW
 failing groups -- `resetStudyUrefHandler` 12, `porcessSecondStudy` 2,
-`findPadGain` 2 -- none of which contains 2300's idiom.  The flag is not a
-targeted ordered-compare switch; it withdraws NaN and infinity from the whole
-translation unit, and 2301's eleven `!(a >= b)` sites depend on the modern
-compiler still honouring them.  `V90Equalizer.cpp` has two of those in
+`findPadGain` 2 -- and **none of the three contains 2300's idiom**.  Two of
+them are full of 2301's, which is exactly the protection the flag withdraws:
+`porcessSecondStudy` has two `!(d >= ...)` sites and `findPadGain` six.
+`resetStudyUrefHandler` has NEITHER, and that is the stronger half of the
+argument -- whatever `-ffinite-math-only` did to it is not about comparison
+ordering at all.  The flag is not a targeted ordered-compare switch; it
+withdraws NaN and infinity from the whole translation unit, and 2301's eleven
+`!(a >= b)` sites depend on the modern compiler still honouring them.  `V90Equalizer.cpp` has two of those in
 `clamp_fade_ratio` alone, so a per-file application would have silently
 removed their protection and passed only because nothing drives a NaN through
 that particular parameter today.  A configuration that is correct by accident
