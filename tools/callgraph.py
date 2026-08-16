@@ -53,10 +53,14 @@ you, so the tool prints how many indirect calls each function makes.
 """
 
 import argparse
+import os
 import re
 import subprocess
 import sys
 from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import objtree                                            # noqa: E402
 
 
 def run(*cmd):
@@ -129,7 +133,7 @@ def call_edges(obj, syms):
 
 
 def reconstructed(paths=None):
-    """Function names that already exist in this tree, from the OBJECTS.
+    r"""Function names that already exist in this tree, from the OBJECTS.
 
     This used to grep `src/**/*.c` for `^(\w+)\s*\(` -- a name at column 0
     followed by a parenthesis.  Two things were wrong with that, and the
@@ -147,13 +151,22 @@ def reconstructed(paths=None):
 
     Read the built objects instead, as coverage.py and closure.py both do.
     Requires a build; that is a fair price for an answer that is true.
+
+    AND IT REFUSES WHEN THERE ARE NONE.  The warning that used to be here
+    named `make`, went to stderr, and was followed by the report anyway at
+    exit 0 -- so `--ready` listed all 73 classes' methods as writable-now and
+    `--of v34handshak` counted every written function as missing, which is
+    the answer this docstring's second paragraph was written to end.  A
+    warning nobody has to act on is the same as no warning: findings 134,
+    3055 and 3110, and tools/objtree.py for the directories probed.
     """
-    import glob as _g
     have = set()
-    objs = paths if paths else _g.glob("build/src/**/*.o", recursive=True)
-    if not objs:
-        sys.stderr.write("callgraph: no objects under build/src -- run make "
-                         "first, or this will report everything as missing\n")
+    if paths:
+        objs = paths
+        sys.stderr.write("callgraph.py: read %d object(s) named on the "
+                         "command line\n" % len(objs))
+    else:
+        _d, objs = objtree.read("which functions this tree has written")
     for o in objs:
         for line in run("nm", "--defined-only", o).split("\n"):
             f = line.split()

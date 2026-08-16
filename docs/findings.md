@@ -58836,6 +58836,13 @@ warning text is what should change, and it should name a target that still
 builds `$(OBJ)`.  This is 134's argument again -- a detector that reports a
 clean tree when its input is empty is worse than one that fails.
 
+**FIXED IN 3110, and the count was SEVEN, not six** -- `tools/service.py`
+reads the same have-set through `closure.ours()` and had no guard at all.
+All seven now probe `build/src` and `build/repro`, refuse a zero denominator
+non-zero, print how many objects they read and from where, and name `make
+coverage`.  The paragraph above is superseded on the "recorded rather than
+fixed" point only; everything above it is what 3110 confirmed and extended.
+
 ### 3100. TWO OF `make phase`'s FIVE TIERS MEASURED NOTHING, AND THE BOUNDARY CALLED IT OK
 
 The gate printed this, and exited 0:
@@ -59024,3 +59031,205 @@ ON is not a precondition.**
 The rule added is `git -C <dir>` in preference to `cd`, and `cd <dir> || exit
 1` where a `cd` is unavoidable.  `git -C` cannot fail open: if the directory is
 gone the git command itself fails and nothing else runs.
+
+### 3110. THE SEVEN TOOLS THAT READ `build/src` NOW REFUSE AN EMPTY OBJECT TREE, AND EVERY ONE OF THEM SAYS WHAT IT READ
+
+Finding 3055 recorded this and left it: since `75dcc19` (#164, "build: split
+the object tree so the DEFAULT build carries our fixes") a plain `make`
+populates `build/repro` and leaves `build/src` EMPTY, and the tools that learn
+what this tree has written by globbing `build/src/**/*.o` answered from
+nothing.  3055 named six.  **It is seven.**  `tools/service.py` reads the same
+have-set through `closure.ours()` and carried no guard at all -- and its own
+`MUST_BE_FAX`/`MUST_BE_DATA` sanity check still PASSED on an empty tree,
+because that check tests reachability in the blob's call graph and
+reachability does not care whether anything has been written.  So the one tool
+here with a self-test printed `sanity checks passed: 5 fax, 4 data` under a
+completely wrong partition.  That is why it was not among the six.
+
+#### WHAT IT ACTUALLY COST, MEASURED IN A WORKTREE AT `cf0f543`
+
+3055 quotes `closure.py`.  The worse one was never written down.  After a
+plain `make` -- 183 objects in `build/repro`, none in `build/src`:
+
+```
+$ python3 tools/coverage.py --obj $BLOB
+dsplibs.o reconstruction coverage
+
+  .text                          734605 bytes, 1861 symbols
+
+  translated  [..................................]   0.0%         0 bytes, 0 symbols
+  tested      [..................................]   0.0%         0 bytes, 0 of 0 that can be
+[exit 0]
+```
+
+**The headline number of the whole project, reading zero, at exit 0.**  The
+true figure in that same tree state is 54.8%, 402334 bytes, 942 symbols.  In
+the same state `service.py` reported 913 unwritten data-mode symbols against a
+true 267, and `cppstruct.py`'s `--missing` column equalled its `members` column
+for all 73 classes.  Two of the seven exited non-zero (`readyqueue.py`,
+`worklist.py`), and both told you to run the build that had just failed to
+help: "build first", "Run `make` first".
+
+#### THE FIX, AND WHY IT IS `0d30911`'s SHAPE AND NOT A NEW ONE
+
+`tools/objtree.py`, one shared module, following the ruling in 2401 and the
+precedent of `0d30911` (3100) exactly -- probe both layouts, refuse a zero
+denominator, report the denominator on every run:
+
+* `objects()` walks `build/src` and then `build/repro`, and returns the FIRST
+  that holds any `.o`.  A pre-#164 checkout finds its objects where it always
+  did; a post-#164 plain `make` finds them in `repro`.
+* `refuse()` is the `sys.exit` message: it names what would have been computed,
+  the directories probed, the number of sources waiting, and the advice.
+* `provenance()` is the line every run now prints to stderr --
+  `closure.py: read 183 object(s) from build/src/ (183 source file(s) under src/)`.
+* `ADVICE` names **`make coverage`** (`coverage:` lists `$(OBJ)` as a
+  prerequisite) or `make phase`, which depends on it -- never `make`.
+
+The guard is inside `closure.ours()` and `coverage.our_symbols()`, the two
+functions the seven read the have-set through, so `readyqueue.py`,
+`worklist.py` and `service.py` inherit it at their call sites.  The two guards
+that already existed are DELETED rather than left unreachable: a check that
+cannot fire is what 134 is about.
+
+STDERR AND NOT THE REPORT BODY.  `make coverage` and `make worklist` write
+`docs/coverage.md` and `docs/worklist.md`, which are committed.  A provenance
+line in the body would dirty the tree on every run.
+
+#### THE DEMONSTRATION, AND WHY THE REFUSAL MOVED
+
+**Any tool here must be shown to fire.**  Five states in a worktree at
+`cf0f543`, every "before" cell run against `master`'s copy of the tool rather
+than inferred.  A, B and C are all seven tools; D and E are the two staleness
+warnings, which live in the shared `provenance()` and are shown on one tool
+each (`coverage.py`, `closure.py`).  The probe means state B -- the state 3055
+was found in -- now yields a CORRECT answer rather than a refusal, so the
+refusal has to be demonstrated one state further down, at B minus the repro
+tree:
+
+| state | `build/src` | `build/repro` | before | after |
+|---|---|---|---|---|
+| **A** no `build/` at all | 0 | 0 | `closure.py` names `alaw2linear`, `ulaw2linear` UNWRITTEN, exit 0; `cppstruct`/`callgraph`/`service` confident and wrong, exit 0 | all seven REFUSE, exit 1 |
+| **B** after a plain `make` | 0 | 183 | `coverage.py` 0.0%; `closure.py` the same two symbols UNWRITTEN | correct: 54.8%, 942 symbols, closure empty -- read from `build/repro`, and the line says so |
+| **C** after `make coverage` | 183 | 183 | correct | correct, read from `build/src`, and the line says so |
+| **D** 14 objects deleted, repro moved aside | 169 | 0 | silently `52.2%, 383541 bytes, 899 symbols`, exit 0 | the same 52.2%, over `WARNING -- 14 fewer object(s) than sources ... PARTIAL` |
+| **E** `touch src/service/pcm.c` | 183 | 183 | silent | `WARNING -- a source under src/ is NEWER than every object ... STALE` |
+
+D is the case a probe cannot save you from and the count can: 899 symbols
+against a true 942, wrong by 43, and nothing in the old output distinguishes
+it from a tree in which those 43 have not been written.  Its "before" is
+`master:tools/coverage.py` run against exactly that directory state, not an
+inference.
+
+State A, the refusal, in full:
+
+```
+$ python3 tools/closure.py --missing alaw2linear ulaw2linear
+closure.py: NO OBJECTS, so the denominator is zero and
+  what is already written
+  would be computed against NOTHING.  That is not a clean sheet:
+  it renders exactly as a tree that has reconstructed nothing,
+  which is why this refuses instead of reporting it.
+  Looked for **/*.o in: build/src, build/repro
+  183 source file(s) under src/ are waiting to be compiled.
+  `make coverage` populates build/src (it lists $(OBJ) as a
+  prerequisite); so does `make phase`, which depends on it.  A plain
+  `make` builds the tests, which link $(OBJ_REPRO), and has not
+  filled build/src since 75dcc19 (#164).
+  Findings 134, 2401, 3055, 3110.
+[exit 1]
+```
+
+State B, the symptom 3055 recorded, gone:
+
+```
+$ ls build/src ; find build/repro -name '*.o' | wc -l
+ls: cannot access 'build/src': No such file or directory
+183
+$ python3 tools/closure.py --missing alaw2linear ulaw2linear
+closure.py: read 183 object(s) from build/repro/ (183 source file(s) under src/)
+closure of alaw2linear ulaw2linear: 0 symbols, 0 bytes (unwritten only)
+$ python3 tools/coverage.py --obj $BLOB | head -6
+coverage.py: read 183 object(s) from build/repro/ (183 source file(s) under src/)
+  translated  [###################...............]  54.8%    402334 bytes, 942 symbols
+```
+
+D and E are warnings, not refusals, deliberately.  A partial tree gives a
+wrong answer the same way an empty one does, but making it fatal would stop
+`make phase`'s coverage step for anyone whose tree is half-compiled.  The
+counts are what make it visible: before this, not one of the seven printed
+how many objects it had read.
+
+#### IS ANY PUBLISHED MEASUREMENT WRONG?  NO, AND IT IS CHECKED
+
+`coverage:` and `worklist:` both list `$(OBJ)` as a prerequisite, so neither
+generated document can have been produced from an empty `build/src`.
+Confirmed rather than assumed, and only one of the two is a published
+document at all:
+
+* `docs/coverage.md` IS committed.  In state C, `make coverage` regenerated it
+  and `git status docs/` came back clean, before this change and again after
+  it -- so the 54.8% / 402334 bytes / 942 symbols in the tree are what a
+  correctly-measured run produces today.
+* `docs/worklist.md` is **gitignored** (`.gitignore:38`), so there has never
+  been a published copy of it to be wrong.  Do not read a clean `git status`
+  as evidence about that file; it cannot be dirty.
+
+**The exposure was to ad-hoc runs**, which is exactly what happened: an agent
+ran `make` as instructed, ran `closure.py`, was told `alaw2linear` and
+`ulaw2linear` were unwritten, and only discovered otherwise by re-running
+`make coverage` on a hunch.  Any readiness, coverage or worklist number quoted
+into a task or a session log after `75dcc19` and not through `make coverage`
+should be re-taken; the numbers in `docs/` should not.
+
+#### THE SAME WRONG ADVICE AT THE DOCUMENT LEVEL
+
+`tools/hybrid.sh` and `tools/objsnap.sh` give usage examples over
+`build/src/pump/v34/*.o`, paths a plain `make` no longer creates.  They take
+their objects from the command line, so they fail loudly rather than silently
+-- but the example is still an instruction that does not work, and both now
+say which target fills that directory.
+
+#### WHAT IS DELIBERATELY NOT DONE
+
+`0d30911` also wrote a denominator file for `make phase`'s closing line to
+quote and refuse without.  Nothing here is in `make phase`, so there is no
+equivalent, and this change is `tools/` only: no `Makefile`, no `src/`, no
+`tools/toolchain/ratchet.json`.  CLAUDE.md's "any tool here must be shown to
+fire" section now has three instances of a build moving under a detector
+(2400, 3100, this); a fourth entry naming the have-set tools is worth adding
+and is left to whoever next edits that file.
+
+### 3111. `build/src` AND `build/repro` DEFINE THE SAME 1457 SYMBOLS, WHICH IS WHAT LICENSES THE PROBE
+
+3110 reads whichever of the two object trees a build has filled.  That is only
+sound if the two define the same names, and it is not obvious that they do:
+`build/repro` is the same sources built `-DDSPLIB_REPRODUCE_BUGS`, and a macro
+that can change a function's body could in principle guard its existence.
+
+MEASURED, at `cf0f543`, with both trees fully built -- `make` then `make
+coverage`, 183 objects each:
+
+```
+$ for d in src repro; do find build/$d -name '*.o' | sort | xargs -n50 \
+      nm --defined-only | ... | sort -u > syms.$d; done
+$ wc -l syms.src syms.repro
+1457 syms.src
+1457 syms.repro
+$ diff syms.src syms.repro && echo IDENTICAL
+IDENTICAL
+```
+
+1457 (name, kind) pairs on each side and an empty diff, so for the one
+question these seven tools ask -- does a definition of this name exist on our
+side -- the two trees are interchangeable and the probe order is a preference
+rather than a correctness argument.  `$(OBJ)` and `$(OBJ_REPRO)` are the same
+`find src -name '*.c'`/`'*.cpp'` list built twice, which is the reason; this
+is the measurement that turns the reason into a fact.
+
+`build/src` is preferred anyway, because it is the FIXED build that ships and
+what every one of those tools' docstrings has always meant.  `build/64` is
+excluded from the probe on purpose: it is the C++ half alone, so it would give
+a true count over the wrong denominator, which is the failure 3110 exists to
+end (and finding 222's whitelist argument, which is why the probe names two
+directories rather than walking `build/`).
