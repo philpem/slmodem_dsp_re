@@ -1,6 +1,25 @@
 RESULT -- VG204 output attenuation 3 dB on port 0/1 (ext 1902, USR Courier)
 Run 2026-08-16 02:24-02:40 on a quiet machine.  Pre-registration: atagain-PREREG.txt
 
+*** CORRECTION, ADDED AFTER THE CALLS: THE CHANGE WAS A NO-OP ***
+
+  `show running-config all` on voice-port 0/1 afterwards reads
+  `output attenuation 3` -- and 3 dB is this platform's DEFAULT.  The effective
+  value was 3 before and 3 after.  Nothing was applied.  Everything below is a
+  measurement of an unchanged system, which is exactly why it reproduced the
+  archive so precisely.
+
+  The failure mode was named in advance, in the advice that accompanied the
+  commands: "read the current value before you set it -- `output attenuation`
+  is an absolute, not a delta.  If it's already 3, setting 3 changes nothing
+  and you'll chase a null."  Six bench calls then went out without that read
+  being confirmed.  A precondition that is stated but not GATED ON is not a
+  precondition.
+
+  So: "does attenuating the ATA change what the far end asks for" is UNTESTED,
+  not answered.  A retry must use a value that differs from 3 -- and, per the
+  spread below, differs by a lot.
+
 THE PRE-REGISTERED PREDICTION IS NOT MET.
 
 PRIMARY -- the Courier's requested power reduction

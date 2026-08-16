@@ -246,6 +246,75 @@ python3 "$BENCH/call.py" --tty "$TTY" --pty "$PTY" \
 CALLRC=$?
 [ "$CALLRC" -ne 0 ] && echo "=== call.py exited $CALLRC"
 
+# THE FAR END'S OWN LINK REPORT, which this harness went 118 captures without.
+#
+# Every quantity the bench has been inferring from our side alone is in it, per
+# direction, in one line each.  From a Courier (ATI11):
+#
+#     Speed                    28800/12000
+#     Recv/Xmit Level (-dB)    20/18
+#     Symbol Rate              3429/3429
+#     Preemphasis (-dB)        0/2
+#     Roundtrip Delay (msec)   152
+#
+# That is the instrument finding 1969 needed and did not have: it settles which
+# DIRECTION a rate deficit is in without arguing from our own logs, and the
+# pre-emphasis field is the only external witness to the shape matcher's choice.
+#
+# THE COMMAND IS NOT PORTABLE AND FAILS SILENTLY WHEN IT IS WRONG.  ATI11 on a
+# USR prints the report; on the Conexant it prints the product name and OK.
+# Four Oli'Net calls were recorded with an empty far-end rate before anyone
+# noticed the command was the problem rather than the modem -- modems.sh:148.
+# So the reply is CHECKED, and a reply that did not parse is marked in the file
+# and shouted about here rather than written out empty.
+#
+# It runs AFTER call.py, with the modem on-hook and the tty free; the link
+# diagnostics survive the port being reopened.  `DIAG=0` skips it.
+if [ "${DIAG:-1}" != "0" ]; then
+	DIAGCMD=$(modem_diag "$MODEM")
+	python3 - "$TTY" "$LOG.lastlink.log" "$DIAGCMD" <<'PY'
+import sys, time
+dev, out_path, cmd = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+	import serial
+except ImportError:
+	print("!!! far-end diagnostic SKIPPED: pyserial not installed")
+	sys.exit(0)
+try:
+	s = serial.Serial(dev, 115200, timeout=1)
+except Exception as e:
+	print("!!! far-end diagnostic FAILED to open %s: %s" % (dev, e))
+	sys.exit(0)
+try:
+	time.sleep(0.3)
+	s.reset_input_buffer()
+	s.write((cmd + "\r").encode())
+	time.sleep(2.0)
+	reply = s.read(8192).decode("ascii", "replace")
+finally:
+	s.close()
+
+# A reply that parsed names at least one field we actually read.  "OK" and a
+# product name is what a WRONG command looks like, and it is not a report.
+FIELDS = ("Recv/Xmit Level", "Rx LEVEL", "LAST TX rate", "Symbol Rate")
+ok = any(f in reply for f in FIELDS)
+with open(out_path, "w") as f:
+	if not ok:
+		f.write("*** DIAGNOSTIC DID NOT PARSE -- '%s' is probably the wrong\n"
+			"*** command for this modem.  Raw reply follows.\n\n" % cmd)
+	f.write(reply)
+if ok:
+	for line in reply.splitlines():
+		if any(k in line for k in ("Speed", "Recv/Xmit Level", "LAST TX rate",
+					   "LAST RX rate", "Rx LEVEL")):
+			print("  far end: " + " ".join(line.split()))
+else:
+	print("!!! far-end diagnostic DID NOT PARSE: '%s' returned no known field."
+	      % cmd)
+	print("!!! see %s -- modems.sh:152 picks this command per modem." % out_path)
+PY
+fi
+
 echo "=== slmodemd: V.8 and datapump progress"
 grep -a -E 'v8shim|new state: DP_|modem report result' "$LOG.slmodemd.log" \
 	| sed 's/engine=[^ ]*//' | tail -12
