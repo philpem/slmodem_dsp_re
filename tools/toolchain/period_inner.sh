@@ -21,6 +21,7 @@ mkdir -p "$OUT"
 #   -include period_compat.h  __builtin_offsetof, GCC 4.0+.  Apparatus, not
 #                             reconstruction; see that file for the line.
 FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+       -mno-ieee-fp
        -fomit-frame-pointer -maccumulate-outgoing-args
        -Iinclude -Itest/harness -DDSPLIB_REPRODUCE_BUGS
        -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
@@ -66,6 +67,7 @@ compile_one() {
 }
 
 echo "period: compiling $(echo $SRC $CXXSRC $HARNESS | wc -w) objects with $(gcc -dumpversion)"
+echo "period: flags $(echo $FLAGS)"
 for f in $SRC $CXXSRC $HARNESS; do
 	compile_one "$f" &
 	while [ "$(jobs -p | wc -l)" -ge "$J" ]; do wait -n 2>/dev/null || wait; done
