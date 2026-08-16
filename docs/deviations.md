@@ -6722,3 +6722,106 @@ behind it rather than on which string was read most recently.
 Recorded rather than silently resolved because a future reader who finds the
 "Max Block Length" string and greps for a field of that name will conclude the
 tree missed it.  Finding 3304.
+## D360 🐛 `V22_FSE_init` zeroes the first 49 history entries twice
+
+*Batch of 2026-08-16, from `V22_FSE_init` (blob 0x08cd00) at 0x8cdd9 and
+0x8cdf0.  **Reachability: every call.**  **Observability: none -- both loops
+write zero to the same 49 entries, and the second then carries on to 97.**
+Status: verified bit-exact; the second loop's bound, 0x61, is what the test
+asserts by leaving a marker above index 48 and requiring it to be cleared.
+Fix class: none proposed; reproduced as found.*
+
+The coefficient loop clears `hist[i]` for i in 0..48 as a side effect of
+walking the 49 taps, and the loop after it clears `hist[i]` for i in 0..97.
+The first clear is entirely redundant -- `hist` is 98 shorts and the second
+loop covers all of it.  Recorded because the redundancy is the kind of thing a
+reader corrects without noticing, and correcting it would be a source change
+with no test able to see it.  Finding 3500.
+
+## D361 ⚠ `FSEv22_decision24` falls back on index 0, which is outside its own search window
+
+*Batch of 2026-08-16, from `FSEv22_decision24` (blob 0x0884a0) at 0x88541 and
+0x88545 (`mov %edx,0x8(%esp)` with `%edx` zero, then `shl $0xc,%ecx`).
+**Reachability: a symbol more than 8192 from both of the two candidates the
+sign and amplitude tests selected -- roughly, any point whose Q coordinate is
+further than one constellation spacing outside the outer ring.**
+**Observability: the returned symbol, the reported angle and the reported ring
+are all those of constellation index 0 rather than of the nearer candidate, so
+a badly off point in any quadrant decodes as if it were in the third.**
+Status: unmeasured against a real receiver -- nothing reconstructed drives this
+slicer from live samples yet.  The differential test drives it over the whole
+16-bit range on both axes and counts the trials that take this path, requiring
+that count to be non-zero.  Fix class: none proposed; reproduced as found.*
+
+The initial best distance is `thresh[0] << 12`, the same 8192 the amplitude
+test uses, rather than 0x7fff.  `FSEv22_decision12` uses 0x7fff and has no
+equivalent.  Finding 3503.
+
+## D362 ⚠ `FSEv22_decision12` accumulates its squared distance in sixteen bits
+
+*Batch of 2026-08-16, from `FSEv22_decision12` (blob 0x088680) at 0x886de
+onwards (`imul %edx,%edx ; imul %eax,%eax ; sar $0x10 ; sar $0x10 ; add ;
+movswl %dx,%eax`).  **Reachability: any point far enough from a candidate that
+the axis error exceeds about 23,170, since the two shifted squares then sum
+past 32767.**  **Observability: the sum wraps negative and that candidate wins,
+so the point decodes as the one it is FURTHEST from.**  Status: unmeasured
+against a real receiver; the differential test counts the trials on which a
+full-precision search would choose differently and requires that count to be
+non-zero.  Fix class: none proposed; reproduced as found.*
+
+Each axis error is truncated to a short before squaring, the 32-bit square is
+shifted down sixteen, and only then are the two added -- and the sum is
+truncated to a short again before the comparison.  Finding 3501.
+
+## D363 🐛 `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not have
+
+*Batch of 2026-08-16, from `Detect_v22` (blob 0x08c1c0).  **Reachability: every
+call.**  **Observability: none -- the call is cdecl, the caller cleans up, and
+the callee never reads the slot.**  Status: verified bit-exact; reproduced as a
+three-argument call, exactly as `src/pump/v23/bwchdem.c` already does at the
+same callee.  Fix class: none proposed.*
+
+The object pushes a constant 1 as a fourth argument.  `FPM_AGC_agc` takes
+three.  Unlike `bwchdem.c`'s site this caller also discards the return value,
+so no `agc.signal` read-back is needed to stay faithful.  Finding 3507 for what
+this function does.
+
+## D364 ✅ `ModDataV22` narrows `V22_PPS_filter`'s `short` to `unsigned short`
+
+*Batch of 2026-08-16, from `ModDataV22` (blob 0x08e310) at 0x8e369
+(`movzwl %ax,%eax` immediately before the return).  **Reachability: every call
+whose pulse shaper returns a negative count, which nothing reconstructed
+produces.**  **Observability: the sign.**  Status: verified bit-exact over the
+domain the differential test drives, which includes a sample count with bit 15
+set.  Fix class: none proposed; the truncation is the CALLER's and lives in
+`v22data.c`, and `v22_pps.h`'s `short` return is unchanged.*
+
+Recorded so that the disagreement between the two declarations reads as
+deliberate rather than as one of them being wrong.
+
+## D365 ✅ `V22FP_TX_CLOCK` and `V22FP_PPS` are two names for one address
+
+*Batch of 2026-08-16.  **Reachability: not a behavioural difference at all.**
+**Observability: none.**  Status: verified -- `fp + 0x78` is written by
+`TxClockSync` under the first name and is the base `V22FP_create` hands
+`V22_PPS_init` under the second.  Fix class: both names are kept and
+cross-referenced until `V22FP_create` lands and the object gets a real type,
+at which point both become one struct member.*
+
+Recorded here rather than silently unified because a reader meeting the two
+constants would otherwise have to rediscover that they collide.  Finding 3505.
+
+## D366 ✅ `V22FP_delete` drops a second argument that no callee reads
+
+*Batch of 2026-08-16, from `V22FP_delete` (blob 0x088330).  **Reachability:
+every call.**  **Observability: none -- cdecl, the caller cleans up, and none
+of the four callees touches anything but its first argument.**  Status:
+verified bit-exact.  Fix class: none proposed; reproduced as four
+one-argument calls.*
+
+The object pushes a literal 1 as a second argument to `V22_PPS_free`,
+`V22_MRF_free`, `V22_SRE_free` and `V22_FSE_free`, four times with a fresh
+`mov $0x1` each -- so the author declared all four with two parameters.  This
+tree reconstructed all four from their own bodies, where the second parameter
+is dead, and one of the four headers belongs to another effort.  The same
+shape as D363, at four sites instead of one.

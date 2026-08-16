@@ -74,6 +74,8 @@
 #include "dsplib/v22tab.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_tone.h"
+#include "dsplib/v22fp.h"
 
 /*
  * { acquisition, tracking }.  Element 0 is what every config selects; see the
@@ -205,32 +207,54 @@ short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS] = {
 };
 
 /*
- * The tone configurations.  Byte-identical to each other; see the header
- * comment for why they are arrays and not `struct fpm_tone_cfg`.
+ * The tone configurations.  Byte-identical to each other, and NOT because
+ * one is derived from the other: both are file-static in the original and
+ * the author wrote the same 36 bytes twice under two names.
  *
- * Laid out here at the offsets that struct would give, purely so the values
- * can be read: 2100 Hz, scale 11587, no phase reversal, detector ratio 2981,
- * minimum level 1, damping 31457, a NULL correlator prototype, length 53.
+ * `src` is NULL in both, which would have `FPM_TONE_create` read 53 words
+ * from address zero.  `V22FP_create` is what closes that: it copies one of
+ * these to the stack and assigns `FPM_TONE_CFG_data.src` -- the library's
+ * shared 53-tap prototype -- into the copy before creating anything.  That
+ * assignment is what types these as `struct fpm_tone_cfg`; it reads the
+ * dword at the library config's +0x10, and the only thing there is `src`.
  */
-const short TONEv22_CFG[V22_TONE_CFG_WORDS] = {
-	2100, 11587, 0, 2981, 328, 1, 31457, 0,
-	0, 0, 53, 0, 0, 0, 40, 0,
-	0, 0,
+const struct fpm_tone_cfg TONEv22_CFG = {
+	2100, 11587, 0, 2981,		/* freq, scale, rev_period, ratio    */
+	328, 1, 31457, 0,		/* f08, min_level, damp, pad0e       */
+	0,				/* src -- patched by V22FP_create    */
+	53, { 0, 0, 0 },		/* len, r16                          */
+	40, 0,				/* f1c, f1e                          */
+	0, 0				/* extra, pad22                      */
 };
 
-const short TONEv22INIT_CFG[V22_TONE_CFG_WORDS] = {
-	2100, 11587, 0, 2981, 328, 1, 31457, 0,
-	0, 0, 53, 0, 0, 0, 40, 0,
-	0, 0,
+const struct fpm_tone_cfg TONEv22INIT_CFG = {
+	2100, 11587, 0, 2981,
+	328, 1, 31457, 0,
+	0,
+	53, { 0, 0, 0 },
+	40, 0,
+	0, 0
 };
 
 /*
- * The datapump's own parameter block.  Untyped: no relocation constrains it
- * and no reconstructed code reads it.  The two 2400s and the 103 are
- * legible -- the symbol rate twice over, and a Bell 103 datapump id -- and
- * nothing else here is, so nothing else is named.
+ * The datapump's own parameter block: the template `V22FP_create` copies to
+ * the stack, patches six fields of from the caller's configuration, and
+ * installs as the object's first 28 bytes.  Six of the eleven fields never
+ * survive the patching; the ones that do are `r0c` (13014), `flags` bits 0,
+ * 1, 2, 4 and 6, and -- when the caller asks for a rate this datapump does
+ * not offer -- the 2400 in `bps`.
+ *
+ * `disconnect_thresh`'s 103 NEVER survives: create overwrites it from
+ * V22DiconnectThreshTable[3] on every path.
  */
-const short V22_CFG[V22_CFG_WORDS] = {
-	1, 2400, 2400, 0, -11072, 1, 13014, 0,
-	1627, 0, 1, 103, 0, 0,
+const struct v22fp_params V22_CFG = {
+	1,				/* +0x00 mode                        */
+	2400, 2400,			/* +0x02 bps, +0x04 bps2             */
+	0,				/* +0x06 r06                         */
+	120000,				/* +0x08 r08                         */
+	13014,				/* +0x0c r0c                         */
+	0x65b,				/* +0x10 flags                       */
+	1,				/* +0x14 r14                         */
+	103,				/* +0x16 disconnect_thresh           */
+	0, 0				/* +0x18 r18, +0x1a r1a              */
 };

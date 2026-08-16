@@ -60374,3 +60374,473 @@ Three things follow, and the third is the one that generalises:
     SUSPECT YOUR OWN EDIT FIRST, not the thing it names. The 17 live mutants
     were 17 true statements about a tree that had been corrupted, and every
     one of them would have wasted a session if taken at face value.
+### 3500. THE V.22 EQUALISER IS ITS OWN BLOCK, NOT `fpm_fse` WITH DIFFERENT TABLES -- AND ITS `fresh` FLAG MEANS THE OPPOSITE
+
+**This block was written as 3300-3315 and renumbered to 3500-3515 at merge**
+**time.** `v34-api-surface` landed 3300-3306 on master concurrently, both
+branches having surveyed when master's maximum was 3122; neither survey was
+wrong when it was taken. Nothing outside this branch ever referred to these by
+their old numbers, so no reference was left dangling -- `refcheck.py` cannot
+see across branches and would not have caught it either way. The renumber was
+done on references only: `3314`, `3312`, `-3301`, `3300 Hz`, `3300.0f` and
+`3300 + lvl` occur in this tree as TABLE DATA and frequencies, and a
+whole-word substitution would have silently corrupted six files. That is
+3506's own lesson, applied to 3506.
+
+`V22_FSE_init` (0x08cd00, 372 bytes), `V22_FSE_free` (0x08ce80, 90) and
+`V22_FSE_getdiag` (0x08c590, 3) sit beside `FPM_FSE_init` (0x0a86b0, 458),
+`FPM_FSE_free` (0x0a8660, 68) and `FSE_getdiag` (0x0a7d10, 229) and share
+neither struct nor geometry with them.
+
+- `fpm_fse_cfg` is 56 bytes and init copies all of it; `struct v22_fse_cfg` is
+  EIGHT, two coefficient pointers, and init copies only those.
+- `fpm_fse`'s buffer sizes come out of the configuration -- `2 * cfg.taps`,
+  `2 * (cfg.block / cfg.interp) + 4`.  Every one of the V.22 block's seven is
+  a literal: 0x62, 0x62, 0xc4, 0x28, 0x28, 0x1c, 0x1c.  The block is wired for
+  one modem and nothing else.
+- Seven buffers against five.  Two of the seven, +0x44 and +0x48 at 20 shorts
+  each, are allocated by init and released by free and read by NOTHING in the
+  object that has been read so far -- not the slicers, not `V22_FSE_receive`.
+  They are left unnamed for that reason.
+
+**And the third argument is inverted.**  `FPM_FSE_init`'s `fresh` is tested
+`if (!fresh)`: zero means re-init, so it FREES the five buffers and then
+allocates unconditionally.  `V22_FSE_init` tests `test %esi,%esi ; jne` and
+allocates only when the flag is NON-ZERO; on the zero path it never frees and
+never allocates, it reuses whatever the struct already holds.  Both are called
+with the same argument in the same position and a reconstruction that carried
+one polarity over to the other compiles, links and leaks or crashes depending
+on which way round it got it.  `t_v22_fse`'s reuse arm asserts
+`harness_alloc.allocs == 0`, which is what pins it.
+
+The four ints at +0x10..+0x1c are initialised 0, 1, 1, 1, exactly as
+`fpm_fse`'s `lms_force`, `pll_on`, `tilt_on`, `lms_on` are.  That is a
+resemblance and not evidence: nothing reconstructed reads any of the four, so
+they keep `rNN` names until `V22_FSE_receive` says what they do.
+
+### 3501. `V22_FSE_init` REVERSES THE COEFFICIENT PROTOTYPE, AND `FSEv22_COFFS` IS SYMMETRIC -- SO THE OBJECT'S OWN TABLE CANNOT SEPARATE THE TWO READINGS
+
+The coefficient loop is
+
+    for (i = 0; i <= 48; i++) {
+            icoeff[48 - i] = icoff[i] >> 2;
+            qcoeff[48 - i] = qcoff[i] >> 2;
+            hist[i] = 0;
+    }
+
+and the destination index is `0x30 - i`, computed as `mov $0x30,%edx ; sub
+%ecx,%edx` before every pair of stores.  `FSEv22_COFFS`, the only prototype the
+object ever hands it, is a linear-phase FIR and therefore satisfies
+`coff[i] == coff[48 - i]` for all 49 taps.
+
+So a reconstruction that copied the prototype IN ORDER would produce a
+byte-identical result for the only input the library ever supplies, and a
+differential test driven with the object's own table would pass it.  This is
+finding 3052's shape exactly, and `t_v22_fse` handles it the way 3052
+prescribes: the driving arrays are generated asymmetric, the I and Q arrays are
+different from each other, half the entries are negative and none is a multiple
+of four, and `main()` counts the taps that actually separate reversed from
+in-order, arithmetic `>> 2` from logical, and I from Q, refusing to report a
+pass if any count is zero.  The test also asserts the symmetry of
+`FSEv22_COFFS` itself, so the reason the generated arrays exist is a check
+rather than a comment.
+
+The `>> 2` is a `movswl` followed by `sar $0x2` on the 32-bit value, so it is
+arithmetic; that is head-room for the LMS update, which adds into these in
+place.
+
+### 3502. `V22_FSE_getdiag` IS A THREE-BYTE STUB, WHICH MAKES `V22FP_GetDiagnostics` UNTESTABLE AND IT IS LEFT OUT
+
+`V22_FSE_getdiag` is `31 c0 c3` -- `xor %eax,%eax ; ret`.  It is not a smaller
+`FSE_getdiag` (229 bytes, which copies a scatter log out and resets the count);
+it is a stub that returns zero and reads nothing.  So the V.22 datapump has no
+constellation display, and `struct v22_fse` has no diagnostic arrays -- which
+is also why it is 100 bytes where `struct fpm_fse` is 20 KB.
+
+**Its arity is not settled by the object.**  `V22FP_GetDiagnostics` (0x088480,
+21 bytes) rewrites only the first outgoing argument -- `arg0 = modem[0x54] +
+0x164` -- and tail-jumps, so any further arguments its own caller passed are
+still on the stack.  A function that reads none of them cannot say how many
+there were.  One parameter is declared, being the one the object is seen to
+pass; under cdecl a caller passing more is harmless.
+
+**`V22FP_GetDiagnostics` is therefore NOT committed, and that is the reason.**
+It is 21 bytes and its whole content is the constant 0x164.  Both sides of a
+differential test would call a getdiag that ignores its argument and returns
+zero, so the test would compare 0 against 0 and separate nothing -- it could
+not tell 0x164 from any other offset, or from no offset at all.  A test that
+cannot distinguish the reading from the obvious wrong one is not evidence, and
+this tree does not commit on one.  It becomes testable the moment anything
+that reads `+0x164` of the V22FP object exists, which in practice means
+`V22FP_create`.
+
+The offset is worth keeping even so: **the V.22 equaliser state lives at +0x164
+of the object `v22prc.h` calls `V22_OBJ_FP`**, and that is the first thing
+recovered about that object's layout.
+
+### 3503. THE 2400 SLICER MEASURES TWO CANDIDATES OF SIXTEEN, AND ITS THRESHOLD IS ALSO ITS INITIAL BEST DISTANCE
+
+`FSEv22_decision24` (0x0884a0, 467 bytes) never computes sixteen distances.
+`DECv22_IMAP24` and `DECv22_QMAP24` are laid out so that the index is a
+bit-field:
+
+    bit 3   I is positive
+    bit 2   Q is negative
+    bit 1   |I| is the larger of the two amplitudes
+    bit 0   which of the two Q amplitudes
+
+Three comparisons fix bits 3, 2 and 1 -- the two signs, then `(2 * sign) << 12`
+against the signed I sample, which is 8192 with the sign of I -- and only bit 0
+is searched, over a window `lea 0x2(%edi),%esi` wide.  The amplitude test sits
+inside a loop that runs exactly ONCE (`test %cx,%cx ; jle`, entered with
+`%ecx` zero) and halves a step of 4 to 2 on the way through, which is the trace
+of a general multi-level binary search instantiated at one level: 16-QAM has
+two amplitudes per axis and needs one threshold.
+
+**8192 is then used a second time, as the initial best distance of that
+search** (`movswl 0x12(%esp),%ecx ; shl $0xc,%ecx`).  So it is a threshold and
+not an infinity, and a symbol more than 8192 from BOTH candidates leaves the
+best index at its initialiser, ZERO -- which is not in the search window unless
+the window happens to start there.  Deviation D361.
+
+The two ends are shared with `FSEv22_decision12`: the chosen point is matched
+back to a transmit index by a linear search over `SMCv22_*MAP_*BPS` shifted
+down one -- the decision tables are at twice the transmit tables' scale -- and
+the returned symbol is the V.22 differential quadrant encoding read backwards,
+`SMCv22_PMAP[((quad - prev) & 0xf) >> 2]`, where `prev` is reached through a
+pointer at +0x5c that nothing in the equaliser initialises.  1200 shifts that
+down two and returns it alone; 2400 returns it unshifted and ORs in the index's
+low two bits, which are the amplitude pair and are NOT differential.
+
+`DECv22_MAG24` is indexed by `(|i >> 1| + |q >> 1|) >> 12` minus one, a
+city-block distance over the halved coordinates that takes the value 4096, 8192
+or 12288 and so selects one of exactly three rings.  Its middle entry, 12953,
+is the constant the 1200 slicer reports unconditionally: the four-point
+constellation is the middle ring of the sixteen-point one.
+
+### 3504. 666 BYTES OF V.22 PREREQUISITE UNLOCKED 2,802, AND `V22_FSE_receive` IS WHAT NOW GATES THE REST
+
+Measured with `tools/closure.py --missing` over all twenty-nine unwritten V.22
+symbols, before and after the batch that added `V22_FSE_init` (372),
+`V22_FSE_free` (90), `V22_FSE_getdiag` (3), `FSEv22_decision12` (294) and
+`FSEv22_decision24` (467).
+
+**Newly startable, and what each was waiting on:**
+
+    V22FP_create          2449   V22_FSE_init (372) + FSEv22_decision12 (294)
+    V22FP_delete           332   V22_FSE_free (90)
+    V22FP_GetDiagnostics    21   V22_FSE_getdiag (3)
+
+666 bytes of prerequisite for 2,449, and 93 more for the other two.
+`V22FP_create` is also the function that lays the V.22 object out, which is
+what `v22prc.h`'s header comment has been waiting for since those nine leaf
+functions were written against `void *` and named offsets.
+
+`v22_delete` (72) is now one hop away, blocked on `V22FP_delete` alone.
+
+**What gates the largest remaining cluster is `V22_FSE_receive`, 1,885 bytes.**
+It is READY on calls -- its only outstanding closure member is `v22_fse_mu`,
+four bytes of file-local rodata it alone reads -- and it blocks `DemodDataV22`
+(510), which appears in the blocker list of six more: `v22_answer` (1,789),
+`v22_originate` (2,655), `v22_local_loop` (1,104), `v22_data` (946),
+`v22_ans_rmloop2` (1,160) and `v22_org_rmloop2` (1,050).
+
+`V22_status` (310) is READY on calls with one 14-byte LOCAL rodata table,
+`PROTOCOL` at .rodata 0x008c0c, outstanding -- a `static const` in the same
+translation unit, so it is a cheap win nobody has examined yet.  Note there are
+TWO symbols spelled `PROTOCOL`, a `.data` one of 18 bytes at 0x7768 and this
+`.rodata` one of 14; both are local, and taking the wrong one is a live way to
+get this wrong.
+
+**THE COUNT OF "29 UNWRITTEN V.22 SYMBOLS" UNDERSTATES THE WORK, and by a lot.**
+Twenty-nine is what the `V22`/`v22` name prefix selects.  The closures of the
+blocked functions keep surfacing nine more that carry no V.22 in their name and
+are in nobody's V.22 count: `connect_1200` (818), `connect_2400` (1,505),
+`Detect_1s` (199), `Detect_Retrain` (288), `Detect_Rmloop2_ACK` (209),
+`MakeTxData` (195), `ResetRx` (62), `SetRxRate` (211) and `SetTxRate` (205).
+Several appear in almost every blocked function's list, so they are not
+optional, and the next agent will meet them immediately.
+
+### 3505. `V22FP_TX_CLOCK` IS THE PULSE SHAPER'S `cfg.step`, AND `v22_pps.h`'s "NOTHING EVER ASSIGNS IT" IS WRONG
+
+Two facts that were each recorded on their own and never put together:
+
+- `TxClockSync` (v22prc.c) stores three times the short at `fp + 0x12a` into
+  `fp + 0x78`.  `v22prc.h` calls that address `V22FP_TX_CLOCK` and says only
+  "short, written by TxClockSync", which is all one leaf function could say.
+- `V22FP_create` calls `V22_PPS_init` on `fp + 0x78` -- 0x87ea1,
+  `mov 0x54(%ebp),%ebx ; add $0x78,%ebx ; mov %ebx,(%esp)`, then the call at
+  0x87eaa.
+
+`struct v22_pps` begins with its configuration, so `fp + 0x78` is
+`pps.cfg.step` and `TxClockSync` writes the pulse shaper's phase increment.
+
+That refutes a sentence in `v22_pps.h`: "`PPSv22_CFG` is sixteen bytes of zero
+and nothing in the object ever gives `step` a value, so the step is 3 and the
+ratio is 40 / 3 = 13.33 outputs per symbol -- 600 baud at 8000 samples/s."
+Something does give it a value.  The header has been corrected in place and
+points here.
+
+**Nothing measured changes.**  `V22_PPS_STEP` is still the constant 3 that the
+phase update adds to `cfg.step`, `t_v22_pps` still passes, and no test drives
+`TxClockSync` and the filter together -- so this is not a defect, it is a
+derivation whose scope was overstated.  The 40/3 ratio holds while `fp + 0x12a`
+is zero and is a statement about one state of the modem rather than about the
+block.  It matters because the 8 kHz retarget (#47) is meant to regenerate
+these coefficients from the design parameters, and "the step is always 3" would
+have been carried into that as an invariant.
+
+The general shape is worth naming: **a leaf function written against `void *`
+and named offsets records WHERE a field is, and only the constructor records
+WHAT it is.**  Two names for one address -- `V22FP_TX_CLOCK` in `v22prc.h` and
+`V22FP_PPS` in `v22data.h` -- is the symptom, and both are kept and
+cross-referenced until `V22FP_create` lands and the object gets a real type.
+
+### 3506. `V22_OBJ_GTIMER` IS NOT AN `int *`
+
+`v22prc.h` describes the pointer at `modem + 0x50` as "int *, a shared
+millisecond clock", which is what `ReadGTimer` alone can support: it steps the
+int at +0x00 by 20 and returns it.
+
+`Detect_v22` reaches `+0x18` and `+0x20` of the same block and hands both to
+`FPM_MTD_detect`, so they are `struct fpm_mtd *`.  `V22FP_control` reaches
+`+0x0c` and `+0x0e` of it and stores shorts.  So +0x50 points at a struct
+shared across the V.22 modem whose first int happens to be the timer, not at a
+bare counter.
+
+Nothing reconstructed builds that block, so its extent is unknown and it is not
+modelled.  Recorded because "int *" is the kind of type a later reader
+dereferences without checking.
+
+### 3507. `MTDv22_CFG` AND `MTDv22_CFG2` DETECT 2200 Hz AND 1800 Hz, AND MEASURING THAT IS WHAT MADE `Detect_v22`'s TEST MEAN ANYTHING
+
+Both configurations are `tones = 3`, `min_level = 10`, `ratio` 29820 and 27980
+respectively, and neither carries its passband anywhere a reader can see it.
+
+Swept 100-3900 Hz in 100 Hz steps at four amplitudes through a V22FP-shaped
+fixture -- AGC configured from `AGCv22_CFG2` first, then 40-sample sub-blocks,
+which is the path `Detect_v22` itself uses -- `MTDv22_CFG`'s detector returns
+`FPM_MTD_ABSENT` at **2200 Hz and nowhere else**, `MTDv22_CFG2`'s at **1800 Hz
+and nowhere else**, and both return `NOSIGNAL` at 100 Hz.
+
+**The reason this is a finding and not a note is what it caught.**  Only a zero
+verdict advances `Detect_v22`'s counters.  A plausible guess at the V.22 tone
+set -- 600, 1200, 2100, 2400, 3000 -- drives neither detector, so every counter
+stays at zero, every sub-block is cleared, and the function returns 0 on every
+input.  The differential test PASSED, at 305,100 checks, with five anti-vacuity
+counts sitting at zero: both sides agreed perfectly about nothing happening.
+The fix was the fixture, not the assertions.  This is finding 134's argument
+arriving from the other direction: a detector that never fires and a tool that
+never fires are the same failure, and the only defence is a count that has to
+be non-zero.
+
+### 3508. A SYMMETRIC RETURN VALUE CANNOT CATCH A MIS-PAIRING, SO THE SEPARATING COUNT HAS TO BE TAKEN ON THE SIDE EFFECTS -- CHANNEL BY CHANNEL
+
+`Detect_v22` runs two detectors, keeps a run length for each, and returns
+`(run_a > 2) | (run_b > 2)`.
+
+Pair each counter with the other detector and the return value is identical for
+every input, because `|` is commutative.  The asymmetry is only in the side
+effects: the sample-buffer clear is gated on `run_a` and the diagnostic store
+on `run_b`.  So a differential test that compares the return value -- the
+obvious thing to compare, and the thing the function exists to produce -- cannot
+separate the true pairing from the swapped one at all.
+
+It generalises to any wrapper whose result is symmetric in its inputs, which is
+most detectors and every `||` of two predicates: **the separating count must be
+taken on the side effects.**  And it has to be taken CHANNEL BY CHANNEL rather
+than as a disjunction, or the count is satisfied by whichever channel the
+differential happens to compare most weakly -- which is what the third commit
+on this batch's branch fixes.
+
+### 3509. A SEPARATING-TRIAL COUNTER THAT COUNTS PATHS CAN BE TRUE AND PROVE NOTHING, AND ONLY THE MUTATION SETTLES IT -- 30 WRITTEN, 27 CAUGHT, 3 EQUIVALENT BY PROOF
+
+The rule this batch was given is right and has a hole.  When a plausible wrong
+reading agrees with the true one over every realistic input, the defence is a
+test that counts the trials which SEPARATE the two and asserts the count is
+non-zero.  The hole is what "separate" means: **the difference has to be
+visible in the OUTPUT, not in an intermediate.**  A clamp, a saturation or a
+`min`/`max` downstream can take both readings to the same result on exactly the
+inputs that separated them upstream, and the counter still prints a large
+number.
+
+Four of this batch's counters were wrong in that way and none of them failed
+anything:
+
+- `sep_hist_tail` was `for (i = 49; i < 98; i++) count++`.  That is the
+  constant 49.  It never looked at the run at all.
+- `sep_fallback`, `sep_amp_hi` and `sep_amp_lo` counted which PATH a trial
+  took.  Whether taking it changes the output depends on `DECv22_ANGL24`, which
+  repeats several of its sixteen entries, so those counters could not say.
+- `sep_modulo` asserted a separation that **does not exist**.  Both operands of
+  the quadrant subtraction have already been masked with `V22_SYM_QUAD`, so the
+  difference is a multiple of four and masking `0x0f` or `0x0c` gives the same
+  value for every possible pair.  The guard was withdrawn.
+
+So the counters are now two kinds with two names -- `sep_*` for an observed
+difference in a reported value, `saw_*` for coverage -- and what adjudicates
+every reading is `tools/mutate.py`.  Twenty-five mutations across three sets:
+
+    v22fse    10 mutations   10 caught    0 uncaught   0 equivalent
+    v22dec    10 mutations    9 caught    0 uncaught   1 equivalent
+    v22recv    5 mutations    4 caught    0 uncaught   1 equivalent
+    v22fp      5 mutations    4 caught    0 uncaught   1 equivalent
+
+(30 in total once `v22fp` was added; the three survivors are all equivalent
+with an argument, and `v22fp`'s is the useful kind -- `TONEv22_CFG` and
+`TONEv22INIT_CFG` are byte-identical in the object, so the set says out loud
+that it cannot tell which one a copy came from rather than appearing to.)
+
+**Both survivors are equivalent by proof, and one of them is the lesson.**
+`t_v22recv` counts `window clamp 16 / full window 784` and stood for the claim
+that the window select reads `&hist[hist_n - 49]` only once there are 49
+entries.  Written out, the unclamped mutation IS caught -- but changing the
+comparison from `>` to `>=` is NOT, and that is a different claim the same
+counter appeared to cover.  It survives because `hist_n` is never 48 at that
+site:
+
+- after a shift, `hist_n = hist_n_old - 49 + need` and the shift fires only
+  when `hist_n_old + need > 98`, so `hist_n_old >= 99 - need` and the result is
+  at least 50;
+- before the first shift `hist_n` runs 1, 7, 13, ..., one for the first symbol
+  and six a symbol after, and 48 is not 1 + 6k.
+
+Simulated over whole-symbol drives and over ragged ones that split a symbol
+across calls at every offset: 58 distinct values reach that site, those below
+50 are exactly {1,7,13,19,25,31,37,43,49}, and 48 is not among them.
+
+The general rule, which is finding 134's argument again from a third direction:
+**a counter is a claim about the test and a mutation is a measurement of it.**
+Write the wrong reading down and run it.  If it survives, either there is a
+proof that it cannot matter -- which is a deliverable, and belongs in the set
+with the argument -- or the counter was measuring the wrong thing, whatever it
+printed.
+
+### 3510. THREE OFFSETS NAMED FROM WHAT A CALLER DOES WITH THEM LAND ON THREE FIELDS NAMED FROM WHAT THE RECEIVE LOOP DOES WITH THEM, AND THE MEANINGS AGREE
+
+`v22prc.h` named three offsets in the V.22 object from the leaf functions that
+touch them, with `void *` parameters and no struct, because the object was not
+modelled: `V22FP_EQ_MODE` 0x16c and `V22FP_EQ_EXTRA` 0x180, written only by
+`SetAdaptEqV22`, and `V22FP_QUALITY` 0x186, returned by `GetSignalQuality`.
+
+`V22_FSE_receive` later named eleven fields of `struct v22_fse` from its own
+instructions, knowing nothing of any of that.  `V22FP_create` then placed the
+equaliser at `dsp + 0x164`.  Subtract:
+
+    V22FP_EQ_MODE  0x16c - 0x164 = 0x08 -> fse.mu_sel   the LMS step selector
+    V22FP_EQ_EXTRA 0x180 - 0x164 = 0x1c -> fse.lms_on   the tap-update gate
+    V22FP_QUALITY  0x186 - 0x164 = 0x22 -> fse.mse      smoothed squared error
+
+**All three agree on the MEANING, not merely on the address.**
+`SetAdaptEqV22` mode 3 writes 1 to EQ_EXTRA, and `lms_on` is exactly the flag
+that lets the tap update run -- "adapt, second mode" turns adaptation on.
+Modes 2 and 3 write 0 and 1 to EQ_MODE, and `mu_sel` indexes `v22_fse_mu`,
+which is the step size -- so the two modes are two adaptation rates.  And
+`GetSignalQuality` returns QUALITY, which is the mean squared decision error;
+mean squared error IS signal quality.
+
+Three names derived from what a caller does with a field and three derived from
+what the receive loop does with it, produced by different readings at different
+times with no communication, agreeing on all three.  That is the strongest
+corroboration this tree has produced for a field name, and it is worth more
+than either derivation alone.
+
+The compile-time assertions in `v22fp.c` hold all ten of `v22prc.h`'s constants
+to the struct, so this stays true or the build stops.
+
+### 3511. A CLEAN TEXTUAL MERGE OF TWO DISJOINT BRANCHES DID NOT COMPILE, AND ONLY THE COMPILER WOULD HAVE SAID SO
+
+Finding 700 says a merge that compiles is not a merge that kept everything.
+This is the neighbouring case and it is worth recording beside it: a merge that
+git completes without a single conflict, of two branches that share no source
+file, and which does not build.
+
+Three branches were taken off one commit and worked in parallel.  One added
+`V22_FSE_receive` and, on the evidence of its own instructions, renamed
+`struct v22_fse`'s `r08`, `r1c` and `r22` to `mu_sel`, `lms_on` and `mse`.
+Another added `v22fp.c`, which asserts at compile time that `v22prc.h`'s
+offsets land on those fields -- and it was branched before the rename, so it
+names them `r08`, `r1c` and `r22`.  The two touch no file in common.  Git
+merged both cleanly.  `make period` then reported
+
+    src/pump/v22/v22fp.c:537: error: structure has no member named `r08'
+
+**Nothing short of a compile could have caught it.**  Not `git`, which had no
+textual overlap to notice; not a review of either diff, each of which is
+correct against the base it was written on; not any test, since the tree does
+not link.  The general shape is that a parallel batch may RENAME what another
+parallel batch REFERENCES, and renaming is invisible to a three-way merge when
+the two edits are in different files.
+
+It surfaced here as a hard error only because the reference was a
+`__builtin_offsetof` in a static assertion.  Had it been a field read through a
+`void *` and an offset constant -- which is exactly what `v22prc.h` does
+everywhere else -- it would have merged, compiled, linked and been wrong.  That
+is an argument for the assertions, not against them.
+
+### 3512. THE V.22 COEFFICIENT SETS ARE SYNTHESISED BY THE CONSTRUCTOR, NOT STORED
+
+`V22FP_create` builds three of the datapump's filters from a stored prototype
+and a carrier it generates on the spot: the pulse shaper's 120 I and Q taps
+from `PPSv22_COFFS`, the receive rate converter's 270 from `MRFv22_COFFS`, and
+the equaliser's 49 I and Q from `FSEv22_COFFS`, each multiplied sample by
+sample in Q14 by a tone from an `fpm_tone` object that create makes for the
+purpose, retunes three times -- increment 0x666 or 0xccc by mode, then 0x222,
+then 0x2aaa -- and deletes before returning.
+
+That answers two things that looked odd on their own.  `FPM_TONE_generate2`
+appearing in a constructor is not a stray call; and re-initialising an existing
+object costs five allocations that are released again immediately, which is
+why the measured counts are 40 allocations to build, 45 after a rebuild, and
+35 live in both cases.
+
+It also means the stored tables are prototypes at baseband and the modulation
+onto the carrier is code, which is the form the 8 kHz retarget (#47) needs.
+
+### 3513. `V22FP_create` CHECKS NONE OF ITS ELEVEN ALLOCATIONS, AND ITS "CALLER SUPPLIES THE STATE" PATH IS A RE-INITIALISATION
+
+`B103FP_create`, in the same object and the same library, checks.  This one
+does not test a single one of the eleven `sysdep_malloc` results.
+
+And its argument handling is not what the b103 shape suggests: create tests
+only `fp == NULL`.  A non-NULL argument goes straight to `mov 0x54(%ebp),%ecx`
+and reuses the sub-object pointers without examining them -- so that path is a
+**re-initialisation of an object create already built**, not an alternative to
+allocating one.  Handing it a zeroed buffer dereferences null.
+
+### 3514. `diff_eq_int("%s: ...", got, want, (long)k)` SEGFAULTS AT THE MOMENT IT HAS SOMETHING TO REPORT
+
+The first argument is a printf format and the last is a `long`, so a `%s` in it
+is handed an integer.  The call only formats when a check FAILS, so the fault
+is latent for exactly as long as the code under test is right, and arrives as a
+crash the first time it is not -- when the message would have said which check.
+
+Eight call sites in `test/unit/t_b103alloc.c` were written that way.  All eight
+pass today; all eight are rewritten to `"... (%ld)"`.  This is finding 134's
+argument -- a detector that has never been shown to fire -- applied to the
+reporting path of a test rather than to a tool.
+
+### 3515. `params.bps2` CANNOT DISAGREE WITH `params.bps`, AND TWO OF `v22prc.h`'s TEN OFFSETS ARE AN OPEN QUESTION
+
+Two smaller results from the same reading, both recorded so that a later reader
+does not mistake either for something a test failed to check.
+
+`V22FP_create` stores the rate to `params.bps` (+0x02) and to `params.bps2`
+(+0x04) unconditionally on all three mode paths, so `dsp->r28` and `dsp->r2a`
+are always equal and swapping either pair is invisible to any input.  That is
+finding 3052's shape and finding 3509's rule: the test NAMES the pair as
+inseparable rather than appearing to distinguish it.  Likewise
+`TONEv22_CFG` and `TONEv22INIT_CFG` are byte-identical, so which one builds
+`hdx->tone` cannot be told apart -- and an injection confirms it, failing zero
+suites.
+
+The other two of `v22prc.h`'s ten offsets resolve to something that wants
+explaining rather than recording as settled.  `V22FP_TX_CLOCK` (+0x78) is
+`v22_pps_cfg::step`, a CONFIGURATION word that `V22_PPS_init` copies in and
+`V22_PPS_filter` reads on every output -- so `TxClockSync` overwrites a
+configuration field after initialisation (finding 3505).  `V22FP_BAUD`
+(+0x12a) is `v22_sre::pll_acc` and has the same shape.  Either a deliberate
+post-init correction of two blocks' running state, or a soft spot in one of the
+two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
+NOT propagated inward on the strength of an offset agreeing -- which is the
+same restraint 3510 rewards when the meanings DO line up.

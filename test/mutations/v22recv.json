@@ -1,0 +1,36 @@
+[
+ [
+  "V22_FSE_receive.  The window clamp and the history shift are exactly the",
+  "shape a separating-trial counter gets wrong -- a clamp downstream can take",
+  "two readings to the same result on the inputs that separated them upstream --",
+  "so each is written out here and run rather than rested on a counter.",
+  "V22_FSE_init/free/getdiag's mutations are in v22fse.json."
+ ],
+ {
+  "label": "the window is not clamped while the history is still filling",
+  "find": "\t\tif (hist_n > V22_FSE_TAPS - 1)\n\t\t\twin = &hist[hist_n - V22_FSE_TAPS];\n\t\telse\n\t\t\twin = hist;",
+  "replace": "\t\twin = &hist[hist_n - V22_FSE_TAPS];"
+ },
+ {
+  "label": "the window clamp uses >= where the object uses >",
+  "find": "\t\tif (hist_n > V22_FSE_TAPS - 1)",
+  "replace": "\t\tif (hist_n >= V22_FSE_TAPS - 1)",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and it is an argument about the code rather than about the suite: `hist_n` is never 48 at this site, so `>` and `>=` agree on every input. Proof in two parts. (1) After a shift, `hist_n_new = hist_n_old - 49 + need` and the shift only fires when `hist_n_old + need > 98`, so `hist_n_old >= 99 - need` and therefore `hist_n_new >= 50`. Every post-shift value is at least 50. (2) Before the first shift `hist_n` runs 1, 7, 13, ... -- one for the first symbol then six a symbol -- and 48 is not of the form 1 + 6k, since 47 is not divisible by six. So 48 is unreachable from either direction. Simulated as well, over whole-symbol drives and over ragged ones that split symbols across calls at every offset: 58 distinct values occur at this site, the ones below 50 are exactly {1,7,13,19,25,31,37,43,49}, and 48 is not among them. THE COUNTER THAT USED TO STAND FOR THIS DID NOT SHOW IT. t_v22recv counts `window clamp 16 / full window 784`, which separates a clamped reading from an unclamped one -- that mutation IS caught -- and says nothing about the boundary of the comparison. Two different claims, one counter."
+ },
+ {
+  "label": "the history shift triggers one sample early",
+  "find": "\t\tif (hist_n + need > V22_FSE_HIST) {",
+  "replace": "\t\tif (hist_n + need >= V22_FSE_HIST) {"
+ },
+ {
+  "label": "the history shifts by one more than the tap count",
+  "find": "\t\t\thist_n = (short)(hist_n - V22_FSE_TAPS);",
+  "replace": "\t\t\thist_n = (short)(hist_n - V22_FSE_TAPS - 1);"
+ },
+ {
+  "label": "the FIR accumulator is not truncated to sixteen bits before the gain",
+  "find": "\t\ti_val = (short)(((short)(acc >> 15) * V22_FSE_FIR_GAIN) >> 14);",
+  "replace": "\t\ti_val = (short)(((acc >> 15) * V22_FSE_FIR_GAIN) >> 14);"
+ }
+]

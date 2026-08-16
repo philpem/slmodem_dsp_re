@@ -1,0 +1,59 @@
+[
+ [
+  "V22_FSE_init, V22_FSE_free and V22_FSE_getdiag.  Each entry is a wrong",
+  "reading t_v22_fse's separating-trial counters CLAIM to kill; the point of",
+  "the set is to find out whether they actually do.  A counter can be true and",
+  "prove nothing when a later clamp takes both readings to the same result.",
+  "V22_FSE_receive's own mutations are in v22recv.json."
+ ],
+ {
+  "label": "the coefficients are copied in order, not reversed",
+  "find": "\t\tstate->icoeff[V22_FSE_TAPS - 1 - i] = (short)(state->icoff[i] >> 2);\n\t\tstate->qcoeff[V22_FSE_TAPS - 1 - i] = (short)(state->qcoff[i] >> 2);",
+  "replace": "\t\tstate->icoeff[i] = (short)(state->icoff[i] >> 2);\n\t\tstate->qcoeff[i] = (short)(state->qcoff[i] >> 2);"
+ },
+ {
+  "label": "the coefficients are not scaled down two",
+  "find": "state->icoeff[V22_FSE_TAPS - 1 - i] = (short)(state->icoff[i] >> 2);",
+  "replace": "state->icoeff[V22_FSE_TAPS - 1 - i] = (short)(state->icoff[i]);"
+ },
+ {
+  "label": "the coefficient shift is logical, not arithmetic",
+  "find": "state->qcoeff[V22_FSE_TAPS - 1 - i] = (short)(state->qcoff[i] >> 2);",
+  "replace": "state->qcoeff[V22_FSE_TAPS - 1 - i] = (short)((unsigned short)state->qcoff[i] >> 2);"
+ },
+ {
+  "label": "I and Q are swapped",
+  "find": "\tstate->icoff = cfg->icoff;\n\tstate->qcoff = cfg->qcoff;",
+  "replace": "\tstate->icoff = cfg->qcoff;\n\tstate->qcoff = cfg->icoff;"
+ },
+ {
+  "label": "the history is cleared only as far as the coefficient loop reached",
+  "find": "\tfor (i = 0; i <= V22_FSE_HIST - 1; i++)\n\t\tstate->hist[i] = 0;",
+  "replace": "\tfor (i = 0; i <= V22_FSE_TAPS - 1; i++)\n\t\tstate->hist[i] = 0;"
+ },
+ {
+  "label": "the `fresh` flag has FPM_FSE_init's polarity",
+  "find": "\tif (fresh) {\n\t\tstate->icoeff",
+  "replace": "\tif (!fresh) {\n\t\tstate->icoeff"
+ },
+ {
+  "label": "the history buffer is allocated at the tap count, not twice it",
+  "find": "state->hist = (short *)sysdep_malloc(2 * V22_FSE_HIST);",
+  "replace": "state->hist = (short *)sysdep_malloc(2 * V22_FSE_TAPS);"
+ },
+ {
+  "label": "the two output buffers are allocated at the auxiliary size",
+  "find": "state->out_i = (short *)sysdep_malloc(2 * V22_FSE_OUT);",
+  "replace": "state->out_i = (short *)sysdep_malloc(2 * V22_FSE_AUX);"
+ },
+ {
+  "label": "free releases six of the seven buffers",
+  "find": "\tsysdep_free(state->r48);\n\tsysdep_free(state->r44);",
+  "replace": "\tsysdep_free(state->r44);"
+ },
+ {
+  "label": "getdiag returns one",
+  "find": "\t(void)state;\n\treturn 0;",
+  "replace": "\t(void)state;\n\treturn 1;"
+ }
+]

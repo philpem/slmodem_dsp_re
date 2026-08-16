@@ -10,6 +10,14 @@
  * allocate" idiom at three nesting levels -- b103_create -> B103FP_create ->
  * FPM_*_create -- with a separate ownership flag at each.
  *
+ * NOTE ON THE FORMAT STRINGS.  `diff_eq_int`'s first argument is a printf
+ * format and its last is a `long`, so a description written as "%s: ..." with
+ * the loop index passed as the input feeds an integer to %s and segfaults --
+ * at the moment the test has something to report, and never before.  Nine
+ * call sites here were written that way and are now "... (%ld)".  Finding
+ * 134's argument applied to a test rather than to a detector: a check that
+ * cannot report a failure is not a check.
+ *
  * What is asserted here is the ORIGINAL's behaviour, measured.  That includes
  * a defect: B103FP_delete frees the object even when the caller supplied it
  * (D8).  Asserting the `bad_free` count rather than asserting zero is
@@ -82,11 +90,11 @@ main(void)
 		printf("  %-10s %2d allocs, %2d frees, %d live, %d bad\n",
 		       types[k].name, c.allocs, c.frees, c.live, c.bad);
 
-		diff_eq_int("%s: allocation count", c.allocs,
+		diff_eq_int("allocation count (%ld)", c.allocs,
 			    types[k].allocs, (long)k);
-		diff_eq_int("%s: nothing leaked", c.live, 0, (long)k);
-		diff_eq_int("%s: frees match allocs", c.frees, c.allocs, (long)k);
-		diff_eq_int("%s: no bad frees", c.bad, 0, (long)k);
+		diff_eq_int("nothing leaked (%ld)", c.live, 0, (long)k);
+		diff_eq_int("frees match allocs (%ld)", c.frees, c.allocs, (long)k);
+		diff_eq_int("no bad frees (%ld)", c.bad, 0, (long)k);
 	}
 	rc |= diff_end();
 
@@ -110,10 +118,10 @@ main(void)
 		printf("  %-10s %2d allocs, %2d frees, %d live, %d bad\n",
 		       types[k].name, c.allocs, c.frees, c.live, c.bad);
 
-		diff_eq_int("%s: one fewer allocation", c.allocs,
+		diff_eq_int("one fewer allocation (%ld)", c.allocs,
 			    types[k].allocs - 1, (long)k);
-		diff_eq_int("%s: nothing leaked", c.live, 0, (long)k);
-		diff_eq_int("%s: the sub-objects balance", c.frees,
+		diff_eq_int("nothing leaked (%ld)", c.live, 0, (long)k);
+		diff_eq_int("the sub-objects balance (%ld)", c.frees,
 			    types[k].allocs - 1, (long)k);
 		/*
 		 * D8.  Not a zero: the original frees the caller's own buffer
@@ -121,7 +129,7 @@ main(void)
 		 * either implementation fails here rather than diverging
 		 * silently.
 		 */
-		diff_eq_int("%s: D8 -- the caller's buffer is freed too",
+		diff_eq_int("D8 -- the caller's buffer is freed too (%ld)",
 			    c.bad, 1, (long)k);
 	}
 	rc |= diff_end();

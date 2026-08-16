@@ -582,6 +582,60 @@
     "resetHistoryIndexes: pTap1 goes to pInitOut": "caught"
    }
   },
+  "v22dec": {
+   "key": "8f83645910657ec5bfde40ed0c7e8ed3bc0f0a43a41a24f135db64ccee5f23a9",
+   "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the 1200 distance is accumulated at full precision": "caught",
+    "the 1200 reverse lookup does not halve the transmit table": "caught",
+    "the 1200 slicer's I and Q tables are swapped": "caught",
+    "the 2400 amplitude threshold ignores the sign of I": "caught",
+    "the 2400 amplitude threshold never fires": "caught",
+    "the 2400 search starts from an infinity instead of the threshold": "caught",
+    "the 2400 search window is one candidate wide": "caught",
+    "the 2400 slicer returns the quadrant alone, as the 1200 one does": "caught",
+    "the differential is reduced over the quadrant field, not the alphabet": "equivalent",
+    "the ring index is not biased down one": "caught"
+   }
+  },
+  "v22fp": {
+   "key": "be4afe146ce3547567ff2698850f0a45aedb93cfe680d43773cb6463d7898d76",
+   "summary": "5 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the 2400 slicer is installed instead of the 1200 one": "caught",
+    "the flag is copied into bit 12 of params.flags, not bit 11": "caught",
+    "the flag that clears hdx.r0e is read one bit over": "caught",
+    "the pulse shaper's I and Q constellation maps are swapped": "caught",
+    "the second tone object is built from TONEv22_CFG, not TONEv22INIT_CFG": "equivalent"
+   }
+  },
+  "v22fse": {
+   "key": "88c02c3b3d3984e2f91420289a3c4ce39e246f4a35b30dfac9592b8fbe54f7c2",
+   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "I and Q are swapped": "caught",
+    "free releases six of the seven buffers": "caught",
+    "getdiag returns one": "caught",
+    "the `fresh` flag has FPM_FSE_init's polarity": "caught",
+    "the coefficient shift is logical, not arithmetic": "caught",
+    "the coefficients are copied in order, not reversed": "caught",
+    "the coefficients are not scaled down two": "caught",
+    "the history buffer is allocated at the tap count, not twice it": "caught",
+    "the history is cleared only as far as the coefficient loop reached": "caught",
+    "the two output buffers are allocated at the auxiliary size": "caught"
+   }
+  },
+  "v22recv": {
+   "key": "19e240ca9d77fb0268abf61861e5d80028eea0160b5be181d9795b6747831b83",
+   "summary": "5 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the FIR accumulator is not truncated to sixteen bits before the gain": "caught",
+    "the history shift triggers one sample early": "caught",
+    "the history shifts by one more than the tap count": "caught",
+    "the window clamp uses >= where the object uses >": "equivalent",
+    "the window is not clamped while the history is still filling": "caught"
+   }
+  },
   "v34datapump": {
    "key": "f01fd489d9cd08294bda68389256163f0ffeb25ec99f358aa05a199d826ea623",
    "summary": "78 mutations: 72 caught (72 by test, 0 by strings), 4 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
