@@ -297,6 +297,25 @@ build(int trial, PcmType law, unsigned char ucode, unsigned int word14)
 		slot[side].o.ansamToneDetector = &ansam[side];
 
 		/*
+		 * ON ODD TRIALS THE DETECTOR IS MADE SENSITIVE.  With the
+		 * constructor's own configuration -- 400 samples of history in
+		 * blocks of 50, a threshold of 307200 -- `process` never once
+		 * answers yes over a sweep this length, and six of the eight
+		 * states that call it only branch when it does.  Shrinking the
+		 * block and dropping the two thresholds is not a claim about
+		 * the detector; it is what makes those six arms reachable at
+		 * all, and t_gtonedet.cpp owns the question of what the
+		 * configuration should be.
+		 */
+		if (trial & 1) {
+			ansam[side].blockLen = 1;
+			ansam[side].blocks1 = 1;
+			ansam[side].blocks2 = 3;
+			ansam[side].threshold = 0.0f;
+			ansam[side].ratio = 0.0f;
+		}
+
+		/*
 		 * Our own `reset`, on both sides.  It is verified against the
 		 * blob by t_v90p3dreset.cpp, and using it on both sides means
 		 * this test is measuring `getV90Decision` and nothing else.
@@ -530,6 +549,13 @@ is_default_state(int st)
  * and a machine whose flags are all zero exercises one side of nine `if`s and
  * neither side of the rest.
  */
+/*
+ * The run-length state 9 counts JdNot symbols with.  Chosen so that the value
+ * the method TESTS -- this plus one, on a symbol that came back zero -- lands
+ * on 12 exactly, which is the only value that separates `> 0xb` from `> 0xc`.
+ */
+static const unsigned int w404_v[8] = { 0, 5, 10, 11, 12, 13, 15, 20 };
+
 static void
 dirty(int side, int trial, int st, unsigned int word2c)
 {
@@ -543,8 +569,24 @@ dirty(int side, int trial, int st, unsigned int word2c)
 	o->short_400 = (short)((trial >> 1) & 1);
 	o->word_410 = (unsigned int)((trial >> 2) & 1);
 	o->word_3fc = 14;
-	o->word_404 = (unsigned int)(trial % 14);
+	/*
+	 * 0, 3, 6, 9, 12, 15, 18, 21 over the eight trials, which straddles
+	 * the `word_404 > 0xb` test in state 9 and lands exactly on 12 so that
+	 * a bound of 0xc rather than 0xb is a different answer.
+	 */
+	o->word_404 = w404_v[trial & 7];
 	o->word_408 = (unsigned int)(trial % 3);
+	/*
+	 * NON-ZERO, so that a state which forgets to clear the event code is a
+	 * different object afterwards.  The default block's only statement is
+	 * that clear.
+	 */
+	o->word_30 = (unsigned int)(0x5a + trial);
+	/*
+	 * 0, 5, 10, 2, 7, 12, 4, 9 -- reaches both the 10 the recovery flag
+	 * arms on and the 0 it disarms on, and `reset` has just zeroed this.
+	 */
+	sdd[side].count = (unsigned int)((trial * 5) % 13);
 	o->byte_424 = (unsigned char)((trial >> 3) & 1);
 	o->word_420 = 5;
 	o->word_3f4 = 0;
@@ -717,6 +759,60 @@ run_free(void)
 	return diff_end();
 }
 
+/*
+ * State 9's JdNot arm, driven on purpose.  Reaching it needs three things at
+ * once -- a descrambled symbol of zero, `word_404` past its bound, and
+ * `word_2c` at 12 modulo 72 -- and the first of those is whatever the
+ * descrambler happens to produce, so the sweep above reaches it only by luck.
+ * This walks the grid instead, and it is what tests the two states the arm
+ * chooses between and the bound it compares against.
+ */
+static int
+run_jdnot(void)
+{
+	static const unsigned int w2c_v[] = { 11u, 83u, 155u, 227u };
+	static const unsigned int cnt_v[] = { 10u, 11u, 12u, 13u, 40u };
+	int trial, w, c, k;
+
+	diff_begin("V90Phase3Demodulator::getV90Decision -- state 9 JdNot");
+
+	for (trial = 0; trial < 8; trial++) {
+		set_level((trial & 4) ? 2u : 0u);
+
+		for (w = 0; w < (int)(sizeof(w2c_v) / sizeof(w2c_v[0])); w++)
+			for (c = 0;
+			     c < (int)(sizeof(cnt_v) / sizeof(cnt_v[0])); c++) {
+				long tag = ((long)trial << 16)
+				    | ((long)w << 8) | (long)c;
+
+				build(trial, (PcmType)(trial & 1),
+				      (unsigned char)(0x40 + trial), 0);
+				dsplib_debug_capture_reset();
+				dirty(0, trial, 9, w2c_v[w]);
+				dirty(1, trial, 9, w2c_v[w]);
+				slot[0].o.word_404 = cnt_v[c];
+				slot[1].o.word_404 = cnt_v[c];
+
+				for (k = 0; k < NSAMP; k++) {
+					float x = samples[(w + k) % NSAMP];
+					short g, r;
+
+					g = slot[0].o.getV90Decision(x);
+					r = ref_p3d_getV90Decision(&slot[1].o,
+								   x);
+					diff_eq_int("decision (%ld)", (long)g,
+						    (long)r, tag * 16 + k);
+					compare_all("after getV90Decision, "
+						    "JdNot grid", tag * 16 + k);
+				}
+				teardown();
+			}
+	}
+
+	set_level(0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -725,6 +821,7 @@ main(void)
 	dsplib_debug_capture_on = 1;
 
 	bad |= run_states();
+	bad |= run_jdnot();
 	bad |= run_null_jd();
 	bad |= run_free();
 

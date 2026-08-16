@@ -64,7 +64,8 @@
  {
   "label": "the probing DIL magnitude is one step out",
   "find": "\t\tif (P3D_ABS((int)symbol) == 0xffc",
-  "replace": "\t\tif (P3D_ABS((int)symbol) == 0xffd"
+  "replace": "\t\tif (P3D_ABS((int)symbol) == 0xffd",
+  "note": "UNCAUGHT and left that way.  0xffc is a magnitude the phase 3 modulator only emits from inside a DIL segment, and this fixture never gets it there: `reset` opens the modulator in P3M_STATE_TRN1D and only state 9's JdNot arm moves it on. So the claim `the probing DIL threshold is 0xffc` rests on the `cmp $0xffc,%eax` at 0x23b98 and on nothing this suite runs.  Recorded rather than deleted, because a deleted mutation is an untested claim nobody can see."
  },
  {
   "label": "the error-relaxation counter runs on the wrong flag",

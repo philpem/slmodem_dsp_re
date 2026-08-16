@@ -447,10 +447,10 @@ run_p3d_ctor(void)
 			 */
 			diff_eq_int("word_3cc, theirs (%ld)",
 				    (long)((V90Phase3Demodulator *)p3b)
-				    ->word_3cc, 0, trial);
+				    ->word_3cc.prev_, 0, trial);
 			diff_eq_int("word_3cc, ours (%ld)",
 				    (long)((V90Phase3Demodulator *)p3a)
-				    ->word_3cc, 0, trial);
+				    ->word_3cc.prev_, 0, trial);
 			/*
 			 * And what the constructor's own `reset` arguments
 			 * reach: state 0, ucode 0x40, short_414 = 1 and
