@@ -60559,7 +60559,7 @@ than per call -- which dissolves the pairing trap in `abextract.py`'s comment
 instead of navigating it, since each block carries its own `ethreh`, its own
 printed thresholds and its own `finally rxbitrate`.
 
-### 3201. #170 ANSWERED, SECOND HALF: THE CHANNEL IS 34.7 dB AND OUR OWN RECEIVER SAYS SO -- BUT ONLY IN PHASE 3, AND THE RATE IS DECIDED IN PHASE 4
+### 3201. #170 ANSWERED, SECOND HALF: THE CHANNEL IS 34.7 dB AND OUR OWN RECEIVER SAYS SO -- BUT ONLY WHEN OUR TRANSMITTER IS QUIET, AND THE RATE IS DECIDED WHEN IT IS NOT
 
 The call performs the control on itself. **A V.34 startup trains our receiver
 TWICE against the same channel**: once in phase 3, when we are receiving and
@@ -60572,6 +60572,13 @@ decided from the second. Same modems, same codec hop, seconds apart, and
     phase 3 SNR, we silent          median 34.73   p90 35.44   max 35.75
     SNR the ladder actually read    median 24.63
     phase 3 minus decision          median  6.26   p90 22.60
+    ... on CLEAN decisions only     median  5.80              (3202 excluded)
+
+**QUOTE 5.80, NOT 6.26.** The p90 of 22.60 is almost entirely the spiked rows
+of 3202, which are a different defect; the systematic deficit is the clean
+figure. Nor is it the whole 8.5 dB gap between what they achieve receiving us
+(28800 median, 31.0 dB) and what we ask for (19200 median, 22.4 dB) -- 3202
+supplies the rest, in the tail rather than the middle.
 
 **34.73 dB is 0.4 dB off what our own ladder demands for 33600.** Our receiver,
 given the far end's signal with our transmitter quiet, measures this path as
@@ -60582,12 +60589,23 @@ from the other side, achieving a median 28800 and up to 33600 receiving us
 34.68, 35.05, 35.28, 35.28 -- 0.89 dB -- while the phase 4 decisions on those
 same eight handshakes range over 20 dB.
 
-**SO IT IS CASE (a), AND NOT CASE (b).** The estimate is honest and the mapping
-is correct (3200); the low rate is the true consequence of a phase 4 channel
-that really is worse. But the phase 3 control narrows "upstream" much further
-than #170 hoped for: **the damage is not the demodulator's steady state and
-not the line, because the same demodulator on the same line reads 34.7 dB one
-second earlier.** It is something that switches on between the two.
+**#170's DICHOTOMY DOES NOT PARTITION THIS, and saying only (a) or only (b)
+would misdirect the next session.** The evidence splits the 8.5 dB two ways:
+
+  * **The median ~6 dB is case (a)** -- a real degradation, honestly measured.
+    The equaliser's error really is that much larger in phase 4; nothing is
+    lying to the ladder. But "upstream" is narrowed hard by the control:
+    **it is not the demodulator's steady state and not the line, because the
+    same demodulator on the same line reads 34.7 dB one second earlier.** It
+    switches on with our own transmitter. Whatever it is, it is duplex-only.
+  * **The tail is case (b)** -- 3202, where 13% of decisions read a block 6 to
+    22 dB off what that same run had already converged to. There the channel
+    is good, the demodulator has already proved it, and the number that
+    reaches the ladder is simply wrong.
+
+**WHAT IS DEAD EITHER WAY:** the mapping (3200, textbook to 0.01 dB per step),
+and any account in which our demodulator is just ~10 dB worse than the
+Courier's. It converges to 29.5 dB on the same block sequence, repeatedly.
 
 **WHAT IS DIFFERENT IN PHASE 4 -- three candidates, none yet separated:**
 
@@ -60596,10 +60614,20 @@ second earlier.** It is something that switches on between the two.
     cannot be this -- but 1971 says itself that a coherence measure cannot see
     energy G.711 companding returns. This is the candidate that survives 1971
     rather than the one it excluded.
-  * **The power reduction WE requested.** Between our two measurements the far
-    end drops its transmit level at our own request -- `power reduction of 1`
-    and `of 2` in the log -- so **up to ~2 dB of the 6.26 is by design and not
-    a defect**, leaving ~4 dB. 1972 and 1973 are the history of that request.
+  * **The power reduction WE requested -- MEASURED, AND IT IS NOT THE CAUSE.**
+    Between our two measurements the far end may drop its transmit level at
+    our own request, which would be by design rather than a defect. It is not
+    what this is. Splitting the 72 clean handshakes on whether we asked:
+
+        we asked for NO reduction   n=46   deficit 6.46 dB
+        we asked for a reduction    n=26   deficit 7.10 dB   (median 1 dB asked)
+
+    **On the majority of handshakes we request nothing at all and still lose
+    6.46 dB**, and asking costs a further 0.64 dB for a median 1 dB requested.
+    So the by-design component is under a dB and **the unexplained systematic
+    deficit is ~6 dB, not ~4** -- do not discount it. 1972 and 1973 are the
+    history of that request, and 1973 is the precedent for how this
+    generalises wrongly from one call.
   * **The AGC steps up across the boundary**, median +1.05 dB (range -0.95 to
     +3.04), and the absolute gain correlates with the deficit: r = +0.44 over
     82 clean decisions, 3.65 dB of deficit below the median gain against
