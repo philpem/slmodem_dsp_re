@@ -57981,3 +57981,129 @@ deliberately -- retargeting a mutation while the record is stale is exactly
 what "nothing is weakened to make a number look better" forbids, and the
 number here would get BETTER, which is the direction that should make a reader
 suspicious.
+
+### 2950. `v8handshak.c`'s -8 IS THE CROSS-FILE FORM OF 2600's ARTEFACT, AND THE PER-FILE ROLLUP HAS A BOUNDARY IT WAS SAID NOT TO HAVE
+
+`debugaudit.py --missing` reports `src/v8/v8handshak.c` at **-8 (blob 10,
+ours 2)** in the PER-FILE rollup -- the table 605 named as the one an inlining
+boundary cannot distort, and which 2600 went to for a gap it could trust after
+retiring `probeselect`'s 31.
+
+**There is nothing to restore.** All ten of the object's diagnostics are in
+this tree; eight of them are in `src/v8/v8hsrx.c`, whose own row is
+**+8 (blob 0, ours 8)**. The two numbers are the same eight call sites counted
+from opposite ends.
+
+**Ten sites, ten distinct strings, 1:1** -- which is what makes a per-string
+comparison a per-site comparison here, and it was measured rather than assumed
+because `--strings` de-duplicates and its format resolution is wrong wherever
+several strings are pushed before one call. `v8handshak` is `0x77310 +
+0x1093`; `tools/dis.py <obj> 0x77310 0x783a3` carries exactly **10** calls to
+`dsplibs_debug_printf` and **12** `R_386_32` references into `.rodata`. Ten of
+the twelve are `movl $imm,(%esp)` -- the format, at ten distinct addresses --
+and the other two are `CJ` at `.rodata.str1.1:0x2f2e` and `JM` at `0x2f18`,
+which are the `%s` argument of one of the ten.
+
+| the object's string | ours |
+|---|---|
+| `V8: Timeout waiting for %s message...\r\n` | `v8handshak.c:111` |
+| `V8: Time Out Waiting For CM...\r\n` | `v8handshak.c:86` |
+| `V8: Time Out Waiting For ANSam...\r\n` | `v8hsrx.c:45` |
+| `V8 ANSAM Detected (CM ready)\n` | `v8hsrx.c:105` |
+| `V8: reseting QCA1 detector...\r\n` | `v8hsrx.c:358` |
+| `V8:  QCA1a: Got Good QCA1a !!!!\r\n` | `v8hsrx.c:383` |
+| `V8:  QCA1a: U_QTS: bits24,26-28 = %d%d%d%d, bits54,56-58 = %d%d%d%d\r\n` | `v8hsrx.c:386` |
+| `V8:  QCA1d: LAPM Indication: bit23 = %d, bit53 = %d\r\n` | `v8hsrx.c:404` |
+| `V8:  QCA1d: Got Good QCA1d !!!!\r\n` | `v8hsrx.c:412` |
+| `V8:  QCA1d: ANSpcm level index: bits27-28 = %d, bits57-58 = %d\r\n` | `v8hsrx.c:415` |
+
+`nm` has no symbol for `v8_handshak_agc` or `v8_handshak_demod`. The object
+inlined both, exactly as it inlined `probe_preemph`.
+
+**WHY THE PER-FILE TABLE FELL THROUGH, WHEN THE WHOLE POINT OF IT IS THAT IT
+CANNOT.** It attributes the blob's sites to whichever file holds OUR function
+of the same name, and counts ours where we actually wrote them. A helper
+factored out within the file therefore nets to zero, which is 605's argument
+and is right. A helper factored out into a DIFFERENT FILE debits one file and
+credits the other. `debugaudit.py`'s own comment said a per-file total "has no
+such boundary to fall through" and its header printed the same claim; both now
+say which boundary it does have.
+
+2600's closing list quotes this row as `-8 (blob 10, ours 0)`, which is the
+per-FUNCTION `ours` beside the per-FILE gap -- the per-file line reads
+`ours 2`. Nothing in 2600 depends on it, but the right column would have shown
+that this row is the same shape as the one it had just retired.
+
+**AND THE TEN ARE NOW PROVED OF THE RUNNING OBJECT.** `t_v8hs.c`'s
+"v8handshak: the trace" already raised both debug levels over three levels and
+five state cases and compared the two transcripts with `strcmp`. Two
+transcripts agreeing say nothing about a site neither side reached, so the
+sweep now accumulates which of the ten the REFERENCE was seen to print and
+asserts all ten by name -- and the same ten on our side, so a dropped site is
+named rather than arriving as a whole-transcript mismatch. **All ten are
+reached**, measured before the assertion was written. 62 checks to 82.
+
+Shown to fire, per 134: deleting the `V8: reseting QCA1 detector...` site from
+`v8hsrx.c` fails five checks and names it -- `we printed site 7  got 0,
+reference 1` -- and restoring it returns 82 of 82.
+
+What it does not say: the ten are proved present, in the right place, under
+the right condition and with the right arguments. It is silent about anything
+the transcript does not print, which is what the return-value and state
+comparisons in the same file are for.
+
+### 2951. THE DEBUG AUDIT NOW COMPARES CONTENT INSTEAD OF COUNTS, AND TWO OF THE THREE LARGEST ROWS IN THE BACKLOG ARE NOT WORK
+
+Twice now a hand-off has taken a number from `debugaudit.py --missing` as a
+restoration queue and been wrong about it -- `probeselect`'s 31 (2600) and
+`v8handshak`'s 8 (2950). Both times the count was measuring where we chose to
+put a helper. `debugaudit.py --absent` asks the question the counts were
+standing in for: **which of the object's format strings appear nowhere in
+`src/`.** A string is content and does not move when we re-factor.
+
+Over the whole tree: **27 absent over 19 functions**, with 13 call sites whose
+format cannot be resolved and which it does not judge.
+
+| function | `--missing` | `--absent` |
+|---|---|---|
+| `v34handshak` | 261 | 2 |
+| `probeselect` | 31 | 0 |
+| `CALLPROG_Progress` | 15 | 0, and 11 unresolvable |
+| `v8handshak` | 10 | 0 |
+| `B103OriginateNextState` | 2 | 2 |
+| `b103_process` | 2 | 2 |
+| `v23FP_rx_progress` | 3 | 3 |
+
+So the real queue is small and is in the modules nobody has been to yet:
+`b103fp.c` (6), `call.c` (4), `b103.c` (4), `v23rx.c` (4), `bwchdem.c` (3),
+`v23.c` (2), `v23modem.c` (2), and two strings in `v34handshak` itself --
+`MOH: Illegal MH sequence under MHreq, initiating retrain\r\n` and
+`V34DATA, getting into data mode from Handshake, Tx bit rate - %d, Rx bit
+Rate - %d\n`.
+
+`callprog.c` cannot be settled this way and is the one row that still needs
+reading: all 18 of `CALLPROG_Progress`'s resolvable strings are present and
+the other 11 sites push more than one string before the call, which is the
+case `--strings` documents itself as getting wrong. `--sites` is the tool for
+those.
+
+**TWO LIMITS, AND BOTH ARE IN THE TOOL'S OWN COMMENT.**
+
+*Necessary, not sufficient* -- `--invented`'s limit mirrored. A string being
+somewhere in the tree does not show the site is in the right function, under
+the right condition, or carrying the right arguments; only a transcript
+comparison does (126, 2600, 2950). An empty report means "nothing was lost",
+never "these sites are right".
+
+*Distinct strings, not sites.* Where the object prints one message from
+several places -- `probe_preemph`'s three strings over ten inlined copies --
+carrying it once satisfies the check. That is deliberate, because the number
+of copies is exactly what inlining decides, but it bounds a `0 absent` row at
+"no message was lost" rather than "no call site was lost". The worked example
+is `B103FP_create`, whose one missing site is the build stamp `Sep 22 2005`
+(135): `src/dsp/fpm_agc.c:135` carries that literal, so `--absent` scores it
+present while `b103fp.c` really has no such site.
+
+Shown to fire, per 134: with the `V8: reseting QCA1 detector...` call deleted
+from `v8hsrx.c`, `--absent v8handshak` reports `1 absent` and names the
+string; with it restored, `0 absent`.
