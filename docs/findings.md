@@ -59233,3 +59233,167 @@ excluded from the probe on purpose: it is the C++ half alone, so it would give
 a true count over the wrong denominator, which is the failure 3110 exists to
 end (and finding 222's whitelist argument, which is why the probe names two
 directories rather than walking `build/`).
+
+### 3120. `V90Phase4Modulator`'s 12,064-BYTE PAD IS ONE 12,000-BYTE SCRAMBLED-BIT BUFFER AND A TAIL OF TEN FIELDS
+
+Numbering: 3120 is taken as the next free block adjacent to 3110/3111, the
+object-tree work of the same day.  3100/3101, 3110/3111 and 3200-3204 were
+already claimed across the nine local trees and the two remote branches;
+3112-3119 are left as a gap rather than consumed.
+
+`include/dsplib/V90Phase4Modulator.h` carried `pad_0078[0x2f20]` -- 12,064
+bytes, **54% of every unmodelled byte in the tree** (92 `pad_*` placeholders
+over 22,218 bytes).  It is now fields.  `pad_0004[0x40]`, 64 bytes, is not,
+and is left alone.
+
+#### THE NEGATIVE THAT LICENSES THE ARRAY, TAKEN WITHOUT TRACKING ANYTHING
+
+The class has forty-five symbols over .text+0x2c5a0..+0x2f72f (`reset` at
++0x2f630 + 0xff being the last).  Over that whole extent there are exactly
+eleven distinct memory displacements in [+0x78, +0x2f58) on **any** base
+register:
+
+```
+  0x78(%esi)                 26 times, and every one of them a `lea`
+  0x84/0x104/0x184/          only setRdRtSymbols and setRfSymbols, where
+    0x204/0x284(%esi)        %esi is ARGUMENT 2 -- `mov 0x14(%esp),%esi` at
+                             +0x2d189 and +0x2d389 -- a V90MappingParams
+  0x114(%ecx), 0x114(%edi)   through `mov 0x48(%..),%..`, the `mp` member
+  0xca0(%ecx)                through `mov 0x54(%..),%ecx`, the `cp` member
+  0x78/0x80(%esp)            stack frame
+```
+
+This is deliberately a `grep` over one `dis.py` range and not a register
+tracker.  The tracker written first for this job had three bugs in
+succession -- an inverted `esp` delta, `cmp`/`test` counted as writing their
+destination, and `pop` in an epilogue killing `this` for the basic block that
+followed a `ret` -- and each one made the region look *emptier* than it is.
+A negative from a detector with that history is worth nothing (2400, 2401,
+3100); a negative from an enumeration that never tracks anything survives.
+
+#### WHAT +0x0078 IS, AND WHY 12,000
+
+Six `generate*` members and both symbol pumps do the same three lines:
+
+```
+   2e304:  lea 0x58(%esi),%eax             the scrambler
+   2e301:  lea 0x78(%esi),%edi             this buffer
+   2e31c:  call Scrambler<unsigned char,unsigned char>::process
+                                           (const unsigned char *src,
+                                            unsigned char *dst, unsigned int n)
+   2e335:  call V90BitsToSymbol::process(unsigned char *bits, unsigned int n)
+```
+
+-- so it is the scrambler's OUTPUT and the converter's input, one byte per
+bit, and `unsigned char` is the mangling's (`_ZN9ScramblerIhhE7processEPKhPhj`,
+`_ZN15V90BitsToSymbol7processEPhj`) rather than a reading of the code.
+`generateB1d` and its five siblings reach it through `processAllOnes` instead.
+
++0x2f58 - +0x78 is **0x2ee0, which is `V90CP_BITS` to the byte** -- and the
+bits this buffer receives are a scrambled copy of exactly the vector
+`V90CP::getBitVector` hands over, so the size it needs and the size it has are
+the same number for a reason.  That is the strongest this can be, and it is
+still not a measurement: `reset` and the constructor were both read for a
+`memset`/`rep stos` that would have pinned the length, and neither has one.
+So the sentence `V90CP.h` uses is the sentence here: **that the whole span is
+ONE array is the modelling choice, not a measurement.**  Start proven, extent
+bounded.
+
+#### THE TAIL IS TWO PARALLEL TRIPLES AND TWO SYMBOL TABLES
+
+```
+  +0x2f58  mpBits             V90MP::getBitVector's return
+  +0x2f5c  mpBitCount         its `unsigned int &` out-parameter, bound by
+                              `lea 0x2f5c(%ebx),%ecx` at +0x2d0db
+  +0x2f60  mpSequenceSymbols  6 * mpBitCount / mp->groupSize (+0x114)
+  +0x2f64  word_2f64          bitsToSymbol->extraSymbols + 12
+  +0x2f68  rdRtSymbols[6]     short
+  +0x2f74  rfSymbols[12]      short
+  +0x2f8c  cpBits             V90CP::getBitVector's return
+  +0x2f90  cpBitCount         its out-parameter
+  +0x2f94  cpSequenceSymbols  6 * cpBitCount / cp->word_3ba8
+```
+
+`exitMP` (+0x2d0db..+0x2d113) is the MP triple and `enterRepeatedCPd`
+(+0x2c7b4..+0x2c7ec) the CP one; `recivedSUV`, `recivedCPtag` and
+`generateV92Symbol` repeat the CP one verbatim.  Both divisors are called "the
+group size" by `V90MP.h` and `V90CP.h`, both out of `calcSequenceLength`, so
+`6 * bits / groupSize` is a count of SYMBOLS -- six symbols carry one group --
+and `V90BitsToSymbol.h` already names a field of that exact shape
+(`extraSymbols`, `(6 * mp[+0x624]) / mp[+0x620]`) and calls it symbols.  Both
+fields are read only as `symbolCounter % x` (`divl`, `test %edx,%edx`), which
+is a state machine asking whether a whole repetition has been sent.
+
+**THE TWO ARRAY LENGTHS ARE MEASURED, NOT COUNTED OFF THE STORES.**
+`generateRdRt` indexes +0x2f68 with `(symbolCounter - 1) % 6` -- `mov
+$0xaaaaaaab`, `mul`, `shr $0x2`, `lea (%edx,%edx,2)`, `add %edx,%edx` -- and
+`generateRf` indexes +0x2f74 with `shr $0x3`, `shl $0x2`, which is twelve.
+`setRdRtSymbols` writes exactly six shorts and `setRfSymbols` exactly twelve,
+and 6 * 2 lands the second array on +0x2f74 exactly.  `short` is forced twice
+over: the loads are `movswl` whose 32-bit result is the return value (613's
+case), and `neg %eax` precedes the stores to +0x2f6e, +0x2f70 and +0x2f72.
+
+#### WHAT WAS NOT NAMED, AND WHY
+
++0x2f64 is `bitsToSymbol->extraSymbols + 12`, written on entry to state 0x10
+-- the state whose debug line is `"V90Phase4Modulator: enter Ed @ %d"` -- and
+read only as `symbolCounter == word_2f64`, which ends that state.  It is a
+deadline in symbols; nothing establishes what the twelve is.  A name for it
+would be believed, so it keeps `V90CP.h`'s neutral `word_` convention with
+the derivation in the comment.
+
+`pad_0004` -- sixty-four bytes at +0x0004..+0x0043 -- is a separate piece of
+work and is left as it was.  The accesses in it are thirteen four-byte words
+(+0x04, +0x08, +0x0c, +0x10, +0x18, +0x20, +0x24, +0x28, +0x2c, +0x30,
++0x34, +0x38, +0x40), two single bytes (+0x14, +0x1c) and one short (+0x3c),
+which is every byte of the region but +0x3e..+0x3f.  Several are nameable
+from `reset`'s own signature; that is a separate piece of work and this
+branch does not do it.
+
+Renaming is a pure refactor and `tools/toolchain/compare.py` is unchanged at
+`{compared:943, identical:341, same_size:64}` before and after, which is what
+proves no TYPE moved.  `V90P4_OFF(ctorArg8, 0x2f98, arg8)` and
+`sizeof == 0x2fac` are the two assertions that prove the region was renamed
+and not resized; both live in the existing
+`#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4` block, which the
+period build restores with `-D__SIZEOF_POINTER__=4` (compilers.md V3), so
+neither can evaporate.
+
+### 3121. `compare.py` COMPARES ZERO SYMBOLS AND EXITS 0 WHEN RUN FROM A WORKTREE
+
+`tools/toolchain/compare.py` has its own default:
+
+```python
+BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
+```
+
+An agent worktree lives at `<repo>/.claude/worktrees/<name>`, so `..` is
+`<repo>/.claude/worktrees` and that path does not exist.  `nm` on a missing
+file yields an empty symbol table, the intersection with ours is empty, and
+the tool prints
+
+```
+Comparing 0 symbols the blob and this tree both have.
+
+  identical instruction sequences (mnemonics)    :    0
+  same size, different instructions             :    0
+  different size                                :    0
+
+  total code: blob 0 bytes, ours 0 (0.0%)
+```
+
+and **exits 0**.  Measured: `BLOB=/nonexistent/dsplibs.o python3
+tools/toolchain/compare.py; echo $?` prints 0.  This is 2400's failure with
+`BLOB` where 2400 was `TC_OUT`, and 3100's with `compare.py` where 3100 was
+the gate: a detector reporting a clean denominator it never had.  It is a
+worse trap than 2400 because the run *looks* right -- it prints the blob's
+`.comment` line as `blob built by:` with an empty value and the object
+directory it did read, so the header is there and only the count is zero.
+
+Not fixed here, because the fix belongs with the person who owns the tool and
+this branch is a header refactor: the same `git rev-parse --git-common-dir`
+resolution the `Makefile` already uses for `BLOB` (CLAUDE.md's worktree
+bullet) would do it, plus a refusal on an empty intersection in the shape
+3110 gave the seven have-set tools.  Until then, **pass `BLOB=` explicitly
+whenever `compare.py` is run outside the main tree**, and treat a
+`Comparing 0 symbols` line as a failed run rather than a clean one.
