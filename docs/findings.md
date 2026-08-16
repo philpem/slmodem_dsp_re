@@ -53490,8 +53490,9 @@ were three shapes of defect plus one in the apparatus -- findings 2300 (the
 from a declaration order), 2302 (a loop constant that was not hoisted, so the
 constant landed on the left of the compare) and 2303 (`x != x` folded to zero,
 which deleted the harness's own NaN detector).  Two corrections to the
-paragraphs above: this branch runs 183 suites, not 181, so the flag-on figure
-was 177/6 and not 176/5 -- `t_v90p3ddec` is a sixth.  And `t_v90leaves`
+paragraphs above: this branch ran 183 suites, not 181, so the flag-on figure
+was 177/6 and not 176/5 -- `t_v90p3ddec` is a sixth.  (It runs 185 since this
+branch was rebased onto finding 2200's toolchain work, and is 185/0 there.)  And `t_v90leaves`
 "exiting non-zero with every check reported PASS" was an artefact of
 `period_inner.sh` printing `tail -6` of the run log; it failed
 `V92EchoCanceller::process` ten lines above the window.  The cost is on the
@@ -56242,9 +56243,22 @@ GCC 3.4's reg-stack pass follows the declaration order, and with `energy`
 first the whole floating-point skeleton comes out shifted -- `fxch %st(3)` for
 the object's `fxch %st(2)`, `faddp %st,%st(2)` for its `faddp %st,%st(1)` --
 ending in the reversed compare.  Swapping the two declarations makes **every
-x87 instruction and every branch in the function the object's**, which is
-CLAUDE.md's full-text acceptance test for a statement-order change (617), and
-takes the suite to 1 failure and then 0.
+x87 instruction and every float compare-and-branch in the function the
+object's**, which is CLAUDE.md's acceptance test for a statement-order change
+(617), and takes the suite to 1 failure and then 0.
+
+STATED EXACTLY, because "every branch" would be an overclaim: the INTEGER
+tail still differs.  The object returns through `xor %ebp,%ebp` ... `mov
+$0x1,%ebp` with a `jb` over it, and ours computes the same answer with `setbe`
+/`movzbl` from the `return run < limit ? 0 : 1;` ternary.  That is a different
+spelling of the same statement, it is not a comparison, and it was not
+touched.  The float half -- `fcomp %st(2)`/`ja`, `fdivp %st,%st(2)`/`fcomp
+%st(1)`/`jae`, `fcompp`/`jbe` -- is the object's instruction for instruction.
+
+MEASURED ON BOTH POINT RELEASES.  The skeleton above came out identical from
+GCC 3.4.4 and from GCC 3.4.2 (`dsplibs-tc342`, finding 2200), which matters
+because 2200 has since made 3.4.2 the default and x87 stack scheduling is
+exactly the kind of thing a point release moves.
 
 **SO `!(a >= b)` IS NOT AN INSTANCE OF 2300 AND WAS LEFT ALONE**, at nine
 further sites in `V90AutoDigitalImpDetector.cpp` and two in `V90Equalizer.cpp`.
@@ -56285,6 +56299,15 @@ spellings of the comparison itself were tried first -- `lvl > 1e-10f`,
 `!(lvl <= 1e-10f)`, `1e-10f < lvl`, and the same with an explicit cast -- and
 all four emit the identical reversed compare, because the spelling is not what
 chooses the operand.  This is 2301's mechanism with a different lever.
+
+`fcom %st(4)` is what GCC 3.4.2 emits here as well as 3.4.4 (finding 2200), so
+the operand-order claim survives the point release the tree has since moved
+to.  The four-spelling A/B and the ten-spelling one in 2301's sibling were run
+on 3.4.4 and are supporting evidence rather than the claim; they were not
+repeated.  What is NOT reproduced on either compiler is the object's hoisting
+of `fld1` and `fldz` alongside it, so the alpha compare stays `fcoms` against
+a `.rodata` constant where the object has `fcom %st(3)`.  Same predicate, same
+NaN routing, different place to keep a one -- free, and left alone.
 
 ### 2303. `x != x` IS FOLDED TO ZERO UNDER `-mno-ieee-fp`, WHICH SILENTLY DELETED THE HARNESS'S NaN DETECTOR
 
