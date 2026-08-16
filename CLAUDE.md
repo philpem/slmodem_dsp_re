@@ -130,10 +130,18 @@ is still the fast loop between commits.
 The modern build runs in the same `phase` and still has to pass. It is the
 portability check, and `make check64` proves the tree is 64-bit clean. Where
 GCC 13 provably cannot reproduce the object from correct source, the site is
-declared in `tools/gccdiverge.json` -- one entry today, `four1`'s butterfly --
+declared in `tools/gccdiverge.json` -- four entries today, nine checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
 a stale entry (an allow-listed test that starts passing) fails the gate.
 **`make period` has no allow-list and is not getting one.**
+
+Three of those four are one cause and were added together: the object's
+equality tests are a single ordered `fcom` with no parity test, which GCC 13
+will not emit at all -- `-mno-ieee-fp` is accepted by it and does nothing, and
+`-ffinite-math-only` does the job by withdrawing NaN semantics from the whole
+translation unit, which breaks eleven other sites that depend on them. So the
+source is the object's, `make period` proves it, and the modern build
+declares. Findings 2300 and 2304.
 
 **A rejection in `src/` under GCC 3.4.2 is a finding, not a portability
 nuisance** -- the author wrote this code for that compiler, so anything it
@@ -186,8 +194,7 @@ from 30 to 82 (finding 612). `-frename-registers` took it to 92 (616).
 three times the size, `-O2` matches 313 and `-O3` matches 324, and the `-O3`
 set gains 15 while losing 4 rather than swapping. 616 measured at 92 of 365,
 where `-finline-functions` had almost nothing to inline across. `make period`
-is green at both, so unlike `-mno-ieee-fp` there is no divergence to declare.
-Finding 2155.
+is green at both, and there is no divergence to declare. Finding 2155.
 
 `-mno-ieee-fp` is the newest and its worth is not in its +2 (302 -> 304): the object's float
 compares are ordered, 406 `fcom`-family against four `fucom` that are all
@@ -196,6 +203,15 @@ comparison whatever the source says. Until it was set, **every float
 comparison in every function read as a codegen mismatch** -- so a numeric
 function's per-symbol diff was measuring our flags, not our source. Finding
 1990.
+
+**IT IS NOW IN `period_inner.sh` TOO, and the two flag sets no longer
+diverge.** Setting it there used to cost five suites, and 1990 refused to
+guess whether that meant five defects or a wrong flag. It was five defects, in
+three shapes -- an `x < c || x > c` idiom written for the wrong flag (2300), a
+compare whose operand order came from a DECLARATION ORDER (2301), and a loop
+constant that was not hoisted (2302) -- plus one in the apparatus, where the
+flag folded `x != x` to zero and deleted the harness's NaN detector (2303).
+The cost is on the modern side and is declared above.
 
 ### The rule for reading a codegen difference
 

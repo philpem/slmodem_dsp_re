@@ -16,15 +16,15 @@ cd "$(dirname "$0")/../.."
 # worktrees would have written over each other.
 #
 OUT=${TC_OUT:-$PWD/build/tc_out}
-# ONE DELIBERATE DIVERGENCE FROM `make period`, AND ONLY ONE: `-mno-ieee-fp`.
-# The object's float compares are ordered -- 406 against four, and those four
-# are inside libm -- so this build needs the flag to compare like for like.
-# `make period` does NOT have it: with it, that tier goes 181 passed to 176,
-# failing five suites on NaN and near-NaN inputs, because the flag also lets
-# GCC invert a comparison and swap the branch.  Finding 1990 has the numbers
-# and says what has to happen before the two can be reconciled.
+# `-mno-ieee-fp` IS IN `make period` TOO NOW, so the two sets are identical
+# again.  It used to be here only: the object's float compares are ordered --
+# 406 against four, and those four are inside libm -- and with the flag the
+# period tier went 181 passed to 176, failing five suites on NaN and near-NaN
+# inputs.  Finding 1990 refused to say whether that meant five defects or a
+# wrong flag; findings 2300 to 2303 say it was five defects, and the tier is
+# green with the flag.
 #
-# OTHERWISE THE SAME FLAGS `make period` USES, and they must stay the same.  The two
+# THE SAME FLAGS `make period` USES, and they must stay the same.  The two
 # diverged once and it cost real coverage: this script passed neither
 # -D__SIZEOF_POINTER__=4 nor the compat header, so it compiled a smaller set
 # than the period differential AND silently elided the 81 offset assertions

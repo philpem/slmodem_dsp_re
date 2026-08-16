@@ -53483,6 +53483,20 @@ reading -- its comparison structure genuinely differs from the object's, 345
 instructions against 324 with no correspondence in the branch sequence.  The
 other four are still unread.]*
 
+*[2026-08-16, later: SETTLED FOR ALL OF THEM, in favour of the first reading.
+The flag is in `period_inner.sh` and `make period` is green with it.  The five
+were three shapes of defect plus one in the apparatus -- findings 2300 (the
+`x < c || x > c` idiom, seven sites), 2301 (a compare whose operand order came
+from a declaration order), 2302 (a loop constant that was not hoisted, so the
+constant landed on the left of the compare) and 2303 (`x != x` folded to zero,
+which deleted the harness's own NaN detector).  Two corrections to the
+paragraphs above: this branch runs 183 suites, not 181, so the flag-on figure
+was 177/6 and not 176/5 -- `t_v90p3ddec` is a sixth.  And `t_v90leaves`
+"exiting non-zero with every check reported PASS" was an artefact of
+`period_inner.sh` printing `tail -6` of the run log; it failed
+`V92EchoCanceller::process` ten lines above the window.  The cost is on the
+modern side and is declared in `tools/gccdiverge.json`; finding 2304.]*
+
 **Which means one of two things, and this finding does not settle which.**
 Either those five reconstructions spell a comparison in a way that only
 matches the object once the compiler is told to be careful -- in which case
@@ -53610,6 +53624,15 @@ the five is what buys the right to set it, and doing so also converts a tier
 that currently cannot see a whole class of reconstruction error into one that
 can.  `determineMaxUcode` is the worked example and the cheapest place to
 start.
+
+*[2026-08-16, later: done, and the flag is in.  This finding's reading was
+right in kind and slightly wrong in detail for its own function:
+`determineMaxUcode`'s 345-against-324 and its unmatched branch sequence are
+largely ONE contorted comparison, `if (!(v < 0.0f) && !(v > 0.0f))` where the
+object has a single `fcom` against `fldz` and a `je` -- two compares becoming
+one accounts for the shape difference rather than a wholly different
+structure.  Correcting it took the group from 12 failures to 9.  Findings 2300
+to 2304 carry the rest.]*
 
 ### 2100. `getV92Decision` RETURNS A `short`, AND THE ONLY THING THAT SAYS SO IS ITS CALLER
 
@@ -56287,3 +56310,56 @@ which cannot be folded away.  This is apparatus, so it is fixed rather than
 declared -- CLAUDE.md's "a rejection in `test/` is plumbing".  Anything else
 in `test/` that wants to know whether a value is unordered must use them; a
 self-comparison in this tree is now a bug by construction.
+
+### 2304. THE MODERN BUILD CANNOT FOLLOW THE SOURCE TO THE OBJECT'S EQUALITY TEST, AND NO FLAG CLOSES IT
+
+*The cost of 2300, stated as a number rather than left implicit, and the two
+ways out that were tried and rejected.*
+
+2300's sites are the object's `x != c` and `x == c`, one ordered `fcom` with
+no parity test.  **GCC 13 will not emit that.**  Modern GCC still accepts
+`-mno-ieee-fp`, and it does nothing here: compiled `-m32 -mfpmath=387
+-mno-ieee-fp`, `Agc<float>::process` comes out
+
+    6e: fcomi %st(2),%st
+    72: jp   90
+    74: jne  90
+
+-- the parity test intact.  So the modern tier routes a NaN to the arm IEEE C
+says it must, the object routes it to the other one, and no spelling of the
+source serves both: "equal OR unordered" needs two compares in IEEE C and the
+object has one.
+
+**WHAT WAS TRIED.**
+
+`-mno-ieee-fp` in the Makefile's `FPFLAGS`: measured, no effect, disassembly
+above.
+
+`-ffinite-math-only`, which IS the modern spelling of the assumption -- and
+which took `t_agc`, `t_v90equ` and `t_v90leaves` fully green.  **Rejected, and
+the reason is a measurement**: the same run put `t_v90adid` into three NEW
+failing groups -- `resetStudyUrefHandler` 12, `porcessSecondStudy` 2,
+`findPadGain` 2 -- none of which contains 2300's idiom.  The flag is not a
+targeted ordered-compare switch; it withdraws NaN and infinity from the whole
+translation unit, and 2301's eleven `!(a >= b)` sites depend on the modern
+compiler still honouring them.  `V90Equalizer.cpp` has two of those in
+`clamp_fade_ratio` alone, so a per-file application would have silently
+removed their protection and passed only because nothing drives a NaN through
+that particular parameter today.  A configuration that is correct by accident
+is the thing this tree calls wrong-but-plausible.
+
+**SO THE SITES ARE DECLARED.**  `tools/gccdiverge.json` is exactly this
+mechanism -- "modern GCC is wrong and we know why", naming CHECKS, failing on
+a stale entry, and never consulted by `make period`.  Its docstring already
+anticipates the shape: the source gets corrected, `make period` proves it
+against the object with the period compiler, and the modern build declares the
+site.  It carried one entry and one check before this; it now carries the
+entries listed in the file.
+
+**WHAT WOULD RETIRE THEM.**  Any of: a GCC option that elides the parity test
+without withdrawing NaN semantics wholesale; a spelling of "equal or
+unordered" that both compilers compile to one ordered compare; or the modern
+tier being retired in favour of the period one.  Until then these checks are
+verified by `make period`, on the object's own compiler with the object's own
+flags, which is the tier CLAUDE.md says decides -- and they are verified
+there over the same inputs, not a subset.
