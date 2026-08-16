@@ -32,6 +32,14 @@
  *     template there is already holds 1.
  *   - The mask widths in the flags patch (`& 0xf3`, `& 0xfd`) are invisible:
  *     the bits they clear beyond the three being set are already zero.
+ *   - `dsp->r18`, `r1c` and `r20` read bits 0, 1 and 2 of `params.flags`, and
+ *     create patches only bits 9, 10 and 11 -- so those three always carry the
+ *     template's 1, 1, 0 and NO configuration can vary them.  With the
+ *     template at 0x65b, bits 0, 1, 3, 4 and 6 all read 1 and bits 2, 5, 7 and
+ *     8 all read 0, so several wrong shift amounts produce a byte-identical
+ *     object.  The reading is forced by the disassembly and is not testable,
+ *     which is worth saying because a wrong shift is exactly the transcription
+ *     slip that would survive here.
  *
  * The two coefficient pairs ARE separable, and only by content: I is the
  * cosine arm and Q the sine, so the test asserts that each pair's two halves
@@ -49,10 +57,29 @@
 #include "dsplib/v22_mrf.h"
 #include "dsplib/v22_pps.h"
 #include "dsplib/v22_sre.h"
+#include "dsplib/v22dec.h"
 #include "dsplib/v22fp.h"
+#include "dsplib/v22tab.h"
+#include "dsplib/v22txtab.h"
 
 extern void *ref_V22FP_create(void *fp, const void *cfg);
 extern void ref_V22FP_delete(void *fp);
+
+/*
+ * The blob's own copies of everything create installs a POINTER to.  A
+ * pointer field cannot be compared across the two sides -- they hold two
+ * different addresses -- so each side is checked against ITS OWN symbol
+ * instead.  Without this, blanking the field to compare the rest of the
+ * struct would leave it checked by nothing at all, which is exactly what a
+ * "template copied into the wrong sub-object" defect hides behind.
+ */
+extern unsigned short ref_FSEv22_decision12(struct v22_fse *state,
+					    short *angle, short *mag);
+extern const short ref_SMCv22_IMAP_1200BPS[16];
+extern const short ref_SMCv22_QMAP_1200BPS[16];
+extern const short ref_MTDv22_COEF[];
+extern const short ref_MTDv22_COEF2[];
+extern const short ref_V22_S1_HC_COEF[];
 
 /* ------------------------------------------------------------------------ */
 
@@ -444,6 +471,50 @@ compare_one(const struct v22fp_cfg *cfg, const char *what, long idx)
 		    r->dsp->fse.icoff == r->dsp->fse_coff_i, 1, idx);
 	diff_eq_int("ref: fse.qcoff is dsp.fse_coff_q",
 		    r->dsp->fse.qcoff == r->dsp->fse_coff_q, 1, idx);
+	/*
+	 * The pointers that are BLANKED above, each against its own side's
+	 * symbol.  `fse.decision` is the sharp one: create installs the
+	 * 1200 bit/s slicer whatever the rate, and `SetRxRate` is what moves
+	 * it to `FSEv22_decision24` -- so an implementation that installed
+	 * the 2400 one here would agree on every other byte of the object.
+	 */
+	diff_eq_int("ref: fse.decision is FSEv22_decision12",
+		    r->dsp->fse.decision == ref_FSEv22_decision12, 1, idx);
+	diff_eq_int("ours: fse.decision is FSEv22_decision12",
+		    o->dsp->fse.decision == FSEv22_decision12, 1, idx);
+	/*
+	 * Both maps are [16], so no size or count check separates them; the
+	 * pulse shaper never reads them either, it carries them for its
+	 * consumer.  Nothing but this would notice a swap.
+	 */
+	diff_eq_int("ref: pps.imap is SMCv22_IMAP_1200BPS",
+		    r->dsp->pps.imap == ref_SMCv22_IMAP_1200BPS, 1, idx);
+	diff_eq_int("ref: pps.qmap is SMCv22_QMAP_1200BPS",
+		    r->dsp->pps.qmap == ref_SMCv22_QMAP_1200BPS, 1, idx);
+	diff_eq_int("ours: pps.imap is SMCv22_IMAP_1200BPS",
+		    o->dsp->pps.imap == SMCv22_IMAP_1200BPS, 1, idx);
+	diff_eq_int("ours: pps.qmap is SMCv22_QMAP_1200BPS",
+		    o->dsp->pps.qmap == SMCv22_QMAP_1200BPS, 1, idx);
+	/*
+	 * Which detector configuration reached which slot.  `MTDv22_CFG` and
+	 * `MTDv22_CFG2` differ in `ratio` (29820 against 27980), so a swap of
+	 * those two is already caught by the struct comparison -- but a
+	 * BANK-only slip, both slots pointed at one coefficient array, is
+	 * not, and this is what sees it.
+	 */
+	diff_eq_int("ref: mtd is MTDv22_CFG's bank",
+		    r->hdx->mtd->cfg.coeff == ref_MTDv22_COEF, 1, idx);
+	diff_eq_int("ref: mtd_s1 is MTDs1_CFG's bank",
+		    r->hdx->mtd_s1->cfg.coeff == ref_V22_S1_HC_COEF, 1, idx);
+	diff_eq_int("ref: mtd2 is MTDv22_CFG2's bank",
+		    r->hdx->mtd2->cfg.coeff == ref_MTDv22_COEF2, 1, idx);
+	diff_eq_int("ours: mtd is MTDv22_CFG's bank",
+		    o->hdx->mtd->cfg.coeff == MTDv22_COEF, 1, idx);
+	diff_eq_int("ours: mtd_s1 is MTDs1_CFG's bank",
+		    o->hdx->mtd_s1->cfg.coeff == V22_S1_HC_COEF, 1, idx);
+	diff_eq_int("ours: mtd2 is MTDv22_CFG2's bank",
+		    o->hdx->mtd2->cfg.coeff == MTDv22_COEF2, 1, idx);
+
 	/* And ours holds the same relationships, not merely the same bytes. */
 	diff_eq_int("ours: obj.n_out is &fse.n_out",
 		    o->n_out == &o->dsp->fse.n_out, 1, idx);
@@ -723,10 +794,14 @@ main(void)
 			cmp_raw(ra[i].name, ra[i].p, rb[i].p, ra[i].n, 0);
 
 		/*
-		 * And a rebuild with the SAME configuration is a fixed point:
-		 * `V22_MRF_init` permutes its coefficient array in place, so
-		 * an implementation that failed to regenerate it would come
-		 * out permuted twice.  This is the check that catches that.
+		 * A THIRD build, on the same configuration, still compared
+		 * across the two sides.  `V22_MRF_init` permutes its
+		 * coefficient array in place, so an implementation that
+		 * failed to regenerate the array before each init would come
+		 * out permuted twice and diverge here.  It is not a check
+		 * that the third build equals the second -- neither side is
+		 * asserted to be a fixed point -- only that ours tracks the
+		 * object's through the repeat.
 		 */
 		o = V22FP_create(o, &b);
 		r = (struct v22fp *)ref_V22FP_create(r, &b);
