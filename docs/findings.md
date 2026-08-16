@@ -61157,3 +61157,15 @@ reconstruction and needs its own differential test; and it would still leave
 that could leave it, which is the difference between a suite that avoids a
 case and one that does not know it exists.
 
+ONE HOLE IS LEFT IN THAT, AND IT IS HERE RATHER THAN IN THE SUITE.  The
+derotation sweep compares the returned angle at all 65536 positions -- integer
+arithmetic, no phasor -- but its object comparison at the end reads the whole
+480-entry scatter log, whose entries were written at the last ~960 positions of
+the walk.  16384 of the 65536 positions ARE out of domain, and the suite counts
+them; that none of the tail ~960 is out of domain follows from the drive
+sample and coefficients fixing where the walk starts, not from anything the
+test arranges.  So a later edit to `t_fpm_fse_recv`'s drive data can move a
+tail position into the out-of-domain quarter, and the failure will read as
+"the reconstruction of `FPM_FSE_receive` is wrong" when it is this.  The check
+at the end of the sweep catches only the final position.
+
