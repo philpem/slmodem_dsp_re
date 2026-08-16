@@ -53470,6 +53470,12 @@ branch, which is not valid when an operand is NaN.  Under `-mieee-fp` our
 sources agree with the object on those inputs; under `-mno-ieee-fp` five
 suites do not.
 
+*[2026-08-16: finding 1992 settles this for one of the five,
+`V90AutoDigitalImpDetector::determineMaxUcode`, in favour of the first
+reading -- its comparison structure genuinely differs from the object's, 345
+instructions against 324 with no correspondence in the branch sequence.  The
+other four are still unread.]*
+
 **Which means one of two things, and this finding does not settle which.**
 Either those five reconstructions spell a comparison in a way that only
 matches the object once the compiler is told to be careful -- in which case
@@ -53545,3 +53551,55 @@ infinity driven, and 54 of 54 mutations; that is the tier that decides.
 test, at the anchor check.  `tools/reanchor.py` is the repair.  Anyone
 permuting a function that already has a mutation set should expect to pay
 that, which is one more reason not to permute one on a hunch.
+
+### 1992. THE FIVE SUITES `-mno-ieee-fp` BREAKS ARE OUR DEFECTS, NOT EVIDENCE AGAINST THE FLAG -- DIAGNOSED IN ONE OF THEM
+
+*Closes the question finding 1990 left open, for one function, in the
+direction 1990 thought more likely but declined to claim.*
+
+Finding 1990 established `-mno-ieee-fp` from the object -- 406 ordered float
+compares against four, and all four inside libm's `pow` -- and then found that
+turning it on in `period_inner.sh` takes `make period` from 181 passed / 0
+failed to 176 / 5.  It said the failures meant either five real defects the
+wrong flag was masking, or a wrong flag, and refused to guess.
+
+**Diagnosed on the smallest of them.**
+`V90AutoDigitalImpDetector::determineMaxUcode` fails 12 of 380 checks with the
+flag on.  Compiled by the period compiler and compared against the object:
+
+    blob   324 instructions
+    ours   345
+
+and their compare-and-branch sequences do not correspond at all:
+
+    blob   jns fcomps fcomps jae fcomps ja cmp jg cmp jle cmp jbe fcoms jae ...
+    ours   cmp jle fcompp ja fcomps jae fcomps jbe jmp cmp jle cmp jbe fcom jb ...
+
+This is not the near-match of `GenericToneDetector::process`, where 111
+instructions against 109 differ at one jump (finding 1991).  The reconstruction
+of `determineMaxUcode` has a **different comparison structure** from the
+original: different number of compares, different mnemonics at corresponding
+positions, different order.
+
+**So the flag did not break it; the flag revealed it.**  Under `-mieee-fp`
+every comparison becomes `fucom` on both sides and the ordered/unordered
+distinction disappears, which is conservative enough that two differently
+shaped comparison structures can still agree on every input the suite drives.
+Under `-mno-ieee-fp` the compiler is permitted to exploit ordered operands --
+inverting a comparison and swapping the branch, which is invalid for NaN -- and
+it does so differently in the two shapes.  Twelve inputs out of 380 then
+separate them.
+
+**What this does NOT establish.**  One function of five.  `t_agc`,
+`t_v90equ`, `t_v90leaves` and `t_v90spectral` have not been read this way and
+may have other causes; `t_v90leaves` is the odd one, exiting non-zero with
+every check reported PASS, which is not a comparison problem at all and wants
+looking at on its own.
+
+**What follows for the tree.**  The flag stays OUT of `period_inner.sh`, and
+that is now a recorded debt rather than an open question: the period tier is
+green only because it is compiled with a flag the object contradicts.  Fixing
+the five is what buys the right to set it, and doing so also converts a tier
+that currently cannot see a whole class of reconstruction error into one that
+can.  `determineMaxUcode` is the worked example and the cheapest place to
+start.
