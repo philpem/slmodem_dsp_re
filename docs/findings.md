@@ -59157,3 +59157,46 @@ city-block distance over the halved coordinates that takes the value 4096, 8192
 or 12288 and so selects one of exactly three rings.  Its middle entry, 12953,
 is the constant the 1200 slicer reports unconditionally: the four-point
 constellation is the middle ring of the sixteen-point one.
+
+### 3304. 666 BYTES OF V.22 PREREQUISITE UNLOCKED 2,802, AND `V22_FSE_receive` IS WHAT NOW GATES THE REST
+
+Measured with `tools/closure.py --missing` over all twenty-nine unwritten V.22
+symbols, before and after the batch that added `V22_FSE_init` (372),
+`V22_FSE_free` (90), `V22_FSE_getdiag` (3), `FSEv22_decision12` (294) and
+`FSEv22_decision24` (467).
+
+**Newly startable, and what each was waiting on:**
+
+    V22FP_create          2449   V22_FSE_init (372) + FSEv22_decision12 (294)
+    V22FP_delete           332   V22_FSE_free (90)
+    V22FP_GetDiagnostics    21   V22_FSE_getdiag (3)
+
+666 bytes of prerequisite for 2,449, and 93 more for the other two.
+`V22FP_create` is also the function that lays the V.22 object out, which is
+what `v22prc.h`'s header comment has been waiting for since those nine leaf
+functions were written against `void *` and named offsets.
+
+`v22_delete` (72) is now one hop away, blocked on `V22FP_delete` alone.
+
+**What gates the largest remaining cluster is `V22_FSE_receive`, 1,885 bytes.**
+It is READY on calls -- its only outstanding closure member is `v22_fse_mu`,
+four bytes of file-local rodata it alone reads -- and it blocks `DemodDataV22`
+(510), which appears in the blocker list of six more: `v22_answer` (1,789),
+`v22_originate` (2,655), `v22_local_loop` (1,104), `v22_data` (946),
+`v22_ans_rmloop2` (1,160) and `v22_org_rmloop2` (1,050).
+
+`V22_status` (310) is READY on calls with one 14-byte LOCAL rodata table,
+`PROTOCOL` at .rodata 0x008c0c, outstanding -- a `static const` in the same
+translation unit, so it is a cheap win nobody has examined yet.  Note there are
+TWO symbols spelled `PROTOCOL`, a `.data` one of 18 bytes at 0x7768 and this
+`.rodata` one of 14; both are local, and taking the wrong one is a live way to
+get this wrong.
+
+**THE COUNT OF "29 UNWRITTEN V.22 SYMBOLS" UNDERSTATES THE WORK, and by a lot.**
+Twenty-nine is what the `V22`/`v22` name prefix selects.  The closures of the
+blocked functions keep surfacing nine more that carry no V.22 in their name and
+are in nobody's V.22 count: `connect_1200` (818), `connect_2400` (1,505),
+`Detect_1s` (199), `Detect_Retrain` (288), `Detect_Rmloop2_ACK` (209),
+`MakeTxData` (195), `ResetRx` (62), `SetRxRate` (211) and `SetTxRate` (205).
+Several appear in almost every blocked function's list, so they are not
+optional, and the next agent will meet them immediately.
