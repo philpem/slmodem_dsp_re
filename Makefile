@@ -548,7 +548,52 @@ refs:
 # the main repository's .git from inside any worktree, which is how the main
 # tree is located without hard-coding a path.
 #
-prereq:
+# `blobcheck` runs first, because everything downstream is measured AGAINST the
+# blob and a wrong one is not detectable from the results.
+#
+# The reference object.  Every differential and codegen number this tree has
+# ever quoted is relative to it.
+#
+BLOB_SHA256 := 1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379
+
+# WHY THIS EXISTS.  The guards added in 3110 and 3122 refuse an EMPTY
+# denominator -- no objects, no symbols.  They cannot refuse a WRONG one: a
+# different but valid ELF compares perfectly happily and yields confident
+# numbers that are all measured against the wrong binary.  There are four files
+# named `dsplibs.o*` under the sibling `d-modem/` tree and three of them are
+# different objects; `d-modem/slmodemd/dsplibs.o` is the most plausible-looking
+# path of the lot and is NOT the reference.  Only `.bak` beside it matches.
+# This is the last silent-wrong-input hole in the apparatus, on the one input
+# that cannot be reconstructed if it is wrong.
+#
+blobcheck:
+	@test -f $(BLOB) || { \
+	    echo "blobcheck: REFUSING to run -- BLOB does not exist."; \
+	    echo "    BLOB = $(BLOB)"; \
+	    echo "  From a worktree the default resolves through"; \
+	    echo "  \`git rev-parse --git-common-dir\`; pass BLOB=/abs/path if that"; \
+	    echo "  is not where the object lives."; \
+	    exit 1; }
+	@command -v sha256sum >/dev/null || { \
+	    echo "blobcheck: REFUSING to run -- no sha256sum, so the blob's"; \
+	    echo "  identity cannot be established.  A check that cannot run must"; \
+	    echo "  not report OK (finding 134)."; \
+	    exit 1; }
+	@got=$$(sha256sum $(BLOB) | cut -d' ' -f1); \
+	if [ "$$got" != "$(BLOB_SHA256)" ]; then \
+	    echo "blobcheck: REFUSING to run -- BLOB is NOT the reference object."; \
+	    echo "    BLOB     $(BLOB)"; \
+	    echo "    sha256   $$got"; \
+	    echo "    expected $(BLOB_SHA256)"; \
+	    echo "  Every number below would be measured against the wrong binary"; \
+	    echo "  and would look entirely normal.  Three files under d-modem/"; \
+	    echo "  share this name and are different objects; the verified backup"; \
+	    echo "  is d-modem/slmodemd/dsplibs.o.bak, not the .o beside it."; \
+	    exit 1; \
+	fi; \
+	echo "blobcheck: $(BLOB) is the reference object ($$(echo $$got | cut -c1-16)...)"
+
+prereq: blobcheck
 	@if [ ! -e $(SPANDSP) ]; then \
 	    main=$$(cd $$(git rev-parse --git-common-dir)/.. && pwd); \
 	    if [ -d "$$main/$(SPANDSP)" ]; then \

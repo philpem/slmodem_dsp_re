@@ -61569,3 +61569,59 @@ bits are out of range AND that the blob accepted the sequence anyway.  The
 mutation "evaluateCRC's accumulator cannot wrap" -- `diff + d` becomes
 `diff | d` -- is dead against the other two thirds of the trials and is killed
 by these.  22 mutations, 22 caught.
+
+### 3560. THE GUARDS REFUSED AN EMPTY DENOMINATOR AND COULD NOT REFUSE A WRONG ONE -- `make phase` NOW VERIFIES THE BLOB'S IDENTITY
+
+*3110 and 3122 closed the "measured nothing and called it clean" hole in nine
+tools and the gate. This closes the one underneath it, on the input none of
+them can reconstruct.*
+
+**THE GAP.** Every one of those guards tests a DENOMINATOR: no objects, no
+symbols, zero compared. None of them tests IDENTITY. A different but valid ELF
+in `$BLOB` produces a full run — objects build, symbols compare, the
+differential passes or fails on its merits — and every number in it is measured
+against the wrong binary. Nothing in the output looks unusual, because nothing
+about it *is* unusual except the premise.
+
+**AND THE DECOYS ARE REAL, NOT HYPOTHETICAL.** Five files named `dsplibs.o*`
+live under the sibling `d-modem/` tree. Measured:
+
+    slmodemd/dsplibs.o                    1f3e56d0...  THE REFERENCE
+    d-modem/slmodemd/dsplibs.o.bak        1f3e56d0...  verified backup, identical
+    d-modem/slmodemd/dsplibs.o            1129d826...  a DIFFERENT object
+    d-modem/slmodemd/dsplibs.o.forkship   1129d826...  a DIFFERENT object
+    d-modem/slmodemd/dsplibs.o.mod        73ec495f...  a DIFFERENT object
+    d-modem/dsplibs.o                     1ac4a719...  a DIFFERENT object
+
+`d-modem/slmodemd/dsplibs.o` is the most plausible-looking path of the six and
+is **not** the reference. The backup that *is* byte-identical is the `.bak`
+beside it. Anyone reaching for "the obvious one" gets a wrong answer that
+passes every existing guard.
+
+**THE CHECK.** `blobcheck`, a prerequisite of `prereq` and therefore the first
+thing `make phase` runs -- before the barrier, because everything after it is
+measured against the blob. It refuses on a missing file, refuses when
+`sha256sum` is absent (a check that cannot run must not report OK -- 134's
+argument), refuses on a hash mismatch naming both hashes and the decoys, and on
+success **prints what it verified** rather than staying silent, per 2401's
+"a detector must report its denominator".
+
+**SHOWN TO FIRE, four states:**
+
+| state | result |
+|---|---|
+| the reference object | exit 0, `blobcheck: ... is the reference object (1f3e56d0...)` |
+| `d-modem/slmodemd/dsplibs.o` — valid ELF, wrong object | **exit 2**, both hashes printed |
+| `BLOB=/nonexistent/dsplibs.o` | **exit 2**, names the path and the worktree resolution |
+| `d-modem/slmodemd/dsplibs.o.bak` | exit 0 — the backup is genuinely identical |
+
+The second row is the one that matters: before this, that invocation ran to
+completion and reported numbers.
+
+**WHY IT BELONGS IN THE GATE RATHER THAN A TOOL.** The blob is the only input
+to this project that cannot be reconstructed from anything else in the tree. A
+wrong compiler is detectable (`.comment`), a wrong flag set is detectable
+(codegen moves), a stale object tree is now detectable (3110) -- a wrong blob
+is detectable only by asking. Findings 134, 2400, 2401, 3100, 3110, 3122 are
+the same argument six times; this is the seventh and the last one that was
+still open.
