@@ -57096,3 +57096,243 @@ The triplet sets a default
 `-march`/`-mtune` only, and every build here passes both explicitly, so it
 does not reach codegen -- but the new image uses the stage3's own CHOST and
 `Dockerfile.exact`'s comment should not be read as evidence.
+
+### 2800. THE MIRROR OF 2410 DOES NOT EXIST: EVERY SITE WHERE WE SELECT AND THE OBJECT DOES NOT IS AN INTEGER SELECT
+
+*2411 handed the other half of the sweep on as "the same defect with the sides
+swapped".  It is not.  Re-derived unpinned, the mirror is eight functions, not
+six, and none of the eight is a float comparison.*
+
+**THE SWEEP, UNPINNED.**  `sbb %r,%r` for any r, blob against `build/tc_out`,
+over the **823 symbols present in both**.  The blob has 231 sites in 98
+functions overall; over the 823 it has 110 in 42 and we have 99 in 39.  Ours
+exceeding the blob's:
+
+    V34scrambler                     0 -> 1
+    V34descrambler                   0 -> 1
+    decoderv34                       0 -> 1
+    receiver                         0 -> 3
+    putFrame                         0 -> 1
+    toneiir_progress                 0 -> 1
+    v34modeminit                     0 -> 1
+    V90MP::bitsToInfo                3 -> 4
+
+**2411's SIX WERE THE PINNED SWEEP'S AND TWO OF THEM ARE NULLS.**  `dpskinit`
+is 1 against 1 over any register and `findPadGain` is **6 against 6** -- 2411's
+"`findPadGain` 2 against 1" is wrong in both operands, not merely under-scoped.
+Four functions it does not name appear instead.  2410 established that a sweep
+for an idiom must not pin the operand and then handed on a list that had not
+been re-run that way; this is that correction applied to 2410's own hand-off.
+
+**NONE OF THE EIGHT IS A FLOAT SIGN TEST**, and the reading is not a judgement
+call.  For `sbb %r,%r` to carry a float condition, `fnstsw %ax`/`sahf` must be
+ADJACENT to it -- any intervening flag-setter destroys CF -- so CF's provenance
+is always local and always visible.  At all eight the producer is an integer
+`cmp $0x1,%r` (CF = the operand is zero) with nothing but `mov`s between.  The
+sign idiom's `and $0xfffffffe`/`add $0x2d` tail appears at none of them.
+
+**AND THE QUESTION ASKED PROPERLY, TREE-WIDE, HAS THE SAME ANSWER.**  Counting
+`sbb %r,%r` at all is the wrong instrument for "is this the sign defect": it
+mixes two idioms that have nothing to do with each other.  Classify each `sbb
+%r,%r` by walking BACK to the instruction that last wrote the flags -- CF's
+producer is always reachable that way, because anything else writing flags in
+between would have destroyed it -- and `sahf` means float, anything else means
+integer.  Over the same 823 symbols:
+
+    blob   77 float,  33 integer,  0 unclassified
+    ours   67 float,  32 integer,  0 unclassified
+
+    functions where OURS emits more FLOAT selects than the blob:  NONE
+
+That is the mirror stated as a property rather than as a list of six
+functions, and it is empty at a denominator of 823.  The eight above are all
+in the integer column; the float column's differences all run the other way and
+are 2410's shape.
+
+**THE CLASSIFIER WAS SHOWN TO FIRE**, which finding 134 requires of anything
+used as a detector and 2400 requires a denominator from.  Reverting 2410's
+`V90Demodulator::reset` to `(0.0f < offset) ? '+' : '-'` and recompiling that
+one unit makes it appear immediately as `blob f=1 ours f=0`; restoring the
+source removes it.  It also reproduces 2411's `V92EchoCanceller::setState` 7
+against 5 independently, and it classifies with nothing left over.
+
+**WHAT EACH COMPUTES, AND WHAT THE OBJECT DOES INSTEAD.**  Read from both
+disassemblies; every constant pair below was checked against the object's and
+every one agrees.
+
+| function | the select | the object |
+|---|---|---|
+| `V34scrambler` | `mode ? bit 13 : bit 26`, the scrambler tap | UNSWITCHED the loop: `test %ecx,%ecx` hoisted, two loop copies with the tap a literal (`test $0x20,%dh` / `test $0x4000000,%edx`) |
+| `V34descrambler` | `bit ? 18 : 5`, a shift count | the same: `testb $0x4,0x122(%eax)` hoisted, two copies with `shr $0x12` and `shr $0x5` |
+| `decoderv34` | the same descrambler loop | the same, on `testb $0x4,0x20(%esp)` |
+| `receiver` x2 | `V34scrambler` INLINED | the object CALLS it, at 5cc6b and 5ce20 |
+| `receiver` x1 | `(f124 & 1) ? rxvect4[3] : rxvect4[0]` | branches and LOADS both arms -- finding 2802 |
+| `putFrame` | `f_a04 < 9 ? 1 : 2` | **also branchless**: `cmpw $0x8`/`setbe`/`sub` |
+| `toneiir_progress` | `(count > limit && x) ? 2 : 1` | branches; we if-convert the `&&` |
+| `v34modeminit` | `x ? 1200 : 2400`, `V34SetupModulator`'s baud | duplicates the whole call block per arm |
+| `V90MP::bitsToInfo` | `(mask & word) ? '1' : '0'`, twice | `movb $0x31` / `movb $0x30`, twice (and it recomputes an `end` we share) |
+
+Three of those rows are worth stating separately, because each is a way the
+count misleads before the disassembly is read.
+
+**TWO OF `receiver`'s THREE ARE ONE SITE.**  Our `receiver` has no call to
+`V34scrambler` left in it and the object has two; the two extra `sbb` are that
+function's single tap select, inlined.  They are `V34scrambler`'s row counted
+twice more, not two more sites -- CLAUDE.md's inlining-boundary trap, which
+applies to an idiom count exactly as it does to a byte count.
+
+**`putFrame`'s "blob 0" IS THE SWEEP'S BLIND SPOT.**  The object materialises
+the same flag there with `setbe` and a `sub` rather than with `sbb`, so it is
+branchless on both sides computing `field <= 8 ? 1 : 2` from the same unsigned
+compare.  Nothing differs but which instruction reads CF.  A count of one
+encoding of an idiom is not a count of the idiom.
+
+**`bitsToInfo`'s 4-AGAINST-3 IS TWO EXTRA AND ONE FEWER, AND THE ONE FEWER IS
+NOT A BRANCH.**  We select at both copies of the debug bit-string loop where
+the object branches.  The other direction is a COMMON SUBEXPRESSION: `end =
+type ? 0xaa : 0x44` is wanted at two program points, and we compute it once at
+0x981 into the stack byte 0x26(%esp) and reload it at both CRC loop guards
+(0x99f and 0xaa9) where the object recomputes it with a second `sbb` (0x204a5
+and 0x20784).  Same values, no branch on either side, one `sbb` fewer because
+one is shared.  The two that match outright are the first `end` and `end +
+0x11` (`0x55`/`0xbb`), the latter instruction for instruction.
+
+**SO NOTHING WAS CHANGED AND NOTHING COULD BE.**  An integer compare has no
+unordered case, so the branch form and the branchless form compute the same
+function over every input and no differential test can separate them.  That is
+2411's ruling, and it now covers both sides of the sweep rather than three
+functions on one.  **0 of 8 changed, 0 pinned, and pinning is impossible by
+construction at all eight** -- which is a property of the sites, not a gap in
+the fixtures, and is the honest way to state it.  No NaN fixture was written
+either: a NaN seed on an integer compare is 2410's vacuous fixture in a new
+shape, a seed that cannot reach the thing being asserted about.
+
+What was worth doing is the constants, and 2411's last clause is why -- "the
+values are the object's and that is what was worth checking".  All eight pairs
+are.  `v34modeminit`'s is the one that needed care, because the object's two
+arms differ in more than the baud: 2400 goes with `bpv22low` and 1200 with
+`bpv22high`, and ours pairs them the same way.
+
+**AND THE FEWER SIDE IS LARGER THAN 2410 MEASURED, WITH FIVE FUNCTIONS THAT
+ARE 2410's DEFECT AND ARE STILL OPEN.**  Unpinned, classified, and over every
+common symbol rather than over twelve candidates, the fewer side is thirteen
+functions.  Six of them are missing FLOAT selects, which is 2410's shape:
+
+    ResamplerTiming::adjustHalfBaudBpfGain   blob 3  ours 0
+    V90Phase2Info::printInfo                 blob 2  ours 0
+    V90Parameters::loadModemParamsData       blob 1  ours 0
+    V90PreFilter::setParamEia6               blob 1  ours 0
+    VPcmFloModem::getUinfoValue              blob 1  ours 0
+    V92EchoCanceller::setState               blob 7  ours 5   -- 2411, explained
+
+so five are new and eight sites are open.  The other seven differ only in the
+INTEGER column and are 2411's ruling again:
+
+    v34handshak 4/0, initTxSequence 3/2   -- 2411, explained
+    call_run 2/0, V90MP::infoToBits 2/1, FSE_decision_trn 1/0,
+    call_create 1/0, vpcm_create 1/0
+
+The five float ones were not investigated here.  Named so the next sweep starts
+with them -- the courtesy 2411 did this one, and with the warning 2411's own
+hand-off earns: re-derive the list before believing it, and classify it before
+calling any of it a defect.
+
+### 2801. `findPadGain`'s SIX SELECTS ARE THE OBJECT'S SIX, WHICH MAKES IT 2301's CORROBORATION RATHER THAN A NULL
+
+*The most useful thing in the mirror list turned out to be the entry that was
+not a difference at all.*
+
+2411 named `V90AutoDigitalImpDetector::findPadGain` as "2 against 1" from the
+`%eax`-pinned sweep.  Unpinned it is **6 against 6**, and all twelve are the
+sign idiom in full:
+
+    43a82: fcomps 0x94(%esp); fnstsw %ax; sahf; sbb %edi,%edi   the object
+           and $0xfffffffe,%edi; add $0x2d,%edi
+
+    2c05:  fcomps 0x84(%esp); fnstsw %ax; sahf; sbb %ebx,%ebx   ours
+           and $0xfffffffe,%ebx; add $0x2d,%ebx
+
+Five `fcomps` against a stack slot and one `fcompp` on each side; only which
+of the six takes the register form differs, and that is scheduling.
+
+This matters beyond the correction.  2304 records that `findPadGain` holds six
+`!(d >= ...)` sites and that they are exactly what `-ffinite-math-only` would
+have destroyed; 2301 ruled that `!(a >= b)` is the one spelling that serves
+both tiers and left eleven such sites alone.  **Six of them are here emitting
+the object's select instruction for instruction**, which is that ruling
+corroborated at the codegen tier rather than merely argued.  `dpskinit`'s 1
+against 1 is the same story in the integer domain: both sides spell
+`x ? 1200 : 2400` with `cmp $0x1`/`sbb`, and the pinned sweep saw a difference
+only because the two compilers' allocators chose differently.
+
+**AN EQUAL COUNT IS NOT AUTOMATICALLY A NULL** and both were read rather than
+dismissed -- a float-select-against-float-branch difference can hide behind an
+offsetting integer one, and only the disassembly says otherwise.
+
+### 2802. `rxvect4` IS NOT DEFINED IN THE TRANSLATION UNIT THAT USES IT, AND .rodata NAMES THE ONE IT IS IN
+
+*The only one of 2800's eight with a cause in the source rather than in the
+optimiser, found because the object would not fold a constant it plainly had.*
+
+`receiver`'s third select is `(rx->f124 & 1) ? rxvect4[3] : rxvect4[0]`, and
+ours folds both arms to immediates -- `add $0x8f1f70e,%edx` after the `sbb`.
+The object branches and LOADS:
+
+    5c341: test $0x1,%cl; je 5ccc1
+    5c347: mov 0xc,%eax        <== R_386_32 rxvect4
+    5ccc1: mov 0x0,%eax        <== R_386_32 rxvect4
+
+The values are the same -- `rxvect4[3]` is 0x08f1f70e and `rxvect4[0]` is
+0x08f108f1 on both sides, and the whole table matches.  What differs is that
+**the object never folds any of its six `rxvect4` references** and we fold
+every constant-index one, including the two plain assignments that are not a
+select at all (our 3ba0 and 3bd7 are `mov $0x8f1f70e` and `mov $0x8f108f1`
+where the object's 5cb79 and 5cbb1 are loads).
+
+**LINKAGE IS NOT THE CAUSE AND THAT WAS MEASURED.**  Ours is `static const int
+rxvect4[4]`, a local `r` symbol, and the object's is a GLOBAL `R` at
+.rodata+0x5360.  Dropping the `static` was compiled and swept: the symbol
+becomes `R` and **the folding is unchanged**, three `sbb` in `receiver` before
+and after.  GCC 3.4.2 folds a file-scope `const` array at a constant index
+whatever its linkage.
+
+**AND THE COUNTERFACTUAL WAS RUN, WHICH IS WHAT MAKES THIS MORE THAN AN
+INFERENCE.**  The same three references -- the two plain assignments and the
+ternary -- compiled twice with the period flags, once against `extern const int
+rxvect4[4];` and once against the definition:
+
+    extern declaration only        definition visible
+    mov 0xc,%edx  R_386_32 ...     movl $0x8f1f70e,(%eax)
+    mov 0x0,%edx  R_386_32 ...     movl $0x8f108f1,(%eax)
+    testb $0x1,..; je; two loads   cmp $0x1; sbb; and $0xffff11e3;
+                                                   add $0x8f1f70e
+
+The left column is the object instruction for instruction, `testb`/`je` and
+both relocated loads.  The right column is OURS instruction for instruction,
+down to the same mask and the same addend.  So the mechanism is settled: the
+object's translation unit sees a DECLARATION only.
+
+**AND .rodata SAYS WHICH TRANSLATION UNIT HAS THE DEFINITION.**  The object's
+layout:
+
+    00005320  0x40  R vect16
+    00005360  0x10  R rxvect4
+    00005370  0x10  R vect4
+
+Contiguity alone would prove nothing -- a unit boundary can fall between any
+two adjacent symbols, and the linker concatenates units in link order.  What
+carries it is that `vect16` and `vect4` are `v34hshak.c`'s in this tree and are
+adjacent THERE with nothing between them, while the object has exactly 0x10
+bytes between them and `rxvect4` occupying them.  A symbol cannot be inserted
+into the middle of another unit's block, so `rxvect4` is defined in the
+HANDSHAKE unit between those two, and declared `extern` in the receive unit
+that uses it.
+
+**NOT MOVED HERE.**  `src/pump/v34/v34hshak.c` is held by another session for
+the diagnostics restoration and this branch does not touch it.  The move is a
+storage-class and file-placement change with no behaviour in it -- no
+differential test can pin it, and the evidence that it is right is the object's
+`.rodata` order and its six unfolded loads, which is the forced column of
+CLAUDE.md's rule.  It should cost nothing and should turn six immediates into
+the object's six loads; recorded so the next session can take it with the
+measurement already made.
