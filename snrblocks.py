@@ -141,6 +141,7 @@ def blocks(sl):
     p3_run = []              # settled-constellation SNRs seen in this phase 3
     p4_run = []              # (equerr, dB) seen since the phase 4 gain was set
     p3_db = None
+    p3_n = 0                 # how many settled blocks the control averaged over
     for line in sl.splitlines():
         m = RE_AGC_SETUP.search(line)
         if m:
@@ -155,6 +156,7 @@ def blocks(sl):
                 # only the FIRST handshake of a call would ever get a control,
                 # and retrains are where the within-call comparison lives.
                 agc_p3, p3_run, agc_p4, p3_db = agc, [], None, None
+                p3_n = 0
                 p4_run = []
             continue
 
@@ -166,6 +168,10 @@ def blocks(sl):
             # be the clean control.
             tail = [v for v in p3_run[-3:]]
             p3_db = sum(tail) / len(tail) if tail else None
+            # REPORTED, not just used: a control averaged over one block is a
+            # different measurement from one averaged over three, and pooling
+            # far ends that differ here is how a 10 dB discrepancy hides.
+            p3_n = len(p3_run)
             in_p4 = True
             continue
 
@@ -201,6 +207,7 @@ def blocks(sl):
             ts = RE_TS.match(line)
             cur["t"] = float(ts.group(1)) if ts else None
             cur["agc_p3"], cur["agc_p4"], cur["p3_db"] = agc_p3, agc_p4, p3_db
+            cur["p3_n"] = p3_n
             cur["p4_run"] = list(p4_run)
             continue
 
@@ -315,7 +322,7 @@ def main():
     w.writerow(["call", "block", "t", "ethreh", "equerr", "preerr", "sigpow",
                 "snr_db", "snr_eq_db", "flag", "ladder_rate", "choice",
                 "rxbits", "txbits",
-                "thresh_db_for_chosen", "p3_db", "p3_minus_dec",
+                "thresh_db_for_chosen", "p3_db", "p3_n", "p3_minus_dec",
                 "p4_best_db", "spike_db", "p4_n",
                 "agc_p3", "agc_p4", "settled_db", "settled_n",
                 "far_recv", "far_xmit"])
@@ -363,6 +370,7 @@ def main():
                             b.get("rxbits"), b.get("txbits"),
                             "%.2f" % tdb if tdb is not None else "",
                             "%.2f" % b["p3_db"] if b.get("p3_db") else "",
+                            b.get("p3_n", 0),
                             "%.2f" % (b["p3_db"] - d)
                             if b.get("p3_db") and d is not None else "",
                             "%.2f" % pbest if pbest is not None else "",
