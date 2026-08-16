@@ -55604,3 +55604,219 @@ not see a real difference.
 
 The two seed mutations are the small numbers in the table and they are the
 ones that needed a fixture built for them (2172).
+
+### 2180. `setConstellationToNoise_forceRate` TURNS A CONFIGURED RATE INTO A REQUIRED PRODUCT, AND ITS TWO TARGETS ARE NOT THE SAME NUMBER
+
+4,434 bytes, the last of the fourteen, and it is NOT a variant of its
+similarly-named sibling. The only regions that are the same code are the
+report: the maximum at 0x4a755..0x4a77d against 0x492d0..0x492f2, the four
+banners and the eighteen-argument ucode line at 0x4a7b2..0x4aaa2 against
+0x4949b..0x49771. Everything before that is its own function -- no `word_48`
+switch, no `dMin`, no `USE_RESTRICED_DMIN`, no 53k clamp.
+
+    bits       = (short)(params->RATE_FORCE * 6.0/7999.998 + 0.5f)
+    n          = (short)(bits + mappingParams->shaperSR - 6)
+    rateTarget = 2^n, by n-1 doublings
+    sizes      = 4.0f per `dmin` phase, doubled per `halfPhase` one
+    size       = the largest m in 1..0x7f with m^6 <= sizes * rateTarget,
+                 or 128 when none qualifies
+    nof[k]     = size, size/2 or size/4 by the same two flags
+    then       the product of the six is walked up to rateTarget one
+                 increment at a time, always the smallest count among the
+                 phases `halfPhase` does not claim
+
+**THE POW6 SEARCH TARGETS `sizes * rateTarget` AND THE REFINEMENT TARGETS
+`rateTarget` ALONE**, and that is not an inconsistency: `size` is the
+UNSCALED size, and dividing each phase's count by its own factor takes the
+`sizes` back out again. Both were read off the stack twice -- 0x49b8e's
+`fcomp %st(3)` and 0x49bf7's are three deep on a five-entry stack whose
+third slot is the 2^n, while 0x49a8f's `fmulp` had already consumed the
+product into a value the pow6 loop pops at 0x49acd.
+
+**THE RETURN TYPE IS `void`**, from the same two-`ret` argument the other two
+large members carry: 0x4a7b1 leaves `dsplibs_debug_level` in %eax and 0x4aafa
+leaves `dsplibs_debug_printf`'s return.
+
+**THE MULTIPLIER IS A DOUBLE AND THAT ONE IS FORCED**, unlike finding 2175's
+100.0: `fldl .rodata.cst8+0x158` holds 0.0007500001875000469, which is
+6.0/7999.998 to the last bit and is NOT exactly representable as a float, so
+GCC could not have narrowed it to `fmuls` whatever the source said. That is
+the same reading 2175 arrived at from the other direction.
+
+### 2181. SEVEN ARGUMENTS, AND THE SIXTH IS THE ONLY ONE ANY MEMBER OF THIS CLASS WRITES
+
+`EfPA128_sS1_PsPhS3_PA128_h` -- `Ph` then `S3_` is the same `unsigned char *`
+twice, and the two are used for completely different things:
+
+    the fifth   a per-phase flag worth ONE bit, where the `short *` before it
+                is worth TWO: `fmul` by 4.0f for a `dmin` phase and `fadd
+                %st(0),%st` for a `halfPhase` one
+    the sixth   the per-phase TOP ucode index, and an IN/OUT parameter --
+                0x4a905 is `incb (%esi,%edx,1)` with %edx the phase number
+
+Nothing else in the twenty-four members writes through an argument, so the
+differential test compares that array SIDE AGAINST SIDE rather than against a
+snapshot, and asserts the write fired.
+
+**THE SEVENTH ARGUMENT IS REFERENCED EXACTLY ONCE**, and that count is the
+evidence for the asymmetry in 2183: `0xfc(%esp)` appears at 0x4a3bd and
+nowhere else in 1,107 lines.
+
+### 2182. THE EXTEND ARM FINDS AN INDEX, THROWS IT AWAY AND INSERTS ZERO
+
+When a phase's walk has produced fewer ucodes than its count wants, the object
+searches forward from `constellation[k][0]` for the first `j` in [c0+1, 0x74]
+with `ucode[k][c0] + phaseDmin[k] < ucode[k][j]`, shifts the row up by one and
+inserts. What it inserts is not `j`:
+
+    4a59f   jb 4a863            the only consumer of `j`, which is in %edx
+    4a87a   mov 0x68(%esp),%edx %edx is overwritten before the store
+    4a89b   dec %ecx            the shift loop's counter, and
+    4a8a9   jne 4a870           the loop ends only when it reaches zero
+    4a8ae   mov %cl,0x4(%ebp,%esi,1)    so `constellation[k][0] = 0`
+
+%cl is provably zero on both entry paths -- the `count == 0` one jumps
+straight to 0x4a8ae with %ecx already zero, and the loop exits only on
+`dec` reaching zero. **AND THE DEFECT PROPAGATES INTO THE CODEC BYTE**:
+0x4a8ca re-reads `constellation[k][0]` from MEMORY after the store, so
+`codecConstellation[k][0]` encodes `ucode[k][0]` as well.
+
+This is the shift loop's exhausted counter stored where `j` was evidently
+meant. It is reproduced, `src/` carries a comment saying not to "fix" it, and
+the differential test asserts the zero rather than merely comparing it --
+`t_v90cdnoise.cpp` counts every trial in which the sixth argument moved and
+requires `constellation[k][0]` to be 0 in each. D339.
+
+### 2183. THE TWO WALKS ARE ASYMMETRIC IN WHICH TABLES THEY READ, AND THE FEEDBACK LOOP AROUND THEM IS A DAMPED SEARCH
+
+Both walks go DOWNWARD from `topUcode[k]` to `params->unnamed_360`, and they
+do not test the same things:
+
+    dmin[k] non-zero  breaks on `ucode < phaseDmin*0.5f` OR
+                      `alt < phaseDmin*0.5f`, skips on `ucode > thresh` OR
+                      `alt > thresh`, and NEVER looks at the flag table
+    dmin[k] zero      breaks on `ucode < phaseDmin*0.5f`, skips on
+                      `ucode > thresh` OR `allow[k][i] == 0`, and never
+                      looks at the second table
+
+so the threshold is `min(alt - (short)pd, ucode - (short)pd)` in one and
+`(short)(ucode - pd)` in the other. The `0xfc(%esp)` count in 2181 is what
+makes the missing flag test a measurement rather than an oversight.
+
+**AND THE WALK IS RUN UP TO 200 TIMES PER PHASE.** After each pass
+`phaseDmin[k]` moves by `(1 - step)` when the count came out short and
+`(1 + step)` when it came out long, `dir` is clamped to [-1, +1] by two
+guarded increments, and `step` is multiplied by 0.9f ONLY as `dir` passes
+through zero -- that is, only when the search reverses. The loop ends when the
+count matches or on the 200th turn.
+
+**THE TWO ARMS AFTER IT ARE REACHABLE ONLY WHEN THE FEEDBACK FAILS**, and the
+way in is a `phaseDmin[k]` that cannot move: every adjustment is a MULTIPLY,
+so a starting value that truncates to zero stays zero for ever and the count
+is whatever the walk gives. `t_v90cdnoise.cpp`'s `run_fr_stuck` uses a ramp of
+one to arrange exactly that.
+
+### 2184. THE CODEGEN TIER ON `setConstellationToNoise_forceRate`
+
+Period build against the blob, at THIS BRANCH's flags. **The number below is an
+`-O2` measurement and master has since moved the codegen level to `-O3`** --
+prompted by `determineDminForRrn`'s own inlining measurement in 2163 -- so it
+is not comparable with anything taken after that landed, and it was not
+redone here because this branch does not carry the change and `tools/` is not
+this batch's to edit:
+
+    4,559 B / 1,039 instructions   against the object's 4,434 / 1,117
+
+so +125 bytes and SEVENTY-EIGHT FEWER instructions -- bigger and shorter at
+once, which is what a different spill pattern looks like. The histogram is
+within two everywhere except:
+
+    mov      +17 )  ours keeps six counters in memory where the blob keeps
+    incl      +6 )  them in registers: `incl 0x7c(%esp)` against `inc %ebx`,
+    cmpl      +6 )  and `cmpl` against `cmp`.  Allocation, so free.
+    inc       -7 )
+    cmp       -7 )
+    lea       +5 / sub -5 / movzbl -5 / movzwl -4   addressing, free
+    jg        -3 / setg +2 / jle +2   branch against branchless on `dir`
+    fldl      -1 / fmull +1 / fmuls -2
+
+**THE LAST ROW IS THE INTERESTING ONE AND IT CONFIRMS 2175.** The blob loads
+the rate multiplier with `fldl` and multiplies with `fmulp`; we emit a single
+`fmull` off the same 64-bit constant. Both are genuine DOUBLE multiplies --
+only the addressing form differs -- and GCC did NOT narrow this one to `fmuls`
+the way it narrowed every spelling of 2175's 100.0, because 0.0007500001875…
+is not exactly representable as a float. That is the control 2175 lacked: the
+narrowing is about the constant, not about the source.
+
+Nothing in the list is the forced kind. `movswl` +2 against `movzwl` -4 is
+614's free kind again, on values that feed 16-bit compares.
+
+### 2185. THE MUTATION SET, AND THE TWO THAT PASSED ARE A PAIR THAT CANNOT BE DRIVEN AT ALL
+
+Twenty mutations, each built alone against the blob and reverted:
+
+    the two-bit weight 4.0f -> 2.0f              FAIL  241 + 289 + 166
+    the one-bit doubling dropped                 FAIL  208 + 259
+    the size search keeps m rather than m-1      FAIL  314 + 377 + 306
+    the size seed 0x80 -> 0x7f                   FAIL   50 +  13
+    the quarter 0.25f -> 0.26f                   FAIL   28 +  27
+    the refinement picks the largest count        FAIL  163 + 176 +  83
+    phaseDmin's -0.5f -> -0.4f                   FAIL  166 + 243 +  57
+    pdSnrThreshForRateUp 0.1f -> 0.11f           FAIL  240 + 180 + 180
+    the two-bit walk drops its `alt` test        FAIL   87 + 118
+    the plain walk drops its flag test           FAIL  336 + 364
+    the step shrink 0.9f -> 0.8f                 FAIL  119 + 147 + 124
+    the `dir` clamp <= 0 -> < 0                  FAIL  218 + 274
+    the iteration cap 199 -> 198                 FAIL  134 + 153 + 178
+    the discarded index restored to `j`          FAIL  157 + 157 + 115
+    the sixth argument no longer written         FAIL  122 +  89 + 115
+    the frame's six -> five                      FAIL  381 + 398 + 302
+    the trim shifts from the wrong place         FAIL   47 +  50
+    the rate constant rounded to 0.00075         FAIL   73 +  79 +  55
+
+    the extend search's `j <= 0x74` -> `j < 0x74`   PASS
+    the give-up bound `> 0x73` -> `> 0x74`         PASS
+
+**THE TWO THAT PASSED ARE THE SAME PAIR OF CONSTANTS AND THEY ARE
+STRUCTURALLY UNDRIVABLE.** 0x73 and 0x74 are one bound: the give-up fires when
+`constellation[k][0]` exceeds 0x73 precisely because the search that follows
+runs to 0x74, so the only inputs that separate the mutant from the object are
+those on which `j == 0x74` is the sole match -- and there the mutant's loop has
+NO EXIT. 0x4a5ab falls straight back into the `while` test with nothing
+changed (D338), so the difference can appear as a non-termination and never as
+a value. A hang is not a comparison, so the claim rests on the encoding.
+
+**THE RATE CONSTANT ONLY BECAME VISIBLE AFTER THE FIXTURE GREW TWO ABSURD
+RATES**, and that is 2164's lesson again. 0.0007500001875000469 and a rounded
+0.00075 differ by a relative 2.5e-7, which cannot change
+`(short)(rate * c + 0.5f)` for any `RATE_FORCE` below **1,335,333** -- a
+1.3 Mbit/s "rate", nowhere near the V.90 ladder and far outside anything the
+sweep had. Adding 1335333 and 1339333, with `shaperSR` solved for the same `n`
+either way so the difference lands on `n`, took the mutation from PASS to FAIL
+with 207 checks. Without them the constant was not under test at all.
+
+### 2186. NONE OF THIS FUNCTION'S OWN DIAGNOSTICS CAN BE READ BACK, SO THE MUTATIONS CARRY THE ARM COVERAGE
+
+Seven `edprintf` sites and six `dsplibs_debug_printf` ones, and the six are the
+shared report. So every diagnostic that says anything about THIS function --
+the three thresholds, the requested rate, and the initial and final
+`nofUcodeInPhase` and `phaseDmin` -- goes through the encoded channel, and
+`strstr` cannot find a word of it in a transcript. That is the opposite of
+`determineDminForRrn`, where seventeen readable sites classified every arm
+(2160), and of `setConstellationToNoise`, where sixteen did.
+
+What is left is classification from the OUTPUTS, and it reaches five arms:
+both walks (from `dmin[k]`), both companding arms (from `word_2c`), the
+one-ucode phase (`constellationSize[k] == 1`), the extend arm (the sixth
+argument moved) and the refinement having pushed a count past 128. The
+feedback loop's `dir`, its 0.9f, the refinement loop itself and the `size`
+seed are invisible from outside, and 2185's mutations are what show they are
+under test -- the `dir` clamp, the 0.9f, the 199 and the 0x80 all FAIL, which
+is the same evidence a counter would have given and is stated as such rather
+than dressed up as coverage.
+
+**AND THE ONE-UCODE ARM NEEDED THE SWEEP RE-PARAMETERISED TO REACH.** A phase
+survives the refinement wanting exactly one ucode only when `size` is 4 and
+the product already equals the target, which needs `n + 2a + b` to be EXACTLY
+12; sweeping `n` directly never produces it, because the refinement pulls any
+count of 1 straight back up. The sweep is over the total instead.

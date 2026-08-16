@@ -4,8 +4,13 @@
  * Reconstructed from dsplibs.o.  Twenty-two members and 22,672 bytes of code.
  * `setMinMaxRates` -- the only member of the class `v34handshak` reaches
  * (docs/v90cpp.md's table of the fifty) -- was the first one written here;
- * the eleven leaves, `determineDminForRrn` and `setConstellationToNoise`
- * followed, and `setConstellationToNoise_forceRate` has not.
+ * the eleven leaves, `determineDminForRrn`, `setConstellationToNoise` and
+ * `setConstellationToNoise_forceRate` followed -- the fourteen-member batch
+ * finding 2140 measured, and TWENTY of the class's twenty-four defined
+ * symbols.  The four still unwritten are `constellationDesign`,
+ * `adjustConstellationsPower`, `adjustConstellationsToNewK` and `process`,
+ * every one of which reaches `V90ConstellationPower` and none of which is in
+ * this batch.
  *
  * NOT POLYMORPHIC.  `tools/cppstruct.py` lists the destructor with the `D1`
  * and `D2` variants and no `D0`, and GCC emits a deleting destructor only for
@@ -149,12 +154,6 @@ public:
 	 * %eax at 0x484c0, and 0x4881f arrives with `dsplibs_debug_printf`'s
 	 * return in it.  Two unrelated values on two paths that a caller would
 	 * have to read as one, so nothing is returned: `void`.
-	 *
-	 * `setConstellationToNoise_forceRate` is still NOT declared.  Its
-	 * argument list is settled by the mangling, but a return type is not
-	 * mangled and reading the body is what decides; a placeholder
-	 * committed ahead of that reading would be a guess in the record.  It
-	 * arrives with its definition.
 	 */
 	void determineDminForRrn(unsigned int);
 
@@ -177,6 +176,28 @@ public:
 	void setConstellationToNoise(float, short (*)[128], short (*)[128],
 				     short *, unsigned char *,
 				     unsigned char (*)[128]);
+
+	/*
+	 * AND `void` A THIRD TIME, from the same two-`ret` argument: 0x4a7b1
+	 * arrives with `dsplibs_debug_level` in %eax, left there by the
+	 * trailing banner's own gate, and 0x4aafa with
+	 * `dsplibs_debug_printf`'s return.  Nothing an int-returning source
+	 * could converge on.  It closes the fourteen-member batch.
+	 *
+	 * SEVEN ARGUMENTS, AND THE SIXTH IS AN IN/OUT ONE.  `Ph` then `S3_` is
+	 * the same `unsigned char *` twice, and the second of them is the
+	 * per-phase top ucode index: 0x4a905 is `incb (%esi,%edx,1)` with %edx
+	 * the phase number, so the object WRITES through it -- the only
+	 * argument any member of this class writes.  The fifth is a per-phase
+	 * flag worth one bit where the `short *` before it is worth two, and
+	 * the seventh is the same flag table `setConstellationToNoise` takes,
+	 * read at exactly one site in the whole function.
+	 */
+	void setConstellationToNoise_forceRate(float, short (*)[128],
+					       short (*)[128], short *,
+					       unsigned char *,
+					       unsigned char *,
+					       unsigned char (*)[128]);
 
 	/*
 	 * Data members are public because the original's access specifiers are

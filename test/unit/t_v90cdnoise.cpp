@@ -79,6 +79,15 @@ void ref_ctn(void *, float, void *, void *, short *, unsigned char *, void *)
 	asm("ref__ZN24V90ConstellationDesigner23setConstellationToNoiseEfPA128_"
 	    "sS1_PsPhPA128_h");
 
+void our_fr(void *, float, void *, void *, short *, unsigned char *,
+	    unsigned char *, void *)
+	asm("_ZN24V90ConstellationDesigner33setConstellationToNoise_forceRateEf"
+	    "PA128_sS1_PsPhS3_PA128_h");
+void ref_fr(void *, float, void *, void *, short *, unsigned char *,
+	    unsigned char *, void *)
+	asm("ref__ZN24V90ConstellationDesigner33setConstellationToNoise_forceRat"
+	    "eEfPA128_sS1_PsPhS3_PA128_h");
+
 extern unsigned int ref_dsplibs_debug_level;
 
 }
@@ -1090,6 +1099,437 @@ run_ctn_outcomes(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * setConstellationToNoise_forceRate
+ * ===========================================================================
+ *
+ * A DIFFERENT FUNCTION, NOT A VARIANT.  It shares only the closing report with
+ * its sibling, so nothing about the fixture above carries over except the
+ * wiring.  Two things it does that the sibling does not:
+ *
+ *   IT WRITES ITS SIXTH ARGUMENT.  `topUcode[k]` is incremented every time the
+ *   extend arm inserts an entry (0x4a905), so that array is compared SIDE
+ *   AGAINST SIDE and the write is asserted to have fired, not asserted absent.
+ *
+ *   IT CAN FAIL TO TERMINATE, in four separate ways, and every one of them is
+ *   excluded by construction rather than by tolerance:
+ *
+ *     A NEGATIVE `n`.  `rateTarget` is 2^n by `n-1` doublings guarded on
+ *     `n == 1` and not on `n <= 1`, so a negative n runs about 2^32 times.
+ *     D336.  The fixture solves for the `n` it wants and never lets it go
+ *     below zero.
+ *
+ *     A LARGE `n`.  The refinement walks the product of the six counts up to
+ *     2^n one increment at a time, so an n of 60 is not reachable in this
+ *     universe and an infinite one never is.  D337.  `n + 2a + b` is held in
+ *     [12, 45] below.
+ *
+ *     A ZERO COUNT.  If `size` comes out below 4 then `size * 0.25f`
+ *     truncates to zero, the product is zero for ever, and the refinement
+ *     never terminates.  `n + 2a + b >= 12` is what keeps `size >= 4`.
+ *
+ *     NO REACHABLE UCODE IN THE EXTEND ARM.  If no `j` in [c0+1, 0x74] clears
+ *     `ucode[k][c0] + phaseDmin[k]`, 0x4a5ab falls into the `while` test with
+ *     nothing changed.  D338.  The tables are RAMPS with a slope large against
+ *     the largest `phaseDmin` the sweep produces.
+ *
+ *   And `topUcode[k]` is never zero: `i = c - 1` is compared UNSIGNED against
+ *   `params->unnamed_360`, so a top of 0 gives -1 and the walk reads backwards
+ *   off the row.  D340.
+ *
+ * WHAT THE TEST CAN AND CANNOT COUNT.  All seven of this function's
+ * diagnostics are `edprintf` and therefore encoded, and the six that are not
+ * are the shared report -- so the transcript classifies nothing here that the
+ * sibling's did.  The arms that ARE observable are counted from the outputs
+ * (`constellationSize`, `constellation[k][0]`, `topUcode`); the feedback
+ * loop's `dir`, its 0.9f step shrink, the refinement loop and the `size` seed
+ * are invisible from outside, and the mutation set is what shows they are
+ * under test.  Finding 2186 says so rather than pretending to a counter.
+ */
+static unsigned char topA[6];
+static unsigned char topB[6];
+static unsigned char halfA[6];
+static unsigned char halfB[6];
+
+static int fr_walkArm[2];
+static int fr_law[2];
+static int fr_sizeOne;
+static int fr_sizeMany;
+static int fr_inserted;
+static int fr_notInserted;
+static int fr_topWritten;
+static int fr_zeroAtFront;
+static int fr_giveUp;
+static int fr_bigCount;
+static int fr_printed;
+
+/*
+ * The bit count the object derives from `params->RATE_FORCE`, spelled the same
+ * way so the fixture can solve for the `n` it wants.  It is used ONLY to
+ * choose inputs; nothing is asserted against it.
+ */
+static int
+fr_bits(int rateForce)
+{
+	return (short)(rateForce * 0.0007500001875000469 + 0.5f);
+}
+
+/*
+ * Plant one trial.  `wantN` is the bit target, `a` the number of two-bit
+ * phases and `b` the number of one-bit ones; the caller keeps
+ * `wantN + 2*a + b` inside [12, 45].
+ */
+static void
+fr_fixture(int trial, int wantN, int a, int b, int ramp, int top, int start)
+{
+	/*
+	 * THE LAST TWO ARE NOT RATES AND THAT IS THE POINT.  The object's
+	 * multiplier is a DOUBLE, 6.0/7999.998, and it differs from a rounded
+	 * 0.00075 by a relative 2.5e-7 -- which cannot change
+	 * `(short)(rate * c + 0.5f)` for any rate below 1,335,333.  At that
+	 * value and every fourth thousand above it the two constants give
+	 * different bit counts, and `shaperSR` below is solved for the same
+	 * `n` either way, so the difference lands on `n` and is visible.
+	 * Without these two the constant is not under test at all.
+	 */
+	static const int rates[10] = {
+		0, 1, -1000, 21600, 28000, 33600, 44000, 56000,
+		1335333, 1339333
+	};
+	int rate = rates[trial % 10];
+	int k;
+	int j;
+
+	reseed(0x2b7du + 149u * (unsigned)trial);
+
+	for (k = 0; k < 7; k++)
+		for (j = 0; j < 128; j++) {
+			short u = (short)(j * ramp + (int)(nextrand() % 8u));
+			short al = (short)(u + (int)(nextrand() % 8u));
+
+			ucA[k][j] = u;
+			ucB[k][j] = u;
+			alA[k][j] = al;
+			alB[k][j] = al;
+			okA[k][j] = (unsigned char)((nextrand() % 16u) != 0);
+			okB[k][j] = okA[k][j];
+		}
+
+	for (k = 0; k < 6; k++) {
+		dminA[k] = (short)(k < a ? 1 + (trial % 3) : 0);
+		dminB[k] = dminA[k];
+		/*
+		 * NEVER BOTH AT ONCE: a phase claimed by `dmin` takes the
+		 * quarter and is then skipped by the refinement's min search,
+		 * so a zero count there would never be repaired.
+		 */
+		halfA[k] = (unsigned char)((k >= a && k < a + b) ? 1 : 0);
+		halfB[k] = halfA[k];
+		topA[k] = (unsigned char)top;
+		topB[k] = topA[k];
+	}
+
+	fill_mp(0x4f21u + 83u * (unsigned)trial);
+	memset(parAbuf, 0, sizeof(parAbuf));
+	memset(parBbuf, 0, sizeof(parBbuf));
+	parA->RATE_FORCE = rate;
+	parA->unnamed_360 = start;
+	parB->RATE_FORCE = rate;
+	parB->unnamed_360 = start;
+	mpA.shaperSR = wantN + 6 - fr_bits(rate);
+	mpB.shaperSR = mpA.shaperSR;
+
+	cdA->word_2c = (trial & 1);
+	cdB->word_2c = cdA->word_2c;
+	cdA->float_18 = 1.5f;
+	cdA->float_1c = -2.25f;
+	cdA->float_20 = 3.75f;
+	cdB->float_18 = cdA->float_18;
+	cdB->float_1c = cdA->float_1c;
+	cdB->float_20 = cdA->float_20;
+}
+
+static void
+fr_restore_and_check(long input)
+{
+	const V90ConstellationDesigner *sa =
+	    (const V90ConstellationDesigner *)snapA;
+	const V90ConstellationDesigner *sb =
+	    (const V90ConstellationDesigner *)snapB;
+
+	cdA->float_18 = sa->float_18;
+	cdA->float_1c = sa->float_1c;
+	cdA->float_20 = sa->float_20;
+	cdB->float_18 = sb->float_18;
+	cdB->float_1c = sb->float_1c;
+	cdB->float_20 = sb->float_20;
+
+	diff_eq_obj("ours writes only the three thresholds",
+		    V90ConstellationDesigner, cdAbuf, snapA, input);
+	diff_eq_obj("the blob writes only the three thresholds",
+		    V90ConstellationDesigner, cdBbuf, snapB, input);
+}
+
+/* Everything the two sides must agree about, and the outcome accounting. */
+static void
+fr_compare(int trial, const unsigned char *topBefore)
+{
+	int k;
+
+	diff_eq_obj("the mapping parameters", V90MappingParams, &mpA, &mpB,
+		    trial);
+	diff_eq_obj("the three thresholds", float[3], &cdA->float_18,
+		    &cdB->float_18, trial);
+	/*
+	 * SIDE AGAINST SIDE AND NOT AGAINST A SNAPSHOT: this one is written.
+	 */
+	diff_eq_obj("the top ucode index", unsigned char[6], topA, topB, trial);
+	diff_eq_obj("the ucode table is read only", short[7][128], ucA, ucB,
+		    trial);
+	diff_eq_obj("the second table is read only", short[7][128], alA, alB,
+		    trial);
+	diff_eq_obj("the flag table is read only", unsigned char[7][128],
+		    okA, okB, trial);
+	diff_eq_obj("the per-phase dmin is read only", short[6], dminA, dminB,
+		    trial);
+	diff_eq_obj("the per-phase half flag is read only", unsigned char[6],
+		    halfA, halfB, trial);
+	diff_eq_obj("the parameters are read only", V90Parameters, parA, parB,
+		    trial);
+
+	for (k = 0; k < 6; k++) {
+		fr_walkArm[dminB[k] != 0 ? 1 : 0]++;
+		if (mpB.constellationSize[k] == 1)
+			fr_sizeOne++;
+		else
+			fr_sizeMany++;
+		if (mpB.constellationSize[k] > 128)
+			fr_bigCount++;
+		if (topB[k] != topBefore[k]) {
+			fr_topWritten++;
+			fr_inserted++;
+			/*
+			 * THE DEFECT, ASSERTED AND NOT MERELY COMPARED.  Every
+			 * insert stores the shift loop's exhausted counter --
+			 * zero -- where the index it just found was evidently
+			 * meant, so a front entry of 0 is the signature of the
+			 * arm having run.  D339.
+			 */
+			diff_eq_int("an insert leaves 0 at the front (%ld)",
+				    (long)mpB.constellation[k][0], 0, trial);
+			if (mpB.constellation[k][0] == 0)
+				fr_zeroAtFront++;
+		} else {
+			fr_notInserted++;
+		}
+	}
+	fr_law[cdB->word_2c != 0 ? 1 : 0]++;
+}
+
+static int
+run_fr_quiet(void)
+{
+	int trial;
+
+	diff_begin("setConstellationToNoise_forceRate, quiet");
+	wire();
+
+	for (trial = 0; trial < 240; trial++) {
+		unsigned char topBefore[6];
+		int a = trial % 4;
+		int b = (trial / 4) % 3;
+		/*
+		 * THE SWEEP IS OVER THE TOTAL `n + 2a + b` AND NOT OVER `n`,
+		 * because that total is what fixes `size` -- and a total of
+		 * exactly 12 makes `size` 4, `size * 0.25f` exactly 1, and the
+		 * product exactly the target, which is the ONLY way a phase
+		 * survives the refinement wanting one ucode.  Setting `n`
+		 * directly never reaches it.
+		 */
+		int total = 12 + (trial % 34);
+		int wantN = total - 2 * a - b;
+		int ramp = 40 + (trial % 60);
+		int top = 12 + (trial % 90);
+		/*
+		 * NEVER ZERO.  The walk's bound is compared UNSIGNED, so a
+		 * `params->unnamed_360` of 0 lets `i` reach -1 and the row is
+		 * read backwards off its front -- into memory the two sides do
+		 * not share.  D340.
+		 */
+		int start = 1 + (trial % 7);
+
+		fr_fixture(trial, wantN, a, b, ramp, top, start);
+		memcpy(topBefore, topA, sizeof(topBefore));
+		snap_this();
+
+		our_fr(cdA, 3.25f, ucA, alA, dminA, halfA, topA, okA);
+		ref_fr(cdB, 3.25f, ucB, alB, dminB, halfB, topB, okB);
+
+		fr_compare(trial, topBefore);
+		fr_restore_and_check(trial);
+	}
+
+	return diff_end();
+}
+
+/*
+ * ===========================================================================
+ * The stuck cases: a phaseDmin that cannot move, which is the only way the
+ * feedback loop runs out its 200 turns and the trim and extend arms run
+ * ===========================================================================
+ *
+ * `phaseDmin[k]` starts at `(short)(ucode[k][topUcode[k]] / (nof[k] - 0.5f))`
+ * and every adjustment is a MULTIPLY, so a starting value that truncates to
+ * zero can never move and the walk's count is whatever it is.  That is what
+ * puts `nofUcodeInPhase[k]` and the count permanently apart, and it is the
+ * only way to reach the two arms after the loop.  A flat, low ramp does it.
+ */
+static int
+run_fr_stuck(void)
+{
+	int trial;
+
+	diff_begin("setConstellationToNoise_forceRate's trim and extend arms");
+	wire();
+
+	for (trial = 0; trial < 180; trial++) {
+		unsigned char topBefore[6];
+		int a = trial % 3;
+		int b = 0;
+		int wantN = 12 + (trial % 24) - 2 * a;
+		int top = (trial % 6 == 5) ? 0x74 + (trial % 8)
+					   : 5 + (trial % 40);
+		int k;
+		int j;
+
+		fr_fixture(trial + 4000, wantN, a, b, 1, top, 1);
+		/*
+		 * A RAMP OF ONE AND NO JITTER, so `ucode[k][top]` is `top` and
+		 * `phaseDmin` truncates to 0 or 1 whatever the count is.  The
+		 * flags are all set: nothing else must decide what is counted.
+		 */
+		for (k = 0; k < 7; k++)
+			for (j = 0; j < 128; j++) {
+				ucA[k][j] = (short)j;
+				ucB[k][j] = (short)j;
+				alA[k][j] = (short)j;
+				alB[k][j] = (short)j;
+				okA[k][j] = 1;
+				okB[k][j] = 1;
+			}
+		memcpy(topBefore, topA, sizeof(topBefore));
+		snap_this();
+
+		our_fr(cdA, -1.75f, ucA, alA, dminA, halfA, topA, okA);
+		ref_fr(cdB, -1.75f, ucB, alB, dminB, halfB, topB, okB);
+
+		fr_compare(trial + 4000, topBefore);
+		fr_restore_and_check(trial);
+
+		for (k = 0; k < 6; k++)
+			if (topBefore[k] > 0x73)
+				fr_giveUp++;
+	}
+
+	return diff_end();
+}
+
+static int
+run_fr_loud(void)
+{
+	int trial;
+
+	diff_begin("setConstellationToNoise_forceRate's diagnostics");
+	wire();
+
+	for (trial = 0; trial < 180; trial++) {
+		unsigned char topBefore[6];
+		unsigned int level = 1u + (unsigned)(trial % 3);
+		int a = trial % 4;
+		int b = (trial / 4) % 3;
+		int wantN = 12 + (trial % 31) - 2 * a - b;
+
+		fr_fixture(trial + 8000, wantN, a, b, 30 + (trial % 90),
+			   9 + (trial % 100), 1 + (trial % 4));
+		memcpy(topBefore, topA, sizeof(topBefore));
+		snap_this();
+
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = level;
+		ref_dsplibs_debug_level = level;
+
+		our_fr(cdA, 6.5f, ucA, alA, dminA, halfA, topA, okA);
+		ref_fr(cdB, 6.5f, ucB, alB, dminB, halfB, topB, okB);
+
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+		dsplib_debug_capture_on = 0;
+
+		diff_eq_int("the transcripts agree (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
+			    1, trial);
+		if (dsplib_debug_capture_lines(1) > 0)
+			fr_printed = 1;
+		if (level > 1) {
+			const char *t = dsplib_debug_capture_text(1);
+
+			/*
+			 * SEVEN ENCODED FRAMES EVERY CALL, and they are the
+			 * only sign the ungated half ran: the seven `edprintf`
+			 * sites are not gated at all, so they speak at every
+			 * level, and their arguments are compared through the
+			 * encoding.
+			 */
+			diff_eq_int("the encoded channel spoke (trial %ld)",
+				    ctn_count(t, "$!$ ") >= 4 ? 1 : 0, 1,
+				    trial);
+			diff_eq_int("the report ran (trial %ld)",
+				    strstr(t, "V90 Constellation Designer"
+					      " report:") != NULL, 1, trial);
+		}
+
+		fr_compare(trial + 8000, topBefore);
+		fr_restore_and_check(trial);
+	}
+
+	return diff_end();
+}
+
+static int
+run_fr_outcomes(void)
+{
+	diff_begin("setConstellationToNoise_forceRate reached every arm");
+
+	diff_eq_int("the blob printed something (%ld)", fr_printed, 1, 0);
+	diff_eq_int("the two-bit walk ran %ld times", fr_walkArm[1] > 0, 1,
+		    fr_walkArm[1]);
+	diff_eq_int("the plain walk ran %ld times", fr_walkArm[0] > 0, 1,
+		    fr_walkArm[0]);
+	diff_eq_int("the u-law arm ran %ld times", fr_law[0] > 0, 1, fr_law[0]);
+	diff_eq_int("the A-law arm ran %ld times", fr_law[1] > 0, 1, fr_law[1]);
+	diff_eq_int("a phase wanted exactly one ucode %ld times",
+		    fr_sizeOne > 0, 1, fr_sizeOne);
+	diff_eq_int("a phase wanted more than one %ld times", fr_sizeMany > 0,
+		    1, fr_sizeMany);
+	diff_eq_int("the extend arm inserted %ld times", fr_inserted > 0, 1,
+		    fr_inserted);
+	diff_eq_int("the extend arm did not run %ld times",
+		    fr_notInserted > 0, 1, fr_notInserted);
+	diff_eq_int("the sixth argument was written %ld times",
+		    fr_topWritten > 0, 1, fr_topWritten);
+	diff_eq_int("an insert left zero at the front %ld times",
+		    fr_zeroAtFront > 0, 1, fr_zeroAtFront);
+	diff_eq_int("a phase started past 0x73 %ld times", fr_giveUp > 0, 1,
+		    fr_giveUp);
+	diff_eq_int("the refinement pushed a count past 128 %ld times",
+		    fr_bigCount > 0, 1, fr_bigCount);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1101,6 +1541,10 @@ main(void)
 	rc |= run_ctn_negodd();
 	rc |= run_ctn_edges();
 	rc |= run_ctn_outcomes();
+	rc |= run_fr_quiet();
+	rc |= run_fr_loud();
+	rc |= run_fr_stuck();
+	rc |= run_fr_outcomes();
 
 	return rc;
 }

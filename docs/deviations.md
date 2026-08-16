@@ -6331,3 +6331,91 @@ The carry after `fldz; fcomps v` is set when `0.0 < v`, so the sign character
 is '+' only for a strictly positive value and '-' for zero as well as for
 negative. Four sites, one shape. Finding 2175 records why the codegen tier
 cannot reproduce the branchless select at either setting of `-mieee-fp`.
+
+## D336 🐛 `setConstellationToNoise_forceRate` doubles about 2^32 times when its bit count goes negative
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner33setConstellationToNoise_forceRateEfPA128_sS1_PsPhS3_PA128_h`
+(blob 0x499b0) at 0x49a47..0x49a50. **Reachability: `(short)(RATE_FORCE *
+0.00075 + 0.5) + mappingParams->shaperSR - 6` below zero, which needs only a
+small forced rate and a `shaperSR` under 6.** **Observability: a hang of
+minutes, then a nonsense target.** Status: unmeasured; nothing in the object
+calls this member (D326). Fix class: none proposed; reproduced as found.*
+
+`cmp $0x1,%eax; je` is an EQUALITY test, not `jle`, so the guard that skips the
+loop only catches `n == 1`; the `dec/dec/jne` that follows counts a negative
+`n` down through zero and round the whole 32-bit range. The same shape as
+D324. `t_v90cdnoise.cpp` solves for the `n` it wants and never lets it go
+below zero.
+
+## D337 🐛 `setConstellationToNoise_forceRate`'s refinement loop has no bound
+
+*Batch of 2026-08-16, same function, at 0x49b95..0x49bfc. **Reachability: a
+bit count large enough that `2^n` overflows to an infinity, or merely large --
+`n` of 60 needs about 10^18 increments.** **Observability: the function never
+returns.** Status: unmeasured. Fix class: none proposed.*
+
+The product of the six counts is walked up to `2^n` ONE INCREMENT AT A TIME,
+and nothing caps the number of turns. A second reachability: if any count is
+zero the product is zero for ever, which happens when `size` comes out below 4
+and a `dmin` phase takes `size * 0.25f`. The test holds `n + 2a + b` in
+[12, 45], which is what keeps `size` at 4 or more, and never lets a phase carry
+both flags.
+
+## D338 🐛 `setConstellationToNoise_forceRate`'s extend loop never terminates when no reachable ucode exists
+
+*Batch of 2026-08-16, same function, at 0x4a5ab..0x4a5b4. **Reachability: no
+`j` in [`constellation[k][0]`+1, 0x74] with `ucode[k][c0] + phaseDmin[k] <
+ucode[k][j]`, while the phase still wants more ucodes.** **Observability: the
+function never returns.** Status: unmeasured. Fix class: none proposed.*
+
+The search falls out of its `for` and straight back into the `while` test with
+nothing changed -- `constellation[k][0]` is only rewritten on the insert path.
+The give-up at `constellation[k][0] > 0x73` does not cover it, because an
+insert sets that byte to zero (D339) rather than advancing it. The test uses
+rising ramps whose slope is large against the largest `phaseDmin` the sweep
+produces.
+
+## D339 🐛 `setConstellationToNoise_forceRate` inserts zero where the ucode it just found belongs
+
+*Batch of 2026-08-16, same function, at 0x4a8ae (`mov %cl,0x4(%ebp,%esi,1)`)
+against the search at 0x4a580..0x4a59f whose result is in %edx and the shift
+loop at 0x4a87a..0x4a8a9 which overwrites %edx and leaves %ecx at zero.
+**Reachability: any phase that reaches the extend arm.** **Observability:
+`constellation[k][0]` becomes 0 rather than the index the search found, and
+0x4a8ca then re-reads that byte from memory so `codecConstellation[k][0]`
+encodes `ucode[k][0]` too.** Status: verified over the sweep in
+`t_v90cdnoise.cpp`, which asserts the zero on every trial where the arm ran.
+Fix class: none proposed; reproduced as found, and `src/` carries a comment
+saying not to "fix" it.*
+
+The store takes the shift loop's exhausted counter, which is zero on every
+path into it including the `count == 0` one that jumps straight there. Finding
+2182.
+
+## D340 🐛 `setConstellationToNoise_forceRate` compares its walk's lower bound UNSIGNED
+
+*Batch of 2026-08-16, same function, at 0x49fdc and 0x4a2d1
+(`cmp %ebx,0x360(%ecx); ja`). **Reachability: `params->unnamed_360` of 0, or a
+`topUcode[k]` of 0.** **Observability: `i` reaches -1, the unsigned compare
+never stops the walk, and the row is read backwards off its front.** Status:
+verified -- this one was found by the test failing rather than by reading, on
+trials where the fixture set the start to zero. Fix class: none proposed.*
+
+`i` is `topUcode[k] - 1` and the bound is an `int` from the parameter block,
+and the comparison is unsigned, so a start of zero can never be greater than
+`i` and the loop's only exit is the `ucode < phaseDmin * 0.5f` break. The test
+keeps both the start and the top at 1 or more: two sides reading two different
+heaps disagree for a reason that is not the reconstruction.
+
+## D341 ⚠ `setConstellationToNoise_forceRate` leaves a one-ucode phase's constellation unwritten
+
+*Batch of 2026-08-16, same function, at 0x49e93 (`cmp $0x1,%di; je`).
+**Reachability: `nofUcodeInPhase[k] == 1`, which needs `n + 2a + b` to be
+exactly 12.** **Observability: `constellationSize[k]` is set to 1 and
+`constellation[k][0]` keeps whatever the caller left there, which the report
+then prints and indexes the ucode table with.** Status: verified over the
+sweep. Fix class: none proposed; reproduced as found.*
+
+The whole build loop is skipped, count stays at its initial 1, and the trim
+and extend arms both see `nof == count` and do nothing. Finding 2186 records
+why reaching this at all took the sweep to be re-parameterised.

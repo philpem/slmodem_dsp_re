@@ -1383,3 +1383,531 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		    "------------------------------------------------------------"
 		    "---------------------------------------------------------\r\n");
 }
+
+/*
+ * ===========================================================================
+ * setConstellationToNoise_forceRate -- build the six constellations for a
+ * rate the configuration file names, rather than for a measured noise level.
+ * ===========================================================================
+ *
+ * 4,434 bytes and the last of the fourteen -- the batch finding 2140
+ * measured, not the whole class: `constellationDesign`,
+ * `adjustConstellationsPower`, `adjustConstellationsToNewK` and `process`
+ * remain, and all four reach `V90ConstellationPower`.  IT SHARES ALMOST NOTHING WITH ITS
+ * SIBLING beyond the closing report, and that was read rather than assumed:
+ * the only regions that are the same code are the maximum at 0x4a755..0x4a77d
+ * against 0x492d0..0x492f2, the four banners and the eighteen-argument ucode
+ * line at 0x4a7b2..0x4aaa2 against 0x4949b..0x49771, and the two `ret` paths.
+ * Everything before that is its own function: there is no `word_48` switch, no
+ * `dMin`, no `USE_RESTRICED_DMIN`, no 53k clamp, and the constellation build is
+ * a downward walk with a feedback loop rather than a single forward pass.
+ *
+ * SEVEN ARGUMENTS AND THE SIXTH IS NEW.  `Ph` then `S3_` is the same
+ * `unsigned char *` twice, and the second of them is an IN/OUT parameter:
+ * 0x4a905 is `incb (%esi,%edx,1)` with %edx the phase number, so the object
+ * WRITES the caller's array.  Nothing in the sibling does that.
+ *
+ * WHAT IT COMPUTES.  `params->RATE_FORCE` is turned into a bit count and then
+ * into a required product of the six constellation sizes:
+ *
+ *     bits = (short)(RATE_FORCE * 0.00075 + 0.5)      the frame's bit count
+ *     n    = bits + mappingParams->shaperSR - 6
+ *     rateTarget = 2^n                                the required product
+ *
+ * and the six phases are not equal: `dmin[k]` non-zero means that phase
+ * carries two more bits than the others and `halfPhase[k]` non-zero means one
+ * more, so the search target is scaled by 4 or 2 per phase.  `size` is the
+ * largest uniform constellation whose sixth power still fits, and each phase's
+ * count comes back down by the same factor -- which is why the pow6 search
+ * compares against `sizes * rateTarget` and the refinement that follows
+ * compares against `rateTarget` alone.  Both stack positions were read twice;
+ * 0x49b8e's `fcomp %st(3)` and 0x49bf7's are three deep on a five-entry stack.
+ *
+ * `pow6` IS INLINED TWICE AND IT IS SPELLED OUT TWICE HERE.  0x49a96 and
+ * 0x49adc are both the member's body -- one `filds`, a duplicate, five
+ * `fmul`s and a `short` counter compared with `cwtl` -- and the member is a
+ * `FUNC GLOBAL` the blob also emits out of line.  Calling it would put a
+ * `call` in the object where the blob has none, for finding 2163's reason.
+ *
+ * THE TWO INNER WALKS ARE NOT THE SIBLING'S TWO.  Both go DOWNWARD from
+ * `topUcode[k]` to `params->unnamed_360`, and:
+ *
+ *   dmin[k] non-zero   tests BOTH tables against `phaseDmin[k] * 0.5f` and
+ *                      both against the threshold, and does NOT look at the
+ *                      flag table at all
+ *   dmin[k] zero       tests the first table only, and DOES look at the flag
+ *                      table
+ *
+ * The evidence for the asymmetry is a count: `0xfc(%esp)`, the seventh
+ * argument, is referenced exactly ONCE in the whole 1,107-line disassembly, at
+ * 0x4a3bd, which is inside the second walk.
+ *
+ * THE FEEDBACK LOOP.  Each phase re-walks until its count matches
+ * `nofUcodeInPhase[k]` or 200 turns have gone by, moving `phaseDmin[k]` by
+ * `(1 -/+ step)` and shrinking `step` by 0.9 each time the direction reverses.
+ * `dir` is clamped to [-1, +1] and the shrink fires only when it passes
+ * through zero.
+ *
+ * THE SIGN PRINTER AND THE DOUBLE 100.0 OF finding 2175 DO NOT APPEAR HERE:
+ * this function's three threshold diagnostics print plain `%d`, not
+ * `%c%d.%02d`.
+ */
+
+/*
+ * The companding, five times over.  It is a macro for `CONSTELLATION_PRODUCT`'s
+ * reason and not for brevity: the object has FIVE pairs of
+ * `linear2alaw`/`linear2ulaw` call sites for five uses, so the original had it
+ * written out, and a `static` helper would not inline at these flags (2163).
+ * The member is re-read inside each arm because the object re-reads it there.
+ */
+#define FORCERATE_ENCODE(k, idx)					\
+	do {								\
+		if (word_2c != 0)					\
+			mappingParams->codecConstellation[k][idx] =	\
+			    (unsigned char)(linear2alaw(__builtin_abs(	\
+				(int)ucode[k][mappingParams		\
+				    ->constellation[k][idx]])) ^ 0xd5);	\
+		else							\
+			mappingParams->codecConstellation[k][idx] =	\
+			    (unsigned char)~linear2ulaw(__builtin_abs(	\
+				(int)ucode[k][mappingParams		\
+				    ->constellation[k][idx]]));		\
+	} while (0)
+
+void
+V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
+						short (*ucode)[128],
+						short (*alt)[128],
+						short *dmin,
+						unsigned char *halfPhase,
+						unsigned char *topUcode,
+						unsigned char (*allow)[128])
+{
+	/*
+	 * `nofUcodeInPhase` and `phaseDmin` are the AUTHOR'S OWN NAMES, out of
+	 * the four format strings that print them.  They are locals and not
+	 * slots, so unlike `+0x18`'s three there is nothing to pin and no
+	 * reason to keep an offset name.
+	 */
+	unsigned short nofUcodeInPhase[6];
+	float phaseDmin[6];
+	float rateTarget = 1.0f;
+	float sizes;
+	short bits;
+	short quarter;
+	short half;
+	short size;
+	short m;
+	int n;
+	unsigned int k;
+
+	/*
+	 * 0.00075 is six bits per 8000-baud frame and the object's double is
+	 * 6.0/7999.998 to the last bit; the literal below is that value's
+	 * shortest round-tripping decimal.  It is a DOUBLE and that is forced:
+	 * `fldl .rodata.cst8+0x158`, and unlike 2175's 100.0 this one is not
+	 * exactly representable as a float, so GCC could not have narrowed it.
+	 */
+	bits = (short)(params->RATE_FORCE * 0.0007500001875000469 + 0.5f);
+	n = (short)(bits + mappingParams->shaperSR - 6);
+	if (n != 0) {
+		int i;
+
+		/*
+		 * 2^n by doubling, guarded on `n == 1` and not on `n <= 1`:
+		 * `cmp $0x1,%eax; je` is an EQUALITY, so the loop's own test
+		 * is `!=` and a negative `n` runs about 2^32 times.  D336.
+		 */
+		rateTarget = 2.0f;
+		for (i = 1; i != n; i++)
+			rateTarget += rateTarget;
+	}
+
+	/*
+	 * The per-phase scaling, and the two flags are not the same weight:
+	 * `fmul` by 4.0f for a `dmin` phase and `fadd %st(0),%st` -- a
+	 * doubling, not a multiply by two -- for a `halfPhase` one.
+	 */
+	sizes = 1.0f;
+	for (k = 0; k <= 5; k++) {
+		if (dmin[k] != 0)
+			sizes *= 4.0f;
+		else if (halfPhase[k] != 0)
+			sizes += sizes;
+	}
+
+	/*
+	 * The largest uniform size whose sixth power still fits.  `size` is
+	 * seeded 0x80 BEFORE the loop -- `mov $0x80,%ecx` at 0x49a8a -- so a
+	 * target no size in 1..0x7f can exceed leaves 128 behind rather than
+	 * 127, and that is measured rather than tidy.
+	 */
+	size = 0x80;
+	for (m = 1; m <= 0x7f; m++) {
+		float p = m;
+		short i;
+
+		for (i = 1; i < 6; i++)
+			p *= m;
+		if (p > sizes * rateTarget) {
+			size = m - 1;
+			break;
+		}
+	}
+
+	/*
+	 * pow6 again, on the size this time, and then the per-phase counts.
+	 * The two scaled sizes are computed ONCE before the loop and reused --
+	 * two `fistps` at 0x49b07 and 0x49b26, ahead of the branch.
+	 */
+	sizes = size;
+	for (m = 1; m < 6; m++)
+		sizes *= size;
+	quarter = (short)(size * 0.25f);
+	half = (short)(size * 0.5f);
+	for (k = 0; k <= 5; k++) {
+		if (dmin[k] != 0) {
+			nofUcodeInPhase[k] = quarter;
+			sizes *= 0.25f;
+		} else if (halfPhase[k] != 0) {
+			nofUcodeInPhase[k] = half;
+			sizes *= 0.5f;
+		} else {
+			nofUcodeInPhase[k] = size;
+		}
+	}
+
+	/*
+	 * And then the product is walked up to the target one entry at a time,
+	 * always the smallest count among the phases the `halfPhase` flag does
+	 * NOT claim.  THE TARGET HERE IS `rateTarget` AND NOT `sizes *
+	 * rateTarget`: the scaling has already been divided out of the counts.
+	 *
+	 * NOTHING BOUNDS THIS LOOP.  A large `n` makes `rateTarget` an
+	 * infinity and the product can never reach it.  D337.
+	 */
+	while (sizes < rateTarget) {
+		short minVal = 0x7d00;
+		short minK = 0;
+
+		for (k = 0; k <= 5; k++)
+			if (halfPhase[k] == 0
+			    && nofUcodeInPhase[k] < minVal) {
+				minVal = nofUcodeInPhase[k];
+				minK = k;
+			}
+		nofUcodeInPhase[minK]++;
+		sizes = 1.0f;
+		for (k = 0; k <= 5; k++)
+			sizes *= nofUcodeInPhase[k];
+	}
+
+	/*
+	 * The starting minimum distance for each phase: the ucode the caller
+	 * named, spread over the count it has to reach.  THE RECIPROCAL IS THE
+	 * OBJECT'S -- `d8 fc`, FDIVR ST(0),ST(4) with ST(4) the CSEd 1.0 --
+	 * which is `calcK`'s spelling and not `maxK`'s (finding 2144), and the
+	 * two are not the same in the last place.
+	 */
+	for (k = 0; k <= 5; k++)
+		phaseDmin[k] = (short)(ucode[k][topUcode[k]]
+				       * (1.0f / (nofUcodeInPhase[k] - 0.5f)));
+
+	float_18 = noiseEnergy * 0.1f;
+	float_1c = noiseEnergy * 10.0f;
+	float_20 = noiseEnergy * 10.0f;
+
+	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp = %d"
+		 " pdSnrThreshForRateDown = %d pdSnrThreshForRetrain = %d\r\n",
+		 (int)float_18, (int)float_1c, (int)float_20);
+	edprintf("V90ConstellationDesigner: requested rate force is %d\n",
+		 params->RATE_FORCE);
+	edprintf("V90ConstellationDesigner: initial nofUcodeInPhase[1..6] ="
+		 " %d %d %d %d %d %d\n",
+		 nofUcodeInPhase[0], nofUcodeInPhase[1], nofUcodeInPhase[2],
+		 nofUcodeInPhase[3], nofUcodeInPhase[4], nofUcodeInPhase[5]);
+	edprintf("V90ConstellationDesigner: initial phaseDmin[1..6] ="
+		 " %d %d %d %d %d %d\n",
+		 (short)phaseDmin[0], (short)phaseDmin[1], (short)phaseDmin[2],
+		 (short)phaseDmin[3], (short)phaseDmin[4], (short)phaseDmin[5]);
+
+	/*
+	 * ------------------------------------------------------------------
+	 * One phase at a time, and each one is a feedback loop.
+	 * ------------------------------------------------------------------
+	 */
+	for (k = 0; k <= 5; k++) {
+		float step = 0.05f;
+		short dir = 0;
+		short iter = 0;
+		unsigned int count = 1;
+
+		/*
+		 * A phase that wants exactly one ucode is not built at all --
+		 * `cmp $0x1,%di; je` at 0x49e93 jumps past the whole loop with
+		 * the count still at its initial 1, so `constellation[k][0]`
+		 * keeps whatever it held.
+		 */
+		if (nofUcodeInPhase[k] != 1) {
+			do {
+				unsigned char c = topUcode[k];
+				short thresh;
+				unsigned int i;
+
+				count = 1;
+				mappingParams->constellation[k][0] = c;
+				FORCERATE_ENCODE(k, 0);
+
+				if (dmin[k] != 0) {
+					thresh = (short)
+					    ((alt[k][c] - (short)phaseDmin[k])
+					     <= (ucode[k][c]
+						 - (short)phaseDmin[k])
+					     ? alt[k][c] - (short)phaseDmin[k]
+					     : ucode[k][c]
+					       - (short)phaseDmin[k]);
+					for (i = (unsigned int)(c - 1);
+					     i >= (unsigned int)
+						  params->unnamed_360;
+					     i--) {
+						short u = ucode[k][i];
+						short a;
+
+						if (u < phaseDmin[k] * 0.5f)
+							break;
+						a = alt[k][i];
+						if (a < phaseDmin[k] * 0.5f)
+							break;
+						if (u > thresh || a > thresh)
+							continue;
+						mappingParams
+						    ->constellation[k][count] =
+						    (unsigned char)i;
+						FORCERATE_ENCODE(k, count);
+						count++;
+						thresh = (short)
+						    ((a - (short)phaseDmin[k])
+						     <= (u
+							 - (short)phaseDmin[k])
+						     ? a - (short)phaseDmin[k]
+						     : u
+						       - (short)phaseDmin[k]);
+					}
+				} else {
+					thresh = (short)(ucode[k][c]
+						  - (short)phaseDmin[k]);
+					for (i = (unsigned int)(c - 1);
+					     i >= (unsigned int)
+						  params->unnamed_360;
+					     i--) {
+						short u = ucode[k][i];
+
+						if (u < phaseDmin[k] * 0.5f)
+							break;
+						if (u > thresh
+						    || allow[k][i] == 0)
+							continue;
+						mappingParams
+						    ->constellation[k][count] =
+						    (unsigned char)i;
+						FORCERATE_ENCODE(k, count);
+						count++;
+						thresh = (short)(u
+						    - (short)phaseDmin[k]);
+					}
+				}
+
+				/*
+				 * TOO FEW MOVES THE DISTANCE DOWN AND TOO MANY
+				 * MOVES IT UP, and the step shrinks only as the
+				 * direction passes through zero: `dir` is
+				 * clamped to [-1, +1] by the two guarded
+				 * increments and 0x4a186 tests it against zero
+				 * before scaling `step`.
+				 */
+				if (nofUcodeInPhase[k] > count) {
+					phaseDmin[k] = (1.0f - step)
+						     * phaseDmin[k];
+					if (dir <= 0)
+						dir++;
+				} else if (nofUcodeInPhase[k] < count) {
+					phaseDmin[k] = (1.0f + step)
+						     * phaseDmin[k];
+					if (dir > -1)
+						dir--;
+				}
+				if (dir == 0)
+					step *= 0.9f;
+				iter++;
+			} while (nofUcodeInPhase[k] != count && iter <= 199);
+		}
+
+		/* Too many: drop from the front, one at a time. */
+		while (nofUcodeInPhase[k] < count) {
+			unsigned int i;
+
+			count--;
+			for (i = 0; i < count; i++) {
+				mappingParams->constellation[k][i] =
+				    mappingParams->constellation[k][i + 1];
+				mappingParams->codecConstellation[k][i] =
+				    mappingParams->codecConstellation[k][i + 1];
+			}
+		}
+
+		/*
+		 * Too few: reach past the largest entry for one that clears it
+		 * by `phaseDmin[k]`, and insert it at the front.
+		 *
+		 * NOTHING STOPS THIS LOOP WHEN NO SUCH ENTRY EXISTS.  0x4a5ab
+		 * falls straight into the `while` test with nothing changed.
+		 * D338.
+		 */
+		while (nofUcodeInPhase[k] > count) {
+			unsigned int j;
+
+			if (mappingParams->constellation[k][0] > 0x73) {
+				edprintf("V90ConstellationDesigner: reached max"
+					 " posible ucode -> Not able to reach"
+					 " requested rate !!!");
+				break;
+			}
+			for (j = mappingParams->constellation[k][0] + 1u;
+			     j <= 0x74; j++) {
+				unsigned int i;
+
+				if (!(ucode[k][mappingParams
+					  ->constellation[k][0]]
+				      + phaseDmin[k] < ucode[k][j]))
+					continue;
+
+				for (i = count; i != 0; i--) {
+					mappingParams->constellation[k][i] =
+					    mappingParams
+						->constellation[k][i - 1];
+					mappingParams
+					    ->codecConstellation[k][i] =
+					    mappingParams
+						->codecConstellation[k][i - 1];
+				}
+				/*
+				 * THE INDEX IT JUST FOUND IS THROWN AWAY AND
+				 * ZERO IS INSERTED INSTEAD, and that is the
+				 * object and not a transcription slip.  0x4a8ae
+				 * is `mov %cl,0x4(%ebp,%esi,1)` with %ecx the
+				 * shift loop's counter, which the `dec/jne` at
+				 * 0x4a89b..0x4a8a9 leaves at zero on every
+				 * path -- including the `count == 0` one, which
+				 * jumps straight to the store.  `j` is in %edx
+				 * and 0x4a87a overwrites it before the store
+				 * can reach it.  The codec byte at 0x4a8ca
+				 * then re-reads the member from MEMORY, so it
+				 * encodes `ucode[k][0]` too.  D339; do not
+				 * "fix" this to `j`.
+				 */
+				mappingParams->constellation[k][0] =
+				    (unsigned char)i;
+				FORCERATE_ENCODE(k, 0);
+				topUcode[k]++;
+				count++;
+				break;
+			}
+		}
+
+		mappingParams->constellationSize[k] = count;
+	}
+
+	edprintf("V90ConstellationDesigner: final nofUcodeInPhase[1..6] ="
+		 " %d %d %d %d %d %d\n",
+		 mappingParams->constellationSize[0],
+		 mappingParams->constellationSize[1],
+		 mappingParams->constellationSize[2],
+		 mappingParams->constellationSize[3],
+		 mappingParams->constellationSize[4],
+		 mappingParams->constellationSize[5]);
+	edprintf("V90ConstellationDesigner: final phaseDmin[1..6] ="
+		 " %d %d %d %d %d %d\n",
+		 (short)phaseDmin[0], (short)phaseDmin[1], (short)phaseDmin[2],
+		 (short)phaseDmin[3], (short)phaseDmin[4], (short)phaseDmin[5]);
+
+	/*
+	 * THE REPORT IS THE SIBLING'S, instruction for instruction: 0x4a755
+	 * onward against 0x492d0 onward.  `maxM` is sixteen bits off a 32-bit
+	 * field for the same reason and with the same two `movzwl`, the four
+	 * banners are the same four strings and the per-ucode line is the same
+	 * eighteen arguments in the same order.  It is written out again
+	 * rather than shared, because the blob has two copies and a helper
+	 * would not inline at these flags (2163).
+	 */
+	{
+		unsigned short maxM;
+		unsigned int i;
+
+		maxM = mappingParams->constellationSize[0];
+		for (k = 1; k <= 5; k++)
+			if (mappingParams->constellationSize[k] > maxM)
+				maxM = mappingParams->constellationSize[k];
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "\n------------------------------------------------------------"
+			    "-----------------------------------------------------\r\n");
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90 Constellation Designer report:\r\n");
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "constelation size phase[0..5]  :  %d  %d  %d  %d"
+			    "  %d  %d\r\n",
+			    mappingParams->constellationSize[0],
+			    mappingParams->constellationSize[1],
+			    mappingParams->constellationSize[2],
+			    mappingParams->constellationSize[3],
+			    mappingParams->constellationSize[4],
+			    mappingParams->constellationSize[5]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "----------- constel phase 0,1,2,3,4,5\t"
+			    " codec constel phase 0,1,2,3,4,5"
+			    "\tlinearMapping of constel --------------\r\n");
+
+		for (i = 0; i < maxM; i++)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "ucode[%d]  :  %d  %d  %d  %d  %d  %d  :"
+				    "  %d  %d  %d  %d  %d  %d  :  %d  %d  %d"
+				    "  %d  %d  %d\r\n",
+				    i,
+				    mappingParams->constellation[0][i],
+				    mappingParams->constellation[1][i],
+				    mappingParams->constellation[2][i],
+				    mappingParams->constellation[3][i],
+				    mappingParams->constellation[4][i],
+				    mappingParams->constellation[5][i],
+				    mappingParams->codecConstellation[0][i],
+				    mappingParams->codecConstellation[1][i],
+				    mappingParams->codecConstellation[2][i],
+				    mappingParams->codecConstellation[3][i],
+				    mappingParams->codecConstellation[4][i],
+				    mappingParams->codecConstellation[5][i],
+				    ucode[0][mappingParams
+					->constellation[0][i]],
+				    ucode[1][mappingParams
+					->constellation[1][i]],
+				    ucode[2][mappingParams
+					->constellation[2][i]],
+				    ucode[3][mappingParams
+					->constellation[3][i]],
+				    ucode[4][mappingParams
+					->constellation[4][i]],
+				    ucode[5][mappingParams
+					->constellation[5][i]]);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "------------------------------------------------------------"
+			    "---------------------------------------------------------\r\n");
+	}
+}
+
+#undef FORCERATE_ENCODE
