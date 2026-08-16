@@ -1,0 +1,209 @@
+HUNT: Gentoo gcc-3.4.2-r2 toolchain (.comment = "GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)")
+
+=========================================================================
+RESULT 1 (SOLVED): Authoritative digest recovered, all three MD5s confirmed
+=========================================================================
+Source: Gentoo CVS->git conversion repo, reachable ONLY via git protocol
+        git clone --filter=blob:none --bare \
+          https://anongit.gentoo.org/git/archive/repo/gentoo-2.git
+        (gitweb.gentoo.org/archive/... returns 502; sources.gentoo.org ViewVC is
+         dead and 301-redirects to the broken gitweb. anongit git:// works.)
+Path:   sys-devel/gcc/files/digest-gcc-3.4.2-r2
+Commit: 789964eafd96 ("added gcc-3.4.2-r2 bounds checking USE flag")
+
+MD5 2fada3a3effd2fd791df09df1f1534b3 gcc-3.4.2.tar.bz2                     27246826
+MD5 ccb950ac035c057bbc766426756072d2 protector-3.4.1-1.tar.gz                 33860
+MD5 bdec16a59f044190fa51e28cae30da34 gcc-3.4.2-manpages.tar.bz2              202762
+MD5 1d077ca6b3119eecade935829b399f82 gcc-3.4.2-patches-1.1.tar.bz2           488213
+MD5 c6d950e8f61cbac4590061a116669b56 gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2    16392
+MD5 b1040fff7d8cd069347080b8ec3e87b7 bounds-checking-gcc-3.4.2-1.00.patch.bz2 815369
+
+All three sizes in the original brief are CONFIRMED correct.
+
+INDEPENDENT CROSS-CHECK of protector md5: IBM TRL's own .md5 sidecar, archived:
+  https://web.archive.org/web/20040917153341id_/http://www.trl.ibm.com/projects/security/ssp/gcc3_4_1/protector-3.4.1-1.tar.gz.md5
+  -> "ccb950ac035c057bbc766426756072d2  protector-3.4.1-1.tar.gz"   MATCHES.
+
+=========================================================================
+RESULT 2: ebuild recovered (documents exactly how the compiler was built)
+=========================================================================
+sys-devel/gcc/gcc-3.4.2-r2.ebuild, CVS rev 1.10 at commit 789964eafd96
+(saved as gcc-3.4.2-r2.ebuild in this directory)
+Key fields:
+  GENTOO_TOOLCHAIN_BASE_URI="http://dev.gentoo.org/~lv/GCC/"
+  PATCH_VER="1.1"  PIE_VER="8.7.6.5"  PP_VER="3_4_1"  PP_FVER="3.4.1-1"  HTB_VER="1.00"
+  IUSE="static nls bootstrap build multilib gcj gtk f77 objc hardened uclibc n32 n64 boundschecking"
+The whole CVS history of the ebuild + toolchain.eclass is in the local clone.
+
+=========================================================================
+AVENUES CLOSED (negative results, with method)
+=========================================================================
+- Software Heritage: content lookup accepts only sha1/sha1_git/sha256/blake2s256,
+  NOT md5. API refuses md5 query. Closed for the tarball-by-hash angle.
+- ALL 99 current Gentoo rsync mirror URIs (from api.gentoo.org/mirrors/distfiles.xml)
+  probed for the 3 filenames AND for releases/x86/{2004.3,2005.0,2005.1}: ZERO hits.
+  (First pass produced false positives from rsync MOTD banners; re-run matched only
+   real listing lines '^[d-][rwx-]{9}'.)
+- 159 hosts from the 2005-era Gentoo mirror list (Wayback capture of
+  www.gentoo.org/main/en/mirrors.xml, 20050201) probed over HTTP/FTP: every
+  apparent hit was a soft-404/parking page or a redirect to a 404. Specifically
+  chased and confirmed 404: ftp.uni-erlangen.de, trumpetti.atm.tut.fi,
+  lasca.ic.unicamp.br, mirrorservice.org(ibiblio), ftp.fau.de (only autobuilds/
+  and binpackages/ remain under releases/x86/).
+  => Gentoo's pruning propagated to mirrors via rsync --delete. Even long-lived
+     university mirrors have nothing, because they are mirrors, not archives.
+- dev.gentoo.org/~lv/GCC/  (the ebuild's actual GENTOO_TOOLCHAIN_BASE_URI, and a
+  path NOT previously tried): live = 404. Wayback CDX prefix dev.gentoo.org/~lv
+  shows ~lv/GCC/ and several sibling tarballs but EVERY capture is a 301/404 stub
+  from 2024 link-discovery; no 200, no content. Nothing retrievable.
+- dev.gentoo.org/~sam/distfiles/, ~grobian/distfiles/, ~slyfox/distfiles/,
+  ~vapier/dist/: none list any gcc-3.4.x patch/pie/protector tarball.
+- IBM TRL (www.trl.ibm.com) full domain CDX enumeration, 9340 unique URLs:
+  the ONLY gcc3_4_1 artifact archived is the .md5 sidecar. protector-3.4.1-1.tar.gz
+  itself was never captured. (Wayback DOES hold protector-2.95.3-29.tar.gz and
+  protector-3.4.4-1.tar.gz with 200 - so the archive kept some, just not this one.)
+- www.research.ibm.com/trl/projects/security/ssp/ -- this is the protector's ACTUAL
+  SRC_URI host per toolchain.eclass, and is a DIFFERENT host from www.trl.ibm.com.
+  CDX prefix enumeration (110 URLs): again ONLY the .md5 for gcc3_4_1. Tarball never
+  captured on either IBM host.
+- Uncollapsed CDX for all three exact filenames on dev.gentoo.org/~lv/GCC/ and on
+  www.research.ibm.com/.../gcc3_4_1/ : ZERO captures of any kind.
+- ALL 284 current Gentoo HTTP(S) mirror URIs probed for the 3 filenames (both
+  "distfiles/<f>" and "<f>" layouts): ZERO hits.
+- Gentoo release tree today has NO historical area: releases/{x86,amd64}/ contain only
+  autobuilds/ and binpackages/; releases/historical/ does not exist; snapshots/ holds
+  only the last ~weeks of portage snapshots.
+- Gentoo Bugzilla REST quicksearch for all three filenames: zero bugs, so no bug
+  attachment carries them.
+
+=========================================================================
+RESULT 3 (STRATEGIC): which media could possibly carry the built compiler
+=========================================================================
+KEYWORDS of gcc-3.4.2-r2 across its ENTIRE CVS life (every revision checked):
+  2004-09-21 first commit   KEYWORDS="-* ~amd64 ~mips ~ppc64 ~x86 -hppa -ppc"
+  2004-09-28 / 2004-10-05   KEYWORDS="-*  amd64 ~mips ~ppc64 ~x86 -hppa -ppc"
+  ... unchanged through ...
+  2005-03-01 last revision  KEYWORDS="-*  amd64 ~mips ~ppc64 ~x86 -hppa -ppc"
+  2005-03-22 fca08a9912cd   "remove old"  -> ebuild DELETED from the tree
+=> It was NEVER stable on x86 (always ~x86). It was stable ONLY on amd64,
+   from 2004-09-28 until removal on 2005-03-22.
+=> Therefore x86 2004.3/2005.0/2005.1 stage3+GRP media CANNOT be the source of this
+   compiler; they shipped gcc-3.3.x. The only plausible built-binary carriers are:
+     (a) Gentoo **amd64** media of 2004.3 (Nov 2004) or 2005.0 (Mar 2005);
+     (b) **hardened** Gentoo media of that window (ssp+pie is the hardened toolchain);
+     (c) a personal amd64/hardened system image or backup from that window.
+   2005.1 (Aug 2005) is AFTER the ebuild was removed -> out of window.
+
+CHEAP UNIVERSAL SCREEN for a built compiler: the .comment string is stamped into
+every ELF the compiler produced, so ANY binary from such a system carries it:
+  readelf -p .comment <any_binary> | grep 'GCC: (GNU) 3.4.2'
+No need to locate a gcc package inside an image.
+
+=========================================================================
+RESULT 4: exact original SRC_URI (from eclass/toolchain.eclass @ 789964eafd96)
+=========================================================================
+  gcc-3.4.2.tar.bz2        ftp://gcc.gnu.org/pub/gcc/releases/gcc-3.4.2/     STILL LIVE
+                           (verified: content-length 27246826 = digest size, OK)
+  protector-3.4.1-1.tar.gz http://www.research.ibm.com/trl/projects/security/ssp/gcc3_4_1/   GONE
+  gcc-3.4.2-manpages.tar.bz2   http://dev.gentoo.org/~lv/GCC/                 GONE (cosmetic)
+  gcc-3.4.2-patches-1.1.tar.bz2 http://dev.gentoo.org/~lv/GCC/                GONE
+  gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2 http://dev.gentoo.org/~lv/GCC/        GONE
+  bounds-checking-...      http://web.inter.nl.net/hcc/Haj.Ten.Brugge/  host DEAD (conn timeout)
+                           (only used with USE=boundschecking; irrelevant to codegen)
+(default devspace fallback in eclass: http://dev.gentoo.org/~lv/toolchain-files/ -
+ also absent from Wayback.)
+
+=> The base source is INTACT. Exactly three files are missing, and only three:
+   gcc-3.4.2-patches-1.1.tar.bz2, gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2,
+   protector-3.4.1-1.tar.gz.
+
+Also recovered locally and kept: eclass/toolchain.eclass (1243 lines) at the matching
+revision - contains the full configure/flags/patch-application logic - plus the
+in-tree patches sys-devel/gcc/files/3.4.2/{gcc-3.4.x-mips-add-march-r10k,
+gcc34-fix-sse2_pinsrw,gcc34-m32-no-sse2}.patch and the files/3.4.1/ set
+(incl. gcc-3.4.1-gentoo-branding.patch, gcc-3.4.1-spec-env.patch).
+
+=========================================================================
+RESULT 5 (HIT): protector-3.4.1-1.tar.gz RECOVERED AND VERIFIED
+=========================================================================
+URL:  https://grok.org.uk/tools/ssp/protector-3.4.1-1.tar.gz
+File: distfiles/protector-3.4.1-1.tar.gz  (in this scratch dir)
+Size: 33860  (matches digest)
+md5:  ccb950ac035c057bbc766426756072d2
+      == Gentoo digest-gcc-3.4.2-r2  AND  == IBM TRL's own archived .md5 sidecar.
+TRIPLE-VERIFIED. This is genuinely the file.
+Site also serves its own .md5/.asc sidecars, both agreeing.
+How it survived: grok.org.uk is a personal Solaris/ProPolice tools page that
+rehosted the IBM tarball locally instead of hotlinking. Not a distro mirror.
+(Found via LFS ssp hint -> grok.org.uk/docs/ssp.html -> /tools/ssp/.)
+
+STILL MISSING (2 of 3), both Gentoo-specific:
+  gcc-3.4.2-patches-1.1.tar.bz2          488213  1d077ca6b3119eecade935829b399f82
+  gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2   16392  c6d950e8f61cbac4590061a116669b56
+
+=========================================================================
+RESULT 6: NEAREST SURVIVING GENTOO PATCHSET (reconstruction lead, not a match)
+=========================================================================
+proj/gcc-patches.git (canonical Gentoo repo; clone via
+  https://anongit.gentoo.org/git/proj/gcc-patches.git )
+Its 3.4.x lineage is EARLIER than previously believed: not 3.4.6, but
+  3.4.3.20050110   <-- the release IMMEDIATELY AFTER our 3.4.2 (dated 2005-01-10)
+(full list of 3.x dirs ever present: 2.95.3, 3.2.2, 3.3.5.20050130, 3.3.6,
+ 3.4.3.20050110, 3.4.4, 3.4.5, 3.4.6)
+It was deleted in commit 9107241d99b ("old", 2006-12-30); recover with
+  git archive 9107241d99baf9c0df8ce617a7ca853dfc6b7695^ 3.4.3.20050110
+EXTRACTED HERE: ./nearest/3.4.3.20050110/  (78 files, 3.9M)
+Contains exactly the three components we are missing, one revision later:
+  gentoo/  34 patches  == the content of gcc-3.4.2-patches-1.1.tar.bz2, +1 rev
+  pie/{def,nondef,upstream}  == the PIE patchset; SAME v8.7.6.x lineage as our
+        target v8.7.6.5 (files here are v8.7.6.7 / v8.7.7, and upstream/ still
+        carries 57_all_gcc-3.4.0-v8.7.6.1-pie-arm.patch and
+        61_all_gcc-3.4.0-v8.7.6.1-pie-arm-uclibc.patch -- the very file the
+        gcc-3.4.2-r2 ebuild names in its commented-out PIEPATCH_EXCLUDE, which
+        confirms the tarball's internal layout is def/ nondef/ upstream/)
+  ssp/gcc_3.4.3.20050110.dif   == the SSP patch (we have the real 3.4.1-1 tarball)
+  misc/, man/, uclibc/
+=> This is the closest primary-source approximation available, and it makes the
+   delta to 3.4.2-r2 small and inspectable rather than unknown.
+
+=========================================================================
+CORRECTION (important): my FIRST mirror sweep was methodologically INVALID
+=========================================================================
+Modern Gentoo mirrors do NOT store distfiles flat. Authority:
+  https://distfiles.gentoo.org/distfiles/layout.conf
+    [structure]
+    0=filename-hash BLAKE2B 8
+Files live at  distfiles/<2-hex>/<filename>  where the 2 hex chars are the first
+8 bits of BLAKE2B of the FILENAME (computable without having the file):
+    1e  gcc-3.4.2-patches-1.1.tar.bz2
+    29  gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2
+    d3  protector-3.4.1-1.tar.gz
+
+My initial HTTP and rsync sweeps probed FLAT paths ("distfiles/<f>" and "<f>").
+That returns 404 whether or not the file is present, so those sweeps could not
+have detected a hit. PROOF (positive control on a file known to be present):
+    distfiles/1e/20120219-patch-aalto.zip  -> HTTP 200, content-length 4991
+    distfiles/20120219-patch-aalto.zip     -> HTTP 404
+=> The original "284 HTTP mirrors, zero hits" claim was UNSOUND AS RUN.
+
+RE-RUN CORRECTLY: all 284 current HTTP mirror URIs re-probed at the correct
+sharded paths for all three files. Probe validated by positive control first
+(10/25 sampled mirrors correctly detected a known-present file, confirming the
+method detects presence).
+RESULT: ZERO hits across 852 probes (284 mirrors x 3 files, sharded paths).
+The corrected negative is therefore GENUINE and properly bounded: no current
+official Gentoo mirror carries any of the three files. The flat sweep should be
+disregarded; this sharded re-run is the one that stands.
+
+NOTE: this flaw does NOT affect two other negatives, which were sound:
+ - the releases/x86|amd64/2004.3|2005.0|2005.1 probes (the RELEASE tree is not
+   sharded; those were verified by following redirects to real 404s, and by
+   observing that releases/{x86,amd64}/ today contain only autobuilds/ and
+   binpackages/);
+ - the Wayback CDX negatives (a different index entirely).
+
+OTHER SOFT-404 TRAPS OBSERVED (hosts that return 200 + HTML for ANY name):
+   mirror.meowsmp.net, gentoo.mirrored.ca, www.tek.net, live www.trl.ibm.com.
+   FTP mirrors return 221 for garbage names -> parse SIZE (213 <n> vs 550).
+Always run a negative control (a filename that cannot exist) before trusting a
+200, and a positive control (a file known present) before trusting a 404.

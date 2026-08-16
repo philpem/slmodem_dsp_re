@@ -56397,3 +56397,68 @@ tier being retired in favour of the period one.  Until then these checks are
 verified by `make period`, on the object's own compiler with the object's own
 flags, which is the tier CLAUDE.md says decides -- and they are verified
 there over the same inputs, not a subset.
+
+### 2320. THE GENTOO gcc-3.4.2-r2 SOURCES ARE RECOVERED, AND A DOUBLE SPACE PROVES THEY ARE THE RIGHT ONES
+
+*Finding 2200 built stock GNU 3.4.2 and called it "the exact point release,
+never the exact compiler", because the object names a Gentoo build and the
+three patch sets that make it one were 404 everywhere. They are no longer.*
+
+**All six of `gcc-3.4.2-r2`'s `SRC_URI` files are recovered and verified
+byte-exact against Gentoo's own digest**, together with the real ebuild
+(CVS rev 1.10), the matching `toolchain.eclass`, and all 96 in-tree
+`FILESDIR` patches -- which include `gcc34-m32-no-sse2.patch` and
+`gcc34-fix-sse2_pinsrw.patch`, x86-only and present in no tarball. Without
+those the rebuild would be quietly wrong on exactly our target.
+
+The recipe is in `tools/toolchain/gentoo-3.4.2-r2/`; the archives are not,
+because 28 MB does not belong in git. `fetch-distfiles.sh` there re-fetches
+and verifies them.
+
+**THE EVIDENCE THAT IT IS THE RIGHT RECIPE IS NOT A CHECKSUM.** A checksum
+proves we downloaded what Gentoo published. What identifies the *builder* is
+an anomaly in the target: the object's version string has a **double space**.
+
+    GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+
+The recovered eclass explains it exactly. Line 709 calls
+
+    gcc_version_patch "${BRANCH_UPDATE} (${release_version})"
+
+and `BRANCH_UPDATE` is empty for this ebuild, so the argument carries a
+leading space; the sed at line 607 emits `\1 @GENTOO@\2`, contributing
+another. One space from each. **That is a fingerprint of the build process
+matching a defect in the artefact**, which is a stronger identification than
+any hash of a file we fetched.
+
+**Two of the six exist in one place on the public internet.**
+`gcc-3.4.2-patches-1.1.tar.bz2` and `gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2`
+are on Roy Bamford's personal archive and nowhere else -- 852 probes across
+284 Gentoo mirrors, on correctly sharded paths, found neither. They are also
+the two that make this the Gentoo compiler rather than a stock one. The IBM
+protector turned out to have three independent sources; `gcc-3.4.2.tar.bz2`
+is still on canonical upstream.
+
+**A METHOD RESULT THAT OUTLIVES THIS SEARCH.** The first mirror sweep
+reported "284 mirrors, zero hits" and was structurally invalid: Gentoo's
+`layout.conf` declares `0=filename-hash BLAKE2B 8`, so distfiles live at
+`distfiles/<2-hex>/<filename>` keyed on a hash OF THE FILENAME, and a
+flat-path probe 404s whether the file is present or not. Proven with a
+positive control:
+
+    distfiles/1e/20120219-patch-aalto.zip  -> 200, content-length 4991
+    distfiles/20120219-patch-aalto.zip     -> 404
+
+The corrected sweep is a genuine zero. Generalised: several hosts return 200
+with HTML for any filename, and FTP mirrors answer 221 to nonsense, so **a 200
+needs a negative control and a 404 needs a positive control.** The first trap
+was guarded against and the second was not.
+
+**What this does not yet settle.** The compiler has not been rebuilt, so
+nothing here revises 2155's `-O3` or 1990's `-mno-ieee-fp`, both of which were
+measured against stock 3.4.2 and stand until re-measured. Two constraints for
+whoever does it: `gcc-3.4.2-r2` was never stable on x86 -- `~x86` only, stable
+on amd64 -- so the object's builder ran an unstable or hardened profile, which
+bounds the likely CFLAGS; and `DEPEND` pins `>=binutils-2.14.90.0.8-r1`, so
+binutils vintage is the next lever after the compiler, the assembler and
+section layout sitting outside gcc entirely.
