@@ -57643,8 +57643,15 @@ encoder select this modem USES are at bits 11..12 and 13 of `info_rates`
 (+0xaa0c), which is a RECEIVED field and not this message at all.
 
 **THE MEASURED MAP, from an all-zero start over 150 runs.** Only the low byte
-of each short is ever touched -- every OR constant in the function is at most
-0xff -- so the payload is ten bytes:
+of each short is ever touched, so the payload is ten bytes. That is a
+measurement, and the source agrees with it for a reason worth writing down:
+every OR TERM is bounded by 0xff, checked per site rather than assumed. The
+literal ones are all `<= 0xff`; the computed ones are
+`bitreverse(x, 3) << 5` (0..0xe0), `bitreverse(x, 3) << 2` (0..0x1c),
+`bitreverse(x, 4)` shifted by 1, 2, 3 or 4 (0..0x1e, 0..0x3c, 0..0x78,
+0..0xf0), and `mp_put_preemph`'s `rev >> 2` (0..3) and `(rev << 6) & 0xff`
+(masked) -- `bitreverse(v, n)` accumulating exactly `n` bits and so returning
+0..2^n-1.
 
 | short | bits ever set | bits never set |
 |---|---|---|
@@ -57659,9 +57666,12 @@ of each short is ever touched -- every OR constant in the function is at most
 | `msg[8]` | 0xe0 | 0x1f |
 | `msg[9]` | 0x00 | 0xff |
 
-`msg[9]` is cleared and never written by `probeselect` at all. "Never set"
-here means not set by any of 150 runs, which is what the phrase can mean when
-it is measured; the ones `V34SetINFO1aBits` adds are not in this table.
+**`msg[9]` is the one row that is PROVED rather than sampled.** The clear
+runs `i <= 9` but every `mp_or` and `mp_put_preemph` index in the function is
+0..8, so no path writes it: `probeselect` clears that short and leaves it
+zero. Every other "never set" in the table means only "not set by any of 150
+runs", which is what the phrase can mean when it is measured. The bits
+`V34SetINFO1aBits` adds afterwards are not in this table at all.
 
 ### 2603. D53's DEAD ARM IS DEAD IN THE OBJECT TOO, AND THAT IS NOW ASSERTED RATHER THAN INFERRED
 
