@@ -2727,15 +2727,24 @@ carrier_loop:
 				 *
 				 * `equerr` is raw error and is never divided by
 				 * anything; the rate ladder compares it against
-				 * absolute thresholds, so its SCALE moves with
-				 * the transmit level (V34TXSCALE at the phase
-				 * 3->4 boundary) and the same equaliser reads
-				 * ~50 in phase 3 and ~2200 in phase 4.  f248 is
-				 * that scale, computed in THIS block from the
-				 * same symbols, and it has never been logged --
-				 * so no capture on this bench can be used to
-				 * ask what the rate decision would have been on
-				 * an SNR.  Findings 1904, 1913, 1914.
+				 * absolute thresholds.  f248 is the scale to
+				 * divide it BY, computed in THIS block from the
+				 * same symbols, so the pair is a slicer SNR:
+				 * 10*log10(f248/f21a).
+				 *
+				 * IT WAS LOGGED, AND THE SCALE DOES NOT MOVE.
+				 * 1904, 1913 and 1914 read the ~50-in-phase-3
+				 * against ~2200-in-phase-4 step as the transmit
+				 * level moving under `equerr` at the V34TXSCALE
+				 * boundary.  It is not: f248 is 163815-163836
+				 * over every settled block in 196 captures, on
+				 * both sides of that boundary, because it is the
+				 * power of the DECISION and V.34 holds the
+				 * constellation's power constant as it grows.
+				 * The step is a real 16 dB of SNR, and `equerr`
+				 * alone was always an SNR with a fixed 52.14 dB
+				 * offset.  Findings 3200 and 3201, and the
+				 * extractor is `testbench/snrblocks.py`.
 				 *
 				 * A SEPARATE LINE, not an edit to V34EQU above:
 				 * the differential tier compares debug

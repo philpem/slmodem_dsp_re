@@ -60507,3 +60507,158 @@ answered by reading source and why #170 cannot read the rate decision's input.
 
 **So the debug-site backlog is not housekeeping.** It is the instrument both
 open receiver questions need, and `probeselect` is where it pays first.
+
+### 3200. #170 ANSWERED, FIRST HALF: THE DATAPUMP DOES COMPUTE A READABLE SNR AT THE RATE DECISION, IT IS ALREADY IN 196 CAPTURES, AND `equerr` IS AN SNR WITH A FIXED 52.14 dB OFFSET
+
+1974 asked whether our rate request is driven by an SNR estimate we can read.
+It is, the estimate was already being logged before this session started, and
+the premise 1904, 1913 and 1914 were written on is wrong.
+
+**THE TWO NUMBERS COME OUT OF THE SAME 1024-SYMBOL BLOCK** of v34rx.c's error
+accumulator, and their ratio is dimensionless:
+
+    equerr = f21a = (SUM |decision - equaliser out|^2) >> 16
+    sigpow = f248 = (SUM (|decision|^2 >> 8)) >> 8
+
+Both are the same sum over the same 1024 symbols scaled by 1/65536 -- the
+signal side truncating per symbol, worth under 4 counts on 163820 -- so
+`10*log10(sigpow/equerr)` is a slicer SNR in dB. `V34EQUPOW` prints them
+together under `DSPLIB_V34_DUMP_PROBE_BINS`, and the ladder's thresholds are
+in `equerr`'s units too (v34hstx1.cpp:2624), so one constant converts a
+threshold into the SNR that rate demands.
+
+**`sigpow` IS PINNED, so the scale never moved and `equerr` alone was always an
+SNR.** Over every settled-constellation block in the archive it is 163815 to
+163836 -- a spread of 0.006% on 163820 -- across every rate, every far end and
+both sides of the phase 3/4 boundary the comment at v34rx.c:2735 said the
+scale moved at. It is the power of the *decision*, which V.34 holds constant
+as the constellation grows, so it is a constellation constant and not a
+measurement. **The offset is 10*log10(163820) = 52.14 dB**, and that makes the
+whole `equerr` archive -- 672 captures, back to before this instrument existed
+-- readable as SNR retrospectively. The comment claiming f248 "has never been
+logged" is stale by 196 captures and is corrected in this commit.
+
+**THE LADDER IS TEXTBOOK, so the estimate-to-rate mapping is NOT the fault.**
+`tx1_ts_scale`'s thresholds, as logged on every call at 3429 baud, converted
+through that offset:
+
+    rate  14     13     12     11     10      9      8      7      6      5      4      3
+    term  50     84    131    205    366    572    937   1539   2571   4109   6614  10286
+    dB  35.15  32.90  30.97  29.03  26.51  24.57  22.43  20.27  18.04  16.01  13.94  12.02
+
+Monotone, no negatives, and **2.10 dB per 2400 bps step against the 2.11 dB
+that 0.7 bits/symbol at 3429 baud costs in 2D QAM.** 33600 wants 35.15 dB and
+28800 wants 30.97 dB, which is where a real V.34 modem sits. The `(short)` cast
+on the squared term in `tx1_ts_scale` wraps rather than saturates and was the
+obvious 16-bit suspect; it never fires, because the table never gets that far.
+On all 443 decision blocks the ladder picks exactly the highest rate whose
+threshold lies below the value it read. **Nothing here is broken.**
+
+`testbench/snrblocks.py` is the extractor, one row per DECISION BLOCK rather
+than per call -- which dissolves the pairing trap in `abextract.py`'s comment
+instead of navigating it, since each block carries its own `ethreh`, its own
+printed thresholds and its own `finally rxbitrate`.
+
+### 3201. #170 ANSWERED, SECOND HALF: THE CHANNEL IS 34.7 dB AND OUR OWN RECEIVER SAYS SO -- BUT ONLY IN PHASE 3, AND THE RATE IS DECIDED IN PHASE 4
+
+The call performs the control on itself. **A V.34 startup trains our receiver
+TWICE against the same channel**: once in phase 3, when we are receiving and
+transmitting nothing, and again in phase 4, when we are doing both. The rate is
+decided from the second. Same modems, same codec hop, seconds apart, and
+`Agc gain estimate at the end of phase 3` marks the boundary in the log.
+
+**REAL HARDWARE CALLS, 25 captures / 97 decision blocks, all three far ends:**
+
+    phase 3 SNR, we silent          median 34.73   p90 35.44   max 35.75
+    SNR the ladder actually read    median 24.63
+    phase 3 minus decision          median  6.26   p90 22.60
+
+**34.73 dB is 0.4 dB off what our own ladder demands for 33600.** Our receiver,
+given the far end's signal with our transmitter quiet, measures this path as
+good for very nearly the top rate -- and the far end's own bookkeeping agrees
+from the other side, achieving a median 28800 and up to 33600 receiving us
+(85 rows, 21 calls). The spread is tight: p90 35.44, max 35.75, and on
+`frz-olinet-2` eight handshakes of ONE call read 34.39, 34.65, 35.06, 35.28,
+34.68, 35.05, 35.28, 35.28 -- 0.89 dB -- while the phase 4 decisions on those
+same eight handshakes range over 20 dB.
+
+**SO IT IS CASE (a), AND NOT CASE (b).** The estimate is honest and the mapping
+is correct (3200); the low rate is the true consequence of a phase 4 channel
+that really is worse. But the phase 3 control narrows "upstream" much further
+than #170 hoped for: **the damage is not the demodulator's steady state and
+not the line, because the same demodulator on the same line reads 34.7 dB one
+second earlier.** It is something that switches on between the two.
+
+**WHAT IS DIFFERENT IN PHASE 4 -- three candidates, none yet separated:**
+
+  * **We are transmitting.** Phase 3 is receive-only; phase 4 is duplex. 1971
+    bounded LINEAR echo below -25 dB, which at 35 dB SNR costs 0.01 dB and
+    cannot be this -- but 1971 says itself that a coherence measure cannot see
+    energy G.711 companding returns. This is the candidate that survives 1971
+    rather than the one it excluded.
+  * **The power reduction WE requested.** Between our two measurements the far
+    end drops its transmit level at our own request -- `power reduction of 1`
+    and `of 2` in the log -- so **up to ~2 dB of the 6.26 is by design and not
+    a defect**, leaving ~4 dB. 1972 and 1973 are the history of that request.
+  * **The AGC steps up across the boundary**, median +1.05 dB (range -0.95 to
+    +3.04), and the absolute gain correlates with the deficit: r = +0.44 over
+    82 clean decisions, 3.65 dB of deficit below the median gain against
+    6.34 dB above. **This is 1974's "stable is not correctly scaled" loose end
+    and it is now a measured lead rather than an open question** -- but r=0.44
+    is a fifth of the variance, and the logged `power reduction request is
+    1360` / `is 1212` are the AGC gain itself, so the third candidate may be
+    the second one wearing a different hat. Not established.
+
+**WHAT THIS FAILS TO EXCLUDE:** it does not distinguish among those three, and
+it does not exclude that phase 3 flatters us for a reason unrelated to all of
+them -- phase 3 and phase 4 training are not bit-identical signals, only the
+same constellation at the same baud and carrier (3429/1959, `sigpow` pinned in
+both). What it does exclude is the whole of case (b) as #170 posed it, and any
+explanation in which our demodulator is simply 10 dB worse than the Courier's.
+
+### 3202. AND A SECOND, SEPARATE DEFECT: 13% OF RATE DECISIONS ARE TAKEN ON A ONE-BLOCK SPIKE, AFTER THE EQUALISER HAS ALREADY CONVERGED
+
+Found while measuring 3201 and independent of it. The rate is read from the
+last `equerr` the phase 4 training run published -- and on 13% of decisions
+that block is 6 to 22 dB worse than the value the *same run* had converged to
+one block earlier. `frz-olinet-2` at 513.7 s, converted through 3200's offset:
+
+    511.948  equerr  11764   11.44 dB   <- first phase 4 block, unconverged
+    512.247  equerr    470   25.42 dB
+    512.548  equerr    244   28.27 dB
+    512.848  equerr    238   28.38 dB
+    513.147  equerr    204   29.05 dB
+    513.448  equerr    184   29.50 dB   <- converged
+    513.747  equerr  13299   10.91 dB   <- THE BLOCK THE LADDER READS
+    514.048  equerr   1276   21.09 dB
+
+The equaliser converges cleanly to 29.50 dB, the error jumps 18.6 dB for
+exactly one block, the ladder reads that block, and the call connects at 4800.
+The next block is already back down. **This is not a slow-convergence problem
+and the decision is not early** -- the three blocks before the spike are 28.38,
+29.05, 29.50, a plateau. The spike lands on the block during which the received
+signal changes from TRN to MP, so a decision-directed error against the wrong
+reference is the obvious mechanism; that is a hypothesis, not established.
+
+**THE DISTRIBUTION IS BIMODAL, so 6 dB is a gap and not a tuned cut:**
+
+    converged minus decision:  -5..0  45 |  0..+3  33 |  +3..+6   4
+                               +6..+9  1 | +9..+12  3 | +12..+15  0
+                              +15..+18 6 |+18..+21  5
+
+    spiked (n=15)   read 11.04 dB, had converged to 28.38 dB, chose 4800
+    clean  (n=82)   read 26.73 dB,                            chose 19200
+
+**IT IS THE OBJECT'S BEHAVIOUR, NOT OUR INSTRUMENT'S.** `equerr` is the
+object's own published value in the object's own format string, and 3200's
+fixed offset makes the pre-instrument archive readable: over **461 captures
+that carry no `sigpow` at all, 916 phase 4 decisions give a median spike of
+0.27 dB and 13% above 6 dB** -- the same rate as the 443 blocks that do
+(median 0.20 dB, 13%). Two populations, one of them predating the instrument.
+
+**SIZE IT HONESTLY.** This is 13% of decisions, not all of them, and a call
+that loses one usually recovers by renegotiation (1902) -- `frz-olinet-2` goes
+4800, 24000, 26400, 26400, 4800, 28800, 4800, 24000 across eight handshakes.
+So it explains the *worst* connects and the CONNECT-versus-final gap 1902
+found, and it does not explain the systematic 6.26 dB of 3201. **They are two
+faults and they need two fixes.**
