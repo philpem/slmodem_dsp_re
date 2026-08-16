@@ -15,6 +15,19 @@
  *
  * The 200-sample history compaction is reached only after enough samples have
  * been pushed, so the streams are long enough to cross it several times.
+ *
+ * WHAT THIS FILE CANNOT CHECK, AND WHY THERE IS NO TEST FOR IT.  `phase`,
+ * `down` and `up` are signed 16-bit fields, and finding 2700 corrected all
+ * three from `unsigned short`.  Nothing below can tell the two readings apart
+ * and nothing added below could: the factors come from `fixedRc_DownFact[]`
+ * and `fixedRc_UpFact[]`, whose largest entry is 24, `phase` is a remainder
+ * modulo `up`, and `RcFixed_Create` takes a mode number rather than a factor,
+ * so bit 15 is unreachable through the module's whole API.  A separating value
+ * exists -- `down = 0x8000, up = 5` gives `input_needed, phase` of `0, 2`
+ * signed and `1, 3` unsigned, both well defined -- but only by writing the
+ * field behind the API, which 2152 rules proves something about the fixture.
+ * The declaration is held by the codegen tier alone.  Do not add a poke here
+ * without settling that first.
  */
 
 #include <stdlib.h>

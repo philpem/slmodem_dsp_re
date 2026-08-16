@@ -57,16 +57,39 @@ struct rc_bank {
 extern const struct rc_bank rc_banks[RCFIXED_NMODES];
 
 /*
- * Converter state.  Field order follows the original's 420-byte layout so the
- * two can be compared field by field during differential testing; see the
- * offsets in the comments.
+ * Converter state, 420 bytes -- the size the original hands to malloc,
+ * `movl $0x1a4,(%esp)` at RcFixed_Create+0x4a.
+ *
+ * Every 16-bit field here is SIGNED, and the object says so at each of them:
+ *
+ *   +0x194 phase  RcFixed_Resample b13ee `movswl 0x194(%esi),%eax` feeding
+ *                 `imul %ecx,%eax` -- a live 32-bit use, so the extension is
+ *                 forced.  `RcFixed_Reset` b0e82 also tests the freshly
+ *                 computed value with a SIXTEEN-bit `test %dx,%dx; js` and
+ *                 corrects it, a branch the compiler deletes outright if the
+ *                 field cannot be negative.
+ *   +0x196 down   b0e5a / b1033 `movswl`, then `cltd; idiv` -- a signed divide.
+ *   +0x198 up     loaded `movzwl` (the first use is a 16-bit compare, where
+ *                 the extension is free) and then RE-EXTENDED `movswl %cx,%esi`
+ *                 at b0e71 for that same divide.  619's rule: the zero-
+ *                 extending load was the expression, the re-extension is the
+ *                 declaration.
+ *   +0x19a taps   b0e51 / b13e7 `movswl`, used at 32 bits by `imul` and `sub`.
+ *
+ * `movzwl 0x194(%ebx),%ecx` at b1448 is not a contradiction: every use there is
+ * 16 bits wide (a 16-bit store and `cmp %ax,%cx`), which finding 614 puts in
+ * the compiler's free column.  It is also why `extcheck` cannot see +0x194 --
+ * 618's "loaded both ways proves nothing" filter suppresses the operand.
+ *
+ * Findings 2403 and 2700.  Field order follows the original's 420-byte layout
+ * so the two can be compared field by field during differential testing.
  */
 struct rc_state {
 	const short *coeff;                 /* +0x000 selected bank         */
 	short history[RCFIXED_HISTORY];     /* +0x004 sliding input window  */
-	unsigned short phase;               /* +0x194 accumulator, 0..up-1  */
-	unsigned short down;                /* +0x196 input rate factor     */
-	unsigned short up;                  /* +0x198 output rate factor    */
+	short phase;                        /* +0x194 accumulator, 0..up-1  */
+	short down;                         /* +0x196 input rate factor     */
+	short up;                           /* +0x198 output rate factor    */
 	short taps;                         /* +0x19a per-branch length     */
 	int pos;                            /* +0x19c history write index   */
 	int input_needed;                   /* +0x1a0 samples before next out */

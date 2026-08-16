@@ -57336,3 +57336,167 @@ differential test can pin it, and the evidence that it is right is the object's
 CLAUDE.md's rule.  It should cost nothing and should turn six immediates into
 the object's six loads; recorded so the next session can take it with the
 measurement already made.
+
+### 2700. `struct rc_state` IS SIGNED IN EVERY ONE OF ITS FOUR 16-BIT FIELDS, AND 2403's SUSPICION ABOUT `phase` IS CONFIRMED -- WITH THE SOURCE SHAPE THAT GOES WITH IT
+
+*2403 traced `extcheck`'s report at `RcFixed_Create`/`RcFixed_Reset` +0x196 and
+recorded it without fixing it, leaving `phase` at +0x194 as an open question.
+Both are settled here against `tools/dis.py`, and the answer is struct-wide.*
+
+**THE STRUCT, FIELD BY FIELD.**  Every offset below is read from the object,
+not from the report:
+
+| off | field | what the object does | verdict |
+|---|---|---|---|
+| +0x000 | `coeff` | `mov (%edi),%ebp`, 32-bit; its target loaded `movswl (%esi),%eax` at b1420 | `const short *`, unchanged |
+| +0x004 | `history[200]` | `movswl (%ebx),%edx` at b1426, then `imul` against the coefficient | `short`, unchanged |
+| +0x194 | `phase` | **`movswl 0x194(%esi),%eax` then `imul %ecx,%eax`** at b13ee -- a live 32-bit use | **`short`, WAS `unsigned short`** |
+| +0x196 | `down` | **`movswl`** at b0e5a / b1033, then `cltd; idiv` | **`short`, WAS `unsigned short`** |
+| +0x198 | `up` | `movzwl` at b0e67, **re-extended `movswl %cx,%esi`** at b0e71 for the same divide | **`short`, WAS `unsigned short`** |
+| +0x19a | `taps` | `movswl` at b0e51 / b13e7, used by `imul` and `sub` | `short`, unchanged |
+| +0x19c | `pos` | 32-bit load and store | `int`, unchanged |
+| +0x1a0 | `input_needed` | 32-bit load and store; see 2702 | `int`, unchanged |
+
+Three of the four 16-bit fields were wrong.  The struct is 420 bytes either
+way -- `movl $0x1a4,(%esp)` at `RcFixed_Create+0x4a` -- so nothing moved.
+
+**`up` IS THE INTERESTING ONE, AND IT IS 619's RULE APPLIED FORWARD.**  Its
+load is `movzwl`, which reads as unsigned and is not.  The first use is
+`cmp %dx,%cx`, sixteen bits wide, where the extension is free (614); the
+second is `idiv`, where it is not, and the object spends an instruction
+sign-extending the register it already has.  The zero-extending load was the
+expression; the `movswl %cx,%esi` is the declaration.
+
+**A SECOND, INDEPENDENT PROOF FOR `phase`, WHICH NEEDS NO LOAD AT ALL.**
+`RcFixed_Reset+0x72` is `test %dx,%dx; js` followed by a correction that adds
+`up` -- the negative-remainder fixup.  If `phase` were unsigned that branch is
+provably dead and the compiler deletes it.  Its presence in the object is
+structural evidence that the field can hold a negative value.
+
+**AND THE ONE THING THAT LOOKS LIKE A CONTRADICTION IS NOT.**  `movzwl
+0x194(%ebx),%ecx` at b1448 loads the same field zero-extended.  Every use there
+is sixteen bits wide -- a 16-bit store and `cmp %ax,%cx` -- so it is 614's free
+column.  It is also why `extcheck` could not report the field; see 2701.
+
+**THE SIGNEDNESS ALONE DID NOT CLEAR THE REPORT -- IT MOVED IT.**  Retyping the
+three fields cleared `RcFixed_Create` and `RcFixed_Reset` at mem 0x196 and
+immediately produced two NEW reports, `RcFixed_Resample` at mem 0x196 and mem
+0x198, both "object `movzwl`, ours `movswl`".  The cause is a source shape this
+file had already noticed and paraphrased rather than transcribed: **the object
+computes the phase update as a subtract-and-count loop in which nothing is ever
+wider than sixteen bits**, and `rc_advance` wrote it as `acc / (int)s->up`,
+whose `cltd; idiv` forces a 32-bit sign extension of two fields the object
+never extends.  Correct declarations made a paraphrase visible that was
+invisible while the declarations were wrong.
+
+Transcribed, with `rc_reset_state`'s fixup narrowed to the field it tests, the
+polyphase body of `RcFixed_Reset` now matches the object **instruction for
+instruction, in the same registers, with the same operands and in the same
+order** -- 617's full-text test, and it is the whole body, both arms of the
+correction included:
+
+    movswl 0x19a  xor  movswl 0x196  mov 0x19c  movzwl 0x198  cmp  movswl %cx
+    setle  mov 0x1a0  mov  cltd  idiv  test %dx,%dx  js  mov %dx,0x194
+      and on the taken arm:  lea (%edx,%ecx,1),%esi   mov %si,0x194
+
+`setle` where we used to emit `setbe`, `test %dx,%dx` where we used to emit
+`test %edx,%edx`, and `lea (%edx,%ecx,1),%esi` -- ours was `add %esi,%edx` --
+where the 16-bit `s->phase + s->up` now produces the object's own instruction
+with the object's own registers.
+
+**THE BOUND ON THAT CLAIM**, so it is not read as more than it is: the object
+duplicates the register-restore epilogue into the fall-through arm and ours
+jumps to one shared copy, so ours carries an extra `jmp` each arm has.  That is
+block layout, CLAUDE.md's free column, and it is the only difference left in
+the function's polyphase half.  The mode 0 and 1 half (deviation D3) is absent
+from ours entirely, which is why the symbol still cannot count as identical.
+
+The inlined `rc_advance` in `RcFixed_Resample` matches the object's loop
+mnemonic for mnemonic as well -- `xor / mov / inc / sub / cmp / mov / jge` --
+differing only in which registers hold `phase` and the count.
+
+**MEASURED.**  `extcheck` 30 live / 18 memory-operand before, **28 live / 16
+after**, with all four `RcFixed` reports gone and `initdigital +0x0` still
+present as 2402 requires.  `compare.py` tree-wide identical **334 before and
+334 after**: `RcFixed_Create`, `_Reset` and `_Resample` all carry the modes 0
+and 1 path that deviation D3 declines to implement, so no amount of correctness
+in the polyphase half can make those three symbols identical, and
+`RcFixed_Check_Combination` was already in the identical set.  This module's
+gain is not visible in that number and it is honest to say so.
+`make phase` green.
+
+**IT IS 613's CLASS AND IT STAYS CODEGEN-TIER-ONLY -- SEE 2410's PRECEDENT.**
+No reachable input separates the two readings.  `down` and `up` are copied from
+`fixedRc_DownFact[]` and `fixedRc_UpFact[]`, whose largest entry is 24, and
+`phase` is a remainder modulo `up`, so bit 15 is never set and the signed and
+unsigned readings agree over the whole reachable domain.  `RcFixed_Create` is
+the only way in and it takes a mode number, not a factor.  A value that
+separates them **exists and is well behaved** -- with `down = 0x8000, up = 5`
+the signed reading gives `input_needed = 0, phase = 2` and the unsigned one
+`1, 3`, both defined, neither faulting, unlike 613 where the divergence lay
+where both readings were already out of bounds -- but it can only be introduced
+by writing the field behind the API, and 2152's ruling is that a fixture
+reaching past a module's own contract proves something about the fixture.  So
+it is recorded as unpinnable rather than pinned, and the codegen tier is the
+only thing that sees it.  1,104 differential tests could not, and did not.
+
+### 2701. `extcheck` CANNOT SEE +0x194, AND 618's "LOADED BOTH WAYS" FILTER IS WHY -- A MEASURED FALSE NEGATIVE, FOUND BY HAND
+
+2403 reported `RcFixed_Create` and `RcFixed_Reset` at +0x196 and had to *guess*
+that `phase` at +0x194 "sits in the same run of fields and may be the same
+mistake".  It was the same mistake, and the tool never said so in either
+direction, before the fix or after.
+
+The mechanism is 618's own correction.  `extcheck` builds, per symbol and per
+side, the set of displacements loaded with more than one extension, and skips
+them:
+
+    # AN OPERAND LOADED BOTH WAYS ON EITHER SIDE PROVES NOTHING.
+
+That is right for `demapFrame`'s 0x144c and `receiver`'s 0x210..0x216, which
+appeared twice in OPPOSITE directions and were self-contradictory.  It is wrong
+here.  The object loads `mem 0x194` twice in `RcFixed_Resample` -- `movswl` at
+b13ee, where `imul` uses all 32 bits, and `movzwl` at b1448, where every use is
+16 bits wide -- so the field lands in the skip set on the OBJECT side and the
+comparison is never made, whatever we emit.  Two loads of one field with
+different extensions are ordinary and 618 says so itself; what 618 did not
+separate is the case where one of the two is forced and the other free.
+
+**So the tool's one-in-five precision (2402) is a statement about its
+candidates, not about its coverage, and this is the first measured example of
+what it misses.**  The class is: a field with at least one 16-bit-only use and
+at least one 32-bit use in the same function.  That is not rare -- it is what
+any accumulator-and-compare does -- and it is exactly the class 619 ruled needs
+real dataflow rather than another lookahead rule.  The ruling stands and now
+has a worked negative example beside its worked positives.
+
+No change is made to the tool here.  Narrowing the skip so it applies only when
+BOTH sides load both ways, or only when the two loads have the same use width,
+changes what is surfaced and would need 618's fire-and-quiet validation ritual
+re-run in both directions first; 2401 is what happens when that is skipped.
+
+### 2702. `RcFixed_Resample`'s `in_count` IS UNSIGNED IN THE OBJECT -- A CANDIDATE, NOT A FIX, BECAUSE IT IS AN API SIGNATURE
+
+Surfaced while tracing 2700 and deliberately not acted on.  Three sites in
+`RcFixed_Resample` compare the input count and the object takes the unsigned
+condition at every one of them:
+
+    b131c  test %edi,%edi ; je      the loop test is `!= 0`, not `> 0`
+    b1332  cmp %ecx,%ebx  ; jbe     `input_needed` against `in_count`
+    b13c7  cmp %eax,0x48(%esp) ; ja the same pair, the other way round
+
+We declare `int in_count` and emit `jle`, `jle` and `jg`.  A signed `while
+(in_count > 0)` cannot compile to `test; je`; an unsigned one compiles to
+exactly that, and once `in_count` is unsigned the other two follow by the usual
+arithmetic conversions whatever `input_needed` is declared as.
+
+**`input_needed` is therefore NOT implicated.**  Both `jbe` and `ja` are fully
+explained by the parameter alone, and its own loads and stores are 32 bits wide
+with no extension to read.  It stays `int`.
+
+Not fixed because it is not a struct field: `RcFixed_Resample`'s prototype is
+public, and changing it reaches `src/core/dp_wrapper.c` and `src/call/call.c`,
+outside the scope this branch was given.  It also cannot be separated from the
+question of what `*out_count`'s limit comparison does, which is a second
+signedness read in the same function.  Recorded with its three addresses so the
+next task starts from evidence rather than from a re-derivation.
