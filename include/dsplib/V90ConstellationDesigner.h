@@ -55,6 +55,13 @@
 #define DSPLIB_V90CONSTELLATIONDESIGNER_H
 
 /*
+ * `spectralDesign`'s second parameter, and the type is part of its mangled
+ * name, so this include is what makes the symbol come out right.  See that
+ * header for why the type lives on its own.
+ */
+#include "dsplib/V90SpectralConditions.h"
+
+/*
  * A POINTER ONLY, so a forward declaration is what belongs here.  Two
  * different definitions of `V90Parameters` exist in this tree -- the 0x504
  * word block in `V90PreFilter.h` and the 0x558 named map in
@@ -73,6 +80,13 @@ class V90Parameters;
  */
 class V90PreFilter;
 class V90ConstellationPower;
+
+/*
+ * The constellation table five of the members below take by pointer, and the
+ * type of the member at +0x04.  `V90MappingParams.h` defines it; a pointer is
+ * all that is needed here.
+ */
+class V90MappingParams;
 
 class V90ConstellationDesigner {
 public:
@@ -99,6 +113,44 @@ public:
 	void reset();
 
 	/*
+	 * THE ELEVEN SMALL MEMBERS, and NOTHING IN THE OBJECT CALLS ANY OF
+	 * THEM.  A sweep of every `R_386_PC32` in `.text` finds no caller for
+	 * any of the eleven -- nor for `constelBuild` or `pow6` in particular
+	 * -- so they survive only because a non-static member function has
+	 * external linkage.  That is why the differential test drives each one
+	 * directly rather than through a caller, and why nothing here can be
+	 * cross-checked against a call site's argument types.
+	 *
+	 * RETURN TYPES ARE NOT MANGLED and therefore not measured.  What the
+	 * object fixes is the register the value comes back in -- `%eax` for
+	 * the six below that return an integer, `%st(0)` for `pow6`, `calcK`
+	 * and `realK` -- and the widths chosen here are the narrowest that
+	 * carries every value the body can produce.
+	 */
+	float pow6(short);
+	float calcK(unsigned int, float *);
+	float realK(V90MappingParams *);
+	int maxK(V90MappingParams *);
+	int calcMtoMatchKtarget(float, float);
+	int findMinValueIndex(V90MappingParams *);
+	int findConstelMaxValueIndex(V90MappingParams *);
+	unsigned char constelBuild(short, short);
+	void spectralDesign(unsigned int, V90SpecialSpectralConditions);
+	void reconstructInitialConditions(V90MappingParams *, unsigned char *);
+	int findNextUcodeToAdd(unsigned char *, unsigned char,
+			      short (*)[128], short (*)[128], short *,
+			      unsigned char (*)[128]);
+
+	/*
+	 * `setConstellationToNoise`, `setConstellationToNoise_forceRate` and
+	 * `determineDminForRrn` are deliberately NOT declared yet.  Their
+	 * argument lists are settled by the manglings, but a return type is
+	 * not mangled and each of the three is large enough that reading it is
+	 * what decides; a placeholder `void` committed ahead of that reading
+	 * would be a guess in the record.  They arrive with their definitions.
+	 */
+
+	/*
 	 * Data members are public because the original's access specifiers are
 	 * not recoverable from the mangling, and because a single access
 	 * section is what keeps the class POD and __builtin_offsetof well
@@ -109,7 +161,21 @@ public:
 	/* +0x00  The parameter block.  Not owned; `reset` reads +0x39c. */
 	V90Parameters *params;
 
-	unsigned char pad_04[4];	/* +0x04                            */
+	/*
+	 * +0x04  The constellation table.  THREE INDEPENDENT MEMBERS FORCE THE
+	 * TYPE, and each recovers the shape `V90MappingParams.h` documents
+	 * from its own displacements:
+	 *
+	 *   spectralDesign            writes six dwords at +0x620..+0x634
+	 *   constelBuild              reads `movzbl 0x4(%edx,%esi,1)` with
+	 *                             %edx = k << 7 -- the +0x004 + 0x80*k
+	 *                             constellation byte
+	 *   findNextUcodeToAdd        the same read, same scaling
+	 *
+	 * It used to be `pad_04`.  Nothing reconstructed here WRITES it, so
+	 * where it comes from is still unknown.
+	 */
+	V90MappingParams *mappingParams;	/* +0x04                    */
 
 	/*
 	 * +0x08  `movb $0x0,0x8(%eax)` in the constructor, and a BYTE: the
@@ -124,16 +190,41 @@ public:
 
 	/*
 	 * +0x0a .. +0x10  Four consecutive 16-bit slots `reset` zeroes with
-	 * four `movw $0x0`.  Nothing reconstructed here reads any of them, so
-	 * they are offset-named; what makes them two bytes rather than four
-	 * is the store width and nothing else.
+	 * four `movw $0x0`.  They are offset-named; what makes them two bytes
+	 * rather than four is the store width and nothing else.
+	 *
+	 * TWO OF THE FOUR NOW HAVE A READER and both readings are `movswl`,
+	 * so they stay SIGNED: `findNextUcodeToAdd` loads +0x0a and +0x10 and
+	 * adds each to a sign-extended `short` from a caller's table before a
+	 * signed comparison.  That is the "forced" kind of extension --
+	 * the 32-bit result is what the comparison uses -- and not the free
+	 * kind of finding 614.
 	 */
 	short short_0a;			/* +0x0a */
 	short short_0c;			/* +0x0c */
 	short short_0e;			/* +0x0e */
 	short short_10;			/* +0x10 */
 
-	unsigned char pad_12[0x12];	/* +0x12                            */
+	unsigned char pad_12[2];	/* +0x12                            */
+
+	/*
+	 * +0x14  `constelBuild`'s table, and its ONLY reader anywhere in the
+	 * object.  `mov 0x14(%ebx),%edi` loads it once and the body then
+	 * addresses BOTH a 16-bit table at `(%edi,%eax,2)` with %eax =
+	 * (k << 7) + i and an 8-bit one at `0xd00(%eax,%ecx,1)` off the same
+	 * register.  One base register with a fixed 0xd00 displacement is the
+	 * measurement: two pointer members would have been two loads.  So the
+	 * pointer is to the first table and the second lives 0xd00 bytes on,
+	 * which is how the .cpp reaches it.
+	 *
+	 * WHAT THE POINTED-AT OBJECT IS is NOT known.  0xd00 is 13 rows of
+	 * 128 shorts, and reading a row count out of that would be inference;
+	 * nothing writes this field anywhere in the object, so there is no
+	 * assignment to type it from either.  It used to be inside `pad_12`.
+	 */
+	short (*constelTable)[128];	/* +0x14                            */
+
+	unsigned char pad_18[12];	/* +0x18                            */
 
 	/*
 	 * +0x24  Seeded by `reset` from the parameter block's +0x39c, which
@@ -143,7 +234,21 @@ public:
 	 */
 	unsigned int word_24;		/* +0x24 = params->w[0x39c / 4]     */
 
-	unsigned char pad_28[8];	/* +0x28                            */
+	unsigned char pad_28[4];	/* +0x28                            */
+
+	/*
+	 * +0x2c  The companding law, and a four-byte load: `mov 0x2c(%edx),%esi
+	 * ; test %esi,%esi` in `findNextUcodeToAdd`, whose zero arm calls
+	 * `linear2ulaw` and complements the result and whose non-zero arm
+	 * calls `linear2alaw` and XORs it with 0xd5.  So non-zero is A-law,
+	 * which is the same convention `PcmType` records for
+	 * `V90Phase3Modulator` (that header's finding).  It is typed `int`
+	 * rather than `PcmType` because the only thing the object forces is
+	 * the width and the `!= 0`, and naming the type would make this header
+	 * depend on the one that defines the enum for no measured gain.  It
+	 * used to be inside `pad_28`.
+	 */
+	int word_2c;			/* +0x2c non-zero selects A-law     */
 
 	/*
 	 * +0x30 and +0x44  The constructor's third and second arguments,

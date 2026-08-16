@@ -6128,3 +6128,99 @@ cleared.** Status: `unmeasured` -- glibc's i386 malloc returns 8-byte-aligned
 blocks, so every observed skew is zero; the mutation set carries the same
 observation from the constructor's side. Fix class: none proposed; reproduced
 as the object has it.*
+
+## D323 🐛 `reconstructInitialConditions` searches a constellation row with no bound
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner28reconstructInitialConditionsEP16V90MappingParamsPh`
+(blob 0x4b6d0) at 0x4b6f0..0x4b70d. **Reachability: a `ucode[k]` byte that does
+not appear anywhere in `constellation[k][]`.** **Observability: the search runs
+past the row into the next one and, in the limit, off the end of the object.**
+Status: `unmeasured` -- who fills `ucode` has not been traced. Fix class: none
+proposed; reproduced as found.*
+
+`while (constellation[k][d] != ucode[k]) d++;` is a bare `jne` with no compare
+against the row length, against 128, or against anything else. `d` is an
+`unsigned char`, so the worst case wraps at 256 rather than running for ever,
+but 256 bytes past a 128-byte row is already the next constellation's data.
+`t_v90cdesign.cpp` always plants the ucode value inside its row: both sides
+would walk off identically and a matching crash is not a comparison.
+
+## D324 🐛 `calcMtoMatchKtarget` loops about 2^32 times when the target is below log2(m)
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner19calcMtoMatchKtargetEff`
+(blob 0x47be0) at 0x47c3c..0x47c53. **Reachability: `kTarget < log2(m)`.**
+**Observability: a hang of seconds to minutes, then a nonsense result.**
+Status: `unmeasured` -- nothing in the object calls this function at all (see
+D326), so no caller's range is known. Fix class: none proposed; reproduced as
+found.*
+
+`(kTarget - log2(m)) / 6` is truncated toward zero into an `unsigned int`, so a
+negative value becomes something near 2^32, and the doubling loop that follows
+counts that value down one at a time. The conversion back to a float for the
+fractional part reads the same low dword as unsigned again. The test keeps
+`kTarget` above `log2(m)`: both sides hang identically and a timeout says
+nothing about the reconstruction.
+
+## D325 🐛 `constelBuild` and `findNextUcodeToAdd` index a 128-entry row with a byte
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner12constelBuildEss`
+(blob 0x47b40) and `_ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h`
+(blob 0x4b580). **Reachability: `constellation[which][0]` above 127, or a start
+index above 127 in the second function's zero-dmin walk.** **Observability: the
+read lands in the following row.** Status: `unmeasured`. Fix class: none
+proposed; reproduced as found.*
+
+Both index flat -- `(which << 7) + i` with no masking and no bound on `i`
+beyond a byte -- so `i` reaching 128 is the next row's entry 0 rather than an
+error. `findNextUcodeToAdd`'s second walk stops only when the index goes
+NEGATIVE as a `signed char`, which is 0x80, so it reads element 128 by
+construction whenever it runs to its bound. The test allocates seven rows
+where six are used, so that both sides read the same defined bytes.
+
+## D326 ⚠ Eleven of `V90ConstellationDesigner`'s members have no caller in the object
+
+*Batch of 2026-08-16, from a sweep of every `R_386_PC32` relocation in
+`.text`. **Reachability: none from inside the object.** **Observability:
+none.** Status: verified -- the sweep is exhaustive over the section's
+relocations. Fix class: documentation only.*
+
+`pow6`, `calcK`, `realK`, `maxK`, `calcMtoMatchKtarget`, `findMinValueIndex`,
+`findConstelMaxValueIndex`, `constelBuild`, `spectralDesign`,
+`reconstructInitialConditions` and `findNextUcodeToAdd` are reached by nothing
+in `dsplibs.o`. They survive because a non-static member function has external
+linkage. Recorded because it bounds what can ever be learned about them: no
+call site types an argument, fixes a return, or constrains an input range, so
+every deviation above is `unmeasured` for a reason that will not change.
+
+## D327 ⚠ `maxK` and `realK` add a fudge before truncating, and the two fudges differ
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams`
+(blob 0x47a10, `fadds` 1e-6f) and `_ZN24V90ConstellationDesigner5realKEP16V90MappingParams`
+(blob 0x4ab10, `fadds` 1e-9f). **Reachability: every non-zero product.**
+**Observability: a K one larger than the exact logarithm gives, for a product
+within a part in 10^6 below a power of two.** Status: `unmeasured` -- whether
+any real constellation product lands in that window has not been computed. Fix
+class: none proposed; reproduced as found.*
+
+`maxK` truncates toward zero, so the 1e-6f is what stops a K of exactly 12
+arriving as 11.9999995 and truncating to 11. `realK` returns a float and
+truncates nothing, so its 1e-9f changes only the last place -- the same
+correction applied where it cannot matter. Both are reproduced as written.
+
+## D328 ⚠ GCC 13 quietens a signalling NaN where the blob's compiler copies bits
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner14spectralDesignEj28V90SpecialSpectralConditions`
+(blob 0x47950) against `build/src/pump/v90/V90ConstellationDesigner.o`.
+**Reachability: a signalling NaN in one of the eight `V90Parameters` spectral
+shaper floats.** **Observability: bit 22 of the copied word comes out set;
+`V90MappingParams+0x636` reads 0xef where the blob leaves 0xaf.** Status:
+verified for the modern build, absent from `make period`. Fix class:
+documentation only -- the source is right and neither build is patched.*
+
+The object copies each shaper float with `mov`, which is what GCC 3.4.2 emits
+for a float assignment. GCC 13 with `-mfpmath=387` emits `flds`/`fstps`, and
+an x87 load quietens a signalling NaN. Spelling the copy as a `memcpy` would
+make both builds agree and would be papering over a compiler divergence in
+`src/`, so the assignment stands and `t_v90cdesign.cpp` excludes exactly that
+one encoding from its fill -- the eight fields are read by
+`Vparser_read_float` from a configuration file and cannot hold one.

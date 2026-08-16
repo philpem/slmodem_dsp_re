@@ -32,11 +32,18 @@
  * every array is six entries.  0x80 * 6 = 0x300 exactly, which is why the two
  * byte tables abut.
  *
- * THE 28 BYTES AT +0x61C ARE NOT EXPLAINED.  No function in this file touches
- * them and no other reconstructed function reaches this struct, so they are a
- * pad and are named as one rather than guessed into fields.  Neither is the
- * total size known: 0x650 is where the last member this tree can see ends,
- * not a measured `sizeof`.
+ * TWENTY-FOUR OF THE 28 BYTES AT +0x61C ARE NOW EXPLAINED, and the sentence
+ * that used to stand here -- that no other reconstructed function reaches
+ * this struct -- is RETRACTED.  `V90ConstellationDesigner::spectralDesign`
+ * writes six consecutive dwords at +0x620..+0x634, and `tools/vparse.py`
+ * names every one of the six `V90Parameters` fields it copies them from, so
+ * the six are the spectral shaper's description and are named for their
+ * sources rather than for their offsets.  See the members below and
+ * `include/dsplib/V90SpectralConditions.h`.  The four bytes at +0x61c are
+ * still untouched by anything reconstructed and stay a pad.
+ *
+ * The total size is still not known: 0x650 is where the last member this
+ * tree can see ends, not a measured `sizeof`.
  *
  * THE FOUR BYTES AT +0 USED TO BE IN THE SAME POSITION AND NOW HAVE ONE
  * READER, `V90Demodulator::getBitRate`:
@@ -77,7 +84,32 @@ public:
 	unsigned char codecConstellation[V90_CONSTELLATIONS]
 					[V90_CONSTELLATION_MAX];/* +0x304 */
 	unsigned int constellationSize[V90_CONSTELLATIONS];	/* +0x604 */
-	unsigned char pad_61c[28];				/* +0x61c */
+	unsigned char pad_61c[4];				/* +0x61c */
+
+	/*
+	 * +0x620..+0x634  The spectral shaper, six dwords written together by
+	 * `V90ConstellationDesigner::spectralDesign` and read by nothing this
+	 * tree has written.  Each is a straight `mov` from a `V90Parameters`
+	 * field `vparse.py` names, so the names below are the AUTHOR'S for the
+	 * sources and ours only for the destinations; the two arms copy
+	 * `SPECTRAL_SHAPER_*` or `GERMAN_PBX_SPECTRAL_SHAPER_*` into the same
+	 * six slots.
+	 *
+	 * The widths are the store encodings -- six `movl` -- and the types
+	 * below are the SOURCES' types, which is what a four-byte copy carries
+	 * and not something the copy itself forces.  `shaperId` is the one
+	 * exception and it is measured: it is not a copy but
+	 * `min(SPECTRAL_SHAPER_ID, rate)` computed with an UNSIGNED compare
+	 * (`ja` in one arm, `jbe` in the other), which the `unsigned int` rate
+	 * argument forces whatever the parameter's own `int` says.
+	 */
+	int shaperSR;						/* +0x620 */
+	unsigned int shaperId;					/* +0x624 */
+	float shaperA1;						/* +0x628 */
+	float shaperA2;						/* +0x62c */
+	float shaperB1;						/* +0x630 */
+	float shaperB2;						/* +0x634 */
+
 	int distinctIndex[V90_CONSTELLATIONS];			/* +0x638 */
 };
 

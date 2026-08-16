@@ -1,0 +1,788 @@
+/*
+ * t_v90cdesign.cpp -- differential test of V90ConstellationDesigner's eleven
+ * small members, each against the blob's own copy.
+ *
+ * NOTHING IN THE OBJECT CALLS ANY OF THEM.  A sweep of every `R_386_PC32`
+ * relocation in `.text` finds no caller for any of the eleven, so there is no
+ * call site to drive them through and no call site to take argument types
+ * from.  Each is therefore called directly by symbol on both sides -- ours by
+ * its mangled name, the blob's by the `ref_` alias -- through an `asm()`
+ * label, which is also how the ctor/dtor test reaches a member with no
+ * spellable C++ form and how finding 225's double mangling is sidestepped.
+ * The convention is plain cdecl with `this` as the first stack argument
+ * (finding 215), and a `short` parameter occupies a whole slot, so the
+ * declarations below widen those to `int` deliberately.
+ *
+ * WHAT A RANDOM FILL WOULD NOT REACH, and what is forced here instead:
+ *
+ *   TIES.  `findMinValueIndex` and `findConstelMaxValueIndex` are three-way
+ *   -- greater, equal, less -- and the equal arm is where the two are
+ *   asymmetric: both break a tie on the LARGER size, so the minimum function
+ *   is min-value/max-size.  Random bytes essentially never make two
+ *   `constellation[k][0]` equal, so the equal arm would go untested.  The
+ *   sweep below makes every subset of the six rows equal in turn and, among
+ *   the equal ones, varies the sizes both ways.
+ *
+ *   EVERY WINNER.  A sweep that only varies values at random can pass while
+ *   two arms are transposed.  Each of the six rows is made the sole winner in
+ *   turn, and each of the six is made the tie-break winner in turn.
+ *
+ *   THE ZERO PRODUCT.  `realK` and `maxK` answer a zero product with a
+ *   constant, and a product of six random 32-bit sizes is never zero, so a
+ *   zero size is planted in each of the six positions in turn.
+ *
+ *   BOTH COMPANDING ARMS and BOTH WALKS of `findNextUcodeToAdd`: the arm is
+ *   chosen by `dmin[which] != 0` and the codec by the object's +0x2c, so all
+ *   four combinations are driven, at starts that straddle both of the two
+ *   different bounds (0x71 unsigned, 0x7f signed).
+ *
+ * WHAT IS DELIBERATELY NOT DRIVEN, because both sides would hang identically
+ * and a hang is not a diagnostic (docs/deviations.md D-entries):
+ *
+ *   `calcMtoMatchKtarget` with kTarget below log2(m).  The truncation goes
+ *   negative and the doubling loop then runs about 2^32 times.
+ *
+ *   `reconstructInitialConditions` with a ucode value absent from its row.
+ *   The search is a bare `jne` with no bound and walks off the row.
+ *
+ * THE TWO MUTATING MEMBERS ARE COMPARED AS WHOLE OBJECTS with `diff_eq_obj`
+ * over the 0x650-byte `V90MappingParams`, not by checking the fields this
+ * session predicted: `spectralDesign` and `reconstructInitialConditions`
+ * write six dwords and two byte tables respectively, and a field-by-field
+ * check would pass over anything else either of them touched.
+ */
+
+#include <string.h>
+
+#include "harness.h"
+
+#include "dsplib/V90MappingParams.h"
+#include "dsplib/V90Parameters.h"
+#include "dsplib/V90ConstellationDesigner.h"
+
+extern "C" {
+
+float our_pow6(void *, int) asm("_ZN24V90ConstellationDesigner4pow6Es");
+float ref_pow6(void *, int) asm("ref__ZN24V90ConstellationDesigner4pow6Es");
+
+float our_calcK(void *, unsigned, float *)
+	asm("_ZN24V90ConstellationDesigner5calcKEjPf");
+float ref_calcK(void *, unsigned, float *)
+	asm("ref__ZN24V90ConstellationDesigner5calcKEjPf");
+
+float our_realK(void *, void *)
+	asm("_ZN24V90ConstellationDesigner5realKEP16V90MappingParams");
+float ref_realK(void *, void *)
+	asm("ref__ZN24V90ConstellationDesigner5realKEP16V90MappingParams");
+
+int our_maxK(void *, void *)
+	asm("_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams");
+int ref_maxK(void *, void *)
+	asm("ref__ZN24V90ConstellationDesigner4maxKEP16V90MappingParams");
+
+int our_calcM(void *, float, float)
+	asm("_ZN24V90ConstellationDesigner19calcMtoMatchKtargetEff");
+int ref_calcM(void *, float, float)
+	asm("ref__ZN24V90ConstellationDesigner19calcMtoMatchKtargetEff");
+
+int our_findMin(void *, void *)
+	asm("_ZN24V90ConstellationDesigner17findMinValueIndexEP16V90MappingParams");
+int ref_findMin(void *, void *)
+	asm("ref__ZN24V90ConstellationDesigner17findMinValueIndexEP16V90MappingParams");
+
+int our_findMax(void *, void *)
+	asm("_ZN24V90ConstellationDesigner24findConstelMaxValueIndexEP16V90MappingParams");
+int ref_findMax(void *, void *)
+	asm("ref__ZN24V90ConstellationDesigner24findConstelMaxValueIndexEP16V90MappingParams");
+
+int our_constelBuild(void *, int, int)
+	asm("_ZN24V90ConstellationDesigner12constelBuildEss");
+int ref_constelBuild(void *, int, int)
+	asm("ref__ZN24V90ConstellationDesigner12constelBuildEss");
+
+void our_spectral(void *, unsigned, int)
+	asm("_ZN24V90ConstellationDesigner14spectralDesignEj28V90SpecialSpectralConditions");
+void ref_spectral(void *, unsigned, int)
+	asm("ref__ZN24V90ConstellationDesigner14spectralDesignEj28V90SpecialSpectralConditions");
+
+void our_reconstruct(void *, void *, unsigned char *)
+	asm("_ZN24V90ConstellationDesigner28reconstructInitialConditionsEP16V90MappingParamsPh");
+void ref_reconstruct(void *, void *, unsigned char *)
+	asm("ref__ZN24V90ConstellationDesigner28reconstructInitialConditionsEP16V90MappingParamsPh");
+
+int our_findNext(void *, unsigned char *, int, void *, void *, short *, void *)
+	asm("_ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h");
+int ref_findNext(void *, unsigned char *, int, void *, void *, short *, void *)
+	asm("ref__ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h");
+
+}
+
+/*
+ * A cheap varied fill.  The same generator the ctor/dtor test uses, so a
+ * value that happens to be a constant the code stores is not mistaken for a
+ * store.
+ */
+static unsigned lfsr;
+
+static void
+reseed(unsigned s)
+{
+	lfsr = s | 1u;
+}
+
+static unsigned
+nextrand(void)
+{
+	lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+	lfsr = lfsr * 1103515245u + 12345u;
+	return lfsr;
+}
+
+/*
+ * The two mapping-parameter blocks, one per side, and the designer object
+ * that points at nothing until each case wires it up.  They are file scope
+ * because 0x650 bytes twice is more than a stack frame wants and because the
+ * period compiler's frame limits are not worth discovering here.
+ */
+static V90MappingParams mpA;
+static V90MappingParams mpB;
+
+/*
+ * `V90Parameters` and `V90ConstellationDesigner` both declare a constructor
+ * and neither declares a default one, so neither can be a plain static
+ * object.  They get raw storage and a pointer, which is also closer to what
+ * the test wants: every field is set explicitly rather than by a constructor
+ * whose stores would be part of what is under test elsewhere.
+ */
+static unsigned char parAbuf[sizeof(V90Parameters)] __attribute__((aligned(8)));
+static unsigned char parBbuf[sizeof(V90Parameters)] __attribute__((aligned(8)));
+static unsigned char cdAbuf[sizeof(V90ConstellationDesigner)]
+	__attribute__((aligned(8)));
+static unsigned char cdBbuf[sizeof(V90ConstellationDesigner)]
+	__attribute__((aligned(8)));
+static V90Parameters *parA;
+static V90Parameters *parB;
+static V90ConstellationDesigner *cdA;
+static V90ConstellationDesigner *cdB;
+
+/* constelBuild's table: 0xd00 of shorts and then the byte table past it. */
+#define TBLBYTES	8192
+static unsigned char tblA[TBLBYTES] __attribute__((aligned(8)));
+static unsigned char tblB[TBLBYTES] __attribute__((aligned(8)));
+
+static void
+wire(void)
+{
+	parA = (V90Parameters *)parAbuf;
+	parB = (V90Parameters *)parBbuf;
+	cdA = (V90ConstellationDesigner *)cdAbuf;
+	cdB = (V90ConstellationDesigner *)cdBbuf;
+	memset((void *)cdA, 0, sizeof(V90ConstellationDesigner));
+	memset((void *)cdB, 0, sizeof(V90ConstellationDesigner));
+	cdA->params = parA;
+	cdB->params = parB;
+	cdA->mappingParams = &mpA;
+	cdB->mappingParams = &mpB;
+	cdA->constelTable = (short (*)[128])tblA;
+	cdB->constelTable = (short (*)[128])tblB;
+}
+
+/* Fill both mapping blocks identically with varied bytes. */
+static void
+fill_mp(unsigned s)
+{
+	unsigned char *a = (unsigned char *)&mpA;
+	unsigned char *b = (unsigned char *)&mpB;
+	unsigned i;
+
+	reseed(s);
+	for (i = 0; i < sizeof(mpA); i++) {
+		unsigned char v = (unsigned char)(nextrand() >> 13);
+
+		a[i] = v;
+		b[i] = v;
+	}
+}
+
+/*
+ * ===========================================================================
+ * pow6, calcK, realK, maxK, calcMtoMatchKtarget -- the arithmetic five
+ * ===========================================================================
+ */
+static int
+run_arith(void)
+{
+	static const short pw[] = {
+		0, 1, -1, 2, -2, 3, 7, -7, 10, -10, 25, 100, -100,
+		181, -181, 255, 256, 1000, -1000, 4096, 12345, -12345,
+		32767, -32768
+	};
+	int i;
+	int j;
+	int k;
+
+	diff_begin("V90ConstellationDesigner arithmetic leaves");
+	wire();
+
+	/* pow6: x^6 as a float, over the whole short range's interesting end. */
+	for (i = 0; i < (int)(sizeof(pw) / sizeof(pw[0])); i++) {
+		float g = our_pow6(cdA, pw[i]);
+		float r = ref_pow6(cdB, pw[i]);
+
+		diff_eq_float("pow6(%ld)", g, r, pw[i]);
+	}
+
+	/*
+	 * calcK: the product of six scaled sizes, then log2 of it.  The
+	 * multiplier is unsigned and the object converts it 64-bit-wise, so
+	 * values above 2^31 are part of the sweep and not an afterthought.
+	 */
+	{
+		static const unsigned mm[] = {
+			1u, 2u, 3u, 17u, 128u, 4096u, 65535u, 1000000u,
+			0x7fffffffu, 0x80000000u, 0xfffffffeu
+		};
+		float f[6];
+
+		for (i = 0; i < (int)(sizeof(mm) / sizeof(mm[0])); i++) {
+			for (j = 0; j < 8; j++) {
+				float g;
+				float r;
+
+				reseed(0x51ed + 37u * (unsigned)(i * 8 + j));
+				for (k = 0; k < 6; k++)
+					f[k] = (float)(nextrand() % 4096u)
+					     / 512.0f + 0.03125f;
+
+				g = our_calcK(cdA, mm[i], f);
+				r = ref_calcK(cdB, mm[i], f);
+				diff_eq_float("calcK(%ld, ...)", g, r,
+					      (long)mm[i]);
+			}
+		}
+	}
+
+	/*
+	 * realK and maxK share a product and differ in their answer's type and
+	 * in the fudge added before the truncation.  Every position is given a
+	 * zero in turn, because a random product is never zero and the zero
+	 * arm is a different return.
+	 */
+	for (i = 0; i < 64; i++) {
+		float gf;
+		float rf;
+		int gi;
+		int ri;
+
+		fill_mp(0x9e37u + 101u * (unsigned)i);
+		reseed(0x1234u + 7u * (unsigned)i);
+		for (k = 0; k < 6; k++) {
+			unsigned v = nextrand() % 200u + 1u;
+
+			mpA.constellationSize[k] = v;
+			mpB.constellationSize[k] = v;
+		}
+		if (i < 6) {
+			mpA.constellationSize[i] = 0;
+			mpB.constellationSize[i] = 0;
+		}
+		if (i >= 6 && i < 12) {
+			/* A huge size, so the product leaves float range. */
+			mpA.constellationSize[i - 6] = 0xfff00000u;
+			mpB.constellationSize[i - 6] = 0xfff00000u;
+		}
+
+		gf = our_realK(cdA, &mpA);
+		rf = ref_realK(cdB, &mpB);
+		diff_eq_float("realK trial %ld", gf, rf, i);
+
+		gi = our_maxK(cdA, &mpA);
+		ri = ref_maxK(cdB, &mpB);
+		diff_eq_int("maxK trial %ld", gi, ri, i);
+
+		diff_eq_obj("realK/maxK read only", V90MappingParams,
+			    &mpA, &mpB, i);
+	}
+
+	/*
+	 * calcMtoMatchKtarget: 2^((kTarget - log2 m)/6).  kTarget is kept
+	 * above log2(m) on purpose -- see the file header -- and the sweep
+	 * straddles the integer boundaries of the doubling loop, which is
+	 * where the split into 2^n and (2^0.01)^frac can disagree.
+	 */
+	for (i = 0; i < 40; i++) {
+		static const float ms[] = { 1.0f, 2.0f, 6.0f, 64.0f, 128.0f };
+		float m = ms[i % 5];
+		float target = (float)(i / 5) * 6.0f + (float)(i % 5) * 0.37f
+			     + 1.0f;
+		int g;
+		int r;
+
+		g = our_calcM(cdA, target, m);
+		r = ref_calcM(cdB, target, m);
+		diff_eq_int("calcMtoMatchKtarget trial %ld", g, r, i);
+	}
+
+	return diff_end();
+}
+
+/*
+ * ===========================================================================
+ * findMinValueIndex and findConstelMaxValueIndex
+ * ===========================================================================
+ *
+ * The sweep is exhaustive over a small alphabet rather than random: six rows
+ * whose first bytes take every combination of three values, with the sizes
+ * taking every combination of two.  3^6 * 2^6 is 46,656 shapes and it covers
+ * every tie pattern, every winner and every tie-break winner.
+ */
+static int
+run_findindex(void)
+{
+	int shape;
+	int i;
+
+	diff_begin("V90ConstellationDesigner::find{Min,ConstelMax}ValueIndex");
+	wire();
+	fill_mp(0x0d0eu);
+
+	for (shape = 0; shape < 46656; shape++) {
+		int v = shape % 729;
+		int s = shape / 729;
+		int g;
+		int r;
+
+		for (i = 0; i < 6; i++) {
+			static const unsigned char vals[3] = { 7, 8, 9 };
+			static const unsigned int lens[2] = { 100u, 200u };
+
+			mpA.constellation[i][0] = vals[(v / 1) % 3];
+			mpB.constellation[i][0] = mpA.constellation[i][0];
+			mpA.constellationSize[i] = lens[s & 1];
+			mpB.constellationSize[i] = mpA.constellationSize[i];
+			v /= 3;
+			s >>= 1;
+		}
+
+		g = our_findMin(cdA, &mpA);
+		r = ref_findMin(cdB, &mpB);
+		diff_eq_int("findMinValueIndex shape %ld", g, r, shape);
+
+		g = our_findMax(cdA, &mpA);
+		r = ref_findMax(cdB, &mpB);
+		diff_eq_int("findConstelMaxValueIndex shape %ld", g, r, shape);
+	}
+
+	/*
+	 * And the wide values, because the alphabet above is all below 0x80
+	 * and the byte is loaded `movzbl`: a signed reading would agree over
+	 * every value used so far and disagree here.
+	 */
+	for (shape = 0; shape < 512; shape++) {
+		int g;
+		int r;
+
+		reseed(0x77u + 13u * (unsigned)shape);
+		for (i = 0; i < 6; i++) {
+			unsigned char v = (unsigned char)(nextrand() >> 11);
+			unsigned int n = nextrand();
+
+			mpA.constellation[i][0] = v;
+			mpB.constellation[i][0] = v;
+			mpA.constellationSize[i] = n;
+			mpB.constellationSize[i] = n;
+		}
+
+		g = our_findMin(cdA, &mpA);
+		r = ref_findMin(cdB, &mpB);
+		diff_eq_int("findMinValueIndex wide %ld", g, r, shape);
+
+		g = our_findMax(cdA, &mpA);
+		r = ref_findMax(cdB, &mpB);
+		diff_eq_int("findConstelMaxValueIndex wide %ld", g, r, shape);
+	}
+
+	return diff_end();
+}
+
+/*
+ * ===========================================================================
+ * spectralDesign
+ * ===========================================================================
+ *
+ * ONE INPUT IS EXCLUDED AND IT IS EXCLUDED PRECISELY: a SIGNALLING NaN in one
+ * of the eight shaper floats.  This is not a tolerance; it is the one input on
+ * which the two BUILDS disagree while the source is right, and the exclusion
+ * is the exact encoding rather than a range.
+ *
+ * The object copies each shaper float with a 32-bit integer `mov`, which is
+ * what GCC 3.4.2 emits for a float assignment.  GCC 13 emits `flds`/`fstps`
+ * instead -- seen in `build/src/pump/v90/V90ConstellationDesigner.o` -- and
+ * loading a signalling NaN into an x87 register and storing it back sets the
+ * quiet bit, so the byte at +0x636 comes out 0xef where the blob leaves 0xaf.
+ * `make period`, the tier that decides, has no such difference.
+ *
+ * Writing the copy as a `memcpy` would make both builds agree and would be
+ * papering over a compiler divergence in `src/`, which is exactly what
+ * CLAUDE.md says not to do.  So the source keeps the float assignment the
+ * author wrote and the test declines to feed it a value the parameters cannot
+ * hold: every one of these comes from `Vparser_read_float` over a
+ * configuration file.  docs/deviations.md carries the entry.
+ */
+static void
+quieten_snan(float *f)
+{
+	unsigned int bits;
+
+	memcpy(&bits, f, sizeof(bits));
+	if ((bits & 0x7f800000u) == 0x7f800000u && (bits & 0x007fffffu) != 0)
+		bits |= 0x00400000u;
+	memcpy(f, &bits, sizeof(bits));
+}
+
+static int
+run_spectral(void)
+{
+	static const unsigned rates[] = {
+		0u, 1u, 27999u, 28000u, 28001u, 31999u, 32000u, 32001u,
+		56000u, 0x7fffffffu, 0x80000000u, 0xffffffffu
+	};
+	int trial;
+	unsigned i;
+
+	diff_begin("V90ConstellationDesigner::spectralDesign");
+	wire();
+
+	for (trial = 0; trial < 48; trial++) {
+		unsigned char *pa = (unsigned char *)parA;
+		unsigned char *pb = (unsigned char *)parB;
+		int cond = trial % 4;
+
+		reseed(0xabc0u + 61u * (unsigned)trial);
+		for (i = 0; i < sizeof(V90Parameters); i++) {
+			unsigned char v = (unsigned char)(nextrand() >> 9);
+
+			pa[i] = v;
+			pb[i] = v;
+		}
+		/*
+		 * The identifier is what the rate limits, so it is planted
+		 * one below, at, and one above each rate rather than left to
+		 * the fill.
+		 */
+		/* See quieten_snan above for why these eight are touched. */
+		quieten_snan(&parA->SPECTRAL_SHAPER_A1);
+		quieten_snan(&parA->SPECTRAL_SHAPER_A2);
+		quieten_snan(&parA->SPECTRAL_SHAPER_B1);
+		quieten_snan(&parA->SPECTRAL_SHAPER_B2);
+		quieten_snan(&parA->GERMAN_PBX_SPECTRAL_SHAPER_A1);
+		quieten_snan(&parA->GERMAN_PBX_SPECTRAL_SHAPER_A2);
+		quieten_snan(&parA->GERMAN_PBX_SPECTRAL_SHAPER_B1);
+		quieten_snan(&parA->GERMAN_PBX_SPECTRAL_SHAPER_B2);
+		memcpy((void *)parB, (const void *)parA, sizeof(V90Parameters));
+
+		parA->SPECTRAL_SHAPER_ID = (int)rates[trial % 12]
+					+ (trial % 3) - 1;
+		parB->SPECTRAL_SHAPER_ID = parA->SPECTRAL_SHAPER_ID;
+		parA->GERMAN_PBX_SPECTRAL_SHAPER_ID = parA->SPECTRAL_SHAPER_ID;
+		parB->GERMAN_PBX_SPECTRAL_SHAPER_ID = parA->SPECTRAL_SHAPER_ID;
+
+		fill_mp(0x5150u + 29u * (unsigned)trial);
+
+		our_spectral(cdA, rates[trial % 12], cond);
+		ref_spectral(cdB, rates[trial % 12], cond);
+
+		diff_eq_obj("spectralDesign", V90MappingParams,
+			    &mpA, &mpB, trial);
+		diff_eq_obj("spectralDesign leaves the parameters alone",
+			    V90Parameters, parA, parB, trial);
+	}
+
+	/*
+	 * And the far side of the enumerator, because the object tests
+	 * `== 2` and every other value takes one arm: the sweep sets the
+	 * condition one below and one above the only value that branches.
+	 */
+	for (trial = 0; trial < 8; trial++) {
+		static const int conds[8] = { -1, 0, 1, 2, 3, 4, 100, -2 };
+
+		fill_mp(0x6161u + 17u * (unsigned)trial);
+		our_spectral(cdA, 33600u, conds[trial]);
+		ref_spectral(cdB, 33600u, conds[trial]);
+		diff_eq_obj("spectralDesign condition sweep", V90MappingParams,
+			    &mpA, &mpB, conds[trial]);
+	}
+
+	return diff_end();
+}
+
+/*
+ * ===========================================================================
+ * reconstructInitialConditions
+ * ===========================================================================
+ *
+ * The ucode value is always PRESENT in its row, because the search has no
+ * bound and an absent value walks off the row on both sides alike.  Which
+ * position it sits at is the sweep: 0 (nothing to drop), the last entry
+ * inside the length, and one past the length -- which is legal for the
+ * search and makes the shift run more times than the row is long.
+ */
+static int
+run_reconstruct(void)
+{
+	int trial;
+	int k;
+	int i;
+
+	diff_begin("V90ConstellationDesigner::reconstructInitialConditions");
+	wire();
+
+	for (trial = 0; trial < 64; trial++) {
+		unsigned char ucodeA[6];
+		unsigned char ucodeB[6];
+
+		fill_mp(0x3141u + 53u * (unsigned)trial);
+		reseed(0x2718u + 11u * (unsigned)trial);
+
+		for (k = 0; k < 6; k++) {
+			unsigned int n = nextrand() % 24u + 1u;
+			int pick;
+
+			mpA.constellationSize[k] = n;
+			mpB.constellationSize[k] = n;
+			/*
+			 * Distinct entries, so the first match is at a known
+			 * index and a wrong search would land elsewhere
+			 * rather than on an equal neighbour.
+			 */
+			for (i = 0; i < 64; i++) {
+				unsigned char v =
+				    (unsigned char)(k * 64 + i + 1);
+
+				mpA.constellation[k][i] = v;
+				mpB.constellation[k][i] = v;
+				mpA.codecConstellation[k][i] =
+				    (unsigned char)(255 - v);
+				mpB.codecConstellation[k][i] =
+				    mpA.codecConstellation[k][i];
+			}
+			pick = (int)(nextrand() % (n + 2u));
+			if (trial % 8 == 0)
+				pick = 0;
+			ucodeA[k] = mpA.constellation[k][pick];
+			ucodeB[k] = ucodeA[k];
+		}
+
+		our_reconstruct(cdA, &mpA, ucodeA);
+		ref_reconstruct(cdB, &mpB, ucodeB);
+
+		diff_eq_obj("reconstructInitialConditions", V90MappingParams,
+			    &mpA, &mpB, trial);
+		diff_eq_obj("the ucode is not written", unsigned char[6],
+			    ucodeA, ucodeB, trial);
+	}
+
+	return diff_end();
+}
+
+/*
+ * ===========================================================================
+ * constelBuild
+ * ===========================================================================
+ */
+static int
+run_constelbuild(void)
+{
+	int trial;
+	int which;
+	unsigned i;
+
+	diff_begin("V90ConstellationDesigner::constelBuild");
+	wire();
+
+	for (trial = 0; trial < 96; trial++) {
+		reseed(0x4d2u + 97u * (unsigned)trial);
+		for (i = 0; i < TBLBYTES; i++) {
+			unsigned char v = (unsigned char)(nextrand() >> 15);
+
+			/*
+			 * The byte table is a flag the object only tests
+			 * against zero, so a quarter of it is made zero
+			 * rather than one in 256.
+			 */
+			if (i >= 0xd00 && (v & 3) == 0)
+				v = 0;
+			tblA[i] = v;
+			tblB[i] = v;
+		}
+		fill_mp(0xbeefu + 41u * (unsigned)trial);
+
+		parA->unnamed_360 = (int)(nextrand() % 8u);
+		parB->unnamed_360 = parA->unnamed_360;
+
+		for (which = 0; which < 6; which++) {
+			static const short steps[8] = {
+				0, 1, -1, 2, 16, -16, 1024, -1024
+			};
+			unsigned char len =
+			    (unsigned char)(nextrand() % 200u);
+			int g;
+			int r;
+			int s;
+
+			mpA.constellation[which][0] = len;
+			mpB.constellation[which][0] = len;
+
+			for (s = 0; s < 8; s++) {
+				g = our_constelBuild(cdA, steps[s], which);
+				r = ref_constelBuild(cdB, steps[s], which);
+				diff_eq_int("constelBuild(step %ld)", g, r,
+					    steps[s]);
+			}
+		}
+
+		diff_eq_obj("constelBuild leaves the table alone",
+			    unsigned char[TBLBYTES], tblA, tblB, trial);
+		diff_eq_obj("constelBuild leaves the mapping alone",
+			    V90MappingParams, &mpA, &mpB, trial);
+	}
+
+	return diff_end();
+}
+
+/*
+ * ===========================================================================
+ * findNextUcodeToAdd
+ * ===========================================================================
+ *
+ * The rows are seven deep and not six: the second walk's bound is
+ * `(signed char)i >= 0`, so the index reaches 0x80 and the object then reads
+ * the row after the one it was given.  Six rows would be a read past the end
+ * of the array on both sides and the test would be measuring the allocator.
+ */
+static int
+run_findnext(void)
+{
+	static short ucodeA[7][128];
+	static short ucodeB[7][128];
+	static short altA[7][128];
+	static short altB[7][128];
+	static unsigned char extraA[7][128];
+	static unsigned char extraB[7][128];
+	int trial;
+	int which;
+	int i;
+	int j;
+
+	diff_begin("V90ConstellationDesigner::findNextUcodeToAdd");
+	wire();
+
+	for (trial = 0; trial < 96; trial++) {
+		short dminA[6];
+		short dminB[6];
+
+		reseed(0xfeedu + 71u * (unsigned)trial);
+		for (i = 0; i < 7; i++) {
+			for (j = 0; j < 128; j++) {
+				/*
+				 * A rising row with noise on it, so that the
+				 * walk stops somewhere in the middle rather
+				 * than at the first or the last entry.
+				 */
+				short u = (short)(j * 61
+					  + (int)(nextrand() % 64u) - 32);
+				short a = (short)(u + (int)(nextrand() % 512u)
+					  - 256);
+
+				ucodeA[i][j] = u;
+				ucodeB[i][j] = u;
+				altA[i][j] = a;
+				altB[i][j] = a;
+				extraA[i][j] = (unsigned char)nextrand();
+				extraB[i][j] = extraA[i][j];
+			}
+		}
+		fill_mp(0xc0deu + 23u * (unsigned)trial);
+
+		cdA->short_0a = (short)(nextrand() % 4096u) - 2048;
+		cdB->short_0a = cdA->short_0a;
+		cdA->short_10 = (short)(nextrand() % 4096u) - 2048;
+		cdB->short_10 = cdA->short_10;
+		/* Both companding arms, alternating with the trial. */
+		cdA->word_2c = (trial & 1);
+		cdB->word_2c = cdA->word_2c;
+
+		for (which = 0; which < 6; which++) {
+			unsigned char outA[4];
+			unsigned char outB[4];
+			int g;
+			int r;
+			int startcase;
+
+			/* Both walks: zero dmin and non-zero dmin. */
+			for (i = 0; i < 6; i++) {
+				dminA[i] = (short)((trial >> 1) & 1);
+				dminB[i] = dminA[i];
+			}
+
+			/*
+			 * The start is the row's first byte, and the two
+			 * walks have two different bounds -- 0x71 read
+			 * unsigned and 0x7f read signed -- so the sweep sets
+			 * it one below, at, and one above each.
+			 */
+			for (startcase = 0; startcase < 10; startcase++) {
+				static const unsigned char starts[10] = {
+					0, 1, 0x70, 0x71, 0x72, 0x7e, 0x7f,
+					0x80, 0x81, 0xff
+				};
+
+				mpA.constellation[which][0] =
+				    starts[startcase];
+				mpB.constellation[which][0] =
+				    starts[startcase];
+
+				memset(outA, 0x5a, sizeof(outA));
+				memset(outB, 0x5a, sizeof(outB));
+
+				g = our_findNext(cdA, outA, which, ucodeA,
+						 altA, dminA, extraA);
+				r = ref_findNext(cdB, outB, which, ucodeB,
+						 altB, dminB, extraB);
+
+				diff_eq_int("findNextUcodeToAdd returns"
+					    " (start %ld)", g, r,
+					    starts[startcase]);
+				diff_eq_obj("findNextUcodeToAdd out",
+					    unsigned char[4], outA, outB,
+					    starts[startcase]);
+			}
+		}
+
+		diff_eq_obj("findNextUcodeToAdd leaves ucode alone",
+			    short[7][128], ucodeA, ucodeB, trial);
+		diff_eq_obj("findNextUcodeToAdd leaves alt alone",
+			    short[7][128], altA, altB, trial);
+		diff_eq_obj("findNextUcodeToAdd leaves the sixth alone",
+			    unsigned char[7][128], extraA, extraB, trial);
+		diff_eq_obj("findNextUcodeToAdd leaves the mapping alone",
+			    V90MappingParams, &mpA, &mpB, trial);
+	}
+
+	return diff_end();
+}
+
+int
+main(void)
+{
+	int rc = 0;
+
+	rc |= run_arith();
+	rc |= run_findindex();
+	rc |= run_spectral();
+	rc |= run_reconstruct();
+	rc |= run_constelbuild();
+	rc |= run_findnext();
+
+	return rc;
+}

@@ -54950,3 +54950,193 @@ about the D8 register forms -- which 245 already noted are fine, and which this
 independently confirms. The rule "read the bytes, not the mnemonic" still
 holds; there is now a second reading printed beside the first so nobody has to
 remember to.
+
+### 2140. THE V90ConstellationDesigner BATCH IS FOURTEEN METHODS AND `adjustConstellationsToNewK` IS NOT ONE OF THEM
+
+The brief for this batch named two members over 4 KB —
+`setConstellationToNoise_forceRate` at 4,434 B and `adjustConstellationsToNewK`
+at 4,887 B — and said of the second that its five dependencies were "likely
+satisfied from within this same batch", to be checked. Checked, and they are
+not.
+
+    tools/closure.py _ZN24V90ConstellationDesigner26adjustConstellationsToNewKEPA128_sS1_PsPA128_h --missing
+
+reaches six unwritten symbols, and three of them belong to another class:
+`V90ConstellationPower::getPower` (574 B), `::getPowerIndexForPower` (72 B) and
+the 140-byte `V90ConstellationPower::averagePowerLimits` data. Only
+`determineDminForRrn` is inside the batch.
+
+**The arithmetic settles it independently.** The class has eighteen unwritten
+methods totalling 22,484 B. Fourteen of them reach nothing outside the class,
+and those fourteen come to **exactly 13,615 B**, which is the figure the brief
+gives for the ready set. The four that are not ready are
+`adjustConstellationsToNewK` (4,887), `adjustConstellationsPower` (2,132),
+`process` (1,578) and `constellationDesign` (272) — 8,869 B, and every one of
+the four reaches `V90ConstellationPower`. So the byte count in the brief is
+the count of a set that excludes the 4,887, and the batch has ONE member over
+4 KB, not two.
+
+`tools/closure.py <the fourteen> --batch` reports `CLOSED`.
+
+What unblocks the other four is 1,408 B of `V90ConstellationPower`:
+`calcModulusParameters` (622), `getPower` (574), `getPowerIndexForPower` (72)
+and `averagePowerLimits` (140). That is a batch, not a footnote, and it is not
+this one.
+
+### 2141. ELEVEN OF THE CLASS'S MEMBERS ARE CALLED BY NOTHING IN THE OBJECT
+
+A sweep of every `R_386_PC32` relocation in `.text`, grouped by the function
+containing it, finds no caller anywhere for `pow6`, `calcK`, `realK`, `maxK`,
+`calcMtoMatchKtarget`, `findMinValueIndex`, `findConstelMaxValueIndex`,
+`constelBuild`, `spectralDesign`, `reconstructInitialConditions` or
+`findNextUcodeToAdd`. They are in the object because a non-static member
+function has external linkage, not because anything reaches them.
+
+This is worth writing down because of what it costs: **no call site types an
+argument, fixes a return type, or bounds an input.** Every return type in the
+batch is chosen from the register the value comes back in and the widths the
+body can produce; every deviation entry the batch raises is `unmeasured` for a
+reason no later work will remove. It also removes an ordering constraint — the
+eleven are a closed batch on their own, since between them they call only
+`linear2alaw` and `linear2ulaw`.
+
+The same sweep is what proves the field at `+0x14` has exactly one reader
+(`constelBuild`) and no writer at all.
+
+### 2142. `V90SpecialSpectralConditions == 2` IS THE GERMAN PBX CONDITION, AND THE PARAMETERS PROVE IT
+
+`spectralDesign` compares its second argument against the literal 2 and takes
+one of two arms. The arms are the same six stores from two disjoint runs of
+`V90Parameters`, and `tools/vparse.py` gives the author's own name for every
+field in both runs:
+
+    fall-through   +0x3a8 A1  +0x3ac A2  +0x3b0 B1  +0x3b4 B2
+                   +0x3b8 SR  +0x3bc ID       SPECTRAL_SHAPER_*
+    the `== 2` arm +0x3c0 A1  +0x3c4 A2  +0x3c8 B1  +0x3cc B2
+                   +0x3d0 SR  +0x3d4 ID       GERMAN_PBX_SPECTRAL_SHAPER_*
+
+So the value's MEANING is measured even though the enumerator's spelling is
+ours. `include/dsplib/V90SpectralConditions.h` names that one value and
+declines to name a "none": the object distinguishes 2 from everything else and
+nothing more. A third set exists in the parameters —
+`EIA6_SPECTRAL_SHAPER_A1` at +0x3d8 — which says the type has at least a third
+value and says nothing about which, so it is not named either.
+
+The type gets its own header for the reason `__tHardwareCodecTypes__` does: a
+C++98 enum definition may appear once and two classes in two headers need it.
+
+### 2143. `V90MappingParams`' 28 UNEXPLAINED BYTES ARE THE SPECTRAL SHAPER, AND THE OLD CLAIM IS RETRACTED
+
+`include/dsplib/V90MappingParams.h` said the 28 bytes at +0x61c were
+unexplained and that no other reconstructed function reached the struct. Both
+halves are now wrong. `spectralDesign` writes six consecutive dwords —
+
+    +0x620  SR   int          +0x624  ID   unsigned, limited by the rate
+    +0x628  A1   float        +0x62c  A2   float
+    +0x630  B1   float        +0x634  B2   float
+
+— leaving only the four bytes at +0x61c untouched. The types are the SOURCES'
+types, which is what a four-byte copy carries; the one thing the copy itself
+forces is `shaperId`, which is not a copy but `min(ID, rate)` computed with an
+UNSIGNED compare (`ja` in one arm, `jbe` in the other) because the rate
+argument is `unsigned int` whatever the parameter's own `int` says.
+
+The retraction is the point. A header that says a region is unexplained is a
+claim, and a claim that has been falsified has to be struck rather than left
+to be read by the next session.
+
+### 2144. `calcK` DIVIDES ONE BY log10(2) AND MULTIPLIES; ITS THREE NEIGHBOURS DIVIDE — AND `fld1; fld %st(0)` IS THE TELL
+
+Four members of this class compute a base-2 logarithm as `log10(x)/log10(2)`,
+and one of them does it differently. `maxK`, `realK` and `calcMtoMatchKtarget`
+all end in `de f9` — `FDIVP ST(1),ST(0)`, numerator over denominator, one
+instruction. `calcK` ends in `de fa; de c9`: it divides 1.0 by log10(2) and
+then multiplies. Those are not the same value in the last place.
+
+What identifies the 1.0 as the SOURCE's rather than the compiler's is the pair
+at the top of the function:
+
+    47aea  d9 e8    fld1            k = 1.0f
+    47af3  d9 c0    fld %st(0)      and a second copy of the same constant
+
+GCC loaded the constant once and duplicated it because x87 arithmetic is
+destructive and the source uses `1.0f` twice — once to seed the product
+accumulator and once as the numerator of the reciprocal. Written that way, the
+differential test passed at the first attempt over eighty-eight inputs
+including multipliers above 2^31.
+
+Do not "simplify" this to a division. The test is exact and it will fail.
+
+### 2145. THE FLOAT-TO-INTEGER CONVERSIONS IN THIS CLASS ARE `unsigned int`, AND THE ENCODING SAYS SO
+
+`maxK` and `calcMtoMatchKtarget` both truncate with
+
+    fnstcw; or $0xc00; fldcw; fistpll (%esp); fldcw; mov (%esp),%eax
+
+`fistpll` is a 64-bit store and the code then reads the low dword. That is how
+GCC 3.4.2 converts a float to `unsigned int` on this target; a cast to `int`
+is a 32-bit `fistpl` and one instruction shorter. So the casts are
+`(unsigned int)`, and `calcMtoMatchKtarget`'s companion conversion back —
+`xor %edx,%edx; push %edx; push %eax; fildll` — is the matching unsigned
+widening, which is the same idiom `V90MappingParams`' `word_0` is typed from.
+
+This is the "forced, so act on it" kind of codegen reading: no test can see it
+over any value either function can produce, and it is what makes D324's
+2^32-iteration loop a consequence of the declared type rather than a guess.
+
+### 2146. GCC 13 QUIETENS A SIGNALLING NaN WHERE GCC 3.4.2 COPIES BITS, AND IT COST ONE TEST FAILURE
+
+`spectralDesign`'s six stores are `mov`, which is what GCC 3.4.2 emits for a
+`float` member assignment. GCC 13 with `-mfpmath=387` emits `flds`/`fstps` for
+the same source, and an x87 load quietens a signalling NaN: with the test's
+parameter block filled from a pseudorandom byte stream, one trial in
+forty-eight put an sNaN in `SPECTRAL_SHAPER_B2` and the modern build wrote
+0xef at `V90MappingParams+0x636` where the blob wrote 0xaf. `make period` —
+the tier that decides — has no such difference.
+
+Two things about the resolution. First, spelling the copy as `memcpy` makes
+both builds agree and is exactly the "papered over in `src/`" that CLAUDE.md
+forbids, so the assignment stands. Second, the exclusion in the test is the
+sNaN ENCODING and not a range or a tolerance: the eight fields are filled by
+`Vparser_read_float` from a configuration file and cannot hold one. D328.
+
+The general lesson is worth more than the case: a pseudorandom fill over a
+struct containing floats is testing the compiler's float-move idiom as well as
+the reconstruction, and the two are not the same claim.
+
+### 2147. `findMinValueIndex` IS MIN-VALUE/MAX-SIZE, AND ITS TIE-BREAK IS THE SAME AS THE MAXIMUM'S
+
+`findMinValueIndex` and `findConstelMaxValueIndex` are 86 bytes each and
+differ in exactly one condition code — `jae` against `jbe` on the first
+comparison. Everything else is identical, INCLUDING the tie-break: when two
+constellations have the same `constellation[k][0]`, both functions take the
+one with the LARGER `constellationSize`. So the minimum function is
+min-value/max-size, and a reader who assumed the tie-break mirrored the
+comparison would have written it backwards.
+
+Nothing calls either (2141), so nothing downstream reveals the asymmetry. What
+finds it is the test: `t_v90cdesign.cpp` sweeps all 3^6 × 2^6 = 46,656 shapes
+of "six first bytes from a three-value alphabet, six sizes from a two-value
+one", which makes every tie pattern, every sole winner and every tie-break
+winner occur. A pseudorandom fill produces an equal pair about never and would
+have passed over the whole equal arm.
+
+The comparisons are also all UNSIGNED (`jae`, `jbe`, `ja`), which is forced: a
+`movzbl`-loaded byte held in an `int` would have compared signed.
+
+### 2148. `constelBuild`'S TWO TABLES SHARE ONE BASE REGISTER, WHICH IS WHAT TYPES `+0x14` AND WHAT DOES NOT
+
+`constelBuild` loads `0x14(%ebx)` once and then addresses two things off it: a
+16-bit table at `(%edi,%eax,2)` with `%eax = (k << 7) + i`, and an 8-bit table
+at `0xd00(%eax,%ecx,1)` — the same register, a fixed displacement. Two pointer
+members would have been two loads, so a single pointer with the second table
+0xd00 bytes on is a measurement.
+
+What is NOT a measurement is the shape of what it points at. 0xd00 is 13 rows
+of 128 shorts, and it is also 6 + 6 + 1 rows of 128 shorts, which is the
+argument list `setConstellationToNoise` takes — two `short (*)[128]`, a
+`short *` and then an `unsigned char (*)[128]`. Either reading fits the
+displacement and nothing in the object distinguishes them, so the header
+records the displacement and declines the row count. Nothing writes the field
+anywhere in the object either (2141), so there is no assignment to type it
+from.
