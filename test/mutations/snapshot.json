@@ -4755,6 +4755,54 @@
     "the destructor clears the first byte, volatile so it survives": "caught"
    }
   },
+  "v90demap": {
+   "key": "61903f2c8564fa26c806691c05e16ba08f86bcfdf8079454718104f124237a89",
+   "summary": "42 mutations: 40 caught (40 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "+0x1ea4 keeps whatever it found": "caught",
+    "+0x1eb0 keeps whatever it found": "caught",
+    "a positive sample is marked negative and the other way round": "caught",
+    "a tie goes to the upper neighbour": "caught",
+    "hardDecision records the frame position after the advance, not before": "caught",
+    "process drains a frame it has only five samples of": "caught",
+    "resetLinearMappStudy drops its argument on the floor": "caught",
+    "the argument lands one field early": "caught",
+    "the bit count is not reported": "caught",
+    "the chosen code is not recorded": "caught",
+    "the code loop stops one cell short of 128": "caught",
+    "the compaction copies one entry too many": "caught",
+    "the compaction leaves the count at the source cursor": "caught",
+    "the delay counts down and the sample is accumulated anyway": "caught",
+    "the detector's flag does not double the search": "caught",
+    "the drain reports failure": "caught",
+    "the frame cursor is not rewound": "caught",
+    "the frame position wraps at 128 instead of at six": "caught",
+    "the histogram counts the samples and does not sum the errors": "caught",
+    "the histogram delay is spent in one go": "caught",
+    "the integration threshold is exclusive": "caught",
+    "the last whole frame is left undrained": "caught",
+    "the magnitude is the raw sample": "uncaught",
+    "the modulus bytes are written over the sign bits": "caught",
+    "the modulus digits are taken from the front of the buffer, not the frame": "caught",
+    "the output cursor does not advance between frames": "caught",
+    "the phase loop clears five constellations, not six": "caught",
+    "the refusal test is off by one, so the last slot is never used": "caught",
+    "the returned level never carries the sign back": "caught",
+    "the sample is decided and not appended": "caught",
+    "the scan bound is the row length rather than one less": "caught",
+    "the scan does not back up to the lower neighbour": "caught",
+    "the scan test is strictly greater, so an exact level walks past": "uncaught",
+    "the serial path copies the sign bits instead of decoding them": "caught",
+    "the sign-bit groups are read one sample apart too few": "caught",
+    "the sign-bit groups overlap by one on output": "caught",
+    "the stored code is halved the other way and keeps its low bit": "caught",
+    "the stored code is not halved when the detector flags the phase": "caught",
+    "the study clears the last decision's code as well": "caught",
+    "the two cell coordinates are passed the other way round": "caught",
+    "the two sign-bit paths are the other way round": "caught",
+    "the upper neighbour is chosen without moving the code": "caught"
+   }
+  },
   "v90demapctor": {
    "key": "a79f8bdf8791de54b0a78de9572f45fd21ff200eaec5d8f5ee5e722fb4b01b28",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -5633,6 +5681,28 @@
     "+0x18 is left as the constructor found it": "caught",
     "the decoder is built with capacity five, not six": "caught",
     "the extractor frees the decoder's state itself, as well as the decoder": "caught"
+   }
+  },
+  "v90sbeproc": {
+   "key": "bffc649918878faf0e85b4a84a1d15151ad8f84d356978aa60ac5d7e47ca80b8",
+   "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "applyFrameAction stops one position short": "caught",
+    "state 0 chooses its action from the wrong sense of the first bit": "caught",
+    "state 0 does not advance the state machine": "caught",
+    "state 1 chooses the other alternating action": "caught",
+    "state 1 stays where it is whatever the bit says": "caught",
+    "the default arm passes the bit through instead of writing nothing": "caught",
+    "the first bit is handed to the caller as well": "caught",
+    "the frame is copied in rather than having its action applied": "caught",
+    "the invert-all action passes through": "caught",
+    "the invert-odd action inverts the even positions": "caught",
+    "the output is shifted one position up": "caught",
+    "the parallel differential decoder is skipped": "caught",
+    "the pass-through action inverts": "caught",
+    "the serial decoder runs on every position": "caught",
+    "the serial decoder runs on the even positions instead": "caught",
+    "the two alternating actions are the other way round": "caught"
    }
   },
   "v90sddet": {
@@ -6776,9 +6846,6 @@
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",
     "VPCMXF_Delete frees without destroying": "caught",
-    "v34BaudAllow[1] keeps the constructor's 1": "caught",
-    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
-    "v34BaudAllow[5] keeps the constructor's 1": "caught",
     "minNofTransmitSequences is left at the constructor's 0": "caught",
     "mode 1 sets the V.92 mode and not the V.90 one": "caught",
     "mode 2 sets the V.90 mode and not the V.92 one": "caught",
@@ -6797,7 +6864,10 @@
     "the object is allocated 64 bytes short": "caught",
     "the sample count is the duration, unconverted": "caught",
     "the side handed to the modem is not inverted": "caught",
-    "the three termination requests are not cleared": "equivalent"
+    "the three termination requests are not cleared": "equivalent",
+    "v34BaudAllow[1] keeps the constructor's 1": "caught",
+    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
+    "v34BaudAllow[5] keeps the constructor's 1": "caught"
    }
   },
   "vpcmxfterm": {

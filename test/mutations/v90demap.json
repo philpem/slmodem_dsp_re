@@ -1,0 +1,215 @@
+[
+ {
+  "note": "V90Demapper's three processing members, against t_v90demap.  Anchors are taken from text that appears ONCE in V90Demapper.cpp -- the file also carries the constructor, the destructor and printErrorHistogramAndReset, and two of the suites over it (v90demapctor, v90demapper) take their anchors from those.  A block that matched twice would be UNUSABLE, and UNUSABLE does not fail a run (finding 1264)."
+ },
+ {
+  "label": "the phase loop clears five constellations, not six",
+  "find": "\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)",
+  "replace": "\tfor (phase = 0; phase + 1 < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)"
+ },
+ {
+  "label": "the code loop stops one cell short of 128",
+  "find": "\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\t\tfor (code = 0; code + 1 < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);"
+ },
+ {
+  "label": "the two cell coordinates are passed the other way round",
+  "find": "\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\t\t\tadiDetector->clearCamulativeVal(code & 5, phase);"
+ },
+ {
+  "label": "resetLinearMappStudy drops its argument on the floor",
+  "find": "\tuint_1ea8 = n;",
+  "replace": "\tuint_1ea8 = 0;\n\t(void)n;"
+ },
+ {
+  "label": "the argument lands one field early",
+  "find": "\tshort_1ea6 = 0;\n\tuint_1ea8 = n;",
+  "replace": "\tshort_1ea6 = (short)n;\n\tuint_1ea8 = 0;"
+ },
+ {
+  "label": "+0x1ea4 keeps whatever it found",
+  "find": "\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;",
+  "replace": "\tshort_1ea6 = 0;"
+ },
+ {
+  "label": "the study clears the last decision's code as well",
+  "find": "\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;",
+  "replace": "\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;"
+ },
+ {
+  "label": "+0x1eb0 keeps whatever it found",
+  "find": "\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;\n}",
+  "replace": "\tdecisionFramePosition = 0;\n}"
+ },
+ {
+  "label": "hardDecision records the frame position after the advance, not before",
+  "find": "\tdecisionFramePosition = (short)rbsFramePosition;\n",
+  "replace": ""
+ },
+ {
+  "label": "the chosen code is not recorded",
+  "find": "\tdecisionCode = (short)code;",
+  "replace": "\t(void)code;"
+ },
+ {
+  "label": "the refusal test is off by one, so the last slot is never used",
+  "find": "\tif (sampleCount >= sampleCapacity) {",
+  "replace": "\tif (sampleCount + 1 >= sampleCapacity) {"
+ },
+ {
+  "label": "a positive sample is marked negative and the other way round",
+  "find": "\t\t\tsigns[sampleCount] = 0;\n\t\t\tsign = -1;",
+  "replace": "\t\t\tsigns[sampleCount] = 1;\n\t\t\tsign = -1;"
+ },
+ {
+  "label": "the returned level never carries the sign back",
+  "find": "\t\t\tsign = -1;\n\t\t\tin = (short)__builtin_abs(in);",
+  "replace": "\t\t\tsign = 1;\n\t\t\tin = (short)__builtin_abs(in);"
+ },
+ {
+  "label": "the magnitude is the raw sample",
+  "find": "\t\tmag = (short)__builtin_abs(in);",
+  "replace": "\t\tmag = in;"
+ },
+ {
+  "label": "the detector's flag does not double the search",
+  "find": "\t\tif (adiDetector->short_2800[rbsFramePosition] != 0)\n\t\t\tn = 2 * n;",
+  "replace": "\t\tif (adiDetector->short_2800[rbsFramePosition] != 0)\n\t\t\tn = n + 1;"
+ },
+ {
+  "label": "the scan does not back up to the lower neighbour",
+  "find": "\t\tif (code)\n\t\t\tcode--;",
+  "replace": "\t\tif (code)\n\t\t\t;"
+ },
+ {
+  "label": "the scan bound is the row length rather than one less",
+  "find": "\t\twhile (constellation[rbsFramePosition][code] >= mag &&\n\t\t       code < n - 1)",
+  "replace": "\t\twhile (constellation[rbsFramePosition][code] >= mag &&\n\t\t       code < n)"
+ },
+ {
+  "label": "the scan test is strictly greater, so an exact level walks past",
+  "find": "\t\twhile (constellation[rbsFramePosition][code] >= mag &&",
+  "replace": "\t\twhile (constellation[rbsFramePosition][code] > mag &&"
+ },
+ {
+  "label": "a tie goes to the upper neighbour",
+  "find": "\t\tif (alt < err) {",
+  "replace": "\t\tif (alt <= err) {"
+ },
+ {
+  "label": "the upper neighbour is chosen without moving the code",
+  "find": "\t\t\terr = alt;\n\t\t\tcode++;",
+  "replace": "\t\t\terr = alt;"
+ },
+ {
+  "label": "the histogram delay is spent in one go",
+  "find": "\t\t\t\thistogramDelay--;",
+  "replace": "\t\t\t\thistogramDelay = 0;"
+ },
+ {
+  "label": "the delay counts down and the sample is accumulated anyway",
+  "find": "\t\t\tif (histogramDelay != 0) {\n\t\t\t\thistogramDelay--;\n\t\t\t} else {",
+  "replace": "\t\t\tif (histogramDelay != 0) {\n\t\t\t\thistogramDelay--;\n\t\t\t}\n\t\t\t{"
+ },
+ {
+  "label": "the histogram counts the samples and does not sum the errors",
+  "find": "\t\t\t\terrorSum[rbsFramePosition][code] += err;",
+  "replace": "\t\t\t\terrorSum[rbsFramePosition][code] += mag;"
+ },
+ {
+  "label": "the integration threshold is exclusive",
+  "find": "\t\t\t\tif (histogramIntegration >= params->",
+  "replace": "\t\t\t\tif (histogramIntegration > params->"
+ },
+ {
+  "label": "the stored code is not halved when the detector flags the phase",
+  "find": "\t\t\tcodes[sampleCount] = (short)(code >> 1);",
+  "replace": "\t\t\tcodes[sampleCount] = code;"
+ },
+ {
+  "label": "the stored code is halved the other way and keeps its low bit",
+  "find": "\t\t\tcodes[sampleCount] = (short)(code >> 1);\n\t\telse",
+  "replace": "\t\t\tcodes[sampleCount] = (short)((code + 1) >> 1);\n\t\telse"
+ },
+ {
+  "label": "the sample is decided and not appended",
+  "find": "\t\tsampleCount++;",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "the frame position wraps at 128 instead of at six",
+  "find": "\t\trbsFramePosition = (rbsFramePosition + 1) %\n\t\t\t\t   V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\t\trbsFramePosition = (rbsFramePosition + 1) %\n\t\t\t\t   V90DEMAPPER_LEVELS;"
+ },
+ {
+  "label": "process drains a frame it has only five samples of",
+  "find": "\tif (sampleCount <= V90DEMAPPER_FRAME - 1) {",
+  "replace": "\tif (sampleCount < V90DEMAPPER_FRAME - 1) {"
+ },
+ {
+  "label": "the last whole frame is left undrained",
+  "find": "\twhile (frameStart + V90DEMAPPER_FRAME <= sampleCount) {",
+  "replace": "\twhile (frameStart + V90DEMAPPER_FRAME < sampleCount) {"
+ },
+ {
+  "label": "the modulus bytes are written over the sign bits",
+  "find": "\t\tmodulusDecoder.progress(out + total + signBitsPerFrame,",
+  "replace": "\t\tmodulusDecoder.progress(out + total,"
+ },
+ {
+  "label": "the modulus digits are taken from the front of the buffer, not the frame",
+  "find": "\t\t\t\t\t&codes[frameStart]);",
+  "replace": "\t\t\t\t\t&codes[0]);"
+ },
+ {
+  "label": "the sign-bit groups overlap by one on output",
+  "find": "\t\t\t\t\t\t out + total +\n\t\t\t\t\t\t (signBitGroupSize - 1) * g);",
+  "replace": "\t\t\t\t\t\t out + total +\n\t\t\t\t\t\t signBitGroupSize * g);"
+ },
+ {
+  "label": "the sign-bit groups are read one sample apart too few",
+  "find": "\t\t\t\tsignBits.process(&signs[frameStart +\n\t\t\t\t\t\t\tsignBitGroupSize * g],",
+  "replace": "\t\t\t\tsignBits.process(&signs[frameStart +\n\t\t\t\t\t\t\t(signBitGroupSize - 1) * g],"
+ },
+ {
+  "label": "the serial path copies the sign bits instead of decoding them",
+  "find": "\t\t\t\tout[total + b] = signDecoder.process(\n\t\t\t\t    signs[frameStart + b]);",
+  "replace": "\t\t\t\tout[total + b] = signs[frameStart + b];"
+ },
+ {
+  "label": "the two sign-bit paths are the other way round",
+  "find": "\t\tif (signBitGroups != 0) {",
+  "replace": "\t\tif (signBitGroups == 0) {"
+ },
+ {
+  "label": "the output cursor does not advance between frames",
+  "find": "\t\ttotal += bitsPerFrame;",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "the compaction copies one entry too many",
+  "find": "\tfor (i = 0, j = frameStart; j < sampleCount; i++, j++) {",
+  "replace": "\tfor (i = 0, j = frameStart; j <= sampleCount; i++, j++) {"
+ },
+ {
+  "label": "the compaction leaves the count at the source cursor",
+  "find": "\tsampleCount = i;\n\tframeStart = 0;",
+  "replace": "\tsampleCount = j;\n\tframeStart = 0;"
+ },
+ {
+  "label": "the frame cursor is not rewound",
+  "find": "\tsampleCount = i;\n\tframeStart = 0;\n",
+  "replace": "\tsampleCount = i;\n"
+ },
+ {
+  "label": "the bit count is not reported",
+  "find": "\tnbits = total;\n\treturn 1;",
+  "replace": "\treturn 1;"
+ },
+ {
+  "label": "the drain reports failure",
+  "find": "\tnbits = total;\n\treturn 1;\n}",
+  "replace": "\tnbits = total;\n\treturn 0;\n}"
+ }
+]

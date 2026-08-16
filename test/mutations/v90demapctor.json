@@ -24,33 +24,33 @@
  },
  {
   "label": "the four-byte array is sized in elements rather than bytes",
-  "find": "\tarray_1c = sysdep_malloc(levels * 4);",
-  "replace": "\tarray_1c = sysdep_malloc(levels);"
+  "find": "\tcodes = (unsigned int *)sysdep_malloc(levels * 4);",
+  "replace": "\tcodes = (unsigned int *)sysdep_malloc(levels);"
  },
  {
   "label": "the one-byte array is sized four bytes to the element",
-  "find": "\tarray_20 = sysdep_malloc(levels);",
-  "replace": "\tarray_20 = sysdep_malloc(levels * 4);"
+  "find": "\tsigns = (unsigned char *)sysdep_malloc(levels);",
+  "replace": "\tsigns = (unsigned char *)sysdep_malloc(levels * 4);"
  },
  {
   "label": "the two allocations are stored the other way round",
-  "find": "\tarray_1c = sysdep_malloc(levels * 4);\n\tarray_20 = sysdep_malloc(levels);",
-  "replace": "\tarray_20 = sysdep_malloc(levels * 4);\n\tarray_1c = sysdep_malloc(levels);"
+  "find": "\tcodes = (unsigned int *)sysdep_malloc(levels * 4);\n\tsigns = (unsigned char *)sysdep_malloc(levels);",
+  "replace": "\tsigns = (unsigned char *)sysdep_malloc(levels * 4);\n\tcodes = (unsigned int *)sysdep_malloc(levels);"
  },
  {
   "label": "the element count is the byte count",
-  "find": "\tcount_24 = levels;",
-  "replace": "\tcount_24 = levels * 4;"
+  "find": "\tsampleCapacity = levels;",
+  "replace": "\tsampleCapacity = levels * 4;"
  },
  {
-  "label": "the flag at +0x664 starts set rather than clear",
-  "find": "\t: byte_664(0)",
-  "replace": "\t: byte_664(1)"
+  "label": "the serial decoder at +0x664 is left as the seed found it",
+  "find": "\t: signDecoder()",
+  "replace": "\t/* signDecoder left uninitialised */"
  },
  {
   "label": "+0x664 is cleared a word wide, taking the alignment with it",
   "find": "\tadiDetector = adi;",
-  "replace": "\t*(unsigned int *)&byte_664 = 0;\n\tadiDetector = adi;"
+  "replace": "\t*(unsigned int *)&signDecoder = 0;\n\tadiDetector = adi;"
  },
  {
   "label": "the last constellation count is left as the constructor found it",
@@ -68,14 +68,14 @@
   "replace": "\tfor (i = 0; i < V90DEMAPPER_LEVELS; i++)\n\t\tconstellationSize[i] = 0;"
  },
  {
-  "label": "word_04 keeps its seed",
-  "find": "\tword_04 = 0;\n\tword_08 = 0;",
+  "label": "bitsPerFrame keeps its seed",
+  "find": "\tbitsPerFrame = 0;\n\tword_08 = 0;",
   "replace": "\tword_08 = 0;"
  },
  {
-  "label": "word_2c keeps its seed",
-  "find": "\tword_28 = 0;\n\tword_2c = 0;",
-  "replace": "\tword_28 = 0;"
+  "label": "sampleCount keeps its seed",
+  "find": "\tframeStart = 0;\n\tsampleCount = 0;",
+  "replace": "\tframeStart = 0;"
  },
  {
   "label": "the constructor also empties the two histograms",

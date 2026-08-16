@@ -6825,3 +6825,43 @@ The object pushes a literal 1 as a second argument to `V22_PPS_free`,
 tree reconstructed all four from their own bodies, where the second parameter
 is dead, and one of the four headers belongs to another effort.  The same
 shape as D363, at four sites instead of one.
+
+## D385 ✅ `V90Demapper::hardDecision` reads `sign` uninitialised on its refusal arm
+
+*Batch of 2026-08-16, from `V90Demapper::hardDecision` (blob 0x31050).
+**Reachability: only when `sampleCount >= sampleCapacity`, which is the arm
+that prints "Hard decision input buffers are full" and decides nothing.**
+**Observability: none -- the value is multiplied by `level`, which is zero on
+that arm and on no other.**  Status: verified bit-exact with `sign`
+initialised.  Fix class: initialised to 1 at its declaration; one instruction,
+no behaviour.*
+
+The object assigns 0x20(%esp) in both arms of the sign test and nowhere else,
+then loads it at 0x31229 -- on a path that reaches the load without having
+taken either arm -- and multiplies it by a register it has just zeroed. So the
+original source declares the variable without an initialiser and the C++ rules
+make that path undefined. Reproducing the undefinedness would put a genuine
+uninitialised read into `src/`, where a later compiler is entitled to delete
+the multiply; initialising costs one `mov` on a diagnostic path and makes the
+function total. The differential suite drives the arm on every trial mode and
+both sides return zero.
+
+## D386 ✅ `V90SignBitsExtractor::process` switches on an unset action when its state is neither 0 nor 1
+
+*Batch of 2026-08-16, from `V90SignBitsExtractor::process` (blob 0x31ab0).
+**Reachability: `reset`'s second argument is stored into `state` unfiltered, so
+any caller that seeds it above 1 reaches it -- `reset` is not yet written and
+no caller is.**  **Observability: total, if it is ever reached -- the switch
+selects an inversion pattern from whatever `%edi` held on entry.**  Status: our
+version verified bit-exact over states 0 and 1; states above 1 cannot be
+compared because the blob has no defined answer.  Fix class: `action` is
+initialised to `V90SBE_PASS_ALL`, the arm a zero register would have selected.*
+
+The object tests `state == 0` and then `state == 1` and falls out of both with
+its action register never written (0x31abf..0x31acb, then 0x31b6a reading
+`%edi`). This is a live gap and not a dead one: nothing in the class clamps
+`reset`'s argument. It is recorded rather than silently repaired because the
+choice of `V90SBE_PASS_ALL` is OURS -- the object has no answer to reproduce --
+and because the batch that writes `reset` should check whether any caller
+passes a third value, in which case this becomes a real behavioural difference
+rather than a formal one.
