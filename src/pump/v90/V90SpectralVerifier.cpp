@@ -263,7 +263,7 @@ sv_bin_at(const float *spectrum, float freq, float binsPerHz)
 void
 V90SpectralVerifier::checkSpecialSpectralConditions()
 {
-	float leftDelta, rightDelta;
+	float leftDelta, rightDelta, leftThr, rightThr;
 	float ref, test1, test2;
 
 	/*
@@ -297,6 +297,29 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 		    - nullBin;
 	}
 
+	/*
+	 * THE TWO THRESHOLDS ARE READ INTO LOCALS AND THAT IS NOT TIDINESS --
+	 * DO NOT INLINE THEM BACK.  `leftDelta > params->SPECTRAL_VERIFIER_-
+	 * ISDN_LEFT_PEAK_DELTA` is the obvious spelling, it is what stood here
+	 * first, and `make period` fails on it.  GCC 3.4.2's
+	 * `tree_swap_operands_p` puts a DECL last, so a plain local against a
+	 * COMPONENT_REF gets SWAPPED: the THRESHOLD lands in %st(0), the
+	 * branch becomes `jb`/`jae` -- "below OR UNORDERED" -- and
+	 * `-mno-ieee-fp` licenses GCC not to add the parity test that would
+	 * exclude the NaN.  The object branches `ja`/`jbe` with the DELTA in
+	 * %st(0) at 0x460d5, 0x46553, 0x4627d and 0x4628c, so a NaN delta
+	 * detects nothing there and detected all three conditions here.
+	 *
+	 * Making both operands DECLs stops the swap, and all six comparison
+	 * sites then carry the object's own condition codes.  The modern build
+	 * cannot see any of this -- GCC 13 honours IEEE for `>` whichever
+	 * operand order it picks -- so the period tier is what holds it, and
+	 * the mutation that inlines them back is pre-registered as
+	 * uncatchable-here for exactly that reason.  Findings 3529, 2300, 1990.
+	 */
+	leftThr = params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA;
+	rightThr = params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA;
+
 	edprintf("V90SpectralVerifier: German ISDN NT1 box: left peak "
 		 "delta = %c%d.%02d\r\n", SV_PRINT_SIGN(leftDelta),
 		 SV_PRINT_WHOLE(leftDelta), SV_FRAC2_REV(leftDelta));
@@ -304,8 +327,7 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 		 "delta = %c%d.%02d\r\n", SV_PRINT_SIGN(rightDelta),
 		 SV_PRINT_WHOLE(rightDelta), SV_FRAC2(rightDelta));
 
-	if (leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA
-	    && rightDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA) {
+	if (leftDelta > leftThr && rightDelta > rightThr) {
 		word_28 = 1;
 		edprintf("V90SpectralVerifier: German ISDN NT1 box conditions "
 			 "detected!\r\n");
@@ -325,6 +347,10 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 		    binsPerHz) - nullBin;
 	}
 
+	/* Locals for the reason the ISDN pair gives.  Do not inline. */
+	leftThr = params->SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_DELTA;
+	rightThr = params->SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA;
+
 	edprintf("V90SpectralVerifier: German PBX: left peak delta = "
 		 "%c%d.%02d\r\n", SV_PRINT_SIGN(leftDelta),
 		 SV_PRINT_WHOLE(leftDelta), SV_FRAC2_REV(leftDelta));
@@ -332,10 +358,7 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 		 "%c%d.%02d\r\n", SV_PRINT_SIGN(rightDelta),
 		 SV_PRINT_WHOLE(rightDelta), SV_FRAC2(rightDelta));
 
-	if (leftDelta
-	      > params->SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_DELTA
-	    && rightDelta
-	      > params->SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA) {
+	if (leftDelta > leftThr && rightDelta > rightThr) {
 		word_28 = 2;
 		edprintf("V90SpectralVerifier: German PBX conditions "
 			 "detected!\r\n");

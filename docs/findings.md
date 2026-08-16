@@ -60990,3 +60990,60 @@ matching nothing, with no failure anywhere and a mutation register that reads
 the same as one that was never run.  That is finding 3511's mechanism with
 the register standing in for the header, and it is the reason a rename has to
 move all five files in one commit rather than arriving with a batch.
+
+### 3529. GCC 3.4.2 SWAPS A COMPARISON'S OPERANDS WHEN ONE IS A PLAIN LOCAL, AND UNDER `-mno-ieee-fp` THAT CHANGES WHAT A NaN DOES
+
+`checkSpecialSpectralConditions` passed the modern differential with 2,928
+checks green and **failed `make period`** on one case out of twenty-two: the
+one that puts a NaN in the bin both deltas are measured against.  Ours printed
+ten diagnostics where the blob printed eight -- our GCC 3.4.2 build detected
+all three special conditions on a NaN and the blob detected none.
+
+The cause is not the arithmetic.  It is `tree_swap_operands_p` in
+`fold-const.c`, which returns "swap" when operand 0 is a `DECL_P` and operand
+1 is not.  `leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA` is a
+plain local against a `COMPONENT_REF`, so it is canonicalised to
+`params->... < leftDelta`, the THRESHOLD is what gets loaded into `%st(0)`,
+and the branch becomes
+
+    flds   0x2d0(%ebx)        ; the threshold
+    fcomps 0x58(%esp)         ; the delta
+    sahf ; jb  <detect>       ; CF -- "below OR UNORDERED"
+
+`jb` is taken for a NaN.  Under `-mieee-fp` GCC would add the parity test that
+excludes it; `-mno-ieee-fp` -- which this object provably is (finding 1990:
+406 `fcom` against four `fucom`) -- licenses it not to.  The object instead
+has the DELTA in `%st(0)` at all four sites (0x460d5 `ja`, 0x46553 `jbe`,
+0x4627d `jbe`, 0x4628c `ja`), and `ja`/`jbe` are the ordered pair, so a NaN
+delta detects nothing.
+
+**READING THE THRESHOLD INTO A LOCAL FIRST IS THE FIX**, because then both
+operands are `DECL_P`, `tree_swap_operands_p` returns 0 at its first test, no
+swap happens, and the delta is what is loaded.  All six comparison sites then
+carry the object's own condition codes, including the two severe-codec ones
+that were already right because their threshold is a common subexpression
+GCC had to keep in a register.
+
+**FIVE SPELLINGS WERE COMPILED AND RUN BEFORE THIS WAS BELIEVED**, in the
+period container against a real NaN: the plain form and a nested-`if` form
+detect on a NaN; a local threshold, a local array of deltas and a local struct
+of deltas do not.  Swapping the source operands (`params->X < leftDelta`)
+changes NOTHING -- both spellings fold to one RTL, which is what says the
+canonicalisation and not the source order is doing the work.  An isolated
+probe whose call GCC folded away (`printf("")`) reproduced none of it and
+nearly retired the whole line of enquiry; the probe has to keep a real call so
+the values are really spilled.
+
+**THE MODERN TIER IS STRUCTURALLY BLIND TO THIS.**  GCC 13 honours IEEE for
+`>` whichever operand order it picks, so `make one`, `make test` and
+`mutate.py` -- which all build with it -- pass either spelling.  Only
+`make period` sees it, and `make period` has no allow-list, which is the whole
+argument for it in CLAUDE.md made concrete: this is a real behavioural defect
+that every modern-toolchain check called correct.  The mutation that inlines
+the thresholds back is registered as `equivalent` with that stated, so the
+next reader can tell "cannot fail here" from "never considered".
+
+Findings 2300 and 2301 are the same family -- an idiom written for the wrong
+flag, and a compare whose operand order came from a declaration order -- and
+this is the third member: **an operand order that comes from whether the
+operand is a variable.**

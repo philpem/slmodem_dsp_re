@@ -1,133 +1,171 @@
 [
- {"label": "NOTE: what this set covers, and what it deliberately does not",
-  "why": "V90SpectralVerifier::checkSpecialSpectralConditions and the four helpers it is written with.  The class's other three written members -- the constructor, the destructor and reset() -- are v90specver's, against t_v90spectral; both sets mutate the same FILE and are pointed at different binaries on purpose, because neither binary reaches the other's half and a set run against the wrong one reads NOT CAUGHT for every entry.  What makes this half catchable at all is that t_v90specialcond.cpp compares the two sides' `edprintf` TRANSCRIPTS as well as +0x28: the result field takes four values and everything the nine diagnostics carry -- the sign character, the truncated magnitude, the hundredths and the three printed probe frequencies -- is invisible without them.  The transcript is encoded (src/core/encode.c) and the test never decodes it; it compares ours against the blob's, and one trial's against a partner trial's that differs in exactly one printed quantity."},
-
- {"label": "the result is cleared inside the guard rather than before it",
+ {
+  "label": "NOTE: what this set covers, and what it deliberately does not",
+  "why": "V90SpectralVerifier::checkSpecialSpectralConditions and the four helpers it is written with.  The class's other three written members -- the constructor, the destructor and reset() -- are v90specver's, against t_v90spectral; both sets mutate the same FILE and are pointed at different binaries on purpose, because neither binary reaches the other's half and a set run against the wrong one reads NOT CAUGHT for every entry.  What makes this half catchable at all is that t_v90specialcond.cpp compares the two sides' `edprintf` TRANSCRIPTS as well as +0x28: the result field takes four values and everything the nine diagnostics carry -- the sign character, the truncated magnitude, the hundredths and the three printed probe frequencies -- is invisible without them.  The transcript is encoded (src/core/encode.c) and the test never decodes it; it compares ours against the blob's, and one trial's against a partner trial's that differs in exactly one printed quantity."
+ },
+ {
+  "label": "the result is cleared inside the guard rather than before it",
   "why": "0x45f1d and 0x45f21 interleave the compare and the store and the store is UNCONDITIONAL, so a call made before the accumulation completes still forgets the previous answer.  Catchable only because the three `state_*` cases seed +0x28 non-zero and assert the blob cleared it.",
   "find": "\tword_28 = 0;\n\n\tif (accumulating != 2)\n\t\treturn;",
-  "replace": "\tif (accumulating != 2)\n\t\treturn;\n\n\tword_28 = 0;"},
-
- {"label": "the guard admits the running state rather than the complete one",
+  "replace": "\tif (accumulating != 2)\n\t\treturn;\n\n\tword_28 = 0;"
+ },
+ {
+  "label": "the guard admits the running state rather than the complete one",
   "why": "`cmpl $0x2,0x24(%edi)`.  1 is what startAccumulation stores and 2 is what process stores when the accumulation finishes; taking 1 would run the whole detection over a half-filled spectrum.",
   "find": "\tif (accumulating != 2)",
-  "replace": "\tif (accumulating != 1)"},
-
- {"label": "the guard admits anything that is not idle",
+  "replace": "\tif (accumulating != 1)"
+ },
+ {
+  "label": "the guard admits anything that is not idle",
   "find": "\tif (accumulating != 2)",
-  "replace": "\tif (accumulating == 0)"},
-
- {"label": "the bins are found by dividing rather than by the reciprocal",
+  "replace": "\tif (accumulating == 0)"
+ },
+ {
+  "label": "the bins are found by dividing rather than by the reciprocal",
   "why": "THE ONE THAT MATTERS MOST here.  `getSpectrumOfNearestBin` divides (0x45ecb) and this function does not: each of its three blocks computes 1/binWidth once (`fld1`/`fdivs` at 0x45f37, 0x460e1, 0x4629a) and multiplies at every probe.  The two readings disagree in the last place, and `+ 0.5f` then a truncation turn that into a bin index one out.  It is catchable because the sweep drives widths with no exact binary reciprocal at offsets sitting on the half-bin boundary; over a table of round numbers alone the two would agree everywhere and this would read equivalent.",
   "find": "\treturn spectrum[(unsigned int)(freq * binsPerHz + 0.5f)];",
-  "replace": "\treturn spectrum[(unsigned int)(freq / (1.0f / binsPerHz) + 0.5f)];"},
-
- {"label": "the bin is truncated rather than rounded",
+  "replace": "\treturn spectrum[(unsigned int)(freq / (1.0f / binsPerHz) + 0.5f)];"
+ },
+ {
+  "label": "the bin is truncated rather than rounded",
   "find": "\treturn spectrum[(unsigned int)(freq * binsPerHz + 0.5f)];",
-  "replace": "\treturn spectrum[(unsigned int)(freq * binsPerHz)];"},
-
- {"label": "the ISDN deltas are measured from the left peak, not the null",
+  "replace": "\treturn spectrum[(unsigned int)(freq * binsPerHz)];"
+ },
+ {
+  "label": "the ISDN deltas are measured from the left peak, not the null",
   "find": "\t\tfloat nullBin = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_NULL_FREQ, binsPerHz);",
-  "replace": "\t\tfloat nullBin = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ, binsPerHz);"},
-
- {"label": "the ISDN deltas are subtracted the other way round",
+  "replace": "\t\tfloat nullBin = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ, binsPerHz);"
+ },
+ {
+  "label": "the ISDN deltas are subtracted the other way round",
   "why": "0x45fad is `fsubrs (%edx,%esi,4)`, a MEMORY FSUBR, which is st0 = mem - st0 -- peak minus null and not null minus peak.  The sign of every printed delta and the sense of both thresholds turn on it.",
   "find": "\t\tleftDelta = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ, binsPerHz)\n\t\t    - nullBin;",
-  "replace": "\t\tleftDelta = nullBin - sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ, binsPerHz);"},
-
- {"label": "the two ISDN peaks are swapped",
+  "replace": "\t\tleftDelta = nullBin - sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ, binsPerHz);"
+ },
+ {
+  "label": "the two ISDN peaks are swapped",
   "find": "\t\trightDelta = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_FREQ, binsPerHz)\n\t\t    - nullBin;",
-  "replace": "\t\trightDelta = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ, binsPerHz)\n\t\t    - nullBin;"},
-
- {"label": "the ISDN test needs either delta rather than both",
-  "find": "\tif (leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA\n\t    && rightDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA) {",
-  "replace": "\tif (leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA\n\t    || rightDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA) {"},
-
- {"label": "the ISDN test admits a delta exactly on its threshold",
+  "replace": "\t\trightDelta = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ, binsPerHz)\n\t\t    - nullBin;"
+ },
+ {
+  "label": "the ISDN test needs either delta rather than both",
+  "find": "\tif (leftDelta > leftThr && rightDelta > rightThr) {\n\t\tword_28 = 1;",
+  "replace": "\tif (leftDelta > leftThr || rightDelta > rightThr) {\n\t\tword_28 = 1;"
+ },
+ {
+  "label": "the ISDN test admits a delta exactly on its threshold",
   "why": "`ja` at 0x460d5 and `jbe` at 0x46553 are both strict, and `>` and `>=` agree on every pair of numbers except an equal one.  `isdn_left_on_threshold` is the case that exists for this.",
-  "find": "\tif (leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA\n\t    && rightDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA) {",
-  "replace": "\tif (leftDelta >= params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA\n\t    && rightDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA) {"},
-
- {"label": "the ISDN thresholds are read out of each other's slots",
-  "find": "\tif (leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA\n\t    && rightDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA) {",
-  "replace": "\tif (leftDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA\n\t    && rightDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA) {"},
-
- {"label": "the ISDN condition reports the German PBX value",
+  "find": "\tif (leftDelta > leftThr && rightDelta > rightThr) {\n\t\tword_28 = 1;",
+  "replace": "\tif (leftDelta >= leftThr && rightDelta > rightThr) {\n\t\tword_28 = 1;"
+ },
+ {
+  "label": "the ISDN thresholds are read out of each other's slots",
+  "find": "\tleftThr = params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA;\n\trightThr = params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA;",
+  "replace": "\tleftThr = params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA;\n\trightThr = params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA;"
+ },
+ {
+  "label": "the ISDN condition reports the German PBX value",
   "find": "\t\tword_28 = 1;\n\t\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box conditions \"",
   "replace": "\t\tword_28 = 2;\n\t\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box conditions \"",
-  "note": "the enumerator 2 is German PBX -- V90SpectralConditions.h"},
-
- {"label": "the three tests are an else chain, so the first match wins",
+  "note": "the enumerator 2 is German PBX -- V90SpectralConditions.h"
+ },
+ {
+  "label": "the three tests are an else chain, so the first match wins",
   "why": "0x46588 and 0x46573 store 2 and 3 with no test of what is already in +0x28, so a line that trips two conditions is reported as the LATER one.  `both_isdn_and_pbx` and `all_three` are the cases that exist for this.",
   "find": "\t/* --- German PBX.  The same shape over the second set of frequencies. */",
-  "replace": "\tif (word_28 != 0)\n\t\treturn;\n\n\t/* --- German PBX.  The same shape over the second set of frequencies. */"},
-
- {"label": "the PBX deltas are measured from its left peak, not its null",
+  "replace": "\tif (word_28 != 0)\n\t\treturn;\n\n\t/* --- German PBX.  The same shape over the second set of frequencies. */"
+ },
+ {
+  "label": "the PBX deltas are measured from its left peak, not its null",
   "find": "\t\tfloat nullBin = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_GERMAN_PBX_NULL_FREQ, binsPerHz);",
-  "replace": "\t\tfloat nullBin = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_FREQ,\n\t\t    binsPerHz);"},
-
- {"label": "the PBX test needs either delta rather than both",
-  "find": "\tif (leftDelta\n\t      > params->SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_DELTA\n\t    && rightDelta\n\t      > params->SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA) {",
-  "replace": "\tif (leftDelta\n\t      > params->SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_DELTA\n\t    || rightDelta\n\t      > params->SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA) {"},
-
- {"label": "the PBX test admits a delta exactly on its threshold",
-  "find": "\t    && rightDelta\n\t      > params->SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA) {",
-  "replace": "\t    && rightDelta\n\t      >= params->SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA) {"},
-
- {"label": "the severe codec differences are taken from the test frequencies",
+  "replace": "\t\tfloat nullBin = sv_bin_at(spectrum,\n\t\t    params->SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_FREQ,\n\t\t    binsPerHz);"
+ },
+ {
+  "label": "the PBX test needs either delta rather than both",
+  "find": "\tif (leftDelta > leftThr && rightDelta > rightThr) {\n\t\tword_28 = 2;",
+  "replace": "\tif (leftDelta > leftThr || rightDelta > rightThr) {\n\t\tword_28 = 2;"
+ },
+ {
+  "label": "the PBX test admits a delta exactly on its threshold",
+  "find": "\tif (leftDelta > leftThr && rightDelta > rightThr) {\n\t\tword_28 = 2;",
+  "replace": "\tif (leftDelta > leftThr && rightDelta >= rightThr) {\n\t\tword_28 = 2;"
+ },
+ {
+  "label": "the severe codec differences are taken from the test frequencies",
   "why": "0x464f1 and 0x46508 are `fsubs` off the REF level, so the reference is the minuend both times.",
   "find": "\tif (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    && ref - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {",
-  "replace": "\tif (test1 - ref > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    && test2 - ref > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"},
-
- {"label": "the severe codec test needs either difference rather than both",
+  "replace": "\tif (test1 - ref > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    && test2 - ref > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"
+ },
+ {
+  "label": "the severe codec test needs either difference rather than both",
   "find": "\tif (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    && ref - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {",
-  "replace": "\tif (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    || ref - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"},
-
- {"label": "the severe codec test admits a difference exactly on its threshold",
+  "replace": "\tif (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    || ref - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"
+ },
+ {
+  "label": "the severe codec test admits a difference exactly on its threshold",
   "find": "\t    && ref - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {",
-  "replace": "\t    && ref - test2 >= params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"},
-
- {"label": "the severe codec compares the two levels against each other",
+  "replace": "\t    && ref - test2 >= params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"
+ },
+ {
+  "label": "the severe codec compares the two levels against each other",
   "find": "\tif (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    && ref - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {",
-  "replace": "\tif (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    && test1 - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"},
-
- {"label": "the sign is the readable spelling, which a NaN separates",
+  "replace": "\tif (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA\n\t    && test1 - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {"
+ },
+ {
+  "label": "the sign is the readable spelling, which a NaN separates",
   "why": "`nan_null` is the case that exists for this.  The object's branchless `0x2d - 2*CF` prints '+' when the compare set CF, and an unordered compare sets it, so a NaN delta prints '+' where `v > 0.0f` prints '-'.  ADID_PRINT_SIGN carries the ten-spelling measurement this is copied from.",
   "find": "#define SV_PRINT_SIGN(v)\t(!(0.0f >= (v)) ? '+' : '-')",
-  "replace": "#define SV_PRINT_SIGN(v)\t(((v) > 0.0f) ? '+' : '-')"},
-
- {"label": "the printed magnitude is the value, not its absolute value",
+  "replace": "#define SV_PRINT_SIGN(v)\t(((v) > 0.0f) ? '+' : '-')"
+ },
+ {
+  "label": "the printed magnitude is the value, not its absolute value",
   "find": "#define SV_PRINT_WHOLE(v)\t((int)__builtin_fabsf(v))",
-  "replace": "#define SV_PRINT_WHOLE(v)\t((int)(v))"},
-
- {"label": "the hundredths are tenths",
+  "replace": "#define SV_PRINT_WHOLE(v)\t((int)(v))"
+ },
+ {
+  "label": "the hundredths are tenths",
   "find": "#define SV_FRAC2(v)\tsv_abs((int)(100.0 * ((v) - (float)(int)(v))))",
-  "replace": "#define SV_FRAC2(v)\tsv_abs((int)(10.0 * ((v) - (float)(int)(v))))"},
-
- {"label": "the hundredths keep their sign",
+  "replace": "#define SV_FRAC2(v)\tsv_abs((int)(10.0 * ((v) - (float)(int)(v))))"
+ },
+ {
+  "label": "the hundredths keep their sign",
   "find": "#define SV_FRAC2(v)\tsv_abs((int)(100.0 * ((v) - (float)(int)(v))))",
-  "replace": "#define SV_FRAC2(v)\t((int)(100.0 * ((v) - (float)(int)(v))))"},
-
- {"label": "the probe frequency printed is the bin rather than the hertz",
+  "replace": "#define SV_FRAC2(v)\t((int)(100.0 * ((v) - (float)(int)(v))))"
+ },
+ {
+  "label": "the probe frequency printed is the bin rather than the hertz",
   "why": "0x46385 is `flds 0x2ec(%ebx)` then `fistpl`, the PARAMETER truncated, not the index the spectrum was read at.  The `freq60`/`freq64` pair exists for this: both round to bin 6 and only the printed number differs.",
   "find": "\t\t (int)params->SPECTRAL_VERIFIER_SEVERE_CODEC_REF_FREQ,",
-  "replace": "\t\t (int)(params->SPECTRAL_VERIFIER_SEVERE_CODEC_REF_FREQ\n\t\t       / binWidth + 0.5f),"},
-
- {"label": "the last diagnostic is not behind the debug gate",
+  "replace": "\t\t (int)(params->SPECTRAL_VERIFIER_SEVERE_CODEC_REF_FREQ\n\t\t       / binWidth + 0.5f),"
+ },
+ {
+  "label": "the last diagnostic is not behind the debug gate",
   "why": "0x46522 is `cmpl $0x1,dsplibs_debug_level; jbe`, which is DSPLIB_DEBUG_ON().  Every other print here goes through `edprintf`, which gates itself AFTER encoding, so this is the only site where the gate is in the caller.  The level sweep is what sees it.",
   "find": "\tif (word_28 == 0 && DSPLIB_DEBUG_ON())",
-  "replace": "\tif (word_28 == 0)"},
-
- {"label": "the last diagnostic prints whatever was detected",
+  "replace": "\tif (word_28 == 0)"
+ },
+ {
+  "label": "the last diagnostic prints whatever was detected",
   "find": "\tif (word_28 == 0 && DSPLIB_DEBUG_ON())",
-  "replace": "\tif (DSPLIB_DEBUG_ON())"},
-
- {"label": "the ISDN and PBX diagnostics are swapped",
+  "replace": "\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the ISDN and PBX diagnostics are swapped",
   "find": "\tedprintf(\"V90SpectralVerifier: German PBX conditions \"\n\t\t\t \"detected!\\r\\n\");",
-  "replace": "\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box conditions \"\n\t\t\t \"detected!\\r\\n\");"},
-
- {"label": "the two fractional spellings are unified",
+  "replace": "\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box conditions \"\n\t\t\t \"detected!\\r\\n\");"
+ },
+ {
+  "label": "the ISDN thresholds are compared as direct member reads",
+  "equivalent": true,
+  "why": "PRE-REGISTERED AS UNCATCHABLE BY THIS BINARY, and it is the most important entry in the set anyway.  `leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA` is the obvious spelling and it was what this file said until `make period` failed on it.  GCC 3.4.2's `tree_swap_operands_p` puts a DECL last, so a plain local against a COMPONENT_REF is SWAPPED: the threshold goes into %st(0) and the branch becomes `jb`/`jae`, which is `below OR UNORDERED` -- and under `-mno-ieee-fp` GCC will not add the parity test that would exclude the NaN.  The object branches `ja`/`jbe` with the DELTA in %st(0), so a NaN delta detects nothing there and detected EVERYTHING here.  Reading the threshold into a local first makes both operands DECLs, no swap happens, and all six sites match the object's condition codes.  mutate.py builds with GCC 13, which honours IEEE for `>` whichever operand order it picks, so this mutation cannot fail HERE -- `make period` is the tier that sees it, and finding 3529 is the record.",
+  "find": "\tif (leftDelta > leftThr && rightDelta > rightThr) {\n\t\tword_28 = 1;",
+  "replace": "\tif (leftDelta > params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA\n\t    && rightDelta > params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA) {\n\t\tword_28 = 1;"
+ },
+ {
+  "label": "the two fractional spellings are unified",
   "equivalent": true,
   "why": "DELIBERATELY LAST, for the reason v90conneval's note gives.  Six sites compute the hundredths and two of them -- both LEFT peak deltas, 0x45ff5 and 0x46186 -- encode `(int)v - v` where the other four encode `v - (int)v`; the encodings are forced, because reg-stack picks which register dies and therefore which mnemonic but can never flip the sign of a subtraction.  `sv_abs` outside makes the two agree for EVERY value, so no differential test can separate them and this entry has to survive.  It is written the object's way because `compare.py` is the tier that can see it and the record should say what the object encodes; if this ever reads `caught`, something other than a name changed.",
   "find": "\t\t SV_PRINT_WHOLE(leftDelta), SV_FRAC2_REV(leftDelta));\n\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box: right peak \"",
-  "replace": "\t\t SV_PRINT_WHOLE(leftDelta), SV_FRAC2(leftDelta));\n\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box: right peak \""}
+  "replace": "\t\t SV_PRINT_WHOLE(leftDelta), SV_FRAC2(leftDelta));\n\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box: right peak \""
+ }
 ]
