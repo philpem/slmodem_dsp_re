@@ -550,7 +550,7 @@ typedef char v22fp_prc_carrier[
  * step size.  `GetSignalQuality` returns QUALITY -- and the mean squared
  * error IS the signal quality.  Three names derived from what a caller does
  * with a field, three derived from what the receive loop does with it,
- * agreeing on all three.  Finding 3310.
+ * agreeing on all three.  Finding 3510.
  */
 typedef char v22fp_prc_eqmode[
 	((int)__builtin_offsetof(struct v22fp_dsp, fse)

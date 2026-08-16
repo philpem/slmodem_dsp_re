@@ -24,7 +24,7 @@
  * `V22FP_create` calls `V22_PPS_init` on `fp + 0x78` (0x87ea1: `mov
  * 0x54(%ebp),%ebx ; add $0x78,%ebx`), and `TxClockSync` stores three times
  * the field at `fp + 0x12a` to that same address.  The state begins with the
- * configuration, so that store lands on `cfg.step`.  Finding 3305.
+ * configuration, so that store lands on `cfg.step`.  Finding 3505.
  *
  * Nothing measured changes: `V22_PPS_STEP` is still the constant 3 the phase
  * update adds, and no test drives `TxClockSync` and the filter together.  What

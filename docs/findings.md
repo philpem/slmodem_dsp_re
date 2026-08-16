@@ -59025,7 +59025,18 @@ The rule added is `git -C <dir>` in preference to `cd`, and `cd <dir> || exit
 1` where a `cd` is unavoidable.  `git -C` cannot fail open: if the directory is
 gone the git command itself fails and nothing else runs.
 
-### 3300. THE V.22 EQUALISER IS ITS OWN BLOCK, NOT `fpm_fse` WITH DIFFERENT TABLES -- AND ITS `fresh` FLAG MEANS THE OPPOSITE
+### 3500. THE V.22 EQUALISER IS ITS OWN BLOCK, NOT `fpm_fse` WITH DIFFERENT TABLES -- AND ITS `fresh` FLAG MEANS THE OPPOSITE
+
+**This block was written as 3300-3315 and renumbered to 3500-3515 at merge**
+**time.** `v34-api-surface` landed 3300-3306 on master concurrently, both
+branches having surveyed when master's maximum was 3122; neither survey was
+wrong when it was taken. Nothing outside this branch ever referred to these by
+their old numbers, so no reference was left dangling -- `refcheck.py` cannot
+see across branches and would not have caught it either way. The renumber was
+done on references only: `3314`, `3312`, `-3301`, `3300 Hz`, `3300.0f` and
+`3300 + lvl` occur in this tree as TABLE DATA and frequencies, and a
+whole-word substitution would have silently corrupted six files. That is
+3506's own lesson, applied to 3506.
 
 `V22_FSE_init` (0x08cd00, 372 bytes), `V22_FSE_free` (0x08ce80, 90) and
 `V22_FSE_getdiag` (0x08c590, 3) sit beside `FPM_FSE_init` (0x0a86b0, 458),
@@ -59058,7 +59069,7 @@ The four ints at +0x10..+0x1c are initialised 0, 1, 1, 1, exactly as
 resemblance and not evidence: nothing reconstructed reads any of the four, so
 they keep `rNN` names until `V22_FSE_receive` says what they do.
 
-### 3301. `V22_FSE_init` REVERSES THE COEFFICIENT PROTOTYPE, AND `FSEv22_COFFS` IS SYMMETRIC -- SO THE OBJECT'S OWN TABLE CANNOT SEPARATE THE TWO READINGS
+### 3501. `V22_FSE_init` REVERSES THE COEFFICIENT PROTOTYPE, AND `FSEv22_COFFS` IS SYMMETRIC -- SO THE OBJECT'S OWN TABLE CANNOT SEPARATE THE TWO READINGS
 
 The coefficient loop is
 
@@ -59089,7 +59100,7 @@ The `>> 2` is a `movswl` followed by `sar $0x2` on the 32-bit value, so it is
 arithmetic; that is head-room for the LMS update, which adds into these in
 place.
 
-### 3302. `V22_FSE_getdiag` IS A THREE-BYTE STUB, WHICH MAKES `V22FP_GetDiagnostics` UNTESTABLE AND IT IS LEFT OUT
+### 3502. `V22_FSE_getdiag` IS A THREE-BYTE STUB, WHICH MAKES `V22FP_GetDiagnostics` UNTESTABLE AND IT IS LEFT OUT
 
 `V22_FSE_getdiag` is `31 c0 c3` -- `xor %eax,%eax ; ret`.  It is not a smaller
 `FSE_getdiag` (229 bytes, which copies a scatter log out and resets the count);
@@ -59118,7 +59129,7 @@ The offset is worth keeping even so: **the V.22 equaliser state lives at +0x164
 of the object `v22prc.h` calls `V22_OBJ_FP`**, and that is the first thing
 recovered about that object's layout.
 
-### 3303. THE 2400 SLICER MEASURES TWO CANDIDATES OF SIXTEEN, AND ITS THRESHOLD IS ALSO ITS INITIAL BEST DISTANCE
+### 3503. THE 2400 SLICER MEASURES TWO CANDIDATES OF SIXTEEN, AND ITS THRESHOLD IS ALSO ITS INITIAL BEST DISTANCE
 
 `FSEv22_decision24` (0x0884a0, 467 bytes) never computes sixteen distances.
 `DECv22_IMAP24` and `DECv22_QMAP24` are laid out so that the index is a
@@ -59158,7 +59169,7 @@ or 12288 and so selects one of exactly three rings.  Its middle entry, 12953,
 is the constant the 1200 slicer reports unconditionally: the four-point
 constellation is the middle ring of the sixteen-point one.
 
-### 3304. 666 BYTES OF V.22 PREREQUISITE UNLOCKED 2,802, AND `V22_FSE_receive` IS WHAT NOW GATES THE REST
+### 3504. 666 BYTES OF V.22 PREREQUISITE UNLOCKED 2,802, AND `V22_FSE_receive` IS WHAT NOW GATES THE REST
 
 Measured with `tools/closure.py --missing` over all twenty-nine unwritten V.22
 symbols, before and after the batch that added `V22_FSE_init` (372),
@@ -59201,7 +59212,7 @@ are in nobody's V.22 count: `connect_1200` (818), `connect_2400` (1,505),
 Several appear in almost every blocked function's list, so they are not
 optional, and the next agent will meet them immediately.
 
-### 3305. `V22FP_TX_CLOCK` IS THE PULSE SHAPER'S `cfg.step`, AND `v22_pps.h`'s "NOTHING EVER ASSIGNS IT" IS WRONG
+### 3505. `V22FP_TX_CLOCK` IS THE PULSE SHAPER'S `cfg.step`, AND `v22_pps.h`'s "NOTHING EVER ASSIGNS IT" IS WRONG
 
 Two facts that were each recorded on their own and never put together:
 
@@ -59236,7 +59247,7 @@ WHAT it is.**  Two names for one address -- `V22FP_TX_CLOCK` in `v22prc.h` and
 `V22FP_PPS` in `v22data.h` -- is the symptom, and both are kept and
 cross-referenced until `V22FP_create` lands and the object gets a real type.
 
-### 3306. `V22_OBJ_GTIMER` IS NOT AN `int *`
+### 3506. `V22_OBJ_GTIMER` IS NOT AN `int *`
 
 `v22prc.h` describes the pointer at `modem + 0x50` as "int *, a shared
 millisecond clock", which is what `ReadGTimer` alone can support: it steps the
@@ -59252,7 +59263,7 @@ Nothing reconstructed builds that block, so its extent is unknown and it is not
 modelled.  Recorded because "int *" is the kind of type a later reader
 dereferences without checking.
 
-### 3307. `MTDv22_CFG` AND `MTDv22_CFG2` DETECT 2200 Hz AND 1800 Hz, AND MEASURING THAT IS WHAT MADE `Detect_v22`'s TEST MEAN ANYTHING
+### 3507. `MTDv22_CFG` AND `MTDv22_CFG2` DETECT 2200 Hz AND 1800 Hz, AND MEASURING THAT IS WHAT MADE `Detect_v22`'s TEST MEAN ANYTHING
 
 Both configurations are `tones = 3`, `min_level = 10`, `ratio` 29820 and 27980
 respectively, and neither carries its passband anywhere a reader can see it.
@@ -59274,7 +59285,7 @@ arriving from the other direction: a detector that never fires and a tool that
 never fires are the same failure, and the only defence is a count that has to
 be non-zero.
 
-### 3308. A SYMMETRIC RETURN VALUE CANNOT CATCH A MIS-PAIRING, SO THE SEPARATING COUNT HAS TO BE TAKEN ON THE SIDE EFFECTS -- CHANNEL BY CHANNEL
+### 3508. A SYMMETRIC RETURN VALUE CANNOT CATCH A MIS-PAIRING, SO THE SEPARATING COUNT HAS TO BE TAKEN ON THE SIDE EFFECTS -- CHANNEL BY CHANNEL
 
 `Detect_v22` runs two detectors, keeps a run length for each, and returns
 `(run_a > 2) | (run_b > 2)`.
@@ -59293,7 +59304,7 @@ than as a disjunction, or the count is satisfied by whichever channel the
 differential happens to compare most weakly -- which is what the third commit
 on this batch's branch fixes.
 
-### 3309. A SEPARATING-TRIAL COUNTER THAT COUNTS PATHS CAN BE TRUE AND PROVE NOTHING, AND ONLY THE MUTATION SETTLES IT -- 30 WRITTEN, 27 CAUGHT, 3 EQUIVALENT BY PROOF
+### 3509. A SEPARATING-TRIAL COUNTER THAT COUNTS PATHS CAN BE TRUE AND PROVE NOTHING, AND ONLY THE MUTATION SETTLES IT -- 30 WRITTEN, 27 CAUGHT, 3 EQUIVALENT BY PROOF
 
 The rule this batch was given is right and has a hole.  When a plausible wrong
 reading agrees with the true one over every realistic input, the defence is a
@@ -59356,7 +59367,7 @@ proof that it cannot matter -- which is a deliverable, and belongs in the set
 with the argument -- or the counter was measuring the wrong thing, whatever it
 printed.
 
-### 3310. THREE OFFSETS NAMED FROM WHAT A CALLER DOES WITH THEM LAND ON THREE FIELDS NAMED FROM WHAT THE RECEIVE LOOP DOES WITH THEM, AND THE MEANINGS AGREE
+### 3510. THREE OFFSETS NAMED FROM WHAT A CALLER DOES WITH THEM LAND ON THREE FIELDS NAMED FROM WHAT THE RECEIVE LOOP DOES WITH THEM, AND THE MEANINGS AGREE
 
 `v22prc.h` named three offsets in the V.22 object from the leaf functions that
 touch them, with `void *` parameters and no struct, because the object was not
@@ -59388,7 +59399,7 @@ than either derivation alone.
 The compile-time assertions in `v22fp.c` hold all ten of `v22prc.h`'s constants
 to the struct, so this stays true or the build stops.
 
-### 3311. A CLEAN TEXTUAL MERGE OF TWO DISJOINT BRANCHES DID NOT COMPILE, AND ONLY THE COMPILER WOULD HAVE SAID SO
+### 3511. A CLEAN TEXTUAL MERGE OF TWO DISJOINT BRANCHES DID NOT COMPILE, AND ONLY THE COMPILER WOULD HAVE SAID SO
 
 Finding 700 says a merge that compiles is not a merge that kept everything.
 This is the neighbouring case and it is worth recording beside it: a merge that
@@ -59418,7 +59429,7 @@ It surfaced here as a hard error only because the reference was a
 everywhere else -- it would have merged, compiled, linked and been wrong.  That
 is an argument for the assertions, not against them.
 
-### 3312. THE V.22 COEFFICIENT SETS ARE SYNTHESISED BY THE CONSTRUCTOR, NOT STORED
+### 3512. THE V.22 COEFFICIENT SETS ARE SYNTHESISED BY THE CONSTRUCTOR, NOT STORED
 
 `V22FP_create` builds three of the datapump's filters from a stored prototype
 and a carrier it generates on the spot: the pulse shaper's 120 I and Q taps
@@ -59437,7 +59448,7 @@ why the measured counts are 40 allocations to build, 45 after a rebuild, and
 It also means the stored tables are prototypes at baseband and the modulation
 onto the carrier is code, which is the form the 8 kHz retarget (#47) needs.
 
-### 3313. `V22FP_create` CHECKS NONE OF ITS ELEVEN ALLOCATIONS, AND ITS "CALLER SUPPLIES THE STATE" PATH IS A RE-INITIALISATION
+### 3513. `V22FP_create` CHECKS NONE OF ITS ELEVEN ALLOCATIONS, AND ITS "CALLER SUPPLIES THE STATE" PATH IS A RE-INITIALISATION
 
 `B103FP_create`, in the same object and the same library, checks.  This one
 does not test a single one of the eleven `sysdep_malloc` results.
@@ -59448,7 +59459,7 @@ and reuses the sub-object pointers without examining them -- so that path is a
 **re-initialisation of an object create already built**, not an alternative to
 allocating one.  Handing it a zeroed buffer dereferences null.
 
-### 3314. `diff_eq_int("%s: ...", got, want, (long)k)` SEGFAULTS AT THE MOMENT IT HAS SOMETHING TO REPORT
+### 3514. `diff_eq_int("%s: ...", got, want, (long)k)` SEGFAULTS AT THE MOMENT IT HAS SOMETHING TO REPORT
 
 The first argument is a printf format and the last is a `long`, so a `%s` in it
 is handed an integer.  The call only formats when a check FAILS, so the fault
@@ -59460,7 +59471,7 @@ pass today; all eight are rewritten to `"... (%ld)"`.  This is finding 134's
 argument -- a detector that has never been shown to fire -- applied to the
 reporting path of a test rather than to a tool.
 
-### 3315. `params.bps2` CANNOT DISAGREE WITH `params.bps`, AND TWO OF `v22prc.h`'s TEN OFFSETS ARE AN OPEN QUESTION
+### 3515. `params.bps2` CANNOT DISAGREE WITH `params.bps`, AND TWO OF `v22prc.h`'s TEN OFFSETS ARE AN OPEN QUESTION
 
 Two smaller results from the same reading, both recorded so that a later reader
 does not mistake either for something a test failed to check.
@@ -59468,7 +59479,7 @@ does not mistake either for something a test failed to check.
 `V22FP_create` stores the rate to `params.bps` (+0x02) and to `params.bps2`
 (+0x04) unconditionally on all three mode paths, so `dsp->r28` and `dsp->r2a`
 are always equal and swapping either pair is invisible to any input.  That is
-finding 3052's shape and finding 3309's rule: the test NAMES the pair as
+finding 3052's shape and finding 3509's rule: the test NAMES the pair as
 inseparable rather than appearing to distinguish it.  Likewise
 `TONEv22_CFG` and `TONEv22INIT_CFG` are byte-identical, so which one builds
 `hdx->tone` cannot be told apart -- and an injection confirms it, failing zero
@@ -59478,9 +59489,9 @@ The other two of `v22prc.h`'s ten offsets resolve to something that wants
 explaining rather than recording as settled.  `V22FP_TX_CLOCK` (+0x78) is
 `v22_pps_cfg::step`, a CONFIGURATION word that `V22_PPS_init` copies in and
 `V22_PPS_filter` reads on every output -- so `TxClockSync` overwrites a
-configuration field after initialisation (finding 3305).  `V22FP_BAUD`
+configuration field after initialisation (finding 3505).  `V22FP_BAUD`
 (+0x12a) is `v22_sre::pll_acc` and has the same shape.  Either a deliberate
 post-init correction of two blocks' running state, or a soft spot in one of the
 two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
-same restraint 3310 rewards when the meanings DO line up.
+same restraint 3510 rewards when the meanings DO line up.

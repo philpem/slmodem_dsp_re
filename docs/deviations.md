@@ -6486,7 +6486,7 @@ walking the 49 taps, and the loop after it clears `hist[i]` for i in 0..97.
 The first clear is entirely redundant -- `hist` is 98 shorts and the second
 loop covers all of it.  Recorded because the redundancy is the kind of thing a
 reader corrects without noticing, and correcting it would be a source change
-with no test able to see it.  Finding 3300.
+with no test able to see it.  Finding 3500.
 
 ## D361 ⚠ `FSEv22_decision24` falls back on index 0, which is outside its own search window
 
@@ -6505,7 +6505,7 @@ that count to be non-zero.  Fix class: none proposed; reproduced as found.*
 
 The initial best distance is `thresh[0] << 12`, the same 8192 the amplitude
 test uses, rather than 0x7fff.  `FSEv22_decision12` uses 0x7fff and has no
-equivalent.  Finding 3303.
+equivalent.  Finding 3503.
 
 ## D362 ⚠ `FSEv22_decision12` accumulates its squared distance in sixteen bits
 
@@ -6521,7 +6521,7 @@ non-zero.  Fix class: none proposed; reproduced as found.*
 
 Each axis error is truncated to a short before squaring, the 32-bit square is
 shifted down sixteen, and only then are the two added -- and the sum is
-truncated to a short again before the comparison.  Finding 3301.
+truncated to a short again before the comparison.  Finding 3501.
 
 ## D363 🐛 `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not have
 
@@ -6533,7 +6533,7 @@ same callee.  Fix class: none proposed.*
 
 The object pushes a constant 1 as a fourth argument.  `FPM_AGC_agc` takes
 three.  Unlike `bwchdem.c`'s site this caller also discards the return value,
-so no `agc.signal` read-back is needed to stay faithful.  Finding 3307 for what
+so no `agc.signal` read-back is needed to stay faithful.  Finding 3507 for what
 this function does.
 
 ## D364 ✅ `ModDataV22` narrows `V22_PPS_filter`'s `short` to `unsigned short`
@@ -6559,7 +6559,7 @@ cross-referenced until `V22FP_create` lands and the object gets a real type,
 at which point both become one struct member.*
 
 Recorded here rather than silently unified because a reader meeting the two
-constants would otherwise have to rediscover that they collide.  Finding 3305.
+constants would otherwise have to rediscover that they collide.  Finding 3505.
 
 ## D366 ✅ `V22FP_delete` drops a second argument that no callee reads
 
