@@ -125,6 +125,45 @@ assert DEC["u"].max() == 32124, DEC["u"].max()
 assert DEC["a"].max() == 32256, DEC["a"].max()
 
 ALAW_FS = 32256          # the top A-law codeword, as decoded
+ULAW_FS = 32124          # ... and u-law's, which is LOWER
+
+_VALS = {law: set(int(v) for v in DEC[law]) for law in ("a", "u")}
+
+
+def which_law(x):
+    """Which codec produced this decoded stream, or None if it cannot tell.
+
+    A G.711 decoder emits only the 256 values in its table, so a capture is
+    identifiable by the set its samples fall in.  This matters: the archive
+    offers both PCMA and PCMU, and testing saturation against A-law's 32256
+    on a u-law capture CANNOT FIRE -- u-law tops out at 32124 -- so a
+    saturating u-law call would silently report 0.0000.
+
+    ZERO IS EXEMPT.  A-law has no zero codeword -- its smallest magnitude is
+    +/-8 -- but the streams contain exact zeros from inserted silence, so a
+    strict subset test called every A-law capture indeterminate (102 of 118
+    on the first run).  Scoring the fraction of DISTINCT values that each
+    table can produce, and requiring a clear margin, is robust to that and to
+    any other stray value.
+    """
+    u = np.unique(x.astype(np.int64))
+    u = u[u != 0]
+    if len(u) < 32:
+        return None                      # too little to tell
+    frac = {law: sum(1 for v in u if int(v) in _VALS[law]) / float(len(u))
+            for law in ("a", "u")}
+    best = "a" if frac["a"] >= frac["u"] else "u"
+    other = "u" if best == "a" else "a"
+    if frac[best] > 0.99 and frac[best] - frac[other] > 0.25:
+        return best
+    return None
+
+
+def full_scale(x):
+    """The top codeword for this capture's law; A-law's if indeterminate,
+    which is the CONSERVATIVE choice -- 32256 is the higher threshold, so it
+    can only under-report saturation, never invent it."""
+    return ULAW_FS if which_law(x) == "u" else ALAW_FS
 
 
 def roundtrip(x, law):
@@ -237,15 +276,22 @@ def cmd_sat(args):
     pattern = args[0] if args else DEFAULT_GLOB
     rows = []
     for n, _tx, rx, _p in _census(pattern):
-        rows.append((n, dbfs(rx), float((np.abs(rx) >= ALAW_FS).mean() * 100)))
-    rows.sort(key=lambda r: -r[2])
-    print("%-26s %11s %9s" % ("capture", "rxRMS dBFS", "sat%"))
+        law = which_law(rx)
+        fs = ULAW_FS if law == "u" else ALAW_FS
+        rows.append((n, law or "?", dbfs(rx),
+                     float((np.abs(rx) >= fs).mean() * 100)))
+    rows.sort(key=lambda r: -r[3])
+    print("%-26s %4s %11s %9s" % ("capture", "law", "rxRMS dBFS", "sat%"))
     for r in rows[:20]:
-        print("%-26s %11.2f %9.4f" % r)
+        print("%-26s %4s %11.2f %9.4f" % r)
     if rows:
+        laws = {}
+        for r in rows:
+            laws[r[1]] = laws.get(r[1], 0) + 1
         print("\nn=%d  any saturated sample: %d  above 0.01%%: %d" % (
-            len(rows), sum(1 for r in rows if r[2] > 0),
-            sum(1 for r in rows if r[2] > 0.01)))
+            len(rows), sum(1 for r in rows if r[3] > 0),
+            sum(1 for r in rows if r[3] > 0.01)))
+        print("law: " + "  ".join("%s=%d" % kv for kv in sorted(laws.items())))
 
 
 def cmd_request(args):
