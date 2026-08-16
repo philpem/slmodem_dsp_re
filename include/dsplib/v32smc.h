@@ -62,14 +62,22 @@ struct v32_symout {
 };
 
 /*
- * The absolute phase map, four entries: index by the two selected bits.  Its
- * differential counterpart `SMCv32_PMAP16` is declared in v32dec.h, which is
- * where the rest of the V.32 maps live -- one object, one declaration, and
- * two of them with different signedness is the defect this note exists to
- * prevent a return of.  Signedness here is not settled by the object; see
- * src/pump/v32/v32smc.c.
+ * The absolute phase map, four entries: index by the two selected bits.
+ * UNSIGNED, and that IS forced: `SMCv32_encoder_abs` is its only consumer and
+ * loads it with `movzwl` into a 32-bit result that is used.  That every value
+ * is positive -- so no test can see the difference -- is finding 613's point
+ * and the reason the codegen evidence is worth having, not a reason to
+ * discount it.
+ *
+ * Its differential counterpart `SMCv32_PMAP16` is NOT declared here.  The
+ * object reads that one both ways from different translation units, so it
+ * gets ONE declaration, `const short` in v32dec.h, and this file includes
+ * that header.  Two `extern`s of one object with different types would be
+ * undefined behaviour (C99 6.2.7p2, no diagnostic required), and onedef.py
+ * would not catch it because it tracks types, not object declarations.
+ * D308 records what we give up instead.
  */
-extern const short SMCv32_PMAP_ABS16[4];
+extern const unsigned short SMCv32_PMAP_ABS16[4];
 
 /*
  * The trellis coder's tables.  `short` and `unsigned short` are taken from

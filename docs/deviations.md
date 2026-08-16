@@ -5742,6 +5742,52 @@ bounds it well below 257 samples, so this is out of contract for the only
 caller in the object. `t_cid_mtd.c` drives 256 and 300 full-scale samples so
 both sides are compared either side of the wrap.
 
+## D308 ⚠ `SMCv32_PMAP16` is read signed by three functions and unsigned by two, and one declaration cannot match both
+
+*Renumbered at the merge into master: this was **D305** on `v32-datapump`, where it was written before `cid-dtmf` took D302-D306.  Nothing else about the entry changed.*
+
+Bit-exact; the difference is in the mnemonic, not the value.
+
+The object loads this four-entry phase map from five places:
+
+| site | load | function |
+|------|------|----------|
+| 0x7f9ea | `movzwl` | `SMCv32_encoder_dif` |
+| 0x7fa6b | `movzwl` | `SMCv32_encoder_dif`, second path |
+| 0x81044 | `movswl` | `FSE_decision_16pt` |
+| 0x8121d | `movswl` | `FSE_decision_4pt` |
+| 0x814a9 | `movswl` | `FSE_decision_AB` |
+
+One object, two signednesses, which is what two translation units with
+independent `extern` declarations look like -- and is almost certainly how
+the original was written, one header per pump stage.
+
+WE DO NOT REPRODUCE THAT, because two `extern` declarations of one object
+with incompatible types is undefined behaviour: C99 6.2.7p2 requires all
+declarations of the same object to have compatible type, `short` and
+`unsigned short` are not compatible, and no diagnostic is required across
+translation units.  `tools/onedef.py` would not catch it either -- it tracks
+type definitions, not object declarations -- so it would pass review looking
+checked when nothing had checked it.  The tree has somewhere to record a
+mnemonic difference and nowhere to make undefined behaviour safe.
+
+So it is declared once, `const short` in v32dec.h, and the two encoder loads
+in `SMCv32_encoder_dif` come out `movswl` where the object has `movzwl`.
+Signed is the majority reading, three sites against two, so this is the
+choice that leaves the fewest sites differing; it is also what master already
+had before this branch merged.
+
+NOTHING OBSERVABLE CHANGES.  The table is `{ 4, 0, 8, 12 }` -- every value
+positive, so sign-extension and zero-extension agree on every entry, and the
+differential tier is silent by construction.  This is a codegen-tier entry
+and `compare.py` is where it will show.
+
+`SMCv32_PMAP_ABS16` is NOT this case and is `unsigned short`: one consumer,
+`movzwl`, nothing contradicting it.  An earlier revision of this branch
+flipped it to `short` for symmetry with its neighbour, which had finding
+613's rule backwards -- that a difference is unobservable is why the codegen
+evidence is worth having, not a reason to set it aside.
+
 ======================================================================
 
 ## D320 🐛 `GenericToneDetector::process` withdraws the answer and puts it straight back when `blocks1` is zero
