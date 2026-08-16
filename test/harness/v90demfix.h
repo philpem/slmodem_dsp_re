@@ -287,9 +287,9 @@ setup(int trial, const struct trial_args *t)
 		    beta_v[(t->idx + 1) % NBETA];
 		((V90Equalizer *)equ[side])->state = t->idx % 7;
 		((V90Equalizer *)equ[side])->mmxMode = t->idx & 1;
-		((V90Equalizer *)equ[side])->linearEquMmxRefLevel = 1.0f;
+		((V90Equalizer *)equ[side])->maxLeCoefValue = 1.0f;
 		((V90Equalizer *)equ[side])->linearEquMmxBetaScale = 1.0f;
-		((V90Equalizer *)equ[side])->dfeMmxRefLevel = 1.0f;
+		((V90Equalizer *)equ[side])->maxDfeCoefValue = 1.0f;
 		((V90Equalizer *)equ[side])->dfeMmxBetaScale = 1.0f;
 
 		/* The phase 3 demodulator, wired as t_v90p3dreset.cpp wires it. */

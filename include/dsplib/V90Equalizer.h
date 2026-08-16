@@ -120,6 +120,7 @@ typedef char v90equ_compmode_is_signed[
  */
 #define V90EQU_STATE_RESET		0	/* V90Equalizer::reset       */
 #define V90EQU_STATE_PHASE3		1	/* enterPhase3()             */
+#define V90EQU_STATE_PHASE4		2	/* enterPhase4()             */
 #define V90EQU_STATE_RRN		4	/* enterRRN()                */
 #define V90EQU_STATE_FPE		5	/* enterFPE()                */
 #define V90EQU_STATE_CHANNEL_VERIFY	6	/* enterChannelVerification()*/
@@ -177,6 +178,13 @@ public:
 	 */
 	int enterRRN();
 	int enterFPE();
+
+	/*
+	 * `_ZN12V90Equalizer11enterPhase4Ev`, and void: it falls off the end
+	 * without setting %eax, so it is the `enter*` family's usual shape and
+	 * not `enterRRN`'s.
+	 */
+	void enterPhase4();
 
 	/*
 	 * The mean-error diagnostic.  It returns a float -- `flds 0x20(%esp);
@@ -255,7 +263,20 @@ public:
 	 */
 	V90Resampler *resampler;	/* +0x00 */
 
-	unsigned char pad_04[4];	/* +0x04 */
+	/*
+	 * +0x04  THE RESAMPLER'S BLL STATE, SAVED ACROSS THE PHASE 4 FREEZE.
+	 * `enterPhase4` reads `resampler->bllState` (+0x94 of that object) and
+	 * stores it here in the instruction before it calls
+	 * `setBllState(V90_BLL_FROZEN, 1)`; nothing else in the class touches
+	 * the slot, so what restores it is in `process` or in a member this
+	 * batch has not written.  It was `pad_04`.
+	 *
+	 * Spelled `int` and not `V90BllState`: this header deliberately does
+	 * not include `V90Resampler.h` (see the note above the two forward
+	 * declarations), and the object moves the word with a plain 32-bit
+	 * `mov` either way.
+	 */
+	int savedBllState;		/* +0x04 */
 
 	/* +0x08  Zeroed by `reset` with a `movw`, so two bytes and not four. */
 	short short_08;			/* +0x08 */
@@ -485,9 +506,18 @@ public:
 	 * two; `convertEqualizerToMmx` writes the same last two from the same
 	 * arithmetic over a magnitude it has just measured, which is what says
 	 * +0xbc holds a magnitude and not a step size.  `reset` zeroes +0xbc.
+	 *
+	 * +0xbc AND +0xc0 HAVE THE AUTHOR'S OWN NAMES, and `enterPhase4` is
+	 * where they came from: it walks `linearEquCoefs`, tracks the largest
+	 * and smallest `fabs` in these two slots, and prints them under
+	 * "maxLeCoefValue  = %c%d.%06d" and "minLeCoefValue  = %c%d.%010d".
+	 * They were `linearEquMmxRefLevel` and `word_c0`, which said what
+	 * `setLinearEquBeta` does with +0xbc and nothing at all about +0xc0.
+	 * Finding 2137.  BOTH ARE FLOATS; `reset` writes zero to each, which
+	 * is the same word either way.
 	 */
-	float linearEquMmxRefLevel;	/* +0xbc */
-	unsigned int word_c0;		/* +0xc0 zeroed by reset          */
+	float maxLeCoefValue;		/* +0xbc */
+	float minLeCoefValue;		/* +0xc0 zeroed by reset          */
 	float linearEquMmxBetaScale;	/* +0xc4 */
 	unsigned char pad_c8[0x4];	/* +0xc8 (no member touches it)   */
 	int linearEquMmxBeta;		/* +0xcc */
@@ -537,9 +567,13 @@ public:
 	 */
 	unsigned int word_20Saved;	/* +0xf8 */
 
-	/* The same four for the decision-feedback filter, +0x40 further on. */
-	float dfeMmxRefLevel;		/* +0xfc */
-	unsigned int word_100;		/* +0x100 zeroed by reset         */
+	/*
+	 * The same four for the decision-feedback filter, +0x40 further on --
+	 * and the same two names, from "maxDfeCoefValue" and "minDfeCoefValue"
+	 * in `enterPhase4`'s second half.
+	 */
+	float maxDfeCoefValue;		/* +0xfc */
+	float minDfeCoefValue;		/* +0x100 zeroed by reset         */
 	float dfeMmxBetaScale;		/* +0x104 */
 	unsigned char pad_108[0x4];	/* +0x108 (no member touches it)  */
 	int dfeMmxBeta;			/* +0x10c */

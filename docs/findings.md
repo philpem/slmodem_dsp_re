@@ -54544,3 +54544,91 @@ lines when the early exit is not taken, which a version that dropped one of the
 six statistics fails. This is finding 134's argument again -- a check that
 cannot fire is worse than no check -- caught here by writing the substring
 check first and watching it fail on a passing function.
+
+### 2137. `enterPhase4` NAMES FOUR MORE FIELDS AND +0x04, AND TWO OF THE NAMES REPLACE ONES THIS TREE HAD INVENTED
+
+The function walks each filter's coefficients, keeps the largest and smallest
+`fabs` in a pair of slots, and prints them:
+
+    36c9d:  d9 95 c0 00 00 00   fsts 0xc0(%ebp)   -> "minLeCoefValue  = %c%d.%010d"
+    36ca3:  d9 95 bc 00 00 00   fsts 0xbc(%ebp)   -> "maxLeCoefValue  = %c%d.%06d"
+    36fc4:  d9 95 00 01 00 00   fsts 0x100(%ebp)  -> "minDfeCoefValue  = %c%d.%010d"
+    36fca:  d9 95 fc 00 00 00   fsts 0xfc(%ebp)   -> "maxDfeCoefValue  = %c%d.%06d"
+
+so +0xbc, +0xc0, +0xfc and +0x100 have the author's own names. Two of them
+were this reconstruction's inventions: +0xbc was `linearEquMmxRefLevel` and
++0xfc `dfeMmxRefLevel`, from what `setLinearEquBeta` and `setDfeBeta` do with
+them -- divide by the step size and take a base-2 logarithm, which is a
+reference LEVEL. That reading is not wrong, and the name is still worse: the
+value is the largest coefficient magnitude, and the slot beside it, which the
+old names said nothing about at all, is the smallest. +0xc0 and +0x100 were
+`word_c0` and `word_100`.
+
+**AND +0xc0 AND +0x100 ARE FLOATS**, which `reset` could not say: it writes
+zero to both, and a store of zero cannot tell an int from a float. Same
+argument as finding 2135's four.
+
+**+0x04 IS THE RESAMPLER'S BLL STATE, SAVED.**
+
+    36b6f:  8b b3 94 00 00 00   mov 0x94(%ebx),%esi     ; resampler->bllState
+    36b75:  89 75 04            mov %esi,0x4(%ebp)      ; this->+0x04
+    36b83:  call V90Resampler::setBllState(V90_BLL_FROZEN, 1)
+
+-- read and stored in the two instructions before the loop is frozen, so it is
+a save slot. Nothing in the twenty-nine V90Equalizer symbols restores it, so
+whatever does is in `process`. It was `pad_04`.
+
+### 2138. `getTimingOffsetPPM` IS CALLED FOUR TIMES FOR ONE PRINTED NUMBER, AND THAT IS THE SOURCE AND NOT THE COMPILER
+
+`enterPhase4` emits four `call
+_ZNK21ResamplerTimingOffset18getTimingOffsetPPMEv` between 0x36b8e and
+0x36c2b, all with the same argument, for one `edprintf` with three arguments:
+
+    call #1  -> 0x38(%esp), the minuend of the fractional part
+    call #2  -> (int), the subtrahend
+    call #3  -> fabs, (int), the integer part          (argument 2)
+    call #4  -> compared against zero, the sign        (argument 1)
+
+which is the three arguments evaluated right to left, each one calling the
+getter for itself. GCC does not duplicate a call -- it has no way to know the
+function is pure -- so the source spelled `getTimingOffsetPPM()` four times
+inside one `edprintf`. Transcribed that way. A temporary would read the same
+value and emit one call, and would not be what was compiled.
+
+This is the same shape `calcMeanErrorStatistics` has with a variable rather
+than a call: there the value is loaded from memory twice, once for the
+arithmetic and once for the sign, and a helper taking the float by value
+matches because the two loads cannot differ.
+
+### 2139. A SPILL TO A FOUR-BYTE SLOT IS A ROUNDING, AND `enterPhase4`'s TIMING OFFSET IS WHERE THAT STOPPED BEING FREE
+
+This tree's rule for reading an x87 sequence has been "the object keeps the
+intermediates in registers and never rounds them, so spell them `long double`"
+-- V90Equalizer.cpp's file comment says so, and finding 256 measured it holding
+for the two step-size setters. `enterPhase4` is the counterexample.
+
+    36b96:  d9 5c 24 38     fstps 0x38(%esp)      ; the getter's result
+    36b9d:  e8 ..           call  getTimingOffsetPPM
+    36bcc:  d8 6c 24 38     fsubrs 0x38(%esp)     ; t - (int)t
+    36bd0:  d9 5c 24 38     fstps 0x38(%esp)      ; the DIFFERENCE, rounded
+    36bd4:  d9 05 ..        flds  1e4
+    36bda:  d8 4c 24 38     fmuls 0x38(%esp)
+
+Two `fstps` to a 4-byte slot, so two roundings to single precision.
+`getTimingOffsetPPM` is `1e6f * timingOffset / ppmScale` and returns in st(0)
+at extended precision -- nothing rounds it on the way out -- so the two
+readings differ, and the difference lands in the fourth decimal digit, which
+is exactly what the `%04d` in "timing offset on freeze (phase4) = %c%d.%04d"
+prints.
+
+Written with `long double` intermediates first, on the file's stated rule. The
+transcript comparison failed on EVERY non-zero offset in the sweep and passed
+on zero -- 48 of 1,092 checks -- and two `float` locals fixed all of them. The
+first spill is forced by the second call clobbering the stack; the second is
+not, and it is the one that says the source had a `float` variable there.
+
+So the rule is not "always long double": it is that the SPILL WIDTH is
+evidence. A 4-byte `fstps` on an intermediate is a `float` in the source; a
+value that stays in a register between its producer and its consumer is not.
+The two setters have no such spill, which is why `long double` was right for
+them and finding 256's measurement stands.

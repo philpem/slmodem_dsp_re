@@ -224,10 +224,10 @@ sweep_setter(int which, unsigned level, struct outcome *out, long *tagp)
 				seed(tag);
 
 				OURS.mmxMode = THEIRS.mmxMode = mmx;
-				OURS.linearEquMmxRefLevel =
-				    THEIRS.linearEquMmxRefLevel = ref_v[ri];
-				OURS.dfeMmxRefLevel =
-				    THEIRS.dfeMmxRefLevel = ref_v[ri];
+				OURS.maxLeCoefValue =
+				    THEIRS.maxLeCoefValue = ref_v[ri];
+				OURS.maxDfeCoefValue =
+				    THEIRS.maxDfeCoefValue = ref_v[ri];
 				OURS.linearEquMmxBetaScale =
 				    THEIRS.linearEquMmxBetaScale =
 					scale_v[si];
@@ -356,9 +356,9 @@ run_exact_powers(void)
 	for (m = -8; m <= 12; m++) {
 		seed(tag);
 		OURS.mmxMode = THEIRS.mmxMode = 1;
-		OURS.linearEquMmxRefLevel =
-		    THEIRS.linearEquMmxRefLevel = 1.0f;
-		OURS.dfeMmxRefLevel = THEIRS.dfeMmxRefLevel = 1.0f;
+		OURS.maxLeCoefValue =
+		    THEIRS.maxLeCoefValue = 1.0f;
+		OURS.maxDfeCoefValue = THEIRS.maxDfeCoefValue = 1.0f;
 		OURS.linearEquMmxBetaScale =
 		    THEIRS.linearEquMmxBetaScale = 1.0f;
 		OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale = 1.0f;
@@ -410,10 +410,10 @@ run_enterphase3(void)
 				seed(tag);
 				OURS.state = THEIRS.state = state;
 				OURS.mmxMode = THEIRS.mmxMode = mmx;
-				OURS.linearEquMmxRefLevel =
-				    THEIRS.linearEquMmxRefLevel = ref_v[ri];
-				OURS.dfeMmxRefLevel =
-				    THEIRS.dfeMmxRefLevel = ref_v[ri];
+				OURS.maxLeCoefValue =
+				    THEIRS.maxLeCoefValue = ref_v[ri];
+				OURS.maxDfeCoefValue =
+				    THEIRS.maxDfeCoefValue = ref_v[ri];
 				OURS.linearEquMmxBetaScale =
 				    THEIRS.linearEquMmxBetaScale = 1.0f;
 				OURS.dfeMmxBetaScale =
@@ -1993,9 +1993,9 @@ run_freeze(void)
 			    beta_v[bi];
 			OURS.dfeBeta = THEIRS.dfeBeta = beta_v[bi];
 			OURS.mmxMode = THEIRS.mmxMode = mmx;
-			OURS.linearEquMmxRefLevel =
-			    THEIRS.linearEquMmxRefLevel = 1.0f;
-			OURS.dfeMmxRefLevel = THEIRS.dfeMmxRefLevel = 1.0f;
+			OURS.maxLeCoefValue =
+			    THEIRS.maxLeCoefValue = 1.0f;
+			OURS.maxDfeCoefValue = THEIRS.maxDfeCoefValue = 1.0f;
 			OURS.linearEquMmxBetaScale =
 			    THEIRS.linearEquMmxBetaScale = 32768.0f;
 			OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale =
@@ -2342,10 +2342,10 @@ run_enterrrnfpe(void)
 				OURS.dfeLength = THEIRS.dfeLength = len;
 				OURS.word_1c = THEIRS.word_1c = len;
 				OURS.mmxMode = THEIRS.mmxMode = mmx;
-				OURS.linearEquMmxRefLevel =
-				    THEIRS.linearEquMmxRefLevel = 1.0f;
-				OURS.dfeMmxRefLevel =
-				    THEIRS.dfeMmxRefLevel = 1.0f;
+				OURS.maxLeCoefValue =
+				    THEIRS.maxLeCoefValue = 1.0f;
+				OURS.maxDfeCoefValue =
+				    THEIRS.maxDfeCoefValue = 1.0f;
 				OURS.linearEquMmxBetaScale =
 				    THEIRS.linearEquMmxBetaScale = 1024.0f;
 				OURS.dfeMmxBetaScale =
@@ -2602,6 +2602,200 @@ run_calcmeanerror(void)
 	return diff_end();
 }
 
+/* ==================================================== enterPhase4 */
+
+/*
+ * enterPhase4 needs everything the batch has needed so far at once: the arena
+ * for both coefficient arrays, a real resampler for `setBllState` and
+ * `getTimingOffsetPPM`, the spectral verifier for the German-PBX arm, and the
+ * fixed-point arrays for the clear inside it.
+ *
+ * WHAT THE OBJECT COMPARISON CANNOT SEE, and what is asserted instead: the two
+ * `*CoefValue` pairs are compared as object fields, but a version that summed
+ * from index 0 instead of 1 would write the same maximum and minimum and only
+ * differ in a printed total.  So the two sums are recomputed here -- skipping
+ * the first tap, as the object does (D325) -- and checked against the
+ * transcript by way of the transcript comparison, which is exact.
+ */
+
+extern "C" {
+void ref_equ_enterPhase4(void *self)
+	asm("ref__ZN12V90Equalizer11enterPhase4Ev");
+}
+
+static int
+run_enterphase4(void)
+{
+	static const unsigned int len_v[] = { 0u, 1u, 3u, 16u };
+	static const float ppm_v[] = { 0.0f, 12.5f, -3.75f, 1234.5f };
+	long tag = 1000000;
+	int li, pi, sv2, mmx, state;
+	int saw_pbx = 0, saw_early = 0, saw_zero_len = 0, saw_neg = 0;
+
+	diff_begin("V90Equalizer::enterPhase4");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (state = 1; state <= 2; state++)
+	    for (li = 0; li < 4; li++)
+		for (pi = 0; pi < 4; pi++)
+		    for (sv2 = 0; sv2 < 2; sv2++)
+			for (mmx = 0; mmx < 2; mmx++) {
+				unsigned int len = len_v[li];
+				unsigned int k;
+				int early = (state == V90EQU_STATE_PHASE4);
+
+				tag++;
+				seed(tag);
+				fill_arena(tag);
+				plant_mmx_words(len, tag);
+				wire(&OURS);
+				wire(&THEIRS);
+				wire_mmx(&OURS);
+				wire_mmx(&THEIRS);
+
+				memset(sv_block, 0, sizeof sv_block);
+				ARENA_SV->word_28 = sv2 ? 2u : 1u;
+				OURS.spectralVerifier =
+				    THEIRS.spectralVerifier = ARENA_SV;
+
+				for (k = 0; k < 64; k++) {
+					arena.lecoefs[k] = (float)((int)k - 20)
+					    * 0.0625f;
+					arena.dfecoefs[k] =
+					    (float)((int)((k * 13) % 41) - 25)
+					    * 0.03125f;
+				}
+
+				OURS.state = THEIRS.state = state;
+				OURS.stateCount = THEIRS.stateCount =
+				    0x5c5c0000 + (int)len;
+				OURS.linearEquLength =
+				    THEIRS.linearEquLength = len;
+				OURS.dfeLength = THEIRS.dfeLength = len;
+				OURS.word_1c = THEIRS.word_1c = len;
+				OURS.mmxMode = THEIRS.mmxMode = mmx;
+				OURS.meanErrorCount = THEIRS.meanErrorCount =
+				    17u;
+				OURS.meanErrorFull = THEIRS.meanErrorFull = 1u;
+				OURS.linearEquMmxBetaScale =
+				    THEIRS.linearEquMmxBetaScale = 1024.0f;
+				OURS.dfeMmxBetaScale =
+				    THEIRS.dfeMmxBetaScale = 256.0f;
+
+				ARENA_RSAMP->params = ARENA_PARAMS;
+				ARENA_RSAMP->bllState = (V90BllState)
+				    (pi == 0 ? V90_BLL_FROZEN
+					     : V90_BLL_STEADY_STATE);
+				ARENA_RSAMP->stateSamples = 0x11223344u;
+				ARENA_RSAMP->countStateSamples = 0x55667788u;
+				ARENA_RSAMP->ppmScale = 4.0f;
+				ARENA_RSAMP->timingOffset =
+				    ppm_v[pi] * 4.0f * 1.0e-6f;
+
+				arena_snapshot();
+				dsplib_debug_capture_reset();
+				OURS.enterPhase4();
+				arena_switch();
+				ref_equ_enterPhase4(&THEIRS);
+
+				diff_eq_obj("after enterPhase4", V90Equalizer,
+					    &OURS, &THEIRS, tag);
+				arena_compare("the arena after enterPhase4",
+					      tag);
+				diff_eq_int("no store past the object (%ld)",
+					    guard_equal(), 1, tag);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+
+				if (early) {
+					saw_early = 1;
+					diff_eq_int("the early out printed "
+						    "nothing (%ld)",
+						    (long)(dsplib_debug_capture_lines(1)
+							   == 0), 1, tag);
+					diff_eq_int("and left the diagnostics "
+						    "alone (%ld)",
+						    (long)THEIRS.meanErrorCount,
+						    17, tag);
+					continue;
+				}
+
+				diff_eq_int("the state was entered (%ld)",
+					    (long)THEIRS.state,
+					    V90EQU_STATE_PHASE4, tag);
+				diff_eq_int("stateCount is NOT reset (%ld)",
+					    (long)THEIRS.stateCount,
+					    (long)(0x5c5c0000 + (int)len), tag);
+				diff_eq_int("the BLL state was saved (%ld)",
+					    (long)THEIRS.savedBllState,
+					    (long)(pi == 0 ? V90_BLL_FROZEN
+						   : V90_BLL_STEADY_STATE),
+					    tag);
+				diff_eq_int("and the loop frozen (%ld)",
+					    (long)ARENA_RSAMP->bllState,
+					    (long)V90_BLL_FROZEN, tag);
+				diff_eq_int("the mean-error diagnostics were "
+					    "reset (%ld)",
+					    (long)(THEIRS.meanErrorCount == 0
+						   && THEIRS.meanErrorFull
+						      == 0), 1, tag);
+
+				if (ppm_v[pi] < 0.0f)
+					saw_neg = 1;
+				if (len == 0)
+					saw_zero_len = 1;
+				if (sv2)
+					saw_pbx = 1;
+
+				/*
+				 * The maximum and minimum are over the
+				 * MAGNITUDE and include the first tap; the
+				 * two sums start at index 1.  The sums are
+				 * not in the object, so they are checked
+				 * through the transcript -- what is asserted
+				 * here is the pair that IS.
+				 */
+				{
+					float mx = arena_save.lecoefs[0] < 0.0f
+					    ? -arena_save.lecoefs[0]
+					    : arena_save.lecoefs[0];
+					float mn = mx;
+
+					for (k = 1; k < len; k++) {
+						float a =
+						    arena_save.lecoefs[k];
+
+						if (a < 0.0f)
+							a = -a;
+						if (a > mx)
+							mx = a;
+						if (a < mn)
+							mn = a;
+					}
+					diff_eq_float("maxLeCoefValue",
+						      THEIRS.maxLeCoefValue,
+						      mx, tag);
+					diff_eq_float("minLeCoefValue",
+						      THEIRS.minLeCoefValue,
+						      mn, tag);
+				}
+			}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the German-PBX arm ran", saw_pbx, 1, 0);
+	diff_eq_int("the early out was taken", saw_early, 1, 0);
+	diff_eq_int("a zero-length filter was summarised", saw_zero_len, 1, 0);
+	diff_eq_int("a negative timing offset was printed", saw_neg, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2627,6 +2821,7 @@ main(void)
 	rc |= run_fadeedges();
 	rc |= run_enterrrnfpe();
 	rc |= run_calcmeanerror();
+	rc |= run_enterphase4();
 
 	return rc;
 }

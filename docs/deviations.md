@@ -6053,3 +6053,28 @@ and no test can make it so -- the two sides read two different frames -- so
 `t_v90equ.cpp`'s `run_calcmeanerror` compares the object, the transcript and
 the store guard on that path and skips only the value. Every other path
 compares the returned bits exactly.
+
+## D325 🐛 `enterPhase4` reads `coefs[0]` of a zero-length filter, and leaves it out of both sums
+
+*Batch of 2026-08-16, from `_ZN12V90Equalizer11enterPhase4Ev` (blob 0x36b20) at
+0x36c83 and 0x36fb0. **Reachability: `linearEquLength == 0` or `dfeLength == 0`
+for the over-read; ALWAYS for the omitted first term.** **Observability: a
+four-byte read past a zero-length allocation, and a printed "coefs sum" that
+excludes the first tap.** Status: `unmeasured` -- the constructor rounds both
+lengths down to a multiple of four and nothing bounds them below, so zero is
+constructible but has not been traced to a caller. Fix class: none proposed;
+reproduced as found.*
+
+    36c83:  d9 02           flds (%edx)          ; linearEquCoefs[0]
+    ...
+    36c98:  83 f8 01        cmp  $0x1,%eax       ; linearEquLength
+    36ca9:  0f 86 91 ..     jbe  36d40           ; and only NOW is the loop guarded
+
+The first coefficient is loaded before the guard, so a zero-length filter reads
+it anyway; and the loop that accumulates the two sums starts at index 1, so
+`coefs[0]` seeds `maxLeCoefValue` and `minLeCoefValue` and appears in neither
+"coefs sum" nor "abs coefs sum". Both are the object's, and the second is
+reproduced in `summarise_coefs`, whose loop also starts at 1. `t_v90equ.cpp`'s
+`run_enterphase4` sweeps a zero length -- the arena's arrays are real memory, so
+the over-read is inside the fixture -- and asserts the sums against a
+hand-computed total that also skips the first tap.

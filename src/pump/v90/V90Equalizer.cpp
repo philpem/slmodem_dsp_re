@@ -128,6 +128,7 @@
 	    ((int)__builtin_offsetof(V90Equalizer, field) == (off)) ? 1 : -1]
 
 V90EQU_OFF(resampler,			0x000, resampler);
+V90EQU_OFF(savedBllState,		0x004, savedbll);
 V90EQU_OFF(short_08,			0x008, short08);
 V90EQU_OFF(linearEquLength,		0x00c, linearequlength);
 V90EQU_OFF(linearEquBeta,		0x010, linearequbeta);
@@ -173,8 +174,8 @@ V90EQU_OFF(mmxArraysPresent,		0x0ac, mmxarrays);
 V90EQU_OFF(mmxMode,			0x0b0, mmxmode);
 V90EQU_OFF(block_b4,			0x0b4, blockb4);
 V90EQU_OFF(block_b8,			0x0b8, blockb8);
-V90EQU_OFF(linearEquMmxRefLevel,	0x0bc, leref);
-V90EQU_OFF(word_c0,			0x0c0, wordc0);
+V90EQU_OFF(maxLeCoefValue,		0x0bc, maxlecoef);
+V90EQU_OFF(minLeCoefValue,		0x0c0, minlecoef);
 V90EQU_OFF(linearEquMmxBetaScale,	0x0c4, lescale);
 V90EQU_OFF(linearEquMmxBeta,		0x0cc, lebeta);
 V90EQU_OFF(linearEquMmxShift,		0x0d0, leshift);
@@ -188,8 +189,8 @@ V90EQU_OFF(array_ec,			0x0ec, arrayec);
 V90EQU_OFF(array_ecAligned,		0x0f0, arrayecalign);
 V90EQU_OFF(array_ecSkew,		0x0f4, arrayecskew);
 V90EQU_OFF(word_20Saved,		0x0f8, word20saved);
-V90EQU_OFF(dfeMmxRefLevel,		0x0fc, dferef);
-V90EQU_OFF(word_100,			0x100, word100);
+V90EQU_OFF(maxDfeCoefValue,		0x0fc, maxdfecoef);
+V90EQU_OFF(minDfeCoefValue,		0x100, mindfecoef);
 V90EQU_OFF(dfeMmxBetaScale,		0x104, dfescale);
 V90EQU_OFF(dfeMmxBeta,			0x10c, dfebetai);
 V90EQU_OFF(dfeMmxShift,			0x110, dfeshift);
@@ -240,6 +241,37 @@ static inline int
 one_shifted_by(int n)
 {
 	return (int)(1u << ((unsigned int)n & 31u));
+}
+
+
+/*
+ * One statistic, printed as the same hand-built fixed-point decimal the two
+ * step-size setters use -- three printf arguments and not one float.
+ *
+ *   %c    the sign.  `fldz; fcomps v; sbb; and $-2; add $0x2d` selects on CF
+ *         alone, and FCOM sets C0 for less-than AND for unordered, so the
+ *         object's predicate is `0 < v || unordered`.
+ *   %d    the integer part, `(int)fabs(v)`: `fld; fabs; fistpl` with the
+ *         control word set to truncate.
+ *   %06d  six fractional digits.  `fistl` leaves `(int)v` in memory WITHOUT
+ *         popping, `fildl` reads it back, and `de e2` -- FSUBRP, which
+ *         objdump prints as its own opposite (finding 245) -- computes
+ *         `v - (float)(int)v`, the ordinary fractional part, which is then
+ *         scaled by 1e6 as a DOUBLE (`fldl`, not `flds`) and made positive
+ *         with `cltd; xor; sub`.
+ *
+ * NOTE THE DIFFERENCE FROM THE SETTERS: they take `(int)x - x`, the negative
+ * of the fractional part, and this takes `x - (int)x`.  Both then take the
+ * absolute value, so the printed digits agree; the subtraction order is read
+ * from the bytes either way.
+ */
+static inline void
+edprint_stat(const char *fmt, float v, long double scale)
+{
+	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl((long double)v),
+		 __builtin_abs((int)(((long double)v
+				      - (long double)(int)v) * scale)));
 }
 
 
@@ -297,7 +329,7 @@ V90Equalizer::setLinearEquBeta(float beta)
 	 */
 	if (beta < 0.0f || beta > 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
-					(long double)linearEquMmxRefLevel
+					(long double)maxLeCoefValue
 					/ ((long double)beta * 16777216.0f)))
 				  / x87_log10((long double)2.0f));
 
@@ -339,7 +371,7 @@ V90Equalizer::setDfeBeta(float beta)
 
 	if (beta < 0.0f || beta > 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
-					(long double)dfeMmxRefLevel
+					(long double)maxDfeCoefValue
 					/ ((long double)beta * 1048576.0f)))
 				  / x87_log10((long double)2.0f));
 
@@ -471,10 +503,10 @@ V90Equalizer::reset(unsigned int cursor)
 	linearEquBeta = 1e-14f;
 	dfeBeta = 1e-14f;
 	mmxMode = 0;
-	linearEquMmxRefLevel = 0;
-	word_c0 = 0;
-	dfeMmxRefLevel = 0;
-	word_100 = 0;
+	maxLeCoefValue = 0;
+	minLeCoefValue = 0;
+	maxDfeCoefValue = 0;
+	minDfeCoefValue = 0;
 
 	setLinearEquBeta(0.0f);
 	setDfeBeta(0.0f);
@@ -1088,6 +1120,185 @@ V90Equalizer::enterRRN()
 }
 
 /*
+ * One filter's coefficients summarised: the largest and smallest magnitude,
+ * the signed sum and the sum of magnitudes.
+ *
+ * `enterPhase4` runs this twice, once over `linearEquCoefs` and once over
+ * `dfeCoefs`, and the two are instruction for instruction the same with the
+ * length, the array and the two destination slots moved -- the relationship
+ * the two step-size setters have.  Written once here; the object has it
+ * twice, inline.
+ *
+ * THE FIRST COEFFICIENT IS READ UNCONDITIONALLY AND IS NOT IN EITHER SUM.
+ * `flds (%edx)` happens before the `cmp $1,%eax; jbe` that guards the loop,
+ * so a zero-length filter reads `coefs[0]` anyway; and the loop runs from 1,
+ * so `coefs[0]` seeds the maximum and the minimum and contributes to neither
+ * total.  Both are the object's; docs/deviations.md D325.
+ *
+ * THE MAXIMUM AND MINIMUM ARE OF THE MAGNITUDE and the sums are not: `fabs`
+ * is applied before both comparisons and before the second accumulator, and
+ * the first accumulator takes the coefficient as it stands.
+ */
+static void
+summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
+		float *minOut, float *sumOut, float *absSumOut)
+{
+	float mx, mn, sum, absSum;
+	unsigned int i;
+
+	sum = 0;
+	absSum = 0;
+
+	mx = mn = __builtin_fabsf(coefs[0]);
+	*maxOut = mx;
+	*minOut = mn;
+
+	for (i = 1; i < len; i++) {
+		float a = __builtin_fabsf(coefs[i]);
+
+		if (a > mx) {
+			mx = a;
+			*maxOut = mx;
+		}
+		if (a < mn) {
+			mn = a;
+			*minOut = mn;
+		}
+		sum += coefs[i];
+		absSum += __builtin_fabsf(coefs[i]);
+	}
+
+	*sumOut = sum;
+	*absSumOut = absSum;
+}
+
+/*
+ * enterPhase4 -- freeze the equaliser, freeze the resampler's band-limited
+ * loop, and dump both filters.
+ *
+ * Four things happen and three of them are diagnostics:
+ *
+ *  1. the state, both step sizes to zero, and the resampler's BLL state saved
+ *     into +0x04 and set to `V90_BLL_FROZEN` with a one-sample count;
+ *  2. the timing offset printed;
+ *  3. when the spectral verifier's +0x28 is 2 -- the German-PBX arm
+ *     `enterRRN` and `enterFPE` also have -- the DFE coefficients zeroed;
+ *  4. the mean-error diagnostics reset, and both filters summarised.
+ *
+ * THE TIMING OFFSET IS FETCHED FOUR TIMES.  `getTimingOffsetPPM` is called
+ * once for the fractional digits' minuend, once for their subtrahend, once
+ * for the integer part and once for the sign -- four `call`s, in the order
+ * GCC evaluates the three arguments right to left.  It is written out four
+ * times below because that is what the object does; a temporary would be one
+ * call and would read the same value, but it is not what was compiled.
+ *
+ * `V90Resampler` derives from `ResamplerTiming`, which derives from
+ * `ResamplerTimingOffset`, so `resampler->getTimingOffsetPPM()` is the
+ * `_ZNK21ResamplerTimingOffset18getTimingOffsetPPMEv` the object calls with
+ * the resampler pointer unadjusted -- offset zero of a single-inheritance
+ * chain.
+ *
+ * THE UNCONDITIONAL EARLY-OUT IS THE `enter*` FAMILY'S.  `cmpl $0x2,0x60;
+ * je <return>`, and `stateCount` is not touched -- the same as `enterRRN` and
+ * `enterFPE` and unlike `enterPhase3`.
+ */
+void
+V90Equalizer::enterPhase4()
+{
+	float sum, absSum, ppm, ppmFrac;
+	unsigned int i, n;
+
+	if (state == V90EQU_STATE_PHASE4)
+		return;
+
+	edprintf("V90Equalizer: enter Phase 4\r\n");
+	state = V90EQU_STATE_PHASE4;
+
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+
+	savedBllState = resampler->bllState;
+	resampler->setBllState(V90_BLL_FROZEN, 1);
+
+	/*
+	 * THE FRACTIONAL PART IS ROUNDED TO SINGLE PRECISION TWICE, AND IT
+	 * MATTERS.  The object stores the first call's result to a 4-byte
+	 * slot, calls again, subtracts, and stores the DIFFERENCE to the same
+	 * 4-byte slot before scaling it:
+	 *
+	 *     36b96:  d9 5c 24 38     fstps 0x38(%esp)      ; t
+	 *     36bcc:  d8 6c 24 38     fsubrs 0x38(%esp)     ; t - (int)t
+	 *     36bd0:  d9 5c 24 38     fstps 0x38(%esp)      ; rounded again
+	 *     36bd4:  d9 05 ..        flds  1e4
+	 *     36bda:  d8 4c 24 38     fmuls 0x38(%esp)
+	 *
+	 * `getTimingOffsetPPM` returns its result in st(0) at EXTENDED
+	 * precision -- it is `1e6f * timingOffset / ppmScale` and nothing
+	 * rounds it on the way out -- so keeping the difference in a register
+	 * changes the fourth decimal digit at the truncation, which is
+	 * exactly what the printed `%04d` carries.  Two `float` locals is what
+	 * the object has and what makes the transcript agree; measured, not
+	 * assumed (the first spelling here used `long double` throughout and
+	 * disagreed on every non-zero offset).
+	 *
+	 * Hoisting them out of the argument list changes no order: GCC
+	 * evaluates the three arguments right to left, so the two calls the
+	 * fractional digits need come first either way.
+	 */
+	ppm = resampler->getTimingOffsetPPM();
+	ppmFrac = ppm - (float)(int)resampler->getTimingOffsetPPM();
+
+	edprintf("V90Equalizer: timing offset on freeze (phase4) = "
+		 "%c%d.%04d\r\n",
+		 !(resampler->getTimingOffsetPPM() <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl((long double)
+				      resampler->getTimingOffsetPPM()),
+		 __builtin_abs((int)(1.0e4f * ppmFrac)));
+
+	if (spectralVerifier->word_28 == 2) {
+		for (i = 0; i < dfeLength; i++)
+			dfeCoefs[i] = 0;
+
+		if (mmxMode != 0) {
+			n = dfeLength + 8;
+			for (i = 0; i < n; i++) {
+				dfeMmxCoefs[i] = 0;
+				array_118[i] = 0;
+			}
+		}
+
+		edprintf("V90Equalizer: Dfe coefs zeroed!!\r\n");
+	}
+
+	meanErrorFull = 0;
+	meanErrorCount = 0;
+
+	summarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,
+			&minLeCoefValue, &sum, &absSum);
+
+	edprintf("=======================================================\r\n");
+	edprintf("Linear Equalizer:\r\n");
+	edprint_stat("minLeCoefValue  = %c%d.%010d\r\n", minLeCoefValue,
+		     1.0e10f);
+	edprint_stat("maxLeCoefValue  = %c%d.%06d\r\n", maxLeCoefValue, 1.0e6);
+	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
+	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
+	edprintf("=======================================================\r\n");
+
+	summarise_coefs(dfeCoefs, dfeLength, &maxDfeCoefValue,
+			&minDfeCoefValue, &sum, &absSum);
+
+	edprintf("DFE:\r\n");
+	edprint_stat("minDfeCoefValue  = %c%d.%010d\r\n", minDfeCoefValue,
+		     1.0e10f);
+	edprint_stat("maxDfeCoefValue  = %c%d.%06d\r\n", maxDfeCoefValue,
+		     1.0e6);
+	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
+	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
+	edprintf("=======================================================\r\n");
+}
+
+/*
  * enterFPE -- `enterRRN` with state 5 and its own entry string.  Everything
  * after the first `edprintf` is instruction for instruction the same, down to
  * the redundant `mmxMode = 0` after `restoreEqualizerToFloat` has already
@@ -1138,36 +1349,6 @@ V90Equalizer::enterFPE()
 }
 
 /* =============================================== the mean-error diagnostic */
-
-/*
- * One statistic, printed as the same hand-built fixed-point decimal the two
- * step-size setters use -- three printf arguments and not one float.
- *
- *   %c    the sign.  `fldz; fcomps v; sbb; and $-2; add $0x2d` selects on CF
- *         alone, and FCOM sets C0 for less-than AND for unordered, so the
- *         object's predicate is `0 < v || unordered`.
- *   %d    the integer part, `(int)fabs(v)`: `fld; fabs; fistpl` with the
- *         control word set to truncate.
- *   %06d  six fractional digits.  `fistl` leaves `(int)v` in memory WITHOUT
- *         popping, `fildl` reads it back, and `de e2` -- FSUBRP, which
- *         objdump prints as its own opposite (finding 245) -- computes
- *         `v - (float)(int)v`, the ordinary fractional part, which is then
- *         scaled by 1e6 as a DOUBLE (`fldl`, not `flds`) and made positive
- *         with `cltd; xor; sub`.
- *
- * NOTE THE DIFFERENCE FROM THE SETTERS: they take `(int)x - x`, the negative
- * of the fractional part, and this takes `x - (int)x`.  Both then take the
- * absolute value, so the printed digits agree; the subtraction order is read
- * from the bytes either way.
- */
-static inline void
-edprint_stat(const char *fmt, float v)
-{
-	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl((long double)v),
-		 __builtin_abs((int)(((long double)v
-				      - (long double)(int)v) * 1.0e6)));
-}
 
 /*
  * calcMeanErrorStatistics -- mean, standard deviation, variance, minimum and
@@ -1229,19 +1410,19 @@ V90Equalizer::calcMeanErrorStatistics()
 	edprintf("V90Equalizer: calculated over %d mean errors\r\n", len);
 	edprintf("--------------------------------------------\r\n");
 	edprint_stat("V90Equalizer: meanErrorEnergy mean  = %c%d.%06d\r\n",
-		     meanErrorEnergyMean);
+		     meanErrorEnergyMean, 1.0e6);
 	edprint_stat("V90Equalizer: current meanErrorEnergy  = %c%d.%06d\r\n",
-		     meanErrorEnergyCurrent);
+		     meanErrorEnergyCurrent, 1.0e6);
 	edprintf("--------------------------------------------\r\n");
 	edprint_stat("V90Equalizer: meanErrorEnergy Std  = %c%d.%06d\r\n",
-		     std);
+		     std, 1.0e6);
 	edprint_stat("V90Equalizer: meanErrorEnergy Variance  = %c%d.%06d\r\n",
-		     var);
+		     var, 1.0e6);
 	edprintf("--------------------------------------------\r\n");
 	edprint_stat("V90Equalizer: meanErrorEnergy min value  = "
-		     "%c%d.%06d\r\n", meanErrorEnergyMin);
+		     "%c%d.%06d\r\n", meanErrorEnergyMin, 1.0e6);
 	edprint_stat("V90Equalizer: meanErrorEnergy max value  = "
-		     "%c%d.%06d\r\n", meanErrorEnergyMax);
+		     "%c%d.%06d\r\n", meanErrorEnergyMax, 1.0e6);
 	edprintf("##########################################"
 		 "##########\r\n");
 
