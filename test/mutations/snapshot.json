@@ -4624,8 +4624,33 @@
     "the same buffer stored twice": "caught"
    }
   },
+  "v90cpmembers": {
+   "key": "97916f1a0170ff1cae6a58a9728a79ebc66496a851b2f39ea789ddb32505f552",
+   "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "an out-of-range index writes a length instead of writing nothing": "caught",
+    "case 2 reports the wrong length": "caught",
+    "case 3 takes the other of the two byte tables": "caught",
+    "the below-boundary arm loses its plus one": "caught",
+    "the bit count is one higher": "caught",
+    "the boundary arm adds where it subtracts": "caught",
+    "the companding arms are the other way round": "caught",
+    "the first place value is zero": "caught",
+    "the frame is five symbols rather than six": "caught",
+    "the ladder walk starts one entry down": "caught",
+    "the ladder walk uses <= where the object uses <": "caught",
+    "the last ladder entry is one lower": "caught",
+    "the legal-index bound is exclusive": "caught",
+    "the measurement point is a != 0 test rather than an == 1 test (case 0)": "caught",
+    "the odometer starts at the codeword count rather than one below it": "caught",
+    "the place values start at 2.0": "caught",
+    "the place-value product uses this size rather than the previous one": "caught",
+    "the sixth digit is a remainder like the other five, not a truncation": "caught",
+    "the tail divides instead of multiplying by the reciprocal": "caught"
+   }
+  },
   "v90cpower": {
-   "key": "ff34fe9952cbf821dbf65209ec04034a664fd8eccad6e9f3aff9e59c4510af70",
+   "key": "4892955e12027c9cc90fecd3e5793e129677dfcb395b328f45e57c0a2bab0450",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the constructor clears the whole 144 bytes": "caught",
