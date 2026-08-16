@@ -1001,7 +1001,7 @@ static struct equ_block block_v[] = {
 	{ 0x028, "dfeWindow",			0, 0 },
 	{ 0x040, "dfeCoefs",			0, 0 },
 	{ 0x044, "array_44",			0, 0 },
-	{ 0x098, "block_98",			0, 0 },
+	{ 0x098, "meanErrorEnergy",			0, 0 },
 	{ 0x0b4, "block_b4",			0, 1 },
 	{ 0x0b8, "block_b8",			0, 1 },
 	{ 0x0d4, "linearEquMmxCoefs",		0, 1 },
@@ -1742,14 +1742,14 @@ run_smallmembers(void)
 			    1, tag);
 
 		if (i == 0) {
-			diff_eq_int("word_9c zeroed (%ld)",
-				    (long)THEIRS.word_9c, 0, tag);
-			diff_eq_int("word_a0 zeroed (%ld)",
-				    (long)THEIRS.word_a0, 0, tag);
+			diff_eq_int("meanErrorCount zeroed (%ld)",
+				    (long)THEIRS.meanErrorCount, 0, tag);
+			diff_eq_int("meanErrorFull zeroed (%ld)",
+				    (long)THEIRS.meanErrorFull, 0, tag);
 		} else {
 			/* Nothing moved at all: the fill is still there. */
 			diff_eq_int("the fill survived (%ld)",
-				    (long)(THEIRS.word_9c != 0), 1, tag);
+				    (long)(THEIRS.meanErrorCount != 0), 1, tag);
 		}
 	}
 
@@ -2256,6 +2256,352 @@ run_fadeedges(void)
 	return diff_end();
 }
 
+/* ================================================== enterRRN and enterFPE */
+
+/*
+ * The two 387-byte state entries need two more objects than anything before
+ * them: the spectral verifier, for the one word at its +0x28 that selects the
+ * German-PBX arm, and the pre-filter, for `isV90WithEia6()`.
+ *
+ * NEITHER IS IN THE ARENA, because neither is written -- `isV90WithEia6` is
+ * `const` and +0x28 is only read -- so one static of each, shared by both
+ * sides, is all that is needed and the stored pointers agree by construction.
+ *
+ * `isV90WithEia6` reads `refLoop` first and only touches `dataBase[codecType]`
+ * when it is not negative, so `refLoop = -1` keeps the call inside the
+ * fixture; the answer then comes from the parameter block's +0x500 word, which
+ * the sweep drives to 6 and to something else.
+ */
+
+#include "dsplib/V90SpectralVerifier.h"
+#include "dsplib/V90PreFilter.h"
+
+extern "C" {
+int ref_equ_enterRRN(void *self) asm("ref__ZN12V90Equalizer8enterRRNEv");
+int ref_equ_enterFPE(void *self) asm("ref__ZN12V90Equalizer8enterFPEEv");
+}
+
+static unsigned char sv_block[sizeof(V90SpectralVerifier) + 32]
+	__attribute__((aligned(8)));
+static unsigned char pf_block[sizeof(V90PreFilter) + 32]
+	__attribute__((aligned(8)));
+
+#define ARENA_SV ((V90SpectralVerifier *)sv_block)
+#define ARENA_PF ((V90PreFilter *)pf_block)
+
+static int
+run_enterrrnfpe(void)
+{
+	static const unsigned int sv_v[] = { 0u, 1u, 2u, 3u };
+	long tag = 980000;
+	int which, si, eia, mmx, state;
+	int saw_pbx = 0, saw_eia = 0, saw_restore = 0, saw_early = 0;
+
+	diff_begin("V90Equalizer::enterRRN / enterFPE");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (which = 0; which < 2; which++)
+	    for (state = 3; state <= 6; state++)
+		for (si = 0; si < 4; si++)
+		    for (eia = 0; eia < 2; eia++)
+			for (mmx = 0; mmx < 2; mmx++) {
+				unsigned int len = 12;
+				int got, want;
+				int early = (state == (which == 0
+						       ? V90EQU_STATE_RRN
+						       : V90EQU_STATE_FPE));
+
+				tag++;
+				seed(tag);
+				fill_arena(tag);
+				plant_mmx_words(len, tag);
+				wire(&OURS);
+				wire(&THEIRS);
+				wire_mmx(&OURS);
+				wire_mmx(&THEIRS);
+
+				memset(sv_block, 0, sizeof sv_block);
+				memset(pf_block, 0, sizeof pf_block);
+				ARENA_SV->word_28 = sv_v[si];
+				ARENA_PF->refLoop = -1;
+				ARENA_PF->params = ARENA_PARAMS;
+				V90PW(ARENA_PARAMS)[0x500 / 4] = eia ? 6u : 3u;
+				ARENA_PARAMS->GERMAN_PBX_DFE_TRN2D_FAST_BETA =
+				    0.0009765625f;
+
+				OURS.spectralVerifier =
+				    THEIRS.spectralVerifier = ARENA_SV;
+				OURS.preFilter = THEIRS.preFilter = ARENA_PF;
+				OURS.state = THEIRS.state = state;
+				OURS.stateCount = THEIRS.stateCount =
+				    0x1a2b3c00 + state;
+				OURS.linearEquLength =
+				    THEIRS.linearEquLength = len;
+				OURS.dfeLength = THEIRS.dfeLength = len;
+				OURS.word_1c = THEIRS.word_1c = len;
+				OURS.mmxMode = THEIRS.mmxMode = mmx;
+				OURS.linearEquMmxRefLevel =
+				    THEIRS.linearEquMmxRefLevel = 1.0f;
+				OURS.dfeMmxRefLevel =
+				    THEIRS.dfeMmxRefLevel = 1.0f;
+				OURS.linearEquMmxBetaScale =
+				    THEIRS.linearEquMmxBetaScale = 1024.0f;
+				OURS.dfeMmxBetaScale =
+				    THEIRS.dfeMmxBetaScale = 256.0f;
+
+				arena_snapshot();
+				dsplib_debug_capture_reset();
+				got = which == 0 ? OURS.enterRRN()
+						 : OURS.enterFPE();
+				arena_switch();
+				want = which == 0 ? ref_equ_enterRRN(&THEIRS)
+						  : ref_equ_enterFPE(&THEIRS);
+
+				diff_eq_int("the return value (%ld)",
+					    (long)got, (long)want, tag);
+				diff_eq_obj("after the entry", V90Equalizer,
+					    &OURS, &THEIRS, tag);
+				arena_compare("the arena after the entry",
+					      tag);
+				diff_eq_int("no store past the object (%ld)",
+					    guard_equal(), 1, tag);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+				diff_eq_int("the verifier is untouched (%ld)",
+					    (long)ARENA_SV->word_28,
+					    (long)sv_v[si], tag);
+
+				if (early) {
+					saw_early = 1;
+					diff_eq_int("the early out returns 0 "
+						    "(%ld)", (long)want, 0,
+						    tag);
+					diff_eq_int("and does nothing (%ld)",
+						    (long)(THEIRS.mmxMode
+							   == (int)mmx), 1,
+						    tag);
+					continue;
+				}
+
+				diff_eq_int("the state was entered (%ld)",
+					    (long)THEIRS.state,
+					    (long)(which == 0
+						   ? V90EQU_STATE_RRN
+						   : V90EQU_STATE_FPE), tag);
+				/*
+				 * `enterPhase3` and
+				 * `enterChannelVerification` zero +0x64 in
+				 * the instruction after they write +0x60.
+				 * These two leave it alone, so the planted
+				 * value has to still be there -- which
+				 * `diff_eq_obj` cannot say, since a version
+				 * that zeroed it on both sides would agree.
+				 */
+				diff_eq_int("stateCount is NOT reset (%ld)",
+					    (long)THEIRS.stateCount,
+					    (long)(0x1a2b3c00 + state), tag);
+
+				if (mmx) {
+					saw_restore = 1;
+					diff_eq_int("out of fixed-point mode "
+						    "(%ld)", (long)want, 1,
+						    tag);
+					diff_eq_int("and the mode is off "
+						    "(%ld)",
+						    (long)THEIRS.mmxMode, 0,
+						    tag);
+				} else {
+					diff_eq_int("nothing to restore "
+						    "(%ld)", (long)want, 0,
+						    tag);
+				}
+
+				if (sv_v[si] == 2) {
+					saw_pbx = 1;
+					diff_eq_int("the DFE coefs were "
+						    "zeroed (%ld)",
+						    (long)(arena.dfecoefs[0]
+							   == 0.0f
+							   || mmx), 1, tag);
+				}
+				if (eia) {
+					saw_eia = 1;
+					diff_eq_int("both betas are zero "
+						    "(%ld)",
+						    (long)(THEIRS.linearEquBeta
+							   == 0.0f
+							   && THEIRS.dfeBeta
+							      == 0.0f), 1,
+						    tag);
+				}
+			}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the German-PBX arm ran", saw_pbx, 1, 0);
+	diff_eq_int("the EIA-6 freeze ran", saw_eia, 1, 0);
+	diff_eq_int("the fixed-point restore ran", saw_restore, 1, 0);
+	diff_eq_int("the early out was taken", saw_early, 1, 0);
+
+	return diff_end();
+}
+
+/* ============================================ calcMeanErrorStatistics */
+
+/*
+ * The 300-float buffer is a static rather than an arena member: the function
+ * only READS it, so one copy shared by both sides is enough and no
+ * snapshot-and-restore is needed.  What it WRITES is three floats inside the
+ * object, which `diff_eq_obj` sees, and eleven lines of transcript, which is
+ * most of the function -- the mean, the standard deviation and the variance
+ * are each printed and only the standard deviation comes back.
+ *
+ * THE EARLY EXIT'S RETURN VALUE IS NOT COMPARED, and cannot be: the object
+ * returns an uninitialised stack slot (D324), so the two sides read two
+ * different frames.  Everything else about that path is compared, including
+ * that nothing moved and nothing was printed.
+ */
+
+extern "C" {
+float ref_equ_calcMeanErrorStatistics(void *self)
+	asm("ref__ZN12V90Equalizer23calcMeanErrorStatisticsEv");
+}
+
+static float mee_buf[V90EQU_MEAN_ERROR_LEN];
+
+static int
+run_calcmeanerror(void)
+{
+	static const unsigned int cnt_v[] = { 0u, 1u, 2u, 7u, 64u, 300u };
+	long tag = 990000;
+	int ci, full, pat;
+	int saw_early = 0, saw_full = 0, saw_count = 0;
+
+	diff_begin("V90Equalizer::calcMeanErrorStatistics");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (ci = 0; ci < 6; ci++)
+	    for (full = 0; full < 2; full++)
+		for (pat = 0; pat < 3; pat++) {
+			unsigned int cnt = cnt_v[ci];
+			int i;
+			float got, want;
+			int early = (cnt == 0 && full == 0);
+
+			tag++;
+			seed(tag);
+			fill_arena(tag);
+			wire(&OURS);
+			wire(&THEIRS);
+
+			/*
+			 * Three shapes: a ramp through zero so the sign
+			 * character goes both ways and the minimum is
+			 * negative; a tight cluster so the variance is tiny
+			 * and the six fractional digits carry all of it; and
+			 * a large one so the integer part is not zero.
+			 */
+			for (i = 0; i < V90EQU_MEAN_ERROR_LEN; i++) {
+				if (pat == 0)
+					mee_buf[i] = (float)(i - 150) * 0.125f;
+				else if (pat == 1)
+					mee_buf[i] = 0.0078125f
+					    + (float)(i % 7) * 0.00048828125f;
+				else
+					mee_buf[i] = (float)((i * 37) % 211)
+					    * 4.0f - 300.0f;
+			}
+
+			OURS.meanErrorEnergy = THEIRS.meanErrorEnergy =
+			    mee_buf;
+			OURS.meanErrorCount = THEIRS.meanErrorCount = cnt;
+			OURS.meanErrorFull = THEIRS.meanErrorFull =
+			    (unsigned int)full;
+			OURS.meanErrorEnergyCurrent =
+			    THEIRS.meanErrorEnergyCurrent =
+			    pat == 0 ? -12.5f : 3.0e-5f;
+
+			dsplib_debug_capture_reset();
+			got = OURS.calcMeanErrorStatistics();
+			want = ref_equ_calcMeanErrorStatistics(&THEIRS);
+
+			diff_eq_obj("after the statistics", V90Equalizer,
+				    &OURS, &THEIRS, tag);
+			diff_eq_int("no store past the object (%ld)",
+				    guard_equal(), 1, tag);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+
+			if (early) {
+				saw_early = 1;
+				diff_eq_int("nothing was printed (%ld)",
+					    (long)(dsplib_debug_capture_text(0)
+						   [0] == '\0'), 1, tag);
+				continue;
+			}
+
+			diff_eq_int("the returned bits (%ld)",
+				    (long)(*(unsigned *)&got
+					   == *(unsigned *)&want), 1, tag);
+
+			{
+				unsigned int len = full
+				    ? (unsigned)V90EQU_MEAN_ERROR_LEN : cnt;
+				float lo = mee_buf[0], hi = mee_buf[0];
+				unsigned int k;
+
+				for (k = 1; k < len; k++) {
+					if (mee_buf[k] > hi)
+						hi = mee_buf[k];
+					if (mee_buf[k] < lo)
+						lo = mee_buf[k];
+				}
+				diff_eq_float("the maximum over len",
+					      THEIRS.meanErrorEnergyMax, hi,
+					      tag);
+				diff_eq_float("the minimum over len",
+					      THEIRS.meanErrorEnergyMin, lo,
+					      tag);
+				/*
+				 * THE TRANSCRIPT IS ENCODED, not plain text
+				 * -- `edprintf` runs its format through
+				 * `encode.c` -- so an anti-vacuity check
+				 * cannot look for a substring.  The LINE
+				 * COUNT can: thirteen `edprintf` calls when
+				 * the early exit is not taken, which is what
+				 * a version that dropped one of the six
+				 * statistics would fail.
+				 */
+				diff_eq_int("thirteen lines were printed "
+					    "(%ld)",
+					    (long)dsplib_debug_capture_lines(1),
+					    13, tag);
+				if (full)
+					saw_full = 1;
+				else
+					saw_count = 1;
+			}
+		}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the early exit was taken", saw_early, 1, 0);
+	diff_eq_int("the wrapped length was used", saw_full, 1, 0);
+	diff_eq_int("and the partial one", saw_count, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2279,6 +2625,8 @@ main(void)
 	rc |= run_freeze();
 	rc |= run_restoretofloat();
 	rc |= run_fadeedges();
+	rc |= run_enterrrnfpe();
+	rc |= run_calcmeanerror();
 
 	return rc;
 }

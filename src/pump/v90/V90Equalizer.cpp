@@ -101,6 +101,20 @@
 #include "dsplib/V90Parameters.h"
 
 /*
+ * `enterRRN` and `enterFPE` dereference two of the six pointers the class
+ * otherwise only stores: the spectral verifier's +0x28 and the pre-filter's
+ * `isV90WithEia6()`.
+ *
+ * INCLUDING `V90PreFilter.h` HERE IS NO LONGER A CONFLICT.  It used to carry
+ * a second, smaller `V90Parameters` -- the 0x504 word block this file's
+ * comment above warns about -- and task #116 reconciled the two (finding
+ * 1112), so the header now includes the same `V90Parameters.h` this file
+ * does.  `tools/onedef.py` is the gate that keeps it that way.
+ */
+#include "dsplib/V90SpectralVerifier.h"
+#include "dsplib/V90PreFilter.h"
+
+/*
  * Hold the compiler to the map in the header.  tools/offcheck.py only parses
  * `struct name {` out of include/dsplib, so a C++ class has to assert its own
  * -- and this is exactly the check that catches an object right in size and
@@ -138,10 +152,10 @@ V90EQU_OFF(word_70,			0x070, word70);
 V90EQU_OFF(errorEnergyMeanBlockLen,	0x074, eemblocklen);
 V90EQU_OFF(word_78,			0x078, word78);
 V90EQU_OFF(word_7c,			0x07c, word7c);
-V90EQU_OFF(word_80,			0x080, word80);
-V90EQU_OFF(word_84,			0x084, word84);
-V90EQU_OFF(word_88,			0x088, word88);
-V90EQU_OFF(word_8c,			0x08c, word8c);
+V90EQU_OFF(meanErrorEnergyCurrent,	0x080, meecurrent);
+V90EQU_OFF(meanErrorEnergyMean,		0x084, meemean);
+V90EQU_OFF(meanErrorEnergyMin,		0x088, meemin);
+V90EQU_OFF(meanErrorEnergyMax,		0x08c, meemax);
 V90EQU_OFF(errorEnergyMeanK,		0x090, eemk);
 V90EQU_OFF(phase3Demod,			0x048, phase3demod);
 V90EQU_OFF(phase4Demod,			0x04c, phase4demod);
@@ -150,9 +164,9 @@ V90EQU_OFF(connEval,			0x054, conneval);
 V90EQU_OFF(spectralVerifier,		0x058, specverif);
 V90EQU_OFF(preFilter,			0x05c, prefilter);
 V90EQU_OFF(word_94,			0x094, word94);
-V90EQU_OFF(block_98,			0x098, block98);
-V90EQU_OFF(word_9c,			0x09c, word9c);
-V90EQU_OFF(word_a0,			0x0a0, worda0);
+V90EQU_OFF(meanErrorEnergy,		0x098, meebuf);
+V90EQU_OFF(meanErrorCount,		0x09c, meecount);
+V90EQU_OFF(meanErrorFull,		0x0a0, meefull);
 V90EQU_OFF(word_a4,			0x0a4, worda4);
 V90EQU_OFF(params,			0x0a8, params);
 V90EQU_OFF(mmxArraysPresent,		0x0ac, mmxarrays);
@@ -505,19 +519,19 @@ V90Equalizer::reset(unsigned int cursor)
 
 	word_6c = 0;
 	word_7c = 0;
-	word_80 = 0;
-	word_84 = 0;
-	word_88 = 0;
-	word_8c = 0;
+	meanErrorEnergyCurrent = 0;
+	meanErrorEnergyMean = 0;
+	meanErrorEnergyMin = 0;
+	meanErrorEnergyMax = 0;
 	word_13c = 0;
 	word_140 = 0;
 	errorEnergyMeanK = params->ERROR_ENERGY_MEAN_K;
 	word_68 = 0;
 	word_70 = 0;
 	errorEnergyMeanBlockLen = params->ERROR_ENERGY_MEAN_BLOCK_LEN;
-	word_9c = 0;
+	meanErrorCount = 0;
 	word_78 = 0;
-	word_a0 = 0;
+	meanErrorFull = 0;
 	word_a4 = 0;
 	word_94 = 0;
 	flag_144 = 1;
@@ -676,7 +690,8 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 		edprintf("V90Equalizer: Created - MMX mode is disabled.\r\n");
 	}
 
-	block_98 = sysdep_malloc(0x4b0);
+	meanErrorEnergy = (float *)sysdep_malloc(V90EQU_MEAN_ERROR_LEN *
+						 sizeof(float));
 
 	reset(linearEquLength / 2);
 }
@@ -710,8 +725,8 @@ V90Equalizer::~V90Equalizer()
 		sysdep_free(linearEquWindow);
 	if (dfeWindow != 0)
 		sysdep_free(dfeWindow);
-	if (block_98 != 0)
-		sysdep_free(block_98);
+	if (meanErrorEnergy != 0)
+		sysdep_free(meanErrorEnergy);
 
 	if (mmxArraysPresent != 0) {
 		if (block_b8 != 0)
@@ -779,8 +794,8 @@ V90Equalizer::getDfeBeta()
 void
 V90Equalizer::resetMeanErrorEnergyDiagnostics()
 {
-	word_9c = 0;
-	word_a0 = 0;
+	meanErrorCount = 0;
+	meanErrorFull = 0;
 }
 
 /*
@@ -998,6 +1013,239 @@ V90Equalizer::linearEquFadeEdges()
 			linearEquMmxCoefsAligned[i] = (short)(v >> 16);
 		}
 	}
+}
+
+/* ============================================================ state entries */
+
+/*
+ * enterRRN and enterFPE -- the same 387 bytes with the state constant and the
+ * entry string swapped, the way `setLinearEquBeta` and `setDfeBeta` are the
+ * same 350.  Written out twice for the same reason.
+ *
+ * THEY RETURN AN int AND THE OTHER `enter*` MEMBERS DO NOT.  `%edi` is zeroed
+ * at entry, made 1 on exactly one path, and moved to `%eax` at both returns;
+ * the 1 means "the equaliser was taken out of fixed-point mode", which a
+ * caller cannot see from the state word.  Finding 2134.
+ *
+ * NEITHER TOUCHES `stateCount`.  `enterPhase3` and `enterChannelVerification`
+ * zero +0x64 in the instruction after they write +0x60; these two write +0x60
+ * and leave +0x64 alone.
+ *
+ * THREE INDEPENDENT CONDITIONS, NOT A CHAIN.  The German-PBX arm, the EIA-6
+ * freeze and the fixed-point restore each test their own thing and any
+ * combination can run.  GCC cross-jumps the second and third out of both arms
+ * of the first, which is why `isV90WithEia6` is called from two sites and the
+ * `mmxMode` test from three.
+ *
+ * `mmxMode` IS READ ONCE FOR THE ARRAY CLEAR AND AGAIN FOR THE RESTORE.  The
+ * first read is cached across the two clearing loops (`mov 0xb0(%esi),%ebx`
+ * before the German-PBX test, used after it); the second is reloaded because
+ * `setDfeBeta` and `setLinearEquBeta` intervene.  Neither of them writes
+ * +0xb0, so the two agree -- it is one field read twice in the source.
+ */
+int
+V90Equalizer::enterRRN()
+{
+	unsigned int i, n;
+
+	if (state == V90EQU_STATE_RRN)
+		return 0;
+
+	edprintf("V90Equalizer: enter RRN state\r\n");
+	state = V90EQU_STATE_RRN;
+
+	if (spectralVerifier->word_28 == 2) {
+		for (i = 0; i < dfeLength; i++)
+			dfeCoefs[i] = 0;
+
+		if (mmxMode != 0) {
+			n = dfeLength + 8;
+			for (i = 0; i < n; i++) {
+				dfeMmxCoefs[i] = 0;
+				array_118[i] = 0;
+			}
+		}
+
+		edprintf("V90Equalizer: Dfe coefs zeroed (GERMAN_PBX) !!\r\n");
+		setDfeBeta(params->GERMAN_PBX_DFE_TRN2D_FAST_BETA);
+	}
+
+	if (preFilter->isV90WithEia6()) {
+		setLinearEquBeta(0.0f);
+		setDfeBeta(0.0f);
+		edprintf("V90Equalizer: Dfe & Linear EQU coefs freezed "
+			 "(RRN : EIA6 )!!\r\n");
+	}
+
+	if (mmxMode != 0) {
+		edprintf("V90Equalizer: restoring Equalizer to float...\r\n");
+		restoreEqualizerToFloat();
+		mmxMode = 0;
+		return 1;
+	}
+
+	return 0;
+}
+
+/*
+ * enterFPE -- `enterRRN` with state 5 and its own entry string.  Everything
+ * after the first `edprintf` is instruction for instruction the same, down to
+ * the redundant `mmxMode = 0` after `restoreEqualizerToFloat` has already
+ * cleared it.
+ */
+int
+V90Equalizer::enterFPE()
+{
+	unsigned int i, n;
+
+	if (state == V90EQU_STATE_FPE)
+		return 0;
+
+	edprintf("V90Equalizer: enter FPE state\r\n");
+	state = V90EQU_STATE_FPE;
+
+	if (spectralVerifier->word_28 == 2) {
+		for (i = 0; i < dfeLength; i++)
+			dfeCoefs[i] = 0;
+
+		if (mmxMode != 0) {
+			n = dfeLength + 8;
+			for (i = 0; i < n; i++) {
+				dfeMmxCoefs[i] = 0;
+				array_118[i] = 0;
+			}
+		}
+
+		edprintf("V90Equalizer: Dfe coefs zeroed (GERMAN_PBX) !!\r\n");
+		setDfeBeta(params->GERMAN_PBX_DFE_TRN2D_FAST_BETA);
+	}
+
+	if (preFilter->isV90WithEia6()) {
+		setLinearEquBeta(0.0f);
+		setDfeBeta(0.0f);
+		edprintf("V90Equalizer: Dfe & Linear EQU coefs freezed "
+			 "(RRN : EIA6 )!!\r\n");
+	}
+
+	if (mmxMode != 0) {
+		edprintf("V90Equalizer: restoring Equalizer to float...\r\n");
+		restoreEqualizerToFloat();
+		mmxMode = 0;
+		return 1;
+	}
+
+	return 0;
+}
+
+/* =============================================== the mean-error diagnostic */
+
+/*
+ * One statistic, printed as the same hand-built fixed-point decimal the two
+ * step-size setters use -- three printf arguments and not one float.
+ *
+ *   %c    the sign.  `fldz; fcomps v; sbb; and $-2; add $0x2d` selects on CF
+ *         alone, and FCOM sets C0 for less-than AND for unordered, so the
+ *         object's predicate is `0 < v || unordered`.
+ *   %d    the integer part, `(int)fabs(v)`: `fld; fabs; fistpl` with the
+ *         control word set to truncate.
+ *   %06d  six fractional digits.  `fistl` leaves `(int)v` in memory WITHOUT
+ *         popping, `fildl` reads it back, and `de e2` -- FSUBRP, which
+ *         objdump prints as its own opposite (finding 245) -- computes
+ *         `v - (float)(int)v`, the ordinary fractional part, which is then
+ *         scaled by 1e6 as a DOUBLE (`fldl`, not `flds`) and made positive
+ *         with `cltd; xor; sub`.
+ *
+ * NOTE THE DIFFERENCE FROM THE SETTERS: they take `(int)x - x`, the negative
+ * of the fractional part, and this takes `x - (int)x`.  Both then take the
+ * absolute value, so the printed digits agree; the subtraction order is read
+ * from the bytes either way.
+ */
+static inline void
+edprint_stat(const char *fmt, float v)
+{
+	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl((long double)v),
+		 __builtin_abs((int)(((long double)v
+				      - (long double)(int)v) * 1.0e6)));
+}
+
+/*
+ * calcMeanErrorStatistics -- mean, standard deviation, variance, minimum and
+ * maximum of the 300-float buffer at +0x98, printed, with the standard
+ * deviation returned.
+ *
+ * THE EARLY EXIT RETURNS AN UNINITIALISED STACK SLOT.  `flds 0x20(%esp); ret`
+ * at 0x38d34 is the ONE return point, and 0x20(%esp) is written only by the
+ * `Std<float>` call the early exit jumps over.  Transcribed as the
+ * uninitialised local it is; docs/deviations.md D324, and the test compares
+ * everything about that path except the value.
+ *
+ * THE LENGTH IS ONE EXPRESSION AND THE OBJECT TESTS `meanErrorFull` TWICE.
+ * `if (count == 0 && full == 0) return std;` then `len = full ? 300 : count`
+ * is exactly the object's four-way graph: the second test is threaded away on
+ * the path where the first already proved `full` non-zero, which is why
+ * 0x38d40 reloads +0xa0 and 0x388e5 does not.
+ *
+ * THE MINIMUM AND MAXIMUM ARE TRACKED IN THE MEMBERS THEMSELVES.  `fsts` is a
+ * store that does not pop, so the object keeps the running pair on the x87
+ * stack and writes it out at every update; that is what a plain assignment to
+ * a member compiles to.  Both start at `meanErrorEnergy[0]` and the loop runs
+ * from 1.  A NaN in the buffer moves the MINIMUM and not the maximum: `jbe`
+ * skips the maximum on unordered and `jae` does not skip the minimum.
+ */
+float
+V90Equalizer::calcMeanErrorStatistics()
+{
+	/*
+	 * Deliberately uninitialised, because 0x20(%esp) is: on the early
+	 * exit the object returns whatever the frame happened to hold.  See
+	 * the comment above and D324.
+	 */
+	float std;
+	float var;
+	unsigned int len, i;
+
+	if (meanErrorCount == 0 && meanErrorFull == 0)
+		return std;
+
+	len = (meanErrorFull != 0) ? V90EQU_MEAN_ERROR_LEN : meanErrorCount;
+
+	meanErrorEnergyMean = mean(meanErrorEnergy, len);
+	std = Std(meanErrorEnergy, len);
+	var = Var(meanErrorEnergy, len);
+
+	meanErrorEnergyMax = meanErrorEnergy[0];
+	meanErrorEnergyMin = meanErrorEnergy[0];
+	for (i = 1; i < len; i++) {
+		if (meanErrorEnergy[i] > meanErrorEnergyMax)
+			meanErrorEnergyMax = meanErrorEnergy[i];
+		if (meanErrorEnergy[i] < meanErrorEnergyMin)
+			meanErrorEnergyMin = meanErrorEnergy[i];
+	}
+
+	edprintf("##########################################"
+		 "##########\r\n");
+	edprintf("V90Equalizer: meanErrorEnergy Debug:\r\n");
+	edprintf("V90Equalizer: calculated over %d mean errors\r\n", len);
+	edprintf("--------------------------------------------\r\n");
+	edprint_stat("V90Equalizer: meanErrorEnergy mean  = %c%d.%06d\r\n",
+		     meanErrorEnergyMean);
+	edprint_stat("V90Equalizer: current meanErrorEnergy  = %c%d.%06d\r\n",
+		     meanErrorEnergyCurrent);
+	edprintf("--------------------------------------------\r\n");
+	edprint_stat("V90Equalizer: meanErrorEnergy Std  = %c%d.%06d\r\n",
+		     std);
+	edprint_stat("V90Equalizer: meanErrorEnergy Variance  = %c%d.%06d\r\n",
+		     var);
+	edprintf("--------------------------------------------\r\n");
+	edprint_stat("V90Equalizer: meanErrorEnergy min value  = "
+		     "%c%d.%06d\r\n", meanErrorEnergyMin);
+	edprint_stat("V90Equalizer: meanErrorEnergy max value  = "
+		     "%c%d.%06d\r\n", meanErrorEnergyMax);
+	edprintf("##########################################"
+		 "##########\r\n");
+
+	return std;
 }
 
 /*

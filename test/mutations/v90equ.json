@@ -73,7 +73,7 @@
  },
  {
   "label": "the destructor does not guard the unconditional blocks against null",
-  "find": "\tif (block_98 != 0)\n\t\tsysdep_free(block_98);",
-  "replace": "\tsysdep_free(block_98);"
+  "find": "\tif (meanErrorEnergy != 0)\n\t\tsysdep_free(meanErrorEnergy);",
+  "replace": "\tsysdep_free(meanErrorEnergy);"
  }
 ]

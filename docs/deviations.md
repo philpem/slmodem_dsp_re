@@ -6023,3 +6023,33 @@ from the clamp*; nothing enforces that on the fields themselves, and
 (`t_v90equ.cpp`, `run_fadeedges`, `hi_i == 4`): the middle is tapered twice and
 the two sides agree. The underflowing case is not tested, for the reason D322
 gives -- exercising it is a crash and not a comparison.
+
+## D324 🐛 `calcMeanErrorStatistics`'s early exit returns an uninitialised stack slot
+
+*Batch of 2026-08-16, from `_ZN12V90Equalizer23calcMeanErrorStatisticsEv` (blob
+0x388c0) at 0x388df and 0x38d34. **Reachability: `meanErrorCount == 0 &&
+meanErrorFull == 0`, which is exactly the state
+`resetMeanErrorEnergyDiagnostics` leaves the object in.** **Observability: the
+returned float is whatever the frame held.** Status: `unmeasured` -- whether
+any caller uses the return value on that path has not been traced; `process`
+is the only caller and is not yet written. Fix class: none proposed;
+reproduced as found.*
+
+The function has ONE return point, `flds 0x20(%esp); ret`, and 0x20(%esp) is
+written only by the `Std<float>` call that the early exit jumps over:
+
+    388d7:  8b 86 a0 00 00 00   mov  0xa0(%esi),%eax
+    388df:  0f 84 4f 04 00 00   je   38d34          <- straight to the return
+    ...
+    3891e:  d9 5c 24 20         fstps 0x20(%esp)    <- the only write
+    ...
+    38d34:  d9 44 24 20         flds  0x20(%esp)
+    38d38:  ...                 ret
+
+Transcribed as the uninitialised local it is, which is why `V90Equalizer.cpp`
+declares `float std;` with no initialiser and GCC's warning on that line is a
+true statement about the original. The reconstruction cannot be bit-exact here
+and no test can make it so -- the two sides read two different frames -- so
+`t_v90equ.cpp`'s `run_calcmeanerror` compares the object, the transcript and
+the store guard on that path and skips only the value. Every other path
+compares the returned bits exactly.

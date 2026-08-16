@@ -124,6 +124,14 @@ typedef char v90equ_compmode_is_signed[
 #define V90EQU_STATE_FPE		5	/* enterFPE()                */
 #define V90EQU_STATE_CHANNEL_VERIFY	6	/* enterChannelVerification()*/
 
+/*
+ * The length of the mean-error buffer at +0x98, in floats.  It is the 0x12c
+ * `calcMeanErrorStatistics` uses when the buffer has wrapped, and
+ * 300 * sizeof(float) is the 0x4b0 the constructor allocates -- the two
+ * readings agree, which is what makes this a length and not a magic number.
+ */
+#define V90EQU_MEAN_ERROR_LEN		300
+
 class V90Equalizer {
 public:
 	/*
@@ -161,6 +169,22 @@ public:
 	 * whose whole body is `flds 0x3c(%eax); ret` -- a float in st(0),
 	 * which is the return value.
 	 */
+	/*
+	 * The other two state entries.  These two return an `int` where every
+	 * other `enter*` in the class returns void: %edi is zeroed at entry,
+	 * set to 1 on the one path that takes the equaliser out of
+	 * fixed-point mode, and moved to %eax at both returns.  Finding 2134.
+	 */
+	int enterRRN();
+	int enterFPE();
+
+	/*
+	 * The mean-error diagnostic.  It returns a float -- `flds 0x20(%esp);
+	 * ret` off a stack slot `Std<float>` wrote -- and on its early exit
+	 * that slot has not been written at all; see the .cpp and D324.
+	 */
+	float calcMeanErrorStatistics();
+
 	float getDfeBeta();
 	void setLinearEquCoeff(float *src, unsigned int n);
 	void setDfeCoeff(float *src, unsigned int n);
@@ -366,10 +390,25 @@ public:
 
 	unsigned int word_78;		/* +0x78 */
 	unsigned int word_7c;		/* +0x7c */
-	unsigned int word_80;		/* +0x80 */
-	unsigned int word_84;		/* +0x84 */
-	unsigned int word_88;		/* +0x88 */
-	unsigned int word_8c;		/* +0x8c */
+
+	/*
+	 * +0x80 .. +0x8c  FOUR FLOATS, AND THE AUTHOR'S OWN NAMES FOR THEM.
+	 * `calcMeanErrorStatistics` writes +0x84 with `fstps` from
+	 * `mean<float>` and tracks a running maximum in +0x8c and minimum in
+	 * +0x88, then prints all four through format strings that name them:
+	 * "meanErrorEnergy mean", "current meanErrorEnergy", "meanErrorEnergy
+	 * min value" and "meanErrorEnergy max value".  +0x80 is printed and
+	 * never written there, so `process` maintains it.
+	 *
+	 * They were `unsigned int word_8*` and `reset` sets all four to zero,
+	 * which is the same word either way -- a store of zero cannot tell an
+	 * int from a float, which is why the type only arrived with a member
+	 * that does arithmetic on them.
+	 */
+	float meanErrorEnergyCurrent;	/* +0x80 */
+	float meanErrorEnergyMean;	/* +0x84 */
+	float meanErrorEnergyMin;	/* +0x88 */
+	float meanErrorEnergyMax;	/* +0x8c */
 
 	/*
 	 * +0x90  = params->ERROR_ENERGY_MEAN_K.  Copied as a 32-bit word and
@@ -381,17 +420,27 @@ public:
 	unsigned int word_94;		/* +0x94 */
 
 	/*
-	 * +0x98  A 1,200-BYTE BLOCK, AND THE ONLY ONE THE CONSTRUCTOR TAKES
-	 * UNCONDITIONALLY.  `movl $0x4b0,(%esp); call sysdep_malloc` is the
-	 * last thing it does before handing over to `reset`, and the
-	 * destructor frees it under a null test like all the others.  This
-	 * header used to call it `pad_98` and say "reset does not reach it",
-	 * which was true and is why the allocation could only be seen from
-	 * the constructor.  What 1,200 bytes hold is still not established.
+	 * +0x98  THREE HUNDRED FLOATS, AND THE ONLY BLOCK THE CONSTRUCTOR
+	 * TAKES UNCONDITIONALLY.  `movl $0x4b0,(%esp); call sysdep_malloc` is
+	 * the last thing it does before handing over to `reset`, and the
+	 * destructor frees it under a null test like all the others.  0x4b0
+	 * is 1,200 bytes, and `calcMeanErrorStatistics` hands the same pointer
+	 * to `mean<float>`, `Std<float>` and `Var<float>` and indexes it with
+	 * `flds (%edx,%ecx,4)` -- so 300 floats, and the length constant the
+	 * function uses is 0x12c = 300.  It was `void *block_98` and before
+	 * that `pad_98`.
+	 *
+	 * +0x9c, +0xa0  The two words `resetMeanErrorEnergyDiagnostics` zeroes
+	 * and nothing else in the class touches.  `calcMeanErrorStatistics`
+	 * reads both: it returns early when BOTH are zero, uses the whole 300
+	 * when +0xa0 is set, and otherwise uses +0x9c as the count -- so +0x9c
+	 * is how many of the 300 are filled and +0xa0 says the buffer has
+	 * wrapped.  Named for what the length arithmetic does with them; what
+	 * `process` calls them is not established.
 	 */
-	void *block_98;			/* +0x98 */
-	unsigned int word_9c;		/* +0x9c */
-	unsigned int word_a0;		/* +0xa0 */
+	float *meanErrorEnergy;		/* +0x98  300 floats */
+	unsigned int meanErrorCount;	/* +0x9c */
+	unsigned int meanErrorFull;	/* +0xa0 */
 	unsigned int word_a4;		/* +0xa4 */
 
 	/*

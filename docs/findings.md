@@ -54485,3 +54485,62 @@ which is the one thing a caller cannot see from the state word. The two
 functions are otherwise the same 387 bytes with the state constant (4 against
 5) and the entry string swapped -- the same relationship `setLinearEquBeta` and
 `setDfeBeta` have.
+
+### 2135. THE MEAN-ERROR BLOCK IS 300 FLOATS AND FOUR OF THE WORDS AROUND IT ARE FLOATS TOO, NAMED BY THE OBJECT'S OWN FORMAT STRINGS
+
+`calcMeanErrorStatistics` is the member that types the whole group, and
+nothing before it could: `reset` writes +0x80, +0x84, +0x88 and +0x8c with
+zero, and a store of zero cannot tell an int from a float.
+
+    388ea:  call mean<float>(+0x98, len)   ->  fstps 0x84(%esi)
+    3893b:  flds (%edx)                    ->  fsts  0x8c, fsts 0x88
+    38a4b:  flds 0x80(%esi)                ->  printed, never written here
+
+and the strings the four are printed under are the author's:
+
+    "V90Equalizer: meanErrorEnergy mean  = %c%d.%06d"
+    "V90Equalizer: current meanErrorEnergy  = %c%d.%06d"
+    "V90Equalizer: meanErrorEnergy min value  = %c%d.%06d"
+    "V90Equalizer: meanErrorEnergy max value  = %c%d.%06d"
+
+so +0x84 is the mean, +0x88 the minimum, +0x8c the maximum and +0x80 a
+"current" value this function only reads. They are now
+`meanErrorEnergyMean`, `...Min`, `...Max` and `...Current`.
+
+**+0x98 IS 300 FLOATS, AND TWO INDEPENDENT READINGS AGREE.** The constructor
+allocates 0x4b0 = 1,200 bytes; this function passes the pointer to
+`mean<float>`, `Std<float>` and `Var<float>` and indexes it with
+`flds (%edx,%ecx,4)`; and the length it uses when the buffer has wrapped is
+`mov $0x12c,%ebx` = 300. 300 * sizeof(float) = 1,200. It was `void *block_98`
+and before that `pad_98` with "what 1,200 bytes hold is still not
+established".
+
+**AND THE LENGTH RULE NAMES +0x9c AND +0xa0.** `if (count == 0 && full == 0)
+return; len = full ? 300 : count` -- so +0x9c is how many entries are filled
+and +0xa0 says the ring has wrapped. `resetMeanErrorEnergyDiagnostics` zeroes
+exactly those two and nothing else, which is the same statement from the other
+side: the pair IS the diagnostic's state.
+
+The object tests +0xa0 twice (0x388d7 and 0x38d40) because GCC threads the
+second test away on the path where the first already proved it non-zero. One
+source-level `? :` produces both.
+
+### 2136. THE DIAGNOSTIC TRANSCRIPT IS ENCODED, SO A SUBSTRING IS NOT AN ANTI-VACUITY CHECK
+
+`edprintf` runs its format through `encode.c` before the harness captures it,
+so `dsplib_debug_capture_text` holds ciphertext: the line
+
+    "V90Equalizer: calculated over 7 mean errors"
+
+is captured as `$!$ 9<5@497:?8;;887E9>?A:;994C55>...`. A `strstr` for a phrase
+in the format string finds nothing and reports the function silent when it
+printed thirteen lines.
+
+The transcript COMPARISON is unaffected -- both sides encode the same way, and
+`t_v90equ.cpp` proves the format strings, the separator widths, the sign
+characters and the six fractional digits through it. What needs the other tool
+is the anti-vacuity check, and `dsplib_debug_capture_lines` is it: thirteen
+lines when the early exit is not taken, which a version that dropped one of the
+six statistics fails. This is finding 134's argument again -- a check that
+cannot fire is worse than no check -- caught here by writing the substring
+check first and watching it fail on a passing function.
