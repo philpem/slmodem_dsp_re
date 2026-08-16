@@ -119,6 +119,19 @@ CXXSRC     := $(shell find src -name '*.cpp' | sort)
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
               $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))
 
+# THE SECOND OBJECT TREE: the same sources built WITH -DDSPLIB_REPRODUCE_BUGS,
+# i.e. a faithful reconstruction of the original binary rather than our fixed
+# one.  $(OBJ) above is now the FIXED build and is what ships.
+#
+# Only the differential tier links these.  Those tests exist to prove we behave
+# identically to the blob, and they cannot do that against a build carrying
+# deliberate fixes the blob does not have -- D4's out-of-range table read in
+# FPM_div being the worked example (finding 40).
+# Stripped of the leading `src/` exactly as CXXOBJ64 is, so the stem matches
+# the $(BUILD)/repro/%.o: src/%.c rule below.
+OBJ_REPRO  := $(patsubst src/%.c,$(BUILD)/repro/%.o,$(SRC)) \
+              $(patsubst src/%.cpp,$(BUILD)/repro/%.o,$(CXXSRC))
+
 # The original was built -fno-exceptions -fno-rtti with no new/delete (zero
 # __cxa_*, _Unwind_* or _ZTI* references -- docs/findings.md section 2), so
 # match it.
@@ -217,11 +230,27 @@ $(REF): $(SYMMAP) $(BLOB) tools/refrename.py
 
 # --- compilation ----------------------------------------------------------
 
+# NO $(REPRODUCE) HERE.  This is the DEFAULT tree and it carries our fixes --
+# that is the whole point of the split, and it is what the interop tier, the
+# bench hybrid and anyone linking this library for real will get.  The faithful
+# variant is $(BUILD)/repro below.  Every `#ifdef DSPLIB_REPRODUCE_BUGS` site
+# therefore marks a fix we added that the original does not have.
 $(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+# The faithful-original tree.  Same sources, same flags, plus $(REPRODUCE).
+# Pattern-matched on src/ specifically so it cannot collide with $(BUILD)/%.o
+# above -- the two would otherwise both match $(BUILD)/repro/foo.o.
+$(BUILD)/repro/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -c $< -o $@
 
-$(BUILD)/%.o: %.cpp
+$(BUILD)/repro/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -c $< -o $@
 
@@ -250,7 +279,12 @@ $(BUILD)/%.o: %.cpp
 # everything else.  tools/cppstruct.py flags this without going near a vtable:
 # a destructor listed with a D0 variant is a deleting destructor, which GCC
 # emits only for a virtual one.  Finding 228.
-$(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ) $(HARNESS_OBJ) $(REF)
+# $(OBJ_REPRO), NOT $(OBJ).  These are the differential tests: they exist to
+# prove our source behaves identically to the blob, and they cannot do that
+# against a build carrying deliberate fixes the blob does not have.  If this
+# ever reverts to $(OBJ) the tier fails loudly rather than quietly passing --
+# which is the right failure mode, and is why the split is safe.
+$(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ_REPRO) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -o $@ $^ -lm
 
