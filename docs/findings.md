@@ -60844,3 +60844,45 @@ post-init correction of two blocks' running state, or a soft spot in one of the
 two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
+
+### 3520. `FPM_TONE_kill` IS THE DETECTOR'S NOTCH, RUN OVER THE CALLER'S BUFFER WITH ITS OWN STATE
+
+*This finding opens the block 3520-3539, reserved for the shared-DSP keystone
+batch (`FPM_SRE_init`, `FPM_SRE_recover`, `FPM_PPS_filter`, `FPM_TONE_kill`).
+It is adjacent to 3515, the highest number in use on any branch when the block
+was claimed; 3540-3549 is held by the sibling agent writing
+`FPM_FSE_receive`.*
+
+Sixty-one bytes, and all of them are one call:
+
+    FPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count)
+
+so the whole function is five argument claims, and three of them are the
+interesting ones.
+
+**The coefficients are LOADED, not addressed.** The blob does
+`mov 0xfc(%edx),%ecx` -- it reads the self-pointer `FPM_TONE_create` stores at
++0xfc -- where a reference to the `iir_coeff` array at +0x36 would have been a
+`lea 0x36(%edx)`. On any object `FPM_TONE_create` built the two agree for
+ever, because create sets +0xfc to exactly that address, so no ordinary test
+can separate them. `t_fpm_tone`'s kill block runs a second pass with +0xfc
+redirected at a different five-tap filter, which separates them on the first
+sample; without that pass the substitution is an untested claim.
+
+**It does NOT share the detector's filter state.** +0x100 is a second
+four-word direct form I state, distinct from `iir_state` at +0x40. So a kill
+pass over the caller's buffer and a detect pass over its own history run the
+identical coefficients without corrupting each other's history. `r100[4]` is
+renamed `kill_state[4]` on that evidence, and on `FPM_TONE_find_rev` -- the
+other candidate the header named -- touching +0xf4 and +0xf8 and nothing else
+in the tail.
+
+**One section.** The immediate is 1, matching the five coefficients create
+lays down at +0x36. `FPM_iir_filt_II` is the direct form *I* block (four state
+words per section), which is why four words is the right size and two would
+have read past the end.
+
+`count` is `movswl 0x28(%esp)` -- read as a signed 16-bit value and widened --
+so the parameter is a `short` and not an `int`.
+
+Six mutations, six caught.

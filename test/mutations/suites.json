@@ -48,6 +48,10 @@
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
  ],
+ "fpmtonekill": [
+  "src/dsp/fpm_tone.c",
+  "build/test/t_fpm_tone"
+ ],
  "gtonedet": [
   "src/dsp/GenericToneDetector.cpp",
   "build/test/t_gtonedet"
