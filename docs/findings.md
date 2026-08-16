@@ -60001,6 +60001,24 @@ Acting on 1966, Phil applied `output attenuation 3` to VG204 `voice-port 0/1`
 quiet machine, `hybrid-fit`, pre-registered in `testbench/records/
 atagain-PREREG.txt`.
 
+> **CORRECTION, added after the calls: THE CHANGE WAS A NO-OP.** `show
+> running-config all` afterwards reads `output attenuation 3` — and **3 dB is
+> this platform's default**, so the effective value was 3 before and 3 after.
+> Nothing was ever applied, and the null below is a measurement of an
+> unchanged system. That is why it matched the archive so exactly.
+>
+> I flagged this failure mode in advance — *"read the current value before you
+> set it; `output attenuation` is an absolute, not a delta. If it's already 3,
+> setting 3 changes nothing and you'll chase a null"* — and then placed six
+> bench calls without confirming it had been read. **The warning was worthless
+> because I did not gate on it.** A precondition that is stated but not
+> checked is not a precondition.
+>
+> The "too little power" and "aimed at the wrong direction" analyses below
+> both stand on their own evidence and are unaffected. But the specific
+> question "does attenuating the ATA change what the far end asks for" is
+> **UNTESTED**, not answered. Any retry must use a value that differs from 3.
+
 **THE PREDICTION WAS THAT THE COURIER'S REQUEST WOULD FALL BELOW 3 dB.** It did
 not, on any of nine handshakes:
 
