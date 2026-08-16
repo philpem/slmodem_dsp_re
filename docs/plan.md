@@ -174,11 +174,52 @@ about 45 KB**, shared by V.32, V.22 and the V.90 family at once. Nothing else
 in the plan has this ratio. Do it first even though it is not the largest
 batch, and do it as ONE batch because the closure interlocks.
 
-## Phase 2 — the V.90 demapper cluster
+## Phase 2 — the V.90 demapper cluster  ✅ WRITTEN, on `v90-demapper`
 
 `V90Demapper::hardDecision`, `::process`, `::resetLinearMappStudy`, and
 `V90SignBitsExtractor::process`. ~1.6 KB gating ~30 KB of the V.90/V.92 receive
 chain. Second-best ratio in the object.
+
+**Written 2026-08-16 on `v90-demapper`, not yet merged.** All four, plus
+`V90SignBitsExtractor::applyFrameAction` (197 B), which is not in the batch and
+is what `process` calls: the object holds its four arms twice, once as its own
+symbol and once inlined (finding 3532), and the period compiler reproduces both
+— our `applyFrameAction` is the same 197 bytes with the same mnemonic sequence,
+and our `process` is 418 against the blob's 417 with no out-of-line call.
+`make phase` green, `compare.py --ratchet` 986→991 compared and 350→351
+identical. 1,771 bytes; coverage 57.9% → 58.1%.
+
+Four type corrections came with it and are the reason to read findings 3530 and
+3533 before touching this class: two one-byte "flags" are
+`SerialDifferentialDecoder<unsigned char>` members and the two heap blocks stop
+being `void *`. The naming was carried inside the batch per §3.
+
+**WHAT IT ACTUALLY UNBLOCKED, measured rather than projected**, by running
+`readyqueue.py` at `781aff9` and again after:
+
+| | before | after |
+|---|--:|--:|
+| unwritten call symbols | 867 | 862 |
+| READY | 426 / 85,368 B | 423 / 84,277 B |
+| BLOCKED | 441 / 209,779 B | 439 / 209,049 B |
+
+**Exactly one symbol became READY: `V90Demodulator::enterDataPhase`, 322 bytes**
+— it was blocked by `resetLinearMappStudy` and by nothing else, so 139 bytes
+freed 322. The "~30 KB" in the heading is what these four are a NECESSARY
+condition for, which §1 already warns is not the same as sufficient, and the
+gap is the four `V90Demapper` members still outstanding: `reset`,
+`resetNoSpectral`, `linearMappingStudy` and `incrementRBSFramePosition`. What
+moved instead is how far the hubs have left to go:
+
+| | before | after |
+|---|--:|--:|
+| `V90Equalizer::process` (9,364 B) | needs 20 | **needs 16** |
+| `V90Demodulator::progress` (7,276 B) | needs 65 | **needs 61** |
+| `V90Phase4Demodulator::getV90Decision` (3,095 B) | needs 7 | **needs 3** |
+| `V90Phase4Demodulator::getV92Decision` (3,252 B) | needs 12 | **needs 8** |
+
+So the natural next batch is the rest of `V90Demapper` — those four plus
+`updateConstelation` — which every one of the four rows above is waiting on.
 
 ## Phase 3 — the large ready set
 

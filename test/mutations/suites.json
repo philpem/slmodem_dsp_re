@@ -559,5 +559,13 @@
  "fpmfserecv": [
   "src/dsp/fpm_fse.c",
   "build/test/t_fpm_fse_recv"
+ ],
+ "v90demap": [
+  "src/pump/v90/V90Demapper.cpp",
+  "build/test/t_v90demap"
+ ],
+ "v90sbeproc": [
+  "src/pump/v90/V90SignBitsExtractor.cpp",
+  "build/test/t_v90demap"
  ]
 }

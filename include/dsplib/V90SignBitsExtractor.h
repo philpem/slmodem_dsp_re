@@ -1,6 +1,15 @@
 /*
- * V90SignBitsExtractor.h -- the V.90 sign-bit extractor, so far as its
- * constructor and destructor need it.
+ * V90SignBitsExtractor.h -- the V.90 sign-bit extractor.  Four of its five
+ * members are written; `reset` is the one that is not.
+ *
+ * WHAT THE CLASS DOES, now that `process` is read.  One call is one V.90
+ * frame of `width` sign bits.  It picks an `ACTIONS` from a two-state machine
+ * and the frame's FIRST bit, applies that inversion pattern into its own
+ * buffer at +0x08, runs the buffer through a per-position differential decoder
+ * and then a serial one over the odd positions only, and hands the caller
+ * positions 1..width-1 -- so the first bit is consumed as the state signal and
+ * `width - 1` bits come out.  `V90Demapper::process` relies on that off-by-one
+ * exactly, advancing its output pointer by `width - 1` per group.
  *
  * Reconstructed from dsplibs.o.  The class had no header and no .cpp in this
  * tree before this file; `.symtab` carries `V90SignBitsExtractor.cpp` as a
@@ -49,6 +58,13 @@
 
 #include "dsplib/DiffCoder.h"
 
+/*
+ * The capacity the constructor fixes (`mov $0x6,%edx` at 0x31901) and, with
+ * it, the most `width` can ever be -- so it is also the size of the frame
+ * buffer at +0x08.  See both member comments.
+ */
+#define V90SBE_DECODER_SIZE	6u
+
 class V90SignBitsExtractor {
 public:
 	/*
@@ -60,18 +76,31 @@ public:
 	~V90SignBitsExtractor();
 
 	/*
-	 * Declared for the record and deliberately left undefined.  Their
-	 * signatures come from the mangling and their return types are not
-	 * mangled, so they are unknown.  They belong to whichever batch
-	 * writes this class's processing half.  `ACTIONS` is the original
-	 * author's own enum name, out of
-	 * `_ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_`;
-	 * its enumerators are not recoverable from the mangling.  The one
-	 * below is a PLACEHOLDER so that the enum can be named at all -- C++
-	 * has no opaque enum declaration before C++11 -- and its spelling
-	 * says so.  Nothing may read it until `applyFrameAction` is written.
+	 * `ACTIONS` is the original author's own enum name, out of
+	 * `_ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_`.
+	 * ITS ENUMERATORS ARE NOT RECOVERABLE FROM THE MANGLING, so the four
+	 * spellings below are DESCRIPTIVE and not the author's -- what is the
+	 * object's is the four VALUES and what each one does, read off the
+	 * switch at 0x319f9..0x31a0c and the `sete`/`movzbl` arms behind it:
+	 *
+	 *     0   out[i] = in[i]                       pass every position
+	 *     1   out[i] = (in[i] == 0)                invert every position
+	 *     2   out[i] = (i & 1) ? in[i] : !in[i]    invert the even ones
+	 *     3   out[i] = (i & 1) ? !in[i] : in[i]    invert the odd ones
+	 *
+	 * The switch is over a SIGNED value -- `cmp $0x1,%ebx; jle` at
+	 * 0x31a02 with the negative side falling into the default -- which is
+	 * what an `enum` parameter compiles to and is why this is an enum and
+	 * not an `unsigned`.  The default arm is not empty in the object: it
+	 * still runs the loop, writing nothing, which is a `switch` inside a
+	 * `for` and not the other way round.
 	 */
-	enum ACTIONS { V90SBE_ACTION_NOT_YET_DERIVED = 0 };
+	enum ACTIONS {
+		V90SBE_PASS_ALL		= 0,
+		V90SBE_INVERT_ALL	= 1,
+		V90SBE_INVERT_EVEN	= 2,
+		V90SBE_INVERT_ODD	= 3
+	};
 
 	void reset(unsigned int, unsigned int);
 	void applyFrameAction(ACTIONS, unsigned char *, unsigned char *);
@@ -85,28 +114,83 @@ public:
 	 */
 
 	/*
-	 * +0x00 .. +0x0f  NOT MODELLED.  `process` reads a byte at +0x00 and
-	 * addresses +0x03, +0x04 and +0x08; `reset` writes +0x04 and +0x08.
-	 * Nothing written here touches any of them, so per this tree's
-	 * convention they stay a pad and an offset landing in one is itself
-	 * the answer.
+	 * +0x00  `reset`'s first argument, stored before anything branches on
+	 * it (`mov %edx,(%ebx)` at 0x3196e) and read by NOTHING else in the
+	 * object.  It is the sign-bit SPACING: `width` below is 6 / it.
+	 *
+	 * THE OLD COMMENT HERE WAS WRONG AND IS WORTH RECORDING AS WRONG.  It
+	 * read "`process` reads a byte at +0x00 and addresses +0x03, +0x04 and
+	 * +0x08", which came from reading `0x0(%ebp)` -- the caller's `in`
+	 * pointer -- and `lea 0x3(%ebx),%edi` -- an action number -- as object
+	 * displacements.  Finding 3531.
 	 */
-	unsigned char pad_00[0x10];
+	unsigned int spacing;
 
 	/*
-	 * +0x10  Zeroed by the constructor, `movl $0x0,0x10(%ebx)` -- a full
-	 * 32-bit store, which is what makes it a word and not the first byte
-	 * of one.  `reset`, `applyFrameAction` and `process` all read it.
+	 * +0x04  THE ACTIVE WIDTH, and every loop in this class runs
+	 * `i < width` with an UNSIGNED comparison (`cmp %ecx,0x4(%esi); ja`).
+	 * `reset` computes it as `6 / spacing` with a `div` and hands the same
+	 * word to `ParallelDifferentialDecoder<unsigned char>::reset`, so it is
+	 * both this class's loop bound and the decoder's active size.
 	 */
-	unsigned int word_10;
-
-	unsigned char pad_14[4];	/* +0x14  read by applyFrameAction   */
+	unsigned int width;
 
 	/*
-	 * +0x18  Zeroed by the constructor, `movb $0x0,0x18(%ebx)` -- one
-	 * byte, so a `char`-width flag and not a word.
+	 * +0x08  The frame under construction, `width` bytes of it.  Its base
+	 * is `lea 0x8(%esi),%ebx` in `process`, which then indexes
+	 * `(%ebx,%ecx,1)` for `i` in 0..width-1, hands the same base to the
+	 * parallel decoder as BOTH its input and its output, and finally
+	 * copies bits 1..width-1 out to the caller.
+	 *
+	 * SIX ELEMENTS AND NOT EIGHT.  Nothing in the object bounds the array
+	 * itself -- +0x10 is the next field and that would allow eight -- but
+	 * `width` is `6 / spacing` and `spacing` is at least 1, so six is the
+	 * most the code can reach and the two trailing bytes are the alignment
+	 * of the word at +0x10.
 	 */
-	unsigned char byte_18;
+	unsigned char bits[V90SBE_DECODER_SIZE];
+	unsigned char pad_0e[2];
+
+	/*
+	 * +0x10  THE TWO-STATE MACHINE `process` runs, and `reset`'s second
+	 * argument is its seed.  Zeroed by the constructor with a full 32-bit
+	 * `movl $0x0,0x10(%ebx)`, which is what makes it a word.  `process`
+	 * reads it, chooses an `ACTIONS` from it and the frame's first byte,
+	 * and writes back 0 or 1:
+	 *
+	 *     state 0:  action = state = (in[0] != 0)
+	 *     state 1:  in[0] == 0 -> action INVERT_ODD,  state 1
+	 *               in[0] != 0 -> action INVERT_EVEN, state 0
+	 *
+	 * A THIRD VALUE IS REACHABLE AND THE OBJECT DOES NOT HANDLE IT --
+	 * `reset` will store any word here, and `process` falls through both
+	 * tests with its action register never written.  docs/deviations.md
+	 * D386.
+	 */
+	unsigned int state;
+
+	/*
+	 * +0x14  NOT MODELLED.  Nothing in the five members touches it.  The
+	 * old comment claimed `applyFrameAction` read it; that was
+	 * `0x14(%esp)`, the action argument on the stack.  Finding 3531.
+	 */
+	unsigned char pad_14[4];
+
+	/*
+	 * +0x18  A `SerialDifferentialDecoder<unsigned char>`, and the type is
+	 * FORCED rather than inferred: `process` does
+	 * `lea 0x18(%esi),%ebp` and hands that as the `this` of
+	 * `_ZN25SerialDifferentialDecoderIhE7processEh` at 0x31b46.  It was
+	 * `unsigned char byte_18` while only the constructor's
+	 * `movb $0x0,0x18(%ebx)` was known -- and DiffCoder.h's file comment
+	 * had already predicted exactly this, that the serial classes emit no
+	 * constructor and an enclosing class value-initialising one gets the
+	 * store inlined.  One byte, so the three that follow are padding.
+	 *
+	 * IT RUNS ON THE ODD POSITIONS ONLY, after the parallel decoder has
+	 * run on all of them: `test $0x1,%bl; je` skips it for even `i`.
+	 */
+	SerialDifferentialDecoder<unsigned char> oddDecoder;
 	unsigned char pad_19[3];
 
 	/*
@@ -118,8 +202,5 @@ public:
 	 */
 	ParallelDifferentialDecoder<unsigned char> decoder;
 };
-
-/* The capacity the constructor fixes; see the member comment. */
-#define V90SBE_DECODER_SIZE	6u
 
 #endif /* DSPLIB_V90SIGNBITSEXTRACTOR_H */

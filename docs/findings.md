@@ -62580,3 +62580,109 @@ things had to be arranged for the second run to mean anything:
 The same reasoning applies to `prefilterGain`, which is masked to 26 bits: above
 that, `(int)` of the gain is out of range, which is undefined in C and happens
 to agree on both sides for reasons that have nothing to do with the modem.
+### 3530. TWO `unsigned char` FLAGS WERE `SerialDifferentialDecoder<unsigned char>` MEMBERS ALL ALONG, AND `DiffCoder.h` HAD ALREADY SAID SO
+
+`V90Demapper + 0x664` and `V90SignBitsExtractor + 0x18` were each modelled as a
+one-byte flag on the strength of the only instruction that touched them -- a
+`movb $0x0` in the enclosing constructor, in both cases positioned between two
+member constructions and therefore known to be a member initialisation rather
+than a body statement. Nothing said what the member was.
+
+`V90Demapper::process` and `V90SignBitsExtractor::process` say. Each does a
+`lea` of exactly that address and passes it as the first stack argument of
+`_ZN25SerialDifferentialDecoderIhE7processEh` -- 0x31887 and 0x31b46. A `this`
+is the strongest kind of type evidence there is short of a mangled member name,
+and it is CLAUDE.md's second rank: a callee that types the field.
+
+What makes it worth a finding rather than a line in a header is that
+`DiffCoder.h`'s file comment had predicted it before either `process` was read:
+
+> The serial classes have no constructor, and that is deliberate. [...] With no
+> user-declared constructor the class is trivial, nothing is emitted, and an
+> enclosing class that value-initialises the member gets the initialisation
+> inlined -- which is exactly what `V90SignBitsExtractor`'s constructor does
+> with its `movb $0x0,0x18(%ebx)`.
+
+So the absence of a `SerialDifferential*C1Ev` symbol anywhere in the object,
+which that comment recorded as evidence for the class having no constructor,
+was simultaneously evidence about two fields in two other classes -- and the
+one-byte store it explains is the same store that was being read as a flag.
+The retype is free at both tiers: `: signDecoder()` and `: oddDecoder()`
+value-initialise a POD and emit the same `movb $0x0` in the same place.
+
+The lesson generalises to the 189 bare `fNNNN` names docs/plan.md counts. A
+one-byte field with nothing but a zeroing store is not necessarily a flag; it
+may be an EMBEDDED OBJECT whose type has no constructor to leave a symbol
+behind. The way to tell is to find the member function that takes its address,
+and if none is written yet, to say the type is unknown rather than that it is a
+`char`.
+
+### 3531. TWO OF `V90SignBitsExtractor.h`'s FIELD COMMENTS WERE STACK DISPLACEMENTS READ AS OBJECT OFFSETS
+
+The header said "`process` reads a byte at +0x00 and addresses +0x03, +0x04 and
++0x08" and "+0x14 read by applyFrameAction". Reading both functions:
+
+  - `+0x00` is written by `reset` alone (`mov %edx,(%ebx)`) and read by
+    nothing. `process` never touches it. The claimed read is `0x0(%ebp)` --
+    the caller's `in` pointer, dereferenced for the frame's first bit.
+  - `+0x03` is not an offset at all. It is `lea 0x3(%ebx),%edi`, arithmetic on
+    a `sbb`-generated mask that produces the action number 3 or 2.
+  - `+0x14` is touched by nothing in any of the five members. The claimed read
+    is `mov 0x14(%esp),%ebx`, which is `applyFrameAction`'s own first argument
+    under this object's plain-cdecl convention (finding 215).
+
+Two of the three come from `(%esp)` and `(%ebp)` displacements being read as
+`this` displacements, which is the specific hazard of a convention where `this`
+arrives on the stack: `0x14(%esp)` and `+0x14` look alike in a hurry, and a
+pad comment is exactly the place nobody re-derives.
+
+**A pad comment that names an offset is a CLAIM and should be sourced like
+one.** The corrected comments quote the instruction, so the next reader can
+see which register it is off. Both fields are now modelled -- `spacing` and a
+four-byte pad -- so the wrong halves are gone rather than merely annotated.
+
+### 3532. `V90SignBitsExtractor::process` CONTAINS `applyFrameAction` TWICE, WHICH IS WHAT SAYS THE SOURCE CALLS IT
+
+`applyFrameAction` is a 147-byte symbol at 0x319e0: a four-way switch on an
+`ACTIONS` inside a loop over `width`, which `-O3` unswitches into five loop
+copies (four arms and an empty default). The same five copies appear inside
+`process` at 0x31b90..0x31c4c, instruction for instruction, differing only in
+that the destination is `this + 8` instead of the caller's pointer.
+
+That is what an `-O3` inline of a same-translation-unit member looks like, and
+the out-of-line copy survives because the member is external. So the source of
+`process` is a CALL, and writing the switch out a second time would reproduce
+the object's bytes while losing the factoring the object is evidence for.
+
+The reverse reading was available and is wrong: that the author wrote the loop
+twice and the compiler shared nothing. It is ruled out by the arms being
+identical down to the `sete`-versus-`movzbl` split on `i & 1` and the order of
+the two `inc`s, which two independent hand-written copies would not be.
+
+**The general rule this supports:** where a small member's body appears
+verbatim inside a larger one in the same translation unit, the factoring in the
+source is the small member, not the copy. Where it does NOT appear -- as with
+`printErrorHistogramAndReset`, which `hardDecision` calls out of line at
+0x312c7 -- the compiler declined to inline and the object shows a `call`, which
+is the same conclusion by the other route.
+
+### 3533. `V90Demapper`'s TWO HEAP BLOCKS ARE ONE `unsigned int` AND ONE `unsigned char` PER SAMPLE, AND THE TYPES CAME FROM TWO MANGLINGS
+
+`V90Demapper.h` recorded the two blocks at +0x1c and +0x20 as `void *` with the
+element WIDTHS derived from the constructor's `sysdep_malloc(levels * 4)` and
+`sysdep_malloc(levels)`, and said so explicitly: "four bytes is equally an
+`int`, an `unsigned` or a `float` -- so they are `void *` until something that
+reads them is written".
+
+`process` is that something, and it settles both in one function. The +0x1c
+block is passed to `ModulusDecoder::progress(unsigned char *, unsigned int *)`
+as the second operand and the +0x20 block to
+`V90SignBitsExtractor::process(unsigned char *, unsigned char *)` as the first.
+Neither type is a guess: both come out of a mangling.
+
+Recorded because the deferral worked exactly as intended and is worth copying.
+The header named the width, named what was missing, and named the condition
+under which it would be answered; the batch that met the condition changed one
+line each and the offset assertions caught nothing, because nothing had been
+assumed. Compare finding 3120's `+0x2f64`, where the same restraint was applied
+to a name rather than a type.

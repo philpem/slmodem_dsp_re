@@ -4,18 +4,18 @@
  },
  {
   "label": "the decoder is built with capacity five, not six",
-  "find": "\t: byte_18(0), decoder(V90SBE_DECODER_SIZE)",
-  "replace": "\t: byte_18(0), decoder(5)"
+  "find": "\t: oddDecoder(), decoder(V90SBE_DECODER_SIZE)",
+  "replace": "\t: oddDecoder(), decoder(5)"
  },
  {
-  "label": "+0x18 is left as the constructor found it",
-  "find": "V90SignBitsExtractor::V90SignBitsExtractor()\n\t: byte_18(0), decoder(V90SBE_DECODER_SIZE)",
+  "label": "the serial decoder at +0x18 is left as the constructor found it",
+  "find": "V90SignBitsExtractor::V90SignBitsExtractor()\n\t: oddDecoder(), decoder(V90SBE_DECODER_SIZE)",
   "replace": "V90SignBitsExtractor::V90SignBitsExtractor()\n\t: decoder(V90SBE_DECODER_SIZE)"
  },
  {
-  "label": "+0x10 is left as the constructor found it",
-  "find": "\tword_10 = 0;",
-  "replace": "\t(void)0;"
+  "label": "state at +0x10 is left as the constructor found it",
+  "find": "\t: oddDecoder(), decoder(V90SBE_DECODER_SIZE)\n{\n\tstate = 0;\n}",
+  "replace": "\t: oddDecoder(), decoder(V90SBE_DECODER_SIZE)\n{\n\t(void)0;\n}"
  },
  {
   "label": "the extractor frees the decoder's state itself, as well as the decoder",

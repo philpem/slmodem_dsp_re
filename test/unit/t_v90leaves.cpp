@@ -2235,10 +2235,9 @@ run_sbe_lifecycle(void)
 			    sbe_same_but_state(), 1, tag);
 
 		/* The three stores, read off the BLOB's object. */
-		diff_eq_int("+0x10 is zeroed (%ld)", (long)SB->word_10, 0,
-			    tag);
-		diff_eq_int("+0x18 is zeroed (%ld)", (long)SB->byte_18, 0,
-			    tag);
+		diff_eq_int("+0x10 is zeroed (%ld)", (long)SB->state, 0, tag);
+		diff_eq_int("+0x18 is zeroed (%ld)",
+			    (long)SB->oddDecoder.prev_, 0, tag);
 		diff_eq_int("the decoder's capacity is six (%ld)",
 			    (long)SB->decoder.capacity_, 6, tag);
 		diff_eq_int("and its active width is zero (%ld)",
@@ -2571,25 +2570,25 @@ static int
 dem_pointers(int null_them, long tag)
 {
 	if (null_them) {
-		DA->array_1c = 0;
-		DB->array_1c = 0;
-		DA->array_20 = 0;
-		DB->array_20 = 0;
+		DA->codes = 0;
+		DB->codes = 0;
+		DA->signs = 0;
+		DB->signs = 0;
 		DA->signBits.decoder.state_ = 0;
 		DB->signBits.decoder.state_ = 0;
 		return 1;
 	}
-	DA->array_1c = sysdep_malloc(16);
-	DB->array_1c = sysdep_malloc(16);
-	DA->array_20 = sysdep_malloc(8);
-	DB->array_20 = sysdep_malloc(8);
+	DA->codes = (unsigned int *)sysdep_malloc(16);
+	DB->codes = (unsigned int *)sysdep_malloc(16);
+	DA->signs = (unsigned char *)sysdep_malloc(8);
+	DB->signs = (unsigned char *)sysdep_malloc(8);
 	DA->signBits.decoder.state_ =
 		(unsigned char *)sysdep_malloc(V90SBE_DECODER_SIZE);
 	DB->signBits.decoder.state_ =
 		(unsigned char *)sysdep_malloc(V90SBE_DECODER_SIZE);
 	diff_eq_int("six blocks handed out (%ld)",
-		    DA->array_1c != 0 && DB->array_1c != 0 &&
-		    DA->array_20 != 0 && DB->array_20 != 0 &&
+		    DA->codes != 0 && DB->codes != 0 &&
+		    DA->signs != 0 && DB->signs != 0 &&
 		    DA->signBits.decoder.state_ != 0 &&
 		    DB->signBits.decoder.state_ != 0, 1, tag);
 	return 0;
