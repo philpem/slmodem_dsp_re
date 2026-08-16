@@ -59024,3 +59024,212 @@ ON is not a precondition.**
 The rule added is `git -C <dir>` in preference to `cd`, and `cd <dir> || exit
 1` where a `cd` is unavoidable.  `git -C` cannot fail open: if the directory is
 gone the git command itself fails and nothing else runs.
+
+### 3400. `V90ConstellationDesigner`'s `+0x14` IS A `V90AutoDigitalImpDetector *`, AND ALL THREE DISPLACEMENTS OFF IT ARE ITS MEMBERS
+
+Adjacent to 3055 and the V.90 constellation-power block 3050-3054, which is
+what unblocked the four members this comes out of.
+
+**THIS BLOCK WAS 3210-3216 FOR ABOUT AN HOUR, and the rename is recorded here
+because CLAUDE.md requires it.**  3210-3216 was claimed against a survey whose
+maximum was 3204 on `handshake-index`; by the time the batch was ready
+`v32-datapump-batch` held 3210-3215 and a fresh survey found it, which is the
+ninth time these numbers have collided across parallel sessions.  Nothing
+outside this batch ever referenced the old numbers.  The block now sits at
+3400-3406, clear of the highest in use anywhere (3304, on
+`v22-datapump-batch`), and the gap is deliberate.
+
+**And the lesson is the one `refcheck.py` cannot teach**: it checks THIS tree,
+so it is silent on a branch that landed between the survey and the commit.
+The survey has to be re-run at commit time and not only at planning time.
+
+`include/dsplib/V90ConstellationDesigner.h` said of the pointer at +0x14 that
+"WHAT THE POINTED-AT OBJECT IS is still NOT known", that 0xd00 was "13 rows of
+128 shorts" and 0x280c "0x2812 bytes short of nothing in particular", and that
+"nothing writes this field anywhere in the object".  The last of those was the
+one that mattered, and it is now false: `process` writes it.
+
+    4cbd9  8b 7c 24 68     mov 0x68(%esp),%edi      argument 2
+    4cbf9  89 7d 14        mov %edi,0x14(%ebp)      this->constelTable
+
+and argument 2 is typed by the mangling -- `P25V90AutoDigitalImpDetector`.
+Every displacement three other members take off that pointer then lands on a
+member of that class, at the width those members use:
+
+    +0        linMapp[6][128]      short   constelBuild's 16-bit table
+    +0xd00    byte_0d00[6][128]    uchar   constelBuild's byte table
+    +0x280c   byte_280c[6]         uchar   determineDminForRrn's per-phase flag
+
+Three members that share nothing else, agreeing on one object.  The declared
+type stays `short (*)[128]`, and that is not a compromise: `linMapp` is at
+offset 0 of the detector and IS `short[6][128]`, so `&detector->linMapp[0]` is
+this pointer with the same value and the same type, which is how `process`
+assigns it.
+
+### 3401. `process` RETURNS A VALUE, AND THE TWO-`ret` ARGUMENT THAT MADE THREE SIBLINGS `void` DOES NOT REACH IT
+
+Adjacent to 3400.  Three members of this class are declared `void` on finding
+2140's argument: two `ret` paths arrive with unrelated values in %eax -- a
+`dsplibs_debug_level` on one and `dsplibs_debug_printf`'s return on the other
+-- and no int-returning source converges on both.  It is tempting to apply
+that to every remaining member, and for `process` it is wrong.
+
+`process` has ONE epilogue, at 0x4d0a5, and it begins
+
+    4d0a5  8b 44 24 34     mov 0x34(%esp),%eax
+    4d0a9  83 c4 4c        add $0x4c,%esp
+    4d0ac  5b 5e 5f 5d c3  pop ; pop ; pop ; pop ; ret
+
+-- a deliberate load of a stack slot into %eax on the only way out.  That slot
+is seeded 0 at 0x4cbdd, out of the `xor %esi,%esi` four instructions earlier,
+and set to 1 at 0x4ce9f on exactly one path: the one whose diagnostic is
+"Connection design ERROR, D choosen is smaller than minimum".  So the return is
+a failure flag, it is `int`, and the differential test compares it.
+
+The rule this restates: **the two-`ret` argument is evidence of a `void`, not a
+default.** One `ret` that loads a slot is evidence the other way, and reading
+the epilogue is what separates them.
+
+### 3402. TWO MEMBERS DROP AN ARGUMENT ON THE SAME ARM, AND BOTH DROPPED PAIRS ARE SAME-TYPED
+
+Adjacent to 3401.  `constellationDesign` and `process` each choose between
+`setConstellationToNoise_forceRate` and `setConstellationToNoise` on
+`params->FORCE_RATE_ENABLE`.  The forced call passes everything; the other one
+does not.
+
+In `constellationDesign`, the outgoing frame is filled at 0x4cb55 with the
+float, p1, p2, p3, then %edx from 0x58(%esp) -- the SIXTH argument -- and %esi
+from 0x5c(%esp).  %ecx holds the fifth from 0x54(%esp) and is stored nowhere.
+`process` does the same at 0x4ccf6 with its ninth and tenth.  Both members of
+each pair are `unsigned char *`.
+
+**A fixture that fills two same-typed arguments alike cannot tell this reading
+from the obvious one**, and the obvious one is what anybody writing the source
+from the argument list would produce.  `test/unit/t_v90cdadjust.cpp` gives the
+two arrays different per-phase spans, counts the trials that take the arm, and
+the mutation set carries the swap; docs/deviations.md D355.  This is finding
+3052's technique -- a test that cannot be shown to distinguish two readings is
+not evidence -- applied to an argument list rather than to a field.
+
+### 3403. `process` CLAMPS K THROUGH AN EIGHT-BIT `S`, AND THE TWO READINGS AGREE FOR EVERY SHAPER A REAL DESIGN PRODUCES
+
+Adjacent to 3402, and the same class of trap.
+
+    4cd52  b1 06           mov $0x6,%cl
+    4cd54  b0 2a           mov $0x2a,%al
+    4cd5e  2a 8b 20 06..   sub 0x620(%ebx),%cl      S    = 6 - shaperSR
+    4cd64  28 c8           sub %cl,%al              kMax = 42 - S
+    4cd66  0f b6 c8        movzbl %al,%ecx
+
+-- three byte operations, one of them an 8-bit read of the low byte of a
+32-bit field.  The 32-bit spelling of the same thing is `36 + shaperSR`, and
+the two agree for every `shaperSR` in -36..219, which is every value the
+spectral shaper tables hold.  They diverge outside it, and the divergence
+reaches the result only when the smaller of the two lands inside the 0..42
+range `maxK` occupies -- `shaperSR` of 250 gives 30 one way and 286 the other,
+and a `maxK` above 30 is then clamped by one reading and not by the other.
+
+**AND THEN IT TURNS OUT NOT TO BE SEPARABLE EITHER, WHICH IS THE FINDING.**
+The first version of `test/unit/t_v90cdadjust.cpp` counted the trials meeting
+both conditions and asserted the count -- and the mutation carrying
+`36 + shaperSR` came back NOT CAUGHT, which is what sent anyone looking at the
+next statement:
+
+    d = k - shaperSR + 6;              /* unsigned */
+    if (d > 42) { word_0 = 42; k = shaperSR + 36; } else word_0 = d;
+
+`shaperSR` above 219 needs a `k` of at least 213 for `d` to stay under 43, and
+`k` is at most `maxK`, which is at most 42 because six constellations of at
+most 128 points have a product of at most 2^42.  `shaperSR` below -36 makes
+`d` at least `k + 43`.  So on exactly the inputs where the two readings of
+`kMax` differ, BOTH take the clamp, both leave `word_0` at 42 and both leave
+`k` at `shaperSR + 36`.  The difference cannot reach a state or a diagnostic.
+
+The counter is gone, the mutation is recorded as an EXPECTED SURVIVOR with
+that proof attached, and the source comment says the reading is from the
+encoding.  **A counter that fires is not a counter that separates**, and the
+mutation is what told the difference -- which is the same lesson as 3052 with
+the answer coming out the other way.
+
+The two neighbouring byte computations are NOT separable either, and the record
+says so rather than claiming them: `42 - (unsigned char)word_0` is computed after
+`word_0` has been clamped into 0..42, so it never wraps, and the loop counter
+and done flag are `short` by their `cwtl` and `cmpw`/`setle` -- read from the
+encoding, over a loop bounded at two passes and a flag holding 0 or 1, where
+no input can tell `short` from `int`.
+
+### 3404. FIVE OF THE ELEVEN LEAVES NOTHING CALLED NOW HAVE A CALLER, INLINED, AND THAT IS MOST OF THE 8,869 BYTES
+
+Adjacent to 3403.  `V90ConstellationDesigner`'s eleven small members were
+written with the note that a sweep of every `R_386_PC32` in `.text` finds no
+caller for any of them.  That is still true of the CALL graph and no longer
+true of the code: the four members that close the class expand five of them.
+
+    maxK                          nine times over the four
+    realK                         six
+    findMinValueIndex             once
+    findConstelMaxValueIndex      once
+    reconstructInitialConditions  once
+
+Each is identified by the constant its block ends on -- `maxK` adds 1e-6f and
+truncates through `fistpll`, `realK` adds 1e-9f and stays a float -- and, for
+the three that are not arithmetic, by an instruction-for-instruction match
+with the out-of-line body.  Written back as the member calls they are: whether
+GCC 3.4.2 inlines them again is a codegen question, and the differential tier
+is over behaviour.
+
+The other half of the same observation is `x87_log10`'s cost.  Two of the
+`realK` sites are spelled differently in the object and both spellings are
+kept: 0x4ba96 loads one stored float four times and 0x4bc5c recomputes the
+whole product and both logarithms four times, once per argument of the same
+`%c%d.%05d` diagnostic.
+
+### 3405. THE ADD PASS WRITES ONE PAST A CONSTELLATION ROW AT A LENGTH OF 128, AND THE RESTORE THEN NEVER TERMINATES
+
+Adjacent to 3404, and the reason a differential test for this batch has to
+bound its own fixture.
+
+`adjustConstellationsToNewK` refuses a point when the row would EXCEED 128, so
+128 is accepted, and the shift that follows indexes `[128]`.
+`V90MappingParams` tiles exactly, so that write lands on the neighbour:
+`constellation[k][128]` is `constellation[k + 1][0]`, and
+`codecConstellation[5][128]` is the low byte of `constellationSize[0]`.  The
+first of those destroys the saved first byte of the next row, and the failure
+path then hands that saved byte to `reconstructInitialConditions`, which
+searches for it with no bound (D342), overshoots, decrements an unsigned
+length past zero, and spends the next round in `for (i = 0; i < n; i++)` with
+`i` an `unsigned char` and `n` 0xFFFFFFFF.
+
+**It hangs, and that is measured rather than reasoned**: the first version of
+`test/unit/t_v90cdadjust.cpp` used constellation lengths up to 119, stopped
+producing output in the second trial of the second group, and
+`coredumpctl debug` on the aborted process put the top frame in
+`reconstructInitialConditions` with `n = 4294967295` and `k = 5`.
+docs/deviations.md D351 and D352.
+
+The consequence for the test is recorded with it: every length in the sweep
+starts at 45 or below, which the add pass cannot double past 90, so the
+`constellationSize > 128` half of the failure test is NOT driven and the
+mutation set says so.  The `u >= 128` half IS driven, by raising `short_0a`
+past anything the ramped `ucode` table reaches.
+
+### 3406. SEVEN SLOTS OF THE DESIGNER AND ONE OF THE MAPPING BLOCK GET THEIR FIRST WRITER
+
+Adjacent to 3405.  `process` is the first member of the class reconstructed
+here that writes anything but the rate window, and it retires four separate
+"nothing anywhere in the object writes it" sentences:
+
+    +0x14  constelTable  = argument 2, the detector          finding 3400
+    +0x28  word_28       = detector->pcmType  (+0xa95c)
+    +0x2c  word_2c       = detector->int_a960 (+0xa960)
+    +0x38  byte_38       = argument 11, and `adjustConstellationsPower`
+                           reads it as a power-ladder index, clamped to the
+                           constructor's own 22
+    +0x3c  codecType     = argument 12, `__tHardwareCodecTypes__`
+    +0x40  word_40       = argument 13, an `unsigned int`
+    +0x04  mappingParams = argument 5
+
+and, in `V90MappingParams`, `+0x61c` -- the last four bytes of that struct
+with no explanation -- is written with the constant 1 and read by nothing.
+The two at +0x3c and +0x40 were inside `pad_39[11]`; they are typed by the
+mangling of the member that writes them and by nothing else.

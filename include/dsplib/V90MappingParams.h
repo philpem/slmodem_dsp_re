@@ -39,8 +39,10 @@
  * names every one of the six `V90Parameters` fields it copies them from, so
  * the six are the spectral shaper's description and are named for their
  * sources rather than for their offsets.  See the members below and
- * `include/dsplib/V90SpectralConditions.h`.  The four bytes at +0x61c are
- * still untouched by anything reconstructed and stay a pad.
+ * `include/dsplib/V90SpectralConditions.h`.  THE FOUR BYTES AT +0x61C ARE
+ * NOW EXPLAINED TOO -- `V90ConstellationDesigner::process` stores the
+ * constant 1 into them and nothing reads them -- so all 28 are, and the
+ * "still untouched" sentence that used to end this paragraph is retracted.
  *
  * The total size is still not known: 0x650 is where the last member this
  * tree can see ends, not a measured `sizeof`.
@@ -84,7 +86,18 @@ public:
 	unsigned char codecConstellation[V90_CONSTELLATIONS]
 					[V90_CONSTELLATION_MAX];/* +0x304 */
 	unsigned int constellationSize[V90_CONSTELLATIONS];	/* +0x604 */
-	unsigned char pad_61c[4];				/* +0x61c */
+
+	/*
+	 * +0x61c  `V90ConstellationDesigner::process` writes the constant 1
+	 * here and nothing anywhere in the object reads it: `mov $0x1,%ecx`
+	 * then `mov %ecx,0x61c(%eax)` with %eax the mapping block, a `movl`
+	 * with no operand-size prefix, which is the whole of what is forced.
+	 * It used to be `pad_61c[4]` and the header said the four bytes were
+	 * untouched by anything reconstructed; that sentence is retracted.
+	 * The name is the offset's because a write-only slot has no meaning to
+	 * take a name from.
+	 */
+	unsigned int word_61c;					/* +0x61c */
 
 	/*
 	 * +0x620..+0x634  The spectral shaper, six dwords written together by
