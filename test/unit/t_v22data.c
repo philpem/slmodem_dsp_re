@@ -54,10 +54,14 @@
  * `t_v22prc.c` does.
  */
 
+#include <math.h>
 #include <string.h>
 
 #include "harness.h"
 #include "dsplib/v22data.h"
+#include "dsplib/debug.h"
+#include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_sdm.h"
 #include "dsplib/fpm_smc.h"
 #include "dsplib/v22_pps.h"
@@ -68,6 +72,7 @@ extern void ref_DescrambleDataV22(void *modem, unsigned short *data,
 				  unsigned short count);
 extern unsigned short ref_ModDataV22(void *modem, const unsigned short *data,
 				     short *out, unsigned short count);
+extern int ref_Detect_v22(void *modem, short *data);
 
 extern void ref_FPM_SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data,
 				  unsigned short count);
@@ -82,7 +87,21 @@ extern short ref_V22_PPS_filter(struct v22_pps *state,
 extern void ref_V22_PPS_init(struct v22_pps *state,
 			     const struct v22_pps_cfg *cfg, int fresh);
 
+extern void ref_FPM_AGC_init(struct fpm_agc *agc, const struct fpm_agc_cfg *cfg,
+			     int reset);
+extern void ref_FPM_AGC_agc(struct fpm_agc *agc, short *samples,
+			    unsigned short count);
+extern struct fpm_mtd *ref_FPM_MTD_create(struct fpm_mtd *state,
+					  const struct fpm_mtd_cfg *cfg);
+extern short ref_FPM_MTD_detect(struct fpm_mtd *state, const short *samples,
+				short count);
+
+extern unsigned int ref_dsplibs_debug_level;
+
 extern const struct fpm_smc_cfg ref_SMCv22_CFG;
+extern const struct fpm_agc_cfg ref_AGCv22_CFG2;
+extern const struct fpm_mtd_cfg ref_MTDv22_CFG;
+extern const struct fpm_mtd_cfg ref_MTDv22_CFG2;
 extern const struct v22_pps_cfg ref_PPSv22_CFG;
 extern const short ref_PPSv22_COFFS[];
 extern const short ref_SMCv22_IMAP_1200BPS[];
@@ -585,14 +604,423 @@ run_mod(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* Detect_v22                                                            */
+
+#define SHR_SIZE	0x40
+#define DGUARD		8
+#define DMARK		0x3c3c
+#define DBLOCK		V22_DETECT_BLOCK
+#define DACC		16
+
+struct dfix {
+	unsigned char	obj[OBJ_SIZE];
+	unsigned char	fp[FP_SIZE];
+	unsigned char	shr[SHR_SIZE];
+	struct fpm_mtd	mtd_a;
+	struct fpm_mtd	mtd_b;
+	short		acc_a[DACC];
+	short		acc_b[DACC];
+	double		align;		/* see the note on struct sfix */
+};
+
+/*
+ * Six of everything: the blob, ours, and four model drivers -- one faithful,
+ * three carrying a named wrong reading.  Each model needs its own detector
+ * state, because a variant that clears a sub-block the original kept feeds
+ * different samples into the next call's detectors, and the divergence has to
+ * be allowed to run.
+ */
+#define NVARIANT	4
+
+static struct dfix dfa, dfb, dfv[NVARIANT];
+static short dsig[DBLOCK + DGUARD];
+static short dbuf[2 + NVARIANT][DBLOCK + DGUARD];
+static unsigned char dfp_pre[FP_SIZE];
+
+/*
+ * WHICH CONFIG GOES TO +0x18 AND WHICH TO +0x20 IS A FIXTURE CHOICE, NOT
+ * EVIDENCE: the shared block is built by something not reconstructed.  What
+ * matters is that the two detectors are DIFFERENT -- a pairing swap is
+ * invisible on every sub-block where they agree -- so `MTDv22_CFG` and
+ * `MTDv22_CFG2` rather than one config twice, and the number of sub-blocks on
+ * which they actually disagreed is asserted non-zero at the end.
+ */
+static void
+det_fixture(struct dfix *f, unsigned s, int use_ref)
+{
+	struct fpm_agc *agc;
+	int i;
+
+	rng_seed(s);
+	for (i = 0; i < FP_SIZE; i++)
+		f->fp[i] = (unsigned char)rng_next();
+	memset(f->obj, 0, sizeof(f->obj));
+	memset(f->shr, 0, sizeof(f->shr));
+	memset(&f->mtd_a, 0, sizeof(f->mtd_a));
+	memset(&f->mtd_b, 0, sizeof(f->mtd_b));
+	memset(f->acc_a, 0, sizeof(f->acc_a));
+	memset(f->acc_b, 0, sizeof(f->acc_b));
+
+	*(void **)(void *)(f->obj + V22_OBJ_FP) = f->fp;
+	*(void **)(void *)(f->obj + V22_OBJ_GTIMER) = f->shr;
+
+	/* A caller-supplied state means caller-supplied accumulators. */
+	f->mtd_a.acc = f->acc_a;
+	f->mtd_b.acc = f->acc_b;
+	if (use_ref) {
+		ref_FPM_MTD_create(&f->mtd_a, &ref_MTDv22_CFG);
+		ref_FPM_MTD_create(&f->mtd_b, &ref_MTDv22_CFG2);
+	} else {
+		FPM_MTD_create(&f->mtd_a, &ref_MTDv22_CFG);
+		FPM_MTD_create(&f->mtd_b, &ref_MTDv22_CFG2);
+	}
+	*(void **)(void *)(f->shr + V22SHR_MTD_A) = &f->mtd_a;
+	*(void **)(void *)(f->shr + V22SHR_MTD_B) = &f->mtd_b;
+
+	agc = (struct fpm_agc *)(void *)(f->fp + V22FP_DET_AGC);
+	memset(agc, 0, sizeof(*agc));
+	if (use_ref)
+		ref_FPM_AGC_init(agc, &ref_AGCv22_CFG2, 1);
+	else
+		FPM_AGC_init(agc, &ref_AGCv22_CFG2, 1);
+}
+
+/*
+ * The signal: eight (frequency, amplitude) pairs, one selected per sub-block.
+ *
+ * THE TWO FREQUENCIES ARE MEASURED, NOT DERIVED.  Sweeping 100..3900 Hz in
+ * 100 Hz steps through this exact fixture at four amplitudes, `MTDv22_CFG`'s
+ * detector answers FPM_MTD_ABSENT at 2200 Hz and NOWHERE ELSE, and
+ * `MTDv22_CFG2`'s at 1800 Hz and nowhere else; below about 200 Hz both fall
+ * under `min_level` and answer FPM_MTD_NOSIGNAL.  Since a zero verdict is
+ * what advances a counter, ONLY those two frequencies can move one at all --
+ * a table of plausible V.22 tones (600, 1200, 2100, 2400, 3000) leaves every
+ * counter pinned at zero, every sub-block cleared, and five separating counts
+ * dead.  Nothing here is a claim about what either detector is FOR; the
+ * coefficient banks belong to an object nothing reconstructed builds.
+ *
+ * Silence and 100 Hz are carried because NOSIGNAL is a THIRD verdict and is
+ * non-zero like a detection, so it RESETS a run rather than advancing it.
+ */
+static const struct { int hz; int amp; } dtones[] = {
+	{ 2200, 12000 },	/* A absent, B present  */
+	{ 1800, 12000 },	/* A present, B absent  */
+	{ 1200, 12000 },	/* both present         */
+	{ 2400, 12000 },	/* both present         */
+	{  100, 12000 },	/* below the gate: both NOSIGNAL, and that is
+				 *   NON-ZERO, so it resets a run           */
+	{    0,	    0 },	/* silence                                  */
+	{ 2200,   750 },	/* the same two, well down in level         */
+	{ 1800,   750 }
+};
+#define NTONE	(int)(sizeof(dtones) / sizeof(dtones[0]))
+
+static double dphase;
+
+static void
+make_block(const int *sel)
+{
+	int k, i;
+
+	for (k = 0; k < V22_DETECT_SUBBLOCKS; k++) {
+		int hz = dtones[sel[k]].hz;
+		int amp = dtones[sel[k]].amp;
+
+		for (i = 0; i < V22_DETECT_SUBBLOCK; i++) {
+			dsig[k * V22_DETECT_SUBBLOCK + i] =
+				(short)(amp * sin(dphase));
+			dphase += 6.283185307179586 * hz / 8000.0;
+		}
+	}
+	for (i = DBLOCK; i < DBLOCK + DGUARD; i++)
+		dsig[i] = (short)DMARK;
+}
+
+struct model_out {
+	int	printed;
+	int	cleared;		/* sub-blocks zeroed, 0..4 */
+	short	run_a, run_b;
+	short	va[V22_DETECT_SUBBLOCKS];
+	short	vb[V22_DETECT_SUBBLOCKS];
+};
+
+/*
+ * The model.  `variant` 0 is faithful, and is checked against the blob on
+ * every single call -- which is what licenses using it as the baseline the
+ * other three are measured against.  Built out of the `ref_` callees so that
+ * a variant's divergence is its own and not its callees'.
+ *
+ *   1  the counters paired with the other detector.  THIS COVERS TWO WRONG
+ *      READINGS, not one: swapping which counter each verdict drives and
+ *      swapping the +0x18 / +0x20 detector offsets are the same permutation,
+ *      so a separating trial here retires both.
+ *   2  the clear gated on the verdict alone, with no hold
+ *   3  `>= 2` where the object has `> 2`
+ */
+static int
+drive(struct dfix *f, short *data, int variant, struct model_out *o)
+{
+	short run_a = 0, run_b = 0;
+	short thr = (variant == 3) ? (short)1 : (short)V22_DETECT_THRESHOLD;
+	int i, j;
+
+	o->cleared = 0;
+
+	ref_FPM_AGC_agc((struct fpm_agc *)(void *)(f->fp + V22FP_DET_AGC),
+			data, V22_DETECT_BLOCK);
+
+	for (i = 0; i < V22_DETECT_SUBBLOCKS; i++) {
+		short *chunk = data + i * V22_DETECT_SUBBLOCK;
+		short va = ref_FPM_MTD_detect(&f->mtd_a, chunk,
+					      V22_DETECT_SUBBLOCK);
+		short vb = ref_FPM_MTD_detect(&f->mtd_b, chunk,
+					      V22_DETECT_SUBBLOCK);
+		short gate;
+		int clear;
+
+		if (vb != 0)
+			run_b = 0;
+		else
+			run_b = (short)(run_b + 1);
+		if (va != 0)
+			run_a = 0;
+		else
+			run_a = (short)(run_a + 1);
+
+		gate = (variant == 1) ? run_b : run_a;
+		if (variant == 2)
+			clear = (va != 0);
+		else
+			clear = (gate <= V22_DETECT_CLEAR_HOLD);
+
+		if (clear) {
+			for (j = 0; j < V22_DETECT_SUBBLOCK; j++)
+				chunk[j] = 0;
+			o->cleared++;
+		}
+		o->va[i] = va;
+		o->vb[i] = vb;
+	}
+
+	o->run_a = run_a;
+	o->run_b = run_b;
+	o->printed = ((variant == 1) ? run_a : run_b) > thr;
+	return (run_a > thr) | (run_b > thr);
+}
+
+static int det_sep[NVARIANT];
+static int det_disagreed;
+static int det_true, det_false;
+static int det_a_over, det_b_over;
+static int det_cleared, det_kept, det_hold;
+static int det_said_ok, det_agc_moved, det_mtd_moved;
+
+static void
+cmp_mtd(const char *f0, const char *f1, const char *f2, const char *f3,
+	const struct fpm_mtd *b, const struct fpm_mtd *a, long where)
+{
+	diff_eq_int(f0, b->dc_state[0], a->dc_state[0], where);
+	diff_eq_int(f1, b->dc_state[1], a->dc_state[1], where);
+	diff_eq_int(f2, b->out_of_band, a->out_of_band, where);
+	diff_eq_int(f3, b->wideband, a->wideband, where);
+}
+
+static void
+run_detect_one(const int *pat0, const int *pat1, unsigned s, int debug_on,
+	       long trial)
+{
+	struct model_out mo[NVARIANT];
+	int ra, rb, rv;
+	int call, v, i;
+	long where;
+
+	det_fixture(&dfa, s, 1);
+	det_fixture(&dfb, s, 0);
+	for (v = 0; v < NVARIANT; v++)
+		det_fixture(&dfv[v], s, 1);
+
+	dphase = 0.0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = debug_on ? 2u : 0u;
+
+	for (call = 0; call < 4; call++) {
+		const int *sel = (call & 1) ? pat1 : pat0;
+
+		where = trial * 10 + call;
+		make_block(sel);
+		for (v = 0; v < 2 + NVARIANT; v++)
+			memcpy(dbuf[v], dsig, sizeof(dsig));
+		memcpy(dfp_pre, dfa.fp, FP_SIZE);
+
+		dsplib_debug_capture_reset();
+		ra = ref_Detect_v22(dfa.obj, dbuf[0]);
+		rb = Detect_v22(dfb.obj, dbuf[1]);
+
+		diff_eq_int("at %ld: verdict", rb, ra, where);
+		for (i = 0; i < DBLOCK + DGUARD; i++)
+			diff_eq_int("sample %ld", dbuf[1][i], dbuf[0][i], i);
+		for (i = DBLOCK; i < DBLOCK + DGUARD; i++)
+			diff_eq_int("guard sample %ld untouched", dbuf[0][i],
+				    (short)DMARK, i);
+		diff_eq_int("at %ld: first differing instance byte",
+			    obj_first_diff(dfb.obj, dfa.obj), -1, where);
+		/*
+		 * The WHOLE FP block, not just the AGC: nothing in it points
+		 * into the fixture (both detectors live outside it and both
+		 * sides copy the same AGCv22_CFG2), so a plain comparison
+		 * works and catches a stray write or a wrong V22FP_DET_AGC.
+		 */
+		diff_eq_int("at %ld: FP block",
+			    memcmp(dfb.fp, dfa.fp, FP_SIZE), 0, where);
+		cmp_mtd("at %ld: A dc_state[0]", "at %ld: A dc_state[1]",
+			"at %ld: A out_of_band", "at %ld: A wideband",
+			&dfb.mtd_a, &dfa.mtd_a, where);
+		cmp_mtd("at %ld: B dc_state[0]", "at %ld: B dc_state[1]",
+			"at %ld: B out_of_band", "at %ld: B wideband",
+			&dfb.mtd_b, &dfa.mtd_b, where);
+		for (i = 0; i < DACC; i++) {
+			diff_eq_int("acc_a[%ld]", dfb.acc_a[i], dfa.acc_a[i],
+				    i);
+			diff_eq_int("acc_b[%ld]", dfb.acc_b[i], dfa.acc_b[i],
+				    i);
+		}
+		diff_eq_int("at %ld: debug transcript",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)), 0, where);
+
+		/*
+		 * On CONTENT, not on the line count: FPM_AGC_init and
+		 * FPM_AGC_Freeze/Release have diagnostic sites of their own,
+		 * so a non-empty buffer does not mean THIS function's arm
+		 * fired.  Finding 149's trap, and harness.h names it.
+		 */
+		if (strstr(dsplib_debug_capture_text(1), "Detect_V22 OK")
+		    != NULL)
+			det_said_ok++;
+
+		/* The faithful model first, then the three wrong readings. */
+		for (v = 0; v < NVARIANT; v++) {
+			rv = drive(&dfv[v], dbuf[2 + v], v, &mo[v]);
+			if (v == 0) {
+				diff_eq_int("at %ld: model verdict", rv, ra,
+					    where);
+				for (i = 0; i < DBLOCK; i++)
+					diff_eq_int("model sample %ld",
+						    dbuf[2][i], dbuf[0][i], i);
+				if (debug_on)
+					diff_eq_int("at %ld: model printing",
+						    mo[0].printed,
+						    strstr(
+						    dsplib_debug_capture_text(1),
+						    "Detect_V22 OK") != NULL,
+						    where);
+				continue;
+			}
+			if (rv != ra || mo[v].printed != mo[0].printed
+			    || memcmp(dbuf[2 + v], dbuf[0],
+				      DBLOCK * sizeof(short)) != 0)
+				det_sep[v]++;
+		}
+
+		if (ra)
+			det_true++;
+		else
+			det_false++;
+		if (mo[0].run_a > V22_DETECT_THRESHOLD)
+			det_a_over++;
+		if (mo[0].run_b > V22_DETECT_THRESHOLD)
+			det_b_over++;
+		det_cleared += mo[0].cleared;
+		det_kept += V22_DETECT_SUBBLOCKS - mo[0].cleared;
+		for (i = 0; i < V22_DETECT_SUBBLOCKS; i++)
+			if (mo[0].va[i] != mo[0].vb[i])
+				det_disagreed++;
+		if (memcmp(dfa.fp + V22FP_DET_AGC, dfp_pre + V22FP_DET_AGC,
+			   sizeof(struct fpm_agc)) != 0)
+			det_agc_moved++;
+		if (dfa.mtd_a.wideband != 0 || dfa.mtd_b.wideband != 0)
+			det_mtd_moved++;
+		/*
+		 * The case the CLEAR HOLD exists for: a sub-block the first
+		 * detector was quiet on, cleared anyway because it is the
+		 * first of a run.  Variant 2 is exactly the reading that gets
+		 * this wrong, so it has to happen.
+		 */
+		{
+			short run = 0;
+
+			for (i = 0; i < V22_DETECT_SUBBLOCKS; i++) {
+				if (mo[0].va[i] != 0)
+					run = 0;
+				else if (++run == 1)
+					det_hold++;
+			}
+		}
+	}
+
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+}
+
+static int
+run_detect(void)
+{
+	int pat0[V22_DETECT_SUBBLOCKS], pat1[V22_DETECT_SUBBLOCKS];
+	int rc, t0, t1;
+	long trial = 0;
+
+	/*
+	 * The accumulator arrays are the caller's, so they have to be big
+	 * enough for whatever the two configs ask for.  Checked rather than
+	 * assumed: an overflow of acc_a into acc_b would present as a
+	 * mysterious detector divergence a long way from its cause.
+	 */
+	diff_begin("Detect_v22 fixture is big enough");
+	diff_eq_int("MTDv22_CFG tones fit (%ld)",
+		    ref_MTDv22_CFG.tones * 2 <= DACC, 1,
+		    ref_MTDv22_CFG.tones);
+	diff_eq_int("MTDv22_CFG2 tones fit (%ld)",
+		    ref_MTDv22_CFG2.tones * 2 <= DACC, 1,
+		    ref_MTDv22_CFG2.tones);
+	rc = diff_end();
+
+	diff_begin("Detect_v22");
+	for (t0 = 0; t0 < NTONE; t0++)
+		for (t1 = 0; t1 < NTONE; t1++) {
+			pat0[0] = t0; pat0[1] = t0; pat0[2] = t1; pat0[3] = t1;
+			pat1[0] = t0; pat1[1] = t1; pat1[2] = t1; pat1[3] = t1;
+			run_detect_one(pat0, pat1,
+				       0x51ed0001u + (unsigned)(t0 * 16 + t1),
+				       ((t0 + t1) & 1) != 0, trial++);
+		}
+
+	/*
+	 * And the patterns that land a counter on EXACTLY two, which is the
+	 * only place `> 2` and `>= 2` can be told apart: one noisy sub-block
+	 * followed by two quiet ones, and its mirror.
+	 */
+	for (t0 = 0; t0 < NTONE; t0++)
+		for (t1 = 0; t1 < NTONE; t1++) {
+			pat0[0] = t0; pat0[1] = t0; pat0[2] = t1; pat0[3] = t1;
+			pat1[0] = t1; pat1[1] = t1; pat1[2] = t0; pat1[3] = t0;
+			run_detect_one(pat0, pat1,
+				       0x6a1c0001u + (unsigned)(t0 * 16 + t1),
+				       ((t0 * t1) & 1) != 0, trial++);
+		}
+	rc |= diff_end();
+	return rc;
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
 {
 	int rc = 0;
 
+	dsplib_debug_capture_on = 1;
+
 	rc |= run_sdm();
 	rc |= run_mod();
+	rc |= run_detect();
 
 	/*
 	 * The separating counts.  Every one of these is the number of trials
@@ -620,6 +1048,34 @@ main(void)
 		    mod_pps_written > 0, 1, mod_pps_written);
 	diff_eq_int("the ring at 0xa0 was written (%ld)",
 		    mod_ring_written > 0, 1, mod_ring_written);
+
+	diff_eq_int("the detector pairing separates (%ld)", det_sep[1] > 0, 1,
+		    det_sep[1]);
+	diff_eq_int("the clear hold separates (%ld)", det_sep[2] > 0, 1,
+		    det_sep[2]);
+	diff_eq_int("the > 2 threshold separates >= 2 (%ld)", det_sep[3] > 0,
+		    1, det_sep[3]);
+	diff_eq_int("the two detectors ever disagreed (%ld)",
+		    det_disagreed > 0, 1, det_disagreed);
+	diff_eq_int("Detect_v22 answered true (%ld)", det_true > 0, 1,
+		    det_true);
+	diff_eq_int("Detect_v22 answered false (%ld)", det_false > 0, 1,
+		    det_false);
+	diff_eq_int("counter A passed the threshold (%ld)", det_a_over > 0, 1,
+		    det_a_over);
+	diff_eq_int("counter B passed the threshold (%ld)", det_b_over > 0, 1,
+		    det_b_over);
+	diff_eq_int("a sub-block was cleared (%ld)", det_cleared > 0, 1,
+		    det_cleared);
+	diff_eq_int("a sub-block was kept (%ld)", det_kept > 0, 1, det_kept);
+	diff_eq_int("the clear hold was exercised (%ld)", det_hold > 0, 1,
+		    det_hold);
+	diff_eq_int("the blob printed Detect_V22 OK (%ld)", det_said_ok > 0, 1,
+		    det_said_ok);
+	diff_eq_int("the AGC state moved (%ld)", det_agc_moved > 0, 1,
+		    det_agc_moved);
+	diff_eq_int("the detector state moved (%ld)", det_mtd_moved > 0, 1,
+		    det_mtd_moved);
 	rc |= diff_end();
 
 	return rc;

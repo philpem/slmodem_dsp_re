@@ -100,3 +100,94 @@ ModDataV22(void *modem, const unsigned short *data, short *out,
 			(struct fpm_smc_ring *)FIELD(fp, V22FP_SMC_RING),
 			out, count);
 }
+
+/*
+ * One block of the receive path's front end: gain-control 160 samples, then
+ * run two tone detectors over four consecutive 40-sample sub-blocks of the
+ * same buffer, and report on how long either has been quiet.
+ *
+ * `data` IS AN OUTPUT AS WELL AS AN INPUT.  The AGC scales it in place, and
+ * each sub-block is then zeroed unless the FIRST detector has already
+ * returned zero twice running.  `fpm_mtd.h` records that a zero verdict is
+ * FPM_MTD_ABSENT -- "there is signal, but not in this detector's band" -- so
+ * the block is passed through only once the thing detector A watches has been
+ * gone for two sub-blocks, and muted otherwise.  Which tone that is depends
+ * on the coefficient bank the shared object was built with, and nothing
+ * reconstructed builds it, so no more than that is claimed here.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TWO COUNTERS ARE NOT INTERCHANGEABLE, THOUGH THE RETURN CANNOT SEE IT
+ *
+ * The result is `(run_a > 2) | (run_b > 2)`, which is symmetric: pairing each
+ * counter with the other detector returns the same value on every input.  The
+ * asymmetry is entirely in the two side effects -- the sub-block clear is
+ * gated on run_a and the diagnostic on run_b -- which is why t_v22data.c
+ * compares the whole sample buffer and the debug transcript rather than the
+ * return alone.
+ *
+ * ---------------------------------------------------------------------------
+ * THE CLEAR TEST, WHICH IS WRITTEN AS THE OBJECT LEAVES IT AMBIGUOUS
+ *
+ * On the detected path the object sets run_a to 0 and falls straight into the
+ * clear with no comparison; on the quiet path it increments and tests.  Those
+ * are the two arms of one `run_a <= 1` whose first arm the compiler folded,
+ * and they are written that way below.  An `if (va) { run_a = 0; clear; } else
+ * if (++run_a <= 1) clear;` compiles to the same thing and means the same
+ * thing.
+ *
+ * The counters are 16 bits: `inc %eax; cwtl` on each, and `cmpw` against the
+ * threshold.  Four iterations cannot take either past 4, so `short` and `int`
+ * agree over everything reachable; `short` is what the object encodes.
+ */
+int
+Detect_v22(void *modem, short *data)
+{
+	short run_a = 0;	/* consecutive sub-blocks A returned zero on */
+	short run_b = 0;	/* the same for B                            */
+	short i, j;
+
+	/*
+	 * The whole block through the second AGC.  The object passes a FOURTH
+	 * argument, the constant 1, which FPM_AGC_agc does not have -- the
+	 * same extra argument `bwchdem.c` records at its own call site, and
+	 * ignored in the same way.  Unlike bwchdem this caller discards the
+	 * return as well, so there is nothing to read back out of the state.
+	 */
+	FPM_AGC_agc((struct fpm_agc *)FIELD(FIELD_PTR(modem, V22_OBJ_FP),
+					    V22FP_DET_AGC),
+		    data, V22_DETECT_BLOCK);
+
+	for (i = 0; i < V22_DETECT_SUBBLOCKS; i++) {
+		short *chunk = data + (int)i * V22_DETECT_SUBBLOCK;
+		short va, vb;
+
+		va = FPM_MTD_detect((struct fpm_mtd *)
+				    FIELD_PTR(FIELD_PTR(modem, V22_OBJ_GTIMER),
+					      V22SHR_MTD_A),
+				    chunk, V22_DETECT_SUBBLOCK);
+		vb = FPM_MTD_detect((struct fpm_mtd *)
+				    FIELD_PTR(FIELD_PTR(modem, V22_OBJ_GTIMER),
+					      V22SHR_MTD_B),
+				    chunk, V22_DETECT_SUBBLOCK);
+
+		if (vb != 0)
+			run_b = 0;
+		else
+			run_b = (short)(run_b + 1);
+
+		if (va != 0)
+			run_a = 0;
+		else
+			run_a = (short)(run_a + 1);
+
+		if (run_a <= V22_DETECT_CLEAR_HOLD)
+			for (j = 0; j <= V22_DETECT_SUBBLOCK - 1; j++)
+				chunk[j] = 0;
+	}
+
+	/* The author's own words, and gated on the SECOND counter. */
+	if (run_b > V22_DETECT_THRESHOLD && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V22: Detect_V22 OK!!!\n");
+
+	return (run_a > V22_DETECT_THRESHOLD) | (run_b > V22_DETECT_THRESHOLD);
+}
