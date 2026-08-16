@@ -59171,3 +59171,40 @@ What the batch leaves READY behind it, largest first: `FPM_SRE_recover`
 only the `DECv32_*` tables between them -- plus `ECCv32_IMAP`, `ECCv32_QMAP`
 and `ECCv32_CFG`, which finding 1614 says were waiting on the `VTBv32_*` maps
 alone and are now writable.
+
+### 3214. ECCv32_IMAP, ECCv32_QMAP AND ECCv32_CFG ARE WRITTEN: FINDING 1614'S BLOCKER WAS THE VITERBI MAPS AND IT IS GONE
+
+1614 left an explicit instruction for "the next person, once the ten maps
+exist anywhere in `src/`", and named the blocker precisely: four of the ten
+pointees are `VTBv32_*`, the harness renames every symbol the blob defines,
+so an `extern const short VTBv32_IMAP32[]` resolved to nothing and there was
+no way to declare the pointer arrays without owning the data.  Finding 3210's
+batch owns it now, so this is 72 bytes and three symbols that cost nothing but
+the batch before them.
+
+**EVERY VALUE 1614 PREDICTED IS CONFIRMED FROM THE OBJECT**, re-derived here
+rather than copied: the twelve relocations in `.rodata:0x7058-0x7088` resolve
+to `SMCv32_QMAP16`, `SMCv32_QMAP16`, `VTBv32_QMAP32`, `VTBv32_QMAP16T`,
+`VTBv32_QMAP64`, `VTBv32_QMAP128` and the same six with `I`, and
+`ECCv32_CFG`'s twenty-four bytes read `480, 40, 40, 0, <reloc ECCv32_IMAP>,
+<reloc ECCv32_QMAP>, 16, 0, 0` against `struct fpm_ecc_cfg`.  `ECC_CFG`, the
+library default, has four far taps where this has forty and no maps at all,
+which is what makes it a template and this a configuration.
+
+**THE INDEX IS THE RATE CODE**, which is why 0 and 1 are one table: 4800 and
+9600 both use the sixteen-point constellation, and the four trellis rates take
+`VTBv32_*MAP32`, `16T`, `64` and `128` -- the same four `VTBv32_init` selects,
+in the same order.  So the echo canceller and the Viterbi decoder index one
+set of maps by one code.
+
+`t_v32ecc` is 2,175 checks over the six pointees compared BY CONTENT (1614's
+rule -- the addresses can never agree), the config field by field, and an
+`FPM_ECC_init` from each side's config compared on the state it builds.
+Shown to fire: swapping pointees 2 and 3 fails three suites, pointing index 1
+at a different table fails three, and changing `fill` from 16 to 0 fails two.
+
+**WHAT THE TEST STILL CANNOT SEE**, said in the file as well as here: it
+compares six sequences of shorts, so it would pass if the arrays were the
+right tables in the right order at the wrong LENGTH.  The lengths come from
+`nm` and the order from the relocations; the test checks the values agree, it
+is not the derivation.
