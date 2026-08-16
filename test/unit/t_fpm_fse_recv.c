@@ -51,6 +51,7 @@
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_fse.h"
+#include "dsplib/fpm_phasor.h"
 
 extern unsigned int ref_dsplibs_debug_level;
 extern void ref_FPM_FSE_init(struct fpm_fse *state,
@@ -78,6 +79,7 @@ static int sep_lms_force;	/* trials the force flag actually adapted    */
 static int sep_tilt;		/* trials the tilt filter actually moved     */
 static int sep_tail;		/* trials that stashed a short tail          */
 static int sep_show_lines;	/* `Decoder Error` lines the blob printed    */
+static int sep_rerot_reach;	/* sweep positions AT the re-rotation edge   */
 
 /*
  * The slicer's three knobs.  All file-scope so the two sides see the same
@@ -388,14 +390,16 @@ fill_one_tap(struct fpm_fse_cfg *cfg)
  * single check in this file.
  */
 static void
-sweep_derot_edge(void)
+sweep_derot_edge(const char *label, short carrier, int count_them)
 {
 	struct fpm_fse_cfg cfg;
 	long t;
 	int zero_hits = 0;
 	int high_bit = 0;
+	int rerot_edge_hits = 0;
 
-	diff_begin("FPM_FSE_receive: the derotation reduction, swept");
+	diff_begin(label);
+	drive_clk[0] = carrier;
 	fill_one_tap(&cfg);
 	init_pair(&cfg);
 
@@ -423,6 +427,18 @@ sweep_derot_edge(void)
 			zero_hits++;
 		if (out_b[0] >= 0x8000)
 			high_bit++;
+		/*
+		 * REACHABILITY, not separation.  `fixed_slicer` returns the
+		 * angle it was handed and subtracts a known constant from it,
+		 * and with the PLL off the carrier is `clk[0]` exactly, so the
+		 * re-rotation's own half-angle is recomputable here.  It is
+		 * counted only to tell "the suite never lands on that value"
+		 * apart from "it lands on it and nothing moves", which is the
+		 * difference between an untested claim and a recorded one.
+		 */
+		if ((short)((((short)(out_b[0] - slice_perr)) + carrier) >> 1)
+		    == (short)(FPM_PHASOR_CYCLE / 2))
+			rerot_edge_hits++;
 	}
 
 	/*
@@ -433,8 +449,11 @@ sweep_derot_edge(void)
 	 * which the upper fold takes to zero.  It is the last of those that a
 	 * `>` reading leaves at 0x8000, so a `>` scores two.
 	 */
-	diff_eq_int("positions returning symbol 0 (%ld)", zero_hits, 3, 0);
-	sep_derot_zero = zero_hits;
+	if (count_them) {
+		diff_eq_int("positions returning symbol 0 (%ld)", zero_hits, 3,
+			    0);
+		sep_derot_zero = zero_hits;
+	}
 
 	/*
 	 * EXACTLY A QUARTER of the sweep still comes back negative, and that
@@ -444,12 +463,19 @@ sweep_derot_edge(void)
 	 * the negative fix and it is a half, run the pair in a loop and it is
 	 * nothing.
 	 */
-	diff_eq_int("positions returning a negative angle (%ld)", high_bit,
-		    16384, 0);
-	sep_derot_neg = high_bit;
+	if (count_them) {
+		diff_eq_int("positions returning a negative angle (%ld)",
+			    high_bit, 16384, 0);
+		sep_derot_neg = high_bit;
+	}
+
+	diff_eq_int("re-rotation half-angles landing on 0x4000 (%ld)",
+		    rerot_edge_hits > 0, 1, 0);
+	sep_rerot_reach += rerot_edge_hits;
 
 	compare_state("state after the sweep", 0);
 	compare_buffers(0);
+	drive_clk[0] = 137;
 	free_pair();
 }
 
@@ -605,6 +631,12 @@ trial_train_edge(void)
 		ours.cfg.train_sym = theirs.cfg.train_sym = 5;
 		ours.sym_count = theirs.sym_count = (short)(4 + k);
 		ours.pll_sel = theirs.pll_sel = 2;
+		/*
+		 * A non-zero integrator on the way in.  V.22's copy of this
+		 * block zeroes it while training and this one does not, and
+		 * with nothing in it to lose the two readings agree.
+		 */
+		ours.freq = theirs.freq = 1234567;
 		slice_perr = 700;
 		slice_mag = 1234;
 		call_pair(in_buf, 1, k);
@@ -942,7 +974,21 @@ main(void)
 	rc |= diff_end();
 	slice_perr = 700;
 
-	sweep_derot_edge();
+	/*
+	 * Twice.  The first pass counts, and its small carrier keeps the
+	 * RE-rotation's own reduction below its fold; the second raises the
+	 * carrier until `(angle + carrier) >> 1` passes 0x4000, which is the
+	 * only way that second fold is reached at all.  Without it the
+	 * mutation that makes it exclusive survives for want of an input
+	 * rather than for want of an observable, and the two look the same
+	 * from the report.
+	 */
+	sweep_derot_edge("FPM_FSE_receive: the derotation reduction, swept",
+			 137, 1);
+	rc |= diff_end();
+
+	sweep_derot_edge("FPM_FSE_receive: the same sweep over a high carrier",
+			 20000, 0);
 	rc |= diff_end();
 
 	trial_perr_wrap();
@@ -995,6 +1041,13 @@ main(void)
 	diff_eq_int("short tails stashed (%ld)", sep_tail > 0, 1, 0);
 	diff_eq_int("Decoder Error lines seen (%ld)", sep_show_lines > 0, 1,
 		    0);
+	/*
+	 * Reachability rather than separation, and the reason the survivor in
+	 * `test/mutations/fpmfserecv.json` is recorded as one: the suite DOES
+	 * land on the re-rotation's boundary, and nothing it compares moves.
+	 */
+	diff_eq_int("re-rotation boundary reached (%ld)", sep_rerot_reach > 0,
+		    1, 0);
 	rc |= diff_end();
 
 	return rc;

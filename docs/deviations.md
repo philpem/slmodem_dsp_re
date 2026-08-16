@@ -6825,3 +6825,22 @@ The object pushes a literal 1 as a second argument to `V22_PPS_free`,
 tree reconstructed all four from their own bodies, where the second parameter
 is dead, and one of the four headers belongs to another effort.  The same
 shape as D363, at four sites instead of one.
+
+## D391 ✅ `FPM_FSE_receive` saturates a NEGATIVE smoothed error to 0x7fff
+
+*Batch of 2026-08-16, from `FPM_FSE_receive` (blob 0x0a7e00) at 0x0a83f8
+(`cmp $0x7fff,%eax` with `jbe`).  **Reachability: any symbol whose decision
+error is large enough that the sum of its two squares, shifted down eleven and
+cast to `short`, comes out negative -- which the differential suite reaches on
+64 of 64 swept magnitudes above about 12000.**  **Observability: `state->mse`,
+which is a compared field, and through it the LMS gate.**  Status: verified
+bit-exact; the reconstruction reproduces the unsigned test.  Fix class: none
+proposed.*
+
+The smoothed error is formed as a signed `int` and tested against 0x7fff as an
+UNSIGNED one, so the clamp catches both ends of the range and sends both to the
+maximum.  A modem whose equaliser has just diverged therefore records the
+largest possible error rather than a negative one, which is arguably what was
+wanted; but the same test also means `state->mse` is non-negative for ever, and
+the `mse > 0` gate below it can only fail on an exact zero.  Reproduced rather
+than corrected, and the consequence for the LMS gate is finding 3546.

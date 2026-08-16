@@ -6,19 +6,30 @@
  * the object also holds `FSEv17_*`, `FSEv22_CFG` and a `FPM_FSE_CFG` default,
  * exactly as `fpm_mrf.h`'s block does.
  *
- * WHAT THE BLOCK DOES, from `FPM_FSE_receive`:
+ * WHAT THE BLOCK DOES.  This was written as a hypothesis from `FPM_FSE_init`
+ * and is now `FPM_FSE_receive`'s own reconstruction, differentially tested:
  *
  *   - a complex FIR over a circular history of `taps` input samples, with two
  *     coefficient sets (`icoff`, `qcoff`) that are ADAPTED in place by
- *     `FPM_lmsupd`, producing one I/Q pair per `interp` input samples;
+ *     `FPM_lmsupd`, producing one I/Q pair per `interp` input samples.  The
+ *     pair is DOUBLED and not otherwise scaled -- V.22's copy of the block
+ *     has a gain stage here and this one does not;
  *   - a phase index that steps by `clk_inc` modulo `clk_mod` per input sample
- *     and looks a nominal carrier phase up in `clk[]`;
+ *     and looks a nominal carrier phase up in `clk[]`, to which the PLL's
+ *     accumulator is added at fifteen fractional bits with rounding;
  *   - `FPM_atan` / `FPM_phasor` to derotate that pair by the recovered
- *     carrier;
- *   - a caller-supplied SLICER (`cfg.decision`) that turns the derotated
- *     point into a symbol and reports back the ideal angle and magnitude;
+ *     carrier, biased by `tilt_out`;
+ *   - a caller-supplied SLICER (`cfg.decision`) whose two arguments are
+ *     IN/OUT: it is handed the measured angle and magnitude and overwrites
+ *     them with the constellation point's.  V.22's copy passes both
+ *     uninitialised, which is the sharpest difference between the two;
  *   - a second-order PLL over the slicer's angle error, whose two gains are
- *     indexed out of `pll_k1[]` / `pll_k2[]` by an error-magnitude band.
+ *     indexed out of `pll_k1[]` / `pll_k2[]` by an error-magnitude band, and
+ *     inside its gate a 4-tap filter over recent errors whose output is the
+ *     derotation bias above;
+ *   - the decision rotated back into the equaliser's frame, an LMS update on
+ *     the difference, a scatter-log entry, and one `Decoder Error` line every
+ *     7200 input samples at debug level 2.
  *
  * The V.32 coefficient tables interleave: `FSEv32_ICOFF` is non-zero only at
  * even indices and `FSEv32_QCOFF` only at odd ones, which is what makes one
@@ -31,11 +42,13 @@
 struct fpm_fse;
 
 /*
- * The slicer.  `angle` is in/out: the caller writes the measured angle and
- * the slicer overwrites it with the constellation point's ideal angle, so the
- * difference is the phase error the PLL runs on.  `mag` is out only.  The
- * return value is the decoded symbol; every slicer in the object returns it
- * zero-extended from 16 bits.
+ * The slicer.  BOTH arguments are in/out, and `mag` no less than `angle`:
+ * `FPM_FSE_receive` writes the measured angle and the measured magnitude into
+ * them before the call and the slicer overwrites both with the constellation
+ * point's, so the difference in the first is the phase error the PLL runs on
+ * and the second is what the LMS adapts against.  The return value is the
+ * decoded symbol; every slicer in the object returns it zero-extended from
+ * 16 bits.
  */
 typedef unsigned short (*fpm_fse_decision)(struct fpm_fse *state,
 					   short *angle, short *mag);
@@ -109,17 +122,33 @@ struct fpm_fse {
 	short *qcoeff;		/* +0x64                                     */
 	short *hist;		/* +0x68 circular input history, `taps`      */
 	short widx;		/* +0x6c newest entry of `hist`              */
-	short pad6e;		/* +0x6e never written by init or receive    */
+	/*
+	 * CONFIRMED, not assumed: `FPM_FSE_receive`'s complete set of
+	 * state-relative offsets has no +0x6e in it, and neither has init.
+	 * Whatever writes it is outside the block.
+	 */
+	short pad6e;		/* +0x6e written by neither init nor receive */
 	int phase_acc;		/* +0x70 PLL phase accumulator               */
 	short clk_phase;	/* +0x74 index into cfg.clk[]                */
-	short tilt_out;		/* +0x76 the 4-tap filter's last output      */
+	short tilt_out;		/* +0x76 the 4-tap filter's last output, and
+				 *       its accumulator -- see below        */
 	/*
 	 * A 4-tap FIR over recent phase errors whose output biases the
-	 * derotation.  Init zeroes the coefficients and nothing in this block
-	 * writes them, so it is inert until the datapump sets them.
+	 * derotation.  Init zeroes the coefficients and nothing in the block
+	 * writes them, so it is inert until the datapump sets them; the newest
+	 * history entry is the phase error PLUS `tilt_out`, so the filter is
+	 * recursive through its own output.
 	 *
-	 * UNVERIFIED SHAPE: both are read `movzwl` and every use is truncated
-	 * back to 16 bits, so the object does not say whether they are signed.
+	 * SHAPE SETTLED, and the answer is that they are `short`.  The three
+	 * loads the object makes of them are `movzwl` where a `short` would
+	 * normally give `movswl`, and the reason is not their type: the
+	 * accumulator is `tilt_out` ITSELF, a `short` that GCC promotes to a
+	 * register across the loop and then narrows, which licenses a zero
+	 * extension on operands whose product is only ever read modulo 2^16.
+	 * Writing the accumulation that way reproduces all three `movzwl` and
+	 * the dead `tilt_out = 0` store beside them; writing it with an `int`
+	 * accumulator reproduces neither.  Same argument for `tilt_out`'s own
+	 * read at the derotation.  Finding 3541.
 	 */
 	short tilt_coeff[4];	/* +0x78                                     */
 	short tilt_hist[4];	/* +0x80                                     */
@@ -130,8 +159,13 @@ struct fpm_fse {
 	struct fpm_fse_point diag[FPM_FSE_DIAG];	/* +0x008c           */
 	struct fpm_fse_point diag2[FPM_FSE_DIAG2];	/* +0x0f8c           */
 	int diag_n;		/* +0x4e0c                                   */
-	int unknown_4e10;	/* +0x4e10 zeroed by init, read by nothing
-				 *         reconstructed so far              */
+	/*
+	 * Still unread, and now measured rather than bounded: neither
+	 * `FPM_FSE_receive`'s offset set nor init's touches it after the
+	 * zeroing.  `diag2` and `diag2_n` are in the same position.
+	 */
+	int unknown_4e10;	/* +0x4e10 zeroed by init, read by neither
+				 *         init nor receive                  */
 	int diag2_n;		/* +0x4e14                                   */
 };
 
