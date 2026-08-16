@@ -774,12 +774,12 @@ run_uinfo(void)
 						ran++;
 					if (r1 != 0)
 						nonzero++;
-					if (M(1)->flags_0217[0] == 1 &&
-					    M(1)->flags_0217[1] == 0 &&
-					    M(1)->flags_0217[2] == 1 &&
-					    M(1)->flags_0217[3] == 1 &&
-					    M(1)->flags_0217[4] == 1 &&
-					    M(1)->flags_0217[5] == 1)
+					if (M(1)->v34BaudAllow[0] == 1 &&
+					    M(1)->v34BaudAllow[1] == 0 &&
+					    M(1)->v34BaudAllow[2] == 1 &&
+					    M(1)->v34BaudAllow[3] == 1 &&
+					    M(1)->v34BaudAllow[4] == 1 &&
+					    M(1)->v34BaudAllow[5] == 1)
 						defaulted++;
 					printed +=
 					    (int)dsplib_debug_capture_lines(1);

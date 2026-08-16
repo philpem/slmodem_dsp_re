@@ -556,11 +556,11 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	{
 		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
 
-		obj->f25c = (short)(0x610u - (unsigned)ext);
+		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, "
 					     "(ext delay=%d)\n",
-					     (int)obj->f25c, ext);
+					     (int)obj->dmadelay, ext);
 	}
 
 	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
@@ -641,7 +641,7 @@ V34PCMCREATE_ASSERT(rwant,    rate_want,        0x022c);
 V34PCMCREATE_ASSERT(floor,    rx_energy_floor,  0x0230);
 V34PCMCREATE_ASSERT(v90rx,    v90_receiver,     0x024c);
 V34PCMCREATE_ASSERT(k56rx,    k56flex_receiver, 0x0250);
-V34PCMCREATE_ASSERT(f25c,     f25c,             0x025c);
+V34PCMCREATE_ASSERT(dmadly,   dmadelay,             0x025c);
 V34PCMCREATE_ASSERT(f2aa6,    f2aa6,            0x2aa6);
 V34PCMCREATE_ASSERT(p3548,    p3548,            0x3548);
 V34PCMCREATE_ASSERT(f3554,    f3554,            0x3554);

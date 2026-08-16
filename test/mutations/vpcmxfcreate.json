@@ -126,19 +126,19 @@
   "replace": "\t(void)0;"
  },
  {
-  "label": "flags_0217[1] keeps the constructor's 1",
-  "find": "\tself->flags_0217[1] = 0;",
-  "replace": "\tself->flags_0217[1] = 1;"
+  "label": "v34BaudAllow[1] keeps the constructor's 1",
+  "find": "\tself->v34BaudAllow[1] = 0;",
+  "replace": "\tself->v34BaudAllow[1] = 1;"
  },
  {
-  "label": "flags_0217[5] keeps the constructor's 1",
-  "find": "\tself->flags_0217[5] = 0;",
-  "replace": "\tself->flags_0217[5] = 1;"
+  "label": "v34BaudAllow[5] keeps the constructor's 1",
+  "find": "\tself->v34BaudAllow[5] = 0;",
+  "replace": "\tself->v34BaudAllow[5] = 1;"
  },
  {
-  "label": "flags_0217[2] is cleared where the object leaves it set",
-  "find": "\tself->flags_0217[2] = 1;",
-  "replace": "\tself->flags_0217[2] = 0;"
+  "label": "v34BaudAllow[2] is cleared where the object leaves it set",
+  "find": "\tself->v34BaudAllow[2] = 1;",
+  "replace": "\tself->v34BaudAllow[2] = 0;"
  },
  {
   "label": "the bit pointer is not reset",

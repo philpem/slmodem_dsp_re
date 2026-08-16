@@ -305,13 +305,19 @@ compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
 	/*
 	 * THE EXCLUDED TWELVE BYTES ARE ASSERTED, NOT SKIPPED.  The two history
 	 * pointers can never agree -- two allocations are two addresses -- but
-	 * `m_i` and `m_acc` CAN, and they differ only because
-	 * `src/dsp/FloatIIR.cpp` writes them where the blob does not.  An
-	 * exclusion that merely looks away would keep this test green after
-	 * that class is repaired and nothing would ever say the exclusion had
-	 * gone obsolete.  So the divergence itself is the assertion: repair
-	 * `FloatIIR.cpp` and these four checks fail, which is the notification.
-	 * Finding 1250.
+	 * `m_i` and `m_acc` CAN, and finding 1250 recorded that they did not:
+	 * ours zeroed both, the blob left `m_i` holding `m_outLen` and never
+	 * touched `m_acc`.  The four checks below asserted THAT, so that
+	 * repairing `src/dsp/FloatIIR.cpp` would fail them rather than pass
+	 * silently on an exclusion nobody knew had gone obsolete.
+	 *
+	 * IT FIRED, AND THE CLASS IS REPAIRED.  `reset` now counts in `m_i`
+	 * exactly as `_ZN10GenericIIRIfdE5resetEv` does, and the constructor no
+	 * longer writes either member -- `_ZN10GenericIIRIfdEC1EjjPdS1_j`
+	 * stores eight fields and tail-calls `reset`, and neither +0x28 nor
+	 * +0x2c is among them.  So the four checks are now the repaired state:
+	 * both sides leave `m_outLen` in `m_i`, and neither side writes
+	 * `m_acc`, which therefore still holds the allocator's fill on both.
 	 *
 	 * `m_outLen` is `nden + blockSize` and the sweep keeps both in
 	 * 1..4 and 0..2, so it is never zero and "the blob left m_outLen there"
@@ -324,12 +330,12 @@ compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
 		memcpy(&mi_a, fa + IIR_SCRATCH, sizeof(mi_a));
 		memcpy(&mi_b, fb + IIR_SCRATCH, sizeof(mi_b));
 
-		diff_eq_int("ours zeroes m_i -- finding 1250 (%ld)",
-			    mi_a == 0, 1, tag);
+		diff_eq_int("ours leaves m_i holding m_outLen -- finding 1250 "
+			    "repaired (%ld)", mi_a == outLen, 1, tag);
 		diff_eq_int("the blob leaves m_i holding m_outLen (%ld)",
 			    mi_b == outLen, 1, tag);
-		diff_eq_int("ours zeroes m_acc (%ld)",
-			    memcmp(fa + IIR_SCRATCH + 4, zero8, 8) == 0, 1,
+		diff_eq_int("ours no longer writes m_acc (%ld)",
+			    memcmp(fa + IIR_SCRATCH + 4, zero8, 8) != 0, 1,
 			    tag);
 		diff_eq_int("the blob never writes m_acc at all (%ld)",
 			    memcmp(fb + IIR_SCRATCH + 4, zero8, 8) != 0, 1,

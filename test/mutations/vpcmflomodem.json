@@ -226,10 +226,10 @@
  },
  {
   "label": "Uinfo: the second default flag is 1",
-  "find": "\t}\n\n\tflags_0217[0] = 1;\n\tflags_0217[1] = 0;",
-  "replace": "\t}\n\n\tflags_0217[0] = 1;\n\tflags_0217[1] = 1;",
+  "find": "\t}\n\n\tv34BaudAllow[0] = 1;\n\tv34BaudAllow[1] = 0;",
+  "replace": "\t}\n\n\tv34BaudAllow[0] = 1;\n\tv34BaudAllow[1] = 1;",
   "fn": "getUinfoValue",
-  "note": "Anchor carries three lines above it, and the entry carries `fn`. `flags_0217[0..3]` is written twice in this file with identical text -- here and in `enterPhase3`, whose copy belongs to the `vpcmep3` suite -- so the one-line anchor matched twice and the mutation was UNUSABLE, which does not fail a run. The label says Uinfo, so this is `getUinfoValue`'s. Findings 347 and 455."
+  "note": "Anchor carries three lines above it, and the entry carries `fn`. `v34BaudAllow[0..3]` is written twice in this file with identical text -- here and in `enterPhase3`, whose copy belongs to the `vpcmep3` suite -- so the one-line anchor matched twice and the mutation was UNUSABLE, which does not fail a run. The label says Uinfo, so this is `getUinfoValue`'s. Findings 347 and 455."
  },
  {
   "label": "Uinfo: the default flags are written whatever came back",

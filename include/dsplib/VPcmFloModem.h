@@ -197,6 +197,20 @@ public:
 	void externalReset();
 
 	/*
+	 * Set `v34BaudAllow` for a V.90 session and for a V.34 one.
+	 *
+	 * Six `movb` each and nothing else -- no read, no call, no return
+	 * value set -- so `void` is what the object supports and the only
+	 * difference between the two is the last entry.  The names are the
+	 * object's own, and they are what settles that the array is per-baud;
+	 * see the comment on `v34BaudAllow` for what that does and does not
+	 * claim.  Nothing in the object calls either, so both survive only as
+	 * the out-of-line copy, exactly like `setScramble` in v34shell.h.
+	 */
+	void setV34BaudForV90();
+	void setV34BaudForV34();
+
+	/*
 	 * --- FOUR MEMBERS THIS TREE HAS NOT WRITTEN --------------------------
 	 *
 	 * `VPcmV34Progress` calls all four and nothing else does, so they are
@@ -266,13 +280,38 @@ public:
 	tagV90DILdescriptor dil;
 
 	/*
-	 * +0x0217  Six bytes `getUinfoValue` sets to 1, 0, 1, 1, 1, 1 when it
-	 * has no Uinfo to report, and `enterPhase3` sets to 1, 0, 1, 1, 1, 0
-	 * -- the same pattern but for the last, which is why the array is
-	 * six long rather than five.  Offset-named: nothing establishes what
-	 * they select, and no other function this tree has read touches them.
+	 * +0x0217  WHICH OF V.34's SIX SYMBOL RATES THIS SESSION WILL ACCEPT,
+	 * one byte each, 1 for allowed.
+	 *
+	 * It used to be `flags_0217`, offset-named because "nothing
+	 * establishes what they select".  Three readings settle it now and
+	 * none of them is this array's own writers:
+	 *
+	 *   - `chkForceBaudRate` (v34pcmif.c) takes `p3548 + 0x217` as `sel`
+	 *     when a V.90 receiver is up, and then INDEXES IT 1..5 against a
+	 *     cap it prints as "max V34 baud rate index = %d", clearing every
+	 *     entry at or above the cap.  An index that runs 0..5 against a
+	 *     quantity the object itself calls a baud rate index is what
+	 *     names the array; a write of six literals never could.
+	 *   - In its other two arms the same function indexes a LOCAL
+	 *     `unsigned char allow[6]` through the same `sel`, so the two are
+	 *     the same shape by construction.
+	 *   - `VPcmFloModem::setV34BaudForV90` and `::setV34BaudForV34` are
+	 *     six stores to this array and nothing else, and the object's own
+	 *     names for them say the six are V.34 baud.
+	 *
+	 * The two `setV34BaudFor*` differ in the LAST entry alone -- V.90
+	 * bars it, V.34 allows it -- which is the same entry `enterPhase3`
+	 * and `externalReset` bar and `getUinfoValue` allows.  V.34 has
+	 * exactly six symbol rates (2400, 2743, 2800, 3000, 3200, 3429) and
+	 * index 5 is the fastest, so every one of those five sites reads as
+	 * "3429 baud off".  WHAT IS NOT ESTABLISHED is the index-to-rate
+	 * mapping itself: `chkForceBaudRate` bars rates in ascending index
+	 * order, which fixes the direction but not the first entry, and
+	 * nothing read here states it.  The name claims the array is per-baud
+	 * and does not claim which baud.
 	 */
-	unsigned char flags_0217[6];
+	unsigned char v34BaudAllow[6];
 
 	unsigned char pad_021d[1];		/* +0x021d not modelled */
 
