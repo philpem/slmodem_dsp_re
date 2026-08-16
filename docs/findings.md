@@ -60479,6 +60479,26 @@ The second is a much stronger claim than anything 1974 supported and it must
 not be asserted on the strength of a grep. What settles it is reading the
 message bits as they leave.
 
+> **REFUTED, by the parallel session, and recorded on master at `f235014`.**
+> `probeselect` CLEARS the message before OR-ing into it. Demonstrated against
+> the blob rather than argued: every seed run twice, once with the buffer
+> pre-filled `0x00` and once `0xff`, identical output over 2,400 checks. So
+> there is no uninitialised state and the second branch above is dead.
+>
+> **AND THE PREMISE OF THE WHOLE PARAGRAPH WAS ALSO WRONG.** The 28-of-43
+> "missing" diagnostic sites are not missing: they are present, inside two
+> static helpers we factor out and the object inlined. That is finding 605's
+> artefact exactly -- a per-FUNCTION count across an inlining boundary
+> measures our factoring, not our completeness -- which CLAUDE.md warns about
+> and which I walked into twice in one session, here and in 1975's
+> debug-coverage misreading.
+>
+> **So 1974's trellis correlation still has no cause.** What survives is the
+> observation itself: `64S-4D/16S-4D` on ten of ten captures at identical
+> symbol rates, on a field V.34 makes receiver-dictated. Not uninitialised
+> state, not a missing builder. Still worth ~1 dB of an 8-12 dB deficit, so it
+> should not absorb the session that could answer the rate-decision question.
+
 **AND THAT IS EXACTLY WHAT THE DEBUG BACKLOG COSTS US.** `probeselect` is **28
 diagnostic sites missing of the blob's 43** -- it is the second-largest gap in
 the tree after `v34handshak`'s 261. The blob narrates its own message
