@@ -6722,9 +6722,9 @@
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",
     "VPCMXF_Delete frees without destroying": "caught",
-    "flags_0217[1] keeps the constructor's 1": "caught",
-    "flags_0217[2] is cleared where the object leaves it set": "caught",
-    "flags_0217[5] keeps the constructor's 1": "caught",
+    "v34BaudAllow[1] keeps the constructor's 1": "caught",
+    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
+    "v34BaudAllow[5] keeps the constructor's 1": "caught",
     "minNofTransmitSequences is left at the constructor's 0": "caught",
     "mode 1 sets the V.92 mode and not the V.90 one": "caught",
     "mode 2 sets the V.90 mode and not the V.92 one": "caught",

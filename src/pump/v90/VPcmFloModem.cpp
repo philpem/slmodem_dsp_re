@@ -73,7 +73,7 @@
 
 VPCM_OFF(v34Object,		0x0000, v34obj);
 VPCM_OFF(dil,			0x0004, dil);
-VPCM_OFF(flags_0217,		0x0217, flags217);
+VPCM_OFF(v34BaudAllow,		0x0217, flags217);
 VPCM_OFF(bitVector,		0x021e, bitvec);
 VPCM_OFF(nofBits,		0x1736, nofbits);
 VPCM_OFF(bitPointer,		0x1738, bitptr);
@@ -114,7 +114,7 @@ typedef char vpcm_modem_size[(sizeof(V90Modem) == 0x49c0) ? 1 : -1];
 
 /*
  * The embedded DIL descriptor's size, for the same reason: `dil` is placed at
- * +0x004 and `flags_0217` at +0x217, and what makes those two consistent is
+ * +0x004 and `v34BaudAllow` at +0x217, and what makes those two consistent is
  * that `tagV90DILdescriptor` is exactly 0x213 bytes.  If a later batch gives
  * the descriptor another field, this fails here instead of silently shifting
  * everything from +0x217 to +0x7f27.
@@ -532,12 +532,12 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 			return uinfo;
 	}
 
-	flags_0217[0] = 1;
-	flags_0217[1] = 0;
-	flags_0217[2] = 1;
-	flags_0217[3] = 1;
-	flags_0217[4] = 1;
-	flags_0217[5] = 1;
+	v34BaudAllow[0] = 1;
+	v34BaudAllow[1] = 0;
+	v34BaudAllow[2] = 1;
+	v34BaudAllow[3] = 1;
+	v34BaudAllow[4] = 1;
+	v34BaudAllow[5] = 1;
 
 	return uinfo;
 }
@@ -586,12 +586,12 @@ VPcmFloModem::enterPhase3()
 	flag_173d = 0;
 	flag_173e = 0;
 
-	flags_0217[0] = 1;
-	flags_0217[1] = 0;
-	flags_0217[2] = 1;
-	flags_0217[3] = 1;
-	flags_0217[4] = 1;
-	flags_0217[5] = 0;
+	v34BaudAllow[0] = 1;
+	v34BaudAllow[1] = 0;
+	v34BaudAllow[2] = 1;
+	v34BaudAllow[3] = 1;
+	v34BaudAllow[4] = 1;
+	v34BaudAllow[5] = 0;
 
 	terminateJa = 0;
 	terminateCp = 0;
@@ -640,12 +640,12 @@ VPcmFloModem::enterPhase3()
 void
 VPcmFloModem::externalReset()
 {
-	flags_0217[0] = 1;		/* +0x217 */
-	flags_0217[1] = 0;		/* +0x218 */
-	flags_0217[2] = 1;		/* +0x219 */
-	flags_0217[3] = 1;		/* +0x21a */
-	flags_0217[4] = 1;		/* +0x21b */
-	flags_0217[5] = 0;		/* +0x21c */
+	v34BaudAllow[0] = 1;		/* +0x217 */
+	v34BaudAllow[1] = 0;		/* +0x218 */
+	v34BaudAllow[2] = 1;		/* +0x219 */
+	v34BaudAllow[3] = 1;		/* +0x21a */
+	v34BaudAllow[4] = 1;		/* +0x21b */
+	v34BaudAllow[5] = 0;		/* +0x21c */
 
 	modem.ptr_49b4->initSession();
 	modem.ptr_49b4->init();
@@ -665,12 +665,12 @@ VPcmFloModem::externalReset()
 	flag_173e = 0;			/* +0x173e */
 
 	/* The second of the two runs; the same six values as above. */
-	flags_0217[0] = 1;		/* +0x217 again */
-	flags_0217[1] = 0;		/* +0x218 again */
-	flags_0217[2] = 1;		/* +0x219 again */
-	flags_0217[3] = 1;		/* +0x21a again */
-	flags_0217[4] = 1;		/* +0x21b again */
-	flags_0217[5] = 0;		/* +0x21c again */
+	v34BaudAllow[0] = 1;		/* +0x217 again */
+	v34BaudAllow[1] = 0;		/* +0x218 again */
+	v34BaudAllow[2] = 1;		/* +0x219 again */
+	v34BaudAllow[3] = 1;		/* +0x21a again */
+	v34BaudAllow[4] = 1;		/* +0x21b again */
+	v34BaudAllow[5] = 0;		/* +0x21c again */
 
 	terminateJa = 0;		/* +0x7dce */
 	terminateCp = 0;		/* +0x7dcf */
@@ -693,4 +693,54 @@ VPcmFloModem::externalReset()
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V90_V34_Main: external reset called.\r\n");
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * setV34BaudForV90, setV34BaudForV34 -- which V.34 symbol rates the next
+ * phase 2 is allowed to settle on.
+ *
+ * SIX STORES EACH AND NOTHING ELSE.  No load, no call, no register left in
+ * %eax; the two are byte-identical bar the last store, so the pair exists to
+ * say "and the fastest rate is/is not on the table".
+ *
+ *     d494  movb $0x1,0x217(%eax)      d4c4  movb $0x1,0x217(%eax)
+ *     d49b  movb $0x0,0x218(%eax)      d4cb  movb $0x0,0x218(%eax)
+ *     d4a2  movb $0x1,0x219(%eax)      d4d2  movb $0x1,0x219(%eax)
+ *     d4a9  movb $0x1,0x21a(%eax)      d4d9  movb $0x1,0x21a(%eax)
+ *     d4b0  movb $0x1,0x21b(%eax)      d4e0  movb $0x1,0x21b(%eax)
+ *     d4b7  movb $0x0,0x21c(%eax)      d4e7  movb $0x1,0x21c(%eax)
+ *              (for V.90)                       (for V.34)
+ *
+ * ENTRY 1 IS ZERO ON BOTH, and on every other site in this tree that writes
+ * the array -- `getUinfoValue`, `enterPhase3` and `externalReset`.  Five
+ * writers and not one of them ever sets it, so whatever index 1 selects is
+ * barred unconditionally by this build; that is an observation about the
+ * writers and not a claim about which rate it is.
+ *
+ * NOBODY IN THE OBJECT CALLS EITHER.  Both are `T` and neither has an
+ * incoming relocation, so they are the out-of-line copies of something whose
+ * every call site was inlined, or of an interface the build does not use.
+ * `setScramble` and `scaleVector` in v34shell.h are the same situation.
+ */
+void
+VPcmFloModem::setV34BaudForV90()
+{
+	v34BaudAllow[0] = 1;		/* +0x217 */
+	v34BaudAllow[1] = 0;		/* +0x218 */
+	v34BaudAllow[2] = 1;		/* +0x219 */
+	v34BaudAllow[3] = 1;		/* +0x21a */
+	v34BaudAllow[4] = 1;		/* +0x21b */
+	v34BaudAllow[5] = 0;		/* +0x21c */
+}
+
+void
+VPcmFloModem::setV34BaudForV34()
+{
+	v34BaudAllow[0] = 1;		/* +0x217 */
+	v34BaudAllow[1] = 0;		/* +0x218 */
+	v34BaudAllow[2] = 1;		/* +0x219 */
+	v34BaudAllow[3] = 1;		/* +0x21a */
+	v34BaudAllow[4] = 1;		/* +0x21b */
+	v34BaudAllow[5] = 1;		/* +0x21c */
 }

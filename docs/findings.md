@@ -41646,6 +41646,34 @@ either constructor is responsible for agrees. It is a state divergence in
 means changing that class and extending its test to compare the object — so it
 is recorded here and not fixed.
 
+**REPAIRED, AND THE NOTIFICATION BELOW IS WHAT SAID SO.** Both halves are now
+fixed in `src/dsp/FloatIIR.cpp`, and both were read straight out of the two
+symbols:
+
+- `_ZN10GenericIIRIfdE5resetEv` counts in the MEMBER -- `movl $0x0,0x28(%ecx)`
+  at +0x0d and +0x38, `mov %eax,0x28(%ecx)` at +0x20 and +0x64 -- so `reset`
+  is written `for (m_i = 0; m_i < m_inLen; m_i++)` and again over `m_outLen`.
+  The object stores the first loop's counter back only when it is about to go
+  round again, so it leaves `m_inLen - 1` and then overwrites it with zero
+  before the second loop; the obvious two loops reproduce every observable
+  value, including both cases where a length is zero.
+- `_ZN10GenericIIRIfdEC1EjjPdS1_j` stores +0x00, +0x04, +0x10, +0x14, +0x18,
+  +0x1c and the two history pointers, then TAIL-CALLS `reset` (`jmp` at
+  +0x66). Neither +0x28 nor +0x2c is among them, so the constructor's
+  `m_i = 0; m_acc = 0;` were two stores the original does not have and are
+  deleted.
+
+It surfaced exactly as this finding said it would, from a third place: a
+`VPcmV34InitMOH` differential (`test/unit/t_v34pcmapi.cpp`) resets the
+session's `GenericToneDetector`, whose `reset` calls this one, and the
+whole-block comparison against the blob differed at +0x28 and nowhere else.
+`t_gtonedet.cpp` and `t_vpcmctor.cpp` then failed on their asserted
+divergence, which is the notification working, and both now assert the
+repaired state instead: each side's `m_i` equal to its own `m_outLen`, and
+neither side's `m_acc` written. The two words stay excluded from the byte
+comparisons because `m_acc` holds whatever each side's storage held, which is
+a fixture property and not a claim about the code.
+
 **THE TEST ASSERTS THE DIVERGENCE RATHER THAN LOOKING AWAY FROM IT**, and that
 distinction matters. `t_gtonedet.cpp` excludes exactly those twelve bytes from
 the field-by-field comparison — but it then asserts all four halves of what is
@@ -60138,3 +60166,211 @@ touches that file and the suite is green either way, so this is a
 transcription slip in the record rather than a change in the test.  Recorded
 so the next session does not spend a turn on it, which is 3213's own advice
 about a set of figures that would not reproduce.
+## 3300. THE V.34 PUBLIC ACCESSOR SURFACE IS 21 SYMBOLS AND IT HAD TO CLOSE AS ONE BATCH
+
+`tools/closure.py --batch` over the twenty-one reports `21 root symbol(s);
+closure reaches 29; 21 unwritten` and `CLOSED`, which is what licensed writing
+them together. Together was not a preference: `tools/symmap.py` renames every
+blob symbol `src/` defines, so a half-written group leaves the other half
+calling a `ref_` name that no longer resolves, and every test binary fails at
+`t_encode` rather than at the function that is wrong.
+
+Largest first: `VPcmV34InitMOH` (444 B), `VPcmV34SetMinMaxBitRates` (348),
+`VPcmV34SetDelays` (259), `V34XF_IndicateK56FlexJdReceived` (247),
+`VPcmV34NotifyDP` (218), `V34XF_GetMaxUpstreamRateIndex` (123),
+`VPcmV34SetMinimumSigLevel` (104), `VPcmV34GetSNR` (99),
+`VPcmV34RequestDPNotification` (89), `VPcmV34GetQuickConnectIndication` (59),
+`VPcmFloModem::setV34BaudForV90` and `::setV34BaudForV34` (47 each),
+`VPcmV34GetCurrentTxCarrier` (47), `VPcmV34GetCurrentRxBaudRate` and
+`...TxBaudRate` (44 each), `VPcmV34SetMaxBlockLength` (42),
+`VPcmV34GetCurrentRxCarrier` (41), `VPcmV34SetTimeOut` (30),
+`VPcmV34SetIndicationOfRemoteRetrain` (12), `VPcmV34Delete` (3) and
+`SetUpstreamModulationInfo` (1).
+
+Twelve of the twenty-one are under sixty bytes and read as one field each,
+which is exactly the shape a reconstruction gets wrong quietly: read the
+neighbouring field, or the right field at the wrong width, and it compiles,
+reads correctly, and agrees with the object over almost every input. 3301 is
+the worked example.
+
+### WHAT THE BATCH COST THAT WAS NOT THE FUNCTIONS
+
+Three defects turned up that no existing test could see, and only one of them
+was in the new code: `VPcmV34GetSNR` written with a signed multiply (UB, and
+GCC 13 turned the loop into a non-terminating one), `VPcmV34InitMOH`'s bypass
+arm zeroing a flag byte the first version stored unconditionally, and
+`GenericIIR<float,double>` -- finding 1250's declared divergence, REPAIRED
+there, reached because `VPcmV34InitMOH` resets the session's
+`GenericToneDetector`. The last is the interesting one: 1250 recorded a known
+divergence and predicted it would surface from a third place, and it did.
+
+## 3301. FOUR ACCESSORS THAT LOOK LIKE ONE FUNCTION FOUR TIMES ARE FOUR DIFFERENT PREDICATES
+
+`VPcmV34GetCurrentRxBaudRate`, `...TxBaudRate`, `...RxCarrier` and
+`...TxCarrier` are 44, 44, 41 and 47 bytes. All four open on `f359c == 0x66`
+and then on a range test over `status`, and no two are the same:
+
+    RxBaudRate   0x66 -> status-1   else status-2   in 0..1 -> 8000
+    TxBaudRate   0x66 -> status-2   else status-1   in 0..1 -> 8000
+    RxCarrier    0x66 -> status-1   else status-2   in 0..1 -> 0
+    TxCarrier    0x66 -> status-2 in 0..1 -> 0;  else status == 2 -> 0
+
+The receive pair and the transmit pair are each other's mirror on the ROLE
+test -- the same crossing v34pcmmain.cpp documents for the two BIT rate
+getters -- and `GetCurrentTxCarrier` alone asks a single-value question on its
+non-PCM arm rather than a range one. Writing any of them from the shape of its
+neighbour is wrong for exactly one value of `status`, so the test sweeps
+`f359c` over three values CROSSED WITH `status` over eight. A sweep of either
+field alone cannot tell the four apart.
+
+`rx_carrier` falls out of this. v34fsk.h said of `struct v34_ratecfg` +0x24
+that "the receive carrier at +0x24 is inside `pad_24` and is left there:
+nothing reconstructed touches it". `VPcmV34GetCurrentRxCarrier` is the reader,
+so the field is named and `pad_24` becomes `pad_26`.
+
+## 3302. THE DIAGNOSTICS DUMP DOES NOT LABEL FIELDS. FIVE SMALLER FUNCTIONS DO
+
+The expectation going in was that `VPcmV34GetDiagnostics` and
+`VPcmV34GetVisualDiagnostics` would be the strongest field-naming lever left
+in V.34: a function that prints a field must reference it, and its format
+string states what the field means in the author's own words.
+
+MEASURED, AND FALSE FOR THESE TWO. `VPcmV34GetVisualDiagnostics` references no
+string at all -- its relocations are one jump table into `.rodata+0x298`, one
+`.rodata.cst4` constant and its nine calls, and nothing else.
+`VPcmV34GetDiagnostics` references six strings and every one is a banner:
+
+    0xba8  "VPcmV34GetDiagnostics called...\r\n"
+    0xbcc  "...It is diagnostics of V.34 (or P2)...\r\n"
+    0xbf8  "...It is diagnostics of V.90 Digital...\r\n"
+    0xc24  "...It is diagnostics of V.92 Digital...\r\n"
+    0xc50  "...It is diagnostics of V.90 Analog...\r\n"
+    0xc7c  "...It is diagnostics of V.92 Analog...\r\n"
+
+Six banners and not one conversion specifier. Neither function PRINTS a field:
+both copy the object's fields into a caller-supplied `TAG_DiagnosticResults`,
+and the labelling happens wherever that struct is printed, which is outside
+this object. The premise is sound and these two are the wrong place for it.
+
+THE LABELS CAME FROM THE SMALL FUNCTIONS INSTEAD:
+
+  - `V34XF_IndicateK56FlexJdReceived` prints "About to setup v34 txmit,
+    baudrate = %d, carrier = %d, preemp = %d" over `v34_ratecfg` +0x00, +0x10
+    and +0x06 (0xa6aa, 0xa69f, 0xa694 load them into the first, second and
+    third argument slots). Two of the three land on `baud` and `carrier`,
+    named from elsewhere, so the string is checked against known answers on
+    both sides of the one it settles: +0x06 was `f06` and is `preemp`.
+  - `VPcmV34SetDelays` prints "V34FEC, V34dmadelay set to %d, (ext delay=%d)"
+    with the stored value first: `f25c` is `dmadelay`. `v34hshak.c` calls the
+    same offset "dma delay" in "...Modifying dma delay from %d to %d" -- a
+    second, independent confirmation the rename found rather than needed.
+  - `VPcmV34NotifyDP` sets +0x262 to 1 under "Valid in samples" and 0 under
+    "Invalid in samples": `samples_valid`.
+  - `VPcmV34NotifyDP` case 3 prints "mohTimer = %d, setting count2 to %d" over
+    +0xabdc and +0xaa74, naming `moh_timer` (and `moh_limit` beside it from
+    `VPcmV34Progress`'s own string). +0xaa74 KEEPS its offset name: "count2"
+    is a position in a set of counters, not a description.
+
+A printed label is primary evidence out of the object's own `.rodata` and is
+not what CLAUDE.md's Ghidra rule forbids -- that rule is about decompiler
+output. The label still has to be paired with the right offset through
+`tools/dis.py`, which is why each of the above records which instruction loads
+which field into which argument slot.
+
+## 3303. `v34_shell::pad_000` IS 2,560 BYTES OF DOUBLE COUNTING
+
+A struct-coverage reading of V.34 reports one large unmodelled region left:
+`struct v34_shell`'s `pad_000`, 0xa00 bytes, the only significant unnamed span
+in all of V.34. Filling it was expected to be this batch's readability prize.
+
+IT IS NOT A REGION. IT IS TWO STRUCTS OVER ONE OBJECT. `struct v34_shell` is
+based on the object -- `V34_SHELL_FIELDS` is 0xa00, and its header says it is
+"left based on the object, because that is how every function already written
+reaches it" -- so `pad_000` IS the object's first 0xa00 bytes, which `struct
+v34_object` already models with named fields (`ptc` at +8, `rate_min` at
++0x220, `rx_energy_floor` at +0x230). Naming into `pad_000` would be a second
+layout for a region that has one: not illegal C, but two maps of one object,
+which finding 100 already ruled on and CLAUDE.md's "one type, one home"
+restates.
+
+THE HONEST DENOMINATOR is `struct v34_object`'s own `unmapped_*` spans below
+0xa00, and before this batch it was 1,714 bytes over seven spans:
+
+    +0x000c    4      +0x0234   24      +0x0254    8      +0x0262    2
+    +0x0370   18      +0x0384  126      +0x0404 1532 (of 2672; the rest is
+                                                      above 0xa00)
+
+This batch converts 10 of those 1,714 -- +0x238 and +0x23c (8 B) from
+`VPcmV34SetTimeOut`, +0x262 (2 B) from `VPcmV34NotifyDP` -- leaving 1,704. It
+names 21 further bytes ABOVE 0xa00 that the same functions reach (+0xabd8 and
++0xabdc, 8 B; +0xac17, 1 B; +0xac40..+0xac4b, 12 B) and 2 bytes in `struct
+v34_ratecfg`. `struct v34_object`'s total unmapped goes 28,696 to 28,665.
+
+Thirty-three bytes, and the number is small for a reason worth recording:
+these are the object's PUBLIC accessors, and they read the head of the object
+where the fields already have names. The unnamed middle belongs to the DSP.
+
+## 3304. TWO AUTHORIAL NAMES FOR ONE FIELD: `ptc` AND "Max Block Length"
+
+`VPcmV34SetMaxBlockLength` stores its argument at object +0x08 and reports it
+as "VPcmV34Main: Max Block Length modified to %d". That offset already has a
+name from a string: `initdigital` prints it as "PTC" in "for tx data rate -
+%d, PTC - %d, setting nofTxBits to %d", which is where `ptc` came from.
+
+Both are the author's words for the same four bytes, so 3302's rule -- a
+printed label names a field -- cannot be applied twice without choosing. The
+field keeps `ptc`: it is the older name and it has a READER behind it
+(`initdigital` computes `nof_tx_bits` from it) where "Max Block Length" has
+only this writer. Recorded at D380 rather than resolved by preferring whichever
+string was read last, because the disagreement is real and a future reader
+finding one string will otherwise take the other for a mistake.
+
+## 3305. `VPcmFloModem::v34BaudAllow` IS NAMED BY A READER, NOT BY ITS FIVE WRITERS
+
+`VPcmFloModem` +0x217 was `flags_0217`, six bytes offset-named because
+"nothing establishes what they select". Five functions write it and all five
+write six literals, which can never name anything.
+
+The two new members do not change that -- `setV34BaudForV90` and
+`setV34BaudForV34` are six `movb` each, differing only in the last -- but
+their NAMES are the object's, and putting them beside the READER settles it.
+`chkForceBaudRate` takes `p3548 + 0x217` as `sel` on its V.90 arm and INDEXES
+IT 1..5 against a cap it prints as "max V34 baud rate index = %d", clearing
+every entry at or above the cap; in its other two arms the same code indexes a
+local `unsigned char allow[6]` through the same pointer, so the two are the
+same shape by construction.
+
+An index that runs 0..5 against a quantity the object itself calls a baud rate
+index is what names the array. WHAT IS NOT ESTABLISHED is the index-to-rate
+mapping: `chkForceBaudRate` bars in ascending index order, which fixes the
+direction and not the first entry. The name claims the array is per-baud and
+does not claim which baud. Entry 1 is zero on all five writers, so whatever it
+selects this build never allows -- a fact about the writers, not about a rate.
+
+## 3306. A SUBSTRING RENAME CORRUPTED 506 MUTATION ANCHORS AND THE SYMPTOM NAMED THE WRONG FILES
+
+Renaming `f25c` to `dmadelay` across `test/mutations/*.json` with a plain
+substring replace silently rewrote `obj->f25c0`, `obj->f25c2`, `obj->f25c6`,
+`obj->f25c8` and `obj->f25cc` -- every one of which CONTAINS `obj->f25c` --
+into `obj->dmadelay0` and friends. 506 occurrences across seven files.
+
+THE SYMPTOM POINTED SOMEWHERE ELSE ENTIRELY. `make refs` did not report
+damaged anchors. It reported **17 LIVE MUTANTS**, in `v34hstx1.cpp`,
+`v34hshak.c`, `v34shell.c` and `v34pcmmain.cpp` -- files the rename had not
+touched and functions the batch had nothing to do with. A live mutant normally
+means a test has stopped discriminating, which is a serious result and invites
+a hunt through the test suite. Here it meant an anchor no longer matched its
+site, so the mutation landed nowhere the suite exercised.
+
+Three things follow, and the third is the one that generalises:
+
+  - The earlier `sed -i 's/\bobj->f25c\b/.../'` over `src/` was SAFE, because
+    `\b` between `c` and `0` does not exist and the sed skipped `f25c0`. The
+    Python `str.replace` that followed had no such guard. The same rename, two
+    tools, one of them silently wrong.
+  - `git diff --stat` caught it in seconds once suspected: seven files changed
+    that had no business changing.
+  - A FAILURE WHOSE SHAPE DOES NOT MATCH WHAT YOU JUST DID SHOULD MAKE YOU
+    SUSPECT YOUR OWN EDIT FIRST, not the thing it names. The 17 live mutants
+    were 17 true statements about a tree that had been corrupted, and every
+    one of them would have wasted a session if taken at face value.

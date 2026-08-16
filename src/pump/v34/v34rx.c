@@ -1171,7 +1171,7 @@ adaptecho(void *objp)
 	 * count is decremented, so it describes the queue as the sample was
 	 * taken rather than after.
 	 */
-	lag = (short)((unsigned short)obj->f25c - (unsigned short)txq->count);
+	lag = (short)((unsigned short)obj->dmadelay - (unsigned short)txq->count);
 	txq->count = (short)(txq->count - 1);
 
 	/* The residual carries a one-shot correction, which is consumed. */
@@ -1303,7 +1303,7 @@ serr_dequeue(struct v34_object *obj)
 	struct v34_queue *txq = &obj->txq;
 	short lag;
 
-	lag = (short)((unsigned short)obj->f25c - (unsigned short)txq->count);
+	lag = (short)((unsigned short)obj->dmadelay - (unsigned short)txq->count);
 	txq->count = (short)(txq->count - 1);
 	obj->f25e = (short)*txq->rd;
 	txq->rd = q_next(txq, txq->rd + 1, V34_TXQ_END);

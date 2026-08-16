@@ -637,7 +637,7 @@ v34tx1_txmd(void *objp)
 
 		V34SetupModulator((struct v34_modulator *)
 				  ((char *)o + TX1_MODULATOR),
-				  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);
+				  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);
 
 		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
 		o->f25c0 = 0;
@@ -968,7 +968,7 @@ v34tx1_sbarseg(void *objp)
 		 * negative int is undefined in C and the object's `shl` is
 		 * not; the bits are the same either way.
 		 */
-		span = (int)((unsigned)(0x5e8 - o->f25c) << 14);
+		span = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);
 		q = (short)(span / 9600);
 		tx1_put(o, TX1_COUNT, (short)((((int)q * 0x960) >> 14) + 0x96));
 		if (dsplibs_debug_level > 1)		/* 0x67916 */
@@ -1100,7 +1100,7 @@ v34tx1_ppseg(void *objp)
 			hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);
 
 			/* 0x68154 */
-			span = (0x5e8 - o->f25c) * (int)baud;
+			span = (0x5e8 - o->dmadelay) * (int)baud;
 			q = span / 9600;
 			tx1_put(o, TX1_COUNT, (short)q);	/* 0x6818d */
 

@@ -61,9 +61,18 @@ GenericIIR<Sample, Coeff>::GenericIIR(unsigned nden, unsigned nnum,
 	m_inHist = (Coeff *)sysdep_malloc(m_inLen * sizeof(Coeff));
 	m_outHist = (Coeff *)sysdep_malloc(m_outLen * sizeof(Coeff));
 
-	m_i = 0;
-	m_acc = 0;
-
+	/*
+	 * NEITHER SCRATCH MEMBER IS INITIALISED HERE, and that is the object's
+	 * and not an omission.  `_ZN10GenericIIRIfdEC1EjjPdS1_j` writes exactly
+	 * +0x00, +0x04, +0x10, +0x14, +0x18, +0x1c and the two history pointers
+	 * and then TAIL-CALLS `reset` -- `jmp` at +0x66 -- so +0x28 and +0x2c
+	 * are never stored, and `m_acc` comes out of the constructor holding
+	 * whatever the allocator left.  `m_i` gets its value from `reset`.
+	 *
+	 * This is the second half of finding 1250, which recorded both stores
+	 * as a known divergence because repairing them belonged to this class
+	 * rather than to `GenericToneDetector`.
+	 */
 	reset();
 }
 
@@ -76,16 +85,33 @@ GenericIIR<Sample, Coeff>::~GenericIIR()
 		sysdep_free(m_outHist);
 }
 
+/*
+ * BOTH LOOPS COUNT IN `m_i`, WHICH IS A MEMBER AND NOT A LOCAL.  The object
+ * is explicit about it -- `movl $0x0,0x28(%ecx)` at +0x0d and +0x38 and
+ * `mov %eax,0x28(%ecx)` at +0x20 and +0x64 of
+ * `_ZN10GenericIIRIfdE5resetEv` -- so a reset filter is left with `m_i`
+ * holding `m_outLen`, or zero when there is no output history, rather than
+ * with whatever the last `process` left there.  GenericIIR.h already said
+ * +0x28 was the original's loop counter; this is the site that shows it.
+ *
+ * The object's first loop stores the counter back only when it is about to
+ * go round again, so it leaves `m_inLen - 1` there -- and then overwrites it
+ * with zero unconditionally before the second loop, which is why writing the
+ * two loops the obvious way reproduces every observable value, including the
+ * two cases where a length is zero.
+ *
+ * Found by `test/unit/t_v34pcmapi.cpp`: `VPcmV34InitMOH` resets the session's
+ * `GenericToneDetector`, whose own `reset` calls this one, and the whole-block
+ * comparison against the blob differed at +0x28 and nowhere else.
+ */
 template <typename Sample, typename Coeff>
 void
 GenericIIR<Sample, Coeff>::reset()
 {
-	unsigned k;
-
-	for (k = 0; k < m_inLen; k++)
-		m_inHist[k] = 0;
-	for (k = 0; k < m_outLen; k++)
-		m_outHist[k] = 0;
+	for (m_i = 0; m_i < m_inLen; m_i++)
+		m_inHist[m_i] = 0;
+	for (m_i = 0; m_i < m_outLen; m_i++)
+		m_outHist[m_i] = 0;
 
 	/* Start at the top of the slack, leaving `n` entries of history above. */
 	m_inPos = m_inLen - m_nnum;

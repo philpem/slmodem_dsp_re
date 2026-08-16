@@ -688,18 +688,18 @@ alias_check(void)
  *   +0x00 `m_den`, +0x04 `m_num`   BORROWED coefficient arrays (GenericIIR.h),
  *                                  so each side points at its own copy of a
  *                                  static table.
- *   +0x28 `m_i`, +0x2c `m_acc`     FINDING 1250: our constructor writes zero
- *                                  into both and the ORIGINAL'S DOES NEITHER.
- *                                  The blob leaves `m_i` holding `m_outLen` --
- *                                  what a `reset()` whose second loop uses the
- *                                  member as its loop variable leaves behind --
- *                                  and `m_acc` holding whatever the storage
- *                                  held.
+ *   +0x28 `m_i`, +0x2c `m_acc`     FINDING 1250, REPAIRED.  `reset()` counts
+ *                                  in `m_i` and neither constructor writes
+ *                                  either member, so both sides leave `m_i`
+ *                                  holding `m_outLen` and both leave `m_acc`
+ *                                  holding whatever their storage held -- and
+ *                                  that last is a fixture property, which is
+ *                                  why the two words stay excluded.
  *
- * THE DIVERGENCE IS ASSERTED, NOT SKIPPED, which is t_gtonedet.cpp's rule and
+ * THE STATE IS ASSERTED, NOT SKIPPED, which is t_gtonedet.cpp's rule and
  * finding 1250's own instruction.  All four halves are checked on every filter
- * found: ours zero in both members, the blob's `m_i` equal to its `m_outLen`,
- * and the blob's `m_acc` not zero.  Repair `src/dsp/FloatIIR.cpp` and these
+ * found: each side's `m_i` equal to its own `m_outLen`, and each side's
+ * `m_acc` not zero.  Undo the repair in `src/dsp/FloatIIR.cpp` and these
  * checks fail, which is the notification that the exclusion has gone obsolete;
  * an exclusion that merely looked away would stay green for ever.
  *
@@ -849,12 +849,18 @@ iir_scan(const struct region *r)
 			       " numerators are not one table\n", r->k, o);
 			bad++;
 		}
-		/* Finding 1250, all four halves. */
-		if (u32(r->a, o + 0x28) != 0
-		    || memcmp(r->a + o + 0x2c, zero8, 8) != 0) {
-			printf("    a filter at region %d +0x%04x: OUR m_i/"
-			       "m_acc are no longer zero -- finding 1250 has"
-			       " been repaired and this exclusion is obsolete\n",
+		/*
+		 * Finding 1250, all four halves, in its REPAIRED state: both
+		 * sides now leave `m_outLen` in `m_i` and neither writes
+		 * `m_acc`.  The two words stay excluded from the byte
+		 * comparison because `m_acc` holds whatever each side's
+		 * storage held, which is a fixture property and not a claim.
+		 */
+		if (u32(r->a, o + 0x28) != olen
+		    || memcmp(r->a + o + 0x2c, zero8, 8) == 0) {
+			printf("    a filter at region %d +0x%04x: OUR m_i is"
+			       " not m_outLen or our m_acc is zero -- finding"
+			       " 1250's repair has been undone\n",
 			       r->k, o);
 			bad++;
 		}
@@ -1338,14 +1344,14 @@ run_create(const char *name)
 		diff_eq_int("minNofTransmitSequences is 1 and not 0 (%ld)",
 			    ((VPcmFloModem *)pa)->minNofTransmitSequences, 1,
 			    trial);
-		diff_eq_int("flags_0217[1] is 0 where the constructor set 1"
-			    " (%ld)", ((VPcmFloModem *)pa)->flags_0217[1], 0,
+		diff_eq_int("v34BaudAllow[1] is 0 where the constructor set 1"
+			    " (%ld)", ((VPcmFloModem *)pa)->v34BaudAllow[1], 0,
 			    trial);
-		diff_eq_int("flags_0217[5] is 0 where the constructor set 1"
-			    " (%ld)", ((VPcmFloModem *)pa)->flags_0217[5], 0,
+		diff_eq_int("v34BaudAllow[5] is 0 where the constructor set 1"
+			    " (%ld)", ((VPcmFloModem *)pa)->v34BaudAllow[5], 0,
 			    trial);
-		diff_eq_int("flags_0217[0] is still 1 (%ld)",
-			    ((VPcmFloModem *)pa)->flags_0217[0], 1, trial);
+		diff_eq_int("v34BaudAllow[0] is still 1 (%ld)",
+			    ((VPcmFloModem *)pa)->v34BaudAllow[0], 1, trial);
 
 		/*
 		 * THE SAMPLE COUNT, read back where the object put it.  The

@@ -155,9 +155,10 @@
  * The rate configuration a short phase 2 hard-codes.  3200 baud and an 1829
  * Hz carrier is a legal V.34 pairing, and the two offsets are named by the
  * object's own getters: `VPcmV34GetCurrentTxBaudRate` reads +0xaa84 and
- * `VPcmV34GetCurrentTxCarrier` reads +0xaa94.  `f06` is offset-named --
- * `setfinalrate` writes it and `v34setuptxmit` reads it, and neither says
- * what it is.
+ * `VPcmV34GetCurrentTxCarrier` reads +0xaa94.  `preemp` is named the same
+ * way now -- `V34XF_IndicateK56FlexJdReceived` prints all three of them
+ * together as "baudrate = %d, carrier = %d, preemp = %d" -- and this is the
+ * function that clears it, so a short phase 2 asks for no pre-emphasis.
  */
 #define SHORT_PHASE2_BAUD	0xc80
 #define SHORT_PHASE2_CARRIER	0x725
@@ -315,7 +316,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		sess->pcmSessionType = 0;
 		cfg->baud = SHORT_PHASE2_BAUD;
 		cfg->carrier = SHORT_PHASE2_CARRIER;
-		cfg->f06 = 0;
+		cfg->preemp = 0;
 		obj->f25dc = 0;
 	}
 
@@ -441,7 +442,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 V34INFO1A_ASSERT(f35a4,   struct v34_object,  f35a4,		0x35a4);
 V34INFO1A_ASSERT(f25dc,   struct v34_object,  f25dc,		0x25dc);
 V34INFO1A_ASSERT(baud,    struct v34_ratecfg, baud,		0x00);
-V34INFO1A_ASSERT(f06,     struct v34_ratecfg, f06,		0x06);
+V34INFO1A_ASSERT(preemp,  struct v34_ratecfg, preemp,		0x06);
 V34INFO1A_ASSERT(carrier, struct v34_ratecfg, carrier,		0x10);
 V34INFO1A_ASSERT(sesstype, VPcmFloModem,      pcmSessionType,	0x611c);
 V34INFO1A_ASSERT(layout,  VPcmFloModem,       info0Layout,	0x6120);

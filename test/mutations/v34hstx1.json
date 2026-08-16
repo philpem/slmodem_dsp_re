@@ -166,13 +166,13 @@
  },
  {
   "label": "86: the modulator is told 2400 baud whatever the rate config says",
-  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
-  "replace": "\t\t\t\t  2400, cfg->carrier, cfg->f06, pcm, 0);"
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);",
+  "replace": "\t\t\t\t  2400, cfg->carrier, cfg->preemp, pcm, 0);"
  },
  {
   "label": "86: the carrier and the pre-emphasis index are swapped",
-  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
-  "replace": "\t\t\t\t  cfg->baud, cfg->f06, cfg->carrier, pcm, 0);"
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);",
+  "replace": "\t\t\t\t  cfg->baud, cfg->preemp, cfg->carrier, pcm, 0);"
  },
  {
   "label": "86: the PCM argument is always zero",
@@ -186,8 +186,8 @@
  },
  {
   "label": "86: the modulator's reset argument is one",
-  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 0);",
-  "replace": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->f06, pcm, 1);"
+  "find": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);",
+  "replace": "\t\t\t\t  cfg->baud, cfg->carrier, cfg->preemp, pcm, 1);"
  },
  {
   "label": "86: the reconfiguration raises 0x8000 and not 0x8004",
@@ -582,18 +582,18 @@
  },
  {
   "label": "19: the span is measured from 0x5e9",
-  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 14);",
-  "replace": "\t\tspan = (int)((unsigned)(0x5e9 - o->f25c) << 14);"
+  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);",
+  "replace": "\t\tspan = (int)((unsigned)(0x5e9 - o->dmadelay) << 14);"
  },
  {
   "label": "19: the span is shifted by thirteen",
-  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 14);",
-  "replace": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 13);"
+  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);",
+  "replace": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 13);"
  },
  {
   "label": "19: +0x25c is read unsigned",
-  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->f25c) << 14);",
-  "replace": "\t\tspan = (int)((unsigned)(0x5e8 - (unsigned short)o->f25c) << 14);"
+  "find": "\t\tspan = (int)((unsigned)(0x5e8 - o->dmadelay) << 14);",
+  "replace": "\t\tspan = (int)((unsigned)(0x5e8 - (unsigned short)o->dmadelay) << 14);"
  },
  {
   "label": "19: the counter divides by 9601",
@@ -759,13 +759,13 @@
  },
  {
   "label": "20: the span is measured from 0x5e9",
-  "find": "\t\t\tspan = (0x5e8 - o->f25c) * (int)baud;",
-  "replace": "\t\t\tspan = (0x5e9 - o->f25c) * (int)baud;"
+  "find": "\t\t\tspan = (0x5e8 - o->dmadelay) * (int)baud;",
+  "replace": "\t\t\tspan = (0x5e9 - o->dmadelay) * (int)baud;"
  },
  {
   "label": "20: the baud is read unsigned for the span",
-  "find": "\t\t\tspan = (0x5e8 - o->f25c) * (int)baud;",
-  "replace": "\t\t\tspan = (0x5e8 - o->f25c) * (int)(unsigned short)baud;",
+  "find": "\t\t\tspan = (0x5e8 - o->dmadelay) * (int)baud;",
+  "replace": "\t\t\tspan = (0x5e8 - o->dmadelay) * (int)(unsigned short)baud;",
   "equivalent": true,
   "why": "every baud driven is 1234..3429, so the sign extension at 0x6815b cannot change the product.  A negative +0xaa84 would separate them and no run has one: the field is the rate configuration's baud, which the switch above has already compared against five positive constants"
  },

@@ -24,7 +24,7 @@
    "",
    "THE STORES THE CONSTRUCTOR MAKES THAT `VPCMXF_Create` IMMEDIATELY",
    "CONTRADICTS are mutated here as well -- `nofBitsPerSymbol` 0 against its",
-   "2, `minNofTransmitSequences` 0 against its 1, `flags_0217` all ones",
+   "2, `minNofTransmitSequences` 0 against its 1, `v34BaudAllow` all ones",
    "against its {1,0,1,1,1,0}.  Those are only observable in the direct",
    "constructor sweep, because a modem that came out of `VPCMXF_Create`",
    "never has the constructor's values for them."
@@ -158,8 +158,8 @@
  },
  {
   "label": "only five of the six flags are written",
-  "find": "\tfor (i = 0; i < sizeof(flags_0217); i++)",
-  "replace": "\tfor (i = 0; i + 1 < sizeof(flags_0217); i++)"
+  "find": "\tfor (i = 0; i < sizeof(v34BaudAllow); i++)",
+  "replace": "\tfor (i = 0; i + 1 < sizeof(v34BaudAllow); i++)"
  },
 
  {

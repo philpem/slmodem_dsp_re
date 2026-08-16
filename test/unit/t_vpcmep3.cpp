@@ -208,12 +208,12 @@ static const struct site site_v[] = {
 	{ "flags_173a[2]",		0x173c, 1, 0 },
 	{ "flag_173d",			0x173d, 1, 0 },
 	{ "flag_173e",			0x173e, 1, 0 },
-	{ "flags_0217[0]",		0x0217, 1, 1 },
-	{ "flags_0217[1]",		0x0218, 1, 0 },
-	{ "flags_0217[2]",		0x0219, 1, 1 },
-	{ "flags_0217[3]",		0x021a, 1, 1 },
-	{ "flags_0217[4]",		0x021b, 1, 1 },
-	{ "flags_0217[5]",		0x021c, 1, 0 },
+	{ "v34BaudAllow[0]",		0x0217, 1, 1 },
+	{ "v34BaudAllow[1]",		0x0218, 1, 0 },
+	{ "v34BaudAllow[2]",		0x0219, 1, 1 },
+	{ "v34BaudAllow[3]",		0x021a, 1, 1 },
+	{ "v34BaudAllow[4]",		0x021b, 1, 1 },
+	{ "v34BaudAllow[5]",		0x021c, 1, 0 },
 	{ "terminateJa",		0x7dce, 1, 0 },
 	{ "terminateCp",		0x7dcf, 1, 0 },
 	{ "terminateCpNot",		0x7dd0, 1, 0 },
@@ -680,12 +680,12 @@ run_externalreset(void)
 					    != 0, 1, tag);
 
 				/* The flags, by value and not only compared. */
-				diff_eq_int("flags_0217[0] (%ld)",
-					    (long)V(1)->flags_0217[0], 1, tag);
-				diff_eq_int("flags_0217[1] (%ld)",
-					    (long)V(1)->flags_0217[1], 0, tag);
-				diff_eq_int("flags_0217[5] (%ld)",
-					    (long)V(1)->flags_0217[5], 0, tag);
+				diff_eq_int("v34BaudAllow[0] (%ld)",
+					    (long)V(1)->v34BaudAllow[0], 1, tag);
+				diff_eq_int("v34BaudAllow[1] (%ld)",
+					    (long)V(1)->v34BaudAllow[1], 0, tag);
+				diff_eq_int("v34BaudAllow[5] (%ld)",
+					    (long)V(1)->v34BaudAllow[5], 0, tag);
 				diff_eq_int("nofBitsPerSymbol (%ld)",
 					    (long)V(1)->nofBitsPerSymbol, 2,
 					    tag);

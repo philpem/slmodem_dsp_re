@@ -1106,7 +1106,7 @@ main(void)
 			 * lagbase 3 makes the lag go negative part-way, which
 			 * is the path that declines to adapt and prints.
 			 */
-			oa.f25c = ob.f25c = (short)(lagbase == 3 ? 8 : 0x40);
+			oa.dmadelay = ob.dmadelay = (short)(lagbase == 3 ? 8 : 0x40);
 
 			for (b = 0; b < V34_TXQ_RING; b++)
 				oa.txq.ring[b] = ob.txq.ring[b] =
@@ -1232,7 +1232,7 @@ main(void)
 			    (mode == 0 ? 0x8000 : mode == 1 ? 0x0800 : 0);
 			ra->f2a4 = rb->f2a4 = coeff;
 
-			oa.f25c  = ob.f25c  = (short)(lag ? 8 : 0x40);
+			oa.dmadelay  = ob.dmadelay  = (short)(lag ? 8 : 0x40);
 			oa.f25c2 = ob.f25c2 = (short)(feed ? V34_EC_FEED : 0);
 			oa.f260  = ob.f260  = 1234;
 			oa.fa23c = ob.fa23c = (short)(far ? 1 : 0);
@@ -2611,7 +2611,7 @@ main(void)
 			 * as an index.
 			 */
 			ra->f2a4 = rb->f2a4 = coeff2;
-			oa2.f25c  = ob2.f25c  = 0x40;
+			oa2.dmadelay  = ob2.dmadelay  = 0x40;
 			oa2.f25c2 = ob2.f25c2 = V34_EC_FEED;
 			oa2.f260  = ob2.f260  = 1234;
 			oa2.fa23c = ob2.fa23c = 1;

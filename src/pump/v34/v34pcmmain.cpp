@@ -123,6 +123,7 @@
  */
 #define SESS_DEMOD		0x175c		/* V90Modem::demodulator     */
 #define SESS_ECHO		0x6bd0		/* a V92EchoCanceller, `lea` */
+#define SESS_TONE		0x6f5c		/* a GenericToneDetector     */
 #define SESS_RETRAIN_FLAG	0x6fb4		/* an int, cleared           */
 
 /*
@@ -919,11 +920,11 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	{
 		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
 
-		obj->f25c = (short)(0x610u - (unsigned)ext);
+		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, "
 					     "(ext delay=%d)\n",
-					     (int)obj->f25c, ext);
+					     (int)obj->dmadelay, ext);
 	}
 
 	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
@@ -1620,6 +1621,14 @@ extern int alias_toneDetectorProcess(GenericToneDetector *, float *,
  */
 #define O_MOHLIMIT	0xabd8
 #define O_MOHCOUNT	0xabdc
+/*
+ * +0xabe4, +0xabe6 and +0xabf9, the three words of the modem-on-hold request
+ * `VPcmV34InitMOH` clears or stores and nothing here reads.  Offsets, not
+ * names: no string and no reader says what any of them carries.
+ */
+#define OB_MOH_W4	0xabe4
+#define OB_MOH_W6	0xabe6
+#define OB_MOH_FLAG	0xabf9
 /* +0xabe9.  Gates the late ANSam case on an outgoing call. */
 #define O_ANSAMLATE	0xabe9
 /* +0xabfe and +0xabff.  The output-clear request, and the phase-2 substate. */
@@ -2782,6 +2791,345 @@ done:
 
 /*
  * ---------------------------------------------------------------------------
+ * THE MANGLED HALF OF THE PUBLIC ACCESSOR SURFACE.
+ *
+ * Six entry points that take `tagV34Object *` rather than `void *`, which is
+ * the whole of why they are mangled and therefore why they are here and not
+ * in `v34pcmif.c` beside the rest of the batch.  `VPcmV34InitMOH` is the odd
+ * one out: its name is NOT mangled, but it calls
+ * `GenericToneDetector::reset`, and a C translation unit cannot name that.
+ *
+ * FOUR OF THE SIX ARE ALREADY IN THIS FILE, INLINED.
+ * `VPcmV34InitiateRetrain` carries the minimum-signal-level block, both delay
+ * blocks and the notch reset verbatim; the standalone functions below are the
+ * out-of-line copies of the same source.  They are transcribed against the
+ * disassembly rather than factored out of the inlined copies, because a
+ * shared static helper would have no blob symbol and its bytes would count
+ * against neither side.
+ */
+
+/*
+ * Two instructions, and the second is the `ret`.
+ *
+ * `_Z25SetUpstreamModulationInfoP12tagV34Object` is one byte long.  Its
+ * mangling is what fixes the parameter -- there is exactly one, and it is the
+ * object -- and nothing else about it is observable.  It survives as an empty
+ * body because the object has the symbol, at 0x6200, immediately before
+ * `VPcmV34SetMinMaxBitRates`.
+ */
+void
+SetUpstreamModulationInfo(struct tagV34Object *objp)
+{
+	(void)objp;
+}
+
+/*
+ * Push the configured rate bounds down to whichever modem is running.
+ *
+ * THREE ARMS, AND THE FIRST TWO DO NOT TOUCH THE V.34 FIELDS AT ALL -- they
+ * hand the configuration's two raw rates, in bits per second and undivided,
+ * to a C++ object and return:
+ *
+ *   V.90     `v90_receiver` non-zero AND the session's `info0Layout` set:
+ *            `V90ConstellationDesigner::setMinMaxRates`, reached as
+ *            `p3548 -> +0x175c -> +0x208`
+ *   K56flex  `k56flex_receiver` non-zero AND `pac18[8]` non-zero:
+ *            `K56FlexFloModem::setMinMaxRates`, with `pac18` as `this`
+ *   V.34     everything else, including a K56flex receiver whose `pac18[8]`
+ *            is clear -- that arm FALLS THROUGH rather than returning
+ *
+ * THE V.34 ARM IS THE ONE v34fsk.h DESCRIBES.  Both rates are divided by
+ * 2400 UNSIGNED -- `mul $0x1b4e81b5; shr $8`, which is `ceil(2^40/2400)` and
+ * so is the unsigned magic and not the signed one -- capped at 14, and then
+ * the maximum is raised to the minimum if it sits below it.  The order
+ * matters: the cap on `rate_min` happens BEFORE the comparison, so a
+ * configuration asking for 40000/33600 ends at 14/14 and not at 16/14.
+ *
+ * AND ONE RATE IS SPECIAL.  A `rate_max` of exactly 1 -- 2400 bps, the
+ * slowest V.34 rate -- also sets the force-low-baud short at +0x359a, which
+ * is `dec %edx; jne` and therefore that value alone rather than a threshold.
+ * A `rate_max` above 14 returns without reaching it.
+ */
+void
+VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	const unsigned char *cfg;
+
+	if (obj->v90_receiver != 0
+	    && *(const int *)(sess + SESS_GATE) != 0) {
+		V90Demodulator *demod =
+		    *(V90Demodulator *const *)(sess + SESS_DEMOD);
+
+		cfg = (const unsigned char *)obj->pac3c;
+		demod->constellationDesigner->setMinMaxRates(
+			(unsigned)*(const int *)(cfg + CFG_MIN_RATE),
+			(unsigned)*(const int *)(cfg + CFG_MAX_RATE));
+		return;
+	}
+
+	if (obj->k56flex_receiver != 0
+	    && *((const unsigned char *)obj->pac18 + 8) != 0) {
+		cfg = (const unsigned char *)obj->pac3c;
+		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
+			*(const int *)(cfg + CFG_MIN_RATE),
+			*(const int *)(cfg + CFG_MAX_RATE));
+		return;
+	}
+
+	cfg = (const unsigned char *)obj->pac3c;
+	obj->rate_min = (int)(*(const unsigned int *)(cfg + CFG_MIN_RATE)
+			      / (unsigned)RATE_STEP);
+	obj->rate_max = (int)(*(const unsigned int *)(cfg + CFG_MAX_RATE)
+			      / (unsigned)RATE_STEP);
+
+	if (obj->rate_min > 14)
+		obj->rate_min = 14;
+
+	if (obj->rate_max < obj->rate_min)
+		obj->rate_max = obj->rate_min;
+
+	if (obj->rate_max > 14) {
+		obj->rate_max = 14;
+		return;
+	}
+
+	if (obj->rate_max == 1)
+		*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+}
+
+/*
+ * The signal-energy floor, out of `V34DisconnectThreshTable`.
+ *
+ * The same eight-entry table and the same biased index
+ * `VPcmV34InitiateRetrain` uses inline, and the same clearing of +0x234
+ * behind it.  The index is `level + 48` compared UNSIGNED against 7, so a
+ * configured level outside -48..-41 takes entry 3; the table runs 71 to 160
+ * in 1 dB steps.
+ */
+void
+VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	int level = *(const int *)(cfg + CFG_MIN_LEVEL);
+	unsigned idx = (unsigned)level + 0x30u;
+	int thresh;
+
+	if (idx > 7u)
+		idx = 3u;
+
+	thresh = V34DisconnectThreshTable[idx];
+	obj->rx_energy_floor = thresh;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
+				     "minSigLevel set to %d\n", level, thresh);
+
+	*(int *)(m + OB_F0234) = 0;
+}
+
+/*
+ * The two filter delays, and the echo canceller's.
+ *
+ * `filtdelay` is `((cfg[0x64] + 2) >> 2) + 0x22` and `dmadelay` is
+ * `0x610 - cfg[0x68]`, both truncated to a short, and the echo canceller is
+ * given `cfg[0x68] + 0x68`.  IT IS THESE TWO STRINGS THAT NAME BOTH FIELDS --
+ * "V34 filtdelay set to %d (params initial delay = %d)" and "V34FEC,
+ * V34dmadelay set to %d, (ext delay=%d)", each with the STORED value first
+ * and the configured one second.
+ *
+ * THE CONFIGURATION POINTER IS RE-LOADED AFTER EACH DIAGNOSTIC -- 0x6475 and
+ * 0x64b5, both `mov 0xac3c(%esi),%ecx` after a call.  Reproduced by reading
+ * `pac3c` again rather than holding it, exactly as
+ * `GetVPcmMinimalTxPowerReduction` does with `p3548`; nothing here can change
+ * it, so the two spellings agree and this is written the object's way.
+ *
+ * Both reports print the stored short SIGN-EXTENDED (`cwtl`), so a delay
+ * configured past 32767/4 reports negative and the field holds the same
+ * negative value.
+ */
+void
+VPcmV34SetDelays(struct tagV34Object *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+
+	{
+		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
+		int biased = (int)((unsigned)delay + 2u);
+
+		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34 filtdelay set to %d "
+					     "(params initial delay = %d)\n",
+					     (int)*(short *)(m + OB_FILT_DELAY),
+					     delay);
+	}
+
+	{
+		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
+
+		obj->dmadelay = (short)(0x610u - (unsigned)ext);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, "
+					     "(ext delay=%d)\n",
+					     (int)obj->dmadelay, ext);
+	}
+
+	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
+		(unsigned)*(const int *)
+		    ((const unsigned char *)obj->pac3c + CFG_EXT_DELAY)
+		+ 0x68u);
+}
+
+/*
+ * Restart the sample clock and set a deadline.
+ *
+ * Thirty bytes: `sample_count` to zero and `secs * 9600` into the word beside
+ * it.  This is the function that names both -- see v34fsk.h -- and 9,600 is
+ * left as the constant it is: it is 8 kHz times 1.2 and not the codec rate,
+ * so calling the argument "seconds" would be a claim this cannot make.
+ */
+void
+VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->sample_count = 0;
+	/*
+	 * THE MULTIPLY IS DONE UNSIGNED, and it is the same defect
+	 * `VPcmV34GetSNR` had: `secs * 0x2580` on a signed int is undefined
+	 * the moment `secs` passes 2^31/9600, about 223,696, and an optimiser
+	 * is entitled to assume it never does.  The object is a plain
+	 * `imul $0x2580,0x8(%esp),%eax` at 0x6e90, which WRAPS, so the
+	 * defined-behaviour spelling is the unsigned one and it is the same
+	 * single instruction.
+	 *
+	 * Nothing bounds the argument: it arrives from outside the object and
+	 * no caller is reconstructed, so "no real caller passes 223,696" is
+	 * not something this can rely on.
+	 */
+	obj->timeout_deadline = (int)((unsigned)secs * 0x2580u);
+}
+
+/*
+ * Start modem-on-hold.
+ *
+ * FOUR ARGUMENTS AND THREE OF THEM ARE STORED RATHER THAN ACTED ON: the
+ * message code, and two bytes that go to +0xabe9/+0xabfa and +0xabf9.  The
+ * first is `movzbl` and reaches two fields -- itself at +0xabe9 and a
+ * `setne` of itself at +0xabfa -- which is what says it is a value with a
+ * "is it set" reading beside it rather than a flag.
+ *
+ * `mode == 1` IS A BYPASS AND IT IS NOT AN ERROR PATH.  The message code is
+ * stored at +0xabec whatever it is; the SECOND copy at +0xabf0 is zeroed
+ * instead of stored when it is 1, under "Special bypass - sending MOHreq
+ * instead of MOHFRR...".  So the two fields are the code as given and the
+ * code as it will be sent.
+ *
+ * AND THE BYPASS TAKES THE FLAG BYTE DOWN WITH IT.  0x6e3b is `xor %ecx,%ecx`
+ * -- on the register holding the fourth argument -- immediately before the
+ * `jmp 6d27` back into the common tail, whose `mov %cl,0xabf9(%ebx)` is the
+ * only store to that field.  Both bypass paths reach it, the quiet one from
+ * 0x6e39 and the one that printed from 0x6e8a, so `message == 1` stores ZERO
+ * at +0xabf9 whatever the caller passed.  Written here as the store repeated
+ * in both arms, which is what GCC's tail merge turns into that `xor`; the
+ * first reconstruction stored `flag` unconditionally and agreed with the
+ * object on every case where `flag` was already 0, which is most of them.
+ * Found by `test/unit/t_v34pcmapi.cpp` crossing `message` with `flag`.
+ *
+ * AFTER THAT IT IS `VPcmV34InitiateRetrain`'S TAIL, mode 4 rather than 1:
+ * the same `v34handshakinit`, the same `f0004 = 7`, the same three receiver
+ * scalars, the same +0x2218, the same `status = 0` and the same notch reset
+ * at +0xac1c with the same 0x5a82/0x55fc/0x39c3 by role.  What is here and
+ * not there is `GenericToneDetector::reset` on the session's detector at
+ * +0x6f5c, and what is there and not here is the DC-estimator seed.
+ *
+ * The retrain-request bit in the configuration is cleared FIRST, before any
+ * of it -- `andb $0xfb,0x3(%eax)` at 0x6d0e, which is `CFG_FLAG3_RETRAIN`.
+ */
+extern "C" void
+VPcmV34InitMOH(void *objp, int message, unsigned char late,
+	       unsigned char flag)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+
+	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
+
+	obj->fabec = message;
+
+	if (message == 1) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "VPcmV34Main: Special bypass - sending MOHreq "
+			    "instead of MOHFRR...\r\n");
+		obj->moh_message = 0;
+		PROG_U8(obj, OB_MOH_FLAG) = 0;
+	} else {
+		obj->moh_message = message;
+		PROG_U8(obj, OB_MOH_FLAG) = flag;
+	}
+
+	obj->moh_recvd = 5;
+	obj->fabfa = (unsigned char)(late != 0);
+	PROG_U8(obj, O_ANSAMLATE) = late;
+
+	obj->fabe2 = 0;
+	PROG_S16(obj, OB_MOH_W6) = 0;
+	PROG_S16(obj, OB_MOH_W4) = 0;
+	obj->fabe0 = 0;
+	obj->moh_limit = 0;
+
+	v34handshakinit(obj, 4);
+
+	obj->f0004 = 7;
+
+	rx->f258 = 0;
+	rx->f25a = 0;
+	rx->f25c = 0;
+
+	PROG_S32(obj, OB_F2218) = 2;
+	obj->status = 0;
+
+	((GenericToneDetector *)(sess + SESS_TONE))->reset();
+
+	{
+		unsigned char *st = m + OB_FAC1C;
+		short role = obj->f359c;
+
+		*(short *)(st + 0x00) = 0;
+		*(short *)(st + 0x02) = 0;
+		*(short *)(st + 0x04) = 0;
+		*(short *)(st + 0x06) = 0;
+		*(int *)(st + 0x08) = 0;
+		*(int *)(st + 0x14) = 0;
+		*(int *)(st + 0x18) = 0;
+		*(int *)(st + 0x1c) = 0;
+
+		if (role == 0x65) {
+			*(short *)(st + 0x0c) = 0;
+			*(short *)(st + 0x0e) = 0;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		} else if (role == 0x66) {
+			*(short *)(st + 0x0c) = (short)0x5a82;
+			*(short *)(st + 0x0e) = (short)0x55fc;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		}
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Layout, pinned.  Same argument as v34pcmif.c's block: the fields this file
  * reaches by offset sit in regions that are otherwise padding, so a field that
  * drifted would compile silently.  Only the fields v34fsk.h already NAMES are
@@ -2802,7 +3150,7 @@ V34PCMMAIN_ASSERT(rmax,    rate_max,         0x0224);
 V34PCMMAIN_ASSERT(floor,   rx_energy_floor,  0x0230);
 V34PCMMAIN_ASSERT(v90rx,   v90_receiver,     0x024c);
 V34PCMMAIN_ASSERT(k56rx,   k56flex_receiver, 0x0250);
-V34PCMMAIN_ASSERT(f25c,    f25c,             0x025c);
+V34PCMMAIN_ASSERT(dmadly,  dmadelay,             0x025c);
 V34PCMMAIN_ASSERT(p3548,   p3548,            0x3548);
 V34PCMMAIN_ASSERT(f359c,   f359c,            0x359c);
 V34PCMMAIN_ASSERT(fa23c,   fa23c,            0xa23c);

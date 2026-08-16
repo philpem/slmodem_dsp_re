@@ -6698,3 +6698,27 @@ while the Q bands are `q > 0x1fff` and `q >= 0xe000`, so a symbol at exactly
 fourth entry because it is one construct read twice, and because `_64pt` runs
 on the symbol as received, where a test can put a value on the line directly.
 Finding 3217.
+## D380 ⚠ Object +0x08 has two of the author's own names, `ptc` and "Max Block Length"
+
+
+**This was numbered D351 when it was written.** It was renumbered to D380 at merge time: `v90-designer-methods` claimed D351-D356 concurrently, both branches having surveyed when the maximum was D350. Nothing outside this file, `v34pcmif.c`, `v34pcmif.h` and its finding ever referred to it as D351.
+*Batch of 2026-08-16, from `VPcmV34SetMaxBlockLength` (blob 0x6500) at 0x6512
+and its string at `.rodata.str1.4+0x980`, against `initdigital`'s string for
+the same offset. **Reachability: every caller of either function -- this is a
+naming disagreement in the object, not a code path.** **Observability: none at
+runtime. `struct v34_object` +0x08 is one field with one value however it is
+spelled; what is observable is only that a reader of one string will not find
+the other.** Status: unmeasured, and not measurable -- there is no behaviour
+here to drive. Fix class: none proposed; the field keeps `ptc`.*
+
+`initdigital` prints +0x08 as "PTC" in "for tx data rate - %d, PTC - %d,
+setting nofTxBits to %d" and computes `nof_tx_bits` from it, so `ptc` has a
+READER behind it. `VPcmV34SetMaxBlockLength` stores its argument there and
+reports "VPcmV34Main: Max Block Length modified to %d", and has only a writer.
+The tree's rule is that a printed label names a field; applied twice to one
+offset it gives two answers, so the tie is broken on which name has a use
+behind it rather than on which string was read most recently.
+
+Recorded rather than silently resolved because a future reader who finds the
+"Max Block Length" string and greps for a field of that name will conclude the
+tree missed it.  Finding 3304.
