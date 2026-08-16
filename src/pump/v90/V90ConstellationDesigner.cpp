@@ -2,11 +2,12 @@
  * V90ConstellationDesigner.cpp -- the V.90 constellation designer's rate
  * limits, lifecycle and eleven small members.
  *
- * Reconstructed from dsplibs.o.  Fifteen of the class's twenty-four symbols
- * live here: the two constructor variants and the two destructor variants,
- * `reset`, `setMinMaxRates` -- the only one `v34handshak` reaches -- and the
- * eleven leaves below.  `include/dsplib/V90ConstellationDesigner.h` carries
- * the object map and the evidence for it.
+ * Reconstructed from dsplibs.o.  The two constructor variants and the two
+ * destructor variants live here, with `reset`, `setMinMaxRates` -- the only
+ * one `v34handshak` reaches -- the eleven leaves below, and the two large
+ * members that follow them: `determineDminForRrn` and
+ * `setConstellationToNoise`.  `include/dsplib/V90ConstellationDesigner.h`
+ * carries the object map and the evidence for it.
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding 215):
  * `mov 0x10(%esp),%ebx` after one push and an eight-byte frame.  Nothing here
@@ -26,6 +27,11 @@
 #include <stddef.h>
 
 #include "dsplib/debug.h"
+/*
+ * `setConstellationToNoise`'s six ungated diagnostics.  `encode.h` carries
+ * its own `extern "C"`, so it needs no wrapper.
+ */
+#include "dsplib/encode.h"
 /*
  * `pcm.h` is a C header with no linkage guard of its own, so it takes the
  * same wrapper every other C++ consumer of it uses (V90Phase3Modulator.cpp
@@ -63,6 +69,10 @@ V90CD_OFF(params,    0x00, params);
 V90CD_OFF(mappingParams, 0x04, mappingparams);
 V90CD_OFF(byte_08,   0x08, byte08);
 V90CD_OFF(constelTable, 0x14, consteltable);
+V90CD_OFF(float_18,  0x18, float18);
+V90CD_OFF(float_1c,  0x1c, float1c);
+V90CD_OFF(float_20,  0x20, float20);
+V90CD_OFF(word_28,   0x28, word28);
 V90CD_OFF(word_2c,   0x2c, word2c);
 V90CD_OFF(short_0a,  0x0a, short0a);
 V90CD_OFF(short_0c,  0x0c, short0c);
@@ -913,4 +923,463 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V90ConstellationDesigner:: rrnUpDmin = %d\r\n", short_0e);
+}
+
+/*
+ * ===========================================================================
+ * setConstellationToNoise -- rebuild all six constellations for a measured
+ * noise level, and set the three thresholds the connection evaluator judges
+ * the line by.
+ * ===========================================================================
+ *
+ * 3,641 bytes, and rather more than half of them are diagnostics: sixteen
+ * `dsplibs_debug_printf` sites, each its own `DSPLIB_DEBUG_ON()` -- sixteen
+ * reads of `dsplibs_debug_level` for sixteen calls -- and SIX
+ * `edprintf` sites that are not gated at all.  Which of the two a site uses
+ * is not decoration -- `edprintf` encodes and then applies the gate itself,
+ * so its six run their encoding at every level including zero -- and the
+ * transcript test sees the difference, so the split below is measured
+ * against the relocations rather than chosen.
+ *
+ * WHAT IT RETURNS IS NOTHING, and the header carries the argument: the two
+ * `ret` paths leave `dsplibs_debug_level` and `dsplibs_debug_printf`'s return
+ * in %eax, which are not one quantity.
+ *
+ * THE TWO NaNs ARE THE FIRST TWO INSTRUCTIONS, before the prologue: `flds`
+ * twice of `.rodata.cst4`'s 0x7fc00000.  They are the two float locals the
+ * "dMinHighRates / dMinLowRates" diagnostic prints, and the restricted arm
+ * discards both with `fstp; fstp` because it overwrites them.  On the
+ * unrestricted arm they survive, and the diagnostic prints (short)NaN, which
+ * is -32768 on both sides.  Any quiet NaN behaves identically here, so this
+ * is the encoding's evidence and not the test's.
+ *
+ * `USE_RESTRICED_DMIN` IS SPELLED THE PARAMETER'S WAY, missing its T.  The
+ * name is `tools/vparse.py`'s, out of the configuration file's own table, and
+ * the format string at 0xc534 misspells it identically -- so the typo is the
+ * author's and correcting it here would lose the correspondence.
+ *
+ * THE THRESHOLD SEED IS DIVIDED, NOT SHIFTED, and its sibling is shifted:
+ * `constelBuild` opens with a bare `sar $1` on a promoted `short` and this
+ * function opens both of its inner loops with `shr $0x1f; lea; sar $1`, which
+ * is the round-toward-zero sequence GCC emits for `/ 2` and not for `>> 1`.
+ * Two loops of the same shape, spelled two ways by the same author.  The two
+ * readings differ only on a NEGATIVE ODD seed, so the test sweeps one.
+ *
+ * THE STAGING BUFFER IS 128 BYTES AND NOTHING BOUNDS THE COUNT.  The accepted
+ * indices go into a local array and the loop runs from `params->unnamed_360`
+ * to `arg5[k]`, a byte, so a bound of 255 against a start of 0 can accept 256
+ * entries into 128 bytes.  The object smashes its own frame; D333 records it
+ * and the test stays inside the array.
+ */
+void
+V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
+						  short (*ucode)[128],
+						  short (*alt)[128],
+						  short *dmin,
+						  unsigned char *lastUcode,
+						  unsigned char (*allow)[128])
+{
+	float dMinHighRates = __builtin_nanf("");
+	float dMinLowRates = __builtin_nanf("");
+	float retrainFactor;
+	short keptDmin = short_0a;
+	unsigned char picked[128];
+	unsigned int nofPicked;
+	unsigned short maxM;
+	unsigned int k;
+	unsigned int i;
+
+	/*
+	 * `keptDmin` above is read BEFORE either arm writes `short_0a`, and
+	 * that is what the KeepRate case restores.  The object keeps it in
+	 * %ebx from 0x48b96 all the way to 0x4946c.
+	 */
+	if (params->USE_RESTRICED_DMIN) {
+		dMinHighRates = noiseEnergy * 3.3330500f + 80.0f;
+		dMinLowRates = noiseEnergy * 8.2135878f + 12.0f;
+		short_0a = (short)(dMinLowRates >= dMinHighRates
+				   ? dMinLowRates : dMinHighRates);
+		retrainFactor = 2.0f;
+	} else {
+		short_0a = (short)(noiseEnergy * 6.7762098f + 9.9f);
+		retrainFactor = 4.0f;
+	}
+
+	/*
+	 * The fixed-point printer, four times over and inline each time.  The
+	 * sign is `sbb %ecx,%ecx; and $-2,%ecx; add $0x2d,%ecx` off an
+	 * ORDERED compare of 0.0f against the value, so it is '+' only when
+	 * the value is strictly positive and '-' at zero.  The magnitude is
+	 * `(int)fabs`, and the hundredths come off the SIGNED remainder and
+	 * are made positive with `__builtin_abs` (findings 2116-2117) rather
+	 * than with a ternary.
+	 *
+	 * AND THE SCALE IS A FLOAT HERE AND A DOUBLE IN THE OTHER THREE:
+	 * `flds .rodata.cst4+0x448` at 0x48c5c against `fldl
+	 * .rodata.cst8+0x150` at 0x48dfb and 0x48eab.  100 is exact in both,
+	 * so the two spellings cannot differ in any digit -- this is measured
+	 * and kept, not tidied.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner: noiseEnergy = %c%d.%02d\r\n",
+		    (0.0f < noiseEnergy) ? '+' : '-',
+		    (int)__builtin_fabsf(noiseEnergy),
+		    __builtin_abs((int)((noiseEnergy
+					 - (float)(int)noiseEnergy) * 100.0f)));
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner: dMinHighRates = %d "
+		    " dMinLowRates = %d\r\n",
+		    (short)dMinHighRates, (short)dMinLowRates);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner: current dMin = %d\r\n",
+		    short_0a);
+
+	/*
+	 * FOUR CASES AND NO DEFAULT, and the object's decision tree is what
+	 * says so: `cmp $1; je / jle -> test for 0 / cmp $2; je / cmp $3; je`
+	 * is a balanced tree over {0,1,2,3}, and a `word_48` of 4 or more --
+	 * or a negative one -- falls out of the switch having written
+	 * nothing.  Three of the four end by writing the three thresholds and
+	 * KeepRate is the one that does not, which is exactly what its own
+	 * diagnostic claims: "keep dMin and pdsnr thresh".
+	 *
+	 * The three threshold stores are written out three times rather than
+	 * factored, because the object has three copies and GCC 3.4.2 at
+	 * these flags does not inline an extern member (finding 2163) -- a
+	 * helper would leave three calls and a symbol the blob has no
+	 * counterpart for.
+	 */
+	switch (word_48) {
+	case 1:
+		short_0a = keptDmin;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner: KeepRate => keep dMin"
+			    " and pdsnr thresh\r\n");
+		break;
+
+	case 2: {
+		/*
+		 * One rate up wants the SMALLER of the two minimum distances,
+		 * and a zero `rrnUpDmin` means there is nothing to take.  The
+		 * condition code is what fixes the sense: `cmp %dx,%ax; jle`
+		 * keeps `short_0e` when it is less than OR EQUAL, so the
+		 * source's test is on the other one being greater.
+		 */
+		short d;
+
+		if (short_0e != 0)
+			d = (short_0e > short_0a) ? short_0a : short_0e;
+		else
+			d = short_0a;
+		short_0a = d;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner: dMin calc OneRateUp\r\n");
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner: rrnUpDmin = %d\r\n",
+			    short_0e);
+		float_18 = noiseEnergy * 0.45f;
+		float_1c = noiseEnergy * 1.4125f;
+		float_20 = retrainFactor * noiseEnergy;
+		break;
+	}
+
+	case 3: {
+		/* And one rate down wants the larger; `jge` where the other
+		 * arm has `jle`, and that one condition code is the whole
+		 * difference between the two bodies. */
+		short d;
+
+		if (short_0c != 0)
+			d = (short_0c < short_0a) ? short_0a : short_0c;
+		else
+			d = short_0a;
+		short_0a = d;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner: dMin calc"
+			    " OneRateDown\r\n");
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner: rrnDownDmin = %d\r\n",
+			    short_0c);
+		float_18 = noiseEnergy * 0.45f;
+		float_1c = noiseEnergy * 1.4125f;
+		float_20 = retrainFactor * noiseEnergy;
+		break;
+	}
+
+	case 0:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner: dMin calc"
+			    " NoRestriction\r\n");
+		float_18 = noiseEnergy * 0.45f;
+		float_1c = noiseEnergy * 1.4125f;
+		float_20 = retrainFactor * noiseEnergy;
+		/*
+		 * THE ONLY CLAMP IN THE FUNCTION, and its window is open at
+		 * the bottom and closed at the top: `cmp $0x43; jg` first and
+		 * `cmp $0x3e; jle` second, both SIGNED 16-bit, so the source
+		 * tests the upper bound first.
+		 */
+		if (word_24 == 0 && short_0a <= 0x43 && short_0a > 0x3e) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V90ConstellationDesigner: adjusting dMin"
+				    " for rate>=53k. Orig dMin=%d Modified"
+				    " dMin=%d\r\n", short_0a, 0x3e);
+			short_0a = 0x3e;
+		}
+		break;
+	}
+
+	/*
+	 * Whatever the arm decided, the next call is a KeepRate one.  The
+	 * 1.25f is applied to the member and not to a local: 0x49492 reloads
+	 * `movzwl 0xa(%ecx)` after the KeepRate diagnostic's call, which a
+	 * local would have spilled to the stack instead.
+	 */
+	word_48 = 1;
+	short_10 = (short)(short_0a * 1.25f);
+
+	/*
+	 * The configuration file can pin dMin, and -1 is how it says it does
+	 * not: `cmp $0xffffffff,%eax; jle`.  The store is 16 bits wide off a
+	 * 32-bit parameter, so a forced value above 0x7fff arrives truncated.
+	 */
+	if (params->FORCED_DMIN > -1) {
+		short_0a = (short)params->FORCED_DMIN;
+		edprintf("V90ConstellationDesigner: dMin Forced to: %d\r\n",
+			 short_0a);
+	}
+	edprintf("V90ConstellationDesigner: final dMin = %d\r\n", short_0a);
+	edprintf("V90ConstellationDesigner: USE_RESTRICED_DMIN = %d\r\n",
+		 params->USE_RESTRICED_DMIN);
+	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp ="
+		 " %c%d.%02d\r\n",
+		 (0.0f < float_18) ? '+' : '-', (int)__builtin_fabsf(float_18),
+		 __builtin_abs((int)((float_18 - (float)(int)float_18)
+				     * 100.0)));
+	edprintf("V90ConstellationDesigner: pdSnrThreshForRateDown ="
+		 " %c%d.%02d\r\n",
+		 (0.0f < float_1c) ? '+' : '-', (int)__builtin_fabsf(float_1c),
+		 __builtin_abs((int)((float_1c - (float)(int)float_1c)
+				     * 100.0)));
+	edprintf("V90ConstellationDesigner: pdSnrThreshForRetrain ="
+		 " %c%d.%02d\r\n",
+		 (0.0f < float_20) ? '+' : '-', (int)__builtin_fabsf(float_20),
+		 __builtin_abs((int)((float_20 - (float)(int)float_20)
+				     * 100.0)));
+
+	/*
+	 * ------------------------------------------------------------------
+	 * The build itself: six constellations, one pass each.
+	 * ------------------------------------------------------------------
+	 *
+	 * TWO INNER LOOPS OF THE SAME SHAPE, chosen by `dmin[k]`, which is
+	 * the same discriminator and the same argument `findNextUcodeToAdd`
+	 * takes.  They differ in two things and not one: the non-zero arm
+	 * seeds its threshold from `short_10` and requires BOTH tables to
+	 * clear it, the zero arm seeds from `short_0a` and looks at the first
+	 * table only.
+	 *
+	 * THE INDICES COME OUT BACKWARDS.  The staging buffer is filled
+	 * forwards and read `0xbf(%esp,%edi,1)` with %edi = count - i, so
+	 * `constellation[k][0]` is the LAST index accepted.
+	 */
+	for (k = 0; k <= 5; k++) {
+		nofPicked = 0;
+		if (dmin[k] != 0) {
+			short thresh = (short)(short_10 / 2);
+
+			for (i = params->unnamed_360; i <= lastUcode[k]; i++) {
+				short a = ucode[k][i];
+
+				if (a > thresh) {
+					short b = alt[k][i];
+
+					if (b > thresh && allow[k][i] != 0) {
+						picked[nofPicked++] =
+						    (unsigned char)i;
+						thresh = (short)
+						    ((b >= a ? b : a)
+						     + short_10);
+					}
+				}
+			}
+		} else {
+			short thresh = (short)(short_0a / 2);
+
+			for (i = params->unnamed_360; i <= lastUcode[k]; i++) {
+				short a = ucode[k][i];
+
+				if (a > thresh && allow[k][i] != 0) {
+					picked[nofPicked++] = (unsigned char)i;
+					thresh = (short)(a + short_0a);
+				}
+			}
+		}
+
+		mappingParams->constellationSize[k] = nofPicked;
+		for (i = 0; i < nofPicked; i++) {
+			mappingParams->constellation[k][i] =
+			    picked[nofPicked - 1 - i];
+			/*
+			 * THE `+0x28` COMPARISON IS THE LEAST OBVIOUS THING
+			 * HERE.  When the two slots agree the codec byte is
+			 * computed and then compared against the constellation
+			 * byte it came from, and the SMALLER of the two is
+			 * stored -- `cmp %esi,%edx; jge` on two `unsigned
+			 * char`s, which promote to `int` and therefore compare
+			 * signed.  When they disagree the codec byte is stored
+			 * whatever it is.
+			 *
+			 * The winning expression is spelled out a second time
+			 * rather than kept in the local: the object recomputes
+			 * it from `mappingParams->constellation[k][i]` at
+			 * 0x49275 where the test used the local at 0x4921f,
+			 * which is what a copy of the simple arm below looks
+			 * like once the compiler has it.  Nothing writes the
+			 * byte in between, so the two readings cannot differ.
+			 */
+			if (word_2c == word_28) {
+				unsigned char c =
+				    mappingParams->constellation[k][i];
+				unsigned char e;
+
+				if (word_2c != 0)
+					e = (unsigned char)
+					    (linear2alaw(__builtin_abs(
+						(int)ucode[k][c])) ^ 0xd5);
+				else
+					e = (unsigned char)
+					    ~linear2ulaw(__builtin_abs(
+						(int)ucode[k][c]));
+
+				if (e < c) {
+					unsigned char d =
+					    mappingParams->constellation[k][i];
+
+					if (word_2c != 0)
+						mappingParams
+						  ->codecConstellation[k][i] =
+						    (unsigned char)
+						    (linear2alaw(
+							__builtin_abs(
+							 (int)ucode[k][d]))
+						     ^ 0xd5);
+					else
+						mappingParams
+						  ->codecConstellation[k][i] =
+						    (unsigned char)
+						    ~linear2ulaw(
+							__builtin_abs(
+							 (int)ucode[k][d]));
+				} else {
+					mappingParams
+					  ->codecConstellation[k][i] =
+					    mappingParams
+					      ->constellation[k][i];
+				}
+			} else {
+				unsigned char c =
+				    mappingParams->constellation[k][i];
+
+				if (word_2c != 0)
+					mappingParams
+					  ->codecConstellation[k][i] =
+					    (unsigned char)
+					    (linear2alaw(__builtin_abs(
+						(int)ucode[k][c])) ^ 0xd5);
+				else
+					mappingParams
+					  ->codecConstellation[k][i] =
+					    (unsigned char)
+					    ~linear2ulaw(__builtin_abs(
+						(int)ucode[k][c]));
+			}
+		}
+	}
+
+	/*
+	 * ------------------------------------------------------------------
+	 * And the report, which is the rest of the function.
+	 * ------------------------------------------------------------------
+	 *
+	 * `maxM` IS SIXTEEN BITS WIDE off a 32-bit field, and the object says
+	 * so twice: `movzwl 0x604(%edi),%esi` for the seed and `movzwl
+	 * %ax,%esi` for the update, either side of a 32-bit UNSIGNED compare.
+	 * Nothing here can reach a size above 256 -- the count is bounded by
+	 * the staging buffer -- so the truncation is unreachable from this
+	 * function and is recorded rather than driven.
+	 */
+	maxM = mappingParams->constellationSize[0];
+	for (k = 1; k <= 5; k++)
+		if (mappingParams->constellationSize[k] > maxM)
+			maxM = mappingParams->constellationSize[k];
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "\n------------------------------------------------------------"
+		    "-----------------------------------------------------\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90 Constellation Designer report:\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "constelation size phase[0..5]  :  %d  %d  %d  %d  %d"
+		    "  %d\r\n",
+		    mappingParams->constellationSize[0],
+		    mappingParams->constellationSize[1],
+		    mappingParams->constellationSize[2],
+		    mappingParams->constellationSize[3],
+		    mappingParams->constellationSize[4],
+		    mappingParams->constellationSize[5]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "----------- constel phase 0,1,2,3,4,5\t"
+		    " codec constel phase 0,1,2,3,4,5"
+		    "\tlinearMapping of constel --------------\r\n");
+
+	/*
+	 * THE GATE IS INSIDE THE LOOP and the loop is not inside the gate:
+	 * 0x49310 re-reads `dsplibs_debug_level` every turn, which is what a
+	 * `DSPLIB_DEBUG_ON()` in the body compiles to once the call between
+	 * turns can change it.  Eighteen `%d` from three tables, the third of
+	 * them the linear sample each constellation entry names.
+	 */
+	for (i = 0; i < maxM; i++)
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "ucode[%d]  :  %d  %d  %d  %d  %d  %d  :  %d  %d"
+			    "  %d  %d  %d  %d  :  %d  %d  %d  %d  %d  %d\r\n",
+			    i,
+			    mappingParams->constellation[0][i],
+			    mappingParams->constellation[1][i],
+			    mappingParams->constellation[2][i],
+			    mappingParams->constellation[3][i],
+			    mappingParams->constellation[4][i],
+			    mappingParams->constellation[5][i],
+			    mappingParams->codecConstellation[0][i],
+			    mappingParams->codecConstellation[1][i],
+			    mappingParams->codecConstellation[2][i],
+			    mappingParams->codecConstellation[3][i],
+			    mappingParams->codecConstellation[4][i],
+			    mappingParams->codecConstellation[5][i],
+			    ucode[0][mappingParams->constellation[0][i]],
+			    ucode[1][mappingParams->constellation[1][i]],
+			    ucode[2][mappingParams->constellation[2][i]],
+			    ucode[3][mappingParams->constellation[3][i]],
+			    ucode[4][mappingParams->constellation[4][i]],
+			    ucode[5][mappingParams->constellation[5][i]]);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "------------------------------------------------------------"
+		    "---------------------------------------------------------\r\n");
 }

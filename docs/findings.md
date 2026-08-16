@@ -55387,3 +55387,220 @@ the code under test is insensitive tests nothing, and the way to find out is to
 mutate. Two arms of the rate-down `||` and two of the seventeen diagnostics
 were also unreached until the sweep grew a long-row and a tiny-size pattern.
 
+
+### 2170. `setConstellationToNoise` IS A `switch` ON `word_48` WITH FOUR CASES AND NO DEFAULT, AND THE FIFTH PATH IS THE ONE THAT WRITES NOTHING
+
+3,641 bytes. The body is:
+
+    the two arms   `USE_RESTRICED_DMIN` picks between one line and two.  Zero:
+                   `dMin = (short)(noiseEnergy * 6.7762098f + 9.9f)` and a
+                   retrain factor of 4.0f.  Non-zero: the MAXIMUM of
+                   `3.3330500f*n + 80.0f` and `8.2135878f*n + 12.0f`, and a
+                   factor of 2.0f
+    the switch     `cmp $1; je / jle -> test for 0 / cmp $2; je / cmp $3; je`,
+                   a balanced decision tree over {0,1,2,3} and therefore a
+                   `switch` with those four cases and no `default`
+    the tail       `word_48 = 1`, `short_10 = (short)(dMin * 1.25f)`, an
+                   optional forced dMin out of the parameters, and six
+                   ungated `edprintf`s
+    the build      six constellations, each by one of two inner loops
+    the report     a maximum, four banners, one line per ucode and a closing
+                   banner
+
+**THE RETURN TYPE IS `void` AND THE ARGUMENT IS `determineDminForRrn`'s.** The
+two `ret` paths leave unrelated values in %eax: 0x49331 arrives with
+`dsplibs_debug_level`, which the trailing banner's gate had just loaded, and
+0x4978c with `dsplibs_debug_printf`'s return, because that path ends by
+printing it. No int-returning source converges on those two.
+
+**A `word_48` OF 4 OR MORE AND A NEGATIVE ONE ARE THE SAME PATH IN THE SOURCE
+AND TWO DIFFERENT ONES IN THE OBJECT**: 0x4978d is `test %eax,%eax; jne
+49492`, so a negative value re-loads `dMin` at 0x49492 and a value of 4 or
+more falls into 0x48cea, and neither writes any of the three thresholds. That
+is what a `switch` with no `default` compiles to once the `jle` has already
+separated 0 from 1.
+
+**THE THREE `pdSnrThresh` STORES APPEAR THREE TIMES**, once in each of the
+OneRateUp, OneRateDown and NoRestriction arms, and NOT in KeepRate -- which is
+exactly what KeepRate's own diagnostic says it does, "keep dMin and pdsnr
+thresh". They are written out three times in `src/` rather than factored,
+because 2163's inlining gap means a helper would leave three calls and a
+symbol the blob has no counterpart for.
+
+### 2171. THE TWO QUIET NaNs ARE FLOAT LOCALS, AND THE `dMin` KeepRate RESTORES IS READ BEFORE ANYTHING WRITES IT
+
+The first two instructions are before the prologue: `flds .rodata.cst4+0x458`
+twice, of 0x7fc00000. They are `dMinHighRates` and `dMinLowRates`, named by
+the diagnostic at 0xc7bc, and they live in x87 registers across the whole
+first third of the function. The restricted arm discards both with `fstp;
+fstp` because it overwrites them; the unrestricted arm leaves them, so that
+arm prints `(short)NaN`, which is -32768 on both sides.
+
+Any quiet NaN behaves identically here, so this rests on the encoding and not
+on the test. `__builtin_nanf("")` is what `src/` uses; `0.0f/0.0f` is NOT the
+spelling, and that was measured -- GCC 3.4.2 without `-funsafe-math` refuses
+to fold it and emits a runtime `fldz; fdiv %st(0),%st`.
+
+**AND `dMin` IS READ AT 0x48b96, BEFORE EITHER ARM STORES.** `movswl
+0xa(%esi),%ebx` runs before the branch and %ebx survives to 0x4946c, where the
+KeepRate arm stores it back over the value the noise computation had just
+written. That is a local whose whole purpose is that one restore, and it is
+what makes "keep dMin" mean what it says.
+
+The tail after the switch reads the MEMBER and not that local: 0x49492 reloads
+`movzwl 0xa(%ecx)` after the KeepRate diagnostic's call, where a local would
+have been spilled to the stack instead.
+
+### 2172. THE THRESHOLD SEED IS DIVIDED HERE AND SHIFTED IN `constelBuild`, AND THE TEST CAN SEE THE DIFFERENCE
+
+Both of this member's inner loops open with
+
+    mov %edx,%esi ; shr $0x1f,%esi ; lea (%edx,%esi,1),%ebx ; sar $1,%ebx
+
+which is GCC's round-toward-zero sequence for `/ 2` on a signed value.
+`constelBuild`, whose loop is otherwise the same shape, opens with a bare `sar
+$1` -- `>> 1`. Two loops of one shape, spelled two ways by one author, and
+`src/` keeps them apart.
+
+**THE TWO READINGS DIFFER ONLY ON A NEGATIVE ODD SEED** (`-3 >> 1` is -2,
+`-3 / 2` is -1), which no part of the broad sweep reaches: the seed is
+`short_10`, which this function sets to `(short)(dMin * 1.25f)`, and dMin is
+positive over most of the noise range. The KeepRate arm is the way in --
+`word_48 == 1` restores whatever dMin the fixture planted -- and
+`t_v90cdnoise.cpp`'s `run_ctn_negodd` drives -1 through -24 with the tables
+filled from small values straddling -2 and -1. Mutating either seed from `/ 2`
+to `>> 1` then FAILS, 23 checks and 16 checks respectively.
+
+That is the opposite result to 2144's and 2161's, where the encoding was the
+only evidence. Here the encoding and the test agree.
+
+### 2173. THE `+0x28` COMPARISON PICKS THE SMALLER OF THE CODEC BYTE AND THE CONSTELLATION BYTE
+
+`this->word_2c` is the companding law and `this->+0x28` was `pad_28[4]`. The
+copy loop loads `mov 0x2c(%ecx),%edx` and then `cmp 0x28(%ecx),%edx`, a 32-bit
+compare with no operand-size prefix -- which is the only thing in the object
+that fixes +0x28's width, and it fixes it at four bytes.
+
+When the two AGREE, the codec byte is computed as usual and then compared
+against the constellation byte it was derived from, `cmp %esi,%edx; jge`, and
+the smaller of the two is stored. Both operands are `unsigned char` widened
+with `movzbl`, and `unsigned char` promotes to `int`, which is why a compare
+of two values that cannot be negative is nevertheless SIGNED. When they
+disagree the codec byte is stored whatever it is.
+
+**THE WINNING EXPRESSION IS SPELLED OUT A SECOND TIME.** 0x49218's test uses a
+local holding `constellation[k][i]` read at 0x4921f and kept across the
+`linear2alaw` call in %esi; 0x49275 then re-reads the member for the value it
+stores. Six `linear2alaw`/`linear2ulaw` call sites for three logical
+expressions, and a compiler does not duplicate a call for a ternary -- so the
+duplication is the source's, and it looks like a copy of the simple arm that
+the comparison was then wrapped around.
+
+What +0x28 MEANS is still unknown: nothing in the object writes it, and the
+only thing that reads it is this comparison, which says only that the two
+slots hold the same kind of thing.
+
+### 2174. SIXTEEN GATED DIAGNOSTICS AND SIX UNGATED ONES, AND THE SPLIT IS WHAT THE TRANSCRIPT TEST CAN AND CANNOT SEE
+
+Sixteen `dsplibs_debug_printf` call sites, each with its own `cmpl $0x1,
+dsplibs_debug_level` -- sixteen reads for sixteen calls, which is what
+separate `DSPLIB_DEBUG_ON()` sites compile to once the call between them can
+change the level. And SIX `edprintf` sites with no gate at all, because
+`edprintf` encodes first and applies the gate itself: those six run their
+encoding on every call at every level, including zero.
+
+The six name three things nothing else in the class had named:
+
+    +0x18  pdSnrThreshForRateUp     = noiseEnergy * 0.45f
+    +0x1c  pdSnrThreshForRateDown   = noiseEnergy * 1.4125f
+    +0x20  pdSnrThreshForRetrain    = (2.0f or 4.0f) * noiseEnergy
+
+and two parameters by their own names, `USE_RESTRICED_DMIN` (+0x374, spelled
+without its T in the parameter table AND in the format string, so the typo is
+the author's) and the forced dMin at +0x398, which `tools/vparse.py` calls
+`FORCED_DMIN` and which -1 disables.
+
+**WHAT THIS COSTS THE TEST.** `edprintf`'s output is encoded, so `strstr`
+cannot find "dMin Forced to:" in a transcript and those six arms cannot be
+classified from one. `t_v90cdnoise.cpp` classifies them from the inputs it
+chose and asserts them through their observable effect instead -- the forced
+value arriving truncated to a short. The encoded text is still compared
+between the two sides, which is what catches a wrong argument in any of the
+six, and the sides' `offsetarr`, `temp` and `cEncodedTemp` are separate
+storage, so the two rotating keys cannot drift into each other.
+
+### 2175. THE CODEGEN TIER ON THIS SYMBOL, AND THE TWO SHAPES NO SPELLING REPRODUCED
+
+Period build against the blob: **3,846 B / 863 instructions against the
+object's 3,641 B / 841**, so +205 bytes and +22 instructions. The mnemonic
+histogram is within one or two everywhere except four families, and two of
+those are free:
+
+    nop      +13   alignment padding
+    jmp       +8   block layout
+    movswl    +7   the 16-bit table reads, 614's free kind and the same one
+    movzwl    -3   2151 recorded for `constelBuild`
+    fldz      -4 ) the four `%c%d.%02d` sign printers
+    sbb       -4 )
+    and       -4 )
+    fldl      -3   the three `%c%d.%02d` hundredths that use a DOUBLE 100.0
+
+**THE SIGN PRINTER IS A FLAG ARTEFACT, NOT A SOURCE DIFFERENCE, AND THAT IS
+MEASURED.** The blob has `fldz; fcomps v; fnstsw; sahf; sbb %ecx,%ecx; and
+$-2,%ecx; add $0x2d,%ecx` -- 0.0 in st(0), an ORDERED compare, and a
+branchless select off the carry. Compiling `(0.0f < v) ? '+' : '-'` with the
+period compiler gives:
+
+    -mno-ieee-fp   flds v; fcomps <0.0f>; ... jbe      (ordered, branch)
+    -mieee-fp      fldz; fucompp                       (unordered, no memory)
+
+so the blob's shape is the `-mieee-fp` operand arrangement with the
+`-mno-ieee-fp` comparison instruction, and NEITHER setting of the one flag
+that `tools/toolchain/build.sh` and `make period` disagree about produces it.
+This is finding 1990's tension seen from a new angle and it belongs to whoever
+owns the flags; nothing in `src/` is permuted for it. `(0.0 < v)`, `(v >
+0.0f)` and the double-typed spelling all give the same two answers.
+
+**THE DOUBLE 100.0 CANNOT BE SPELLED AT THESE FLAGS EITHER.** The blob's three
+member printers load `fldl .rodata.cst8+0x150`, which is exactly 100.0, while
+the first one loads the float `flds .rodata.cst4+0x448`. Five spellings were
+compiled and every one narrowed to `fmuls` under both `-mieee-fp` and
+`-mno-ieee-fp`: `(v - (float)(int)v) * 100.0`, `100.0 * (v - (float)(int)v)`,
+the same with a `double` local for the value, the same with a `double` local
+for the difference, and `(v - (double)(int)v) * 100.0`. GCC 3.4.2 at -O2
+narrows an exactly-representable double constant to a float multiply whatever
+the source says, so the object's `fldl` is not reachable from here. 100 is
+exact in both, so the two cannot differ in any digit; `src/` keeps the `100.0`
+the object measured and this records why the tier disagrees.
+
+### 2176. THE MUTATION SET FOR `setConstellationToNoise`, AND THE ONE THAT PASSED IS AN IDENTITY
+
+Fourteen mutations, each built alone against the blob and then reverted:
+
+    the non-zero-dmin seed / 2 -> >> 1          FAIL    3 +  4 + 20
+    the zero-dmin seed / 2 -> >> 1              FAIL    1 +  1 + 15
+    max(alt, ucode) -> min                      FAIL  529 + 875 + 420 + 99 + 36
+    the offset 9.9f -> 9.8f                     FAIL   61 +  54 +  59 +  6
+    max(low, high) rates -> min                 FAIL  451 + 416 +  42
+    the clamp's <= 0x43 -> < 0x43               FAIL   43
+    the sign printer's `<` -> `<=`              FAIL   37 +   7
+    the codec/constellation min, < -> >         FAIL  416 + 693 + 300 + 144 + 30
+    the staged indices no longer reversed       FAIL  665 +1102 + 450 + 240 + 48
+    short_10's 1.25f -> 1.26f                   FAIL  387 + 132 + 146 + 14
+    pdSnrThreshForRateUp 0.45f -> 0.44f         FAIL  332 + 517 + 260 + 39
+    FORCED_DMIN > -1 -> >= -1                   FAIL  199 + 268 + 770 + 230 + 15
+    the zero-dmin loop drops its flag test      FAIL  563 + 934 + 424 + 40
+    the retrain factor 2.0f -> 4.0f             FAIL  121 + 201 +  17
+
+    the codec/constellation min, < -> <=        PASS
+
+**THE ONE THAT PASSED IS A SEMANTIC IDENTITY AND NOT A COVERAGE HOLE**, and
+saying so is the point: when the codec byte EQUALS the constellation byte, the
+two arms of `e < c ? e : c` store the same value, so `<=` and `<` are the same
+function. The inverted form of the same comparison FAILS 1,583 checks, which
+is what shows the comparison itself is under test. Contrast 2150, 2161 and
+2162, where a mutation passed because the differential tier genuinely could
+not see a real difference.
+
+The two seed mutations are the small numbers in the table and they are the
+ones that needed a fixture built for them (2172).

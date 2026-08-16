@@ -6284,3 +6284,50 @@ reachable.*
 `nofUcodes` is a byte because `constelBuild` returns one, and the object seeds
 it with a straight `mov %al,%bl` off a `V90MappingParams::constellationSize`
 that is four bytes wide everywhere else. Finding 2160.
+
+## D333 🐛 `setConstellationToNoise` stages accepted indices into a 128-byte frame local with nothing bounding the count
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner23setConstellationToNoiseEfPA128_sS1_PsPhPA128_h`
+(blob 0x48b70) at 0x4907d and 0x493f8 (`mov %cl,0xc0(%esp,%edx,1)`), against
+the frame at 0x48b80 (`sub $0x14c,%esp`) which leaves 0x8c bytes above 0xc0.
+**Reachability: `arg5[k] - params->unnamed_360` of 128 or more with most
+entries accepted.** **Observability: the store walks past the local into the
+rest of the frame and then past the frame into the caller's.** Status:
+unmeasured; nothing in the object calls this member (D326), so no caller's
+range is known. Fix class: none proposed; reproduced as found.*
+
+The loop runs `for (i = params->unnamed_360; i <= arg5[k]; i++)` with `arg5`
+an `unsigned char *`, so the span can be 256 while the staging array holds
+128. `t_v90cdnoise.cpp` caps every trial's span at 120: two sides smashing two
+different frames disagree for a reason that is not the reconstruction, and a
+crash is not a comparison.
+
+## D334 ⚠ `setConstellationToNoise` reduces a 32-bit constellation size to sixteen bits for the report's maximum
+
+*Batch of 2026-08-16, same function, at 0x492d0 (`movzwl 0x604(%edi),%esi`)
+and 0x492eb (`movzwl %ax,%esi`), against the 32-bit unsigned `cmp` at 0x492e7.
+**Reachability: a `constellationSize[k]` of 0x10000 or more.**
+**Observability: the report's `maxM` comes out as the low sixteen bits, so a
+size of 65536 makes it zero and no ucode line is printed at all.** Status:
+verified UNREACHABLE FROM THIS MEMBER -- it writes every `constellationSize[k]`
+itself, from a count the staging array bounds at 128 (D333), a few
+instructions earlier. Fix class: none proposed; reproduced as found.*
+
+Recorded because the truncation is real and another writer of
+`V90MappingParams::constellationSize` could reach it; this member cannot, so
+the test asserts it rather than driving it.
+
+## D335 🐛 `setConstellationToNoise` prints a zero threshold with a minus sign
+
+*Batch of 2026-08-16, same function, at 0x48c79, 0x48e18, 0x48ec8 and 0x48f7b
+(`fldz` then `fcomps` then `sbb %ecx,%ecx; and $0xfffffffe,%ecx; add
+$0x2d,%ecx`). **Reachability: a `noiseEnergy` or a `pdSnrThresh*` of exactly
+zero.** **Observability: the diagnostic reads "= -0.00".** Status: verified
+over the sweep in `t_v90cdnoise.cpp`, which drives a `noiseEnergy` of exactly
+0.0f and both signs of all three thresholds. Fix class: none proposed;
+reproduced as found, and it is a diagnostic only.*
+
+The carry after `fldz; fcomps v` is set when `0.0 < v`, so the sign character
+is '+' only for a strictly positive value and '-' for zero as well as for
+negative. Four sites, one shape. Finding 2175 records why the codegen tier
+cannot reproduce the branchless select at either setting of `-mieee-fp`.

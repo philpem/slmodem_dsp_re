@@ -1,9 +1,11 @@
 /*
  * V90ConstellationDesigner.h -- the V.90 downstream constellation designer.
  *
- * Reconstructed from dsplibs.o.  Twenty-two members and 22,672 bytes of code,
- * of which ONE is written here: `setMinMaxRates`, the only member of the
- * class `v34handshak` reaches (docs/v90cpp.md's table of the fifty).
+ * Reconstructed from dsplibs.o.  Twenty-two members and 22,672 bytes of code.
+ * `setMinMaxRates` -- the only member of the class `v34handshak` reaches
+ * (docs/v90cpp.md's table of the fifty) -- was the first one written here;
+ * the eleven leaves, `determineDminForRrn` and `setConstellationToNoise`
+ * followed, and `setConstellationToNoise_forceRate` has not.
  *
  * NOT POLYMORPHIC.  `tools/cppstruct.py` lists the destructor with the `D1`
  * and `D2` variants and no `D0`, and GCC emits a deleting destructor only for
@@ -148,13 +150,33 @@ public:
 	 * return in it.  Two unrelated values on two paths that a caller would
 	 * have to read as one, so nothing is returned: `void`.
 	 *
-	 * `setConstellationToNoise` and `setConstellationToNoise_forceRate`
-	 * are still NOT declared.  Their argument lists are settled by the
-	 * manglings, but a return type is not mangled and reading the body is
-	 * what decides; a placeholder committed ahead of that reading would be
-	 * a guess in the record.  They arrive with their definitions.
+	 * `setConstellationToNoise_forceRate` is still NOT declared.  Its
+	 * argument list is settled by the mangling, but a return type is not
+	 * mangled and reading the body is what decides; a placeholder
+	 * committed ahead of that reading would be a guess in the record.  It
+	 * arrives with its definition.
 	 */
 	void determineDminForRrn(unsigned int);
+
+	/*
+	 * AND `void` HERE FOR THE SAME REASON, read from the two `ret` paths.
+	 * 0x49331 arrives with `dsplibs_debug_level` in %eax -- the gate the
+	 * trailing banner was tested with, `mov 0x0,%eax; cmp $0x1,%eax; jbe`
+	 * -- and 0x4978c arrives with `dsplibs_debug_printf`'s return, because
+	 * that path ends by printing the banner and falling into the epilogue.
+	 * A debug level and a printf's return are not one quantity, and no
+	 * int-returning source converges on them, so nothing is returned.
+	 *
+	 * The six arguments are the mangling's and nothing here weakens them:
+	 * the two `short (*)[128]` are indexed FLAT as (k << 7) + i like
+	 * `constelBuild`'s table, the `short *` and the `unsigned char *` are
+	 * both indexed by the constellation number 0..5, and the
+	 * `unsigned char (*)[128]` is a flag table read at the same flat
+	 * index as the first two.
+	 */
+	void setConstellationToNoise(float, short (*)[128], short (*)[128],
+				     short *, unsigned char *,
+				     unsigned char (*)[128]);
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -257,7 +279,37 @@ public:
 	 */
 	short (*constelTable)[128];	/* +0x14                            */
 
-	unsigned char pad_18[12];	/* +0x18                            */
+	/*
+	 * +0x18 .. +0x20  Three floats, and `setConstellationToNoise` is the
+	 * first reader OR writer of any of them.  It writes all three in each
+	 * of three of its four `word_48` arms --
+	 *
+	 *     +0x18 = noiseEnergy * 0.45f
+	 *     +0x1c = noiseEnergy * 1.4125f
+	 *     +0x20 = (2.0f or 4.0f, by USE_RESTRICED_DMIN) * noiseEnergy
+	 *
+	 * -- with `fstps`, so they are four bytes each and not eight, and
+	 * that is what turns three of `pad_18`'s twelve dwords into fields.
+	 * The KeepRate arm writes none of them, which is what its own
+	 * diagnostic says it does: "keep dMin and pdsnr thresh".
+	 *
+	 * AND THE AUTHOR'S OWN WORDS FOR THEM are in the three unconditional
+	 * `edprintf` sites that follow, which print `flds 0x18(%ebx)`,
+	 * `flds 0x1c(%ebx)` and `flds 0x20(%ebx)` in that order:
+	 *
+	 *     +0x18  pdSnrThreshForRateUp
+	 *     +0x1c  pdSnrThreshForRateDown
+	 *     +0x20  pdSnrThreshForRetrain
+	 *
+	 * They keep their offset names for the reason `short_0c` and
+	 * `short_0e` do: a name out of a diagnostic is the author's word for
+	 * the QUANTITY and these names are for the SLOTS the offset
+	 * assertions pin.  The mapping is recorded here, which is where a
+	 * later batch can act on it.
+	 */
+	float float_18;			/* +0x18  pdSnrThreshForRateUp      */
+	float float_1c;			/* +0x1c  pdSnrThreshForRateDown    */
+	float float_20;			/* +0x20  pdSnrThreshForRetrain     */
 
 	/*
 	 * +0x24  Seeded by `reset` from the parameter block's +0x39c, which
@@ -267,7 +319,19 @@ public:
 	 */
 	unsigned int word_24;		/* +0x24 = params->w[0x39c / 4]     */
 
-	unsigned char pad_28[4];	/* +0x28                            */
+	/*
+	 * +0x28  FOUR BYTES BECAUSE IT IS COMPARED AGAINST `word_2c`, and
+	 * that is the only thing about it the object fixes:
+	 * `setConstellationToNoise` loads `mov 0x2c(%ecx),%edx` and then
+	 * `cmp 0x28(%ecx),%edx`, a 32-bit compare with no operand-size
+	 * prefix, so the two slots are the same width.  Nothing reads it
+	 * apart from that comparison and nothing anywhere in the object
+	 * writes it, so what it MEANS is not known: the equality picks
+	 * between two ways of filling `codecConstellation` and says only
+	 * that both slots hold the same kind of thing.  It used to be
+	 * `pad_28[4]`.
+	 */
+	int word_28;			/* +0x28  compared against word_2c  */
 
 	/*
 	 * +0x2c  The companding law, and a four-byte load: `mov 0x2c(%edx),%esi
