@@ -53495,3 +53495,76 @@ bundle.  It also says nothing about whether any reconstructed code DEPENDS on
 unordered semantics -- if some function is only correct because a comparison
 was quiet, this flag makes it wrong, and the differential tier is what would
 catch that.  It passed.
+
+## 2001 -- `V90Phase3Demodulator::getV90Decision` returns a `short`, and the header's `void` was a placeholder
+
+The class header spells every unwritten member `void` "for want of evidence
+rather than because the blob returns nothing". For this one the evidence
+exists: `getDecision(float)` at 0x258f0 calls it and then executes `cwtl`
+before its own `ret`, sign-extending `%ax` into `%eax`. A callee already
+returning an `int` would make that instruction dead, and GCC does not emit
+dead sign extensions on a return value. It does the same for `getV92Decision`
+at 0x2590e, so that member is a `short` too and the sibling reconstruction can
+take it as given.
+
+## 2002 -- `V90Phase3Demodulator + 0x3cc` is a `SerialDifferentialDecoder<int>`, not an opaque word
+
+`getV90Decision` calls `_ZN25SerialDifferentialDecoderIiE7processEi` with
+`this + 0x3cc` as the object (0x23f6b, 0x2449e, 0x24596, 0x24649), and
+`twoLevelDemod` does the same at 0x215fa. `DiffCoder.h` already said the `int`
+pair of that template belonged to this class without saying where; this is
+where. The template has one `T` member and no constructor by design, so the
+size is unchanged, every offset in the class still holds, and the
+mem-initializer argument finding 1302 makes about the zero stored between the
+two subobject constructors is strengthened rather than disturbed: a trivial
+member value-initialised in the ctor-init-list is exactly that instruction.
+
+## 2003 -- `V90Parameters + 0x440` is a `float`, and the copy at +0x438 is what shows it
+
+Finding 878 could see that `setToDefault` stores 0x41200000 there and typed
+the field `int` with a comment saying the pattern is 10.0f. `getV90Decision`
+copies that word into `PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH` at
++0x438 -- a `float` -- with `mov 0x440(%ecx),%eax; mov %eax,0x438(%ecx)`. GCC
+emits an integer pair for a float-to-float assignment and an `fildl`/`fstps`
+pair for an int-to-float one, so the two fields have the same type, and +0x438
+is not in doubt. `setToDefault` stores the same four bytes either way, so
+nothing else moves.
+
+## 2004 -- `word_2c` and `word_14` are unsigned, and the timeouts prove it twice
+
+Three of the state timeouts compare the sample counter against a float
+expression -- `word_2c == word_14 + 12000.0f` at 0x24b16, `== word_14 +
+38760.0f` at 0x23fe6, `== 36000.0f` at 0x244f6. Each conversion is `push $0;
+push %reg; fildll`, a 64-bit load with a zeroed high dword, which is GCC
+3.4.2's `(float)(unsigned int)` and never its signed form. The same pattern
+types `V90AutoDigitalImpDetector`'s sample counts (see that header), so this is
+the third independent instance of the same tell.
+
+## 2005 -- `twoLevelDemod` is duplicated in `getV90Decision`'s source, not inlined into it
+
+Cases 4, 5, 6 and 9 each open with a block that is instruction for instruction
+the body of `_ZN20V90Phase3Demodulator13twoLevelDemodEfRi` at 0x215a0. That
+symbol is GLOBAL and in `.text`, not weak and not in a `.gnu.linkonce.t`
+section, so it was not declared `inline`; and GCC 3.4.2 at `-O2` inlines
+nothing that is not. So the author wrote the block out at each of the four
+sites AND as a member -- the duplication is in the source. The reconstruction
+reproduces it rather than defining the member and hoping, and whoever writes
+`twoLevelDemod` has its body four times over in
+`src/pump/v90/V90Phase3Demodulator.cpp`.
+
+The one thing the duplication does not explain is the stack slot: the four
+copies address their bit through `lea 0x98(%esp),%edi` as though its address
+had been taken, which is what the member's `int &` would do. Register pressure
+in an 8 KB function is the alternative reading and nothing here settles it.
+Register allocation is on CLAUDE.md's "free, so ignore it" list either way.
+
+## 2006 -- `V90Jd::unPackData` returns something eight bits wide
+
+`getV90Decision` tests its result with `test %al,%al` at 0x2468d, not `test
+%eax,%eax`. That is forced encoding: GCC compares the whole register for an
+`int` and only `%al` for a `char`, `signed char`, `unsigned char` or `bool`.
+`V90Jd.h` declares it `int` today, which agrees over every value the method
+returns and disagrees on the instruction. Recorded against V90Jd rather than
+acted on here -- changing the declaration is that module's call, and the
+reconstruction of `getV90Decision` reads the result as a truth value either
+way.

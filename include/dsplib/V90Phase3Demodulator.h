@@ -47,6 +47,7 @@
 #ifndef DSPLIB_V90PHASE3DEMODULATOR_H
 #define DSPLIB_V90PHASE3DEMODULATOR_H
 
+#include "dsplib/DiffCoder.h"
 #include "dsplib/Scrambler.h"
 #include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/V90Jd.h"
@@ -148,7 +149,14 @@ public:
 	 * A return type is not mangled, so every one below is spelled `void`
 	 * for want of evidence rather than because the blob returns nothing.
 	 */
-	void getV90Decision(float);
+	/*
+	 * WRITTEN, and the return type is NOT `void`: `getDecision(float)` at
+	 * 0x258f0 does `cwtl` on the result of both this and `getV92Decision`
+	 * before returning it, which it would not need if the callee returned
+	 * an `int`.  See docs/v90p3ddecision.md.
+	 */
+	short getV90Decision(float);
+
 	void getV92Decision(float);
 	void getDecision(float);
 	void twoLevelDemod(float, int &);
@@ -274,8 +282,22 @@ public:
 	 * comparison.  The argument above stands on the instruction ordering
 	 * alone, which is weaker evidence than 1302 had, and saying so is the
 	 * point of this paragraph.
+	 *
+	 * IT IS A `SerialDifferentialDecoder<int>`, WHICH THE SKETCH ABOVE
+	 * COULD NOT SEE.  `getV90Decision` calls
+	 * `_ZN25SerialDifferentialDecoderIiE7processEi` on `this + 0x3cc`
+	 * (0x23f6b, and again at 0x2449e, 0x24596, 0x24649), and
+	 * `twoLevelDemod` at 0x215fa does the same.  The template has one `T`
+	 * member and no constructor by design -- see DiffCoder.h, whose own
+	 * comment already said the `int` pair belonged to this class -- so the
+	 * size is unchanged at four bytes, every offset below still holds, and
+	 * the mem-initializer argument above is strengthened rather than
+	 * weakened: a trivial member value-initialised in the ctor-init-list
+	 * is exactly the `mov %ecx,0x3cc(%ebx)` that sits between the two
+	 * subobject constructors.  The NAME is left as it was, because nothing
+	 * names it and a guess is worse than no name.
 	 */
-	unsigned int word_3cc;
+	SerialDifferentialDecoder<int> word_3cc;
 
 	/*
 	 * +0x3d0  EMBEDDED, 0x20 bytes, ending exactly at the field below.
@@ -291,7 +313,16 @@ public:
 	 */
 	V90SdDetector *sdDetector;
 
-	unsigned char pad_3f4[5];	/* +0x3f4 nothing reaches it     */
+	/*
+	 * +0x3f4  A 32-bit word, and the comment here used to say nothing
+	 * reaches it.  `getV90Decision` writes it from two different
+	 * parameters as it enters the TRN1d data-directed state:
+	 * `params->unnamed_4a4` when `word_410` is set (0x24094, 0x2410b) and
+	 * `params->unnamed_344` when it is not (0x25749).  Nothing written so
+	 * far READS it, so what it is for is still open.
+	 */
+	unsigned int word_3f4;		/* +0x3f4                        */
+	unsigned char pad_3f8[1];	/* +0x3f8 nothing reaches it     */
 
 	/* +0x3f9  Zeroed by `reset`. */
 	unsigned char byte_3f9;
@@ -337,7 +368,15 @@ public:
 	 */
 	unsigned int verificationStatus;
 
-	unsigned char pad_420[4];	/* +0x420 nothing reaches it     */
+	/*
+	 * +0x420  The length of the TRN1d data-directed stage, in samples, and
+	 * likewise no longer unreached.  `getV90Decision` loads it from
+	 * `params->TRN1_QC_DD_LENGTH` (+0x4a0) when `word_410` is set and from
+	 * `params->TRN1D_DD_LENGTH` (+0x2fc) when it is not, and state 4
+	 * compares `word_2c` against it to decide when to enter the
+	 * study-reference-Ucode state.
+	 */
+	unsigned int word_420;		/* +0x420                        */
 
 	/* +0x424  Zeroed by `reset`, before anything else it does. */
 	unsigned char byte_424;

@@ -5769,3 +5769,41 @@ block was, which nothing else about the class suggests it should. `t_gtonedet`
 drives it -- tag 206 constructs with `samples1 == 0` and requires the blob's
 answer to be down after a below-threshold block -- so the asymmetry is
 reproduced and pinned rather than only noticed.
+
+## D321 🐛 `getV90Decision` returns an uninitialised register on four of its states
+
+*Batch of 2026-08-16, from `_ZN20V90Phase3Demodulator14getV90DecisionEf` (blob
+0x23830) at 0x238b0..0x238b7 and the dispatch at 0x238a2. **Reachability:
+`state` 7, 8, 0x12 or any value above 0x21 when the method is called.**
+**Observability: the `short` the method returns, and through it whatever
+`getDecision` hands its caller.** Status: `unmeasured` -- no caller has been
+traced for whether those four states can be current when a sample arrives. Fix
+class: none proposed; reproduced as found.*
+
+The decision is a local held in `%edi`, a callee-saved register, and every
+state that has a decision to give writes it. The default block reached by
+states 7, 8, 0x12 and everything above 0x21 does `movl $0x0,0x30(%ebx)` and
+falls straight into `mov %edi,%eax`, so what comes back is whatever the caller
+had in that register. It is not a missing `return`: the epilogue is shared
+with the thirty other states and the register simply has no reaching
+definition on this path.
+
+`t_v90p3ddec.cpp` therefore compares the OBJECT on those states and does not
+assert the return value, because the two sides agree there only by accident of
+being called from the same place.
+
+## D322 🐛 State 2 calls `unPackReset` through the Jd pointer state 3 checks for null
+
+*Batch of 2026-08-16, from `_ZN20V90Phase3Demodulator14getV90DecisionEf` (blob
+0x23830) at 0x24111 against 0x24052..0x2531d. **Reachability: `state == 2` and
+`word_2c == 0x30` and `word_410 != 0` with a null `jd`.** **Observability: a
+null dereference.** Status: `unmeasured` -- whether the machine can reach state
+2 with a null Jd has not been traced. Fix class: none proposed; reproduced as
+found.*
+
+Both states enter the TRN1d data-directed state and both call
+`jd->unPackReset()` on the way. State 3 loads `0x20(%ebx)` first and, finding
+it null, sets state 0x19 and prints "ERROR: Null JdDetector" instead. State 2
+loads the same pointer and calls straight through it. `t_v90p3ddec.cpp` drives
+the guarded arm with a null Jd; the unguarded one is left alone because
+exercising it is a crash and not a comparison.
