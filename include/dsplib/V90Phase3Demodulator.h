@@ -47,6 +47,7 @@
 #ifndef DSPLIB_V90PHASE3DEMODULATOR_H
 #define DSPLIB_V90PHASE3DEMODULATOR_H
 
+#include "dsplib/DiffCoder.h"
 #include "dsplib/Scrambler.h"
 #include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/V90Jd.h"
@@ -148,25 +149,27 @@ public:
 	 * A return type is not mangled, so every one below is spelled `void`
 	 * for want of evidence rather than because the blob returns nothing.
 	 */
-	void getV90Decision(float);
-
 	/*
-	 * WRITTEN, AND IT RETURNS A `short` -- THE ONE RETURN TYPE IN THIS
-	 * CLASS THAT IS NOT A GUESS.  `getDecision` is 52 bytes and is nothing
-	 * but a two-way dispatch on `sessionFlag`:
+	 * THE TWO BELOW ARE THE EXCEPTION, AND THEY ARE THE ONLY RETURN TYPES
+	 * IN THIS CLASS THAT ARE NOT A GUESS.  `getDecision` at 0x258f0 is 52
+	 * bytes and is nothing but a two-way dispatch on `sessionFlag`:
 	 *
 	 *     call getV92Decision ; cwtl ; add $0xc,%esp ; ret
 	 *     call getV90Decision ; cwtl ; add $0xc,%esp ; ret
 	 *
-	 * `cwtl` sign-extends `%ax` into `%eax`, so the callee's answer is
+	 * `cwtl` sign-extends `%ax` into `%eax`, so each callee's answer is
 	 * sixteen bits wide and SIGNED, and `getDecision` itself returns the
 	 * widened `int`.  A return type is not mangled, so `void` linked and
 	 * would have gone on linking; nothing but this caller settles it.
 	 *
-	 * The same two lines say `getV90Decision` returns `short` too.  Its
-	 * declaration is left as it stands because it is another session's
-	 * function and this one must not move under it.
+	 * The two functions were reconstructed in separate sessions and each
+	 * read the same two lines the same way.  While they were in flight each
+	 * left the OTHER's declaration alone -- `getV92Decision`'s side wrote
+	 * "left as it stands because it is another session's function", and it
+	 * was right to.  Both have landed now, so both say `short`.
+	 * See docs/v90p3ddecision.md.
 	 */
+	short getV90Decision(float);
 	short getV92Decision(float);
 
 	void getDecision(float);
@@ -198,9 +201,15 @@ public:
 	 *
 	 * with this field as the argument -- so the author's name for it is
 	 * `framePosition`, on the same footing as `sessionFlag` below.  IT IS
-	 * NOT RENAMED HERE: `getV90Decision` is being written concurrently
-	 * against `word_04`, and a rename would move the ground under it.  The
-	 * name is recorded rather than applied.
+	 * STILL NOT RENAMED, but the reason has changed and is now a weaker one.
+	 * The original reason was that `getV90Decision` was being written
+	 * concurrently against `word_04` and a rename would move the ground
+	 * under it; both functions have landed, so that blocker is gone.  What
+	 * remains is only that the rename now touches two 8 KB functions, the
+	 * `P3D_OFF(word_04, 0x004, word04)` assertion tag and the mutation
+	 * anchors keyed on it, none of which this compose was testing.  The
+	 * name is recorded rather than applied, and applying it is a clean
+	 * separate step nothing is waiting on.
 	 *
 	 * IT IS READ AT THREE WIDTHS and all three are in the object, which is
 	 * why the reconstruction spells a cast at every site rather than
@@ -309,36 +318,62 @@ public:
 	 * declaration order, so this field is declared between the two
 	 * subobjects, which is where it sits.
 	 *
-	 * AND UNLIKE `V90Demapper`'s CASE, `make similarity` DOES NOT
-	 * CORROBORATE IT.  That is not a disagreement: this translation unit
-	 * is one of the fifteen the period toolchain cannot compile at all --
-	 * it was already on that list before this batch, and the ratchet
-	 * gained rather than lost -- so none of its symbols reach the
-	 * comparison.  The argument above stands on the instruction ordering
-	 * alone, which is weaker evidence than 1302 had, and saying so is the
-	 * point of this paragraph.
+	 * AND UNLIKE `V90Demapper`'s CASE, `make similarity` DID NOT
+	 * CORROBORATE IT.  The reason given here was that this translation
+	 * unit "is one of the fifteen the period toolchain cannot compile at
+	 * all -- so none of its symbols reach the comparison".  THAT REASON IS
+	 * NOT TRUE and was re-measured rather than re-read: GCC 3.4.2, given
+	 * `tools/toolchain/build.sh`'s exact flag set, compiles this file and
+	 * emits both decision symbols, at the merge base as well as here.
+	 * Finding 2119.  So the corroboration is available and simply had not
+	 * been taken; the argument above still stands on the instruction
+	 * ordering alone, which is weaker evidence than 1302 had, and saying so
+	 * is still the point of this paragraph.
 	 *
-	 * AND IT IS NOW CORROBORATED FROM THE OTHER END.  `getV92Decision`
-	 * passes `this + 0x3cc` as the `this` of
-	 * `SerialDifferentialDecoder<int>::process` five times over --
-	 * `lea 0x3cc(%ebx),%ebp` then
-	 * `call _ZN25SerialDifferentialDecoderIiE7processEi` -- and that class
-	 * is exactly one `int prev_` with no constructor of its own (see
-	 * DiffCoder.h, which already records that
-	 * `SerialDifferentialDecoder<int>` is called ten times from this
-	 * class).  So +0x3cc is a SUBOBJECT with one `int` in it, a trivial
-	 * class value-initialised in the initializer list is exactly the
-	 * `mov $0,0x3cc(%ebx)` seen between the two neighbouring
-	 * constructions, and this field is the differential decoder that pairs
-	 * with the `Descrambler<int,int>` immediately below it.
+	 * IT IS A `SerialDifferentialDecoder<int>`, WHICH THE SKETCH ABOVE
+	 * COULD NOT SEE, AND TWO INDEPENDENT RECONSTRUCTIONS SAY SO.  Neither
+	 * could see the other's work; findings 2102 and 2110 are the same
+	 * conclusion reached twice from opposite ends of the class.
 	 *
-	 * THE DECLARED TYPE IS LEFT AS `unsigned int` and `getV92Decision`
-	 * casts at its five call sites, for the same reason `word_04` is not
-	 * renamed: `getV90Decision` is being written concurrently against this
-	 * declaration.  Correcting the type is the right end state and belongs
-	 * to whoever lands second.
+	 *   `getV90Decision` calls `_ZN25SerialDifferentialDecoderIiE7processEi`
+	 *   on `this + 0x3cc` at 0x23f6b, 0x2449e, 0x24596 and 0x24649, and
+	 *   `twoLevelDemod` at 0x215fa does the same.
+	 *
+	 *   `getV92Decision` passes `this + 0x3cc` as the `this` of the same
+	 *   method five times over -- `lea 0x3cc(%ebx),%ebp` then the `call`.
+	 *
+	 * The template has one `T` member and no constructor by design -- see
+	 * DiffCoder.h, whose own comment already said the `int` pair belonged
+	 * to this class and records the ten calls -- so +0x3cc is a SUBOBJECT
+	 * with one `int` in it, the size is unchanged at four bytes, every
+	 * offset below still holds, and the mem-initializer argument above is
+	 * strengthened rather than weakened: a trivial member value-initialised
+	 * in the ctor-init-list is exactly the `mov %ecx,0x3cc(%ebx)` that sits
+	 * between the two subobject constructions.  This field is the
+	 * differential decoder that pairs with the `Descrambler<int,int>`
+	 * immediately below it.  The NAME is left as it was, because nothing
+	 * names it and a guess is worse than no name.
+	 *
+	 * WHILE THE TWO WERE IN FLIGHT the declaration stayed `unsigned int`
+	 * and `getV92Decision` cast at its call sites, so as not to move the
+	 * ground under a function being written in another session; that side's
+	 * comment said correcting the type "belongs to whoever lands second".
+	 * Both have landed.  The member has its real type, the casts are gone,
+	 * and both functions now call `word_3cc.process(...)` directly.
+	 *
+	 * AND THE SPELLING WAS MEASURED, not assumed.  `word_3cc(0)` on an
+	 * `unsigned int` obviously emits the store; `word_3cc()` on a class
+	 * type is C++98 DEFAULT-initialization, which TC1 changed to
+	 * value-initialization, so whether GCC 3.4.2 still zeroes it is a
+	 * question about that compiler and not about the standard.  No test
+	 * here can answer it -- the constructor's last act is `reset`, which
+	 * writes the same zero, which is why test/mutations/v90p3dctor.json
+	 * records the store as behaviourally invisible.  The period build was
+	 * disassembled instead: `xor %eax,%eax; mov %eax,0x3cc(%edi)` sits
+	 * between the call to `V90Phase3Modulator`'s constructor and the
+	 * `Descrambler` construction, exactly where the object puts it.
 	 */
-	unsigned int word_3cc;
+	SerialDifferentialDecoder<int> word_3cc;
 
 	/*
 	 * +0x3d0  EMBEDDED, 0x20 bytes, ending exactly at the field below.
@@ -355,16 +390,18 @@ public:
 	V90SdDetector *sdDetector;
 
 	/*
-	 * +0x3f4  A 32-bit slot `getV92Decision` writes and nothing in wave 2
-	 * reached, so it used to be the head of `pad_3f4[5]`.  It is loaded
-	 * from the parameter block beside +0x420 and always at the same time:
-	 * `params->unnamed_4a4` when +0x410 is set and `params->unnamed_344`
-	 * when it is not.  Written and never read in the 8,616 bytes, so what
-	 * it is FOR is not established here -- only its width and its source.
+	 * +0x3f4  A 32-bit word, and the comment here used to say nothing
+	 * reaches it -- it was the head of `pad_3f4[5]`.  BOTH decision
+	 * functions write it, independently reconstructed and agreeing to the
+	 * parameter: as each enters its TRN1d data-directed state it stores
+	 * `params->unnamed_4a4` when `word_410` is set (0x24094, 0x2410b in
+	 * `getV90Decision`) and `params->unnamed_344` when it is not (0x25749),
+	 * always in the same breath as +0x420 below.  Nothing in either
+	 * function -- 17 KB between them -- READS it, so its width and its
+	 * source are settled and what it is FOR is not.  Finding 2118.
 	 */
-	unsigned int word_3f4;
-
-	unsigned char pad_3f8[1];	/* +0x3f8 alignment              */
+	unsigned int word_3f4;		/* +0x3f4                        */
+	unsigned char pad_3f8[1];	/* +0x3f8 nothing reaches it     */
 
 	/* +0x3f9  Zeroed by `reset`. */
 	unsigned char byte_3f9;
@@ -411,15 +448,19 @@ public:
 	unsigned int verificationStatus;
 
 	/*
-	 * +0x420  A 32-bit slot, likewise unreached in wave 2 and likewise no
-	 * longer padding.  `getV92Decision` loads it from
-	 * `params->TRN1_QC_DD_LENGTH` when +0x410 is set and from
-	 * `params->TRN1D_DD_LENGTH` when it is not, and then COMPARES the
-	 * frame counter +0x2c against it in the state-5 arm -- so unlike
-	 * +0x3f4 this one is both written and read, and it holds a length in
-	 * symbols.
+	 * +0x420  The length of the TRN1d data-directed stage, and likewise no
+	 * longer padding.  BOTH decision functions load it from
+	 * `params->TRN1_QC_DD_LENGTH` (+0x4a0) when `word_410` is set and from
+	 * `params->TRN1D_DD_LENGTH` (+0x2fc) when it is not, and then COMPARE
+	 * the counter `word_2c` against it to decide when to leave -- state 4
+	 * in `getV90Decision`, state 5 in `getV92Decision`.  So unlike +0x3f4
+	 * this one is both written and read, and it holds a length.  The two
+	 * reconstructions disagree only on the UNIT, one saying samples and the
+	 * other symbols; nothing here settles which, and at 8 kHz on a
+	 * one-sample-in one-decision-out function they are the same count.
+	 * Finding 2118.
 	 */
-	unsigned int word_420;
+	unsigned int word_420;		/* +0x420                        */
 
 	/* +0x424  Zeroed by `reset`, before anything else it does. */
 	unsigned char byte_424;

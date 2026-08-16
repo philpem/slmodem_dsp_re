@@ -426,7 +426,17 @@ setup(int trial, const struct trial_args *t)
 		d->word_3f4 = 0x5a5a5a5au;
 		d->dilLength = t->dilLength;
 		d->verificationStatus = 0x1234u;
-		d->word_3cc = 1u;
+		/*
+		 * +0x3cc used to be declared `unsigned int` and this line
+		 * seeded it as one.  It is a `SerialDifferentialDecoder<int>`
+		 * now -- both reconstructions concluded that independently,
+		 * findings 2102 and 2110 -- so the seed names the member.  It
+		 * is the SAME four bytes set to the same 1, so the fixture is
+		 * unchanged in what it does: it puts a non-zero previous bit
+		 * into the differential decoder so that an arm which fails to
+		 * run it is visible.
+		 */
+		d->word_3cc.prev_ = 1;
 
 		if (t->forceJd) {
 			V92Jd *j = &jd92o[side];

@@ -341,7 +341,7 @@ V90Parameters::setToDefault()
 	unnamed_434 = 0x437a0000;	/* the object stores 250.0f here -- finding 878 */
 	PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH = 1.5f;
 	QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH = 1.75f;
-	unnamed_440 = 0x41200000;	/* the object stores 10.0f here -- finding 878 */
+	unnamed_440 = 10.0f;		/* 0x41200000 -- finding 878 */
 	ENABLE_RRN_UP = 1;
 	ENABLE_RRN_DOWN = 1;
 	RATE_UP_DETECT_DURATION = 2400;

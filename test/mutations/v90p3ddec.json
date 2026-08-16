@@ -1,0 +1,112 @@
+[
+ {
+  "label": "the sample counter counts down",
+  "find": "\ts = (short)sample;\n\tword_2c++;\n",
+  "replace": "\ts = (short)sample;\n\tword_2c--;\n",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ },
+ {
+  "label": "the sample is rounded rather than truncated",
+  "find": "\ts = (short)sample;\n",
+  "replace": "\ts = (short)(sample + 0.5f);\n"
+ },
+ {
+  "label": "the sign of the sample is inverted",
+  "find": "#define P3D_SIGN(x)\t((((int)(x)) >> 31) | 1)",
+  "replace": "#define P3D_SIGN(x)\t(-((((int)(x)) >> 31) | 1))"
+ },
+ {
+  "label": "the two companding arms are swapped",
+  "find": "\t((unsigned short)(pcmType == PCM_TYPE_MU_LAW\t\t\t\\",
+  "replace": "\t((unsigned short)(pcmType != PCM_TYPE_MU_LAW\t\t\t\\"
+ },
+ {
+  "label": "the phase index is not truncated to sixteen bits",
+  "find": "#define P3D_PHASE\t((unsigned short)word_04)",
+  "replace": "#define P3D_PHASE\t(word_04)",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT.  `word_04` is a 0..5 phase counter that `if (++p == 6) p = 0` keeps in range, so truncating it to sixteen bits before the table index cannot change a subscript.  The cast is in the reconstruction because the object has `movzwl 0x4(%ebx)` at every one of those sites and not because any test can see it -- which is the whole reason the mutation is here: it says out loud that this one line rests on the instruction and not on the suite."
+ },
+ {
+  "label": "the Sd run-length the recovery flag arms on is 11",
+  "find": "\t\tif (sdDetector->count == 10)",
+  "replace": "\t\tif (sdDetector->count == 11)"
+ },
+ {
+  "label": "the SdDemod timeout is one sample late",
+  "find": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 2;\n\t\t} else if (word_2c == 0x180) {",
+  "replace": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 2;\n\t\t} else if (word_2c == 0x181) {",
+  "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ },
+ {
+  "label": "the TRN1dKnownData handover is one sample late",
+  "find": "\t\tif (word_2c == 0x7f8) {",
+  "replace": "\t\tif (word_2c == 0x7f9) {"
+ },
+ {
+  "label": "the faked energy drop fires one sample early",
+  "find": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\tword_30 = 0x3a;\n\t\t}\n\t\tif (word_2c > 0x7cf) {",
+  "replace": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\tword_30 = 0x3a;\n\t\t}\n\t\tif (word_2c >= 0x7cf) {"
+ },
+ {
+  "label": "the JdNot frame position is 13 rather than 12",
+  "find": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 12) {",
+  "replace": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 13) {",
+  "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ },
+ {
+  "label": "the JdNot run length is 12 rather than 11",
+  "find": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 12) {\n",
+  "replace": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xc && word_2c % 72 == 12) {\n",
+  "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ },
+ {
+  "label": "the two probing-mode states are swapped",
+  "find": "\t\t\t\t    (params->PROBING_MODE ? 0x11 : 0x0a);",
+  "replace": "\t\t\t\t    (params->PROBING_MODE ? 0x0a : 0x11);"
+ },
+ {
+  "label": "the probing DIL magnitude is one step out",
+  "find": "\t\tif (P3D_ABS((int)symbol) == 0xffc",
+  "replace": "\t\tif (P3D_ABS((int)symbol) == 0xffd",
+  "note": "UNCAUGHT and left that way.  0xffc is a magnitude the phase 3 modulator only emits from inside a DIL segment, and this fixture never gets it there: `reset` opens the modulator in P3M_STATE_TRN1D and only state 9's JdNot arm moves it on. So the claim `the probing DIL threshold is 0xffc` rests on the `cmp $0xffc,%eax` at 0x23b98 and on nothing this suite runs.  Recorded rather than deleted, because a deleted mutation is an untested claim nobody can see."
+ },
+ {
+  "label": "the error-relaxation counter runs on the wrong flag",
+  "find": "\t\t\tword_04 = 0;\n\t\tif (byte_3f9 != 0) {",
+  "replace": "\t\t\tword_04 = 0;\n\t\tif (byte_3f9 == 0) {",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ },
+ {
+  "label": "the ANSpcm demod state does not raise the verification status",
+  "find": "\t\t\t\tparams->ANSPCM_DEMODULATION_LENGTH = 0x320;\n\t\t\tword_30 = 0x39;\n\t\t\tverificationStatus = 1;",
+  "replace": "\t\t\t\tparams->ANSPCM_DEMODULATION_LENGTH = 0x320;\n\t\t\tword_30 = 0x39;\n\t\t\tverificationStatus = 0;"
+ },
+ {
+  "label": "the QTS-detected event code is the QTSNot one",
+  "find": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 0x37;",
+  "replace": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 0x38;",
+  "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ },
+ {
+  "label": "the recovery watch uses > where the object uses >=",
+  "find": "\t\tif (ansamToneDetector->process(sample)\n\t\t    && word_2c >= (unsigned int)",
+  "replace": "\t\tif (ansamToneDetector->process(sample)\n\t\t    && word_2c > (unsigned int)"
+ },
+ {
+  "label": "the terminal states return the sample rather than zero",
+  "find": "\tcase 0x19:\n\t\tword_30 = 0;\n\t\tdecision = 0;",
+  "replace": "\tcase 0x19:\n\t\tword_30 = 0;\n\t\tdecision = s;"
+ },
+ {
+  "label": "the default state clears the event code it must not",
+  "find": "\tdefault:\n\t\tword_30 = 0;\n\t\tbreak;",
+  "replace": "\tdefault:\n\t\tbreak;"
+ },
+ {
+  "label": "the probing DIL ends one sample late",
+  "find": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength) {",
+  "replace": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength + 1) {",
+  "note": "Anchor carries 4 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ }
+]

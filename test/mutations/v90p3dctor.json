@@ -27,8 +27,8 @@
  },
  {
   "label": "the modulator is built with the parameter block and no flag",
-  "find": "\t: phase3Modulator(p, flag), word_3cc(0),",
-  "replace": "\t: phase3Modulator(p, 0), word_3cc(0),"
+  "find": "\t: phase3Modulator(p, flag), word_3cc(),",
+  "replace": "\t: phase3Modulator(p, 0), word_3cc(),"
  },
  {
   "label": "the descrambler's two taps are swapped",

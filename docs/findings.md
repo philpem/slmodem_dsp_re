@@ -53870,3 +53870,245 @@ which is what 614 and 617 are about. The acceptance test for a shape change in
 this tree is FULL-TEXT identity, which the arm order puts out of reach here
 whatever the companding is spelled as. Anyone who later recovers the arm order
 should re-measure this before touching it.
+*2110-2115 WERE WRITTEN AS 2001-2006 AND RENUMBERED BEFORE THEY LEFT THIS
+branch, because `getV92Decision`'s session had taken 2100-2109 concurrently.
+Nothing outside this branch ever cited the old numbers.  Three of the six are
+the same fact that session reached independently from the other method --
+2110 with its 2100, 2111 with its 2102, and the +0x3f4/+0x420 fields it files
+as 2105 -- and two reconstructions arriving at one answer from two functions
+is corroboration, so they are left standing rather than merged away.*
+
+### 2110. `V90Phase3Demodulator::getV90Decision` RETURNS A `short`, AND THE HEADER'S `void` WAS A PLACEHOLDER
+
+The class header spells every unwritten member `void` "for want of evidence
+rather than because the blob returns nothing". For this one the evidence
+exists: `getDecision(float)` at 0x258f0 calls it and then executes `cwtl`
+before its own `ret`, sign-extending `%ax` into `%eax`. A callee already
+returning an `int` would make that instruction dead, and GCC does not emit
+dead sign extensions on a return value. It does the same for `getV92Decision`
+at 0x2590e, so that member is a `short` too and the sibling reconstruction can
+take it as given.
+
+### 2111. `V90Phase3Demodulator + 0x3cc` IS A `SerialDifferentialDecoder<int>`, NOT AN OPAQUE WORD
+
+`getV90Decision` calls `_ZN25SerialDifferentialDecoderIiE7processEi` with
+`this + 0x3cc` as the object (0x23f6b, 0x2449e, 0x24596, 0x24649), and
+`twoLevelDemod` does the same at 0x215fa. `DiffCoder.h` already said the `int`
+pair of that template belonged to this class without saying where; this is
+where. The template has one `T` member and no constructor by design, so the
+size is unchanged, every offset in the class still holds, and the
+mem-initializer argument finding 1302 makes about the zero stored between the
+two subobject constructors is strengthened rather than disturbed: a trivial
+member value-initialised in the ctor-init-list is exactly that instruction.
+
+### 2112. `V90Parameters + 0x440` IS A `float`, AND THE COPY AT +0x438 IS WHAT SHOWS IT
+
+Finding 878 could see that `setToDefault` stores 0x41200000 there and typed
+the field `int` with a comment saying the pattern is 10.0f. `getV90Decision`
+copies that word into `PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH` at
++0x438 -- a `float` -- with `mov 0x440(%ecx),%eax; mov %eax,0x438(%ecx)`. GCC
+emits an integer pair for a float-to-float assignment and an `fildl`/`fstps`
+pair for an int-to-float one, so the two fields have the same type, and +0x438
+is not in doubt. `setToDefault` stores the same four bytes either way, so
+nothing else moves.
+
+### 2113. `word_2c` AND `word_14` ARE UNSIGNED, AND THE TIMEOUTS PROVE IT TWICE
+
+Three of the state timeouts compare the sample counter against a float
+expression -- `word_2c == word_14 + 12000.0f` at 0x24b16, `== word_14 +
+38760.0f` at 0x23fe6, `== 36000.0f` at 0x244f6. Each conversion is `push $0;
+push %reg; fildll`, a 64-bit load with a zeroed high dword, which is GCC
+3.4.2's `(float)(unsigned int)` and never its signed form. The same pattern
+types `V90AutoDigitalImpDetector`'s sample counts (see that header), so this is
+the third independent instance of the same tell.
+
+### 2114. `twoLevelDemod` IS DUPLICATED IN `getV90Decision`'s SOURCE, NOT INLINED INTO IT
+
+Cases 4, 5, 6 and 9 each open with a block that is instruction for instruction
+the body of `_ZN20V90Phase3Demodulator13twoLevelDemodEfRi` at 0x215a0. That
+symbol is GLOBAL and in `.text`, not weak and not in a `.gnu.linkonce.t`
+section, so it was not declared `inline`; and GCC 3.4.2 at `-O2` inlines
+nothing that is not. So the author wrote the block out at each of the four
+sites AND as a member -- the duplication is in the source. The reconstruction
+reproduces it rather than defining the member and hoping, and whoever writes
+`twoLevelDemod` has its body four times over in
+`src/pump/v90/V90Phase3Demodulator.cpp`.
+
+The one thing the duplication does not explain is the stack slot: the four
+copies address their bit through `lea 0x98(%esp),%edi` as though its address
+had been taken, which is what the member's `int &` would do. Register pressure
+in an 8 KB function is the alternative reading and nothing here settles it.
+Register allocation is on CLAUDE.md's "free, so ignore it" list either way.
+
+### 2115. `V90Jd::unPackData` RETURNS SOMETHING EIGHT BITS WIDE
+
+`getV90Decision` tests its result with `test %al,%al` at 0x2468d, not `test
+%eax,%eax`. That is forced encoding: GCC compares the whole register for an
+`int` and only `%al` for a `char`, `signed char`, `unsigned char` or `bool`.
+`V90Jd.h` declares it `int` today, which agrees over every value the method
+returns and disagrees on the instruction. Recorded against V90Jd rather than
+acted on here -- changing the declaration is that module's call, and the
+reconstruction of `getV90Decision` reads the result as a truth value either
+way.
+
+### 2116. THE TWO PHASE 3 DECISION FUNCTIONS SPELLED THREE SHARED MACROS DIFFERENTLY, AND ALL THREE AGREE ON VALUE
+
+`getV90Decision` and `getV92Decision` were reconstructed in separate sessions
+that could not see each other, and each defined `P3D_CODE`, `P3D_SIGN` and
+`P3D_ABS` at file scope in the same translation unit. Redefinition with
+different replacement text is ill-formed, so composing them forced a choice.
+Before choosing, the three pairs were checked for VALUE equivalence at every
+one of their 130 call sites, because a merge that changes what a macro
+computes is the silent-wrong outcome here:
+
+- `P3D_CODE`. `((unsigned short)(pcmType == PCM_TYPE_MU_LAW ? 0xff -
+  linear2ulaw(m) : linear2alaw(m) ^ 0xd5))` against `(pcmType ==
+  PCM_TYPE_MU_LAW ? (int)(unsigned char)~linear2ulaw(v) :
+  (int)(unsigned char)(linear2alaw(v) ^ 0xd5))`. `pcm.h` declares both
+  companders `unsigned char`, so the operand is 0..255 and `0xff - u` and
+  `(unsigned char)~u` are the same 255 - u. The results differ only in TYPE,
+  `unsigned short` against `int`, and an `unsigned short` holding 0..255
+  promotes to the same `int` at every site. Equal.
+- `P3D_SIGN`. `((((int)(x)) >> 31) | 1)` against `(((x) >> 31) | 1)`. The
+  arguments across both functions are a `short` and an `int` and nothing
+  else -- no unsigned type, which is the only case where the added cast could
+  matter, because it is the only case where the shift would be logical. The
+  cast is a no-op at all 43 sites. Equal.
+- `P3D_ABS`. `__builtin_abs(x)` against `((x) < 0 ? -(x) : (x))`. Equal over
+  every `int` except `INT_MIN`, which neither function can present: both
+  arguments derive from a value truncated to `short`. Equal.
+
+So the choice was a codegen question and never a behavioural one, which is
+what made it safe to settle by measurement -- 2117. The composed file defines
+one set. `P3D_PHASE` is `getV90Decision`'s alone and `P3D_LINMAPP` and the
+sixteen `P3D_P_*` are `getV92Decision`'s alone; none of those collided.
+
+### 2117. GCC 3.4.2 DOES NOT COMPILE `x < 0 ? -x : x` TO `cltd; xor; sub`, AND BOTH DECISION FUNCTIONS GET BETTER WITH THE BUILTIN
+
+The two reconstructions' comments on `P3D_ABS` made directly contradictory
+claims about the same compiler. `getV92Decision`'s said the conditional is
+"`|x|`, as `cltd; xor; sub` -- what GCC emits for this at -O2".
+`getV90Decision`'s said "GCC 3.4.2 emits a branch for `x < 0 ? -x : x` and
+this sequence for the builtin". Only one of those can be true, and only the
+second was measured, so the composed file was built both ways with
+`tools/toolchain/build.sh`'s flags and both symbols compared against the blob:
+
+                       getV90Decision            getV92Decision
+                    insns   LCS vs blob        insns   LCS vs blob
+      blob           1998        --             2079        --
+      __builtin_abs  2113   1342  67.2%         2223   1404  67.5%
+      ternary        2181   1302  65.2%         2220   1277  61.4%
+
+`__builtin_abs` is closer for BOTH, and the mechanism is visible in the
+mnemonic counts. The blob has `cltd` 6 and `neg` 4 in `getV90Decision`; the
+builtin gives 9 and 4, the ternary gives **0 and 48**. In `getV92Decision` the
+blob has `cltd` 6, the builtin 5, the ternary 19. So GCC 3.4.2 renders the
+conditional as a conditional negation and not as the sign-mask triple, and the
+v92 comment was describing a modern GCC rather than the period one.
+
+The effect is context-sensitive -- the ternary degrades one function through
+`neg` and the other through `cltd` -- so a standalone `int f(int x)` would
+have shown the two spellings agreeing and would have convicted the wrong side.
+That is why it was measured on the composed translation unit and not on a toy.
+
+`P3D_ABS` is therefore `__builtin_abs`, and unifying on it did not merely
+preserve `getV92Decision`'s codegen match, it improved it by 6.1 points.
+
+### 2118. `V90Phase3Demodulator + 0x3f4` AND `+ 0x420` WERE RECOVERED TWICE, INDEPENDENTLY, AND AGREE
+
+Both were `pad` in wave 2 -- `pad_3f4[5]` and `pad_420[4]` -- and both decision
+functions reach them. The two reconstructions were written in separate
+worktrees with no sight of each other and produced the same answer for each:
+32 bits wide, written on entry to the TRN1d data-directed state, sourced from
+`params->unnamed_4a4` (+0x3f4) and `params->TRN1_QC_DD_LENGTH` (+0x420) when
+`word_410` is set and from `params->unnamed_344` and
+`params->TRN1D_DD_LENGTH` when it is not. Both also agree that +0x3f4 is
+written and never read in the 17 KB the two functions span, while +0x420 is
+read back against the counter `word_2c`.
+
+Independent agreement is not proof, but it is the strongest corroboration this
+tree can get short of a caller, because the two readings share no author, no
+fixture and no note -- only the object. The one thing they do NOT agree on is
+the unit of +0x420, one saying samples and the other symbols; nothing in
+either function settles it, and on a one-sample-in one-decision-out function
+at 8 kHz the two are the same count.
+
+### 2119. THIS TRANSLATION UNIT IS NOT ONE OF THE FIFTEEN THE PERIOD TOOLCHAIN CANNOT COMPILE
+
+`V90Phase3Demodulator.h` carried, in the `+0x3cc` field comment, the claim
+that `make similarity` could not corroborate the mem-initializer argument
+because "this translation unit is one of the fifteen the period toolchain
+cannot compile at all -- so none of its symbols reach the comparison". It was
+re-measured rather than re-read, because it is load-bearing: it is the stated
+reason for accepting weaker evidence than finding 1302 had.
+
+GCC 3.4.2 compiles this file. Handed `tools/toolchain/build.sh`'s exact flag
+set -- `-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude
+-D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h` plus
+`-fno-exceptions -fno-rtti` -- it produces an object containing both decision
+symbols. It does so for the composed file AND for the merge base's version of
+the file against the merge base's header, so this is not something the compose
+changed; the claim was already untrue when it was written.
+
+That the corroboration is available does not supply it: nobody has yet checked
+whether the period build puts the `+0x3cc` store between the two subobject
+constructions. The finding is only that the stated reason for not looking is
+not a reason. Whatever put this file on a "cannot compile" list -- a different
+flag set, a different header state, or a list that was never re-derived --
+does not reproduce.
+
+The general point is CLAUDE.md's about `extcheck`: a tool or a list that
+reports a negative must be shown to fire, and an inherited "cannot" is a
+measurement with an expiry date.
+
+### 2120. `reanchor.py` SILENTLY PREFERS THE LAST OCCURRENCE WHEN NO `--prefix` IS GIVEN, AND IT CHOSE THE WRONG FUNCTION NINE TIMES OUT OF NINE
+
+Landing `getV92Decision` beside `getV90Decision` made nine of the twenty
+`v90p3ddec` mutation anchors match twice, which is the situation
+`tools/reanchor.py` exists for and which `anchorcheck.py` correctly reported.
+Run as `tools/reanchor.py v90p3ddec`, the tool re-anchored all nine INTO
+`getV92Decision` -- lines 1582, 1611, 1786, 1786, 2136, 2166, 2197, 2240 and
+2276, when `getV90Decision` is lines 602..1570 and every one of the nine had
+its correct occurrence there. Nine of nine wrong, and reported as success:
+"9 re-anchored, 0 left for a human".
+
+The cause is two lines:
+
+    scored = sorted(((prefix_score(src, h, args.prefix), h) for h in hits),
+                    reverse=True)
+    if args.prefix and len(scored) > 1 and scored[0][0] == scored[1][0]:
+        ... STUCK ...
+
+With no `--prefix`, `prefix_score` returns 0 for every occurrence, so the sort
+falls through to its second key and orders by FILE OFFSET DESCENDING -- the
+last occurrence always wins. And the guard that exists to catch exactly this,
+an undistinguished tie, is gated on `args.prefix`, so in the one case where
+every occurrence scores the same it cannot fire. The tool's own docstring
+promises "if no prefix distinguishes them, the mutation is left alone and
+named"; without `--prefix` it does the opposite, silently.
+
+This is finding 347's failure mode one level up. There, a doubly-matching
+anchor read UNUSABLE and the suite still printed `0 NOT caught`, so mutations
+were lost without a signal. Here the anchor is repaired to point at a
+DIFFERENT FUNCTION, so the mutation is not lost -- it is applied to code the
+suite does not claim to test, and it may well still be caught, which means the
+suite goes green while nine of its claims have quietly changed meaning. A lost
+mutation is recoverable; a relocated one corrupts the record.
+
+The repair used here was `--prefix P3D_PHASE --prefix symbol`, both of which
+appear only in `getV90Decision` (22 and 42 times against 0 and 0). That placed
+seven correctly and honestly reported the other two STUCK -- the guard works
+as soon as it is allowed to run. The two were extended by hand, each upward to
+the nearest line the two functions spell differently: `if
+(ansamToneDetector->process(sample))` against the sibling's `!= 0`, and
+`params->ANSPCM_DEMODULATION_LENGTH = 0x320` against the sibling's
+`V90PW(params)[P3D_P_ANSPCM_LENGTH]`. All twenty now match once and the
+seventeen non-macro anchors are inside 602..1570; the other three are on the
+shared macro bodies, which is where they belong.
+
+`reanchor.py` is not fixed here -- changing a tool while using it on a
+compose is how a second defect gets in -- but it must not be run without
+`--prefix` until the tie guard is ungated. CLAUDE.md's rule for `extcheck`
+generalises: a tool that reports a negative must be shown to fire, and this
+one reports a POSITIVE it cannot justify.

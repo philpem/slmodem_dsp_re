@@ -17,8 +17,8 @@
  },
  {
   "label": "the level lands at +0x18, over the code",
-  "find": "\tword_3cc = 0;\n\tucode = ucodeArg;",
-  "replace": "\t*(short *)((char *)this + 0x18) = ucodeLevel;\n\tword_3cc = 0;\n\tucode = ucodeArg;"
+  "find": "\tword_3cc.prev_ = 0;\n\tucode = ucodeArg;",
+  "replace": "\t*(short *)((char *)this + 0x18) = ucodeLevel;\n\tword_3cc.prev_ = 0;\n\tucode = ucodeArg;"
  },
  {
   "label": "the descrambler is seeded from the code rather than with 0",

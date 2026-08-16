@@ -410,7 +410,15 @@ public:
 	int	unnamed_434;		/* +0x434  setToDefault only; the object stores 250.0f (0x437a0000) -- 878 */
 	float	PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x438 */
 	float	QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x43c */
-	int	unnamed_440;		/* +0x440  setToDefault only; the object stores 10.0f (0x41200000) -- 878 */
+	/*
+	 * A FLOAT, and it was typed `int` here only because 878 could see
+	 * the bit pattern and not the use.  `V90Phase3Demodulator::getV90Decision`
+	 * copies this word into +0x438 above -- a `float` -- with a plain
+	 * `mov`, which is what GCC emits for a float-to-float assignment and
+	 * never for an int-to-float one.  `setToDefault` stores the same
+	 * four bytes either way.
+	 */
+	float	unnamed_440;		/* +0x440  setToDefault only; 10.0f -- 878 */
 	int  	ENABLE_RRN_UP;	/* +0x444 */
 	int  	ENABLE_RRN_DOWN;	/* +0x448 */
 	int  	RATE_UP_DETECT_DURATION;	/* +0x44c */
