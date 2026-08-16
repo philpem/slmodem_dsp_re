@@ -271,6 +271,8 @@ static int
 step(struct v22recv_pair *p, int pos, short n, long where)
 {
 	unsigned short ra, rb;
+	short hist_n0 = p->a.hist_n;
+	short need0 = p->a.need;
 	int i;
 
 	mark_outputs(p);
@@ -311,6 +313,20 @@ step(struct v22recv_pair *p, int pos, short n, long where)
 	 */
 	if (p->a.clk_phase >= 0 && p->a.clk_phase < V22_CRR_CLK_STEPS)
 		sep_clk_seen[p->a.clk_phase]++;
+
+	/*
+	 * The history shift, and its boundary.  `hist_n + need > 98` is the
+	 * object's test and `>=` would shift one call early, so the input that
+	 * separates them is one landing on 98 exactly.  Both are counted here
+	 * rather than per symbol so the ragged runs -- which are what put
+	 * `hist_n` off the lattice a whole-symbol drive walks -- feed them; on a
+	 * call producing several symbols they see only its first interval, so
+	 * both are lower bounds and neither can over-count.
+	 */
+	if (p->a.hist_n < hist_n0)
+		sep_hist_shift++;
+	if (hist_n0 + need0 == V22_FSE_HIST)
+		sep_shift_edge++;
 
 	compare_pair(p, where);
 	return (int)ra;
@@ -383,7 +399,7 @@ smooth_separated(short old, short got)
  */
 static void
 analyse_symbol(struct v22recv_pair *p, const short *ic0, const short *qc0,
-	       short err0, short mse0, short hist_n0, short need0, short sym0)
+	       short err0, short mse0, short sym0)
 {
 	const short *win;
 	int overflow = 0;
@@ -445,15 +461,6 @@ analyse_symbol(struct v22recv_pair *p, const short *ic0, const short *qc0,
 	if (sym0 == V22_FSE_TRAIN + 1 && p->a.sym_count == V22_FSE_TRAIN + 1)
 		sep_train_held++;
 
-	/*
-	 * The history shift, and its boundary.  `hist_n + need > 98` is the
-	 * object's test; `>=` would shift one call early, and the only input
-	 * that separates them is one landing exactly on 98.
-	 */
-	if (p->a.hist_n < hist_n0)
-		sep_hist_shift++;
-	if (hist_n0 + need0 == V22_FSE_HIST)
-		sep_shift_edge++;
 }
 
 /* ------------------------------------------------------------------ *
@@ -479,16 +486,13 @@ run_persymbol(const char *label, int use24)
 		short n = (short)(first ? 1 : V22_FSE_INTERP);
 		short err0 = p.a.err_avg;
 		short mse0 = p.a.mse;
-		short hist_n0 = p.a.hist_n;
-		short need0 = p.a.need;
 		short sym0 = p.a.sym_count;
 
 		memcpy(ic0, p.a.icoeff, sizeof ic0);
 		memcpy(qc0, p.a.qcoeff, sizeof qc0);
 
 		if (step(&p, pos, n, pos) == 1) {
-			analyse_symbol(&p, ic0, qc0, err0, mse0, hist_n0,
-				       need0, sym0);
+			analyse_symbol(&p, ic0, qc0, err0, mse0, sym0);
 			symbols++;
 		}
 		pos += n;
