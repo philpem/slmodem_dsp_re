@@ -6843,7 +6843,7 @@ maximum.  A modem whose equaliser has just diverged therefore records the
 largest possible error rather than a negative one, which is arguably what was
 wanted; but the same test also means `state->mse` is non-negative for ever, and
 the `mse > 0` gate below it can only fail on an exact zero.  Reproduced rather
-than corrected, and the consequence for the LMS gate is finding 3546.
+than corrected, and the consequence for the LMS gate is finding 3586.
 
 ## D392 ⚠ `FPM_phasor` cannot match the blob for a phase of 0x8000 or more
 
@@ -6871,5 +6871,5 @@ is therefore deterministic on both sides and different.
 
 `t_fpm_fse_recv` stays inside 0 .. 0x7fff wherever an observable depends on the
 phasor, and asserts that it has -- see the domain checks in its tilt trial and
-at the end of its derotation sweep.  Finding 3548 for the whole derivation and
+at the end of its derotation sweep.  Finding 3588 for the whole derivation and
 for why the symptom is a mismatched `out_i` beside a matching `out_q`.

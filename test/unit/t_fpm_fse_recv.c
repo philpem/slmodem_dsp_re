@@ -480,7 +480,7 @@ sweep_derot_edge(const char *label, short carrier, int count_them)
 	 * `FPM_phasor` is only defined for 0 .. 0x7fff: past that it indexes
 	 * its quadrant sign table with a NEGATIVE quadrant and reads whatever
 	 * the linker put in front of it, which is `FPM_sin_sign` in the blob
-	 * and something else entirely here.  Finding 3548 and D392.  The
+	 * and something else entirely here.  Finding 3588 and D392.  The
 	 * angle itself is integer arithmetic and is compared at all 65536
 	 * positions; `out_i`/`out_q` and the scatter log go through the
 	 * phasor, so they are compared once, at the end, where the check
@@ -881,7 +881,7 @@ trial_tilt(void)
 			 * that it indexes its quadrant sign table with a
 			 * NEGATIVE quadrant and reads whatever precedes it,
 			 * which is not the same bytes in this build as in the
-			 * blob.  Finding 3548 and D392.  The coefficients
+			 * blob.  Finding 3588 and D392.  The coefficients
 			 * below are chosen to keep the bias small enough that
 			 * the angle stays inside it, and this is the check
 			 * that says so.

@@ -148,7 +148,7 @@ struct fpm_fse {
 	 * Writing the accumulation that way reproduces all three `movzwl` and
 	 * the dead `tilt_out = 0` store beside them; writing it with an `int`
 	 * accumulator reproduces neither.  Same argument for `tilt_out`'s own
-	 * read at the derotation.  Finding 3541.
+	 * read at the derotation.  Finding 3581.
 	 */
 	short tilt_coeff[4];	/* +0x78                                     */
 	short tilt_hist[4];	/* +0x80                                     */

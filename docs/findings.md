@@ -60845,10 +60845,18 @@ two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
 
-### 3540. `FPM_FSE_receive` IS RECONSTRUCTED, AND THE V.22 COUSIN IS A QUESTION GENERATOR AND NOT AN ANSWER
+### 3580. `FPM_FSE_receive` IS RECONSTRUCTED, AND THE V.22 COUSIN IS A QUESTION GENERATOR AND NOT AN ANSWER
 
-*This block is 3540-3549, adjacent to 3515 above and to 3520-3539 held by the
-rest of the same batch.*
+*Renumbered from 3540.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+*This block is 3580-3589.  It was reserved as 3540-3549 and moved: `master`
+took 3540, 3541, 3542 and 3560 in the `V90CP` merge, and `wip/v92-params-tx`
+reached 3544, while this branch was open.  The rest of the same batch holds
+3570-3576, also renumbered.  The deviation block reserved alongside it did NOT
+move, because no live branch had reached it; this branch uses D391 and D392.*
 
 `FPM_FSE_receive` (blob 0x0a7e00, 2131 bytes) and the function-scope static
 `avg_err_show.0` (blob .bss 0x0008d0, 4 bytes) are written, in
@@ -60879,13 +60887,18 @@ same.  What actually differs, all of it from the disassembly:
   - training does NOT hold the integrator down.  V.22 writes `freq = 0` on
     every training symbol and nothing here writes `freq` before the update;
   - the squared decision error is brought down ELEVEN bits, not fifteen, and
-    the smoothed result is saturated on an UNSIGNED test (3546);
+    the smoothed result is saturated on an UNSIGNED test (3586);
   - the LMS gate is `(mse > 0 && lms_on) || lms_force`, where V.22's has no
     override;
   - a 4-tap tilt filter, a 480-entry scatter log and a `Decoder Error` report
     have no counterpart in V.22 at all.
 
-### 3541. THE TILT FILTER'S `movzwl` IS ITS ACCUMULATOR AND NOT ITS ELEMENT TYPE
+### 3581. THE TILT FILTER'S `movzwl` IS ITS ACCUMULATOR AND NOT ITS ELEMENT TYPE
+
+*Renumbered from 3541.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 `fpm_fse.h` carried "UNVERIFIED SHAPE: both are read `movzwl` and every use is
 truncated back to 16 bits" against `tilt_coeff[4]` and `tilt_hist[4]`.
@@ -60919,7 +60932,12 @@ derivation, and the tree gains a worked example of the converse of finding
 read modulo 2^16.  Similarity on the function went 0.645 to 0.692 on the
 change and nothing else moved.
 
-### 3542. `pad6e` AND `unknown_4e10` CONFIRMED UNTOUCHED, BY SWEEP RATHER THAN BY READING
+### 3582. `pad6e` AND `unknown_4e10` CONFIRMED UNTOUCHED, BY SWEEP RATHER THAN BY READING
+
+*Renumbered from 3542.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 The other two open questions in `fpm_fse.h` are both answered no, and the
 method is worth keeping because reading a 566-line disassembly for the absence
@@ -60937,7 +60955,12 @@ and something not yet reconstructed can be filling.  The one +0x6e in the
 function is `0x6e(%esp)`, which is the stack `fpm_phasor`'s `inc`, and reading
 it as the state's would have been the easy mistake.
 
-### 3543. `avg_err_show.0` IS A SAMPLE COUNTER, NOT AN ERROR, AND ITS FORMAT STRING IS IN THE OBJECT
+### 3583. `avg_err_show.0` IS A SAMPLE COUNTER, NOT AN ERROR, AND ITS FORMAT STRING IS IN THE OBJECT
+
+*Renumbered from 3543.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 Four bytes of `.bss` at 0x0008d0, LOCAL, with GCC's `name.N` function-scope
 static mangling -- so it has to be declared inside `FPM_FSE_receive` for the
@@ -60965,7 +60988,12 @@ each side has its own copy of the counter and they stay in step only because
 every call in the suite is mirrored, which is a property of the driver and not
 of the code.
 
-### 3544. TWO LOOP-COUNTER TYPES IN ONE FUNCTION, AND `FPM_lmsupd` IS THE CONTROL
+### 3584. TWO LOOP-COUNTER TYPES IN ONE FUNCTION, AND `FPM_lmsupd` IS THE CONTROL
+
+*Renumbered from 3544.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 `FPM_FSE_receive` walks six loops and the object compiles them two different
 ways.  The two FIR walks decrement a full 32-bit register and branch on `jns`
@@ -60984,7 +61012,12 @@ means the author declared that one `int`.
 
 Reconstructed accordingly, and the mixture is deliberate rather than tidied.
 
-### 3545. ONE OF THE TWO `>=` REDUCTIONS IS SEPARABLE AND THE OTHER IS NOT, AND THE DIFFERENCE IS THE SLICER
+### 3585. ONE OF THE TWO `>=` REDUCTIONS IS SEPARABLE AND THE OTHER IS NOT, AND THE DIFFERENCE IS THE SLICER
+
+*Renumbered from 3545.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 Both of `FPM_FSE_receive`'s angle reductions fold at `>= 0x4000` where V.22's
 fold at `> 0x4000`, and the two readings differ on exactly ONE input each.
@@ -61019,7 +61052,12 @@ boundary that no trial lands on and a boundary that no observable carries
 produce the same green run, and only a counter that fails when the input is
 never reached tells them apart.
 
-### 3546. THE SMOOTHED SQUARED ERROR SATURATES ON AN UNSIGNED TEST, WHICH MAKES IT NON-NEGATIVE FOR EVER
+### 3586. THE SMOOTHED SQUARED ERROR SATURATES ON AN UNSIGNED TEST, WHICH MAKES IT NON-NEGATIVE FOR EVER
+
+*Renumbered from 3546.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 At 0x0a83f8 the object compares the new smoothed error against 0x7fff and
 branches with `jbe` -- unsigned.  Above it, the sum of two squares is truncated
@@ -61042,7 +61080,12 @@ the suite sweeps a half-magnitude offset through it and counts the positions
 where the forced and unforced runs leave different coefficients.  Recorded as
 D391.
 
-### 3547. WHAT IS STILL UNEXPLAINED IN THE CODEGEN, AND THE EMPTY LOOP AT 0x0a82c7
+### 3587. WHAT IS STILL UNEXPLAINED IN THE CODEGEN, AND THE EMPTY LOOP AT 0x0a82c7
+
+*Renumbered from 3547.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 Ours is 2166 bytes against the blob's 2131 and 519 instructions against 547,
 and with sixteen mnemonics at identical counts -- `add`, `and`, `call`,
@@ -61064,7 +61107,12 @@ object's and the residue is placement.  Three parts of the residue are named rat
     would.  Recorded so that the next reader does not spend a session
     rediscovering that it is unexplained rather than absent.
 
-### 3548. `FPM_phasor` READS ITS QUADRANT SIGN TABLE OUT OF BOUNDS FOR A NEGATIVE PHASE, AND `FPM_FSE_receive` IS THE FIRST CALLER THAT HANDS IT ONE
+### 3588. `FPM_phasor` READS ITS QUADRANT SIGN TABLE OUT OF BOUNDS FOR A NEGATIVE PHASE, AND `FPM_FSE_receive` IS THE FIRST CALLER THAT HANDS IT ONE
+
+*Renumbered from 3548.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
 
 The blob's `FPM_phasor` (0x0a9300) splits its phase with `sar $0x5` then
 `sar $0x8` and indexes the two sign tables with the result UNMASKED:
