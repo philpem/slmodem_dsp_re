@@ -59926,6 +59926,16 @@ V.32 branch is a merge conflict for everyone.  Recorded so the next person to
 see that link error does not go looking for it in their own code, which is
 where this session looked first.
 
+**FIXED IN 3521, AND THE FIRST OF THE TWO ONE-LINE FIXES ABOVE IS WITHDRAWN.**
+An order-only `| prereq` on the eight tiers does not close this: the target
+that fails is `build/test/t_spandsp_b103`, a PREREQUISITE of `interop`, and
+make builds it concurrently with `prereq` whatever `interop`'s own ordering
+says.  It is the second option -- `phase` reduced to the single prerequisite
+`prereq`, with the eight tiers moved into a `$(MAKE)` recipe -- that holds.
+3521 also has the reproduction this paragraph could not offer: `prereq` had
+not started 2.37 s into a `-j3` run, so it is an ordering failure and not a
+lost race.
+
 ### 3216. THE FOUR TRELLIS SLICERS ARE WRITTEN, AND `FSE_decision_16pt` STILL IS NOT
 
 Read end to end from `tools/dis.py` at .text 0x80330 (`_16Tpt`, 432 B),
@@ -60844,3 +60854,285 @@ post-init correction of two blocks' running state, or a soft spot in one of the
 two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
+
+### 3520. `tools/indirect.py` HAD NEVER RUN, AND WHAT IT SAYS NOW CONTRADICTS THE BUCKET IT WAS MEANT TO EXPLAIN
+
+The `tools/dis.py` shadow, in the place `docs/plan.md` Phase 8 was waiting on.
+`inspect` reads `dis.COMPILER_FLAG_NAMES` at import; ours has no such
+attribute; pyelftools reaches `inspect` through `pprint` -> `dataclasses`, so
+the tool died on its own second import line and named neither this directory
+nor the file responsible.  Before, from a clean checkout:
+
+    $ python3 tools/indirect.py
+    Traceback (most recent call last):
+      File ".../tools/indirect.py", line 18, in <module>
+        from elftools.elf.elffile import ELFFile
+      ...
+      File "/usr/lib/python3.12/inspect.py", line 167, in <module>
+        for k, v in dis.COMPILER_FLAG_NAMES.items():
+    AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'
+    exit 1
+
+The fix is `whichfield.py`'s and `boundarycheck.py`'s, unchanged: drop our own
+directory from `sys.path` before the import.  After, same command, same tree,
+**no environment set at all**:
+
+    $ python3 tools/indirect.py
+    pointers stored in data that resolve to a .text symbol
+
+      object: /home/philpem/dev/sip-D-modem/slmodemd/dsplibs.o
+      1922 relocations into .text from data sections
+      163 land exactly on a symbol, naming 125 distinct entry points
+      1759 land mid-function (switch jump tables, not entry points)
+    exit 0
+
+**TWO DEFECTS UNDER THE CRASH, both of the kind that only surface once a tool
+runs.**  `path = sys.argv[1]` had no default, so the documented reproduction
+command was an `IndexError` the moment the import was repaired; the default is
+now `$BLOB`, and where that is unset it is resolved through `git rev-parse
+--git-common-dir` exactly as `BLOB` in the Makefile and the `prereq` target
+resolve it, because a bare `../slmodemd/dsplibs.o` names
+`.claude/worktrees/slmodemd` from every agent worktree.  **The resolved path is
+printed with the counts**, which is 3110's rule and readyqueue.py's comment: a
+tool that can silently read a different object than the caller meant must say
+which one it read.  And the second line printed `len(exact)` while calling it
+relocations, so 125 + 1759 did not equal 1922 and no reader could tell which
+number was wrong; it now prints both measurements and says they are two.
+
+**WHAT IT FINDS, AND WHY PHASE 8 SHOULD NOT BELIEVE `docs/plan.md`'s SENTENCE
+ABOUT IT.**  The 125 are dominated by the state-machine dispatch tables --
+`B103OriginateNextState`, `V32AnsNextState`, `V32OrgNextState`,
+`V32LocLoopNextState`, the eight `FSE_decision_*` slicers and their `FAX_`
+twins -- 73 pointed at from `.rodata`, 37 from `.data`, and 17 from the four
+`.gnu.linkonce.r._ZTV*` sections, which are the only C++ vtables the object
+contains at all: `Resampler`, `V90Resampler`, `ResamplerTiming`,
+`ResamplerTimingOffset`.
+
+`plan.md` names `VOICE_process`, `FAX_process` and `V92CP::bitsToInfo` as the
+worked examples of the 254 no-direct-caller symbols, calling them "vtable slots
+and dispatch-table targets".  **None of the three is in the 125, and none of
+them is the target of any relocation anywhere in the object** -- `readelf -rW
+dsplibs.o | grep -cE 'VOICE_process|FAX_process|_ZN5V92CP10bitsToInfoEh'`
+returns 0.  They have no direct caller because **nothing inside dsplibs.o calls
+them at all**: `nm -u ../slmodemd/modem.o` lists `VOICE_process` and
+`FAX_process` as undefined, so they are the library's external API and their
+callers are in the program that links it.  `V92CP::bitsToInfo` is not
+undefined in any object of `slmodemd/`, so on the evidence available it is
+reached from neither side.  That is a different fact about the bucket from the
+one plan.md records, and it changes the ordering question rather than
+answering it: an external entry point has no ordering constraint to discover.
+
+**A SECOND MECHANISM THIS TOOL DOES NOT MEASURE, MEASURED SEPARATELY.**  A
+function pointer installed by CODE -- `movl $FSE_decision_4pt, 0x18(%ebx)` --
+is an `R_386_32` in `.rel.text`, and `indirect.py` excludes `.text` by design
+because that is where the jump tables would otherwise come from.  A throwaway
+probe over `.rel.text` alone counts **310 such relocations, all 310 landing
+exactly on a symbol boundary and none mid-function, naming 144 distinct
+functions** -- `RxHdxData`, `RxHdxEpoch`, `FSE_decision_eqtrn`,
+`FSEv22_decision12` and so on.  The three plan.md names are not among those
+either.  The tool was NOT extended to cover this: its docstring says data
+sections, its 1759 mid-function hits are the jump-table population it exists
+to separate out, and folding a second mechanism into one count is how a number
+stops meaning anything.  Recorded so the next pass knows the 144 exist and
+that they are a second query, not a bigger one.
+
+**THE SWEEP FOR THE SAME CRASH ELSEWHERE: one candidate, and it was a false
+positive.**  Running every `tools/*.py` with `--help` and grepping for the
+`AttributeError` flagged `indirect.py` and `gen_v90pf_tables.py`.  The second
+is not this bug: it fails `KeyError: '.data'` on being handed `--help` as an
+object path, and the `COMPILER_FLAG_NAMES` text after it comes from Ubuntu's
+**apport excepthook**, which imports `dataclasses` to file a crash report and
+hits the shadow on the way.  So **every unhandled exception in every tool here
+prints a spurious `dis`/`inspect` traceback after the real one**, which is the
+same "names neither the directory nor the file" trap wearing a new hat -- read
+past it to the `Original exception was:` line.  A static cross-check agrees
+with the empirical sweep: `elftools`, `pprint`, `dataclasses`, `unittest`,
+`pydoc`, `doctest`, `inspect` and `typing` are imported at module level by
+`indirect.py` and `whichfield.py` only; `boundarycheck.py` and `closure.py`
+already carry the guard, and `readyqueue.py` inherits it from `closure`.
+
+### 3521. `make phase`'s `prereq` IS NOW A BARRIER, AND 3215's SUGGESTED ONE-LINE FIX WOULD NOT HAVE WORKED
+
+Finding 3215 recorded the race and declined to fix it.  This fixes it, and
+first corrects the remedy 3215 proposed.
+
+**THE ORDER-ONLY FORM IS UNSOUND HERE.**  3215 offers "make the other eight
+prerequisites `| prereq`" as one of two one-line fixes.  It does not work: what
+fails is not the phony `interop` target but `build/test/t_spandsp_b103`, a
+PREREQUISITE of it, and `interop: | prereq` orders `prereq` against `interop`'s
+RECIPE while leaving make free to build `interop`'s prerequisites -- the five
+link rules at Makefile lines 627, 639, 649, 677 and 685, each carrying its own
+`test -f $(SPANDSP_LIB)` guard -- concurrently with `prereq`.  The race would
+have survived the fix, and it would have survived it silently, since the
+symptom is identical.  It would also have put an order-only `prereq` on `make
+test` and `make check64`, which nothing asked for.
+
+So it is 3215's other option, in its cheapest form: `phase` keeps `prereq` as
+its ONE AND ONLY prerequisite -- a single prerequisite cannot race anything --
+and the eight tiers move into a recipe.
+
+    phase: prereq
+    	@$(MAKE) --no-print-directory $(PHASE_TIERS)
+
+`$(MAKE)` in the recipe is what marks the line recursive, so `-jN` crosses into
+the sub-make through the jobserver and the eight tiers still run in parallel
+with each other.  That was verified rather than assumed, because a sub-make
+that fell back to `-j1` would serialise `make phase` for every worktree at
+once: TIMINGS AND THE ABSENCE OF `jobserver unavailable` ARE BELOW.
+
+**SHOWN TO FIRE, DETERMINISTICALLY, ON THE THREE SHAPES.**  The real tree's
+race is a race and so is a poor witness -- it is won or lost per run, and a run
+that passes proves nothing either way.  What is NOT a race is make's ordering
+rule, and that can be put on a stopwatch.  Three Makefiles, identical but for
+the `phase` line, `prereq` sleeping 0.3 s and each tier 1 s, all at `-j3` on
+GNU Make 4.3; the whole transcript is timestamps, in seconds:
+
+    (1) BEFORE:  phase: prereq t1 t2 t3
+        prereq start 112.2745        t1 start 112.2749
+        prereq done  112.5762        t2 start 112.2749
+                                     t3 start 112.5778
+
+    (2) 3215's ORDER-ONLY SUGGESTION:  t1: dep1 | prereq
+        dep1         113.5867   <-- dep1 stands for t_spandsp_b103
+        prereq start 113.5869
+        prereq done  113.8886
+        t1 start     113.8901
+
+    (3) AFTER:  phase: prereq  +  recipe @$(MAKE) $(PHASE_TIERS)
+        prereq start 092.7183
+        prereq done  093.0200
+        t1 start     093.0225        t2 start 093.0227   t3 start 093.0229
+
+(1) is the defect with the timing taken out: `t1` and `t2` start **0.4 ms after
+`prereq` starts and 301 ms before it finishes**.  (2) is why 3215's first
+suggestion is withdrawn: the order-only edge holds `t1`'s RECIPE back, and
+`dep1` -- the stand-in for `build/test/t_spandsp_b103`, the target that
+actually carries the failing `test -f` guard -- **runs 0.2 ms BEFORE `prereq`
+even starts**.  (3) is the fix: no tier begins until `prereq` has finished, and
+all three then start within 0.4 ms of each other, which is the jobserver
+crossing the sub-make.  Wall times for (3): **1.30 s at `-j3` against 3.31 s
+at `-j1`**, so the parallelism survives; `grep -i jobserver` over the log is
+empty, i.e. no `jobserver unavailable: using -j1` fallback.
+
+**AND ON THE REAL `make phase`, WHERE IT IS PLAINER STILL.**  A `-j3` run in
+this worktree with `third_party/spandsp` absent PASSED -- 197 differential
+suites, exit 0, 156.55 s -- and its log says why that was luck.  `prereq:
+linked` is line **1835 of 4764**, and the line above it is
+
+    1834  one definition: 210 types, 127 files, 1 known duplicates  OK
+    1835  prereq: linked third_party/spandsp -> .../claude_re/third_party/spandsp
+
+**`onedef` is the LAST name on `phase`'s prerequisite line and it finished
+before `prereq`, the FIRST name, had done anything**; 778 compiler jobs had
+been launched by then, and `refs` and `firewall` were long done.  The interop
+link survived only because it is gated behind those 778 compiles and does not
+become runnable until line 4147 -- 2,312 lines later.  That is the whole of
+3215's "race": the tier that fails is simply the slowest to become ready, and
+on a warm tree, where the five link rules are runnable at once, it is not
+slower at all.  Nothing about the ordering changed between the run that failed
+and the run that passed.
+
+**AND IT REPRODUCES ON DEMAND ON A WARM TREE**, which is the condition every
+agent actually runs in and the one where the five link rules are runnable the
+instant make starts.  Symlink removed, the five interop binaries deleted:
+
+    $ make phase -j3
+    ...
+    2433  third_party/spandsp/src/.libs/libspandsp.a not built -- see third_party/README.md
+    2436  make: *** [Makefile:685: build/test/t_spandsp_b103] Error 1
+    ...
+    WALL 87.34 s
+    exit 2
+    $ ls third_party/
+    README.md
+
+**`grep '^prereq:'` over that whole 2,584-line log matches nothing and the
+symlink was never created**: `prereq` did not run at all, and `make phase`
+failed naming a link line rather than the missing library.  That is 3215's
+transcript, its Makefile line number, and 1563's diagnosis defeated, on demand
+rather than twice in a row by luck.
+
+AFTER -- same worktree, same `-j3`, same two removals, so the two arms do the
+same work:
+
+    $ make phase -j3
+    prereq: linked third_party/spandsp -> /home/philpem/dev/sip-D-modem/claude_re/third_party/spandsp
+    licence firewall: no SpanDSP include reachable from src/  OK
+    offsets: 1341 annotations, all match __builtin_offsetof  OK
+    ...
+    period differential: 197 passed, 0 failed
+    phase boundary: differential, 64-bit, interop, coverage and debug sites all OK
+                    suite line coverage over src/ ...
+    WALL 160.70 s
+    exit 0
+
+**`prereq: linked` is line 1 of 3,188.**  Not line 1835 of 4764, and not
+absent.
+
+**AND THE FIX CAUGHT A SECOND DEFECT ON ITS WAY IN, WHICH IS WHY THE JOBSERVER
+WAS CHECKED RATHER THAN ASSUMED.**  The first version of this change was green
+and correct and printed, as its second line,
+
+    make[1]: warning: -j6 forced in makefile: resetting jobserver mode.
+
+`MAKEFLAGS += -j$(J)` is set BY THIS MAKEFILE, and `-j` from a makefile is
+FORCED: the sub-make re-read the file, threw away the jobserver it had
+inherited, and started `$(J)` = 6 jobs of its own.  So `make phase -j3` would
+have run **six** jobs, and six agents each politely asking for `-j3` would have
+put 36 on twelve cores -- the exact load the `J` paragraph says invalidates a
+bench afternoon, arrived at by a change whose entire purpose was to be
+conservative.  It is not hypothetical: on an eight-tier model, `-j3` took
+2.01 s (the `-j6` time) with the sub-make and 3.00 s without it.
+
+The guard is `ifeq ($(MAKELEVEL),0)` around the `MAKEFLAGS` line, so the flag
+is set once at the top and every sub-make inherits the jobserver instead of
+re-forcing it.  With it, the recursive shape matches the non-recursive one to
+the hundredth of a second on all three settings -- `-j3` 3.00 s, no flag
+2.00 s, `-j1` 8.01 s -- and the warning is gone from the real log.  **It also
+repairs `make one`**, at Makefile line 348, which has recursed through
+`$(MAKE)` all along and has therefore been quietly ignoring `-jN` and using
+`$(J)` for as long as it has existed.
+
+On the real tree the tiers still overlap: the same full green `-j3` run takes
+160.70 s with the guard against 103.40 s without it, and 103.40 s is what six
+jobs buy.  A pre-fix full green `-j3` run took 156.55 s, so the barrier costs
+about 4 s -- within the noise of a twelve-core box with five other agents on
+it, and the two runs differ in warmth as well.
+
+**A CORROBORATING RUN, AND WHAT IT IS AND IS NOT.**  An earlier `-j3` run in
+the same worktree aborted at 2.37 s for an unrelated reason -- 3520's forward
+reference to this finding, which `tools/refcheck.py` caught, incidentally
+demonstrating that `refs` is a live gate:
+
+    $ /usr/bin/time -f "WALL %e s" make phase -j3
+    licence firewall: no SpanDSP include reachable from src/  OK
+    offsets: 1341 annotations, all match __builtin_offsetof  OK
+    [ ~40 compiles, 3 at a time ]
+    make: *** [Makefile:494: refs] Error 1
+    make: *** Waiting for unfinished jobs....
+    WALL 2.37 s
+    $ ls third_party/
+    .gitignore  README.md
+
+`prereq` is the FIRST name on `phase`'s prerequisite line, and 2.37 s in --
+with `firewall`, `offsets`, `strings` and `refs` finished and forty compiles
+launched -- it had created no symlink and printed neither of its two lines.
+**What that does NOT establish is that it had never been dispatched**: make
+stops handing out work once a job fails, so "queued behind three occupied
+slots when `refs` died" fits the same transcript and is not the defect.  It
+also never reached the interop link, so it is not 3215's failure mode.  It is
+recorded as what it is -- no barrier, on a run that ended early -- and the
+transcripts above are the evidence.
+
+**WHAT THIS DOES NOT CHANGE.**  Three lines of Makefile: the `phase` rule, a
+`PHASE_TIERS` list holding the same eight names in the same order, and the
+`ifeq` around `MAKEFLAGS`.  The tiers, their recipes, `prereq` itself and the
+closing denominator check are untouched, `J`'s default is untouched, and a
+serial `make phase` behaves as it always did.  The visible differences are one
+extra `make` process during a run and `prereq`'s line moving to the top, which
+is what 1563 asked for in the first place.
+
+**WHAT IT STILL CANNOT SEE.**  `prereq` guards one prerequisite, the SpanDSP
+library.  Nothing here checks that the other tiers' inputs exist before their
+tier starts, and a barrier is not a reason to think they are checked: this
+makes `prereq` run first, it does not make it comprehensive.
