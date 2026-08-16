@@ -60622,6 +60622,11 @@ Courier's. It converges to 29.5 dB on the same block sequence, repeatedly.
         we asked for NO reduction   n=46   deficit 6.46 dB
         we asked for a reduction    n=26   deficit 7.10 dB   (median 1 dB asked)
 
+    (These 72 are HANDSHAKES that carry both a phase 3 control and a decision,
+    a stricter pairing than the 82 clean DECISION BLOCKS the 5.80 dB above is
+    taken over, so the two denominators differ and 5.80 against 6.46 is not a
+    disagreement.)
+
     **On the majority of handshakes we request nothing at all and still lose
     6.46 dB**, and asking costs a further 0.64 dB for a median 1 dB requested.
     So the by-design component is under a dB and **the unexplained systematic
