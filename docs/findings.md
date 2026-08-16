@@ -59850,31 +59850,53 @@ level is **-23.1 dBFS** and the median receive level **-22.4 dBFS**, range
 10 dB of headroom before clipping and about 11 dB before the low-level roll-off.
 
 **AND WE ARE NOT CLIPPING ON RECEIVE.** The tell would be samples landing on
-A-law's top codeword, which decodes to exactly 32256. 50 of 118 captures
-contain at least one; **none exceeds 0.01% of samples**, worst case 0.0017%,
-which is 17 samples in a million and exactly what an 11–14 dB PAR signal
-should do. (This also validates the measurement point: decoded peaks landing
-on the codeword value prove nothing scaled them between the codec and the
-dump. On transmit the equivalent check is that d-modem's only
-`conf_adjust_tx_level` calls are on the splitcomb's loudspeaker ports, 1940.)
+the top codeword. **All 118 captures are A-law** — classified by which decode
+table their distinct sample values fall in, 118 of 118 A-law and none u-law,
+so the PCMU the SDP also offers is never selected and the threshold is 32256
+throughout. 50 of 118 contain at least one such sample; **none exceeds 0.01%
+of samples**, worst case 0.0017%, which is 17 in a million and exactly what an
+11–14 dB PAR signal should do.
 
-**SO THE VG204's GAIN IS NOT THE LEVER, IN EITHER DIRECTION.** Trimming it
-moves us along a flat curve. The premise that we must "get the gain set
-correctly for the optimal signal-to-noise ratio" is the right instinct aimed
-at the wrong converter — companding already did that job.
+That classification also **validates the measurement point**, which was an
+assumption until now: the samples ARE bit-exact codec output, so nothing
+scales them between the decoder and the dump. The only value present that no
+A-law codeword can produce is exact zero — A-law's smallest magnitude is ±8 —
+and those are inserted silence. (On transmit the equivalent check is weaker:
+d-modem's only `conf_adjust_tx_level` calls are on the splitcomb's loudspeaker
+ports, 1940, so nothing should scale the network path, but there is no
+codeword fingerprint to confirm it with.)
 
-**THE REAL CONSTRAINT IS THE PLATEAU ITSELF.** ~37.5 dB is what one G.711 hop
-costs, it applies once per direction, and no gain setting improves it. V.34's
-top rates want SNR in the high thirties (an engineering figure, not one I have
-measured here), so **33 600 sits at the edge of what this path can carry even
-with a perfect modem at each end.** That is a ceiling to design against, not a
-defect to fix.
+**SO THE ATA's INPUT GAIN IS NOT A LEVER.** We are centred, we are not
+saturating, and trimming it moves us along a flat curve. The premise that we
+must "get the gain set correctly for the optimal signal-to-noise ratio" is the
+right instinct aimed at the wrong converter — companding already did that job.
 
-**IT ALSO CANNOT EXPLAIN THE ASYMMETRY IN #132** — the far end trains 33 600
-while we ask for 14 400. The codec hop is symmetric and both directions are
-equally well-centred, so whatever costs our receiver ~10 dB of effective SNR
-is downstream of it, in our own receive chain. This narrows that hunt rather
-than answering it.
+**BUT THE OUTPUT GAIN IS A LEVER, POINTING THE OTHER WAY.** See 1967: every
+far end asks us down because the ANALOG level arriving there is hotter than it
+wants, and we comply by dropping our DIGITAL level from -22.75 toward
+-25.48 dBFS, i.e. away from the plateau's centre and toward its lower edge.
+Attenuating the VG204's output by ~3–6 dB would make the far end stop asking,
+so our digital level stays centred. Note the mechanism carefully: this does
+NOT move us along the SNR curve — the curve is about our digital level. It
+changes what the far end hears, and only thereby lets us stop giving digital
+level away. Same few tenths of a dB as #165, no code change, reversible
+config, and not blocked on re-deriving any bit offsets. It is the cheapest
+experiment available and it is Phil's to make.
+
+**THE PLATEAU IS NOT A CEILING ON 33 600 — DO NOT READ IT THAT WAY.** ~37.5 dB
+is what one G.711 hop costs and no gain setting improves it, but the &V1
+diagnostics settle empirically what it permits: **the far modem reports
+`LAST RX rate 33600` in 9 of 17 captures**, having received our signal through
+exactly this hop. So the plateau demonstrably passes 33.6k. An earlier draft
+of this finding called it "a ceiling to design against"; that overstated the
+data and is withdrawn.
+
+**WHICH SHARPENS RATHER THAN WEAKENS THE POINT ABOUT #132** — the far end
+trains 33 600 while we ask for 14 400. The hop is symmetric, both directions
+are equally well-centred, and one direction achieves 33 600 across it. So the
+codec is not what binds, and whatever costs our receiver ~10 dB of effective
+SNR is downstream of it, in our own receive chain. This narrows that hunt
+rather than answering it.
 
 Reproduce: `testbench/g711level.py sweep | levels | sat | request`.
 
@@ -59918,3 +59940,56 @@ exactly like #149 — not an edit made on the strength of an argument. Task
 #165. Given the size, the right primary outcome is the transmit level itself
 (does the slope move toward -1.0 when the additional field is dropped), not a
 connect rate this bench cannot resolve to a fraction of a dB.
+
+### 1968. BOTH ENDS BLAME THE OTHER FOR THE RETRAINS — AND THE FAR END'S TALLY IS 39 TO 5 AGAINST US
+
+1964 left an open question: the object classifies most retrains as
+remote-requested, which if taken at face value would mean #149's ladder fix is
+aimed at a minority of them. **The far modems have been recording their own
+answer to that question all along**, in the `AT&V1` link diagnostics already
+captured beside 17 calls. No new call was needed.
+
+    capture              far Local   far Remote   termination
+    frz-olinet-1                00           03   RETRAIN FAILURE
+    frz-olinet-2                00           06   GSTN CLEARDOWN
+    frz-olinet-3                00           04   RETRAIN FAILURE
+    m3-olinet-fit-1             00           04   RETRAIN FAILURE
+    m3-olinet-off-1             01           03   RETRAIN FAILURE
+    m3-supra-fit-2              00           04   RETRAIN FAILURE
+    m3-supra-off-1              00           01   LOCAL REQUEST
+    m3-supra-off-2              00           03   RETRAIN FAILURE
+    qk-olinet-1                 01           03   RETRAIN FAILURE
+    qk-olinet-2                 00           02   LOCAL REQUEST
+    rrn-olinet-on-1             01           00   RETRAIN FAILURE
+    src-olinet-1                01           01   LOCAL REQUEST
+    src-olinet-2                00           02   LOCAL REQUEST
+    src-olinet-3                01           00   RETRAIN FAILURE
+    why-olinet-1                00           01   LOCAL REQUEST
+    why-olinet-2                00           02   LOCAL REQUEST
+    why-olinet-3                00           00   KEY ABORT
+
+`Remote Rtrn Count` is the far modem counting retrains it believes the OTHER
+end initiated — us. **Totals: 39 attributed to us, 5 to itself.** And the
+termination reason is `RETRAIN FAILURE` in 9 of 17.
+
+**SO THE TWO ENDS DISAGREE, EACH BLAMING THE OTHER.** Our object's
+`V34RTNWHO` said remote 3, local 2 — i.e. it thought the far end started most
+of them. The far end says we started 39 of 44. Both cannot be right.
+
+**THIS IS THE MORE CREDIBLE WITNESS, AND IT SUPPORTS #149.** It is 17 real
+calls against 1964's single emulated one; the counters come from a shipping
+commercial modem rather than from a reconstruction whose attribution logic is
+exactly what is in doubt; and it agrees with 1931, which attributed at least 6
+of 11 retrains to our own bad-block run using entirely separate
+instrumentation. The pessimistic reading of 1964 — that #149 is aimed at a
+minority of retrains — is **not supported**, and the likelier explanation is
+that our `rx->flags & 0x40` classification is wrong, which was already the
+first of 1964's two candidate explanations.
+
+**LIMITS, and they matter.** These 17 are 1901 and 1903 only — 14 Oli'Net and
+3 SupraExpress, **no Courier**, which is the far end that ratchets its power
+request (1965) and the one the ab149 batches used. The comparison against
+`V34RTNWHO` is across different calls, not the same ones. The clean test is
+cheap and should come before any more producer-hunting: run one call with
+`V34RTNWHO` logging AND read `AT&V1` from the far end afterwards, so both
+tallies describe the same handshakes.
