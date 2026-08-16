@@ -60311,3 +60311,74 @@ control works; the recovered headroom is real and measurable; and companding
 converts it into nothing. The receive-side deficit of #132 -- now confirmed
 from the far end's own mouth on all three modems, at 33600 against our
 4800-16800 -- is untouched by any of it.
+
+### 1974. THE RECEIVER HUNT, FIRST PASS: LEVEL IS EXCLUDED, THE AGC IS STABLE, AND THE ONE CONCRETE LEAD IS A TRELLIS CODE WE MAY BE CHOOSING BADLY
+
+Phil's three hypotheses for the receive-side deficit (#132), taken in order.
+The deficit is now measured from the far end's own diagnostics on all three
+modems: **they receive us at 28800-33600, we manage 4800-16800.**
+
+**1. "IS OUR RECEIVER EXPECTING A HIGHER LEVEL THAN THE PATH PROVIDES? SHOULD
+THE VG204's INPUT GAIN BE ADJUSTED?" — NO, and this is already answered.**
+We receive at -19 to -24 dBFS across 118 captures, which is the middle of the
+companding plateau where 1966 measured SNR flat to within a dB over 24 dB of
+level, with no meaningful saturation (worst capture 0.0017% of samples on the
+top codeword). There is nothing to win, and `input gain` should be left alone.
+No bench time should go here.
+
+**2. "IS THE RX AGC WORKING?" — IT IS STABLE, which is a provisional no-fault
+rather than a clean bill.** `rx->agc_gain`, logged by `probeselect`:
+
+    ata12-1901-5   1363, 1363
+    ata12-1903-5   1364, 1218, 960, 1202, 1199
+    ata12-1902-5   1213, 1077, 1204, 1068
+    base3db-1901-2 1215, 1219, 1081, 1218, 1085
+    archive        674-1080
+
+**960 to 1364 on every call, every far end, and unchanged between the 3 dB and
+12 dB gateway arms** -- which is right, since `output attenuation` does not
+alter what we receive. It is nowhere near the `0xfff` (4095) threshold the
+ordinary reduction arm gates on, so it is neither pinned at a rail nor
+wandering. **But stable is not the same as correctly scaled**: an AGC with a
+constant wrong gain would look exactly like this, and nothing here establishes
+the absolute. That distinction is what the next pass has to settle.
+
+**3. "IS THERE A FLAW IN THE RECEIVER?" — ONE CONCRETE CANDIDATE, and it is a
+lead rather than a finding.** The Courier's `ATI11` reports, identically on ten
+of ten captures:
+
+    Symbol Rate         3200/3200      <- IDENTICAL, so not a bandwidth gap
+    Trellis Code        64S-4D/16S-4D
+    Nonlinear Encoding  ON/OFF
+
+V.34's MP field list settles that both are receiver-dictated -- *"Receiver
+requires remote-end transmitter to use selected trellis encoder"*, 0 = 16
+State, 1 = 32, 2 = 64 -- so an asymmetry here is a CHOICE one of the two
+receivers made, not a property of the channel. If the first column is the
+Courier's receive direction, **our receiver asks for the weakest trellis code
+V.34 defines and declines nonlinear encoding**, worth about 1 dB together.
+
+**THE COLUMN CONVENTION IS NOT ESTABLISHED, and I am not building on it.** The
+`Recv/Xmit Level` line suggests receive-first, but the pre-emphasis field --
+tried as an independent check -- comes out 2 of 4: `ata12-1902-1` and
+`diagchk-1` match the second column, `ata12-1902-5` (we sent index 4, column
+says 8) and `atagain-1902-2` (we sent 6, column says 2) do not. Transmit-first
+would invert the reading into a non-story.
+
+**THE DECISIVE TEST NEEDS NO BENCH AND NO CONVENTION**: read what our own V.34
+MP builder puts in the trellis bits. `V90MP.cpp` models them (`Trellis` at
+bits 0x1d..0x1e, decode at :180, `switch` at :276) but that is the V.90 path
+and its `Trellis%d,NonLin%d,Shaping%d` string appears in **zero** captures,
+because `AT+MS=34,1` never runs it. The V.34 equivalent in `v34hshak.c` is what
+to read. Task #169.
+
+**AND SIZE IT: ~1 dB against an 8-12 dB deficit.** Even fully confirmed this is
+a contributor at about a tenth of the gap. 1966 is the precedent to keep in
+mind -- a correct measurement whose remedy turned out worth nothing.
+
+**WHAT WOULD DISCRIMINATE NEXT, and it is the question worth the next session:**
+whether our rate request is driven by an SNR estimate we can read. On a call
+where they achieve 33600 and we ask 12000, that number says whether our
+receiver is *correctly observing a bad channel* or *incorrectly observing a
+good one*. Those need entirely different fixes and the rate alone cannot tell
+them apart.
