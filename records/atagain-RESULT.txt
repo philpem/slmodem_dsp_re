@@ -92,3 +92,57 @@ WHAT THIS RUN DID PRODUCE, and it is worth more than the null
   knew; row.sh does not read it).  It is the per-direction level and rate
   instrument this bench has been missing, and $CLAUDE_JOB_DIR/atacall.sh has
   the two-line recipe.  Fold it into row.sh.
+
+===========================================================================
+ARM 2 RESULT -- output attenuation 3 (default) -> 12, i.e. +9 dB.  Five calls.
+
+PRIMARY: THE KNOB WORKS.  ATI11 Recv Level, settled reads only:
+
+    arm 1 (3 dB)    20  20  25
+    arm 2 (12 dB)   27  27
+
+  A shift of roughly +2 to +7 dB against a +9 dB command.  Not one-for-one,
+  but well outside the direction of chance and the first demonstration that
+  the gateway's attenuation reaches the audio path at all.  So the conclusion
+  the earlier arms could not reach: the control is real, and the arm-1 null
+  was the no-op it was later shown to be.
+
+TWO OF FIVE LEVEL READS WERE CONTAMINATED, and both by the harness, not the
+gateway.  Recorded because the numbers are in the captures:
+    calls 1,2   Recv Level 70 and 67 -- read mid-hangup, post-carrier floor.
+                A settled read of call 3 said 27 where its own early read
+                returned nothing at all.
+    call 4      Recv Level 26 beside Carrier Freq 34109, Symbol Rate 48905,
+                RTD 24 -- all nonsense.  Caused by the FIX for the above: an
+                AT-until-OK poll before the diagnostic perturbs the Courier's
+                stored report.  Plain settle restored it (call 5: 1920, 3200,
+                150, and Recv 27).
+
+SECONDARY, and it does NOT go the way finding 1966 predicted
+  The Courier's requested reduction, arm 2:  3 6 8 / 3 8 / 3 6 3 3 / 3 6 6
+  **8 dB appears, and 8 has never been seen** -- not in 121 archived
+  handshakes nor in arm 1's nine.  Nine dB quieter, and it asks for MORE.
+  Our transmit level fell rather than rose: -25.75/-26.68/-23.89 dBFS against
+  arm 1's -24.29/-24.29/-24.16.
+  The prediction was "request falls to 0-1, our level rises toward -23".  Both
+  wrong, and wrong in the opposite direction.
+
+OVER-ATTENUATION IS REAL, exactly as the addendum warned to watch for
+  Courier receive rate: 28800 on four calls, but 12000 on call 5, and ATI6 on
+  call 3 reported `Speed 21600/16800` with `Retrains Granted 3` and
+  `Disconnect Reason is Loop loss disconnect`.  Against arm 1's uniform 28800
+  that is the healthy direction starting to give way.
+
+AN UNEXPECTED HINT, EXPLICITLY NOT A RESULT
+  OUR receive rate went 12000/9600/14400 (arm 1) -> 14400 x4 and 19200 (arm 2).
+  Attenuating our TRANSMIT should not affect what we RECEIVE -- unless it is
+  echo: these FXS ports carry `no echo-cancel enable`, so our own signal leaks
+  back through the hybrid, and 9 dB less of it is 9 dB less interference on
+  our receiver.  That would bear on #110 and #111.
+  n=5 against n=3, one variable moved, two contaminated reads, and the rates
+  overlap.  It is a hypothesis with a cheap test (#167), not a finding.
+
+RECOMMENDATION: put voice-port 0/1 back to `output attenuation 3`, the default.
+  12 dB costs the direction that works and did not buy the direction that does
+  not.  If the echo hint is worth chasing, chase it with the echo canceller,
+  not with the transmit level.

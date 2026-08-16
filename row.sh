@@ -286,11 +286,32 @@ except Exception as e:
 	print("!!! far-end diagnostic FAILED to open %s: %s" % (dev, e))
 	sys.exit(0)
 try:
-	time.sleep(0.3)
-	s.reset_input_buffer()
-	s.write((cmd + "\r").encode())
-	time.sleep(2.0)
-	reply = s.read(8192).decode("ascii", "replace")
+	# WAIT FOR THE MODEM TO BE IDLE FIRST.  Reading straight after call.py
+	# returns catches it mid-hangup: the first version did that and got an
+	# EMPTY reply on one call and, far worse, a WELL-FORMED report carrying a
+	# post-carrier-loss noise floor on two others -- `Recv Level 70` where a
+	# settled read of the same call said 27.  A plausible wrong number that
+	# passes the field check is the failure this whole guard exists to stop.
+	# A PLAIN SETTLE, AND DELIBERATELY NOTHING CLEVERER.
+	#
+	# Reading straight after call.py returns catches the modem mid-hangup:
+	# one call came back EMPTY and two came back as well-formed reports
+	# carrying a post-carrier noise floor (`Recv Level 70` where a settled
+	# read of the same call said 27).
+	#
+	# The obvious fix -- poll AT until it answers OK -- MADE IT WORSE.  Twenty
+	# rapid AT commands perturb the Courier's stored diagnostics: the report
+	# came back with Carrier Freq 34109, Symbol Rate 48905 and RTD 24, all
+	# nonsense, beside a plausible level.  Do not reintroduce it.  What was
+	# empirically clean across four calls is to leave the modem alone and
+	# wait.  The range check below is the guard, not the delay.
+	time.sleep(3.0)
+	reply = ""
+	for one in cmd.split():
+		s.reset_input_buffer()
+		s.write((one + "\r").encode())
+		time.sleep(2.0)
+		reply += s.read(8192).decode("ascii", "replace")
 finally:
 	s.close()
 
@@ -298,11 +319,33 @@ finally:
 # product name is what a WRONG command looks like, and it is not a report.
 FIELDS = ("Recv/Xmit Level", "Rx LEVEL", "LAST TX rate", "Symbol Rate")
 ok = any(f in reply for f in FIELDS)
+
+# AND THE VALUE MUST BE PHYSICALLY POSSIBLE.  A well-formed report is not a
+# valid one: reading mid-hangup returned `Recv/Xmit Level (-dB) 70/20` for a
+# call that a settled read scored at 27.  V.34 does not run 50 dB below the
+# level this path delivers, so a figure that large is the carrier already
+# gone.  NOTE the absolute reference of this field is NOT verified -- treat it
+# as a relative indicator between calls, not as dBm.
+suspect = ""
+for line in reply.splitlines():
+	if "Recv/Xmit Level" in line:
+		try:
+			recv = int(line.split()[-1].split("/")[0])
+		except (ValueError, IndexError):
+			continue
+		if recv > 50:
+			suspect = ("Recv level %d is below anything V.34 can carry -- "
+				   "this is a post-carrier read, not a link measurement"
+				   % recv)
 with open(out_path, "w") as f:
 	if not ok:
 		f.write("*** DIAGNOSTIC DID NOT PARSE -- '%s' is probably the wrong\n"
 			"*** command for this modem.  Raw reply follows.\n\n" % cmd)
+	elif suspect:
+		f.write("*** DIAGNOSTIC IS SUSPECT: %s\n\n" % suspect)
 	f.write(reply)
+if suspect:
+	print("!!! far-end diagnostic SUSPECT: " + suspect)
 if ok:
 	for line in reply.splitlines():
 		if any(k in line for k in ("Speed", "Recv/Xmit Level", "LAST TX rate",
