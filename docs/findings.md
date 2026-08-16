@@ -60409,11 +60409,24 @@ whatever about the V.34 path.
 at `+0xa9de..+0xa9e3` and `settxlevel` reads its power fields. There is no
 assembler for an MP we send.
 
-`debugaudit.py --missing` says where it went: **`v34handshak` is 261 debug
-sites missing of the blob's 262** -- by far the largest coverage gap in the
-tree. Our version of that function is functional (calls connect and carry) but
-its diagnostics, and plausibly whole arms of its state machine, are not
-reconstructed. The MP we transmit is built somewhere in there.
+`debugaudit.py --missing` says **`v34handshak` is 261 debug sites missing of
+the blob's 262** -- by far the largest gap in the tree.
+
+> **CORRECTION, after re-reading the tool's own header: THAT IS A DIAGNOSTICS
+> GAP, NOT A RECONSTRUCTION GAP.** `debugaudit --missing` reports "MISSING
+> diagnostic call sites, **in functions already reconstructed**... the level
+> ships at zero, so a missing call and a present one behave identically"
+> (finding 134). `v34handshak` is 487 lines in `v34hshak.c` and is
+> reconstructed. I read a debug-coverage number as a completeness number and
+> inferred "plausibly whole arms of its state machine are not reconstructed",
+> which the tool explicitly says is not what it measures. Withdrawn.
+>
+> So the MP transmit builder is NOT missing because the function is missing.
+> It is somewhere in the V.34 sources and I did not find it: no `t4_mp_*`
+> function assembles one, and nothing in `src/pump/v34/` writes a bit array at
+> MP positions 29-31. The likeliest explanation is that it packs words rather
+> than a bit array, so the V90MP-shaped search was looking for the wrong
+> construct. #169 stands re-opened on that basis, not blocked.
 
 **SO #169 IS BLOCKED, not answered**, and the honest position on the trellis
 asymmetry is unchanged from 1974: it rests on an `ATI11` column convention that
