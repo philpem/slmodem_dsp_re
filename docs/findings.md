@@ -59993,3 +59993,68 @@ request (1965) and the one the ab149 batches used. The comparison against
 cheap and should come before any more producer-hunting: run one call with
 `V34RTNWHO` logging AND read `AT&V1` from the far end afterwards, so both
 tallies describe the same handshakes.
+
+### 1969. THE ATA ATTENUATION CHANGED NOTHING MEASURABLE — AND THE TEST COULD NOT HAVE SEEN IT IF IT HAD, AND IT WAS AIMED AT THE WRONG DIRECTION ANYWAY
+
+Acting on 1966, Phil applied `output attenuation 3` to VG204 `voice-port 0/1`
+(ext 1902, the USR Courier). Three calls to 1902 and two controls to 1901,
+quiet machine, `hybrid-fit`, pre-registered in `testbench/records/
+atagain-PREREG.txt`.
+
+**THE PREDICTION WAS THAT THE COURIER'S REQUEST WOULD FALL BELOW 3 dB.** It did
+not, on any of nine handshakes:
+
+    1902, 3 dB attenuation   3  3  3  9  3  6  3  3  9
+    1902, archived at 0 dB   3 x65   6 x51   9 x5      -- never below 3
+
+Our transmit level was **-24.29, -24.29, -24.16 dBFS** against an archived
+median of **-24.30** for a 3 dB request. The control on the untouched port
+matched its own archive exactly (requests `2 1 1 1 2 / 2 1 2 2 2 3` against
+`1 x65, 2 x86`; -22.24 dBFS against -22.75/-22.99), so nothing global moved.
+
+**BUT THE NULL IS NOT A REFUTATION, BECAUSE THE TEST HAD NO POWER.** `ATI11` on
+the Courier reports `Recv/Xmit Level (-dB)` — the far end's own measurement of
+the analog level reaching it, and the only witness to whether the gateway
+change did anything at all. Across the three calls:
+
+    20/18        20/19        25/18
+
+**Five dB of spread across three identical calls.** A 3 dB step is inside it.
+The pre-registration asserted "n=1 is adequate because the quantity is
+near-deterministic per far end"; that was wrong twice over — the request is
+bimodal 3/6 rather than deterministic, and the level wanders 5 dB. So "the
+mechanism is wrong" and "the config never took effect" are both still live and
+this run separates them not at all.
+
+**AND THE WHOLE LINE WAS AIMED AT THE DIRECTION THAT ALREADY WORKS.** The same
+`ATI11` line settles it:
+
+    Speed 28800/12000      Recv/Xmit Level (-dB) 20/18
+
+The Courier receives us at **-20 dBm, a healthy level, and gets 28 800 out of
+it**. We receive the Courier — transmitting at -18 dBm — and manage **12 000**.
+`output attenuation` changes only what the FAR END hears, which is the 28 800
+direction. It cannot touch the 12 000 direction at all.
+
+So even with the knob working perfectly and 1966's model exactly right, the
+best available prize was a fraction of a dB of margin on the healthy
+direction. **That is a defect in the recommendation, not in the execution, and
+it was visible in principle before a single call was placed** — 1966 itself
+records that the codec hop is symmetric and that our receive side is already
+centred, which is precisely why the deficit cannot be a transmit-level
+problem. I proposed the change anyway. Recorded so the next person does not
+re-derive the same enthusiasm.
+
+**RECOMMENDATION: revert port 0/1 to the default.** Nothing was demonstrated,
+nothing is available in the direction that matters, and it is a live gateway.
+
+**WHAT THE RUN DID BUY, and it is worth more than the null.** `ATI11` on the
+Courier gives per-direction level AND rate in one line. No archived capture has
+it: every `&V1` block in the archive is Supra or Oli'Net, and the Courier needs
+`ATI11` rather than `&V1` — `modems.sh:156` already encodes that, but `row.sh`
+never reads any diagnostic at all, which is why 118 captures have no far-end
+level. This is the per-direction instrument the bench has been missing for
+#132, and it should be folded into `row.sh`. Task #166.
+
+It also independently confirms #132's direction on the exact link under
+investigation: **they hear us fine; we cannot hear them.**
