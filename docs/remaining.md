@@ -1,6 +1,6 @@
 # What is reconstructed, and what is left
 
-*Measured at `d367962`. Every figure here comes from a tool in `tools/`; the
+*Measured at `a30a3e0`. Every figure here comes from a tool in `tools/`; the
 commands are given so they can be re-run rather than trusted. Nothing in this
 document is an estimate.*
 
@@ -19,9 +19,9 @@ sec 7 ranks by value and 477 of the 969 cannot be started yet.*
 | | |
 |---|--:|
 | `.text` in the blob | 734,605 bytes / 1,861 symbols |
-| translated | **48.5%** — 356,597 bytes / 892 symbols |
+| translated | **51.6%** — 379,256 bytes / 905 symbols |
 | driven against the blob | **100%** of what can be — 356,574 bytes, 885 of 892 |
-| still to write | **969 symbols / 363,528 bytes** |
+| still to write | **956 symbols / 340,869 bytes** |
 | `make phase` | exit 0, 1,436 PASS, 0 FAIL *(last recorded; not re-run here)* |
 | codegen tier | *not re-measured — see below* |
 

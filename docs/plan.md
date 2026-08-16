@@ -1,10 +1,10 @@
-# A plan for the 961 functions that are left
+# A plan for the 956 functions that are left
 
 *Companion to `docs/remaining.md`, which says what is left, and
 `make worklist`, which lists it. This says in what order, and why that
 order rather than the obvious one.*
 
-*Measured at `93270f9`, after phase 0 landed. Re-run `tools/readyqueue.py`
+*Measured at `a30a3e0`, with phases 0 and 1 landed and the project past 50%. Re-run `tools/readyqueue.py`
 and `tools/service.py` before trusting any count here; the whole point of the
 ordering is that it moves as work lands.*
 
@@ -20,8 +20,8 @@ executed by deferring a translation-unit span, and §2 is why.
 
 | | symbols | bytes |
 |---|--:|--:|
-| **READY** — closure needs nothing unwritten but itself | 481 | **105,516** |
-| **BLOCKED** — needs 1 or more unwritten symbols first | 471 | 253,156 |
+| **READY** — closure needs nothing unwritten but itself | 480 | **105,204** |
+| **BLOCKED** — needs 1 or more unwritten symbols first | 467 | 235,665 |
 
 A batch has to be **closed** before it can be committed: every dependency of
 every member is in the set or already written. This is not a style
@@ -42,7 +42,7 @@ parallelises; the limit is review and machine time, not the graph.
 
 | who needs it | symbols | bytes |
 |---|--:|--:|
-| **data mode** — V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8/call progress | 285 | **209,067** |
+| **data mode** — V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8/call progress | 280 | **191,264** |
 | **fax only** — nothing in data mode reaches it | 286 | 78,718 |
 | voice / Caller ID / ring detect only | 70 | 24,467 |
 | no entry point reaches it | 311 | 46,420 |
@@ -129,10 +129,18 @@ Eighteen merged branches were deleted with them. `worktree-agent-af64acb…`
 and `review/nextsteps-2026-08-11` are superseded rather than merged — they
 are one commit ahead each and need `-D`, so they were left alone.
 
-## Phase 1 — the one keystone, and the 17 KB behind it
+## Phase 1 — the one keystone, and the 17 KB behind it  ✅ DONE
 
-`GenericToneDetector` is the only symbol in the object whose leverage is
-worth sequencing around, and it is small.
+**Landed 2026-08-16.** `GenericToneDetector` (all three methods), then both
+`V90Phase3Demodulator` decisions -- 8,379 and 8,616 bytes, 34 arms each -- which
+took the tree past **50% for the first time**: 51.6%, 905 symbols, 379,256
+bytes at `a30a3e0`. The two decisions were written by separate agents that
+could not see each other and had to be composed afterwards; findings 2116-2117
+settle a direct contradiction between them about GCC 3.4.2's `abs`, and 2120
+is the `reanchor.py` defect that composition exposed.
+
+`GenericToneDetector` was the only symbol in the object whose leverage was
+worth sequencing around, and it was small.
 
 | write | bytes | frees | bytes freed |
 |---|--:|---|--:|
