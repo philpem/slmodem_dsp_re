@@ -60845,13 +60845,24 @@ two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
 
-### 3520. `FPM_TONE_kill` IS THE DETECTOR'S NOTCH, RUN OVER THE CALLER'S BUFFER WITH ITS OWN STATE
+### 3570. `FPM_TONE_kill` IS THE DETECTOR'S NOTCH, RUN OVER THE CALLER'S BUFFER WITH ITS OWN STATE
 
-*This finding opens the block 3520-3539, reserved for the shared-DSP keystone
+*This finding opens the block 3570-3579, reserved for the shared-DSP keystone
 batch (`FPM_SRE_init`, `FPM_SRE_recover`, `FPM_PPS_filter`, `FPM_TONE_kill`).
-It is adjacent to 3515, the highest number in use on any branch when the block
-was claimed; 3540-3549 is held by the sibling agent writing
-`FPM_FSE_receive`.*
+It is adjacent to 3560, the highest number in use on any branch at COMMIT
+time; 3580-3589 is held by the sibling agent writing `FPM_FSE_receive`.*
+
+**THESE SEVEN WERE 3520-3526 AND WERE RENUMBERED BEFORE THE BRANCH WAS
+REPORTED.** 3515 was the highest number anywhere when the block was claimed at
+the top of the session; by the time the work was committed `master` had taken
+3520 and 3521 for `tools/indirect.py` and `make phase`'s `prereq`, and
+3540-3542 and 3560 for `V90CP`. Re-surveying at COMMIT time rather than at
+claim time is what docs/plan.md asks for and it is why: a block reserved
+against a five-hour-old survey is not reserved. Nothing outside this branch
+cites the old numbers -- the only reference was `test/unit/t_fpm_pps.c`'s
+citation of 3524, now 3574 -- but they appear in three commit messages on
+`fpm-shared-dsp`, which cannot be rewritten. The mapping is
+3520-3526 -> 3570-3576, in order.*
 
 Sixty-one bytes, and all of them are one call:
 
@@ -60887,7 +60898,7 @@ so the parameter is a `short` and not an `int`.
 
 Six mutations, six caught.
 
-### 3521. `FPM_SRE_*` IS THE GENERIC BLOCK `v22_sre.c` IS A SPECIALISATION OF, AND THE 403 EXTRA BYTES ARE FOUR REAL DIFFERENCES
+### 3571. `FPM_SRE_*` IS THE GENERIC BLOCK `v22_sre.c` IS A SPECIALISATION OF, AND THE 403 EXTRA BYTES ARE FOUR REAL DIFFERENCES
 
 `V22_SRE_recover` is 1,883 bytes and `FPM_SRE_recover` is 2,286. Reading the
 second beside the first is what makes it tractable -- the three-section
@@ -60910,7 +60921,7 @@ analogue is a question generator and four of its answers are wrong here**:
    input sample is also written to a ring and the discriminant is forced to
    ZERO; the first block whose `FPM_rms` exceeds `cfg.rms_min` clears the flag
    for good. V.22 has nothing like it, and it is a whole fourth heap buffer.
-4. **It measures a timing offset.** See 3523.
+4. **It measures a timing offset.** See 3573.
 
 And one thing that is the SAME and must not be assumed to be: V.22 indexes
 `SRE_ALPHA_AVG` / `SRE_BETA_AVG` by mode; this hard-codes 15/16 for both
@@ -60926,7 +60937,7 @@ is the right-hand end of the last interpolation, exactly as `SREv22_COFFS`'s
 `FPM_SRE_recover`'s return is `unsigned short`, not `short`: the counter is
 incremented with `cwtl` and returned with `movzwl`.
 
-### 3522. `fpm_sre_cfg::clock_len` IS THE CORRELATION LENGTH AND THE LOOP GAIN, AND IT IS ONE FIELD
+### 3572. `fpm_sre_cfg::clock_len` IS THE CORRELATION LENGTH AND THE LOOP GAIN, AND IT IS ONE FIELD
 
 Offset +0x00 of the configuration is read twice for two apparently unrelated
 purposes, and both reads are `(%ecx)` on the same object:
@@ -60955,7 +60966,7 @@ declared 16-bit on the strength of their contents. `FPM_SRE_recover` indexes
 `movswl (%edi,%ebx,2)`, so all six are measured now. `XB_COFFS` being 22 bytes
 is also where `FPM_SRE_DISC` comes from.
 
-### 3523. THE TIMING METER, AND WHAT ONE FORMAT STRING IS WORTH
+### 3573. THE TIMING METER, AND WHAT ONE FORMAT STRING IS WORTH
 
 `FPM_SRE_recover` carries a diagnostic V.22's specialisation does not, and its
 string is the only class-1 naming evidence in the whole struct:
@@ -60985,7 +60996,7 @@ set by init, to 1, and it is the divisor.
 the early return and never reaches it, so the interval is counted in CALLS that
 consumed all their input and not in samples.
 
-### 3524. FOUR MUTATIONS THAT SURVIVED ON V.32's OWN TABLES, AND WHY THAT IS A PROPERTY OF THE TABLES
+### 3574. FOUR MUTATIONS THAT SURVIVED ON V.32's OWN TABLES, AND WHY THAT IS A PROPERTY OF THE TABLES
 
 `SREv32_XB_COFFS` is `{-28156, 16128, 28156, 16128, 14078, 8128, -14078, 8128,
 992, -15360, 14399}` and `SREv32_PLL_K2` is `{0, 17, 8}`. So on V.32's
@@ -61025,7 +61036,7 @@ not because a test can see it.
 
 49 mutations: 44 caught, 0 uncaught, 5 equivalent.
 
-### 3525. `FPM_PPS_filter` REPEATS THE SRE's TWO DIFFERENCES, WHICH MAKES THEM A FAMILY PROPERTY RATHER THAN A COINCIDENCE
+### 3575. `FPM_PPS_filter` REPEATS THE SRE's TWO DIFFERENCES, WHICH MAKES THEM A FAMILY PROPERTY RATHER THAN A COINCIDENCE
 
 The generic pulse shaper differs from `v22_pps.c` in exactly the two ways the
 generic SRE differs from `v22_sre.c`:
@@ -61049,7 +61060,7 @@ Two things the shaper has that V.22's does not:
 constellation INDEX -- its low byte, `movzbl` at stride two -- into `cfg.imap`
 and `cfg.qmap`. Zero means the ring's own I and Q arrays are read directly.
 V.22 only ever reaches the mapped form, which is why the direct form's two
-pointers were sitting unnamed (see 3526).
+pointers were sitting unnamed (see 3576).
 
 **Everything is configured.** V.22's 40 phases, 3 taps and nominal step of 3
 are literals; here they are `cfg.phases`, `cfg.coeffs / cfg.phases` (an `idiv`
@@ -61068,7 +61079,7 @@ differs from `count - 1` when a caller seeds a debt above one, which nothing in
 the block ever does. Full-scale coefficients and a seeded `need` of two settle
 both.
 
-### 3526. `fpm_smc_ring::pad00[8]` IS TWO POINTERS, AND ONLY THE GENERIC SHAPER COULD SAY SO
+### 3576. `fpm_smc_ring::pad00[8]` IS TWO POINTERS, AND ONLY THE GENERIC SHAPER COULD SAY SO
 
 `struct fpm_smc_ring`'s first eight bytes were `pad00[8]`, "not read by
 anything traced yet". `FPM_PPS_filter`'s direct symbol source reads them:

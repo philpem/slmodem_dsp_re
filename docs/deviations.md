@@ -6826,7 +6826,15 @@ tree reconstructed all four from their own bodies, where the second parameter
 is dead, and one of the four headers belongs to another effort.  The same
 shape as D363, at four sites instead of one.
 
-## D381 ⚠ `FPM_SRE_init`'s reuse test guards THREE buffers with the size of a fourth
+## D400 ⚠ `FPM_SRE_init`'s reuse test guards THREE buffers with the size of a fourth
+
+*Renumbered at commit time from the number this batch first gave it, which
+three live branches had each taken independently while the work was in
+progress; the block below four hundred was exhausted by `master` and by the
+sibling agent writing `FPM_FSE_receive`. Re-surveying at COMMIT time rather
+than at claim time is what docs/plan.md asks for, and this is why. The old
+number appears in one commit message on `fpm-shared-dsp`, which cannot be
+rewritten.*
 
 *Batch of 2026-08-16, from `FPM_SRE_init` (blob 0x0aa7c0).  **Reachability: a
 re-init (`fresh` zero) whose configuration raises `rms_len` without raising
