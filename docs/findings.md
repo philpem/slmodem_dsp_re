@@ -60382,3 +60382,54 @@ where they achieve 33600 and we ask 12000, that number says whether our
 receiver is *correctly observing a bad channel* or *incorrectly observing a
 good one*. Those need entirely different fixes and the rate alone cannot tell
 them apart.
+
+### 1975. #169 CANNOT BE SETTLED FROM OUR SOURCE: THE V.34 MP *TRANSMIT* BUILDER IS NOT RECONSTRUCTED, AND V90MP IS NOT IT
+
+Chasing the `Trellis Code 64S-4D/16S-4D` asymmetry (1974) to its source. Three
+things established, and the third kills the approach.
+
+**THE BIT NUMBERING IS CONFIRMED, from the Recommendation.** V.34's MP carries
+`29:30` trellis encoder select (0 = 16 State, 1 = 32, 2 = 64) and `31` the
+non-linear encoder parameter, both explicitly *"for the remote-end
+transmitter"*. `V90MP.h` models exactly those positions -- `Trellis` at
+`0x1d..0x1e`, `NonLin` at `0x1f`, i.e. 29, 30, 31. The match is exact, which is
+what made V90MP look like the answer.
+
+**BUT V90MP IS V.90-ONLY AND MY HYPOTHESIS THAT IT SERVED V.34 WAS WRONG.**
+Every user of it is in `src/pump/v90/` -- `V90Demodulator`, `V90Modulator`,
+`V90Phase4*`, `V90ModemCtor`, `V90Modem`. **Nothing in `src/pump/v34/`
+references it.** The bit layout agrees because V.90's MP *extends* V.34's, not
+because the code is shared. So the fact that `Trellis` is never assigned
+outside `V90MP.cpp:180`'s decode -- which looked damning -- says nothing
+whatever about the V.34 path.
+
+**AND THE V.34 MP TRANSMIT BUILDER IS NOT IN THE RECONSTRUCTION.** Every
+`t4_mp_*` function in `v34hshak.c` is RECEIVE-side: `t4_mp_packer`,
+`t4_mp_runlength`, `t4_mp_word`, `t4_mp_coeffs`, `t4_mp_e_sequence`,
+`t4_mp_sequence_end`, `t4_mp_print`. `setfinalrate` decodes the *received* MP
+at `+0xa9de..+0xa9e3` and `settxlevel` reads its power fields. There is no
+assembler for an MP we send.
+
+`debugaudit.py --missing` says where it went: **`v34handshak` is 261 debug
+sites missing of the blob's 262** -- by far the largest coverage gap in the
+tree. Our version of that function is functional (calls connect and carry) but
+its diagnostics, and plausibly whole arms of its state machine, are not
+reconstructed. The MP we transmit is built somewhere in there.
+
+**SO #169 IS BLOCKED, not answered**, and the honest position on the trellis
+asymmetry is unchanged from 1974: it rests on an `ATI11` column convention that
+the pre-emphasis cross-check could only confirm 2 times in 4. It is a lead.
+
+**THE ROUTES THAT REMAIN, none of which need the column convention:**
+
+  * Instrument the transmitted MP directly -- log the bit vector at the point
+    the packer emits it, and read bits 29:30 off the wire. This is the
+    definitive answer and it is a debug site, not a reconstruction.
+  * Or reconstruct the MP transmit arm of `v34handshak`, which is wanted
+    anyway for the 261-site coverage gap.
+
+**A NOTE ON PROPORTION.** Even settled, this is ~1 dB of an 8-12 dB deficit,
+and #170 -- whether our rate request follows an SNR estimate we can read -- is
+the question that decides whether the receiver is correctly seeing a bad
+channel or wrongly seeing a good one. That is the better use of the next
+session, and the trellis lead should not be allowed to absorb it.
