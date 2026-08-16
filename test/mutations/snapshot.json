@@ -276,6 +276,40 @@
     "the two sums land in the other member": "caught"
    }
   },
+  "fpmpps": {
+   "key": "c9095516e6a6b03e59595a35ec6f085c9a96013d522d66309eae64d9d45875d0",
+   "summary": "28 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "both rails are filtered with the I coefficients": "caught",
+    "the coefficient stride is the tap count rather than the phase count, which is the V.22 block's permuted layout applied to this one": "caught",
+    "the count is decremented by one rather than by the debt it just paid": "caught",
+    "the debt is left standing rather than cleared before the phase test": "caught",
+    "the difference is not truncated to sixteen bits before the output gain": "caught",
+    "the mapped and direct forms are chosen the other way round": "caught",
+    "the mapped source reads the map with the write cursor instead of the read cursor": "caught",
+    "the mapped source takes the whole ring entry as an index rather than its low byte": "caught",
+    "the output gain is applied without its shift": "caught",
+    "the phase advances by the nominal step alone, dropping the timing correction": "caught",
+    "the phase is not carried across calls": "caught",
+    "the phase wraps one step late": "caught",
+    "the rail walks the history forwards instead of newest first": "caught",
+    "the rail's accumulator is shifted down by fourteen instead of fifteen": "caught",
+    "the rails are filtered at the phase the NEXT output will use": "caught",
+    "the rails are summed instead of differenced, which drops the carrier's quadrature term": "caught",
+    "the read cursor is not written back, so a caller feeding one ring across calls re-sends the same symbols": "caught",
+    "the read cursor wraps at one short of the ring length": "caught",
+    "the second run of the rail includes hist[widx] again instead of stopping above it": "caught",
+    "the second run starts at the top of the buffer rather than one below it": "caught",
+    "the symbol is stored before the write cursor advances rather than after": "caught",
+    "the two constellation maps are transposed": "caught",
+    "the two histories are transposed at the store": "caught",
+    "the two rails are differenced the other way round": "caught",
+    "the two rails of the direct source are transposed": "caught",
+    "the wrap does not ask for the next symbol": "caught",
+    "the wrap resets the phase instead of subtracting the phase count, so the fractional part is lost": "caught",
+    "the write cursor wraps at one short of the tap count": "caught"
+   }
+  },
   "fpmsre": {
    "key": "64735868a32368feaddec5d7a9e271f29de61a6f88d59ab6e5eb971569af124d",
    "summary": "49 mutations: 44 caught (44 by test, 0 by strings), 0 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",

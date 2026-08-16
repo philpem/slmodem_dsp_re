@@ -48,6 +48,10 @@
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
  ],
+ "fpmpps": [
+  "src/dsp/fpm_pps.c",
+  "build/test/t_fpm_pps"
+ ],
  "fpmsre": [
   "src/dsp/fpm_sre.c",
   "build/test/t_fpm_sre"

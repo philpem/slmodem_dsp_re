@@ -1,0 +1,145 @@
+[
+ {
+  "label": "NOTE: FPM_PPS_filter is 753 bytes of geometry -- a circular history, a strided coefficient walk, two rails truncated separately, and a phase that consumes a symbol when it wraps. Every mutation here moves one of those and nothing else."
+ },
+ {
+  "label": "the coefficient stride is the tap count rather than the phase count, which is the V.22 block's permuted layout applied to this one",
+  "find": "\t\tc += phases;\n\t}\n\n\th = hist + taps - 1;",
+  "replace": "\t\tc += taps;\n\t}\n\n\th = hist + taps - 1;"
+ },
+ {
+  "label": "the second run of the rail includes hist[widx] again instead of stopping above it",
+  "find": "\tfor (i = (short)(taps - 1); i > widx; i--) {",
+  "replace": "\tfor (i = (short)(taps - 1); i >= widx; i--) {"
+ },
+ {
+  "label": "the second run starts at the top of the buffer rather than one below it",
+  "find": "\th = hist + taps - 1;",
+  "replace": "\th = hist + taps;"
+ },
+ {
+  "label": "the rail's accumulator is shifted down by fourteen instead of fifteen",
+  "find": "\treturn (short)(acc >> 15);",
+  "replace": "\treturn (short)(acc >> 14);"
+ },
+ {
+  "label": "the rail walks the history forwards instead of newest first",
+  "find": "\tfor (i = widx; i >= 0; i--) {\n\t\tacc += *h * *c;\n\t\th--;",
+  "replace": "\tfor (i = widx; i >= 0; i--) {\n\t\tacc += *h * *c;\n\t\th++;"
+ },
+ {
+  "label": "the mapped source takes the whole ring entry as an index rather than its low byte",
+  "find": "\t\t\t\tunsigned char k = (unsigned char)src->sym[ridx];",
+  "replace": "\t\t\t\tshort k = src->sym[ridx];"
+ },
+ {
+  "label": "the mapped source reads the map with the write cursor instead of the read cursor",
+  "find": "\t\t\t\tunsigned char k = (unsigned char)src->sym[ridx];",
+  "replace": "\t\t\t\tunsigned char k = (unsigned char)src->sym[src->widx];"
+ },
+ {
+  "label": "the two rails of the direct source are transposed",
+  "find": "\t\t\t\tsi = src->i[ridx];\n\t\t\t\tsq = src->q[ridx];",
+  "replace": "\t\t\t\tsi = src->q[ridx];\n\t\t\t\tsq = src->i[ridx];"
+ },
+ {
+  "label": "the two constellation maps are transposed",
+  "find": "\t\t\t\tsi = state->cfg.imap[k];\n\t\t\t\tsq = state->cfg.qmap[k];",
+  "replace": "\t\t\t\tsi = state->cfg.qmap[k];\n\t\t\t\tsq = state->cfg.imap[k];"
+ },
+ {
+  "label": "the mapped and direct forms are chosen the other way round",
+  "find": "\t\t\tif (state->cfg.mapped != 0) {",
+  "replace": "\t\t\tif (state->cfg.mapped == 0) {"
+ },
+ {
+  "label": "the read cursor wraps at one short of the ring length",
+  "find": "\t\t\tridx = (short)(ridx + 1 < len ? ridx + 1 : 0);",
+  "replace": "\t\t\tridx = (short)(ridx + 1 < len - 1 ? ridx + 1 : 0);"
+ },
+ {
+  "label": "the write cursor wraps at one short of the tap count",
+  "find": "\t\t\twidx = (short)(widx + 1 < taps ? widx + 1 : 0);",
+  "replace": "\t\t\twidx = (short)(widx + 1 < taps - 1 ? widx + 1 : 0);"
+ },
+ {
+  "label": "the symbol is stored before the write cursor advances rather than after",
+  "find": "\t\t\twidx = (short)(widx + 1 < taps ? widx + 1 : 0);\n\t\t\tstate->hist_i[widx] = si;\n\t\t\tstate->hist_q[widx] = sq;",
+  "replace": "\t\t\tstate->hist_i[widx] = si;\n\t\t\tstate->hist_q[widx] = sq;\n\t\t\twidx = (short)(widx + 1 < taps ? widx + 1 : 0);"
+ },
+ {
+  "label": "the count is decremented by one rather than by the debt it just paid",
+  "find": "\t\t\tcount = (unsigned short)(count - need);",
+  "replace": "\t\t\tcount = (unsigned short)(count - 1);"
+ },
+ {
+  "label": "the two rails are differenced the other way round",
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
+  "replace": "\t\t*out++ = (short)(((short)(yq - yi) * state->cfg.scale) >> 15);"
+ },
+ {
+  "label": "the rails are summed instead of differenced, which drops the carrier's quadrature term",
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
+  "replace": "\t\t*out++ = (short)(((short)(yi + yq) * state->cfg.scale) >> 15);"
+ },
+ {
+  "label": "the difference is not truncated to sixteen bits before the output gain",
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
+  "replace": "\t\t*out++ = (short)(((yi - yq) * state->cfg.scale) >> 15);"
+ },
+ {
+  "label": "the output gain is applied without its shift",
+  "find": "\t\t*out++ = (short)(((short)(yi - yq) * state->cfg.scale) >> 15);",
+  "replace": "\t\t*out++ = (short)((short)(yi - yq) * state->cfg.scale);"
+ },
+ {
+  "label": "the phase advances by the nominal step alone, dropping the timing correction",
+  "find": "\t\tphase = (short)(phase + step + state->cfg.step_adj);",
+  "replace": "\t\tphase = (short)(phase + step);"
+ },
+ {
+  "label": "the phase wraps one step late",
+  "find": "\t\tif (phase >= phases) {",
+  "replace": "\t\tif (phase > phases) {"
+ },
+ {
+  "label": "the wrap resets the phase instead of subtracting the phase count, so the fractional part is lost",
+  "find": "\t\t\tphase = (short)(phase - phases);",
+  "replace": "\t\t\tphase = 0;"
+ },
+ {
+  "label": "the wrap does not ask for the next symbol",
+  "find": "\t\t\tphase = (short)(phase - phases);\n\t\t\tneed = 1;",
+  "replace": "\t\t\tphase = (short)(phase - phases);"
+ },
+ {
+  "label": "the debt is left standing rather than cleared before the phase test",
+  "find": "\t\tneed = 0;\n\t\tphase = (short)(phase + step + state->cfg.step_adj);",
+  "replace": "\t\tphase = (short)(phase + step + state->cfg.step_adj);"
+ },
+ {
+  "label": "the read cursor is not written back, so a caller feeding one ring across calls re-sends the same symbols",
+  "find": "\tsrc->ridx = ridx;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the phase is not carried across calls",
+  "find": "\tstate->phase = phase;",
+  "replace": "\tstate->phase = 0;"
+ },
+ {
+  "label": "the two histories are transposed at the store",
+  "find": "\t\t\tstate->hist_i[widx] = si;\n\t\t\tstate->hist_q[widx] = sq;",
+  "replace": "\t\t\tstate->hist_i[widx] = sq;\n\t\t\tstate->hist_q[widx] = si;"
+ },
+ {
+  "label": "both rails are filtered with the I coefficients",
+  "find": "\t\tyq = pps_rail(state->hist_q, state->cfg.coeff_q, phases, phase,",
+  "replace": "\t\tyq = pps_rail(state->hist_q, state->cfg.coeff_i, phases, phase,"
+ },
+ {
+  "label": "the rails are filtered at the phase the NEXT output will use",
+  "find": "\t\tyi = pps_rail(state->hist_i, state->cfg.coeff_i, phases, phase,\n\t\t\t      taps, widx);",
+  "replace": "\t\tyi = pps_rail(state->hist_i, state->cfg.coeff_i, phases,\n\t\t\t      (short)(phase + step), taps, widx);"
+ }
+]

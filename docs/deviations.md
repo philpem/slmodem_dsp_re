@@ -6825,3 +6825,33 @@ The object pushes a literal 1 as a second argument to `V22_PPS_free`,
 tree reconstructed all four from their own bodies, where the second parameter
 is dead, and one of the four headers belongs to another effort.  The same
 shape as D363, at four sites instead of one.
+
+## D381 ⚠ `FPM_SRE_init`'s reuse test guards THREE buffers with the size of a fourth
+
+*Batch of 2026-08-16, from `FPM_SRE_init` (blob 0x0aa7c0).  **Reachability: a
+re-init (`fresh` zero) whose configuration raises `rms_len` without raising
+`coeffs`.  No such call is reconstructed, so unmeasured.**  **Observability: a
+heap overrun of `2 * (new rms_len - old rms_len)` bytes in init's own clear
+loop, which the differential tier cannot see because both sides overrun
+identically.**  Status: unmeasured.  Fix class: none proposed; reproduced.*
+
+The reuse path is
+
+    if (!fresh && sre->cfg.coeffs < cfg->coeffs) { free x4; fresh = 1; }
+
+so the decision to keep the four existing buffers is made on `coeffs` alone.
+Three of the four are sized on `coeffs` or on `taps`, which is `coeffs / 10`,
+and that is sound. **`rms_buf` is sized on `cfg.rms_len`, which the test does
+not look at.** A re-init that raises `rms_len` alone therefore keeps a buffer
+that is now too small, and the clear loop immediately below runs to the NEW
+`rms_len`.
+
+`FPM_PPS_init` has the same shape and does NOT have the bug -- its test is
+`state->taps < cfg.coeffs / cfg.phases`, which is the size of the buffers it
+guards. So this is a slip in one of two sibling functions rather than a
+convention.
+
+Unmeasured because no caller of `FPM_SRE_init` is reconstructed: the built-in
+`FPM_SRE_CFG` is a template with null table pointers and whoever patches and
+passes it is not written yet. Whether any real configuration ever raises
+`rms_len` on a re-init is exactly what that caller would settle.

@@ -61024,3 +61024,68 @@ each split needs exactly one normalisation pass and both land on the same
 not because a test can see it.
 
 49 mutations: 44 caught, 0 uncaught, 5 equivalent.
+
+### 3525. `FPM_PPS_filter` REPEATS THE SRE's TWO DIFFERENCES, WHICH MAKES THEM A FAMILY PROPERTY RATHER THAN A COINCIDENCE
+
+The generic pulse shaper differs from `v22_pps.c` in exactly the two ways the
+generic SRE differs from `v22_sre.c`:
+
+- **the history is circular**, `taps` entries with `widx` wrapping, where V.22
+  keeps `2 * taps` and slides -- so each rail's dot product is two runs;
+- **the coefficients are not permuted**, phase `p` selected by starting at
+  `coeff[p]` and striding `phases`, where `V22_PPS_init` de-interleaves them
+  into phase-major order.
+
+Two blocks, the same pair of differences, in the same direction. **The generic
+form indexes and the specialisation lays out.** That is worth stating as a
+family property because it is the first thing to check when the next `FPM_*`
+block is read beside its V.22 or V.32 cousin -- and it is also the shape of
+the two mutations that survive longest if you get it wrong, since a wrong
+stride and a wrong permutation both still produce a plausible filtered signal.
+
+Two things the shaper has that V.22's does not:
+
+**A second symbol source.** `cfg.mapped` non-zero means the ring's entry is a
+constellation INDEX -- its low byte, `movzbl` at stride two -- into `cfg.imap`
+and `cfg.qmap`. Zero means the ring's own I and Q arrays are read directly.
+V.22 only ever reaches the mapped form, which is why the direct form's two
+pointers were sitting unnamed (see 3526).
+
+**Everything is configured.** V.22's 40 phases, 3 taps and nominal step of 3
+are literals; here they are `cfg.phases`, `cfg.coeffs / cfg.phases` (an `idiv`
+in init) and `cfg.step`, and there is a Q15 output gain as well. `cfg.step_adj`
+is V.22's `cfg.step` -- the field `TxClockSync` writes a timing correction into
+(3505) -- with the nominal part split out.
+
+`count` and the return are both `unsigned short` and both are forced: the count
+is decremented through `movzwl %ax` and the counter incremented through it.
+
+28 mutations, 28 caught. Two of them needed the suite extending rather than the
+claim weakening, and both for the same reason -- a gentle stimulus cannot
+separate a truncation. `(short)(yi - yq)` only differs from `yi - yq` when the
+two rails are near full scale in opposite directions, and `count - need` only
+differs from `count - 1` when a caller seeds a debt above one, which nothing in
+the block ever does. Full-scale coefficients and a seeded `need` of two settle
+both.
+
+### 3526. `fpm_smc_ring::pad00[8]` IS TWO POINTERS, AND ONLY THE GENERIC SHAPER COULD SAY SO
+
+`struct fpm_smc_ring`'s first eight bytes were `pad00[8]`, "not read by
+anything traced yet". `FPM_PPS_filter`'s direct symbol source reads them:
+
+    a961d   mov (%ebx),%edi        ->  short *i
+    a962f   mov 0x4(%esi),%edx     ->  short *q
+
+both 32-bit loads used as `short *` bases indexed by `ridx`, on the arm
+`cfg.mapped` clear selects. They are named `i` and `q` on that evidence.
+
+**This is why deferring naming loses evidence, in the form docs/plan.md §3
+describes.** V.22 is the only reconstructed user of the ring and it configures
+the mapped form, so from V.22 alone those eight bytes are unreadable padding
+for ever. They became legible only from a DIFFERENT datapump's use of the same
+struct, and only while the function that uses them was being read. A later
+standalone naming pass over `fpm_smc.h` would have had nothing to go on.
+
+`t_fpm_smc.c`'s "ring pad00 untouched" check is retained as a byte comparison
+over the same eight bytes, so the claim that nothing in the encoder writes them
+still holds and is still tested.
