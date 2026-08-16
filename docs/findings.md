@@ -53827,3 +53827,46 @@ Testing `unPackJdData` 32 bits wide is invisible because it returns 0 or 1
 **No formal mutation set is registered for this suite.** Three of six would
 have to be entered as equivalent or unusable, and the argument for each is
 above; a set that carried them without the argument would be worse than none.
+
+### 2109. THE CODEGEN TIER REACHES `getV92Decision`, AND IT SAYS THE ARM ORDER AND ONE EXPRESSION SHAPE DIFFER -- NEITHER IS ACTED ON
+
+`V90Phase3Demodulator.h` said this translation unit is "one of the fifteen the
+period toolchain cannot compile at all -- so none of its symbols reach the
+comparison". **That is no longer true.** `tools/toolchain/build.sh` compiles it
+and `compare.py` reports the symbol:
+
+    +155  blob  8616  ours  8771  _ZN20V90Phase3DemodulatorEf14getV92DecisionEf
+
+so ours is 1.8% larger, and it is in the "different size" bucket rather than
+the identical one. The run also moved the headline from 900 compared / 304
+identical to 904 / 305. `make period` compiled the same file and its 182
+differential suites passed, so the toolchain has no complaint about the source.
+
+**WHAT THE MNEMONIC HISTOGRAM SAYS**, 2,225 instructions against 2,079, a
+sequence-match ratio of 0.463 over 185 divergent blocks:
+
+    mov    +93     je   -27     xor  +26     jne  +26
+    movswl +17     movzbw -16   sar  +16     movzwl -15   not +15
+
+The `je`/`jne`/`mov` mass and the 185 blocks are the ARM LAYOUT: the
+reconstruction writes the thirty-four cases in numeric order and the compiler
+emitted the object's in a different one, which destroys sequence alignment
+before anything about the source is measured. CLAUDE.md classes layout and
+scheduling as free, and they are not chased.
+
+**The one signal that is not layout is `movzbw`: sixteen in the blob and none
+in ours.** They are the mu-law companding sites. The blob computes the code as
+`0xff - linear2ulaw(v)` in a SIXTEEN-BIT intermediate at sixteen sites and as a
+byte complement (`not %al`) at six; the reconstruction writes
+`(unsigned char)~linear2ulaw(v)` at all twenty-one. The value is identical for
+every input -- `0xff ^ c` and `0xff - c` agree over 0..255 -- so the
+differential tier cannot see it, and the width tells us the author's
+intermediate was wider than a byte in most places and not in the rest.
+
+**It is recorded and NOT chased**, and that is the deliberate choice. One
+spelling cannot produce both shapes, so matching the sixteen would break the
+six; picking a spelling to raise a mnemonic score is fitting the compiler,
+which is what 614 and 617 are about. The acceptance test for a shape change in
+this tree is FULL-TEXT identity, which the arm order puts out of reach here
+whatever the companding is spelled as. Anyone who later recovers the arm order
+should re-measure this before touching it.

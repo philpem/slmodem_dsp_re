@@ -1101,6 +1101,44 @@ run_transcripts(void)
 				t.word_3fc =
 				    (unsigned int)pslot(P_31C, trial) - 1u;
 				t.word_2c = cand_of(k, &t, trial);
+				/*
+				 * THE THREE GATED DIAGNOSTICS LIVE BEHIND
+				 * BRANCHES NOTHING RANDOM REACHES, so the
+				 * level-2 sweep forces them the same way the
+				 * level-0 one does.  Case 7 prints
+				 * "waitForJd framePosition" and
+				 * "adjustUinfoToPhaseOffset" only once the
+				 * V92Jd unpacker has declared a match; case 9
+				 * prints "changing state to
+				 * DILDemodQCfirstStudy" only when the JdNot
+				 * arm fires with +0x410 set, which needs a
+				 * zero bit, a frame counter congruent to 12
+				 * modulo 72 and a run of at least twelve
+				 * zeros behind it at once.
+				 */
+				t.forceJd = (st == 7);
+				t.forceJdPhase = (st == 8);
+				if (st == 7 || st == 8)
+					t.word_2c = 11u;
+				if (st == 9) {
+					t.word_2c = 11u + 72u;
+					t.word_410 = 1;
+					t.word_404 = 0x40u;
+				}
+				/*
+				 * Case 3 prints "V92 setting params for short
+				 * TRN1" only when the frame counter is exactly
+				 * 0x7f8, the V92Jd record is present AND
+				 * +0x410 is set; the free sweep never lines
+				 * all three up because the candidate that
+				 * gives 0x7f8 is an even k and both of the
+				 * others are driven from k's low bit.
+				 */
+				if (st == 3) {
+					t.word_2c = 0x7f8u - 1u;
+					t.withJd92 = (k & 1) == 0;
+					t.word_410 = 1;
+				}
 
 				dsplib_debug_capture_reset();
 				run_trial(trial++, &t, 2, tag);
