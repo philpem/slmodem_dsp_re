@@ -190,6 +190,33 @@ Four type corrections came with it and are the reason to read findings 3530 and
 `SerialDifferentialDecoder<unsigned char>` members and the two heap blocks stop
 being `void *`. The naming was carried inside the batch per §3.
 
+**WHAT IT ACTUALLY UNBLOCKED, measured rather than projected**, by running
+`readyqueue.py` at `781aff9` and again after:
+
+| | before | after |
+|---|--:|--:|
+| unwritten call symbols | 867 | 862 |
+| READY | 426 / 85,368 B | 423 / 84,277 B |
+| BLOCKED | 441 / 209,779 B | 439 / 209,049 B |
+
+**Exactly one symbol became READY: `V90Demodulator::enterDataPhase`, 322 bytes**
+— it was blocked by `resetLinearMappStudy` and by nothing else, so 139 bytes
+freed 322. The "~30 KB" in the heading is what these four are a NECESSARY
+condition for, which §1 already warns is not the same as sufficient, and the
+gap is the four `V90Demapper` members still outstanding: `reset`,
+`resetNoSpectral`, `linearMappingStudy` and `incrementRBSFramePosition`. What
+moved instead is how far the hubs have left to go:
+
+| | before | after |
+|---|--:|--:|
+| `V90Equalizer::process` (9,364 B) | needs 20 | **needs 16** |
+| `V90Demodulator::progress` (7,276 B) | needs 65 | **needs 61** |
+| `V90Phase4Demodulator::getV90Decision` (3,095 B) | needs 7 | **needs 3** |
+| `V90Phase4Demodulator::getV92Decision` (3,252 B) | needs 12 | **needs 8** |
+
+So the natural next batch is the rest of `V90Demapper` — those four plus
+`updateConstelation` — which every one of the four rows above is waiting on.
+
 ## Phase 3 — the large ready set
 
 Needs nothing, and 13 KB between them: `V90TRN2Design` (3,767 B),
