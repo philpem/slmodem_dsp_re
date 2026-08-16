@@ -53327,3 +53327,88 @@ because renumbering by hand missed six references once (its own docstring
 says so), and a tool that cannot be run is a tool that will be worked around
 by hand the next time a merge collides -- which is the ninth collision this
 tree has had, and they are not getting rarer.
+
+### 1990. THE ORIGINAL WAS BUILT `-mno-ieee-fp`, AND WITHOUT IT EVERY FLOAT COMPARISON IN EVERY FUNCTION READ AS A CODEGEN MISMATCH
+
+*Found while reviewing `GenericToneDetector`, whose two `process` overloads
+differed from the object at every comparison and nowhere else obvious.*
+
+**The object's float compares are ORDERED.** Across the whole 1.2 MB:
+
+| mnemonic | count | | mnemonic | count |
+|---|--:|---|---|--:|
+| `fcomps` | 124 | | `fcomp` | 40 |
+| `fcompp` | 102 | | `fcompl` | 3 |
+| `fcom` | 91 | | `fcoml` | 1 |
+| `fcoms` | 49 | | **`fucompp`** | **3** |
+| | | | **`fucomp`** | **1** |
+
+406 ordered against four unordered -- and **all four of those are inside
+`pow`**, which is libm and not our code.  The reconstruction's own translation
+units contain, at the time of writing, zero.
+
+**Under the default `-mieee-fp` this compiler cannot produce that.**  Compiled
+in the period container with the tree's exact flags, GCC 3.4.2 emits `fucompp`
+for `a >= b`, for `a > b`, for `!(a < b)` and for `a == b` alike -- the source
+operator does not select ordered against unordered, and neither does `double`
+against `float`, a `||` chain, or `__builtin_isgreaterequal`.  Adding
+`-mno-ieee-fp` turns every one of them into `fcom`/`fcomp`/`fcompp`, and
+brings the memory-operand forms (`fcoms`, `fcomps`) with it, which is where
+the object's 173 of those come from.
+
+This is the same argument `-march=i386` rests on: a mnemonic absent from
+1.2 MB bounds the flag.  `-mieee-fp` would have left 400-odd `fucom`s in the
+object and there are four.
+
+**What it is worth, stated honestly.**  Measured on `master` at `93270f9`,
+same tree, same build, flag the only variable: the identical-mnemonic count
+goes **302 -> 304** and the total-bytes percentage does not move.  (On the
+`gtd-methods` branch, which additionally has `GenericToneDetector`, the same
+experiment gives 303 -> 305.)  Two symbols is not the point.  The point is that **every float comparison in
+every function was reading as a mismatch**, so any per-function codegen review
+of anything numeric was starting from a difference that was ours-versus-flags
+and not ours-versus-source.  Finding 617 looked at seventeen functions that
+"did not pass full-text identity" under exactly that handicap, and the 303
+baseline was measured under it.
+
+**IT IS SET FOR THE SIMILARITY BUILD ONLY, AND THE REASON IS A MEASUREMENT.**
+The obvious move is to set it in `period_inner.sh` too -- `build.sh`'s own
+header says the two must stay the same and records what it cost when they
+diverged.  That was tried first, and `make period` went **181 passed / 0
+failed to 176 / 5**: `t_agc`, `t_v90adid`, `t_v90equ`, `t_v90leaves` and
+`t_v90spectral`.  The failing fractions are small and where you would expect
+-- `agc: every input shape, including silence and NaN` 975 of 225,792, and
+`agc: process over pole x reference x block x length` 15,504 of 1,524,096 --
+while `agc: freeze, including a signalling NaN pole` still passes.
+
+`-mno-ieee-fp` does not merely rename the mnemonic.  It tells GCC it may
+assume comparisons are ordered, so it is free to invert one and swap the
+branch, which is not valid when an operand is NaN.  Under `-mieee-fp` our
+sources agree with the object on those inputs; under `-mno-ieee-fp` five
+suites do not.
+
+**Which means one of two things, and this finding does not settle which.**
+Either those five reconstructions spell a comparison in a way that only
+matches the object once the compiler is told to be careful -- in which case
+the flag has just uncovered five real defects that the wrong flag was masking
+-- or the flag is wrong and the object's 406 ordered compares have some other
+cause.  The mnemonic census is hard to argue with, so the first is more
+likely, but "more likely" is not the standard here.
+
+So the flag goes where its evidence is unambiguous, the codegen tier, and
+`make period` keeps `-mieee-fp` until someone works those five sites by hand.
+The MODERN build's `FPFLAGS` is untouched for a separate reason: that tier is
+GCC 13 and a portability check, not a reproduction of anyone's code
+generation.
+
+**This is now a KNOWN divergence between the two flag sets**, which
+`build.sh`'s header forbids in general.  It is deliberate, it is one flag, and
+it is recorded here and there.  Anyone reconciling them should start by
+running `make period` with the flag and reading those five suites.
+
+**What this does not settle.**  `-mno-ieee-fp` permits `fcom`; it does not
+prove the author typed it rather than reaching it through some other option
+bundle.  It also says nothing about whether any reconstructed code DEPENDS on
+unordered semantics -- if some function is only correct because a comparison
+was quiet, this flag makes it wrong, and the differential tier is what would
+catch that.  It passed.

@@ -142,21 +142,33 @@ result against the blob, function by function.
 
 This answers a question the differential tier cannot: not "does it behave the
 same" but "did the same compiler, given our source, emit what the original's
-compiler emitted". Currently **92 of 365 shared symbols match on their
+compiler emitted". Currently **304 of 900 compared symbols match on their
 instruction sequence** — mnemonics, not bytes; see the precision note below
-before quoting that number.
+before quoting that number. That figure was 92 of 365 when this paragraph was
+written and had not been re-measured since; it is measured here at `93270f9`
+with `-mno-ieee-fp` set, and `tools/toolchain/ratchet.json` is the stored
+baseline `compare.py --ratchet` moves against.
 
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/build.sh` with the evidence beside each:
 
     -O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
-    -fomit-frame-pointer -maccumulate-outgoing-args      (no PIC, no SSP)
+    -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args
+                                                        (no PIC, no SSP)
 
 `-mtune=i686` is worth knowing about: `-march` and `-mtune` are separate
 questions and only the first leaves a trace, so "no cmov in 1.2 MB" bounds the
 instruction set and says nothing about scheduling. Finding it took the match
 from 30 to 82 (finding 612). `-frename-registers` took it to 92 and settled
 `-O2` against `-O3` (616).
+
+`-mno-ieee-fp` is the newest and its worth is not in its +2 (302 -> 304): the object's float
+compares are ordered, 406 `fcom`-family against four `fucom` that are all
+inside libm's `pow`, and the default `-mieee-fp` emits `fucom` for every
+comparison whatever the source says. Until it was set, **every float
+comparison in every function read as a codegen mismatch** -- so a numeric
+function's per-symbol diff was measuring our flags, not our source. Finding
+1990.
 
 ### The rule for reading a codegen difference
 

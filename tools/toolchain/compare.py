@@ -27,6 +27,20 @@ THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
                             pentium2, pentium3, and the period spelling
                             `-mcpu=i686`) gives the identical result
     -mfpmath=387            follows from the above
+    -mno-ieee-fp            the object's float compares are ORDERED.  Across
+                            1.2 MB: 406 fcom/fcoms/fcomp/fcomps/fcompp/fcoml/
+                            fcompl against FOUR fucom, and all four of those
+                            are inside libm's `pow`, which is not our code.
+                            Under the default -mieee-fp this compiler emits
+                            fucom for EVERY comparison regardless of the source
+                            operator -- `>=`, `>`, `!(<)` and `==` all give
+                            fucompp -- so the object cannot have been built
+                            with it.  Same argument as -march=i386's: a
+                            mnemonic that is absent from 1.2 MB bounds the
+                            flag.  Worth +2 identical on its own, but the
+                            effect that matters is that EVERY float comparison
+                            in EVERY function used to read as a mismatch.
+                            Finding 1990
     -fomit-frame-pointer    no push %ebp / mov %esp,%ebp in the object's
                             prologues.  GCC 3.4 does NOT imply this at -O2
     -maccumulate-outgoing-args
