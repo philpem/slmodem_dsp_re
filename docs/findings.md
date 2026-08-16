@@ -60076,3 +60076,72 @@ level. This is the per-direction instrument the bench has been missing for
 
 It also independently confirms #132's direction on the exact link under
 investigation: **they hear us fine; we cannot hear them.**
+
+### 1970. THE GATEWAY'S ATTENUATION DOES REACH THE AUDIO PATH — AND WITH IT WORKING, 1966's PREDICTION GOES THE WRONG WAY
+
+Arm 2 of the ATA test: `output attenuation` 3 (the platform default, so arm 1
+was a no-op — see 1969's correction) to **12**, confirmed in
+`show running-config all`. Five calls to 1902.
+
+**PRIMARY, AND IT IS ANSWERED: THE KNOB WORKS.** `ATI11 Recv Level`, settled
+reads only:
+
+    arm 1 (3 dB)    20  20  25
+    arm 2 (12 dB)   27  27
+
+Roughly +2 to +7 dB against a +9 dB command. Not one-for-one, but it is the
+first demonstration that the gateway's attenuation reaches the audio path at
+all, which neither earlier arm could establish.
+
+**THE SECONDARY GOES THE WRONG WAY, AND THAT IS THE INTERESTING PART.** The
+Courier's requested reduction across arm 2 was `3 6 8 / 3 8 / 3 6 3 3 / 3 6 6`.
+**Eight dB appears, and 8 has never been seen** — not in 121 archived
+handshakes, not in arm 1's nine. It is hearing us **nine dB quieter and asking
+us to go quieter still**. Our transmit level FELL in consequence
+(-25.75/-26.68/-23.89 dBFS against arm 1's -24.29/-24.29/-24.16).
+
+1966 predicted the request would fall to 0-1 and our level would rise toward
+-23. Both wrong, and wrong in the opposite direction. **So the far end's
+request is not a simple servo on the level it receives**, and the model that
+motivated the whole intervention is now contradicted by its own test.
+
+**OVER-ATTENUATION IS REAL.** The Courier's receive rate held at 28800 on four
+calls but fell to 12000 on the fifth, and `ATI6` on call 3 reported
+`Speed 21600/16800` with `Retrains Granted 3`. Against arm 1's uniform 28800,
+that is the healthy direction beginning to give way — exactly what the
+pre-registration said to watch for, and why 12 dB must not be left in place.
+
+**AN UNEXPECTED HINT, EXPLICITLY NOT A RESULT.** Our OWN receive rate went
+`12000/9600/14400` to `14400 x4 and 19200`. Attenuating our TRANSMIT should not
+touch what we RECEIVE — unless it is **echo**. Every FXS port on this gateway
+carries `no echo-cancel enable`, so our signal leaks back through the hybrid,
+and 9 dB less of it is 9 dB less interference on our own receiver. That would
+bear directly on #132, #110 and #111. But n=5 against n=3, the ranges overlap,
+two of five level reads were contaminated, and the far end's direction moved
+the opposite way at the same time. **Task #167** has the cheap test, and it
+needs no gateway and no call: `stereo_8k.wav` already carries L=received and
+R=transmitted, so the echo-to-signal RATIO can be fitted per arm from captures
+in hand.
+
+**TWO HARNESS DEFECTS, BOTH MINE, BOTH IN THE DIAGNOSTIC ADDED THE SAME HOUR.**
+Recorded because the wrong numbers are in the captures:
+
+  * Reading straight after `call.py` catches the modem mid-hangup. One call
+    returned empty; two returned a **well-formed report carrying a
+    post-carrier noise floor** — `Recv Level 70` where a settled read of the
+    same call said 27. A plausible wrong number that passes the field check is
+    worse than an outright failure, and is exactly what the guard existed to
+    stop. Now range-checked: a level V.34 cannot carry is marked suspect.
+  * The obvious fix — poll `AT` until `OK` — **made it worse**, perturbing the
+    Courier's stored report into `Carrier Freq 34109, Symbol Rate 48905,
+    RTD 24`. A plain settle restored it. The reason is written into the code
+    so it is not reintroduced.
+
+**RECOMMENDATION: put port 0/1 back to 3 dB.** Twelve costs the direction that
+works and did not buy the direction that does not. If the echo hint survives
+#167, the instrument is the echo canceller, not the transmit level.
+
+**AND THE ABSOLUTE SCALE OF `Recv Level` IS NOT VERIFIED** — Phil's point. It
+tracks the gateway's attenuation, so it is a sound RELATIVE indicator between
+calls, but 1969's reading of "20" as a healthy -20 dBm was an assumption about
+its reference and should not be relied on.
