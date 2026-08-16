@@ -61088,10 +61088,18 @@ The guard is `ifeq ($(MAKELEVEL),0)` around the `MAKEFLAGS` line, so the flag
 is set once at the top and every sub-make inherits the jobserver instead of
 re-forcing it.  With it, the recursive shape matches the non-recursive one to
 the hundredth of a second on all three settings -- `-j3` 3.00 s, no flag
-2.00 s, `-j1` 8.01 s -- and the warning is gone from the real log.  **It also
-repairs `make one`**, at Makefile line 348, which has recursed through
-`$(MAKE)` all along and has therefore been quietly ignoring `-jN` and using
-`$(J)` for as long as it has existed.
+2.00 s, `-j1` 8.01 s -- and the warning is gone from the real log.
+
+**A CLAIM THIS FINDING MADE AND THEN WITHDREW.**  It first said the guard also
+repaired `make one`, which has recursed through `$(MAKE)` at Makefile line 348
+all along, on the reasoning that the same shape must have the same defect.
+**Measured, it does not**: `make -f <pre-fix Makefile> one T=t_resampler -j3`
+prints no `-j6 forced` warning, up to date or forced to rebuild, and neither
+does the post-fix one.  Why `phase` warns and `one` does not is not explained
+here and is not guessed at.  The guard is justified by `phase`'s measurement
+alone; `one` is the same shape and an open question.  Recorded because a tree
+that has been caught three times by an unmeasured claim about its own tools
+should not take a fourth from the commit repairing two of them.
 
 On the real tree the tiers still overlap: the same full green `-j3` run takes
 160.70 s with the guard against 103.40 s without it, and 103.40 s is what six
