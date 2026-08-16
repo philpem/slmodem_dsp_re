@@ -205,6 +205,14 @@ public:
 	void linearEquFadeEdges();
 
 	/*
+	 * `_ZN12V90Equalizer21convertEqualizerToMmxEv`, and void: both exits
+	 * fall off the end without setting %eax.  The other half of
+	 * `restoreEqualizerToFloat`, and the class's own name for the state
+	 * `mmxMode` selects.
+	 */
+	void convertEqualizerToMmx();
+
+	/*
 	 * THREE MEMBERS THAT ARE ONE `ret` EACH.  Not stubs and not missing:
 	 * the object's copies are a single byte at 0x36b10, 0x36960 and
 	 * 0x388b0, so whatever they did was compiled out -- the names say
@@ -518,8 +526,27 @@ public:
 	 */
 	float maxLeCoefValue;		/* +0xbc */
 	float minLeCoefValue;		/* +0xc0 zeroed by reset          */
-	float linearEquMmxBetaScale;	/* +0xc4 */
-	unsigned char pad_c8[0x4];	/* +0xc8 (no member touches it)   */
+
+	/*
+	 * +0xc4 AND +0xc8 ALSO HAVE THE AUTHOR'S OWN NAMES, and
+	 * `convertEqualizerToMmx` is where they came from: it computes both,
+	 * and prints each under a format string that names it --
+	 * "linearEquMmxConversionFactor = %c%d.%05de8" reads +0xc4 and
+	 * "linearEquMmxOutputConversionFactor = %c%d.%03d" reads +0xc8.
+	 * +0xc4 was `linearEquMmxBetaScale`, which said what
+	 * `setLinearEquBeta` does with the slot and nothing about what it is;
+	 * +0xc8 was `pad_c8`, and it is a real field.  Finding 2145.
+	 *
+	 * The pair is one scaling and its inverse: +0xc4 is
+	 * `2**30 / maxLeCoefValue`, which takes a float coefficient into the
+	 * 32-bit fixed-point word, and +0xc8 is `2**14 / maxLeCoefValue` --
+	 * the same factor times 2**-16 -- which is what takes the HIGH HALF
+	 * of that word back out.  It is an `int` and not a float: the object
+	 * writes it with `fistpl` and reads it back with `fildl`.
+	 */
+	float linearEquMmxConversionFactor;		/* +0xc4 */
+	int linearEquMmxOutputConversionFactor;		/* +0xc8 */
+
 	int linearEquMmxBeta;		/* +0xcc */
 	int linearEquMmxShift;		/* +0xd0 */
 
@@ -574,8 +601,16 @@ public:
 	 */
 	float maxDfeCoefValue;		/* +0xfc */
 	float minDfeCoefValue;		/* +0x100 zeroed by reset         */
-	float dfeMmxBetaScale;		/* +0x104 */
-	unsigned char pad_108[0x4];	/* +0x108 (no member touches it)  */
+	/*
+	 * The same pair as +0xc4 and +0xc8, named by the same two prints --
+	 * "dfeMmxConversionFactor = %c%d.%05de8" and
+	 * "dfeMmxOutputConversionFactor = %c%d.%03d" -- and built from
+	 * `maxDfeCoefValue` the way the linear half's are built from
+	 * `maxLeCoefValue`.  +0x108 was `pad_108`.  Finding 2145.
+	 */
+	float dfeMmxConversionFactor;			/* +0x104 */
+	int dfeMmxOutputConversionFactor;		/* +0x108 */
+
 	int dfeMmxBeta;			/* +0x10c */
 	int dfeMmxShift;		/* +0x110 */
 

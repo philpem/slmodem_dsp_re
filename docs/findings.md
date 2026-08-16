@@ -54632,3 +54632,202 @@ evidence. A 4-byte `fstps` on an intermediate is a `float` in the source; a
 value that stays in a register between its producer and its consumer is not.
 The two setters have no such spill, which is why `long double` was right for
 them and finding 256's measurement stands.
+
+### 2145. `convertEqualizerToMmx` NAMES FOUR MORE FIELDS, AND TWO OF THEM WERE PADDING
+
+The function computes two scaling factors per filter and prints both under
+format strings that name them:
+
+    .rodata.str1.4+0x8c60  "V90Equalizer: linearEquMmxConversionFactor = %c%d.%05de8\r\n"
+    .rodata.str1.4+0x8c9c  "V90Equalizer: linearEquMmxOutputConversionFactor = %c%d.%03d\r\n"
+
+The first print's value is `fldl <1e-8>; fmuls 0xc4(%ebp)` and the second's is
+`fildl 0xc8(%ebp)`, so the two slots are named outright, the same way finding
+2137 named +0xbc and +0xc0 out of `enterPhase4`:
+
+    +0xc4   linearEquMmxConversionFactor        was linearEquMmxBetaScale
+    +0xc8   linearEquMmxOutputConversionFactor  was pad_c8
+    +0x104  dfeMmxConversionFactor              was dfeMmxBetaScale
+    +0x108  dfeMmxOutputConversionFactor        was pad_108
+
+`linearEquMmxBetaScale` was this tree's own invention and said what
+`setLinearEquBeta` does with the slot rather than what it holds. What it holds
+is `2**30 / maxLeCoefValue`, the factor that takes a float coefficient into the
+32-bit fixed-point word; +0xc8 is the same factor times 2**-16, which is what
+takes the HIGH HALF of that word back out, and it is an `int` -- written with
+`fistpl`, read back with `fildl`. Two slots this header called padding because
+no member it had written touched them.
+
+### 2146. A CONSTANT THAT IS NOT IN `.rodata` IS EVIDENCE ABOUT AN ARGUMENT'S TYPE
+
+The "OutputConversionFactor" print is the tree's hand-built fixed-point decimal
+-- sign, integer part, fractional digits -- and its third argument is `xor
+%esi,%esi`, a literal zero, where every other use of that idiom computes
+`(int)((v - (int)v) * scale)`.
+
+The scale is what says why. `.rodata.cst4` carries every other constant this
+function uses -- 1e5, 1e4, 2**30, 2**24, 2**20, 2**-16 and 2.0 -- and nothing
+anywhere near a thousand, even though the format string is `%03d`. So the
+multiply folded away at compile time, which happens only if `v - (int)v` folded
+first, which happens only if `v` was an INT: integer arithmetic, zero before it
+reaches the coprocessor. The sign still costs `fldz; fildl; fcompp`, because
+the comparison is against a float zero and the usual arithmetic conversions
+promote.
+
+A float argument would have left the subtraction, the multiply and the 1e3 in
+the object. The missing constant is the measurement, and it is what the
+reconstruction's `edprint_int_stat` is written from.
+
+### 2147. THE COEFFICIENTS ARE SCALED BY THE UNROUNDED FACTOR AND THE DIAGNOSTIC PRINTS THE ROUNDED ONE
+
+`fsts 0xc4(%ebp)` is a store that does not pop, so the conversion factor stays
+on the x87 stack at 64-bit precision while the object holds a 24-bit copy. All
+three arithmetic uses take the register:
+
+    3739b:  dc ca       fmul   %st,%st(2)     ; the output factor
+    37416:  d8 c9       fmul   %st(1),%st     ; beta * factor
+    37473:  d8 ca       fmul   %st(2),%st     ; every coefficient
+
+and the one use that reloads the member is the print, `fmuls 0xc4(%ebp)` at
+37527. `setLinearEquBeta` and `linearEquEquFadeEdges` -- the two members that
+already existed and do the same multiply -- read the member, so the natural
+thing to copy is wrong here, and wrong only in the last bit of a coefficient,
+which is exactly where a weak sweep agrees.
+
+### 2148. THE RENORMALISATION MULTIPLIES BY A RECIPROCAL WHERE `setLinearEquBeta` DIVIDES
+
+Both compute `shift = (int)(log10(fabs(refLevel / (beta * 2**k))) /
+log10(2.0f))` over the same fields, and they do not compute it the same way.
+The setter divides:
+
+    36564:  d8 f1       fdiv   %st(1),%st        ; maxLeCoefValue / (beta*2**24)
+
+and `convertEqualizerToMmx` takes the reciprocal of the denominator and
+multiplies by the reference level, off the same `fld1` its own conversion
+factor's reciprocal came from:
+
+    37383:  d9 e8       fld1
+    373d8:  d8 0d ..    fmuls  <2**24>
+    373de:  de fc       FDIVP  st(4) = st(4)/st(0)   ; 1.0/(beta * 2**24)
+    373e2:  de cb       FMULP  st(3) = st(3)*st(0)   ; times maxLeCoefValue
+
+(objdump prints `de fc` as `fdivrp` and it is FDIVP -- finding 245.) GCC does
+not turn a division into a reciprocal and a multiply without
+`-freciprocal-math`, so this is the source and not the compiler. A reciprocal
+rounds, so the two routes can differ in the last bit; the quotient is fed to a
+TRUNCATED logarithm, so that ulp is a whole step in `shift` and a factor of two
+in the fixed-point step size. docs/deviations.md D327.
+
+### 2149. THE HISTORY ARRAY IS CONVERTED TO 16 BITS WITH NO SCALING, AND ITS EXTREMES ARE TRACKED AS A `short`
+
+The fourth loop of each half is not a coefficient loop:
+
+    377d8:  d9 04 88    flds   (%eax,%ecx,4)     ; array_18[i]
+    377df:  df 5c 24 66 fistps 0x66(%esp)        ; (short), truncating, NO scale
+    377e7:  0f b7 ..    movzwl 0x66(%esp),%eax
+    377ec:  98          cwtl
+    377ed:  66 89 04 4a mov    %ax,(%edx,%ecx,2) ; array_ecAligned[i]
+    377f1:  99          cltd
+    377f2:  31 d0       xor    %edx,%eax
+    377f4:  29 d0       sub    %edx,%eax         ; the magnitude
+    377f6:  98          cwtl                     ; ...back to a short
+
+which is the same statement `restoreEqualizerToFloat`'s middle loop makes from
+the other side: whatever `array_18` holds is a count and not a coefficient, so
+it round-trips through a `short` unscaled. The bound is `word_1c` for the
+linear half and `dfeLength` for the DFE's, and the destination is the ALIGNED
+view of +0xec and +0x12c.
+
+The second `cwtl` is the interesting one: the magnitude is truncated back to 16
+bits before it is compared, so `abs(-32768)` is -32768 again and the printed
+"Min LE History" can be negative. The running minimum starts at 0x8000 and the
+maximum at 0, both as ints, so an empty history prints 32768 and 0.
+docs/deviations.md D328.
+
+### 2150. THE FOUR COEFFICIENT SUMS IN `convertEqualizerToMmx` ARE `float`, AND GCC 13 CANNOT BE MADE TO AGREE
+
+Finding 2139 established that a spill to a four-byte slot is a rounding and is
+evidence about the declared type. `convertEqualizerToMmx` has four of them --
+
+    3750b:  d9 5c 24 4c     fstps 0x4c(%esp)     ; the signed sum
+    3750f:  d9 5c 24 48      fstps 0x48(%esp)    ; the sum of magnitudes
+
+and 0x28/0x24 in the DFE half -- one per iteration, so each accumulator is
+rounded to single precision at every step and a tap below half its ulp is lost
+entirely. The source is `float fsum, fabsSum;` and `fsum += coefs[i];`.
+
+**THE MODERN BUILD KEEPS 80 BITS AND NOTHING IN THE SOURCE MOVES IT.** Under
+`-mfpmath=387 -fexcess-precision=fast` GCC 13 holds the accumulator in an x87
+register across the whole loop and rounds once, at the end. Two spellings were
+tried and BOTH still failed, which is the precondition `tools/gccdiverge.py`'s
+header sets before an entry is allowed:
+
+    fsum = (float)(fsum + coefs[i]);                       still 80-bit
+    fsum = (float)((double)fsum + (double)coefs[i]);       still 80-bit
+
+The second is the spelling that repaired `Resampler.cpp` without an entry
+(finding 1354's neighbour), so this is not the untried case.
+
+**AND THE PERIOD COMPILER GETS IT RIGHT**, which is what says the source is
+correct rather than merely convenient: `make period` passes the witness, 183
+suites and 0 failures, with `float` and the plain `+=`. GCC 3.4.2 runs out of
+x87 registers and spills, exactly as the object does.
+
+The witness had to be built, because the obvious one does not fire. A large
+first tap with a merely SMALL tail agrees to the fourth printed digit either
+way -- which is why the mutation `the coefficient sums are accumulated in long
+double` survived the whole sweep. 65536.0f has an ulp of 0.0078125, so
+nineteen taps of 0.0005f each round away one at a time in `float` and total
+0.0095 in `long double`: "+65536.0000" against "+65536.0078", and the mutation
+is caught.
+
+**THE CHECK IS COMPILED ONLY WHEN `__GNUC__ < 4`, AND `tools/gccdiverge.json`
+WAS THE WRONG ANSWER HERE.** The register was the obvious route -- declare the
+site, excuse the one check in the modern build, let `make period` gate it --
+and it was tried. It fails on the tooling: `tools/mutate.py` does not consult
+the register, builds with the modern compiler, and treats a binary with any
+failing check as a dead shard, so a `t_v90equ` entry took the whole 24-mutation
+suite down with it. A register entry that breaks the mutation tier to save the
+differential tier is a bad trade when the check can simply be asked of the
+compiler that can answer it.
+
+There is a second reason, and it is the better one: under GCC 13 the check
+would pass for a `long double` accumulator and fail for the `float` one the
+object has. It is not a check that is merely unavailable there -- it is a
+check that says the opposite of the truth. A guard is right and an excuse is
+not.
+
+The mutation stays uncaught and now carries its reason in
+`test/mutations/v90equ.json`, in the shape the two equivalent entries beside
+it use: expected uncaught, by this tier, for a measured reason, and if it ever
+starts being caught the modern build has stopped keeping excess precision and
+the guard can go.
+
+### 2151. THE RECIPROCAL-BEFORE-MULTIPLY WITNESS HAD TO BE SEARCHED FOR, AND IT EXISTS
+
+`convertEqualizerToMmx` computes the renormalisation's argument as
+`(1/(beta * 2**24)) * maxLeCoefValue` where `setLinearEquBeta` computes
+`maxLeCoefValue / (beta * 2**24)` -- a reciprocal and a multiply against one
+division. The two differ by at most one bit in the extended significand, and
+the mutation that swaps them survived a sweep of every step size the setters
+are tested over against every reference level.
+
+It survives because one bit only matters where the TRUNCATED logarithm
+downstream lands on an integer, and that needs the exact quotient to be a
+power of two while the divisor is not: then the exact answer is `2**k`, the
+division returns it exactly, and the reciprocal route returns something a hair
+under it, so `(int)(log2(x))` is `k` one way and `k-1` the other. Powers of
+two on their own do not do it -- if the divisor is also a power of two, the
+reciprocal is exact and both routes agree, which is precisely what
+`run_exact_powers` sweeps.
+
+Found by enumerating: beta = 41 * 2**-24 makes the divisor exactly 41, and a
+reference level of 82 makes the exact quotient exactly 2. The reciprocal route
+truncates the exponent to 0 and a division truncates it to 1, and both the
+printed "beta exponent" and `linearEquMmxShift` show it. `t_v90equ.cpp` now
+carries that trial.
+
+The general shape is worth keeping: **to separate two roundings that differ by
+one bit, put the exact answer on the boundary of a truncation.** It is the
+same argument `run_exact_powers` already made for the setters, applied to a
+divisor that is not itself a power of two.

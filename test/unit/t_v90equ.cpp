@@ -228,11 +228,11 @@ sweep_setter(int which, unsigned level, struct outcome *out, long *tagp)
 				    THEIRS.maxLeCoefValue = ref_v[ri];
 				OURS.maxDfeCoefValue =
 				    THEIRS.maxDfeCoefValue = ref_v[ri];
-				OURS.linearEquMmxBetaScale =
-				    THEIRS.linearEquMmxBetaScale =
+				OURS.linearEquMmxConversionFactor =
+				    THEIRS.linearEquMmxConversionFactor =
 					scale_v[si];
-				OURS.dfeMmxBetaScale =
-				    THEIRS.dfeMmxBetaScale = scale_v[si];
+				OURS.dfeMmxConversionFactor =
+				    THEIRS.dfeMmxConversionFactor = scale_v[si];
 
 				/*
 				 * `prev` drives both arms of the diagnostic's
@@ -359,9 +359,9 @@ run_exact_powers(void)
 		OURS.maxLeCoefValue =
 		    THEIRS.maxLeCoefValue = 1.0f;
 		OURS.maxDfeCoefValue = THEIRS.maxDfeCoefValue = 1.0f;
-		OURS.linearEquMmxBetaScale =
-		    THEIRS.linearEquMmxBetaScale = 1.0f;
-		OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale = 1.0f;
+		OURS.linearEquMmxConversionFactor =
+		    THEIRS.linearEquMmxConversionFactor = 1.0f;
+		OURS.dfeMmxConversionFactor = THEIRS.dfeMmxConversionFactor = 1.0f;
 		OURS.linearEquBeta = THEIRS.linearEquBeta = -7.5f;
 		OURS.dfeBeta = THEIRS.dfeBeta = -7.5f;
 
@@ -414,10 +414,10 @@ run_enterphase3(void)
 				    THEIRS.maxLeCoefValue = ref_v[ri];
 				OURS.maxDfeCoefValue =
 				    THEIRS.maxDfeCoefValue = ref_v[ri];
-				OURS.linearEquMmxBetaScale =
-				    THEIRS.linearEquMmxBetaScale = 1.0f;
-				OURS.dfeMmxBetaScale =
-				    THEIRS.dfeMmxBetaScale = 1.0f;
+				OURS.linearEquMmxConversionFactor =
+				    THEIRS.linearEquMmxConversionFactor = 1.0f;
+				OURS.dfeMmxConversionFactor =
+				    THEIRS.dfeMmxConversionFactor = 1.0f;
 
 				memcpy(before, ours.raw, SLOT);
 				if (level > 1)
@@ -1996,9 +1996,9 @@ run_freeze(void)
 			OURS.maxLeCoefValue =
 			    THEIRS.maxLeCoefValue = 1.0f;
 			OURS.maxDfeCoefValue = THEIRS.maxDfeCoefValue = 1.0f;
-			OURS.linearEquMmxBetaScale =
-			    THEIRS.linearEquMmxBetaScale = 32768.0f;
-			OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale =
+			OURS.linearEquMmxConversionFactor =
+			    THEIRS.linearEquMmxConversionFactor = 32768.0f;
+			OURS.dfeMmxConversionFactor = THEIRS.dfeMmxConversionFactor =
 			    32768.0f;
 
 			dsplib_debug_capture_reset();
@@ -2091,9 +2091,9 @@ run_restoretofloat(void)
 			    0xa5a50000u + (unsigned)li;
 			OURS.word_20 = THEIRS.word_20 = 0x5a5a1111u;
 			OURS.mmxMode = THEIRS.mmxMode = mmx;
-			OURS.linearEquMmxBetaScale =
-			    THEIRS.linearEquMmxBetaScale = scale_p[si];
-			OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale =
+			OURS.linearEquMmxConversionFactor =
+			    THEIRS.linearEquMmxConversionFactor = scale_p[si];
+			OURS.dfeMmxConversionFactor = THEIRS.dfeMmxConversionFactor =
 			    scale_p[(si + 2) % 4];
 
 			arena_snapshot();
@@ -2205,9 +2205,9 @@ run_fadeedges(void)
 			    THEIRS.linearEquWindowHalf = lh;
 			OURS.dfeWindowHalf = THEIRS.dfeWindowHalf = dh;
 			OURS.mmxMode = THEIRS.mmxMode = mmx;
-			OURS.linearEquMmxBetaScale =
-			    THEIRS.linearEquMmxBetaScale = 1024.0f;
-			OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale =
+			OURS.linearEquMmxConversionFactor =
+			    THEIRS.linearEquMmxConversionFactor = 1024.0f;
+			OURS.dfeMmxConversionFactor = THEIRS.dfeMmxConversionFactor =
 			    256.0f;
 
 			arena_snapshot();
@@ -2346,10 +2346,10 @@ run_enterrrnfpe(void)
 				    THEIRS.maxLeCoefValue = 1.0f;
 				OURS.maxDfeCoefValue =
 				    THEIRS.maxDfeCoefValue = 1.0f;
-				OURS.linearEquMmxBetaScale =
-				    THEIRS.linearEquMmxBetaScale = 1024.0f;
-				OURS.dfeMmxBetaScale =
-				    THEIRS.dfeMmxBetaScale = 256.0f;
+				OURS.linearEquMmxConversionFactor =
+				    THEIRS.linearEquMmxConversionFactor = 1024.0f;
+				OURS.dfeMmxConversionFactor =
+				    THEIRS.dfeMmxConversionFactor = 256.0f;
 
 				arena_snapshot();
 				dsplib_debug_capture_reset();
@@ -2679,10 +2679,10 @@ run_enterphase4(void)
 				OURS.meanErrorCount = THEIRS.meanErrorCount =
 				    17u;
 				OURS.meanErrorFull = THEIRS.meanErrorFull = 1u;
-				OURS.linearEquMmxBetaScale =
-				    THEIRS.linearEquMmxBetaScale = 1024.0f;
-				OURS.dfeMmxBetaScale =
-				    THEIRS.dfeMmxBetaScale = 256.0f;
+				OURS.linearEquMmxConversionFactor =
+				    THEIRS.linearEquMmxConversionFactor = 1024.0f;
+				OURS.dfeMmxConversionFactor =
+				    THEIRS.dfeMmxConversionFactor = 256.0f;
 
 				ARENA_RSAMP->params = ARENA_PARAMS;
 				ARENA_RSAMP->bllState = (V90BllState)
@@ -2796,6 +2796,421 @@ run_enterphase4(void)
 	return diff_end();
 }
 
+/* =========================================== convertEqualizerToMmx */
+
+/*
+ * convertEqualizerToMmx -- twenty-seven printed lines, six arrays written and
+ * twelve fields set, so it needs everything the batch has built at once: the
+ * arena for both coefficient pairs and both histories, the skewed aligned
+ * views, the planted fixed-point words and the transcript.
+ *
+ * WHAT ONLY THE TRANSCRIPT CAN SEE.  Six of the printed numbers are locals the
+ * object never stores -- the signed and absolute sums over the high halves,
+ * their two extremes, and the two history extremes -- along with every
+ * fractional digit of the four float sums.  A body that accumulated any of
+ * them differently leaves the object and the arena identical, so the
+ * transcript comparison is the test and the object comparison is the backstop.
+ *
+ * WHAT THE TRANSCRIPT CANNOT SAY OUT LOUD.  The capture is ciphertext (finding
+ * 2136), so `strstr` finds nothing in it.  The empty-filter case -- where the
+ * minimum is printed as the 0x10000 it was initialised to -- is checked in one
+ * extra trial with `dsplib_encode_plain` set, which turns OUR side's output
+ * readable and leaves the reference's encoded.  That trial compares everything
+ * except the transcript; what carries its claim back to the object is that
+ * every other trial compared the two and they agreed.
+ *
+ * THE THREE LENGTHS ARE SET APART FROM ONE ANOTHER IN EVERY TRIAL.
+ * `linearEquLength` bounds the linear coefficients, `dfeLength` the DFE's and
+ * its history, and `word_1c` the linear history -- three different fields, and
+ * `fill_arena` leaves garbage in all three, so a trial that left one alone
+ * would be a wild write and not a wrong answer.
+ */
+
+#include "dsplib/encode.h"
+
+extern "C" {
+void ref_equ_convertEqualizerToMmx(void *self)
+	asm("ref__ZN12V90Equalizer21convertEqualizerToMmxEv");
+}
+
+/*
+ * The reference levels.  1024 and 0.5 make the reciprocal exact; 3.0 and 1e-6
+ * do not, and those are the ones that tell `(1.0/x) * m` -- which is what the
+ * object computes -- from `m / x`, which is what `setLinearEquBeta` computes.
+ * 0.0f divides by zero on purpose: the factor comes out infinite and the
+ * conversion of it is the x87's integer indefinite on both sides.
+ */
+static const float mmxref_v[] = {
+	1.0f, 2.0f, 3.0f, 1024.0f, 0.5f, -1.0f, 1.0e-6f, 1048576.0f, 0.0f
+};
+#define NMMXREF ((int)(sizeof(mmxref_v) / sizeof(mmxref_v[0])))
+
+/* Floats for the two history arrays: both ends of a short, two values outside
+ * it, and -32768 itself, whose magnitude comes back negative. */
+static const float mmxhist_v[] = {
+	-32768.0f, 32767.0f, 40000.0f, -40000.0f, 0.0f,
+	-0.5f, 100.75f, -100.75f, 1.0f
+};
+
+/* Exactly float-representable 32-bit words, planted through a factor of 2**30:
+ * the high half goes negative and the low half above 0x7fff. */
+static const int mmxwit_v[] = {
+	32768, -32768, 2147450880, -2147450880, 98304, -98304
+};
+
+static void
+mmx_setup(long tag, unsigned int le, unsigned int dfe, unsigned int w1c,
+	  int pat, float ml, float md, float beta, float dbeta)
+{
+	unsigned int k;
+
+	seed(tag);
+	fill_arena(tag);
+	plant_mmx_words(le > dfe ? le : dfe, tag);
+	wire(&OURS);
+	wire(&THEIRS);
+	wire_mmx(&OURS);
+	wire_mmx(&THEIRS);
+
+	for (k = 0; k < 64; k++) {
+		switch (pat) {
+		case 0:
+			arena.lecoefs[k] = (float)((int)k - 20) * 0.0625f;
+			arena.dfecoefs[k] = (float)((int)k - 9) * 0.125f;
+			break;
+		case 1:
+			arena.lecoefs[k] = (float)mmxwit_v[k % 6]
+			    * (1.0f / 1073741824.0f);
+			arena.dfecoefs[k] = (float)mmxwit_v[(k + 3) % 6]
+			    * (1.0f / 1073741824.0f);
+			break;
+		default:
+			/*
+			 * One large tap and a tail of small ones, so a sum
+			 * accumulated in extended precision differs from one
+			 * accumulated in `float` in the digits that are
+			 * printed.
+			 */
+			arena.lecoefs[k] = (k == 0) ? 1024.0f
+			    : 0.0001f * (float)(k % 7 + 1);
+			arena.dfecoefs[k] = (k == 0) ? 512.0f
+			    : 0.00013f * (float)(k % 5 + 1);
+			break;
+		}
+		arena.a18[k] = mmxhist_v[(k + (unsigned)tag) % 9];
+		arena.a44[k] = mmxhist_v[(k * 3u + (unsigned)tag) % 9];
+	}
+
+	OURS.linearEquLength = THEIRS.linearEquLength = le;
+	OURS.dfeLength = THEIRS.dfeLength = dfe;
+	OURS.word_1c = THEIRS.word_1c = w1c;
+	OURS.word_20 = THEIRS.word_20 = 0x5a5a0000u + (unsigned)pat;
+	OURS.word_20Saved = THEIRS.word_20Saved = 0xdeadbeefu;
+	OURS.maxLeCoefValue = THEIRS.maxLeCoefValue = ml;
+	OURS.maxDfeCoefValue = THEIRS.maxDfeCoefValue = md;
+	OURS.linearEquBeta = THEIRS.linearEquBeta = beta;
+	OURS.dfeBeta = THEIRS.dfeBeta = dbeta;
+
+	OURS.mmxMode = THEIRS.mmxMode = 0;
+	OURS.mmxArraysPresent = THEIRS.mmxArraysPresent = 1;
+	ARENA_PARAMS->ENABLE_EQUALIZER_MMX = 1;
+}
+
+/*
+ * The conversion run on both sides against the same starting arena, and
+ * everything that is asserted for every trial.  The line count is the
+ * call-site check the ciphertext comparison cannot name: one line on the bail
+ * and thirteen for each half plus the closing line on the success path.
+ */
+static void
+mmx_run(long tag, int bail)
+{
+	arena_snapshot();
+	dsplib_debug_capture_reset();
+	OURS.convertEqualizerToMmx();
+	arena_switch();
+	ref_equ_convertEqualizerToMmx(&THEIRS);
+
+	diff_eq_obj("after the conversion", V90Equalizer, &OURS, &THEIRS, tag);
+	arena_compare("the arena after the conversion", tag);
+	diff_eq_int("no store past the object (%ld)", guard_equal(), 1, tag);
+	diff_eq_int("transcript (%ld)",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+	diff_eq_int("lines printed (%ld)", (long)dsplib_debug_capture_lines(1),
+		    bail ? 1 : 27, tag);
+	diff_eq_int("the mode (%ld)", (long)THEIRS.mmxMode, bail ? 0 : 1, tag);
+}
+
+/*
+ * The two factors, restated here from the disassembly instead of taken from
+ * the code under test: the RECIPROCAL first and the scale after it, which is
+ * the order 3738f and 37395 have, and then that times 2**-16 for the output
+ * factor.  A body that computed `2**30 / m` in one step would agree with this
+ * for every power of two and differ in the last bit for 3.0 and 1e-6.
+ */
+static void
+mmx_check_factors(const char *what, float m, float gotConv, int gotOut,
+		  long tag)
+{
+	long double c = (1.0L / (long double)m) * 1073741824.0L;
+	long double o = c * 0.0000152587890625L;
+
+	diff_eq_float(what, gotConv, (float)c, tag);
+	if (o > -2.0e9L && o < 2.0e9L)
+		diff_eq_int("the output conversion factor (%ld)", (long)gotOut,
+			    (long)(int)o, tag);
+}
+
+static int
+run_converttommx(void)
+{
+	static const unsigned int len_v[] = { 0u, 1u, 5u, 20u };
+	long tag = 1010000;
+	int bi, ri, li, pat, gate;
+	int saw_mode = 0, saw_noarrays = 0, saw_noparam = 0, saw_ok = 0;
+	int saw_beta = 0, saw_zerobeta = 0;
+
+	diff_begin("V90Equalizer::convertEqualizerToMmx");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	/*
+	 * The three ways out.  Only the first arm can make the `mmxMode = 0`
+	 * store observable -- the other two enter with the field already
+	 * clear -- so it is set to something else entirely there.
+	 */
+	for (gate = 0; gate < 3; gate++)
+		for (li = 0; li < 4; li++) {
+			tag++;
+			mmx_setup(tag, len_v[li], len_v[(li + 1) % 4],
+				  len_v[(li + 2) % 4], 0, 1.0f, 2.0f, 0.0f,
+				  0.0f);
+
+			switch (gate) {
+			case 0:
+				OURS.mmxMode = THEIRS.mmxMode = 0x1234u;
+				saw_mode = 1;
+				break;
+			case 1:
+				OURS.mmxArraysPresent =
+				    THEIRS.mmxArraysPresent = 0;
+				saw_noarrays = 1;
+				break;
+			default:
+				ARENA_PARAMS->ENABLE_EQUALIZER_MMX = 0;
+				saw_noparam = 1;
+				break;
+			}
+
+			mmx_run(tag, 1);
+			diff_eq_int("nothing was converted (%ld)",
+				    (long)(THEIRS.word_20Saved == 0xdeadbeefu),
+				    1, tag);
+		}
+
+	/*
+	 * The arithmetic: every step size the setters are swept over, against
+	 * every reference level, with the lengths and the coefficient pattern
+	 * rotating underneath so no combination of the three is the only one
+	 * seen.
+	 */
+	for (bi = 0; bi < nbeta; bi++)
+		for (ri = 0; ri < NMMXREF; ri++) {
+			float ml = mmxref_v[ri];
+			float md = mmxref_v[(ri + 3) % NMMXREF];
+
+			li = (bi + ri) % 4;
+			pat = (bi + 2 * ri) % 3;
+
+			tag++;
+			mmx_setup(tag, len_v[li], len_v[(li + 1) % 4],
+				  len_v[(li + 2) % 4], pat, ml, md,
+				  beta_v[bi], beta_v[(bi + 7) % nbeta]);
+			mmx_run(tag, 0);
+
+			saw_ok = 1;
+			if (beta_v[bi] != 0.0f)
+				saw_beta = 1;
+			else
+				saw_zerobeta = 1;
+
+			mmx_check_factors("linearEquMmxConversionFactor", ml,
+					  THEIRS.linearEquMmxConversionFactor,
+					  THEIRS.linearEquMmxOutputConversionFactor,
+					  tag);
+			mmx_check_factors("dfeMmxConversionFactor", md,
+					  THEIRS.dfeMmxConversionFactor,
+					  THEIRS.dfeMmxOutputConversionFactor,
+					  tag);
+			diff_eq_int("word_20 was parked in +0xf8 (%ld)",
+				    (long)THEIRS.word_20Saved,
+				    (long)THEIRS.word_20, tag);
+			if (beta_v[bi] == 0.0f) {
+				diff_eq_int("a zero step size is zero (%ld)",
+					    (long)THEIRS.linearEquMmxBeta, 0,
+					    tag);
+				diff_eq_int("and its exponent (%ld)",
+					    (long)THEIRS.linearEquMmxShift, 0,
+					    tag);
+			}
+		}
+
+	/*
+	 * Every length against every coefficient pattern, at a reference level
+	 * of 1.0 so the factor is exactly 2**30 and the planted witnesses land
+	 * on the 32-bit words they were chosen for.
+	 */
+	for (li = 0; li < 4; li++)
+		for (pat = 0; pat < 3; pat++) {
+			unsigned int le = len_v[li];
+
+			tag++;
+			mmx_setup(tag, le, len_v[(li + 2) % 4],
+				  len_v[(li + 3) % 4], pat, 1.0f, 1.0f,
+				  1.0e-8f, 3.0e-7f);
+			mmx_run(tag, 0);
+
+			if (pat == 1 && le > 0) {
+				/* The witness at index 0 is 32768: high half
+				 * 0x0000, low half 0x8000 -- the pairing the
+				 * two extensions exist for. */
+				diff_eq_int("the low half was written (%ld)",
+					    (long)(unsigned short)
+					    arena.ad8[1], 0x8000, tag);
+				diff_eq_int("and the high half (%ld)",
+					    (long)arena.lemmx[1], 0, tag);
+			}
+		}
+
+	/*
+	 * THE RECIPROCAL IS TAKEN BEFORE THE MULTIPLY, and the sweep above
+	 * cannot see it.  `1/(beta*2**24)` then times the reference level,
+	 * not the level divided by the product -- the two differ by at most
+	 * one bit, and the only inputs where one bit matters are those where
+	 * the exact quotient is a power of two and the divisor is not,
+	 * because the truncated logarithm downstream then lands on either
+	 * side of an integer.  Searched for rather than guessed: beta =
+	 * 41 * 2**-24 makes the divisor exactly 41, and a reference level of
+	 * 82 makes the exact quotient exactly 2, so the reciprocal route
+	 * comes out just under and truncates to 0 where a division truncates
+	 * to 1.  D327's difference, made visible; the mutation that survived
+	 * until this trial existed is in test/mutations/v90equ.json.
+	 */
+	tag++;
+	mmx_setup(tag, 4u, 4u, 4u, 0, 82.0f, 82.0f, 41.0f / 16777216.0f,
+		  41.0f / 1048576.0f);
+	mmx_run(tag, 0);
+	diff_eq_int("the reciprocal route truncates the exponent down (%ld)",
+		    (long)THEIRS.linearEquMmxShift, 0, tag);
+
+	/*
+	 * The empty filter, in plain text.  Both extremes come out as what
+	 * they were initialised to and neither is a field, so this is the one
+	 * claim the ciphertext cannot make; see the note above.
+	 */
+	tag++;
+	mmx_setup(tag, 0u, 0u, 0u, 0, 1.0f, 1.0f, 0.0f, 0.0f);
+	arena_snapshot();
+	dsplib_debug_capture_reset();
+	dsplib_encode_plain = 1;
+	OURS.convertEqualizerToMmx();
+	dsplib_encode_plain = 0;
+	arena_switch();
+	ref_equ_convertEqualizerToMmx(&THEIRS);
+
+	diff_eq_obj("after the empty conversion", V90Equalizer, &OURS, &THEIRS,
+		    tag);
+	arena_compare("the arena after the empty conversion", tag);
+	diff_eq_int("the empty filter's minimum is 0x10000 (%ld)",
+		    (long)(strstr(dsplib_debug_capture_text(0),
+				  "short high LE coeffs min value = 65536")
+			   != 0), 1, tag);
+	diff_eq_int("and its maximum is zero (%ld)",
+		    (long)(strstr(dsplib_debug_capture_text(0),
+				  "short high LE coeffs max value = 0\r")
+			   != 0), 1, tag);
+	diff_eq_int("the DFE's minimum too (%ld)",
+		    (long)(strstr(dsplib_debug_capture_text(0),
+				  "short high dfe coeffs min value = 65536")
+			   != 0), 1, tag);
+	diff_eq_int("the empty history's minimum is 0x8000 (%ld)",
+		    (long)(strstr(dsplib_debug_capture_text(0),
+				  "Min LE History = 32768") != 0), 1, tag);
+	diff_eq_int("and its maximum is zero (%ld)",
+		    (long)(strstr(dsplib_debug_capture_text(0),
+				  "Max LE History = 0\r") != 0), 1, tag);
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the mode-already-set arm was taken", saw_mode, 1, 0);
+	diff_eq_int("the no-arrays arm was taken", saw_noarrays, 1, 0);
+	diff_eq_int("the parameter arm was taken", saw_noparam, 1, 0);
+	diff_eq_int("the conversion ran", saw_ok, 1, 0);
+	diff_eq_int("a non-zero step size was renormalised", saw_beta, 1, 0);
+	diff_eq_int("and a zero one was not", saw_zerobeta, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * THE FOUR COEFFICIENT SUMS ARE `float`, AND ONLY THE PERIOD COMPILER AGREES.
+ *
+ * The object stores each accumulator back to a four-byte slot every iteration
+ * (`fstps 0x4c(%esp)` and `fstps 0x48(%esp)`, 0x28 and 0x24 in the DFE half),
+ * so a tap smaller than half the accumulator's ulp is lost entirely.  A large
+ * first tap and a tail below that ulp is what separates a `float` accumulator
+ * from an extended-precision one: 65536.0f has an ulp of 0.0078125, so
+ * nineteen taps of 0.0005f vanish one at a time in `float` and add up to
+ * 0.0095 in `long double` -- four printed digits apart.  The pattern in
+ * `mmx_setup` has a tail that is merely SMALL, which agrees to the fourth
+ * digit either way, and that is why the mutation survived it.
+ *
+ * IT RUNS ONLY UNDER THE PERIOD COMPILER, and that is not a convenience.
+ * GCC 13 holds the accumulator in an x87 register across the whole loop and
+ * rounds once at the end, so under the modern build BOTH a `float` and a
+ * `long double` accumulator produce the extended-precision answer and the
+ * check fails for our source and passes for a wrong one -- it would be a
+ * check that lies.  GCC 3.4.2 spills exactly as the object does.  Two
+ * spellings that force the narrowing elsewhere were tried and neither moved
+ * GCC 13; `tools/gccdiverge.json` was the other candidate and is worse here,
+ * because `tools/mutate.py` does not consult it and a binary with a failing
+ * check takes the whole mutation suite down with it.  Finding 2150.
+ */
+#if defined(__GNUC__) && __GNUC__ < 4
+#define V90EQU_SUM_PRECISION_TESTABLE 1
+#endif
+
+#ifdef V90EQU_SUM_PRECISION_TESTABLE
+static int
+run_mmx_sum_precision(void)
+{
+	long tag = 1011000;
+	unsigned int k;
+
+	diff_begin("V90Equalizer: the coefficient sums are float");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	mmx_setup(tag, 20u, 20u, 8u, 0, 65536.0f, 32768.0f, 0.0f, 0.0f);
+	arena.lecoefs[0] = 65536.0f;
+	arena.dfecoefs[0] = 32768.0f;
+	for (k = 1; k < 64; k++) {
+		arena.lecoefs[k] = 0.0005f;
+		arena.dfecoefs[k] = 0.0007f;
+	}
+	mmx_run(tag, 0);
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	return diff_end();
+}
+#endif /* V90EQU_SUM_PRECISION_TESTABLE */
+
 int
 main(void)
 {
@@ -2822,6 +3237,10 @@ main(void)
 	rc |= run_enterrrnfpe();
 	rc |= run_calcmeanerror();
 	rc |= run_enterphase4();
+	rc |= run_converttommx();
+#ifdef V90EQU_SUM_PRECISION_TESTABLE
+	rc |= run_mmx_sum_precision();
+#endif
 
 	return rc;
 }

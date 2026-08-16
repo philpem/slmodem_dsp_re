@@ -6078,3 +6078,53 @@ reproduced in `summarise_coefs`, whose loop also starts at 1. `t_v90equ.cpp`'s
 `run_enterphase4` sweeps a zero length -- the arena's arrays are real memory, so
 the over-read is inside the fixture -- and asserts the sums against a
 hand-computed total that also skips the first tap.
+
+## D326 🐛 An empty filter prints a minimum magnitude of 65536, which no `short` can hold
+
+*Batch of 2026-08-16, from `_ZN12V90Equalizer21convertEqualizerToMmxEv` (blob
+0x37330) at 0x374a5 and 0x37774. **Reachability: `linearEquLength == 0` or
+`dfeLength == 0` when the equaliser is converted.** **Observability: "short
+high LE coeffs min value = 65536" in the diagnostic transcript.** Status:
+`unmeasured` -- the running minimum is seeded with 0x10000, one past the
+largest magnitude a 16-bit half can produce, and nothing re-seeds it from the
+first entry, so a filter with no taps prints the sentinel. `t_v90equ.cpp`'s
+`run_converttommx` sweeps a zero length and asserts the 65536 in plain text.
+Fix class: none proposed; reproduced as the object has it.*
+
+## D327 🐛 The two renormalisations of the same step size can disagree by a whole exponent
+
+*Batch of 2026-08-16, from `_ZN12V90Equalizer21convertEqualizerToMmxEv` (blob
+0x37330) at 0x373d8..0x373e2 against `_ZN12V90Equalizer16setLinearEquBetaEf`
+(blob 0x36490) at 0x36564. **Reachability: any `maxLeCoefValue` and
+`linearEquBeta` whose reciprocal rounds, which is every pair that is not a
+power of two.** **Observability: `linearEquMmxShift` and `linearEquMmxBeta`,
+and through them every fixed-point coefficient update.** Status: `unmeasured`
+-- `convertEqualizerToMmx` computes `(1.0/(beta*2**24)) * maxLeCoefValue` and
+the setter computes `maxLeCoefValue / (beta*2**24)`; the two differ in the last
+bit, the quotient is fed to a truncated base-2 logarithm, and one ulp there is
+one step in the exponent and a factor of two in the step size. Finding 2148.
+Fix class: none proposed; both are reproduced as the object has them.*
+
+## D328 🐛 The magnitude of -32768 is -32768, so a printed minimum magnitude can be negative
+
+*Batch of 2026-08-16, from `_ZN12V90Equalizer21convertEqualizerToMmxEv` (blob
+0x37330) at 0x377f1..0x377f6. **Reachability: an `array_18` or `array_44` entry
+that converts to exactly -32768, which every value at or below -32768.0f does
+through `fistps`.** **Observability: "Min LE History = -32768" where the number
+is documented as a magnitude.** Status: `unmeasured` -- the object takes the
+absolute value as an int and then truncates it back to 16 bits with `cwtl`, so
+0x8000 wraps. Fix class: none proposed; reproduced as the object has it.*
+
+## D329 🐛 The conversion writes the ALIGNED fixed-point arrays and every clear in the class clears the RAW ones
+
+*Batch of 2026-08-16, from `_ZN12V90Equalizer21convertEqualizerToMmxEv` (blob
+0x37330) at 0x37455..0x3748c and 0x377a8..0x377ed against
+`_ZN12V90Equalizer5resetEj` (blob 0x36e10) and
+`_ZN12V90Equalizer18zeroLinearEquCoefsEv` (blob 0x36850). **Reachability:
+whenever the constructor's `(align8(p) - p) / 2` comes out non-zero.**
+**Observability: the first `skew` entries of each array are cleared and never
+written, and the last `skew` of the `+ 8` headroom are written and never
+cleared.** Status: `unmeasured` -- glibc's i386 malloc returns 8-byte-aligned
+blocks, so every observed skew is zero; the mutation set carries the same
+observation from the constructor's side. Fix class: none proposed; reproduced
+as the object has it.*

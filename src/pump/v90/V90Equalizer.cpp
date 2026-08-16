@@ -176,7 +176,8 @@ V90EQU_OFF(block_b4,			0x0b4, blockb4);
 V90EQU_OFF(block_b8,			0x0b8, blockb8);
 V90EQU_OFF(maxLeCoefValue,		0x0bc, maxlecoef);
 V90EQU_OFF(minLeCoefValue,		0x0c0, minlecoef);
-V90EQU_OFF(linearEquMmxBetaScale,	0x0c4, lescale);
+V90EQU_OFF(linearEquMmxConversionFactor,	0x0c4, lescale);
+V90EQU_OFF(linearEquMmxOutputConversionFactor,	0x0c8, leoutscale);
 V90EQU_OFF(linearEquMmxBeta,		0x0cc, lebeta);
 V90EQU_OFF(linearEquMmxShift,		0x0d0, leshift);
 V90EQU_OFF(linearEquMmxCoefs,		0x0d4, lemmxcoefs);
@@ -191,7 +192,8 @@ V90EQU_OFF(array_ecSkew,		0x0f4, arrayecskew);
 V90EQU_OFF(word_20Saved,		0x0f8, word20saved);
 V90EQU_OFF(maxDfeCoefValue,		0x0fc, maxdfecoef);
 V90EQU_OFF(minDfeCoefValue,		0x100, mindfecoef);
-V90EQU_OFF(dfeMmxBetaScale,		0x104, dfescale);
+V90EQU_OFF(dfeMmxConversionFactor,		0x104, dfescale);
+V90EQU_OFF(dfeMmxOutputConversionFactor,	0x108, dfeoutscale);
 V90EQU_OFF(dfeMmxBeta,			0x10c, dfebetai);
 V90EQU_OFF(dfeMmxShift,			0x110, dfeshift);
 V90EQU_OFF(dfeMmxCoefs,			0x114, dfemmxcoefs);
@@ -335,7 +337,7 @@ V90Equalizer::setLinearEquBeta(float beta)
 
 		linearEquMmxShift = shift;
 		linearEquMmxBeta = (int)((long double)beta
-					 * linearEquMmxBetaScale
+					 * linearEquMmxConversionFactor
 					 * (long double)one_shifted_by(shift));
 	} else {
 		linearEquMmxShift = 0;
@@ -377,7 +379,7 @@ V90Equalizer::setDfeBeta(float beta)
 
 		dfeMmxShift = shift;
 		dfeMmxBeta = (int)((long double)beta
-				   * dfeMmxBetaScale
+				   * dfeMmxConversionFactor
 				   * (long double)one_shifted_by(shift));
 	} else {
 		dfeMmxShift = 0;
@@ -968,7 +970,7 @@ V90Equalizer::restoreEqualizerToFloat()
 		return;
 
 	for (i = 0; i < linearEquLength; i++)
-		linearEquCoefs[i] = (1.0f / linearEquMmxBetaScale)
+		linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
 		    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
 					  array_d8Aligned, i);
 
@@ -978,7 +980,7 @@ V90Equalizer::restoreEqualizerToFloat()
 	word_20 = word_20Saved;
 
 	for (i = 0; i < dfeLength; i++) {
-		dfeCoefs[i] = (1.0f / dfeMmxBetaScale)
+		dfeCoefs[i] = (1.0f / dfeMmxConversionFactor)
 		    * (float)mmx_coef_get(dfeMmxCoefsAligned,
 					  array_118Aligned, i);
 		array_44[i] = (float)array_12cAligned[i];
@@ -1019,12 +1021,12 @@ V90Equalizer::linearEquFadeEdges()
 
 	if (mmxMode != 0) {
 		for (i = 0; i < linearEquLength; i++)
-			linearEquCoefs[i] = (1.0f / linearEquMmxBetaScale)
+			linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
 			    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
 						  array_d8Aligned, i);
 
 		for (i = 0; i < dfeLength; i++)
-			dfeCoefs[i] = (1.0f / dfeMmxBetaScale)
+			dfeCoefs[i] = (1.0f / dfeMmxConversionFactor)
 			    * (float)mmx_coef_get(dfeMmxCoefsAligned,
 						  array_118Aligned, i);
 	}
@@ -1039,12 +1041,342 @@ V90Equalizer::linearEquFadeEdges()
 	if (mmxMode != 0) {
 		for (i = 0; i < linearEquLength; i++) {
 			int v = (int)(linearEquCoefs[i]
-				      * linearEquMmxBetaScale);
+				      * linearEquMmxConversionFactor);
 
 			array_d8Aligned[i] = (short)v;
 			linearEquMmxCoefsAligned[i] = (short)(v >> 16);
 		}
 	}
+}
+
+/*
+ * The conversion factor's diagnostic: `edprint_stat`'s hand-built decimal with
+ * the sign and the digits taken from DIFFERENT expressions.  The object
+ * reloads the member for the comparison --
+ *
+ *      3757f:  d9 ee           fldz
+ *      3758e:  d8 9d c4 ..     fcomps 0xc4(%ebp)
+ *
+ * -- while the three printed digits come from that member scaled by 1e-8,
+ * which is what the "e8" on the end of the format string means.  The scale is
+ * a DOUBLE (`fldl` out of .rodata.cst8) and the fractional multiplier is a
+ * float (`flds` out of .rodata.cst4); 1e-8 is not exactly representable in
+ * either, so the two are different numbers and the printed digits show it.
+ */
+static inline void
+edprint_scaled_stat(const char *fmt, float v, long double scaled,
+		    long double scale)
+{
+	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl(scaled),
+		 __builtin_abs((int)((scaled - (long double)(int)scaled)
+				     * scale)));
+}
+
+/*
+ * The same decimal applied to an INTEGER, which is why its fractional digits
+ * are a compile-time zero: `v - (int)v` is integer arithmetic and folds before
+ * it ever reaches the coprocessor, so the whole third argument becomes `xor
+ * %esi,%esi` and the object carries no 1e3 constant at all.  THE MISSING
+ * CONSTANT IS THE EVIDENCE -- .rodata.cst4 holds every other scale this
+ * function uses (1e5, 1e4, 2**30, 2**24, 2**20, 2**-16, 2.0) and nothing near
+ * a thousand -- so the argument was an int and not a float.  Finding 2146.
+ *
+ * The sign still costs a comparison on the coprocessor, because it is against
+ * a float zero and the usual arithmetic conversions promote:
+ *
+ *      375dc:  d9 ee           fldz
+ *      375de:  db 85 c8 ..     fildl 0xc8(%ebp)
+ *      375ed:  de d9           fcompp
+ */
+static inline void
+edprint_int_stat(const char *fmt, int v)
+{
+	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl((long double)v),
+		 __builtin_abs((int)((v - (int)v) * 1.0e3f)));
+}
+
+/*
+ * convertEqualizerToMmx -- the float coefficients into the fixed-point pair,
+ * and the mode on.  `restoreEqualizerToFloat` is the other half.
+ *
+ * 2,573 bytes, and about two thirds of them are the twenty-seven diagnostic
+ * lines.  Each half is: the scaling factors, the step-size renormalisation,
+ * the coefficient conversion, a summary of what came out, and the history
+ * array; then the DFE half again with its own fields, its own constants and
+ * its own strings, the way `setLinearEquBeta` and `setDfeBeta` are the same
+ * 350 bytes twice.  Written out twice here for the same reason.
+ *
+ * THE SCALING IS COMPUTED ONCE AND KEPT IN A REGISTER.  `fsts 0xc4(%ebp)` is a
+ * store that does not pop, and every later use is the x87 copy -- `fmul
+ * %st(2),%st` in the coefficient loop, `fmul %st,%st(2)` for the output factor
+ * and `fmul %st(1),%st` for the step size -- so all three see the UNROUNDED
+ * value and not the 24-bit float left in the object.  `setLinearEquBeta` and
+ * `linearEquFadeEdges` read the member, and copying them here would be wrong
+ * in the last place a coefficient can differ.  The one thing that DOES read
+ * the member back is the diagnostic, `fmuls 0xc4(%ebp)`.
+ *
+ * THE RENORMALISATION IS THE SETTER'S WITH THE DIVISION TURNED INSIDE OUT.
+ * `setLinearEquBeta` computes `maxLeCoefValue / (beta * 2**24)`; this computes
+ * the RECIPROCAL of the denominator and multiplies:
+ *
+ *      37383:  d9 e8           fld1                    ; and 1.0/maxLeCoef
+ *      373d8:  d8 0d ..        fmuls  <2**24>          ;   comes off the same
+ *      373de:  de fc           FDIVP  st(4)=st(4)/st(0); 1.0/(beta * 2**24)
+ *      373e2:  de cb           FMULP  st(3)=st(3)*st(0); times maxLeCoefValue
+ *
+ * A reciprocal rounds, so the two routes can differ in the last bit and the
+ * TRUNCATED logarithm downstream can differ by a whole step; docs/deviations.md
+ * D327.  (objdump prints both `DE` forms as their own opposite -- finding 245.)
+ *
+ * THE FOUR SUMS ARE `float` AND NOT `long double`.  Each accumulator is stored
+ * back to a four-byte stack slot every iteration (`fstps 0x4c(%esp)` and
+ * `fstps 0x48(%esp)`, and 0x28/0x24 in the DFE half), so the object rounds to
+ * single precision at every step and the printed digits depend on it.  Finding
+ * 2139's rule, applied where it fires.
+ *
+ * THE HISTORY LOOP IS NOT A COEFFICIENT LOOP.  It converts `array_18` to 16
+ * bits with no scale at all -- `fistps`, a two-byte store -- which is the same
+ * thing `restoreEqualizerToFloat`'s middle loop says from the other side, and
+ * it tracks the largest and smallest MAGNITUDE as a `short`, so the magnitude
+ * of -32768 comes back negative.  docs/deviations.md D328.
+ */
+void
+V90Equalizer::convertEqualizerToMmx()
+{
+	long double conv;
+	float fsum, fabsSum;
+	int sumHi, absSumHi, maxHi, minHi;
+	int maxHist, minHist;
+	unsigned int i;
+
+	/*
+	 * Three ways not to convert: already converted, no fixed-point arrays
+	 * to convert into, or the parameter block says the equaliser may not
+	 * use them.  `mmxMode` is written on the way out even though two of the
+	 * three arms have just proved it is already zero.
+	 */
+	if (mmxMode != 0 || mmxArraysPresent == 0
+	    || params->ENABLE_EQUALIZER_MMX == 0) {
+		edprintf("V90Equalizer: LE & DFE running in FLOAT mode.\r\n");
+		mmxMode = 0;
+		return;
+	}
+
+	/* ------------------------------------------- the linear equaliser */
+
+	conv = (1.0f / (long double)maxLeCoefValue) * 1073741824.0f;
+	linearEquMmxConversionFactor = (float)conv;
+	linearEquMmxOutputConversionFactor = (int)((1.0f / 65536.0f) * conv);
+
+	/*
+	 * `fcom %st(1)` against `fldz` and `je`, so this arm is taken for zero
+	 * and for unordered both -- the setters' test, and not C's `!= 0.0f`.
+	 */
+	if (linearEquBeta < 0.0f || linearEquBeta > 0.0f) {
+		int shift = (int)(x87_log10(__builtin_fabsl(
+					(1.0f / ((long double)linearEquBeta
+						 * 16777216.0f))
+					* (long double)maxLeCoefValue))
+				  / x87_log10((long double)2.0f));
+
+		linearEquMmxShift = shift;
+		linearEquMmxBeta = (int)((long double)linearEquBeta * conv
+					 * (long double)one_shifted_by(shift));
+	} else {
+		linearEquMmxShift = 0;
+		linearEquMmxBeta = 0;
+	}
+
+	/*
+	 * The split write, `linearEquFadeEdges`'s exactly: the low half into
+	 * the array beside the coefficients, the high half into the
+	 * coefficients' own, and both through the ALIGNED pointers.
+	 */
+	for (i = 0; i < linearEquLength; i++) {
+		int v = (int)(linearEquCoefs[i] * conv);
+
+		array_d8Aligned[i] = (short)v;
+		linearEquMmxCoefsAligned[i] = (short)(v >> 16);
+	}
+
+	/*
+	 * What came out, read back through the same aligned pointer.  The
+	 * maximum and the minimum are of the MAGNITUDE -- `cltd; xor; sub`
+	 * runs before both comparisons -- and the signed sum is not; the
+	 * minimum starts at 0x10000, one past anything a `short` can hold, so
+	 * an empty filter prints 65536.  D326.
+	 */
+	sumHi = 0;
+	absSumHi = 0;
+	maxHi = 0;
+	minHi = 0x10000;
+	fsum = 0.0f;
+	fabsSum = 0.0f;
+
+	for (i = 0; i < linearEquLength; i++) {
+		int hi = linearEquMmxCoefsAligned[i];
+		int a = __builtin_abs(hi);
+
+		sumHi += hi;
+		if (a > maxHi)
+			maxHi = a;
+		if (a < minHi)
+			minHi = a;
+		absSumHi += a;
+		fsum += linearEquCoefs[i];
+		fabsSum += __builtin_fabsf(linearEquCoefs[i]);
+	}
+
+	edprintf("========================================"
+		 "======================\r\n");
+	edprint_scaled_stat("V90Equalizer: linearEquMmxConversionFactor = "
+			    "%c%d.%05de8\r\n", linearEquMmxConversionFactor,
+			    1.0e-8 * linearEquMmxConversionFactor, 1.0e5f);
+	edprint_int_stat("V90Equalizer: linearEquMmxOutputConversionFactor = "
+			 "%c%d.%03d\r\n", linearEquMmxOutputConversionFactor);
+	edprintf("V90Equalizer: linearEquBetaMmx = %d, beta exponent = %d\r\n",
+		 linearEquMmxBeta, linearEquMmxShift);
+	edprintf("========================================"
+		 "======================\r\n");
+	edprint_stat("V90Equalizer: float LE coeffs sum = %c%d.%04d\r\n", fsum,
+		     1.0e4f);
+	edprint_stat("V90Equalizer: float LE coeffs abs sum = %c%d.%04d\r\n",
+		     fabsSum, 1.0e4f);
+	edprintf("V90Equalizer: short high LE coeffs sum = %d\r\n", sumHi);
+	edprintf("V90Equalizer: short high LE coeffs abs sum = %d\r\n",
+		 absSumHi);
+	edprintf("V90Equalizer: short high LE coeffs min value = %d\r\n", minHi);
+	edprintf("V90Equalizer: short high LE coeffs max value = %d\r\n", maxHi);
+
+	/*
+	 * The history, `word_1c` entries of it, with no scaling and a
+	 * two-byte conversion.  `(short)__builtin_abs(s)` is the object's
+	 * `cltd; xor; sub; cwtl`, and the truncation is what makes the
+	 * magnitude of -32768 negative again.
+	 */
+	maxHist = 0;
+	minHist = 0x8000;
+
+	for (i = 0; i < word_1c; i++) {
+		short s = (short)array_18[i];
+		short a;
+
+		array_ecAligned[i] = s;
+		a = (short)__builtin_abs(s);
+		if (a > maxHist)
+			maxHist = a;
+		if (a < minHist)
+			minHist = a;
+	}
+
+	edprintf("V90Equalizer: Max LE History = %d\r\n", maxHist);
+	edprintf("V90Equalizer: Min LE History = %d\r\n", minHist);
+
+	/* -------------------------------------- the decision-feedback half */
+
+	conv = (1.0f / (long double)maxDfeCoefValue) * 1073741824.0f;
+
+	/*
+	 * +0x20 IS PARKED IN +0xf8 FOR THE DURATION OF THE FIXED-POINT MODE,
+	 * and `restoreEqualizerToFloat` copies it straight back.  The object
+	 * does it here, in the middle of the DFE half's scaling, because that
+	 * is where GCC scheduled a copy with no floating-point dependency.
+	 */
+	word_20Saved = word_20;
+
+	dfeMmxConversionFactor = (float)conv;
+	dfeMmxOutputConversionFactor = (int)((1.0f / 65536.0f) * conv);
+
+	if (dfeBeta < 0.0f || dfeBeta > 0.0f) {
+		int shift = (int)(x87_log10(__builtin_fabsl(
+					(1.0f / ((long double)dfeBeta
+						 * 1048576.0f))
+					* (long double)maxDfeCoefValue))
+				  / x87_log10((long double)2.0f));
+
+		dfeMmxShift = shift;
+		dfeMmxBeta = (int)((long double)dfeBeta * conv
+				   * (long double)one_shifted_by(shift));
+	} else {
+		dfeMmxShift = 0;
+		dfeMmxBeta = 0;
+	}
+
+	for (i = 0; i < dfeLength; i++) {
+		int v = (int)(dfeCoefs[i] * conv);
+
+		array_118Aligned[i] = (short)v;
+		dfeMmxCoefsAligned[i] = (short)(v >> 16);
+	}
+
+	sumHi = 0;
+	absSumHi = 0;
+	maxHi = 0;
+	minHi = 0x10000;
+	fsum = 0.0f;
+	fabsSum = 0.0f;
+
+	for (i = 0; i < dfeLength; i++) {
+		int hi = dfeMmxCoefsAligned[i];
+		int a = __builtin_abs(hi);
+
+		sumHi += hi;
+		if (a > maxHi)
+			maxHi = a;
+		if (a < minHi)
+			minHi = a;
+		absSumHi += a;
+		fsum += dfeCoefs[i];
+		fabsSum += __builtin_fabsf(dfeCoefs[i]);
+	}
+
+	edprintf("========================================"
+		 "======================\r\n");
+	edprint_scaled_stat("V90Equalizer: dfeMmxConversionFactor = "
+			    "%c%d.%05de8\r\n", dfeMmxConversionFactor,
+			    1.0e-8 * dfeMmxConversionFactor, 1.0e5f);
+	edprint_int_stat("V90Equalizer: dfeMmxOutputConversionFactor = "
+			 "%c%d.%03d\r\n", dfeMmxOutputConversionFactor);
+	edprintf("V90Equalizer: dfeBetaMmx = %d, beta exponent = %d\r\n",
+		 dfeMmxBeta, dfeMmxShift);
+	edprintf("========================================"
+		 "======================\r\n");
+	edprint_stat("V90Equalizer: float dfe coeffs sum = %c%d.%04d\r\n", fsum,
+		     1.0e4f);
+	edprint_stat("V90Equalizer: float dfe coeffs abs sum = %c%d.%04d\r\n",
+		     fabsSum, 1.0e4f);
+	edprintf("V90Equalizer: short high dfe coeffs sum = %d\r\n", sumHi);
+	edprintf("V90Equalizer: short high dfe coeffs abs sum = %d\r\n",
+		 absSumHi);
+	edprintf("V90Equalizer: short high dfe coeffs min value = %d\r\n",
+		 minHi);
+	edprintf("V90Equalizer: short high dfe coeffs max value = %d\r\n",
+		 maxHi);
+
+	/* The DFE's history is `dfeLength` long and lives in +0x12c. */
+	maxHist = 0;
+	minHist = 0x8000;
+
+	for (i = 0; i < dfeLength; i++) {
+		short s = (short)array_44[i];
+		short a;
+
+		array_12cAligned[i] = s;
+		a = (short)__builtin_abs(s);
+		if (a > maxHist)
+			maxHist = a;
+		if (a < minHist)
+			minHist = a;
+	}
+
+	edprintf("V90Equalizer: Max dfe History = %d\r\n", maxHist);
+	edprintf("V90Equalizer: Min dfe History = %d\r\n", minHist);
+
+	/* The mode goes on BEFORE the line that announces it. */
+	mmxMode = 1;
+	edprintf("V90Equalizer: LE & DFE running in MMX mode.\r\n");
 }
 
 /* ============================================================ state entries */
