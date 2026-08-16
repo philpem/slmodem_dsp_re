@@ -44,8 +44,20 @@ build-recipe/
                               3.4.2/gcc34-m32-no-sse2.patch
                               3.4.2/gcc34-fix-sse2_pinsrw.patch
                               3.4.1/gcc-3.4.1-glibc-is-native.patch
-                              pro-police-docs.patch   (applied by the eclass, SSP)
+                                    (amd64 + multilib ONLY -- ebuild:174)
                             (mips n32/n64 and ppc64 patches are conditional.)
+
+                            CORRECTED BY THE REBUILD (finding 2500): this list
+                            used to name pro-police-docs.patch as "applied by
+                            the eclass".  It is NOT.  eclass:405 guards it on
+                            sspdocs="no", and PP_VER=3_4_1 takes the branch at
+                            eclass:397 that sets sspdocs="yes" -- confirmed
+                            independently by the protector tarball shipping
+                            gcc_3_4_1.dif rather than protector.dif, which is
+                            that same branch's other consequence.  The x86
+                            build applies FOUR files from here; the run that
+                            produced the exact version string applied 47
+                            patches in total with none skipped.
 nearest-patchset/   3.4.3.20050110 -- the NEXT Gentoo gcc patchset (2005-01-10),
                     recovered from proj/gcc-patches.git. Not needed now that the
                     real 3.4.2 tarballs are here; kept only as a cross-reference.
@@ -175,12 +187,22 @@ time. This local set is now the safe copy -- keep a backup.
 
 BUILDING IT
 -----------
+IT IS BUILT.  tools/toolchain/build-gentoo-image.sh and Dockerfile.gentoo do
+all of the below inside Gentoo's own stage3-x86-2005.0, and the by-hand
+reimplementation of the ebuild is build-gentoo-gcc.sh in this directory, with
+the eclass line number beside each step and its deviations listed at the foot.
+Finding 2500 for what the result measures; 2501 for the two flag findings it
+was needed to re-test.
+
 Patch order, per gcc_src_unpack() in toolchain.eclass (authoritative):
   1. epatch ${WORKDIR}/patch        <- gcc-3.4.2-patches-1.1.tar.bz2
   2. do_gcc_SSP_patches             <- protector-3.4.1-1.tar.gz
   3. do_gcc_PIE_patches             <- gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2
-  4. the ${FILESDIR} patches listed above
-  5. gcc_version_patch "${BRANCH_UPDATE} (${release_version})"
+  4. gcc_version_patch "${BRANCH_UPDATE} (${release_version})"
+  5. the ${FILESDIR} patches listed above
+     (4 BEFORE 5, corrected by the rebuild: gcc_src_unpack ends with the
+      version patch, and the ebuild's own src_unpack applies FILESDIR
+      afterwards -- ebuild:150 calls gcc_src_unpack, ebuild:153 patches.)
 (With USE=boundschecking, step 2+3 are replaced by the HTB patch instead --
  that is NOT what produced the target .comment string, so leave it off.)
 

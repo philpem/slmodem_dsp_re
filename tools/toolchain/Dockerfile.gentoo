@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1.7
+#
+# THE COMPILER THAT BUILT THE OBJECT: Gentoo's gcc-3.4.2-r2, built from
+# Gentoo's own ebuild inside Gentoo's own 2005.0 userland.
+#
+# `.comment` in dsplibs.o says, 279 times over:
+#
+#     GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+#
+# and this image is the first one here that prints the same string back.  The
+# two siblings are the earlier approximations and both stay buildable, because
+# both are arms of finding 2200's A/B:
+#
+#     Dockerfile        Debian sarge's gcc 3.4.4 prerelease   dsplibs-tc
+#     Dockerfile.exact  stock GNU 3.4.2 in sarge              dsplibs-tc342
+#     Dockerfile.gentoo  <- this one                          dsplibs-tc342-gentoo
+#
+# WHAT CHANGED, AND IT IS MORE THAN THE COMPILER.  This one is not built in
+# Debian at all.  The base is Gentoo's stage3-x86-2005.0 (glibc 2.3.4,
+# binutils 2.15.92.0.2-r1, gcc 3.3.5 as the bootstrap compiler), which is what
+# a machine building this object in 2005 actually was.  So the difference
+# against dsplibs-tc342 is a BUNDLE -- Gentoo's 96-patch stack, a different
+# assembler, a different libc -- and a delta measured here is not attributable
+# to the patch stack alone without a further build.  Say "bundle", not "patch
+# stack", when quoting a number from it.
+#
+#   tools/toolchain/build-gentoo-image.sh          builds it (about 6 minutes)
+#   TC_IMAGE=dsplibs-tc342-gentoo tools/toolchain/build.sh
+#   PERIOD_IMG=dsplibs-tc342-gentoo make period
+#
+# The image is only ever used to COMPILE, never to run anything.
+#
+# The base image is not on any registry -- it is `docker import` of a tarball
+# whose md5 the install CD's own sidecar vouches for.  build-gentoo-image.sh
+# does the import and the verification; this file assumes the result.
+#
+FROM --platform=linux/386 gentoo-2005.0-stage3:x86
+
+# The recipe: the ebuild, its eclass, the 96 in-tree FILESDIR patches, and the
+# by-hand reimplementation of what portage would have run.
+COPY gentoo-3.4.2-r2 /recipe
+
+# The six SRC_URI tarballs, 28 MB, which are deliberately NOT in git --
+# gentoo-3.4.2-r2/fetch-distfiles.sh re-fetches and verifies them.  A named
+# build context keeps them out of the image's context tarball too.
+COPY --from=distfiles . /distfiles
+
+# JOBS=6 is half of this box's twelve cores, on purpose: a modem bench and
+# other agents share it.
+RUN JOBS=6 bash /recipe/build-gentoo-gcc.sh all \
+ && rm -rf /build /distfiles
+
+# PATH IS WHAT SELECTS THE COMPILER, and it is Gentoo's own versioned bindir
+# rather than a symlink into /usr/bin -- the driver deduces its prefix by
+# walking up from its own path, and a /usr/bin symlink has it deduce the wrong
+# one.  The stage3's gcc 3.3.5 stays installed and reachable at
+# /usr/i386-pc-linux-gnu/gcc-bin/3.3.5, which is what gcc-config switched
+# between; one container can then run both over the same source.
+ENV PATH=/usr/i386-pc-linux-gnu/gcc-bin/3.4:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN echo /usr/lib/gcc/i386-pc-linux-gnu/3.4.2 >> /etc/ld.so.conf && ldconfig \
+ && bash /recipe/build-gentoo-gcc.sh verify
+
+CMD ["/bin/sh"]
