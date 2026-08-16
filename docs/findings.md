@@ -54360,3 +54360,128 @@ in identically prepared memory. The moment an index can leave the object that
 assumption is a premise rather than a fact, and the failure it produces looks
 exactly like a defect in the code that did the indexing. `diff_eq_obj` cannot
 see it, because the difference is outside the object it was given.
+
+### 2130. `V90Equalizer + 0xf8` IS WHERE `word_20` IS PARKED WHILE THE EQUALISER IS IN FIXED-POINT MODE
+
+It was `pad_f8` in the header, on the strength of "no member the lifecycle
+batch wrote touches it". Three members do.
+
+    convertEqualizerToMmx  37830:  8b 5d 20        mov 0x20(%ebp),%ebx
+                           3783d:  89 9d f8 00..   mov %ebx,0xf8(%ebp)
+
+    restoreEqualizerToFloat 3846b: 8b 8b f8 00..   mov 0xf8(%ebx),%ecx
+                            38474: 89 4b 20        mov %ecx,0x20(%ebx)
+
+and `process` reads it at 0x38fe0 and 0x39316 and writes it at 0x39001,
+0x39468 and 0x39918, always in a fixed-point arm. So it is a save slot for
++0x20 across the float/fixed-point transition and not padding, and it is named
+`word_20Saved` rather than for what it holds, because +0x20 itself is still
+offset-named -- `reset` derives it as `word_1c - linearEquLength - 1` and
+nothing yet says what that counts.
+
+`t_v90equ.cpp`'s `run_restoretofloat` plants a distinguishable value in each
+of the two slots and asserts the copy, so a version that left +0x20 alone
+fails rather than passing on a fill that happened to agree.
+
+### 2131. THE FIXED-POINT COEFFICIENT IS ONE 32-BIT WORD SPLIT ACROSS TWO ARRAYS, AND THE TWO HALVES ARE EXTENDED DIFFERENTLY
+
+Every conversion in `V90Equalizer` -- `restoreEqualizerToFloat` at 0x38426,
+`linearEquFadeEdges` at 0x369c0 and 0x36a10, and the same shape inside
+`convertEqualizerToMmx` -- reads its coefficient as
+
+    0f bf 04 4a     movswl (%edx,%ecx,2),%eax    ; the HIGH half, SIGNED
+    0f b7 14 4f     movzwl (%edi,%ecx,2),%edx    ; the LOW half, UNSIGNED
+    c1 e0 10        shl    $0x10,%eax
+    09 d0           or     %edx,%eax
+
+and writes it back with the halves in the same two places:
+
+    66 89 02        mov %ax,(%edx)               ; low  -> array_d8Aligned
+    c1 f8 10        sar $0x10,%eax
+    66 89 01        mov %ax,(%ecx)               ; high -> linearEquMmxCoefsAligned
+
+So `linearEquMmxCoefs`/`array_d8` are not two coefficient vectors; they are the
+top and bottom halves of one, which is what an MMX multiply wants. The
+`array_118`/`dfeMmxCoefs` pair is the same for the decision-feedback filter,
+and `array_ec`/`array_12c` are single 16-bit arrays widened with `filds` and no
+scale at all.
+
+**BOTH EXTENSIONS ARE FORCED, and this is the CLAUDE.md `movzwl`/`movswl` rule
+firing for real.** The high half carries the word's sign, so it must
+sign-extend; the low half must NOT, or its top bit would flood the high half
+through the `or`. No test can see the difference on a low half below 0x8000,
+which is why `plant_mmx_words` in `t_v90equ.cpp` plants 0x8000 and 0xffff in
+every low position -- with the fill alone, a `short` reading of the low half
+passes.
+
+**THE PAIR IS ALWAYS THE ALIGNED POINTERS.** +0xdc/+0xe0, +0xf0, +0x11c/+0x120
+and +0x130 -- never the raw +0xd4/+0xd8 and friends, which is the opposite of
+what `reset`, `zeroLinearEquCoefs` and `zeroDfeCoefs` clear. The test wires
+each aligned view one SHORT past its raw array so the two cannot pass for one
+another.
+
+### 2132. `getDfeBeta` RETURNS A FLOAT, AND THREE MEMBERS OF THE CLASS ARE ONE `ret`
+
+A return type is not mangled, so it comes off the body. `getDfeBeta` is
+
+    367f0:  8b 44 24 04     mov  0x4(%esp),%eax
+    367f4:  d9 40 3c        flds 0x3c(%eax)
+    367f7:  c3              ret
+
+which leaves a float in st(0): the class's only member that returns anything
+until `enterRRN` and `enterFPE`, and the only one whose sole output is the
+return value -- an object-state comparison passes a body that reads the wrong
+field, so `run_getdfebeta` compares the returned bits.
+
+`printCoefsToFile` (0x36b10, and `_ZNK...` so it is `const`),
+`loadCoefsFromFile` (0x36960) and `printEquStuff` (0x388b0) are ONE BYTE each,
+at three distinct addresses -- so not identical-code-folded aliases of one
+another, three separate members that compiled to nothing. The names say file
+I/O and a debug dump, which is what a shipping build drops. They are written
+with empty bodies and tested like the rest: object and arena must both come
+back untouched.
+
+### 2133. `linearEquFadeEdges` APPLIES BOTH WINDOWS TO THE LINEAR ARRAY, FROM ITS TWO ENDS -- `dfeWindow` DOES NOT TOUCH `dfeCoefs`
+
+    36a50:  d9 04 81        flds  (%ecx,%eax,4)      ; linearEquWindow[i]
+    36a53:  d8 0c 82        fmuls (%edx,%eax,4)      ; * linearEquCoefs[i]
+    36a56:  d9 1c 82        fstps (%edx,%eax,4)
+
+    36a80:  d9 04 93        flds  (%ebx,%edx,4)      ; dfeWindow[j]
+    36a83:  89 f0 / 29 d0   mov %esi,%eax; sub %edx,%eax   ; linearEquLength - j
+    36a87:  d8 4c 81 fc     fmuls -0x4(%ecx,%eax,4)  ; * linearEquCoefs[len-1-j]
+    36a8e:  d9 5c 81 fc     fstps -0x4(%ecx,%eax,4)
+
+`%ecx` is +0x14 in both loops. `dfeCoefs` (+0x40) is read and written by this
+function only in the fixed-point conversion that brackets the taper, never by
+either window. So +0x28 and +0x30 are the RIGHT-HAND window of the linear
+equaliser, and the header's `dfeWindow`/`dfeWindowHalf` are named for the
+parameter that sets them (`LINEAR_EQU_FADE_RIGHT_EDGE_RATIO`, through `reset`)
+and not for a filter they touch. The names are kept because they are already
+asserted in three files and renaming them proves nothing; this finding is the
+correction.
+
+`reset` says the same thing from the other side and it was already written
+down there: both halves are scaled by `linearEquLength` and `dfeLength` is not
+in it at all.
+
+### 2134. THE `enter*` PAIR `enterRRN` AND `enterFPE` RETURN AN `int`, AND EVERY OTHER `enter*` IN THE CLASS RETURNS VOID
+
+`enterPhase3` (0x36790), `enterChannelVerification` and `enterPhase4` all fall
+off the end without setting %eax. `enterRRN` (0x386a0) and `enterFPE`
+(0x38510) set it deliberately, from a register that is zeroed at entry and
+made 1 on exactly one path:
+
+    386af:  31 ff           xor %edi,%edi
+    ...
+    38806:  89 be b0 00..   mov %edi,0xb0(%esi)     ; mmxMode = 0
+    3880c:  bf 01 00 00 00  mov $0x1,%edi
+    38815:  89 f8           mov %edi,%eax           ; return 1
+    ...
+    38700:  89 f8           mov %edi,%eax           ; return 0 everywhere else
+
+so the value returned is "the equaliser was taken out of fixed-point mode",
+which is the one thing a caller cannot see from the state word. The two
+functions are otherwise the same 387 bytes with the state constant (4 against
+5) and the entry string swapped -- the same relationship `setLinearEquBeta` and
+`setDfeBeta` have.

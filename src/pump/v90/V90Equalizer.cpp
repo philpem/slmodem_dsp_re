@@ -173,6 +173,7 @@ V90EQU_OFF(array_d8Skew,		0x0e8, arrayd8skew);
 V90EQU_OFF(array_ec,			0x0ec, arrayec);
 V90EQU_OFF(array_ecAligned,		0x0f0, arrayecalign);
 V90EQU_OFF(array_ecSkew,		0x0f4, arrayecskew);
+V90EQU_OFF(word_20Saved,		0x0f8, word20saved);
 V90EQU_OFF(dfeMmxRefLevel,		0x0fc, dferef);
 V90EQU_OFF(word_100,			0x100, word100);
 V90EQU_OFF(dfeMmxBetaScale,		0x104, dfescale);
@@ -730,4 +731,289 @@ V90Equalizer::~V90Equalizer()
 		if (array_12c != 0)
 			sysdep_free(array_12c);
 	}
+}
+
+/* ============================================================= coefficients */
+
+/*
+ * THE FIXED-POINT COEFFICIENT IS THIRTY-TWO BITS SPLIT ACROSS TWO ARRAYS.
+ * Every conversion in this class reads it as
+ *
+ *      0f bf 04 4a     movswl (%edx,%ecx,2),%eax    ; the high half, SIGNED
+ *      0f b7 14 4f     movzwl (%edi,%ecx,2),%edx    ; the low half, UNSIGNED
+ *      c1 e0 10        shl    $0x10,%eax
+ *      09 d0           or     %edx,%eax
+ *
+ * -- the high sixteen bits in `*MmxCoefsAligned` and the low sixteen in the
+ * array beside it -- and writes it back with the halves in the same places
+ * (`mov %ax,(%edx); sar $0x10,%eax; mov %ax,(%ecx)`).  The two extensions
+ * differ and both are FORCED: the high half's sign is the value's sign and
+ * the low half must not sign-extend into it, so `movswl`/`movzwl` is the one
+ * pairing that reconstructs the word.  That is why the low half is read
+ * through an `unsigned short` cast below and the high half is not.
+ *
+ * The pair is always the ALIGNED pointers, never the raw ones -- which is the
+ * opposite of what `reset`, `zeroLinearEquCoefs` and `zeroDfeCoefs` clear.
+ */
+static inline int
+mmx_coef_get(const short *hi, const short *lo, unsigned int i)
+{
+	return ((int)hi[i] << 16) | (unsigned short)lo[i];
+}
+
+/*
+ * `getDfeBeta` -- `mov 0x4(%esp),%eax; flds 0x3c(%eax); ret`, and that is the
+ * whole function.  The value comes back in st(0), so the return type is float.
+ */
+float
+V90Equalizer::getDfeBeta()
+{
+	return dfeBeta;
+}
+
+/*
+ * The two diagnostic accumulators, and nothing else: `xor %edx,%edx; xor
+ * %ecx,%ecx; mov %edx,0x9c(%eax); mov %ecx,0xa0(%eax); ret`.  Two zeroed
+ * registers for two stores, so two assignments and not one wider one.
+ */
+void
+V90Equalizer::resetMeanErrorEnergyDiagnostics()
+{
+	word_9c = 0;
+	word_a0 = 0;
+}
+
+/*
+ * The two coefficient loaders.  `mov (%esi,%edx,4),%eax; mov %eax,(%ecx,%edx,4)`
+ * is a plain copy, and the count is UNSIGNED -- the guard is `cmp %ebx,%edx;
+ * jae` and the latch is `jb`, so a count of zero copies nothing and there is
+ * no bound against the equaliser's own length.  The destination pointer is
+ * loaded once, inside the guard.
+ */
+void
+V90Equalizer::setLinearEquCoeff(float *src, unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++)
+		linearEquCoefs[i] = src[i];
+}
+
+void
+V90Equalizer::setDfeCoeff(float *src, unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++)
+		dfeCoefs[i] = src[i];
+}
+
+/*
+ * `zeroLinearEquCoefs` and `zeroDfeCoefs` -- the float array, then the two
+ * fixed-point arrays if the equaliser is in fixed-point mode.
+ *
+ * THE GATE IS `mmxMode` AND NOT `mmxArraysPresent`.  `reset` clears the same
+ * arrays under `mmxArraysPresent`; these two read +0xb0, which is the mode.
+ * The `+ 8` on the length is the same slack `reset` and the constructor use,
+ * and the arrays cleared are the RAW pointers, so the clear starts before the
+ * aligned view and the eight extra entries are what keeps it in the block.
+ */
+void
+V90Equalizer::zeroLinearEquCoefs()
+{
+	unsigned int i, n;
+
+	for (i = 0; i < linearEquLength; i++)
+		linearEquCoefs[i] = 0;
+
+	if (mmxMode != 0) {
+		n = linearEquLength + 8;
+		for (i = 0; i < n; i++) {
+			linearEquMmxCoefs[i] = 0;
+			array_d8[i] = 0;
+		}
+	}
+}
+
+void
+V90Equalizer::zeroDfeCoefs()
+{
+	unsigned int i, n;
+
+	for (i = 0; i < dfeLength; i++)
+		dfeCoefs[i] = 0;
+
+	if (mmxMode != 0) {
+		n = dfeLength + 8;
+		for (i = 0; i < n; i++) {
+			dfeMmxCoefs[i] = 0;
+			array_118[i] = 0;
+		}
+	}
+}
+
+/*
+ * setLinearEquEdgesFadingParams -- `reset`'s last five statements, exposed.
+ *
+ * The same two clamps against the same 0.5f (`.rodata.cst4+0x294`), the same
+ * `fildll` of `linearEquLength` scaling BOTH ratios -- one `fmul %st,%st(1)`
+ * and one `fmulp %st,%st(2)`, so the DFE half is a fraction of the LINEAR
+ * length here too -- the same pair of truncating `fistpll`s, and the same two
+ * `hamming` calls with the second a tail call.  Written against the same
+ * `clamp_fade_ratio` as `reset` so the two cannot drift apart.
+ */
+void
+V90Equalizer::setLinearEquEdgesFadingParams(float left, float right)
+{
+	float l, r, scale;
+
+	l = clamp_fade_ratio(left);
+	r = clamp_fade_ratio(right);
+
+	scale = (float)linearEquLength;
+	linearEquWindowHalf = (unsigned int)(l * scale);
+	dfeWindowHalf = (unsigned int)(r * scale);
+
+	hamming(linearEquWindow, 2 * linearEquWindowHalf);
+	hamming(dfeWindow, 2 * dfeWindowHalf);
+}
+
+/*
+ * freeze -- both step sizes to zero and nothing else.  The two zeros go out
+ * the same way `enterPhase3` sends them, as an integer register holding the
+ * float's bit pattern.
+ */
+void
+V90Equalizer::freeze()
+{
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+}
+
+/*
+ * restoreEqualizerToFloat -- the fixed-point coefficients back into the float
+ * arrays, and the mode off.
+ *
+ * Three loops and a restore.  The first and third undo the scaling
+ * `convertEqualizerToMmx` applied: the object divides ONE by the scale and
+ * multiplies, rather than dividing by it, and the reciprocal is recomputed
+ * inside the loop -- `fld1` outside, `fld %st(0)` then `fdivs` within.  It is
+ * written as the one expression it is; hoisting the reciprocal is the
+ * compiler's business and changes no value.
+ *
+ * The second loop is a plain 16-bit widening, `filds` into `fstps`, with no
+ * scale at all -- so whatever `array_ec` holds is a count and not a
+ * coefficient.
+ *
+ * BETWEEN THEM, +0x20 IS RESTORED FROM +0xf8, which is where
+ * `convertEqualizerToMmx` parked it.  See the header.
+ *
+ * The whole body is under `mmxMode`, and the mode is cleared last -- so a
+ * second call does nothing, which is what makes this callable from `enterRRN`
+ * and `enterFPE` without either of them checking first.
+ */
+void
+V90Equalizer::restoreEqualizerToFloat()
+{
+	unsigned int i;
+
+	if (mmxMode == 0)
+		return;
+
+	for (i = 0; i < linearEquLength; i++)
+		linearEquCoefs[i] = (1.0f / linearEquMmxBetaScale)
+		    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
+					  array_d8Aligned, i);
+
+	for (i = 0; i < word_1c; i++)
+		array_18[i] = (float)array_ecAligned[i];
+
+	word_20 = word_20Saved;
+
+	for (i = 0; i < dfeLength; i++) {
+		dfeCoefs[i] = (1.0f / dfeMmxBetaScale)
+		    * (float)mmx_coef_get(dfeMmxCoefsAligned,
+					  array_118Aligned, i);
+		array_44[i] = (float)array_12cAligned[i];
+	}
+
+	edprintf("V90Equalizer: Equalizer restored to FLOAT mode.\r\n");
+	mmxMode = 0;
+}
+
+/*
+ * linearEquFadeEdges -- taper both ends of the linear equaliser with the two
+ * Hamming windows `reset` built.
+ *
+ * FOUR STEPS, AND THE FIRST AND LAST ONLY HAPPEN IN FIXED-POINT MODE.  The
+ * windows are float, so a fixed-point equaliser is converted out, tapered, and
+ * converted back: step 1 is `restoreEqualizerToFloat`'s first and third loops
+ * with `array_18`, `array_44` and +0x20 left alone, and step 4 is
+ * `convertEqualizerToMmx`'s coefficient loop with nothing else.  The mode is
+ * NOT changed, and no diagnostic is printed.
+ *
+ * THE TWO WINDOWS ARE APPLIED TO ONE ARRAY, FROM ITS TWO ENDS.
+ * `linearEquWindow[i]` multiplies `linearEquCoefs[i]` going up, and
+ * `dfeWindow[j]` multiplies `linearEquCoefs[linearEquLength - 1 - j]` coming
+ * down: `mov %esi,%eax; sub %edx,%eax; fmuls -0x4(%ecx,%eax,4)` is
+ * `linearEquLength - j`, indexed one word back.  `dfeCoefs` is not tapered by
+ * either -- which is what says `dfeWindow` and `dfeWindowHalf` are named for
+ * the parameter that sets them and not for the filter they touch.
+ *
+ * Nothing bounds `linearEquWindowHalf + dfeWindowHalf` against
+ * `linearEquLength`, so an overlapping pair tapers the middle twice; `reset`
+ * and `setLinearEquEdgesFadingParams` both clamp each ratio to 0.5
+ * independently, which permits exactly that.  D-entry in docs/deviations.md.
+ */
+void
+V90Equalizer::linearEquFadeEdges()
+{
+	unsigned int i;
+
+	if (mmxMode != 0) {
+		for (i = 0; i < linearEquLength; i++)
+			linearEquCoefs[i] = (1.0f / linearEquMmxBetaScale)
+			    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
+						  array_d8Aligned, i);
+
+		for (i = 0; i < dfeLength; i++)
+			dfeCoefs[i] = (1.0f / dfeMmxBetaScale)
+			    * (float)mmx_coef_get(dfeMmxCoefsAligned,
+						  array_118Aligned, i);
+	}
+
+	for (i = 0; i < linearEquWindowHalf; i++)
+		linearEquCoefs[i] = linearEquWindow[i] * linearEquCoefs[i];
+
+	for (i = 0; i < dfeWindowHalf; i++)
+		linearEquCoefs[linearEquLength - i - 1] =
+		    dfeWindow[i] * linearEquCoefs[linearEquLength - i - 1];
+
+	if (mmxMode != 0) {
+		for (i = 0; i < linearEquLength; i++) {
+			int v = (int)(linearEquCoefs[i]
+				      * linearEquMmxBetaScale);
+
+			array_d8Aligned[i] = (short)v;
+			linearEquMmxCoefsAligned[i] = (short)(v >> 16);
+		}
+	}
+}
+
+/*
+ * The three that are one `ret`.  See the header.
+ */
+void
+V90Equalizer::printCoefsToFile() const
+{
+}
+
+void
+V90Equalizer::loadCoefsFromFile()
+{
+}
+
+void
+V90Equalizer::printEquStuff()
+{
 }

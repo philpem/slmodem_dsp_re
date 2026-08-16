@@ -151,6 +151,41 @@ public:
 	void enterChannelVerification();
 
 	/*
+	 * The coefficient batch.  Every signature below is the mangling's:
+	 * `_ZN12V90Equalizer17setLinearEquCoeffEPfj` is `(float *, unsigned)`,
+	 * `_ZN12V90Equalizer29setLinearEquEdgesFadingParamsEff` is
+	 * `(float, float)`, and `_ZNK12V90Equalizer16printCoefsToFileEv`
+	 * carries the `K` that makes it `const`.  Return types are not
+	 * mangled, so each one is read off the body: all of these fall off
+	 * the end without setting %eax and are void, EXCEPT `getDfeBeta`,
+	 * whose whole body is `flds 0x3c(%eax); ret` -- a float in st(0),
+	 * which is the return value.
+	 */
+	float getDfeBeta();
+	void setLinearEquCoeff(float *src, unsigned int n);
+	void setDfeCoeff(float *src, unsigned int n);
+	void zeroLinearEquCoefs();
+	void zeroDfeCoefs();
+	void resetMeanErrorEnergyDiagnostics();
+	void setLinearEquEdgesFadingParams(float left, float right);
+	void freeze();
+	void restoreEqualizerToFloat();
+	void linearEquFadeEdges();
+
+	/*
+	 * THREE MEMBERS THAT ARE ONE `ret` EACH.  Not stubs and not missing:
+	 * the object's copies are a single byte at 0x36b10, 0x36960 and
+	 * 0x388b0, so whatever they did was compiled out -- the names say
+	 * file I/O and a debug dump, which is what a shipping build drops.
+	 * They are written empty because an empty body is what the object
+	 * has, and they are still tested: a body that touched the object
+	 * would show.
+	 */
+	void printCoefsToFile() const;
+	void loadCoefsFromFile();
+	void printEquStuff();
+
+	/*
 	 * The lifecycle pair.  The constructor's signature is the mangling's,
 	 * argument for argument:
 	 *
@@ -443,7 +478,15 @@ public:
 	short *array_ecAligned;		/* +0xf0 */
 	unsigned int array_ecSkew;	/* +0xf4 */
 
-	unsigned char pad_f8[0x4];	/* +0xf8 */
+	/*
+	 * +0xf8  WHERE `word_20` IS PARKED WHILE THE EQUALISER IS IN ITS
+	 * FIXED-POINT MODE.  `convertEqualizerToMmx` copies +0x20 here
+	 * (`mov 0x20(%ebp),%ebx; mov %ebx,0xf8(%ebp)`) and
+	 * `restoreEqualizerToFloat` copies it straight back
+	 * (`mov 0xf8(%ebx),%ecx; mov %ecx,0x20(%ebx)`); `process` reads and
+	 * writes it in the fixed-point arms.  It used to be `pad_f8`.
+	 */
+	unsigned int word_20Saved;	/* +0xf8 */
 
 	/* The same four for the decision-feedback filter, +0x40 further on. */
 	float dfeMmxRefLevel;		/* +0xfc */

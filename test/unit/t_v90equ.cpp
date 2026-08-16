@@ -1553,6 +1553,709 @@ run_dtor(void)
 	return diff_end();
 }
 
+/* ======================================================= the coefficient set */
+
+/*
+ * HALF OF THIS BATCH WRITES NOTHING INSIDE THE OBJECT.  `setLinearEquCoeff`
+ * stores through `this->linearEquCoefs`; `zeroDfeCoefs` through +0x40, +0x114
+ * and +0x118; `linearEquFadeEdges` and `restoreEqualizerToFloat` read one set
+ * of arrays and write another.  An object-only `diff_eq_obj` reports "equal"
+ * for every one of them even if the body were empty, so each test below
+ * compares the ARENA as well -- the same snapshot-and-restore `run_reset` uses,
+ * because two writers into one buffer would otherwise leave only the second's
+ * work.
+ *
+ * AND THE ALIGNED POINTERS ARE SKEWED BY ONE ENTRY.  `wire_mmx` points each
+ * of the six `*Aligned` slots one SHORT past its raw array, so a version that
+ * reached for the raw pointer where the object reaches for the aligned one
+ * reads and writes different entries and the arena comparison sees it.  The
+ * skew is real: the constructor's `(align8(p) - p) / 2` is 0, 1, 2 or 3.
+ */
+
+extern "C" {
+float ref_equ_getDfeBeta(void *self)
+	asm("ref__ZN12V90Equalizer10getDfeBetaEv");
+void ref_equ_resetMeanErrorEnergyDiagnostics(void *self)
+	asm("ref__ZN12V90Equalizer31resetMeanErrorEnergyDiagnosticsEv");
+void ref_equ_setLinearEquCoeff(void *self, float *src, unsigned int n)
+	asm("ref__ZN12V90Equalizer17setLinearEquCoeffEPfj");
+void ref_equ_setDfeCoeff(void *self, float *src, unsigned int n)
+	asm("ref__ZN12V90Equalizer11setDfeCoeffEPfj");
+void ref_equ_zeroLinearEquCoefs(void *self)
+	asm("ref__ZN12V90Equalizer18zeroLinearEquCoefsEv");
+void ref_equ_zeroDfeCoefs(void *self)
+	asm("ref__ZN12V90Equalizer12zeroDfeCoefsEv");
+void ref_equ_setLinearEquEdgesFadingParams(void *self, float l, float r)
+	asm("ref__ZN12V90Equalizer29setLinearEquEdgesFadingParamsEff");
+void ref_equ_freeze(void *self)
+	asm("ref__ZN12V90Equalizer6freezeEv");
+void ref_equ_restoreEqualizerToFloat(void *self)
+	asm("ref__ZN12V90Equalizer23restoreEqualizerToFloatEv");
+void ref_equ_linearEquFadeEdges(void *self)
+	asm("ref__ZN12V90Equalizer18linearEquFadeEdgesEv");
+void ref_equ_printCoefsToFile(const void *self)
+	asm("ref__ZNK12V90Equalizer16printCoefsToFileEv");
+void ref_equ_loadCoefsFromFile(void *self)
+	asm("ref__ZN12V90Equalizer17loadCoefsFromFileEv");
+void ref_equ_printEquStuff(void *self)
+	asm("ref__ZN12V90Equalizer13printEquStuffEv");
+}
+
+/* One SHORT of skew on every aligned view, so raw and aligned cannot pass
+ * for one another. */
+static void
+wire_mmx(V90Equalizer *o)
+{
+	o->linearEquMmxCoefsAligned = arena.lemmx + 1;
+	o->array_d8Aligned = arena.ad8 + 1;
+	o->array_ecAligned = arena.aec + 1;
+	o->dfeMmxCoefsAligned = arena.dfemmx + 1;
+	o->array_118Aligned = arena.a118 + 1;
+	o->array_12cAligned = arena.a12c + 1;
+	o->linearEquMmxCoefsSkew = o->array_d8Skew = o->array_ecSkew = 1;
+	o->dfeMmxCoefsSkew = o->array_118Skew = o->array_12cSkew = 1;
+}
+
+/* The two sides run against the same starting arena, one after the other. */
+static void
+arena_snapshot(void)
+{
+	memcpy(&arena_save, &arena, sizeof(arena));
+}
+
+static void
+arena_switch(void)
+{
+	memcpy(&arena_ours, &arena, sizeof(arena));
+	memcpy(&arena, &arena_save, sizeof(arena));
+}
+
+static void
+arena_compare(const char *what, long tag)
+{
+	diff_eq_obj_(__FILE__, __LINE__, what, "struct equ_arena",
+		     &arena_ours, &arena, sizeof(arena), tag);
+}
+
+/*
+ * `getDfeBeta` is the one member whose only output is the return value, so
+ * comparing the object would pass a body that returned the wrong field.  The
+ * float is compared bit for bit, and the object is compared too, because
+ * nothing may move.
+ */
+static int
+run_getdfebeta(void)
+{
+	static const unsigned pat[] = {
+		0x00000000u, 0x80000000u, 0x3f800000u, 0xbf800000u,
+		0x283424dcu, 0x7f800000u, 0x7fc00000u, 0x00000001u,
+		0x12345678u
+	};
+	long tag = 900000;
+	int i;
+
+	diff_begin("V90Equalizer::getDfeBeta");
+
+	for (i = 0; i < (int)(sizeof(pat) / sizeof(pat[0])); i++) {
+		union { unsigned u; float f; } v;
+		float got, want;
+
+		tag++;
+		seed(tag);
+		v.u = pat[i];
+		OURS.dfeBeta = THEIRS.dfeBeta = v.f;
+
+		got = OURS.getDfeBeta();
+		want = ref_equ_getDfeBeta(&THEIRS);
+
+		diff_eq_int("the bits came back (%ld)",
+			    (long)(*(unsigned *)&got == *(unsigned *)&want),
+			    1, tag);
+		diff_eq_obj("after getDfeBeta", V90Equalizer, &OURS, &THEIRS,
+			    tag);
+		diff_eq_int("no store past the object (%ld)", guard_equal(),
+			    1, tag);
+	}
+
+	return diff_end();
+}
+
+/*
+ * `resetMeanErrorEnergyDiagnostics` and the three one-byte members.  The
+ * empty three are tested exactly as the others are: the object and the arena
+ * must both come back untouched, which is what an empty body means and what a
+ * body that did anything would fail.
+ */
+static int
+run_smallmembers(void)
+{
+	long tag = 910000;
+	int i;
+
+	diff_begin("V90Equalizer::resetMeanErrorEnergyDiagnostics and the "
+		   "empty three");
+
+	for (i = 0; i < 4; i++) {
+		tag++;
+		seed(tag);
+		fill_arena(tag);
+		wire(&OURS);
+		wire(&THEIRS);
+		wire_mmx(&OURS);
+		wire_mmx(&THEIRS);
+
+		arena_snapshot();
+		switch (i) {
+		case 0:
+			OURS.resetMeanErrorEnergyDiagnostics();
+			break;
+		case 1:
+			OURS.printCoefsToFile();
+			break;
+		case 2:
+			OURS.loadCoefsFromFile();
+			break;
+		default:
+			OURS.printEquStuff();
+			break;
+		}
+		arena_switch();
+		switch (i) {
+		case 0:
+			ref_equ_resetMeanErrorEnergyDiagnostics(&THEIRS);
+			break;
+		case 1:
+			ref_equ_printCoefsToFile(&THEIRS);
+			break;
+		case 2:
+			ref_equ_loadCoefsFromFile(&THEIRS);
+			break;
+		default:
+			ref_equ_printEquStuff(&THEIRS);
+			break;
+		}
+
+		diff_eq_obj("after the call", V90Equalizer, &OURS, &THEIRS,
+			    tag);
+		arena_compare("the arena after the call", tag);
+		diff_eq_int("no store past the object (%ld)", guard_equal(),
+			    1, tag);
+
+		if (i == 0) {
+			diff_eq_int("word_9c zeroed (%ld)",
+				    (long)THEIRS.word_9c, 0, tag);
+			diff_eq_int("word_a0 zeroed (%ld)",
+				    (long)THEIRS.word_a0, 0, tag);
+		} else {
+			/* Nothing moved at all: the fill is still there. */
+			diff_eq_int("the fill survived (%ld)",
+				    (long)(THEIRS.word_9c != 0), 1, tag);
+		}
+	}
+
+	return diff_end();
+}
+
+/* The two coefficient loaders, swept over a count that runs past nothing. */
+static int
+run_setcoeff(void)
+{
+	static const unsigned int n_v[] = { 0u, 1u, 3u, 16u, 32u };
+	static float src[32];
+	long tag = 920000;
+	int ni, which, k;
+	int saw_copy = 0;
+
+	diff_begin("V90Equalizer::setLinearEquCoeff / setDfeCoeff");
+
+	for (which = 0; which < 2; which++)
+	    for (ni = 0; ni < 5; ni++) {
+		unsigned int n = n_v[ni];
+
+		tag++;
+		seed(tag);
+		fill_arena(tag);
+		wire(&OURS);
+		wire(&THEIRS);
+		wire_mmx(&OURS);
+		wire_mmx(&THEIRS);
+
+		for (k = 0; k < 32; k++)
+			src[k] = (float)(k + 1) * 0.25f - (float)which;
+
+		arena_snapshot();
+		if (which == 0)
+			OURS.setLinearEquCoeff(src, n);
+		else
+			OURS.setDfeCoeff(src, n);
+		arena_switch();
+		if (which == 0)
+			ref_equ_setLinearEquCoeff(&THEIRS, src, n);
+		else
+			ref_equ_setDfeCoeff(&THEIRS, src, n);
+
+		diff_eq_obj("after the loader", V90Equalizer, &OURS, &THEIRS,
+			    tag);
+		arena_compare("the arena after the loader", tag);
+		diff_eq_int("no store past the object (%ld)", guard_equal(),
+			    1, tag);
+
+		if (n > 0) {
+			const float *dst = which == 0 ? arena.lecoefs
+						      : arena.dfecoefs;
+
+			saw_copy = 1;
+			diff_eq_float("the first entry copied", dst[0],
+				      src[0], tag);
+			diff_eq_float("the last entry copied", dst[n - 1],
+				      src[n - 1], tag);
+		}
+	    }
+
+	diff_eq_int("something was copied", saw_copy, 1, 0);
+
+	return diff_end();
+}
+
+/* The two clearers, over both modes and both lengths. */
+static int
+run_zerocoefs(void)
+{
+	static const unsigned int len_v[] = { 0u, 1u, 4u, 24u };
+	long tag = 930000;
+	int li, which, mmx;
+	int saw_mmx = 0, saw_plain = 0;
+
+	diff_begin("V90Equalizer::zeroLinearEquCoefs / zeroDfeCoefs");
+
+	for (which = 0; which < 2; which++)
+	    for (li = 0; li < 4; li++)
+		for (mmx = 0; mmx < 2; mmx++) {
+			unsigned int len = len_v[li];
+
+			tag++;
+			seed(tag);
+			fill_arena(tag);
+			wire(&OURS);
+			wire(&THEIRS);
+			wire_mmx(&OURS);
+			wire_mmx(&THEIRS);
+
+			OURS.linearEquLength = THEIRS.linearEquLength = len;
+			OURS.dfeLength = THEIRS.dfeLength = len;
+			OURS.mmxMode = THEIRS.mmxMode = mmx;
+
+			arena_snapshot();
+			if (which == 0)
+				OURS.zeroLinearEquCoefs();
+			else
+				OURS.zeroDfeCoefs();
+			arena_switch();
+			if (which == 0)
+				ref_equ_zeroLinearEquCoefs(&THEIRS);
+			else
+				ref_equ_zeroDfeCoefs(&THEIRS);
+
+			diff_eq_obj("after the clear", V90Equalizer, &OURS,
+				    &THEIRS, tag);
+			arena_compare("the arena after the clear", tag);
+			diff_eq_int("no store past the object (%ld)",
+				    guard_equal(), 1, tag);
+
+			if (len > 0) {
+				const float *f = which == 0 ? arena.lecoefs
+							    : arena.dfecoefs;
+
+				diff_eq_int("the float array was cleared "
+					    "(%ld)", (long)(f[len - 1] == 0.0f),
+					    1, tag);
+				if (mmx) {
+					const short *s = which == 0
+					    ? arena.lemmx : arena.dfemmx;
+
+					saw_mmx = 1;
+					diff_eq_int("the RAW fixed-point "
+						    "array was cleared (%ld)",
+						    (long)(s[0] == 0 &&
+							   s[len + 7] == 0),
+						    1, tag);
+				} else {
+					saw_plain = 1;
+					diff_eq_int("and left alone without "
+						    "the mode (%ld)",
+						    (long)(arena.lemmx[0] != 0
+							   || arena.dfemmx[0]
+							      != 0),
+						    1, tag);
+				}
+			}
+		}
+
+	diff_eq_int("the fixed-point arrays were cleared somewhere", saw_mmx,
+		    1, 0);
+	diff_eq_int("and skipped somewhere", saw_plain, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * setLinearEquEdgesFadingParams.  The same asymmetric pair `run_reset` uses,
+ * because the sweep alone would agree with a version that scaled both halves
+ * from the left ratio.
+ */
+/* The object's clamp, restated here so the expected value is not computed by
+ * the code under test.  NaN and negative zero both come out as 0.0f. */
+static float
+clampf(float x)
+{
+	if (!(x >= 0.0f))
+		return 0.0f;
+	if (!(x <= 0.5f))
+		return 0.5f;
+	return x;
+}
+
+static int
+run_fadingparams(void)
+{
+	static const unsigned int len_v[] = { 0u, 4u, 16u, 32u };
+	static const float lr[6][2] = {
+		{ 0.5f, 0.05f }, { 0.05f, 0.5f }, { 0.25f, 0.5f },
+		{ -1.0f, 0.7f }, { 0.0f, 0.0f }, { 37.0f, -0.0f }
+	};
+	long tag = 940000;
+	int li, k;
+	int saw_window = 0;
+
+	diff_begin("V90Equalizer::setLinearEquEdgesFadingParams");
+
+	for (li = 0; li < 4; li++)
+	    for (k = 0; k < 6; k++) {
+		unsigned int len = len_v[li];
+
+		tag++;
+		seed(tag);
+		fill_arena(tag);
+		wire(&OURS);
+		wire(&THEIRS);
+		OURS.linearEquLength = THEIRS.linearEquLength = len;
+
+		arena_snapshot();
+		OURS.setLinearEquEdgesFadingParams(lr[k][0], lr[k][1]);
+		arena_switch();
+		ref_equ_setLinearEquEdgesFadingParams(&THEIRS, lr[k][0],
+						      lr[k][1]);
+
+		diff_eq_obj("after the fading params", V90Equalizer, &OURS,
+			    &THEIRS, tag);
+		arena_compare("the arena after the fading params", tag);
+		diff_eq_int("no store past the object (%ld)", guard_equal(),
+			    1, tag);
+
+		diff_eq_int("linearEquWindowHalf (%ld)",
+			    (long)THEIRS.linearEquWindowHalf,
+			    (long)(unsigned int)(clampf(lr[k][0])
+						 * (float)len), tag);
+		diff_eq_int("dfeWindowHalf (%ld)",
+			    (long)THEIRS.dfeWindowHalf,
+			    (long)(unsigned int)(clampf(lr[k][1])
+						 * (float)len), tag);
+		if (THEIRS.linearEquWindowHalf > 0)
+			saw_window = 1;
+	    }
+
+	diff_eq_int("a non-empty window was built", saw_window, 1, 0);
+
+	return diff_end();
+}
+
+/* freeze -- both setters with zero, and the transcript that proves it. */
+static int
+run_freeze(void)
+{
+	long tag = 950000;
+	int bi, mmx;
+
+	diff_begin("V90Equalizer::freeze");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (bi = 0; bi < nbeta; bi++)
+		for (mmx = 0; mmx < 2; mmx++) {
+			tag++;
+			seed(tag);
+			fill_arena(tag);
+			wire(&OURS);
+			wire(&THEIRS);
+
+			OURS.linearEquBeta = THEIRS.linearEquBeta =
+			    beta_v[bi];
+			OURS.dfeBeta = THEIRS.dfeBeta = beta_v[bi];
+			OURS.mmxMode = THEIRS.mmxMode = mmx;
+			OURS.linearEquMmxRefLevel =
+			    THEIRS.linearEquMmxRefLevel = 1.0f;
+			OURS.dfeMmxRefLevel = THEIRS.dfeMmxRefLevel = 1.0f;
+			OURS.linearEquMmxBetaScale =
+			    THEIRS.linearEquMmxBetaScale = 32768.0f;
+			OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale =
+			    32768.0f;
+
+			dsplib_debug_capture_reset();
+			OURS.freeze();
+			ref_equ_freeze(&THEIRS);
+
+			diff_eq_obj("after freeze", V90Equalizer, &OURS,
+				    &THEIRS, tag);
+			diff_eq_int("no store past the object (%ld)",
+				    guard_equal(), 1, tag);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			diff_eq_int("linearEquBeta is zero (%ld)",
+				    (long)(THEIRS.linearEquBeta == 0.0f), 1,
+				    tag);
+			diff_eq_int("dfeBeta is zero (%ld)",
+				    (long)(THEIRS.dfeBeta == 0.0f), 1, tag);
+		}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	return diff_end();
+}
+
+/*
+ * The fixed-point halves get planted by hand rather than left to the fill:
+ * the high half must go negative and the low half must go above 0x7fff, which
+ * is the pair `movswl`/`movzwl` exists for, and a fill that never produced
+ * 0x8000 in a low half would let a sign-extending reading pass.
+ */
+static void
+plant_mmx_words(unsigned int n, long tag)
+{
+	static const unsigned short hi_v[] = {
+		0x0000u, 0xffffu, 0x8000u, 0x7fffu, 0x0001u, 0xfffeu
+	};
+	static const unsigned short lo_v[] = {
+		0x0000u, 0x8000u, 0xffffu, 0x7fffu, 0x0001u, 0x1234u
+	};
+	unsigned int i;
+
+	for (i = 0; i < n + 8 && i + 1 < 64; i++) {
+		int a = (int)((i + (unsigned)tag) % 6);
+		int b = (int)((i * 5u + (unsigned)tag) % 6);
+
+		arena.lemmx[i + 1]  = (short)hi_v[a];
+		arena.ad8[i + 1]    = (short)lo_v[b];
+		arena.dfemmx[i + 1] = (short)hi_v[b];
+		arena.a118[i + 1]   = (short)lo_v[a];
+		arena.aec[i + 1]    = (short)hi_v[(a + b) % 6];
+		arena.a12c[i + 1]   = (short)lo_v[(a + 2 * b) % 6];
+	}
+}
+
+static int
+run_restoretofloat(void)
+{
+	static const unsigned int len_v[] = { 0u, 1u, 5u, 20u };
+	static const float scale_p[] = { 1.0f, 32768.0f, 0.5f, 1024.0f };
+	long tag = 960000;
+	int li, si, mmx;
+	int saw_work = 0, saw_skip = 0;
+
+	diff_begin("V90Equalizer::restoreEqualizerToFloat");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (li = 0; li < 4; li++)
+	    for (si = 0; si < 4; si++)
+		for (mmx = 0; mmx < 2; mmx++) {
+			unsigned int len = len_v[li];
+
+			tag++;
+			seed(tag);
+			fill_arena(tag);
+			plant_mmx_words(len, tag);
+			wire(&OURS);
+			wire(&THEIRS);
+			wire_mmx(&OURS);
+			wire_mmx(&THEIRS);
+
+			OURS.linearEquLength = THEIRS.linearEquLength = len;
+			OURS.dfeLength = THEIRS.dfeLength = len;
+			OURS.word_1c = THEIRS.word_1c = len;
+			OURS.word_20Saved = THEIRS.word_20Saved =
+			    0xa5a50000u + (unsigned)li;
+			OURS.word_20 = THEIRS.word_20 = 0x5a5a1111u;
+			OURS.mmxMode = THEIRS.mmxMode = mmx;
+			OURS.linearEquMmxBetaScale =
+			    THEIRS.linearEquMmxBetaScale = scale_p[si];
+			OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale =
+			    scale_p[(si + 2) % 4];
+
+			arena_snapshot();
+			dsplib_debug_capture_reset();
+			OURS.restoreEqualizerToFloat();
+			arena_switch();
+			ref_equ_restoreEqualizerToFloat(&THEIRS);
+
+			diff_eq_obj("after the restore", V90Equalizer, &OURS,
+				    &THEIRS, tag);
+			arena_compare("the arena after the restore", tag);
+			diff_eq_int("no store past the object (%ld)",
+				    guard_equal(), 1, tag);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+
+			if (mmx) {
+				saw_work = 1;
+				diff_eq_int("the mode was cleared (%ld)",
+					    (long)THEIRS.mmxMode, 0, tag);
+				diff_eq_int("word_20 came back from +0xf8 "
+					    "(%ld)", (long)THEIRS.word_20,
+					    (long)(0xa5a50000u
+						   + (unsigned)li), tag);
+			} else {
+				saw_skip = 1;
+				diff_eq_int("nothing happened without the "
+					    "mode (%ld)",
+					    (long)(THEIRS.word_20
+						   == 0x5a5a1111u), 1, tag);
+			}
+		}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the restore ran somewhere", saw_work, 1, 0);
+	diff_eq_int("and was skipped somewhere", saw_skip, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * linearEquFadeEdges.
+ *
+ * `dfeWindowHalf` indexes DOWN from `linearEquLength`, in unsigned arithmetic
+ * and with no bound of its own, so a zero-length equaliser with a non-empty
+ * right window walks off the front of the array.  The sweep keeps
+ * `dfeWindowHalf <= linearEquLength` for that reason; docs/deviations.md
+ * carries the entry.
+ */
+static int
+run_fadeedges(void)
+{
+	static const unsigned int len_v[] = { 1u, 4u, 20u, 40u };
+	long tag = 970000;
+	int li, hi_i, mmx;
+	int saw_mmx = 0, saw_plain = 0, saw_overlap = 0;
+
+	diff_begin("V90Equalizer::linearEquFadeEdges");
+
+	for (li = 0; li < 4; li++)
+	    for (hi_i = 0; hi_i < 5; hi_i++)
+		for (mmx = 0; mmx < 2; mmx++) {
+			unsigned int len = len_v[li];
+			unsigned int lh, dh;
+			unsigned int k;
+
+			/* The last pair is both windows over the WHOLE
+			 * array, which is what the two independent clamps
+			 * permit and what tapers the middle twice. */
+			lh = (hi_i == 0) ? 0u
+			   : (hi_i == 1) ? 1u
+			   : (hi_i == 2) ? len / 2u : len;
+			dh = (hi_i == 0) ? len
+			   : (hi_i == 1) ? len / 2u
+			   : (hi_i == 2) ? 1u
+			   : (hi_i == 3) ? 0u : len;
+			if (lh + dh > len)
+				saw_overlap = 1;
+
+			tag++;
+			seed(tag);
+			fill_arena(tag);
+			plant_mmx_words(len, tag);
+			wire(&OURS);
+			wire(&THEIRS);
+			wire_mmx(&OURS);
+			wire_mmx(&THEIRS);
+
+			/* Coefficients and windows with a settled range, so
+			 * the truncation back to 32 bits stays in an int. */
+			for (k = 0; k < 64; k++) {
+				arena.lecoefs[k] = (float)((int)k - 32)
+				    * 0.03125f;
+				arena.dfecoefs[k] = (float)((int)k - 16)
+				    * 0.0625f;
+				arena.lewin[k] = 0.5f
+				    + (float)(k % 5) * 0.125f;
+				arena.dfewin[k] = 0.25f
+				    + (float)(k % 7) * 0.0625f;
+			}
+
+			OURS.linearEquLength = THEIRS.linearEquLength = len;
+			OURS.dfeLength = THEIRS.dfeLength = len;
+			OURS.linearEquWindowHalf =
+			    THEIRS.linearEquWindowHalf = lh;
+			OURS.dfeWindowHalf = THEIRS.dfeWindowHalf = dh;
+			OURS.mmxMode = THEIRS.mmxMode = mmx;
+			OURS.linearEquMmxBetaScale =
+			    THEIRS.linearEquMmxBetaScale = 1024.0f;
+			OURS.dfeMmxBetaScale = THEIRS.dfeMmxBetaScale =
+			    256.0f;
+
+			arena_snapshot();
+			OURS.linearEquFadeEdges();
+			arena_switch();
+			ref_equ_linearEquFadeEdges(&THEIRS);
+
+			diff_eq_obj("after the fade", V90Equalizer, &OURS,
+				    &THEIRS, tag);
+			arena_compare("the arena after the fade", tag);
+			diff_eq_int("no store past the object (%ld)",
+				    guard_equal(), 1, tag);
+
+			if (mmx)
+				saw_mmx = 1;
+			else
+				saw_plain = 1;
+
+			/*
+			 * Without the mode the first tap is the window
+			 * times what was there; with it, it came out of the
+			 * fixed-point pair first.  The right window reaches
+			 * index 0 exactly when `dh >= len`, and then the tap
+			 * is tapered TWICE -- which is the overlap the two
+			 * independent clamps permit, asserted rather than
+			 * only compared.
+			 */
+			if (!mmx && lh > 0 && dh < len)
+				diff_eq_float("the first tap was tapered",
+					      arena.lecoefs[0],
+					      arena_save.lewin[0]
+					      * arena_save.lecoefs[0], tag);
+			if (!mmx && lh > 0 && dh >= len && len > 0)
+				diff_eq_float("the first tap was tapered "
+					      "twice", arena.lecoefs[0],
+					      arena_save.dfewin[len - 1]
+					      * (arena_save.lewin[0]
+						 * arena_save.lecoefs[0]),
+					      tag);
+		}
+
+	diff_eq_int("the fade ran in fixed-point mode", saw_mmx, 1, 0);
+	diff_eq_int("and in float mode", saw_plain, 1, 0);
+	diff_eq_int("the two windows overlapped somewhere", saw_overlap, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1567,6 +2270,15 @@ main(void)
 	rc |= run_enterphase3();
 	rc |= run_reset();
 	rc |= run_enterchannelverification();
+
+	rc |= run_getdfebeta();
+	rc |= run_smallmembers();
+	rc |= run_setcoeff();
+	rc |= run_zerocoefs();
+	rc |= run_fadingparams();
+	rc |= run_freeze();
+	rc |= run_restoretofloat();
+	rc |= run_fadeedges();
 
 	return rc;
 }

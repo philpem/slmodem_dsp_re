@@ -6002,3 +6002,24 @@ merely differed direction-to-direction would not hold **our transmit at exactly
 33600 on 22 of 22 calls** while our receive is trimodal at 4800–26400 with echo
 exonerated. Something one-sided and discrete is in our receiver. The appendix's
 own ranking is the right list to work down.
+
+## D323 🐛 `linearEquFadeEdges` indexes DOWN from `linearEquLength` with no bound of its own
+
+*Batch of 2026-08-16, from `_ZN12V90Equalizer18linearEquFadeEdgesEv` (blob
+0x36970) at 0x36a5e..0x36a92. **Reachability: `dfeWindowHalf > linearEquLength`,
+which `reset` and `setLinearEquEdgesFadingParams` both permit.**
+**Observability: reads and writes before `linearEquCoefs[0]`.** Status:
+`unmeasured` -- whether any parameter block produces it has not been traced.
+Fix class: none proposed; reproduced as found.*
+
+The right-hand taper is `linearEquCoefs[linearEquLength - j - 1] *=
+dfeWindow[j]` for `j < dfeWindowHalf` -- `mov %esi,%eax; sub %edx,%eax; fmuls
+-0x4(%ecx,%eax,4)`, unsigned throughout. Both halves are clamped
+INDEPENDENTLY to a ratio of 0.5 of `linearEquLength`, so `linearEquWindowHalf
++ dfeWindowHalf` can reach `linearEquLength` but not exceed it *when both come
+from the clamp*; nothing enforces that on the fields themselves, and
+`linearEquLength == 0` with any non-zero `dfeWindowHalf` makes the first index
+0xffffffff. The overlapping case is reachable through the clamp and is tested
+(`t_v90equ.cpp`, `run_fadeedges`, `hi_i == 4`): the middle is tapered twice and
+the two sides agree. The underflowing case is not tested, for the reason D322
+gives -- exercising it is a crash and not a comparison.
