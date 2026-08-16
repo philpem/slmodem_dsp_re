@@ -52,13 +52,30 @@ extern const short ref_DECv22_MAG24[];
 #define MARK 0x5ead
 #define NOUT 14
 
-/* Separation counters; see the guards in main(). */
+/*
+ * TWO KINDS OF COUNTER, AND THEY ARE NOT INTERCHANGEABLE.
+ *
+ * `sep_*` counts trials on which the true reading and a named wrong one
+ * produce a DIFFERENT OBSERVABLE RESULT -- a different reported angle, a
+ * different returned symbol.  `saw_*` counts trials that merely take a
+ * particular PATH.  Only the first is evidence that the test could catch the
+ * wrong reading; the second is coverage, which is worth having and is not the
+ * same claim.
+ *
+ * The distinction is not pedantry.  A separating-trial counter that counts
+ * paths can be true and prove nothing, because a clamp, a saturation or a
+ * min/max downstream can take both readings to the same result on exactly the
+ * inputs that separated them upstream.  Three of the counters here started out
+ * as `sep_` and were counting paths; they are `saw_` now, and what actually
+ * adjudicates every claim in this file is `test/mutations/v22dec.json`, where
+ * each wrong reading is written out and run.
+ */
 static long sep_truncation;
 static long sep_swap;
-static long sep_fallback;
-static long sep_modulo;
-static long sep_amp_hi;
-static long sep_amp_lo;
+static long saw_fallback;
+static long saw_modulo_borrow;
+static long saw_amp_hi;
+static long saw_amp_lo;
 static long saw_best12[4];
 static long saw_mag24[3];
 
@@ -142,19 +159,38 @@ count_separations(void)
 			int base = base24(si, sq);
 			short d0, d1;
 
-			if (best12(si, sq, 1, 0) != best12(si, sq, 0, 0))
+			/*
+			 * OBSERVABLE separation, not merely a different
+			 * internal choice: a different candidate is only
+			 * visible to this test if it carries a different
+			 * reported angle, so that is what is counted.
+			 * `DECv22_ANGL12` happens to have four distinct
+			 * entries, which makes the two conditions equivalent
+			 * here -- but writing the weaker one would be relying
+			 * on that, and the sixteen-point table next door does
+			 * repeat its angles.
+			 */
+			if (DECv22_ANGL12[best12(si, sq, 1, 0)]
+			    != DECv22_ANGL12[best12(si, sq, 0, 0)])
 				sep_truncation++;
-			if (best12(si, sq, 1, 0) != best12(si, sq, 1, 1))
+			if (DECv22_ANGL12[best12(si, sq, 1, 0)]
+			    != DECv22_ANGL12[best12(si, sq, 1, 1)])
 				sep_swap++;
 
+			/* Path coverage of the amplitude test, nothing more. */
 			if (base & 2)
-				sep_amp_hi++;
+				saw_amp_hi++;
 			else
-				sep_amp_lo++;
+				saw_amp_lo++;
 
 			/*
 			 * The fallback: neither candidate beats the initial
-			 * 8192, so `best` stays at index 0.
+			 * 8192, so `best` stays at index 0.  COVERAGE, not
+			 * separation -- whether taking it changes the output
+			 * depends on `DECv22_ANGL24`, which repeats several of
+			 * its entries, so this counter cannot say.  The claim
+			 * is adjudicated by the "starts from an infinity"
+			 * mutation instead.
 			 */
 			d0 = (short)(sq >= DECv22_QMAP24[base]
 				     ? sq - DECv22_QMAP24[base]
@@ -163,21 +199,32 @@ count_separations(void)
 				     ? sq - DECv22_QMAP24[base + 1]
 				     : DECv22_QMAP24[base + 1] - sq);
 			if (d0 >= 8192 && d1 >= 8192)
-				sep_fallback++;
+				saw_fallback++;
 		}
 	}
 
 	/*
-	 * The modulo: any trial whose previous quadrant exceeds the one the
-	 * slicer is about to store needs the reduction.  Counted over the
-	 * quadrants the tables can actually produce, 0, 4, 8 and 12.
+	 * The subtraction borrows, so the reduction has something to do.
+	 *
+	 * THIS USED TO BE A SEPARATION GUARD AND THE CLAIM WAS WITHDRAWN.  It
+	 * asserted that the trials distinguished masking four bits from masking
+	 * two, and no trial does: both operands have already been masked with
+	 * V22_SYM_QUAD, so the difference is a multiple of four and its low two
+	 * bits are clear whatever the borrow does.  The two readings are
+	 * provably equal for every possible pair -- which is now written out as
+	 * an `equivalent` entry in test/mutations/v22dec.json and confirmed to
+	 * survive, rather than being asserted here as a separation that does
+	 * not exist.  `0x0f` is in the source because `and $0xf,%eax` is what
+	 * the object encodes at 0x8878a and 0x88641.
+	 *
+	 * What is left is honest coverage: the borrow itself happens.
 	 */
 	for (ip = 0; ip < NPREV; ip++) {
 		int q;
 
 		for (q = 0; q <= 12; q += 4)
 			if ((unsigned short)q < (unsigned short)prevs[ip])
-				sep_modulo++;
+				saw_modulo_borrow++;
 	}
 }
 
@@ -327,18 +374,24 @@ main(void)
 	rc |= run("v22 decision12", 12);
 	rc |= run("v22 decision24", 24);
 
-	diff_begin("v22 dec separation");
-	diff_eq_int("truncation separated (%ld)", sep_truncation > 0, 1,
-		    sep_truncation);
-	diff_eq_int("I/Q swap separated (%ld)", sep_swap > 0, 1, sep_swap);
-	diff_eq_int("8192 fallback separated (%ld)", sep_fallback > 0, 1,
-		    sep_fallback);
-	diff_eq_int("modulo-16 separated (%ld)", sep_modulo > 0, 1,
-		    sep_modulo);
-	diff_eq_int("amplitude threshold taken (%ld)", sep_amp_hi > 0, 1,
-		    sep_amp_hi);
-	diff_eq_int("amplitude threshold untaken (%ld)", sep_amp_lo > 0, 1,
-		    sep_amp_lo);
+	/*
+	 * Two separation guards and four coverage ones, labelled as what they
+	 * are.  What decides whether a wrong reading would actually be caught
+	 * is test/mutations/v22dec.json, not these.
+	 */
+	diff_begin("v22 dec separation and coverage");
+	diff_eq_int("truncation separated in the ANGLE (%ld)",
+		    sep_truncation > 0, 1, sep_truncation);
+	diff_eq_int("I/Q swap separated in the ANGLE (%ld)", sep_swap > 0, 1,
+		    sep_swap);
+	diff_eq_int("coverage: 8192 fallback reached (%ld)", saw_fallback > 0,
+		    1, saw_fallback);
+	diff_eq_int("coverage: the differential borrows (%ld)",
+		    saw_modulo_borrow > 0, 1, saw_modulo_borrow);
+	diff_eq_int("coverage: amplitude threshold taken (%ld)",
+		    saw_amp_hi > 0, 1, saw_amp_hi);
+	diff_eq_int("coverage: amplitude threshold untaken (%ld)",
+		    saw_amp_lo > 0, 1, saw_amp_lo);
 	for (i = 0; i < 4; i++)
 		diff_eq_int("decision12 candidate %ld reached",
 			    saw_best12[i] > 0, 1, i);

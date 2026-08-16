@@ -19,9 +19,14 @@
  *   scaling    entries the `>> 2` changes
  *   arithmetic entries where an arithmetic and a logical `>> 2` disagree
  *   i_vs_q     entries where the I and Q arrays disagree, so an I/Q swap fails
- *   hist_tail  entries of `hist` above the coefficient loop's 49 that the
- *              second loop has to clear, marked beforehand so their clearing
- *              is visible
+ *   hist_tail  entries of `hist` above the coefficient loop's 49 that held
+ *              the marker on entry and hold zero on exit, so the second loop
+ *              is what cleared them
+ *
+ * Every one is counted on an OBSERVED difference rather than on a loop bound
+ * or a path taken, which is the distinction that makes a separating-trial
+ * count mean anything.  What finally adjudicates each reading is
+ * `test/mutations/v22fse.json`, where the wrong one is written out and run.
  *
  * `FSEv22_COFFS` and `FSEv22_CFG` are still compared against the blob's copies
  * entry by entry -- they are the deliverable -- they are just not what the
@@ -272,6 +277,7 @@ run_init_reuse(const char *label)
 	static short x8_a[V22_FSE_AUX], x8_b[V22_FSE_AUX];
 	static short oi_a[V22_FSE_OUT], oi_b[V22_FSE_OUT];
 	static short oq_a[V22_FSE_OUT], oq_b[V22_FSE_OUT];
+	static short pre_hist_b[V22_FSE_HIST];
 	struct v22_fse a, b, ma, mb;
 	int rc, i;
 
@@ -286,6 +292,9 @@ run_init_reuse(const char *label)
 		x4_a[i] = x4_b[i] = x8_a[i] = x8_b[i] = (short)MARK;
 	for (i = 0; i < V22_FSE_OUT; i++)
 		oi_a[i] = oi_b[i] = oq_a[i] = oq_b[i] = (short)MARK;
+
+	for (i = 0; i < V22_FSE_HIST; i++)
+		pre_hist_b[i] = hi_b[i];
 
 	a.icoeff = ic_a; a.qcoeff = qc_a; a.hist = hi_a;
 	a.r44 = x4_a; a.r48 = x8_a; a.out_i = oi_a; a.out_q = oq_a;
@@ -321,10 +330,20 @@ run_init_reuse(const char *label)
 	 * are the evidence for the SECOND loop: the coefficient loop only
 	 * reaches 0..48, so without it these would still hold MARK.
 	 */
-	for (i = 0; i < V22_FSE_HIST; i++)
+	for (i = 0; i < V22_FSE_HIST; i++) {
+		/*
+		 * Counted on the OBSERVATION rather than on the loop bound:
+		 * an entry above the coefficient loop's reach that held MARK
+		 * on entry and holds zero now is one the second loop had to
+		 * clear.  The version of this that shipped first incremented
+		 * once per index, which is the constant 49 and says nothing
+		 * about the run.
+		 */
+		if (i >= V22_FSE_TAPS && pre_hist_b[i] == (short)MARK
+		    && hi_b[i] == 0)
+			sep_hist_tail++;
 		diff_eq_int("hist[%ld] cleared", hi_b[i], 0, i);
-	for (i = V22_FSE_TAPS; i < V22_FSE_HIST; i++)
-		sep_hist_tail++;
+	}
 
 	/* And the four buffers init never writes must still hold MARK. */
 	for (i = 0; i < V22_FSE_AUX; i++) {
@@ -450,8 +469,8 @@ main(void)
 	diff_eq_int("arithmetic shift separated (%ld)", sep_arithmetic > 0, 1,
 		    sep_arithmetic);
 	diff_eq_int("I and Q separated (%ld)", sep_i_vs_q > 0, 1, sep_i_vs_q);
-	diff_eq_int("history tail separated (%ld)", sep_hist_tail > 0, 1,
-		    sep_hist_tail);
+	diff_eq_int("history tail cleared past the coefficient loop (%ld)",
+		    sep_hist_tail > 0, 1, sep_hist_tail);
 	rc |= diff_end();
 
 	return rc;

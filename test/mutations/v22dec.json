@@ -1,0 +1,61 @@
+[
+ [
+  "FSEv22_decision12 and FSEv22_decision24.  Each entry is a wrong reading",
+  "t_v22dec's separating-trial counters CLAIM to kill.  Two of those counters",
+  "were measuring which PATH was taken rather than whether the OUTPUT differed,",
+  "which is the failure this set exists to expose -- see the `why` on any",
+  "entry marked equivalent."
+ ],
+ {
+  "label": "the 1200 distance is accumulated at full precision",
+  "find": "\t\tshort d = (short)(((di * di) >> 16) + ((dq * dq) >> 16));",
+  "replace": "\t\tlong d = ((long)di * di + (long)dq * dq) >> 16;"
+ },
+ {
+  "label": "the 1200 slicer's I and Q tables are swapped",
+  "find": "\t\tshort di = (short)(si - DECv22_IMAP12[k]);\n\t\tshort dq = (short)(sq - DECv22_QMAP12[k]);",
+  "replace": "\t\tshort di = (short)(si - DECv22_QMAP12[k]);\n\t\tshort dq = (short)(sq - DECv22_IMAP12[k]);"
+ },
+ {
+  "label": "the 2400 search starts from an infinity instead of the threshold",
+  "find": "\tbestd = (short)(thresh[0] << V22_DEC_LEVEL_SHIFT);",
+  "replace": "\tbestd = 0x7fff;"
+ },
+ {
+  "label": "the 2400 amplitude threshold never fires",
+  "find": "\t\tif ((short)((thresh[i] * sign) << V22_DEC_LEVEL_SHIFT) <= si)\n\t\t\tbase = (short)(base + step);",
+  "replace": "\t\tif (0)\n\t\t\tbase = (short)(base + step);"
+ },
+ {
+  "label": "the 2400 amplitude threshold ignores the sign of I",
+  "find": "if ((short)((thresh[i] * sign) << V22_DEC_LEVEL_SHIFT) <= si)",
+  "replace": "if ((short)(thresh[i] << V22_DEC_LEVEL_SHIFT) <= si)"
+ },
+ {
+  "label": "the 2400 search window is one candidate wide",
+  "find": "#define V22_DEC24_WINDOW\t2",
+  "replace": "#define V22_DEC24_WINDOW\t1"
+ },
+ {
+  "label": "the ring index is not biased down one",
+  "find": "\t*mag = DECv22_MAG24[((short)amp >> V22_DEC_LEVEL_SHIFT) - 1];",
+  "replace": "\t*mag = DECv22_MAG24[((short)amp >> V22_DEC_LEVEL_SHIFT)];"
+ },
+ {
+  "label": "the 2400 slicer returns the quadrant alone, as the 1200 one does",
+  "find": "\t     | (sym & V22_SYM_AMP));",
+  "replace": "\t     >> V22_SYM_QUAD_SHIFT);"
+ },
+ {
+  "label": "the 1200 reverse lookup does not halve the transmit table",
+  "find": "\t\tif ((short)(SMCv22_IMAP_1200BPS[j] >> 1) != ci)",
+  "replace": "\t\tif ((short)(SMCv22_IMAP_1200BPS[j]) != ci)"
+ },
+ {
+  "label": "the differential is reduced over the quadrant field, not the alphabet",
+  "find": "\t\t\t  & V22_SYM_MODULO) >> V22_SYM_QUAD_SHIFT]\n\t     >> V22_SYM_QUAD_SHIFT);",
+  "replace": "\t\t\t  & V22_SYM_QUAD) >> V22_SYM_QUAD_SHIFT]\n\t     >> V22_SYM_QUAD_SHIFT);",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and this is an argument about the code rather than about the suite.  Both operands of the subtraction have already been masked with V22_SYM_QUAD, so each is a multiple of four and bits 1:0 of the difference are clear whatever the borrow does.  Masking four bits and masking two therefore give the same value for every possible pair, and the index that follows is identical.  0x0f is written because 0x0f is what the object encodes (`and $0xf,%eax` at 0x8878a and 0x88641), not because anything can tell the two apart."
+ }
+]

@@ -8,7 +8,7 @@ dsplibs.o reconstruction coverage
   .text                          734605 bytes, 1861 symbols
 
   translated  [###################...............]  55.3%    405973 bytes, 952 symbols
-  tested      [##################################]  99.5%    404065 bytes, 944 of 952 that can be
+  tested      [##################################] 100.0%    405950 bytes, 945 of 952 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,7 +17,6 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 21 of ours (10728 bytes).
 
   translated, alias exists, and NOT tested:
-    V22_FSE_receive                                1885 bytes
     _ZN5QueueIfE5resetEv                             13 bytes
     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes

@@ -59292,3 +59292,60 @@ taken on the side effects.**  And it has to be taken CHANNEL BY CHANNEL rather
 than as a disjunction, or the count is satisfied by whichever channel the
 differential happens to compare most weakly -- which is what the third commit
 on this batch's branch fixes.
+
+### 3309. A SEPARATING-TRIAL COUNTER THAT COUNTS PATHS CAN BE TRUE AND PROVE NOTHING, AND ONLY THE MUTATION SETTLES IT -- 25 WRITTEN, 23 CAUGHT, 2 EQUIVALENT BY PROOF
+
+The rule this batch was given is right and has a hole.  When a plausible wrong
+reading agrees with the true one over every realistic input, the defence is a
+test that counts the trials which SEPARATE the two and asserts the count is
+non-zero.  The hole is what "separate" means: **the difference has to be
+visible in the OUTPUT, not in an intermediate.**  A clamp, a saturation or a
+`min`/`max` downstream can take both readings to the same result on exactly the
+inputs that separated them upstream, and the counter still prints a large
+number.
+
+Four of this batch's counters were wrong in that way and none of them failed
+anything:
+
+- `sep_hist_tail` was `for (i = 49; i < 98; i++) count++`.  That is the
+  constant 49.  It never looked at the run at all.
+- `sep_fallback`, `sep_amp_hi` and `sep_amp_lo` counted which PATH a trial
+  took.  Whether taking it changes the output depends on `DECv22_ANGL24`, which
+  repeats several of its sixteen entries, so those counters could not say.
+- `sep_modulo` asserted a separation that **does not exist**.  Both operands of
+  the quadrant subtraction have already been masked with `V22_SYM_QUAD`, so the
+  difference is a multiple of four and masking `0x0f` or `0x0c` gives the same
+  value for every possible pair.  The guard was withdrawn.
+
+So the counters are now two kinds with two names -- `sep_*` for an observed
+difference in a reported value, `saw_*` for coverage -- and what adjudicates
+every reading is `tools/mutate.py`.  Twenty-five mutations across three sets:
+
+    v22fse    10 mutations   10 caught    0 uncaught   0 equivalent
+    v22dec    10 mutations    9 caught    0 uncaught   1 equivalent
+    v22recv    5 mutations    4 caught    0 uncaught   1 equivalent
+
+**Both survivors are equivalent by proof, and one of them is the lesson.**
+`t_v22recv` counts `window clamp 16 / full window 784` and stood for the claim
+that the window select reads `&hist[hist_n - 49]` only once there are 49
+entries.  Written out, the unclamped mutation IS caught -- but changing the
+comparison from `>` to `>=` is NOT, and that is a different claim the same
+counter appeared to cover.  It survives because `hist_n` is never 48 at that
+site:
+
+- after a shift, `hist_n = hist_n_old - 49 + need` and the shift fires only
+  when `hist_n_old + need > 98`, so `hist_n_old >= 99 - need` and the result is
+  at least 50;
+- before the first shift `hist_n` runs 1, 7, 13, ..., one for the first symbol
+  and six a symbol after, and 48 is not 1 + 6k.
+
+Simulated over whole-symbol drives and over ragged ones that split a symbol
+across calls at every offset: 58 distinct values reach that site, those below
+50 are exactly {1,7,13,19,25,31,37,43,49}, and 48 is not among them.
+
+The general rule, which is finding 134's argument again from a third direction:
+**a counter is a claim about the test and a mutation is a measurement of it.**
+Write the wrong reading down and run it.  If it survives, either there is a
+proof that it cannot matter -- which is a deliverable, and belongs in the set
+with the argument -- or the counter was measuring the wrong thing, whatever it
+printed.
