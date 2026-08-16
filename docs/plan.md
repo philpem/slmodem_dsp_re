@@ -244,7 +244,7 @@ Includes the 254 no-direct-caller symbols. Fix `tools/indirect.py` first.
 - Its own differential suite, and mutations that are shown to fire. A
   separating-trial counter must count trials that differ in an **observable**
   result; four of five such counters in one batch were measuring a path or a
-  constant and proved nothing (findings 3309, 3403). **The mutation
+  constant and proved nothing (findings 3509, 3403). **The mutation
   adjudicates, not the counter.**
 - Findings and deviations numbered from a survey across **all branches** at
   commit time — and the merger re-checks, because two agents surveying in the
