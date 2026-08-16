@@ -310,6 +310,19 @@ print the number of symbols compared on every line that carries a verdict. **A
 detector must report its denominator** — re-running the injection ritual on the
 current toolchain is what found that, and two more bugs under it (2401).
 
+**AND THEN TO `make phase` ITSELF, WHICH IS NOT A TRIAGE AID BUT THE GATE.**
+Task #164, "build: split the object tree so the DEFAULT build carries our
+fixes", moved the differential tier's objects from
+`build-cov/src/` to `build-cov/repro/`; `tools/debugcov.py` went on reading the
+old path, found no `.gcda` anywhere, and printed `suite line coverage over
+src/ 0.0% (0/0)` and `0 of 0` deviation sites — which the phase boundary
+aggregated into "differential, 64-bit, interop, coverage and debug sites all
+OK", exit 0. Two of five tiers had measured nothing and the gate could not
+tell. It now probes both layouts, **exits non-zero on a zero denominator**, and
+prints the count on every line carrying a verdict; `make phase`'s closing line
+quotes those denominators and refuses to be printed without them. Finding 3100,
+and it is the same defect as 2400 with the gate rather than an aid behind it.
+
 ## Ghidra is scaffolding, never evidence
 
 `tools/decompile.sh v34handshak` gives a decompilation to read control flow
@@ -418,3 +431,23 @@ Task numbers are not safe across sessions either: two task stores exist whose
 - Other sessions work in sibling worktrees. Check `git worktree list` and
   `git status` before touching one, and never `git stash` in a tree you do
   not own.
+- **A fresh worktree is missing TWO paths outside itself, and both are now
+  found for you.** Agent worktrees live under `.claude/worktrees/`, so nothing
+  relative to `..` resolves.
+  - `third_party/spandsp` is gitignored, so `git worktree add` does not bring
+    it and the interop tier cannot link. That failed at the top of a 1,573-line
+    log everybody read the tail of, so `make phase` gained a `prereq` target
+    that runs FIRST, refuses if the library is absent, and symlinks the main
+    tree's copy when it can find one (finding 1563).
+  - `BLOB ?= ../slmodemd/dsplibs.o` pointed at `.claude/worktrees/slmodemd` and
+    every run died at `No rule to make target`. Loud, so not the same class of
+    bug, but it blocked every worktree run until someone passed `BLOB=/abs/…`.
+    The default is now resolved through `git rev-parse --git-common-dir` —
+    the main repository's `.git` seen from inside any worktree, the same trick
+    `prereq` uses. `make -s print-BLOB` says what it resolved to, and an
+    explicit `BLOB=` still wins.
+
+  What neither of them was is a reason to distrust a worktree's gate. That was
+  finding 3100, and it was a branch difference and not a worktree one: the
+  coverage tiers had stopped measuring on `master` and would have measured
+  nothing in the main tree too, the moment it checked `master` out.

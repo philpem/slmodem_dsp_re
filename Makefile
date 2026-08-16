@@ -15,7 +15,21 @@
 # and one session serialised its whole run believing that ruled out parallel
 # trees entirely.  `make BLOB=/abs/path/dsplibs.o` now covers both.
 #
-BLOB       ?= ../slmodemd/dsplibs.o
+# AND IT NO LONGER HAS TO BE PASSED.  Agent worktrees live under
+# `.claude/worktrees/`, where `../slmodemd` is `.claude/worktrees/slmodemd` and
+# does not exist, so every worktree run died at `No rule to make target
+# '../slmodemd/dsplibs.o'` until someone remembered the override.  The default
+# is now resolved against the MAIN REPOSITORY rather than against $(CURDIR):
+# `--git-common-dir` names the main tree's .git from inside any worktree, which
+# is the same trick `prereq` below already uses to find spandsp, and outside a
+# git tree the shell prints nothing and this collapses to the old relative
+# path.  `?=` is kept, so an explicit BLOB= still wins.
+#
+# `:=` on the shell-out, so git runs once at parse time and not once per
+# expansion.  `make -s print-BLOB` says what it resolved to.
+#
+GIT_COMMON_DIR := $(shell git rev-parse --git-common-dir 2>/dev/null)
+BLOB       ?= $(abspath $(dir $(GIT_COMMON_DIR))../slmodemd/dsplibs.o)
 #
 # EXPORTED, because the recipes are not the only thing that opens it.
 # `tools/debugaudit.py` and `tools/coverage.py` are invoked with no path and
@@ -536,9 +550,33 @@ prereq:
 	    echo "  has it and this target will symlink it for you."; \
 	    exit 1; }
 
+#
+# THE CLOSING LINE QUOTES ITS DENOMINATORS, and refuses to be printed without
+# them.  It is the one line a human reads to call the tree green, and it used
+# to carry no numbers at all -- so a coverage tier that measured NOTHING
+# ("0.0% (0/0)", "0 of 0 anchored") was aggregated into "all OK" and the whole
+# gate passed on an empty measurement.  `tools/debugcov.py --summary` now
+# refuses on a zero denominator and writes what it measured to $(COVCOUNTS)
+# after its last guard; a missing file therefore means the tier did not get as
+# far as measuring, and this stops rather than pronouncing on it.  Findings 134
+# and 2401 -- "a detector must report its denominator".
+#
+# THE PATH IS SPELT TWICE, here and as `COUNTS` in tools/debugcov.py, which is
+# the same two-places-one-path shape that caused finding 3100 in the first
+# place.  It is safe HERE and only here, because the two diverging makes
+# `test -s` fail and the boundary refuse -- loudly, in the direction that stops
+# the gate.  Do not "fix" the duplication by having this target stop checking.
+COVCOUNTS  := build-cov/measured.txt
+
 phase: prereq period test check64 interop params coverage debugcov onedef
 	@echo
+	@test -s $(COVCOUNTS) || { \
+	    echo "phase boundary: REFUSING to say OK -- $(COVCOUNTS) is missing,"; \
+	    echo "  so the coverage and deviation tiers measured nothing and there"; \
+	    echo "  is no denominator to stand behind.  Findings 134, 2401."; \
+	    exit 1; }
 	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
+	@printf '                '; cat $(COVCOUNTS)
 
 # SpanDSP interop.  A SEPARATE 64-bit binary: the system SpanDSP is amd64 and
 # the blob is i386, so the two tiers cannot share a build.  That is a feature --

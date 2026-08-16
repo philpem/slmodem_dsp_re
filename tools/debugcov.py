@@ -116,6 +116,9 @@ import subprocess
 import sys
 
 BUILD = "build-cov"
+# The denominators, for `make phase`'s closing line to quote.  Under BUILD/ so
+# it is gitignored and so a `make clean` takes it with the data it describes.
+COUNTS = os.path.join(BUILD, "measured.txt")
 COV = ("-Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -MMD -MP "
        "--coverage")
 LD = "-no-pie -Wl,-z,noexecstack,-z,notext --coverage"
@@ -188,13 +191,76 @@ def run(targets):
                  % (len(bad), " ".join(os.path.basename(b) for b in bad)))
 
 
+#
+# WHERE THE INSTRUMENTED OBJECTS LIVE, and why this is a PROBE and not a path.
+#
+# The differential tier links $(OBJ_REPRO) since task #164, "build: split the
+# object tree so the DEFAULT build carries our fixes", so the objects the suite
+# actually runs -- and the .gcda written
+# beside them -- are `build-cov/repro/dsp/foo.o` for `src/dsp/foo.c`, with the
+# leading `src/` stripped exactly as CXXOBJ64 strips it.  Before the split they
+# were `build-cov/src/dsp/foo.o`.  This file went on looking only at the old
+# location and every lookup returned None, so the whole tool measured NOTHING
+# and reported 0.0% (0/0) and "0 of 0" at exit 0.
+#
+# That is finding 2400 exactly over again -- a build moved its output and a
+# detector kept reading the old path -- so the answer is both halves of 2401's
+# ruling: probe both layouts and take whichever HAS the data, and make a zero
+# denominator fatal below so the next move cannot be silent either.
+#
+# The order matters only for a tree carrying both: `repro` is the one the test
+# binaries link, so it is the one whose counts describe what ran.
+#
+def objdir(src):
+    """The build-cov directory holding src's .gcda, or None if there is none."""
+    for d in objdirs(src):
+        if glob.glob(os.path.join(d, stem_of(src) + ".gcda")):
+            return d
+    return None
+
+
+def objdirs(src):
+    """Every layout this tool knows about, newest first -- for the diagnostic."""
+    rel = os.path.dirname(src)
+    return [os.path.normpath(os.path.join(BUILD, "repro",
+                                          os.path.relpath(rel, "src"))),
+            os.path.join(BUILD, rel)]
+
+
+def stem_of(src):
+    return os.path.splitext(os.path.basename(src))[0]
+
+
+#
+# A DETECTOR MUST REPORT ITS DENOMINATOR (finding 2401), and a denominator of
+# zero is not a pass.  Every number this tool prints is a ratio over what gcov
+# gave it, and "everything is covered" and "nothing was measured" render
+# IDENTICALLY -- 0 of 0, 0 dead, 0.0% -- while the second is the tool being
+# broken.  `extcheck` printed "(none)" through four broken versions for want of
+# this (134); both codegen aids compared zero symbols and reported a clean tree
+# at exit 0 for want of it again (2400, 2401).  This is the third instance.
+#
+def zero_denominator(what):
+    sample = (sorted(glob.glob("src/**/*.c", recursive=True)) or ["src/x.c"])[0]
+    found = glob.glob("%s/**/*.gcda" % BUILD, recursive=True)
+    return ("  %s.\n"
+            "  THE DENOMINATOR IS ZERO, which is not a clean sheet -- it is\n"
+            "  this tool measuring nothing and saying so in the same words it\n"
+            "  would use for a perfect score, which is why it refuses.\n"
+            "  Looked for %s.gcda in: %s\n"
+            "  %d .gcda file(s) exist anywhere under %s/.\n"
+            "  If the build tree moved again, teach objdirs() where it went;\n"
+            "  if it was never built, drop --no-build.  Findings 134, 2400, 2401."
+            % (what, stem_of(sample), ", ".join(objdirs(sample)),
+               len(found), BUILD))
+
+
 def gcov_lines(src):
     """(count, lineno, text) per line, count None for non-executable."""
-    objdir = os.path.join(BUILD, os.path.dirname(src))
-    stem = os.path.splitext(os.path.basename(src))[0]
-    if not glob.glob(os.path.join(objdir, stem + ".gcda")):
+    d = objdir(src)
+    if d is None:
         return None
-    out = subprocess.run(["gcov", "-t", "-o", objdir, src],
+    out = subprocess.run(["gcov", "-t", "-o", d, src],
                          capture_output=True, text=True).stdout
     rows = []
     for line in out.split("\n"):
@@ -260,11 +326,10 @@ def dev_sites(entries):
 
 def gcov_marked(src):
     """{lineno: (count, [branch counts])} with -b, or None if never compiled."""
-    objdir = os.path.join(BUILD, os.path.dirname(src))
-    stem = os.path.splitext(os.path.basename(src))[0]
-    if not glob.glob(os.path.join(objdir, stem + ".gcda")):
+    d = objdir(src)
+    if d is None:
         return None
-    out = subprocess.run(["gcov", "-b", "-t", "-o", objdir, src],
+    out = subprocess.run(["gcov", "-b", "-t", "-o", d, src],
                          capture_output=True, text=True).stdout
     rows, last = {}, None
     for line in out.split("\n"):
@@ -330,6 +395,18 @@ def deviation_pass(quiet=False):
     kinds = {}
     for r in rows:
         kinds[r[3]] = kinds.get(r[3], 0) + 1
+    #
+    # THE OTHER VACUOUS GUARD, and the one that actually fired.  The tag sweep
+    # above proves the PROSE is still there; this proves the COVERAGE is.  With
+    # every file's .gcda missing, every row is `nogcda`, and the summary line
+    # below -- which does not print that column at all -- reads "0 of 0
+    # anchored ... over 0 entries" and the phase boundary calls it OK.
+    #
+    if not sum(kinds.get(k, 0) for k in ("full", "gap", "folded", "header")):
+        sys.exit(zero_denominator(
+            "the deviation pass anchored %d site tag(s) in src/ and got gcov "
+            "data for none of them (%d with no .gcda)"
+            % (len([h for h in hits if h[4]]), kinds.get("nogcda", 0))))
     named = set(d for d, _, _, k, _, _ in rows if k in ("full", "gap", "folded"))
     if not quiet:
         for did in sorted(entries, key=lambda d: int(d[1:])):
@@ -453,8 +530,20 @@ def main():
         run(sorted(glob.glob("%s/test/t_*" % BUILD)))
 
     summary = "--summary" in sys.argv
+    #
+    # REMOVED BEFORE ANYTHING IS MEASURED, so the phase boundary cannot read a
+    # previous run's numbers: a stale denominator is the same lie as a missing
+    # one, told more convincingly.  Here rather than at the top of main(),
+    # because `--deviations --no-build` -- the command the summary line tells
+    # people to run -- returns above this and has no business deleting it.
+    #
+    if summary:
+        try:
+            os.unlink(COUNTS)
+        except OSError:
+            pass
     worst = []
-    sites = dead = ex = tot = 0
+    sites = dead = ex = tot = files = 0
     #
     # .cpp AS WELL AS .c, for the reason debugaudit.py's own glob now gives:
     # a C++ translation unit's diagnostics were counted by neither tool, and
@@ -465,6 +554,7 @@ def main():
         rows = gcov_lines(src)
         if rows is None:
             continue
+        files += 1
         fn, out = None, []
         for c, no, text in rows:
             m = re.match(r"^([A-Za-z_]\w*)\s*\(", text)
@@ -494,25 +584,59 @@ def main():
             if l:
                 print("    lines %5.1f%%  %s (%d/%d)" % (100.0 * e / l, src, e, l))
 
+    #
+    # ZERO IS NOT A SCORE.  `tot` is every executable line gcov reported and
+    # `sites` every diagnostic call site it saw; both are zero exactly when the
+    # gcov data was not found, and the lines below would then print 0.0% (0/0)
+    # and "0 of 0 never execute" -- indistinguishable from a tree with no dead
+    # sites, which is what this tool exists to report on.  Fatal, per 2401.
+    #
+    if tot == 0 or sites == 0:
+        sys.exit(zero_denominator(
+            "%d source file(s) yielded gcov data: %d executable line(s) and "
+            "%d debug site(s)" % (files, tot, sites)))
+
     if summary:
         # The count is the tracked number; the files are so a rise can be
-        # placed without re-running the whole thing.
-        print("debug sites: %d of %d never execute  (%s)"
-              % (dead, sites, ", ".join("%s %d" % (os.path.basename(s), n)
-                                        for n, s in sorted(worst, reverse=True))))
+        # placed without re-running the whole thing.  EVERY LINE HERE CARRIES
+        # ITS DENOMINATOR, including the file count -- 2401's ruling, and the
+        # reason this tool's silence lasted as long as it did.
+        print("debug sites: %d of %d never execute, over %d file(s) with "
+              "coverage data  (%s)"
+              % (dead, sites, files,
+                 ", ".join("%s %d" % (os.path.basename(s), n)
+                           for n, s in sorted(worst, reverse=True))))
         print("             suite line coverage over src/ %.1f%% (%d/%d)"
-              % (100.0 * ex / tot if tot else 0, ex, tot))
+              % (100.0 * ex / tot, ex, tot))
         dr, dd, dh, dn, de, df = deviation_pass(quiet=True)
+        #
+        # `%d with no coverage data` IS THE COLUMN THAT WAS MISSING.  The
+        # --deviations report has always printed it; this line dropped it, so a
+        # pass where every site was unmeasured rendered as "0 of 0" and read as
+        # a clean sheet.  It is the same defect as the guard above, one level up.
+        #
         print("deviation sites: %d of %d anchored in a fully-covered function, %d"
               " with dead code\n                 or an untaken arm, %d"
-              " compiler-folded, %d header-only, over %d entries\n"
-              "                 -- tools/debugcov.py --deviations --no-build"
-              % (dr, dr + dd + df, dd, df, dh, de))
+              " compiler-folded, %d header-only, %d with no coverage data,\n"
+              "                 over %d entries"
+              "  -- tools/debugcov.py --deviations --no-build"
+              % (dr, dr + dd + df, dd, df, dh, dn, de))
+        #
+        # THE DENOMINATORS, WHERE THE PHASE BOUNDARY CAN READ THEM.  `make
+        # phase`'s closing line is the one a human reads to call the tree
+        # green and it carried no numbers at all; it now prints this and
+        # REFUSES if the file is missing, so the boundary cannot pronounce on
+        # a tier that measured nothing.  Written last, after every guard.
+        #
+        with open(COUNTS, "w") as f:
+            f.write("measured: %d/%d src/ lines over %d file(s), %d debug "
+                    "sites, %d anchored deviation sites\n"
+                    % (ex, tot, files, sites, dr + dd + df))
     else:
-        print("  %d of %d dsplibs_debug_printf call sites never execute"
-              % (dead, sites))
+        print("  %d of %d dsplibs_debug_printf call sites never execute, over "
+              "%d file(s) with coverage data" % (dead, sites, files))
         print("  suite line coverage over src/: %d of %d = %.1f%%"
-              % (ex, tot, 100.0 * ex / tot if tot else 0))
+              % (ex, tot, 100.0 * ex / tot))
     #
     # Deliberately does not exit non-zero on a dead site.  Task #50 is the work
     # of retiring these, and a gate that fails from the first run is a gate

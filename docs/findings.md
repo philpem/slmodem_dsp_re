@@ -58835,3 +58835,151 @@ changed underneath a batch is exactly the kind of edit that collides.  The
 warning text is what should change, and it should name a target that still
 builds `$(OBJ)`.  This is 134's argument again -- a detector that reports a
 clean tree when its input is empty is worse than one that fails.
+
+### 3100. TWO OF `make phase`'s FIVE TIERS MEASURED NOTHING, AND THE BOUNDARY CALLED IT OK
+
+The gate printed this, and exited 0:
+
+    debug sites: 0 of 0 never execute  ()
+                 suite line coverage over src/ 0.0% (0/0)
+    deviation sites: 0 of 0 anchored in a fully-covered function, 0 with dead
+                     code or an untaken arm, 0 compiler-folded, 0 header-only,
+                     over 0 entries
+
+    phase boundary: differential, 64-bit, interop, coverage and debug sites all OK
+
+Every one of those zeroes is a denominator, not a score.  The coverage and
+deviation tiers had measured nothing at all, and the closing line -- the one
+line a human reads to call the tree green -- aggregated that into "all OK"
+because nothing between the two knew the difference.
+
+**The mechanism.** Task #164, "build: split the object tree so the DEFAULT
+build carries our fixes", gave the differential tier its own object tree: the
+test binaries now link `$(OBJ_REPRO)`, which is `build-cov/repro/dsp/foo.o` for
+`src/dsp/foo.c`, with the leading `src/` stripped as `CXXOBJ64` strips it.
+`tools/debugcov.py` computed its gcov directory as `BUILD + dirname(src)` --
+`build-cov/src/dsp` -- which after the split is a directory that does not
+exist.  `gcov_lines` and `gcov_marked` both return `None` when there is no
+`.gcda`, both callers treat `None` as "not compiled, skip", and the skip is
+silent.  All 159 source files were skipped.  348 `.gcda` files were sitting
+under `build-cov/` the whole time, one directory away from where the tool
+looked.
+
+**Why nobody saw it in the numbers either.**  `--summary`'s deviation line
+dropped the `no data` column that `--deviations --no-build` has always printed.
+So the one figure that could have distinguished the two states was the one
+figure not on the line: 35 sites with no coverage data rendered exactly as 35
+sites measured clean.
+
+**This is the third instance of one defect, and the ruling was already
+written.**  Finding 134: `extcheck` printed "(none)" through four broken
+versions and there was no way to tell a clean tree from a dead detector.
+Findings 2400 and 2401: both codegen aids kept defaulting to a stale `TC_OUT`
+after `build.sh` moved its output, so with no environment set they compared
+**zero** symbols and reported a clean tree at exit 0 -- and 2401's ruling is
+explicit, **a detector must report its denominator**.  The shape is identical
+every time: THE BUILD MOVED ITS OUTPUT AND THE TOOL WENT ON READING THE OLD
+PATH.  What is new here is only that it happened to the gate rather than to a
+triage aid, where "no result" and "a clean result" are the same words and the
+second one ships.
+
+**It is a branch difference and not a worktree one**, which matters because
+that is how it was reported.  The main tree measured 94.7% because it had
+`improve/v34-training` checked out and task #164 is on `master`; it would have
+measured 0.0% the moment it checked `master` out, in the main tree, with the
+blob beside it and every path resolving.  A worktree is where it was NOTICED,
+not where it lives.
+
+**The fix, in three parts.**
+
+  - `objdirs()` probes both layouts and takes whichever HAS the data, `repro`
+    first, since that is the tree the test binaries link.  A pre-#164 checkout
+    therefore finds its `.gcda` exactly where it always did, so the fix is
+    correct on both sides of the split and survives the merge either way.
+  - A zero denominator is fatal.  `tot == 0 or sites == 0` in the line pass,
+    and no site anchored with gcov data in the deviation pass, both exit
+    non-zero naming what was looked for, where, and how many `.gcda` exist
+    anywhere under `build-cov/`.  The message says which of the two things it
+    is: the build tree moved, or it was never built.
+  - Every line carrying a verdict carries its denominator.  The file count
+    joins the debug-site line, `no data` joins the deviation line, and
+    `tools/debugcov.py --summary` writes what it measured to
+    `build-cov/measured.txt` after its last guard.  `make phase` **refuses to
+    print its closing line if that file is missing** and quotes it when it is
+    there, so the boundary can no longer pronounce on a tier that measured
+    nothing.
+
+**The evidence, both directions, per 134's argument and 2401's ritual.**
+In a fresh worktree at `master`, before the change:
+
+    suite line coverage over src/ 0.0% (0/0)
+    deviation sites: 0 of 0 anchored ... over 0 entries
+    phase boundary: ... all OK                            $? = 0
+
+With the guards in and the old path reintroduced as an injected defect -- the
+same tree, the same 348 `.gcda`:
+
+    0 source file(s) yielded gcov data: 0 executable line(s) and 0 debug site(s).
+    THE DENOMINATOR IS ZERO, which is not a clean sheet -- it is
+    this tool measuring nothing ...
+    Looked for call.gcda in: build-cov/src/call
+    348 .gcda file(s) exist anywhere under build-cov/.
+    make: *** [debugcov] Error 1                             $? = 2
+
+and the deviation pass separately, which the line pass would otherwise mask:
+
+    the deviation pass anchored 39 site tag(s) in src/ and got gcov data for
+    none of them (39 with no .gcda).
+
+With the probe restored, on real data:
+
+    debug sites: 47 of 714 never execute, over 159 file(s) with coverage data
+                 suite line coverage over src/ 95.3% (25140/26368)
+    deviation sites: 21 of 32 anchored in a fully-covered function, 6 with dead
+                     code or an untaken arm, 5 compiler-folded, 7 header-only,
+                     0 with no coverage data, over 28 entries
+
+**On comparing that with the main tree's 94.7% (25155/26559) and 20 of 35.**
+Near, and it should be near rather than equal: the two are different commits.
+`src/` and `include/` differ by 211 insertions and 1,027 deletions over 11
+files between `improve/v34-training` and `master`, which is where 191 lines of
+denominator went.  What is NOT a difference is the compilation flags -- before
+#164 `$(BUILD)/%.o` passed `$(REPRODUCE)` and after it `$(BUILD)/repro/%.o`
+does, so the tree being measured is `-DDSPLIB_REPRODUCE_BUGS` either way and
+the percentages are comparable.  Anyone re-measuring should quote the commit
+beside the number, exactly as `compare.py` must quote its compiler.
+
+The deviation counts moved for the same reason and not a different one: 20 of
+35 over 30 entries against 21 of 32 over 28.  `docs/deviations.md` differs by
+one insertion and 33 deletions between the two commits, and the `D` tags in
+`src/` went from 108 to 105 -- three tags left with the source that was
+deleted.  Three fewer anchored sites and two fewer entries carrying one is
+exactly that, arithmetic included.
+
+**Both of the numerators here are the interesting output and neither is a
+target.**  47 dead debug sites of 714 is task #50's work, tracked and not
+gated, and 21 of 32 deviation sites anchored in a fully-covered function is a
+distribution to read against what each entry CLAIMS, not a score to raise.
+What this finding changes is only that they are now numbers rather than the
+absence of numbers wearing the same clothes.
+
+**The second half, and the reason this was found from a worktree at all.**
+`BLOB ?= ../slmodemd/dsplibs.o` does not resolve under `.claude/worktrees/`,
+where `..` is the worktree directory.  That failed LOUDLY (`No rule to make
+target '../slmodemd/dsplibs.o'`), so it is the opposite defect and not this
+one -- but it blocked every worktree run until someone remembered
+`BLOB=/abs/path`, and a gate people cannot run is a gate people stop running.
+The default is now `$(abspath $(dir $(GIT_COMMON_DIR))../slmodemd/dsplibs.o)`,
+resolved through `git rev-parse --git-common-dir`, which names the MAIN
+repository's `.git` from inside any worktree -- the same trick `prereq` already
+uses to find `third_party/spandsp`.  `?=` is kept, so an explicit `BLOB=` still
+wins, and outside a git tree the shell prints nothing and the expression
+collapses to the old relative path.  `make -s print-BLOB` says what it
+resolved to.  Both runs quoted above were `make phase` with no override.
+
+CLAUDE.md now carries a worktree trap covering both missing paths.  It EXTENDS
+NOTHING: there was no worktree trap to amend, only the generic "other sessions
+work in sibling worktrees" line, finding 1563 itself, and the comment above
+`prereq` in the Makefile.  Said here because the task that commissioned this
+work believed one existed, and the next reader should not go looking for the
+version this supposedly edited.
