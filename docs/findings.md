@@ -60203,3 +60203,50 @@ by `def load(path): a = load(path)[0]` shadows the import with the wrapper, so
 it recurses until the stack goes. It cannot have run since that edit. Recorded
 rather than fixed here: fixing it needs an end-to-end validation this session
 cannot give it, and `echoratio.py` covers the question #167 asked. Task #168.
+
+### 1972. THE FAR END'S POWER-REDUCTION REQUEST IS NOT A MEASUREMENT OF OUR LEVEL — 9 dB QUIETER, SAME REQUEST
+
+Phil's question after the 12 dB arm: did the Courier ask us to reduce power,
+and by how much? The tally, over every 1902 call of both arms:
+
+    3 dB attenuation (default)   n=13   mean 4.62 dB   3 x8   6 x3   9 x2
+    12 dB attenuation (-9 dB)    n=17   mean 4.47 dB   3 x10  6 x5   8 x2
+    archive, 3 dB default        n=121  mean 4.51 dB   3 x65  6 x51  9 x5
+
+**All three agree to within 0.15 dB.** And the opening request is **3 dB on all
+nine calls in both arms**, with the ladder 3/6/8/9 appearing only across later
+handshakes of a call.
+
+**SO IT IS A FIXED POLICY WITH A RETRAIN LADDER, NOT A SERVO ON RECEIVED
+LEVEL.** Nine dB is far outside the ~5 dB call-to-call spread of the Courier's
+own `Recv Level`, and it moved the request by nothing.
+
+**THIS REFUTES THE PREMISE OF 1966's ATA RECOMMENDATION.** The argument was:
+they ask us down because the analog level reaching them is hot; attenuate at
+the gateway and they stop asking, so our digital level stays centred. They do
+not stop asking, because the asking was never about the level. 1966's
+measurements of the companding plateau stand — those were of the codec and are
+unaffected — but the remedy built on top of them does not.
+
+**IT ALSO DEMOTES #165.** Honouring the minimum rather than minimum+additional
+was worth a few tenths of a dB *if* the fields tracked the level. If the number
+is policy, the field is less interesting than the bit-offset verification it
+would cost to act on. Not withdrawn — the object still applies more reduction
+than the Recommendation requires, which is still wrong — but no longer worth
+bench time.
+
+**CORRECTION TO 1970.** That finding called the 8 dB value "never seen — not in
+121 archived handshakes, not in arm 1's nine" and read it as the far end
+responding to the change. With the full tally that is wrong: 8 appears twice in
+seventeen, occupying the slot where 9 appears twice in thirteen. One bucket
+moved by 1 dB. **I read a small-n curiosity as a signal**, one message after
+warning that the arm-1 request distribution was too small to read. The
+retraction matters more than the observation did.
+
+**WHAT SURVIVES FROM THE WHOLE ATA LINE**, across 1965-1972: the far end can
+only ask us down and always does; G.711's companding makes SNR level-
+independent over a 24 dB plateau and both directions sit centred in it; the
+gateway's attenuation control does work; over-attenuating costs the healthy
+direction; there is no linear echo above about -25 dB; and the request itself
+is not level-driven. **Every one of those is a negative or a bound.** The
+receive-side deficit of #132 is untouched by any of it.
