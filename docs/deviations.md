@@ -6129,8 +6129,6 @@ blocks, so every observed skew is zero; the mutation set carries the same
 observation from the constructor's side. Fix class: none proposed; reproduced
 as the object has it.*
 
-## D323 🐛 `reconstructInitialConditions` searches a constellation row with no bound
-
 ## D342 🐛 `reconstructInitialConditions` searches a constellation row with no bound
 
 *Renumbered before merge: this was **D323**, which the `V90Equalizer` batch had independently taken and landed on master first. Nothing else about this entry changed.*
