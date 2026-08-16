@@ -20,7 +20,7 @@ mkdir -p "$OUT"
 #                             checks deleted, which is worse than failing.
 #   -include period_compat.h  __builtin_offsetof, GCC 4.0+.  Apparatus, not
 #                             reconstruction; see that file for the line.
-FLAGS="-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
        -fomit-frame-pointer -maccumulate-outgoing-args
        -Iinclude -Itest/harness -DDSPLIB_REPRODUCE_BUGS
        -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"

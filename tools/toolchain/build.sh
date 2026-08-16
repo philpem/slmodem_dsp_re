@@ -35,7 +35,7 @@ OUT=${TC_OUT:-$PWD/build/tc_out}
 # TEST HARNESS needs, and this script compiles only src/.
 # ONE LINE, deliberately: $FLAGS is interpolated into the `docker ... sh -c`
 # string below, where a newline ends the command rather than separating words.
-FLAGS="-O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
+FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
 
 # MAKEFLAGS is cleared and the directory banner suppressed: run from inside a
 # make recipe, both leak `make[1]: Entering directory ...` and a jobserver

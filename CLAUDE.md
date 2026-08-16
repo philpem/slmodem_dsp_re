@@ -152,15 +152,21 @@ baseline `compare.py --ratchet` moves against.
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/build.sh` with the evidence beside each:
 
-    -O2 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+    -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
     -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args
                                                         (no PIC, no SSP)
 
 `-mtune=i686` is worth knowing about: `-march` and `-mtune` are separate
 questions and only the first leaves a trace, so "no cmov in 1.2 MB" bounds the
 instruction set and says nothing about scheduling. Finding it took the match
-from 30 to 82 (finding 612). `-frename-registers` took it to 92 and settled
-`-O2` against `-O3` (616).
+from 30 to 82 (finding 612). `-frename-registers` took it to 92 (616).
+
+**The level is `-O3`, and 616's ruling against it is overturned** -- on a tree
+three times the size, `-O2` matches 313 and `-O3` matches 324, and the `-O3`
+set gains 15 while losing 4 rather than swapping. 616 measured at 92 of 365,
+where `-finline-functions` had almost nothing to inline across. `make period`
+is green at both, so unlike `-mno-ieee-fp` there is no divergence to declare.
+Finding 2155.
 
 `-mno-ieee-fp` is the newest and its worth is not in its +2 (302 -> 304): the object's float
 compares are ordered, 406 `fcom`-family against four `fucom` that are all

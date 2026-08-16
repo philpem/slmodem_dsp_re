@@ -57,9 +57,17 @@ THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
                             -O3 adds 17 KB of our code and no matches at all,
                             so -O3 itself is disfavoured.  Finding 616.
 
-`-O2` is the level, on the evidence above.  What is still open is only whether
-the original passed `-frename-registers` explicitly or passed `-O3` and got it
-while the rest of -O3 happened not to bite on sources shaped like theirs.
+`-O3` IS THE LEVEL, and this paragraph used to say the opposite.  It used to
+read that `-O2` was the level and that the only open question was whether the
+author passed `-frename-registers` explicitly or passed `-O3` and got it while
+the rest of -O3 happened not to bite.  Measured on the whole tree with the
+level as the only variable: `-O2` 313 identical, `-O2 -finline-functions` 314,
+`-O3` 324 -- and the `-O3` set GAINS 15 and loses 4 rather than swapping, with
+byte coverage 72.2% -> 80.0% and no new overshoot.  `make period` is green at
+all three.  Finding 616 measured the opposite when this tree matched 92 of
+365, where `-finline-functions` had almost nothing to inline across.
+`-frename-registers` stays spelled out although `-O3` implies it, because
+616's evidence for it is independent.  Finding 2155.
 
 WHAT THE NUMBERS MEAN, and do not mean.  A size mismatch is not a defect: our
 source is not the original's source, and a function we wrote as one loop that

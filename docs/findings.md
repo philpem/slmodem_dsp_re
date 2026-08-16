@@ -54835,3 +54835,67 @@ The general shape is worth keeping: **to separate two roundings that differ by
 one bit, put the exact answer on the boundary of a truncation.** It is the
 same argument `run_exact_powers` already made for the setters, applied to a
 divisor that is not itself a power of two.
+
+### 2155. THE LEVEL IS `-O3`, NOT `-O2` -- FINDING 616's MEASUREMENT WAS TAKEN ON A THIRD OF THE TREE
+
+*`compare.py`'s own header states this as the open question: "whether the
+original passed `-frename-registers` explicitly or passed `-O3` and got it
+while the rest of `-O3` happened not to bite on sources shaped like theirs."
+It is answered here, and the answer is the second.*
+
+Prompted from an unexpected direction.  The batch reconstructing
+`V90ConstellationDesigner::determineDminForRrn` -- still on its own branch as
+this is written, so its finding number is not cited here -- measured that function at
+2,311 bytes under `-O2` against the object's 3,760, and at **3,755 under
+`-O2 -finline-functions`** -- five bytes.  The mechanism is concrete: the blob
+inlines `calcK` eight times and `constelBuild` twice while still emitting both
+as out-of-line `FUNC GLOBAL` symbols, and GCC 3.4 does not set
+`flag_inline_functions` at `-O2`, so an extern member is never inlined however
+small.  Plain `-O2` cannot produce that shape at all.
+
+**Measured tree-wide, same tree, same blob, flags the only variable:**
+
+| flags | identical | same_size | of the blob's bytes | `make period` |
+|---|--:|--:|--:|---|
+| `-O2` (what the tree had) | 313 | 65 | 72.2% | 183/0 |
+| `-O2 -finline-functions` | 314 | 71 | 80.1% | 183/0 |
+| **`-O3`** | **324** | 69 | 80.0% | **183/0** |
+
+**And it is additive, which is the test that separates a right flag from a
+lucky one.**  Comparing the identical SETS rather than the counts, `-O3`
+gains 15 symbols and loses 4.  The four it loses are named, because a finding
+that reports only its gains is not a measurement:
+
+    RxHdxStartB103
+    TxHdxDataB103
+    V90Demodulator::setSessionFlag
+    V92Jd::getJdBitVector
+
+Byte coverage moves 72.2% -> 80.0%, and no object overshoots: the per-object
+rollup still runs 29%-66% of the blob everywhere, and only five symbols in the
+tree are larger than their originals, the same five as before.  So the extra
+31 KB is gap being closed, not code being invented -- which is the distinction
+`compare.py`'s header warns the total-bytes number cannot make on its own.
+
+**WHY 616 SAID OTHERWISE, AND WHY BOTH CAN BE HONEST.**  Finding 616 measured
+`-O3` as adding "17 KB of our code and no matches at all" and disfavoured it.
+That was taken when this tree matched **92 of 365** symbols; it now compares
+924 and matches 324.  With a third of the code, `-finline-functions` had
+almost nothing to inline across, so the flag that distinguishes the two levels
+had nearly no surface to act on.  616 is not withdrawn -- it is the reason
+`-frename-registers` is in the flag set at all, and that stands.  What is
+withdrawn is its conclusion about the LEVEL.
+
+**THE EVIDENCE IS WEAKER IN KIND THAN 1990's, AND THAT MATTERS.**
+`-mno-ieee-fp` is provable from the object alone: 406 ordered compares against
+four, and a compiler that cannot emit them under the other setting.  This is a
+match-rate argument -- 324 against 313 -- which is the same kind of evidence
+`-mtune=i686` rests on (finding 612) and no stronger.  It could be overturned
+by a better hypothesis in a way 1990 could not.  Recorded as the best current
+reading, not as a proof.
+
+**Both tiers carry it**, and unlike 1990 there is no divergence to declare:
+`make period` is 183 passed / 0 failed at `-O3`, so `build.sh` and
+`period_inner.sh` take the same level.  `-frename-registers` stays spelled out
+even though `-O3` implies it, because 616's evidence for it is independent and
+the explicit flag is what records that.
