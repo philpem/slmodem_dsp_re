@@ -58350,3 +58350,280 @@ and the string constants followed the arms.  One in-between row, not two, and
 wrong reading was written down first and a difference in a `.rodata` OFFSET
 is never evidence about a string's LENGTH -- CLAUDE.md's own trap about
 string references and inline addends, in a new shape.
+
+### 2950. `v8handshak.c`'s -8 IS THE CROSS-FILE FORM OF 2600's ARTEFACT, AND THE PER-FILE ROLLUP HAS A BOUNDARY IT WAS SAID NOT TO HAVE
+
+`debugaudit.py --missing` reports `src/v8/v8handshak.c` at **-8 (blob 10,
+ours 2)** in the PER-FILE rollup -- the table 605 named as the one an inlining
+boundary cannot distort, and which 2600 went to for a gap it could trust after
+retiring `probeselect`'s 31.
+
+**There is nothing to restore.** All ten of the object's diagnostics are in
+this tree; eight of them are in `src/v8/v8hsrx.c`, whose own row is
+**+8 (blob 0, ours 8)**. The two numbers are the same eight call sites counted
+from opposite ends.
+
+**Ten sites, ten distinct strings, 1:1** -- which is what makes a per-string
+comparison a per-site comparison here, and it was measured rather than assumed
+because `--strings` de-duplicates and its format resolution is wrong wherever
+several strings are pushed before one call. `v8handshak` is `0x77310 +
+0x1093`; `tools/dis.py <obj> 0x77310 0x783a3` carries exactly **10** calls to
+`dsplibs_debug_printf` and **12** `R_386_32` references into `.rodata`. Ten of
+the twelve are `movl $imm,(%esp)` -- the format, at ten distinct addresses --
+and the other two are `CJ` at `.rodata.str1.1:0x2f2e` and `JM` at `0x2f18`,
+which are the `%s` argument of one of the ten.
+
+| the object's string | ours |
+|---|---|
+| `V8: Timeout waiting for %s message...\r\n` | `v8handshak.c:111` |
+| `V8: Time Out Waiting For CM...\r\n` | `v8handshak.c:86` |
+| `V8: Time Out Waiting For ANSam...\r\n` | `v8hsrx.c:45` |
+| `V8 ANSAM Detected (CM ready)\n` | `v8hsrx.c:105` |
+| `V8: reseting QCA1 detector...\r\n` | `v8hsrx.c:358` |
+| `V8:  QCA1a: Got Good QCA1a !!!!\r\n` | `v8hsrx.c:383` |
+| `V8:  QCA1a: U_QTS: bits24,26-28 = %d%d%d%d, bits54,56-58 = %d%d%d%d\r\n` | `v8hsrx.c:386` |
+| `V8:  QCA1d: LAPM Indication: bit23 = %d, bit53 = %d\r\n` | `v8hsrx.c:404` |
+| `V8:  QCA1d: Got Good QCA1d !!!!\r\n` | `v8hsrx.c:412` |
+| `V8:  QCA1d: ANSpcm level index: bits27-28 = %d, bits57-58 = %d\r\n` | `v8hsrx.c:415` |
+
+`nm` has no symbol for `v8_handshak_agc` or `v8_handshak_demod`. The object
+inlined both, exactly as it inlined `probe_preemph`.
+
+**WHY THE PER-FILE TABLE FELL THROUGH, WHEN THE WHOLE POINT OF IT IS THAT IT
+CANNOT.** It attributes the blob's sites to whichever file holds OUR function
+of the same name, and counts ours where we actually wrote them. A helper
+factored out within the file therefore nets to zero, which is 605's argument
+and is right. A helper factored out into a DIFFERENT FILE debits one file and
+credits the other. `debugaudit.py`'s own comment said a per-file total "has no
+such boundary to fall through" and its header printed the same claim; both now
+say which boundary it does have.
+
+2600's closing list quotes this row as `-8 (blob 10, ours 0)`, which is the
+per-FUNCTION `ours` beside the per-FILE gap -- the per-file line reads
+`ours 2`. Nothing in 2600 depends on it, but the right column would have shown
+that this row is the same shape as the one it had just retired.
+
+**AND THE TEN ARE NOW PROVED OF THE RUNNING OBJECT.** `t_v8hs.c`'s
+"v8handshak: the trace" already raised both debug levels over three levels and
+five state cases and compared the two transcripts with `strcmp`. Two
+transcripts agreeing say nothing about a site neither side reached, so the
+sweep now accumulates which of the ten the REFERENCE was seen to print and
+asserts all ten by name -- and the same ten on our side, so a dropped site is
+named rather than arriving as a whole-transcript mismatch. **All ten are
+reached**, measured before the assertion was written. 62 checks to 82.
+
+Shown to fire, per 134: deleting the `V8: reseting QCA1 detector...` site from
+`v8hsrx.c` fails five checks and names it -- `we printed site 7  got 0,
+reference 1` -- and restoring it returns 82 of 82.
+
+What it does not say: the ten are proved present, in the right place, under
+the right condition and with the right arguments. It is silent about anything
+the transcript does not print, which is what the return-value and state
+comparisons in the same file are for.
+
+### 2951. THE DEBUG AUDIT NOW COMPARES CONTENT INSTEAD OF COUNTS, AND TWO OF THE THREE LARGEST ROWS IN THE BACKLOG ARE NOT WORK
+
+Twice now a hand-off has taken a number from `debugaudit.py --missing` as a
+restoration queue and been wrong about it -- `probeselect`'s 31 (2600) and
+`v8handshak`'s 8 (2950). Both times the count was measuring where we chose to
+put a helper. `debugaudit.py --absent` asks the question the counts were
+standing in for: **which of the object's format strings appear nowhere in
+`src/`.** A string is content and does not move when we re-factor.
+
+Over the whole tree: **27 absent over 19 functions**, with 13 call sites whose
+format cannot be resolved and which it does not judge.
+
+| function | `--missing` | `--absent` |
+|---|---|---|
+| `v34handshak` | 261 | 2 |
+| `probeselect` | 31 | 0 |
+| `CALLPROG_Progress` | 15 | 0, and 11 unresolvable |
+| `v8handshak` | 10 | 0 |
+| `B103OriginateNextState` | 2 | 2 |
+| `b103_process` | 2 | 2 |
+| `v23FP_rx_progress` | 3 | 3 |
+
+So the real queue is small and is in the modules nobody has been to yet:
+`b103fp.c` (6), `call.c` (4), `b103.c` (4), `v23rx.c` (4), `bwchdem.c` (3),
+`v23.c` (2), `v23modem.c` (2), and two strings in `v34handshak` itself --
+`MOH: Illegal MH sequence under MHreq, initiating retrain\r\n` and
+`V34DATA, getting into data mode from Handshake, Tx bit rate - %d, Rx bit
+Rate - %d\n`.
+
+`callprog.c` cannot be settled this way and is the one row that still needs
+reading: all 18 of `CALLPROG_Progress`'s resolvable strings are present and
+the other 11 sites push more than one string before the call, which is the
+case `--strings` documents itself as getting wrong. `--sites` is the tool for
+those.
+
+**TWO LIMITS, AND BOTH ARE IN THE TOOL'S OWN COMMENT.**
+
+*Necessary, not sufficient* -- `--invented`'s limit mirrored. A string being
+somewhere in the tree does not show the site is in the right function, under
+the right condition, or carrying the right arguments; only a transcript
+comparison does (126, 2600, 2950). An empty report means "nothing was lost",
+never "these sites are right".
+
+*Distinct strings, not sites.* Where the object prints one message from
+several places -- `probe_preemph`'s three strings over ten inlined copies --
+carrying it once satisfies the check. That is deliberate, because the number
+of copies is exactly what inlining decides, but it bounds a `0 absent` row at
+"no message was lost" rather than "no call site was lost". The worked example
+is `B103FP_create`, whose one missing site is the build stamp `Sep 22 2005`
+(135): `src/dsp/fpm_agc.c:135` carries that literal, so `--absent` scores it
+present while `b103fp.c` really has no such site.
+
+Shown to fire, per 134: with the `V8: reseting QCA1 detector...` call deleted
+from `v8hsrx.c`, `--absent v8handshak` reports `1 absent` and names the
+string; with it restored, `0 absent`.
+
+### 2952. THREE CODEGEN ROWS IN `src/v8/`: TWO ARE THE DECLARED WIDTH OF A COMPARISON AND NOW MATCH INSTRUCTION FOR INSTRUCTION, THE THIRD IS REGISTER ALLOCATION AND IS DECLINED
+
+Handed over as same-size symbols whose code generation differs. The rule they
+are decided by is CLAUDE.md's: act on what the compiler was FORCED to encode,
+ignore what it was free to choose. Two of the three are forced and one is not,
+and the split is clean.
+
+Measured by compiling the single translation unit in the `dsplibs-tc342`
+image with `build.sh`'s exact flags and diffing the symbol's full text against
+the blob's, operands included, with branch targets normalised and alignment
+padding ignored -- 617's acceptance test, not a mnemonic count.
+
+**`V8_V21_reset` -- one instruction, and it is the loop counter's signedness.**
+The object ends its clear loop `inc %eax; cmp $0x27,%eax; jbe`; we emitted
+`jle`. Everything else was already identical. `unsigned i` in place of `int i`
+closes it: **14 of 14**. The counter runs 0..39, so the two readings agree
+over every value it holds and no differential test can ever see the
+difference.
+
+**`v8_agcadapt` -- 70 against 68, and four declarations close all of it.**
+**70 of 70** afterwards. Three separate signals, each forced:
+
+  * `delta` and `acc` are SHORT, not `int`. Each dead-band test is
+    `test %dx,%dx` in the object and was `test %edx,%edx` in ours; the width
+    of a test is the width of the value tested.
+  * the accumulator that is STORED BACK is the untruncated sum. The object
+    stores `%cx`, the raw `lea` result, where we stored the sign-extended
+    `%dx`. Same sixteen bits, so nothing can measure it, but it says the
+    source stored the sum and not the narrowed copy -- so the function carries
+    both, `sum` and `acc = (short)sum`.
+  * the magnitude is a NAMED SHORT TEMPORARY and not a cast inside the `if`.
+    The object sign-extends the difference with `cwtl` and then narrows the
+    test back to `%ax`; written as `(short)(... - 0x7d0) <= 0` in the
+    condition, this compiler folds the conversion away and emits two
+    instructions fewer. That was the whole of the residual once the widths
+    were right.
+
+**`V8Create` -- 244 against 245, and every difference is free. Declined.**
+The object keeps `%eax` live out of the allocator and tests it before moving
+it to `%esi`; we move first, materialise the NULL return with an extra
+`xor %eax,%eax`, and test `%esi`. The rest is the same six field copies in a
+different order and the same epilogue scheduled differently. Register
+allocation and instruction scheduling are the two examples CLAUDE.md gives of
+what to ignore, and permuting source until they line up is fitting the
+compiler. Left alone.
+
+**NONE OF THIS IS VISIBLE TO A DIFFERENTIAL TEST**, which is the point: every
+value involved already ranged over a short, so both readings agree over every
+input and `make phase` can only show that nothing broke. It does -- 185
+passed, 0 failed. The evidence for these two is the instruction, and this is
+the tier that exists to read it.
+
+### 2953. `B103FP_modem`'s DEBUG-ONLY SWITCH IS RESTORED FROM ITS JUMP TABLE, AND THE OTHER FOUR SITES IN `b103fp.c` ARE CROSS-JUMPED AND NEED A READ
+
+2951's queue put `src/pump/b103/b103fp.c` at the top of the work that is
+really work: **-7 (blob 7, ours 0)**, with six of the seven strings absent
+from the tree outright. Two of the seven are now restored and the file reads
+**-5 (blob 7, ours 2)**.
+
+**What was there.** `B103FP_modem` ends on a switch our source had elided, and
+said so in a comment: "the switch it runs first is debug-only: every arm
+returns the same thing". It is debug-only, and that is precisely why
+`debug.h`'s policy says to carry it -- the gate is real control flow and the
+strings are the author's words, and with the level at zero nothing can tell
+the two versions apart (134).
+
+The shape is read off the object and not guessed:
+
+```
+  8f2ad:  movzbl 0x1c(%edx),%eax        <- the BYTE at +0x1c
+  8f2b1:  cmp    $0x7,%eax
+  8f2b4:  ja     8f2cd                  <- "Bell103 unknown internal state!"
+  8f2b6:  jmp    *0x8e14(,%eax,4)
+```
+
+and the eight-entry table at `.rodata+0x8e14` reads
+`8f2d6 8f2d6 8f2d6 8f2d6 8f2d6 8f300 8f2d6 8f2d6` -- 0..4, 6 and 7 to the
+epilogue, **5** to `Bell103 internal error detected!`. Neither string has a
+trailing newline. The scrutinee is the byte at +0x1c while the return is the
+whole 32-bit word there (status in the low byte, flags in the next): the same
+four bytes read two ways, and `whichfield.py` confirms `struct b103fp + 28 ->
+status (unsigned char)`. The `int last_status` at +0x1c of `struct b103_dp` is
+a different struct and not this field.
+
+**Corroborated by code generation, which is the only instrument that can see
+this at all.** Compiled in `dsplibs-tc342` with `build.sh`'s flags,
+`B103FP_modem` was 183 instructions against the object's 215 and is now
+**210** -- the switch, its two gates, its two calls and the second copy of the
+epilogue, 27 instructions, all landing where the object has them. No
+differential test moves, and none can.
+
+**THE OTHER FOUR ARE NOT THE SAME JOB, and the reason is worth writing down
+before the next session rediscovers it.** `B103OriginateNextState` reports two
+call sites and `--strings` resolves `B103_STATE_WAIT1\n` and `default\n`, but
+`--sites` shows **five gates on `dsplibs_debug_level` against two references
+to `dsplibs_debug_printf`**, and one of the two is a tail JUMP with the format
+already in `%eax`:
+
+```
+  8f810:  mov  %eax,0x10(%esp)
+  8f814:  add  $0xc,%esp
+  8f817:  jmp  dsplibs_debug_printf
+```
+
+So GCC cross-jumped several arms onto one shared tail, each loading its own
+string beforehand -- the same mechanism as 2601's 9 dB arm, at larger scale.
+The message set is therefore NOT the two `--strings` names, the site count is
+not two, and placing them needs the whole function read for `.rodata` loads
+rather than for calls. `B103AnswerNextState` is the same shape.
+`B103FP_create`'s one site is the `Sep 22 2005` build stamp (135), which
+`--absent` scores present because `src/dsp/fpm_agc.c` carries the same literal
+-- 2951's second limit, and this is the case that shows it.
+
+And there is **no transcript test for Bell 103**: no `t_b103*.c` uses
+`dsplib_debug_capture`. `B103FP_modem` was restorable without one because its
+control flow is a jump table that can be read exhaustively; the cross-jumped
+four are not, and guessing at them is what "wrong-but-plausible is worse than
+missing" forbids.
+
+### 2954. `toneiir_reset`'s `movzwl` IS A MEASURED DECLINE, AND `callprog.c`'s GAP IS NOT A STRING GAP AT ALL
+
+Two pieces of work that were handed over as available and are not, both
+declined on measurement rather than on argument.
+
+**`toneiir_reset`.** 617 records, in parentheses, that declaring `prev` as
+`unsigned short` produces the object's `movzwl` where we emit `movswl`. That
+is a fact about the compiler and it has twice been read as a recommendation.
+It is not one, on two independent grounds:
+
+  * `prev` is loaded from `env_band` and stored to `env_prev` as sixteen bits.
+    The upper half is discarded, so the compiler was free to use either
+    instruction -- 614's class, and the first of the false-positive classes
+    618 had to remove from `extcheck` before it could find anything.
+  * **and it does not produce a match.** Measured: with `unsigned short prev`
+    the extension lines up and the store order still differs, `0x96 0x2c 0x98
+    0x94` in the object against our `0x96 0x94 0x98 0x2c`. 617's acceptance
+    test is full-text identity, operands included, and the change fails it --
+    so it would be a source edit that buys a mnemonic and not a match, which
+    is the definition of fitting the compiler. 617's own conclusion is that
+    everything else on that list stays untouched, and it still holds.
+
+**`callprog.c` -9.** Named as the next true gap after `v8handshak.c`. It is
+not a string gap: `--absent` finds **0 absent over `CALLPROG_Progress`, with
+11 of its 29 sites unresolvable**, and all 18 resolvable strings are in the
+tree. The 11 are the case `--strings` documents itself as getting wrong --
+more than one string pushed before a single call -- so nothing about them can
+be read off the format table either way, and the count gap is at least partly
+`callprog.c`'s own static helpers, which is the worked example in
+`debugaudit.py`'s comment. Whatever is there needs `--sites` read by hand;
+what it is NOT is nine dropped messages.

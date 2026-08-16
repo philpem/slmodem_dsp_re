@@ -260,6 +260,34 @@ trace_setup(const struct trace_case *c, unsigned seed)
 	}
 }
 
+/*
+ * The ten diagnostics the object's `v8handshak` carries, by the literal head
+ * of each format string, in the order `debugaudit.py --strings v8handshak`
+ * lists them.  Ten call sites, ten distinct format addresses, 1:1.
+ *
+ * Two of them are in `v8handshak.c` here and eight are in `v8hsrx.c`, because
+ * the two long receive paths are a separate translation unit in this tree and
+ * were inlined in the object.  That the STRINGS are all present is a grep;
+ * that each site is in the right place, under the right condition, with the
+ * right arguments, is only ever this transcript.  So whichever of the ten the
+ * sweep reaches is asserted by name at the bottom of `t_hs_trace`, and a
+ * refactor that drops one -- or a "restoration" that moves one back and makes
+ * it print twice -- fails here rather than silently.  Finding 2950.
+ */
+static const char *const hs_lines[] = {
+	"V8: Timeout waiting for ",
+	"V8: Time Out Waiting For CM...",
+	"V8:  QCA1d: LAPM Indication: bit23 = ",
+	"V8 ANSAM Detected (CM ready)",
+	"V8: Time Out Waiting For ANSam...",
+	"V8:  QCA1d: Got Good QCA1d !!!!",
+	"V8:  QCA1d: ANSpcm level index: bits27-28 = ",
+	"V8: reseting QCA1 detector...",
+	"V8:  QCA1a: Got Good QCA1a !!!!",
+	"V8:  QCA1a: U_QTS: bits24,26-28 = "
+};
+#define HS_NLINES ((int)(sizeof(hs_lines) / sizeof(hs_lines[0])))
+
 static int
 t_hs_trace(void)
 {
@@ -267,8 +295,14 @@ t_hs_trace(void)
 	unsigned i, lvl;
 	long lines = 0;
 	int step;
+	int k;
+	int seen[HS_NLINES];
+	int mine[HS_NLINES];
 
 	diff_begin("v8handshak: the trace");
+
+	for (k = 0; k < HS_NLINES; k++)
+		seen[k] = mine[k] = 0;
 
 	for (lvl = 1; lvl <= 3; lvl++) {
 		dsplib_debug_capture_reset();
@@ -323,10 +357,47 @@ t_hs_trace(void)
 				    (int)dsplib_debug_capture_lines(1), 0, 0);
 		else
 			lines += dsplib_debug_capture_lines(1);
+
+		/*
+		 * Accumulated from the REFERENCE side across the levels, since
+		 * the capture is reset at the top of each one.
+		 */
+		for (k = 0; k < HS_NLINES; k++) {
+			if (strstr(dsplib_debug_capture_text(1), hs_lines[k]))
+				seen[k] = 1;
+			if (strstr(dsplib_debug_capture_text(0), hs_lines[k]))
+				mine[k] = 1;
+		}
 	}
 
 	diff_eq_int("diagnostics were captured (%ld lines)", lines > 15, 1,
 		    lines);
+
+	if (getenv("DBGDUMP")) {
+		printf("=== the ten sites, ref / ours ===\n");
+		for (k = 0; k < HS_NLINES; k++)
+			printf("  [%d] %s %s  %s\n", k,
+			       seen[k] ? "SEEN" : "----",
+			       mine[k] ? "SEEN" : "----", hs_lines[k]);
+	}
+
+	/*
+	 * All ten, and the sweep was measured to reach all ten before this was
+	 * written -- which is what makes the transcript comparison above
+	 * evidence rather than a coverage claim.  Two transcripts agreeing say
+	 * nothing whatever about a site neither side reached, and this is the
+	 * check that would notice if the sweep stopped reaching one.  The
+	 * pattern, and the reason for it, are finding 2601's.
+	 *
+	 * Asserted on both sides separately: the reference arm is the claim
+	 * about the OBJECT (this line is really printed here, with these
+	 * arguments), and ours localises a dropped site to the line rather than
+	 * leaving it as a whole-transcript `strcmp` mismatch.
+	 */
+	for (k = 0; k < HS_NLINES; k++) {
+		diff_eq_int("reference printed site %ld", seen[k], 1, (long)k);
+		diff_eq_int("we printed site %ld", mine[k], 1, (long)k);
+	}
 
 	return diff_end();
 }
