@@ -1,0 +1,79 @@
+PRE-REGISTRATION -- shape-matched pre-emphasis, scored on equaliser workload
+Written 2026-08-14, before the code had ever been run.
+
+THE CHANGE UNDER TEST
+  probe_preemp_shape() in v34hshak.c, gated DSPLIB_V34_SHAPE_PREEMP.
+  Scores all eleven V.34 transmit-spectrum templates against the measured probe
+  bins and returns the best fit, instead of reducing the channel to a two-point
+  tilt and indexing a counter that can only reach 6-10.  Findings 1956, 1957.
+  Committed 10dbf7c, make phase green, never executed.
+
+THE OUTCOME, and why it is not the connect rate
+  Phil's proposal, and it is better than what the previous A/B used: *"compare
+  equaliser coefficients / frequency shape, less error amplitude per bin should
+  indicate the equaliser is doing less work."*
+
+  A pre-emphasis filter that matches the channel leaves the equaliser with
+  nothing to do.  One that does not leaves the equaliser correcting the
+  shortfall itself.  So the equaliser's workload measures the pre-emphasis
+  choice far more directly than a bit rate does -- and the bit rate on this
+  bench varies by thousands of bits per second call to call, which is a noise
+  floor no 0.13 dB effect can be seen through.
+
+  PRIMARY:   off-centre / centre tap-energy ratio, from V34EQTAPS.
+             A perfectly matched channel needs the centre tap and nothing else,
+             so off-centre energy IS the work.  The RATIO, not the absolutes:
+             absolute tap magnitudes move with the transmit level exactly as
+             equerr does (V34TXSCALE at the phase 3->4 boundary).
+             Taken over blocks in DATA mode only, after the last handshake.
+  SECONDARY: equerr from the same V34EQTAPS lines; the index actually chosen
+             (V34PREEMPHASIS SHAPE vs the object's line); connect rate.
+
+ARMS         control  DSPLIB_V34_SHAPE_PREEMP=0   (object's counter, 6-10 only)
+             treat    DSPLIB_V34_SHAPE_PREEMP=1   (all 11, shape matched)
+             BOTH with DSPLIB_V34_DUMP_EQ_TAPS=1, so the arms differ by exactly
+             one environment variable and both produce the primary outcome.
+
+DESIGN       6 per arm per far end, 1901 and 1902, interleaved, quiet machine
+             gated before every call.  ab149.sh with TAG=pesh REPS=6.
+             12 per arm is not proposed: see the expectation below -- a bigger
+             sample does not rescue an effect this small, and the bench time is
+             better spent on #152.
+
+*** THE EXPECTED RESULT IS A NULL, AND THAT IS NOT A FAILURE ***
+
+  Finding 1956 measured the whole prize on this path at 0.13 dB RMS residual
+  (object index 7 at 1.37 dB, best available index 9 at 1.24 dB).  The reason is
+  measured, not guessed: this channel is flat to +/-0.4 dB from 450 to 3150 Hz,
+  so there is almost no tilt for any template to correct, and its one real
+  defect is a band-edge cliff -- -18.3 dB at 3450 Hz -- against which the largest
+  template offers 7.5 dB.  The dominant impairment is beyond the authority of
+  the entire mechanism.
+
+  So the prediction is NO MEASURABLE CHANGE in the tap-energy ratio.  If that is
+  what comes back, it CONFIRMS 1956 and the correct write-up is "the defect is
+  real, the fix is correct, and this bench cannot see it".  It must not be
+  re-scored, re-windowed or re-armed until something moves.  That is exactly
+  what happened to the first ladder A/B (1955), and the lesson is cheaper the
+  second time.
+
+  A MEASURABLE DROP in off-centre energy would be a genuine surprise and would
+  mean 1956's residual model is missing something -- most likely the template
+  breakpoints, which are read off a figure drawn with +/-1 dB tolerance and are
+  the weakest part of the model.  Chase that before believing the improvement.
+
+  A MEASURABLE RISE would mean the shape matcher is choosing worse than the
+  counter, which would point at the 0.4-0.8 interpolation (unconstrained by the
+  Recommendation, linear by my choice) or at the variance-vs-mean-square
+  scoring.  Both are in template_db() and probe_preemp_shape() respectively.
+
+BEFORE THE FIRST CALL, three checks that cost no bench time
+  1. Relink: tools/hybrid_link.sh, never by hand.  The bench binary was once an
+     hour older than the source it was supposed to be testing.
+  2. One EMULATED call with the flag set, to confirm the selector fires at all
+     and prints "V34PREEMPHASIS, - SHAPE index N ... var X.XX dB2", and that
+     V34EQTAPS appears once per 1024-symbol block.
+  3. Cross-check the C against the Python: run testbench/preemphshape.py on that
+     capture and confirm both pick the SAME index.  They implement the same
+     eleven templates independently, so a disagreement means one is wrong, and
+     finding out on the bench would waste calls.

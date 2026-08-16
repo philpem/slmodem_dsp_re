@@ -1,0 +1,67 @@
+PRE-REGISTRATION -- #149 bad-block-run threshold, REPLICATION
+Written 2026-08-14 before any call of this batch was placed.
+
+WHY A REPLICATION.  The first batch (records/ab149-PREREG.txt, finding 1953)
+gave p=0.036 on its pre-registered outcome and the change looked settled.
+Re-scoring it with outcomes that exclude fewer calls -- chosen to maximise
+RETENTION, not effect -- gave p=0.090 and p=0.085 (finding 1955).  The smallest
+p came from the outcome that discarded the most data, which is the signature of
+a fragile result.  The effect SIZE was consistent across all three scorings (the
+median handshake count roughly halves), but that is equally what a lenient
+metric on a small sample looks like when there is no effect.  This batch exists
+to tell those apart.
+
+WHAT CHANGED IN THE DESIGN, and why
+
+  1. PRIMARY OUTCOME IS NOW HANDSHAKES PER MINUTE OF CARRIER, on every call
+     that reached carrier at all.  ZERO EXCLUSION.
+     The old outcome required 45 s of carrier before a call could be scored,
+     which threw away 13 of 23 calls and -- worse -- conditioned on call
+     duration, something the treatment can itself affect.  That is a collider,
+     and pre-registering it stopped it being a fishing expedition without
+     stopping it being a bias.  Retention should have been the design criterion
+     from the start.
+
+  2. SAMPLE DOUBLED to 12 per arm per far end = 24 per arm, 48 calls.
+     At the effect size observed (5.28 -> 2.58 handshakes/min) this should
+     resolve either way rather than landing at p ~ 0.085 again.
+
+  3. CONNECT SUCCESS IS PROMOTED TO A CO-PRIMARY, not a gate.
+     The first batch gave 9/12 treatment against 11/12 control.  Not
+     significant at n=12, not the 1-in-4 collapse of the earlier attempt, but
+     the direction is unfavourable and n=24 per arm can actually measure it.
+     A change that halves retrains and costs connects is not obviously a win.
+
+UNCHANGED FROM THE FIRST BATCH, deliberately, so the two are comparable:
+  arms      control DSPLIB_V34_RRN_ON_BADBLOCK=0, treat =1
+  far ends  1901 (SupraExpress) and 1902 (USR Courier)
+  order     arms INTERLEAVED within each far end
+  binary    d-modem-jb for BOTH arms; one environment variable is the only
+            difference between them
+  slmodemd  claude_re/build/hybrid-fit/slmodemd-fit
+  harness   testbench/ab149.sh, the SAME script, parameterised by REPS and TAG
+            rather than copied -- a second copy would drift and the comparison
+            would quietly stop being one
+  gating    quiet machine required before EVERY call, not just the first
+
+SECONDARY, reported but not decisive
+  * handshakes in a fixed 15 s window (kept for comparability with 1955)
+  * final rx bit rate, span-matched
+  * jbuf lost+empty per second of carrier
+
+ANALYSIS, fixed now
+  Exact permutation test, one-tailed (the prediction is directional: treatment
+  fewer handshakes than control), on handshakes per minute.  Connect success by
+  Fisher exact, two-tailed -- there is no directional prediction there and a
+  gain would be as interesting as a loss.
+
+WHAT WOULD MAKE ME ABANDON THE CHANGE
+  * connect success significantly below control, or
+  * handshakes/min not lower in treatment at p < 0.05 with n=24 per arm.
+    At this sample size a null is a real answer, not an underpowered one, and
+    it should be reported as such rather than re-scored until something moves.
+
+WHAT THIS BATCH CANNOT DO
+  Settle whether the RATE improves.  Rate is confounded by far end (1902 sits
+  at 28800 in both arms with no headroom) and by call duration.  Handshake rate
+  is the mechanism under test; rate is downstream of it and of much else.

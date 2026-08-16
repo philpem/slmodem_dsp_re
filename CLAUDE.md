@@ -20,6 +20,16 @@ hard failure whatever build it came from — never a tolerance to widen.
 
 Run `make phase`, not `make test`.
 
+**IT IS A RULE ABOUT `src/`, AND `testbench/` IS NOT `src/`.** The harness is
+measurement apparatus -- it places calls, records both ends, and analyses what
+came back. There is no blob to be differentially identical to, so the rule
+cannot apply to it and must not be read as forbidding a commit there. What
+DOES apply is the discipline those tools were built under and which cost more
+to learn: a detector must report its denominator, and a tool that prints
+nothing is indistinguishable from a tool that is broken (findings 134, 2400,
+2401). Show a new analysis firing on a known input before trusting a clean
+run from it.
+
 ## Budget your turns, not your reading
 
 Finding 220 measured this, so it is not a guess. **Context growth is

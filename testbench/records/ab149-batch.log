@@ -1,0 +1,60 @@
+ab149: 24 calls, 6/arm/far-end, interleaved.  binary slmodemd-fit
+ab149: waiting for a quiet machine (load<3.00, no busy process)...
+[1/24] ab149-1901-a0-1  (arm=0 dest=1901 00:20:06)
+CONNECT 115200 CONNECT 14400 
+[2/24] ab149-1901-a1-1  (arm=1 dest=1901 00:23:13)
+
+[3/24] ab149-1901-a0-2  (arm=0 dest=1901 00:28:41)
+CONNECT 115200 CONNECT 7200 
+  (machine busy again, resetting)
+  (machine busy again, resetting)
+[4/24] ab149-1901-a1-2  (arm=1 dest=1901 00:31:39)
+CONNECT 115200 CONNECT 14400 
+[5/24] ab149-1901-a0-3  (arm=0 dest=1901 00:34:36)
+
+[6/24] ab149-1901-a1-3  (arm=1 dest=1901 00:44:35)
+CONNECT 115200 CONNECT 14400 
+  (machine busy again, resetting)
+  (machine busy again, resetting)
+[7/24] ab149-1901-a0-4  (arm=0 dest=1901 00:47:53)
+CONNECT 115200 CONNECT 4800 
+[8/24] ab149-1901-a1-4  (arm=1 dest=1901 00:50:20)
+CONNECT 115200 CONNECT 14400 
+[9/24] ab149-1901-a0-5  (arm=0 dest=1901 00:53:33)
+CONNECT 115200 CONNECT 12000 
+  (machine busy again, resetting)
+[10/24] ab149-1901-a1-5  (arm=1 dest=1901 00:56:30)
+
+[11/24] ab149-1901-a0-6  (arm=0 dest=1901 00:58:38)
+CONNECT 115200 CONNECT 14400 
+[12/24] ab149-1901-a1-6  (arm=1 dest=1901 01:02:11)
+CONNECT 115200 CONNECT 14400 
+[13/24] ab149-1902-a0-1  (arm=0 dest=1902 01:05:35)
+CONNECT 24000 CONNECT 24000 
+[14/24] ab149-1902-a1-1  (arm=1 dest=1902 01:08:14)
+CONNECT 28800 CONNECT 12000 
+[15/24] ab149-1902-a0-2  (arm=0 dest=1902 01:10:51)
+CONNECT 28800 CONNECT 12000 
+[16/24] ab149-1902-a1-2  (arm=1 dest=1902 01:13:38)
+CONNECT 28800 CONNECT 12000 
+[17/24] ab149-1902-a0-3  (arm=0 dest=1902 01:16:05)
+CONNECT 28800 CONNECT 14400 
+[18/24] ab149-1902-a1-3  (arm=1 dest=1902 01:18:23)
+CONNECT 28800 CONNECT 9600 
+  (machine busy again, resetting)
+[19/24] ab149-1902-a0-4  (arm=0 dest=1902 01:21:00)
+CONNECT 28800 CONNECT 24000 
+[20/24] ab149-1902-a1-4  (arm=1 dest=1902 01:23:37)
+CONNECT 28800 CONNECT 14400 
+[21/24] ab149-1902-a0-5  (arm=0 dest=1902 01:25:54)
+CONNECT 28800 CONNECT 12000 
+  (machine busy again, resetting)
+  (machine busy again, resetting)
+  (machine busy again, resetting)
+[22/24] ab149-1902-a1-5  (arm=1 dest=1902 01:29:32)
+
+[23/24] ab149-1902-a0-6  (arm=0 dest=1902 01:31:42)
+CONNECT 28800 CONNECT 28800 
+[24/24] ab149-1902-a1-6  (arm=1 dest=1902 01:34:03)
+CONNECT 28800 CONNECT 12000 
+ab149: DONE 2026-08-14T01:35:55+01:00

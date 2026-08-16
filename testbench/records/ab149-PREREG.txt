@@ -1,0 +1,72 @@
+PRE-REGISTRATION -- #149 bad-block-run threshold, bench A/B
+Written 2026-08-13 before any call of this batch was placed.
+
+WHY PRE-REGISTER.  Nine mechanisms have been proposed in this investigation
+and seven withdrawn, several of them mine, and two were withdrawn only because
+a metric chosen after seeing the data turned out to be p=0.05 post-hoc on n=9
+(1945).  The outcome, the window and the exclusion rule are fixed here, before
+the data exists, so that cannot happen again.
+
+THE CHANGE UNDER TEST
+  v34hshak.c:10096, gated on DSPLIB_V34_RRN_ON_BADBLOCK:
+
+      if (dsplib_v34_rrn_on_badblock
+          && !(T3C_RX(obj)->flags & 0x40)
+          && dp_rxget(obj, DP_RX_BAD) <= (short)((int)obj->baud_rate * 3))
+              dp_rxput(obj, DP_RX_BAD, 0);
+
+  It raises the FULL RETRAIN's threshold above the §11.6 renegotiation's, so
+  the cheap recovery (2-3 s) gets first refusal and the expensive one (~10 s)
+  becomes the fallback.  Today the ladder is inverted: the retrain fires at
+  DP_RX_BAD > baud_rate>>1 and the renegotiation at > 2*baud_rate, so the
+  expensive response needs a QUARTER of the evidence the cheap one does
+  (1933/1934).  The far end's own request (flag 0x40) is exempt and still
+  retrains immediately.
+
+ARMS         control  DSPLIB_V34_RRN_ON_BADBLOCK=0   (ladder as it ships)
+             treat    DSPLIB_V34_RRN_ON_BADBLOCK=1
+
+DESIGN       6 calls per arm per far end, far ends 1901 (SupraExpress) and
+             1902 (USR Courier) = 24 calls, 12 per arm.
+             INTERLEAVED control/treat within each far end, so any drift over
+             the batch (line, ATA, thermal, time of night) hits both arms
+             equally.  Batch order is fixed here and not changed afterwards.
+             Binary: d-modem-jb for BOTH arms -- it carries JBSTAT, so the
+             arms differ by one environment variable and nothing else.
+             slmodemd: claude_re/build/hybrid-fit/slmodemd-fit, relinked
+             2026-08-13 with tools/hybrid_link.sh (the previous binary was an
+             hour older than the source it was supposed to be testing).
+
+PRIMARY OUTCOME (fixed now, one only)
+  Handshakes in a FIXED 45 s window from the first "V34 bulk delay
+  estimation", counted from the BLOB's own string, on calls with >=45 s of
+  carrier.  This is 1947's metric and nothing else will be substituted.
+  Prediction if the change works: treat < control.
+
+SECONDARY, reported but not decisive
+  * final rx bit rate, from V34DATARATE "finally ... rxbitrate", span-matched
+  * connect success (the 1932 regression showed up here, not in rates)
+  * jbuf lost+empty per second of carrier, from JBSTAT
+
+THE KEYSTONE, same calls, no extra bench time
+  row.sh now writes a BENCHANCHOR line giving wall clock at slmodemd's start,
+  so slmodemd's relative <t> stamps and pjmedia's wall-clock JBSTAT stamps can
+  finally be put on one timeline.  Question: do jitter-buffer underruns
+  cluster before retrains, against the call's own base rate as the null?
+  A ratio near 1 means underruns are simply common and any clustering is an
+  artefact -- which is how the tap-drift and overshoot hypotheses died (1918).
+
+EXCLUSIONS, decided now
+  * Any call where the machine was not quiet is DISCARDED, not analysed.  The
+    batch gates on this before every call.  A call placed with a game running
+    returned CONNECT 4800 against 31200 quiet on the same far end (1951).
+  * Calls with <45 s of carrier are excluded from the primary outcome (the
+    window cannot be counted) but ARE counted in connect success.
+  * Rate is read from the .dte capture, never from the .origin.log -- slmodemd
+    logs "result: 1 (CONNECT)" and drops the speed, which once made a working
+    sweep look like total failure.
+
+WHAT WOULD MAKE ME ABANDON THE CHANGE
+  Connect success materially below control.  1932's attempt gave 1 connect in
+  4; that is the failure mode to watch, and it is checked FIRST, before any
+  rate or handshake number is looked at.
