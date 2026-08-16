@@ -16,6 +16,8 @@
 #include "dsplib/v22tab.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_tone.h"
+#include "dsplib/v22fp.h"
 
 extern const struct fpm_agc_cfg ref_AGCv22_CFG;
 extern const struct fpm_agc_cfg ref_AGCv22_CFG2;
@@ -128,13 +130,23 @@ main(void)
 		    ref_AGCv22_CFG.beta == ref_AGCv22_CFG2.beta, 0);
 	rc |= diff_end();
 
-	/* --- the untyped blocks ---------------------------------------- */
+	/*
+	 * --- the three blocks that used to be untyped ------------------
+	 *
+	 * Compared as WORDS, which is deliberate.  `V22FP_create` is what
+	 * gives these types, and the type is a claim about which field is
+	 * where; the bytes are a separate claim and this is the one that
+	 * checks them.  A cast rather than a member-by-member comparison, so
+	 * that a field added or resized in either struct still fails here.
+	 */
 
-	rc |= cmp_words("TONEv22_CFG", TONEv22_CFG, ref_TONEv22_CFG,
+	rc |= cmp_words("TONEv22_CFG", (const short *)&TONEv22_CFG,
+			ref_TONEv22_CFG,
 			V22_TONE_CFG_WORDS);
-	rc |= cmp_words("TONEv22INIT_CFG", TONEv22INIT_CFG,
+	rc |= cmp_words("TONEv22INIT_CFG", (const short *)&TONEv22INIT_CFG,
 			ref_TONEv22INIT_CFG, V22_TONE_CFG_WORDS);
-	rc |= cmp_words("V22_CFG", V22_CFG, ref_V22_CFG, V22_CFG_WORDS);
+	rc |= cmp_words("V22_CFG", (const short *)&V22_CFG, ref_V22_CFG,
+			V22_CFG_WORDS);
 
 	/*
 	 * Asserted rather than assumed: the two tone configurations are the
