@@ -187,6 +187,31 @@ wire(void)
 	cdB->constelTable = (short (*)[128])tblB;
 }
 
+/*
+ * ALL ELEVEN ARE READ-ONLY ON `this`, and that is a negative claim, so it is
+ * asserted rather than assumed.  The two sides cannot be compared against
+ * each other -- they hold different collaborator addresses on purpose -- so
+ * each is compared against its OWN state before the call.
+ */
+static unsigned char snapA[sizeof(V90ConstellationDesigner)];
+static unsigned char snapB[sizeof(V90ConstellationDesigner)];
+
+static void
+snap_this(void)
+{
+	memcpy(snapA, cdAbuf, sizeof(snapA));
+	memcpy(snapB, cdBbuf, sizeof(snapB));
+}
+
+static void
+check_this(long input)
+{
+	diff_eq_obj("ours leaves `this` alone", V90ConstellationDesigner,
+		    cdAbuf, snapA, input);
+	diff_eq_obj("the blob leaves `this` alone", V90ConstellationDesigner,
+		    cdBbuf, snapB, input);
+}
+
 /* Fill both mapping blocks identically with varied bytes. */
 static void
 fill_mp(unsigned s)
@@ -220,9 +245,14 @@ run_arith(void)
 	int i;
 	int j;
 	int k;
+	int seenZeroK = 0;
+	int seenNonZeroK = 0;
+	int seenExact = 0;
+	int seenShort = 0;
 
 	diff_begin("V90ConstellationDesigner arithmetic leaves");
 	wire();
+	snap_this();
 
 	/* pow6: x^6 as a float, over the whole short range's interesting end. */
 	for (i = 0; i < (int)(sizeof(pw) / sizeof(pw[0])); i++) {
@@ -299,6 +329,10 @@ run_arith(void)
 		gi = our_maxK(cdA, &mpA);
 		ri = ref_maxK(cdB, &mpB);
 		diff_eq_int("maxK trial %ld", gi, ri, i);
+		if (gi == 0)
+			seenZeroK++;
+		else
+			seenNonZeroK++;
 
 		diff_eq_obj("realK/maxK read only", V90MappingParams,
 			    &mpA, &mpB, i);
@@ -323,6 +357,78 @@ run_arith(void)
 		diff_eq_int("calcMtoMatchKtarget trial %ld", g, r, i);
 	}
 
+	/*
+	 * THE TWO FUDGES, MADE VISIBLE.  `realK` adds 1e-9f and `maxK` adds
+	 * 1e-6f before truncating, and neither can change an answer over the
+	 * sweep above: at K near 40 an addition of 1e-9 rounds away entirely,
+	 * and 1e-6 only matters when the quotient lands just under an integer.
+	 *
+	 * All six sizes 1 makes the product 1, log2 of it 0, and `realK`'s
+	 * 1e-9f the WHOLE return value.  Products that are exact powers of two
+	 * are where `maxK`'s quotient lands on an integer boundary, which is
+	 * the only place its 1e-6f can decide anything, so 2^1 through 2^48 are
+	 * swept with the exponent spread over the six sizes.
+	 */
+	fill_mp(0x7777u);
+	for (k = 0; k < 6; k++) {
+		mpA.constellationSize[k] = 1u;
+		mpB.constellationSize[k] = 1u;
+	}
+	diff_eq_float("realK of a unit product", our_realK(cdA, &mpA),
+		      ref_realK(cdB, &mpB), 1);
+	diff_eq_int("maxK of a unit product", our_maxK(cdA, &mpA),
+		    ref_maxK(cdB, &mpB), 1);
+
+	for (i = 1; i <= 48; i++) {
+		int left = i;
+		int gi;
+
+		fill_mp(0x2222u + (unsigned)i);
+		for (k = 0; k < 6; k++) {
+			int part = left / (6 - k);
+
+			left -= part;
+			mpA.constellationSize[k] = 1u << part;
+			mpB.constellationSize[k] = mpA.constellationSize[k];
+		}
+		diff_eq_float("realK of 2^%ld", our_realK(cdA, &mpA),
+			      ref_realK(cdB, &mpB), i);
+		gi = our_maxK(cdA, &mpA);
+		diff_eq_int("maxK of 2^%ld", gi, ref_maxK(cdB, &mpB), i);
+		/*
+		 * AND THE ANSWER ITSELF, because two sides agreeing on a wrong
+		 * exponent would still pass.  A product of exactly 2^i has
+		 * log2 exactly i, and the object returns i up to 21 and i-1
+		 * from 22 on: the 1e-6f is an ABSOLUTE correction applied to a
+		 * quotient whose error grows with the quotient, because the
+		 * divisor is log10(2) rounded to a float first.  D329.  What is
+		 * asserted here is that reading, not an intent -- and that both
+		 * regimes were reached, so the boundary is under test.
+		 */
+		diff_eq_int("maxK of 2^%ld is the exponent or one below",
+			    gi == i || gi == i - 1, 1, i);
+		if (gi == i)
+			seenExact++;
+		else
+			seenShort++;
+		seenNonZeroK++;
+	}
+
+	diff_eq_int("maxK returned the exponent %ld times", seenExact > 0, 1,
+		    seenExact);
+	diff_eq_int("maxK returned one below it %ld times", seenShort > 0, 1,
+		    seenShort);
+
+	/*
+	 * Both arms of the zero test were reached, or the sweep proves only
+	 * that two sides agree about one of them (findings 149, 223).
+	 */
+	diff_eq_int("the zero-product arm was reached %ld times",
+		    seenZeroK > 0, 1, seenZeroK);
+	diff_eq_int("the logarithm arm was reached %ld times",
+		    seenNonZeroK > 0, 1, seenNonZeroK);
+	check_this(0);
+
 	return diff_end();
 }
 
@@ -341,10 +447,17 @@ run_findindex(void)
 {
 	int shape;
 	int i;
+	int seenMin[6];
+	int seenMax[6];
 
 	diff_begin("V90ConstellationDesigner::find{Min,ConstelMax}ValueIndex");
 	wire();
+	snap_this();
 	fill_mp(0x0d0eu);
+	for (i = 0; i < 6; i++) {
+		seenMin[i] = 0;
+		seenMax[i] = 0;
+	}
 
 	for (shape = 0; shape < 46656; shape++) {
 		int v = shape % 729;
@@ -367,10 +480,14 @@ run_findindex(void)
 		g = our_findMin(cdA, &mpA);
 		r = ref_findMin(cdB, &mpB);
 		diff_eq_int("findMinValueIndex shape %ld", g, r, shape);
+		if (g >= 0 && g < 6)
+			seenMin[g]++;
 
 		g = our_findMax(cdA, &mpA);
 		r = ref_findMax(cdB, &mpB);
 		diff_eq_int("findConstelMaxValueIndex shape %ld", g, r, shape);
+		if (g >= 0 && g < 6)
+			seenMax[g]++;
 	}
 
 	/*
@@ -401,6 +518,17 @@ run_findindex(void)
 		r = ref_findMax(cdB, &mpB);
 		diff_eq_int("findConstelMaxValueIndex wide %ld", g, r, shape);
 	}
+
+	/*
+	 * EVERY ROW WON AT LEAST ONCE, in each direction.  Without this the
+	 * sweep would prove only that two sides agree, and two transposed arms
+	 * agree with each other perfectly well (findings 149, 223).
+	 */
+	for (i = 0; i < 6; i++) {
+		diff_eq_int("row %ld won the minimum", seenMin[i] > 0, 1, i);
+		diff_eq_int("row %ld won the maximum", seenMax[i] > 0, 1, i);
+	}
+	check_this(0);
 
 	return diff_end();
 }
@@ -452,6 +580,7 @@ run_spectral(void)
 
 	diff_begin("V90ConstellationDesigner::spectralDesign");
 	wire();
+	snap_this();
 
 	for (trial = 0; trial < 48; trial++) {
 		unsigned char *pa = (unsigned char *)parA;
@@ -513,6 +642,35 @@ run_spectral(void)
 			    &mpA, &mpB, conds[trial]);
 	}
 
+	/*
+	 * The limit fired and did not fire.  `shaperId` is the only computed
+	 * field, so a sweep in which the rate never bit would be testing five
+	 * copies and a constant.
+	 */
+	{
+		int clamped = 0;
+		int unclamped = 0;
+
+		fill_mp(0x1010u);
+		parA->SPECTRAL_SHAPER_ID = 40000;
+		parB->SPECTRAL_SHAPER_ID = 40000;
+		our_spectral(cdA, 30000u, 0);
+		ref_spectral(cdB, 30000u, 0);
+		diff_eq_obj("spectralDesign clamped", V90MappingParams,
+			    &mpA, &mpB, 30000);
+		if (mpA.shaperId == 30000u)
+			clamped++;
+		our_spectral(cdA, 50000u, 0);
+		ref_spectral(cdB, 50000u, 0);
+		diff_eq_obj("spectralDesign unclamped", V90MappingParams,
+			    &mpA, &mpB, 50000);
+		if (mpA.shaperId == 40000u)
+			unclamped++;
+		diff_eq_int("the rate limit fired", clamped, 1, 0);
+		diff_eq_int("the rate limit did not fire", unclamped, 1, 0);
+	}
+	check_this(0);
+
 	return diff_end();
 }
 
@@ -533,9 +691,12 @@ run_reconstruct(void)
 	int trial;
 	int k;
 	int i;
+	int seenDropped = 0;
+	int seenUntouched = 0;
 
 	diff_begin("V90ConstellationDesigner::reconstructInitialConditions");
 	wire();
+	snap_this();
 
 	for (trial = 0; trial < 64; trial++) {
 		unsigned char ucodeA[6];
@@ -573,14 +734,38 @@ run_reconstruct(void)
 			ucodeB[k] = ucodeA[k];
 		}
 
-		our_reconstruct(cdA, &mpA, ucodeA);
-		ref_reconstruct(cdB, &mpB, ucodeB);
+		{
+			unsigned int before[6];
+
+			for (k = 0; k < 6; k++)
+				before[k] = mpA.constellationSize[k];
+
+			our_reconstruct(cdA, &mpA, ucodeA);
+			ref_reconstruct(cdB, &mpB, ucodeB);
+
+			for (k = 0; k < 6; k++) {
+				if (mpA.constellationSize[k] != before[k])
+					seenDropped++;
+				else
+					seenUntouched++;
+			}
+		}
 
 		diff_eq_obj("reconstructInitialConditions", V90MappingParams,
 			    &mpA, &mpB, trial);
 		diff_eq_obj("the ucode is not written", unsigned char[6],
 			    ucodeA, ucodeB, trial);
 	}
+
+	/*
+	 * Both outcomes.  A sweep in which nothing was ever dropped would be
+	 * testing an empty loop on both sides and agreeing about it.
+	 */
+	diff_eq_int("a row was shortened %ld times", seenDropped > 0, 1,
+		    seenDropped);
+	diff_eq_int("a row was left alone %ld times", seenUntouched > 0, 1,
+		    seenUntouched);
+	check_this(0);
 
 	return diff_end();
 }
@@ -596,9 +781,12 @@ run_constelbuild(void)
 	int trial;
 	int which;
 	unsigned i;
+	int seenZero = 0;
+	int seenCounted = 0;
 
 	diff_begin("V90ConstellationDesigner::constelBuild");
 	wire();
+	snap_this();
 
 	for (trial = 0; trial < 96; trial++) {
 		reseed(0x4d2u + 97u * (unsigned)trial);
@@ -638,6 +826,10 @@ run_constelbuild(void)
 				r = ref_constelBuild(cdB, steps[s], which);
 				diff_eq_int("constelBuild(step %ld)", g, r,
 					    steps[s]);
+				if (g == 0)
+					seenZero++;
+				else
+					seenCounted++;
 			}
 		}
 
@@ -646,6 +838,12 @@ run_constelbuild(void)
 		diff_eq_obj("constelBuild leaves the mapping alone",
 			    V90MappingParams, &mpA, &mpB, trial);
 	}
+
+	diff_eq_int("constelBuild counted something %ld times",
+		    seenCounted > 0, 1, seenCounted);
+	diff_eq_int("constelBuild counted nothing %ld times",
+		    seenZero > 0, 1, seenZero);
+	check_this(0);
 
 	return diff_end();
 }
@@ -673,6 +871,11 @@ run_findnext(void)
 	int which;
 	int i;
 	int j;
+	int seenFound = 0;
+	int seenRanOff = 0;
+	int seenAlaw = 0;
+	int seenUlaw = 0;
+	int seenWalked = 0;
 
 	diff_begin("V90ConstellationDesigner::findNextUcodeToAdd");
 	wire();
@@ -711,6 +914,11 @@ run_findnext(void)
 		/* Both companding arms, alternating with the trial. */
 		cdA->word_2c = (trial & 1);
 		cdB->word_2c = cdA->word_2c;
+		/*
+		 * After the fields this trial sets, not before: the claim is
+		 * that the MEMBER leaves `this` alone, not that the test does.
+		 */
+		snap_this();
 
 		for (which = 0; which < 6; which++) {
 			unsigned char outA[4];
@@ -756,6 +964,16 @@ run_findnext(void)
 				diff_eq_obj("findNextUcodeToAdd out",
 					    unsigned char[4], outA, outB,
 					    starts[startcase]);
+				if (g)
+					seenFound++;
+				else
+					seenRanOff++;
+				if (cdA->word_2c != 0)
+					seenAlaw++;
+				else
+					seenUlaw++;
+				if (outA[0] != starts[startcase])
+					seenWalked++;
 			}
 		}
 
@@ -768,6 +986,21 @@ run_findnext(void)
 		diff_eq_obj("findNextUcodeToAdd leaves the mapping alone",
 			    V90MappingParams, &mpA, &mpB, trial);
 	}
+
+	/*
+	 * Every outcome, or this is a sweep in which both sides said no.  The
+	 * return is `(signed char)i >= 0`, so a run that never went off the end
+	 * would never see 0, and one that always did would never see 1.
+	 */
+	diff_eq_int("the walk stopped inside the row %ld times",
+		    seenFound > 0, 1, seenFound);
+	diff_eq_int("the walk ran off the row %ld times",
+		    seenRanOff > 0, 1, seenRanOff);
+	diff_eq_int("the A-law arm ran %ld times", seenAlaw > 0, 1, seenAlaw);
+	diff_eq_int("the u-law arm ran %ld times", seenUlaw > 0, 1, seenUlaw);
+	diff_eq_int("the walk actually advanced %ld times",
+		    seenWalked > 0, 1, seenWalked);
+	check_this(0);
 
 	return diff_end();
 }

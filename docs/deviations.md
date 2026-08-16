@@ -6224,3 +6224,19 @@ make both builds agree and would be papering over a compiler divergence in
 `src/`, so the assignment stands and `t_v90cdesign.cpp` excludes exactly that
 one encoding from its fill -- the eight fields are read by
 `Vparser_read_float` from a configuration file and cannot hold one.
+
+## D329 🐛 `maxK` returns one less than the exponent from 2^22 upwards
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams`
+(blob 0x47a10) at 0x47a94..0x47ac6. **Reachability: a constellation-size
+product of 2^22 or more.** **Observability: a K one below the true base-2
+logarithm.** Status: verified over 2^1..2^48 by `t_v90cdesign.cpp`, both sides
+agreeing at every exponent. Fix class: none proposed; reproduced as found.*
+
+The divisor `log10(2)` reaches memory as a float before the divide while the
+dividend keeps the register's full precision, so the quotient carries a
+relative error of a few times 1e-8. The `fadds` correction that follows is
+1e-6f, an absolute quantity, and truncation is toward zero — so the correction
+covers the error up to K = 21 and stops covering it at 22. `realK` returns a
+float and truncates nothing, so its own 1e-9f never matters (D327). Finding
+2149.

@@ -55065,7 +55065,18 @@ accumulator and once as the numerator of the reciprocal. Written that way, the
 differential test passed at the first attempt over eighty-eight inputs
 including multipliers above 2^31.
 
-Do not "simplify" this to a division. The test is exact and it will fail.
+**The differential tier cannot see the difference, and that was measured.**
+Flipping the source to a plain `/ l2` and re-running `t_v90cdesign.cpp` passes
+all 496 arithmetic checks: over eighty-eight multiplier-and-coefficient
+combinations including multipliers above 2^31, the two spellings round to the
+same float. So the reason to keep the reciprocal is the CODEGEN tier and only
+that, and the earlier version of this finding -- which ended "the test is exact
+and it will fail" -- was an assumption stated as a measurement and is
+withdrawn.
+
+That is the argument for the second tier in one line. The tie-break in 2147
+was mutated the same way and the differential test caught it 22,273 times over;
+this one it cannot catch at all.
 
 ### 2145. THE FLOAT-TO-INTEGER CONVERSIONS IN THIS CLASS ARE `unsigned int`, AND THE ENCODING SAYS SO
 
@@ -55140,3 +55151,98 @@ displacement and nothing in the object distinguishes them, so the header
 records the displacement and declines the row count. Nothing writes the field
 anywhere in the object either (2141), so there is no assignment to type it
 from.
+
+### 2149. `maxK`'S CORRECTION IS ABSOLUTE AND ITS ERROR IS RELATIVE, SO IT STOPS WORKING AT 2^22
+
+`maxK` computes `log10(prod) / (float)log10(2) + 1e-6f` and truncates toward
+zero. The divisor reaches memory as a FLOAT before the divide -- one
+`fstps`/`flds` pair -- while the dividend stays at the register's full
+precision, so the quotient carries a RELATIVE error of a few times 1e-8. The
+correction added to it is ABSOLUTE.
+
+Sweeping products that are exact powers of two, with the exponent spread over
+the six constellation sizes, the object returns
+
+    2^1 .. 2^21    the exponent
+    2^22 .. 2^48   the exponent MINUS ONE
+
+and our reconstruction agrees with it everywhere. 21 is where a relative error
+of ~4.5e-8 first exceeds 1e-6/K. Nothing in the object calls `maxK` (2141), so
+whether a real constellation product ever reaches 2^22 is not knowable from
+here; D329 records it.
+
+The test asserts the reading rather than the intent -- `gi == i || gi == i-1`,
+plus an assertion that BOTH regimes were reached -- because "maxK of 2^i is i"
+is what a reader expects and is not what either side does.
+
+### 2150. TWO MUTATIONS, ONE CAUGHT AND ONE INVISIBLE, AND THAT IS THE SHAPE OF THE TWO TIERS
+
+CLAUDE.md's rule for `extcheck` -- a tool that reports a negative must be shown
+to fire -- applies to a test as much as to a tool, so the two claims this batch
+leans on hardest were mutated and re-run.
+
+  `findMinValueIndex`'s tie-break, `len > bestLen` flipped to `<`:
+      FAIL, 22,273 of 94,350 checks. The 3^6 x 2^6 shape sweep sees it.
+
+  `calcK`'s `* (1.0f / l2)` flipped to `/ l2`:
+      PASS, all 496 arithmetic checks. The differential tier cannot see it.
+
+The second is the more useful result. It is a real difference -- the object
+divides one by the logarithm and multiplies, and the source's two `1.0f` are
+what produced `fld1; fld %st(0)` -- and no black-box test over this input
+domain distinguishes it. That is precisely the question `make similarity`
+answers and the differential tier does not, and it is why finding 2144 no
+longer claims the test would catch it.
+
+Both mutations were reverted; neither is in the tree.
+
+### 2151. THE CODEGEN TIER FOUND TWO THINGS NO TEST COULD, AND BOTH WERE ONE WORD
+
+Per-symbol comparison of the eleven small members against the blob, built with
+the period compiler, before and after acting on what it reported:
+
+    symbol                        before          after
+    pow6                          IDENTICAL       IDENTICAL
+    realK                         -96 bytes       IDENTICAL
+    findMinValueIndex             86 = 86, one    IDENTICAL
+                                  mnemonic apart
+    findConstelMaxValueIndex      86 = 86         IDENTICAL
+    maxK                          -98 bytes       +2
+    spectralDesign                -5              same size, one mov
+                                                  scheduled apart
+    calcK                         -2              -2
+    constelBuild                  +1              +1
+    calcMtoMatchKtarget           215 = 215       215 = 215
+    findNextUcodeToAdd            +6              +6
+    reconstructInitialConditions  +13             +13
+
+**The 96 bytes were a helper that did not inline.** `realK` and `maxK` share a
+six-term product and it was factored into a `static` function; GCC 3.4.2 left
+it out of line, so both members came out ~96 bytes short and the object grew a
+`_Z21constellation_productP16V90MappingParams` the blob has no counterpart
+for. That is CLAUDE.md's inlining-boundary trap seen from the inside: the
+differential tier passed throughout, and the per-symbol byte gap was the only
+thing that showed it. It is a macro now, and `realK` is byte-for-byte
+identical in mnemonics.
+
+**The one mnemonic was a loop counter's signedness.** `findMinValueIndex` ended
+`cmp $0x5,%edx; jle` where the blob has `jbe`, from `int i` against the
+object's unsigned. No value either function can be given distinguishes the two
+readings, which is finding 613's shape exactly, and both members went to
+identical the moment the counter became `unsigned int`.
+
+**And one was statement order, acted on because it was cheap.** `spectralDesign`
+read `params` and `mappingParams` into locals before the branch; the object
+reloads both inside each arm. Writing the members directly took it from -5
+bytes to the same size and the same 44 instructions -- NOT to identical: one
+`mov` is still scheduled across the `cmp`, which is the free kind and is left
+alone. Do not quote this row as a match.
+
+What is NOT chased, per finding 1991 and this batch's brief: `maxK` and `calcK`
+differ from the blob only in the ORDER of the two logarithm expansions and in
+`fxch`/`fdivrp` placement -- the same instructions, +2 and -2 bytes.
+`constelBuild` loads with `movswl` where the blob loads `movzwl`, which is
+finding 614's free kind and not 613's: the 32-bit result feeds a 16-bit compare
+and then an add that is immediately truncated, so the upper half is dead both
+times, and `unsigned short` would change the comparison's signedness and break
+the differential test.

@@ -242,18 +242,21 @@ V90ConstellationDesigner::calcK(unsigned int m, float *f)
 }
 
 /*
- * The product of the six constellation sizes, as a float.  Shared by `realK`
- * and `maxK`, which the object spells out separately -- both are six
- * `fildll`s and five `fmulp`s, left to right, with every size converted as
- * UNSIGNED.
+ * The product of the six constellation sizes, as a float: six `fildll`s and
+ * five `fmulp`s, left to right, with every size converted as UNSIGNED.
+ *
+ * IT IS A MACRO AND NOT A FUNCTION, and that is measured rather than a style
+ * choice.  `realK` and `maxK` each spell the product out in full in the
+ * object, and there is no helper symbol anywhere in the blob.  Written as a
+ * `static` function here it did NOT inline under GCC 3.4.2 -- the two members
+ * came out 82 and 106 bytes against the object's 178 and 204, with the
+ * missing ~96 sitting in a symbol the blob has no counterpart for, which is
+ * CLAUDE.md's inlining-boundary trap exactly.
  */
-static float
-constellation_product(V90MappingParams *p)
-{
-	return (float)p->constellationSize[0] * p->constellationSize[1]
-	     * p->constellationSize[2] * p->constellationSize[3]
-	     * p->constellationSize[4] * p->constellationSize[5];
-}
+#define CONSTELLATION_PRODUCT(p) \
+	((float)(p)->constellationSize[0] * (p)->constellationSize[1] \
+	 * (p)->constellationSize[2] * (p)->constellationSize[3] \
+	 * (p)->constellationSize[4] * (p)->constellationSize[5])
 
 /*
  * realK -- the same K as a float, with a zero product answered by zero.
@@ -265,7 +268,7 @@ constellation_product(V90MappingParams *p)
 float
 V90ConstellationDesigner::realK(V90MappingParams *p)
 {
-	float prod = constellation_product(p);
+	float prod = CONSTELLATION_PRODUCT(p);
 	float lp;
 	float l2;
 
@@ -293,7 +296,7 @@ V90ConstellationDesigner::realK(V90MappingParams *p)
 int
 V90ConstellationDesigner::maxK(V90MappingParams *p)
 {
-	float prod = constellation_product(p);
+	float prod = CONSTELLATION_PRODUCT(p);
 	float l2;
 
 	if (prod == 0.0f)
@@ -359,7 +362,7 @@ V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
 	unsigned int bestLen = p->constellationSize[0];
 	unsigned int bestVal = p->constellation[0][0];
 	int best = 0;
-	int i;
+	unsigned int i;
 
 	for (i = 1; i <= 5; i++) {
 		unsigned int v = p->constellation[i][0];
@@ -387,7 +390,7 @@ V90ConstellationDesigner::findConstelMaxValueIndex(V90MappingParams *p)
 	unsigned int bestLen = p->constellationSize[0];
 	unsigned int bestVal = p->constellation[0][0];
 	int best = 0;
-	int i;
+	unsigned int i;
 
 	for (i = 1; i <= 5; i++) {
 		unsigned int v = p->constellation[i][0];
@@ -425,30 +428,28 @@ void
 V90ConstellationDesigner::spectralDesign(unsigned int rate,
 					 V90SpecialSpectralConditions cond)
 {
-	V90Parameters *p = params;
-	V90MappingParams *mp = mappingParams;
 	unsigned int id;
 
 	if (cond == V90_SPECTRAL_GERMAN_PBX) {
-		id = (unsigned int)p->GERMAN_PBX_SPECTRAL_SHAPER_ID;
+		id = (unsigned int)params->GERMAN_PBX_SPECTRAL_SHAPER_ID;
 		if (id > rate)
 			id = rate;
-		mp->shaperId = id;
-		mp->shaperA1 = p->GERMAN_PBX_SPECTRAL_SHAPER_A1;
-		mp->shaperSR = p->GERMAN_PBX_SPECTRAL_SHAPER_SR;
-		mp->shaperA2 = p->GERMAN_PBX_SPECTRAL_SHAPER_A2;
-		mp->shaperB1 = p->GERMAN_PBX_SPECTRAL_SHAPER_B1;
-		mp->shaperB2 = p->GERMAN_PBX_SPECTRAL_SHAPER_B2;
+		mappingParams->shaperId = id;
+		mappingParams->shaperA1 = params->GERMAN_PBX_SPECTRAL_SHAPER_A1;
+		mappingParams->shaperSR = params->GERMAN_PBX_SPECTRAL_SHAPER_SR;
+		mappingParams->shaperA2 = params->GERMAN_PBX_SPECTRAL_SHAPER_A2;
+		mappingParams->shaperB1 = params->GERMAN_PBX_SPECTRAL_SHAPER_B1;
+		mappingParams->shaperB2 = params->GERMAN_PBX_SPECTRAL_SHAPER_B2;
 	} else {
-		id = (unsigned int)p->SPECTRAL_SHAPER_ID;
+		id = (unsigned int)params->SPECTRAL_SHAPER_ID;
 		if (id > rate)
 			id = rate;
-		mp->shaperId = id;
-		mp->shaperA1 = p->SPECTRAL_SHAPER_A1;
-		mp->shaperSR = p->SPECTRAL_SHAPER_SR;
-		mp->shaperA2 = p->SPECTRAL_SHAPER_A2;
-		mp->shaperB1 = p->SPECTRAL_SHAPER_B1;
-		mp->shaperB2 = p->SPECTRAL_SHAPER_B2;
+		mappingParams->shaperId = id;
+		mappingParams->shaperA1 = params->SPECTRAL_SHAPER_A1;
+		mappingParams->shaperSR = params->SPECTRAL_SHAPER_SR;
+		mappingParams->shaperA2 = params->SPECTRAL_SHAPER_A2;
+		mappingParams->shaperB1 = params->SPECTRAL_SHAPER_B1;
+		mappingParams->shaperB2 = params->SPECTRAL_SHAPER_B2;
 	}
 }
 
@@ -522,6 +523,16 @@ V90ConstellationDesigner::constelBuild(short step, short which)
 	for (i = params->unnamed_360;
 	     i <= mp->constellation[which][0];
 	     i++) {
+		/*
+		 * THE OBJECT LOADS THIS WITH `movzwl` AND WE EMIT `movswl`,
+		 * and that is the FREE kind of extension (finding 614), not
+		 * finding 613's forced kind: the 32-bit result never survives.
+		 * It feeds a 16-bit compare (`cmp %bp,%bx`) and then an add
+		 * whose result is immediately truncated by `movswl %dx,%ebp`,
+		 * so the upper half is dead both times.  `short` is also what
+		 * the comparison needs -- it is SIGNED 16-bit (`jle`), which an
+		 * `unsigned short` promoted to `int` would not give.
+		 */
 		short v = tbl[which][i];
 
 		if (v > thresh && mark[which * 128 + i] != 0) {
