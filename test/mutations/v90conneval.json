@@ -952,7 +952,7 @@
   "replace": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tword_70 = 0;\n\treturn verdict;\n}"},
 
  {"label": "phase4: the replacement threshold's sign is the ordered test",
-  "why": "0x3fdb7 is `sbb %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` after `fldz`/`fcom`, so the character is 0x2d - 2*CF with the ZERO in %st(0) and an UNORDERED compare sets CF -- the object prints '+' for a NaN threshold.  Eighteen of this file's nineteen sign selects print `word_70` from inside `if (word_70 > thresh)`, whose `ja` is false for an unordered compare, so a NaN provably cannot reach them; this is the one site it can, through `params->unnamed_434`, and the block at tag 7500 is what drives it.  Finding 2410.",
+  "why": "0x3fdb7 is `sbb %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` after `fldz`/`fcom`, so the character is 0x2d - 2*CF with the ZERO in %st(0) and an UNORDERED compare sets CF -- the object prints '+' for a NaN threshold.  Eighteen of this file's nineteen sign selects are not driven -- nine of them provably, being inside `if (word_70 > thresh)` whose `ja` is false for an unordered compare, and nine untraced.  This is the one a NaN demonstrably reaches, through `params->unnamed_434`, and the block at tag 7500 is what drives it.  Finding 2410.",
   "find": "\t\t\t\t\t\t    !(0.0f >= t) ? '+' : '-',",
   "replace": "\t\t\t\t\t\t    (0.0f < t) ? '+' : '-',"}
 ]

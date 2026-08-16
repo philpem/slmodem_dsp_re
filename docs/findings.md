@@ -56753,14 +56753,14 @@ the source is `!(0.0f >= v) ? '+' : '-'`.  The tree had `(0.0f < v) ? '+' :
 '-'`, which compiles to `flds`/`fcomps`/`ja` -- a BRANCH, and `ja` is false
 for an unordered compare, so it prints '-' where the object prints '+'.  The
 two agree on every other float there is.  This is `ADID_PRINT_SIGN`'s reading
-(2300) at 25 further sites; the ten-spelling A/B that established it was not
+(2300) at 24 further sites, 26 of the object's; the ten-spelling A/B that established it was not
 repeated.
 
 **SO IT IS A CHANGE OF BEHAVIOUR AS WELL AS OF CODEGEN**, which 2300's
 operand-order half was not, and it therefore needed the differential tier
 rather than the codegen one.  **Both spellings passed every existing test**,
 measured before anything was written: no fixture in the tree drove an
-unordered value into any of the 25 sites.  Four fixtures were extended and
+unordered value into any of the 24 sites.  Four fixtures were extended and
 each was A/B'd by reverting the source under it:
 
 | fixture | drives | old spelling fails |
@@ -56785,17 +56785,40 @@ four-case switch having written nothing; the seed is on those four now, and
 2300's sibling names as an unsatisfiable schedule, in a different shape:
 a seed the code under test overwrites is a seed that proves nothing.
 
-**EIGHTEEN OF `V90ConnectionEvaluator`'s NINETEEN SITES ARE UNREACHABLE WITH
-A NaN, AND THAT IS CONTROL FLOW.**  Every `word_70` report is inside `if
-(word_70 > threshold)` -- `flds`/`fcoms`/`ja`, and `ja` is false for an
-unordered compare -- so an unordered average turns the printing arm off before
-it can reach the printer.  No fixture closes that; it is the shape of the
-object.  The nineteenth prints `t`, the replacement threshold read out of
+**SEVEN OF THE TWENTY-FOUR SITES ARE PINNED AND THE OTHER SEVENTEEN ARE NOT,
+which is the honest count and is worth stating rather than leaving implicit.**
+Pinned: the three in `V90Demodulator`, the three thresholds in
+`setConstellationToNoise`, and `evaluatePhase4`'s `t`.
+
+`setConstellationToNoise`'s FOURTH site prints `noiseEnergy`, the function's
+own argument, and `noisetab` in t_v90cdnoise.cpp is thirteen finite values --
+so that one is NOT pinned and the A/B's 240 + 48 failures are the three
+thresholds alone.  A NaN argument was NOT introduced for it: it feeds `(short)
+(noiseEnergy * 6.7762098f + 9.9f)` and the `dMinHighRates`/`dMinLowRates`
+comparisons, which is the same exposure t_v90conneval.cpp already declined at
+`evaluatePhase4`'s argument, and buying one sign character with an unordered
+value running through half a method is the trade that finding refused.
+
+**NINE OF `V90ConnectionEvaluator`'s NINETEEN SITES ARE PROVABLY UNREACHABLE
+WITH A NaN, AND NINE MORE ARE MERELY UNTESTED.**  The provable nine -- the
+four in `evaluatePhase3`, the three `word_70` ones in `evaluatePhase4` and the
+two in `evaluateConnection`'s retrain half -- are inside `if (word_70 >
+threshold)`, `flds`/`fcoms`/`ja`, and `ja` is false for an unordered compare,
+so an unordered average turns the printing arm off before it can reach the
+printer.  No fixture closes those; it is the shape of the object.
+
+THE OTHER NINE WERE NOT TRACED TO A DECISION and are recorded as untested
+rather than unreachable, which is a weaker claim and the one the evidence
+supports: two print `evaluatePhase4`'s ARGUMENT, three are under
+`evaluateConnection`'s verdict cases, and four are `ce_echo_rrn_debug` inlined
+at two call sites -- one behind `word_70 * scale > threshDown`, which a NaN
+does fail, and one behind the counters, which was not followed up.
+
+The nineteenth prints `t`, the replacement threshold read out of
 `params->unnamed_434`, whose gate is on the average and the counters and not
-on itself, and that one IS driven.  The other eighteen are verified in the
-codegen tier only, and the change to them is justified by the encoding rather
-than by a test.  Stated rather than left implicit, because "we changed 25
-sites and pinned 7" is the honest count.
+on itself, and that one IS driven.  The seventeen unpinned sites are verified
+in the codegen tier only, and the change to them is justified by the encoding
+rather than by a test.
 
 **COUNTS, BEFORE AND AFTER**, `sbb %r,%r` per function against the blob:
 

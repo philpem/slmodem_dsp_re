@@ -428,14 +428,24 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)
  * false for an unordered compare, which prints '-' where the object prints
  * '+'.  Findings 2300 and 2410.
  *
- * EIGHTEEN OF THE NINETEEN SITES CANNOT BE HANDED ONE, and that is control
- * flow rather than a gap in the fixture: every `word_70` report is inside `if
- * (word_70 > threshold)`, whose `ja` a NaN fails, so an unordered average
- * turns the arm off before it can be printed.  The nineteenth is the
- * replacement threshold `t` below, read out of `params->unnamed_434` and
- * gated on the average and the counters rather than on itself; t_v90conneval
- * drives an unordered one through it at tag 7500 and the mutation for it
- * dies there.  The other eighteen are verified in the codegen tier only.
+ * EIGHTEEN OF THE NINETEEN SITES ARE NOT DRIVEN, and for nine of them that is
+ * provable from the control flow rather than a gap in the fixture: the four in
+ * `evaluatePhase3`, the three `word_70` ones in `evaluatePhase4` and the two
+ * in `evaluateConnection`'s retrain half are all inside `if (word_70 >
+ * threshold)`, whose `ja` an unordered compare fails, so a NaN average turns
+ * the arm off before it can be printed.  The other nine were NOT traced to a
+ * decision and are recorded as untested rather than unreachable: two print
+ * `evaluatePhase4`'s ARGUMENT, which t_v90conneval declines to make unordered
+ * for a reason of its own (see its header); three are under `evaluateConnection`'s
+ * verdict cases, whose verdicts are chosen upstream; and four are
+ * `ce_echo_rrn_debug` inlined at two call sites, one of which is behind
+ * `word_70 * scale > threshDown` and the other behind the counters.
+ *
+ * The nineteenth is the replacement threshold `t` below, read out of
+ * `params->unnamed_434` and gated on the average and the counters rather than
+ * on itself; t_v90conneval drives an unordered one through it at tag 7500 and
+ * the mutation for it dies there.  The other eighteen are verified in the
+ * codegen tier only.
  *
  * THE MAGNITUDE TAKES ITS ABSOLUTE VALUE IN THE FLOAT DOMAIN.  `d9 e1`
  * (`fabs`) runs BEFORE the `fistpl`, so it is `(int)fabsf(v)` and not
