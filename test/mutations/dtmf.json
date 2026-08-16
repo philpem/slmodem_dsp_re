@@ -181,8 +181,8 @@
  },
  {
   "label": "dtmf_progress starts from -2 instead of -1",
-  "find": "\tshort result = DTMF_NO_DIGIT;\n\tint i;",
-  "replace": "\tshort result = DTMF_NOT_YET;\n\tint i;"
+  "find": "\tint result = DTMF_NO_DIGIT;\n\tint i;",
+  "replace": "\tint result = DTMF_NOT_YET;\n\tint i;"
  },
  {
   "label": "dtmf_set_easy clears the flag instead of setting it",

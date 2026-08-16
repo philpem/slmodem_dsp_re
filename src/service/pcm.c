@@ -192,18 +192,35 @@ static const unsigned char u2a_table[128] = {
 	113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128,
 };
 
+/*
+ * NO `& 0x7f` ON THE INDEX, and the object is what says so.  Each arm xors
+ * with a constant whose bit 7 MATCHES the arm's own test -- 0xd5 and 0xff
+ * where bit 7 is set, 0x55 and 0x7f where it is clear -- so the xor always
+ * clears bit 7 and the index is already 0..127 on every one of the 256
+ * inputs.  A mask there is therefore redundant over the whole domain, which
+ * is exactly why no test could ever see it and why the codegen tier had to:
+ *
+ *     blob:  movzbl %al,%eax        the unsigned char -> int conversion
+ *     ours:  and    $0x7f,%eax      the mask, and nothing else
+ *
+ * both three bytes, so the function stayed the right size while carrying an
+ * operation the original does not have.  This is finding 613's shape -- a
+ * difference the differential tier is structurally unable to reach -- and it
+ * is recorded as finding 2901.  Removing it leaves the indices unchanged and
+ * both tables are 128 entries, so nothing here goes out of bounds.
+ */
 unsigned char
 alaw2ulaw(unsigned char a_val)
 {
 	return (a_val & 0x80)
-		? (unsigned char)(0xff ^ a2u_table[(a_val ^ 0xd5) & 0x7f])
-		: (unsigned char)(0x7f ^ a2u_table[(a_val ^ 0x55) & 0x7f]);
+		? (unsigned char)(0xff ^ a2u_table[a_val ^ 0xd5])
+		: (unsigned char)(0x7f ^ a2u_table[a_val ^ 0x55]);
 }
 
 unsigned char
 ulaw2alaw(unsigned char u_val)
 {
 	return (u_val & 0x80)
-		? (unsigned char)(0xd5 ^ (u2a_table[(0xff ^ u_val) & 0x7f] - 1))
-		: (unsigned char)(0x55 ^ (u2a_table[(0x7f ^ u_val) & 0x7f] - 1));
+		? (unsigned char)(0xd5 ^ (u2a_table[0xff ^ u_val] - 1))
+		: (unsigned char)(0x55 ^ (u2a_table[0x7f ^ u_val] - 1));
 }

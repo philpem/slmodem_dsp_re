@@ -320,11 +320,29 @@ dtmf_detect(float x, struct dtmf *d, short mode)
 short
 dtmf_progress(struct dtmf *d, const float *samples, short count, short mode)
 {
-	short result = DTMF_NO_DIGIT;
+	/*
+	 * BOTH LOCALS ARE `int` AND THE OBJECT IS WHAT SAYS SO.  The `(short)`
+	 * narrowing is on the CALL, not on the variable, and the two readings
+	 * agree over every value `dtmf_detect` can return -- so no test can
+	 * separate them and the codegen tier had to.  Two instructions carry
+	 * it, and each is a byte's worth of the same claim:
+	 *
+	 *   blob:  cmp $0x1,%ecx           `digit` is int, so the promoted
+	 *   ours:  cmp $0x1,%cx            compare is 32-bit, not 16
+	 *
+	 *   blob:  movswl 0x18(%esp),%eax  `result` is int and the RETURN
+	 *   ours:  mov    0x18(%esp),%eax  type is short, so returning it
+	 *                                  truncates; a short `result` needs
+	 *                                  no re-extension and gets none
+	 *
+	 * The 0x66 prefix on the narrow compare pays for the byte the narrow
+	 * load saves, which is how this stayed the right size.  Finding 2901.
+	 */
+	int result = DTMF_NO_DIGIT;
 	int i;
 
 	for (i = 0; i < count; i++) {
-		short digit = (short)dtmf_detect(samples[i], d, mode);
+		int digit = (short)dtmf_detect(samples[i], d, mode);
 
 		if (digit != DTMF_NOT_YET && digit != DTMF_NO_DIGIT)
 			result = digit;
