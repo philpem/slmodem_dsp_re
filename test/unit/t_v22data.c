@@ -809,6 +809,17 @@ drive(struct dfix *f, short *data, int variant, struct model_out *o)
 }
 
 static int det_sep[NVARIANT];
+/*
+ * The buffer channel on its own.  det_sep[] is an OR over three channels and
+ * for variant 1 the RETURN channel is dead by construction, so det_sep[1]
+ * could be satisfied entirely by the diagnostic -- which the differential
+ * only compares on the trials that raise the level.  The claim being made is
+ * that the CLEAR separates a swapped pairing, so that is what is counted.
+ * Variants 2 and 3 have no independent claim here: 2 is a clear-gate change
+ * and separates only through the buffer anyway, and 3 is thresholds alone,
+ * whose buffer channel is empty by construction.
+ */
+static int det_sep_buf[NVARIANT];
 static int det_disagreed;
 static int det_true, det_false;
 static int det_a_over, det_b_over;
@@ -830,7 +841,7 @@ run_detect_one(const int *pat0, const int *pat1, unsigned s, int debug_on,
 	       long trial)
 {
 	struct model_out mo[NVARIANT];
-	int ra, rb, rv;
+	int ra, rb, rv, buf_differs;
 	int call, v, i;
 	long where;
 
@@ -915,10 +926,13 @@ run_detect_one(const int *pat0, const int *pat1, unsigned s, int debug_on,
 						    where);
 				continue;
 			}
+			buf_differs = memcmp(dbuf[2 + v], dbuf[0],
+					     DBLOCK * sizeof(short)) != 0;
 			if (rv != ra || mo[v].printed != mo[0].printed
-			    || memcmp(dbuf[2 + v], dbuf[0],
-				      DBLOCK * sizeof(short)) != 0)
+			    || buf_differs)
 				det_sep[v]++;
+			if (buf_differs)
+				det_sep_buf[v]++;
 		}
 
 		if (ra)
@@ -1051,6 +1065,8 @@ main(void)
 
 	diff_eq_int("the detector pairing separates (%ld)", det_sep[1] > 0, 1,
 		    det_sep[1]);
+	diff_eq_int("...and separates in the SAMPLE BUFFER (%ld)",
+		    det_sep_buf[1] > 0, 1, det_sep_buf[1]);
 	diff_eq_int("the clear hold separates (%ld)", det_sep[2] > 0, 1,
 		    det_sep[2]);
 	diff_eq_int("the > 2 threshold separates >= 2 (%ld)", det_sep[3] > 0,

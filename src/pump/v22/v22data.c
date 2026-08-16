@@ -108,12 +108,17 @@ ModDataV22(void *modem, const unsigned short *data, short *out,
  *
  * `data` IS AN OUTPUT AS WELL AS AN INPUT.  The AGC scales it in place, and
  * each sub-block is then zeroed unless the FIRST detector has already
- * returned zero twice running.  `fpm_mtd.h` records that a zero verdict is
- * FPM_MTD_ABSENT -- "there is signal, but not in this detector's band" -- so
- * the block is passed through only once the thing detector A watches has been
- * gone for two sub-blocks, and muted otherwise.  Which tone that is depends
- * on the coefficient bank the shared object was built with, and nothing
- * reconstructed builds it, so no more than that is claimed here.
+ * returned zero twice running.  `fpm_mtd.h` glosses a zero verdict as
+ * FPM_MTD_ABSENT -- there is signal, but not in this detector's band -- so
+ * the run advances only while SOMETHING is on the line that is not what
+ * detector A watches; silence answers NOSIGNAL, which is non-zero and resets
+ * the run instead.
+ *
+ * Measured through t_v22data.c's fixture, `MTDv22_CFG`'s detector answers
+ * zero at 2200 Hz and at no other frequency between 100 and 3900, so on that
+ * bank the mute lifts while a 2200 Hz tone is present.  What either detector
+ * is FOR is not established and is not claimed: the coefficient bank belongs
+ * to the shared object, which nothing reconstructed builds.
  *
  * ---------------------------------------------------------------------------
  * THE TWO COUNTERS ARE NOT INTERCHANGEABLE, THOUGH THE RETURN CANNOT SEE IT
