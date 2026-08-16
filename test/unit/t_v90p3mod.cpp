@@ -666,6 +666,7 @@ static int cov_trn1d_null, cov_jdnot_null;
 static int cov_dil_wrap, cov_dil_nowrap;
 static int cov_dil_segment, cov_dil_entry, cov_dil_negated;
 static int cov_seq1_wrap, cov_seq2_wrap, cov_dilindex_wrap;
+static int cov_zeropos_end, cov_zeropos_stay;
 static int cov_segindex8, cov_scr_restart;
 static int cov_sample_neg, cov_sample_pos;
 
@@ -861,6 +862,7 @@ cov_reset(void)
 	cov_dil_wrap = cov_dil_nowrap = 0;
 	cov_dil_segment = cov_dil_entry = cov_dil_negated = 0;
 	cov_seq1_wrap = cov_seq2_wrap = cov_dilindex_wrap = 0;
+	cov_zeropos_end = cov_zeropos_stay = 0;
 	cov_segindex8 = cov_scr_restart = 0;
 	cov_sample_neg = cov_sample_pos = 0;
 }
@@ -1076,6 +1078,45 @@ run_generate(int v92)
 		}
 
 		/*
+		 * THE SEGMENT THAT ENDS ON THE SYMBOL THAT STARTS IT.
+		 *
+		 * `dilSymbol` ends the segment when `segmentPos + 1` reaches
+		 * `segmentLength[segmentIndex]`, and in DIL_END ending it is
+		 * the whole of the terminating condition.  With a length of 1
+		 * that happens from a ZERO `segmentPos` -- the only route to
+		 * event code 6 that never passes through a non-zero position,
+		 * and one `prepare`'s own lengths (12..54) cannot reach, which
+		 * is why every DIL case above enters mid-segment.  Finding 2107
+		 * named this case; 2152 says what was actually there.
+		 *
+		 * A length of 2 from the same zero position is the control: the
+		 * segment does not end, so DIL_END must stay in DIL_END.
+		 */
+		for (k = 0; k < 4; k++) {
+			unsigned int s = (k & 1) ? P3M_STATE_DIL_END
+						 : P3M_STATE_DIL;
+			unsigned int i;
+
+			prepare(trial, mo, s);
+			ours.o.segmentIndex = theirs.o.segmentIndex =
+			    (unsigned char)(trial % 8);
+			for (i = 0; i < 8; i++)
+				ours.o.segmentLength[i] =
+				    theirs.o.segmentLength[i] =
+					(k & 2) ? 2u : 1u;
+			ours.o.segmentPos = theirs.o.segmentPos = 0;
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    100u + (unsigned int)trial;
+			drive(v92, (long)(285000 + trial * 10 + k));
+			if (s == P3M_STATE_DIL_END) {
+				if (k & 2)
+					cov_zeropos_stay = 1;
+				else
+					cov_zeropos_end = 1;
+			}
+		}
+
+		/*
 		 * Both sequence cursors one step from wrapping on their own
 		 * length, with the segment deliberately NOT ending -- the
 		 * segment wrap zeroes all three anyway, so it would hide the
@@ -1232,6 +1273,10 @@ run_generate(int v92)
 	diff_eq_int("seq1Index wrapped", cov_seq1_wrap, 1, 0);
 	diff_eq_int("seq2Index wrapped", cov_seq2_wrap, 1, 0);
 	diff_eq_int("dilIndex wrapped", cov_dilindex_wrap, 1, 0);
+	diff_eq_int("a segment ended from a zero position",
+		    cov_zeropos_end, 1, 0);
+	diff_eq_int("a segment did not end from a zero position",
+		    cov_zeropos_stay, 1, 0);
 	diff_eq_int("the segment search reached index 8", cov_segindex8, 1, 0);
 	diff_eq_int("the scrambler restarted", cov_scr_restart, 1, 0);
 	diff_eq_int("a symbol came out negative", cov_sample_neg, 1, 0);

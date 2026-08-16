@@ -54271,3 +54271,92 @@ says sarge "can bootstrap an exact GCC 3.4.2 from the GNU tarball" and its
 `apt-get install` line takes `gcc-3.4 g++-3.4` instead. Whoever quotes "the
 same compiler" should know it is the same MINOR VERSION and not the same
 build.)*
+
+### 2152. FINDING 2107 IS NOT A DEFECT IN `generateSymbol`. THE FIXTURE READ OFF THE END OF ITS OWN SLOT, AND THE TWO SIDES ARE TWO ALLOCATIONS
+
+2107 recorded that our `V90Phase3Modulator` and the blob's disagree at
+`DIL_END` with a zero `segmentPos` -- ours taking the TERMINATED transition
+and the blob's not -- and reasoned to `dilSymbol`'s effect on `segmentPos`
+"by elimination". The elimination was sound about everything it named and
+wrong about the one thing it did not: **the memory being read.**
+
+**REPRODUCED FIRST.** Turning `t_v92dec`'s `forceDilEnd` back on fails
+exactly as 2107 describes: `slot+72`, which is the modulator's `state` at
++0x14, reads `0b` (TERMINATED) on our side against `0a` (DIL_END) in the
+blob, and the demodulator's `word_30` follows it to 0x13. Eight checks over
+the sweep.
+
+**THE CAUSE IS `segmentLength[segmentIndex]`, WHICH IS A FOUR-BYTE STRIDE
+INDEXED BY AN UNBOUNDED BYTE.** In that trial `dilCount` is zero, so
+`resetDILGenerator` returns without touching the DIL half and `segmentIndex`
+is still a seeded random byte -- the dump shows 126, 96, 195, 80 against an
+array of EIGHT. The array is at +0x158 of a 0x398-byte modulator embedded at
++0x34 of a 0x42c-byte demodulator in a 0x46c-byte slot, so the read address is
+`slot + 0x18c + 4 * segmentIndex` and it leaves the slot entirely once
+`segmentIndex` exceeds 183. Past the slot the two sides are two different
+allocations.
+
+**THE BOUNDARY IS THE SLOT, NOT THE ARRAY, AND THAT IS THE WHOLE PROOF.**
+Three runs of the same fixture, differing only in how far the index may reach:
+
+    segmentIndex 0..255   (leaves the slot)          8 checks failed
+    segmentIndex 0..183   (off the array, in slot)   1 check failed
+    segmentIndex 0..7     (inside the array)         0, 44656 passed
+
+The middle row is the one that settles it. An index of 183 is twenty-three
+times past the end of an eight-element array -- every bit as out of bounds as
+195 -- and the differential comparison PASSES. Its single failure is the
+bookkeeping assertion that the terminated tail is never reached, which had
+just become false. So what changes the answer is not how far off the array the
+read goes; it is whether it stays inside memory the fixture seeded identically
+on both sides. **Both implementations perform the same out-of-bounds read at
+the same address. What differed was the memory, not the code.**
+
+That is also why the disassembly shows nothing: the blob's arm is
+`movzbl 0x390(%ebx),%esi` then `cmp 0x158(%ebx,%esi,4),%ecx` then, after the
+DIL work, a RELOAD of `0x38c(%ebx)` and `test`/`jne` -- an unbounded
+zero-extended byte scaled by four, which is exactly what `unsigned int
+segmentLength[8]` indexed by `unsigned char segmentIndex` compiles to. The two
+sides agree instruction for instruction on the shape of the read.
+
+**NOTHING IN `src/` CHANGED AND THIS IS NOT A DEVIATION.** The object and the
+reconstruction do the same thing; there is no disagreement to record and
+nothing to widen. `V90Phase3Modulator.cpp`'s own comment already says
+`segmentIndex` can be 8 and that "the reads that follow land inside the object
+either way" -- true of `segmentLevel` and `dilLevel`, whose strides are two,
+and true of `segmentLength` only up to 142. Beyond that it leaves the
+modulator, and beyond 183 it leaves the fixture. In real operation
+`updateCodeSegment` only ever writes 0..8, so no caller can reach it; only a
+fixture that seeds the field can.
+
+**WHAT WAS ACTUALLY WRONG WAS THE TEST, AND BOTH TESTS ARE FIXED.**
+
+`t_v92dec` -- `setup` now puts `segmentIndex` at 0 and `segmentLength[0]` at 1
+when it forces DIL_END, so the trial tests `generateSymbol` rather than the
+allocator, and a length of 1 against a zero position ends the segment on that
+symbol, which is the only route to event code 6. `forceDilEnd` is on for a
+SECOND PASS over the whole sweep rather than a bit inside the candidate index:
+forcing DIL_END rewrites the modulator's `eventCode`, several arms are
+selected by that field, and folding it into `k` cost two transitions their
+coverage when it was tried. The assertion that read "the terminated tail is a
+known gap ... 0" now reads "is reached ... > 0". 44,656 checks become 89,272,
+all passing, and the shared Phase3-Terminated tail of the seven DIL arms is
+covered for the first time: the tally goes from 0 to **182**. That tally is
+counted off the REFERENCE side, so it says the blob reached the tail 182
+times; our side reached it the same 182 times, because a whole-object
+comparison follows every one of them and none of them differ.
+
+`t_v90p3mod` -- the case 2107 named is now driven directly. `prepare`'s own
+segment lengths are 12..54, so every DIL case in that suite entered
+mid-segment and the zero-position segment end was unreachable; a length of 1
+with `segmentPos` zero ends the segment on the symbol that starts it, and a
+length of 2 from the same position is the control that must NOT terminate.
+Both arms, both PCM laws, with coverage assertions that each was produced.
+It passes -- which is the same answer from the other direction.
+
+**THE GENERAL POINT, WHICH IS 2107'S OWN.** Elimination is only as good as the
+list, and a whole-object differential test silently assumes both objects live
+in identically prepared memory. The moment an index can leave the object that
+assumption is a premise rather than a fact, and the failure it produces looks
+exactly like a defect in the code that did the indexing. `diff_eq_obj` cannot
+see it, because the difference is outside the object it was given.

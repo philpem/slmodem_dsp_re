@@ -457,8 +457,32 @@ setup(int trial, const struct trial_args *t)
 		d->phase3Modulator.dilPcmCode = t->dilPcmCode;
 		d->phase3Modulator.eventCode = t->eventCode;
 		if (t->forceDilEnd) {
+			/*
+			 * `segmentIndex` AND `segmentLength` ARE SET HERE, AND
+			 * THAT IS THE WHOLE OF FINDING 2107.
+			 *
+			 * This trial runs with `dilCount` zero, so
+			 * `resetDILGenerator` returns without touching the DIL
+			 * half and `segmentIndex` is still a seeded RANDOM BYTE.
+			 * `segmentLength[segmentIndex]` has a four-byte stride
+			 * from +0x158, so an index above 183 addresses past the
+			 * end of this fixture's slot -- and past the slot the two
+			 * sides are two different allocations, so they read
+			 * different bytes and the wrap test goes different ways.
+			 * BOTH IMPLEMENTATIONS DO THE SAME OUT-OF-BOUNDS READ;
+			 * what differed was the memory, not the code.  Setting
+			 * the index inside the array is what makes the trial a
+			 * test of `generateSymbol` rather than of the allocator.
+			 *
+			 * A length of 1 against a zero position then ends the
+			 * segment on this very symbol, which is the only route to
+			 * event code 6 and so the only way to reach the shared
+			 * Phase3-Terminated tail of the seven DIL arms.
+			 */
 			d->phase3Modulator.state = (Phase3ModulatorState)10;
 			d->phase3Modulator.segmentPos = 0;
+			d->phase3Modulator.segmentIndex = 0;
+			d->phase3Modulator.segmentLength[0] = 1;
 		}
 	}
 }
@@ -894,7 +918,7 @@ static const float sample_v[] = {
 static int
 run_states(void)
 {
-	int st, k, v, trial = 0;
+	int st, k, v, pass, trial = 0;
 	int sawNoValue = 0, sawValue = 0, sawAlt = 0, sawPlain = 0;
 	int sawSeg = 0, sawNoSeg = 0, sawS2800 = 0, sawNoS2800 = 0;
 	int sawMu = 0, sawA = 0, sawShortTrn = 0, sawLongTrn = 0;
@@ -904,6 +928,16 @@ run_states(void)
 
 	set_level(0);
 
+	/*
+	 * TWO PASSES OVER THE SAME SWEEP, and the second one exists to reach
+	 * the shared Phase3-Terminated tail.  It is a separate pass rather
+	 * than a bit multiplexed into `k`, because forcing the modulator to
+	 * DIL_END rewrites its `eventCode` and several arms are selected BY
+	 * that field -- folding it into the candidate index costs whichever
+	 * transitions those candidates were there to drive, and it cost two
+	 * of them when it was tried.  Pass 0 is the sweep exactly as it was.
+	 */
+	for (pass = 0; pass < 2; pass++)
 	for (st = 0; st <= 35; st++) {
 		for (k = 0; k < NCAND; k++) {
 			struct trial_args t;
@@ -936,7 +970,7 @@ run_states(void)
 			t.forceUcode = (v / 37) & 1;
 			t.forceJd = (st == 7 && (k & 1));
 			t.forceJdPhase = (st == 8 && (k & 1));
-			t.forceDilEnd = 0;		/* see finding 2107 */
+			t.forceDilEnd = pass;
 			if (t.forceJd || t.forceJdPhase)
 				t.word_2c = 11u;	/* 12 on entry, %6 == 0 */
 			t.sample = sample_v[v % NSAMPLE];
@@ -949,7 +983,7 @@ run_states(void)
 			    pslot(P_31C, trial) - (unsigned int)((v & 1));
 			t.word_2c = cand_of(k, &t, trial);
 
-			tag = (long)st * 1000 + k;
+			tag = (long)pass * 100000 + (long)st * 1000 + k;
 			run_trial(trial++, &t, 3, tag);
 
 			if (returns_a_value(st))
@@ -1031,19 +1065,20 @@ run_states(void)
 	diff_eq_int("case 3 took the null V92Jd arm", tal.nullJd92 > 0, 1, 0);
 	diff_eq_int("a DIL timeout fired", tal.dilTimeout > 0, 1, 0);
 	/*
-	 * THE SHARED Phase3-Terminated TAIL IS NOT REACHED AND THIS SAYS SO.
+	 * THE SHARED Phase3-Terminated TAIL, WHICH USED TO BE A DECLARED GAP.
 	 * The seven DIL arms end with `if (phase3Modulator.eventCode == 6)`,
 	 * and `generateSymbol` writes 6 in exactly one place: the DIL_END case
-	 * when `segmentPos` is zero after `dilSymbol`. Putting the modulator
-	 * there does reach it -- and makes OUR modulator take the transition
-	 * where the blob's does not, which is a divergence in
-	 * `V90Phase3Modulator::generateSymbol` and not in the method under
-	 * test (finding 2107). So the flag that forced it is off, the tail is
-	 * UNTESTED, and this comment is the record rather than a passing
-	 * assertion that would have been about nothing.
+	 * when `segmentPos` is zero after `dilSymbol`.  This assertion read
+	 * `== 0` and the flag that reaches the tail was off, because forcing
+	 * it made the two sides disagree and that was recorded as a divergence
+	 * in `generateSymbol` (finding 2107).  It was not one: the fixture left
+	 * `segmentIndex` a random byte and `segmentLength[segmentIndex]` read
+	 * off the end of the slot, so the two sides were reading different
+	 * memory rather than running different code -- 2152, and `setup` now
+	 * puts the index inside the array.  The tail is reached and compared.
 	 */
-	diff_eq_int("the terminated tail is a known gap (%ld)",
-		    tal.terminated, 0, 0);
+	diff_eq_int("the terminated tail is reached (%ld)",
+		    tal.terminated > 0, 1, 0);
 	diff_eq_int("case 0 detected Sd", tal.sdSeen > 0, 1, 0);
 	diff_eq_int("case 1 detected SdNot", tal.sdNotSeen > 0, 1, 0);
 	diff_eq_int("case 26 detected QTS", tal.qtsSeen > 0, 1, 0);
