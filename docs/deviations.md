@@ -6825,3 +6825,28 @@ The object pushes a literal 1 as a second argument to `V22_PPS_free`,
 tree reconstructed all four from their own bodies, where the second parameter
 is dead, and one of the four headers belongs to another effort.  The same
 shape as D363, at four sites instead of one.
+
+## D381 ⚠ Two special spectral conditions at once: the log says both, the field says the later one
+
+*Batch of 2026-08-16, from `V90SpectralVerifier::checkSpecialSpectralConditions`
+(blob 0x45f10).  **Reachability: any line that trips more than one of the
+three conditions.**  **Observability: yes -- the diagnostic stream and
+`+0x28` disagree.**  Status: verified bit-exact; reproduced deliberately and
+driven by the `both_isdn_and_pbx` and `all_three` cases in
+`test/unit/t_v90specialcond.cpp`.  Fix class: none proposed -- an `else`
+chain would change which condition is reported.*
+
+The three tests are sequential `if`s.  `movl $0x2,0x28(%edi)` at 0x46588 and
+`movl $0x3,0x28(%edi)` at 0x46573 store without testing what is already in
++0x28, so a line that trips both the German ISDN NT1 box test and the German
+PBX test prints
+
+    V90SpectralVerifier: German ISDN NT1 box conditions detected!
+    V90SpectralVerifier: German PBX conditions detected!
+
+and leaves 2 in +0x28.  `V90Equalizer` reads that field at three sites and
+compares it against 2, so the ISDN detection is silently discarded by the one
+consumer this tree has written.  Whether the three conditions are meant to be
+mutually exclusive in practice is not something the object states; what it
+states is that nothing enforces it.  The `three tests are an else chain`
+mutation in `test/mutations/v90specialcond.json` is what holds this reading.
