@@ -323,6 +323,27 @@ prints the count on every line carrying a verdict; `make phase`'s closing line
 quotes those denominators and refuses to be printed without them. Finding 3100,
 and it is the same defect as 2400 with the gate rather than an aid behind it.
 
+**AND A THIRD TIME, TO SEVEN TOOLS AT ONCE — SAME COMMIT, OTHER HALF OF THE
+TREE.** #164 also stopped a plain `make` filling `build/src`; those objects now
+go to `build/repro`. Seven tools learn what we have WRITTEN by globbing that
+directory -- `closure.py`, `readyqueue.py`, `worklist.py`, `coverage.py`,
+`cppstruct.py`, `callgraph.py` and `service.py` -- and they went on reading the
+empty one. `coverage.py` printed `translated 0.0%, 0 bytes, 0 symbols` at exit
+0: the headline number of the whole project reading zero. `service.py` reported
+913 unwritten data-mode symbols against a true 267 **while its own
+`MUST_BE_FAX`/`MUST_BE_DATA` self-check passed** -- that check tests
+reachability in the BLOB, and reachability does not care whether anything is
+written. **A self-test that cannot fail is the dead detector in its purest
+form**, and it is why this one survived unnoticed the longest. Two of the seven
+also advised "Run `make` first", which by then was the advice that CAUSED the
+fault; `make coverage` is what fills the tree. All seven now go through
+`tools/objtree.py`, which refuses on an empty tree, prints the directory it read
+and the object count on stderr, and warns without refusing when the tree is
+PARTIAL (fewer objects than sources -- silently 52.2% against a true 54.8%) or
+STALE (a source newer than every object). The probe order is licensed by
+measurement, not assumption: both object trees define the same 1457
+`(name, kind)` pairs. Findings 3055, 3110 and 3111.
+
 ## Ghidra is scaffolding, never evidence
 
 `tools/decompile.sh v34handshak` gives a decompilation to read control flow
