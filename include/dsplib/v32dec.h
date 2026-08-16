@@ -9,13 +9,13 @@
  * gives the carrier PLL its error -- writes an ideal magnitude to `mag`, and
  * returns the decoded bits.
  *
- * FIVE of the nine slicers are NOT here.  `FSE_decision_16Tpt`, `_32pt`,
- * `_64pt` and `_128pt` all call `VTB_decoder`, which is 1,773 bytes of the
- * Viterbi block plus about 10 KB of trellis tables and belongs to a different
- * batch (finding 1602); `FSE_decision_16pt` indexes `DECv32_MAG9600` out of
- * bounds and cannot be reproduced across builds (finding 1603, D302).
- * Neither group is prototyped here: a declaration with no definition would be
- * a claim this tree cannot honour.
+ * ONE of the nine slicers is NOT here.  `FSE_decision_16pt` indexes
+ * `DECv32_MAG9600` out of bounds and cannot be reproduced across builds
+ * (finding 1603, D302), so it is not prototyped: a declaration with no
+ * definition would be a claim this tree cannot honour.  The other eight are.
+ * The four trellis ones -- `_16Tpt`, `_32pt`, `_64pt` and `_128pt` -- were
+ * blocked on `VTB_decoder` (finding 1602) until finding 3210's Viterbi batch
+ * landed it.
  */
 
 #ifndef DSPLIB_V32DEC_H
@@ -34,7 +34,13 @@
  *
  * `vtb` is not a guess about the Viterbi decoder's size: `FSE_decision_16Tpt`
  * passes `owner + 0x18` to `VTB_decoder`, and `owner + 0x50` is in use here,
- * so whatever the decoder keeps there is at most 56 bytes.
+ * so whatever the decoder keeps there is at most 56 bytes.  Finding 3210
+ * measured `sizeof(struct vtb)` at exactly 0x38, so the bound is now met
+ * exactly -- but the field stays a byte array and the four trellis slicers
+ * cast it, because `struct vtb` holds four POINTERS: declaring it as the
+ * struct would make `struct v32_dec` a different size in the 64-bit build and
+ * every offset after +0x18 in this comment false.  The 32-bit layout is the
+ * one the object fixes, and the cast is where the two meet.
  */
 struct v32_dec {
 	unsigned short chan;		/* +0x00 selects prev_sym[]          */
@@ -70,6 +76,21 @@ unsigned short FSE_decision_AB(struct fpm_fse *state, short *angle,
 			       short *mag);
 
 /*
+ * THE FOUR TRELLIS SLICERS.  Each decides a point, writes its ideal angle and
+ * magnitude, and then hands the UNROTATED received symbol to `VTB_decoder`,
+ * whose output through a stack local is the return value.  None of them
+ * installs a successor: the datapump leaves a trellis rate by another route.
+ */
+unsigned short FSE_decision_16Tpt(struct fpm_fse *state, short *angle,
+				  short *mag);
+unsigned short FSE_decision_32pt(struct fpm_fse *state, short *angle,
+				 short *mag);
+unsigned short FSE_decision_64pt(struct fpm_fse *state, short *angle,
+				 short *mag);
+unsigned short FSE_decision_128pt(struct fpm_fse *state, short *angle,
+				  short *mag);
+
+/*
  * The constellations, as (I, Q) pairs at +-4096 and +-12288, with the ideal
  * angle and magnitude of each point beside them.  `.data` in the object, so
  * not declared const.
@@ -82,6 +103,31 @@ extern short DECv32_MAG9600[3];
 extern short DECv32_ANGL9600[16];
 extern short DECv32_IMAP16[16];
 extern short DECv32_QMAP16[16];
+
+/*
+ * The trellis rates' tables.  The five `.data` ones first, then the eight
+ * `.rodata` ones, and the split is which section the object defines each in.
+ *
+ * `ANA_QMAP` is the 32-point slicer's whole constellation: that decision is
+ * one-dimensional, a search in Q alone over at most three candidates, and the
+ * only I coordinates the function ever names are the two literals in its
+ * tie-break.  `ANA_{I,Q}MAP128` is the 128-point one folded into the octant
+ * the rotation maps everything into, which is why 32 entries serve 128 points.
+ */
+extern short DECv32_ANA_QMAP[8];
+extern short DECv32_COS_ROT_ANGLE[4];
+extern short DECv32_SIN_ROT_ANGLE[4];
+extern short DECv32_MAG9600T[32];
+extern short DECv32_ANGL9600T[32];
+
+extern const short DECv32_IMAP64[64];
+extern const short DECv32_QMAP64[64];
+extern const short DECv32_MAG12000[64];
+extern const short DECv32_ANGL12000[64];
+extern const short DECv32_ANA_IMAP128[32];
+extern const short DECv32_ANA_QMAP128[32];
+extern const short DECv32_MAG14400[128];
+extern const short DECv32_ANGL14400[128];
 
 /*
  * NOT PART OF THIS BATCH.  These three belong to the trellis/differential

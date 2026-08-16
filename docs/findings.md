@@ -59032,7 +59032,12 @@ bytes and called it the largest single block V.32 had left; 1602 and 1614 both
 deferred work to "whoever lands the Viterbi batch".  This is that batch, and
 it is all of it: `VTB_decoder` (1,773 B, .text 0xab4d0), `VTBv32_init` (355 B,
 .text 0x7e700), `VTB_DIFF_TBL` (32 B, file-local) and the sixteen tables.
-`t_v32vtb` is 139,483 checks and green.
+`t_v32vtb` is 113,483 checks and green.  (**This entry said 139,483 when it
+was written and that was a transcription slip in the finding, not a change in
+the test** -- the binary from `367d800`, the file's only commit, has always
+reported 113,483.  Corrected here as well as recorded at 3219, because a
+number quoted in two places is a number that will be quoted from the wrong
+one.)
 
 **THE WIDTH IS THE ONLY QUESTION A TABLE DUMP CANNOT ANSWER**, and 3,712 bytes
 of `VTB_BOUND_14400` read identically as 1,856 shorts, 928 ints or 3,712
@@ -59070,9 +59075,19 @@ suites.
 `bound` +0x20, `nsub` +0x24, `region` +0x28, `grid` +0x2c, `depth` +0x2e,
 `prev` +0x30, `mask` +0x32, `shift` +0x34, size 0x38.  1602 bounded the
 decoder's state at 56 bytes from the other end -- `FSE_decision_16Tpt` passes
-`owner+0x18` and `owner+0x50` is in use -- and 0x38 is 56.  `struct v32_dec`'s
-`unsigned char vtb[0x38]` is now that struct, in the same place and at the
-same size.
+`owner+0x18` and `owner+0x50` is in use -- and 0x38 is 56.
+
+**AND `struct v32_dec` KEEPS `unsigned char vtb[0x38]` RATHER THAN BECOMING A
+MEMBER.**  This entry first said the field "is now that struct, in the same
+place and at the same size", and that was written as an intention and never
+done; the batch that wrote the four trellis slicers found the reason it must
+not be.  `struct vtb` holds four pointers, so a member would be 0x38 under
+`make period` and 0x60 under `make check64`, and every offset in
+`struct v32_dec` past +0x18 would move on the 64-bit side while the object's
+say they do not.  So 1602's byte array stays and the slicers cast it, which
+is what the object does anyway -- it passes `owner + 0x18` as an address.
+What 3210 changes about that field is that its size is no longer a BOUND: it
+is a measurement, and `t_v32vtb` asserts `sizeof(struct vtb) == 0x38`.
 
 `VTB_decoder`'s signature is settled from `FSE_decision_16Tpt`'s call site,
 which pushes `owner+0x18`, the two symbol coordinates and the address of a
@@ -59104,6 +59119,18 @@ not move the point into a different grid cell, which is most of the plane.
 region indices actually differ and asserts the count is not zero, so a pass
 means the run contained cases that could have failed.  Finding 134's rule
 applied to the input set rather than to a tool.
+
+**AND THE COUNTER IS NOT WHAT SETTLES IT -- THE MUTATIONS ARE.**  A
+separating-trial counter measures an INTERMEDIATE, and an intermediate that
+differs can still reach the same output: a clamp, a saturation or a `min` two
+statements later collapses both readings and the counter goes on reporting a
+healthy number while proving nothing.  That has now happened once in this
+tree, to a `kMax` claim whose counter was true and whose mutation came back
+NOT CAUGHT, and the claim was withdrawn.  So the counter here is corroboration
+and the adjudication is M1 and M2 of 3213: the wrong reading was written out
+as source, built, and run, and it failed -- M1 the 7200 suite and M2 both
+rotated rates.  **Where a counter and a mutation disagree, the mutation is
+right.**
 
 ### 3212. THE TRELLIS: EIGHT STATES, FOUR BRANCHES EACH, AND THE SUBSET PERMUTATION IS NOT SYMMETRIC BETWEEN THE HALVES
 
@@ -59244,3 +59271,244 @@ shared by five live worktrees, the failure is loud, and a build change from a
 V.32 branch is a merge conflict for everyone.  Recorded so the next person to
 see that link error does not go looking for it in their own code, which is
 where this session looked first.
+
+### 3216. THE FOUR TRELLIS SLICERS ARE WRITTEN, AND `FSE_decision_16pt` STILL IS NOT
+
+Read end to end from `tools/dis.py` at .text 0x80330 (`_16Tpt`, 432 B),
+0x804e0 (`_128pt`, 1,032 B), 0x808f0 (`_64pt`, 694 B) and 0x80bb0 (`_32pt`,
+721 B), together with the thirteen `DECv32_*` tables they need.  Finding
+1602's table said these four were gated on the Viterbi batch and 3210 landed
+it, so this is 2,879 bytes of `.text` and 1,240 bytes of tables that the
+V.32 queue had ready and nothing else blocking.  `t_v32fset` is a NEW file --
+`t_v32fse.c`'s whole-object `diff_eq_obj` cannot serve here, because
+`struct v32_dec` now has a live `struct vtb` in it whose five pointer fields
+hold addresses that can never agree between the two sides.
+
+**WHAT ALL FOUR SHARE.**  The `fse_quality` preamble, inlined identically in
+each and identical to the committed one -- `energy >> 16`, `eqm = (15*eqm)/16
++ energy/16`, the 0x4ff ceiling, the 21-to-59 window writing `retrain = 2`
+and the count of 60 writing `retrain = 1` -- and then a RELOAD of
+`cfg.owner`, which is what says the preamble was a separate function in the
+source.  Then a decision, then `*mag` and `*angle`, then
+`VTB_decoder(owner + 0x18, i, q, &local)` with the UNROTATED coordinates and
+the return value taken from `local` while `%eax` is discarded.  **None of the
+four writes `cfg.decision`**: all four are terminal, which the test asserts
+on every symbol rather than leaving in a comment.
+
+Every loop counter is a `short`, narrowed `movswl`/`cwtl` before each bound
+test, unlike `_4pt`'s `int k`; every metric is narrowed to `short` before the
+comparison against the running minimum, so an overflowing distance wraps and
+`best` can keep its initial 0.  That initialisation is load-bearing and is
+reproduced.
+
+**THE FOUR RATES AND THE FOUR SEARCHES.**
+
+| slicer | rate | search | metric |
+|---|---|---|---|
+| `_16Tpt` | 7200 | all 16 points, no region tree | `(di*di + dq*dq) >> 16`, SYMMETRIC |
+| `_64pt` | 12000 | 4 of 64, from a 4x4 cell on (I, Q) as received | `>> 13` |
+| `_32pt` | 9600 | 2 or 3 of 8, ONE-DIMENSIONAL in rotated Q | `abs`, no squaring |
+| `_128pt` | 14400 | 4 of 32, from a ten-leaf tree on the rotated point | `>> 13` |
+
+`_16Tpt`'s metric is symmetric, which is the cross-check against `_4pt`'s
+deliberate 15/16 asymmetry (D301): the two are not the same code with a
+different table.  `_32pt` and `_128pt` open with a shared 45-degree rotation
+-- `sel = (|I| > |Q|) + (I > Q ? 2 : 0)`, `+-23170` out of
+`DECv32_{COS,SIN}_ROT_ANGLE`, each product shifted by 15 SEPARATELY before
+being combined -- and carry `sel` through to the magnitude and angle lookup,
+which is indexed `point + 8*sel` and `point + 32*sel`.  `MAG9600T` is eight
+values repeated four times and `ANGL9600T`'s four blocks differ by 8192,
+which is what that indexing predicts and is how it was checked.
+
+**`FSE_decision_16pt` STAYS OUT.**  Finding 1603 and D302 stand unchanged,
+and `_16Tpt` is now the cross-check 1603 said it would be: the two compute
+the same `(|I| + |Q|)` off the same sixteen points, `_16Tpt` shifts it right
+by 13 and indexes `DECv32_MAG9600[0..2]`, `_16pt` shifts it by 1 and reads
+8,190 bytes past a six-byte table.  Same code, one wrong shift, and only one
+of the two can be differentially tested.
+
+**THREE READINGS THE DISASSEMBLY CONTRADICTED**, all from a prior pass that
+was handed in as a hypothesis:
+
+- **`struct v32_dec`'s `vtb` is still `unsigned char[0x38]`, not a `struct
+  vtb`.**  It has to be: `struct vtb` holds four pointers, so making it a
+  member would change `sizeof(struct v32_dec)` and every offset after +0x18
+  in the 64-bit build, where `make check64` compiles the same header.  The
+  four slicers cast it, which is also what the test does.
+- **`_128pt`'s bases 0x0e and 0x1a are not "special cells" holding one point
+  each.**  They are ordinary bases: the function stores them in the same slot
+  as 0x00..0x1c and then runs the same four-point search from there, over
+  points 14..17 and 26..29.  Taking them literally would have given a decision
+  that never searched.
+- **`_64pt`'s thresholds are not `+-0x2000` on both axes.**  They are one
+  apart between I and Q, in both signs.  D372's closing paragraph has it.
+
+### 3217. THE THREE REGION TREES, READ CELL BY CELL, AND THE BOUNDARIES THAT ARE ONE APART
+
+**`_64pt` IS SIXTEEN CELLS ON THE SYMBOL AS RECEIVED**, and the sixteen bases
+are not `4 * (iband*4 + qband)` in any single ordering -- they were read off
+the sixteen `mov $imm,%eax` sites at 0x809c0-0x80b9c one at a time:
+
+| | q outer + | q inner + | q inner - | q outer - |
+|---|--:|--:|--:|--:|
+| i outer - | 0x00 | 0x04 | 0x10 | 0x14 |
+| i inner - | 0x08 | 0x0c | 0x18 | 0x1c |
+| i inner + | 0x20 | 0x24 | 0x30 | 0x34 |
+| i outer + | 0x28 | 0x2c | 0x38 | 0x3c |
+
+**AND THE TWO AXES DO NOT AGREE ABOUT WHERE OUTER STARTS.**  In I it is
+`cmp $0x2000,%si ; jle` and `cmp $0xe000,%si ; jle`, so outer is `i > 8192`
+and `i <= -8192`.  In Q it is `cmp $0x1fff,%bx ; jg` and `cmp $0xe000,%bx ;
+jge`, so outer is `q > 8191` and `q < -8192`.  A symbol at exactly
+(8192, 8192) is inner in I and outer in Q; one at (-8192, -8192) is outer in
+I and inner in Q.  Writing either axis's test for both agrees over the whole
+plane except on those two lines, so `t_v32fset` constructs `+-8191`,
+`+-8192` and `+-8193` on both axes rather than sampling for them.
+
+**`_32pt` IS THREE BANDS AND A TIE-BREAK.**  `ri <= 0x16a0` searches points
+0..2; above it, points 3..5; and `ri > 0x2d41` with `rq <= 0x2d40` searches
+only 6 and 7.  The search itself is `|rq - DECv32_ANA_QMAP[k]|` -- no
+squaring and no I coordinate at all, because after the rotation the eight
+candidates lie on a line.  When it lands on 3 or 6 the function re-decides
+between those two with a real squared distance, and that is the only place
+`_32pt` names an I coordinate: 0x21f1 and 0x3891, which are `ANA_QMAP[1]` and
+`ANA_QMAP[0]` crossed over, point 3 being (8689, 14481) and point 6 being
+(14481, 8689).
+
+**`_128pt` IS TEN LEAVES AND TWO SKIPS**, on the rotated point, at 5792,
+11585 and 14481:
+
+| | `rq` band | base |
+|---|---|--:|
+| `ri <= 0x16a0` | `>= 0x2d41` / `>= 0x16a0` / below | 0x00 / 0x04 / 0x08 |
+| `ri <= 0x2d41` | `>= 0x2d41` / `>= 0x16a0` / below | 0x0c / 0x10 / 0x14 |
+| `ri > 0x2d41`, `rq <= 0x2d41` | `> 0x16a0` / `<= 0x16a0` | 0x18 / 0x1c |
+| `ri <= 0x3891`, `rq > 0x2d41` | `> 0x3891` / else | 0x0e / **skip** |
+| `ri > 0x3891`, `rq > 0x2d41` | `< 0x3891` / else | 0x1a / **skip** |
+
+The two skips do not search at all: they decide between one fixed PAIR of
+points, 14 against 26 in the outer one and 15 against 24 in the inner one.
+D370, D371 and D372 are all in those last three rows.
+
+**THE THIRD ROW'S BOUNDARY DISAGREES WITH THE FIRST TWO' AND IT IS
+MEASURED.**  Rows one and two claim 5792 and 11585 for the band ABOVE; row
+three claims them for the band BELOW.  82,597 (I, Q) pairs rotate to `rq`
+exactly 5792 with `ri > 11585`, and at every one of them the cell the object
+searches and the cell a uniform convention would search return different
+points.  D372.
+
+### 3218. THE TWO-WAY DECISIONS IN `_128pt` DISAGREE ABOUT WHICH DIRECTION IS NEARER, AND ONE OF THEIR CONSTANTS IS OFF BY ONE
+
+Both ambiguous cells compute two squared distances with the `>> 13` metric
+and pick with a `set<cc>` on a 16-bit compare.  The outer one, at 0x806d1, is
+`cmp %cx,%bx ; setge %al ; dec %eax ; and $0xfffffff4,%eax ; add $0x1a,%eax`
+and yields 26 when 26 is the FARTHER; the inner one, at 0x807d1, is
+`cmp %cx,%dx ; setle %bl ; lea 0xf(%ebx,%ebx,8),%eax` and yields 24 when 24
+is the NEARER.  Same construct, opposite direction.  Over the 603,901,812
+(I, Q) pairs that reach the outer cell the two distances differ at
+603,873,842 -- 99.995% -- and the object returns the rejected point at every
+one.  D370.
+
+**AND THE FOUR I COORDINATES ARE IMMEDIATES, NOT TABLE READS.**  The Q
+coordinates come out of `DECv32_ANA_QMAP128` with a `movzwl` at a constant
+address; the I coordinates are `mov $0x2799`, `mov $0x2799`, `mov $0x32e9`
+and `mov $0x3e3a`.  Three of those equal `DECv32_ANA_IMAP128[14]`, `[15]` and
+`[24]` exactly.  The fourth is 15930 where `[26]` is 15929, which is what
+rules out a constant fold out of the const table and says the source carried
+literals -- one of them mistyped.  It is not cosmetic: the difference
+survives the `>> 13` and flips the decision at 48,490 points of that cell.
+D371.
+
+`src/` carries `0x3e3a`, because reproducing the object is the contract; the
+test would fail on 48,490 inputs if it carried 15929, and `t_v32fset`'s
+boundary sweep reaches that cell.
+
+### 3219. THE MUTATION SET FOR THE TRELLIS SLICERS, AND WHAT THE TEST HAD TO BE BUILT DIFFERENTLY TO CATCH
+
+Nine mutations, each applied alone to a green tree, rebuilt and run against
+all three V.32 suites, then restored.  `t_v32fset` has six suites,
+`t_v32fse` five and `t_v32vtb` nine.
+
+| | change | t_v32fset | t_v32fse | t_v32vtb |
+|---|---|--:|--:|--:|
+| M1 | `_64pt`'s region threshold 0x2000 -> 0x1fff | 1 | 0 | 0 |
+| M2 | `_128pt`'s outer tie-break FARTHER -> NEARER | 1 | 0 | 0 |
+| M3 | `_32pt`'s tie-break flipped | 1 | 0 | 0 |
+| M4 | `_64pt`'s I-term metric shift >>13 -> >>14 | 1 | 0 | 0 |
+| M5 | the rotation's `sel` as `(ai >= aq)` | 2 | 0 | 0 |
+| M6 | `DECv32_IMAP64[0]` changed by one | 2 | 0 | 0 |
+| M7 | `_16Tpt`'s magnitude index >>13 -> >>1 | 1 | 0 | 0 |
+| M8 | `_128pt` arm 3's 5792 band given arm 1's convention | 1 | 0 | 0 |
+| M9 | `_128pt` arm 3's 11585 split given arm 1's convention | 1 | 0 | 0 |
+
+Every one is caught, and the counts are the ones the code predicts rather
+than a blanket failure.  **M5 fails exactly two suites** -- `_32pt` and
+`_128pt`, the only two that rotate -- and fails them on `angle out`, because
+`sel` is not only the rotation's octant but the high bits of the magnitude
+and angle index.  **M6 also fails two**, the `_64pt` suite and the table
+comparison, which is the table comparison earning its place.  Every other
+mutation fails exactly the one function it is in, and none of the nine
+disturbs `t_v32fse` or `t_v32vtb` -- which is what says `t_v32fset` is
+testing the four new functions and not re-testing `VTB_decoder`.
+
+**M8 AND M9 EXIST BECAUSE D372 WAS DOCUMENTED BEFORE IT WAS TESTABLE.**  The
+first version of the boundary sweep kept the FIRST input whose `rq` landed on
+each threshold and put no condition on `ri`, so every witness it found was in
+the first arm -- where the convention it records does not apply.  Both
+mutations would have passed.  The sweep now collects each threshold twice,
+once anywhere and once restricted to `ri > 0x2d41`, and names the two
+witnesses outright: (-32768, -24576) rotates to (24989, 5792) and
+(-32768, -16384) to (30781, 11585).  A deviation whose own mutation passes is
+a deviation the record claims and the suite cannot see.
+
+**M7 IS FINDING 1603'S DEFECT, REINTRODUCED ON PURPOSE**, and it behaves
+exactly as 1603 predicted rather than merely failing.  `_16Tpt` with `>> 1`
+reads `DECv32_MAG9600[4095]`, `[8191]` and `[12287]` -- 8,190, 16,382 and
+24,574 bytes past a six-byte table -- and the run does not crash, because
+`.data` is 0x9594 bytes and the first of the three is still inside it.  It
+returns whatever the LINK put there: our build writes `*mag` = -17234 where
+the blob writes 5792, and 18757 where the blob writes 12953.  So the two
+builds disagree on a value neither of them computes, which is the whole
+argument for leaving `FSE_decision_16pt` out, now demonstrated rather than
+reasoned.
+
+**THE TEST HAD TO BE BUILT FOR THREE THINGS THAT RANDOM INPUT CANNOT REACH.**
+
+- **The whole-object comparison does not work here.**  `t_v32fse.c`'s
+  `diff_eq_obj(..., struct v32_dec, ...)` covers every byte, and bytes
+  0x18..0x50 are now a live `struct vtb` whose `paths`, `imap`, `qmap`,
+  `bound` and `region` are ADDRESSES into two different builds.  `t_v32fset`
+  copies both objects, blanks that window in the copies, compares the copies,
+  and then compares the Viterbi state field by field and all 128 survivor
+  nodes by content -- finding 1614's rule, and the same shape as
+  `t_v32vtb`'s `cmp_init`.
+- **The rate code comes from the CONSTELLATION, not the table name.**
+  `_16Tpt` reads `DECv32_MAG9600` and `DECv32_ANGL9600` but decides on the
+  sixteen-point trellis constellation, so its decoder is mode 3 (7200) and
+  not mode 2.  Inferring 9600 from the name would leave both sides agreeing
+  about a decoder whose `imap` did not match the slicer's points, and every
+  suite would still have passed while measuring less.
+- **Three of the seven mutations are one value wide.**  M1 differs only at
+  `i` exactly 8192; M5 only where `|I| == |Q|`; and `_64pt`'s own I/Q
+  asymmetry (finding 3217) only on the lines `+-8192`.  Uniform random input
+  reaches none of them, so the input set is CONSTRUCTED: a symmetric edge
+  list whose product supplies both, a grid sweep that keeps one input per
+  region-tree leaf, and a Q sweep at five fixed I that lands `ri` and `rq` on
+  each of the nine rotated-frame thresholds exactly.  **Every leaf count is
+  then asserted non-zero** -- 16 cells for `_64pt`, 16 decided points for
+  `_16Tpt`, 3 bands plus 3 tie-break outcomes for `_32pt`, and 12 leaves plus
+  4 two-way outcomes for `_128pt`.  A region tree tested only near the origin
+  is a test that cannot see a wrong threshold.
+
+`t_v32fset` is 1,136,720 checks over 6 suites and green; `t_v32fse` (22,977)
+and `t_v32vtb` (113,483) are unchanged and still green after `v32dec.h` and
+`v32fse.c` grew.
+
+**A NUMBER IN 3210 DOES NOT REPRODUCE.**  That finding says `t_v32vtb` is
+139,483 checks; the binary built from `367d800`'s `test/unit/t_v32vtb.c` --
+the only commit that file has -- reports 113,483, summed from its nine
+suites (14 + 4,080 + 248 + 6,612 + 25,632 x 4 + 1).  Nothing in this batch
+touches that file and the suite is green either way, so this is a
+transcription slip in the record rather than a change in the test.  Recorded
+so the next session does not spend a turn on it, which is 3213's own advice
+about a set of figures that would not reproduce.
