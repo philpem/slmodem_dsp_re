@@ -289,6 +289,37 @@ last is a fact about the code under test. Finding 1353.
 
 ---
 
+### V10 — a check only the period compiler can make · 1 test · APPARATUS
+
+`test/unit/t_v90equ.cpp`'s `V90Equalizer: the coefficient sums are float`
+group is compiled under `#if defined(__GNUC__) && __GNUC__ < 4` and nowhere
+else. It is the only compiler-version conditional in `test/`, and it is
+registered here because an unexplained one is exactly what V3 was.
+
+`convertEqualizerToMmx` accumulates four coefficient sums in `float`, storing
+each back to a four-byte slot every iteration (`fstps 0x4c(%esp)` inside the
+loop). GCC 3.4.2 spills the same way; GCC 13 under `-fexcess-precision=fast`
+holds the accumulator in an x87 register across the whole loop and rounds
+once at the end. So under the modern build a `float` accumulator and a `long
+double` one give the SAME answer, and the check would pass for the wrong
+source and fail for the right one -- not a check that is unavailable, a check
+that says the opposite of the truth.
+
+`tools/gccdiverge.json` was tried first and taken back out. It is the
+declared route for "modern GCC provably cannot", and two narrowing spellings
+had already failed -- `(float)(fsum + c)` and `(float)((double)fsum +
+(double)c)`, the second being the one that repaired `Resampler.cpp` -- so the
+precondition was met. It fails on the tooling instead: `tools/mutate.py` does
+not consult the register, builds with the modern compiler, and treats a binary
+with any failing check as a dead shard, so one entry took the whole
+24-mutation `v90equ` suite down. A guard that asks the question of the
+compiler that can answer it costs nothing and breaks nothing.
+
+`make period` passes the witness -- 65536.0f plus nineteen taps of 0.0005f,
+which is `+65536.0000` in `float` and `+65536.0078` in extended -- and that is
+what says the source is right. Finding 2150, and finding 2139 for the rule it
+applies.
+
 ## Where it stands
 
 | | |
