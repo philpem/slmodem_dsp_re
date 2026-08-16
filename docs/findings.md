@@ -59024,3 +59024,150 @@ ON is not a precondition.**
 The rule added is `git -C <dir>` in preference to `cd`, and `cd <dir> || exit
 1` where a `cd` is unavoidable.  `git -C` cannot fail open: if the directory is
 gone the git command itself fails and nothing else runs.
+
+### 3210. THE V.32 VITERBI BATCH IS WRITTEN: 19 SYMBOLS, 10,320 BYTES, AND THE ELEMENT WIDTH IS MEASURED THREE WAYS
+
+Finding 1600's block table put `VTB_*` + `VTBv32_*` at 19 symbols and 10,320
+bytes and called it the largest single block V.32 had left; 1602 and 1614 both
+deferred work to "whoever lands the Viterbi batch".  This is that batch, and
+it is all of it: `VTB_decoder` (1,773 B, .text 0xab4d0), `VTBv32_init` (355 B,
+.text 0x7e700), `VTB_DIFF_TBL` (32 B, file-local) and the sixteen tables.
+`t_v32vtb` is 139,483 checks and green.
+
+**THE WIDTH IS THE ONLY QUESTION A TABLE DUMP CANNOT ANSWER**, and 3,712 bytes
+of `VTB_BOUND_14400` read identically as 1,856 shorts, 928 ints or 3,712
+bytes.  Three independent measurements say two bytes:
+
+- **The loads.**  `VTB_decoder` reads a boundary `movswl (%ebx)` and steps the
+  pointer by 2, and reads a region entry `movswl (%edi,%eax,2)`.  Both 32-bit
+  results are then used as indices, so the extension is FORCED and not the
+  compiler's choice (the rule in CLAUDE.md, and finding 613).
+- **The region index cannot exceed the table.**  The index is
+  `ci + grid*(cq + (cq > ci ? grid : 0))` with both coordinates clamped to
+  `grid - 1`, so its largest value is `2*grid*grid - 1`.  `2*grid*grid` is
+  8, 32, 72 and 128 at grid 2, 4, 6 and 8 -- exactly the entry counts of
+  `VTB_REGION_7200`, `_9600`, `_12000` and `_14400` under a two-byte element,
+  and exactly twice them under a four-byte one.
+- **The boundary index cannot either.**  The decoder adds a quadrant offset of
+  at most 24 to a region entry and then reads eight entries.  The largest
+  entry of each region table plus 32 is 128, 416, 960 and 1,856 -- again the
+  matching `VTB_BOUND_*` entry count exactly, and again only at two bytes.
+
+The second and third are asserted in the test (`run_lengths`, 248 checks)
+rather than left in a comment, because they are the part a byte comparison
+cannot see.  Every region entry is also a multiple of 32, which is what the
+block structure predicts: four quadrants of eight, each eight being two groups
+of four.
+
+**`VTB_DIFF_TBL` IS `r` AND NOT `R`** -- file-local to `VTB_decoder`'s
+translation unit -- so it is `static` here and is tested through the decoder
+rather than against `ref_VTB_DIFF_TBL`.  Its sixteen entries are all reached:
+`prev` takes all four values and `sym >> shift` all four across the four rate
+suites.
+
+**THE STRUCT IS 0x38 AND THAT CONFIRMS 1602 EXACTLY.**  `struct vtb` comes out
+`paths` +0x00, `metric[8]` +0x04, `ring` +0x14, `imap` +0x18, `qmap` +0x1c,
+`bound` +0x20, `nsub` +0x24, `region` +0x28, `grid` +0x2c, `depth` +0x2e,
+`prev` +0x30, `mask` +0x32, `shift` +0x34, size 0x38.  1602 bounded the
+decoder's state at 56 bytes from the other end -- `FSE_decision_16Tpt` passes
+`owner+0x18` and `owner+0x50` is in use -- and 0x38 is 56.  `struct v32_dec`'s
+`unsigned char vtb[0x38]` is now that struct, in the same place and at the
+same size.
+
+`VTB_decoder`'s signature is settled from `FSE_decision_16Tpt`'s call site,
+which pushes `owner+0x18`, the two symbol coordinates and the address of a
+local, and afterwards reads that local and discards `%eax`: `void
+VTB_decoder(struct vtb *, short i, short q, short *out)`.  `VTBv32_init`'s
+third argument is tested `test %edx,%edx` on a full 32-bit load, so it is an
+`int` and not a short.
+
+### 3211. THE REGION IS LOOKED UP IN THE ROTATED FRAME AND THE DISTANCE IS MEASURED IN THE FRAME AS RECEIVED
+
+`VTB_decoder` rotates the received point 45 degrees for `nsub` 1 and 3 -- the
+16- and 64-point constellations, which are V.32bis' rotated ones -- and then
+**does not use the rotated point again**.  The four branch metrics are squared
+distances from the point AS RECEIVED to `imap[]`/`qmap[]`, which hold the true
+coordinates.  In the object this is visible only as a register that is not
+written back: `0x1c(%esp)` and `0x18(%esp)` still hold the original
+coordinates when the metric loop reloads them at 0xab62a, while the rotation
+at 0xabb67 and 0xabb9a left its results in `%esi` and `%ebx` alone.
+
+The two scalings differ too, and both are exact: `nsub` 1 computes
+`(I+Q) >> 2` and `(Q-I) >> 2` in 32 bits with no narrowing, `nsub` 3 computes
+`(short)(I+Q) >> 1` and `(short)(Q-I) >> 1`.
+
+**THIS IS A FINDING 3052 SHAPE AND THE TEST IS BUILT FOR IT.**  Rotating both
+the lookup and the metric -- the tidy reading, and the one a summary of the
+algorithm would produce -- agrees with the true one wherever the rotation does
+not move the point into a different grid cell, which is most of the plane.
+`t_v32vtb` therefore counts the trials at which the rotated and unrotated
+region indices actually differ and asserts the count is not zero, so a pass
+means the run contained cases that could have failed.  Finding 134's rule
+applied to the input set rather than to a tool.
+
+### 3212. THE TRELLIS: EIGHT STATES, FOUR BRANCHES EACH, AND THE SUBSET PERMUTATION IS NOT SYMMETRIC BETWEEN THE HALVES
+
+The add-compare-select is written out eight times in the object, once per
+state, with the branch metric and survivor-symbol indices folded into the
+addressing.  Read out of the eight blocks at 0xab67c-0xaba90:
+
+| state | sources | subset for source `p0 + k` |
+|---|---|---|
+| 0, 2, 4, 6 | 0..3 | `k ^ (state/2)` |
+| 1, 3, 5, 7 | 4..7 | `k ^ x`, `x` = 0, 1, 3, 2 |
+
+The even half is the identity permutation on `state/2`; **the odd half is
+not** -- states 5 and 7 take 3 and 2 where the even pattern would give 2 and
+3.  Writing the odd half as `state/2` is the obvious wrong reading, and it
+fails all four rate suites (mutation M4 below).
+
+The even states use the first group of four boundary entries and the odd
+states the second, four entries further on, which is why the branch metrics
+are computed twice per symbol.  The object writes each group of four points
+and metrics into two adjacent stack slots so that indices 4..7 alias 0..3;
+that duplication is what the `5 - k`, `9 - k` and `3 - k` address forms in the
+blocks are for, and it collapses to `[k & 3]` with no loss.
+
+Everything else in the loop is arithmetic that had to be read exactly: the
+state metric leaks by `0x799a/0x8000` before every add, the branch metric is
+`((di*di + dq*dq) >> 16) * 0x666 >> 12`, ties in both the ACS and the
+least-metric search go to the lower index, the survivor ring is 16 slots of 8
+nodes walked back 16 steps with the node index masked `& 0x78`, and the symbol
+emitted is the one the slot held BEFORE this call overwrote it -- which is why
+the decoder saves all eight of them first.
+
+### 3213. THE MUTATION SET, AND THE V.32 QUEUE AS THIS SESSION MEASURED IT
+
+Seven mutations, each applied alone to a green tree, rebuilt and run:
+
+| | change | suites failed |
+|---|---|--:|
+| M1 | region looked up in the unrotated frame for `nsub` 1 | 1 |
+| M2 | branch metric measured on the rotated point | 2 |
+| M3 | one entry of `VTB_BOUND_7200` changed by one | 2 |
+| M4 | odd-state subset permutation made 0, 1, 2, 3 | 4 |
+| M5 | traceback one step short | 4 |
+| M6 | metric leak `0x799a` -> `0x8000` | 4 |
+| M7 | the `0x08` and `0x10` quadrant offsets swapped | 4 |
+
+M1 and M2 are the pair that 3211 is about, and they fail exactly the suites
+they should: M1 only 7200, because only the `nsub == 1` branch was disabled;
+M2 both rotated rates and neither unrotated one.
+
+**THE V.32 QUEUE, seeded the way `service.py` seeds it** (`v32_create`,
+`v32_delete`), measured at this branch point before any of the above was
+written: 257 symbols and 75,842 bytes in the closure, 87 symbols and 16,893
+bytes of it written -- 22.3%.  170 unwritten, 58,949 bytes, of which 109 were
+READY at 26,485 bytes.  A hand-over into this session quoted 42 symbols,
+21,538 bytes and 16 READY at 6.9% written; those figures do not reproduce from
+this tree's tools under any seeding this session could find, and the numbers
+above are what `closure.py` and `coverage.py` say.  Recorded so the next
+session does not spend a turn reconciling them either.
+
+What the batch leaves READY behind it, largest first: `FPM_SRE_recover`
+(2,286), `FPM_FSE_receive` (2,131, and now unblocked bar `avg_err_show.0`),
+`FPM_PPS_filter` (753), `FSE_decision_128pt` (1,032), `_32pt` (721), `_64pt`
+(694) and `_16Tpt` (432) -- the last four unblocked by this batch and needing
+only the `DECv32_*` tables between them -- plus `ECCv32_IMAP`, `ECCv32_QMAP`
+and `ECCv32_CFG`, which finding 1614 says were waiting on the `VTBv32_*` maps
+alone and are now writable.
