@@ -170,11 +170,25 @@ about 45 KB**, shared by V.32, V.22 and the V.90 family at once. Nothing else
 in the plan has this ratio. Do it first even though it is not the largest
 batch, and do it as ONE batch because the closure interlocks.
 
-## Phase 2 — the V.90 demapper cluster
+## Phase 2 — the V.90 demapper cluster  ✅ WRITTEN, on `v90-demapper`
 
 `V90Demapper::hardDecision`, `::process`, `::resetLinearMappStudy`, and
 `V90SignBitsExtractor::process`. ~1.6 KB gating ~30 KB of the V.90/V.92 receive
 chain. Second-best ratio in the object.
+
+**Written 2026-08-16 on `v90-demapper`, not yet merged.** All four, plus
+`V90SignBitsExtractor::applyFrameAction` (197 B), which is not in the batch and
+is what `process` calls: the object holds its four arms twice, once as its own
+symbol and once inlined (finding 3532), and the period compiler reproduces both
+— our `applyFrameAction` is the same 197 bytes with the same mnemonic sequence,
+and our `process` is 418 against the blob's 417 with no out-of-line call.
+`make phase` green, `compare.py --ratchet` 986→991 compared and 350→351
+identical. 1,771 bytes; coverage 57.9% → 58.1%.
+
+Four type corrections came with it and are the reason to read findings 3530 and
+3533 before touching this class: two one-byte "flags" are
+`SerialDifferentialDecoder<unsigned char>` members and the two heap blocks stop
+being `void *`. The naming was carried inside the batch per §3.
 
 ## Phase 3 — the large ready set
 

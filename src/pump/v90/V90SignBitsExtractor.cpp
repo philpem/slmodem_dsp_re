@@ -89,14 +89,21 @@ V90SignBitsExtractor::~V90SignBitsExtractor()
 
 /*
  * ===========================================================================
- * THE PROCESSING HALF -- two of the three, 564 bytes of the object.  `reset`
- * is the one still outstanding.
+ * THE PROCESSING HALF -- two of the three, 614 bytes of the object.  `reset`
+ * is the one still outstanding, at 119.
  * ===========================================================================
  */
 
 /*
- * `applyFrameAction` -- 147 bytes at 0x319e0.  One inversion pattern applied
+ * `applyFrameAction` -- 197 bytes at 0x319e0.  One inversion pattern applied
  * across `width` positions.
+ *
+ * AND IT COMES OUT AT 197 BYTES ON THE PERIOD COMPILER, with the mnemonic
+ * sequence identical to the blob's -- `compare.py` counts it in the identical
+ * set and `nm -S` gives 0xc5 on both sides.  That is a stronger result than
+ * this function needed and it is the second half of finding 3532's argument:
+ * the switch-inside-the-loop reading is not merely consistent with the
+ * object, it reproduces it.
  *
  * THE SWITCH IS INSIDE THE LOOP AND NOT OUTSIDE IT, and the object's shape is
  * the compiler's, not the source's.  What is written here is one `for` with a
@@ -144,9 +151,12 @@ V90SignBitsExtractor::applyFrameAction(ACTIONS action, unsigned char *in,
  * `process` -- 417 bytes at 0x31ab0.  One V.90 frame of sign bits in,
  * `width - 1` decoded bits out.
  *
- * `applyFrameAction` IS CALLED, NOT COPIED.  The object contains its four
- * arms twice: once as the symbol above, and once here, writing into +0x08
- * instead of the caller's buffer.  The two copies are the same instructions
+ * `applyFrameAction` IS CALLED, NOT COPIED, AND THE PERIOD COMPILER AGREES.
+ * The object contains its four arms twice: once as the symbol above, and
+ * once here, writing into +0x08 instead of the caller's buffer.  Our
+ * translation unit has no undefined reference to `applyFrameAction` and this
+ * function comes out at 418 bytes against the blob's 417, so GCC 3.4.2 at
+ * -O3 inlines it exactly as the original's did.  The two copies are the same instructions
  * in the same order down to the `sete`/`movzbl` split on `i & 1`, which is
  * what an `-O3` inline of a same-translation-unit member looks like -- and
  * the out-of-line copy still exists because the member is external and could

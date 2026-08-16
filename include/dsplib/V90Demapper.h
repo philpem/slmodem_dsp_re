@@ -402,7 +402,13 @@ public:
 
 	/*
 	 * +0x1e9c  MODELLED, UNNAMED.  `resetLinearMappStudy` clears it with a
-	 * 16-bit store and nothing else written here touches it.
+	 * 16-bit store; `linearMappingStudy` increments it once per completed
+	 * run and compares the result against TWO (`movzwl 0x1e9c(%edx),%ebx;
+	 * inc %ebx; cmp $0x2,%bx; mov %bx,0x1e9c(%edx); je`).  So it counts
+	 * something that happens twice, and that is as far as the object goes:
+	 * a name here would be a guess about what the second pass is for, and
+	 * finding 3120 declined exactly that.  The compare is an equality, so
+	 * it carries no signedness evidence either.
 	 */
 	short short_1e9c;
 	unsigned char pad_1e9e[2];
@@ -418,48 +424,80 @@ public:
 	V90AutoDigitalImpDetector *adiDetector;
 
 	/*
-	 * +0x1ea4 and +0x1ea6  MODELLED, UNNAMED.  `resetLinearMappStudy`
-	 * clears both with 16-bit stores; `linearMappingStudy` is what reads
-	 * them and is another batch's.
+	 * +0x1ea4 and +0x1ea6  MODELLED, UNNAMED.  `resetLinearMappStudy` and
+	 * `reset` clear both with 16-bit stores and `linearMappingStudy`
+	 * stores a literal 1 into each (0x315b6 and 0x3170f) at the two points
+	 * where its end-of-run pass begins.  Nothing in the object LOADS
+	 * either, so they are flags something else reads and the something
+	 * else is not in this class.
 	 */
 	short short_1ea4;
 	short short_1ea6;
 
 	/*
-	 * +0x1ea8  `resetLinearMappStudy`'s ONE ARGUMENT, stored whole and
-	 * 32-bit wide (`mov 0x24(%esp),%ebx; mov %ebx,0x1ea8(%edi)`) and read
-	 * by nothing this tree has written.  Left offset-named deliberately:
-	 * the study's own members would say what it counts, and guessing here
-	 * would put a name where every other line in this file is a
-	 * measurement.
+	 * +0x1ea8 and +0x1eb0  THE LINEAR-MAPPING STUDY'S LENGTH AND ITS
+	 * PROGRESS, and the pair is what says which is which:
+	 *
+	 *     314e2:  mov  0x1eb0(%edx),%eax
+	 *     314e8:  inc  %eax
+	 *     314e9:  cmp  0x1ea8(%edx),%eax
+	 *     314ef:  je   31578            -> the study's end-of-run pass
+	 *     314f9:  mov  %eax,0x1eb0(%ebx)
+	 *
+	 * inside `linearMappingStudy`, against `resetLinearMappStudy` storing
+	 * its ONE ARGUMENT at +0x1ea8 and zeroing +0x1eb0.  One is set once
+	 * and only read; the other starts at zero, is incremented per call and
+	 * is compared against the first.  The comparison is an EQUALITY, so
+	 * neither carries signedness evidence and both are `unsigned int` by
+	 * the argument's type rather than by the branch.
+	 *
+	 * `linearMappingStudy` IS READ HERE AND NOT RECONSTRUCTED, which is
+	 * the weakest of CLAUDE.md's three evidence ranks and is said out
+	 * loud.  What the two names rest on is the shape above and nothing
+	 * else.
 	 */
-	unsigned int uint_1ea8;
+	unsigned int uint_1ea8;			/* the length  */
 
 	/*
 	 * +0x1eac  THE CODE THE LAST `hardDecision` CHOSE, and +0x1eae the RBS
 	 * frame position it chose it in -- the position BEFORE the advance,
 	 * stored at the very top of the function and therefore recorded even
 	 * on the over-capacity arm that decides nothing.  Both are 16-bit
-	 * stores, both are written on every path, and nothing in the object
-	 * reads either: they are a diagnostic pair, of the shape
-	 * `VPcmV34GetVisualDiagnostics` collects.
+	 * stores and both are written on every path.
+	 *
+	 * THEY ARE NOT DIAGNOSTICS, and an earlier draft of this comment said
+	 * they were on the strength of nothing in the five members this batch
+	 * read touching them.  `linearMappingStudy` reads BOTH, at 0x31459 and
+	 * 0x31470, and uses them as the (phase, code) cell it accumulates the
+	 * study's error into -- `shl $0x7` on the frame position, add the
+	 * code, index +0x1000 and +0x1c00 of the detector.  So this pair is
+	 * the hand-off from the decision to the study, and a batch that
+	 * changed either would change what the study measures.  Finding 3531
+	 * is the same mistake in the neighbouring header and this is why its
+	 * rule is worth having: a claim that NOTHING reads a field is a claim
+	 * about every function in the object, not about the ones in hand.
+	 *
+	 * BOTH ARE SIGNED.  The loads are `movzwl` and each is followed
+	 * immediately by a `movswl` of the same register's low half
+	 * (0x31459/0x31460 and 0x31470/0x3147b), so the value in use is
+	 * sign-extended and the zero-extending load is the free half of
+	 * finding 614 -- an extension whose upper bits are discarded by the
+	 * next instruction.
 	 */
 	short decisionCode;
 	short decisionFramePosition;
 
-	/*
-	 * +0x1eb0  MODELLED, UNNAMED.  A 32-bit word `resetLinearMappStudy`
-	 * clears.
-	 */
-	unsigned int uint_1eb0;
+	unsigned int uint_1eb0;			/* the progress; see +0x1ea8 */
 
 	/*
-	 * +0x1eb4 .. +0x1eb7  NOT MODELLED, and the ONLY thing that bounds it
-	 * is the 0x1eb8 allocation.  `reset`, `resetNoSpectral` and
-	 * `linearMappingStudy` are what touch this last word; nothing written
-	 * here does.
+	 * +0x1eb4  MODELLED, UNNAMED, and it is a HALFWORD rather than the
+	 * four-byte pad this file used to carry: `reset` writes it 16-bit wide
+	 * (`mov %si,0x1eb4(%ebp)` at 0x30b34) and nothing else in the object
+	 * touches it.  The two bytes after it are the tail of the 0x1eb8
+	 * allocation and nothing reaches them.
 	 */
-	unsigned char pad_1eb4[4];
+	short short_1eb4;
+	unsigned char pad_1eb6[2];
 };
 
 #endif /* DSPLIB_V90DEMAPPER_H */
