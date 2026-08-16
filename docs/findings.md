@@ -59293,7 +59293,7 @@ than as a disjunction, or the count is satisfied by whichever channel the
 differential happens to compare most weakly -- which is what the third commit
 on this batch's branch fixes.
 
-### 3309. A SEPARATING-TRIAL COUNTER THAT COUNTS PATHS CAN BE TRUE AND PROVE NOTHING, AND ONLY THE MUTATION SETTLES IT -- 25 WRITTEN, 23 CAUGHT, 2 EQUIVALENT BY PROOF
+### 3309. A SEPARATING-TRIAL COUNTER THAT COUNTS PATHS CAN BE TRUE AND PROVE NOTHING, AND ONLY THE MUTATION SETTLES IT -- 30 WRITTEN, 27 CAUGHT, 3 EQUIVALENT BY PROOF
 
 The rule this batch was given is right and has a hole.  When a plausible wrong
 reading agrees with the true one over every realistic input, the defence is a
@@ -59324,6 +59324,12 @@ every reading is `tools/mutate.py`.  Twenty-five mutations across three sets:
     v22fse    10 mutations   10 caught    0 uncaught   0 equivalent
     v22dec    10 mutations    9 caught    0 uncaught   1 equivalent
     v22recv    5 mutations    4 caught    0 uncaught   1 equivalent
+    v22fp      5 mutations    4 caught    0 uncaught   1 equivalent
+
+(30 in total once `v22fp` was added; the three survivors are all equivalent
+with an argument, and `v22fp`'s is the useful kind -- `TONEv22_CFG` and
+`TONEv22INIT_CFG` are byte-identical in the object, so the set says out loud
+that it cannot tell which one a copy came from rather than appearing to.)
 
 **Both survivors are equivalent by proof, and one of them is the lesson.**
 `t_v22recv` counts `window clamp 16 / full window 784` and stood for the claim
@@ -59349,3 +59355,132 @@ Write the wrong reading down and run it.  If it survives, either there is a
 proof that it cannot matter -- which is a deliverable, and belongs in the set
 with the argument -- or the counter was measuring the wrong thing, whatever it
 printed.
+
+### 3310. THREE OFFSETS NAMED FROM WHAT A CALLER DOES WITH THEM LAND ON THREE FIELDS NAMED FROM WHAT THE RECEIVE LOOP DOES WITH THEM, AND THE MEANINGS AGREE
+
+`v22prc.h` named three offsets in the V.22 object from the leaf functions that
+touch them, with `void *` parameters and no struct, because the object was not
+modelled: `V22FP_EQ_MODE` 0x16c and `V22FP_EQ_EXTRA` 0x180, written only by
+`SetAdaptEqV22`, and `V22FP_QUALITY` 0x186, returned by `GetSignalQuality`.
+
+`V22_FSE_receive` later named eleven fields of `struct v22_fse` from its own
+instructions, knowing nothing of any of that.  `V22FP_create` then placed the
+equaliser at `dsp + 0x164`.  Subtract:
+
+    V22FP_EQ_MODE  0x16c - 0x164 = 0x08 -> fse.mu_sel   the LMS step selector
+    V22FP_EQ_EXTRA 0x180 - 0x164 = 0x1c -> fse.lms_on   the tap-update gate
+    V22FP_QUALITY  0x186 - 0x164 = 0x22 -> fse.mse      smoothed squared error
+
+**All three agree on the MEANING, not merely on the address.**
+`SetAdaptEqV22` mode 3 writes 1 to EQ_EXTRA, and `lms_on` is exactly the flag
+that lets the tap update run -- "adapt, second mode" turns adaptation on.
+Modes 2 and 3 write 0 and 1 to EQ_MODE, and `mu_sel` indexes `v22_fse_mu`,
+which is the step size -- so the two modes are two adaptation rates.  And
+`GetSignalQuality` returns QUALITY, which is the mean squared decision error;
+mean squared error IS signal quality.
+
+Three names derived from what a caller does with a field and three derived from
+what the receive loop does with it, produced by different readings at different
+times with no communication, agreeing on all three.  That is the strongest
+corroboration this tree has produced for a field name, and it is worth more
+than either derivation alone.
+
+The compile-time assertions in `v22fp.c` hold all ten of `v22prc.h`'s constants
+to the struct, so this stays true or the build stops.
+
+### 3311. A CLEAN TEXTUAL MERGE OF TWO DISJOINT BRANCHES DID NOT COMPILE, AND ONLY THE COMPILER WOULD HAVE SAID SO
+
+Finding 700 says a merge that compiles is not a merge that kept everything.
+This is the neighbouring case and it is worth recording beside it: a merge that
+git completes without a single conflict, of two branches that share no source
+file, and which does not build.
+
+Three branches were taken off one commit and worked in parallel.  One added
+`V22_FSE_receive` and, on the evidence of its own instructions, renamed
+`struct v22_fse`'s `r08`, `r1c` and `r22` to `mu_sel`, `lms_on` and `mse`.
+Another added `v22fp.c`, which asserts at compile time that `v22prc.h`'s
+offsets land on those fields -- and it was branched before the rename, so it
+names them `r08`, `r1c` and `r22`.  The two touch no file in common.  Git
+merged both cleanly.  `make period` then reported
+
+    src/pump/v22/v22fp.c:537: error: structure has no member named `r08'
+
+**Nothing short of a compile could have caught it.**  Not `git`, which had no
+textual overlap to notice; not a review of either diff, each of which is
+correct against the base it was written on; not any test, since the tree does
+not link.  The general shape is that a parallel batch may RENAME what another
+parallel batch REFERENCES, and renaming is invisible to a three-way merge when
+the two edits are in different files.
+
+It surfaced here as a hard error only because the reference was a
+`__builtin_offsetof` in a static assertion.  Had it been a field read through a
+`void *` and an offset constant -- which is exactly what `v22prc.h` does
+everywhere else -- it would have merged, compiled, linked and been wrong.  That
+is an argument for the assertions, not against them.
+
+### 3312. THE V.22 COEFFICIENT SETS ARE SYNTHESISED BY THE CONSTRUCTOR, NOT STORED
+
+`V22FP_create` builds three of the datapump's filters from a stored prototype
+and a carrier it generates on the spot: the pulse shaper's 120 I and Q taps
+from `PPSv22_COFFS`, the receive rate converter's 270 from `MRFv22_COFFS`, and
+the equaliser's 49 I and Q from `FSEv22_COFFS`, each multiplied sample by
+sample in Q14 by a tone from an `fpm_tone` object that create makes for the
+purpose, retunes three times -- increment 0x666 or 0xccc by mode, then 0x222,
+then 0x2aaa -- and deletes before returning.
+
+That answers two things that looked odd on their own.  `FPM_TONE_generate2`
+appearing in a constructor is not a stray call; and re-initialising an existing
+object costs five allocations that are released again immediately, which is
+why the measured counts are 40 allocations to build, 45 after a rebuild, and
+35 live in both cases.
+
+It also means the stored tables are prototypes at baseband and the modulation
+onto the carrier is code, which is the form the 8 kHz retarget (#47) needs.
+
+### 3313. `V22FP_create` CHECKS NONE OF ITS ELEVEN ALLOCATIONS, AND ITS "CALLER SUPPLIES THE STATE" PATH IS A RE-INITIALISATION
+
+`B103FP_create`, in the same object and the same library, checks.  This one
+does not test a single one of the eleven `sysdep_malloc` results.
+
+And its argument handling is not what the b103 shape suggests: create tests
+only `fp == NULL`.  A non-NULL argument goes straight to `mov 0x54(%ebp),%ecx`
+and reuses the sub-object pointers without examining them -- so that path is a
+**re-initialisation of an object create already built**, not an alternative to
+allocating one.  Handing it a zeroed buffer dereferences null.
+
+### 3314. `diff_eq_int("%s: ...", got, want, (long)k)` SEGFAULTS AT THE MOMENT IT HAS SOMETHING TO REPORT
+
+The first argument is a printf format and the last is a `long`, so a `%s` in it
+is handed an integer.  The call only formats when a check FAILS, so the fault
+is latent for exactly as long as the code under test is right, and arrives as a
+crash the first time it is not -- when the message would have said which check.
+
+Eight call sites in `test/unit/t_b103alloc.c` were written that way.  All eight
+pass today; all eight are rewritten to `"... (%ld)"`.  This is finding 134's
+argument -- a detector that has never been shown to fire -- applied to the
+reporting path of a test rather than to a tool.
+
+### 3315. `params.bps2` CANNOT DISAGREE WITH `params.bps`, AND TWO OF `v22prc.h`'s TEN OFFSETS ARE AN OPEN QUESTION
+
+Two smaller results from the same reading, both recorded so that a later reader
+does not mistake either for something a test failed to check.
+
+`V22FP_create` stores the rate to `params.bps` (+0x02) and to `params.bps2`
+(+0x04) unconditionally on all three mode paths, so `dsp->r28` and `dsp->r2a`
+are always equal and swapping either pair is invisible to any input.  That is
+finding 3052's shape and finding 3309's rule: the test NAMES the pair as
+inseparable rather than appearing to distinguish it.  Likewise
+`TONEv22_CFG` and `TONEv22INIT_CFG` are byte-identical, so which one builds
+`hdx->tone` cannot be told apart -- and an injection confirms it, failing zero
+suites.
+
+The other two of `v22prc.h`'s ten offsets resolve to something that wants
+explaining rather than recording as settled.  `V22FP_TX_CLOCK` (+0x78) is
+`v22_pps_cfg::step`, a CONFIGURATION word that `V22_PPS_init` copies in and
+`V22_PPS_filter` reads on every output -- so `TxClockSync` overwrites a
+configuration field after initialisation (finding 3305).  `V22FP_BAUD`
+(+0x12a) is `v22_sre::pll_acc` and has the same shape.  Either a deliberate
+post-init correction of two blocks' running state, or a soft spot in one of the
+two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
+NOT propagated inward on the strength of an offset agreeing -- which is the
+same restraint 3310 rewards when the meanings DO line up.

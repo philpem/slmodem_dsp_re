@@ -583,7 +583,7 @@
    }
   },
   "v22dec": {
-   "key": "01e4a0b1540538555ba4e69617ee10497cad7db52d2374608a6c466ecbc8041c",
+   "key": "8f83645910657ec5bfde40ed0c7e8ed3bc0f0a43a41a24f135db64ccee5f23a9",
    "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the 1200 distance is accumulated at full precision": "caught",
@@ -598,8 +598,19 @@
     "the ring index is not biased down one": "caught"
    }
   },
+  "v22fp": {
+   "key": "be4afe146ce3547567ff2698850f0a45aedb93cfe680d43773cb6463d7898d76",
+   "summary": "5 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the 2400 slicer is installed instead of the 1200 one": "caught",
+    "the flag is copied into bit 12 of params.flags, not bit 11": "caught",
+    "the flag that clears hdx.r0e is read one bit over": "caught",
+    "the pulse shaper's I and Q constellation maps are swapped": "caught",
+    "the second tone object is built from TONEv22_CFG, not TONEv22INIT_CFG": "equivalent"
+   }
+  },
   "v22fse": {
-   "key": "05141a3c309c340264601b7887632f8d8483f65ab606f88efe609cf1c06a830d",
+   "key": "88c02c3b3d3984e2f91420289a3c4ce39e246f4a35b30dfac9592b8fbe54f7c2",
    "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "I and Q are swapped": "caught",
@@ -615,7 +626,7 @@
    }
   },
   "v22recv": {
-   "key": "f55ba001634d92e9eb8b4faed0cb27c9c082f0b410d1bc00da658ce3f8687a1e",
+   "key": "19e240ca9d77fb0268abf61861e5d80028eea0160b5be181d9795b6747831b83",
    "summary": "5 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the FIR accumulator is not truncated to sixteen bits before the gain": "caught",

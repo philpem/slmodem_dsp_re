@@ -532,17 +532,37 @@ typedef char v22fp_prc_carrier[
 	((int)__builtin_offsetof(struct v22fp_dsp, sre)
 	 + (int)__builtin_offsetof(struct v22_sre, active)
 		== V22FP_CARRIER) ? 1 : -1];
+/*
+ * THE LAST THREE LAND ON FIELDS THAT WERE NAMED INDEPENDENTLY, AND THE
+ * MEANINGS AGREE.  These assertions were written against `r08`, `r1c` and
+ * `r22`, which is what `struct v22_fse` called those offsets when this file
+ * was written; `V22_FSE_receive` has since named all three from its own
+ * instructions, without reference to `v22prc.h` or to this file.  What the
+ * three offsets resolve to is:
+ *
+ *   V22FP_EQ_MODE  0x16c -> fse.mu_sel   the LMS step-size selector
+ *   V22FP_EQ_EXTRA 0x180 -> fse.lms_on   the gate on the tap update
+ *   V22FP_QUALITY  0x186 -> fse.mse      the smoothed squared decision error
+ *
+ * and every one of them says the same thing the leaf function did.
+ * `SetAdaptEqV22` mode 3 writes 1 to EQ_EXTRA -- it turns the equaliser's
+ * adaptation ON.  Modes 2 and 3 write 0 and 1 to EQ_MODE -- they pick the
+ * step size.  `GetSignalQuality` returns QUALITY -- and the mean squared
+ * error IS the signal quality.  Three names derived from what a caller does
+ * with a field, three derived from what the receive loop does with it,
+ * agreeing on all three.  Finding 3310.
+ */
 typedef char v22fp_prc_eqmode[
 	((int)__builtin_offsetof(struct v22fp_dsp, fse)
-	 + (int)__builtin_offsetof(struct v22_fse, r08)
+	 + (int)__builtin_offsetof(struct v22_fse, mu_sel)
 		== V22FP_EQ_MODE) ? 1 : -1];
 typedef char v22fp_prc_eqextra[
 	((int)__builtin_offsetof(struct v22fp_dsp, fse)
-	 + (int)__builtin_offsetof(struct v22_fse, r1c)
+	 + (int)__builtin_offsetof(struct v22_fse, lms_on)
 		== V22FP_EQ_EXTRA) ? 1 : -1];
 typedef char v22fp_prc_quality[
 	((int)__builtin_offsetof(struct v22fp_dsp, fse)
-	 + (int)__builtin_offsetof(struct v22_fse, r22)
+	 + (int)__builtin_offsetof(struct v22_fse, mse)
 		== V22FP_QUALITY) ? 1 : -1];
 
 #endif /* 32-bit */

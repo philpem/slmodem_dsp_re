@@ -519,5 +519,9 @@
  "v22recv": [
   "src/pump/v22/v22_fse.c",
   "build/test/t_v22recv"
+ ],
+ "v22fp": [
+  "src/pump/v22/v22fp.c",
+  "build/test/t_v22fpcreate"
  ]
 }

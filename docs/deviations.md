@@ -6560,3 +6560,18 @@ at which point both become one struct member.*
 
 Recorded here rather than silently unified because a reader meeting the two
 constants would otherwise have to rediscover that they collide.  Finding 3305.
+
+## D366 ✅ `V22FP_delete` drops a second argument that no callee reads
+
+*Batch of 2026-08-16, from `V22FP_delete` (blob 0x088330).  **Reachability:
+every call.**  **Observability: none -- cdecl, the caller cleans up, and none
+of the four callees touches anything but its first argument.**  Status:
+verified bit-exact.  Fix class: none proposed; reproduced as four
+one-argument calls.*
+
+The object pushes a literal 1 as a second argument to `V22_PPS_free`,
+`V22_MRF_free`, `V22_SRE_free` and `V22_FSE_free`, four times with a fresh
+`mov $0x1` each -- so the author declared all four with two parameters.  This
+tree reconstructed all four from their own bodies, where the second parameter
+is dead, and one of the four headers belongs to another effort.  The same
+shape as D363, at four sites instead of one.
