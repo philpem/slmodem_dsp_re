@@ -60250,3 +60250,64 @@ gateway's attenuation control does work; over-attenuating costs the healthy
 direction; there is no linear echo above about -25 dB; and the request itself
 is not level-driven. **Every one of those is a negative or a bound.** The
 receive-side deficit of #132 is untouched by any of it.
+
+### 1973. 1972 WAS WRONG, GENERALISED FROM ONE MODEM: THE ROCKWELL PAIR'S REQUEST *DOES* TRACK LEVEL — AND THE MECHANISM WORKS END TO END, AND STILL BUYS NOTHING
+
+Phil's proposal, and it was the right one: 1972 concluded the far end's
+power-reduction request is fixed policy rather than a servo on received level,
+**from a single far end**. Testing the two Rockwell-lineage modems settles it.
+Baseline at the 3 dB default first this time, then `output attenuation 12` on
+`voice-port 0/0` and `0/2`, five calls per arm, interleaved.
+
+    1901 Supra     3 dB   req n=12 mean 1.50 dB   zeros  0/12   RxLVL med 32
+                  12 dB   req n=13 mean 1.00 dB   zeros  6/13   RxLVL med 43
+    1903 Oli'Net   3 dB   req n= 8 mean 2.50 dB   zeros  0/8    RxLVL med 19
+                  12 dB   req n=14 mean 0.79 dB   zeros 10/14   RxLVL med 46
+
+**ZERO REQUESTS DO NOT OCCUR AT BASELINE AND DOMINATE AT 12 dB.** By call --
+the honest unit, since handshakes inside one call are not independent --
+**0 of 6 baseline calls contain a zero, against 9 of 10 at 12 dB** (Fisher
+exact p ~ 0.0005). This is a categorical change, not a mean drifting.
+
+**SO 1972 IS WRONG AS STATED AND IS HEREBY NARROWED.** "The far end's request
+is not a measurement of our level" holds for the **USR Courier only**. The
+Supra and the Oli'Net measure the level and respond to it, which is what the
+Recommendation's field is for. I had one far end, generalised to all far ends,
+and said so in a finding. Phil caught it by asking for the other two.
+
+**AND THE MECHANISM 1966 PROPOSED WORKS, END TO END, FOR THE FIRST TIME.**
+The far end stops asking, so we stop applying the reduction, so our digital
+level rises:
+
+    1901   txRMS -22.55 -> -22.04 dBFS   (+0.51 dB)
+    1903   txRMS -24.56 -> -21.89 dBFS   (+2.67 dB)
+
+That is the full causal chain 1966 predicted and the Courier arm failed to
+show, and it is the largest level movement anywhere in this line of work.
+
+**AND IT STILL BUYS NOTHING, FOR THE REASON 1966 ITSELF MEASURED.** -24.56 and
+-21.89 dBFS are both in the middle of the companding plateau, where SNR is flat
+to within a dB across 24 dB of level. The recovered headroom does not convert:
+our receive rate is unchanged (1901 `14400 x4, 16800`; 1903 mixed and if
+anything worse), and by the codeword census a 2.7 dB rise moves us from 182 of
+256 codewords to about 200, which is ~0.04 bits. **The remedy works and is
+worthless, exactly as the plateau said it would be.**
+
+**ONE MORE WAY THE COURIER IS THE ODD ONE OUT.** At 12 dB the Rockwell pair
+kept receiving us at **33600** (`LAST RX rate` 33600 on 7 of 9 parsed calls);
+the Courier fell 28800 -> 12000 under the same change (1970). So the
+over-attenuation cost recorded in 1970 is Courier-specific too, and 12 dB is
+not intrinsically too quiet for this path.
+
+**`Rx LEVEL` IS A LEVEL, DIRECTIONALLY.** Both medians moved the right way and
+substantially (32->43, 19->46) when the gateway attenuated. But +11 and +27
+against a 9 dB command, with within-arm spreads of 22-53 and 25-52, mean the
+SCALE is not established. Use it to compare arms, not as dBm -- which retires
+the reading of the Courier's "20" as -20 dBm in 1969.
+
+**WHAT IS LEFT OF THE WHOLE ATA LINE, 1965-1973:** the far end can only ask us
+down; two of three do so as a function of level and one does not; the gateway
+control works; the recovered headroom is real and measurable; and companding
+converts it into nothing. The receive-side deficit of #132 -- now confirmed
+from the far end's own mouth on all three modems, at 33600 against our
+4800-16800 -- is untouched by any of it.
