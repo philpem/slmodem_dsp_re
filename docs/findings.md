@@ -58159,3 +58159,102 @@ value involved already ranged over a short, so both readings agree over every
 input and `make phase` can only show that nothing broke. It does -- 185
 passed, 0 failed. The evidence for these two is the instruction, and this is
 the tier that exists to read it.
+
+### 2953. `B103FP_modem`'s DEBUG-ONLY SWITCH IS RESTORED FROM ITS JUMP TABLE, AND THE OTHER FOUR SITES IN `b103fp.c` ARE CROSS-JUMPED AND NEED A READ
+
+2951's queue put `src/pump/b103/b103fp.c` at the top of the work that is
+really work: **-7 (blob 7, ours 0)**, with six of the seven strings absent
+from the tree outright. Two of the seven are now restored and the file reads
+**-5 (blob 7, ours 2)**.
+
+**What was there.** `B103FP_modem` ends on a switch our source had elided, and
+said so in a comment: "the switch it runs first is debug-only: every arm
+returns the same thing". It is debug-only, and that is precisely why
+`debug.h`'s policy says to carry it -- the gate is real control flow and the
+strings are the author's words, and with the level at zero nothing can tell
+the two versions apart (134).
+
+The shape is read off the object and not guessed:
+
+```
+  8f2ad:  movzbl 0x1c(%edx),%eax        <- the BYTE at +0x1c
+  8f2b1:  cmp    $0x7,%eax
+  8f2b4:  ja     8f2cd                  <- "Bell103 unknown internal state!"
+  8f2b6:  jmp    *0x8e14(,%eax,4)
+```
+
+and the eight-entry table at `.rodata+0x8e14` reads
+`8f2d6 8f2d6 8f2d6 8f2d6 8f2d6 8f300 8f2d6 8f2d6` -- 0..4, 6 and 7 to the
+epilogue, **5** to `Bell103 internal error detected!`. Neither string has a
+trailing newline. The scrutinee is the byte at +0x1c while the return is the
+whole 32-bit word there (status in the low byte, flags in the next): the same
+four bytes read two ways, and `whichfield.py` confirms `struct b103fp + 28 ->
+status (unsigned char)`. The `int last_status` at +0x1c of `struct b103_dp` is
+a different struct and not this field.
+
+**Corroborated by code generation, which is the only instrument that can see
+this at all.** Compiled in `dsplibs-tc342` with `build.sh`'s flags,
+`B103FP_modem` was 183 instructions against the object's 215 and is now
+**210** -- the switch, its two gates, its two calls and the second copy of the
+epilogue, 27 instructions, all landing where the object has them. No
+differential test moves, and none can.
+
+**THE OTHER FOUR ARE NOT THE SAME JOB, and the reason is worth writing down
+before the next session rediscovers it.** `B103OriginateNextState` reports two
+call sites and `--strings` resolves `B103_STATE_WAIT1\n` and `default\n`, but
+`--sites` shows **five gates on `dsplibs_debug_level` against two references
+to `dsplibs_debug_printf`**, and one of the two is a tail JUMP with the format
+already in `%eax`:
+
+```
+  8f810:  mov  %eax,0x10(%esp)
+  8f814:  add  $0xc,%esp
+  8f817:  jmp  dsplibs_debug_printf
+```
+
+So GCC cross-jumped several arms onto one shared tail, each loading its own
+string beforehand -- the same mechanism as 2601's 9 dB arm, at larger scale.
+The message set is therefore NOT the two `--strings` names, the site count is
+not two, and placing them needs the whole function read for `.rodata` loads
+rather than for calls. `B103AnswerNextState` is the same shape.
+`B103FP_create`'s one site is the `Sep 22 2005` build stamp (135), which
+`--absent` scores present because `src/dsp/fpm_agc.c` carries the same literal
+-- 2951's second limit, and this is the case that shows it.
+
+And there is **no transcript test for Bell 103**: no `t_b103*.c` uses
+`dsplib_debug_capture`. `B103FP_modem` was restorable without one because its
+control flow is a jump table that can be read exhaustively; the cross-jumped
+four are not, and guessing at them is what "wrong-but-plausible is worse than
+missing" forbids.
+
+### 2954. `toneiir_reset`'s `movzwl` IS A MEASURED DECLINE, AND `callprog.c`'s GAP IS NOT A STRING GAP AT ALL
+
+Two pieces of work that were handed over as available and are not, both
+declined on measurement rather than on argument.
+
+**`toneiir_reset`.** 617 records, in parentheses, that declaring `prev` as
+`unsigned short` produces the object's `movzwl` where we emit `movswl`. That
+is a fact about the compiler and it has twice been read as a recommendation.
+It is not one, on two independent grounds:
+
+  * `prev` is loaded from `env_band` and stored to `env_prev` as sixteen bits.
+    The upper half is discarded, so the compiler was free to use either
+    instruction -- 614's class, and the first of the false-positive classes
+    618 had to remove from `extcheck` before it could find anything.
+  * **and it does not produce a match.** Measured: with `unsigned short prev`
+    the extension lines up and the store order still differs, `0x96 0x2c 0x98
+    0x94` in the object against our `0x96 0x94 0x98 0x2c`. 617's acceptance
+    test is full-text identity, operands included, and the change fails it --
+    so it would be a source edit that buys a mnemonic and not a match, which
+    is the definition of fitting the compiler. 617's own conclusion is that
+    everything else on that list stays untouched, and it still holds.
+
+**`callprog.c` -9.** Named as the next true gap after `v8handshak.c`. It is
+not a string gap: `--absent` finds **0 absent over `CALLPROG_Progress`, with
+11 of its 29 sites unresolvable**, and all 18 resolvable strings are in the
+tree. The 11 are the case `--strings` documents itself as getting wrong --
+more than one string pushed before a single call -- so nothing about them can
+be read off the format table either way, and the count gap is at least partly
+`callprog.c`'s own static helpers, which is the worked example in
+`debugaudit.py`'s comment. Whatever is there needs `--sites` read by hand;
+what it is NOT is nine dropped messages.
