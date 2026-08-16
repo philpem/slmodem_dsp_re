@@ -156,6 +156,18 @@ parallel batches — and turned out to be exactly what makes an anchor unique
 (finding 347). If your project has no such convention, introduce one before you
 need this tool.
 
+**That refusal was a promise the tool did not keep until finding 2150.** The
+guard was gated on `--prefix` having been given and the sort's second key was
+the file offset descending, so with no `--prefix` every occurrence scored the
+same, the guard could not be reached, and the LAST textual match won silently —
+nine mutations moved out of `getV90Decision` and into `getV92Decision`, reported
+as "9 re-anchored, 0 left for a human" (finding 2120; 455 is the same thing one
+occurrence at a time). The guard is now unconditional and the offset tiebreak is
+gone, so **an ambiguous anchor with no `--prefix` reads STUCK and exits 1**. The
+repair was demonstrated against the exact input that beat it, in all three
+directions: old tool wrong-and-silent, new tool refusing, new tool still placing
+a case a prefix genuinely separates.
+
 **Known limitation, and it is not academic:** it only grows anchors **upward**,
 and two of one batch's hardest cases needed downward growth — six identical
 lines that first differ in the diagnostic *below* them (finding 432).

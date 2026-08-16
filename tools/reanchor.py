@@ -29,6 +29,26 @@ is made and REPORTED, never guessed silently:
 
 If no prefix distinguishes them, the mutation is left alone and named.  A
 mutation that cannot be placed is a decision for whoever owns the arm.
+
+THE TIE GUARD IS UNCONDITIONAL, AND IT USED NOT TO BE
+
+That last paragraph was a promise the tool did not keep.  The guard was
+gated on `--prefix` having been given, and the sort's second key was the
+file offset, descending -- so with no `--prefix` every occurrence scored 0,
+nothing could ever reach the guard, and the LAST textual match won every
+time.  Run against `v90p3ddec`, that re-anchored nine mutations out of
+`getV90Decision` and into `getV92Decision` and called it "9 re-anchored, 0
+left for a human".  A relocated mutation is worse than a lost one: the
+suite stays green while nine of its claims have changed which code they
+test (finding 2120, and 455 is the same picked-the-wrong-occurrence one
+occurrence at a time).
+
+So: the sort is keyed on the SCORE ALONE -- the offset is no longer a
+tiebreak, because there is no defensible reason to prefer the later
+occurrence over the earlier one -- and the guard runs whether or not
+`--prefix` was given.  With no prefix, every ambiguous anchor now reads
+STUCK, which is the honest answer: nothing was supplied that could tell
+the occurrences apart.
 """
 
 import argparse
@@ -101,10 +121,12 @@ def main():
             continue
         label = m.get("label", "?")
         scored = sorted(((prefix_score(src, h, args.prefix), h) for h in hits),
-                        reverse=True)
-        if args.prefix and len(scored) > 1 and scored[0][0] == scored[1][0]:
-            print("  STUCK    %-52s %d sites, prefix does not separate them"
-                  % (label[:52], len(hits)))
+                        key=lambda t: t[0], reverse=True)
+        if len(scored) > 1 and scored[0][0] == scored[1][0]:
+            print("  STUCK    %-52s %d sites, %s"
+                  % (label[:52], len(hits),
+                     "prefix does not separate them" if args.prefix
+                     else "no --prefix given, so nothing separates them"))
             stuck += 1
             continue
         pos = scored[0][1]

@@ -54119,3 +54119,73 @@ compose is how a second defect gets in -- but it must not be run without
 `--prefix` until the tie guard is ungated. CLAUDE.md's rule for `extcheck`
 generalises: a tool that reports a negative must be shown to fire, and this
 one reports a POSITIVE it cannot justify.
+
+### 2150. `reanchor.py`'s TIE GUARD IS UNGATED, AND THE REPAIR WAS SHOWN TO FIRE AGAINST THE EXACT INPUT THAT BEAT IT
+
+Finding 2120 diagnosed the defect and deliberately did not fix it. Fixed
+here, and the fix is two lines:
+
+    scored = sorted(..., key=lambda t: t[0], reverse=True)
+    if len(scored) > 1 and scored[0][0] == scored[1][0]:
+
+The sort is now keyed on the SCORE ALONE. Previously the tuple compared
+whole, so equal scores fell through to the file offset, descending, and the
+last textual match won; there is no defensible reason to prefer the later
+occurrence over the earlier one, so the tiebreak is removed rather than
+fenced. And the guard no longer tests `args.prefix`, so the case where
+nothing distinguishes the occurrences -- which is every case when no
+`--prefix` is given -- reaches it.
+
+**IT WAS SHOWN TO FIRE, AND AGAINST THE HISTORICAL INPUT.** CLAUDE.md's rule
+is that a tool which cannot be told from a clean tree is not a tool, and a
+guard that fires on everything passes a one-sided test as easily as a correct
+one does. So three legs, on ONE reconstructed input.
+
+The input is the pre-repair `v90p3ddec` anchor set, recovered from the tree's
+own record rather than invented: seven of the nine carry the note
+`reanchor.py` wrote saying how many lines it added, so stripping that many
+leading lines off `find` and `replace` restores what the tool was handed;
+the other two are the pair 2120 says were extended by hand, stripped by the
+count its description implies. All nine then match exactly twice, once in
+`getV90Decision` (lines 610..1578 in this tree) and once in `getV92Decision`
+(1580..2317) -- which is the situation of 2120.
+
+    OLD, no --prefix          9 re-anchored, 0 left for a human   exit 0
+                              lines 1590 1619 2284 1794 1794 2144 2247 2205 2174
+                              -- nine of nine inside getV92Decision
+
+    NEW, no --prefix          0 re-anchored, 9 left for a human   exit 1
+                              every one STUCK, "no --prefix given, so
+                              nothing separates them"
+
+    NEW, --prefix P3D_PHASE   7 re-anchored, 2 left for a human   exit 1
+        --prefix symbol       lines 619 658 911 911 1318 1388 1354
+                              -- seven of seven inside getV90Decision
+
+The third leg is the one that makes the first two mean anything: the guard
+still lets a distinguishable case through, so it is not firing on everything.
+It also reproduces 2120's repair exactly -- the same seven placed, the same
+two STUCK -- and eighteen of the twenty regenerated `find` strings come back
+BYTE-IDENTICAL to the ones committed in the tree. The two that differ are
+precisely the two the tool leaves STUCK, which is independent corroboration
+that those are the two a human extended.
+
+The exit code changes from 0 to 1 on ambiguity. Nothing shells out to this
+tool -- it is not in the Makefile and not called from another tool -- so no
+gate changes behaviour; `anchorcheck.py` only mentions it in prose.
+
+**The nine were re-checked and they sit where they claim.** Against the
+current file, all twenty anchors match exactly once: seventeen inside
+`getV90Decision` at 618..1504, three above line 610 on the shared macro
+bodies (`P3D_SIGN` and its neighbours), and none in `getV92Decision`.
+`anchorcheck.py` reports 0 ambiguous, 0 whose replace equals their find, and
+0 landing in an arm their label does not name. 2120's line numbers (602..1570
+for the function, anchors at 1582..2276) differ from these by the eight or so
+lines the compose moved; the ranges were re-derived here rather than
+inherited.
+
+This is 455 as well as 2120. There, the tool picked the wrong occurrence of
+three in `v34pcmif` and only the line number it printed said so; the three
+notes in that suite still record that they were anchored by hand "and not by
+`tools/reanchor.py`, which picked the other occurrence". Same mechanism, one
+occurrence at a time.
