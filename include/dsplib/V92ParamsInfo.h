@@ -20,7 +20,7 @@
  * that refreshes the scalars of a block whose storage is allocated once, and
  * would be a coincidence otherwise.  With the unpacker written, everything
  * below +0xb4 is now accounted for; the earlier revision of this header said
- * +0x9c..+0xb3 was reached by nothing, and finding 3540 is what it turned out
+ * +0x9c..+0xb3 was reached by nothing, and finding 3600 is what it turned out
  * to be.
  *
  * IT IS THE SAME BLOCK AS `V92MappingParams`, WHICH IS THE AUTHOR'S OWN NAME

@@ -60845,7 +60845,16 @@ two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
 
-### 3540. THE V.92 MAPPING PARAMETER BLOCK NAMES ITSELF OUT OF ITS OWN DIAGNOSTICS, AND ITS LAST 24 BYTES TURN OUT TO BE `indexConstel`
+### 3600. THE V.92 MAPPING PARAMETER BLOCK NAMES ITSELF OUT OF ITS OWN DIAGNOSTICS, AND ITS LAST 24 BYTES TURN OUT TO BE `indexConstel`
+
+**This block was written as 3540-3544 and renumbered to 3600-3604 at merge**
+**time.** `v90cp-info` landed 3540-3542 on master while this branch was
+running, for entirely different subject matter (V.90 CP, not V.92 params).
+Both surveys were correct when taken. The renumber touched HEADINGS and
+`finding NNNN` citations only: `3541` occurs in this tree as table data in
+`src/pump/v34/v34shell.c` and `src/callprog/dualtone.c`, and a whole-word
+substitution would have corrupted both silently -- 3506's lesson, which this
+batch inherited rather than rediscovered.
 
 `V92setParamsInfoFromCPUnPck` (.text+0x12f00) and
 `V92Transmitter::reset` (+0x53d10) are both roughly half diagnostics, and
@@ -60894,7 +60903,7 @@ describes, and the object tests the COPY rather than the source
 (`mov 0x4(%esi),%ebx; test %ebx,%ebx` at .text+0x13090 reads back what
 +0x12f1c wrote).
 
-### 3541. `V92MappingParams` AND `struct V92ParamsInfo` ARE ONE BLOCK, AND FIVE OFFSET/NAME AGREEMENTS SAY SO RATHER THAN THE SIZE
+### 3601. `V92MappingParams` AND `struct V92ParamsInfo` ARE ONE BLOCK, AND FIVE OFFSET/NAME AGREEMENTS SAY SO RATHER THAN THE SIZE
 
 `V92MappingParams` is the author's name -- it is in the mangling of
 `V92Transmitter::reset`, `V92Precoder::reset`, `V92ModulusEncoder::reset` and
@@ -60919,7 +60928,7 @@ Renaming one to the other would have been a defensible reading of the mangling
 and would have touched ten files across five live branches for no behaviour;
 the cast is one line and says the same thing.
 
-### 3542. WHAT FORCES AN ARRAY AND WHAT FORCES SEPARATE FIELDS, ANSWERED THREE DIFFERENT WAYS INSIDE ONE STRUCT
+### 3602. WHAT FORCES AN ARRAY AND WHAT FORCES SEPARATE FIELDS, ANSWERED THREE DIFFERENT WAYS INSIDE ONE STRUCT
 
 Six pointers at `V92CPUnPck` +0xc88..+0xc9c, six words at +0xc58 and six at
 +0xc70 are the same shape and the same count, and the object says something
@@ -60949,7 +60958,7 @@ The negative case is the useful half: `V92Precoder::reset`'s own object code is
 straight-line for loops our source writes as loops, so "the object is
 unrolled" is not evidence about the source at all.  Only the INDEXED access is.
 
-### 3543. THE V.92 CONSTELLATION GAIN IS ROUNDED TO SINGLE PRECISION BETWEEN ITS TWO MULTIPLICATIONS, AND WRITING IT AS ONE EXPRESSION WOULD NOT BE THE SAME NUMBER
+### 3603. THE V.92 CONSTELLATION GAIN IS ROUNDED TO SINGLE PRECISION BETWEEN ITS TWO MULTIPLICATIONS, AND WRITING IT AS ONE EXPRESSION WOULD NOT BE THE SAME NUMBER
 
 The unpacker builds `gain` from `CPObj->prefilterGain` in two steps, printing
 it between them as the "constellation gain (before Lu multiplication)" and
@@ -60980,7 +60989,7 @@ assignment overwrites it either way, so the two agree at every debug level.
 `prefilterGain` unsigned -- a signed conversion is one `fildl` -- and that is
 the forced-signedness case of CLAUDE.md's codegen rule, not a preference.
 
-### 3544. HALF OF BOTH THESE FUNCTIONS IS UNREACHABLE AT LEVEL 0, AND THE TRANSCRIPT ORACLE IS WHAT MAKES THE OTHER HALF TESTABLE
+### 3604. HALF OF BOTH THESE FUNCTIONS IS UNREACHABLE AT LEVEL 0, AND THE TRANSCRIPT ORACLE IS WHAT MAKES THE OTHER HALF TESTABLE
 
 `V92setParamsInfoFromCPUnPck` is 2,695 bytes of which roughly half is behind
 twenty-six separate `cmpl $0x1,dsplibs_debug_level` gates; `V92Transmitter::reset`
