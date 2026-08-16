@@ -53495,3 +53495,53 @@ bundle.  It also says nothing about whether any reconstructed code DEPENDS on
 unordered semantics -- if some function is only correct because a comparison
 was quiet, this flag makes it wrong, and the differential tier is what would
 catch that.  It passed.
+
+### 1991. THE `GenericToneDetector::process` CODEGEN RESIDUAL IS NOT OPERAND ORDER, AND TWO SPELLINGS PROVE IT
+
+*A negative result, recorded because the obvious fix was recommended in
+writing -- including in two subagent briefs -- before it was tested.*
+
+After finding 1990 put `-mno-ieee-fp` in the codegen flags, `reset` is
+mnemonic-identical to the object and the two `process` overloads are not.  The
+residual is small and looks like a spelling problem:
+
+    process(float)          blob 111 instructions, ours 109.  Blob `jae`
+                            where we emit `jbe`; one site, everything else
+                            in the branch sequence agrees
+    process(float *, n)     blob 148, ours 148.  One `je` against our `jne`
+
+**The natural reading is that the comparison operands are the other way round
+in our source, and that reading is wrong.**  Both spellings were tried against
+the period compiler:
+
+| change | result |
+|---|---|
+| `meanOut >= threshold` -> `threshold <= meanOut` | no change; GCC canonicalises operand order |
+| invert the condition and swap the arms, `!(meanOut >= threshold)` with the miss arm as the if-body | no change to the jump sense |
+
+Semantically both rewrites are safe -- `>=` and its operand-swapped form route
+a NaN to the same arm -- and neither moves the emitted branch.
+
+**What the difference actually is.**  The object issues
+
+    103e1:  fcomps 0x4(%ebx)
+
+comparing straight against the member in memory, and it does so BEFORE the two
+accumulator stores at 103ed and 103f2.  Ours stores first and then loads the
+member with `flds` for a register-to-register compare.  So the difference is
+where the compare sits relative to the stores and what is left on the x87
+stack -- statement order and scheduling, which `CLAUDE.md` files under "in
+between: it needs the strong test", and where this project's own measurement
+is that two functions passed full-text identity and seventeen did not and were
+left alone (finding 617).
+
+**So it is left alone**, and the code is unchanged by this finding.  The
+overloads pass their differential tests over 23,361 checks with NaN and
+infinity driven, and 54 of 54 mutations; that is the tier that decides.
+
+**One incidental cost worth knowing.**  Restructuring the arms invalidated
+`test/mutations/gtonedet.json`'s anchors and `make one` then failed at the
+`refs` target with "5 anchor(s) match other than exactly once" -- not at the
+test, at the anchor check.  `tools/reanchor.py` is the repair.  Anyone
+permuting a function that already has a mutation set should expect to pay
+that, which is one more reason not to permute one on a hunch.
