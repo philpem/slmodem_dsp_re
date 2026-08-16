@@ -60844,3 +60844,100 @@ post-init correction of two blocks' running state, or a soft spot in one of the
 two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
+
+### 3540. `V90CP`'s 3,188-BYTE `pad_14` IS FULLY TYPED BY TWO FUNCTIONS THAT REFERENCE NO STRING, AND SO IS NAMED ALMOST NOWHERE
+
+`V90CP::infoToBits` (2,785 bytes) and `V90CP::evaluateInfo` (1,986) are exact
+inverses, and between them they touch every byte of the class below +0xcb8.
+Read together they force the type, the element width, the signedness and the
+array bound of all 3,188 bytes of `pad_14`, plus `pad_00`, `pad_ca0` and
+`pad_cb4`:
+
+| offset | bytes | shape | what forced it |
+|---|--:|---|---|
+| +0x000..+0x00c | 16 | four `int` | 32-bit loads, each tested against zero |
+| +0x010..+0x013 | 4 | four bytes | `movsbl` on +0x10, `movzbl` on the rest |
+| +0x014 | 4 | `int` | `movzwl` read, 32-bit store back |
+| +0x018 | 48 | `int[12]`, six pairs | `(%esi,%ebp,8)` in one half, `(%esi,%eax,4)` in the other |
+| +0x048 | 16 | `unsigned int[4]` | loop bounds, unsigned compares |
+| +0x058 | 3072 | `short[4][384]` | stride 2, 16-bit accumulator in `%di` |
+| +0xc58 | 24 | `unsigned int[6]` | loop bounds over the six buffers |
+| +0xc70 | 24 | `int[6]` | stride 4, four bits each |
+| +0xca0 | 4 | `unsigned int` | one bit in, all 32 bits out |
+| +0xcb4 | 4 | `unsigned int` | the decoder's bit cursor |
+
+Total 3,188 for `pad_14` alone, and the four spans meet exactly: 0x58 + 4*0x300 = 0xc58, +24 = 0xc70, +24 = 0xc88, which is where the six already-known heap pointers start.  The `void *` those pointers used to be is gone as well -- `evaluateInfo` stores 32 bits at `(%edi,%ebp,4)` -- so `buf` is `int *[6]`.
+
+**And almost none of it is NAMED.**  Neither function references a single string: `infoToBits` has no relocations at all and `evaluateInfo` has one, its own jump table.  The whole translation unit reaches three strings, and all three are in `bitsToInfo` and `printNofRecievedMpMpNot`.  With the tree's first-order evidence absent, the fields keep offset-anchored names and carry their derivation in the header.  Two exceptions are named, because the code itself settles them and no reading is involved: `nof_58[k]` is the bound of the loop over `short_58[k]` and `nof_buf[k]` the bound of the loop over `buf[k]`, in **both** directions.  That is 40 named bytes of 3,188 modelled ones, and the balance is deliberate -- 3120's ground, at eleven fields instead of one.
+
+The strongest near-miss is recorded so nobody re-derives it and stops there.
+`V92setParamsInfoFromCPUnPck` prints a whole `CPObj->` field list in the
+author's own words -- `constellationPresent`, `LC[%d]`, `M[%d]`,
+`indexConstel[%d]`, `trellisState`, and six banners reading
+"======== Constellation LC 1..6 ========" with `const1[]`..`const6[]` beside
+them.  Six lists with six sizes is the shape of `buf[6]` and `nof_buf[6]`
+exactly.  But that `CPObj` is not this object: `V92CP` puts its bit vector at
++0x129 and its CRC at +0x8f9 against `V90CP`'s +0xcb8 and +0x3b98, so the two
+classes do not share a layout, and the struct those strings describe has not
+been shown to be either of them.  A vocabulary match across a sibling is
+usage inference wearing better clothes.
+
+### 3541. THE TWO HALVES OF THE V.90 CP MESSAGE WERE READ INDEPENDENTLY AND MEET AT TWO ABSOLUTE CONSTANTS
+
+The sequence is seventeen-bit frames: one zero framing bit and sixteen
+information bits, after a preamble frame of seventeen ones.  Nothing in the
+object states that; three separate things imply it and agree.
+
+- `infoToBits` writes bits[0x00..0x10] as ones and then writes a zero at every
+  index it reaches that is a multiple of seventeen, and never anything else
+  there.
+- Its CRC loop steps over exactly those indices, with `mul $0xf0f0f0f1` /
+  `shr $4` / `cmp $1` / `adc $0` -- the reciprocal for 17 followed by
+  "if the remainder is zero, skip one".
+- `evaluateInfo` walks the same grid backwards and **two of its arms end by
+  storing an absolute constant** into the read cursor rather than the
+  arithmetic: 0x32 after the header and 0x98 after the six pairs.
+
+The check is that the two halves were transcribed from opposite ends and the
+constants land where the other half's arithmetic puts them.  `infoToBits`
+leaves its write cursor at 0x33 after the header, and 0x33 + 6*17 = 0x99 after
+the pairs; the decoder's cursor convention is one below the next framing bit,
+so 0x32 and 0x98.  Both, first time, with no fitting.
+
+The CRC is the CCITT register held one bit per byte, least significant first:
+sixteen bytes set to 1, then `a = (crc[0] + bit) & 1`, a shift down one place,
+`a` added into what becomes crc[3] and crc[10], and `a` itself into crc[15] --
+x^16 + x^12 + x^5 + 1.  It is INLINED into `infoToBits` rather than reached
+through `calcCRC`, which exists as its own 570-byte symbol and is not called.
+
+### 3542. `V90CP::evaluateCRC` RETURNS A VALUE, AND THE MANGLING CANNOT SAY SO
+
+`include/dsplib/V90CP.h` declared it `void`, on the tree's usual rule that a
+return type is not mangled and so is not established.  The epilogue settles it
+the other way: `xor %eax,%eax` / `cmpb $0x0,0x13(%esp)` / `sete %al`.  A
+leftover in `%eax` is never built with a `sete`, so the declaration was wrong
+in the one direction the mangling leaves open, and it is now `int`.
+
+The comparison is worth recording for its shape.  It accumulates the ABSOLUTE
+DIFFERENCE between the sixteen bits it computed and the sixteen the peer sent,
+in a single byte -- `cltd` / `xor %edx,%eax` / `sub %edx,%eax` is the object's
+inlined `abs` -- and returns whether that byte is zero.  With sixteen terms of
+at most 255 THE ACCUMULATOR CAN WRAP, so a reconstruction that widened it to
+an `int` is not equivalent: the object accepts a sequence whose differences sum
+to 256 and a wider one rejects it.
+
+**That is unreachable through any sequence `infoToBits` builds**, which is why
+it is written down rather than left to a test to find.  Both the register this
+end computes and the sixteen bits the peer sent are 0 or 1 on every such
+vector, so each term is 0 or 1, the sum is at most 16, and no accumulator width
+can be told from another.  A first version of `t_v90cpinfo` had 48 trials that
+all looked like they exercised this and none of them did -- finding 3509's
+shape exactly, a separating count that is true and proves nothing.
+
+So the case is now CONSTRUCTED rather than hoped for: a third of the trials
+move two of the received CRC bits 128 away from the computed register, making
+the differences 128 and 128, and the test asserts off the blob that the two
+bits are out of range AND that the blob accepted the sequence anyway.  The
+mutation "evaluateCRC's accumulator cannot wrap" -- `diff + d` becomes
+`diff | d` -- is dead against the other two thirds of the trials and is killed
+by these.  22 mutations, 22 caught.
