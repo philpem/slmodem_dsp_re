@@ -56361,8 +56361,11 @@ mechanism -- "modern GCC is wrong and we know why", naming CHECKS, failing on
 a stale entry, and never consulted by `make period`.  Its docstring already
 anticipates the shape: the source gets corrected, `make period` proves it
 against the object with the period compiler, and the modern build declares the
-site.  It carried one entry and one check before this; it now carries the
-entries listed in the file.
+site.  It carried one entry and one check before this -- `t_psd`'s
+`Psd::process`, finding 1453 -- and now carries five and ten: `t_agc` 1,
+`t_v90adid` 1, `t_v90equ` 6, `t_v90leaves` 1.  Four of the six `t_v90equ`
+checks are consequential on the other two rather than separate causes, so the
+count of independent sites is four, not ten.
 
 **WHAT WOULD RETIRE THEM.**  Any of: a GCC option that elides the parity test
 without withdrawing NaN semantics wholesale; a spelling of "equal or

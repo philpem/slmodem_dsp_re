@@ -130,12 +130,12 @@ is still the fast loop between commits.
 The modern build runs in the same `phase` and still has to pass. It is the
 portability check, and `make check64` proves the tree is 64-bit clean. Where
 GCC 13 provably cannot reproduce the object from correct source, the site is
-declared in `tools/gccdiverge.json` -- four entries today, nine checks --
+declared in `tools/gccdiverge.json` -- five entries today, ten checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
 a stale entry (an allow-listed test that starts passing) fails the gate.
 **`make period` has no allow-list and is not getting one.**
 
-Three of those four are one cause and were added together: the object's
+Four of those five are one cause and were added together: the object's
 equality tests are a single ordered `fcom` with no parity test, which GCC 13
 will not emit at all -- `-mno-ieee-fp` is accepted by it and does nothing, and
 `-ffinite-math-only` does the job by withdrawing NaN semantics from the whole

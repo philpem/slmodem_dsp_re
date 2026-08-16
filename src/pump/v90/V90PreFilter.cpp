@@ -390,10 +390,20 @@ V90PreFilter::setParamEia6()
 	/*
 	 * `fcompp; sahf; jne`, and the zero flag comes from C3, which is set
 	 * for equal AND for unordered -- so the object treats a NaN deviation
-	 * as zero where C's `!=` would not.  Spelled as the object's predicate
-	 * rather than as `!=`; the difference is unreachable, because `x` is
-	 * an int times 0.001f and cannot be a NaN, but the two are not the
-	 * same test and only one of them is the object's.
+	 * as zero where C's `!=` would not.
+	 *
+	 * THE ARGUMENT FOR THIS SPELLING IS NOW THE ARGUMENT AGAINST IT, and
+	 * the code is left alone anyway.  It was written as two relational
+	 * tests because C's `!=` acquires a parity test under `-mieee-fp`;
+	 * `period_inner.sh` now carries `-mno-ieee-fp`, where `!=` IS the
+	 * object's single `fcompp`/`jne` and this pair is one compare too many
+	 * (finding 2300, which corrected nine such sites).  This is the tenth.
+	 * It is not one of the nine because its suite is green either way --
+	 * `x` is an int times 0.001f and cannot be a NaN, so the two tests
+	 * agree over every value that reaches them -- so there was no
+	 * differential failure to drive the change and nothing to prove it
+	 * with beyond the codegen tier.  Whoever measures that next should
+	 * take it.
 	 */
 	if (xf < 0.0f || xf > 0.0f) {
 		edprintf("V90PreFilter: Setting timing parameters "
