@@ -274,6 +274,17 @@ came from getting that backwards.
   16-bit test, a sum truncated by a cast, and a value masked to two bits, and
   no lookahead rule separates those from the real thing. 619 ruled that needs
   real dataflow and the ruling stands.
+- `samesize.py` — the SAME SIZE, DIFFERENT INSTRUCTIONS bucket, which
+  `compare.py` counts and does not print. `--all` dumps every aligned diff in
+  one pass; `--identical` prints the identical SET, because a count can gain
+  four and lose four and not move. The sharp slice: same byte count means
+  nothing is missing and nothing is extra. **The free column is narrower here
+  than the general rule** — `compare.py` drops operands, so pure register
+  allocation already scores as identical and cannot reach this list; what is
+  still free in it is scheduling, 614's discarded upper half, and 2411's
+  integer if-conversion. 69 rows classified in finding 2900, of which three
+  were real (2901), three were 614 and declined (2902), and ten are forced
+  and named for the next pass (2903).
 - `storeorder.py` — store order, and a HINT, not a defect list. 617's
   acceptance test is full-text identity, operands included: nineteen examined,
   two passed. It reports 57 differing functions and, of those, **the 14 whose

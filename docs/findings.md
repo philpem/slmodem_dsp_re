@@ -57981,3 +57981,372 @@ deliberately -- retargeting a mutation while the record is stale is exactly
 what "nothing is weakened to make a number look better" forbids, and the
 number here would get BETTER, which is the direction that should make a reader
 suspicious.
+### 2900. THE SAME-SIZE SLICE, ALL 69 CLASSIFIED -- AND THE FREE COLUMN IS NARROWER HERE THAN THE RULE'S GENERAL FORM
+
+*The triage that 613/614/617 asked for, run over the whole slice at once
+rather than a function at a time.  The table is the deliverable; three fixes
+came out of it and are 2901.  What was DECLINED is 2902 and 2903, and those
+are the more useful half.*
+
+`compare.py` splits the 938 symbols the blob and this tree both have into
+identical mnemonic sequences (334), same byte count with a different sequence
+(69), and different size (535).  It PRINTS the first bucket and merely COUNTS
+the other two, so the 69 had never been enumerated.  `tools/samesize.py` --
+new, and in `tools/` rather than `tools/toolchain/` because that directory is
+another session's -- prints them with a lexical shape tag and the owning
+source file, and `--all` dumps every aligned diff in one pass.
+
+**WHY THIS SLICE IS THE SHARP ONE.**  Same byte count means nothing is
+missing and nothing is extra: the difference is a spelling, an order or a
+shape inside a function that is otherwise exactly the right size.
+
+**AND THE FREE COLUMN IS SMALLER HERE THAN CLAUDE.md's RULE IMPLIES, which
+is worth stating because it changes how a row should be read.**  `compare.py`
+compares MNEMONICS with operands dropped, so a difference that is only
+register allocation, only a stack slot or only a relocated address ALREADY
+SCORES AS IDENTICAL and is inside the 334.  **Nothing reaching the 69 can be
+pure regalloc.**  A row that reads "free -- the register allocator" is a row
+that has been misread.  What is still free in this slice is narrower:
+scheduling proper, the extension on a load whose upper half is discarded
+(614), and if-conversion of an INTEGER two-constant select (2411, unpinnable
+by construction).
+
+**THE 69, BY CLASS.**  Rows, then distinct emitted bodies -- the C1/C2 and
+D1/D2 pairs are one body under two names and inflate every count here:
+
+| class | rows | bodies | what they are |
+|---|---|---|---|
+| IN BETWEEN -- statement/declaration order | 28 | 21 | same multiset of mnemonics, different order.  617's class |
+| IN BETWEEN -- the sibling-call decision | 9 | 6 | 2902 |
+| IN BETWEEN -- arm order (an EXACT inverse jump pair) | 6 | 4 | which arm is the fallthrough |
+| FORCED -- acted on | 3 | 3 | 2901 |
+| FORCED -- named and left | 10 | 10 | 2903 |
+| FREE -- 614, upper half discarded | 3 | 3 | 2902 |
+| FREE / IN BETWEEN -- loop idiom, x87 stack order, padding | 10 | 9 | below |
+| **total** | **69** | **56** | |
+
+**THE CLASSES PARTITION AND THAT WAS CHECKED, not assumed.**  The first
+version of this table did not: it carried a separate `.rodata` class, which
+double-counted `V90Modem::V90Modem` against arm order and
+`V90Demapper::printErrorHistogramAndReset` against the loop-idiom row, and
+listed the `V90Equalizer` destructors under the sibling call while also
+counting them under arm order.  Rows still summed to 69, which is exactly why
+a sum is not a check.  **The 69 rows are 56 distinct emitted bodies** -- the
+`C1`/`C2` and `D1`/`D2` pairs are one body under two names (thirteen pairs in
+all), so every count in this slice reads about 20% high until they are
+collapsed.
+
+**THE ROWS.**  `[owner]` marks a file or symbol another live session holds;
+those were reported, not edited.
+
+*IN BETWEEN, statement or declaration order (617's class -- the acceptance
+test is FULL-TEXT identity, operands included; nineteen were tried there and
+two passed, so expect most to fail):*
+`dp_runtime_create`, `FloatARMA::reset`, `FPM_FSE_init`, `v23FP_tx_create`,
+`V34Filter2`, `V34InitializeImplementationSpecific`, `V90CP::V90CP` (C1+C2),
+`V90ConnectionEvaluator::reset`,
+`V90ConstellationDesigner::spectralDesign`,
+`V90ConstellationDesigner::V90ConstellationDesigner` (C1+C2),
+`V90Equalizer::enterChannelVerification`, `V90MP::reset`,
+`V90MP::V90MP` (C1+C2), `V90Resampler::V90Resampler(...float...)` (C1+C2),
+`V92CP::V92CP` (C1+C2), `V92Mapper::process`,
+`V92Phase2Info::V92Phase2Info` (C1+C2), `V92Transmitter::V92Transmitter`
+(C1+C2), `VPCMXF_Create`, `create_cid_dtmf`, `reset_dtmf`.
+
+*IN BETWEEN, the sibling call -- blob `call`+`ret`, ours `jmp`.  Nine rows,
+six bodies, five files, ONE cause, and the callee is the same symbol on both
+sides.  Finding 2902:*
+`FloatARMA::~FloatARMA` (D1+D2), `GenericIIR<float,double>::~GenericIIR`,
+`Psd::~Psd` (D1+D2), `V90CP::~V90CP` (D1+D2),
+`V90Equalizer::~V90Equalizer` (D1+D2), `V92deleteConstellations`,
+`V92deleteFilterCoefficients`.
+
+*IN BETWEEN, arm order -- an EXACT inverse pair of jumps, so it is which arm
+the compiler laid down first and not what was compared:*
+`DeleteV23Modem` (`je`/`jne`), `V90Modem::V90Modem` (C1+C2, `je`/`jne`),
+`V90Equalizer::~V90Equalizer` (D1+D2, `jne`/`je`, on top of the sibcall),
+`V8Create` [agent-debugsites] (`je`/`jne`).
+
+*FORCED, acted on -- finding 2901:*
+`alaw2ulaw`, `ulaw2alaw`, `dtmf_progress`.
+
+*FORCED, named and left -- finding 2903:*
+`toneiir_reset` [agent-debugsites], `FPM_atan`, `hamming<float>`,
+`V34EchoPreFilter`, `V34EchoHistoryBackwardClean`,
+`Resampler::setNormalizedPhase`, `getConstellationMask`,
+`getCodecConstellationMask`.  Plus, in another session's files,
+`v8_agcadapt` and `V8_V21_reset` [agent-debugsites].
+
+*FREE, 614 -- the extension on a load whose upper half is discarded.  Finding
+2902 for why this is the report's most useful row:*
+`V90AutoDigitalImpDetector::resetLinearMapping`,
+`V90AutoDigitalImpDetector::unitePhasesInfoOfUref`,
+`V90MP::evaluateInfo`.
+
+*FREE or IN BETWEEN -- a loop-guard idiom, an x87 stack order, or padding:*
+`FloatFIR::process` (blob counts down with `dec`/`cmp $-1`, we count up),
+`V34EqualizerUpdateDelayLine` (`lea 1(%edx)` against `inc`),
+`indicateJaTransmission` (`add $4` folded into two displacements),
+`V90AutoDigitalImpDetector::updateUref` (three `fxch` against a different
+x87 stack order), `V90ConstellationDesigner::calcMtoMatchKtarget` (the same),
+`V90Equalizer::zeroDfeCoefs` and `zeroLinearEquCoefs` (the blob hoists
+`n != 0` out of `0 < n`; both unsigned, so no signedness in it),
+`V90Resampler::V90Resampler(...float *...)` (C1+C2, thirteen `nop` of
+alignment), `V90Demapper::printErrorHistogramAndReset` (a spilled loop
+counter against a register one, plus fourteen `nop`).
+
+*A NOTE ON TWO OF THE ROWS ABOVE, and NOT a class of its own:*
+`V90Modem::V90Modem` (arm order) and
+`V90Demapper::printErrorHistogramAndReset` (loop idiom) also pass different
+`.rodata` offsets to their diagnostics.  That is a consequence of the rows
+they are already in, not a separate difference -- see 2903, where reading it
+as one was the session's own error.
+
+**A `JCC` TAG IS TWO DIFFERENT ANIMALS AND MUST BE SPLIT BEFORE IT IS READ.**
+An EXACT inverse pair (`je`/`jne`, `jg`/`jle`) is arm order and belongs in the
+in-between column.  A pair that crosses the SIGNEDNESS CLASS -- `jbe` against
+`jle`, `jb` against `jle`, `jae` against `jbe` where the partner moves too --
+is the compiler reporting the declared signedness of what was compared, and
+belongs in the forced column beside 613.  `V8_V21_reset` is the cleanest
+instance in the object: one conditional jump, `jbe` in the blob and `jle` in
+ours, nothing else in the function differs.
+
+**`storeorder.py` CANNOT HELP WITH THIS SLICE, AND THE ARITHMETIC SAYS SO
+BEFORE ANY RUN DOES.**  This task was scoped to use it rather than re-derive
+617's precondition, and the intersection is empty:
+
+    storeorder's 14 ELIGIBLE  n  the 69 same-size  =   0
+    storeorder's 14 ELIGIBLE  n  the 334 identical =  14
+    storeorder's 43 others    n  the 69 same-size  =  19
+
+**"Mnemonics already match" IS the definition of the identical bucket**, so
+every symbol storeorder calls eligible is already inside the 334 and none of
+them can be here.  What it does contribute is the other direction: 19 of its
+43 "leave alone" rows are this slice's order-only rows, which is independent
+confirmation that those 19 differ in more than order and that 617's full-text
+test would fail on them.  Read the two tools as covering DIFFERENT halves of
+617's question, not as one refining the other.
+
+**THE TOOL PRINTS ITS DENOMINATOR** on every run, per 2400 and 2401, and the
+runs behind this finding read `938 symbols compared, 334 identical, 69 same
+size and different` before and `337 / 66` after.  **A FALLING `same_size` IS
+PROGRESS WHEN THOSE SYMBOLS MOVED INTO `identical`, and `compare.py
+--ratchet` cannot tell the two apart** -- it fails on a decrease in EITHER
+count, so 69 -> 66 reads to it as a regression.  Do not run `--update` after
+a session like this one without saying which way the three went.
+
+### 2901. THREE SYMBOLS THE CODEGEN TIER COULD SEE AND NO TEST COULD: A REDUNDANT MASK AND TWO NARROW LOCALS
+
+*613's shape, twice over.  Both changes are provably invisible to the
+differential tier over the WHOLE input domain, so both are codegen-tier-only
+by construction and neither manufactures a fixture to pretend otherwise.*
+
+**`alaw2ulaw` AND `ulaw2alaw` -- A MASK THE ORIGINAL DOES NOT HAVE.**
+
+    blob:  movzbl %al,%eax        the unsigned char -> int conversion
+    ours:  and    $0x7f,%eax      the mask, and nothing else
+
+Both are three bytes, which is how the functions stayed the right size while
+carrying an operation the original does not.  Our source indexed
+`a2u_table[(a_val ^ 0xd5) & 0x7f]`; the object indexes `a2u_table[a_val ^
+0xd5]`.
+
+**THE MASK IS REDUNDANT OVER ALL 256 INPUTS AND THAT IS PROVED, NOT
+ASSUMED.**  Each arm xors with a constant whose bit 7 MATCHES the arm's own
+`& 0x80` test -- 0xd5 and 0xff where the test says bit 7 is set, 0x55 and
+0x7f where it says it is clear -- so the xor always clears bit 7 and the
+index is already 0..127 on every input.  Both tables are `[128]`, so removing
+the mask leaves every index in bounds.  That is exactly why no test could
+ever see it and why the codegen tier had to.  GCC 13 at `-Wall -Wextra`
+emits nothing on the unmasked form, which was checked before committing
+rather than after.
+
+**`dtmf_progress` -- TWO LOCALS DECLARED `short` THAT THE OBJECT DECLARES
+`int`.**  Two instructions carry it and each is worth a byte of the same
+claim:
+
+    blob:  cmp $0x1,%ecx           `digit` is int, so the promoted
+    ours:  cmp $0x1,%cx            compare is 32-bit and not 16
+
+    blob:  movswl 0x18(%esp),%eax  `result` is int and the RETURN type is
+    ours:  mov    0x18(%esp),%eax  short, so returning it truncates; a short
+                                   `result` needs no re-extension, and gets
+                                   none
+
+The 0x66 prefix on the narrow compare pays for the byte the narrow load
+saves.  The `(short)` narrowing is on the CALL -- `dtmf_detect` returns `int`
+and both sides emit `movswl %ax,%edx` -- so it is the variables' type that
+differs, not the conversion.
+
+**INVISIBLE, AND ALSO PROVED.**  `digit` only ever holds `(short)x`, so
+`digit + 2` lies in [-32766, 32769]; `(unsigned)(digit+2) <= 1` selects
+{-2,-1} and `(unsigned short)(digit+2) <= 1` selects {-2,-1} plus 65534 and
+65535, neither of which a short can hold.  `result` only ever holds `digit`
+or `DTMF_NO_DIGIT`, and the function returns `short`, over which the int and
+short readings agree.
+
+**MEASURED ON BOTH SIDES, AS A SET AND NOT AS A COUNT** (2155's argument: a
+change can gain four and lose four and not move a total):
+
+    before  938 compared, 334 identical, 69 same size and different
+    after   938 compared, 337 identical, 66 same size and different
+    set diff: +alaw2ulaw +ulaw2alaw +dtmf_progress, and NOTHING lost
+
+### 2902. THE EXT TAG'S PRECISION, AND THE ROW THAT WOULD HAVE BEEN A REAL DEFECT IF IT HAD BEEN ACTED ON
+
+*The most useful result of the triage is a decline, and 2402's "one report in
+five is real" survives re-measurement on this slice.*
+
+**`V90AutoDigitalImpDetector::resetLinearMapping` LOOKS EXACTLY LIKE 613 AND
+IS 614.**  One instruction differs in the whole 111-byte function:
+
+    blob:  movzwl 0xa96c(%ebx),%edi
+    ours:  movswl 0xa96c(%ebx),%edi
+
+which is `TxHdxStartB103`'s signature to the letter, and 0xa96c is `short
+ucodeLevel`.  **The consumer decides, and the consumer here is
+`mov %di,(%ebx,%eax,2)` -- a 16-bit store.**  The upper half is discarded, so
+the two loads are interchangeable and the choice is the compiler's: finding
+614, not 613.
+
+**AND RETYPING IT WOULD HAVE BEEN WRONG, not merely unnecessary.**
+`ucodeLevel` is assigned from `alaw2linear`/`ulaw2linear`, which return
+SIGNED linear levels; `V90AutoDigitalImpDetector.cpp:341` reads it as `short
+level`, line 1476 computes `ucodeLevel * inv + 0.5f`, and
+`V90Phase3Demodulator.cpp` compares it against `P3D_ABS(symbol)` at eight
+sites.  `unsigned short` would have flipped every negative level.  The
+codegen tier would have gone up by one and the reconstruction would have
+become less correct -- which is precisely the failure mode CLAUDE.md's rule
+exists to prevent.
+
+`V90AutoDigitalImpDetector::unitePhasesInfoOfUref` and
+`V90MP::evaluateInfo` are the same call.  The first differs by a `cwtl`
+against two `movswl` around a loop counter that is stored back as a short;
+the second by `movsbl %al,%edx` on a value the preceding `and $0x1,%al` has
+already reduced to 0 or 1, where both extensions agree.
+
+**SO THE EXT TAG RAN 3 REAL IN 9 ON THIS SLICE** -- `alaw2ulaw`,
+`ulaw2alaw` and `dtmf_progress` against `resetLinearMapping`,
+`unitePhasesInfoOfUref`, `evaluateInfo`, and three in another session's files
+that were not traced.  Better than 2402's one in five and the same lesson:
+**the tag says a load's extension differs, and only the CONSUMER says whether
+the compiler had a choice.**
+
+**THE SIBLING-CALL GROUP: NINE ROWS, SIX BODIES, FIVE FILES, ONE CAUSE, AND
+NO HYPOTHESIS.**  The blob ends its last deallocation with `mov %eax,(%esp)`
+/ `call` / `add` / `pop` / `ret`; we place the argument past the epilogue and
+`jmp`.  **The callee is the same symbol on both sides** -- `objdump -dr` on
+`Psd::~Psd` shows `R_386_PC32 sysdep_free` for the blob's `call` and for our
+`jmp` alike -- so it is not a different deallocator, and the outgoing
+argument (one word) fits the incoming (`this`, one word), which is the
+constraint that usually forbids the transform.  Same compiler, same flags,
+same callee, and the transform fires for us and not for the original.  No
+source change was tried, because permuting source until a jump changes shape
+is what 1991 measured and refuted.  Named here so the next pass starts with
+it: it is the largest single-cause group in the slice.
+
+### 2903. THE FORCED ROWS THAT WERE NOT ACTED ON, WITH THE MECHANISM NAMED FOR EACH
+
+*Ten bodies where the compiler was forced and the fix was still declined --
+because it is another session's file, because it is a struct layout rather
+than a local, or because it is bigger than one pass.  Each is recorded with
+the instruction that shows it so the next attempt starts from evidence.  The
+count read "eight" until 2900's class table was checked for overlap: the two
+in `src/v8/` were being narrated as an afterthought and left out of the
+total, which is the same slip in miniature as the double-counted rows.*
+
+**`FPM_atan` -- THE `dtmf_progress` SHAPE AT SCALE.**  409 bytes, and every
+difference points one way: the blob works in `int` where we work in `short`.
+
+    blob:  mov %esi,%eax ; sar $0x1f,%eax ; and $0x4000,%eax ; lea 0x2000(%eax),%edx
+    ours:  test %si,%si  ; mov $0x6000,%eax ; js ; mov $0x2000,%eax
+
+    blob:  mov %esi,%eax ; cltd ; mov %edx,%edi ; xor %esi,%edi ; sub %edx,%edi
+    ours:  test %si,%si  ; movzwl %si,%ebp ; js ; neg
+
+The blob's `cltd`-and-`xor`-and-`sub` is GCC's branchless `abs()` on a
+32-bit value; ours is a 16-bit test and a branch.  Three `cltd` and seven
+`movswl` in the blob against two `movzwl` in ours, all from the same cause.
+Not attempted here: it is many sites in one function and wants its own pass.
+
+**`hamming<float>` -- `fldt` AGAINST `fldl`, AND THE FILE'S OWN COMMENT
+ALREADY SAYS WHICH IS RIGHT.**  The blob loads three constants with `fldl`
+from `.rodata.cst8`; we load three with `fldt`, because `DspMath.cpp` writes
+`6.283185307179586L`, `0.54L` and `0.46L` with `long double` suffixes.  The
+comment beside them already records the object's operands as
+`.rodata.cst8+0x40`, `+0x48` and `+0x50` -- eight-byte constants, so
+`double`.  **This one IS drivable**, unlike the rest of this finding: the
+file already claims bit-exactness over every n from 0 to 256 and out to
+1,000,003, so dropping the suffixes is a change the existing fixture can
+accept or reject.  `hanning` and `blackman` in the same file carry `L`
+suffixes too and are NOT in this slice, so the change must be made to
+`hamming` alone and re-measured, not applied to the file.
+
+**`V34EchoPreFilter` -- A STRUCT LAYOUT QUESTION, WHICH IS WHY IT WAS LEFT.**
+
+    blob:  mov    0x64(%edi),%edx                a four-byte load
+    ours:  movzbl 0x64(%edi),%edx ; and $0x1f,%edx
+
+The blob reads the shift count as a whole word; we read a byte and mask it.
+That is the width of a FIELD, not the type of a local, so it ripples through
+every offset after 0x64 and through the offset assertions on them -- too
+wide to take while five sessions are live.  The same function also has
+`cmp $0x2a,%ebx` / `jb` (unsigned, 42) against our `cmp $0x29` / `jle`
+(signed, 41), which is the loop variable's signedness.
+
+**`getConstellationMask` AND `getCodecConstellationMask` -- A MASKED SELECT
+AND AN UNSIGNED LOOP.**  The blob computes `cmp $0x6 ; setl ; neg ; and`,
+which is `idx & -(idx < 6)` -- the index itself selected, not a pointer --
+where we branch between two address expressions; and its element loop ends
+`cmp $0x7,%eax` / `jbe` where ours is `jle`.  The loop counter's signedness
+is forced; the select is integer and therefore unpinnable by 2411's
+argument, so only the first half could ever be pinned and neither was taken.
+
+**`Resampler::setNormalizedPhase` -- TWO `jb` AGAINST `jb` THEN `jae`, AND
+IT MAY BE 2410's DEFECT AGAIN.**  With `-mno-ieee-fp` the compares are
+ordered, so `jb` is true for "less OR unordered" and its negation is not.
+The blob takes the out-of-range arm by falling through two `jb`; we reach the
+same arm by `jb` then `jae`.  If that second test's operands route an
+unordered value the other way, this is 2300/2410's defect at a new site and
+needs their standard -- both spellings measured first, a fixture extended
+with a NaN phase, a mutation on the reverted spelling.  It was NOT traced to
+a decision here and is recorded as a candidate, not a defect.
+
+**`V34EchoHistoryBackwardClean` -- MIXED, AND ONLY PART OF IT IS FORCED.**
+Blob `jae`x2 and `jle`x3 against ours `jbe`x3 and `jg`x2.  The `jle`/`jg`
+pair is an exact inverse and is arm order; the `jae`/`jbe` sites cross the
+signedness class and are not.  404 bytes with heavy register pressure, so
+the forced half is not separable from the free half by inspection.
+
+**IN ANOTHER SESSION'S FILES, REPORTED AND NOT EDITED.**
+`toneiir_reset` [agent-debugsites, `src/callprog/`] is the sharpest of them
+and is ALREADY KNOWN: finding 617 records that declaring its `prev` as
+`unsigned short` produces the object's `movzwl` and leaves the store order
+untouched, and the tree still emits `movswl` there.  That is a one-word fix
+sitting unmade.  `v8_agcadapt` [`src/v8/`] differs by two `cwtl` the blob has
+and we do not; `V8_V21_reset` [`src/v8/`] is the cleanest signedness row in
+the whole slice -- one conditional jump, `jbe` in the blob against `jle` in
+ours, and nothing else in the function differs.
+
+**AND TWO ROWS ARE NOT CODEGEN AT ALL.**  `V90Modem::V90Modem` and
+`V90Demapper::printErrorHistogramAndReset` differ only in the `.rodata`
+offsets they pass to their diagnostics.
+
+**THE FIRST READING OF THE V90Modem PAIR WAS WRONG AND THE STRINGS THEMSELVES
+CORRECTED IT.**  The blob's two immediates are eight bytes apart (`0x1089`,
+`0x1091`) and ours are seven (`0x0`, `0x7`), which looks like one of our
+strings being a character short.  It is not.  Read out of
+`.rodata.str1.1` through the `R_386_32` on each:
+
+    blob   0x1089 "Digital"   0x1091 "Analog"
+    ours   0x0    "Analog"    0x7    "Digital"
+
+Same two strings, emitted in the OPPOSITE ORDER, and the spacing follows from
+which of the two is first.  So this is not a second defect: it is the SAME
+fact as the `je`/`jne` inversion in the row above it -- our `if`/`else` arms
+are written the other way round, the compiler laid the other arm down first,
+and the string constants followed the arms.  One in-between row, not two, and
+`V90ModemCtor.cpp` needs no change on this evidence.  Recorded because the
+wrong reading was written down first and a difference in a `.rodata` OFFSET
+is never evidence about a string's LENGTH -- CLAUDE.md's own trap about
+string references and inline addends, in a new shape.
