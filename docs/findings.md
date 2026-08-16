@@ -54189,3 +54189,85 @@ three in `v34pcmif` and only the line number it printed said so; the three
 notes in that suite still record that they were anchored by hand "and not by
 `tools/reanchor.py`, which picked the other occurrence". Same mechanism, one
 occurrence at a time.
+
+### 2151. THE `+0x3cc` CORROBORATION, TAKEN AT LAST -- AND IT EXCLUDES THE BODY SPELLING RATHER THAN MERELY AGREEING WITH THE INITIALIZER ONE
+
+Finding 2119 established that the reason given for not looking was false and
+said so without looking. Looked at here.
+
+**THE PERIOD BUILD PUTS THE STORE WHERE THE OBJECT PUTS IT.**
+`src/pump/v90/V90Phase3Demodulator.cpp` compiled with
+`tools/toolchain/build.sh`'s exact flag set plus `-fno-exceptions -fno-rtti`:
+
+    477  call  _ZN18V90Phase3ModulatorC1EP13V90Parametersj
+    47c  xor   %eax,%eax
+    47e  mov   %eax,0x3cc(%edi)            word_3cc
+    484  movl  $0x17,0x1c(%ebx)            descrambler, %ebx = this+0x3d0
+
+against the object at 0x212c0:
+
+    212e0  call  _ZN18V90Phase3ModulatorC1EP13V90Parametersj
+    212e5  xor   %ecx,%ecx
+    212f1  mov   %ecx,0x3cc(%ebx)          word_3cc
+    212f1..21311                            (argument setup)
+    21311  call  _ZN11DescramblerIiiEC1Ejjj
+
+**AND IT DISCRIMINATES, WHICH IS THE HALF THAT MAKES IT EVIDENCE.** A store
+landing between the two constructions is only an argument for the
+ctor-init-list if the body spelling lands somewhere else. It does. The same
+file with `word_3cc()` removed from the initializer list and
+`word_3cc.prev_ = 0;` written as the first body statement compiles, under the
+same compiler and flags, to the same store at **0x4d6** -- after the
+descrambler's entire construction, its `sysdep_malloc(0x1ec)`, its six pointer
+stores and its clear loop. Between the two builds nothing else about the
+function changes. So GCC 3.4 does not merely permit the object's ordering from
+a mem-initializer, it *requires* a mem-initializer to produce it, and the body
+spelling is excluded rather than unpreferred.
+
+This is CLAUDE.md's `extcheck` rule applied to a piece of EVIDENCE rather than
+to a tool: an ordering observation that would look the same under both
+hypotheses proves nothing, and nobody had checked which kind this was.
+
+**ONE DIFFERENCE, AND IT IS NOT A SOURCE DIFFERENCE.** The object CALLS
+`Descrambler<int,int>`'s constructor; the period build of our source INLINES
+it. The argument turns on where the store sits relative to the START of the
+descrambler's construction, which is the same either way. Inlining is the
+compiler's to choose, so this is recorded and not chased -- and it is a
+reminder that "the two subobject constructions" is not always "the two calls".
+
+Nothing in `src/` changed. The spelling was already right; what was missing was
+the evidence for it, and CLAUDE.md's bar for a source change driven by
+statement order is full-text identity (617), which is not what this is.
+
+**WHY THE FILE WAS ON THE FIFTEEN-FILE LIST: BECAUSE IT WAS TRUE WHEN IT WAS
+WRITTEN.** The claim entered at `1dcb4ca`, "V.90 receive ctors: the two inner
+pairs land". The tree at that commit, materialised with `git archive` and
+handed the same compiler, does not build this translation unit:
+
+    V90Phase3Demodulator.h:87: use of enum `Phase3DemodulatorState'
+                               without previous declaration
+    V90PreFilter.h:124:        use of enum `__tHardwareCodecTypes__'
+                               without previous declaration
+    V90PreFilter.h:125:        use of enum `PreFilterCoefType' ...
+
+`enum Phase3DemodulatorState : int;` is a C++11 OPAQUE ENUM DECLARATION, which
+C++98 has no syntax for; the member `state` then has no type, and the file
+collapses. That is exactly the portability wall CLAUDE.md's "One type, one
+home" describes and `docs/method/compilers.md` registers -- six enums spelled
+in two headers each, legal as the C++11 opaque declarations they were and
+illegal as the C++98 definitions they had to become.
+
+So the fifteen-file list was a correct measurement with an expiry date. The
+C++98 pass replaced the opaque declarations with definitions, this file began
+to compile, and **the list was never re-derived** -- which is why an inherited
+"cannot" went on being cited as a reason to accept weaker evidence long after
+the reason had gone. 2119's general point, now with the mechanism attached.
+
+*(Incidental, from the same run and not chased here: the container's compiler
+reports `GCC: (GNU) 3.4.4 20050314 (prerelease) (Debian 3.4.3-13sarge1)` in
+`.comment`, where the object's 279 copies read `GCC: (GNU) 3.4.2 (Gentoo Linux
+3.4.2-r2, ...)`. `tools/toolchain/Dockerfile` is open about this -- its header
+says sarge "can bootstrap an exact GCC 3.4.2 from the GNU tarball" and its
+`apt-get install` line takes `gcc-3.4 g++-3.4` instead. Whoever quotes "the
+same compiler" should know it is the same MINOR VERSION and not the same
+build.)*

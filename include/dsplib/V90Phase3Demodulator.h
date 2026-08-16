@@ -318,17 +318,44 @@ public:
 	 * declaration order, so this field is declared between the two
 	 * subobjects, which is where it sits.
 	 *
-	 * AND UNLIKE `V90Demapper`'s CASE, `make similarity` DID NOT
-	 * CORROBORATE IT.  The reason given here was that this translation
-	 * unit "is one of the fifteen the period toolchain cannot compile at
-	 * all -- so none of its symbols reach the comparison".  THAT REASON IS
-	 * NOT TRUE and was re-measured rather than re-read: GCC 3.4.2, given
-	 * `tools/toolchain/build.sh`'s exact flag set, compiles this file and
-	 * emits both decision symbols, at the merge base as well as here.
-	 * Finding 2119.  So the corroboration is available and simply had not
-	 * been taken; the argument above still stands on the instruction
-	 * ordering alone, which is weaker evidence than 1302 had, and saying so
-	 * is still the point of this paragraph.
+	 * THE PERIOD BUILD CORROBORATES IT, AND THE CORROBORATION
+	 * DISCRIMINATES.  This paragraph used to say `make similarity` could
+	 * not reach the argument because this translation unit "is one of the
+	 * fifteen the period toolchain cannot compile at all".  That reason
+	 * was already untrue when it was written (finding 2119), and the
+	 * corroboration it was standing in for has now been taken (2151).
+	 *
+	 * Built with `tools/toolchain/build.sh`'s exact flag set, the period
+	 * compiler puts the store in the object's position:
+	 *
+	 *     477  call  _ZN18V90Phase3ModulatorC1EP13V90Parametersj
+	 *     47c  xor   %eax,%eax
+	 *     47e  mov   %eax,0x3cc(%edi)          <-- word_3cc
+	 *     484  movl  $0x17,0x1c(%ebx)          <-- descrambler, %ebx = this+0x3d0
+	 *
+	 * against the object's `call` at 0x212e0, `mov %ecx,0x3cc(%ebx)` at
+	 * 0x212f1 and `call _ZN11DescramblerIiiEC1Ejjj` at 0x21311.
+	 *
+	 * **The alternative spelling is EXCLUDED, not merely unpreferred.**
+	 * The same source with `word_3cc()` dropped from the ctor-init-list and
+	 * `word_3cc.prev_ = 0;` written as the first body statement compiles to
+	 * the same store at 0x4d6 -- AFTER the whole descrambler construction,
+	 * its allocation and its clear loop -- so the two spellings are
+	 * distinguishable in the emitted code and only the mem-initializer
+	 * reproduces the object.  An ordering argument is evidence only if the
+	 * other spelling orders differently, and here it does.
+	 *
+	 * ONE DIFFERENCE THAT IS NOT A SOURCE DIFFERENCE: the object CALLS
+	 * `Descrambler<int,int>`'s constructor and the period build of this
+	 * source INLINES it.  What the argument uses is where the store sits
+	 * relative to the START of the descrambler's construction, and that is
+	 * the same in both.  Inlining is the compiler's to choose (CLAUDE.md's
+	 * rule for reading a codegen difference), so it is recorded and not
+	 * chased.
+	 *
+	 * This corroborates a spelling the tree already had; it is not a
+	 * source change derived from statement order, which would need the
+	 * full-text identity test that 617 sets.
 	 *
 	 * IT IS A `SerialDifferentialDecoder<int>`, WHICH THE SKETCH ABOVE
 	 * COULD NOT SEE, AND TWO INDEPENDENT RECONSTRUCTIONS SAY SO.  Neither
@@ -371,7 +398,10 @@ public:
 	 * records the store as behaviourally invisible.  The period build was
 	 * disassembled instead: `xor %eax,%eax; mov %eax,0x3cc(%edi)` sits
 	 * between the call to `V90Phase3Modulator`'s constructor and the
-	 * `Descrambler` construction, exactly where the object puts it.
+	 * `Descrambler` construction, exactly where the object puts it.  That
+	 * measurement is re-taken and extended above, where the body spelling
+	 * is shown to put the same store somewhere else -- so this answers the
+	 * value-initialization question AND the mem-initializer one.
 	 */
 	SerialDifferentialDecoder<int> word_3cc;
 
