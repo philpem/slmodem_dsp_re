@@ -260,6 +260,10 @@
     "src/pump/v90/V90CP.cpp",
     "build/test/t_v90cp"
   ],
+  "v90cpmembers": [
+    "src/pump/v90/V90ConstellationPower.cpp",
+    "build/test/t_v90cpower"
+  ],
   "v90cpower": [
     "src/pump/v90/V90ConstellationPower.cpp",
     "build/test/t_v90designers"

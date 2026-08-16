@@ -1,0 +1,97 @@
+[
+ {
+  "label": "the sixth digit is a remainder like the other five, not a truncation",
+  "find": "\tmodulus[V90CP_CONSTELLATIONS - 1] =\n\t    (unsigned int)remaining[V90CP_CONSTELLATIONS - 1];",
+  "replace": "\tmodulus[V90CP_CONSTELLATIONS - 1] =\n\t    (unsigned int)(remaining[V90CP_CONSTELLATIONS - 1]\n\t     % mappingParams->constellationSize[V90CP_CONSTELLATIONS - 1]);"
+ },
+ {
+  "label": "the bit count is one higher",
+  "find": "\t\t\t\t+ mappingParams->word_0 - 6);",
+  "replace": "\t\t\t\t+ mappingParams->word_0 - 5);"
+ },
+ {
+  "label": "the odometer starts at the codeword count rather than one below it",
+  "find": "\tremaining[0] = codewordCount - 1;",
+  "replace": "\tremaining[0] = codewordCount;"
+ },
+ {
+  "label": "the place values start at 2.0",
+  "find": "\tproduct = 1.0;",
+  "replace": "\tproduct = 2.0;"
+ },
+ {
+  "label": "the place-value product uses this size rather than the previous one",
+  "find": "\t\tproduct *= mappingParams->constellationSize[i - 1];",
+  "replace": "\t\tproduct *= mappingParams->constellationSize[i];"
+ },
+ {
+  "label": "the first place value is zero",
+  "find": "\tplaceValue[0] = product;",
+  "replace": "\tplaceValue[0] = 0.0;"
+ },
+ {
+  "label": "the measurement point is a != 0 test rather than an == 1 test (case 0)",
+  "find": "\tcase 0:\n\t\tconstellation = (point == V90_TX_POWER_OVER_CODEC_CONSTELLATION)",
+  "replace": "\tcase 0:\n\t\tconstellation = (point != V90_TX_POWER_OVER_CONSTELLATION)"
+ },
+ {
+  "label": "case 3 takes the other of the two byte tables",
+  "find": "\t\tconstellation = (point == V90_TX_POWER_OVER_CODEC_CONSTELLATION)\n\t\t\t\t? mappingParams->codecConstellation[3]\n\t\t\t\t: mappingParams->constellation[3];",
+  "replace": "\t\tconstellation = (point == V90_TX_POWER_OVER_CODEC_CONSTELLATION)\n\t\t\t\t? mappingParams->constellation[3]\n\t\t\t\t: mappingParams->codecConstellation[3];"
+ },
+ {
+  "label": "case 2 reports the wrong length",
+  "find": "\t\tconstellationSize = mappingParams->constellationSize[2];",
+  "replace": "\t\tconstellationSize = mappingParams->constellationSize[3];"
+ },
+ {
+  "label": "an out-of-range index writes a length instead of writing nothing",
+  "find": "\tswitch (index) {\n\tcase 0:",
+  "replace": "\tswitch (index) {\n\tdefault:\n\t\tconstellationSize = 0;\n\t\tbreak;\n\tcase 0:"
+ },
+ {
+  "label": "the below-boundary arm loses its plus one",
+  "find": "\t\t\t\tfraction = placeValue[i] / (double)codewordCount\n\t\t\t\t\t   * (double)(remaining[i + 1] + 1);",
+  "replace": "\t\t\t\tfraction = placeValue[i] / (double)codewordCount\n\t\t\t\t\t   * (double)remaining[i + 1];"
+ },
+ {
+  "label": "the boundary arm adds where it subtracts",
+  "find": "\t\t\t\tfraction = 1.0 - 1.0 / (double)codewordCount",
+  "replace": "\t\t\t\tfraction = 1.0 + 1.0 / (double)codewordCount"
+ },
+ {
+  "label": "the companding arms are the other way round",
+  "find": "\t\t\tif (pcmType != PCM_TYPE_MU_LAW)",
+  "replace": "\t\t\tif (pcmType == PCM_TYPE_MU_LAW)"
+ },
+ {
+  "label": "the frame is five symbols rather than six",
+  "find": "\tpower = power * (1.0 / 6.0);",
+  "replace": "\tpower = power * (1.0 / 5.0);"
+ },
+ {
+  "label": "the tail divides instead of multiplying by the reciprocal",
+  "find": "\tpower = power * (1.0 / 6.0);\n\treturn (float)power;",
+  "replace": "\tpower = power / 6.0;\n\treturn (float)power;"
+ },
+ {
+  "label": "the ladder walk uses <= where the object uses <",
+  "find": "\twhile (index != 0 && averagePowerLimits[index] < power)",
+  "replace": "\twhile (index != 0 && averagePowerLimits[index] <= power)"
+ },
+ {
+  "label": "the ladder walk starts one entry down",
+  "find": "\tindex = V90CP_POWER_INDICES - 1;",
+  "replace": "\tindex = V90CP_POWER_INDICES - 2;"
+ },
+ {
+  "label": "the legal-index bound is exclusive",
+  "find": "\treturn index <= V90CP_POWER_INDICES - 1;",
+  "replace": "\treturn index < V90CP_POWER_INDICES - 1;"
+ },
+ {
+  "label": "the last ladder entry is one lower",
+  "find": "  5112121,   4549689\n};",
+  "replace": "  5112121,   4549688\n};"
+ }
+]

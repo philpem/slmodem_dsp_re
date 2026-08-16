@@ -6433,3 +6433,41 @@ sweep. Fix class: none proposed; reproduced as found.*
 The whole build loop is skipped, count stays at its initial 1, and the trim
 and extend arms both see `nof == count` and do nothing. Finding 2186 records
 why reaching this at all took the sweep to be re-parameterised.
+
+## D349 🐛 `calcModulusParameters` shifts a 64-bit one by an unbounded count
+
+*Batch of 2026-08-16, from `_ZN21V90ConstellationPower21calcModulusParametersEP16V90MappingParams`
+(blob 0x3dd80) at 0x3dd96..0x3ddb0. **Reachability: any
+`mappingParams->shaperSR + mappingParams->word_0` outside [6, 69] -- the count
+is that sum less six, formed with no test of any kind.**
+**Observability: the i386 sequence is `shld %cl,%ebx,%esi ; shl %cl,%ebx ;
+test $0x20,%cl`, which masks the count to six bits, so a count of 64 produces
+1 rather than 0 and a count of 70 produces 64; and above 62 the one lands in
+or past the sign bit of a SIGNED `long long`, after which every `__divdi3`
+below it divides a negative.** Status: unmeasured -- nothing reconstructed
+calls this member, so no caller's range is known.  The differential test holds
+the count in 0..62; a shift outside that is undefined in the source language
+and the two compilers are entitled to differ for reasons that are not the
+reconstruction's.  Fix class: none proposed; reproduced as found.*
+
+`V90MappingParams::shaperSR` is written by
+`V90ConstellationDesigner::spectralDesign` out of the parameter block and is
+`int`; `word_0` is unsigned.  Nothing between the two writes and this read
+bounds either.  Finding 3050.
+
+## D350 ⚠ `getPowerIndexForPower` walks its whole ladder for a NaN
+
+*Batch of 2026-08-16, from `_ZN21V90ConstellationPower21getPowerIndexForPowerEf`
+(blob 0x3e320) at 0x3e338 and 0x3e352 (`fcomp %st(1) ; fnstsw %ax ; sahf`).
+**Reachability: a NaN argument.** **Observability: an unordered compare leaves
+C0 set, so `jae` is not taken and `setb` yields 1 at every step -- the walk
+runs all 34 turns and returns 0, the same answer an enormous power gives.**
+Status: unmeasured; the compare is a bare ordered `fcom` with no parity test,
+which is what `-mno-ieee-fp` emits for every comparison in the object (finding
+1990), so a NaN case would be measuring the two builds' float-compare flags
+rather than the reconstruction.  The differential test drives both infinities
+and stops there.  Fix class: none proposed; reproduced as found.*
+
+Recorded rather than driven because the return is a saturating index and not a
+failure code -- 0 is a legal answer, so nothing downstream can tell the NaN
+apart.  Finding 3051.
