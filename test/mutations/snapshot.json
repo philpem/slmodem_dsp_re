@@ -276,6 +276,73 @@
     "the two sums land in the other member": "caught"
    }
   },
+  "fpmsre": {
+   "key": "64735868a32368feaddec5d7a9e271f29de61a6f88d59ab6e5eb971569af124d",
+   "summary": "49 mutations: 44 caught (44 by test, 0 by strings), 0 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
+   "verdicts": {
+    "a full window restarts the average from zero instead of from its own mean": "caught",
+    "acquisition interpolates as well as tracking": "caught",
+    "init clears the history for the whole coefficient count rather than the tap count": "caught",
+    "init divides the coefficient count by five instead of ten, so the tap count and the history are half what they should be": "caught",
+    "init leaves the level gate off, so the PLL runs before there is a signal": "caught",
+    "init starts `need` at zero instead of one": "caught",
+    "init starts the averaging count at zero, which is also the meter's divisor": "caught",
+    "init's reuse test compares the wrong way round, so it reallocates when it should reuse and reuses when it should grow": "caught",
+    "the accumulator is truncated to 16 bits before the shift rather than after": "caught",
+    "the correlation is shifted down by four instead of three": "caught",
+    "the cross term is shifted down by 14 like its neighbours instead of 11": "caught",
+    "the cross term's two coefficients are transposed": "caught",
+    "the discriminant is halved, as V.22's specialisation halves its own": "caught",
+    "the discriminant's first section reads clk[1] where it should read clk[0]": "caught",
+    "the early return banks the samples but forgets to carry the shortfall": "caught",
+    "the envelope's decay is 14/16 rather than 15/16": "caught",
+    "the envelope's decay shifts arithmetically, as err_avg's does. FORCED BY THE OBJECT -- `shr` against `sar` in otherwise identical sequences -- and UNREACHABLE, because mag_avg is a magnitude clamped into [0, 0x7fff] and the two shifts agree over every value it can hold. Recorded as a survivor with its reason rather than dropped.": "equivalent",
+    "the error smoother truncates its decay term to 16 bits. UNREACHABLE by arithmetic: err_avg is a short, so err_avg * 15 lies in [-491520, 491505] and >> 4 lies in [-30720, 30719], which is inside short's range for every input. The cast can never change a value.": "equivalent",
+    "the filter output is not doubled": "caught",
+    "the first interval is folded in rather than discarded": "caught",
+    "the freeze suppresses the error measurement as well as the phase update": "caught",
+    "the gear-shift thresholds are compared without the further shift down by three": "caught",
+    "the group counter is compared against the configured count rather than one past it": "caught",
+    "the history wraps one entry early, so the oldest tap is never read": "caught",
+    "the integrator's rounding bias is dropped": "caught",
+    "the intermediate sections keep full width instead of truncating to 16 bits between stages": "caught",
+    "the interpolator weights the two prototype taps the other way round": "caught",
+    "the interpolator's dead store is dropped. The object stores the first term and then stores the sum over it; the sum is formed from the UNTRUNCATED first term either way, so the intermediate store is unobservable. `v22_sre.c` met the same pair and declined to reproduce it; this file reproduces it and records here that no test can tell.": "equivalent",
+    "the level gate forces the discriminant to zero on the wrong side of the threshold": "caught",
+    "the level gate's ring reads the history slot instead of the input. THE OBJECT RELOADS from `in[-1]` -- forced, because the store through `hist` may alias the input -- but the two hold the same value on any call whose input and history do not overlap, and no caller can arrange that: `hist` is init's own allocation. Unobservable, recorded rather than dropped.": "equivalent",
+    "the loop-filter step loses its sign inversion": "caught",
+    "the meter ticks inside the sample loop instead of once per drained call": "caught",
+    "the meter's interval closes on `at least` rather than on equality": "caught",
+    "the negative-step borrow is dropped, leaving the floor quotient and a non-negative remainder. EQUIVALENT, and this took a derivation rather than a run: both forms compute the same total phase, branch * 0x800 + frac + step, and differ only in how they split it. With the borrow, rem lies in (-0x800, 0] and the `frac < 0` test normalises; without it, rem lies in [0, 0x800) and the `frac > 0x7ff` test normalises. Each split needs exactly one normalisation pass and both land on the same (branch, frac). The object's form is reproduced because the object encodes it, not because a test can see it.": "equivalent",
+    "the next output's input debt is one more than the branch wraps say": "caught",
+    "the phase-error gain is shifted down by two instead of three": "caught",
+    "the polyphase stride is the tap count instead of the branch count, which is the V.22 block's layout applied to this one": "caught",
+    "the quadrature accumulator adds where it should subtract": "caught",
+    "the running average is truncated to 16 bits after the division rather than before it": "caught",
+    "the second run of the dot product includes hist[fill] again instead of stopping above it": "caught",
+    "the settling branch leaves the integrator alone instead of holding it at zero": "caught",
+    "the slope is measured after clk[5] has been updated rather than before": "caught",
+    "the squelch's two thresholds are transposed, so the hysteresis runs backwards": "caught",
+    "the step's clamp is made symmetric": "caught",
+    "the third section's two state terms swap sign": "caught",
+    "the tick wraps at the clock length rather than one short of it": "caught",
+    "the timing meter counts a slip of zero as a gain rather than a loss": "caught",
+    "the tracking-mode in-phase rejection is inverted, so the update runs only when the vector carries nothing": "caught",
+    "the two gear-shift scalings are transposed, so the integrator is scaled the wrong way at both ends": "caught"
+   }
+  },
+  "fpmtonekill": {
+   "key": "b06cd5414b4c4ed7ff323c42f231f941feedf967b2f1cdfbef3830087113d454",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "one sample short: an off-by-one in the count": "caught",
+    "the coefficients come from the iir_coeff array rather than the stored pointer at +0xfc": "caught",
+    "the kill pass shares the detector's filter state at +0x40 instead of owning +0x100": "caught",
+    "the section count and the sample count are transposed": "caught",
+    "the tone is left in: the call is dropped entirely": "caught",
+    "two biquads instead of one, so it reads five coefficients and four state words past the end": "caught"
+   }
+  },
   "gtonedet": {
    "key": "548992bf48e43c49a79a335473e47543389a181317cb4328f0ee7171a4bb2530",
    "summary": "54 mutations: 54 caught (54 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -6776,9 +6843,6 @@
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",
     "VPCMXF_Delete frees without destroying": "caught",
-    "v34BaudAllow[1] keeps the constructor's 1": "caught",
-    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
-    "v34BaudAllow[5] keeps the constructor's 1": "caught",
     "minNofTransmitSequences is left at the constructor's 0": "caught",
     "mode 1 sets the V.92 mode and not the V.90 one": "caught",
     "mode 2 sets the V.90 mode and not the V.92 one": "caught",
@@ -6797,7 +6861,10 @@
     "the object is allocated 64 bytes short": "caught",
     "the sample count is the duration, unconverted": "caught",
     "the side handed to the modem is not inverted": "caught",
-    "the three termination requests are not cleared": "equivalent"
+    "the three termination requests are not cleared": "equivalent",
+    "v34BaudAllow[1] keeps the constructor's 1": "caught",
+    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
+    "v34BaudAllow[5] keeps the constructor's 1": "caught"
    }
   },
   "vpcmxfterm": {

@@ -60886,3 +60886,141 @@ have read past the end.
 so the parameter is a `short` and not an `int`.
 
 Six mutations, six caught.
+
+### 3521. `FPM_SRE_*` IS THE GENERIC BLOCK `v22_sre.c` IS A SPECIALISATION OF, AND THE 403 EXTRA BYTES ARE FOUR REAL DIFFERENCES
+
+`V22_SRE_recover` is 1,883 bytes and `FPM_SRE_recover` is 2,286. Reading the
+second beside the first is what makes it tractable -- the three-section
+discriminant, the gear-shifted loop filter, the ten polyphase branches and the
+asymmetric `[-18432, +20480]` step clamp are the same block -- but **the
+analogue is a question generator and four of its answers are wrong here**:
+
+1. **The history is CIRCULAR, not sliding.** V.22 keeps `2 * taps` entries and
+   memcpy's the top half down; this keeps exactly `taps` and wraps `fill` to
+   zero, so the dot product is two runs (`hist[fill]` down to `hist[0]`, then
+   `hist[taps-1]` down to `hist[fill+1]`) rather than one contiguous walk.
+   `FPM_SRE_init` allocating `2 * taps` BYTES where V.22 allocates
+   `2 * (2 * taps)` is the tell.
+2. **The prototype is not permuted.** `V22_SRE_init` de-interleaves the taps
+   into ten contiguous branches through a stack scratch buffer; this copies the
+   prototype in design order and the dot product selects branch `b` by starting
+   at `coeff[b]` and striding ten (`add $0x14,%esi`). Same filter, and it is
+   why the interpolator is one flat walk instead of a nested one.
+3. **There is a level gate in front of the loop.** While `rms_on` is set every
+   input sample is also written to a ring and the discriminant is forced to
+   ZERO; the first block whose `FPM_rms` exceeds `cfg.rms_min` clears the flag
+   for good. V.22 has nothing like it, and it is a whole fourth heap buffer.
+4. **It measures a timing offset.** See 3523.
+
+And one thing that is the SAME and must not be assumed to be: V.22 indexes
+`SRE_ALPHA_AVG` / `SRE_BETA_AVG` by mode; this hard-codes 15/16 for both
+smoothers, with no rounding and no table.
+
+**Ten branches, not five.** The tap count comes from `imul $0x66666667` and
+`sar $2`, which is division by TEN -- `sar $1` would have been five. Getting
+that wrong makes every geometry below it wrong, and `SREv32_COFFS`'s 181
+entries settle it independently: 180 is 18 taps by ten branches, and the 181st
+is the right-hand end of the last interpolation, exactly as `SREv22_COFFS`'s
+271st is for V.22's 270.
+
+`FPM_SRE_recover`'s return is `unsigned short`, not `short`: the counter is
+incremented with `cwtl` and returned with `movzwl`.
+
+### 3522. `fpm_sre_cfg::clock_len` IS THE CORRELATION LENGTH AND THE LOOP GAIN, AND IT IS ONE FIELD
+
+Offset +0x00 of the configuration is read twice for two apparently unrelated
+purposes, and both reads are `(%ecx)` on the same object:
+
+    aa164   cmp %di,(%ebx)          di = tick + 1   -- the group boundary
+    aa21e   movswl (%ecx),%eax      * angle, >> 3   -- the phase-error gain
+
+That is not two fields. It is the generic form of what V.22 hard-codes: there
+the correlation runs over `V22_SRE_CLOCK` = 6 points and the gain is
+`(3 * angle) >> 1`, which is `(6 * angle) >> 2`. Here it is
+`(clock_len * angle) >> 3` with the same field supplying the count. The shift
+differs (3 against 2) so the two are not the same expression, and the
+relationship is recorded as the derivation rather than asserted as identity.
+
+`SREv32_xCLOCK` and `SREv32_yCLOCK` are three entries each -- cos and sin of 0,
+120 and 240 degrees at 16384 -- so V.32 configures `clock_len` = 3 where the
+built-in `FPM_SRE_CFG` says 4. The tables are the evidence for the field's
+meaning and the built-in is only evidence of scale, because all six of its
+table pointers are null: like `fpm_fse_cfg::decision` and `fpm_mrf_cfg::coeff`,
+a caller copies the static and patches the tables in.
+
+**Finding 1615's five unverified widths are now settled.** It recorded that
+only `SREv32_COFFS` had a measured element width and that the other five were
+declared 16-bit on the strength of their contents. `FPM_SRE_recover` indexes
+`XB_COFFS` at eleven distinct 16-bit offsets and `PLL_K1` / `PLL_K2` with
+`movswl (%edi,%ebx,2)`, so all six are measured now. `XB_COFFS` being 22 bytes
+is also where `FPM_SRE_DISC` comes from.
+
+### 3523. THE TIMING METER, AND WHAT ONE FORMAT STRING IS WORTH
+
+`FPM_SRE_recover` carries a diagnostic V.22's specialisation does not, and its
+string is the only class-1 naming evidence in the whole struct:
+
+    "TimingVxx: Timing Offset [ppm] = %d\n"        .rodata.str1.4 0x12e20
+
+so `+0x82` is `ppm_offset` and is named from the author's own words. **The
+other nine fields of the group are usage inference and are named as such** --
+what each does is measured, what the group MEANS is read from the one field
+whose meaning the object states.
+
+How it works. Ten branch-steps per output is one input sample at the nominal
+rate, so the debt the next output carries is normally 1; the code counts 2 as
+`+1` and 0 as `-1`, which makes `ppm_slip` the net samples the recovered clock
+has gained. Every `ppm_period` worth of `ppm_step` the meter folds
+`ppm_slip * ppm_scale` into a running total and republishes the mean. Once
+`ppm_n` reaches `ppm_n_max` the average restarts FROM ITS OWN MEAN rather than
+from zero, so a long measurement decays instead of freezing.
+
+**Four of the ten are never written by `FPM_SRE_init`** -- `ppm_step`,
+`ppm_scale`, `ppm_period` and `ppm_n_max` are read-only to both functions. A
+caller has to fill them, and a state straight out of init never ticks the meter
+at all, which is why the differential suite arms them explicitly. `ppm_n` IS
+set by init, to 1, and it is the divisor.
+
+**The meter runs only on the exact-drain path.** A call that ends short takes
+the early return and never reaches it, so the interval is counted in CALLS that
+consumed all their input and not in samples.
+
+### 3524. FOUR MUTATIONS THAT SURVIVED ON V.32's OWN TABLES, AND WHY THAT IS A PROPERTY OF THE TABLES
+
+`SREv32_XB_COFFS` is `{-28156, 16128, 28156, 16128, 14078, 8128, -14078, 8128,
+992, -15360, 14399}` and `SREv32_PLL_K2` is `{0, 17, 8}`. So on V.32's
+configuration:
+
+- `k[1] == k[3]` and `k[5] == k[7]`, and transposing either pair is invisible;
+- `K2[0]` is zero, so the settling branch's "hold the integrator at zero"
+  cannot be told from not holding it.
+
+Three mutations survived on that account and **none of them is equivalent** --
+`FPM_SRE_*` is the generic block and another datapump's tables need not be
+degenerate. The suite gained a second sweep over synthetic tables with no
+repeats, a non-zero `K2[0]` and a four-point clock, and all three are caught.
+This is finding 3509's rule in its other direction: there the danger was a
+counter that could not fail, here it is a TABLE that cannot separate, and the
+fix in both cases is to change the stimulus rather than the claim.
+
+The fourth needed something else again. A control loop's far corners -- both
+clamps, both gear shifts, a running total past 16 bits, an input debt of two
+samples -- are not reachable from a waveform in any sane number of samples. The
+suite seeds `err_avg`, `pll_acc`, `frac`, `branch`, `mode`, `settle` and the
+whole `ppm_*` group IDENTICALLY ON BOTH SIDES and runs one call. The seeding
+chooses where to look and never what the answer is; the blob still adjudicates
+every byte.
+
+**Five survivors are recorded with derivations rather than dropped.** Two are
+forced by the object and unreachable by arithmetic (the `shr` in `mag_avg`'s
+decay against the `sar` in `err_avg`'s; `err_avg * 15 >> 4` never leaving
+short's range). One is forced by aliasing and unobservable without an aliasing
+caller (the reload from `in[-1]`). One is the interpolator's dead store. The
+fifth took a derivation to settle: dropping the negative-step borrow leaves the
+floor quotient and a non-negative remainder, and BOTH FORMS COMPUTE THE SAME
+TOTAL, `branch * 0x800 + frac + step`, differing only in how they split it --
+each split needs exactly one normalisation pass and both land on the same
+(branch, frac). The object's form is reproduced because the object encodes it,
+not because a test can see it.
+
+49 mutations: 44 caught, 0 uncaught, 5 equivalent.
