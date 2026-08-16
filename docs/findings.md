@@ -59766,3 +59766,155 @@ right counter.
 **LIMIT: one emulated call, one seed, 1% loss.** Nothing here is a rate and
 nothing is a bench figure. What it establishes is that the remote arm FIRES,
 which the previous reading said it could not.
+
+### 1965. THE FAR END CAN ONLY ASK US TO GO QUIETER — V.34 HAS NO "LOUDER", AND ALL THREE MODEMS ASK, ON ESSENTIALLY EVERY HANDSHAKE
+
+Phil's question was whether the analog modem is asking us to reduce or increase
+amplitude. **The Recommendation only lets it ask for a reduction.** From
+T-REC-V.34-199802, the INFOc field list:
+
+    12:14  Minimum power reduction to be implemented by the answer modem
+           transmitter. An integer between 0 and 7 gives the recommended
+           power reduction in dB.
+    15:17  Additional power reduction, below that indicated by bits 12-14,
+           which can be tolerated by the call modem receiver.
+
+INFOa carries the mirror pair for the call modem, and MP bits 12:14 carry a
+single such field for data mode. Every one is an **unsigned** count of dB of
+reduction. There is no encoding for "transmit louder". If our level were too
+LOW, no far end could say so, and nothing in the protocol would ever correct
+it — so the absence of a complaint is not evidence that the level is right.
+
+**WHAT THEY ACTUALLY ASK.** 330 observations of `V34TXSCALE, power reduction
+requested by remote modem is %d dB` across 118 archived captures. Only twice
+in 330 is the answer zero, and the value is close to a per-model constant:
+
+    1901  SupraExpress   1 dB x65   2 dB x86   3 dB x2    6 dB x1
+    1902  USR Courier    3 dB x65   6 dB x51   9 dB x5
+    1903  Oli'Net        0 dB x1    1 dB x1    2 dB x30   3 dB x19
+
+**THE COURIER RATCHETS WITHIN A CALL.** The per-handshake sequences are not
+noise around a mean — the Courier climbs and sometimes sticks:
+
+    qk-courier-1    3 3 6 3 6 6 6 6 6 6 6 6 6 6      <- pins at 6 for eleven
+    src-courier-1   3 3 3 6 9 3 3
+    ab149-1902-a0-5 3 6 9 3
+    fit-fit-1       3 3 6 6 6
+
+The Supra and the Oli'Net stay inside a 1–3 dB band and do not ratchet. Since
+66% of connected time on this link is re-handshaking (1921), a far end that
+asks for more attenuation at each retrain gets many chances to apply it.
+**That is a hypothesis, not a mechanism**: the sequences also come back down
+(`3 3 3 6 9 3 3`), so it is not a one-way ratchet, and this session has
+already withdrawn sixteen mechanisms that looked this good.
+
+**IT IS TWO FIELDS SUMMED, WHICH THE DATA PROVES INDEPENDENTLY.** `settxlevel`
+reads two 3-bit fields and adds them. A single 3-bit field cannot express 9,
+and the Courier produces 9 five times — so both fields are live. The record it
+reads (`obj + 0xa9dc`) is the received INFO1a/INFO1c, which is the object's
+name for V.34's INFOa/INFOc, and those are exactly the messages carrying the
+minimum-plus-additional pair. The observed totals also have holes at 4, 5, 7
+and 8, consistent with every far end using an *additional* field of 0 or 3 and
+a *minimum* of 0–6, and inconsistent with a smeared single field.
+
+**WHAT IS NOT ESTABLISHED:** the exact bit offsets, re-derived from the spec's
+own bit numbering rather than from the object's unpacking. That is the one
+thing gating 1967, and it wants the raw message word logged on a call.
+
+### 1966. ANSWERED, NEGATIVELY: THE ATA'S GAIN IS NOT MIS-SET, BECAUSE G.711 COMPANDING MAKES SNR LEVEL-INDEPENDENT OVER 24 dB — AND WE SIT DEAD CENTRE IN BOTH DIRECTIONS
+
+The worry behind Phil's question is sound for a *linear* 8-bit converter: run
+it quiet and you throw away bits. **G.711 is not linear.** Its step size grows
+with amplitude, so quantisation error tracks the signal and the SNR is flat.
+Measured on a real V.34 waveform — not a tone, because a precoded V.34 signal
+has an 11–14 dB peak-to-average ratio and a sine has 3 — with the error taken
+against the unclipped input so that clipping counts:
+
+    gain   RMS dBFS   SNR A-law   clip%        (qk-courier-1, last 20 s)
+    -30      -54.51       21.90   0.000
+    -21      -45.51       30.88   0.000
+    -15      -39.51       35.44   0.000
+     -9      -33.51       37.05   0.000
+     -3      -27.51       37.42   0.000
+     +0      -24.51       38.11   0.000        <- as captured
+     +6      -18.51       38.37   0.000
+     +9      -15.51       37.55   0.000
+    +12      -12.51       30.66   0.405        <- clipping starts
+    +15       -9.51       18.61   1.050
+
+**A PLATEAU OF ABOUT 37.5 dB, ROUGHLY 24 dB WIDE, AND WE ARE IN THE MIDDLE OF
+IT.** Raising our level 9 dB changes the SNR by less than half a dB; the same
+shape appears on `why-olinet-1`. Across all 118 captures the median transmit
+level is **-23.1 dBFS** and the median receive level **-22.4 dBFS**, range
+-24.5 to -16.8. Both directions sit near the centre of the plateau with about
+10 dB of headroom before clipping and about 11 dB before the low-level roll-off.
+
+**AND WE ARE NOT CLIPPING ON RECEIVE.** The tell would be samples landing on
+A-law's top codeword, which decodes to exactly 32256. 50 of 118 captures
+contain at least one; **none exceeds 0.01% of samples**, worst case 0.0017%,
+which is 17 samples in a million and exactly what an 11–14 dB PAR signal
+should do. (This also validates the measurement point: decoded peaks landing
+on the codeword value prove nothing scaled them between the codec and the
+dump. On transmit the equivalent check is that d-modem's only
+`conf_adjust_tx_level` calls are on the splitcomb's loudspeaker ports, 1940.)
+
+**SO THE VG204's GAIN IS NOT THE LEVER, IN EITHER DIRECTION.** Trimming it
+moves us along a flat curve. The premise that we must "get the gain set
+correctly for the optimal signal-to-noise ratio" is the right instinct aimed
+at the wrong converter — companding already did that job.
+
+**THE REAL CONSTRAINT IS THE PLATEAU ITSELF.** ~37.5 dB is what one G.711 hop
+costs, it applies once per direction, and no gain setting improves it. V.34's
+top rates want SNR in the high thirties (an engineering figure, not one I have
+measured here), so **33 600 sits at the edge of what this path can carry even
+with a perfect modem at each end.** That is a ceiling to design against, not a
+defect to fix.
+
+**IT ALSO CANNOT EXPLAIN THE ASYMMETRY IN #132** — the far end trains 33 600
+while we ask for 14 400. The codec hop is symmetric and both directions are
+equally well-centred, so whatever costs our receiver ~10 dB of effective SNR
+is downstream of it, in our own receive chain. This narrows that hunt rather
+than answering it.
+
+Reproduce: `testbench/g711level.py sweep | levels | sat | request`.
+
+### 1967. WE APPLY THE MAXIMUM REDUCTION THE FAR END PERMITS, NOT THE MINIMUM IT REQUIRES — WORTH UNDER A dB, AND ONLY 42% OF IT REACHES THE WIRE ANYWAY
+
+V.34 splits the request in two: bits 12:14 are the reduction that **must** be
+implemented, bits 15:17 the further reduction the receiver **can tolerate**.
+`settxlevel` adds them — `obj->f25dc = extra + f25dc`, with `extra` clamped to
+3 — so we always transmit at the quietest level permitted rather than the
+loudest allowed. On an analog loop that is harmless and arguably polite. On a
+path whose SNR budget is a 37.5 dB codec plateau it is a giveaway.
+
+**BUT IT IS A SMALL ONE, AND HONESTY ABOUT THE SIZE MATTERS MORE THAN THE
+FINDING.** From 1966's curve, a 9 dB reduction from -24.5 dBFS costs about
+1 dB of SNR; the *additional* field is at most 3 dB, so recovering it is worth
+a few tenths. This is not a rate mechanism. It is free, correct, and small.
+
+**AND THE REQUEST ONLY PARTLY REACHES THE WIRE.** Regressing the measured
+transmit level on the last reduction requested, 115 captures:
+
+    req dB    n   median txRMS
+    1        22        -22.75
+    2        47        -22.99
+    3        26        -24.30
+    6        18        -24.53
+    9         2        -25.48
+
+    slope -0.424 dB of level per dB requested, r = -0.576
+
+Monotone and clearly real, but **-0.42, not -1.0**. Some of that is the
+measurement — one level averaged over the last 20 s against the last of
+several requests in a call that retrained repeatedly — and some is plausibly
+the code: `settxlevel`'s two scaling loops are asymmetric (D51), and it
+finishes with an unconditional `* 0x4b4b`, about +1.4 dB, that the object's own
+"final txscale" diagnostic does not account for. **Which of those dominates is
+not established.**
+
+**PROPOSED, NOT DONE.** Honouring the minimum and ignoring the additional
+field is a one-line change behind a default-off flag with a pre-registration,
+exactly like #149 — not an edit made on the strength of an argument. Task
+#165. Given the size, the right primary outcome is the transmit level itself
+(does the slope move toward -1.0 when the additional field is dropped), not a
+connect rate this bench cannot resolve to a fraction of a dB.
