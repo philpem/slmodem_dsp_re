@@ -6522,3 +6522,41 @@ non-zero.  Fix class: none proposed; reproduced as found.*
 Each axis error is truncated to a short before squaring, the 32-bit square is
 shifted down sixteen, and only then are the two added -- and the sum is
 truncated to a short again before the comparison.  Finding 3301.
+
+## D363 🐛 `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not have
+
+*Batch of 2026-08-16, from `Detect_v22` (blob 0x08c1c0).  **Reachability: every
+call.**  **Observability: none -- the call is cdecl, the caller cleans up, and
+the callee never reads the slot.**  Status: verified bit-exact; reproduced as a
+three-argument call, exactly as `src/pump/v23/bwchdem.c` already does at the
+same callee.  Fix class: none proposed.*
+
+The object pushes a constant 1 as a fourth argument.  `FPM_AGC_agc` takes
+three.  Unlike `bwchdem.c`'s site this caller also discards the return value,
+so no `agc.signal` read-back is needed to stay faithful.  Finding 3307 for what
+this function does.
+
+## D364 ✅ `ModDataV22` narrows `V22_PPS_filter`'s `short` to `unsigned short`
+
+*Batch of 2026-08-16, from `ModDataV22` (blob 0x08e310) at 0x8e369
+(`movzwl %ax,%eax` immediately before the return).  **Reachability: every call
+whose pulse shaper returns a negative count, which nothing reconstructed
+produces.**  **Observability: the sign.**  Status: verified bit-exact over the
+domain the differential test drives, which includes a sample count with bit 15
+set.  Fix class: none proposed; the truncation is the CALLER's and lives in
+`v22data.c`, and `v22_pps.h`'s `short` return is unchanged.*
+
+Recorded so that the disagreement between the two declarations reads as
+deliberate rather than as one of them being wrong.
+
+## D365 ✅ `V22FP_TX_CLOCK` and `V22FP_PPS` are two names for one address
+
+*Batch of 2026-08-16.  **Reachability: not a behavioural difference at all.**
+**Observability: none.**  Status: verified -- `fp + 0x78` is written by
+`TxClockSync` under the first name and is the base `V22FP_create` hands
+`V22_PPS_init` under the second.  Fix class: both names are kept and
+cross-referenced until `V22FP_create` lands and the object gets a real type,
+at which point both become one struct member.*
+
+Recorded here rather than silently unified because a reader meeting the two
+constants would otherwise have to rediscover that they collide.  Finding 3305.

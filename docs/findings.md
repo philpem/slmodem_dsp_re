@@ -59200,3 +59200,95 @@ are in nobody's V.22 count: `connect_1200` (818), `connect_2400` (1,505),
 `MakeTxData` (195), `ResetRx` (62), `SetRxRate` (211) and `SetTxRate` (205).
 Several appear in almost every blocked function's list, so they are not
 optional, and the next agent will meet them immediately.
+
+### 3305. `V22FP_TX_CLOCK` IS THE PULSE SHAPER'S `cfg.step`, AND `v22_pps.h`'s "NOTHING EVER ASSIGNS IT" IS WRONG
+
+Two facts that were each recorded on their own and never put together:
+
+- `TxClockSync` (v22prc.c) stores three times the short at `fp + 0x12a` into
+  `fp + 0x78`.  `v22prc.h` calls that address `V22FP_TX_CLOCK` and says only
+  "short, written by TxClockSync", which is all one leaf function could say.
+- `V22FP_create` calls `V22_PPS_init` on `fp + 0x78` -- 0x87ea1,
+  `mov 0x54(%ebp),%ebx ; add $0x78,%ebx ; mov %ebx,(%esp)`, then the call at
+  0x87eaa.
+
+`struct v22_pps` begins with its configuration, so `fp + 0x78` is
+`pps.cfg.step` and `TxClockSync` writes the pulse shaper's phase increment.
+
+That refutes a sentence in `v22_pps.h`: "`PPSv22_CFG` is sixteen bytes of zero
+and nothing in the object ever gives `step` a value, so the step is 3 and the
+ratio is 40 / 3 = 13.33 outputs per symbol -- 600 baud at 8000 samples/s."
+Something does give it a value.  The header has been corrected in place and
+points here.
+
+**Nothing measured changes.**  `V22_PPS_STEP` is still the constant 3 that the
+phase update adds to `cfg.step`, `t_v22_pps` still passes, and no test drives
+`TxClockSync` and the filter together -- so this is not a defect, it is a
+derivation whose scope was overstated.  The 40/3 ratio holds while `fp + 0x12a`
+is zero and is a statement about one state of the modem rather than about the
+block.  It matters because the 8 kHz retarget (#47) is meant to regenerate
+these coefficients from the design parameters, and "the step is always 3" would
+have been carried into that as an invariant.
+
+The general shape is worth naming: **a leaf function written against `void *`
+and named offsets records WHERE a field is, and only the constructor records
+WHAT it is.**  Two names for one address -- `V22FP_TX_CLOCK` in `v22prc.h` and
+`V22FP_PPS` in `v22data.h` -- is the symptom, and both are kept and
+cross-referenced until `V22FP_create` lands and the object gets a real type.
+
+### 3306. `V22_OBJ_GTIMER` IS NOT AN `int *`
+
+`v22prc.h` describes the pointer at `modem + 0x50` as "int *, a shared
+millisecond clock", which is what `ReadGTimer` alone can support: it steps the
+int at +0x00 by 20 and returns it.
+
+`Detect_v22` reaches `+0x18` and `+0x20` of the same block and hands both to
+`FPM_MTD_detect`, so they are `struct fpm_mtd *`.  `V22FP_control` reaches
+`+0x0c` and `+0x0e` of it and stores shorts.  So +0x50 points at a struct
+shared across the V.22 modem whose first int happens to be the timer, not at a
+bare counter.
+
+Nothing reconstructed builds that block, so its extent is unknown and it is not
+modelled.  Recorded because "int *" is the kind of type a later reader
+dereferences without checking.
+
+### 3307. `MTDv22_CFG` AND `MTDv22_CFG2` DETECT 2200 Hz AND 1800 Hz, AND MEASURING THAT IS WHAT MADE `Detect_v22`'s TEST MEAN ANYTHING
+
+Both configurations are `tones = 3`, `min_level = 10`, `ratio` 29820 and 27980
+respectively, and neither carries its passband anywhere a reader can see it.
+
+Swept 100-3900 Hz in 100 Hz steps at four amplitudes through a V22FP-shaped
+fixture -- AGC configured from `AGCv22_CFG2` first, then 40-sample sub-blocks,
+which is the path `Detect_v22` itself uses -- `MTDv22_CFG`'s detector returns
+`FPM_MTD_ABSENT` at **2200 Hz and nowhere else**, `MTDv22_CFG2`'s at **1800 Hz
+and nowhere else**, and both return `NOSIGNAL` at 100 Hz.
+
+**The reason this is a finding and not a note is what it caught.**  Only a zero
+verdict advances `Detect_v22`'s counters.  A plausible guess at the V.22 tone
+set -- 600, 1200, 2100, 2400, 3000 -- drives neither detector, so every counter
+stays at zero, every sub-block is cleared, and the function returns 0 on every
+input.  The differential test PASSED, at 305,100 checks, with five anti-vacuity
+counts sitting at zero: both sides agreed perfectly about nothing happening.
+The fix was the fixture, not the assertions.  This is finding 134's argument
+arriving from the other direction: a detector that never fires and a tool that
+never fires are the same failure, and the only defence is a count that has to
+be non-zero.
+
+### 3308. A SYMMETRIC RETURN VALUE CANNOT CATCH A MIS-PAIRING, SO THE SEPARATING COUNT HAS TO BE TAKEN ON THE SIDE EFFECTS -- CHANNEL BY CHANNEL
+
+`Detect_v22` runs two detectors, keeps a run length for each, and returns
+`(run_a > 2) | (run_b > 2)`.
+
+Pair each counter with the other detector and the return value is identical for
+every input, because `|` is commutative.  The asymmetry is only in the side
+effects: the sample-buffer clear is gated on `run_a` and the diagnostic store
+on `run_b`.  So a differential test that compares the return value -- the
+obvious thing to compare, and the thing the function exists to produce -- cannot
+separate the true pairing from the swapped one at all.
+
+It generalises to any wrapper whose result is symmetric in its inputs, which is
+most detectors and every `||` of two predicates: **the separating count must be
+taken on the side effects.**  And it has to be taken CHANNEL BY CHANNEL rather
+than as a disjunction, or the count is satisfied by whichever channel the
+differential happens to compare most weakly -- which is what the third commit
+on this batch's branch fixes.
