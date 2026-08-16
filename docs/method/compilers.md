@@ -317,7 +317,7 @@ compiler that can answer it costs nothing and breaks nothing.
 
 `make period` passes the witness -- 65536.0f plus nineteen taps of 0.0005f,
 which is `+65536.0000` in `float` and `+65536.0078` in extended -- and that is
-what says the source is right. Finding 2150, and finding 2139 for the rule it
+what says the source is right. Finding 2153, and finding 2139 for the rule it
 applies.
 
 ## Where it stands

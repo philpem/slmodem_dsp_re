@@ -54744,7 +54744,9 @@ bits before it is compared, so `abs(-32768)` is -32768 again and the printed
 maximum at 0, both as ints, so an empty history prints 32768 and 0.
 docs/deviations.md D328.
 
-### 2150. THE FOUR COEFFICIENT SUMS IN `convertEqualizerToMmx` ARE `float`, AND GCC 13 CANNOT BE MADE TO AGREE
+### 2153. THE FOUR COEFFICIENT SUMS IN `convertEqualizerToMmx` ARE `float`, AND GCC 13 CANNOT BE MADE TO AGREE
+
+*Renumbered before merge: this was **2150** on `v90-equalizer-methods`, where it was written while `tooling-debts` had independently taken 2150 for `reanchor.py`'s ungated tie guard. Master's is the one that landed first; nothing else about this entry changed.*
 
 Finding 2139 established that a spill to a four-byte slot is a rounding and is
 evidence about the declared type. `convertEqualizerToMmx` has four of them --
@@ -54803,7 +54805,9 @@ it use: expected uncaught, by this tier, for a measured reason, and if it ever
 starts being caught the modern build has stopped keeping excess precision and
 the guard can go.
 
-### 2151. THE RECIPROCAL-BEFORE-MULTIPLY WITNESS HAD TO BE SEARCHED FOR, AND IT EXISTS
+### 2154. THE RECIPROCAL-BEFORE-MULTIPLY WITNESS HAD TO BE SEARCHED FOR, AND IT EXISTS
+
+*Renumbered before merge: this was **2151** on `v90-equalizer-methods`, where it was written while `tooling-debts` had independently taken 2151 for the `+0x3cc` corroboration. Master's is the one that landed first; nothing else about this entry changed.*
 
 `convertEqualizerToMmx` computes the renormalisation's argument as
 `(1/(beta * 2**24)) * maxLeCoefValue` where `setLinearEquBeta` computes
