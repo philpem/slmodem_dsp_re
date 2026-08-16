@@ -59208,3 +59208,39 @@ compares six sequences of shorts, so it would pass if the arrays were the
 right tables in the right order at the wrong LENGTH.  The lengths come from
 `nm` and the order from the relocations; the test checks the values agree, it
 is not the derivation.
+
+### 3215. `make phase`'s `prereq` GUARD DOES NOT RUN FIRST UNDER `-j`, AND THE INTEROP TIER LOSES THE RACE
+
+Finding 1563 added `prereq` so that a worktree missing `third_party/spandsp`
+is told so at the TOP of the log rather than at the bottom of 1,573 lines
+nobody reads the tail of, and the Makefile reads
+
+    phase: prereq period test check64 interop params coverage debugcov onedef
+
+**`prereq` is a prerequisite, not a barrier.**  Under `-j3` make starts it
+alongside `period`, `test`, `check64` and `interop`, and this session lost
+that race twice in a row: `make phase -j3` in a worktree whose symlink had
+just been removed died at
+
+    make: *** [Makefile:685: build/test/t_spandsp_b103] Error 1
+
+with no `prereq: linked` and no `prereq: REFUSING` line anywhere in the log,
+because `prereq` had not reached its `ln -s` by the time the interop link
+ran.  `make prereq` on its own, in the same tree at the same moment, links it
+and exits 0 -- so the target is correct and its ORDERING is not.
+
+**IT FAILS LOUD, WHICH IS WHY THIS IS A NOTE AND NOT AN ALARM.**  The two
+outcomes of the race are "prereq wins and everything works" and "interop
+fails to link and `make phase` exits 2".  There is no arm in which the tier
+is skipped and the run still says OK -- unlike 3055, 2400 and 3100, where a
+gate measured nothing and reported success.  What it costs is a confusing
+message and a full re-run: the failure names a link line, not the missing
+library, which is exactly the diagnosis 1563 was written to prevent.
+
+The one-line fix is an order-only dependency -- make the other eight
+prerequisites `| prereq`, or give `phase` a recipe that runs `$(MAKE)
+prereq` before `$(MAKE) the-rest`.  **NOT APPLIED HERE**: the Makefile is
+shared by five live worktrees, the failure is loud, and a build change from a
+V.32 branch is a merge conflict for everyone.  Recorded so the next person to
+see that link error does not go looking for it in their own code, which is
+where this session looked first.
