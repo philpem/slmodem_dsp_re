@@ -57500,3 +57500,183 @@ outside the scope this branch was given.  It also cannot be separated from the
 question of what `*out_count`'s limit comparison does, which is a second
 signedness read in the same function.  Recorded with its three addresses so the
 next task starts from evidence rather than from a re-derivation.
+
+### 2600. THE BACKLOG'S SECOND-LARGEST GAP IS NOT A GAP: `probeselect`'s 31 MISSING DIAGNOSTIC SITES ARE ALL PRESENT, IN TWO HELPERS THE OBJECT INLINED
+
+`debugaudit.py --missing` reports `probeselect` as **31 missing (blob 43, ours
+12)**, second only to `v34handshak`'s 261, and 1976 on
+`improve/v34-training` built a plan on it: the object narrates its own
+message construction, our reconstruction does not, so #169 and #170 are
+blocked until the sites are restored.
+
+**Every one of the 31 is already in this tree.** They are in two static
+helpers our source factors out and the original's compiler inlined:
+
+| helper | sites in it | call sites in `probeselect` | expansions |
+|---|---|---|---|
+| `probe_preemph` | 3 | 10 | 30 |
+| `probe_ask` | 1 | 2 | 2 |
+
+Three `V34PREEMPHASIS` strings, ten copies of each, is exactly what
+`--strings probeselect` lists. The three are separate strings and not one
+folded string -- `index is 10, baudrate= %d \n` carries a literal 10 AND a
+trailing space before the newline, `index is 0, baudrate= %d\n` a literal 0
+and no trailing space -- which is itself the evidence that the author wrote a
+call at each leaf where the index is statically known.
+
+**This is the artifact `debugaudit.py` documents against itself**, in the
+comment above its own per-file rollup, and finding 605 named it: where the
+reconstruction splits one of the original's functions into static helpers,
+our sites sit in functions the blob has no symbol for and are counted against
+neither side. `callprog.c` is the tool's own worked example. **The per-file
+total is the number with no boundary to fall through.** For `v34hshak.c` the
+four per-function rows sum to 305 missing (261 + 31 + 11 + 2), while the
+per-file total is `-235 (blob 338, ours 103)`. **Seventy sites are the
+difference**, and they are not missing -- they are in this file's static
+helpers, which the object inlined and which therefore have no blob symbol to
+be counted against.
+
+**AND THE INSTRUMENT 1976 ASKED FOR ALREADY EXISTS.** `test/unit/t_v34hshak.c`,
+"v34 handshake: probeselect narrates every decision", raises both
+`dsplibs_debug_level` and `ref_dsplibs_debug_level`, captures each side's
+transcript separately and compares them with `strcmp` over 150 seeds at two
+levels. It passes. That single check verifies the format string, the argument
+VALUES, the argument order, the number of sites and each site's placement in
+control flow, all at once -- which is the whole of what finding 134 said no
+test could see, and the reason the capture harness was built after finding 126
+found `updateAlpha` wrong in all three.
+
+**So the debug backlog is not what blocks #169 and #170**, and the restoration
+work that was requested for `probeselect` does not exist to be done. What the
+`--missing` count is measuring there is our factoring. The real backlog is in
+the per-file rollup, where no helper can hide a site: `v8handshak.c` -8 (blob
+10, ours 0), `callprog.c` -9, `b103fp.c` -7, `dialer.c` -4, and `v23rx.c`,
+`b103.c` and `call.c` at -4 each.
+
+### 2601. THE OBJECT HAS 43 DIAGNOSTIC SITES WHERE OUR SOURCE HAS 44 EXPANSIONS, BECAUSE GCC CROSS-JUMPED THE 9 dB ARM ONTO THE VARIABLE REQUEST'S TAIL
+
+Reconciling 2600's arithmetic. Our source expands to 12 in `probeselect`'s own
+body + 30 from `probe_preemph` + 2 from `probe_ask` = **44**. The blob has
+**43**. One expansion has no site of its own, and which one it is matters,
+because the alternative reading is that we print a line the object does not.
+
+It is not an unresolved string: all 43 site blocks resolve one, checked.
+
+The object has exactly two `V34PROBE, asking for a power reduction of %d\n`
+sites, and they do not carry the same kind of argument:
+
+    61041:  b8 07 00 00 00   mov  $0x7,%eax      <- a literal 7
+    61cdf:  89 6c 24 04      mov  %ebp,0x4(%esp) <- a register
+
+The first is `probe_ask(rx, msg, 7, -1, 7)` inlined: the backoff loop
+immediately above it is `imul $0x47cf` under `cmp $0x7`, so the count and the
+printed value are the same constant. Our source has three expansions -- the
+ordinary arm's computed `req`, `probe_ask(..., 9)` and `probe_ask(..., 7)` --
+and **no site anywhere in the object carries a literal 9.**
+
+So the 9 dB arm shares the second site. Both it and the ordinary arm reach a
+printf whose argument is already in a register, the tails are identical, and
+GCC cross-jumped them; the `$0x7` arm could not join because its argument is
+an immediate. 44 - 1 = 43.
+
+**THE TRANSCRIPT TEST IS ONLY EVIDENCE FOR THIS IF THE ARM IS REACHED**, and
+`strcmp` over a sweep says nothing about a path the sweep misses. The arm
+needs `snr_l1 <= 0x1f3` with the sensitive-ISP bit set, and `probe_l1` in the
+test carries 0, 1, 0x1f2 and 0x1f3, so it is reachable -- but reachable is not
+reached. The sweep now accumulates which lines the REFERENCE was seen to
+print and asserts eight of them by name at the end, "asking for a power
+reduction of 9" among them. If that arm ever stops being exercised the check
+fails, rather than this reconciliation quietly reverting to an assumption.
+
+### 2602. THE OUTGOING MESSAGE IS CLEARED BEFORE IT IS BUILT, AND IT HAS A SECOND WRITER -- SO NOTHING IN IT IS EVER UNINITIALISED, AND 1974's PROPOSED MECHANISM DOES NOT EXIST
+
+1976 on `improve/v34-training` left two possibilities and said only reading
+the bits as they leave could choose between them: the trellis code, the
+non-linear-encoder bit and the shaping bit are **either written elsewhere in
+`v34handshak`, or never written at all** -- and if never, they go out carrying
+whatever the buffer held, which would make a weak trellis choice
+uninitialised state rather than a decision. That second reading was what gave
+1974's `64S-4D/16S-4D` correlation a mechanism.
+
+**BOTH HALVES OF THE SECOND READING ARE FALSE.**
+
+**One: `probeselect` clears the buffer before it builds.** Its first
+statement is
+
+    for (i = 0; i <= 9; i++)
+        msg[i] = 0;
+
+over `msg = (short *)(m + 0xa9ac)`, and every write after it is an
+OR through `mp_or` or `mp_put_preemph`. So a field it does not write leaves
+as **zero** -- a value the clear chose, not a value the buffer kept.
+
+Measured, not read. `t_v34hshak.c`, "probeselect's message does not inherit
+the buffer", runs each of 150 seeds TWICE with every input reproduced exactly
+and only the ten shorts at +0xa9ac differing beforehand -- once filled 0x00,
+once 0xff -- and compares the message afterwards. 2400 checks, all passing, on
+the REFERENCE side as well as ours, so the claim is about the object. If any
+field were inherited the two runs would differ in it.
+
+**Two: `probeselect` is not the only writer.** `V34SetINFO1aBits`
+(`src/pump/v34/v34info1a.cpp`, reconstructed) takes `bits` and is called as
+
+    w = (unsigned short *)(f->m + 0xa9ac);
+    V34SetINFO1aBits(f->obj, (short *)w);
+
+at `v34hshak.c:4108`, and at `:6764` through the pointer `v34handshak` aims
+at that same record -- three call sites in all, which is the count
+`v34info1a.cpp`'s own header states. It
+accumulates into what is there -- `bits[0] = (...) | (unsigned short)bits[0]`
+-- so it adds fields to the message `probeselect` cleared and filled. That is
+1976's FIRST alternative, and 1976 said such a writer would be findable
+because `v34handshak` is reconstructed. It is, and it was not in
+`v34handshak` but in a callee.
+
+**WHAT THIS DOES AND DOES NOT SETTLE.** It settles the mechanism question:
+there is no uninitialised state in this message, so a consistently weak
+trellis choice cannot be explained that way and 1974's correlation still wants
+a cause. It does NOT establish which bit is the trellis code. This finding
+deliberately does not name the fields -- the bit map would have to come from
+our own decoders or the Recommendation, and `setfinalrate` unpacks only
+pre-emphasis and the two rate codes, while the trellis depth and non-linear
+encoder select this modem USES are at bits 11..12 and 13 of `info_rates`
+(+0xaa0c), which is a RECEIVED field and not this message at all.
+
+**THE MEASURED MAP, from an all-zero start over 150 runs.** Only the low byte
+of each short is ever touched -- every OR constant in the function is at most
+0xff -- so the payload is ten bytes:
+
+| short | bits ever set | bits never set |
+|---|---|---|
+| `msg[0]` | 0xe8 | 0x17 |
+| `msg[1]` | 0x07 | 0xf8 |
+| `msg[2]` | 0xe7 | 0x18 |
+| `msg[3]` | 0xf1 | 0x0e |
+| `msg[4]` | 0xfd | 0x02 |
+| `msg[5]` | 0xff | -- |
+| `msg[6]` | 0xff | -- |
+| `msg[7]` | 0xde | 0x21 |
+| `msg[8]` | 0xe0 | 0x1f |
+| `msg[9]` | 0x00 | 0xff |
+
+`msg[9]` is cleared and never written by `probeselect` at all. "Never set"
+here means not set by any of 150 runs, which is what the phrase can mean when
+it is measured; the ones `V34SetINFO1aBits` adds are not in this table.
+
+### 2603. D53's DEAD ARM IS DEAD IN THE OBJECT TOO, AND THAT IS NOW ASSERTED RATHER THAN INFERRED
+
+D53 says `probe_preemph`'s `return 0` arm cannot be reached: the counter is
+advanced before the test and never after it, so `i == 5` cannot hold. That
+was read off the object's instruction order.
+
+The transcript sweep now shows it of the RUNNING OBJECT. The blob carries ten
+copies of `V34PREEMPHASIS, - index is 0, baudrate= %d\n` -- one per inlined
+copy of the helper (finding 2600) -- and over 150 seeds at two debug levels it
+prints none of them. Ten format strings in `.rodata` that no execution can
+reach.
+
+It is asserted as a must-NOT-appear rather than dropped from the coverage
+list, because the interesting failure is the other way round: a reconstruction
+that "corrected" the counter would start printing it and would shift every
+pre-emphasis index down one. Findings 1477 and 1901 measured that variant and
+rejected it.
