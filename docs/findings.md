@@ -58107,3 +58107,55 @@ present while `b103fp.c` really has no such site.
 Shown to fire, per 134: with the `V8: reseting QCA1 detector...` call deleted
 from `v8hsrx.c`, `--absent v8handshak` reports `1 absent` and names the
 string; with it restored, `0 absent`.
+
+### 2952. THREE CODEGEN ROWS IN `src/v8/`: TWO ARE THE DECLARED WIDTH OF A COMPARISON AND NOW MATCH INSTRUCTION FOR INSTRUCTION, THE THIRD IS REGISTER ALLOCATION AND IS DECLINED
+
+Handed over as same-size symbols whose code generation differs. The rule they
+are decided by is CLAUDE.md's: act on what the compiler was FORCED to encode,
+ignore what it was free to choose. Two of the three are forced and one is not,
+and the split is clean.
+
+Measured by compiling the single translation unit in the `dsplibs-tc342`
+image with `build.sh`'s exact flags and diffing the symbol's full text against
+the blob's, operands included, with branch targets normalised and alignment
+padding ignored -- 617's acceptance test, not a mnemonic count.
+
+**`V8_V21_reset` -- one instruction, and it is the loop counter's signedness.**
+The object ends its clear loop `inc %eax; cmp $0x27,%eax; jbe`; we emitted
+`jle`. Everything else was already identical. `unsigned i` in place of `int i`
+closes it: **14 of 14**. The counter runs 0..39, so the two readings agree
+over every value it holds and no differential test can ever see the
+difference.
+
+**`v8_agcadapt` -- 70 against 68, and four declarations close all of it.**
+**70 of 70** afterwards. Three separate signals, each forced:
+
+  * `delta` and `acc` are SHORT, not `int`. Each dead-band test is
+    `test %dx,%dx` in the object and was `test %edx,%edx` in ours; the width
+    of a test is the width of the value tested.
+  * the accumulator that is STORED BACK is the untruncated sum. The object
+    stores `%cx`, the raw `lea` result, where we stored the sign-extended
+    `%dx`. Same sixteen bits, so nothing can measure it, but it says the
+    source stored the sum and not the narrowed copy -- so the function carries
+    both, `sum` and `acc = (short)sum`.
+  * the magnitude is a NAMED SHORT TEMPORARY and not a cast inside the `if`.
+    The object sign-extends the difference with `cwtl` and then narrows the
+    test back to `%ax`; written as `(short)(... - 0x7d0) <= 0` in the
+    condition, this compiler folds the conversion away and emits two
+    instructions fewer. That was the whole of the residual once the widths
+    were right.
+
+**`V8Create` -- 244 against 245, and every difference is free. Declined.**
+The object keeps `%eax` live out of the allocator and tests it before moving
+it to `%esi`; we move first, materialise the NULL return with an extra
+`xor %eax,%eax`, and test `%esi`. The rest is the same six field copies in a
+different order and the same epilogue scheduled differently. Register
+allocation and instruction scheduling are the two examples CLAUDE.md gives of
+what to ignore, and permuting source until they line up is fitting the
+compiler. Left alone.
+
+**NONE OF THIS IS VISIBLE TO A DIFFERENTIAL TEST**, which is the point: every
+value involved already ranged over a short, so both readings agree over every
+input and `make phase` can only show that nothing broke. It does -- 185
+passed, 0 failed. The evidence for these two is the instruction, and this is
+the tier that exists to read it.
