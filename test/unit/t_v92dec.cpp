@@ -220,6 +220,25 @@ struct trial_args {
 	unsigned int	word_420;
 	unsigned int	dilLength;
 	int		withJd92;	/* a null jdV92 is a real arm   */
+	int		forceUcode;	/* make abs(symbol)==ucodeLevel */
+	/*
+	 * THREE BRANCHES NOTHING RANDOM REACHES, put one step from firing.
+	 *   forceJd      the V92Jd data unpacker is left in its last state
+	 *                with 0x33 of 0x34 bits taken and bits[28] clear, so
+	 *                the next bit -- whatever it is -- completes a match.
+	 *   forceJdPhase the same for the phase unpacker, whose tag test is
+	 *                `phaseBits[28] != 1` rather than `!= 0`.
+	 *   forceDilEnd  the modulator is put in P3M_STATE_DIL_END with a zero
+	 *                segment position, which is the ONE place
+	 *                `generateSymbol` writes eventCode 6 -- the shared
+	 *                Phase3-Terminated tail of the seven DIL arms.
+	 * Each needs about seventy specific bits or a whole DIL to arrive at
+	 * honestly; setting the collaborator's own state is the same device
+	 * this tree uses to reach a dispatch case cold.
+	 */
+	int		forceJd;
+	int		forceJdPhase;
+	int		forceDilEnd;
 	float		sample;
 };
 
@@ -409,10 +428,28 @@ setup(int trial, const struct trial_args *t)
 		d->verificationStatus = 0x1234u;
 		d->word_3cc = 1u;
 
+		if (t->forceJd) {
+			V92Jd *j = &jd92o[side];
+
+			j->unpackWord = 9;
+			j->unpack[1] = 0x33;
+			j->bits[28] = 0;
+		}
+		if (t->forceJdPhase) {
+			V92Jd *j = &jd92o[side];
+
+			j->unpackPhaseWord = 8;
+			j->unpack[1] = 0x33;
+			j->phaseBits[28] = 1;
+		}
 		d->phase3Modulator.usingSegmentLevel = (short)t->usingSeg;
 		d->phase3Modulator.segmentPos = t->segmentPos;
 		d->phase3Modulator.dilPcmCode = t->dilPcmCode;
 		d->phase3Modulator.eventCode = t->eventCode;
+		if (t->forceDilEnd) {
+			d->phase3Modulator.state = (Phase3ModulatorState)10;
+			d->phase3Modulator.segmentPos = 0;
+		}
 	}
 }
 
@@ -623,6 +660,136 @@ returns_a_value(int st)
 }
 
 /*
+ * WHAT EACH ARM LEAVES BEHIND THAT NOTHING ELSE DOES.  A sweep that agrees
+ * with the blob proves nothing unless the interesting branches were entered,
+ * and most of them are only visible through the state and event code the blob
+ * writes.  These tallies are read off the BLOB's side after every call, and
+ * `run_states` requires every one of them to be non-zero -- findings 247 and
+ * 262 are why a coverage claim in this tree has to be satisfiable and checked.
+ */
+struct tally {
+	int firstStudy;		/* case 10  -> state 0x0b            */
+	int qcFirstStudy;	/* case 13  -> state 0x0e            */
+	int secondStudy;	/* 11/12/15 -> state 0x10, word_30 17 */
+	int thirdStage;		/* case 11  -> state 0x0c, word_30 16 */
+	int qcSecond;		/* case 14  -> state 0x0f, word_30 16 */
+	int relaxation;		/* case 16  -> word_30 0x12          */
+	int relaxCount;		/* case 16  -> word_30 0x0f          */
+	int dilEnded;		/* case 17  -> word_30 0x13          */
+	int jdNot;		/* cases 5 and 9 -> word_30 8 or 5   */
+	int v92Jd;		/* case 7   -> word_30 6             */
+	int v92JdPhase;		/* case 8   -> word_30 7             */
+	int studyUref;		/* case 4   -> state 5               */
+	int trn1dDd;		/* cases 2 and 3 -> state 4          */
+	int nullJd92;		/* case 3   -> state 0x19            */
+	int dilTimeout;		/* 10..16   -> state 0x18            */
+	int terminated;		/* the shared tail -> word_30 0x14   */
+	int sdSeen;		/* case 0   -> state 1               */
+	int sdNotSeen;		/* case 1   -> state 2               */
+	int qtsSeen;		/* case 26  -> state 0x1b            */
+	int qtsNotSeen;		/* case 27  -> state 0x1c            */
+	int ansamEnter;		/* case 28  -> state 0x1d            */
+	int ansamDrop;		/* case 30  -> state 0x1f            */
+	int notSameLine;	/* cases 26/27 -> state 0x20 or 0x21 */
+	int midEvent;		/* 11/14    -> word_30 0x0c or 0x0a  */
+	int ucodeForced;	/* the symbol was made to match      */
+};
+
+static struct tally tal;
+
+static void
+count_branches(void)
+{
+	const V90Phase3Demodulator *d = &slot[1].o;
+	int st = (int)d->state;
+	unsigned int ev = d->word_30;
+
+	if (st == 0x0b)
+		tal.firstStudy++;
+	if (st == 0x0e)
+		tal.qcFirstStudy++;
+	if (st == 0x10 && ev == 0x11)
+		tal.secondStudy++;
+	if (st == 0x0c && ev == 0x10)
+		tal.thirdStage++;
+	if (st == 0x0f && ev == 0x10)
+		tal.qcSecond++;
+	if (ev == 0x12)
+		tal.relaxation++;
+	if (ev == 0x0f)
+		tal.relaxCount++;
+	if (ev == 0x13)
+		tal.dilEnded++;
+	if (ev == 8 || ev == 5)
+		tal.jdNot++;
+	if (ev == 6)
+		tal.v92Jd++;
+	if (ev == 7)
+		tal.v92JdPhase++;
+	if (st == 5)
+		tal.studyUref++;
+	if (st == 4)
+		tal.trn1dDd++;
+	if (st == 0x19)
+		tal.nullJd92++;
+	if (st == 0x18)
+		tal.dilTimeout++;
+	if (ev == 0x14)
+		tal.terminated++;
+	if (st == 1)
+		tal.sdSeen++;
+	if (st == 2)
+		tal.sdNotSeen++;
+	if (st == 0x1b)
+		tal.qtsSeen++;
+	if (st == 0x1c)
+		tal.qtsNotSeen++;
+	if (st == 0x1d)
+		tal.ansamEnter++;
+	if (st == 0x1f)
+		tal.ansamDrop++;
+	if (st == 0x20 || st == 0x21)
+		tal.notSameLine++;
+	if (ev == 0x0c || ev == 0x0a)
+		tal.midEvent++;
+}
+
+/*
+ * `abs(symbol) == ucodeLevel` splits cases 11 and 14 in half and NOTHING
+ * OBSERVABLE SAYS WHICH HALF RAN, so breadth would have been a guess.  It is
+ * forced instead: the modulator and its scrambler buffer are saved, our side's
+ * `generateSymbol` is run once to learn the symbol the real call is about to
+ * produce, both are restored, and `ucodeLevel` is set to its magnitude on both
+ * sides.  `generateSymbol` touches the modulator and that buffer and nothing
+ * else, so the restore is exact -- and it is our own `generateSymbol`, which
+ * `t_v90p3mod` has already shown to agree with the blob's, so the value it
+ * predicts is the value both sides will see.
+ */
+static void
+force_ucode_match(void)
+{
+	static unsigned char modsave[0x398];
+	static unsigned char scrsave[SCR_BUF];
+	int sym, mag, side;
+
+	memcpy(modsave, (const void *)&slot[0].o.phase3Modulator,
+	       sizeof(modsave));
+	memcpy(scrsave, sbuf[0], sizeof(scrsave));
+
+	sym = slot[0].o.phase3Modulator.generateSymbol();
+
+	memcpy((void *)&slot[0].o.phase3Modulator, modsave, sizeof(modsave));
+	memcpy(sbuf[0], scrsave, sizeof(scrsave));
+
+	mag = (short)sym;
+	if (mag < 0)
+		mag = -mag;
+	for (side = 0; side < 2; side++)
+		slot[side].o.ucodeLevel = (short)mag;
+	tal.ucodeForced++;
+}
+
+/*
  * One trial: `calls` consecutive samples through both sides, comparing after
  * each.  A single call exercises one arm's FIRST sample only, and every arm
  * that advances `word_04` or a counter behaves differently on the second.
@@ -636,13 +803,19 @@ run_trial(int trial, const struct trial_args *t, int calls, long tag)
 
 	for (i = 0; i < calls; i++) {
 		float s = t->sample + 137.0f * (float)i;
-		short mine = slot[0].o.getV92Decision(s);
-		short theirs = ref_getV92Decision(&slot[1].o, s);
+		short mine, theirs;
+
+		if (t->forceUcode)
+			force_ucode_match();
+
+		mine = slot[0].o.getV92Decision(s);
+		theirs = ref_getV92Decision(&slot[1].o, s);
 
 		if (returns_a_value(t->state))
 			diff_eq_int("decision (%ld)", (long)mine,
 				    (long)theirs, tag * 8 + i);
 		compare_all("after getV92Decision", tag * 8 + i);
+		count_branches();
 	}
 
 	teardown();
@@ -656,8 +829,22 @@ run_trial(int trial, const struct trial_args *t, int calls, long tag)
  */
 #define NCAND	26
 
+/*
+ * `fill_params` is deterministic in (slot, trial), so the value a slot WILL
+ * hold can be computed before it is written.  This used to read the block
+ * itself, which was read one trial too early -- `setup` had not run yet -- so
+ * candidates 19..25 were systematically one below the PREVIOUS trial's value
+ * and the seven parameter-slot timeouts fired only by coincidence with the
+ * literal ones.  The tallies in `run_trial` are what proves the repair.
+ */
+static int
+pslot(int idx, int trial)
+{
+	return (int)(((unsigned)idx * 7u + (unsigned)trial) % 61u) + 1;
+}
+
 static unsigned int
-cand_of(int k, const struct trial_args *t)
+cand_of(int k, const struct trial_args *t, int trial)
 {
 	switch (k) {
 	case 0:  return 0u;
@@ -679,13 +866,13 @@ cand_of(int k, const struct trial_args *t)
 	case 16: return 11u;			/* %6 == 0 on entry     */
 	case 17: return 12u;			/* %6 != 0 on entry     */
 	case 18: return 11u + 72u;		/* %72 == 12            */
-	case 19: return (unsigned int)V90PW(parm[0])[P_300] - 1u;
-	case 20: return (unsigned int)V90PW(parm[0])[P_308] - 1u;
-	case 21: return (unsigned int)V90PW(parm[0])[P_30C] - 1u;
-	case 22: return (unsigned int)V90PW(parm[0])[P_310] - 1u;
-	case 23: return (unsigned int)V90PW(parm[0])[P_314] - 1u;
-	case 24: return (unsigned int)V90PW(parm[0])[P_318] - 1u;
-	default: return (unsigned int)V90PW(parm[0])[P_ANSPCM] - 1u;
+	case 19: return (unsigned int)pslot(P_300, trial) - 1u;
+	case 20: return (unsigned int)pslot(P_308, trial) - 1u;
+	case 21: return (unsigned int)pslot(P_30C, trial) - 1u;
+	case 22: return (unsigned int)pslot(P_310, trial) - 1u;
+	case 23: return (unsigned int)pslot(P_314, trial) - 1u;
+	case 24: return (unsigned int)pslot(P_318, trial) - 1u;
+	default: return (unsigned int)pslot(P_ANSPCM, trial) - 1u;
 	}
 }
 
@@ -731,11 +918,17 @@ run_states(void)
 			t.byte_3f9 = (unsigned char)((v / 29) & 1);
 			t.word_3fc = 0;
 			t.short_400 = (short)((v / 31) & 1);
-			t.word_404 = (unsigned int)((v % 3) * 6u);
+			t.word_404 = (unsigned int)(0x20u + (v % 3) * 6u);
 			t.word_408 = (unsigned int)(v % 3);
 			t.word_420 = (unsigned int)(v % 97 + 1);
 			t.dilLength = (unsigned int)(v % 89 + 1);
 			t.withJd92 = (st == 3) ? ((v / 4) & 1) : 1;
+			t.forceUcode = (v / 37) & 1;
+			t.forceJd = (st == 7 && (k & 1));
+			t.forceJdPhase = (st == 8 && (k & 1));
+			t.forceDilEnd = 0;		/* see finding 2107 */
+			if (t.forceJd || t.forceJdPhase)
+				t.word_2c = 11u;	/* 12 on entry, %6 == 0 */
 			t.sample = sample_v[v % NSAMPLE];
 			t.ucodeLevel = (short)((v & 1) ? 4095 : 1234);
 			/*
@@ -743,8 +936,8 @@ run_states(void)
 			 * after it is incremented, so it starts one short.
 			 */
 			t.word_3fc = (unsigned int)
-			    V90PW(parm[0])[P_31C] - (unsigned int)((v & 1));
-			t.word_2c = cand_of(k, &t);
+			    pslot(P_31C, trial) - (unsigned int)((v & 1));
+			t.word_2c = cand_of(k, &t, trial);
 
 			tag = (long)st * 1000 + k;
 			run_trial(trial++, &t, 3, tag);
@@ -799,6 +992,62 @@ run_states(void)
 	diff_eq_int("a symbol matching ucodeLevel was possible", sawUcodeHit,
 		    1, 0);
 
+	/*
+	 * The branch tallies.  Every one of these is a transition only ONE arm
+	 * makes, read off the blob's side, so a zero here means that arm's
+	 * interesting path was never entered and the agreement above was
+	 * agreement about nothing.
+	 */
+	diff_eq_int("case 10 reached porcessFirstStudy", tal.firstStudy > 0,
+		    1, 0);
+	diff_eq_int("case 13 reached porcessFirstStudy", tal.qcFirstStudy > 0,
+		    1, 0);
+	diff_eq_int("a second-study transition fired", tal.secondStudy > 0,
+		    1, 0);
+	diff_eq_int("case 11's third-stage transition fired",
+		    tal.thirdStage > 0, 1, 0);
+	diff_eq_int("case 14's QC-second transition fired", tal.qcSecond > 0,
+		    1, 0);
+	diff_eq_int("case 16's +0x318 event fired", tal.relaxation > 0, 1, 0);
+	diff_eq_int("case 16's +0x31c counter event fired", tal.relaxCount > 0,
+		    1, 0);
+	diff_eq_int("case 17 saw the DIL end", tal.dilEnded > 0, 1, 0);
+	diff_eq_int("a JdNot detection fired", tal.jdNot > 0, 1, 0);
+	diff_eq_int("case 7 detected a V92Jd", tal.v92Jd > 0, 1, 0);
+	diff_eq_int("case 8 detected a V92JdPhase", tal.v92JdPhase > 0, 1, 0);
+	diff_eq_int("case 4 entered study reference Ucode", tal.studyUref > 0,
+		    1, 0);
+	diff_eq_int("an arm entered TRN1d DD", tal.trn1dDd > 0, 1, 0);
+	diff_eq_int("case 3 took the null V92Jd arm", tal.nullJd92 > 0, 1, 0);
+	diff_eq_int("a DIL timeout fired", tal.dilTimeout > 0, 1, 0);
+	/*
+	 * THE SHARED Phase3-Terminated TAIL IS NOT REACHED AND THIS SAYS SO.
+	 * The seven DIL arms end with `if (phase3Modulator.eventCode == 6)`,
+	 * and `generateSymbol` writes 6 in exactly one place: the DIL_END case
+	 * when `segmentPos` is zero after `dilSymbol`. Putting the modulator
+	 * there does reach it -- and makes OUR modulator take the transition
+	 * where the blob's does not, which is a divergence in
+	 * `V90Phase3Modulator::generateSymbol` and not in the method under
+	 * test (finding 2107). So the flag that forced it is off, the tail is
+	 * UNTESTED, and this comment is the record rather than a passing
+	 * assertion that would have been about nothing.
+	 */
+	diff_eq_int("the terminated tail is a known gap (%ld)",
+		    tal.terminated, 0, 0);
+	diff_eq_int("case 0 detected Sd", tal.sdSeen > 0, 1, 0);
+	diff_eq_int("case 1 detected SdNot", tal.sdNotSeen > 0, 1, 0);
+	diff_eq_int("case 26 detected QTS", tal.qtsSeen > 0, 1, 0);
+	diff_eq_int("case 27 detected QTSNot", tal.qtsNotSeen > 0, 1, 0);
+	diff_eq_int("case 28 entered ANSpcm demod", tal.ansamEnter > 0, 1, 0);
+	diff_eq_int("case 30 saw the ANSpcm energy drop", tal.ansamDrop > 0,
+		    1, 0);
+	diff_eq_int("a not-same-line decision was reached",
+		    tal.notSameLine > 0, 1, 0);
+	diff_eq_int("cases 11/14 reached their mid-arm event codes",
+		    tal.midEvent > 0, 1, 0);
+	diff_eq_int("the symbol was forced to match ucodeLevel",
+		    tal.ucodeForced > 0, 1, 0);
+
 	return diff_end();
 }
 
@@ -850,8 +1099,8 @@ run_transcripts(void)
 				t.withJd92 = (st == 3) ? (k & 1) : 1;
 				t.sample = sample_v[k % NSAMPLE];
 				t.word_3fc =
-				    (unsigned int)V90PW(parm[0])[P_31C] - 1u;
-				t.word_2c = cand_of(k, &t);
+				    (unsigned int)pslot(P_31C, trial) - 1u;
+				t.word_2c = cand_of(k, &t, trial);
 
 				dsplib_debug_capture_reset();
 				run_trial(trial++, &t, 2, tag);

@@ -53759,3 +53759,71 @@ thirty-four arms compare against and runs all of them against all of the
 states -- so the timeout branch of every arm is entered on purpose rather than
 by luck. A per-state test that only drove each arm's ordinary path would have
 passed with both defects in place.
+
+### 2107. `V90Phase3Modulator::generateSymbol` AND THE BLOB'S DISAGREE AT `DIL_END` WITH A ZERO SEGMENT POSITION, WHICH IS THE ONLY ROUTE TO EVENT CODE 6
+
+The seven DIL arms of `getV92Decision` share a tail the compiler folded into
+one block at +0x4a6:
+
+    if (phase3Modulator.eventCode == 6) {
+            edprintf("... Phase3 Terminated @ %d\r\n", word_2c);
+            state = 0x13; word_2c = 0; word_30 = 0x14;
+    }
+
+and `generateSymbol` writes eventCode 6 in exactly one place -- the
+`P3M_STATE_DIL_END` case, after `dilSymbol`, when `segmentPos` is zero. So
+that is the only way to reach the tail, and `t_v92dec` put the modulator there
+on purpose rather than waiting for a whole DIL to run.
+
+**Both sides were identical going in and diverged inside `generateSymbol`.**
+Our modulator moved DIL_END -> TERMINATED and set eventCode 6; the blob's
+stayed in DIL_END with eventCode 0. `getV92Decision` never writes
+`phase3Modulator+0x14`, and `reset` is differentially proven by
+`t_v90p3dreset`, so by elimination the difference is inside `generateSymbol`
+itself -- `dilSymbol`'s effect on `segmentPos`, most likely, since the test
+that follows it is `segmentPos == 0`.
+
+`t_v90p3mod` drives `generateSymbol` and does not catch it, which places it
+with 613 and 2103: a real difference that agrees over every input the existing
+suite happens to use.
+
+**Consequence, stated rather than papered over.** The shared tail of the seven
+DIL arms is NOT covered by `t_v92dec`: the flag that reached it is off, the
+tally for it is asserted to be zero, and the comment at that assertion says
+why. Everything else in those seven arms is covered. Whoever picks this up
+should start from `V90Phase3Modulator`'s DIL_END case with `segmentPos` zero,
+not from `getV92Decision`.
+
+### 2108. SIX SPOT MUTATIONS AGAINST `t_v92dec`, AND THE THREE IT DOES NOT CATCH ARE THE INTERESTING HALF
+
+Finding 134's argument -- a checker that has never been shown to fire is not a
+checker -- applied to the suite for `getV92Decision`. Six defects were put in
+by hand, the suite re-run, and the result recorded whichever way it came out.
+
+    linMappAlt read as linMapp                     caught, 20 reports
+    P3D_SIGN pinned to +1                          caught, 20 reports
+    case 8 stops clearing word_404                 caught,  9 reports
+    prevLinMapp read SIGNED instead of unsigned    NOT caught
+    the (unsigned short) narrowing of +0x04 dropped NOT caught
+    unPackJdData tested 32 bits wide, not 8        NOT caught
+
+**The signedness one is EQUIVALENT, and that is worth knowing.** The object
+reads `prevLinMapp` with `movzwl` where it reads the other two tables with
+`movswl`, which is a difference the compiler was FORCED to encode and so is
+normally worth acting on (613). Here it cannot be observed: the value is used
+only as `(short)(sign * v)`, and for any 16-bit pattern the product's low
+sixteen bits are the same whether the pattern was widened as signed or
+unsigned. So the source type is recoverable from the instruction and the
+BEHAVIOUR is not. The reconstruction spells the object's reading.
+
+**The other two are the deviations already on the record**, and this measures
+them rather than restating them. Dropping the `(unsigned short)` on +0x04 is
+invisible because the field only ever holds 0..5 in the sweep, and it cannot be
+made visible without an index that reads 16 MB past a 40 KB object -- which is
+what the OBJECT would do too, so there is nothing to compare (finding 2104).
+Testing `unPackJdData` 32 bits wide is invisible because it returns 0 or 1
+(D-V92DEC-2).
+
+**No formal mutation set is registered for this suite.** Three of six would
+have to be entered as equivalent or unusable, and the argument for each is
+above; a set that carried them without the argument would be worse than none.
