@@ -31,6 +31,26 @@ towards reporting.  Read the disassembly before changing a declaration.
     tools/toolchain/extcheck.py [--dead]
 
 `--dead` also lists the discarded ones, to show what is being filtered.
+
+PRECISION, MEASURED, AND IT IS POOR (finding 2402).  On the current toolchain
+-- GCC 3.4.2 exact, -O3, -mno-ieee-fp -- this reports 18 live memory-operand
+candidates over 938 shared symbols.  Fourteen are traced (eleven by hand
+against tools/dis.py, three by 619): THREE are real, so roughly ONE REPORT IN
+FIVE is a defect.  Four are untraced and 2402 names them.  Every hit must
+still be traced; nothing here is a gate.
+
+The twelve failures are not one class.  A 16-bit compare (`cmp $0x2580,%ax`), a
+signed branch on a 16-bit test, a 32-bit sum immediately narrowed by a cast, a
+value masked with `and $0x3` before use -- in each the extension is real but
+unobservable, and lookahead cannot see truncation.  619 already ruled that
+fixing this needs real dataflow rather than another lookahead rule, and that
+ruling stands; the two corrections since are BUGS removed (finding 2401), not
+heuristics added.
+
+One more class the displacement key cannot avoid: at displacement 0x0 it pairs
+any zero-displacement load with any other, so `receiver mem 0x0` pairs the
+object's dot-product loop against our field copy.  Treat a `mem 0x0` hit in a
+large function as unpaired until the two sites are shown to be the same site.
 """
 
 import glob
@@ -40,7 +60,7 @@ import subprocess
 import sys
 
 BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
-OURS = os.environ.get("TC_OUT", "/tmp/tc_out")
+OURS = os.environ.get("TC_OUT", "build/tc_out")
 
 LOW16 = {"%eax": "%ax", "%ebx": "%bx", "%ecx": "%cx", "%edx": "%dx",
          "%esi": "%si", "%edi": "%di", "%ebp": "%bp"}
@@ -57,6 +77,28 @@ def sizes(path):
     return d
 
 
+#
+# ALIGNMENT PADDING IS NOT A USE.  A multi-byte NOP is spelled as a real
+# instruction -- `lea 0x0(%esi,%eiz,1),%esi`, `lea 0x0(%edi),%edi`,
+# `mov %esi,%esi` -- and the liveness scan below, which asks only whether the
+# register's name appears, read every one of them as a 32-bit use.  So a load
+# followed by padding was reported LIVE with no use at all.
+#
+# `fskdemodulate` +0x14 and `V90AutoDigitalImpDetector::resetLinearMapping`
+# +0xa96c were both this and nothing else.  Padding also ate the re-extension
+# window, which counts ten INSTRUCTIONS -- nops included, so a padded gap hid
+# the second extension the window exists to find.
+#
+# MEASURED, NOT ASSUMED: it costs two memory-operand reports at -O3 (20 -> 18)
+# and the same two at -O2 (17 -> 15), so it is NOT a consequence of the -O3
+# move.  In the decisive cases the padding is in the BLOB, whose codegen no
+# flag of ours changes.  The bug was latent from the start and survived 618's
+# five corrections; re-running the validation ritual is what found it.
+# Finding 2401.
+#
+PAD = re.compile(r"nop|lea 0x0\(.*\),%e[a-z][a-z]$|mov %e(si|di),%e(si|di)$")
+
+
 def disasm(path, sym):
     out = subprocess.run(
         ["objdump", "-d", "--disassemble=" + sym, "--no-show-raw-insn", path],
@@ -67,7 +109,9 @@ def disasm(path, sym):
             continue
         m = re.match(r"^\s*[0-9a-f]+:\s+(.*?)\s*$", line)
         if m:
-            insns.append(re.sub(r"\s*<[^>]*>", "", re.sub(r"\s+", " ", m.group(1))).strip())
+            t = re.sub(r"\s*<[^>]*>", "", re.sub(r"\s+", " ", m.group(1))).strip()
+            if not PAD.match(t):
+                insns.append(t)
     return insns
 
 
@@ -90,10 +134,24 @@ def extensions(insns):
         # backwards, which is how `fskdemodulate`'s four "hits" arose.
         # Finding 618.
         #
+        # A REDEFINITION ENDS THE WINDOW.  The filter's premise is that the SAME
+        # loaded value is extended again; once the register has been written the
+        # low half belongs to a different value and any later `movswl %di,...`
+        # is unrelated.  Scanning past it retracted a real hit: `initdigital`
+        # loads +0x0 into %edi and passes it 32-bit to a call, then reloads
+        # %edi from +0x14 and re-extends THAT -- ten instructions later, which
+        # the window reached once padding stopped filling it.  Finding 2401.
         low16 = LOW16.get(reg)
-        if low16 and any(re.match(r"mov[sz][wb]l\s+%s," % re.escape(low16), n)
-                         for n in insns[i + 1:i + 10]):
-            continue
+        if low16:
+            reextended = False
+            for n in insns[i + 1:i + 10]:
+                if re.match(r"mov[sz][wb]l\s+%s," % re.escape(low16), n):
+                    reextended = True
+                    break
+                if re.match(r"\S+\s+[^,]*,%s$" % re.escape(reg), n):
+                    break                      # reg overwritten; value is gone
+            if reextended:
+                continue
 
         live = False
         for nxt in insns[i + 1:]:
@@ -128,18 +186,38 @@ def extensions(insns):
     return out
 
 
+def load_ours():
+    """Objects from TC_OUT, or die.  AN EMPTY SET IS NOT A CLEAN TREE.
+
+    This tool defaulted to `/tmp/tc_out` while `build.sh` and `compare.py`
+    moved to `build/tc_out`, so with no environment set it globbed an absent
+    directory, compared zero symbols, printed "(none)" and exited 0 -- the
+    dead detector of finding 618 back in the tree, and no way to see it from
+    the output.  Finding 2400.  Never let this fail quietly again.
+    """
+    objs = sorted(glob.glob(os.path.join(OURS, "*.o")))
+    if not objs:
+        sys.exit("extcheck: no objects in TC_OUT=%s -- run tools/toolchain/"
+                 "build.sh first.  Refusing to report a clean tree that was "
+                 "never examined." % OURS)
+    ours = {}
+    for o in objs:
+        for k, v in sizes(o).items():
+            ours.setdefault(k, v)
+    return ours
+
+
 def main():
     show_dead = "--dead" in sys.argv
     blob = sizes(BLOB)
-    ours = {}
-    for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
-        for k, v in sizes(o).items():
-            ours.setdefault(k, v)
+    ours = load_ours()
 
     live_hits, dead_hits = [], []
+    compared = 0
     for k in sorted(ours):
         if k not in blob:
             continue
+        compared += 1
         ea, eb = extensions(disasm(BLOB, k)), extensions(disasm(ours[k][1], k))
         a = {(s, m): l for s, m, l in ea}
         b = {(s, m): l for s, m, l in eb}
@@ -187,7 +265,11 @@ def main():
         print("  (none)")
     print("\nLIVE, register operand -- an intermediate cast, weaker evidence:"
           "  %d" % len(reg))
-    print("\n  %d live, %d discarded as dead extensions" % (len(live_hits), len(dead_hits)))
+    # ALWAYS say how much was examined.  "(none)" over 938 symbols is a result;
+    # "(none)" over 0 is a broken invocation, and they used to print alike.
+    print("\n  %d live, %d discarded as dead extensions"
+          "   (%d symbols compared, TC_OUT=%s)"
+          % (len(live_hits), len(dead_hits), compared, OURS))
     if show_dead:
         print()
         for k, src, mnem, other in dead_hits:

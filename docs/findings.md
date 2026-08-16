@@ -56462,3 +56462,238 @@ on amd64 -- so the object's builder ran an unstable or hardened profile, which
 bounds the likely CFLAGS; and `DEPEND` pins `>=binutils-2.14.90.0.8-r1`, so
 binutils vintage is the next lever after the compiler, the assembler and
 section layout sitting outside gcc entirely.
+
+### 2400. BOTH TRIAGE AIDS WERE DEAD DETECTORS: THEY LOOKED IN A DIRECTORY THAT MOVED, AND REPORTED A CLEAN TREE
+
+CLAUDE.md carries one rule about tools in this tier -- **"any tool here must be
+shown to fire"** -- and names the reason: `extcheck` once printed "(none)"
+through four broken versions with no way to tell a clean tree from a dead
+detector (finding 618). That exact failure was back in the tree, in both aids
+at once, and had been since `build.sh` moved its output.
+
+`tools/toolchain/build.sh` writes `build/tc_out`, and its own comment says why
+it moved there -- "UNDER build/, NOT UNDER /tmp, so `make clean` reaches it".
+`compare.py` was moved with it. **`extcheck.py` and `storeorder.py` were not**,
+and still defaulted to `TC_OUT=/tmp/tc_out`. With no environment set they
+globbed an absent directory, got an empty object list, compared **zero**
+symbols and printed:
+
+    LIVE, MEMORY OPERAND -- a field's declared type differs:
+      (none)
+      0 live, 0 discarded as dead extensions
+
+    0 functions differ in store order, 0 already agree
+
+Both exited 0. Nothing in either output distinguishes that from a tree with no
+defects, which is the whole of finding 134's argument and the whole of 618's.
+
+Worse than the false all-clear is the near miss: had `/tmp/tc_out` survived
+from an older run -- and nothing in the tree ever removed it, which is what
+prompted the move -- the tools would have compared today's blob against
+whatever flags built that directory, silently. Under the flag changes since
+(1990, 2155, 2200) that is a different compiler and a different optimiser.
+
+**FIXED, AND MADE UNABLE TO RECUR.** Both default to `build/tc_out`; both
+`sys.exit` with a message naming `TC_OUT` when the directory yields no objects,
+rather than reporting; and both now print the number of symbols actually
+compared on every run, so "(none)" over 938 and "(none)" over 0 no longer look
+alike:
+
+      30 live, 31 discarded as dead extensions   (938 symbols compared, TC_OUT=build/tc_out)
+
+The lesson generalises past these two tools. A tool that takes its input
+location from the environment fails silently when the location moves, and the
+failure mode is always the reassuring one -- nothing found. **A detector must
+report its denominator.**
+
+### 2401. TWO LATENT BUGS IN `extcheck`, FOUND ONLY BY RE-RUNNING THE VALIDATION RITUAL: PADDING READ AS A USE, AND A WINDOW THAT SCANNED PAST A REDEFINITION
+
+Both survived 618's five corrections, and neither is visible from the tool's
+output. They were found by re-running 618's own validation ritual -- inject the
+known defect, watch it appear, restore, watch it go -- on the current toolchain.
+
+**Padding is spelled as an instruction.** A multi-byte NOP is `lea
+0x0(%esi,%eiz,1),%esi`, `lea 0x0(%edi),%edi`, `mov %esi,%esi`. `extcheck`'s
+liveness scan asks only whether the register's name appears in a later
+instruction, so every one of those read as a 32-bit use, and a load followed by
+padding was reported LIVE with no use at all. Two hits
+were this and nothing else: `fskdemodulate` +0x14 and
+`V90AutoDigitalImpDetector::resetLinearMapping` +0xa96c, where the sole
+"use" of the loaded register was `lea 0x0(%edi,%eiz,1),%edi`.
+
+It also corrupted the re-extension filter, whose window is ten INSTRUCTIONS.
+Padding counted against that budget, so a padded gap hid the second extension
+the window exists to find.
+
+**IT IS NOT A CONSEQUENCE OF `-O3`, AND THE FIRST DRAFT OF THIS FINDING SAID IT
+WAS.** The obvious story -- `-O3` (finding 2155) pads more, so the class
+reappeared when the flag changed -- is wrong, and `build.sh`'s `TC_EXTRA` knob
+settles it in two five-second builds. Padding costs **two** memory-operand
+reports at `-O3` (20 -> 18) and the **same two** at `-O2` (17 -> 15). The
+reason is plain once seen: in both decisive cases the padding is in the
+**BLOB**, whose codegen no flag of ours changes. The bug was latent from the
+day the tool was written. Asserting the flag as its cause would have been the
+error CLAUDE.md warns about two sections earlier -- a mechanism, like a number,
+quoted without the compiler beside it.
+
+**And then the widened window over-fired.** With padding removed the window
+reached further and retracted a REAL hit. `initdigital` loads +0x0 into `%edi`
+and passes it to a call as a 32-bit argument -- forced, and the two sides
+disagree -- then reloads `%edi` from +0x14 and re-extends *that*, nine
+instructions later. The filter saw `movswl %di,%ecx` and concluded the first
+load's extension was not the type. It was a different value in the same
+register. The filter's premise is that the SAME loaded value is extended
+again, so the window must **stop at any redefinition of the register**, and
+now does.
+
+The two corrections are bugs removed, not heuristics added -- 619's ruling that
+real precision needs dataflow rather than another lookahead rule is untouched
+and still correct. Effect on the live memory-operand list: 20 reports before,
+18 after, with one true positive recovered and two false ones dropped.
+
+Neither would have been visible from the tool's output alone, which is the
+whole argument for the ritual.
+
+### 2402. THE TRIAGE AIDS RE-MEASURED ON THE CURRENT TOOLCHAIN: ONE IN FIVE FOR `extcheck`, AND `storeorder` NOW SAYS WHICH QUARTER IS WORTH READING
+
+CLAUDE.md quoted `extcheck`'s precision as "about one true positive in four
+(619)" with no compiler beside it. 619 was measured on Debian sarge's GCC
+3.4.4, at `-O2`, without `-mno-ieee-fp`, over 365 shared symbols. **All three
+flags and the compiler have changed since** (1990, 2155, 2200) and the
+comparison now covers 938. CLAUDE.md's own rule for `compare.py` -- "a number
+quoted from this tool is only meaningful with the compiler beside it" -- was
+never applied to the triage aids. Re-measured here on GCC 3.4.2 exact,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp`.
+
+**`extcheck`: 18 live memory-operand candidates over 938 symbols. Fourteen are
+traced -- eleven by hand here against `tools/dis.py`, three already traced to
+ground by 619. THREE ARE REAL: roughly ONE REPORT IN FIVE. Four are not traced
+and are listed as such below; nothing here claims full coverage of the 18.**
+
+The three:
+
+| candidate | why it is real |
+|---|---|
+| `RcFixed_Create` +0x196 | object `movswl` then `cmp %dx,%cx` + **`setle`**; ours `movzwl` then `cmp %di,%si` + **`setbe`**. Signed against unsigned comparison, and the value then feeds `cltd; idiv`. See 2403. |
+| `RcFixed_Reset` +0x196 | the same field, the same disagreement, in a second function |
+| `initdigital` +0x0 | the 32-bit value is a CALL ARGUMENT -- `mov %edi,0x4(%esp)` -- so the extension reaches a callee. Forced on both sides and they differ. |
+
+The twelve failures, and no two of them alike, which is why lookahead keeps
+mis-classifying:
+
+- `CID_FSD_demodulate` +0x2a -- object's uses are `cmp $0x2580,%ax` and a
+  16-bit store; the extension never reaches a result
+- `V22_SRE_recover` +0x34 -- `cmp %bx,0x30(%ecx)`, 16-bit
+- `V22_SRE_recover` +0x2c -- sum tested with `test %dx,%dx` and stored 16-bit
+- `FPM_ECC_init` +0x64, +0x10 -- a sum of 16-bit fields truncated by `cwtl` /
+  `movswl %ax`; addition is modular, so the extension of an input cannot be
+  observed in a result narrowed to 16 bits
+- `fskdetect` +0x2 -- difference stored back as 16 bits
+- `decodeDepth` +0xa38 -- **619 named this one as surfaced and not
+  investigated; it is traced to ground here.** The difference is masked with
+  `and $0x3` and stored 16-bit. Two bits survive. Nothing about the extension
+  is observable.
+- `receiver` +0x0 -- a spurious pairing; see the note below
+- `FPM_MTD_detect` +0x14, `FPM_TONE_generate` +0x4, `V8GetMessage` +0x28 --
+  already traced to ground by 619 and still reported
+
+**NOT TRACED, and recorded as unverified rather than assumed:**
+`fskdemodulate` +0x12 and +0x6, `receiver` +0x214 and +0x216. The first two are
+probably the padding class of 2401 and the second two are probably 618's
+self-contradiction pair -- 618 names `receiver`'s 0x210..0x216 as exactly that
+-- but neither was confirmed after the fixes, and 619's lesson is that four
+candidates can fail for four different reasons. Whoever picks these up should
+expect them to be false and prove it, not assume it.
+
+**A pairing limit worth writing down.** The operand key is the DISPLACEMENT
+(618, and it is what made the tool work at all), but at displacement **0x0** it
+pairs any zero-displacement load with any other. `receiver mem 0x0` pairs the
+object's dot-product loop -- `movswl (%ecx),%edx` then `imul` -- against our
+field copy `movzwl (%edi),%ebx` then `mov %bx,0x294(%ebp)`. Those are not the
+same site and the report means nothing. Treat a `mem 0x0` hit in a large
+function as unpaired until both sites are shown to be one site.
+
+**`storeorder`: 57 differing functions of 194 eligible, and most are not worth
+touching.** 617 set the acceptance test at full-text identity, operands
+included, and measured it: nineteen examined, two passed, seventeen left alone.
+A bare count of 57 invites exactly the misreading 617 warns against, so the
+tool now computes the precondition. Where the two bodies already agree
+MNEMONIC for mnemonic, only operands and order stand between us and 617's test.
+Where the mnemonics differ too, something bigger differs upstream and the store
+order is a symptom -- permuting there is fitting the compiler.
+
+    of the 57, 14 are ELIGIBLE for 617's full-text test (mnemonics
+       already match); the other 43 differ in mnemonics too and 617's
+       rule is to leave those alone.
+
+So a run reads as "14 worth a look, 43 to leave alone", and 617's own rate on
+the ones it examined was two in nineteen. The split is validated by the
+injected defect: permuting `FPM_AGC_init` makes it appear **and** classifies it
+ELIGIBLE, which is right, since permuting it back restores identity exactly.
+
+**What `storeorder` cannot see, stated because a candidate count is worthless
+without it.** `store_seq` matches only a store through `%eax`/`%ebx`/`%ecx`/
+`%edx` at a NON-ZERO displacement. A store at offset 0 is invisible, and so is
+any store through `%esi`/`%edi`/`%ebp` -- which `-O3 -frename-registers` uses
+freely. A function can therefore be judged "eligible" on a partial view of its
+stores. The tool now prints this on every run. Widening it changes what is
+surfaced and would need the fire/quiet validation run again; that has not been
+done.
+
+**Both tools were validated by injection, both ways, on this toolchain**, which
+is what 618 requires and what caught 2401:
+
+- `extcheck` -- `struct b103_hdx.mode` back to `short` (the 613 defect):
+  `TxHdxStartB103 mem 0x0 object movzwl ours movswl` appears, live count
+  30 -> 32; restored, the b103 hits vanish and the count returns to 30.
+- `storeorder` -- two stores permuted in `FPM_AGC_init`: it moves out of the
+  "already agree" set into the differing list, 57 -> 58, marked ELIGIBLE;
+  restored, it goes back, 58 -> 57.
+
+### 2403. `struct rc_state`'s RATE FACTORS ARE SIGNED IN THE OBJECT AND UNSIGNED HERE -- FINDING 613's DEFECT CLASS, FOUND THE SAME WAY
+
+`extcheck` reports `RcFixed_Create` and `RcFixed_Reset` at +0x196, and the
+disagreement is not only in the load. In the object:
+
+    movswl 0x196(%ebx),%edx        ; `down`, SIGN-extended
+    movzwl 0x198(%ebx),%ecx        ; `up`
+    cmp    %dx,%cx
+    movswl %cx,%edi                ; and `up` re-extended SIGNED for the divide
+    setle  %al                     ; SIGNED <=
+    mov    %edx,%eax
+    cltd
+    idiv   ...
+
+and in ours:
+
+    movzwl 0x196(%ebx),%edi        ; `down`, ZERO-extended
+    cmp    %di,%si
+    setbe  %dl                     ; UNSIGNED <=
+    mov    %edi,%eax
+    cltd
+    idiv   %esi
+
+`setle` against `setbe` is not a free choice. Our source is
+`s->input_needed = (s->up <= s->down) ? 1 : 0;` with both fields declared
+`unsigned short` in `include/dsplib/fixedrc.h`; two `unsigned short` operands
+compared as a 16-bit pattern require the unsigned condition, and the object
+uses the signed one. The object also re-extends `up` with `movswl %cx,%edi`
+before the division -- a signed short's promotion -- and `r = (int)s->down %
+(int)s->up` at `src/core/fixedrc.c:154` reaches `cltd; idiv` from a
+zero-extended value here and a sign-extended one there.
+
+So the original declared `down` and `up` as **`short`**, and we declare them
+`unsigned short`. It is finding 613 exactly: the two readings agree over every
+value the field actually holds -- these are rate factors, small and positive,
+from `fixedRc_DownFact[]` -- so no differential test can separate them, and
+1,104 tests do not. They diverge only for a value at or above 0x8000, which
+the code never produces.
+
+**NOT FIXED HERE.** This branch is a `tools/` and documentation change and does
+not edit `src/`; the retyping wants its own task, with `make phase` and the
+codegen tier re-measured after, since `phase` at +0x194 sits in the same run of
+fields and may be the same mistake. Recorded so the candidate is not lost.
+
+This is the first defect `extcheck` has surfaced since the one it was written
+for. 619 concluded "the tree has no known signedness defect of this class"; on
+the current toolchain, over 938 symbols instead of 365, it has one.

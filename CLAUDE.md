@@ -254,13 +254,40 @@ came from getting that backwards.
 - `compare.py --ratchet` — fails only on a DECREASE, and is deliberately not
   in `make phase`. 100% is not the target: different factoring differs for
   ever while behaving identically.
-- `storeorder.py`, `extcheck.py` — triage aids, not gates. `extcheck` runs
-  about one true positive in four (619) and every hit must be traced by hand.
+- `extcheck.py` — the signedness detector, and a triage aid, never a gate. It
+  pairs `movswl` against `movzwl` on the same field and reports only where the
+  32-bit result is USED, which is the forced case above. **18 candidates over
+  938 symbols, and one report in five is real** — 14 traced, 3 true, 4 left
+  unverified and named (finding 2402). Every hit must be traced against
+  `dis.py` before anything is
+  retyped; the twelve failures are a 16-bit compare, a signed branch on a
+  16-bit test, a sum truncated by a cast, and a value masked to two bits, and
+  no lookahead rule separates those from the real thing. 619 ruled that needs
+  real dataflow and the ruling stands.
+- `storeorder.py` — store order, and a HINT, not a defect list. 617's
+  acceptance test is full-text identity, operands included: nineteen examined,
+  two passed. It reports 57 differing functions and, of those, **the 14 whose
+  mnemonics already match** — the only ones that test can ever pass. Read a run
+  as "14 worth a look, 43 to leave alone". It also prints what its regex cannot
+  see, which is any store at offset 0 or through `%esi`/`%edi`/`%ebp`.
+
+**A number from either is meaningless without the compiler beside it**, exactly
+as for `compare.py`. Both figures above are GCC 3.4.2 exact at `-O3`. The
+inherited "one true positive in four" was measured on sarge's 3.4.4 at `-O2`
+over 365 symbols and did not survive re-measurement (2402).
 
 **Any tool here must be shown to fire.** `extcheck` printed "(none)" through
 four broken versions and there was no way to tell a clean tree from a dead
-detector; it is now validated by reintroducing a known defect and watching it
-appear. Finding 134's argument, and it caught two tools this session.
+detector; both aids are now validated by reintroducing a known defect and
+watching it appear, then restoring and watching it go. Finding 134's argument.
+
+**And it happened again, to both of them at once.** They kept defaulting to
+`TC_OUT=/tmp/tc_out` after `build.sh` moved its output to `build/tc_out`, so
+with no environment set they compared **zero** symbols and reported a clean
+tree, exit 0 (finding 2400). Both now refuse to run on an empty `TC_OUT` and
+print the number of symbols compared on every line that carries a verdict. **A
+detector must report its denominator** — re-running the injection ritual on the
+current toolchain is what found that, and two more bugs under it (2401).
 
 ## Ghidra is scaffolding, never evidence
 
