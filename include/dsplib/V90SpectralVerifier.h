@@ -1,8 +1,9 @@
 /*
  * V90SpectralVerifier.h -- the V.90 received-spectrum accumulator's state.
  *
- * Reconstructed from dsplibs.o.  Twelve members, 2,764 bytes; `reset()` is
- * the one written here and the one `v34handshak` reaches.
+ * Reconstructed from dsplibs.o.  Twelve members, 2,764 bytes; `reset()` and
+ * `checkSpecialSpectralConditions()` are the ones written here, and `reset()`
+ * is the one `v34handshak` reaches.
  *
  * NOT POLYMORPHIC: `~V90SpectralVerifier` is listed with `D1` and `D2` and no
  * `D0`, so there is no vptr.
@@ -27,6 +28,51 @@
  *     +0x28  stored zero HERE AND NOWHERE ELSE.  No member of the class
  *            reads it and no other writes it, so it gets an offset-derived
  *            name: naming it for a purpose would be inventing one.
+ *
+ * BOTH OF THOSE LAST TWO PARAGRAPHS ARE NOW RETRACTED, and `checkSpecial-
+ * SpectralConditions` is what retracts them.  Neither NAME below moves --
+ * see the warning at the end of this comment -- but what the two slots hold
+ * is measured rather than bounded now:
+ *
+ *     +0x24 IS A THREE-STATE, NOT A FLAG.  `reset` stores 0 (0x45ca4),
+ *           `startAccumulation` stores 1 (0x45cec) and `process` stores 2
+ *           (0x46659) on the sample that completes the accumulation, and
+ *           `checkSpecialSpectralConditions` opens `cmpl $0x2,0x24(%edi)`
+ *           and returns at once unless it holds 2.  So 0 is idle, 1 is
+ *           running, and 2 is complete-and-not-yet-restarted.  The old
+ *           sentence bounded it at "the gate that says an accumulation is
+ *           running", which is true of 1 and says nothing about 2.
+ *
+ *     +0x28 IS THE DETECTED `V90SpecialSpectralConditions`, and the
+ *           original's own diagnostics name all four values.
+ *           `checkSpecialSpectralConditions` clears it on entry and then
+ *           stores 1, 2 or 3 beside an `edprintf` that says what each is:
+ *
+ *               0  "V90SpectralVerifier: No special conditions"
+ *               1  "... German ISDN NT1 box conditions detected!"
+ *               2  "... German PBX conditions detected!"
+ *               3  "... Severe Codec conditions detected!"
+ *
+ *           TWO INDEPENDENT DERIVATIONS AGREE ON THE 2.  `include/dsplib/
+ *           V90SpectralConditions.h` reached `V90_SPECTRAL_GERMAN_PBX = 2`
+ *           from a different function entirely -- `V90ConstellationDesigner
+ *           ::spectralDesign` compares its argument against the literal 2
+ *           and copies the `GERMAN_PBX_SPECTRAL_SHAPER_*` run -- and this
+ *           function's `movl $0x2,0x28(%edi)` at 0x46588 sits beside the
+ *           string that says German PBX.  Neither reading knew about the
+ *           other.
+ *
+ *     THE NAMES BELOW ARE DELIBERATELY UNCHANGED, and this is not
+ *     timidity.  `word_28` would become `specialConditions` and
+ *     `accumulating` would become a state, but `src/pump/v90/V90Equalizer
+ *     .cpp` reads `spectralVerifier->word_28 == 2` at three sites,
+ *     `test/unit/t_v90equ.cpp` and `t_v90leaves.cpp` name both fields, and
+ *     `test/mutations/v90specver.json` carries `word_28 = 0;` and
+ *     `accumCount = 0;\n\taccumulating = 0;\n\tword_28 = 0;` inside `find`
+ *     strings that `make phase` does not execute -- so a rename would rot
+ *     the mutation register silently, which is finding 3511's failure mode
+ *     with the register in place of a header.  The rename belongs in one
+ *     commit of its own that moves all five files together.
  *
  * EVERYTHING BELOW +0x20 IS NAMED BY THE CONSTRUCTOR, which writes all eight
  * words and takes six of them from the parameter block:
@@ -70,6 +116,14 @@ public:
 	~V90SpectralVerifier();
 
 	void reset();
+
+	/*
+	 * Look for the three special line conditions in the accumulated
+	 * spectrum and leave the answer in `word_28`.  Does nothing but
+	 * clear `word_28` unless `accumulating` holds 2; see the file
+	 * comment for the four values and where their names come from.
+	 */
+	void checkSpecialSpectralConditions();
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	V90Parameters *params;		/* +0x00 the constructor's argument */
