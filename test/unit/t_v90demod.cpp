@@ -592,10 +592,28 @@ run_reset(void)
 	static const unsigned int len_v[] = { 0u, 4u, 8u };
 	static const unsigned int cur_v[] = { 0u, 3u };
 	static const int cursor_param[] = { -1, 0, 2, 0x7fffffff };
+	/*
+	 * THE BAUD OFFSET, AND THE THIRD ONE IS THE POINT.  `reset` prints
+	 * `PARAMS_TIMING_OFFSET` UNGATED as `%c%d.%03d`, and the object builds
+	 * the sign character branchlessly -- `fldz; fcomps 0x84(%ebx); sahf;
+	 * sbb %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax` at 0x1c0dc,
+	 * which is `0x2d - 2*CF` with the ZERO in %st(0).  FCOM sets CF for
+	 * less-than AND for unordered, so an unordered offset prints '+' where
+	 * `(0.0f < offset)` prints '-'; on every ordered value the two agree,
+	 * so a finite-only sweep cannot tell them apart.  The shared fixture's
+	 * `ppm_v` is deliberately all finite (t_vpcmep3.cpp shares it), so the
+	 * NaN is planted HERE, per trial, after `life_setup` -- the same way
+	 * the cursor parameter is.  Findings 2300 and 2410.
+	 */
+	static const unsigned int off_bits[] = {
+		0x3f800000u,	/*   1.0f          */
+		0xc1480000u,	/* -12.5f          */
+		0x7fc00000u	/* a quiet NaN     */
+	};
 	struct trial_args t;
 	long tag = 90000;
-	int li, ci, cp, mmx, q;
-	int saw_derived = 0, saw_configured = 0;
+	int li, ci, cp, mmx, q, ob;
+	int saw_derived = 0, saw_configured = 0, saw_nan_offset = 0;
 	unsigned lvl;
 
 	diff_begin("V90Demodulator::reset");
@@ -608,9 +626,11 @@ run_reset(void)
 		    for (ci = 0; ci < 2; ci++)
 			for (cp = 0; cp < 4; cp++)
 			    for (mmx = 0; mmx < 2; mmx++)
+				for (ob = 0; ob < 3; ob++)
 				for (q = 0; q < 2; q++) {
 					unsigned int quick =
 					    q ? 0x5a5a1234u : 0u;
+					float offset;
 
 					tag++;
 					t.latch = 0;
@@ -624,6 +644,12 @@ run_reset(void)
 						   4u + cur_v[ci], mmx);
 					set_int(0, 0x184, cursor_param[cp]);
 					set_int(1, 0x184, cursor_param[cp]);
+					memcpy(&offset, &off_bits[ob],
+					       sizeof offset);
+					set_float(0, 0x84, offset);
+					set_float(1, 0x84, offset);
+					if (diff_isnan_f(offset))
+						saw_nan_offset = 1;
 
 					memcpy(&la_save, &la, sizeof(la));
 					dsplib_debug_capture_reset();
@@ -704,6 +730,8 @@ run_reset(void)
 	set_level(0);
 	diff_eq_int("the cursor was derived somewhere", saw_derived, 1, 0);
 	diff_eq_int("and configured somewhere", saw_configured, 1, 0);
+	diff_eq_int("an unordered baud offset was printed", saw_nan_offset,
+		    1, 0);
 
 	return diff_end();
 }
@@ -1006,6 +1034,24 @@ run_getbitrate(void)
  * CONSTANT history so that `std` is exactly zero, and magnitudes either side
  * of 1.  `timingHistoryLen` is never zero: `mean` divides by it.
  *
+ * AND A NaN HISTORY, WHICH IS THE ONLY THING THAT SEPARATES THE TWO SIGN
+ * SPELLINGS.  The object builds the character branchlessly -- `fldz; fcomps
+ * mean; sahf; sbb %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax` at 0x1ac3a
+ * -- which is `0x2d - 2*CF` with the ZERO in %st(0), and FCOM sets CF for
+ * less-than AND for unordered, so a NaN prints '+'.  `(0.0f < mean)` prints
+ * '-' for it and agrees on every other value there is, so without this
+ * pattern the two spellings are indistinguishable and the sweep proves
+ * nothing about the site.  `sawNan` below requires it to have been printed.
+ * Findings 2300 and 2410.
+ *
+ * NOTHING ELSE IN THE FUNCTION FORKS ON IT.  The saving arm is
+ * `V90PF(params)[MIN_STD_FOR_SAVE] >= std`, the object's `flds thresh;
+ * fcomps std; jb` with the threshold on the left, so an unordered compare
+ * sets CF, `jb` is taken and the arm is REFUSED -- which is what C says too,
+ * so the predicted arm stays right.  The magnitude and the fraction both go
+ * through `cvttss`-style truncation of a NaN and land on the indefinite
+ * integer on both sides alike.
+ *
  * D72's NEIGHBOUR IS NOT HERE.  This method only reads the history; the
  * echo canceller's unclamped clear is t_v90leaves.cpp's.
  */
@@ -1056,12 +1102,26 @@ st_value(int pattern, int i)
 		return -0.99995f;			/* rounds at 1e-4 */
 	case 7:
 		return (float)(i - ST_HIST / 2) * 0.3125f;
-	default:
+	case 8:
 		return 0.0f;		/* mean AND std exactly zero    */
+	default: {
+		/*
+		 * A quiet NaN, so `mean` and `std` are both unordered and the
+		 * sign character is the only thing that can disagree.  Built
+		 * from the bits rather than written as a literal: 2303 folded
+		 * a self-comparison away here, and a computed 0.0f/0.0f would
+		 * be folded too.
+		 */
+		float q;
+		unsigned int b = 0x7fc00000u;
+
+		memcpy(&q, &b, sizeof q);
+		return q;
+	}
 	}
 }
 
-#define ST_PATTERNS	9
+#define ST_PATTERNS	10
 
 static int
 run_sessterm(void)
@@ -1072,7 +1132,7 @@ run_sessterm(void)
 	struct trial_args t;
 	int lvl, pat, li, mi, si, ei, gi, ii;
 	int sawSaved = 0, sawRefused = 0, sawDisabled = 0, sawElse = 0;
-	int sawPlus = 0, sawMinus = 0, sawFrac = 0;
+	int sawPlus = 0, sawMinus = 0, sawFrac = 0, sawNan = 0;
 
 	diff_begin("V90Demodulator::sessionTermination");
 
@@ -1246,11 +1306,15 @@ run_sessterm(void)
 			if (mainArm && eval) {
 				float fr = rmean - (float)(int)rmean;
 
-				if (0.0f < rmean)
+				if (diff_isnan_f(rmean)) {
+					sawNan = 1;
+				} else if (0.0f < rmean) {
 					sawPlus = 1;
-				else
+				} else {
 					sawMinus = 1;
-				if ((int)(fr * 10000.0f) != 0)
+				}
+				if (!diff_isnan_f(fr)
+				    && (int)(fr * 10000.0f) != 0)
 					sawFrac = 1;
 			}
 		}
@@ -1267,6 +1331,13 @@ run_sessterm(void)
 	diff_eq_int("a '+' sign was printed", sawPlus, 1, 0);
 	diff_eq_int("a '-' sign was printed", sawMinus, 1, 0);
 	diff_eq_int("a non-zero fraction was printed", sawFrac, 1, 0);
+	/*
+	 * The NaN pattern reached the printer.  Without this the whole point
+	 * of pattern 9 is unverified -- the arm is gated on `inPhase3` and
+	 * EIA-6 and a schedule that correlated either with the pattern index
+	 * would silently never print one.  Finding 2410.
+	 */
+	diff_eq_int("an unordered mean reached the sign printer", sawNan, 1, 0);
 
 	return diff_end();
 }

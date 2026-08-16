@@ -413,15 +413,29 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)
  * already carry -- a sign character, the truncated magnitude, and the first
  * three decimals of the fraction -- and the spelling here is theirs:
  *
- *     (0.0f < v) ? '+' : '-',  (int)__builtin_fabsf(v),  ce_frac3(v)
+ *     !(0.0f >= v) ? '+' : '-',  (int)__builtin_fabsf(v),  ce_frac3(v)
  *
  * THE SIGN IS `fldz` AND A COMPARE WITH THE VALUE, NOT A BRANCH.  `sbb %edx,
  * %edx; and $0xfffffffe,%edx; add $0x2d,%edx` is `0x2d - 2*CF`, so '+' when
  * the carry is set and '-' when it is not, and the carry is set when
  * `0.0f < v` OR the compare was unordered.  ZERO THEREFORE PRINTS '-', both
- * signs of it, which is what makes the spelling `0.0f < v` rather than
- * `v < 0.0f`; and a NaN prints '+', which no reachable input produces because
- * every site is behind a `v > threshold` that a NaN fails.
+ * signs of it; and a NaN prints '+'.
+ *
+ * THAT MAKES THE SPELLING `!(0.0f >= v)` AND NOT `0.0f < v`, and the two
+ * differ only on a NaN.  A branchless select is encodable only when the TRUE
+ * arm is the CF one, so the negation is on the outside and the zero is on the
+ * left; `0.0f < v` compiles to `flds`/`fcomps`/`ja` instead, and `ja` is
+ * false for an unordered compare, which prints '-' where the object prints
+ * '+'.  Findings 2300 and 2410.
+ *
+ * EIGHTEEN OF THE NINETEEN SITES CANNOT BE HANDED ONE, and that is control
+ * flow rather than a gap in the fixture: every `word_70` report is inside `if
+ * (word_70 > threshold)`, whose `ja` a NaN fails, so an unordered average
+ * turns the arm off before it can be printed.  The nineteenth is the
+ * replacement threshold `t` below, read out of `params->unnamed_434` and
+ * gated on the average and the counters rather than on itself; t_v90conneval
+ * drives an unordered one through it at tag 7500 and the mutation for it
+ * dies there.  The other eighteen are verified in the codegen tier only.
  *
  * THE MAGNITUDE TAKES ITS ABSOLUTE VALUE IN THE FLOAT DOMAIN.  `d9 e1`
  * (`fabs`) runs BEFORE the `fistpl`, so it is `(int)fabsf(v)` and not
@@ -592,7 +606,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 					 "TRN1d): initiating fall back to V34 "
 					 "due to large error, avePdsnr = "
 					 "%c%d.%03d\r\n",
-					 (0.0f < word_70) ? '+' : '-',
+					 !(0.0f >= word_70) ? '+' : '-',
 					 (int)__builtin_fabsf(word_70),
 					 ce_frac3(word_70));
 				nofV90Retrains = 0;
@@ -610,7 +624,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 				edprintf("V90ConnectionEvaluator (phase3): "
 					 "initiating fall back to V34 due to "
 					 "large error, avePdsnr = %c%d.%03d\r\n",
-					 (0.0f < word_70) ? '+' : '-',
+					 !(0.0f >= word_70) ? '+' : '-',
 					 (int)__builtin_fabsf(word_70),
 					 ce_frac3(word_70));
 				nofV90Retrains = 0;
@@ -634,7 +648,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 						 "retrains, avePdsnr = "
 						 "%c%d.%03d\r\n",
 						 nofV90Retrains,
-						 (0.0f < word_70) ? '+' : '-',
+						 !(0.0f >= word_70) ? '+' : '-',
 						 (int)__builtin_fabsf(word_70),
 						 ce_frac3(word_70));
 					nofV90Retrains = 0;
@@ -645,7 +659,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 						 "(retrain no %d), due to "
 						 "avePdsnr = %c%d.%03d\r\n",
 						 nofV90Retrains,
-						 (0.0f < word_70) ? '+' : '-',
+						 !(0.0f >= word_70) ? '+' : '-',
 						 (int)__builtin_fabsf(word_70),
 						 ce_frac3(word_70));
 				}
@@ -746,7 +760,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 				 "fall back to V34 due to %d V90 retrains, "
 				 "meanErrBefToAftUpdateRatio = %c%d.%03d\r\n",
 				 nofV90Retrains,
-				 (0.0f < meanErrBefToAftUpdateRatio)
+				 !(0.0f >= meanErrBefToAftUpdateRatio)
 				     ? '+' : '-',
 				 (int)__builtin_fabsf(
 				     meanErrBefToAftUpdateRatio),
@@ -758,7 +772,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 				 "Retrain (retrain no %d), due to "
 				 "meanErrBefToAftUpdateRatio = %c%d.%03d\r\n",
 				 nofV90Retrains,
-				 (0.0f < meanErrBefToAftUpdateRatio)
+				 !(0.0f >= meanErrBefToAftUpdateRatio)
 				     ? '+' : '-',
 				 (int)__builtin_fabsf(
 				     meanErrBefToAftUpdateRatio),
@@ -774,7 +788,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 				edprintf("V90ConnectionEvaluator (phase4): "
 					 "initiating fall back to V34 due to "
 					 "large error, avePdsnr = %c%d.%03d\r\n",
-					 (0.0f < word_70) ? '+' : '-',
+					 !(0.0f >= word_70) ? '+' : '-',
 					 (int)__builtin_fabsf(word_70),
 					 ce_frac3(word_70));
 				nofV90Retrains = 0;
@@ -801,7 +815,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 						 "retrains, avePdsnr = "
 						 "%c%d.%03d\r\n",
 						 nofV90Retrains,
-						 (0.0f < word_70) ? '+' : '-',
+						 !(0.0f >= word_70) ? '+' : '-',
 						 (int)__builtin_fabsf(word_70),
 						 ce_frac3(word_70));
 					nofV90Retrains = 0;
@@ -817,7 +831,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 						    "pdsnrCurrentV34DropThresh"
 						    "Phase4 set to = "
 						    "%c%d.%03d\r\n",
-						    (0.0f < t) ? '+' : '-',
+						    !(0.0f >= t) ? '+' : '-',
 						    (int)__builtin_fabsf(t),
 						    ce_frac3(t));
 					verdict = V90CE_VERDICT_RETRAIN;
@@ -826,7 +840,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 						 "(retrain no %d), due to "
 						 "avePdsnr = %c%d.%03d\r\n",
 						 nofV90Retrains,
-						 (0.0f < word_70) ? '+' : '-',
+						 !(0.0f >= word_70) ? '+' : '-',
 						 (int)__builtin_fabsf(word_70),
 						 ce_frac3(word_70));
 				}
@@ -999,13 +1013,13 @@ ce_echo_rrn_debug(V90ConnectionEvaluator *ce)
 {
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("error -- = %c%d.%03d\r\n",
-		    (0.0f < ce->word_70 * ce->word_b8) ? '+' : '-',
+		    !(0.0f >= ce->word_70 * ce->word_b8) ? '+' : '-',
 		    (int)__builtin_fabsf(ce->word_70 * ce->word_b8),
 		    ce_frac3_of(ce->word_70, ce->word_b8));
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("threshold -- = %c%d.%03d\r\n",
-		    (0.0f < ce->threshDown) ? '+' : '-',
+		    !(0.0f >= ce->threshDown) ? '+' : '-',
 		    (int)__builtin_fabsf(ce->threshDown),
 		    ce_frac3(ce->threshDown));
 }
@@ -1361,7 +1375,7 @@ V90ConnectionEvaluator::evaluateConnection()
 					 "fall back to V34 due to %d V90 "
 					 "retrains, avePdsnr = %c%d.%02d\r\n",
 					 nofV90Retrains,
-					 (0.0f < word_70) ? '+' : '-',
+					 !(0.0f >= word_70) ? '+' : '-',
 					 (int)__builtin_fabsf(word_70),
 					 ce_frac2(word_70));
 				nofV90Retrains = 0;
@@ -1371,7 +1385,7 @@ V90ConnectionEvaluator::evaluateConnection()
 					 "Retrain (retrain no %d) due to "
 					 "avePdsnr = %c%d.%02d\r\n",
 					 nofV90Retrains,
-					 (0.0f < word_70) ? '+' : '-',
+					 !(0.0f >= word_70) ? '+' : '-',
 					 (int)__builtin_fabsf(word_70),
 					 ce_frac2(word_70));
 			}
@@ -1402,7 +1416,7 @@ V90ConnectionEvaluator::evaluateConnection()
 	case V90CE_VERDICT_RRN_UP:
 		edprintf("V90ConnectionEvaluator: initiating One Rate Up "
 			 "demand, avePdsnr = %c%d.%02d\r\n",
-			 (0.0f < word_70) ? '+' : '-',
+			 !(0.0f >= word_70) ? '+' : '-',
 			 (int)__builtin_fabsf(word_70), ce_frac2(word_70));
 		word_90 = 0;
 		break;
@@ -1416,7 +1430,7 @@ V90ConnectionEvaluator::evaluateConnection()
 				 "due to %d rate renegotiations down, "
 				 "avePdsnr = %c%d.%02d\r\n",
 				 params->MAX_NOF_RATES_DIFF_BEFORE_RETRAIN,
-				 (0.0f < word_70) ? '+' : '-',
+				 !(0.0f >= word_70) ? '+' : '-',
 				 (int)__builtin_fabsf(word_70),
 				 ce_frac2(word_70));
 			edprintf("V90ConnectionEvaluator: retrain no %d\r\n",
@@ -1437,7 +1451,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		} else {
 			edprintf("V90ConnectionEvaluator: initiating One Rate "
 				 "Down demand, avePdsnr = %c%d.%02d\r\n",
-				 (0.0f < word_70) ? '+' : '-',
+				 !(0.0f >= word_70) ? '+' : '-',
 				 (int)__builtin_fabsf(word_70),
 				 ce_frac2(word_70));
 		}

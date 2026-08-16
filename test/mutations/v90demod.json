@@ -215,13 +215,13 @@
  },
  {
   "label": "sessionTermination: zero prints '+' rather than '-'",
-  "find": "\t\t\t\t (0.0f < mean) ? '+' : '-',",
+  "find": "\t\t\t\t !(0.0f >= mean) ? '+' : '-',",
   "replace": "\t\t\t\t (0.0f <= mean) ? '+' : '-',"
  },
  {
   "label": "sessionTermination: the deviation's sign test is on the mean",
-  "find": "\t\t\t\t (0.0f < std) ? '+' : '-',",
-  "replace": "\t\t\t\t (0.0f < mean) ? '+' : '-',"
+  "find": "\t\t\t\t !(0.0f >= std) ? '+' : '-',",
+  "replace": "\t\t\t\t !(0.0f >= mean) ? '+' : '-',"
  },
  {
   "label": "sessionTermination: 1000*std is printed as 10000*std",
@@ -282,5 +282,23 @@
   "label": "sessionTermination: the disabled notice ends CRLF like the others",
   "find": "\t\t\t\t \"EVALUATION DISABLED !\\n\");",
   "replace": "\t\t\t\t \"EVALUATION DISABLED !\\r\\n\");"
+ },
+
+ {
+  "label": "sessionTermination: the mean's sign is the ordered test, so a NaN prints '-'",
+  "why": "0x1ac3a is `sbb %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax` after `fldz; fcomps mean`, which is 0x2d - 2*CF with the ZERO in %st(0); FCOM sets CF for less-than AND for unordered, so the object prints '+' for an unordered mean.  This is the spelling the tree carried until finding 2410 and it agrees on every ordered value, so pattern 9 of `st_value` is the only thing that kills it.",
+  "find": "\t\t\t\t !(0.0f >= mean) ? '+' : '-',",
+  "replace": "\t\t\t\t (0.0f < mean) ? '+' : '-',"
+ },
+ {
+  "label": "sessionTermination: the deviation's sign is the ordered test",
+  "find": "\t\t\t\t !(0.0f >= std) ? '+' : '-',",
+  "replace": "\t\t\t\t (0.0f < std) ? '+' : '-',"
+ },
+ {
+  "label": "reset: the baud offset's sign is the ordered test, so a NaN prints '-'",
+  "why": "0x1c0dc, the same branchless select on CF, and the diagnostic is UNGATED so the only reachability question is what the parameter block holds.  `off_bits[2]` in run_reset is the quiet NaN that kills it.",
+  "find": "\t\t !(0.0f >= offset) ? '+' : '-',",
+  "replace": "\t\t (0.0f < offset) ? '+' : '-',"
  }
 ]

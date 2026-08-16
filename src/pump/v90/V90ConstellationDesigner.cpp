@@ -1007,9 +1007,14 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 
 	/*
 	 * The fixed-point printer, four times over and inline each time.  The
-	 * sign is `sbb %ecx,%ecx; and $-2,%ecx; add $0x2d,%ecx` off an
-	 * ORDERED compare of 0.0f against the value, so it is '+' only when
-	 * the value is strictly positive and '-' at zero.  The magnitude is
+	 * sign is `sbb %ecx,%ecx; and $-2,%ecx; add $0x2d,%ecx` off an ORDERED
+	 * compare with 0.0f in %st(0) -- `0x2d - 2*CF`, and no branch, so the
+	 * TRUE arm has to be the CF one and the spelling is `!(0.0f >= v)`.
+	 * FCOM sets CF for less-than AND for unordered, so it is '+' for a
+	 * strictly positive value AND for an unordered one, and '-' at zero.
+	 * The unordered half is what `(0.0f < v)` got wrong; the seed on the
+	 * threshold-keeping arms of t_v90cdnoise.cpp's `ctn_fixture` is what
+	 * proves it.  Findings 2300 and 2410.  The magnitude is
 	 * `(int)fabs`, and the hundredths come off the SIGNED remainder and
 	 * are made positive with `__builtin_abs` (findings 2116-2117) rather
 	 * than with a ternary.
@@ -1023,7 +1028,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V90ConstellationDesigner: noiseEnergy = %c%d.%02d\r\n",
-		    (0.0f < noiseEnergy) ? '+' : '-',
+		    !(0.0f >= noiseEnergy) ? '+' : '-',
 		    (int)__builtin_fabsf(noiseEnergy),
 		    __builtin_abs((int)((noiseEnergy
 					 - (float)(int)noiseEnergy) * 100.0f)));
@@ -1163,17 +1168,20 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		 params->USE_RESTRICED_DMIN);
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp ="
 		 " %c%d.%02d\r\n",
-		 (0.0f < float_18) ? '+' : '-', (int)__builtin_fabsf(float_18),
+		 !(0.0f >= float_18) ? '+' : '-',
+		 (int)__builtin_fabsf(float_18),
 		 __builtin_abs((int)((float_18 - (float)(int)float_18)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateDown ="
 		 " %c%d.%02d\r\n",
-		 (0.0f < float_1c) ? '+' : '-', (int)__builtin_fabsf(float_1c),
+		 !(0.0f >= float_1c) ? '+' : '-',
+		 (int)__builtin_fabsf(float_1c),
 		 __builtin_abs((int)((float_1c - (float)(int)float_1c)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRetrain ="
 		 " %c%d.%02d\r\n",
-		 (0.0f < float_20) ? '+' : '-', (int)__builtin_fabsf(float_20),
+		 !(0.0f >= float_20) ? '+' : '-',
+		 (int)__builtin_fabsf(float_20),
 		 __builtin_abs((int)((float_20 - (float)(int)float_20)
 				     * 100.0)));
 

@@ -56697,3 +56697,175 @@ fields and may be the same mistake. Recorded so the candidate is not lost.
 This is the first defect `extcheck` has surfaced since the one it was written
 for. 619 concluded "the tree has no known signedness defect of this class"; on
 the current toolchain, over 938 symbols instead of 365, it has one.
+
+### 2410. THE BRANCHLESS SIGN SELECT IS SIX MORE FUNCTIONS' DEFECT, AND `!(0.0f >= v)` IS THE ONLY SPELLING THAT ENCODES IT
+
+*2300 and 2301 fixed the idiom where it had been written round the other way
+for a missing flag; this is the same reading applied to every remaining site
+in the object where we emit a branch and it does not.*
+
+**THE SWEEP.**  `sbb %reg,%reg` materialises the carry flag, so a function
+that has one where we have none is a function where the object could encode a
+select and our source could not.  Counting `sbb %eax,%eax` per symbol, blob
+against `build/tc_out`, over the symbols we have written:
+
+    blob 76 sites in 51 functions; ours 33 sites in 19 of them; twelve short
+
+**THREE OF THE TWELVE ARE THE SWEEP AND NOT THE CODE**, and saying so is
+worth as much as the fixes.  Counting the idiom with the REGISTER PINNED
+counts the register allocator, which CLAUDE.md's rule puts squarely in the
+free column.  Re-run over `sbb %r,%r` for any r:
+
+    V90Equalizer::enterPhase4              blob 9  ours 9
+    V90Equalizer::convertEqualizerToMmx    blob 8  ours 8
+    getFrame                               blob 1  ours 1
+
+-- same number of selects, different register, nothing to fix.  They appear
+in the `%eax` sweep only because the object happened to land on `%eax` once
+more than we did.  **A sweep for an IDIOM must not pin the operand.**  The
+real list is nine, and 40 sites.
+
+**WHAT THE 40 ACTUALLY COMPUTE**, read from the disassembly and not assumed:
+
+| function | sites | what the select is |
+|---|---|---|
+| `V90ConnectionEvaluator::evaluateConnection` | 9 | `and $-2; add $0x2d` -- the sign character |
+| `V90ConnectionEvaluator::evaluatePhase4` | 6 | the same |
+| `V90ConnectionEvaluator::evaluatePhase3` | 4 | the same |
+| `V90ConstellationDesigner::setConstellationToNoise` | 4 | the same |
+| `V92EchoCanceller::setState` | 7 | the same |
+| `V90Demodulator::sessionTermination` | 2 | the same |
+| `V90Demodulator::reset` | 1 | the same |
+| `v34handshak` | 4 | `and $0x60; add $0x30` and `add $0x4`/`add $0x3` -- INTEGER |
+| `initTxSequence` | 3 | `and $-8; add $0x149` and two more -- INTEGER |
+
+33 of the 40 are one idiom: `fldz` / `fcom` / `fnstsw %ax` / `sahf` / `sbb` /
+`and $0xfffffffe` / `add $0x2d`, which is `0x2d - 2*CF` -- '+' exactly when
+the compare set CF.  **None of the seven has a single branch-form sign site**
+(`$0x2b` as an immediate: zero occurrences in all seven), so the mapping from
+our source's sign ternaries to the object's selects is 1:1 and was checked
+that way before anything was edited.
+
+**THE SPELLING IS FORCED AND IT IS NOT WHAT THE TREE HAD.**  With `fldz`
+first the ZERO is in `%st(0)`, so CF is set for "0.0 < v OR unordered"; a
+branchless select is encodable only when the TRUE arm is the CF one; therefore
+the source is `!(0.0f >= v) ? '+' : '-'`.  The tree had `(0.0f < v) ? '+' :
+'-'`, which compiles to `flds`/`fcomps`/`ja` -- a BRANCH, and `ja` is false
+for an unordered compare, so it prints '-' where the object prints '+'.  The
+two agree on every other float there is.  This is `ADID_PRINT_SIGN`'s reading
+(2300) at 25 further sites; the ten-spelling A/B that established it was not
+repeated.
+
+**SO IT IS A CHANGE OF BEHAVIOUR AS WELL AS OF CODEGEN**, which 2300's
+operand-order half was not, and it therefore needed the differential tier
+rather than the codegen one.  **Both spellings passed every existing test**,
+measured before anything was written: no fixture in the tree drove an
+unordered value into any of the 25 sites.  Four fixtures were extended and
+each was A/B'd by reverting the source under it:
+
+| fixture | drives | old spelling fails |
+|---|---|---|
+| `t_v90demod.cpp` `st_value` pattern 9 | a NaN timing history | 16 + 4 checks |
+| `t_v90demod.cpp` `run_reset` `off_bits[2]` | a NaN baud offset | 96 checks |
+| `t_v90cdnoise.cpp` `ctn_fixture` | a NaN threshold seed | 240 + 48 checks |
+| `t_v90conneval.cpp` tag 7500 | a NaN `unnamed_434` | 2 checks |
+
+Four mutations are registered on the reverted spelling and all four are
+caught.  `V90Demodulator::reset` is the cheapest site in the object to drive
+one through -- the diagnostic is UNGATED, so the only question is what the
+parameter block holds.
+
+**THE SEED HAS TO GO ON AN ARM THAT KEEPS IT.**  `setConstellationToNoise`'s
+first fixture planted the NaN on `w48tab`'s case 3, which is one of the three
+switch arms that end by recomputing all three thresholds from `noiseEnergy` --
+so the seed was erased before the report and the A/B could not tell the
+spellings apart.  KeepRate (1) keeps them and -1, 4 and 100 fall out of the
+four-case switch having written nothing; the seed is on those four now, and
+`seenNanThresh` requires the arm to have been reached.  This is the same trap
+2300's sibling names as an unsatisfiable schedule, in a different shape:
+a seed the code under test overwrites is a seed that proves nothing.
+
+**EIGHTEEN OF `V90ConnectionEvaluator`'s NINETEEN SITES ARE UNREACHABLE WITH
+A NaN, AND THAT IS CONTROL FLOW.**  Every `word_70` report is inside `if
+(word_70 > threshold)` -- `flds`/`fcoms`/`ja`, and `ja` is false for an
+unordered compare -- so an unordered average turns the printing arm off before
+it can reach the printer.  No fixture closes that; it is the shape of the
+object.  The nineteenth prints `t`, the replacement threshold read out of
+`params->unnamed_434`, whose gate is on the average and the counters and not
+on itself, and that one IS driven.  The other eighteen are verified in the
+codegen tier only, and the change to them is justified by the encoding rather
+than by a test.  Stated rather than left implicit, because "we changed 25
+sites and pinned 7" is the honest count.
+
+**COUNTS, BEFORE AND AFTER**, `sbb %r,%r` per function against the blob:
+
+    evaluateConnection            0 -> 9   of 9
+    evaluatePhase4                0 -> 6   of 6
+    evaluatePhase3                0 -> 4   of 4
+    setConstellationToNoise       0 -> 4   of 4
+    sessionTermination            0 -> 2   of 2
+    reset                         0 -> 1   of 1
+
+### 2411. THE THREE SITES THAT WERE LEFT, AND WHY NONE OF THEM IS A SOURCE DEFECT
+
+*The other half of 2410's nine.  Each was traced to the instruction and each
+is a difference no input can see, so each is recorded instead of chased.*
+
+**`V92EchoCanceller::setState` -- 7 in the blob, 5 in ours, AND THE GAP IS A
+CONSTANT FOLD.**  The seven sites are one coefficient dump plus
+`setEchoBeta`/`setDecayFactor` inlined at each of the three transitions.  Five
+match.  The two that do not are the FILTER_ONLY arm, where both are called
+with a literal `0.0f`:
+
+    113ab: fldz               ; 0.0 into %st(0)
+    113ad: xor %ecx,%ecx      ; the magnitude, already folded to 0
+    113af: xor %esi,%esi      ; the fraction, already folded to 0
+    113b1: fsts 0x30(%ebx)    ; echoBeta = 0.0f
+    113bc: fcoms 0x30(%ebx)   ; and the sign RE-READS the field
+    113c6: sbb %edx,%edx ...
+
+The object folds the two INTEGER terms, which come from the argument, and does
+not fold the sign, which comes from the FIELD -- it reloads it.  GCC 3.4.2
+given our source forwards that store and folds the compare to `'-'`, which is
+the value the reload would have produced.  `sign_of` here is already
+`!(v <= 0.0f)` and already emits the triple at the five live sites, so this is
+not a spelling difference; it is store-to-load forwarding, the argument is a
+literal zero, and no input can distinguish a computed `'-'` from a constant
+one.  Left, and the five that are the object's are what the suite pins.
+
+**`v34handshak` -- 4 sites, ALL INTEGER.**  Read from the object:
+
+    6354f  esi=(x>>5)&1; cmp $1; sbb; and $0x60; add $0x30   -> bit ? 0x30 : 0x90
+    64659  the same, at the reload                            -> bit ? 0x30 : 0x90
+    644ea  bp=u16; cmp $1; sbb; add $0x4                      -> bp==0 ? 3 : 4
+    64541  esi=(x>>3)&1; cmp $1; sbb; add $0x3                -> bit ? 3 : 2
+
+and `src/pump/v34/v34hshak.c` already computes all four values -- lines 3424
+and 3453 are the last two verbatim, and the 0x30/0x90 pair is the one the
+V.8 message-length note already records at 0x64656.
+
+**`initTxSequence` -- 3 sites, ALL INTEGER**, and `src/v8/v8seq.c` 105, 109
+and 115 are the three expressions:
+
+    7590d  and $0xfffffff8; add $0x149   -> (b0 & 0x08) ? 0x149 : 0x141
+    75944  and $0xffffff00; add $0x111   -> (b0 & 0x80) ? 0x111 : 0x011
+    7598c  and $0xffffffc0; add $0x51    -> (b1 & 0x10) ? 0x51  : 0x11
+
+GCC emits the branchless form for two of the three from that source and a
+branch for the other.
+
+**SO NEITHER IS A SPELLING QUESTION.**  An integer compare has no unordered
+case, so the branch form and the branchless form compute the SAME FUNCTION
+over every input, and no differential test can ever separate them -- which by
+CLAUDE.md's rule makes a change here unpinnable by construction.  Whether GCC
+if-converts a two-constant select is a scheduling decision taken on block
+layout, not something the source chooses.  The values are the object's and
+that is what was worth checking; the encoding is free.
+
+**AND THE MIRROR OF 2410 EXISTS AND IS NOT CLOSED.**  Six functions emit MORE
+selects than the blob -- `V34scrambler`, `V34descrambler`, `dpskinit`,
+`receiver` and `V90MP::bitsToInfo` at one or two each, and
+`V90AutoDigitalImpDetector::findPadGain` 2 against 1.  Where those are float
+sign tests they are the same defect with the sides swapped: we route an
+unordered value the object's opposite way.  Not investigated here; named so
+the next sweep starts with it.

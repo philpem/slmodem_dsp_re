@@ -390,6 +390,17 @@ frac_of(float v)
  * is what the object does -- `fsts 0x30(%ebx)` leaves the value live in the
  * register for the magnitude and `fcomps 0x30(%ebx)` reads the store back for
  * the sign.  They are the same float; the spelling is the object's.
+ *
+ * TWO OF THE SIX INLINED COPIES COME OUT AS A CONSTANT `'-'` HERE AND AS A
+ * COMPARE IN THE OBJECT, and it is a fold rather than a spelling.  The
+ * FILTER_ONLY arm calls both with a literal `0.0f`; the object folds the
+ * magnitude and the fraction (`xor %ecx,%ecx; xor %esi,%esi` at 0x113ad) and
+ * still RELOADS the field for the sign (`fcoms 0x30(%ebx)` at 0x113bc,
+ * `sbb %edx,%edx` at 0x113c6), where GCC 3.4.2 given this source forwards the
+ * store and folds the compare.  The reload's answer is `'-'`, which is what
+ * the fold produces, so no input can tell them apart and there is nothing for
+ * a test to pin.  `setState` is therefore 5 of the object's 7 selects and
+ * stays that way; finding 2411.
  */
 static void
 ec_set_echo_beta(V92EchoCanceller *self, float beta)

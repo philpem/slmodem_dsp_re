@@ -1064,6 +1064,8 @@ static int p3_altrbs, p3_trn1d, p3_large, p3_retrain, p3_none, p3_empty;
 static int p3_five_then_four, p3_cleared_10, p3_cleared_18;
 static int p4_mean_arm, p4_mean_skipped, p4_large, p4_retrain, p4_none;
 static int p4_empty, p4_delayed, p4_delayed_over, p4_thresh_replaced;
+/* The retrain fired with an unordered `unnamed_434`.  Finding 2410. */
+static int p4_nan_thresh;
 static int p4_cleared_10, p4_cleared_18, p4_guard_b0, p4_guard_ratio;
 static int p4_guard_count, p4_delayed_half, p4_missing_arg;
 static int p3_unsigned_dur, p3_unsigned_max;
@@ -2009,6 +2011,67 @@ run_ce_phase4(void)
 					diff_eq_int("+0x10 stays clear (%ld)",
 						    (long)CEB->word_10, 0, tag);
 			}
+		}
+
+		/*
+		 * THE SAME RETRAIN WITH AN UNORDERED `unnamed_434`, WHICH IS
+		 * THE ONLY WAY A NaN REACHES A SIGN PRINTER IN THIS FILE.
+		 *
+		 * Nineteen of this object's branchless sign selects are in
+		 * these three methods, and eighteen of them print `word_70`
+		 * from inside `if (word_70 > threshold)` -- the object's
+		 * `flds; fcoms; ja`, which is FALSE for an unordered compare,
+		 * so a NaN average provably cannot reach any of them.  The
+		 * nineteenth prints `t`, the replacement threshold read out of
+		 * `params->unnamed_434`, and its gate is on `word_70` and the
+		 * counters and not on `t` -- so an unordered parameter gets
+		 * there with the average left ordered at 100.0f.
+		 *
+		 * `!(0.0f >= t)` prints '+' for it, which is what `sbb
+		 * %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` at 0x3fdb7
+		 * computes; `(0.0f < t)` prints '-'.  Findings 2300 and 2410.
+		 *
+		 * ITS OWN BLOCK, NOT A DIMENSION OF THE ONE ABOVE: +0xac keeps
+		 * what the retrain stored, and that block's later iterations
+		 * depend on it holding 250.0f.  Here the store is checked and
+		 * the block ends.
+		 */
+		{
+			long tag = (long)lvl * 100000 + 7500;
+			unsigned int got;
+			int vb;
+
+			seed_pair(3450 + lvl, (lvl + 2) & 3);
+			fill_pair(parm_a, parm_b, PARM_SLOT, 3451 + lvl,
+				  (lvl + 2) & 3);
+			p34_params();
+			SET_PF(unnamed_434, 0x7fc00000u);	/* a quiet NaN */
+			SET_P(MAX_NOF_V90_RETRAINS, 4);
+			SET_P(MAX_NOF_REMOTE_RETRAINS, -5);
+			SET_P(unnamed_45c, -5);
+			SET_CE(nofV90Retrains, 0u);
+			SET_CE(short_b0, (short)0);
+			SET_CE(word_78, 0u);
+			SET_CE(word_7c, 0u);
+			SET_CE(word_10, 0u);
+			SET_CE(word_18, 0u);
+			SET_CE(word_64, 7u);
+			SET_CE(word_68, 100000u);
+			SET_CE(retrainDetectDuration, 90);
+			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
+			SET_CE(word_74, 100u);
+			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+
+			vb = p4_call(tag, as_float(0x00000000u), 1);
+
+			diff_eq_int("the retrain fired on an unordered "
+				    "threshold (%ld)", vb, 4, tag);
+			memcpy(&got, &CEB->phase4ErrorForV34Fallback, 4);
+			diff_eq_int("+0xac took the unordered unnamed_434 "
+				    "(%ld)", got == 0x7fc00000u, 1, tag);
+			if (vb == 4)
+				p4_nan_thresh = 1;
+			consumed(tag);
 		}
 
 		/*
@@ -3522,6 +3585,12 @@ main(void)
 	diff_eq_int("phase4: the retrain", p4_retrain, 1, 0);
 	diff_eq_int("phase4: +0xac was replaced by unnamed_434",
 		    p4_thresh_replaced, 1, 0);
+	/*
+	 * The one site in this file a NaN can reach: the replacement
+	 * threshold's own sign report.  Finding 2410.
+	 */
+	diff_eq_int("phase4: an unordered unnamed_434 reached the sign printer",
+		    p4_nan_thresh, 1, 0);
 	diff_eq_int("phase4: +0x10 cleared below its threshold", p4_cleared_10,
 		    1, 0);
 	diff_eq_int("phase4: +0x18 accumulated and was cleared", p4_cleared_18,
