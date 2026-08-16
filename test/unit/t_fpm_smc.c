@@ -139,8 +139,9 @@ compare_ring(const struct fpm_smc_ring *a, const struct fpm_smc_ring *b,
 	diff_eq_int("ring ridx untouched by the encoder (%ld)", a->ridx,
 		    b->ridx, input);
 	for (i = 0; i < 8; i++)
-		diff_eq_int("ring pad00[%ld] untouched", a->pad00[i],
-			    b->pad00[i], i);
+		diff_eq_int("ring direct rails untouched (%ld)",
+			    ((const unsigned char *)a)[i],
+			    ((const unsigned char *)b)[i], i);
 	for (i = 0; i < nsym; i++)
 		diff_eq_int("symbol[%ld]", a->sym[i], b->sym[i], i);
 }

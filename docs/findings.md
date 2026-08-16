@@ -61827,3 +61827,258 @@ Findings 2300 and 2301 are the same family -- an idiom written for the wrong
 flag, and a compare whose operand order came from a declaration order -- and
 this is the third member: **an operand order that comes from whether the
 operand is a variable.**
+### 3570. `FPM_TONE_kill` IS THE DETECTOR'S NOTCH, RUN OVER THE CALLER'S BUFFER WITH ITS OWN STATE
+
+*This finding opens the block 3570-3579, reserved for the shared-DSP keystone
+batch (`FPM_SRE_init`, `FPM_SRE_recover`, `FPM_PPS_filter`, `FPM_TONE_kill`).
+It is adjacent to 3560, the highest number in use on any branch at COMMIT
+time; 3580-3589 is held by the sibling agent writing `FPM_FSE_receive`.*
+
+**THESE SEVEN WERE 3520-3526 AND WERE RENUMBERED BEFORE THE BRANCH WAS
+REPORTED.** 3515 was the highest number anywhere when the block was claimed at
+the top of the session; by the time the work was committed `master` had taken
+3520 and 3521 for `tools/indirect.py` and `make phase`'s `prereq`, and
+3540-3542 and 3560 for `V90CP`. Re-surveying at COMMIT time rather than at
+claim time is what docs/plan.md asks for and it is why: a block reserved
+against a five-hour-old survey is not reserved. Nothing outside this branch
+cites the old numbers -- the only reference was `test/unit/t_fpm_pps.c`'s
+citation of 3524, now 3574 -- but they appear in three commit messages on
+`fpm-shared-dsp`, which cannot be rewritten. The mapping is
+3520-3526 -> 3570-3576, in order.*
+
+Sixty-one bytes, and all of them are one call:
+
+    FPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count)
+
+so the whole function is five argument claims, and three of them are the
+interesting ones.
+
+**The coefficients are LOADED, not addressed.** The blob does
+`mov 0xfc(%edx),%ecx` -- it reads the self-pointer `FPM_TONE_create` stores at
++0xfc -- where a reference to the `iir_coeff` array at +0x36 would have been a
+`lea 0x36(%edx)`. On any object `FPM_TONE_create` built the two agree for
+ever, because create sets +0xfc to exactly that address, so no ordinary test
+can separate them. `t_fpm_tone`'s kill block runs a second pass with +0xfc
+redirected at a different five-tap filter, which separates them on the first
+sample; without that pass the substitution is an untested claim.
+
+**It does NOT share the detector's filter state.** +0x100 is a second
+four-word direct form I state, distinct from `iir_state` at +0x40. So a kill
+pass over the caller's buffer and a detect pass over its own history run the
+identical coefficients without corrupting each other's history. `r100[4]` is
+renamed `kill_state[4]` on that evidence, and on `FPM_TONE_find_rev` -- the
+other candidate the header named -- touching +0xf4 and +0xf8 and nothing else
+in the tail.
+
+**One section.** The immediate is 1, matching the five coefficients create
+lays down at +0x36. `FPM_iir_filt_II` is the direct form *I* block (four state
+words per section), which is why four words is the right size and two would
+have read past the end.
+
+`count` is `movswl 0x28(%esp)` -- read as a signed 16-bit value and widened --
+so the parameter is a `short` and not an `int`.
+
+Six mutations, six caught.
+
+### 3571. `FPM_SRE_*` IS THE GENERIC BLOCK `v22_sre.c` IS A SPECIALISATION OF, AND THE 403 EXTRA BYTES ARE FOUR REAL DIFFERENCES
+
+`V22_SRE_recover` is 1,883 bytes and `FPM_SRE_recover` is 2,286. Reading the
+second beside the first is what makes it tractable -- the three-section
+discriminant, the gear-shifted loop filter, the ten polyphase branches and the
+asymmetric `[-18432, +20480]` step clamp are the same block -- but **the
+analogue is a question generator and four of its answers are wrong here**:
+
+1. **The history is CIRCULAR, not sliding.** V.22 keeps `2 * taps` entries and
+   memcpy's the top half down; this keeps exactly `taps` and wraps `fill` to
+   zero, so the dot product is two runs (`hist[fill]` down to `hist[0]`, then
+   `hist[taps-1]` down to `hist[fill+1]`) rather than one contiguous walk.
+   `FPM_SRE_init` allocating `2 * taps` BYTES where V.22 allocates
+   `2 * (2 * taps)` is the tell.
+2. **The prototype is not permuted.** `V22_SRE_init` de-interleaves the taps
+   into ten contiguous branches through a stack scratch buffer; this copies the
+   prototype in design order and the dot product selects branch `b` by starting
+   at `coeff[b]` and striding ten (`add $0x14,%esi`). Same filter, and it is
+   why the interpolator is one flat walk instead of a nested one.
+3. **There is a level gate in front of the loop.** While `rms_on` is set every
+   input sample is also written to a ring and the discriminant is forced to
+   ZERO; the first block whose `FPM_rms` exceeds `cfg.rms_min` clears the flag
+   for good. V.22 has nothing like it, and it is a whole fourth heap buffer.
+4. **It measures a timing offset.** See 3573.
+
+And one thing that is the SAME and must not be assumed to be: V.22 indexes
+`SRE_ALPHA_AVG` / `SRE_BETA_AVG` by mode; this hard-codes 15/16 for both
+smoothers, with no rounding and no table.
+
+**Ten branches, not five.** The tap count comes from `imul $0x66666667` and
+`sar $2`, which is division by TEN -- `sar $1` would have been five. Getting
+that wrong makes every geometry below it wrong, and `SREv32_COFFS`'s 181
+entries settle it independently: 180 is 18 taps by ten branches, and the 181st
+is the right-hand end of the last interpolation, exactly as `SREv22_COFFS`'s
+271st is for V.22's 270.
+
+`FPM_SRE_recover`'s return is `unsigned short`, not `short`: the counter is
+incremented with `cwtl` and returned with `movzwl`.
+
+### 3572. `fpm_sre_cfg::clock_len` IS THE CORRELATION LENGTH AND THE LOOP GAIN, AND IT IS ONE FIELD
+
+Offset +0x00 of the configuration is read twice for two apparently unrelated
+purposes, and both reads are `(%ecx)` on the same object:
+
+    aa164   cmp %di,(%ebx)          di = tick + 1   -- the group boundary
+    aa21e   movswl (%ecx),%eax      * angle, >> 3   -- the phase-error gain
+
+That is not two fields. It is the generic form of what V.22 hard-codes: there
+the correlation runs over `V22_SRE_CLOCK` = 6 points and the gain is
+`(3 * angle) >> 1`, which is `(6 * angle) >> 2`. Here it is
+`(clock_len * angle) >> 3` with the same field supplying the count. The shift
+differs (3 against 2) so the two are not the same expression, and the
+relationship is recorded as the derivation rather than asserted as identity.
+
+`SREv32_xCLOCK` and `SREv32_yCLOCK` are three entries each -- cos and sin of 0,
+120 and 240 degrees at 16384 -- so V.32 configures `clock_len` = 3 where the
+built-in `FPM_SRE_CFG` says 4. The tables are the evidence for the field's
+meaning and the built-in is only evidence of scale, because all six of its
+table pointers are null: like `fpm_fse_cfg::decision` and `fpm_mrf_cfg::coeff`,
+a caller copies the static and patches the tables in.
+
+**Finding 1615's five unverified widths are now settled.** It recorded that
+only `SREv32_COFFS` had a measured element width and that the other five were
+declared 16-bit on the strength of their contents. `FPM_SRE_recover` indexes
+`XB_COFFS` at eleven distinct 16-bit offsets and `PLL_K1` / `PLL_K2` with
+`movswl (%edi,%ebx,2)`, so all six are measured now. `XB_COFFS` being 22 bytes
+is also where `FPM_SRE_DISC` comes from.
+
+### 3573. THE TIMING METER, AND WHAT ONE FORMAT STRING IS WORTH
+
+`FPM_SRE_recover` carries a diagnostic V.22's specialisation does not, and its
+string is the only class-1 naming evidence in the whole struct:
+
+    "TimingVxx: Timing Offset [ppm] = %d\n"        .rodata.str1.4 0x12e20
+
+so `+0x82` is `ppm_offset` and is named from the author's own words. **The
+other nine fields of the group are usage inference and are named as such** --
+what each does is measured, what the group MEANS is read from the one field
+whose meaning the object states.
+
+How it works. Ten branch-steps per output is one input sample at the nominal
+rate, so the debt the next output carries is normally 1; the code counts 2 as
+`+1` and 0 as `-1`, which makes `ppm_slip` the net samples the recovered clock
+has gained. Every `ppm_period` worth of `ppm_step` the meter folds
+`ppm_slip * ppm_scale` into a running total and republishes the mean. Once
+`ppm_n` reaches `ppm_n_max` the average restarts FROM ITS OWN MEAN rather than
+from zero, so a long measurement decays instead of freezing.
+
+**Four of the ten are never written by `FPM_SRE_init`** -- `ppm_step`,
+`ppm_scale`, `ppm_period` and `ppm_n_max` are read-only to both functions. A
+caller has to fill them, and a state straight out of init never ticks the meter
+at all, which is why the differential suite arms them explicitly. `ppm_n` IS
+set by init, to 1, and it is the divisor.
+
+**The meter runs only on the exact-drain path.** A call that ends short takes
+the early return and never reaches it, so the interval is counted in CALLS that
+consumed all their input and not in samples.
+
+### 3574. FOUR MUTATIONS THAT SURVIVED ON V.32's OWN TABLES, AND WHY THAT IS A PROPERTY OF THE TABLES
+
+`SREv32_XB_COFFS` is `{-28156, 16128, 28156, 16128, 14078, 8128, -14078, 8128,
+992, -15360, 14399}` and `SREv32_PLL_K2` is `{0, 17, 8}`. So on V.32's
+configuration:
+
+- `k[1] == k[3]` and `k[5] == k[7]`, and transposing either pair is invisible;
+- `K2[0]` is zero, so the settling branch's "hold the integrator at zero"
+  cannot be told from not holding it.
+
+Three mutations survived on that account and **none of them is equivalent** --
+`FPM_SRE_*` is the generic block and another datapump's tables need not be
+degenerate. The suite gained a second sweep over synthetic tables with no
+repeats, a non-zero `K2[0]` and a four-point clock, and all three are caught.
+This is finding 3509's rule in its other direction: there the danger was a
+counter that could not fail, here it is a TABLE that cannot separate, and the
+fix in both cases is to change the stimulus rather than the claim.
+
+The fourth needed something else again. A control loop's far corners -- both
+clamps, both gear shifts, a running total past 16 bits, an input debt of two
+samples -- are not reachable from a waveform in any sane number of samples. The
+suite seeds `err_avg`, `pll_acc`, `frac`, `branch`, `mode`, `settle` and the
+whole `ppm_*` group IDENTICALLY ON BOTH SIDES and runs one call. The seeding
+chooses where to look and never what the answer is; the blob still adjudicates
+every byte.
+
+**Five survivors are recorded with derivations rather than dropped.** Two are
+forced by the object and unreachable by arithmetic (the `shr` in `mag_avg`'s
+decay against the `sar` in `err_avg`'s; `err_avg * 15 >> 4` never leaving
+short's range). One is forced by aliasing and unobservable without an aliasing
+caller (the reload from `in[-1]`). One is the interpolator's dead store. The
+fifth took a derivation to settle: dropping the negative-step borrow leaves the
+floor quotient and a non-negative remainder, and BOTH FORMS COMPUTE THE SAME
+TOTAL, `branch * 0x800 + frac + step`, differing only in how they split it --
+each split needs exactly one normalisation pass and both land on the same
+(branch, frac). The object's form is reproduced because the object encodes it,
+not because a test can see it.
+
+49 mutations: 44 caught, 0 uncaught, 5 equivalent.
+
+### 3575. `FPM_PPS_filter` REPEATS THE SRE's TWO DIFFERENCES, WHICH MAKES THEM A FAMILY PROPERTY RATHER THAN A COINCIDENCE
+
+The generic pulse shaper differs from `v22_pps.c` in exactly the two ways the
+generic SRE differs from `v22_sre.c`:
+
+- **the history is circular**, `taps` entries with `widx` wrapping, where V.22
+  keeps `2 * taps` and slides -- so each rail's dot product is two runs;
+- **the coefficients are not permuted**, phase `p` selected by starting at
+  `coeff[p]` and striding `phases`, where `V22_PPS_init` de-interleaves them
+  into phase-major order.
+
+Two blocks, the same pair of differences, in the same direction. **The generic
+form indexes and the specialisation lays out.** That is worth stating as a
+family property because it is the first thing to check when the next `FPM_*`
+block is read beside its V.22 or V.32 cousin -- and it is also the shape of
+the two mutations that survive longest if you get it wrong, since a wrong
+stride and a wrong permutation both still produce a plausible filtered signal.
+
+Two things the shaper has that V.22's does not:
+
+**A second symbol source.** `cfg.mapped` non-zero means the ring's entry is a
+constellation INDEX -- its low byte, `movzbl` at stride two -- into `cfg.imap`
+and `cfg.qmap`. Zero means the ring's own I and Q arrays are read directly.
+V.22 only ever reaches the mapped form, which is why the direct form's two
+pointers were sitting unnamed (see 3576).
+
+**Everything is configured.** V.22's 40 phases, 3 taps and nominal step of 3
+are literals; here they are `cfg.phases`, `cfg.coeffs / cfg.phases` (an `idiv`
+in init) and `cfg.step`, and there is a Q15 output gain as well. `cfg.step_adj`
+is V.22's `cfg.step` -- the field `TxClockSync` writes a timing correction into
+(3505) -- with the nominal part split out.
+
+`count` and the return are both `unsigned short` and both are forced: the count
+is decremented through `movzwl %ax` and the counter incremented through it.
+
+28 mutations, 28 caught. Two of them needed the suite extending rather than the
+claim weakening, and both for the same reason -- a gentle stimulus cannot
+separate a truncation. `(short)(yi - yq)` only differs from `yi - yq` when the
+two rails are near full scale in opposite directions, and `count - need` only
+differs from `count - 1` when a caller seeds a debt above one, which nothing in
+the block ever does. Full-scale coefficients and a seeded `need` of two settle
+both.
+
+### 3576. `fpm_smc_ring::pad00[8]` IS TWO POINTERS, AND ONLY THE GENERIC SHAPER COULD SAY SO
+
+`struct fpm_smc_ring`'s first eight bytes were `pad00[8]`, "not read by
+anything traced yet". `FPM_PPS_filter`'s direct symbol source reads them:
+
+    a961d   mov (%ebx),%edi        ->  short *i
+    a962f   mov 0x4(%esi),%edx     ->  short *q
+
+both 32-bit loads used as `short *` bases indexed by `ridx`, on the arm
+`cfg.mapped` clear selects. They are named `i` and `q` on that evidence.
+
+**This is why deferring naming loses evidence, in the form docs/plan.md §3
+describes.** V.22 is the only reconstructed user of the ring and it configures
+the mapped form, so from V.22 alone those eight bytes are unreadable padding
+for ever. They became legible only from a DIFFERENT datapump's use of the same
+struct, and only while the function that uses them was being read. A later
+standalone naming pass over `fpm_smc.h` would have had nothing to go on.
+
+`t_fpm_smc.c`'s "ring pad00 untouched" check is retained as a byte comparison
+over the same eight bytes, so the claim that nothing in the encoder writes them
+still holds and is still tested.
