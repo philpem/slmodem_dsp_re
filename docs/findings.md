@@ -57690,3 +57690,294 @@ list, because the interesting failure is the other way round: a reconstruction
 that "corrected" the counter would start printing it and would shift every
 pre-emphasis index down one. Findings 1477 and 1901 measured that variant and
 rejected it.
+
+### 3000. The 124-entry re-record was NOT run, and the tree state is the argument
+
+The whole mutation snapshot is stale -- `mutsnap.py --check` reports **0
+current, 124 stale, 0 never recorded, of 124 registered**, covering **5,940
+recorded verdicts** (5,719 caught, 34 NOT caught, 186 equivalent, 1 unusable).
+Re-recording it was the commissioned work and it was declined.  The reason is
+worth writing down because the obvious reading of the evidence is backwards.
+
+**`master` sitting unmoved at `626e2e7` is not evidence the tree is quiet.  It
+is evidence that every `src/` landing is still AHEAD.**  Six branches sit *at*
+`626e2e7` -- `codegen-same-size`, `defect-rc-signedness`, `v90-select-mirror`,
+`fix/reproduce-default`, `mutation-rerecord` and `master` itself -- and three
+of them are known to be carrying `src/` edits that have not landed
+(diagnostics in `v34hshak.c` and `callprog/`, a signedness fix in
+`core/fixedrc.c`, float sign selects in `pump/v34` and `pump/v90`, and a
+same-size codegen triage that may touch anything).  `mutsnap.py`'s key covers
+`Makefile`, `src/`, `include/`, `test/harness/` and `tools/mutate.py`, so the
+FIRST of those to land invalidates all 124 entries at once -- including any
+recorded in the meantime.  A re-record started here is stale on arrival by
+construction, not by bad luck.
+
+The second half of the argument is cost.  5,971 mutations is a rebuild and a
+test run each; `mutate.py` is the heaviest job on this machine, the box was at
+load 8.15 of 12 cores with five agents live, and a real-time modem bench
+shares it that a loaded box invalidates.
+
+So the deliverable is the ANALYSIS, which does not depend on `src/` settling:
+the stale snapshot still names every mutation that was not caught, and an
+uncaught mutation is an untested claim whatever tree it was measured on.
+3001 is that list.  Nothing under `test/mutations/` was written -- no
+`--update`, no hand-edit -- because a record refreshed as a chore is worse
+than a stale one that admits it (`mutsnap.py`'s own argument, and 545's).
+
+**What a later batch should read this as:** the 124 entries are stale, the
+verdicts below are the last measurement and are quotable as HISTORY and not as
+a baseline, and the re-record wants a tree with the five agents landed.
+
+**THE PREDICTION WAS TESTED WITHIN THE HOUR, AND IT HELD.**  Everything above
+was written against `master` at `626e2e7`.  During this session's own
+`make phase` run `master` advanced seven commits to `6c0df0f`, and one of them
+-- `6470df6`, "struct rc_state is signed throughout, and the divide was a
+paraphrase" -- edits `src/core/fixedrc.c` and `include/dsplib/fixedrc.h`, both
+inside `mutsnap.py`'s key.  So all 124 entries were invalidated again while a
+single `make phase` was running, which is the whole argument for not having
+spent the afternoon re-recording them.  This finding is left dated rather than
+rewritten: the sentence "every `src/` landing is still AHEAD" was true at
+`626e2e7` and is now true of a different set, and there are still agents that
+have not landed.
+
+### 3001. The 34 uncaught mutations, and the three-way split they actually make
+
+From the (stale) snapshot: **34 NOT CAUGHT across 15 of the 124 suites**.
+Finding 545 measured 37 across 10 of 48 at 2,874 mutations; the tree is now
+5,971 mutations and the figure has barely moved, which is better than it
+sounds -- `v34hstx1` went from **11 uncaught to 2** while growing from 749
+mutations to 776.
+
+    v34k56 10   v34datapump 4   v34hsmst44 3   v34hstx1 2   v90demod 2
+    v90equ 2    v90sessionflag 2   vpcmrun 2   dilpack 1   v34hst3core 1
+    v90p3ddec 1   v90p3dreset 1   v90rto 1   vpcmcreate 1   vpcmguard 1
+
+They are not one kind of thing, and lumping them is the mistake this entry
+exists to prevent.  Three buckets:
+
+**(A) GENUINE COVERAGE HOLES -- 26.**  The mutation changes behaviour and no
+test in the tree presents an input that separates it.  Sub-grouped by cause,
+because the causes repeat:
+
+  - *The arm is unreachable in this tree* (10).  Seven of `v34k56`'s eight
+    DEAD Ja/MP completion mutations -- finding 279 already ruled these
+    uncaught and not equivalent, "being unreachable is the stronger reason",
+    and the eighth is counted in bucket (C) below because its label claims
+    both -- then `v90p3ddec`'s
+    probing DIL magnitude (the fixture opens the modulator in
+    `P3M_STATE_TRN1D` and never reaches a DIL segment, so `0xffc` rests on
+    `cmp $0xffc,%eax` at 0x23b98 and on nothing that runs), and `vpcmrun`'s
+    two stall mutations (nothing else resets `stall` and the deadline is a
+    block count this call's trajectory never reaches).
+  - *The callee is a no-op in this fixture, so the call has no observable
+    effect* (4).  `v34k56`'s two "does not consult the bit source at all" --
+    the stub returns 0 and writes nothing through its pointer, and the only
+    witness is `nm` plus `tools/closure.py`, not a test.  And **the same wall
+    accounts for two of `v34hsmst44`'s three**: `V34GiveProbeResults` returns
+    at once when `v90_receiver == 0 && k56flex_receiver == 0`
+    (`src/pump/v34/v34info.c:107`) and `V34GiveINFO1dBits` returns before
+    reading its buffer on the same condition, and zero is what every case in
+    that fixture holds both at, because the V.90 path walks to a
+    `VPcmFloModem` the fixture does not build.  ONE MISSING FIXTURE -- a
+    session with a PCM receiver running -- is the cause of both, and naming it
+    once is worth more than three separate "not covered" lines.
+  - *The boundary is never presented* (3).  `v34hst3core`'s `<= 5` against
+    `< 5`; `v34hsmst44`'s probeselect diagnostic swapping two rates that
+    `probeselect` settles at 2400 apiece on every case, so the arguments are
+    equal and their order is invisible; `dilpack`'s frame-boundary zero.
+  - *Order and condition claims the fixture cannot separate* (4).
+    `v34datapump`'s four: the +0x124 bump either side of `receiver`, the error
+    measure read either side of it, the receiver loop before the modulator
+    loop, and the handshake loop's `||` turned `&&`.
+  - *A range the type permits and no test presents* (2).  `v90equ`'s
+    `1u << (n & 31)` against `1u << n` -- identical for every `n` under 32 and
+    UNDEFINED at or above it, so this is 282's `vect_idx` question with no
+    282-style sweep behind it.  **282 is the ready-made recipe**: it swept
+    `vect_idx` over 0,1,2,6,7,8,15,100,-1,-9 against the blob and -1 and 100
+    are what separated masking from anything else.  And `v90equ`'s `long
+    double` intermediate narrowed to `double`.
+  - *The set points at a line the binary cannot reach* (1).  `vpcmguard`'s,
+    and it is a defect in the SET rather than in the fixture -- finding 3004.
+  - *Cause not established here* (2).  `v34hstx1`'s pair, below.
+
+    10 + 4 + 3 + 4 + 2 + 1 + 2 = 26, which is the bucket.
+
+**(B) ARGUED EQUIVALENT IN PROSE, NOT FLAGGED, STILL SCORED UNCAUGHT -- 5.**
+These carry a written argument that the change cannot alter behaviour, but no
+`"equivalent": true`, so `mutate.py` scores them in the uncaught column and
+they inflate bucket (A) for anyone counting.
+
+  - `v90demod` "the eighth argument is not narrowed to short" and "the EIA-6
+    answer is cached across `setParamEia6`", and `v90p3dreset` "the detector
+    is handed the argument rather than the field".  All three arguments are
+    CONDITIONAL -- each says "held fixed: X, which some other test checks" --
+    and that conditionality is very likely why the flag was withheld.  Left
+    exactly as they are.
+  - `v90sessionflag`'s two are the unconditional case and are the ones to look
+    at.  "demodulator prints after storing the flag" moves an `edprintf` past
+    `sessionFlag = flag`, and the printf's argument is `flag`, the PARAMETER,
+    which the store cannot change; "modem reads the side after storing the
+    flag" reorders `which = side` past `sessionFlag = flag`, and
+    `V90SessionFlag.cpp`'s own offset assertions put `V90Modem::sessionFlag`
+    at 0x49b8 and `side` at 0x49bc -- two distinct, non-aliasing members.
+    That is `mutate.py`'s docstring definition of equivalent, verbatim: "a
+    reordering of two stores that do not alias."  **Recommended for
+    `"equivalent": true` with that argument, NOT done here** -- the flag has
+    teeth (a flagged equivalent that gets caught fails the run) and it should
+    be set by someone with a green run behind them, not against a stale
+    record.
+
+**(C) EQUIVALENT IN BEHAVIOUR, KEPT BECAUSE THE BLOB DOES IT -- 3.**  The
+claim is about the object's encoding and no runtime test can ever reach it.
+`v34k56`'s "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store"
+(its own label says both, and 279 lists it with the gap because unreachability
+is the stronger reason); `vpcmcreate`'s "the redundant second memset is
+dropped"; `v90rto`'s "round the intermediate product to float".  These are
+uncaught because they are unobservable, not because a fixture is missing, and
+adding a fixture cannot close them.
+
+**The `--verbose` question is only half-answerable from the record, and that
+is a gap in the snapshot rather than in the tree.**  Per-label verdicts store
+`caught`, not WHICH gate fired; only the per-suite summary carries the
+by-test/by-strings split.  Tree-wide that split is **one strings-only catch in
+5,940** -- `v34filters`, 1 of its 30 -- so the "caught by the weak gate"
+concern is a single label, and naming it needs one `--verbose` run of that one
+suite.  For the 34 above the question does not arise: nothing fired.
+
+  - THE TWO `v34hstx1` ENTRIES ARE A PAIR AND WORTH ONE LINE: "67:
+    `initdigital` is not called" and "67: +0x3598 is not set" are the two
+    halves of one `if` body and each survives alone.  Whatever makes one
+    invisible makes the other invisible, and closing either needs the same
+    input; they are counted once each above and should be worked once.
+
+### 3002. NINE SUITES AND 647 VERDICTS CANNOT BE RE-RECORDED AT ALL, AND NOBODY HAD COUNTED THEM
+
+2157 established the interaction -- `tools/gccdiverge.json` allow-lists checks
+modern GCC provably cannot reproduce, `mutate.py` judges a mutant caught by
+the binary exiting non-zero, so a binary with a declared entry has a RED
+BASELINE and `mutate.py` correctly refuses to score anything against it.  What
+2157 did not do is say how much of the mutation tier that removes.  Mapping
+`suites.json`'s binaries against the register:
+
+    t_psd        (1453)  psd
+    t_agc        (2304)  -- no mutation suite registered
+    t_v90adid    (2304)  v90adid, v90dil
+    t_v90equ     (2304)  v90equ
+    t_v90leaves  (2304)  v90cd, v90demapper, v90rto, v90sbe, v92ec
+
+**Nine of the 124 registered suites, holding 647 of the 5,940 recorded
+verdicts -- 10.9% -- are unrecordable on the modern build.**  `v90adid` alone
+is 481 of them, the largest suite in the tree.  The claim is deliberately
+present-tense and no ordering is asserted: those binaries carry a declared
+entry NOW, so `mutate.py` refuses their baseline NOW, so a re-record of "all
+124 suites" can reach at most 115 whatever the history of either file.  And
+"unrecordable" means REFUSED ON THE MODERN BUILD rather than impossible --
+2157 names the two ways out, and neither is taken here: judge the suite on
+`make period`, which has no allow-list, or split the divergent check out of
+the binary.  **Three of 3001's 34 uncaught live in there** (`v90equ` 2,
+`v90rto` 1) and are frozen until one of those is done.
+
+**THE RED BASELINES ARE MEASURED IN THIS RUN, NOT INFERRED FROM THE
+REGISTER.**  This session's `make phase` printed all ten declared checks as
+FAIL and allow-listed them -- `agc: process over pole x reference x block x
+length` 15504/1524096, `Psd::process` 7550/140404,
+`V90AutoDigitalImpDetector::determineMaxUcode` 4/380, all six
+`V90Equalizer::*` (784/86026, 2/2396, 2/480, 1/1244, 1/1092, 36/4778) and
+`V92EchoCanceller::process` 273/4570 -- while the run as a whole exited 0.
+Five binaries, ten checks, every one of them red on the modern build in the
+same tree these verdicts would have to be re-measured in.  So the refusal is
+not a prediction from a JSON file: `mutate.py` would meet exactly these
+failures at the baseline gate, on all nine suites, today.
+
+This is a limitation to report and not to route around.  The refusal is
+correct and 2157 keeps it.  What is new here is the denominator: any future
+"124 suites re-recorded" claim is wrong by nine, and `mutsnap.py --update`
+will print `COULD NOT RUN -- left stale, not recorded` nine times and exit
+non-zero having done everything it could.  That is the honest outcome and it
+should not be read as a failed run.
+
+### 3003. THE ANCHOR SWEEP: 5,971 of 5,971 usable, and 35 mutations that have never been scored
+
+An unusable mutation does not fail a run (finding 347) and four batches have
+silently lost mutations that way.  Detecting it costs a rebuild per mutation
+inside `mutate.py` and costs NOTHING statically, because the test is pure
+text: `source.count(find) != 1` is `ANCHOR MATCHES n TIMES`, and
+`source.replace(find, replace) == source` is `VACUOUS -- REPLACE == FIND`
+(`tools/mutate.py`, the two guards at the top of the mutation loop).  Swept
+over every registered suite against the file `suites.json` names for it:
+
+    anchors usable: 5971 of 5971 checked, over 124 suites
+
+**SHOWN TO FIRE, because "all 5,971 match" and "the sweep compared nothing"
+are the same output otherwise** -- 134's argument, and 2400's, where two triage
+aids defaulted to an empty output directory, compared ZERO symbols and
+reported a clean tree at exit 0.  Three defects were injected into one suite's
+in-memory list (a zero-match anchor, a 186-match anchor, and a vacuous
+`replace == find`), all three appeared, and all three went when the injection
+was removed.  Nothing was written to the tree.  The denominator is on the
+verdict line for the same reason.
+
+**The record's coverage was then checked in BOTH directions, and only one
+direction is the one people run:**
+
+  - **35 mutations exist in `test/mutations/*.json` with NO verdict in the
+    snapshot at all.**  This is 347's shape, not staleness: a stale entry says
+    it is stale, an unscored mutation says nothing.  Stated without asserting
+    which side moved -- `psd` holds 31 mutations today and has 14 verdicts,
+    and `psd` is the suite `mutsnap.py`'s own header names as the live
+    COULD-NOT-RUN case, so its entry may never have been a full recording in
+    the first place.  Either way the record does not cover them.  And they are
+    not spread evenly: `psd` 17, `v90equ` 9, `v90adid` 4, `v92ec` 1 -- **31 of
+    the 35 are in the nine suites 3002 says cannot be scored at all.**  The
+    newest mutation work in this tree went almost entirely into the suites
+    mutation testing cannot reach.  The other four are `v90demod` 3 and
+    `v90conneval` 1, and those four are scoreable the moment the tree is
+    quiet.
+  - **The mutation files have demonstrably moved under the record**, which is
+    worth one line because it is independent of the key: `v90equ`'s recorded
+    summary says `1 unusable`, and the sweep above finds **0 unusable in all
+    5,971**.  Whatever that mutation was, it has been re-anchored since.
+  - **4 recorded verdicts name a mutation that no longer exists** --
+    `v90adid` 3, `v92ec` 1.  All four are the ordered-compare rewrite of
+    2300/2304: labels like "dmu: the NaN half of the zero test dropped" were
+    retired in favour of "...spelt for IEEE, so an unordered code is not
+    skipped".  Superseded rather than lost, and the snapshot has no way to say
+    so.
+
+Net: the snapshot describes 5,936 of today's 5,971 mutations, all of which are
+mechanically usable, and 647 of those verdicts can never be refreshed.
+
+### 3004. `vpcmguard`'s uncaught mutation is a SET AIMED AT A GUARD THAT MOVED
+
+Reported, not fixed.  `vpcmguard` has two mutations and its own note says they
+are "the two ends" of watching the unwritten-path guard stop: the stop
+removed, and the guard never reached.  The first, replacing
+`if (!vpcm_unwritten_soft) abort();` with `if (0) abort();` in
+`src/pump/v90/vpcm.c`, is **NOT CAUGHT** -- which reads as a hole in a test
+whose whole design is to fork and require the child to have died of SIGABRT.
+
+It is not a hole in the test.  `test/unit/t_vpcmguard.c` says so itself, in
+its own opening comment: the five `VPcmV34*` entry points it used to watch are
+now real definitions in every binary, "so every one of the five is a real
+definition in every binary and `vpcm_run`'s guards can no longer fire."  What
+the binary actually drives is one level down -- `v34pcm_notwritten` in
+`src/pump/v34/v34pcmmain.cpp:1711`, reached through
+`V34PCM_UNWRITTEN_QCLINE` at 2441, on the line-verification path.
+
+So the mutation breaks a guard that is dead in every binary in the tree, and
+no input can catch it.  `suites.json` still pairs `vpcmguard` with
+`src/pump/v90/vpcm.c`; the guard under test lives in a different file.  The
+set was correct when written and the boundary moved out from under it -- the
+same drift `t_vpcmguard.c` documents for itself and the mutation set did not
+follow.
+
+**What it wants** (for whoever owns that suite, with a green run behind them):
+the mutation re-anchored onto `v34pcm_notwritten`'s `abort()`, which IS the
+stop this binary watches and which a mutation there would be caught by at
+once.  Until then the 1-uncaught-of-2 in `vpcmguard` is bucket (A) of 3001 by
+letter and something else in substance: the claim is untested because the set
+points at the wrong line, not because the fixture is weak.  Left alone
+deliberately -- retargeting a mutation while the record is stale is exactly
+what "nothing is weakened to make a number look better" forbids, and the
+number here would get BETTER, which is the direction that should make a reader
+suspicious.
