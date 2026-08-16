@@ -44,6 +44,15 @@ import re
 import subprocess
 import sys
 
+#
+# The x87 operations whose AT&T mnemonic can be the reverse of what the bytes
+# encode.  Only the popping DE forms actually flip -- the D8 register forms
+# agree -- but the whole family is listed so a new spelling cannot slip past,
+# and the annotation only fires when the two renderings genuinely differ.
+#
+REVERSIBLE = {"fdivp", "fdivrp", "fsubp", "fsubrp",
+              "fdiv", "fdivr", "fsub", "fsubr"}
+
 # Alignment padding gcc emits between blocks.  These cannot carry relocations,
 # which is the only reason it is safe to drop them.
 PADDING = re.compile(
@@ -85,6 +94,28 @@ def main():
          '--stop-address=0x%x' % hi, args.obj],
         capture_output=True, text=True).stdout
 
+    #
+    # THE REVERSIBLE x87 FAMILY IS ANNOTATED WITH ITS INTEL MNEMONIC, because
+    # the AT&T one is its own opposite and reading it straight has cost this
+    # project real time (finding 245).  `de f1` prints `fdivp` and IS FDIVRP:
+    # ST(1) = ST(0)/ST(1).
+    #
+    # MEASURED, not assumed, and the measurement is the point: binutils 2.15
+    # in the period container and 2.42 natively print these IDENTICALLY in
+    # AT&T syntax, so upgrading does not fix it and never would have.  What
+    # does fix it is `-M intel`, which renders the same bytes the way the
+    # Intel manual names them.  So we ask objdump twice and print both.
+    #
+    intel = subprocess.run(
+        ['objdump', '-d', '-M', 'intel', '--start-address=0x%x' % lo,
+         '--stop-address=0x%x' % hi, args.obj],
+        capture_output=True, text=True).stdout
+    intel_at = {}
+    for line in intel.splitlines():
+        m = re.match(r"\s*([0-9a-f]+):\s+(?:[0-9a-f]{2} )+\s*(\S+)", line)
+        if m:
+            intel_at[int(m.group(1), 16)] = m.group(2)
+
     # Collect relocations by the address they annotate, then attach each to
     # the instruction that contains it.
     relocs = {}
@@ -108,6 +139,19 @@ def main():
         if not args.plain and PADDING.search(line):
             continue
         tags = [relocs[a] for a in sorted(relocs) if addr <= a < end]
+
+        # The AT&T spelling of a popping divide or subtract is its own
+        # opposite.  Where the Intel rendering of the SAME BYTES disagrees,
+        # say so on the line rather than trusting the reader to remember.
+        att_mn = line.expandtabs(8).split()
+        att_mn = att_mn[att_mn.index(":") + 1] if ":" in att_mn else None
+        m2 = re.match(r"\s*[0-9a-f]+:\s+(?:[0-9a-f]{2} )+\s*(\S+)", line)
+        att_mn = m2.group(1) if m2 else None
+        if att_mn in REVERSIBLE:
+            other = intel_at.get(addr)
+            if other and other != att_mn:
+                tags.append("Intel: %s" % other)
+
         text = line.rstrip()
         if tags:
             text = "%-58s  <== %s" % (text.expandtabs(8).rstrip(),

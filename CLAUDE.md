@@ -287,6 +287,16 @@ Task numbers are not safe across sessions either: two task stores exist whose
   print as their own opposite: `de f1` reads `fdivp` and IS `FDIVRP`
   (`ST(1) = ST(0)/ST(1)`). The `D8` register forms are fine. For any popping
   divide or subtract, read the bytes, not the mnemonic — finding 245.
+
+  **Upgrading objdump does not help and `tools/dis.py` now tells you anyway.**
+  Binutils 2.15 in the container and 2.42 on the host print these identically
+  in AT&T syntax; it is what the syntax means, not a bug being carried.
+  `objdump -M intel` renders the same bytes the architecture's way, and
+  `dis.py` runs that second pass for you and appends `<== Intel: fdivp` to any
+  line where the two disagree — 4 lines of 763 on a real function, silent
+  elsewhere. Finding 2156, which also records how the measurement nearly went
+  wrong: comparing two objdumps under different `-M` settings made them look
+  exactly opposite and almost retired 245.
 - A string reference is an `R_386_32` against the SECTION symbol with the
   offset as an inline addend, so searching the disassembly for a string's
   address finds nothing and proves nothing. `tools/relocscan.py --at

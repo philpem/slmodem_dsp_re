@@ -54899,3 +54899,54 @@ reading, not as a proof.
 `period_inner.sh` take the same level.  `-frename-registers` stays spelled out
 even though `-O3` implies it, because 616's evidence for it is independent and
 the explicit flag is what records that.
+
+### 2156. FINDING 245 CONFIRMED AGAINST BINUTILS 2.42, AND `tools/dis.py` NOW SAYS IT ON THE LINE
+
+*Started as an attempt to RETIRE 245 -- a modern objdump is installed natively
+here, so the obvious question was whether it still gets these wrong. It does.*
+
+Finding 245 records that objdump's AT&T spelling of a popping x87 divide or
+subtract is its own opposite, and that the bytes are the only thing to trust.
+Two things are now measured that were not.
+
+**Upgrading does not fix it.** The period container has binutils **2.15**; the
+host has **2.42**. On the same bytes, in default (AT&T) syntax, they are
+character-for-character identical:
+
+    de f1   fdivp  %st,%st(1)        de e1   fsubp  %st,%st(1)
+    de f9   fdivrp %st,%st(1)        de e9   fsubrp %st,%st(1)
+
+Twenty-seven years of binutils did not change it, because it is not a bug being
+carried -- it is what AT&T syntax means for these encodings.
+
+**`-M intel` renders the same bytes the way the Intel manual names them**, and
+that is the cheap disambiguation nobody had written down:
+
+    de f1   fdivrp st(1),st          de e1   fsubrp st(1),st
+    de f9   fdivp  st(1),st          de e9   fsubp  st(1),st
+
+which is the architecture: `DE F1` is `FDIVRP ST(1),ST(0)`, ST(1) = ST(0)/ST(1).
+
+**A METHOD NOTE, BECAUSE I NEARLY PUBLISHED THE OPPOSITE.** The first
+comparison passed `-M intel=off` to 2.42 and nothing to 2.15. That is not a
+real suboption; 2.42 took it as a syntax change and 2.15 ignored it, so the two
+were disassembling in different modes and came out looking EXACTLY OPPOSITE.
+The conclusion "the modern objdump fixes it, retire 245" was one step away and
+would have been wrong in the most damaging direction -- it would have told
+readers to trust a mnemonic that lies. What caught it was disassembling the
+BLOB and finding it disagreed with the synthetic test. Compare two tools on the
+same input or do not compare them.
+
+**`tools/dis.py` now annotates it.** The tool runs objdump a second time under
+`-M intel` and, where the two renderings of one address disagree, appends the
+Intel mnemonic to the line:
+
+    264b6:  de e1   fsubp  %st,%st(1)    <== Intel: fsubrp
+    26802:  de f9   fdivrp %st,%st(1)    <== Intel: fdivp
+
+Shown to fire and shown to stay quiet: over `V90Phase4Demodulator::getV90Decision`
+it annotates **4 lines of 763**, exactly the popping DE forms, and says nothing
+about the D8 register forms -- which 245 already noted are fine, and which this
+independently confirms. The rule "read the bytes, not the mnemonic" still
+holds; there is now a second reading printed beside the first so nobody has to
+remember to.
