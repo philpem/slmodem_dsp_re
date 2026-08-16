@@ -55,6 +55,14 @@ SIGPOW_TOL = 0.005
 EQUERR_SAT = 32767
 
 RE_EQUPOW = re.compile(r"V34EQUPOW, sigpow = (-?\d+), equerr = (-?\d+)")
+# THE PRE-INSTRUMENT ARCHIVE, readable because `sigpow` turned out to be a
+# constant (finding 3200).  A capture with no `V34EQUPOW` at all still carries
+# the object's own `V34EQU`, and 163820 is the value `sigpow` takes on every
+# settled block ever logged -- so the same SNR comes out with a fixed 52.14 dB
+# offset.  Used ONLY when the log has no V34EQUPOW anywhere: never mixed with
+# measured values inside one call, and every row it produces is flagged
+# `assumed` so a reader can tell which archive a number came from.
+RE_EQU = re.compile(r"V34EQU, equerr = (-?\d+), preerr = (-?\d+)")
 RE_THRESH = re.compile(r"V34DATARATE,threshold for data rate (\d+) = (-?\d+)")
 RE_ETHRESH = re.compile(r"V34DATARATE, ethresh data rate = (-?\d+),ethreh=(-?\d+)")
 RE_DECIDE = re.compile(r"V34DATARATE, equerr = (\d+),preerr=(\d+)")
@@ -114,8 +122,16 @@ def farend(base):
     return "", ""
 
 
+def powline(sl):
+    """(regex, assumed) -- how this log reports the equaliser's error."""
+    if "V34EQUPOW" in sl:
+        return RE_EQUPOW, False
+    return RE_EQU, True
+
+
 def blocks(sl):
     """Every rate decision in one log, with the sample it was taken on."""
+    rx_pow, assumed = powline(sl)
     out = []
     last_pow = None          # (sigpow, equerr) of the most recent V34EQUPOW
     cur = None
@@ -153,9 +169,10 @@ def blocks(sl):
             in_p4 = True
             continue
 
-        m = RE_EQUPOW.search(line)
+        m = rx_pow.search(line)
         if m:
-            last_pow = (int(m.group(1)), int(m.group(2)))
+            last_pow = ((SIGPOW_SETTLED, int(m.group(1))) if assumed
+                        else (int(m.group(1)), int(m.group(2))))
             s, e = last_pow
             d = db(s, e)
             clean = (d is not None and e < EQUERR_SAT
@@ -197,6 +214,7 @@ def blocks(sl):
             # log rather than something to paper over with "near enough".
             cur["sigpow"] = (last_pow[0] if last_pow
                              and last_pow[1] == cur["equerr"] else None)
+            cur["assumed"] = assumed
             continue
 
         m = RE_CHOICE.search(line)
@@ -216,11 +234,17 @@ def blocks(sl):
 
 
 def trace(sl):
-    """Every V34EQUPOW block, in order: (t, sigpow, equerr)."""
+    """Every error block, in order: (t, sigpow, equerr)."""
+    rx_pow, assumed = powline(sl)
     out = []
     for line in sl.splitlines():
-        m = RE_EQUPOW.search(line)
+        m = rx_pow.search(line)
         if m:
+            if assumed:
+                ts = RE_TS.match(line)
+                out.append((float(ts.group(1)) if ts else None,
+                            SIGPOW_SETTLED, int(m.group(1))))
+                continue
             ts = RE_TS.match(line)
             out.append((float(ts.group(1)) if ts else None,
                         int(m.group(1)), int(m.group(2))))
@@ -314,6 +338,8 @@ def main():
                 elif not (SIGPOW_SETTLED * (1 - SIGPOW_TOL) <= sp
                           <= SIGPOW_SETTLED * (1 + SIGPOW_TOL)):
                     flag = "regime"
+                if b.get("assumed") and flag != "sat":
+                    flag = (flag + "+assumed") if flag else "assumed"
                 # What the rate it settled on was asking for, in the same dB.
                 ch = b.get("choice")
                 tdb = None
