@@ -59397,3 +59397,49 @@ bullet) would do it, plus a refusal on an empty intersection in the shape
 3110 gave the seven have-set tools.  Until then, **pass `BLOB=` explicitly
 whenever `compare.py` is run outside the main tree**, and treat a
 `Comparing 0 symbols` line as a failed run rather than a clean one.
+
+### 3122. 3121 FIXED: `compare.py` RESOLVES THE BLOB THE WAY THE MAKEFILE DOES, AND REFUSES A ZERO DENOMINATOR TWICE OVER
+
+*3121 found it and deliberately left it, being a header refactor at the time.
+This is the fix, and it takes 3121's own recommendation rather than a new one.*
+
+**THE MECHANISM, CONFIRMED BEFORE CHANGING ANYTHING.** `nm` on a missing file
+exits non-zero with empty stdout, and `sizes()` reads `subprocess.run(...)
+.stdout` without checking the return code -- so "the path is wrong" and "this
+object defines no symbols" arrive as the same empty dict.  Reproduced from
+`.claude/worktrees/agent-merge` with `BLOB` unset: exit **0**, `blob built by:
+(no .comment)`, `Comparing 0 symbols`, identical **0**, same size **0**.
+
+**WHY IT IS WORSE THAN 2400.** `--update` in that state writes
+`{identical: 0, same_size: 0, compared: 0}` into `ratchet.json` and destroys
+the floor, after which nothing can fail a ratchet check again.  That is not
+hypothetical: this project has already written a `{0,0,0}` ratchet once, for
+exactly this reason.
+
+**THE FIX IS IN TWO LAYERS, AND THE SECOND IS NOT REDUNDANT.**
+
+1. `_default_blob()` resolves `../slmodemd/dsplibs.o` against
+   `git rev-parse --git-common-dir` when the literal path does not exist --
+   which is how the `Makefile` already resolves the same thing, so this is the
+   tree's existing answer and not a second one.  The tool now WORKS from a
+   worktree rather than merely refusing.
+2. Two refusals behind it: an empty blob, and an empty INTERSECTION.  The
+   second catches what the first cannot -- a blob that reads perfectly but
+   shares nothing with `TC_OUT`, i.e. two unrelated trees or two targets.
+
+**SHOWN TO FIRE, all five states, this tree at `a3373af`:**
+
+| state | before | after |
+|---|---|---|
+| worktree, `BLOB` unset | exit 0, `Comparing 0 symbols`, 0/0 | exit 0, **943 compared, 341/64** |
+| main tree, `BLOB` unset | correct | correct, unchanged |
+| `BLOB=/nonexistent/dsplibs.o` | exit 0, 0/0 | exit **1**, names the path and that it does not exist |
+| `BLOB=/usr/lib/.../crt1.o` (2 symbols, shares none) | exit 0, 0/0 | exit **1**, `the blob defines 2 symbols and build/tc_out defines 1033, and they share NONE` |
+| `--ratchet`, normal | OK | OK, `{compared:943, identical:341, same_size:64}` |
+
+**THIS IS THE PATTERN'S FIFTH INSTANCE** -- 134 and 2400/2401 for the two
+triage aids, 3100 for `make phase` itself, 3110/3111 for the seven have-set
+tools, and now the codegen tier.  Every one is the same shape: a denominator
+that went to zero and a tool that reported the result as clean.  CLAUDE.md's
+"any tool here must be shown to fire" now carries the seven-tool instance; a
+reader who wants the whole set should read it with this finding beside it.
