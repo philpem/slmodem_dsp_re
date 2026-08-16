@@ -60145,3 +60145,61 @@ works and did not buy the direction that does not. If the echo hint survives
 tracks the gateway's attenuation, so it is a sound RELATIVE indicator between
 calls, but 1969's reading of "20" as a healthy -20 dBm was an assumption about
 its reference and should not be relied on.
+
+### 1971. #167 ANSWERED, NEGATIVELY: THERE IS NO LINEAR ECHO ON THIS PATH, SO THE RECEIVE-RATE HINT IN 1970 WAS NOT ECHO
+
+1970 recorded an unexplained observation: attenuating our TRANSMIT by 9 dB at
+the gateway coincided with OUR OWN RECEIVE rate rising
+(`12000/9600/14400` to `14400 x4, 19200`). Under a pure level model that is
+impossible — `output attenuation` changes only what the far end hears. The
+candidate was hybrid echo: every FXS port on this VG204 carries
+`no echo-cancel enable`, so 9 dB less transmit would be 9 dB less of our own
+signal returning into our receiver.
+
+**IT IS NOT ECHO.** `testbench/echoratio.py` measures the fraction of received
+power that is linearly predictable from what we sent, as a RATIO — which the
+task required, because our transmit level fell for a second, independent
+reason (the Courier asked for more reduction), so an absolute echo figure
+could not separate the two.
+
+    arm 1, 3 dB     -24.46  -24.49  -24.34 dB
+    arm 2, 12 dB    -24.69  -24.60  -25.51  -24.79  -24.67 dB
+
+Flat. And the cross-correlation peaks sit at 105, 27, 0.2, 99, 6.9, 67.8, 23.8
+and 13.6 ms with r ~ 0.01 — scattered, i.e. no consistent path delay.
+
+**THOSE NUMBERS ARE THE ESTIMATOR'S FLOOR, NOT A MEASUREMENT OF ECHO**, and the
+controls say so rather than my judgement saying so:
+
+    null, two uncorrelated signals        -24.70 dB   (predicted -24.92 from
+                                                       310 averaged segments)
+    planted echo at -10 dB, 30 ms lag     -13.40 dB
+    planted echo at -20 dB, 30 ms lag     -20.96 dB
+    planted echo at -30 dB, 30 ms lag     -24.40 dB   (under the floor)
+
+The tool sees a real echo at -20 dB plainly and loses one at -30 dB in the
+noise. Every capture in both arms lands **at or below the null floor**, one of
+them beneath it. So the result is a BOUND: **linear echo on this path is below
+about -25 dB relative to received power, in both arms.**
+
+**CONSEQUENCES, in order of what they cost:**
+
+  * 1970's receive-rate hint has no mechanism. With n=5 against n=3 and
+    overlapping ranges it was never more than suggestive; it should now be
+    read as ordinary call-to-call spread unless something else explains it.
+  * It also bounds the premise behind **#101 and #110/#111** — `echoscan.py`'s
+    docstring proposes "our own transmit echoing back beyond the canceller's
+    reach" as the leading candidate for the receive-side deficit. On this
+    path, at these levels, there is no linear echo to reach. That does not
+    close those tasks, because of the caveat below, but it removes the simple
+    version of the story.
+
+**THE BOUND IS ON LINEAR ECHO ONLY.** G.711 companding returns energy that is
+not a scaled copy of what we sent, and no coherence measure can find it.
+`echoscan.py` states the same caveat and it remains true.
+
+**AND `echoscan.py` ITSELF IS BROKEN** — `from capture_io import load` followed
+by `def load(path): a = load(path)[0]` shadows the import with the wrapper, so
+it recurses until the stack goes. It cannot have run since that edit. Recorded
+rather than fixed here: fixing it needs an end-to-end validation this session
+cannot give it, and `echoratio.py` covers the question #167 asked. Task #168.
