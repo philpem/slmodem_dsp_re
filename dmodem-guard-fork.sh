@@ -84,7 +84,7 @@ export DMODEM_ALLOWED_DEST
 #   default   the production build
 #   jb        + jitter-buffer stats, DMODEM_JB_DISCARD selects the algorithm
 #   noaudio   built without -DWITH_AUDIO: no monitor speaker, no splitcomb
-DMODEM_DIR=/home/philpem/dev/D-Modem-fork
+DMODEM_DIR=/home/philpem/dev/sip-D-modem/d-modem
 case "${DMODEM_VARIANT:-default}" in
 	default) DMODEM_BIN=$DMODEM_DIR/d-modem ;;
 	jb)      DMODEM_BIN=$DMODEM_DIR/d-modem-jb ;;

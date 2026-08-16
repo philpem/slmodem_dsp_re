@@ -31,4 +31,10 @@ SIP_LOGIN="${EXT}:${PASS}@${SERVER}"
 export SIP_LOGIN
 
 echo "GUARD: allowing $CLEAN as ${EXT}@${SERVER}" >&2
-exec /home/philpem/dev/sip-D-modem/d-modem "$CLEAN" "$SOCK"
+# WAS the old strozfriedberg build at sip-D-modem/d-modem, which was a FILE at
+# that path.  The two D-Modem forks were consolidated and that path is now the
+# directory holding the surviving one, so this runs the fork's binary -- the
+# one carrying d-modem.c's own destination allow-list.  That makes row2.sh,
+# rtprelay.py and relay.py strictly safer than they were, and it is a change
+# in what they execute: flagged rather than silent.
+exec /home/philpem/dev/sip-D-modem/d-modem/d-modem "$CLEAN" "$SOCK"

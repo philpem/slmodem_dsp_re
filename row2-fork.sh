@@ -8,7 +8,7 @@
 # the group is signalled; nothing else is touched.
 #
 set -u
-ROOT=/home/philpem/dev/D-Modem-fork
+ROOT=/home/philpem/dev/sip-D-modem/d-modem
 BENCH=/home/philpem/dev/sip-D-modem/testbench
 . "$BENCH/modems.sh"
 # Superseded by row.sh (`row.sh <log> pty 1901` does this), but kept runnable.

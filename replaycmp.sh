@@ -30,7 +30,7 @@ CR=/home/philpem/dev/sip-D-modem/claude_re
 
 WAV=${1:?usage: replaycmp.sh <recording.wav> [ours-slmodemd] [blob-slmodemd]}
 OURS=${2:-$CR/build/hybrid-fit/slmodemd-fit}
-BLOB=${3:-/home/philpem/dev/D-Modem-fork/slmodemd/slmodemd}
+BLOB=${3:-/home/philpem/dev/sip-D-modem/d-modem/slmodemd/slmodemd}
 OUT=${OUT:-$BENCH/captures/replay-$(basename "${WAV%%.*}")}
 
 [ -r "$WAV" ] || { echo "replaycmp: cannot read $WAV" >&2; exit 2; }

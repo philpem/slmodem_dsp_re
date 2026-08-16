@@ -19,7 +19,7 @@
 # configuration.
 #
 set -u
-ROOT=${ROOT:-/home/philpem/dev/D-Modem-fork}
+ROOT=${ROOT:-/home/philpem/dev/sip-D-modem/d-modem}
 #
 # WHICH slmodemd, so a HYBRID build can be put on the bench without moving
 # anything in the source tree.  Task #89 substitutes our reconstructed
