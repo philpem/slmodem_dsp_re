@@ -62082,3 +62082,327 @@ standalone naming pass over `fpm_smc.h` would have had nothing to go on.
 `t_fpm_smc.c`'s "ring pad00 untouched" check is retained as a byte comparison
 over the same eight bytes, so the claim that nothing in the encoder writes them
 still holds and is still tested.
+### 3580. `FPM_FSE_receive` IS RECONSTRUCTED, AND THE V.22 COUSIN IS A QUESTION GENERATOR AND NOT AN ANSWER
+
+*Renumbered from 3540.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+*This block is 3580-3589.  It was reserved as 3540-3549 and moved: `master`
+took 3540, 3541, 3542 and 3560 in the `V90CP` merge, and `wip/v92-params-tx`
+reached 3544, while this branch was open.  The rest of the same batch holds
+3570-3576, also renumbered.  The deviation block reserved alongside it did NOT
+move, because no live branch had reached it; this branch uses D391 and D392.*
+
+`FPM_FSE_receive` (blob 0x0a7e00, 2131 bytes) and the function-scope static
+`avg_err_show.0` (blob .bss 0x0008d0, 4 bytes) are written, in
+`src/dsp/fpm_fse.c`, from `tools/dis.py` of that function.  `t_fpm_fse_recv`
+drives it against the blob and compares the whole 19992-byte state as an
+object, the five heap buffers by content, the caller's symbol array and the
+return value; `test/mutations/fpmfserecv.json` is 45 mutations, 43 caught, 0
+uncaught, 2 recorded survivors.
+
+`V22_FSE_receive` (1885 bytes) was read side by side with it and NOT adapted,
+and the 246-byte difference is real code rather than a bigger version of the
+same.  What actually differs, all of it from the disassembly:
+
+  - the history is CIRCULAR, indexed by `widx` and wrapped at `taps`.  V.22's
+    is linear and `memcpy`s the top half down when it fills;
+  - there is no gain stage.  V.22 multiplies both FIR outputs by 0x8908 in
+    Q14; this doubles them and nothing else;
+  - the carrier is `clk[clk_phase]` plus a 32-bit PLL accumulator read at
+    fifteen fractional bits with rounding, where V.22 adds a `short` phase
+    directly.  The wrap is +-0x20000000, which is +-0x4000 scaled by 2^15;
+  - the SLICER'S TWO ARGUMENTS ARE IN/OUT.  The object writes `derot` into
+    `angle` and `amp` into `mag` before the indirect call.  V.22 passes both
+    uninitialised, and a reconstruction that copied V.22 would have been
+    caught only by a slicer that reads them -- which the object's own slicers
+    do;
+  - three of the reductions are `>=` where V.22's are `>` (`cmp $0x3fff` with
+    a `jle` past it, twice, and `cfg.err_hi` compared the other way round);
+  - training does NOT hold the integrator down.  V.22 writes `freq = 0` on
+    every training symbol and nothing here writes `freq` before the update;
+  - the squared decision error is brought down ELEVEN bits, not fifteen, and
+    the smoothed result is saturated on an UNSIGNED test (3586);
+  - the LMS gate is `(mse > 0 && lms_on) || lms_force`, where V.22's has no
+    override;
+  - a 4-tap tilt filter, a 480-entry scatter log and a `Decoder Error` report
+    have no counterpart in V.22 at all.
+
+### 3581. THE TILT FILTER'S `movzwl` IS ITS ACCUMULATOR AND NOT ITS ELEMENT TYPE
+
+*Renumbered from 3541.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+`fpm_fse.h` carried "UNVERIFIED SHAPE: both are read `movzwl` and every use is
+truncated back to 16 bits" against `tilt_coeff[4]` and `tilt_hist[4]`.
+`FPM_FSE_receive` is the function that runs them, and it settles the question
+against retyping them.
+
+The object reads both arrays `movzwl` inside the 4-tap multiply-accumulate at
+0x0a832a and 0x0a832f, and reads `tilt_out` `movzwl` at 0x0a80a5 and 0x0a82ff.
+A `short` array feeding a 32-bit `imul` normally gives `movswl`, so the naive
+reading is `unsigned short`.  It is wrong, and the experiment that says so is
+cheap: compile the same `short` declaration with the accumulation written two
+ways under GCC 3.4.2.
+
+  - `int acc = 0; for (j...) acc += coeff[j] * hist[j]; tilt_out = (short)acc;`
+    emits `movswl` on both operands and DELETES the `tilt_out = 0` store
+    before the loop;
+  - `tilt_out = 0; for (j...) tilt_out = (short)(tilt_out + coeff[j]
+    * hist[j]);` emits `movzwl` on both operands and KEEPS the zero store --
+    which is 0x0a8303, `movw $0x0,0x76(%ecx)`, in the object.
+
+The mechanism is that the accumulator is the `short` field itself: loop store
+motion promotes it to a register for the loop, and because only the low 16
+bits of the register are ever stored back, the extension on the operands is
+free and GCC takes the zero one.  The two spellings are behaviourally
+identical -- truncation to 16 bits commutes with multiplication and addition
+-- so no differential test can separate them and only the codegen tier can.
+
+So the arrays stay `short`, the header's UNVERIFIED note is replaced by this
+derivation, and the tree gains a worked example of the converse of finding
+613: a `movzwl` that is NOT a signedness signal because the value it feeds is
+read modulo 2^16.  Similarity on the function went 0.645 to 0.692 on the
+change and nothing else moved.
+
+### 3582. `pad6e` AND `unknown_4e10` CONFIRMED UNTOUCHED, BY SWEEP RATHER THAN BY READING
+
+*Renumbered from 3542.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+The other two open questions in `fpm_fse.h` are both answered no, and the
+method is worth keeping because reading a 566-line disassembly for the absence
+of something is exactly how an absence gets missed.  Extract the complete set
+of state-relative operands instead:
+
+    tools/dis.py $BLOB FPM_FSE_receive |
+        grep -oE '0x[0-9a-f]+\(%e[a-z]+(,%e[a-z]+,[0-9])?\)' | sort -u
+
+54 distinct offsets, and +0x6e, +0x4e10, +0x4e14 and the +0xf8c..+0x4e0b range
+are none of them.  So `pad6e` is written by neither init nor receive;
+`unknown_4e10` is zeroed by init and read by neither; and `diag2` and
+`diag2_n` are in the same position -- allocated space that only `FSE_getdiag`
+and something not yet reconstructed can be filling.  The one +0x6e in the
+function is `0x6e(%esp)`, which is the stack `fpm_phasor`'s `inc`, and reading
+it as the state's would have been the easy mistake.
+
+### 3583. `avg_err_show.0` IS A SAMPLE COUNTER, NOT AN ERROR, AND ITS FORMAT STRING IS IN THE OBJECT
+
+*Renumbered from 3543.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+Four bytes of `.bss` at 0x0008d0, LOCAL, with GCC's `name.N` function-scope
+static mangling -- so it has to be declared inside `FPM_FSE_receive` for the
+symbol to exist at all, and the `.0` says it is the first such static in the
+translation unit, which `fpm_fse.c` still is.
+
+Its three sites are all in that function.  At 0x0a7ea4 the call's sample count
+is ADDED to it, once per call and zero-extended.  At 0x0a849c it is compared
+against 0x1c1f with a signed branch, once per SYMBOL, and above the threshold
+it is reset to zero at 0x0a84b7 -- whether or not anything was printed.
+Between the two, gated on `dsplibs_debug_level > 1`, is
+`dsplibs_debug_printf("Decoder Error = %d\n", state->mse)`.
+
+So the name is "show the average error", the thing counted is input samples,
+and the period is 7200 of them -- 0.75 s at 9600, three V.32 blocks of 144 at
+three samples a symbol times sixteen.  Signed `int`, from the `cmpl` and the
+`jle`.
+
+**The format string is PRESENT**, at `.rodata.str1.1:0x4e85`, referenced from
+`.text+0x0a862f` -- `tools/relocscan.py --at .rodata.str1.1:0x4e85` finds the
+one site, and searching the disassembly for the address would have found
+nothing (finding 604).  So the deviation this would otherwise have owed does
+not arise.  It is tested by transcript rather than by any object comparison:
+each side has its own copy of the counter and they stay in step only because
+every call in the suite is mirrored, which is a property of the driver and not
+of the code.
+
+### 3584. TWO LOOP-COUNTER TYPES IN ONE FUNCTION, AND `FPM_lmsupd` IS THE CONTROL
+
+*Renumbered from 3544.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+`FPM_FSE_receive` walks six loops and the object compiles them two different
+ways.  The two FIR walks decrement a full 32-bit register and branch on `jns`
+(0x0a7fc1, 0x0a7fc2); the sample stash, the tilt shift and the tilt MAC all
+re-narrow with `movswl` on every iteration (0x0a7f1a, 0x0a82f7, 0x0a8337).
+That is the difference between an `int` counter and a `short` one, and it is
+FORCED -- a `short` counter's exit test is on the truncated value and GCC 3.4.2
+has to produce it.
+
+What makes it evidence rather than a guess is that the object contains its own
+control.  `FPM_lmsupd` (0x0abbc0) walks the SAME circular history in the same
+two halves, its reconstruction is written with `short k`, and the object
+narrows it: `movswl %ax,%ebx; test %bx,%bx; jns` at 0x0abbf1.  So the compiler
+does not widen a `short` counter of its own accord, and the FIR's bare `dec`
+means the author declared that one `int`.
+
+Reconstructed accordingly, and the mixture is deliberate rather than tidied.
+
+### 3585. ONE OF THE TWO `>=` REDUCTIONS IS SEPARABLE AND THE OTHER IS NOT, AND THE DIFFERENCE IS THE SLICER
+
+*Renumbered from 3545.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+Both of `FPM_FSE_receive`'s angle reductions fold at `>= 0x4000` where V.22's
+fold at `> 0x4000`, and the two readings differ on exactly ONE input each.
+Reaching that input needed a sweep: with one tap, a zero clock increment and
+the PLL and LMS off, `tilt_out` is the only thing that moves the derotation
+angle, so walking it through all 65536 values walks `half` through every value
+a `short` can hold.  The suite does that and compares both sides at every
+position.
+
+The DEROTATION's fold is separable, and only through the slicer.  Everything
+else the derotation angle reaches takes it modulo the half turn -- `FPM_phasor`
+by construction, and the phase error because its own wrap subtracts 0x8000 --
+so the boundary is visible solely because the raw angle is handed to
+`cfg.decision`, whose return value the caller sees.  The suite's slicer
+returns it for that reason.  Two observable counts fall out and both are sharp:
+THREE sweep positions return symbol zero (`half` at 0, at -0x4000 which the
+negative fix lifts, and at 0x4000 which the fold takes down), and EXACTLY
+16384 return a negative angle -- the quarter where `half` is below -0x4000, is
+lifted once, and is left negative, because the two adjustments are a pair of
+tests and not a loop.  A `>` reading scores two zeros; a missing negative fix
+scores 32768 negatives; a loop scores none.
+
+The RE-ROTATION's fold is NOT separable, and the suite says so with a
+reachability count rather than by silence: it lands on the boundary and
+nothing it compares moves, because that angle reaches only `FPM_phasor`.  The
+mutation is recorded as an expected survivor.  Its sibling -- dropping the
+negative lift on the same reduction -- IS caught, because that one moves a
+quarter of the range rather than one point.
+
+The general lesson is the one findings 3509 and 3403 keep paying for: a
+boundary that no trial lands on and a boundary that no observable carries
+produce the same green run, and only a counter that fails when the input is
+never reached tells them apart.
+
+### 3586. THE SMOOTHED SQUARED ERROR SATURATES ON AN UNSIGNED TEST, WHICH MAKES IT NON-NEGATIVE FOR EVER
+
+*Renumbered from 3546.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+At 0x0a83f8 the object compares the new smoothed error against 0x7fff and
+branches with `jbe` -- unsigned.  Above it, the sum of two squares is truncated
+to sixteen bits by a `cwtl` before it is weighted, so the value under test
+really can be negative, and a negative one is `> 0x7fff` unsigned and is
+clamped to 0x7fff.  A negative error saturates HIGH.
+
+Three spellings of the source produce that instruction -- an `unsigned int`
+accumulator, an `(unsigned)` cast in the test, and `m < 0 || m > 0x7fff` -- and
+nothing in the object separates them.  The first is written, and the comment
+beside it says so.
+
+The consequence is what makes this worth recording rather than merely
+reproducing: `state->mse` after the update is in [0, 0x7fff] and can never be
+negative, so the gate below it, `mse > 0 && lms_on`, can only fail on an error
+of EXACTLY ZERO.  Testing `lms_force` therefore meant searching for a reported
+magnitude that leaves the error at zero while still leaving the LMS step
+non-zero, which is a narrow band and not a value anyone would have guessed;
+the suite sweeps a half-magnitude offset through it and counts the positions
+where the forced and unforced runs leave different coefficients.  Recorded as
+D391.
+
+### 3587. WHAT IS STILL UNEXPLAINED IN THE CODEGEN, AND THE EMPTY LOOP AT 0x0a82c7
+
+*Renumbered from 3547.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+Ours is 2166 bytes against the blob's 2131 and 519 instructions against 547,
+and with sixteen mnemonics at identical counts -- `add`, `and`, `call`,
+`cmpw`, `imul`, `incl`, `ja`, `jbe`, `je`, `jge`, `jne`, `jns`, `movzbl`,
+`push`, `sar` and `setl` -- so the arithmetic and the call structure are the
+object's and the residue is placement.  Three parts of the residue are named rather than chased:
+
+  - the blob duplicates its epilogue (8 `pop` and 2 `ret` against our 4 and 1)
+    and materialises `pll_sel`'s constants as immediates where we use a
+    register (9 `movw` against 4).  Free, per CLAUDE.md's rule;
+  - the object branches where we if-convert the training branch's 0/1 store
+    into `xor`/`setle`.  Finding 2411's column, and left alone;
+  - **AN EMPTY LOOP at 0x0a82c7**: `xor %eax,%eax; inc %eax; cwtl;
+    cmp $0x3,%ax; jle` -- four iterations of nothing, immediately before the
+    tilt delay line's shift, leaving `%eax` at 4 for a value that is then
+    overwritten by `mov $0x3,%edx`.  It is 15 bytes and it is behaviourally
+    invisible: no differential test can see it and no mutation can land in it.
+    Nothing written here reproduces it and no reading has been found that
+    would.  Recorded so that the next reader does not spend a session
+    rediscovering that it is unexplained rather than absent.
+
+### 3588. `FPM_phasor` READS ITS QUADRANT SIGN TABLE OUT OF BOUNDS FOR A NEGATIVE PHASE, AND `FPM_FSE_receive` IS THE FIRST CALLER THAT HANDS IT ONE
+
+*Renumbered from 3548.  `master` took 3540-3542 in the `V90CP` merge and
+`wip/v92-params-tx` reached 3544 while this branch was open, so the block moved
+to 3580-3589.  The commits on `fpm-fse-receive` still cite the old numbers and
+cannot be rewritten.*
+
+The blob's `FPM_phasor` (0x0a9300) splits its phase with `sar $0x5` then
+`sar $0x8` and indexes the two sign tables with the result UNMASKED:
+
+    a9367: movswl 0x0(%esi,%esi,1),%edx   <== R_386_32 FPM_cos_sign
+    a9392: movswl 0x0(%esi,%esi,1),%eax   <== R_386_32 FPM_sin_sign
+
+`%esi` is the quadrant and there is no `and $0x3` anywhere in the function.
+`struct fpm_phasor::phase` is 16 bits and the function reads it as a SIGNED
+short, so any phase from 0x8000 up arrives negative, the quadrant comes out
+-1..-4, and both lookups read four entries BEFORE the table.  Our
+`src/dsp/fpm_phasor.c` reproduces that faithfully -- `sign[quad]`, no mask --
+which is right, and it is also why the two disagree: what precedes each table
+is a property of the LINK, not of the code.
+
+  - the blob has `FPM_sin_sign` at .data 0x81dc and `FPM_cos_sign` at 0x81e4,
+    adjacent and in that order, both GLOBAL and both in `.data`.  So the
+    blob's `FPM_cos_sign[-4..-1]` is exactly `FPM_sin_sign[0..3]`, and its
+    `FPM_sin_sign[-4..-1]` is `{28620, -25834, 12917, 0}`, the tail of
+    whatever `.data` object precedes it;
+  - ours are `static const` in `.rodata` with the 514-byte tables laid out
+    between them -- `fpm_cos_sign` at +0, `fpm_cos_table` at +0x20,
+    `fpm_sin_sign` at +0x222 -- so neither out-of-range read lands on the same
+    bytes, and `fpm_cos_sign[-4]` is not even in the object.
+
+**Nothing reconstructed had ever driven it out of domain.** `FPM_FSE_receive`
+does, because its derotation reduction is a PAIR OF TESTS and not a loop: a
+half-angle below -0x4000 is lifted once and left negative, so the doubled
+angle handed to the phasor is negative for a quarter of the input range.
+`t_fpm_fse_recv` reached it with a tilt coefficient of 512, which turns a
+phase error of 700 into a bias of 30720 and puts the angle out of range within
+two symbols.  The symptom is diagnostic in itself and worth recognising again:
+`out_q` and the smoothed error MATCH while `out_i` alone differs, because
+`fpm_sin_sign[-4..-1]` happens to land on a defined object in both builds and
+`fpm_cos_sign[-4..-1]` does not.
+
+This is recorded as D392 rather than fixed here.  Making the two tables global,
+`.data` and adjacent in the blob's order is a change to another function's
+reconstruction and needs its own differential test; and it would still leave
+`FPM_sin_sign[-4..-1]` depending on a neighbouring translation unit.
+`t_fpm_fse_recv` stays inside the domain instead and says so at every trial
+that could leave it, which is the difference between a suite that avoids a
+case and one that does not know it exists.
+
+ONE HOLE IS LEFT IN THAT, AND IT IS HERE RATHER THAN IN THE SUITE.  The
+derotation sweep compares the returned angle at all 65536 positions -- integer
+arithmetic, no phasor -- but its object comparison at the end reads the whole
+480-entry scatter log, whose entries were written at the last ~960 positions of
+the walk.  16384 of the 65536 positions ARE out of domain, and the suite counts
+them; that none of the tail ~960 is out of domain follows from the drive
+sample and coefficients fixing where the walk starts, not from anything the
+test arranges.  So a later edit to `t_fpm_fse_recv`'s drive data can move a
+tail position into the out-of-domain quarter, and the failure will read as
+"the reconstruction of `FPM_FSE_receive` is wrong" when it is this.  The check
+at the end of the sweep catches only the final position.
+

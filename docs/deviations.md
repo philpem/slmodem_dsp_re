@@ -6922,3 +6922,50 @@ Unmeasured because no caller of `FPM_SRE_init` is reconstructed: the built-in
 `FPM_SRE_CFG` is a template with null table pointers and whoever patches and
 passes it is not written yet. Whether any real configuration ever raises
 `rms_len` on a re-init is exactly what that caller would settle.
+## D391 ✅ `FPM_FSE_receive` saturates a NEGATIVE smoothed error to 0x7fff
+
+*Batch of 2026-08-16, from `FPM_FSE_receive` (blob 0x0a7e00) at 0x0a83f8
+(`cmp $0x7fff,%eax` with `jbe`).  **Reachability: any symbol whose decision
+error is large enough that the sum of its two squares, shifted down eleven and
+cast to `short`, comes out negative -- which the differential suite reaches on
+64 of 64 swept magnitudes above about 12000.**  **Observability: `state->mse`,
+which is a compared field, and through it the LMS gate.**  Status: verified
+bit-exact; the reconstruction reproduces the unsigned test.  Fix class: none
+proposed.*
+
+The smoothed error is formed as a signed `int` and tested against 0x7fff as an
+UNSIGNED one, so the clamp catches both ends of the range and sends both to the
+maximum.  A modem whose equaliser has just diverged therefore records the
+largest possible error rather than a negative one, which is arguably what was
+wanted; but the same test also means `state->mse` is non-negative for ever, and
+the `mse > 0` gate below it can only fail on an exact zero.  Reproduced rather
+than corrected, and the consequence for the LMS gate is finding 3586.
+
+## D392 ⚠ `FPM_phasor` cannot match the blob for a phase of 0x8000 or more
+
+*Batch of 2026-08-16, from `FPM_phasor` (blob 0x0a9300) at 0x0a9367 and
+0x0a9392 (`movswl 0x0(%esi,%esi,1)` against `FPM_cos_sign` and `FPM_sin_sign`,
+with no mask on the quadrant).  **Reachability: any caller that sets
+`phase` to 0x8000 or above -- `FPM_FSE_receive`'s derotation does, for a
+quarter of its angle range, because its reduction is a pair of tests and not a
+loop.**  **Observability: `cos`, and through it every output the caller
+derives from it; `sin` happens to agree because the four entries before
+`FPM_sin_sign` are `FPM_cos_sign` in the blob and a defined object here too.**
+Status: UNMEASURABLE, not verified -- the two implementations read different
+memory and no input makes them agree.  Fix class: would need
+`FPM_cos_sign`/`FPM_sin_sign` made global, `.data` and adjacent in the blob's
+order, which is a change to `src/dsp/fpm_phasor.c` with its own differential
+test to write, and even then the four entries before `FPM_sin_sign` belong to
+a neighbouring translation unit.*
+
+The object indexes its two quadrant sign tables with an unmasked quadrant, so a
+negative phase reads four entries before each table.  Our reconstruction
+reproduces the unmasked index -- that part is right -- but the tables are
+`static const` in `.rodata` with the 514-byte wave tables laid out between
+them, where the blob's are adjacent globals in `.data`.  The out-of-range read
+is therefore deterministic on both sides and different.
+
+`t_fpm_fse_recv` stays inside 0 .. 0x7fff wherever an observable depends on the
+phasor, and asserts that it has -- see the domain checks in its tilt trial and
+at the end of its derotation sweep.  Finding 3588 for the whole derivation and
+for why the symptom is a mismatched `out_i` beside a matching `out_q`.

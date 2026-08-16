@@ -547,5 +547,9 @@
  "v90specialcond": [
   "src/pump/v90/V90SpectralVerifier.cpp",
   "build/test/t_v90specialcond"
+ ],
+ "fpmfserecv": [
+  "src/dsp/fpm_fse.c",
+  "build/test/t_fpm_fse_recv"
  ]
 }
