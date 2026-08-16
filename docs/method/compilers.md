@@ -7,6 +7,16 @@ closing it: `make period` builds `src/`, `test/harness/` and `test/unit/` with
 the period compiler, links them against the blob with binutils 2.15, and runs
 the suite.
 
+**And until finding 2200 the period compiler was not 3.4.2 either.** It was
+Debian sarge's `gcc 3.4.4 20050314 (prerelease)`, near enough to be used and
+wrong enough to matter: 18 of 183 translation units come out different, and
+the exact 3.4.2 — now bootstrapped from the GNU tarball by
+`tools/toolchain/Dockerfile.exact` — matches the blob on six more functions
+and no fewer. This tier did not see it: 183 passed / 0 failed on both, so
+every variance recorded below stands as written. The codegen tier did.
+Finding 2201 for the part that remains out of reach, which is Gentoo's patch
+stack rather than the version.
+
 ## Why it was backwards, in one example
 
 Where two compilers disagree, the disagreement has to be absorbed somewhere.

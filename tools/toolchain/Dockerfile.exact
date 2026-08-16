@@ -1,0 +1,132 @@
+# syntax=docker/dockerfile:1.7
+#
+# GCC 3.4.2 ITSELF, bootstrapped from the GNU tarball -- the version the blob
+# names, rather than the 3.4.4 prerelease the sibling Dockerfile settles for.
+#
+# `.comment` in dsplibs.o says, 279 times over:
+#
+#     GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+#
+# and the sibling `Dockerfile` gives us Debian sarge's
+#
+#     gcc (GCC) 3.4.4 20050314 (prerelease) (Debian 3.4.3-13sarge1)
+#
+# -- a different point release AND a different vendor's patch stack.  Every
+# flag conclusion in compare.py's header was measured against that.  This image
+# removes the point-release variable.
+#
+# WHAT THIS IS NOT.  It is STOCK GNU 3.4.2, not Gentoo's 3.4.2-r2.  The version
+# string above names an ebuild revision and two Gentoo patchsets (ProPolice
+# `ssp-3.4.1-1` and the hardened `pie-8.7.6.5`), and this image carries none of
+# them.  Read finding 2201 before calling anything here "the exact compiler":
+# the value of this image is that it makes the point-release difference
+# MEASURABLE, not that it ends the question.  The `.comment` string this
+# compiler stamps is the stock one, and it is deliberately left alone -- a
+# stock compiler wearing the Gentoo version string would make the image look
+# exact while being stock, and that corrupts the record.
+#
+# BINUTILS STAYS AT SARGE'S 2.15, which finding 606 settles as the right
+# generation, so the assembler and the object writer are the same in both
+# images and the compiler is the only variable.
+#
+#   docker build --platform linux/386 -f tools/toolchain/Dockerfile.exact \
+#                -t dsplibs-tc342 tools/toolchain
+#   TC_IMAGE=dsplibs-tc342 TC_OUT=$PWD/build/tc_342 tools/toolchain/build.sh
+#   PERIOD_IMG=dsplibs-tc342 PERIOD_OUT=build/period342 make period
+#
+# The image is only ever used to COMPILE, never to run anything.
+#
+FROM --platform=linux/386 debian/eol:sarge AS base
+
+# archive.debian.org has no valid-until, and sarge's keys are long expired.
+RUN printf '%s\n' \
+      'Acquire::Check-Valid-Until "false";' \
+      'APT::Get::AllowUnauthenticated "true";' \
+      > /etc/apt/apt.conf.d/99archive \
+ && apt-get update \
+ && apt-get install -y --force-yes \
+      gcc-3.4 g++-3.4 binutils make libc6-dev bzip2 \
+ && rm -rf /var/lib/apt/lists/*
+
+#
+# THE BUILD STAGE.  Sarge's own gcc-3.4.4 compiles gcc-3.4.2; the C compiler
+# that builds cc1 does not change what cc1 emits, so this is a plain `make`
+# and not `make bootstrap` -- three stages would cost 3x the wall clock to
+# re-verify a property this build does not depend on.
+#
+FROM base AS build
+# `--checksum` is buildkit's: the download and the verification happen on the
+# host, which is the only way to get a 2004 tarball into a 2005 userland whose
+# openssl cannot speak to ftp.gnu.org and whose coreutils has no sha256sum.
+ADD --checksum=sha256:254dba1cf126db6c4e69dbb8305b0db80aba151f5fdd05b61be88aff3088f2d2 \
+    https://ftp.gnu.org/gnu/gcc/gcc-3.4.2/gcc-core-3.4.2.tar.bz2 /build/
+ADD --checksum=sha256:ccd30a0a9cf8530940663e799d51a243c60059a57142727920503eaaab9c3090 \
+    https://ftp.gnu.org/gnu/gcc/gcc-3.4.2/gcc-g++-3.4.2.tar.bz2 /build/
+
+# --enable-__cxa_atexit is NOT derived from the object: the blob has no static
+# constructors at all (no .ctors, no reference to atexit or __cxa_atexit), so
+# it cannot show which way that was configured.  It is set because BOTH the
+# distributions in play here set it -- Debian's 3.4.4 above and Gentoo's
+# linux profiles -- so it keeps the two images comparable.
+#
+# THE TRIPLET IS FORCED AND MUST BE.  `--platform=linux/386` gives a 32-bit
+# USERLAND on the host's own kernel, so `uname -m` inside the container still
+# says x86_64 and config.guess duly guesses `x86_64-unknown-linux-gnu` -- which
+# configures a compiler for the wrong target and fails at the first conftest,
+# since there is no 64-bit toolchain here to build it with.  Spelling
+# build/host/target keeps it a native i686 build.
+#
+# i686-pc-linux-gnu is also Gentoo's x86 CHOST of the period, and closer to
+# the original than Debian's i486-linux.  It only sets a DEFAULT -march/-mtune,
+# and every build here passes both explicitly, so it does not reach codegen.
+#
+# CC is Debian's gcc-3.4: the base image installs no unversioned `cc`.
+RUN set -e; cd /build \
+ && tar xjf gcc-core-3.4.2.tar.bz2 \
+ && tar xjf gcc-g++-3.4.2.tar.bz2 \
+ && mkdir obj && cd obj \
+ && CC=gcc-3.4 CXX=g++-3.4 ../gcc-3.4.2/configure \
+      --build=i686-pc-linux-gnu \
+      --host=i686-pc-linux-gnu \
+      --target=i686-pc-linux-gnu \
+      --prefix=/opt/gcc342 \
+      --enable-languages=c,c++ \
+      --enable-__cxa_atexit \
+      --enable-threads=posix \
+      --enable-clocale=gnu \
+      --enable-shared \
+      --disable-multilib \
+      --disable-nls \
+      --disable-werror \
+ && make -j6 \
+ && make install DESTDIR=/opt/tc342 \
+ && cd / && rm -rf /build
+
+#
+# THE IMAGE.  Sarge's 3.4.4 is left installed on purpose: one container can
+# then run both compilers over the same source with nothing else differing --
+# `gcc` is 3.4.2 and `gcc-3.4` is 3.4.4.
+#
+FROM base
+COPY --from=build /opt/tc342/opt/gcc342 /opt/gcc342
+
+# THE PREFIX IS /opt AND NOT /usr/local for one boring reason: sarge's
+# /usr/local/man is a SYMLINK to /usr/share/man, and COPY refuses to write a
+# directory over it -- "cannot copy to non-directory".
+#
+# PATH, not symlinks in /usr/bin, is what makes `gcc` mean 3.4.2 here: the
+# driver locates cc1 by walking up from its own path, and a /usr/bin symlink
+# has it deduce the wrong prefix.  build.sh and period_inner.sh both invoke a
+# bare `gcc`/`g++` and inherit this, so neither needs changing.
+ENV PATH=/opt/gcc342/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN echo /opt/gcc342/lib >> /etc/ld.so.conf && ldconfig \
+ && gcc --version | head -1 \
+ && g++ --version | head -1 \
+ && printf 'int f(int x){return x*3;}\n' > /tmp/t.c \
+ && gcc -c -O2 -march=i386 -o /tmp/t.o /tmp/t.c \
+ && printf '#include <cstddef>\nstruct S{int a;};int g(S*s){return s->a;}\n' > /tmp/t.cpp \
+ && g++ -c -O2 -fno-exceptions -fno-rtti -o /tmp/tpp.o /tmp/t.cpp \
+ && file /tmp/t.o 2>/dev/null; strings -a /tmp/t.o | grep GCC:
+
+CMD ["/bin/sh"]

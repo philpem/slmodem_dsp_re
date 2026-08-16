@@ -8,12 +8,22 @@ the SOURCE that no amount of black-box testing can give -- it says the
 expression shape, the operand order and the control flow were recovered, not
 merely something equivalent to them.
 
-Build the objects first, with the period toolchain (see the Dockerfile here and
-finding 606):
+Build the objects first, with the period toolchain (see Dockerfile.exact here
+and findings 606 and 2200):
 
-    docker build --platform linux/386 -t dsplibs-tc tools/toolchain
+    docker build --platform linux/386 -f tools/toolchain/Dockerfile.exact \
+                 -t dsplibs-tc342 tools/toolchain
     tools/toolchain/build.sh            # writes build/tc_out/*.o
     tools/toolchain/compare.py
+
+THE COMPILER IS GCC 3.4.2 ITSELF, bootstrapped from the GNU tarball.  Until
+finding 2200 it was Debian sarge's `3.4.4 20050314 (prerelease)`, two point
+releases and one vendor's patch stack away from the `3.4.2` the blob names,
+and every number below had been measured with it.  The point release reaches
+codegen: 18 of 183 translation units differ between the two, and the exact
+compiler matches 330 of 924 symbols where 3.4.4 matches 324 -- SIX GAINED,
+NONE LOST.  Every run now prints both `.comment` strings so the reference and
+the measurement can be read together.
 
 THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
 
@@ -68,6 +78,27 @@ all three.  Finding 616 measured the opposite when this tree matched 92 of
 365, where `-finline-functions` had almost nothing to inline across.
 `-frename-registers` stays spelled out although `-O3` implies it, because
 616's evidence for it is independent.  Finding 2155.
+
+RE-MEASURED ON GCC 3.4.2 ITSELF, because 2155 and 1990 were both taken on the
+wrong point release, and 2155 says of itself that it is a match-rate argument
+a better hypothesis could overturn.  A better compiler is a better hypothesis.
+It does not overturn either of them; it widens both:
+
+    compiler   flags                     identical  same_size  of blob's bytes
+    3.4.4      -O2  -mno-ieee-fp             313         67        72.2%
+    3.4.4      -O3  -mieee-fp                322         70        80.1%
+    3.4.4      -O3  -mno-ieee-fp             324         69        80.0%
+    3.4.2      -O2  -mno-ieee-fp             315         65        72.2%
+    3.4.2      -O3  -mieee-fp                328         68        80.2%
+    3.4.2      -O3  -mno-ieee-fp (the set)   330         67        80.1%
+
+`-O3` over `-O2` on the exact compiler gains 19 and loses 4, where the 3.4.4
+reading was gains 15 loses 4 -- and the four lost are the SAME four 2155 named.
+`-mno-ieee-fp` gains 2 and loses none, exactly as it did on 3.4.4; its
+mechanism argument, the half that does not depend on match rate, reproduces
+unchanged: 3.4.2 under the default `-mieee-fp` emits `fucompp` for `a>=b`,
+`a>b`, `!(a<b)`, `a==b` and the `double` form alike, and `fcomps`/`fcompl` for
+every one of them with the flag.  Finding 2200.
 
 WHAT THE NUMBERS MEAN, and do not mean.  A size mismatch is not a defect: our
 source is not the original's source, and a function we wrote as one loop that
@@ -142,6 +173,25 @@ def sizes(path):
     return d
 
 
+def comment(path):
+    """Who built this object, out of its `.comment` section.
+
+    THIS MEASUREMENT IS ONLY AS GOOD AS THE COMPILER THAT TOOK IT, and for a
+    long time nothing printed which one that was: the container ran GCC 3.4.4
+    (Debian sarge) while every flag conclusion in this file was written up as
+    3.4.2, the version the blob names.  It cost +6 identical, and nobody could
+    have seen it from the output.  Both strings now print on every run, so the
+    reference and the measurement are side by side.  Finding 2200.
+    """
+    out = subprocess.run(["readelf", "-p", ".comment", path],
+                         capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        m = re.match(r"^\s*\[\s*[0-9a-f]+\]\s+(.*\S)", line)
+        if m:
+            return m.group(1)
+    return "(no .comment)"
+
+
 def mnemonics(path, sym):
     """The instruction mnemonic sequence, with addresses and operands dropped.
 
@@ -168,11 +218,16 @@ def main():
 
     blob = sizes(BLOB)
     ours = {}
-    for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
+    objs = sorted(glob.glob(os.path.join(OURS, "*.o")))
+    for o in objs:
         for k, v in sizes(o).items():
             ours.setdefault(k, (v, o))
     if not ours:
         sys.exit("no objects in %s -- run tools/toolchain/build.sh first" % OURS)
+
+    print("  blob built by: %s" % comment(BLOB))
+    print("  ours built by: %s" % comment(objs[0]))
+    print("  objects      : %s\n" % OURS)
 
     common = sorted(k for k in ours if k in blob)
     identical, samesize, rows = [], [], []

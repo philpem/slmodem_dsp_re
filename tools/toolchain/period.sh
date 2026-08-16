@@ -55,7 +55,20 @@
 set -e
 cd "$(dirname "$0")/../.."
 
-IMG=${PERIOD_IMG:-dsplibs-tc}
+# THE IMAGE IS GCC 3.4.2 ITSELF SINCE FINDING 2200 -- this used to default to
+# `dsplibs-tc`, which is Debian sarge's 3.4.4 prerelease and not the compiler
+# every comment in this directory claims.  `PERIOD_IMG=dsplibs-tc` still
+# selects the old one, which is how the two were compared; both are green here
+# at 183 passed / 0 failed, so this tier does not decide between them.
+IMG=${PERIOD_IMG:-dsplibs-tc342}
+
+if ! docker image inspect "$IMG" >/dev/null 2>&1; then
+    echo "tools/toolchain: no docker image '$IMG'.  Build it with" >&2
+    echo "  docker build --platform linux/386 \\" >&2
+    echo "    -f tools/toolchain/Dockerfile.exact -t dsplibs-tc342 tools/toolchain" >&2
+    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding 2200.)" >&2
+    exit 1
+fi
 REF=${REF:-build/dsplibs_ref.o}
 #
 # HALF THE CORES, because this NESTS.  `make phase` already runs at -j$(nproc)

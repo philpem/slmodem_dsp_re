@@ -1,3 +1,13 @@
+# NOT THE DEFAULT ANY MORE.  `Dockerfile.exact` bootstraps GCC 3.4.2 itself
+# from the GNU tarball and is what `build.sh` and `period.sh` reach for; this
+# one builds `dsplibs-tc`, sarge's 3.4.4 prerelease, and is kept because it is
+# the OTHER ARM of the measurement -- `TC_IMAGE=dsplibs-tc` and
+# `PERIOD_IMG=dsplibs-tc` still select it.  The point release is worth 6
+# identical functions and 18 of 183 translation units; finding 2200.
+#
+# What follows was written when this was the only image, and the paragraph
+# about sarge bootstrapping an exact 3.4.2 has now been acted on.
+#
 # The original's toolchain, as closely as it can be had.
 #
 # `.comment` in dsplibs.o says, 279 times over:

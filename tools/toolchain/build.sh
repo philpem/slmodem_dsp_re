@@ -37,6 +37,32 @@ OUT=${TC_OUT:-$PWD/build/tc_out}
 # string below, where a newline ends the command rather than separating words.
 FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
 
+# TWO KNOBS, BOTH FOR A/B MEASUREMENT AND NEITHER A WAY TO CHANGE THE BUILD.
+#
+#   TC_IMAGE=dsplibs-tc      the OLD image, Debian sarge's GCC 3.4.4; the
+#                            default is now `dsplibs-tc342`, GCC 3.4.2 itself
+#                            (Dockerfile.exact).  Finding 2200
+#   TC_EXTRA="-O2"           APPENDED after $FLAGS, so a repeat of an option
+#                            overrides the one above -- `-O2` beats the `-O3`,
+#                            `-mieee-fp` beats the `-mno-ieee-fp`.  That is how
+#                            finding 2200's arms were taken without editing
+#                            this line, which is what a flag conclusion has to
+#                            be measured against.
+#
+# Set TC_OUT as well when you set either, or you will compare one arm against
+# another arm's leftovers.  Findings 2155 and 1990 are the flag record; this
+# is not a supported way to build the tree differently from what they say.
+IMAGE=${TC_IMAGE:-dsplibs-tc342}
+FLAGS="$FLAGS $TC_EXTRA"
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "tools/toolchain: no docker image '$IMAGE'.  Build it with" >&2
+    echo "  docker build --platform linux/386 \\" >&2
+    echo "    -f tools/toolchain/Dockerfile.exact -t dsplibs-tc342 tools/toolchain" >&2
+    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding 2200.)" >&2
+    exit 1
+fi
+
 # MAKEFLAGS is cleared and the directory banner suppressed: run from inside a
 # make recipe, both leak `make[1]: Entering directory ...` and a jobserver
 # warning into the variable, and the container then tries to compile them.
@@ -59,7 +85,7 @@ cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
 
 docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" --platform linux/386 \
-  -v "$PWD:/src" -v "$OUT:/out" -w /src dsplibs-tc sh -c "
+  -v "$PWD:/src" -v "$OUT:/out" -w /src "$IMAGE" sh -c "
     fail=0
     for f in $SRC; do
       gcc -c $FLAGS -o /out/\$(echo \$f | tr / _).o \$f 2>/dev/null || { echo \"  FAIL \$f\"; fail=\$((fail+1)); }
@@ -67,4 +93,4 @@ docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" --platform linux/386 \
     for f in $CXXSRC; do
       g++ -c $FLAGS -fno-exceptions -fno-rtti -o /out/\$(echo \$f | tr / _).o \$f 2>/dev/null || { echo \"  FAIL \$f\"; fail=\$((fail+1)); }
     done
-    echo \"period toolchain: \$(ls /out | wc -l) objects, \$fail failed\""
+    echo \"period toolchain: \$(ls /out | wc -l) objects, \$fail failed, gcc \$(gcc -dumpversion)\""

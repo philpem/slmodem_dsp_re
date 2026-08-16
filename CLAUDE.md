@@ -107,6 +107,20 @@ runs the suite. Our source and the object, compiled by the same compiler,
 compared at runtime -- so a difference is a difference in the code and not in
 the toolchain.
 
+**IT IS GCC 3.4.2 ITSELF SINCE FINDING 2200**, bootstrapped from the GNU
+tarball by `tools/toolchain/Dockerfile.exact`, and until then it was Debian
+sarge's `3.4.4` prerelease while every comment in the tree said 3.4.2. Build
+the image once:
+
+```
+docker build --platform linux/386 -f tools/toolchain/Dockerfile.exact \
+             -t dsplibs-tc342 tools/toolchain      # about a minute
+```
+
+The old 3.4.4 image is still built by `tools/toolchain/Dockerfile` and still
+selectable -- `PERIOD_IMG=dsplibs-tc`, `TC_IMAGE=dsplibs-tc` -- because it is
+the other arm of every A/B in 2200. Both are green at 183 passed / 0 failed.
+
 **`make phase` RUNS IT**, so `make phase` needs docker and the
 `tools/toolchain` image. It is incremental and sound -- an object is reused
 only if it is newer than its source and than every header -- so an unchanged
@@ -142,12 +156,19 @@ result against the blob, function by function.
 
 This answers a question the differential tier cannot: not "does it behave the
 same" but "did the same compiler, given our source, emit what the original's
-compiler emitted". Currently **304 of 900 compared symbols match on their
+compiler emitted". Currently **330 of 924 compared symbols match on their
 instruction sequence** — mnemonics, not bytes; see the precision note below
 before quoting that number. That figure was 92 of 365 when this paragraph was
-written and had not been re-measured since; it is measured here at `93270f9`
-with `-mno-ieee-fp` set, and `tools/toolchain/ratchet.json` is the stored
-baseline `compare.py --ratchet` moves against.
+written; it is measured at `c181797` on the exact compiler, and
+`tools/toolchain/ratchet.json` is the stored baseline `compare.py --ratchet`
+moves against.
+
+**Six of those 330 are the compiler and not the code.** On sarge's 3.4.4 the
+same tree matches 324, and the exact 3.4.2 gains six and loses none. So a
+number quoted from this tool is only meaningful with the compiler beside it,
+which is why `compare.py` now prints the blob's `.comment` and ours on every
+run. Finding 2200, and 2201 for what the blob's Gentoo patch stack means:
+stock 3.4.2 is the exact POINT RELEASE, never the exact compiler.
 
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/build.sh` with the evidence beside each:

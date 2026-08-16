@@ -55887,3 +55887,214 @@ has an entry:
 baseline, which is the failure mode the gate exists to prevent, and no message
 makes that safe.  What changes is that the next person loses a minute rather
 than a cycle.
+
+---
+
+### 2200. THE COMPILER WAS NEVER 3.4.2. IT IS NOW, AND THE POINT RELEASE IS WORTH SIX FUNCTIONS AND EIGHTEEN TRANSLATION UNITS
+
+*Every flag conclusion in `tools/toolchain/compare.py` -- 612's `-mtune=i686`,
+616's `-frename-registers`, 1990's `-mno-ieee-fp`, 2155's `-O3` -- was measured
+against a compiler the tree described as GCC 3.4.2 and which was not.*
+
+`.comment` in the blob says, 279 times over:
+
+```
+GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+```
+
+`dsplibs-tc` contains:
+
+```
+gcc (GCC) 3.4.4 20050314 (prerelease) (Debian 3.4.3-13sarge1)
+```
+
+Two point releases and a different vendor's patch stack. The Dockerfile was
+open about it and said sarge "can bootstrap an exact GCC 3.4.2 from the GNU
+tarball"; that was never done, and nothing in any tool's output showed which
+compiler a measurement had been taken with.
+
+**IT IS DONE.** `tools/toolchain/Dockerfile.exact` builds `gcc-core-3.4.2` +
+`gcc-g++-3.4.2` from ftp.gnu.org inside the same sarge i386 userland, with the
+same binutils 2.15 (finding 606 settles that generation), and installs it as
+the image `dsplibs-tc342`. It took **48 seconds**. Three things had to be got
+right and each failed loudly first:
+
+- `--platform=linux/386` gives a 32-bit userland on the host's own kernel, so
+  `uname -m` still says `x86_64` and config.guess configures a compiler for a
+  target that cannot be built here. `--build/--host/--target=i686-pc-linux-gnu`
+  -- which is also Gentoo's x86 CHOST of the period.
+- sarge installs no unversioned `cc`; `CC=gcc-3.4`.
+- sarge's `/usr/local/man` is a symlink, and `COPY` will not write a directory
+  over it. The prefix is `/opt/gcc342`, and `PATH` rather than `/usr/bin`
+  symlinks is what makes `gcc` mean 3.4.2 -- the driver finds `cc1` by walking
+  up from its own path and a `/usr/bin` symlink has it deduce the wrong prefix.
+
+It is a plain `make`, not `make bootstrap`: which C compiler builds `cc1` does
+not change what `cc1` emits, and three stages would cost 3x the wall clock to
+re-verify a property nothing here depends on.
+
+**THE TWO COMPILERS ARE NOT THE SAME COMPILER.** Same source, same flags,
+`.comment` stripped, byte-compared: **165 of 183 objects identical, 18
+differing.** They are `DspMath.cpp`, `fpm_agc.c`, `fpm_mrf.c`,
+`GenericToneDetector.cpp`, `b103fp.c`, `v34hshak.c`, `v34hstx1.cpp`,
+`v34rx.c`, `v34shell.c`, `ResamplerTimingOffset.cpp`,
+`V90AutoDigitalImpDetector.cpp`, `V90Resampler.cpp`,
+`V92ConvolutionEncoder.cpp`, `V92Modem.cpp`, `V92Precoder.cpp`, `v8jm.c`,
+`v8seq.c` and `v8sig.c`.
+
+**AND 3.4.2 IS THE ONE THAT MATCHES THE BLOB.** Whole tree, flags fixed at the
+set the record already argues for:
+
+| compiler | identical | same_size | of the blob's bytes |
+|---|--:|--:|--:|
+| 3.4.4 (Debian sarge, what we had) | 324 | 69 | 80.0% |
+| **3.4.2 (GNU tarball)** | **330** | 67 | 80.1% |
+
+**Six gained, none lost** -- the additivity test 2155 set for itself, passed in
+its strongest form. The six:
+
+    GenericToneDetector::~GenericToneDetector   (D1 and D2)
+    ResamplerTimingOffset::ResamplerTimingOffset(unsigned, float, unsigned,
+                                                 float*, float, unsigned)
+    ResamplerTimingOffset::ResamplerTimingOffset(unsigned, float, unsigned,
+                                                 float, float, unsigned)
+                                                 (C1 and C2 of each)
+
+**IT IS THE CODE GENERATOR AND NOT THE HEADERS, WHICH HAD TO BE ASKED BECAUSE
+ALL SIX GAINED SYMBOLS ARE C++.** A new compiler brings a new libstdc++ with
+it, so "3.4.2 matches better" could have meant "3.4.2's headers inline
+differently" -- the same misattribution this finding is about, one level down.
+Both hypotheses were tested, on both gaining translation units, inside ONE
+image that has both compilers and both header sets:
+
+    3.4.4 with its own headers  vs  3.4.4 with 3.4.2's headers   IDENTICAL
+    3.4.2 with its own headers  vs  3.4.2 with 3.4.4's headers   IDENTICAL
+    3.4.2                       vs  3.4.4, headers held fixed    DIFFER
+
+Swapping the header set changes not one byte in either direction; swapping the
+compiler changes the object. And the header set could not have mattered anyway:
+`g++ -M` on both files reaches no libstdc++ header at all, only the compiler's
+own `stddef.h` and `stdarg.h`. The same run also confirms the two images are
+otherwise interchangeable -- 3.4.4 inside the new image reproduces the old
+image's object byte for byte -- so nothing in the measurement is the container.
+
+**FINDING 2155 SURVIVES AND WIDENS.** `-O2` against `-O3`, both compilers, one
+variable:
+
+| compiler | `-O2` | `-O3` | gained | lost |
+|---|--:|--:|--:|--:|
+| 3.4.4 | 313 | 324 | 15 | 4 |
+| 3.4.2 | 315 | 330 | 19 | 4 |
+
+The four lost are the same four 2155 named -- `RxHdxStartB103`,
+`TxHdxDataB103`, `V90Demodulator::setSessionFlag`, `V92Jd::getJdBitVector` --
+so the exact compiler reproduces that result symbol for symbol and improves the
+margin. 2155's own caveat, that it is match-rate evidence which "could be
+overturned by a better hypothesis", is discharged against the best hypothesis
+available.
+
+**FINDING 1990 SURVIVES, AND ITS STRONG HALF REPRODUCES EXACTLY.** 1990 does
+not rest on its +2; it rests on a mechanism, and that is what a new compiler
+could have broken. Five comparison forms compiled in both images:
+
+    gcc 3.4.4, -mno-ieee-fp   4 fcomps, 1 fcompl
+    gcc 3.4.4, -mieee-fp      5 fucompp
+    gcc 3.4.2, -mno-ieee-fp   4 fcomps, 1 fcompl
+    gcc 3.4.2, -mieee-fp      5 fucompp
+
+`a>=b`, `a>b`, `!(a<b)`, `a==b` and the `double` form all give `fucompp` under
+the default and an ordered compare with the flag, on 3.4.2 exactly as on 3.4.4.
+The blob's census -- 406 ordered against four, all four inside libm's `pow` --
+is about the blob and cannot move. The match-rate half also reproduces: 328 ->
+330 on 3.4.2, against 322 -> 324 on 3.4.4. Same +2, same direction, and the two
+symbols it turns are `sinc<float>` and `ResamplerTiming::invertPhase`.
+
+**THE PERIOD TIER DOES NOT SEE IT.** `make period` on the exact compiler is
+**183 passed, 0 failed**, the same as on 3.4.4, so the differential tier does
+not decide between the two compilers and nothing in `src/` had to change. Both
+images therefore stay usable and the defaults move to the exact one:
+`TC_IMAGE=dsplibs-tc` and `PERIOD_IMG=dsplibs-tc` select the old arm.
+
+**AND `compare.py` NOW PRINTS BOTH `.comment` STRINGS ON EVERY RUN**:
+
+    blob built by: GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+    ours built by: GCC: (GNU) 3.4.2
+
+That is the part worth generalising. The wrong compiler cost six functions and
+sat there through four flag findings, and no output anywhere would have shown
+it -- exactly the failure CLAUDE.md's "any tool here must be shown to fire"
+rule exists for, one level up: not a detector that cannot fire, but a
+measurement that cannot show what it was taken against.
+
+---
+
+### 2201. THE VERSION STRING IDENTIFIES THE EXACT TOOLCHAIN PRECISELY AND IT IS NOT OBTAINABLE -- THIS IS THE LIMIT, AND HERE IS THE RESIDUAL
+
+*Finding 2200 builds stock GNU 3.4.2. The blob was not built by stock GNU
+3.4.2, and calling it "the exact compiler" without this finding beside it would
+be false.*
+
+```
+GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+```
+
+names four things: the distribution, the ebuild revision, Gentoo's ProPolice
+patch version and Gentoo's PIE patch version.
+
+**IT IS A PRECISE IDENTIFICATION, AND THE RECIPE SURVIVES.**
+`sys-devel/gcc/gcc-3.4.2-r2.ebuild` is readable today in Gentoo's converted CVS
+history (`gitweb.gentoo.org/archive/repo/gentoo-2.git`, rev 1.29, 1 March
+2005). It declares exactly the three components the version string names:
+
+    PATCH_VER="1.1"       gcc-3.4.2-patches-1.1.tar.bz2
+    PIE_VER="8.7.6.5"     gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2
+    PP_VER="3_4_1"        protector-3.4.1-1.tar.gz          (PP_FVER=3.4.1-1)
+
+and the ebuild's digest file gives each one's size and MD5:
+
+    1d077ca6b3119eecade935829b399f82  gcc-3.4.2-patches-1.1.tar.bz2         488213
+    c6d950e8f61cbac4590061a116669b56  gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2  16392
+    ccb950ac035c057bbc766426756072d2  protector-3.4.1-1.tar.gz               33860
+
+So anything anyone ever finds can be VERIFIED, which is worth recording even
+though nothing was found.
+
+**THE THREE TARBALLS ARE GONE.** Probed and 404 or absent: distfiles.gentoo.org
+(both the old flat layout and the developer directories), ftp.osuosl.org,
+mirror.leaseweb.com, mirrors.kernel.org, mirror.yandex.ru, ftp.jaist.ac.jp,
+`dev.gentoo.org/~vapier/dist`, `dev.gentoo.org/~solar`, IBM TRL's original
+ProPolice URL, and the Internet Archive -- the Wayback CDX index returns **no
+snapshot for any of the three** at their `distfiles.gentoo.org` URLs, which is
+where every mirror of the period fetched them from. Gentoo prunes distfiles for removed packages
+and gcc-3.4 was removed long ago. The surviving `proj/gcc-patches.git` and
+`proj/hardened-gccpatchset.git` repositories start at GCC 4.x.
+
+**WHAT THE RESIDUAL UNCERTAINTY IS, HONESTLY STATED.**
+
+- **Settled from the object, and it was already settled.** Both Gentoo features
+  are OFF in the blob: no `__guard` and no `__stack_smash_handler`, so ProPolice
+  did not run; not one `get_pc_thunk` in 1.2 MB, so nothing was compiled `-fPIE`
+  (finding 606). Both are opt-in -- a `-fstack-protector` pass and a specs
+  change -- and the ebuild sets `SPLIT_SPECS="true"`, Gentoo's mechanism of the
+  period for shipping the hardened specs as a SEPARATE file for `gcc-config` to
+  select rather than as the default. The object is what a vanilla selection
+  produces and is not what a hardened one produces, so it also tells us how the
+  original's toolchain was configured, not only how it was invoked.
+- **Not answerable, and no amount of looking at the object will make it
+  answerable.** Whether `gcc-3.4.2-patches-1.1.tar.bz2` -- 488 KB, far larger
+  than the 16 KB PIE and 34 KB ssp patches -- carried backports that touch the
+  optimiser. Gentoo patchsets of the era were mostly build fixes and backports,
+  but "mostly" is not a measurement and the tarball is not available to read.
+- **A bound, which is the useful part.** Two point releases and Debian's entire
+  patch stack move 18 of 183 translation units and 6 of 924 symbols. A vendor
+  patchset applied WITHIN one point release is a strictly smaller perturbation
+  than that, so the residual sits under a ceiling of roughly that size -- and
+  it can only be probed, never closed, without the tarballs.
+
+**THE LIMIT.** Stock GNU 3.4.2 with binutils 2.15 is as close as this project
+can get, it is measurably closer than what came before (2200), and the gap that
+remains is one 488 KB patchset whose contents nobody can now read. Call the
+image "the exact point release", never "the exact compiler" -- and the image
+deliberately stamps the stock `.comment` string rather than the Gentoo one, so
+that a stock compiler can never be mistaken for the original by anyone reading
+an object it produced.
