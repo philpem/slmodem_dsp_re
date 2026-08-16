@@ -151,6 +151,50 @@ def _term(signum, frame):
 signal.signal(signal.SIGTERM, _term)
 
 
+
+#
+# WHY THIS EXISTS.  `tools/gccdiverge.json` allow-lists checks that modern GCC
+# provably cannot reproduce, and `make test` honours it -- but MUTATION TESTING
+# CANNOT.  A mutant is judged caught by the binary exiting non-zero, so a
+# binary whose baseline already exits non-zero for an ALLOWED reason cannot
+# distinguish "the mutation was caught" from "this test was already red", and
+# the whole suite is unusable rather than partly usable.
+#
+# That is a real limitation and not a bug to route around: the honest move is
+# to refuse, which the baseline gate above already did.  What it did NOT do is
+# say WHY, so a register entry looked like a broken suite and cost one batch a
+# cycle working out that the two features interact at all.  Neither tool
+# mentioned the other.  This says it.
+#
+def diverge_note(test, out):
+    """If the baseline failed only on allow-listed checks, name the register."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "gccdiverge.json"), encoding="utf-8") as fh:
+            reg = json.load(fh)
+    except OSError:
+        return ""
+    entry = reg.get(os.path.basename(test))
+    if not entry:
+        return ""
+    hits = [c for c in entry.get("checks", ()) if c in out]
+    if not hits:
+        return ""
+    return ("\n\n%s IS IN tools/gccdiverge.json, and that is why this baseline "
+            "is red.\n"
+            "Allow-listed check(s) failing here: %s  (finding %s)\n"
+            "\n"
+            "`make test` tolerates these; mutation testing CANNOT, because a\n"
+            "mutant is judged caught by a non-zero exit and this binary already\n"
+            "exits non-zero.  Caught and already-red are indistinguishable, so\n"
+            "the suite is refused rather than scored wrongly.\n"
+            "\n"
+            "This is a limitation, not a defect to work around.  `make period`\n"
+            "is the tier that has no allow-list and passes these checks; a\n"
+            "mutation set for this binary has to be judged there, or the\n"
+            "divergent check has to be split out of it."
+            % (os.path.basename(test), ", ".join(hits), entry.get("finding", "?")))
+
 def build_and_run(target, test):
     b = subprocess.run(["make", target], capture_output=True, text=True)
     if b.returncode != 0:
@@ -786,7 +830,7 @@ def main():
         rc, out, _ = build_and_run(target, args.test)
         if rc != 0:
             sys.exit("baseline is not green -- fix that first:\n" +
-                     (out or ""))
+                     (out or "") + diverge_note(args.test, out or ""))
 
         for m in muts:
             n = good.count(m["find"])

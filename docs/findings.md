@@ -55848,3 +55848,42 @@ survives the refinement wanting exactly one ucode only when `size` is 4 and
 the product already equals the target, which needs `n + 2a + b` to be EXACTLY
 12; sweeping `n` directly never produces it, because the refinement pulls any
 count of 1 straight back up. The sweep is over the total instead.
+
+### 2157. `mutate.py` AND `gccdiverge.json` INTERACT, AND NEITHER TOOL MENTIONED THE OTHER
+
+*Reported by the `V90Equalizer` batch, which lost a cycle to it: a
+`gccdiverge.json` entry was tried, "one failing check killed the whole
+24-mutation suite", and the entry was taken back out without the interaction
+being understood.*
+
+`tools/gccdiverge.json` allow-lists checks modern GCC provably cannot
+reproduce, and `make test` honours it.  **Mutation testing cannot**, and the
+reason is structural rather than a bug: `mutate.py` judges a mutant caught by
+the test binary exiting non-zero, so a binary whose baseline ALREADY exits
+non-zero -- for an allowed reason -- cannot distinguish "the mutation was
+caught" from "this suite was already red".
+
+**What the tool did right, and what it did not.**  It already refused: the
+baseline gate says "baseline is not green -- fix that first" before any
+mutation runs, so no score was ever inflated.  What it did not do is say WHY,
+and `gccdiverge.json` is invisible to it -- `grep -c gccdiverge tools/mutate.py`
+was **0**.  A register entry therefore looked exactly like a broken suite.
+
+It now names the register.  Shown to fire, on the one binary in the tree that
+has an entry:
+
+    $ python3 tools/mutate.py --suite psd
+    FAIL Psd::process             7550/140404 checks failed
+
+    t_psd IS IN tools/gccdiverge.json, and that is why this baseline is red.
+    Allow-listed check(s) failing here: Psd::process  (finding 1453)
+    ...
+    This is a limitation, not a defect to work around.  `make period` is the
+    tier that has no allow-list and passes these checks; a mutation set for
+    this binary has to be judged there, or the divergent check has to be split
+    out of it.
+
+**The refusal is kept.**  Proceeding would mean scoring mutants against a red
+baseline, which is the failure mode the gate exists to prevent, and no message
+makes that safe.  What changes is that the next person loses a minute rather
+than a cycle.
