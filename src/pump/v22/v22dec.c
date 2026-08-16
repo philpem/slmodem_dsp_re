@@ -147,13 +147,14 @@ FSEv22_decision12(struct v22_fse *state, short *angle, short *mag)
 		break;
 	}
 
-	quad = (short)(sym & 0x0c);
+	quad = (short)(sym & V22_SYM_QUAD);
 	prev = *state->prev_quad;
 	*state->prev_quad = quad;
 
 	return (unsigned short)
-	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev) & 0x0f)
-			 >> 2] >> 2);
+	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev)
+			  & V22_SYM_MODULO) >> V22_SYM_QUAD_SHIFT]
+	     >> V22_SYM_QUAD_SHIFT);
 }
 
 /*
@@ -202,7 +203,7 @@ FSEv22_decision24(struct v22_fse *state, short *angle, short *mag)
 	step = 4;
 	for (i = 0; i < V22_DEC24_LEVELS; i++) {
 		step = (short)(step >> 1);
-		if ((short)((thresh[i] * sign) << 12) <= si)
+		if ((short)((thresh[i] * sign) << V22_DEC_LEVEL_SHIFT) <= si)
 			base = (short)(base + step);
 	}
 
@@ -210,7 +211,7 @@ FSEv22_decision24(struct v22_fse *state, short *angle, short *mag)
 	 * The Q amplitude, by distance rather than by threshold, over the two
 	 * candidates the index bits above have left.
 	 */
-	bestd = (short)(thresh[0] << 12);
+	bestd = (short)(thresh[0] << V22_DEC_LEVEL_SHIFT);
 	limit = (short)(base + V22_DEC24_WINDOW);
 	for (k = base; k < limit; k++) {
 		short qm = DECv22_QMAP24[k];
@@ -232,7 +233,7 @@ FSEv22_decision24(struct v22_fse *state, short *angle, short *mag)
 	 */
 	amp = (ci >> 1) < 0 ? -(ci >> 1) : (ci >> 1);
 	amp += (cq >> 1) < 0 ? -(cq >> 1) : (cq >> 1);
-	*mag = DECv22_MAG24[((short)amp >> 12) - 1];
+	*mag = DECv22_MAG24[((short)amp >> V22_DEC_LEVEL_SHIFT) - 1];
 
 	for (j = 0; j <= 15; j++) {
 		if ((short)(SMCv22_IMAP_2400BPS[j] >> 1) != ci)
@@ -243,7 +244,7 @@ FSEv22_decision24(struct v22_fse *state, short *angle, short *mag)
 		break;
 	}
 
-	quad = (short)(sym & 0x0c);
+	quad = (short)(sym & V22_SYM_QUAD);
 	prev = *state->prev_quad;
 	*state->prev_quad = quad;
 
@@ -252,6 +253,7 @@ FSEv22_decision24(struct v22_fse *state, short *angle, short *mag)
 	 * two bits is not, and is passed straight through.
 	 */
 	return (unsigned short)
-	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev) & 0x0f)
-			 >> 2] | (sym & 3));
+	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev)
+			  & V22_SYM_MODULO) >> V22_SYM_QUAD_SHIFT]
+	     | (sym & V22_SYM_AMP));
 }

@@ -55,6 +55,42 @@ extern const short DECv22_IMAP24[16];
  */
 extern const short DECv22_MAG24[3];
 
+/*
+ * THE CONSTELLATION INDEX IS A TWO-FIELD WORD, in both alphabets, and both
+ * slicers take it apart.  These are MULTI-BIT fields, not flags, so they are
+ * named as a width and a shift.
+ *
+ * Evidence, and it is not the author's own words -- the slicers reference no
+ * format string, `relocscan.py --range .text:0x884a0-0x887a6` finds nothing.
+ * It is the callee plus the table layout:
+ *
+ *   - `SMCv22_PMAP` holds { 4, 0, 8, 12 }, which is a quadrant already shifted
+ *     into bits 3:2, and `FPM_SMC_encoder` consumes that same numbering going
+ *     the other way.  So bits 3:2 of an index are the quadrant, and the shift
+ *     that turns the field into 0..3 is two.
+ *   - `DECv22_IMAP24` and `DECv22_QMAP24` change sign exactly with bits 3 and
+ *     2 of their own index -- see the layout note in v22dec.c -- which is the
+ *     same statement read off the tables.
+ *   - bits 1:0 survive `FSEv22_decision24`'s return untouched, ORed in after
+ *     the differential step, which is what makes them the amplitude pair
+ *     rather than part of the phase.
+ *
+ * The four-bit `V22_SYM_MODULO` is the alphabet size and not a third field:
+ * the difference it reduces is already a multiple of four, so its low two bits
+ * are always clear and masking four bits or two would give the same answer.
+ * Four is what the object encodes and four is what is written.
+ */
+#define V22_SYM_QUAD		0x0c	/* bits 3:2, the quadrant           */
+#define V22_SYM_QUAD_SHIFT	2	/* ...down to 0..3                  */
+#define V22_SYM_AMP		0x03	/* bits 1:0, the amplitude pair     */
+#define V22_SYM_MODULO		0x0f	/* the differential wraps over 16   */
+
+/*
+ * How far a constellation LEVEL is shifted to become a coordinate.  The two
+ * amplitudes are 1 and 3, and the tables hold 4096 and 12288.
+ */
+#define V22_DEC_LEVEL_SHIFT	12
+
 unsigned short FSEv22_decision12(struct v22_fse *state, short *angle,
 				 short *mag);
 unsigned short FSEv22_decision24(struct v22_fse *state, short *angle,
