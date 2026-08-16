@@ -579,9 +579,9 @@
   "label": "NOTE: the four study methods.  Several anchors below have to reach past the line they change: unitePhasesInfoOfUref and uniteLinMappInfoOfUnsuspectedPhases share whole statements, and so do the two clearing runs inside porcessFirstStudy.  Finding 1264 again -- an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
  },
  {
-  "label": "print the sign with the ordered test rather than its negation",
-  "find": "#define ADID_PRINT_SIGN(v)\t((0.0f >= (v)) ? '-' : '+')",
-  "replace": "#define ADID_PRINT_SIGN(v)\t(((v) > 0.0f) ? '+' : '-')"
+  "label": "print the sign with the ternary the other way up, which GCC commutes",
+  "find": "#define ADID_PRINT_SIGN(v)\t(!(0.0f >= (v)) ? '+' : '-')",
+  "replace": "#define ADID_PRINT_SIGN(v)\t((0.0f >= (v)) ? '-' : '+')"
  },
  {
   "label": "drop the magnitude from the printed whole part",
@@ -694,28 +694,33 @@
  },
  {
   "label": "merge on a quarter of the CANDIDATE's variance",
-  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
-  "replace": "\t\t\tif (d * d >= float_9d48[j][at] * 0.25f)"
+  "find": "\t\t\tlim = float_9d48[i][at] * 0.25f;",
+  "replace": "\t\t\tlim = float_9d48[j][at] * 0.25f;"
  },
  {
   "label": "merge on half the leader's variance",
-  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
-  "replace": "\t\t\tif (d * d >= float_9d48[i][at] * 0.5f)"
+  "find": "\t\t\tlim = float_9d48[i][at] * 0.25f;",
+  "replace": "\t\t\tlim = float_9d48[i][at] * 0.5f;"
  },
  {
   "label": "merge when the difference EXCEEDS the tolerance",
-  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
-  "replace": "\t\t\tif (d * d < float_9d48[i][at] * 0.25f)"
+  "find": "\t\t\tif (d * d >= lim)",
+  "replace": "\t\t\tif (d * d < lim)"
  },
  {
   "label": "merge on an exactly equal difference too",
-  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
-  "replace": "\t\t\tif (d * d > float_9d48[i][at] * 0.25f)"
+  "find": "\t\t\tif (d * d >= lim)",
+  "replace": "\t\t\tif (d * d > lim)"
  },
  {
   "label": "merge on the distance rather than on its square",
-  "find": "\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)",
-  "replace": "\t\t\tif (d >= float_9d48[i][at] * 0.25f)"
+  "find": "\t\t\tif (d * d >= lim)",
+  "replace": "\t\t\tif (d >= lim)"
+ },
+ {
+  "label": "form the merge tolerance inside the test rather than before the distance",
+  "find": "\t\t\tlim = float_9d48[i][at] * 0.25f;\n\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);\n\n\t\t\tif (d * d >= lim)",
+  "replace": "\t\t\td = (float)(linMapp[i][at] - linMapp[j][at]);\n\n\t\t\tif (d * d >= float_9d48[i][at] * 0.25f)"
  },
  {
   "label": "take the merge distance backwards",

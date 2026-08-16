@@ -995,8 +995,29 @@ V90AutoDigitalImpDetector::updateUref()
  * prints '+' where `v > 0.0f ? '+' : '-'` would print '-'.  Written as the
  * negation of the ordered test, which is what the branch encodes.  A seeded
  * object reaches this: one 32-bit pattern in 128 is a NaN.
+ *
+ * THE ZERO IS ON THE LEFT AND THE NEGATION IS ON THE OUTSIDE, and both halves
+ * of that are forced.  The object's three sites in `getAltVarThresh` are
+ *
+ *	fldz / fcompp (or fcoms) / fnstsw %ax / sahf
+ *	sbb %eax,%eax / and $0xfffffffe,%eax / add $0x2d,%eax
+ *
+ * -- 0x4073c, 0x407c4 and 0x40859 -- so there is no branch at all: the
+ * character is 0x2d - 2*CF, which is '+' exactly when the compare set CF.
+ * That is only encodable when the TRUE arm is the CF one, and CF is "below or
+ * unordered" with the ZERO in %st(0).  Spelling it `(0.0f >= v) ? '-' : '+'`
+ * puts the true arm on the other side: GCC 3.4.2 then commutes the compare to
+ * `v <= 0.0f`, emits `flds v`/`fcomps 0.0f`/`ja`, and a NaN -- which sets CF
+ * and ZF both -- fails `ja` and prints '-' where the object prints '+'.
+ * Measured: of ten spellings compiled with the object's flags, this is the
+ * only one that reproduces the `sbb`/`and`/`add` triple.
+ *
+ * The two spellings are the SAME under IEEE rules -- `0.0f >= NaN` is false
+ * either way -- so this is an operand-order fix and not a change of meaning;
+ * the modern build is unaffected.  The old comment argued the `-mieee-fp`
+ * case, which no longer applies.  Findings 1990 and 2300.
  */
-#define ADID_PRINT_SIGN(v)	((0.0f >= (v)) ? '-' : '+')
+#define ADID_PRINT_SIGN(v)	(!(0.0f >= (v)) ? '+' : '-')
 
 /* `fabs` then a truncating `fistpl`. */
 #define ADID_PRINT_WHOLE(v)	((int)__builtin_fabsf(v))
@@ -1093,6 +1114,29 @@ V90AutoDigitalImpDetector::getAltVarThresh(float *var, float factor)
  * `fcompp` -- so a NaN variance at +0x9d48 pools everything behind it, which
  * `updateLinMappMeanAndVar` can produce and a seeded object reaches directly.
  *
+ * AND THE TOLERANCE IS FORMED BEFORE THE DISTANCE, which is the only reason
+ * that last sentence is true.  `fcompp` compares %st(0) against %st(1), and
+ * on an unordered compare CF is set whichever way round they are -- so which
+ * of the two is on top decides whether a NaN merges or skips, and it is
+ * decided by which subexpression the compiler pushed LAST.  The object at
+ * 0x41739 is
+ *
+ *	flds 0x9d48(%edi,%eax,4) / fmul %st(1),%st	the tolerance
+ *	push %eax / fildl (%esp) / fmul %st(0),%st	the squared distance
+ *	fcompp / fnstsw %ax / sahf / jae		skip
+ *
+ * -- tolerance first, distance second, so the DISTANCE is %st(0) and `jae`
+ * means "skip when d*d is ordered-not-below", leaving the unordered case to
+ * fall through and merge.  Writing the tolerance inline on the right of the
+ * `>=` reverses that: GCC evaluates the comparison's left operand first, so
+ * `d*d` is pushed first, and it then emits two `fxch` and `jbe` -- which
+ * SKIPS on an unordered compare, the opposite answer for a NaN variance.
+ * Hoisting it into `lim` above the distance is what puts the object's operand
+ * in %st(0); the resulting thirteen instructions are the object's, register
+ * allocation included.  The `>=` itself is unchanged and so is its meaning
+ * under IEEE rules, so this is an evaluation-order fix and the modern build
+ * does not see it.  Finding 1990 for why the flag exposes it at all.
+ *
  * THERE IS NO CONVERGENCE LOOP.  One pass, not `unitePhasesInfoOfUref`'s
  * do/while.
  *
@@ -1142,15 +1186,22 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 		group[i] = i;
 
 		for (j = (unsigned char)(i + 1); j < V90ADID_PHASES; j++) {
+			float lim;
 			float d;
 
 			if (byte_280c[j] != 0 || group[j] != ADID_NO_GROUP)
 				continue;
 
+			/*
+			 * The tolerance is formed FIRST so that the squared
+			 * distance is the one in %st(0) at the `fcompp`, which
+			 * is what makes the object's `jae` merge an unordered
+			 * compare rather than skip it.  Head comment.
+			 */
+			lim = float_9d48[i][at] * 0.25f;
 			d = (float)(linMapp[i][at] - linMapp[j][at]);
 
-			/* Unordered merges -- see the head comment. */
-			if (d * d >= float_9d48[i][at] * 0.25f)
+			if (d * d >= lim)
 				continue;
 
 			group[j] = i;
@@ -1862,11 +1913,21 @@ V90AutoDigitalImpDetector::setQcLinearMapping()
  * floating-point branch in both methods is an `fcom`, and an unordered
  * compare sets CF and ZF -- so wherever the object skips on `jae` a NaN does
  * NOT skip, wherever it takes on `jb` a NaN DOES take, and wherever it tests
- * with `je` a NaN compares EQUAL.  All three are written as the negation of
- * an ordered test, which is what the branch encodes; the third has no direct
- * C spelling, because `v == 0.0f` is false for a NaN in C and the object's
- * `fcomp`/`je` takes it, so it is `!(v < 0.0f) && !(v > 0.0f)` -- true for
- * both zeroes and every NaN and false for everything else (finding 1447).
+ * with `je` a NaN compares EQUAL.  The first two are written as the negation
+ * of an ordered test, which is what the branch encodes.  The THIRD is a plain
+ * `v == 0.0f`: under the object's own `-mno-ieee-fp` that is one `fcom` with
+ * no parity test, so the NaN takes it exactly as the object's `fcomp`/`je`
+ * does.  The two-compare "not less and not greater" spelling that used to
+ * stand here was a workaround for the flag `make period` was missing, not the
+ * object's code (findings 1447, 1990 and 2300).
+ *
+ * AND A RIGHT SPELLING IS NOT YET A RIGHT COMPARE.  `fcom` sets CF on an
+ * unordered compare whichever way round its operands are, so which one is in
+ * %st(0) is what decides where a NaN goes -- and with the flag set GCC is
+ * free to commute a compare and invert its predicate, which is identical for
+ * ordered values and exactly opposite for a NaN.  `ADID_PRINT_SIGN` above is
+ * spelled the way it is for that reason alone, and both of these methods
+ * print through it.
  *
  * WHAT IS *NOT* REPRODUCED IS THE SIGNALLING.  The object compares with
  * `fcomp`, which raises #IA on a quiet NaN; both of this tree's compilers
