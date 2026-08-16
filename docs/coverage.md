@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [##################................]  51.9%    381036 bytes, 916 symbols
-  tested      [##################################] 100.0%    381013 bytes, 909 of 916 that can be
+  translated  [##################................]  52.4%    384796 bytes, 917 symbols
+  tested      [##################################] 100.0%    384773 bytes, 910 of 917 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -86,7 +86,7 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    VPcmV34Main.cpp +72                           156747 bytes   344 symbols
+    VPcmV34Main.cpp +72                           152987 bytes   343 symbols
     class1tx.c +94                                 84164 bytes   317 symbols
     V32mod.c +39                                   44118 bytes    88 symbols
     Dialer.c +18                                   14602 bytes    46 symbols

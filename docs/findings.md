@@ -55246,3 +55246,144 @@ finding 614's free kind and not 613's: the 32-bit result feeds a 16-bit compare
 and then an add that is immediately truncated, so the upper half is dead both
 times, and `unsigned short` would change the comparison's signedness and break
 the differential test.
+
+### 2160. `determineDminForRrn` IS TWO HALVES OF THE SAME SHAPE, AND ITS SEVENTEEN FORMAT STRINGS NAME THE FIELDS THREE OTHER MEMBERS COULD NOT
+
+3,760 bytes, of which about 44% is diagnostics. The body is:
+
+    block one    over k = 0..5, the largest `pParams->m[k]` among those whose
+                 byte at `constelTable + 0x280c + k` is zero; the index is
+                 kept as `phase`, a `short`
+    block two    `mm[k] = m[k] * (1.0f / maxSize)` into a local `float[6]`,
+                 and their product into a `double`
+    rate down    a target M from 2^((rrn - 0.75f - log2 m) / 6), nudged up by
+                 one if `calcK(M, mm)` is under `rrn - 0.8f` and `calcK(M+1,
+                 mm)` under `rrn - 0.3f`; then a search that grows `tempDmin`
+                 by `*1.02f + 1.0f` and recounts with `constelBuild` until the
+                 count falls below M, capped at 100 turns; then `rrnDownDmin`
+                 from one of three arms
+    rate up      the same with `rrn + 1.05f`, `rrn + 1.0f`, `rrn + 1.7f`, a
+                 `*0.95f` shrink and `count < M` as the loop test
+
+**THE RETURN TYPE IS `void` AND THE ARGUMENT IS STRONGER THAN "NO PATH SETS
+%eax".** The two `ret` paths leave UNRELATED values there: 0x484fa arrives with
+the coprocessor status word `fnstsw` deposited at 0x484c0, and 0x4881f with
+`dsplibs_debug_printf`'s return. No int-returning source converges on those.
+
+**THE FORMAT STRINGS ARE THE AUTHOR'S NAMES**, and this is the first reader or
+writer of `+0x0c` and `+0x0e` anywhere reconstructed — `reset`'s zeroing aside.
+"rrnDownDmin = %d" prints `movswl 0xc(%edx)` and "rrnUpDmin = %d" prints
+`movswl 0xe(%edx)`, so those two slots are `rrnDownDmin` and `rrnUpDmin`;
+`+0x0a`, which both are copied from, is `dMin`. `V90MappingParams`'
+`constellationSize` is the author's `pParams->m[1..6]`. The header records the
+mapping and keeps the offset names, because a name out of a diagnostic is the
+author's word for the QUANTITY and the header's names are for the SLOTS its
+offset assertions pin.
+
+**A SECOND DISPLACEMENT OFF `+0x14`.** `constelBuild` reaches a byte table at
+`+0xd00`; this member reaches six more bytes at `+0x280c` off the same single
+`mov 0x14(%eax)`. Two independent displacements from two members, and still no
+shape for the pointed-at object — 2148's argument, now with a second data
+point that does not settle it either.
+
+Three deviations: D330 (an uninitialised read when the rate-down loop does not
+run once), D331 (a reciprocal of a count nothing stops being zero, which is
+D324's 2^31-iteration hazard reached twice per call), D332 (a 32-bit size
+truncated to a byte and then compared against the untruncated one).
+
+### 2161. THE TWO HALVES SPELL THE SAME LOGARITHM TWO DIFFERENT WAYS, AND NO TEST CAN TELL
+
+Both halves compute 2^((kTarget - log2 m) / 6) with the same constants and the
+same two loops. They do not divide the same way:
+
+    rate down  0x47def  d8 fc   FDIVR ST(0),ST(4)   ST(4) is a CSEd 1.0
+                                so 1.0f / log10(2), then FMULP
+    rate up    0x48302  de fa   FDIVP ST(2),ST(0)   ST(2) is log10(m)
+                                so log10(m) / log10(2), one instruction
+
+That is `calcK`'s spelling in one half and `calcMtoMatchKtarget`'s in the other
+(2144), inside one function, and the two are not the same value in the last
+place. Mutating the rate-down half to the rate-up spelling and re-running
+passes ALL 8,072 checks — the same result 2150 recorded for `calcK`, and the
+same conclusion: the reason to keep them apart is the encoding, and factoring
+the two into one helper would be wrong in a way the differential tier cannot
+see. They are spelled apart in `src/` with a comment saying which is which.
+
+### 2162. THE PRODUCT OF THE SIX SCALED SIZES IS A `double`, AND GCC 13 DOES NOT REPRODUCE THE ROUNDING
+
+0x47d9b spills the accumulated product with `fstpl` and 0x47da5 and 0x482b6
+reload it with `fldl` — 64 bits, so the variable is a `double`. A `float`
+would be `fstps`/`flds` and a `long double` `fstpt`. It is the one shape in
+this class's fourteen members with no precedent among the other thirteen.
+
+**It is not cosmetic**: the rounding at that spill feeds `log10`, whose result
+feeds `(unsigned int)x` and then `(unsigned int)((x - n) * 100.0f)`, and both
+are truncations — so one bit there is a factor of two in the doubling loop or
+a factor of 1.0069555 in the other.
+
+**And it is not testable at either tier as things stand.** Mutating `double m`
+to `float m` passes all 8,072 checks, and the modern object explains why:
+`objdump` over GCC 13's `determineDminForRrn` finds 43 `flds`, 18 `fstps` and
+ZERO `fldl`/`fstpl`, so that build never rounds the product at all and the two
+spellings are the same code there. The claim rests on the encoding, which is
+2145's kind of evidence, and the finding says so rather than citing a test.
+
+### 2163. THE BLOB INLINES `calcK` EIGHT TIMES AND `constelBuild` TWICE WHILE KEEPING BOTH AS GLOBAL OUT-OF-LINE SYMBOLS, AND `-O2` ALONE CANNOT DO THAT
+
+`determineDminForRrn` contains eight copies of `calcK`'s body — `fildll`, the
+six-turn `fld %st(0); fmuls 0xb0(%esp,%ecx,4); fmulp %st,%st(2)` product with a
+`short` counter, `log10`, `log10(2.0f)`, the reciprocal and the multiply — and
+two of `constelBuild`'s. Both are `FUNC GLOBAL` in `.text` in the blob, not
+weak and not in a `.gnu.linkonce.t.*` section, so neither was declared inline;
+79 other symbols in the object ARE weak, so the toolchain had the option.
+
+Built with the period compiler and this tree's flags, the same source gives:
+
+    -O2                       2,311 B    639 insns    (blob 3,760 B, 957)
+    -O2 -finline-functions    3,755 B    968 insns
+    -O3                       3,793 B    983 insns
+
+and `calcK` (92 B) and `constelBuild` (157 B) are still emitted out of line in
+all three. So the source is right and the FLAGS are short one option: `-O2`
+does not set `flag_inline_functions` in GCC 3.4, and without it an extern
+member is never inlined however small it is. `-O2 -finline-functions` lands 5
+bytes from the object where plain `-O2` is 1,449 short, and beats `-O3` — which
+is consistent with 616 having settled `-O2` against `-O3` on other symbols
+rather than against inlining as such.
+
+This is a `tools/toolchain/build.sh` question and is NOT changed here: the flag
+set is shared with `make period`, one worktree owns it at a time, and the
+measurement above is what a change would have to be justified by. Recorded for
+whoever owns the tooling. It also explains 2151's 96-byte hole from the other
+direction — a `static` helper did not inline for exactly the same reason.
+
+### 2164. THE MUTATION SET, AND THE ONE THAT ONLY BECAME VISIBLE AFTER THE FIXTURE WAS FIXED
+
+Eight mutations of `determineDminForRrn`, each built and run alone and then
+reverted:
+
+    tempDmin *= 1.02f -> 1.03f              FAIL   254/4320 and 531/3725
+    rrn - 0.8f -> rrn - 0.7f (first site)   FAIL     1/4320 and 189/3725
+    tempDmin *= 0.95f -> 0.96f              FAIL     3/4320 and   6/3725
+    drop the + 0.5f from the down arbitrary FAIL   180/4320 and 360/3725
+    prevNofUcodes == maxM -> >=             FAIL   213/4320 and 426/3725
+    rrn + 1.7f -> rrn + 1.6f (both sites)   FAIL     4/4320 and   8/3725
+    the rate-down reciprocal -> a divide    PASS   (2161)
+    double m -> float m                     PASS   (2162)
+
+**The 0.95f was invisible until the table was changed, and that is the useful
+result.** `constelBuild` counts an entry only when it clears a threshold that
+jumps to `step + value` after every hit, so over uniformly random 16-bit values
+the count is a RECORD count — about ln(rowlen), five or so, and essentially
+independent of `step`. With a count that does not move, the rate-up search
+always ran to its 100-turn cap, `tempDmin` was multiplied down to zero either
+way, and 0.95f and 0.96f produced identical transcripts over 288 trials.
+Filling the 16-bit table with a RAMP instead makes the count about
+`rowlen * ramp / (step + ramp)` — smooth, monotone and tunable — and the same
+mutation then fails.
+
+The general lesson is 134's: a fixture whose randomness lands in a regime where
+the code under test is insensitive tests nothing, and the way to find out is to
+mutate. Two arms of the rate-down `||` and two of the seventeen diagnostics
+were also unreached until the sweep grew a long-row and a tiny-size pattern.
+

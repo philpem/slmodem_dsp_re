@@ -6240,3 +6240,47 @@ relative error of a few times 1e-8. The `fadds` correction that follows is
 covers the error up to K = 21 and stops covering it at 22. `realK` returns a
 float and truncates nothing, so its own 1e-9f never matters (D327). Finding
 2149.
+
+## D330 🐛 `determineDminForRrn` reads `prevNofUcodes` and `prevDmin` uninitialised when its rate-down search does not run once
+
+*Batch of 2026-08-16, from `_ZN24V90ConstellationDesigner19determineDminForRrnEj`
+(blob 0x47cc0) at 0x4815b and 0x48280, against the stores at 0x48060 and
+0x4807f which are inside the loop. **Reachability: `(unsigned char)pParams->m[phase] < maxM`
+while `pParams->m[phase] > maxM` — that is, a constellation size above 255,
+since the count is truncated to a byte (D332) and the outer test is not.**
+**Observability: `rrnDownDmin` set from a stack slot the function never wrote.**
+Status: unmeasured; nothing in the object calls this member (D326), so no
+caller's range is known. The differential test EXCLUDES it — two sides reading
+two different stack frames disagree for a reason that is not the
+reconstruction. Fix class: none proposed; reproduced as found.*
+
+The loop is entered only when the byte-wide `nofUcodes` is at least `maxM`, and
+its body is what writes `prevNofUcodes` and `prevDmin`; the three arms after it
+read both unconditionally. Finding 2160.
+
+## D331 🐛 `determineDminForRrn` divides one by a constellation count that nothing stops being zero
+
+*Batch of 2026-08-16, same function, at 0x47d54..0x47d5a. **Reachability: no
+`pParams->m[k]` with a zero byte at `constelTable + 0x280c + k`.**
+**Observability: `1.0f / 0` is an infinity, every scaled size is a NaN, the
+product is a NaN, and the two truncations that follow yield 0x80000000 — after
+which each of the two doubling loops runs about 2^31 times.** Status:
+unmeasured; the search's guard byte is written by nothing reconstructed. The
+test plants a zero in one of the six every trial. Fix class: none proposed.*
+
+The same shape as D324 and reached twice per call, because the 2^((kTarget -
+log2 m)/6) computation is spelled out in each half rather than called. Finding
+2160.
+
+## D332 ⚠ `determineDminForRrn` truncates a 32-bit constellation size to a byte and then compares it against the untruncated one
+
+*Batch of 2026-08-16, same function, at 0x47ffd (`mov %al,%bl`) and 0x48600,
+against the 32-bit `cmp` at 0x47ff3 and 0x485ef. **Reachability: any
+`pParams->m[phase]` above 255.** **Observability: the search loop's starting
+count is the low byte, so a size of 256 starts at 0.** Status: unmeasured.
+Fix class: none proposed; reproduced as found, and it is what makes D330
+reachable.*
+
+`nofUcodes` is a byte because `constelBuild` returns one, and the object seeds
+it with a straight `mov %al,%bl` off a `V90MappingParams::constellationSize`
+that is four bytes wide everywhere else. Finding 2160.

@@ -613,3 +613,304 @@ V90ConstellationDesigner::findNextUcodeToAdd(unsigned char *out,
 
 	return (signed char)i >= 0;
 }
+
+/*
+ * ===========================================================================
+ * determineDminForRrn -- the two minimum distances the rate-renegotiation
+ * thresholds need, one for a rate down and one for a rate up.
+ * ===========================================================================
+ *
+ * 3,760 bytes, and about 44% of them are diagnostics: seventeen
+ * `dsplibs_debug_printf` sites, each its own `DSPLIB_DEBUG_ON()`.  The level
+ * is re-read from memory after every call (0x48561, 0x4857c, 0x485c1 and
+ * more), which is what separate gates compile to when the call between them
+ * can change the level -- the same reasoning `setMinMaxRates` carries.
+ *
+ * THE FORMAT STRINGS ARE THE AUTHOR'S NAMES FOR THE VARIABLES and they are
+ * where every name below comes from: `pParams->m[1..6]` for
+ * `V90MappingParams::constellationSize`, `phase` for the chosen constellation,
+ * `maxM`, `nofUcodes`, `prevNofUcodes`, `tempDmin`, `prevDmin`, `dMin`,
+ * `rrnDownDmin` and `rrnUpDmin`.  The last three are `short_0a`, `short_0c`
+ * and `short_0e`, and THIS IS THE FIRST READER OR WRITER OF `short_0c` AND
+ * `short_0e` anywhere in the reconstruction: `reset` zeroes both and nothing
+ * else had touched them.  `short_0a` is `dMin` -- read here, written by
+ * nothing reconstructed yet.
+ *
+ * WHAT IT RETURNS IS NOTHING, and the argument is stronger than "no path sets
+ * %eax": the two `ret` paths leave UNRELATED values there.  0x484fa arrives
+ * with the coprocessor status word `fnstsw` deposited at 0x484c0, and 0x4881f
+ * arrives with `dsplibs_debug_printf`'s return.  No int-returning source could
+ * converge on those, so the return type is `void`.
+ *
+ * THE 0x280c DISPLACEMENT OFF `constelTable`.  Block one below tests
+ * `((unsigned char *)constelTable)[0x280c + k]` where `constelBuild` tests
+ * `[0xd00 + 128*k + i]`.  Two independent displacements off one pointer, from
+ * two members, is what the header now records; neither says what the
+ * pointed-at object IS and no struct is invented for it.
+ *
+ * THE TWO HALVES SPELL THE SAME FORMULA TWO DIFFERENT WAYS, and that is
+ * measured rather than tidied.  Both compute 2^((kTarget - log2 m) / 6) the
+ * way `calcMtoMatchKtarget` does, but the RRN-DOWN half divides ONE by
+ * log10(2) and multiplies (0x47def is `d8 fc`, FDIVR ST(0),ST(4) with ST(4)
+ * the CSEd 1.0) while the RRN-UP half divides directly (0x48302 is `de fa`,
+ * FDIVP ST(2),ST(0) with ST(2) the logarithm).  Those are not the same value
+ * in the last place, the differential tier cannot tell them apart (finding
+ * 2150's shape), and factoring the two into one helper would be wrong in a
+ * way no test could catch.  So they stay apart.
+ *
+ * THE PRODUCT OF THE SIX SCALED SIZES IS A `double`.  0x47d9b spills it with
+ * `fstpl` and 0x47da5 and 0x482b6 reload it with `fldl` -- 64 bits, so the
+ * variable is a `double` and not a `float`, and the rounding at that spill is
+ * observable: it feeds a truncation two steps later.
+ *
+ * THE UNINITIALISED READ IS THE OBJECT'S.  When the rrn-down loop does not
+ * run once, `prevNofUcodes` and `prevDmin` are read at 0x4815b and 0x48280
+ * having never been written.  Reproduced, and D330 records it.
+ */
+void
+V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
+{
+	float mm[6];
+	double m;
+	unsigned int maxSize;
+	unsigned int rrnDownMaxM;
+	unsigned int rrnUpMaxM;
+	short phase;
+	unsigned int k;
+	int failed;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner::determineDminForRrn :"
+		    " pParams->m[1..6] = %d %d %d %d %d %d\r\n",
+		    mappingParams->constellationSize[0],
+		    mappingParams->constellationSize[1],
+		    mappingParams->constellationSize[2],
+		    mappingParams->constellationSize[3],
+		    mappingParams->constellationSize[4],
+		    mappingParams->constellationSize[5]);
+
+	/*
+	 * The largest constellation among those the table's 0x280c byte
+	 * allows.  `phase` is a `short` and the object proves it twice over:
+	 * the assignment is `movswl %cx` into a 32-bit spill slot, and the
+	 * same shape appears at 0x84/0x88(%esp) where a 32-bit slot is written
+	 * by a 16-bit `fistps` and read by a 16-bit `filds`.  The counter is
+	 * UNSIGNED -- `cmp $0x5,%ecx; jbe`.
+	 */
+	maxSize = 0;
+	phase = 0;
+	for (k = 0; k <= 5; k++)
+		if (mappingParams->constellationSize[k] > maxSize
+		    && ((unsigned char *)constelTable)[0x280c + k] == 0) {
+			maxSize = mappingParams->constellationSize[k];
+			phase = k;
+		}
+
+	/*
+	 * The six sizes scaled by the largest, and their product.  NOTHING
+	 * BOUNDS `maxSize`: if no constellation passes the test above it stays
+	 * zero and the reciprocal is an infinity.  The object divides anyway;
+	 * D331.
+	 */
+	m = 1.0;
+	for (k = 0; k <= 5; k++) {
+		mm[k] = mappingParams->constellationSize[k] * (1.0f / maxSize);
+		m *= mm[k];
+	}
+
+	/*
+	 * The rate-down target.  See the header comment for why this one
+	 * multiplies by the reciprocal and its twin below divides.
+	 */
+	{
+		float lm = (float)x87_log10((long double)m);
+		float l2 = (float)x87_log10((long double)2.0f);
+		long double x = ((long double)(rrn - 0.75f)
+				 - lm * (1.0f / l2)) * (1.0f / 6.0f);
+		unsigned int n = (unsigned int)x;
+		unsigned int frac = (unsigned int)((x - n) * 100.0f);
+		unsigned int shift = 1;
+		float p = 1.0f;
+		unsigned int i;
+
+		for (i = 0; i < n; i++)
+			shift += shift;
+		for (i = 0; i < frac; i++)
+			p *= 1.0069555f;
+		rrnDownMaxM = (unsigned int)((long double)p * shift);
+	}
+
+	if (calcK(rrnDownMaxM, mm) < rrn - 0.8f) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: rrn down maxM too low"
+			    " - probably will cause more then one rate down"
+			    "\r\n");
+		if (calcK(rrnDownMaxM + 1, mm) < rrn - 0.3f) {
+			rrnDownMaxM++;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V90ConstellationDesigner:: increment maxM"
+				    " for one rate down\r\n");
+		}
+	}
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner:: current maxM = %d "
+		    " rrn down maxM = %d\r\n",
+		    mappingParams->constellationSize[phase], rrnDownMaxM);
+
+	if (mappingParams->constellationSize[phase] > rrnDownMaxM) {
+		unsigned char nofUcodes;
+		unsigned char prevNofUcodes;
+		short tempDmin;
+		short prevDmin;
+		unsigned int nofIterations;
+
+		/*
+		 * `nofUcodes` is a BYTE and the truncation is the object's:
+		 * `mov %al,%bl` off a 32-bit `constellationSize`.  So a size
+		 * above 255 enters the loop as its low byte.  D332.
+		 */
+		nofUcodes = (unsigned char)
+			    mappingParams->constellationSize[phase];
+		tempDmin = short_0a;
+		nofIterations = 0;
+		while (nofUcodes >= rrnDownMaxM && nofIterations <= 99) {
+			prevNofUcodes = nofUcodes;
+			prevDmin = tempDmin;
+			tempDmin = (short)(tempDmin * 1.02f + 1.0f);
+			nofUcodes = constelBuild(tempDmin, phase);
+			nofIterations++;
+		}
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: rrn down - nofUcodes"
+			    " = %d  prevNofUcodes = %d\r\n",
+			    nofUcodes, prevNofUcodes);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: rrn down - tempDmin "
+			    " = %d  prevDmin      = %d\r\n",
+			    tempDmin, prevDmin);
+
+		if (prevNofUcodes == rrnDownMaxM)
+			short_0c = prevDmin;
+		else if (calcK(nofUcodes, mm) >= rrn - 0.8f
+			 || calcK(prevNofUcodes, mm) >= rrn - 0.3f)
+			short_0c = tempDmin;
+		else
+			short_0c = prevDmin;
+	} else {
+		short_0c = (short)(short_0a * 1.25f + 0.5f);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: maxM>pParams->m[phase]"
+			    " seting rrnDownDmin arbitrary !!!\r\n");
+	}
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner:: rrnDownDmin = %d\r\n",
+		    short_0c);
+
+	/* And the rate-up target, which divides where its twin multiplied. */
+	{
+		float lm = (float)x87_log10((long double)m);
+		float l2 = (float)x87_log10((long double)2.0f);
+		long double x = ((long double)(rrn + 1.05f) - lm / l2)
+			      * (1.0f / 6.0f);
+		unsigned int n = (unsigned int)x;
+		unsigned int frac = (unsigned int)((x - n) * 100.0f);
+		unsigned int shift = 1;
+		float p = 1.0f;
+		unsigned int i;
+
+		for (i = 0; i < n; i++)
+			shift += shift;
+		for (i = 0; i < frac; i++)
+			p *= 1.0069555f;
+		rrnUpMaxM = (unsigned int)((long double)p * shift);
+	}
+
+	failed = 0;
+	if (calcK(rrnUpMaxM, mm) < rrn + 1.0f) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: maxM too high -"
+			    " probably will not cause rate up\r\n");
+		if (calcK(rrnUpMaxM + 1, mm) < rrn + 1.7f) {
+			rrnUpMaxM++;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V90ConstellationDesigner:: increment maxM"
+				    " for one rate up\r\n");
+		} else {
+			failed = 1;
+		}
+	}
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner:: current maxM = %d "
+		    " rrn up maxM = %d\r\n",
+		    mappingParams->constellationSize[phase], rrnUpMaxM);
+
+	if (failed) {
+		short_0e = short_0a;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: failed to find"
+			    " rrnUpDmin => seting rrnUpDmin = dMin !!!\r\n");
+	} else if (mappingParams->constellationSize[phase] < rrnUpMaxM) {
+		unsigned char nofUcodes;
+		short tempDmin;
+		unsigned int nofIterations;
+
+		nofUcodes = (unsigned char)
+			    mappingParams->constellationSize[phase];
+		tempDmin = short_0a;
+		nofIterations = 0;
+		while (nofUcodes < rrnUpMaxM && nofIterations <= 99) {
+			tempDmin = (short)(tempDmin * 0.95f);
+			nofUcodes = constelBuild(tempDmin, phase);
+			nofIterations++;
+		}
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: rrn up nofUcodes ="
+			    " %d \r\n", nofUcodes);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: rrn up tempDmin  ="
+			    " %d \r\n", tempDmin);
+
+		/*
+		 * THE FIRST STORE IS NOT DEAD, and that is what proves it is
+		 * in the source: 0x48b4a writes `tempDmin` into `short_0e`,
+		 * calls the diagnostic, and 0x487e0 then overwrites it with
+		 * `dMin`.  A store to a member cannot be removed across an
+		 * external call, so the compiler kept it on the arm that has
+		 * one and sank it into 0x48ab9 on the arm that does not.
+		 */
+		short_0e = tempDmin;
+		if (calcK(nofUcodes, mm) > rrn + 1.7f) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V90ConstellationDesigner:: tempDmin might"
+				    " cause 2 rates up => rrnUpDmin = dMin"
+				    "\r\n");
+			short_0e = short_0a;
+		}
+	} else {
+		short_0e = (short)(short_0a * 0.9f + 0.5f);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90ConstellationDesigner:: maxM<pParams->m[phase]"
+			    " seting rrnUpDmin arbitrary !!!\r\n");
+	}
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner:: rrnUpDmin = %d\r\n", short_0e);
+}

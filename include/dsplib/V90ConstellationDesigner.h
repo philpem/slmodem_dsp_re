@@ -142,13 +142,19 @@ public:
 			      unsigned char (*)[128]);
 
 	/*
-	 * `setConstellationToNoise`, `setConstellationToNoise_forceRate` and
-	 * `determineDminForRrn` are deliberately NOT declared yet.  Their
-	 * argument lists are settled by the manglings, but a return type is
-	 * not mangled and each of the three is large enough that reading it is
-	 * what decides; a placeholder `void` committed ahead of that reading
-	 * would be a guess in the record.  They arrive with their definitions.
+	 * THE RETURN TYPE HERE IS READ FROM THE TWO `ret` PATHS, not guessed.
+	 * 0x484fa arrives with the coprocessor status word `fnstsw` left in
+	 * %eax at 0x484c0, and 0x4881f arrives with `dsplibs_debug_printf`'s
+	 * return in it.  Two unrelated values on two paths that a caller would
+	 * have to read as one, so nothing is returned: `void`.
+	 *
+	 * `setConstellationToNoise` and `setConstellationToNoise_forceRate`
+	 * are still NOT declared.  Their argument lists are settled by the
+	 * manglings, but a return type is not mangled and reading the body is
+	 * what decides; a placeholder committed ahead of that reading would be
+	 * a guess in the record.  They arrive with their definitions.
 	 */
+	void determineDminForRrn(unsigned int);
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -199,10 +205,27 @@ public:
 	 * signed comparison.  That is the "forced" kind of extension --
 	 * the 32-bit result is what the comparison uses -- and not the free
 	 * kind of finding 614.
+	 *
+	 * AND THREE OF THE FOUR NOW HAVE THE AUTHOR'S OWN WORD FOR WHAT THEY
+	 * HOLD, out of `determineDminForRrn`'s seventeen format strings --
+	 * which is the first reader OR writer of +0x0c and +0x0e anywhere in
+	 * the reconstruction, `reset`'s zeroing aside:
+	 *
+	 *     +0x0a  dMin         read as `filds 0xa(%edx)`, and copied into
+	 *                         both of the others; still written by
+	 *                         nothing this tree has reconstructed
+	 *     +0x0c  rrnDownDmin  "V90ConstellationDesigner:: rrnDownDmin =
+	 *                         %d" prints `movswl 0xc(%edx)`
+	 *     +0x0e  rrnUpDmin    the same message and load, at +0x0e
+	 *
+	 * They keep their offset names.  A name out of a diagnostic is the
+	 * author's word for the QUANTITY, and these names are for the SLOTS
+	 * the offset assertions pin; the mapping is recorded here, which is
+	 * where a later batch can act on it.
 	 */
-	short short_0a;			/* +0x0a */
-	short short_0c;			/* +0x0c */
-	short short_0e;			/* +0x0e */
+	short short_0a;			/* +0x0a  the author's `dMin`        */
+	short short_0c;			/* +0x0c  the author's `rrnDownDmin` */
+	short short_0e;			/* +0x0e  the author's `rrnUpDmin`   */
 	short short_10;			/* +0x10 */
 
 	unsigned char pad_12[2];	/* +0x12                            */
@@ -217,10 +240,20 @@ public:
 	 * pointer is to the first table and the second lives 0xd00 bytes on,
 	 * which is how the .cpp reaches it.
 	 *
-	 * WHAT THE POINTED-AT OBJECT IS is NOT known.  0xd00 is 13 rows of
-	 * 128 shorts, and reading a row count out of that would be inference;
-	 * nothing writes this field anywhere in the object, so there is no
-	 * assignment to type it from either.  It used to be inside `pad_12`.
+	 * A SECOND, INDEPENDENT DISPLACEMENT off the same pointer is now
+	 * measured: `determineDminForRrn` tests
+	 * `cmpb $0x0,0x280c(%ecx,%ebp,1)` with %ebp the same `mov 0x14(%eax)`
+	 * and %ecx a constellation index 0..5.  So one pointer reaches a
+	 * 16-bit table at +0, a byte table at +0xd00 and six more bytes at
+	 * +0x280c, from two members that share nothing else.
+	 *
+	 * WHAT THE POINTED-AT OBJECT IS is still NOT known, and two
+	 * displacements do not make it known.  0xd00 is 13 rows of 128 shorts
+	 * and 0x280c is 0x2812 bytes short of nothing in particular; reading a
+	 * shape out of either would be inference.  Nothing writes this field
+	 * anywhere in the object, so there is no assignment to type it from
+	 * either, and no struct is invented for it.  It used to be inside
+	 * `pad_12`.
 	 */
 	short (*constelTable)[128];	/* +0x14                            */
 

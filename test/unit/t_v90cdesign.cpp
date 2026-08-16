@@ -52,10 +52,12 @@
  * check would pass over anything else either of them touched.
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "harness.h"
 
+#include "dsplib/debug.h"
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Parameters.h"
 #include "dsplib/V90ConstellationDesigner.h"
@@ -115,6 +117,13 @@ int our_findNext(void *, unsigned char *, int, void *, void *, short *, void *)
 int ref_findNext(void *, unsigned char *, int, void *, void *, short *, void *)
 	asm("ref__ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h");
 
+void our_dmin(void *, unsigned)
+	asm("_ZN24V90ConstellationDesigner19determineDminForRrnEj");
+void ref_dmin(void *, unsigned)
+	asm("ref__ZN24V90ConstellationDesigner19determineDminForRrnEj");
+
+extern unsigned int ref_dsplibs_debug_level;
+
 }
 
 /*
@@ -165,8 +174,18 @@ static V90Parameters *parB;
 static V90ConstellationDesigner *cdA;
 static V90ConstellationDesigner *cdB;
 
-/* constelBuild's table: 0xd00 of shorts and then the byte table past it. */
-#define TBLBYTES	8192
+/*
+ * constelBuild's table: 0xd00 of shorts and then the byte table past it.
+ *
+ * IT REACHES FURTHER THAN `constelBuild` DOES, and 12 KB is not slack.
+ * `determineDminForRrn` tests six bytes at +0x280c off the same pointer, so a
+ * table sized for `constelBuild` alone would be read past its end -- and the
+ * failure would not be a difference: six non-zero bytes there leave the search
+ * with no candidate, `maxSize` zero, `1.0f / maxSize` an infinity and the
+ * doubling loop running 2^31 times on BOTH sides identically.  A hang is not a
+ * diagnostic, so the size is chosen for the furthest reader.
+ */
+#define TBLBYTES	12288
 static unsigned char tblA[TBLBYTES] __attribute__((aligned(8)));
 static unsigned char tblB[TBLBYTES] __attribute__((aligned(8)));
 
@@ -1005,6 +1024,400 @@ run_findnext(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * determineDminForRrn
+ * ===========================================================================
+ *
+ * THE HAZARDS ARE HANGS, NOT DIFFERENCES, so the fixture excludes them by
+ * construction rather than by tolerance.  The function inlines D324's doubling
+ * loop TWICE, and each runs about 2^32 times when its truncation goes
+ * negative or lands on 0x80000000:
+ *
+ *   `maxSize` zero.  If none of the six `constellationSize` entries has a zero
+ *   byte at `constelTable + 0x280c`, nothing wins the search, the reciprocal
+ *   is an infinity and every `mm[k]` is a NaN.  One of the six is always
+ *   planted zero below.
+ *
+ *   A zero `constellationSize`.  All six are in the product, so one zero makes
+ *   it zero, `log10(0)` is minus infinity and the target goes to infinity.
+ *   Every size below is at least 1.
+ *
+ *   `rrn` zero.  Every `mm[k]` is at most 1, so `log2(m)` is at most 0 and the
+ *   rate-down target is `(rrn - 0.75 - log2 m) / 6`; at rrn 0 with a uniform
+ *   constellation that is negative.  The sweep starts at 1.
+ *
+ * A SIZE ABOVE 255 IS ALSO EXCLUDED, and for a different reason: the object
+ * truncates it to a byte for `nofUcodes`, so a size of 256 enters the
+ * rate-down loop as 0, the loop does not run once, and `prevNofUcodes` and
+ * `prevDmin` are then READ HAVING NEVER BEEN WRITTEN (D330).  Two sides
+ * reading two different stack frames would disagree for a reason that is not
+ * about the reconstruction.  D332 records the truncation itself.
+ *
+ * WHAT THE TRANSCRIPT IS FOR.  Seventeen diagnostics name every arm, and
+ * several of the arms are invisible from outside: `prevNofUcodes == maxM` and
+ * the two halves of the `||` all write `rrnDownDmin` and print nothing of
+ * their own.  So the loud pass below does two things a quiet one cannot --
+ * compares the two sides' transcripts, and reads the BLOB's own numbers back
+ * out of its transcript to classify which arm ran, which is what turns "the
+ * two agree" into "each arm was reached".
+ */
+static long
+dmin_num(const char *t, const char *key, long dflt)
+{
+	const char *p = strstr(t, key);
+	long v;
+
+	if (p == NULL || sscanf(p + strlen(key), "%ld", &v) != 1)
+		return dflt;
+	return v;
+}
+
+static int
+dmin_count(const char *t, const char *key)
+{
+	const char *p = t;
+	size_t k = strlen(key);
+	int n = 0;
+
+	while ((p = strstr(p, key)) != NULL) {
+		n++;
+		p += k;
+	}
+	return n;
+}
+
+/* The seventeen, by a substring that matches that site and no other. */
+static const char *const dmin_sites[17] = {
+	"pParams->m[1..6] = ",
+	"rrn down maxM too low",
+	"increment maxM for one rate down",
+	" rrn down maxM = ",
+	"maxM>pParams->m[phase]",
+	"rrn down - nofUcodes = ",
+	"rrn down - tempDmin  = ",
+	":: rrnDownDmin = ",
+	"maxM too high",
+	"increment maxM for one rate up",
+	" rrn up maxM = ",
+	"maxM<pParams->m[phase]",
+	"rrn up nofUcodes = ",
+	"rrn up tempDmin  = ",
+	"failed to find rrnUpDmin",
+	"tempDmin might cause 2 rates up",
+	":: rrnUpDmin = "
+};
+
+#define DMIN_RRN	72
+#define DMIN_PATTERNS	10
+#define DMIN_TRIALS	(DMIN_RRN * DMIN_PATTERNS)
+
+/*
+ * Plant one trial's inputs on both sides.  Returns the trial's `dMin`.
+ *
+ * THE 16-BIT TABLE IS A RAMP AND NOT NOISE, and that is what makes the two
+ * searches test anything.  `constelBuild` counts an entry only when it clears a
+ * threshold that jumps to `step + value` after every hit, so over uniformly
+ * random 16-bit values the count is a RECORD count -- about ln(rowlen), five
+ * or so, whatever `step` is.  A count that does not move with `step` makes
+ * both loops terminate on their first turn and leaves every arm that depends
+ * on where the count crosses `maxM` unreached.  Against a ramp of slope
+ * `ramp` the count is about `rowlen * ramp / (step + ramp)`, which is smooth,
+ * monotone and tunable -- so the sweep can put the crossing anywhere.
+ */
+static short
+dmin_fixture(int trial)
+{
+	unsigned i;
+	unsigned ramp;
+	int k;
+	int pattern = trial / DMIN_RRN;
+	short dmin;
+
+	reseed(0x5a5au + 131u * (unsigned)trial);
+	ramp = 1u + (unsigned)(trial % 29);
+
+	for (i = 0; i < 0xd00 / 2; i++) {
+		short v = (short)((i % 128) * ramp
+				  + nextrand() % (2u * ramp));
+
+		((short *)tblA)[i] = v;
+		((short *)tblB)[i] = v;
+	}
+	for (i = 0xd00; i < TBLBYTES; i++) {
+		unsigned char v = (unsigned char)(nextrand() >> 15);
+
+		/*
+		 * The byte table is only ever tested against zero, so an
+		 * eighth of it is made zero rather than one in 256 -- and
+		 * every twenty-fourth trial makes ALL of it zero, which is
+		 * what drives `constelBuild` to answer 0 for ever and both
+		 * loops to run out on their 100-iteration cap.
+		 */
+		if ((v & 7) == 0 || trial % 24 == 0)
+			v = 0;
+		tblA[i] = v;
+		tblB[i] = v;
+	}
+	for (k = 0; k < 6; k++) {
+		unsigned char mk = (unsigned char)((trial >> k) & 1);
+
+		tblA[0x280c + k] = mk;
+		tblB[0x280c + k] = mk;
+	}
+	tblA[0x280c + trial % 6] = 0;
+	tblB[0x280c + trial % 6] = 0;
+
+	fill_mp(0x6d61u + 17u * (unsigned)trial);
+	for (k = 0; k < 6; k++) {
+		unsigned int n;
+
+		switch (pattern) {
+		case 0:
+			n = 100u;		/* uniform: log2(m) is 0    */
+			break;
+		case 1:
+			n = nextrand() % 200u + 8u;
+			break;
+		case 2:
+			n = (k == trial % 6) ? 250u : 12u;
+			break;
+		case 3:
+			n = nextrand() % 255u + 1u;
+			break;
+		case 4:
+			n = 2u + (unsigned)(trial % 3);	/* tiny */
+			break;
+		case 5:
+		case 8:
+			n = 100u;
+			break;
+		case 6:
+			n = 40u + (unsigned)(trial % 7);
+			break;
+		case 9:
+			n = 30u + (unsigned)(trial % 11);
+			break;
+		default:
+			n = 200u + (unsigned)(trial % 40);
+			break;
+		}
+		mpA.constellationSize[k] = n;
+		mpB.constellationSize[k] = n;
+		/*
+		 * The row length bounds the count, so it is swept wide.  A row
+		 * shorter than `maxM` leaves the count unable to reach it and
+		 * the 100-iteration cap the only exit -- which is a real arm,
+		 * and also the state in which `tempDmin` has been multiplied
+		 * down to zero and stopped carrying information.  Patterns 5
+		 * to 7 use LONG rows and a LARGE `dMin` for the opposite case:
+		 * the loop exits on the count, a few turns in, with `tempDmin`
+		 * still large enough that a change to the 0.95f or the 1.02f
+		 * moves it.  Without them the 0.95f could be mutated to 0.96f
+		 * and every check still passed.
+		 */
+		mpA.constellation[k][0] = (unsigned char)
+		    (pattern >= 8 ? nextrand() % 56u + 200u
+		   : pattern >= 4 ? nextrand() % 128u + 100u
+				  : nextrand() % 120u + 6u);
+		mpB.constellation[k][0] = mpA.constellation[k][0];
+	}
+
+	parA->unnamed_360 = (int)(nextrand() % 4u);
+	parB->unnamed_360 = parA->unnamed_360;
+
+	dmin = (short)(pattern >= 8 ? nextrand() % 140u + 60u
+		     : pattern >= 4 ? nextrand() % 12u + 1u
+				    : nextrand() % 160u + 1u);
+	cdA->short_0a = dmin;
+	cdB->short_0a = dmin;
+	cdA->short_0c = 0x1234;
+	cdB->short_0c = 0x1234;
+	cdA->short_0e = 0x5678;
+	cdB->short_0e = 0x5678;
+	return dmin;
+}
+
+static int
+run_dmin_quiet(void)
+{
+	int trial;
+
+	diff_begin("V90ConstellationDesigner::determineDminForRrn, quiet");
+	wire();
+
+	for (trial = 0; trial < DMIN_TRIALS; trial++) {
+		unsigned rrn = 1u + (unsigned)(trial % 72);
+
+		dmin_fixture(trial);
+		snap_this();
+
+		our_dmin(cdA, rrn);
+		ref_dmin(cdB, rrn);
+
+		diff_eq_int("rrnDownDmin (trial %ld)", cdA->short_0c,
+			    cdB->short_0c, trial);
+		diff_eq_int("rrnUpDmin (trial %ld)", cdA->short_0e,
+			    cdB->short_0e, trial);
+		diff_eq_obj("determineDminForRrn leaves the mapping alone",
+			    V90MappingParams, &mpA, &mpB, trial);
+		diff_eq_obj("determineDminForRrn leaves the table alone",
+			    unsigned char[TBLBYTES], tblA, tblB, trial);
+
+		/*
+		 * ONLY THOSE TWO FIELDS ARE WRITTEN, and that is a negative
+		 * claim, so it is asserted: put them back and the object must
+		 * be what it was.
+		 */
+		cdA->short_0c = 0x1234;
+		cdB->short_0c = 0x1234;
+		cdA->short_0e = 0x5678;
+		cdB->short_0e = 0x5678;
+		check_this(trial);
+	}
+
+	return diff_end();
+}
+
+static int dmin_seen[17];
+static int dmin_armPrevEqMax;
+static int dmin_armTemp;
+static int dmin_armPrev;
+static int dmin_downLoop;
+static int dmin_downArb;
+static int dmin_upLoop;
+static int dmin_upArb;
+static int dmin_upFailed;
+static int dmin_capped;
+static int dmin_printed;
+
+static int
+run_dmin_loud(void)
+{
+	int trial;
+	int i;
+
+	diff_begin("determineDminForRrn's diagnostics, both sides talking");
+	wire();
+
+	for (trial = 0; trial < DMIN_TRIALS; trial++) {
+		unsigned rrn = 1u + (unsigned)(trial % 72);
+		const char *t;
+		short dmin;
+
+		dmin = dmin_fixture(trial);
+		snap_this();
+
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+
+		our_dmin(cdA, rrn);
+		ref_dmin(cdB, rrn);
+
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+		dsplib_debug_capture_on = 0;
+
+		diff_eq_int("the transcripts agree (trial %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
+			    1, trial);
+		diff_eq_int("rrnDownDmin, loud (trial %ld)", cdA->short_0c,
+			    cdB->short_0c, trial);
+		diff_eq_int("rrnUpDmin, loud (trial %ld)", cdA->short_0e,
+			    cdB->short_0e, trial);
+
+		if (dsplib_debug_capture_lines(1) > 0)
+			dmin_printed = 1;
+
+		/*
+		 * Everything below reads the BLOB's transcript, never ours:
+		 * the arm coverage is a claim about what the OBJECT did.
+		 */
+		t = dsplib_debug_capture_text(1);
+		for (i = 0; i < 17; i++)
+			if (dmin_count(t, dmin_sites[i]) > 0)
+				dmin_seen[i]++;
+
+		if (strstr(t, "rrn down - nofUcodes = ") != NULL) {
+			long maxM = dmin_num(t, " rrn down maxM = ", -1);
+			long prevNof = dmin_num(t, "prevNofUcodes = ", -2);
+			long tempD = dmin_num(t, "rrn down - tempDmin  = ", -1);
+			long prevD = dmin_num(t, "prevDmin      = ", -2);
+			long got = dmin_num(t, ":: rrnDownDmin = ", -3);
+
+			dmin_downLoop++;
+			if (prevNof == maxM) {
+				dmin_armPrevEqMax++;
+				diff_eq_int("the prevNofUcodes == maxM arm"
+					    " answers prevDmin (%ld)",
+					    got, prevD, trial);
+			} else if (got == tempD && tempD != prevD) {
+				dmin_armTemp++;
+			} else if (got == prevD && tempD != prevD) {
+				dmin_armPrev++;
+			}
+		} else {
+			dmin_downArb++;
+		}
+
+		if (strstr(t, "failed to find rrnUpDmin") != NULL)
+			dmin_upFailed++;
+		else if (strstr(t, "rrn up nofUcodes = ") != NULL)
+			dmin_upLoop++;
+		else
+			dmin_upArb++;
+
+		if (trial % 24 == 0)
+			dmin_capped++;
+
+		cdA->short_0c = 0x1234;
+		cdB->short_0c = 0x1234;
+		cdA->short_0e = 0x5678;
+		cdB->short_0e = 0x5678;
+		check_this(trial);
+
+		(void)dmin;
+	}
+
+	return diff_end();
+}
+
+static int
+run_dmin_outcomes(void)
+{
+	int i;
+
+	diff_begin("determineDminForRrn reached every arm");
+
+	diff_eq_int("the blob printed something (%ld)", dmin_printed, 1, 0);
+	for (i = 0; i < 17; i++)
+		diff_eq_int("diagnostic %ld fired", dmin_seen[i] > 0, 1, i);
+
+	diff_eq_int("the rate-down search ran %ld times",
+		    dmin_downLoop > 0, 1, dmin_downLoop);
+	diff_eq_int("the rate-down arbitrary arm ran %ld times",
+		    dmin_downArb > 0, 1, dmin_downArb);
+	diff_eq_int("the prevNofUcodes == maxM arm ran %ld times",
+		    dmin_armPrevEqMax > 0, 1, dmin_armPrevEqMax);
+	diff_eq_int("the rate-down `||` answered tempDmin %ld times",
+		    dmin_armTemp > 0, 1, dmin_armTemp);
+	diff_eq_int("the rate-down `||` answered prevDmin %ld times",
+		    dmin_armPrev > 0, 1, dmin_armPrev);
+	diff_eq_int("the rate-up search ran %ld times",
+		    dmin_upLoop > 0, 1, dmin_upLoop);
+	diff_eq_int("the rate-up arbitrary arm ran %ld times",
+		    dmin_upArb > 0, 1, dmin_upArb);
+	diff_eq_int("the rate-up failure arm ran %ld times",
+		    dmin_upFailed > 0, 1, dmin_upFailed);
+	diff_eq_int("the 100-iteration cap was driven %ld times",
+		    dmin_capped > 0, 1, dmin_capped);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1016,6 +1429,9 @@ main(void)
 	rc |= run_reconstruct();
 	rc |= run_constelbuild();
 	rc |= run_findnext();
+	rc |= run_dmin_quiet();
+	rc |= run_dmin_loud();
+	rc |= run_dmin_outcomes();
 
 	return rc;
 }
