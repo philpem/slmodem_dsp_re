@@ -13,7 +13,36 @@
  *   V22_FSE_free     .text 0x08ce80    90 bytes
  *   V22_FSE_getdiag  .text 0x08c590     3 bytes
  *   FSEv22_decision12 and FSEv22_decision24 -- see v22dec.c
- *   V22_FSE_receive  .text 0x08c5a0  NOT YET RECONSTRUCTED
+ *   V22_FSE_receive  .text 0x08c5a0 1885 bytes
+ *
+ * WHAT THE BLOCK DOES, from `V22_FSE_receive`, which is the only thing in the
+ * object that gives most of these fields a meaning:
+ *
+ *   - input samples are appended to a LINEAR history of 98 entries, and when
+ *     the next block would not fit, the top 49 entries are copied down over
+ *     the bottom 49 and the write index drops by 49.  It is not circular;
+ *     `FPM_FSE_receive`'s is;
+ *   - every `need` samples -- 1 the first time, then 6 -- a 49-tap real FIR is
+ *     run over the newest 49 history entries with each of the two coefficient
+ *     sets, giving one I/Q pair;
+ *   - that pair is turned into polar form by `FPM_atan` and one `FPM_phasor`,
+ *     the recovered carrier phase is SUBTRACTED FROM THE ANGLE, and one more
+ *     `FPM_phasor` turns it back into the I/Q pair the slicer sees.  The
+ *     sibling block derotates by a complex multiply; this one goes through
+ *     polar coordinates, so its magnitude survives the derotation exactly;
+ *   - `state->decision` slices that point and reports the ideal angle and
+ *     magnitude back, and its return value is the output symbol;
+ *   - a second-order PLL runs on the angle error, with the gain pair chosen by
+ *     a smoothed-error band, and held wide until 49 symbols have passed;
+ *   - the ideal point is rotated BACK into the equaliser's own frame and
+ *     subtracted from the FIR output; that error drives an LMS update of all
+ *     49 taps of both coefficient sets.
+ *
+ * THE HISTORY IS NOT PRE-FILLED.  While fewer than 49 entries have been
+ * written the FIR reads `hist[0..48]` -- a FIXED window, not a sliding one --
+ * so during the first eight symbols the newest sample is somewhere in the
+ * middle of the window and moves one place per sample.  That is the object's
+ * arithmetic and it is reproduced.
  *
  * WHERE THE STATE LIVES.  `V22FP_GetDiagnostics` does
  * `V22_FSE_getdiag((char *)modem[0x54] + 0x164)`, so the block is embedded at
@@ -73,6 +102,29 @@ struct v22_fse_cfg {
 #define V22_FSE_OUT	14	/* 0x1c bytes: out_i, out_q                */
 
 /*
+ * Input samples per symbol, and it is a LITERAL 6 in `V22_FSE_receive` and not
+ * the six of `V22_CRR_CLK_STEPS` beside it, which the same function also
+ * spells as a literal.  Two quantities that happen to be equal: this one is
+ * the symbol interval, that one is the length of `CRRv22_CLK`.  600 baud at
+ * 3600 Hz -- the V.22 receiver runs six samples to the symbol.
+ */
+#define V22_FSE_INTERP	6
+
+/*
+ * Symbols the PLL spends in its widest configuration.  `sym_count` counts up
+ * to this and stops one past it, and while it is at or below, the integrator
+ * is HELD AT ZERO -- so the loop is first-order for the first 49 symbols
+ * whatever `pll_sel` would otherwise have selected.
+ */
+#define V22_FSE_TRAIN	48
+
+/*
+ * `v22_fse_mu` has two entries, from its 4 bytes in .rodata.  It is file-local
+ * to src/pump/v22/v22_fse.c, so this is the bound and not a declaration.
+ */
+#define V22_FSE_MU	2
+
+/*
  * 100 bytes.
  *
  * The size is the highest offset any reconstructed or read function touches
@@ -88,28 +140,63 @@ struct v22_fse {
 	 */
 	const short *icoff;	/* +0x00 <- cfg.icoff                       */
 	const short *qcoff;	/* +0x04 <- cfg.qcoff                       */
-	short r08;		/* +0x08 init 0                             */
-	short r0a;		/* +0x0a init 0                             */
-	short r0c;		/* +0x0c init 0                             */
+	/*
+	 * The LMS step size, as an index into the file-local `v22_fse_mu`.
+	 * `V22_FSE_receive` reads it (`movswl 0x8(%esi),%ebp` at 0x8ca51) and
+	 * indexes that two-entry table with it; nothing in the block writes it,
+	 * so the datapump chooses the step.  Init leaves it 0, which is the
+	 * larger of the two.
+	 */
+	short mu_sel;		/* +0x08 init 0                             */
+	/*
+	 * The PLL gain pair, as an index into `CRRv22_PLL_K1`/`CRRv22_PLL_K2`.
+	 * Written by `V22_FSE_receive` only: 0 and 1 while `sym_count` is still
+	 * counting, then 1 above the wide error threshold and 2 below the
+	 * narrow one.  Set 0 has a zero K2, so the loop really is first-order
+	 * during training rather than merely slow.
+	 */
+	short pll_sel;		/* +0x0a init 0                             */
+	/*
+	 * The PLL's frequency integrator, in the same phase units as `phase`.
+	 * `freq += (K2[pll_sel] * err) >> 15` per symbol, and it is FORCED TO
+	 * ZERO on every symbol up to `V22_FSE_TRAIN`.  A short, not the int
+	 * `struct fpm_fse` uses -- `movw $0x0,0xc(%ebx)`.
+	 */
+	short freq;		/* +0x0c init 0                             */
 	/*
 	 * NOT written by init, and the test proves it: the byte pattern the
-	 * harness's allocator leaves survives the call.
+	 * harness's allocator leaves survives the call.  `V22_FSE_receive` does
+	 * not touch it either.
 	 */
 	short r0e;		/* +0x0e                                    */
 	/*
 	 * Four ints, initialised 0, 1, 1, 1.  `struct fpm_fse` has
 	 * `lms_force`, `pll_on`, `tilt_on`, `lms_on` at the analogous place
-	 * with exactly those four values, which is suggestive and is NOT
-	 * evidence: nothing reconstructed here reads any of them, and
-	 * `V22_FSE_receive` is where the meaning would have to come from.
-	 * Left unnamed deliberately.
+	 * with exactly those four values.  `V22_FSE_receive` reads the SECOND
+	 * and the FOURTH, and each is a plain `test`-and-skip over one block of
+	 * the loop, so those two are named from what they gate and not from the
+	 * resemblance.  It reads NEITHER +0x10 nor +0x18, so those two keep
+	 * their offsets for a name: the resemblance is not evidence, and the
+	 * function that would settle them has not been found.
 	 */
 	int r10;		/* +0x10 init 0                             */
-	int r14;		/* +0x14 init 1                             */
+	int pll_on;		/* +0x14 init 1; 0 skips carrier recovery
+				 *       entirely -- `mov 0x14(%ecx),%edx;
+				 *       test %edx,%edx; je` at 0x8c8ec        */
 	int r18;		/* +0x18 init 1                             */
-	int r1c;		/* +0x1c init 1                             */
-	short r20;		/* +0x20 init 0                             */
-	short r22;		/* +0x22 init 0                             */
+	int lms_on;		/* +0x1c init 1; 0 skips the coefficient
+				 *       update -- `mov 0x1c(%esi),%edi;
+				 *       test %edi,%edi; je` at 0x8ca46        */
+	/*
+	 * The smoothed phase error, and the smoothed squared decision error.
+	 * Both are the same first-order IIR, `x = (x * 0x799a >> 15) + (new *
+	 * 0x666 >> 15)` -- 0.95 and 0.05 in Q15, each term shifted SEPARATELY,
+	 * which is not the same as shifting the sum.  `err_avg` is what selects
+	 * the PLL gain band; `mse` gates the LMS update, which runs only while
+	 * it is strictly positive.
+	 */
+	short err_avg;		/* +0x20 init 0                             */
+	short mse;		/* +0x22 init 0                             */
 	/*
 	 * One entry per symbol the last `V22_FSE_receive` call produced.  Both
 	 * slicers read `out_i[n_out]` and `out_q[n_out]`, and the pairing is
@@ -118,7 +205,18 @@ struct v22_fse {
 	 */
 	short *out_i;		/* +0x24 V22_FSE_OUT entries                */
 	short *out_q;		/* +0x28 V22_FSE_OUT entries                */
-	short r2c;		/* +0x2c init 0                             */
+	/*
+	 * The two counters, both rewritten by every `V22_FSE_receive` call:
+	 * `n_in` is its `count` argument, stored on entry and never read back,
+	 * and `n_out` is zeroed on entry, incremented once per symbol and
+	 * RETURNED.  So `n_out` is per call, not cumulative, and it is also the
+	 * slicers' index into `out_i`/`out_q` because the increment happens
+	 * after the slicer returns.
+	 *
+	 * NOTHING BOUNDS `n_out` AGAINST `V22_FSE_OUT`.  Fifteen symbols in one
+	 * call walks off both buffers; see the note on the receive prototype.
+	 */
+	short n_in;		/* +0x2c init 0                             */
 	short n_out;		/* +0x2e the slicers' index into out_i/out_q*/
 	/*
 	 * The working coefficients, and what `V22_FSE_init` builds them from.
@@ -130,9 +228,28 @@ struct v22_fse {
 	short *icoeff;		/* +0x30 V22_FSE_TAPS entries               */
 	short *qcoeff;		/* +0x34 V22_FSE_TAPS entries               */
 	short *hist;		/* +0x38 V22_FSE_HIST entries, zeroed       */
-	short r3c;		/* +0x3c init 0                             */
-	short r3e;		/* +0x3e init 0                             */
-	short r40;		/* +0x40 init 0                             */
+	/*
+	 * How many entries of `hist` are filled: the next input sample goes to
+	 * `hist[hist_n]`, and the FIR reads the 49 entries BELOW it.  Not an
+	 * index of the newest sample and not a circular cursor -- when
+	 * `hist_n + need` would pass 98 the whole history is shifted down 49
+	 * places and this drops by 49, so it walks 0..98 and never wraps.
+	 */
+	short hist_n;		/* +0x3c init 0                             */
+	/*
+	 * The recovered carrier phase and the sample clock's contribution to
+	 * it.  `phase` is the PLL's own accumulator, wrapped into +-0x4000 by
+	 * two conditional subtractions of 0x8000; `clk_phase` steps by TWO per
+	 * input sample and is reduced modulo `V22_CRR_CLK_STEPS`, indexing
+	 * `CRRv22_CLK`.  The carrier the derotation uses is the sum.
+	 *
+	 * Because the step is even and init leaves `clk_phase` zero, only the
+	 * even entries of `CRRv22_CLK` are reachable unless the datapump seeds
+	 * this field -- and only entry 2 is reachable at all if every call is a
+	 * whole number of symbols.
+	 */
+	short phase;		/* +0x3e init 0                             */
+	short clk_phase;	/* +0x40 init 0                             */
 	short r42;		/* +0x42 init 0                             */
 	/*
 	 * Allocated by init and released by free, and read by NOTHING that has
@@ -148,8 +265,19 @@ struct v22_fse {
 	 * offset in here is the answer that this part is not modelled.
 	 */
 	unsigned char r4c[10];	/* +0x4c .. +0x55                           */
-	short r56;		/* +0x56 init 0                             */
-	short r58;		/* +0x58 init 1                             */
+	/*
+	 * Symbols since init, counted only while the PLL is enabled and held at
+	 * `V22_FSE_TRAIN + 1` for ever after.  Its only use is to hold the
+	 * integrator at zero and the gain band wide during training.
+	 */
+	short sym_count;	/* +0x56 init 0                             */
+	/*
+	 * Input samples owed before the next symbol.  Init leaves it 1, so the
+	 * first symbol comes out after ONE sample; `V22_FSE_receive` sets it to
+	 * `V22_FSE_INTERP` after that, and a call that runs out of input part
+	 * way through an interval leaves the remainder here.
+	 */
+	short need;		/* +0x58 init 1                             */
 	short r5a;		/* +0x5a not written by init                */
 	/*
 	 * The previous symbol's quadrant, kept OUTSIDE this block -- both
@@ -203,5 +331,28 @@ void V22_FSE_free(struct v22_fse *state);
  * more is harmless.
  */
 int V22_FSE_getdiag(struct v22_fse *state);
+
+/*
+ * One block of input samples in, one symbol per `V22_FSE_INTERP` of them out.
+ * The return value is `state->n_out`, the number of symbols this call
+ * produced, and the same count applies to `out`, to `state->out_i` and to
+ * `state->out_q`.
+ *
+ * `count` IS SIGNED and a negative one is not the same as zero: zero returns
+ * without entering the loop, and a negative count enters it, takes the
+ * short-block path and leaves without stashing anything -- so neither
+ * produces a symbol, but only the negative one can decrement `need`.  It
+ * cannot: the stash is guarded by `count > 0`.  Reproduced from the object's
+ * `test`/`cmpw $0x0` pair rather than tidied into one test.
+ *
+ * THE CALLER MUST NOT ASK FOR MORE THAN `V22_FSE_OUT` SYMBOLS.  `out_i` and
+ * `out_q` are 14 entries, the function writes one of each per symbol, and
+ * there is no bound anywhere in it -- 84 samples in one call (79 on the first)
+ * overruns both heap buffers.  The datapump's own block size is not
+ * reconstructed, so this is stated rather than enforced: adding a check here
+ * would be a fix, and this file is a reconstruction.
+ */
+unsigned short V22_FSE_receive(struct v22_fse *state, const short *in,
+			       unsigned short *out, short count);
 
 #endif /* DSPLIB_V22_FSE_H */

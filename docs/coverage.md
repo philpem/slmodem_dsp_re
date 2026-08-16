@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [###################...............]  55.0%    404088 bytes, 951 symbols
-  tested      [##################################] 100.0%    404065 bytes, 944 of 951 that can be
+  translated  [###################...............]  55.3%    405973 bytes, 952 symbols
+  tested      [##################################]  99.5%    404065 bytes, 944 of 952 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,6 +17,7 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 21 of ours (10728 bytes).
 
   translated, alias exists, and NOT tested:
+    V22_FSE_receive                                1885 bytes
     _ZN5QueueIfE5resetEv                             13 bytes
     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes
@@ -88,7 +89,7 @@ dsplibs.o reconstruction coverage
   what is left, by translation-unit span:
     VPcmV34Main.cpp +72                           135449 bytes   318 symbols
     class1tx.c +94                                 84164 bytes   317 symbols
-    V32mod.c +39                                   42364 bytes    79 symbols
+    V32mod.c +39                                   40479 bytes    78 symbols
     Dialer.c +18                                   14602 bytes    46 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
     Fdspkrnl.c +13                                  7635 bytes    29 symbols
