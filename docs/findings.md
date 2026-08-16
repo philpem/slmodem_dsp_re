@@ -60445,3 +60445,45 @@ and #170 -- whether our rate request follows an SNR estimate we can read -- is
 the question that decides whether the receiver is correctly seeing a bad
 channel or wrongly seeing a good one. That is the better use of the next
 session, and the trellis lead should not be allowed to absorb it.
+
+### 1976. THE OUTGOING MESSAGE BUILDER IS `probeselect`, AND IT WRITES NO TRELLIS FIELD — WHICH MAKES THE DEBUG-SITE BACKLOG THE THING BLOCKING #169 AND #170
+
+Hunting the V.34 MP transmit assembly (1975 left it unfound). It is
+`probeselect`, and the header states its whole output:
+
+> *"Writes the rate config at +0xaa84 and the outgoing message at +0xa9ac, and
+> nothing else; takes no arguments beyond the object."*
+
+The body comment pairs it with the decoder: *"the message it builds at +0xa9ac
+... so the two are an encode/decode pair over one message"*, `setfinalrate`
+being what unpacks the RECEIVED message's rate fields at `+0xa9de..+0xa9e3`.
+The `mp_or` / `mp_put_preemp` helpers write into it, and the power-reduction
+request that the far end's `settxlevel` reads back is one of its fields --
+which independently confirms this is the message that crosses the wire.
+
+**WHAT IT WRITES:** a power-reduction request, the offered or chosen symbol
+rates, and a pre-emphasis index per rate. **WHAT IT DOES NOT WRITE: a trellis
+code, a non-linear-encoder bit, or a shaping bit.**
+
+**SO ONE OF TWO THINGS IS TRUE, AND NEITHER IS ESTABLISHED:**
+
+  * those fields are written elsewhere in `v34handshak` -- which is
+    reconstructed (1975's correction), so they would be findable; or
+  * **we never write them at all**, in which case they carry whatever the
+    buffer held. If that is so, a consistently weak trellis choice would not
+    be a decision at all -- it would be uninitialised state, and the `ATI11`
+    reading of `64S-4D/16S-4D` (1974) would have a mechanism rather than
+    merely a correlation.
+
+The second is a much stronger claim than anything 1974 supported and it must
+not be asserted on the strength of a grep. What settles it is reading the
+message bits as they leave.
+
+**AND THAT IS EXACTLY WHAT THE DEBUG BACKLOG COSTS US.** `probeselect` is **28
+diagnostic sites missing of the blob's 43** -- it is the second-largest gap in
+the tree after `v34handshak`'s 261. The blob narrates its own message
+construction and our reconstruction does not, which is why #169 cannot be
+answered by reading source and why #170 cannot read the rate decision's input.
+
+**So the debug-site backlog is not housekeeping.** It is the instrument both
+open receiver questions need, and `probeselect` is where it pays first.
