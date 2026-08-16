@@ -76,9 +76,16 @@ ADD --checksum=sha256:ccd30a0a9cf8530940663e799d51a243c60059a57142727920503eaaab
 # since there is no 64-bit toolchain here to build it with.  Spelling
 # build/host/target keeps it a native i686 build.
 #
-# i686-pc-linux-gnu is also Gentoo's x86 CHOST of the period, and closer to
-# the original than Debian's i486-linux.  It only sets a DEFAULT -march/-mtune,
-# and every build here passes both explicitly, so it does not reach codegen.
+# i686-pc-linux-gnu is closer to the original than Debian's i486-linux.  It
+# only sets a DEFAULT -march/-mtune, and every build here passes both
+# explicitly, so it does not reach codegen.
+#
+# THE CLAIM THAT IT IS "GENTOO'S x86 CHOST OF THE PERIOD" WAS WRONG and is
+# withdrawn: the generic stage3-x86-2005.0 ships CHOST="i386-pc-linux-gnu",
+# with CFLAGS="-O2 -mcpu=i686 -fomit-frame-pointer".  Nothing here changes --
+# the triplet cannot reach codegen when -march and -mtune are always spelled
+# out -- but do not cite this line as evidence.  Dockerfile.gentoo uses the
+# stage3's own CHOST.  Finding 2502.
 #
 # CC is Debian's gcc-3.4: the base image installs no unversioned `cc`.
 RUN set -e; cd /build \

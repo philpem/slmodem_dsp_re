@@ -25,6 +25,16 @@ compiler matches 330 of 924 symbols where 3.4.4 matches 324 -- SIX GAINED,
 NONE LOST.  Every run now prints both `.comment` strings so the reference and
 the measurement can be read together.
 
+AND THE VENDOR'S PATCH STACK NOW HAS A NUMBER TOO.  `dsplibs-tc342-gentoo`
+(Dockerfile.gentoo) is Gentoo's own `gcc-3.4.2-r2` built from its ebuild
+inside stage3-x86-2005.0, and it is the only compiler here whose `.comment`
+matches the blob's byte for byte.  It changes NOTHING measurable: 182 of the
+183 objects are byte-identical to stock 3.4.2's, the match is 334 either way
+with none gained and none lost, and the one difference is a schedule
+permutation in `DTMF_MTD_detect`.  So the two `.comment` lines below being
+equal is a property of the IMAGE and not of the numbers -- which is why the
+default stays the stock one, buildable from the network alone.  Finding 2500.
+
 THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
 
     -march=i386             no cmov and no fcomi anywhere in 1.2 MB, and float

@@ -178,17 +178,27 @@ which is why `compare.py` now prints the blob's `.comment` and ours on every
 run. Finding 2200, and 2201 for what the blob's Gentoo patch stack means:
 stock 3.4.2 is the exact POINT RELEASE, never the exact compiler.
 
-**THE GENTOO SOURCES ARE NOW RECOVERED** and that gap is closable. All six of
-`gcc-3.4.2-r2`'s `SRC_URI` files verify byte-exact against Gentoo's digest,
-with the real ebuild, its `toolchain.eclass` and all 96 in-tree patches, in
-`tools/toolchain/gentoo-3.4.2-r2/`. The archives are not in git -- run
-`tools/toolchain/gentoo-3.4.2-r2/fetch-distfiles.sh` to pull and verify them.
-What proves it is the right recipe is not a checksum but the object's
-**double space** after `3.4.2`: the eclass calls `gcc_version_patch` with an
-empty `BRANCH_UPDATE`, so the argument carries a leading space and the sed
-adds another. Nobody has rebuilt with it yet, so `-O3` (2155) and
-`-mno-ieee-fp` (1990) still rest on stock 3.4.2 until re-measured. Finding
-2320.
+**AND THE GENTOO COMPILER ITSELF IS NOW BUILT.** `dsplibs-tc342-gentoo` is
+`sys-devel/gcc-3.4.2-r2` built from Gentoo's own ebuild inside Gentoo's own
+stage3-x86-2005.0 -- glibc 2.3.4, binutils 2.15.92.0.2-r1 -- and it prints
+the blob's `.comment` back byte for byte, double space and all:
+
+```
+tools/toolchain/build-gentoo-image.sh              # about a minute
+TC_IMAGE=dsplibs-tc342-gentoo tools/toolchain/build.sh
+PERIOD_IMG=dsplibs-tc342-gentoo make period
+```
+
+It needs the stage3 and the six `SRC_URI` tarballs, neither in git;
+`tools/toolchain/gentoo-3.4.2-r2/fetch-distfiles.sh` pulls and verifies the
+latter. **What it changes is nothing**: 182 of 183 objects come out
+byte-identical to stock 3.4.2's, the symbol match is 334 either way with none
+gained and none lost, and the single difference is a schedule permutation in
+`DTMF_MTD_detect` that flips no symbol. So 2201's residual is now measured
+rather than bounded, and the default stays `dsplibs-tc342` -- which anyone can
+build from the network alone. `-O3` (2155) and `-mno-ieee-fp` (1990) were
+re-measured on the real compiler and both survive symbol for symbol. Findings
+2320, 2500 and 2501.
 
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/build.sh` with the evidence beside each:

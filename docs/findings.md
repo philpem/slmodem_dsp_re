@@ -56892,3 +56892,193 @@ selects than the blob -- `V34scrambler`, `V34descrambler`, `dpskinit`,
 sign tests they are the same defect with the sides swapped: we route an
 unordered value the object's opposite way.  Not investigated here; named so
 the next sweep starts with it.
+
+---
+
+### 2500. THE GENTOO COMPILER IS BUILT AND IT NAMES ITSELF BYTE FOR BYTE -- AND ITS 96-PATCH STACK REACHES CODE GENERATION IN ONE FUNCTION OF 938
+
+*2201 called stock GNU 3.4.2 "the exact point release, never the exact
+compiler" and put the residual at "one 488 KB patchset whose contents nobody
+can now read". 2320 recovered the patchset. This applies it.*
+
+```
+$ docker run --rm --platform linux/386 dsplibs-tc342-gentoo gcc --version
+gcc (GCC) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+```
+
+Double space and all. Every one of the **279 `.comment` entries in the blob is
+byte-identical to what this compiler stamps** -- 67 bytes, compared as bytes
+rather than read as text.
+
+**WHAT IT IS.** `tools/toolchain/Dockerfile.gentoo`, built by
+`tools/toolchain/build-gentoo-image.sh`. The base is not Debian: it is
+`docker import` of Gentoo's own **stage3-x86-2005.0** (glibc 2.3.4, binutils
+**2.15.92.0.2-r1**, gcc 3.3.5 as the bootstrap compiler), md5-verified against
+the install CD's sidecar. **A 2005 userland runs unmodified on a 2026 kernel**
+-- that was the risk in attempting this and it is not one. The stage3 has no
+portage tree, so `tools/toolchain/gentoo-3.4.2-r2/build-gentoo-gcc.sh`
+reproduces `gcc-3.4.2-r2.ebuild` + `toolchain.eclass` by hand, citing the
+line each step comes from. The compiler builds in **45 seconds**.
+
+**THE VERSION STRING IS NOT THE ACCEPTANCE TEST, AND THIS IS THE TRAP IN THE
+WHOLE EXERCISE.** `gcc_version_patch` is the LAST step of `src_unpack` and is
+two seds on `gcc/version.c`. A tree with half the patch stack silently skipped
+still prints the string above. So the build script makes every patch fatal and
+counts them: **47 applied, 0 skipped** -- 22 from `gcc-3.4.2-patches-1.1`, the
+ProPolice `gcc_3_4_1.dif`, 20 PIE (12 upstream, 1 nondef, 7 def), and 4 from
+`FILESDIR`. The count is what says the recipe ran; the string only says it was
+the right recipe.
+
+**AND WHAT IT CHANGES IS ESSENTIALLY NOTHING.** Whole tree, flags fixed at the
+set the record argues for, 938 symbols the blob and this tree both have:
+
+| compiler | identical | same size | different | of the blob's bytes |
+|---|--:|--:|--:|--:|
+| 3.4.4 (Debian sarge, `dsplibs-tc`) | 328 | 71 | 539 | 80.7% |
+| 3.4.2 stock GNU (`dsplibs-tc342`) | 334 | 69 | 535 | 80.8% |
+| **3.4.2-r2 Gentoo (`dsplibs-tc342-gentoo`)** | **334** | 69 | 535 | 80.8% |
+
+Stock to Gentoo is **0 gained, 0 lost -- the matched sets are equal element by
+element**, not merely equal in size. Sarge to Gentoo is +6/-0 and they are the
+same six symbols 2200 named, so this reproduces that finding through a
+different distribution.
+
+**THE OBJECT-LEVEL TEST IS THE SHARP ONE.** All 183 translation units built by
+both, `.comment` stripped, compared as bytes: **182 identical, 1 differing.**
+The one is `src/service/dtmf_detector.c`, and inside it `DTMF_MTD_detect` --
+**261 instructions on both sides, the same multiset, a different order**, first
+divergence at instruction 27, code size unchanged. It matches on neither arm,
+so it moves no number. That is the entire measurable effect of Gentoo's 96
+patches on a 1.2 MB reconstruction.
+
+**SO 2201'S RESIDUAL IS NOW MEASURED RATHER THAN BOUNDED.** Its ceiling
+argument -- "a vendor patchset applied WITHIN one point release is a strictly
+smaller perturbation" than the 18-of-183 that two point releases cost -- was
+right, and the true value is 1 of 183 and 0 of 938. The honest reading is that
+*for this source and these flags* the vendor patch stack does not reach code
+generation; it is not a claim that the patches are inert.
+
+**THE COMPILER IS ALSO VANILLA IN THE WAY THE OBJECT IS.** Compiled with no
+flags beyond the usual set, output has no `__guard`, no
+`__stack_smash_handler` and no `get_pc_thunk` -- the two Gentoo features the
+version string names are built IN and switched OFF, exactly as 606 and 2201
+read out of the blob. `SPLIT_SPECS` shipped them for `gcc-config` to select
+and `make_gcc_hard` never runs on a vanilla profile.
+
+**WHAT THE DELTA IS AND IS NOT ATTRIBUTABLE TO.** This image changes three
+things at once against `dsplibs-tc342`: Gentoo's patch stack, binutils
+2.15.92.0.2-r1 for sarge's 2.15, and glibc 2.3.4 for sarge's. It is a BUNDLE
+A/B. With the result at 0 symbols that costs nothing, but a future non-zero
+delta measured here must not be credited to the patch stack without a further
+build -- stock 3.4.2 inside the same stage3 -- to separate the assembler.
+
+**DEVIATIONS FROM THE EBUILD, EACH DELIBERATE**, and all listed at the foot of
+`build-gentoo-gcc.sh`: plain `make` rather than x86's `profiledbootstrap`
+(2200's argument -- the compiler that builds `cc1` does not change what `cc1`
+emits); `--build`/`--target` spelled out because `--platform linux/386` leaves
+`uname -m` saying `x86_64` and config.guess then configures for a target that
+cannot be built; `--disable-nls`; and the portage plumbing (`elibtoolize`,
+`gnuconfig_update`, `split_out_specs_files`, all of `src_install`) which
+cannot reach code generation. `contrib/gcc_update --touch` IS run -- the
+stage3 has no gperf, so without it the build tries to regenerate `c-gperf.h`
+and fails.
+
+**TWO CORRECTIONS TO `RECOVERY.txt`**, both found by reading the eclass rather
+than the notes: `pro-police-docs.patch` is **not** applied -- eclass:405 guards
+it on `sspdocs="no"` and `PP_VER=3_4_1` takes the branch that sets it to
+`"yes"`, which the tarball shipping `gcc_3_4_1.dif` rather than `protector.dif`
+independently confirms -- and the `FILESDIR` patches come **after**
+`gcc_version_patch`, not before, because the ebuild's `src_unpack` calls
+`gcc_src_unpack` first and patches afterwards.
+
+**THE DEFAULT DOES NOT MOVE.** `make period` and `build.sh` still default to
+`dsplibs-tc342`, which anyone can build from the network alone; this image
+needs a 89 MB stage3 and 28 MB of distfiles that live on one person's web
+archive. Since the two produce the same objects, the default costs nothing --
+and if that ever stops being true, this finding is the reason to revisit it.
+`make period` on the Gentoo compiler is **185 passed, 0 failed**, the same as
+on both other arms, so the differential tier does not discriminate either.
+
+---
+
+### 2501. `-O3` AND `-mno-ieee-fp` SURVIVE THE REAL COMPILER, SYMBOL FOR SYMBOL
+
+*2320 left both flags resting on stock 3.4.2 and said so: "nothing here
+revises 2155's `-O3` or 1990's `-mno-ieee-fp` ... until re-measured". This is
+the re-measurement, on the compiler the object names.*
+
+**2155 (`-O2` against `-O3`) reproduces exactly.** One variable, both arms on
+`dsplibs-tc342-gentoo`, separate `TC_OUT` per arm:
+
+| level | identical | of the blob's bytes |
+|---|--:|--:|
+| `-O2` | 319 | 72.9% |
+| `-O3` | **334** | 80.8% |
+
+**+19 gained, 4 lost**, which is the additivity test 2155 set itself and the
+same +19/-4 that 2200 measured on stock 3.4.2 (315 -> 330 there, 319 -> 334
+here; the tree has gained four matches since). The four lost are the same four
+again, third measurement running: `RxHdxStartB103`, `TxHdxDataB103`,
+`V90Demodulator::setSessionFlag`, `V92Jd::getJdBitVector`.
+
+**1990's STRONG HALF -- THE MECHANISM -- IS BYTE-FOR-BYTE WHAT IT WAS.** The
+five comparison forms, compiled in the new image:
+
+```
+gentoo 3.4.2-r2, -mno-ieee-fp   4 fcomps, 1 fcompl
+gentoo 3.4.2-r2, -mieee-fp      5 fucompp
+```
+
+Identical to what 2200 recorded for sarge's 3.4.4 and for stock 3.4.2. The
+default really does emit an unordered compare for `a>=b`, `a>b`, `!(a<b)`,
+`a==b` and the `double` form whatever the source says, and the blob's census
+-- 406 ordered against four, all four inside libm's `pow` -- is about the blob
+and cannot move.
+
+**Its match-rate half strengthens slightly**: 331 -> **334**, +3 and none
+lost, where stock 3.4.2 gave +2. The two symbols 2200 named turn again --
+`sinc<float>` and `ResamplerTiming::invertPhase` -- and
+`V90ConstellationDesigner::realK` joins them.
+
+Neither flag conclusion moves. Both were reached against a compiler that was
+not the object's, and both hold on the one that is.
+
+---
+
+### 2502. THE STAGE3'S OWN `make.conf` IS THREE OF THE SEVEN FLAGS THE OBJECT WAS READ FOR
+
+The Gentoo 2005.0 x86 stage3 ships this, and it is the installation default a
+2005 x86 Gentoo box started life with:
+
+```
+CHOST="i386-pc-linux-gnu"
+CFLAGS="-O2 -mcpu=i686 -fomit-frame-pointer"
+```
+
+An `i386-*` CHOST defaults `-march` to i386. `-mcpu=` was already deprecated in
+3.4.2 -- it warns and means `-mtune=`, and `-mcpu=i686` and `-mtune=i686`
+produce **byte-identical objects** on this compiler, which is the period
+spelling `compare.py`'s header already records as equivalent. So the default
+CFLAGS of the userland the object was built in are
+
+    -march=i386  -mtune=i686  -fomit-frame-pointer
+
+which is three of the seven flags in `build.sh`, each derived independently
+from the object years apart: `-march=i386` from the absence of cmov and fcomi
+in 1.2 MB (606), `-mtune=i686` from a match rate that went 30 -> 82 (612), and
+`-fomit-frame-pointer` from the prologues. Three separate readings of the
+artefact land on one distribution's default line.
+
+**IT IS CORROBORATION, NOT DERIVATION, AND IT CUTS BOTH WAYS.** The same line
+says `-O2`, and 2155 measures `-O3` as +19/-4 better. The two are not in
+conflict -- editing CFLAGS was the whole point of Gentoo, and
+`gcc-3.4.2-r2` was `~x86` only, so the builder was by definition not running
+defaults (2320) -- but nobody should quote the make.conf as evidence for the
+optimisation level, and `-frename-registers`, `-mfpmath=387` and
+`-mno-ieee-fp` are not in it either. What it supports is the three flags
+above, and the CHOST: **`i386-pc-linux-gnu`, not the `i686-pc-linux-gnu` that
+`Dockerfile.exact` forces** on the strength of it being "Gentoo's x86 CHOST of
+the period". The generic x86 stage3 says otherwise. It sets a default
+`-march`/`-mtune` only, and every build here passes both explicitly, so it
+does not reach codegen -- but the new image uses the stage3's own CHOST and
+`Dockerfile.exact`'s comment should not be read as evidence.
