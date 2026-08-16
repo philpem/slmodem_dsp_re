@@ -61064,3 +61064,48 @@ object's and the residue is placement.  Three parts of the residue are named rat
     would.  Recorded so that the next reader does not spend a session
     rediscovering that it is unexplained rather than absent.
 
+### 3548. `FPM_phasor` READS ITS QUADRANT SIGN TABLE OUT OF BOUNDS FOR A NEGATIVE PHASE, AND `FPM_FSE_receive` IS THE FIRST CALLER THAT HANDS IT ONE
+
+The blob's `FPM_phasor` (0x0a9300) splits its phase with `sar $0x5` then
+`sar $0x8` and indexes the two sign tables with the result UNMASKED:
+
+    a9367: movswl 0x0(%esi,%esi,1),%edx   <== R_386_32 FPM_cos_sign
+    a9392: movswl 0x0(%esi,%esi,1),%eax   <== R_386_32 FPM_sin_sign
+
+`%esi` is the quadrant and there is no `and $0x3` anywhere in the function.
+`struct fpm_phasor::phase` is 16 bits and the function reads it as a SIGNED
+short, so any phase from 0x8000 up arrives negative, the quadrant comes out
+-1..-4, and both lookups read four entries BEFORE the table.  Our
+`src/dsp/fpm_phasor.c` reproduces that faithfully -- `sign[quad]`, no mask --
+which is right, and it is also why the two disagree: what precedes each table
+is a property of the LINK, not of the code.
+
+  - the blob has `FPM_sin_sign` at .data 0x81dc and `FPM_cos_sign` at 0x81e4,
+    adjacent and in that order, both GLOBAL and both in `.data`.  So the
+    blob's `FPM_cos_sign[-4..-1]` is exactly `FPM_sin_sign[0..3]`, and its
+    `FPM_sin_sign[-4..-1]` is `{28620, -25834, 12917, 0}`, the tail of
+    whatever `.data` object precedes it;
+  - ours are `static const` in `.rodata` with the 514-byte tables laid out
+    between them -- `fpm_cos_sign` at +0, `fpm_cos_table` at +0x20,
+    `fpm_sin_sign` at +0x222 -- so neither out-of-range read lands on the same
+    bytes, and `fpm_cos_sign[-4]` is not even in the object.
+
+**Nothing reconstructed had ever driven it out of domain.** `FPM_FSE_receive`
+does, because its derotation reduction is a PAIR OF TESTS and not a loop: a
+half-angle below -0x4000 is lifted once and left negative, so the doubled
+angle handed to the phasor is negative for a quarter of the input range.
+`t_fpm_fse_recv` reached it with a tilt coefficient of 512, which turns a
+phase error of 700 into a bias of 30720 and puts the angle out of range within
+two symbols.  The symptom is diagnostic in itself and worth recognising again:
+`out_q` and the smoothed error MATCH while `out_i` alone differs, because
+`fpm_sin_sign[-4..-1]` happens to land on a defined object in both builds and
+`fpm_cos_sign[-4..-1]` does not.
+
+This is recorded as D392 rather than fixed here.  Making the two tables global,
+`.data` and adjacent in the blob's order is a change to another function's
+reconstruction and needs its own differential test; and it would still leave
+`FPM_sin_sign[-4..-1]` depending on a neighbouring translation unit.
+`t_fpm_fse_recv` stays inside the domain instead and says so at every trial
+that could leave it, which is the difference between a suite that avoids a
+case and one that does not know it exists.
+

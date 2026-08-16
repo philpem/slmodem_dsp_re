@@ -473,6 +473,23 @@ sweep_derot_edge(const char *label, short carrier, int count_them)
 		    rerot_edge_hits > 0, 1, 0);
 	sep_rerot_reach += rerot_edge_hits;
 
+	/*
+	 * WHY ONLY THE RETURNED ANGLE IS COMPARED AT EVERY POSITION.  A
+	 * quarter of the sweep leaves the derotation angle negative -- the
+	 * two adjustments are a pair of tests and not a loop -- and
+	 * `FPM_phasor` is only defined for 0 .. 0x7fff: past that it indexes
+	 * its quadrant sign table with a NEGATIVE quadrant and reads whatever
+	 * the linker put in front of it, which is `FPM_sin_sign` in the blob
+	 * and something else entirely here.  Finding 3548 and D392.  The
+	 * angle itself is integer arithmetic and is compared at all 65536
+	 * positions; `out_i`/`out_q` and the scatter log go through the
+	 * phasor, so they are compared once, at the end, where the check
+	 * below says the last position is in domain.  If that ever stops
+	 * being true this fails rather than quietly comparing nothing.
+	 */
+	diff_eq_int("the sweep ends in the phasor's domain (%ld)",
+		    out_b[0] < 0x8000, 1, 0);
+
 	compare_state("state after the sweep", 0);
 	compare_buffers(0);
 	drive_clk[0] = 137;
@@ -831,16 +848,48 @@ trial_tilt(void)
 		init_pair(&cfg);
 		ours.lms_on = theirs.lms_on = 0;
 		ours.tilt_on = theirs.tilt_on = k;
-		ours.tilt_coeff[0] = theirs.tilt_coeff[0] = 4096;
-		ours.tilt_coeff[1] = theirs.tilt_coeff[1] = -2048;
-		ours.tilt_coeff[2] = theirs.tilt_coeff[2] = 1024;
-		ours.tilt_coeff[3] = theirs.tilt_coeff[3] = -512;
+		/*
+		 * SMALL INTEGERS, and the object is what says so: the 4-tap
+		 * sum is stored without any shift, so a coefficient of 512
+		 * multiplies a phase error of 700 into 30720 and drives the
+		 * derotation angle out of `FPM_phasor`'s domain within two
+		 * symbols.  These four are asymmetric, of two magnitudes and
+		 * of mixed sign, and the recursion through `tilt_out` settles
+		 * rather than growing.
+		 */
+		ours.tilt_coeff[0] = theirs.tilt_coeff[0] = 2;
+		ours.tilt_coeff[1] = theirs.tilt_coeff[1] = -1;
+		ours.tilt_coeff[2] = theirs.tilt_coeff[2] = -1;
+		ours.tilt_coeff[3] = theirs.tilt_coeff[3] = 1;
 		slice_perr = 700;
 		slice_mag = 1234;
-		counts[0] = 8;
-		call_pair(in_buf, counts[0], k);
-		compare_state("tilt", k);
-		compare_buffers(k);
+		/*
+		 * ONE SAMPLE PER CALL, eight times, and compared after each:
+		 * the filter is recursive through its own output and its delay
+		 * line is four deep, so a defect in it does not show until the
+		 * fourth symbol and the run that finds it should say which
+		 * symbol rather than which call.
+		 */
+		for (counts[0] = 0; counts[0] < 8; counts[0]++) {
+			call_pair(&in_buf[counts[0]], 1, k * 8 + counts[0]);
+			compare_state("tilt", k * 8 + counts[0]);
+			compare_buffers(k * 8 + counts[0]);
+			/*
+			 * IN DOMAIN, and asserted rather than assumed.
+			 * `fixed_slicer` returns the derotation angle, and
+			 * `FPM_phasor` is only defined for 0 .. 0x7fff -- past
+			 * that it indexes its quadrant sign table with a
+			 * NEGATIVE quadrant and reads whatever precedes it,
+			 * which is not the same bytes in this build as in the
+			 * blob.  Finding 3548 and D392.  The coefficients
+			 * below are chosen to keep the bias small enough that
+			 * the angle stays inside it, and this is the check
+			 * that says so.
+			 */
+			diff_eq_int("derotation angle in phasor domain (%ld)",
+				    out_b[0] < 0x8000, 1,
+				    k * 8 + counts[0]);
+		}
 		got[k] = theirs.tilt_out;
 		free_pair();
 	}

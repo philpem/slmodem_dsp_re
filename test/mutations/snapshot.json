@@ -277,7 +277,7 @@
    }
   },
   "fpmfserecv": {
-   "key": "154d16bf7d1173dcfd25418101ffc5fc55eb0f3f83f61c836d0c2f0a5a4fc8e7",
+   "key": "598cafb5a423ceab99b8167799027db8c8b047e26558b0455d5973b4a26aab1f",
    "summary": "45 mutations: 43 caught (43 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "a one-sample tail is dropped rather than stashed": "caught",

@@ -6844,3 +6844,32 @@ largest possible error rather than a negative one, which is arguably what was
 wanted; but the same test also means `state->mse` is non-negative for ever, and
 the `mse > 0` gate below it can only fail on an exact zero.  Reproduced rather
 than corrected, and the consequence for the LMS gate is finding 3546.
+
+## D392 ⚠ `FPM_phasor` cannot match the blob for a phase of 0x8000 or more
+
+*Batch of 2026-08-16, from `FPM_phasor` (blob 0x0a9300) at 0x0a9367 and
+0x0a9392 (`movswl 0x0(%esi,%esi,1)` against `FPM_cos_sign` and `FPM_sin_sign`,
+with no mask on the quadrant).  **Reachability: any caller that sets
+`phase` to 0x8000 or above -- `FPM_FSE_receive`'s derotation does, for a
+quarter of its angle range, because its reduction is a pair of tests and not a
+loop.**  **Observability: `cos`, and through it every output the caller
+derives from it; `sin` happens to agree because the four entries before
+`FPM_sin_sign` are `FPM_cos_sign` in the blob and a defined object here too.**
+Status: UNMEASURABLE, not verified -- the two implementations read different
+memory and no input makes them agree.  Fix class: would need
+`FPM_cos_sign`/`FPM_sin_sign` made global, `.data` and adjacent in the blob's
+order, which is a change to `src/dsp/fpm_phasor.c` with its own differential
+test to write, and even then the four entries before `FPM_sin_sign` belong to
+a neighbouring translation unit.*
+
+The object indexes its two quadrant sign tables with an unmasked quadrant, so a
+negative phase reads four entries before each table.  Our reconstruction
+reproduces the unmasked index -- that part is right -- but the tables are
+`static const` in `.rodata` with the 514-byte wave tables laid out between
+them, where the blob's are adjacent globals in `.data`.  The out-of-range read
+is therefore deterministic on both sides and different.
+
+`t_fpm_fse_recv` stays inside 0 .. 0x7fff wherever an observable depends on the
+phasor, and asserts that it has -- see the domain checks in its tilt trial and
+at the end of its derotation sweep.  Finding 3548 for the whole derivation and
+for why the symptom is a mismatched `out_i` beside a matching `out_q`.
