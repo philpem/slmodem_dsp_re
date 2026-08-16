@@ -431,6 +431,17 @@ Task numbers are not safe across sessions either: two task stores exist whose
 - Other sessions work in sibling worktrees. Check `git worktree list` and
   `git status` before touching one, and never `git stash` in a tree you do
   not own.
+- **A bare `cd` in a compound command FAILS OPEN: everything after it runs in
+  the tree you were already in.** Use `git -C <dir>` in preference, and where a
+  `cd` is unavoidable write `cd <dir> || exit 1`. A worktree that had been
+  auto-removed made `cd .claude/worktrees/fix164` fail; the `git rebase master`
+  on the next line therefore ran in the MAIN tree, against
+  `improve/v34-training` — a branch another session was committing to — and
+  stopped on a `findings.md` conflict rather than at the `cd`. Aborted, and the
+  branch, the working tree and that session's three commits all verified
+  intact, but the window in which a concurrent write would have been lost was
+  real. The `git status` check in the bullet above cannot save you here,
+  because by then you are checking the wrong tree.
 - **A fresh worktree is missing TWO paths outside itself, and both are now
   found for you.** Agent worktrees live under `.claude/worktrees/`, so nothing
   relative to `..` resolves.

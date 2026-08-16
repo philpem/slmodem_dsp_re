@@ -58983,3 +58983,44 @@ work in sibling worktrees" line, finding 1563 itself, and the comment above
 `prereq` in the Makefile.  Said here because the task that commissioned this
 work believed one existed, and the next reader should not go looking for the
 version this supposedly edited.
+
+======================================================================
+
+### 3101. A BARE `cd` FAILS OPEN, AND THE NEXT COMMAND RAN IN ANOTHER SESSION'S TREE
+
+*Recorded because it is the same shape as 700 -- a git operation that does
+something plausible instead of nothing when its precondition is absent -- and
+because the tree already had a rule that would not have caught it.*
+
+The intended command was, in one Bash call:
+
+    cd .claude/worktrees/fix164
+    git rebase master
+
+`fix164` had been auto-removed after its branch merged, so the `cd` failed.
+`cd` failing does not stop the call: the shell printed the error, returned
+non-zero from that ONE statement, and ran the next line **in the tree the call
+started in** -- the main checkout, which had `improve/v34-training` checked
+out and a second session actively committing #170 work to it.  `git rebase
+master` therefore rewrote that branch's three commits and stopped on a
+`findings.md` conflict.  Aborted at once; branch back at `d68b013`, working
+tree clean, no `rebase-merge`/`rebase-apply` state, all three commits
+(`1bc0a7f`, `c42376e`, `d68b013`) and `testbench/snrblocks.py` present, and the
+reflog shows exactly two entries, `rebase (start)` and `rebase (abort)`.
+
+**No work was lost, and the window in which it could have been was real.** A
+write from the other session during the seconds the rebase held would have
+landed on a detached HEAD.
+
+**WHY THE EXISTING RULE DOES NOT COVER IT.**  CLAUDE.md already says to check
+`git worktree list` and `git status` before touching another session's tree.
+That check had been made, and it passed -- against the tree the command was
+*supposed* to run in.  A precondition verified in one tree says nothing about
+the tree the command actually reaches, and the failure mode here is precisely
+that those are different.  This is the same class as the six bench calls spent
+on a no-op earlier in the same session: **a precondition stated but not GATED
+ON is not a precondition.**
+
+The rule added is `git -C <dir>` in preference to `cd`, and `cd <dir> || exit
+1` where a `cd` is unavoidable.  `git -C` cannot fail open: if the directory is
+gone the git command itself fails and nothing else runs.
