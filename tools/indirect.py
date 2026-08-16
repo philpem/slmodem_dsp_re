@@ -13,12 +13,55 @@ symbol boundary.  Landing mid-function means a switch jump table, which is
 intra-function control flow and not an entry point; those are counted
 separately rather than dropped silently.
 """
+import os
+import subprocess
 import sys
 from collections import defaultdict
-from elftools.elf.elffile import ELFFile
-from elftools.elf.sections import SymbolTableSection
 
-path = sys.argv[1]
+#
+# `tools/dis.py` shadows the standard library's `dis`, and `inspect` imports
+# that on the way up from pyelftools -- so this file died on the import below
+# with
+#
+#     AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'
+#
+# naming neither this directory nor the file responsible, for as long as the
+# tool had existed.  Drop our own directory from the search path before the
+# import rather than renaming dis.py, whose name is right and which is
+# referenced from several findings.  Same fix as whichfield.py and
+# boundarycheck.py; finding 3520.
+#
+_here = os.path.abspath(os.path.dirname(__file__))
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _here]
+
+from elftools.elf.elffile import ELFFile                    # noqa: E402
+from elftools.elf.sections import SymbolTableSection        # noqa: E402
+
+
+def default_blob():
+    """$BLOB, else the main repository's copy -- the Makefile's own rule.
+
+    A plain `../slmodemd/dsplibs.o` is wrong in every agent worktree, since
+    those live under `.claude/worktrees/` and it resolves to
+    `.claude/worktrees/slmodemd`.  `git rev-parse --git-common-dir` names the
+    MAIN repository's .git from inside any worktree, which is how `BLOB` in
+    the Makefile and the `prereq` target both find their way out.
+    """
+    if os.environ.get("BLOB"):
+        return os.environ["BLOB"]
+    try:
+        gcd = subprocess.check_output(["git", "rev-parse", "--git-common-dir"],
+                                      text=True).strip()
+    except Exception:
+        return "../slmodemd/dsplibs.o"
+    return os.path.abspath(os.path.join(gcd, os.pardir, os.pardir,
+                                        "slmodemd", "dsplibs.o"))
+
+
+# The resolved path is PRINTED with the counts below: a tool that can silently
+# read a different object than the caller meant is exactly the hazard
+# `readyqueue.py`'s comment is about, and printing it costs one line.
+path = sys.argv[1] if len(sys.argv) > 1 else default_blob()
 
 with open(path, "rb") as fh:
     elf = ELFFile(fh)
@@ -42,6 +85,7 @@ with open(path, "rb") as fh:
                 pass
 
     exact = defaultdict(set)   # target symbol -> sections it is pointed from
+    onsym = 0                  # RELOCATIONS landing on a boundary, not symbols
     midfn = 0
     total = 0
 
@@ -68,13 +112,18 @@ with open(path, "rb") as fh:
             total += 1
             if addr in text_at:
                 exact[text_at[addr]].add(target_name)
+                onsym += 1
             else:
                 midfn += 1
 
 print("pointers stored in data that resolve to a .text symbol")
 print()
+print("  object: %s" % os.path.abspath(path))
 print("  %d relocations into .text from data sections" % total)
-print("  %d land exactly on a symbol (indirect entry points)" % len(exact))
+# The two numbers on this line are different measurements and the arithmetic
+# only closes on the first: one symbol can be pointed at from many tables.
+print("  %d land exactly on a symbol, naming %d distinct entry points"
+      % (onsym, len(exact)))
 print("  %d land mid-function (switch jump tables, not entry points)" % midfn)
 print()
 for name in sorted(exact):

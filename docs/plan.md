@@ -75,11 +75,15 @@ dispatch-table targets — `VOICE_process`, `FAX_process`, `V92CP::bitsToInfo`,
 both V.34 diagnostics. A direct-call walk cannot see them. Treat the bucket as
 real work whose *ordering* is unknown, not as work that can be skipped.
 
-(`tools/indirect.py` is the tool for this and it currently **crashes** on the
-`tools/dis.py` shadow — `AttributeError: module 'dis' has no attribute
-'COMPILER_FLAG_NAMES'`. The fix is at the top of `tools/whichfield.py` and has
-not been applied here. Fixing it is a prerequisite for planning this bucket
-properly.)
+(`tools/indirect.py` is the tool for this. It used to **crash** on the
+`tools/dis.py` shadow; that is fixed and it runs — 163 relocations from data
+land on a `.text` symbol, naming 125 distinct indirect entry points, mostly the
+`*NextState` dispatch tables and the `FSE_decision_*` slicers.
+**But the three examples named above are not among them**, and none of the
+three is the target of any relocation anywhere in the object: `VOICE_process`
+and `FAX_process` are undefined in `slmodemd/modem.o`, so they are the
+library's external API and their callers are outside it. Read finding 3520
+before planning this bucket — the sentence above is not what the object says.)
 
 ## 2. The trap in "leave fax until last"
 
