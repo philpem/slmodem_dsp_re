@@ -56156,13 +56156,17 @@ under `-mno-ieee-fp`, and it is not reachable under `-mieee-fp` at all.
 routing out of a `-mieee-fp` build, the reconstruction wrote the test as two
 relational compares:
 
-    if (alpha < T(1) || alpha > T(1))            src/dsp/Agc.cpp
-    if (linearEquBeta < beta || linearEquBeta > beta)
-    if (beta < 0.0f || beta > 0.0f)              x2, the two setters
-    if (linearEquBeta < 0.0f || linearEquBeta > 0.0f)
-    if (dfeBeta < 0.0f || dfeBeta > 0.0f)        convertEqualizerToMmx
+    if (alpha < T(1) || alpha > T(1))            Agc<float>::process
+    if (linearEquBeta < beta || linearEquBeta > beta)   setLinearEquBeta
+    if (beta < 0.0f || beta > 0.0f)                     setLinearEquBeta
+    if (dfeBeta < beta || dfeBeta > beta)               setDfeBeta
+    if (beta < 0.0f || beta > 0.0f)                     setDfeBeta
+    if (linearEquBeta < 0.0f || linearEquBeta > 0.0f)   convertEqualizerToMmx
+    if (dfeBeta < 0.0f || dfeBeta > 0.0f)               convertEqualizerToMmx
     if (!(out[0] < 177.0f || out[0] > 177.0f))   V92EchoCanceller::process
     if (!(v < 0.0f) && !(v > 0.0f))              determineMaxUcode
+
+NINE SITES, six of them in `V90Equalizer.cpp`.
 
 Under `-mieee-fp` that is exactly right and every suite passed.  Under
 `-mno-ieee-fp` it is exactly wrong, twice over: the compiler is told it may
@@ -56178,7 +56182,7 @@ at its site rather than deleted, because the reasoning is right and only its
 premise moved.
 
 **THE RESULT, MEASURED.**  With `-mno-ieee-fp` in `period_inner.sh`, changing
-these seven sites to `!=` / `==`:
+these nine sites to `!=` / `==`:
 
 | suite | before | after |
 |---|---|---|

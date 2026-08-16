@@ -23,7 +23,7 @@
       "V90Equalizer::enterPhase4",
       "V90Equalizer::convertEqualizerToMmx"
     ],
-    "why": "The same one-ordered-compare equality as t_agc, at four sites: `linearEquBeta != beta` and `dfeBeta != beta` in the two setters (`flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je`, one compare, no parity test), and `linearEquBeta != 0.0f` / `dfeBeta != 0.0f` in convertEqualizerToMmx (`fcom %st(1)` against `fldz` and `je`). The other four checks are consequential: enterPhase3, freeze, enterRRN/enterFPE and enterPhase4 all reach one of those four and they went green together on the period tier when the four were corrected. Finding 2300 for the sites, 2304 for why no modern flag closes it. `make period` passes this binary's twenty groups and 208,311 checks."
+    "why": "The same one-ordered-compare equality as t_agc, at six sites: `linearEquBeta != beta` and `dfeBeta != beta` in the two setters (`flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je`, one compare, no parity test), `beta != 0.0f` in each setter's fixed-point arm, and `linearEquBeta != 0.0f` / `dfeBeta != 0.0f` in convertEqualizerToMmx (`fcom %st(1)` against `fldz` and `je`). The other four checks are consequential: enterPhase3, freeze, enterRRN/enterFPE and enterPhase4 all reach one of those six and they went green together on the period tier when the six were corrected. Finding 2300 for the sites, 2304 for why no modern flag closes it. `make period` passes this binary's twenty groups and 208,311 checks."
   },
   "t_v90leaves": {
     "finding": 2304,
