@@ -6969,3 +6969,39 @@ is therefore deterministic on both sides and different.
 phasor, and asserts that it has -- see the domain checks in its tilt trial and
 at the end of its derotation sweep.  Finding 3588 for the whole derivation and
 for why the symptom is a mismatched `out_i` beside a matching `out_q`.
+## D410 ⚠ `V92setParamsInfoFromCPUnPck` stores through all ten of the block's array pointers without testing one of them
+
+**This entry was written with a number in the three-eighties and moved to 410
+before it was committed**, so nothing has ever referred to it by the old one.
+The survey that produced the old number swept every BRANCH and stopped at the
+maximum it found; four sibling WORKING TREES had already claimed higher numbers
+in commits they had not made yet, the highest of them four hundred. A branch
+sweep is not a survey while other agents are live -- the same lesson the
+findings numbering learnt one batch earlier, where the branches topped out
+twenty-one numbers below an uncommitted worktree.
+
+*Batch of 2026-08-16, from `V92setParamsInfoFromCPUnPck` (blob 0x012f00).
+**Reachability: every call that has any non-zero length or size.**
+**Observability: none through the block -- a null slot is a store to address
+0 and the process is gone.** Status: verified bit-exact against the blob over
+all forty-five level-0 cases. Fix class: none proposed; reproduced.*
+
+The four coefficient arrays at +0x5c..+0x68 and the six constellations at
++0x84..+0x98 are allocated once, by `V92createFilterCoefficients` and
+`V92createConstellations`, and D171 records that neither of those two checks
+a `sysdep_malloc` return. This function is the reader on the other side of
+that: it loads each pointer and stores through it under a length taken from
+the CP, with no null test anywhere -- `mov 0x5c(%esi),%ecx` at .text+0x131b9
+and `fstps (%ecx,%edx,4)` two instructions later is the whole of it.
+
+So a failed allocation at construction is a null in the block, and the first
+CP with a non-zero `lz1` writes a float to address 0. The two behaviours
+compose into a crash that neither function alone would show, which is why it
+is recorded here rather than only at D171.
+
+What the function DOES check is the other half of the same question, and
+checks it carefully: every length is clamped before it is used --
+`lz1`..`lp2` to 0x148 and the six `LC` to 0x80, eight separate conditional
+stores -- and both ceilings are exactly what the allocations behind them
+hold. The bound that could overrun a buffer is enforced; the pointer that
+could be null is not.

@@ -1,11 +1,12 @@
 /*
- * V92Transmitter.cpp -- the V.92 transmit chain's construction and
- * destruction.
+ * V92Transmitter.cpp -- the V.92 transmit chain's construction, destruction
+ * and reset.
  *
- * Reconstructed from dsplibs.o.  Four symbols, 706 bytes:
+ * Reconstructed from dsplibs.o.  Five symbols, 2,867 bytes:
  *
  *     V92Transmitter::V92Transmitter()   .text+0x53b90 (C1), +0x53c50 (C2)
  *     V92Transmitter::~V92Transmitter()  .text+0x53a30 (D2), +0x53ae0 (D1)
+ *     V92Transmitter::reset(V92MappingParams *)  .text+0x53d10
  *
  * C1 and C2 are byte-identical bar the register allocation of two argument
  * setups, and so are D1 and D2; GCC emits both from one definition.
@@ -34,6 +35,8 @@
 #include "dsplib/V92ConvolutionEncoder.h"
 #include "dsplib/V92Precoder.h"
 #include "dsplib/V92PreFilter.h"
+#include "dsplib/V92ParamsInfo.h"
+#include "dsplib/debug.h"
 
 extern "C" {
 void *sysdep_malloc(unsigned int size);
@@ -67,10 +70,12 @@ void v92tx_prefilter_ctor(void *self, unsigned int nTaps)
 	    ? 1 : -1]
 
 V92TX_OFF(pad_00,		0x00, pad00);
-V92TX_OFF(word_04,		0x04, word04);
+V92TX_OFF(K,			0x04, k);
 V92TX_OFF(buf_08,		0x08, buf08);
 V92TX_OFF(word_0c,		0x0c, word0c);
 V92TX_OFF(pad_10,		0x10, pad10);
+V92TX_OFF(word_40,		0x40, word40);
+V92TX_OFF(gain,			0x44, gain);
 V92TX_OFF(modulusEncoder,	0x48, modenc);
 V92TX_OFF(precoder,		0x4c, precoder);
 V92TX_OFF(preFilter,		0x50, prefilter);
@@ -122,7 +127,7 @@ V92Transmitter::V92Transmitter()
 
 	buf_08 = sysdep_malloc(V92TX_BUF08_BYTES);
 	word_0c = 0;
-	word_04 = 0;
+	K = 0;
 
 	p = sysdep_malloc(sizeof(V92ModulusEncoder));
 	v92tx_moduluscoder_ctor(p);
@@ -187,4 +192,204 @@ V92Transmitter::~V92Transmitter()
 		convolutionEncoder->~V92ConvolutionEncoder();
 		sysdep_free(convolutionEncoder);
 	}
+}
+
+/*
+ * The float-as-%c%d.%07d idiom, the same three helpers
+ * src/pump/v90/V92EchoCanceller.cpp carries.  The scale is 1e7 here and not
+ * 1e6 -- `.rodata.cst4` +0x4f0 is 10000000.0 and the five format strings all
+ * say %07d.  `frac_of`'s subtraction is `v - (int)v`, which is what `de e1`
+ * at .text+0x53e3d does: objdump prints it `fsubp %st,%st(1)` and it IS
+ * FSUBRP, so st(1) becomes st(0) - st(1) and st(0) holds the value (finding
+ * 245).  The abs() makes the order unobservable (finding 256).
+ */
+static char
+sign_of(float v)
+{
+	return (0.0f < v) ? '+' : '-';
+}
+
+static int
+whole_of(float v)
+{
+	return (int)__builtin_fabsf(v);
+}
+
+static int
+frac_of(float v)
+{
+	return __builtin_abs((int)(((long double)v - (long double)(int)v)
+				   * 1.0e7f));
+}
+
+/*
+ * ===========================================================================
+ * V92Transmitter::reset (.text+0x53d10, 2,161 bytes)
+ *
+ * WHAT IT ACTUALLY DOES IS 170 BYTES OF IT.  Two words in from the parameter
+ * block, one byte cleared through the one-byte buffer at +0x58, six calls,
+ * and two words zeroed on the way out.  Everything between is diagnostics --
+ * a header, three banners, the general parameters, and a per-coefficient dump
+ * of all four filters -- and every one of the fifty-odd prints reloads
+ * `dsplibs_debug_level` for itself, so each gets its own `if
+ * (DSPLIB_DEBUG_ON())` and they are not collapsed.
+ *
+ * THE PARAMETER BLOCK IS `struct V92ParamsInfo` UNDER ANOTHER NAME.  The
+ * mangling says `V92MappingParams`; the layout is the one
+ * include/dsplib/V92ParamsInfo.h maps, and the cast below is the same one
+ * V92Precoder.cpp and V92ModulusEncoder.cpp already make.  This function is
+ * half of what proves they are one block: it prints +0x4c, +0x50, +0x54,
+ * +0x58 and +0x14 under the very names the unpacker fills them from.
+ *
+ * WHICH FILTER GETS WHICH PAIR IS FORCED BY THE MANGLING.  The precoder is
+ * given (z1, p1, lz1, lp1) and the pre-filter (z2, p2, lz2, lp2), and
+ * `setCoefficients` is `EPfS0_jj` on both -- two `float *` and two
+ * `unsigned` -- which is what makes the four block pointers `float *` and the
+ * four lengths unsigned rather than a guess from the dump loops.
+ *
+ * THE FOUR DUMP BLOCKS ARE NOT INSIDE A DEBUG GATE, only their contents are:
+ * `if (p->lz1 != 0)` at .text+0x53dca is reached from both sides of the
+ * level test above it.  So an empty filter prints no rule, and a non-empty
+ * one at level 0 costs a load and a branch.  That is the object's shape and
+ * it is reproduced.
+ * ===========================================================================
+ */
+void
+V92Transmitter::reset(V92MappingParams *params)
+{
+	struct V92ParamsInfo *p = (struct V92ParamsInfo *)params;
+	unsigned int i;
+
+	gain = p->gain;
+	K = p->K;
+
+	modulusEncoder->reset(params);
+
+	*byte_58 = 0;
+
+	precoder->reset(params);
+	precoder->setCoefficients(p->z1, p->p1, p->lz1, p->lp1);
+
+	preFilter->reset();
+	preFilter->setCoefficients(p->z2, p->p2, p->lz2, p->lp2);
+
+	convolutionEncoder->reset(p->trellisType);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("On V92 Transmitter reset, here are "
+				     "modulation parameters:\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("================== General ============"
+				     "======\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Gain = %c%d.%07d\r\n", sign_of(gain),
+				     whole_of(gain), frac_of(gain));
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("K = %d\r\n", K);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("trellisType = %d\r\n", p->trellisType);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("extendEu = %d\r\n", p->extendEu);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m0 = %d\r\n", p->m[0]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m1 = %d\r\n", p->m[1]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m2 = %d\r\n", p->m[2]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m3 = %d\r\n", p->m[3]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m4 = %d\r\n", p->m[4]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m5 = %d\r\n", p->m[5]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m6 = %d\r\n", p->m[6]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m7 = %d\r\n", p->m[7]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m8 = %d\r\n", p->m[8]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m9 = %d\r\n", p->m[9]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m10 = %d\r\n", p->m[10]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("m11 = %d\r\n", p->m[11]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("================== Pre Coder =========="
+				     "======\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("lz1 = %d\r\n", p->lz1);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("lp1 = %d\r\n", p->lp1);
+
+	if (p->lz1 != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+		for (i = 0; i < p->lz1; i++)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("z1[%d] = %c%d.%07d\r\n",
+						     i, sign_of(p->z1[i]),
+						     whole_of(p->z1[i]),
+						     frac_of(p->z1[i]));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+	}
+
+	if (p->lp1 != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+		for (i = 0; i < p->lp1; i++)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("p1[%d] = %c%d.%07d\r\n",
+						     i, sign_of(p->p1[i]),
+						     whole_of(p->p1[i]),
+						     frac_of(p->p1[i]));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("================== Pre Filter ========="
+				     "======\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("lz2 = %d\r\n", p->lz2);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("lp2 = %d\r\n", p->lp2);
+
+	if (p->lz2 != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+		for (i = 0; i < p->lz2; i++)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("z2[%d] = %c%d.%07d\r\n",
+						     i, sign_of(p->z2[i]),
+						     whole_of(p->z2[i]),
+						     frac_of(p->z2[i]));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+	}
+
+	if (p->lp2 != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+		for (i = 0; i < p->lp2; i++)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("p2[%d] = %c%d.%07d\r\n",
+						     i, sign_of(p->p2[i]),
+						     whole_of(p->p2[i]),
+						     frac_of(p->p2[i]));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("---------------------------"
+					     "\r\n");
+	}
+
+	word_40 = 0;
+	word_0c = 0;
 }

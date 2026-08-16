@@ -500,6 +500,14 @@
   "src/pump/v90/V92Transmitter.cpp",
   "build/test/t_v92tx"
  ],
+ "v92txreset": [
+  "src/pump/v90/V92Transmitter.cpp",
+  "build/test/t_v92txreset"
+ ],
+ "v92unpck": [
+  "src/pump/v90/V92ParamsInfo.c",
+  "build/test/t_v92unpck"
+ ],
  "vpcmcreate": [
   "src/pump/v34/v34pcmcreate.cpp",
   "build/test/t_vpcmcreate"

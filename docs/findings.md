@@ -62406,3 +62406,177 @@ tail position into the out-of-domain quarter, and the failure will read as
 "the reconstruction of `FPM_FSE_receive` is wrong" when it is this.  The check
 at the end of the sweep catches only the final position.
 
+### 3600. THE V.92 MAPPING PARAMETER BLOCK NAMES ITSELF OUT OF ITS OWN DIAGNOSTICS, AND ITS LAST 24 BYTES TURN OUT TO BE `indexConstel`
+
+**This block was written as 3540-3544 and renumbered to 3600-3604 at merge**
+**time.** `v90cp-info` landed 3540-3542 on master while this branch was
+running, for entirely different subject matter (V.90 CP, not V.92 params).
+Both surveys were correct when taken. The renumber touched HEADINGS and
+`finding NNNN` citations only: `3541` occurs in this tree as table data in
+`src/pump/v34/v34shell.c` and `src/callprog/dualtone.c`, and a whole-word
+substitution would have corrupted both silently -- 3506's lesson, which this
+batch inherited rather than rediscovered.
+
+`V92setParamsInfoFromCPUnPck` (.text+0x12f00) and
+`V92Transmitter::reset` (+0x53d10) are both roughly half diagnostics, and
+between them they print fifty-nine format strings, and most carry a field's
+name beside the load that reads it -- thirty-one in the unpacker alone.  `tools/relocscan.py --at
+.rodata.str1.1:0xNNNN` resolves who references which (finding 604); grepping
+the disassembly for a string's address finds nothing, which is the trap that
+rule exists for.
+
+That took `struct V92ParamsInfo` from two named arrays and 140 bytes of pad to
+nineteen named fields and no pad at all, and produced a second struct,
+`include/dsplib/V92CPUnPck.h`, for the unpacked CP message the first is filled
+from.  The block is:
+
+| off | name | how it was named |
+|---|---|---|
+| +0x00 | `K` | `"K = %d"`, printed off the transmitter's copy |
+| +0x04 | `modulosEncoderPresent` | source field's name, and this copy gates the moduli |
+| +0x08 | `prefilterPrecoderPresent` | ditto, gates the filters |
+| +0x0c | `constellationPresent` | ditto, gates the constellations |
+| +0x10 | `trellisType` | `"trellisType = %d"`, off this block |
+| +0x14 | `extendEu` | `"extendEu = %d"`, off this block |
+| +0x18 | `gain` | `"Gain = %c%d.%07d"` |
+| +0x1c | `m[12]` | `"m0 = %d"` .. `"m11 = %d"` |
+| +0x4c | `lz1`, `lp1`, `lz2`, `lp2` | four strings, each beside its own load |
+| +0x5c | `z1`, `p1`, `z2`, `p2` | `"z1[%d] = %c%d.%07d"` and its three siblings |
+| +0x6c | `LC[6]` | `"CPObj->LC[%d]"`, and six `Constellation LC n` banners |
+| +0x84 | `constellations[6]` | the six allocations; no string of its own |
+| +0x9c | `indexConstel[6]` | `"CPObj->indexConstel[%d]"` |
+
+The last row is the one worth keeping.  `V92ParamsInfo.h` said of +0x9c..+0xb3
+that "nothing in this batch reaches" it and `V92Precoder.h` described the same
+region as "the eighteen bytes" -- 0x18 read as decimal.  It is twenty-four
+bytes, six words, the unpacker fills all six with a genuine indexed loop, and
+`V92Precoder::reset` keeps a pointer to them because `V92Precoder::process`
+selects among them.  A pad that two headers had already reasoned about is
+exactly the kind of thing a wrong name would have frozen; the reason it stayed
+a pad until now is that the function that fills it had not been read.
+
+Four of the nineteen names are at ONE REMOVE and are marked as such in the
+header: `K` and the three `*Present` words are named from the field of the
+SOURCE block that is copied into them, verbatim and at the same width.  For the
+three flags there is corroboration that costs nothing to state -- each
+destination copy is then tested to gate exactly the part of the unpack its name
+describes, and the object tests the COPY rather than the source
+(`mov 0x4(%esi),%ebx; test %ebx,%ebx` at .text+0x13090 reads back what
++0x12f1c wrote).
+
+### 3601. `V92MappingParams` AND `struct V92ParamsInfo` ARE ONE BLOCK, AND FIVE OFFSET/NAME AGREEMENTS SAY SO RATHER THAN THE SIZE
+
+`V92MappingParams` is the author's name -- it is in the mangling of
+`V92Transmitter::reset`, `V92Precoder::reset`, `V92ModulusEncoder::reset` and
+`V92Phase4Modulator::setMappingParams`.  `V92ParamsInfo` is this tree's,
+invented from `V92setParamsInfoFromCPUnPck` before anything had read either.
+They are the same 0xb4 bytes.
+
+The evidence is not adjacency and not size.  `V92Transmitter::reset` prints its
+argument's +0x4c as `lz1`, +0x50 as `lp1`, +0x54 as `lz2`, +0x58 as `lp2` and
++0x14 as `extendEu`; the unpacker fills those five offsets from source fields
+it prints as `CPObj->lz1`, `CPObj->lp1`, `CPObj->lz2`, `CPObj->lp2` and
+`CPObj->extendEu`.  Five offsets, five names, two functions that share no call
+edge.
+
+**The two names both stay, and that is deliberate.**  The C++ side needs a
+class spelled `V92MappingParams` for the manglings to come out right; the C
+side needs a struct it can dereference.  So the class stays an opaque forward
+declaration and every method that dereferences it casts -- which is what
+`V92Precoder.cpp:151` and `V92ModulusEncoder.cpp:161` already did before this
+header had a single field name, and what `V92Transmitter::reset` now does too.
+Renaming one to the other would have been a defensible reading of the mangling
+and would have touched ten files across five live branches for no behaviour;
+the cast is one line and says the same thing.
+
+### 3602. WHAT FORCES AN ARRAY AND WHAT FORCES SEPARATE FIELDS, ANSWERED THREE DIFFERENT WAYS INSIDE ONE STRUCT
+
+Six pointers at `V92CPUnPck` +0xc88..+0xc9c, six words at +0xc58 and six at
++0xc70 are the same shape and the same count, and the object says something
+different about each.  The rule that separates them is worth writing down
+because "six of a thing" reads as an array by default:
+
+- **Forced ARRAY.** The unpacker's debug loop reads +0xc58 as
+  `mov 0xc58(%ebp,%ebx,4)` under `cmp $0x5`, and +0xc70 the same way; the copy
+  out of +0xc70 into the parameter block is a second indexed loop.  A run-time
+  index is a run-time index: these are `LC[6]` and `indexConstel[6]`.  Same for
+  the twelve at +0x18, `mov 0x18(%ebp,%ebx,4)` under `cmp $0xb` -- `M[12]`.
+- **Forced FIELDS.** The six pointers at +0xc88 are read only at constant
+  displacements, in the prints and in the copies both, and the prints use SIX
+  DIFFERENT format strings -- `"\tconst1[%d] = %d"` through `const6`.  A
+  six-element array would have printed one string with an index, the way `M`,
+  `LC` and `indexConstel` all do fifteen lines earlier in the same function.
+  So `const1` .. `const6`.
+- **UNDECIDABLE, and modelled rather than claimed.** The parameter block's own
+  twelve at +0x1c are printed as twelve strings, `"m0 = %d"` .. `"m11 = %d"`,
+  and copied by twelve straight-line stores -- but that is what twelve
+  statements over an ARRAY give too, and `V92Precoder::reset` reads the same
+  twelve with a loop in this tree's source and matches.  Twelve distinct
+  strings force twelve STATEMENTS; they do not force twelve DECLARATIONS.  The
+  header says `int m[12]` and says why, which is the honest form.
+
+The negative case is the useful half: `V92Precoder::reset`'s own object code is
+straight-line for loops our source writes as loops, so "the object is
+unrolled" is not evidence about the source at all.  Only the INDEXED access is.
+
+### 3603. THE V.92 CONSTELLATION GAIN IS ROUNDED TO SINGLE PRECISION BETWEEN ITS TWO MULTIPLICATIONS, AND WRITING IT AS ONE EXPRESSION WOULD NOT BE THE SAME NUMBER
+
+The unpacker builds `gain` from `CPObj->prefilterGain` in two steps, printing
+it between them as the "constellation gain (before Lu multiplication)" and
+"(after)":
+
+    fildll (%esp)        ; (float) of an unsigned 32-bit: high half pushed as 0
+    fmuls  2^-18
+    fstps  0x28(%esp)    ; <-- rounded to 32 bits here
+    flds   0x28(%esp)
+    ...
+    fmuls  4000.0
+    fsts   0x18(%esi)
+
+The store-and-reload is not scheduling: with `-mfpmath=387` the product is in
+an 80-bit register and the only thing that narrows it is a 4-byte store.  So
+`gain = pfg * 2^-18; gain = gain * 4000;` is the object and
+`gain = pfg * 2^-18 * 4000` is not, and the difference is real for any `pfg`
+whose product has more than 24 significant bits.  Reproduced as two
+assignments through `p->gain`.
+
+One shape beside it is NOT reproduced literally and is recorded here so nobody
+reads it as a defect: the object materialises the first assignment only on the
+PRINTING path, because on the other path the store is immediately dead.  The
+source assigns unconditionally.  Both store the same value and the second
+assignment overwrites it either way, so the two agree at every debug level.
+
+`fildll` with an explicitly pushed zero high half is what makes
+`prefilterGain` unsigned -- a signed conversion is one `fildl` -- and that is
+the forced-signedness case of CLAUDE.md's codegen rule, not a preference.
+
+### 3604. HALF OF BOTH THESE FUNCTIONS IS UNREACHABLE AT LEVEL 0, AND THE TRANSCRIPT ORACLE IS WHAT MAKES THE OTHER HALF TESTABLE
+
+`V92setParamsInfoFromCPUnPck` is 2,695 bytes of which roughly half is behind
+twenty-six separate `cmpl $0x1,dsplibs_debug_level` gates; `V92Transmitter::reset`
+is 2,161 bytes of which about 2,000 are.  A differential run at the shipping
+level exercises every copy, every clamp and every loop bound in both, and not
+one of the thirty-one format strings -- which is finding 126's failure mode
+(`updateAlpha` had the format, the conversion and the argument list all wrong,
+undetected).
+
+Both new fixtures therefore run each case twice: once at level 0 over lengths
+chosen to straddle the two clamps, and once at level 2 with
+`dsplib_debug_capture_on` and the two transcripts compared as strings.  Two
+things had to be arranged for the second run to mean anything:
+
+- **The lengths are cut down for the transcript cases.** At `LC[i] = 0x80` the
+  six constellation dumps alone are 768 lines and both sides overflow the 16 KB
+  capture -- at the same place, so `strcmp` still says equal and everything
+  past the cut is silently untested.  The fixtures assert `strlen < 15000` so
+  that a case which grows into the limit fails instead of going quiet.
+- **The gain and the coefficients are forced finite.** A seeded 32-bit pattern
+  is a NaN about one time in 256, and `sign_of` is a single ordered `fcom` with
+  no parity test, so a NaN prints `'+'` under `!(v <= 0)` and `'-'` under
+  `0 < v`.  That difference is real (V92EchoCanceller.cpp argues it at length)
+  and is not what these fixtures measure, so the exponent is forced into a
+  finite range while the sign bit stays seeded.
+
+The same reasoning applies to `prefilterGain`, which is masked to 26 bits: above
+that, `(int)` of the gain is out of range, which is undefined in C and happens
+to agree on both sides for reasons that have nothing to do with the modem.
