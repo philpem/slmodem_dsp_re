@@ -59024,3 +59024,136 @@ ON is not a precondition.**
 The rule added is `git -C <dir>` in preference to `cd`, and `cd <dir> || exit
 1` where a `cd` is unavoidable.  `git -C` cannot fail open: if the directory is
 gone the git command itself fails and nothing else runs.
+
+### 3300. THE V.22 EQUALISER IS ITS OWN BLOCK, NOT `fpm_fse` WITH DIFFERENT TABLES -- AND ITS `fresh` FLAG MEANS THE OPPOSITE
+
+`V22_FSE_init` (0x08cd00, 372 bytes), `V22_FSE_free` (0x08ce80, 90) and
+`V22_FSE_getdiag` (0x08c590, 3) sit beside `FPM_FSE_init` (0x0a86b0, 458),
+`FPM_FSE_free` (0x0a8660, 68) and `FSE_getdiag` (0x0a7d10, 229) and share
+neither struct nor geometry with them.
+
+- `fpm_fse_cfg` is 56 bytes and init copies all of it; `struct v22_fse_cfg` is
+  EIGHT, two coefficient pointers, and init copies only those.
+- `fpm_fse`'s buffer sizes come out of the configuration -- `2 * cfg.taps`,
+  `2 * (cfg.block / cfg.interp) + 4`.  Every one of the V.22 block's seven is
+  a literal: 0x62, 0x62, 0xc4, 0x28, 0x28, 0x1c, 0x1c.  The block is wired for
+  one modem and nothing else.
+- Seven buffers against five.  Two of the seven, +0x44 and +0x48 at 20 shorts
+  each, are allocated by init and released by free and read by NOTHING in the
+  object that has been read so far -- not the slicers, not `V22_FSE_receive`.
+  They are left unnamed for that reason.
+
+**And the third argument is inverted.**  `FPM_FSE_init`'s `fresh` is tested
+`if (!fresh)`: zero means re-init, so it FREES the five buffers and then
+allocates unconditionally.  `V22_FSE_init` tests `test %esi,%esi ; jne` and
+allocates only when the flag is NON-ZERO; on the zero path it never frees and
+never allocates, it reuses whatever the struct already holds.  Both are called
+with the same argument in the same position and a reconstruction that carried
+one polarity over to the other compiles, links and leaks or crashes depending
+on which way round it got it.  `t_v22_fse`'s reuse arm asserts
+`harness_alloc.allocs == 0`, which is what pins it.
+
+The four ints at +0x10..+0x1c are initialised 0, 1, 1, 1, exactly as
+`fpm_fse`'s `lms_force`, `pll_on`, `tilt_on`, `lms_on` are.  That is a
+resemblance and not evidence: nothing reconstructed reads any of the four, so
+they keep `rNN` names until `V22_FSE_receive` says what they do.
+
+### 3301. `V22_FSE_init` REVERSES THE COEFFICIENT PROTOTYPE, AND `FSEv22_COFFS` IS SYMMETRIC -- SO THE OBJECT'S OWN TABLE CANNOT SEPARATE THE TWO READINGS
+
+The coefficient loop is
+
+    for (i = 0; i <= 48; i++) {
+            icoeff[48 - i] = icoff[i] >> 2;
+            qcoeff[48 - i] = qcoff[i] >> 2;
+            hist[i] = 0;
+    }
+
+and the destination index is `0x30 - i`, computed as `mov $0x30,%edx ; sub
+%ecx,%edx` before every pair of stores.  `FSEv22_COFFS`, the only prototype the
+object ever hands it, is a linear-phase FIR and therefore satisfies
+`coff[i] == coff[48 - i]` for all 49 taps.
+
+So a reconstruction that copied the prototype IN ORDER would produce a
+byte-identical result for the only input the library ever supplies, and a
+differential test driven with the object's own table would pass it.  This is
+finding 3052's shape exactly, and `t_v22_fse` handles it the way 3052
+prescribes: the driving arrays are generated asymmetric, the I and Q arrays are
+different from each other, half the entries are negative and none is a multiple
+of four, and `main()` counts the taps that actually separate reversed from
+in-order, arithmetic `>> 2` from logical, and I from Q, refusing to report a
+pass if any count is zero.  The test also asserts the symmetry of
+`FSEv22_COFFS` itself, so the reason the generated arrays exist is a check
+rather than a comment.
+
+The `>> 2` is a `movswl` followed by `sar $0x2` on the 32-bit value, so it is
+arithmetic; that is head-room for the LMS update, which adds into these in
+place.
+
+### 3302. `V22_FSE_getdiag` IS A THREE-BYTE STUB, WHICH MAKES `V22FP_GetDiagnostics` UNTESTABLE AND IT IS LEFT OUT
+
+`V22_FSE_getdiag` is `31 c0 c3` -- `xor %eax,%eax ; ret`.  It is not a smaller
+`FSE_getdiag` (229 bytes, which copies a scatter log out and resets the count);
+it is a stub that returns zero and reads nothing.  So the V.22 datapump has no
+constellation display, and `struct v22_fse` has no diagnostic arrays -- which
+is also why it is 100 bytes where `struct fpm_fse` is 20 KB.
+
+**Its arity is not settled by the object.**  `V22FP_GetDiagnostics` (0x088480,
+21 bytes) rewrites only the first outgoing argument -- `arg0 = modem[0x54] +
+0x164` -- and tail-jumps, so any further arguments its own caller passed are
+still on the stack.  A function that reads none of them cannot say how many
+there were.  One parameter is declared, being the one the object is seen to
+pass; under cdecl a caller passing more is harmless.
+
+**`V22FP_GetDiagnostics` is therefore NOT committed, and that is the reason.**
+It is 21 bytes and its whole content is the constant 0x164.  Both sides of a
+differential test would call a getdiag that ignores its argument and returns
+zero, so the test would compare 0 against 0 and separate nothing -- it could
+not tell 0x164 from any other offset, or from no offset at all.  A test that
+cannot distinguish the reading from the obvious wrong one is not evidence, and
+this tree does not commit on one.  It becomes testable the moment anything
+that reads `+0x164` of the V22FP object exists, which in practice means
+`V22FP_create`.
+
+The offset is worth keeping even so: **the V.22 equaliser state lives at +0x164
+of the object `v22prc.h` calls `V22_OBJ_FP`**, and that is the first thing
+recovered about that object's layout.
+
+### 3303. THE 2400 SLICER MEASURES TWO CANDIDATES OF SIXTEEN, AND ITS THRESHOLD IS ALSO ITS INITIAL BEST DISTANCE
+
+`FSEv22_decision24` (0x0884a0, 467 bytes) never computes sixteen distances.
+`DECv22_IMAP24` and `DECv22_QMAP24` are laid out so that the index is a
+bit-field:
+
+    bit 3   I is positive
+    bit 2   Q is negative
+    bit 1   |I| is the larger of the two amplitudes
+    bit 0   which of the two Q amplitudes
+
+Three comparisons fix bits 3, 2 and 1 -- the two signs, then `(2 * sign) << 12`
+against the signed I sample, which is 8192 with the sign of I -- and only bit 0
+is searched, over a window `lea 0x2(%edi),%esi` wide.  The amplitude test sits
+inside a loop that runs exactly ONCE (`test %cx,%cx ; jle`, entered with
+`%ecx` zero) and halves a step of 4 to 2 on the way through, which is the trace
+of a general multi-level binary search instantiated at one level: 16-QAM has
+two amplitudes per axis and needs one threshold.
+
+**8192 is then used a second time, as the initial best distance of that
+search** (`movswl 0x12(%esp),%ecx ; shl $0xc,%ecx`).  So it is a threshold and
+not an infinity, and a symbol more than 8192 from BOTH candidates leaves the
+best index at its initialiser, ZERO -- which is not in the search window unless
+the window happens to start there.  Deviation D361.
+
+The two ends are shared with `FSEv22_decision12`: the chosen point is matched
+back to a transmit index by a linear search over `SMCv22_*MAP_*BPS` shifted
+down one -- the decision tables are at twice the transmit tables' scale -- and
+the returned symbol is the V.22 differential quadrant encoding read backwards,
+`SMCv22_PMAP[((quad - prev) & 0xf) >> 2]`, where `prev` is reached through a
+pointer at +0x5c that nothing in the equaliser initialises.  1200 shifts that
+down two and returns it alone; 2400 returns it unshifted and ORs in the index's
+low two bits, which are the amplitude pair and are NOT differential.
+
+`DECv22_MAG24` is indexed by `(|i >> 1| + |q >> 1|) >> 12` minus one, a
+city-block distance over the halved coordinates that takes the value 4096, 8192
+or 12288 and so selects one of exactly three rings.  Its middle entry, 12953,
+is the constant the 1200 slicer reports unconditionally: the four-point
+constellation is the middle ring of the sixteen-point one.

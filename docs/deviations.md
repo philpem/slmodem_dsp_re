@@ -6471,3 +6471,54 @@ and stops there.  Fix class: none proposed; reproduced as found.*
 Recorded rather than driven because the return is a saturating index and not a
 failure code -- 0 is a legal answer, so nothing downstream can tell the NaN
 apart.  Finding 3051.
+
+## D360 🐛 `V22_FSE_init` zeroes the first 49 history entries twice
+
+*Batch of 2026-08-16, from `V22_FSE_init` (blob 0x08cd00) at 0x8cdd9 and
+0x8cdf0.  **Reachability: every call.**  **Observability: none -- both loops
+write zero to the same 49 entries, and the second then carries on to 97.**
+Status: verified bit-exact; the second loop's bound, 0x61, is what the test
+asserts by leaving a marker above index 48 and requiring it to be cleared.
+Fix class: none proposed; reproduced as found.*
+
+The coefficient loop clears `hist[i]` for i in 0..48 as a side effect of
+walking the 49 taps, and the loop after it clears `hist[i]` for i in 0..97.
+The first clear is entirely redundant -- `hist` is 98 shorts and the second
+loop covers all of it.  Recorded because the redundancy is the kind of thing a
+reader corrects without noticing, and correcting it would be a source change
+with no test able to see it.  Finding 3300.
+
+## D361 ⚠ `FSEv22_decision24` falls back on index 0, which is outside its own search window
+
+*Batch of 2026-08-16, from `FSEv22_decision24` (blob 0x0884a0) at 0x88541 and
+0x88545 (`mov %edx,0x8(%esp)` with `%edx` zero, then `shl $0xc,%ecx`).
+**Reachability: a symbol more than 8192 from both of the two candidates the
+sign and amplitude tests selected -- roughly, any point whose Q coordinate is
+further than one constellation spacing outside the outer ring.**
+**Observability: the returned symbol, the reported angle and the reported ring
+are all those of constellation index 0 rather than of the nearer candidate, so
+a badly off point in any quadrant decodes as if it were in the third.**
+Status: unmeasured against a real receiver -- nothing reconstructed drives this
+slicer from live samples yet.  The differential test drives it over the whole
+16-bit range on both axes and counts the trials that take this path, requiring
+that count to be non-zero.  Fix class: none proposed; reproduced as found.*
+
+The initial best distance is `thresh[0] << 12`, the same 8192 the amplitude
+test uses, rather than 0x7fff.  `FSEv22_decision12` uses 0x7fff and has no
+equivalent.  Finding 3303.
+
+## D362 ⚠ `FSEv22_decision12` accumulates its squared distance in sixteen bits
+
+*Batch of 2026-08-16, from `FSEv22_decision12` (blob 0x088680) at 0x886de
+onwards (`imul %edx,%edx ; imul %eax,%eax ; sar $0x10 ; sar $0x10 ; add ;
+movswl %dx,%eax`).  **Reachability: any point far enough from a candidate that
+the axis error exceeds about 23,170, since the two shifted squares then sum
+past 32767.**  **Observability: the sum wraps negative and that candidate wins,
+so the point decodes as the one it is FURTHEST from.**  Status: unmeasured
+against a real receiver; the differential test counts the trials on which a
+full-precision search would choose differently and requires that count to be
+non-zero.  Fix class: none proposed; reproduced as found.*
+
+Each axis error is truncated to a short before squaring, the 32-bit square is
+shifted down sixteen, and only then are the two added -- and the sum is
+truncated to a short again before the comparison.  Finding 3301.
