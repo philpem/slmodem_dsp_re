@@ -56396,7 +56396,6 @@ tier being retired in favour of the period one.  Until then these checks are
 verified by `make period`, on the object's own compiler with the object's own
 flags, which is the tier CLAUDE.md says decides -- and they are verified
 there over the same inputs, not a subset.
-=======
 
 ### 1904. THE RATE DECISION READS APPROXIMATELY THE CORRECT PHASE-4 ERROR — THE "FORTY TIMES WORSE" READING COMPARED TWO OPERATING POINTS AND IS WITHDRAWN
 
