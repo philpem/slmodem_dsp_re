@@ -60844,3 +60844,333 @@ post-init correction of two blocks' running state, or a soft spot in one of the
 two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
+
+======================================================================
+
+### 3203. 3201's DEFICIT IS NOT SYSTEMATIC -- IT IS THE FIRST HANDSHAKE, AND THE 17-vs-5.80 DISCREPANCY IS THE MIX
+
+> **3200, 3201 and 3202 ARE NOT ON master.** They answer #170 and they live on
+> `improve/v34-training`, which carries pre-emphasis and rate-collapse source
+> changes that were deliberately not merged with these findings. 3203-3206
+> cite them by bare number, and `refcheck.py` only resolves the form
+> "finding NNNN", so it does NOT flag those citations -- their absence from
+> its report is a silent pass, not a resolution. What you need from them:
+> `sigpow` is a constellation constant so `equerr` alone is an SNR with a
+> fixed 52.14 dB offset (3200); the ladder's mapping is textbook at 2.10 dB
+> per 2400 bps step and is not the fault (3200); and a V.34 startup trains the
+> receiver twice, phase 3 with our transmitter quiet and phase 4 with it live,
+> with the rate decided from the second (3201).
+
+*The hand-over named the 17-vs-5.80 dB discrepancy as the first thing to
+resolve, said it costs no bench time, and said it may change what the
+attenuation A/B is worth.  All three were right.  Zero calls placed;
+605 archived captures, 1073 clean decisions.*
+
+`snrblocks.py`'s `block` column is the handshake index within a call -- it
+opens a new one at `setup receiver gain` and each carries its own `ethreh`,
+its own thresholds and its own `finally rxbitrate`.  3201 never split on it.
+Split on it and the deficit is not a level, it is a ramp:
+
+    hs     n  decision   p4 best   phase 3   deficit  % low
+     0   474     17.79     17.95     34.60     15.71    93%
+     1   246     28.28     26.49     25.48      2.91    33%
+     2   136     28.05     27.37     27.69      2.44    19%
+     3    98     27.96     27.83     27.59      0.09    13%
+    4+   119     26.52     27.16     24.68     -0.07    14%
+
+**THE POOLED MEDIAN MEASURES THE MIX, NOT THE CHANNEL.**  A capture set full
+of first handshakes reads 17 dB; one full of later ones reads 5.80.  That is
+the whole discrepancy, and neither number is "the deficit".  The `phase 3`
+column moves down the table for a second reason given below, so read the
+per-far-end tables in `handshakeorder.py` rather than this pooled one.
+
+**PAIRED, WITHIN THE SAME CALL, which removes far end, era, arm and mix at
+once:**
+
+    hs0 -> hs1, same call            n=227   median +8.72 dB   190/227 improved
+    hs0 -> best later handshake      n=246   median +10.74 dB  210/246 improved
+
+    1902  n=44  +8.65   42/44          1903  n=23  +9.22   20/23
+    1901  n=39  +0.92   25/39
+
+**AND IT IS NOT 3202.**  On a 3202 row phase 4 converged and the ladder read a
+one-block spike.  These rows are excluded as spikes (`spike_db < 6`), and in
+the low mode `p4_best_db` is 18.75 -- that column is `max(run)` over every
+block of the same phase 4 run *except the one the ladder read*, so the best
+block of the whole training run is also ~18.  **Phase 4 does not converge and
+get misread on the first handshake; it does not converge.**  Two different
+faults, and this is a third alongside 3201's and 3202's.
+
+**THE MODES ARE SEPARATED BY A REAL TROUGH**, so the split is not a tuned cut:
+2 dB bins over the 1901/1903 clean rows give 70 rows at 18, 9 at 20, 1 at 22,
+2 at 26, 10 at 28.  `TROUGH_DB = 23` sits in a gap several bins wide.
+
+**RECOVERY IS FAR-END DEPENDENT, and 1901 barely recovers:** % of decisions in
+the low mode, hs0 / hs1 / hs2 -- 1902 92/19/12, 1903 93/17/10, **1901
+92/70/53**.  Do not quote 1901's hs3 and hs4+ (n=8 and n=4, and they reverse).
+The supportable claim is that the Supra recovers slowly and incompletely over
+hs0-hs2, n=17 by hs2, and its paired hs0->hs1 gain is +0.92 dB against +8.65
+and +9.22 for the other two.
+
+**A SECOND MIXING VARIABLE: THE COURIER'S CONTROL IS NOT COMPARABLE, and the
+reason is now measured rather than suspected.**  `p3_db` averages the last
+three settled blocks of phase 3, dropping the unconverged head deliberately.
+A new `p3_n` column reports the denominator:
+
+    1901   3 blocks x1, 5 x135, 6 x29      p3_db 35.22
+    1903   5 blocks x86, 6 x16             p3_db 35.20
+    1902   3 blocks on ALL 219             p3_db 24.55
+
+The Courier's phase 3 yields exactly three settled blocks, every time, so
+`p3_run[-3:]` is all of them and the unconverged head it was written to drop
+is averaged in.  **Its control is understated by roughly 10 dB**, which is why
+its later-handshake deficit goes NEGATIVE (-3.12, -1.94, -1.37, -0.86): the
+decision beats the control.  A control the measurement beats is not a control.
+3201 quotes 5.80 dB over "all three far ends" -- one of the three is biased
+downward, so if anything 5.80 understates what is left after handshake 0.
+
+**WHAT THIS DOES NOT SAY, because 1947 says the opposite about a different
+quantity.**  1947 counts handshakes PER CALL against the FINAL rate and finds
+four or more halves it; 1921 finds every retrain restarts the ladder.  Both
+stand.  This is an ORDINAL statement inside one call -- the first handshake is
+worse than the second on that same call -- and it is compatible with a call
+that needs many handshakes being a bad call.  1947's own `best - final` column
+(0, 0, 2400, 8400, 7200) says late handshakes fall back below the best, and
+`4+` above declines from hs1, so **"later is better" is false as a general
+claim.**  What is supported is hs0 against hs1.
+
+**THE ATTENUATION A/B IS CONFOUNDED AND UNDERPOWERED, NOT REFUTED.**  Ext
+1901, clean decisions:
+
+    3 dB arm   n=10   pooled deficit 17.01   low mode 9/10 (90%)  within-low 17.20
+    12 dB arm  n=11   pooled deficit 14.74   low mode 9/11 (82%)  within-low 15.13
+
+Of the 2.7 dB, about 0.6 dB is the mode mix and about 2.1 dB survives inside
+the low mode at n=9 per arm.  1973 is the precedent for calling a real effect
+dead; do not repeat it in the other direction either.
+
+**THE CONSEQUENCE FOR #149, flagged and not settled.**  If the first phase 4
+is structurally bad and it is the next FULL retrain that clears it, then
+replacing full retrains with S11.6 renegotiation may preserve the bad state
+rather than escape it.  That inverts what #149 is worth and it must be checked
+before building it.
+
+**WHAT IS NOW THE QUESTION.**  Not "which of three duplex candidates owns the
+6 dB".  It is why the first phase 4 training of a call never converges when
+the second one does, seconds later, on the same channel -- and why the
+SupraExpress needs more than one retrain to escape it.  3201's three
+candidates (our own transmission, the AGC step, the frozen EC) are all still
+live, but whichever it is, **it clears after the first handshake**, which is a
+much harder constraint than "it switches on with our transmitter".
+
+Tool: `testbench/handshakeorder.py` on branch `handshake-order`, with the
+`p3_n` column added to `snrblocks.py` in the same commit.
+
+======================================================================
+
+### 3204. SAME START, SAME DURATION, SLOWER ADAPTATION -- AND THE SUPRA NEVER GETS THE RETRAIN'S BENEFIT
+
+*3203 left one question: why the first phase 4 of a call ends ~9 dB below the
+second. Two obvious answers were "it starts worse" and "it gets less time".
+Both are wrong, measured over the same 605 captures with zero calls placed.*
+
+The phase 4 trajectory, decision block excluded, by handshake index:
+
+    hs     n   1st blk  last blk   climb  blocks
+     0   506      9.74     17.82    8.21     6.0
+     1   285     11.09     24.98   13.80     6.0
+    2+   408     11.30     26.13   14.84     7.0
+
+**Every phase 4 begins at the same error and gets the same number of blocks.**
+The first block is 9.74 dB cold against 11.09 on a retrain -- 1.35 dB, not
+nine -- so the equaliser is NOT starting from retained taps. The block count
+is 6 either way. What differs is how far it gets in those six: **8.21 dB of
+climb cold against 13.80 on the next handshake of the same call.**
+
+**PAIRED WITHIN THE SAME CALL, climb(hs1) - climb(hs0):**
+
+    1902   n=55   +6.38 dB   faster 44/55
+    1903   n=27   +6.38 dB   faster 20/27
+    1901   n=53   +0.09 dB   faster 27/53      <- nothing
+    ALL    n=284  +5.72 dB
+
+**THE SUPRA GETS NO BENEFIT FROM RETRAINING AT ALL** -- 27 of 53 is a coin
+flip -- which is the same fact 3203 saw from the other side, where 1901 stays
+92/70/53% in the low mode while the other two clear on handshake 1. Two
+independent cuts of the archive agree, so it is a property of that path and
+not of either statistic.
+
+**WHAT THIS NARROWS IT TO.** Not convergence time, not initial tap state, not
+the channel: the ADAPTATION RATE over a fixed six blocks from a fixed starting
+error. Something the second handshake has and the first does not makes the
+equaliser converge ~6 dB further in the same time.
+
+**AND THERE IS ALREADY A NAME FOR THE DISCRIMINATOR IN THIS TREE.** The
+disassembly notes carry
+
+    5fad2  v34handshakinit                    ecx (0 on the cold start)
+
+so the function that sets phase 4 up already takes a cold-start-versus-retrain
+argument that this reconstruction has recorded and nobody has followed. What
+that argument gates -- an adaptation step size, a gear-shift schedule, an EC
+or timing-recovery mode -- is the next read, and it is source work rather than
+bench work.
+
+**DO NOT READ THE `phase3` COLUMN ACROSS ROWS of 3203's pooled table**: it
+moves 34.60 -> 25.48 -> 25.14 purely because the far-end mix changes with
+handshake index and the Courier's control is understated by ~10 dB (3203).
+The per-far-end tables are the ones to read. Every number above is either
+paired within a call or split by far end for that reason.
+
+======================================================================
+
+### 3205. THE COLD START AND THE RETRAIN DIFFER BY TWO LINES, AND ONE OF THEM IS THE AGC GAIN 3201 CORRELATED WITH
+
+*3204 narrowed the first-handshake deficit to the ADAPTATION RATE and named
+`v34handshakinit`'s `ecx (0 on the cold start)` as the discriminator to read.
+Master has since reconstructed that function, so the read is C rather than
+disassembly. This is what it says.*
+
+`v34handshakinit(void *obj, int mode)` and its modes, sourced from call sites
+rather than inferred (`include/dsplib/v34hshak.h`):
+
+    0   VPcmV34Create                        cold start
+    1   VPcmV34InitiateRetrain, v34handshak  retrain
+    2   VPcmV34InitiateRateRenegotiation     rate renegotiation
+    3   -- no caller anywhere; shares 2's body
+    4   VPcmV34InitMOH                       Modem-on-Hold
+
+**Mode 0 is handshake 0 and mode 1 is handshakes 1+**, which is exactly
+3204's split. Over the whole function the two bodies differ in what they
+touch, and only two lines are asymmetric in the receiver:
+
+    rxtiminginit(obj)          mode 0 ONLY   -- "the only one that re-arms
+                                                the timing recovery"
+    rx->agc_gain = rx->f262    modes 1 and 4 ONLY -- NOT mode 0, NOT mode 2
+
+**`rx->f262` IS THE NUMBER 3201 CORRELATED WITH.** It is the AGC gain
+estimate off the L1 probe -- `V34PROBE, agc gainestimate of L1 signal is %d`
+-- scaled down one dB per dB of power reduction requested by `probe_backoff`
+and clamped at 0x1b58. 3201 found the AGC gain correlating with the deficit at
+r = +0.44 and noted the logged `power reduction request is 1360 / is 1212`
+were the AGC gain itself. They are this field. So the measurement and the
+source name the same quantity from opposite ends.
+
+**TWO SOURCED CANDIDATES for 3204's ~6 dB, and they are separable:**
+
+  * **The AGC restore.** A retrain sets the working gain to the probe's
+    estimate; the cold start leaves whatever `v34modeminit` put there. An
+    equaliser adapting at the wrong gain converges to a worse error in a
+    fixed number of blocks, which is 3204's shape exactly.
+  * **`rxtiminginit`.** The cold start re-arms timing recovery and the
+    retrain does not, so on handshake 0 the timing loop is converging
+    CONCURRENTLY with the equaliser and on later ones it is already settled.
+    That also produces "same start, same duration, less progress".
+
+**WHAT WOULD KILL THE AGC CANDIDATE, and it must be checked before anyone
+builds on this.** Three other sites do the same restore -- `dpskinit` twice
+(v34hshak.c:392, :541) and `setupreceiver` (:815). If the cold-start path
+reaches any of them before its phase 4, the asymmetry closes and mode 0's
+omission means nothing. **This is a hypothesis with a named refutation, not a
+mechanism.** `setupreceiver` is the one to look at first, by its name.
+
+**AND IT SHARPENS #149 FROM SOURCE RATHER THAN SPECULATION.** 3203 flagged
+that if a full retrain is what clears the bad state, replacing retrains with
+S11.6 renegotiation might preserve it. Mode 2 does LESS than mode 1, not more:
+it is "the only body that does not call `v34modeminit`", it does not restore
+`agc_gain`, and it does not re-arm timing. So on this reading renegotiation
+keeps whatever handshake 0 left. **#149 should not be built until the
+cold-start question is settled**, because the measured doubling 1947 found
+came from full retrains and #149 proposes to stop doing them.
+
+**WHAT THIS IS NOT.** Not a measurement -- 3203 and 3204 are the measurements
+and this is a source read that fits them. Not proof that mode 0 is wrong:
+re-arming timing recovery on a cold start is correct behaviour, and the object
+may be right that the first handshake has nothing to restore. The defect, if
+there is one, is that six blocks is not enough to converge from that state --
+which would make it a phase 4 length problem, and a deviation rather than a
+bug fix.
+
+======================================================================
+
+### 3206. #174 ANSWERED: THE AGC CANDIDATE IS DEAD BY MEASUREMENT, NOT BY ARGUMENT -- AND `rxtiminginit` IS WHAT SURVIVES
+
+*3205 offered two sourced candidates for 3204's ~6 dB. This kills one of them.
+It is recorded at length because the source asymmetry is REAL and still there,
+and it would have been written up as the leading explanation on the strength
+of that alone.*
+
+**FIRST, THE REFUTATION TEST 3205 NAMED DID NOT FIRE -- it strengthened the
+candidate.** 3205 said the AGC reading dies if the cold-start path reaches one
+of the other `rx->agc_gain = rx->f262` sites (`dpskinit` x2, `setupreceiver`)
+before its phase 4. It cannot: **nothing in the object reaches them at all.**
+Verified against the blob rather than taken from the comment that claims it,
+because findings 144, 176 and 604 are all this class of claim being wrong:
+
+    direct call   no R_386_PC32 relocation names dpskinit, setupreceiver or
+                  dpskDetectInfo1Init.  Control: setfinalrate, which the tree
+                  says HAS a caller, matches once.
+    address taken 1823 R_386_32 relocations target .text, 1056 distinct
+                  addresses, addends read INLINE from each relocated section
+                  because x86-32 is REL and readelf's column is the symbol
+                  value, not the addend.  dpskinit 0, setupreceiver 0,
+                  dpskDetectInfo1Init 0.
+                  CONTROLS: v34handshakinit's own mode jump table at
+                  .rodata+0x2d44 -> mode 0 body x1, mode 1 x1, mode 2/3 x2,
+                  mode 4 x1.  The 2 is correct and is the check that matters:
+                  modes 2 and 3 share a slot, which the source says
+                  independently.
+
+The scan read **zero** twice before that, once from a section-name slice that
+produced `..rodata`. Both times every control read zero with it, which is the
+only reason it was caught -- a detector must report its denominator (2401),
+and it must be shown firing on a known input (the `extcheck` lesson).
+
+**THEN THE MEASUREMENT KILLED IT ANYWAY.** `rxinit` sets `agc_gain = 0x200`
+(512) and mode 1 assigns `f262` (logged at 1212-1360), so the prediction is
+that handshake 0 sits at a LOWER gain through its phase 4. Over 1073 clean
+decisions, `snrblocks.py`'s own `agc_p3`/`agc_p4`:
+
+    hs     n   agc_p3   agc_p4   p4-p3   decision
+     0   474     1204     1215       8      17.79
+     1   246     1065     1216     154      28.28
+     2   136      961     1206     164      28.05
+    3+   217      846     1050     199      27.01
+
+    agc_p4 over all 1073: min 724, p10 858, median 1214, max 2731
+    below 600: 0.   512 is NEVER OBSERVED at a decision.
+
+**Handshake 0's AGC is 1215 -- the HIGHEST, not the lowest -- and it is the
+one that does not move (delta 8 against 154-199).** Whatever 512 does, it is
+gone long before the rate decision, and the missing restore does not leave a
+wrong gain where the ladder reads. The direction is opposite to the
+prediction, not merely absent.
+
+So 3201's candidate 2 and 1974's "stable is not correctly scaled" are both
+answered negatively at the decision point: the gain there is neither low nor
+drifting. **3201's r = +0.44 correlation stands as an observation and now has
+no mechanism behind it** -- it is not the cold-start restore.
+
+**WHAT SURVIVES, and it is the other line of the same two-line asymmetry:**
+
+    rxtiminginit(obj)    mode 0 ONLY -- "the only one that re-arms the
+                                        timing recovery"
+
+On a cold start the timing loop is converging CONCURRENTLY with the equaliser;
+on a retrain it is already settled and untouched. That produces 3204's exact
+shape -- same starting error, same six blocks, less progress -- without
+needing the gain to be wrong. It is now the leading candidate by elimination
+rather than by evidence, which is a weaker position than the AGC one occupied
+an hour ago, and the next step is to measure it rather than read it.
+
+**STILL UNCHECKED, and it is the honest gap:** `t44_accept_len26`
+(v34hshak.c:6663) is a SIXTH `agc_gain = f262` site, in a message handler, and
+whether the cold-start path receives that message before its phase 4 was not
+established. It does not rescue the candidate -- the measurement above is
+downstream of every restore site and says the gain is right -- but it is
+unfinished.
+
+**AND #149's HOLD IS UNCHANGED.** It never rested on the AGC line. Mode 2
+still does less than mode 1 -- no `v34modeminit`, no timing re-arm -- so
+S11.6 renegotiation still fails to do whatever the full retrain does, and
+whatever that is has moved from the gain to the timing recovery.
