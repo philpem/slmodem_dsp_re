@@ -75,10 +75,13 @@ def main():
                  "from elsewhere." % args.obj)
 
     syms, sec, edges = closure.build_graph()
+    # THE GUARD THAT USED TO BE HERE has moved inside `closure.ours()`, which
+    # refuses on an empty object tree for all three of its callers and names
+    # the target that actually fills it.  It said "build first" and the tree
+    # it was reading, build/src, stopped being built by a plain `make` at
+    # #164 -- so the advice was right in 2018 and wrong since.  Findings 3055
+    # and 3110; tools/objtree.py.
     have = closure.ours()
-    if not have:
-        sys.exit("readyqueue.py: build/src/**/*.o defines nothing -- build "
-                 "first, or every symbol will read as unwritten.")
 
     addr = coverage.blob_addresses(args.obj)
     tus = coverage.load_tus(args.tumap)

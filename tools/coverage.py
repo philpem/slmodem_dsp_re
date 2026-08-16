@@ -21,7 +21,8 @@ HOW IT DECIDES
 Not by grepping source for names, which would count a prototype, a comment or
 a call as a definition.  By reading symbol tables:
 
-  ours     every T symbol our own build defines, from build/src/**/*.o
+  ours     every T symbol our own build defines, from build/src/**/*.o --
+           or build/repro/**/*.o, whichever a build has actually filled
   blob     every T and t symbol dsplibs.o defines, with its size
   tested   every `ref_NAME` a compiled test object actually REFERENCES,
            from `nm -u` on build/test/**/*.o
@@ -54,7 +55,13 @@ drivable if and only if objcopy really made an alias for it.
 
 WHERE `ours` COMES FROM, AND WHY IT IS A WHITELIST
 
-Only build/src is walked.  This used to be all of build/ less `dsplibs_ref.o`
+Only build/src and build/repro are walked, in that order, and only ever one
+of them: they are the two directories our own compiler writes to from src/,
+they hold the same 1457 (name, kind) pairs when both are built, and a plain
+`make` has filled only the second since 75dcc19 (#164).  An empty pair of
+them is a REFUSAL and not a 0.0%.  See tools/objtree.py, findings 3055/3110.
+
+This used to be all of build/ less `dsplibs_ref.o`
 by name -- and then the two-pass rename put a SECOND copy of the blob beside
 it, build/dsplibs_glob.o, with all 1782 of its symbols promoted to global.
 The walk took that for our own output and the report claimed 98.0% translated
@@ -73,6 +80,9 @@ import os
 import re
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import objtree                                            # noqa: E402
 
 # Symbols we define only IN PART, and which therefore must not be counted.
 #
@@ -173,17 +183,20 @@ def blob_addresses(path):
 def our_symbols(build):
     """Global text symbols our own compiler output defines.
 
-    build/src and nothing else -- the whitelist the docstring argues for.
+    build/src, or build/repro when build/src is empty -- the two-directory
+    whitelist the docstring argues for, probed rather than assumed since a
+    plain `make` stopped filling the first of them.  REFUSES on an empty
+    tree: this function returning an empty set made the headline number of
+    the whole project read `translated 0.0%, 0 bytes, 0 symbols` at exit 0
+    after a plain `make`, which is indistinguishable from a reconstruction
+    that has not started.  Findings 3055 and 3110; tools/objtree.py.
     """
+    _d, objs = objtree.read("the translated share of the blob", build)
     syms = set()
-    for root, _dirs, files in os.walk(os.path.join(build, "src")):
-        for name in files:
-            if not name.endswith(".o"):
-                continue
-            for sym, (_size, kind) in nm_symbols(os.path.join(root,
-                                                             name)).items():
-                if kind in ("T", "W"):
-                    syms.add(sym)
+    for path in objs:
+        for sym, (_size, kind) in nm_symbols(path).items():
+            if kind in ("T", "W"):
+                syms.add(sym)
     return syms
 
 

@@ -8,6 +8,10 @@
 # and watching it fire (CLAUDE.md, finding 134).
 #
 #   tools/objsnap.sh build/src/pump/v34/v34hshak.o
+#
+# That path exists after `make coverage`; a plain `make` builds
+# build/repro/pump/v34/v34hshak.o instead, which is the same source with
+# -DDSPLIB_REPRODUCE_BUGS and will not have the same hash.  Findings 3055/3110.
 o="$1"
 for s in .text .rodata .rodata.str1.1 .rodata.str1.4 .data .bss; do
 	objcopy -O binary --only-section=$s "$o" /tmp/objsnap.bin 2>/dev/null

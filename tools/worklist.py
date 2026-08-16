@@ -16,8 +16,11 @@ call graph.
 
 THE THREE CATEGORIES, AND WHY THE THIRD IS NOT OPTIONAL
 
-  not written        the blob defines the symbol and `build/src` does not.
-                     A set difference; exact.
+  not written        the blob defines the symbol and our own built objects
+                     -- `build/src`, or `build/repro` when a plain `make` is
+                     all that has been run -- do not.  A set difference;
+                     exact.  An EMPTY object tree is refused rather than
+                     reported as "nothing written": findings 3055 and 3110.
 
   written            a function of that name exists on our side.  Note what
                      this does NOT claim: `coverage.py`'s own docstring says
@@ -130,16 +133,12 @@ def main():
                  "pass --obj with a full path when running from elsewhere."
                  % args.obj)
 
-    # `our_symbols()` reads build/src/**/*.o, so in a fresh `git worktree add`
-    # -- where build/ does not exist yet -- it comes back empty and EVERY
-    # symbol reads as unwritten.  That is a plausible-looking report and a
-    # completely wrong one, so refuse rather than print it.  closure.py
-    # carries the same guard for the same reason.
-    if not ours:
-        sys.exit("worklist.py: %s/src/**/*.o defines nothing, so everything\n"
-                 "would be reported as unwritten.  Build first, or point\n"
-                 "--build at a tree that has been built."
-                 % args.build)
+    # THE GUARD THAT USED TO BE HERE has moved inside `coverage.our_symbols()`,
+    # which both this and coverage.py read the have-set through.  Its advice
+    # was "Build first", and the directory it meant -- build/src -- stopped
+    # being filled by a plain `make` at #164, so following it changed nothing
+    # and the report stayed wrong.  objtree.read() now names `make coverage`
+    # and prints the object count.  Findings 3055 and 3110.
     if not tus:
         sys.exit("worklist.py: no TU map at %s, so nothing can be attributed\n"
                  "to a translation unit.  `make %s` builds it."
@@ -178,8 +177,13 @@ def main():
     # `make worklist` would show a diff every time it ran from a worktree.
     add("  The two halves have two different sources and can drift.  The")
     add("  counts are from the object and the built objects under")
-    add("  %s/src; the stub sites are read from the SOURCE"
-        % os.path.relpath(args.build))
+    # BOTH DIRECTORIES, AND STATICALLY.  Naming the one this run happened to
+    # read would make the committed file depend on which build the regenerator
+    # had done -- the same churn the note above avoids.  Which was read is on
+    # stderr, every run.  Findings 3055 and 3110.
+    add("  %s/src or %s/repro, whichever a build has filled (the run's"
+        % (os.path.relpath(args.build), os.path.relpath(args.build)))
+    add("  own stderr says which); the stub sites are read from the SOURCE")
     add("  under %s -- which under `make worklist` is the working"
         % os.path.relpath(args.root))
     add("  tree, so an uncommitted edit moves those line numbers.")

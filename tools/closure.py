@@ -49,7 +49,6 @@ USAGE
 
 import argparse
 import collections
-import glob
 import os
 import re
 import struct
@@ -57,6 +56,12 @@ import subprocess
 import sys
 
 _here = os.path.dirname(os.path.abspath(__file__))
+# BEFORE the strip below, and it has to be: that line removes tools/ from
+# sys.path so `inspect` does not find tools/dis.py in place of the standard
+# library's, and any tools module imported after it is unfindable.  See the
+# order comment at the top of readyqueue.py.
+sys.path.insert(0, _here)
+import objtree                                            # noqa: E402
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _here]
 
 BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
@@ -251,9 +256,21 @@ def build_graph():
     return syms, sec, edges
 
 
+#
+# THE HAVE-SET, AND WHY IT REFUSES RATHER THAN COMES BACK EMPTY.
+#
+# readyqueue.py and service.py call this too, so the guard belongs here and
+# not at the three call sites -- service.py had none at all, and on an empty
+# tree it partitioned every symbol in the object by service and printed
+# "sanity checks passed" underneath, because its own MUST_BE_FAX check tests
+# reachability and reachability does not care whether anything is written.
+# tools/objtree.py for which directories are read and why an empty one is a
+# refusal.  Finding 3110.
+#
 def ours():
+    _d, objs = objtree.read("what is already written")
     found = set()
-    for o in glob.glob("build/src/**/*.o", recursive=True):
+    for o in objs:
         out = subprocess.run(["nm", "--defined-only", o], capture_output=True,
                              text=True).stdout
         for line in out.splitlines():
@@ -339,19 +356,20 @@ def main():
     #
     # AN UNBUILT TREE MAKES EVERY CLOSURE LOOK ENORMOUS.
     #
-    # `ours()` reads what src/ defines out of build/src/**/*.o, so in a fresh
+    # `ours()` reads what src/ defines out of the built objects, so in a fresh
     # `git worktree add` -- where build/ does not exist yet -- the have-set is
     # empty and everything this tree has already written is reported missing.
     # One agent read 21 symbols and 9,187 bytes for a function whose real
     # closure is itself.  The answer is not wrong so much as answering a
     # different question, which is the worst kind.  Finding 271.
     #
-    if not have:
-        sys.stderr.write(
-            "closure.py: build/src/**/*.o defines nothing, so NOTHING counts\n"
-            "            as already written and this closure is meaningless.\n"
-            "            Run `make` first.  (Finding 271.)\n")
-
+    # THE WARNING THAT USED TO BE HERE SAID "Run `make` first" AND WAS WRONG
+    # AFTER #164, which is worse than saying nothing: an agent ran `make`, got
+    # the identical warning and the identical wrong closure, and only found out
+    # by re-running `make coverage` on a hunch.  `ours()` now refuses in
+    # objtree.read() before this point is reached, with advice that works.
+    # Findings 3055 and 3110.
+    #
     roots = []
     for spec in args.names:
         got = resolve(spec, syms)
