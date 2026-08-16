@@ -141,6 +141,20 @@ struct fpm_fse {
  * five and allocates again unconditionally -- unlike `FPM_MRF_init`, there is
  * no reuse path.
  */
+/*
+ * `count` input samples in, one decoded symbol per `cfg.interp` of them out,
+ * and the return is how many symbols that was.  `out` must have room for
+ * `count / cfg.interp` of them and `in` is consumed in full unless the tail
+ * is shorter than a symbol interval, in which case it is stashed and charged
+ * against `state->need` for the next call.
+ *
+ * `count` is UNSIGNED -- the object zero-extends it into the sample counter
+ * behind the `Decoder Error` report -- but the loop runs on a `short` copy of
+ * it, so a count above 0x7fff is negative to the loop and stashes nothing.
+ */
+unsigned short FPM_FSE_receive(struct fpm_fse *state, const short *in,
+			       unsigned short *out, unsigned short count);
+
 void FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg,
 		  int fresh);
 void FPM_FSE_free(struct fpm_fse *state);
