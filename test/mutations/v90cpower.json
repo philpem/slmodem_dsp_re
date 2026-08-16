@@ -1,27 +1,31 @@
 [
  {
+  "label": "NOTE: this set is the CONSTRUCTOR AND DESTRUCTOR ONLY, caught by t_v90designers. The five members and the power ladder are v90cpmembers, caught by t_v90cpower.",
+  "note": "The three byte-level mutations below used to be written through `pad_00`, the byte array this class carried before its interior was mapped. They now go through the object address so that they stay independent of which field happens to live at the offset."
+ },
+ {
   "label": "the constructor initialises the first byte of the object",
   "find": "V90ConstellationPower::V90ConstellationPower()\n{\n}",
-  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\tpad_00[0] = 0;\n}"
+  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\t((unsigned char *)this)[0] = 0;\n}"
  },
  {
   "label": "the constructor clears the whole 144 bytes",
   "find": "V90ConstellationPower::V90ConstellationPower()\n{\n}",
-  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\tint i;\n\n\tfor (i = 0; i < 0x90; i++)\n\t\tpad_00[i] = 0;\n}"
+  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\tint i;\n\n\tfor (i = 0; i < 0x90; i++)\n\t\t((unsigned char *)this)[i] = 0;\n}"
  },
  {
   "label": "the constructor writes the LAST byte only",
   "find": "V90ConstellationPower::V90ConstellationPower()\n{\n}",
-  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\tpad_00[0x8f] = 0;\n}"
+  "replace": "V90ConstellationPower::V90ConstellationPower()\n{\n\t((unsigned char *)this)[0x8f] = 0;\n}"
  },
  {
   "label": "the destructor clears the first byte",
   "find": "V90ConstellationPower::~V90ConstellationPower()\n{\n}",
-  "replace": "V90ConstellationPower::~V90ConstellationPower()\n{\n\tpad_00[0] = 0;\n}"
+  "replace": "V90ConstellationPower::~V90ConstellationPower()\n{\n\t((unsigned char *)this)[0] = 0;\n}"
  },
  {
   "label": "the destructor clears the first byte, volatile so it survives",
   "find": "V90ConstellationPower::~V90ConstellationPower()\n{\n}",
-  "replace": "V90ConstellationPower::~V90ConstellationPower()\n{\n\t*(volatile unsigned char *)&pad_00[0] = 0;\n}"
+  "replace": "V90ConstellationPower::~V90ConstellationPower()\n{\n\t*(volatile unsigned char *)&((unsigned char *)this)[0] = 0;\n}"
  }
 ]

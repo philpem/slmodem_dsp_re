@@ -58627,3 +58627,211 @@ be read off the format table either way, and the count gap is at least partly
 `callprog.c`'s own static helpers, which is the worked example in
 `debugaudit.py`'s comment. Whatever is there needs `--sites` read by hand;
 what it is NOT is nine dropped messages.
+
+### 3050. `V90ConstellationPower` IS A MIXED-RADIX ODOMETER, AND ITS 144 BYTES ARE NOW ALL FIELDS
+
+*Numbering note: this block was briefed as 2900-2949 and then as 3000-3049.
+Both were taken -- 2900-2903 by the same-size codegen triage, and 3000-3004 are
+already on master.  It is 3050-3055, and nothing else about it changed.*
+
+The class had four symbols written (`C1`, `C2`, `D1`, `D2`, one `ret` each) and
+its interior modelled as `unsigned char pad_00[0x90]`, on the argument that
+naming the regions without a reader would be a guess.  The five members in this
+batch are those readers, and between them they fix every byte:
+
+```
+  +0x00  unsigned char *constellation      getConstellationInfo, mov %eax,(%ebx)
+  +0x04  unsigned int   constellationSize  ... and mov %eax,0x4(%ebx)
+  +0x08  long long      codewordCount      1LL << (shaperSR + word_0 - 6)
+  +0x10  long long      remaining[7]       0x10..0x47, the successive quotients
+  +0x48  unsigned int   modulus[6]         0x48..0x5f, the successive digits
+  +0x60  double         placeValue[6]      0x60..0x8f, the cumulative products
+```
+
+`calcModulusParameters` (0x3dd80) writes everything but the first two, and what
+it is doing is laying out a positional number system whose radices are the six
+`V90MappingParams::constellationSize` entries:
+
+```
+  codewordCount = 1LL << (mp->shaperSR + mp->word_0 - 6)
+  remaining[0]  = codewordCount - 1
+  modulus[i]    = remaining[i] % constellationSize[i]        i = 0..4
+  remaining[i+1]= (remaining[i] - modulus[i]) / constellationSize[i]
+  placeValue[0] = 1.0
+  placeValue[i] = placeValue[i-1] * constellationSize[i-1]
+```
+
+THE SIGNEDNESS IS FORCED IN THREE PLACES AND NOT GUESSED ANYWHERE.  The
+divisions are `__divdi3`/`__moddi3` and never the `__u*` pair, so
+`codewordCount` and `remaining` are SIGNED `long long`.  Each
+`constellationSize` enters the division with a zero high word (`xor %eax,%eax`
+into the argument pair) and enters the place-value product through `fildll` off
+a zero-extended push pair, so it is the `unsigned int` `V90MappingParams.h`
+already measured.  Each `modulus[i]` is read BACK out of the object ahead of the
+subtraction, with `xor %ecx,%ecx` supplying the high half -- a zero extension,
+so the field is `unsigned int` and not `int`.
+
+THE PLACE-VALUE PRODUCT IS A REGISTER AND NEVER A RELOAD: five `fstl` and one
+`fstpl`, with the running value staying in %st(0) the whole way.  A version
+that read `placeValue[i-1]` back would round to double once per step where the
+object rounds only on the store.  Every value is a product of at most six sizes
+and is exact either way, so this is shape rather than arithmetic -- but it costs
+nothing to keep.
+
+The shift count has no guard of any kind; D349.
+
+### 3051. `getPower` IS AN EXPECTED SQUARE OVER THE ODOMETER, AND ITS THREE ARMS ARE A DIGIT-FREQUENCY ARGUMENT
+
+`getPower` (0x3e0e0, 574 bytes) calls `calcModulusParameters`, then walks the
+six constellations and, within each, every point of it, accumulating
+
+```
+  power += level(j) * level(j) * fraction(i, j)
+```
+
+where `level` is the companded value of the point's byte and `fraction(i, j)`
+is the share of the `codewordCount` codewords that put point `j` in symbol
+position `i`.  The tail is `power * (1.0 / 6.0)` -- the double
+0.16666666666666666 at `.rodata.cst8:0xc0`, reached by `fmull` and not by a
+`fdivl` against 6.0 -- so the answer is a MEAN SQUARE PER SYMBOL of a
+six-symbol V.90 frame.
+
+The fraction is a three-way test of `modulus[i]` against the point index, `ja`,
+`je`, fall-through:
+
+```
+  j <  modulus[i]   placeValue[i] / codewordCount * (remaining[i+1] + 1)
+  j == modulus[i]   1.0 - 1.0 / codewordCount * placeValue[i]
+                          * (remaining[i] - remaining[i+1])
+  j >  modulus[i]   placeValue[i] / codewordCount * remaining[i+1]
+```
+
+which is exactly the digit-frequency count for a mixed-radix range: the digits
+below the top one's remainder occur once more often than the rest, and the
+boundary digit takes whatever is left.  The middle arm is the only one that
+divides the other way round -- `fildll` the count, `fld1`, then `de f1`, which
+objdump prints as `fdivp` and which IS `FDIVRP`, leaving `1.0 / count`
+(finding 245, and `tools/dis.py` annotates the line).  Spelling it
+`1.0 - (remaining[i] - remaining[i+1]) * placeValue[i] / codewordCount` would
+be the same value in exact arithmetic and a different instruction sequence.
+
+TWO CALLS PER POINT, NOT ONE AND A SQUARE.  The object calls `alaw2linear`
+twice with the same argument and multiplies the results, reloading
+`this->constellation` from memory between them.  Both are forced -- the
+companding routines are external calls, so nothing lets the compiler cache the
+member or fold the pair -- and the source is written the same way rather than
+with a temporary.
+
+THE TWO MASKS ARE THE ONES THE REST OF THE V.90 CODE USES:
+`alaw2linear((c & 0x7f) ^ 0xd5)` for A-law and
+`ulaw2linear((c & 0x7f) ^ 0xff)` for mu-law, chosen on `pcmType != 0` with the
+A-law arm as the fall-through.  `V90Phase3Modulator`, `V90Phase3Demodulator`
+and `V90ConstellationDesigner::findNextUcodeToAdd` all agree.
+
+### 3052. THE SIXTH MODULUS IS A TRUNCATION, NOT A REMAINDER -- AND THE TWO READINGS AGREE FOR EVERY ORDINARY INPUT
+
+Five of `calcModulusParameters`' six digits are a `__moddi3` call.  The sixth
+is not:
+
+```
+   3df42  89 47 38     mov %eax,0x38(%edi)     remaining[5] = quotient
+   3df45  8b 77 38     mov 0x38(%edi),%esi     ... read the LOW half back
+   3df48  89 57 3c     mov %edx,0x3c(%edi)
+   3df4b  89 77 5c     mov %esi,0x5c(%edi)     modulus[5] = (unsigned)remaining[5]
+```
+
+There is no division and no `__moddi3` between the fifth round and the sixth
+`__divdi3`; `modulus[5]` is `remaining[5]` truncated to 32 bits, and the
+subtraction that follows takes that truncation away again before the final
+divide.
+
+THIS IS THE KIND OF DIFFERENCE A GREEN TEST HIDES.  `x % n` and `x` are the
+same value for every `x < n`, and `remaining[5]` is the range left after five
+constellations have been divided out -- which for any realistic rate and any
+realistic set of sizes is smaller than the sixth constellation.  A sweep over
+plausible inputs passes with the loop everyone would write in place of what is
+there.  `t_v90cpower.cpp` therefore COUNTS the trials where
+`remaining[5] >= constellationSize[5]` and asserts the count is not zero, and
+the mutation set carries "the sixth digit is a remainder like the other five"
+as a mutation that must be caught.  Both fire.
+
+What the author meant by it is not recoverable and is not claimed here.  It is
+reproduced as found.
+
+### 3053. `getConstellationInfo` IS INLINED INTO `getPower`, AND THE MEASUREMENT POINT IS AN `== 1` AND NOT A `!= 0`
+
+`getPower` contains a second copy of `getConstellationInfo`'s body: the same
+twelve `lea` displacements over the two byte tables, the same six
+`constellationSize` loads, dispatched through its own jump table at
+`.rodata:0xce4` in index order.  The differences are the two an inliner makes.
+The out-of-line copy bounds its switch (`cmp $0x5,%eax ; ja`) and the inlined
+one does not, because the loop variable is provably 0..5; and the out-of-line
+copy tests the measurement point with `dec %edx ; je` where the inlined one
+uses `cmpl $0x1,0x68(%esp) ; je`, the argument having stayed on the stack.
+
+So the source has ONE function and `getPower` calls it, and the definition has
+to come first in the translation unit for -O3 to have the same opportunity.
+
+THE POINT TEST IS AN EQUALITY.  Both spellings are an equality against 1, not a
+test against zero, so a value of 2 takes the `constellation` arm exactly as 0
+does.  Nothing in the object names an enumerator or fixes what the two
+measurement points ARE; what is measured is that ONE selects
+`codecConstellation`.  The enum carries a wide negative pin for the reason
+`V90CodecType.h` argues -- a two-valued enum has the range 0..1 and entitles
+the compiler to narrow `== 1` to `!= 0`, which would make the object's
+`cmpl $0x1` both unreproducible and untestable -- and `t_v90cpower.cpp` drives
+2 on every third trial.
+
+### 3054. `averagePowerLimits` IS 35 PERFECT SQUARES, 0.5 dB APART
+
+The static data member at `.data:0xb60`, 0x8c bytes, is 35 `unsigned int`.
+Every one of the 35 is a perfect square:
+
+```
+  228735376 = 15124^2   ...   5112121 = 2261^2   4549689 = 2133^2
+```
+
+and the ratio of consecutive ROOTS is 1.0593 +/- 0.0003, which is 0.5006 dB
++/- 0.005.  So the table is an amplitude ladder in 0.5 dB steps held squared,
+spanning 17 dB over its 35 entries, and `getPowerIndexForPower` compares a
+power against it directly rather than taking a root.
+
+That is the shape and it is measured; what the amplitudes are referred TO is a
+derivation and is deferred with the rest of them (docs/fastpass.md).  The
+reconstruction carries the 35 values verbatim and `t_v90cpower.cpp` compares
+our copy against the blob's own through the `ref_` alias, so the claim is a
+byte comparison of two distinct objects rather than a symbol against itself.
+
+NOT `const`: the symbol is `D`, in `.data`.  A `const` static member of this
+shape would have been emitted into `.rodata`.
+
+### 3055. AFTER #164 A PLAIN `make` NO LONGER POPULATES `build/src`, AND SIX TOOLS SILENTLY REPORT THAT NOTHING IS WRITTEN
+
+`closure.py`, `readyqueue.py`, `worklist.py`, `coverage.py`, `cppstruct.py` and
+`callgraph.py` all learn what our side defines by globbing
+`build/src/**/*.o`.  Commit 75dcc19 (#164) split the object tree so that
+`$(BUILD)/%.o` is the FIXED build and `$(BUILD)/repro/%.o` the faithful one,
+and the test binaries link the repro tree -- so `make`, which builds the tests,
+now leaves `build/src` empty.
+
+The failure is loud in two of the six and silent in the rest.  `closure.py` and
+`readyqueue.py` print a warning and name `make` as the fix:
+
+```
+closure.py: build/src/**/*.o defines nothing, so NOTHING counts
+            as already written and this closure is meaningless.
+            Run `make` first.  (Finding 271.)
+```
+
+`make` is no longer sufficient advice.  Running it and re-running the closure
+gives the same warning and a report in which every already-written callee is
+listed as unwritten -- this batch's closure named `alaw2linear` and
+`ulaw2linear` as missing, both of which have been in `src/service/pcm.c`
+throughout.  What does populate the tree is `make coverage` (or `make phase`,
+which depends on it), because `coverage:` lists `$(OBJ)` as a prerequisite.
+
+Recorded rather than fixed: the tools belong to work in flight and a glob
+changed underneath a batch is exactly the kind of edit that collides.  The
+warning text is what should change, and it should name a target that still
+builds `$(OBJ)`.  This is 134's argument again -- a detector that reports a
+clean tree when its input is empty is worse than one that fails.
