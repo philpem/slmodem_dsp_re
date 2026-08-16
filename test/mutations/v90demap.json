@@ -70,7 +70,9 @@
  {
   "label": "the magnitude is the raw sample",
   "find": "\t\tmag = (short)__builtin_abs(in);",
-  "replace": "\t\tmag = in;"
+  "replace": "\t\tmag = in;",
+  "equivalent": true,
+  "why": "`in` is ALREADY non-negative wherever this line runs: the arm above it that can leave a negative value assigns `in = (short)__builtin_abs(in)` first, and the other arm is taken only when `in >= 0`.  So the second absolute value cannot change a bit, at every input including -32768, where both spellings give -32768 back.  The line is written because the OBJECT computes abs twice -- `cltd; xor; sub` at 0x312af on the negative arm and again at 0x3109d on the shared path -- and this entry records that the redundancy is the original's rather than that the suite is weak."
  },
  {
   "label": "the detector's flag does not double the search",

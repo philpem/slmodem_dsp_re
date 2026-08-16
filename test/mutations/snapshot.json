@@ -4756,8 +4756,8 @@
    }
   },
   "v90demap": {
-   "key": "61903f2c8564fa26c806691c05e16ba08f86bcfdf8079454718104f124237a89",
-   "summary": "42 mutations: 40 caught (40 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "70b847014bd360a78ec920f469f568d7c958773846f508e0aeac7ecf7f58c6b4",
+   "summary": "42 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x1ea4 keeps whatever it found": "caught",
     "+0x1eb0 keeps whatever it found": "caught",
@@ -4781,7 +4781,7 @@
     "the histogram delay is spent in one go": "caught",
     "the integration threshold is exclusive": "caught",
     "the last whole frame is left undrained": "caught",
-    "the magnitude is the raw sample": "uncaught",
+    "the magnitude is the raw sample": "equivalent",
     "the modulus bytes are written over the sign bits": "caught",
     "the modulus digits are taken from the front of the buffer, not the frame": "caught",
     "the output cursor does not advance between frames": "caught",
@@ -4791,7 +4791,7 @@
     "the sample is decided and not appended": "caught",
     "the scan bound is the row length rather than one less": "caught",
     "the scan does not back up to the lower neighbour": "caught",
-    "the scan test is strictly greater, so an exact level walks past": "uncaught",
+    "the scan test is strictly greater, so an exact level walks past": "caught",
     "the serial path copies the sign bits instead of decoding them": "caught",
     "the sign-bit groups are read one sample apart too few": "caught",
     "the sign-bit groups overlap by one on output": "caught",
@@ -5684,7 +5684,7 @@
    }
   },
   "v90sbeproc": {
-   "key": "bffc649918878faf0e85b4a84a1d15151ad8f84d356978aa60ac5d7e47ca80b8",
+   "key": "8b51449d01e1e64f5259f55aeb672dea478150037708bf8e73762c5b32dd429f",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "applyFrameAction stops one position short": "caught",

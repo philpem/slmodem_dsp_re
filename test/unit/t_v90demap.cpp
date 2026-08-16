@@ -379,7 +379,7 @@ level_at(int row, int col)
  * hide the seed the comparison rests on.
  */
 static void
-dem_setup(int s, int adi_side, unsigned lfsr)
+dem_setup(int s, int adi_side, int dup, unsigned lfsr)
 {
 	V90Demapper *d = &DEM(s);
 	int i;
@@ -414,6 +414,19 @@ dem_setup(int s, int adi_side, unsigned lfsr)
 
 		for (j = 0; j < V90DEMAPPER_LEVELS; j++)
 			d->constellation[i][j] = level_at(i, j);
+		/*
+		 * A PLATEAU OF TWO, on half the trials.  A strictly descending
+		 * row cannot tell `constellation[code] >= mag` from
+		 * `> mag`: the scan stops one code apart and the two-neighbour
+		 * comparison that follows puts both back on the same level.
+		 * With two adjacent codes holding the SAME level the scan ends
+		 * either side of the pair and the two readings choose
+		 * different codes, which `codes[]` records.  Rounding two
+		 * adjacent mu-law levels to one short is what makes this a
+		 * table the class can really hold, not a contrived one.
+		 */
+		if (dup)
+			d->constellation[i][6] = level_at(i, 5);
 	}
 
 	d->signBits.decoder.state_ = sbstate_s[s];
@@ -471,7 +484,7 @@ run_rlms(void)
 		for (s = 0; s < 2; s++) {
 			/* Each side its own detector: this one WRITES. */
 			fill(adi_s[s], (int)sizeof adi_s[s], lf + 0x900u);
-			dem_setup(s, s, lf);
+			dem_setup(s, s, 0, lf);
 		}
 
 		our_rlms(&DEM(0), n_v[ni]);
@@ -578,16 +591,20 @@ static const short sample_v[] = {
  * last two are the same two negated, so the tie-break is exercised on the arm
  * that also puts a sign back on.
  */
-#define NEXTRA	6
+#define NEXTRA	8
 
 static short
 extra_sample(int phase, int k)
 {
-	short lvl = level_at(phase, (k & 2) ? 3 : 0);
+	short lvl;
 
-	if (k & 1)
+	if (k >= 6)
+		lvl = level_at(phase, 5);	/* the plateau, when there  */
+	else					/* is one                   */
+		lvl = level_at(phase, (k & 2) ? 3 : 0);
+	if (k < 6 && (k & 1))
 		lvl = (short)(lvl - CSTEP / 2);
-	return (k >= 4) ? (short)-lvl : lvl;
+	return (k == 5 || k == 4 || k == 7) ? (short)-lvl : lvl;
 }
 
 static int
@@ -604,12 +621,13 @@ run_harddec(void)
 
 	dsplib_debug_capture_on = 1;
 
-	for (ci = 0; ci < NCSIZE; ci++)
+	for (ci = 0; ci < NCSIZE * 2; ci++)
 	  for (flag = 0; flag < 2; flag++)
 	    for (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)
 	      for (dbg = 0; dbg < 4; dbg++)
 		for (si = 0; si < NSAMP + NEXTRA; si++) {
 			unsigned lf = 0x30a7u + 0x4e6du * (unsigned)trial;
+			int dup = ci >= NCSIZE;
 			unsigned before_hist, after_hist;
 			unsigned before_count;
 			short in, got0, got1;
@@ -638,11 +656,11 @@ run_harddec(void)
 			    (int)(si % 3);
 
 			for (s = 0; s < 2; s++) {
-				dem_setup(s, 0, lf);
+				dem_setup(s, 0, dup, lf);
 				for (i = 0; i < V90DEMAPPER_CONSTELLATIONS;
 				     i++)
 					DEM(s).constellationSize[i] =
-					    csize_v[ci];
+					    csize_v[ci % NCSIZE];
 				DEM(s).rbsFramePosition = (unsigned)phase;
 				/*
 				 * The refusal arm on one trial in five, and
@@ -790,7 +808,7 @@ run_demproc(void)
 		fill(parm_s, (int)PARM_SLOT, lf ^ 0x88u);
 
 		for (s = 0; s < 2; s++) {
-			dem_setup(s, 0, lf);
+			dem_setup(s, 0, 0, lf);
 			DEM(s).signBitGroups = p->groups;
 			DEM(s).signBitGroupSize = p->groupsz;
 			DEM(s).signBitsPerFrame = p->signbits;
