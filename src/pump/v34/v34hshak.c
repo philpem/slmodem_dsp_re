@@ -1487,6 +1487,41 @@ v34handshakinit(void *objp, int mode)
 			       (short)(*(unsigned short *)(m + 0xac12) + 1));
 		}
 
+		/*
+		 * WHO ASKED FOR THIS RETRAIN, from the object's OWN counters.
+		 *
+		 * +0xac14 is bumped when the remote asked -- either our tone
+		 * detector set bit 6, or the byte at +0xac17 was set, and the
+		 * object's name for the routine that sets that byte is
+		 * `VPcmV34SetIndicationOfRemoteRetrain`.  +0xac12 is bumped
+		 * when neither, i.e. we decided.  +0xac10 counts remote RATE
+		 * RENEGOTIATIONS, incremented by `VPcmV34IndicateRemoteRRN`
+		 * four bytes below it.
+		 *
+		 * WHY THIS IS WORTH A LINE.  Finding 1931 attributed "at least
+		 * 6 of 11" retrains to our own bad-block run using our own
+		 * instrumentation.  These three are the OBJECT's accounting of
+		 * the same question, and on a V.34 call the remote arm is
+		 * expected to be structurally unreachable: every caller of
+		 * SetIndicationOfRemoteRetrain is in `VPcmFloModem`, the V.90
+		 * PCM path, which does not run when AT+MS=34,1 forces V.34.
+		 * That expectation has never been measured, and the whole
+		 * ladder argument rests on which counter moves.
+		 *
+		 * GATED ON THE DUMP FLAG, NOT ON DSPLIB_DEBUG_ON(), and this
+		 * is not a style choice: the differential tier compares debug
+		 * transcripts character for character, so an unconditional
+		 * line here would fail every V.34 handshake test.  The flag is
+		 * set only by tools/benchflags.c, which the tier never links.
+		 */
+		if (dsplib_v34_dump_probe_bins)
+			dsplibs_debug_printf(
+			    "V34RTNWHO, remote = %d, local = %d, "
+			    "remote_rrn = %d\n",
+			    (int)*(unsigned short *)(m + 0xac14),
+			    (int)*(unsigned short *)(m + 0xac12),
+			    (int)*(unsigned short *)(m + 0xac10));
+
 		v34modeminit(obj);
 
 		hs_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);

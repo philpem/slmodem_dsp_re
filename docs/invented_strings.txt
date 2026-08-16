@@ -30,3 +30,4 @@ improve/v34-training	'ASKED'	the ternary arm in V34RTNWHY above; 'TIMEOUT' happe
 improve/v34-training	'V34HSINIT, mode = %d, from = %p, f124 = %d, equerr = %d, rxflags = 0x%x\n'	logs EVERY entry to v34handshakinit with its mode argument; there are fourteen call sites and instrumenting one of them measured nothing across six calls (findings 1926, 1928)
 improve/v34-training	'V34PREEMPHASIS, - SHAPE index %d over %d bins, var %d.%02d dB2, baudrate= %d\n'	the shape-matched pre-emphasis selector; the object has no counterpart and never prints this (findings 1956, 1957)
 improve/v34-training	'V34EQTAPS, centre = %lu, off = %lu, equerr = %d\n'	equaliser workload split centre-run vs off-centre; the object never reports its tap energy (findings 1956, 1958)
+improve/v34-training	'V34RTNWHO, remote = %d, local = %d, remote_rrn = %d\n'	the object's own retrain attribution counters (+0xac14/+0xac12/+0xac10); the object increments them but never prints them (finding 1964)

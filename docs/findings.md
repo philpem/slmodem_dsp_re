@@ -59709,3 +59709,60 @@ now refuses to link any object older than its source.
 object's reachable set, broadband noise, an isolated tone, an isolated notch,
 and a broad roll-off -- the last two being the pair that stops the smoothing
 from being tuned into uselessness.
+
+### 1964. MEASURED, AND IT CONTRADICTS MY PREDICTION: THE OBJECT CLASSIFIES MOST RETRAINS AS REMOTE-REQUESTED
+
+`V34RTNWHO` now logs the object's own retrain attribution at the point it bumps
+the counters -- `+0xac14` remote, `+0xac12` local, `+0xac10` remote rate
+renegotiation. First call with it, emulated at `CHAN_SNR=24 CHAN_LOSS=0.01`:
+
+    V34RTNWHO, remote = 1, local = 0, remote_rrn = 0
+    V34RTNWHO, remote = 2, local = 0, remote_rrn = 0
+    V34RTNWHO, remote = 3, local = 0, remote_rrn = 0
+    V34RTNWHO, remote = 3, local = 1, remote_rrn = 0
+    V34RTNWHO, remote = 3, local = 2, remote_rrn = 0
+
+**THREE OF FIVE RETRAINS WERE REMOTE, and the first three consecutively.**
+
+**I PREDICTED ZERO.** The reasoning, recorded before the measurement: every
+caller of `VPcmV34SetIndicationOfRemoteRetrain` -- the only writer of the
+`+0xac17` byte -- is in `VPcmFloModem::runPcmModem` and
+`VPcmFloModem::v90RunDemodulator`, the V.90 PCM path, which does not run when
+`AT+MS=34,1` forces V.34. So the remote arm looked structurally unreachable on
+a V.34 call. It is not, and the prediction was stated plainly enough to be
+falsified, which is the only useful thing about it.
+
+**SO ONE OF TWO THINGS IS TRUE and neither is established yet:**
+
+  * `rx->flags & 0x40` has a producer I did not find. My grep matched
+    `flags.*| *0x40` and found exactly one site, `v34hshak.c:4860`, whose
+    companion message `"retrain is initiated in RX_PHASE2_CALL"` appears ONCE
+    in 1197 handshakes across every capture. Three firings in a single call
+    cannot come from that. A helper, an `hs_put`, or a differently-spelled
+    or-assignment would have been invisible to that grep.
+  * or `m[0xac17]` is being set after all, by a path the call-graph reading
+    missed.
+
+**WHY THIS MATTERS MORE THAN THE COUNT.** The #149 ladder fix suppresses only
+OUR bad-block counter and **exempts flag 0x40 by design** -- the far end's
+request retrains immediately, on the reasoning that it is the far end's
+decision and not ours. If the object is classifying the majority of retrains as
+remote, the fix cannot touch them, and that is a far better explanation of the
+null in 1958 than "it helps typical calls and not bad ones". It would mean the
+change was aimed at the minority of the problem.
+
+**IT ALSO PUTS FINDING 1931 IN DOUBT.** That attributed "at least 6 of 11"
+retrains to our own bad-block run using our instrumentation. This is the
+object's own bookkeeping on the same question and it points the other way. One
+of the two is measuring something other than what it claims.
+
+**NEXT, and none of it needs the bench:** find the real producer -- grep for
+every write to `rx->flags` rather than for the literal, and check `hs_put` and
+any helper -- then re-run this on the ARM that matters, with
+`DSPLIB_V34_RRN_ON_BADBLOCK=1`, to see whether the fix moves `local` while
+`remote` stays put. That single comparison decides whether #149 is aimed at the
+right counter.
+
+**LIMIT: one emulated call, one seed, 1% loss.** Nothing here is a rate and
+nothing is a bench figure. What it establishes is that the remote arm FIRES,
+which the previous reading said it could not.
