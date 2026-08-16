@@ -427,16 +427,38 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
  * the blob.  A macro rather than a helper because a helper would have to be
  * relied on to inline, and at -O2 GCC 3.4.2 inlines nothing that is not
  * declared `inline`.  A-law is the NON-zero arm, as in `reset` above.
+ *
+ * SIXTEEN BITS WIDE, AND `make similarity` IS WHAT SETTLES THAT.  Written as
+ * `unsigned char` the u-law arm comes out as `not %al` at all twenty-two
+ * sites; the object has `not %al` at the six that feed an `unsigned char`
+ * argument and `movzbw %al,%cx; sub %ecx,%ebp; movzwl %bp,%eax` at the
+ * sixteen that index a table -- a truncation to sixteen bits that is
+ * unobservable, because the value is 0..255, and that the compiler therefore
+ * emitted only because the type asked for it.  Widening the macro's result
+ * puts all twenty-two back.  It costs about sixty instructions elsewhere in
+ * register allocation, which is the half of a codegen difference CLAUDE.md
+ * says to ignore.
  */
 #define P3D_CODE(mag)							\
-	((unsigned char)(pcmType == PCM_TYPE_MU_LAW			\
-			 ? (unsigned char)(0xff - linear2ulaw(mag))	\
-			 : (unsigned char)(linear2alaw(mag) ^ 0xd5)))
+	((unsigned short)(pcmType == PCM_TYPE_MU_LAW			\
+			  ? 0xff - linear2ulaw(mag)			\
+			  : linear2alaw(mag) ^ 0xd5))
 
-/* `sar $0x1f; or $0x1` in the object: -1 for a negative sample, +1 otherwise. */
-#define P3D_SIGN(x)	((x) < 0 ? -1 : 1)
+/*
+ * -1 for a negative sample, +1 otherwise, and SPELLED AS THE SHIFT because the
+ * object is `sar $0x1f; or $0x1`.  GCC 3.4.2 compiles `x < 0 ? -1 : 1` to a
+ * test and a branch, so the two spellings are not interchangeable here even
+ * though they agree over every input.
+ */
+#define P3D_SIGN(x)	((((int)(x)) >> 31) | 1)
 
-#define P3D_ABS(x)	((x) < 0 ? -(x) : (x))
+/*
+ * `cltd; xor %edx,%eax; sub %edx,%eax`, which is abs() and not a conditional
+ * negation -- GCC 3.4.2 emits a branch for `x < 0 ? -x : x` and this sequence
+ * for the builtin.  V90Equalizer.cpp reaches for the same builtin for the same
+ * reason, and V90Phase2Info.cpp's comment names the instruction triple.
+ */
+#define P3D_ABS(x)	__builtin_abs(x)
 
 /*
  * The phase index is truncated to sixteen bits at every table lookup

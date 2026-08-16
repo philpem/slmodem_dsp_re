@@ -10,14 +10,14 @@
   "replace": "\ts = (short)(sample + 0.5f);\n"
  },
  {
-  "label": "the sign of the sample is taken as <= rather than <",
-  "find": "#define P3D_SIGN(x)\t((x) < 0 ? -1 : 1)",
-  "replace": "#define P3D_SIGN(x)\t((x) <= 0 ? -1 : 1)"
+  "label": "the sign of the sample is inverted",
+  "find": "#define P3D_SIGN(x)\t((((int)(x)) >> 31) | 1)",
+  "replace": "#define P3D_SIGN(x)\t(-((((int)(x)) >> 31) | 1))"
  },
  {
   "label": "the two companding arms are swapped",
-  "find": "\t((unsigned char)(pcmType == PCM_TYPE_MU_LAW\t\t\t\\",
-  "replace": "\t((unsigned char)(pcmType != PCM_TYPE_MU_LAW\t\t\t\\"
+  "find": "\t((unsigned short)(pcmType == PCM_TYPE_MU_LAW\t\t\t\\",
+  "replace": "\t((unsigned short)(pcmType != PCM_TYPE_MU_LAW\t\t\t\\"
  },
  {
   "label": "the phase index is not truncated to sixteen bits",

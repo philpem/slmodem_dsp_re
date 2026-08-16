@@ -89,32 +89,48 @@ The case that prints "X TimeOut" *is* state X, so this mapping is sourced.
 0x00, 0x03 and 0x1a are the three the header's `Phase3DemodulatorState` already
 names, and they agree.
 
-## `twoLevelDemod(float, int &)` is inlined here, four times
+## `twoLevelDemod(float, int &)` appears here four times over
 
-Cases 4, 5, 6 and 9 open with a block that is byte-for-byte the body of
-`_ZN20V90Phase3Demodulator13twoLevelDemodEfRi` (0x215a0, its own blob symbol):
+Cases 4, 5, 6 and 9 open with a block that is instruction for instruction the
+body of `_ZN20V90Phase3Demodulator13twoLevelDemodEfRi` (0x215a0, its own blob
+symbol):
 the `short_a948`/`isAltRbs` choice between `linMapp` and `linMappAlt`, the
 `fcomps` of the sample against 0.0f, the `SerialDifferentialDecoder<int>` and
 the `Descrambler<int,int>`.  The `lea 0x98(%esp),%edi` and the accesses through
 `%edi` are the `int &` out-parameter, which is why an ordinary local has its
 address taken at all.
 
-The reconstruction writes the block out at each of the four sites rather than
-defining `twoLevelDemod` and relying on the compiler to inline it — that member
-is a separate blob symbol and a separate job.  **Whoever writes it should read
-this section first**; the four copies here are its body.
+That symbol is GLOBAL and in `.text`, not weak and not in a
+`.gnu.linkonce.t` section, so it was not declared `inline` — and GCC 3.4.2 at
+`-O2` inlines nothing that is not.  **So the duplication is in the author's
+source**, and the reconstruction writes the block out at each of the four
+sites rather than defining the member and hoping.  Finding 2005.  **Whoever
+writes `twoLevelDemod` should read this section first**; the four copies here
+are its body.
+
+The one thing that argument does not explain is the stack slot: the four
+copies address their bit through `lea 0x98(%esp),%edi` as though its address
+had been taken, which is exactly what the member's `int &` would do.  Register
+pressure in an 8 KB function is the alternative reading and nothing settles it;
+register allocation is on the "free, so ignore it" list either way.
 
 ## The magnitude-to-code expression
 
 Twenty sites, all open-coded in the blob:
 
-    pcmType == PCM_TYPE_MU_LAW ? (unsigned char)(0xff - linear2ulaw(m))
-                               : (unsigned char)(linear2alaw(m) ^ 0xd5)
+    (unsigned short)(pcmType == PCM_TYPE_MU_LAW ? 0xff - linear2ulaw(m)
+                                                : linear2alaw(m) ^ 0xd5)
 
-The u-law arm appears as `not %al` where only eight bits are wanted and as
-`mov $0xff; sub; movzwl` where the result is widened for an index; the two are
-the same value.  Written as a macro because a function would have to be relied
-on to inline.
+Written as a macro because a function would have to be relied on to inline, and
+GCC 3.4.2 at -O2 inlines nothing not declared `inline`.
+
+**The width is sixteen bits and `make similarity` is what settles it.** As
+`unsigned char` the u-law arm comes out `not %al` at all twenty-two sites; the
+object has `not %al` at the six feeding an `unsigned char` argument and
+`movzbw %al,%cx; sub %ecx,%ebp; movzwl %bp,%eax` at the sixteen indexing a
+table.  The value is 0..255, so that truncation cannot be observed by any test
+— the compiler emitted it because the type asked for it, which is the
+"forced, so act on it" side of CLAUDE.md's rule.
 
 ## The three tables it indexes, all in `V90AutoDigitalImpDetector`
 
@@ -123,6 +139,23 @@ on to inline.
 every one of those sites (`movzwl 0x4(%ebx)`), even though +0x04 is a 32-bit
 field — the field only ever holds 0..5, so the truncation is invisible, but it
 is in the object and it is reproduced.
+
+## Codegen
+
+`make similarity` reaches this translation unit — the header's claim that it is
+one of the fifteen the period toolchain cannot compile is stale, and the
+current build is 184 objects with 0 failures.  Our `getV90Decision` is 8,485
+bytes against the blob's 8,379 and matches on 56% of its mnemonic sequence.
+What is left is `je`/`jne` pairs with the arms the other way round, extra
+`mov`/`shl` in the table-index addressing, and scheduling — all of it on
+CLAUDE.md's "free, so ignore it" side.  Two forced differences were found and
+acted on: `abs` and the sign of the sample, below.
+
+`abs()` is `cltd; xor %edx,%eax; sub %edx,%eax`, and `x < 0 ? -x : x` is a test
+and a branch under this compiler — 52 spurious `js` and 51 spurious `neg`
+before the macro reached for `__builtin_abs`.  The sign of the sample is
+`sar $0x1f; or $0x1`, and `x < 0 ? -1 : 1` is again a branch — 41 `sar` and 16
+`or` missing, and all ten `imul` of a table entry by that sign gone with them.
 
 ## Deviations noticed
 

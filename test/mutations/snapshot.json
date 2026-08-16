@@ -5226,6 +5226,31 @@
     "the session flag and the parameter block swap fields": "caught"
    }
   },
+  "v90p3ddec": {
+   "key": "ddb462e0da2c61d2830247236e58eb92fe4d50ea810c316344ac6cba3ba5fbcf",
+   "summary": "19 mutations: 17 caught (17 by test, 0 by strings), 1 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the ANSpcm demod state does not raise the verification status": "caught",
+    "the JdNot frame position is 13 rather than 12": "caught",
+    "the JdNot run length is 12 rather than 11": "caught",
+    "the QTS-detected event code is the QTSNot one": "caught",
+    "the Sd run-length the recovery flag arms on is 11": "caught",
+    "the SdDemod timeout is one sample late": "caught",
+    "the TRN1dKnownData handover is one sample late": "caught",
+    "the default state clears the event code it must not": "caught",
+    "the error-relaxation counter runs on the wrong flag": "caught",
+    "the faked energy drop fires one sample early": "caught",
+    "the phase index is not truncated to sixteen bits": "equivalent",
+    "the probing DIL magnitude is one step out": "uncaught",
+    "the recovery watch uses > where the object uses >=": "caught",
+    "the sample counter counts down": "caught",
+    "the sample is rounded rather than truncated": "caught",
+    "the sign of the sample is inverted": "caught",
+    "the terminal states return the sample rather than zero": "caught",
+    "the two companding arms are swapped": "caught",
+    "the two probing-mode states are swapped": "caught"
+   }
+  },
   "v90p3dreset": {
    "key": "eab26b9ec831c0ccdd0e9a5040651deea70dca059340759b90352f11d87ffe5f",
    "summary": "29 mutations: 28 caught (28 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
