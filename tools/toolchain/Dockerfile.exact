@@ -80,9 +80,13 @@ ADD --checksum=sha256:ccd30a0a9cf8530940663e799d51a243c60059a57142727920503eaaab
 # only sets a DEFAULT -march/-mtune, and every build here passes both
 # explicitly, so it does not reach codegen.
 #
-# THE CLAIM THAT IT IS "GENTOO'S x86 CHOST OF THE PERIOD" WAS WRONG and is
-# withdrawn: the generic stage3-x86-2005.0 ships CHOST="i386-pc-linux-gnu",
-# with CFLAGS="-O2 -mcpu=i686 -fomit-frame-pointer".  Nothing here changes --
+# DO NOT CITE THIS LINE AS "GENTOO'S x86 CHOST OF THE PERIOD", which is what
+# it used to say: the generic stage3-x86-2005.0 ships CHOST="i386-pc-linux-gnu"
+# with CFLAGS="-O2 -mcpu=i686 -fomit-frame-pointer", so i686 was not THE x86
+# CHOST.  Gentoo also shipped i686 stages and profiles, and gcc-3.4.2-r2 was
+# ~x86, so the object's builder may well have run one -- the point is that
+# neither is established and this line was never evidence.  Nothing here
+# changes --
 # the triplet cannot reach codegen when -march and -mtune are always spelled
 # out -- but do not cite this line as evidence.  Dockerfile.gentoo uses the
 # stage3's own CHOST.  Finding 2502.

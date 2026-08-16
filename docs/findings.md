@@ -57010,10 +57010,21 @@ the re-measurement, on the compiler the object names.*
 **2155 (`-O2` against `-O3`) reproduces exactly.** One variable, both arms on
 `dsplibs-tc342-gentoo`, separate `TC_OUT` per arm:
 
-| level | identical | of the blob's bytes |
-|---|--:|--:|
-| `-O2` | 319 | 72.9% |
-| `-O3` | **334** | 80.8% |
+| level | identical | compared | of the blob's bytes |
+|---|--:|--:|--:|
+| `-O2` | 319 | 937 | 72.9% |
+| `-O3` | **334** | 938 | 80.8% |
+
+**THE TWO ARMS DO NOT COMPARE THE SAME UNIVERSE, AND IT HAD TO BE CHECKED
+BEFORE THE DELTA COULD BE QUOTED.** 937 against 938: at `-O2` our build does
+not emit `GetNextDigitAndReturnNextState` at all, which the blob has, so
+`compare.py` has nothing to compare it against and drops it from both sides --
+which is also why the byte percentages have different denominators (400828
+against 401723, the difference being that function's 895 bytes) and are not a
+clean A/B. **The symbol is not in the `-O3` matched set**, so it contributes
+nothing to the gained count: the delta below is +19/-4 and not +18/-4. Had it
+matched, the free symbol would have inflated the headline and the
+reproduction claim would have been wrong-but-plausible.
 
 **+19 gained, 4 lost**, which is the additivity test 2155 set itself and the
 same +19/-4 that 2200 measured on stock 3.4.2 (315 -> 330 there, 319 -> 334
@@ -57076,9 +57087,12 @@ conflict -- editing CFLAGS was the whole point of Gentoo, and
 defaults (2320) -- but nobody should quote the make.conf as evidence for the
 optimisation level, and `-frename-registers`, `-mfpmath=387` and
 `-mno-ieee-fp` are not in it either. What it supports is the three flags
-above, and the CHOST: **`i386-pc-linux-gnu`, not the `i686-pc-linux-gnu` that
-`Dockerfile.exact` forces** on the strength of it being "Gentoo's x86 CHOST of
-the period". The generic x86 stage3 says otherwise. It sets a default
+above, and the CHOST: the generic x86 stage3's is **`i386-pc-linux-gnu`**, so
+`Dockerfile.exact`'s "i686-pc-linux-gnu is also Gentoo's x86 CHOST of the
+period" cannot stand as written. It is not evidence for i386 either -- Gentoo
+shipped i686 stages and profiles as well, and this ebuild was `~x86`, so the
+builder may have run one. What is settled is that the line was never evidence.
+The triplet sets a default
 `-march`/`-mtune` only, and every build here passes both explicitly, so it
 does not reach codegen -- but the new image uses the stage3's own CHOST and
 `Dockerfile.exact`'s comment should not be read as evidence.

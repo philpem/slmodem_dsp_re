@@ -24,7 +24,9 @@
 # to the patch stack alone without a further build.  Say "bundle", not "patch
 # stack", when quoting a number from it.
 #
-#   tools/toolchain/build-gentoo-image.sh          builds it (about 6 minutes)
+#   tools/toolchain/build-gentoo-image.sh    builds it; the compiler itself
+#                                            takes 45 seconds, the stage3
+#                                            import about 15 more
 #   TC_IMAGE=dsplibs-tc342-gentoo tools/toolchain/build.sh
 #   PERIOD_IMG=dsplibs-tc342-gentoo make period
 #
