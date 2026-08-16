@@ -261,6 +261,16 @@ void diff_begin(const char *name);
 int diff_end(void);
 
 /*
+ * NaN, DETECTED FROM THE BITS.  `x != x` is folded to zero under the object's
+ * own -mno-ieee-fp, which `make period` builds this apparatus with, so the
+ * idiom detects nothing there and does so silently.  Use these instead of a
+ * self-comparison anywhere a test has to know whether a value is unordered.
+ * Finding 2303.
+ */
+int diff_isnan_f(float x);
+int diff_isnan_ld(long double x);
+
+/*
  * Compare one integer result.  `desc` should identify the input, e.g.
  *   diff_eq_int("alaw2linear(0x%02x)", got, want, in);
  */

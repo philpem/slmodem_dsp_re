@@ -56098,3 +56098,192 @@ image "the exact point release", never "the exact compiler" -- and the image
 deliberately stamps the stock `.comment` string rather than the Gentoo one, so
 that a stock compiler can never be mistaken for the original by anyone reading
 an object it produced.
+
+### 2300. THE `x < c || x > c` IDIOM WAS A WORKAROUND FOR THE WRONG FLAG, AND UNDER THE RIGHT ONE IT IS A DEFECT
+
+*Closes, for four of the five suites, the question findings 1990 and 1992
+left open: are the failures `-mno-ieee-fp` causes our defects, or evidence
+against the flag?  They are our defects, and the flag is corroborated on the
+way past.*
+
+Finding 1990 established the flag from the object -- 406 ordered float
+compares against four, all four inside libm's `pow` -- and recorded that
+setting it in `period_inner.sh` took `make period` from 181/0 to 176/5.
+Finding 1992 diagnosed one function.  This is the mechanism behind most of
+the rest, and it is one idiom repeated across the tree.
+
+**WHAT THE IDIOM IS.**  In IEEE C, `x != c` is TRUE for a NaN, and GCC under
+the default `-mieee-fp` implements it with a parity test:
+
+    fucomp; fnstsw; sahf; jp <taken>; jne <taken>
+
+The object does not do that.  Everywhere it tests a float against a value it
+issues ONE ordered compare and no parity test --
+
+    flds (%ecx); fcom %st(3); fnstsw; sahf; jne     Agc<float>::process 0x9f
+    flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je V90Equalizer::setLinearEquBeta
+    fcoms <177.0f>; fnstsw; sahf; je                V92EchoCanceller::process
+    fcom %st(1); fnstsw; sahf; je                   V90Equalizer::convertEqualizerToMmx
+
+-- and FCOM sets C3 for UNORDERED as well as for equal, so `jne` is not taken
+on a NaN and the equality arm is.  That is precisely what `x != c` compiles to
+under `-mno-ieee-fp`, and it is not reachable under `-mieee-fp` at all.
+
+**SO THE TREE HAD SPELLED IT ROUND THE OTHER WAY.**  To get the object's NaN
+routing out of a `-mieee-fp` build, the reconstruction wrote the test as two
+relational compares:
+
+    if (alpha < T(1) || alpha > T(1))            src/dsp/Agc.cpp
+    if (linearEquBeta < beta || linearEquBeta > beta)
+    if (beta < 0.0f || beta > 0.0f)              x2, the two setters
+    if (linearEquBeta < 0.0f || linearEquBeta > 0.0f)
+    if (dfeBeta < 0.0f || dfeBeta > 0.0f)        convertEqualizerToMmx
+    if (!(out[0] < 177.0f || out[0] > 177.0f))   V92EchoCanceller::process
+    if (!(v < 0.0f) && !(v > 0.0f))              determineMaxUcode
+
+Under `-mieee-fp` that is exactly right and every suite passed.  Under
+`-mno-ieee-fp` it is exactly wrong, twice over: the compiler is told it may
+treat `x < c` as ordered, so `fcom` + `jb` is TAKEN on a NaN and the branch
+goes the opposite way from the object's -- and it is TWO compares where the
+object has one, so the codegen tier was reading a mismatch as well.
+
+**THE COMMENTS SAID SO, WHICH IS HOW THEY WERE FOUND.**  Every one of these
+sites carried a note quoting the object's single `fcom`/`je` and then arguing
+that C's `!=` could not produce it.  That argument is sound for `-mieee-fp`
+and void for the flag the object was built with; each comment is now rewritten
+at its site rather than deleted, because the reasoning is right and only its
+premise moved.
+
+**THE RESULT, MEASURED.**  With `-mno-ieee-fp` in `period_inner.sh`, changing
+these seven sites to `!=` / `==`:
+
+| suite | before | after |
+|---|---|---|
+| `t_agc` | 2 groups, 16,479 checks | one group left, then 0 (finding 2302) |
+| `t_v90equ` | 5 groups, 790 checks | 0 |
+| `t_v90leaves` | `V92EchoCanceller::process` 273 | 0 |
+| `t_v90adid` | `determineMaxUcode` 12 | 9 |
+
+`t_v90leaves` is worth naming separately.  1990 and 1992 recorded it as "exits
+non-zero with every check reported PASS", which is not a comparison problem at
+all -- and that was an artefact of `period_inner.sh` printing `tail -6` of the
+run log.  It fails `V92EchoCanceller::process` like the others, ten lines
+above the window.  The run logs are on the host in `$PERIOD_OUT/*.run.log`;
+read those, not the tail.
+
+**WHAT IT DOES NOT COVER.**  `!(a >= b)` and `!(a <= b)` are NOT instances of
+this and were left alone -- see 2301.  And the modern build cannot follow the
+tree here; that is 2304.
+
+### 2301. WHICH OPERAND THE `fcom` GETS COMES FROM A DECLARATION ORDER, AND UNDER `-mno-ieee-fp` THAT IS BEHAVIOUR
+
+*The second mechanism behind the five suites, and the one that no amount of
+rewriting the `if` will reach.*
+
+`-mno-ieee-fp` lets GCC commute a float compare and invert its predicate,
+which is identical for ordered operands and OPPOSITE for a NaN.  So a source
+comparison can be logically right, spelled every available way, and still send
+a NaN down the wrong arm -- because the emitted `fcom`'s left operand is not
+the object's.
+
+`V90SdDetector::process` is the worked example.  The object:
+
+    flds 0xc(%edi); fxch %st(1); fdivrp %st,%st(2); fcomp %st(1); jae
+
+`thresh_0c` is in `%st(0)` and the quotient in `%st(1)`, and `jae` skips the
+counting arm, so an unordered quotient -- which a silent history really does
+produce, 0/0 -- COUNTS.  Ours emitted
+
+    flds 0xc(%ebx); fxch %st(2); fdivrp %st,%st(1); fcom %st(1); fstp %st(1); jbe
+
+the same test with the operands the other way round and the predicate
+inverted to match, which agrees on every ordered pair and sends the NaN down
+the other arm.  304 of 32,262 checks, and `V90Phase3Demodulator::getV90Decision`
+failed 38,501 more downstream of it because it calls this.
+
+**BOTH SPELLINGS OF THE `if` GIVE THE SAME CODE.**  `!(thresh_0c >= ratio)`
+and `thresh_0c < ratio` compile identically here, before and after the fix.
+The lever is four lines higher:
+
+    long double energy = 0.0L;             ours
+    long double correlation = 0.0L;
+
+    long double correlation = 0.0L;        the object's
+    long double energy = 0.0L;
+
+GCC 3.4's reg-stack pass follows the declaration order, and with `energy`
+first the whole floating-point skeleton comes out shifted -- `fxch %st(3)` for
+the object's `fxch %st(2)`, `faddp %st,%st(2)` for its `faddp %st,%st(1)` --
+ending in the reversed compare.  Swapping the two declarations makes **every
+x87 instruction and every branch in the function the object's**, which is
+CLAUDE.md's full-text acceptance test for a statement-order change (617), and
+takes the suite to 1 failure and then 0.
+
+**SO `!(a >= b)` IS NOT AN INSTANCE OF 2300 AND WAS LEFT ALONE**, at nine
+further sites in `V90AutoDigitalImpDetector.cpp` and two in `V90Equalizer.cpp`.
+It costs nothing on the period tier -- identical instructions -- and it is the
+only spelling that ALSO routes a NaN the object's way under the modern build's
+IEEE semantics.  One text, both tiers.  Converting them would have bought
+nothing and lost a modern check group each.
+
+### 2302. THE AGC's LEVEL FLOOR IS A NAMED LOCAL, AND THE OBJECT HOLDS IT IN `%st(4)` FOR THE WHOLE FUNCTION
+
+`Agc<float>::process` compares the block's mean square against 1e-10 before
+it adapts the gain.  The object loads that constant ONCE, before the loop is
+entered, beside `fld1` and `fldz`:
+
+    1c: flds 0x128        <- 1e-10f, .rodata.cst4
+    25: fld1
+    27: fldz
+    29: jmp 64            <- into the sample loop
+    ...
+    30: fcom %st(4); fnstsw; sahf; jbe b8
+
+so the compare has `lvl` in `%st(0)` and the floor in `%st(4)`, and `jbe`
+skips the adaptation on unordered as well as on less-or-equal.
+
+Written as a literal inside the loop -- which is what the reconstruction had
+-- GCC 3.4.2 does not hoist it.  It reloads `flds` into `%st(0)` at the
+comparison, which puts the CONSTANT on the left, and then emits the reversed
+predicate `jb`; under `-mno-ieee-fp` `jb` IS taken for an unordered compare,
+so a NaN level adapted the gain where the object freezes it.  975 of 225,792
+checks in `agc: every input shape, including silence and NaN`, all of them
+`got 0x7fc00000, reference 0x3f800000` -- our QNaN gain against the object's
+unchanged 1.0.
+
+    long double minLevel = 1e-10f;      declared before the loop
+
+restores `fcom %st(4)`, the object's operand order, and zero failures.  Four
+spellings of the comparison itself were tried first -- `lvl > 1e-10f`,
+`!(lvl <= 1e-10f)`, `1e-10f < lvl`, and the same with an explicit cast -- and
+all four emit the identical reversed compare, because the spelling is not what
+chooses the operand.  This is 2301's mechanism with a different lever.
+
+### 2303. `x != x` IS FOLDED TO ZERO UNDER `-mno-ieee-fp`, WHICH SILENTLY DELETED THE HARNESS'S NaN DETECTOR
+
+*Found because one check failed for a reason that had nothing to do with the
+code under test, and it is the kind of failure finding 134's rule exists for.*
+
+`test/harness/harness.c`'s `diff_eq_float_` decided whether a value was
+unordered with
+
+    int got_nan = (got != got), want_nan = (want != want);
+
+and `test/unit/t_v90spectral.cpp` counted 0/0 quotients with `if (!(r == r))`.
+`period_inner.sh` builds the apparatus with the object's own flags, so once
+`-mno-ieee-fp` went in, GCC took the licence and folded both self-comparisons
+to a constant.  **The NaN detector was not weakened, it was deleted**, in the
+tier that decides, and the only visible symptom was one coverage assertion --
+`the quotient was 0/0 on 0 calls`, reference 1 -- reporting that a case the
+sweep definitely still reaches had stopped being reached.
+
+`diff_eq_float_` was the worse of the two and had no symptom at all: with the
+detector gone, two NaNs go down the ULP path, where the distance between two
+different payloads is enormous and the verdict is noise in whichever direction
+the payloads happened to fall.
+
+`diff_isnan_f` and `diff_isnan_ld` are in `harness.h` now and test the bits,
+which cannot be folded away.  This is apparatus, so it is fixed rather than
+declared -- CLAUDE.md's "a rejection in `test/` is plumbing".  Anything else
+in `test/` that wants to know whether a value is unordered must use them; a
+self-comparison in this tree is now a bug by construction.

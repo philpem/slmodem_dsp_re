@@ -2034,17 +2034,19 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 			 * THE OBJECT'S ZERO TEST TAKES A NaN.  `fcomp %st(1)`
 			 * against the zero it has kept on the stack since
 			 * 0x4443c, then `je` -- and an unordered compare sets
-			 * C3, so ZF is set and the entry is skipped.  C's
-			 * `v == 0.0f` is false for a NaN, so the test has to
-			 * be written as "not less and not greater": true for
-			 * a zero of either sign and for every NaN, false for
-			 * everything else.  Findings 1436 and 1447 -- the
-			 * obvious `__builtin_isnan` spelling does not exist
-			 * in GCC 3.4.2, and the object's own compiler
-			 * refusing it is the evidence that settles what was
-			 * written here.
+			 * C3, so ZF is set and the entry is skipped.  ONE
+			 * compare, and under -mno-ieee-fp `v == 0.0f` is
+			 * exactly that: GCC emits `fcom`/`fnstsw`/`sahf`/`je`
+			 * with no parity test, so a NaN is skipped too.
+			 *
+			 * This used to be spelled "not less and not greater",
+			 * two compares, because under -mieee-fp `==` acquires
+			 * a parity test and a NaN then falls through.  That
+			 * was a workaround for `make period`'s flag set, and
+			 * with the object's own flag it is neither needed nor
+			 * the object's code.  Findings 1436, 1447 and 2300.
 			 */
-			if (!(v < 0.0f) && !(v > 0.0f))
+			if (v == 0.0f)
 				continue;
 
 			if (n == 0)

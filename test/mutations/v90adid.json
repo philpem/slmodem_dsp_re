@@ -1587,14 +1587,14 @@
   "replace": "\t\t\tif (v > varThresh)\n\t\t\t\tcontinue;"
  },
  {
-  "label": "dmu: the NaN half of the zero test dropped",
-  "find": "if (!(v < 0.0f) && !(v > 0.0f))",
-  "replace": "if (v == 0.0f)"
+  "label": "dmu: the zero test spelt for IEEE, so an unordered code is not skipped",
+  "find": "if (v == 0.0f)",
+  "replace": "if (!(v < 0.0f) && !(v > 0.0f))"
  },
  {
-  "label": "dmu: the zero half of the zero test dropped",
-  "find": "if (!(v < 0.0f) && !(v > 0.0f))",
-  "replace": "if (v != v)"
+  "label": "dmu: the zero test admits every code at or below zero",
+  "find": "if (v == 0.0f)",
+  "replace": "if (v <= 0.0f)"
  },
  {
   "label": "dmu: the first qualifying offset is the last",

@@ -680,7 +680,14 @@ V92EchoCanceller::process(float *in, float *out, unsigned int count)
 	unsigned int i, j, mod;
 	long double sum, err, mu;
 
-	if (!(out[0] < 177.0f || out[0] > 177.0f)) {
+	/*
+	 * `fcoms` against the 177.0f constant and `je` -- ONE compare, taken
+	 * for equal and for unordered both, which under -mno-ieee-fp is what
+	 * `out[0] == 177.0f` emits.  The negated pair of relational tests this
+	 * used to carry was the -mieee-fp workaround and is two compares.
+	 * Finding 2300.
+	 */
+	if (out[0] == 177.0f) {
 		mod = historyAlloc - word_18;
 		for (i = 0; i < count; i++) {
 			out[i] = in[i];

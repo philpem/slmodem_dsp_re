@@ -182,7 +182,43 @@ diff_eq_int_(const char *file, int line, const char *fmt,
  * compare correctly under it; NaN is handled explicitly below.
  * ===========================================================================
  */
-static unsigned long
+/*
+ * NaN BY ITS BITS, NOT BY `x != x`, AND THE REASON IS A COMPILER FLAG.
+ *
+ * `make period` builds this apparatus with the object's own flags, which
+ * include -mno-ieee-fp (finding 1990).  That flag tells GCC it may assume
+ * every comparison is ordered, and the first thing it does with the licence
+ * is fold `x != x` to zero -- so the self-comparison idiom does not detect a
+ * NaN there, it detects nothing at all, silently, in a build that is
+ * otherwise the one that decides.  `diff_eq_float_` then took two NaNs down
+ * the ULP path, where the distance between two different payloads is
+ * enormous and the verdict is noise.
+ *
+ * The bit test cannot be folded away and is exact.  Finding 2303.
+ */
+int
+diff_isnan_f(float x)
+{
+	unsigned bits;
+
+	memcpy(&bits, &x, 4);
+	return (bits & 0x7f800000u) == 0x7f800000u
+	    && (bits & 0x007fffffu) != 0;
+}
+
+int
+diff_isnan_ld(long double x)
+{
+	double d = (double)x;		/* a NaN narrows to a NaN */
+	unsigned lo, hi;
+
+	memcpy(&lo, (const unsigned char *)&d, 4);
+	memcpy(&hi, (const unsigned char *)&d + 4, 4);
+	return (hi & 0x7ff00000u) == 0x7ff00000u
+	    && ((hi & 0x000fffffu) != 0 || lo != 0);
+}
+
+unsigned long
 float_ulps(float a, float b)
 {
 	long ia, ib;
@@ -222,7 +258,7 @@ diff_eq_float_(const char *file, int line, const char *fmt, float got,
 	       long input)
 {
 	unsigned long d;
-	int got_nan = (got != got), want_nan = (want != want);
+	int got_nan = diff_isnan_f(got), want_nan = diff_isnan_f(want);
 	double diff;
 
 	diff_checks++;

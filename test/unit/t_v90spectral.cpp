@@ -1090,7 +1090,14 @@ run_sd_process(void)
 					which = 3;
 				else
 					which = 4;
-				if (!(r == r))
+				/*
+				 * `r != r` would be folded to zero by the
+				 * object's own -mno-ieee-fp, which is what
+				 * `make period` builds this file with, and
+				 * the counter below would then read zero for
+				 * the wrong reason.  Finding 2303.
+				 */
+				if (diff_isnan_ld(r))
 					seen[5]++;
 			}
 			seen[which]++;

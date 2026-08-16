@@ -386,13 +386,13 @@
  },
  {
   "label": "the sentinel is 178.0f",
-  "find": "\tif (!(out[0] < 177.0f || out[0] > 177.0f)) {",
-  "replace": "\tif (!(out[0] < 178.0f || out[0] > 178.0f)) {"
+  "find": "\tif (out[0] == 177.0f) {",
+  "replace": "\tif (out[0] == 178.0f) {"
  },
  {
-  "label": "the sentinel test is C's equality, so a NaN filters",
-  "find": "\tif (!(out[0] < 177.0f || out[0] > 177.0f)) {",
-  "replace": "\tif (out[0] == 177.0f) {"
+  "label": "the sentinel test is spelt for IEEE, so a NaN block is not filtered",
+  "find": "\tif (out[0] == 177.0f) {",
+  "replace": "\tif (!(out[0] < 177.0f || out[0] > 177.0f)) {"
  },
  {
   "label": "the sentinel path does not step the read cursor",

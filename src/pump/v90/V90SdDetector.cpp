@@ -148,9 +148,21 @@ V90SdDetector::reset()
 int
 V90SdDetector::process(float sample)
 {
+	/*
+	 * `correlation` IS DECLARED FIRST, and that is not a tidiness -- it is
+	 * what puts the two accumulators in the object's x87 stack slots.  GCC
+	 * 3.4's reg-stack pass follows the declaration order here, and with
+	 * `energy` first the whole floating-point skeleton comes out shifted:
+	 * `fxch %st(3)` where the object has `fxch %st(2)`, `faddp %st,%st(2)`
+	 * where it has `faddp %st,%st(1)`, and -- the part that is not
+	 * cosmetic -- the middle compare with its operands the other way round
+	 * and `jbe` for the object's `jae`.  Swapping these two lines makes
+	 * every x87 instruction and every branch in the function the object's.
+	 * Finding 2301.
+	 */
 	unsigned int i = historyLength - 1;
-	long double energy = 0.0L;
 	long double correlation = 0.0L;
+	long double energy = 0.0L;
 	long double ratio;
 	unsigned int run;
 
@@ -174,6 +186,21 @@ V90SdDetector::process(float sample)
 
 	ratio = correlation / energy;
 
+	/*
+	 * `flds 0xc(%edi); fcomp %st(1); fnstsw; sahf; jae` -- THRESH_0C IS
+	 * THE LEFT OPERAND and the jump over this arm is `jae`, so the arm is
+	 * entered on CF, which FCOM sets for unordered as well as for less: a
+	 * NaN quotient counts.  Under -mno-ieee-fp that is what the plain `<`
+	 * emits, given the declaration order above.
+	 *
+	 * THE SPELLING IS NOT THE LEVER HERE.  `thresh_0c < ratio` emits the
+	 * identical instruction under -mno-ieee-fp -- the operand order came
+	 * from the stack slots, which came from the declarations above.  The
+	 * negated form is kept because it is ALSO right for the modern build,
+	 * where the compiler will not drop the parity test and `<` is false on
+	 * a NaN: one text, both tiers.  Finding 2301, and 2300 for the sites
+	 * where the spelling IS the lever and no single text serves both.
+	 */
 	if (!(thresh_0c >= ratio)) {
 		run = count + 1;
 		count = run;

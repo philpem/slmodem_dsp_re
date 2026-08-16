@@ -286,12 +286,14 @@ void
 V90Equalizer::setLinearEquBeta(float beta)
 {
 	/*
-	 * `flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je` -- the jump over
-	 * the diagnostic is taken on ZF, and FCOM sets C3 for equal AND for
-	 * unordered, so a NaN on either side skips the print where C's `!=`
-	 * would take it.  Finding 236 is the same shape in `setParamEia6`.
+	 * `flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je` -- ONE compare,
+	 * and the jump over the diagnostic is taken on ZF.  FCOM sets C3 for
+	 * equal AND for unordered, so a NaN on either side skips the print,
+	 * and under -mno-ieee-fp that is exactly what `!=` emits.  Finding 236
+	 * is the same shape in `setParamEia6`; finding 2300 for why this used
+	 * to be spelled as two relational tests.
 	 */
-	if (linearEquBeta < beta || linearEquBeta > beta) {
+	if (linearEquBeta != beta) {
 		long double scaled = (long double)beta * 1.0e10f;
 
 		/*
@@ -325,11 +327,11 @@ V90Equalizer::setLinearEquBeta(float beta)
 		return;
 
 	/*
-	 * `fcoms <0.0f>; fnstsw; sahf; je` -- ZF again, so this arm is taken
-	 * for zero and for unordered both, and C's `beta == 0.0f` is not the
-	 * object's test.
+	 * `fcoms <0.0f>; fnstsw; sahf; je` -- ZF again, so the ELSE arm is
+	 * taken for zero and for unordered both, which under -mno-ieee-fp is
+	 * what `!= 0.0f` gives.  Finding 2300.
 	 */
-	if (beta < 0.0f || beta > 0.0f) {
+	if (beta != 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
 					(long double)maxLeCoefValue
 					/ ((long double)beta * 16777216.0f)))
@@ -356,7 +358,8 @@ V90Equalizer::setLinearEquBeta(float beta)
 void
 V90Equalizer::setDfeBeta(float beta)
 {
-	if (dfeBeta < beta || dfeBeta > beta) {
+	/* `!=`, one FCOM and a `je` -- see setLinearEquBeta. */
+	if (dfeBeta != beta) {
 		long double scaled = (long double)beta * 1.0e7f;
 
 		edprintf("V90Equalizer: DFE Beta = %c%d.%05de-7\r\n",
@@ -371,7 +374,8 @@ V90Equalizer::setDfeBeta(float beta)
 	if (mmxMode == 0)
 		return;
 
-	if (beta < 0.0f || beta > 0.0f) {
+	/* `!= 0.0f`, one FCOM and a `je` -- see setLinearEquBeta. */
+	if (beta != 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
 					(long double)maxDfeCoefValue
 					/ ((long double)beta * 1048576.0f)))
@@ -1171,10 +1175,13 @@ V90Equalizer::convertEqualizerToMmx()
 	linearEquMmxOutputConversionFactor = (int)((1.0f / 65536.0f) * conv);
 
 	/*
-	 * `fcom %st(1)` against `fldz` and `je`, so this arm is taken for zero
-	 * and for unordered both -- the setters' test, and not C's `!= 0.0f`.
+	 * `fcom %st(1)` against `fldz` and `je`, so the ELSE arm is taken for
+	 * zero and for unordered both.  ONE compare, and under -mno-ieee-fp
+	 * that is what `!= 0.0f` emits: FCOM sets C3 for unordered as well as
+	 * for equal.  Two relational tests were the -mieee-fp workaround.
+	 * Finding 2300.
 	 */
-	if (linearEquBeta < 0.0f || linearEquBeta > 0.0f) {
+	if (linearEquBeta != 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
 					(1.0f / ((long double)linearEquBeta
 						 * 16777216.0f))
@@ -1289,7 +1296,8 @@ V90Equalizer::convertEqualizerToMmx()
 	dfeMmxConversionFactor = (float)conv;
 	dfeMmxOutputConversionFactor = (int)((1.0f / 65536.0f) * conv);
 
-	if (dfeBeta < 0.0f || dfeBeta > 0.0f) {
+	/* `!= 0.0f`, one FCOM and a `je` -- see linearEquBeta above. */
+	if (dfeBeta != 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
 					(1.0f / ((long double)dfeBeta
 						 * 1048576.0f))

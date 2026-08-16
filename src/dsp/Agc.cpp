@@ -82,6 +82,21 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 
 	c = count;			/* cached in a register for the call */
 
+	/*
+	 * THE FLOOR IS A NAMED LOCAL AND THE OBJECT SAYS SO.  `flds 0x128` at
+	 * 0x1c loads it BEFORE the loop is entered, beside `fld1` and `fldz`,
+	 * and it stays in `%st(4)` for the whole function -- the block update
+	 * compares against it with `fcom %st(4)`.  Written as a literal inside
+	 * the loop, GCC 3.4.2 does not hoist it: it reloads `flds` into
+	 * `%st(0)` at the comparison and then has the CONSTANT as the left
+	 * operand, so it emits the reversed predicate `jb`, and under
+	 * -mno-ieee-fp `jb` is taken for an unordered compare -- a NaN level
+	 * then adapts the gain where the object's `jbe` freezes it.  A local
+	 * initialised here puts `lvl` back in `%st(0)`, `fcom %st(4)`, and the
+	 * object's NaN routing.  Finding 2302.
+	 */
+	long double minLevel = 1e-10f;
+
 	for (;;) {
 		/*
 		 * `in[0]` and `gain` are RE-READ after the `acc` store rather
@@ -134,16 +149,23 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 			level = (T)lvl;	/* stored rounded; lvl stays 80-bit */
 
 			/*
-			 * "ordered and not equal to 1.0".  Written as two
-			 * relational tests rather than `alpha != T(1)` so that
-			 * a NaN takes the frozen path under plain IEEE, with no
-			 * dependence on -ffinite-math-only.  The object's
-			 * `fcom`/`fnstsw`/`sahf`/`jne` has no parity check, so
-			 * unordered means frozen there too.  The naive form
-			 * costs 126,261.
+			 * PLAIN `!=`, and the object's one `fcom` is what says
+			 * so.  At 0xa8 it is `fcom %st(3); fnstsw; sahf; jne`
+			 * -- ONE compare, no parity check -- and under
+			 * -mno-ieee-fp that is exactly what GCC emits for
+			 * `alpha != T(1)`, NaN included: FCOM sets C3 for
+			 * unordered as well as for equal, so ZF is set and the
+			 * frozen path is taken.
+			 *
+			 * This used to read `alpha < T(1) || alpha > T(1)`,
+			 * which is TWO compares, and it was a workaround for
+			 * `make period` being built -mieee-fp: there `!=` gets
+			 * a parity test and a NaN adapts.  With the flag the
+			 * object was built with, the naive form is both the
+			 * correct one and the object's.  Finding 2300.
 			 */
-			if (alpha < T(1) || alpha > T(1)) {
-				if (lvl > 1e-10f) {
+			if (alpha != T(1)) {
+				if (lvl > minLevel) {
 					long double t =
 					    agc_fsqrt((1.0L / lvl) * ref);
 
