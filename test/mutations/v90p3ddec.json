@@ -96,5 +96,10 @@
   "label": "the default state clears the event code it must not",
   "find": "\tdefault:\n\t\tword_30 = 0;\n\t\tbreak;",
   "replace": "\tdefault:\n\t\tbreak;"
+ },
+ {
+  "label": "the probing DIL ends one sample late",
+  "find": "\t\tif (word_2c == dilLength) {",
+  "replace": "\t\tif (word_2c == dilLength + 1) {"
  }
 ]

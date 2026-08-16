@@ -53496,7 +53496,15 @@ unordered semantics -- if some function is only correct because a comparison
 was quiet, this flag makes it wrong, and the differential tier is what would
 catch that.  It passed.
 
-### 2001. `V90Phase3Demodulator::getV90Decision` RETURNS A `short`, AND THE HEADER'S `void` WAS A PLACEHOLDER
+*2110-2115 WERE WRITTEN AS 2001-2006 AND RENUMBERED BEFORE THEY LEFT THIS
+branch, because `getV92Decision`'s session had taken 2100-2109 concurrently.
+Nothing outside this branch ever cited the old numbers.  Three of the six are
+the same fact that session reached independently from the other method --
+2110 with its 2100, 2111 with its 2102, and the +0x3f4/+0x420 fields it files
+as 2105 -- and two reconstructions arriving at one answer from two functions
+is corroboration, so they are left standing rather than merged away.*
+
+### 2110. `V90Phase3Demodulator::getV90Decision` RETURNS A `short`, AND THE HEADER'S `void` WAS A PLACEHOLDER
 
 The class header spells every unwritten member `void` "for want of evidence
 rather than because the blob returns nothing". For this one the evidence
@@ -53507,7 +53515,7 @@ dead sign extensions on a return value. It does the same for `getV92Decision`
 at 0x2590e, so that member is a `short` too and the sibling reconstruction can
 take it as given.
 
-### 2002. `V90Phase3Demodulator + 0x3cc` IS A `SerialDifferentialDecoder<int>`, NOT AN OPAQUE WORD
+### 2111. `V90Phase3Demodulator + 0x3cc` IS A `SerialDifferentialDecoder<int>`, NOT AN OPAQUE WORD
 
 `getV90Decision` calls `_ZN25SerialDifferentialDecoderIiE7processEi` with
 `this + 0x3cc` as the object (0x23f6b, 0x2449e, 0x24596, 0x24649), and
@@ -53519,7 +53527,7 @@ mem-initializer argument finding 1302 makes about the zero stored between the
 two subobject constructors is strengthened rather than disturbed: a trivial
 member value-initialised in the ctor-init-list is exactly that instruction.
 
-### 2003. `V90Parameters + 0x440` IS A `float`, AND THE COPY AT +0x438 IS WHAT SHOWS IT
+### 2112. `V90Parameters + 0x440` IS A `float`, AND THE COPY AT +0x438 IS WHAT SHOWS IT
 
 Finding 878 could see that `setToDefault` stores 0x41200000 there and typed
 the field `int` with a comment saying the pattern is 10.0f. `getV90Decision`
@@ -53530,7 +53538,7 @@ pair for an int-to-float one, so the two fields have the same type, and +0x438
 is not in doubt. `setToDefault` stores the same four bytes either way, so
 nothing else moves.
 
-### 2004. `word_2c` AND `word_14` ARE UNSIGNED, AND THE TIMEOUTS PROVE IT TWICE
+### 2113. `word_2c` AND `word_14` ARE UNSIGNED, AND THE TIMEOUTS PROVE IT TWICE
 
 Three of the state timeouts compare the sample counter against a float
 expression -- `word_2c == word_14 + 12000.0f` at 0x24b16, `== word_14 +
@@ -53540,7 +53548,7 @@ push %reg; fildll`, a 64-bit load with a zeroed high dword, which is GCC
 types `V90AutoDigitalImpDetector`'s sample counts (see that header), so this is
 the third independent instance of the same tell.
 
-### 2005. `twoLevelDemod` IS DUPLICATED IN `getV90Decision`'s SOURCE, NOT INLINED INTO IT
+### 2114. `twoLevelDemod` IS DUPLICATED IN `getV90Decision`'s SOURCE, NOT INLINED INTO IT
 
 Cases 4, 5, 6 and 9 each open with a block that is instruction for instruction
 the body of `_ZN20V90Phase3Demodulator13twoLevelDemodEfRi` at 0x215a0. That
@@ -53558,7 +53566,7 @@ had been taken, which is what the member's `int &` would do. Register pressure
 in an 8 KB function is the alternative reading and nothing here settles it.
 Register allocation is on CLAUDE.md's "free, so ignore it" list either way.
 
-### 2006. `V90Jd::unPackData` RETURNS SOMETHING EIGHT BITS WIDE
+### 2115. `V90Jd::unPackData` RETURNS SOMETHING EIGHT BITS WIDE
 
 `getV90Decision` tests its result with `test %al,%al` at 0x2468d, not `test
 %eax,%eax`. That is forced encoding: GCC compares the whole register for an

@@ -589,6 +589,14 @@ dirty(int side, int trial, int st, unsigned int word2c)
 	sdd[side].count = (unsigned int)((trial * 5) % 13);
 	o->byte_424 = (unsigned char)((trial >> 3) & 1);
 	o->word_420 = 5;
+	/*
+	 * SMALL, so that state 0x11's "Probing DIL ended" arm is inside the
+	 * `word_2c` sweep at all.  `reset` computes this from the DIL
+	 * descriptor and gets a number in the thousands, which no sweep this
+	 * length reaches -- the same reason the parameter thresholds are set
+	 * rather than left at their defaults.
+	 */
+	o->dilLength = 7;
 	o->word_3f4 = 0;
 	o->verificationStatus = (unsigned int)(trial & 1);
 

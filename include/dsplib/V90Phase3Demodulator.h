@@ -296,6 +296,18 @@ public:
 	 * is exactly the `mov %ecx,0x3cc(%ebx)` that sits between the two
 	 * subobject constructors.  The NAME is left as it was, because nothing
 	 * names it and a guess is worse than no name.
+	 *
+	 * AND THE SPELLING WAS MEASURED, not assumed.  `word_3cc(0)` on an
+	 * `unsigned int` obviously emits the store; `word_3cc()` on a class
+	 * type is C++98 DEFAULT-initialization, which TC1 changed to
+	 * value-initialization, so whether GCC 3.4.2 still zeroes it is a
+	 * question about that compiler and not about the standard.  No test
+	 * here can answer it -- the constructor's last act is `reset`, which
+	 * writes the same zero, which is why test/mutations/v90p3dctor.json
+	 * records the store as behaviourally invisible.  The period build was
+	 * disassembled instead: `xor %eax,%eax; mov %eax,0x3cc(%edi)` sits
+	 * between the call to `V90Phase3Modulator`'s constructor and the
+	 * `Descrambler` construction, exactly where the object puts it.
 	 */
 	SerialDifferentialDecoder<int> word_3cc;
 
