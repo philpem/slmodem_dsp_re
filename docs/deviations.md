@@ -6825,3 +6825,39 @@ The object pushes a literal 1 as a second argument to `V22_PPS_free`,
 tree reconstructed all four from their own bodies, where the second parameter
 is dead, and one of the four headers belongs to another effort.  The same
 shape as D363, at four sites instead of one.
+
+## D390 ⚠ Two of `V90CP`'s counts travel wider than the arrays they index
+
+**This was written five numbers lower**, and moved up before it left its
+branch: a sibling claimed the number immediately above D380 while this batch
+was running, and five free numbers is not a gap when six branches are open at
+once.  Nothing outside this file, `include/dsplib/V90CP.h` and
+`test/unit/t_v90cpinfo.cpp` ever referred to it by the old number, and it is
+spelled out here rather than cited so that the survey's own tool does not read
+a retired number as a live reference.
+
+*Batch of 2026-08-16, from `V90CP::infoToBits` (blob 0x52230) and
+`V90CP::evaluateInfo` (0x519f0). **Reachability: any peer that sends a large
+count, and any local caller that sets one.** **Observability: a read or a
+write past the end of the array, identical on both sides -- so it is not a
+DIFFERENCE and no differential test can fail on it.** Status: unmeasured. Fix
+class: none proposed; reproduced exactly, and `t_v90cpinfo` bounds its own
+seeds instead.*
+
+`nof_58[k]` is carried in nine bits, so up to 511, and `short_58[k]` holds
+384.  `nof_buf[k]` is carried in eight bits, so up to 255, and `buf[k]` is a
+0x200-byte allocation holding 128 four-byte entries.  Both loops run to the
+count with no clamp, in both directions: `infoToBits` READS past the end and
+`evaluateInfo` WRITES past it.
+
+The author knew about the second one.  `bitsToInfo` carries
+"*** error CP bit , not enouch memory in the buffer ***" and reaches it from
+five separate sites, so the guard exists -- one layer out, in the member that
+feeds the bit vector, and not in the two that walk it.  Nothing was found that
+guards the first.
+
+Recorded rather than clamped because clamping would be a behaviour change that
+no test could justify, and because a later reader who seeds a count of 384 into
+all four lists will watch both sides walk off the end of a 12,000-byte bit
+vector together and need to know that is the object and not the
+reconstruction.

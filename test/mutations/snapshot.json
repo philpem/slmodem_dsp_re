@@ -4696,7 +4696,7 @@
    }
   },
   "v90cp": {
-   "key": "375305e03a7c6fbed8600214a47bcdabad1122445c61f1ff7392955c7c92353d",
+   "key": "ace9963eec36bb9a78c56dcb47622cc4f6eff25f60d3f5b60a1455d29080a52d",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x13 left alone, as reset() leaves it": "caught",
@@ -4717,6 +4717,34 @@
     "the last free is not guarded": "caught",
     "the released pointer is cleared afterwards": "caught",
     "the same buffer stored twice": "caught"
+   }
+  },
+  "v90cpinfo": {
+   "key": "788cbd608706defb0327756ec63c3950d1693c18bb21323af1b2e58a5ce221e6",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "a fifth value of +0x11 writes zeros instead of nothing": "caught",
+    "a value outside the jump table decodes the header": "caught",
+    "bit 0x12 carries only whether +0x00 is set": "caught",
+    "evaluateCRC compares against the wrong sixteen bits": "caught",
+    "evaluateCRC covers one frame too many": "caught",
+    "evaluateCRC returns the opposite verdict": "caught",
+    "evaluateCRC's accumulator cannot wrap": "caught",
+    "the CRC covers the framing bits too": "caught",
+    "the CRC's second tap is one place out": "caught",
+    "the buffer arm accumulates the wrong way round": "caught",
+    "the buffer arm advances sixteen, not seventeen": "caught",
+    "the counts arm steps sixteen, not seventeen": "caught",
+    "the header arm leaves the cursor at 0x33": "caught",
+    "the length is rounded down, not up": "caught",
+    "the list arm's entries are one bit apart too few": "caught",
+    "the nine-bit count is followed by six zeros, not seven": "caught",
+    "the pad is counted but not written": "caught",
+    "the pairs arm leaves the cursor at 0x99": "caught",
+    "the preamble is one bit short": "caught",
+    "the sequence length is one frame short": "caught",
+    "the short form drops +0xca0": "caught",
+    "the short form's two decoded bits are swapped": "caught"
    }
   },
   "v90cpmembers": {
@@ -6776,9 +6804,6 @@
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",
     "VPCMXF_Delete frees without destroying": "caught",
-    "v34BaudAllow[1] keeps the constructor's 1": "caught",
-    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
-    "v34BaudAllow[5] keeps the constructor's 1": "caught",
     "minNofTransmitSequences is left at the constructor's 0": "caught",
     "mode 1 sets the V.92 mode and not the V.90 one": "caught",
     "mode 2 sets the V.90 mode and not the V.92 one": "caught",
@@ -6797,7 +6822,10 @@
     "the object is allocated 64 bytes short": "caught",
     "the sample count is the duration, unconverted": "caught",
     "the side handed to the modem is not inverted": "caught",
-    "the three termination requests are not cleared": "equivalent"
+    "the three termination requests are not cleared": "equivalent",
+    "v34BaudAllow[1] keeps the constructor's 1": "caught",
+    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
+    "v34BaudAllow[5] keeps the constructor's 1": "caught"
    }
   },
   "vpcmxfterm": {

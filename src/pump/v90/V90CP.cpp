@@ -50,8 +50,24 @@
 	typedef char v90cp_off_##tag[ \
 	    ((int)__builtin_offsetof(V90CP, field) == (off)) ? 1 : -1]
 
+V90CP_OFF(word_00,		0x0000, word00);
+V90CP_OFF(word_04,		0x0004, word04);
+V90CP_OFF(word_08,		0x0008, word08);
+V90CP_OFF(word_0c,		0x000c, word0c);
+V90CP_OFF(byte_10,		0x0010, byte10);
+V90CP_OFF(byte_11,		0x0011, byte11);
+V90CP_OFF(byte_12,		0x0012, byte12);
 V90CP_OFF(byte_13,		0x0013, byte13);
+V90CP_OFF(word_14,		0x0014, word14);
+V90CP_OFF(word_18,		0x0018, word18);
+V90CP_OFF(nof_58,		0x0048, nof58);
+V90CP_OFF(short_58,		0x0058, short58);
+V90CP_OFF(nof_buf,		0x0c58, nofbuf);
+V90CP_OFF(word_c70,		0x0c70, wordc70);
 V90CP_OFF(buf,			0x0c88, buf);
+V90CP_OFF(word_ca0,		0x0ca0, wordca0);
+V90CP_OFF(byte_ca8,		0x0ca8, byteca8);
+V90CP_OFF(word_cb4,		0x0cb4, wordcb4);
 V90CP_OFF(word_ca4,		0x0ca4, wordca4);
 V90CP_OFF(byte_ca9,		0x0ca9, byteca9);
 V90CP_OFF(byte_caa,		0x0caa, bytecaa);
@@ -81,12 +97,12 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  */
 V90CP::V90CP()
 {
-	buf[0] = sysdep_malloc(V90CP_BUFSIZE);
-	buf[1] = sysdep_malloc(V90CP_BUFSIZE);
-	buf[2] = sysdep_malloc(V90CP_BUFSIZE);
-	buf[3] = sysdep_malloc(V90CP_BUFSIZE);
-	buf[4] = sysdep_malloc(V90CP_BUFSIZE);
-	buf[5] = sysdep_malloc(V90CP_BUFSIZE);
+	buf[0] = (int *)sysdep_malloc(V90CP_BUFSIZE);
+	buf[1] = (int *)sysdep_malloc(V90CP_BUFSIZE);
+	buf[2] = (int *)sysdep_malloc(V90CP_BUFSIZE);
+	buf[3] = (int *)sysdep_malloc(V90CP_BUFSIZE);
+	buf[4] = (int *)sysdep_malloc(V90CP_BUFSIZE);
+	buf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 
 	word_ca4 = 0;
 	byte_ca9 = 0;
@@ -119,4 +135,551 @@ V90CP::~V90CP()
 		sysdep_free(buf[4]);
 	if (buf[5] != 0)
 		sysdep_free(buf[5]);
+}
+
+/*
+ * evaluateInfo -- 0x519f0, 1986 bytes.  ONE SWITCH OVER `word_ca4` and
+ * nothing else: `sub $0x3` / `cmp $0x8` / `jmp *0xe50(,%eax,4)`, so the arms
+ * are 3..11 and everything outside falls through to the same `ret`.  The
+ * table's nine entries are 0x51d3a, 0x51af0, 0x51d56, 0x51de8, 0x51a14,
+ * 0x51e88, 0x51af0, 0x52031, 0x51af8 -- 0x51af0 is the `ret`, which is how
+ * we know 4 and 9 are holes in the case list and not arms that do nothing.
+ *
+ * Every arm decodes ONE BLOCK of the CP message and leaves `word_cb4`, the
+ * read cursor, one below the next frame's framing bit.  Each field is read
+ * most-significant bit first, walking DOWNWARDS -- `movzbl 0xcb8(%ecx,%esi,1)`
+ * with `dec %ecx` -- which is the exact inverse of `infoToBits` writing it
+ * least-significant bit first walking upwards.
+ *
+ * TWO ARMS END WITH AN ABSOLUTE CONSTANT (0x32 and 0x98) rather than with the
+ * arithmetic, and that is what pins the fixed part of the layout: the header
+ * ends at bit 0x32 and the six pairs end at bit 0x98, which is one below
+ * 0x99, which is where `infoToBits` has laid the next framing bit after
+ * 0x33 + 6*17.  The two halves were read independently and agree.
+ *
+ * The accumulator's WIDTH is the field's own: `%cl` for the five-bit byte at
+ * +0x10, `%di` as a 16-bit register for `short_58`, and 32 bits everywhere
+ * else.  That is forced -- a wider accumulator would not have needed the
+ * `movzwl %di,%eax` the object encodes -- and it is what makes `short_58`
+ * shorts and `word_18` ints.
+ */
+void
+V90CP::evaluateInfo()
+{
+	unsigned int i, j, k, p, q, n;
+	int *dst;
+
+	switch (word_ca4) {
+	case 3:
+		/* The short form: two bits, and no cursor movement. */
+		word_ca0 = bits[0x20];
+		byte_13 = bits[0x21];
+		break;
+
+	case 5:
+		/* The header, ending at the absolute bit 0x32. */
+		byte_10 = 0;
+		for (p = 0x1a; p > 0x15; p--)
+			byte_10 = (signed char)((byte_10 << 1) | (bits[p] & 1));
+
+		byte_11 = (unsigned char)((bits[0x1b] & 1) |
+					  ((bits[0x1c] & 1) << 1));
+		byte_12 = bits[0x1d];
+		byte_13 = bits[0x21];
+
+		word_14 = 0;
+		for (p = 0x32; p > 0x22; p--)
+			word_14 = (word_14 << 1) | (bits[p] & 1);
+
+		word_cb4 = 0x32;
+		break;
+
+	case 6:
+		/* Six frames of two eight-bit halves, ending at 0x98. */
+		for (i = 0; i <= 0xb; i++)
+			word_18[i] = 0;
+
+		p = word_cb4;
+		for (k = 0; k <= 5; k++) {
+			p += 9;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 7; i++, q--)
+				word_18[2 * k] =
+				    (word_18[2 * k] << 1) | (bits[q] & 1);
+
+			p += 8;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 7; i++, q--)
+				word_18[2 * k + 1] =
+				    (word_18[2 * k + 1] << 1) | (bits[q] & 1);
+		}
+		word_cb4 = 0x98;
+		break;
+
+	case 7:
+		/* Four nine-bit counts, one to a frame. */
+		for (k = 0; k <= 3; k++)
+			nof_58[k] = 0;
+
+		p = word_cb4 + 0xa;
+		q = p;
+		for (k = 0; k <= 3; k++) {
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 8; i++, q--)
+				nof_58[k] = (nof_58[k] << 1) | (bits[q] & 1);
+			p += 0x11;
+		}
+		word_cb4 = q + 0x10;
+		break;
+
+	case 8:
+		/* The four counted lists, one entry to a frame. */
+		for (k = 0; k <= 3; k++) {
+			n = nof_58[k];
+			for (j = 0; j < n; j++) {
+				short_58[k][j] = 0;
+				p = word_cb4 + 0x11;
+				word_cb4 = p;
+				for (i = 0, q = p; i <= 0xf; i++, q--)
+					short_58[k][j] = (short)
+					    ((short_58[k][j] << 1) |
+					     (bits[q] & 1));
+				word_cb4 = q + 0x10;
+			}
+		}
+		break;
+
+	case 10:
+		/* Six four-bit values, four to a frame and then two, and then
+		 * the six eight-bit buffer counts, two to a frame. */
+		for (i = 0; i <= 5; i++)
+			word_c70[i] = 0;
+
+		word_cb4++;
+		p = word_cb4;
+		for (k = 0; k <= 3; k++) {
+			p += 4;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 3; i++, q--)
+				word_c70[k] =
+				    (word_c70[k] << 1) | (bits[q] & 1);
+		}
+
+		p++;
+		word_cb4 = p;
+		for (k = 4; k <= 5; k++) {
+			p += 4;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 3; i++, q--)
+				word_c70[k] =
+				    (word_c70[k] << 1) | (bits[q] & 1);
+		}
+		p += 8;
+		word_cb4 = p;
+
+		for (i = 0; i <= 5; i++)
+			nof_buf[i] = 0;
+
+		for (k = 0; k <= 2; k++) {
+			p += 9;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 7; i++, q--)
+				nof_buf[2 * k] =
+				    (nof_buf[2 * k] << 1) | (bits[q] & 1);
+
+			p += 8;
+			word_cb4 = p;
+			for (i = 0, q = p; i <= 7; i++, q--)
+				nof_buf[2 * k + 1] =
+				    (nof_buf[2 * k + 1] << 1) | (bits[q] & 1);
+		}
+		break;
+
+	case 11:
+		/*
+		 * The six buffers.  `word_cb4` is stepped through MEMORY here
+		 * rather than through a register, because the store into
+		 * `dst[j]` may alias it -- that is the object's own reading
+		 * and it is why this arm reloads where the others do not.
+		 */
+		for (k = 0; k <= 5; k++) {
+			if (nof_buf[k] == 0)
+				continue;
+			dst = buf[k];
+			for (j = 0; j < nof_buf[k]; j++) {
+				word_cb4 += 0x11;
+				dst[j] = 0;
+				for (i = 0; i <= 0xf; i++) {
+					dst[j] = (dst[j] << 1) |
+						 (bits[word_cb4] & 1);
+					word_cb4--;
+				}
+				word_cb4 += 0x10;
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+}
+
+/*
+ * infoToBits -- 0x52230, 2785 bytes, and the inverse of `evaluateInfo` field
+ * for field.  It lays the CP sequence out one byte per bit into `bits`,
+ * running the write cursor `word_cac` forward, and closes by generating the
+ * CRC over what it just wrote and padding out to a whole number of whatever
+ * +0x3ba8 counts.
+ *
+ * THE ONE FIELD THAT IS NOT A SHIFT LOOP is +0x11: the object writes its two
+ * bits from a four-arm switch over 0, 1, 2 and 3, so a value outside that
+ * range leaves bits[0x1b] and bits[0x1c] holding whatever was there before.
+ * A shift loop cannot do that, and t_v90cp drives a fifth value through it
+ * precisely so that the difference is observed rather than assumed.
+ *
+ * THE CRC IS THE CCITT REGISTER RUN ONE BIT PER BYTE.  Sixteen bytes, all set
+ * to 1, then for each information bit `a = (crc[0] + bit) & 1`, the register
+ * shifts down one place, `a` is added into what becomes crc[3] and crc[10],
+ * and `a` itself lands in crc[15] -- x^16 + x^12 + x^5 + 1 with the register
+ * held least-significant-first.  Framing bits are NOT covered: the walk
+ * carries an `if (i % 17 == 0) i++`, which the object encodes as the
+ * 0xf0f0f0f1 reciprocal followed by `cmp $1` / `adc $0`.
+ */
+void
+V90CP::infoToBits()
+{
+	unsigned int i, j, k;
+	unsigned int pos, start, nbits, total, group, quot;
+	unsigned char a;
+
+	/* One frame of ones, then the first framing bit. */
+	for (i = 0; i <= 0x10; i++)
+		bits[i] = 1;
+	bits[0x11] = 0;
+	bits[0x12] = (unsigned char)word_00;
+
+	if (word_00 != 0) {
+		/* The short form: three frames and straight to the CRC. */
+		for (i = 0x13; i <= 0x1f; i++)
+			bits[i] = 0;
+		word_cac = 0x22;
+		bits[0x20] = (unsigned char)word_ca0;
+		bits[0x21] = byte_13;
+	} else {
+		int v;
+		unsigned int u;
+
+		bits[0x13] = (unsigned char)word_04;
+		bits[0x14] = (unsigned char)word_08;
+		bits[0x15] = (unsigned char)word_0c;
+
+		v = byte_10;			/* movsbl, then sar */
+		for (i = 0; i <= 4; i++) {
+			bits[0x16 + i] = (unsigned char)(v & 1);
+			v >>= 1;
+		}
+
+		switch (byte_11) {
+		case 0:
+			bits[0x1b] = 0;
+			bits[0x1c] = 0;
+			break;
+		case 1:
+			bits[0x1b] = 1;
+			bits[0x1c] = 0;
+			break;
+		case 2:
+			bits[0x1b] = 0;
+			bits[0x1c] = 1;
+			break;
+		case 3:
+			bits[0x1b] = 1;
+			bits[0x1c] = 1;
+			break;
+		}
+
+		bits[0x1d] = byte_12;
+		for (i = 0; i <= 2; i++)
+			bits[0x1e + i] = 0;
+		bits[0x21] = byte_13;
+		bits[0x22] = 0;
+
+		u = (unsigned short)word_14;	/* movzwl, then shr */
+		for (i = 0; i <= 0xf; i++) {
+			bits[0x23 + i] = (unsigned char)(u & 1);
+			u >>= 1;
+		}
+
+		byte_ca8 = 0;
+		word_cac = 0x33;
+
+		if (word_04 != 0) {
+			for (k = 0; k <= 5; k++) {
+				int lo = (short)word_18[2 * k];
+				int hi = (short)word_18[2 * k + 1];
+
+				pos = word_cac;
+				bits[pos] = 0;
+				pos++;
+				word_cac = pos;
+				for (i = 0; i <= 7; i++) {
+					bits[pos + i] = (unsigned char)(lo & 1);
+					lo >>= 1;
+				}
+				pos += 8;
+				word_cac = pos;
+				for (i = 0; i <= 7; i++) {
+					bits[pos + i] = (unsigned char)(hi & 1);
+					hi >>= 1;
+				}
+				word_cac = pos + 8;
+			}
+		}
+
+		if (word_08 != 0) {
+			unsigned int t[4];
+			unsigned int n[4];
+
+			for (k = 0; k <= 3; k++) {
+				t[k] = nof_58[k];
+				n[k] = nof_58[k];
+			}
+
+			for (k = 0; k <= 3; k++) {
+				pos = word_cac;
+				bits[pos] = 0;
+				pos++;
+				word_cac = pos;
+				for (i = 0; i <= 8; i++) {
+					bits[pos + i] = (unsigned char)(t[k] & 1);
+					t[k] >>= 1;
+				}
+				word_cac = pos + 9;
+				for (i = 0; i <= 6; i++)
+					bits[pos + 9 + i] = 0;
+				word_cac = pos + 16;
+			}
+
+			for (k = 0; k <= 3; k++) {
+				for (j = 0; j < n[k]; j++) {
+					int w = short_58[k][j];
+
+					pos = word_cac;
+					bits[pos] = 0;
+					pos++;
+					word_cac = pos;
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					word_cac = pos + 16;
+				}
+			}
+		}
+
+		if (word_0c != 0) {
+			pos = word_cac;
+			bits[pos] = 0;
+			word_cac = pos + 1;
+			for (k = 0; k <= 3; k++) {
+				int w = (short)word_c70[k];
+
+				pos = word_cac;
+				for (i = 0; i <= 3; i++) {
+					bits[pos + i] = (unsigned char)(w & 1);
+					w >>= 1;
+				}
+				word_cac = pos + 4;
+			}
+
+			pos = word_cac;
+			bits[pos] = 0;
+			word_cac = pos + 1;
+			for (k = 4; k <= 5; k++) {
+				int w = (short)word_c70[k];
+
+				pos = word_cac;
+				for (i = 0; i <= 3; i++) {
+					bits[pos + i] = (unsigned char)(w & 1);
+					w >>= 1;
+				}
+				word_cac = pos + 4;
+			}
+
+			pos = word_cac;
+			for (i = 0; i <= 7; i++)
+				bits[pos + i] = 0;
+			word_cac = pos + 8;
+
+			for (k = 0; k <= 2; k++) {
+				int lo = (short)nof_buf[2 * k];
+				int hi = (short)nof_buf[2 * k + 1];
+
+				pos = word_cac;
+				bits[pos] = 0;
+				pos++;
+				word_cac = pos;
+				for (i = 0; i <= 7; i++) {
+					bits[pos + i] = (unsigned char)(lo & 1);
+					lo >>= 1;
+				}
+				pos += 8;
+				word_cac = pos;
+				for (i = 0; i <= 7; i++) {
+					bits[pos + i] = (unsigned char)(hi & 1);
+					hi >>= 1;
+				}
+				word_cac = pos + 8;
+			}
+
+			for (k = 0; k <= 5; k++) {
+				unsigned int n = nof_buf[k];
+				const int *src;
+
+				if (n == 0)
+					continue;
+				src = buf[k];
+				for (j = 0; j < n; j++) {
+					int w = (short)src[j];
+
+					pos = word_cac;
+					bits[pos] = 0;
+					pos++;
+					word_cac = pos;
+					for (i = 0; i <= 0xf; i++) {
+						bits[pos + i] =
+						    (unsigned char)(w & 1);
+						w >>= 1;
+					}
+					word_cac = pos + 16;
+				}
+			}
+		}
+	}
+
+	/* --- the tail, which both forms reach --- */
+
+	start = (unsigned int)word_cac;
+	bits[start] = 0;
+	word_cac = (int)(start + 1);
+	nbits = start + 0x11;
+	word_3bb0 = nbits;
+
+	for (i = 0; i <= 0xf; i++)
+		crc[i] = 1;
+
+	for (i = 0x12; i < start; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = a;
+	}
+
+	pos = (unsigned int)word_cac;
+	for (i = 0; i <= 0xf; i++) {
+		bits[pos] = crc[i];
+		pos++;
+	}
+	bits[pos] = 0;
+	word_cac = (int)(pos + 1);
+
+	/* calcSequenceLength, inlined: round the bit count up to a whole
+	 * number of +0x3ba8 and record it at +0x3bac. */
+	total = nbits + 1;
+	group = word_3ba8;
+	quot = total / group;
+	if (quot * group == total)
+		word_3bac = quot * group;
+	else
+		word_3bac = (quot + 1) * group;
+
+	pos = (unsigned int)word_cac;
+	while (word_3bac > pos) {
+		bits[pos] = 0;
+		pos++;
+	}
+}
+
+/*
+ * evaluateCRC -- 0x51730, 668 bytes.  The read side of the register above:
+ * recompute the CRC over the information bits of a RECEIVED sequence and
+ * compare it against the sixteen the peer sent.
+ *
+ * The extent is `word_3bb0`, which `bitsToInfo` has by then set the way
+ * `infoToBits` sets it -- information bits run from 0x12 up to
+ * word_3bb0 - 0x11, and the peer's CRC occupies the sixteen bits ending at
+ * word_3bb0 - 1.  The object reaches those through a single displacement,
+ * `-0x2ef0(%ecx,%edi,1)` with %ecx walking `crc` and %edi holding
+ * word_3bb0, and 0x3b98 - 0x2ef0 - 0xcb8 is -0x10, which is where the -0x10
+ * below comes from.
+ *
+ * IT RETURNS A VALUE, which the header used to say it did not: the epilogue
+ * is `xor %eax,%eax` / `cmpb $0x0,...` / `sete %al`, and a leftover is never
+ * built with a `sete`.  The comparison accumulates ABSOLUTE DIFFERENCES in a
+ * single byte -- `cltd` / `xor %edx,%eax` / `sub %edx,%eax` is the object's
+ * inlined `abs`, and the accumulator wraps at 256 exactly as ours does.
+ */
+int
+V90CP::evaluateCRC()
+{
+	unsigned int i, end;
+	unsigned char a;
+	unsigned char diff;
+
+	for (i = 0; i <= 0xf; i++)
+		crc[i] = 1;
+
+	end = word_3bb0 - 0x11;
+	for (i = 0x12; i < end; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = a;
+	}
+
+	diff = 0;
+	for (i = 0; i <= 0xf; i++) {
+		int d = (int)crc[i] - (int)bits[word_3bb0 - 0x10 + i];
+
+		if (d < 0)
+			d = -d;
+		diff = (unsigned char)(diff + d);
+	}
+
+	return diff == 0;
 }
