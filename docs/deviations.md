@@ -6630,3 +6630,71 @@ ucode tables a real detector fills.  Fix class: floor the length at one, or
 skip the power pass on an empty phase.  Reproduced as found; the test's
 composed groups use a fixture that cannot produce an empty phase and its
 header says why.
+## D370 🐛 `FSE_decision_128pt`'s outer ambiguous cell returns the FARTHER of its two candidates
+
+*Batch of 2026-08-16, from `FSE_decision_128pt` (blob .text 0x804e0) at
+0x806cf-0x806db: `xor %eax,%eax ; cmp %cx,%bx ; setge %al ; dec %eax ; and
+$0xfffffff4,%eax ; add $0x1a,%eax`, where `%bx` holds the squared distance to
+point 26 and `%cx` the one to point 14.  `setge` therefore selects point 26
+exactly when 26 is the FARTHER of the two, and point 14 otherwise.*
+**Reachability: any received symbol whose rotated coordinates satisfy
+`ri > 14481` and `rq >= 14481` -- 603,901,812 of the 2^32 (I, Q) pairs, and
+the cell is entered on ordinary 14400 bit/s traffic.**
+**Observability: the two distances differ at 603,873,842 of those
+603,901,812 points, and at every one of them the object returns the point a
+nearest-neighbour decision would reject.  Witness I = -32767, Q = -12286.**
+*Status: 🐛 defect in the original, reproduced as written.  Fix class: none
+proposed -- the slicer's own decision feeds the equaliser and the carrier
+loop, not the bit stream, so the cost is a worse error term in a cell that a
+Viterbi decoder is about to overrule anyway.*
+
+The second ambiguous cell, twenty-five instructions further on at 0x807d1, is
+the same shape with `setle` and picks the NEARER of ITS two candidates.  So
+this is not one tie-breaking convention applied twice: the two arms of the
+same construct disagree about which direction the comparison runs, which is
+what makes the first one a slip rather than a choice.  Finding 3218.
+
+## D371 🐛 `FSE_decision_128pt` carries point 26's I coordinate as a literal one greater than the table's
+
+*Batch of 2026-08-16, from `FSE_decision_128pt` at 0x806bc, `mov
+$0x3e3a,%eax` -- 15930 -- used as the I coordinate of constellation point 26,
+where `DECv32_ANA_IMAP128[26]` (.rodata 0x75c0 + 0x34) is 15929.*
+**Reachability: the same cell as D370.**
+**Observability: the one-LSB difference survives the `>> 13` and flips the
+decision between points 14 and 26 at 48,490 of the cell's 603,901,812 points.
+Witness I = -32767, Q = -3841.**
+*Status: 🐛 defect in the original, reproduced as written -- `src/` carries
+`0x3e3a` and not the table entry.  Fix class: none proposed.*
+
+**THE OTHER THREE LITERALS ARE RIGHT, WHICH IS WHAT MAKES THIS ONE A FINDING
+AND NOT A COMPILER ARTEFACT.**  The two tie-breaks name four I coordinates as
+immediates -- 0x2799 twice, 0x32e9 and 0x3e3a -- and the first three equal
+`DECv32_ANA_IMAP128[14]`, `[15]` and `[24]` exactly.  A constant fold out of
+the const table would have produced 15929 here too; a hand-written constant
+would not have to.  Finding 3218.
+
+## D372 🐛 `FSE_decision_128pt`'s region tree puts the same rq boundary in two different places
+
+*Batch of 2026-08-16, from `FSE_decision_128pt`'s region tree.  Two arms cut
+the rotated Q axis one way -- 0x80750 and 0x80801 both encode `cmp $0x2d40,%bx
+; jg` and 0x8075d and 0x80811 both encode `cmp $0x169f,%bx`, so the bands are
+`rq >= 0x2d41` and `rq >= 0x16a0` -- and the third cuts it the other way, with
+`cmp $0x2d41,%bx ; jle` at 0x80644 and `cmp $0x16a1,%bx ; setl` at 0x808b2, so
+its bands are `rq <= 0x2d41` and `rq <= 0x16a0`.  The two nominal boundaries
+are 5792 and 11585 and each is claimed by the band above it in the first two
+arms and by the band below it in the third.*
+**Reachability: 82,597 (I, Q) pairs rotate to `rq` exactly 5792 with
+`ri > 11585`, which is the third arm.**
+**Observability: at every one of those 82,597 the object searches the cell at
+base 0x1c and a single uniform convention would search base 0x18, and the two
+never agree on the point.  Witness I = -32768, Q = -24576.**
+*Status: 🐛 inconsistency in the original, reproduced arm by arm.  Fix class:
+none proposed.*
+
+The same one-apart pattern is in `FSE_decision_64pt`, where it is between the
+AXES rather than between arms: the I bands are `i > 0x2000` and `i <= 0xe000`
+while the Q bands are `q > 0x1fff` and `q >= 0xe000`, so a symbol at exactly
+(8192, 8192) is inner in I and outer in Q.  Recorded here rather than as a
+fourth entry because it is one construct read twice, and because `_64pt` runs
+on the symbol as received, where a test can put a value on the line directly.
+Finding 3217.

@@ -2,16 +2,19 @@
  * v32fse.c -- V.32's slicers for the library equaliser.
  *
  * Reconstructed from dsplibs.o:
- *   FSE_decision_AB   .text 0x081260   678
- *   FSE_decision_4pt  .text 0x081080   468
- *   FSE_decision_trn  .text 0x081590   225
- *   FSE_decision_CD   .text 0x081510   122
+ *   FSE_decision_AB    .text 0x081260   678
+ *   FSE_decision_4pt   .text 0x081080   468
+ *   FSE_decision_trn   .text 0x081590   225
+ *   FSE_decision_CD    .text 0x081510   122
+ *   FSE_decision_128pt .text 0x0804e0  1032
+ *   FSE_decision_32pt  .text 0x080bb0   721
+ *   FSE_decision_64pt  .text 0x0808f0   694
+ *   FSE_decision_16Tpt .text 0x080330   432
  *
- * The five that are not here are `_16pt` (finding 1603: it indexes
- * `DECv32_MAG9600` out of bounds and cannot be reproduced across builds) and
- * `_16Tpt`, `_32pt`, `_64pt` and `_128pt`, which call `VTB_decoder`.
+ * The one that is not here is `_16pt` (finding 1603: it indexes
+ * `DECv32_MAG9600` out of bounds and cannot be reproduced across builds).
  *
- * THE SEQUENCE THEY IMPLEMENT.  Each slicer installs its own successor in
+ * THE SEQUENCE THE FIRST FOUR IMPLEMENT.  Each installs its own successor in
  * `state->cfg.decision`, so the chain is the receiver's handshake:
  *
  *     AB  --(the two-tone phase alternation stops)-->  CD
@@ -19,9 +22,25 @@
  *     trn --(after 1280 symbols)-->                    4pt
  *
  * and the datapump switches to a data-rate slicer from there.
+ *
+ * THE FOUR TRELLIS SLICERS are the data-rate end of that: 7200, 9600, 12000
+ * and 14400 bit/s, one per V.32bis trellis constellation.  All four share the
+ * same three-part shape --
+ *
+ *   1. narrow the search to a handful of candidates with a REGION TREE of
+ *      integer comparisons (`_16Tpt` alone skips this and searches all 16),
+ *   2. pick the nearest of those by a squared-distance metric, and
+ *   3. write that point's ideal magnitude and angle, then hand the received
+ *      symbol AS RECEIVED to `VTB_decoder` and return what it writes back.
+ *
+ * -- and none of them installs a successor or touches `cfg.decision`.  The
+ * decision they return is the Viterbi decoder's, which is the decision made
+ * sixteen symbols ago; the point this function decided is used only for the
+ * equaliser's and the carrier loop's error terms.
  */
 
 #include "dsplib/v32dec.h"
+#include "dsplib/vtb.h"
 
 /*
  * The common preamble of six of the nine slicers, and the only thing they
@@ -303,4 +322,373 @@ FSE_decision_AB(struct fpm_fse *state, short *angle, short *mag)
 	m->eqm_b = eqm_b;
 	m->eqm = eqm_a;
 	return (unsigned short)(rot >> 2);
+}
+
+/*
+ * ===========================================================================
+ * THE TRELLIS SLICERS
+ * ===========================================================================
+ */
+
+/*
+ * The 45-degree rotation `_32pt` and `_128pt` open with, and the only thing
+ * those two share beyond the preamble.
+ *
+ * It folds the plane into one octant so that a rectangular region tree can
+ * work on eight points instead of thirty-two or a hundred and twenty-eight:
+ * `sel` names the octant, the two tables hold its cosine and sine, and the
+ * caller carries `sel` through to the magnitude and angle lookup, which is
+ * indexed `point + 8*sel` and `point + 32*sel`.
+ *
+ * BOTH TABLES ARE +-23170, which is 32768/sqrt(2) rounded, so this is exactly
+ * a rotation by an odd multiple of 45 degrees with no scaling.  `sel` is
+ * `(|I| > |Q|) + (I > Q ? 2 : 0)`: the second term is the diagonal I = Q and
+ * the first the anti-diagonal, and together they cut the plane into four.
+ *
+ * The two products of each output are shifted by 15 SEPARATELY and only then
+ * combined, which is not the same as shifting the sum: each term is rounded
+ * towards minus infinity on its own, so the result can be one less than the
+ * combined form.  The object does it this way and so do we.
+ */
+static int
+fse_rotate(int i, int q, short *ri, short *rq)
+{
+	short ai = (short)(i < 0 ? -i : i);
+	short aq = (short)(q < 0 ? -q : q);
+	int sel = (ai > aq) + (i > q ? 2 : 0);
+	int c = DECv32_COS_ROT_ANGLE[sel];
+	int s = DECv32_SIN_ROT_ANGLE[sel];
+
+	*ri = (short)(((i * c) >> 15) - ((q * s) >> 15));
+	*rq = (short)(((q * c) >> 15) + ((i * s) >> 15));
+	return sel;
+}
+
+/*
+ * 7200 bit/s: the sixteen-point trellis constellation, and the only one of
+ * the four with no region tree -- it searches all sixteen points.
+ *
+ * The metric here is SYMMETRIC, `(di*di + dq*dq) >> 16` with the two terms
+ * shifted separately, unlike `_4pt`'s deliberately lopsided one (D301).  So
+ * the two slicers over the same four quadrants do not agree about what is
+ * nearest, and that is in the object, not in this reading.
+ *
+ * `*mag` is `MAG9600[(|I| + |Q|)/8192 - 1]`.  The sixteen points have
+ * |I| + |Q| in {8192, 16384, 24576}, so the index is 0, 1 or 2 and the
+ * three-entry table is exactly covered -- which is finding 1603's
+ * cross-check: `_16pt` computes the same quantity with `>> 1` instead of
+ * `>> 13`, reads 8190 bytes past the table, and is therefore left out.
+ */
+unsigned short
+FSE_decision_16Tpt(struct fpm_fse *state, short *angle, short *mag)
+{
+	struct v32_dec *m;
+	int i, q, ib, qb, n;
+	short k, best = 0;
+	short min, sym;
+
+	fse_quality(state);
+	m = (struct v32_dec *)state->cfg.owner;
+
+	i = state->out_i[(short)state->n_out];
+	q = state->out_q[(short)state->n_out];
+
+	min = 0x7fff;
+	for (k = 0; k <= 15; k++) {
+		int di = (short)(i - DECv32_IMAP16[k]);
+		int dq = (short)(q - DECv32_QMAP16[k]);
+		short d = (short)(((di * di) >> 16) + ((dq * dq) >> 16));
+
+		if (d < min) {
+			best = k;
+			min = d;
+		}
+	}
+
+	ib = DECv32_IMAP16[best];
+	qb = DECv32_QMAP16[best];
+	n = ((ib < 0 ? -ib : ib) + (qb < 0 ? -qb : qb)) >> 13;
+
+	*mag = DECv32_MAG9600[n - 1];
+	*angle = DECv32_ANGL9600[best];
+
+	VTB_decoder((struct vtb *)m->vtb, (short)i, (short)q, &sym);
+	return (unsigned short)sym;
+}
+
+/*
+ * 12000 bit/s: the sixty-four-point constellation, and the plainest of the
+ * three region trees -- a four-by-four grid on the symbol as received, with
+ * no rotation, cutting the plane at 0 and +-8192 on each axis and searching
+ * the four points of the cell that names.
+ *
+ * THE TWO AXES DO NOT SPLIT AT THE SAME PLACE, and it is one count, not a
+ * misreading.  In I the outer band is `i > 8192` and `i <= -8192`; in Q it is
+ * `q > 8191` and `q < -8192`.  So a symbol at exactly (8192, 8192) is treated
+ * as inner in I and outer in Q, and one at exactly (-8192, -8192) as outer in
+ * I and inner in Q.  Writing either axis's test for both -- the tidy reading
+ * -- agrees everywhere except on those two lines; the test drives them
+ * explicitly for that reason.
+ */
+unsigned short
+FSE_decision_64pt(struct fpm_fse *state, short *angle, short *mag)
+{
+	struct v32_dec *m;
+	int i, q;
+	short k, base, best = 0;
+	short min, sym;
+
+	fse_quality(state);
+	m = (struct v32_dec *)state->cfg.owner;
+
+	i = state->out_i[(short)state->n_out];
+	q = state->out_q[(short)state->n_out];
+
+	if (i > 0) {
+		if (q > 0) {
+			if (i > 0x2000)
+				base = (short)(q > 0x1fff ? 0x28 : 0x2c);
+			else
+				base = (short)(q > 0x1fff ? 0x20 : 0x24);
+		} else {
+			if (i > 0x2000)
+				base = (short)(q >= -0x2000 ? 0x38 : 0x3c);
+			else
+				base = (short)(q >= -0x2000 ? 0x30 : 0x34);
+		}
+	} else {
+		if (q > 0) {
+			if (i > -0x2000)
+				base = (short)(q > 0x1fff ? 0x08 : 0x0c);
+			else
+				base = (short)(q > 0x1fff ? 0x00 : 0x04);
+		} else {
+			if (i > -0x2000)
+				base = (short)(q >= -0x2000 ? 0x18 : 0x1c);
+			else
+				base = (short)(q >= -0x2000 ? 0x10 : 0x14);
+		}
+	}
+
+	min = 0x7fff;
+	for (k = base; k < base + 4; k++) {
+		int di = (short)(i - DECv32_IMAP64[k]);
+		int dq = (short)(q - DECv32_QMAP64[k]);
+		short d = (short)(((di * di) >> 13) + ((dq * dq) >> 13));
+
+		if (d < min) {
+			best = k;
+			min = d;
+		}
+	}
+
+	*mag = DECv32_MAG12000[best];
+	*angle = DECv32_ANGL12000[best];
+
+	VTB_decoder((struct vtb *)m->vtb, (short)i, (short)q, &sym);
+	return (unsigned short)sym;
+}
+
+/*
+ * 9600 bit/s: thirty-two points, and the decision is ONE-DIMENSIONAL.
+ *
+ * After the rotation every symbol is in one octant, where the eight
+ * candidates lie on a line and only their Q coordinates differ -- so the
+ * search is `|rq - ANA_QMAP[k]|` over at most three of them and there is no
+ * `ANA_IMAP` table at all.  The bands of `ri` choose which three: below 5792
+ * the first three, above it the second three, and in the far corner (`ri`
+ * past 11585 with `rq` below it) only two.
+ *
+ * THE TIE-BREAK IS THE TWO-DIMENSIONAL PART.  Points 3 and 6 are the two ends
+ * of the fold and share a Q band, so when the linear search lands on either
+ * the function re-decides between them with a real squared distance -- and
+ * that is the only place `_32pt` uses an I coordinate, which is why the two
+ * appear as the literals 8689 and 14481 rather than as a table.  Both match
+ * `ANA_QMAP` entries, crossed over: point 3 is (8689, 14481) and point 6 is
+ * (14481, 8689), which is the mirror in the octant's diagonal.
+ */
+unsigned short
+FSE_decision_32pt(struct fpm_fse *state, short *angle, short *mag)
+{
+	struct v32_dec *m;
+	int i, q, rot;
+	short ri, rq;
+	short k, first, count, best = 0;
+	short min, sym, n;
+
+	fse_quality(state);
+	m = (struct v32_dec *)state->cfg.owner;
+
+	i = state->out_i[(short)state->n_out];
+	q = state->out_q[(short)state->n_out];
+
+	rot = fse_rotate(i, q, &ri, &rq);
+
+	first = 0;
+	count = 3;
+	if (ri > 0x16a0) {
+		first = 3;
+		if (ri > 0x2d41 && rq <= 0x2d40) {
+			first = 6;
+			count = 2;
+		}
+	}
+
+	min = 0x7fff;
+	for (k = first; k < first + count; k++) {
+		short d = (short)(rq >= DECv32_ANA_QMAP[k]
+				  ? rq - DECv32_ANA_QMAP[k]
+				  : DECv32_ANA_QMAP[k] - rq);
+
+		if (d < min) {
+			best = k;
+			min = d;
+		}
+	}
+
+	if (best == 3 || best == 6) {
+		short d3i = (short)(0x21f1 - ri);
+		short d3q = (short)(DECv32_ANA_QMAP[3] - rq);
+		short d6i = (short)(0x3891 - ri);
+		short d6q = (short)(DECv32_ANA_QMAP[6] - rq);
+		short e3 = (short)(((d3q * d3q) >> 15) + ((d3i * d3i) >> 15));
+		short e6 = (short)(((d6q * d6q) >> 15) + ((d6i * d6i) >> 15));
+
+		/* The NEARER wins, and a tie goes to 3. */
+		best = (short)(e6 < e3 ? 6 : 3);
+	}
+
+	n = (short)(best + 8 * rot);
+	*mag = DECv32_MAG9600T[n];
+	*angle = DECv32_ANGL9600T[n];
+
+	VTB_decoder((struct vtb *)m->vtb, (short)i, (short)q, &sym);
+	return (unsigned short)sym;
+}
+
+/*
+ * 14400 bit/s: a hundred and twenty-eight points, folded by the rotation onto
+ * the thirty-two of `ANA_{I,Q}MAP128` and cut by a ten-leaf region tree on
+ * `ri` and `rq` at 5792, 11585 and 14481.  Eight leaves name a cell of four
+ * consecutive points and search it; two more name a cell straddling the
+ * diagonal, at 14 and 26, and search four from there.
+ *
+ * TWO LEAVES DO NOT SEARCH AT ALL.  Where the tree cannot separate the point
+ * -- the far diagonal corner, on either side of the line -- the function
+ * skips the loop and decides between one specific PAIR of points with a
+ * squared distance.  `amb` carries which pair, and its two arms disagree
+ * about ties: the outer one takes the FARTHER of the two on a tie (D370) and
+ * the inner one the nearer.  Both are reproduced as written.
+ *
+ * `amb` is `unsigned` because the object shifts it `shrl`, which is a logical
+ * shift and so is forced.  Nothing can measure it: the variable only ever
+ * holds 0, `FSE128_AMB_OUTER` or `FSE128_AMB_INNER`.  The second test is
+ * written as the object encodes it -- a shift, not a mask against the second
+ * name -- because `shrl $1` then `test` is what the object does and a mask
+ * would move the code generation off it.
+ *
+ * THE I COORDINATES OF THOSE FOUR POINTS ARE LITERALS AND ONE IS WRONG.
+ * Three of them -- 10137, 10137, 13033 -- equal `ANA_IMAP128[14]`, `[15]` and
+ * `[24]`; the fourth is 15930 where `ANA_IMAP128[26]` is 15929.  That one-off
+ * is what proves they are literals in the source rather than a compiler's
+ * fold of a const table, and it is reproduced: D371.
+ */
+
+/*
+ * The two bits of `amb`, one per cell of the region tree that cannot be
+ * separated.  Which cell each is comes straight out of the tree and is not an
+ * inference: bit 0 is set only where both rotated coordinates are past 14481,
+ * the far corner of the diagonal, and bit 1 only where both are between 11585
+ * and 14481, the cell one step in from it.  Local to this function, because
+ * the same bit values mean something else everywhere else.
+ */
+#define FSE128_AMB_OUTER	(1 << 0)
+#define FSE128_AMB_INNER	(1 << 1)
+
+unsigned short
+FSE_decision_128pt(struct fpm_fse *state, short *angle, short *mag)
+{
+	struct v32_dec *m;
+	int i, q, rot;
+	unsigned int amb = 0;
+	short ri, rq;
+	short k, base = 0, best = 0;
+	short min, sym, n;
+
+	fse_quality(state);
+	m = (struct v32_dec *)state->cfg.owner;
+
+	i = state->out_i[(short)state->n_out];
+	q = state->out_q[(short)state->n_out];
+
+	rot = fse_rotate(i, q, &ri, &rq);
+
+	if (ri > 0x16a0) {
+		base = 0x0c;
+		if (ri > 0x2d41) {
+			if (rq <= 0x2d41)
+				base = (short)(rq <= 0x16a0 ? 0x1c : 0x18);
+			else if (ri <= 0x3891) {
+				if (rq > 0x3891)
+					base = 0x0e;
+				else
+					amb = FSE128_AMB_INNER;
+			} else {
+				if (rq < 0x3891)
+					base = 0x1a;
+				else
+					amb = FSE128_AMB_OUTER;
+			}
+		} else if (rq <= 0x2d40) {
+			base = (short)(rq <= 0x169f ? 0x14 : 0x10);
+		}
+	} else if (rq <= 0x2d40) {
+		base = (short)(rq <= 0x169f ? 0x08 : 0x04);
+	}
+
+	if (amb & FSE128_AMB_OUTER) {
+		short d14i = (short)(0x2799 - ri);
+		short d14q = (short)(DECv32_ANA_QMAP128[14] - rq);
+		short d26i = (short)(0x3e3a - ri);
+		short d26q = (short)(DECv32_ANA_QMAP128[26] - rq);
+		short e14 = (short)(((d14q * d14q) >> 13)
+				    + ((d14i * d14i) >> 13));
+		short e26 = (short)(((d26q * d26q) >> 13)
+				    + ((d26i * d26i) >> 13));
+
+		/* The FARTHER wins on a tie, which is D370. */
+		best = (short)(e26 >= e14 ? 26 : 14);
+	} else if (amb >> 1) {
+		short d15i = (short)(0x2799 - ri);
+		short d15q = (short)(DECv32_ANA_QMAP128[15] - rq);
+		short d24i = (short)(0x32e9 - ri);
+		short d24q = (short)(DECv32_ANA_QMAP128[24] - rq);
+		short e15 = (short)(((d15q * d15q) >> 13)
+				    + ((d15i * d15i) >> 13));
+		short e24 = (short)(((d24q * d24q) >> 13)
+				    + ((d24i * d24i) >> 13));
+
+		/* And here the nearer, with the tie the other way. */
+		best = (short)(e24 <= e15 ? 24 : 15);
+	} else {
+		min = 0x7fff;
+		for (k = base; k < base + 4; k++) {
+			int di = (short)(ri - DECv32_ANA_IMAP128[k]);
+			int dq = (short)(rq - DECv32_ANA_QMAP128[k]);
+			short d = (short)(((di * di) >> 13)
+					  + ((dq * dq) >> 13));
+
+			if (d < min) {
+				best = k;
+				min = d;
+			}
+		}
+	}
+
+	n = (short)(best + 32 * rot);
+	*mag = DECv32_MAG14400[n];
+	*angle = DECv32_ANGL14400[n];
+
+	VTB_decoder((struct vtb *)m->vtb, (short)i, (short)q, &sym);
+	return (unsigned short)sym;
 }
