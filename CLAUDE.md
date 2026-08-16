@@ -76,6 +76,57 @@ now appends the input when the format string has no conversion for it, which
 repaired 819 call sites that were silently discarding the offset they computed
 (finding 220).
 
+## Naming: fields, and flags
+
+Four states, and they are not the same problem:
+
+- `pad_NNNN` — **unmodelled space.** We do not know how many fields are in it.
+- `type_NNNN` (`short_2800`, `flags_0217`, `ptr_49b4`) — **modelled, unnamed.**
+  Shape and size known, meaning not.
+- bare `fNNNN` — neither. An offset wearing a name.
+- a real name — the goal.
+
+**If we know what something indicates, name it. That includes FLAGS.** A bare
+`x & 0x40` states a bit position and hides a meaning, exactly as `f25d0` does.
+Give it a named constant.
+
+**Name by BIT VALUE and keep 1:1 with the object** — `#define FOO_TRAINED
+(1 << 6)` or `0x40`, then `x & FOO_TRAINED`. A macro or enum constant is a
+compile-time substitution and **cannot** move code generation, so this is free
+and `compare.py` must not budge. If it does, something other than a name
+changed.
+
+**Bitfields are NOT free, and whether the original used them is MEASURABLE
+rather than a preference.** A bitfield read compiles to a shift and a mask; an
+explicit mask test compiles to `and`/`test` against an immediate. The blob is
+dominated by the second — 1233 `and $imm`, 474 `test $imm`, 161 `andb`, 150
+`testb` — so a bitfield rewrite would move the codegen tier AWAY from the
+object at the sites it touched. Do not convert to bitfields to make a struct
+read nicely; if a bitfield is ever right, it is because the object's own
+instructions at that site say the author used one. Settle it per site, from
+`dis.py`, like everything else.
+
+A mask that is not a single bit is a different thing again: `0x0f` over a
+four-bit field wants a named width and shift, not a flag name. There are 147
+single-bit uses and 235 multi-bit ones, so check which you have before naming.
+
+**Evidence order, strongest first**, and it matters more than completeness:
+
+1. **A format string that prints the thing.** `.rodata` labels are the original
+   author's own words. `tools/relocscan.py --at .rodata.str1.1:0xNNNN` finds
+   who references one (finding 604). This is not the Ghidra prohibition — that
+   rule forbids names from DECOMPILER OUTPUT, not from the binary's own text.
+2. **A callee or caller that types it.** A mangled C++ name carries argument
+   types; a field passed to `Scrambler<h,h>::process` has that element type
+   because the mangling says so, not because it looked right.
+3. **Usage inference.** Weakest. Say so in the finding when it is all you have.
+
+**Naming something wrongly is worse than leaving it padded**, because a wrong
+name is believed by every future reader, and no test can fail on it. Where the
+role can be bounded but not established, keep a neutral name and put the
+derivation in the comment — 3120 declined `+0x2f64` on exactly this ground and
+that was the right call.
+
 ## One type, one home
 
 A `class`, `struct`, `enum` or `union` is **defined in exactly one file**.
