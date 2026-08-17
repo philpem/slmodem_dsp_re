@@ -176,6 +176,53 @@ at some point the reconstruction stops being a reconstruction and becomes the
 source, and that is when the remaining address citations are worth a final
 sweep. Recording it here so it is not forgotten, not proposing it now.
 
+## 3a. Casts — 1,157 pointer, 4,804 width, and only 24 are the bad kind
+
+**A cast is a claim, and in this tree it is usually a claim that a DECLARATION
+is wrong.** Used sparingly it states something the type system cannot; used
+freely it hides a type error behind a syntax that compiles.
+
+Measured in `src/`:
+
+| kind | count |
+|---|--:|
+| pointer casts `(T *)` | 1,157 |
+| — of which type-punning `*(T *)&` | **24** |
+| width / truncation `(short)`, `(int)` | 4,804 |
+| — of which adjacent to a shift (the Q15 idiom) | 394 |
+| `(float)` / `(double)` | 189 |
+| bare `(unsigned)` | 430 |
+
+**Three categories, and only one of them is cleanup.**
+
+**FORCED — keep, and say why.** The object truncates, sign-extends or widens,
+and the cast is how C spells that. A `(short)` reproducing a `cwtl`, a
+`(unsigned short)` reproducing a `movzwl`, `(int)a * b >> 15` reproducing a
+Q15 multiply — these are EVIDENCE, and findings 613, 614 and 2702 are the tree
+arguing about exactly this class. Removing one changes behaviour. **The 4,804
+width casts are mostly this, and are NOT a cleanup target** — sweeping them
+would be actively harmful.
+
+**PAPERING OVER A WRONG DECLARATION — remove, by fixing the declaration.** The
+24 type-punning sites are the extreme case: `*(int *)&o->f25d0` writes four
+bytes through a field modelled as narrower, which says the field is declared
+wrong. The fix is the declaration — a wider type, an array, or a union, which is
+defined C where a pointer cast is not. §3a's test: **if removing the cast
+changes nothing the object does, the cast was hiding a type error.**
+
+**CONVENIENCE — remove.** A cast written to silence a warning or to make a call
+site compile is the worst kind, because it converts a real mismatch into
+something that looks deliberate.
+
+**The rule:** every cast should survive the question *"what forces this?"* with
+an answer that is the object's behaviour or a genuine limit of C. "It made the
+types line up" is not an answer — it is a declaration bug wearing a cast.
+
+Note the shape of the numbers: 1,157 pointer casts is a lot, but only 24 are
+punning. The rest are `void *` from allocators and dispatch-table casts, most of
+which are legitimate. **Do not sweep by count.** The 24 are a task; the 1,157
+are a category to be careful in.
+
 ## 4. Naming — 304 offset-named fields, 189 bare `fNNNN`, 148 unnamed flags, 90 `pad_*`
 
 Governed by `docs/plan.md` §3, which stands unchanged: **name inside the batch
