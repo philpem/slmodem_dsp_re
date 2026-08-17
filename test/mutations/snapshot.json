@@ -7673,6 +7673,34 @@
     "the type bit selects the wrong form": "caught",
     "the values and counts block is four frames, not five": "caught"
    }
+  },
+  "v90trn2design": {
+   "key": "33b7b9b84f197dc2dfd42ca8255ba506be480ca307e79534985dc72c8f3a77f2",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V90TRN2Design's dMin seed divides instead of multiplying by the reciprocal": "caught",
+    "a phase that placed nothing is treated as designed": "caught",
+    "maxK answers a zero product the other way round": "caught",
+    "maxK changes base to 10 rather than to 2": "caught",
+    "maxK drops the 1e-6 guard, which only an exact power of two can see": "caught",
+    "maxK rounds to nearest instead of truncating towards zero": "caught",
+    "setNofUcodesInTrn2 tests its argument as an int rather than a short": "caught",
+    "setNofUcodesInTrn2 treats a negative short as off": "caught",
+    "the ceiling takes the smaller of the two rather than the larger": "caught",
+    "the codec fill never takes the ucode in place of the companded level": "caught",
+    "the codec fill takes the same arm whichever way the two PcmTypes compare": "caught",
+    "the dummy fill leaves the codec table alone": "caught",
+    "the dummy fill runs one entry too far": "caught",
+    "the dummy fill starts at 77 rather than 78": "caught",
+    "the frame's bit count loses its +6": "caught",
+    "the power ladder is indexed without the relocation's inline +4": "caught",
+    "the retry cap is 198 rounds rather than 199": "caught",
+    "the retry cap is 200 rounds rather than 199": "caught",
+    "the scan ignores the permission table": "caught",
+    "the scan's lower bound excludes its own endpoint": "caught",
+    "the shaper identifier is not limited by the lookahead": "caught",
+    "the two spectral shaper arms are exchanged": "caught"
+   }
   }
  }
 }

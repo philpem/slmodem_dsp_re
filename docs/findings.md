@@ -65104,3 +65104,221 @@ The general lesson is the one 4600 already paid for once: **a new function
 that repeats an old one's body is a second reading of that body, and where the
 two disagree the object is the arbiter.**  Three symbols carry this loop and
 now all three carry it the same way.
+### 4400. `V90TRN2Designer::maxK` GUARDS ITS TRUNCATION WITH 1e-6 AND THE GUARD RUNS OUT AT 2^22, SO EVERY LARGE POWER OF TWO COMES BACK ONE BIT SHORT
+
+`maxK` (0x3ca30, 204 bytes) is log2 of the product of the six constellation
+lengths, and it is written as a base change through log10 rather than as a
+`fyl2x` against 1:
+
+    fldlg2 ; fxch ; fyl2x           log10(product), extended precision
+    flds .rodata.cst4+0x2b0         2.0f
+    fldlg2 ; fxch ; fyl2x           log10(2), extended precision
+    fstps 0xc(%esp) ; flds 0xc(%esp)    ROUNDED TO FLOAT, then reloaded
+    fdivrp                          (Intel FDIVP -- finding 245)
+    fadds .rodata.cst4+0x2b4        + 1e-6f
+    or $0xc00 ... fistpll           truncate towards zero
+
+**THE DIVISOR IS ROUNDED TO A FLOAT AND THE DIVIDEND IS NOT.**  That is the
+whole of it.  `(float)log10(2)` is `0x3E9A209B` = 0.30103000998497009, against
+a true 0.30102999566398119 -- larger by 4.757e-8 in relative terms.  So
+
+    q = k * log10(2) / (float)log10(2) = k * (1 - 4.757e-8)
+
+and the quotient for an exact power of two lands `k * 4.757e-8` BELOW `k`.
+The 1e-6 covers that only while
+
+    k * 4.757e-8 < 1e-6      i.e.  k <= 21.02
+
+Measured, and the object agrees with the arithmetic at every point:
+
+| product | quotient | `maxK` |
+|---|--:|--:|
+| 2^18 | 18.000000143680722 | 18 |
+| 2^20 | 20.000000048534135 | 20 |
+| **2^21** | **21.000000000960842** | **21** |
+| **2^22** | **21.999999953387549** | **21** |
+| 2^36 | 35.999999287361446 | 35 |
+| 2^42 | 41.999990019216872 | 41 |
+| 2^60 | 59.999998145602411 | 59 |
+
+2^21 clears the guard by 9.6e-10 and 2^22 misses it by 4.7e-8, which is why
+`test/unit/t_v90trn2design.cpp` drives both: they are one bit apart and they
+bracket the entire behaviour.  Every case's expected value was derived from
+the arithmetic above in 60-digit decimal BEFORE the blob was asked, so the
+table is a prediction the object confirmed rather than a transcript of what it
+returned -- which is the difference between a test and a tautology.
+
+**IT IS REACHABLE, NOT A CORNER.**  `V90TRN2Design` inlines `maxK` and uses
+its result as `mappingParams->word_0 = k - shaperSR + 6`, and
+`V90ConstellationPower` reads that back as
+`codewordCount = 1LL << (shaperSR + word_0 - 6)` -- so the value IS the frame's
+bit count, V.90 downstream frames carry into the forties, and every power-of-two
+constellation product above 2^21 is designed one bit small.  D470 carries it.
+
+Two things this is NOT.  It is not float-vs-double in the PRODUCT: the six
+`fildll`/`fmulp` never leave the register, so the product is extended
+whatever it is declared, and the declaration shows up only in the `fcoms`
+against a float zero.  And it is not the ordering of the guard against the
+truncation: moving the `+1e-6` inside or outside the cast changes nothing,
+because the control word is already set to round towards zero.
+
+### 4401. GCC 3.4.2 NEEDS `-ffast-math` TO INLINE `log10`, NOT `-funsafe-math-optimizations`, AND FINDING 876's FLAG IS MEASURED INSUFFICIENT
+
+Finding 876 records that the `fldlg2`/`fxch`/`fyl2x` sequence is what GCC
+emits for `log10()` "only under `-funsafe-math-optimizations`", and three
+files -- `Psd.cpp`, `V90Equalizer.cpp`, `VPcmFloModem.cpp` -- carry an inline
+x87 helper on the strength of it.  The CONCLUSION is right and the flag is
+not.  Measured on the period compiler in `tools/toolchain/` (GCC 3.4.2 exact,
+`dsplibs-tc342`), one probe function whose body is
+`log10(prod) / (float)log10(2.0f)`, compiled at `build.sh`'s exact flag list
+plus one:
+
+| extra flag | log10 |
+|---|---|
+| (nothing) | `call log10` |
+| `-funsafe-math-optimizations` | `call log10` |
+| `-funsafe-math-optimizations -fno-math-errno` | `call log10` |
+| `-funsafe-math-optimizations -fno-trapping-math` | `call log10` |
+| `-fno-math-errno` | `call log10` |
+| **`-ffast-math`** | **`fldlg2 ; fxch ; fyl2x`** |
+
+So `-funsafe-math-optimizations` is NECESSARY and not SUFFICIENT for a
+`double` argument, and nothing narrower than the whole of `-ffast-math`
+reproduces the object.  That strengthens 876's ruling rather than weakening
+it: the flag that would be needed is the one CLAUDE.md records withdrawing
+NaN semantics from a whole translation unit and breaking eleven other sites,
+so it is further out of reach than 876 thought, and the inline-asm helper is
+the only route.  `V90TRN2Designer.cpp` carries the fourth copy.
+
+**AND THE OBJECT COMPUTES `log10(2.0f)` AT RUNTIME**, which is itself
+evidence about the compiler: GCC 3.4 has no constant folding for `log10`, so
+a literal argument reaches the inline expander and is evaluated on the
+coprocessor at every call.  A compiler that folded it would have left the
+constant 0.30103f in `.rodata` and no second `fyl2x`, and finding 4400's
+whole behaviour would not exist -- the fold would have used the correctly
+rounded value.
+
+### 4402. THE `V90TRN2Designer` OBJECT IS EIGHT BYTES AND FIVE OF ITS SIX MEMBERS PROVE IT, WHICH IS WHY `maxK` TAKES ITS TABLE AS AN ARGUMENT
+
+`include/dsplib/V90TRN2Designer.h` bounded the class at eight bytes across
+four members and said the bound's scope was four, because `V90TRN2Design` had
+not been read.  Three more members are now written and the bound is unchanged:
+`setNofUcodesInTrn2` reaches `(%ecx)` and nothing else, `setTrn2DummyConstel`
+reaches `0x0(%ebp)` and nothing else, and **`maxK` does not touch `this` at
+all** -- its 204 bytes work entirely through the `V90MappingParams *` it is
+handed, which is why it can be tested with a null designer.
+
+That is worth recording because it is the shape a designer HAS in this object:
+the constellation table is not a member, it is passed in, and the class holds
+only the two collaborators the constructor stored.  `V90ConstellationDesigner`
+is the opposite -- it holds its `mappingParams` -- so the two are not
+interchangeable and a reader coming from one to the other will expect the
+wrong thing.
+
+### 4403. `V90TRN2Design` SPELLS ONE DIVIDE AS A RECIPROCAL-MULTIPLY AND THE OTHER AS A DIVIDE, IN THE SAME FUNCTION, AND BOTH SPELLINGS ARE IN THE SOURCE
+
+The function computes a starting `dMin` twice over, once in each of its two
+design arms, from the same quantities.  The two arms compile to different
+instructions and **the compiler cannot be the reason**, because the
+transformation that turns one into the other is exactly what
+`-funsafe-math-optimizations` licenses and this tree's flags do not set it.
+
+    iterative arm     fld1 (hoisted out of the loop)
+    0x3cece..0x3cf25  fdivr %st(3),%st ; fmulp %st,%st(2)      x * (1/y)
+    free arm          fildl ; fsubs ; filds ; fmuls
+    0x3d7a6..0x3d7ee  de f1 -- Intel FDIVRP, one instruction   x / y
+
+Measured on the period compiler, one probe per spelling at `build.sh`'s exact
+flags: `(short)(lm[u] / (N - 0.5f))` emits `fildl/fsubs/fild/fdivp` and
+`(short)(lm[u] * (1.0f / (N - 0.5f)))` emits `fdivrs`+`fmulp`.  The blob's
+free arm is the first sequence instruction for instruction; the iterative arm
+is the second with the 1.0 in a register instead of memory, which is what
+loop-invariant hoisting does to a constant used twice in a loop.
+
+**AND THE `fld1` IS CONSUMED TWICE**, at `%st(3)` for the seed and at `%st(4)`
+for the per-round update, which couples the two: a plain divide in the update
+would leave the constant with one consumer and it would not still be on the
+stack at that depth.  So the update is a reciprocal-multiply for the same
+reason the seed is, and that is structural rather than separately measured.
+
+**IT IS NOT A FREE CODEGEN DIFFERENCE.**  Both results go straight through a
+`(short)` truncation and become a constellation's minimum spacing, so a last-
+bit difference is a different constellation.  Searched in 80-bit arithmetic
+over every `(N, level)` pair up to 32 x 32768: the first that separates the
+two spellings is **N = 21, level = 41**, where the reciprocal gives dMin 1 and
+the divide gives 2, and a linear fully-permitted table then designs
+consecutive ucodes under one and every other ucode under the other.
+`test/unit/t_v90trn2design.cpp` drives exactly that, and mutating the source
+to a divide turns it red.
+
+The per-round update's spelling is separated by the coupling above and NOT by
+a behavioural trial: the same search over `(N, dMin, v)` finds separators only
+where `v` is negative -- the scan's stopping value below zero -- and every
+construction that reaches one also runs the retry loop out and fails on both
+sides, which `setTrn2DummyConstel` makes identical again.  Said here rather
+than left to be rediscovered.
+
+### 4404. `V90TRN2Design`'S TWO DESIGN ARMS SHARE ONE COUNTER WITH OPPOSITE SENSES, AND THE FAILURE TEST IS THE SAME `>= 0` FOR BOTH
+
+The stack slot at `0x94(%esp)` is a `short` and it is two source variables:
+
+  - in the `dmin[k] != 0` arm it COUNTS UP -- the number of ucodes placed,
+    which starts at 1 the moment `constellation[k][0]` is stored and rises to
+    `params->nofUcodesInTrn2` on success;
+  - in the `dmin[k] == 0` arm it COUNTS DOWN -- the index being filled, from
+    `nofUcodesInTrn2 - 1` to -1.
+
+Both arms then converge on `cmpw $0x0,0x94(%esp) ; jns 3d913`, so **a
+non-negative value means the phase failed** whichever arm produced it.  That
+reads backwards for the counting arm until you notice the arm exits early --
+`cmp 0x78(%ebp),%esi ; je 3d294` -- whenever the count reached the target, so
+anything that arrives at the shared test has already failed.
+
+**THE ONE VALUE THAT SEPARATES `>= 0` FROM `> 0` IS ZERO, AND ONLY THE
+DESCENDING ARM CAN PRODUCE IT.**  The counting arm stores before it counts, so
+it is at 1 or more from its first round; the descending arm reaches 0 by
+breaking on its LAST placement.  A random sweep of 240 trials never produced
+it and the mutation survived; the case is now built rather than searched --
+two ucodes to place, a linear table, and a `topUcode` the walk reaches on the
+first placement, which is 11 because the threshold is `dMin / 2` and dMin is
+23.  `test/unit/t_v90trn2design.cpp` asserts the outcome is a FAILURE, which is
+what makes it a separator instead of another passing row.
+
+### 4405. `V90TRN2Design`'s PHASE-K DIVIDE IS AN EQUIVALENT MUTANT OVER THE WHOLE DRIVABLE DOMAIN, AND THAT IS SEARCHED RATHER THAN ASSUMED
+
+`test/mutations/v90trn2design.json` is 22 mutations and all 22 are caught by
+`t_v90trn2design`.  A twenty-third was written, run, and NOT included, and the
+reason is worth more than the entry would have been.
+
+Spelling the `dmin[k] == 0` arm's divide as a reciprocal-multiply --
+`0.85f * L * (1.0f / (N - 0.5f))` in place of `0.85f * L / (N - 0.5f)` --
+changes the instructions (finding 4403 measures that) and changes NOTHING
+observable.  Searched in 80-bit arithmetic over the entire domain the object
+can be given: every `N` from 1 to 64 against every `L` from 1 to 32767, which
+is the whole of what an `int` parameter and a `short` level table can supply,
+and the two spellings agree after the `(short)` truncation at every one of
+those 2,097,088 points.
+
+**That is the OPPOSITE of the seed divide in the other arm**, where the same
+search found separators immediately -- N = 21, level = 41 -- and the mutation
+is caught.  One expression family, two sites, and only one of them is
+reachable by a differential test.  So the phase-K site is settled by the
+codegen tier alone, and the honest record is that a mutation there would sit
+in the register for ever reading NOT CAUGHT while the source was right, which
+is finding 3403's failure mode with the sign reversed: a counter that cannot
+move is as useless as one that moves for the wrong reason.
+
+**THE THREE THAT NEEDED BUILT INPUTS.**  Three of the 22 survived a
+240-trial pseudorandom sweep and were only caught once the input was
+constructed for them, which is finding 3509's point stated positively:
+
+  - `maxK`'s 1e-6 guard, which bites only on an EXACT POWER OF TWO
+    (finding 4400);
+  - `slot >= 0` against `slot > 0`, which differ only at zero, reachable
+    only by the descending arm breaking on its last placement, and only on a
+    table with a STEP at `topUcode` rather than a ramp (finding 4404);
+  - the 199-round retry cap, which shows only where a design succeeds later
+    than the mutated cap and no later than the real one.  Sweeping the height
+    of that step makes the round count rise smoothly through the window, and
+    the suite now catches **199 -> 198**, an off-by-one in a constant that a
+    random sweep could not touch at all.

@@ -631,5 +631,9 @@
  "v90cpb2i": [
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cpb2i"
+ ],
+ "v90trn2design": [
+  "src/pump/v90/V90TRN2Designer.cpp",
+  "build/test/t_v90trn2design"
  ]
 }
