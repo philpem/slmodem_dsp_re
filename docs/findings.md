@@ -74276,3 +74276,32 @@ compared because it had never been written.
 The source now reads `msgLen = word_11c; if (evaluateCRC()) { ... }`, and the
 mutation that found it is replaced by one on the closing frame's length, which
 IS caught.
+
+## 6610. A FUNCTION-LOCAL STATIC'S `.bss` OFFSET DOES NOT RECORD ITS DECLARATION ORDER
+
+`V90CP.cpp` says of its two statics "declared in this order because that is
+the order they occupy in .bss", and `V92CP::bitsToInfo` was written with the
+same reasoning: the blob has `gamma` at .bss+0x0 and `delta` at +0x4, so
+`gamma` was declared first.
+
+**Measured, and it does not follow.** Compiled with the period GCC 3.4.2 at
+the tree's own flags, our object comes out
+
+    00000000 b _ZZN5V92CP10bitsToInfoEhE5delta
+    00000004 b _ZZN5V92CP10bitsToInfoEhE5gamma
+
+-- `delta` first -- and **it comes out that way with the declarations in
+EITHER order**. Both arrangements were built and the layout did not move. The
+blob's order is therefore not evidence about the original's source and cannot
+be reproduced by reordering declarations; whatever decides it (the layout is
+not alphabetical in the blob, so it is not the rule ours follows either) is
+not established here.
+
+**Nothing observes it.** The offsets are within one object's `.bss` and no
+member reads a static by address. The source keeps `gamma` first so that a
+reader comparing against `nm ref/slmodemd/dsplibs.o` sees the same order, with
+the comment saying that is documentation and not derivation.
+
+**`V90CP.cpp`'s claim is inherited and is now suspect for the same reason.**
+It is not corrected here -- that file is another batch's and `alpha`/`beta`
+have not been re-measured -- but anybody touching it should read this first.

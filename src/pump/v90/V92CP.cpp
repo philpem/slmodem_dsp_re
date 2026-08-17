@@ -1047,8 +1047,10 @@ V92CP::evaluateInfo()
  *
  * THE TWO STATICS ARE FUNCTION-LOCAL AND IN .bss, mangled
  * `_ZZN5V92CP10bitsToInfoEhE5gamma` at +0x0 and `...E5delta` at +0x4, so
- * their C++ names are the author's and their DECLARATION ORDER is fixed by
- * their addresses -- gamma first.  Each holds the bit length of one mask
+ * their C++ names are the author's.  THEIR ADDRESSES DO NOT FIX A
+ * DECLARATION ORDER and finding 6610 measured that: GCC 3.4.2 lays them out
+ * the same way whichever order they are declared in, and the way it lays them
+ * out is not the blob's.  Each holds the bit length of one mask
  * block, computed once `evaluateInfo` has decoded the group count and
  * compared against `word_120` while the block arrives:
  *
@@ -1074,8 +1076,13 @@ int
 V92CP::bitsToInfo(unsigned char bit)
 {
 	/*
-	 * Declared in this order because that is the order they occupy in
-	 * .bss -- gamma at +0x0, delta at +0x4.
+	 * Declared gamma first because that is the order they occupy in the
+	 * blob's .bss -- gamma at +0x0, delta at +0x4 -- and NOT because the
+	 * declaration order puts them there.  MEASURED, both ways round: GCC
+	 * 3.4.2 emits `delta` at +0x0 and `gamma` at +0x4 whichever order the
+	 * declarations are in, so the blob's order is not recoverable from
+	 * this and the source is written to document it rather than to
+	 * reproduce it.  Nothing observes either offset.  Finding 6610.
 	 */
 	static unsigned int gamma;
 	static unsigned int delta;

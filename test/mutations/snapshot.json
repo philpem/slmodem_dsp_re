@@ -7110,7 +7110,7 @@
    }
   },
   "v92cpb2i": {
-   "key": "45de2c86252af2b68a5cc747da0c45f1ef69c5c20e0738c60de3ce03cf6629b6",
+   "key": "5d6fbcd5343b017e9db0a063ed39d3c425b69dc7e00050072e68b82f6addb1b5",
    "summary": "49 mutations: 47 caught (47 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a ONE does not clear the run of zeros": "caught",
