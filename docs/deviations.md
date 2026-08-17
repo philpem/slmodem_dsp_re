@@ -8094,5 +8094,7 @@ does; `t_v90loadparams` compares the two logs entry for entry and would fail
 if it did not. What would settle the name outright is a reader of +0x0f4 --
 `V90Jd` or whatever consumes the TRN1 quality-control betas -- naming it in a
 diagnostic. That is CLAUDE.md's evidence rule 1, a format string that prints
-the thing, and it is how other `unnamed_*` slots in this class have been
-retired; nothing weaker should retire this one.
+the thing, and it is exactly how finding 3527 retired +0x074 and +0x078 in
+this same class: `V90TRN2Design`'s own `%d` line named `maxUcode` and
+`nofUcodesInTrn2`, and the slot beside them at +0x080 kept its offset name
+because no string reached it. Nothing weaker should retire this one either.
