@@ -50,13 +50,13 @@
  },
  {
   "label": "getBitVector reports the other length",
-  "find": "\tlength = word_90c;",
-  "replace": "\tlength = word_910;"
+  "find": "\tlength = vectorLen;",
+  "replace": "\tlength = msgLen;"
  },
  {
   "label": "getBitVector hands back the CRC register",
-  "find": "\tlength = word_90c;\n\n\treturn bits;",
-  "replace": "\tlength = word_90c;\n\n\treturn crc;"
+  "find": "\tlength = vectorLen;\n\n\treturn bits;",
+  "replace": "\tlength = vectorLen;\n\n\treturn crc;"
  },
  {
   "label": "setSUV stores fifteen rather than sixteen",
@@ -75,13 +75,13 @@
  },
  {
   "label": "the message runs to the very end",
-  "find": "\tunsigned int n = word_910 - 17;",
-  "replace": "\tunsigned int n = word_910;"
+  "find": "\tunsigned int n = msgLen - 17;",
+  "replace": "\tunsigned int n = msgLen;"
  },
  {
   "label": "the message stops sixteen short, not seventeen",
-  "find": "\tunsigned int n = word_910 - 17;",
-  "replace": "\tunsigned int n = word_910 - 16;"
+  "find": "\tunsigned int n = msgLen - 17;",
+  "replace": "\tunsigned int n = msgLen - 16;"
  },
  {
   "label": "no position is skipped",
@@ -135,23 +135,25 @@
  },
  {
   "label": "evaluateCRC does not reset the register first",
-  "find": "\tresetCRC();\n\tcalcCRC();",
-  "replace": "\tcalcCRC();"
+  "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
+  "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();",
+  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding 4708's shape a second time."
  },
  {
   "label": "evaluateCRC resets after calculating",
-  "find": "\tresetCRC();\n\tcalcCRC();",
-  "replace": "\tcalcCRC();\n\tresetCRC();"
+  "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
+  "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();\n\tresetCRC();",
+  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding 4708's shape a second time."
  },
  {
   "label": "the received CRC is read from the front of the message",
-  "find": "\t\tint d = (int)crc[j] - (int)bits[word_910 - V92CP_CRC + j];",
+  "find": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];",
   "replace": "\t\tint d = (int)crc[j] - (int)bits[j];"
  },
  {
   "label": "the received CRC is one place off",
-  "find": "\t\tint d = (int)crc[j] - (int)bits[word_910 - V92CP_CRC + j];",
-  "replace": "\t\tint d = (int)crc[j] - (int)bits[word_910 - V92CP_CRC + j - 1];"
+  "find": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];",
+  "replace": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j - 1];"
  },
  {
   "label": "the difference is signed rather than absolute",
@@ -160,8 +162,8 @@
  },
  {
   "label": "the accumulator is wider than a byte",
-  "find": "\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[word_910 - V92CP_CRC + j];\n\n\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));\n\t}\n\n\treturn acc == 0;",
-  "replace": "\tunsigned int wide = 0;\n\n\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[word_910 - V92CP_CRC + j];\n\n\t\twide += (unsigned int)(d < 0 ? -d : d);\n\t}\n\tacc = (unsigned char)wide;\n\n\treturn wide == 0;"
+  "find": "\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));\n\t}\n\n\treturn acc == 0;",
+  "replace": "\tunsigned int wide = 0;\n\n\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\twide += (unsigned int)(d < 0 ? -d : d);\n\t}\n\tacc = (unsigned char)wide;\n\n\treturn wide == 0;"
  },
  {
   "label": "the verdict is inverted",

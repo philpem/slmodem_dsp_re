@@ -17,28 +17,30 @@
  * 0x918 = 2328, and the last field the class touches is the four-byte
  * +0x914, which ends exactly there.
  *
- * WHICH MEMBER PROVED WHICH OFFSET.  Only the constructor and the destructor
- * are defined here; the rest of the map was read out of members that are
- * declared and deliberately left undefined:
+ * WHICH MEMBER PROVED WHICH OFFSET.  The constructor, the destructor and the
+ * seven small members are in src/pump/v90/V92CP.cpp; `infoToBits` is there
+ * too and is what proved everything below +0x104.  The rest of the map was
+ * read out of members that are declared and deliberately left undefined:
  *
- *     +0x004                  the constructor, and nothing else
+ *     +0x000..+0x103          `infoToBits` (0x4ec80), which packs the whole
+ *                             block into `bits`, and `setV92CPpckFromParams-
+ *                             Info` (0x33920), which fills it
  *     +0x104,+0x108           `setSUV` (0x4e920), whose whole body is
  *                             "+0x104 = 16; +0x108 = the argument"
  *     +0x114,+0x119,+0x11a,   `resetDetector` (0x4e830), whose whole body is
  *     +0x11c,+0x120           these five stores
+ *     +0x118,+0x128           `infoToBits`
  *     +0x129                  `getBitVector` (0x4ebe0) returns `this+0x129`
  *     +0x8f9                  `resetCRC` (0x4e5d0) writes 1 to sixteen bytes
  *                             from here
- *     +0x90c                  `getBitVector` reports it as the length
- *     +0x910                  `calcCRC` (0x4e5f0) bounds its loop with it and
- *                             `evaluateCRC` (0x4e940) finds the received CRC
- *                             at its end -- a word, not the pad it was
+ *     +0x90c,+0x910           `infoToBits` writes both and fixes the relation
+ *                             between them; see `msgLen` and `vectorLen`
  *     +0x914                  `reset` (0x4e860) and the constructor set -1
  *
- * SEVEN OF THE TWELVE ARE NOW WRITTEN.  `getBitVector`, `setSUV`, `resetCRC`,
- * `resetDetector`, `reset`, `calcCRC` and `evaluateCRC` are in
- * src/pump/v90/V92CP.cpp with the constructor and destructor; `evaluateInfo`,
- * `infoToBits` and `bitsToInfo` are the three still declared and undefined.
+ * EIGHT OF THE TWELVE ARE NOW WRITTEN.  `getBitVector`, `setSUV`, `resetCRC`,
+ * `resetDetector`, `reset`, `calcCRC`, `evaluateCRC` and `infoToBits` are in
+ * src/pump/v90/V92CP.cpp with the constructor and destructor; `evaluateInfo`
+ * and `bitsToInfo` are the two still declared and undefined.
  *
  * The destructor is one byte -- a bare `ret`.  That is not an assumption
  * about an empty class: nothing here is allocated, and the V.90 sibling with
@@ -69,6 +71,28 @@
 
 /* The CRC register: sixteen bytes, one per bit, `resetCRC` sets them all. */
 #define V92CP_CRC	16
+
+/*
+ * THE MESSAGE IS SEVENTEEN-ENTRY GROUPS: one zero followed by sixteen
+ * payload entries.  `infoToBits` writes the zero at every index that is a
+ * multiple of seventeen -- 17, 34, 51, 68, 85, 102, 119 are all spelled out
+ * as constant displacements -- and `calcCRC` skips exactly those indices,
+ * `if (i % 17 == 0) i++`.  The first group, indices 0..16, is seventeen ONES
+ * and carries no marker.
+ */
+#define V92CP_GROUP	17
+
+/*
+ * The two mask blocks at +0x042 and +0x0a2 hold six groups of eight 16-bit
+ * words each, and both numbers are forced rather than modelled.  EIGHT: the
+ * outer loop of `setV92CPpckFromParamsInfo` advances the block pointer by
+ * `add $0x10,%edi` -- sixteen bytes -- and zeroes eight words with
+ * `cmp $0x7,%eax; jbe` before filling them.  SIX: the two blocks abut, and
+ * 0x0a2 - 0x042 = 0x60 = six times sixteen; 0x0a2 + 0x60 = 0x102, which is
+ * where the next field's alignment padding begins.
+ */
+#define V92CP_GROUPS	6
+#define V92CP_MASKS	8
 
 class V92CP {
 public:
@@ -106,42 +130,162 @@ public:
 	/* Public for the same reason as V90Jd's and V90CP's: it keeps the
 	 * class standard-layout, so the offsetof assertions are well defined. */
 
-	unsigned char pad_00[4];	/* +0x000 not modelled            */
+	/*
+	 * ===================================================================
+	 * +0x000 .. +0x103  THE MESSAGE FIELDS, which `infoToBits` packs into
+	 * `bits` and `setV92CPpckFromParamsInfo` fills.
+	 *
+	 * SHAPE IS MEASURED AND MEANING IS NOT.  Every type below is forced by
+	 * an instruction -- a store width, a load's extension whose 32-bit
+	 * result is used, or an index stride -- and every one of them is
+	 * NAMED BY ITS OFFSET, because nothing written establishes what any of
+	 * them holds.  `V92CPUnPck` is a different struct at
+	 * `VPcmFloModem+0x254c` whose author-printed names are tempting and
+	 * are NOT carried across: the correspondence would be adjacency and
+	 * not evidence, and CLAUDE.md's "a wrong name is worse than a pad"
+	 * covers exactly that.  `bitsToInfo` and `evaluateInfo` are the two
+	 * unwritten members that read this block; either may settle it.
+	 * ===================================================================
+	 */
+
+	/* +0x000  `bits[18]`, stored whole rather than masked, and then
+	 * tested against ONE -- `dec %al; je` -- to choose between the short
+	 * two-group message and everything else. */
+	unsigned char byte_00;
 
 	/*
-	 * +0x004  Cleared by the constructor and NOT by `reset`, which is the
-	 * whole difference between the two.  THREE MEMBERS OF ANOTHER CLASS
-	 * ALSO WRITE IT: `V92Phase4Modulator::recivedCP` and
-	 * `::recivedPartOneSilenceRrnSUV` set it to 1 and
-	 * `::resetRRNSecondSection` clears it, all through the `V92CP *` that
-	 * class holds at its own +0x74.  So a received CP or the first part of
-	 * an RRN SUV raises it and the second section of an RRN lowers it;
-	 * what it MEANS is still not established, because no member of this
-	 * class that reads it is written.  Findings 1282 and 4700.
+	 * +0x001  SIGNED, and forced: `cmp $0x1,%bl; jle` and `dec %bl; jle`
+	 * are signed byte branches where an `unsigned char` would have given
+	 * `jbe`, and `sar $1,%al` is an arithmetic shift of the byte.  Two of
+	 * its bits go out at `bits[19]` and `bits[20]`, its whole value is
+	 * copied to +0x118, and `<= 1` selects the long form of the message.
+	 */
+	signed char char_01;
+
+	/*
+	 * +0x002  SIGNED, and forced the strong way: `movsbl 0x2(%edi),%ecx`
+	 * with the 32-bit result shifted arithmetically EIGHTEEN times.
+	 * `infoToBits` takes five bits of it into `bits[21..25]` and then --
+	 * out of the same register, with no reload -- thirteen more into
+	 * `bits[36..48]`.  Those thirteen are the sign extension of a byte;
+	 * that is what the object does and it is reproduced.
+	 */
+	signed char char_02;
+
+	/* +0x003  `bits[35]`, stored whole. */
+	unsigned char byte_03;
+
+	/*
+	 * +0x004  `bits[33]`, stored whole, and separately non-zero raises
+	 * +0x110 at the end of `infoToBits`.  Cleared by the constructor and
+	 * NOT by `reset`, which is the whole difference between the two.
+	 * THREE MEMBERS OF ANOTHER CLASS ALSO WRITE IT:
+	 * `V92Phase4Modulator::recivedCP` and `::recivedPartOneSilenceRrnSUV`
+	 * set it to 1 and `::resetRRNSecondSection` clears it, all through the
+	 * `V92CP *` that class holds at its own +0x74.  Findings 1282, 4700.
 	 */
 	unsigned char byte_04;
 
-	unsigned char pad_05[0xff];	/* +0x005 not modelled            */
+	unsigned char pad_05[3];	/* +0x005 alignment               */
 
-	/* +0x104  `setSUV` stores 16 here before storing its argument. */
-	unsigned int word_104;
+	/* +0x008  UNSIGNED: `shr $1` on the 32-bit value.  Two bits, and they
+	 * go out at `bits[31]` and `bits[32]` -- over the top of two of the
+	 * seven zeros already written there -- only when `char_01 <= 1`. */
+	unsigned int word_08;
 
-	/* +0x108  `setSUV`'s argument. */
-	unsigned int suv;
-
-	unsigned char pad_10c[4];	/* +0x10c read by methods not written */
+	/* +0x00c  UNSIGNED, same shape: two bits at `bits[49]`, `bits[50]`. */
+	unsigned int word_0c;
 
 	/*
-	 * +0x110  Written only from OUTSIDE this class, and only by
-	 * V92Phase4Modulator: its constructor clears it (`mov %edi,0x74(%ebx);
-	 * mov %esi,0x110(%edi)` at .text+0x179ed with %esi zero), and so do
-	 * `recivedCP`, `resetBeforRRN` and `resetRRNSecondSection`.  Four
-	 * writers, all of them clears, none of them a member of V92CP.
+	 * +0x010  Sixteen magnitude entries at `bits[52..67]`, weights 4 down
+	 * to 2^-13 from `fltTable_2`, MOST significant at the HIGHEST index.
+	 * The only one of the five with no sign entry.
+	 */
+	float flt_10;
+
+	/*
+	 * +0x014 .. +0x020  Seven magnitude entries each from `fltTable_1`,
+	 * weights 1 down to 2^-6, again most significant at the highest
+	 * index, each followed by one entry that is `f < 0`.
+	 */
+	float flt_14;
+	float flt_18;
+	float flt_1c;
+	float flt_20;
+
+	/*
+	 * +0x024  `bits[128]`, stored whole, and separately a GATE: the second
+	 * mask block at +0x0a2 is emitted only when it is non-zero.
+	 * `setV92CPpckFromParamsInfo` gates the same block on the same byte,
+	 * `cmpb $0x0,0x24(%eax); je`.
+	 */
+	unsigned char byte_24;
+
+	unsigned char pad_25[3];	/* +0x025 alignment               */
+
+	/*
+	 * +0x028 .. +0x03f  Six four-byte entries.  FOUR BYTES is forced by
+	 * `setV92CPpckFromParamsInfo`, which zeroes +0x28 with `movl $0x0` and
+	 * indexes the block `(%edi,%ecx,4)` under `cmpl $0x5`; `infoToBits`
+	 * agrees on the stride, `0x28(%edi,%ebp,4)`.  Only FOUR BITS of each
+	 * reach the message, which is why the load there is a 16-bit one.
+	 *
+	 * The six are emitted in two runs because a group boundary falls
+	 * between them: entries 0..3 at `bits[103..118]` and entries 4..5 at
+	 * `bits[120..127]`, with the marker at 119 in between.
+	 */
+	int word_28[V92CP_GROUPS];
+
+	unsigned char pad_40[2];	/* +0x040 alignment               */
+
+	/*
+	 * +0x042 and +0x0a2  The two mask blocks, `V92CP_GROUPS` groups of
+	 * `V92CP_MASKS` words.  `infoToBits` sends `word_10c` groups of eight,
+	 * each word as its own seventeen-entry group -- a zero and then all
+	 * sixteen bits, least significant first.
+	 *
+	 * `short` is the reader's type and not the writer's: `infoToBits`
+	 * loads `movswl`, and `setV92CPpckFromParamsInfo` loads `movzwl` to
+	 * OR a bit in.  Sixteen bits are extracted either way, so nothing
+	 * observable turns on it and neither reading is preferred here.
+	 */
+	short short_42[V92CP_GROUPS][V92CP_MASKS];
+	short short_a2[V92CP_GROUPS][V92CP_MASKS];
+
+	unsigned char pad_102[2];	/* +0x102 alignment               */
+
+	/* +0x104  `setSUV` stores 16 here before storing its argument, as a
+	 * four-byte store; `infoToBits` reads the low half of it, sign
+	 * extended, and sends five bits of it at `bits[27..31]`. */
+	unsigned int word_104;
+
+	/* +0x108  `setSUV`'s argument.  `infoToBits` sends its low BYTE whole
+	 * at `bits[32]`. */
+	unsigned int suv;
+
+	/*
+	 * +0x10c  UNSIGNED and SIXTEEN BITS, both forced:
+	 * `setV92CPpckFromParamsInfo` stores it `mov %dx,0x10c(%edi)` and both
+	 * functions load it `movzwl`.  It is the number of groups of eight
+	 * that `infoToBits` takes out of each mask block, and NOTHING BOUNDS
+	 * IT -- the blocks hold six and the loop trusts the field.  See
+	 * docs/deviations.md.
+	 */
+	unsigned short word_10c;
+
+	unsigned char pad_10e[2];	/* +0x10e alignment               */
+
+	/*
+	 * +0x110  `infoToBits` raises it to 1 when `byte_04` is non-zero, and
+	 * that is the only writer inside this class.  Outside it, only
+	 * V92Phase4Modulator writes it: its constructor clears it
+	 * (`mov %edi,0x74(%ebx); mov %esi,0x110(%edi)` at .text+0x179ed with
+	 * %esi zero), and so do `recivedCP`, `resetBeforRRN` and
+	 * `resetRRNSecondSection`.
 	 *
 	 * `V92Phase4Modulator::recivedSUVtag` is the only READER written, and
-	 * it requires the word non-zero before it will take a transition -- so
-	 * something not yet written raises it and everything written lowers
-	 * it.  A four-byte store, so a word; what it counts is still not
+	 * it requires the word non-zero before it will take a transition.  A
+	 * four-byte store, so a word; what it counts is still not
 	 * established.  Named out of `pad_10c` by finding 1282; the extra
 	 * writers are finding 4700's batch.
 	 */
@@ -150,7 +294,9 @@ public:
 	/* +0x114  Zeroed by `resetDetector`, and so by `reset` and the ctor. */
 	unsigned int word_114;
 
-	unsigned char pad_118[1];	/* +0x118 not modelled            */
+	/* +0x118  `infoToBits` copies `char_01` here whole, and nothing
+	 * written reads it. */
+	unsigned char byte_118;
 
 	/* +0x119  Cleared by `resetDetector`.  One byte, stored as a byte. */
 	unsigned char byte_119;
@@ -160,13 +306,47 @@ public:
 
 	unsigned char pad_11b[1];	/* +0x11b alignment               */
 
-	/* +0x11c  Set to 18 by `resetDetector`. */
+	/*
+	 * +0x11c  Set to 18 by `resetDetector`.  In `infoToBits` it is the
+	 * WRITE CURSOR into `bits`: set to 34 once the first two groups are
+	 * out, then advanced by seventeen for every group after that, and
+	 * finally left one past the message's closing marker.  Eighteen is
+	 * the first payload index, so the detector's seed and the packer's
+	 * cursor are the same quantity counted from the same place -- but
+	 * `bitsToInfo` and `evaluateInfo` are the members that would settle
+	 * whether the receive side means the same thing by it, and neither is
+	 * written.  Kept neutral for that reason.
+	 */
 	int word_11c;
 
 	/* +0x120  Zeroed by `resetDetector`. */
 	int word_120;
 
-	unsigned char pad_124[5];	/* +0x124 not modelled            */
+	unsigned char pad_124[4];	/* +0x124 not modelled            */
+
+	/*
+	 * +0x128  HOW MANY BITS GO INTO ONE SYMBOL, and the name is the
+	 * CALLER'S rather than an inference from arithmetic:
+	 * `V92Phase4Modulator::recivedRt` assigns it from that class's own
+	 * `bitsPerSymbol` at its +0x43 -- `movzbl 0x43(%ebx),%eax; mov
+	 * %al,0x128(%edx)` at .text+0x177e6 -- and +0x43 was named from the
+	 * loop bound of `generateCPu`/`generateSUVu` and the count handed to
+	 * `Scrambler<h,h>::processAllOnes`.  That is CLAUDE.md's second
+	 * evidence tier, a callee or caller that types the field.
+	 *
+	 * It is consistent with what `infoToBits` does with it: the padded
+	 * length is rounded up to a multiple of `12 * bitsPerSymbol` --
+	 * `lea (%ebx,%ebx,2),%edx; lea 0x0(,%edx,4)` -- which is a whole
+	 * number of twelve-symbol frames, and five members of
+	 * V92Phase4Modulator then divide `vectorLen` by it to get a count in
+	 * SYMBOLS.  What the twelve counts is still not established.
+	 *
+	 * It is also the divisor of an unsigned `div`, so a zero here divides
+	 * by zero in the object as well as in ours; `infoToBits` stores 1
+	 * when `char_01` is zero, and V92Phase4Modulator writes it at five
+	 * sites.
+	 */
+	unsigned char bitsPerSymbol;
 
 	/* +0x129  The bit vector, one byte per bit.  See V92CP_BITS. */
 	unsigned char bits[V92CP_BITS];
@@ -176,35 +356,40 @@ public:
 
 	unsigned char pad_909[3];	/* +0x909 alignment               */
 
-	/* +0x90c  The sequence length `getBitVector` reports through its
-	 * reference argument. */
-	unsigned int word_90c;
+	/*
+	 * +0x90c  THE PADDED LENGTH, and what `getBitVector` reports.
+	 * `infoToBits` computes it as the next multiple of `12 * bitsPerSymbol`
+	 * STRICTLY GREATER than the message -- `n / q + 1` times `q`, so an
+	 * exact multiple still gains a whole quantum -- and zero-fills
+	 * `bits[msgLen + 1 .. vectorLen)` up to it.  Named with `msgLen`; see
+	 * there for why the pair could not be named before.
+	 */
+	unsigned int vectorLen;
 
 	/*
-	 * +0x910  The number of entries of `bits` the message occupies, its
-	 * sixteen CRC bits included.  Modelled and NOT named: `calcCRC` and
-	 * `evaluateCRC` are its only readers here, and between them they force
-	 * the shape without settling the word.
+	 * +0x910  THE MESSAGE LENGTH, its sixteen CRC entries included and its
+	 * padding excluded.  `infoToBits` sets it to one past the last CRC
+	 * entry, and every other user agrees with that reading:
 	 *
-	 * What they force.  `calcCRC` runs its shift register over
-	 * `bits[18 .. word_910 - 17)` -- `mov 0x910(%edi),%ebp; sub $0x11,%ebp`
-	 * at .text+0x4e600, then `cmp %ebp,%esi; jb` -- so the value is an
-	 * index bound into `bits`, and `jae`/`jb` make it UNSIGNED.
-	 * `evaluateCRC` then compares the sixteen bytes of `crc` against
-	 * `bits[word_910 - 16 + j]`: the address it forms is
-	 * `-0x7e0(%ecx,%edi,1)` with `%ecx` walking from `this + 0x8f9`, which
-	 * is `this + 0x119 + word_910 + j` and therefore `bits` at
-	 * `word_910 - 16 + j`.  So the last sixteen entries are the received
-	 * CRC and the value is a length rather than a capacity.
+	 *   - `calcCRC` clocks over `bits[18 .. msgLen - 17)`, which stops
+	 *     just before the marker that precedes the CRC.
+	 *   - `evaluateCRC` finds the received CRC at `bits[msgLen - 16 ..
+	 *     msgLen)`, so the last sixteen entries of the message are it.
+	 *   - `infoToBits` writes the marker at `msgLen`, the padding from
+	 *     `msgLen + 1`, and `vectorLen` above that.
 	 *
-	 * Why not a name.  `+0x90c` is ALSO a length -- it is what
-	 * `getBitVector` reports -- and nothing written here says which of the
-	 * two is the message and which the buffer, or whether they ever
-	 * differ.  `infoToBits` and `bitsToInfo` write them and are not
-	 * written.  Naming one of two lengths is exactly the guess CLAUDE.md
-	 * calls worse than a pad; this was `pad_910[4]` and is now a word.
+	 * WHY IT COULD NOT BE NAMED BEFORE, and what settled it.  This was
+	 * `word_910` for as long as the class held two lengths and only
+	 * READERS of them: `calcCRC` and `evaluateCRC` forced the shape --
+	 * an unsigned index bound into `bits` -- without saying which of the
+	 * two lengths was the message and which the buffer, and naming one of
+	 * two indistinguishable lengths is the guess CLAUDE.md calls worse
+	 * than a pad.  `infoToBits` is the WRITER of both, in the same eight
+	 * instructions, and the arithmetic between them is one-directional:
+	 * +0x910 is the message and +0x90c is +0x910 rounded up and
+	 * zero-filled.  Finding 4750.
 	 */
-	unsigned int word_910;
+	unsigned int msgLen;
 
 	/* +0x914  Set to -1 by `reset` and by the constructor. */
 	int word_914;

@@ -652,6 +652,231 @@ void V92Phase4Modulator::recivedSUVtag()
 
 /*
  * ===========================================================================
+ * THE FIVE HANDLERS THAT REBUILD THE CP MESSAGE
+ *
+ * Each of the five below, and `enterRepeatedCP` further down, ends with the
+ * same four statements:
+ *
+ *     cp->byte_00 = k;
+ *     cp->infoToBits();
+ *     pattern = cp->getBitVector(patternLength);
+ *     word_1b0 = patternLength / cp->bitsPerSymbol;
+ *
+ * -- pack the message, take the vector and its padded length, and turn that
+ * length into a count in SYMBOLS.  The blob holds that block once per
+ * function, with no call and no helper symbol anywhere in .text+0x16f20 ..
+ * +0x1783a, so it is written out at each site rather than factored into a
+ * helper the object does not have.  Finding 4754.
+ *
+ * `recivedSUV` and `recivedPartTwoSilenceRrnSUV` are 177 bytes each and the
+ * same 177 bytes: same guard, same modulus test, same `.rodata.str1.4:0x3c40`
+ * string, same tail.  Two ordinary GLOBAL symbols, not linkonce and not an
+ * alias, so the original spelled the body twice -- finding 1237's ruling for
+ * `reset` against the constructor, one class over.
+ * ===========================================================================
+ */
+
+/*
+ * recivedSUV (.text+0x17130, 177 B).  Acts once -- `word_1c4` is the latch --
+ * and only out of SUV.  Off a period boundary it goes to 6 instead and leaves
+ * the latch alone, so it can try again on the next symbol.
+ */
+void V92Phase4Modulator::recivedSUV()
+{
+	if (word_1c4 != 0 || state != V92P4M_STATE_SUV)
+		return;
+
+	if (symbolCount % word_1b0 != 0) {
+		state = 6;
+		return;
+	}
+
+	edprintf("V92Phase4Modulator: on recivedSUV enter CPu @ %d\r\n",
+		 symbolCount);
+	state = V92P4M_STATE_CPU;
+	symbolCount = 0;
+	cp->byte_00 = 0;
+	cp->infoToBits();
+	pattern = cp->getBitVector(patternLength);
+	word_1c4 = 1;
+	word_1b0 = patternLength / cp->bitsPerSymbol;
+}
+
+/* recivedPartTwoSilenceRrnSUV (.text+0x17200, 177 B).  The same body again;
+ * see the banner above for why it is repeated rather than shared. */
+void V92Phase4Modulator::recivedPartTwoSilenceRrnSUV()
+{
+	if (word_1c4 != 0 || state != V92P4M_STATE_SUV)
+		return;
+
+	if (symbolCount % word_1b0 != 0) {
+		state = 6;
+		return;
+	}
+
+	edprintf("V92Phase4Modulator: on recivedSUV enter CPu @ %d\r\n",
+		 symbolCount);
+	state = V92P4M_STATE_CPU;
+	symbolCount = 0;
+	cp->byte_00 = 0;
+	cp->infoToBits();
+	pattern = cp->getBitVector(patternLength);
+	word_1c4 = 1;
+	word_1b0 = patternLength / cp->bitsPerSymbol;
+}
+
+/*
+ * recivedPartOneSilenceRrnSUVtag (.text+0x173c0, 294 B).
+ *
+ * `cp->byte_04` is BOTH the branch selector and the last store on every path,
+ * including the one that returns because `flag_20` was already set: the object
+ * reloads `cp` at +0x173ff and writes the byte again after the two arms have
+ * each written it.  Reproduced as the trailing statement it is.
+ */
+void V92Phase4Modulator::recivedPartOneSilenceRrnSUVtag()
+{
+	if (flag_20 == 0) {
+		if (cp->byte_04 == 1) {
+			if (symbolCount % word_1b0 != 0) {
+				state = 9;
+			} else {
+				edprintf("V92Phase4Modulator: enter E2u First "
+					 "at RRN @ %d\r\n", symbolCount);
+				state = V92P4M_STATE_E2U;
+				symbolCount = 0;
+				word_1b8 = (e2uExtended != 0) ? 13 : 12;
+			}
+		} else {
+			cp->byte_04 = 1;
+
+			if (symbolCount % word_1b0 != 0) {
+				state = 8;
+			} else {
+				state = 10;
+				symbolCount = 0;
+				cp->byte_00 = 1;
+				cp->infoToBits();
+				pattern = cp->getBitVector(patternLength);
+				word_1b0 = patternLength / cp->bitsPerSymbol;
+			}
+		}
+		flag_20 = 1;
+	}
+
+	cp->byte_04 = 1;
+}
+
+/*
+ * recivedCPtag (.text+0x17500, 296 B).
+ *
+ * Two halves that share only their tail.  The FIRST CP tag -- `word_1c0`
+ * clear -- raises the two CP flags and rebuilds the message; every one after
+ * it takes `recivedSUVtag`'s transition instead, with the modulus test on the
+ * outside and the state switch in its false arm, which is `recivedEd`'s
+ * shape rather than `recivedSUVtag`'s.
+ */
+void V92Phase4Modulator::recivedCPtag()
+{
+	byte_1c = 0;
+	word_18 = 0;
+
+	if (word_1c0 == 0) {
+		if (flag_20 != 0)
+			return;
+
+		word_1c0 = 1;
+		cp->byte_04 = 1;
+		cp->byte_00 = 1;
+
+		if (symbolCount % word_1b0 != 0) {
+			state = 8;
+		} else {
+			state = 10;
+			symbolCount = 0;
+			cp->infoToBits();
+			pattern = cp->getBitVector(patternLength);
+			word_1b0 = patternLength / cp->bitsPerSymbol;
+		}
+
+		flag_20 = 1;
+		return;
+	}
+
+	if (flag_20 != 0)
+		return;
+
+	if (symbolCount % word_1b0 != 0) {
+		switch (state) {
+		case V92P4M_STATE_SUV:
+			state = 9;
+			break;
+		case V92P4M_STATE_CPU:
+		case V92P4M_STATE_REPEATED_CPU:
+			state = 11;
+			break;
+		default:
+			return;
+		}
+	} else {
+		edprintf("V92Phase4Modulator: enter E2u @ %d\r\n", symbolCount);
+		state = V92P4M_STATE_E2U;
+		symbolCount = 0;
+		word_1b8 = (e2uExtended != 0) ? 13 : 12;
+	}
+
+	flag_20 = 1;
+}
+
+/*
+ * recivedRt (.text+0x17740, 251 B).
+ *
+ * The only member that WRITES `cp->bitsPerSymbol`, and the reason that field
+ * has a name rather than an offset: `movzbl 0x43(%ebx),%eax; mov
+ * %al,0x128(%edx)` at +0x177e6 copies this class's own `bitsPerSymbol` into
+ * it.  It also clears the CP's `suv`.
+ *
+ * The gate is `symbolCount > 2399 && symbolCount % 12 == 0`; 2399 is the
+ * object's literal (`cmp $0x95f; jbe`) and `< 2400` compiles to the same
+ * branch, so which of the two the author wrote is not established.
+ *
+ * A NULL `cp` is a real arm here and not a defensive one: it sets state 29
+ * and prints an ERROR, so the object expects to be able to reach it.
+ */
+void V92Phase4Modulator::recivedRt()
+{
+	if (state != 23 || word_38 == 0)
+		return;
+
+	if (symbolCount < 2400 || symbolCount % 12 != 0) {
+		state = 24;
+		return;
+	}
+
+	if (cp == 0) {
+		state = 29;
+		symbolCount = 0;
+
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V92Phase4Modulator: ERROR: Null "
+					     "CP at RRN @ end of TRN2d\r\n");
+		return;
+	}
+
+	edprintf("V92Phase4Modulator: on recivedRt enter SUV @ %d\r\n",
+		 symbolCount);
+	symbolCount = 0;
+	patternIndex = 0;
+	state = V92P4M_STATE_SUV;
+	cp->bitsPerSymbol = bitsPerSymbol;
+	cp->byte_00 = 1;
+	cp->suv = 0;
+	cp->infoToBits();
+	pattern = cp->getBitVector(patternLength);
+	word_1b0 = patternLength / bitsPerSymbol;
+}
+
+/*
+ * ===========================================================================
  * THE SEGMENT BOUNDARIES AND THE RESETS
  * ===========================================================================
  */
@@ -736,4 +961,29 @@ void V92Phase4Modulator::setMappingParams(V92MappingParams *mp)
 	}
 	bitsToSymbol->reset(mp);
 	bitsToSymbol->setSymbolsBlockSize(1);
+}
+
+
+/*
+ * enterRepeatedCP (.text+0x16f20, 139 B).  Not a `recived` handler and not
+ * guarded by anything: it clears the two trace fields, announces the state and
+ * rebuilds the message unconditionally.  The message goes through
+ * `dsplibs_debug_printf` under `dsplibs_debug_level > 1` rather than through
+ * `edprintf`, exactly as `recivedSUVtag`'s does.
+ */
+void V92Phase4Modulator::enterRepeatedCP()
+{
+	byte_1c = 0;
+	word_18 = 0;
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("V92Phase4Modulator: enter repeatedCPu "
+				     "@ %d\r\n", symbolCount);
+
+	state = V92P4M_STATE_REPEATED_CPU;
+	cp->byte_00 = 0;
+	cp->infoToBits();
+	pattern = cp->getBitVector(patternLength);
+	symbolCount = 0;
+	word_1b0 = patternLength / cp->bitsPerSymbol;
 }
