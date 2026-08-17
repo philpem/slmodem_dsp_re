@@ -7469,3 +7469,37 @@ and an out-of-bounds subscript leaves that order to the compiler. GCC 13 and
 GCC 3.4.2 disagree -- the modern build passed and `make period` failed 240
 checks on the unmutated source. A trial that measures which compiler built it
 is not a differential trial. Finding 4705.
+
+## D570 ✅ `word_10c` bounds two six-group blocks and nothing bounds `word_10c`
+
+`V92CP::infoToBits` sends `word_10c` groups of eight 16-bit words out of
+`short_42` and as many again out of `short_a2`.  Both blocks hold SIX groups --
+they abut at +0x0a2 and end at +0x102 -- and the loop trusts the field:
+`movzwl 0x10c(%edi),%ebp` at .text+0x4f29f, then `cmp 0x4(%esp),%ebp; ja` with
+no clamp anywhere in the 1,916 bytes.  A value above six walks off the end of
+`short_a2` into `word_104`, `suv`, `word_10c` itself and beyond, and at 118 or
+more the cursor runs past `bits` as well.
+
+`setV92CPpckFromParamsInfo`, which is what fills the field, counts up to six
+and no further -- `cmpl $0x5,0x14(%esp); jbe` at .text+0x33a13 -- so nothing in
+the object produces an out-of-range value.  That is a property of the writer
+and not a check in the reader.
+
+Reproduced as the object has it, and NOT DRIVEN.  `t_v92info.cpp` clamps its
+grid to 0..6 and says so at the top: past six the subscript is out of bounds in
+OUR source, and a trial there would be the compiler adjudicating our undefined
+behaviour rather than the object adjudicating our reading -- D561's argument,
+one class up.  Finding 4750.
+
+## D571 ✅ `byte_128 == 0` divides by zero in the padded-length round-up
+
+The padded length is `(cursor / (12 * byte_128) + 1) * 12 * byte_128`, and the
+object's `div %ecx` at .text+0x4efdd has no guard: a zero at +0x128 raises #DE.
+`infoToBits` itself stores 1 there when +0x001 is zero, and
+`V92Phase4Modulator` writes it at five sites, so the field is expected to be
+set before the message is packed -- but nothing checks, and the constructor
+does not initialise it.
+
+Reproduced, and kept out of the grid: `t_v92info.cpp` uses 1..6.  A trial at
+zero would trap identically on both sides, which measures the CPU rather than
+the reading.  Finding 4750.

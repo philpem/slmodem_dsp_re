@@ -20,16 +20,16 @@
  * loop and back afterwards, and reads `bits[i]` inside without ever writing to
  * the object.  Written the short way -- updating `crc[]` in place -- the
  * function behaves identically for every message that fits, because `bits` is
- * 2,000 entries and the loop stops 17 short of `word_910`.
+ * 2,000 entries and the loop stops 17 short of `msgLen`.
  *
  * The two separate the moment the loop reaches index 2000, which is where
  * `crc` begins: the in-place reading would then feed the register's own
  * updated bytes back through the shift, and the object's reading feeds the
- * values it started with.  `word_910` above 2,017 is what gets there, and
+ * values it started with.  `msgLen` above 2,017 is what gets there, and
  * three cases below do.  Nothing a modem sends is that long; this is finding
  * 3052's shape and the trials leave the plausible range on purpose.
  *
- * THE OBJECT IS GIVEN A TAIL, and that is not slack.  At `word_910 = 2200`
+ * THE OBJECT IS GIVEN A TAIL, and that is not slack.  At `msgLen = 2200`
  * the loop reads `bits[2182]`, which is `this + 2479` -- 151 bytes past the
  * 0x918 the class occupies.  The blob reads it, so the fixture has to own it;
  * both sides get the same bytes there and the tail is compared like the rest.
@@ -104,7 +104,7 @@ struct cpcase {
 };
 
 /*
- * NOTHING BELOW SEVENTEEN.  `calcCRC` computes its bound as `word_910 - 17`
+ * NOTHING BELOW SEVENTEEN.  `calcCRC` computes its bound as `msgLen - 17`
  * in unsigned arithmetic and compares 18 against it with `jae`, so a length of
  * sixteen or less wraps to about four billion and the loop walks the whole
  * address space.  The blob does exactly that -- there is no guard anywhere in
@@ -158,8 +158,8 @@ setup(int c, unsigned int seed)
 	}
 	memcpy(cp[1], cp[0], SLOT);
 
-	C(0)->word_910 = cases[c].len;
-	C(1)->word_910 = cases[c].len;
+	C(0)->msgLen = cases[c].len;
+	C(1)->msgLen = cases[c].len;
 }
 
 static void
@@ -192,7 +192,7 @@ run_small(void)
 		diff_eq_int("the length agrees (%ld)", (long)ol, (long)rl,
 			    (long)c);
 		diff_eq_int("the length is +0x90c (%ld)", (long)rl,
-			    (long)C(1)->word_90c, (long)c);
+			    (long)C(1)->vectorLen, (long)c);
 		diff_eq_int("the vector is at +0x129 (%ld)",
 			    (long)(op - cp[0]), (long)(rp - cp[1]), (long)c);
 		diff_eq_int("and that offset is 0x129 (%ld)",
@@ -404,7 +404,7 @@ run_crc(void)
 				C(1)->bits[cases[c].len - V92CP_CRC + i] = b;
 			}
 			memcpy(cp[0], cp[1], sizeof(V92CP));
-			C(0)->word_910 = cases[c].len;
+			C(0)->msgLen = cases[c].len;
 
 			o = our_cp_evalcrc(C(0));
 			r = ref_cp_evalcrc(C(1));
@@ -545,9 +545,9 @@ main(void)
 		    0x129);
 	diff_eq_int("crc is at +0x%lx", (long)offsetof(V92CP, crc), 0x8f9,
 		    0x8f9);
-	diff_eq_int("word_90c is at +0x%lx", (long)offsetof(V92CP, word_90c),
+	diff_eq_int("vectorLen is at +0x%lx", (long)offsetof(V92CP, vectorLen),
 		    0x90c, 0x90c);
-	diff_eq_int("word_910 is at +0x%lx", (long)offsetof(V92CP, word_910),
+	diff_eq_int("msgLen is at +0x%lx", (long)offsetof(V92CP, msgLen),
 		    0x910, 0x910);
 	diff_eq_int("word_914 is at +0x%lx", (long)offsetof(V92CP, word_914),
 		    0x914, 0x914);

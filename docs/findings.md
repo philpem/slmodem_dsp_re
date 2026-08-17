@@ -65541,3 +65541,135 @@ It costs a second thing as well. `mutsnap.py`'s key covers the source tree, so
 ANY reorder re-stales every suite's recorded verdicts and they have to be run
 again -- which this batch did twice for that reason alone. A reorder is never
 free; it is a codegen symbol and a mutation re-record.
+
+## 4750. `V92CP::infoToBits`, AND WHAT IT SETTLES ABOUT THE CLASS'S TWO LENGTHS
+
+1,916 bytes at .text+0x4ec80, written and green.  `tools/dis.py` reports FIVE
+relocations in the whole range and all five are `R_386_32` against
+`fltTable_2` and `fltTable_1`; there is no call relocation anywhere, so the
+closure is those three symbols and `closure.py` agrees -- `3 symbols, 2008
+bytes`.  `resetCRC` and `calcCRC` appear in it INLINED, which is most of the
+size: the sixteen-stage register is loaded into stack slots, clocked, and
+stored back, exactly as finding 4510 measured inside `calcCRC` itself.
+
+**THE MESSAGE IS SEVENTEEN-ENTRY GROUPS**, which was visible from `calcCRC`'s
+`i % 17 == 0` skip and is now visible from the other side.  `bits[0..16]` is
+seventeen ONES and carries no marker; every group after it is a zero at an
+index that is a multiple of seventeen followed by sixteen payload entries.
+The function spells the markers out as constant displacements -- 0x13a, 0x14b,
+0x15c, 0x16d, 0x17e, 0x18f, 0x1a0, which are `bits` at 17, 34, 51, 68, 85, 102
+and 119 -- and writes one at the cursor before the CRC and another after it.
+So `calcCRC`'s skip is not a quirk of the checker: the fill entry is real and
+the transmitter puts it there.
+
+**+0x910 IS THE MESSAGE AND +0x90c IS THE PADDED VECTOR**, and that closes the
+question 1282 left open and the header declined to guess at.  Eight
+instructions fix the relation:
+
+    msgLen    = cursor + 17                     one past the last CRC entry
+    quantum   = 12 * byte_128                   lea (%ebx,%ebx,2); lea (,%edx,4)
+    vectorLen = (cursor / quantum + 1) * quantum        div is UNSIGNED
+    bits[cursor .. vectorLen) = 0
+
+`+1` before the multiply, so an exact multiple still gains a whole quantum and
+`vectorLen` is STRICTLY greater than the cursor -- the fixture checks that
+against the blob's own answer rather than against our arithmetic.  Every other
+user agrees with the reading: `calcCRC` stops 17 short of `msgLen`,
+`evaluateCRC` finds the received CRC in `bits[msgLen - 16 .. msgLen)`, and
+`getBitVector` reports `vectorLen`.  Both are now named; the rename moved
+`compare.py` by nothing, which is what CLAUDE.md says a rename must do.
+
+Why it could not be settled before: the class held two lengths and only
+READERS of them.  `calcCRC` and `evaluateCRC` between them force the shape of
++0x910 -- an unsigned index bound into `bits` -- without saying which of the
+two is the message and which the buffer.  `infoToBits` is the writer of both,
+and the arithmetic runs one way only.
+
+`t_v92info.cpp`, 40 chosen cases and 96 drawn ones, 883 checks; 46 mutations,
+46 caught.
+
+## 4751. THE THIRTEEN ENTRIES AT `bits[36..48]` ARE A SIGNED BYTE'S SIGN EXTENSION, AND NO TRIAL WITH -1 CAN SEE IT
+
+`infoToBits` loads +0x002 once, `movsbl 0x2(%edi),%ecx` at .text+0x4ece3,
+shifts it five times into `bits[21..25]`, and then -- after the branch at
++0x4ed10, in the long form only -- shifts the SAME REGISTER thirteen more
+times into `bits[36..48]`.  There is no second load anywhere in the 1,916
+bytes.  The field is one signed byte, so those thirteen entries are thirteen
+copies of its bit 7.
+
+That is either the author reusing a temporary past its field or a field that
+was meant to be wider than the byte `setV92CPpckFromParamsInfo` stores into it
+(`mov %al,0x2(%ebx)`, from `arg1[0] - 20` or `arg1[0] - 8`).  Nothing here
+distinguishes the two and the finding does not guess; what matters is that the
+object encodes it and the reconstruction carries one variable across the
+branch to match.
+
+**THE OBVIOUS TRIAL VALUE PROVES NOTHING.**  `-1` gives 0xff, whose bits 5..17
+under the object's reading and bits 0..12 under a re-reading version are
+thirteen ones either way; `0` gives thirteen zeros either way.  The mutation
+that re-reads the field is caught only by a value with a one BELOW bit five
+and a clear bit seven -- `0x0f` gives thirteen zeros against `1,1,1,1,0,...`.
+Four cases in the grid carry 0x0f, 0x01, 0x7f and -16 for that reason, and the
+mutation is in `test/mutations/v92info.json` as the entry the set exists for.
+
+## 4752. `fltTable_2` IS NOT GEOMETRIC: 2^-8 IS ABSENT AND 2^-9 APPEARS TWICE
+
+The sixteen weights at `.data+0x69e0` read 2^2 down to 2^-13 with one step
+missing:
+
+    69f0  0000803e 0000003e 0000803d 0000003d
+    6a00  0000803c 0000003c 0000003b 0000003b
+                            ^^^^^^^^ ^^^^^^^^   both 2^-9; 0x3b800000 absent
+
+Entries 10 and 11 are both `0x3b000000`.  A generator written from the
+sequence produces `0x3b800000` at entry 10 and is wrong, and the difference is
+OBSERVABLE rather than cosmetic: the expansion is greedy, so a magnitude in
+[2^-8, 2^-7) sets entries 10 and 11 under the object's table and entry 10 alone
+under a repaired one.  Both tables are therefore transcribed, `t_v92info.cpp`
+compares all 23 floats against the blob's own `ref_fltTable_*` byte for byte,
+and the repaired sequence is registered as a mutation which the grid catches.
+
+`fltTable_1` (seven weights, 1 down to 2^-6) has no such gap.  The object
+holds a SECOND identical pair, `fltTable2` at `.data+0xb00` and `fltTable1` at
+`+0xb40`, which nothing written references -- finding 826 measured that they
+are separate symbols and not aliases, and this batch does not write them.
+
+## 4753. THE V.92 CP MESSAGE BLOCK AT +0x000..+0x103, SHAPE MEASURED AND NAMES DECLINED
+
+`infoToBits` reads twenty distinct fields below +0x104 and
+`setV92CPpckFromParamsInfo` (0x33920, unwritten) writes the same set, so every
+type below is forced by a store width, an index stride, or a load extension
+whose 32-bit result is used:
+
+| offset | shape | what forced it |
+|---|---|---|
+| +0x000 | `unsigned char` | stored whole to `bits[18]`, tested `dec %al; je` |
+| +0x001 | `signed char` | `cmp $0x1,%bl; jle` and `sar $1,%al` |
+| +0x002 | `signed char` | `movsbl`, result shifted arithmetically |
+| +0x003, +0x004 | `unsigned char` | stored whole |
+| +0x008, +0x00c | `unsigned int` | `shr $1` on the 32-bit value |
+| +0x010..+0x020 | five `float` | `flds`, `fabs`, `fcom` |
+| +0x024 | `unsigned char` | `cmpb $0x0` in both functions |
+| +0x028 | `int[6]` | `movl $0x0` and `(%edi,%ecx,4)` under `cmpl $0x5` |
+| +0x042, +0x0a2 | `short[6][8]` each | `add $0x10` per group, eight words zeroed |
+| +0x10c | `unsigned short` | `mov %dx,0x10c(%edi)`, loaded `movzwl` |
+
+The six and the eight are not modelled either: the two mask blocks abut and
+`0xa2 - 0x42 = 0x60` is six times sixteen, and `0xa2 + 0x60 = 0x102` is where
+the next field's alignment padding starts.
+
+**AND EVERY ONE OF THEM IS NAMED BY ITS OFFSET.**  `V92CPUnPck` (`include/dsplib/V92CPUnPck.h`) is an unpacked CP block whose eighteen fields
+carry the author's OWN printed names -- `constellationPresent`, `LC[]`, `M[]`,
+`trellisState`, `const1[]`..`const6[]` -- and six of those names would fit six
+four-byte entries and six groups of masks very comfortably.  They are not
+carried across.  That struct lives at `VPcmFloModem+0x254c`, is 0xca0 bytes
+against this block's 0x104, and has a different layout; the correspondence
+would be adjacency and nothing else, which is exactly the case CLAUDE.md's
+"a wrong name is worse than a pad" and finding 3120's declined `+0x2f64` are
+about.  `bitsToInfo` and `evaluateInfo` are the two unwritten members that
+READ this block, and either may settle it.
+
+Two fields did come out of pads on hard evidence: +0x118, which `infoToBits`
+fills with +0x001 whole, and +0x128, which is the frame quantum in twelfths --
+`infoToBits` multiplies it by twelve, rounds the message up to it, and stores
+1 there itself when +0x001 is zero.  Both are typed and neither is named.
