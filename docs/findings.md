@@ -57924,6 +57924,35 @@ will print `COULD NOT RUN -- left stale, not recorded` nine times and exit
 non-zero having done everything it could.  That is the honest outcome and it
 should not be read as a failed run.
 
+**UPDATE: SEVEN OF THE NINE ARE SCOREABLE NOW, AND 617 OF THE VERDICTS HAVE
+BEEN TAKEN.**  The paragraph above stands as written -- it was true of the
+tree it was measured in, and the refusal is still correct -- but the count it
+gives is no longer current, so this is where anyone quoting it should stop.
+Findings 6000, 6001, 6002 and 6003 have the work; in summary:
+
+  - `t_v90leaves`'s divergent check split out to `t_v92ecnan` (6000), which
+    recovered `v90cd`, `v90demapper`, `v90rto`, `v90sbe` and `v92ec` -- 120
+    verdicts, and the parent kept every shape because the blob's path for
+    177.0f and its path for a NaN are the same path.
+  - `t_v90adid`'s split out to `t_v90adidnan` (6001), which recovered
+    `v90adid` -- 482 mutations, the largest suite in the tree -- and
+    `v90dil`.  Its fourth failing check was not the deliberate NaN row but an
+    ACCIDENT of the seed, and that half was fixed in the fixture with both
+    counts pinned.
+  - **`psd` is not split and 6002 says why**: its divergence is x87 excess
+    precision reaching every decibel of `process`'s output, driven by no
+    constructible input property, and the only honest way to register the 17
+    mutations a whole-group split would strand fails `mutsnap.py --check`.
+    That prerequisite is named there.
+  - `v90equ` was a concurrent batch's and is untouched.
+
+So the register still costs the mutation tier two suites rather than nine, the
+five binaries are three, and `mutsnap.py --check` reads 164 current / 2 stale
+/ 0 never recorded of 166 registered where this finding's run read 157 and 9.
+The claim that stays true without amendment is the one this finding was
+written to make: **a `gccdiverge.json` entry silently removes its binary's
+whole mutation surface, and nobody had counted it.**
+
 ### 3003. THE ANCHOR SWEEP: 5,971 of 5,971 usable, and 35 mutations that have never been scored
 
 An unusable mutation does not fail a run (finding 347) and four batches have
@@ -67932,3 +67961,284 @@ The two clamps in the same function, `fcomps 32767.0f` at 0x39f6c and
 ordinary `float` spelling; `soft > 32767.0f` and `soft < -32767.0f` map onto
 the single CF test correctly, including a NaN clamping low. Not every compare
 in the function is the interesting one, and three of the eight are not.
+---
+
+### 6000. THE ECHO CANCELLER'S UNORDERED SENTINEL, SPLIT OUT: FIVE SUITES AND 120 VERDICTS RECOVERED
+
+*Numbered 5500 in the two commits that carry the work; `v34-diagnostics` had
+claimed 5500-5503 in a worktree while this ran and the block moved to
+6000-6003 before the findings were written.  Nothing else was renumbered.*
+
+3002 counted what `tools/gccdiverge.json` costs the mutation tier -- nine
+suites and 647 recorded verdicts that `mutate.py` correctly refuses -- and
+named the two ways out without taking either.  This takes the second one for
+`t_v90leaves`, which is five of the nine.
+
+**THE DIVERGENCE IS FOUR BLOCKS OF ONE TRIAL AND IT KILLED THE WHOLE BINARY.**
+`V92EchoCanceller::process` opens with `out[0] == 177.0f`, the sentinel that
+makes the canceller pass a block straight through.  The object issues ONE
+ordered compare and no parity test:
+
+```
+10f4e:  d9 00              flds  (%eax)          ; out[0]
+10f50:  d8 1d .. .. .. ..  fcomps <177.0f>
+10f56:  df e0              fnstsw %ax
+10f58:  9e                 sahf
+10f59:  75 ..              jne   <filter>
+```
+
+FCOM sets C3 for an unordered result exactly as it does for an equal one, so
+`sahf` raises ZF either way and the sentinel arm is taken for a NaN as well as
+for 177.0f.  `t_v90leaves`'s sweep set `out[0]` to a quiet NaN on every
+thirteenth block of its 44-block shape; GCC 13 emits the parity test whatever
+it is told (2304), ran the FILTER on that block instead, and every later block
+of the trial diverged with it -- **273 of that group's 4,570 checks, all
+downstream of one block, and the binary exits non-zero.**
+
+`mutate.py` judges a mutant caught by a non-zero exit, so it refuses a red
+baseline (2157) -- and it refuses the SUITE, not the row.  Five suites are
+pinned to `t_v90leaves`: `v90cd`, `v90demapper`, `v90rto`, `v90sbe` and
+`v92ec`, 122 mutations between them, four of which never touch
+`V92EchoCanceller` at all.
+
+**ONLY THE NaN VALUE MOVED, AND THAT IS WHY THE PARENT KEPT ITS COVERAGE.**
+The blob takes the SAME PATH for 177.0f as for a NaN, so replacing the NaN
+with 177.0f leaves every block of every shape evolving exactly as before:
+`t_v90leaves` still drives fifteen shapes at three levels, still takes the
+sentinel arm every seventh block, and the group goes from 4,570 checks to
+4,569 -- the one lost is the anti-vacuity counter that said the unordered arm
+had been reached.  `t_v90adid`'s split (6001) had to remove a whole grid row;
+this one did not.
+
+`t_v92ecnan` carries the arm instead: four NaN ENCODINGS (quiet, signalling,
+negative quiet, all-ones) x five states x four block lengths x three levels,
+2,703 checks.  492 fail on the modern build and **every one of them is a
+two-sided comparison** -- the slot, the output block, the coefficients and the
+transcript.  Every assertion about what the BLOB did passes: the block is
+copied through, the read cursor is stepped modulo `historyAlloc - (fl - 1)`,
+and `state`, `echoCoeff` and `echoHistory` are left alone in all five states
+including the two that would otherwise have adapted.  That is the anti-vacuity
+`t_v90p4dnan` argues for -- an OBSERVABLE the ordered reading cannot produce,
+not a path.
+
+**THE VERDICTS, none of which had ever been taken:**
+
+| suite | mutations | caught | NOT caught | equivalent |
+|---|--:|--:|--:|--:|
+| `v90cd` | 4 | 3 | 0 | 1 |
+| `v90demapper` | 13 | 13 | 0 | 0 |
+| `v90rto` | 4 | 3 | **1** | 0 |
+| `v90sbe` | 4 | 4 | 0 | 0 |
+| `v92ec` | 95 | 94 | **1** | 0 |
+
+**AND THE RECORD IT REPLACED WAS WRONG IN A WAY NOTHING COULD SEE.**  The
+stale `v92ec` entry read `97 mutations: 97 caught, 0 NOT caught` -- a number
+from before the register entry existed, describing a mutation set that has
+since lost two entries and gained a hole.  It had been quotable all along.
+
+**TWO NOT CAUGHT, and neither is papered over.**
+
+- `v92ec`, *"the sentinel test is spelt for IEEE, so a NaN block is not
+  filtered"*.  Its only witness is the NaN block that just moved to
+  `t_v92ecnan`, and a declared binary is one `mutate.py` cannot score.  This
+  is 2157's limitation restated at the level of a single mutation, and it is
+  the price of the split: 94 of 95 scoreable beats 0 of 95.  The mutation is
+  LEFT IN THE SET rather than retired to a note, because a note has no `find`
+  and would drop the anchor out of `anchorcheck.py`'s sweep -- 3306's failure
+  mode, created deliberately.
+- `v90rto`, *"round the intermediate product to float"*.
+  `setTimingOffset`'s body is `timingOffset = ppmScale * ppm * 1e-6f;` and the
+  mutation narrows the intermediate to `float` first.  Under `-mfpmath=387`
+  the two differ only where a double rounding does, and no pair of values in
+  that sweep separates them.  A REAL gap, not a tool limitation: it is
+  closable by a search for a separating `(ppmScale, ppm)`, and is left for
+  whoever owns that suite because widening a green sweep can turn it red and
+  this batch's job was the register.
+
+### 6001. THE ADID SCAN'S UNORDERED ENTRY: 497 MORE VERDICTS, AND THE OTHER HALF WAS AN ACCIDENT OF THE SEED
+
+*Numbered 5501 in the commits; see 6000 for why the block moved.*
+
+`determineMaxUcode` counts the small entries of a five-entry variance window
+and skips one that is zero.  The object's zero test is one ordered `fcom`
+against a zero it has kept on the x87 stack since 0x4443c:
+
+```
+444d1:  d9 04 98        flds   (%eax,%ebx,4)     ; the variance
+444d4:  d8 d1           fcom   %st(1)            ; against the kept 0.0
+444d6:  df e0           fnstsw %ax
+444d8:  9e              sahf
+444d9:  74 ..           je     <next entry>
+```
+
+No parity test, so an UNORDERED entry is skipped along with a zero one: two
+small entries beside three NaNs count 2, the window does not qualify, and the
+answer falls through to the floor.  GCC 13 keeps the three the object drops,
+the count becomes 5, and the answer moves.
+
+**FOUR CHECKS OF 380, AND THEY WERE TWO DIFFERENT THINGS.**  Three were the
+window grid's deliberate NaN row.  The fourth was **trial 27 of the sweep**,
+and it is the one worth recording: the sweep seeds the whole 43,440-byte
+object from an LFSR, and trial 27's flat word 424 of `float_9d48` -- which is
+`float_9d48[3][40]`, the FIRST of the twenty entries the threshold averages --
+came out non-finite.  That is why that trial diverged in the printed REPORT
+and not in the object: a NaN threshold prints differently and decides nothing
+the object comparison could see.
+
+The deliberate half moved to `t_v90adidnan` and gained two qualifying CONTROL
+rows, a second NaN arrangement, and three NaN encodings: 6 of its 25 checks
+fail on the modern build, both controls pass at 0x5a and 0x59, and all three
+NaN rows are asserted NOT to qualify in the blob.
+
+**THE ACCIDENTAL HALF IS A FIXTURE FAULT AND IT IS NOW A GUARDED ONE.**
+`float_9d48` holds VARIANCES, and the object's own writer --
+`updateLinMappMeanAndVar`, behind a guard on a zero sample count -- cannot put
+a NaN there.  `mu_finite_variances` turns any word whose exponent field is all
+ones into the largest finite exponent, keeping the sign and the significand,
+so the entry stays as varied as the seed made it; the test is on the BITS and
+not `v != v`, because the period build's `-mno-ieee-fp` folds a
+self-comparison to zero and deleted a harness NaN detector once already
+(2303).
+
+**IT REPORTS ITS DENOMINATOR, because a sanitiser that silently did nothing
+and one that silently rewrote half the array both leave the group green.**
+2400's argument and 3100's, applied to a fixture rather than to a detector.
+Both numbers are asserted and PINNED, not bounded -- they are a function of
+the seed alone and of nothing in `src/`, so either moving means the sweep's
+inputs moved and every verdict the group carries describes a different grid:
+
+    the variance sanitiser examined 67,490 words
+    and rewrote 459 of them            -- 0.68%, over 85 seeded objects
+
+Both were PREDICTED from a Python replica of the LFSR before the assertion was
+written, and the C agreed exactly.  The prediction is also what identified
+word 424; the "shown to fire" half is that the group was red at trial 27
+before and is green now, and removing the grid row alone could not have done
+that.
+
+`determineMaxUcode` is 379 checks and green under both compilers.  **The
+verdicts, again the first either suite has ever had:**
+
+| suite | mutations | caught | NOT caught | equivalent |
+|---|--:|--:|--:|--:|
+| `v90adid` | 482 | 462 | **3** | 17 |
+| `v90dil` | 15 | 15 | 0 | 0 |
+
+`v90adid` is the largest suite in the tree and 17 registered equivalents is
+the largest such set in it -- every one of them carrying a written argument
+for why no input can separate the two spellings.
+
+**THREE NOT CAUGHT, all first-ever measurements**, so none can be attributed
+to the fixture change and none can be exonerated from it either:
+
+- *"dmu: the zero test spelt for IEEE, so an unordered code is not skipped"* --
+  the same shape as `v92ec`'s in 6000.  Its only witness moved to
+  `t_v90adidnan`, which is declared.
+- *"print the sign with the ternary the other way up, which GCC commutes"* --
+  `!(0.0f >= v) ? '+' : '-'` against `(0.0f >= v) ? '-' : '+'`.  These are the
+  SAME FUNCTION on every input, NaN included, so no differential test can ever
+  catch it.  It is a codegen-shape claim wearing a mutation's clothes, and
+  what would settle it is `compare.py`, not `mutate.py`.  Reported rather than
+  reclassified as equivalent, because an equivalent entry needs the argument
+  written into the set and that is the owner's call.
+- *"form the merge tolerance inside the test rather than before the
+  distance"* -- hoisting `float_9d48[i][at] * 0.25f` out of the comparison.
+  2302's shape, a question about where an x87 intermediate is narrowed; no
+  pair of variances in the sweep separates the two spellings.
+
+### 6002. `t_psd` CANNOT BE SPLIT, AND THE THING THAT BLOCKS IT IS `mutsnap.py` AND NOT THE TEST
+
+The third of 3002's binaries, and the answer is different: **`psd` stays
+unscoreable, and the reason is worth more than the 14 verdicts a split would
+have bought.**
+
+**THE DIVERGENCE IS NOT DRIVEN BY ANY CONSTRUCTIBLE INPUT PROPERTY.**  1453
+records it: x87 excess precision in `four1`/`realfft` reaching `Psd`'s
+decibels, up to 0.043 dB on bins near -85 dB where cancellation dominates.
+The two NaN sites in 6000 and 6001 are each ONE value the test plants on
+purpose, so moving that value moves the divergence with it.  This one is an
+interaction of signal x window x length x overlap, and it was measured rather
+than assumed: with the report cap lifted, the 7,550 failing float comparisons
+are spread over **at least 295 distinct `cmp_buf` calls** of the 720 that can
+diverge at all -- so between 41% and 82% of the 360-trial sweep.  Separating
+the trials that happen to fail would be fitting the test to the compiler, and
+the subset would move under a different GCC or `-O` level and take the
+register entry stale with it.
+
+**SO THE SPLIT WOULD HAVE TO BE THE WHOLE GROUP, AND THAT IS WHERE IT
+FAILS.**  17 of `psd`'s 31 mutations live in `Psd::process` -- the overlap
+arithmetic, the accumulation and all four `OutputOption` arms -- against 14 in
+the constructor, the setters and `getFrequencies`.  Move `run_process` to its
+own binary and those 17 are scored against a `t_psd` that no longer drives
+them: **17 manufactured NOT CAUGHT results**, which is exactly what
+`suites.json`'s own header says has already misled six sets.
+
+There are three ways to register them honestly and all three are worse:
+
+- **A `psdproc` suite pinned to the new binary.**  `mutsnap.py --check`
+  reports a registered-but-never-recorded suite as MISSING, and
+  `hard = missing or orphaned or bad` **fails `make phase`**.  Right by its
+  own lights: a suite that has never been recorded is always a defect today.
+- **17 NOTE entries.**  A NOTE has no `find`, so those 17 anchors leave
+  `anchorcheck.py`'s sweep and rot silently -- 3306's failure mode, created
+  deliberately.
+- **Deleting them.**  Weakening the set to make a number look better.
+
+**THE PREREQUISITE, named so the next batch can take it deliberately:**
+`mutsnap.py --check` needs a fourth class beside current / stale / MISSING --
+a suite whose binary is declared in `tools/gccdiverge.json`, which
+`mutate.py` provably refuses (2157) and which `--update` already reports as
+`COULD NOT RUN`.  It would be printed, counted on the verdict line with the
+others, and not treated as a defect.  `mutsnap.py` is NOT in the mutation
+closure (`Makefile`, `src/`, `include/`, `test/harness/`, `tools/mutate.py`),
+so the change invalidates no key.  What it needs and did not get here is the
+inject-and-watch ritual 134 and 2401 demand of anything that touches the gate
+five sessions depend on, and it was out of scope for a batch whose remit was
+`gccdiverge.json`.
+
+Until then `psd` is one suite and 31 mutations that cannot be scored, down
+from nine suites and 658.
+
+### 6003. THE TALLY AGAINST 3002, WITH BOTH DENOMINATORS
+
+3002 said nine suites and 647 recorded verdicts could not be re-recorded at
+all.  Eight of the nine were in scope here (`v90equ` belonged to a concurrent
+batch and its binary is untouched).  After 6000 and 6001:
+
+| suite | binary | was | now |
+|---|---|---|---|
+| `v90cd` | `t_v90leaves` | refused | 4 recorded |
+| `v90demapper` | `t_v90leaves` | refused | 13 recorded |
+| `v90rto` | `t_v90leaves` | refused | 4 recorded |
+| `v90sbe` | `t_v90leaves` | refused | 4 recorded |
+| `v92ec` | `t_v90leaves` | refused | 95 recorded |
+| `v90adid` | `t_v90adid` | refused | 482 recorded |
+| `v90dil` | `t_v90adid` | refused | 15 recorded |
+| `psd` | `t_psd` | refused | still refused (6002) |
+| `v90equ` | `t_v90equ` | refused | out of scope |
+
+**617 verdicts recorded, and BOTH denominators are quoted because they
+differ.**  3002's 647 is *recorded verdicts in the snapshot*; the eight suites
+hold **658 mutations** in `test/mutations/` today, and 3003 already documented
+that the files have moved under the record.  Against the recorded figure the
+recovery is 617 of 647; against the live one it is 617 of 658, with `psd`'s 31
+outstanding and 10 of the difference explained by 3003's drift.  Quoting the
+tidier number would be picking one.
+
+`mutsnap.py --check` reads **164 current, 2 stale, 0 never recorded, of 166
+registered**, where the run 3002 was written from read 157 current and 9
+stale.  The two stale are `psd` and `v90equ`.
+
+**FOUR NOT CAUGHT AND SEVENTEEN EQUIVALENT CAME WITH THEM**, which is the
+point of taking a verdict rather than assuming one: two of the four are the
+declared arms themselves (6000, 6001) and two are real gaps in green sweeps --
+`v90rto`'s double rounding and `v90adid`'s hoisted tolerance.  3001's 34
+uncaught and 3002's "three of them frozen in there" can now be re-counted:
+`v90rto`'s 1 is one of them, and `v90equ`'s 2 remain frozen.
+
+**THE REGISTER IS THE SAME SIZE IT WAS.**  Six entries and eleven checks
+before, six and eleven after: `t_v90leaves` and `t_v90adid` came out,
+`t_v92ecnan` and `t_v90adidnan` went in, and the check each names is one
+check.  What changed is that the two binaries carrying them now have nothing
+else in them.  **Neither new binary has a mutation suite**, following
+`t_v90p4dnan`: registering one would be the MISSING failure 6002 describes.

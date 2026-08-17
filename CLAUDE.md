@@ -191,12 +191,27 @@ is still the fast loop between commits.
 The modern build runs in the same `phase` and still has to pass. It is the
 portability check, and `make check64` proves the tree is 64-bit clean. Where
 GCC 13 provably cannot reproduce the object from correct source, the site is
-declared in `tools/gccdiverge.json` -- five entries today, ten checks --
+declared in `tools/gccdiverge.json` -- six entries today, eleven checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
 a stale entry (an allow-listed test that starts passing) fails the gate.
 **`make period` has no allow-list and is not getting one.**
 
-Four of those five are one cause and were added together: the object's
+**AN ENTRY COSTS ITS BINARY'S WHOLE MUTATION SURFACE, so the divergent check
+goes in a binary of its own.** `tools/mutate.py` judges a mutant caught by a
+non-zero exit, and a declared binary exits non-zero on the UNMUTATED source --
+so it cannot score a mutation set against that baseline and it refuses, for
+the SUITE and not the row. That silently removed nine suites and 647 verdicts
+before anyone counted them (findings 2157 and 3002). Three binaries now carry
+one declared check each for this reason -- `t_v90p4dnan`, `t_v92ecnan`,
+`t_v90adidnan` -- and **none of them has a mutation suite**, because a
+registered suite that can never be recorded reads MISSING to
+`mutsnap.py --check` and fails the gate. `t_v92ecparams` is the same move the
+other way round: three GREEN members lifted out of a declared parent, so it
+keeps its suite. Split the VALUE where you can rather than the group -- the
+blob treats a NaN and 177.0f as one input, so `t_v90leaves` lost one check of
+4,570 and kept every shape. Findings 6000, 6001 and 6002.
+
+Five of those six are one cause: the object's
 equality tests are a single ordered `fcom` with no parity test, which GCC 13
 will not emit at all -- `-mno-ieee-fp` is accepted by it and does nothing, and
 `-ffinite-math-only` does the job by withdrawing NaN semantics from the whole

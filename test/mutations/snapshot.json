@@ -4230,8 +4230,8 @@
    }
   },
   "v90adid": {
-   "key": "35bd9d42ddda3a43205bbf01e0a09cbcb85cbd2ba4fa2063e81554e898ab4aca",
-   "summary": "481 mutations: 464 caught (460 by test, 0 by strings), 0 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
+   "key": "f993456a87f599490d6bb3239a7be32a9984ed4ac9bc355724b91e11127fca8e",
+   "summary": "482 mutations: 462 caught (458 by test, 0 by strings), 3 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
    "verdicts": {
     "DIL: drop the redundant marked test inside the run": "equivalent",
     "DIL: drop the redundant reference test inside the run": "equivalent",
@@ -4285,7 +4285,6 @@
     "dmu: sum window ends at 58": "caught",
     "dmu: sum window starts at 41": "caught",
     "dmu: sum without the magnitude": "caught",
-    "dmu: the NaN half of the zero test dropped": "caught",
     "dmu: the answer is the window's top": "caught",
     "dmu: the answer's offset is added": "caught",
     "dmu: the fall-through answer is zero": "caught",
@@ -4328,7 +4327,8 @@
     "dmu: the small test is strict": "caught",
     "dmu: the window is four entries wide": "caught",
     "dmu: the window runs upwards": "caught",
-    "dmu: the zero half of the zero test dropped": "caught",
+    "dmu: the zero test admits every code at or below zero": "caught",
+    "dmu: the zero test spelt for IEEE, so an unordered code is not skipped": "uncaught",
     "dmu: threshold scale 0.05 -> 0.06": "caught",
     "dmu: threshold scaled by the wrong field": "caught",
     "do not advance the store index": "caught",
@@ -4362,6 +4362,7 @@
     "floor the squared-difference threshold at the MAXIMUM neighbour distance": "caught",
     "form the group mean even when it pooled nothing": "caught",
     "form the mean from the sum of squares": "caught",
+    "form the merge tolerance inside the test rather than before the distance": "uncaught",
     "fpg: only one companding law is tried": "caught",
     "fpg: the A-law error report's fraction scale": "caught",
     "fpg: the A-law gain report prints the mu-law gain": "caught",
@@ -4502,7 +4503,7 @@
     "pool the sum of squares into the mean": "caught",
     "pre-increment the store index rather than post-incrementing it": "caught",
     "print tenths where the object prints hundredths": "caught",
-    "print the sign with the ordered test rather than its negation": "caught",
+    "print the sign with the ternary the other way up, which GCC commutes": "uncaught",
     "quantise onto the phase's own mapping, not the reference's": "caught",
     "read the QC block on the default branch": "caught",
     "read the QC block one word low": "caught",
@@ -4782,7 +4783,7 @@
    }
   },
   "v90cd": {
-   "key": "ae38f2b20642c9437eac2b979ac7f844550a3f388fad2bdbc4109adaa5febdf5",
+   "key": "93c079e52f38bdae33e899f6b42663c37e9711925affe2e89ae2c7e2601c2a94",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "one gate around both diagnostics": "caught",
@@ -5415,7 +5416,7 @@
    }
   },
   "v90demapper": {
-   "key": "e2e3d3a6d391db18ae4550783e7f268919fea5e1fd8a3e293f68911a51de11d6",
+   "key": "77c8f5c21612403b2bac813ac037692af119e85de0353bf9c17b15fc148b5758",
    "summary": "13 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a level nothing landed on prints its raw error sum, not zero (transcript only)": "caught",
@@ -5579,7 +5580,7 @@
    }
   },
   "v90dil": {
-   "key": "d617328715afcceb9933a72d8edc2d77f7ab3b43e9057e995565b73a43aa2acb",
+   "key": "bf56ea8756937e48a5798d94c4ef671961176202400aa716c8b73f11385438b6",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "always take the A-law row": "caught",
@@ -6547,7 +6548,7 @@
    }
   },
   "v90rto": {
-   "key": "395bba7260f3f877a4dfdca72af0afc8c40a4ee948fda3e13d954a465baf7ddc",
+   "key": "8f0142807aae97496a9ee85af4ff8fe6993aba3f5191cdd54fbc6bd26e7a894a",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "1e-6 as a double, not a float": "caught",
@@ -6557,13 +6558,13 @@
    }
   },
   "v90sbe": {
-   "key": "9045d9da4e333abcb01a4d510dabeecf5b66a683d0d4660204eae5abcbc18721",
+   "key": "6f63e7a83ff8601412ffafe733fcb05aaf0e6ff698f0c84961fb927ae788e934",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "+0x10 is left as the constructor found it": "caught",
-    "+0x18 is left as the constructor found it": "caught",
+    "state at +0x10 is left as the constructor found it": "caught",
     "the decoder is built with capacity five, not six": "caught",
-    "the extractor frees the decoder's state itself, as well as the decoder": "caught"
+    "the extractor frees the decoder's state itself, as well as the decoder": "caught",
+    "the serial decoder at +0x18 is left as the constructor found it": "caught"
    }
   },
   "v90sbeproc": {
@@ -7013,8 +7014,8 @@
    }
   },
   "v92ec": {
-   "key": "102cc439d490236d30da70d3798e9f5985781a9b4922bb50d8275211ea778fc5",
-   "summary": "97 mutations: 97 caught (97 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "005f0353c2cfa6e0197787e0d5849731cf1bc0fdc8ea255f69957c9494d70421",
+   "summary": "95 mutations: 94 caught (94 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a repeated state restarts the sample count anyway": "caught",
     "fast training loads the slow beta": "caught",
@@ -7033,7 +7034,6 @@
     "the ARMA pointer is nulled before it is freed": "caught",
     "the beta does not decay": "caught",
     "the beta is cleared and the decay factor is not": "caught",
-    "the beta is printed and not stored": "caught",
     "the block length replaces the sample count": "caught",
     "the coefficient array is freed but not nulled": "caught",
     "the coefficient array is sized in doubles": "caught",
@@ -7054,7 +7054,6 @@
     "the copy state's duration comparison is strict": "caught",
     "the count-delay duration is the delay alone": "caught",
     "the count-delay state hands on to slow training": "caught",
-    "the decay factor is printed and not stored": "caught",
     "the delay is stored without going through setEchoDelay": "caught",
     "the delta is subtracted, not added": "caught",
     "the destruction notice is gated one level too low": "caught",
@@ -7092,7 +7091,7 @@
     "the sample count survives a state change": "caught",
     "the sentinel is 178.0f": "caught",
     "the sentinel path does not step the read cursor": "caught",
-    "the sentinel test is C's equality, so a NaN filters": "caught",
+    "the sentinel test is spelt for IEEE, so a NaN block is not filtered": "uncaught",
     "the sign character folds to '+' rather than '-'": "caught",
     "the state is left alone": "caught",
     "the step size is the decay factor": "caught",
