@@ -62686,3 +62686,125 @@ under which it would be answered; the batch that met the condition changed one
 line each and the offset assertions caught nothing, because nothing had been
 assumed. Compare finding 3120's `+0x2f64`, where the same restraint was applied
 to a name rather than a type.
+
+### 3660. `FPM_PPS_init` SEEDS THE PHASE FROM THE STEP AND THE DEBT FROM ZERO, AND ITS SIBLING DOES NEITHER
+
+Three stores between the configuration copy and the tap-count division, at
+0x0a9912-0x0a9922:
+
+    movzwl 0x2(%ebx),%eax     ; state->cfg.step, after the copy
+    ...
+    movw   $0x0,0x28(%ebx)    ; need  = 0
+    mov    %ax,0x2a(%ebx)     ; phase = step
+    movw   $0x0,0x2c(%ebx)    ; widx  = 0
+
+`phase` starting at `cfg.step` rather than at zero is the one initialisation in
+this block with no counterpart in `v22_pps.c`, where the step is the literal 3
+and there is nothing to seed from. It means the first output sample is taken a
+nominal step into the first symbol period rather than at its start, and the
+header's claim that init derives `taps` from `cfg.coeffs / cfg.phases` -- the
+`cltd; idiv %esi` at 0x0a9928 -- is confirmed at the same time.
+
+`need` STARTS AT ZERO, where `FPM_SRE_init` sets its own `need` to 1. So the
+pulse shaper's first call filters the history it was handed before it takes a
+symbol, and the timing recovery's first call takes a sample before it produces
+anything. Two sibling blocks, opposite conventions, and both are single
+`movw $0x0` / `movw $0x1` stores that cannot be misread.
+
+WHAT WAS DECLINED. `phase` is not reduced modulo `phases`, and the filter's
+wrap subtracts `phases` exactly once, so a configuration with `step >= phases`
+starts at a phase the filter can never bring back into range and walks its
+coefficient table off the end for ever. That is not registered as a deviation:
+it needs a step at or above the phase count, which is a resampling ratio at or
+below one output per symbol, and no configuration in the object comes near it.
+It is recorded here and in the field comment instead. The same call was made
+for `cfg.phases == 0`, which faults in the `idiv` with no guard.
+
+### 3661. D400 IS A SLIP AND NOT A CONVENTION, AND ONE RE-INIT TRIAL MEASURES IT RATHER THAN READING IT
+
+D400 records that `FPM_SRE_init`'s reuse test guards four buffers with the size
+of three of them, and asserted -- from a reading made while writing
+`FPM_PPS_filter` -- that `FPM_PPS_init` has the same shape without the bug.
+Confirmed from the disassembly, and the confirmation is two instructions:
+
+    a9928:  cltd; idiv %esi          ; si = cfg.coeffs / cfg.phases
+    a9932:  cmp %si,0x2e(%ebx)       ; state->taps  vs  that quotient
+    a9936:  jl  a9968                ;   smaller -> free and reallocate
+    a9994:  lea (%esi,%esi,1),%eax   ; malloc(2 * that same quotient)
+    a99a6:  add %esi,%esi            ; malloc(2 * that same quotient)
+
+The quantity TESTED and the quantity both buffers are SIZED ON are the same
+register. There is no third buffer sized on anything else -- this block has two
+where SRE has four -- so the reuse decision cannot be sound for some of them
+and unsound for the rest.
+
+READING THAT IS NOT MEASURING IT, so the suite now separates the two guards
+with a trial neither block had: a re-init that raises `cfg.coeffs` from 120 to
+125 with `cfg.phases` at ten. The quotient stays at twelve, so `FPM_PPS_init`
+must take the REUSE path and the allocator must record zero frees and zero
+allocations. An SRE-shaped test -- `sre->cfg.coeffs < cfg->coeffs` -- would
+reallocate on the same input. The mutation that rewrites the guard into that
+shape is in `test/mutations/fpmpps.json` and is caught by exactly this pass.
+
+So D400 stands as written: one of two sibling functions has it.
+
+### 3662. `FPM_PPS_init`'s ALLOCATION SIZES ARE NOT TRUNCATED TO SIXTEEN BITS WHERE `FPM_SRE_init`'s ARE
+
+`fpm_sre.c` carries a note that both of its byte counts are formed in sixteen
+bits and only then widened, so a coefficient count above 16383 wraps. The
+sibling does not do it:
+
+    a9994:  lea (%esi,%esi,1),%eax   ; esi is movswl of the quotient
+    a999f:  movswl 0x2e(%ebx),%esi   ; reloaded across the first call
+    a99a6:  add %esi,%esi
+
+Both doublings are on a sign-extended 32-bit value with no `cwtl` after them
+and no 16-bit store between the arithmetic and the argument slot. Written
+plainly as `2 * state->taps`, and the mutation that adds SRE's cast is a
+recorded survivor: `cfg.coeffs` is a `short`, so reaching 16384 taps would need
+a coefficient count of 163840 and the field's own type forbids it. The
+difference is real in the object and unreachable in behaviour, which is why it
+is a finding and a survivor rather than a deviation.
+
+The reload at 0x0a999f is the first `sysdep_malloc` clobbering memory and is
+reproduced for free by writing both sizes as `state->taps`.
+
+### 3663. BOTH LIFECYCLE PAIRS RELEASE IN INIT'S ORDER, AND NO TEST CAN EVER SEE IT
+
+`FPM_PPS_free` releases `hist_q` (+0x34) before `hist_i` (+0x30);
+`FPM_SRE_free` releases `clk` (+0x58), `hist` (+0x54), `coeff` (+0x50),
+`rms_buf` (+0x74). In both cases that is the order the matching init's realloc
+path uses and NEITHER is the order they are allocated in -- SRE allocates
+coeff, hist, clk, rms_buf and releases clk, hist, coeff, rms_buf.
+
+It is reproduced because the object encodes it, and it is recorded as an
+equivalent mutation in both suites because nothing can fail on it: the releases
+are unconditional, nothing lies between them, and nothing allocates afterwards,
+so `allocs`, `frees`, `live`, `free_null` and `bad_free` are identical under
+any permutation. What CAN be measured is the number of releases, and it is: a
+second pass frees a ZEROED state, where every pointer is null, and `free_null`
+counts what `frees` does not. A version releasing three of SRE's four agrees on
+`frees` in the first pass and disagrees in the second.
+
+### 3664. THE HARNESS'S LIVE SET IS 4096 SLOTS AND `t_fpm_sre` HAD ALREADY OVERFLOWED IT 4620 TIMES
+
+A new `FPM_SRE_free` block reported both sides releasing nothing and eight
+`bad_free`s -- the reference's four included, which is what said it was the
+apparatus and not the code. The state at that point in the run:
+
+    live=8716  allocs=8724  frees=8  bad_free=0  overflow=4620
+
+Every `fresh` init in the file leaks its four buffers and the suite calls init
+about a thousand times, so `alloc_insert` had been failing silently for most of
+the run and the pointers this block allocated were never recorded. `sysdep_free`
+then could not find them and counted them as frees of memory it never handed
+out.
+
+`harness_alloc.overflow` was doing its job -- it is documented in `harness.h`
+as "live set full; counts are unreliable" -- and nothing read it. The fix here
+is local: both new free blocks call `harness_alloc_reset()` first and are
+placed where nothing after them frees anything allocated before them, which is
+what `t_fpm_tone`'s delete block already did. The general lesson is 2400's
+again with a third instrument: a counter that goes unread is a detector that
+does not fire, and this one had been mis-reporting for however long the suite
+has had a thousand leaking inits.

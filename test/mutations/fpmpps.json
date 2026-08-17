@@ -141,5 +141,117 @@
   "label": "the rails are filtered at the phase the NEXT output will use",
   "find": "\t\tyi = pps_rail(state->hist_i, state->cfg.coeff_i, phases, phase,\n\t\t\t      taps, widx);",
   "replace": "\t\tyi = pps_rail(state->hist_i, state->cfg.coeff_i, phases,\n\t\t\t      (short)(phase + step), taps, widx);"
+ },
+ {
+  "label": "NOTE: FPM_PPS_init and FPM_PPS_free are allocation and release, so the mutations below are measured with the allocator's books -- counts, request sizes and null releases -- and not by reading freed memory."
+ },
+ {
+  "label": "the reuse test decides on the COEFFICIENT COUNT rather than on the quotient it sizes the buffers with, which is FPM_SRE_init's shape and the slip deviation D400 records",
+  "find": "\tif (!fresh && state->taps < taps) {",
+  "replace": "\tif (!fresh && state->taps * state->cfg.phases < state->cfg.coeffs) {"
+ },
+ {
+  "label": "the reuse test also reallocates when the tap count is unchanged",
+  "find": "\tif (!fresh && state->taps < taps) {",
+  "replace": "\tif (!fresh && state->taps <= taps) {"
+ },
+ {
+  "label": "a re-init always reallocates, so there is no reuse path at all",
+  "find": "\tif (!fresh && state->taps < taps) {",
+  "replace": "\tif (!fresh) {"
+ },
+ {
+  "label": "the realloc path forgets to ask for new buffers, leaving the two pointers dangling",
+  "find": "\t\tsysdep_free(state->hist_i);\n\t\tfresh = 1;",
+  "replace": "\t\tsysdep_free(state->hist_i);"
+ },
+ {
+  "label": "the tap count divides by the phase count plus one",
+  "find": "\ttaps = (short)(state->cfg.coeffs / state->cfg.phases);",
+  "replace": "\ttaps = (short)(state->cfg.coeffs / (state->cfg.phases + 1));"
+ },
+ {
+  "label": "the tap count divides by the phase STEP rather than the phase count",
+  "find": "\ttaps = (short)(state->cfg.coeffs / state->cfg.phases);",
+  "replace": "\ttaps = (short)(state->cfg.coeffs / state->cfg.step);"
+ },
+ {
+  "label": "the histories are sized in ENTRIES rather than in bytes, so each is half the size it must be",
+  "find": "\t\tstate->hist_i = (short *)sysdep_malloc(2 * state->taps);",
+  "replace": "\t\tstate->hist_i = (short *)sysdep_malloc(state->taps);"
+ },
+ {
+  "label": "the histories are V.22's 2 * taps entries rather than this block's taps",
+  "find": "\t\tstate->hist_q = (short *)sysdep_malloc(2 * state->taps);",
+  "replace": "\t\tstate->hist_q = (short *)sysdep_malloc(4 * state->taps);"
+ },
+ {
+  "label": "only one history is allocated",
+  "find": "\t\tstate->hist_q = (short *)sysdep_malloc(2 * state->taps);\n",
+  "replace": ""
+ },
+ {
+  "label": "`phase` is seeded from zero rather than from the nominal step",
+  "find": "\tstate->phase = state->cfg.step;",
+  "replace": "\tstate->phase = 0;"
+ },
+ {
+  "label": "`need` starts at one, as FPM_SRE_init's counterpart does, so the first output takes a symbol first",
+  "find": "\tstate->need = 0;\n\tstate->phase",
+  "replace": "\tstate->need = 1;\n\tstate->phase"
+ },
+ {
+  "label": "`widx` is not reset by a re-init",
+  "find": "\tstate->widx = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the clear loop stops one short of the tap count",
+  "find": "\tfor (i = 0; i < state->taps; i++) {\n\t\tstate->hist_i[i] = 0;",
+  "replace": "\tfor (i = 0; i < state->taps - 1; i++) {\n\t\tstate->hist_i[i] = 0;"
+ },
+ {
+  "label": "the clear loop runs to the tap count the buffers were ALLOCATED with rather than the new one, which on the shrinking reuse path writes past the new length",
+  "find": "\tfor (i = 0; i < state->taps; i++) {\n\t\tstate->hist_i[i] = 0;",
+  "replace": "\tfor (i = 0; i < taps + 1; i++) {\n\t\tstate->hist_i[i] = 0;"
+ },
+ {
+  "label": "only the in-phase history is cleared",
+  "find": "\t\tstate->hist_i[i] = 0;\n\t\tstate->hist_q[i] = 0;",
+  "replace": "\t\tstate->hist_i[i] = 0;"
+ },
+ {
+  "label": "FPM_PPS_free releases only the in-phase history",
+  "find": "\tsysdep_free(state->hist_q);\n\tsysdep_free(state->hist_i);",
+  "replace": "\tsysdep_free(state->hist_i);"
+ },
+ {
+  "label": "FPM_PPS_free releases the in-phase history twice",
+  "find": "\tsysdep_free(state->hist_q);\n\tsysdep_free(state->hist_i);",
+  "replace": "\tsysdep_free(state->hist_i);\n\tsysdep_free(state->hist_i);"
+ },
+ {
+  "label": "FPM_PPS_free releases the two histories the other way round.  SURVIVOR, and it cannot be otherwise: `sysdep_free` has no ordering effect a caller can observe, both releases happen unconditionally, and nothing allocates afterwards -- so the allocator's books are identical under either order.  The object's order (hist_q first, at 0x0a9898 before 0x0a98a3) is reproduced because the object encodes it, not because a test can see it.",
+  "find": "\tsysdep_free(state->hist_q);\n\tsysdep_free(state->hist_i);",
+  "replace": "\tsysdep_free(state->hist_i);\n\tsysdep_free(state->hist_q);",
+  "equivalent": true
+ },
+ {
+  "label": "init's realloc path releases the two histories the other way round.  SURVIVOR for the same reason as the pair in FPM_PPS_free: two unconditional releases with nothing between them, and the two allocations that follow are recorded by count and by request size, neither of which an order can move.",
+  "find": "\t\tsysdep_free(state->hist_q);\n\t\tsysdep_free(state->hist_i);",
+  "replace": "\t\tsysdep_free(state->hist_i);\n\t\tsysdep_free(state->hist_q);",
+  "equivalent": true
+ },
+ {
+  "label": "the tap count is derived from the CALLER's configuration rather than from the copy init just made.  SURVIVOR, and unreachable rather than untested: the two objects hold the same ten dwords by the time this line runs, so they can only disagree if `cfg` aliases `state->cfg` -- that is, if a caller passes the state's own configuration back into init, which is a self-assignment no caller can want and none is reconstructed.  The object reads the COPY (`movswl 0x20(%ebx)` and `movswl (%ebx)`, both off the state pointer, not off `cfg`), so that is what is written.",
+  "find": "\ttaps = (short)(state->cfg.coeffs / state->cfg.phases);",
+  "replace": "\ttaps = (short)(cfg->coeffs / cfg->phases);",
+  "equivalent": true
+ },
+ {
+  "label": "the two byte counts are truncated to sixteen bits, as FPM_SRE_init's are.  SURVIVOR by arithmetic: it can only change a value when `2 * taps` exceeds 32767, i.e. above 16384 taps, which needs `cfg.coeffs` above 163840 with ten phases -- and `cfg.coeffs` is a short. UNREACHABLE THROUGH THE FIELD'S OWN TYPE. The object does not encode the truncation (`lea (%esi,%esi,1)` and `add %esi,%esi` on a sign-extended 32-bit tap count, no `cwtl`, no 16-bit store), which is a measured difference from the sibling and is why the plain form is written.",
+  "find": "\t\tstate->hist_i = (short *)sysdep_malloc(2 * state->taps);\n\t\tstate->hist_q = (short *)sysdep_malloc(2 * state->taps);",
+  "replace": "\t\tstate->hist_i = (short *)sysdep_malloc((short)(2 * state->taps));\n\t\tstate->hist_q = (short *)sysdep_malloc((short)(2 * state->taps));",
+  "equivalent": true
  }
 ]

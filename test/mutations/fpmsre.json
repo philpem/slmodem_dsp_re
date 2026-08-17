@@ -251,5 +251,24 @@
   "label": "the tracking-mode in-phase rejection is inverted, so the update runs only when the vector carries nothing",
   "find": "\t\t\t\t\tupdate = mode != 2\n\t\t\t\t\t\t || (unsigned short)(xq + 0x31)\n\t\t\t\t\t\t    > 0x62;",
   "replace": "\t\t\t\t\tupdate = mode != 2\n\t\t\t\t\t\t || (unsigned short)(xq + 0x31)\n\t\t\t\t\t\t    <= 0x62;"
+ },
+ {
+  "label": "NOTE: FPM_SRE_free is four releases and nothing else, so the three below are measured with the allocator's books."
+ },
+ {
+  "label": "FPM_SRE_free releases only three of the four buffers",
+  "find": "\tsysdep_free(sre->coeff);\n\tsysdep_free(sre->rms_buf);",
+  "replace": "\tsysdep_free(sre->coeff);"
+ },
+ {
+  "label": "FPM_SRE_free releases the history twice and the clock not at all",
+  "find": "\tsysdep_free(sre->clk);\n\tsysdep_free(sre->hist);",
+  "replace": "\tsysdep_free(sre->hist);\n\tsysdep_free(sre->hist);"
+ },
+ {
+  "label": "FPM_SRE_free releases the four buffers in the order init ALLOCATES them rather than the order it releases them in.  SURVIVOR, and no test can be written that fails on it: four unconditional releases with nothing between them and no allocation afterwards, so `allocs`, `frees`, `live`, `free_null` and `bad_free` are identical under any permutation.  The object's order -- clk, hist, coeff, rms_buf, at 0x0aa788, 0x0aa793, 0x0aa79e, 0x0aa7a9 -- is reproduced because the object encodes it, and it is the same order init's realloc path uses.",
+  "find": "\tsysdep_free(sre->clk);\n\tsysdep_free(sre->hist);\n\tsysdep_free(sre->coeff);\n\tsysdep_free(sre->rms_buf);",
+  "replace": "\tsysdep_free(sre->coeff);\n\tsysdep_free(sre->hist);\n\tsysdep_free(sre->clk);\n\tsysdep_free(sre->rms_buf);",
+  "equivalent": true
  }
 ]
