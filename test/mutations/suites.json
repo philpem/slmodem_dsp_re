@@ -667,5 +667,9 @@
  "v90p4mgen": [
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90p4mgen"
+ ],
+ "v90eqdata": [
+  "src/pump/v90/V90Equalizer.cpp",
+  "build/test/t_v90eqdata"
  ]
 }

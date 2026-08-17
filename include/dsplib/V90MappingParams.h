@@ -101,12 +101,20 @@ public:
 
 	/*
 	 * +0x620..+0x634  The spectral shaper, six dwords written together by
-	 * `V90ConstellationDesigner::spectralDesign` and read by nothing this
-	 * tree has written.  Each is a straight `mov` from a `V90Parameters`
-	 * field `vparse.py` names, so the names below are the AUTHOR'S for the
-	 * sources and ours only for the destinations; the two arms copy
-	 * `SPECTRAL_SHAPER_*` or `GERMAN_PBX_SPECTRAL_SHAPER_*` into the same
-	 * six slots.
+	 * `V90ConstellationDesigner::spectralDesign`.  Each is a straight `mov`
+	 * from a `V90Parameters` field `vparse.py` names, so the names below
+	 * are the AUTHOR'S for the sources and ours only for the destinations;
+	 * the two arms copy `SPECTRAL_SHAPER_*` or
+	 * `GERMAN_PBX_SPECTRAL_SHAPER_*` into the same six slots.
+	 *
+	 * "READ BY NOTHING THIS TREE HAS WRITTEN" USED TO END THAT SENTENCE AND
+	 * IS RETRACTED.  `V90Demapper::reset` reads +0x620 four times over --
+	 * into `signBitGroups` unchanged, as `6 - it`, as `6 / it`, and as
+	 * `V90SignBitsExtractor::reset`'s spacing -- and `spectralDesign`'s own
+	 * caller forms `6 - shaperSR` too (`mov $0x6,%cl; sub 0x620(%ebx),%cl`,
+	 * quoted in V90ConstellationDesigner.cpp).  Finding 4342's rule is why
+	 * this matters: a claim that nothing reads a field is a claim about
+	 * every function in the object.  Finding 5004.
 	 *
 	 * The widths are the store encodings -- six `movl` -- and the types
 	 * below are the SOURCES' types, which is what a four-byte copy carries
@@ -115,6 +123,21 @@ public:
 	 * `min(SPECTRAL_SHAPER_ID, rate)` computed with an UNSIGNED compare
 	 * (`ja` in one arm, `jbe` in the other), which the `unsigned int` rate
 	 * argument forces whatever the parameter's own `int` says.
+	 *
+	 * AND THERE IS NOW A SECOND MEASUREMENT, ON `shaperSR`, WHICH IS
+	 * DELIBERATELY NOT ACTED ON HERE.  `V90Demapper::reset` divides six by
+	 * it with `divl` and not `idiv` (0x308b6), which is unsigned
+	 * arithmetic; but what that forces is the NUMERATOR's type, and
+	 * `V90DEMAPPER_FRAME` is already `6u`, so the reading is satisfied with
+	 * the field left `int`.  The two spellings agree over every spacing a
+	 * caller can produce -- `6 - x` has the same bits either way and the
+	 * quotient differs only for a negative divisor -- so retyping would be
+	 * choosing between two readings the object does not separate.  The name
+	 * is not touched either: `shaperSR` is the author's for the PARAMETER
+	 * `spectralDesign` copies, and the demapper's use of the same word as a
+	 * sign-bit spacing is usage inference, which is the weakest of
+	 * CLAUDE.md's three ranks and does not outrank a name from the
+	 * parameter block.
 	 */
 	int shaperSR;						/* +0x620 */
 	unsigned int shaperId;					/* +0x624 */
