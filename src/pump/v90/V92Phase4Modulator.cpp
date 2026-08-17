@@ -73,6 +73,7 @@ V92P4M_OFF(word_34,		0x034, word34);
 V92P4M_OFF(word_38,		0x038, word38);
 V92P4M_OFF(flag_3c,		0x03c, flag3c);
 V92P4M_OFF(amplitude,		0x040, amplitude);
+V92P4M_OFF(byte_42,		0x042, byte42);
 V92P4M_OFF(bitsPerSymbol,	0x043, bitspersymbol);
 V92P4M_OFF(word_44,		0x044, word44);
 V92P4M_OFF(mappingParams,	0x048, mappingparams);

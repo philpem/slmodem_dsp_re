@@ -66256,3 +66256,178 @@ store that compares equal), fractional values (`frac_of` scales by 1e6 and a
 grid of whole numbers prints `.000000` for all of them), and stays inside
 +/-3000 because `(int)v` outside `int`'s range is undefined in OUR source --
 D561's argument.  The floats are compared as BITS, not as numbers.
+
+## 5400. THE OBJECT WRITES `bits[-1]` TOO, SO THE FIX WAS TO MAKE OUR ACCESS DEFINED AND KEEP THE VALUE -- D392'S SHAPE, AT NO CODEGEN COST
+
+*Numbering: the high-water mark across every branch and the on-disk `docs/` of
+all fourteen `git worktree list` entries was 5305 when this was written, so
+this block starts at 5400.*
+
+**THE FIRST QUESTION WAS WHETHER THE WRITE IS OURS OR THE OBJECT'S, AND IT IS
+THE OBJECT'S.**  All four differential generators load AND store through
+`0x7b(%count,%this,1)` with `bitsPerSymbol` zero-extended into the index
+register, which is `&bits[bitsPerSymbol - 1]` because `bits` is at +0x7c:
+
+```
+   17c33:  0f b6 53 43     movzbl 0x43(%ebx),%edx       generateTRN2u
+   17c37:  8b 4b 78        mov    0x78(%ebx),%ecx
+   17c3a:  0f b6 44 1a 7b  movzbl 0x7b(%edx,%ebx,1),%eax
+   17c3f:  31 c8           xor    %ecx,%eax
+   17c41:  89 43 78        mov    %eax,0x78(%ebx)
+   17c44:  88 44 1a 7b     mov    %al,0x7b(%edx,%ebx,1)
+```
+
+and the same five instructions at +0x17c91/+0x17c9b (`generateE2u`),
++0x17dc0/+0x17dc7 (`generateCPu`) and +0x17ef0/+0x17ef7 (`generateSUVu`).
+There is no guard on the count anywhere in the four functions.  At a count of
+zero the address is `this + 0x7b` -- the TOP BYTE of the `unsigned int prevBit`
+at +0x78 -- so the object reads and writes one byte of the very field the same
+statement assigns.  **The overlap is load-bearing**: the byte the fold reads is
+`prevBit >> 24`, and which of the two stores lands last decides what +0x7b
+holds afterwards.  The object commits to both orders, in two pairs:
+
+```
+    generateCPu, generateSUVu    byte then prevBit    +0x7b ends as prevBit's
+    generateE2u, generateTRN2u   prevBit then byte    +0x7b ends as the bit
+```
+
+**SO THE FIX REPRODUCES THE VALUE AND REMOVES THE UNDEFINED ACCESS**, which is
+D392's move and D4's before it: `prevBit` and the block are now one array
+object, and index -1 is an ordinary element of it.
+
+```c
+	union {
+		unsigned int prevBit;
+		unsigned char bitsExt[V92P4M_BITS_BELOW + V92P4M_BITS_LEN];
+	};
+```
+
+`bitsExt[V92P4M_BITS_BELOW + i]` is the object's `bits[i]`;
+`bitsExt[V92P4M_BITS_BELOW - 1]` is its `bits[-1]`.  The bound is exact rather
+than defensive: `bitsPerSymbol` is an `unsigned char`, so the index the fold
+forms is 3 .. 258 over a 304-element array and cannot be otherwise.  The bias
+is four rather than one because the union has to cover the whole of `prevBit`;
+only its top byte is ever addressed as part of the block.
+
+**IT PINS THE STORE ORDER, WHICH IS THE WHOLE POINT AND WAS NOT ASSUMED.**
+Compiled with the period toolchain and read back through `dis.py`, our
+`build/tc_out/src_pump_v90_V92Phase4Modulator.cpp.o` now has
+
+```
+     fb3:  89 47 78        mov    %eax,0x78(%edi)      generateTRN2u
+     fb6:  88 44 39 7b     mov    %al,0x7b(%ecx,%edi,1)
+```
+
+-- prevBit then byte in `generateE2u` and `generateTRN2u`, byte then prevBit in
+`generateCPu` and `generateSUVu`, which is the blob's order in all four.  Two
+members at two offsets let GCC 3.4.2 disambiguate the stores by FIELD and
+reorder them; one union member says they may overlap, and the order goes back
+to the source's.  Our source order was already the object's, so nothing in
+`src/` moved but the spelling.
+
+**`compare.py` DOES NOT MOVE, AND THAT IS FINDING 3701 AGAIN.**  Measured on
+GCC 3.4.2 exact at the period flags, before and after, from this branch's own
+runs and not from `ratchet.json`:
+
+```
+                       before    after
+    identical             410      410     and the same SET, by samesize.py
+    same size              78       78                          --identical
+    different size        606      606
+    total bytes        401355   401355   of the blob's 478060 (84.0%)
+```
+
+A constant bias on an index into a member array rides in the addressing-mode
+displacement, exactly as it rode in the relocated displacement for the phasor:
+`0x7b(%count,%this,1)` is `0x7c + count - 1` and `0x78 + 4 + count - 1` alike.
+**Removing this class of undefined behaviour is not a trade against codegen
+fidelity.**
+
+**ONE FORM WAS REJECTED ON THAT MEASUREMENT.**  A local
+`unsigned char *bits = &bitsExt[V92P4M_BITS_BELOW];` in each generator reads
+far better -- every access inside the block keeps its old spelling and only the
+fold names the wider array -- and it hoists the address: 401328 bytes, six
+functions moved, `generateTRN2u` 214 -> 230 and `generateE2u` 475 -> 464.  The
+identical SET was unchanged either way, so it is a small movement and not a
+regression, but a deviation fix is not entitled to make it.  The verbose
+spelling is in `src/` and the reason is in the comment above the generators.
+
+## 5401. `bitsPerSymbol == 0` IS REACHABLE, `reset` COMPUTES IT AS `arg + 2` IN ONE BYTE, AND +0x42 IS NOT PADDING
+
+D700 established that the phase 4 states this class divides in are reachable
+rather than hypothetical; this is the same question for +0x43, and the answer
+comes from its writers.
+
+**THERE IS EXACTLY ONE WRITER AMONG THE CLASS'S OWN THIRTY-SIX SYMBOLS** --
+scanned over .text 0x16de0 .. 0x19160, which is every `V92Phase4Modulator`
+member, and the claim is scoped to that range rather than to 1.2 MB.  Twenty-
+six instructions touch +0x43 and twenty-five are `movzbl`.  The one store is in
+`reset`:
+
+```
+   19043:  8b 54 24 28     mov    0x28(%esp),%edx      the 2nd argument
+   19062:  88 56 42        mov    %dl,0x42(%esi)
+   19065:  80 c2 02        add    $0x2,%dl
+   1906a:  88 56 43        mov    %dl,0x43(%esi)
+```
+
+so `bitsPerSymbol = (unsigned char)(arg + 2)`, **and the add is eight bits
+wide**: an argument of 254 gives zero and 255 gives one.  Nothing between the
+argument and the store tests it.  `V92Modulator` calls `reset` from four sites
+(0x1470e, 0x1482a, 0x148f5, 0x14eb9) and `enterPhase4` passes
+`movzbl 0xc(%ebx)` -- a byte field of the caller, unbounded at the call.
+
+**AND THE CONSTRUCTOR NEVER WRITES +0x43 AT ALL.**  The 164 bytes at 0x17970
+write +0x1c0, +0x48, +0x1c8, +0x1c4, +0x74, cp->+0x110, +0x6c, +0x18 and +0x1c
+and nothing else, so before the first `reset` the field holds whatever the
+storage held.  Both routes put zero in front of the fold, so the state is not
+provably unreachable and was not treated as such.
+
+**+0x42 HOLDS THE RAW ARGUMENT, AND THE HEADER SAID NOTHING WRITES IT.**  The
+`mov %dl,0x42(%esi)` above is a byte store of `reset`'s second argument before
+the `add $0x2`, and it is a separate store from the 16-bit `mov %bx,0x40(%esi)`
+that writes `amplitude`.  `V92Phase4Modulator.h` carried `+0x42  Alignment;
+nothing writes it`, which was true of every member reconstructed so far and
+false of the object; `reset` is one of the eight members still outstanding, so
+nothing had read it.  The comment now says what `reset` does.  The field is NOT
+retyped and no deviation is opened: what +0x42 is FOR is `reset`'s business and
+`reset` is unwritten.
+
+## 5402. A TRIAL WITHDRAWN BECAUSE OUR CODE WAS UNDEFINED HAS TO COME BACK ONCE IT IS DEFINED, AND THE SAME 80 AND 160 CHECKS SAY SO TWICE
+
+Finding 4705 withdrew `bitsPerSymbol == 0` from `t_v92p4sym`'s grid and four
+store-order mutations from its set, because the trial's verdict was the
+compiler's: with the input in the grid the UNMUTATED source failed 80 checks in
+`generateE2u` and 160 in `generateTRN2u` under GCC 3.4.2 and passed under GCC
+13.  That was the right call about the TRIAL.  It was not the fix, and the two
+halves have to be settled together -- **otherwise the fix is invisible to the
+suite that motivated it.**
+
+Both are back.  The grid starts at zero again and the period tier is green:
+56323 checks per generator at level 0, 61443 with transcripts, `make phase`
+exit 0, period differential 222 passed / 0 failed.  And the four mutations are
+CAUGHT by the very checks that used to fail on unmutated source:
+
+```
+    generateE2u stores the folded bit before prevBit    80/56323 checks failed
+    generateTRN2u stores the folded bit before prevBit 160/56323 checks failed
+```
+
+-- the same two numbers, now measuring the mutation instead of the compiler.
+The suite is 134 mutations, 134 caught, 0 NOT caught, 0 unusable, 0 equivalent.
+
+**THE ANTI-VACUITY COUNTER IS ON THE CONJUNCTION AND NOT ON THE AXIS**, which
+is finding 4756's shape avoided rather than repeated: `generateCPu`,
+`generateSUVu` and `generateE2u` fold only on the `flag_3c == 0` arm, so
+`saw_bps_zero_folding` requires `bps[bi] == 0 && f3 == 0`.  Shown to fire:
+taking the zero back out gives `some trial folded at bitsPerSymbol == 0, on the
+arm that folds  got 0, reference 1` and the suite fails.
+
+**AND WIDENING A GRID MOVED A SECOND ONE, WHICH SIGFPE CAUGHT.**  `gs_setup`
+calls `setup`, so the zero reached the `generateSymbol` grid too -- state 4
+copies `bitsPerSymbol` into the CP and `word_1b0 = patternLength /
+cp->bitsPerSymbol` then raises #DE on both sides at once.  That is D571's
+input, not D561's: a trial that traps identically on both sides measures the
+CPU.  The second grid is clamped to one and says so.  Worth stating as a
+general shape: **a shared `setup` means widening one grid widens every grid
+built on it**, and the two may have different domains.

@@ -403,8 +403,18 @@ public:
 	 */
 	short amplitude;
 
-	/* +0x42  Alignment; nothing writes it. */
-	unsigned char pad_42[1];
+	/*
+	 * +0x42  `reset`'s SECOND argument, raw.  NOT alignment, which is what
+	 * this comment used to say: `mov %dl,0x42(%esi)` at .text+0x19062 is a
+	 * byte store of that argument, separate from the 16-bit
+	 * `mov %bx,0x40(%esi)` above it and from the `+0x43` store below.  It
+	 * was true of every member reconstructed so far and false of the
+	 * object -- `reset` is one of the eight still outstanding, so nothing
+	 * had read it.  The offset name STAYS: what the field is FOR is
+	 * `reset`'s business and nothing written here touches it.  Finding
+	 * 5401.
+	 */
+	unsigned char byte_42;
 
 	/*
 	 * +0x43  How many bits go into one symbol when the bits come from
@@ -413,6 +423,12 @@ public:
 	 * `Scrambler<h,h>::processAllOnes`/`processAllZeros` in
 	 * `generateTRN2u`/`generateE2u`, and the index of the last bit
 	 * (`bits[bitsPerSymbol - 1]`) that carries the differential state.
+	 *
+	 * `reset` COMPUTES IT AS `arg + 2` IN ONE BYTE -- `add $0x2,%dl;
+	 * mov %dl,0x43(%esi)` at .text+0x19065 -- so a second argument of 254
+	 * gives ZERO, the constructor does not initialise the field at all,
+	 * and `bits[bitsPerSymbol - 1]` at zero is the fold D561 records.
+	 * Finding 5401.
 	 */
 	unsigned char bitsPerSymbol;
 
