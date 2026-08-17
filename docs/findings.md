@@ -62854,3 +62854,106 @@ Two things follow that a reader of the V.17 and V.29 twins would get wrong:
 - **A forwards step is invisible at counts that are multiples of four**, which
   is finding 3574's shape without a table: the test drives 1, 2, 3, 5, 7, 11,
   13, 47 and 49 alongside 12, 48 and 0, and seeds `quad` at all four residues.
+
+### 3649. THE FAX RECEIVER'S BLOCK IS A STRAIGHT CONCATENATION OF FIVE DSP OBJECTS, AND THEIR `sizeof`s PROVE THE OFFSETS
+
+`DemodDataV27` reaches five sub-objects of the block at `obj + 0x54`. Their
+offsets are read from its call sites; their SIZES come from headers written by
+other batches, from the objects' own constructors, and the two agree with no
+slack at all:
+
+| offset | object | `sizeof` | ends at |
+|--:|---|--:|--:|
+| 0x004c | `struct fpm_mrf` | 0x1c | 0x0068 |
+| 0x0068 | `struct fpm_agc` | 0x2c | 0x0094 |
+| 0x0094 | `struct fpm_sre` | 0x90 | 0x0124 |
+| 0x0124 | `struct fpm_fse` | 0x4e18 | 0x4f3c |
+| 0x4f40 | two `short *` scratch pointers, four-byte aligned | | |
+
+Five objects, four exact abutments and one four-byte alignment pad. Nothing
+was fitted: the sizes were fixed before this function was read, and any one
+offset being wrong would have made the chain overlap. `DemodDataV29`'s block
+at `obj + 0x50` is the same five in the same order four bytes lower --
+0x48, 0x64, 0x90, 0x120 -- but its scratch pointers are at 0x4f54 and 0x4f58
+rather than immediately after the equaliser, leaving 0x1c bytes unaccounted
+for between them. `struct fpm_mrf` is 0x1c bytes, which is a hypothesis and
+not a reading.
+
+### 3650. `FPM_AGC_agc` RETURNS THE VALUE IT STORES IN `agc->signal`, AND THE OBJECT HAS ONE `ret` TO PROVE IT
+
+`v23rx.c`, `bwchdem.c` and `b103fp.c` all read `agc.signal` after the call and
+say the returned value "is the same number". That was an assertion; here is the
+measurement. `FPM_AGC_agc` has exactly ONE `ret`, at 0xa6894, and the three
+instructions before its epilogue are
+
+    a6884  setg   %dl
+    a6887  movzbl %dl,%eax
+    a688a  mov    %eax,0x1c(%edi)
+
+with `%edi` the state pointer and 0x1c the field `fpm_agc.h` already calls
+`signal`. The value returned and the value stored are computed once and are
+the same on the only path out of the function, so reading the field after the
+call is exactly equivalent and not merely close.
+
+All four `DemodData*` functions use that return. `DemodDataV27` moves it
+straight into `%esi` at 0xa5992; V.17, V.29 and V.32 stash it on the stack.
+Our `FPM_AGC_agc` is declared `void`, so the reconstruction must read the
+field -- the convention the three files above already set. Correcting the
+signature belongs to whoever owns `src/dsp/fpm_agc.c`, not to a caller's batch.
+
+### 3651. THE `signal` FLAG GATES THREE FIELDS INTO THREE OTHERS, AND V.27 AND V.29 DISAGREE ABOUT THE THIRD
+
+Both functions do the same three-and-a-zero, at different offsets in their own
+receiver block. Writing V.29's relative to 0x164 and V.27's relative to 0x168
+lines them up:
+
+| | source | destination |
+|---|---|---|
+| the early one | `+0x04 & signal` | V.27 `+0xdc`, V.29 `+0xd8` |
+| base + 0 | `+0x08 & signal` | |
+| base + 4 | zero, unconditionally | |
+| base + 8 | V.27 `+0x10 & signal`, V.29 `+0x20 & signal` | |
+
+So the two agree on the shape, on the first two sources and on the
+unconditional zero, and take their third source from different fields. All six
+are 32-bit and `signal` is 0 or 1, so the operation is a pass-or-clear rather
+than a mask. What the six fields MEAN is not established and no name is given
+to any of them here; they are recorded at their offsets so that the batch that
+writes these functions has the shape without having to re-derive it.
+
+### 3652. THE FOUR `DemodData*` FUNCTIONS WERE NOT WRITTEN, AND THIS IS WHAT STOPPED THEM
+
+Read, disassembled and understood; not committed, because no differential test
+was built for them and CLAUDE.md's rule is not relaxed for a function that
+merely looks right.
+
+What the test needs, and why it is not small: the receiver block is about
+0x4f60 bytes and holds five initialised DSP objects (3649), so the fixture must
+build an `fpm_mrf`, an `fpm_agc`, an `fpm_sre`, an `fpm_fse` and an `fpm_mtd`
+-- and for V.29 and V.17 an `fpm_tone` as well -- each through its own `ref_`
+constructor with its own configuration and tables, laid at exact offsets, on
+both sides. Then the separating trials: the `signal` gate of 3651 needs its
+three sources seeded to three DIFFERENT multi-bit values or transposing them is
+invisible (finding 3574's shape), and needs `signal` driven at both 0 and 1,
+which means seeding the AGC so its `setg` goes both ways rather than hoping a
+stimulus sweep gets there.
+
+The shape is settled and recorded, so the next batch starts from
+`docs/findings.md` rather than from `dis.py`:
+
+- `DemodDataV27` (0xa5950): AGC, then a gate on `*(short *)(obj+0x50 + 0x10)`
+  around `FPM_MTD_detect`, which returns 0 from the whole function if it fires;
+  then MRF, SRE and FSE with two scratch buffers between them.
+- `DemodDataV29` (0xa5ff0) adds, before the detector, a halving loop --
+  `scratch[i] = in[i] >> 1` over `count` samples, arithmetic shift -- and a
+  `FPM_TONE_kill` pass over that scratch. Its gate is at `+0x14` of the shared
+  block and its detector and tone objects are its `+0x00` and `+0x04`.
+- `DemodDataV17` (0xa50a0) is the same shape as V.29 with the block at
+  `obj + 0x5c`, the shared block at `obj + 0x4c` and the gate at `+0x18`.
+- `DemodDataV32` (0x81c00) is NOT a fourth copy: it runs MRF and
+  `FPM_ECC_cancel` BEFORE the AGC, has no `FPM_MTD_detect` at all, and ends
+  with `FPM_rms` and a second diagnostic. Model it on itself.
+
+Three different gate offsets -- 0x10, 0x14, 0x18 -- across the three fax
+modulations is a transposable set, so whoever writes them must make the shared
+block hold different values at all three or a swap will not separate.
