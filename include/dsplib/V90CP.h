@@ -179,7 +179,7 @@ public:
 	 *
 	 * `reset` calls `resetDetector` and the compiler inlines it; the
 	 * constructor repeats the five stores instead.  Findings 1237 and
-	 * 4300 for why those two are spelled differently.
+	 * 4600 for why those two are spelled differently.
 	 */
 	unsigned char *getBitVector(unsigned int &length);
 	void reset();

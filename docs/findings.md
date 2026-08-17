@@ -63477,7 +63477,7 @@ set" would have lost silently:
   neighbourhood block can catch. That last one is what proves the two copies of
   the four real signs cannot drift apart.
 
-### 4300. `V90CP`'s DETECTOR RESET IS `+0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa`, AND THAT ONE ORDERING MOVED THREE SYMBOLS AT ONCE
+### 4600. `V90CP`'s DETECTOR RESET IS `+0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa`, AND THAT ONE ORDERING MOVED THREE SYMBOLS AT ONCE
 
 `V90CP::resetDetector` writes five fields and nothing else. The constructor
 writes the same five, and `reset` writes them and three more. All three were
@@ -63527,7 +63527,7 @@ of stores, the object's store order is a testable hypothesis about the source
 order, and testing it costs one build.** Ascending-by-offset is a reader's
 habit, not the author's.
 
-### 4301. `V90CP::calcCRC` IS `evaluateCRC`'s LOOP WITH BOTH ENDS REMOVED, AND THE ABSENCES ARE WHAT IDENTIFY IT
+### 4601. `V90CP::calcCRC` IS `evaluateCRC`'s LOOP WITH BOTH ENDS REMOVED, AND THE ABSENCES ARE WHAT IDENTIFY IT
 
 `calcCRC` (0x512d0, 570 bytes) and `evaluateCRC` (0x51730, 668) run the same
 CCITT shift register over the same extent -- information bits from 0x12 up to
@@ -63559,7 +63559,7 @@ unsigned `jae`/`jb` on both bounds. What differs is which of the sixteen stack
 slots holds which register index and whether the cursor advances by `inc` or
 by `lea`. That is 614's free column; chasing it would be fitting the compiler.
 
-### 4302. `V90CP::printNofRecievedMpMpNot` PRINTS "V90MP", AND THE POOLED STRING IS WHY
+### 4602. `V90CP::printNofRecievedMpMpNot` PRINTS "V90MP", AND THE POOLED STRING IS WHY
 
 The format at `.rodata.str1.4+0xd6b0` is `"V90MP: received %d MP, %d MPNot\r\n"`
 and it has two referrers: `V90MP::printNofRecievedMpMpNot` at 0x20bef, where
