@@ -1,0 +1,245 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the one input that makes a store ORDER a claim",
+  "why": "The nine members here are the phase 4 upstream generators and setMappingParams, read out of .text+0x17840-0x18054. Every entry is a claim the disassembly makes: which constant each scrambler call is fed, which bulk form (all-ones or all-zeros) each uses, where the differential bit is folded in, that generateCPt toggles below 25 symbols and scrambles from a base of 25 above it, that generateCPu and generateSUVu have IDENTICAL bodies and generateRm and generateB1u likewise, and that setMappingParams neither stores its argument nor does anything but reconfigure the chain. THE STORE ORDER ENTRIES ARE ONLY CATCHABLE AT bitsPerSymbol == 0, where `bits[-1]` is the top byte of prevBit and the two stores overlap; at every other input they are disjoint and finding 617's rule -- that a store order is a codegen hint the differential tier cannot settle -- applies unchanged. WHAT NO ENTRY HERE REACHES: which of generateCPu and generateSUVu is which, because their bodies are the same instructions in the same order and only `pattern`'s contents tell them apart."
+ },
+ {
+  "label": "NOTE: no entry here claims a store ORDER, and one used to",
+  "why": "generateCPu and generateSUVu store the folded bit and then prevBit; generateE2u and generateTRN2u store prevBit and then the bit. Four mutations exchanged those orders and all four were caught -- under GCC 13, at bitsPerSymbol == 0, the only input where the two stores overlap because `bits[-1]` is prevBit's top byte. Under the PERIOD compiler the same trials fail on the unmutated source: 3.4.2 schedules the byte store first in E2u and TRN2u whatever the source says. The subscript is out of bounds and the behaviour is therefore the compiler's, not the object's, so the trials came out of the grid and these four claims came out of this set. Finding 4705, deviation D561. What still holds is everything the fold DOES: which bit it lands on, that prevBit carries it, and that both are written -- entries above cover all three."
+ },
+ {
+  "label": "generateCPt scrambles from 24 symbols rather than toggling to 24",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount < 24)"
+ },
+ {
+  "label": "generateCPt toggles prevBit with 2 rather than 1",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 2;"
+ },
+ {
+  "label": "generateCPt does not toggle prevBit at all",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit;"
+ },
+ {
+  "label": "generateCPt's pattern base is 24 rather than 25",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 24) % patternLength])"
+ },
+ {
+  "label": "generateCPt does not reduce the pattern index",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % (patternLength + 1)])"
+ },
+ {
+  "label": "generateCPt does not fold prevBit into the scrambled bit",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ 0;"
+ },
+ {
+  "label": "generateCPt does not carry the bit forward",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\n"
+ },
+ {
+  "label": "generateCPt negates on a zero bit",
+  "find": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit != 0)\n\t\tsym = -sym;",
+  "replace": "V92Phase4Modulator::generateCPt()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tif (symbolCount <= 24)\n\t\tbit = prevBit ^ 1;\n\telse\n\t\tbit = (unsigned char)scrambler.process(\n\t\t\t      pattern[(symbolCount - 25) % patternLength])\n\t\t      ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit == 0)\n\t\tsym = -sym;"
+ },
+ {
+  "label": "generateE1u scrambles a one rather than a zero",
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0)",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(1)"
+ },
+ {
+  "label": "generateE1u does not fold prevBit in",
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ 0u;"
+ },
+ {
+  "label": "generateE1u does not carry the bit forward",
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\n"
+ },
+ {
+  "label": "generateE1u negates on a zero bit",
+  "find": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit != 0)\n\t\tsym = -sym;",
+  "replace": "V92Phase4Modulator::generateE1u()\n{\n\tunsigned int bit;\n\tshort sym;\n\n\tbit = (unsigned char)scrambler.process(0) ^ prevBit;\n\tprevBit = bit;\n\n\tsym = amplitude;\n\tif (bit == 0)\n\t\tsym = -sym;"
+ },
+ {
+  "label": "generateCPu takes the bits-to-symbol arm when flag_3c is clear",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c != 0) {"
+ },
+ {
+  "label": "generateCPu scrambles the pattern index rather than the pattern byte",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process((unsigned char)patternIndex);"
+ },
+ {
+  "label": "generateCPu steps the pattern index by two",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 2) % patternLength;"
+ },
+ {
+  "label": "generateCPu does not wrap the pattern index",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = patternIndex + 1;"
+ },
+ {
+  "label": "generateCPu folds prevBit into the FIRST bit rather than the last",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[0] ^ prevBit;"
+ },
+ {
+  "label": "generateCPu does not carry the bit forward",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tprevBit = last;\n",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\n"
+ },
+ {
+  "label": "generateCPu's second arm does not push the bits it made",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tprevBit = last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tfor (i = 0; i < n; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tbitsToSymbol->process(bits, n);\n",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tprevBit = last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tfor (i = 0; i < n; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n"
+ },
+ {
+  "label": "generateCPu's second arm fills bitsPerSymbol bits rather than n",
+  "find": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tprevBit = last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tfor (i = 0; i < n; i++) {",
+  "replace": "V92Phase4Modulator::generateCPu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tprevBit = last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {"
+ },
+ {
+  "label": "generateSUVu takes the bits-to-symbol arm when flag_3c is clear",
+  "find": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {",
+  "replace": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c != 0) {"
+ },
+ {
+  "label": "generateSUVu steps the pattern index by two",
+  "find": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;",
+  "replace": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 2) % patternLength;"
+ },
+ {
+  "label": "generateSUVu folds prevBit into the FIRST bit rather than the last",
+  "find": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[0] ^ prevBit;"
+ },
+ {
+  "label": "generateSUVu's second arm does not push the bits it made",
+  "find": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tprevBit = last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tfor (i = 0; i < n; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tbitsToSymbol->process(bits, n);\n",
+  "replace": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tprevBit = last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tfor (i = 0; i < n; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);\n\t\t\tpatternIndex = (patternIndex + 1) % patternLength;\n\t\t}\n"
+ },
+ {
+  "label": "generateSUVu scrambles a constant one rather than the pattern",
+  "find": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(pattern[patternIndex]);",
+  "replace": "V92Phase4Modulator::generateSUVu()\n{\n\tunsigned int i;\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tfor (i = 0; i < bitsPerSymbol; i++) {\n\t\t\tbits[i] = scrambler.process(1);"
+ },
+ {
+  "label": "generateE2u scrambles all ones rather than all zeros",
+  "find": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);",
+  "replace": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllOnes(bits, bitsPerSymbol);"
+ },
+ {
+  "label": "generateE2u's first arm uses one bit rather than bitsPerSymbol",
+  "find": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);",
+  "replace": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, 1u);"
+ },
+ {
+  "label": "generateE2u folds prevBit into the FIRST bit rather than the last",
+  "find": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);\n\t\tlast = bits[0] ^ prevBit;"
+ },
+ {
+  "label": "generateE2u takes the bits-to-symbol arm when flag_3c is clear",
+  "find": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {",
+  "replace": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c != 0) {"
+ },
+ {
+  "label": "generateE2u's second arm scrambles all ones",
+  "find": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tprevBit = last;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllZeros(bits, n);",
+  "replace": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tprevBit = last;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);"
+ },
+ {
+  "label": "generateE2u's second arm does not push the bits it made",
+  "find": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tprevBit = last;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllZeros(bits, n);\n\t\tbitsToSymbol->process(bits, n);\n",
+  "replace": "V92Phase4Modulator::generateE2u()\n{\n\tunsigned int n;\n\tunsigned int last;\n\tshort sym;\n\n\tif (flag_3c == 0) {\n\t\tscrambler.processAllZeros(bits, bitsPerSymbol);\n\t\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\t\tprevBit = last;\n\t\tbits[bitsPerSymbol - 1] = (unsigned char)last;\n\t\tsym = mapper->process(bits);\n\t\treturn sym;\n\t}\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllZeros(bits, n);\n"
+ },
+ {
+  "label": "generateTRN2u scrambles all zeros rather than all ones",
+  "find": "V92Phase4Modulator::generateTRN2u()\n{\n\tunsigned int last;\n\tshort sym;\n\n\tscrambler.processAllOnes(bits, bitsPerSymbol);",
+  "replace": "V92Phase4Modulator::generateTRN2u()\n{\n\tunsigned int last;\n\tshort sym;\n\n\tscrambler.processAllZeros(bits, bitsPerSymbol);"
+ },
+ {
+  "label": "generateTRN2u folds prevBit into the FIRST bit rather than the last",
+  "find": "V92Phase4Modulator::generateTRN2u()\n{\n\tunsigned int last;\n\tshort sym;\n\n\tscrambler.processAllOnes(bits, bitsPerSymbol);\n\tlast = bits[bitsPerSymbol - 1] ^ prevBit;",
+  "replace": "V92Phase4Modulator::generateTRN2u()\n{\n\tunsigned int last;\n\tshort sym;\n\n\tscrambler.processAllOnes(bits, bitsPerSymbol);\n\tlast = bits[0] ^ prevBit;"
+ },
+ {
+  "label": "generateTRN2u does not carry the bit forward",
+  "find": "V92Phase4Modulator::generateTRN2u()\n{\n\tunsigned int last;\n\tshort sym;\n\n\tscrambler.processAllOnes(bits, bitsPerSymbol);\n\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\tprevBit = last;\n",
+  "replace": "V92Phase4Modulator::generateTRN2u()\n{\n\tunsigned int last;\n\tshort sym;\n\n\tscrambler.processAllOnes(bits, bitsPerSymbol);\n\tlast = bits[bitsPerSymbol - 1] ^ prevBit;\n\n"
+ },
+ {
+  "label": "generateRm scrambles all zeros rather than all ones",
+  "find": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);",
+  "replace": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllZeros(bits, n);"
+ },
+ {
+  "label": "generateRm's test is inverted",
+  "find": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {",
+  "replace": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n == 0) {"
+ },
+ {
+  "label": "generateRm does not push the bits it made",
+  "find": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);\n\t\tbitsToSymbol->process(bits, n);\n",
+  "replace": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);\n"
+ },
+ {
+  "label": "generateRm scrambles one bit rather than n",
+  "find": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);",
+  "replace": "V92Phase4Modulator::generateRm()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, 1u);"
+ },
+ {
+  "label": "generateB1u scrambles all zeros rather than all ones",
+  "find": "V92Phase4Modulator::generateB1u()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);",
+  "replace": "V92Phase4Modulator::generateB1u()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllZeros(bits, n);"
+ },
+ {
+  "label": "generateB1u's test is inverted",
+  "find": "V92Phase4Modulator::generateB1u()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {",
+  "replace": "V92Phase4Modulator::generateB1u()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n == 0) {"
+ },
+ {
+  "label": "generateB1u does not push the bits it made",
+  "find": "V92Phase4Modulator::generateB1u()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);\n\t\tbitsToSymbol->process(bits, n);\n",
+  "replace": "V92Phase4Modulator::generateB1u()\n{\n\tunsigned int n;\n\tshort sym;\n\n\tn = bitsToSymbol->nofBitsForNextTime();\n\tif (n != 0) {\n\t\tscrambler.processAllOnes(bits, n);\n"
+ },
+ {
+  "label": "setMappingParams acts on a null argument and diagnoses a live one",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {",
+  "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp != 0) {"
+ },
+ {
+  "label": "setMappingParams' diagnostic is gated at level 1 rather than above it",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)",
+  "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 0)"
+ },
+ {
+  "label": "setMappingParams does not reset the bits-to-symbol object",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n",
+  "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n"
+ },
+ {
+  "label": "setMappingParams leaves the symbol block size where reset left it",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n"
+ },
+ {
+  "label": "setMappingParams sets the symbol block size to two",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(1);",
+  "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(2);"
+ },
+ {
+  "label": "setMappingParams stores its argument as well",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);",
+  "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tmappingParams = mp;\n\tbitsToSymbol->reset(mp);"
+ }
+]

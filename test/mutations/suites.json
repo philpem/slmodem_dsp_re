@@ -635,5 +635,13 @@
  "v90trn2design": [
   "src/pump/v90/V90TRN2Designer.cpp",
   "build/test/t_v90trn2design"
+ ],
+ "v92p4gen": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4gen"
+ ],
+ "v92p4sym": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4sym"
  ]
 }
