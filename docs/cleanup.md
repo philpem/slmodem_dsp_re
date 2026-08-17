@@ -78,12 +78,20 @@ named constant for the shift COUNT where it encodes a scale (`Q15_SHIFT`,
 
 ## 3. Comments — 4,154 address-citing lines across 260 files
 
-The complaint is fair: too many comments say where a function lives and too few
-say what it is for. But **the address is provenance, not clutter**, and it is
-how any future reader verifies a claim against the object. Several findings
-exist only because someone could re-read the instructions at a cited address.
+**Provenance has a lifespan, and this is the section that has to change twice.**
 
-**The rule: intent first, provenance second, in that order.** Not
+While a unit is being reconstructed the address is load-bearing: it is how any
+reader verifies a claim against the object, and several findings exist only
+because someone could go back and re-read the instructions at a cited address.
+**Once a unit is verified, the address stops being evidence and becomes
+archaeology** — and the code has to be maintainable by someone who does not have
+`dsplibs.o` and never will.
+
+So there are two states, and a defined transition.
+
+### While reconstructing: intent first, provenance second
+
+Not
 
     /* Reimplementation of the function at 0x0a9300. */
 
@@ -97,9 +105,46 @@ but
      * blob 0x0a9300; the sign tables are .data 0x081dc and 0x081e4.
      */
 
-The second is longer and worth it. **Do not delete addresses to shorten a
-comment.** A file whose header explains the algorithm and cites the address is
-finished; a file that only cites the address is not.
+### After verification: the provenance moves out of the source
+
+**The acceptance test is: could a competent engineer extend this function
+without the blob?** Add a rate, change a filter length, fix a real bug — using
+only the source, the headers and the registers. If the answer is no because the
+comment only says where the code came from, the comment has not been written
+yet.
+
+When a unit passes that test:
+
+- **One provenance line survives per function**, and it is a citation, not a
+  derivation: `blob 0x0a9300` and the findings/deviations that govern it. That
+  is enough to re-verify, and it is the level `git log` and `docs/findings.md`
+  cannot replace.
+- **Address-laced prose in the body goes.** Detailed derivations already live in
+  `docs/findings.md` — that is what the register is FOR, and duplicating it into
+  a comment means two copies that drift. Cite the finding number instead.
+- **What replaces it is the thing a maintainer needs**: what the function is
+  for, what its inputs mean and what units they are in, what invariants the
+  caller must hold, and what the surprising parts are and why they are that way.
+  A reproduced defect is a surprising part and must stay, but stated as
+  behaviour with a deviation number, not as an anecdote about an address.
+
+`tools/tuattrib.py` already maintains the symbol-to-original-file index, so the
+per-symbol provenance is recoverable from the tree without being carried in
+every comment.
+
+### When the transition happens
+
+**Per unit, at the same moment as the rest of the readability pass** — when the
+unit closes. "Verified" here means: every symbol written, `make phase` green,
+and its codegen difference either zero or explained. It does NOT mean
+byte-identical; 410 of ~1,094 compared symbols are identical today and a
+different factoring can differ for ever while behaving identically (`compare.py`
+`--ratchet`'s own note). Waiting for identity would mean never pivoting.
+
+**The whole-tree pivot is a separate, later decision** and it is the owner's:
+at some point the reconstruction stops being a reconstruction and becomes the
+source, and that is when the remaining address citations are worth a final
+sweep. Recording it here so it is not forgotten, not proposing it now.
 
 ## 4. Naming — 304 offset-named fields, 189 bare `fNNNN`, 148 unnamed flags, 90 `pad_*`
 
