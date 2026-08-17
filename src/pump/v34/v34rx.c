@@ -588,8 +588,8 @@ txmit(void *objp)
 	short local[38];
 	int sym, n, i;
 
-	sym = (int)(((unsigned)(unsigned short)obj->f25d2 << 16)
-		    | (unsigned short)obj->f25d0);
+	sym = (int)(((unsigned)(unsigned short)obj->txpoint.c[1] << 16)
+		    | (unsigned short)obj->txpoint.c[0]);
 	n = (short)V34ModulatorProcess(
 		(struct v34_modulator *)((char *)obj + 0x1450), sym, local);
 

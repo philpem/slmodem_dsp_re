@@ -192,12 +192,12 @@ k56FlexPhase34(void *objp)
 			d = (short)V34scrambler((unsigned *)&o->f25cc,
 						1, 3, 2);
 			q = o->f25c8;
-			*(int *)&o->f25d0 = vect16[d + q * 4];
+			o->txpoint.word = vect16[d + q * 4];
 		} else {
 			q = (short)V34scrambler((unsigned *)&o->f25cc,
 						1, 3, 2);
 			o->f25c8 = (short)q;
-			*(int *)&o->f25d0 = vect4[q];
+			o->txpoint.word = vect4[q];
 		}
 
 		txmit(o);

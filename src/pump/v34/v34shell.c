@@ -2204,9 +2204,9 @@ modulatevector(void *obj)
 
 	o->vect_idx = (short)(n + 1);
 	if (o->f25c2 & 0x4000)
-		V34nlencoder(&o->vect[2 * n], &o->f25d0);
+		V34nlencoder(&o->vect[2 * n], o->txpoint.c);
 	else
-		*(int *)&o->f25d0 = o->vectp[n];
+		o->txpoint.word = o->vectp[n];
 
 	txmit(obj);
 }
@@ -2267,7 +2267,7 @@ V34OB_ASSERT(data_enable, 0x2214);
 V34OB_ASSERT(faa74, 0xaa74);
 V34OB_ASSERT(vect, 0x2a80);
 V34OB_ASSERT(vect_idx, 0x2aa2);
-V34OB_ASSERT(f25d0, 0x25d0);
+V34OB_ASSERT(txpoint, 0x25d0);
 V34OB_ASSERT(f25c2, 0x25c2);
 /* initdigital's, including the two that grew the struct past 0xac10. */
 V34OB_ASSERT(ptc, 0x008);

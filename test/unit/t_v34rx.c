@@ -514,8 +514,8 @@ main(void)
 			for (it = 0; it < 60; it++) {
 				unsigned b;
 
-				oa.f25d0 = ob.f25d0 = (short)(it * 811 - 9000);
-				oa.f25d2 = ob.f25d2 = (short)(it * 337 - 5000);
+				oa.txpoint.c[0] = ob.txpoint.c[0] = (short)(it * 811 - 9000);
+				oa.txpoint.c[1] = ob.txpoint.c[1] = (short)(it * 337 - 5000);
 				txmit(&oa); ref_txmit(&ob);
 
 				for (b = 0; b < sizeof(oa); b++) {

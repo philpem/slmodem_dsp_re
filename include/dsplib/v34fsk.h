@@ -392,8 +392,40 @@ struct v34_object {
 	unsigned char unmapped_25ca[0x25cc - 0x25ca];
 	/* The transmit scrambler's shift register. */
 	int f25cc;					/* +0x25cc */
-	short f25d0;					/* +0x25d0 symbol re */
-	short f25d2;					/* +0x25d2 symbol im */
+	/*
+	 * +0x25d0.  The point being transmitted: two shorts, real then
+	 * imaginary, and EVERY ARM THAT SENDS A CONSTELLATION POINT WRITES
+	 * BOTH WITH ONE 32-BIT STORE --
+	 *
+	 *   txmitdibit     0x5e6c5   mov %edx,0x3b4(%edi)   edi = obj+0x221c
+	 *   txmitquadbit   0x5e582   mov %ecx,0x3b4(%edi)   edi = obj+0x221c
+	 *   modulatevector 0x59e94   mov %edx,0x25d0(%esi)  esi = obj
+	 *
+	 * which is why `vect4` and `vect16` hold ints at all.  The halves
+	 * are ALSO written and read separately as shorts: the silent symbol
+	 * zeroes each on its own, and `txmit` reassembles them as
+	 * `(im << 16) | (unsigned short)re` before handing the result to
+	 * `V34ModulatorProcess`.  That reader is the whole of the evidence
+	 * for the name -- `txmit` is the only thing in the object that reads
+	 * this pair, so it is the point going OUT and not one coming in.
+	 * Was `f25d0` (`symbol re`) and `f25d2` (`symbol im`).
+	 *
+	 * The union spells the aliasing out rather than casting a pointer,
+	 * which -O2 is entitled to reorder; `v34_receiver::energy` is the
+	 * same reading and the same remedy.  `c` is an ARRAY rather than two
+	 * named fields because `V34nlencoder` is handed `txpoint.c` and
+	 * writes `out[0]` and `out[1]` through it -- two named shorts would
+	 * make that second store its own out-of-bounds defect.
+	 *
+	 * A 4-byte STRUCT ASSIGNMENT would emit the same single `movl` and
+	 * is an equally consistent reading of the original; nothing in the
+	 * object separates the two, so this does not claim to have settled
+	 * which the author wrote.  See finding 5303.
+	 */
+	union {
+		int word;				/* +0x25d0 both at once */
+		short c[2];				/* [0] real, [1] imag  */
+	} txpoint;
 	short f25d4;					/* +0x25d4 tx scale  */
 	unsigned char unmapped_25d6[0x25dc - 0x25d6];
 	/*

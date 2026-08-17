@@ -1,8 +1,8 @@
 [
  {
   "label": "the idle generator follows f25c2 bit 0 (dibit arm)",
-  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];",
-  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t(short)((o->f25c2 & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];"
+  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t(short)((o->f25c2 & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
  },
  {
   "label": "the idle generator follows f25c2 bit 0 (quadbit arm)",
@@ -11,13 +11,13 @@
  },
  {
   "label": "the idle symbol encodes differentially against f25c6",
-  "find": "\t\t\t*(int *)&o->f25d0 = vect4[q];",
-  "replace": "\t\t\t*(int *)&o->f25d0 =\n\t\t\t\tvect4[(q + (unsigned short)o->f25c6) & 3];"
+  "find": "\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\to->txpoint.word =\n\t\t\t\tvect4[(q + (unsigned short)o->f25c6) & 3];"
  },
  {
   "label": "the idle symbol writes the quadrant back to f25c6",
-  "find": "\t\t\to->f25c8 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];",
-  "replace": "\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];"
+  "find": "\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
  },
  {
   "label": "the quadbit index is q + d * 4 rather than d + q * 4",

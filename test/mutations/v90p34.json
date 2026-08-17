@@ -81,15 +81,15 @@
  },
  {
   "label": "the arming arm transmits vect4[0] rather than the zero point",
-  "find": "\t\to->f25d0 = 0;\n\t\to->f25d2 = 0;\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)",
-  "replace": "\t\t*(int *)&o->f25d0 = vect4[0];\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)"
+  "find": "\t\to->txpoint.c[0] = 0;\n\t\to->txpoint.c[1] = 0;\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)",
+  "replace": "\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)"
  },
  {
   "label": "the arming arm's zero point is one 32-bit store",
   "equivalent": true,
-  "why": "f25d0 and f25d2 are adjacent shorts at +0x25d0 and +0x25d2 and nothing between the two stores reads either, so two 16-bit zeros and one 32-bit zero leave the same four bytes.  Held fixed: that nothing aliases the pair, which is true of every writer in the tree -- txmit reads them and does not write them.  The object's two stores are transcribed because they are the object's, not because they are distinguishable.",
-  "find": "\t\to->f25d0 = 0;\n\t\to->f25d2 = 0;\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)",
-  "replace": "\t\t*(int *)&o->f25d0 = 0;\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)"
+  "why": "txpoint.c[0] and txpoint.c[1] are adjacent shorts at +0x25d0 and +0x25d2 and nothing between the two stores reads either, so two 16-bit zeros and one 32-bit zero leave the same four bytes.  Held fixed: that nothing aliases the pair, which is true of every writer in the tree -- txmit reads them and does not write them.  The object's two stores are transcribed because they are the object's, not because they are distinguishable.",
+  "find": "\t\to->txpoint.c[0] = 0;\n\t\to->txpoint.c[1] = 0;\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)",
+  "replace": "\t\to->txpoint.word = 0;\n\t\ttxmit(o);\n\t\tif (o->v90_receiver <= 2)"
  },
  {
   "label": "case 3 advances to state 7",
@@ -108,28 +108,28 @@
  },
  {
   "label": "case 3 sends its two points in the other order",
-  "find": "\tcase 3:\n\t\t*(int *)&o->f25d0 = vect4[0];",
-  "replace": "\tcase 3:\n\t\t*(int *)&o->f25d0 = vect4[3];"
+  "find": "\tcase 3:\n\t\to->txpoint.word = vect4[0];",
+  "replace": "\tcase 3:\n\t\to->txpoint.word = vect4[3];"
  },
  {
   "label": "case 3's second point is vect4[1]",
-  "find": "\t\t*(int *)&o->f25d0 = vect4[3];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */",
-  "replace": "\t\t*(int *)&o->f25d0 = vect4[1];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */"
+  "find": "\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */",
+  "replace": "\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */"
  },
  {
   "label": "case 6's first point is vect4[2]",
-  "find": "\tcase 6:\n\t\t*(int *)&o->f25d0 = vect4[0];",
-  "replace": "\tcase 6:\n\t\t*(int *)&o->f25d0 = vect4[2];"
+  "find": "\tcase 6:\n\t\to->txpoint.word = vect4[0];",
+  "replace": "\tcase 6:\n\t\to->txpoint.word = vect4[2];"
  },
  {
   "label": "case 4 sends case 3's point pair",
-  "find": "\tcase 4:\n\t\t*(int *)&o->f25d0 = vect4[2];",
-  "replace": "\tcase 4:\n\t\t*(int *)&o->f25d0 = vect4[0];"
+  "find": "\tcase 4:\n\t\to->txpoint.word = vect4[2];",
+  "replace": "\tcase 4:\n\t\to->txpoint.word = vect4[0];"
  },
  {
   "label": "case 7's second point is vect4[3]",
-  "find": "\t\t*(int *)&o->f25d0 = vect4[1];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;",
-  "replace": "\t\t*(int *)&o->f25d0 = vect4[3];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;"
+  "find": "\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;",
+  "replace": "\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;"
  },
  {
   "label": "case 3 counts to 0x10 exactly, as cases 4 and 7 do",
@@ -178,8 +178,8 @@
  },
  {
   "label": "the first of each pair does not bump f25c0",
-  "find": "\tcase 3:\n\t\t*(int *)&o->f25d0 = vect4[0];\n\t\ttxmit(o);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
-  "replace": "\tcase 3:\n\t\t*(int *)&o->f25d0 = vect4[0];\n\t\ttxmit(o);"
+  "find": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "replace": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);"
  },
  {
   "label": "case 5's scrambler mode is the K56flex twin's literal 1",
@@ -193,13 +193,13 @@
  },
  {
   "label": "case 5 encodes differentially against f25c6",
-  "find": "\t\t\t*(int *)&o->f25d0 = vect4[q];",
-  "replace": "\t\t\t*(int *)&o->f25d0 =\n\t\t\t    vect4[(q + (unsigned short)o->f25c6) & 3];"
+  "find": "\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\to->txpoint.word =\n\t\t\t    vect4[(q + (unsigned short)o->f25c6) & 3];"
  },
  {
   "label": "case 5 writes the quadrant back to f25c6",
-  "find": "\t\t\to->f25c8 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];",
-  "replace": "\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\t*(int *)&o->f25d0 = vect4[q];"
+  "find": "\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
  },
  {
   "label": "case 5's quadbit index is q + d * 4",
@@ -218,13 +218,13 @@
  },
  {
   "label": "case 5's third arm transmits vect4[0] rather than the zero point",
-  "find": "\t\t} else {\n\t\t\to->f25d0 = 0;\n\t\t\to->f25d2 = 0;\n\t\t}",
-  "replace": "\t\t} else {\n\t\t\t*(int *)&o->f25d0 = vect4[0];\n\t\t}"
+  "find": "\t\t} else {\n\t\t\to->txpoint.c[0] = 0;\n\t\t\to->txpoint.c[1] = 0;\n\t\t}",
+  "replace": "\t\t} else {\n\t\t\to->txpoint.word = vect4[0];\n\t\t}"
  },
  {
   "label": "case 5's third arm leaves the imaginary half alone",
-  "find": "\t\t} else {\n\t\t\to->f25d0 = 0;\n\t\t\to->f25d2 = 0;\n\t\t}",
-  "replace": "\t\t} else {\n\t\t\to->f25d0 = 0;\n\t\t}"
+  "find": "\t\t} else {\n\t\t\to->txpoint.c[0] = 0;\n\t\t\to->txpoint.c[1] = 0;\n\t\t}",
+  "replace": "\t\t} else {\n\t\t\to->txpoint.c[0] = 0;\n\t\t}"
  },
  {
   "label": "case 5 does not bump f25c0",
@@ -235,8 +235,8 @@
   "label": "case 5's quadbit arm uses the first read of f25c8",
   "equivalent": true,
   "why": "`q` was just stored into f25c8 and the only thing between the store and the re-read is V34scrambler, which is handed &o->f25cc and a mode, a bit count and a bit width -- it cannot reach f25c8.  So the re-read returns the value stored, and (short)q for a q that came from a (short) cast is q.  Held fixed: V34scrambler's argument list, which is v34rx.c's and not this function's.  The re-read is transcribed because the object performs it, a call sitting between the two accesses.",
-  "find": "\t\t\tq = o->f25c8;\n\t\t\t*(int *)&o->f25d0 = vect16[d + q * 4];",
-  "replace": "\t\t\t*(int *)&o->f25d0 = vect16[d + q * 4];"
+  "find": "\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[d + q * 4];",
+  "replace": "\t\t\to->txpoint.word = vect16[d + q * 4];"
  },
  {
   "label": "case 9's quadbit is 0 rather than 15",

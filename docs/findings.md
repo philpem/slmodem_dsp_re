@@ -66295,3 +66295,143 @@ not because anyone aimed at the bytes.
 count. A second ratchet on the strict number would be defensible, and is not
 proposed here: it would fail on register-allocation churn that 614 says is not a
 defect, and a gate that fails on non-defects gets disabled.
+## 5300. The 27 type-punned sites are six SHAPES, and the instruction width decides each
+
+`docs/plan.md`'s "type-punned sites -- provably mis-modelled: 27" is one row
+and six different defects.  Measured on `master` at `52e5aced` with GCC 13 at
+`-O2` (`-Wstrict-aliasing` is on under `-Wall`, and `-fstrict-aliasing` under
+`-O2`), the 27 `dereferencing type-punned pointer will break strict-aliasing
+rules` warnings fall out as:
+
+| shape | warned sites | file(s) |
+|---|--:|---|
+| A  `*(int *)&o->f25d0` -- a short PAIR stored as one word | 15 | v34hshak.c, v34shell.c, v34k56.cpp, v34pcmmain.cpp |
+| B  `*(int *)&o->vect[2 * n]` -- a short array read as points | 1 | v34shell.c |
+| C  `*(int *)&s->state[i].a` -- four shorts stored as two halves | 2 | v34shell.c |
+| D  `*(int *)&s->frame[0]` -- a wide field over two elements | 5 | v34shell.c |
+| E  `((short *)&obj->hist_2aa8[k])[0]` -- the ELEMENT TYPE is wrong | 2 | v34rx.c |
+| F  `(struct v34_receiver *)&(obj)->rxq` -- a whole-struct overlay | 2 | v34hshak.c |
+
+**The count is five files, not the six the row implies.**
+`src/pump/v34/v34hstx1.cpp` contributes ZERO warnings, because
+`tx1_put_point` had already been written as a `memcpy` with a comment saying
+it was a workaround for the C front end warning where the C++ one did not.
+That is a workaround and not a fixed declaration, so it is in the batch; it
+just was not in the warning list.
+
+**FOUR MORE SITES ARE THE SAME DEFECT AND DO NOT WARN.**  GCC only sees
+through the BASE expression, so `((short *)&obj->hist_2aa8[k])[1]` at
+v34rx.c:1434 and :2383 are silent while their `[0]` partners warn.  And
+`demapFrame`'s `(&s->state[st].a)[i]` walks for `i` in 0..3 -- pointer
+arithmetic across four separately declared members -- are a different rule
+(6.5.6p8, not 6.5p7) with no warning at all and the same owner ruling against
+them.  Fixing shape C's declaration retires those four for free, which is
+evidence for the declaration rather than a bonus.
+
+**The method, and why it is not a matter of taste.**  Writing four bytes
+through a field declared narrower says the DECLARATION is wrong, and the
+object says which way:
+
+- one `movl` to the offset -> a 32-bit field, or a short pair written as a
+  unit (shapes A, B, C, D);
+- two `movw` -> two 16-bit fields, and the single-store shortcut is the
+  error (shape E);
+- neither -> not one of the three, and a candidate for an exception (F).
+
+Every one was read through `tools/dis.py` at the writer the header comment
+names, and shape E came back the OPPOSITE way round from what the tree had
+declared.  That is the whole argument for doing this from the disassembly
+rather than from the source: five of six confirmed what the comments already
+asserted, and the sixth did not.
+
+**The invariant.**  A declaration change that is right produces the same
+instructions, so `compare.py` must not move -- and the number is not enough,
+because a count can gain four and lose four.  Measured before and after by
+hand rather than from `tools/toolchain/ratchet.json`, which is stale (it
+holds 986/350/71 against a true 1094/410/78): GCC 3.4.2 exact, `-O3`, 1094
+symbols compared, 410 identical, 78 same size, and `samesize.py --identical`
+diffs EMPTY against the pre-batch list at every step.  Precedent: the V.92
+params batch, which diffed the identical SET for the same reason.
+
+## 5301. `v34_object::hist_2aa8`'s element is two shorts, and the tree had it as an int
+
+`modem_serrint` fills the first per-symbol history ring with **two 16-bit
+stores per entry** -- `mov %si,0x2aa8(%edx)` at 0x5d0f7 and
+`mov %si,0x2aaa(%edx)` at 0x5d0fe.  A 32-bit field would have taken one
+`movl`; two `movw` to adjacent offsets is two fields.
+
+The header declared `int hist_2aa8[0x12c]` and both writers -- v34rx.c:1433
+and :2382 -- reached the halves back out through
+`((short *)&obj->hist_2aa8[k])[0..1]`.  Now `short hist_2aa8[0x12c][2]`:
+the same 0x4b0 bytes at the same offset, four casts deleted, and the two
+silent `[1]` siblings retired with their partners.
+
+**This is the one that ran against the comment.**  The header already said
+the ring "holds each residual TWICE, as both halves of its int -- so it is a
+complex buffer being written with a real value", which is the right reading
+of the DATA and the wrong reading of the type.  Both writers do store the
+same value in both halves; that is the caller's doing, not the element's.
+
+`t_v34rx` cleared the ring with a whole-element assignment and now clears
+both halves.  It is apparatus, so the rule about `src/` does not reach it.
+
+## 5302. `v34_object::vect` is eight ints over the same sixteen shorts, and `modulatevector` pins both
+
+`modulatevector` writes the modulator's output points here one short at a
+time -- `mov %dx,0x2a80(%edi)` at 0x5a4fd, `mov %ax,0x2a80(%esi)` at 0x5a78e
+-- and then loads ONE WHOLE POINT back with `mov 0x2a80(%esi,%eax,4),%edx`
+at 0x59e86.  The index is scaled by FOUR, so the load is 32 bits wide, and
+the value goes straight to the 32-bit store at +0x25d0 two instructions
+later.  Sixteen shorts and eight ints over the same 32 bytes.
+
+Declared as a union of `short vect[16]` and `int vectp[8]`.  The array keeps
+its name and its type, so `scaleVector(o->vect, ...)`, `&o->vect[4 * g]`,
+`&o->vect[2 * n]` and the offset assertion at v34shell.c:2268 are all
+untouched; the single punned read becomes `o->vectp[n]`, with `n` bounded
+0..7 by `vect_idx` being reset to zero on the refill four lines above.
+
+## 5303. `+0x25d0` is the point going OUT, and a union is the LOCAL fix rather than the settled one
+
+Three writers, three single 32-bit stores, and they are what makes `vect4`
+and `vect16` tables of ints:
+
+    txmitdibit      0x5e6c5   mov %edx,0x3b4(%edi)    edi = obj + 0x221c
+    txmitquadbit    0x5e582   mov %ecx,0x3b4(%edi)    edi = obj + 0x221c
+    modulatevector  0x59e94   mov %edx,0x25d0(%esi)   esi = obj
+
+The halves are also written and read SEPARATELY as shorts -- the silent
+symbol zeroes each on its own, and `txmit` reassembles them as
+`(im << 16) | (unsigned short)re` for `V34ModulatorProcess`.  So this is a
+short pair with a wide store, shape A, and fifteen of the 27 warnings.
+
+**Named `txpoint`, on `txmit` and nothing weaker.**  `txmit` is the only
+reader of the pair in the object and it hands the result to the modulator,
+so the field is the point going OUT and not one coming in; every writer
+loads a constellation-table entry into it.  That is usage inference, which
+is the weakest of the three evidence classes, but it is usage inference from
+a UNIQUE reader rather than from a plausible-looking name.  Was `f25d0`
+(`symbol re`) and `f25d2` (`symbol im`) -- two of the bare `fNNNN` the plan
+counts.
+
+**`c` IS AN ARRAY AND THAT IS NOT COSMETIC.**  `V34nlencoder(const short *in,
+short *out)` is handed this field as `out` and writes `out[0]` and `out[1]`
+through it.  Declared as two named shorts, the second store would be its own
+out-of-bounds defect -- the same class as shape C's `(&state.a)[i]` walk,
+introduced while fixing a different one.  `short c[2]` makes it legal.
+
+**WHAT THIS DOES NOT SETTLE.**  A 4-byte STRUCT ASSIGNMENT emits exactly the
+same single `movl`, and `mov 0x0(,%ecx,4),%edx` / `mov %edx,0x3b4(%edi)` is
+equally what `o->point = vect4[q]` compiles to if `vect4` were an array of a
+two-short complex type.  Nothing in the object separates a union member
+store from a small-struct copy: both tiers are blind to it, so neither the
+differential test nor `compare.py` can ever adjudicate.  The union is
+recorded as the LOCAL fix -- it corrects the declaration where the defect
+is, and claims nothing about `vect4`, `vect16` or `vect`'s element type.
+A future batch that retypes those three together on other evidence should
+read this as unfinished rather than as decided against.
+
+Nineteen call sites across five files, plus three offset assertions and
+twenty mutation anchors in `test/mutations/{v90p34,v34k56,v34hstx1}.json`,
+which are text-exact against the source and were rewritten with the same
+substitution.  CLAUDE.md's warning about anchors is about COSMETIC renames;
+this one is forced by the type, and twenty is not 443.

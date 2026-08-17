@@ -1735,7 +1735,7 @@ txmitdibit(void *obj, short bits)
 
 	q = (d + (unsigned short)o->f25c6) & 3;
 
-	*(int *)&o->f25d0 = vect4[q];
+	o->txpoint.word = vect4[q];
 	o->f25c8 = (short)q;
 	o->f25c6 = (short)q;
 
@@ -1770,7 +1770,7 @@ txmitquadbit(void *obj, short bits)
 
 	q = (unsigned short)o->f25c8;
 	o->f25c6 = (short)q;
-	*(int *)&o->f25d0 = vect16[d + q * 4];
+	o->txpoint.word = vect16[d + q * 4];
 
 	txmit(obj);
 }
@@ -9806,7 +9806,7 @@ V34HS_OFF(f25c2,   struct v34_object,   f25c2,      0x25c2);
 V34HS_OFF(f25c6,   struct v34_object,   f25c6,      0x25c6);
 V34HS_OFF(f25c8,   struct v34_object,   f25c8,      0x25c8);
 V34HS_OFF(f25cc,   struct v34_object,   f25cc,      0x25cc);
-V34HS_OFF(f25d0,   struct v34_object,   f25d0,      0x25d0);
-V34HS_OFF(f25d2,   struct v34_object,   f25d2,      0x25d2);
+V34HS_OFF(txpoint, struct v34_object,   txpoint,    0x25d0);
+V34HS_OFF(txpim,   struct v34_object,   txpoint.c[1], 0x25d2);
 
 #endif
