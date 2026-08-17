@@ -1,24 +1,17 @@
 /*
  * V92Phase4Modulator.h -- the V.92 phase 4 upstream symbol source, PARTIAL.
  *
- * Reconstructed from dsplibs.o.  The class has 34 distinct members; SEVENTEEN
+ * Reconstructed from dsplibs.o.  The class has 34 distinct members; TWENTY-SIX
  * of them are written in src/pump/v90/V92Phase4Modulator.cpp -- the constructor
  * (C1 at .text+0x17970 and C2 at +0x17a20, 164 bytes each), the destructor (D2
- * at +0x16de0 and D1 at +0x16e40, 87 bytes each) and the fifteen members of the
- * "recived / exit / resetBefor" surface plus the four generators that need no
- * sub-object of their own.  The rest are NOT declared here, because a
- * declaration whose signature is guessed is worse than no declaration:
- *
- *   - nine generators (`generateCPt`, `generateCPu`, `generateSUVu`,
- *     `generateE1u`, `generateE2u`, `generateB1u`, `generateRm`,
- *     `generateTRN2u`) and `setMappingParams`, which are read and understood
- *     but whose differential fixtures need a live scrambler, mapper or
- *     transmitter chain;
- *   - eight -- `generateSymbol` (4,055 B), `recivedCPtag`,
- *     `recivedPartOneSilenceRrnSUVtag`, `reset`, `recivedRt`, `recivedSUV`,
- *     `recivedPartTwoSilenceRrnSUV` and `enterRepeatedCP` -- every one of which
- *     needs `V92CP::infoToBits`, directly or through `generateSymbol`, and that
- *     is unwritten.
+ * at +0x16de0 and D1 at +0x16e40, 87 bytes each) and the twenty-four members of
+ * the "generate / recived / exit / resetBefor" surface.  The EIGHT not written
+ * are `generateSymbol` (4,055 B), `recivedCPtag`,
+ * `recivedPartOneSilenceRrnSUVtag`, `reset`, `recivedRt`, `recivedSUV`,
+ * `recivedPartTwoSilenceRrnSUV` and `enterRepeatedCP`.  Every one of those
+ * needs `V92CP::infoToBits`, directly or through `generateSymbol`, and that is
+ * unwritten.  They are not declared here: a declaration whose signature is
+ * guessed is worse than no declaration.
  *
  * THE OBJECT'S SPELLING OF "received" IS "recived" throughout, and it is the
  * mangling's -- `_ZN18V92Phase4Modulator13recivedSUVtagEv`.  Reproduced.
@@ -138,13 +131,22 @@ public:
 	~V92Phase4Modulator();
 
 	/*
-	 * The fifteen written members.  Return types are not mangled, so
-	 * `int` here means "the object leaves a 32-bit value in %eax and the
-	 * last thing done to it is a sign extension from 16 bits" and `void`
-	 * means "nothing is left in %eax".
+	 * The twenty-four written members.  Return types are not mangled,
+	 * so `int` here means "the object leaves a 32-bit value in %eax and
+	 * the last thing done to it is a sign extension from 16 bits" and
+	 * `void` means "nothing is left in %eax".  The one argument type is
+	 * the mangling's.
 	 */
+	int generateCPt();
+	int generateCPu();
+	int generateSUVu();
+	int generateE1u();
+	int generateE2u();
+	int generateB1u();
+	int generateRm();
 	int generateRu();
 	int generateRuNot();
+	int generateTRN2u();
 	int generateDataSymbolBeforeFPE();
 	int generateDataSymbolBeforeRRN();
 
@@ -160,6 +162,8 @@ public:
 	void resetBeforFPE();
 	void resetBeforRRN();
 	void resetRRNSecondSection();
+
+	void setMappingParams(V92MappingParams *mappingParams);
 
 	/* Public for `offsetof`, which wants standard layout; and one access
 	 * section, for the same reason V92Precoder.h gives. */

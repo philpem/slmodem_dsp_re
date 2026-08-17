@@ -109,8 +109,15 @@ public:
 	unsigned char pad_00[4];	/* +0x000 not modelled            */
 
 	/*
-	 * +0x004  Cleared by the constructor and by NOTHING else -- `reset`
-	 * does not touch it, which is the whole difference between the two.
+	 * +0x004  Cleared by the constructor and NOT by `reset`, which is the
+	 * whole difference between the two.  THREE MEMBERS OF ANOTHER CLASS
+	 * ALSO WRITE IT: `V92Phase4Modulator::recivedCP` and
+	 * `::recivedPartOneSilenceRrnSUV` set it to 1 and
+	 * `::resetRRNSecondSection` clears it, all through the `V92CP *` that
+	 * class holds at its own +0x74.  So a received CP or the first part of
+	 * an RRN SUV raises it and the second section of an RRN lowers it;
+	 * what it MEANS is still not established, because no member of this
+	 * class that reads it is written.  Findings 1282 and 4700.
 	 */
 	unsigned char byte_04;
 
@@ -125,12 +132,18 @@ public:
 	unsigned char pad_10c[4];	/* +0x10c read by methods not written */
 
 	/*
-	 * +0x110  Cleared by `V92Phase4Modulator::V92Phase4Modulator`, which
-	 * is the only writer of it anywhere in this tree and is not a member
-	 * of this class: `mov %edi,0x74(%ebx); mov %esi,0x110(%edi)` at
-	 * .text+0x179ed with %esi zero.  A four-byte store, so a word; what
-	 * it counts is not established, because no member of V92CP that reads
-	 * it is written.  Named out of `pad_10c` by that batch (finding 1282).
+	 * +0x110  Written only from OUTSIDE this class, and only by
+	 * V92Phase4Modulator: its constructor clears it (`mov %edi,0x74(%ebx);
+	 * mov %esi,0x110(%edi)` at .text+0x179ed with %esi zero), and so do
+	 * `recivedCP`, `resetBeforRRN` and `resetRRNSecondSection`.  Four
+	 * writers, all of them clears, none of them a member of V92CP.
+	 *
+	 * `V92Phase4Modulator::recivedSUVtag` is the only READER written, and
+	 * it requires the word non-zero before it will take a transition -- so
+	 * something not yet written raises it and everything written lowers
+	 * it.  A four-byte store, so a word; what it counts is still not
+	 * established.  Named out of `pad_10c` by finding 1282; the extra
+	 * writers are finding 4700's batch.
 	 */
 	unsigned int word_110;
 

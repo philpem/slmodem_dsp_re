@@ -145,8 +145,8 @@
  },
  {
   "label": "recivedSUVtag's trace is gated at level 1 rather than above it",
-  "find": "\tif (dsplibs_debug_level > 1)",
-  "replace": "\tif (dsplibs_debug_level > 0)"
+  "find": "\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"recivedSUVtag",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"recivedSUVtag"
  },
  {
   "label": "recivedSUVtag does not require word_1c0",

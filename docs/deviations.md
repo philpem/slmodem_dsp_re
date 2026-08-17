@@ -7312,3 +7312,36 @@ Reproduced, and NOT driven: a fixture that reached it would crash on both
 sides rather than compare them. `t_v92cpcrc.cpp`'s grid starts at seventeen,
 which is the first length that behaves -- and it behaves by computing a bound
 of zero and returning without clocking anything.
+
+## D560 ✅ `V92Phase4Modulator::generateRu` and `::generateRuNot` return an uninitialised local
+
+Both switch on `(symbolCount - 1) % 6` over cases 0-2 and 3-5 with no default
+arm and no return after the switch. The quotient can never exceed five, so the
+third path is unreachable through any input -- but GCC emits it, and it returns
+whatever the register the symbol lives in happened to hold: `ja 16ffb` at
+.text+0x16fdf, landing on the shared `mov %ebx,%eax` before either arm wrote
+%ebx.
+
+Reproduced as `short sym; switch (...) {...} return sym;`, which is what
+produces that code. A `default:` arm would add an instruction the blob does not
+have. Not reachable by any trial, so `t_v92p4gen.cpp` cannot drive it and does
+not try; finding 4704.
+
+## D561 ✅ `bits[-1]` at `bitsPerSymbol == 0` writes into `prevBit`
+
+`generateCPu`, `generateSUVu`, `generateE2u` and `generateTRN2u` fold the
+carried differential bit into `bits[bitsPerSymbol - 1]`. With `bitsPerSymbol`
+zero that subscript is -1, which is `V92Phase4Modulator+0x7b` -- the top byte
+of the `unsigned int prevBit` at +0x78. Out of bounds for the `bits` array and
+inside the object, which is why it neither faults nor is caught by a checking
+allocator.
+
+It is the object's own arithmetic: `movzbl 0x7b(%esi,%ebx,1)` with %esi holding
+the (zero) count is that address, and the blob has no guard.
+
+Reproduced, and NOT DRIVEN. `t_v92p4sym.cpp` had the input in its grid and took
+it out: the two stores overlap only there, so their ORDER decides the result,
+and an out-of-bounds subscript leaves that order to the compiler. GCC 13 and
+GCC 3.4.2 disagree -- the modern build passed and `make period` failed 240
+checks on the unmutated source. A trial that measures which compiler built it
+is not a differential trial. Finding 4705.

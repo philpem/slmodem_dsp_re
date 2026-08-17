@@ -64329,3 +64329,222 @@ so it is arithmetic and not the author's word for it, and
 `include/dsplib/V92CP.h` records `+0x910` as a modelled word rather than
 naming it. `infoToBits` and `bitsToInfo` are the two members that build the
 layout, both still unwritten, and they are where the names will come from.
+
+## 4700. FOUR OF V92Phase4Modulator's STATE CODES ARE NAMED BY THE OBJECT ITSELF, AND THE FIELD IS SIGNED
+
+`V92Phase4Modulator+0x00` is the phase 4 upstream state. Four of its values are
+pinned by a format string that fires on the assignment itself, which is
+CLAUDE.md's strongest evidence tier -- the message names the signal being
+entered and the very next instruction stores the code:
+
+    "V92Phase4Modulator: enter E1u @ %d"   ->  2    exitCPt, .text+0x170f5
+    "V92Phase4Modulator: enter E2u @ %d"   ->  15   recivedEd +0x17680,
+                                                   recivedSUVtag +0x1739c
+    "V92Phase4Modulator: enter Ru @ %d"    ->  19   genDataSymbolBeforeRRN
+    "V92Phase4Modulator: enter Rm @ %d"    ->  26   genDataSymbolBeforeFPE
+
+The other nine values the batch sees -- 0, 1, 3, 4, 5, 9, 11, 12, 13 -- are
+left as bare numbers in `src/`. Nothing written names them and a guessed
+enumerator is exactly the wrong name no test can fail on.
+
+**THE FIELD IS A SIGNED `int` AND THAT IS FORCED.** `recivedEd` and
+`recivedSUVtag` lower their switch over {5, 12, 13} as `cmp $0x5; je; jl
+<default>; sub $0xc; cmp $0x1; ja <default>` -- the `jl` at .text+0x17657 and
++0x17331 is a SIGNED branch, and GCC cannot emit one for an unsigned switch
+value. `reset`'s mangling names an enum `V92Phase4ModulatorState`, and GCC
+gives a small non-negative enum an unsigned underlying type, so that enum is
+NOT this field's type as far as anything measured goes. `reset` is unwritten
+and the question is left to whoever writes it.
+
+## 4701. `V92Phase4Modulator+0x1bc` IS NAMED BY THE ERROR MESSAGE THAT TESTS IT
+
+`recivedFirstRrnEd` reads +0x1bc and, when it is non-zero, prints
+"V92Phase4Modulator: ERROR: E2u is extended in RRN !!!" (.text+0x17720). The
+string is the author's word for what the field means, so it is named
+`e2uExtended` -- evidence tier 1, not usage inference.
+
+It corroborates a second reading. `recivedEd` and `recivedSUVtag` set +0x1b8 to
+`e2uExtended ? 13 : 12`, and 12 and 13 are two of the three `state` values
+`recivedSUVtag` will act on. So +0x1b8 holds a state code and the code depends
+on whether E2u was extended -- but nothing written READS +0x1b8 back, so it
+stays `word_1b8` at the modelled-unnamed tier. That is 3120's restraint and the
+same restraint `V92CP::+0x910` is under.
+
+## 4702. TWO PAIRS OF V.92 PHASE 4 GENERATORS HAVE IDENTICAL BODIES
+
+`generateCPu` (.text+0x17d50) and `generateSUVu` (+0x17e80) are 304 bytes each
+and are the same instructions in the same order, differing only in which of
+%esi and %edi holds the loop counter -- 614's free column. `generateRm`
+(+0x17ad0) and `generateB1u` (+0x17b70) are 149 bytes each and the same,
+register for register.
+
+So what makes a CPu a CP and an SUVu an SUV is what the object's `pattern`
+pointer at +0x1a8 holds when the member runs, not anything the member does.
+The four are written out four times in `src/` rather than factored: a shared
+helper would be one symbol where the object has two, and the differential suite
+drives each by its own mangled name.
+
+**Nothing in this batch can tell CPu from SUVu**, and the mutation set says so
+rather than pretending otherwise.
+
+## 4703. THE EIGHT SCRAMBLER-CALLING GENERATORS ARE TWICE THE BLOB'S SIZE, AND EVERY BYTE OF IT IS ONE INLINED `Scrambler` BODY
+
+Under GCC 3.4.2 at the object's own flags, sixteen of the twenty-four members
+in this batch come out byte-for-byte the blob's size with an identical mnemonic
+sequence. The eight that do not are exactly the eight that call
+`Scrambler<unsigned char, unsigned char>`:
+
+    blob  ours  delta   member                 Scrambler call sites
+      54   170   +116   generateE1u            1  process(T)
+      94   197   +103   generateCPt            1  process(T)
+      78   214   +136   generateTRN2u          1  processAllOnes
+     149   278   +129   generateRm             1  processAllOnes
+     149   278   +129   generateB1u            1  processAllOnes
+     239   475   +236   generateE2u            2  processAllZeros
+     304   568   +264   generateCPu            2  process(T)
+     304   568   +264   generateSUVu           2  process(T)
+
+`include/dsplib/Scrambler.h`'s own table sizes `process(T)` at 107-118 bytes
+and the bulk forms at 120-136. Every delta above is exactly one or two of
+those. **The blob CALLS these members out of line and our tree INLINES them**,
+because this reconstruction defines the template's members in the header and
+the original evidently did not at these sites.
+
+That is a fact about the original's file structure and not a defect: the
+differential tier is green, `compare.py` went UP (368 -> 384 identical of
+1029 -> 1053 compared), and Scrambler.h's own comment records that an explicit
+`template class Scrambler<...>;` would emit members the object does not have.
+Chasing it would move a header every Scrambler user shares. Left alone, and
+recorded here so the next reader does not re-derive it.
+
+## 4704. `generateRu` AND `generateRuNot` RETURN AN UNINITIALISED LOCAL ON AN ARM THAT CANNOT BE TAKEN
+
+Both are 88 bytes and both switch on `(symbolCount - 1) % 6` with cases 0-2 and
+3-5 and NO default. `x % 6` is never above 5, but GCC does not know that, so it
+emits a `ja` to a return that reads the register the symbol lives in before
+either arm has written it -- .text+0x16fdf -> +0x16ffb and +0x1703f -> +0x1705b.
+
+The source is `short sym; switch (...) { ... } return sym;`, which is what puts
+both arms in one register and leaves it undefined on the third path.
+Reproduced rather than tidied: a `default:` arm would add an instruction the
+blob does not have. Deviation D560.
+
+## 4705. THE ONE INPUT THAT WOULD SETTLE A STORE ORDER IS UNDEFINED IN OUR SOURCE, AND THE TWO COMPILERS PROVE IT BY DISAGREEING
+
+Four generators fold `prevBit` into `bits[bitsPerSymbol - 1]` and write the
+result to both. At `bitsPerSymbol == 0` that subscript is `bits[-1]`, which is
+`V92Phase4Modulator+0x7b` -- the TOP BYTE of `prevBit` itself. The blob's own
+`movzbl 0x7b(%esi,%ebx,1)` with %esi zero is that address, so the aliasing is
+the object's.
+
+The two stores then overlap and the blob's order decides the outcome:
+
+    generateCPu, generateSUVu   bit then prevBit   -> prevBit wins, +0x7b = 0
+    generateE2u, generateTRN2u  prevBit then bit   -> +0x7b = the folded bit
+
+**It looked like the differential tier settling what 617 says only full-text
+identity can.** `t_v92p4sym.cpp` had `bitsPerSymbol == 0` in its grid, four
+mutations exchanged the two orders, and all four were caught. Under GCC 13.
+
+Under the PERIOD compiler the UNMUTATED source fails those same trials: 80
+checks in `generateE2u` and 160 in `generateTRN2u`, every one of them
+`V92Phase4Modulator+123 got 00, reference 01`. GCC 3.4.2 at `-O3` schedules the
+byte store FIRST in both members whatever the source order is, and GCC 13 does
+not.
+
+That is the answer, not a defect to chase. The subscript is out of bounds, so
+the source's behaviour at that input is undefined and the order belongs to the
+compiler -- which is exactly 614's free column and 617's ruling, arriving from
+the differential side instead of the codegen side. A trial whose verdict is the
+compiler's proves nothing about the source either way, so the grid now starts
+at one, the four order mutations are withdrawn with a note saying why, and
+D561 records the aliasing as reproduced and NOT driven -- D504's disposition
+for the same reason.
+
+**The general lesson: a differential trial that reaches undefined behaviour in
+the RECONSTRUCTION is not a differential trial.** It compares a compiler's
+choice against a fixed instruction sequence, and the only thing it can measure
+is which compiler you built with. `make period` is what caught this; the
+modern build had it green.
+
+## 4706. A FIXTURE THAT DRIVES `V92BitsToSymbol::process` MUST PIN `symbolsBlockSize` TO ONE, AND THE OBJECT ITSELF SAYS SO
+
+Three ways to get this wrong were found in one afternoon, and each fails
+differently:
+
+- `process(unsigned int &, short *)` copies `symbolsBlockSize` shorts into
+  `out`, and the two `generateDataSymbolBefore*` members pass the address of
+  ONE `short` on their own frame (`lea 0x16(%esp)` at .text+0x178a8). A block
+  size of 28 overwrote 56 bytes of the harness's stack and took the process
+  down.
+- A block size of ZERO makes `process` return before assigning its reference
+  argument, and the generators pass that argument UNINITIALISED. Both sides
+  then branch on their own stack residue, which is not the same residue.
+- `symbolsDone == 0` takes the underflow arm, which copies nothing, so the
+  returned symbol is stack residue for the same reason.
+
+`V92BitsToSymbol::reset` leaves the block size at ZERO, so any fixture that
+resets has to set it again. **`V92Phase4Modulator::setMappingParams` does
+exactly that** -- `bitsToSymbol->reset(mp); bitsToSymbol->setSymbolsBlockSize(1)`
+-- which is the object corroborating the constraint rather than the fixture
+inventing one.
+
+## 4707. WHAT THE PHASE 4 BATCH FREED, MEASURED
+
+`readyqueue.py` at `e3527586` and again after the twenty-four members landed:
+
+|                        | before        | after         |
+|------------------------|--------------:|--------------:|
+| unwritten call symbols | 824           | 800           |
+| READY                  | 411 / 69,281 B| 389 / 66,735 B|
+| BLOCKED                | 413 / 201,004 B| 411 / 200,919 B|
+
+**Exactly one symbol became READY: `V92Modulator::exitCPt`, 80 bytes** -- it
+was blocked by `V92Phase4Modulator::exitCPt` and by nothing else. That makes
+the next batch, the READY `V92Modulator` members, **10 symbols / 1,416 bytes**
+rather than the 9 / 1,336 the queue showed before.
+
+The eight `V92Phase4Modulator` members still outstanding did NOT move, and the
+reason is uniform: every one of them needs `V92CP::infoToBits`, directly
+(`recivedRt`, `recivedCPtag`, `recivedSUV`, `enterRepeatedCP`,
+`recivedPartOneSilenceRrnSUVtag`, `recivedPartTwoSilenceRrnSUV`) or through
+`generateSymbol` (`reset`). `infoToBits` is 1,916 bytes and needs two data
+symbols, `fltTable_1` and `fltTable_2`, and nothing else.
+
+## 4708. A MUTATION ANCHOR IS A CLAIM ABOUT THE WHOLE FILE, AND A LATER BATCH IN THE SAME FILE BREAKS IT
+
+Six anchors in `test/mutations/v92p4mod.json` stopped being unique the moment
+this batch landed: the constructor's `word_1c0 = 0;`, `word_1c4 = 0;`,
+`word_18 = 0;`, `byte_1c = 0;` and `cp->word_110 = 0;` are all repeated
+verbatim by `resetBeforRRN` and `resetRRNSecondSection`, which do the same
+stores for their own reason. `make phase` caught it at the `refs` gate --
+`NOT UNIQUE ... matches 3 time(s)` -- so it fails loud rather than silently
+mutating the wrong statement.
+
+The fix is context, not cleverness: each find now carries the following line.
+Worth knowing before writing a mutation set for a class whose members repeat
+each other's stores, which the reset-shaped ones always do.
+
+## 4709. MOVING FOUR FUNCTIONS DOWN A TRANSLATION UNIT COST ONE IDENTICAL SYMBOL
+
+`generateDataSymbolBeforeFPE` matched the blob's mnemonic sequence at 110 bytes
+when it sat between `generateB1u` and the tag handlers, and did NOT when the
+same text sat after the reset members instead -- 384 identical of 1053 against
+383, with the byte count unchanged either way. Nothing about the function
+moved; only its position in `V92Phase4Modulator.cpp`.
+
+GCC 3.4.2 is a unit-at-a-time compiler and its register allocation and
+scheduling see the whole file, so definition ORDER is an input to codegen in the
+same way `-mtune` is. It is free at the behaviour tier -- `make phase` was green
+at both orders -- and it costs nothing to keep, so the file is back in the order
+that matched.
+
+Worth knowing before splitting a batch: staging half a file out and back is not
+a no-op at the codegen tier, and the loss is invisible unless the identical SET
+is diffed rather than the count. `samesize.py --identical` exists for exactly
+that, and here a plain count would have read 384 -> 383 with no clue which.
+
+It costs a second thing as well. `mutsnap.py`'s key covers the source tree, so
+ANY reorder re-stales every suite's recorded verdicts and they have to be run
+again -- which this batch did twice for that reason alone. A reorder is never
+free; it is a codegen symbol and a mutation re-record.

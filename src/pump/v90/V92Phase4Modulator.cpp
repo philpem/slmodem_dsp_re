@@ -1,12 +1,12 @@
 /*
  * V92Phase4Modulator.cpp -- the V.92 phase 4 upstream symbol source.
  *
- * Reconstructed from dsplibs.o.  Nineteen symbols, 1,469 bytes: the four
- * below, plus the fifteen members at the bottom of this file that take the
- * tag-driven state transitions, reset the object between segments, and
- * generate the four signals that need no sub-object.
- * `include/dsplib/V92Phase4Modulator.h` carries the object map, the state
- * codes four format strings name, and the seventeen members still outstanding.
+ * Reconstructed from dsplibs.o.  Twenty-eight symbols, 3,133 bytes: the four
+ * below, plus the twenty-four members at the bottom of this file that generate
+ * the phase 4 upstream signals, take the tag-driven state transitions, and
+ * reset the object between segments.  `include/dsplib/V92Phase4Modulator.h`
+ * carries the object map, the state codes four format strings name, and the
+ * eight members still outstanding -- all of them behind `V92CP::infoToBits`.
  *
  * The original four:
  *
@@ -192,6 +192,318 @@ V92Phase4Modulator::~V92Phase4Modulator()
 		mapper->~V92Mapper();
 		sysdep_free(mapper);
 	}
+}
+
+/*
+ * ===========================================================================
+ * THE GENERATORS
+ *
+ * Every one of them returns a symbol, and every one of them ends with a
+ * 16-bit value sign-extended into %eax -- `cwtl` where the value is already in
+ * %ax, `movswl` where it is in memory.  That is why the return type is `int`
+ * and the local holding the symbol is `short`.
+ *
+ * Six share one shape: fill `bits` with `bitsPerSymbol` scrambled bits,
+ * exclusive-OR `prevBit` into the LAST of them, store the result back both
+ * into that bit and into `prevBit`, and hand the block to `mapper`.  Three of
+ * those six take a second path when `flag_3c` is set, in which the bits come
+ * from `bitsToSymbol` instead and the mapper is not used at all.
+ * ===========================================================================
+ */
+
+/*
+ * generateCPt (.text+0x17ff0, 94 B).
+ *
+ * Below 25 symbols the emitted bit simply alternates; from 25 on it is the
+ * scrambled `pattern`, reduced from a base of 25 rather than of zero
+ * (`sub $0x19,%eax` at +0x18020).  Both arms converge on the same store to
+ * `prevBit` and the same +/- selection, which is what the `jmp 18006` says.
+ */
+int V92Phase4Modulator::generateCPt()
+{
+	unsigned int bit;
+	short sym;
+
+	if (symbolCount <= 24)
+		bit = prevBit ^ 1;
+	else
+		bit = (unsigned char)scrambler.process(
+			      pattern[(symbolCount - 25) % patternLength])
+		      ^ prevBit;
+	prevBit = bit;
+
+	sym = amplitude;
+	if (bit != 0)
+		sym = -sym;
+	return sym;
+}
+
+/*
+ * generateE1u (.text+0x17fb0, 54 B).  One scrambled zero, differentially
+ * encoded, and the same +/- selection generateCPt ends with.
+ */
+int V92Phase4Modulator::generateE1u()
+{
+	unsigned int bit;
+	short sym;
+
+	bit = (unsigned char)scrambler.process(0) ^ prevBit;
+	prevBit = bit;
+
+	sym = amplitude;
+	if (bit != 0)
+		sym = -sym;
+	return sym;
+}
+
+/*
+ * generateCPu (.text+0x17d50, 304 B) and generateSUVu (+0x17e80, 304 B).
+ *
+ * THE TWO BODIES ARE THE SAME INSTRUCTIONS IN THE SAME ORDER, differing only
+ * in which of %esi and %edi holds the loop counter -- the register allocator's
+ * choice, which finding 614 puts in the free column.  So the two source
+ * bodies are identical and what makes CPu a CP and SUVu an SUV is what
+ * `pattern` holds, not what these do with it.  Written out twice rather than
+ * factored: a shared helper would be one symbol where the object has two.
+ *
+ * The loop re-reads `bitsPerSymbol` on every iteration (`movzbl 0x43(%ebx)` at
+ * +0x17ddc, inside the loop) because `Scrambler::process` is a call the
+ * compiler cannot see through -- so the bound is the field, not a copy of it.
+ */
+int V92Phase4Modulator::generateCPu()
+{
+	unsigned int i;
+	unsigned int n;
+	unsigned int last;
+	short sym;
+
+	if (flag_3c == 0) {
+		for (i = 0; i < bitsPerSymbol; i++) {
+			bits[i] = scrambler.process(pattern[patternIndex]);
+			patternIndex = (patternIndex + 1) % patternLength;
+		}
+		last = bits[bitsPerSymbol - 1] ^ prevBit;
+		bits[bitsPerSymbol - 1] = (unsigned char)last;
+		prevBit = last;
+		sym = mapper->process(bits);
+		return sym;
+	}
+
+	n = bitsToSymbol->nofBitsForNextTime();
+	if (n != 0) {
+		for (i = 0; i < n; i++) {
+			bits[i] = scrambler.process(pattern[patternIndex]);
+			patternIndex = (patternIndex + 1) % patternLength;
+		}
+		bitsToSymbol->process(bits, n);
+	}
+	bitsToSymbol->process(n, &sym);
+	return sym;
+}
+
+int V92Phase4Modulator::generateSUVu()
+{
+	unsigned int i;
+	unsigned int n;
+	unsigned int last;
+	short sym;
+
+	if (flag_3c == 0) {
+		for (i = 0; i < bitsPerSymbol; i++) {
+			bits[i] = scrambler.process(pattern[patternIndex]);
+			patternIndex = (patternIndex + 1) % patternLength;
+		}
+		last = bits[bitsPerSymbol - 1] ^ prevBit;
+		bits[bitsPerSymbol - 1] = (unsigned char)last;
+		prevBit = last;
+		sym = mapper->process(bits);
+		return sym;
+	}
+
+	n = bitsToSymbol->nofBitsForNextTime();
+	if (n != 0) {
+		for (i = 0; i < n; i++) {
+			bits[i] = scrambler.process(pattern[patternIndex]);
+			patternIndex = (patternIndex + 1) % patternLength;
+		}
+		bitsToSymbol->process(bits, n);
+	}
+	bitsToSymbol->process(n, &sym);
+	return sym;
+}
+
+/*
+ * generateE2u (.text+0x17c60, 239 B).  generateCPu's shape with the pattern
+ * loop replaced by one bulk `processAllZeros` -- E2u is an all-zeros segment.
+ */
+int V92Phase4Modulator::generateE2u()
+{
+	unsigned int n;
+	unsigned int last;
+	short sym;
+
+	if (flag_3c == 0) {
+		scrambler.processAllZeros(bits, bitsPerSymbol);
+		last = bits[bitsPerSymbol - 1] ^ prevBit;
+		prevBit = last;
+		bits[bitsPerSymbol - 1] = (unsigned char)last;
+		sym = mapper->process(bits);
+		return sym;
+	}
+
+	n = bitsToSymbol->nofBitsForNextTime();
+	if (n != 0) {
+		scrambler.processAllZeros(bits, n);
+		bitsToSymbol->process(bits, n);
+	}
+	bitsToSymbol->process(n, &sym);
+	return sym;
+}
+
+/*
+ * generateTRN2u (.text+0x17c10, 78 B).  generateE2u's first arm with
+ * `processAllOnes`, and no `flag_3c` test at all.
+ */
+int V92Phase4Modulator::generateTRN2u()
+{
+	unsigned int last;
+	short sym;
+
+	scrambler.processAllOnes(bits, bitsPerSymbol);
+	last = bits[bitsPerSymbol - 1] ^ prevBit;
+	prevBit = last;
+	bits[bitsPerSymbol - 1] = (unsigned char)last;
+	sym = mapper->process(bits);
+	return sym;
+}
+
+/*
+ * generateRm (.text+0x17ad0, 149 B) and generateB1u (+0x17b70, 149 B).
+ *
+ * THE TWO BODIES ARE IDENTICAL, instruction for instruction, register for
+ * register -- the same relationship generateCPu and generateSUVu have.  Both
+ * go through `bitsToSymbol` unconditionally and neither touches `mapper`.
+ */
+int V92Phase4Modulator::generateRm()
+{
+	unsigned int n;
+	short sym;
+
+	n = bitsToSymbol->nofBitsForNextTime();
+	if (n != 0) {
+		scrambler.processAllOnes(bits, n);
+		bitsToSymbol->process(bits, n);
+	}
+	bitsToSymbol->process(n, &sym);
+	return sym;
+}
+
+int V92Phase4Modulator::generateB1u()
+{
+	unsigned int n;
+	short sym;
+
+	n = bitsToSymbol->nofBitsForNextTime();
+	if (n != 0) {
+		scrambler.processAllOnes(bits, n);
+		bitsToSymbol->process(bits, n);
+	}
+	bitsToSymbol->process(n, &sym);
+	return sym;
+}
+
+/*
+ * generateRu (.text+0x16fb0, 88 B) and generateRuNot (+0x17010, 88 B).
+ *
+ * A six-symbol pattern: three of one sign then three of the other, indexed by
+ * `(symbolCount - 1) % 6` -- the `mul $0xaaaaaaab; shr $2` at +0x16fc9 is
+ * GCC's division by six, and the `lea (%edx,%edx,2); add %edx,%edx; sub` that
+ * follows it is the multiply-back.  `RuNot` is `Ru` with the two signs
+ * exchanged.
+ *
+ * THE SWITCH HAS NO DEFAULT AND `sym` IS LEFT UNINITIALISED ON A PATH THAT
+ * CANNOT BE TAKEN.  `x % 6` is never above 5, but GCC does not know that, so
+ * it emits a `ja` to a return that reads the register `sym` lives in before
+ * anything has written it (+0x16fdf -> +0x16ffb, and +0x1703f -> +0x1705b).
+ * That is the object's own code and it is reproduced rather than tidied: a
+ * `default:` arm here would add an instruction the blob does not have.
+ */
+int V92Phase4Modulator::generateRu()
+{
+	short sym;
+
+	switch ((symbolCount - 1) % 6) {
+	case 0:
+	case 1:
+	case 2:
+		sym = amplitude;
+		break;
+	case 3:
+	case 4:
+	case 5:
+		sym = -amplitude;
+		break;
+	}
+	return sym;
+}
+
+int V92Phase4Modulator::generateRuNot()
+{
+	short sym;
+
+	switch ((symbolCount - 1) % 6) {
+	case 0:
+	case 1:
+	case 2:
+		sym = -amplitude;
+		break;
+	case 3:
+	case 4:
+	case 5:
+		sym = amplitude;
+		break;
+	}
+	return sym;
+}
+
+/*
+ * generateDataSymbolBeforeFPE (.text+0x178a0, 110 B).
+ *
+ * `nbits` is passed to `process` UNINITIALISED and comes back as the number of
+ * bits that were left over; a non-zero one means the data being sent has run
+ * out mid-block, which is when Rm starts.  Its last act reaches three levels
+ * down -- `bitsToSymbol->transmitter->modulusEncoder->field_50 = 1` -- and
+ * that word is what `V92ModulusEncoder::progress` switches on.
+ */
+int V92Phase4Modulator::generateDataSymbolBeforeFPE()
+{
+	unsigned int nbits;
+	short sym;
+
+	bitsToSymbol->process(nbits, &sym);
+	if (nbits != 0) {
+		edprintf("V92Phase4Modulator: enter Rm @ %d\r\n", symbolCount);
+		state = V92P4M_STATE_RM;
+		symbolCount = 0;
+		bitsToSymbol->transmitter->modulusEncoder->field_50 = 1;
+	}
+	return sym;
+}
+
+/* generateDataSymbolBeforeRRN (.text+0x17910, 95 B).  The same, entering Ru
+ * and without the reach into the modulus encoder. */
+int V92Phase4Modulator::generateDataSymbolBeforeRRN()
+{
+	unsigned int nbits;
+	short sym;
+
+	bitsToSymbol->process(nbits, &sym);
+	if (nbits != 0) {
+		edprintf("V92Phase4Modulator: enter Ru @ %d\r\n", symbolCount);
+		state = V92P4M_STATE_RU;
+		symbolCount = 0;
+	}
+	return sym;
 }
 
 /*
@@ -405,96 +717,23 @@ void V92Phase4Modulator::resetRRNSecondSection()
 }
 
 /*
- * generateRu (.text+0x16fb0, 88 B) and generateRuNot (+0x17010, 88 B).
+ * setMappingParams (.text+0x17840, 88 B).
  *
- * A six-symbol pattern: three of one sign then three of the other, indexed by
- * `(symbolCount - 1) % 6` -- the `mul $0xaaaaaaab; shr $2` at +0x16fc9 is
- * GCC's division by six, and the `lea (%edx,%edx,2); add %edx,%edx; sub` that
- * follows it is the multiply-back.  `RuNot` is `Ru` with the two signs
- * exchanged.
- *
- * THE SWITCH HAS NO DEFAULT AND `sym` IS LEFT UNINITIALISED ON A PATH THAT
- * CANNOT BE TAKEN.  `x % 6` is never above 5, but GCC does not know that, so
- * it emits a `ja` to a return that reads the register `sym` lives in before
- * anything has written it (+0x16fdf -> +0x16ffb, and +0x1703f -> +0x1705b).
- * That is the object's own code and it is reproduced rather than tidied: a
- * `default:` arm here would add an instruction the blob does not have.
+ * It does NOT store its argument into `this->mappingParams`; it hands it
+ * straight to `bitsToSymbol` and forces that object's symbol block back to
+ * one.  A null argument is a diagnostic and nothing else.  Both exits are
+ * sibling calls in the object, which is what an ignored return value from a
+ * tail position gives.
  */
-int V92Phase4Modulator::generateRu()
+void V92Phase4Modulator::setMappingParams(V92MappingParams *mp)
 {
-	short sym;
-
-	switch ((symbolCount - 1) % 6) {
-	case 0:
-	case 1:
-	case 2:
-		sym = amplitude;
-		break;
-	case 3:
-	case 4:
-	case 5:
-		sym = -amplitude;
-		break;
+	if (mp == 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V92Phase4Modulator: ERROR: Null"
+					     " mappingParams @"
+					     " setMappingParams\r\n");
+		return;
 	}
-	return sym;
+	bitsToSymbol->reset(mp);
+	bitsToSymbol->setSymbolsBlockSize(1);
 }
-
-int V92Phase4Modulator::generateRuNot()
-{
-	short sym;
-
-	switch ((symbolCount - 1) % 6) {
-	case 0:
-	case 1:
-	case 2:
-		sym = -amplitude;
-		break;
-	case 3:
-	case 4:
-	case 5:
-		sym = amplitude;
-		break;
-	}
-	return sym;
-}
-
-/*
- * generateDataSymbolBeforeFPE (.text+0x178a0, 110 B).
- *
- * `nbits` is passed to `process` UNINITIALISED and comes back as the number of
- * bits that were left over; a non-zero one means the data being sent has run
- * out mid-block, which is when Rm starts.  Its last act reaches three levels
- * down -- `bitsToSymbol->transmitter->modulusEncoder->field_50 = 1` -- and
- * that word is what `V92ModulusEncoder::progress` switches on.
- */
-int V92Phase4Modulator::generateDataSymbolBeforeFPE()
-{
-	unsigned int nbits;
-	short sym;
-
-	bitsToSymbol->process(nbits, &sym);
-	if (nbits != 0) {
-		edprintf("V92Phase4Modulator: enter Rm @ %d\r\n", symbolCount);
-		state = V92P4M_STATE_RM;
-		symbolCount = 0;
-		bitsToSymbol->transmitter->modulusEncoder->field_50 = 1;
-	}
-	return sym;
-}
-
-/* generateDataSymbolBeforeRRN (.text+0x17910, 95 B).  The same, entering Ru
- * and without the reach into the modulus encoder. */
-int V92Phase4Modulator::generateDataSymbolBeforeRRN()
-{
-	unsigned int nbits;
-	short sym;
-
-	bitsToSymbol->process(nbits, &sym);
-	if (nbits != 0) {
-		edprintf("V92Phase4Modulator: enter Ru @ %d\r\n", symbolCount);
-		state = V92P4M_STATE_RU;
-		symbolCount = 0;
-	}
-	return sym;
-}
-
