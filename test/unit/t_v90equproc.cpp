@@ -1177,6 +1177,20 @@ p4_equ_plant(long tag, unsigned int le, unsigned int dfe, int mmx)
 	THEIRS.demapper = (V90Demapper *)dem_s[1];
 	OURS.spectralVerifier = THEIRS.spectralVerifier = SPECVER;
 	OURS.preFilter = THEIRS.preFilter = PREFILT;
+
+	/*
+	 * THE RESAMPLER'S OWN `params` POINTER, and it is not decoration:
+	 * `setBllState` reads a K1/K2 pair out of it on twelve of its sixteen
+	 * arms, and the RESET group never calls it, so the pseudorandom word
+	 * the fill leaves there survived one whole group before this one
+	 * segfaulted on it.  The starting state is planted at STEADY_STATE so
+	 * that every state this file's arms ask for is a CHANGE -- the member
+	 * returns immediately when the state it is handed is the one it
+	 * already holds, and a fixture that started in the target state would
+	 * drive the call and none of its body.
+	 */
+	ARENA_RSAMP->params = ARENA_PARAMS;
+	ARENA_RSAMP->bllState = V90_BLL_STEADY_STATE;
 }
 
 /*
