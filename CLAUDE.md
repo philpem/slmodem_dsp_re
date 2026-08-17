@@ -143,18 +143,33 @@ A `class`, `struct`, `enum` or `union` is **defined in exactly one file**.
 Everyone else forward-declares it or includes that file. A forward declaration
 is not a definition and is never a problem.
 
-`make phase` gates this through `tools/onedef.py`, which carries the two
-duplicates this tree still has and the reason for each. Adding a third needs
-a reason written there; removing one is progress.
+`make phase` gates this through `tools/onedef.py`, which carries the duplicates
+this tree still has and the reason for each. **It is ONE today —
+`V90Phase4Demodulator`** — and the tool prints the count, so read it there
+rather than from this paragraph. Adding one needs a reason written there;
+removing one is progress.
 
 It is not a style rule. Two definitions of one type is undefined behaviour the
 moment both reach a translation unit, and it fails silently -- the compiler
 picks one, and every offset, `sizeof` and allocation in the other half is
-quietly wrong. `V90Parameters` is 0x504 in one header and 0x558 in the other,
-and `V90ModemCtor.cpp` carries a long comment about which of the two it must
-not include, because allocating the smaller and using the larger
+quietly wrong.
+
+**The worked example is `V90Parameters`, and it is now FIXED — read it as
+history, not as a live hazard.** It WAS 0x504 in one header and 0x558 in the
+other, and `V90ModemCtor.cpp` carried a long comment about which of the two it
+must not include, because allocating the smaller and using the larger
 under-allocates by 84 bytes and passes every test not run under a checking
-allocator.
+allocator. It has had one home since task #116; `include/dsplib/V90Parameters.h`
+is that home, `sizeof` is 0x558, and the nineteen other headers naming the class
+only forward-declare it. Keep the example — the failure mode is exactly as
+described and cost real time — but do not send anyone hunting for it.
+
+That correction came from an agent briefed to expect the trap, which measured
+the tree instead of believing the brief (finding 6402). **A rules file has the
+same shelf-life problem as a comment and no gate behind it**: findings 6100 and
+6103 are the same defect in a source comment and in this file's own gccdiverge
+tally. When a paragraph here states a COUNT or a live defect, check it against
+the tool before repeating it.
 
 It was also a portability wall: six enums were spelled in two headers each,
 which is legal for the C++11 OPAQUE DECLARATION they were and illegal for the
