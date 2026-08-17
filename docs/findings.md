@@ -75478,3 +75478,76 @@ per-process ASLR noise. ASLR shifts by whole pages, so the page offset is the
 call site; grouping by `addr & 0xfff` gives 22, which is a number that can be
 argued with. A denominator that is silently counting the wrong thing reads
 exactly like a denominator that is right.
+
+### 6901. AN INDEPENDENT, KNOWN-GOOD V.34 PEER DOES NOT REPRODUCE THE RETRAINING EITHER — OURS AGAINST THE CONEXANT HSF IS 33600/33600 WITH ZERO RETRAINS, 8 RUNS OF 9
+
+`testbench/hsfcall.sh` puts our datapump and the Conexant HSF datapump
+(`~/dev/softmodems/conexant/hsfuser`) on the same modelled channel, through the
+same `chanshim.py` the ours-against-ours rig uses. No PBX, no hardware, no
+dialling — `chanshim.py` ignores the dial string, so no destination guard is
+involved and none can be.
+
+    ours vs HSF, clean, 9 runs   8 connected 33600 / 33600, train 14.2-19.5 s
+    ours vs ours  (control)      33600, V34DATARATE 10, probes 1, RETRAINS 0
+
+Reproduced independently of the run that built it, on a seed of my own
+choosing: `CHAN_DELAY_MS=0 CHAN_SEED=4242` gives CONNECT 33600 both ways,
+14.2 s training, real time 1.00x (61.7 s of audio in 61.7 s wall, so the run is
+not starved), `V34RTNCOUNT 0`.
+
+**THIS IS A NEGATIVE RESULT AND IT IS THE POINT.** #151/1948 established that
+the emulator does not reproduce the bench's retraining, and the obvious reading
+was that two copies of our own datapump might handshake perfectly with each
+other while failing against a real modem — an interop effect that a self-pairing
+cannot show. `chanshim.py`'s own header says exactly that: *"Smart Link against
+Smart Link is not Smart Link against a Rockwell or a USR."*
+
+**That reading is now tested and it does not survive.** The peer is no longer
+ours: HSF is a different implementation, a different vendor, a different era's
+code, and it trains 33600 against us in both directions with no retrains at
+all. So the symptom does not come from "our datapump against a competent
+foreign V.34" — it needs something this channel model does not contain.
+
+**WHAT THAT LEAVES.** Between the emulated rig and the bench the differences
+are the real SIP path (packetisation, two jitter buffers, the ATA's own
+processing) and the specific behaviour of the three hardware far ends. 1927
+cleared the ATA and the trunk for *hardware-to-hardware* traffic and 6700
+records why that does not extend to our leg. So the remaining suspects are the
+media path our leg alone traverses, and far-end behaviour no software peer
+imitates.
+
+**THE ONE RUN THAT DID NOT CONNECT, reported because it is the interesting
+one.** At `CHAN_DELAY_MS=70` over 60 s, the two ends trained V.34 at 33600 both
+ways — `+MRR` at 21.2 s — and then never reached CONNECT, with no `+ER: LAPM`
+in the remaining 40 s. It is the only run of nine with three probe rounds
+(`V34PROBEBINS 3`, `V34DATARATE 20`). n=1, not chased, and there is a live
+alternative to channel variance: the two runs with `V34DATARATE 20` were the
+first two executed, so first-run state is as good a candidate as the seed —
+and it is NOT a seed effect, because all four seeded 70 ms runs were
+`DATARATE 10`. Worth one repeat before anyone builds on it.
+
+**TWO CORRECTIONS TO hsfuser's OWN DOCUMENTATION, both measured here.**
+
+* `HSF_NOCTL` does not work for this. It swaps the answering side's `ATS0=1`
+  for a bare `ATA`, and over 70 s the modem stayed `offhook=0 tx_nz=0 rx_nz=0`
+  and emitted no sample. `ATS1=1` first changed the symptom to `NO CARRIER` in
+  about a second and not the outcome. `hsfshim.py` therefore makes a SECOND
+  socketpair for HSF's control channel and rings it in HSF's own newline
+  format — 24 ms cycles, 2 s bursts every 6 s, `exchange.c`'s numbers, because
+  `CRingDetector` accepts only 14-66 ms per cycle. HSF then keeps its built-in
+  `ATS0=1` and lifts after 84 rings.
+* HSF cannot originate over a bare channel. `DialerDialString` arms a
+  `DialtoneWaitTime` unconditionally and `ATX3` does not disable it; measured
+  here as `NO DIALTONE` 4.7 s after dialling, then on-hook. `exchange.c`
+  synthesises 350+440 Hz to satisfy it and a channel model carrying our silence
+  does not. So HSF answers and we dial — which is the bench's arrangement in
+  any case. `HSF_ROLE=originate` stays reachable so the failure can be
+  re-measured, not because it works.
+
+**LIMITS.** This inherits every limitation of the channel model, including the
+one that matters most: the model has never reproduced the retraining with ANY
+peer, so a clean result here is weak evidence about a mechanism the rig cannot
+show. What it does establish is narrower and worth having — the PEER is no
+longer a candidate explanation. `chanshim.py` and `chancall.sh` are unmodified
+and the ours-against-ours control was re-run alongside to prove the rig can
+still report a connect.
