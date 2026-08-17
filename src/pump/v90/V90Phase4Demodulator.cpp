@@ -611,21 +611,21 @@ V90Phase4Demodulator::getV90Decision(short sample)
 	case P4D_STATE_TRN2D_DD:
 		decision = demapper->hardDecision(sample);
 		if (countInState == linearMappStudyStart) {
-			demapper->short_1eb4 = 1;
+			demapper->linearMappStudyEnabled = 1;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Phase4Demodulator "
 						     "reset & enable linear "
 						     "mapping study in "
 						     "TRN2.\n");
 		}
-		if (demapper->short_1eb4 != 0)
+		if (demapper->linearMappStudyEnabled != 0)
 			demapper->linearMappingStudy(sample, decision);
 		demapper->process(bits, nbits);
 		if (countInState == trn2dDDLength / 2)
 			int_0028 = 0x18;
 		if (countInState == trn2dDDLength) {
 			int_0028 = 0x19;
-			demapper->short_1eb4 = 0;
+			demapper->linearMappStudyEnabled = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Phase4Demodulator: "
 						     "disable linear mapping "
@@ -1029,21 +1029,21 @@ V90Phase4Demodulator::getV92Decision(short sample)
 	case P4D_STATE_TRN2D_DD:
 		decision = demapper->hardDecision(sample);
 		if (countInState == linearMappStudyStart) {
-			demapper->short_1eb4 = 1;
+			demapper->linearMappStudyEnabled = 1;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Phase4Demodulator "
 						     "reset & enable linear "
 						     "mapping study in "
 						     "TRN2.\n");
 		}
-		if (demapper->short_1eb4 != 0)
+		if (demapper->linearMappStudyEnabled != 0)
 			demapper->linearMappingStudy(sample, decision);
 		demapper->process(bits, nbits);
 		if (countInState == trn2dDDLength / 2)
 			int_0028 = 0x18;
 		if (countInState == trn2dDDLength) {
 			int_0028 = 0x19;
-			demapper->short_1eb4 = 0;
+			demapper->linearMappStudyEnabled = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Phase4Demodulator: "
 						     "disable linear mapping "

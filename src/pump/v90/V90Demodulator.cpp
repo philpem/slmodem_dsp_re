@@ -58,6 +58,14 @@ extern "C" {
 #include "dsplib/V90TRN2Designer.h"
 #include "dsplib/sysdep.h"
 /*
+ * `getAT_UD`'s argument record, and the block `enterRRN` writes +0x10 of.
+ * Both headers define one struct and include nothing, so neither can collide
+ * with the block definition of `V90Parameters` that V90PreFilter.h supplies
+ * through V90Demodulator.h (finding 1112).
+ */
+#include "dsplib/TAG_DiagnosticResults.h"
+#include "dsplib/tagV90AdditionalCPinfo.h"
+/*
  * The header forward-declares this one too, and `getBitRate` DEREFERENCES it.
  * Same argument as V90ConstellationDesigner above.
  */
@@ -148,6 +156,28 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 #define PARAMS_TIMING_OFFSET	(0x084 / 4)
 #define PARAMS_WORD_264		(0x264 / 4)
 #define PARAMS_WORD_278		(0x278 / 4)
+
+/*
+ * The four the phase-4 and data-phase entries copy into +0x288 and +0x290.
+ * `enterPhase3` already used +0x264 and +0x278 for the same PAIR of
+ * destinations, so the parameter block holds one (+0x288, +0x290) pair per
+ * phase and these are phases 4 and data:
+ *
+ *     enterPhase3           +0x264 -> +0x288      +0x278 -> +0x290
+ *     enterRRN, enterFPE,
+ *     enterPhase4           +0x268 -> +0x288      +0x27c -> +0x290
+ *     enterDataPhase        +0x26c -> +0x288      +0x280 -> +0x290
+ *
+ * -- three consecutive words in each of two runs, indexed by phase.  That is
+ * the shape of the block and not a name for either quantity, so these keep
+ * offset names: the author's own names are in V90Parameters.h, which this
+ * file cannot include (finding 1112), and inventing two here would be worse
+ * than an offset.
+ */
+#define PARAMS_WORD_268		(0x268 / 4)
+#define PARAMS_WORD_26C		(0x26c / 4)
+#define PARAMS_WORD_27C		(0x27c / 4)
+#define PARAMS_WORD_280		(0x280 / 4)
 
 /*
  * `sessionTermination`'s two.  The names in the comments are the ORIGINAL
@@ -469,6 +499,451 @@ V90Demodulator::reInit()
 {
 	connectionEvaluator->reset();
 	phase3Demodulator->clearVerificationStatus();
+}
+
+/*
+ * ===========================================================================
+ * THE PHASE-4 AND DATA-PHASE ENTRIES
+ * ===========================================================================
+ *
+ * Five members that move `inPhase3` on, and they share one shape which is
+ * worth reading once rather than five times:
+ *
+ *   - EVERY ONE OF THEM RETURNS IMMEDIATELY IF IT IS ALREADY IN THE STATE IT
+ *     IS ENTERING, and the test is for EQUALITY with that state and not for
+ *     "already past it".  `enterRRN`, `enterFPE` and `enterPhase4` all test
+ *     against 2 and all set 2, so the three are three ways into ONE state and
+ *     any of them suppresses the other two.  That is the object's and it is
+ *     not obviously what was meant; it is reproduced, not tidied.
+ *
+ *   - THE DIAGNOSTIC IS BEFORE THE WORK, which is visible only because the
+ *     guard is compiled inline: `cmpl $0x1,dsplibs_debug_level; ja <away>`
+ *     sits between the state test and the first store, and the away block
+ *     prints and jumps BACK to the store.  So the source is
+ *     `if (DSPLIB_DEBUG_ON()) dsplibs_debug_printf(...);` and then the work,
+ *     and writing it the other way round moves the branch.  Same reading as
+ *     v34hshak.h's note on `DSPLIB_DEBUG_ON()` printing before it stores.
+ *
+ *   - +0x048 IS A DEADLINE BUILT FROM THE ROUND-TRIP DELAY with one `lea`
+ *     each, and V90Demodulator.h carries the derivation and the reason it is
+ *     not named further.
+ */
+
+/*
+ * enterRRN -- 225 bytes.  The rate-renegotiation entry into phase 4.
+ *
+ * TWO THINGS IT DOES THAT ITS TWO SIBLINGS DO NOT.
+ *
+ * 1. IT RECORDS A THREE-WAY CONJUNCTION IN `tagV90AdditionalCPinfo`, AND THE
+ *    DESTINATION IS NOT THE OBJECT THE CONDITION IS READ FROM.  The address
+ *    is loaded at 0x1b5bb -- `mov 0x20(%ebx),%ecx`, which is +0x20 and so
+ *    `additionalCPinfo` -- while the first term of the condition comes from
+ *    +0x20c, the connection evaluator, and the other two from +0x1e0.  Three
+ *    different objects, and the destination is the one nothing in the
+ *    condition mentions.  The load is hoisted ABOVE the tests because it is
+ *    needed on every path.
+ *
+ *    The object loads `connectionEvaluator->word_90`, and only if that is
+ *    non-zero loads `phase4Demodulator`'s +0x3c and +0x38 -- and then stores
+ *    ZERO whichever way every one of those tests went:
+ *
+ *        1b5be  test %eax,%eax ; je 1b5d0        -> store 0
+ *        1b5cd  jne 1b623                        -> 1b623 sets %edx = 1 ...
+ *        1b62d  jne 1b5d2                        -> ... and stores %edx
+ *        1b62f  jmp 1b5d0                        -> store 0
+ *
+ *    but 1b5d0 is `xor %edx,%edx` immediately before 1b5d2, so the value
+ *    reaching the store is 1 on exactly one path and 0 on the other three.
+ *    The `mov $0x1,%edx` at 1b626 is therefore live and this is a genuine
+ *    three-way `&&`, not a fold -- written below as one condition.  The
+ *    register holding the destination is loaded at 1b5bb, BEFORE the tests,
+ *    which is the compiler hoisting an address it needs on every path.
+ *
+ * 2. IT CLEARS `byte_280`, WHICH IS WHAT `getBitRate` GATES ON.  So after
+ *    `enterRRN` the reported rate is 0 until something sets it again.  That
+ *    is the one observable coupling between this member and the diagnostics
+ *    below, and `t_v90dataph.cpp` drives it.
+ */
+void
+V90Demodulator::enterRRN()
+{
+	if (inPhase3 == 2)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demodulator: RRN detected: "
+				     "enter Phase 4\r\n");
+
+	word_38 = 0;
+	word_44 = 0;
+	inPhase3 = 2;
+	word_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
+
+	word_288 = V90PW(params)[PARAMS_WORD_268];
+	word_290 = V90PW(params)[PARAMS_WORD_27C];
+
+	additionalCPinfo->word_10 =
+	    (connectionEvaluator->word_90 != 0 &&
+	     phase4Demodulator->int_003c != 0 &&
+	     phase4Demodulator->int_0038 != 0) ? 1 : 0;
+
+	byte_280 = 0;
+	demapper->linearMappStudyEnabled = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demodulator: disable linear mapping "
+				     "study\n");
+}
+
+/*
+ * enterFPE -- 110 bytes.  `enterRRN` without the connection-evaluator
+ * condition, without the `byte_280` clear and without the second diagnostic:
+ * the state, the counters, the deadline and the two parameter copies, and
+ * nothing else.
+ */
+void
+V90Demodulator::enterFPE()
+{
+	if (inPhase3 == 2)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demodulator: FPE detected: "
+				     "enter Phase 4\r\n");
+
+	word_38 = 0;
+	word_44 = 0;
+	inPhase3 = 2;
+	word_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
+
+	word_288 = V90PW(params)[PARAMS_WORD_268];
+	word_290 = V90PW(params)[PARAMS_WORD_27C];
+}
+
+/*
+ * enterPhase4 -- 110 bytes, and the same size as `enterFPE` for a reason: it
+ * is the same member with two differences, both forced.
+ *
+ * `word_44` is ACCUMULATED rather than cleared -- `mov 0x38(%ebx),%eax; add
+ * %eax,0x44(%ebx)` before +0x38 is zeroed, so this entry adds the count it
+ * found to the running total where the other two discard it -- and the
+ * deadline's `lea` is `0x28230(%edx,%edx,4)`, five times the round-trip delay
+ * from a larger base, where the other two use twice it.
+ *
+ * THE ORDER OF THE +0x38 READ AND THE +0x44 ADD IS NOT FREE.  The object
+ * reads +0x38 at 0x1b2ce, adds at 0x1b2d4 and stores zero at 0x1b2da; writing
+ * the clear first would change what is added.
+ */
+void
+V90Demodulator::enterPhase4()
+{
+	if (inPhase3 == 2)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demodulator: enter Phase 4\r\n");
+
+	inPhase3 = 2;
+	word_44 += word_38;
+	word_38 = 0;
+	word_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;
+
+	word_288 = V90PW(params)[PARAMS_WORD_268];
+	word_290 = V90PW(params)[PARAMS_WORD_27C];
+}
+
+/*
+ * enterDataPhase -- 322 bytes.  State 3, and the point at which the linear
+ * mapping study is armed for the data phase.
+ *
+ * THE STUDY LENGTH IS A CHOICE BETWEEN TWO LITERALS AND NEITHER IS A POINTER.
+ * The object has
+ *
+ *     1bec9  ba 38 31 00 00   mov $0x3138,%edx
+ *     1bf70  b8 30 75 00 00   mov $0x7530,%eax
+ *
+ * and NEITHER line carries a relocation, which is the whole of finding 245's
+ * point: they are the integers 12600 and 30000 and not offsets into
+ * `.rodata`.  12600 when `word_294` is set and 30000 when it is not, and
+ * `word_294` is what `reset` stored `quickConnect` into -- so a quick connect
+ * studies for the shorter run.  That reading is the field's provenance and
+ * not this function's, which only picks between two numbers.
+ *
+ * THE RATE DIAGNOSTIC IS `getBitRate()` AND NOT A COPY OF IT.  0x1bf06 is the
+ * same `cmpb $0x0,0x280` guard, the same `imul $0x1f40`, the same 1/6 and the
+ * same `+ 0.5f` under the same rounding-mode dance as the out-of-line member
+ * at 0x1b8e0, inlined here because it is small and in the same translation
+ * unit.  Writing the expression out again would be a second place to get it
+ * wrong; calling it is what the source did and what reproduces the code.
+ */
+void
+V90Demodulator::enterDataPhase()
+{
+	if (inPhase3 == 3)
+		return;
+
+	word_38 = 0;
+	inPhase3 = 3;
+	word_3c = 0x1e;
+
+	word_288 = V90PW(params)[PARAMS_WORD_26C];
+	word_290 = V90PW(params)[PARAMS_WORD_280];
+
+	resampler.setBllState(V90_BLL_STEADY_STATE, 1);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demodulator: enter Data Phase, "
+				     "Rate = %d [bps]\r\n", getBitRate());
+
+	demapper->resetLinearMappStudy(word_294 != 0 ? 12600u : 30000u);
+	demapper->linearMappStudyEnabled = 1;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demodulator: reset and enable linear "
+				     "mapping study in data\n");
+}
+
+/*
+ * enterDataSteadyState -- 548 bytes, and 400 of them are one diagnostic that
+ * `sessionTermination` above already carries word for word.
+ *
+ * IT IS `sessionTermination`'S TIMING-HISTORY BLOCK WITH A DIFFERENT GUARD.
+ * Same two resampler accessors, same `%c%d.%04d` split, same `1000* std`
+ * line, same `PARAMS_MIN_STD_FOR_SAVE >= std` test with the parameter on the
+ * LEFT, and the same store into the modem parameter block's
+ * `MODEM_CLOCK_DEVIATION`.  Everything that comment says about the sign
+ * character applies here unchanged and is not repeated: `fldz` puts the ZERO
+ * in %st(0), the character is `0x2d - 2*CF` with no branch, and an unordered
+ * value therefore prints '+'.  Findings 2300 and 2410.
+ *
+ * WHAT IS DIFFERENT IS THE GUARD, AND IT IS NOT A PURE TEST.  This member
+ * COPIES the evaluation flag into `word_278` and then branches on it:
+ *
+ *     1b345  mov  0x160(%edx),%eax
+ *     1b34b  test %eax,%eax
+ *     1b34d  mov  %eax,0x278(%esi)      <- the store is between them
+ *     1b353  jne  ...
+ *
+ * -- the store is scheduled into the middle of the test, which is free, but
+ * the store itself is not: `sessionTermination` reads the same parameter and
+ * does NOT copy it.  So the assignment is in the source and the value the
+ * branch uses is the value that was stored.
+ *
+ * AND THE ELSE ARM IS EMPTY, where `sessionTermination`'s prints "EVALUATION
+ * DISABLED".  There is no second string and no second call in the range; the
+ * function falls straight to the shared tail.
+ */
+void
+V90Demodulator::enterDataSteadyState()
+{
+	if (inPhase3 == 4)
+		return;
+
+	inPhase3 = 4;
+	edprintf("V90Demodulator: enter Data steady state\r\n");
+
+	word_278 = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];
+	if (word_278 != 0) {
+		float mean = v90resampler_timingHistoryMean(&resampler);
+		float std = v90resampler_timingHistoryStd(&resampler);
+		int frac;
+
+		frac = (int)((mean - (float)(int)mean) * 10000.0f);
+		edprintf("V90Demodulator: mean of timing offset History  = "
+			 "%c%d.%04d\r\n",
+			 !(0.0f >= mean) ? '+' : '-',
+			 (int)__builtin_fabsf(mean),
+			 (frac < 0) ? -frac : frac);
+
+		frac = (int)((std - (float)(int)std) * 10000.0f);
+		edprintf("V90Demodulator: std of timing offset History  = "
+			 "%c%d.%04d\r\n",
+			 !(0.0f >= std) ? '+' : '-',
+			 (int)__builtin_fabsf(std),
+			 (frac < 0) ? -frac : frac);
+
+		edprintf("V90Demodulator: 1000* std = %d\r\n",
+			 (int)(std * 1000.0f));
+
+		if (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {
+			int *modemParams;
+
+			edprintf("V90Demodulator: Timing offset saved in "
+				 "Registry!\r\n");
+
+			modemParams = *(int *const *)&V90PB(params)[0];
+			modemParams[MODEM_CLOCK_DEVIATION] =
+			    (int)(1000.0f * mean);
+		}
+	}
+
+	demapper->linearMappStudyEnabled = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demodulator: disable linear mapping "
+				     "study.\n");
+}
+
+/*
+ * ===========================================================================
+ * THE DIAGNOSTICS ACCESSORS
+ * ===========================================================================
+ */
+
+/*
+ * log10() on the coprocessor, as the object computes it.
+ *
+ * `fldlg2` pushes log10(2) at the register's full 64-bit mantissa and `fyl2x`
+ * computes st(1) * log2(st(0)) and pops, so the sequence takes one value and
+ * leaves one -- net stack effect zero, which is what makes the "=t"/"0" tie
+ * legal.  glibc's log10() is a polynomial and differs from this in the last
+ * place often enough to matter once the result is scaled by ten, which is
+ * exactly what `getAT_UD` does to both of its results.
+ *
+ * THIS IS THE THIRD COPY of the same four-line helper -- `x87_log10` in
+ * V90Equalizer.cpp, `psd_x87_log10` in Psd.cpp, `trn2_x87_log10` in
+ * V90TRN2Designer.cpp and the one in VPcmFloModem.cpp -- and it is a copy
+ * deliberately, on the reasoning VPcmFloModem.cpp already wrote down:
+ * hoisting it into a shared header from a worktree touches files other
+ * batches own for no behavioural gain.  Recorded so a later cleanup can
+ * collapse them all at once.
+ */
+static inline long double
+dem_x87_log10(long double x)
+{
+	long double r;
+
+	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
+	return r;
+}
+
+/*
+ * getRbsPattern -- 51 bytes, and the whole of it is one loop.
+ *
+ * Six bytes of `V90AutoDigitalImpDetector::byte_280c` widened into six words
+ * of the caller's array.  The count is the object's `cmp $0x5 / jbe` and is
+ * `V90ADID_PHASES`, which is the array's own declared length -- so the loop
+ * is written against that constant rather than a literal 6, and the two are
+ * required to agree.
+ *
+ * THE ENTRY JUMP IS THE COMPILER'S, NOT A CONDITION.  0x1b941 is `jmp 1b950`
+ * into the top of the loop body, which is what GCC emits when it has proved
+ * the loop runs at least once and still wants the body aligned.  There is no
+ * zero-trip test in the source and none is written here.
+ */
+void
+V90Demodulator::getRbsPattern(unsigned int *rbs) const
+{
+	unsigned int i;
+
+	for (i = 0; i < V90ADID_PHASES; i++)
+		rbs[i] = autoDigitalImpDetector->byte_280c[i];
+}
+
+/*
+ * indicateRemoteRateReneg -- 40 bytes.  One call and one store.
+ *
+ * The two go through DIFFERENT pointers and that is the whole of the
+ * function's content: the call is on +0x20c, the connection evaluator, and
+ * the store is into +0x208 -- `constellationDesigner` -- at its +0x48.  The
+ * object loads the second pointer AFTER the call returns, so the call is not
+ * what supplies it, and the two objects are not confusable even though the
+ * fields are adjacent.
+ *
+ * `V90ConstellationDesigner`'s +0x48 is `word_48`, "zeroed by reset", and
+ * this is the only place in the object that ever stores a 1 into it.  It
+ * keeps its offset name: one writer storing a literal 1 says the field is a
+ * flag and says nothing about what of.
+ */
+void
+V90Demodulator::indicateRemoteRateReneg() const
+{
+	connectionEvaluator->indicateRemoteRateReneg();
+	constellationDesigner->word_48 = 1;
+}
+
+/*
+ * getAT_UD -- 418 bytes, and the only place in the object that names
+ * `TAG_DiagnosticResults`.  See dsplib/TAG_DiagnosticResults.h for what is
+ * modelled of that record and what is deliberately left padded.
+ *
+ * FOUR THINGS IN IT ARE FORCED AND ARE WRITTEN THE OBJECT'S WAY.
+ *
+ * 1. THE ROUND-TRIP DELAY IS DIVIDED UNSIGNED, AND THAT IS A TYPE STATEMENT.
+ *    The object computes `rtd * 10` with `lea (%edx,%edx,4)` then `add
+ *    %ebx,%ebx`, and divides by 96 with the unsigned reciprocal
+ *
+ *        mov $0xaaaaaaab,%eax ; mul %ebx ; shr $0x6,%edx
+ *
+ *    -- `mul`, not `imul`, and with NO sign correction anywhere: a signed
+ *    divide by 96 needs the quotient adjusting for a negative dividend and
+ *    there is no `cltd`, no `sar` and no conditional add in the range.  So
+ *    the arithmetic is unsigned, while `V90Phase2Info::rtd` is declared
+ *    `int` with a comment saying its signedness is not recoverable because
+ *    "nothing does arithmetic on it".  Something does now.
+ *
+ *    THE CAST IS HERE RATHER THAN IN THE FIELD, and that is a decision and
+ *    not an oversight.  Retyping `rtd` would reach a header three other
+ *    live branches include, which is exactly finding 3511's shape; the cast
+ *    reproduces the object's instructions today and the evidence for the
+ *    retype is recorded in the finding for a pass that owns that header.
+ *
+ * 2. `+0x074` IS COPIED WITH AN INTEGER `mov` AND IS STILL A FLOAT.  0x1ba3e
+ *    loads the equaliser's +0x80 into %eax and stores it, and 0x1ba47 then
+ *    loads the SAME address with `flds` for the logarithm.  A float-to-float
+ *    assignment with no conversion is a 32-bit `mov` in this compiler, so the
+ *    integer move is not evidence of an integer field -- and the independent
+ *    writer in `VPcmV34GetDiagnostics` stores that offset with `fsts`, which
+ *    settles it.  CLAUDE.md's free column: the instruction was the
+ *    compiler's to choose.
+ *
+ * 3. THE TWO dB FIGURES SHARE ONE CONSTANT.  `10.0f` is loaded once, at
+ *    0x1ba53, and left on the stack across the second `fyl2x` -- `fmul
+ *    %st,%st(1)` for the first result and `fmulp` for the second.  That is
+ *    the compiler hoisting one constant out of two expressions, so the
+ *    source has the literal twice; writing it once into a local moves the
+ *    code.  Both are `10.0f * log10f(x)`, built as `log10(2) * log2(x)` by
+ *    `fldlg2 / fyl2x`, which is how this compiler open-codes `log10f`.
+ *
+ * 4. THE RBS PACKING IS LSB-FIRST AND THE OBJECT PROVES THE ORDER.  Five
+ *    `lea (%r,%r,2)` steps fold the six bytes from the TOP down --
+ *    `b[0] + 2*(b[1] + 2*(b[2] + 2*(b[3] + 2*(b[4] + 2*b[5]))))` -- so
+ *    `byte_280c[0]` is bit 0.  The six are read into a local array first and
+ *    the array is then passed to `edprintf` element by element, which is why
+ *    `getRbsPattern` is called for its side effect rather than the six being
+ *    read twice: the object reads +0x280c exactly six times in this function.
+ */
+void
+V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
+{
+	unsigned int rbs[V90ADID_PHASES];
+
+	results->word_0ec = word_264;
+	results->word_0f0 = word_268;
+	results->word_0f4 = word_26c;
+
+	results->dataRate = getBitRate();
+
+	results->word_0bc = 0;
+	results->word_0b4 = 8000;
+
+	results->float_074 = equalizer->meanErrorEnergyCurrent;
+	results->float_070 = (float)(10.0f * dem_x87_log10(
+	    (long double)equalizer->meanErrorEnergyCurrent));
+	results->float_068 = (float)(10.0f * dem_x87_log10(
+	    (long double)agc.level));
+
+	results->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 96u;
+
+	getRbsPattern(rbs);
+
+	results->rbsPattern = rbs[0] + 2 * (rbs[1] + 2 * (rbs[2] + 2 *
+			      (rbs[3] + 2 * (rbs[4] + 2 * rbs[5]))));
+
+	edprintf("V90 Diagnostics\r\n");
+	edprintf("-------------------------\r\n");
+	edprintf("RBS : %d (%d%d%d%d%d%d)\r\n", results->rbsPattern,
+		 rbs[0], rbs[1], rbs[2], rbs[3], rbs[4], rbs[5]);
 }
 
 /*

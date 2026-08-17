@@ -66295,3 +66295,245 @@ not because anyone aimed at the bytes.
 count. A second ratchet on the strict number would be defensible, and is not
 proposed here: it would fail on register-allocation churn that 614 says is not a
 defect, and a gate that fails on non-defects gets disabled.
+### 4900. `TAG_DiagnosticResults` IS NAMED, BOUNDED FROM BELOW, AND MODELLED ONLY WHERE A WRITER IS RECONSTRUCTED
+
+The record the data-mode diagnostics API fills in.  The name is the object's,
+out of the only mangling that carries it --
+`_ZNK14V90Demodulator8getAT_UDEP21TAG_DiagnosticResults` -- and
+`include/dsplib/TAG_DiagnosticResults.h` is its one home.
+
+**THE SIZE IS NOT RECOVERABLE AND IS DECLARED AS A LOWER BOUND.**  No
+allocation site for this record exists anywhere in the object: all three
+functions that fill one -- `VPcmV34GetDiagnostics`,
+`VPcmV34GetVisualDiagnostics` and `getAT_UD` -- receive the pointer from
+outside `dsplibs.o`, so the caller that sizes the buffer is in the
+application.  What IS measured is the highest offset any writer touches:
+`VPcmV34GetDiagnostics` stores a word at +0x228, which ends at 0x22c.  The
+trailing `pad_` runs to exactly there.  This is `v34_object`'s tail declared
+the same way, and plan.md section 7's "runs to at least 0x22c" is confirmed
+rather than inherited.
+
+**Twenty-two offsets are written between the two functions and eleven are
+modelled.**  The V.34 half is listed in the header and deliberately left in
+`pad_`: `VPcmV34GetDiagnostics` is unwritten, so nothing in this tree can be
+tested against those offsets, and a field declared from a disassembly nobody
+has reconstructed is the wrong-but-plausible CLAUDE.md refuses.  Three of the
+eleven get real names (4901, and `dataRate` below); the other eight keep offset
+names with their derivations beside them.
+
+**`+0x0fc` IS `dataRate`, AND A FORMAT STRING NAMES IT.**  `getAT_UD` stores
+exactly what `getBitRate()` returns, and `enterDataPhase` passes that same
+expression to `"V90Demodulator: enter Data Phase, Rate = %d [bps]\r\n"` -- the
+author's own words for the quantity AND its unit.  The V.34 arm writes a
+multiple of 2400 into the same slot, which is a V.34 data rate, so the two
+writers agree on what the field holds.
+
+**`+0x0b4` IS DECLINED.**  V.90 stores the literal 8000 and V.34 a widened
+short; 8000 is the V.90 downstream symbol rate and every V.34 symbol rate fits
+a short, so "baud" is the obvious reading -- but `getAT_UD` is the receive side
+only while the V.34 arm writes +0x0b0 AND +0x0b4 from two different fields, so
+which of the pair is transmit and which receive is not settled by anything in
+this batch.  Offset name, derivation in the comment; 3120's ruling.
+
+`test/unit/t_v90dataph.cpp` carries a 64-byte guard past +0x22c and asserts it
+untouched on every trial, which is what turns the lower bound from a comment
+into a checked claim.
+
+### 4901. THE RBS PATTERN IS THE DIGITAL-IMPAIRMENT DETECTOR'S SIX PER-PHASE FLAGS, PACKED LSB-FIRST
+
+`getAT_UD` reads six bytes of `V90AutoDigitalImpDetector::byte_280c` -- one per
+frame phase, and `V90ADID_PHASES` is 6 -- folds them with five `lea (%r,%r,2)`
+steps from the top down,
+
+    b[0] + 2*(b[1] + 2*(b[2] + 2*(b[3] + 2*(b[4] + 2*b[5]))))
+
+and prints the result beside the six bytes it was built from:
+
+    "RBS : %d (%d%d%d%d%d%d)\r\n"
+
+So the label names the field, the parenthesised six name its WIDTH, and the
+fold order says bit N is frame phase N.  `TAG_DiagnosticResults +0x220` is
+`rbsPattern`.
+
+**What makes RBS the right reading of the label rather than a coincidence of
+initials is the source of the bytes.**  `byte_280c` is already documented in
+`V90AutoDigitalImpDetector.h` as the phase's "suspected" flag, and robbed-bit
+signalling in V.90 is exactly a per-frame-phase impairment.  Two independent
+descriptions of the same six bytes agreeing is stronger than either alone.
+
+The six are read into a local array and the array is then passed to `edprintf`
+element by element, so the object reads +0x280c exactly six times in the
+function -- which is why the reconstruction calls `getRbsPattern` for its side
+effect rather than reading the detector twice.
+
+### 4902. `V90Demapper +0x1eb4` IS THE LINEAR MAPPING STUDY'S ENABLE FLAG
+
+It was `short_1eb4`, "MODELLED, UNNAMED ... nothing else in the object touches
+it".  The 16-bit width is unchanged and still forced.  The "nothing else" was
+true of the tree when it was written and is now false three times over:
+
+  - `V90Demodulator::enterDataPhase` calls `resetLinearMappStudy`, stores 1,
+    and prints "reset and enable linear mapping study in data";
+  - `V90Demodulator::enterDataSteadyState` stores 0 and prints "disable linear
+    mapping study.";
+  - `V90Demodulator::enterRRN` stores 0 and prints "disable linear mapping
+    study".
+
+Three writers, two values, and a format string beside each saying "enable" for
+the 1 and "disable" for the 0.  **And the reader settles it independently:**
+`V90Phase4Demodulator`'s two decision members -- landed before this batch --
+do the same pair of writes with their own strings and, between them, GATE the
+call `if (demapper->linearMappStudyEnabled != 0)
+demapper->linearMappingStudy(...)`.  Tier 1 and tier 3 evidence agreeing, and
+the gate is what makes the name a description of the field's ROLE rather than
+of one writer's intent.
+
+It stays a `short` and does not become a flag constant: CLAUDE.md names flags
+by bit value where a mask test reads a bit, and nothing masks this -- all four
+writers store a whole halfword.
+
+The rename touched three sources and five anchors in
+`test/mutations/v90p4ddec.json`, which `anchorcheck.py` caught as
+`NOT UNIQUE ... matches 0 time(s)`.
+
+**AND IT MOVED NOTHING AT THE CODEGEN TIER, WHICH IS CHECKED AS A SET AND NOT
+AS A COUNT.**  CLAUDE.md requires `compare.py` not to budge across a pure
+rename, and warns in the same breath that "a count can gain four and lose four
+and not move" -- so the count alone cannot carry the claim.  `samesize.py
+--identical` was run at the branch point and again on the finished batch and
+the two SETS diffed:
+
+    identical set   298 -> 302
+    lost            (none)
+    gained          enterFPE, enterRRN, getRbsPattern,
+                    indicateRemoteRateReneg
+
+Nothing left the set, and every gain is one of this batch's own new symbols.
+So no `V90Phase4Demodulator` or `V90Demapper` symbol changed shape, which is
+the actual claim -- a rename is a compile-time substitution and a TYPE change
+masquerading as one would have shown here.  `compare.py` moved 409 -> 413
+identical and 75 -> 77 same-size over the same interval, with the blob-side
+total rising by exactly 1,824 bytes, which is the eight symbols and nothing
+else.
+
+### 4903. `V90Phase2Info::rtd`'S ARITHMETIC IS UNSIGNED, AND THE RETYPE IS DEFERRED ON PURPOSE
+
+The header said "Signedness is not recoverable: nothing does arithmetic on
+it".  `getAT_UD` does, and the object's instructions settle it:
+
+    1ba6c:  b8 ab aa aa aa   mov  $0xaaaaaaab,%eax
+    1ba7f:  8d 1c 92         lea  (%edx,%edx,4),%ebx     ; rtd * 5
+    1ba82:  01 db            add  %ebx,%ebx              ; rtd * 10
+    1ba84:  f7 e3            mul  %ebx                   ; UNSIGNED
+    1ba8a:  c1 ea 06         shr  $0x6,%edx              ; / 96
+
+`mul`, not `imul`, and no sign correction anywhere in the range -- a signed
+divide by 96 has to adjust the quotient for a negative dividend and there is no
+`cltd`, no `sar` and no conditional add.  This is CLAUDE.md's forced case: the
+signedness of a 32-bit result that is USED.  The three phase entries also do
+arithmetic on the field but only through `lea`, which is signedness-blind and
+settles nothing.
+
+**THE CAST IS AT THE USE SITE AND THE FIELD IS LEFT `int`, AND THAT IS A
+DECISION.**  `V90Phase2Info.h` is included by four live branches; finding 3511
+is what a type change reaching one of them costs when the other half asserts
+against the old shape, and it failed loudly there only because the reference
+was a `__builtin_offsetof`.  `getAT_UD` therefore spells
+`(unsigned int)phase2Info->rtd * 10u / 96u` and reproduces the object's
+instructions today.  The retype belongs to a pass that owns this header and
+can move every user at once.
+
+**The claim is tested and was not, at first.**  Over the non-negative delays
+the fixture plants, the signed and unsigned spellings agree on every value, and
+the mutation that swaps them SURVIVED a green run of 64,515 checks.  It dies
+against a table that includes -1, -95, -96, -1000 and -0x7ffffff.  This is
+613's lesson arriving a second time: two readings that agree over every value
+the test happens to supply are not distinguished by the test being large.
+
+### 4904. THE V.90 PARAMETER BLOCK HOLDS ONE (+0x288, +0x290) PAIR PER PHASE
+
+Four members of `V90Demodulator` copy two parameter words into the same two
+fields, and which two they read is the phase:
+
+    enterPhase3                      +0x264 -> +0x288    +0x278 -> +0x290
+    enterRRN, enterFPE, enterPhase4  +0x268 -> +0x288    +0x27c -> +0x290
+    enterDataPhase                   +0x26c -> +0x288    +0x280 -> +0x290
+
+-- three consecutive words in each of two runs, indexed by the phase being
+entered.  That is the SHAPE of the block, and it is not a name for either
+quantity: the author's own names are in `V90Parameters.h`, which
+`V90Demodulator.cpp` cannot include (finding 1112), so the indices keep offset
+names.  Recorded because the pattern predicts where the remaining phases' pairs
+are, which is worth more than a guess at what they hold.
+
+### 4905. `tagV90AdditionalCPinfo +0x10` IS WRITTEN ONCE AND READ NOWHERE
+
+`V90Demodulator::enterRRN` stores a 0 or a 1 at +0x10 of the record, and it is
+the ONLY access to that record anywhere in the object -- `V90Modem`'s
+constructor takes its address and passes it on without touching a byte.  The 1
+is reached only when `V90ConnectionEvaluator +0x90` and both of
+`V90Phase4Demodulator +0x3c` and +0x38 are non-zero.
+
+**The destination is not the object any term of the condition comes from.**
+The address is loaded at 0x1b5bb -- `mov 0x20(%ebx),%ecx`, which is
+`additionalCPinfo` -- while the first term comes from +0x20c and the other two
+from +0x1e0.  Three objects, and the one written is the one the condition never
+mentions.  The load is hoisted above the tests because it is needed on every
+path.
+
+So the field is a conjunction of three flags latched at the moment a rate
+renegotiation is detected, and what it is FOR is not recoverable inside the
+object: nothing reads it, so the consumer is the application.  MODELLED,
+UNNAMED, and the definition moved out of `V90Modem.h` into
+`include/dsplib/tagV90AdditionalCPinfo.h` so that a second file could have the
+complete type without the type being spelled twice.
+
+**The `&&` chain is a genuine three-way test and not a fold**, which the
+object's branch layout is what says: 0x1b5d0 is `xor %edx,%edx` immediately
+before the store at 0x1b5d2, and 0x1b626's `mov $0x1,%edx` reaches the store
+on exactly one of four paths.
+
+### 4906. `anchorcheck.py` CANNOT SEE A `const` MEMBER, SO NO `const` MEMBER IN THE TREE CAN USE `"fn"`
+
+`tools/anchorcheck.py`'s definition index requires the closing parenthesis of a
+definition to be followed by `{` after whitespace:
+
+    j = i + 1
+    while j < len(src) and src[j] in " \t\r\n":
+        j += 1
+    if j < len(src) and src[j] == "{":      # a body, so a definition
+
+A const member has ` const` between the two, so `V90Demodulator::getAT_UD`,
+`::getRbsPattern` and `::indicateRemoteRateReneg` are absent from `defined`,
+and a mutation naming any of them in its opt-in `"fn"` field fails with
+`BAD fn ... names no function in <file>`.
+
+**It fails SAFE and it fails LOUD**, which is why this is a note rather than a
+defect report: the run stops with a message naming the function, and the field
+is opt-in, so dropping it costs only rule 2's cross-check while rule 1's
+uniqueness check still applies.  `test/mutations/v90dataph.json` therefore
+carries no `"fn"` on its eleven const-member anchors and says why in its note.
+`tools/` is off-limits to this batch; recorded for whoever owns it.  The
+scale of what it hides is not measured here -- every const member in every
+suite is affected, not only these three.
+
+### 4907. THREE OF `V90Demodulator`'S ENTRIES ARE THREE WAYS INTO ONE STATE, AND EACH SUPPRESSES THE OTHER TWO
+
+`enterRRN`, `enterFPE` and `enterPhase4` all begin `if (inPhase3 == 2) return;`
+and all set `inPhase3 = 2`.  So whichever runs first makes the other two
+no-ops until something else moves the field, and the test is for EQUALITY with
+the destination state rather than for "already past it" -- 3, 4 or 0xffffffff
+all take the working arm.
+
+What differs between them is small and entirely forced: the deadline at +0x48
+is `0x10680 + 2*rtd` for the first two and `0x28230 + 5*rtd` for the third;
+`enterPhase4` ACCUMULATES `word_44 += word_38` where the other two clear
++0x44; and `enterRRN` alone latches 4905's conjunction, clears `byte_280` --
+which is what `getBitRate` gates on, so the reported rate becomes 0 -- and
+prints a second message.
+
+This is not obviously what was meant, and it is reproduced rather than tidied.
+`t_v90dataph.cpp`'s `run_latch` requires, for each of the five entries, that
+both arms were reached AND that they left different objects behind; a slot
+seeded with 2 would otherwise make all three compare equal for the worst
+possible reason.

@@ -377,7 +377,7 @@ setup(int trial, int mode)
 		 * so 5 is clear of both.  Finding 4811.
 		 */
 		m->word_08 = 5u;
-		m->short_1eb4 = (short)((mode & 1) ? 1 : 0);
+		m->linearMappStudyEnabled = (short)((mode & 1) ? 1 : 0);
 		m->modulusDecoder.field_00 = 7u;
 		m->modulusDecoder.field_04 = 11u;
 		m->modulusDecoder.field_08 = 5u;
@@ -876,7 +876,7 @@ run_sweep(int v92)
 		P4D(1).countInState = 0x1f;
 		P4D(1).linearMappStudyStart = 0x20;
 		P4D(1).trn2dDDLength = 0x400;
-		DEM(1).short_1eb4 = 0;
+		DEM(1).linearMappStudyEnabled = 0;
 		dsplib_debug_capture_reset();
 		dsplib_debug_capture_on = 1;
 		if (v92)
@@ -890,14 +890,14 @@ run_sweep(int v92)
 		memcpy(first, dsplib_debug_capture_text(1), n);
 		first[n] = '\0';
 		diff_eq_int("the study was enabled (%ld)",
-			    (long)DEM(1).short_1eb4, 1, trial);
+			    (long)DEM(1).linearMappStudyEnabled, 1, trial);
 
 		setup((int)trial, 0);
 		P4D(1).state = P4D_STATE_TRN2D_DD;
 		P4D(1).countInState = 0x1f;
 		P4D(1).linearMappStudyStart = 0x900;
 		P4D(1).trn2dDDLength = 0x400;
-		DEM(1).short_1eb4 = 0;
+		DEM(1).linearMappStudyEnabled = 0;
 		dsplib_debug_capture_reset();
 		dsplib_debug_capture_on = 1;
 		if (v92)
@@ -906,7 +906,7 @@ run_sweep(int v92)
 			(void)ref_p4d_getv90decision(p4d_s[1], 300);
 		dsplib_debug_capture_on = 0;
 		diff_eq_int("the study stayed off (%ld)",
-			    (long)DEM(1).short_1eb4, 0, trial);
+			    (long)DEM(1).linearMappStudyEnabled, 0, trial);
 		diff_eq_int("the study gate reads +0x3518 (%ld)",
 			    strcmp(first, dsplib_debug_capture_text(1)) != 0,
 			    1, trial);

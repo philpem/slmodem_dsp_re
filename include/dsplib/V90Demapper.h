@@ -586,13 +586,46 @@ public:
 	unsigned int uint_1eb0;			/* the progress; see +0x1ea8 */
 
 	/*
-	 * +0x1eb4  MODELLED, UNNAMED, and it is a HALFWORD rather than the
-	 * four-byte pad this file used to carry: `reset` writes it 16-bit wide
-	 * (`mov %si,0x1eb4(%ebp)` at 0x30b34) and nothing else in the object
-	 * touches it.  The two bytes after it are the tail of the 0x1eb8
-	 * allocation and nothing reaches them.
+	 * +0x1eb4  NAMED, AND BY THE ONLY EVIDENCE CLAUDE.md RATES FIRST.
+	 *
+	 * This was `short_1eb4`, "MODELLED, UNNAMED ... `reset` writes it
+	 * 16-bit wide (`mov %si,0x1eb4(%ebp)` at 0x30b34) and nothing else in
+	 * the object touches it".  The width is unchanged and still forced;
+	 * the "nothing else" was true of the tree at the time and is now
+	 * false.  `V90Demodulator`'s two data-phase entries write it, and each
+	 * prints what it just did:
+	 *
+	 *   enterDataPhase        resetLinearMappStudy(...); this = 1
+	 *     "V90Demodulator: reset and enable linear mapping study in data"
+	 *
+	 *   enterDataSteadyState  this = 0
+	 *     "V90Demodulator: disable linear mapping study."
+	 *
+	 * Two writers, opposite values, and a format string beside each saying
+	 * "enable" for the 1 and "disable" for the 0.  So the field is the
+	 * study's enable flag and the polarity is the object's own.
+	 *
+	 * AND THE READER SETTLES IT INDEPENDENTLY.  `V90Phase4Demodulator`'s
+	 * two decision members -- landed before this batch and not changed by
+	 * it -- do the same pair of writes with their own pair of strings
+	 * ("reset & enable linear mapping study in TRN2", "disable linear
+	 * mapping study") and, between them, GATE the call:
+	 *
+	 *     if (demapper->linearMappStudyEnabled != 0)
+	 *             demapper->linearMappingStudy(sample, decision);
+	 *
+	 * That is the third tier of evidence agreeing with the first, and it
+	 * is what makes the name a description of the field's role rather
+	 * than of one writer's intent: the flag is read, and what it gates is
+	 * `linearMappingStudy`.
+	 *
+	 * It stays a `short` and does NOT become a flag constant: CLAUDE.md
+	 * names flags by bit value where a mask test reads a bit, and nothing
+	 * masks this -- all three writers store a whole halfword.  The two
+	 * bytes after it are the tail of the 0x1eb8 allocation and nothing
+	 * reaches them.
 	 */
-	short short_1eb4;
+	short linearMappStudyEnabled;
 	unsigned char pad_1eb6[2];
 };
 
