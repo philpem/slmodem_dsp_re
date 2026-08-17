@@ -140,6 +140,116 @@ V90SpectralVerifier::reset()
 
 /*
  * ===========================================================================
+ * The accumulation cycle and the five frequency accessors
+ * ===========================================================================
+ *
+ * THE OBJECT'S TU ORDER IS `startAccumulation`, the three `freqTo*Bin`, the
+ * two `getSpectrumOf*`, `printSpectrum`, `checkSpecialSpectralConditions`,
+ * `process` (0x45cc0 .. 0x465b0).  This file follows it except for
+ * `printSpectrum`, which is written after `checkSpecialSpectralConditions`
+ * because it shares that section's `SV_PRINT_SIGN` and `sv_abs` helpers.
+ * That is a text difference and not a code one: the only ordering that can
+ * reach code generation is an inlining opportunity, nothing in this file
+ * calls any of the five accessors, and `printSpectrum` still precedes its
+ * one caller exactly as in the object.
+ *
+ * THE FIVE ACCESSORS HAVE NO CALLER ANYWHERE IN THE OBJECT.  Not one
+ * `R_386_PC32` in 1.2 MB names any of them, so every use the original had was
+ * inlined and these out-of-line bodies exist only because a non-static member
+ * defined outside its class body is emitted whether or not it is called.  They
+ * are written the same way here, and the codegen tier is what checks them.
+ */
+
+/*
+ * `fistpll` AND THE LOW DWORD IS THE UNSIGNED CONVERSION, and it is what all
+ * three roundings end in -- 0x45d2a, 0x45d64, 0x45da4 and 0x45eeb.  A signed
+ * `(int)` cast compiles to a 32-bit `fistpl`; the 64-bit store with only
+ * `(%esp)` read back is `fixuns_truncsfsi2`, so the destination type is a
+ * 32-bit UNSIGNED one.
+ *
+ * `unsigned int` RATHER THAN THE `unsigned long` THE CLASS'S OWN ACCESSOR
+ * TAKES.  `getSpectrumOfBin`'s mangling ends `Em`, so its parameter is
+ * `unsigned long` and that is not ours to choose; the three converters'
+ * return type is not mangled anywhere and is chosen the way `sv_bin_at`
+ * already chose it in the next section -- on i386 the two types are the
+ * same and both expand to the object's idiom, and `make check64` compiles
+ * this file for a target where `unsigned long` is 64 bits, where the
+ * conversion would stop agreeing above 2**32.
+ *
+ * THE ROUNDINGS ARE THREE AND THEY ARE NOT INTERCHANGEABLE: truncate, add a
+ * half and truncate, truncate and add one.  `freqToRightBin`'s `inc %eax` at
+ * 0x45db1 is on the INTEGER, after the conversion, so it is not
+ * `(unsigned)(f / binWidth + 1.0f)` -- the two disagree for every operand
+ * whose quotient is within one ulp below an integer.
+ */
+unsigned int
+V90SpectralVerifier::freqToNearestBin(float freq) const
+{
+	return (unsigned int)(freq / binWidth + 0.5f);
+}
+
+unsigned int
+V90SpectralVerifier::freqToLeftBin(float freq) const
+{
+	return (unsigned int)(freq / binWidth);
+}
+
+unsigned int
+V90SpectralVerifier::freqToRightBin(float freq) const
+{
+	return (unsigned int)(freq / binWidth) + 1;
+}
+
+/*
+ * FOUR INSTRUCTIONS AND NO BOUND.  `spectrum` is `fftLength / 2` floats long
+ * and 0x45dc0 indexes it with the caller's argument unchecked; there is no
+ * compare and no clamp in the object.  Reproduced, and recorded as D780 --
+ * this reconstruction does not add a guard the original does not have, and
+ * the fixture is what keeps the index in range so that no differential trial
+ * reaches the undefined access (D561).
+ */
+float
+V90SpectralVerifier::getSpectrumOfBin(unsigned long bin) const
+{
+	return spectrum[bin];
+}
+
+float
+V90SpectralVerifier::getSpectrumOfNearestBin(float freq) const
+{
+	return getSpectrumOfBin(freqToNearestBin(freq));
+}
+
+/*
+ * ARMING AN ACCUMULATION IS GATED ON A PARAMETER, NOT JUST ITS DIAGNOSTIC.
+ * `SPECTRAL_VERIFIER_ENABLE` (+0x2a4) is tested at 0x45cd6 and the `jne`
+ * carries the two state stores as well as the `edprintf`, so with the
+ * parameter clear the object never leaves state 0 and `process` -- which
+ * requires state 1 -- accumulates nothing for the rest of the connection.
+ * That is the whole verifier turned off by one word, and it is why the test
+ * drives the parameter both ways.
+ *
+ * THE `== 1` TEST IS FOR ALREADY-RUNNING AND NOT FOR ANYTHING ELSE.  State 2
+ * (finished) falls THROUGH it, so a second call after a completed
+ * accumulation re-arms; only state 1 is refused.
+ */
+void
+V90SpectralVerifier::startAccumulation()
+{
+	if (accumulating == 1)
+		return;
+
+	if (params->SPECTRAL_VERIFIER_ENABLE == 0)
+		return;
+
+	edprintf("V90SpectralVerifier: start data accumulation\r\n");
+
+	accumulating = 1;
+	accumCount = 0;
+}
+
+/*
+ * ===========================================================================
  * checkSpecialSpectralConditions -- 1,682 bytes, 0x45f10
  *
  * Three line conditions, tested in order, each overwriting the last:
@@ -424,4 +534,116 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 	if (word_28 == 0 && DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V90SpectralVerifier: No special "
 				     "conditions\r\n");
+}
+
+/*
+ * The same two decimals `SV_FRAC2` prints, with a `float` hundred: 0x45e25
+ * is `fmuls .rodata.cst4+0x3b0`, a FOUR-byte pool entry, where the five sites
+ * in `checkSpecialSpectralConditions` load eight bytes out of `.rodata.cst8`.
+ * A four-byte entry does not distinguish `100`, `100.0f` and `100.0` on its
+ * own (finding 1384), but an eight-byte one rules a `float` out -- so the two
+ * really are different expressions in the original, and folding this into
+ * `SV_FRAC2` would move the multiply's width at the site that has it narrow.
+ *
+ * The subtraction runs `v - (float)(int)v`: 0x45e23 is `d8 e9`, FSUBR
+ * ST(0),ST(i), which is a D8 REGISTER form and therefore not one of the
+ * encodings finding 245 warns about -- the swap is in the DE pop forms only.
+ */
+#define SV_FRAC2F(v)	sv_abs((int)(((v) - (float)(int)(v)) * 100.0f))
+
+/*
+ * THE RULE IS PRINTED TWICE FROM ONE STRING.  0x45ddb and 0x45ea4 both carry
+ * `.rodata.str1.4+0xbcb4`, and the trailing one is a SIBLING CALL: 0x45ea9
+ * writes the pointer over the incoming `this` slot, unwinds and `jmp`s to
+ * `edprintf`, which GCC emits only in tail position -- so the closing rule
+ * has to stay the last statement here.
+ *
+ * `Spectrum[%d]` IS A FREQUENCY IN Hz AND NOT THE BIN NUMBER.  The first
+ * conversion is `(bin * binWidth) + 0.5f` truncated (0x45e70..0x45e8a), which
+ * is the bin's centre frequency rounded to nearest; the loop counter itself
+ * is never printed.  Read the log accordingly.
+ *
+ * `fftLength / 2` IS RE-READ EVERY ITERATION -- 0x45e97 loads +0x0c again --
+ * because `edprintf` is an opaque call between the two uses, so the bound is
+ * written in the condition rather than hoisted into a local.
+ */
+void
+V90SpectralVerifier::printSpectrum() const
+{
+	unsigned int bin;
+
+	edprintf("--------------------------------------------------------"
+		 "\r\n");
+
+	for (bin = 0; bin < fftLength / 2; bin++) {
+		float v = spectrum[bin];
+
+		edprintf("V90SpectralVerifier: Spectrum[%d] = %c%d.%02d\r\n",
+			 (int)(bin * binWidth + 0.5f), SV_PRINT_SIGN(v),
+			 SV_PRINT_WHOLE(v), SV_FRAC2F(v));
+	}
+
+	edprintf("--------------------------------------------------------"
+		 "\r\n");
+}
+
+/*
+ * ===========================================================================
+ * process -- 268 bytes, 0x465b0
+ *
+ * Fill the accumulation buffer from the caller's block, and on the sample
+ * that fills it run the periodogram and classify the line.  Returns 1 on
+ * that one call and 0 on every other, including every call made outside
+ * state 1.
+ *
+ * THE TWO LOOP CONDITIONS ARE IF-CONVERTED AND THAT IS THE COMPILER'S.
+ * 0x465fb..0x46607 is `setb`/`setb`/`test`/`je` -- two compares with no
+ * branch between them -- which is what GCC 3.4.2 does to a `&&` whose arms
+ * are both cheap (finding 2411's class).  The source is an ordinary `&&`.
+ *
+ * THE PROGRESS COUNTER IS STORED ONLY ON THE PATH THAT LEAVES THE LOOP FROM
+ * INSIDE IT (0x46647).  Entering with the buffer already full skips the
+ * store, which is a loop rotation and unobservable: on that path the value
+ * being stored is the one already there.
+ *
+ * THE STATE MOVES TO 2 BEFORE THE PERIODOGRAM RUNS (0x46659, ahead of the
+ * call at 0x4667c), so a `Psd::process` that re-entered this object would
+ * find it finished rather than running.  It does not, but the order is the
+ * object's and is kept.
+ * ===========================================================================
+ */
+int
+V90SpectralVerifier::process(float *in, unsigned int count)
+{
+	unsigned int filled, i;
+
+	if (accumulating != 1)
+		return 0;
+
+	filled = accumCount;
+	for (i = 0; filled < psdLength && i < count; i++)
+		buf_18[filled++] = in[i];
+	accumCount = filled;
+
+	if (filled < psdLength)
+		return 0;
+
+	accumulating = 2;
+
+	psd->process(buf_18, psdLength, spectrum, Psd::OUTPUT_DB);
+
+	edprintf("V90SpectralVerifier: Ready\r\n");
+
+	/*
+	 * `SPECTRAL_VERIFIER_PRINT_SPECTRUM` (+0x2c0) is read through the
+	 * object's own `params` (0x46695 reloads it from `(%edx)`), not
+	 * through a register still holding it, so the source names the
+	 * member.
+	 */
+	if (params->SPECTRAL_VERIFIER_PRINT_SPECTRUM != 0)
+		printSpectrum();
+
+	checkSpecialSpectralConditions();
+
+	return 1;
 }

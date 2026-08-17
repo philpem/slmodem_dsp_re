@@ -7827,3 +7827,42 @@ swaps it is registered `equivalent` with this entry as its reason.
 **Not corrected**: clamping the cursor would make the reconstruction disagree
 with the blob for any caller that does produce a row above 64, which is the one
 thing it may not do.
+
+## D780 ✅ `getSpectrumOfBin` indexes the spectrum with no bound at all
+
+`V90SpectralVerifier::getSpectrumOfBin(unsigned long)` is fifteen bytes and
+four instructions:
+
+    45dc0  mov 0x4(%esp),%ecx      ; this
+    45dc4  mov 0x8(%esp),%eax      ; bin
+    45dc8  mov 0x1c(%ecx),%edx     ; this->spectrum
+    45dcb  flds (%edx,%eax,4)
+    45dce  ret
+
+There is no compare, no clamp and no mask.  `spectrum` is
+`sysdep_malloc(4 * (fftLength / 2))` and holds `fftLength / 2` floats, so any
+argument at or above that reads past the allocation.
+
+`getSpectrumOfNearestBin` is the same access with the index computed rather
+than passed -- `spectrum[(unsigned)(freq / binWidth + 0.5f)]` at 0x45ec0 --
+which puts the bound on the CALLER's frequency and on `binWidth`, neither of
+which the function sees.  A frequency above `sampleFreq / 2` indexes past the
+array, and a negative one converts to 0x80000000 through the object's
+`fistpll`, which is undefined in C and reads the low dword as zero on this
+target.
+
+**Reproduced, and the reconstruction adds no guard.**  Adding one would make
+the two disagree for exactly the callers that need reproducing, which is the
+one thing this tree may not do.
+
+**NOT DRIVEN OUT OF RANGE, deliberately.**  `t_v90specacc.cpp` computes every
+quotient it drives and marks each row `indexable` or not; the negative and
+huge rows go through `freqToLeftBin`, `freqToRightBin` and `freqToNearestBin`,
+which return the number without subscripting anything, and never through the
+two `getSpectrumOf*` entry points.  D561's rule: a trial that reaches
+undefined behaviour in the reconstruction is not a differential trial, so the
+out-of-range access is described here rather than executed.
+
+**Not corrected**: the guard would be a behavioural difference, and the
+callers inside the object -- `checkSpecialSpectralConditions`'s seven probes
+-- are bounded by parameter values rather than by anything the class checks.

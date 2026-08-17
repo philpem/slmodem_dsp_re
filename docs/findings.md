@@ -67652,3 +67652,170 @@ input, not D561's: a trial that traps identically on both sides measures the
 CPU.  The second grid is clamped to one and says so.  Worth stating as a
 general shape: **a shared `setup` means widening one grid widens every grid
 built on it**, and the two may have different domains.
+
+## 5800. THE BLOB'S FUNCTION ORDER INSIDE A TRANSLATION UNIT IS THE CALLGRAPH'S, NOT THE SOURCE'S, AND READING SOURCE ORDER OFF THE ADDRESSES IS WRONG
+
+`V90SpectralVerifier`'s fourteen text symbols come out of the blob in an order
+that looks like a source listing: constructor, destructor, `reset`,
+`startAccumulation`, the three `freqTo*Bin`, `getSpectrumOfBin`,
+`printSpectrum`, `getSpectrumOfNearestBin`, `checkSpecialSpectralConditions`,
+`process`.  Our reconstruction of the same class came out in *our* source
+order on the first build, which made the inference irresistible: GCC 3.4.2
+emits in source order, therefore the blob's addresses recover the original
+file's layout.
+
+**It was a coincidence and the probe kills it.**  `printSpectrum`'s definition
+was moved to *after* `process` in our file and the tree rebuilt on the period
+compiler.  The emission order did not move: `printSpectrum` stayed at 0xa60
+and `process` at 0xb50, the same two addresses and the same order as before.
+So the compiler is not laying functions out as it parses them; it is laying
+them out from the callgraph, and `process` calls `printSpectrum`, so
+`printSpectrum` is emitted first whichever order the source has them in.
+
+That matters beyond this class, because the temptation is general and the
+conclusion it leads to is unfalsifiable-looking: any two functions in one TU
+can be "shown" to be in a particular source order by their addresses, and the
+claim can never fail a test.  It is exactly the shape CLAUDE.md warns about
+under naming -- a statement no test can refute -- and it would have gone into
+this file's header comment as a derivation had the probe not been run.
+
+**What the addresses DO still bound** is the callgraph: a symbol appearing
+before another in the same TU is consistent with being its callee, and two
+symbols with no call between them can be in either order for any reason.
+Nothing about the source's layout follows.
+
+## 5801. ALL FOUR `V90SpecialSpectralConditions` VALUES ARE NAMED BY THE DETECTOR'S OWN SENTENCES, AND THE HEADER THAT DECLINED THREE OF THEM WAS ANSWERING A NARROWER QUESTION
+
+`include/dsplib/V90SpectralConditions.h` carried one enumerator,
+`V90_SPECTRAL_GERMAN_PBX = 2`, and a paragraph explaining why it would not
+name any others: `V90ConstellationDesigner::spectralDesign` compares its
+argument against the literal 2 and takes one of two arms, so it distinguishes
+2 from everything else and says nothing about what "everything else" contains.
+That was correct about `spectralDesign` and wrong as a statement about the
+object, because `spectralDesign` is not where the value comes from.
+
+`V90SpectralVerifier::checkSpecialSpectralConditions` is where it comes from,
+and it names all four in the author's own words -- each store adjacent to the
+`edprintf` that says what it means:
+
+    0x46559  movl $0x1,0x28(%edi)  "German ISDN NT1 box conditions detected!"
+    0x46588  movl $0x2,0x28(%edi)  "German PBX conditions detected!"
+    0x46573  movl $0x3,0x28(%edi)  "Severe Codec conditions detected!"
+    0x46517  mov 0x28(%edi),%ebx; test; jne  ->  "No special conditions"
+
+The fourth is the zero: 0x4651a tests the field and prints the sentence only
+when nothing has been stored into it, which makes 0 a value of the type rather
+than the absence of one.  This is evidence class 1 in CLAUDE.md's order -- a
+format string that prints the thing -- and the enumerators
+`V90_SPECTRAL_NONE`, `V90_SPECTRAL_GERMAN_ISDN_NT1` and
+`V90_SPECTRAL_SEVERE_CODEC` are added on it.
+
+**The 2 now has two independent derivations that agree**, which is why it was
+the one that could be named from `spectralDesign` alone: the shaper runs that
+function copies, and the string beside 0x46588.  Neither reading knew about
+the other.
+
+**What is still declined**: `EIA6_SPECTRAL_SHAPER_A1` at `V90Parameters+0x3d8`
+and `EIA6_SPECTRAL_VERIFIER_ENABLE` at +0x2a8 say a fourth shaper set exists,
+but nothing in 1.2 MB stores a fifth value into +0x28, so no enumerator is
+invented for it.  Naming it would be the mistake this finding is correcting,
+one step further out.
+
+## 5802. OUR COMPILER INLINES `printSpectrum` INTO `process` AND THE ORIGINAL'S DID NOT -- DEFINITION ORDER AND UNIT GROWTH BOTH PROBED AND BOTH REFUTED
+
+The blob's `V90SpectralVerifier::process` is 268 bytes and contains a real
+`call` to `printSpectrum` at 0x466b5.  Ours is 419 bytes with the body
+inlined, and the inlined copy is instruction-for-instruction the blob's
+`printSpectrum` -- which is itself the best evidence that `printSpectrum` is
+reconstructed correctly, since the same source text reproduces the blob's
+out-of-line function *and* appears verbatim inside our `process`.
+
+Two explanations were probed on the period compiler and neither survives:
+
+- **Definition order.**  Moving `printSpectrum` after `process` changed
+  nothing: still inlined, still 419 bytes.  (It is also what produced finding
+  5800.)
+- **Translation-unit growth.**  Our per-class file is far smaller than the
+  original's TU, and `--param inline-unit-growth` is a plausible reason a
+  large unit would decline what a small one accepts.  The file was padded with
+  400 unrelated functions and rebuilt: still inlined, still 419 bytes, to the
+  byte.
+
+So the cause is in the SOURCE of one of the two functions and has not been
+found.  It is recorded rather than chased, because the remaining move is to
+permute source text until the output matches, which finding 614 forbids by
+name.  The differential tier is unaffected -- an inlined call and an
+out-of-line one compute the same thing -- and `t_v90specacc.cpp` drives both
+functions and their transcripts.
+
+**Do not "fix" this with `__attribute__((noinline))`.**  That is fitting the
+compiler in its purest form: it would move `compare.py` without recovering
+anything, and it would put a construct in `src/` that the original cannot have
+had, since the original did not need one.
+
+## 5803. `cltd` AND `mov`+`sar $0x1f` ARE ONE `abs()` IN TWO ENCODINGS, THE BLOB USES BOTH, AND THE CHOICE IS THE REGISTER ALLOCATOR'S
+
+Our `printSpectrum` is 227 bytes against the blob's 231, and the whole
+difference is four bytes in one place.  The blob computes the hundredths'
+magnitude as
+
+    45e3b  mov 0x1c(%esp),%edx ; mov %edx,%ecx ; ... ; sar $0x1f,%ecx
+           xor %ecx,%edx ; sub %ecx,%edx
+
+and ours as
+
+    mov 0x14(%esp),%eax ; cltd ; xor %edx,%eax ; sub %edx,%eax
+
+`cltd` sign-extends `%eax` into `%edx` in one byte and is only available when
+the value is already in `%eax`; with the value in `%edx` the compiler must
+copy it and shift, which is five bytes for the same two-instruction idea.  The
+expression is identical, `sv_abs` is the same helper in both, and the encoding
+follows from which register the value landed in.
+
+**The blob itself uses both spellings for the same helper.**
+`checkSpecialSpectralConditions` compiles `sv_abs` to `cltd; xor; sub` at
+0x46015, 0x460a5, 0x4636b, 0x46407 and 0x464b1, and to `mov; sar; xor; sub` at
+0x45e3f in `printSpectrum` -- one source function, two encodings, in one
+object, seventy bytes apart.  That is finding 614's free column demonstrated
+inside the original rather than argued about across it, and it is why the
+four-byte gap is left alone.
+
+The remaining difference in the same function is a schedule: `fldz`/`fcompp`/
+`fnstsw` sit on the other side of the `xor`/`sub` pair.  Also free.
+
+## 5804. A DECLARED DIVERGENCE PROPAGATES UP THE CALL CHAIN, AND THE ANSWER IS A SEPARATE BINARY RATHER THAN A WIDER TOLERANCE
+
+`V90SpectralVerifier::process` calls `Psd::process` on the sample that
+completes an accumulation.  `Psd::process` has carried a `gccdiverge.json`
+entry since finding 1453 -- x87 excess precision in `four1`/`realfft` reaching
+the decibel scaling, measured at up to 0.043 dB and argued there to be
+uncloseable with a tolerance because 0.043 dB is four times the separation
+between two `V90PreFilter` reference loops that must give different answers.
+
+The first differential test of `process` inherited it exactly: 181 of 35,450
+checks red on GCC 13, **every one of them a spectrum-bin comparison, off by
+one or two ULP, and not one of them a return value, a state word, the
+progress counter, the accumulation buffer or a transcript**.  `make period`
+passes all 35,450 with the object's own compiler.  So the reconstruction is
+right, the modern build cannot reproduce it, and the cause is a function two
+call levels away that the register already names.
+
+**The first instinct is a tolerance on the spectrum, and it is wrong twice
+over.**  It would widen a comparison the tree has already ruled cannot be
+widened, and it would do it in a file that is not where the divergence lives,
+so the next reader would find a tolerance with no derivation attached to it.
+
+**The second instinct is to excuse the check inside the existing binary, and
+that is wrong once.**  An excused binary exits non-zero; `tools/mutate.py`
+judges a mutant caught by a non-zero exit, so a red binary cannot score a
+mutation set and refuses to try.  Excusing one group would take the class's
+other seven members out of mutation testing with it.  `t_v90p4dnan`'s entry
+in the register records the same problem and the same answer.
+
+**So the shape is: split the inheriting check into its own binary.**
+`t_v90specacc.cpp` holds `startAccumulation`, `printSpectrum` and the five
+frequency accessors, is green under both compilers and carries the mutation
+set; `t_v90specproc.cpp` holds `process` alone and is declared.  The rule
+generalises -- **a declared divergence is a property of a CALL GRAPH, not of a
+file** -- and the cost of getting it wrong is measured in mutation coverage
+rather than in a failing gate, which is why it is worth writing down.
