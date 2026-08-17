@@ -277,7 +277,7 @@
    }
   },
   "fpmfserecv": {
-   "key": "24a2ac2dbe3199c3141d2dfe2f52c83503e9757fa68c162a51be6ea795bb12c9",
+   "key": "01d58ec8307284656928895e3aac6e0c56ed0cc2613e90e6c0c6eee7efa391ba",
    "summary": "45 mutations: 43 caught (43 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "a one-sample tail is dropped rather than stashed": "caught",
@@ -7181,6 +7181,24 @@
     "the handle itself is forwarded": "caught",
     "the modulator is forwarded rather than the demodulator": "caught",
     "the phase 2 record is forwarded rather than the demodulator": "caught"
+   }
+  },
+  "fpmmtdlayout": {
+   "key": "4e3beb55c8e579462099358c74cb53782ca220bc27986bed2e82ab0a2c3bbd8e",
+   "summary": "2 mutations: 0 caught (0 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "COEF_DC's third coefficient is one out": "uncaught",
+    "another of fpm_mtd.c's globals comes between COEF_DC and the phasor's sign tables": "uncaught"
+   }
+  },
+  "fpmphasor": {
+   "key": "7266ce4c92930789f0aa26a1530edabf771fbffda449a67c03fb8d13a97ab6b6",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the demodulator reads its phase unsigned": "caught",
+    "the phase is read unsigned, so the quadrant never goes negative": "caught",
+    "the quadrant is masked before it indexes the sign tables": "caught",
+    "the sign tables are laid out cosine first": "caught"
    }
   }
  }

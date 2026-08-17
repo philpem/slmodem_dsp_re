@@ -1,0 +1,24 @@
+[
+ {
+  "note": "COEF_DC's PLACEMENT, and THIS SET IS A REGISTER OF WHAT IS NOT TESTED.  Both entries are recorded NOT CAUGHT, deliberately, with the derivation below.  A surviving mutation with a written derivation is a legitimate deliverable here; a set quietly deleted because it went red is not."
+ },
+ {
+  "note": "The source is `src/dsp/fpm_mtd.c` and the binary is `build/test/t_fpm_phasor` -- deliberately not the pairing the rest of `suites.json` uses.  COEF_DC is the last `.data` object of fpm_mtd.c and `FPM_sin_sign` is the first of fpm_phasor.c, the next translation unit in link order; `FPM_phasor` does not mask its quadrant, so for a phase of 0x8000 or more it reads COEF_DC's last three words and the two bytes of boundary padding as its SINE sign.  Where a coefficient array lives is therefore a claim about what the phasor returns.  Findings 3620 and 3621."
+ },
+ {
+  "note": "WHY NEITHER IS CAUGHT.  The claim is true of the build that ships and is not ASSERTABLE, so `t_fpm_phasor` compares the sine only inside 0 .. 0x7fff and never reads COEF_DC at all.  `--coverage` appends `__gcov_.FPM_MTD_create`, `__gcov_.FPM_MTD_delete` and `__gcov_.FPM_MTD_detect` to fpm_mtd.c's `.data` at offsets 0x0c, 0x24 and 0x3c, immediately after COEF_DC at 0 -- so in the instrumented tree `tools/debugcov.py` builds, `FPM_sin_sign[-4 .. -1]` reads gcov metadata.  Asserting the adjacency would make `make phase` red for a reason that is about the instrumentation and not about the reconstruction, and exempting the instrumented build would be an undeclared allow-list.  Finding 3624, deviation D392."
+ },
+ {
+  "note": "WHAT WOULD CHANGE THIS.  Anything that lets the differential tier see the shipped link's `.data` neighbourhood -- a non-instrumented arm of the coverage tier, or a declaration in a register `tools/debugcov.py` reads.  Neither exists today.  The COSINE half of the same defect IS asserted and IS adjudicated, by `fpmphasor`, because `FPM_cos_sign`'s four preceding entries are `FPM_sin_sign` in the same translation unit and nothing can come between them."
+ },
+ {
+  "label": "COEF_DC's third coefficient is one out",
+  "find": "\t-12971, 12917, 28620, -25834, 12917,",
+  "replace": "\t-12971, 12917, 28621, -25834, 12917,"
+ },
+ {
+  "label": "another of fpm_mtd.c's globals comes between COEF_DC and the phasor's sign tables",
+  "find": "short COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {",
+  "replace": "short mutant_between[4] = { 1, 2, 3, 4 };\nshort COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {"
+ }
+]

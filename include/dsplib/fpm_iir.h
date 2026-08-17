@@ -44,7 +44,21 @@ short FPM_iir_filt(short x, const short *coeff, short *state, short sections);
 void FPM_iir_filt_II(short *samples, const short *coeff, short *state,
 		     short sections, short count);
 
-/* Wideband reference filter: one section, used for total-energy estimates. */
-extern const short COEF_DC[FPM_IIR_COEFF_PER_SECTION];
+/*
+ * Wideband reference filter: one section, used for total-energy estimates.
+ *
+ * NOT `const`, because the object's is `D` and not `R` -- 0x081d0 in `.data`.
+ * It is defined in `src/dsp/fpm_mtd.c`, not here and not in a coefficient
+ * file of its own: the object's `.data` runs DEF_COEFS (a fpm_mtd.c local)
+ * straight into COEF_DC with no padding, and COEF_DC straight into
+ * fpm_phasor.c's `FPM_sin_sign` with the two bytes a translation-unit
+ * boundary costs.  Where it lives is therefore observable, not cosmetic --
+ * `FPM_phasor` reads COEF_DC's tail as the SINE's quadrant sign for a quarter
+ * of its phase range.  Observable is not the same as assertable: a compiler
+ * may append to a translation unit's `.data` and `--coverage` does, so the
+ * placement is reproduced and deliberately not tested.  Findings 3621 and
+ * 3624, deviation D392.
+ */
+extern short COEF_DC[FPM_IIR_COEFF_PER_SECTION];
 
 #endif /* DSPLIB_FPM_IIR_H */

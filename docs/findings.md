@@ -62808,3 +62808,225 @@ what `t_fpm_tone`'s delete block already did. The general lesson is 2400's
 again with a third instrument: a counter that goes unread is a detector that
 does not fire, and this one had been mis-reporting for however long the suite
 has had a thousand leaking inits.
+### 3620. THE OBJECT'S `.data` ORDER IS THE LINK ORDER, AND THE SIX `*_CFG` BLOCKS PROVE IT WELL ENOUGH TO ATTRIBUTE TWO GLOBALS TO THEIR TRANSLATION UNITS
+
+`ld -r` concatenates each input object's `.data` in link order, and the symbol
+table records that order as a sequence of `STT_FILE` entries -- the same
+mechanism `tools/tumap.py` uses for `.text`. `.data` is far sparser than
+`.text`, which makes it *more* useful rather than less: a run of adjacent
+globals with no gap is a run of adjacent translation units, and most fpm
+modules contribute no `.data` at all.
+
+The stretch that settles this batch runs 0x08114 to 0x081ec:
+
+| addr | symbol | bind | the TU it must be in | FILE # |
+|---|---|---|---|---|
+| 0x08114 | `ECC_CFG` | GLOBAL | fpm_ecc.c | 614 |
+| 0x0812c | `FPM_FSD_CFG` | GLOBAL | fpm_fsd.c | 615 |
+| 0x08160 | `FPM_FSE_CFG` | GLOBAL | fpm_fse.c | 616 |
+| 0x08198 | `FPM_FSM_CFG` | GLOBAL | fpm_fsm.c | 618 |
+| 0x081a0 | `FPM_MRF_CFG` | GLOBAL | fpm_mrf.c | 622 |
+| 0x081b0 | `FPM_MTD_CFG` | GLOBAL | fpm_mtd.c | 623 |
+| 0x081bc | `DEF_COEFS` | **LOCAL** | fpm_mtd.c | 623 |
+| 0x081d0 | `COEF_DC` | GLOBAL | fpm_mtd.c | 623 |
+| 0x081dc | `FPM_sin_sign` | GLOBAL | fpm_phasor.c | 625 |
+| 0x081e4 | `FPM_cos_sign` | GLOBAL | fpm_phasor.c | 625 |
+
+The address order and the FILE order agree over all ten rows, and `DEF_COEFS`
+is the anchor that makes it more than a coincidence: it is LOCAL, so its
+`STT_FILE` association is recorded rather than inferred, and it says fpm_mtd.c.
+`FPM_MTD_CFG` immediately precedes it and `COEF_DC` immediately follows it,
+both with zero padding, so all three are one translation unit's `.data`.
+fpm_iir.c (#619) and fpm_log10.c (#620) contribute none at all -- 0x08198 + 8
+is 0x081a0 exactly -- which is what an empty `.data` looks like from outside.
+
+**A GLOBAL's own `STT_FILE` neighbour tells you nothing**: globals are emitted
+after every local, so a naive symtab walk attributes all of them to the LAST
+FILE entry in the object (`FixedRC.c` here). The attribution above comes from
+the addresses and the local anchor, not from the symbol table's order.
+
+### 3621. `COEF_DC` IS fpm_mtd.c's, NOT AN IIR COEFFICIENT FILE'S, AND IT IS NOT `const`
+
+Three independent readings, and they agree:
+
+- **Address.** It is at 0x081d0, immediately after fpm_mtd.c's local
+  `DEF_COEFS`, with no padding. fpm_iir.c is FILE #619 against fpm_mtd.c's
+  #623, so anything of fpm_iir.c's would be *below* `DEF_COEFS`, not above it.
+  Finding 3620 for the table.
+- **Use.** `readelf -rW` finds exactly ONE relocation naming it in the whole
+  1.2 MB object, at .text 0x0a921a, which is inside `FPM_MTD_detect`
+  (0x0a91d0 + 0x129). Nothing else in the library refers to it by name.
+- **Binding.** `nm` says `D`, not `R`. The original was not `const`-qualified,
+  which our `const short COEF_DC[]` had quietly changed.
+
+`src/dsp/fpm_iir_coeffs.c` was our own factoring -- it is not one of the
+object's 283 translation units -- and it was the wrong one. The definition has
+moved to `src/dsp/fpm_mtd.c`; the file is kept, empty, carrying the derivation,
+because a file that never corresponded to a translation unit of the original's
+is exactly the kind of invented structure a later reader would otherwise
+re-derive from scratch. It emits no `.data`, so keeping it cannot come between
+`fpm_mtd.o` and `fpm_phasor.o`.
+
+**This is not bookkeeping.** `FPM_phasor` does not mask its quadrant, so for a
+phase of 0x8000 or more it reads four entries BEFORE `FPM_sin_sign` -- which is
+`COEF_DC`'s last three words and the two bytes of boundary padding. Where
+`COEF_DC` lives is therefore part of what the phasor returns. D392.
+
+### 3622. GCC 3.4.2 AND GCC 13 BOTH EMIT `.data` GLOBALS IN REVERSE DECLARATION ORDER, AND A TWO-BYTE PAD IS A TRANSLATION-UNIT BOUNDARY
+
+Measured, not recalled, on a three-variable scratch file
+(`short AAA[4]; short BBB[4]; short CCC[5];` in that order):
+
+```
+GCC 13   -m32 -O3     CCC 0x00   BBB 0x0c   AAA 0x14
+GCC 3.4.2 period flags CCC 0x00   BBB 0x0a   AAA 0x12
+```
+
+Two things fall out, and the batch needed both:
+
+1. **The order is REVERSE declaration order on both compilers**, so one source
+   order satisfies the period build and the modern one. Had they disagreed, no
+   source could have reproduced the object's `FPM_sin_sign`-then-`FPM_cos_sign`
+   adjacency under both, and D392 would have closed as unachievable rather than
+   as fixed. This is why `src/dsp/fpm_phasor.c` declares cosine first.
+2. **Their ALIGNMENT differs, and that is what dates the padding.** A `short[4]`
+   gets 4-byte alignment from GCC 13 and 2-byte from GCC 3.4.2, but the `.data`
+   SECTION alignment is 4 in both. So under the object's own compiler, a
+   10-byte array followed by an 8-byte array *in the same translation unit* has
+   NO padding between them -- while a translation-unit boundary there costs
+   exactly two. The blob has two, at 0x081da. `COEF_DC` and `FPM_sin_sign` are
+   therefore in different translation units, which corroborates 3620 and 3621
+   from the bytes rather than from the symbol table.
+
+Reverse order also reads back onto the object: fpm_mtd.c's `.data` is
+`FPM_MTD_CFG`, `DEF_COEFS`, `COEF_DC` ascending, so the original declared them
+`COEF_DC`, `DEF_COEFS`, `FPM_MTD_CFG` -- and `DEF_COEFS` must precede
+`FPM_MTD_CFG`, because `FPM_MTD_CFG`'s first word is a pointer to it.  That is
+CORROBORATION AND NOT PROOF, since it assumes the rule it illustrates.
+
+**HOW FAR THE HEADLINE IS ENTITLED TO GO.** It is one scratch file of three
+variables plus one real file of two, so it is not a general law of either
+compiler and nothing should be built on it that a test does not check. What is
+established, and is all the batch needs, is narrower: for
+`src/dsp/fpm_phasor.c` under both compilers, declaring cosine first puts
+`FPM_sin_sign` at the lower address -- and `t_fpm_phasor`'s `sign table
+neighbourhood` block is what keeps that true rather than the rule being
+remembered.
+
+### 3623. THE OUT-OF-DOMAIN PHASOR FAILED UNDER BOTH COMPILERS, BUT THE MODERN BUILD WOULD HAVE DECLARED THREE QUARTERS OF IT FIXED
+
+`t_fpm_phasor`'s sweeps were widened from `i < 0x8000` to `i < 0x10000` BEFORE
+anything in `src/` was touched, which is the only way to know what the fix
+fixed. Against the unmodified tree:
+
+```
+modern (GCC 13)   FPM_phasor exhaustive       344036 / 2752512 failed
+                  FPM_phasor_demod exhaustive      PASS 3670016 checks
+period (3.4.2)    FPM_phasor exhaustive       802760 / 2752512 failed
+                  FPM_phasor_demod exhaustive 458724 / 3670016 failed
+```
+
+**The modern build's `cos` passed, and it passed by accident.** GCC 13 lays the
+two `static const` tables out as `fpm_sin_sign` at `.rodata`+0 and
+`fpm_cos_sign` at +8 -- adjacent, sine first, which is the object's own
+relative order -- so `fpm_cos_sign[-4 .. -1]` already read
+`{16384, 16384, -16384, -16384}` and already agreed. GCC 3.4.2 lays the same
+source out as `fpm_cos_sign` +0, `fpm_cos_table` +0x20, `fpm_sin_sign` +0x222,
+`fpm_sin_table` +0x240, so neither out-of-range read landed anywhere near the
+object's and both halves failed. `FPM_phasor_demod` computes only the cosine,
+which is why it is the clean separator: PASS on one compiler, 458724 failures
+on the other, from one source.
+
+Two things this is worth remembering for:
+
+- a differential test that only ever ran under GCC 13 would have reported this
+  defect as three quarters smaller than it is, and the quarter it showed
+  (`sin`) is the quarter that looks like an arithmetic mistake rather than a
+  layout one;
+- it is a concrete instance of what `make period` is for, in a case where the
+  modern compiler was not *wrong* about anything -- it simply chose a layout
+  that happened to match.
+
+**THE OUTCOME IS A HALF-CLOSE AND THE SEAM IS THE TRANSLATION UNIT.** After the
+change, `FPM_cos_sign[-4 .. -1]` is `FPM_sin_sign[0 .. 3]` on both sides in
+every build this tree makes, so the COSINE is compared over all 65536 phases,
+under both compilers, and `t_fpm_phasor`'s `sign table neighbourhood` block
+compares those four words plus both tables against `dsplibs_ref.o`'s own -- the
+layout as a differential observable, not an invariant to be remembered. The
+SINE's out-of-domain sign comes from the previous translation unit and is
+reproduced but not asserted; finding 3624 is why, and D392 carries the bound.
+
+**The mutations adjudicate the closed half and register the open one.**
+`fpmphasor` (4 entries) and `fpmmtdlayout` (2) are all dead against the old
+0 .. 0x7fff sweep -- 0 of 6 caught, measured with the fix already in place, so
+what is being adjudicated is the sweep and not the source. Against the widened
+one, `fpmphasor` goes to 4 of 4: masking the quadrant, reading the phase
+unsigned in `FPM_phasor`, the same in `FPM_phasor_demod`, and swapping the two
+tables' declaration order. `fpmmtdlayout` stays at 0 of 2 and is recorded that
+way on purpose -- perturbing `COEF_DC` and inserting another fpm_mtd.c global
+behind it are exactly the claims the sine half cannot make, and the set is
+where that is written down.
+
+`t_fpm_fse_recv` gained 131073 checks: `out_i` compared at all 65536 positions
+of each derotation sweep (its `out_q` sibling is the sine and stays at the end
+of the walk), less the trial that was tried and taken out again. Its own
+"the sweep ends in the phasor's domain" gate stays, because the object
+comparison after the sweep reads the scatter log's `.q`.
+
+### 3624. `--coverage` PUTS `__gcov_` STRUCTURES IN `.data`, WHICH IS THE FIRST THING TO PERTURB THE DIFFERENTIAL TIER -- AND IT IS LAYOUT, NOT ROUNDING
+
+Finding 192 established that instrumentation does not perturb the differential
+tier and said exactly what that claim was worth: "That is a property of this
+tree's flags and worth re-checking if they change, not a general licence." It
+was re-checked by accident and it now has a counterexample, and the
+counterexample is not the one 192 was watching for. 192 worried about
+`--coverage` disabling optimisation and moving x87 spill points, which would
+change ROUNDING. What happened instead is that it changes ADDRESSES.
+
+Compiled ordinarily, `src/dsp/fpm_mtd.c` puts one object in `.data`:
+
+```
+00000000 D COEF_DC                        (10 bytes)
+```
+
+Compiled with `--coverage`, the same file puts four:
+
+```
+00000000 D COEF_DC
+0000000c d __gcov_.FPM_MTD_create
+00000024 d __gcov_.FPM_MTD_delete
+0000003c d __gcov_.FPM_MTD_detect
+```
+
+The per-function counters (`__gcov0.*`) go to `.bss` and are harmless; the
+`__gcov_.*` INFO structures go to `.data` and land after the file's own data,
+because `.data` is emitted in reverse declaration order and the gcov objects
+are created last. So in the instrumented link `FPM_sin_sign` is 0xa0 bytes
+past `COEF_DC` instead of 12, and `FPM_phasor`'s unmasked sine-sign lookup
+reads gcov metadata. Two binaries failed: `t_fpm_phasor` on
+`sin_sign[-4 .. -1]` and the sine half of its sweep, `t_fpm_fse_recv` on
+`out_q` alone -- `out_i` passed at all 65536 sweep positions, which is the
+control.
+
+**`fpm_phasor.c` itself is unperturbed**, and that is the whole reason D392
+closes by half:
+
+```
+00000000 D FPM_sin_sign
+00000008 D FPM_cos_sign        (and the gcov objects after both)
+```
+
+The general rule, which is worth more than the instance: **a claim about what
+lies before or after a symbol is assertable WITHIN a translation unit and is
+not assertable ACROSS one.** A compiler may append per-function metadata to a
+unit's `.data` and this one does; `-fprofile-generate`, `-fsanitize` and
+`-finstrument-functions` are the same shape. Nothing about the reconstruction
+is wrong in the instrumented build -- the source, the link order and the
+shipped binary's layout are all the object's -- but the tier cannot see it,
+and `make phase` has no allow-list outside `tools/gccdiverge.json`, which is
+for the modern compiler's semantics and not for this.
+
+So the sine's out-of-domain sign is reproduced and not tested, `t_fpm_phasor`
+says so where a reader will meet it, and `test/mutations/fpmmtdlayout.json`
+records the two mutations that would have caught it with the derivation
+attached. D392, and 3620-3623 for the rest of the batch.
