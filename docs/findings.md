@@ -68153,3 +68153,47 @@ two arguments removes the duplicated call and gets within 28 bytes a block, so
 part of it is evaluation order.  Left open, with the measurement recorded, and
 `V92ParamsInfo.c` named as the second site whose `sign_of` has the same
 `long double` correction available to whoever takes it.
+
+## 5814. THE `BLOB=` PATH EVERY AGENT IS HANDED WAS OVERWRITTEN MID-SESSION, AND `blobcheck` IS THE ONLY THING THAT NOTICED
+
+Two thirds of the way through this batch `make phase` stopped at
+`Makefile:572`:
+
+    blobcheck: REFUSING to run -- BLOB is NOT the reference object.
+        BLOB     /home/philpem/dev/sip-D-modem/slmodemd/dsplibs.o
+        sha256   1129d826ca23f1e3...
+        expected 1f3e56d0dfae1a6a...
+
+That path is the one the task brief exports, and it had been correct: two
+earlier `make phase` runs in this same session passed the same check with the
+same value, and `compare.py` read 1159 compared / 455 identical / 87 same size
+off it -- the number the batch before this one had reported.  Between those
+runs and this one the file was replaced, along with every other object under
+`slmodemd/`, all of them stamped to the same microsecond.  It is now the
+1,232,028-byte variant that `d-modem/slmodemd/dsplibs.o` has held since
+August, where the reference is 1,233,728 bytes.
+
+**NOTHING WAS MEASURED AGAINST IT.**  Re-run against the verified reference,
+every number reproduces exactly -- 1163 compared, 455 identical, 87 same size,
+the identical SET diffing empty against the pre-batch list, and
+`period differential: 229 passed, 0 failed`.  So this finding is about the
+hazard and not about a correction.
+
+**THE HAZARD IS THAT THE OVERRIDE IS UNNECESSARY.**  `BLOB` already defaults
+to `ref/slmodemd/dsplibs.o` resolved through `git rev-parse --git-common-dir`,
+which CLAUDE.md's worktree bullet describes, and every agent worktree has a
+correct copy at that path -- twelve of them checked, all
+`1f3e56d0dfae1a6a`.  `make -s print-BLOB` says so in one line.  Passing
+`BLOB=<some absolute path outside the tree>` opts out of that and points the
+whole measurement apparatus at a file no worktree owns and any process on the
+machine can rewrite.  **Do not pass `BLOB=` in a worktree.**  The default is
+right, it is inside the tree, and it is the one `blobcheck` verifies against.
+
+**AND `blobcheck` IS THE ONLY GATE THAT COULD HAVE CAUGHT IT.**  Every other
+tool would have run happily: `compare.py` would have compared 1,163 symbols
+against a different object and printed a plausible number, `samesize.py` would
+have listed a plausible set, and the differential tier would have linked
+`ref_*` aliases out of the wrong binary and failed in a way that reads like a
+reconstruction defect rather than a fixture one.  It is finding 134's argument
+in its strongest form -- an apparatus that cannot tell it is measuring the
+wrong thing -- and the check that exists for it earned its keep here.
