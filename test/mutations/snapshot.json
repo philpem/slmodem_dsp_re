@@ -6065,6 +6065,28 @@
     "the two alternating actions are the other way round": "caught"
    }
   },
+  "v90sbereset": {
+   "key": "480612ce7825e21545054fab7e4de51ee72345605dcade29fc68b510573b90f8",
+   "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the division is the other way round": "caught",
+    "the frame is five samples, not six": "caught",
+    "the guard is a range test on six instead": "equivalent",
+    "the guard is inverted": "equivalent",
+    "the odd decoder is not cleared": "caught",
+    "the odd decoder is set, not cleared": "caught",
+    "the parallel decoder is armed with the capacity": "caught",
+    "the parallel decoder is armed with the spacing": "caught",
+    "the parallel decoder is not re-armed": "caught",
+    "the parallel decoder's init is one, not zero": "caught",
+    "the spacing is not stored": "caught",
+    "the spacing takes the state argument": "caught",
+    "the state is not stored": "caught",
+    "the state takes the spacing argument": "caught",
+    "the width is the spacing, not six over it": "caught",
+    "the zero-spacing guard is dropped and it divides anyway": "caught"
+   }
+  },
   "v90sddet": {
    "key": "18edf07dbb3066a4793b1c7a081c6a21c12ebbc91a68789c158ad2544614dade",
    "summary": "33 mutations: 32 caught (32 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",

@@ -63619,3 +63619,44 @@ symbols just written and intersecting with the current READY set. Note that
 `objdump -r --section=.rel.text` silently matches nothing -- the section is
 named `.text` in `objdump -r`'s own output -- and a scan that uses it reports
 "no referrer" for every symbol, which is what nearly buried this measurement.
+
+### 4304. A MUTATION THE DIFFERENTIAL TIER CAN NEVER CATCH, AND THE CODEGEN TIER CAN: `V90SignBitsExtractor::reset`'s ZERO GUARD
+
+`reset` derives its width as `6 / spacing` behind a guard:
+
+    spacing = spacing_;
+    if (spacing_ != 0)
+            width = V90SBE_DECODER_SIZE / spacing_;
+    else
+            width = 0;
+
+`t_v90sbereset` registered the mutation "the guard is a range test on six
+instead" -- `spacing_ != 0 && spacing_ <= 6` -- expecting to catch it with a
+spacing of 7, where the real body reaches the divide and the mutant takes the
+else arm. It came back **NOT CAUGHT**, and adding trials would not have
+helped: `6 / spacing` is zero for every spacing above six, which is the same
+zero the else arm stores, so **the two bodies agree on all 2^32 inputs.** No
+differential test can ever separate them.
+
+This is finding 3052's trap in its sharpest form. 3052's shape was a
+plausible reading that agrees with the true one over every REALISTIC input and
+is separated only by a downstream clamp; this one agrees over every input
+there is, and the file comment written before the mutation ran claimed the
+opposite -- that a spacing of 0 and a spacing of 7 were the pair that
+separated the guard from a range test. They are not. **The mutation registry
+caught a false claim in a test's own comment**, which is a use for it nobody
+had written down.
+
+**What DOES rule the range test out is `make similarity`.** The object issues
+one `test %edx,%edx` and one `je`; a second condition is a second compare and
+the function would be longer. Our source compiles under GCC 3.4.2 at `-O3` to
+the object's 119 bytes byte for byte, operands included, both arms of the
+duplicated tail included -- so the guard's FORM is settled at the codegen tier
+by a function that is exactly the object, and settled nowhere else.
+
+The mutation is kept and marked `equivalent` with the arithmetic as its
+reason, rather than deleted. A deleted mutation tells a later reader nothing;
+an `equivalent` one tells them the claim was tested, found untestable at this
+tier, and where the evidence actually lives. `mutate.py` already separates
+`survived, equivalent` from `NOT CAUGHT` in its totals, so this costs the
+suite's score nothing and preserves the record.
