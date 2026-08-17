@@ -416,6 +416,10 @@
   "src/pump/v90/V90Phase4Demodulator.cpp",
   "build/test/t_v90rxctor"
  ],
+ "v90p4dleaf": [
+  "src/pump/v90/V90Phase4Demodulator.cpp",
+  "build/test/t_v90p4dleaf"
+ ],
  "v90p4mctor": [
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90modchain"

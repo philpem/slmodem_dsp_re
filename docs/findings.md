@@ -63578,3 +63578,94 @@ in this class: the first `%d` is fed from +0x3bb4 and the second from +0x3bb8,
 which is what makes them `nofRecievedMp` and `nofRecievedMpNot` rather than
 two counters in an unknown order. Finding 3540 noted that `infoToBits` and
 `evaluateInfo` between them reach no string at all; this is the one that does.
+
+### 4320. `V90Phase4Demodulator::detectFPE` REPORTS THE OTHER DETECTOR'S POLARITY
+
+The class embeds two `V90RDetector`s, at +0x2ffc (`rDetector1`) and +0x3028
+(`rDetector2`). `detectFPE` runs the twelve-sample Rf detector on the SECOND
+and, when it fires, prints the polarity of the FIRST:
+
+    25d6d:  8d 83 28 30 00 00   lea 0x3028(%ebx),%eax    ; rDetector2
+    25d7a:  e8 ..               call V90RDetector::detectRf
+    25d90:  8b 8b 20 30 00 00   mov 0x3020(%ebx),%ecx    ; 0x2ffc + 0x24
+    25d96:  c7 04 24 e4 65 ..   movl $0x65e4,(%esp)      ; "Rf detected,
+                                                         ;  polarity = %d"
+
+`rDetector2.int_24` is +0x304c. Both references are displacements off the same
+`%ebx` inside twenty-two instructions, so this is not a misreading of which
+object is which: it is a copy of `detectRRN` -- which detects on `rDetector1`
+and prints `rDetector1.int_24` -- whose second reference was not updated when
+the first was.
+
+It is only visible when the two detectors hold different polarities, and the
+detector that just fired always holds +1 or -1, so a fixture that seeded both
+alike, or that let both run, would report the same number either way.
+`t_v90p4dleaf` therefore seeds +0x3020 to a value `detectRf` cannot produce and
+compares the encoded transcript; the mutation "print the polarity of the
+detector it ran" is caught, and two runs of the BLOB alone that differ in
++0x3020 and nothing else print different messages, which is the property
+stated without reference to this reconstruction.
+
+We reproduce the object, so the source reads `rDetector1.int_24` and says why.
+The behavioural consequence is confined to the diagnostic channel -- nothing
+branches on the printed value -- so this is a defect in the original's logging
+and not in its state machine.
+
+### 4321. A LOCAL POINTER IS WHAT SEPARATES `detectRRN`'s 143 BYTES FROM 123
+
+Written the obvious way,
+
+    if (!rDetector1.detectR(sample))
+            return 0;
+    edprintf("... polarity = %d\r\n", rDetector1.int_24);
+
+GCC 3.4.2 at the object's flags emits 123 bytes with ONE callee-saved
+register: it puts `this` in `%ebx`, forms `&rDetector1` into `%eax` for the
+call, and re-derives the field afterwards as `0x3020(%ebx)`. The blob is 143
+bytes, holds `this` in `%esi` and `&rDetector1` in `%ebx` across the call, and
+reads the polarity as `0x24(%ebx)` -- one address expression used twice.
+Introducing the local
+
+    V90RDetector *rd = &rDetector1;
+
+makes ours byte-for-byte the blob's: 0x8f bytes, 35 instructions, every
+operand equal.
+
+**This is not 614's free column and the distinction matters.** Register
+allocation is free because the same expression tree can be coloured many ways;
+here the two spellings hand the compiler DIFFERENT trees -- one address
+computed once versus two member accesses off `this` -- and the difference is
+twenty bytes and a whole extra callee-save spill at two exits, not a permuted
+register. The acceptance test is finding 617's, full-text identity with
+operands, and it moved from fail to pass.
+
+`detectFPE` is the control. Its two detector references are to DIFFERENT
+objects (finding 4320), so no single local could serve both, and it is
+byte-identical written the obvious way. So the rule this yields is narrow: the
+original used a local for a subobject it touched twice, and the object says so
+per site rather than as a house style.
+
+### 4322. `Phase4DemodulatorState` IS NAMED BY THE MANGLING AND VALUED BY THE STRINGS
+
+`_ZN20V90Phase4Demodulator5resetEh22Phase4DemodulatorStatejj` proves a type
+spelled exactly `Phase4DemodulatorState` exists at namespace scope, and
+`reset` stores that argument -- `mov 0x38(%esp),%ebx ; mov %ebx,0x20(%esi)`,
+its second parameter -- into +0x20 and nothing else there. So +0x20 is that
+enum and not an `unsigned int` holding the same numbers. Same shape as
+`Phase3DemodulatorState` (finding 3120's neighbourhood), including the
+`_BASE_PIN` enumerator that restores C++11's `: int` under a C++98 compiler.
+
+Four of the five enumerators this batch can see are the author's own words,
+from the `edprintf` format at the only site that stores each: 4 WaitForV90CP,
+5 WaitForMP, 6 WaitForEd, 0x10 FPE. The fifth, 9, is usage inference from
+`detectRRN`'s "Rd detected" message immediately before it, and the header says
+so rather than implying the name is recovered.
+
+The neighbouring fields are measured, not named. +0x24 is a count reset on
+every state change and printed as the "@ %d" of the three entry messages --
+`countInState`, with no unit claimed, because nothing in this batch increments
+it. +0x28, +0x2c, +0x38, +0x3c, +0x40, +0x44 and +0x48 keep `int_NNNN`: the
+`movl $0x0` / `movl $0x1` encodings fix four bytes and say nothing about
+signedness, which is the same bound `V90RDetector.h` states for its own. Only
++0x34 is typed by evidence beyond a width -- it is `reset`'s fourth argument,
+which the mangling types `unsigned int`.

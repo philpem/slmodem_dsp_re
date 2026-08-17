@@ -5868,6 +5868,42 @@
     "the two mapping-parameter pointers land in each other's fields": "caught"
    }
   },
+  "v90p4dleaf": {
+   "key": "a199faa44a6f6232ca2c78f7b8501cbe2c502e5a7b4d636460c9475cef130260",
+   "summary": "30 mutations: 30 caught (30 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "detectFPE announces FPE twice": "caught",
+    "detectFPE answers 1 when the detector declined": "caught",
+    "detectFPE detects on the first R detector": "caught",
+    "detectFPE does not announce the FPE state": "caught",
+    "detectFPE does not clear the count": "caught",
+    "detectFPE enters state 9 rather than 0x10": "caught",
+    "detectFPE prints the polarity of the detector it ran, not +0x3020": "caught",
+    "detectRRN answers 1 when the detector declined": "caught",
+    "detectRRN detects on the second R detector": "caught",
+    "detectRRN does not clear +0x28": "caught",
+    "detectRRN enters the FPE state rather than 9": "caught",
+    "detectRRN prints the second detector's polarity": "caught",
+    "detectRRN runs the twelve-sample detector": "caught",
+    "detectRRN sets the pair unconditionally": "caught",
+    "detectRRN takes the pair arm when the session flag is SET": "caught",
+    "enterWaitForCP and enterWaitForMP have their messages swapped": "caught",
+    "enterWaitForCP does not clear the count": "caught",
+    "enterWaitForCP leaves the WaitForMP state behind": "caught",
+    "enterWaitForEd leaves the WaitForMP state behind": "caught",
+    "enterWaitForEd prints the WaitForMP message": "caught",
+    "enterWaitForMP clears the count before printing it": "caught",
+    "resetBeforRRN clears +0x40 as `reset` does": "caught",
+    "resetBeforRRN clears the count as `reset` does": "caught",
+    "resetBeforRRN does not clear the byte at +0x30": "caught",
+    "resetBeforRRN leaves +0x3c at zero": "caught",
+    "resetRRNDetector gives the second detector 0x18 rather than 0xc": "caught",
+    "resetRRNDetector gives the second detector the parameter too": "caught",
+    "resetRRNDetector reads the phase 4 detection length, +0x294": "caught",
+    "resetRRNDetector resets the two detectors the other way round": "caught",
+    "resetRRNDetector swaps the first detector's two counts": "caught"
+   }
+  },
   "v90p4mctor": {
    "key": "f25834cc6034f915f4f40f3147faa03e8d3afcdb4b78eb7c449536b7242e767c",
    "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",

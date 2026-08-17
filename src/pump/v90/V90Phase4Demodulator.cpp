@@ -30,6 +30,8 @@
 
 #include <stddef.h>
 
+#include "dsplib/encode.h"
+#include "dsplib/V90Parameters.h"
 #include "dsplib/V90Phase4Demodulator.h"
 
 /*
@@ -58,6 +60,27 @@ P4D_OFF(demapper,		0x3054, demapper);
 P4D_OFF(descrambler,		0x3058, descrambler);
 P4D_OFF(connectionEvaluator,	0x34f8, conneval);
 P4D_OFF(autoDigitalImpDetector,	0x3514, adid);
+
+/* The state block, from the seven leaves below and from `reset`'s widths. */
+P4D_OFF(state,			0x0020, state);
+P4D_OFF(countInState,		0x0024, countinstate);
+P4D_OFF(int_0028,		0x0028, i28);
+P4D_OFF(int_002c,		0x002c, i2c);
+P4D_OFF(uchar_0030,		0x0030, u30);
+P4D_OFF(uint_0034,		0x0034, u34);
+P4D_OFF(int_0038,		0x0038, i38);
+P4D_OFF(int_003c,		0x003c, i3c);
+P4D_OFF(int_0040,		0x0040, i40);
+P4D_OFF(int_0044,		0x0044, i44);
+P4D_OFF(int_0048,		0x0048, i48);
+
+/*
+ * The enum is four bytes wide, which is what makes `state` a field at 0x20
+ * and `countInState` one at 0x24 rather than two halves of one word.  GCC
+ * 3.4.2 and GCC 13 both give it `int` here; the pin in the header is what
+ * keeps that true under C++98's minimum-range rule.
+ */
+typedef char v90p4d_statesize[(sizeof(Phase4DemodulatorState) == 4) ? 1 : -1];
 
 /*
  * The allocation, and finding 1107's point again: this number is
@@ -153,4 +176,200 @@ V90Phase4Demodulator::V90Phase4Demodulator(V90MappingParams *mp1,
  */
 V90Phase4Demodulator::~V90Phase4Demodulator()
 {
+}
+
+/*
+ * ===========================================================================
+ * THE SEVEN LEAVES.
+ *
+ * All seven are state entries or the two detectors that cause one, and none
+ * of them reaches anything outside this class except `V90RDetector`,
+ * `edprintf` and one field of `V90Parameters`.  They are written here in the
+ * blob's address order -- 0x25bb0, 0x25be0, 0x25c10, 0x25c40, 0x25ca0,
+ * 0x25d30, 0x25d60 -- which is also GCC's emission order for a single
+ * translation unit, so the file's order is the original's.
+ *
+ * `trn2dKnownDemod` at 0x25de0 sits between `resetBeforRRN` and `detectFPE`
+ * in that run and is deliberately absent: it calls `V90Phase4Modulator` and
+ * `V90SpectralShaper` members that nothing in this tree has written, and one
+ * unwritten callee fails every differential binary rather than only its own
+ * (finding 215).
+ * ===========================================================================
+ */
+
+/*
+ * `enterWaitForCP` -- 46 bytes at 0x25bb0.
+ * `enterWaitForMP` -- 46 bytes at 0x25be0.
+ * `enterWaitForEd` -- 46 bytes at 0x25c10.
+ *
+ * THREE BODIES THAT DIFFER IN TWO TOKENS, which is exactly why the test does
+ * not stop at comparing the object: the state constant is observable in
+ * +0x20 and the format string is not, so a pair with their strings swapped
+ * would pass every object comparison ever written.  `t_v90p4dleaf` captures
+ * the diagnostic transcript on both sides and compares it.
+ *
+ * The message prints `countInState` BEFORE it is cleared -- the blob loads
+ * 0x24(%ebx) into %eax ahead of the call and stores the zero after it -- so
+ * the value that reaches the log is how long the outgoing state lasted.
+ */
+void
+V90Phase4Demodulator::enterWaitForCP()
+{
+	edprintf("V90Phase4Demodulator: enter WaitForV90CP state @ %d\r\n",
+		 countInState);
+	state = P4D_STATE_WAIT_FOR_V90CP;
+	countInState = 0;
+}
+
+void
+V90Phase4Demodulator::enterWaitForMP()
+{
+	edprintf("V90Phase4Demodulator: enter WaitForMP state @ %d\r\n",
+		 countInState);
+	state = P4D_STATE_WAIT_FOR_MP;
+	countInState = 0;
+}
+
+void
+V90Phase4Demodulator::enterWaitForEd()
+{
+	edprintf("V90Phase4Demodulator: enter WaitForEd state @ %d\r\n",
+		 countInState);
+	state = P4D_STATE_WAIT_FOR_ED;
+	countInState = 0;
+}
+
+/*
+ * `resetRRNDetector` -- 81 bytes at 0x25c40.
+ *
+ * THE ONLY THING IN THIS BATCH THAT DEREFERENCES `V90Parameters`, and the
+ * field it reads is named rather than an offset:
+ *
+ *     25c51:  8b 53 04         mov 0x4(%ebx),%edx        ; this->params
+ *     25c60:  8b 82 98 02 ..   mov 0x298(%edx),%eax      ; +0x298
+ *
+ * and V90Parameters.h already calls +0x298 `RRN_R_DETECTION_LENGTH`, which
+ * is the strongest agreement a member called `resetRRNDetector` could have
+ * asked for.  That is why this file includes the definition rather than the
+ * forward declaration the header carries.
+ *
+ * THE THREE CONSTANTS ARE LEFT AS NUMBERS.  `V90RDetector::reset` rounds its
+ * first argument down to multiples of 6 and 12 and its second the same way,
+ * so 0x18, 0xb4 and 0xc are sample counts -- but which detector is the R one
+ * and which the Rf one is a question about `rDetector1`/`rDetector2`, whose
+ * roles this header has never established (see its own comment at +0x2ffc).
+ * Naming them would be inventing that answer.
+ */
+void
+V90Phase4Demodulator::resetRRNDetector()
+{
+	rDetector1.reset(params->RRN_R_DETECTION_LENGTH, 0x18);
+	rDetector2.reset(0xb4, 0xc);
+}
+
+/*
+ * `detectRRN` -- 143 bytes at 0x25ca0.
+ *
+ * Answers 0 until `rDetector1` says it has seen Rd, and on the sample that
+ * it does, moves to state 9 and reports the detector's polarity.
+ *
+ * THE `sessionFlag == 0` ARM IS THE INTERESTING HALF.  `mov (%esi),%ebx ;
+ * test %ebx,%ebx ; jne` reads +0x00, which is the field `setSessionFlag`
+ * writes and which the constructor takes as its eleventh argument, and the
+ * pair +0x38/+0x3c is set to 1,1 only when it is zero -- the same pair, and
+ * the same values, that `resetBeforRRN` sets unconditionally.
+ *
+ * THE LOCAL POINTER IS THE OBJECT'S, AND IT WAS MEASURED RATHER THAN
+ * PREFERRED.  Written the obvious way -- `rDetector1.detectR(sample)` and
+ * then `rDetector1.int_24` -- this compiles to 123 bytes with one
+ * callee-saved register: GCC re-derives the field address as `0x3020(%ebx)`
+ * off `this` instead of keeping `&rDetector1` live across the call.  The
+ * blob is 143 bytes, holds `this` in %esi and `&rDetector1` in %ebx, and
+ * reads the polarity as `0x24(%ebx)` -- one address expression used twice,
+ * which is what a local pointer gives and what two independent member
+ * accesses do not.  With the pointer the function is byte-for-byte the
+ * blob's, 0x8f bytes and 35 instructions with the same operands.
+ *
+ * This is NOT register allocation being chased (CLAUDE.md's free column):
+ * the two spellings put a different expression tree in front of the
+ * compiler, the difference is twenty bytes and a whole extra callee-save,
+ * and the acceptance test is finding 617's full-text identity.  `detectFPE`
+ * below is the control -- its two detector references are to DIFFERENT
+ * objects, so no single pointer could serve both, and it is byte-identical
+ * written the obvious way.  Finding 4321.
+ */
+int
+V90Phase4Demodulator::detectRRN(short sample)
+{
+	V90RDetector *rd = &rDetector1;
+
+	if (!rd->detectR(sample))
+		return 0;
+
+	edprintf("V90Phase4Demodulator: Rd detected, polarity = %d\r\n",
+		 rd->int_24);
+	state = P4D_STATE_RD_DETECTED;
+	countInState = 0;
+	int_0028 = 0;
+	if (sessionFlag == 0) {
+		int_0038 = 1;
+		int_003c = 1;
+	}
+	return 1;
+}
+
+/*
+ * `resetBeforRRN` -- 37 bytes at 0x25d30.  The spelling is the blob's.
+ *
+ * FIVE STORES AND NOTHING ELSE, AND THE ORDER IS THE OBJECT'S: +0x38, +0x3c,
+ * +0x44, +0x48 and the byte at +0x30 LAST, not ascending by offset.  For a
+ * body that is nothing but stores the object's order is a testable
+ * hypothesis about the source's, and the acceptance test is finding 617's --
+ * full-text identity of the disassembly, operands included -- not "the same
+ * mnemonics".  Writing it ascending gives the same five instructions in a
+ * different order and fails that test.
+ */
+void
+V90Phase4Demodulator::resetBeforRRN()
+{
+	int_0038 = 1;
+	int_003c = 1;
+	int_0044 = 0;
+	int_0048 = 0;
+	uchar_0030 = 0;
+}
+
+/*
+ * `detectFPE` -- 115 bytes at 0x25d60.
+ *
+ * IT PRINTS THE OTHER DETECTOR'S POLARITY, and that is the blob's:
+ *
+ *     25d6d:  8d 83 28 30 ..   lea 0x3028(%ebx),%eax   ; rDetector2
+ *     25d7a:  call             V90RDetector::detectRf
+ *     25d90:  8b 8b 20 30 ..   mov 0x3020(%ebx),%ecx   ; 0x2ffc + 0x24
+ *
+ * -- the detection runs on `rDetector2` at +0x3028 and the "%d" comes from
+ * +0x3020, which is `rDetector1.int_24`.  `rDetector2.int_24` would be
+ * +0x304c.  Both are `lea`/`mov` off the same base in the same 22
+ * instructions, so this is not a misread of which object is which; it is a
+ * copy of `detectRRN` whose second reference was not updated.  Finding 4320.
+ * A test that seeded the two detectors alike could not see it, so
+ * `t_v90p4dleaf` gives them different polarities.
+ *
+ * THE SECOND MESSAGE TAKES NO ARGUMENT and has no "\r\n".  Two separate
+ * `edprintf` calls, not one string: 0x65e4 then 0x6618.
+ */
+int
+V90Phase4Demodulator::detectFPE(short sample)
+{
+	if (!rDetector2.detectRf(sample))
+		return 0;
+
+	edprintf("V90Phase4Demodulator: Rf detected, polarity = %d\r\n",
+		 rDetector1.int_24);
+	edprintf("V90Phase4Demodulator: enter FPE !");
+	state = P4D_STATE_FPE;
+	countInState = 0;
+	int_0028 = 0;
+	return 1;
 }
