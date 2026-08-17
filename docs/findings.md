@@ -75918,3 +75918,77 @@ no added noise. The retrain column is omitted from the table above because the
 two harnesses source it differently — `V34RTNCOUNT` from our log for the `ours`
 arm and HSF's own counter for the other — and a number that is not the same
 measurement on both sides of an A/B should not be put in one column.
+
+### 6903. THE JITTER BUFFER'S INSERTION RATE IS 0.096/s ACROSS 76 CALLS, NOT 1941's 0.25 — AND AT THAT RATE 6902's LADDER SAYS IT COSTS ABOUT ONE CALL IN TEN, NOT SIX
+
+6902 left one thing between it and a conclusion: the bench CONNECTS and then
+thrashes, where the emulator at what we believed was the bench's insertion rate
+mostly failed to connect at all. The proposed explanation was that 1941
+measured 0.25/s over the CONNECTED period and the training window might be
+gentler. **`testbench/jbtiming.py` over the archive refutes that explanation
+and replaces it with a simpler one.**
+
+The `JBSTAT` instrumentation lives only in the archive — master reverted
+`d-modem.c` to cryan209's tree and `grep -c JBSTAT` is 0 — so 76 logs are the
+whole available evidence and no new bench call can add to it without
+re-modifying a tree we deliberately restored.
+
+    elapsed within call   sec obs   empty/s   lost/s   mean buffer (frames)
+        0-10s               767      0.196    0.171          2.86
+       10-20s               756      0.085    0.097          2.76
+       20-30s               757      0.087    0.098          2.70
+       30-45s              1126      0.101    0.107          3.45
+       45-60s              1057      0.084    0.095          4.35
+         60s+              1721      0.064    0.069          9.87
+
+**THE HYPOTHESIS IS DEAD, AND BACKWARDS.** The early window is not gentler, it
+is the WORST — 0.196/s against 0.064/s after a minute, three times the rate —
+and the buffer is shallowest exactly then (2.9 frames against 9.9). That is the
+same direction 1941 saw within one call and the opposite of what was proposed
+here.
+
+**BUT THE HEADLINE IS THE DENOMINATOR, NOT THE SHAPE.** Across 6,184 observed
+seconds the rate is **0.096 insertions/s and 0.100 substitutions/s**, 0.196
+combined. 1941 reported roughly one of each every four seconds — 0.25/s each —
+from a single call, `jb-base-1`. 1942's three arms were 0.274 to 0.483/s
+COMBINED, so 1942 is consistent with this; **1941's per-mechanism figure is
+about 2.6x the archive-wide value and should not have been carried forward as
+typical.** It was one call and it is quoted throughout as though it were the
+bench's rate.
+
+**AND THAT DISSOLVES 6902's DISCREPANCY BY MOVING THE OPERATING POINT.** 6902
+swept `CHAN_SLIP` at 0.25 insertions/s because that is what 1941 said. The
+archive says 0.096. Reading 6902's own table at the point that actually
+obtains:
+
+    CHAN_SLIP 0.1/s   ours  9/10 connected, median 33600, p25 31200
+    CHAN_SLIP 0.25/s  ours  4/10 connected, median 22800, p25 12000
+
+**At the real rate the model gives 9 connects in 10 at full rate.** That agrees
+with the bench, which connects. It also means the jitter buffer costs us
+something like one call in ten and a little rate on the survivors — real, worth
+fixing, and **nowhere near enough to explain 66% of connected time spent
+re-handshaking.**
+
+**SO THE IMPLICATION I DREW FROM 6902 IS WITHDRAWN.** That finding's closing
+argument — d-modem's insertions are unique to our leg, they are measured to be
+capable of the damage, therefore the fix is in the media path — used 0.25/s.
+At 0.096/s the same table says they are not capable of the damage. The media
+path remains a contributor and is no longer a candidate for the principal
+cause.
+
+**WHAT SURVIVES, and it is worth keeping.** The insertions are real, they are
+concentrated in the first ten seconds where the buffer is shallowest, and
+that IS the window a handshake lives in. A defect that triples during training
+and costs one call in ten is a good thing to fix even when it is not the main
+event — and 6703's `hsfsip`, which counts underruns instead of hiding them,
+is the instrument that would let it be fixed and verified without re-modifying
+cryan209's tree.
+
+**LIMITS, and the first is structural.** The buckets are elapsed time from
+d-modem's first tick, not anchored to CONNECT, because aligning d-modem's
+block-buffered stdout to slmodemd's log needs row.sh's BENCHANCHOR and 1941
+records why file position cannot do it. So "0-10s" is SIP setup, ringing and
+early training mixed together, and the training window proper is probably the
+10-30s buckets at ~0.086/s. A CONNECT-anchored split would sharpen this and
+needs the anchor work. 76 series, one bench, one ATA, one period of time.
