@@ -66059,6 +66059,16 @@ by a neighbour, which is not the same thing: `exitTRN2u` takes 3 to 4 and state
 OUT of 4 rather than 4 itself; 23 and 24 stand in the same relation.  29 is set
 on three separate null-pointer errors and no message names it either.
 
+**FOUR MESSAGES CARRY A CONSTANT WHERE OUR SOURCE CARRIES THE FIELD.**  States
+16, 17, 20 and 27 print inside `if (symbolCount == K)`, and the object passes
+the literal -- `mov $0x240,%edx` and `mov $0x18,%ecx` -- because the equality
+test above it lets the compiler substitute.  Our source writes `symbolCount` at
+all thirteen sites.  The two are indistinguishable at both tiers: they print the
+same number, so no differential trial separates them, and which one 3.4.2 emits
+from `symbolCount` is a constant-propagation decision rather than a difference
+in the source.  Said here so that nobody reads our text as the object's at those
+four sites.
+
 **WHAT THE OBJECT CANNOT SAY, and it is recorded rather than guessed.**
 `generateRm` and `generateB1u` are the same 149 bytes as each other,
 instruction for instruction.  Five arms -- states 16, 17, 26, 27 and 28 --
@@ -66126,8 +66136,9 @@ because `word_44` was always zero, so `word_18 > word_44 + 800` and
 anti-vacuity counter asserts that a trial ran at 801 against a threshold of
 804.
 
-Final: **80 mutations for `generateSymbol`, all caught**, over a grid of
-33 x 11 x 4 x 32 = 46,464 trials at each of three debug levels.  Level 1 earns
+Final: **83 mutations for `generateSymbol` and 130 for the file, all caught**,
+over a grid of 33 x 12 x 4 x 32 = 50,688 trials at each of three debug levels,
+3,700,227 checks.  Level 1 earns
 its place here for the reason it does in t_v92p4gen: eight of the thirteen
 messages are gated `> 1`, and 0 and 2 fall the same side of `> 1` and `> 0`
 alike.

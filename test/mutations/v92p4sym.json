@@ -487,7 +487,7 @@
   "replace": "\t\t\t\tstate = V92P4M_STATE_FB1U;\n\t\t\t\tsetMappingParams(mappingParams);\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tscrambler.reset(0);"
  },
  {
-  "label": "E2u's null-mappingParams arm is tested after the two signal arms",
+  "label": "E2u's null-mappingParams arm never fires",
   "find": "\t\t\t} else if (mappingParams == 0) {\n\t\t\t\tstate = 29;",
   "replace": "\t\t\t} else if (mappingParams == (V92MappingParams *)1) {\n\t\t\t\tstate = 29;"
  },
@@ -655,5 +655,10 @@
   "label": "state 24 reduces the count modulo six rather than twelve",
   "find": "\t\tif (symbolCount > 2399 && symbolCount % 12 == 0) {",
   "replace": "\t\tif (symbolCount > 2399 && symbolCount % 6 == 0) {"
+ },
+ {
+  "label": "state 1's word_1b8 follows e2uExtended as states 9, 10 and 11 do",
+  "find": "\t\t\tstate = V92P4M_STATE_E1U;\n\t\t\tsymbolCount = 0;\n\t\t\tword_1b8 = 12;",
+  "replace": "\t\t\tstate = V92P4M_STATE_E1U;\n\t\t\tsymbolCount = 0;\n\t\t\tword_1b8 = (e2uExtended != 0) ? 13 : 12;"
  }
 ]
