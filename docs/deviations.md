@@ -8155,11 +8155,17 @@ and on the direction:
     flt_14..20   bits[69 + i] weight fltTable_1[6 - i], both       agree
     masks        bits[pos + 1 + i] weight 2^i out, 2^(15-i) back   DISAGREE
 
-**WHICH OF THE TWO IS WRONG IS NOT ESTABLISHED HERE.** Settling it needs the
-V.92 CP message's own field order out of the recommendation, which nobody has
-read against this class; the object is self-consistent in every other field,
-so the odds are on the reader, but that is an impression and not a
-measurement. What IS measured is that the two disagree.
+**SETTLED: `evaluateInfo` IS THE WRONG SIDE.** Finding 6800 closed this against
+ITU-T V.90 Table 14 and V.92 Table 23, which are identical here: "bit 137
+corresponds to Ucode 0", with "Bit 0 is transmitted first" -- so the
+first-transmitted bit of each sixteen-bit block is the LOWEST Ucode. That fixes
+the WIRE only; what fixes the class's own storage is its consumer,
+`getConstellationMask`, which fills these words as `mask[v >> 4] |= 1 << (v &
+15)` -- bit `j` of word `k` is Ucode `16k + j`. Both agree, and both convict the
+reader: `infoToBits` puts Ucode 0 on the first wire position, `evaluateInfo`
+gives that position weight 2^15. The translation was verified faithful on both
+sides first (.text+0x4f2f3 and +0x4f7f4), so this is the object's defect and not
+ours.
 
 **Reproduced, and not fixed**, per the rule above. `t_v92cpeval` drives it
 directly with bit vectors whose two readings differ (`i & 1`, `(i >> 1) & 1`
@@ -8261,15 +8267,24 @@ not. So the author knew the failure mode, wrote a diagnostic for it, and
 arm to reach one from. The two classes were read from addresses 0x2180 apart
 and this is the sharpest difference between them.
 
-**Reachability is bounded rather than measured.** The collecting states are
-not open-ended in a well-formed exchange -- state 6 stops at 136, states 7 and
-8 at `gamma` and `delta`, and state 9 at seventeen -- so the exposure is
-`gamma`, which is `136 * word_10c`, and `word_10c` is decoded from six
-FOUR-BIT counts as one more than the largest of them (D570). The largest a
-peer can therefore ask for is 16, and `136 * 16 = 2176` positions from 136,
-which is 2,312 -- **past the 2,000 the array holds**. So the bound is
-reachable from the wire and not only from a fault, and whether any real peer
-sends counts that large is not established here.
+**Reachability: NOT from a conformant peer. This paragraph replaces an earlier
+one that said the opposite** -- it claimed the bound was "reachable from the
+wire and not only from a fault", which finding 6800 disproved.
+
+ITU-T V.90 Table 14 and V.92 Table 23 both bound each of the six four-bit
+constellation indices at bits 103:127 to **"an integer between 0 and 5"**.
+`word_10c` is `max + 1`, so a legal peer yields at most 6, `gamma` and `delta`
+at most 816 each, and a longest legal message of about 1,786 of the 2,000
+entries -- confirmed independently by `t_v92cpb2i`, whose longest six-group
+message measures 1,785. **No conforming exchange can reach the end of the
+array.**
+
+Reaching it needs an index of 6 to 15, which the recommendation forbids and
+which nothing here rejects: `word_28[k]` is accumulated from four bits and fed
+to `max` with no clamp anywhere upstream. So the exposure is to a MALFORMED OR
+HOSTILE peer rather than a legal one -- still a real defect, and still the one
+the sibling class guards against, but a materially weaker claim than the
+original wording made.
 
 **Reproduced, and not guarded.** Adding a bound would be a behavioural
 difference on exactly the inputs that matter, and CLAUDE.md's rule is that a

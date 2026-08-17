@@ -75231,3 +75231,128 @@ measurement by whoever next has `V90SpectralShapingFilter` open -- the most
 likely answer is a mixed declaration this pass did not try, with the recurrence
 extended and the returned expression already `float`-typed without an
 intervening store.
+
+### 6800. D920 AND D923 SETTLED AGAINST ITU-T V.90 AND V.92: BOTH ARE THE ORIGINAL'S, AND ONE OF D923's CLAIMS WAS WRONG
+
+D920 and D923 were recorded with their central question open. Both are now
+closed against the recommendations themselves — `T-REC-V.90-199809` §8.5.2 and
+Table 14, and `T-REC-V.92-200011` Table 23, which are word for word identical on
+every point used here. Amendments 1 and 2 and Corrigendum 1 touch none of it.
+
+**FIRST, THE TRANSLATION IS FAITHFUL ON BOTH SIDES.** That was checked before
+anything was attributed, because every conclusion below rests on it.
+
+`infoToBits` writes the mask word least significant bit first, at .text+0x4f2f3:
+
+    4f2f3  movswl 0x42(%edi,%ebx,2),%ecx    s = short_42[...]
+    4f2f8  mov    $0xf,%ebx                 j = 15
+    4f300  mov    %cl,%al
+    4f302  and    $0x1,%al                  bit 0 -- the LSB
+    4f304  sar    $1,%ecx                   s >>= 1
+    4f306  mov    %al,(%edx)                bits[pos++]
+    4f309  dec %ebx ; jns 4f300             sixteen times
+
+`evaluateInfo` reads the same sixteen positions most significant bit first, at
+.text+0x4f7f4:
+
+    4f816  mov    $0xf,%ecx
+    4f81b  sub    %ebx,%ecx                 15 - i
+    4f827  imul   binaryTable(,%ecx,4),%edx weight 2^(15-i)
+    4f837  cmp    $0xf,%ebx ; jbe           i ASCENDING, sixteen times
+
+Both match `src/pump/v90/V92CP.cpp` instruction for instruction. **So the round
+trip is broken in the OBJECT, and D920 is a defect reproduced, not a defect
+introduced.**
+
+#### D920: the reader is the wrong side, and it is now proved rather than guessed
+
+D920 said "which of the two is wrong is not established" and put the odds on the
+reader as an impression. The impression was right and there are now two
+independent proofs.
+
+**The wire order, from the recommendation.** Table 14/V.90 and Table 23/V.92
+both give the mask layout explicitly:
+
+    136        Start bit: 0
+    137:152    Constellation mask for Uchord1 (bit 137 corresponds to Ucode 0)
+    154:169    Constellation mask for Uchord2 (bit 154 corresponds to Ucode 16)
+    ...
+    256:271    Constellation mask for Uchord8 (bit 256 corresponds to Ucode 112)
+
+and §8.5.2 states "Bit 0 is transmitted first". So the FIRST-TRANSMITTED bit of
+each sixteen-bit block is Ucode 0, the lowest. **Lean on the explicit Ucode
+mapping and not on the table's `LSB:MSB` column header** — a constellation mask
+is a bit-set rather than an integer, so LSB/MSB does not strictly apply to it,
+while "bit 137 corresponds to Ucode 0" is unambiguous.
+
+**The internal representation, from our own arbiter.** The recommendation fixes
+the WIRE and not the class's storage: the class would be free to hold Ucode 0 in
+bit 15 as long as everything agreed. What decides is the consumer, and
+`getConstellationMask` in `V90MappingParamsInt.cpp` is it — the transmit path
+fills `cp->short_42[i]` through it:
+
+    mask[v >> 4] |= 1 << (v & 15);       /* Ucode v -> word v/16, bit v%16 */
+
+so **bit `j` of word `k` is Ucode `16k + j`**, LSB-indexed, Ucode 0 in bit 0.
+
+The two agree, and they convict the reader. `infoToBits` puts word bit 0 --
+Ucode 0 -- on the first wire position, which is what bit 137 is defined to be.
+`evaluateInfo` gives that same position weight 2^15 and lands Ucode 0 in bit 15.
+**`evaluateInfo` is the defective side**; `infoToBits` and
+`getConstellationMask` are both correct and consistent with each other and with
+the recommendation.
+
+#### D923: the exposure is real but NOT reachable from a conformant peer
+
+D923 says the bound is "reachable from the wire and not only from a fault".
+**That is wrong as written and the paragraph is corrected below rather than
+appended to.**
+
+Both recommendations bound each of the six four-bit constellation indices at
+bits 103:127 to **"an integer between 0 and 5"**. `word_10c` is `max + 1`
+(`V92CP.cpp:924`), so a conformant peer yields at most 6, `gamma` and `delta`
+at most 816 each, and a longest legal message of about 1,786 of the 2,000
+`bits` entries. That figure is confirmed independently by `t_v92cpb2i`, whose
+longest six-group message measures 1,785.
+
+**So no conforming exchange can reach the end of the array.** Reaching it needs
+an index of 6 to 15, which the recommendation forbids and which nothing in
+`V92CP` rejects — `word_28[k]` is accumulated from four bits and fed straight to
+`max` with no clamp anywhere upstream. The exposure is therefore to a MALFORMED
+OR HOSTILE peer, not to a legal one, which is a materially different claim from
+the one D923 makes and a weaker one.
+
+It remains a genuine defect, and the sibling class settles the author's intent:
+`V90CP::bitsToInfo` carries `cmp $0x2edf; ja` at five of ten store sites and
+prints its own "not enouch memory in the buffer" diagnostic (D520, finding
+4361). The author knew the failure mode and wrote a guard for the V.90 class;
+none of it is in the V.92 one.
+
+#### A third thing, and it is NOT a defect: `gamma` is not the recommendation's γ
+
+Worth recording because it reads like one. The recommendations define
+γ = 136 × (the maximum constellation index) and δ = 2γ + 136 when bit 128 is
+set, where the FIRST constellation sits outside γ in bits 136:271 and γ covers
+only the additional ones. Ours is `gamma = 136 * word_10c` with
+`word_10c = max + 1`, which is the recommendation's γ **plus 136**.
+
+They do not disagree about anything. Our state 6 ends at position 136, BEFORE
+the first constellation, so state 7 has to collect every constellation and not
+merely the additional ones. For a legal max of 5 both readings put the block at
+positions 136 to 951, and the recommendation's own worked example -- "indexed
+from 0 (in bits 136:271) to a maximum of 5 (in bits 816:951)" -- is that same
+span. `delta` is the codec block, whose length is δ − γ = γ + 136 = 136 × count,
+which is again ours exactly.
+
+The name is the author's own, from the mangled statics
+`_ZZN5V92CP10bitsToInfoEhE5gamma` and `...E5delta`, so the looseness is the
+original's. **Do not "correct" `gamma` to match the recommendation's formula: it
+would be wrong by one constellation block.**
+
+#### Disposition
+
+Both defects stay reproduced. Each is now a candidate to go behind
+`DSPLIB_REPRODUCE_BUGS` with the citation above as its evidence, which is the
+owner's call and not taken here. D920's fix is one index; D923's is a compare
+before seven stores, and the sibling class shows what the author's own guard and
+message would have looked like.
