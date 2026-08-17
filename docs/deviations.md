@@ -7914,3 +7914,51 @@ Closing it needs the mask region modelled as one addressable block -- the
 shape `v92-fold-oob` gave D561's own site -- which is a `V92CP` layout change
 and belongs to a batch that owns that header.  D570 is the same class of
 finding on the same two blocks from the reading end.
+
+## D800 🐛 `V90SpectralShaper` reads an uninitialised action, and runs a four-billion-iteration loop, on inputs its own tables and `reset` cannot produce
+
+Two undefined-behaviour sites in one class, both reproduced and neither driven.
+
+**ONE -- the leading digit's switch has no default, and the local it writes is
+read either way.**  `advanceTrellis` recovers the winning candidate's leading
+decimal digit as `bestAction / pow10Table[shaperId]` and converts it to an
+`ACTIONS` with a four-armed switch (0x32d39..0x32ed3).  Digits 1, 2, 3 and 4
+store 0, 1, 2 and 3 into a stack slot; **anything else falls through to
+0x32d4f with that slot never written**, and the two switches that follow read
+it -- one to pick a polarity pattern for the outgoing frame, one to update the
+trellis state.  `act = leading - 1` would have been a single `dec` and the
+object has four separate constant stores, so the switch is the source's, and
+a `default:` arm would be code the object does not contain.  Reproduced by
+writing no default and no initialiser.
+
+It is unreachable through the object's own data: finding 5853 regenerates all
+128 entries of `actionLookupTable` from the digit rule and every digit in every
+live entry is in 1..4, while the dead entries are zero and are never selected
+because the candidate loop runs to 2^(shaperId+1).  It becomes reachable only
+if `shaperId` exceeds 3, which walks off the table's eight rows first, or if
+the table is corrupted.
+
+**TWO -- `process` computes an unsigned bound as `blockLength - 1`.**
+`lea -0x1(%ecx),%ebx; cmp $0x0,%ebx; ja` at 0x32fd8 copies the caller's sign
+bits into `frameBits[1..blockLength-1]`.  With `blockLength` zero the
+subtraction wraps to 0xffffffff and the loop runs to four billion, writing
+through the object and everything after it.  `reset` can produce a zero
+`blockLength`: it is `6 / shaperSR` with an explicit guard storing 0 when
+`shaperSR` is zero (0x3286c), and `6 / shaperSR` is also 0 for any
+`shaperSR` above 6.  So the value is reachable from the parameter block, and
+only the caller's choice of `shaperSR` keeps it out.
+
+**NOT DRIVEN, AND THAT IS D561'S RULE.**  Both sites are undefined in OUR
+source as much as in the object's, so a trial reaching either is not a
+differential trial. `t_v90spectrellis.cpp` and `t_v90shapeact.cpp` therefore
+hold `shaperId <= 3` and `shaperSR` in {1, 2, 3, 6}, which gives
+`blockLength` in {6, 3, 2, 1} and never zero, and the exclusion is stated in
+both files' headers with the reason. `t_v90shapereset.cpp` DOES sweep
+`shaperSR` at 0, 7, 12 and 0xffffffff, because `reset` itself is total and
+storing a zero `blockLength` is the behaviour under test there; what no suite
+does is call `process` afterwards.
+
+Closing either needs a `default:` arm and a guard that the object does not
+have, so neither is fixed. Anyone linking this library for real should bound
+`shaperSR` to 1..6 at the parameter block, which is where the constraint
+actually lives.

@@ -90,9 +90,19 @@ void our_ssf_progress(void *self, const short *in)
 	asm("_ZN24V90SpectralShapingFilter8progressEPKs");
 void ref_ssf_progress(void *self, const short *in)
 	asm("ref__ZN24V90SpectralShapingFilter8progressEPKs");
-float our_ssf_metric(const void *self, const short *in, unsigned blocks)
+/*
+ * `long double`, NOT `float`.  The object hands the caller its x87 accumulator
+ * without narrowing it (0x33270, three bare `fstp %st(1)` and a `ret`), and
+ * this suite used to declare a `float` return -- which made both sides round
+ * before it looked, so a difference in the low 40 significand bits compared
+ * equal and the whole question was invisible here.  It was invisible because
+ * of the DECLARATION and not because of the values.  Finding 5854; the float
+ * checks below are kept beside the exact one because that is what a caller
+ * storing the result would see.
+ */
+long double our_ssf_metric(const void *self, const short *in, unsigned blocks)
 	asm("_ZNK24V90SpectralShapingFilter9getMetricEPKsj");
-float ref_ssf_metric(const void *self, const short *in, unsigned blocks)
+long double ref_ssf_metric(const void *self, const short *in, unsigned blocks)
 	asm("ref__ZNK24V90SpectralShapingFilter9getMetricEPKsj");
 
 int our_sd_process(void *self, unsigned sample)
@@ -612,6 +622,7 @@ run_ssf_metric(void)
 		unsigned char before_a[SSF_SLOT], before_b[SSF_SLOT];
 		short sig[64];
 		float ma, mb;
+		long double lda, ldb;
 		int i;
 
 		ssf_setup(trial, len);
@@ -621,11 +632,30 @@ run_ssf_metric(void)
 		memcpy(before_a, ssf_a, SSF_SLOT);
 		memcpy(before_b, ssf_b, SSF_SLOT);
 
-		ma = our_ssf_metric(ssf_a, sig, blocks);
-		mb = ref_ssf_metric(ssf_b, sig, blocks);
+		lda = our_ssf_metric(ssf_a, sig, blocks);
+		ldb = ref_ssf_metric(ssf_b, sig, blocks);
+		ma = (float)lda;
+		mb = (float)ldb;
 
 		diff_eq_int("the metric (len %ld)", fbits(ma), fbits(mb),
 			    len);
+		/*
+		 * THE EXACT ONE, all 64 significand bits, which is what
+		 * `advanceTrellis` compares against its running best before
+		 * anything rounds it.  memcmp rather than `==` so a NaN
+		 * cannot make two differing values compare equal.
+		 *
+		 * TEN BYTES AND NOT `sizeof`.  An x87 `long double` is 12
+		 * bytes here and only 10 of them are the value; the top two
+		 * are PADDING the compiler never writes, so they hold
+		 * whatever was in that stack slot.  Comparing `sizeof(lda)`
+		 * compares that garbage: it happened to agree at -O2 and
+		 * disagreed on every trial under the instrumented build,
+		 * which is how it was caught -- a check that was reading
+		 * uninitialised memory and calling the result a metric.
+		 */
+		diff_eq_int("the metric, unrounded (len %ld)",
+			    memcmp(&lda, &ldb, 10) == 0, 1, len);
 		diff_eq_int("blob: getMetric wrote nothing (trial %ld)",
 			    memcmp(before_b, ssf_b, SSF_SLOT) == 0, 1, trial);
 		diff_eq_int("ours: getMetric wrote nothing (trial %ld)",

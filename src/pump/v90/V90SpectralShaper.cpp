@@ -346,3 +346,234 @@ V90SpectralShaper::applyAction(int action, short *dst)
 		}
 	}
 }
+
+/*
+ * ===========================================================================
+ * V90SpectralShaper::advanceTrellis -- .text+0x32ba0, 1054 bytes
+ *
+ * The search.  Every one of the 2^(shaperId+1) candidate polarity patterns for
+ * the frames still in the delay line is applied to a scratch copy of the whole
+ * line, scored by the embedded shaping filter, and the best-scoring one kept;
+ * then the winner's LEADING action -- the one belonging to the frame about to
+ * leave -- is committed to the line itself and its low bit becomes the next
+ * call's trellis state.
+ *
+ * THE INITIAL SCORE IS `1e38f`, not FLT_MAX and not infinity: `flds` of
+ * `.rodata.cst4+0x1c8`, which is 0x7e967699 and the float nearest 1e38.  A
+ * four-byte load, so a `float` and not a `double` literal.
+ *
+ * THE COMPARISON IS `metric < best` WITH `metric` IN `%st(0)`.  `fcoms
+ * 0x30(%esp)` at 0x32cdd, then `fnstsw`/`sahf`/`jae` to skip -- an ORDERED
+ * compare with no parity test, which is `-mno-ieee-fp` (finding 1990) and not
+ * a source choice.  The operand order is the natural one here and needed no
+ * correction: the value being tested is a call's return in `%st(0)` and the
+ * threshold is the memory operand, which is what `x < local` compiles to when
+ * `x` is a temporary.  Finding 3529's swap does not apply, because
+ * `tree_swap_operands_p` only swaps when operand 0 is a bare DECL and a
+ * function result is not one.
+ *
+ * THE TWO OPERANDS ARE AT DIFFERENT PRECISIONS ON PURPOSE, and this is the
+ * whole of finding 5854.  `best` is a `float` and lives in memory, so storing
+ * it ROUNDS; `metric` is a `long double` and never leaves `%st(0)`, so the
+ * comparison sees all 64 significand bits of the value `getMetric` just
+ * returned.  Declaring `metric` a `float` puts an `fstps`/`flds` pair between
+ * the call and the `fcoms` that the object does not have, and that pair
+ * changes which candidate wins a tie.
+ *
+ * STRICT `<`, SO AN EXACT TIE KEEPS THE EARLIER CANDIDATE -- except that with
+ * `best` rounded and `metric` not, a tie at 64 bits is not a tie at 32: where
+ * the stored `float` rounded UP, the tied later candidate compares strictly
+ * smaller and takes it.  That is reachable and common rather than exotic,
+ * because the candidates come in exactly-negating pairs (5854).  With `best`
+ * starting at 1e38f every reachable metric wins the first comparison, so the
+ * only way `bestAction` stays unset is a line whose every candidate scores
+ * 1e38f or worse -- unreachable for a sum of squares of 24 shorts.  The object
+ * has no initialiser for it and neither has this; see the note on the switch
+ * below.
+ *
+ * THE TABLE IS READ TWICE PER CANDIDATE, at 0x32c36 and again at 0x32d0b, and
+ * that is the source and not a rematerialisation.  `applyAction` consumes its
+ * argument -- it divides it down to zero -- so after the call the value is
+ * gone; a source that had kept it in a local would have kept it in a register
+ * across the call, and the object instead recomputes
+ * `(state + 2 * shaperId) * 16 + n` from three memory reloads.  Written as two
+ * reads of the same expression, which is what produces that.
+ *
+ * `shaperId` IS RE-READ FROM THE OBJECT AFTER `getMetric` on both arms of the
+ * branch (0x32cfa taken, 0x32f56 not), which is what a member access across a
+ * call compiles to and is why it is spelled as the member here rather than
+ * hoisted into a local.
+ *
+ * THE LEADING DIGIT IS AN UNSIGNED DIVIDE: `xor %edx,%edx; divl 0x0(,%esi,4)`
+ * at 0x32d32.  `divl` and not `idivl`, so one of the two operands is unsigned;
+ * `pow10Table` carries it, and the alternative -- an `unsigned` local divided
+ * by an `int` table -- emits the identical instruction.  See the note on the
+ * table.
+ *
+ * THE SWITCH ON THE LEADING DIGIT HAS NO DEFAULT, AND THE LOCAL IT WRITES IS
+ * LEFT UNINITIALISED WHEN NOTHING MATCHES.  The object stores 0, 1, 2 and 3
+ * for digits 1, 2, 3 and 4 from four separate constant loads (0x32f80,
+ * 0x32ee1, 0x32f8b, 0x32ed3) and falls through to 0x32d4f with the slot
+ * untouched otherwise -- and `act = leading - 1` would have been one `dec`, so
+ * the four stores are the source's own switch.  Reproduced with no default arm
+ * and no initialiser, because adding either moves code generation.  It is
+ * unreachable while `actionLookupTable` holds only digits 1..4, which 5853
+ * establishes for all 128 entries.  D800.
+ *
+ * THE COMMITTED ACTION IS APPLIED WITH `start` ZERO, which is the frame at the
+ * head of the line -- the one `process` is about to hand back.  The state
+ * update that follows is a second switch over the same value, storing 0, 1, 0,
+ * 1 for actions 0..3; `state = act & 1` would have been an `and` and the
+ * object has four constant stores at two addresses, so it is a switch as well.
+ * ===========================================================================
+ */
+void
+V90SpectralShaper::advanceTrellis()
+{
+	unsigned int candidates;
+	unsigned int n;
+	unsigned int i;
+	float best;
+	int bestAction;
+	ACTIONS action;
+
+	candidates = 1u << (shaperId + 1);
+	best = 1e38f;
+
+	for (n = 0; n < candidates; n++) {
+		long double metric;
+
+		for (i = 0; i < windowLength; i++)
+			trialLine[i] = delayLine[i];
+
+		applyAction(actionLookupTable[state + 2 * shaperId][n],
+			    trialLine);
+
+		metric = ssf.getMetric(trialLine, shaperId + 1);
+		if (metric < best) {
+			best = metric;
+			bestAction =
+			    actionLookupTable[state + 2 * shaperId][n];
+		}
+	}
+
+	switch (bestAction / pow10Table[shaperId]) {
+	case 1:
+		action = V90SS_KEEP_ALL;
+		break;
+	case 2:
+		action = V90SS_NEGATE_ALL;
+		break;
+	case 3:
+		action = V90SS_NEGATE_EVEN;
+		break;
+	case 4:
+		action = V90SS_NEGATE_ODD;
+		break;
+	}
+
+	applyFrameAction(action, delayLine, 0);
+
+	switch (action) {
+	case V90SS_KEEP_ALL:
+	case V90SS_NEGATE_EVEN:
+		state = 0;
+		break;
+	case V90SS_NEGATE_ALL:
+	case V90SS_NEGATE_ODD:
+		state = 1;
+		break;
+	}
+}
+
+/*
+ * ===========================================================================
+ * V90SpectralShaper::process -- .text+0x32fc0, 362 bytes
+ *
+ * One V.90 frame in, one frame out, `shaperId` frames later.  `in` is
+ * `blockLength` samples, `bits` their `blockLength - 1` payload sign bits, and
+ * `out` receives the frame leaving the far end of the delay line.
+ *
+ * POSITION 0 IS NOT A PAYLOAD BIT.  `movb $0x0,0xc(%edi)` at 0x32fd4 forces it
+ * to zero and the copy loop shifts the caller's bits up by one, so the caller
+ * supplies `blockLength - 1` of them.  `V90SignBitsExtractor::process` spends
+ * the same position on the receive side, handing its caller positions
+ * 1..width-1 -- the two halves agree, and that is where the trellis's own
+ * signalling lives.
+ *
+ * THE COPY BOUND IS `blockLength - 1` AND THE OBJECT COMPUTES IT AS SUCH:
+ * `lea -0x1(%ecx),%ebx; cmp $0x0,%ebx; ja` at 0x32fd8.  A loop written
+ * `for (i = 1; i < blockLength; i++)` would have compared `blockLength`
+ * against 1 directly.  The subtraction is UNSIGNED and unguarded, which is
+ * D800's second half.
+ *
+ * THE SERIAL ENCODER RUNS ON THE ODD POSITIONS ONLY -- `test $0x1,%bl; je` at
+ * 0x33002 -- and the even ones are copied through.  `blockLength` is re-read
+ * after the call (0x3301b) because the callee could have changed it, which is
+ * what a member as a loop bound compiles to.
+ *
+ * A ZERO SIGN BIT NEGATES.  `cmpb $0x0,0x18(%ecx,%edi,1)` then `jne` past the
+ * `neg` at 0x3306a, so 1 is positive.  The 32-bit `movzwl`/`neg` has its upper
+ * half discarded by the 16-bit store, which is finding 614's free case and not
+ * evidence about `in`'s signedness.
+ *
+ * `writeIndex` IS INVARIANT ACROSS EVERY PATH.  The write loop advances a
+ * local from it and stores the result back (0x3307d), and the tail subtracts
+ * `blockLength` again (0x330cc, 0x3310f) after the line has been shifted down
+ * by the same amount.  When `blockLength` is zero the loop is skipped and so
+ * is the store, and the tail subtracts zero.  So a test comparing this field
+ * before and after is passing trivially, and t_v90specproc.cpp says so rather
+ * than claiming it as coverage.
+ *
+ * THE TRELLIS IS HELD OFF FOR `shaperId` CALLS.  `if (primeFrames != 0)
+ * primeFrames--; else advanceTrellis();` -- see 5851 for why that is a
+ * countdown and not a copy of `shaperId`.
+ *
+ * THE OUTPUT IS TAKEN BEFORE THE FILTER RUNS AND BEFORE THE SHIFT, and the
+ * filter is fed the delay line's head rather than the outgoing frame -- one
+ * pointer, `delayLine`, in both cases (0x330bb).  The shift-down that follows
+ * moves `windowLength - blockLength` entries and is written as the object
+ * indexes it, source index from `blockLength` and destination from zero.
+ * ===========================================================================
+ */
+void
+V90SpectralShaper::process(short *in, unsigned char *bits, short *out)
+{
+	unsigned int i;
+	unsigned int pos;
+
+	frameBits[0] = 0;
+	for (i = 0; i < blockLength - 1; i++)
+		frameBits[i + 1] = bits[i];
+
+	for (i = 0; i < blockLength; i++) {
+		if (i & 1)
+			codedBits[i] = oddEncoder.process(frameBits[i]);
+		else
+			codedBits[i] = frameBits[i];
+	}
+
+	pde.process(codedBits, signBits);
+
+	pos = writeIndex;
+	for (i = 0; i < blockLength; i++) {
+		delayLine[pos] = signBits[i] ? in[i] : -in[i];
+		pos++;
+	}
+	writeIndex = pos;
+
+	if (primeFrames != 0)
+		primeFrames--;
+	else
+		advanceTrellis();
+
+	for (i = 0; i < blockLength; i++)
+		out[i] = delayLine[i];
+
+	ssf.progress(delayLine);
+
+	for (i = blockLength; i < windowLength; i++)
+		delayLine[i - blockLength] = delayLine[i];
+
+	writeIndex -= blockLength;
+}

@@ -68399,3 +68399,148 @@ index by four, so five entries of four bytes and not ten of two.  Only 0..3 are
 reachable, because `shaperId` above 3 would run off `actionLookupTable`'s eight
 rows first; the fifth entry is dead in this object.  Its one use is recovering
 the winning candidate's LEADING digit in a single unsigned divide.
+
+## 5854. `getMetric` RETURNED A ROUNDED `float` WHERE THE OBJECT RETURNS ITS x87 ACCUMULATOR, AND THE TRELLIS IS WHERE THAT BECAME VISIBLE
+
+`V90SpectralShapingFilter::getMetric` was written returning `float`, ending
+`return (float)sum;` with `sum` a `long double`.  GCC narrows that through
+memory -- `fstps 0x2c(%esp); flds 0x2c(%esp)` at the tail of our object.  **The
+blob ends with three bare `fstp %st(1)` and a `ret` (0x33270), with no
+narrowing on the return path**, so the value reaching the caller keeps the x87
+stack's full 64-bit significand.
+
+**It does spill internally and that is a different thing** -- two `fstps` at
+0x3320d and 0x33213 with a matching `flds` at 0x33230.  An earlier draft of
+this finding said the function "contains no `fstps`/`flds` pair anywhere",
+which is wrong and was written from the last twenty instructions rather than
+from all of them; the claim that survives measurement is about the RETURN PATH
+only.  What the internal spills are NOT is the recurrence: declaring the four
+state variables and the four intermediates `float` makes this function's own
+suite fail 180 checks of 866, so the arithmetic is extended throughout and the
+spilled values are ones a four-byte slot holds exactly -- the coefficients,
+which are `float` members before they are ever loaded.
+
+**A C++ mangling carries no return type**, so
+`_ZNK24V90SpectralShapingFilter9getMetricEPKsj` says nothing here and the only
+evidence is what the function does with the value on the way out.  The correct
+declaration is `long double`: with a `float` return GCC narrows whether or not
+the cast is written, so removing the cast is not the fix and the return TYPE
+is.  Our symbol went 149 bytes -> 157 against the blob's 172 on the change.
+
+**THE FILE ALREADY KNEW.**  `V90SpectralShapingFilter.cpp`'s comment said the
+rounding "is not in the object", that it is unobservable to a STORE but not to
+a COMPARISON, that `advanceTrellis` is the caller that makes one, and -- in as
+many words -- "whoever writes `advanceTrellis` has to decide whether that is
+reachable in the values it sees; this comment is not permission to skip the
+question".  It closed with "nothing in this tree calls `getMetric` yet, so
+nothing is wrong today", which was true when it was written and stopped being
+true the moment this batch landed.  **That is the finding worth keeping: a
+deferred question with a named trigger, and the trigger firing.**
+
+**IT IS REACHABLE, AND NOT MARGINALLY.**  `advanceTrellis` holds its running
+best as a `float` in memory and compares the freshly returned value against it
+with `fcoms 0x30(%esp)` BEFORE `fstps` rounds it into that slot -- so the two
+operands are deliberately at different precisions.  Now note what the search is
+actually comparing.  With the filter state zeroed, the recurrence is linear and
+homogeneous, so negating its input negates its output exactly and squares to
+the same accumulator: **`actionLookupTable`'s candidates come in
+exactly-negating pairs whose metrics are bit-identical.**  For `shaperId` 0
+both candidates in either row are such a pair.  The comparison is a strict
+`metric < best`, so an exact tie should always keep the earlier candidate --
+and it does, once both sides carry the same precision.  Before the fix, ours
+rounded on the way out and every tie went to candidate 0, while the blob
+compared an unrounded metric against a `best` that had been rounded on STORE:
+where that rounding went up, the tied second candidate compared strictly
+smaller and won.  Different committed action, different `state`, different
+delay line.  Five trials in sixteen at `shaperId` 0 in the first run of
+`t_v90spectrellis`.
+
+**WHY THE SUITE THAT ALREADY COVERED `getMetric` COULD NOT CATCH IT.**
+`t_v90spectral.cpp` declared both sides' symbol as returning `float`.  Both
+sides' values are read out of `%st(0)` by the declaration, so declaring `float`
+made the harness round BOTH before comparing -- and a difference confined to
+the low 40 significand bits compared equal every time.  The suite was blind for
+the same reason the defect existed, and its mutation register said so in
+writing, listing "the ROUNDING of getMetric's return" among the three things it
+could not mutate into a caught failure "because ... a caller that captures a
+float cannot tell -- which is why the test captures a float and says so".
+**The apparatus and the code shared one assumption, so the test agreeing with
+the code was not evidence.**  That is finding 134's shape in its most
+expensive form: not a detector printing nothing, but a detector whose
+measurement is taken through the very conversion it should be measuring.  The
+suite now takes the value as `long double` and compares all 64 significand bits
+with a `memcmp`, keeping the `float` comparison beside it because that is what
+a caller storing the result would see.
+
+**The general rule this earns:** where a function's result crosses into the
+harness through a DECLARED type, the declaration is part of the measurement.
+An x87 return is the sharp case, because the ABI leaves the value in a register
+wider than any of the types that can name it, and the harness's own prototype
+silently decides how much of it is looked at.
+
+## 5855. THE TRELLIS COMPARE IS BEHAVIOURALLY EXACT AND ITS OPERAND ORDER IS NOT REPRODUCED -- SIX SPELLINGS COMPILED, AND THE LEVER IS THE TYPE, WHICH IS PINNED ELSEWHERE
+
+`advanceTrellis`'s one float comparison is, in the blob:
+
+    32cd8  call  getMetric
+    32cdd  fcoms 0x30(%esp)          <- the running best, a float in memory
+    32ce1  fnstsw %ax ; sahf
+    32ce4  jae   ...                 <- skip unless metric < best
+    32cea  fstps 0x30(%esp)
+
+and in ours:
+
+    6c8    call  getMetric
+    6cd    flds  0x38(%esp)
+    6d1    fcomp %st(1)
+    6d3    fnstsw %ax ; sahf
+    6d6    jbe   ...
+    6dc    fstps 0x38(%esp)
+
+**Same values, same branch, opposite operand order**: the blob keeps the metric
+in `%st(0)` and takes `best` as a memory operand; we load `best` and compare
+the other way round.  `metric < best` and `best > metric` are the same
+predicate, `-mno-ieee-fp` means there is no parity test either way, and the
+differential suite is green over 2,947 checks including every tie -- so this is
+a codegen difference and not a behavioural one.  It is 3 instructions and 16
+bytes of the 1,054: ours is 1,038.
+
+**WHY IT IS THE TYPE AND NOT THE ORDER.**  GCC 3.4.2's `tree_swap_operands_p`
+swaps a comparison when operand 0 is a bare DECL and operand 1 is not (finding
+3529).  Our operand 1 is `best` **converted** from `float` to `long double`, so
+it is a `NOP_EXPR` and not a DECL, and `metric` is -- so GCC swaps, `best`
+lands in operand 0, and the `float_extend`-of-memory form of the i387 compare
+no longer applies because that pattern wants the narrow memory operand SECOND.
+The `fcoms` is only reachable when BOTH operands are `float` DECLs, needing no
+conversion at all.  Measured, not reasoned:
+
+| spelling | what came out |
+|---|---|
+| `metric = getMetric(...); if (metric < best)`, `metric` long double | `flds`+`fcomp`, 1038 |
+| `... if (best > metric)` | `flds`+`fcomp`, 1038 |
+| `if ((metric = getMetric(...)) < best)` | `flds`+`fcomp`, 1038 |
+| `if (getMetric(...) < best) { metric = getMetric(...); }` | `flds`+`fcompp`, 1072, and calls twice |
+| `metric` declared `float`, `getMetric` returning `long double` | `fstps`/`flds` narrowing pair, then `fcoms` -- **rounds, and fails** |
+| `metric` declared `float`, `getMetric` returning `float` | **`fcoms` exactly**, and `getMetric` narrows on return -- fails |
+
+**So the order is reachable only by a declaration that is wrong for a reason
+that is pinned independently.** The two spellings that produce `fcoms` both
+make the metric a `float` at the comparison, which puts a narrowing between the
+call and the compare -- and 5854 is the measurement that says the object has no
+such narrowing and that removing it is what makes the trellis choose the same
+candidate as the blob.  A third possibility, that the object's own accumulator
+is `float` and merely held in a register, was tested too and is refused by
+`getMetric`'s own suite at 180 failures of 866.
+
+**Left as it is, and recorded rather than chased.**  Two of the six spellings
+match the object's instruction and both are refused by a differential test;
+four are green and none of the four matches.  CLAUDE.md's rule is that the
+differential tier decides and the codegen tier informs, and permuting source
+until the mnemonics agree while a stronger test says the result is wrong is the
+exact inversion of it.  What is NOT settled is how GCC 3.4.2 was made to emit
+`fcoms` against an un-narrowed accumulator from any source at all; that is a
+real open question about the original's declarations, and it is worth one
+measurement by whoever next has `V90SpectralShapingFilter` open -- the most
+likely answer is a mixed declaration this pass did not try, with the recurrence
+extended and the returned expression already `float`-typed without an
+intervening store.
