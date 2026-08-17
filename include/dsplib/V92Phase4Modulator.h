@@ -146,6 +146,22 @@ class V92Parameters;
 #define V92P4M_STATE_REPEATED_CPU 13
 
 /*
+ * THE BIT BLOCK, AND THE FOUR BYTES BELOW IT.  `bitsExt` holds `prevBit` and
+ * the block in ONE array object, because the object addresses one byte below
+ * the block; see the member itself for the instructions that say so.
+ *
+ *   bitsExt[V92P4M_BITS_BELOW + i]   IS the object's `bits[i]`, +0x7c + i
+ *   bitsExt[V92P4M_BITS_BELOW - 1]   IS the object's `bits[-1]`, +0x7b
+ *
+ * `V92P4M_BITS_BELOW` is four and not one because the union has to cover the
+ * whole of `prevBit`; only its top byte is ever addressed as part of the
+ * block.  `V92P4M_BITS_LEN` is the distance from `bits[0]` to `pattern` and
+ * NOT a measured bound -- see the block comment above.
+ */
+#define V92P4M_BITS_BELOW	4
+#define V92P4M_BITS_LEN		0x12c
+
+/*
  * Six more, and they are `generateSymbol`'s -- that one function carries a
  * thirty-arm switch and thirteen `.rodata.str1.4` messages, and six of the
  * messages name the signal being entered with the state store on the very
@@ -434,18 +450,49 @@ public:
 	V92CP *cp;
 
 	/*
-	 * +0x78  The differentially encoded bit carried from one symbol to the
-	 * next.  Six generators exclusive-OR it into the bit they are about to
-	 * emit and store the result back here; `generateCPt` toggles it with
-	 * `^ 1` while the symbol count is still below 25.
+	 * +0x78 .. +0x1a7  THE DIFFERENTIAL BIT AND THE BIT BLOCK, IN ONE
+	 * ARRAY OBJECT, BECAUSE THE OBJECT ADDRESSES ONE BYTE BELOW THE BLOCK.
+	 *
+	 * +0x78 `prevBit` is the differentially encoded bit carried from one
+	 * symbol to the next.  Six generators exclusive-OR it into the bit
+	 * they are about to emit and store the result back here; `generateCPt`
+	 * toggles it with `^ 1` while the symbol count is still below 25, and
+	 * `reset` clears it (`movl $0x0,0x78(%esi)` at .text+0x1909c).
+	 *
+	 * +0x7c `bitsExt[V92P4M_BITS_BELOW]` onwards is the bit block handed
+	 * to `V92Mapper::process` for one symbol.  ITS LENGTH IS THE DISTANCE
+	 * TO `pattern`, NOT A MEASURED BOUND -- see the block comment.
+	 *
+	 * THE UNION IS THE OBJECT'S OWN ALIASING AND NOT A CONVENIENCE.  The
+	 * four differential generators fold into `bits[bitsPerSymbol - 1]`,
+	 * and the blob forms that address as `0x7b(%count,%this,1)` with the
+	 * count -- `bitsPerSymbol`, zero-extended from +0x43 -- in the index
+	 * register.  Four load/store pairs say it:
+	 *
+	 *   generateTRN2u  movzbl 0x7b(%edx,%ebx,1),%eax   .text+0x17c3a
+	 *                  mov    %al,0x7b(%edx,%ebx,1)           +0x17c44
+	 *   generateE2u                                           +0x17c91
+	 *                                                         +0x17c9b
+	 *   generateCPu                                           +0x17dc0
+	 *                                                         +0x17dc7
+	 *   generateSUVu                                          +0x17ef0
+	 *                                                         +0x17ef7
+	 *
+	 * At `bitsPerSymbol == 0` that address is `this + 0x7b`, the TOP BYTE
+	 * of `prevBit` -- so the load and the store overlap the very field the
+	 * same statement assigns.  Declared as two separate members, `bits[-1]`
+	 * is out of bounds, the two stores may be emitted in either order, and
+	 * they were: GCC 13 kept our order and GCC 3.4.2 did not, which cost
+	 * 240 checks on unmutated source (finding 4705).  One array object
+	 * spanning both makes the access defined C, states the aliasing where
+	 * a reader will find it, and returns the store order to the source.
+	 * D561, and it is D392's fix in the same shape -- an out-of-range
+	 * window becoming a value inside our own array.
 	 */
-	unsigned int prevBit;
-
-	/*
-	 * +0x7c  The bit block for one symbol.  THE LENGTH IS THE DISTANCE TO
-	 * `pattern`, NOT A MEASURED BOUND -- see the block comment.
-	 */
-	unsigned char bits[0x12c];
+	union {
+		unsigned int prevBit;
+		unsigned char bitsExt[V92P4M_BITS_BELOW + V92P4M_BITS_LEN];
+	};
 
 	/*
 	 * +0x1a8  A repeating bit pattern, one bit per byte, read at

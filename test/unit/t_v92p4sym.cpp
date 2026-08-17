@@ -470,11 +470,11 @@ setup(int trial)
 	for (i = 0; i < SCR_LEN; i++)
 		scr[0][i] = (unsigned char)(nextbyte() & 1u);
 	memcpy(scr[1], scr[0], SCR_LEN);
-	for (i = 0; i < sizeof(M(0)->bits); i++) {
+	for (i = 0; i < V92P4M_BITS_LEN; i++) {
 		unsigned char v = (unsigned char)(nextbyte() & 1u);
 
-		M(0)->bits[i] = v;
-		M(1)->bits[i] = v;
+		M(0)->bitsExt[V92P4M_BITS_BELOW + i] = v;
+		M(1)->bitsExt[V92P4M_BITS_BELOW + i] = v;
 		objseed[0x7c + i] = v;
 	}
 
