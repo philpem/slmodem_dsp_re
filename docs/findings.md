@@ -69426,6 +69426,24 @@ entries in each log before it compares anything.
 `t_v90params.cpp`'s existing both-arms sweep now drives the real callee on
 both sides rather than driving a branch we did not take.
 
+**AND THE CODEGEN TIER AGREES, WHICH NOTHING PLANNED FOR.** On the period
+compiler, five of the six symbols this batch touches land in `compare.py`'s
+identical-mnemonic set: `Vparser_read_int` and `Vparser_read_float` (3 bytes
+each), `V90Parameters::init` (63) and `V92Parameters::init` (49), and
+`V92Parameters::loadParams` at **1,384 bytes, which is the largest identical
+symbol in the tree**. The two `init()`s could not have been in that set
+before, because ours had no branch where the object has one -- so this batch
+moved them there.
+
+The sixth is `V90Parameters::loadParams`, and its row is the best possible
+result short of identity: `samesize.py` tags it **`SCHED -- same multiset of
+1781 mnemonics, different order`**, and our object is `0x1ed6` bytes, which is
+the blob's 7,894 exactly. Same size, same instructions, different schedule --
+CLAUDE.md's "free, so ignore it" column, on the largest function this batch
+wrote. Chasing it would mean permuting 295 identical statements until GCC
+happened to schedule them the same way, which is fitting the compiler rather
+than recovering the source.
+
 ### 6402. `V90Parameters` has had one home since task #116, and CLAUDE.md still says two
 
 CLAUDE.md's "One type, one home" section names `V90Parameters` as the live
