@@ -1,0 +1,26 @@
+The pab-bug-* / pab-fix-* captures are DISCARDED.  Do not analyse them and do
+not cite them.
+
+They are the pre-emphasis A/B (finding 1471 / D53), and they were taken while
+three reconstruction agents were compiling.  /proc/loadavg read 10.3 and 11.7
+on the two calls that completed, on a 12-core box, and the run was stopped
+when it reached 42.
+
+slmodemd is real-time DSP: it must produce and consume 9600 samples a second
+on schedule, and scheduling jitter from competing compilers shows up as sample
+slips.  That is the exact mechanism that stopped a pjsua conference bridge
+carrying a V.34 handshake at all (finding 1468).  A connect failure under that
+load says nothing about the branch under test.
+
+The design was right -- interleaved arms, load recorded per call -- and
+interleaving does protect against load DRIFT.  It does not rescue a run where
+both arms are degraded, because the effect being looked for is smaller than
+the degradation.
+
+Re-run on an idle machine.  The two builds are kept and are ready:
+    claude_re/build/hybrid-vpcm/slmodemd-bug
+    claude_re/build/hybrid-vpcm/slmodemd-fix
+and the runner is $CLAUDE_JOB_DIR/tmp/preemph_ab.sh, whose only defect was
+extracting equerr with a grep that matches the 57 per-call V34EQU samples as
+well as the one V34DATARATE decision line.  Use testbench/abextract.py
+instead; it anchors on the decision line.

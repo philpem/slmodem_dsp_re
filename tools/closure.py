@@ -64,7 +64,7 @@ sys.path.insert(0, _here)
 import objtree                                            # noqa: E402
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _here]
 
-BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
+BLOB = os.environ.get("BLOB", "ref/slmodemd/dsplibs.o")
 
 
 def readelf_sections(obj):

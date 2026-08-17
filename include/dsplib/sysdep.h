@@ -4,7 +4,7 @@
  * `dsplibs.o` calls out to exactly nine functions, all of them thin wrappers
  * over libc that slmodemd supplies in `sysdep_common.c`:
  *
- *     nm -u ../slmodemd/dsplibs.o | grep sysdep
+ *     nm -u ref/slmodemd/dsplibs.o | grep sysdep
  *
  * slmodemd itself has no header for them -- `sysdep_common.c` defines them
  * and every caller declares what it needs -- so this one is written rather

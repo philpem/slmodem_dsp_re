@@ -1,0 +1,274 @@
+[
+ {
+  "label": "NOTE: FIVE of these are expected to survive and are marked equivalent, each with the derivation that says why no test can fail on it -- the mag_avg smoother's logical shift and the err_avg smoother's truncation (both forced by the object, both unreachable by arithmetic), the level gate's reload from in[-1] (forced by aliasing, unobservable without an aliasing caller), the interpolator's dead store, and the negative-step borrow (algebraically the same split). EVERYTHING ELSE MUST BE CAUGHT, and the last four to be caught needed the test extending rather than the claim weakening: V.32's own tables repeat two discriminant coefficients and zero K2[0], so a second sweep runs non-degenerate ones, and the loop's far corners are reached by seeding state identically on both sides rather than by hoping a waveform gets there."
+ },
+ {
+  "label": "init divides the coefficient count by five instead of ten, so the tap count and the history are half what they should be",
+  "find": "\tsre->taps = (short)(sre->cfg.coeffs / FPM_SRE_BRANCHES);",
+  "replace": "\tsre->taps = (short)(sre->cfg.coeffs / 5);"
+ },
+ {
+  "label": "init's reuse test compares the wrong way round, so it reallocates when it should reuse and reuses when it should grow",
+  "find": "\tif (!fresh && sre->cfg.coeffs < cfg->coeffs) {",
+  "replace": "\tif (!fresh && sre->cfg.coeffs > cfg->coeffs) {"
+ },
+ {
+  "label": "init clears the history for the whole coefficient count rather than the tap count",
+  "find": "\tfor (i = 0; i < sre->taps; i++)\n\t\tsre->hist[i] = 0;",
+  "replace": "\tfor (i = 0; i < sre->cfg.coeffs; i++)\n\t\tsre->hist[i] = 0;"
+ },
+ {
+  "label": "init starts `need` at zero instead of one",
+  "find": "\tsre->need = 1;\n\tsre->rms_on = 1;",
+  "replace": "\tsre->need = 0;\n\tsre->rms_on = 1;"
+ },
+ {
+  "label": "init leaves the level gate off, so the PLL runs before there is a signal",
+  "find": "\tsre->need = 1;\n\tsre->rms_on = 1;",
+  "replace": "\tsre->need = 1;\n\tsre->rms_on = 0;"
+ },
+ {
+  "label": "init starts the averaging count at zero, which is also the meter's divisor",
+  "find": "\tsre->ppm_n = 1;\n\tsre->ppm_slip = 0;",
+  "replace": "\tsre->ppm_n = 0;\n\tsre->ppm_slip = 0;"
+ },
+ {
+  "label": "the history wraps one entry early, so the oldest tap is never read",
+  "find": "\t\tfill = (short)(fill + 1 < taps ? fill + 1 : 0);",
+  "replace": "\t\tfill = (short)(fill + 1 < taps - 1 ? fill + 1 : 0);"
+ },
+ {
+  "label": "the level gate's ring reads the history slot instead of the input. THE OBJECT RELOADS from `in[-1]` -- forced, because the store through `hist` may alias the input -- but the two hold the same value on any call whose input and history do not overlap, and no caller can arrange that: `hist` is init's own allocation. Unobservable, recorded rather than dropped.",
+  "find": "\t\t\tsre->rms_buf[k] = in[-1];",
+  "replace": "\t\t\tsre->rms_buf[k] = hist[fill];",
+  "equivalent": true
+ },
+ {
+  "label": "the polyphase stride is the tap count instead of the branch count, which is the V.22 block's layout applied to this one",
+  "find": "\t\tc += FPM_SRE_BRANCHES;\n\t}\n\n\th = sre->hist + taps - 1;",
+  "replace": "\t\tc += taps;\n\t}\n\n\th = sre->hist + taps - 1;"
+ },
+ {
+  "label": "the second run of the dot product includes hist[fill] again instead of stopping above it",
+  "find": "\tfor (i = (short)(taps - 1); i > fill; i--) {",
+  "replace": "\tfor (i = (short)(taps - 1); i >= fill; i--) {"
+ },
+ {
+  "label": "the filter output is not doubled",
+  "find": "\treturn (short)(2 * (short)(acc >> 15));",
+  "replace": "\treturn (short)((short)(acc >> 15));"
+ },
+ {
+  "label": "the accumulator is truncated to 16 bits before the shift rather than after",
+  "find": "\treturn (short)(2 * (short)(acc >> 15));",
+  "replace": "\treturn (short)(2 * (short)((short)acc >> 15));"
+ },
+ {
+  "label": "the discriminant's first section reads clk[1] where it should read clk[0]",
+  "find": "\ta_new = (short)((drive - k[0] * clk[0] - k[1] * clk[1]) >> 14);",
+  "replace": "\ta_new = (short)((drive - k[0] * clk[1] - k[1] * clk[1]) >> 14);"
+ },
+ {
+  "label": "the cross term's two coefficients are transposed",
+  "find": "\tr = (short)((q * u + (short)((k[7] * clk[2]) >> 14) * p) >> 11);",
+  "replace": "\tr = (short)((q * u + (short)((k[5] * clk[2]) >> 14) * p) >> 11);"
+ },
+ {
+  "label": "the cross term is shifted down by 14 like its neighbours instead of 11",
+  "find": "\tr = (short)((q * u + (short)((k[7] * clk[2]) >> 14) * p) >> 11);",
+  "replace": "\tr = (short)((q * u + (short)((k[7] * clk[2]) >> 14) * p) >> 14);"
+ },
+ {
+  "label": "the third section's two state terms swap sign",
+  "find": "\tc_new = (short)((k[8] * r + k[9] * clk[4] - k[10] * clk[5]) >> 14);",
+  "replace": "\tc_new = (short)((k[8] * r - k[9] * clk[4] + k[10] * clk[5]) >> 14);"
+ },
+ {
+  "label": "the slope is measured after clk[5] has been updated rather than before",
+  "find": "\td = (short)(c_new - clk[5]);\n\tclk[1] = clk[0];",
+  "replace": "\tclk[5] = clk[4];\n\td = (short)(c_new - clk[5]);\n\tclk[1] = clk[0];"
+ },
+ {
+  "label": "the discriminant is halved, as V.22's specialisation halves its own",
+  "find": "\td = (short)(c_new - clk[5]);\n\tclk[1] = clk[0];",
+  "replace": "\td = (short)((c_new - clk[5]) >> 1);\n\tclk[1] = clk[0];"
+ },
+ {
+  "label": "the intermediate sections keep full width instead of truncating to 16 bits between stages",
+  "find": "\tu = (short)(a_new - ((k[4] * clk[0]) >> 14));",
+  "replace": "\tu = (short)(a_new - ((k[4] * clk[0]) >> 13));"
+ },
+ {
+  "label": "the level gate forces the discriminant to zero on the wrong side of the threshold",
+  "find": "\t\t\tif (sre->cfg.rms_min < FPM_rms(sre->rms_buf,\n\t\t\t\t\t\t       sre->cfg.rms_len))\n\t\t\t\tsre->rms_on = 0;\n\t\t\telse\n\t\t\t\td = 0;",
+  "replace": "\t\t\tif (sre->cfg.rms_min > FPM_rms(sre->rms_buf,\n\t\t\t\t\t\t       sre->cfg.rms_len))\n\t\t\t\tsre->rms_on = 0;\n\t\t\telse\n\t\t\t\td = 0;"
+ },
+ {
+  "label": "the quadrature accumulator adds where it should subtract",
+  "find": "\t\tacc_y = sre->acc_y - ((d * sre->cfg.yclock[tick]) >> 3);",
+  "replace": "\t\tacc_y = sre->acc_y + ((d * sre->cfg.yclock[tick]) >> 3);"
+ },
+ {
+  "label": "the correlation is shifted down by four instead of three",
+  "find": "\t\tacc_x = sre->acc_x + ((d * sre->cfg.xclock[tick]) >> 3);",
+  "replace": "\t\tacc_x = sre->acc_x + ((d * sre->cfg.xclock[tick]) >> 4);"
+ },
+ {
+  "label": "the envelope's decay is 14/16 rather than 15/16",
+  "find": "\t\t\tunsigned int decay = (unsigned int)(sre->mag_avg * 15)\n\t\t\t\t\t     >> 4;",
+  "replace": "\t\t\tunsigned int decay = (unsigned int)(sre->mag_avg * 14)\n\t\t\t\t\t     >> 4;"
+ },
+ {
+  "equivalent": true,
+  "label": "the envelope's decay shifts arithmetically, as err_avg's does. FORCED BY THE OBJECT -- `shr` against `sar` in otherwise identical sequences -- and UNREACHABLE, because mag_avg is a magnitude clamped into [0, 0x7fff] and the two shifts agree over every value it can hold. Recorded as a survivor with its reason rather than dropped.",
+  "find": "\t\t\tunsigned int decay = (unsigned int)(sre->mag_avg * 15)\n\t\t\t\t\t     >> 4;",
+  "replace": "\t\t\tunsigned int decay = (unsigned int)((sre->mag_avg * 15)\n\t\t\t\t\t     >> 4);"
+ },
+ {
+  "label": "the squelch's two thresholds are transposed, so the hysteresis runs backwards",
+  "find": "\t\t\t\tif (sre->mag_avg >= sre->cfg.mag_hi)\n\t\t\t\t\tsre->active = 1;\n\t\t\t\tif (sre->mag_avg <= sre->cfg.mag_lo)",
+  "replace": "\t\t\t\tif (sre->mag_avg >= sre->cfg.mag_lo)\n\t\t\t\t\tsre->active = 1;\n\t\t\t\tif (sre->mag_avg <= sre->cfg.mag_hi)"
+ },
+ {
+  "label": "the group counter is compared against the configured count rather than one past it",
+  "find": "\t\t\tif (sre->groups > (short)(group + 1)) {",
+  "replace": "\t\t\tif (sre->groups > group) {"
+ },
+ {
+  "label": "the tick wraps at the clock length rather than one short of it",
+  "find": "\t\tif (sre->cfg.clock_len > (short)(tick + 1)) {",
+  "replace": "\t\tif (sre->cfg.clock_len > tick) {"
+ },
+ {
+  "label": "the phase-error gain is shifted down by two instead of three",
+  "find": "\te = (short)((sre->cfg.clock_len * (int)angle) >> 3);",
+  "replace": "\te = (short)((sre->cfg.clock_len * (int)angle) >> 2);"
+ },
+ {
+  "label": "the error smoother truncates its decay term to 16 bits. UNREACHABLE by arithmetic: err_avg is a short, so err_avg * 15 lies in [-491520, 491505] and >> 4 lies in [-30720, 30719], which is inside short's range for every input. The cast can never change a value.",
+  "find": "\tsre->err_avg = (short)(((sre->err_avg * 15) >> 4) + (e >> 4));",
+  "replace": "\tsre->err_avg = (short)((short)((sre->err_avg * 15) >> 4) + (e >> 4));",
+  "equivalent": true
+ },
+ {
+  "label": "the freeze suppresses the error measurement as well as the phase update",
+  "find": "\tsre->err_avg = (short)(((sre->err_avg * 15) >> 4) + (e >> 4));\n\n\t/* The caller can freeze the phase while still letting it be measured. */\n\tif (sre->adapt == 0)\n\t\treturn;",
+  "replace": "\tif (sre->adapt == 0)\n\t\treturn;\n\tsre->err_avg = (short)(((sre->err_avg * 15) >> 4) + (e >> 4));"
+ },
+ {
+  "label": "the two gear-shift scalings are transposed, so the integrator is scaled the wrong way at both ends",
+  "find": "\t\t\tsre->pll_acc = (short)\n\t\t\t\t((sre->cfg.acc_down * sre->pll_acc) >> 15);",
+  "replace": "\t\t\tsre->pll_acc = (short)\n\t\t\t\t((sre->cfg.acc_up * sre->pll_acc) >> 12);"
+ },
+ {
+  "label": "the gear-shift thresholds are compared without the further shift down by three",
+  "find": "\t\tif ((sre->cfg.err_hi >> 3) <= a && m == 2) {",
+  "replace": "\t\tif (sre->cfg.err_hi <= a && m == 2) {"
+ },
+ {
+  "label": "the settling branch leaves the integrator alone instead of holding it at zero",
+  "find": "\t\tsre->pll_acc = 0;\n\t\tsre->settle = (short)(settle + 1);",
+  "replace": "\t\tsre->settle = (short)(settle + 1);"
+ },
+ {
+  "label": "the loop-filter step loses its sign inversion",
+  "find": "\t\tstep = (short)((-(FPM_SRE_BRANCHES * p)) >> 4);",
+  "replace": "\t\tstep = (short)((FPM_SRE_BRANCHES * p) >> 4);"
+ },
+ {
+  "label": "the step's clamp is made symmetric",
+  "find": "\telse if (step < -18432)\n\t\tstep = -18432;",
+  "replace": "\telse if (step < -0x5000)\n\t\tstep = -0x5000;"
+ },
+ {
+  "label": "the integrator's rounding bias is dropped",
+  "find": "\t\t\t(((sre->cfg.pll_k2[m] * e + 0x800) >> 12) + acc);",
+  "replace": "\t\t\t(((sre->cfg.pll_k2[m] * e) >> 12) + acc);"
+ },
+ {
+  "label": "the negative-step borrow is dropped, leaving the floor quotient and a non-negative remainder. EQUIVALENT, and this took a derivation rather than a run: both forms compute the same total phase, branch * 0x800 + frac + step, and differ only in how they split it. With the borrow, rem lies in (-0x800, 0] and the `frac < 0` test normalises; without it, rem lies in [0, 0x800) and the `frac > 0x7ff` test normalises. Each split needs exactly one normalisation pass and both land on the same (branch, frac). The object's form is reproduced because the object encodes it, not because a test can see it.",
+  "find": "\tq = step >> 11;\n\tif (step < 0)\n\t\tq = q + 1;",
+  "replace": "\tq = step >> 11;",
+  "equivalent": true
+ },
+ {
+  "label": "acquisition interpolates as well as tracking",
+  "find": "\t\tif (m == 2)\n\t\t\tsre_interpolate(sre, w0, w1);",
+  "replace": "\t\tsre_interpolate(sre, w0, w1);"
+ },
+ {
+  "label": "the interpolator weights the two prototype taps the other way round",
+  "find": "\t\tint v = (proto[i] * w0) >> 15;\n\n\t\tco[i] = (short)v;\n\t\tv += (proto[i + 1] * w1) >> 15;",
+  "replace": "\t\tint v = (proto[i] * w1) >> 15;\n\n\t\tco[i] = (short)v;\n\t\tv += (proto[i + 1] * w0) >> 15;"
+ },
+ {
+  "equivalent": true,
+  "label": "the interpolator's dead store is dropped. The object stores the first term and then stores the sum over it; the sum is formed from the UNTRUNCATED first term either way, so the intermediate store is unobservable. `v22_sre.c` met the same pair and declined to reproduce it; this file reproduces it and records here that no test can tell.",
+  "find": "\t\tco[i] = (short)v;\n\t\tv += (proto[i + 1] * w1) >> 15;\n\t\tco[i] = (short)v;",
+  "replace": "\t\tv += (proto[i + 1] * w1) >> 15;\n\t\tco[i] = (short)v;"
+ },
+ {
+  "label": "the timing meter counts a slip of zero as a gain rather than a loss",
+  "find": "\t\telse if (extra == 0)\n\t\t\tsre->ppm_slip = (short)(sre->ppm_slip - 1);",
+  "replace": "\t\telse if (extra == 0)\n\t\t\tsre->ppm_slip = (short)(sre->ppm_slip + 1);"
+ },
+ {
+  "label": "the meter's interval closes on `at least` rather than on equality",
+  "find": "\tif (sre->ppm_count == sre->ppm_period)",
+  "replace": "\tif (sre->ppm_count >= sre->ppm_period)"
+ },
+ {
+  "label": "the meter ticks inside the sample loop instead of once per drained call",
+  "find": "\tsre->ppm_count = (short)(sre->ppm_count + sre->ppm_step);\n\tif (sre->ppm_count == sre->ppm_period)\n\t\tsre_meter(sre);\n\n\tsre->fill = fill;",
+  "replace": "\tsre->ppm_count = (short)(sre->ppm_count + sre->ppm_step);\n\tsre->fill = fill;"
+ },
+ {
+  "label": "the running average is truncated to 16 bits after the division rather than before it",
+  "find": "\tsre->ppm_offset = (short)((short)sum / sre->ppm_n);",
+  "replace": "\tsre->ppm_offset = (short)(sum / sre->ppm_n);"
+ },
+ {
+  "label": "a full window restarts the average from zero instead of from its own mean",
+  "find": "\t\t\tsre->ppm_n = 2;\n\t\t\tsre->ppm_acc = sre->ppm_offset;",
+  "replace": "\t\t\tsre->ppm_n = 2;\n\t\t\tsre->ppm_acc = 0;"
+ },
+ {
+  "label": "the first interval is folded in rather than discarded",
+  "find": "\t\tif (sre->ppm_first != 0) {\n\t\t\tsre->ppm_acc = 0;\n\t\t\tsre->ppm_n = 1;\n\t\t\tsre->ppm_first = 0;\n\t\t} else {\n\t\t\tsre->ppm_n = (short)(sre->ppm_n + 1);\n\t\t\tsre->ppm_acc = (short)sum;\n\t\t}",
+  "replace": "\t\tsre->ppm_n = (short)(sre->ppm_n + 1);\n\t\tsre->ppm_acc = (short)sum;"
+ },
+ {
+  "label": "the early return banks the samples but forgets to carry the shortfall",
+  "find": "\t\t\tneed = (short)(need - remaining);\n\t\t\tfill = sre_ingest(sre, hist, taps, fill, in, remaining);",
+  "replace": "\t\t\tfill = sre_ingest(sre, hist, taps, fill, in, remaining);"
+ },
+ {
+  "label": "the next output's input debt is one more than the branch wraps say",
+  "find": "\t\tneed = extra;",
+  "replace": "\t\tneed = (short)(extra + 1);"
+ },
+ {
+  "label": "the tracking-mode in-phase rejection is inverted, so the update runs only when the vector carries nothing",
+  "find": "\t\t\t\t\tupdate = mode != 2\n\t\t\t\t\t\t || (unsigned short)(xq + 0x31)\n\t\t\t\t\t\t    > 0x62;",
+  "replace": "\t\t\t\t\tupdate = mode != 2\n\t\t\t\t\t\t || (unsigned short)(xq + 0x31)\n\t\t\t\t\t\t    <= 0x62;"
+ },
+ {
+  "label": "NOTE: FPM_SRE_free is four releases and nothing else, so the three below are measured with the allocator's books."
+ },
+ {
+  "label": "FPM_SRE_free releases only three of the four buffers",
+  "find": "\tsysdep_free(sre->coeff);\n\tsysdep_free(sre->rms_buf);",
+  "replace": "\tsysdep_free(sre->coeff);"
+ },
+ {
+  "label": "FPM_SRE_free releases the history twice and the clock not at all",
+  "find": "\tsysdep_free(sre->clk);\n\tsysdep_free(sre->hist);",
+  "replace": "\tsysdep_free(sre->hist);\n\tsysdep_free(sre->hist);"
+ },
+ {
+  "label": "FPM_SRE_free releases the four buffers in the order init ALLOCATES them rather than the order it releases them in.  SURVIVOR, and no test can be written that fails on it: four unconditional releases with nothing between them and no allocation afterwards, so `allocs`, `frees`, `live`, `free_null` and `bad_free` are identical under any permutation.  The object's order -- clk, hist, coeff, rms_buf, at 0x0aa788, 0x0aa793, 0x0aa79e, 0x0aa7a9 -- is reproduced because the object encodes it, and it is the same order init's realloc path uses.",
+  "find": "\tsysdep_free(sre->clk);\n\tsysdep_free(sre->hist);\n\tsysdep_free(sre->coeff);\n\tsysdep_free(sre->rms_buf);",
+  "replace": "\tsysdep_free(sre->coeff);\n\tsysdep_free(sre->hist);\n\tsysdep_free(sre->clk);\n\tsysdep_free(sre->rms_buf);",
+  "equivalent": true
+ }
+]

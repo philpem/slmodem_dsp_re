@@ -1,0 +1,155 @@
+[
+ {
+  "note": "V90Phase4Demodulator's seven leaf members, against t_v90p4dleaf.  Two shapes of mutation, and the second is the reason the test captures transcripts at all: the placement ones move a store to a neighbouring field or change a state constant, which the whole-object comparison sees, and the DIAGNOSTIC ones swap a format string or the detector whose polarity is printed, which writes the same bytes into the object and can only be caught by comparing what was printed.  Reordering the five stores of `resetBeforRRN` is deliberately NOT here: it is behaviourally equivalent and would report NOT CAUGHT for ever.  What holds that order is finding 617's full-text identity against the blob, not a mutation."
+ },
+ {
+  "label": "enterWaitForCP leaves the WaitForMP state behind",
+  "find": "\tstate = P4D_STATE_WAIT_FOR_V90CP;\n\tcountInState = 0;\n}\n",
+  "replace": "\tstate = P4D_STATE_WAIT_FOR_MP;\n\tcountInState = 0;\n}\n"
+ },
+ {
+  "label": "enterWaitForEd leaves the WaitForMP state behind",
+  "find": "\tstate = P4D_STATE_WAIT_FOR_ED;\n\tcountInState = 0;",
+  "replace": "\tstate = P4D_STATE_WAIT_FOR_MP;\n\tcountInState = 0;"
+ },
+ {
+  "label": "enterWaitForCP and enterWaitForMP have their messages swapped",
+  "find": "\tedprintf(\"V90Phase4Demodulator: enter WaitForV90CP state @ %d\\r\\n\",\n\t\t countInState);\n\tstate = P4D_STATE_WAIT_FOR_V90CP;",
+  "replace": "\tedprintf(\"V90Phase4Demodulator: enter WaitForMP state @ %d\\r\\n\",\n\t\t countInState);\n\tstate = P4D_STATE_WAIT_FOR_V90CP;"
+ },
+ {
+  "label": "enterWaitForEd prints the WaitForMP message",
+  "find": "\tedprintf(\"V90Phase4Demodulator: enter WaitForEd state @ %d\\r\\n\",\n\t\t countInState);",
+  "replace": "\tedprintf(\"V90Phase4Demodulator: enter WaitForMP state @ %d\\r\\n\",\n\t\t countInState);"
+ },
+ {
+  "label": "enterWaitForMP clears the count before printing it",
+  "find": "\tedprintf(\"V90Phase4Demodulator: enter WaitForMP state @ %d\\r\\n\",\n\t\t countInState);\n\tstate = P4D_STATE_WAIT_FOR_MP;\n\tcountInState = 0;",
+  "replace": "\tcountInState = 0;\n\tedprintf(\"V90Phase4Demodulator: enter WaitForMP state @ %d\\r\\n\",\n\t\t countInState);\n\tstate = P4D_STATE_WAIT_FOR_MP;"
+ },
+ {
+  "label": "enterWaitForCP does not clear the count",
+  "find": "\tstate = P4D_STATE_WAIT_FOR_V90CP;\n\tcountInState = 0;",
+  "replace": "\tstate = P4D_STATE_WAIT_FOR_V90CP;"
+ },
+ {
+  "label": "resetRRNDetector resets the two detectors the other way round",
+  "find": "\trDetector1.reset(params->RRN_R_DETECTION_LENGTH, 0x18);\n\trDetector2.reset(0xb4, 0xc);",
+  "replace": "\trDetector2.reset(params->RRN_R_DETECTION_LENGTH, 0x18);\n\trDetector1.reset(0xb4, 0xc);"
+ },
+ {
+  "label": "resetRRNDetector reads the phase 4 detection length, +0x294",
+  "find": "\trDetector1.reset(params->RRN_R_DETECTION_LENGTH, 0x18);",
+  "replace": "\trDetector1.reset(params->PHASE4_R_DETECTION_LENGTH, 0x18);"
+ },
+ {
+  "label": "resetRRNDetector swaps the first detector's two counts",
+  "find": "\trDetector1.reset(params->RRN_R_DETECTION_LENGTH, 0x18);",
+  "replace": "\trDetector1.reset(0x18, params->RRN_R_DETECTION_LENGTH);"
+ },
+ {
+  "label": "resetRRNDetector gives the second detector 0x18 rather than 0xc",
+  "find": "\trDetector2.reset(0xb4, 0xc);",
+  "replace": "\trDetector2.reset(0xb4, 0x18);"
+ },
+ {
+  "label": "resetRRNDetector gives the second detector the parameter too",
+  "find": "\trDetector2.reset(0xb4, 0xc);",
+  "replace": "\trDetector2.reset(params->RRN_R_DETECTION_LENGTH, 0xc);"
+ },
+ {
+  "label": "resetBeforRRN leaves +0x3c at zero",
+  "find": "\tint_0038 = 1;\n\tint_003c = 1;\n\tint_0044 = 0;",
+  "replace": "\tint_0038 = 1;\n\tint_003c = 0;\n\tint_0044 = 0;"
+ },
+ {
+  "label": "resetBeforRRN clears +0x40 as `reset` does",
+  "find": "\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;",
+  "replace": "\tint_0040 = 0;\n\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;"
+ },
+ {
+  "label": "resetBeforRRN does not clear the byte at +0x30",
+  "find": "\tint_0048 = 0;\n\tuchar_0030 = 0;",
+  "replace": "\tint_0048 = 0;"
+ },
+ {
+  "label": "resetBeforRRN clears the count as `reset` does",
+  "find": "\tint_0048 = 0;\n\tuchar_0030 = 0;",
+  "replace": "\tint_0048 = 0;\n\tuchar_0030 = 0;\n\tcountInState = 0;"
+ },
+ {
+  "label": "detectRRN detects on the second R detector",
+  "find": "{\n\tV90RDetector *rd = &rDetector1;\n\n\tif (!rd->detectR(sample))",
+  "replace": "{\n\tV90RDetector *rd = &rDetector2;\n\n\tif (!rd->detectR(sample))"
+ },
+ {
+  "label": "detectRRN prints the second detector's polarity",
+  "find": "\tedprintf(\"V90Phase4Demodulator: Rd detected, polarity = %d\\r\\n\",\n\t\t rd->int_24);",
+  "replace": "\tedprintf(\"V90Phase4Demodulator: Rd detected, polarity = %d\\r\\n\",\n\t\t rDetector2.int_24);"
+ },
+ {
+  "label": "detectRRN takes the pair arm when the session flag is SET",
+  "find": "\tif (sessionFlag == 0) {",
+  "replace": "\tif (sessionFlag != 0) {"
+ },
+ {
+  "label": "detectRRN sets the pair unconditionally",
+  "find": "\tif (sessionFlag == 0) {\n\t\tint_0038 = 1;\n\t\tint_003c = 1;\n\t}",
+  "replace": "\tint_0038 = 1;\n\tint_003c = 1;"
+ },
+ {
+  "label": "detectRRN does not clear +0x28",
+  "find": "\tcountInState = 0;\n\tint_0028 = 0;\n\tif (sessionFlag == 0) {",
+  "replace": "\tcountInState = 0;\n\tif (sessionFlag == 0) {"
+ },
+ {
+  "label": "detectRRN enters the FPE state rather than 9",
+  "find": "\tstate = P4D_STATE_RD_DETECTED;",
+  "replace": "\tstate = P4D_STATE_FPE;"
+ },
+ {
+  "label": "detectRRN answers 1 when the detector declined",
+  "find": "\tif (!rd->detectR(sample))\n\t\treturn 0;",
+  "replace": "\tif (!rd->detectR(sample))\n\t\treturn 1;"
+ },
+ {
+  "label": "detectRRN runs the twelve-sample detector",
+  "find": "\tif (!rd->detectR(sample))",
+  "replace": "\tif (!rd->detectRf(sample))"
+ },
+ {
+  "label": "detectFPE detects on the first R detector",
+  "find": "\tif (!rDetector2.detectRf(sample))",
+  "replace": "\tif (!rDetector1.detectRf(sample))"
+ },
+ {
+  "label": "detectFPE prints the polarity of the detector it ran, not +0x3020",
+  "find": "\t\t rDetector1.int_24);\n\tedprintf(\"V90Phase4Demodulator: enter FPE !\");",
+  "replace": "\t\t rDetector2.int_24);\n\tedprintf(\"V90Phase4Demodulator: enter FPE !\");"
+ },
+ {
+  "label": "detectFPE does not announce the FPE state",
+  "find": "\tedprintf(\"V90Phase4Demodulator: enter FPE !\");\n\tstate = P4D_STATE_FPE;",
+  "replace": "\tstate = P4D_STATE_FPE;"
+ },
+ {
+  "label": "detectFPE announces FPE twice",
+  "find": "\tedprintf(\"V90Phase4Demodulator: enter FPE !\");\n\tstate = P4D_STATE_FPE;",
+  "replace": "\tedprintf(\"V90Phase4Demodulator: enter FPE !\");\n\tedprintf(\"V90Phase4Demodulator: enter FPE !\");\n\tstate = P4D_STATE_FPE;"
+ },
+ {
+  "label": "detectFPE enters state 9 rather than 0x10",
+  "find": "\tstate = P4D_STATE_FPE;\n\tcountInState = 0;\n\tint_0028 = 0;\n\treturn 1;",
+  "replace": "\tstate = P4D_STATE_RD_DETECTED;\n\tcountInState = 0;\n\tint_0028 = 0;\n\treturn 1;"
+ },
+ {
+  "label": "detectFPE does not clear the count",
+  "find": "\tstate = P4D_STATE_FPE;\n\tcountInState = 0;",
+  "replace": "\tstate = P4D_STATE_FPE;"
+ },
+ {
+  "label": "detectFPE answers 1 when the detector declined",
+  "find": "\tif (!rDetector2.detectRf(sample))\n\t\treturn 0;",
+  "replace": "\tif (!rDetector2.detectRf(sample))\n\t\treturn 1;"
+ }
+]

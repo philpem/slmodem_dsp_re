@@ -1,0 +1,33 @@
+{
+  "_why": [
+    "References that resolve on a branch this tree has deliberately NOT merged.",
+    "",
+    "A dangling reference is normally a defect: prose pointing at prose that",
+    "is not there.  These are a different thing -- the entry exists, it is",
+    "just on a branch being held back on purpose, so blocking the gate on",
+    "them would mean master cannot go green until somebody merges a branch",
+    "they have chosen not to merge.",
+    "",
+    "THIS REGISTER GOES STALE LOUDLY, which is the whole point and is copied",
+    "from tools/gccdiverge.json.  refcheck fails if an entry here starts",
+    "RESOLVING -- because that means the branch landed and the entry is now a",
+    "lie -- exactly as it fails for a reference that dangles and is not",
+    "listed.  So this cannot rot into a permanent exemption: the day",
+    "improve/v34-training merges, the gate demands these lines be deleted.",
+    "",
+    "It is not a place to silence an inconvenient reference.  An entry needs",
+    "a branch that really contains the target and a reason a reader can",
+    "check."
+  ],
+
+  "pending": [
+    {
+      "kind": "finding",
+      "refs": ["1904", "1906", "1907", "1911", "1914", "1916", "1918",
+               "1922", "1940", "1941", "1956", "1960", "3200"],
+      "branch": "improve/v34-training",
+      "why": "The bench-side findings that justify the testbench tools citing them -- the pre-emphasis estimator work (1904-1916), the channel shim's model (1918-1956), the shape matcher (1960) and #170's SNR derivation (3200).  Held unmerged until the V.34 receiver deficit is settled, because the branch also carries pre-emphasis and rate-collapse SOURCE changes that are not wanted on master yet.  The findings themselves are sound; only the branch is held.",
+      "cited_by": "testbench/ -- chanshim.py, fitplot.py, freezescan.py, g711level.py, lastlink.py, linesim.py, preemphshape.py, replay.py, snrblocks.py, test_preempshape.py, ab149scan.py"
+    }
+  ]
+}

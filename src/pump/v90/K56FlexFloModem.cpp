@@ -30,12 +30,69 @@
  * -Wunused-parameter is why the parameters below are unnamed.
  */
 
+#include "dsplib/int_complex.h"
 #include "dsplib/K56FlexFloModem.h"
 
 #include "dsplib/sysdep.h"
 
 int
 K56FlexFloModem::getK56FlexMpBits(short *)
+{
+	return 0;
+}
+
+/*
+ * The six visual diagnostics, `31 c0 c3` each, at .text+0x10210, +0x10220,
+ * +0x10230, +0x10240, +0x10250 and +0x10260.  `xor %eax,%eax; ret` and
+ * nothing else: each reports zero points and writes nothing at all through
+ * the array it is handed.
+ *
+ * `VPcmV34GetVisualDiagnostics` calls five of the six -- every selector
+ * except the two resampler ones consumes the result -- so a K56flex session
+ * asking this library for a constellation, an equaliser, a DFE or its
+ * decision errors is told there is nothing to show.  That is the same answer
+ * the rest of the class gives, and K56FlexFloModem.h's file comment is where
+ * the argument that the whole class is unimplemented lives.
+ *
+ * The two RESAMPLER getters are called and their answer is DISCARDED: the
+ * dispatcher overwrites the point with a zero imaginary half and returns 1
+ * regardless.  Reproduced, and the discarding is the caller's; see
+ * src/pump/v34/v34diag.cpp.
+ *
+ * -Wunused-parameter is why the parameters are unnamed.
+ */
+int
+K56FlexFloModem::getConstellation(int_complex *, unsigned long)
+{
+	return 0;
+}
+
+int
+K56FlexFloModem::getLinearEqualizer(int_complex *, unsigned long)
+{
+	return 0;
+}
+
+int
+K56FlexFloModem::getDFE(int_complex *, unsigned long)
+{
+	return 0;
+}
+
+int
+K56FlexFloModem::getDecisionErrors(int_complex *, unsigned long)
+{
+	return 0;
+}
+
+int
+K56FlexFloModem::getResamplerPhase(int_complex *, unsigned long)
+{
+	return 0;
+}
+
+int
+K56FlexFloModem::getResamplerOffset(int_complex *, unsigned long)
 {
 	return 0;
 }

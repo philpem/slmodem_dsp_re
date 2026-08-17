@@ -89,6 +89,7 @@ os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 FINDINGS = "docs/findings.md"
 DEVIATIONS = "docs/deviations.md"
+PENDINGREFS = "tools/pendingrefs.json"
 
 #
 # Both heading levels are in use in findings.md -- 121 at `##` and 99 at
@@ -627,27 +628,81 @@ def check_live_mutants():
     return live
 
 
+def read_pending():
+    """
+    Entries that resolve on a branch this tree has deliberately not merged.
+
+    Returns {(kind, num): (branch, why)}.  Absent or unreadable is empty --
+    the register is an allowance, so failing to read it must make the gate
+    STRICTER, never looser.
+    """
+    try:
+        with open(PENDINGREFS) as f:
+            reg = json.load(f)
+    except (IOError, ValueError):
+        return {}
+    out = {}
+    for e in reg.get("pending", []):
+        for num in e.get("refs", []):
+            out[(e.get("kind", "finding"), num)] = (e.get("branch", "?"),
+                                                    e.get("why", ""))
+    return out
+
+
 def check_dangling():
     known = titles(read(FINDINGS), read(DEVIATIONS))
+    pending = read_pending()
     bad = []
+    held = []
     total = 0
     for path in tracked():
         for kind, num, line, _ in refs_in(path, read(path)):
             total += 1
-            if (kind, num) not in known:
-                bad.append((path, line, kind, num))
+            if (kind, num) in known:
+                continue
+            (held if (kind, num) in pending else bad).append(
+                (path, line, kind, num))
+    #
+    # STALE ENTRIES FAIL, which is the property that stops this register
+    # rotting into a permanent exemption.  A listed reference that RESOLVES
+    # means the branch landed, so the line is now a lie and must go.  Copied
+    # from tools/gccdiverge.json, where an allow-listed test that starts
+    # passing is a failure for the same reason.
+    #
+    stale = sorted(k for k in pending if k in known)
     for path, line, kind, num in bad:
         print("  DANGLING  %s:%d  %s"
               % (path, line, num if kind == "D" else "finding " + num))
+    for kind, num in stale:
+        print("  STALE     tools/pendingrefs.json  %s now RESOLVES on %s -- "
+              "delete the entry"
+              % (num if kind == "D" else "finding " + num, pending[(kind, num)][0]))
+    if held:
+        by_branch = {}
+        for path, line, kind, num in held:
+            by_branch.setdefault(pending[(kind, num)][0], set()).add(num)
+        for branch in sorted(by_branch):
+            nums = sorted(by_branch[branch])
+            print("  held      %d reference(s) to %d entr(y/ies) on the "
+                  "unmerged %s: %s"
+                  % (sum(1 for h in held
+                         if pending[(h[2], h[3])][0] == branch),
+                     len(nums), branch, ", ".join(nums)))
     marks = check_conflict_markers()
     suites = check_suites()
     live = check_live_mutants()
-    print("\n  %d references checked, %d resolve to nothing%s%s%s"
-          % (total, len(bad),
+    #
+    # EVERY COUNT CARRIES ITS DENOMINATOR (finding 2401), including the held
+    # one: "0 resolve to nothing" over a silently exempted set is the same
+    # lie as a coverage tier reporting 0.0% (0/0) and calling it OK.
+    #
+    print("\n  %d references checked, %d resolve to nothing, %d held pending "
+          "an unmerged branch, %d stale entr(y/ies)%s%s%s"
+          % (total, len(bad), len(held), len(stale),
              "" if not marks else ", %d conflict marker(s)" % len(marks),
              "" if not suites else ", %d bad mutation suite(s)" % len(suites),
              "" if not live else ", %d LIVE MUTANT(S)" % len(live)))
-    return 1 if (bad or marks or suites or live) else 0
+    return 1 if (bad or stale or marks or suites or live) else 0
 
 
 def check_since(rev):

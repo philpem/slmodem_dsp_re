@@ -2,17 +2,22 @@
  * V92Modulator.h -- the V.92 upstream modulator: the object that owns the
  * whole transmit graph.
  *
- * Reconstructed from dsplibs.o.  The class has eighteen symbols; TWO of them
- * are written in src/pump/v90/V92Modulator.cpp -- the constructor (C1 at
- * .text+0x15120 and C2 at +0x15400, 734 bytes each) and the destructor (D2 at
- * +0x14050 and D1 at +0x14250, 503 bytes each).  The other sixteen are
- * declared here with the signatures the mangling gives and deliberately left
- * undefined; `progress` alone is 1,075 bytes and none of them has been read.
+ * Reconstructed from dsplibs.o.  The class has eighteen symbols; FOURTEEN of
+ * them are written in src/pump/v90/V92Modulator.cpp -- the constructor (C1 at
+ * .text+0x15120 and C2 at +0x15400, 734 bytes each), the destructor (D2 at
+ * +0x14050 and D1 at +0x14250, 503 bytes each), `reset`, the four `exit*`
+ * members, `enterPhase3`, `enterDataPhase`, `exitCPt`, `getV92TxFilterDelay`
+ * and `mkResampledSignal`.
  *
- * SO THE MAP BELOW IS THE CONSTRUCTOR'S, THE DESTRUCTOR'S AND `reset`'s, and
- * it happens to be almost the whole object: only +0x24 and +0x3c are unnamed,
- * and they are unnamed because NOTHING WRITTEN HERE WRITES THEM.  That is a
- * claim rather than a gap -- see the note below.
+ * FOUR ARE STILL UNWRITTEN and are declared here with the signatures the
+ * mangling gives: `enterPhase4`, `initiateRRN`, `initiateFPE` and `progress`,
+ * the last of which is 1,075 bytes on its own.
+ *
+ * SO THE MAP BELOW IS ALMOST THE WHOLE OBJECT.  The two words the first pass
+ * could not name are named now, by `mkResampledSignal`: +0x3c is the sample
+ * index a resampler phase change takes effect at, and +0x24 is the phase step
+ * itself -- and +0x24 is the one word NO MEMBER OF THIS CLASS WRITES.  See the
+ * note below; it is still a claim rather than a gap, and now a sharper one.
  *
  * THE OBJECT IS 0x90 BYTES AND THAT IS THE ALLOCATION.  `V92Modem::V92Modem`
  * builds it:
@@ -25,15 +30,25 @@
  * field is the four bytes at +0x8c and 0x8c + 4 == 0x90 exactly.
  *
  * ---------------------------------------------------------------------------
- * TWO WORDS ARE LEFT UNINITIALISED, AND THAT IS THE CONSTRUCTOR'S
+ * TWO WORDS ARE LEFT UNINITIALISED, AND ONE OF THEM IS NEVER WRITTEN AT ALL
  *
- * +0x24 and +0x3c are written by neither the constructor nor the `reset` it
- * inlines, so a freshly built V92Modulator carries whatever `sysdep_malloc`
- * left in them until some member not written here fills them.  Finding 1240's
- * shape in a third class, and t_v92mod.cpp holds it: both sides are seeded
- * with the same bytes and never zeroed, so the two words compare equal
- * BECAUSE nobody wrote them, and a reconstruction that helpfully cleared
+ * +0x24 and +0x3c are written by neither the constructor nor `reset`, so a
+ * freshly built V92Modulator carries whatever `sysdep_malloc` left in them.
+ * Finding 1240's shape in a third class, and t_v92mod.cpp holds it: both sides
+ * are seeded with the same bytes and never zeroed, so the two words compare
+ * equal BECAUSE nobody wrote them, and a reconstruction that helpfully cleared
  * either would fail.
+ *
+ * +0x3c IS written, by `progress` -- `movl $0x1,0x38(%esi); mov %ebx,0x3c(%esi)`
+ * at .text+0x14fb4 and the same pair with a 2 at +0x15033 -- and cleared by
+ * `mkResampledSignal` once the change has been applied.
+ *
+ * **+0x24 IS READ BY `mkResampledSignal` AND WRITTEN BY NOTHING IN THE CLASS.**
+ * All eighteen symbols were swept for a store to it and there is none:
+ * `progress`'s four `0x24(%esp)` are its own frame, not the object.  So the
+ * `resamplerPhaseChange == 2` arm adds an UNINITIALISED float to the
+ * resampler's phase unless something outside the class has filled the word
+ * first.  Reproduced with no initialisation added -- docs/deviations.md D800.
  *
  * ---------------------------------------------------------------------------
  * THE SCRAMBLER IS A MEMBER AT +0x54 AND ITS INTERMEDIATE TYPE IS THE THIRD
@@ -141,6 +156,56 @@ template <class T> class Queue;
  * `lea 0x28(,%ebx,4)` are the same ten elements spelled two ways. */
 #define V92MOD_BUF_SLACK	10
 
+/*
+ * WHICH PHASE THE MODULATOR IS IN -- `phase`, +0x2c.  Each of the three is a
+ * literal stored on the instruction after a message that names it, which is
+ * CLAUDE.md's strongest evidence tier:
+ *
+ *     "V92Modulator enter Phase 3"       ->  1    enterPhase3, +0x144bf
+ *     "V92Modulator: enter Phase 4"      ->  2    enterPhase4, +0x148f9
+ *     "V92Modulator:enter  Data Phase:"  ->  3    enterDataPhase, +0x1494a
+ *
+ * `initiateRRN` and `initiateFPE` also store 2, from a guard on 3.  Zero is
+ * what `reset` does NOT store -- nothing clears this field -- so the value out
+ * of the constructor is whatever `sysdep_malloc` left.
+ */
+#define V92MOD_PHASE_3		1
+#define V92MOD_PHASE_4		2
+#define V92MOD_PHASE_DATA	3
+
+/*
+ * WHAT `mkResampledSignal` DOES TO THE RESAMPLER'S PHASE -- the three values
+ * of `resamplerPhaseChange`, +0x38.  `progress` is the only writer of 1 and 2
+ * (.text+0x14fb4 and +0x15033, each storing `resamplerPhaseChangeAt` in the
+ * same breath); `reset`, `enterPhase3` and `mkResampledSignal` itself store 0.
+ *
+ * The two non-zero arms are named by the two messages the arms themselves
+ * print: "V92Modulator: setPhase = 0.5" against the literal 0.5f, and
+ * "V92Modulator: setPhase = %c%d.%05d" against `resamplerPhaseOffset`.
+ */
+#define V92MOD_PHASECHG_NONE	0
+#define V92MOD_PHASECHG_HALF	1
+#define V92MOD_PHASECHG_OFFSET	2
+
+/* The half-sample step the `HALF` arm applies: `fadds .rodata.cst4+0xbc`,
+ * which is 0x3f000000. */
+#define V92MOD_PHASECHG_HALF_STEP	0.5f
+
+/* The scale the diagnostic prints the fractional part of the phase step at --
+ * `flds .rodata.cst4+0xb8` = 0x47c35000 -- and it is the five digits of the
+ * message's own `%05d`. */
+#define V92MOD_PHASE_PRINT_SCALE	100000.0f
+
+/*
+ * WHAT `getV92TxFilterDelay` REPORTS: 18 when `V92_APPLY_TX_SHAPING_FILTER` is
+ * set and 0 when it is not.  `and $0x12,%eax` at .text+0x14461 is the whole of
+ * it, so 18 is a literal in the object and the derivation below is INFERENCE,
+ * not measurement: the shaping filter is `FloatFIR(36, v92TxPreFilter, 99)`
+ * and a linear-phase FIR of 36 taps has a group delay of 18 samples.  The name
+ * records the role the object gives it; the number is the object's.
+ */
+#define V92MOD_TX_FILTER_DELAY	18
+
 class V92Modulator {
 public:
 	V92Modulator(unsigned int nSamples, V92Phase2Info *phase2Info,
@@ -149,25 +214,30 @@ public:
 	~V92Modulator();
 
 	/*
-	 * Declared, not defined.  Argument types are the mangling's and
-	 * exact; return types are not mangled, and `void` here means "not
-	 * established" rather than "measured" -- except `getV92TxFilterDelay`,
-	 * which is 21 bytes ending in a value in %eax.
+	 * Written.  Argument types are the mangling's and exact; return types
+	 * are not mangled, so `void` on these ten is MEASURED -- each leaves
+	 * nothing in %eax -- and `getV92TxFilterDelay`'s `int` is measured the
+	 * other way, 21 bytes ending in a value in %eax.
 	 */
 	void reset();
 	void enterPhase3();
-	void enterPhase4();
 	void enterDataPhase();
 	void exitJa();
 	void exitSilence();
 	void exitSuSecond();
 	void exitTRN1uSecond();
 	void exitCPt();
+	void mkResampledSignal(unsigned int &n);
+	int getV92TxFilterDelay() const;
+
+	/*
+	 * Declared, not defined.  `void` here means "not established" rather
+	 * than "measured".
+	 */
+	void enterPhase4();
 	void initiateRRN();
 	void initiateFPE();
-	void mkResampledSignal(unsigned int &n);
 	void progress(int *a, unsigned int &b, float *c, unsigned int d);
-	int getV92TxFilterDelay() const;
 
 	/* Public for `offsetof`; one access section, as everywhere here. */
 
@@ -216,29 +286,63 @@ public:
 	V92CP *cp;
 
 	/*
-	 * +0x24  NOT WRITTEN by the constructor or by `reset`.  See the note
-	 * at the top of this file: the hole is the claim.
+	 * +0x24  THE PHASE STEP the `OFFSET` arm of `mkResampledSignal` adds to
+	 * the resampler's normalised phase, and the value its diagnostic prints
+	 * as `setPhase = %c%d.%05d` (.rodata.str1.4+0x3838).  A float, forced:
+	 * `fadds 0x24(%ebx)`, `flds 0x24(%ebx)` and `fcomps 0x24(%ebx)` at
+	 * .text+0x14ae6, +0x14b75 and +0x14bdb are all single-precision.
+	 *
+	 * NOTHING IN THE CLASS WRITES IT -- see the note at the top of this
+	 * file, and D800.  The hole is still the claim; it is now a claim about
+	 * all eighteen symbols rather than about two.
 	 */
-	unsigned char pad_24[4];
+	float resamplerPhaseOffset;
 
 	/* +0x28  Cleared by `reset` -- a 32-bit zero, and the same zero is
 	 * passed to `Queue<float>::write`, so it is a float. */
 	float float_28;
 
-	/* +0x2c  Cleared by `reset`. */
-	unsigned int word_2c;
+	/*
+	 * +0x2c  WHICH PHASE IS RUNNING -- 1, 2 or 3, and each of the three is
+	 * named by the message printed on the instruction before the store.
+	 * See the `V92MOD_PHASE_*` block above.  Every `enter*` member returns
+	 * early when it is already at its own value, so each transition happens
+	 * at most once, and `mkResampledSignal` takes its split path only in
+	 * phase 3.  Cleared by `reset`.
+	 */
+	unsigned int phase;
 
-	/* +0x30  Cleared by `reset`. */
+	/* +0x30  Cleared by `reset`, `enterPhase3`, `enterPhase4` and
+	 * `enterDataPhase`.  Nothing written reads it. */
 	unsigned int word_30;
 
-	/* +0x34  Cleared by `reset`. */
+	/*
+	 * +0x34  Cleared by `reset`, by both `enter` members, and by all five
+	 * `exit` members; set to 10 by `enterDataPhase` and to nothing else by
+	 * anything written.  `V92Phase4Modulator.h`'s note on its own +0x0c
+	 * reads `progress` latching that field into this one, so this is a
+	 * status code the layer above consumes -- but `progress` is unwritten,
+	 * so what the codes MEAN is not established and the offset name stays.
+	 */
 	unsigned int word_34;
 
-	/* +0x38  Cleared by `reset`. */
-	unsigned int word_38;
+	/*
+	 * +0x38  WHICH RESAMPLER PHASE CHANGE IS PENDING: 0, 1 or 2, and the
+	 * `V92MOD_PHASECHG_*` block above says how each was named.
+	 * `mkResampledSignal` acts on it and clears it, `progress` sets it, and
+	 * `reset` and `enterPhase3` clear it.
+	 */
+	unsigned int resamplerPhaseChange;
 
-	/* +0x3c  NOT WRITTEN.  The second of the two holes. */
-	unsigned char pad_3c[4];
+	/*
+	 * +0x3c  HOW MANY INPUT SAMPLES OF THE BLOCK ARE RESAMPLED BEFORE THE
+	 * PENDING CHANGE TAKES EFFECT.  `mkResampledSignal` resamples
+	 * `resampleIn[0 .. n)` at the old phase, changes the phase, resamples
+	 * `resampleIn[n .. blockRemaining)` at the new one, and then clears
+	 * both this and `resamplerPhaseChange`.  Written only by `progress`,
+	 * alongside the code above.  Usage inference; nothing prints it.
+	 */
+	unsigned int resamplerPhaseChangeAt;
 
 	/* +0x40  The constructor's SEVENTH argument.  Read back by the
 	 * constructor itself for the phase 3 and phase 4 modulators and for
@@ -274,15 +378,26 @@ public:
 	 */
 	short *buf_7c;
 
-	/* +0x80  `(blockSize + 10) * 4` bytes: `add $0xa; shl $2`. */
-	int *buf_80;
+	/*
+	 * +0x80  THE RESAMPLER'S INPUT, `(blockSize + 10) * 4` bytes:
+	 * `add $0xa; shl $2`.  `float *` is the CALLEE'S -- all three of
+	 * `mkResampledSignal`'s calls pass it as `Resampler::resample`'s
+	 * `const float *in`, and the second passes `resampleIn + n`, so the
+	 * element width is four AND the element type is float.  It was an
+	 * `int *` while nothing had read it; that is CLAUDE.md's second
+	 * evidence tier arriving.  Sized from `blockSize`, which is the rate
+	 * the resampler reads at.
+	 */
+	float *resampleIn;
 
 	/*
-	 * +0x84  `(nSamples + 10) * 4` bytes, from the CONSTRUCTOR ARGUMENT
-	 * and not from `blockSize`: `lea 0x28(,%ebx,4)` with %ebx holding the
-	 * argument, computed once and used for this and for +0x8c.
+	 * +0x84  THE RESAMPLER'S OUTPUT, `(nSamples + 10) * 4` bytes, from the
+	 * CONSTRUCTOR ARGUMENT and not from `blockSize`: `lea 0x28(,%ebx,4)`
+	 * with %ebx holding the argument, computed once and used for this and
+	 * for +0x8c.  `nSamples` is the rate the resampler WRITES at, which is
+	 * the second thing saying which of the pair is the input.
 	 */
-	float *buf_84;
+	float *resampleOut;
 
 	/*
 	 * +0x88  `blockSize * 8` bytes: `shl $0x3` and no slack.  The element
@@ -292,9 +407,14 @@ public:
 	 */
 	void *buf_88;
 
-	/* +0x8c  `(nSamples + 10) * 4` bytes, the same expression as +0x84
-	 * and the same register; the last four bytes of the object. */
-	float *buf_8c;
+	/*
+	 * +0x8c  WHERE THE SECOND SEGMENT IS RESAMPLED TO, `(nSamples + 10) * 4`
+	 * bytes -- the same expression as +0x84 and the same register; the last
+	 * four bytes of the object.  `mkResampledSignal` resamples the tail of
+	 * the block here and then copies it up behind the head in `resampleOut`,
+	 * which is why the two are the same size.
+	 */
+	float *resampleTail;
 };
 
 #endif /* DSPLIB_V92MODULATOR_H */

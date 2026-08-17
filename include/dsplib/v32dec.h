@@ -9,13 +9,15 @@
  * gives the carrier PLL its error -- writes an ideal magnitude to `mag`, and
  * returns the decoded bits.
  *
- * ONE of the nine slicers is NOT here.  `FSE_decision_16pt` indexes
- * `DECv32_MAG9600` out of bounds and cannot be reproduced across builds
- * (finding 1603, D302), so it is not prototyped: a declaration with no
- * definition would be a claim this tree cannot honour.  The other eight are.
- * The four trellis ones -- `_16Tpt`, `_32pt`, `_64pt` and `_128pt` -- were
- * blocked on `VTB_decoder` (finding 1602) until finding 3210's Viterbi batch
- * landed it.
+ * ALL NINE ARE HERE NOW.  `FSE_decision_16pt` was the last one out: it
+ * indexes `DECv32_MAG9600` thousands of entries past the end (finding 1603,
+ * D302) and only ONE of its three reachable indices reads a byte the blob
+ * carries with it into a link, so that store is fixed behind
+ * `DSPLIB_REPRODUCE_BUGS` and only that ring's `*mag` is compared.
+ * Everything else about the function is ordinary and is compared on every
+ * trial -- findings 3800 and 3801.  The four trellis ones -- `_16Tpt`,
+ * `_32pt`, `_64pt` and `_128pt` -- were blocked on `VTB_decoder` (finding
+ * 1602) until finding 3210's Viterbi batch landed it.
  */
 
 #ifndef DSPLIB_V32DEC_H
@@ -74,6 +76,13 @@ unsigned short FSE_decision_CD(struct fpm_fse *state, short *angle,
 			       short *mag);
 unsigned short FSE_decision_AB(struct fpm_fse *state, short *angle,
 			       short *mag);
+
+/*
+ * 9600 bit/s with no trellis: a sixteen-point decision reported as four
+ * differentially encoded bits.  It installs no successor.
+ */
+unsigned short FSE_decision_16pt(struct fpm_fse *state, short *angle,
+				 short *mag);
 
 /*
  * THE FOUR TRELLIS SLICERS.  Each decides a point, writes its ideal angle and

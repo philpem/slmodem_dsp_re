@@ -5,18 +5,18 @@
  },
  {
   "label": "the raw buffer at +0x08 is a byte short",
-  "find": "\tbuf_08 = sysdep_malloc(V92TX_BUF08_BYTES);",
-  "replace": "\tbuf_08 = sysdep_malloc(V92TX_BUF08_BYTES - 1);"
+  "find": "\tbitBuffer = (unsigned char *)sysdep_malloc(V92TX_BUF08_BYTES);",
+  "replace": "\tbitBuffer = (unsigned char *)sysdep_malloc(V92TX_BUF08_BYTES - 1);"
  },
  {
   "label": "+0x0c is not cleared",
-  "find": "\tword_0c = 0;\n\tword_04 = 0;",
-  "replace": "\tword_04 = 0;"
+  "find": "\tbitsBuffered = 0;\n\tK = 0;",
+  "replace": "\tK = 0;"
  },
  {
   "label": "+0x04 is not cleared",
-  "find": "\tword_0c = 0;\n\tword_04 = 0;\n",
-  "replace": "\tword_0c = 0;\n"
+  "find": "\tbitsBuffered = 0;\n\tK = 0;\n",
+  "replace": "\tbitsBuffered = 0;\n"
  },
  {
   "label": "the one-byte buffer is allocated and not cleared",
@@ -55,8 +55,8 @@
  },
  {
   "label": "the raw buffer's null test is dropped",
-  "find": "\tif (buf_08 != 0)\n\t\tsysdep_free(buf_08);",
-  "replace": "\tsysdep_free(buf_08);"
+  "find": "\tif (bitBuffer != 0)\n\t\tsysdep_free(bitBuffer);",
+  "replace": "\tsysdep_free(bitBuffer);"
  },
  {
   "label": "the modulus encoder's null test is dropped",

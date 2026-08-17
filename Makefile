@@ -4,7 +4,7 @@
 #
 #	Self-contained: this tree never builds from, or writes into,
 #	../slmodemd or ../re.  The only thing it reads outside itself is
-#	the reference object ../slmodemd/dsplibs.o.
+#	the reference object ref/slmodemd/dsplibs.o.
 #
 ###########################################################################
 
@@ -18,7 +18,7 @@
 # AND IT NO LONGER HAS TO BE PASSED.  Agent worktrees live under
 # `.claude/worktrees/`, where `../slmodemd` is `.claude/worktrees/slmodemd` and
 # does not exist, so every worktree run died at `No rule to make target
-# '../slmodemd/dsplibs.o'` until someone remembered the override.  The default
+# 'ref/slmodemd/dsplibs.o'` until someone remembered the override.  The default
 # is now resolved against the MAIN REPOSITORY rather than against $(CURDIR):
 # `--git-common-dir` names the main tree's .git from inside any worktree, which
 # is the same trick `prereq` below already uses to find spandsp, and outside a
@@ -29,7 +29,7 @@
 # expansion.  `make -s print-BLOB` says what it resolved to.
 #
 GIT_COMMON_DIR := $(shell git rev-parse --git-common-dir 2>/dev/null)
-BLOB       ?= $(abspath $(dir $(GIT_COMMON_DIR))../slmodemd/dsplibs.o)
+BLOB       ?= ref/slmodemd/dsplibs.o
 #
 # EXPORTED, because the recipes are not the only thing that opens it.
 # `tools/debugaudit.py` and `tools/coverage.py` are invoked with no path and
@@ -78,7 +78,23 @@ export BLOB
 # twelve cores with three agents running.
 J          ?= $(shell echo $$(( $$(nproc 2>/dev/null || echo 4) / 2 )) )
 J          := $(if $(filter 0,$(J)),1,$(J))
+#
+# TOP LEVEL ONLY, and the guard is load-bearing.  `-j` set from a makefile is
+# FORCED: a sub-make re-reading this file discards the jobserver it inherited
+# ("make[1]: warning: -j6 forced in makefile: resetting jobserver mode") and
+# starts its own $(J) jobs, so an explicit `make phase -j3` became -j6 in the
+# sub-make and the caller's budget was silently doubled.  Measured on an
+# eight-tier model: without the guard, `-j3` ran in 2.01 s, which is the -j6
+# time; with it, 3.00 s, 2.00 s and 8.01 s for `-j3`, none and `-j1` -- exactly
+# the numbers the non-recursive shape gives.  At MAKELEVEL 0 nothing changes.
+#
+# That matters to `phase` (3521) and to `one` above it, both of which recurse,
+# and it matters more than tidiness: six agents each asking for -j3 and each
+# getting -j6 is 36 jobs on twelve cores, which is the load the paragraph above
+# says invalidates the bench.
+ifeq ($(MAKELEVEL),0)
 MAKEFLAGS  += -j$(J) --output-sync=target
+endif
 BUILD      := build
 
 # 32-bit is forced by the reference object, not by our own code -- the
@@ -571,7 +587,52 @@ refs:
 # the main repository's .git from inside any worktree, which is how the main
 # tree is located without hard-coding a path.
 #
-prereq:
+# `blobcheck` runs first, because everything downstream is measured AGAINST the
+# blob and a wrong one is not detectable from the results.
+#
+# The reference object.  Every differential and codegen number this tree has
+# ever quoted is relative to it.
+#
+BLOB_SHA256 := 1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379
+
+# WHY THIS EXISTS.  The guards added in 3110 and 3122 refuse an EMPTY
+# denominator -- no objects, no symbols.  They cannot refuse a WRONG one: a
+# different but valid ELF compares perfectly happily and yields confident
+# numbers that are all measured against the wrong binary.  There are four files
+# named `dsplibs.o*` under the sibling `d-modem/` tree and three of them are
+# different objects; `d-modem/slmodemd/dsplibs.o` is the most plausible-looking
+# path of the lot and is NOT the reference.  Only `.bak` beside it matches.
+# This is the last silent-wrong-input hole in the apparatus, on the one input
+# that cannot be reconstructed if it is wrong.
+#
+blobcheck:
+	@test -f $(BLOB) || { \
+	    echo "blobcheck: REFUSING to run -- BLOB does not exist."; \
+	    echo "    BLOB = $(BLOB)"; \
+	    echo "  From a worktree the default resolves through"; \
+	    echo "  \`git rev-parse --git-common-dir\`; pass BLOB=/abs/path if that"; \
+	    echo "  is not where the object lives."; \
+	    exit 1; }
+	@command -v sha256sum >/dev/null || { \
+	    echo "blobcheck: REFUSING to run -- no sha256sum, so the blob's"; \
+	    echo "  identity cannot be established.  A check that cannot run must"; \
+	    echo "  not report OK (finding 134)."; \
+	    exit 1; }
+	@got=$$(sha256sum $(BLOB) | cut -d' ' -f1); \
+	if [ "$$got" != "$(BLOB_SHA256)" ]; then \
+	    echo "blobcheck: REFUSING to run -- BLOB is NOT the reference object."; \
+	    echo "    BLOB     $(BLOB)"; \
+	    echo "    sha256   $$got"; \
+	    echo "    expected $(BLOB_SHA256)"; \
+	    echo "  Every number below would be measured against the wrong binary"; \
+	    echo "  and would look entirely normal.  Three files under d-modem/"; \
+	    echo "  share this name and are different objects; the verified backup"; \
+	    echo "  is d-modem/slmodemd/dsplibs.o.bak, not the .o beside it."; \
+	    exit 1; \
+	fi; \
+	echo "blobcheck: $(BLOB) is the reference object ($$(echo $$got | cut -c1-16)...)"
+
+prereq: blobcheck
 	@if [ ! -e $(SPANDSP) ]; then \
 	    main=$$(cd $$(git rev-parse --git-common-dir)/.. && pwd); \
 	    if [ -d "$$main/$(SPANDSP)" ]; then \
@@ -607,7 +668,33 @@ prereq:
 # the gate.  Do not "fix" the duplication by having this target stop checking.
 COVCOUNTS  := build-cov/measured.txt
 
-phase: prereq period test check64 interop params coverage debugcov onedef
+# THE TIERS SIT BEHIND `prereq`, NOT BESIDE IT.  This used to read
+#
+#     phase: prereq period test check64 interop params coverage debugcov onedef
+#
+# which makes `prereq` a PREREQUISITE and not a barrier: under -jN make starts
+# it alongside the other eight instead of before them.  Measured, and it is not
+# a near miss -- in one -j3 run `onedef`, the LAST name on that line, finished
+# before `prereq`, the first, had done anything, with 778 compiles already
+# launched; on a WARM tree, where the five interop link rules are runnable at
+# once, `prereq` did not run at all and `make phase -j3` died at
+# `Makefile:685: build/test/t_spandsp_b103` naming a link line rather than the
+# missing library -- which is the exact diagnosis finding 1563 added `prereq`
+# to prevent.
+#
+# An order-only `| prereq` on the eight tiers does NOT fix it, and that was
+# measured too: what fails is `build/test/t_spandsp_b103`, a PREREQUISITE of
+# `interop`, and make builds it concurrently with `prereq` however `interop`'s
+# own edges are drawn.  A target with ONE prerequisite has nothing to race, so
+# `prereq` stays alone on the line and the tiers move into the recipe.
+#
+# `$(MAKE)` is what marks that line recursive, which is what carries -jN into
+# the sub-make through the jobserver, so the eight still run in parallel with
+# each other.  Findings 1563, 3215 and 3521.
+PHASE_TIERS := period test check64 interop params coverage debugcov onedef
+
+phase: prereq
+	@$(MAKE) --no-print-directory $(PHASE_TIERS)
 	@echo
 	@test -s $(COVCOUNTS) || { \
 	    echo "phase boundary: REFUSING to say OK -- $(COVCOUNTS) is missing,"; \

@@ -20,6 +20,16 @@ hard failure whatever build it came from — never a tolerance to widen.
 
 Run `make phase`, not `make test`.
 
+**IT IS A RULE ABOUT `src/`, AND `testbench/` IS NOT `src/`.** The harness is
+measurement apparatus -- it places calls, records both ends, and analyses what
+came back. There is no blob to be differentially identical to, so the rule
+cannot apply to it and must not be read as forbidding a commit there. What
+DOES apply is the discipline those tools were built under and which cost more
+to learn: a detector must report its denominator, and a tool that prints
+nothing is indistinguishable from a tool that is broken (findings 134, 2400,
+2401). Show a new analysis firing on a known input before trusting a clean
+run from it.
+
 ## Budget your turns, not your reading
 
 Finding 220 measured this, so it is not a guess. **Context growth is
@@ -181,18 +191,49 @@ is still the fast loop between commits.
 The modern build runs in the same `phase` and still has to pass. It is the
 portability check, and `make check64` proves the tree is 64-bit clean. Where
 GCC 13 provably cannot reproduce the object from correct source, the site is
-declared in `tools/gccdiverge.json` -- five entries today, ten checks --
+declared in `tools/gccdiverge.json` -- seven entries today, twelve checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
 a stale entry (an allow-listed test that starts passing) fails the gate.
 **`make period` has no allow-list and is not getting one.**
 
-Four of those five are one cause and were added together: the object's
-equality tests are a single ordered `fcom` with no parity test, which GCC 13
+**AN ENTRY COSTS ITS BINARY'S WHOLE MUTATION SURFACE, so the divergent check
+goes in a binary of its own.** `tools/mutate.py` judges a mutant caught by a
+non-zero exit, and a declared binary exits non-zero on the UNMUTATED source --
+so it cannot score a mutation set against that baseline and it refuses, for
+the SUITE and not the row. That silently removed nine suites and 647 verdicts
+before anyone counted them (findings 2157 and 3002). Three binaries now carry
+one declared check each for this reason -- `t_v90p4dnan`, `t_v92ecnan`,
+`t_v90adidnan` -- and **none of them has a mutation suite**, because a
+registered suite that can never be recorded reads MISSING to
+`mutsnap.py --check` and fails the gate. `t_v92ecparams` is the same move the
+other way round: three GREEN members lifted out of a declared parent, so it
+keeps its suite. Split the VALUE where you can rather than the group -- the
+blob treats a NaN and 177.0f as one input, so `t_v90leaves` lost one check of
+4,570 and kept every shape. Findings 6000, 6001 and 6002.
+
+`t_v90equproc` is declared without being a split -- it is `V90Equalizer::
+process`'s own binary and its divergence is the whole test's, not one check
+lifted out of a healthy group -- and the no-suite rule binds it just the same.
+**Do not register a mutation suite for it.**
+
+**The seven are two causes, and only two.** Five of them are the object's
+equality tests: a single ordered `fcom` with no parity test, which GCC 13
 will not emit at all -- `-mno-ieee-fp` is accepted by it and does nothing, and
 `-ffinite-math-only` does the job by withdrawing NaN semantics from the whole
 translation unit, which breaks eleven other sites that depend on them. So the
 source is the object's, `make period` proves it, and the modern build
-declares. Findings 2300 and 2304.
+declares. `t_agc`, `t_v90equ`, `t_v92ecnan`, `t_v90adidnan` and `t_v90p4dnan`.
+Findings 2300 and 2304.
+
+The other two are **x87 excess precision**, where the object narrows an
+intermediate the modern compiler keeps at 80 bits: `t_psd` in the FFT
+butterflies reaching a decibel (1453), and `t_v90equproc` on the one
+subtraction inside `V90Equalizer::process` whose difference feeds the squared
+error, the DFE step and the high-error test (6203). Neither is closable by
+choosing a type -- 6203 measured all three candidates, and the `float` the
+author wrote is the only one that is exactly green on the period compiler.
+`-fexcess-precision=standard` would close both and is a translation-unit-wide
+change to flags this tree derived from the object.
 
 **A rejection in `src/` under GCC 3.4.2 is a finding, not a portability
 nuisance** -- the author wrote this code for that compiler, so anything it
@@ -522,7 +563,7 @@ Task numbers are not safe across sessions either: two task stores exist whose
     log everybody read the tail of, so `make phase` gained a `prereq` target
     that runs FIRST, refuses if the library is absent, and symlinks the main
     tree's copy when it can find one (finding 1563).
-  - `BLOB ?= ../slmodemd/dsplibs.o` pointed at `.claude/worktrees/slmodemd` and
+  - `BLOB ?= ref/slmodemd/dsplibs.o` pointed at `.claude/worktrees/slmodemd` and
     every run died at `No rule to make target`. Loud, so not the same class of
     bug, but it blocked every worktree run until someone passed `BLOB=/abs/…`.
     The default is now resolved through `git rev-parse --git-common-dir` —

@@ -34,18 +34,18 @@
  },
  {
   "label": "the bit count is read from the wrong parameter word",
-  "find": "\tfield_48 = v92me_param(p, 0x00);",
-  "replace": "\tfield_48 = v92me_param(p, 0x04);"
+  "find": "\tfield_48 = p->K;",
+  "replace": "\tfield_48 = (unsigned int)p->modulosEncoderPresent;"
  },
  {
   "label": "the twelve moduli are copied one word high",
-  "find": "\tfield_18 = v92me_param(p, 0x1c);",
-  "replace": "\tfield_18 = v92me_param(p, 0x18);"
+  "find": "\tfield_18 = p->m[0];",
+  "replace": "\tfield_18 = (unsigned int)p->gain;"
  },
  {
   "label": "the last modulus is copied from one word past the block",
-  "find": "\tfield_44 = v92me_param(p, 0x48);",
-  "replace": "\tfield_44 = v92me_param(p, 0x4c);"
+  "find": "\tfield_44 = p->m[11];",
+  "replace": "\tfield_44 = p->lz1;"
  },
  {
   "label": "the wrapping product misses its last factor",

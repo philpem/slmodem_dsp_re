@@ -20,6 +20,10 @@
   "src/callprog/callprog.c",
   "build/test/t_callprog_progress"
  ],
+ "dcr": [
+  "src/service/dcr.c",
+  "build/test/t_dcr"
+ ],
  "dialer": [
   "src/dialer/dialer.c",
   "build/test/t_dialerprog"
@@ -47,6 +51,30 @@
  "floatarma": [
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
+ ],
+ "fpmmtd": [
+  "src/dsp/fpm_mtd.c",
+  "build/test/t_fpm_mtd"
+ ],
+ "fpmmtdlayout": [
+  "src/dsp/fpm_mtd.c",
+  "build/test/t_fpm_phasor"
+ ],
+ "fpmphasor": [
+  "src/dsp/fpm_phasor.c",
+  "build/test/t_fpm_phasor"
+ ],
+ "fpmpps": [
+  "src/dsp/fpm_pps.c",
+  "build/test/t_fpm_pps"
+ ],
+ "fpmsre": [
+  "src/dsp/fpm_sre.c",
+  "build/test/t_fpm_sre"
+ ],
+ "fpmtonekill": [
+  "src/dsp/fpm_tone.c",
+  "build/test/t_fpm_tone"
  ],
  "gtonedet": [
   "src/dsp/GenericToneDetector.cpp",
@@ -87,6 +115,22 @@
  "scrambler": [
   "include/dsplib/Scrambler.h",
   "build/test/t_scrambler"
+ ],
+ "v22dec": [
+  "src/pump/v22/v22dec.c",
+  "build/test/t_v22dec"
+ ],
+ "v22fp": [
+  "src/pump/v22/v22fp.c",
+  "build/test/t_v22fpcreate"
+ ],
+ "v22fse": [
+  "src/pump/v22/v22_fse.c",
+  "build/test/t_v22_fse"
+ ],
+ "v22recv": [
+  "src/pump/v22/v22_fse.c",
+  "build/test/t_v22recv"
  ],
  "v34datapump": [
   "src/pump/v34/v34hshak.c",
@@ -263,6 +307,10 @@
  "v90cp": [
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cp"
+ ],
+ "v90cpinfo": [
+  "src/pump/v90/V90CP.cpp",
+  "build/test/t_v90cpinfo"
  ],
  "v90cpmembers": [
   "src/pump/v90/V90ConstellationPower.cpp",
@@ -468,6 +516,14 @@
   "src/pump/v90/V92Transmitter.cpp",
   "build/test/t_v92tx"
  ],
+ "v92txreset": [
+  "src/pump/v90/V92Transmitter.cpp",
+  "build/test/t_v92txreset"
+ ],
+ "v92unpck": [
+  "src/pump/v90/V92ParamsInfo.c",
+  "build/test/t_v92unpck"
+ ],
  "vpcmcreate": [
   "src/pump/v34/v34pcmcreate.cpp",
   "build/test/t_vpcmcreate"
@@ -512,21 +568,17 @@
   "src/pump/v90/VPcmXfTerm.cpp",
   "build/test/t_v90demod"
  ],
- "v22fse": [
-  "src/pump/v22/v22_fse.c",
-  "build/test/t_v22_fse"
+ "v90specialcond": [
+  "src/pump/v90/V90SpectralVerifier.cpp",
+  "build/test/t_v90specialcond"
  ],
- "v22dec": [
-  "src/pump/v22/v22dec.c",
-  "build/test/t_v22dec"
+ "fpmfserecv": [
+  "src/dsp/fpm_fse.c",
+  "build/test/t_fpm_fse_recv"
  ],
- "v22recv": [
-  "src/pump/v22/v22_fse.c",
-  "build/test/t_v22recv"
- ],
- "v22fp": [
-  "src/pump/v22/v22fp.c",
-  "build/test/t_v22fpcreate"
+ "v90demap": [
+  "src/pump/v90/V90Demapper.cpp",
+  "build/test/t_v90demap"
  ],
  "vparser": [
   "src/core/Vparser.c",
@@ -539,5 +591,121 @@
  "v92loadparams": [
   "src/pump/v90/V92Parameters.cpp",
   "build/test/t_v90loadparams"
+ ],
+ "v90sbeproc": [
+  "src/pump/v90/V90SignBitsExtractor.cpp",
+  "build/test/t_v90demap"
+ ],
+ "v17data": [
+  "src/pump/v17/v17data.c",
+  "build/test/t_v17data"
+ ],
+ "v29data": [
+  "src/pump/v29/v29data.c",
+  "build/test/t_v29data"
+ ],
+ "v32data": [
+  "src/pump/v32/v32data.c",
+  "build/test/t_v32data"
+ ],
+ "v92btosproc": [
+  "src/pump/v90/V92BitsToSymbol.cpp",
+  "build/test/t_v92btosproc"
+ ],
+ "v92btosprochdr": [
+  "include/dsplib/V92BitsToSymbol.h",
+  "build/test/t_v92btosproc"
+ ],
+ "v92txproc": [
+  "src/pump/v90/V92Transmitter.cpp",
+  "build/test/t_v92btosproc"
+ ],
+ "v92cpcrc": [
+  "src/pump/v90/V92CP.cpp",
+  "build/test/t_v92cpcrc"
+ ],
+ "v90cpleaf": [
+  "src/pump/v90/V90CP.cpp",
+  "build/test/t_v90cpleaf"
+ ],
+ "v90sbereset": [
+  "src/pump/v90/V90SignBitsExtractor.cpp",
+  "build/test/t_v90sbereset"
+ ],
+ "v90btsproc": [
+  "src/pump/v90/V90BitsToSymbol.cpp",
+  "build/test/t_v90btsproc"
+ ],
+ "v90p4dleaf": [
+  "src/pump/v90/V90Phase4Demodulator.cpp",
+  "build/test/t_v90p4dleaf"
+ ],
+ "v90cpb2i": [
+  "src/pump/v90/V90CP.cpp",
+  "build/test/t_v90cpb2i"
+ ],
+ "v90trn2design": [
+  "src/pump/v90/V90TRN2Designer.cpp",
+  "build/test/t_v90trn2design"
+ ],
+ "v92p4gen": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4gen"
+ ],
+ "v92p4sym": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4sym"
+ ],
+ "v90p4ddec": [
+  "src/pump/v90/V90Phase4Demodulator.cpp",
+  "build/test/t_v90p4ddec"
+ ],
+ "v92info": [
+  "src/pump/v90/V92CP.cpp",
+  "build/test/t_v92info"
+ ],
+ "v92ecparams": [
+  "src/pump/v90/V92EchoCanceller.cpp",
+  "build/test/t_v92ecparams"
+ ],
+ "v90dataph": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90dataph"
+ ],
+ "v90p4mtab": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90p4mtab"
+ ],
+ "v90p4mgen": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90p4mgen"
+ ],
+ "v90eqdata": [
+  "src/pump/v90/V90Equalizer.cpp",
+  "build/test/t_v90eqdata"
+ ],
+ "v34diag": [
+  "src/pump/v34/v34diag.cpp",
+  "build/test/t_v34diag"
+ ],
+ "v34vdiag": [
+  "src/pump/v34/v34diag.cpp",
+  "build/test/t_v34diag"
+ ],
+ "v34diagflo": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_v34diag"
+ ],
+ "v34diagk56": [
+  "src/pump/v90/K56FlexFloModem.cpp",
+  "build/test/t_v34diag"
+ ],
+ "v92modstate": [
+  "src/pump/v90/V92Modulator.cpp",
+  "build/test/t_v92modstate"
+ ],
+ "v92p4reset": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4reset"
  ]
 }

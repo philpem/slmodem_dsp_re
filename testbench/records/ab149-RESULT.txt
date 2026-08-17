@@ -1,0 +1,32 @@
+====================================================================
+1. CONNECT SUCCESS  (checked first -- this is where 1932 failed)
+====================================================================
+   arm 0 (control): 11/12 connected
+   arm 1 (treatment): 9/12 connected
+
+====================================================================
+2. PRIMARY: handshakes in a fixed 45 s window (>=45 s carrier)
+====================================================================
+   arm 0 (control  ) n=5   median 3.0  mean 3.20   [2, 3, 3, 3, 5]
+   arm 1 (treatment) n=5   median 1.0  mean 1.60   [1, 1, 1, 2, 3]
+
+====================================================================
+3. SECONDARY (reported, not decisive)
+====================================================================
+   arm 0  median rate 24000    span-matched 28800.0  jb events/s 0.410
+        dest 1901: [4800, 7200, 12000, 14400, 14400]
+        dest 1902: [24000, 28800, 28800, 28800, 28800, 28800]
+   arm 1  median rate 28800    span-matched 14400    jb events/s 0.299
+        dest 1901: [14400, 14400, 14400, 14400]
+        dest 1902: [28800, 28800, 28800, 28800, 28800]
+
+====================================================================
+4. KEYSTONE: do jitter-buffer underruns cluster before retrains?
+====================================================================
+   underruns/s in the 2.0 s before a retrain : 0.659
+   underruns/s over the whole call            : 0.597
+   ratio (>1 means they CLUSTER before retrains): 1.10x
+
+   A ratio near 1 means underruns are simply common and any
+   clustering is an artefact of that -- which is exactly how the
+   tap-drift and rate-overshoot hypotheses died (finding 1918).

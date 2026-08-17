@@ -45,12 +45,12 @@
  },
  {
   "label": "ctor: +0x2f9c is left as it was found",
-  "find": "\tcleared_2f9c = 0;\n\tmappingParams2 = mpsB;",
+  "find": "\tword_2f9c = 0;\n\tmappingParams2 = mpsB;",
   "replace": "\tmappingParams2 = mpsB;"
  },
  {
   "label": "ctor: +0x2fa0 is left as it was found",
-  "find": "\tcleared_2fa0 = 0;\n\tif (bts) {",
+  "find": "\tword_2fa0 = 0;\n\tif (bts) {",
   "replace": "\tif (bts) {"
  },
  {

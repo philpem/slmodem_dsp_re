@@ -1048,25 +1048,34 @@ build_params(const struct pre_spec *spec, int trial)
 		pre_params[i] = (unsigned char)((lfsr >> 3) | 1u);
 	}
 
-	w = (int *)(void *)p->pad_00;
+	/*
+	 * These three runs were `pad_00 + 7`, `pad_6c` and `pad_9c` until the
+	 * unpacker named them.  The offsets they land on have not moved --
+	 * `w` is kept so the arithmetic below is unchanged -- but the names
+	 * now say which quantity each one is.
+	 */
+	w = (int *)(void *)p->m;
 	for (i = 0; i < 12; i++)
-		w[7 + i] = spec->steps[i];	/* +0x1c .. +0x48 */
-	w = (int *)(void *)p->pad_6c;
+		w[i] = spec->steps[i];		/* +0x1c .. +0x48 */
+	w = (int *)(void *)p->LC;
 	for (i = 0; i < 6; i++)
 		w[i] = spec->moduli[i];		/* +0x6c .. +0x80 */
-	w = (int *)(void *)p->pad_9c;
+	w = (int *)(void *)p->indexConstel;
 	for (i = 0; i < 6; i++)
 		w[i] = spec->selectors[i];	/* +0x9c .. +0xb0 */
 	for (i = 0; i < PRE_CONST; i++) {
 		switch (spec->kind) {
 		case PRE_KIND_HUGE:
-			p->constellations[i] = (void *)&pre_const_huge[0];
+			p->constellations[i] =
+			    (int *)(void *)&pre_const_huge[0];
 			break;
 		case PRE_KIND_FALLING:
-			p->constellations[i] = (void *)&pre_const_falling[0];
+			p->constellations[i] =
+			    (int *)(void *)&pre_const_falling[0];
 			break;
 		default:
-			p->constellations[i] = (void *)&pre_const[i][0];
+			p->constellations[i] =
+			    (int *)(void *)&pre_const[i][0];
 			break;
 		}
 	}

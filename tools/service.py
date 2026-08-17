@@ -53,7 +53,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 ap = argparse.ArgumentParser(
     description="Partition the unwritten symbols by service.")
 ap.add_argument("--obj", default=os.environ.get("BLOB",
-                                                "../slmodemd/dsplibs.o"),
+                                                "ref/slmodemd/dsplibs.o"),
                 help="the blob; also exported as BLOB for closure.py")
 ap.add_argument("--tumap", default="build/tumap.json")
 ap.add_argument("--list", choices=["data", "fax", "other", "none"],

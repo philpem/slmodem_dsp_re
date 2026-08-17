@@ -9,8 +9,8 @@
  },
  {
   "label": "the row loop runs to 128 instead of to the row length (transcript only)",
-  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {",
-  "replace": "\t\t\tfor (j = 0; j < V90DEMAPPER_LEVELS; j++) {"
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned int mean = 0;",
+  "replace": "\t\t\tfor (j = 0; j < V90DEMAPPER_LEVELS; j++) {\n\t\t\t\tunsigned int mean = 0;"
  },
  {
   "label": "the histogram number moves only when something was printed",
@@ -54,17 +54,17 @@
  },
  {
   "label": "the destructor frees +0x1c whether or not it holds anything",
-  "find": "\tif (array_1c)\n\t\tsysdep_free(array_1c);",
-  "replace": "\tsysdep_free(array_1c);"
+  "find": "\tif (codes)\n\t\tsysdep_free(codes);",
+  "replace": "\tsysdep_free(codes);"
  },
  {
   "label": "the destructor leaks the block at +0x20",
-  "find": "\tif (array_20)\n\t\tsysdep_free(array_20);",
-  "replace": "\t(void)array_20;"
+  "find": "\tif (signs)\n\t\tsysdep_free(signs);",
+  "replace": "\t(void)signs;"
  },
  {
   "label": "the destructor prints the histogram when the parameter is CLEAR",
-  "find": "\tif (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM)",
-  "replace": "\tif (!params->DEBUG_DEMAPPER_ERROR_HISTOGRAM)"
+  "find": "\tif (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM)\n\t\tprintErrorHistogramAndReset();",
+  "replace": "\tif (!params->DEBUG_DEMAPPER_ERROR_HISTOGRAM)\n\t\tprintErrorHistogramAndReset();"
  }
 ]

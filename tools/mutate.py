@@ -350,18 +350,18 @@ def enter_workdir():
     #
     # $BLOB is resolved HERE, while the cwd is still the real tree, because
     # nothing about the copy's location can find it: it is under $TMPDIR, so
-    # neither the relative default nor `git rev-parse` resolves from there.
+    # neither a relative default nor `git rev-parse` resolves from there.
     # Get it wrong and the copy compiles and links perfectly and then dies
     # inside `make strings`, which is the late and confusing place to find out.
     #
     # ASK MAKE, rather than repeating its default here.  This used to hard-code
-    # `../slmodemd/dsplibs.o`, which is the default the Makefile ABANDONED when
-    # worktrees arrived -- it now resolves through `git rev-parse
-    # --git-common-dir`.  So from any worktree, and that is where every agent
-    # works, `mutate.py` aimed at a path that does not exist and NO mutation
-    # suite could be run at all.  Loud, but total.  An explicit `BLOB=` in the
-    # environment still wins, because make's `?=` gives it precedence and this
-    # asks make.
+    # a relative path, and the Makefile's default has now moved twice -- through
+    # `git rev-parse --git-common-dir` for worktrees, and then to
+    # `ref/slmodemd/dsplibs.o`.  Either move leaves a hard-coded copy pointing
+    # at a path that does not exist, and from a worktree -- which is where every
+    # agent works -- that meant NO mutation suite could be run at all.  Loud,
+    # but total.  An explicit `BLOB=` in the environment still wins, because
+    # make's `?=` gives it precedence and this asks make.  Finding 6403.
     #
     os.environ["BLOB"] = os.path.abspath(
         subprocess.run(["make", "-s", "print-BLOB"], capture_output=True,

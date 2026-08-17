@@ -284,17 +284,19 @@
 #define TX1_RATEIDX	0xaa98
 
 /*
- * The transmitted point.  `f25d0` and `f25d2` are two shorts and every arm
- * that sends a constellation point writes them with ONE 32-bit store, which
- * is what `vect4` holds -- v34pcmmain.cpp and v34k56.cpp spell it
- * `*(int *)&o->f25d0`.  Spelled with `memcpy` here only because the C front
- * end warns about the type pun where the C++ one does not; it is the same
- * store.
+ * The transmitted point.  `txpoint` is two shorts and every arm that sends a
+ * constellation point writes them with ONE 32-bit store, which is what
+ * `vect4` holds -- v34pcmmain.cpp and v34k56.cpp spell it the same way.
+ *
+ * This used to be a `memcpy`, which was a workaround for the C front end
+ * warning about `*(int *)&o->f25d0` where the C++ one did not.  The
+ * declaration carries it now: `txpoint` is a union, so the wide store has a
+ * member of its own and there is nothing left to work around.
  */
 static void
 tx1_put_point(struct v34_object *o, int point)
 {
-	memcpy(&o->f25d0, &point, sizeof(point));
+	o->txpoint.word = point;
 }
 
 static short
@@ -352,8 +354,8 @@ v34tx1_xmit0(void *objp)
 	struct v34_receiver *rx =
 		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
 
-	o->f25d0 = 0;
-	o->f25d2 = 0;
+	o->txpoint.c[0] = 0;
+	o->txpoint.c[1] = 0;
 	txmit(o);
 
 	if (rx->flags & V34_RX_FLAG_LATE_TRN) {

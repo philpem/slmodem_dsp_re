@@ -99,7 +99,18 @@ struct fpm_tone {
 	short *iir_self;		/* +0xfc points at iir_coeff[0]; the
 					 *       original stores it rather than
 					 *       recomputing it               */
-	short r100[4];			/* +0x100 .. +0x107                   */
+	/*
+	 * Direct form I state for FPM_TONE_kill's pass of the SAME notch --
+	 * four words because FPM_iir_filt_II keeps two past inputs and two
+	 * past outputs per section, and there is one section.  Separate from
+	 * `iir_state` at +0x40 so that killing the tone in the caller's buffer
+	 * does not disturb the detector's own running estimate; the two run
+	 * the identical coefficients over different sample streams.
+	 *
+	 * Named from FPM_TONE_kill, which is the only reader: FPM_TONE_find_rev
+	 * touches +0xf4 and +0xf8 and nothing else in the tail.
+	 */
+	short kill_state[4];		/* +0x100 .. +0x107                   */
 };
 
 extern const struct fpm_tone_cfg FPM_TONE_CFG_data;
@@ -178,5 +189,18 @@ short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
  */
 short FPM_TONE_detect(struct fpm_tone *state, const short *samples,
 		      short count);
+
+/*
+ * Remove the configured tone from `samples`, in place, `count` at a time.
+ *
+ * It is FPM_TONE_detect's notch run over the caller's own buffer: the same
+ * one biquad, through the stored self-pointer at +0xfc rather than
+ * `iir_coeff` directly, with its own persistent state so the two passes do
+ * not interfere.  The filter is `FPM_iir_filt_II`, which does not saturate.
+ *
+ * `count` is read as a signed 16-bit value and widened, so it is the
+ * declared type here and not an int.
+ */
+void FPM_TONE_kill(struct fpm_tone *state, short *samples, short count);
 
 #endif /* DSPLIB_FPM_TONE_H */

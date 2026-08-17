@@ -2235,10 +2235,9 @@ run_sbe_lifecycle(void)
 			    sbe_same_but_state(), 1, tag);
 
 		/* The three stores, read off the BLOB's object. */
-		diff_eq_int("+0x10 is zeroed (%ld)", (long)SB->word_10, 0,
-			    tag);
-		diff_eq_int("+0x18 is zeroed (%ld)", (long)SB->byte_18, 0,
-			    tag);
+		diff_eq_int("+0x10 is zeroed (%ld)", (long)SB->state, 0, tag);
+		diff_eq_int("+0x18 is zeroed (%ld)",
+			    (long)SB->oddDecoder.prev_, 0, tag);
 		diff_eq_int("the decoder's capacity is six (%ld)",
 			    (long)SB->decoder.capacity_, 6, tag);
 		diff_eq_int("and its active width is zero (%ld)",
@@ -2571,25 +2570,25 @@ static int
 dem_pointers(int null_them, long tag)
 {
 	if (null_them) {
-		DA->array_1c = 0;
-		DB->array_1c = 0;
-		DA->array_20 = 0;
-		DB->array_20 = 0;
+		DA->codes = 0;
+		DB->codes = 0;
+		DA->signs = 0;
+		DB->signs = 0;
 		DA->signBits.decoder.state_ = 0;
 		DB->signBits.decoder.state_ = 0;
 		return 1;
 	}
-	DA->array_1c = sysdep_malloc(16);
-	DB->array_1c = sysdep_malloc(16);
-	DA->array_20 = sysdep_malloc(8);
-	DB->array_20 = sysdep_malloc(8);
+	DA->codes = (unsigned int *)sysdep_malloc(16);
+	DB->codes = (unsigned int *)sysdep_malloc(16);
+	DA->signs = (unsigned char *)sysdep_malloc(8);
+	DB->signs = (unsigned char *)sysdep_malloc(8);
 	DA->signBits.decoder.state_ =
 		(unsigned char *)sysdep_malloc(V90SBE_DECODER_SIZE);
 	DB->signBits.decoder.state_ =
 		(unsigned char *)sysdep_malloc(V90SBE_DECODER_SIZE);
 	diff_eq_int("six blocks handed out (%ld)",
-		    DA->array_1c != 0 && DB->array_1c != 0 &&
-		    DA->array_20 != 0 && DB->array_20 != 0 &&
+		    DA->codes != 0 && DB->codes != 0 &&
+		    DA->signs != 0 && DB->signs != 0 &&
 		    DA->signBits.decoder.state_ != 0 &&
 		    DB->signBits.decoder.state_ != 0, 1, tag);
 	return 0;
@@ -3412,7 +3411,7 @@ run_ec_process(void)
 	};
 	const int nshape = (int)(sizeof(shape) / sizeof(shape[0]));
 	int printed = 0, sawMoved = 0, sawVaried = 0, sawWrap = 0;
-	int sawSentinel = 0, sawNan = 0, sawTransition = 0, sawCut = 0;
+	int sawSentinel = 0, sawTransition = 0, sawCut = 0;
 	int trial;
 	unsigned lvl;
 
@@ -3505,8 +3504,35 @@ run_ec_process(void)
 							ec_b.o.state;
 				float hbefore[ECX_LEAD + ECX_HIST
 					      + ECX_GUARD];
-				int sentinel = (blk % 7) == 6
-					       ? 1 + (blk % 2) : 0;
+				/*
+				 * ORDINARY OR SENTINEL, AND NEVER A NaN.
+				 * `out[0]` decides the path and the third
+				 * value it used to take here was a quiet NaN,
+				 * which the object's single `fcoms`/`je`
+				 * treats as EQUAL and so filters -- an
+				 * unordered code sets ZF exactly as an equal
+				 * one does.  GCC 13 emits the parity test
+				 * whatever it is told (finding 2304), so the
+				 * modern build runs the filter on that block
+				 * instead, and from there every later block
+				 * of the trial diverges: 273 of this group's
+				 * 4570 checks, all of them downstream of one
+				 * block.  That made the whole BINARY red on
+				 * the modern build, and a red binary cannot
+				 * score a mutation set at all -- five suites
+				 * pinned here went unscoreable for one arm
+				 * (findings 2157 and 3002).
+				 *
+				 * So the unordered arm now lives in
+				 * `t_v92ecnan`, its own binary, where it is
+				 * declared in `tools/gccdiverge.json`.
+				 * NOTHING ELSE MOVES: the blob takes the same
+				 * path for 177.0f as for a NaN, so every
+				 * block here evolves exactly as it did and
+				 * the group keeps all fifteen shapes, three
+				 * levels and both cursors.  Finding 6000.
+				 */
+				int sentinel = (blk % 7) == 6 ? 1 : 0;
 
 				/*
 				 * The input: near end plus the echo of the
@@ -3529,18 +3555,14 @@ run_ec_process(void)
 				/*
 				 * `out[0]` DECIDES THE PATH, so it is never
 				 * left to the seed: 0.25f for the ordinary
-				 * one, 177.0f for the sentinel, and a NaN for
-				 * the arm that only an UNORDERED compare
-				 * reaches.
+				 * one and 177.0f for the sentinel.  The
+				 * unordered arm is `t_v92ecnan`'s -- see the
+				 * note where `sentinel` is computed.
 				 */
 				ecx_out[0][0] = ecx_out[1][0] =
-					sentinel == 0 ? 0.25f
-					: sentinel == 1 ? 177.0f
-					: ecx_bits(0x7fc00000u);
+					sentinel == 0 ? 0.25f : 177.0f;
 				if (sentinel == 1)
 					sawSentinel = 1;
-				if (sentinel == 2)
-					sawNan = 1;
 
 				memcpy(hbefore, ecx_hist[1], sizeof hbefore);
 
@@ -3659,7 +3681,6 @@ run_ec_process(void)
 	diff_eq_int("the output differs from the input", sawCut, 1, 0);
 	diff_eq_int("the read cursor wrapped", sawWrap, 1, 0);
 	diff_eq_int("the 177.0f path was taken", sawSentinel, 1, 0);
-	diff_eq_int("and its unordered arm too", sawNan, 1, 0);
 	diff_eq_int("process drove a state transition", sawTransition, 1, 0);
 	diff_eq_int("the transitions were announced", printed, 1, 0);
 

@@ -102,7 +102,16 @@ struct fpm_smc {
  * used to size an allocation.
  */
 struct fpm_smc_ring {
-	unsigned char pad00[8];	/* +0x00 not read by anything traced yet     */
+	/*
+	 * The DIRECT rails, named by `FPM_PPS_filter`: with `fpm_pps_cfg`'s
+	 * `mapped` clear it reads I and Q straight out of these two, indexed
+	 * by `ridx` -- `mov (%ebx),%edi` and `mov 0x4(%esi),%edx`, both
+	 * 32-bit loads used as `short *` bases.  Only the mapped form is
+	 * reachable from V.22, which is why they read as padding until the
+	 * generic shaper was read.  Nothing else traced touches them.
+	 */
+	short *i;		/* +0x00 `len` I values, direct form         */
+	short *q;		/* +0x04 `len` Q values, direct form         */
 	short *sym;		/* +0x08 `len` symbol indices.  V22_PPS_filter
 				 *       loads these with `movzbl (%ebx,%edi,2)`
 				 *       -- stride two, low byte used.       */

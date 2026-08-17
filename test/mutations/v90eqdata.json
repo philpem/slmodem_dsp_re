@@ -1,0 +1,56 @@
+[
+  {
+    "label": "NOTE",
+    "note": "enterDataPhase's dump is TEXTUALLY IDENTICAL to enterPhase4's -- the same summary, the same four format strings, the same two rules -- so every `find` below is anchored on something only this function has: the entry string, the `resetRRNDetector` call, the `mmxMode` early-out or the trailing `convertEqualizerToMmx`.  A bare print line appears four times in the file and would be rejected as ambiguous."
+  },
+  {
+    "label": "the state is phase 4's rather than the data phase's",
+    "find": "\tif (state == V90EQU_STATE_DATA)\n\t\treturn 0;\n\n\tedprintf(\"V90Equalizer: enter Data Phase\\r\\n\");\n\tstate = V90EQU_STATE_DATA;\n",
+    "replace": "\tif (state == V90EQU_STATE_PHASE4)\n\t\treturn 0;\n\n\tedprintf(\"V90Equalizer: enter Data Phase\\r\\n\");\n\tstate = V90EQU_STATE_PHASE4;\n"
+  },
+  {
+    "label": "the state is not stored, so the entry is not idempotent",
+    "find": "\tedprintf(\"V90Equalizer: enter Data Phase\\r\\n\");\n\tstate = V90EQU_STATE_DATA;\n\n\tphase4Demod->resetRRNDetector();\n",
+    "replace": "\tedprintf(\"V90Equalizer: enter Data Phase\\r\\n\");\n\n\tphase4Demod->resetRRNDetector();\n"
+  },
+  {
+    "label": "the RRN detector is re-armed only on the path that prints",
+    "find": "\tphase4Demod->resetRRNDetector();\n\n\tif (mmxMode != 0)\n\t\treturn 0;\n",
+    "replace": "\tif (mmxMode != 0)\n\t\treturn 0;\n\n\tphase4Demod->resetRRNDetector();\n"
+  },
+  {
+    "label": "the fixed-point entry runs the dump anyway",
+    "find": "\tphase4Demod->resetRRNDetector();\n\n\tif (mmxMode != 0)\n\t\treturn 0;\n\n\tsummarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,\n\t\t\t&minLeCoefValue, &sum, &absSum);\n",
+    "replace": "\tphase4Demod->resetRRNDetector();\n\n\tsummarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,\n\t\t\t&minLeCoefValue, &sum, &absSum);\n"
+  },
+  {
+    "label": "the linear half's maximum and minimum are exchanged",
+    "find": "\tif (mmxMode != 0)\n\t\treturn 0;\n\n\tsummarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,\n\t\t\t&minLeCoefValue, &sum, &absSum);\n",
+    "replace": "\tif (mmxMode != 0)\n\t\treturn 0;\n\n\tsummarise_coefs(linearEquCoefs, linearEquLength, &minLeCoefValue,\n\t\t\t&maxLeCoefValue, &sum, &absSum);\n"
+  },
+  {
+    "label": "the DFE half summarises the linear filter",
+    "find": "\tsummarise_coefs(dfeCoefs, dfeLength, &maxDfeCoefValue,\n\t\t\t&minDfeCoefValue, &sum, &absSum);\n\n\tedprintf(\"DFE:\\r\\n\");\n\tedprint_stat(\"minDfeCoefValue  = %c%d.%010d\\r\\n\", minDfeCoefValue,\n\t\t     1.0e10f);\n\tedprint_stat(\"maxDfeCoefValue  = %c%d.%06d\\r\\n\", maxDfeCoefValue,\n\t\t     1.0e6);\n\tedprint_stat(\"coefs sum  = %c%d.%06d\\r\\n\", sum, 1.0e6);\n\tedprint_stat(\"abs coefs sum  = %c%d.%06d\\r\\n\", absSum, 1.0e6);\n\tedprintf(\"=======================================================\\r\\n\");\n\n\tconvertEqualizerToMmx();\n",
+    "replace": "\tsummarise_coefs(linearEquCoefs, linearEquLength, &maxDfeCoefValue,\n\t\t\t&minDfeCoefValue, &sum, &absSum);\n\n\tedprintf(\"DFE:\\r\\n\");\n\tedprint_stat(\"minDfeCoefValue  = %c%d.%010d\\r\\n\", minDfeCoefValue,\n\t\t     1.0e10f);\n\tedprint_stat(\"maxDfeCoefValue  = %c%d.%06d\\r\\n\", maxDfeCoefValue,\n\t\t     1.0e6);\n\tedprint_stat(\"coefs sum  = %c%d.%06d\\r\\n\", sum, 1.0e6);\n\tedprint_stat(\"abs coefs sum  = %c%d.%06d\\r\\n\", absSum, 1.0e6);\n\tedprintf(\"=======================================================\\r\\n\");\n\n\tconvertEqualizerToMmx();\n"
+  },
+  {
+    "label": "the DFE minimum is scaled by 1e6 like its maximum",
+    "find": "\tedprint_stat(\"minDfeCoefValue  = %c%d.%010d\\r\\n\", minDfeCoefValue,\n\t\t     1.0e10f);\n\tedprint_stat(\"maxDfeCoefValue  = %c%d.%06d\\r\\n\", maxDfeCoefValue,\n\t\t     1.0e6);\n\tedprint_stat(\"coefs sum  = %c%d.%06d\\r\\n\", sum, 1.0e6);\n\tedprint_stat(\"abs coefs sum  = %c%d.%06d\\r\\n\", absSum, 1.0e6);\n\tedprintf(\"=======================================================\\r\\n\");\n\n\tconvertEqualizerToMmx();\n",
+    "replace": "\tedprint_stat(\"minDfeCoefValue  = %c%d.%010d\\r\\n\", minDfeCoefValue,\n\t\t     1.0e6f);\n\tedprint_stat(\"maxDfeCoefValue  = %c%d.%06d\\r\\n\", maxDfeCoefValue,\n\t\t     1.0e6);\n\tedprint_stat(\"coefs sum  = %c%d.%06d\\r\\n\", sum, 1.0e6);\n\tedprint_stat(\"abs coefs sum  = %c%d.%06d\\r\\n\", absSum, 1.0e6);\n\tedprintf(\"=======================================================\\r\\n\");\n\n\tconvertEqualizerToMmx();\n"
+  },
+  {
+    "label": "the DFE half prints the two sums the other way round",
+    "find": "\tedprint_stat(\"minDfeCoefValue  = %c%d.%010d\\r\\n\", minDfeCoefValue,\n\t\t     1.0e10f);\n\tedprint_stat(\"maxDfeCoefValue  = %c%d.%06d\\r\\n\", maxDfeCoefValue,\n\t\t     1.0e6);\n\tedprint_stat(\"coefs sum  = %c%d.%06d\\r\\n\", sum, 1.0e6);\n\tedprint_stat(\"abs coefs sum  = %c%d.%06d\\r\\n\", absSum, 1.0e6);\n\tedprintf(\"=======================================================\\r\\n\");\n\n\tconvertEqualizerToMmx();\n\n\tif (mmxMode != 0)\n",
+    "replace": "\tedprint_stat(\"minDfeCoefValue  = %c%d.%010d\\r\\n\", minDfeCoefValue,\n\t\t     1.0e10f);\n\tedprint_stat(\"maxDfeCoefValue  = %c%d.%06d\\r\\n\", maxDfeCoefValue,\n\t\t     1.0e6);\n\tedprint_stat(\"coefs sum  = %c%d.%06d\\r\\n\", absSum, 1.0e6);\n\tedprint_stat(\"abs coefs sum  = %c%d.%06d\\r\\n\", sum, 1.0e6);\n\tedprintf(\"=======================================================\\r\\n\");\n\n\tconvertEqualizerToMmx();\n\n\tif (mmxMode != 0)\n"
+  },
+  {
+    "label": "the conversion is not run",
+    "find": "\tconvertEqualizerToMmx();\n\n\tif (mmxMode != 0)\n\t\treturn 1;\n",
+    "replace": "\tif (mmxMode != 0)\n\t\treturn 1;\n"
+  },
+  {
+    "label": "the return does not re-read the mode after the conversion",
+    "find": "\tconvertEqualizerToMmx();\n\n\tif (mmxMode != 0)\n\t\treturn 1;\n\n\treturn 0;\n}\n",
+    "replace": "\tconvertEqualizerToMmx();\n\n\treturn 0;\n}\n"
+  }
+]

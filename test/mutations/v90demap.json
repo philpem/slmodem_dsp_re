@@ -1,0 +1,539 @@
+[
+ {
+  "note": "V90Demapper's three processing members, against t_v90demap.  Anchors are taken from text that appears ONCE in V90Demapper.cpp -- the file also carries the constructor, the destructor and printErrorHistogramAndReset, and two of the suites over it (v90demapctor, v90demapper) take their anchors from those.  A block that matched twice would be UNUSABLE, and UNUSABLE does not fail a run (finding 1264)."
+ },
+ {
+  "label": "the phase loop clears five constellations, not six",
+  "find": "\tshort phase, code;\n\n\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)",
+  "replace": "\tshort phase, code;\n\n\tfor (phase = 0; phase + 1 < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)"
+ },
+ {
+  "label": "the code loop stops one cell short of 128",
+  "find": "\tshort phase, code;\n\n\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\tshort phase, code;\n\n\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code + 1 < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);"
+ },
+ {
+  "label": "the two cell coordinates are passed the other way round",
+  "find": "\tshort phase, code;\n\n\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\tshort phase, code;\n\n\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(code & 5, phase);"
+ },
+ {
+  "label": "resetLinearMappStudy drops its argument on the floor",
+  "find": "\tuint_1ea8 = n;",
+  "replace": "\tuint_1ea8 = 0;\n\t(void)n;"
+ },
+ {
+  "label": "the argument lands one field early",
+  "find": "\tshort_1ea6 = 0;\n\tuint_1ea8 = n;",
+  "replace": "\tshort_1ea6 = (short)n;\n\tuint_1ea8 = 0;"
+ },
+ {
+  "label": "+0x1ea4 keeps whatever it found",
+  "find": "\tshort_1e9c = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;",
+  "replace": "\tshort_1e9c = 0;\n\tshort_1ea6 = 0;"
+ },
+ {
+  "label": "the study clears the last decision's code as well",
+  "find": "\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;",
+  "replace": "\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;"
+ },
+ {
+  "label": "+0x1eb0 keeps whatever it found",
+  "find": "\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;\n}",
+  "replace": "\tdecisionFramePosition = 0;\n}"
+ },
+ {
+  "label": "hardDecision records the frame position after the advance, not before",
+  "find": "\tdecisionFramePosition = (short)rbsFramePosition;\n",
+  "replace": ""
+ },
+ {
+  "label": "the chosen code is not recorded",
+  "find": "\tdecisionCode = (short)code;",
+  "replace": "\t(void)code;"
+ },
+ {
+  "label": "the refusal test is off by one, so the last slot is never used",
+  "find": "\tif (sampleCount >= sampleCapacity) {",
+  "replace": "\tif (sampleCount + 1 >= sampleCapacity) {"
+ },
+ {
+  "label": "a positive sample is marked negative and the other way round",
+  "find": "\t\t\tsigns[sampleCount] = 0;\n\t\t\tsign = -1;",
+  "replace": "\t\t\tsigns[sampleCount] = 1;\n\t\t\tsign = -1;"
+ },
+ {
+  "label": "the returned level never carries the sign back",
+  "find": "\t\t\tsign = -1;\n\t\t\tin = (short)__builtin_abs(in);",
+  "replace": "\t\t\tsign = 1;\n\t\t\tin = (short)__builtin_abs(in);"
+ },
+ {
+  "label": "the magnitude is the raw sample",
+  "find": "\t\tmag = (short)__builtin_abs(in);",
+  "replace": "\t\tmag = in;",
+  "equivalent": true,
+  "why": "`in` is ALREADY non-negative wherever this line runs: the arm above it that can leave a negative value assigns `in = (short)__builtin_abs(in)` first, and the other arm is taken only when `in >= 0`.  So the second absolute value cannot change a bit, at every input including -32768, where both spellings give -32768 back.  The line is written because the OBJECT computes abs twice -- `cltd; xor; sub` at 0x312af on the negative arm and again at 0x3109d on the shared path -- and this entry records that the redundancy is the original's rather than that the suite is weak."
+ },
+ {
+  "label": "the detector's flag does not double the search",
+  "find": "\t\tif (adiDetector->short_2800[rbsFramePosition] != 0)\n\t\t\tn = 2 * n;",
+  "replace": "\t\tif (adiDetector->short_2800[rbsFramePosition] != 0)\n\t\t\tn = n + 1;"
+ },
+ {
+  "label": "the scan does not back up to the lower neighbour",
+  "find": "\t\tif (code)\n\t\t\tcode--;",
+  "replace": "\t\tif (code)\n\t\t\t;"
+ },
+ {
+  "label": "the scan bound is the row length rather than one less",
+  "find": "\t\twhile (constellation[rbsFramePosition][code] >= mag &&\n\t\t       code < n - 1)",
+  "replace": "\t\twhile (constellation[rbsFramePosition][code] >= mag &&\n\t\t       code < n)"
+ },
+ {
+  "label": "the scan test is strictly greater, so an exact level walks past",
+  "find": "\t\twhile (constellation[rbsFramePosition][code] >= mag &&",
+  "replace": "\t\twhile (constellation[rbsFramePosition][code] > mag &&"
+ },
+ {
+  "label": "a tie goes to the upper neighbour",
+  "find": "\t\tif (alt < err) {",
+  "replace": "\t\tif (alt <= err) {"
+ },
+ {
+  "label": "the upper neighbour is chosen without moving the code",
+  "find": "\t\t\terr = alt;\n\t\t\tcode++;",
+  "replace": "\t\t\terr = alt;"
+ },
+ {
+  "label": "the histogram delay is spent in one go",
+  "find": "\t\t\t\thistogramDelay--;",
+  "replace": "\t\t\t\thistogramDelay = 0;"
+ },
+ {
+  "label": "the delay counts down and the sample is accumulated anyway",
+  "find": "\t\t\tif (histogramDelay != 0) {\n\t\t\t\thistogramDelay--;\n\t\t\t} else {",
+  "replace": "\t\t\tif (histogramDelay != 0) {\n\t\t\t\thistogramDelay--;\n\t\t\t}\n\t\t\t{"
+ },
+ {
+  "label": "the histogram counts the samples and does not sum the errors",
+  "find": "\t\t\t\terrorSum[rbsFramePosition][code] += err;",
+  "replace": "\t\t\t\terrorSum[rbsFramePosition][code] += mag;"
+ },
+ {
+  "label": "the integration threshold is exclusive",
+  "find": "\t\t\t\tif (histogramIntegration >= params->",
+  "replace": "\t\t\t\tif (histogramIntegration > params->"
+ },
+ {
+  "label": "the stored code is not halved when the detector flags the phase",
+  "find": "\t\t\tcodes[sampleCount] = (short)(code >> 1);",
+  "replace": "\t\t\tcodes[sampleCount] = code;"
+ },
+ {
+  "label": "the stored code is halved the other way and keeps its low bit",
+  "find": "\t\t\tcodes[sampleCount] = (short)(code >> 1);\n\t\telse",
+  "replace": "\t\t\tcodes[sampleCount] = (short)((code + 1) >> 1);\n\t\telse"
+ },
+ {
+  "label": "the sample is decided and not appended",
+  "find": "\t\tsampleCount++;",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "the frame position wraps at 128 instead of at six",
+  "find": "\t\trbsFramePosition = (rbsFramePosition + 1) %\n\t\t\t\t   V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\t\trbsFramePosition = (rbsFramePosition + 1) %\n\t\t\t\t   V90DEMAPPER_LEVELS;"
+ },
+ {
+  "label": "process drains a frame it has only five samples of",
+  "find": "\tif (sampleCount <= V90DEMAPPER_FRAME - 1) {",
+  "replace": "\tif (sampleCount < V90DEMAPPER_FRAME - 1) {"
+ },
+ {
+  "label": "the last whole frame is left undrained",
+  "find": "\twhile (frameStart + V90DEMAPPER_FRAME <= sampleCount) {",
+  "replace": "\twhile (frameStart + V90DEMAPPER_FRAME < sampleCount) {"
+ },
+ {
+  "label": "the modulus bytes are written over the sign bits",
+  "find": "\t\tmodulusDecoder.progress(out + total + signBitsPerFrame,",
+  "replace": "\t\tmodulusDecoder.progress(out + total,"
+ },
+ {
+  "label": "the modulus digits are taken from the front of the buffer, not the frame",
+  "find": "\t\t\t\t\t&codes[frameStart]);",
+  "replace": "\t\t\t\t\t&codes[0]);"
+ },
+ {
+  "label": "the sign-bit groups overlap by one on output",
+  "find": "\t\t\t\t\t\t out + total +\n\t\t\t\t\t\t (signBitGroupSize - 1) * g);",
+  "replace": "\t\t\t\t\t\t out + total +\n\t\t\t\t\t\t signBitGroupSize * g);"
+ },
+ {
+  "label": "the sign-bit groups are read one sample apart too few",
+  "find": "\t\t\t\tsignBits.process(&signs[frameStart +\n\t\t\t\t\t\t\tsignBitGroupSize * g],",
+  "replace": "\t\t\t\tsignBits.process(&signs[frameStart +\n\t\t\t\t\t\t\t(signBitGroupSize - 1) * g],"
+ },
+ {
+  "label": "the serial path copies the sign bits instead of decoding them",
+  "find": "\t\t\t\tout[total + b] = signDecoder.process(\n\t\t\t\t    signs[frameStart + b]);",
+  "replace": "\t\t\t\tout[total + b] = signs[frameStart + b];"
+ },
+ {
+  "label": "the two sign-bit paths are the other way round",
+  "find": "\t\tif (signBitGroups != 0) {",
+  "replace": "\t\tif (signBitGroups == 0) {"
+ },
+ {
+  "label": "the output cursor does not advance between frames",
+  "find": "\t\ttotal += bitsPerFrame;",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "the compaction copies one entry too many",
+  "find": "\tfor (i = 0, j = frameStart; j < sampleCount; i++, j++) {",
+  "replace": "\tfor (i = 0, j = frameStart; j <= sampleCount; i++, j++) {"
+ },
+ {
+  "label": "the compaction leaves the count at the source cursor",
+  "find": "\tsampleCount = i;\n\tframeStart = 0;",
+  "replace": "\tsampleCount = j;\n\tframeStart = 0;"
+ },
+ {
+  "label": "the frame cursor is not rewound",
+  "find": "\tsampleCount = i;\n\tframeStart = 0;\n",
+  "replace": "\tsampleCount = i;\n"
+ },
+ {
+  "label": "the bit count is not reported",
+  "find": "\tnbits = total;\n\treturn 1;",
+  "replace": "\treturn 1;"
+ },
+ {
+  "label": "the drain reports failure",
+  "find": "\tnbits = total;\n\treturn 1;\n}",
+  "replace": "\tnbits = total;\n\treturn 0;\n}"
+ },
+ {
+  "label": "the frame position wraps at five, not six",
+  "find": "\trbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\trbsFramePosition = (rbsFramePosition + 1) % 5u;"
+ },
+ {
+  "label": "the wrap is a SIGNED remainder -- the `mul` at 0x30b60 is not",
+  "find": "\trbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\trbsFramePosition = (unsigned int)((int)(rbsFramePosition + 1) %\n\t\t\t\t\t   (int)V90DEMAPPER_CONSTELLATIONS);"
+ },
+ {
+  "label": "the position is left where it was",
+  "find": "\trbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the update walks five constellations, not six",
+  "find": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {\n\t\tunsigned short n;",
+  "replace": "\tfor (i = 0; i + 1 < V90DEMAPPER_CONSTELLATIONS; i++) {\n\t\tunsigned short n;"
+ },
+ {
+  "label": "the detector's flag does not double the row",
+  "find": "\t\tif (adiDetector->short_2800[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
+  "replace": "\t\tn = constellationSize[i];\n\t\tif (adiDetector->short_2800[i] == 0)\n\t\t\tn = constellationSize[i];"
+ },
+ {
+  "label": "every row is doubled, flag or no flag",
+  "find": "\t\tif (adiDetector->short_2800[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
+  "replace": "\t\tn = 2 * constellationSize[i];\n\t\tif (adiDetector->short_2800[i] == 0)\n\t\t\tn = 2 * constellationSize[i];"
+ },
+ {
+  "label": "the rounding half is dropped, so the mean truncates",
+  "find": "\t\t\t\t    (1.0F / adiDetector->uint_1c00[i][j] *\n\t\t\t\t     adiDetector->float_1000[i][j] + 0.5F);",
+  "replace": "\t\t\t\t    (1.0F / adiDetector->uint_1c00[i][j] *\n\t\t\t\t     adiDetector->float_1000[i][j]);"
+ },
+ {
+  "label": "a cell nothing landed on is rewritten anyway",
+  "find": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->uint_1c00[i][j] != 0)",
+  "replace": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->uint_1c00[i][j] + 1u != 0)"
+ },
+ {
+  "label": "the mean comes from the next phase's cell",
+  "find": "\t\t\t\t     adiDetector->float_1000[i][j] + 0.5F);",
+  "replace": "\t\t\t\t     adiDetector->float_1000[(i + 1) % 6][j] + 0.5F);"
+ },
+ {
+  "label": "the update line is spelt correctly (transcript only)",
+  "find": "\t\tdsplibs_debug_printf(\"V90Demapper: constelation update !!!\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Demapper: constellation update !!!\\n\");"
+ },
+ {
+  "label": "the update line is printed whatever the debug level (transcript only)",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demapper: constelation update !!!\\n\");",
+  "replace": "\tdsplibs_debug_printf(\"V90Demapper: constelation update !!!\\n\");"
+ },
+ {
+  "label": "the frame's bit count is left as it was found",
+  "find": "\tbitsPerFrame = mapp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tword_08 = bitsPerFrame - signBitsPerFrame;"
+ },
+ {
+  "label": "+0x08 is the SUM of the two counts, not the difference",
+  "find": "\tbitsPerFrame = mapp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tbitsPerFrame = mapp->word_0;\n\tword_08 = bitsPerFrame + signBitsPerFrame;"
+ },
+ {
+  "label": "the histogram is printed but the delay is not reseeded",
+  "find": "\t\thistogramIntegration = 0;\n\t\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;",
+  "replace": "\t\thistogramIntegration = 0;"
+ },
+ {
+  "label": "the delay comes from the integration time instead",
+  "find": "\t\thistogramIntegration = 0;\n\t\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;",
+  "replace": "\t\thistogramIntegration = 0;\n\t\thistogramDelay = params->DEMAPPER_ERROR_HISTOGRAM_INTEGRATION_TIME;"
+ },
+ {
+  "label": "the row length is not copied over",
+  "find": "\t\tconstellationSize[i] = mapp->constellationSize[i];",
+  "replace": "\t\t(void)mapp->constellationSize[i];"
+ },
+ {
+  "label": "the pair is laid down smaller first",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] >\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] <\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {"
+ },
+ {
+  "label": "two equal levels go the other way round -- `>=` and not `>`",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] >\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] >=\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
+  "equivalent": true,
+  "why": "The two arms differ ONLY in which of `linMapp[i][c]` and `linMappAlt[i][c]` is written first, so on the input this mutation moves -- the two being EQUAL -- both orders store the same pair of values into the same two slots.  The mutation is behaviourally the identity and no seeding can change that; `t_v90demap.cpp` plants one cell in six with the two equal, reaches the case, and proves it makes no difference.  What decides `>` against `>=` is the object alone: `cmp %cx,%bx; jle` at 0x30dab puts the EQUAL case on the arm that writes `linMappAlt` first, and finding 4343 records that this half is a codegen claim and not a differential one."
+ },
+ {
+  "label": "the doubled arm advances its cursor once per code, not twice",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] >\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {\n\t\t\t\t\tconstellation[i][k] =\n\t\t\t\t\t    adiDetector->linMapp[i][c];\n\t\t\t\t\tk++;\n\t\t\t\t\tconstellation[i][k] =\n\t\t\t\t\t    adiDetector->linMappAlt[i][c];\n\t\t\t\t\tk++;\n\t\t\t\t} else {",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] >\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {\n\t\t\t\t\tconstellation[i][k] =\n\t\t\t\t\t    adiDetector->linMapp[i][c];\n\t\t\t\t\tk++;\n\t\t\t\t\tconstellation[i][k] =\n\t\t\t\t\t    adiDetector->linMappAlt[i][c];\n\t\t\t\t} else {"
+ },
+ {
+  "label": "the plain arm copies the ALTERNATE table",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMappAlt[i]\n\t\t\t\t    [mapp->constellation[i][j]];"
+ },
+ {
+  "label": "the code is read as a SIGNED byte, so 128 and above index backwards",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tsigned char c = (signed char)\n\t\t\t\t    mapp->constellation[i][j];"
+ },
+ {
+  "label": "the modulus decoder's seventh word is the frame's whole bit count",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = word_08;",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = bitsPerFrame;"
+ },
+ {
+  "label": "the six row lengths reach the modulus decoder one slot out",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[1];\n\tmodulusDecoder.field_04 = constellationSize[0];"
+ },
+ {
+  "label": "the serial sign decoder keeps its previous bit",
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = word_08;\n\tsignDecoder.prev_ = 0;",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = word_08;\n\t(void)0;"
+ },
+ {
+  "label": "an equal magnitude takes the upper pair -- `>=` and not `>`",
+  "find": "\tif (diff > 0.0F) {",
+  "replace": "\tif (diff >= 0.0F) {"
+ },
+ {
+  "label": "the study measures the level rather than the sample",
+  "find": "\t\t    __builtin_abs(sample);",
+  "replace": "\t\t    __builtin_abs(level);"
+ },
+ {
+  "label": "the gate opens on equality as well -- `<=` and not `<`",
+  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (__builtin_fabsf(diff) <= 0.4F * (high - low)) {"
+ },
+ {
+  "label": "the gate is half the gap, not four tenths of it",
+  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (__builtin_fabsf(diff) < 0.5F * (high - low)) {"
+ },
+ {
+  "label": "the sign of the difference is kept, so half the samples never gate in",
+  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (diff < 0.4F * (high - low)) {"
+ },
+ {
+  "label": "the sample count moves and the sum does not",
+  "find": "\t\tadiDetector->float_1000[decisionFramePosition][decisionCode] +=\n\t\t    __builtin_abs(sample);",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "the sum moves and the count does not",
+  "find": "\t\tadiDetector->uint_1c00[decisionFramePosition][decisionCode]++;",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "code zero takes the pair BELOW the row on the upper arm too",
+  "find": "\t\tif (decisionCode - 1 >= 0) {",
+  "replace": "\t\tif (decisionCode >= 0) {"
+ },
+ {
+  "label": "the top of the row is one entry further up",
+  "find": "\t\tif (decisionCode + 1 >= n) {",
+  "replace": "\t\tif (decisionCode + 2 >= n) {"
+ },
+ {
+  "label": "the doubled row length is not doubled",
+  "find": "\t\tif (adiDetector->short_2800[decisionFramePosition] != 0)\n\t\t\tn = 2 * constellationSize[decisionFramePosition];",
+  "replace": "\t\tif (adiDetector->short_2800[decisionFramePosition] != 0)\n\t\t\tn = constellationSize[decisionFramePosition];"
+ },
+ {
+  "label": "the run ends one call late",
+  "find": "\tif (uint_1eb0 + 1 == uint_1ea8) {",
+  "replace": "\tif (uint_1eb0 == uint_1ea8) {"
+ },
+ {
+  "label": "the completed-run count is not kept",
+  "find": "\t\tshort_1e9c++;\n\t\tif (short_1e9c == 2)",
+  "replace": "\t\tif (short_1e9c == 2)"
+ },
+ {
+  "label": "+0x1ea6 goes up on the THIRD completed run",
+  "find": "\t\tif (short_1e9c == 2)\n\t\t\tshort_1ea6 = 1;",
+  "replace": "\t\tif (short_1e9c == 3)\n\t\t\tshort_1ea6 = 1;"
+ },
+ {
+  "label": "+0x1ea4 is left as the study found it",
+  "find": "\t\tuint_1eb0 = 0;\n\t\tshort_1ea4 = 1;",
+  "replace": "\t\tuint_1eb0 = 0;"
+ },
+ {
+  "label": "the progress is not rewound at the end of a run",
+  "find": "\t\tuint_1eb0 = 0;\n\t\tshort_1ea4 = 1;",
+  "replace": "\t\tshort_1ea4 = 1;"
+ },
+ {
+  "label": "the cells are cleared BEFORE they are read into the constellation",
+  "find": "\t\tupdateConstelation();\n\n\t\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\t\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\t\tupdateConstelation();"
+ },
+ {
+  "label": "the study's own clear stops one phase short",
+  "find": "\t\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\t\tfor (phase = 0; phase + 1 < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);"
+ },
+ {
+  "label": "the progress does not advance between runs",
+  "find": "\t} else {\n\t\tuint_1eb0++;\n\t}",
+  "replace": "\t} else {\n\t\t;\n\t}"
+ },
+ {
+  "note": "V90Demapper::reset, added with the member.  Its body repeats resetNoSpectral's two constellation loops and resetLinearMappStudy's clearCamulativeVal pair almost word for word, which cost fourteen of the anchors above the uniqueness they had when they were written (finding 4708's shape, arriving from the other direction).  Every anchor below is taken from something only `reset` has: the mapping block's spacing, the extractor call, the three cursors, the histogram clear or the study words."
+ },
+ {
+  "label": "the spacing lands in signBitsPerFrame rather than signBitGroups",
+  "find": "\tbitsPerFrame = mapp->word_0;\n\tsignBitGroups = mapp->shaperSR;\n",
+  "replace": "\tbitsPerFrame = mapp->word_0;\n\tsignBitsPerFrame = mapp->shaperSR;\n"
+ },
+ {
+  "label": "the sign bits per frame are the spacing less six, not six less it",
+  "find": "\tsignBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;\n",
+  "replace": "\tsignBitsPerFrame = mapp->shaperSR - V90DEMAPPER_FRAME;\n"
+ },
+ {
+  "label": "+0x08 is the sum of the two counts, not the difference",
+  "find": "\tsignBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;\n\tword_08 = bitsPerFrame - signBitsPerFrame;\n",
+  "replace": "\tsignBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;\n\tword_08 = bitsPerFrame + signBitsPerFrame;\n"
+ },
+ {
+  "label": "a zero spacing writes a zero group size instead of leaving it alone",
+  "find": "\tif (mapp->shaperSR != 0)\n\t\tsignBitGroupSize = V90DEMAPPER_FRAME / mapp->shaperSR;\n",
+  "replace": "\tif (mapp->shaperSR != 0)\n\t\tsignBitGroupSize = V90DEMAPPER_FRAME / mapp->shaperSR;\n\telse\n\t\tsignBitGroupSize = 0;\n"
+ },
+ {
+  "label": "the group size is a SIGNED division",
+  "find": "\t\tsignBitGroupSize = V90DEMAPPER_FRAME / mapp->shaperSR;\n",
+  "replace": "\t\tsignBitGroupSize = V90DEMAPPER_CONSTELLATIONS / mapp->shaperSR;\n"
+ },
+ {
+  "label": "the loop bound is re-read from the member the store just wrote",
+  "find": "\t\tunsigned int n = mapp->constellationSize[i];\n\n\t\tconstellationSize[i] = n;\n",
+  "replace": "\t\tunsigned int n;\n\n\t\tconstellationSize[i] = mapp->constellationSize[i];\n\t\tn = constellationSize[i];\n",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and the input that would separate the two is one this reconstruction may not be given.  The object loads `mapp->constellationSize[i]`, spills it, stores it to the member and compares against the SPILL; the two readings can only differ if the loop writes the member, which happens only when the doubled arm's `constellation[5][k]` runs past its 128 entries into `constellationSize` behind it.  The object really does that; in this source that index is out of bounds and driving it is UB in OUR code rather than a differential trial (D561's rule), so the grid stops at 63 and no runnable input separates them.  Held fixed by the encoding alone, and recorded as such: docs/deviations.md D680.  If this ever starts being caught, someone has added a trial that overruns the row -- which wants looking at before it is believed."
+ },
+ {
+  "label": "the extractor is armed with the group size rather than the spacing",
+  "find": "\tsignBits.reset(mapp->shaperSR, 0);\n",
+  "replace": "\tsignBits.reset(signBitGroupSize, 0);\n"
+ },
+ {
+  "label": "the extractor's state machine starts at one",
+  "find": "\tsignBits.reset(mapp->shaperSR, 0);\n\n\tsampleCount = 0;\n",
+  "replace": "\tsignBits.reset(mapp->shaperSR, 1);\n\n\tsampleCount = 0;\n"
+ },
+ {
+  "label": "the extractor is not re-armed at all",
+  "find": "\tsignBits.reset(mapp->shaperSR, 0);\n\n\tsampleCount = 0;\n\tframeStart = 0;\n",
+  "replace": "\n\tsampleCount = 0;\n\tframeStart = 0;\n"
+ },
+ {
+  "label": "the RBS frame position survives the reset",
+  "find": "\tsampleCount = 0;\n\tframeStart = 0;\n\trbsFramePosition = 0;\n",
+  "replace": "\tsampleCount = 0;\n\tframeStart = 0;\n"
+ },
+ {
+  "label": "the histogram is cleared to the row length rather than to 128",
+  "find": "\t\tfor (j = 0; j < V90DEMAPPER_LEVELS; j++) {\n\t\t\terrorSum[i][j] = 0;\n\t\t\terrorCount[i][j] = 0;\n\t\t}\n",
+  "replace": "\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\terrorSum[i][j] = 0;\n\t\t\terrorCount[i][j] = 0;\n\t\t}\n"
+ },
+ {
+  "label": "only the error sums are cleared, not their counts",
+  "find": "\t\t\terrorSum[i][j] = 0;\n\t\t\terrorCount[i][j] = 0;\n",
+  "replace": "\t\t\terrorSum[i][j] = 0;\n"
+ },
+ {
+  "label": "the delay is bounded the other way round",
+  "find": "\tif (params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM <\n\t    params->TRN2D_DD_LENGTH)\n",
+  "replace": "\tif (params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM >\n\t    params->TRN2D_DD_LENGTH)\n"
+ },
+ {
+  "label": "the delay is bounded against the integration time instead",
+  "find": "\t    params->TRN2D_DD_LENGTH)\n\t\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;\n",
+  "replace": "\t    params->DEMAPPER_ERROR_HISTOGRAM_INTEGRATION_TIME)\n\t\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;\n"
+ },
+ {
+  "label": "the delay is seeded unconditionally",
+  "find": "\tif (params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM <\n\t    params->TRN2D_DD_LENGTH)\n\t\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;\n\telse\n\t\thistogramDelay = 0;\n",
+  "replace": "\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;\n"
+ },
+ {
+  "label": "+0x1eac is cleared with the words either side of it",
+  "find": "\tuint_1eb0 = 0;\n\tdecisionFramePosition = 0;\n",
+  "replace": "\tuint_1eb0 = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n"
+ },
+ {
+  "label": "the study length keeps whatever it held",
+  "find": "\tshort_1e9c = 0;\n\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;\n",
+  "replace": "\tshort_1e9c = 0;\n\tlinearMappStudyEnabled = 0;\n"
+ },
+ {
+  "label": "+0x1eb4 is written 32 bits wide",
+  "find": "\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;\n}\n",
+  "replace": "\tuint_1ea8 = 0;\n\t*(unsigned int *)&linearMappStudyEnabled = 0;\n}\n"
+ },
+ {
+  "label": "reset's own phase loop clears five constellations, not six",
+  "find": "\thistogramIntegration = 0;\n\n\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n",
+  "replace": "\thistogramIntegration = 0;\n\n\tfor (phase = 0; phase + 1 < V90DEMAPPER_CONSTELLATIONS; phase++)\n"
+ },
+ {
+  "label": "reset's own code loop stops one cell short of 128",
+  "find": "\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tuint_1eb0 = 0;\n",
+  "replace": "\t\tfor (code = 0; code + 1 < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tuint_1eb0 = 0;\n"
+ },
+ {
+  "label": "the delay bound is not strict",
+  "find": "\tif (params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM <\n\t    params->TRN2D_DD_LENGTH)\n\t\thistogramDelay",
+  "replace": "\tif (params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM <=\n\t    params->TRN2D_DD_LENGTH)\n\t\thistogramDelay"
+ }
+]

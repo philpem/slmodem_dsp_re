@@ -99,8 +99,8 @@ V90Parameters::setToDefault()
 	AGC_ADAPTATION_DURATION = 1000;
 	unnamed_06c = 0x3f800000;	/* the object stores 1.0f here -- finding 878 */
 	unnamed_070 = 0x3f19999a;	/* the object stores 0.6f here -- finding 878 */
-	unnamed_074 = 92;
-	unnamed_078 = 8;
+	maxUcode = 92;			/* +0x074, named by finding 3527 */
+	nofUcodesInTrn2 = 8;		/* +0x078, named by finding 3527 */
 	unnamed_07c = 4;
 	unnamed_080 = 4;
 	INITIAL_BAUD_OFFSET = 0.0f;

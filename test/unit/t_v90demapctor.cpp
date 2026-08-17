@@ -24,10 +24,10 @@
  * uninitialised stack and copy it in, throwing away the seed the whole test
  * rests on (findings 223, 224).
  *
- * TWO WORDS CANNOT BE COMPARED AND ARE NOT.  `array_1c` and `array_20` are
+ * TWO WORDS CANNOT BE COMPARED AND ARE NOT.  `codes` and `signs` are
  * separate `sysdep_malloc`s on the two sides and hold different addresses for
  * ever.  What is compared instead is what those addresses stand for -- the
- * CONTENTS of both blocks over the exact length `count_24` implies, their
+ * CONTENTS of both blocks over the exact length `sampleCapacity` implies, their
  * SIZES from `malloc_usable_size`, and the number of allocations and the
  * exact number of BYTES ASKED FOR.  That last one is the only check that can
  * see an allocation of the wrong size in a way the contents cannot: a block
@@ -245,7 +245,7 @@ run_ctor(void)
 			 * are asserted and not only compared: two constructors
 			 * that both did nothing would agree (finding 1105).
 			 */
-			diff_eq_int("count_24 (%ld)", (long)THEIRS.count_24,
+			diff_eq_int("sampleCapacity (%ld)", (long)THEIRS.sampleCapacity,
 				    (long)levels, trial);
 			diff_eq_int("params (%ld)",
 				    (void *)THEIRS.params == (void *)PARAMS, 1,
@@ -253,25 +253,30 @@ run_ctor(void)
 			diff_eq_int("adiDetector (%ld)",
 				    (void *)THEIRS.adiDetector ==
 				    (void *)adi_obj, 1, trial);
-			diff_eq_int("byte_664 (%ld)", (long)THEIRS.byte_664, 0,
+			diff_eq_int("signDecoder (%ld)",
+				    (long)THEIRS.signDecoder.prev_, 0,
 				    trial);
 			diff_eq_int("errorHistogramCount (%ld)",
 				    (long)THEIRS.errorHistogramCount, 0, trial);
-			diff_eq_int("word_04 (%ld)", (long)THEIRS.word_04, 0,
+			diff_eq_int("bitsPerFrame (%ld)", (long)THEIRS.bitsPerFrame, 0,
 				    trial);
 			diff_eq_int("word_08 (%ld)", (long)THEIRS.word_08, 0,
 				    trial);
-			diff_eq_int("word_0c (%ld)", (long)THEIRS.word_0c, 0,
+			diff_eq_int("signBitsPerFrame (%ld)",
+				    (long)THEIRS.signBitsPerFrame, 0,
 				    trial);
-			diff_eq_int("word_10 (%ld)", (long)THEIRS.word_10, 0,
+			diff_eq_int("signBitGroups (%ld)",
+				    (long)THEIRS.signBitGroups, 0,
 				    trial);
-			diff_eq_int("word_14 (%ld)", (long)THEIRS.word_14, 0,
+			diff_eq_int("signBitGroupSize (%ld)",
+				    (long)THEIRS.signBitGroupSize, 0,
 				    trial);
-			diff_eq_int("word_18 (%ld)", (long)THEIRS.word_18, 0,
+			diff_eq_int("rbsFramePosition (%ld)",
+				    (long)THEIRS.rbsFramePosition, 0,
 				    trial);
-			diff_eq_int("word_28 (%ld)", (long)THEIRS.word_28, 0,
+			diff_eq_int("frameStart (%ld)", (long)THEIRS.frameStart, 0,
 				    trial);
-			diff_eq_int("word_2c (%ld)", (long)THEIRS.word_2c, 0,
+			diff_eq_int("sampleCount (%ld)", (long)THEIRS.sampleCount, 0,
 				    trial);
 			for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
 				diff_eq_int("constellationSize[%ld]",
@@ -322,18 +327,18 @@ run_ctor(void)
 					    (long)malloc_usable_size(rb), trial);
 			}
 			if (pa && pb) {
-				diff_eq_int("array_1c contents (%ld)",
+				diff_eq_int("codes contents (%ld)",
 					    memcmp(pa, pb, levels * 4) == 0, 1,
 					    trial);
-				diff_eq_int("array_1c size (%ld)",
+				diff_eq_int("codes size (%ld)",
 					    (long)malloc_usable_size(pa),
 					    (long)malloc_usable_size(pb), trial);
 			}
 			if (qa && qb) {
-				diff_eq_int("array_20 contents (%ld)",
+				diff_eq_int("signs contents (%ld)",
 					    memcmp(qa, qb, levels) == 0, 1,
 					    trial);
-				diff_eq_int("array_20 size (%ld)",
+				diff_eq_int("signs size (%ld)",
 					    (long)malloc_usable_size(qa),
 					    (long)malloc_usable_size(qb), trial);
 			}

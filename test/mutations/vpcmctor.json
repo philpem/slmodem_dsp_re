@@ -50,12 +50,12 @@
  {
   "label": "the V90Modem is given a DIL descriptor that is not this object's",
   "find": "\t  modem(side, modemParams, &dil, nSamples, v90Mode, 1),",
-  "replace": "\t  modem(side, modemParams, (tagV90DILdescriptor *)&word_1740,\n\t\tnSamples, v90Mode, 1),"
+  "replace": "\t  modem(side, modemParams, (tagV90DILdescriptor *)&sweepCounter,\n\t\tnSamples, v90Mode, 1),"
  },
  {
   "label": "the V92Modem is given a DIL descriptor that is not the V90Modem's",
   "find": "\t\t   nSamples, &dil, v92Mode),",
-  "replace": "\t\t   nSamples, (tagV90DILdescriptor *)&word_1740, v92Mode),"
+  "replace": "\t\t   nSamples, (tagV90DILdescriptor *)&sweepCounter, v92Mode),"
  },
  {
   "label": "the V90Modem's session flag is 0 and not the literal 1",
@@ -199,8 +199,8 @@
   "replace": "\t(void)0;"
  },
  {
-  "label": "word_1740 is left holding the storage's bytes",
-  "find": "\tword_1740 = 0;",
+  "label": "sweepCounter is left holding the storage's bytes",
+  "find": "\tsweepCounter = 0;",
   "replace": "\t(void)0;"
  },
  {

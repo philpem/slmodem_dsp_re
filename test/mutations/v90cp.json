@@ -1,56 +1,92 @@
 [
- {"label": "one buffer fewer",
-  "find": "\tbuf[5] = sysdep_malloc(V90CP_BUFSIZE);\n",
-  "replace": ""},
- {"label": "a buffer of half the size",
-  "find": "\tbuf[2] = sysdep_malloc(V90CP_BUFSIZE);",
-  "replace": "\tbuf[2] = sysdep_malloc(V90CP_BUFSIZE / 2);"},
- {"label": "the same buffer stored twice",
-  "find": "\tbuf[4] = sysdep_malloc(V90CP_BUFSIZE);",
-  "replace": "\tbuf[4] = buf[3];"},
- {"label": "the detector's counter left alone",
-  "find": "\tword_ca4 = 0;\n",
-  "replace": ""},
- {"label": "the detector's first flag left alone",
-  "find": "\tbyte_ca9 = 0;\n",
-  "replace": ""},
- {"label": "the detector's second flag left alone",
-  "find": "\tbyte_caa = 0;\n",
-  "replace": ""},
- {"label": "+0xcac starts at 17, not 18",
-  "find": "\tword_cac = 18;",
-  "replace": "\tword_cac = 17;"},
- {"label": "+0xcac written as a byte",
-  "find": "\tword_cac = 18;",
-  "replace": "\t*(unsigned char *)&word_cac = 18;"},
- {"label": "+0xcb0 left alone",
-  "find": "\tword_cb0 = 0;\n",
-  "replace": ""},
- {"label": "the MP counter left alone",
-  "find": "\tnofRecievedMp = 0;\n",
-  "replace": ""},
- {"label": "the MPNot counter left alone",
-  "find": "\tnofRecievedMpNot = 0;\n",
-  "replace": ""},
- {"label": "+0x13 left alone, as reset() leaves it",
+ {
+  "label": "one buffer fewer",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n",
+  "replace": ""
+ },
+ {
+  "label": "a buffer of half the size",
+  "find": "\tbuf[2] = (int *)sysdep_malloc(V90CP_BUFSIZE);",
+  "replace": "\tbuf[2] = (int *)sysdep_malloc(V90CP_BUFSIZE / 2);"
+ },
+ {
+  "label": "the same buffer stored twice",
+  "find": "\tbuf[4] = (int *)sysdep_malloc(V90CP_BUFSIZE);",
+  "replace": "\tbuf[4] = buf[3];"
+ },
+ {
+  "label": "the detector's counter left alone",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n"
+ },
+ {
+  "label": "the detector's first flag left alone",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_caa = 0;\n"
+ },
+ {
+  "label": "the detector's second flag left alone",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n"
+ },
+ {
+  "label": "+0xcac starts at 17, not 18",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 17;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n"
+ },
+ {
+  "label": "+0xcac written as a byte",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\t*(unsigned char *)&word_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n"
+ },
+ {
+  "label": "+0xcb0 left alone",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tword_cac = 18;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n"
+ },
+ {
+  "label": "the MP counter left alone",
+  "find": "\tnofRecievedMp = 0;\n\tnofRecievedMpNot = 0;\n\n\tbyte_13 = 0;",
+  "replace": "\tnofRecievedMpNot = 0;\n\n\tbyte_13 = 0;"
+ },
+ {
+  "label": "the MPNot counter left alone",
+  "find": "\tnofRecievedMpNot = 0;\n\n\tbyte_13 = 0;",
+  "replace": "\tbyte_13 = 0;"
+ },
+ {
+  "label": "+0x13 left alone, as reset() leaves it",
   "find": "\tbyte_13 = 0;\n",
-  "replace": ""},
- {"label": "+0x3bbc starts at 0, not -1",
-  "find": "\tword_3bbc = -1;",
-  "replace": "\tword_3bbc = 0;"},
- {"label": "the first free is not guarded",
+  "replace": ""
+ },
+ {
+  "label": "+0x3bbc starts at 0, not -1",
+  "find": "\tbyte_13 = 0;\n\tword_3bbc = -1;",
+  "replace": "\tbyte_13 = 0;\n\tword_3bbc = 0;"
+ },
+ {
+  "label": "the first free is not guarded",
   "find": "\tif (buf[0] != 0)\n\t\tsysdep_free(buf[0]);",
-  "replace": "\tsysdep_free(buf[0]);"},
- {"label": "the last free is not guarded",
+  "replace": "\tsysdep_free(buf[0]);"
+ },
+ {
+  "label": "the last free is not guarded",
   "find": "\tif (buf[5] != 0)\n\t\tsysdep_free(buf[5]);",
-  "replace": "\tsysdep_free(buf[5]);"},
- {"label": "the guard is inverted",
+  "replace": "\tsysdep_free(buf[5]);"
+ },
+ {
+  "label": "the guard is inverted",
   "find": "\tif (buf[2] != 0)\n\t\tsysdep_free(buf[2]);",
-  "replace": "\tif (buf[2] == 0)\n\t\tsysdep_free(buf[2]);"},
- {"label": "one buffer is never released",
+  "replace": "\tif (buf[2] == 0)\n\t\tsysdep_free(buf[2]);"
+ },
+ {
+  "label": "one buffer is never released",
   "find": "\tif (buf[3] != 0)\n\t\tsysdep_free(buf[3]);\n",
-  "replace": ""},
- {"label": "the released pointer is cleared afterwards",
+  "replace": ""
+ },
+ {
+  "label": "the released pointer is cleared afterwards",
   "find": "\tif (buf[1] != 0)\n\t\tsysdep_free(buf[1]);",
-  "replace": "\tif (buf[1] != 0) {\n\t\tsysdep_free(buf[1]);\n\t\tbuf[1] = 0;\n\t}"}
+  "replace": "\tif (buf[1] != 0) {\n\t\tsysdep_free(buf[1]);\n\t\tbuf[1] = 0;\n\t}"
+ }
 ]

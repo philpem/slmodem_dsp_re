@@ -259,10 +259,10 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 * a caller retunes it later via FPM_TONE_set_freq.
 	 */
 	state->iir_self = state->iir_coeff;
-	state->r100[0] = 0;
-	state->r100[1] = 0;
-	state->r100[2] = 0;
-	state->r100[3] = 0;
+	state->kill_state[0] = 0;
+	state->kill_state[1] = 0;
+	state->kill_state[2] = 0;
+	state->kill_state[3] = 0;
 
 	p.phase = 0;
 	p.inc = 0;
@@ -482,6 +482,32 @@ FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
 }
 
 /*
+ * FPM_TONE_kill -- .text 0x0ab490, 61 bytes.
+ *
+ * One tail call's worth of function: the detector's notch, run over the
+ * caller's buffer to take the tone back out of it.
+ *
+ * Three things it does NOT do, each of which would be the natural guess:
+ *
+ *   - it does not use `iir_coeff` directly.  The object stores a pointer to
+ *     its own coefficients at +0xfc and this reads that, `mov 0xfc(%edx)`,
+ *     rather than the `lea 0x36(%edx)` an array reference would give.
+ *   - it does not share `iir_state`.  +0x100 is a second four-word direct
+ *     form I state, so a kill pass and a detect pass over different streams
+ *     do not corrupt each other's history.
+ *   - it does not touch the phase-reversal fields at +0xf4 / +0xf8, which are
+ *     FPM_TONE_find_rev's.
+ *
+ * The section count is the immediate 1: one biquad, matching the five
+ * coefficients FPM_TONE_create lays down at +0x36.
+ */
+void
+FPM_TONE_kill(struct fpm_tone *state, short *samples, short count)
+{
+	FPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);
+}
+
+/*
  * The reserved region is a byte count from a 32-bit build, so these are
  * compiled only under that ABI -- see the same note in src/pump/b103/b103fp.c.
  */
@@ -505,7 +531,7 @@ TONE_ASSERT_OFF(e_total, 0x4a);
 TONE_ASSERT_OFF(rev_block, 0xf4);
 TONE_ASSERT_OFF(rev_acc, 0xf8);
 TONE_ASSERT_OFF(iir_self, 0xfc);
-TONE_ASSERT_OFF(r100, 0x100);
+TONE_ASSERT_OFF(kill_state, 0x100);
 
 typedef char fpm_tone_cfg_size[(sizeof(struct fpm_tone_cfg) == 0x24) ? 1 : -1];
 typedef char fpm_tone_size[(sizeof(struct fpm_tone) == FPM_TONE_STATE_SIZE)

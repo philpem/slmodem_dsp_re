@@ -127,8 +127,28 @@ public:
 
 	/*
 	 * +0x04  Round trip delay, whole-word copy out of V90Parameters+0x1c,
-	 * printed with %d.  Signedness is not recoverable: nothing does
-	 * arithmetic on it.
+	 * printed with %d.
+	 *
+	 * THIS USED TO SAY "Signedness is not recoverable: nothing does
+	 * arithmetic on it".  Something does now, and it says UNSIGNED.
+	 * `V90Demodulator::getAT_UD` scales this field by 10/96 into the
+	 * diagnostics record and the object divides with
+	 *
+	 *     mov $0xaaaaaaab,%eax ; mul %ebx ; shr $0x6,%edx
+	 *
+	 * -- `mul`, and with no sign correction anywhere in the range, where
+	 * a signed divide by 96 has to adjust the quotient for a negative
+	 * dividend.  Three other entries (`enterRRN`, `enterFPE`,
+	 * `enterPhase4`) also do arithmetic on it, but only through `lea`,
+	 * which is signedness-blind and settles nothing.
+	 *
+	 * THE TYPE IS LEFT AS `int` DELIBERATELY AND THE CAST IS AT THE USE
+	 * SITE.  This header is included by four live branches, and finding
+	 * 3511 is what a type change reaching one of them costs when the
+	 * other half asserts against the old shape.  `getAT_UD` therefore
+	 * spells the conversion itself and reproduces the object's
+	 * instructions today; the retype belongs to a pass that owns this
+	 * header and can move every user at once.  Finding 4903.
 	 */
 	int rtd;
 

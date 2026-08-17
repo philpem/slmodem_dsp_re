@@ -549,8 +549,8 @@ v90Phase34(void *objp)
 		 * where every other arm stores the whole packed complex at
 		 * once -- and arm it only once the state has moved past 2.
 		 */
-		o->f25d0 = 0;
-		o->f25d2 = 0;
+		o->txpoint.c[0] = 0;
+		o->txpoint.c[1] = 0;
 		txmit(o);
 		if (o->v90_receiver <= 2)
 			return 0;
@@ -570,10 +570,10 @@ v90Phase34(void *objp)
 	 * because folding would have to invent a conditional debug site.
 	 */
 	case 3:
-		*(int *)&o->f25d0 = vect4[0];
+		o->txpoint.word = vect4[0];
 		txmit(o);
 		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
-		*(int *)&o->f25d0 = vect4[3];
+		o->txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
 		n = (short)((unsigned short)o->f25c0 + 1);
@@ -600,10 +600,10 @@ v90Phase34(void *objp)
 		return 0;
 
 	case 6:
-		*(int *)&o->f25d0 = vect4[0];
+		o->txpoint.word = vect4[0];
 		txmit(o);
 		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
-		*(int *)&o->f25d0 = vect4[3];
+		o->txpoint.word = vect4[3];
 		txmit(o);
 		n = (short)((unsigned short)o->f25c0 + 1);
 		if (n <= 0x7f) {
@@ -615,10 +615,10 @@ v90Phase34(void *objp)
 		return 0;
 
 	case 4:
-		*(int *)&o->f25d0 = vect4[2];
+		o->txpoint.word = vect4[2];
 		txmit(o);
 		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
-		*(int *)&o->f25d0 = vect4[1];
+		o->txpoint.word = vect4[1];
 		txmit(o);
 		n = (short)((unsigned short)o->f25c0 + 1);
 		if (n != 0x10) {
@@ -633,10 +633,10 @@ v90Phase34(void *objp)
 		return 0;
 
 	case 7:
-		*(int *)&o->f25d0 = vect4[2];
+		o->txpoint.word = vect4[2];
 		txmit(o);
 		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
-		*(int *)&o->f25d0 = vect4[1];
+		o->txpoint.word = vect4[1];
 		txmit(o);
 		n = (short)((unsigned short)o->f25c0 + 1);
 		if (n != 0x10) {
@@ -663,15 +663,15 @@ v90Phase34(void *objp)
 			d = (short)V34scrambler((unsigned *)&o->f25cc,
 						0, 3, 2);
 			q = o->f25c8;
-			*(int *)&o->f25d0 = vect16[d + q * 4];
+			o->txpoint.word = vect16[d + q * 4];
 		} else if (c == OB_CONSTEL_4) {
 			q = (short)V34scrambler((unsigned *)&o->f25cc,
 						0, 3, 2);
 			o->f25c8 = (short)q;
-			*(int *)&o->f25d0 = vect4[q];
+			o->txpoint.word = vect4[q];
 		} else {
-			o->f25d0 = 0;
-			o->f25d2 = 0;
+			o->txpoint.c[0] = 0;
+			o->txpoint.c[1] = 0;
 		}
 
 		txmit(o);

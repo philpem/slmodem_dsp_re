@@ -46,6 +46,32 @@ extern "C" {
 short ref_p3d_getV90Decision(void *self, float sample)
 	asm("ref__ZN20V90Phase3Demodulator14getV90DecisionEf");
 
+/*
+ * The ten small members.  The return types below are the reconstruction's
+ * reading of the object and are therefore part of what is under test: a
+ * `getMaxUcode` that returned something other than a pointer would still link.
+ */
+int ref_p3d_getDecision(void *self, float sample)
+	asm("ref__ZN20V90Phase3Demodulator11getDecisionEf");
+int ref_p3d_twoLevelDemod(void *self, float sample, int *bit)
+	asm("ref__ZN20V90Phase3Demodulator13twoLevelDemodEfRi");
+void ref_p3d_exitDIL(void *self)
+	asm("ref__ZN20V90Phase3Demodulator7exitDILEv");
+int ref_p3d_JdNotDetector(void *self, int symbol)
+	asm("ref__ZN20V90Phase3Demodulator13JdNotDetectorEi");
+void ref_p3d_setDigitalImairmentsInfo(void *self)
+	asm("ref__ZN20V90Phase3Demodulator24setDigitalImairmentsInfoEv");
+void ref_p3d_enterWaitForANSpcmDrop(void *self)
+	asm("ref__ZN20V90Phase3Demodulator22enterWaitForANSpcmDropEv");
+void ref_p3d_incrementFramePosition(void *self)
+	asm("ref__ZN20V90Phase3Demodulator22incrementFramePositionEv");
+void ref_p3d_setAltRbsParams(void *self)
+	asm("ref__ZN20V90Phase3Demodulator15setAltRbsParamsEv");
+void ref_p3d_resetJdNotDetector(void *self)
+	asm("ref__ZN20V90Phase3Demodulator18resetJdNotDetectorEv");
+unsigned char *ref_p3d_getMaxUcode(void *self)
+	asm("ref__ZN20V90Phase3Demodulator11getMaxUcodeEv");
+
 extern unsigned int ref_dsplibs_debug_level;
 }
 
@@ -821,6 +847,738 @@ run_jdnot(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * THE TEN SMALL MEMBERS.  They share this file's rig because they share its
+ * object: `build` gives each side its own detector, Sd detector, tone
+ * detector, Jd, DIL descriptor and parameter block, all seeded from varied
+ * bytes and never zeroed (finding 230), and `compare_all` compares every one
+ * of them plus the transcript after every call.
+ *
+ * WHAT THE OBJECT COMPARISON CANNOT SEE IS THE RETURN, and four of the ten
+ * have one.  Each is compared explicitly below; `getMaxUcode`'s is a pointer
+ * into each side's OWN detector, so it is compared as an offset from that
+ * side's base -- two static arrays at two addresses never compare equal.
+ * ===========================================================================
+ */
+
+/* The states `exitDIL` acts on, and a spread of the ones it must ignore. */
+static const int exitdil_states[] = {
+	0, 1, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 26, 30, 40
+};
+#define N_EXITDIL ((int)(sizeof(exitdil_states) / sizeof(exitdil_states[0])))
+
+/*
+ * `resetJdNotDetector`, `getMaxUcode`, `setAltRbsParams` and
+ * `incrementFramePosition` -- the four that are one statement each.
+ */
+static int
+run_p3d_leaves(void)
+{
+	int trial, st, w;
+	int sawwrap = 0, sawstep = 0, sawcleared = 0, sawcopied = 0;
+
+	diff_begin("V90Phase3Demodulator: the four one-statement members");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		set_level((trial & 2) ? 2u : 0u);
+
+		for (st = 0; st < 6; st++)
+			for (w = 0; w < 4; w++) {
+				long tag = ((long)trial << 16)
+				    | ((long)st << 8) | (long)w;
+				unsigned char *ga, *gb;
+				int side;
+
+				build(trial, (PcmType)(trial & 1),
+				      (unsigned char)(0x40 + trial), 0);
+				dsplib_debug_capture_reset();
+				dirty(0, trial, 4, w2c[w]);
+				dirty(1, trial, 4, w2c[w]);
+
+				/* The frame position under test, both sides. */
+				for (side = 0; side < 2; side++) {
+					slot[side].o.word_04 =
+					    (unsigned int)st;
+					slot[side].o.word_404 = 7u + (unsigned)w;
+					parm[side].unnamed_440 =
+					    3.5f + (float)trial;
+					parm[side].
+					  PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
+					    = -1.0f - (float)trial;
+					adid[side].maxUcode[trial % 6] =
+					    (unsigned char)(0x11 + trial);
+				}
+
+				slot[0].o.resetJdNotDetector();
+				ref_p3d_resetJdNotDetector(&slot[1].o);
+				compare_all("after resetJdNotDetector", tag);
+				if (slot[1].o.word_404 == 0)
+					sawcleared++;
+
+				slot[0].o.setAltRbsParams();
+				ref_p3d_setAltRbsParams(&slot[1].o);
+				compare_all("after setAltRbsParams", tag);
+				if (parm[1].
+				      PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
+				    == parm[1].unnamed_440)
+					sawcopied++;
+
+				ga = slot[0].o.getMaxUcode();
+				gb = ref_p3d_getMaxUcode(&slot[1].o);
+				diff_eq_int("getMaxUcode, as an offset into the"
+					    " detector (%ld)",
+					    (long)(ga - (unsigned char *)&adid[0]),
+					    (long)(gb - (unsigned char *)&adid[1]),
+					    tag);
+				diff_eq_int("and it is the maxUcode array"
+					    " (%ld)",
+					    (long)(gb - (unsigned char *)&adid[1]),
+					    (long)__builtin_offsetof(
+						V90AutoDigitalImpDetector,
+						maxUcode), tag);
+				compare_all("after getMaxUcode", tag);
+
+				slot[0].o.incrementFramePosition();
+				ref_p3d_incrementFramePosition(&slot[1].o);
+				compare_all("after incrementFramePosition", tag);
+				if (st == 5) {
+					if (slot[1].o.word_04 == 0)
+						sawwrap++;
+				} else if (slot[1].o.word_04 ==
+					   (unsigned int)st + 1u) {
+					sawstep++;
+				}
+
+				teardown();
+			}
+	}
+
+	set_level(0);
+
+	/*
+	 * Anti-vacuity, and each counts trials whose OBJECT differed from
+	 * another trial's rather than a branch believed taken (finding 3509).
+	 */
+	diff_eq_int("the frame position wrapped, and stepped (%ld)",
+		    sawwrap > 0 && sawstep > 0, 1, 0);
+	diff_eq_int("the JdNot counter was cleared (%ld)", sawcleared > 0, 1,
+		    0);
+	diff_eq_int("the alt-RBS parameter was copied (%ld)", sawcopied > 0, 1,
+		    0);
+
+	return diff_end();
+}
+
+/*
+ * `enterWaitForANSpcmDrop` -- and the state it is already in, which is the
+ * only input that separates the guard from an unconditional store.  Called
+ * TWICE per trial: the second call must do nothing whatever the first did,
+ * and it is the transcript that says so.
+ */
+static int
+run_p3d_enterdrop(void)
+{
+	int trial, i;
+	int sawentered = 0, sawalready = 0;
+
+	diff_begin("V90Phase3Demodulator::enterWaitForANSpcmDrop");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		set_level((trial & 1) ? 2u : 0u);
+
+		for (i = 0; i < N_EXITDIL; i++) {
+			long tag = ((long)trial << 16) | (long)i;
+			unsigned lines;
+
+			build(trial, (PcmType)(trial & 1),
+			      (unsigned char)(0x40 + trial), 0);
+			dsplib_debug_capture_reset();
+			dirty(0, trial, exitdil_states[i], 13u);
+			dirty(1, trial, exitdil_states[i], 13u);
+
+			slot[0].o.enterWaitForANSpcmDrop();
+			ref_p3d_enterWaitForANSpcmDrop(&slot[1].o);
+			compare_all("after enterWaitForANSpcmDrop", tag);
+
+			lines = dsplib_debug_capture_lines(1);
+			if (exitdil_states[i] == 30) {
+				if (slot[1].o.word_2c == 13u)
+					sawalready++;
+			} else if (slot[1].o.word_2c == 0
+				   && (int)slot[1].o.state == 30) {
+				sawentered++;
+			}
+			(void)lines;
+
+			/* Again: idempotent, and silent the second time. */
+			dsplib_debug_capture_reset();
+			slot[0].o.enterWaitForANSpcmDrop();
+			ref_p3d_enterWaitForANSpcmDrop(&slot[1].o);
+			compare_all("after enterWaitForANSpcmDrop repeated",
+				    tag);
+			diff_eq_int("the repeat said nothing (%ld)",
+				    (long)dsplib_debug_capture_lines(1), 0L,
+				    tag);
+
+			teardown();
+		}
+	}
+
+	set_level(0);
+
+	diff_eq_int("the state was entered, and was already held (%ld)",
+		    sawentered > 0 && sawalready > 0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `exitDIL` -- seven states act and the rest do not, and the modulator's
+ * event code decides whether the terminated transition follows.
+ */
+static int
+run_p3d_exitdil(void)
+{
+	int trial, i, e;
+	int sawacted = 0, sawignored = 0, sawterm = 0, sawnoterm = 0;
+
+	diff_begin("V90Phase3Demodulator::exitDIL");
+
+	for (trial = 0; trial < NTRIAL / 2; trial++) {
+		set_level((trial & 1) ? 2u : 0u);
+
+		for (i = 0; i < N_EXITDIL; i++)
+			for (e = 0; e < 8; e++) {
+				long tag = ((long)trial << 16)
+				    | ((long)i << 8) | (long)e;
+				int st = exitdil_states[i];
+				int side;
+
+				build(trial, (PcmType)(trial & 1),
+				      (unsigned char)(0x40 + trial), 0);
+				dsplib_debug_capture_reset();
+				dirty(0, trial, st, 29u);
+				dirty(1, trial, st, 29u);
+
+				for (side = 0; side < 2; side++) {
+					V90Phase3Modulator *m =
+					    &slot[side].o.phase3Modulator;
+
+					m->eventCode = (unsigned int)e;
+					/*
+					 * THE MODULATOR HAS TO BE IN ITS OWN
+					 * DIL STATE OR ITS `exitDIL` RETURNS
+					 * AT ITS FIRST LINE, and then neither
+					 * "does not tell the modulator" nor
+					 * the ordering of the two statements
+					 * is observable -- both mutations read
+					 * NOT CAUGHT, which is how this was
+					 * found.  `reset` leaves it in
+					 * TRN1D, so it is placed here: half
+					 * the grid in DIL with a non-zero
+					 * symbol count, which is what makes
+					 * the modulator act, and the segment
+					 * position decides which of its two
+					 * arms -- only one of which sets the
+					 * event code this method then reads.
+					 */
+					if ((e & 1) != 0) {
+						m->state = P3M_STATE_DIL;
+						m->symbolCount =
+						    1u + (unsigned int)e;
+						m->segmentPos =
+						    (unsigned int)(e & 2);
+					}
+				}
+
+				slot[0].o.exitDIL();
+				ref_p3d_exitDIL(&slot[1].o);
+				compare_all("after exitDIL", tag);
+
+				if (st >= 10 && st <= 16) {
+					sawacted++;
+					if ((int)slot[1].o.state == 0x13)
+						sawterm++;
+					else
+						sawnoterm++;
+				} else if ((int)slot[1].o.state == st
+					   && slot[1].o.word_2c == 29u) {
+					sawignored++;
+				}
+
+				teardown();
+			}
+	}
+
+	set_level(0);
+
+	diff_eq_int("a DIL state acted, and a non-DIL state did not (%ld)",
+		    sawacted > 0 && sawignored > 0, 1, 0);
+	diff_eq_int("the terminated transition fired, and did not (%ld)",
+		    sawterm > 0 && sawnoterm > 0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `JdNotDetector` -- the run length, and the one frame in seventy-two.
+ *
+ * `w404_v` above straddles the `> 0xb` bound and lands on 12 exactly, which
+ * is what separates that bound from `> 0xc`; the `word_2c` values here
+ * straddle the modulus, which is what separates 72 from anything else.
+ */
+static int
+run_p3d_jdnotdetector(void)
+{
+	/*
+	 * 48 AND 120 ARE THE ONES THAT SEPARATE 72 FROM 36.  Every other value
+	 * here is 12 modulo 72, which is 12 modulo 36 as well, so a modulus of
+	 * 36 answers the same on all of them -- the mutation read NOT CAUGHT
+	 * until these two were added.
+	 */
+	static const unsigned int w2c_v[] = {
+		0u, 11u, 12u, 13u, 48u, 71u, 72u, 83u, 84u, 120u, 143u, 155u,
+		156u, 227u
+	};
+	static const int sym_v[] = { 0, 1, -1, 7 };
+	int trial, w, c, k;
+	int sawyes = 0, sawno = 0, sawinc = 0, sawclr = 0;
+
+	diff_begin("V90Phase3Demodulator::JdNotDetector");
+
+	for (trial = 0; trial < NTRIAL / 2; trial++) {
+		set_level((trial & 1) ? 2u : 0u);
+
+		for (w = 0; w < (int)(sizeof(w2c_v) / sizeof(w2c_v[0])); w++)
+		    for (c = 0; c < 8; c++)
+			for (k = 0;
+			     k < (int)(sizeof(sym_v) / sizeof(sym_v[0])); k++) {
+				long tag = ((long)trial << 24) | ((long)w << 16)
+				    | ((long)c << 8) | (long)k;
+				int side, ga, gb;
+				unsigned int before;
+
+				build(trial, (PcmType)(trial & 1),
+				      (unsigned char)(0x40 + trial), 0);
+				dsplib_debug_capture_reset();
+				dirty(0, trial, 9, w2c_v[w]);
+				dirty(1, trial, 9, w2c_v[w]);
+
+				for (side = 0; side < 2; side++) {
+					slot[side].o.word_404 = w404_v[c];
+					slot[side].o.word_2c = w2c_v[w];
+				}
+				before = w404_v[c];
+
+				ga = slot[0].o.JdNotDetector(sym_v[k]);
+				gb = ref_p3d_JdNotDetector(&slot[1].o,
+							   sym_v[k]);
+
+				diff_eq_int("JdNotDetector (%ld)", (long)ga,
+					    (long)gb, tag);
+				compare_all("after JdNotDetector", tag);
+
+				if (gb != 0)
+					sawyes++;
+				else
+					sawno++;
+				if (sym_v[k] == 0
+				    && slot[1].o.word_404 == before + 1u)
+					sawinc++;
+				if (sym_v[k] != 0 && slot[1].o.word_404 == 0)
+					sawclr++;
+
+				teardown();
+			}
+	}
+
+	set_level(0);
+
+	diff_eq_int("it answered yes, and no (%ld)", sawyes > 0 && sawno > 0,
+		    1, 0);
+	diff_eq_int("the counter stepped, and was cleared (%ld)",
+		    sawinc > 0 && sawclr > 0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `setDigitalImairmentsInfo` -- three calls on the detector, and the ORDER
+ * matters: `applyPadGainToLinMapp` divides by the gain `findPadGain` stores,
+ * and `determineMaxUcode`'s byte is what `findPadGain` starts from.  Every one
+ * of those is inside the 43 KB detector that `compare_all` compares whole.
+ *
+ * The byte at +0x3f8 is swept, because it is this method's only input and
+ * nothing else in the object reaches it.
+ *
+ * EVERY TRIAL IS PROBED FIRST, BECAUSE `findPadGain` DOES NOT ALWAYS RETURN.
+ * D290: its opening search counts a BYTE down against `(int)byte_a954 - 8`
+ * with a signed `jg`, so a `byte_a954` of 3..7 makes the bound negative and
+ * the loop never ends.  That byte is whatever `determineMaxUcode` -- the call
+ * immediately before -- happens to leave, so this method can be handed a
+ * non-terminating input by its own first line, and this fixture found four
+ * such inputs by hanging on them.
+ *
+ * So each trial runs OUR `determineMaxUcode` alone on a saved copy of the
+ * detector, reads the byte, puts the copy back, and skips the trial if the
+ * value is one of the five that do not terminate.  A hang is not a
+ * differential result, and driving the object into a loop it cannot leave is
+ * measuring D290 rather than this method (D561's ruling).  The skipped count
+ * is reported, so the denominator is visible rather than implied.
+ */
+static int
+run_p3d_setdigimp(void)
+{
+	static const unsigned char maxcode_v[] = { 0x40u, 0x7fu };
+	static unsigned char probe_[sizeof(V90AutoDigitalImpDetector)];
+	int trial, m;
+	int sawmoved = 0, ran = 0, skipped = 0;
+
+	diff_begin("V90Phase3Demodulator::setDigitalImairmentsInfo");
+
+	/*
+	 * LEVEL 0 THROUGHOUT, AND THAT IS A LIMIT WORTH STATING.  This method
+	 * prints nothing of its own -- its 54 bytes are three calls and a tail
+	 * jump -- so its whole transcript is `determineMaxUcode`'s and
+	 * `findPadGain`'s, and those are t_v90adid's subject and its 20,407
+	 * checks.  Driven from here at level 2 the two sides' REPORTS differ
+	 * (69 lines against 43 on one trial, 195 against 106 on another) while
+	 * the 43 KB detector they leave behind is identical byte for byte;
+	 * that is a difference in those two functions' diagnostic paths at
+	 * inputs t_v90adid does not reach, it is recorded in finding 4980 for
+	 * whoever owns them, and it is not this method's to fix or to excuse.
+	 * What IS this method's -- which three, in which order, with which
+	 * argument -- is entirely in the object, which is compared whole.
+	 */
+	for (trial = 0; trial < 2; trial++) {
+		set_level(0);
+
+		for (m = 0;
+		     m < (int)(sizeof(maxcode_v) / sizeof(maxcode_v[0])); m++) {
+			long tag = ((long)trial << 16) | (long)m;
+			unsigned char keep[V90ADID_PHASES];
+			int side;
+			unsigned int i;
+
+			build(trial, (PcmType)(trial & 1),
+			      (unsigned char)(0x40 + trial), 0);
+			dsplib_debug_capture_reset();
+			dirty(0, trial, 4, 5u);
+			dirty(1, trial, 4, 5u);
+			fill_tables(0, trial);
+			fill_tables(1, trial);
+
+			for (side = 0; side < 2; side++) {
+				unsigned int ph, ci;
+
+				slot[side].o.byte_3f8 = maxcode_v[m];
+				adid[side].unSuspectedPhase =
+				    (short)(trial % V90ADID_PHASES);
+				adid[side].padGain = 1.0f;
+				/*
+				 * FINITE FLOATS, PLANTED, and this is not
+				 * decoration.  `build` seeds the whole 43 KB
+				 * detector from varied bytes and `reset` does
+				 * not clear these three tables, so about one
+				 * seeded word in 250 is a signalling NaN --
+				 * the reason `set_params` above plants its two
+				 * float parameters as well.  `determineMaxUcode`
+				 * and `findPadGain` both reach a
+				 * `v == 0.0f` test that the object compiles as
+				 * ONE ordered `fcom` and GCC 13 cannot (finding
+				 * 2304), so a NaN here makes the two builds
+				 * keep different entries and print different
+				 * reports.  Measured: 131 lines against 105
+				 * before this was planted, objects identical,
+				 * transcripts not.  That divergence belongs to
+				 * V90AutoDigitalImpDetector and is already
+				 * declared against t_v90adid; reaching it from
+				 * here would be this fixture's NaN and not a
+				 * property of the method under test.
+				 */
+				for (ph = 0; ph < V90ADID_PHASES; ph++)
+					for (ci = 0; ci < V90ADID_CODES; ci++) {
+						adid[side].float_9d48[ph][ci] =
+						    1.0f + (float)((ci * 3u
+							+ ph) % 17u);
+						adid[side].float_1000[ph][ci] =
+						    0.5f + (float)(ci % 11u);
+						adid[side].float_9118[ph][ci] =
+						    2.0f + (float)(ci % 13u);
+					}
+				adid[side].float_a970 = 5.0f;
+				adid[side].float_a974 = 5.0f;
+				adid[side].float_a97c = 1.0f;
+				adid[side].float_a980 = 1.0f;
+				adid[side].trn1Sigma = 1.0f;
+				/*
+				 * 0x30-ish, as t_v90adid's own findPadGain
+				 * fixture uses.  The floor `determineMaxUcode`
+				 * starts from decides the `byte_a954` it
+				 * leaves, and a floor near zero leaves a byte
+				 * near zero -- which is D290's non-terminating
+				 * band and also a scan long enough to dominate
+				 * this binary's run time.
+				 */
+				adid[side].short_a97a =
+				    (short)(0x30 + (trial & 7));
+				for (i = 0; i < V90ADID_PHASES; i++)
+					adid[side].maxUcode[i] = 0u;
+			}
+			for (i = 0; i < V90ADID_PHASES; i++)
+				keep[i] = adid[1].maxUcode[i];
+
+			/* D290's five non-terminating inputs, probed for. */
+			memcpy(probe_, &adid[0], sizeof(probe_));
+			adid[0].determineMaxUcode((short)maxcode_v[m]);
+			{
+				unsigned char b = adid[0].byte_a954;
+
+				memcpy(&adid[0], probe_, sizeof(probe_));
+				if (b >= 3 && b <= 7) {
+					skipped++;
+					teardown();
+					continue;
+				}
+			}
+			ran++;
+
+			slot[0].o.setDigitalImairmentsInfo();
+			ref_p3d_setDigitalImairmentsInfo(&slot[1].o);
+
+			compare_all("after setDigitalImairmentsInfo", tag);
+
+			if (memcmp(keep, adid[1].maxUcode, sizeof(keep)) != 0)
+				sawmoved++;
+
+			teardown();
+		}
+	}
+
+	set_level(0);
+
+	diff_eq_int("the detector's maxUcode array moved (%ld)", sawmoved > 0,
+		    1, 0);
+	diff_eq_int("trials that ran (%ld)", ran > 0, 1, (long)ran);
+	diff_eq_int("and the D290 skip is reported, not implied (%ld)",
+		    ran + skipped,
+		    2 * (int)(sizeof(maxcode_v) / sizeof(maxcode_v[0])), 0);
+
+	return diff_end();
+}
+
+/*
+ * `twoLevelDemod` -- one bit out through the reference argument, one level
+ * back.
+ *
+ * THE -32768 TRIAL IS THE POINT OF THIS SUITE.  The object negates the level
+ * and TRUNCATES the result to sixteen bits; written `-level` on an `int` the
+ * answer for a mapping entry of -32768 is +32768 where the object's is
+ * -32768, and the two agree over every other value a `short` table can hold.
+ * So the extreme entry is planted, on both sides, for the whole grid.
+ */
+static int
+run_p3d_twolevel(void)
+{
+	static const short level_v[] = {
+		0, 1, -1, 1234, -1234, 32767, -32768, -32767
+	};
+	int trial, l, k, a;
+	int sawpos = 0, sawneg = 0, sawalt = 0, sawmain = 0, sawextreme = 0;
+
+	diff_begin("V90Phase3Demodulator::twoLevelDemod");
+
+	for (trial = 0; trial < NTRIAL / 2; trial++) {
+		set_level((trial & 1) ? 2u : 0u);
+
+		for (l = 0; l < (int)(sizeof(level_v) / sizeof(level_v[0])); l++)
+		    for (a = 0; a < 2; a++)
+			for (k = 0; k < NSAMP; k++) {
+				long tag = ((long)trial << 24) | ((long)l << 16)
+				    | ((long)a << 8) | (long)k;
+				unsigned char uc =
+				    (unsigned char)(0x40 + trial);
+				float x = samples[k];
+				int side, ga, gb, ba, bb;
+
+				build(trial, (PcmType)(trial & 1), uc, 0);
+				dsplib_debug_capture_reset();
+				dirty(0, trial, 4, 5u);
+				dirty(1, trial, 4, 5u);
+				fill_tables(0, trial);
+				fill_tables(1, trial);
+
+				for (side = 0; side < 2; side++) {
+					unsigned int ph =
+					    (unsigned int)(trial % 6);
+
+					slot[side].o.word_04 = ph;
+					/*
+					 * The two tables differ at the entry
+					 * the method reads, so which of them
+					 * it read is visible in the answer.
+					 */
+					adid[side].linMapp[ph][uc] =
+					    level_v[l];
+					adid[side].linMappAlt[ph][uc] =
+					    (short)(level_v[l] ^ 0x2a5);
+					adid[side].short_a948 = (short)a;
+					/*
+					 * `isAltRbs` answers yes only when
+					 * `short_2800[phase]` is set AND the
+					 * sample is further from the main
+					 * mapping entry than `short_a9a6`.
+					 * A threshold of 0 on the arm that
+					 * arms the flag is what makes the
+					 * alternate table reachable at all --
+					 * with a large one the counter below
+					 * reads zero, which is how this was
+					 * found.
+					 */
+					adid[side].short_2800[ph] = (short)a;
+					adid[side].short_a9a6 =
+					    (short)(a ? 0 : 0x4000);
+				}
+
+				ba = 0x5a5a5a;
+				bb = 0x5a5a5a;
+				ga = slot[0].o.twoLevelDemod(x, ba);
+				gb = ref_p3d_twoLevelDemod(&slot[1].o, x, &bb);
+
+				diff_eq_int("twoLevelDemod, the level (%ld)",
+					    (long)ga, (long)gb, tag);
+				diff_eq_int("twoLevelDemod, the bit (%ld)",
+					    (long)ba, (long)bb, tag);
+				compare_all("after twoLevelDemod", tag);
+
+				if (x > 0.0f)
+					sawpos++;
+				else
+					sawneg++;
+				if (gb == (int)(short)(level_v[l] ^ 0x2a5)
+				    || gb == -(int)(short)(level_v[l] ^ 0x2a5))
+					sawalt++;
+				if (gb == (int)level_v[l]
+				    || gb == -(int)level_v[l])
+					sawmain++;
+				if (level_v[l] == -32768 && !(x > 0.0f))
+					sawextreme++;
+
+				teardown();
+			}
+	}
+
+	set_level(0);
+
+	diff_eq_int("both signs of the sample were driven (%ld)",
+		    sawpos > 0 && sawneg > 0, 1, 0);
+	diff_eq_int("both mapping tables were reached (%ld)",
+		    sawalt > 0 && sawmain > 0, 1, 0);
+	diff_eq_int("the -32768 entry was negated (%ld)", sawextreme > 0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `getDecision` -- the session flag picks the callee, and the callee's `short`
+ * is widened.  Both callees are this file's other subject, so what is new here
+ * is only the dispatch and the widening: a level that is negative as a `short`
+ * must come back negative as an `int`.
+ */
+static int
+run_p3d_getdecision(void)
+{
+	/*
+	 * THE V.92 ARM NEEDS A Jd BLOCK.  `build` passes a null `V92Jd`,
+	 * because every suite above it drives `getV90Decision` only, and
+	 * `getV92Decision` walks the block its Jd states are about -- a null
+	 * one faults.  Storage is provided here rather than in `build`, so
+	 * that the four suites above keep exercising exactly what they did.
+	 * `snap` maps this pointer to "is it null", which is false on both
+	 * sides once it is set, so the blocks themselves are compared here.
+	 */
+	static unsigned char jd92_[2][sizeof(V92Jd)] __attribute__((aligned(8)));
+	static const unsigned int flag_v[] = { 0u, 1u, 2u, 0xffffffffu };
+	/*
+	 * SIX STATES, NAMED, NOT A SWEEP.  What is new in `getDecision` is the
+	 * dispatch and the widening; the state machines behind it are what
+	 * `run_states` above sweeps, at 80,000 trials, and repeating that here
+	 * would double this binary's run time for no claim it does not already
+	 * make.  These six are one default-block state, one that returns a
+	 * negative level, and four that move the object.
+	 */
+	static const int st_v[] = { 0, 4, 7, 9, 0x11, 0x1e };
+	int trial, f, si, k, st;
+	int sawv90 = 0, sawv92 = 0, sawneg = 0;
+
+	diff_begin("V90Phase3Demodulator::getDecision");
+
+	for (trial = 0; trial < NTRIAL / 2; trial++) {
+		set_level((trial & 2) ? 2u : 0u);
+
+		for (f = 0; f < (int)(sizeof(flag_v) / sizeof(flag_v[0])); f++)
+		    for (si = 0; si < (int)(sizeof(st_v) / sizeof(st_v[0])); si++)
+			for (k = 0; k < NSAMP; k += 2) {
+				st = st_v[si];
+				long tag = ((long)trial << 24) | ((long)f << 16)
+				    | ((long)st << 8) | (long)k;
+				float x = samples[k];
+				int side, ga, gb;
+
+				build(trial, (PcmType)(trial & 1),
+				      (unsigned char)(0x40 + trial), 0);
+				dsplib_debug_capture_reset();
+				dirty(0, trial, st, w2c[k % NW2C]);
+				dirty(1, trial, st, w2c[k % NW2C]);
+				fill_tables(0, trial);
+				fill_tables(1, trial);
+
+				for (side = 0; side < 2; side++) {
+					unsigned int b;
+
+					slot[side].o.sessionFlag = flag_v[f];
+					for (b = 0; b < sizeof(jd92_[0]); b++)
+						jd92_[side][b] =
+						    (unsigned char)(b * 7u + 1u
+						        + (unsigned)trial);
+					slot[side].o.jdV92 = (V92Jd *)jd92_[side];
+				}
+
+				ga = slot[0].o.getDecision(x);
+				gb = ref_p3d_getDecision(&slot[1].o, x);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "after getDecision", "V92Jd",
+					     jd92_[0], jd92_[1],
+					     sizeof(jd92_[0]), tag);
+
+				if (!is_default_state(st))
+					diff_eq_int("getDecision (%ld)",
+						    (long)ga, (long)gb, tag);
+				compare_all("after getDecision", tag);
+
+				if (!is_default_state(st)) {
+					if (flag_v[f] == 0u)
+						sawv90++;
+					else
+						sawv92++;
+					if (gb < 0)
+						sawneg++;
+				}
+
+				teardown();
+			}
+	}
+
+	set_level(0);
+
+	diff_eq_int("both callees were dispatched to (%ld)",
+		    sawv90 > 0 && sawv92 > 0, 1, 0);
+	diff_eq_int("a negative decision was widened (%ld)", sawneg > 0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -832,6 +1590,13 @@ main(void)
 	bad |= run_jdnot();
 	bad |= run_null_jd();
 	bad |= run_free();
+	bad |= run_p3d_leaves();
+	bad |= run_p3d_enterdrop();
+	bad |= run_p3d_exitdil();
+	bad |= run_p3d_jdnotdetector();
+	bad |= run_p3d_twolevel();
+	bad |= run_p3d_getdecision();
+	bad |= run_p3d_setdigimp();
 
 	return bad;
 }

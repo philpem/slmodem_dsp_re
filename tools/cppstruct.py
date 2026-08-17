@@ -69,7 +69,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import objtree                                            # noqa: E402
 
-BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
+BLOB = os.environ.get("BLOB", "ref/slmodemd/dsplibs.o")
 
 
 def nm_mangled(path):

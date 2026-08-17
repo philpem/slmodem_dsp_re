@@ -103,11 +103,13 @@ public:
 	/*
 	 * +0x04  `lea 0x9c(%ebx),%edx` in `reset(V92MappingParams *)`: a
 	 * pointer INTO the parameter block, not a copy out of it.  It lands
-	 * on `struct V92ParamsInfo`'s +0x9c, the eighteen bytes that header
-	 * records as reached by nothing -- and `process` reaches them, as SIX
-	 * INTS indexed `(i + 4 * a) % 6`, which is exactly the 0x18 bytes
-	 * between +0x9c and the end of the 0xb4 block.  Each one selects a
-	 * constellation and a modulus below.
+	 * on `struct V92ParamsInfo`'s +0x9c -- the 0x18 bytes between +0x9c
+	 * and the end of the 0xb4 block, which is TWENTY-FOUR and was written
+	 * "the eighteen bytes" here until somebody read the hex twice.  That
+	 * header recorded them as reached by nothing; `process` reaches them
+	 * as SIX INTS indexed `(i + 4 * a) % 6`, and the unpacker fills them
+	 * with a real indexed loop, which is what named them `indexConstel`.
+	 * Each one selects a constellation and a modulus below.
 	 */
 	int *paramsAt9c;
 

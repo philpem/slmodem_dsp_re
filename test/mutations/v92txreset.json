@@ -1,0 +1,101 @@
+[
+ {
+  "label": "NOTE: what this set reaches",
+  "why": "V92Transmitter::reset and t_v92txreset.cpp were written by one hand from one reading of .text+0x53d10. About 2,000 of the function's 2,161 bytes are diagnostics, so the entries below split cleanly: the ones that change what reset WRITES or what it PASSES are killed at level 0 by the block comparison and by the sub-object comparison, and the ones that change a format string or an argument are killed only by the level-2 transcript run. WHAT NO ENTRY HERE CAN REACH: the ORDER of the six calls. The fixture compares the sub-objects after all six have run and none of the six reads what another wrote, so permuting them is invisible -- that rests on the disassembly and not on this tier."
+ },
+ {
+  "label": "the precoder is given the pre-filter's coefficients",
+  "find": "\tprecoder->setCoefficients(p->z1, p->p1, p->lz1, p->lp1);",
+  "replace": "\tprecoder->setCoefficients(p->z2, p->p2, p->lz2, p->lp2);"
+ },
+ {
+  "label": "the precoder's zeros and poles are swapped",
+  "find": "\tprecoder->setCoefficients(p->z1, p->p1, p->lz1, p->lp1);",
+  "replace": "\tprecoder->setCoefficients(p->p1, p->z1, p->lp1, p->lz1);"
+ },
+ {
+  "label": "the precoder's lengths are swapped but not its arrays",
+  "find": "\tprecoder->setCoefficients(p->z1, p->p1, p->lz1, p->lp1);",
+  "replace": "\tprecoder->setCoefficients(p->z1, p->p1, p->lp1, p->lz1);"
+ },
+ {
+  "label": "the pre-filter is given the precoder's coefficients",
+  "find": "\tpreFilter->setCoefficients(p->z2, p->p2, p->lz2, p->lp2);",
+  "replace": "\tpreFilter->setCoefficients(p->z1, p->p1, p->lz1, p->lp1);"
+ },
+ {
+  "label": "the convolution encoder is reset from extendEu",
+  "find": "\tconvolutionEncoder->reset(p->trellisType);",
+  "replace": "\tconvolutionEncoder->reset(p->extendEu);"
+ },
+ {
+  "label": "the one-byte buffer is not cleared",
+  "find": "\t*byte_58 = 0;\n\n\tprecoder->reset(params);",
+  "replace": "\tprecoder->reset(params);"
+ },
+ {
+  "label": "K is taken from the gain's neighbour",
+  "find": "\tK = p->K;",
+  "replace": "\tK = p->trellisType;"
+ },
+ {
+  "label": "the gain is not copied in",
+  "find": "\tgain = p->gain;\n",
+  "replace": ""
+ },
+ {
+  "label": "+0x40 is not zeroed on the way out",
+  "find": "\tconvEncoderOutput = 0;\n\tbitsBuffered = 0;",
+  "replace": "\tbitsBuffered = 0;"
+ },
+ {
+  "label": "+0x0c is not zeroed on the way out",
+  "find": "\tconvEncoderOutput = 0;\n\tbitsBuffered = 0;",
+  "replace": "\tconvEncoderOutput = 0;"
+ },
+ {
+  "label": "the modulus encoder is reset with the transmitter and not the block",
+  "find": "\tmodulusEncoder->reset(params);",
+  "replace": "\tmodulusEncoder->reset((V92MappingParams *)this);"
+ },
+ {
+  "label": "the z1 dump is bounded by lp1",
+  "find": "\t\tfor (i = 0; i < p->lz1; i++)\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"z1[%d] = %c%d.%07d\\r\\n\",",
+  "replace": "\t\tfor (i = 0; i < p->lp1; i++)\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"z1[%d] = %c%d.%07d\\r\\n\","
+ },
+ {
+  "label": "the p2 dump reads z2",
+  "find": "\t\t\t\t\t\t     i, sign_of(p->p2[i]),\n\t\t\t\t\t\t     whole_of(p->p2[i]),\n\t\t\t\t\t\t     frac_of(p->p2[i]));",
+  "replace": "\t\t\t\t\t\t     i, sign_of(p->z2[i]),\n\t\t\t\t\t\t     whole_of(p->z2[i]),\n\t\t\t\t\t\t     frac_of(p->z2[i]));"
+ },
+ {
+  "label": "the rules are printed even for an empty filter",
+  "find": "\tif (p->lz2 != 0) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "the moduli are printed one word high",
+  "find": "\t\tdsplibs_debug_printf(\"m0 = %d\\r\\n\", p->m[0]);",
+  "replace": "\t\tdsplibs_debug_printf(\"m0 = %d\\r\\n\", p->m[1]);"
+ },
+ {
+  "label": "the lz2 and lp2 prints are swapped",
+  "find": "\t\tdsplibs_debug_printf(\"lz2 = %d\\r\\n\", p->lz2);\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"lp2 = %d\\r\\n\", p->lp2);",
+  "replace": "\t\tdsplibs_debug_printf(\"lz2 = %d\\r\\n\", p->lp2);\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"lp2 = %d\\r\\n\", p->lz2);"
+ },
+ {
+  "label": "the fraction is scaled for %06d and not %07d",
+  "find": "\t\t\t\t   * 1.0e7f));",
+  "replace": "\t\t\t\t   * 1.0e6f));"
+ },
+ {
+  "label": "zero prints as positive",
+  "find": "\treturn (0.0f < v) ? '+' : '-';",
+  "replace": "\treturn (0.0f <= v) ? '+' : '-';"
+ },
+ {
+  "label": "the gain is printed from the block rather than from the object",
+  "find": "\t\tdsplibs_debug_printf(\"Gain = %c%d.%07d\\r\\n\", sign_of(gain),\n\t\t\t\t     whole_of(gain), frac_of(gain));",
+  "replace": "\t\tdsplibs_debug_printf(\"Gain = %c%d.%07d\\r\\n\", sign_of(gain),\n\t\t\t\t     whole_of(gain), frac_of(gain) + 1);"
+ }
+]

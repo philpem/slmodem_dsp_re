@@ -1,0 +1,148 @@
+RESULT -- VG204 output attenuation 3 dB on port 0/1 (ext 1902, USR Courier)
+Run 2026-08-16 02:24-02:40 on a quiet machine.  Pre-registration: atagain-PREREG.txt
+
+*** CORRECTION, ADDED AFTER THE CALLS: THE CHANGE WAS A NO-OP ***
+
+  `show running-config all` on voice-port 0/1 afterwards reads
+  `output attenuation 3` -- and 3 dB is this platform's DEFAULT.  The effective
+  value was 3 before and 3 after.  Nothing was applied.  Everything below is a
+  measurement of an unchanged system, which is exactly why it reproduced the
+  archive so precisely.
+
+  The failure mode was named in advance, in the advice that accompanied the
+  commands: "read the current value before you set it -- `output attenuation`
+  is an absolute, not a delta.  If it's already 3, setting 3 changes nothing
+  and you'll chase a null."  Six bench calls then went out without that read
+  being confirmed.  A precondition that is stated but not GATED ON is not a
+  precondition.
+
+  So: "does attenuating the ATA change what the far end asks for" is UNTESTED,
+  not answered.  A retry must use a value that differs from 3 -- and, per the
+  spread below, differs by a lot.
+
+THE PRE-REGISTERED PREDICTION IS NOT MET.
+
+PRIMARY -- the Courier's requested power reduction
+  9 handshakes across 3 calls:   3  3  3  9  3  6  3  3  9
+  Archived at 0 dB, 121 handshakes:   3 x65   6 x51   9 x5   -- never below 3
+  Prediction was "falls below 3, ideally 0-1".  It did not, on any handshake.
+  The distribution is indistinguishable from the archive.
+
+SECONDARY -- our transmit level
+  -24.29, -24.29, -24.16 dBFS.  Archived median for a 3 dB request: -24.30.
+  Identical.  Nothing moved.
+
+CONTROL -- 1901 Supra, port 0/0, untouched, same binary, same session
+  11 handshakes:  2 1 1 1 2  /  2 1 2 2 2 3
+  Archived: 1 x65  2 x86  3 x2  6 x1.  Identical.
+  txRMS -22.24 dBFS against an archived -22.75/-22.99.  Identical.
+  So nothing global moved, and the 1902 null is not masking a bench-wide shift.
+  (The first control call handshook five times and never settled -- recorded,
+  not diagnosed; port 0/0 was untouched so it is unrelated to this test.  The
+  second connected at 4800.)
+
+*** BUT THE TEST COULD NOT HAVE DETECTED THE EFFECT IT WAS LOOKING FOR ***
+
+  ATI11's `Recv/Xmit Level (-dB)` on the three 1902 calls -- the far end's own
+  report of the analog level reaching it, and the only witness to whether the
+  gateway change did anything at all:
+
+      call 1   20/18        call 2   20/19        call 3   25/18
+
+  FIVE dB of spread across three identical calls.  A 3 dB step is inside it.
+  The pre-registration's claim that "n=1 is adequate because the quantity is
+  near-deterministic per far end" was WRONG on both outcomes: the request is
+  bimodal 3/6, not deterministic, and the level wanders 5 dB.
+
+  So this run does not distinguish "the mechanism is wrong" from "the config
+  did not take effect".  Both remain live.  Do not read the null as a
+  refutation of finding 1966's model; read it as a test with too little power.
+
+*** AND THE WHOLE LINE IS AIMED AT THE DIRECTION THAT ALREADY WORKS ***
+
+  ATI11, same calls:   Speed 28800/12000     Recv/Xmit Level 20/18
+
+  The Courier RECEIVES us at -20 dBm -- a healthy level -- and gets 28800 out
+  of it.  We receive the Courier, transmitting at -18 dBm, and manage 12000.
+
+  `output attenuation` on port 0/1 changes only what the FAR END hears.  That
+  is the 28800 direction.  It cannot touch the 12000 direction at all.  So even
+  if the knob works perfectly and finding 1966's model is exactly right, the
+  best available outcome is a fraction of a dB of margin on the direction that
+  is not the problem.
+
+  That is a defect in the RECOMMENDATION, not in the execution, and it was
+  visible in principle before any call was placed.  It is the reason to stop
+  here rather than to spend more bench time on a bigger step.
+
+RECOMMENDATION
+  Revert `voice-port 0/1 / output attenuation 3` to the default.  No benefit
+  was demonstrated, none is available in the direction that matters, and it is
+  a live gateway.
+
+  If certainty about the knob is wanted later for its own sake, the test is a
+  12 dB step -- unambiguous against a 5 dB spread -- and three calls reading
+  ATI11.  That answers "does the control work", which is worth knowing, but it
+  does not resurrect the throughput argument.
+
+WHAT THIS RUN DID PRODUCE, and it is worth more than the null
+  ATI11 on the Courier gives `Recv/Xmit Level` and `Speed` per direction in one
+  line.  No archived capture had it -- every &V1 block in the archive is Supra
+  or Oli'Net, and the Courier needs ATI11 rather than &V1 (modems.sh already
+  knew; row.sh does not read it).  It is the per-direction level and rate
+  instrument this bench has been missing, and $CLAUDE_JOB_DIR/atacall.sh has
+  the two-line recipe.  Fold it into row.sh.
+
+===========================================================================
+ARM 2 RESULT -- output attenuation 3 (default) -> 12, i.e. +9 dB.  Five calls.
+
+PRIMARY: THE KNOB WORKS.  ATI11 Recv Level, settled reads only:
+
+    arm 1 (3 dB)    20  20  25
+    arm 2 (12 dB)   27  27
+
+  A shift of roughly +2 to +7 dB against a +9 dB command.  Not one-for-one,
+  but well outside the direction of chance and the first demonstration that
+  the gateway's attenuation reaches the audio path at all.  So the conclusion
+  the earlier arms could not reach: the control is real, and the arm-1 null
+  was the no-op it was later shown to be.
+
+TWO OF FIVE LEVEL READS WERE CONTAMINATED, and both by the harness, not the
+gateway.  Recorded because the numbers are in the captures:
+    calls 1,2   Recv Level 70 and 67 -- read mid-hangup, post-carrier floor.
+                A settled read of call 3 said 27 where its own early read
+                returned nothing at all.
+    call 4      Recv Level 26 beside Carrier Freq 34109, Symbol Rate 48905,
+                RTD 24 -- all nonsense.  Caused by the FIX for the above: an
+                AT-until-OK poll before the diagnostic perturbs the Courier's
+                stored report.  Plain settle restored it (call 5: 1920, 3200,
+                150, and Recv 27).
+
+SECONDARY, and it does NOT go the way finding 1966 predicted
+  The Courier's requested reduction, arm 2:  3 6 8 / 3 8 / 3 6 3 3 / 3 6 6
+  **8 dB appears, and 8 has never been seen** -- not in 121 archived
+  handshakes nor in arm 1's nine.  Nine dB quieter, and it asks for MORE.
+  Our transmit level fell rather than rose: -25.75/-26.68/-23.89 dBFS against
+  arm 1's -24.29/-24.29/-24.16.
+  The prediction was "request falls to 0-1, our level rises toward -23".  Both
+  wrong, and wrong in the opposite direction.
+
+OVER-ATTENUATION IS REAL, exactly as the addendum warned to watch for
+  Courier receive rate: 28800 on four calls, but 12000 on call 5, and ATI6 on
+  call 3 reported `Speed 21600/16800` with `Retrains Granted 3` and
+  `Disconnect Reason is Loop loss disconnect`.  Against arm 1's uniform 28800
+  that is the healthy direction starting to give way.
+
+AN UNEXPECTED HINT, EXPLICITLY NOT A RESULT
+  OUR receive rate went 12000/9600/14400 (arm 1) -> 14400 x4 and 19200 (arm 2).
+  Attenuating our TRANSMIT should not affect what we RECEIVE -- unless it is
+  echo: these FXS ports carry `no echo-cancel enable`, so our own signal leaks
+  back through the hybrid, and 9 dB less of it is 9 dB less interference on
+  our receiver.  That would bear on #110 and #111.
+  n=5 against n=3, one variable moved, two contaminated reads, and the rates
+  overlap.  It is a hypothesis with a cheap test (#167), not a finding.
+
+RECOMMENDATION: put voice-port 0/1 back to `output attenuation 3`, the default.
+  12 dB costs the direction that works and did not buy the direction that does
+  not.  If the echo hint is worth chasing, chase it with the echo canceller,
+  not with the transmit level.

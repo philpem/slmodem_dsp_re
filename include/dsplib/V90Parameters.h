@@ -169,9 +169,38 @@ public:
 	int  	AGC_ADAPTATION_DURATION;	/* +0x068 */
 	int	unnamed_06c;		/* +0x06c  setToDefault only; the object stores 1.0f (fsts) -- 878 */
 	int	unnamed_070;		/* +0x070  setToDefault only; the object stores 0.6f (0x3f19999a) -- 878 */
-	int	unnamed_074;		/* +0x074  setToDefault only */
-	int	unnamed_078;		/* +0x078  setToDefault only */
+	/*
+	 * +0x074 and +0x078 ARE NAMED BY `V90TRN2Design`'s OWN DIAGNOSTICS,
+	 * which is evidence rule 1 -- a format string that prints the thing --
+	 * and not usage inference.  Finding 3527 derived both and could not
+	 * rename them because another branch held this header; this batch owns
+	 * it and applies them.  `loadParams` still does not read either, so the
+	 * "setToDefault only" note stands: they are parameters the file cannot
+	 * override, and the names come from the printer rather than the parser.
+	 *
+	 * `maxUcode` -- 0x3cdf1 reads it into the second argument slot of
+	 * `"V90TRN2Design: ...hence max ucode (after factor) = %d, by params
+	 * maxUcode = %d\r\n"` (.rodata.str1.4+0x9a14), and 0x3ce14 clamps the
+	 * computed ucode against the same byte three instructions later, which
+	 * is what a ceiling of that name does.
+	 *
+	 * `nofUcodesInTrn2` -- 0x3d9bc reads it into `"trn2 size  :  %d\r\n"`
+	 * (.rodata.str1.1+0x2472).  The string gives the quantity and
+	 * `V90TRN2Designer::setNofUcodesInTrn2`'s own MANGLED NAME gives the
+	 * spelling, which is the stronger half of the pair: that member's whole
+	 * body is `mov 0x80(%edx),%eax ; mov %eax,0x78(%edx)`.
+	 * `setTrn2DummyConstel` fills a constellation `while (i < +0x78)` and
+	 * `V90TRN2Design` uses it as the count its design loop must reach.
+	 */
+	int	maxUcode;		/* +0x074  setToDefault only -- 3527 */
+	int	nofUcodesInTrn2;	/* +0x078  setToDefault only -- 3527 */
 	int	unnamed_07c;		/* +0x07c  setToDefault only */
+	/*
+	 * +0x080 is where `setNofUcodesInTrn2` COPIES `nofUcodesInTrn2` from
+	 * when its `short` argument is non-zero, so it is the configured value
+	 * and +0x078 the working one.  No string names it and it keeps its
+	 * offset name, exactly as 3527 ruled.
+	 */
 	int	unnamed_080;		/* +0x080  setToDefault only */
 	float	INITIAL_BAUD_OFFSET;	/* +0x084 */
 	float	BLL_INITIAL_K1;	/* +0x088 */

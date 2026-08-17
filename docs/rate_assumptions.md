@@ -58,12 +58,29 @@ not the pump rate.
 acceptance test for any coefficient generator — derive the 8000 set from the
 9600 set and check the bytes match.
 
-## 🔴 R-5 — `dcr_create` initialises a field to 9600
+## 🔴 R-5 — `dcr_create` initialises three phase intervals at 9600
 
 `dcr_create` writes 5760, **9600** and 19200 into its 32-byte state. The DC
 remover runs at the host rate.
 
-**Retarget:** these need re-deriving for 8000. Finding 11.
+**And they are DURATIONS, which is what the whole service being reconstructed
+added.** Each is the sample count that ends one phase of the estimator, read by
+exactly one phase and written by nobody but `dcr_create`, so at 9600 Hz they
+are 0.6 s of settling, 1.0 s of initial evaluation, and a 2.0 s re-estimation
+interval thereafter:
+
+| field | value | at 9600 | phase it ends |
+|---|--:|--:|---|
+| +0x14 | 5760 | 0.6 s | SETTLE — discard the opening transient |
+| +0x18 | 9600 | 1.0 s | EVALUATE — the "initial DC Evaluation" |
+| +0x1c | 19200 | 2.0 s | TRACK — one pass of the 0.9/0.1 blend |
+
+**Retarget:** scale all three by 8000/9600, i.e. 4800, 8000 and 16000, which
+keeps the durations the module was tuned for. Nothing else in `dcr.c` mentions
+a rate — the estimator is a mean and a leaky blend, and neither has a
+frequency in it — so unlike the filter banks there is no coefficient set to
+regenerate. These are fields rather than constants, so a host could also poke
+them after `dcr_create` without touching the library. Findings 11 and 4200.
 
 ## 🔴 R-8 — Bell 103's FSK core is clocked at 7200 Hz
 

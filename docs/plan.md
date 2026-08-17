@@ -1,18 +1,33 @@
-# A plan for the 956 functions that are left
+# A plan for the 330,816 bytes that are left
 
 *Companion to `docs/remaining.md`, which says what is left, and
-`make worklist`, which lists it. This says in what order, and why that
-order rather than the obvious one.*
+`make worklist`, which lists it. This says in what order, and why that order
+rather than the obvious one.*
 
-*Measured at `a30a3e0`, with phases 0 and 1 landed and the project past 50%. Re-run `tools/readyqueue.py`
-and `tools/service.py` before trusting any count here; the whole point of the
-ordering is that it moves as work lands.*
+*Measured at `ad6c0c1`. **Re-run `tools/readyqueue.py` and `tools/service.py`
+before trusting any count here** — the whole point of the ordering is that it
+moves as work lands, and every count below moved substantially in a single day.
+Seed by REACHABILITY, never by symbol name: a name-matched count was wrong
+three separate times in one session (V.34's remainder, V.32's size, and a pad
+that turned out to be a double count), each time by enough to change the plan.*
 
 **The priority is complete data mode. Fax Class 1 is last.** That is the
 owner's decision and it is what the phase order implements — but it cannot be
 executed by deferring a translation-unit span, and §2 is why.
 
-## 1. The two facts that decide the order
+## Where the object stands
+
+The blob is **818,104 bytes**. Reconstructed: **487,288 — 59.6%.**
+
+| | written | left | symbols left |
+|---|--:|--:|--:|
+| code | 418,677 | **295,147** | 867 |
+| data | 68,611 | **35,669** | 409 |
+
+`docs/coverage.md` reports the same tree as 57.9% on a code-only basis. Both
+numbers are correct; quote which one you mean.
+
+## 1. The three facts that decide the order
 
 ### Most of what is left cannot be started yet
 
@@ -20,316 +35,385 @@ executed by deferring a translation-unit span, and §2 is why.
 
 | | symbols | bytes |
 |---|--:|--:|
-| **READY** — closure needs nothing unwritten but itself | 480 | **105,204** |
-| **BLOCKED** — needs 1 or more unwritten symbols first | 467 | 235,665 |
+| **READY** — closure needs nothing unwritten but itself | 426 | **85,368** |
+| **BLOCKED** — needs one or more unwritten symbols first | 441 | 209,779 |
 
 A batch has to be **closed** before it can be committed: every dependency of
-every member is in the set or already written. This is not a style
-preference. `symmap.py` renames every symbol the blob defines to `ref_*`, so
-one unwritten callee is not one failing test — it is an undefined reference
-that fails all 92 binaries, and `make` stops at the first, which is
-`t_encode` and names nothing involved. Finding 215 considered the escape
-hatch (rename only what we define) and **declined** it deliberately; it is
-not to be reintroduced.
+every member is in the set or already written. This is not a style preference.
+`symmap.py` renames every symbol the blob defines to `ref_*`, so one unwritten
+callee fails *all* the differential binaries at `t_encode`, not just its own.
+Finding 215 declined the escape hatch and that ruling stands.
 
-**There is no bottleneck to unlock.** 105 KB is startable today and exactly
-one dependency in the object is worth sequencing around (phase 1). The work
-parallelises; the limit is review and machine time, not the graph.
+### A few hundred bytes gate tens of thousands
 
-### Data mode and fax are not separate spans
+Sorting every unwritten symbol by the total size of the blocked work whose
+closure contains it — that is, what it is a NECESSARY condition for:
 
-    tools/service.py
+| cost | necessary for | symbol |
+|--:|--:|---|
+| **4 B** | 47,516 B | `avg_err_show.0` |
+| 2,286 B | 45,385 B | `FPM_SRE_recover` |
+| 2,131 B | 45,385 B | `FPM_FSE_receive` |
+| 753 B | 42,889 B | `FPM_PPS_filter` |
+| **61 B** | 40,291 B | `FPM_TONE_kill` |
+| 574 B | 38,542 B | `FPM_SRE_init` |
+| 417 B | 30,740 B | `V90SignBitsExtractor::process` |
+| 660 B | 30,332 B | `V90Demapper::hardDecision` |
+| 408 B | 30,332 B | `V90Demapper::process` |
+| 139 B | 30,654 B | `V90Demapper::resetLinearMappStudy` |
 
-| who needs it | symbols | bytes |
-|---|--:|--:|
-| **data mode** — V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8/call progress | 280 | **191,264** |
-| **fax only** — nothing in data mode reaches it | 286 | 78,718 |
-| voice / Caller ID / ring detect only | 70 | 24,467 |
-| no entry point reaches it | 311 | 46,420 |
+**Necessary, not sufficient** — writing `FPM_TONE_kill` does not make 40 KB
+ready by itself. But nothing in that 40 KB can be closed without it, so it is
+where the order starts. This is the `V90ConstellationPower` shape (1,408 bytes
+unlocked 8,869) an order of magnitude larger.
 
-Deferring fax takes **78,718 bytes off the critical path**, a little over a
-fifth of what is left. But most of the 311 unreached symbols are data mode by
-name — `V92CP::bitsToInfo`, `VPcmV34GetDiagnostics`, the V.90/V.92 CRC
-methods — roughly 32,800 bytes the host calls directly rather than through a
-datapump. **Complete data mode includes those**, so the target is about
-242,000 bytes rather than 209,067, and phase 8 is where they are picked up.
+### The unreachable bucket is not dead code
+
+`service.py` reports 265 symbols / 41,143 bytes that no entry point reaches.
+**254 of those simply have no DIRECT caller**: they are vtable slots and
+dispatch-table targets — `VOICE_process`, `FAX_process`, `V92CP::bitsToInfo`,
+both V.34 diagnostics. A direct-call walk cannot see them. Treat the bucket as
+real work whose *ordering* is unknown, not as work that can be skipped.
+
+(`tools/indirect.py` is the tool for this. It used to **crash** on the
+`tools/dis.py` shadow; that is fixed and it runs — 163 relocations from data
+land on a `.text` symbol, naming 125 distinct indirect entry points, mostly the
+`*NextState` dispatch tables and the `FSE_decision_*` slicers.
+**But the three examples named above are not among them**, and none of the
+three is the target of any relocation anywhere in the object: `VOICE_process`
+and `FAX_process` are undefined in `slmodemd/modem.o`, so they are the
+library's external API and their callers are outside it. Read finding 3520
+before planning this bucket — the sentence above is not what the object says.)
 
 ## 2. The trap in "leave fax until last"
 
-`make worklist` groups by translation-unit span, and the span printed as
-`class1tx.c +94` is a **bracket over 95 translation units** — `class1tx.c`,
-`faxvmi*.c`, `T30frames.c`, `V17rx.c`, `V17tx.c` and so on. Reading that as
-"the fax span" and deferring it would block V.32.
+Fax and data mode are not separate translation-unit spans. Thirteen symbols
+inside what looks like the fax span are shared DSP that data mode reaches —
+`FPM_ECC_cancel` is the V.32 echo canceller. **Partitioning by TU span puts
+shared DSP on the wrong side.** `tools/service.py` seeds each service from its
+own entry points and follows reachability; that partition is the authority, and
+it carries `MUST_BE_FAX`/`MUST_BE_DATA` sanity lists that exit non-zero if it
+breaks.
 
-**Thirteen symbols in that span, 11,232 bytes, are data mode**: the shared DSP
-primitives the fax modulations and the data modulations both use.
+So "fax last" means *fax-only symbols last* — 286 symbols, 78,718 bytes that
+nothing in data mode reaches. Anything data mode needs is data-mode work
+whatever file it lives in.
 
-| bytes | symbol | bytes | symbol |
-|--:|---|--:|---|
-| 2,286 | `FPM_SRE_recover` | 574 | `FPM_SRE_init` |
-| 2,131 | `FPM_FSE_receive` | 547 | `FPM_TONE_find_rev` |
-| 2,051 | `FPM_ECC_cancel` | 259 | `FPM_PPS_init` |
-| 1,773 | `VTB_decoder` | 98 | `FPM_ECC_free` |
-| 753 | `FPM_PPS_filter` | 61 | `FPM_TONE_kill` |
-| 607 | `FPM_ECC_init` | 57 | `FPM_SRE_free` |
-| | | 35 | `FPM_PPS_free` |
+| partition | symbols | bytes |
+|---|--:|--:|
+| **Data mode** V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8 | 246 | 150,819 |
+| Fax only | 286 | 78,718 |
+| Voice / Caller ID / ring detect | 70 | 24,467 |
+| No direct caller (vtable / dispatch) | 265 | 41,143 |
 
-`FPM_ECC_*` is the **V.32 echo canceller** — the `v32-ecc` branch says so in
-its own commit message. `SRE` is timing recovery, `FSE` the equaliser, `PPS`
-the pulse shaping, and `VTB_decoder` the trellis decoder. They are phase 5,
-they gate phase 6, and they must not travel with fax.
+## 3. Naming: do it INSIDE the batch that owns the struct
 
-The converse holds too, and is why this was measured rather than assumed:
-`V17RX_create`, `V27RX_create`, `V29RX_create`, `TxNextStateV17` and
-`faxvmi_hdlc_unframe` are **fax only**. A first attempt at this partition put
-all five in *data mode*, by seeding every indirect target as a data entry
-point on the theory that `closure.py` cannot follow a function pointer in a
-dispatch table. It cannot — but seeding a table's *arms* as roots throws away
-the question of who reaches the *table*, and these arms are fax.
+This is a decision, not a preference, and it comes from two measurements that
+point in opposite directions.
 
-The fix is to name each service's own entry points and bulk-seed nothing,
-which is what `tools/indirect.py` was written to discover. `service.py`
-carries the four names above as a check that exits non-zero if they ever land
-in data mode again; bulk-seeding makes it fire.
+**Renaming concurrently with reconstruction is dangerous.** Finding 3511: three
+branches off one commit, **no shared source file and no git conflict**, merged
+cleanly and did not compile. One had renamed `struct v22_fse`'s fields on the
+evidence of the receive loop; another had written compile-time assertions
+against the old names. Each diff was correct against its own base. It failed
+loudly only because the reference was a `__builtin_offsetof`; through a
+`void *` and an offset constant it would have linked and been silently wrong.
 
-A `data symbol → the .text it points at` edge was built as well, on the
-assumption it would be needed to reach the modulations, and **measured to
-change not one number**: `FAX_create` reaches `V17RX_create` by ordinary
-calls, through `fax_class1_create`, `FAXVMI_create`, `vxx_create` and
-`v17rx_create`. It is not in the tool, and that is recorded so nobody adds it
-back without a case that measures differently.
+**But deferring the naming loses the evidence.** The strongest evidence for
+what a field means is a format string that prints it, and those surface while
+reconstructing the function that does the printing. The V.34 accessor batch
+produced `f06`→`preemp`, `f25c`→`dmadelay` and `flags_0217`→`v34BaudAllow` as a
+by-product — `v34BaudAllow` named by `chkForceBaudRate` *indexing* it 0..5, not
+by its five writers. None of that was available to a later pass without redoing
+the work. Finding 3303 makes the same point negatively: `v34_shell::pad_000`
+looked like 2,560 bytes of opportunity and was a double count of a region
+`v34_object` already models — only the batch that knows the struct could tell.
 
-## Phase 0 — land what is already written  ✅ DONE
+**So: the batch that reconstructs a struct's users names that struct's fields
+and flags, in the same branch and the same compile. A standalone naming pass is
+run ONLY against a struct no live batch touches** — which is what made
+`V90Phase4Modulator` (12,064 bytes, finding 3120) safe: nobody else was writing
+against it. Never schedule a naming agent and a reconstruction agent over the
+same header.
 
-**Landed 2026-08-15 at `93270f9`.** Both branches merged, `make phase` passed
-(phase boundary reached, 0 FAIL), and coverage went 48.5% -> **49.2%**: 900
-symbols, 361,453 bytes, which is exactly the 8 symbols / 4,856 bytes the two
-branches carried, so nothing was lost in the conflict resolutions.
+Naming is free at the codegen tier, so it costs the batch nothing to carry:
+`compare.py` did not move by one symbol across 3120's rename. **If it does
+move, a TYPE changed, not a name** — investigate rather than accept it.
 
-Three conflicts were resolved by hand rather than by `--ours`, and one number
-moved: `cid-dtmf`'s **D302 became D307**, because master had independently
-allocated D302 to `FSE_decision_16pt` (itself already renumbered D298 -> D300
--> D302). Its companions D303-D306 were free and did not move. Both sides of
-`tools/refcheck.py` had independently fixed the same catastrophic-backtracking
-bug; master's unbounded fix won over `cid-dtmf`'s `{0,10}` bound, which would
-silently stop rewriting citation lists longer than ten.
+What is outstanding, and shrinking:
 
-| branch | symbols | bytes | |
-|---|--:|--:|---|
-| `v32-ecc` | 3 | 2,756 | **data mode** — 3 of the 13 shared-DSP symbols above |
-| `cid-dtmf` | 5 | 2,100 | Caller ID; phase 9 work, but written already |
+| | remaining |
+|---|--:|
+| unmodelled struct space | 90 `pad_*` regions, **10,142 bytes** |
+| offset-named fields (`short_2800`, `flags_0217`) | 304 distinct |
+| bare `fNNNN` names | 189 distinct |
+| unnamed single-bit flags | 148 uses |
+| type-punned sites — GCC-warned, provably mis-modelled | **2** (was 27) |
 
-The feared `v32-ecc` duplication was a non-event: all six of its files were
-**byte-identical** to what the `agent-v32` worktree has staged on
-`v32-datapump`, so it was the same work in two places rather than two
-readings of it. That worktree's staged copies are now redundant and will
-merge as a no-op.
+Flags are named **by bit value**, never converted to bitfields; CLAUDE.md's
+"Naming: fields, and flags" carries the rule and the measurement behind it.
 
-Eighteen merged branches were deleted with them. `worktree-agent-af64acb…`
-and `review/nextsteps-2026-08-11` are superseded rather than merged — they
-are one commit ahead each and need `-D`, so they were left alone.
+The 27 punned sites were the exception to "name inside the batch": each was a
+*provable* modelling error (`*(int *)&o->f25d0` wrote four bytes through a
+narrower field), they clustered in six files, and they were corrected as one
+standalone batch on `v34-type-punning`. Twenty-five are gone and the naming
+went with them — `f25d0`/`f25d2` became `txpoint`, and `state[].a`..`.d`
+became one four-short group. The two that remain are one line; see Phase 6.
 
-## Phase 1 — the one keystone, and the 17 KB behind it  ✅ DONE
+## Phase 0 — landed
 
-**Landed 2026-08-16.** `GenericToneDetector` (all three methods), then both
-`V90Phase3Demodulator` decisions -- 8,379 and 8,616 bytes, 34 arms each -- which
-took the tree past **50% for the first time**: 51.6%, 905 symbols, 379,256
-bytes at `a30a3e0`. The two decisions were written by separate agents that
-could not see each other and had to be composed afterwards; findings 2116-2117
-settle a direct contradiction between them about GCC 3.4.2's `abs`, and 2120
-is the `reanchor.py` defect that composition exposed.
+`V90ConstellationPower` 10/10 · `V90ConstellationDesigner` 24/24 · the V.34
+public accessor surface (21 symbols) · V.32's Viterbi trellis decoder, four
+slicers and 13 `DECv32_*` tables (39 symbols) · V.22's equaliser, both slicers,
+`V22_FSE_receive` and the datapump object fully tiled (12 symbols) ·
+`V90Phase4Modulator`'s 12,064-byte pad named out.
 
-`GenericToneDetector` was the only symbol in the object whose leverage was
-worth sequencing around, and it was small.
+## Phase 1 — the shared DSP keystone
 
-| write | bytes | frees | bytes freed |
-|---|--:|---|--:|
-| `GenericToneDetector::reset()` + `::process(float)` | **386** | `V90Phase3Demodulator::getV90Decision`, `::getV92Decision` | **16,995** |
-| `GenericToneDetector::process(float*, unsigned)` | 422 | `VPcmV34InitMOH` | 444 |
+`FPM_SRE_recover`, `FPM_FSE_receive`, `FPM_PPS_filter`, `FPM_SRE_init`,
+`FPM_TONE_kill`, and `avg_err_show.0`. **About 6 KB that is a precondition for
+about 45 KB**, shared by V.32, V.22 and the V.90 family at once. Nothing else
+in the plan has this ratio. Do it first even though it is not the largest
+batch, and do it as ONE batch because the closure interlocks.
 
-386 bytes unblock 16,995 — a ratio of 44, and nothing else in the object is
-above 1.5. Those two decision methods need `GenericToneDetector::reset` and
-`::process(float)` **and nothing else**; they are otherwise ready.
+## Phase 2 — the V.90 demapper cluster  ✅ WRITTEN, on `v90-demapper`
 
-Then take the two decisions themselves. At 8,379 and 8,616 bytes they are
-both over the 6 KB wall, so each goes to **its own subagent** per
-`docs/largefunctions.md` — the cost there is cumulative context, not
-disassembly size, and delegation is the only change that alters the exponent.
+`V90Demapper::hardDecision`, `::process`, `::resetLinearMappStudy`, and
+`V90SignBitsExtractor::process`. ~1.6 KB gating ~30 KB of the V.90/V.92 receive
+chain. Second-best ratio in the object.
 
-**A limit on what "done" means for these two.** `V90Phase3Demodulator` is one
-of the five classes with no codegen-tier evidence (finding 1308: ten of
-fifteen period-toolchain failures are one C++11 construct in three headers).
-The differential tier still applies and still decides; the second tier will
-not corroborate it here.
+**Written 2026-08-16 on `v90-demapper`, not yet merged.** All four, plus
+`V90SignBitsExtractor::applyFrameAction` (197 B), which is not in the batch and
+is what `process` calls: the object holds its four arms twice, once as its own
+symbol and once inlined (finding 3532), and the period compiler reproduces both
+— our `applyFrameAction` is the same 197 bytes with the same mnemonic sequence,
+and our `process` is 418 against the blob's 417 with no out-of-line call.
+`make phase` green, `compare.py --ratchet` 986→991 compared and 350→351
+identical. 1,771 bytes; coverage 57.9% → 58.1%.
 
-**Writing the class does not clear the stub.** `V34PCM_UNWRITTEN_TONEPROC` is
-an inlined arm *inside* `VPcmV34Progress` that calls this detector. That is
-phase 4, and phase 1 is a precondition for it rather than a substitute.
+Four type corrections came with it and are the reason to read findings 3530 and
+3533 before touching this class: two one-byte "flags" are
+`SerialDifferentialDecoder<unsigned char>` members and the two heap blocks stop
+being `void *`. The naming was carried inside the batch per §3.
 
-## Phase 2 — the V.90/V.92 receive chain's ready set
+**WHAT IT ACTUALLY UNBLOCKED, measured rather than projected**, by running
+`readyqueue.py` at `781aff9` and again after:
 
-65,734 bytes ready now, and also the prerequisite set for phase 3. Take the
-small classes first: they are cheap, all ready, and they are what
-`V90Equalizer::process` (needs 31) and `V90Demodulator::progress` (needs 86)
-are waiting on.
+| | before | after |
+|---|--:|--:|
+| unwritten call symbols | 867 | 862 |
+| READY | 426 / 85,368 B | 423 / 84,277 B |
+| BLOCKED | 441 / 209,779 B | 439 / 209,049 B |
 
-    V90SignBitsExtractor  733 B    V90BitsToSymbol      1,476 B
-    V90SpectralShaper   2,392 B    V90Mapper            1,451 B
-    V90ConstellationPower 1,408 B  V90Demapper          3,633 B
-    V90CP               8,730 B    V92BitsToSymbol      1,283 B
-    V92Transmitter      2,516 B    V92Modulator         3,119 B
+**Exactly one symbol became READY: `V90Demodulator::enterDataPhase`, 322 bytes**
+— it was blocked by `resetLinearMappStudy` and by nothing else, so 139 bytes
+freed 322. The "~30 KB" in the heading is what these four are a NECESSARY
+condition for, which §1 already warns is not the same as sufficient, and the
+gap is the four `V90Demapper` members still outstanding: `reset`,
+`resetNoSpectral`, `linearMappingStudy` and `incrementRBSFramePosition`. What
+moved instead is how far the hubs have left to go:
 
-and the three `V90ConstellationDesigner` methods ready today — 4,434, 3,760
-and 3,641 bytes, the largest ready items in the object.
+| | before | after |
+|---|--:|--:|
+| `V90Equalizer::process` (9,364 B) | needs 20 | **needs 16** |
+| `V90Demodulator::progress` (7,276 B) | needs 65 | **needs 61** |
+| `V90Phase4Demodulator::getV90Decision` (3,095 B) | needs 7 | **needs 3** |
+| `V90Phase4Demodulator::getV92Decision` (3,252 B) | needs 12 | **needs 8** |
 
-`V90Phase4Modulator` is 40 unwritten methods for 11,760 bytes: the highest
-symbol count of any class left, and so the best candidate for a parallel
-batch of small independent functions.
+So the natural next batch is the rest of `V90Demapper` — those four plus
+`updateConstelation` — which every one of the four rows above is waiting on.
 
-## Phase 3 — the four large blocked functions
+## Phase 3 — the large ready set
 
-Only startable once phase 2 has landed.
+Needs nothing, and 13 KB between them: `V90TRN2Design` (3,767 B),
+`V90CP::infoToBits` (2,785), `V92setParamsInfoFromCPUnPck` (2,695),
+`V92Transmitter::reset` (2,161), `V90CP::evaluateInfo` (1,986),
+`V90SpectralVerifier::checkSpecialSpectralConditions` (1,682). Parallelisable —
+they share no closure.
 
-| bytes | function | still needs |
-|--:|---|--:|
-| 9,364 | `V90Equalizer::process` | 31 |
-| 7,276 | `V90Demodulator::progress` | 86 |
-| 4,887 | `V90ConstellationDesigner::adjustConstellationsToNewK` | 5 |
-| 4,055 | `V92Phase4Modulator::generateSymbol` | 14 |
+## Phase 4 — V.32's state machine
 
-The lower two are under the 6 KB wall and are ordinary batches;
-`adjustConstellationsToNewK` needs only five symbols and is the natural first
-of the four. The upper two go to their own subagents.
-`V90Demodulator::progress` is the hub — 86 dependencies — and should be
-**last of the four**, not first. Re-run `readyqueue.py` before each: that
-column moves most as phase 2 lands. `V90Equalizer` is also on finding 1308's
-no-codegen-evidence list.
+The 103-symbol mutually-recursive cluster: `V32*NextState`, `RxHdx*`/`TxHdx*`,
+`V32FP_*`. **One batch, not several** — the recursion means no proper subset
+closes. V.32 is 41.5% written; this is most of the remainder.
 
-## Phase 4 — the twelve stub sites
+## Phase 5 — V.22's remainder
 
-Arms inside functions that already exist, link and pass. Invisible to every
-per-symbol count, so they will be reported as finished for ever if nobody
-schedules them.
+`DemodDataV22` (510 B) is newly READY and was the gate on six functions. What
+now blocks the rest is mostly **not V.22-named**: `connect_1200`,
+`connect_2400`, `Detect_1s`, `MakeTxData`, `SetRxRate`, `SetTxRate`, `ResetRx`,
+`Detect_Retrain`, `Detect_Rmloop2_ACK`. Seed by reachability or this phase
+looks smaller than it is.
 
-- **`VPcmV34Progress`, 7 sites** — `runPcmModem`, `v90RunDemodulator`,
-  `qcLineVerification`, `vPcmResetPhase3Modem` and `GenericToneDetector` are
-  **inlined**, with no blob symbol of their own. There is nothing separate to
-  disassemble: read `tools/dis.py VPcmV34Progress` and place each arm at the
-  stub call site in `v34pcmmain.cpp`. The other two, `v90RateReneg` and
-  `v90RateRenegSilence`, *are* symbols and appear in `make worklist`.
-- **`vpcm_run`, 5 sites** — the same shape inside its 1,662 bytes.
-- **`v34handshak`, 1 site** — the table-3 `default:`, **unreachable**, kept so
-  a mutation to the range test or the label set lands somewhere. Not work.
+## Phase 6 — the type-punned sites  ✅ 25 of 27, on `v34-type-punning`
 
-## Phase 5 — the shared DSP that V.32 and V.22 need
+27 sites turned out to be **six shapes**, and the instruction width at each
+writer decided every one (finding 5300). Five files, not six —
+`v34hstx1.cpp` contributed no warning because its instance had already been
+worked around with a `memcpy`, which is not a fixed declaration and was in
+the batch anyway.
 
-The thirteen symbols in §2, 11,232 bytes, of which `v32-ecc` already supplies
-2,756 if phase 0 landed it. This phase exists only because they live in the
-fax span; it is data-mode work and it gates phase 6.
+| shape | sites | what the blob said | fix |
+|---|--:|---|---|
+| A `*(int *)&o->f25d0` | 15 | one `movl` at 0x5e6c5, 0x5e582, 0x59e94 | `union { int word; short c[2]; } txpoint` |
+| B `*(int *)&o->vect[2*n]` | 1 | `movl 0x2a80(%esi,%eax,4)`, scale 4 | union with `int vectp[8]` |
+| C `*(int *)&s->state[i].a` | 2 | one `movl` per pair, 0x59673 / 0x59193 | `short par[4]` / `int pair[2]` |
+| D `*(int *)&s->frame[0]` | 5 | `movl` at 0x57a68 AND `movw` at 0x57cac | union with `int frame_wide` |
+| E `((short *)&hist_2aa8[k])[0]` | 2 | **two `movw`**, 0x5d0f7 / 0x5d0fe | `short hist_2aa8[0x12c][2]` |
+| F `(v34_receiver *)&obj->rxq` | 2 | not a width at all | **left**, finding 5305 |
 
-`FPM_SRE_recover` (2,286), `FPM_FSE_receive` (2,131) and `FPM_ECC_cancel`
-(2,051) are all **ready today**.
+E is the one that mattered most: the tree had declared it the other way
+round, so five of six confirmed what the comments already asserted and the
+sixth did not. Four further sites that GCC never warns about went with their
+partners — the `[1]` halves of E, and `demapFrame`'s `(&state[st].a)[i]`
+walks, which are pointer arithmetic across separate members. **A fix written
+at the access would have left all four**; fixing the declaration retired them
+without being aimed at them.
 
-## Phase 6 — V.32 / V.32bis, V.22 / V.22bis, Bell 103, V.23
+F is the documented exception. The correct model is to EMBED `struct
+v34_receiver` in `v34_object` at +0x264 — the base is established, not
+guessed — but that means merging two independent pad maps and belongs in a
+`v34_receiver` batch. It must not be respelled through a `char *` to silence
+the warning. Finding 5305.
 
-37,647 bytes in the `V32mod.c +39` span, plus `v32.c` (1,691), `v22.c`
-(1,071), `dp_init.c +2` (762) and what is left of `b103.c +2`. The large
-items — `V32FP_recreate` (3,733), `v22_originate` (2,655), `V32OrgNextState`
-(2,580), `V32AnsNextState` (2,539), `V22FP_create` (2,449) — are all under
-the 6 KB wall and are ordinary batches. The `*NextState` arms are independent
-of each other, so this parallelises well.
+`compare.py` did not move at any step: 1094 compared, 410 identical, 78 same
+size, and the identical SET diffed empty against the pre-batch list every
+time — GCC 3.4.2 exact at `-O3`.
 
-## Phase 7 — dialler and call progress
+**The row above counts WARNED sites, and the warning count is not the defect
+count.** Six more of the same class were found while fixing these and are in
+findings 5300 and 5305: four went with their partners (E's `[1]` halves and
+`demapFrame`'s three `(&state[st].a)[i]` walks), and two are recorded and
+outstanding — `T3C_RX`, and `demapFrame`'s `*(int *)ap`, which is the
+receiver's `target_re`/`target_im` pair read as one word through `char *`
+arithmetic. Both belong to the same future `v34_receiver` batch.
 
-13,536 data-mode bytes in the `Dialer.c +18` span. Needed to place and
-supervise a call, so complete data mode is not complete without it. That span
-is mixed the same way the fax one is: `V32FP_recreate` and `DemodDataV32` sit
-in it and are V.32, not dialling.
+## Phase 7 — the data-mode API and the two diagnostics  ✅ 11/11, on `v34-diagnostics`
 
-## Phase 8 — the data-mode API the host calls directly
+Both diagnostics and the nine symbols the second one needs, 2,624 bytes:
+`VPcmV34GetDiagnostics` (821), `VPcmV34GetVisualDiagnostics` (1,023),
+`VPcmFloModem::getConstellation` (469), `::getLinearEqualizer` (155),
+`::getDFE` (138) and the six 3-byte `K56FlexFloModem` stubs, which are
+`xor %eax,%eax; ret` and are written as what they are.
 
-218 symbols / 32,798 bytes that **no entry point reaches** through the link
-graph, because the host calls them itself rather than through a datapump:
-`V92CP::bitsToInfo` (1,957), `V92CP::evaluateInfo` (1,124),
-`VPcmV34GetVisualDiagnostics` (1,023), `V90Phase4Modulator::setRfSymbols`
-(1,005), `VPcmV34GetDiagnostics` (821), the `V90CP`/`V92CP`/`V90MP` CRC
-methods, and `setParamsInfoFromV92CPUnPck`.
+**They were naming oracles, as expected, and the yield is in the record
+rather than in the byte count.** `TAG_DiagnosticResults` goes from 11 of its
+22 written offsets modelled to all 22, nine of them named, and its tail is
+still declared as the lower bound 0x22c with the 64-byte guard past it
+unmoved — +0x228 came out of the pad without changing an offset.
 
-They are absent from every closure, so nothing will remind anyone they exist.
-V.92 rate renegotiation and the diagnostics interface are part of what
-complete data mode means. **This is the phase most likely to be forgotten.**
+| what it settled | how |
+|---|---|
+| +0x0b4 is the RECEIVE symbol rate (5500) | six `v34_ratecfg` members copied one for one into six result offsets, four of them already named by four direction-named getters |
+| +0x0f8/+0x0fc are the transmit/receive data rates (5500) | same, plus `getAT_UD` writing only the receive one |
+| +0x070, +0x074 and +0x084 are NOT one quantity each (5502) | the second writer disagrees with the first about linear-vs-dB, about polarity, and about units |
+| `VPcmFloModem::sweepCounter` is `int` and the constellation is a strip chart (5511) | two signed divisions, six lanes at 140 positions |
+| `v34_object::pac18` is a `K56FlexFloModem *` (5510) | five `this` arguments; the field is NOT retyped and the finding says why |
+| the equaliser arm's cap of 80 is `V34_EQ_TAPS` (5512) | two derivations that share no evidence |
 
-## Phase 9 — voice, Caller ID, ring detect, beep
+One deviation: **D710**, selectors 3 and 4 write `points[0]` and return 1
+whatever `maxCount` says, including zero. Driven, not fixed.
 
-74 symbols / 26,292 bytes, plus the `Beepgen.c +3` span (6,546, of which
-3,949 is ready and nothing depends on it — a good batch for a session with
-little context left). `cid-dtmf` from phase 0 has already done part of the
-Caller ID work.
+`make phase` green; 39,000-odd checks over five groups; 99 mutations in four
+sets, 96 caught, 0 NOT caught, 0 unusable, 3 equivalent with the argument for
+each written down.
 
-Placed here because the instruction names fax as last and data mode as first
-and says nothing about these; they are small, and none of them blocks data
-mode.
+## Phase 8 — dialler, call progress, and the dispatch bucket
+
+**MEASURED, now that `tools/indirect.py` works (3520/3521), and the headline is
+that NONE of it is V.34/V.90/V.92.** That dispatch surface is complete.
+
+Two mechanisms reach code without a direct call, and the second is not a
+duplicate of the first:
+
+1. **Relocations from a data section into `.text`** — 1,922 of them; 163 land
+   on a symbol boundary and name **125 distinct indirect entry points** (73
+   from `.rodata`, 37 from `.data`, 17 from the object's only four C++ vtables,
+   the `Resampler` family). **92 unwritten, 33,422 bytes.**
+2. **`R_386_32` naming a FUNC symbol anywhere** — **223 distinct functions,
+   181 unwritten, 57,781 bytes.**
+
+Classified by REACHABILITY from each service's own entry points. Not by name:
+a name-based pass put `faxvmi_*` and `v17rx_create` under "core/dsp" and made
+this bucket look like in-scope work when none of it is.
+
+| | symbols | bytes |
+|---|--:|--:|
+| fax only | 135 | 29,930 |
+| data mode, V.22 / V.32 | 33 | 24,670 |
+| voice / Caller ID / ring | 4 | 2,858 |
+| reached by no entry point | 9 | 323 |
+| **V.34 / V.90 / V.92** | **0** | **0** |
+
+**The nine orphans are worth a note for whoever comes back.** Eight modulation
+message handlers at *exactly* 39 bytes each -- `v17rx_message`, `v17tx_message`,
+`v21rx_message`, `v21tx_message`, `v27rx_message`, `v27tx_message`,
+`v29rx_message`, `v29tx_message` -- plus `null_message` at 11. The uniform size
+says one shape repeated, and `null_message` says the table has a default. V.21
+is fax's 300-baud control channel, so all nine are almost certainly reached
+through the fax VMI dispatch, which is a table `indirect.py` resolves but whose
+CALLER it cannot follow. They are cheap and they are fax; take them with fax.
+
+The dialler and call-progress half of this phase is unmeasured and still owed.
+
+## Phase 9 — voice, Caller ID, ring detect
+
+70 symbols, 24,467 bytes.
 
 ## Phase 10 — fax Class 1, last
 
-286 symbols / 78,718 bytes exclusive to fax: `class1tx.c +94` (68,796 once
-the shared DSP of phase 5 is removed), `class1.c` (4,146), `class1rx.c`
-(2,495) and part of `voice.c#3` (3,253). V.17, V.27ter and V.29 transmit and
-receive, the `faxvmi` framing layer, and T.30. It is the largest symbol count
-of anything left, which is the shape that parallelises best when its turn
-comes.
+286 symbols, 78,718 bytes that nothing in data mode reaches.
 
-The `VTB_*` tables (`VTB_BOUND_*`, `VTB_REGION_*`, `VTB_DIFF_TBL`) are one
-cluster, not eight independent wins — a byte-exact copy via
-`tools/tabdump.py` is what they need, and `docs/fastpass.md` defers the
-closed-form derivation to the 8 kHz retarget. `VTB_decoder` itself is phase
-5, because V.32 needs it.
+## The readability pass — `docs/cleanup.md`
 
-## Phase 11 — deliberately last, whatever the metrics say
+Magic numbers, comments that cite an address instead of stating an intent,
+parameter names, file headers. **Not a phase and not an end-stage sweep**: it
+runs inside the batch that closes a translation unit, for the same reasons §3
+gives for naming, plus one more -- a cleanup pass over a file another agent is
+writing is exactly finding 3511's shape.
 
-- **`V90Parameters::loadParams`, 7,894 bytes, needing only two symbols
-  (`Vparser_read_float`, `Vparser_read_int`).** It will rank near the top of
-  every metric in this document. Findings 860–862 show both its callees are
-  three-byte stubs, so the method has no observable behaviour, and
-  `tools/vparse.py` already extracts everything it encodes.
-- **`v34handshak` microstate 44** (`DET_INFO`, 6,046 bytes), the only part of
-  table 3 still open — `docs/v34handshak.md` is the live tracker and says
-  what is open is *inside* 44, not beside it.
-- **The V.90 answer side.** `VPCMXF_Create` derives its side from a null
-  argument its one caller always passes, so the digital-side sender is code
-  the blob never enters and **cannot be driven differentially at all**. Only
-  the codegen tier applies, and finding 1308 bounds what that is worth for
-  these classes. "Done" here can only mean "reads correctly and compiles to
-  the same instruction sequence" — say so wherever it is claimed.
-- **The tree-wide mutation re-record**, owed once reconstruction stops
-  moving: roughly 1 snapshot current of 117.
+The one item that is settled and CLOSED: **shifts are not to be rewritten as
+divides.** Finding 1044 measured that the object's choice is forced and
+detectable -- six signed divides by a power of two in 1.2 MB, all `/ 2`, at six
+named addresses -- so a rewrite would move codegen and destroy evidence.
+`docs/cleanup.md` §2.
+
+## Continuous, not a phase
+
+- **The mutation snapshot is stale** — 131 suites registered, 0 current after
+  the last merges. Re-record needs a quiet `src/`.
+- **25 diagnostic format strings are genuinely absent** across 18 functions,
+  with 13 call sites unresolvable either way. `debugaudit.py --absent` is the
+  measure; the per-file "missing" rollup is NOT, and reads ~15× worse than the
+  truth because it debits one file and credits another whenever a factored
+  helper lands elsewhere (findings 2600, 2950).
+- **Finding 3215**: `make phase`'s `prereq` is a prerequisite rather than a
+  barrier, so under `-j` it races the interop link. Fails loud. Unfixed only
+  because the Makefile was contended.
 
 ## What every batch owes, whatever phase it is in
 
-1. **Read from the disassembly**, not a summary. Ghidra is scaffolding and
-   never evidence; every line goes through `tools/dis.py` first.
-2. **A tier-1 differential test per function.** Non-negotiable. It is not
-   overhead — it is what makes writing fast, because each fault is localised
-   in one run.
-3. **A closed batch.** `python3 tools/closure.py <members> --batch` must say
-   CLOSED before commit.
-4. **`make phase`, not `make test`** — it runs the period toolchain
-   (GCC 3.4.2 in `tools/toolchain/`), the modern build, `check64`, interop
-   and the coverage gates. A rejection under 3.4.2 in `src/` is a *finding*,
-   not a portability nuisance: the author wrote this for that compiler.
-5. **A one-line `docs/deviations.md` entry** for anything that looks wrong,
-   marked `unmeasured`. An unrecorded observation is unrecoverable.
-6. **Nothing wrong-but-plausible is committed.** If a function cannot be made
-   to pass, leave it out and record the attempt.
-
-And two about the machine, not the code: build with **about half the cores,
-never `-j$(nproc)`**, and place no bench call while a build or an agent is
-running — the DSP is real-time and a loaded machine invalidates the run.
+- A closed batch, and `make phase` green — **not `make test`**.
+- Its own differential suite, and mutations that are shown to fire. A
+  separating-trial counter must count trials that differ in an **observable**
+  result; four of five such counters in one batch were measuring a path or a
+  constant and proved nothing (findings 3509, 3403). **The mutation
+  adjudicates, not the counter.**
+- Findings and deviations numbered from a survey across **all branches** at
+  commit time — and the merger re-checks, because two agents surveying in the
+  same window both claimed D351.
+- `refcheck.py` clean. It cannot see other branches, so it is necessary and not
+  sufficient.
+- Naming carried inside the batch, per §3.
 
 ## Re-deriving all of this
 
-    make worklist                                     # what is left
-    python3 tools/readyqueue.py                       # what is startable
-    python3 tools/service.py                          # data mode vs fax
-    python3 tools/closure.py <members> --batch        # is my batch closed
-    python3 tools/coverage.py                         # the headline
+    make coverage                  # MUST run first -- a plain `make` no longer
+                                   # fills build/src, and seven tools read it
+    python3 tools/service.py       # the reachability partition
+    python3 tools/readyqueue.py    # READY vs BLOCKED
+    python3 tools/worklist.py      # the per-symbol list
+    BLOB=<abs> tools/toolchain/compare.py --ratchet
+
+Every one of those refuses on a zero denominator now (findings 3110, 3122).
+If one refuses, it is telling you the truth: run `make coverage`.
