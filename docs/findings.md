@@ -65876,8 +65876,27 @@ writers store a whole halfword.
 
 The rename touched three sources and five anchors in
 `test/mutations/v90p4ddec.json`, which `anchorcheck.py` caught as
-`NOT UNIQUE ... matches 0 time(s)`.  `compare.py --ratchet` did not decrease
-across it, which is what CLAUDE.md requires of a pure rename.
+`NOT UNIQUE ... matches 0 time(s)`.
+
+**AND IT MOVED NOTHING AT THE CODEGEN TIER, WHICH IS CHECKED AS A SET AND NOT
+AS A COUNT.**  CLAUDE.md requires `compare.py` not to budge across a pure
+rename, and warns in the same breath that "a count can gain four and lose four
+and not move" -- so the count alone cannot carry the claim.  `samesize.py
+--identical` was run at the branch point and again on the finished batch and
+the two SETS diffed:
+
+    identical set   298 -> 302
+    lost            (none)
+    gained          enterFPE, enterRRN, getRbsPattern,
+                    indicateRemoteRateReneg
+
+Nothing left the set, and every gain is one of this batch's own new symbols.
+So no `V90Phase4Demodulator` or `V90Demapper` symbol changed shape, which is
+the actual claim -- a rename is a compile-time substitution and a TYPE change
+masquerading as one would have shown here.  `compare.py` moved 409 -> 413
+identical and 75 -> 77 same-size over the same interval, with the blob-side
+total rising by exactly 1,824 bytes, which is the eight symbols and nothing
+else.
 
 ### 4903. `V90Phase2Info::rtd`'S ARITHMETIC IS UNSIGNED, AND THE RETYPE IS DEFERRED ON PURPOSE
 
