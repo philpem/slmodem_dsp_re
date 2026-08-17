@@ -248,8 +248,26 @@ struct v34_object {
 	 * copies +0x238 into +0x248 to restart the span.  Between them those
 	 * are the second and third readings that settle finding 179's
 	 * register-relative offsets as four low.
+	 *
+	 * TWO OF THE FOUR ARE NAMED NOW, by `VPcmV34SetTimeOut`, which is the
+	 * only function in the object that writes the pair together and the
+	 * only one that establishes what the second is for:
+	 *
+	 *     6e90  imul $0x2580,0x8(%esp),%eax     seconds * 9600
+	 *     6ea1  mov  %ecx,0x234(%edx)           obj+0x238 <- 0
+	 *     6ea7  mov  %eax,0x238(%edx)           obj+0x23c <- that
+	 *
+	 * so +0x238 is the running count `datapumpv34` reads (restarted here)
+	 * and +0x23c is a DEADLINE in the same units.  9,600 is 8 kHz times
+	 * 1.2 and not the sample rate; the argument is therefore not seconds
+	 * of wall clock at the codec rate, and the scale is left as the
+	 * constant it is rather than named a unit this cannot prove.
+	 * +0x234, +0x240 and +0x244 are still unnamed and still unmapped.
 	 */
-	unsigned char unmapped_0234[0x24c - 0x234];
+	unsigned char unmapped_0234[0x238 - 0x234];
+	int sample_count;				/* +0x0238 */
+	int timeout_deadline;				/* +0x023c */
+	unsigned char unmapped_0240[0x24c - 0x240];
 	/*
 	 * How far the V.90 receiver has got through phase 3, as a number the
 	 * handshake's C++ side ratchets forward.  `V34XF_Indicate-
@@ -277,13 +295,28 @@ struct v34_object {
 	unsigned char unmapped_0254[0x25c - 0x254];
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
-	 * f25c is the base the echo filter's lag is measured from, f25e the
-	 * transmit sample it just dequeued, f260 the running residual.
+	 * `dmadelay` is the base the echo filter's lag is measured from,
+	 * f25e the transmit sample it just dequeued, f260 the running
+	 * residual.
+	 *
+	 * +0x25c IS `V34dmadelay`, and it is the object's own spelling:
+	 * `VPcmV34SetDelays` computes `0x610 - cfg[0x68]`, stores it here and
+	 * reports it as "V34FEC, V34dmadelay set to %d, (ext delay=%d)" with
+	 * the stored value first and the configured one second.  Was `f25c`.
+	 * `VPcmV34Create` and `VPcmV34InitiateRetrain` already carried the
+	 * same expression against the same offset.
 	 */
-	short f25c;					/* +0x25c */
+	short dmadelay;					/* +0x25c */
 	short f25e;					/* +0x25e */
 	short f260;					/* +0x260 */
-	unsigned char unmapped_0262[0x264 - 0x262];
+	/*
+	 * +0x262.  `VPcmV34NotifyDP` sets it to 1 under "VPcmV34
+	 * Notification: Valid in samples..." and to 0 under "...Invalid in
+	 * samples...", and `datapumpv34` returns early when it is zero.  So
+	 * the incoming sample stream is usable exactly while this is set.
+	 * Two bytes, written as a short by both arms.
+	 */
+	short samples_valid;				/* +0x262 */
 	struct v34_queue rxq;				/* +0x264 */
 	int rxq_ring_tail[V34_RXQ_RING - 1];		/* to +0x370 */
 	unsigned char unmapped_0370[0x382 - 0x370];
@@ -900,7 +933,19 @@ struct v34_object {
 	short fabce;					/* +0xabce */
 	short fabd0;					/* +0xabd0 */
 	short fabd2;					/* +0xabd2 */
-	unsigned char unmapped_abd4[0xabe0 - 0xabd4];
+	unsigned char unmapped_abd4[0xabd8 - 0xabd4];
+	/*
+	 * +0xabd8 and +0xabdc, the modem-on-hold timer and its limit.
+	 * `VPcmV34Progress` names the first from "Modem On Hold approved by
+	 * phase2 (ISP timeout is %d seconds)" and counts samples in the
+	 * second against it, with -1 meaning no limit; and
+	 * `VPcmV34NotifyDP`'s three-way-call arm prints the second as
+	 * "mohTimer = %d" on its way to setting a deadline 48,000 samples
+	 * further on.  That second string is what turns the counter from
+	 * "the one beside the limit" into a named field.
+	 */
+	int moh_limit;					/* +0xabd8 */
+	int moh_timer;					/* +0xabdc */
 	/*
 	 * +0xabe0.  Added to 0x50 to make the MHack message's first short,
 	 * so it is what the acknowledgement CARRIES rather than a flag.
@@ -1020,7 +1065,15 @@ struct v34_object {
 	 * initdigital writes here.
 	 */
 	unsigned char rates_latched;			/* +0xac16 */
-	unsigned char unmapped_ac17[0xac18 - 0xac17];
+	/*
+	 * +0xac17.  A byte, and `VPcmV34SetIndicationOfRemoteRetrain` is the
+	 * whole of what writes it -- twelve bytes that load the object and
+	 * store 1 here.  Named from that function and from nothing else: no
+	 * reader has been reconstructed, so what consumes the flag is not
+	 * established, only that this one entry point raises it and never
+	 * lowers it.  Was `unmapped_ac17`.
+	 */
+	unsigned char remote_retrain_ind;		/* +0xac17 */
 	/*
 	 * +0xac18.  A second pointer into the C++ side, distinct from
 	 * `p3548`, and `V34GiveINFO1aBits` reads exactly one thing through
@@ -1068,11 +1121,23 @@ struct v34_object {
 	 * three words at .text+0xc98e, +0xc99f and +0xc9a7: a sample count, a
 	 * flag set to 1 beside it, and a third word cleared to 0.
 	 *
-	 * Unmapped rather than named for the reason the regions above are:
-	 * one writer and no reader in this tree says nothing about what they
-	 * hold, and an offset is honest where a name would not be.
+	 * THE READER HAS ARRIVED AND THEY ARE NAMED NOW.
+	 * `VPcmV34RequestDPNotification` is the other end of exactly that arm:
+	 * it hands the three words out through three `int *`, in this order,
+	 * and then resets them to -1, 0 and 0 -- and it clears bit 0 of the
+	 * configuration's +0x51, which is the same bit
+	 * `requestOutputSampleClear` sets beside the three stores.  So the
+	 * group is a one-deep request mailbox between the datapump and its
+	 * caller, +0xac40 says whether one is outstanding and NEGATIVE means
+	 * none (`test; js` and a reset to -1, against the writer's 1).
+	 *
+	 * `clr_count` is the writer's `n * 2`, in samples.  `clr_done` is
+	 * written zero by both sides and read by neither, so the name says
+	 * where it sits in the triple and not what it carries.
 	 */
-	unsigned char unmapped_ac40[0xac4c - 0xac40];	/* +0xac40 */
+	int clr_flag;					/* +0xac40 */
+	int clr_count;					/* +0xac44 */
+	int clr_done;					/* +0xac48 */
 };
 
 /*
@@ -1106,12 +1171,26 @@ struct v34_ratecfg {
 	short period;			/* +0x02                         */
 	short txbits;			/* +0x04 in units of 2400 bps    */
 	/*
-	 * +0x06.  `setfinalrate` writes it, `v34setuptxmit` and `v34handshak`
-	 * read it beside `baud` and `carrier`, and `V34SetINFO1aBits` clears
-	 * it when it hard-codes the other two for a short phase 2.  No getter
-	 * names it and nothing here says what it holds.
+	 * +0x06.  THE TRANSMIT PRE-EMPHASIS FILTER INDEX, and the object
+	 * names it: `V34XF_IndicateK56FlexJdReceived` prints this record's
+	 * +0x00, +0x10 and +0x06 through
+	 *
+	 *   "VPcmV34Main: About to setup v34 txmit, baudrate = %d,
+	 *    carrier = %d, preemp = %d"
+	 *
+	 * in that argument order (0xa6aa, 0xa69f, 0xa694 load +0x00, +0x10,
+	 * +0x06 into the first, second and third slots).  Two of the three
+	 * land on `baud` and `carrier`, which were named from elsewhere, so
+	 * the string is checked against known answers on both sides of the
+	 * one it settles.
+	 *
+	 * That agrees with every use already recorded: `setfinalrate` writes
+	 * it, `v34setuptxmit` and `v34handshak` read it beside `baud` and
+	 * `carrier` -- the three parameters of a V.34 transmitter setup --
+	 * and `V34SetINFO1aBits` clears it when it hard-codes the other two
+	 * for a short phase 2.  Was `f06`.
 	 */
-	short f06;			/* +0x06                         */
+	short preemp;			/* +0x06                         */
 	short depth;			/* +0x08 trellis, initV34's arg  */
 	short use_max;			/* +0x0a picks MMaxTable         */
 	const short *divtab;		/* +0x0c the divisor table       */
@@ -1120,7 +1199,16 @@ struct v34_ratecfg {
 	short rxbits;			/* +0x14                         */
 	unsigned char pad_16[0x22 - 0x16];
 	short rx_use_max;		/* +0x22                         */
-	unsigned char pad_24[0x28 - 0x24];
+	/*
+	 * +0x24.  The RECEIVE carrier, and the paragraph above used to say it
+	 * was "inside `pad_24` and is left there: nothing reconstructed
+	 * touches it".  `VPcmV34GetCurrentRxCarrier` touches it now -- it is
+	 * the field that getter returns, `movswl 0xaaa8` -- and it is the
+	 * receive half of the same tx/rx pairing every other member of this
+	 * struct has.
+	 */
+	short rx_carrier;		/* +0x24                         */
+	unsigned char pad_26[0x28 - 0x26];
 	const short *rx_divtab;		/* +0x28                         */
 };
 

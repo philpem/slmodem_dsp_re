@@ -1,0 +1,232 @@
+Gentoo gcc-3.4.2-r2 toolchain -- COMPLETE RECOVERED SOURCE SET
+==============================================================
+Target compiler identity (.comment section, byte for byte):
+
+    GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+
+STATUS: ALL SIX SRC_URI components recovered and verified byte-exact against
+Gentoo's own digest-gcc-3.4.2-r2. This is 100% of the ebuild's inputs -- not a
+near-miss, not a substitute. The exact compiler can be rebuilt from this.
+
+
+HOW IT WAS VERIFIED
+-------------------
+The authority is Gentoo's CVS digest file, recovered from the CVS->git
+conversion repo (see build-recipe/digest-gcc-3.4.2-r2.txt):
+  git clone --filter=blob:none --bare \
+      https://anongit.gentoo.org/git/archive/repo/gentoo-2.git
+  git show 789964eafd96:sys-devel/gcc/files/digest-gcc-3.4.2-r2
+
+To re-verify at any time:
+  cd distfiles && md5sum -c MD5SUMS
+
+Independent cross-check: the protector md5 also matches IBM TRL's own archived
+.md5 sidecar
+  https://web.archive.org/web/20040917153341id_/http://www.trl.ibm.com/projects/security/ssp/gcc3_4_1/protector-3.4.1-1.tar.gz.md5
+and the same file was independently located at a second unofficial mirror
+(www.jabawok.net/gentoo/distfiles/) with an identical md5. Three sources agree.
+
+
+CONTENTS
+--------
+distfiles/          all six SRC_URI files, md5-verified (MD5SUMS included)
+build-recipe/
+  digest-gcc-3.4.2-r2.txt   Gentoo's authoritative checksums (the reference)
+  gcc-3.4.2-r2.ebuild       the actual ebuild, CVS rev 1.10 @ commit 789964eafd96
+  toolchain.eclass          the eclass with get_gcc_src_uri + all configure/flags
+                            and patch-application logic, at the matching revision
+  in-tree-files/            sys-devel/gcc/files/ from CVS at the same commit (96
+                            files) -- the ebuild applies these from ${FILESDIR}
+                            IN ADDITION to the tarballs. The ones that apply on
+                            x86/amd64 are:
+                              gcc-spec-env.patch
+                              3.4.0/gcc34-reiser4-fix.patch
+                              3.4.2/gcc34-m32-no-sse2.patch
+                              3.4.2/gcc34-fix-sse2_pinsrw.patch
+                              3.4.1/gcc-3.4.1-glibc-is-native.patch
+                                    (amd64 + multilib ONLY -- ebuild:174)
+                            (mips n32/n64 and ppc64 patches are conditional.)
+
+                            CORRECTED BY THE REBUILD (finding 2500): this list
+                            used to name pro-police-docs.patch as "applied by
+                            the eclass".  It is NOT.  eclass:405 guards it on
+                            sspdocs="no", and PP_VER=3_4_1 takes the branch at
+                            eclass:397 that sets sspdocs="yes" -- confirmed
+                            independently by the protector tarball shipping
+                            gcc_3_4_1.dif rather than protector.dif, which is
+                            that same branch's other consequence.  The x86
+                            build applies FOUR files from here; the run that
+                            produced the exact version string applied 47
+                            patches in total with none skipped.
+nearest-patchset/   3.4.3.20050110 -- the NEXT Gentoo gcc patchset (2005-01-10),
+                    recovered from proj/gcc-patches.git. Not needed now that the
+                    real 3.4.2 tarballs are here; kept only as a cross-reference.
+FINDINGS.txt        full research log: every source checked, hits and negatives
+
+
+PROVENANCE: ORIGINAL URL -> WHERE EACH FILE WAS ACTUALLY RECOVERED
+------------------------------------------------------------------
+"ORIGINAL" = the 2004 SRC_URI the ebuild really used, reconstructed from
+get_gcc_src_uri() in build-recipe/toolchain.eclass (NOT guessed).
+"RECOVERED FROM" = the URL each local copy in distfiles/ was downloaded from.
+
+1) gcc-3.4.2.tar.bz2
+   ORIGINAL:  ftp://gcc.gnu.org/pub/gcc/releases/gcc-3.4.2/gcc-3.4.2.tar.bz2
+              STILL LIVE (verified: content-length 27246826 = digest size)
+   RECOVERED: http://bloodnoc.org/~roy/olde-distfiles/gcc-3.4.2.tar.bz2
+   ALSO AT:   https://gcc.gnu.org/pub/gcc/releases/gcc-3.4.2/gcc-3.4.2.tar.bz2
+              (canonical upstream; prefer this one if re-fetching)
+
+2) protector-3.4.1-1.tar.gz          [IBM ProPolice SSP, by Hiroaki Etoh]
+   ORIGINAL:  http://www.research.ibm.com/trl/projects/security/ssp/gcc3_4_1/protector-3.4.1-1.tar.gz
+              GONE. Note this is www.research.ibm.com/trl/..., which is a
+              DIFFERENT host from www.trl.ibm.com/... -- both are dead, and
+              neither was ever captured by the Wayback Machine.
+   RECOVERED: https://grok.org.uk/tools/ssp/protector-3.4.1-1.tar.gz
+   ALSO AT:   http://bloodnoc.org/~roy/olde-distfiles/protector-3.4.1-1.tar.gz
+              https://www.jabawok.net/gentoo/distfiles/protector-3.4.1-1.tar.gz
+              (three independent copies located; all agree on the md5)
+
+3) gcc-3.4.2-patches-1.1.tar.bz2     [the Gentoo patch set]
+   ORIGINAL:  http://dev.gentoo.org/~lv/GCC/gcc-3.4.2-patches-1.1.tar.bz2
+              GONE (live 404; Wayback holds only 301 redirect stubs, no content)
+   RECOVERED: http://bloodnoc.org/~roy/olde-distfiles/gcc-3.4.2-patches-1.1.tar.bz2
+
+4) gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2   [Gentoo's own PIE patch set]
+   ORIGINAL:  http://dev.gentoo.org/~lv/GCC/gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2
+              GONE (same as above)
+   RECOVERED: http://bloodnoc.org/~roy/olde-distfiles/gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2
+
+5) gcc-3.4.2-manpages.tar.bz2        [pre-generated man pages; cosmetic]
+   ORIGINAL:  http://dev.gentoo.org/~lv/GCC/gcc-3.4.2-manpages.tar.bz2   GONE
+   RECOVERED: http://bloodnoc.org/~roy/olde-distfiles/gcc-3.4.2-manpages.tar.bz2
+
+6) bounds-checking-gcc-3.4.2-1.00.patch.bz2   [only with USE=boundschecking;
+                                               NOT used for the target build]
+   ORIGINAL:  http://web.inter.nl.net/hcc/Haj.Ten.Brugge/bounds-checking-gcc-3.4.2-1.00.patch.bz2
+              HOST DEAD (connection timeout, not merely 404)
+   RECOVERED: http://bloodnoc.org/~roy/olde-distfiles/bounds-checking-gcc-3.4.2-1.00.patch.bz2
+
+The eclass default devspace, had GENTOO_TOOLCHAIN_BASE_URI been unset, was
+  http://dev.gentoo.org/~lv/toolchain-files/     (also gone, also never archived)
+The ebuild overrides it to http://dev.gentoo.org/~lv/GCC/ -- "lv" is Travis
+Tilley, the GCC maintainer at the time.
+
+Ebuild knobs that select the above:
+  PATCH_VER="1.1"  PIE_VER="8.7.6.5"  PP_VER="3_4_1"  PP_FVER="3.4.1-1"  HTB_VER="1.00"
+  IUSE="... hardened uclibc ... boundschecking"
+
+
+HOW THESE SOURCES WERE FOUND (the search trail, so it can be redone)
+---------------------------------------------------------------------
+Step 1 -- get the checksums, without which nothing can be verified.
+  Gentoo's CVS history is reachable ONLY over the git protocol today:
+  gitweb.gentoo.org/archive/... returns HTTP 502, and sources.gentoo.org (the
+  old ViewVC) is dead and 301-redirects into that same 502. The way through:
+      git clone --filter=blob:none --bare \
+          https://anongit.gentoo.org/git/archive/repo/gentoo-2.git
+      git show 789964eafd96:sys-devel/gcc/files/digest-gcc-3.4.2-r2
+  This yields all six md5s + sizes. It also holds the ebuild and eclass.
+
+Step 2 -- get the real SRC_URI, rather than guessing hostnames.
+  Extract eclass/toolchain.eclass at the same commit and read
+  get_gcc_src_uri(). This is what revealed dev.gentoo.org/~lv/GCC/ (a path that
+  had not been tried; earlier attempts had used ~vapier/dist) and the IBM host
+  www.research.ibm.com/trl/... as distinct from www.trl.ibm.com/...
+
+Step 3 -- protector-3.4.1-1.tar.gz.
+  Found via the Linux From Scratch SSP hint
+      https://www.linuxfromscratch.org/hints/downloads/files/ssp.txt
+  which cites  http://www.grok.org.uk/docs/ssp.html , whose companion directory
+      https://grok.org.uk/tools/ssp/
+  rehosted the IBM tarball locally (with .md5 and .asc sidecars) instead of
+  hotlinking it -- so it never rotted.
+
+Step 4 -- the two Gentoo-specific tarballs (the hard ones).
+  Web search for a historical Gentoo distfiles archive surfaced
+      https://bugs.gentoo.org/834712   ("Old" or "historical" Gentoo distfiles mirror)
+  That bug catalogues community archives, among them Roy Bamford's
+  ("NeddySeagoon", Gentoo developer / forums moderator) personal, never-purged
+  archive, which turned out to hold everything:
+      http://bloodnoc.org/~roy/olde-distfiles/
+      http://bloodnoc.org/~roy/old_Gentoo/DISTFILES.year/     (same content)
+      http://bloodnoc.org/~roy/old_Gentoo/                    (also 2004-2014 GRP
+                                                              sets, stages, ISOs)
+  Other archives named in that bug, worth remembering:
+      https://www.jabawok.net/gentoo/distfiles/
+      https://dev.gentoo.org/~sam/distfiles/ , ~vapier/dist/ , ~robbat2/distfiles/
+      https://archive.org/download/gentoo-distfiles_202311
+      https://anongit.gentoo.org/git/repo/gentoo/historical.git
+
+WHY NO OFFICIAL MIRROR HAD THEM
+  Official Gentoo mirrors run rsync --delete, so they are mirrors, not archives;
+  once Gentoo pruned these files they vanished everywhere downstream. Verified:
+  all 284 current HTTP mirrors re-probed at the CORRECT sharded paths (852
+  probes) -- zero hits; 159 hosts from the 2005-era mirror list -- zero; and
+  releases/{x86,amd64}/ today contain only autobuilds/ and binpackages/.
+  Surviving copies are all on individuals' personal web space.
+
+  IMPORTANT if you ever re-run a mirror sweep: Gentoo mirrors are NOT flat.
+  https://distfiles.gentoo.org/distfiles/layout.conf says
+      [structure]
+      0=filename-hash BLAKE2B 8
+  so files live at  distfiles/<2-hex>/<filename>  where the 2 hex digits are the
+  first 8 bits of BLAKE2B of the FILENAME (computable without the file):
+      1e  gcc-3.4.2-patches-1.1.tar.bz2
+      29  gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2
+      d3  protector-3.4.1-1.tar.gz
+  A flat probe 404s whether or not the file is present. Always run a positive
+  control (a file known to exist) before believing a 404, and a negative control
+  (an impossible filename) before believing a 200 -- several hosts
+  (mirror.meowsmp.net, gentoo.mirrored.ca, www.tek.net, live www.trl.ibm.com)
+  return 200 + HTML for any name, and FTP mirrors return 221 for garbage names.
+
+CAVEAT: bloodnoc.org is one person's web directory and could disappear at any
+time. This local set is now the safe copy -- keep a backup.
+
+
+BUILDING IT
+-----------
+IT IS BUILT.  tools/toolchain/build-gentoo-image.sh and Dockerfile.gentoo do
+all of the below inside Gentoo's own stage3-x86-2005.0, and the by-hand
+reimplementation of the ebuild is build-gentoo-gcc.sh in this directory, with
+the eclass line number beside each step and its deviations listed at the foot.
+Finding 2500 for what the result measures; 2501 for the two flag findings it
+was needed to re-test.
+
+Patch order, per gcc_src_unpack() in toolchain.eclass (authoritative):
+  1. epatch ${WORKDIR}/patch        <- gcc-3.4.2-patches-1.1.tar.bz2
+  2. do_gcc_SSP_patches             <- protector-3.4.1-1.tar.gz
+  3. do_gcc_PIE_patches             <- gcc-3.4.0-piepatches-v8.7.6.5.tar.bz2
+  4. gcc_version_patch "${BRANCH_UPDATE} (${release_version})"
+  5. the ${FILESDIR} patches listed above
+     (4 BEFORE 5, corrected by the rebuild: gcc_src_unpack ends with the
+      version patch, and the ebuild's own src_unpack applies FILESDIR
+      afterwards -- ebuild:150 calls gcc_src_unpack, ebuild:153 patches.)
+(With USE=boundschecking, step 2+3 are replaced by the HTB patch instead --
+ that is NOT what produced the target .comment string, so leave it off.)
+
+WHY THE .comment STRING HAS A DOUBLE SPACE -- and why this proves the recipe:
+  release_version = "Gentoo Linux ${PVR}"            -> "Gentoo Linux 3.4.2-r2"
+                  + ", ssp-${PP_FVER}"               -> ", ssp-3.4.1-1"
+                  + ", pie-${PIE_VER}"               -> ", pie-8.7.6.5"
+  BRANCH_UPDATE is EMPTY for this ebuild, so the argument passed is
+      " (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)"   [leading space]
+  gcc_version_patch() then seds gcc/version.c:
+      s~\(const char version_string\[\] = ".....\).*\(".*\)~\1 @GENTOO@\2~
+  \1 captures `"3.4.2`, and the replacement re-emits it followed by a SPACE and
+  then @GENTOO@ -- which itself begins with a space. Hence:
+      3.4.2 + " " + " (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)"
+    = "GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)"
+  The anomalous double space falls out of the recipe. That is independent
+  confirmation -- separate from the MD5s -- that this ebuild+eclass pair is
+  exactly the one that built the object under study.
+
+Verifying you rebuilt the right thing -- compile anything and check:
+  readelf -p .comment <any_object.o>
+It must read exactly:
+  GCC: (GNU) 3.4.2  (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)
+
+USEFUL CONTEXT: gcc-3.4.2-r2 was stable ONLY on amd64 (2004-09-28 to its removal
+on 2005-03-22) and was never more than ~x86 on x86. So its .comment appearing in
+an x86 object means the builder was running ~arch or a hardened profile.

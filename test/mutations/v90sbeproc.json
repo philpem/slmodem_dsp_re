@@ -1,0 +1,85 @@
+[
+ {
+  "note": "V90SignBitsExtractor::applyFrameAction and ::process, against t_v90demap.  The file also carries the constructor and destructor, whose suite is v90sbe; anchors here are taken from the two processing members only and each appears once."
+ },
+ {
+  "label": "the pass-through action inverts",
+  "find": "\t\tcase V90SBE_PASS_ALL:\n\t\t\tout[i] = in[i];",
+  "replace": "\t\tcase V90SBE_PASS_ALL:\n\t\t\tout[i] = (unsigned char)(in[i] == 0);"
+ },
+ {
+  "label": "the invert-all action passes through",
+  "find": "\t\tcase V90SBE_INVERT_ALL:\n\t\t\tout[i] = (unsigned char)(in[i] == 0);",
+  "replace": "\t\tcase V90SBE_INVERT_ALL:\n\t\t\tout[i] = in[i];"
+ },
+ {
+  "label": "the two alternating actions are the other way round",
+  "find": "\t\tcase V90SBE_INVERT_EVEN:\n\t\t\tout[i] = (i & 1) ? in[i]\n\t\t\t\t\t : (unsigned char)(in[i] == 0);",
+  "replace": "\t\tcase V90SBE_INVERT_EVEN:\n\t\t\tout[i] = (i & 1) ? (unsigned char)(in[i] == 0)\n\t\t\t\t\t : in[i];"
+ },
+ {
+  "label": "the invert-odd action inverts the even positions",
+  "find": "\t\tcase V90SBE_INVERT_ODD:\n\t\t\tout[i] = (i & 1) ? (unsigned char)(in[i] == 0)\n\t\t\t\t\t : in[i];",
+  "replace": "\t\tcase V90SBE_INVERT_ODD:\n\t\t\tout[i] = (i & 1) ? in[i]\n\t\t\t\t\t : (unsigned char)(in[i] == 0);"
+ },
+ {
+  "label": "applyFrameAction stops one position short",
+  "find": "\tfor (i = 0; i < width; i++) {\n\t\tswitch (action) {",
+  "replace": "\tfor (i = 0; i + 1 < width; i++) {\n\t\tswitch (action) {"
+ },
+ {
+  "label": "the default arm passes the bit through instead of writing nothing",
+  "find": "\t\tcase V90SBE_INVERT_ODD:\n\t\t\tout[i] = (i & 1) ? (unsigned char)(in[i] == 0)\n\t\t\t\t\t : in[i];\n\t\t\tbreak;\n\t\t}",
+  "replace": "\t\tcase V90SBE_INVERT_ODD:\n\t\t\tout[i] = (i & 1) ? (unsigned char)(in[i] == 0)\n\t\t\t\t\t : in[i];\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tout[i] = in[i];\n\t\t\tbreak;\n\t\t}"
+ },
+ {
+  "label": "state 0 chooses its action from the wrong sense of the first bit",
+  "find": "\t\taction = (ACTIONS)(in[0] != 0);",
+  "replace": "\t\taction = (ACTIONS)(in[0] == 0);"
+ },
+ {
+  "label": "state 0 does not advance the state machine",
+  "find": "\t\tstate = (unsigned int)action;",
+  "replace": "\t\tstate = 0;"
+ },
+ {
+  "label": "state 1 chooses the other alternating action",
+  "find": "\t\t\taction = V90SBE_INVERT_ODD;\n\t\t\tstate = 1;",
+  "replace": "\t\t\taction = V90SBE_INVERT_EVEN;\n\t\t\tstate = 1;"
+ },
+ {
+  "label": "state 1 stays where it is whatever the bit says",
+  "find": "\t\t\taction = V90SBE_INVERT_EVEN;\n\t\t\tstate = 0;",
+  "replace": "\t\t\taction = V90SBE_INVERT_EVEN;\n\t\t\tstate = 1;"
+ },
+ {
+  "label": "the frame is copied in rather than having its action applied",
+  "find": "\tapplyFrameAction(action, in, bits);",
+  "replace": "\tapplyFrameAction(V90SBE_PASS_ALL, in, bits);"
+ },
+ {
+  "label": "the parallel differential decoder is skipped",
+  "find": "\tdecoder.process(bits, bits);",
+  "replace": "\t;"
+ },
+ {
+  "label": "the serial decoder runs on the even positions instead",
+  "find": "\t\tbits[i] = (i & 1) ? oddDecoder.process(bits[i]) : bits[i];",
+  "replace": "\t\tbits[i] = (i & 1) ? bits[i] : oddDecoder.process(bits[i]);"
+ },
+ {
+  "label": "the serial decoder runs on every position",
+  "find": "\tfor (i = 0; i < width; i++)\n\t\tbits[i] = (i & 1) ? oddDecoder.process(bits[i]) : bits[i];",
+  "replace": "\tfor (i = 0; i < width; i++)\n\t\tbits[i] = oddDecoder.process(bits[i]);"
+ },
+ {
+  "label": "the first bit is handed to the caller as well",
+  "find": "\tfor (i = 1; i < width; i++)\n\t\tout[i - 1] = bits[i];",
+  "replace": "\tfor (i = 0; i < width; i++)\n\t\tout[i] = bits[i];"
+ },
+ {
+  "label": "the output is shifted one position up",
+  "find": "\t\tout[i - 1] = bits[i];",
+  "replace": "\t\tout[i] = bits[i];"
+ }
+]

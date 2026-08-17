@@ -365,13 +365,30 @@ V90Demodulator::enterPhase3()
  * method, so the choice binds no caller.
  *
  * THE `%c%d.%04d` SHAPE IS THE ONE V90PreFilter.cpp ALREADY CARRIES: a sign
- * character from `0.0f < x`, the truncated magnitude of `x`, and the first
- * four decimals as `|(int)((x - (int)x) * 10000.0f)|`.  Two details of it are
- * the object's rather than the idiom's -- the sign comes from `fldz; fcomps`
- * with the VALUE as the operand, so a NaN prints '-', and the fractional part
- * is truncated twice rather than rounded.  10000.0f is loaded once for both
+ * character, the truncated magnitude of `x`, and the first four decimals as
+ * `|(int)((x - (int)x) * 10000.0f)|`.  Two details of it are the object's
+ * rather than the idiom's -- the sign, below, and the fractional part being
+ * truncated twice rather than rounded.  10000.0f is loaded once for both
  * calls and spilled as a `double`, which is GCC hoisting one constant and not
  * two different ones.
+ *
+ * THE SIGN IS `!(0.0f >= x)` AND NOT `0.0f < x`, AND A NaN IS THE DIFFERENCE.
+ * 0x1ac24 is `fldz`, so the ZERO is in %st(0) and the value is `fcomps`'s
+ * memory operand; the character is then built with NO BRANCH AT ALL --
+ *
+ *	fldz / fcomps mean / fnstsw %ax / sahf
+ *	sbb %eax,%eax / and $0xfffffffe,%eax / add $0x2d,%eax    0x1ac3a
+ *
+ * -- which is `0x2d - 2*CF`, '+' exactly when the compare set CF.  FCOM sets
+ * CF for LESS-THAN and for UNORDERED both, so the object prints '+' for an
+ * unordered mean where `0.0f < mean` prints '-'; both zeros print '-'.  A
+ * branchless select is only encodable when the TRUE arm is the CF one, which
+ * is what fixes the negation on the outside and the zero on the left.  This
+ * used to read "so a NaN prints '-'", which was the branch form's answer and
+ * not this one's; `st_value` pattern 9 in t_v90demod.cpp is the input that
+ * tells them apart, and the two mutations there die on it.  Findings 2300 and
+ * 2410, and `ADID_PRINT_SIGN` in V90AutoDigitalImpDetector.cpp is the same
+ * reading.
  */
 int
 V90Demodulator::sessionTermination()
@@ -385,14 +402,14 @@ V90Demodulator::sessionTermination()
 			frac = (int)((mean - (float)(int)mean) * 10000.0f);
 			edprintf("V90Demodulator on sessionTermination: mean "
 				 "of timing offset History  = %c%d.%04d\r\n",
-				 (0.0f < mean) ? '+' : '-',
+				 !(0.0f >= mean) ? '+' : '-',
 				 (int)__builtin_fabsf(mean),
 				 (frac < 0) ? -frac : frac);
 
 			frac = (int)((std - (float)(int)std) * 10000.0f);
 			edprintf("V90Demodulator on sessionTermination: std "
 				 "of timing offset History  = %c%d.%04d\r\n",
-				 (0.0f < std) ? '+' : '-',
+				 !(0.0f >= std) ? '+' : '-',
 				 (int)__builtin_fabsf(std),
 				 (frac < 0) ? -frac : frac);
 
@@ -469,8 +486,11 @@ V90Demodulator::reInit()
  *    arithmetic in the function.  It splits `INITIAL_BAUD_OFFSET` into a sign
  *    character, a truncated magnitude and three decimal places, the same
  *    `%c%d.%03d` shape `V90PreFilter::setParamEia6` uses at four places.  The
- *    sign test is `0.0f < x`, taken from `fcomps` with zero on the stack and
- *    the parameter as the operand, so a NaN offset prints '-'.
+ *    sign test is `!(0.0f >= x)`: 0x1c0b4 is `fldz` and 0x1c0dc is `sbb
+ *    %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax`, the same branchless
+ *    `0x2d - 2*CF` the method above uses, so an unordered offset prints '+'.
+ *    Being UNGATED is what makes this the cheapest site in the tree to drive
+ *    one through -- `off_bits[2]` in `run_reset`.  Findings 2300 and 2410.
  *
  * 3. THE EQUALISER'S CURSOR IS EITHER CONFIGURED OR DERIVED.  A negative
  *    `LINEAR_EQU_CURSOR_PLACE` means "the middle of the linear equaliser",
@@ -514,7 +534,7 @@ V90Demodulator::reset(unsigned int quickConnect)
 	whole = (int)offset;
 	frac = (int)((offset - (float)whole) * 1000.0f);
 	edprintf("V90Demodulator reset: Baud Offset = %c%d.%03d\r\n",
-		 (0.0f < offset) ? '+' : '-',
+		 !(0.0f >= offset) ? '+' : '-',
 		 (int)__builtin_fabsf(offset),
 		 (frac < 0) ? -frac : frac);
 

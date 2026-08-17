@@ -49,6 +49,7 @@
 
 #include "harness.h"
 #include "dsplib/debug.h"
+#include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34pcmif.h"
@@ -88,6 +89,36 @@ extern void *ref_VPcmV34GetCleanedSamples(void *obj, int *n);
 extern int ref_VPcmV34GetCurrentSessionDP(void *obj);
 extern int ref_VPcmV34GetCurrentRxBitRate(void *obj);
 extern int ref_VPcmV34GetCurrentTxBitRate(void *obj);
+
+/*
+ * --- and the batch this file's second half covers -------------------------
+ *
+ * Thirteen more entry points out of the same translation unit, added after
+ * the fixture above was frozen.  Everything below `main`'s existing sections
+ * is ADDITIVE for the reason the rate block already gives: `ptr_skip`,
+ * `compare()`, `seed_chain()` and `SESS_LEN` are exactly as the batch that
+ * wrote them left them, and two recorded mutation suites were measured
+ * against that fixture.  The three new sections that need more than the
+ * object seed their own blocks on top and do their own comparing.
+ */
+extern int ref_VPcmV34Delete(void *obj);
+extern void ref_VPcmV34SetMaxBlockLength(void *obj, int len);
+extern int ref_VPcmV34GetQuickConnectIndication(void *obj);
+extern int ref_VPcmV34GetCurrentRxBaudRate(void *obj);
+extern int ref_VPcmV34GetCurrentTxBaudRate(void *obj);
+extern int ref_VPcmV34GetCurrentRxCarrier(void *obj);
+extern int ref_VPcmV34GetCurrentTxCarrier(void *obj);
+extern int ref_VPcmV34GetSNR(void *obj);
+extern void ref_VPcmV34NotifyDP(void *obj, int what);
+extern int ref_VPcmV34RequestDPNotification(void *obj, int *flag, int *count,
+					    int *done);
+extern int ref_V34XF_GetMaxUpstreamRateIndex(void *obj);
+extern void ref_V34XF_IndicateK56FlexJdReceived(void *obj,
+						unsigned char constel);
+extern void ref_VPcmV34SetIndicationOfRemoteRetrain(void *obj);
+
+/* And what `V34XF_IndicateK56FlexJdReceived` needs to be legal. */
+extern void ref_V34InitializeImplementationSpecific(void *obj);
 
 extern short ref_scrambleGPC(void *obj, short n);
 extern short ref_scrambleGPA(void *obj, short n);
@@ -1329,6 +1360,625 @@ static const int rate_in[][3] = {
 	{ (-0x7fffffff - 1), 0x7fffffff, (-0x7fffffff - 1) }
 };
 
+/*
+ * ===========================================================================
+ * THE PUBLIC ACCESSOR SURFACE, thirteen more entry points.
+ *
+ * ADDITIVE, for the reason the rate block above gives at length: the fixture
+ * everything before this point shares is frozen and two recorded mutation
+ * suites were measured against it.  What follows seeds its own blocks where
+ * it needs more than the object, and compares them itself.
+ *
+ * Offsets, all read out of `tools/dis.py` and all named here rather than
+ * inline so that a sweep and its expectation cannot drift apart.
+ */
+#define OB_STATUS	0x0000
+#define OB_PTC		0x0008
+#define OB_SAMPLE_CNT	0x0238
+#define OB_SAMPLES_VLD	0x0262
+#define OB_RX_EQUERR	(0x0264 + 0x21a)	/* short, SIGNED, `jle`     */
+#define OB_RX_F248	(0x0264 + 0x248)	/* int, the numerator       */
+#define OB_TXSTATE	0x3596
+#define OB_F35A4	0x35a4
+#define OB_FAA74	0xaa74
+#define OB_CFG_BAUD	(V34_RATECFG + 0x00)
+#define OB_CFG_PREEMP	(V34_RATECFG + 0x06)
+#define OB_CFG_CARRIER	(V34_RATECFG + 0x10)
+#define OB_CFG_RXBAUD	(V34_RATECFG + 0x12)
+#define OB_CFG_RXCARR	(V34_RATECFG + 0x24)
+#define OB_IS_SHORT	0xabcc
+#define OB_MOH_TIMER	0xabdc
+#define OB_AC17		0xac17
+#define OB_CLR_FLAG	0xac40
+#define OB_CLR_COUNT	0xac44
+#define OB_CLR_DONE	0xac48
+
+static int
+get_int_a(unsigned off)
+{
+	int v;
+
+	memcpy(&v, (const unsigned char *)&oa + off, sizeof(v));
+	return v;
+}
+
+static short
+get_short_a(unsigned off)
+{
+	short v;
+
+	memcpy(&v, (const unsigned char *)&oa + off, sizeof(v));
+	return v;
+}
+
+/* --- the four "current" getters ------------------------------------------- */
+
+/*
+ * FOUR DIFFERENT PREDICATES, NOT FOUR COPIES.  All four open on
+ * `f359c == 0x66` and all four differ inside it, so `role` and `status` are
+ * CROSSED: a version that took the receive pair's role test for the transmit
+ * pair's agrees with the object on every case where the two happen to select
+ * the same arm, and differs on exactly the cases this cross contains.
+ *
+ * The four configuration fields are seeded to four DIFFERENT values, none of
+ * them 8000 and none of them 0 -- otherwise "returned the PCM constant" and
+ * "returned the configured rate" are the same number and the arm that ran is
+ * unreadable from the answer.  Each is a `short` returned as an `int` through
+ * `movswl`, which is the only place the declared type is observable, so the
+ * sweep also runs them negative.
+ */
+#define GBAUD		1234
+#define GCARRIER	2345
+#define GRXBAUD		3456
+#define GRXCARRIER	4321
+
+static int saw_getter_arm[8];
+
+static void
+run_getters(short role, int status, short baud, short carrier, short rxbaud,
+	    short rxcarrier, long tag)
+{
+	int n_rx, n_tx;
+	int want_rxb, want_txb, want_rxc, want_txc;
+	int a, b;
+
+	setup();
+	poke_short(0x359c, role);
+	poke_int(OB_STATUS, status);
+	poke_short(OB_CFG_BAUD, baud);
+	poke_short(OB_CFG_CARRIER, carrier);
+	poke_short(OB_CFG_RXBAUD, rxbaud);
+	poke_short(OB_CFG_RXCARR, rxcarrier);
+
+	/*
+	 * The hand calculation, which is the second oracle: two
+	 * implementations wrong the same way agree with each other for ever.
+	 * `n_rx` is the offset the RECEIVE pair uses and `n_tx` the one the
+	 * TRANSMIT pair uses, and they swap across the role test.
+	 */
+	n_rx = (role == 0x66) ? status - 1 : status - 2;
+	n_tx = (role == 0x66) ? status - 2 : status - 1;
+	want_rxb = ((unsigned int)n_rx <= 1u) ? 8000 : (int)rxbaud;
+	want_txb = ((unsigned int)n_tx <= 1u) ? 8000 : (int)baud;
+	want_rxc = ((unsigned int)n_rx <= 1u) ? 0 : (int)rxcarrier;
+	if (role == 0x66)
+		want_txc = ((unsigned int)(status - 2) <= 1u)
+			   ? 0 : (int)carrier;
+	else
+		want_txc = (status == 2) ? 0 : (int)carrier;
+
+	a = VPcmV34GetCurrentRxBaudRate(&oa);
+	b = ref_VPcmV34GetCurrentRxBaudRate(ob);
+	diff_eq_int("GetCurrentRxBaudRate", a, b, tag);
+	diff_eq_int("GetCurrentRxBaudRate, by hand", b, want_rxb, tag);
+	saw_getter_arm[(a == 8000) ? 0 : 1] = 1;
+
+	a = VPcmV34GetCurrentTxBaudRate(&oa);
+	b = ref_VPcmV34GetCurrentTxBaudRate(ob);
+	diff_eq_int("GetCurrentTxBaudRate", a, b, tag);
+	diff_eq_int("GetCurrentTxBaudRate, by hand", b, want_txb, tag);
+	saw_getter_arm[(a == 8000) ? 2 : 3] = 1;
+
+	a = VPcmV34GetCurrentRxCarrier(&oa);
+	b = ref_VPcmV34GetCurrentRxCarrier(ob);
+	diff_eq_int("GetCurrentRxCarrier", a, b, tag);
+	diff_eq_int("GetCurrentRxCarrier, by hand", b, want_rxc, tag);
+	saw_getter_arm[(a == 0) ? 4 : 5] = 1;
+
+	a = VPcmV34GetCurrentTxCarrier(&oa);
+	b = ref_VPcmV34GetCurrentTxCarrier(ob);
+	diff_eq_int("GetCurrentTxCarrier", a, b, tag);
+	diff_eq_int("GetCurrentTxCarrier, by hand", b, want_txc, tag);
+	saw_getter_arm[(a == 0) ? 6 : 7] = 1;
+
+	/* None of the four writes anything. */
+	compare("the four current getters store nothing", tag);
+}
+
+/* --- GetQuickConnectIndication -------------------------------------------- */
+
+static int saw_qc_arm[3];
+
+static void
+run_quickconnect(int status, short is_short, long tag)
+{
+	int a, b, want;
+
+	setup();
+	poke_int(OB_STATUS, status);
+	poke_short(OB_IS_SHORT, is_short);
+
+	/*
+	 * `1 << status` against three masks, and the shift is only reached
+	 * when `status` is 0..10 UNSIGNED -- so a negative one leaves at the
+	 * first test and never shifts.  `is_short` comes back through
+	 * `movswl`, so a negative one comes back negative.
+	 */
+	if ((unsigned int)status > 10u) {
+		want = 0;
+	} else if (((1 << status) & 0xe7) != 0) {
+		want = is_short;
+		saw_qc_arm[0] = 1;
+	} else if (((1 << status) & 0x408) != 0) {
+		want = 0;
+		saw_qc_arm[1] = 1;
+	} else {
+		want = 1;
+		saw_qc_arm[2] = 1;
+	}
+
+	a = VPcmV34GetQuickConnectIndication(&oa);
+	b = ref_VPcmV34GetQuickConnectIndication(ob);
+	diff_eq_int("GetQuickConnectIndication", a, b, tag);
+	diff_eq_int("GetQuickConnectIndication, by hand", b, want, tag);
+	compare("GetQuickConnectIndication stores nothing", tag);
+}
+
+/* --- GetSNR ---------------------------------------------------------------- */
+
+/*
+ * TWO LOOPS AND A HAND-OFF, and the hand-off is where an off-by-one lives:
+ * the coarse loop hands the fine one the LAST value that was still positive
+ * rather than the one that ended it.  So the expectation here is written the
+ * object's way -- from the two step constants -- and not as `10 * log10`,
+ * which would be a different function that happens to agree at most points.
+ *
+ * `equerr` is SIGNED and the guard is `jle`, so zero and negative return 0
+ * without dividing; the sweep contains both.
+ *
+ * THE MULTIPLY IS `imul` AND THE SHIFT IS `sar`, and this helper is written
+ * from those two instructions rather than from the source it is checking.
+ * The distinction is the whole of what it is worth: a wrapped product is
+ * NEGATIVE to a `sar` and huge to a `shr`, so a helper that shifted the
+ * unsigned product -- which is what the first version of this one did --
+ * disagrees with the object on every ratio past 2^31/0x1013 and agrees on
+ * every smaller one.  It reported 56 dB where the object answers 35.
+ */
+static int saw_snr_zero, saw_snr_coarse, saw_snr_fine;
+
+static int
+snr_by_hand(short equerr, int f248)
+{
+	int db = 0;
+	int last = 0;
+
+	if (equerr > 0) {
+		int v = f248 / equerr;
+
+		if (v > 0) {
+			for (;;) {
+				last = v;
+				v = (int)((unsigned int)v * 0x1013u) >> 14;
+				if (v <= 0)
+					break;
+				db += 6;
+			}
+		}
+	}
+
+	if (last > 0) {
+		for (;;) {
+			last = (int)((unsigned int)last * 0x32d6u) >> 14;
+			if (last <= 0)
+				break;
+			db += 1;
+		}
+	}
+
+	return db;
+}
+
+static void
+run_snr(short equerr, int f248, long tag)
+{
+	int a, b;
+
+	setup();
+	poke_short(OB_RX_EQUERR, equerr);
+	poke_int(OB_RX_F248, f248);
+
+	a = VPcmV34GetSNR(&oa);
+	b = ref_VPcmV34GetSNR(ob);
+
+	diff_eq_int("GetSNR", a, b, tag);
+	diff_eq_int("GetSNR, by hand", b, snr_by_hand(equerr, f248), tag);
+	compare("GetSNR stores nothing", tag);
+
+	if (b == 0)
+		saw_snr_zero = 1;
+	if (b >= 6)
+		saw_snr_coarse = 1;
+	if (b % 6 != 0)
+		saw_snr_fine = 1;
+}
+
+/* --- NotifyDP -------------------------------------------------------------- */
+
+static int saw_notify_arm[5];
+
+static void
+run_notify(int what, int moh, int status, int count, short valid, long tag)
+{
+	setup();
+	poke_int(OB_MOH_TIMER, moh);
+	poke_int(OB_STATUS, status);
+	poke_int(OB_SAMPLE_CNT, count);
+	poke_short(OB_SAMPLES_VLD, valid);
+
+	VPcmV34NotifyDP(&oa, what);
+	ref_VPcmV34NotifyDP(ob, what);
+
+	compare("NotifyDP", tag);
+
+	/*
+	 * And what each arm was supposed to do, worked out by hand.  The
+	 * byte comparison sees a store landing one field over; it cannot see
+	 * both sides storing the same wrong constant.
+	 */
+	switch (what) {
+	case 0:
+		diff_eq_int("NotifyDP 0 invalidated the samples",
+			    (int)get_short_a(OB_SAMPLES_VLD), 0, tag);
+		diff_eq_int("...and left the status", get_int_a(OB_STATUS),
+			    status, tag);
+		saw_notify_arm[0] = 1;
+		break;
+	case 1:
+		diff_eq_int("NotifyDP 1 validated the samples",
+			    (int)get_short_a(OB_SAMPLES_VLD), 1, tag);
+		diff_eq_int("...and left the status", get_int_a(OB_STATUS),
+			    status, tag);
+		saw_notify_arm[1] = 1;
+		break;
+	case 2:
+		diff_eq_int("NotifyDP 2 set the status", get_int_a(OB_STATUS),
+			    5, tag);
+		diff_eq_int("...and restarted the sample count",
+			    get_int_a(OB_SAMPLE_CNT), 0, tag);
+		diff_eq_int("...and left the sample flag",
+			    (int)get_short_a(OB_SAMPLES_VLD), (int)valid, tag);
+		saw_notify_arm[2] = 1;
+		break;
+	case 3:
+		diff_eq_int("NotifyDP 3 set the status", get_int_a(OB_STATUS),
+			    6, tag);
+		diff_eq_int("...and set count2 48000 samples on",
+			    get_int_a(OB_FAA74),
+			    (int)((unsigned int)moh + 0xbb80u), tag);
+		diff_eq_int("...and left the sample count",
+			    get_int_a(OB_SAMPLE_CNT), count, tag);
+		saw_notify_arm[3] = 1;
+		break;
+	default:
+		diff_eq_int("NotifyDP did nothing at all",
+			    get_int_a(OB_STATUS) == status
+			    && get_int_a(OB_SAMPLE_CNT) == count
+			    && get_short_a(OB_SAMPLES_VLD) == valid, 1, tag);
+		saw_notify_arm[4] = 1;
+		break;
+	}
+}
+
+/* --- RequestDPNotification ------------------------------------------------- */
+
+/*
+ * THREE DISTINCT SENTINELS IN THE THREE DESTINATIONS, and three distinct
+ * values in the mailbox.  One repeated pattern cannot tell a version that
+ * handed out the wrong one of the three, and a shared sentinel cannot tell
+ * "wrote nothing" from "wrote the same thing".
+ */
+#define RQ_SENT0	0x11112222
+#define RQ_SENT1	0x33334444
+#define RQ_SENT2	0x55556666
+#define RQ_CFG_BIT	0x51
+
+static int saw_reqdp_empty, saw_reqdp_full, saw_reqdp_bit_was_clear;
+
+static void
+run_reqdp(int flagv, int countv, int donev, unsigned char cfg51, long tag)
+{
+	int fa = RQ_SENT0, ca = RQ_SENT1, da = RQ_SENT2;
+	int fb = RQ_SENT0, cb = RQ_SENT1, db = RQ_SENT2;
+	int ra, rb;
+	unsigned k;
+	int bad = 0;
+
+	setup();
+	memset(cfg_a, CFG_FILL, sizeof(cfg_a));
+	memset(cfg_b, CFG_FILL, sizeof(cfg_b));
+	cfg_a[RQ_CFG_BIT] = cfg_b[RQ_CFG_BIT] = cfg51;
+	poke_ptr(0xac3c, cfg_a, cfg_b);
+
+	poke_int(OB_CLR_FLAG, flagv);
+	poke_int(OB_CLR_COUNT, countv);
+	poke_int(OB_CLR_DONE, donev);
+
+	ra = VPcmV34RequestDPNotification(&oa, &fa, &ca, &da);
+	rb = ref_VPcmV34RequestDPNotification(ob, &fb, &cb, &db);
+
+	diff_eq_int("RequestDPNotification", ra, rb, tag);
+	diff_eq_int("RequestDPNotification flag out", fa, fb, tag);
+	diff_eq_int("RequestDPNotification count out", ca, cb, tag);
+	diff_eq_int("RequestDPNotification done out", da, db, tag);
+	compare("RequestDPNotification", tag);
+
+	for (k = 0; k < CFG_LEN; k++)
+		if (cfg_a[k] != cfg_b[k])
+			bad++;
+	diff_eq_int("RequestDPNotification configuration", bad, 0, tag);
+
+	if (flagv < 0) {
+		/*
+		 * NEGATIVE MEANS EMPTY, and the whole of what that promises
+		 * is that nothing is written THROUGH THE POINTERS.  Proved
+		 * by the sentinels surviving, which a comparison against the
+		 * reference cannot show on its own: two versions that both
+		 * wrote rubbish would agree.
+		 */
+		diff_eq_int("an empty mailbox answers 0", ra, 0, tag);
+		diff_eq_int("...and leaves the flag destination", fa,
+			    RQ_SENT0, tag);
+		diff_eq_int("...and the count destination", ca, RQ_SENT1, tag);
+		diff_eq_int("...and the done destination", da, RQ_SENT2, tag);
+		diff_eq_int("...and the mailbox itself",
+			    get_int_a(OB_CLR_FLAG), flagv, tag);
+		diff_eq_int("...and the configuration byte",
+			    (int)cfg_a[RQ_CFG_BIT], (int)cfg51, tag);
+		saw_reqdp_empty = 1;
+	} else {
+		diff_eq_int("a full mailbox answers 1", ra, 1, tag);
+		diff_eq_int("...and hands out the flag", fa, flagv, tag);
+		diff_eq_int("...and the count", ca, countv, tag);
+		diff_eq_int("...and the done word", da, donev, tag);
+		diff_eq_int("...and resets the flag to -1",
+			    get_int_a(OB_CLR_FLAG), -1, tag);
+		diff_eq_int("...and clears the count",
+			    get_int_a(OB_CLR_COUNT), 0, tag);
+		diff_eq_int("...and clears the done word",
+			    get_int_a(OB_CLR_DONE), 0, tag);
+		diff_eq_int("...and clears bit 0 of the configuration",
+			    (int)cfg_a[RQ_CFG_BIT],
+			    (int)(unsigned char)(cfg51 & 0xfe), tag);
+		if ((cfg51 & 1) == 0)
+			saw_reqdp_bit_was_clear = 1;
+		saw_reqdp_full = 1;
+	}
+}
+
+/* --- V34XF_GetMaxUpstreamRateIndex ---------------------------------------- */
+
+/*
+ * BYTE FOR BYTE THE SAME FUNCTION as `VPcmV34GetMaxUpstreamRateIndex`, so it
+ * is swept the same way and through the same fixture: five inputs across two
+ * blocks, the gate at the session's +0x6120, `v90_receiver` over values that
+ * separate `> 1` from `!= 0`, the PCM object's +0x4f8 both ways, and a
+ * configured rate both above and below `+0x4fc * 2400`.
+ *
+ * Sharing `pwr_case` with the other one is deliberate: if the two ever stop
+ * agreeing, the sweep that catches it is the one they both run.
+ */
+static int saw_xf_capped, saw_xf_plain;
+
+static void
+run_xfrate(const struct pwr_case *c, int cross, long tag)
+{
+	int ra, rb, rc2;
+
+	setup_pwr(c);
+
+	ra = V34XF_GetMaxUpstreamRateIndex(&oa);
+	rb = ref_V34XF_GetMaxUpstreamRateIndex(ob);
+
+	diff_eq_int("V34XF_GetMaxUpstreamRateIndex", ra, rb, tag);
+	compare("V34XF_GetMaxUpstreamRateIndex", tag);
+	compare_sess("V34XF_GetMaxUpstreamRateIndex session", tag);
+	compare_link("V34XF_GetMaxUpstreamRateIndex pcm", pcm_a, pcm_b,
+		     PCM_LEN, (unsigned)-1, tag);
+
+	/*
+	 * AND IT IS THE SAME ANSWER THE OTHER PREFIX GIVES.  That is the
+	 * claim the source makes about this function -- one body under two
+	 * names -- and it is checked here rather than assumed.
+	 *
+	 * OFF WHILE THE TRANSCRIPT IS BEING CAPTURED: the second call prints
+	 * a second line on OUR side only, and the comparison would then be
+	 * measuring the fixture.
+	 *
+	 * NOT RE-SEEDED FIRST, because the comparison two lines up has just
+	 * proved that neither side wrote anything -- so the state the second
+	 * call sees is the state the first one saw.
+	 */
+	if (cross) {
+		rc2 = VPcmV34GetMaxUpstreamRateIndex(&oa);
+		diff_eq_int("...and the two prefixes agree", ra, rc2, tag);
+	}
+
+	if (ra == c->maxrate)
+		saw_xf_plain = 1;
+	else
+		saw_xf_capped = 1;
+}
+
+/* --- V34XF_IndicateK56FlexJdReceived -------------------------------------- */
+
+/*
+ * THE ONE THAT CALLS OUT.  `v34setuptxmit` runs `settxlevel`,
+ * `V34SetupModulator`, two state transitions and `txinit`, so the object has
+ * to be LEGAL rather than merely filled: `V34InitializeImplementationSpecific`
+ * aims the two echo cancellers' five pointers each -- without it the first
+ * dereference faults -- the rate configuration has to name a real symbol rate,
+ * and the three state words have to be in range because the transitions index
+ * `StateName` with whatever they find (D42).
+ *
+ * Its own hole list, because the initialiser and the handshake install
+ * pointers INTO the object and the two sides are at two addresses.  It was
+ * built by running with an empty list and classifying what differed, which
+ * is what t_v34retrain.c did; every entry is asserted reached at the end, so
+ * one that stops being written fails rather than quietly widening the test.
+ */
+static const unsigned k56_ptr_skip[] = {
+	0x3548, 0xac3c,			/* the fixture's own            */
+	0x0a28, 0x0e48,			/* receive shell context        */
+	0x0a28 + V34_SHELL_TX, 0x0e48 + V34_SHELL_TX,
+	0x0268, 0x026c,			/* rxq read and write cursors   */
+	/*
+	 * NOT the receiver's three -- +0x394, +0x418 and +0x508 -- nor the
+	 * detector's coefficients at +0x3564.  `rxinit`, `setupreceiver`,
+	 * `dpskinit` and `detectorinit` install those, and `v34setuptxmit`
+	 * calls none of them: it is `settxlevel`, `V34SetupModulator`, two
+	 * transitions and `txinit`.  They were in this list, transcribed from
+	 * t_v34hshak.c, until the run said they had never been written --
+	 * which is what the assertion at the end of the sweep is for.
+	 */
+	0x1460,				/* modulator +0x10 sine         */
+	0x2074,				/* modulator +0xc24 shaped      */
+	0x20cc,				/* modulator +0xc7c ec_prem     */
+	0x2100,				/* modulator +0xcb0 preemp      */
+	0x2220, 0x2224,			/* txq cursors                  */
+	0x2608, 0x2a28,			/* transmit shell context       */
+	0x80b8, 0x80bc, 0x80c0, 0x80c4, 0x80c8,	/* echo canceller 0     */
+	0x9138, 0x913c, 0x9140, 0x9144, 0x9148	/* and 1                */
+};
+#define NK56PTR (sizeof(k56_ptr_skip) / sizeof(k56_ptr_skip[0]))
+#define NK56FIXTURE 2
+
+static int saw_k56_ptr[NK56PTR];
+
+static int
+k56_skipped(unsigned off)
+{
+	unsigned k;
+
+	for (k = 0; k < NK56PTR; k++)
+		if (off >= k56_ptr_skip[k] && off < k56_ptr_skip[k] + 4)
+			return 1;
+	return 0;
+}
+
+static void
+compare_k56(const char *what, long tag)
+{
+	const unsigned char *p = (const unsigned char *)&oa;
+	unsigned i, k;
+	int bad = 0;
+
+	for (k = 0; k < NK56PTR; k++)
+		if (memcmp(p + k56_ptr_skip[k], ob + k56_ptr_skip[k], 4) != 0)
+			saw_k56_ptr[k] = 1;
+
+	for (i = 0; i < sizeof(oa); i++) {
+		if (p[i] == ob[i] || k56_skipped(i))
+			continue;
+		bad++;
+		if (bad <= 8)
+			diff_eq_int(what, p[i], ob[i], (long)i * 1000 + tag);
+	}
+	diff_eq_int(what, bad, 0, tag);
+}
+
+/* The two modulator tables, by CONTENT: they are installed by address. */
+static void
+compare_k56_table(const char *what, unsigned off, long tag)
+{
+	const short *a = (const short *)ptr_at(&oa, off);
+	const short *b = (const short *)ptr_at(ob, off);
+	int k, diffs = 0;
+
+	for (k = 0; k < 16; k++)
+		if (a[k] != b[k])
+			diffs++;
+	diff_eq_int(what, diffs, 0, tag);
+}
+
+static int saw_k56_constel[2], saw_k56_txstate[2];
+
+static void
+run_k56jd(const struct pwr_case *pc, unsigned char constel, short f35a4,
+	  short txstate, short baud, short carrier, short preemp,
+	  unsigned short rxflags, long tag)
+{
+	setup_pwr(pc);
+
+	V34InitializeImplementationSpecific(&oa);
+	ref_V34InitializeImplementationSpecific(ob);
+
+	/* Re-aim the two fixture pointers, in case the initialiser moved them. */
+	poke_ptr(0x3548, sess_a, sess_b);
+	poke_ptr(0xac3c, cfg_a, cfg_b);
+
+	poke_short(0xa9dc, (short)0x00e4);
+	poke_short(0x25d4, 0x16a1);
+	poke_short(OB_CFG_BAUD, baud);
+	poke_short(OB_CFG_CARRIER, carrier);
+	poke_short(OB_CFG_PREEMP, preemp);
+	poke_short(0x3592, V34HS_PHASE1);
+	poke_short(0x3594, V34HS_PHASE2);
+	poke_short(OB_TXSTATE, txstate);
+	poke_short(0x2aa2, (short)0x1111);
+	poke_short(0xaa78, (short)0x2222);
+	poke_short(0x264 + 0x122, (short)rxflags);
+	poke_short(0x25c2, (short)0x1234);
+	poke_short(OB_F35A4, f35a4);
+	poke_short(0x382, (short)0x4321);
+
+	V34XF_IndicateK56FlexJdReceived(&oa, constel);
+	ref_V34XF_IndicateK56FlexJdReceived(ob, constel);
+
+	compare_k56("IndicateK56FlexJdReceived", tag);
+	compare_sess("IndicateK56FlexJdReceived session", tag);
+	compare_link("IndicateK56FlexJdReceived pcm", pcm_a, pcm_b, PCM_LEN,
+		     (unsigned)-1, tag);
+	diff_eq_int("IndicateK56FlexJdReceived configuration",
+		    memcmp(cfg_a, cfg_b, CFG_LEN) == 0, 1, tag);
+	compare_k56_table("IndicateK56FlexJdReceived ec_prem", 0x20cc, tag);
+	compare_k56_table("IndicateK56FlexJdReceived preemp", 0x2100, tag);
+
+	/*
+	 * The three things the object comparison cannot see on its own,
+	 * against the value rather than only against the blob.  The
+	 * constellation test is `== 0x10` and NOT `!= 0`, which is what makes
+	 * 1 and 0xff interesting; the DC seed is `336 * f35a4 + 10000`
+	 * truncated to a short, which is where a version that kept 32 bits
+	 * differs; and bit 3 of the receiver's flags is SET rather than
+	 * assigned.
+	 */
+	diff_eq_int("IndicateK56FlexJdReceived f382",
+		    (int)(unsigned short)get_short_a(0x382),
+		    constel == 0x10 ? 0x89b0 : 0x8990, tag);
+	saw_k56_constel[constel == 0x10] = 1;
+	diff_eq_int("IndicateK56FlexJdReceived seeded the DC estimator",
+		    (int)get_short_a(0x254),
+		    (int)(short)(336 * (int)f35a4 + 10000), tag);
+	diff_eq_int("...and cleared the two behind it",
+		    get_short_a(0x256) == 0 && get_int_a(0x258) == 0, 1, tag);
+	diff_eq_int("IndicateK56FlexJdReceived set the AGC bit",
+		    (int)(unsigned short)get_short_a(0x264 + 0x122) & 8, 8,
+		    tag);
+	diff_eq_int("IndicateK56FlexJdReceived forced the transmit state",
+		    (int)get_short_a(OB_TXSTATE), 0x12, tag);
+	saw_k56_txstate[txstate == 0x12] = 1;
+}
+
 int
 main(void)
 {
@@ -2452,6 +3102,501 @@ main(void)
 			diff_eq_int("and neither did the reference",
 				    dsplib_debug_capture_text(1)[0], 0,
 				    9000 + (long)lvl);
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/* =================================================================
+	 * THE PUBLIC ACCESSOR SURFACE.
+	 */
+
+	diff_begin("v34 pcm interface: Delete, SetMaxBlockLength and "
+		   "SetIndicationOfRemoteRetrain");
+	{
+		static const int len_in[] = {
+			0, 1, -1, 2, 0x1234, -0x1234, 0x7fffffff,
+			(-0x7fffffff - 1)
+		};
+		static const unsigned char prior[] = {
+			0, 1, 2, 0x7f, 0x80, 0xff, HARNESS_MALLOC_FILL
+		};
+
+		/*
+		 * `VPcmV34Delete` is three instructions and returns zero.  The
+		 * only thing there is to check is that it really is zero and
+		 * that it really writes nothing -- a reconstruction that
+		 * cleared a field on the way out would look identical from the
+		 * return value.
+		 */
+		setup();
+		diff_eq_int("Delete", VPcmV34Delete(&oa), ref_VPcmV34Delete(ob),
+			    70000);
+		diff_eq_int("...and it is zero", ref_VPcmV34Delete(ob), 0,
+			    70000);
+		compare("Delete stores nothing", 70000);
+
+		/*
+		 * SetMaxBlockLength is one store, swept past both ends of the
+		 * signed range: the field is an `int` and a reconstruction
+		 * that truncated it agrees on every plausible block length.
+		 */
+		for (i = 0; i < sizeof(len_in) / sizeof(len_in[0]); i++) {
+			setup();
+			poke_int(OB_PTC, 0x5a5a5a5a);
+			VPcmV34SetMaxBlockLength(&oa, len_in[i]);
+			ref_VPcmV34SetMaxBlockLength(ob, len_in[i]);
+			compare("SetMaxBlockLength", 70100 + (long)i);
+			diff_eq_int("SetMaxBlockLength stored the whole int",
+				    get_int_a(OB_PTC), len_in[i],
+				    70100 + (long)i);
+		}
+
+		/*
+		 * And the retrain indication, whose prior value is swept
+		 * because the store is unconditional: a reconstruction that
+		 * OR-ed instead of assigning agrees on every case that starts
+		 * at 0 or 1.
+		 */
+		for (i = 0; i < sizeof(prior) / sizeof(prior[0]); i++) {
+			setup();
+			((unsigned char *)&oa)[OB_AC17] = prior[i];
+			ob[OB_AC17] = prior[i];
+			VPcmV34SetIndicationOfRemoteRetrain(&oa);
+			ref_VPcmV34SetIndicationOfRemoteRetrain(ob);
+			compare("SetIndicationOfRemoteRetrain", 70200 + (long)i);
+			diff_eq_int("SetIndicationOfRemoteRetrain set the byte",
+				    (int)((unsigned char *)&oa)[OB_AC17], 1,
+				    70200 + (long)i);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * THE FOUR "CURRENT" GETTERS, ROLE CROSSED WITH STATUS.  Nothing less
+	 * than the cross can tell the receive pair from the transmit pair:
+	 * they differ only in which side of the role test each status offset
+	 * sits on, so a swap agrees everywhere the two offsets coincide.
+	 */
+	diff_begin("v34 pcm interface: the four current getters, role crossed "
+		   "with status");
+	{
+		static const short role_v[] = { 0x64, 0x65, 0x66 };
+		static const int st_v[] = {
+			-1, 0, 1, 2, 3, 4, 5, 6, (-0x7fffffff - 1), 0x7fffffff
+		};
+		unsigned r, s;
+
+		for (r = 0; r < sizeof(role_v) / sizeof(role_v[0]); r++)
+		for (s = 0; s < sizeof(st_v) / sizeof(st_v[0]); s++)
+			run_getters(role_v[r], st_v[s], GBAUD, GCARRIER,
+				    GRXBAUD, GRXCARRIER,
+				    71000 + (long)(r * 100 + s));
+
+		/*
+		 * AND THE SAME CROSS WITH THE FOUR FIELDS SIGNED.  Each comes
+		 * back through `movswl`, and 0x8000 is the one value that
+		 * separates that from a `movzwl` -- the two readings agree
+		 * over every rate a session can hold.
+		 */
+		for (r = 0; r < sizeof(role_v) / sizeof(role_v[0]); r++)
+		for (s = 0; s < sizeof(st_v) / sizeof(st_v[0]); s++)
+			run_getters(role_v[r], st_v[s], (short)0x8000, -1,
+				    (short)0xffff, (short)0x8001,
+				    71500 + (long)(r * 100 + s));
+
+		diff_eq_int("the receive baud PCM arm was reached",
+			    saw_getter_arm[0], 1, 71900);
+		diff_eq_int("and its configured arm", saw_getter_arm[1], 1,
+			    71901);
+		diff_eq_int("the transmit baud PCM arm was reached",
+			    saw_getter_arm[2], 1, 71902);
+		diff_eq_int("and its configured arm", saw_getter_arm[3], 1,
+			    71903);
+		diff_eq_int("the receive carrier PCM arm was reached",
+			    saw_getter_arm[4], 1, 71904);
+		diff_eq_int("and its configured arm", saw_getter_arm[5], 1,
+			    71905);
+		diff_eq_int("the transmit carrier PCM arm was reached",
+			    saw_getter_arm[6], 1, 71906);
+		diff_eq_int("and its configured arm", saw_getter_arm[7], 1,
+			    71907);
+	}
+	rc |= diff_end();
+
+	/*
+	 * GetQuickConnectIndication: the shift is only reached for 0..10
+	 * UNSIGNED, so the sweep runs past both ends of that, and `is_short`
+	 * is swept because one of the three arms returns it -- including
+	 * negative, since it is read with `movswl`.
+	 */
+	diff_begin("v34 pcm interface: GetQuickConnectIndication, "
+		   "every state and both signs of the answer");
+	{
+		static const short short_v[] = {
+			0, 1, -1, 2, 0x7fff, (short)0x8000
+		};
+		int s;
+		unsigned k;
+
+		for (s = -2; s <= 13; s++)
+		for (k = 0; k < sizeof(short_v) / sizeof(short_v[0]); k++)
+			run_quickconnect(s, short_v[k],
+					 72000 + (long)(s + 2) * 10 + k);
+
+		run_quickconnect((-0x7fffffff - 1), 1, 72900);
+		run_quickconnect(0x7fffffff, 1, 72901);
+
+		diff_eq_int("the stored-answer arm was reached", saw_qc_arm[0],
+			    1, 72910);
+		diff_eq_int("the zero arm was reached", saw_qc_arm[1], 1,
+			    72911);
+		diff_eq_int("and the one arm", saw_qc_arm[2], 1, 72912);
+	}
+	rc |= diff_end();
+
+	/*
+	 * GetSNR: `equerr` over the whole of its guard and `f248` over
+	 * quotients that land either side of the hand-off between the two
+	 * loops.  The 6 dB loop runs the ratio down to below 4 and the 1 dB
+	 * loop finishes it, and the value it hands over is the LAST one that
+	 * was still positive -- so 3, 4 and 5 are three different answers and
+	 * a version that handed over the post-multiply value is out by six
+	 * across the whole range.
+	 */
+	diff_begin("v34 pcm interface: GetSNR, both loops and the hand-off");
+	{
+		static const short eq_v[] = {
+			(short)0x8000, -1000, -1, 0, 1, 2, 3, 8, 1000, 0x7fff
+		};
+		static const int num_v[] = {
+			(-0x7fffffff - 1), -1000000, -1, 0, 1, 2, 3, 4, 5, 6,
+			7, 100, 1000, 1000000, 100000000, 0x7fffffff
+		};
+		static const int q_v[] = {
+			0, 1, 2, 3, 4, 5, 6, 7, 100, 1000, 1000000
+		};
+		unsigned e, n;
+		long tag = 73000;
+
+		for (e = 0; e < sizeof(eq_v) / sizeof(eq_v[0]); e++)
+		for (n = 0; n < sizeof(num_v) / sizeof(num_v[0]); n++)
+			run_snr(eq_v[e], num_v[n], tag++);
+
+		/*
+		 * AND THE EXACT QUOTIENTS, which the raw numerators above only
+		 * reach for `equerr` of 1.  `f248 = q * equerr` puts the
+		 * division's answer exactly on each of them.
+		 */
+		for (e = 0; e < sizeof(eq_v) / sizeof(eq_v[0]); e++) {
+			if (eq_v[e] <= 0)
+				continue;
+			for (n = 0; n < sizeof(q_v) / sizeof(q_v[0]); n++)
+				run_snr(eq_v[e], q_v[n] * (int)eq_v[e], tag++);
+		}
+
+		diff_eq_int("some case answered zero", saw_snr_zero, 1, 73900);
+		diff_eq_int("some case ran the 6 dB loop", saw_snr_coarse, 1,
+			    73901);
+		diff_eq_int("and some case ran the 1 dB loop", saw_snr_fine, 1,
+			    73902);
+	}
+	rc |= diff_end();
+
+	/*
+	 * NotifyDP: four codes and a default, swept from -2 to 6 so that the
+	 * `jle` into the zero test is driven on both sides.  The two fields
+	 * case 2 writes are seeded to values that are neither 5 nor 0, and
+	 * `moh_timer` is swept because case 3's deadline is computed from it
+	 * -- including past the point where `+ 48000` overflows.
+	 */
+	diff_begin("v34 pcm interface: NotifyDP, every code and the default");
+	{
+		static const int moh_v[] = {
+			0, 1, -1, 48000, 0x7fff0000, 0x7fffffff,
+			(-0x7fffffff - 1)
+		};
+		int w;
+		unsigned k;
+
+		for (w = -2; w <= 6; w++)
+		for (k = 0; k < sizeof(moh_v) / sizeof(moh_v[0]); k++)
+			run_notify(w, moh_v[k], 3, 0x1234, (short)0x4321,
+				   74000 + (long)(w + 2) * 10 + k);
+
+		for (k = 0; k < 5; k++)
+			diff_eq_int("every NotifyDP arm was reached",
+				    saw_notify_arm[k], 1, 74900 + (long)k);
+	}
+	rc |= diff_end();
+
+	/*
+	 * RequestDPNotification: the flag is swept over both signs and both
+	 * extremes, the other two words carry values distinct from it and
+	 * from each other, and the configuration byte is driven with bit 0
+	 * both set and clear -- the fill pattern only ever gives it set.
+	 */
+	diff_begin("v34 pcm interface: RequestDPNotification, the empty "
+		   "mailbox writes nothing");
+	{
+		static const int flag_v[] = {
+			(-0x7fffffff - 1), -1000, -2, -1, 0, 1, 2, 1000,
+			0x7fffffff
+		};
+		static const unsigned char cfg_v[] = {
+			0x00, 0x01, 0xfe, 0xff, 0x71, 0x70
+		};
+		unsigned f, k;
+
+		for (f = 0; f < sizeof(flag_v) / sizeof(flag_v[0]); f++)
+		for (k = 0; k < sizeof(cfg_v) / sizeof(cfg_v[0]); k++)
+			run_reqdp(flag_v[f], 0x0badf00d, 0x0c0ffee0, cfg_v[k],
+				  75000 + (long)f * 10 + k);
+
+		diff_eq_int("some case found the mailbox empty",
+			    saw_reqdp_empty, 1, 75900);
+		diff_eq_int("and some case found it full", saw_reqdp_full, 1,
+			    75901);
+		diff_eq_int("and some full case started with the bit clear",
+			    saw_reqdp_bit_was_clear, 1, 75902);
+	}
+	rc |= diff_end();
+
+	/*
+	 * V34XF_GetMaxUpstreamRateIndex, swept exactly as the other prefix is
+	 * -- the same five inputs across the same two blocks.
+	 */
+	diff_begin("v34 pcm interface: V34XF_GetMaxUpstreamRateIndex, "
+		   "both ISPs and the multiply that wraps");
+	{
+		static const int gate_in[] = { 0, 1, -1 };
+		static const int v90_in[] = { 0, 1, 2, -1, 0x7fffffff };
+		static const int sens_in[] = { 0, 1, -1 };
+		static const int cap_in[] = { 0, 1, 5, 13, 14, 15,
+					      0x7fffffff, -1 };
+		static const int rate_in2[] = { 0, 1, 2400, 31200, 33600,
+						56000, 0x7fffffff, -1 };
+		unsigned g, v, s, c2, r;
+		long tag = 76000;
+
+		for (g = 0; g < sizeof(gate_in) / sizeof(gate_in[0]); g++)
+		for (v = 0; v < sizeof(v90_in) / sizeof(v90_in[0]); v++)
+		for (s = 0; s < sizeof(sens_in) / sizeof(sens_in[0]); s++)
+		for (c2 = 0; c2 < sizeof(cap_in) / sizeof(cap_in[0]); c2++)
+		for (r = 0; r < sizeof(rate_in2) / sizeof(rate_in2[0]); r++) {
+			struct pwr_case c = pwr_base;
+
+			c.gate = gate_in[g];
+			c.v90 = v90_in[v];
+			c.sens = sens_in[s];
+			c.cap = cap_in[c2];
+			c.maxrate = rate_in2[r];
+			run_xfrate(&c, 1, tag++);
+		}
+
+		diff_eq_int("some case was capped", saw_xf_capped, 1, 76900);
+		diff_eq_int("and some case was not", saw_xf_plain, 1, 76901);
+	}
+	rc |= diff_end();
+
+	/*
+	 * V34XF_IndicateK56FlexJdReceived.  Every real symbol rate, because
+	 * `v34setuptxmit` picks the modulator's shaping and pre-emphasis
+	 * tables from the rate and the carrier; the constellation argument
+	 * across the `== 0x10` test rather than a `!= 0` one; the DC seed's
+	 * input across both signs, since the store truncates to a short; and
+	 * the transmit state both at 0x12 and away from it, which is the arm
+	 * that stores nothing.
+	 */
+	diff_begin("v34 pcm interface: V34XF_IndicateK56FlexJdReceived, "
+		   "the transmitter rebuild");
+	{
+		static const struct { short baud, carrier; } rate_v[] = {
+			{ 2400, 1600 }, { 2400, 1800 }, { 3000, 1800 },
+			{ 3200, 1920 }, { 3429, 1959 }
+		};
+		static const unsigned char cst_v[] = { 0, 1, 0x10, 0x11, 0xff };
+		static const short seed_v[] = {
+			0, 1, -1, 3, 100, -100, 0x7fff, (short)0x8000
+		};
+		static const short txst_v[] = { 0x12, 0x11, 0, V34HS_SSEG };
+		unsigned r, c2, s, t;
+		long tag = 77000;
+
+		for (r = 0; r < sizeof(rate_v) / sizeof(rate_v[0]); r++)
+		for (c2 = 0; c2 < sizeof(cst_v) / sizeof(cst_v[0]); c2++)
+		for (t = 0; t < sizeof(txst_v) / sizeof(txst_v[0]); t++) {
+			struct pwr_case c = pwr_base;
+
+			run_k56jd(&c, cst_v[c2], 3, txst_v[t],
+				  rate_v[r].baud, rate_v[r].carrier,
+				  (short)(c2 % 3), (unsigned short)0x0000,
+				  tag++);
+		}
+
+		for (s = 0; s < sizeof(seed_v) / sizeof(seed_v[0]); s++) {
+			struct pwr_case c = pwr_base;
+
+			run_k56jd(&c, 0x10, seed_v[s], 0x12, 3000, 1800, 0,
+				  (unsigned short)0xffff, tag++);
+			run_k56jd(&c, 0, seed_v[s], 0x11, 3000, 2000, 2,
+				  (unsigned short)0x0800, tag++);
+		}
+
+		diff_eq_int("the non-0x10 constellation arm was reached",
+			    saw_k56_constel[0], 1, 77900);
+		diff_eq_int("and the 0x10 one", saw_k56_constel[1], 1, 77901);
+		diff_eq_int("the transmit state was moved at least once",
+			    saw_k56_txstate[0], 1, 77902);
+		diff_eq_int("and left alone at least once", saw_k56_txstate[1],
+			    1, 77903);
+
+		for (i = NK56FIXTURE; i < NK56PTR; i++)
+			diff_eq_int("K56flex Jd: pointer field was installed",
+				    saw_k56_ptr[i], 1, (long)k56_ptr_skip[i]);
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND ALL OF THEM WITH THE DIAGNOSTICS LIVE.  Four of the thirteen
+	 * print, and finding 134 is why that needs its own pass: a dropped
+	 * call site is invisible to every state comparison in this file.
+	 */
+	diff_begin("v34 pcm interface: the accessor surface, transcripts too");
+	{
+		static const int sens_in[] = { 0, 1 };
+		int w;
+		unsigned k;
+		long tag = 78000;
+
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+
+		for (k = 0; k < 4; k++) {
+			static const int len_in[] = { 0, 1, -1, 0x7fffffff };
+
+			dsplib_debug_capture_reset();
+			setup();
+			VPcmV34SetMaxBlockLength(&oa, len_in[k]);
+			ref_VPcmV34SetMaxBlockLength(ob, len_in[k]);
+			compare("SetMaxBlockLength, logging", tag);
+			diff_eq_int("SetMaxBlockLength transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			diff_eq_int("and it said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    tag);
+			tag++;
+		}
+
+		/* Every NotifyDP arm, because each prints its own line. */
+		for (w = -1; w <= 4; w++) {
+			dsplib_debug_capture_reset();
+			run_notify(w, 12345, 3, 0x1234, (short)0x4321, tag);
+			diff_eq_int("NotifyDP transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			if (w >= 0 && w <= 3)
+				diff_eq_int("and the coded arms said something",
+					    dsplib_debug_capture_text(1)[0] != 0,
+					    1, tag);
+			tag++;
+		}
+
+		/* Both arms of the upstream rate cap name themselves. */
+		for (k = 0; k < sizeof(sens_in) / sizeof(sens_in[0]); k++) {
+			struct pwr_case c = pwr_base;
+
+			c.sens = sens_in[k];
+			dsplib_debug_capture_reset();
+			run_xfrate(&c, 0, tag);
+			diff_eq_int("V34XF_GetMaxUpstreamRateIndex transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			diff_eq_int("and it said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    tag);
+			tag++;
+		}
+
+		/*
+		 * And the transmitter rebuild, whose own line prints three
+		 * fields of the rate configuration and whose callees print
+		 * two state transitions.
+		 */
+		for (k = 0; k < 3; k++) {
+			struct pwr_case c = pwr_base;
+
+			dsplib_debug_capture_reset();
+			run_k56jd(&c, (unsigned char)(k == 1 ? 0x10 : k), 3,
+				  (short)(k == 2 ? 0x12 : 0x11), 3000, 1800,
+				  (short)k, (unsigned short)0x0000, tag);
+			diff_eq_int("IndicateK56FlexJdReceived transcript",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			diff_eq_int("and it said something",
+				    dsplib_debug_capture_text(1)[0] != 0, 1,
+				    tag);
+			tag++;
+		}
+
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * AND THE GATE, which the section above is structurally blind to: it
+	 * raises the level first, so a call site that lost its
+	 * `if (DSPLIB_DEBUG_ON())` prints the same thing and passes.  Both
+	 * levels below the threshold, because every gate in the object is
+	 * `> 1` and 1 is the only value that separates it from `>= 1`.
+	 */
+	diff_begin("v34 pcm interface: the accessor surface is silent below "
+		   "the threshold");
+	{
+		unsigned lvl;
+
+		dsplib_debug_capture_on = 1;
+
+		for (lvl = 0; lvl <= 1; lvl++) {
+			struct pwr_case c = pwr_base;
+			int w;
+
+			dsplibs_debug_level = lvl;
+			ref_dsplibs_debug_level = lvl;
+			dsplib_debug_capture_reset();
+
+			setup();
+			VPcmV34SetMaxBlockLength(&oa, 1234);
+			ref_VPcmV34SetMaxBlockLength(ob, 1234);
+			for (w = 0; w <= 3; w++)
+				run_notify(w, 12345, 3, 0x1234, (short)0x4321,
+					   79000 + (long)lvl * 100 + w);
+			run_xfrate(&c, 1, 79010 + (long)lvl * 100);
+			run_k56jd(&c, 0x10, 3, 0x11, 3000, 1800, 0,
+				  (unsigned short)0, 79020 + (long)lvl * 100);
+			run_getters(0x66, 1, GBAUD, GCARRIER, GRXBAUD,
+				    GRXCARRIER, 79030 + (long)lvl * 100);
+			run_quickconnect(3, 1, 79040 + (long)lvl * 100);
+			run_snr(8, 800000, 79050 + (long)lvl * 100);
+			run_reqdp(1, 2, 3, 0x71, 79060 + (long)lvl * 100);
+
+			diff_eq_int("ours printed nothing",
+				    dsplib_debug_capture_text(0)[0], 0,
+				    79000 + (long)lvl);
+			diff_eq_int("and neither did the reference",
+				    dsplib_debug_capture_text(1)[0], 0,
+				    79000 + (long)lvl);
 		}
 
 		dsplib_debug_capture_on = 0;

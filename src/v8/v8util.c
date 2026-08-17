@@ -217,11 +217,21 @@ V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
 	v->v21.d = d;
 }
 
-/* Clear the V.21 delay line and the three accumulators behind it. */
+/*
+ * Clear the V.21 delay line and the three accumulators behind it.
+ *
+ * The counter is UNSIGNED because the object's loop test is `cmp $0x27` +
+ * `jbe`, and the signedness of a comparison is something the compiler was
+ * forced to encode: a signed `int i` gives `jle` here and everything else in
+ * the function byte for byte.  It cannot change behaviour -- the counter runs
+ * 0..39 and the two readings agree over every value it holds -- so no
+ * differential test can see it, which is why it is settled against the
+ * instruction and not against a test.  Finding 2952.
+ */
 void
 V8_V21_reset(struct v8 *v)
 {
-	int i;
+	unsigned i;
 
 	for (i = 0; i < V8_V21_DELAY; i++)
 		v->v21.delay[i] = 0;

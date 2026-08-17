@@ -77,6 +77,16 @@ class V90MappingParams;
 #define V90DEMAPPER_CONSTELLATIONS	6
 #define V90DEMAPPER_LEVELS		128
 
+/*
+ * The samples in one V.90 frame, and a SEPARATE constant from the count above
+ * even though both are six.  `process` steps its cursor by it (`lea 0x6(%edx)`
+ * at 0x31750) and refuses to run below it (`cmp $0x5,%ebx; jbe`); the six
+ * above is how many constellations the RBS cycle holds.  They are the same
+ * six for the same reason -- one sample per RBS position -- but a reader who
+ * saw only one macro would not know that either use had been checked.
+ */
+#define V90DEMAPPER_FRAME		6u
+
 class V90Demapper {
 public:
 	/*
@@ -101,21 +111,34 @@ public:
 		    V90AutoDigitalImpDetector *adi);
 
 	/*
+	 * Three more of the processing half, written.  A RETURN TYPE IS NOT
+	 * MANGLED, so the two that return something are read off the epilogue
+	 * and not off the name:
+	 *
+	 *   `hardDecision`  ends `movswl 0x20(%esp),%eax`, so a `short` --
+	 *                   the 16-bit truncation is in the object and a
+	 *                   wider return type would not have it.
+	 *   `process`       ends `mov $0x1,%eax` on one path and
+	 *                   `xor %eax,%eax` on the other, which is `int` or
+	 *                   `bool` and the object cannot tell them apart.
+	 *                   `int` is the reading here; nothing depends on it.
+	 */
+	short hardDecision(short in);
+	int process(unsigned char *out, unsigned int &nbits);
+	void resetLinearMappStudy(unsigned int);
+
+	/*
 	 * Declared for the record and deliberately left undefined -- their
 	 * signatures come from the mangling, so this list is a specification
 	 * rather than a guess, and a return type is not mangled and is
-	 * therefore unknown for all of them.  They are this class's
-	 * processing half, 4,400-odd bytes, and belong to whichever batch
-	 * writes it.
+	 * therefore unknown for all of them.  They are the rest of this
+	 * class's processing half and belong to whichever batch writes it.
 	 */
 	void reset(V90MappingParams *);
 	void resetNoSpectral(V90MappingParams *);
-	void resetLinearMappStudy(unsigned int);
 	void incrementRBSFramePosition();
-	void hardDecision(short);
 	void linearMappingStudy(short, short);
 	void updateConstelation();
-	void process(unsigned char *, unsigned int &);
 
 	/*
 	 * Data members are public for the reason V90Jd.h gives: the original's
@@ -135,14 +158,66 @@ public:
 
 	/*
 	 * +0x04 .. +0x18  Six words the constructor zeroes with six
-	 * consecutive `movl $0x0`.  Nothing written here reads any of them.
+	 * consecutive `movl $0x0`.  Five of the six are named from `process`
+	 * and `hardDecision`; the sixth is read by nothing this tree has.
+	 *
+	 * THE FRAME IS SIX SAMPLES AND THE ARITHMETIC BELOW ALL HANGS OFF
+	 * THAT.  `process` consumes samples six at a time (`lea 0x6(%edx)`,
+	 * loop guard `frameStart + 6 <= sampleCount`), and one such frame
+	 * yields `bitsPerFrame` bits laid out as `signBitsPerFrame` sign bits
+	 * followed by whatever `ModulusDecoder::progress` writes after them.
 	 */
-	unsigned int word_04;
+
+	/*
+	 * +0x04  Bits produced per six-sample frame.  `process` adds it to its
+	 * running total once per frame and returns that total through its
+	 * reference argument, and it is also the stride of the output buffer.
+	 */
+	unsigned int bitsPerFrame;
+
+	/*
+	 * +0x08  Read by nothing in the object that this tree has read.  The
+	 * constructor zeroes it and that is all that is known.
+	 */
 	unsigned int word_08;
-	unsigned int word_0c;
-	unsigned int word_10;
-	unsigned int word_14;
-	unsigned int word_18;
+
+	/*
+	 * +0x0c  How many sign bits a frame carries, and therefore where the
+	 * modulus bytes start: `process` hands `ModulusDecoder::progress` the
+	 * output pointer already advanced by it.  It is the loop bound of the
+	 * serial-decoder path too, so the two readings agree.
+	 */
+	unsigned int signBitsPerFrame;
+
+	/*
+	 * +0x10  How many sign-bit GROUPS a frame is cut into, and the switch
+	 * between this class's two sign-bit paths: zero means the whole frame
+	 * goes through the serial decoder at +0x664, non-zero means it is cut
+	 * into this many groups and each goes through `signBits`.
+	 *
+	 * It is `V90SignBitsExtractor::reset`'s `spacing`: that member sets the
+	 * extractor's width to `6 / spacing`, and `groups * groupSize == 6`
+	 * below is what makes the two consistent.
+	 */
+	unsigned int signBitGroups;
+
+	/*
+	 * +0x14  Samples per group -- the extractor's `width`.  Each group
+	 * consumes this many samples of `signs` and produces `width - 1` bits,
+	 * which is why `process` strides its input by it and its output by one
+	 * less.
+	 */
+	unsigned int signBitGroupSize;
+
+	/*
+	 * +0x18  THE RBS FRAME POSITION, 0..5, and the name is the author's:
+	 * `incrementRBSFramePosition` is a symbol of this class.
+	 * `hardDecision` selects the constellation with it, advances it
+	 * `(pos + 1) % 6` with an UNSIGNED division by six
+	 * (`mul $0xaaaaaaab; shr $0x2`), and copies its pre-advance value to
+	 * +0x1eae.
+	 */
+	unsigned int rbsFramePosition;
 
 	/*
 	 * +0x1c and +0x20  THE TWO HEAP BLOCKS THE DESTRUCTOR FREES, each
@@ -155,20 +230,50 @@ public:
 	 *     3068f:  e8 ..                 call sysdep_malloc     ->  +0x20
 	 *     30699:  89 5e 24              mov  %ebx,0x24(%esi)
 	 *
-	 * so +0x1c holds `count_24` elements of four bytes and +0x20 holds
-	 * `count_24` of one.  The ELEMENT WIDTH is derivable and the element
-	 * TYPE is not -- four bytes is equally an `int`, an `unsigned` or a
-	 * `float` -- so they are `void *` until something that reads them is
-	 * written.  Both are OWNED: the destructor frees them.
+	 * so +0x1c holds `sampleCapacity` elements of four bytes and +0x20
+	 * holds `sampleCapacity` of one.
+	 *
+	 * THE ELEMENT TYPES ARE NOW FORCED AND THE `void *` IS GONE.  That
+	 * comment said they would stay `void *` "until something that reads
+	 * them is written", and `process` is it: +0x1c is passed to
+	 * `ModulusDecoder::progress(unsigned char *, unsigned int *)` as its
+	 * second operand, and +0x20 to
+	 * `V90SignBitsExtractor::process(unsigned char *, unsigned char *)`.
+	 * Both types come from a mangling, which is the second-strongest kind
+	 * of evidence there is here.
+	 *
+	 * WHAT THEY HOLD, one entry per sample decided by `hardDecision`:
+	 * `codes` the constellation index it chose, `signs` a 1 for a sample
+	 * that was positive and a 0 for one that was negative.  "Code" is the
+	 * author's word for a constellation index -- `clearCamulativeVal(short
+	 * phase, short code)` and `setMaxUcodeArray` are
+	 * `V90AutoDigitalImpDetector`'s, over the same 0..127 index.
+	 *
+	 * Both are OWNED: the destructor frees them.
 	 */
-	void *array_1c;
-	void *array_20;
+	unsigned int *codes;
+	unsigned char *signs;
 
-	/* +0x24  The element count both allocations were sized from. */
-	unsigned int count_24;
+	/*
+	 * +0x24  The element count both allocations were sized from, and the
+	 * ceiling `hardDecision` refuses to write past -- `cmp 0x24(%ebx),%edx`
+	 * with `jae` to the diagnostic.
+	 */
+	unsigned int sampleCapacity;
 
-	unsigned int word_28;		/* +0x28  zeroed by the constructor */
-	unsigned int word_2c;		/* +0x2c  zeroed by the constructor */
+	/*
+	 * +0x28  Where the frame `process` is working on starts.  Zero at
+	 * construction, advanced by six per frame, and reset to zero when
+	 * `process` compacts what is left down to the front.
+	 */
+	unsigned int frameStart;
+
+	/*
+	 * +0x2c  How many samples `codes` and `signs` hold.  `hardDecision`
+	 * appends one and increments it; `process` consumes whole frames from
+	 * `frameStart` and leaves the remainder here.
+	 */
+	unsigned int sampleCount;
 
 	/*
 	 * +0x30  The six constellations, up to 128 signed PCM levels each.
@@ -199,7 +304,18 @@ public:
 	ModulusDecoder modulusDecoder;
 
 	/*
-	 * +0x664  `movb $0x0,0x664(%esi)` -- one byte, so a `char`-width flag.
+	 * +0x664  A `SerialDifferentialDecoder<unsigned char>`, ONE BYTE, and
+	 * the type is forced by a `this` and not inferred from the store:
+	 * `process` does `lea 0x664(%esi),%edx` and passes it as the first
+	 * stack argument of `_ZN25SerialDifferentialDecoderIhE7processEh` at
+	 * 0x31887.  It was `unsigned char byte_664` while the constructor's
+	 * `movb $0x0,0x664(%esi)` was the only thing that touched it.
+	 *
+	 * DiffCoder.h PREDICTED THIS BEFORE IT WAS READ, and the prediction is
+	 * worth keeping because it is what makes the store below evidence
+	 * rather than coincidence: the serial coders emit no constructor of
+	 * their own, so an enclosing class that value-initialises one gets
+	 * exactly one inlined `movb $0x0` where the member sits.
 	 *
 	 * IT IS A MEM-INITIALIZER AND NOT A BODY STATEMENT, and the position of
 	 * that one instruction is the whole argument:
@@ -226,8 +342,12 @@ public:
 	 * exactly what a claim about POSITION needs, since where the `movb`
 	 * sits relative to the two `call`s is in the sequence even though its
 	 * operands are not compared.
+	 *
+	 * WHAT IT IS FOR: `process`'s other sign-bit path.  With
+	 * `signBitGroups` zero the frame does not go through `signBits` at all
+	 * and every sign bit goes through this one decoder instead.
 	 */
-	unsigned char byte_664;
+	SerialDifferentialDecoder<unsigned char> signDecoder;
 	unsigned char pad_665[3];
 
 	/*
@@ -261,11 +381,37 @@ public:
 	unsigned int errorHistogramCount;
 
 	/*
-	 * +0x1e94 .. +0x1e9f  NOT MODELLED.  Three words `reset`,
-	 * `resetNoSpectral`, `hardDecision` and `linearMappingStudy` touch
-	 * and nothing written here does.
+	 * +0x1e94  THE DELAY BEFORE THE HISTOGRAM STARTS FILLING, counted
+	 * down.  `hardDecision` tests it and, while it is non-zero, decrements
+	 * it and accumulates nothing; when it reaches zero every decision goes
+	 * into the histogram.  The parameter block has the author's name for
+	 * what seeds it -- `DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM` at +0x530,
+	 * beside the two this class does read -- and `reset` is what seeds it.
 	 */
-	unsigned char pad_1e94[12];
+	int histogramDelay;
+
+	/*
+	 * +0x1e98  HOW LONG THE CURRENT HISTOGRAM HAS BEEN INTEGRATING.
+	 * `hardDecision` compares it against
+	 * `params->DEMAPPER_ERROR_HISTOGRAM_INTEGRATION_TIME` (+0x534) with a
+	 * SIGNED `jge`, which is why both are `int`; on reaching it the
+	 * histogram is printed, reset and this goes back to zero, otherwise it
+	 * is incremented.
+	 */
+	int histogramIntegration;
+
+	/*
+	 * +0x1e9c  MODELLED, UNNAMED.  `resetLinearMappStudy` clears it with a
+	 * 16-bit store; `linearMappingStudy` increments it once per completed
+	 * run and compares the result against TWO (`movzwl 0x1e9c(%edx),%ebx;
+	 * inc %ebx; cmp $0x2,%bx; mov %bx,0x1e9c(%edx); je`).  So it counts
+	 * something that happens twice, and that is as far as the object goes:
+	 * a name here would be a guess about what the second pass is for, and
+	 * finding 3120 declined exactly that.  The compare is an equality, so
+	 * it carries no signedness evidence either.
+	 */
+	short short_1e9c;
+	unsigned char pad_1e9e[2];
 
 	/*
 	 * +0x1ea0  The automatic digital-impairment detector: the
@@ -278,13 +424,80 @@ public:
 	V90AutoDigitalImpDetector *adiDetector;
 
 	/*
-	 * +0x1ea4 .. +0x1eb7  NOT MODELLED, and the ONLY thing that bounds it
-	 * is the 0x1eb8 allocation.  `reset`, `resetLinearMappStudy`,
-	 * `linearMappingStudy` and `hardDecision` touch +0x1ea4, +0x1ea6,
-	 * +0x1ea8, +0x1eac, +0x1eae, +0x1eb0 and +0x1eb4 between them, at
-	 * mixed widths; nothing written here does.
+	 * +0x1ea4 and +0x1ea6  MODELLED, UNNAMED.  `resetLinearMappStudy` and
+	 * `reset` clear both with 16-bit stores and `linearMappingStudy`
+	 * stores a literal 1 into each (0x315b6 and 0x3170f) at the two points
+	 * where its end-of-run pass begins.  Nothing in the object LOADS
+	 * either, so they are flags something else reads and the something
+	 * else is not in this class.
 	 */
-	unsigned char pad_1ea4[0x14];
+	short short_1ea4;
+	short short_1ea6;
+
+	/*
+	 * +0x1ea8 and +0x1eb0  THE LINEAR-MAPPING STUDY'S LENGTH AND ITS
+	 * PROGRESS, and the pair is what says which is which:
+	 *
+	 *     314e2:  mov  0x1eb0(%edx),%eax
+	 *     314e8:  inc  %eax
+	 *     314e9:  cmp  0x1ea8(%edx),%eax
+	 *     314ef:  je   31578            -> the study's end-of-run pass
+	 *     314f9:  mov  %eax,0x1eb0(%ebx)
+	 *
+	 * inside `linearMappingStudy`, against `resetLinearMappStudy` storing
+	 * its ONE ARGUMENT at +0x1ea8 and zeroing +0x1eb0.  One is set once
+	 * and only read; the other starts at zero, is incremented per call and
+	 * is compared against the first.  The comparison is an EQUALITY, so
+	 * neither carries signedness evidence and both are `unsigned int` by
+	 * the argument's type rather than by the branch.
+	 *
+	 * `linearMappingStudy` IS READ HERE AND NOT RECONSTRUCTED, which is
+	 * the weakest of CLAUDE.md's three evidence ranks and is said out
+	 * loud.  What the two names rest on is the shape above and nothing
+	 * else.
+	 */
+	unsigned int uint_1ea8;			/* the length  */
+
+	/*
+	 * +0x1eac  THE CODE THE LAST `hardDecision` CHOSE, and +0x1eae the RBS
+	 * frame position it chose it in -- the position BEFORE the advance,
+	 * stored at the very top of the function and therefore recorded even
+	 * on the over-capacity arm that decides nothing.  Both are 16-bit
+	 * stores and both are written on every path.
+	 *
+	 * THEY ARE NOT DIAGNOSTICS, and an earlier draft of this comment said
+	 * they were on the strength of nothing in the five members this batch
+	 * read touching them.  `linearMappingStudy` reads BOTH, at 0x31459 and
+	 * 0x31470, and uses them as the (phase, code) cell it accumulates the
+	 * study's error into -- `shl $0x7` on the frame position, add the
+	 * code, index +0x1000 and +0x1c00 of the detector.  So this pair is
+	 * the hand-off from the decision to the study, and a batch that
+	 * changed either would change what the study measures.  Finding 3531
+	 * is the same mistake in the neighbouring header and this is why its
+	 * rule is worth having: a claim that NOTHING reads a field is a claim
+	 * about every function in the object, not about the ones in hand.
+	 *
+	 * BOTH ARE SIGNED.  The loads are `movzwl` and each is followed
+	 * immediately by a `movswl` of the same register's low half
+	 * (0x31459/0x31460 and 0x31470/0x3147b), so the value in use is
+	 * sign-extended and the zero-extending load is the free half of
+	 * finding 614 -- an extension whose upper bits are discarded by the
+	 * next instruction.
+	 */
+	short decisionCode;
+	short decisionFramePosition;
+
+	unsigned int uint_1eb0;			/* the progress; see +0x1ea8 */
+
+	/*
+	 * +0x1eb4  MODELLED, UNNAMED, and it is a HALFWORD rather than the
+	 * four-byte pad this file used to carry: `reset` writes it 16-bit wide
+	 * (`mov %si,0x1eb4(%ebp)` at 0x30b34) and nothing else in the object
+	 * touches it.  The two bytes after it are the tail of the 0x1eb8
+	 * allocation and nothing reaches them.
+	 */
+	short short_1eb4;
+	unsigned char pad_1eb6[2];
 };
 
 #endif /* DSPLIB_V90DEMAPPER_H */

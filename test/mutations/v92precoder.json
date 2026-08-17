@@ -59,13 +59,13 @@
  },
  {
   "label": "reset copies tableA from one word too early",
-  "find": "\t\ttableA[i] = scalars[7 + i];",
-  "replace": "\t\ttableA[i] = scalars[6 + i];"
+  "find": "\t\ttableA[i] = p->m[i];",
+  "replace": "\t\ttableA[i] = p->m[i ? i - 1 : 0];"
  },
  {
   "label": "reset takes the pointer to the block's start rather than to +0x9c",
-  "find": "\tparamsAt9c = (int *)p->pad_9c;",
-  "replace": "\tparamsAt9c = (int *)p->pad_00;"
+  "find": "\tparamsAt9c = p->indexConstel;",
+  "replace": "\tparamsAt9c = (int *)p;"
  },
  {
   "label": "reset copies the constellations in reverse",
@@ -74,8 +74,8 @@
  },
  {
   "label": "reset copies tableB from the six words above it",
-  "find": "\t\ttableB[i] = six[i];",
-  "replace": "\t\ttableB[i] = six[i + 1];"
+  "find": "\t\ttableB[i] = (int)p->LC[i];",
+  "replace": "\t\ttableB[i] = (int)p->LC[i < 5 ? i + 1 : 5];"
  },
  {
   "label": "reset leaves the second carried sample alone",

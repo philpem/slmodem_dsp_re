@@ -354,9 +354,37 @@ ctn_fixture(int trial)
 	cdA->short_0c = cur.dmin0c;
 	cdA->short_0e = cur.dmin0e;
 	cdA->short_10 = 0x0bad;
-	cdA->float_18 = (trial & 1) ? 1.5f : -1.5f;
-	cdA->float_1c = (trial & 2) ? 2.25f : -2.25f;
-	cdA->float_20 = (trial & 4) ? 3.75f : -3.75f;
+	/*
+	 * THE THREE THRESHOLDS CARRY AN UNORDERED SEED ON THE ARMS THAT DO
+	 * NOT RECOMPUTE THEM, and choosing those arms is the whole trick.
+	 * `w48tab` is { 0, 1, 2, 3, 0, -1, 4, 100 }: cases 0, 2 and 3 end by
+	 * writing all three thresholds from `noiseEnergy` and would erase the
+	 * seed, KeepRate (1) deliberately keeps them, and -1, 4 and 100 fall
+	 * out of the four-case switch having written nothing.  So the seed is
+	 * planted on `trial % 8` of 1, 5, 6 and 7 -- and it then reaches the
+	 * `%c%d.%02d` report at the end of the method, whose sign character is
+	 * the object's branchless `sbb %eax,%eax; and $0xfffffffe,%eax; add
+	 * $0x2d,%eax` off a `fldz`/`fcom`.  That is '+' for an unordered value
+	 * where `(0.0f < v)` is '-', and they agree on every ordered one, so
+	 * without this seed the two spellings are indistinguishable here.
+	 * Findings 2300 and 2410.
+	 *
+	 * Planted on the arms that KEEP the thresholds and on no others: a
+	 * seed the method overwrites is a seed that proves nothing, and the
+	 * first version of this planted it on case 3 and was silently
+	 * vacuous.
+	 */
+	if (trial % 8 == 1 || trial % 8 >= 5) {
+		static const unsigned int qnan = 0x7fc00000u;
+
+		memcpy(&cdA->float_18, &qnan, sizeof qnan);
+		memcpy(&cdA->float_1c, &qnan, sizeof qnan);
+		memcpy(&cdA->float_20, &qnan, sizeof qnan);
+	} else {
+		cdA->float_18 = (trial & 1) ? 1.5f : -1.5f;
+		cdA->float_1c = (trial & 2) ? 2.25f : -2.25f;
+		cdA->float_20 = (trial & 4) ? 3.75f : -3.75f;
+	}
 
 	cdB->word_48 = cdA->word_48;
 	cdB->word_24 = cdA->word_24;
@@ -389,6 +417,8 @@ static int seenPicked[2];
 static int seenIndexHigh;
 static int seenNegOddSeed;
 static int seenPrinted;
+/* The unordered threshold seed survived to the report.  See ctn_fixture. */
+static int seenNanThresh;
 
 enum {
 	ARM_KEEP = 0, ARM_UP, ARM_DOWN, ARM_NONE, ARM_HIGH, ARM_NEG
@@ -633,6 +663,16 @@ run_ctn_loud(void)
 
 		if (dsplib_debug_capture_lines(1) > 0)
 			seenPrinted = 1;
+		/*
+		 * Claimed off the BLOB's own field rather than off the
+		 * transcript: the three threshold reports go through
+		 * `edprintf`, whose output is encoded, so `strstr` cannot
+		 * find them.  The method's last read of `float_18` is the
+		 * report itself, so a field still unordered here is a field
+		 * that was printed unordered.
+		 */
+		if (diff_isnan_f(cdB->float_18))
+			seenNanThresh = 1;
 
 		/* Everything below reads the BLOB's transcript, never ours. */
 		t = dsplib_debug_capture_text(1);
@@ -1045,6 +1085,13 @@ run_ctn_outcomes(void)
 		    seenSign[0]);
 	diff_eq_int("the sign printer chose '+' %ld times", seenSign[1] > 0, 1,
 		    seenSign[1]);
+	/*
+	 * And it chose one for an UNORDERED threshold, which is the only
+	 * input that separates `!(0.0f >= v)` from `(0.0f < v)`.  Finding
+	 * 2410.
+	 */
+	diff_eq_int("an unordered threshold reached the sign printer",
+		    seenNanThresh, 1, 0);
 	diff_eq_int("dMin was not forced %ld times", seenForced[0] > 0, 1,
 		    seenForced[0]);
 	diff_eq_int("dMin was forced %ld times", seenForced[1] > 0, 1,

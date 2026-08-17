@@ -140,8 +140,6 @@ RcFixed_State(struct rc *h)
 static void
 rc_reset_state(struct rc_state *s)
 {
-	int r;
-
 	memset(s->history, 0, sizeof(s->history));
 	s->pos = s->taps;
 	s->input_needed = (s->up <= s->down) ? 1 : 0;
@@ -150,11 +148,17 @@ rc_reset_state(struct rc_state *s)
 	 * The original uses the C remainder, then corrects a negative result by
 	 * adding `up`.  Rates are positive so the correction is unreachable in
 	 * practice, but it is reproduced to keep behaviour identical.
+	 *
+	 * The correction tests the FIELD, not an `int` temporary: the object's
+	 * test is sixteen bits wide -- `test %dx,%dx; js` at RcFixed_Reset+0x72
+	 * -- which is the sign of the value after truncation to `phase`, and a
+	 * 32-bit remainder in a local would give `test %edx,%edx`.  It is also
+	 * a branch the compiler deletes outright if `phase` is unsigned, so its
+	 * presence is a second proof of the declaration.  Finding 2700.
 	 */
-	r = (int)s->down % (int)s->up;
-	if (r < 0)
-		r += (int)s->up;
-	s->phase = (unsigned short)r;
+	s->phase = (short)(s->down % s->up);
+	if (s->phase < 0)
+		s->phase = (short)(s->phase + s->up);
 }
 
 struct rc *
@@ -186,8 +190,8 @@ RcFixed_Create(int mode)
 
 	s->coeff = rc_banks[mode].coeff;
 	s->taps = (short)rc_banks[mode].taps;
-	s->up = (unsigned short)fixedRc_UpFact[mode];
-	s->down = (unsigned short)fixedRc_DownFact[mode];
+	s->up = (short)fixedRc_UpFact[mode];
+	s->down = (short)fixedRc_DownFact[mode];
 
 	rc_reset_state(s);
 	return h;
@@ -272,16 +276,42 @@ rc_output(struct rc_state *s)
  *     input_needed = (phase + down) / up
  *     phase        = (phase + down) % up
  *
- * The original spells the division out as a subtract-and-count loop, which is
- * equivalent for the small factors involved.
+ * THE ORIGINAL SPELLS IT AS A SUBTRACT-AND-COUNT LOOP, not as a division, and
+ * that is transcribed rather than paraphrased here.  Inlined into
+ * RcFixed_Resample the object reads:
+ *
+ *     lea    (%ecx,%esi,1),%eax     ; phase + down
+ *     mov    %ebp,0x1a0(%ebx)       ; input_needed = 0
+ *     mov    %ax,0x194(%ebx)        ; phase = that, SIXTEEN bits
+ *     cmp    %ax,%cx                ; against `up`, sixteen bits
+ *     jg     ...                    ; SIGNED: skip if up > phase
+ *     xor    %ebx,%ebx              ; n = 0
+ *   1:mov    %eax,%edx
+ *     inc    %ebx
+ *     sub    %ecx,%edx              ; phase -= up
+ *     cmp    %cx,%dx
+ *     mov    %edx,%eax
+ *     jge    1b                     ; SIGNED again
+ *     mov    %dx,0x194(%edi)        ; the sunk stores
+ *     mov    %ebx,0x1a0(%edi)
+ *
+ * Nothing in it is wider than sixteen bits, which is why writing it as a
+ * division was visible to the codegen tier: `acc / (int)s->up` forces a
+ * `cltd; idiv` and with it a 32-bit sign extension of both `down` and `up`,
+ * and `extcheck` reported exactly that at mem 0x196 and mem 0x198 once the
+ * declarations were corrected.  The two forms agree over every reachable
+ * value (0 <= phase < up <= 24, 1 <= down <= 24).  Finding 2700.
  */
 static void
 rc_advance(struct rc_state *s)
 {
-	int acc = (int)s->phase + (int)s->down;
+	s->phase = (short)(s->phase + s->down);
+	s->input_needed = 0;
 
-	s->input_needed = acc / (int)s->up;
-	s->phase = (unsigned short)(acc % (int)s->up);
+	while (s->phase >= s->up) {
+		s->phase = (short)(s->phase - s->up);
+		s->input_needed++;
+	}
 }
 
 void

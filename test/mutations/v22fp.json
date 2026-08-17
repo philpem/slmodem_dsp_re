@@ -1,0 +1,36 @@
+[
+ [
+  "V22FP_create and V22FP_delete.  The batch that wrote them validated these",
+  "by hand, by injecting each defect once and watching suites fail.  That is",
+  "the right check and it evaporates when the session ends, so it is written",
+  "down here instead -- including the two the file argues CANNOT be caught,",
+  "which are the entries that make the rest of the set mean something."
+ ],
+ {
+  "label": "the 2400 slicer is installed instead of the 1200 one",
+  "find": "\tdsp->fse.decision = FSEv22_decision12;",
+  "replace": "\tdsp->fse.decision = FSEv22_decision24;"
+ },
+ {
+  "label": "the pulse shaper's I and Q constellation maps are swapped",
+  "find": "\tdsp->pps.imap = SMCv22_IMAP_1200BPS;\n\tdsp->pps.qmap = SMCv22_QMAP_1200BPS;",
+  "replace": "\tdsp->pps.imap = SMCv22_QMAP_1200BPS;\n\tdsp->pps.qmap = SMCv22_IMAP_1200BPS;"
+ },
+ {
+  "label": "the flag that clears hdx.r0e is read one bit over",
+  "find": "\tif (fp->params.flags & 0x800)",
+  "replace": "\tif (fp->params.flags & 0x1000)"
+ },
+ {
+  "label": "the flag is copied into bit 12 of params.flags, not bit 11",
+  "find": "\t\t| (unsigned int)((cfg->f14 & 1) << 11)",
+  "replace": "\t\t| (unsigned int)((cfg->f14 & 1) << 12)"
+ },
+ {
+  "label": "the second tone object is built from TONEv22_CFG, not TONEv22INIT_CFG",
+  "find": "\ttone = TONEv22INIT_CFG;",
+  "replace": "\ttone = TONEv22_CFG;",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and the file says so before the run does: TONEv22_CFG and TONEv22INIT_CFG are BYTE-IDENTICAL in the object, all 36 bytes of each, so no input can tell which one a copy came from.  The two names exist in the blob and are kept because the blob has two symbols, not because the values differ.  This entry is here so that the set does not look like it covers a distinction it cannot: an injection of it fails zero suites, which is the recorded result rather than a gap."
+ }
+]

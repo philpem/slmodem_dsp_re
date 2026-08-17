@@ -117,7 +117,7 @@
  * SIX BYTES COPIED OUT OF .rodata
  * ===========================================================================
  *
- * `flags_0217` is not six stores.  0xfbf5 loads FOUR bytes from .rodata+0x3e0
+ * `v34BaudAllow` is not six stores.  0xfbf5 loads FOUR bytes from .rodata+0x3e0
  * and stores them at +0x217; 0xfc09 loads TWO more from .rodata+0x3e4 and
  * stores them at +0x21b.  The bytes there are 1,1,1,1,1,1 -- all six -- so
  * the source is an initialisation from a constant array and the compiler
@@ -221,8 +221,8 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	sysdep_memset(bitVector, 0, sizeof(bitVector));
 	nofBits = 0;
 
-	for (i = 0; i < sizeof(flags_0217); i++)
-		flags_0217[i] = vpcm_ctor_flags_0217[i];
+	for (i = 0; i < sizeof(v34BaudAllow); i++)
+		v34BaudAllow[i] = vpcm_ctor_flags_0217[i];
 
 	word_1740 = 0;
 

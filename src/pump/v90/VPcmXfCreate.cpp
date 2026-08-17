@@ -69,7 +69,7 @@
  *
  * And five of them CONTRADICT the constructor, which is the interesting part:
  * `nofBitsPerSymbol` is 0 from the constructor and 2 from here,
- * `minNofTransmitSequences` is 0 and then 1, and `flags_0217` is
+ * `minNofTransmitSequences` is 0 and then 1, and `v34BaudAllow` is
  * {1,1,1,1,1,1} and then {1,0,1,1,1,0}.  A constructed-and-returned
  * `VPcmFloModem` therefore never has the constructor's values for those, and
  * a test that drove only the constructor would be measuring a state the
@@ -193,12 +193,12 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 	self->flag_173d = 0;
 	self->flag_173e = 0;
 
-	self->flags_0217[0] = 1;
-	self->flags_0217[1] = 0;
-	self->flags_0217[2] = 1;
-	self->flags_0217[3] = 1;
-	self->flags_0217[4] = 1;
-	self->flags_0217[5] = 0;
+	self->v34BaudAllow[0] = 1;
+	self->v34BaudAllow[1] = 0;
+	self->v34BaudAllow[2] = 1;
+	self->v34BaudAllow[3] = 1;
+	self->v34BaudAllow[4] = 1;
+	self->v34BaudAllow[5] = 0;
 
 	self->nofBits = 0;
 	self->cpNofBits = 0;

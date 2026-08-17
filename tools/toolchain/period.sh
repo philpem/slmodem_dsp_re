@@ -60,6 +60,12 @@ cd "$(dirname "$0")/../.."
 # every comment in this directory claims.  `PERIOD_IMG=dsplibs-tc` still
 # selects the old one, which is how the two were compared; both are green here
 # at 183 passed / 0 failed, so this tier does not decide between them.
+#
+# `PERIOD_IMG=dsplibs-tc342-gentoo` selects the third and exact arm, Gentoo's
+# gcc-3.4.2-r2 (Dockerfile.gentoo, finding 2500).  It is green here too --
+# 185 passed / 0 failed -- so this tier decides between none of the three.
+# Set PERIOD_OUT with it: build/period is incremental on SOURCE mtime and
+# does not notice that the compiler changed.
 IMG=${PERIOD_IMG:-dsplibs-tc342}
 
 if ! docker image inspect "$IMG" >/dev/null 2>&1; then

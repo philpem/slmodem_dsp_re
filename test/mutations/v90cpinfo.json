@@ -1,0 +1,112 @@
+[
+ {
+  "label": "the preamble is one bit short",
+  "find": "\tfor (i = 0; i <= 0x10; i++)\n\t\tbits[i] = 1;",
+  "replace": "\tfor (i = 0; i < 0x10; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "bit 0x12 carries only whether +0x00 is set",
+  "find": "\tbits[0x12] = (unsigned char)word_00;",
+  "replace": "\tbits[0x12] = (unsigned char)(word_00 != 0);"
+ },
+ {
+  "label": "the short form drops +0xca0",
+  "find": "\t\tbits[0x20] = (unsigned char)word_ca0;",
+  "replace": "\t\tbits[0x20] = 0;"
+ },
+ {
+  "label": "a fifth value of +0x11 writes zeros instead of nothing",
+  "find": "\t\tcase 3:\n\t\t\tbits[0x1b] = 1;\n\t\t\tbits[0x1c] = 1;\n\t\t\tbreak;\n\t\t}",
+  "replace": "\t\tcase 3:\n\t\t\tbits[0x1b] = 1;\n\t\t\tbits[0x1c] = 1;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tbits[0x1b] = 0;\n\t\t\tbits[0x1c] = 0;\n\t\t\tbreak;\n\t\t}"
+ },
+ {
+  "label": "the nine-bit count is followed by six zeros, not seven",
+  "find": "\t\t\t\tfor (i = 0; i <= 6; i++)\n\t\t\t\t\tbits[pos + 9 + i] = 0;",
+  "replace": "\t\t\t\tfor (i = 0; i <= 5; i++)\n\t\t\t\t\tbits[pos + 9 + i] = 0;"
+ },
+ {
+  "label": "the sequence length is one frame short",
+  "find": "\tnbits = start + 0x11;",
+  "replace": "\tnbits = start + 0x10;"
+ },
+ {
+  "label": "the CRC covers the framing bits too",
+  "find": "\tfor (i = 0x12; i < start; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
+  "replace": "\tfor (i = 0x12; i < start; ) {"
+ },
+ {
+  "label": "the CRC's second tap is one place out",
+  "find": "\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)word_cac;",
+  "replace": "\t\tcrc[10] = crc[11];\n\t\tcrc[11] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)word_cac;"
+ },
+ {
+  "label": "the length is rounded down, not up",
+  "find": "\t\tword_3bac = (quot + 1) * group;",
+  "replace": "\t\tword_3bac = quot * group;"
+ },
+ {
+  "label": "the pad is counted but not written",
+  "find": "\twhile (word_3bac > pos) {\n\t\tbits[pos] = 0;\n\t\tpos++;\n\t}",
+  "replace": "\twhile (word_3bac > pos)\n\t\tpos++;"
+ },
+ {
+  "label": "the header arm leaves the cursor at 0x33",
+  "find": "\t\tword_cb4 = 0x32;",
+  "replace": "\t\tword_cb4 = 0x33;"
+ },
+ {
+  "label": "the pairs arm leaves the cursor at 0x99",
+  "find": "\t\tword_cb4 = 0x98;",
+  "replace": "\t\tword_cb4 = 0x99;"
+ },
+ {
+  "label": "the short form's two decoded bits are swapped",
+  "find": "\t\tword_ca0 = bits[0x20];\n\t\tbyte_13 = bits[0x21];",
+  "replace": "\t\tword_ca0 = bits[0x21];\n\t\tbyte_13 = bits[0x20];"
+ },
+ {
+  "label": "the counts arm steps sixteen, not seventeen",
+  "find": "\t\t\tp += 0x11;",
+  "replace": "\t\t\tp += 0x10;"
+ },
+ {
+  "label": "the list arm's entries are one bit apart too few",
+  "find": "\t\t\t\tword_cb4 = q + 0x10;",
+  "replace": "\t\t\t\tword_cb4 = q + 0xf;"
+ },
+ {
+  "label": "the buffer arm advances sixteen, not seventeen",
+  "find": "\t\t\t\tword_cb4 += 0x11;",
+  "replace": "\t\t\t\tword_cb4 += 0x10;"
+ },
+ {
+  "label": "the buffer arm accumulates the wrong way round",
+  "find": "\t\t\t\t\tdst[j] = (dst[j] << 1) |\n\t\t\t\t\t\t (bits[word_cb4] & 1);",
+  "replace": "\t\t\t\t\tdst[j] = (dst[j] >> 1) |\n\t\t\t\t\t\t (bits[word_cb4] & 1);"
+ },
+ {
+  "label": "a value outside the jump table decodes the header",
+  "find": "\tswitch (word_ca4) {\n\tcase 3:",
+  "replace": "\tswitch (word_ca4 == 12 ? 5 : word_ca4) {\n\tcase 3:"
+ },
+ {
+  "label": "evaluateCRC covers one frame too many",
+  "find": "\tend = word_3bb0 - 0x11;",
+  "replace": "\tend = word_3bb0 - 0x10;"
+ },
+ {
+  "label": "evaluateCRC compares against the wrong sixteen bits",
+  "find": "\t\tint d = (int)crc[i] - (int)bits[word_3bb0 - 0x10 + i];",
+  "replace": "\t\tint d = (int)crc[i] - (int)bits[word_3bb0 - 0xf + i];"
+ },
+ {
+  "label": "evaluateCRC returns the opposite verdict",
+  "find": "\treturn diff == 0;",
+  "replace": "\treturn diff != 0;"
+ },
+ {
+  "label": "evaluateCRC's accumulator cannot wrap",
+  "find": "\t\tdiff = (unsigned char)(diff + d);",
+  "replace": "\t\tdiff = (unsigned char)(diff | d);"
+ }
+]

@@ -30,6 +30,13 @@ extern short ref_FPM_TONE_generate2(void *state, short *cos_out,
 extern short ref_FPM_TONE_detect(void *state, const short *samples,
 				 short count);
 extern void ref_FPM_TONE_delete(void *state);
+extern void ref_FPM_TONE_kill(void *state, short *samples, short count);
+
+/*
+ * Pass 0's filtered output, kept so pass 1 can be shown to differ from it.
+ * 40 trials of at most 17 samples; sized generously rather than exactly.
+ */
+static short kill_pass0[40][64];
 
 /* Compare the whole object, so unnamed fields are covered too. */
 static void
@@ -618,6 +625,126 @@ main(void)
 		    detect_verdicts[1]);
 	diff_eq_int("NOSIGNAL seen (%ld)", detect_verdicts[2] > 0, 1,
 		    detect_verdicts[2]);
+	rc |= diff_end();
+
+	/*
+	 * FPM_TONE_kill -- the notch run over the caller's buffer, in place.
+	 *
+	 * The observables are the BUFFER, which is filtered in place, and the
+	 * whole object, which carries the filter's four-word state at +0x100.
+	 * Both are compared, so a pass that read the wrong state words or wrote
+	 * the wrong ones is visible even where the samples happen to agree.
+	 *
+	 * `kill_coeffs` is the point of the second pass and it is not
+	 * decoration.  The object stores a pointer to its own coefficients at
+	 * +0xfc, and the blob LOADS it (`mov 0xfc(%edx),%ecx`) where a
+	 * reference to the `iir_coeff` array would have been a `lea`.  Those
+	 * two readings agree for ever on an object built by FPM_TONE_create,
+	 * because create sets the pointer to exactly that address -- so the
+	 * only way to separate them is to point +0xfc somewhere else and see
+	 * which set of coefficients comes out.  Pass 1 does that.
+	 */
+	diff_begin("FPM_TONE_kill");
+	{
+		/*
+		 * A one-pole-ish section with an obviously different response
+		 * from the 2100 Hz notch, in FPM_iir_filt_II's own coefficient
+		 * order { b0, b2, b1, a2, a1 }.
+		 */
+		static short kill_coeffs[5] = { 8192, -4096, 2048, 1024, -3072 };
+		int pass, changed = 0, stateful = 0, separated = 0;
+
+		for (pass = 0; pass < 2; pass++) {
+			for (k = 0; k < 40; k++) {
+				int n = (k % 17) + 1, i;
+				short ka[64], kb[64];
+
+				memcpy(a, built, sizeof(a));
+				memcpy(b, built, sizeof(b));
+				/*
+				 * Pass 0 leaves +0xfc as the memcpy left it,
+				 * pointing at `built`'s own taps -- the same
+				 * address on both sides, so the whole-object
+				 * comparison still holds.  Pass 1 redirects
+				 * both sides to a different filter, which is
+				 * what separates the stored pointer from the
+				 * array it usually equals.
+				 */
+				if (pass) {
+					((struct fpm_tone *)a)->iir_self =
+						kill_coeffs;
+					((struct fpm_tone *)b)->iir_self =
+						kill_coeffs;
+				}
+				/*
+				 * A non-zero starting state, so reading the
+				 * detector's `iir_state` at +0x40 instead of
+				 * +0x100 separates on the first sample rather
+				 * than only after the history has filled.
+				 */
+				for (i = 0; i < 4; i++) {
+					((struct fpm_tone *)a)->kill_state[i] =
+					((struct fpm_tone *)b)->kill_state[i] =
+						(short)(1000 * (i + 1) - 2500);
+					((struct fpm_tone *)a)->iir_state[i] =
+					((struct fpm_tone *)b)->iir_state[i] =
+						(short)(-700 * (i + 1));
+				}
+
+				for (i = 0; i < n; i++) {
+					/* A 2100 Hz tone plus a slow ramp. */
+					ka[i] = kb[i] = (short)
+						(9000 * ((i & 1) ? -1 : 1)
+						 + 40 * (k + i));
+				}
+
+				ref_FPM_TONE_kill(a, ka, (short)n);
+				FPM_TONE_kill((struct fpm_tone *)b, kb,
+					      (short)n);
+
+				for (i = 0; i < n; i++) {
+					diff_eq_int("kill sample %ld", kb[i],
+						    ka[i], i);
+					/*
+					 * Observable-difference counters: a
+					 * filtered sample that differs from
+					 * its input, and a run whose two
+					 * coefficient sets disagree.  Both
+					 * count COMPARED bytes, not a path.
+					 */
+					if (ka[i] != (short)
+					    (9000 * ((i & 1) ? -1 : 1)
+					     + 40 * (k + i)))
+						changed++;
+					if (pass == 1 && kill_pass0[k][i]
+					    != ka[i])
+						separated++;
+					if (pass == 0)
+						kill_pass0[k][i] = ka[i];
+				}
+				compare_state(b, a, "kill");
+				if (((struct fpm_tone *)a)->kill_state[0]
+				    != (short)-1500)
+					stateful++;
+			}
+		}
+
+		/*
+		 * Anti-vacuity.  Every one of these is a count of trials whose
+		 * COMPARED result differed -- an output sample that the filter
+		 * moved, an object byte the filter wrote, and a pair of runs
+		 * that the two coefficient sets drove apart.  A kill that did
+		 * nothing, that kept no state, or that ignored +0xfc would fail
+		 * one of the three while still agreeing sample for sample with
+		 * a reconstruction that did the same nothing.
+		 */
+		diff_eq_int("samples the filter moved (%ld)", changed > 0, 1,
+			    changed);
+		diff_eq_int("trials that wrote kill_state (%ld)",
+			    stateful > 0, 1, stateful);
+		diff_eq_int("samples separating +0xfc from iir_coeff (%ld)",
+			    separated > 0, 1, separated);
+	}
 	rc |= diff_end();
 
 	/*

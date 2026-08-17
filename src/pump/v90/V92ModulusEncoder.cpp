@@ -37,9 +37,10 @@
  * Finding 1321: the block `reset` is handed is the one this tree already
  * models as `struct V92ParamsInfo`, and finding 1325 is why a translation
  * unit that dereferences it includes the header rather than reaching through
- * a local declaration.  The thirteen words `reset` reads all fall inside the
- * region that header leaves as `pad_00`, so they are addressed through it by
- * offset; naming them there is the job of whoever reconstructs the unpacker.
+ * a local declaration.  The thirteen words `reset` reads used to fall inside
+ * the region that header left as `pad_00` and were addressed by offset
+ * through a `v92me_param(p, off)` helper; the unpacker has since named them,
+ * so they are `p->K` and `p->m[0..11]` and the helper is gone.
  */
 #include "dsplib/V92ParamsInfo.h"
 
@@ -79,16 +80,6 @@ static inline long long
 v92me_sub(long long x, long long y)
 {
 	return (long long)((unsigned long long)x - (unsigned long long)y);
-}
-
-/* One 32-bit load out of the parameter block, by offset. */
-static inline unsigned int
-v92me_param(const struct V92ParamsInfo *p, int off)
-{
-	unsigned int v;
-
-	__builtin_memcpy(&v, &p->pad_00[off], sizeof v);
-	return v;
 }
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -162,19 +153,19 @@ V92ModulusEncoder::reset(V92MappingParams *params)
 	long long a, b, u;
 	int n;
 
-	field_48 = v92me_param(p, 0x00);
-	field_18 = v92me_param(p, 0x1c);
-	field_1c = v92me_param(p, 0x20);
-	field_20 = v92me_param(p, 0x24);
-	field_24 = v92me_param(p, 0x28);
-	field_28 = v92me_param(p, 0x2c);
-	field_2c = v92me_param(p, 0x30);
-	field_30 = v92me_param(p, 0x34);
-	field_34 = v92me_param(p, 0x38);
-	field_38 = v92me_param(p, 0x3c);
-	field_3c = v92me_param(p, 0x40);
-	field_40 = v92me_param(p, 0x44);
-	field_44 = v92me_param(p, 0x48);
+	field_48 = p->K;
+	field_18 = p->m[0];
+	field_1c = p->m[1];
+	field_20 = p->m[2];
+	field_24 = p->m[3];
+	field_28 = p->m[4];
+	field_2c = p->m[5];
+	field_30 = p->m[6];
+	field_34 = p->m[7];
+	field_38 = p->m[8];
+	field_3c = p->m[9];
+	field_40 = p->m[10];
+	field_44 = p->m[11];
 
 	product = (long long)((unsigned long long)field_18 * field_1c *
 			      field_20 * field_24 * field_28 * field_2c *

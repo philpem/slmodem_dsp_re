@@ -18,10 +18,17 @@
  *     relocations at known offsets.  A relocation PROVES a pointer field, so
  *     these are written as the `struct fpm_agc_cfg` / `struct fpm_mtd_cfg`
  *     the shared modules already define.
- *   - `TONEv22_CFG`, `TONEv22INIT_CFG` and `V22_CFG` carry none.  Their sizes
- *     match `struct fpm_tone_cfg` (36) and nothing respectively, but size is
- *     not proof, so they stay `short` arrays until the code that reads them
- *     is reconstructed.  See the note in src/pump/v22/v22rxtab.c.
+ *   - `TONEv22_CFG`, `TONEv22INIT_CFG` and `V22_CFG` carry none, and were
+ *     `short` arrays until the code that reads them was reconstructed.  IT
+ *     NOW IS.  `V22FP_create` copies each to the stack and hands the copy to
+ *     a function whose parameter type settles it: the two tone blocks go to
+ *     `FPM_TONE_create` with the pointer at +0x10 patched from the library's
+ *     own `FPM_TONE_CFG`, which is `struct fpm_tone_cfg::src` and nothing
+ *     else, and `V22_CFG` is patched with 16-bit stores at +0x00, +0x02,
+ *     +0x04, +0x14, +0x16 and +0x18, a 32-bit one at +0x08 and a
+ *     read-modify-write of the byte at +0x11 before being copied into the
+ *     object's first 28 bytes.  So they are typed now, and the type of the
+ *     last one is `struct v22fp_params` in dsplib/v22fp.h.
  */
 
 #ifndef DSPLIB_V22TAB_H
@@ -32,6 +39,8 @@
 
 struct fpm_agc_cfg;
 struct fpm_mtd_cfg;
+struct fpm_tone_cfg;
+struct v22fp_params;
 
 /*
  * The two AGC configurations.  Same smoother, same gate, different reference
@@ -72,13 +81,25 @@ extern const short CRRv22_PLL_K2[V22_CRR_PLL_SETS];
 #define V22_DISCONNECT_THRESHOLDS 8
 extern short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS];
 
-/* The tone configurations, untyped -- see the header comment. */
+/*
+ * The tone configurations.  36 bytes each and BYTE-IDENTICAL to each other --
+ * see the note in src/pump/v22/v22rxtab.c, and note that the identity means
+ * no differential test can tell which of the two feeds which tone object.
+ *
+ * The word count is kept because t_v22tab.c compares them word for word
+ * against the object's copies, which is a check on the bytes rather than on
+ * the field mapping.
+ */
 #define V22_TONE_CFG_WORDS	18
-extern const short TONEv22_CFG[V22_TONE_CFG_WORDS];
-extern const short TONEv22INIT_CFG[V22_TONE_CFG_WORDS];
+extern const struct fpm_tone_cfg TONEv22_CFG;
+extern const struct fpm_tone_cfg TONEv22INIT_CFG;
 
-/* The datapump's own parameter block, untyped -- see the header comment. */
+/*
+ * The datapump's own parameter block: the template `V22FP_create` copies to
+ * the stack, patches from the caller's configuration, and installs as the
+ * first 28 bytes of the object.
+ */
 #define V22_CFG_WORDS		14
-extern const short V22_CFG[V22_CFG_WORDS];
+extern const struct v22fp_params V22_CFG;
 
 #endif /* DSPLIB_V22TAB_H */

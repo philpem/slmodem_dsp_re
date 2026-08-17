@@ -20,6 +20,16 @@ hard failure whatever build it came from — never a tolerance to widen.
 
 Run `make phase`, not `make test`.
 
+**IT IS A RULE ABOUT `src/`, AND `testbench/` IS NOT `src/`.** The harness is
+measurement apparatus -- it places calls, records both ends, and analyses what
+came back. There is no blob to be differentially identical to, so the rule
+cannot apply to it and must not be read as forbidding a commit there. What
+DOES apply is the discipline those tools were built under and which cost more
+to learn: a detector must report its denominator, and a tool that prints
+nothing is indistinguishable from a tool that is broken (findings 134, 2400,
+2401). Show a new analysis firing on a known input before trusting a clean
+run from it.
+
 ## Budget your turns, not your reading
 
 Finding 220 measured this, so it is not a guess. **Context growth is
@@ -75,6 +85,57 @@ hold two different addresses and always will. Those keep working: `diff_eq_int`
 now appends the input when the format string has no conversion for it, which
 repaired 819 call sites that were silently discarding the offset they computed
 (finding 220).
+
+## Naming: fields, and flags
+
+Four states, and they are not the same problem:
+
+- `pad_NNNN` — **unmodelled space.** We do not know how many fields are in it.
+- `type_NNNN` (`short_2800`, `flags_0217`, `ptr_49b4`) — **modelled, unnamed.**
+  Shape and size known, meaning not.
+- bare `fNNNN` — neither. An offset wearing a name.
+- a real name — the goal.
+
+**If we know what something indicates, name it. That includes FLAGS.** A bare
+`x & 0x40` states a bit position and hides a meaning, exactly as `f25d0` does.
+Give it a named constant.
+
+**Name by BIT VALUE and keep 1:1 with the object** — `#define FOO_TRAINED
+(1 << 6)` or `0x40`, then `x & FOO_TRAINED`. A macro or enum constant is a
+compile-time substitution and **cannot** move code generation, so this is free
+and `compare.py` must not budge. If it does, something other than a name
+changed.
+
+**Bitfields are NOT free, and whether the original used them is MEASURABLE
+rather than a preference.** A bitfield read compiles to a shift and a mask; an
+explicit mask test compiles to `and`/`test` against an immediate. The blob is
+dominated by the second — 1233 `and $imm`, 474 `test $imm`, 161 `andb`, 150
+`testb` — so a bitfield rewrite would move the codegen tier AWAY from the
+object at the sites it touched. Do not convert to bitfields to make a struct
+read nicely; if a bitfield is ever right, it is because the object's own
+instructions at that site say the author used one. Settle it per site, from
+`dis.py`, like everything else.
+
+A mask that is not a single bit is a different thing again: `0x0f` over a
+four-bit field wants a named width and shift, not a flag name. There are 147
+single-bit uses and 235 multi-bit ones, so check which you have before naming.
+
+**Evidence order, strongest first**, and it matters more than completeness:
+
+1. **A format string that prints the thing.** `.rodata` labels are the original
+   author's own words. `tools/relocscan.py --at .rodata.str1.1:0xNNNN` finds
+   who references one (finding 604). This is not the Ghidra prohibition — that
+   rule forbids names from DECOMPILER OUTPUT, not from the binary's own text.
+2. **A callee or caller that types it.** A mangled C++ name carries argument
+   types; a field passed to `Scrambler<h,h>::process` has that element type
+   because the mangling says so, not because it looked right.
+3. **Usage inference.** Weakest. Say so in the finding when it is all you have.
+
+**Naming something wrongly is worse than leaving it padded**, because a wrong
+name is believed by every future reader, and no test can fail on it. Where the
+role can be bounded but not established, keep a neutral name and put the
+derivation in the comment — 3120 declined `+0x2f64` on exactly this ground and
+that was the right call.
 
 ## One type, one home
 
@@ -178,6 +239,28 @@ which is why `compare.py` now prints the blob's `.comment` and ours on every
 run. Finding 2200, and 2201 for what the blob's Gentoo patch stack means:
 stock 3.4.2 is the exact POINT RELEASE, never the exact compiler.
 
+**AND THE GENTOO COMPILER ITSELF IS NOW BUILT.** `dsplibs-tc342-gentoo` is
+`sys-devel/gcc-3.4.2-r2` built from Gentoo's own ebuild inside Gentoo's own
+stage3-x86-2005.0 -- glibc 2.3.4, binutils 2.15.92.0.2-r1 -- and it prints
+the blob's `.comment` back byte for byte, double space and all:
+
+```
+tools/toolchain/build-gentoo-image.sh              # about a minute
+TC_IMAGE=dsplibs-tc342-gentoo tools/toolchain/build.sh
+PERIOD_IMG=dsplibs-tc342-gentoo make period
+```
+
+It needs the stage3 and the six `SRC_URI` tarballs, neither in git;
+`tools/toolchain/gentoo-3.4.2-r2/fetch-distfiles.sh` pulls and verifies the
+latter. **What it changes is nothing**: 182 of 183 objects come out
+byte-identical to stock 3.4.2's, the symbol match is 334 either way with none
+gained and none lost, and the single difference is a schedule permutation in
+`DTMF_MTD_detect` that flips no symbol. So 2201's residual is now measured
+rather than bounded, and the default stays `dsplibs-tc342` -- which anyone can
+build from the network alone. `-O3` (2155) and `-mno-ieee-fp` (1990) were
+re-measured on the real compiler and both survive symbol for symbol. Findings
+2320, 2500 and 2501.
+
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/build.sh` with the evidence beside each:
 
@@ -242,13 +325,85 @@ came from getting that backwards.
 - `compare.py --ratchet` — fails only on a DECREASE, and is deliberately not
   in `make phase`. 100% is not the target: different factoring differs for
   ever while behaving identically.
-- `storeorder.py`, `extcheck.py` — triage aids, not gates. `extcheck` runs
-  about one true positive in four (619) and every hit must be traced by hand.
+- `extcheck.py` — the signedness detector, and a triage aid, never a gate. It
+  pairs `movswl` against `movzwl` on the same field and reports only where the
+  32-bit result is USED, which is the forced case above. **18 candidates over
+  938 symbols, and one report in five is real** — 14 traced, 3 true, 4 left
+  unverified and named (finding 2402). Every hit must be traced against
+  `dis.py` before anything is
+  retyped; the twelve failures are a 16-bit compare, a signed branch on a
+  16-bit test, a sum truncated by a cast, and a value masked to two bits, and
+  no lookahead rule separates those from the real thing. 619 ruled that needs
+  real dataflow and the ruling stands.
+- `samesize.py` — the SAME SIZE, DIFFERENT INSTRUCTIONS bucket, which
+  `compare.py` counts and does not print. `--all` dumps every aligned diff in
+  one pass; `--identical` prints the identical SET, because a count can gain
+  four and lose four and not move. The sharp slice: same byte count means
+  nothing is missing and nothing is extra. **The free column is narrower here
+  than the general rule** — `compare.py` drops operands, so pure register
+  allocation already scores as identical and cannot reach this list; what is
+  still free in it is scheduling, 614's discarded upper half, and 2411's
+  integer if-conversion. 69 rows classified in finding 2900, of which three
+  were real (2901), three were 614 and declined (2902), and ten are forced
+  and named for the next pass (2903).
+- `storeorder.py` — store order, and a HINT, not a defect list. 617's
+  acceptance test is full-text identity, operands included: nineteen examined,
+  two passed. It reports 57 differing functions and, of those, **the 14 whose
+  mnemonics already match** — the only ones that test can ever pass. Read a run
+  as "14 worth a look, 43 to leave alone". It also prints what its regex cannot
+  see, which is any store at offset 0 or through `%esi`/`%edi`/`%ebp`.
+
+**A number from either is meaningless without the compiler beside it**, exactly
+as for `compare.py`. Both figures above are GCC 3.4.2 exact at `-O3`. The
+inherited "one true positive in four" was measured on sarge's 3.4.4 at `-O2`
+over 365 symbols and did not survive re-measurement (2402).
 
 **Any tool here must be shown to fire.** `extcheck` printed "(none)" through
 four broken versions and there was no way to tell a clean tree from a dead
-detector; it is now validated by reintroducing a known defect and watching it
-appear. Finding 134's argument, and it caught two tools this session.
+detector; both aids are now validated by reintroducing a known defect and
+watching it appear, then restoring and watching it go. Finding 134's argument.
+
+**And it happened again, to both of them at once.** They kept defaulting to
+`TC_OUT=/tmp/tc_out` after `build.sh` moved its output to `build/tc_out`, so
+with no environment set they compared **zero** symbols and reported a clean
+tree, exit 0 (finding 2400). Both now refuse to run on an empty `TC_OUT` and
+print the number of symbols compared on every line that carries a verdict. **A
+detector must report its denominator** — re-running the injection ritual on the
+current toolchain is what found that, and two more bugs under it (2401).
+
+**AND THEN TO `make phase` ITSELF, WHICH IS NOT A TRIAGE AID BUT THE GATE.**
+Task #164, "build: split the object tree so the DEFAULT build carries our
+fixes", moved the differential tier's objects from
+`build-cov/src/` to `build-cov/repro/`; `tools/debugcov.py` went on reading the
+old path, found no `.gcda` anywhere, and printed `suite line coverage over
+src/ 0.0% (0/0)` and `0 of 0` deviation sites — which the phase boundary
+aggregated into "differential, 64-bit, interop, coverage and debug sites all
+OK", exit 0. Two of five tiers had measured nothing and the gate could not
+tell. It now probes both layouts, **exits non-zero on a zero denominator**, and
+prints the count on every line carrying a verdict; `make phase`'s closing line
+quotes those denominators and refuses to be printed without them. Finding 3100,
+and it is the same defect as 2400 with the gate rather than an aid behind it.
+
+**AND A THIRD TIME, TO SEVEN TOOLS AT ONCE — SAME COMMIT, OTHER HALF OF THE
+TREE.** #164 also stopped a plain `make` filling `build/src`; those objects now
+go to `build/repro`. Seven tools learn what we have WRITTEN by globbing that
+directory -- `closure.py`, `readyqueue.py`, `worklist.py`, `coverage.py`,
+`cppstruct.py`, `callgraph.py` and `service.py` -- and they went on reading the
+empty one. `coverage.py` printed `translated 0.0%, 0 bytes, 0 symbols` at exit
+0: the headline number of the whole project reading zero. `service.py` reported
+913 unwritten data-mode symbols against a true 267 **while its own
+`MUST_BE_FAX`/`MUST_BE_DATA` self-check passed** -- that check tests
+reachability in the BLOB, and reachability does not care whether anything is
+written. **A self-test that cannot fail is the dead detector in its purest
+form**, and it is why this one survived unnoticed the longest. Two of the seven
+also advised "Run `make` first", which by then was the advice that CAUSED the
+fault; `make coverage` is what fills the tree. All seven now go through
+`tools/objtree.py`, which refuses on an empty tree, prints the directory it read
+and the object count on stderr, and warns without refusing when the tree is
+PARTIAL (fewer objects than sources -- silently 52.2% against a true 54.8%) or
+STALE (a source newer than every object). The probe order is licensed by
+measurement, not assumption: both object trees define the same 1457
+`(name, kind)` pairs. Findings 3055, 3110 and 3111.
 
 ## Ghidra is scaffolding, never evidence
 
@@ -358,3 +513,34 @@ Task numbers are not safe across sessions either: two task stores exist whose
 - Other sessions work in sibling worktrees. Check `git worktree list` and
   `git status` before touching one, and never `git stash` in a tree you do
   not own.
+- **A bare `cd` in a compound command FAILS OPEN: everything after it runs in
+  the tree you were already in.** Use `git -C <dir>` in preference, and where a
+  `cd` is unavoidable write `cd <dir> || exit 1`. A worktree that had been
+  auto-removed made `cd .claude/worktrees/fix164` fail; the `git rebase master`
+  on the next line therefore ran in the MAIN tree, against
+  `improve/v34-training` — a branch another session was committing to — and
+  stopped on a `findings.md` conflict rather than at the `cd`. Aborted, and the
+  branch, the working tree and that session's three commits all verified
+  intact, but the window in which a concurrent write would have been lost was
+  real. The `git status` check in the bullet above cannot save you here,
+  because by then you are checking the wrong tree.
+- **A fresh worktree is missing TWO paths outside itself, and both are now
+  found for you.** Agent worktrees live under `.claude/worktrees/`, so nothing
+  relative to `..` resolves.
+  - `third_party/spandsp` is gitignored, so `git worktree add` does not bring
+    it and the interop tier cannot link. That failed at the top of a 1,573-line
+    log everybody read the tail of, so `make phase` gained a `prereq` target
+    that runs FIRST, refuses if the library is absent, and symlinks the main
+    tree's copy when it can find one (finding 1563).
+  - `BLOB ?= ../slmodemd/dsplibs.o` pointed at `.claude/worktrees/slmodemd` and
+    every run died at `No rule to make target`. Loud, so not the same class of
+    bug, but it blocked every worktree run until someone passed `BLOB=/abs/…`.
+    The default is now resolved through `git rev-parse --git-common-dir` —
+    the main repository's `.git` seen from inside any worktree, the same trick
+    `prereq` uses. `make -s print-BLOB` says what it resolved to, and an
+    explicit `BLOB=` still wins.
+
+  What neither of them was is a reason to distrust a worktree's gate. That was
+  finding 3100, and it was a branch difference and not a worktree one: the
+  coverage tiers had stopped measuring on `master` and would have measured
+  nothing in the main tree too, the moment it checked `master` out.

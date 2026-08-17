@@ -16,18 +16,18 @@
  },
  {
   "label": "allocate the coefficient banks at the constellation size",
-  "find": "\tp->filterCoefficients[1] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);",
-  "replace": "\tp->filterCoefficients[1] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);"
+  "find": "\tp->p1 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);",
+  "replace": "\tp->p1 = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);"
  },
  {
   "label": "drop the fourth coefficient bank",
-  "find": "\tp->filterCoefficients[3] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
+  "find": "\tp->p2 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
   "replace": "}"
  },
  {
   "label": "add a fifth coefficient bank the object does not allocate",
-  "find": "\tp->filterCoefficients[3] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
-  "replace": "\tp->filterCoefficients[3] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n\tp->constellations[0] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}"
+  "find": "\tp->p2 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}",
+  "replace": "\tp->p2 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n\tp->constellations[0] = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);\n}"
  },
  {
   "label": "null the constellation slot after freeing it",
@@ -36,8 +36,8 @@
  },
  {
   "label": "null every coefficient slot after freeing it",
-  "find": "\tif (p->filterCoefficients[2] != 0)\n\t\tsysdep_free(p->filterCoefficients[2]);",
-  "replace": "\tif (p->filterCoefficients[2] != 0)\n\t\tsysdep_free(p->filterCoefficients[2]);\n\tp->filterCoefficients[2] = 0;"
+  "find": "\tif (p->z2 != 0)\n\t\tsysdep_free(p->z2);",
+  "replace": "\tif (p->z2 != 0)\n\t\tsysdep_free(p->z2);\n\tp->z2 = 0;"
  },
  {
   "label": "delegate the null test to the allocator",
@@ -51,7 +51,7 @@
  },
  {
   "label": "free the third coefficient bank twice and the fourth never",
-  "find": "\tif (p->filterCoefficients[3] != 0)\n\t\tsysdep_free(p->filterCoefficients[3]);",
-  "replace": "\tif (p->filterCoefficients[2] != 0)\n\t\tsysdep_free(p->filterCoefficients[2]);"
+  "find": "\tif (p->p2 != 0)\n\t\tsysdep_free(p->p2);",
+  "replace": "\tif (p->z2 != 0)\n\t\tsysdep_free(p->z2);"
  }
 ]

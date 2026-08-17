@@ -1,0 +1,110 @@
+PRE-REGISTRATION -- VG204 output attenuation on port 0/1 (ext 1902, USR Courier)
+Written 2026-08-16, after the config change was applied but BEFORE any call.
+
+THE CHANGE UNDER TEST
+  `voice-port 0/1 / output attenuation 3` on the Cisco VG204.  Nothing else on
+  the gateway changed; ports 0/0 (1901 Supra) and 0/2 (1903 Oli'Net) are
+  untouched and serve as controls.  No code change, no rebuild.
+
+WHY, in one line
+  Finding 1965: the far ends can only ask us to go QUIETER -- V.34's power
+  fields are unsigned reduction-only -- and all three ask on 328 of 330
+  handshakes.  Finding 1966: we comply by dropping our DIGITAL level away from
+  the centre of G.711's ~24 dB companding plateau.  Attenuating the ATA's
+  ANALOG output instead should make the far end stop asking, letting our
+  digital level stay centred.
+
+*** THE BASELINE SLOT WAS MISSED, AND THIS IS STATED UP FRONT ***
+
+  The intended design was a matched before/after pair.  The config was applied
+  before the "before" call was placed, so no same-session baseline exists.
+  This run is therefore ARCHIVE-REFERENCED: the comparison is against the 118
+  captures already in /mnt/zfs/.../captures, taken with port 0/1 at the IOS
+  default (no `output attenuation` line was present in the running config, so
+  every archived 1902 call was at the default).
+
+  That is a weaker design and the write-up must say so.  What rescues it is
+  that the primary outcome is exceptionally stable across the archive (see
+  below) and is a property of the FAR END's receiver, not of our build.
+
+PRIMARY OUTCOME
+  The Courier's requested power reduction, from
+  `V34TXSCALE, power reduction requested by remote modem is %d dB`.
+
+  Archived distribution for 1902, over every capture carrying the line:
+      3 dB x65    6 dB x51    9 dB x5      -- and NEVER below 3.
+  Across many different builds, dates and flag settings.  That stability is
+  what makes n=1 adequate here: the quantity is near-deterministic per far end.
+
+  PREDICTION IF THE MECHANISM IS REAL: the request falls BELOW 3 dB, ideally
+  to 0-1.  We now deliver 3 dB less analog level, and the Courier previously
+  demanded at least 3.
+  PREDICTION IF IT IS NOT: the request stays at 3 or 6, which would mean the
+  value is a fixed policy of the Courier rather than a measurement of our
+  level -- and would falsify the whole rationale for touching the ATA.
+
+SECONDARY
+  Our transmit RMS in dBFS, from `g711level.py request`.  Expected to RISE by
+  about 0.42x whatever the request falls by (the measured slope, finding 1967)
+  -- so a 3 dB fall predicts roughly +1.3 dB.  NOT expected to reach +3.
+
+CONTROL
+  One call to 1901 (Supra, port 0/0, untouched) in the same session on the same
+  binary.  Its archived distribution is 1 dB x65, 2 dB x86, 3 dB x2, 6 dB x1.
+  If 1901 also moves, something other than the gateway change did it and the
+  1902 result cannot be attributed.
+
+WHAT IS **NOT** AN OUTCOME
+  The connect rate.  Finding 1966 measured the whole prize at a few tenths of a
+  dB of SNR, and this bench's call-to-call rate spread is thousands of bits per
+  second.  A rate difference here is noise whichever way it points, and quoting
+  one would repeat the mistake of 1955.
+
+CONDITIONS
+  Binary: claude_re/build/hybrid-fit/slmodemd-fit, the same path the archived
+  ab149 1902 baselines used.  Default flags.  HOLD=60.
+  Machine must be quiet FIRST: a neighbouring agent's `make` was running three
+  test binaries at 100% when this was written.  Transmit dropouts would lower
+  the level the far end perceives and make it ask for LESS reduction -- a false
+  positive for the hypothesis under test, which is the worst possible
+  confound.  Calls wait for the build to finish.
+
+===========================================================================
+ADDENDUM -- ARM 2, written 2026-08-16 after arm 1 was found to be a no-op and
+BEFORE any call of this arm.
+
+WHAT CHANGED
+  voice-port 0/1 `output attenuation` 3 -> 12, confirmed by Phil in
+  `show running-config all`.  3 was the platform DEFAULT, so arm 1 changed
+  nothing; this is the first arm that actually moves the gateway.  The step is
+  +9 dB of attenuation, i.e. the Courier should hear us 9 dB quieter.
+
+PRIMARY, and it is now a DIFFERENT QUESTION FROM ARM 1
+  ATI11 `Recv/Xmit Level (-dB)`, first figure -- the Courier's own measurement
+  of the level arriving at it.  Arm 1 read 20, 20, 25 across three calls, so
+  the spread is ~5 dB and a 9 dB step clears it.
+
+  THIS ARM TESTS WHETHER THE KNOB WORKS AT ALL, not whether the theory is
+  right.  Those were conflated in arm 1 and that was a mistake.
+    PREDICT: Recv Level moves to roughly 29 (i.e. -29 dBm), +/- the 5 dB spread.
+    IF IT DOES NOT MOVE: the command is not reaching the audio path, and every
+    conclusion about ATA gain on this bench is unfounded until that is fixed.
+
+SECONDARY -- only meaningful if the primary moves
+  The Courier's requested power reduction.  Archived and arm-1: 3/6/9, never
+  below 3.  Nine dB quieter should remove the reason to ask.
+    PREDICT: falls to 0-1.
+  Our transmit RMS should RISE as we stop applying the reduction.
+    PREDICT: from ~-24.3 dBFS toward ~-23 dBFS.  Not more: finding 1967
+    measured only 0.42 dB of level per dB of request.
+
+WATCH FOR OVER-ATTENUATION, which is a real risk and not a nuisance
+  The Courier currently RECEIVES us at 28800 -- the healthy direction.  Nine dB
+  quieter may cost it.  If its receive rate falls below 28800, we have
+  over-attenuated, and per finding 1965 V.34 gives it NO way to ask for more.
+  Record it as a result, not as a failed run: it would bound how much headroom
+  the us->Courier direction actually had.
+
+N = 3 calls to 1902.  No control this time: the primary is a within-arm
+comparison against arm 1's three calls on the same port, same binary, same
+night.  1901 was already shown unmoved.

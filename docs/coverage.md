@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [###################...............]  54.6%    400828 bytes, 937 symbols
-  tested      [##################################] 100.0%    400805 bytes, 930 of 937 that can be
+  translated  [#####################.............]  60.6%    444932 bytes, 1004 symbols
+  tested      [##################################] 100.0%    444909 bytes, 997 of 1004 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -86,16 +86,16 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    VPcmV34Main.cpp +72                           136955 bytes   323 symbols
-    class1tx.c +94                                 84164 bytes   317 symbols
-    V32mod.c +39                                   44118 bytes    88 symbols
-    Dialer.c +18                                   14602 bytes    46 symbols
+    VPcmV34Main.cpp +72                           112429 bytes   299 symbols
+    class1tx.c +94                                 76235 bytes   308 symbols
+    V32mod.c +39                                   37698 bytes    76 symbols
+    Dialer.c +18                                   11368 bytes    41 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
     Fdspkrnl.c +13                                  7635 bytes    29 symbols
     Beepgen.c +3                                    6546 bytes    27 symbols
     class1.c                                        4626 bytes    14 symbols
-    b103.c +2                                       4471 bytes    24 symbols
     class1rx.c                                      2495 bytes     5 symbols
+    b103.c +2                                       2476 bytes     7 symbols
     v32.c                                           1691 bytes     5 symbols
     dp_init.c +2                                    1452 bytes     9 symbols
 ```

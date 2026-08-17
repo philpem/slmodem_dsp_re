@@ -15,9 +15,22 @@
  *
  * Forty phases, and each output advances the phase by `cfg.step + 3`.  A
  * wrap past 39 is what consumes a symbol, so the outputs per symbol are
- * 40 / (step + 3).  `PPSv22_CFG` is sixteen bytes of zero and nothing in the
- * object ever gives `step` a value, so the step is 3 and the ratio is
- * 40 / 3 = 13.33 outputs per symbol -- 600 baud at 8000 samples/s.
+ * 40 / (step + 3).  `PPSv22_CFG` is sixteen bytes of zero, so `step` starts
+ * at zero and the ratio starts at 40 / 3 = 13.33 outputs per symbol -- 600
+ * baud at 8000 samples/s.
+ *
+ * **IT DOES NOT STAY THERE, AND THE SENTENCE THAT USED TO BE HERE -- THAT
+ * NOTHING IN THE OBJECT EVER GIVES `step` A VALUE -- IS WRONG.**
+ * `V22FP_create` calls `V22_PPS_init` on `fp + 0x78` (0x87ea1: `mov
+ * 0x54(%ebp),%ebx ; add $0x78,%ebx`), and `TxClockSync` stores three times
+ * the field at `fp + 0x12a` to that same address.  The state begins with the
+ * configuration, so that store lands on `cfg.step`.  Finding 3505.
+ *
+ * Nothing measured changes: `V22_PPS_STEP` is still the constant 3 the phase
+ * update adds, and no test drives `TxClockSync` and the filter together.  What
+ * changes is the standing of the 600-baud ratio -- it holds while `fp + 0x12a`
+ * is zero and is a derivation about one state of the modem rather than about
+ * the block.
  *
  * ---------------------------------------------------------------------------
  * THE SAME FAMILY SHAPE AS `fpm_mrf` AND `v22_mrf`

@@ -418,6 +418,28 @@ static void seed_rate_pointers(void);
  */
 static unsigned probe_rng;
 
+/*
+ * The outgoing MP message `probeselect` builds: ten shorts at +0xa9ac, which
+ * is `msg[0..9]` in the source.  Named here because two checks below poke at
+ * it rather than only comparing it.
+ */
+#define PROBE_MSG_OFF	0xa9ac
+#define PROBE_MSG_LEN	20
+
+/*
+ * What the message buffer holds BEFORE `probeselect` runs.
+ *
+ * -1 leaves whatever `setup()` filled the object with, which is what every
+ * existing sweep wants.  0..255 overwrites the ten shorts on both sides, so a
+ * run can be repeated with a different prior content and the two outputs
+ * compared -- which is the only way to ask whether any field of the message
+ * is left carrying what was already there.  1976 on `improve/v34-training`
+ * turned on that question and could not answer it by reading.  Cited by
+ * number and branch rather than as a `finding`, because it is not in this
+ * branch's `docs/findings.md` and refcheck would call the reference dangling.
+ */
+static int probe_msg_fill = -1;
+
 static unsigned
 probe_next(void)
 {
@@ -560,6 +582,12 @@ run_probeselect(unsigned seed, int spread, long tag)
 
 	poke_short(0x359a, (short)((probe_next() & 3) == 0 ? 1 : 0));
 	poke_short(0x359c, (short)((probe_next() & 1) ? 0x65 : 0x11));
+
+	if (probe_msg_fill >= 0) {
+		memset((unsigned char *)&oa + PROBE_MSG_OFF,
+		       probe_msg_fill, PROBE_MSG_LEN);
+		memset(ob + PROBE_MSG_OFF, probe_msg_fill, PROBE_MSG_LEN);
+	}
 
 	probeselect(&oa);
 	ref_probeselect(ob);
@@ -2571,6 +2599,53 @@ main(void)
 	{
 		unsigned lvl, n;
 		long tag = 80000;
+		/*
+		 * WHICH LINES THE REFERENCE WAS SEEN TO PRINT, accumulated
+		 * over the whole sweep and asserted once at the end.
+		 *
+		 * `strcmp` catches a wrong line only on a path the sweep
+		 * actually reaches, so "the transcripts matched" is a claim
+		 * about the paths taken and says nothing about the rest.  The
+		 * "asking ... of 9" arm is why this exists: our source reaches
+		 * that printf from `probe_ask(rx, msg, 7, 2, 9)` while the
+		 * object has no site with a literal 9 -- GCC cross-jumped it
+		 * onto the tail the ordinary arm's variable request uses, so
+		 * the blob has two "asking" sites where our source has three
+		 * expansions.  That reconciles 43 against 44 (finding 2601),
+		 * and it is only true if the arm is REACHED.  If it ever stops
+		 * being reached this check fails rather than the count quietly
+		 * becoming an assumption again.
+		 */
+		static const struct {
+			const char *text;
+			unsigned bit;
+		} want[] = {
+			{ "asking for a power reduction of 9\n",	0x01 },
+			{ "asking for a power reduction of 7\n",	0x02 },
+			{ "index is 10, baudrate=",		0x04 },
+			{ "V34PROBE,0=",			0x08 },
+			{ "mechanism enabled!",			0x10 },
+			{ "mechanism disabled!",		0x20 },
+			{ "not asking for power reduction",	0x40 }
+		};
+		/*
+		 * AND THE ONE THAT MUST NEVER APPEAR.  `probe_preemph` has a
+		 * `return 0` arm that prints `- index is 0`, and D53 is the
+		 * claim that it is DEAD: the counter is advanced before the
+		 * test and never after it, so `i == 5` cannot hold.  That was
+		 * read off the object's instruction order; this asserts it of
+		 * the OBJECT AT RUNTIME, which nothing had done.  The object
+		 * carries ten copies of the string and prints none of them.
+		 *
+		 * It is asserted rather than dropped because the interesting
+		 * failure is in the other direction: a reconstruction that
+		 * "fixed" the counter would start printing it, and every
+		 * pre-emphasis index would shift down one.  Findings 1477 and
+		 * 1901 measured that variant and rejected it.
+		 */
+		static const char dead[] = "index is 0, baudrate=";
+		unsigned seen = 0;
+		unsigned saw_dead = 0;
 
 		dsplib_debug_capture_on = 1;
 
@@ -2579,6 +2654,8 @@ main(void)
 			ref_dsplibs_debug_level = lvl;
 
 			for (n = 0; n < 150; n++) {
+				unsigned w;
+
 				dsplib_debug_capture_reset();
 				run_probeselect(0x9e3779b9u + n * 40503u,
 						(int)(3 + n % 12), tag);
@@ -2589,13 +2666,122 @@ main(void)
 				diff_eq_int("and it said something",
 					    dsplib_debug_capture_text(1)[0]
 					    != 0, 1, tag);
+				for (w = 0; w < sizeof(want) / sizeof(want[0]);
+				     w++)
+					if (strstr(dsplib_debug_capture_text(1),
+						   want[w].text))
+						seen |= want[w].bit;
+				if (strstr(dsplib_debug_capture_text(0), dead)
+				    || strstr(dsplib_debug_capture_text(1),
+					      dead))
+					saw_dead++;
 				tag++;
 			}
+		}
+
+		/*
+		 * Named one at a time, so a failure says WHICH line was never
+		 * reached rather than only that the mask was short.
+		 */
+		{
+			unsigned w;
+
+			for (w = 0; w < sizeof(want) / sizeof(want[0]); w++)
+				diff_eq_int("the reference was seen to print "
+					    "this line", (seen & want[w].bit)
+					    != 0, 1, (long)w);
+			diff_eq_int("and neither side ever reached the dead "
+				    "index-0 arm (D53)", (int)saw_dead, 0, 0);
 		}
 
 		dsplib_debug_capture_on = 0;
 		dsplibs_debug_level = 0;
 		ref_dsplibs_debug_level = 0;
+	}
+	rc |= diff_end();
+
+	/*
+	 * --- and what the message does NOT carry --------------------------
+	 *
+	 * 1976 on `improve/v34-training` left two possibilities open and
+	 * could not choose between them by reading: the trellis code, the
+	 * non-linear-encoder bit and the shaping bit are either written
+	 * somewhere else, or never written at all -- in which case they would
+	 * go out carrying whatever
+	 * the buffer already held, and a weak trellis choice would be
+	 * uninitialised state rather than a decision.
+	 *
+	 * THE SAME RUN, TWICE, OVER TWO DIFFERENT PRIOR CONTENTS.  Every
+	 * input is reproduced exactly (the generator is seeded per run), only
+	 * the ten shorts at +0xa9ac differ before the call, and the message
+	 * afterwards is compared.  If any field were left carrying what was
+	 * there, the two runs would differ in it.  Driven on the REFERENCE
+	 * side as well as ours, because the claim being tested is about the
+	 * object's behaviour and not about the reconstruction's.
+	 */
+	diff_begin("v34 handshake: probeselect's message does not inherit the "
+		   "buffer");
+	{
+		unsigned n;
+		long tag = 90000;
+		unsigned char ever_set[PROBE_MSG_LEN];
+
+		memset(ever_set, 0, sizeof(ever_set));
+
+		for (n = 0; n < 150; n++) {
+			unsigned char zero_a[PROBE_MSG_LEN];
+			unsigned char zero_b[PROBE_MSG_LEN];
+			unsigned char ones_a[PROBE_MSG_LEN];
+			unsigned char ones_b[PROBE_MSG_LEN];
+			unsigned seed = 0x9e3779b9u + n * 40503u;
+			int spread = (int)(3 + n % 12);
+			unsigned i;
+
+			probe_msg_fill = 0x00;
+			run_probeselect(seed, spread, tag);
+			memcpy(zero_a, (unsigned char *)&oa + PROBE_MSG_OFF,
+			       PROBE_MSG_LEN);
+			memcpy(zero_b, ob + PROBE_MSG_OFF, PROBE_MSG_LEN);
+
+			probe_msg_fill = 0xff;
+			run_probeselect(seed, spread, tag);
+			memcpy(ones_a, (unsigned char *)&oa + PROBE_MSG_OFF,
+			       PROBE_MSG_LEN);
+			memcpy(ones_b, ob + PROBE_MSG_OFF, PROBE_MSG_LEN);
+
+			probe_msg_fill = -1;
+
+			diff_eq_int("the object's message is the same whatever "
+				    "the buffer held",
+				    memcmp(zero_b, ones_b, PROBE_MSG_LEN) == 0,
+				    1, tag);
+			diff_eq_int("and ours is too",
+				    memcmp(zero_a, ones_a, PROBE_MSG_LEN) == 0,
+				    1, tag);
+
+			/*
+			 * Which bits the object was EVER seen to set, from an
+			 * all-zero start.  A bit outside this union was not
+			 * set by any of the hundred and fifty runs, which is
+			 * what "never written" has to mean when it is measured
+			 * rather than proved.
+			 */
+			for (i = 0; i < PROBE_MSG_LEN; i++)
+				ever_set[i] |= zero_b[i];
+			tag++;
+		}
+
+		if (getenv("PROBEMSG")) {
+			unsigned i;
+
+			printf("=== bits probeselect was ever seen to set, "
+			       "+0xa9ac..+0xa9bf\n");
+			for (i = 0; i < PROBE_MSG_LEN; i++)
+				printf("  +0x%04x  msg[%u].%s  0x%02x\n",
+				       PROBE_MSG_OFF + i, i / 2,
+				       (i & 1) ? "hi" : "lo",
+				       (unsigned)ever_set[i]);
+		}
 	}
 	rc |= diff_end();
 

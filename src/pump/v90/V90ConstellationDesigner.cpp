@@ -50,6 +50,22 @@ extern "C" {
  * would throw that away.
  */
 #include "dsplib/V90Parameters.h"
+/*
+ * `adjustConstellationsPower` and `adjustConstellationsToNewK` call
+ * `V90ConstellationPower::getPower` and `::getPowerIndexForPower` and read its
+ * static `averagePowerLimits`, so the definition is needed and not a forward
+ * declaration.  It pulls in `V90Phase3Modulator.h` for `PcmType`, which is the
+ * type `getPower`'s mangling names; neither reaches `V90PreFilter.h`, so the
+ * 0x504 word-block definition of `V90Parameters` stays out of this translation
+ * unit and finding 1112's rule holds.
+ */
+#include "dsplib/V90ConstellationPower.h"
+/*
+ * `process` reads two fields of the detector it is handed (+0xa95c and
+ * +0xa960) and points `constelTable` at a third (`linMapp`, at offset 0), so
+ * this one is needed whole too.  It forward-declares `V90Parameters`.
+ */
+#include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/V90ConstellationDesigner.h"
 
 /*
@@ -81,6 +97,8 @@ V90CD_OFF(short_10,  0x10, short10);
 V90CD_OFF(word_24,   0x24, word24);
 V90CD_OFF(power,     0x30, power);
 V90CD_OFF(byte_38,   0x38, byte38);
+V90CD_OFF(codecType, 0x3c, codectype);
+V90CD_OFF(word_40,   0x40, word40);
 V90CD_OFF(preFilter, 0x44, prefilter);
 V90CD_OFF(word_48,   0x48, word48);
 V90CD_OFF(maxRate, 0x4c, maxrate);
@@ -197,6 +215,30 @@ x87_log10(long double x)
 	long double r;
 
 	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
+	return r;
+}
+
+/*
+ * FSQRT on the value already in st(0), for the three "sqrt(power)"
+ * diagnostics, and NOT `__builtin_sqrt`.
+ *
+ * The object's is a bare `fsqrt` with no branch and no call: one instruction
+ * between the `flds` of the power and the `fld %st(0)` that duplicates the
+ * root.  `sqrtf()` under `-fmath-errno` -- which these flags are -- is a libm
+ * call that has to test for a negative argument first, so it would be a
+ * different instruction sequence AND a different value on a negative input,
+ * where `fsqrt` returns the indefinite NaN and libm sets errno.
+ *
+ * SAME ASM, SAME REASON, as `v92mapper_fsqrt` in src/pump/v90/V92Mapper.cpp
+ * and `agc_fsqrt` in include/dsplib/Agc.h; this is the third copy and it is
+ * deliberate for the reason `x87_log10`'s third copy is.
+ */
+static inline long double
+x87_fsqrt(long double x)
+{
+	long double r;
+
+	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
 	return r;
 }
 
@@ -1007,9 +1049,14 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 
 	/*
 	 * The fixed-point printer, four times over and inline each time.  The
-	 * sign is `sbb %ecx,%ecx; and $-2,%ecx; add $0x2d,%ecx` off an
-	 * ORDERED compare of 0.0f against the value, so it is '+' only when
-	 * the value is strictly positive and '-' at zero.  The magnitude is
+	 * sign is `sbb %ecx,%ecx; and $-2,%ecx; add $0x2d,%ecx` off an ORDERED
+	 * compare with 0.0f in %st(0) -- `0x2d - 2*CF`, and no branch, so the
+	 * TRUE arm has to be the CF one and the spelling is `!(0.0f >= v)`.
+	 * FCOM sets CF for less-than AND for unordered, so it is '+' for a
+	 * strictly positive value AND for an unordered one, and '-' at zero.
+	 * The unordered half is what `(0.0f < v)` got wrong; the seed on the
+	 * threshold-keeping arms of t_v90cdnoise.cpp's `ctn_fixture` is what
+	 * proves it.  Findings 2300 and 2410.  The magnitude is
 	 * `(int)fabs`, and the hundredths come off the SIGNED remainder and
 	 * are made positive with `__builtin_abs` (findings 2116-2117) rather
 	 * than with a ternary.
@@ -1023,7 +1070,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V90ConstellationDesigner: noiseEnergy = %c%d.%02d\r\n",
-		    (0.0f < noiseEnergy) ? '+' : '-',
+		    !(0.0f >= noiseEnergy) ? '+' : '-',
 		    (int)__builtin_fabsf(noiseEnergy),
 		    __builtin_abs((int)((noiseEnergy
 					 - (float)(int)noiseEnergy) * 100.0f)));
@@ -1163,17 +1210,20 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		 params->USE_RESTRICED_DMIN);
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp ="
 		 " %c%d.%02d\r\n",
-		 (0.0f < float_18) ? '+' : '-', (int)__builtin_fabsf(float_18),
+		 !(0.0f >= float_18) ? '+' : '-',
+		 (int)__builtin_fabsf(float_18),
 		 __builtin_abs((int)((float_18 - (float)(int)float_18)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateDown ="
 		 " %c%d.%02d\r\n",
-		 (0.0f < float_1c) ? '+' : '-', (int)__builtin_fabsf(float_1c),
+		 !(0.0f >= float_1c) ? '+' : '-',
+		 (int)__builtin_fabsf(float_1c),
 		 __builtin_abs((int)((float_1c - (float)(int)float_1c)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRetrain ="
 		 " %c%d.%02d\r\n",
-		 (0.0f < float_20) ? '+' : '-', (int)__builtin_fabsf(float_20),
+		 !(0.0f >= float_20) ? '+' : '-',
+		 (int)__builtin_fabsf(float_20),
 		 __builtin_abs((int)((float_20 - (float)(int)float_20)
 				     * 100.0)));
 
@@ -1911,3 +1961,822 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 }
 
 #undef FORCERATE_ENCODE
+
+/*
+ * ===========================================================================
+ * The four that close the class
+ * ===========================================================================
+ *
+ * `adjustConstellationsPower`, `adjustConstellationsToNewK`,
+ * `constellationDesign` and `process`, 8,869 bytes, all of which reach
+ * `V90ConstellationPower` -- which is why they waited for it.
+ *
+ * FIVE OF THE ELEVEN LEAVES ARE INLINED INTO THEM, and that is what most of
+ * the bulk is: `maxK` appears nine times over the four, `realK` six,
+ * `findMinValueIndex` and `findConstelMaxValueIndex` once each and
+ * `reconstructInitialConditions` once.  Each is written below as the member
+ * call it is; whether GCC inlines it is a codegen question and not a
+ * behavioural one, and the differential test is over behaviour.  The evidence
+ * that they ARE those members and not lookalikes is the constant each block
+ * ends on -- `maxK` adds 1e-6f and truncates through `fistpll`, `realK` adds
+ * 1e-9f and stays a float -- and, for the two index searches and the
+ * reconstruction, an instruction-for-instruction match with the bodies above.
+ *
+ * THE FIXED-POINT PRINTER APPEARS SEVEN MORE TIMES.  Its shape and the
+ * argument for `!(0.0f >= v)` rather than `(0.0f < v)` are in the comment
+ * above `setConstellationToNoise`'s four; only the scale changes -- 1000.0f
+ * for a sqrt, 10.0f for a dBm0 tenth, 100000.0f for a K.
+ *
+ * AND THE SIGN OF A SQRT IS TAKEN FROM ITS ARGUMENT.  All three "sqrt(power)"
+ * diagnostics compare 0.0f against the POWER (`fcomps` of the stored float)
+ * and take the magnitude and the fraction from its root.  That is what the
+ * object does at 0x4ae74, 0x4b290 and 0x4c1b8, and it is reproduced rather
+ * than tidied: the two agree for every non-negative power and the object's
+ * choice is the measurement.
+ */
+
+/*
+ * adjustConstellationsPower -- drop constellation points until the frame's
+ * average power is at or under the ladder entry `byte_38` selects.
+ *
+ * The ladder index the design is aiming at is `byte_38` clamped to 22, which
+ * is also what the constructor seeds it with, and the target power is
+ * `V90ConstellationPower::averagePowerLimits[target]` converted as UNSIGNED
+ * (`push $0; push val; fildll`, the idiom that header's finding measures).
+ *
+ * HOW MANY POINTS ONE ROUND REMOVES is a three-way choice on how far the
+ * current index is from the target, overridden to one whenever `byte_08` is
+ * above 13.  The two comparisons are `ja` and a `sbb`/`and $-9`/`add $10`
+ * pair, so both are UNSIGNED and the arms are 1, 10 and 20.
+ *
+ * THE LOOP CONDITION IS EVALUATED BEFORE THE LOOP AND AGAIN AT ITS FOOT --
+ * GCC's rotation -- and the two copies are not the same: the entry copy tests
+ * only the power, because `more` is provably 1 there and the conjunct folds
+ * away.  Written below as one `while` over a power the body recomputes.
+ *
+ * TWO WAYS OUT BESIDES THE CONDITION.  A constellation that reaches length
+ * zero puts the point back, clears `more` and leaves the removal loop; a `d`
+ * that falls below 21 restores the last point removed and leaves both loops.
+ */
+void
+V90ConstellationDesigner::adjustConstellationsPower()
+{
+	unsigned char savedPoint = 0;
+	unsigned char savedCodec = 0;
+	int removed = 0;
+	short more = 1;
+	unsigned int index;
+	unsigned int target;
+	unsigned int delta;
+	unsigned int maxIndex;
+	float first;
+	float targetPower;
+	float p;
+	float dBm0;
+
+	mappingParams->word_0 = maxK(mappingParams)
+			        - mappingParams->shaperSR + 6;
+
+	first = power->getPower(mappingParams,
+				V90_TX_POWER_OVER_CODEC_CONSTELLATION,
+				(PcmType)word_2c);
+	index = power->getPowerIndexForPower(first);
+
+	edprintf("--------------------------------------\r\n");
+	edprintf("V90ConstellationDesigner:\r\n");
+	edprintf("V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\r\n",
+		 !(0.0f >= first) ? '+' : '-',
+		 (int)__builtin_fabsl(x87_fsqrt((long double)first)),
+		 __builtin_abs((int)((x87_fsqrt((long double)first)
+				      - (long double)(int)x87_fsqrt(
+						(long double)first))
+				     * 1000.0f)));
+
+	dBm0 = (index + 1) * -0.5f;
+	edprintf("V90ConstellationDesigner: initial index %d, "
+		 "power in dBm0  = %c%d.%01d\r\n",
+		 index,
+		 !(0.0f >= dBm0) ? '+' : '-',
+		 (int)__builtin_fabsf(dBm0),
+		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
+
+	/*
+	 * `cmp $0x15,%al; ja` over a `movzbl` of the byte, so the bound is 21
+	 * and the fallback is the constructor's own 22.
+	 */
+	target = (byte_38 <= 21) ? byte_38 : 22;
+	targetPower = (float)V90ConstellationPower::averagePowerLimits[target];
+	delta = target - index;
+
+	p = power->getPower(mappingParams,
+			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
+			    (PcmType)word_2c);
+
+	while (p > targetPower && more != 0) {
+		int count;
+		unsigned int j;
+
+		count = 20;
+		if (delta <= 7)
+			count = (delta < 4) ? 1 : 10;
+		if (byte_08 > 13)
+			count = 1;
+
+		while (count != 0) {
+			maxIndex = findConstelMaxValueIndex(mappingParams);
+			if (--mappingParams->constellationSize[maxIndex] == 0) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90ConnectionDesigner: adjust"
+					    "ConstellationPower - BUG !!! "
+					    "reached constellation length "
+					    "0!!!\n");
+				more = 0;
+				mappingParams->constellationSize[maxIndex]++;
+				break;
+			}
+
+			savedCodec =
+			    mappingParams->codecConstellation[maxIndex][0];
+			savedPoint = mappingParams->constellation[maxIndex][0];
+
+			for (j = 0;
+			     j < mappingParams->constellationSize[maxIndex];
+			     j++) {
+				mappingParams->codecConstellation[maxIndex][j] =
+				    mappingParams
+					->codecConstellation[maxIndex][j + 1];
+				mappingParams->constellation[maxIndex][j] =
+				    mappingParams->constellation[maxIndex][j + 1];
+			}
+
+			removed++;
+			count--;
+		}
+
+		mappingParams->word_0 = maxK(mappingParams)
+					- mappingParams->shaperSR + 6;
+
+		/*
+		 * `cmpl $0x14,%eax; jbe`, so the floor is 21 -- the constant
+		 * the diagnostic itself calls V90_MIN_D_IN_DATA.
+		 */
+		if (mappingParams->word_0 <= 20) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V90ConstellationDesigner::adjust"
+				    "ConstellationsPower (pParams->d=%d)"
+				    "<V90_MIN_D_IN_DATA\n",
+				    mappingParams->word_0);
+
+			if (removed != 0) {
+				unsigned int n;
+
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90ConstellationDesigner::adjust"
+					    "ConstellationsPower restoring "
+					    "last removed point\n");
+
+				n = ++mappingParams
+					->constellationSize[maxIndex];
+				for (j = n; j != 0; j--) {
+					mappingParams
+					    ->codecConstellation[maxIndex][j] =
+					    mappingParams
+						->codecConstellation[maxIndex]
+								    [j - 1];
+					mappingParams
+					    ->constellation[maxIndex][j] =
+					    mappingParams
+						->constellation[maxIndex][j - 1];
+				}
+				mappingParams
+				    ->codecConstellation[maxIndex][0] =
+				    savedCodec;
+				mappingParams->constellation[maxIndex][0] =
+				    savedPoint;
+				removed--;
+
+				mappingParams->word_0 = maxK(mappingParams)
+					- mappingParams->shaperSR + 6;
+			}
+			break;
+		}
+
+		p = power->getPower(mappingParams,
+				    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
+				    (PcmType)word_2c);
+		index = power->getPowerIndexForPower(p);
+		delta = target - index;
+	}
+
+	p = power->getPower(mappingParams,
+			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
+			    (PcmType)word_2c);
+	index = power->getPowerIndexForPower(p);
+
+	edprintf("V90ConstellationDesigner: nof points removed %d, "
+		 "new sqrt(power)  = %c%d.%03d\r\n",
+		 removed,
+		 !(0.0f >= p) ? '+' : '-',
+		 (int)__builtin_fabsl(x87_fsqrt((long double)p)),
+		 __builtin_abs((int)((x87_fsqrt((long double)p)
+				      - (long double)(int)x87_fsqrt(
+						(long double)p))
+				     * 1000.0f)));
+
+	dBm0 = (index + 1) * -0.5f;
+	edprintf("V90ConstellationDesigner: final index %d, "
+		 "final power in dBm0  = %c%d.%01d\r\n",
+		 index,
+		 !(0.0f >= dBm0) ? '+' : '-',
+		 (int)__builtin_fabsf(dBm0),
+		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
+
+	edprintf("--------------------------------------\r\n");
+}
+
+/*
+ * adjustConstellationsToNewK -- move the constellations to the nearest whole
+ * K, upwards by adding points if the fractional part is large enough and
+ * downwards by removing them otherwise.
+ *
+ * WHICH DIRECTION is decided once, by `realK(mp) - maxK(mp)` against the
+ * parameter block's `UP_ROUND_K`: above it the function ADDS points until K
+ * reaches `maxK + 1`, and then falls into the removal pass anyway; at or below
+ * it, only the removal pass runs.  `again` is what carries that -- it starts
+ * at 1, the add pass clears it, and the failure path sets it back -- so the
+ * removal pass runs unless a successful add pass has already happened.
+ *
+ * THE TWO SEARCHES FOR THE POINT TO ADD are chosen by `dmin[k]`.  With a
+ * non-zero dmin the scan runs to 113 and stops at the first code whose ucode
+ * clears BOTH `ucode[k][u0] + short_10` and `alt[k][u0] + short_10`; with a
+ * zero dmin it runs to 127 and stops at the first that clears
+ * `ucode[k][u0] + short_0a`.  Both bounds are the byte's own: `cmp $0x71,%bl;
+ * ja` for the first and a sign test on the byte -- which is `u < 128` on an
+ * `unsigned char` -- for the second.
+ *
+ * THE FOURTH ARGUMENT IS NEVER READ.  `0xe0(%esp)` appears nowhere in the
+ * 4,887 bytes; it is named and left unused here, and the test asserts the
+ * buffer behind it is untouched.
+ *
+ * THE `goto` IS THE OBJECT'S SHAPE.  Both failure exits from the add pass
+ * jump PAST its closing diagnostic and into the removal pass, which is two
+ * levels of loop and a skipped statement -- a flag would be a different
+ * program with the same result, and the label says what the object does.
+ */
+void
+V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
+						     short (*alt)[128],
+						     short *dmin,
+						     unsigned char (*)[128])
+{
+	unsigned char firstPoint[V90_CONSTELLATIONS];
+	unsigned char savedPoint = 0;
+	unsigned char savedCodec = 0;
+	unsigned char added = 0;
+	unsigned char again = 1;
+	int removed = 0;
+	unsigned int startK;
+	unsigned int currentK;
+	unsigned int targetK;
+	unsigned int rrn;
+	unsigned int minIndex;
+	unsigned int maxIndex;
+	unsigned int index;
+	unsigned int j;
+	float beforeK;
+	float p;
+	float dBm0;
+
+	startK = maxK(mappingParams);
+	currentK = maxK(mappingParams);
+
+	mappingParams->word_0 = startK - mappingParams->shaperSR + 6;
+
+	beforeK = realK(mappingParams);
+
+	/*
+	 * The index is COMPUTED AND DISCARDED, and that is the object's: the
+	 * two calls are made, %eax is never read, and neither can be deleted
+	 * because both write through `this->power`.
+	 */
+	power->getPowerIndexForPower(
+	    power->getPower(mappingParams,
+			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
+			    (PcmType)word_2c));
+
+	edprintf("--------------------------------------------------"
+		 "-------------\r\n");
+	edprintf("V90ConnectionDesigner: redundant points optimization :\r\n");
+	edprintf("V90ConnectionDesigner: real K before optimization  "
+		 "= %c%d.%05d\r\n",
+		 !(0.0f >= beforeK) ? '+' : '-',
+		 (int)__builtin_fabsf(beforeK),
+		 __builtin_abs((int)((beforeK - (float)(int)beforeK)
+				     * 100000.0f)));
+
+	if (beforeK - startK > params->UP_ROUND_K) {
+		unsigned int d;
+
+		rrn = startK + 1;
+		determineDminForRrn(rrn);
+		again = 0;
+
+		for (d = 0; d < V90_CONSTELLATIONS; d++)
+			firstPoint[d] = mappingParams->constellation[d][0];
+
+		while (rrn > currentK) {
+			unsigned char u;
+			unsigned char companded;
+
+			minIndex = findMinValueIndex(mappingParams);
+			mappingParams->constellationSize[minIndex]++;
+
+			u = mappingParams->constellation[minIndex][0];
+
+			if (dmin[minIndex] == 0) {
+				short lim = ucode[minIndex][u] + short_0a;
+
+				while (u < 128) {
+					if (ucode[minIndex][u] >= lim)
+						break;
+					u++;
+				}
+			} else {
+				short lo = ucode[minIndex][u] + short_10;
+				short hi = alt[minIndex][u] + short_10;
+
+				while (u <= 0x71) {
+					if (ucode[minIndex][u] >= lo
+					    && ucode[minIndex][u] >= hi)
+						break;
+					u++;
+				}
+			}
+
+			if (word_2c != 0)
+				companded = (unsigned char)
+				    (linear2alaw(__builtin_abs(
+					(int)ucode[minIndex][u])) ^ 0xd5);
+			else
+				companded = (unsigned char)
+				    ~linear2ulaw(__builtin_abs(
+					(int)ucode[minIndex][u]));
+
+			if (u >= 128
+			    || mappingParams->constellationSize[minIndex]
+			       > V90_CONSTELLATION_MAX) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90ConnectionDesigner::adjust"
+					    "ConstellationsToNewK !!! reached "
+					    "Max constellation length!!!\r\n");
+				again = 1;
+				mappingParams
+				    ->constellationSize[minIndex]--;
+				reconstructInitialConditions(mappingParams,
+							     firstPoint);
+				goto reduce;
+			}
+
+			for (j = mappingParams->constellationSize[minIndex];
+			     j != 0; j--) {
+				mappingParams
+				    ->codecConstellation[minIndex][j] =
+				    mappingParams
+					->codecConstellation[minIndex][j - 1];
+				mappingParams->constellation[minIndex][j] =
+				    mappingParams
+					->constellation[minIndex][j - 1];
+			}
+			mappingParams->codecConstellation[minIndex][0] =
+			    companded;
+			mappingParams->constellation[minIndex][0] = u;
+
+			added++;
+			currentK = maxK(mappingParams);
+			mappingParams->word_0 = currentK
+					        - mappingParams->shaperSR + 6;
+		}
+
+		edprintf("V90ConnectionDesigner: Optimizing new K: "
+			 "nof points Add %d \r\n", added);
+	}
+
+reduce:
+	targetK = maxK(mappingParams);
+
+	if (again != 0) {
+		determineDminForRrn(targetK);
+
+		if (currentK >= targetK) {
+			do {
+				maxIndex = findConstelMaxValueIndex(
+						mappingParams);
+				if (--mappingParams
+					->constellationSize[maxIndex] == 0) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "V90ConnectionDesigner::"
+						    "adjustConstellationsToNewK"
+						    " - BUG !!! reached "
+						    "constellation length "
+						    "0!!!\r\n");
+					mappingParams
+					    ->constellationSize[maxIndex]++;
+					break;
+				}
+
+				savedCodec = mappingParams
+					->codecConstellation[maxIndex][0];
+				savedPoint = mappingParams
+					->constellation[maxIndex][0];
+
+				for (j = 0;
+				     j < mappingParams
+					     ->constellationSize[maxIndex];
+				     j++) {
+					mappingParams
+					    ->codecConstellation[maxIndex][j] =
+					    mappingParams
+						->codecConstellation[maxIndex]
+								    [j + 1];
+					mappingParams
+					    ->constellation[maxIndex][j] =
+					    mappingParams
+						->constellation[maxIndex][j + 1];
+				}
+
+				currentK = maxK(mappingParams);
+				removed++;
+				mappingParams->word_0 = currentK
+					- mappingParams->shaperSR + 6;
+			} while (currentK >= targetK);
+		}
+
+		/*
+		 * PUT THE LAST ONE BACK, unless the row is down to a single
+		 * point -- `cmp $0x1,%eax; je` skips the whole restore AND the
+		 * decrement of the count, so a row of one leaves the count
+		 * naming a point that is no longer there.  The object does
+		 * that; docs/deviations.md carries the entry.
+		 */
+		if (mappingParams->constellationSize[maxIndex] != 1) {
+			for (j = mappingParams->constellationSize[maxIndex];
+			     j != 0; j--) {
+				mappingParams
+				    ->codecConstellation[maxIndex][j] =
+				    mappingParams
+					->codecConstellation[maxIndex][j - 1];
+				mappingParams->constellation[maxIndex][j] =
+				    mappingParams
+					->constellation[maxIndex][j - 1];
+			}
+			mappingParams->constellationSize[maxIndex]++;
+			mappingParams->codecConstellation[maxIndex][0] =
+			    savedCodec;
+			mappingParams->constellation[maxIndex][0] = savedPoint;
+			removed--;
+		}
+
+		edprintf("V90ConnectionDesigner: Optimizing new K: "
+			 "nof points removed %d \r\n", removed);
+	}
+
+	/*
+	 * FOUR SEPARATE `realK` EVALUATIONS, one per argument, where the
+	 * "before" diagnostic above used one stored float four times.  Both
+	 * shapes are the object's -- 0x4bc5c recomputes the product and the
+	 * logarithm four times over and 0x4ba96 reloads `0x68(%esp)` -- and
+	 * they are written as they were measured rather than unified.  GCC is
+	 * free to fold these four back into one, since `x87_log10` is a
+	 * non-volatile `asm`; that is a codegen difference and not a
+	 * behavioural one.
+	 */
+	edprintf("V90ConnectionDesigner: real K after optimization  "
+		 "= %c%d.%05d\r\n",
+		 !(0.0f >= realK(mappingParams)) ? '+' : '-',
+		 (int)__builtin_fabsf(realK(mappingParams)),
+		 __builtin_abs((int)((realK(mappingParams)
+				      - (float)(int)realK(mappingParams))
+				     * 100000.0f)));
+
+	mappingParams->word_0 = maxK(mappingParams)
+				- mappingParams->shaperSR + 6;
+
+	p = power->getPower(mappingParams,
+			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
+			    (PcmType)word_2c);
+	index = power->getPowerIndexForPower(p);
+
+	/*
+	 * THE ROOT IS NEVER ROUNDED TO A FLOAT, and that is what the object
+	 * does rather than a nicety: `fsqrt` leaves the value in %st and the
+	 * integer part, the remainder and the scaling are all taken off it at
+	 * the register's own width, with no store to memory in between.  A
+	 * `(float)` cast on the way costs the last place and the transcripts
+	 * disagree in one digit -- which is how the first draft of this was
+	 * caught, by `t_v90cdadjust.cpp`'s loud group and nothing else.
+	 */
+	edprintf("V90ConnectionDesigner: Optimizing new K: "
+		 "new sqrt(power)  = %c%d.%03d\r\n",
+		 !(0.0f >= p) ? '+' : '-',
+		 (int)__builtin_fabsl(x87_fsqrt((long double)p)),
+		 __builtin_abs((int)((x87_fsqrt((long double)p)
+				      - (long double)(int)x87_fsqrt(
+						(long double)p))
+				     * 1000.0f)));
+
+	/*
+	 * THE SAME STRING `adjustConstellationsPower` ENDS ON, and it is
+	 * literally the same one: both `movl $0xcdec,(%esp)`, so the object
+	 * has one copy and the spelling here has to match it exactly --
+	 * "ConstellationDesigner", where every other diagnostic in this member
+	 * says "ConnectionDesigner".  The inconsistency is the author's.
+	 */
+	dBm0 = (index + 1) * -0.5f;
+	edprintf("V90ConstellationDesigner: final index %d, "
+		 "final power in dBm0  = %c%d.%01d\r\n",
+		 index,
+		 !(0.0f >= dBm0) ? '+' : '-',
+		 (int)__builtin_fabsf(dBm0),
+		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
+
+	edprintf("--------------------------------------------------"
+		 "-------------\r\n");
+}
+
+/*
+ * constellationDesign -- one design pass: choose the constellations for the
+ * measured noise, then the two refinements the parameter block gates.
+ *
+ * THE FIFTH ARGUMENT IS DROPPED ON THE NON-FORCED ARM.  The forced call passes
+ * all seven; the other stores the SIXTH into `setConstellationToNoise`'s fifth
+ * outgoing slot and never stores the fifth at all -- %ecx holds it from
+ * 0x54(%esp) and is written nowhere.  Both are `unsigned char *`, so this is
+ * only visible to a fixture that gives them different contents.
+ *
+ * THE LAST CALL IS A SIBLING JUMP.  The object rewrites its own incoming
+ * argument area to `this`, p1, p2, p6 and `jmp`s, which is a tail call and is
+ * written as one below.
+ */
+void
+V90ConstellationDesigner::constellationDesign(float noiseEnergy,
+					      short (*ucode)[128],
+					      short (*alt)[128],
+					      short *dmin,
+					      unsigned char *lastUcode,
+					      unsigned char *perPhase,
+					      unsigned char (*mark)[128])
+{
+	if (params->FORCE_RATE_ENABLE)
+		setConstellationToNoise_forceRate(noiseEnergy, ucode, alt, dmin,
+						  lastUcode, perPhase, mark);
+	else
+		setConstellationToNoise(noiseEnergy, ucode, alt, dmin,
+					perPhase, mark);
+
+	if (params->ENABLE_DIGITAL_POWER_REDUCTION)
+		adjustConstellationsPower();
+
+	if (params->ENABLE_REDUNDANCY_OPTIMIZATION)
+		adjustConstellationsToNewK(ucode, alt, dmin, mark);
+}
+
+/*
+ * THE MASKED-RATE BANNER, SEVEN `edprintf`s OVER TWO STRINGS.  The rule is
+ * printed three times, then the banner, then three more -- seven calls and
+ * only two `.rodata.str1.4` addresses, 0xd34c six times and 0xd3b4 once, so
+ * the rule is one string and a macro is what keeps the six spellings
+ * identical.  Both are 98 characters plus CR LF, measured off the object.
+ */
+#define RATE_MASK_BANNER_RULE						\
+	"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n"
+
+/*
+ * process -- the class's entry point, and the only member of it with a caller
+ * inside the class.
+ *
+ * It plants the six things the design needs in the object, lays out the
+ * spectral shaper, clamps the rate window into the V.90 ladder, and then runs
+ * `constellationDesign`'s three steps up to twice, forcing the rate to an end
+ * of the window and going round again whenever the design lands outside it.
+ *
+ * THE COUNTER AND THE DONE FLAG ARE `short`, and that is read from the
+ * encoding and NOT from any behaviour: the counter is incremented with
+ * `inc %eax; cwtl` -- a sign-extension from 16 bits that an `int` would not
+ * need -- and both are tested with `cmpw`, the flag against 0 and the counter
+ * against 2 with a SIGNED `setle`.  No input can separate the two readings,
+ * because the loop is bounded at two passes and the flag holds 0 or 1, so the
+ * test below does not claim to prove it and the mutation set does not pretend
+ * to either.
+ *
+ * THREE PIECES OF ARITHMETIC ARE DONE IN EIGHT BITS and are reproduced with
+ * `unsigned char` locals rather than widened.  NONE OF THE THREE IS
+ * DIFFERENTIALLY OBSERVABLE and the record says so rather than pretending
+ * otherwise: `42 - (unsigned char)word_0` is computed after `word_0` has been
+ * clamped into 0..42 and so never wraps, and the `kMax` pair differs from its
+ * 32-bit spelling only where the `d > 42` clamp below takes both readings to
+ * the same `word_0` and the same `k` -- proved in finding 3403 and recorded in
+ * the mutation set as an expected survivor.  They are written as the object
+ * encodes them because the encoding is the evidence.
+ *
+ *     mov $0x6,%cl ; sub 0x620(%ebx),%cl        S  = 6 - shaperSR
+ *     mov $0x2a,%al ; sub %cl,%al               kMax = 42 - S
+ *     mov $0x2a,%al ; sub %cl,%al ; cmp $4,%al  byte_08 from 42 - d
+ *
+ * The rate itself is the other way round and is 32-bit unsigned: the
+ * `0xaaaaaaab` multiply and `shr $2` is an unsigned divide by six, over
+ * `d * 8000`.
+ *
+ * THE NINTH ARGUMENT IS DROPPED ON THE NON-FORCED ARM, exactly as
+ * `constellationDesign` drops its fifth, and for the same reason.
+ */
+int
+V90ConstellationDesigner::process(unsigned int rate,
+				  V90AutoDigitalImpDetector *detector,
+				  float noiseEnergy, int rateMask,
+				  V90MappingParams *mapp,
+				  short (*ucode)[128], short (*alt)[128],
+				  short *dmin, unsigned char *lastUcode,
+				  unsigned char *perPhase,
+				  unsigned char powerIndex,
+				  __tHardwareCodecTypes__ codec,
+				  unsigned int arg13,
+				  V90SpecialSpectralConditions cond)
+{
+	short pass = 1;
+	short done = 0;
+	int failed = 0;
+	unsigned int currentRate;
+
+	constelTable = detector->linMapp;
+	word_28 = detector->pcmType;
+	word_40 = arg13;
+	codecType = codec;
+	word_2c = detector->int_a960;
+	byte_38 = powerIndex;
+	mappingParams = mapp;
+	mapp->word_61c = 1;
+
+	edprintf("V90ConstellationDesigner: digital rate mask %d\r\n",
+		 rateMask);
+
+	spectralDesign(rate, cond);
+
+	/*
+	 * 0x6d60 is 28000 and 0xdac0 is 56000 -- the two the constructor
+	 * seeds -- and every comparison is unsigned.
+	 */
+	if (minRate < 28000)
+		minRate = 28000;
+	else if (minRate > 56000)
+		minRate = 56000;
+	if (maxRate < 28000)
+		maxRate = 28000;
+	else if (maxRate > 56000)
+		maxRate = 56000;
+	if (minRate > maxRate)
+		minRate = maxRate;
+
+	do {
+		unsigned char (*mark)[128];
+		unsigned char s;
+		unsigned char scaled;
+		unsigned int kMax;
+		unsigned int k;
+		unsigned int d;
+
+		pass++;
+
+		/*
+		 * The byte table 0xd00 into the detector, re-formed from the
+		 * member on every pass because the three calls below are
+		 * external and could have moved it.  Same displacement, same
+		 * spelling, as `constelBuild`'s.
+		 */
+		mark = (unsigned char (*)[128])
+		       ((unsigned char *)constelTable + 0xd00);
+
+		if (params->FORCE_RATE_ENABLE)
+			setConstellationToNoise_forceRate(noiseEnergy, ucode,
+							  alt, dmin, lastUcode,
+							  perPhase, mark);
+		else
+			setConstellationToNoise(noiseEnergy, ucode, alt, dmin,
+						perPhase, mark);
+
+		if (params->ENABLE_DIGITAL_POWER_REDUCTION)
+			adjustConstellationsPower();
+
+		if (params->ENABLE_REDUNDANCY_OPTIMIZATION)
+			adjustConstellationsToNewK(ucode, alt, dmin, mark);
+
+		s = (unsigned char)(6 - mappingParams->shaperSR);
+		kMax = (unsigned char)(42 - s);
+
+		k = (unsigned int)maxK(mapp);
+		if (k > kMax)
+			k = kMax;
+
+		d = k - mappingParams->shaperSR + 6;
+		if (d > 42) {
+			mappingParams->word_0 = 42;
+			k = mappingParams->shaperSR + 36;
+		} else {
+			mappingParams->word_0 = d;
+		}
+
+		/*
+		 * The mask's bit for this `d`, counted from 21 -- the same
+		 * floor `adjustConstellationsPower`'s diagnostic calls
+		 * V90_MIN_D_IN_DATA.  THE `& 1` IS NOT A FLAG AND IS NOT GIVEN
+		 * A NAME: the bit's position is a RUNTIME value, one per
+		 * reachable `d`, so what CLAUDE.md's flag-naming rule asks for
+		 * -- a constant naming what a fixed bit indicates -- has
+		 * nothing to attach to here.  The two other masks these four
+		 * members carry are the A-law `^ 0xd5` and nothing else, and
+		 * that one is multi-bit and already the tree's idiom.  `sar` and not `shr`, so the mask is a
+		 * signed `int` exactly as the mangling says.  A masked rate is
+		 * announced and then used anyway.
+		 */
+		if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {
+			edprintf(RATE_MASK_BANNER_RULE);
+			edprintf(RATE_MASK_BANNER_RULE);
+			edprintf(RATE_MASK_BANNER_RULE);
+			edprintf("!!!!!!!!!!!!!!!!!!    V90ConstellationDesigner"
+				 ": Rate Used Masked By Provider    "
+				 "!!!!!!!!!!!!!!!!!!\r\n");
+			edprintf(RATE_MASK_BANNER_RULE);
+			edprintf(RATE_MASK_BANNER_RULE);
+			edprintf(RATE_MASK_BANNER_RULE);
+		}
+
+		currentRate = (mappingParams->word_0 * 8000) / 6;
+
+		scaled = (unsigned char)(42
+					 - (unsigned char)mappingParams->word_0);
+		if (scaled > 4)
+			scaled++;
+		byte_08 = scaled;
+
+		if (mappingParams->word_0 <= 20) {
+			edprintf("V90ConstellationDesigner: Connection design "
+				 "ERROR, D choosen is smaller than "
+				 "minimum.\r\n");
+			failed = 1;
+		} else {
+			edprintf("V90ConstellationDesigner: S = %d\r\n",
+				 6 - mappingParams->shaperSR);
+			edprintf("V90ConstellationDesigner: K = %d\r\n", k);
+			edprintf("V90ConstellationDesigner: final rate chosen "
+				 "- D = %d ( %d )\r\n",
+				 mappingParams->word_0, currentRate);
+		}
+
+		if (maxRate < currentRate) {
+			edprintf("V90ConstellationDesigner: currentRate = %d "
+				 "is larger then maxRate = %d => seting "
+				 "currentRate = %d\r\n",
+				 currentRate, maxRate, maxRate);
+			params->FORCE_RATE_ENABLE = 1;
+			params->ENABLE_DIGITAL_POWER_REDUCTION = 0;
+			params->ENABLE_REDUNDANCY_OPTIMIZATION = 0;
+			params->RATE_FORCE = maxRate;
+		} else if (minRate > currentRate) {
+			edprintf("V90ConstellationDesigner: currentRate = %d "
+				 "is smaller then minRate = %d => seting "
+				 "currentRate = %d\r\n",
+				 currentRate, minRate, minRate);
+			params->FORCE_RATE_ENABLE = 1;
+			params->ENABLE_DIGITAL_POWER_REDUCTION = 0;
+			params->ENABLE_REDUNDANCY_OPTIMIZATION = 0;
+			params->RATE_FORCE = minRate;
+		} else {
+			done = 1;
+		}
+	} while (done == 0 && pass <= 2);
+
+	/*
+	 * The two retrain-request enables: set where the window has been moved
+	 * off its default end, then cleared again where the rate has already
+	 * reached that end.
+	 */
+	if (maxRate != 56000)
+		params->ENABLE_RRN_UP = 1;
+	if (minRate != 28000)
+		params->ENABLE_RRN_DOWN = 1;
+	if (maxRate <= currentRate)
+		params->ENABLE_RRN_UP = 0;
+	if (minRate >= currentRate)
+		params->ENABLE_RRN_DOWN = 0;
+
+	if (word_24 == 0)
+		word_24 = currentRate;
+
+	return failed;
+}
+
+#undef RATE_MASK_BANNER_RULE

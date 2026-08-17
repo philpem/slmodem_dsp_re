@@ -19,6 +19,15 @@ WHAT IT REPORTS
 
   --missing   per function, how many call sites the blob has and this tree
               does not.  The work queue for task #50.
+  --absent    the same question asked of the STRINGS rather than the counts:
+              which of the object's format strings appear nowhere in `src/`.
+              A count -- per function or per file -- is distorted by wherever
+              we chose to put a helper; a string is content and does not move
+              when we re-factor, so this is what separates a real gap from a
+              factoring artefact.  Read it before restoring anything: two of
+              the three largest rows in `--missing` are artefacts (findings
+              2600 and 2950).  Necessary and not sufficient, exactly as
+              `--invented` is -- see the note at its implementation.
   --strings   the format strings themselves, per function.  Useful BEFORE
               restoring anything: the strings are the annotation, and they
               routinely name fields and conditions the reconstruction is
@@ -357,6 +366,9 @@ def main():
                     help="instructions of argument setup to show (--sites)")
     ap.add_argument("--invented", action="store_true",
                     help="our format strings that are not in the object")
+    ap.add_argument("--absent", metavar="FUNC", nargs="?", const="",
+                    help="the object's format strings that appear NOWHERE in "
+                         "this tree, optionally for one function")
     args = ap.parse_args()
 
     tabs = rodata_strings(args.obj)
@@ -449,6 +461,73 @@ def main():
               % (len(found), len(bad) + len(ok), len(ok)))
         return 1 if bad else 0
 
+    if args.absent is not None:
+        #
+        # WHICH OF THE OBJECT'S DIAGNOSTICS ARE REALLY NOT HERE.
+        #
+        # Neither count above can answer that.  The per-function table is
+        # distorted by any helper we factor out, and the per-file table -- the
+        # one this tool's own comment below calls the one "an inlining
+        # boundary cannot distort" -- is distorted by a helper we factor into
+        # ANOTHER FILE, because the blob's sites are attributed to the file
+        # holding our function of the same name and ours are counted where we
+        # put them.  `v8handshak.c` read as `-8 (blob 10, ours 2)` with all
+        # ten of the object's strings present, eight of them in `v8hsrx.c`,
+        # whose `+8 (blob 0, ours 8)` is the other half of the same number.
+        # Finding 2950.
+        #
+        # A string is content and does not move when we re-factor, so this
+        # asks the question the counts were standing in for.
+        #
+        # ITS LIMIT IS `--invented`'s, MIRRORED, and it is the reason this
+        # prints a queue and not a verdict: a string being somewhere in the
+        # tree is NECESSARY and not sufficient.  It does not show the site is
+        # in the right function, under the right condition, or carrying the
+        # right arguments -- only a transcript comparison does that (findings
+        # 126, 2600).  So an empty report means "nothing to restore", never
+        # "these sites are right".
+        #
+        # AND IT COUNTS DISTINCT STRINGS, NOT SITES.  Where the object prints
+        # one message from several places -- `probe_preemph`'s three strings
+        # over ten inlined copies (finding 2600) -- carrying it once satisfies
+        # this check.  That is deliberate, because the number of copies is
+        # precisely what inlining decides and what we are trying not to
+        # measure, but it means a row of `0 absent` bounds the gap at "no
+        # message was lost" and not at "no call site was lost".
+        #
+        which = args.absent
+        have = set(t for _, _, t in our_strings(args.src))
+        print("Format strings the object has and this tree does not carry "
+              "ANYWHERE.\nString presence is necessary, not sufficient: it "
+              "says a site was not\ndropped, never that it is in the right "
+              "place.  Finding 2950.\n")
+        rows, unres = [], 0
+        for fn in sorted(sites):
+            if which and fn != which:
+                continue
+            if not which and fn not in ours:
+                continue            # only reconstructed ones, unless named
+            miss = sorted(set(s for s in sites[fn] if s and s not in have))
+            n_un = sum(1 for s in sites[fn] if not s)
+            unres += n_un
+            if miss or n_un:
+                rows.append((len(miss), n_un, fn, where.get(fn, "?"), miss))
+        rows.sort(reverse=True)
+        for n, n_un, fn, f, miss in rows:
+            print("  %-30s %s" % (fn, f))
+            print("      %d absent, %d unresolvable" % (n, n_un))
+            for s in miss:
+                print("        %r" % s)
+        print("\n  %d absent over %d function%s; %d call sites could not be "
+              "resolved to a\n  string at all and are not judged either way "
+              "(see the --strings caveat)."
+              % (sum(r[0] for r in rows), len(rows),
+                 "" if len(rows) == 1 else "s", unres))
+        if not rows:
+            print("  every one of the object's resolvable format strings is "
+                  "somewhere in src/.")
+        return 0
+
     if args.strings is not None:
         which = args.strings
         for fn in sorted(sites):
@@ -494,8 +573,20 @@ def main():
     # vanish from `ours`, and the blob's function shows the whole difference as
     # missing.  `callprog.c` is the worked example: `CALLPROG_Progress` reads
     # as 15 sites short, and every one of them is present a few lines away in
-    # `request_state`, `detect`, `apply_event` or `run_timeouts`.  A per-file
-    # total has no such boundary to fall through.  See finding 605.
+    # `request_state`, `detect`, `apply_event` or `run_timeouts`.  See finding
+    # 605.
+    #
+    # THIS TABLE HAS A BOUNDARY OF ITS OWN, and it used to say here that it
+    # had none.  It falls through wherever the helper is in a DIFFERENT FILE:
+    # the blob's sites are attributed to whichever file holds our function of
+    # the same name, and ours are counted where we actually put them, so a
+    # split across files debits one file and credits the other.  `v8handshak.c`
+    # read as `-8 (blob 10, ours 2)` with every one of the object's ten
+    # strings present -- eight of them in `v8hsrx.c`, whose `+8 (blob 0,
+    # ours 8)` is the same eight sites counted the other way.  Finding 2950.
+    #
+    # `--absent` is the check with no such boundary, because it compares
+    # content rather than counts.  Read it before restoring anything.
     #
     by_file_blob, by_file_ours = {}, {}
     for fn, lst in sites.items():
@@ -512,7 +603,9 @@ def main():
         if b != o:
             frows.append((b - o, b, o, f))
     frows.sort(reverse=True)
-    print("\nPER FILE, where a helper the original inlined cannot hide a site:")
+    print("\nPER FILE, where a helper in the SAME file cannot hide a site."
+          "\nA helper in another file still can -- run --absent before "
+          "restoring (2950).")
     if not frows:
         print("  every reconstructed file matches the blob's count exactly")
     for gap, b, o, f in frows:

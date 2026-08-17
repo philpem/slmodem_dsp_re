@@ -1,15 +1,24 @@
 /*
- * V90Demapper.cpp -- two of the fourteen members of the V.90 demapper: the
- * destructor and the diagnostic it exists to reach.
+ * V90Demapper.cpp -- eight of the fourteen members of the V.90 demapper: the
+ * constructor, both destructors, the histogram diagnostic, and three of the
+ * nine that do the work -- `hardDecision`, `process` and
+ * `resetLinearMappStudy`.
  *
  * Reconstructed from dsplibs.o.  `include/dsplib/V90Demapper.h` carries the
- * object map, the 0x1eb8 allocation the size comes from, and why the
- * constructor is declared there and not defined here.
+ * object map and the 0x1eb8 allocation the size comes from.
  *
- * THE OTHER TWELVE ARE THE CLASS'S PROCESSING HALF -- `process`,
- * `hardDecision`, `linearMappingStudy`, `updateConstelation`, the three
- * resets -- 4,400-odd bytes, declared in the header for the record.  One
- * class, one owner.
+ * THE SIX STILL OUTSTANDING are `reset`, `resetNoSpectral`,
+ * `incrementRBSFramePosition`, `linearMappingStudy` and `updateConstelation`
+ * -- about 2,400 bytes, declared in the header for the record.  One class,
+ * one owner.
+ *
+ * WHAT THE CLASS IS FOR, now that its middle is read.  `hardDecision` takes
+ * one PCM sample, finds the nearest level of the constellation belonging to
+ * the current RBS frame position, and appends the level's CODE and the
+ * sample's SIGN to two parallel arrays.  `process` then drains those arrays
+ * six samples at a time: the codes through `ModulusDecoder::progress` and the
+ * signs through either `V90SignBitsExtractor` or the serial differential
+ * decoder at +0x664, both writing into one bit buffer the caller supplies.
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding 215):
  * `mov 0x10(%esp),%ebx` after one push and an eight-byte frame in the
@@ -62,6 +71,13 @@
  * translation unit may include both definitions; finding 1112.
  */
 #include "dsplib/V90Parameters.h"
+/*
+ * `hardDecision` reads the detector's per-phase flag at +0x2800 and
+ * `resetLinearMappStudy` calls `clearCamulativeVal` over all 6 x 128 cells of
+ * it, so the pointer at +0x1ea0 has to be a complete type here.
+ */
+#include "dsplib/V90AutoDigitalImpDetector.h"
+#include "dsplib/ModulusCoder.h"
 #include "dsplib/V90Demapper.h"
 
 /*
@@ -75,22 +91,36 @@
 	    ((int)__builtin_offsetof(V90Demapper, field) == (off)) ? 1 : -1]
 
 DEM_OFF(params,			0x0000, params);
-DEM_OFF(word_04,		0x0004, word04);
-DEM_OFF(word_18,		0x0018, word18);
-DEM_OFF(array_1c,		0x001c, array1c);
-DEM_OFF(array_20,		0x0020, array20);
-DEM_OFF(count_24,		0x0024, count24);
-DEM_OFF(word_28,		0x0028, word28);
-DEM_OFF(word_2c,		0x002c, word2c);
+DEM_OFF(bitsPerFrame,		0x0004, bitsframe);
+DEM_OFF(word_08,		0x0008, word08);
+DEM_OFF(signBitsPerFrame,	0x000c, sbframe);
+DEM_OFF(signBitGroups,		0x0010, sbgroups);
+DEM_OFF(signBitGroupSize,	0x0014, sbgroupsz);
+DEM_OFF(rbsFramePosition,	0x0018, rbspos);
+DEM_OFF(codes,			0x001c, codes);
+DEM_OFF(signs,			0x0020, signs);
+DEM_OFF(sampleCapacity,		0x0024, samplecap);
+DEM_OFF(frameStart,		0x0028, framestart);
+DEM_OFF(sampleCount,		0x002c, samplecnt);
 DEM_OFF(constellation,		0x0030, constel);
 DEM_OFF(constellationSize,	0x0630, constelsz);
 DEM_OFF(modulusDecoder,		0x0648, moddec);
-DEM_OFF(byte_664,		0x0664, byte664);
+DEM_OFF(signDecoder,		0x0664, signdec);
 DEM_OFF(signBits,		0x0668, signbits);
 DEM_OFF(errorSum,		0x0690, errsum);
 DEM_OFF(errorCount,		0x1290, errcount);
 DEM_OFF(errorHistogramCount,	0x1e90, errhist);
+DEM_OFF(histogramDelay,		0x1e94, histdelay);
+DEM_OFF(histogramIntegration,	0x1e98, histint);
+DEM_OFF(short_1e9c,		0x1e9c, short1e9c);
 DEM_OFF(adiDetector,		0x1ea0, adi);
+DEM_OFF(short_1ea4,		0x1ea4, short1ea4);
+DEM_OFF(short_1ea6,		0x1ea6, short1ea6);
+DEM_OFF(uint_1ea8,		0x1ea8, uint1ea8);
+DEM_OFF(decisionCode,		0x1eac, deccode);
+DEM_OFF(decisionFramePosition,	0x1eae, decpos);
+DEM_OFF(uint_1eb0,		0x1eb0, uint1eb0);
+DEM_OFF(short_1eb4,		0x1eb4, short1eb4);
 
 /*
  * The allocation, and finding 1107's whole point: this number comes from
@@ -112,8 +142,10 @@ typedef char v90dem_size[(sizeof(V90Demapper) == 0x1eb8) ? 1 : -1];
  * THE ELEMENT COUNT IS THE FIRST ARGUMENT AND THE TWO WIDTHS ARE FOUR AND
  * ONE.  `lea 0x0(,%ebx,4),%eax` before the first `sysdep_malloc` and a bare
  * `mov %ebx,(%esp)` before the second, with `%ebx` the first argument
- * throughout; `count_24` then receives `%ebx` itself.  The element TYPES are
- * still unknown -- see the header -- so the two stay `void *`.
+ * throughout; `sampleCapacity` then receives `%ebx` itself.  The element
+ * TYPES used to be unknown and are not any more -- `process` hands both
+ * blocks to callees whose manglings type them -- so the casts below are what
+ * `sysdep_malloc` returning `void *` costs and nothing more.
  *
  * THE ORDER OF THE STORES IS NOT THE OBJECT'S ORDER, and only one part of it
  * was forced.  `adiDetector` is stored BEFORE the two allocations and the
@@ -128,23 +160,23 @@ typedef char v90dem_size[(sizeof(V90Demapper) == 0x1eb8) ? 1 : -1];
  */
 V90Demapper::V90Demapper(unsigned int levels, V90Parameters *params,
 			 V90AutoDigitalImpDetector *adi)
-	: byte_664(0)
+	: signDecoder()
 {
 	unsigned int i;
 
 	adiDetector = adi;
-	array_1c = sysdep_malloc(levels * 4);
-	array_20 = sysdep_malloc(levels);
-	count_24 = levels;
+	codes = (unsigned int *)sysdep_malloc(levels * 4);
+	signs = (unsigned char *)sysdep_malloc(levels);
+	sampleCapacity = levels;
 
-	word_04 = 0;
+	bitsPerFrame = 0;
 	word_08 = 0;
-	word_0c = 0;
-	word_10 = 0;
-	word_14 = 0;
-	word_18 = 0;
-	word_28 = 0;
-	word_2c = 0;
+	signBitsPerFrame = 0;
+	signBitGroups = 0;
+	signBitGroupSize = 0;
+	rbsFramePosition = 0;
+	frameStart = 0;
+	sampleCount = 0;
 
 	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
 		constellationSize[i] = 0;
@@ -259,8 +291,288 @@ V90Demapper::~V90Demapper()
 {
 	if (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM)
 		printErrorHistogramAndReset();
-	if (array_1c)
-		sysdep_free(array_1c);
-	if (array_20)
-		sysdep_free(array_20);
+	if (codes)
+		sysdep_free(codes);
+	if (signs)
+		sysdep_free(signs);
+}
+
+/*
+ * ===========================================================================
+ * THE PROCESSING HALF -- three of the nine, 1,207 bytes of the object.
+ * ===========================================================================
+ */
+
+/*
+ * `resetLinearMappStudy` -- 139 bytes at 0x307e0.
+ *
+ * THE TWO COUNTERS ARE `short` AND SIGNED, and that is forced rather than
+ * chosen.  Both are incremented through `lea 0x1(%r),%eax; movswl %ax,%r` --
+ * a 16-bit truncation on every step, which a 32-bit counter would not have --
+ * and both loop tests are `cmp $imm,%r16` followed by `jle`, the SIGNED
+ * branch.  An `unsigned short` would give `jbe`, and an `int` neither the
+ * truncation nor the 16-bit compare.  The width also matches the callee:
+ * `clearCamulativeVal(short, short)` says so in its mangling.
+ *
+ * THE SIX STORES ARE NOT IN THE OBJECT'S ORDER AND THAT IS NOT EVIDENCE.
+ * They are six plain stores with no call between them, so the scheduler was
+ * free to interleave them with the argument reload it needed anyway (finding
+ * 617); what IS in the object is their widths -- 16-bit at +0x1e9c, +0x1ea4,
+ * +0x1ea6 and +0x1eae, 32-bit at +0x1ea8 and +0x1eb0 -- and the header
+ * declares each accordingly.
+ */
+void
+V90Demapper::resetLinearMappStudy(unsigned int n)
+{
+	short phase, code;
+
+	for (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)
+		for (code = 0; code < V90DEMAPPER_LEVELS; code++)
+			adiDetector->clearCamulativeVal(phase, code);
+
+	short_1e9c = 0;
+	short_1ea4 = 0;
+	short_1ea6 = 0;
+	uint_1ea8 = n;
+	decisionFramePosition = 0;
+	uint_1eb0 = 0;
+}
+
+/*
+ * `hardDecision` -- 660 bytes at 0x31050, and the largest of the three.
+ *
+ * ONE PCM SAMPLE IN, THE NEAREST CONSTELLATION LEVEL OUT, and one entry
+ * appended to `codes` and `signs` on the way.  The return is the level with
+ * the input's sign put back on it.
+ *
+ * THE RETURN TYPE IS `short` AND THE OBJECT SAYS SO.  It ends
+ * `imul %ebx,%esi; mov %esi,0x20(%esp); movswl 0x20(%esp),%eax` -- the
+ * product is formed 32 bits wide and then TRUNCATED to 16 and sign-extended
+ * back.  An `int` return would stop at the `imul`.
+ *
+ * FOUR THINGS ARE READ FROM THE OBJECT RATHER THAN CACHED, and the reloads
+ * are what says so.  `rbsFramePosition` is re-read at 0x3109a after the byte
+ * store into `signs` and again at 0x312d8 after
+ * `printErrorHistogramAndReset`; `sampleCount` at 0x31173 and 0x31254; the
+ * `signs` and `codes` pointers on every use.  A local copy would have
+ * survived all of those, because nothing in the source could alias `this`
+ * -- but a store through an `unsigned char *` and a call to another member
+ * both can, as far as the compiler knows, so the member accesses are written
+ * out and not hoisted into locals.
+ *
+ * `sign` IS ASSIGNED IN BOTH ARMS OF THE SIGN TEST AND NOWHERE ELSE, so the
+ * over-capacity arm below reaches the multiply with it unset.  THE OBJECT
+ * DOES EXACTLY THAT -- it loads 0x20(%esp) at 0x31229 having never written it
+ * on that path -- and it is unobservable, because `level` is zero there and
+ * anything times zero is zero.  This reconstruction initialises it instead,
+ * which is a deviation of one instruction and no behaviour: docs/deviations.md
+ * D385.
+ *
+ * THE SEARCH IS A LINEAR SCAN DOWN A DESCENDING CONSTELLATION, unswitched by
+ * the compiler into two copies that differ only in their bound -- `size - 1`
+ * at 0x310d0 and `2 * size - 1` at 0x311d4.  The doubling is the automatic
+ * digital-impairment detector's flag at its +0x2800: with that set the row
+ * holds two levels per code and the scan runs over twice as many of them,
+ * which is also why the code that goes into `codes` is halved.
+ *
+ * AND THE SCAN HAS THE OBJECT'S OWN HAZARD, kept rather than fixed: `n - 1`
+ * with `n` zero is 0xffffffff, so a constellation whose count is still zero
+ * and whose first level compares `>=` sends the scan off the end of the row.
+ * The object computes the same `size - 1` and takes the same branch
+ * (`cmp $0x0,%ecx; jbe` -- unsigned, so only zero exits).  Nothing calls this
+ * before `updateConstelation` has filled the counts.
+ *
+ * `__builtin_abs` AND NOT `x < 0 ? -x : x`, three times.  Finding 2117
+ * measured both spellings on the period compiler over a composed translation
+ * unit: GCC 3.4.2 renders the conditional as a conditional NEGATION and only
+ * the builtin gives the `cltd; xor; sub` triple the object has at 0x3109d,
+ * 0x3110f and 0x3111d.
+ *
+ * THE ABSOLUTE VALUE IS TAKEN TWICE ON THE NEGATIVE ARM and once on the
+ * other, which is in the object and is not an accident of scheduling: the
+ * negative arm's `cltd; xor; sub` at 0x312af leaves `%esi` already
+ * non-negative and the shared code at 0x3109d does it again.  So the sign
+ * test's own arm assigns `in`, and `mag` is a second, separate abs.
+ */
+short
+V90Demapper::hardDecision(short in)
+{
+	unsigned int code = 0;
+	int sign = 1;
+	short level = 0;
+
+	decisionFramePosition = (short)rbsFramePosition;
+
+	if (sampleCount >= sampleCapacity) {
+		/*
+		 * THE ONLY DIAGNOSTIC IN THE FUNCTION, and the sample is
+		 * dropped: nothing is appended, no position is advanced, and
+		 * the return is zero because `level` never leaves its
+		 * initialiser.
+		 */
+		edprintf("V90Demapper: Hard decision input buffers are full "
+			 "!!!!!!!!!!!!!\n");
+	} else {
+		unsigned int n;
+		short mag, err, alt;
+
+		if (in < 0) {
+			signs[sampleCount] = 0;
+			sign = -1;
+			in = (short)__builtin_abs(in);
+		} else {
+			signs[sampleCount] = 1;
+			sign = 1;
+		}
+		mag = (short)__builtin_abs(in);
+
+		n = constellationSize[rbsFramePosition];
+		if (adiDetector->short_2800[rbsFramePosition] != 0)
+			n = 2 * n;
+
+		while (constellation[rbsFramePosition][code] >= mag &&
+		       code < n - 1)
+			code++;
+		if (code)
+			code--;
+
+		/*
+		 * The two neighbours the scan left `code` between, compared on
+		 * 16-bit distance -- `cmp 0x24(%esp),%dx` with `jge`, so the
+		 * lower index wins a tie.
+		 */
+		err = (short)__builtin_abs(constellation[rbsFramePosition]
+					   [code] - mag);
+		alt = (short)__builtin_abs(constellation[rbsFramePosition]
+					   [code + 1] - mag);
+		if (alt < err) {
+			level = constellation[rbsFramePosition][code + 1];
+			err = alt;
+			code++;
+		} else {
+			level = constellation[rbsFramePosition][code];
+		}
+
+		/*
+		 * THE HISTOGRAM, and its two counters run in sequence rather
+		 * than together: the delay is spent first, one decision at a
+		 * time, and only then does the integration begin.  The
+		 * comparison against the parameter is SIGNED (`jge` at
+		 * 0x3128b), which is what makes both fields `int`.
+		 */
+		if (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM) {
+			if (histogramDelay != 0) {
+				histogramDelay--;
+			} else {
+				errorSum[rbsFramePosition][code] += err;
+				errorCount[rbsFramePosition][code]++;
+				if (histogramIntegration >= params->
+				    DEMAPPER_ERROR_HISTOGRAM_INTEGRATION_TIME) {
+					printErrorHistogramAndReset();
+					histogramIntegration = 0;
+				} else {
+					histogramIntegration++;
+				}
+			}
+		}
+
+		/*
+		 * THE STORED CODE IS HALVED WHEN THE DETECTOR'S FLAG IS SET,
+		 * and the object's shift is LOGICAL with a 16-bit truncation
+		 * after it -- `shr $1,%eax; cwtl` at 0x3125a.  An arithmetic
+		 * shift would say the value was signed and there would be no
+		 * `cwtl` if the result went straight into the word.
+		 */
+		if (adiDetector->short_2800[rbsFramePosition] != 0)
+			codes[sampleCount] = (short)(code >> 1);
+		else
+			codes[sampleCount] = code;
+		sampleCount++;
+
+		/*
+		 * `mul $0xaaaaaaab; shr $0x2` and a multiply back -- the
+		 * UNSIGNED division by six, which is what makes
+		 * `rbsFramePosition` unsigned.
+		 */
+		rbsFramePosition = (rbsFramePosition + 1) %
+				   V90DEMAPPER_CONSTELLATIONS;
+	}
+
+	decisionCode = (short)code;
+	return (short)(sign * level);
+}
+
+/*
+ * `process` -- 408 bytes at 0x31720.  Drain whole six-sample frames into the
+ * caller's bit buffer, then slide what is left down to the front.
+ *
+ * SIX SAMPLES IS THE FRAME AND THE CONSTANT IS IN THE OBJECT TWICE -- `lea
+ * 0x6(%edx),%eax` for the entry test and `lea 0x6(%edi),%edx` with
+ * `add $0xc,%edi` for the advance-and-retest.  It is the same six as
+ * `V90DEMAPPER_CONSTELLATIONS`, the RBS frame, and the sign-bit extractor's
+ * capacity; they are one number and the macro says which.
+ *
+ * FEWER THAN SIX SAMPLES IS NOT AN EMPTY DRAIN, IT IS A DIFFERENT RETURN.
+ * `cmp $0x5,%ebx; jbe` short-circuits to `*nbits = 0; return 0` without
+ * touching `frameStart` or compacting anything -- so a caller that keeps
+ * feeding gets its partial frame back untouched, and the compaction below
+ * only ever runs on the path that also returns 1.
+ *
+ * THE TWO SIGN-BIT PATHS ARE EXCLUSIVE AND `signBitGroups` IS THE SWITCH.
+ * Non-zero cuts the frame into that many groups through `signBits`, each
+ * consuming `signBitGroupSize` samples and yielding one bit fewer; zero sends
+ * every sign bit through the serial decoder at +0x664 instead.  Both write
+ * the same `signBitsPerFrame` bytes at the front of the frame's output, and
+ * `ModulusDecoder::progress` writes after them -- which is what
+ * `signBitsPerFrame` IS.
+ *
+ * THE COMPACTION USES A LOCAL SOURCE CURSOR, not `frameStart`.  The object
+ * keeps it in `%ecx` and writes `frameStart` exactly once, at the end and
+ * with zero (`movl $0x0,0x28(%esi)`); a version that walked the member would
+ * have to store it every iteration.
+ */
+int
+V90Demapper::process(unsigned char *out, unsigned int &nbits)
+{
+	unsigned int total = 0;
+	unsigned int i, j;
+
+	if (sampleCount <= V90DEMAPPER_FRAME - 1) {
+		nbits = 0;
+		return 0;
+	}
+
+	while (frameStart + V90DEMAPPER_FRAME <= sampleCount) {
+		modulusDecoder.progress(out + total + signBitsPerFrame,
+					&codes[frameStart]);
+
+		if (signBitGroups != 0) {
+			unsigned int g;
+
+			for (g = 0; g < signBitGroups; g++)
+				signBits.process(&signs[frameStart +
+							signBitGroupSize * g],
+						 out + total +
+						 (signBitGroupSize - 1) * g);
+		} else {
+			unsigned int b;
+
+			for (b = 0; b < signBitsPerFrame; b++)
+				out[total + b] = signDecoder.process(
+				    signs[frameStart + b]);
+		}
+
+		total += bitsPerFrame;
+		frameStart += V90DEMAPPER_FRAME;
+	}
+
+	for (i = 0, j = frameStart; j < sampleCount; i++, j++) {
+		codes[i] = codes[j];
+		signs[i] = signs[j];
+	}
+	sampleCount = i;
+	frameStart = 0;
+
+	nbits = total;
+	return 1;
 }

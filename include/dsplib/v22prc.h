@@ -6,18 +6,47 @@
  * nine could be written and tested before the datapump object they read is
  * modelled.
  *
- * THE OBJECT IS NOT MODELLED, DELIBERATELY.  Four of these reach fields of
- * the V.22 datapump instance and the receiver hanging off it, and
- * `V22FP_create` -- the 2,449-byte function that lays that instance out -- is
- * not reconstructed.  Naming a struct now would mean guessing at fields whose
- * meaning has not been established, and `src/dsp/fpm_tone.c` already settled
- * how this tree handles that: a wrong layout is worse than none.  So the
- * parameters are `void *` and the offsets are named constants with the
- * evidence beside each.  When `V22FP_create` lands these get retyped and the
- * constants go away.
+ * THE OBJECT IS NOT MODELLED HERE, DELIBERATELY.  Four of these reach fields
+ * of the V.22 datapump instance and the receiver hanging off it, and the
+ * offsets were derived one function at a time, before anything knew where the
+ * instance's sub-blocks began.  So the parameters are `void *` and the offsets
+ * are named constants with the evidence beside each.
  *
  * The offsets are not guesses; each is a load or a store in the object, and
  * the function's own name is what licenses the reading of it.
+ *
+ * ---------------------------------------------------------------------------
+ * `V22FP_create` HAS NOW LANDED, and all ten of these resolve.
+ *
+ * `include/dsplib/v22fp.h` is the struct, and the bottom of
+ * `src/pump/v22/v22fp.c` holds every constant below as a compile-time
+ * assertion against it -- so the two spellings cannot drift apart, and the
+ * fact that ten offsets derived from ten unrelated instructions each land on
+ * a field is corroboration neither file could have produced alone:
+ *
+ *   V22_OBJ_GTIMER  -> struct v22fp::hdx, and `hdx->gtimer` beyond it
+ *   V22_OBJ_FP      -> struct v22fp::dsp
+ *   V22FP_EQ_ADAPT  -> dsp->eq_adapt          create leaves 1
+ *   V22FP_TX_CLOCK  -> dsp->pps.cfg.step
+ *   V22FP_SIGNAL    -> dsp->agc.signal
+ *   V22FP_BAUD      -> dsp->sre.pll_acc
+ *   V22FP_CARRIER   -> dsp->sre.active
+ *   V22FP_EQ_MODE   -> dsp->fse.r08           init 0
+ *   V22FP_EQ_EXTRA  -> dsp->fse.r1c           init 1
+ *   V22FP_QUALITY   -> dsp->fse.r22           init 0
+ *
+ * THE CONSTANTS STAY ANYWAY, and the reason is not inertia.  Four of the ten
+ * resolve INSIDE another module's struct -- three into `struct v22_fse` and
+ * one into `struct v22_sre` -- so retyping these nine functions would mean
+ * writing `fp->dsp->fse.r22` where the name `GetSignalQuality` is the only
+ * evidence, i.e. carrying this file's names into headers whose own rule is
+ * that a field is named only where an instruction in ITS module forces it.
+ * Two of the ten are also an open question rather than a resolution:
+ * `V22FP_TX_CLOCK` lands on a configuration word `V22_PPS_init` copies in and
+ * `V22_PPS_filter` reads on every output, so `TxClockSync` is overwriting a
+ * configuration field after initialisation -- deliberate or a soft spot in one
+ * of the two readings, and nothing here decides it.  `V22FP_BAUD` has the same
+ * shape.  Retiring the constants would bury both questions inside a name.
  */
 
 #ifndef DSPLIB_V22PRC_H

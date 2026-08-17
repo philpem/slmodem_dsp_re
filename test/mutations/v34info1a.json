@@ -94,7 +94,7 @@
  },
  {
   "label": "the short phase 2 does not clear rate config +0x06",
-  "find": "\t\tcfg->f06 = 0;\n",
+  "find": "\t\tcfg->preemp = 0;\n",
   "replace": ""
  },
  {

@@ -186,14 +186,38 @@ v8_fskmodulate(struct v8 *v, short which)
  * correction that accumulates from that has to reach 1000 before the gain
  * moves.  The gain then goes down by a factor or up by a smaller one, which
  * is the usual fast-attack slow-release asymmetry.
+ *
+ * THE WIDTHS BELOW ARE READ OFF THE OBJECT AND NOT CHOSEN.  Every one of them
+ * is something the compiler was forced to encode, and with these four
+ * declarations the function is byte-identical to the blob's -- 70
+ * instructions, operands included, which is 617's acceptance test:
+ *
+ *   `delta` and `acc` are SHORT because each dead-band test is `test %dx,%dx`
+ *   and not `test %edx,%edx`; the width of a test is the width of the value
+ *   being tested.
+ *
+ *   `sum` is the UNTRUNCATED accumulator and is what gets stored back, because
+ *   the object stores `%cx` -- the raw sum -- and not the sign-extended `%dx`.
+ *   The two hold the same sixteen bits, so no test can tell them apart.
+ *
+ *   `mag` is a NAMED SHORT TEMPORARY rather than a cast inside the `if`,
+ *   because the object sign-extends the difference (`cwtl`) before testing it
+ *   and then narrows the test back to `%ax`.  Written as a cast in the
+ *   condition, this compiler folds the conversion away and emits two
+ *   instructions fewer.
+ *
+ * None of it changes behaviour: every value here already ranged over a short.
+ * Finding 2952.
  */
 int
 v8_agcadapt(struct v8 *v)
 {
 	struct v8_rx *r = &v->rx;
 	int level;
-	int delta;
-	int acc;
+	short delta;
+	int sum;
+	short acc;
+	short mag;
 
 	level = ((r->f1a * 0x6ccd) >> 15) + (unsigned short)r->f16;
 
@@ -211,14 +235,16 @@ v8_agcadapt(struct v8 *v)
 		return 0;
 
 	delta = (short)((unsigned short)r->f1a - 0xfa0);
-	if ((short)((delta < 0 ? -delta : delta) - 0x7d0) <= 0)
+	mag = (short)((delta < 0 ? -delta : delta) - 0x7d0);
+	if (mag <= 0)
 		return 0;
 
-	acc = ((r->f20 * delta) >> 16) + (unsigned short)r->f1e;
-	acc = (short)acc;
+	sum = ((r->f20 * delta) >> 16) + (unsigned short)r->f1e;
+	acc = (short)sum;
 
-	if ((short)((acc < 0 ? -acc : acc) - 0x3e8) <= 0) {
-		r->f1e = (short)acc;
+	mag = (short)((acc < 0 ? -acc : acc) - 0x3e8);
+	if (mag <= 0) {
+		r->f1e = (short)sum;
 		return 0;
 	}
 	r->f1e = 0;

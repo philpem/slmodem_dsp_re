@@ -50,6 +50,21 @@ V90P4_OFF(mappingParams,	0x004c, mp1);
 V90P4_OFF(mappingParams2,	0x0050, mp2);
 V90P4_OFF(cp,			0x0054, cp);
 V90P4_OFF(scrambler,		0x0058, scrambler);
+V90P4_OFF(scrambledBits,	0x0078, bits);
+V90P4_OFF(mpBits,		0x2f58, mpbits);
+V90P4_OFF(mpBitCount,		0x2f5c, mpcount);
+V90P4_OFF(mpSequenceSymbols,	0x2f60, mpsym);
+V90P4_OFF(word_2f64,		0x2f64, w2f64);
+V90P4_OFF(rdRtSymbols,		0x2f68, rdrt);
+V90P4_OFF(rfSymbols,		0x2f74, rf);
+V90P4_OFF(cpBits,		0x2f8c, cpbits);
+V90P4_OFF(cpBitCount,		0x2f90, cpcount);
+V90P4_OFF(cpSequenceSymbols,	0x2f94, cpsym);
+/*
+ * The one that proves the region was renamed and not resized: everything from
+ * here on was named before this pass, so if the fields above have taken one
+ * byte too many or too few, this fails.
+ */
 V90P4_OFF(ctorArg8,		0x2f98, arg8);
 V90P4_OFF(cleared_2f9c,		0x2f9c, c2f9c);
 V90P4_OFF(cleared_2fa0,		0x2fa0, c2fa0);
@@ -65,8 +80,10 @@ typedef char v90p4_size[(sizeof(V90Phase4Modulator) == 0x2fac) ? 1 : -1];
  *
  * The scrambler's mem-initializer runs before the body, which is where the
  * blob's leading `lea 0x58(%esi),%edx ; call Scrambler<h,h>::C1` comes from.
- * `pad_0004` and `pad_0078` are left exactly as they were found; forty-two
- * unwritten members' state is not this function's business.
+ * `pad_0004` and everything from `scrambledBits` to `cpSequenceSymbols` are
+ * left exactly as they were found; forty-two unwritten members' state is not
+ * this function's business.  (That second region was `pad_0078` until it was
+ * named out; the constructor's behaviour is unchanged, which is the point.)
  * ===========================================================================
  */
 V90Phase4Modulator::V90Phase4Modulator(V90Parameters *p, unsigned int flag,

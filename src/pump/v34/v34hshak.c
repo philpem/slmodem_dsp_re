@@ -3370,9 +3370,9 @@ ApplyBulkDelay(void *objp, short delay)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "...Modifying dma delay from %d to %d\r\n",
-				    obj->f25c, obj->f25c - back);
+				    obj->dmadelay, obj->dmadelay - back);
 
-			obj->f25c = (short)((unsigned short)obj->f25c - back);
+			obj->dmadelay = (short)((unsigned short)obj->dmadelay - back);
 		}
 	} else {
 		obj->fa23c = 0;

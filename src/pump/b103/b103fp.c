@@ -15,6 +15,7 @@
 
 #include <string.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/b103fp.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_tone.h"
@@ -792,11 +793,44 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 		rx_bits[i] = (unsigned short)rx_out_internal[i];
 
 	/*
-	 * The original returns the whole 32-bit word at +0x1c -- status in the
-	 * low byte, flags in the next -- not just the status.  The switch it
-	 * runs first is debug-only: every arm returns the same thing, and only
-	 * status 5 ("Bell103 internal error detected!") prints anything.
+	 * The switch is debug-only -- every arm returns the same thing -- and
+	 * it was elided here until finding 2953.  `debug.h`'s policy is to
+	 * carry the call sites: the gate is real control flow and the strings
+	 * are the author's own words, and with the level at zero nothing else
+	 * can tell the two versions apart (finding 134).
+	 *
+	 * The eight-entry jump table at `.rodata+0x8e14` sends 0..4, 6 and 7
+	 * straight to the epilogue and 5 to the error message; anything above
+	 * 7 fails the `cmp $0x7` before the table is reached and prints the
+	 * other one.  Neither string has a trailing newline; that is the
+	 * object's.
+	 *
+	 * The scrutinee is the BYTE at +0x1c -- `movzbl 0x1c(%edx),%eax` --
+	 * while the return is the whole 32-bit word there, status in the low
+	 * byte and flags in the next.  The same four bytes read two ways, and
+	 * both readings are the original's.
 	 */
+	switch (fp->status) {
+	case 0:
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+	case 6:
+	case 7:
+		break;
+	case 5:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "Bell103 internal error detected!");
+		break;
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "Bell103 unknown internal state!");
+		break;
+	}
+
 	{
 		int word;
 

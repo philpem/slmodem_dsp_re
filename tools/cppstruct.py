@@ -61,11 +61,13 @@ USAGE
 
 import argparse
 import collections
-import glob
 import os
 import re
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import objtree                                            # noqa: E402
 
 BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
 
@@ -93,9 +95,16 @@ def demangle(names):
 
 
 def ours():
-    """Mangled names our own build already defines."""
+    """Mangled names our own build already defines.
+
+    REFUSES on an empty object tree rather than returning an empty set: with
+    one, every `--missing` column equalled its `members` column and the report
+    read as 73 classes with not one method written, at exit 0.  Findings 3055
+    and 3110; tools/objtree.py.
+    """
+    _d, objs = objtree.read("which members src/ already defines")
     found = set()
-    for o in glob.glob("build/src/**/*.o", recursive=True):
+    for o in objs:
         out = subprocess.run(["nm", "--defined-only", o],
                              capture_output=True, text=True).stdout
         for line in out.splitlines():

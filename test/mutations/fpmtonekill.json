@@ -1,0 +1,36 @@
+[
+ {
+  "label": "NOTE: FPM_TONE_kill is one call, so every claim it makes is an argument. There are five of them and this set has one mutation per argument, plus the two substitutions that are indistinguishable on an object FPM_TONE_create built and separate only on a redirected +0xfc.",
+  "_": "t_fpm_tone's kill block runs two passes for exactly that reason."
+ },
+ {
+  "label": "the coefficients come from the iir_coeff array rather than the stored pointer at +0xfc",
+  "find": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);",
+  "replace": "\tFPM_iir_filt_II(samples, state->iir_coeff, state->kill_state, 1, count);"
+ },
+ {
+  "label": "the kill pass shares the detector's filter state at +0x40 instead of owning +0x100",
+  "find": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);",
+  "replace": "\tFPM_iir_filt_II(samples, state->iir_self, state->iir_state, 1, count);"
+ },
+ {
+  "label": "two biquads instead of one, so it reads five coefficients and four state words past the end",
+  "find": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);",
+  "replace": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 2, count);"
+ },
+ {
+  "label": "the section count and the sample count are transposed",
+  "find": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);",
+  "replace": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, count, 1);"
+ },
+ {
+  "label": "one sample short: an off-by-one in the count",
+  "find": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);",
+  "replace": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, (short)(count - 1));"
+ },
+ {
+  "label": "the tone is left in: the call is dropped entirely",
+  "find": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);",
+  "replace": "\t(void)samples; (void)state; (void)count;"
+ }
+]

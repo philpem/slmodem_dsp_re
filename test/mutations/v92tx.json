@@ -10,12 +10,12 @@
  },
  {
   "label": "+0x0c is not cleared",
-  "find": "\tword_0c = 0;\n\tword_04 = 0;",
-  "replace": "\tword_04 = 0;"
+  "find": "\tword_0c = 0;\n\tK = 0;",
+  "replace": "\tK = 0;"
  },
  {
   "label": "+0x04 is not cleared",
-  "find": "\tword_0c = 0;\n\tword_04 = 0;\n",
+  "find": "\tword_0c = 0;\n\tK = 0;\n",
   "replace": "\tword_0c = 0;\n"
  },
  {

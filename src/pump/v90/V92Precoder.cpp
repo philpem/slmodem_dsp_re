@@ -134,12 +134,18 @@ V92Precoder::~V92Precoder()
  * filters at +0x68 and +0x6c are the only fields below +0x78 this does NOT
  * write, which is the map's best evidence -- see the header.
  *
- * THE BLOCK IS ADDRESSED AS WORDS WHERE V92ParamsInfo PADS IT.  Only ten of
- * its offsets are named there (four filter-coefficient pointers and six
- * constellations); the eighteen scalars this copies live inside `pad_00` and
- * `pad_6c` and have no names to use.  Reading them through `pad_*` rather
- * than through a cast of the whole block is what keeps the 64-bit build
- * honest: the two pointer arrays move there and the pads do not.
+ * THE BLOCK IS NOW NAMED, AND THIS FUNCTION READS THE NAMES.  It used to
+ * address the eighteen scalars it copies as words inside `pad_00` and
+ * `pad_6c`, because V92ParamsInfo.h had names for only the ten pointers.  The
+ * unpacker supplied the rest: the twelve are `m[0..11]`, the six are
+ * `LC[0..5]`, and the pointer this keeps is into `indexConstel`, which was
+ * `pad_9c` and which the header there described as "the eighteen bytes" --
+ * 0x18 read as decimal, and twenty-four in fact.
+ *
+ * `LC` is unsigned in the block, because the unpacker clamps it with `jbe`,
+ * and `tableB` is int; the cast below is that narrowing written down rather
+ * than left implicit.  Neither the values nor the codegen move: every LC the
+ * unpacker leaves is at most 0x80.
  *
  * The store order below is the object's, which interleaves the three groups
  * -- +0x50 before +0x08 before +0x20 -- and is the compiler's scheduling
@@ -149,24 +155,21 @@ void
 V92Precoder::reset(V92MappingParams *params)
 {
 	struct V92ParamsInfo *p = (struct V92ParamsInfo *)params;
-	const int *scalars = (const int *)p->pad_00;
-	const int *six = (const int *)p->pad_6c;
 	int i;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V92Precoder: reset 1 (with cfg) "
 				     "called\r\n");
 
-	paramsAt9c = (int *)p->pad_9c;
+	paramsAt9c = p->indexConstel;
 
 	for (i = 0; i < 6; i++) {
 		head[i] = (unsigned int *)p->constellations[i];
-		tableB[i] = six[i];
+		tableB[i] = (int)p->LC[i];
 	}
 
-	/* +0x1c through +0x48 of the block, which is word 7 onwards. */
 	for (i = 0; i < 12; i++)
-		tableA[i] = scalars[7 + i];
+		tableA[i] = p->m[i];
 
 	state0 = 0.0f;
 	state1 = 0.0f;

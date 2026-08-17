@@ -1,0 +1,138 @@
+# capture archive index -- written by testbench/archive.py
+# path	prefix	files	bytes	sha256(slmodemd.log)	cited_by
+ab149/ab149-1901-a0-1	ab149-1901-a0-1	9	12714524	084afb16287e73e1	(batch: ab149-*)
+ab149/ab149-1901-a0-2	ab149-1901-a0-2	9	9172620	f87ca2c1a692cc2a	(batch: ab149-*)
+ab149/ab149-1901-a0-3	ab149-1901-a0-3	9	12380656	e39f86778066a96e	(batch: ab149-*)
+ab149/ab149-1901-a0-4	ab149-1901-a0-4	9	5850481	176f85c68f22f812	(batch: ab149-*)
+ab149/ab149-1901-a0-5	ab149-1901-a0-5	9	11343036	ca7045b57c86ae40	(batch: ab149-*)
+ab149/ab149-1901-a0-6	ab149-1901-a0-6	9	12530868	03ba772e41b84682	(batch: ab149-*)
+ab149/ab149-1901-a1-1	ab149-1901-a1-1	9	10513508	88898cdd4d07b03b	(batch: ab149-*)
+ab149/ab149-1901-a1-2	ab149-1901-a1-2	9	12518953	7c7833c31bbd2b79	(batch: ab149-*)
+ab149/ab149-1901-a1-3	ab149-1901-a1-3	9	12565510	522be934fd5dca8b	(batch: ab149-*)
+ab149/ab149-1901-a1-4	ab149-1901-a1-4	9	12553382	9176494cfed00e74	(batch: ab149-*)
+ab149/ab149-1901-a1-5	ab149-1901-a1-5	9	9457396	96cf4aa33f11470e	(batch: ab149-*)
+ab149/ab149-1901-a1-6	ab149-1901-a1-6	9	9994144	9597fe8601880a17	(batch: ab149-*)
+ab149/ab149-1902-a0-1	ab149-1902-a0-1	9	14835399	cbfb625db7f835a4	(batch: ab149-*)
+ab149/ab149-1902-a0-2	ab149-1902-a0-2	9	8695944	01c50b4b0cbe1388	(batch: ab149-*)
+ab149/ab149-1902-a0-3	ab149-1902-a0-3	9	9886817	1c03b1c37b7ad4a3	(batch: ab149-*)
+ab149/ab149-1902-a0-4	ab149-1902-a0-4	9	14507859	3e20681fa250f197	(batch: ab149-*)
+ab149/ab149-1902-a0-5	ab149-1902-a0-5	9	11857501	da27d0ca0ca311da	(batch: ab149-*)
+ab149/ab149-1902-a0-6	ab149-1902-a0-6	9	12314497	9777d84ba73a9029	(batch: ab149-*)
+ab149/ab149-1902-a1-1	ab149-1902-a1-1	9	11598958	14411837a824a476	(batch: ab149-*)
+ab149/ab149-1902-a1-2	ab149-1902-a1-2	9	6909479	ecb4c548292a3901	(batch: ab149-*)
+ab149/ab149-1902-a1-3	ab149-1902-a1-3	9	11623258	2b1e5c2ab1c12525	(batch: ab149-*)
+ab149/ab149-1902-a1-4	ab149-1902-a1-4	9	11683187	cb57a93583995e7a	(batch: ab149-*)
+ab149/ab149-1902-a1-5	ab149-1902-a1-5	9	5609443	4884a1f73009ff8c	(batch: ab149-*)
+ab149/ab149-1902-a1-6	ab149-1902-a1-6	9	11708744	54c68bec25b9a8d0	(batch: ab149-*)
+ab149/ab149-batch	ab149-batch	1	2306	-	(batch: ab149-*)
+asym/asym-1	asym-1	9	5468216	cc868427d26161a7	echofit.py,echoscan.py,findings.md
+asym/asym-3	asym-3	9	10545854	04d679949f16ff21	findings.md
+b103/b103-ours-courier	b103-ours-courier	8	3404794	84a52a7d45235c45	findings.md
+b80/b80-1	b80-1	9	5358534	d90b5ddcaf3436f8	findings.md
+base/base-2	base-2	9	27361	11a3be28f58f27de	findings.md
+base/base-cx2	base-cx2	1	2534	-	batchcompare.py,findings.md
+base/base-cx2-1	base-cx2-1	9	7073977	792ac21f16243676	capture_io.py,findings.md
+base/base-cx2-10	base-cx2-10	9	8207689	838c48809411ce80	abextract.py
+base/base-cx2-12	base-cx2-12	9	11736590	b25e7fdeb8c84b56	findings.md
+base/base-cx2-2	base-cx2-2	9	9145248	1fbd14d0c9688423	abextract.py,findings.md
+base/base-cx2-3	base-cx2-3	9	5409607	4dc4b239decb2bb2	findings.md,replay.py,replaycmp.sh
+base/base-cx2-4	base-cx2-4	9	10535286	b53589cb858ccc42	findings.md
+base/base-cx2-5	base-cx2-5	9	10486921	3d9841f6aa126775	findings.md
+base/base-cx2-6	base-cx2-6	9	5408235	a0a14014466bb00b	findings.md
+batch/batch	batch	1	2224	-	ab149scan.py,batch.sh,batchanalyse.py,batchcompare.py,blobfix.md,deviations.md,findings.md,freezescan.py,modems.sh,relaycall.sh,v34handshak.md,v90cpp.md,v90rest.md,vpcmv34main.md
+batch/batch-23	batch-23	9	12572376	8221ea1bda305f5c	findings.md
+batch/batch-28	batch-28	9	8542892	1c87ed95598c747b	findings.md
+batch/batch-4	batch-4	9	7567738	ea0f46a6ab7d69e7	findings.md
+batch/batch-7	batch-7	9	5468226	d6f2e701b6dda22f	callstats.py
+cal/cal-loss001	cal-loss001	6	368063	-	findings.md
+cal/cal-loss003	cal-loss003	6	48448	-	findings.md
+cbase2/cbase2	cbase2	9	6955767	f20cd1829a712a5b	findings.md
+cbase3/cbase3	cbase3	9	6407985	263b88370fad6a4d	findings.md
+cjb20a2/cjb20a2	cjb20a2	9	8922089	76941c0b870ecaba	findings.md
+cjb20a3/cjb20a3	cjb20a3	9	6931158	9519a951215e32cf	findings.md
+ec2/ec2-supra-1	ec2-supra-1	9	5471193	a4e6ed7d03ea331c	findings.md
+ec2/ec2-supra-2	ec2-supra-2	9	5469325	1ac04f829b0a45b9	findings.md
+ec2/ec2-supra-3	ec2-supra-3	9	5472566	6fdd8f3b3aa0f397	findings.md
+ec2/ec2-supra-4	ec2-supra-4	9	10260440	70bf109d21d86f82	findings.md
+ec2/ec2-supra-5	ec2-supra-5	9	5602931	214067cf7b50d903	findings.md
+ec3/ec3-courier-1	ec3-courier-1	9	5627451	473da2c6659b3048	findings.md
+ec3/ec3-courier-2	ec3-courier-2	9	4564552	473a4ad543e0c260	findings.md
+ec3/ec3-courier-3	ec3-courier-3	9	4551774	409b6293c527fb26	findings.md
+ec3/ec3-courier-4	ec3-courier-4	9	6190604	94e6ff3c09336e61	findings.md
+final/final	final	1	2533	-	batchanalyse.py,coefficients.md,deviations.md,findings.md,holdlong.sh,largefunctions.md,row.sh,training.md
+final/final-10	final-10	9	5573232	39b607d0a8d849ca	findings.md
+final/final-28	final-28	9	5571089	ad0e449e1d782d8f	findings.md
+fit/fit-fit-1	fit-fit-1	9	10532899	348f4c05716a7506	findings.md
+fit/fit-fit-2	fit-fit-2	9	11560288	47d5ab7621d73ed2	findings.md
+fit/fit-off-1	fit-off-1	9	11666026	05081cb837bccc1d	findings.md
+fit/fit-off-2	fit-off-2	9	10378310	0080dd62700051ef	findings.md
+fitplot/fitplot	fitplot	1	186032	-	fitplot.py
+frz/frz-olinet-1	frz-olinet-1	10	9796765	87fcc77d2eff6405	findings.md
+frz/frz-olinet-2	frz-olinet-2	10	19673307	d8087f768c83079a	findings.md
+frz/frz-olinet-3	frz-olinet-3	10	9775150	ca39ea362cb014d6	findings.md
+hold/hold-1	hold-1	10	9055292	c709d8b269e096ea	findings.md
+hold/hold-2	hold-2	10	11755277	d5d60f7d0b869a42	findings.md
+hold/hold-3	hold-3	10	15589096	c4b0f83e7febe2b2	findings.md
+hold/hold-4	hold-4	10	16431156	5d16207ced59b97f	findings.md
+hold/hold-5	hold-5	10	15746187	a71bf137a42026e6	findings.md
+hold/hold-6	hold-6	10	15341623	1d88c60260bc2975	findings.md
+holdlong/holdlong	holdlong	1	261	-	holdlong.sh
+jb/jb-adapt-1	jb-adapt-1	8	12686183	779673d032e45057	findings.md
+jb/jb-base-1	jb-base-1	8	17033808	593d20dddd57a3ab	findings.md
+jb/jb-deep-1	jb-deep-1	8	10505588	a78dbbcf676a00af	findings.md
+jb/jb-shallow-1	jb-shallow-1	8	9362630	f310ef9fcb470e69	findings.md
+m3/m3-olinet-fit-1	m3-olinet-fit-1	10	10755131	47e22c458b51f7cc	findings.md
+m3/m3-olinet-off-1	m3-olinet-off-1	10	15646334	c09ada72f626c41a	findings.md
+m3/m3-supra-fit-2	m3-supra-fit-2	10	11942445	df302a9c71364d2c	findings.md
+m3/m3-supra-off-1	m3-supra-off-1	10	10481449	be3a6312d73468ba	findings.md
+m3/m3-supra-off-2	m3-supra-off-2	10	9191369	532e7ff617ad7e43	findings.md
+n10/n10-2	n10-2	9	5549662	3230706d334b7050	findings.md
+n10/n10-3	n10-3	9	5568081	4d741cc7233e637a	findings.md
+n10/n10-5	n10-5	9	7907776	4dccd9c858db4037	findings.md
+n20/n20-1	n20-1	9	5381446	1cb6498f6f93ef29	findings.md
+n20/n20-2	n20-2	9	5374814	b8ef0b52dfd9d981	findings.md
+n20/n20-4	n20-4	9	5565289	5e6a0dbadc27ad3f	findings.md
+na/na-check-1	na-check-1	8	12744469	021989136f88d848	findings.md
+pab3/pab3-bug-1	pab3-bug-1	10	4498732	01a4990489c28493	findings.md
+pab3/pab3-fix-2	pab3-fix-2	10	9044388	2768ddeafa5e7990	findings.md
+pab3/pab3-fix-3	pab3-fix-3	10	4507995	64385904d736e935	abextract.py,findings.md
+pab3/pab3-fix-4	pab3-fix-4	10	4537414	8e17f98201993c1a	findings.md
+preemph/preemph-ab	preemph-ab	1	657	-	abcompare.py,abextract.py,preemph_ab.sh
+preemph/preemph-ab-ANALYSIS-PLAN	preemph-ab-ANALYSIS-PLAN	1	4108	-	abcompare.py,findings.md
+preemph/preemph-ab2	preemph-ab2	1	1096	-	abcompare.py,preemph_ab2.sh
+preemph/preemph-ab2-ANALYSIS-PLAN	preemph-ab2-ANALYSIS-PLAN	1	7378	-	findings.md,preemph_ab2.sh
+preemph/preemph-fit-ANALYSIS-PLAN	preemph-fit-ANALYSIS-PLAN	1	6928	-	findings.md,preemph_fit_ab.sh
+probe/probe	probe	3	872772	-	atprobe.py,audiostats.py,call.py,chirpdelay.py,deviations.md,findings.md,fitplot.py,freezescan.py,holdlong.sh,linesim.py,modemid.py,modems.sh,probeplot.py,training.md,v21decode.py,v34handshak.md
+probe/probe-1	probe-1	8	11365356	d934737a599a273e	probeplot.py
+probe/probe-2	probe-2	9	10782533	42b3fb740ce40f56	findings.md
+qk/qk-courier-1	qk-courier-1	10	20323929	992ad0e269d92e32	findings.md
+qk/qk-courier-2	qk-courier-2	10	20128133	0eff35ff90eab7f8	findings.md
+qk/qk-olinet-1	qk-olinet-1	10	21027267	21869b81c970c25d	findings.md
+qk/qk-olinet-2	qk-olinet-2	10	21154368	7a862fe229da0de3	findings.md
+regress/regress	regress	8	5466018	34b544f23f1d851b	deviations.md
+relay/relay-1	relay-1	4	19245	-	relaycall.sh
+rrn/rrn-olinet-on-1	rrn-olinet-on-1	10	21092629	fc579bccf540716f	findings.md
+rt/rt-1	rt-1	9	14045448	cbc8563737a33393	findings.md
+rt/rt-2	rt-2	9	12248780	575efbc8ce331d40	findings.md
+rt/rt-3	rt-3	9	12229677	cf05cb24c0738652	findings.md
+rt/rt-4	rt-4	9	11560334	133fd7a67426c92e	findings.md
+rt/rt-5	rt-5	9	12386560	5fb8485b8986727d	findings.md
+rt/rt-6	rt-6	9	12408631	0cb448bff329e00c	findings.md
+rt/rt-7	rt-7	9	12429612	1269088ff78cce49	findings.md
+rt/rt-8	rt-8	9	13481444	0a8ea95ff6737551	findings.md
+rtp/rtp-1	rtp-1	6	837442	-	findings.md
+rtp/rtp-2	rtp-2	6	838460	-	findings.md
+src/src-courier-1	src-courier-1	10	13729750	42cc4829b29b7ae4	findings.md
+src/src-courier-2	src-courier-2	10	19893285	ca885b1517a52b57	findings.md
+src/src-courier-3	src-courier-3	10	20019449	954fb8b956d81e18	findings.md
+src/src-olinet-1	src-olinet-1	10	23329718	065034362ac47a18	findings.md
+src/src-olinet-2	src-olinet-2	10	21288724	7734fc069c398ded	findings.md
+src/src-olinet-3	src-olinet-3	10	21188836	b352f1b84d0ba211	findings.md
+v34/v34-uk-1	v34-uk-1	9	5411768	f36ddc31175c8a6c	audiostats.py
+v34/v34-us-1	v34-us-1	9	5558201	fbd2fbd03d44d57e	audiostats.py,findings.md
+why/why-courier-1	why-courier-1	10	19846510	bb88da2f6e3d6963	findings.md
+why/why-courier-2	why-courier-2	10	19915920	d5f1f0fa4b87d2dd	findings.md
+why/why-courier-3	why-courier-3	10	5512244	7990b53dbe178711	findings.md
+why/why-olinet-1	why-olinet-1	10	21121314	7c13a46ccad40ee0	findings.md
+why/why-olinet-2	why-olinet-2	10	24573906	8bff46bef202add1	findings.md
+why/why-olinet-3	why-olinet-3	10	2867171	732c0eb28e456897	findings.md

@@ -6465,3 +6465,639 @@ sweep. Fix class: none proposed; reproduced as found.*
 The whole build loop is skipped, count stays at its initial 1, and the trim
 and extend arms both see `nof == count` and do nothing. Finding 2186 records
 why reaching this at all took the sweep to be re-parameterised.
+
+## D349 🐛 `calcModulusParameters` shifts a 64-bit one by an unbounded count
+
+*Batch of 2026-08-16, from `_ZN21V90ConstellationPower21calcModulusParametersEP16V90MappingParams`
+(blob 0x3dd80) at 0x3dd96..0x3ddb0. **Reachability: any
+`mappingParams->shaperSR + mappingParams->word_0` outside [6, 69] -- the count
+is that sum less six, formed with no test of any kind.**
+**Observability: the i386 sequence is `shld %cl,%ebx,%esi ; shl %cl,%ebx ;
+test $0x20,%cl`, which masks the count to six bits, so a count of 64 produces
+1 rather than 0 and a count of 70 produces 64; and above 62 the one lands in
+or past the sign bit of a SIGNED `long long`, after which every `__divdi3`
+below it divides a negative.** Status: unmeasured -- nothing reconstructed
+calls this member, so no caller's range is known.  The differential test holds
+the count in 0..62; a shift outside that is undefined in the source language
+and the two compilers are entitled to differ for reasons that are not the
+reconstruction's.  Fix class: none proposed; reproduced as found.*
+
+`V90MappingParams::shaperSR` is written by
+`V90ConstellationDesigner::spectralDesign` out of the parameter block and is
+`int`; `word_0` is unsigned.  Nothing between the two writes and this read
+bounds either.  Finding 3050.
+
+## D350 ⚠ `getPowerIndexForPower` walks its whole ladder for a NaN
+
+*Batch of 2026-08-16, from `_ZN21V90ConstellationPower21getPowerIndexForPowerEf`
+(blob 0x3e320) at 0x3e338 and 0x3e352 (`fcomp %st(1) ; fnstsw %ax ; sahf`).
+**Reachability: a NaN argument.** **Observability: an unordered compare leaves
+C0 set, so `jae` is not taken and `setb` yields 1 at every step -- the walk
+runs all 34 turns and returns 0, the same answer an enormous power gives.**
+Status: unmeasured; the compare is a bare ordered `fcom` with no parity test,
+which is what `-mno-ieee-fp` emits for every comparison in the object (finding
+1990), so a NaN case would be measuring the two builds' float-compare flags
+rather than the reconstruction.  The differential test drives both infinities
+and stops there.  Fix class: none proposed; reproduced as found.*
+
+Recorded rather than driven because the return is a saturating index and not a
+failure code -- 0 is a legal answer, so nothing downstream can tell the NaN
+apart.  Finding 3051.
+
+## D351 🐛 `adjustConstellationsToNewK` writes one past a constellation row when it has exactly 128 points
+
+`V90ConstellationDesigner::adjustConstellationsToNewK` refuses to add a point
+when the row would exceed 128 -- `cmp $0x80,%eax; ja` at 0x4c726, so 128 is
+ACCEPTED -- and the shift that follows then runs
+
+```c
+for (j = mappingParams->constellationSize[minIndex]; j != 0; j--) {
+	mappingParams->codecConstellation[minIndex][j] = ...[j - 1];
+	mappingParams->constellation[minIndex][j] = ...[j - 1];
+}
+```
+
+with `j` reaching 128, which is one past the row.  `V90MappingParams` tiles
+exactly, so the write is not off the end of the object and lands on a
+NEIGHBOUR:
+
+    constellation[k][128]        is  constellation[k + 1][0]        (k < 5)
+    constellation[5][128]        is  codecConstellation[0][0]
+    codecConstellation[k][128]   is  codecConstellation[k + 1][0]   (k < 5)
+    codecConstellation[5][128]   is  the low byte of constellationSize[0]
+
+**Reachability: a row that reaches 128 points, which the add pass produces
+whenever the constellations start large enough that the product cannot cross
+the next power of two before one row fills.** **Observability: the next
+member to read that neighbour reads a value the design never chose, and the
+`constellationSize[0]` case turns a length into an arbitrary byte.** Status:
+measured -- reproduced under the fixture of `test/unit/t_v90cdadjust.cpp` with
+constellation lengths above 60, and read off the core dump the follow-on
+non-termination (D352) produced.  Fix class: bound the shift at 127, or
+refuse at 128 rather than above it.  Reproduced as found; the differential
+test keeps every length at 45 or below so that the pass cannot reach 128, and
+the test's header says so.
+
+## D352 🐛 `reconstructInitialConditions` decrements a length more times than the row has points, and the next round never terminates
+
+D342 records that the search in
+`V90ConstellationDesigner::reconstructInitialConditions` has no bound.  This
+is what happens when it overshoots.  The member is
+
+```c
+while (p->constellation[k][drop] != target)
+	drop++;
+while (drop != 0) {
+	unsigned int n = p->constellationSize[k];
+	unsigned char i;
+	for (i = 0; i < n; i++) { ... }
+	p->constellationSize[k]--;
+	drop--;
+}
+```
+
+so `drop` larger than `constellationSize[k]` decrements an UNSIGNED length
+past zero.  The round after that has `n == 0xFFFFFFFF` and an `unsigned char`
+index, `i < n` is true for every one of the 256 values `i` can take, and the
+loop runs for ever.
+
+**Reachability: any caller whose saved first byte is no longer within the
+first `constellationSize[k]` entries of the row -- which D351 produces
+directly, by overwriting `constellation[k + 1][0]` with a value from row
+`k`.** **Observability: total, the modem stops.** Status: measured -- the
+combination hangs, and `#0 reconstructInitialConditions ... n = 4294967295,
+k = 5` is off the core.  Fix class: bound `drop` by the length, or widen `i`.
+Reproduced as found.
+
+## D353 ⚠ `process` shifts the digital rate mask by a negative count
+
+`V90ConstellationDesigner::process` tests the provider's rate mask with
+
+```c
+if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0)
+```
+
+-- `sub $0x15,%ecx; sar %cl,%eax` at 0x4ce54 -- and the test is made BEFORE
+the `word_0 <= 20` check that would have ruled the value out.  A `word_0`
+below 21 therefore shifts by a negative count, which is undefined in C; the
+i386 masks the count to five bits and both sides do the same thing, so the
+differential test cannot see it.
+
+**Reachability: any design that lands under the minimum, which is the arm
+whose own diagnostic is "Connection design ERROR, D choosen is smaller than
+minimum".** **Observability: the banner is printed or not printed on the
+strength of an arbitrary bit; nothing else depends on it.** Status:
+unmeasured on the wire.  Fix class: test the floor first.  Reproduced as
+found, and the differential test drives `word_0` below 21.
+
+## D354 ⚠ `adjustConstellationsToNewK` leaves its removed-point count naming a point it has put back nowhere
+
+The removal pass ends by restoring the last point it took out, and the whole
+restore -- INCLUDING the `removed--` -- is skipped when the row is down to a
+single point:
+
+```c
+if (mappingParams->constellationSize[maxIndex] != 1) {
+	...restore...
+	removed--;
+}
+edprintf("... nof points removed %d \r\n", removed);
+```
+
+`cmp $0x1,%eax; je` at 0x4c4ce jumps straight to the diagnostic.  So on that
+path the count is one larger than the number of points actually gone, and the
+constellation keeps a point the member's own accounting says it returned.
+
+**Reachability: a removal pass that empties a row down to one point, which
+needs a constellation the design has already cut hard.** **Observability: the
+count is a diagnostic only; nothing reads it back.** Status: unmeasured.  Fix
+class: decrement outside the guard, or guard only the shift.  Reproduced as
+found.
+
+## D355 🐛 `constellationDesign` and `process` drop an argument on the arm that does not force the rate
+
+Both members pass seven-argument and six-argument forms of the same design
+call, and on the six-argument arm the argument that goes into
+`setConstellationToNoise`'s `unsigned char *` slot is the SIXTH they were
+handed and not the fifth -- which is never passed at all.  In
+`constellationDesign` the fifth is never stored to the outgoing frame (%ecx
+holds it from 0x54(%esp) at 0x4cad3 and is written nowhere); in `process` the
+ninth is not (0x84(%esp) is loaded only on the forced arm, at 0x4cf13).
+
+**Reachability: `FORCE_RATE_ENABLE` clear, which is the ordinary case.**
+**Observability: `setConstellationToNoise` reads that argument as the
+per-phase top ucode and bounds its staging loop with it, so the wrong one
+changes which points enter every constellation.** Status: unmeasured against
+the standard -- what the two arrays hold in a live session is not known here.
+Fix class: pass the fifth.  Reproduced as found; `test/unit/t_v90cdadjust.cpp`
+gives the two arrays different per-phase spans so that the reading is
+measured rather than assumed, and the mutation set carries the swap.
+
+## D356 🐛 `constellationDesign` divides by zero when the design it just made leaves a phase empty
+
+`setConstellationToNoise` sets `constellationSize[k]` to the number of ucodes
+its staging loop accepted, and that number is ZERO whenever no index in
+`[unnamed_360, lastUcode[k]]` clears the phase's threshold -- there is no
+floor on it and D341 records the sibling case where a phase is left unwritten
+altogether.  `constellationDesign` then calls `adjustConstellationsPower` if
+`ENABLE_DIGITAL_POWER_REDUCTION` is set, whose first act is
+
+    power->getPower(mappingParams, 1, word_2c)
+
+and whose `calcModulusParameters` computes `remaining[i] %
+constellationSize[i]` through `__moddi3`.  A zero divisor there is a divide
+error and the process takes SIGFPE.  `process` reaches the same call the same
+way.
+
+**Reachability: any design that leaves one of the six phases with no points,
+which needs only a threshold above every ucode in that phase's span.**
+**Observability: total, and immediate -- the modem dies rather than
+misbehaving.** Status: measured, in the sense that it was REPRODUCED: the
+first composed sweep in `test/unit/t_v90cdadjust.cpp` took SIGFPE with
+`constellationSize = {0, 8, 0, 18, 1, 22}`, and `coredumpctl debug` put the
+top frame in `__moddi3` under `calcModulusParameters` under
+`adjustConstellationsPower` under `constellationDesign`.  What is NOT measured
+is whether a live session can produce an empty phase; nothing here bounds the
+ucode tables a real detector fills.  Fix class: floor the length at one, or
+skip the power pass on an empty phase.  Reproduced as found; the test's
+composed groups use a fixture that cannot produce an empty phase and its
+header says why.
+## D370 🐛 `FSE_decision_128pt`'s outer ambiguous cell returns the FARTHER of its two candidates
+
+*Batch of 2026-08-16, from `FSE_decision_128pt` (blob .text 0x804e0) at
+0x806cf-0x806db: `xor %eax,%eax ; cmp %cx,%bx ; setge %al ; dec %eax ; and
+$0xfffffff4,%eax ; add $0x1a,%eax`, where `%bx` holds the squared distance to
+point 26 and `%cx` the one to point 14.  `setge` therefore selects point 26
+exactly when 26 is the FARTHER of the two, and point 14 otherwise.*
+**Reachability: any received symbol whose rotated coordinates satisfy
+`ri > 14481` and `rq >= 14481` -- 603,901,812 of the 2^32 (I, Q) pairs, and
+the cell is entered on ordinary 14400 bit/s traffic.**
+**Observability: the two distances differ at 603,873,842 of those
+603,901,812 points, and at every one of them the object returns the point a
+nearest-neighbour decision would reject.  Witness I = -32767, Q = -12286.**
+*Status: 🐛 defect in the original, reproduced as written.  Fix class: none
+proposed -- the slicer's own decision feeds the equaliser and the carrier
+loop, not the bit stream, so the cost is a worse error term in a cell that a
+Viterbi decoder is about to overrule anyway.*
+
+The second ambiguous cell, twenty-five instructions further on at 0x807d1, is
+the same shape with `setle` and picks the NEARER of ITS two candidates.  So
+this is not one tie-breaking convention applied twice: the two arms of the
+same construct disagree about which direction the comparison runs, which is
+what makes the first one a slip rather than a choice.  Finding 3218.
+
+## D371 🐛 `FSE_decision_128pt` carries point 26's I coordinate as a literal one greater than the table's
+
+*Batch of 2026-08-16, from `FSE_decision_128pt` at 0x806bc, `mov
+$0x3e3a,%eax` -- 15930 -- used as the I coordinate of constellation point 26,
+where `DECv32_ANA_IMAP128[26]` (.rodata 0x75c0 + 0x34) is 15929.*
+**Reachability: the same cell as D370.**
+**Observability: the one-LSB difference survives the `>> 13` and flips the
+decision between points 14 and 26 at 48,490 of the cell's 603,901,812 points.
+Witness I = -32767, Q = -3841.**
+*Status: 🐛 defect in the original, reproduced as written -- `src/` carries
+`0x3e3a` and not the table entry.  Fix class: none proposed.*
+
+**THE OTHER THREE LITERALS ARE RIGHT, WHICH IS WHAT MAKES THIS ONE A FINDING
+AND NOT A COMPILER ARTEFACT.**  The two tie-breaks name four I coordinates as
+immediates -- 0x2799 twice, 0x32e9 and 0x3e3a -- and the first three equal
+`DECv32_ANA_IMAP128[14]`, `[15]` and `[24]` exactly.  A constant fold out of
+the const table would have produced 15929 here too; a hand-written constant
+would not have to.  Finding 3218.
+
+## D372 🐛 `FSE_decision_128pt`'s region tree puts the same rq boundary in two different places
+
+*Batch of 2026-08-16, from `FSE_decision_128pt`'s region tree.  Two arms cut
+the rotated Q axis one way -- 0x80750 and 0x80801 both encode `cmp $0x2d40,%bx
+; jg` and 0x8075d and 0x80811 both encode `cmp $0x169f,%bx`, so the bands are
+`rq >= 0x2d41` and `rq >= 0x16a0` -- and the third cuts it the other way, with
+`cmp $0x2d41,%bx ; jle` at 0x80644 and `cmp $0x16a1,%bx ; setl` at 0x808b2, so
+its bands are `rq <= 0x2d41` and `rq <= 0x16a0`.  The two nominal boundaries
+are 5792 and 11585 and each is claimed by the band above it in the first two
+arms and by the band below it in the third.*
+**Reachability: 82,597 (I, Q) pairs rotate to `rq` exactly 5792 with
+`ri > 11585`, which is the third arm.**
+**Observability: at every one of those 82,597 the object searches the cell at
+base 0x1c and a single uniform convention would search base 0x18, and the two
+never agree on the point.  Witness I = -32768, Q = -24576.**
+*Status: 🐛 inconsistency in the original, reproduced arm by arm.  Fix class:
+none proposed.*
+
+The same one-apart pattern is in `FSE_decision_64pt`, where it is between the
+AXES rather than between arms: the I bands are `i > 0x2000` and `i <= 0xe000`
+while the Q bands are `q > 0x1fff` and `q >= 0xe000`, so a symbol at exactly
+(8192, 8192) is inner in I and outer in Q.  Recorded here rather than as a
+fourth entry because it is one construct read twice, and because `_64pt` runs
+on the symbol as received, where a test can put a value on the line directly.
+Finding 3217.
+## D380 ⚠ Object +0x08 has two of the author's own names, `ptc` and "Max Block Length"
+
+
+**This was numbered D351 when it was written.** It was renumbered to D380 at merge time: `v90-designer-methods` claimed D351-D356 concurrently, both branches having surveyed when the maximum was D350. Nothing outside this file, `v34pcmif.c`, `v34pcmif.h` and its finding ever referred to it as D351.
+*Batch of 2026-08-16, from `VPcmV34SetMaxBlockLength` (blob 0x6500) at 0x6512
+and its string at `.rodata.str1.4+0x980`, against `initdigital`'s string for
+the same offset. **Reachability: every caller of either function -- this is a
+naming disagreement in the object, not a code path.** **Observability: none at
+runtime. `struct v34_object` +0x08 is one field with one value however it is
+spelled; what is observable is only that a reader of one string will not find
+the other.** Status: unmeasured, and not measurable -- there is no behaviour
+here to drive. Fix class: none proposed; the field keeps `ptc`.*
+
+`initdigital` prints +0x08 as "PTC" in "for tx data rate - %d, PTC - %d,
+setting nofTxBits to %d" and computes `nof_tx_bits` from it, so `ptc` has a
+READER behind it. `VPcmV34SetMaxBlockLength` stores its argument there and
+reports "VPcmV34Main: Max Block Length modified to %d", and has only a writer.
+The tree's rule is that a printed label names a field; applied twice to one
+offset it gives two answers, so the tie is broken on which name has a use
+behind it rather than on which string was read most recently.
+
+Recorded rather than silently resolved because a future reader who finds the
+"Max Block Length" string and greps for a field of that name will conclude the
+tree missed it.  Finding 3304.
+## D360 🐛 `V22_FSE_init` zeroes the first 49 history entries twice
+
+*Batch of 2026-08-16, from `V22_FSE_init` (blob 0x08cd00) at 0x8cdd9 and
+0x8cdf0.  **Reachability: every call.**  **Observability: none -- both loops
+write zero to the same 49 entries, and the second then carries on to 97.**
+Status: verified bit-exact; the second loop's bound, 0x61, is what the test
+asserts by leaving a marker above index 48 and requiring it to be cleared.
+Fix class: none proposed; reproduced as found.*
+
+The coefficient loop clears `hist[i]` for i in 0..48 as a side effect of
+walking the 49 taps, and the loop after it clears `hist[i]` for i in 0..97.
+The first clear is entirely redundant -- `hist` is 98 shorts and the second
+loop covers all of it.  Recorded because the redundancy is the kind of thing a
+reader corrects without noticing, and correcting it would be a source change
+with no test able to see it.  Finding 3500.
+
+## D361 ⚠ `FSEv22_decision24` falls back on index 0, which is outside its own search window
+
+*Batch of 2026-08-16, from `FSEv22_decision24` (blob 0x0884a0) at 0x88541 and
+0x88545 (`mov %edx,0x8(%esp)` with `%edx` zero, then `shl $0xc,%ecx`).
+**Reachability: a symbol more than 8192 from both of the two candidates the
+sign and amplitude tests selected -- roughly, any point whose Q coordinate is
+further than one constellation spacing outside the outer ring.**
+**Observability: the returned symbol, the reported angle and the reported ring
+are all those of constellation index 0 rather than of the nearer candidate, so
+a badly off point in any quadrant decodes as if it were in the third.**
+Status: unmeasured against a real receiver -- nothing reconstructed drives this
+slicer from live samples yet.  The differential test drives it over the whole
+16-bit range on both axes and counts the trials that take this path, requiring
+that count to be non-zero.  Fix class: none proposed; reproduced as found.*
+
+The initial best distance is `thresh[0] << 12`, the same 8192 the amplitude
+test uses, rather than 0x7fff.  `FSEv22_decision12` uses 0x7fff and has no
+equivalent.  Finding 3503.
+
+## D362 ⚠ `FSEv22_decision12` accumulates its squared distance in sixteen bits
+
+*Batch of 2026-08-16, from `FSEv22_decision12` (blob 0x088680) at 0x886de
+onwards (`imul %edx,%edx ; imul %eax,%eax ; sar $0x10 ; sar $0x10 ; add ;
+movswl %dx,%eax`).  **Reachability: any point far enough from a candidate that
+the axis error exceeds about 23,170, since the two shifted squares then sum
+past 32767.**  **Observability: the sum wraps negative and that candidate wins,
+so the point decodes as the one it is FURTHEST from.**  Status: unmeasured
+against a real receiver; the differential test counts the trials on which a
+full-precision search would choose differently and requires that count to be
+non-zero.  Fix class: none proposed; reproduced as found.*
+
+Each axis error is truncated to a short before squaring, the 32-bit square is
+shifted down sixteen, and only then are the two added -- and the sum is
+truncated to a short again before the comparison.  Finding 3501.
+
+## D363 🐛 `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not have
+
+*Batch of 2026-08-16, from `Detect_v22` (blob 0x08c1c0).  **Reachability: every
+call.**  **Observability: none -- the call is cdecl, the caller cleans up, and
+the callee never reads the slot.**  Status: verified bit-exact; reproduced as a
+three-argument call, exactly as `src/pump/v23/bwchdem.c` already does at the
+same callee.  Fix class: none proposed.*
+
+The object pushes a constant 1 as a fourth argument.  `FPM_AGC_agc` takes
+three.  Unlike `bwchdem.c`'s site this caller also discards the return value,
+so no `agc.signal` read-back is needed to stay faithful.  Finding 3507 for what
+this function does.
+
+## D364 ✅ `ModDataV22` narrows `V22_PPS_filter`'s `short` to `unsigned short`
+
+*Batch of 2026-08-16, from `ModDataV22` (blob 0x08e310) at 0x8e369
+(`movzwl %ax,%eax` immediately before the return).  **Reachability: every call
+whose pulse shaper returns a negative count, which nothing reconstructed
+produces.**  **Observability: the sign.**  Status: verified bit-exact over the
+domain the differential test drives, which includes a sample count with bit 15
+set.  Fix class: none proposed; the truncation is the CALLER's and lives in
+`v22data.c`, and `v22_pps.h`'s `short` return is unchanged.*
+
+Recorded so that the disagreement between the two declarations reads as
+deliberate rather than as one of them being wrong.
+
+## D365 ✅ `V22FP_TX_CLOCK` and `V22FP_PPS` are two names for one address
+
+*Batch of 2026-08-16.  **Reachability: not a behavioural difference at all.**
+**Observability: none.**  Status: verified -- `fp + 0x78` is written by
+`TxClockSync` under the first name and is the base `V22FP_create` hands
+`V22_PPS_init` under the second.  Fix class: both names are kept and
+cross-referenced until `V22FP_create` lands and the object gets a real type,
+at which point both become one struct member.*
+
+Recorded here rather than silently unified because a reader meeting the two
+constants would otherwise have to rediscover that they collide.  Finding 3505.
+
+## D366 ✅ `V22FP_delete` drops a second argument that no callee reads
+
+*Batch of 2026-08-16, from `V22FP_delete` (blob 0x088330).  **Reachability:
+every call.**  **Observability: none -- cdecl, the caller cleans up, and none
+of the four callees touches anything but its first argument.**  Status:
+verified bit-exact.  Fix class: none proposed; reproduced as four
+one-argument calls.*
+
+The object pushes a literal 1 as a second argument to `V22_PPS_free`,
+`V22_MRF_free`, `V22_SRE_free` and `V22_FSE_free`, four times with a fresh
+`mov $0x1` each -- so the author declared all four with two parameters.  This
+tree reconstructed all four from their own bodies, where the second parameter
+is dead, and one of the four headers belongs to another effort.  The same
+shape as D363, at four sites instead of one.
+
+## D390 ⚠ Two of `V90CP`'s counts travel wider than the arrays they index
+
+**This was written five numbers lower**, and moved up before it left its
+branch: a sibling claimed the number immediately above D380 while this batch
+was running, and five free numbers is not a gap when six branches are open at
+once.  Nothing outside this file, `include/dsplib/V90CP.h` and
+`test/unit/t_v90cpinfo.cpp` ever referred to it by the old number, and it is
+spelled out here rather than cited so that the survey's own tool does not read
+a retired number as a live reference.
+
+*Batch of 2026-08-16, from `V90CP::infoToBits` (blob 0x52230) and
+`V90CP::evaluateInfo` (0x519f0). **Reachability: any peer that sends a large
+count, and any local caller that sets one.** **Observability: a read or a
+write past the end of the array, identical on both sides -- so it is not a
+DIFFERENCE and no differential test can fail on it.** Status: unmeasured. Fix
+class: none proposed; reproduced exactly, and `t_v90cpinfo` bounds its own
+seeds instead.*
+
+`nof_58[k]` is carried in nine bits, so up to 511, and `short_58[k]` holds
+384.  `nof_buf[k]` is carried in eight bits, so up to 255, and `buf[k]` is a
+0x200-byte allocation holding 128 four-byte entries.  Both loops run to the
+count with no clamp, in both directions: `infoToBits` READS past the end and
+`evaluateInfo` WRITES past it.
+
+The author knew about the second one.  `bitsToInfo` carries
+"*** error CP bit , not enouch memory in the buffer ***" and reaches it from
+five separate sites, so the guard exists -- one layer out, in the member that
+feeds the bit vector, and not in the two that walk it.  Nothing was found that
+guards the first.
+
+Recorded rather than clamped because clamping would be a behaviour change that
+no test could justify, and because a later reader who seeds a count of 384 into
+all four lists will watch both sides walk off the end of a 12,000-byte bit
+vector together and need to know that is the object and not the
+reconstruction.
+## D381 ⚠ Two special spectral conditions at once: the log says both, the field says the later one
+
+*Batch of 2026-08-16, from `V90SpectralVerifier::checkSpecialSpectralConditions`
+(blob 0x45f10).  **Reachability: any line that trips more than one of the
+three conditions.**  **Observability: yes -- the diagnostic stream and
+`+0x28` disagree.**  Status: verified bit-exact; reproduced deliberately and
+driven by the `both_isdn_and_pbx` and `all_three` cases in
+`test/unit/t_v90specialcond.cpp`.  Fix class: none proposed -- an `else`
+chain would change which condition is reported.*
+
+The three tests are sequential `if`s.  `movl $0x2,0x28(%edi)` at 0x46588 and
+`movl $0x3,0x28(%edi)` at 0x46573 store without testing what is already in
++0x28, so a line that trips both the German ISDN NT1 box test and the German
+PBX test prints
+
+    V90SpectralVerifier: German ISDN NT1 box conditions detected!
+    V90SpectralVerifier: German PBX conditions detected!
+
+and leaves 2 in +0x28.  `V90Equalizer` reads that field at three sites and
+compares it against 2, so the ISDN detection is silently discarded by the one
+consumer this tree has written.  Whether the three conditions are meant to be
+mutually exclusive in practice is not something the object states; what it
+states is that nothing enforces it.  The `three tests are an else chain`
+mutation in `test/mutations/v90specialcond.json` is what holds this reading.
+## D400 ⚠ `FPM_SRE_init`'s reuse test guards THREE buffers with the size of a fourth
+
+*Renumbered at commit time from the number this batch first gave it, which
+three live branches had each taken independently while the work was in
+progress; the block below four hundred was exhausted by `master` and by the
+sibling agent writing `FPM_FSE_receive`. Re-surveying at COMMIT time rather
+than at claim time is what docs/plan.md asks for, and this is why. The old
+number appears in one commit message on `fpm-shared-dsp`, which cannot be
+rewritten.*
+
+*Batch of 2026-08-16, from `FPM_SRE_init` (blob 0x0aa7c0).  **Reachability: a
+re-init (`fresh` zero) whose configuration raises `rms_len` without raising
+`coeffs`.  No such call is reconstructed, so unmeasured.**  **Observability: a
+heap overrun of `2 * (new rms_len - old rms_len)` bytes in init's own clear
+loop, which the differential tier cannot see because both sides overrun
+identically.**  Status: unmeasured.  Fix class: none proposed; reproduced.*
+
+The reuse path is
+
+    if (!fresh && sre->cfg.coeffs < cfg->coeffs) { free x4; fresh = 1; }
+
+so the decision to keep the four existing buffers is made on `coeffs` alone.
+Three of the four are sized on `coeffs` or on `taps`, which is `coeffs / 10`,
+and that is sound. **`rms_buf` is sized on `cfg.rms_len`, which the test does
+not look at.** A re-init that raises `rms_len` alone therefore keeps a buffer
+that is now too small, and the clear loop immediately below runs to the NEW
+`rms_len`.
+
+`FPM_PPS_init` has the same shape and does NOT have the bug -- its test is
+`state->taps < cfg.coeffs / cfg.phases`, which is the size of the buffers it
+guards. So this is a slip in one of two sibling functions rather than a
+convention.
+
+**CONFIRMED AT THE BATCH OF 2026-08-17, WHICH WROTE `FPM_PPS_init`, AND THE**
+**VERDICT IS UNCHANGED.** The claim above was a reading made while writing
+`FPM_PPS_filter`, and this entry is amended rather than rewritten because
+nothing in it turned out to be wrong. Two things are now firmer than they were.
+
+*The disassembly settles it outright.* `cltd; idiv %esi` at 0x0a9928 leaves the
+quotient in `si`; `cmp %si,0x2e(%ebx)` at 0x0a9932 tests `state->taps` against
+that register, and `lea (%esi,%esi,1)` at 0x0a9994 and `add %esi,%esi` at
+0x0a99a6 size both buffers from the same one. The quantity tested and the
+quantity allocated are one value, and this block has two buffers where SRE has
+four -- so there is no third size for the test to miss.
+
+*And it is measured rather than read.* `t_fpm_pps.c`'s reuse block now drives a
+re-init that raises `cfg.coeffs` from 120 to 125 with `cfg.phases` at ten: the
+quotient stays at twelve, so the buffers must be KEPT, and the allocator must
+record zero frees and zero allocations. An SRE-shaped guard reallocates on that
+input, and the mutation that rewrites `FPM_PPS_init`'s test into that shape is
+in `test/mutations/fpmpps.json` and is caught by that pass alone. So the
+sentence "this is a slip rather than a convention" is now something a test
+fails on. Finding 3661.
+
+The SRE half of this entry is UNCHANGED and still unmeasured: `FPM_SRE_free`
+was written in the same batch, which adds a release path but no caller, and
+nothing in it raises `rms_len`.
+
+Unmeasured because no caller of `FPM_SRE_init` is reconstructed: the built-in
+`FPM_SRE_CFG` is a template with null table pointers and whoever patches and
+passes it is not written yet. Whether any real configuration ever raises
+`rms_len` on a re-init is exactly what that caller would settle.
+## D391 ✅ `FPM_FSE_receive` saturates a NEGATIVE smoothed error to 0x7fff
+
+*Batch of 2026-08-16, from `FPM_FSE_receive` (blob 0x0a7e00) at 0x0a83f8
+(`cmp $0x7fff,%eax` with `jbe`).  **Reachability: any symbol whose decision
+error is large enough that the sum of its two squares, shifted down eleven and
+cast to `short`, comes out negative -- which the differential suite reaches on
+64 of 64 swept magnitudes above about 12000.**  **Observability: `state->mse`,
+which is a compared field, and through it the LMS gate.**  Status: verified
+bit-exact; the reconstruction reproduces the unsigned test.  Fix class: none
+proposed.*
+
+The smoothed error is formed as a signed `int` and tested against 0x7fff as an
+UNSIGNED one, so the clamp catches both ends of the range and sends both to the
+maximum.  A modem whose equaliser has just diverged therefore records the
+largest possible error rather than a negative one, which is arguably what was
+wanted; but the same test also means `state->mse` is non-negative for ever, and
+the `mse > 0` gate below it can only fail on an exact zero.  Reproduced rather
+than corrected, and the consequence for the LMS gate is finding 3586.
+
+## D392 ⚠ `FPM_phasor` cannot match the blob for a phase of 0x8000 or more
+
+*Batch of 2026-08-16, from `FPM_phasor` (blob 0x0a9300) at 0x0a9367 and
+0x0a9392 (`movswl 0x0(%esi,%esi,1)` against `FPM_cos_sign` and `FPM_sin_sign`,
+with no mask on the quadrant).  **Reachability: any caller that sets
+`phase` to 0x8000 or above -- `FPM_FSE_receive`'s derotation does, for a
+quarter of its angle range, because its reduction is a pair of tests and not a
+loop.**  **Observability: `cos`, and through it every output the caller
+derives from it; `sin` happens to agree because the four entries before
+`FPM_sin_sign` are `FPM_cos_sign` in the blob and a defined object here too.**
+Status: UNMEASURABLE, not verified -- the two implementations read different
+memory and no input makes them agree.  Fix class: would need
+`FPM_cos_sign`/`FPM_sin_sign` made global, `.data` and adjacent in the blob's
+order, which is a change to `src/dsp/fpm_phasor.c` with its own differential
+test to write, and even then the four entries before `FPM_sin_sign` belong to
+a neighbouring translation unit.*
+
+The object indexes its two quadrant sign tables with an unmasked quadrant, so a
+negative phase reads four entries before each table.  Our reconstruction
+reproduces the unmasked index -- that part is right -- but the tables are
+`static const` in `.rodata` with the 514-byte wave tables laid out between
+them, where the blob's are adjacent globals in `.data`.  The out-of-range read
+is therefore deterministic on both sides and different.
+
+`t_fpm_fse_recv` stays inside 0 .. 0x7fff wherever an observable depends on the
+phasor, and asserts that it has -- see the domain checks in its tilt trial and
+at the end of its derotation sweep.  Finding 3588 for the whole derivation and
+for why the symptom is a mismatched `out_i` beside a matching `out_q`.
+## D410 ⚠ `V92setParamsInfoFromCPUnPck` stores through all ten of the block's array pointers without testing one of them
+
+**This entry was written with a number in the three-eighties and moved to 410
+before it was committed**, so nothing has ever referred to it by the old one.
+The survey that produced the old number swept every BRANCH and stopped at the
+maximum it found; four sibling WORKING TREES had already claimed higher numbers
+in commits they had not made yet, the highest of them four hundred. A branch
+sweep is not a survey while other agents are live -- the same lesson the
+findings numbering learnt one batch earlier, where the branches topped out
+twenty-one numbers below an uncommitted worktree.
+
+*Batch of 2026-08-16, from `V92setParamsInfoFromCPUnPck` (blob 0x012f00).
+**Reachability: every call that has any non-zero length or size.**
+**Observability: none through the block -- a null slot is a store to address
+0 and the process is gone.** Status: verified bit-exact against the blob over
+all forty-five level-0 cases. Fix class: none proposed; reproduced.*
+
+The four coefficient arrays at +0x5c..+0x68 and the six constellations at
++0x84..+0x98 are allocated once, by `V92createFilterCoefficients` and
+`V92createConstellations`, and D171 records that neither of those two checks
+a `sysdep_malloc` return. This function is the reader on the other side of
+that: it loads each pointer and stores through it under a length taken from
+the CP, with no null test anywhere -- `mov 0x5c(%esi),%ecx` at .text+0x131b9
+and `fstps (%ecx,%edx,4)` two instructions later is the whole of it.
+
+So a failed allocation at construction is a null in the block, and the first
+CP with a non-zero `lz1` writes a float to address 0. The two behaviours
+compose into a crash that neither function alone would show, which is why it
+is recorded here rather than only at D171.
+
+What the function DOES check is the other half of the same question, and
+checks it carefully: every length is clamped before it is used --
+`lz1`..`lp2` to 0x148 and the six `LC` to 0x80, eight separate conditional
+stores -- and both ceilings are exactly what the allocations behind them
+hold. The bound that could overrun a buffer is enforced; the pointer that
+could be null is not.
+## D385 ✅ `V90Demapper::hardDecision` reads `sign` uninitialised on its refusal arm
+
+*Batch of 2026-08-16, from `V90Demapper::hardDecision` (blob 0x31050).
+**Reachability: only when `sampleCount >= sampleCapacity`, which is the arm
+that prints "Hard decision input buffers are full" and decides nothing.**
+**Observability: none -- the value is multiplied by `level`, which is zero on
+that arm and on no other.**  Status: verified bit-exact with `sign`
+initialised.  Fix class: initialised to 1 at its declaration; one instruction,
+no behaviour.*
+
+The object assigns 0x20(%esp) in both arms of the sign test and nowhere else,
+then loads it at 0x31229 -- on a path that reaches the load without having
+taken either arm -- and multiplies it by a register it has just zeroed. So the
+original source declares the variable without an initialiser and the C++ rules
+make that path undefined. Reproducing the undefinedness would put a genuine
+uninitialised read into `src/`, where a later compiler is entitled to delete
+the multiply; initialising costs one `mov` on a diagnostic path and makes the
+function total. The differential suite drives the arm on every trial mode and
+both sides return zero.
+
+## D386 ✅ `V90SignBitsExtractor::process` switches on an unset action when its state is neither 0 nor 1
+
+*Batch of 2026-08-16, from `V90SignBitsExtractor::process` (blob 0x31ab0).
+**Reachability: `reset`'s second argument is stored into `state` unfiltered, so
+any caller that seeds it above 1 reaches it -- `reset` is not yet written and
+no caller is.**  **Observability: total, if it is ever reached -- the switch
+selects an inversion pattern from whatever `%edi` held on entry.**  Status: our
+version verified bit-exact over states 0 and 1; states above 1 cannot be
+compared because the blob has no defined answer.  Fix class: `action` is
+initialised to `V90SBE_PASS_ALL`, the arm a zero register would have selected.*
+
+The object tests `state == 0` and then `state == 1` and falls out of both with
+its action register never written (0x31abf..0x31acb, then 0x31b6a reading
+`%edi`). This is a live gap and not a dead one: nothing in the class clamps
+`reset`'s argument. It is recorded rather than silently repaired because the
+choice of `V90SBE_PASS_ALL` is OURS -- the object has no answer to reproduce --
+and because the batch that writes `reset` should check whether any caller
+passes a third value, in which case this becomes a real behavioural difference
+rather than a formal one.

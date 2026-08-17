@@ -124,4 +124,17 @@ short FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count);
  */
 extern struct fpm_ecc_cfg ECC_CFG;
 
+/*
+ * V.32's OWN configuration, `.rodata:0x7088` and therefore const, where the
+ * library default above is `.data` and is not.  Its two map arrays are six
+ * POINTERS each, not six coefficients: the index is the rate code, and 0 and
+ * 1 are the same table because 4800 and 9600 share the sixteen-point
+ * constellation.  Both are resolved from the object's relocations -- the
+ * bytes are zero -- and finding 1614 has the derivation.
+ */
+extern const short *const ECCv32_IMAP[6];
+extern const short *const ECCv32_QMAP[6];
+extern const struct fpm_ecc_cfg ECCv32_CFG;
+
 #endif /* DSPLIB_FPM_ECC_H */
+

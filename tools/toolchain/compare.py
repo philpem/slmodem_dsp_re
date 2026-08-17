@@ -25,6 +25,16 @@ compiler matches 330 of 924 symbols where 3.4.4 matches 324 -- SIX GAINED,
 NONE LOST.  Every run now prints both `.comment` strings so the reference and
 the measurement can be read together.
 
+AND THE VENDOR'S PATCH STACK NOW HAS A NUMBER TOO.  `dsplibs-tc342-gentoo`
+(Dockerfile.gentoo) is Gentoo's own `gcc-3.4.2-r2` built from its ebuild
+inside stage3-x86-2005.0, and it is the only compiler here whose `.comment`
+matches the blob's byte for byte.  It changes NOTHING measurable: 182 of the
+183 objects are byte-identical to stock 3.4.2's, the match is 334 either way
+with none gained and none lost, and the one difference is a schedule
+permutation in `DTMF_MTD_detect`.  So the two `.comment` lines below being
+equal is a property of the IMAGE and not of the numbers -- which is why the
+default stays the stock one, buildable from the network alone.  Finding 2500.
+
 THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
 
     -march=i386             no cmov and no fcomi anywhere in 1.2 MB, and float
@@ -157,7 +167,31 @@ TU_GROUPS = (
     ("src/v8/v8handshak.c", "src/v8/v8hsrx.c"),
 )
 
-BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
+def _default_blob():
+    """`../slmodemd/dsplibs.o` is relative to the MAIN tree, not to a worktree.
+
+    From `.claude/worktrees/<name>` that literal path resolves inside
+    `.claude/worktrees/`, where there is no blob -- and `nm` on a missing file
+    exits non-zero with empty stdout, which `sizes()` cannot tell from a file
+    with no symbols.  Every count is then computed against nothing.  Finding
+    3121.  `git rev-parse --git-common-dir` is how the `Makefile` already
+    resolves this, so it is the tree's existing answer rather than a new one.
+    """
+    literal = "../slmodemd/dsplibs.o"
+    if os.path.exists(literal):
+        return literal
+    try:
+        common = subprocess.run(["git", "rev-parse", "--git-common-dir"],
+                                capture_output=True, text=True,
+                                check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return literal
+    main = os.path.dirname(os.path.abspath(common))
+    found = os.path.join(os.path.dirname(main), "slmodemd", "dsplibs.o")
+    return found if os.path.exists(found) else literal
+
+
+BLOB = os.environ.get("BLOB") or _default_blob()
 OURS = os.environ.get("TC_OUT", "build/tc_out")
 
 
@@ -217,6 +251,20 @@ def main():
     args = ap.parse_args()
 
     blob = sizes(BLOB)
+    if not blob:
+        sys.exit(
+            "compare.py: NO SYMBOLS read from the blob at %s (file exists: %s).\n"
+            "  Every count below would be computed against NOTHING and would\n"
+            "  render as a clean zero -- and `--update` would write\n"
+            "  {identical: 0, same_size: 0, compared: 0} into %s, destroying\n"
+            "  the floor.  That has already happened once.\n"
+            "  BLOB defaults to a path relative to the MAIN tree, so from a\n"
+            "  worktree it must be given explicitly:\n"
+            "      BLOB=/abs/path/to/dsplibs.o %s\n"
+            "  A detector must report its denominator, and zero is not a score:\n"
+            "  findings 2400, 2401, 3110 and 3121."
+            % (BLOB, "yes" if os.path.exists(BLOB) else "no", RATCHET,
+               " ".join(sys.argv)))
     ours = {}
     objs = sorted(glob.glob(os.path.join(OURS, "*.o")))
     for o in objs:
@@ -230,6 +278,15 @@ def main():
     print("  objects      : %s\n" % OURS)
 
     common = sorted(k for k in ours if k in blob)
+    if not common:
+        sys.exit(
+            "compare.py: the blob defines %d symbols and %s defines %d, and\n"
+            "  they share NONE.  The comparison denominator is zero, which is\n"
+            "  not a score -- it renders identically to a tree that matches\n"
+            "  nothing.  Most likely BLOB and TC_OUT point at unrelated trees,\n"
+            "  or the two were built for different targets.  Findings 2401\n"
+            "  and 3121."
+            % (len(blob), OURS, len(ours)))
     identical, samesize, rows = [], [], []
     tb = to = 0
     for k in common:

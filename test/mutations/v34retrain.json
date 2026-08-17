@@ -53,8 +53,8 @@
  },
  {
   "label": "the K56flex modem is not told",
-  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));",
-  "replace": "\t\t(void)cfg;",
+  "find": "\t\tcfg = (unsigned char *)obj->pac3c;\n\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));",
+  "replace": "\t\tcfg = (unsigned char *)obj->pac3c;\n\t\t(void)cfg;",
   "equivalent": true,
   "why": "`K56FlexFloModem::setMinMaxRates` is ONE BYTE of code in this object -- a bare `ret` that never touches `this` (include/dsplib/K56FlexFloModem.h measures it, and the class is declared without a single defined data member for that reason). A call to it and no call at all leave identical memory and identical output, so no differential test on this side of the call can tell them apart.  What IS held fixed is that arm's selection: the mutation above that or-s the two K56flex inputs together is caught, so the arm is still shown to be entered when and only when the object enters it."
  },
@@ -136,48 +136,48 @@
  },
  {
   "label": "+0x234 is left alone",
-  "find": "\t*(int *)(m + OB_F0234) = 0;",
-  "replace": "\t(void)0;"
+  "find": "\t}\n\n\t*(int *)(m + OB_F0234) = 0;",
+  "replace": "\t}\n\n\t(void)0;"
  },
  {
   "label": "the filt delay offset is 0x21",
-  "find": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
-  "replace": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x21);"
+  "find": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
+  "replace": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x21);"
  },
  {
   "label": "the filt delay divides instead of shifting",
-  "find": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
-  "replace": "\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased / 4) + 0x22);"
+  "find": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
+  "replace": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased / 4) + 0x22);"
  },
  {
   "label": "the filt delay is not biased by 2",
-  "find": "\t\tint biased = (int)((unsigned)delay + 2u);",
-  "replace": "\t\tint biased = delay;"
+  "find": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);",
+  "replace": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = delay;"
  },
  {
   "label": "the filtdelay diagnostic prints the arithmetic, not the field",
-  "find": "\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);",
-  "replace": "\t\t\t\t\t     (biased >> 2) + 0x22,\n\t\t\t\t\t     delay);"
+  "find": "\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
+  "replace": "\t\t\t\t\t     (biased >> 2) + 0x22,\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);"
  },
  {
   "label": "the filtdelay diagnostic is dropped",
-  "find": "\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);",
-  "replace": "\t\t\t(void)0;"
+  "find": "\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
+  "replace": "\t\t\t(void)0;\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);"
  },
  {
   "label": "the dma delay base is 0x600",
-  "find": "\t\tobj->f25c = (short)(0x610u - (unsigned)ext);",
-  "replace": "\t\tobj->f25c = (short)(0x600u - (unsigned)ext);"
+  "find": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);",
+  "replace": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x600u - (unsigned)ext);"
  },
  {
   "label": "the dma delay is not stored",
-  "find": "\t\tobj->f25c = (short)(0x610u - (unsigned)ext);",
-  "replace": "\t\t(void)ext;"
+  "find": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);",
+  "replace": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\t(void)ext;"
  },
  {
   "label": "the dmadelay diagnostic prints the arithmetic, not the field",
-  "find": "\t\t\t\t\t     (int)obj->f25c, ext);",
-  "replace": "\t\t\t\t\t     0x610 - ext, ext);"
+  "find": "\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "replace": "\t\t\t\t\t     0x610 - ext, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);"
  },
  {
   "label": "the echo delay is not offset by 0x68",
@@ -191,8 +191,8 @@
  },
  {
   "label": "the echo canceller is at +0x6bd4",
-  "find": "\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(",
-  "replace": "\t((V92EchoCanceller *)(sess + 0x6bd4))->setEchoDelay("
+  "find": "\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "replace": "\t((V92EchoCanceller *)(sess + 0x6bd4))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);"
  },
  {
   "label": "the sensitive-ISP notice is dropped",
@@ -318,8 +318,8 @@
  },
  {
   "label": "f0004 becomes 6",
-  "find": "\tobj->f0004 = 7;",
-  "replace": "\tobj->f0004 = 6;"
+  "find": "\tobj->f0004 = 7;\n\tobj->status = 0;",
+  "replace": "\tobj->f0004 = 6;\n\tobj->status = 0;"
  },
  {
   "label": "status is not cleared",
@@ -333,8 +333,8 @@
  },
  {
   "label": "the three receiver scalars are left alone",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;",
-  "replace": "\t(void)rx;"
+  "find": "\t*(int *)(m + OB_F2218) = 2;\n\n\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;",
+  "replace": "\t*(int *)(m + OB_F2218) = 2;\n\n\t(void)rx;"
  },
  {
   "label": "+0x254's scale is 335",
@@ -360,38 +360,38 @@
  },
  {
   "label": "+0xac24 is cleared as a short rather than an int",
-  "find": "\t\t*(int *)(st + 0x08) = 0;",
-  "replace": "\t\t*(short *)(st + 0x08) = 0;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(short *)(st + 0x08) = 0;"
  },
  {
   "label": "+0xac2e is cleared as well",
-  "find": "\t\t*(int *)(st + 0x1c) = 0;",
-  "replace": "\t\t*(int *)(st + 0x1c) = 0;\n\t\t*(short *)(st + 0x12) = 0;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\t\t*(short *)(st + 0x12) = 0;"
  },
  {
   "label": "+0xac30 is left alone",
-  "find": "\t\t*(int *)(st + 0x14) = 0;",
-  "replace": "\t\t(void)0;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t(void)0;"
  },
  {
   "label": "the two roles are swapped",
-  "find": "\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
-  "replace": "\t\tif (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x65) {"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x65) {"
  },
  {
   "label": "0x39c3 goes in on the answering role only",
-  "find": "\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
-  "replace": "\t\t} else if (role == 0x66) {"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t} else if (role == 0x66) {"
  },
  {
   "label": "the quadrature pair is swapped",
-  "find": "\t\t\t*(short *)(st + 0x0c) = (short)0x5a82;\n\t\t\t*(short *)(st + 0x0e) = (short)0x55fc;",
-  "replace": "\t\t\t*(short *)(st + 0x0c) = (short)0x55fc;\n\t\t\t*(short *)(st + 0x0e) = (short)0x5a82;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x5a82;\n\t\t\t*(short *)(st + 0x0e) = (short)0x55fc;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x55fc;\n\t\t\t*(short *)(st + 0x0e) = (short)0x5a82;"
  },
  {
   "label": "the role is read unsigned",
-  "find": "\t\tshort role = obj->f359c;",
-  "replace": "\t\tint role = (unsigned short)obj->f359c;",
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tint role = (unsigned short)obj->f359c;",
   "equivalent": true,
   "why": "`role` is used for nothing but equality with 0x65 and 0x66, both of which are in [0, 0x7fff].  A signed short equals 0x65 exactly when its low sixteen bits do, so the sign of the load cannot change either answer.  The sweep drives -1 and 0x7fff as well as the two live values.  Written signed because `movswl` is what the object emits, and because v34hshak.c reads the same field signed."
  }

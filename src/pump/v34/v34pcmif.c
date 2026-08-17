@@ -63,6 +63,37 @@
 #define DP_V90			90
 #define DP_V92			92
 
+/*
+ * The answerer's value of `f359c`, the same 0x65/0x66 pair `v34modeminit`,
+ * `preinitdigital` and `v34handshakinit` all test it against and the same
+ * constant v34pcmmain.cpp spells `PCM_ROLE`.  Named here too because the four
+ * "current" getters below test it four times and a bare 0x66 in four places
+ * is four chances to transcribe 0x65.
+ */
+#define PCMIF_ROLE_ANSWER	0x66
+
+/*
+ * 0x1f40.  The PCM sample rate answered as a symbol rate: with a PCM receiver
+ * running there is no V.34 symbol clock to report, and both baud-rate getters
+ * return 8000 rather than zero.
+ */
+#define PCMIF_PCM_BAUD		8000
+
+/*
+ * The configuration byte `VPcmV34RequestDPNotification` clears a bit of, and
+ * the bit.  `requestOutputSampleClear` in v34pcmmain.cpp SETS the same bit
+ * beside the same three words, and that file spells the pair the same way --
+ * both halves of `VPcmV34Main.cpp` carry the constants they use, since
+ * splitting one translation unit by language leaves no shared private header.
+ *
+ * Named rather than written `&= 0xfe` because a mask states a bit position
+ * and hides a meaning: this one is "a sample clear is outstanding", which is
+ * what the setter and this clearer agree on.  A macro is a compile-time
+ * substitution and cannot move code generation, so the name is free.
+ */
+#define CFG_FLAGS51		0x51
+#define CFG_FLAG51_CLEAR	0x01
+
 void
 VPcmV34LogTimingOffset(void *objp, short offset)
 {
@@ -880,6 +911,523 @@ chkForceBaudRate(void *objp, struct v34_dftbin *bins)
 		bins[20].shift = 7;
 		bins[19].shift = 7;
 	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE PUBLIC ACCESSOR SURFACE.  Everything below is what the layer above the
+ * datapump calls to ask what the modem is doing or to tell it something, and
+ * it is written as one batch because that is the only way it can be: the
+ * harness renames every blob symbol this tree defines, so a half-written
+ * group leaves the other half calling a `ref_` name that no longer exists.
+ *
+ * They are small, and small is where a reconstruction goes wrong quietly --
+ * reading the neighbouring field, or the right field at the wrong width,
+ * agrees with the object over almost every input.  So every offset below was
+ * read out of `tools/dis.py` and every one of them is swept rather than
+ * sampled in `test/unit/t_v34pcmif.c`.
+ */
+
+/*
+ * Tear the datapump down.  Three bytes: `xor %eax,%eax; ret`.
+ *
+ * It reads nothing, so its ARITY IS NOT OBSERVABLE from the callee and
+ * nothing in the object calls it.  One argument is what every other
+ * `VPcmV34*` entry point takes and what the caller must have to name an
+ * instance; the parameter is therefore a convention here and not a
+ * measurement, which is also why it is unused rather than merely ignored.
+ * The zero return is measured.
+ */
+int
+VPcmV34Delete(void *objp)
+{
+	(void)objp;
+	return 0;
+}
+
+/*
+ * The datapump's block length.
+ *
+ * `obj + 8` IS `ptc`, WHICH ALREADY HAS A NAME FROM ANOTHER STRING, and the
+ * two disagree: `initdigital` prints this offset as "PTC" in "for tx data
+ * rate - %d, PTC - %d, setting nofTxBits to %d" and this function prints it
+ * as "Max Block Length".  Both are the author's words for the same four
+ * bytes.  The field keeps `ptc` -- the older name, and the one with a reader
+ * behind it rather than only a writer -- and the conflict is recorded at D380
+ * rather than resolved by preferring whichever string was read last.
+ *
+ * The store is reached through `obj + 4` as `0x4(%eax)`, which is the same
+ * addressing artefact v34fsk.h describes on the rate group and not a second
+ * object.
+ */
+void
+VPcmV34SetMaxBlockLength(void *objp, int len)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->ptc = len;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: Max Block Length modified "
+				     "to %d\r\n", len);
+}
+
+/*
+ * Whether this connection came up on a quick connect.
+ *
+ * A BIT SET OVER `status`, NOT A COMPARISON CHAIN.  The object builds
+ * `1 << status` once and tests it against three masks in turn, which is what
+ * a `switch` with grouped cases compiles to and is written back as the masks
+ * because the groups have no arithmetic relating them:
+ *
+ *     6f09  cmp $0xa,%ecx; ja        status > 10 -> 0, and UNSIGNED, so a
+ *                                    negative status leaves here too
+ *     6f15  test $0xe7,%dl           0,1,2,5,6,7 -> the stored answer
+ *     6f1a  test $0x408,%edx         3,10        -> 0
+ *     6f22  and  $0x310,%edx         4,8,9       -> 1
+ *
+ * The three masks cover 0..10 exactly once each, so the final zero is
+ * unreachable from the shift and is the `default` the object still emits.
+ *
+ * `is_short` is the field `V34SetINFO1aBits` sends as the phase-2 length, so
+ * "quick connect" here means the short phase 2 that field selects, and the
+ * six states that return it are the ones where the negotiation has got far
+ * enough to know.
+ */
+int
+VPcmV34GetQuickConnectIndication(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	int mask;
+
+	if ((unsigned int)obj->status > 10u)
+		return 0;
+
+	mask = 1 << obj->status;
+
+	if ((mask & 0xe7) != 0)
+		return obj->is_short;
+	if ((mask & 0x408) != 0)
+		return 0;
+	if ((mask & 0x310) != 0)
+		return 1;
+
+	return 0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * The four "current" getters that answer in baud and in hertz.
+ *
+ * THEY LOOK LIKE FOUR COPIES OF ONE FUNCTION AND THEY ARE NOT.  All four open
+ * on `f359c == 0x66` and then on a range test over `status`, and all four
+ * differ inside it -- the crossing is the same one v34pcmmain.cpp documents
+ * for the two BIT rate getters, and the two carriers are a third and fourth
+ * shape again:
+ *
+ *   RxBaudRate   0x66 -> status-1   else status-2   in 0..1 -> 8000
+ *   TxBaudRate   0x66 -> status-2   else status-1   in 0..1 -> 8000
+ *   RxCarrier    0x66 -> status-1   else status-2   in 0..1 -> 0
+ *   TxCarrier    0x66 -> status-2 in 0..1 -> 0;  else status == 2 -> 0
+ *
+ * so the receive pair and the transmit pair are each other's mirror on the
+ * ROLE test, and `VPcmV34GetCurrentTxCarrier` alone asks a single-value
+ * question on its non-PCM arm rather than a range one.  Writing any of them
+ * from the shape of its neighbour gets it wrong for exactly one value of
+ * `status`, which is why the test sweeps both fields over their whole range
+ * rather than at a representative point.
+ *
+ * The subtraction is unsigned and the comparison `jbe`, so `status` below the
+ * offset wraps high and takes the far arm; spelled with the cast the object's
+ * `sub; cmp; jbe` requires.
+ *
+ * 8000 is the PCM sample rate answered as a symbol rate, and 0 is "there is
+ * no carrier" -- a PCM receiver has none.
+ */
+int
+VPcmV34GetCurrentRxBaudRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	int n;
+
+	if (obj->f359c == PCMIF_ROLE_ANSWER)
+		n = obj->status - 1;
+	else
+		n = obj->status - 2;
+
+	if ((unsigned int)n <= 1u)
+		return PCMIF_PCM_BAUD;
+
+	return cfg->rx_baud;
+}
+
+int
+VPcmV34GetCurrentTxBaudRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	int n;
+
+	if (obj->f359c == PCMIF_ROLE_ANSWER)
+		n = obj->status - 2;
+	else
+		n = obj->status - 1;
+
+	if ((unsigned int)n <= 1u)
+		return PCMIF_PCM_BAUD;
+
+	return cfg->baud;
+}
+
+int
+VPcmV34GetCurrentRxCarrier(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	int n;
+
+	if (obj->f359c == PCMIF_ROLE_ANSWER)
+		n = obj->status - 1;
+	else
+		n = obj->status - 2;
+
+	if ((unsigned int)n <= 1u)
+		return 0;
+
+	return cfg->rx_carrier;
+}
+
+int
+VPcmV34GetCurrentTxCarrier(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+
+	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 2) <= 1u)
+			return 0;
+	} else if (obj->status == 2) {
+		return 0;
+	}
+
+	return cfg->carrier;
+}
+
+/*
+ * The signal-to-noise ratio, in whole dB.
+ *
+ * NO LOGARITHM AND NO TABLE: the object divides down by two constants and
+ * counts how many times it can, which is a base-conversion of the ratio into
+ * decibels with the two step sizes chosen so the counts add.
+ *
+ *     0x1013 / 0x4000 = 0.25074   ~= -6.0 dB, counted 6 at a time
+ *     0x32d6 / 0x4000 = 0.79431   ~= -1.0 dB, counted 1 at a time
+ *
+ * so the coarse loop takes the ratio down to below 4 and the fine loop
+ * finishes it, and the answer is the sum of the two counts.  The coarse loop
+ * hands the fine one the LAST value that was still positive, not the one that
+ * ended it -- `mov %ecx,%esi` at 0x717b saves the pre-multiply value each
+ * time round -- so the two loops do not double-count the step between them.
+ *
+ * WHAT IS DIVIDED BY WHAT.  `f248` over `equerr`: the equaliser error energy
+ * republished every 1024 symbols (v34recv.h names it from receiver's own
+ * "V34EQU, equerr = %d, preerr = %d") divides into the int at +0x248.  A
+ * ratio reported in dB with the error underneath is a signal-to-noise ratio,
+ * which is the only thing this says about +0x248 and is not enough to name
+ * it: `equerr` could equally be the numerator of something else.
+ *
+ * `equerr` IS SIGNED AND THE GUARD IS `jle`, so a zero or negative error
+ * returns 0 dB rather than dividing.  Declared `short` for that reason and
+ * not `unsigned short`, which would make the guard `jbe` and let a large
+ * positive error through as a divisor.
+ *
+ * BOTH MULTIPLIES ARE SPELLED THROUGH `unsigned`, AND THAT IS THE
+ * INSTRUCTION AND NOT A STYLE.  0x7175 and 0x7191 are `imul $imm,%r,%r`
+ * followed by `sar $0xe` -- a 32-bit multiply that WRAPS, then an arithmetic
+ * shift -- and the loop exit is `test`/`jg` on the shifted result.  A ratio
+ * past 2^31/0x1013, which is about 522,000 and which
+ * `VPcmV34GetDiagnostics` can reach, therefore wraps NEGATIVE and ends the
+ * loop; that is the object's behaviour and the only way out for a large
+ * ratio.  Written as a plain `v * 0x1013` it is signed overflow, which is
+ * undefined, and GCC 13 duly assumes a positive `v` keeps a positive
+ * product and compiles the coarse loop into one that never terminates.
+ * `(int)((unsigned)v * 0x1013u) >> 14` is the same two instructions with the
+ * wrap made legal -- the same reason `VPcmV34InitiateRateRenegotiation`'s
+ * step is spelled unsigned, and the same class of defect as findings 2300 to
+ * 2302.
+ *
+ * THIS BODY IS INLINED VERBATIM INTO `VPcmV34GetDiagnostics` at 0x7691, so
+ * whatever shape reproduces it here has to reproduce it there too.  It is
+ * left as one function rather than factored into a static helper, because a
+ * helper has no blob symbol and its bytes would count against neither side.
+ */
+int
+VPcmV34GetSNR(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)
+	    ((unsigned char *)obj + 0x264);
+	int db = 0;
+	int last = 0;
+
+	if (rx->f21a > 0) {
+		int v = rx->f248 / rx->f21a;
+
+		if (v > 0) {
+			for (;;) {
+				last = v;
+				v = (int)((unsigned int)v * 0x1013u) >> 14;
+				if (v <= 0)
+					break;
+				db += 6;
+			}
+		}
+	}
+
+	if (last > 0) {
+		for (;;) {
+			last = (int)((unsigned int)last * 0x32d6u) >> 14;
+			if (last <= 0)
+				break;
+			db += 1;
+		}
+	}
+
+	return db;
+}
+
+/*
+ * The datapump is told something happened.
+ *
+ * FOUR CODES AND THE OBJECT TESTS THEM AS A `switch`: `cmp $1; je`, then
+ * `jle` into a test against zero, then `cmp $2` and `cmp $3`.  Anything else
+ * does nothing at all, and that includes every negative value.
+ *
+ * TWO OF THE THREE FIELDS ARE NAMED BY THESE STRINGS.  +0x262 is set to 1
+ * under "Valid in samples" and to 0 under "Invalid in samples", which is what
+ * makes it `samples_valid`; and case 3 prints "mohTimer = %d, setting count2
+ * to %d" with +0xabdc first and +0xaa74 second, so the MOH sample counter
+ * v34pcmmain.cpp calls `O_MOHCOUNT` is the object's `mohTimer` and +0xaa74
+ * is its `count2`, a deadline 48,000 samples further on.
+ *
+ * `faa74` KEEPS ITS OFFSET NAME.  "count2" is what the string calls it, and
+ * that is a position in a set of counters rather than a description; nothing
+ * here reads it back.
+ *
+ * The diagnostics are `edprintf` and are NOT gated at the call site -- the
+ * whole function is unguarded and `edprintf` applies its own level -- unlike
+ * `VPcmV34InitMOH` next door, which tests first.  That difference is the
+ * object's.
+ */
+void
+VPcmV34NotifyDP(void *objp, int what)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	switch (what) {
+	case 0:
+		edprintf("VPcmV34 Notification: Invalid in samples...\r\n");
+		obj->samples_valid = 0;
+		break;
+
+	case 1:
+		edprintf("VPcmV34 Notification: Valid in samples...\r\n");
+		obj->samples_valid = 1;
+		break;
+
+	case 2:
+		edprintf("VPcmV34 Notification: CAS Detected...\r\n");
+		obj->status = 5;
+		obj->sample_count = 0;
+		break;
+
+	case 3: {
+		int moh = obj->moh_timer;
+		int count2 = moh + 0xbb80;
+
+		edprintf("VPcmV34 Notification: Validate 3-Way Call...\r\n");
+		obj->status = 6;
+		obj->faa74 = count2;
+		edprintf("VPcmV34 debug validate: mohTimer = %d, setting "
+			 "count2 to %d\r\n", moh, count2);
+		break;
+	}
+
+	default:
+		break;
+	}
+}
+
+/*
+ * Collect the pending output-sample-clear request, if there is one.
+ *
+ * THE OTHER END OF `requestOutputSampleClear`, which v34pcmmain.cpp writes:
+ * that arm stores 1, a sample count and 0 into +0xac40, +0xac44 and +0xac48
+ * and sets bit 0 of the configuration's +0x51; this hands all three out and
+ * puts the mailbox back to -1, 0, 0 with that same bit cleared.  Between them
+ * they are what names the three words, which v34fsk.h carried as
+ * `unmapped_ac40` while only the writer existed.
+ *
+ * NEGATIVE MEANS EMPTY, and the test is `js` on the flag alone: an empty
+ * mailbox returns 0 and writes NOTHING through the three pointers, so a
+ * caller that does not check the return reads its own uninitialised
+ * variables rather than stale ones.
+ *
+ * The reset order is the object's -- `clr_done` first, then `clr_flag`, then
+ * `clr_count` -- and the configuration byte is reached last, through `pac3c`
+ * loaded between the two flag stores.
+ */
+int
+VPcmV34RequestDPNotification(void *objp, int *flag, int *count, int *done)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	int pending = obj->clr_flag;
+
+	if (pending < 0)
+		return 0;
+
+	*flag = pending;
+	*count = obj->clr_count;
+	*done = obj->clr_done;
+
+	obj->clr_done = 0;
+	obj->clr_flag = -1;
+	obj->clr_count = 0;
+
+	*((unsigned char *)obj->pac3c + CFG_FLAGS51) &=
+		(unsigned char)~CFG_FLAG51_CLEAR;
+
+	return 1;
+}
+
+/*
+ * The upstream rate cap, again.
+ *
+ * BYTE FOR BYTE THE SAME FUNCTION AS `VPcmV34GetMaxUpstreamRateIndex` above,
+ * 123 bytes against 128 and the difference is register allocation: the same
+ * two arms, the same five offsets, the same two `edprintf` strings.  The
+ * object exports both names, 0x7c10 and 0x7c90, so the source has the body
+ * twice -- once under each prefix, which is what the `V34XF_` / `VPcmV34`
+ * split means (the direction of the call, not the work).  Transcribed twice
+ * for that reason rather than one of them calling the other, which would
+ * leave a `call` the object does not have.
+ */
+int
+V34XF_GetMaxUpstreamRateIndex(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const unsigned char *sess = (const unsigned char *)obj->p3548;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	int rate = *(const int *)(cfg + 0x3c);
+
+	if (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {
+		const unsigned char *pcm =
+			*(unsigned char *const *)(sess + 0x610c);
+
+		if (*(const int *)(pcm + 0x4f8) != 0) {
+			int cap = *(const int *)(pcm + 0x4fc) * 0x960;
+
+			if (rate > cap)
+				rate = cap;
+
+			edprintf("on get max upstream rate, on sensitive ISP, "
+				 "returning %d\r\n", rate);
+			return rate;
+		}
+	}
+
+	edprintf("on get max upstream rate, on regular ISP, returning %d\r\n",
+		 rate);
+	return rate;
+}
+
+/*
+ * A K56flex Jd has been received.
+ *
+ * THE FIFTH INDICATION, and unlike the other four it does not move
+ * `v90_receiver` or `k56flex_receiver` at all -- it rebuilds the
+ * TRANSMITTER.  Four things happen in this order:
+ *
+ *   1  bit 3 of the receiver's `flags` is set, the same word +0x122 that
+ *      v34recv.h describes as the detector-pending and AGC-freeze bit;
+ *   2  +0x382 takes the same two constellation constants
+ *      `V34XF_IndicateJdReceived` and `V34XF_IndicateDilReceived` use, on
+ *      the same test, except that the test here is against 0x10 rather than
+ *      against zero -- so the argument is a constellation SIZE and not the
+ *      flag those two take;
+ *   3  `v34setuptxmit`, which is the transmitter rebuild;
+ *   4  the transmit state is forced to 0x12 (and only if it is not already
+ *      there -- `cmpw` then a conditional store, which is the object's and
+ *      is kept because a store to a state word is not free);
+ *   5  three transmit scalars are cleared and adaptecho's DC estimator is
+ *      re-seeded.
+ *
+ * THE DC SEED IS THE SAME EXPRESSION `VPcmV34InitiateRetrain` WRITES, at the
+ * same offset: `336 * f35a4 + 10000`, `f35a4` read signed, into +0x254 with
+ * +0x256 and +0x258 cleared behind it.  v34fsk.h's note on `f35a4` said that
+ * two functions computed it and that "nothing establishes that their
+ * destinations are the same field".  This is the second one, it is
+ * reconstructed, and the destination is the same -- so that reservation is
+ * discharged, and the arithmetic belongs to the DC estimator rather than to
+ * whatever else those two functions do.
+ *
+ * The diagnostic is gated and prints the three transmitter parameters; it is
+ * what names `preemp` in v34fsk.h.
+ */
+void
+V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)(m + V34_RATECFG);
+
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
+
+	obj->f382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"VPcmV34Main: About to setup v34 txmit, "
+			"baudrate = %d, carrier = %d, preemp = %d\r\n",
+			cfg->baud, cfg->carrier, cfg->preemp);
+
+	v34setuptxmit(obj);
+
+	if (obj->txstate != 0x12)
+		obj->txstate = 0x12;
+
+	obj->f25c0 = 0;
+	obj->f25c6 = 0;
+	obj->f25cc = 0;
+
+	*(short *)(m + 0x254) =
+		(short)(336 * (int)*(const short *)(m + 0x35a4) + 10000);
+	*(short *)(m + 0x256) = 0;
+	*(int *)(m + 0x258) = 0;
+}
+
+/*
+ * The remote end has asked for a retrain.
+ *
+ * Twelve bytes: load the object, store 1 at +0xac17, return.  Nothing
+ * reconstructed reads the byte, so the function's own name is the whole of
+ * what names the field -- see v34fsk.h's note on `remote_retrain_ind`.  It is
+ * never cleared here, which is why it reads as an indication rather than as a
+ * request.
+ */
+void
+VPcmV34SetIndicationOfRemoteRetrain(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->remote_retrain_ind = 1;
 }
 
 /*

@@ -198,6 +198,65 @@ short GetVPcmMinimalTxPowerReduction(void *obj);
  */
 int VPcmV34GetMaxUpstreamRateIndex(void *obj);
 
+/*
+ * ---------------------------------------------------------------------------
+ * The public accessor surface: what the layer above the datapump calls.
+ *
+ * All of them are `extern "C"` exports of `VPcmV34Main.cpp` and all of them
+ * are defined in `v34pcmif.c`.  The four "current" getters are declared as a
+ * block because they read as four copies of one function and are not; see the
+ * comment on them in the `.c`.
+ */
+
+/* The same body as `VPcmV34GetMaxUpstreamRateIndex` under the other prefix. */
+int V34XF_GetMaxUpstreamRateIndex(void *obj);
+
+/*
+ * Tear the datapump down.  Always zero, and the argument is a convention:
+ * three instructions that read nothing cannot fix an arity.
+ */
+int VPcmV34Delete(void *obj);
+
+/* Set the datapump's block length; the field is `ptc`.  See D380. */
+void VPcmV34SetMaxBlockLength(void *obj, int len);
+
+/* Non-zero if this connection came up on a short phase 2. */
+int VPcmV34GetQuickConnectIndication(void *obj);
+
+/* Symbol rate in baud, or 8000 with a PCM receiver running. */
+int VPcmV34GetCurrentRxBaudRate(void *obj);
+int VPcmV34GetCurrentTxBaudRate(void *obj);
+
+/* Carrier in Hz, or 0 with a PCM receiver running. */
+int VPcmV34GetCurrentRxCarrier(void *obj);
+int VPcmV34GetCurrentTxCarrier(void *obj);
+
+/* The equaliser's signal-to-noise ratio in whole dB, 0 when unavailable. */
+int VPcmV34GetSNR(void *obj);
+
+/* Tell the datapump something happened: 0/1 samples, 2 CAS, 3 three-way. */
+void VPcmV34NotifyDP(void *obj, int what);
+
+/*
+ * Collect the pending output-sample-clear request.  Returns 1 and fills all
+ * three when there is one, 0 and writes nothing when there is not.
+ */
+int VPcmV34RequestDPNotification(void *obj, int *flag, int *count, int *done);
+
+/* A K56flex Jd has arrived: rebuild the transmitter.  `constel` is a size. */
+void V34XF_IndicateK56FlexJdReceived(void *obj, unsigned char constel);
+
+/* The remote end has asked for a retrain. */
+void VPcmV34SetIndicationOfRemoteRetrain(void *obj);
+
+/*
+ * Reset the sample clock and set a deadline `secs * 9600` samples out.
+ *
+ * MANGLED, so it is C++ and lives in `v34pcmmain.cpp` --
+ * `_Z17VPcmV34SetTimeOutP12tagV34Objecti`.  Declared with the rest of the
+ * surface all the same, below the `extern "C"` block.
+ */
+
 #ifdef __cplusplus
 }
 #endif
@@ -236,6 +295,43 @@ struct tagV34Object;
  * receiver's "sensitive ISP" word gets a say.
  */
 void getMPrecvdBits(struct tagV34Object *obj);
+
+/*
+ * ---------------------------------------------------------------------------
+ * AND THE SIX ACCESSORS THAT ARE MANGLED TOO, so C++ on both sides for the
+ * same reason `getMPrecvdBits` is.  All six take `tagV34Object *`, which is
+ * the whole of why they are mangled: an `extern "C"` export of the same file
+ * takes `void *` and these take the object's own type.
+ *
+ * They are declared here rather than in a private header because there is no
+ * private header -- `VPcmV34Main.cpp` is split across a `.c` and a `.cpp` in
+ * this tree, and this is the header both halves already include.
+ */
+
+/* Two instructions: `ret`.  Every parameter is unread. */
+void SetUpstreamModulationInfo(struct tagV34Object *obj);
+
+/*
+ * Push the configured rate bounds down to whichever modem is running: the
+ * V.90 constellation designer, the K56flex modem, or the V.34 rate group at
+ * +0x220/+0x224 by dividing both by 2400 and capping at 14.
+ */
+void VPcmV34SetMinMaxBitRates(struct tagV34Object *obj);
+
+/*
+ * Set `rx_energy_floor` from `V34DisconnectThreshTable`, indexed by the
+ * configuration's +0x60 biased by 48 and defaulting to entry 3.
+ */
+void VPcmV34SetMinimumSigLevel(struct tagV34Object *obj);
+
+/*
+ * Compute `filtdelay` and `dmadelay` from the configuration's +0x64 and
+ * +0x68, and hand the echo canceller its delay.
+ */
+void VPcmV34SetDelays(struct tagV34Object *obj);
+
+/* Restart the sample clock and set a deadline `secs * 9600` samples out. */
+void VPcmV34SetTimeOut(struct tagV34Object *obj, int secs);
 #endif
 
 #endif /* DSPLIB_V34PCMIF_H */

@@ -1,0 +1,25 @@
+{
+  "_why": [
+    "References that resolve on a branch this tree has deliberately NOT merged.",
+    "",
+    "A dangling reference is normally a defect: prose pointing at prose that",
+    "is not there.  These are a different thing -- the entry exists, it is",
+    "just on a branch being held back on purpose, so blocking the gate on",
+    "them would mean master cannot go green until somebody merges a branch",
+    "they have chosen not to merge.",
+    "",
+    "THIS REGISTER GOES STALE LOUDLY, which is the whole point and is copied",
+    "from tools/gccdiverge.json.  refcheck fails if an entry here starts",
+    "RESOLVING -- because that means the branch landed and the entry is now a",
+    "lie -- exactly as it fails for a reference that dangles and is not",
+    "listed.  So this cannot rot into a permanent exemption: the day",
+    "improve/v34-training merges, the gate demands these lines be deleted.",
+    "",
+    "It is not a place to silence an inconvenient reference.  An entry needs",
+    "a branch that really contains the target and a reason a reader can",
+    "check.",
+    "",
+    "EMPTY, and kept rather than deleted: the mechanism is documented here for the next branch that has to be held.  Its first entry covered 13 findings on improve/v34-training and was removed the moment that branch merged -- the gate reported them STALE and refused, which is the property this file exists to have."
+  ],
+  "pending": []
+}

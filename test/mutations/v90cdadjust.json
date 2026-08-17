@@ -1,0 +1,189 @@
+[
+ {
+  "label": "NOTE: this set covers the four members that close V90ConstellationDesigner -- adjustConstellationsPower, adjustConstellationsToNewK, constellationDesign and process -- and is caught by t_v90cdadjust. The earlier members of the same source file have their own sets; a mutation here that those catch as well is still recorded against this one, because what is being asked is whether THIS test would see it.",
+  "note": "The two argument-drop mutations and the 32-bit kMax are the ones the fixture was built for: each is a reading a plausible source produces and that no ordinary random fill separates from the object's. See the header of test/unit/t_v90cdadjust.cpp. NOT REPRESENTED HERE: the constellationSize > 128 half of adjustConstellationsToNewK's failure test, which the test cannot drive because the object writes one past the row there and then fails to terminate -- docs/deviations.md D351 and D352, and the test's own header."
+ },
+ {
+  "label": "constellationDesign passes its FIFTH argument where the object passes its sixth",
+  "find": "\t\tsetConstellationToNoise(noiseEnergy, ucode, alt, dmin,\n\t\t\t\t\tperPhase, mark);",
+  "replace": "\t\tsetConstellationToNoise(noiseEnergy, ucode, alt, dmin,\n\t\t\t\t\tlastUcode, mark);"
+ },
+ {
+  "label": "constellationDesign swaps the two short (*)[128] tables in its tail call",
+  "find": "\t\tadjustConstellationsToNewK(ucode, alt, dmin, mark);\n}",
+  "replace": "\t\tadjustConstellationsToNewK(alt, ucode, dmin, mark);\n}"
+ },
+ {
+  "label": "constellationDesign runs the power pass on the redundancy flag",
+  "find": "\tif (params->ENABLE_DIGITAL_POWER_REDUCTION)\n\t\tadjustConstellationsPower();\n\n\tif (params->ENABLE_REDUNDANCY_OPTIMIZATION)\n\t\tadjustConstellationsToNewK(ucode, alt, dmin, mark);\n}",
+  "replace": "\tif (params->ENABLE_REDUNDANCY_OPTIMIZATION)\n\t\tadjustConstellationsPower();\n\n\tif (params->ENABLE_REDUNDANCY_OPTIMIZATION)\n\t\tadjustConstellationsToNewK(ucode, alt, dmin, mark);\n}"
+ },
+ {
+  "label": "process passes its NINTH argument where the object passes its tenth",
+  "find": "\t\t\tsetConstellationToNoise(noiseEnergy, ucode, alt, dmin,\n\t\t\t\t\t\tperPhase, mark);",
+  "replace": "\t\t\tsetConstellationToNoise(noiseEnergy, ucode, alt, dmin,\n\t\t\t\t\t\tlastUcode, mark);"
+ },
+ {
+  "label": "process computes kMax in 32 bits, which is the obvious spelling -- EXPECTED TO SURVIVE",
+  "find": "\t\ts = (unsigned char)(6 - mappingParams->shaperSR);\n\t\tkMax = (unsigned char)(42 - s);",
+  "replace": "\t\ts = (unsigned char)(6 - mappingParams->shaperSR);\n\t\tkMax = (unsigned int)(36 + mappingParams->shaperSR) + (s - s);",
+  "equivalent": true,
+  "note": "The two readings differ only for a shaperSR above 219 or below -36, and there the `d > 42` clamp two statements later takes both to word_0 = 42 and k = shaperSR + 36: d is `k - shaperSR + 6` unsigned, k is at most maxK which is at most 42 over six constellations of at most 128 points, so a shaperSR above 219 needs k >= 213 to keep d under 43 and one below -36 makes d at least k + 43.  Provably unobservable through this member, and the source comment and finding 3403 say so."
+ },
+ {
+  "label": "process clamps the constellation table's d at 41 rather than 42",
+  "find": "\t\tif (d > 42) {\n\t\t\tmappingParams->word_0 = 42;",
+  "replace": "\t\tif (d > 41) {\n\t\t\tmappingParams->word_0 = 42;",
+  "note": "Recorded NOT CAUGHT.  It differs only where `d` is exactly 42, and the two arms then agree on `word_0` (42 either way) and differ only in `k`, which is printed and not stored -- so the loud group would have to land a composed trial on `maxK == shaperSR + 36` exactly.  None of the sixty-one does."
+ },
+ {
+  "label": "process rounds byte_08 up at 4 rather than above it",
+  "find": "\t\tif (scaled > 4)\n\t\t\tscaled++;",
+  "replace": "\t\tif (scaled >= 4)\n\t\t\tscaled++;",
+  "note": "Recorded NOT CAUGHT.  It differs only where `42 - word_0` is exactly 4, which is a `word_0` of 38, and every composed trial's design lands on the 42 clamp or well under it."
+ },
+ {
+  "label": "process forms the rate by dividing by 8 rather than by 6",
+  "find": "\t\tcurrentRate = (mappingParams->word_0 * 8000) / 6;",
+  "replace": "\t\tcurrentRate = (mappingParams->word_0 * 8000) / 8;"
+ },
+ {
+  "label": "process clamps maxRate to minRate rather than the other way round",
+  "find": "\tif (minRate > maxRate)\n\t\tminRate = maxRate;",
+  "replace": "\tif (minRate > maxRate)\n\t\tmaxRate = minRate;"
+ },
+ {
+  "label": "process always reports success",
+  "find": "\treturn failed;\n}",
+  "replace": "\treturn failed & 0;\n}"
+ },
+ {
+  "label": "process plants the alternate linear mapping in constelTable",
+  "find": "\tconstelTable = detector->linMapp;",
+  "replace": "\tconstelTable = detector->linMappAlt;"
+ },
+ {
+  "label": "process plants the detector's two fields the other way round",
+  "find": "\tword_28 = detector->pcmType;",
+  "replace": "\tword_28 = detector->int_a960;"
+ },
+ {
+  "label": "process leaves the mapping block's +0x61c alone",
+  "find": "\tmapp->word_61c = 1;",
+  "replace": "\tmapp->word_61c = mapp->word_61c;"
+ },
+ {
+  "label": "process clears ENABLE_RRN_UP on a strictly greater rate",
+  "find": "\tif (maxRate <= currentRate)\n\t\tparams->ENABLE_RRN_UP = 0;",
+  "replace": "\tif (maxRate < currentRate)\n\t\tparams->ENABLE_RRN_UP = 0;"
+ },
+ {
+  "label": "process seeds word_24 unconditionally",
+  "find": "\tif (word_24 == 0)\n\t\tword_24 = currentRate;",
+  "replace": "\tword_24 = currentRate;"
+ },
+ {
+  "label": "process runs the design loop once rather than twice",
+  "find": "\t} while (done == 0 && pass <= 2);",
+  "replace": "\t} while (done == 0 && pass <= 1);"
+ },
+ {
+  "label": "adjustConstellationsPower clamps the ladder index at 22 rather than 21 -- EXPECTED TO SURVIVE",
+  "find": "\ttarget = (byte_38 <= 21) ? byte_38 : 22;",
+  "replace": "\ttarget = (byte_38 <= 22) ? byte_38 : 22;",
+  "equivalent": true,
+  "note": "`(byte_38 <= 21) ? byte_38 : 22` and `(byte_38 <= 22) ? byte_38 : 22` agree everywhere: below 22 both give byte_38, at 22 both give 22, above 22 both give 22.  Kept because the BOUND is what the object encodes (`cmp $0x15,%al; ja`) and a reader will wonder; the mutation records that no input can tell."
+ },
+ {
+  "label": "adjustConstellationsPower swaps the one-point and ten-point rounds",
+  "find": "\t\t\tcount = (delta < 4) ? 1 : 10;",
+  "replace": "\t\t\tcount = (delta < 4) ? 10 : 1;"
+ },
+ {
+  "label": "adjustConstellationsPower forces one point a round at 13 rather than above it",
+  "find": "\t\tif (byte_08 > 13)\n\t\t\tcount = 1;",
+  "replace": "\t\tif (byte_08 >= 13)\n\t\t\tcount = 1;"
+ },
+ {
+  "label": "adjustConstellationsPower counts each removed point twice",
+  "find": "\t\t\tremoved++;\n\t\t\tcount--;",
+  "replace": "\t\t\tremoved += 2;\n\t\t\tcount--;"
+ },
+ {
+  "label": "adjustConstellationsPower puts the d floor one lower",
+  "find": "\t\tif (mappingParams->word_0 <= 20) {\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (mappingParams->word_0 <= 19) {\n\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "adjustConstellationsPower takes the power over the plain constellation",
+  "find": "\tfirst = power->getPower(mappingParams,\n\t\t\t\tV90_TX_POWER_OVER_CODEC_CONSTELLATION,\n\t\t\t\t(PcmType)word_2c);",
+  "replace": "\tfirst = power->getPower(mappingParams,\n\t\t\t\tV90_TX_POWER_OVER_CONSTELLATION,\n\t\t\t\t(PcmType)word_2c);"
+ },
+ {
+  "label": "adjustConstellationsToNewK swaps the two dmin arms",
+  "find": "\t\t\tif (dmin[minIndex] == 0) {",
+  "replace": "\t\t\tif (dmin[minIndex] != 0) {"
+ },
+ {
+  "label": "adjustConstellationsToNewK uses short_10 where the zero-dmin scan uses short_0a",
+  "find": "\t\t\t\tshort lim = ucode[minIndex][u] + short_0a;",
+  "replace": "\t\t\t\tshort lim = ucode[minIndex][u] + short_10;"
+ },
+ {
+  "label": "adjustConstellationsToNewK scans the non-zero-dmin arm to 127 rather than 113",
+  "find": "\t\t\t\twhile (u <= 0x71) {",
+  "replace": "\t\t\t\twhile (u < 128) {"
+ },
+ {
+  "label": "adjustConstellationsToNewK requires only the lower of the two bounds",
+  "find": "\t\t\t\t\tif (ucode[minIndex][u] >= lo\n\t\t\t\t\t    && ucode[minIndex][u] >= hi)",
+  "replace": "\t\t\t\t\tif (ucode[minIndex][u] >= lo)"
+ },
+ {
+  "label": "adjustConstellationsToNewK starts its scan one code late",
+  "find": "\t\t\tu = mappingParams->constellation[minIndex][0];",
+  "replace": "\t\t\tu = (unsigned char)\n\t\t\t    (mappingParams->constellation[minIndex][0] + 1);"
+ },
+ {
+  "label": "adjustConstellationsToNewK aims at K rather than K + 1",
+  "find": "\t\trrn = startK + 1;",
+  "replace": "\t\trrn = startK;"
+ },
+ {
+  "label": "adjustConstellationsToNewK rounds up at UP_ROUND_K rather than above it",
+  "find": "\tif (beforeK - startK > params->UP_ROUND_K) {",
+  "replace": "\tif (beforeK - startK >= params->UP_ROUND_K) {",
+  "note": "Recorded NOT CAUGHT.  `beforeK - startK` is `realK - maxK`, and realK adds 1e-9f to a quotient of two logarithms, so it lands exactly on a float UP_ROUND_K only if the product of the six lengths is zero -- which the fixture cannot drive, because the getPower that follows would divide by that same zero (D356).  The strictness of the comparison is read from `ja` at 0x4bb67 and is not differentially observable."
+ },
+ {
+  "label": "adjustConstellationsToNewK restores the last point even at a length of one",
+  "find": "\t\tif (mappingParams->constellationSize[maxIndex] != 1) {",
+  "replace": "\t\tif (mappingParams->constellationSize[maxIndex] != 0) {"
+ },
+ {
+  "label": "adjustConstellationsToNewK compands the ucode with the other law",
+  "find": "\t\t\tif (word_2c != 0)\n\t\t\t\tcompanded = (unsigned char)\n\t\t\t\t    (linear2alaw(__builtin_abs(",
+  "replace": "\t\t\tif (word_2c == 0)\n\t\t\t\tcompanded = (unsigned char)\n\t\t\t\t    (linear2alaw(__builtin_abs("
+ },
+ {
+  "label": "adjustConstellationsToNewK stops removing one round early",
+  "find": "\t\t\t} while (currentK >= targetK);",
+  "replace": "\t\t\t} while (currentK > targetK);"
+ },
+ {
+  "label": "adjustConstellationsPower prints the sqrt fraction in hundredths (only the loud group can see this)",
+  "find": "\tedprintf(\"V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\\r\\n\",\n\t\t !(0.0f >= first) ? '+' : '-',\n\t\t (int)__builtin_fabsl(x87_fsqrt((long double)first)),\n\t\t __builtin_abs((int)((x87_fsqrt((long double)first)\n\t\t\t\t      - (long double)(int)x87_fsqrt(\n\t\t\t\t\t\t(long double)first))\n\t\t\t\t     * 1000.0f)));",
+  "replace": "\tedprintf(\"V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\\r\\n\",\n\t\t !(0.0f >= first) ? '+' : '-',\n\t\t (int)__builtin_fabsl(x87_fsqrt((long double)first)),\n\t\t __builtin_abs((int)((x87_fsqrt((long double)first)\n\t\t\t\t      - (long double)(int)x87_fsqrt(\n\t\t\t\t\t\t(long double)first))\n\t\t\t\t     * 100.0f)));"
+ },
+ {
+  "label": "adjustConstellationsPower takes the sqrt line's sign from the ROOT and not from the power (only the loud group can see this)",
+  "find": "\t\t removed,\n\t\t !(0.0f >= p) ? '+' : '-',",
+  "replace": "\t\t removed,\n\t\t !(0.0f >= (float)x87_fsqrt((long double)p)) ? '+' : '-',",
+  "note": "Recorded NOT CAUGHT.  The two differ only for a negative power, where the root is the indefinite NaN and an ordered compare against it takes the other arm; every power this sweep produces is a sum of squares times non-negative fractions.  The reading is from `fcomps 0x38(%esp)` at 0x4ae74, which compares against the STORED POWER and not the root -- the disassembly is the evidence, and this entry records that no input adds to it."
+ },
+ {
+  "label": "adjustConstellationsPower prints the final dBm0 without the ladder's +1 (only the loud group can see this)",
+  "find": "\tdBm0 = (index + 1) * -0.5f;\n\tedprintf(\"V90ConstellationDesigner: final index %d, \"\n\t\t \"final power in dBm0  = %c%d.%01d\\r\\n\",\n\t\t index,\n\t\t !(0.0f >= dBm0) ? '+' : '-',\n\t\t (int)__builtin_fabsf(dBm0),\n\t\t __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));\n\n\tedprintf(\"--------------------------------------\\r\\n\");",
+  "replace": "\tdBm0 = index * -0.5f;\n\tedprintf(\"V90ConstellationDesigner: final index %d, \"\n\t\t \"final power in dBm0  = %c%d.%01d\\r\\n\",\n\t\t index,\n\t\t !(0.0f >= dBm0) ? '+' : '-',\n\t\t (int)__builtin_fabsf(dBm0),\n\t\t __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));\n\n\tedprintf(\"--------------------------------------\\r\\n\");"
+ }
+]

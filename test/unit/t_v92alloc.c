@@ -659,7 +659,14 @@ main(void)
 {
 	int rc = 0;
 	size_t coff = offsetof(struct fixture, p.constellations);
-	size_t foff = offsetof(struct fixture, p.filterCoefficients);
+	/*
+	 * The four coefficient pointers are four NAMED fields since the
+	 * unpacker was read -- z1, p1, z2, p2 -- rather than one array, so
+	 * the run they form is anchored on the first of them.  Their
+	 * contiguity is not assumed either: the four `diff_eq_int`s below
+	 * check it.
+	 */
+	size_t foff = offsetof(struct fixture, p.z1);
 
 	/* The block is exactly what V92Modem's constructor allocates. */
 	diff_begin("the parameter-info block's size");
@@ -669,6 +676,12 @@ main(void)
 		    0x84);
 	diff_eq_int("the coefficient array is at +0x%lx", (long)foff, 0x5c,
 		    0x5c);
+	diff_eq_int("p1 is at +0x%lx",
+		    (long)offsetof(struct fixture, p.p1) - (long)foff, 4, 4);
+	diff_eq_int("z2 is at +0x%lx",
+		    (long)offsetof(struct fixture, p.z2) - (long)foff, 8, 8);
+	diff_eq_int("p2 is at +0x%lx",
+		    (long)offsetof(struct fixture, p.p2) - (long)foff, 12, 12);
 	rc |= diff_end();
 
 	rc |= check_create("V92createConstellations", V92createConstellations,
