@@ -180,12 +180,12 @@ V92CP::reset()
  * to the object in between.  That looked like proof the author had copied the
  * register into locals -- `bits` and `crc` are both `unsigned char` and abut,
  * so an in-place loop would have to reload after every store IF they could
- * alias.  They cannot: GCC's alias analysis is component-based, two distinct
- * members of one class never alias whatever their types, and loop-invariant
- * motion is free to hoist the loads and sink the stores out of a loop that
- * only reads `bits`.  Written in place, that is exactly the code that comes
- * out -- which is why this is written in place.  Finding 4510, and it is a
- * correction of a reading this file carried for one revision.
+ * alias.  MEASURED RATHER THAN ARGUED: the in-place form below reproduces the
+ * object at every length the fixture drives, three of them past the point
+ * where `bits[i]` addresses `crc`, under GCC 3.4.2 and GCC 13 alike.  So
+ * loop-invariant motion hoists the loads and sinks the stores and the sixteen
+ * slots are the compiler's.  WHY it is allowed to is NOT established here and
+ * finding 4510 says so rather than naming a rule it has not checked.
  *
  * The two forms are not the same FUNCTION -- `bits` is 2,000 entries and `crc`
  * follows it, so a `word_910` above 2,017 makes the loop read the register it

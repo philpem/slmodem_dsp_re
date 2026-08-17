@@ -6250,7 +6250,7 @@
    }
   },
   "v92btosproc": {
-   "key": "10e32e499f69bcea4bdc6aef2ce33b4500b7b400e455d396d65cdab500ce1c73",
+   "key": "9eefca521215172d8e29cf2bc602482597e81cd6650a3e0651204b587c67e772",
    "summary": "32 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
    "verdicts": {
     "reset clears the flag rather than setting it": "caught",
@@ -6288,7 +6288,7 @@
    }
   },
   "v92btosprochdr": {
-   "key": "d1d5e36ecbdd5a2320c37cbbdc5e7ff198986242afb5a0c4cc3edf113dd80f2a",
+   "key": "315f66a3bb974ba4e05ca5c9baf460d0d197d4d2bcd656dd2f27ff5e076e2da7",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "SIZE_NOT_SET is reported as success": "caught",
@@ -6365,7 +6365,7 @@
    }
   },
   "v92cpcrc": {
-   "key": "4f64f08103140c5092bf5a5278c4109b88c3831d142b81c90585b0dc9c00317a",
+   "key": "95e21aaab5171f7536405362f6ee5140bd4386e18efd0299537ff34d0f787c48",
    "summary": "35 mutations: 35 caught (35 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "evaluateCRC does not reset the register first": "caught",
@@ -6942,7 +6942,7 @@
    }
   },
   "v92tx": {
-   "key": "67a953421f9d208df9ac2b26e2ad016fd1bf838d22861b49c7ed66621a8fc466",
+   "key": "2039805a01fbf91ba36c1c4daaba43ab00a69f77ec9790657b70e97d2e98a95e",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x04 is not cleared": "caught",
@@ -6966,7 +6966,7 @@
    }
   },
   "v92txproc": {
-   "key": "b3e3ad6968cdf83ee0dcc1c8ac38f3966e00f8e56e0300a5ef8704d0b0053ed3",
+   "key": "88d997f015953ef30c780c732157ede5187d8b5fec44db3b6a52709bfa61697a",
    "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "K is reached exactly rather than crossed": "caught",
@@ -6992,7 +6992,7 @@
    }
   },
   "v92txreset": {
-   "key": "0102f7d11aab10b352532ffbd18a0afaca024960cb81dd4e992c1e60655901e6",
+   "key": "5263b48b688c72ab709f5c1c957415d7988279cf22b962644fd5f635d917683a",
    "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x0c is not zeroed on the way out": "caught",

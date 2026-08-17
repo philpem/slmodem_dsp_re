@@ -63650,16 +63650,26 @@ nothing to the object at all.
 **That was read as proof the author had copied the register into locals, and
 the reading was wrong.** The argument was that `bits` and `crc` are both
 `unsigned char` and abut, so an in-place loop would have to reload `crc[0]`
-after every store in case the next `bits[i]` aliased it. The premise fails:
-GCC's alias analysis is COMPONENT-BASED, two distinct members of one class
-never alias whatever their element types, so loop-invariant motion is free to
-hoist the loads and sink the stores out of a loop whose only object access is
-a read of a different member. Written in place, the object's code is what
-comes out.
+after every store in case the next `bits[i]` aliased it.
 
-The correction was measured, not argued: the in-place source passes the
-differential test at every length in `t_v92cpcrc.cpp`'s grid, three of which
-are past 2,017 and therefore past the point where `bits[i]` addresses `crc`.
+**WHAT IS MEASURED: both compilers hoist it anyway.** The in-place source --
+sixteen stores straight into `this->crc`, no local array, no copy either way --
+passes the differential test at every length in `t_v92cpcrc.cpp`'s grid, three
+of which are past 2,017 and therefore past the point where `bits[i]` addresses
+`crc`; `make phase` is green, which puts GCC 3.4.2 and GCC 13 both on that
+side. So loop-invariant motion does hoist the loads and sink the stores out of
+a loop whose only object access is a read of the other member, and the
+sixteen stack slots are the compiler's rather than the author's.
+
+**WHAT IS NOT ESTABLISHED IS WHY, and this finding deliberately does not say.**
+The obvious candidate -- that GCC disambiguates two distinct members by
+component -- does not obviously reach this case: telling `bits[i]` from
+`crc[j]` needs `i < 2000`, and `i` is bounded only by a run-time `n`. The
+other candidate is the out-of-bounds entitlement: an access to `bits[i]` past
+its 2,000 declared entries is undefined, so the compiler may assume it stays
+inside `bits`. Those are different rules with different reach, and naming the
+wrong one here would send the next reader to apply it where it does not hold.
+The measurement stands without it.
 
 **THE TWO SOURCES ARE STILL NOT THE SAME FUNCTION.** At the C level the
 in-place form feeds the register its own updated bytes once the index reaches
@@ -63667,11 +63677,13 @@ in-place form feeds the register its own updated bytes once the index reaches
 can see it -- the compiler resolves it identically for both -- so the choice
 had to be made on which source produces the object's code, and it does.
 
-**The general shape is worth keeping.** "The compiler could not have done this,
-so the source must have" needs the compiler's actual rules, not the ones a
-careful C programmer would assume. This is the third reading in this tree
-overturned by remembering what GCC is allowed to assume rather than what the
-bytes could be.
+**The general shape is worth keeping, and so is the second half of it.** "The
+compiler could not have done this, so the source must have" needs the
+compiler's actual rules and not the ones a careful C programmer would assume
+-- and the way to settle it is to WRITE THE OTHER FORM AND RUN IT, which took
+one edit and one `make one` here. An argument about what GCC may do is worth
+less than a build that shows what it did, and it is worth less still when the
+rule it names has not been checked against the case in hand.
 
 ## 4511. `V92CP::evaluateCRC` IS TWO MEMBERS INLINED AND A SUMMED ABSOLUTE DIFFERENCE
 

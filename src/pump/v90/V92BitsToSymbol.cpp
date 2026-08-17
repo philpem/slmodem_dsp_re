@@ -195,10 +195,13 @@ V92BitsToSymbol::nofBitsForNextTime()
  *
  * Two statements.  The object holds `nofBitsForNextTime` INLINED here rather
  * than called -- there is no relocation on any call in the range and the 108
- * bytes are the 100 above plus the store and one extra `mov` -- so the two
- * functions are the same code twice and `make similarity` sees them that way.
- * Nothing here re-reads +0x18 after storing it, which is what an inline of a
- * member the compiler can see through gives.
+ * bytes are the 100 above plus the store and one extra `mov`.  Nothing here
+ * re-reads +0x18 after storing it, which is what an inline of a member the
+ * compiler can see through gives.
+ *
+ * `nofBitsForNextTime` matches the blob's instruction sequence and THIS DOES
+ * NOT, so the inline is not reproduced exactly; the differential tier is
+ * green either way and 100% was never the target.
  * ===========================================================================
  */
 unsigned int
