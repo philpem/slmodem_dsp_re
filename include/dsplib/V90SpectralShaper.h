@@ -38,11 +38,34 @@
  *            destructor does NOT call one for it, which is half the evidence
  *            that that class has no destructor at all.
  *
- * EVERYTHING BELOW +0x20 IS STILL `pad_`.  Neither function written here
- * touches it and the rule is that an unmodelled region stays `pad_` rather
- * than being guessed into fields; the other six members reach +0x00, +0x04,
- * +0x08, +0x0c, +0x12, +0x18 and +0x24 through registers this file did not
- * trace back to `this`, so even their existence is not asserted here.
+ * EVERYTHING BELOW +0x20 WAS `pad_`, AND `reset` NAMES THREE WORDS OF IT.
+ * The old note here said the region stays padded until something traces it
+ * back to `this`; `reset` does, at +0x00, +0x04, +0x08 and +0x24, and the
+ * caller types the first two for us:
+ *
+ *     +0x00  `shaperId`, `V90MappingParams+0x624`.  `V90Mapper::reset`
+ *            passes that field as argument 1 (0x3024e / 0x30257), and
+ *            `tools/vparse.py` gives the name from the parameter block, so
+ *            it is the author's and not ours.
+ *     +0x04  `shaperSR`, `V90MappingParams+0x620`, argument 2.
+ *     +0x08  `6 / shaperSR`, with 0 substituted when `shaperSR` is 0 --
+ *            `mov $0x6,%eax; xor %edx,%edx; div %ecx` at 0x327d0, an
+ *            UNSIGNED divide, which is the second reason the arguments are
+ *            unsigned and the mangling is the first.  It is also what is
+ *            stored into the embedded filter's `blockLength` at 0x32830 and
+ *            what the encoder is reset with, which is `DiffCoder.h`'s
+ *            "6 / spacing as the active width" seen from the other side:
+ *            six samples to a V.90 frame, one independent memory per
+ *            position that is still in play.  Named `blockLength` for the
+ *            member it is copied into.
+ *     +0x24  `shaperId` AGAIN, stored at 0x3285c from a re-read of +0x00.
+ *            Which of the two is the working copy is not decidable from
+ *            this function, so it keeps an offset name; `advanceTrellis`
+ *            and `process` are what will settle it.
+ *
+ * +0x0c..+0x1f IS STILL `pad_`, and +0x12 and +0x18 are still only known to
+ * be reached by the other six members through registers this file has not
+ * traced.
  */
 
 #ifndef DSPLIB_V90SPECTRALSHAPER_H
@@ -57,10 +80,25 @@ public:
 	V90SpectralShaper();
 	~V90SpectralShaper();
 
+	/*
+	 * Set up for a connection: `V90MappingParams`' six shaper words, as
+	 * `V90Mapper::reset` passes them (0x3025c).  The `unsigned` pair is
+	 * the mangling's (`Ejjffff`) and the four floats go straight through
+	 * to the embedded filter's coefficients.
+	 */
+	void reset(unsigned int shaperId, unsigned int shaperSR,
+		   float a1, float a2, float b1, float b2);
+
+	/* Re-run the filter's own two-step setup and nothing else. */
+	void resetSSFilter(float a1, float a2, float b1, float b2);
+
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
-	unsigned char	 pad_00[0x20];	/* +0x00 not touched here           */
+	unsigned int	 shaperId;	/* +0x00 V90MappingParams::shaperId */
+	unsigned int	 shaperSR;	/* +0x04 V90MappingParams::shaperSR */
+	unsigned int	 blockLength;	/* +0x08 6 / shaperSR, or 0         */
+	unsigned char	 pad_0c[0x14];	/* +0x0c not touched here           */
 	unsigned int	 word_20;	/* +0x20 constructed 0              */
-	unsigned char	 pad_24[4];	/* +0x24 not touched here           */
+	unsigned int	 word_24;	/* +0x24 reset stores shaperId again */
 	unsigned short	*buf_28;	/* +0x28 owned, 24 entries          */
 	unsigned short	*buf_2c;	/* +0x2c owned, 24 entries          */
 	unsigned int	 word_30;	/* +0x30 constructed 0              */

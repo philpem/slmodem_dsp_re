@@ -40,6 +40,15 @@
  * 18 and 23, the same three constants `V90Phase3Demodulator` builds its
  * descrambler with.
  *
+ * +0x2c..+0x37 ARE THREE WORDS AND `reset` IS WHAT ESTABLISHES IT.  They were
+ * `pad_2c[0x0c]` while only the constructor was written; `reset` stores a
+ * separate `movl $0x0` into each of +0x2c, +0x30 and +0x34 (0x1a532, 0x1a539,
+ * 0x1a540), which fixes the width at four bytes and the count at three.  The
+ * NAMES stay offset-derived: the roles below are read out of `progress`,
+ * which is not written yet, and a role that has not been reproduced is not a
+ * name (CLAUDE.md, "naming something wrongly is worse than leaving it
+ * padded").
+ *
  * WHAT THE CONSTRUCTOR DOES NOT TOUCH is +0x2c..+0x37, which `progress` uses
  * as three separate words: a state at +0x2c that it compares against 2 and 3,
  * a running count at +0x30, and a step at +0x34 that it sets to 0, 6, 7, 8 and
@@ -80,6 +89,13 @@ public:
 		     V90MP *mp, V90Parameters *params, unsigned int sessionFlag);
 	~V90Modulator();
 
+	/*
+	 * Per-connection reset: the embedded scrambler back to 0 and the
+	 * three words at +0x2c..+0x37 cleared.  Does NOT rebuild anything --
+	 * the scrambler keeps the taps its constructor set.
+	 */
+	void reset();
+
 	/* Defined in src/pump/v90/V90SessionFlag.cpp. */
 	void setSessionFlag(unsigned int flag);
 
@@ -95,7 +111,9 @@ public:
 	V90CP *cp;				/* +0x20 argument 9       */
 	V90Parameters *params;			/* +0x24 argument 11      */
 	unsigned int sessionFlag;		/* +0x28 argument 12      */
-	unsigned char pad_2c[0x0c];		/* +0x2c progress's three */
+	unsigned int word_2c;			/* +0x2c reset clears     */
+	unsigned int word_30;			/* +0x30 reset clears     */
+	unsigned int word_34;			/* +0x34 reset clears     */
 	V90Phase3Modulator *phase3Modulator;	/* +0x38 owned, 0x398     */
 	V90Phase4Modulator *phase4Modulator;	/* +0x3c owned, 0x2fac    */
 	V90BitsToSymbol *bitsToSymbol;		/* +0x40 owned, 0x24      */

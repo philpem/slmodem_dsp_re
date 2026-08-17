@@ -40,6 +40,7 @@
 
 #include <stddef.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90BitsToSymbol.h"
 #include "dsplib/V90Modulator.h"
@@ -98,6 +99,9 @@ V90MOD_OFF(sessionFlag,		0x28, flag);
 V90MOD_OFF(phase3Modulator,	0x38, p3mod);
 V90MOD_OFF(phase4Modulator,	0x3c, p4mod);
 V90MOD_OFF(bitsToSymbol,	0x40, bts);
+V90MOD_OFF(word_2c,		0x2c, word2c);
+V90MOD_OFF(word_30,		0x30, word30);
+V90MOD_OFF(word_34,		0x34, word34);
 V90MOD_OFF(scrambler,		0x44, scrambler);
 V90MOD_OFF(nofSymbols,		0x64, nofsym);
 V90MOD_OFF(symbolBuf,		0x68, symbuf);
@@ -111,8 +115,8 @@ typedef char v90mod_size[(sizeof(V90Modulator) == 0x70) ? 1 : -1];
  * bytes each.
  *
  * Twelve arguments, eleven of them stored straight through, and five
- * allocations of which none is null-checked.  `pad_2c` is left exactly as it
- * was found.
+ * allocations of which none is null-checked.  +0x2c..+0x37 is left exactly as
+ * it was found; `reset` is the member that clears it.
  * ===========================================================================
  */
 V90Modulator::V90Modulator(unsigned int n, V90Phase2Info *p2, V90Jd *jdArg,
@@ -190,4 +194,41 @@ V90Modulator::~V90Modulator()
 		sysdep_free(symbolBuf);
 	if (frameBuf)
 		sysdep_free(frameBuf);
+}
+
+/*
+ * ===========================================================================
+ * V90Modulator::reset -- .text+0x1a510, 78 bytes
+ *
+ * The class's last member, and the smallest: one gated diagnostic, one call
+ * into the embedded scrambler, and three words cleared.
+ *
+ * THE DIAGNOSTIC IS `dsplibs_debug_printf` BEHIND `DSPLIB_DEBUG_ON()` AND NOT
+ * `edprintf`.  0x1a518 is `cmpl $0x1,dsplibs_debug_level` with `ja`, so the
+ * call only happens above level 1 -- unlike the V.90 spectral group, whose
+ * diagnostics go through `edprintf` and run at every level because `edprintf`
+ * tests the level after it has already formatted and encoded.  The two are
+ * not interchangeable and the object picks one per site.
+ *
+ * THE PRINT COMES FIRST IN THE OBJECT AND FIRST HERE, but the compiler has
+ * moved its BODY out of line to 0x1a550 and jumps back -- the ordinary layout
+ * for an unlikely arm, and not a statement about order.
+ *
+ * THE SCRAMBLER IS RESET, NOT RECONSTRUCTED.  `lea 0x44(%ebx),%eax` and a
+ * call to `Scrambler<int,unsigned char>::reset(int)` with 0; the taps set by
+ * the constructor's member-initialiser are untouched, which is what makes
+ * this a per-connection reset rather than a rebuild.
+ * ===========================================================================
+ */
+void
+V90Modulator::reset()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator reset\r\n");
+
+	scrambler.reset(0);
+
+	word_2c = 0;
+	word_30 = 0;
+	word_34 = 0;
 }

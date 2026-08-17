@@ -67819,3 +67819,52 @@ set; `t_v90specproc.cpp` holds `process` alone and is declared.  The rule
 generalises -- **a declared divergence is a property of a CALL GRAPH, not of a
 file** -- and the cost of getting it wrong is measured in mutation coverage
 rather than in a failing gate, which is why it is worth writing down.
+
+## 5805. AN IN-CLASS DEFINITION IS IMPLICITLY `inline`, AND MOVING `Scrambler::reset` OUT OF THE CLASS BODY GAINED THREE SYMBOLS AND LOST NONE
+
+`V90Modulator::reset` is 78 bytes in the object and came out 101 here.  The
+23 bytes were `Scrambler<int,unsigned char>::reset` inlined: the object makes
+a real call at 0x1a52d, to a weak symbol with **twenty** `R_386_PC32` call
+sites across the object, and ours had no call at all.
+
+The lever is where the body is written.  `Scrambler.h` defined `reset` inside
+the class body, which makes it implicitly `inline` and puts it under
+`--param max-inline-insns-single` (500) instead of `max-inline-insns-auto`
+(100), so GCC 3.4.2 inlines it almost everywhere.  Its sibling template has
+always been the other shape -- `DiffCoder.h` declares
+`ParallelDifferentialEncoder<T>::reset` in the class and defines it in
+`src/dsp/DiffCoder.cpp` -- and that one is a call in the object AND a call in
+ours, which is how the asymmetry was noticed at all: two templates, two
+spellings, one matching and one not.
+
+**MEASURED WITH THE SETS DIFFED AND NOT THE COUNTS**, which is what
+`docs/cleanup.md` asks for and what makes this reportable: one tree, two
+builds on the exact 3.4.2 compiler, everything else held fixed.
+
+| | identical |
+|---|--:|
+| `reset` in the class body | 452 |
+| `reset` out of the class body | **455** |
+
+**Nothing was lost.**  Three symbols moved in: `V90Modulator::reset`,
+`Scrambler<unsigned char,int>::Scrambler` and
+`Descrambler<unsigned char,int>::Scrambler`, the two constructors because
+they call `reset` as well.
+
+**The behaviour is identical by construction** -- same body, same semantics,
+only the implicit-`inline` property changes -- so this is a codegen-tier gain
+with nothing at risk on the differential tier, and `make phase` is green.
+
+**IT IS A SHARED HEADER AND THAT IS THE ONE COST.**  `Scrambler.h` reaches
+V.34 and the whole V.90/V.92 modulator family, and finding 3511 is about
+exactly this shape of change landing beside somebody else's work.  The edit
+is two bodies moved below their classes with no text changed inside either,
+so a conflict is textual and visible rather than silent -- but a merger
+should know it is there.
+
+**The general rule it earns**, and it is worth carrying to every other
+template in the tree: **where the object CALLS a template member, check
+whether our header defines it in the class body.**  That is a one-line
+question with a measurable answer, and finding 5802's `printSpectrum` is the
+case where the answer was "no, it is already out of line" and the cause is
+still open -- so this is a lever, not the lever.
