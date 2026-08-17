@@ -68074,6 +68074,41 @@ however many checks the grid multiplies out to and drives one of eighteen
 arms. The axis has to be driven through the demodulator's own inputs, and the
 counter has to be read off the reference peer AFTER the call returns.
 
+### What IS driven, measured rather than asserted
+
+`gcov` over `build-cov/repro/pump/v90/V90Equalizer.gcda`, after the suite:
+
+    Function '_ZN12V90Equalizer7processEPfjPsS0_Rj'
+    Lines executed:20.49% of 532
+
+**109 of 532 lines.** The decode's §7 asked for exactly this number and said an
+assertion that the arms were driven is not a measurement; here it is, and it
+says the opposite of what the check count suggests. 120,974 differential
+checks at zero failures buy one state arm of seven.
+
+Driven: the prologue including the held-sample carry, both `fdot` calls, the
+RESET slicer, the error tail's clean-symbol counter and its burst-close
+diagnostic, both float LMS loops, the `array_44` shift, the `word_20` wrap,
+the squared error's 64-bit convert, `outSym`, `outFloat` and `nOut`, the
+epilogue's block close with `updateAvePdsnr` on a real peer, the odd-sample
+carry and the fade-edges cycle.
+
+Not driven, and this is what the next batch owes: the CHANNEL_VERIFY, FPE,
+RRN, DATA, PHASE4 and PHASE3 arms; both nested jump tables and all fifteen
+reachable phase 3 sub-cases; `<TAIL-P3>` and `<TAIL-P4>`; all four re-convert
+blocks, whose one measurable difference is a `(short)` at exactly one of
+three sites; and the whole fixed-point half -- `mmxDot`, the two `idivl`s,
+the split high/low accumulator, `sar_by`, the `array_12c` shift, the
+`word_20Saved` wrap and the epilogue's `block_b8` conversion.
+
+**The cheapest next stage is `mmxMode` with `state` 3, not another float
+arm.** It needs only the demapper and the phase 4 demodulator, both written
+and both with a peer-seeding pattern already in `t_v90eqdata.cpp`, and it
+reaches every one of the fixed-point items above in one fixture. The phase 3
+sub-cases are the expensive end: they need `t_v90p3ddec.cpp`'s sub-peer
+wiring, because `word_30` is cleared on entry to both decision functions and
+cannot be planted.
+
 ## 6002. THE FIXED-POINT LMS UPDATE, AND THE ONE PLACE `docs/v90equprocess.md` IS WRONG
 
 The transcription in `docs/v90equprocess.md` records the fixed-point
