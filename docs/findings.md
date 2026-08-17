@@ -67652,3 +67652,283 @@ input, not D561's: a trial that traps identically on both sides measures the
 CPU.  The second grid is clamped to one and says so.  Worth stating as a
 general shape: **a shared `setup` means widening one grid widens every grid
 built on it**, and the two may have different domains.
+
+## 5700. `V90Equalizer::process` FULLY DECODED, AND THE THREE THINGS THAT WOULD HAVE BEEN WRITTEN WRONG
+
+The 9,364-byte hub at 0x38d80. Its closure is one symbol -- itself -- and every
+peer offset it reaches was already modelled, so nothing about this function was
+blocked by a struct. What it is blocked by is its own shape, and this finding
+is the map, recorded before the source, because three separate readings of it
+were wrong on the first pass and each would have compiled and passed a
+carelessly built suite.
+
+### The shape
+
+    void process(float *in, unsigned n, short *outSym, float *outFloat,
+                 unsigned &nOut)
+
+Four pushes and `sub $0xcc`, so `esp+0xe0` is `this`. `nOut = n >> 1` -- a
+LOGICAL shift on an unsigned, so `docs/cleanup.md` §2 applies and it stays a
+shift. The body is one loop over `j < nOut`, split at the top by `mmxMode` into
+a float arm (0x390d0) and a fixed-point arm (0x38fcc) that compute the same
+quantity two ways, joined at 0x39250, and re-split for the error accounting.
+
+Inside each iteration is `switch (this->state)` over 0..6, table at
+`.rodata+0xc00`, with 0x39250 as both the `default` and the join. Two further
+tables nest inside arms: `.rodata+0xc1c` (26 entries, biased by 0x1c) on
+`phase4Demod->int_0028` inside the RRN arm, and `.rodata+0xc84` (**18 entries,
+not 20** -- 0xc84+18*4 = 0xccc and the 0x3e00d/0x3e048 pair at index 18,19
+belongs to the next table) on `phase3Demod->word_30 - 3` inside the PHASE3 arm.
+
+### 1. `word_20` retreats by TWO per symbol, and the second step is unconditional
+
+The linear equaliser's delay line at `+0x18` is written twice per symbol --
+`array_18[word_20] = s0`, `word_20--`, `array_18[word_20] = s1` at 0x390fe --
+which reads as one step. It is two: 0x3986f decrements it again, inside the
+block at 0x39830 that shifts `array_44` and pushes the new DFE input. That
+block looked conditional because 0x396c4 jumps to 0x39830 when the coefficient
+update is skipped -- but the update path rejoins at 0x39840, *inside* it, from
+0x399c5. So both decrements run on every path, the line is T/2-spaced, and a
+suite that only drove the update path would still have seen both.
+
+When the second decrement goes negative, 0x3a2d4 copies `array_18[0 ..
+linearEquLength-1]` up to `array_18[word_1c-linearEquLength .. word_1c-1]` and
+sets `word_20 = word_1c - linearEquLength - 1` -- the same expression `reset`
+plants in `word_20` at construction, which is what confirms `word_20` is the
+cursor and `word_1c` the length. The fixed-point twin is at 0x398f5 over
+`array_ecAligned` and `word_20Saved`.
+
+### 2. `%ecx` at 0x39717 IS `this->state`, and the 10..16 tests are NOT dead
+
+Seven consecutive comparisons against 10, 11, 12, 16, 13, 14, 15 sit in the
+tail, and `V90EQU_STATE_*` only names 0..6. The obvious conclusion -- that
+`%ecx` had been mis-attributed and really held `phase3Demod->state`, which the
+PHASE3 arm tests against exactly those values -- is wrong. Every one of the
+eight paths that reaches 0x39250 loads `%ecx` from `0x60(...)`:
+
+    390bd  3923e  39b7b  39d00  3a073  3a2cc  3a327  3a369
+
+and the ninth, the RESET arm at 0x3a113, falls through carrying the 0 the
+jump-table dispatch left there. There is no `0x64` load and no `0x28(%edx)`
+load among them.
+
+So the field really is compared against values the `enter*` family never
+writes. They are reachable: the switch is `cmp $6,%ecx; ja 39250`, so any state
+above 6 lands on the default and then meets those tests with a live value.
+`V90Equalizer::state` is therefore WIDER than the seven values this tree has
+named, and the header's `V90EQU_STATE_*` block is a partial enumeration rather
+than a complete one. Recorded rather than named: no string names any of
+10..16, and a wrong name is worse than a pad.
+
+The lesson generalises. "This comparison would be dead code" is an argument
+about the values a field can hold, and a `default:` arm is exactly where a
+field holds values the local enumeration does not list. It is not evidence of a
+mis-read register; the register attribution is settled by the loads, and only
+by the loads.
+
+### 3. `0x84(%esp)` is ONE variable, not two coalesced ones
+
+It is initialised to 1 before the loop (0x38d96), zeroed at 0x392c0 and
+0x39699, incremented and compared against 4 at 0x3975f and 0x397f1, **and
+loaded from `phase3Demod->word_408` at 0x3a285 and 0x3a557**. A local that a
+state arm overwrites from a peer field looks like GCC's classic disjoint-live-
+range slot sharing, and at `-O3` that is usually what it is.
+
+It is not, and the test that settles it is cheap: the arm's write at 0x3a285 is
+followed by the join at 0x39250 and then by the reads at 0x392de and 0x396b4 on
+the SAME iteration. A coalesced pair would need the arm's store to be dead. It
+is read, so there is one variable, and it is a counter whose zero-ness gates
+the LMS update:
+
+    updateCoefs = 1;                       /* before the loop        */
+    ... PHASE3 arm: updateCoefs = phase3Demod->word_408;
+    if (|err| > 300 && state > 1) {        /* a bad symbol           */
+        if (word_94 <= 1) edprintf("High momentary error ...");
+        word_94++;  updateCoefs = 0;       /* freeze the adaptation  */
+    } else if (state not in 10..16 && word_94 > 2) {
+        if (++updateCoefs == 4) {
+            edprintf("nof consecutive errors = %d", word_94);
+            word_94 = 0;                   /* the burst is over      */
+        }
+    }
+    if (updateCoefs) { ... LMS ... }
+
+`word_94` counts high-error events in the burst and `0x84` counts clean symbols
+since the last one; four clean symbols close the burst and report its length.
+The asymmetry is real and must be reproduced: when a burst ends with
+`word_94 <= 2` the `else if` never fires, so `updateCoefs` stays 0 and the
+equaliser stops adapting for the rest of the call.
+
+### The float dot product is TWO accumulators, and that is forced
+
+Both filters are the same 4x-unrolled shape at 0x39131 and 0x39197: two
+accumulators, even indices into the one on top of the x87 stack and odd indices
+into `%st(1)`, the scalar tail accumulating into `%st(1)`, and one
+`faddp %st,%st(1)` at 0x39177 to combine. GCC 3.4.2 does not unroll at `-O3`
+(`-funroll-loops` is not implied) and would not reassociate a float sum in any
+case, so the two accumulators are in the SOURCE. Collapsing them to one changes
+the arithmetic and is not a cleanup.
+
+The counts differ between the two arms and the difference is forced: the float
+loop counts DOWN with `cmp $0x3,%ecx; ja` -- unsigned -- while the fixed-point
+loops at 0x39035 and 0x39088 count UP with `jl`, signed, against
+`dfeLength` and `linearEquLength`. Two loop shapes, and the branch condition
+says which is which whatever the field's declared type.
+
+### The output of one symbol
+
+    y    = dot(&array_18[word_20], linearEquCoefs, linearEquLength)
+    d    = dot(array_44,           dfeCoefs,       dfeLength)
+    soft = y - d                    /* fsubrs 0xb0(%esp), so mem - st0 */
+    softInt = (short)soft           /* fists, TRUNCATING, and NOT popped */
+    decision = <the arm's slicer>
+    outSym[j]   = (short)decision
+    err  = soft - (float)(short)decision
+    array_44[0] = y - decision      /* NOT the decision: the LE output less it */
+    dfeCoefs[i]       += (dfeBeta * err)        * array_44[i]
+    linearEquCoefs[i] += (-linearEquBeta * (y - decision)) * array_18[word_20+i]
+    word_78 += (unsigned)(err * err)
+    outFloat[j] = soft
+
+The two updates use DIFFERENT errors -- the DFE's is `soft - decision` and the
+linear half's is `y - decision` -- and the object says so plainly: at 0x39967
+`fmul %st(1),%st` multiplies by `%st(1)`, which the stack holds as `y - dec`,
+while at 0x396e0 `fmul %st(2),%st` reaches past it to `%st(2)`, which is `err`.
+One stack slot apart, and writing both with the same error would pass every
+test whose DFE is zero-length.
+
+### The block accounting
+
+`word_70` counts symbols and `word_78` accumulates squared error. When
+`word_70` reaches `errorEnergyMeanBlockLen` the block closes at 0x399d1:
+
+    word_7c = sqrt((float)(unsigned)word_78 / (float)(unsigned)word_70)
+    meanErrorEnergyCurrent = errorEnergyMeanK * meanErrorEnergyCurrent
+                             + (1 - errorEnergyMeanK) * word_7c
+    connEval->updateAvePdsnr(meanErrorEnergyCurrent, word_70)
+    word_70 = 0; word_78 = 0
+    if (word_a4) {
+        meanErrorEnergy[meanErrorCount] = word_7c;
+        if (++meanErrorCount == 300) { meanErrorCount = 0; meanErrorFull = 1; }
+    }
+
+Both `fildll`s push a zero high word first (`push %eax` with `%eax = 0`), so
+both counters are read UNSIGNED. `1 - K` is `dc eb`, which objdump prints as
+`fsubr` and which Intel calls FSUB -- `ST(3) = ST(3) - ST(0)` -- and the
+divide is `de f1`, FDIVRP, `ST(1) = ST(0)/ST(1)`. Read from the annotation
+`tools/dis.py` appends, not from the AT&T mnemonic (findings 245, 2156).
+
+### The eight float comparisons, and the one that is written backwards
+
+    0x39501  flds 300.0f; fcomp %st(1); jae      -> `300.0f < fabs(err)`
+    0x395e8  fcoms 0x8c(%esp)   sign character for the soft value
+    0x39630  fcomp %st(2)       sign character for the error
+    0x39f6c  fcomps 32767.0f    PHASE4 upper clamp
+    0x3a33a  fcomps -32767.0f   PHASE4 lower clamp
+    0x3a470  fldz; fcom %st(1)  the before/after ratio's zero guard
+    0x3a527  fcomps 0x140(%esi) sign character for that ratio
+
+0x39501 LOOKS like the `+0x3510` shape of findings 4800-4812 and **is not it**;
+finding 5701 measured the six candidate spellings on the period compiler and
+the lever is the `long double` type of the compared value, not an operand
+order. The paragraph that stood here asserted the operand order was the fix
+and was wrong; 5701 supersedes it. What survives is the consequence: one
+ordered compare, no parity test, so an unordered error takes the HIGH arm --
+and only the modern tier is blind to it, so `make period` is the only thing
+that decides.
+
+### The complete transcription is `docs/v90equprocess.md`
+
+Every arm, every sub-case of both nested tables, the four re-convert blocks
+and the epilogue, written out as the C they came from. Two of the four
+re-convert blocks truncate the DFE output through 16 bits and two do not, so
+they are three source sites and not one helper -- writing them as one would be
+wrong at exactly one of them.
+
+### What is still owed
+
+The source. This finding is the analysis and it is deliberately committed
+without it: the reading above cost more than the transcription will, and
+`docs/` is not `src/`, so recording it breaks no rule and losing it would.
+
+## 5701. THE OBJECT'S `flds; fcomp %st(1)` COMES FROM A `long double`, NOT FROM AN OPERAND ORDER -- MEASURED ON THE PERIOD COMPILER
+
+Finding 5700 recorded `V90Equalizer::process`'s high-error test at 0x394f7 as
+the `+0x3510` shape of 4800-4812 and said the fix was to write the comparison
+with the constant on the left. **That was an assertion, and it is wrong.** Six
+spellings through `dsplibs-tc342` settle it, and the lever is the TYPE of the
+value being compared.
+
+The object:
+
+    394f7:  d9 c0            fld    %st(0)
+    394f9:  d9 e1            fabs
+    394fb:  d9 05 90 02 ..   flds   <300.0f>          .rodata.cst4 + 0x290
+    39501:  d8 d9            fcomp  %st(1)
+    39503:  df e0            fnstsw %ax
+    39505:  9e               sahf
+    39506:  0f 83 ..         jae    397a0              the NOT-high arm
+
+Six probes, one translation unit, the project's own flags
+(`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args`), GCC 3.4.2 exact:
+
+| probe | source | emitted |
+|---|---|---|
+| A | `float a = e<0?-e:e;  a > 300.0f` | `fcoms mem` ; `jbe` |
+| B | same, `300.0f < a` | `fcoms mem` ; `jbe` |
+| C | `float a = __builtin_fabsf(e); a > 300.0f` | `fcoms mem` ; `jbe` |
+| D | same, `300.0f < a` | `fcoms mem` ; `jbe` |
+| E | `!(a <= 300.0f)`, `a` float | `fcoms mem` ; `jbe` |
+| F | `a > LIM`, `LIM` a `static const float` | `fcoms mem` ; `jbe` |
+| I | `a > 300.0` (double constant, float `a`) | `fcoms mem` ; `jbe` |
+| J | `a <= 300.0f` with the arms swapped | `fcoms mem` ; `ja` |
+| **G** | **`long double a = __builtin_fabsl((long double)e); a > 300.0`** | **`fld %st(0); fabs; flds; fcomp %st(1); jae`** |
+| **H** | the same with `300.0 < a` | **the same** |
+
+G and H are the object, instruction for instruction, `jae` included. **Both
+operand orders give it**, so the operand order is not what is doing the work
+-- GCC canonicalises the constant to the right in either spelling. What
+selects the register form is that the compared value is a `long double` living
+on the x87 stack rather than a `float` GCC can leave in memory.
+
+### And the NaN behaviour follows the type, not the order
+
+Under `-mno-ieee-fp` there is no parity test either way, so the whole question
+is which way the single CF test falls:
+
+- `fcoms mem` with `jbe`: unordered sets CF and ZF, `jbe` is taken, and the
+  error goes down the NOT-high arm.
+- `fcomp %st(1)` with `jae`: unordered sets CF, `jae` is NOT taken, and the
+  error goes down the HIGH arm -- which is what the object does.
+
+So **every `float` spelling disagrees with the object on a NaN error**, and
+the `long double` spelling agrees with it without anyone having to reason
+about operand order at all. This is not 2301's shape and it is not 4812's;
+those two are genuine operand-order findings and this one looked like them.
+
+### Why the `long double` was there anyway
+
+`|err|` is live past the comparison: the high arm prints it as the `%d` of a
+`%c%d.%03d` triple, and `src/pump/v90/V90Equalizer.cpp`'s existing
+`edprint_stat` already spells that `(int)__builtin_fabsl((long double)v)`.
+So the source computes the absolute value once, in `long double`, tests it and
+then prints it -- and the type that the print needs is the type that produces
+the comparison. Two constraints, one declaration, and neither of them is a
+trick.
+
+### The rule this is worth stating
+
+**A codegen shape that matches a known trap is not the trap.** 4800-4812's
+`fcompp`-with-no-parity-test and this `fcomp %st(1)` look alike and are
+produced by different things; reading the first onto the second cost a wrong
+sentence in 5700 that a reader would have believed. The probe is three turns
+and the period compiler is already built -- when a claim is about what source
+produces a given encoding, compile it and look, because that claim is
+MEASURABLE and an argument about `tree_swap_operands_p` is not.
+
+The two clamps in the same function, `fcomps 32767.0f` at 0x39f6c and
+`fcomps -32767.0f` at 0x3a33a, are the ordinary `float` form and want the
+ordinary `float` spelling; `soft > 32767.0f` and `soft < -32767.0f` map onto
+the single CF test correctly, including a NaN clamping low. Not every compare
+in the function is the interesting one, and three of the eight are not.
