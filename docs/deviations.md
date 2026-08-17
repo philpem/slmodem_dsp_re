@@ -7436,3 +7436,39 @@ parameter to keep the mangled name.
 `test/unit/t_v90trn2design.cpp` runs the same design twice with two different
 values in that slot and asserts the mapping block is identical, so "never
 read" is measured rather than read off a listing.
+
+## D560 ⚠ Both phase 4 decision members return an uninitialised local on five arms
+
+**Where:** `src/pump/v90/V90Phase4Demodulator.cpp`, `getV90Decision` and
+`getV92Decision`; blob 0x25ea0 and 0x26ac0.
+
+**What the original does:** both build the returned decision in `%edi` and both
+save and restore `%edi` around the body, but neither writes it on every path.
+`getV90Decision` leaves it untouched on states 4 and 0x10 and on the
+out-of-range `ja` at 0x25ec8; `getV92Decision` on states 5 and 6 and on its own
+`ja` at 0x26ae8.  All five reach
+
+    25fa0:  89 f8            mov %edi,%eax
+    25fa2:  8b 5c 24 40      mov 0x40(%esp),%ebx
+    ...
+    25fb1:  c3               ret
+
+so what comes back is whatever the CALLER left in `%edi`.  There is no
+initialiser anywhere in either function and no path that could have been
+eliminated as dead: the jump table sends states 4 and 0x10 to the same block
+as the range check.
+
+**Impact:** none that reaches a modem.  `V90Demodulator` calls `getDecision`
+only in states whose arm assigns the value, and the four inert states are ones
+the receiver passes through rather than sits in.  A caller that used the answer
+in one of the five would get stack litter.
+
+**Status:** reproduced.  `short decision;` with no initialiser is what puts it
+in front of the compiler, and GCC 3.4.2 emits the object's shape from it; GCC
+13 warns `-Wmaybe-uninitialized` at both `return` statements, which is correct
+and is the point.  `test/unit/t_v90p4ddec.cpp` compares the OBJECT and the
+transcript on all five arms and the return value on none of them -- an
+assertion there would be comparing two pieces of stack litter and would pass or
+fail for reasons unrelated to this reconstruction.  Initialising it would be a
+behaviour change on exactly the paths the object leaves open, so it is not
+done.

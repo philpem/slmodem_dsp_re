@@ -635,5 +635,9 @@
  "v90trn2design": [
   "src/pump/v90/V90TRN2Designer.cpp",
   "build/test/t_v90trn2design"
+ ],
+ "v90p4ddec": [
+  "src/pump/v90/V90Phase4Demodulator.cpp",
+  "build/test/t_v90p4ddec"
  ]
 }

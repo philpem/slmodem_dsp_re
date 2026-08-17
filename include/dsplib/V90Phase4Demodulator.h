@@ -143,9 +143,43 @@ class V90AutoDigitalImpDetector;
  * recoverable, so `P4D_STATE_RD_DETECTED` says what the object does and
  * claims nothing more.
  *
- * The gaps are real states this batch does not reach -- `getV90Decision`,
- * `getV92Decision`, `reset` and `trn2dKnownDemod` are unwritten and between
- * them hold the rest -- not missing enumerators.
+ * THE GAPS ARE NOW FILLED, by `getV90Decision` and `getV92Decision`, whose
+ * switch is over the whole 0..0x11 range and whose arms carry the entry
+ * messages for eleven more.  Eight of those eleven are the author's own words
+ * again -- the message printed on the transition INTO the state, at the only
+ * site that stores it:
+ *
+ *     2     "RiNot detected @ %d, enter TRN2dKnownData state"
+ *     3     "RdNot detected @ %d, enter TRN2d DD state"
+ *     7     "Ed detected @ %d, enter B1d state"
+ *     8     "Phase4 Terminated @ %d, ..."
+ *     0xa   "First Ed at RRN detected @ %d, Silence state"
+ *     0xb   "entering CalcErrorEnergyBeforeEchoCancellation state @ %d"
+ *     0xc   "entering WaitForEchoCancellation state @ %d"
+ *     0xd   "entering CalcErrorEnergyAfterEchoCancellation state @ %d"
+ *     0xe   "entering WaitForRt state @ %d"
+ *
+ * THE REMAINING THREE ARE THE SAME CONSTRUCTION APPLIED TO THE SAME SHAPE OF
+ * ARM, and that is weaker than a string but stronger than a guess.  State 0xe
+ * is called `WaitForRt` by the author, and its arm is exactly "run
+ * `rDetector1.detectR`, and on success report `Rt detected` and move on".
+ * States 0, 1 and 0xf have that arm with a different detector call and a
+ * different message -- `detectR`/"Ri detected", `detectRNot`/"RiNot detected",
+ * `detectRNot`/"RtNot detected" -- so `WAIT_FOR_RI`, `WAIT_FOR_RI_NOT` and
+ * `WAIT_FOR_RT_NOT` name what the arm waits for, in the author's own scheme.
+ * Finding 4710.
+ *
+ * 0x11 IS DELIBERATELY UNNAMED.  Both functions send it to the same body as
+ * state 8 -- return zero, touch nothing -- and no message anywhere in the
+ * object stores or reports it, so what distinguishes it from 8 is not
+ * recoverable.  The switch writes the literal; naming it would be inventing
+ * the distinction.  Same ruling as `V90MP`'s, and 3120's.
+ *
+ * STATE 4 HAS TWO OF THE AUTHOR'S NAMES, one per function, and that is the
+ * object's rather than a slip here: `getV90Decision` reaches it through
+ * `enterWaitForCP`'s "enter WaitForV90CP state" and `getV92Decision` through
+ * "RfNot detected @ %d, enter WaitForCPu state".  The V.90 spelling is kept
+ * because it was here first.
  *
  * SPELLED AS A PIN RATHER THAN A BASE for the reason Phase3DemodulatorState
  * gives: `: int` is C++11 and the author's compiler was C++98, where these
@@ -154,11 +188,34 @@ class V90AutoDigitalImpDetector;
  * ours; docs/method/compilers.md, V2.
  */
 enum Phase4DemodulatorState {
+	P4D_STATE_WAIT_FOR_RI = 0,	/* arm shape; see above      */
+	P4D_STATE_WAIT_FOR_RI_NOT = 1,	/* arm shape; see above      */
+	P4D_STATE_TRN2D_KNOWN_DATA = 2,	/* "enter TRN2dKnownData"    */
+	P4D_STATE_TRN2D_DD = 3,		/* "enter TRN2d DD state"    */
 	P4D_STATE_WAIT_FOR_V90CP = 4,	/* enterWaitForCP            */
 	P4D_STATE_WAIT_FOR_MP = 5,	/* enterWaitForMP            */
 	P4D_STATE_WAIT_FOR_ED = 6,	/* enterWaitForEd            */
+	P4D_STATE_B1D = 7,		/* "enter B1d state"         */
+	P4D_STATE_TERMINATED = 8,	/* "Phase4 Terminated @ %d"  */
 	P4D_STATE_RD_DETECTED = 9,	/* detectRRN; inferred       */
+	P4D_STATE_SILENCE = 0xa,	/* "Silence state"           */
+	P4D_STATE_CALC_ENERGY_BEFORE_EC = 0xb,	/* "entering Calc..."*/
+	P4D_STATE_WAIT_FOR_ECHO_CANCEL = 0xc,	/* "entering WaitFor"*/
+	P4D_STATE_CALC_ENERGY_AFTER_EC = 0xd,	/* "entering Calc..."*/
+	P4D_STATE_WAIT_FOR_RT = 0xe,	/* "entering WaitForRt"      */
+	P4D_STATE_WAIT_FOR_RT_NOT = 0xf,/* arm shape; see above      */
 	P4D_STATE_FPE = 0x10,		/* detectFPE                 */
+	/*
+	 * MODELLED, UNNAMED, and the name says so on purpose.  Both decision
+	 * members carry a case label for 0x11 -- GCC sizes a jump table by
+	 * the case range, and both tables are eighteen entries under
+	 * `cmp $0x11` -- so the value exists in the original's source.  What
+	 * it MEANS is not recoverable: no store anywhere in the object puts
+	 * it in +0x20, no message reports it, and its arm is the same three
+	 * instructions as `TERMINATED`'s.  `P4D_STATE_11` would be an offset
+	 * wearing a name; this spelling claims exactly what is known.
+	 */
+	P4D_STATE_UNNAMED_11 = 0x11,
 	P4D_STATE_BASE_PIN = -0x7fffffff - 1	/* ours: pins the base */
 };
 
@@ -203,12 +260,29 @@ public:
 	int detectFPE(short sample);
 
 	/*
-	 * The rest of the class -- `getV90Decision`, `getV92Decision`,
-	 * `reset`, `trn2dKnownDemod`, `setSessionFlag` and the rest -- is
-	 * declared nowhere yet and belongs to whichever batch writes it.
-	 * `trn2dKnownDemod` is blocked on `V90Phase4Modulator` and
-	 * `V90SpectralShaper`, neither of which is written.
+	 * THE THREE DECISION MEMBERS.  `getDecision` is the switch on
+	 * `sessionFlag` and nothing else; the other two are one arm each of
+	 * it, and between them they are the whole phase 4 state machine.
 	 *
+	 * THE RETURN TYPES ARE READ OFF `getDecision`, WHICH IS THE ONLY
+	 * PLACE THEY SHOW.  A return type is not mangled, so the evidence is
+	 * `cwtl` -- sign-extend %ax into %eax -- on the result of each of the
+	 * two calls, at 0x2779e and 0x277af.  A caller only widens what the
+	 * callee left narrow, so the two arms return `short`; and a caller
+	 * that widens is one whose own result is `int`, so `getDecision`
+	 * does.  Nothing else in the object separates the three.
+	 *
+	 * The rest of the class -- `reset`, `trn2dKnownDemod`,
+	 * `setSessionFlag` and the rest -- is declared nowhere yet and
+	 * belongs to whichever batch writes it.  `trn2dKnownDemod` is blocked
+	 * on `V90Phase4Modulator` and `V90SpectralShaper`, neither of which
+	 * is written.
+	 */
+	int getDecision(short sample);
+	short getV90Decision(short sample);
+	short getV92Decision(short sample);
+
+	/*
 	 * Data members are public for the reason V90Jd.h gives: the original's
 	 * access specifiers are not recoverable from the mangling, and a
 	 * single access section is what lets the .cpp assert every offset
@@ -267,15 +341,34 @@ public:
 	Phase4DemodulatorState state;
 
 	/*
-	 * +0x0024  A COUNT SINCE THE LAST STATE CHANGE, and the unit is NOT
-	 * claimed.  Every function that stores `state` zeroes this in the same
-	 * breath -- the three `enterWaitFor*`, `detectRRN`, `detectFPE` and
-	 * `reset` -- and the three `enterWaitFor*` print its old value as the
-	 * "@ %d" of their message before doing so.  Nothing in this batch
-	 * increments it, so whether it counts samples, symbols or frames is
-	 * open.  `int` because the author's own conversion is `%d`.
+	 * +0x0024  THE COUNT OF SAMPLES SINCE THE LAST STATE CHANGE.  Every
+	 * function that stores `state` zeroes this in the same breath -- the
+	 * three `enterWaitFor*`, `detectRRN`, `detectFPE`, `reset` and every
+	 * transition in the two decision members -- and the three
+	 * `enterWaitFor*` print its old value as the "@ %d" of their message
+	 * before doing so.  `getV90Decision` and `getV92Decision` increment
+	 * it once per call, and a call is one sample, which is what settles
+	 * the unit; `trn2dDDLength` below is printed as "%d symbols".
+	 *
+	 * UNSIGNED, AND THAT IS FORCED THREE WAYS, against the `int` this
+	 * field carried when only the leaves had been read.  The `%d` in the
+	 * author's own format string was the whole of the old argument, and
+	 * it is tier-3 usage inference; all three of these are encodings the
+	 * compiler had no choice about (CLAUDE.md's FORCED column):
+	 *
+	 *   - `cmp 0x400(%edx),%ecx ; jb` at 0x26195 and three more, against
+	 *     `V90Parameters::RRN_SILENCE_ECHO_CALC_PERIOD`, which is `int`.
+	 *     Two `int`s compare with `jl`; `jb` needs one side unsigned.
+	 *   - `mov $0xaaaaaaab,%ebx ; mul %ebx ; shr $0x2,%edx` -- the
+	 *     UNSIGNED magic for `% 6`, at 0x261a3 and five more.  A signed
+	 *     `% 6` is `imul` with 0x2aaaaaab plus a sign fixup.
+	 *   - `xor %edx,%edx ; push %edx ; push %eax ; fildll` at 0x267ed and
+	 *     three more: the zero high word is the unsigned-to-float
+	 *     widening.  A signed `int` converts with a plain `fildl`.
+	 *
+	 * Finding 4700.
 	 */
-	int countInState;
+	unsigned int countInState;
 
 	/*
 	 * +0x0028  Zeroed by `detectRRN`, `detectFPE` and `reset` -- the three
@@ -285,11 +378,32 @@ public:
 	int int_0028;
 
 	/*
-	 * +0x002c  Four bytes.  `reset` stores the result of `getV90Decision`
-	 * or `getV92Decision` here (`mov %eax,0x2c(%esi)` at 0x2792c);
-	 * nothing in this batch touches it.
+	 * +0x002c  `trn2dDDLength`, AND THE NAME IS THE AUTHOR'S OWN.  `reset`
+	 * prints exactly this field:
+	 *
+	 *     27926:  8b 80 c0 04 ..   mov 0x4c0(%eax),%eax   ; params
+	 *     2792c:  89 46 2c         mov %eax,0x2c(%esi)
+	 *     27933:  c7 04 24 a8 6c   movl $0x6ca8,(%esp)
+	 *             "V90Phase4Demodulator: trn2dDDLength = %d symbols\r\n"
+	 *
+	 * -- one store and the format string that reports it, which is the
+	 * strongest evidence this project recognises.  The old comment here
+	 * said `reset` stored "the result of getV90Decision or getV92Decision"
+	 * in it; that was a misreading of the same instruction and IS
+	 * RETRACTED.  It is a duration, and both decision members use it as
+	 * one: state `TRN2D_DD` marks `countInState` reaching half of it and
+	 * then all of it.
+	 *
+	 * The two writers disagree about which parameter fills it --
+	 * `reset` uses `TRN2D_QC_DD_LENGTH` (+0x4c0) and the RdNot arm of both
+	 * decision members uses `RRN_TRN2D_DD_LENGTH` (+0x370) -- so the field
+	 * is the length in force, not either parameter.
+	 *
+	 * UNSIGNED, forced: `mov %ecx,%ebx ; shr $1,%ebx` at 0x25f5b takes the
+	 * half with a LOGICAL shift.  A signed `/2` carries the bias fixup and
+	 * a signed `>>1` is `sar`.
 	 */
-	int int_002c;
+	unsigned int trn2dDDLength;
 
 	/*
 	 * +0x0030  ONE byte: `movb $0x0,0x30(...)` in `resetBeforRRN` and in
@@ -317,15 +431,38 @@ public:
 	/* +0x0040  Zeroed by `reset` alone. */
 	int int_0040;
 
-	/* +0x0044 and +0x0048  Zeroed by `resetBeforRRN` and by `reset`. */
+	/*
+	 * +0x0044 and +0x0048  Zeroed by `resetBeforRRN` and by `reset`, and
+	 * both set to 1 by `getV92Decision` -- +0x44 when a CP or CPnot
+	 * arrives with the conditions met, +0x48 when the first Ed at RRN is
+	 * accepted.  Their three-way test with +0x3c is what separates
+	 * "Ed detected, enter B1d" from "First Ed at RRN detected, Silence",
+	 * and `getV90Decision` reads neither.
+	 */
 	int int_0044;
 	int int_0048;
 
 	/*
-	 * +0x004c  NOT MODELLED.  Nothing reconstructed here reaches it; the
-	 * bound is the modulator's base below.
+	 * +0x004c  MODELLED, UNNAMED, and the role is bounded rather than
+	 * settled.  `getV92Decision` copies `V90CP::word_ca0` into it at two
+	 * sites and, at one more, chooses `P4D_STATE_SILENCE` when it is zero
+	 * and `P4D_STATE_WAIT_FOR_RT` when it is not:
+	 *
+	 *     27761:  83 f8 01   cmp $0x1,%eax      ; the copy
+	 *     27764:  19 d2      sbb %edx,%edx
+	 *     27766:  83 e2 fc   and $0xfffffffc,%edx
+	 *     27769:  83 c2 0e   add $0xe,%edx      ; 0xe, or 0xa if zero
+	 *
+	 * So it holds one bit of the CP message and picks one of two paths
+	 * with it.  `V90CP.h` calls +0xca0 "the short form's payload" and
+	 * declines to say what the bit means; nothing here settles that
+	 * either, so this keeps the offset name.  3120's ruling.
+	 *
+	 * UNSIGNED, from the `cmp $0x1` / `sbb` above -- that is the
+	 * branchless form of an unsigned `!= 0`; a signed one needs `test`.
+	 * The source type agrees: `V90CP::word_ca0` is `unsigned int`.
 	 */
-	unsigned char pad_004c[4];
+	unsigned int uint_004c;
 
 	/*
 	 * +0x0050  EMBEDDED, not pointed at: `lea 0x50(%ebx),%edx` in the
@@ -351,26 +488,104 @@ public:
 	Descrambler<unsigned char, int> *descrambler;
 
 	/*
-	 * +0x305c .. +0x34f7  NOT MODELLED.  The two runs of trailing
-	 * pointers are 0x3054..0x305c and 0x34f8..0x3518, and what sits
-	 * between them is the phase 4 receiver's own state.
+	 * +0x305c  THE DEMAPPER'S OUTPUT BUFFER, and both its base and its
+	 * element type are read rather than chosen.  Both decision members
+	 * pass `lea 0x305c(%esi)` as the first argument of
+	 * `V90Demapper::process(unsigned char *, unsigned int &)`, whose
+	 * mangling types the element, and then walk it with
+	 * `movzbl 0x305c(%ebx,%esi,1)` -- a byte load with a stride of one.
+	 *
+	 * THE LENGTH IS A BOUND, NOT A MEASUREMENT.  `nbits` below is at
+	 * +0x34f4 and nothing anywhere reaches between, so 0x498 is how much
+	 * room there is; no allocation, no memset and no bounds test in the
+	 * object states the array's declared size.  If a later batch finds a
+	 * field inside this run, the array shortens and nothing else moves.
 	 */
-	unsigned char pad_305c[0x49c];
+	unsigned char bits[0x498];
+
+	/*
+	 * +0x34f4  HOW MANY OF THEM `process` PRODUCED.  Passed as
+	 * `lea 0x34f4(%esi)` into that member's `unsigned int &` -- so the
+	 * type is the callee's mangling and not an inference -- and used as
+	 * the loop bound over `bits` with `ja`/`jbe`.
+	 */
+	unsigned int nbits;
 
 	/* +0x34f8  The constructor's seventh argument.  Not owned. */
 	V90ConnectionEvaluator *connectionEvaluator;
 
-	unsigned char pad_34fc[0x18];	/* +0x34fc  not modelled           */
+	/*
+	 * +0x34fc  NOT MODELLED.  `reset` writes it and nothing in this batch
+	 * reaches it, so its width is that function's to settle.
+	 */
+	unsigned char pad_34fc[4];
+
+	/*
+	 * +0x3500 and +0x3504  THE B1d BIT COUNTERS, and the names are the
+	 * author's: the one message that reports them prints both, in this
+	 * order, from these two offsets --
+	 *
+	 *     "Phase4 Terminated @ %d,  nof B1d bits = %d,
+	 *      B1d Zeros (after delay) = %d"
+	 *
+	 * with +0x3504 in the second slot and +0x3500 in the third.  State
+	 * `B1D` descrambles every bit `process` returns, counts them all in
+	 * `b1dBits`, and counts the zeros in `b1dZeros` once `b1dBits` has
+	 * passed `3 * mappingParams2->word_0 + 0x17` -- which is the "(after
+	 * delay)" the message names.
+	 *
+	 * BOTH UNSIGNED, forced: `cmp %eax,%edx ; jbe` at 0x26576 guards the
+	 * zero count, and the BER at 0x26447 converts both with the
+	 * zero-high-word `fildll` idiom rather than a signed `fildl`.
+	 */
+	unsigned int b1dZeros;
+	unsigned int b1dBits;
+
+	/*
+	 * +0x3508 and +0x350c  THE TWO SILENCE ERROR ENERGIES, named by the
+	 * states that compute them.  `CALC_ENERGY_BEFORE_EC` accumulates
+	 * `decision * decision` into +0x3508 and `CALC_ENERGY_AFTER_EC` into
+	 * +0x350c; each then divides by `countInState` in place and reports
+	 * itself as "error energy before/after echo cancellation".  Floats,
+	 * from `fadds`/`fstps`/`flds` throughout -- never `faddl`.
+	 *
+	 * The ratio of the two is what the dB line prints, and +0x350c is the
+	 * divisor there, which is the second reason the pairing is this way
+	 * round and not the other.
+	 */
+	float errorEnergyBeforeEC;
+	float errorEnergyAfterEC;
+
+	/*
+	 * +0x3510  MODELLED, UNNAMED.  Written once, by the tail of
+	 * `CALC_ENERGY_AFTER_EC`, as the one-bit result of
+	 *
+	 *     dB > params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
+	 *
+	 * (`flds 0x404(%ebx) ; fcompp ; setb %dl ; movzbl %dl,%ecx`), and
+	 * read by nothing in the object that this tree has written.  The
+	 * parameter's name says what the comparison is FOR; it does not say
+	 * whether this field is the condition, its negation, or a request,
+	 * and `reset` also writes it.  A neutral name and the derivation, per
+	 * CLAUDE.md and 3120.
+	 */
+	int int_3510;
 
 	/* +0x3514  The constructor's tenth argument.  Not owned. */
 	V90AutoDigitalImpDetector *autoDigitalImpDetector;
 
 	/*
-	 * +0x3518  NOT MODELLED, and the ONLY thing that bounds it is the
-	 * 0x351c allocation: nothing the construction path touches reaches
-	 * past +0x3514.
+	 * +0x3518  WHEN THE LINEAR MAPPING STUDY STARTS.  Its only reader is
+	 * state `TRN2D_DD`, which turns the study on when `countInState`
+	 * reaches it exactly (`cmp %eax,0x24(%esi) ; jne`), and its only
+	 * writers are the two RiNot/RdNot arms, which set 0x258 or 0x7d0
+	 * beside the matching `V90Demapper::resetLinearMappStudy(0x960)` or
+	 * `(0x1c20)`.  One reader and three writers, all saying the same
+	 * thing, so the role is established even though no string names it.
+	 *
+	 * It used to be `pad_3518[4]`, bounded only by the 0x351c allocation.
 	 */
-	unsigned char pad_3518[4];
+	unsigned int linearMappStudyStart;
 };
 
 #endif /* DSPLIB_V90PHASE4DEMODULATOR_H */

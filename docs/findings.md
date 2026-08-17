@@ -65322,3 +65322,233 @@ constructed for them, which is finding 3509's point stated positively:
     of that step makes the round count rise smoothly through the window, and
     the suite now catches **199 -> 198**, an off-by-one in a constant that a
     random sweep could not touch at all.
+
+### 4700. `V90Phase4Demodulator`'s SAMPLE COUNTER IS UNSIGNED AND ITS NEIGHBOUR IS THE AUTHOR'S `trn2dDDLength`
+
+The seven leaf members settled `+0x24` and `+0x2c` as far as they could and got
+both partly wrong, in the two ways CLAUDE.md's evidence order predicts.
+
+**`countInState` at +0x24 was `int` on tier-3 evidence and is `unsigned int` on
+three forced encodings.**  The old justification was the author's own `%d`,
+which is usage inference; the two decision members give three instructions the
+compiler had no choice about:
+
+  - `cmp 0x400(%edx),%ecx ; jb` at 0x26195 and three more, against
+    `V90Parameters::RRN_SILENCE_ECHO_CALC_PERIOD`, which is `int`.  Two `int`s
+    compare with `jl`.
+  - `mov $0xaaaaaaab,%ebx ; mul %ebx ; shr $0x2,%edx` -- the UNSIGNED magic for
+    `% 6` -- at 0x261a3 and five more.  A signed `% 6` is `imul` with
+    0x2aaaaaab plus a sign fixup.
+  - `xor %edx,%edx ; push %edx ; push %eax ; fildll` at 0x267ed and three more:
+    the zero high word is the unsigned-to-double widening.  A signed `int` uses
+    a plain `fildl`.
+
+No differential test can hold this: `countInState` never goes near 2^31, so the
+two readings agree over every value the object produces.  Finding 613's class.
+
+**`+0x2c` HAD A WRONG COMMENT, and the correction came from a string.**  The
+header said `reset` stored "the result of `getV90Decision` or `getV92Decision`"
+there.  The instruction it was reading is
+
+    27923:  8b 46 04         mov 0x4(%esi),%eax     ; params
+    27926:  8b 80 c0 04 ..   mov 0x4c0(%eax),%eax   ; TRN2D_QC_DD_LENGTH
+    2792c:  89 46 2c         mov %eax,0x2c(%esi)
+    27933:  c7 04 24 a8 6c   movl $0x6ca8,(%esp)
+            "V90Phase4Demodulator: trn2dDDLength = %d symbols\r\n"
+
+-- a parameter copy with the author's own name for the destination printed on
+the next line.  So the field is `trn2dDDLength`, tier 1, and it is UNSIGNED
+because `mov %ecx,%ebx ; shr $1,%ebx` at 0x25f5b takes its half with a logical
+shift.  Both decision members use it as a duration and neither stores a
+decision anywhere near it.  **A wrong comment is exactly the failure CLAUDE.md
+warns about**: it survived a whole batch, a review and a green `make phase`,
+because no test can fail on prose.
+
+The two writers disagree about which parameter fills it -- `reset` uses
+`TRN2D_QC_DD_LENGTH` (+0x4c0) and the RdNot arm of both decision members uses
+`RRN_TRN2D_DD_LENGTH` (+0x370) -- so the field is the length in force and not
+either parameter.
+
+### 4701. THE TWO PHASE 4 DECISION MEMBERS ARE NOT TWINS, AND THE CLOSURE SAYS SO BEFORE THE DISASSEMBLY DOES
+
+`getV90Decision` (3,095 B) and `getV92Decision` (3,252 B) share a frame, an
+eighteen-way switch on the same field and the whole five-state silence chain.
+Eleven of the eighteen jump-table entries differ in body:
+
+  - `getV90Decision` calls `V90MP::bitsToInfo`, `V90MP::reset` and
+    `V90MP::printNofRecievedMpMpNot` and touches no `V90CP` member;
+    `getV92Decision` calls `V90CP::bitsToInfo` and `V90CP::reset` and touches
+    no `V90MP` member.  A relocation scan of the whole object finds
+    `getV92Decision` is the ONLY caller of `V90CP::bitsToInfo` anywhere.
+  - state 4 is inert in V.90 and in V.92 is `WaitForCPu`, a five-way switch on
+    the CP decoder's answer that reads the four flags at +0x3c/+0x40/+0x44/
+    +0x48 and the byte at +0x30.  That arm alone is a fifth of the function.
+  - states 5 and 6, the two MP states, fall straight to the exit in V.92.
+  - state 0x10, `FPE`, is inert in V.90 and runs `V90RDetector::detectRfNot` in
+    V.92.
+  - V.92's Rt arm sets +0x28 to 0x27 and V.90's sets nothing; V.90's RtNot arm
+    prints the WaitForMP message and V.92's does not.
+
+**Writing the second from the first would have produced a plausible function
+with eleven wrong arms.**  The two are written out separately and the
+`V90CP`/`V90MP` split is what makes a shared helper impossible rather than
+merely unattractive.
+
+### 4702. ELEVEN MORE `Phase4DemodulatorState` NAMES CAME OUT OF THE TRANSITION MESSAGES, AND ONE WAS DECLINED
+
+The enum had five enumerators, four of them from the `edprintf` at the site
+that stores the value.  The decision members' switch covers 0..0x11 and carries
+the entry message for nine more of them, at the same tier:
+
+    2     "RiNot detected @ %d, enter TRN2dKnownData state"
+    3     "RdNot detected @ %d, enter TRN2d DD state"
+    7     "Ed detected @ %d, enter B1d state"
+    8     "Phase4 Terminated @ %d, ..."
+    0xa   "First Ed at RRN detected @ %d, Silence state"
+    0xb   "entering CalcErrorEnergyBeforeEchoCancellation state @ %d"
+    0xc   "entering WaitForEchoCancellation state @ %d"
+    0xd   "entering CalcErrorEnergyAfterEchoCancellation state @ %d"
+    0xe   "entering WaitForRt state @ %d"
+
+Three more -- 0, 1 and 0xf -- are named from the ARM SHAPE and that is said to
+be weaker.  State 0xe is `WaitForRt` by the author's own word and its arm is
+"run `rDetector1.detectR`; on success report `Rt detected` and move on".
+States 0, 1 and 0xf are that arm with a different detector call and a different
+message, so `WAIT_FOR_RI`, `WAIT_FOR_RI_NOT` and `WAIT_FOR_RT_NOT` are the
+author's scheme applied to the author's own messages.
+
+**0x11 IS DECLINED and the enumerator says so.**  Both functions carry a case
+label for it -- GCC sizes a jump table by the case range, and both are eighteen
+entries under `cmp $0x11` -- so the value is in the original's source.  But no
+store anywhere in the object puts it in +0x20, no message reports it, and its
+arm is the same three instructions as `TERMINATED`'s.  `P4D_STATE_11` would be
+an offset wearing a name, so the enumerator is `P4D_STATE_UNNAMED_11`.  Same
+ruling as `V90MP`'s and 3120's.
+
+**STATE 4 HAS TWO OF THE AUTHOR'S NAMES**, one per function: `enterWaitForCP`
+prints "enter WaitForV90CP state" and `getV92Decision`'s RfNot arm prints
+"enter WaitForCPu state", both storing 4.  The V.90 spelling is kept because it
+was there first, and the disagreement is recorded rather than resolved.
+
+### 4703. THE FOUR ENERGY LINES TAKE THEIR SIGN FROM THE ENERGY AND THEIR MAGNITUDE FROM ITS SQUARE ROOT
+
+Both decision members print
+
+    "error energy before echo cancellation  = %c%d.%04d"
+    "error energy after echo cancellation  = %c%d.%04d"
+
+and at all four sites the `%d.%04d` pair comes from `fsqrt` of the field while
+the `%c` comes from the field itself:
+
+    269ac:  d9 86 08 35 ..   flds  0x3508(%esi)
+    269bd:  d9 fa            fsqrt                  ; the magnitude
+    ...
+    26a15:  d8 9e 08 35 ..   fcomps 0x3508(%esi)    ; the sign, un-rooted
+
+A single `PRINT_FLOAT(x)` macro would compare `x`; this compares one thing and
+prints another.  **Four sites in two functions do it identically**, so it is
+the original's print idiom and not a slip in one line -- and it is
+unobservable except through the transcript, because an energy is non-negative
+and the two readings only disagree where `fsqrt` would return a NaN anyway.
+The dB line three instructions later does NOT do it: there the sign and the
+magnitude are the same register.
+
+### 4704. THE B1d BER's SIGN IS COMPUTED FROM A SECOND, DIFFERENTLY SPELLED QUOTIENT, AND NO TEST CAN SEE IT
+
+`getV90Decision` at 0x26447 computes the ratio TWICE for one `edprintf`:
+
+    26484:  d8 f9            fdivr %st(1),%st       ; zeros / N   -> %d.%08d
+    ...
+    264f6:  de fa            fdivrp %st,%st(2)      ; 1.0 / N     <== Intel: fdivp
+    264f8:  de c9            fmulp %st,%st(1)       ; * zeros     -> %c
+
+-- one division for the whole and fractional parts and a reciprocal-multiply
+for the sign character, with the `fld1` at 0x2644f parked on the x87 stack
+across the whole block to serve the second.  `getV92Decision` does the same at
+0x270fe.
+
+**The two are equal in sign for every input**, so the sign character is the
+same whichever way it is written and no differential test can separate them --
+finding 3052's trap in its purest form, and 245's annotation is what makes the
+block readable at all: `de fa` prints as `fdivrp` and IS `FDIVP`.  The source
+is written as one quotient spelled three times and the residual is a codegen
+question, recorded here so the next reader does not mistake it for a defect.
+
+### 4710. THREE PHASE 4 STATE NAMES COME FROM THE ARM SHAPE AND NOT FROM A STRING
+
+Split out of 4702 because it is the weakest claim in that header and a reader
+should be able to find it on its own.  `P4D_STATE_WAIT_FOR_RI`,
+`P4D_STATE_WAIT_FOR_RI_NOT` and `P4D_STATE_WAIT_FOR_RT_NOT` are tier-3 names.
+What licenses them is that state 0xe is called `WaitForRt` by the author, at
+the only site that enters it, and that its arm is
+
+    decision = sample;
+    if (rDetector1.detectR(sample)) { report "Rt detected"; move on; }
+
+and the three above are that arm with `detectR`/"Ri detected",
+`detectRNot`/"RiNot detected" and `detectRNot`/"RtNot detected".  If a later
+batch finds the author calling any of the three something else, these are the
+names to change and 4702 is where the rest are.
+
+### 4711. A FIXTURE THAT ARMS `detectR` DOES NOT ARM `detectRNot`, AND THIRTY-NINE MUTATIONS SAID SO
+
+`t_v90p4ddec`'s first run passed every differential check and caught 34 of 73
+mutations.  The 39 survivors were not 39 problems; they were four, and each was
+a way of never reaching the code the mutation changed.
+
+  - **`arm_r`/`arm_rf` arm the wrong member.**  `V90RDetector::detectR` counts
+    +0x04 and matches 0x38; `detectRNot` counts +0x08 and matches 0x07.  The
+    helpers inherited from `t_v90p4dleaf` set up the first, so every RNot arm
+    in both functions -- RiNot, RtNot, RdNot, and V.92's RfNot -- was
+    unreachable and eleven mutations read NOT CAUGHT.
+  - **A threshold only ever approached from one side cannot separate two
+    readings of it.**  Driving `countInState` to 54 against a real threshold of
+    48 and a mutated one of 36 fires both.  Each silence state and the B1d
+    delay now get a value below the real threshold, one BETWEEN it and the
+    nearest wrong one, and one above both.
+  - **The two message decoders never answered.**  `V90MP::bitsToInfo` and
+    `V90CP::bitsToInfo` answer on a run of zeros arriving while the cursor is
+    still at its home 18, so a pseudorandom object never produces one.  Planted
+    one bit from an answer -- group size 1, run already at 1, state 0 -- the
+    first zero bit turns into `Ed detected` for V.90 and answer 5 for V.92.
+  - **And one crash.**  `V90Demapper::resetNoSpectral` copies
+    `constellationSize` straight out of the mapping block and walks it, so a
+    pseudorandom word there is a four-billion-iteration loop writing past the
+    end of the demapper.  It SEGFAULTED rather than failing a check, which is
+    the loudest possible version of finding 230's warning that a seed has to be
+    varied AND legal.
+
+**This is finding 3509 restated from the other end.**  The suite's own
+anti-vacuity counters were all true -- something printed, something moved,
+eight distinct states came out -- and all four faults survived them, because a
+counter over the whole sweep cannot see that one arm of eighteen was never
+entered.  The mutations adjudicated and the counters did not.
+
+### 4712. THE PHASE 4 KEEP-RATE FLAG IS AN UNORDERED COMPARE, AND ITS OPERAND ORDER IS THE OBJECT'S
+
+`CalcErrorEnergyAfterEchoCancellation`'s tail stores one bit into +0x3510:
+
+    26956:  d9 44 24 10      flds  0x10(%esp)       ; dB
+    2696b:  d9 83 04 04 ..   flds  0x404(%ebx)      ; the parameter
+    26971:  de d9            fcompp
+    26976:  0f 92 c2         setb  %dl
+
+-- ONE ordered compare, no parity test, and `setb` reads CF.  So the flag is
+`PARAM < dB`, and on an UNORDERED result CF is set and the flag comes out 1.
+
+**Written the natural way round it is wrong under the object's own flag too**,
+which is why this is finding 2301's shape and not only 2304's: `dB > PARAM`
+compiles to the reversed compare and answers 0 where the object answers 1.  The
+reconstruction had it that way, `make one` was green over 24,509 checks, and
+what caught it was seeding the silence accumulator NEGATIVE on a third of the
+trials -- because `1.0f / after * before` is then negative and `fyl2x` answers
+a NaN.  60 checks failed at +0x3510 and nowhere else.
+
+**The reachability is out-of-contract and the divergence is not.**  Both
+energies are sums of squares and `reset` clears them, so a real receiver never
+produces a negative ratio; the object's behaviour on one is still defined,
+reproducible, and a hard failure if we differ (CLAUDE.md).  GCC 13 cannot store
+1 there from correct source, so the NaN trial is its own `diff_begin` group and
+`tools/gccdiverge.json` excuses THAT CHECK alone -- the other three groups in
+the same binary are 65,984 checks and pass under both compilers.  `make period`
+has no allow-list and passes all four.
