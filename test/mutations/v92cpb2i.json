@@ -149,9 +149,9 @@
   "replace": "\t\t\tmsgLen = (unsigned int)word_11c - 1u;"
  },
  {
-  "label": "the register is not reset before it is clocked",
-  "find": "\t\t\tresetCRC();\n\t\t\tcalcCRC();",
-  "replace": "\t\t\tcalcCRC();"
+  "label": "the closing frame is eighteen positions",
+  "find": "\t\tif (word_120 == 17) {\n\t\t\tmsgLen = (unsigned int)word_11c;",
+  "replace": "\t\tif (word_120 == 18) {\n\t\t\tmsgLen = (unsigned int)word_11c;"
  },
  {
   "label": "the CRC verdict is inverted",

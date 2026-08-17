@@ -292,7 +292,15 @@ SUITES = "test/mutations/suites.json"
 # in a comment).  A target added to `build_and_run` later that does read it
 # will fail loudly and this list is where to fix it.
 #
-COPY = ("Makefile", "src", "include", "test", "tools")
+# `docs` IS IN THE LIST AND IS NOT DECORATION.  It was left out until finding
+# 6608, and the measurement comment above has always named it: `make strings`
+# reads `docs/invented_strings.txt`, the register of the strings that are in
+# `src/` and not in the blob, and a copy without it reports every one of the
+# seventeen as undeclared and exits non-zero.  `mutate.py` judges a mutant
+# caught by a NON-ZERO EXIT, so the effect was not a wrong verdict but no
+# verdict at all -- "3 of 3 shards died; this run is not a result" -- for every
+# suite in the tree, from the commit that added the register onwards.
+COPY = ("Makefile", "src", "include", "test", "tools", "docs")
 WORKDIR_PREFIX = "mutate-"
 
 

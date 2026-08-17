@@ -1229,6 +1229,16 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * register is then reset, clocked over the message and
 		 * compared against what arrived.
 		 *
+		 * THAT IS `evaluateCRC` AND NOTHING ELSE.  This arm read
+		 * `resetCRC(); calcCRC(); evaluateCRC();` until the mutation
+		 * "the register is not reset before it is clocked" came back
+		 * NOT CAUGHT: `evaluateCRC` does the reset and the clocking
+		 * itself, so the first two were redundant and no input could
+		 * tell.  Redundant AND wrong -- the object's arm is 660 bytes
+		 * against `evaluateCRC`'s 668, which is ONE inline of it and
+		 * not two of `calcCRC` plus one of the comparison.  Finding
+		 * 6609.
+		 *
 		 * A BAD CRC RESTARTS THE DETECTOR, and says so.
 		 */
 		bits[word_11c] = bit;
@@ -1236,9 +1246,6 @@ V92CP::bitsToInfo(unsigned char bit)
 		word_120++;
 		if (word_120 == 17) {
 			msgLen = (unsigned int)word_11c;
-
-			resetCRC();
-			calcCRC();
 
 			if (evaluateCRC()) {
 				word_114 = 10;

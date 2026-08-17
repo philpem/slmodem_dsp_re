@@ -196,6 +196,9 @@ static const struct mcase cases[] = {
  { "the long form, three groups, both blocks",
    0,  1,  0x03, 0x00, 1, 3, 1, -1, 0,
    S(0)|S(1)|S(2)|S(5)|S(6)|S(7)|S(8)|S(9)|S(10), 1 },
+ { "byte_00 = 2, which is neither the SUV form nor zero",
+   2,  1,  0x0f, 0x01, 1, 4, 2, -1, 0,
+   S(0)|S(1)|S(2)|S(5)|S(6)|S(7)|S(8)|S(9)|S(10), 2 },
  { "the long form with a corrupted payload bit",
    0,  1,  0x0f, 0x01, 0, 2, 1, 40, 0, S(0)|S(1)|S(2)|S(5)|S(6)|S(9), -1 },
  { "the SUV form with a corrupted payload bit",
@@ -511,6 +514,109 @@ run_holdoff(void)
 	return diff_end();
 }
 
+
+/*
+ * THE POKED SECTION, and it exists because the message grid cannot reach
+ * everything.  Three claims are outside any legal sequence:
+ *
+ *   - `char_01` is a SIGNED byte and the branch on it is `jg`, but the value
+ *     `evaluateInfo` puts there comes from two positions of `bits` that a
+ *     legal message only ever holds 0 or 1 in, so the decoded field is 0..3
+ *     and signed and unsigned agree over all four.  Setting bits[20] to 0x40
+ *     by hand makes the decoded value 0x80, where they do not.
+ *
+ *   - the hold-off suppresses answers 3 and 4 and passes 5, and to see that
+ *     an answer has to be produced WHILE `word_914` is running.  A message
+ *     produces its answer once, at the end, from a fresh object where the
+ *     hold-off is idle.
+ *
+ *   - answer 5 arrives from a run of zeros with the cursor at home, which is
+ *     a different arm from the one that produces 1..4.
+ *
+ * Each trial sets the state word, the cursor and the fields by hand, feeds
+ * ONE bit, and compares the whole object.  That is exactly what a state
+ * machine's caller does, so nothing here is out of the member's contract --
+ * only out of the sequence a well-formed message walks.
+ */
+static int
+run_poked(void)
+{
+	static const int holds[] = { -5, -1, 0, 7, 399 };
+	unsigned int b0, b4, h, v;
+
+	diff_begin("the answer and the hold-off, poked");
+
+	/* State 10: the four answers, against every hold-off value. */
+	for (b0 = 0; b0 <= 2u; b0++) {
+		for (b4 = 0; b4 <= 1u; b4++) {
+			for (h = 0; h < sizeof(holds) / sizeof(holds[0]); h++) {
+				long tag = (long)((b0 * 2u + b4) * 8u + h);
+
+				blank(A);
+				blank(B);
+				A->bitsPerSymbol = B->bitsPerSymbol = 3;
+				A->byte_00 = B->byte_00 = (unsigned char)b0;
+				A->byte_04 = B->byte_04 = (unsigned char)b4;
+				A->word_114 = B->word_114 = 10;
+				A->word_11c = B->word_11c = 35;
+				A->word_914 = B->word_914 = holds[h];
+
+				diff_eq_int("the answer matches (%ld)",
+					    (long)A->bitsToInfo(0),
+					    (long)ref_cp_bitstoinfo(cp_b, 0),
+					    tag);
+				diff_eq_obj("after the answer", V92CP, A, B,
+					    tag);
+			}
+		}
+	}
+
+	/* State 0: answer 5, which the hold-off must NOT suppress. */
+	for (h = 0; h < sizeof(holds) / sizeof(holds[0]); h++) {
+		long tag = (long)(100 + h);
+
+		blank(A);
+		blank(B);
+		A->bitsPerSymbol = B->bitsPerSymbol = 3;
+		A->byte_11a = B->byte_11a = 35;
+		A->word_914 = B->word_914 = holds[h];
+
+		diff_eq_int("the answer matches (%ld)", (long)A->bitsToInfo(0),
+			    (long)ref_cp_bitstoinfo(cp_b, 0), tag);
+		diff_eq_obj("after the silence answer", V92CP, A, B, tag);
+	}
+
+	/* State 5: a decoded `char_01` with its top bit set. */
+	for (v = 0; v <= 1u; v++) {
+		static const unsigned char hi[] = { 0x40, 0x41, 0x02, 0x01 };
+		unsigned int k;
+
+		for (k = 0; k < sizeof(hi) / sizeof(hi[0]); k++) {
+			long tag = (long)(200 + v * 8u + k);
+
+			blank(A);
+			blank(B);
+			A->bitsPerSymbol = B->bitsPerSymbol = 2;
+			A->word_114 = B->word_114 = 5;
+			A->word_11c = B->word_11c = 33;
+			A->bits[19] = B->bits[19] = 1;
+			A->bits[20] = B->bits[20] = hi[k];
+
+			diff_eq_int("the answer matches (%ld)",
+				    (long)A->bitsToInfo((unsigned char)v),
+				    (long)ref_cp_bitstoinfo(cp_b,
+							    (unsigned char)v),
+				    tag);
+			diff_eq_obj("after the header decode", V92CP, A, B,
+				    tag);
+			diff_eq_int("the state agrees (%ld)",
+				    (long)A->word_114, (long)B->word_114, tag);
+		}
+	}
+
+	return diff_end();
+}
+
 /*
  * The drawn sweep.  It cannot reach the decoding states -- that is what the
  * grid above is for -- but it is the only thing that drives the detector's
@@ -566,6 +672,7 @@ main(void)
 	rc |= run_cases();
 	rc |= run_silence();
 	rc |= run_holdoff();
+	rc |= run_poked();
 	rc |= run_sweep();
 
 	return rc;

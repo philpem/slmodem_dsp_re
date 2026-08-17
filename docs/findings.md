@@ -74215,3 +74215,64 @@ for the packer, `float2Bits(float, short*, int)` and the two tables, and
 are unwritten. Finding 826 measured that the two pairs are separate symbols
 and not aliases, and the near-identical names are exactly the trap that makes
 this worth restating.
+
+## 6608. `tools/mutate.py` COPIED FIVE DIRECTORIES OF SIX, AND EVERY MUTATION RUN IN THE TREE DIED
+
+`mutate.py` works in a copy under `$TMPDIR`, and `COPY` listed
+`Makefile, src, include, test, tools`. **`docs` was missing.** The measurement
+comment ten lines above it has always spelt the command as
+`cp -a Makefile src include test tools docs`, so this was a list that had
+drifted from its own documentation.
+
+It did not matter until master added `docs/invented_strings.txt`, the register
+of strings that are in `src/` and not in the blob. `make strings` reads it,
+finds seventeen undeclared strings without it, and exits non-zero -- **before
+the mutation is even applied**. So every shard died on its baseline and the
+run reported
+
+    3 of 3 shards died; this run is not a result.
+
+for EVERY suite in the tree, not only the one being run.
+
+**The failure mode is the good one and that is the only reason this cost
+minutes rather than a batch.** `mutate.py` judges a mutant caught by a
+non-zero exit, so a missing input file could have made every mutation read
+CAUGHT -- the shape of findings 2157 and 3002, where nine suites and 647
+verdicts went silently missing. It did not, because the baseline run is
+checked first and a failing baseline is refused outright rather than scored.
+
+Fixed by adding `docs` to `COPY`. Anyone who ran a mutation suite between the
+commit that added the register and this one got no result rather than a wrong
+one; there is nothing to re-check.
+
+## 6609. THE MUTATION SUITE FOUND A REAL DEFECT: `bitsToInfo` COMPUTED THE CRC TWICE
+
+`V92CP::bitsToInfo`'s `case 9` was written as
+
+    msgLen = word_11c;
+    resetCRC();
+    calcCRC();
+    if (evaluateCRC()) { ... }
+
+and the mutation "the register is not reset before it is clocked" -- which
+deletes the first two lines -- came back **NOT CAUGHT**. That is the mutation
+tier working exactly as intended: no input could tell, because
+`V92CP::evaluateCRC` **does the reset and the clocking itself**, so the first
+two calls were redundant and their effect was overwritten a line later.
+
+**Redundant AND wrong.** The object's `case 9` runs from 0x4fcf9 to 0x4ff8f,
+about 660 bytes, against `evaluateCRC`'s own 668 -- which is ONE inline of
+that member and not two of `calcCRC` plus one comparison. Our version would
+have emitted roughly 1,200 bytes there and clocked a 1,750-position shift
+register twice per message.
+
+**No differential test could have caught it and none ever would have**, which
+is the whole argument for the mutation tier: the extra work is idempotent, so
+the two versions are indistinguishable at every input by construction. The
+codegen tier could have -- `compare.py` on a function 540 bytes too long --
+but only if somebody had looked, and `V92CP::bitsToInfo` had never been
+compared because it had never been written.
+
+The source now reads `msgLen = word_11c; if (evaluateCRC()) { ... }`, and the
+mutation that found it is replaced by one on the closing frame's length, which
+IS caught.
