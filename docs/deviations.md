@@ -7866,3 +7866,51 @@ out-of-range access is described here rather than executed.
 **Not corrected**: the guard would be a behavioural difference, and the
 callers inside the object -- `checkSpecialSpectralConditions`'s seven probes
 -- are bounded by parameter values rather than by anything the class checks.
+
+## D790 ✅ `setV92CPpckFromParamsInfo`'s mask loops write across `short_42` into `short_a2`, and the codec loop's last group overwrites the field bounding it
+
+`getConstellationMask` clears eight words and then sets `mask[b >> 4]` with no
+mask on the nibble, so a constellation byte of 0x80 or more addresses entries
+8 to 15 of a buffer it was handed as eight.  `V90MappingParams.h` records that
+for the out-of-line function and `t_v90cmask`'s `run_masks` drives it into a
+24-entry buffer with eight guard entries.
+
+`setV92CPpckFromParamsInfo` calls it -- inlined, but the arithmetic is the
+same -- with a ROW of `V92CP::short_42` and then of `short_a2`, which are
+eight words each and abut.  So the overflow is not into guard space:
+
+| the write | where it lands |
+|---|---|
+| `short_42[i][8..15]`, i < 5 | `short_42[i + 1]` |
+| `short_42[5][8..15]` | `short_a2[0]` |
+| `short_a2[i][8..15]`, i < 5 | `short_a2[i + 1]` |
+| `short_a2[5][8..15]` | `pad_102`, `word_104`, `suv`, **`word_10c`** |
+
+The last row is the interesting one.  `word_10c` is what BOUNDS both loops and
+the object re-reads it from memory on every iteration (`movzwl 0x10c(%ebp),%esi;
+cmp; ja` at .text+0x33b28 and .text+0x33be7), so the codec loop's last group can
+change its own trip count -- upwards as easily as downwards.  It also
+overwrites `suv`, which the same function set from the record eighty
+instructions earlier, and `word_104`, which `V92CP::setSUV` owns.
+
+**REPRODUCED, NOT FIXED**, and it is reproduced by construction rather than by
+choice: the source is `getConstellationMask(params, (int)i, cp->short_42[i])`,
+which is what the object inlines, and the overflow is entirely inside the
+callee.  Both sides do the same thing to the same bytes.
+
+**AND IT IS NOT DRIVEN, WHICH IS THE OTHER HALF OF THE ENTRY.**  Writing past
+a row of `short short[6][8]` is out of bounds in OUR source as well as the
+object's, and D561's ruling is that a differential trial reaching undefined
+behaviour in the reconstruction is not a differential trial.  So
+`t_v90cmask`'s `run_pack` sweep uses only the two byte alphabets that cannot
+produce a byte at or above 0x80 -- mode 2, masked below 0x80, and mode 3,
+`((id + n) & 3) * 0x11` -- and the overflow is recorded here with the offsets
+worked out rather than exercised.  `run_masks` still drives the same overflow
+against the same callee, into a buffer sized for it, so the BEHAVIOUR is
+covered where it can be covered safely; what is not covered is what it does to
+a `V92CP`.
+
+Closing it needs the mask region modelled as one addressable block -- the
+shape `v92-fold-oob` gave D561's own site -- which is a `V92CP` layout change
+and belongs to a batch that owns that header.  D570 is the same class of
+finding on the same two blocks from the reading end.

@@ -67996,3 +67996,160 @@ header even notes that `v34pcmmain` would be `getMPrecvdBits`'s), but the
 anchors are file-scoped strings, so the coupling is invisible until the file
 grows.  Anyone adding a function to a file that already has a suite should
 expect this and should run `tools/anchorcheck.py` before anything else.
+
+## 5820. GCC 3.4.2 COPIES A `float` WITH `movl` AT `-O3`, SO A FOUR-BYTE INTEGER MOVE BETWEEN TWO FLOAT FIELDS IS NOT EVIDENCE OF PUNNING
+
+`setV92CPpckFromParamsInfo` copies four spectral-shaper floats and one more
+out of a `tagV90AdditionalCPinfo` with plain `mov` pairs:
+
+    33a59  mov 0x628(%ecx),%ebx      params->shaperA1
+    33a65  mov %ebx,0x14(%edx)       cp->flt_14
+
+Under `-mfpmath=387` the obvious reading is that the author copied the WORDS
+-- `*(int *)&dst = *(const int *)&src` -- because a float assignment "would
+be" `flds`/`fstps`.  Probed on the period compiler, it is not:
+
+    c->f14 = p->a1;   ->   mov 0x628(%edx),%eax ; mov %eax,0x14(%ecx)
+
+GCC 3.4.2 at `-O3` moves SFmode through an integer register whenever the
+value is only being copied, exactly as it does for a 32-bit struct member.
+So the object's `movl` is what a plain assignment emits and carries no claim
+about the source at all.
+
+**This is the useful direction of `docs/cleanup.md` §3a's rule.**  Had the
+probe come out `flds`/`fstps`, the object's `movl` would have been a forced
+signal that the author punned, and the correct reconstruction would have been
+a union or a `memcpy` -- a real modelling decision resting on one instruction.
+Two minutes of container time separated the two readings.  Any float copy in
+this object should be read the same way before anything is punned to reproduce
+it.
+
+## 5821. A LOOP COUNTER THAT IS UNSIGNED AT ITS BOUND AND SIGNED AT ITS CLAMP IS TWO VARIABLES, WHICH MEANS THE CALL WAS INLINED AND NOT OPEN-CODED
+
+`setV92CPpckFromParamsInfo` holds `getConstellationsIndex`,
+`getConstellationMask` and `getCodecConstellationMask` with no call
+instruction anywhere in its 822 bytes, so on the face of it the author wrote
+the loops out.  The counter says otherwise.  Both mask loops do this:
+
+    33b28  movzwl 0x10c(%ebp),%esi   cp->word_10c
+    33b2f  cmp    0x1c(%esp),%esi
+    33b33  ja     .Lloop             UNSIGNED
+
+and, at the top of the same loop body,
+
+    33ab0  mov  0x1c(%esp),%eax
+    33ab4  cmp  $0x5,%eax
+    33ab7  jle  .Lok                 SIGNED
+    33ab9  xor  %eax,%eax
+
+One variable cannot be compared unsigned against the bound and signed against
+5 in the same iteration.  Two can: the loop counter is the CALLER's, unsigned
+because the bound is `unsigned short`, and the clamp is the CALLEE's, signed
+because `getConstellationMask` takes an `int which` -- which
+`V90MappingParams.h` already records for the out-of-line copy at 0x33450
+(`cmp $0x6,%esi; setl`).
+
+So the source is
+
+    for (i = 0; i < cp->word_10c; i++)
+        getConstellationMask(params, (int)i, cp->short_42[i]);
+
+and GCC inlined it.  **It does: the period compiler inlines all three at
+`-O3` from exactly that spelling**, 0 calls in our 858 bytes against the
+blob's 822, and it emits the same pair of comparisons for the same reason.
+The three out-of-line symbols are still emitted because they are `extern "C"`
+and externally visible.
+
+**The general form is worth keeping.**  An inlined callee's parameter
+conversions survive inlining as real operations, so a signedness or width
+change ACROSS a call boundary is visible in the inlined code and is
+inconsistent with any single-variable reading of it.  That is a way to detect
+an inlined call in a function with no relocations at all, which is otherwise
+the hardest case: `tools/tumap.py` can bracket such a function and nothing
+else about it says where its code came from.
+
+## 5822. THE SAME THREE-HELPER FLOAT-PRINTING IDIOM APPEARS TWICE WITH TWO DIFFERENT SCALE TYPES, AND THE CONSTANT POOL IS WHAT SAYS SO
+
+`V92setParamsInfoFromCPUnPck` (0x12f00) and `displaySpectralParams` (0x33ec0)
+both print floats as `%c%d.%06d` through the same three steps -- sign, integer
+part, and `abs((int)((v - (int)v) * 1e6))`.  The two differ in one thing and
+it is forced:
+
+    12f00's site   flds/fmuls off .rodata.cst4        a FLOAT constant
+    33ec0's site   fldl        off .rodata.cst8+0x30  a DOUBLE constant
+
+`.rodata.cst8 + 0x30` holds `00 00 00 00 80 84 2e 41`, which is 1000000.0
+exactly -- the same value the other site's four-byte entry holds.  GCC never
+widens a `float` constant into a `double` pool entry, and it narrows the other
+way only when the constant can be the memory operand of the operation, so an
+eight-byte entry means the SOURCE constant was a `double`.  `1.0e6f` in one
+function and `1.0e6` in the other.
+
+Nothing observable turns on it.  Both are exactly 1e6, the multiply happens in
+the x87's extended registers either way, and no input separates the two.  It
+is written as the object holds it because that is the whole method: the
+constant's type is recoverable, so it is recovered.
+
+**AND THE FOURTH BLOCK MATERIALISES THE SAME CONSTANT INLINE**, as two
+immediate stores to the stack and an `fldl` off them (0x340a0, 0x340cc), where
+the first three load it from the pool.  That is constant rematerialisation
+under register pressure, it is the same value, and it is free -- named here
+only so the next reader does not go looking for a fifth constant.
+
+## 5823. THE SIGN TEST'S SHAPE IS THE TYPE AGAIN, NOT THE OPERAND ORDER -- SEVEN SPELLINGS COMPILED, ONE MATCHES, AND THE IF-CONVERSION STILL DOES NOT
+
+`displaySpectralParams` picks '+' or '-' with
+
+    33f58  fldz
+    33f67  fcompp
+    33f69  fnstsw %ax ; sahf
+    33f6c  sbb  %edx,%edx
+    33f6e  and  $0xfffffffe,%edx
+    33f71  add  $0x2d,%edx
+
+-- the zero materialised in a REGISTER, both operands popped, and the result
+selected branchlessly.  `src/pump/v90/V92ParamsInfo.c`'s `sign_of` is
+`(0.0f < v) ? '+' : '-'` and produced the object's shape at ITS site, so the
+obvious move is to copy it.  Compiled on the period compiler with this
+project's flags it gives `fcomps` against a four-byte zero in memory, and a
+BRANCH with the whole `edprintf` call duplicated into both arms.
+
+Seven spellings, all compiled, none reasoned about:
+
+    (0.0f < v) ? '+' : '-'          float       fcomps mem, branch
+    (v > 0.0f) ? '+' : '-'          float       fcomps mem, branch
+    (v <= 0.0f) ? '-' : '+'         float       fcomps mem, branch
+    (0.0f >= v) ? '-' : '+'         float       fcomps mem, branch
+    (0.0 < (double)v) ? ...         double      fcomps mem, branch
+    double z = 0.0; z < (double)v   double       fcomps cst8, branch
+    (0.0L < v) ? '+' : '-'          LONG DOUBLE  fldz, fcompp, branch
+
+**Only the `long double` parameter emits `fldz; fcompp`, and no operand order
+changes anything.**  The rule this establishes: when a float comparison will
+not come out in the object's shape, vary the TYPE first and the operand order
+second, and compile the candidates rather than reasoning about them.  3529's
+operand-order lever is real -- `tree_swap_operands_p` does swap a comparison
+whose operand 0 is a local and whose operand 1 is a struct member -- but it is
+the second thing to try and not the first.
+
+**AND IT IS THE SECOND SITE TO SAY SO.**  `master` carries the same correction,
+measured independently at a V.90 phase-4 comparison in the same window: a site
+that looked like 3529's, where every `float` spelling emitted the wrong
+condition and only a `long double` one emitted the object's.  Two sites, two
+functions, two people, one lever.  The merge should wire this paragraph to
+that finding's number; it is deliberately not cited here because it does not
+exist on this branch and a reference that resolves to nothing fails the
+gate.
+
+**WHAT STILL DOES NOT REPRODUCE IS THE `sbb`**, and it is not this function's
+defect.  Our build branches where the object if-converts, and the same is true
+of the ALREADY-COMMITTED `V92ParamsInfo.c` at its own site: the blob has
+`fldz; fcompp; sahf; sbb %ebx,%ebx` at 0x12fcf and our object has
+`fcomps; sahf` and a branch.  So one phenomenon, two functions, and it was
+there before this batch.  Two things are known about it: the arithmetic form
+(`'-' - 2 * (0.0L < v)`) gets `setcc` and not `sbb`, so it is not the source
+spelling of the SELECT; and computing the sign into a local before the other
+two arguments removes the duplicated call and gets within 28 bytes a block, so
+part of it is evaluation order.  Left open, with the measurement recorded, and
+`V92ParamsInfo.c` named as the second site whose `sign_of` has the same
+`long double` correction available to whoever takes it.
