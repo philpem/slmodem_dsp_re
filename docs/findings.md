@@ -74216,6 +74216,41 @@ are unwritten. Finding 826 measured that the two pairs are separate symbols
 and not aliases, and the near-identical names are exactly the trap that makes
 this worth restating.
 
+**AND IT IS NOT IN `V90Demodulator::progress`'s WAY EITHER, nor is anything
+else in this batch.** The brief for this work said `progress` "reports needs
+22 and your symbols are named among them". Measured, and they are not:
+
+    tools/closure.py _ZN14V90Demodulator8progressEPiRjPfj --missing
+      -> 23 symbols, 20284 bytes
+
+and the twenty-three are `V90BitsToSymbol` (4), `V90Mapper` (3),
+`V90SpectralShaper` (4 plus its 512-byte `actionLookupTable`),
+`V90SpectralVerifier` (3), `V90Phase4Modulator` (4),
+`V90Phase4Demodulator` (1), `V90Demodulator::exitPhase3`,
+`displaySpectralParams`, `pow10Table` and `progress` itself. **`V90CPPacker`
+is not among them, and neither is either `V92CP` member.** `needs 22` reads 22
+before this batch and 22 after it, and could not have moved.
+
+**Where the claim came from is worth recording, because it is a trap anyone
+grepping `readyqueue.py` will fall into.** A `grep` for several symbols at
+once prints matching lines from DIFFERENT blocks next to each other, with no
+blank line between, so
+
+         7276  _ZN14V90Demodulator8progressEPiRjPfj    needs 22
+                 _ZN14V90Demodulator10exitPhase3Ev
+                 _Z11V90CPPackerP16V90MappingParams...
+
+reads as one blocking set and is two. Use `closure.py --missing`, which prints
+the whole set and nothing else.
+
+What this batch unblocked is **nothing**, and that is measurable rather than
+disappointing: there is not one relocation anywhere in `dsplibs.o` against
+`_ZN5V92CP10bitsToInfoEh`, so no function in the object calls it and writing
+it cannot make anything READY. `readyqueue.py` goes from 678 unwritten call
+symbols to 676 and from 157,999 blocked bytes to 154,918 -- a fall of exactly
+3,081, which is 1,124 + 1,957 and nothing else -- with the READY count
+unchanged at 304.
+
 ## 6608. `tools/mutate.py` COPIED FIVE DIRECTORIES OF SIX, AND EVERY MUTATION RUN IN THE TREE DIED
 
 `mutate.py` works in a copy under `$TMPDIR`, and `COPY` listed

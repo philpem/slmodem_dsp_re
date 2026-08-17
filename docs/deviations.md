@@ -8241,3 +8241,38 @@ everywhere the field is touched, including in `bitsToInfo` -- or a
 type-punned access, which is undefined in its own right. The honest position
 is that the reconstruction is exact up to the boundary and undefined past it,
 which is where the object is too.
+
+## D923 🐛 `V92CP::bitsToInfo` stores into `bits[word_11c]` at seven sites and guards none of them
+
+Every one of the seven is a bare `mov %cl,0x129(%reg,%ebx,1)` with no compare
+before it -- 0x4fa8a, 0x4fac8, 0x4fb30, 0x4fb58, 0x4fbc2, 0x4fc2a and
+0x4fc9c -- and `word_11c` is advanced by one on every call in states 2 to 10
+without an upper bound anywhere. `bits` is 2,000 entries; a stream that stays
+in one collecting state past 2,000 positions writes through `crc`,
+`vectorLen`, `msgLen` and `word_914` and then off the end of the 0x918-byte
+allocation.
+
+**THE SIBLING CLASS GUARDS AND SAYS SO.** `V90CP::bitsToInfo` carries
+`cmp $0x2edf; ja` at five of its ten store sites and prints the author's own
+`"\n *** error CP bit , not enouch memory in the buffer *** \n"` instead --
+findings 4361 and D520, which record that five of ten are guarded and five are
+not. So the author knew the failure mode, wrote a diagnostic for it, and
+**none of it is in the V.92 class**: `V92CP` has no bound, no string, and no
+arm to reach one from. The two classes were read from addresses 0x2180 apart
+and this is the sharpest difference between them.
+
+**Reachability is bounded rather than measured.** The collecting states are
+not open-ended in a well-formed exchange -- state 6 stops at 136, states 7 and
+8 at `gamma` and `delta`, and state 9 at seventeen -- so the exposure is
+`gamma`, which is `136 * word_10c`, and `word_10c` is decoded from six
+FOUR-BIT counts as one more than the largest of them (D570). The largest a
+peer can therefore ask for is 16, and `136 * 16 = 2176` positions from 136,
+which is 2,312 -- **past the 2,000 the array holds**. So the bound is
+reachable from the wire and not only from a fault, and whether any real peer
+sends counts that large is not established here.
+
+**Reproduced, and not guarded.** Adding a bound would be a behavioural
+difference on exactly the inputs that matter, and CLAUDE.md's rule is that a
+defect recorded here is not quietly corrected in `src/`. `t_v92cpb2i` stays
+inside the array on purpose -- its longest message is six groups in both
+blocks, 1,785 of 2,000 -- and says so in its header. Finding 6600's batch.
