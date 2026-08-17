@@ -208,6 +208,17 @@ public:
 	 */
 	float calcMeanErrorStatistics();
 
+	/*
+	 * The hub.  `_ZN12V90Equalizer7processEPfjPsS0_Rj` is
+	 * `(float *, unsigned int, short *, float *, unsigned int &)` --
+	 * every argument type is the mangling's, including the REFERENCE on
+	 * the last one, which `Rj` spells and which no other reading of the
+	 * object would have given.  Void: all three returns fall off the end
+	 * without setting %eax.  docs/v90equprocess.md.
+	 */
+	void process(float *in, unsigned int n, short *outSym,
+		     float *outFloat, unsigned int &nOut);
+
 	float getDfeBeta();
 	void setLinearEquCoeff(float *src, unsigned int n);
 	void setDfeCoeff(float *src, unsigned int n);
@@ -354,8 +365,18 @@ public:
 	 * linearEquLength - 1` and stores it here BEFORE the guard that skips
 	 * the clearing loops, so it is written even when the equaliser has no
 	 * taps.
+	 *
+	 * SIGNED, AND `process` IS WHAT SETTLES IT.  The cursor retreats by
+	 * two per symbol and the second step is `dec %eax; js 3a2d4` at
+	 * 0x3985f -- a test of the SIGN, which is the whole wrap condition.
+	 * Written against an `unsigned` field that test folds to false and the
+	 * wrap never runs, so the only two readings are an `int` field or a
+	 * cast at the test; a cast is a claim that the declaration is wrong
+	 * (docs/cleanup.md §3a) and the declaration is what this batch owns.
+	 * `reset`'s `word_1c - linearEquLength - 1` still computes in unsigned
+	 * and converts, which is why nothing else moved.  Finding 6000.
 	 */
-	unsigned int word_20;		/* +0x20 */
+	int word_20;			/* +0x20 */
 
 	/*
 	 * +0x24, +0x28  The two windows.  `reset` ends by calling
@@ -425,15 +446,36 @@ public:
 	 * parameter's name and the rest are offset-named.  +0x98 is the one
 	 * slot in the run `reset` does not touch.
 	 */
+	/*
+	 * +0x68, +0x6c  THE HELD-OVER ODD SAMPLE AND ITS VALUE, and `process`
+	 * is what says so: the epilogue sets the flag exactly when `n` came
+	 * out odd and stores the sample the loop could not pair, and the
+	 * prologue consumes both.  The flag stays offset-named; the VALUE is
+	 * a `float`, because the float arm assigns it straight into
+	 * `array_18[]` and the epilogue fills it from `*in` -- a raw 32-bit
+	 * `mov` either way, which is exactly what GCC emits for a float copy
+	 * that does no arithmetic.  `reset` writes zero, and a store of zero
+	 * cannot tell an int from a float (the +0x80..+0x8c argument again).
+	 */
 	unsigned int word_68;		/* +0x68 */
-	unsigned int word_6c;		/* +0x6c */
+	float word_6c;			/* +0x6c */
 	unsigned int word_70;		/* +0x70 */
 
 	/* +0x74  = params->ERROR_ENERGY_MEAN_BLOCK_LEN */
 	int errorEnergyMeanBlockLen;	/* +0x74 */
 
+	/*
+	 * +0x78  The block's accumulated squared error, read UNSIGNED: the
+	 * epilogue converts it with `push $0; push it; fildll`, the
+	 * zero-extending idiom.
+	 *
+	 * +0x7c  The block's root-mean-square error, and a FLOAT: the object
+	 * writes it with `fsts 0x7c(%ebp)` -- a four-byte x87 store, not an
+	 * integer move -- and reads it back to append to `meanErrorEnergy[]`.
+	 * `reset` writes zero, which is the same word either way.
+	 */
 	unsigned int word_78;		/* +0x78 */
-	unsigned int word_7c;		/* +0x7c */
+	float word_7c;			/* +0x7c */
 
 	/*
 	 * +0x80 .. +0x8c  FOUR FLOATS, AND THE AUTHOR'S OWN NAMES FOR THEM.
@@ -607,7 +649,9 @@ public:
 	 * (`mov 0xf8(%ebx),%ecx; mov %ecx,0x20(%ebx)`); `process` reads and
 	 * writes it in the fixed-point arms.  It used to be `pad_f8`.
 	 */
-	unsigned int word_20Saved;	/* +0xf8 */
+	/* SIGNED, for the reason `word_20` above is: 0x39457 is the same
+	 * `dec %eax; js` on this slot. */
+	int word_20Saved;		/* +0xf8 */
 
 	/*
 	 * The same four for the decision-feedback filter, +0x40 further on --
@@ -648,8 +692,22 @@ public:
 
 	unsigned char pad_138[0x4];	/* +0x138 */
 
-	unsigned int word_13c;		/* +0x13c zeroed by reset         */
-	unsigned int word_140;		/* +0x140 zeroed by reset         */
+	/*
+	 * +0x13c, +0x140  THE PHASE 4 MEAN-ERROR BEFORE/AFTER PAIR, and BOTH
+	 * ARE FLOATS.  `process` copies `meanErrorEnergyMean` into +0x13c at
+	 * 0x3aa09, before the statistics are recomputed, and divides the two
+	 * into +0x140 at 0x3a485 afterwards -- a float divide, so both slots
+	 * are floats and `reset`'s store of zero says nothing either way.
+	 *
+	 * +0x140 CARRIES THE AUTHOR'S OWN NAME.  The format string at
+	 * .rodata 0x9540 prints exactly this slot as
+	 * "ph4MeanErrorEnergyBeforeToAfterUpdateRatio", which is class-1
+	 * evidence under CLAUDE.md's ordering.  +0x13c is the "Before" of
+	 * that ratio and is named from the same string plus the arithmetic
+	 * that feeds it; nothing prints it directly.
+	 */
+	float ph4MeanErrorEnergyBeforeUpdate;			/* +0x13c */
+	float ph4MeanErrorEnergyBeforeToAfterUpdateRatio;	/* +0x140 */
 
 	/*
 	 * +0x144, +0x146  Two 16-bit flags `reset` sets to 1, not 0 -- the
@@ -668,7 +726,14 @@ public:
 	 */
 	unsigned int quickConnect;	/* +0x148 */
 
-	unsigned char pad_14c[4];	/* +0x14c .. +0x14f               */
+	/*
+	 * +0x14c  NOT PADDING.  `process`'s PHASE3 arm reads it and hands it
+	 * straight to `ResamplerTimingOffset::setTimingOffset(float)` at
+	 * 0x3b1cb, which is what types it -- a callee's mangled signature,
+	 * class-2 evidence.  It is the last four bytes of the 0x150 object.
+	 * What WRITES it is not in this class.
+	 */
+	float timingOffset;		/* +0x14c */
 };
 
 #endif /* DSPLIB_V90EQUALIZER_H */

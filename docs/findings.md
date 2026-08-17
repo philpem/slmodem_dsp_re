@@ -67932,3 +67932,277 @@ The two clamps in the same function, `fcomps 32767.0f` at 0x39f6c and
 ordinary `float` spelling; `soft > 32767.0f` and `soft < -32767.0f` map onto
 the single CF test correctly, including a NaN clamping low. Not every compare
 in the function is the interesting one, and three of the eight are not.
+
+## 6000. `V90Equalizer::process`'S HEADER BATCH: TWO FIELDS ARE SIGNED, FOUR ARE FLOATS, AND `pad_14c` IS NOT PADDING
+
+Six declarations in `V90Equalizer.h` that only `process` could settle, and
+each one is settled by an instruction rather than by how the code reads. Every
+one of them is FREE at the codegen tier -- a store of zero cannot tell an int
+from a float, and a 32-bit `mov` cannot either -- which is why the earlier
+batches could not have got them right and were right not to guess.
+
+### `word_20` and `word_20Saved` are `int`, and the `js` is what says so
+
+The cursor into `array_18` retreats twice per symbol, and the second step is
+
+    3985f:  89 f8       mov    %edi,%eax
+    39861:  48          dec    %eax
+    39862:  0f 88 ..    js     3a2d4                <- the wrap
+
+with the fixed-point twin at 0x39457 in exactly the same shape over
+`word_20Saved`. **A test of the SIGN is the entire wrap condition.** Written
+literally against the `unsigned int` the header carried, `if (word_20 < 0)`
+folds to false, the wrap never runs, and the delay line walks off its array
+after `word_1c` symbols -- silently, because a suite whose blocks are shorter
+than the line never reaches it.
+
+So there were two readings: the field is `int`, or the field is `unsigned` and
+the object is decrementing an `int` LOCAL that is written back. The second
+needs a cast at the test, and `docs/cleanup.md` §3a rules that a cast is
+usually a claim that a DECLARATION is wrong and that the fix belongs at the
+declaration. The declaration is what this batch owns, so it moved.
+
+**Nothing else moved with it, and that is the check that matters.** `reset`'s
+`word_1c - linearEquLength - 1` still computes in unsigned and converts on the
+way in; `convertEqualizerToMmx` and `restoreEqualizerToFloat` still copy the
+slot with a plain 32-bit `mov`; `setLinearEquCoeff` still clamps against
+`linearEquLength` unsigned. All four are already differentially verified and
+all four are unchanged, which is what says the retype is a retype and not a
+behaviour change.
+
+### `word_6c`, `word_7c`, `+0x13c` and `+0x140` are floats
+
+- **+0x6c** is the held-over odd sample's VALUE. The float arm assigns it
+  straight into `array_18[]` and the epilogue fills it from `*in`, both as a
+  raw 32-bit `mov` -- which is exactly what GCC emits for a float copy that
+  does no arithmetic, and is not evidence on its own. What settles it is the
+  fixed-point prologue's `(short)word_6c`, which is `flds`/`fistps`: a
+  float-to-int conversion and not a truncation of an integer.
+- **+0x7c** is the block's root-mean-square error, and the object writes it
+  with `fsts 0x7c(%ebp)` at 0x39a03 -- a four-byte x87 store, which an integer
+  slot cannot receive.
+- **+0x13c and +0x140** are the phase 4 mean-error before/after pair, divided
+  one into the other in floating point at 0x3a485.
+
+`reset` writes zero to all four, and a store of zero is the same word either
+way -- the same argument the header already makes for +0x80..+0x8c, and the
+reason these arrived only with the member that does arithmetic on them.
+
+### +0x140 carries the author's own name; +0x13c is named from the same string
+
+The format string at `.rodata` 0x9540 prints +0x140 as
+`ph4MeanErrorEnergyBeforeToAfterUpdateRatio`, which is class-1 evidence under
+CLAUDE.md's ordering -- the original author's own words. +0x13c is the
+"Before" half of that ratio and is named `ph4MeanErrorEnergyBeforeUpdate` from
+the string plus the arithmetic that feeds it; nothing prints it directly, so
+that one is class-1-adjacent rather than class-1 and the comment says so.
+
+### +0x14c is `float timingOffset`
+
+`pad_14c[4]` was the last four bytes of the 0x150 object and is a real field:
+
+    3b1b7:  8b 8b 4c 01 00 00   mov  0x14c(%ebx),%ecx
+    3b1c2:  89 4c 24 04         mov  %ecx,0x4(%esp)
+    3b1cb:  e8 ..               call ResamplerTimingOffset::setTimingOffset
+
+A callee's mangled signature types it, which is class-2. What WRITES it is not
+in this class and is not claimed here.
+
+## 6001. WHAT `process` CANNOT BE DRIVEN FOR, MEASURED RATHER THAN ASSERTED -- THREE REGIONS, AND ALL THREE ARE PROPERTIES OF THE OBJECT
+
+A differential test can only compare what the object defines. Three parts of
+`process` are outside that, and it matters that they are named, because a
+coverage number over the file will show them unexecuted for ever and the next
+reader will otherwise take that for a gap in the grid.
+
+### 1. `state` outside 0..6 leaves `decision` unwritten
+
+The dispatch is `cmp $0x6,%ecx; ja 39250`, and 0x39250 -- the default -- is
+also the join every arm falls into. The default writes no decision, so
+`outSym[j] = (short)decision` publishes whatever the register held; on the
+second and later symbols that is the PREVIOUS symbol's decision, and on the
+first it is the caller's. Our code and the object are different code, so the
+two cannot be made to agree, and the trial is not comparable.
+
+The consequence is specific: **the tail's seven tests against 10, 11, 12, 16,
+13, 14, 15 can only be reached from the default**, so their FALSE side is not
+differentially drivable. Their TRUE side is driven on every trial in 0..6 and
+the chain's ORDER is still forced by the codegen (only the adjacent 10, 11, 12
+fold into one range test), so the source shape is settled by the object and not
+by the test. Finding 5700 §2 established the tests are live; this establishes
+they are live and unreachable at the same time, which is not a contradiction --
+`V90Equalizer::state` is written by members outside this class.
+
+### 2. `mmxMode` is only defined for states 3, 4 and 5
+
+The fixed-point arm writes `leSum`, `dfeSum` and `softInt` and never writes
+`soft` or `y`. States 0, 1, 2 and 6 consume `soft` -- RESET slices it, PHASE3
+and CHANNEL_VERIFY hand it to `getDecision(float)`, PHASE4 clamps it -- so in
+fixed-point mode those four arms read a stack slot no path has written on the
+first symbol of the call.
+
+That is not a defect: the fixed-point representation is only ever ENTERED from
+the data phase, by `enterDataPhase`, `enterRRN` and `enterFPE`, and states 3,
+4 and 5 are exactly the three that read `softInt`. The pairing is the object's
+own structure, and it halves the state x mode grid honestly rather than by
+omission.
+
+### 3. Fifteen of the eighteen phase 3 sub-cases are reachable, and three are not
+
+`process` dispatches on `phase3Demod->word_30` through an 18-entry table
+biased by three, so the cases are `word_30` 3..20. `word_30` is CLEARED on
+entry to both `getV90Decision` and `getV92Decision` and then set by whichever
+arm has news, so the value cannot be planted by a harness -- it has to be
+produced by the demodulator.
+
+Sweeping every `word_30` assignment in `V90Phase3Demodulator.cpp`, which is
+written and differentially verified, the values it can produce in 3..20 are
+
+    3 4 5 6 7 8 9 10 12 15 16 17 18 19 20
+
+and **11, 13 and 14 are never written by any path of either decision
+function**. Those three are `process`'s "DemodDilHighUcodesStageTerminated",
+"DemodDilInMedUcodesStageTerminated" and "DemodDilInitialErrorRelaxation"
+arms. They are transcribed from the object and they are not differentially
+driven, and no grid axis can change that without a second writer of +0x30
+appearing somewhere this tree has not yet written.
+
+**This is 4756's failure mode caught before it was paid for.** The obvious
+grid axis -- plant `word_30` in both peers and sweep it -- reaches exactly one
+value, because the callee overwrites it; a suite built that way is green over
+however many checks the grid multiplies out to and drives one of eighteen
+arms. The axis has to be driven through the demodulator's own inputs, and the
+counter has to be read off the reference peer AFTER the call returns.
+
+## 6002. THE FIXED-POINT LMS UPDATE, AND THE ONE PLACE `docs/v90equprocess.md` IS WRONG
+
+The transcription in `docs/v90equprocess.md` records the fixed-point
+coefficient update as prose -- "two fixed-point LMS loops, each a 32-bit
+accumulator split across an aligned/unaligned short pair" -- and prose is not
+something a function can be written from. Read out at 0x392f4 and 0x39396,
+each loop is
+
+    c  = ((int)hi[i] << 16) | (unsigned short)lo[i];    /* movswl ; movzwl */
+    c += ((int)x[i] * beta) >> shift;                   /* imul ; sar %cl  */
+    lo[i] = (short)c;                                   /* mov %ax         */
+    hi[i] = (short)(c >> 16);                           /* sar $0x10 ; mov %ax */
+
+with `hi`/`lo`/`x`/`beta`/`shift` being
+`linearEquMmxCoefsAligned`/`array_d8Aligned`/`&array_ecAligned[word_20Saved]`/
+`-linearEquMmxBeta * diff`/`linearEquMmxShift` for the linear half and
+`dfeMmxCoefsAligned`/`array_118Aligned`/`array_12cAligned`/`e * dfeMmxBeta`/
+`dfeMmxShift` for the DFE. The high half read SIGNED and the low half UNSIGNED
+is forced, and so is the NEGATION on one of the two step sizes and not the
+other.
+
+**The two errors are one slot apart here too.** `diff` is
+`(short)(leSum - decision)` at 0x392e5 and `e` is `(short)(softInt - decision)`
+at 0x39272; the linear half takes the first with a negated beta and the DFE
+takes the second with a positive one, which is the fixed-point image of the
+float arm's `y - decision` against `soft - decision`. A reconstruction that
+used one error for both passes every test whose DFE output is zero.
+
+`sar %cl` masks its count to five bits and both shifts are a truncated
+logarithm that can come out negative, so the C is written `>> (n & 31)`; GCC
+folds the mask into the shift instruction, so it is free at the codegen tier
+and removes the undefined behaviour.
+
+### RECONVERT-D does not step the input pointer by what the doc says
+
+`docs/v90equprocess.md` §5 says the inverse blocks step `in` "past `8*j`
+(plus 4 more when `((short *)block_b4)[0] != 0`)". The object at 0x39e14:
+
+    39e14:  8d 54 cd 00   lea    0x0(%ebp,%ecx,8),%edx    ; in + 8*j
+    39e18:  66 83 38 00   cmpw   $0x0,(%eax)              ; block_b4[0] == 0 ?
+    39e1c:  8d 5a 08      lea    0x8(%edx),%ebx           ; in + 8*j + 8
+    39e1f:  89 9c 24 ..   mov    %ebx,0xe4(%esp)
+    ...
+    39e49:  74 0a         je     39e55                    ; equal: keep +8
+    39e4b:  83 c2 04      add    $0x4,%edx                ; else +4
+    39e4e:  89 94 24 ..   mov    %edx,0xe4(%esp)
+
+so it is `in + 2*j + 2` floats normally and `in + 2*j + 1` when the held
+sample is present -- the `+ 2` accounting for the symbol already consumed and
+the `- 1` for the one short of it that came from `word_6c` rather than from
+`in`. The doc's reading would have advanced the pointer by two floats too few
+on the common path and one too few on the other, and no test with `j == 0`
+could see it.
+
+The doc is otherwise accurate everywhere it was checked against `dis.py`, and
+both of these are the same class of thing: a transcription that summarises is
+a transcription that has to be re-read at the site before it is written.
+
+## 6003. THREE FLOATS IN `process` HAVE TO BE NARROWED AND ONE MUST NOT BE, AND THE DIFFERENCE IS 2,459 DIFFERENTIAL CHECKS
+
+`V90Equalizer::process` was written from `docs/v90equprocess.md`, compiled by
+both compilers, and driven by `t_v90equproc`'s RESET grid at 110,894 checks.
+It failed 2,459 of them on GCC 13 and 701 on GCC 3.4.2, every one of them in
+`outFloat` and `dfeCoefs`, and the whole gap is x87 excess precision on four
+values. Getting it to zero on the period compiler took three separate
+decisions, and two of them go opposite ways.
+
+### `y`, `d` and `soft` are NARROWED, and the object says so in three stores
+
+    391dd:  de c1        faddp %st,%st(1)          ; the linear dot product
+    391e7:  d9 84 24 b4  flds  0xb4(%esp)          ; d, out of its own slot
+    391ee:  d9 c9        fxch  %st(1)
+    391f0:  d9 9c 24 b0  fstps 0xb0(%esp)          ; y STORED as a float
+    391fc:  d8 ac 24 b0  fsubrs 0xb0(%esp)         ; and READ BACK for y - d
+    39220:  d9 9c 24 8c  fstps 0x8c(%esp)          ; soft stored as a float
+    394e8:  d9 84 24 8c  flds  0x8c(%esp)          ; and read back for the error
+
+A store followed by a load of the same slot is not a spill the compiler was
+free to make and undo -- it is the narrowing, and the object then computes
+everything downstream from the 32-bit value. A plain C assignment to a `float`
+local SAYS exactly that, and **neither compiler is obliged to do it**:
+`-fexcess-precision=fast` is the default on GCC 13 and the only behaviour GCC
+3.4.2 has, so an 80-bit value that never has to leave the register stack
+stays there. Ours stayed. The DFE coefficients then drift a few ulps within
+three symbols and `outFloat` follows on the symbol after that.
+
+The fix is a `volatile float` round trip at those three assignments and
+nothing else. It is not a general licence: `-ffloat-store` would round every
+intermediate product and the Makefile refuses it for `FloatIIR`'s sake, so the
+narrowing is applied exactly where the object encodes one.
+
+### `word_7c` is narrowed for the FIELD and not for the smoothing
+
+    399f9:  d9 fa        fsqrt
+    39a03:  d9 55 7c     fsts  0x7c(%ebp)          ; store, and do NOT pop
+    39a06:  de cb        fmulp %st,%st(3)          ; multiply the value STILL THERE
+
+so the block's r.m.s. error reaches its field rounded to `float` and reaches
+`meanErrorEnergyCurrent` unrounded. Reading the field back in the second
+expression -- which is what the obvious transcription does -- is one rounding
+too many. The source keeps the root in a `long double` local, stores the cast
+of it, and smooths with the local.
+
+### `err` IS A `float` AND MUST NOT BE FORCED EITHER WAY, and that is the divergence
+
+`err = soft - fdec` is never stored in the object's frame: `fsub %st(1),%st`
+at 0x394ef leaves it in a register, and it stays there through the high-error
+test, the DFE step and the square into `word_78`. It is rounded only where a
+call spills the x87 stack -- which on this arm is the "nof consecutive errors"
+diagnostic, so it happens on some trials and not others.
+
+Three spellings, both compilers, the same grid:
+
+| `err` spelled | GCC 3.4.2 | GCC 13 |
+|---|--:|--:|
+| `long double err = soft - fdec` | fails | 59 |
+| `v90equ_narrow(soft - fdec)` (rounded at every use) | 1 | 733 |
+| **`float err = soft - fdec`** | **0 of 120,974** | 731 |
+
+The plain `float` -- what the author must have written -- is exactly right on
+the compiler that built the object and wrong on the modern one, because the
+object's behaviour is *neither* consistently narrowed *nor* consistently
+extended and which it is at each use belongs to the register allocator. That
+is not expressible in portable C, so `t_v90equproc` is declared in
+`tools/gccdiverge.json` with the measurement above; it is finding 1453's
+`t_psd` class with the same disposition, and `make period` is what decides.
+
+**The lesson is the one 613/614 states from the other side.** A store that is
+immediately reloaded is FORCED and has to be reproduced; a store that is
+never reloaded is a spill and is free. Both appear in this one function,
+fourteen instructions apart, and reading either onto the other costs hundreds
+of failing checks that look like arithmetic and are not.

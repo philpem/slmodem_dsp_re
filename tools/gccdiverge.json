@@ -1,49 +1,56 @@
 {
-  "t_psd": {
-    "finding": 1453,
-    "checks": [
-      "Psd::process"
-    ],
-    "why": "x87 excess precision in four1/realfft reaching Psd's decibels. Under -fexcess-precision=fast modern GCC keeps 80-bit intermediates the object narrows to 32 bits mid-butterfly, and by the time the transform reaches a decibel the divergence is up to 0.043 dB on bins near -85 dB, where cancellation dominates. It is NOT closable with a tolerance: the smallest separation between two V90PreFilter reference loops that give DIFFERENT answers is SSD 0.00268 dB^2 (AscendNULL vs AscendNULLCodec2, refLoopsType2), a distance of 0.0518 dB, and 0.043 dB on six points moves a signature by 0.105 dB -- four times the separation, so the excess precision can flip autoSelection's winner. `make period` passes all 160: the period compiler has no divergence here, and it is the tier that decides."
-  },
-  "t_agc": {
-    "finding": 2304,
-    "checks": [
-      "agc: process over pole x reference x block x length"
-    ],
-    "why": "`alpha != T(1)`, the object's frozen test. The object issues ONE ordered compare and no parity test -- `flds (%ecx); fcom %st(3); fnstsw; sahf; jne` at 0xa8 -- and FCOM sets C3 for unordered as well as for equal, so a NaN pole freezes. GCC 13 will not emit that: `-mno-ieee-fp` is accepted and does nothing (measured: `fcomi %st(2),%st; jp; jne`, the parity test intact), and IEEE C requires `!=` to be true for a NaN. `-ffinite-math-only` does remove it and is rejected in finding 2304, because it withdraws NaN semantics from the whole translation unit and eleven `!(a >= b)` sites elsewhere depend on the modern compiler still honouring them. `make period` passes this binary's seven groups and 1,848,336 checks with the object's own compiler and the object's own flags, over the same inputs and not a subset."
-  },
-  "t_v90equ": {
-    "finding": 2304,
-    "checks": [
-      "V90Equalizer::setLinearEquBeta / setDfeBeta",
-      "V90Equalizer::enterPhase3",
-      "V90Equalizer::freeze",
-      "V90Equalizer::enterRRN / enterFPE",
-      "V90Equalizer::enterPhase4",
-      "V90Equalizer::convertEqualizerToMmx"
-    ],
-    "why": "The same one-ordered-compare equality as t_agc, at six sites: `linearEquBeta != beta` and `dfeBeta != beta` in the two setters (`flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je`, one compare, no parity test), `beta != 0.0f` in each setter's fixed-point arm, and `linearEquBeta != 0.0f` / `dfeBeta != 0.0f` in convertEqualizerToMmx (`fcom %st(1)` against `fldz` and `je`). The other four checks are consequential: enterPhase3, freeze, enterRRN/enterFPE and enterPhase4 all reach one of those six and they went green together on the period tier when the six were corrected. Finding 2300 for the sites, 2304 for why no modern flag closes it. `make period` passes this binary's twenty groups and 208,311 checks."
-  },
-  "t_v90leaves": {
-    "finding": 2304,
-    "checks": [
-      "V92EchoCanceller::process"
-    ],
-    "why": "`out[0] == 177.0f`, the sentinel that makes the canceller pass a block straight through. The object compares against the constant in memory and jumps on ZF -- `fcoms <177.0f>; fnstsw; sahf; je` -- so the sentinel arm is taken for equal AND for unordered, and a NaN block is filtered. IEEE C's `==` is false for a NaN and GCC 13 emits the parity test whatever it is told; the two-relational-compare spelling that satisfies the modern build is two compares where the object has one, and is wrong under the object's own flag (finding 2300). `make period` passes this binary's twenty groups and 77,967 checks."
-  },
-  "t_v90adid": {
-    "finding": 2304,
-    "checks": [
-      "V90AutoDigitalImpDetector::determineMaxUcode"
-    ],
-    "why": "`if (v == 0.0f) continue;` in the loop that picks the nearest linear-mapping entry. The object compares against the zero it has kept on the x87 stack since 0x4443c and jumps on ZF -- ONE `fcom`, no parity test -- so an unordered entry is skipped along with a zero one. IEEE C's `==` is false for a NaN and GCC 13 emits the parity test whatever it is told (finding 2304), so the modern build keeps four entries the object drops. This is the only check in this binary that diverges: the other twenty-one groups pass under both compilers, and the two operand-order corrections this file also took -- `ADID_PRINT_SIGN`'s negation and the merge tolerance hoisted into `lim` -- are IEEE-neutral by construction and change nothing here. `make period` passes this binary's twenty-two groups and 20,407 checks."
-  },
-  "t_v90p4dnan": {
-    "finding": 4812,
-    "checks": [
-      "V90Phase4Demodulator: the keep-rate flag on an unordered dB"
-    ],
-    "why": "`params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE < dB`, stored into +0x3510 at the tail of CalcErrorEnergyAfterEchoCancellation. The object issues ONE ordered compare and no parity test -- `flds 0x10(%esp); flds 0x404(%ebx); fcompp; fnstsw; sahf; setb %dl` at 0x26956..0x26976 and again at 0x275a0..0x275c6 -- so an UNORDERED result leaves CF set and the flag comes out 1. `dB` is unordered whenever the two silence energies have opposite signs, because then `1.0f / after * before` is negative and `fyl2x` answers a NaN. IEEE C requires a relational compare against a NaN to be false and GCC 13 emits the parity test whatever it is told, so the modern build stores 0 and cannot be made to store 1 from correct source; `-ffinite-math-only` is rejected on finding 2304's ground. THE OPERAND ORDER IS THE FIX AND NOT THE DECLARATION: written `dB > PARAM` the site is wrong under the object's own flag too, which is finding 2301's shape, and t_v90p4ddec's negative-accumulator trial is what caught it. IT IS ITS OWN BINARY on purpose: an excused binary exits non-zero, and tools/mutate.py judges a mutant caught by a non-zero exit, so a red binary cannot score a mutation set and refuses. Splitting the check out is what that refusal asks for, and it leaves t_v90p4ddec's three sweeps -- 65,984 checks -- green under both compilers and mutation-testable. `make period` has no allow-list and passes all four groups with the object's own compiler."
-  }
+ "t_psd": {
+  "finding": 1453,
+  "checks": [
+   "Psd::process"
+  ],
+  "why": "x87 excess precision in four1/realfft reaching Psd's decibels. Under -fexcess-precision=fast modern GCC keeps 80-bit intermediates the object narrows to 32 bits mid-butterfly, and by the time the transform reaches a decibel the divergence is up to 0.043 dB on bins near -85 dB, where cancellation dominates. It is NOT closable with a tolerance: the smallest separation between two V90PreFilter reference loops that give DIFFERENT answers is SSD 0.00268 dB^2 (AscendNULL vs AscendNULLCodec2, refLoopsType2), a distance of 0.0518 dB, and 0.043 dB on six points moves a signature by 0.105 dB -- four times the separation, so the excess precision can flip autoSelection's winner. `make period` passes all 160: the period compiler has no divergence here, and it is the tier that decides."
+ },
+ "t_agc": {
+  "finding": 2304,
+  "checks": [
+   "agc: process over pole x reference x block x length"
+  ],
+  "why": "`alpha != T(1)`, the object's frozen test. The object issues ONE ordered compare and no parity test -- `flds (%ecx); fcom %st(3); fnstsw; sahf; jne` at 0xa8 -- and FCOM sets C3 for unordered as well as for equal, so a NaN pole freezes. GCC 13 will not emit that: `-mno-ieee-fp` is accepted and does nothing (measured: `fcomi %st(2),%st; jp; jne`, the parity test intact), and IEEE C requires `!=` to be true for a NaN. `-ffinite-math-only` does remove it and is rejected in finding 2304, because it withdraws NaN semantics from the whole translation unit and eleven `!(a >= b)` sites elsewhere depend on the modern compiler still honouring them. `make period` passes this binary's seven groups and 1,848,336 checks with the object's own compiler and the object's own flags, over the same inputs and not a subset."
+ },
+ "t_v90equ": {
+  "finding": 2304,
+  "checks": [
+   "V90Equalizer::setLinearEquBeta / setDfeBeta",
+   "V90Equalizer::enterPhase3",
+   "V90Equalizer::freeze",
+   "V90Equalizer::enterRRN / enterFPE",
+   "V90Equalizer::enterPhase4",
+   "V90Equalizer::convertEqualizerToMmx"
+  ],
+  "why": "The same one-ordered-compare equality as t_agc, at six sites: `linearEquBeta != beta` and `dfeBeta != beta` in the two setters (`flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je`, one compare, no parity test), `beta != 0.0f` in each setter's fixed-point arm, and `linearEquBeta != 0.0f` / `dfeBeta != 0.0f` in convertEqualizerToMmx (`fcom %st(1)` against `fldz` and `je`). The other four checks are consequential: enterPhase3, freeze, enterRRN/enterFPE and enterPhase4 all reach one of those six and they went green together on the period tier when the six were corrected. Finding 2300 for the sites, 2304 for why no modern flag closes it. `make period` passes this binary's twenty groups and 208,311 checks."
+ },
+ "t_v90leaves": {
+  "finding": 2304,
+  "checks": [
+   "V92EchoCanceller::process"
+  ],
+  "why": "`out[0] == 177.0f`, the sentinel that makes the canceller pass a block straight through. The object compares against the constant in memory and jumps on ZF -- `fcoms <177.0f>; fnstsw; sahf; je` -- so the sentinel arm is taken for equal AND for unordered, and a NaN block is filtered. IEEE C's `==` is false for a NaN and GCC 13 emits the parity test whatever it is told; the two-relational-compare spelling that satisfies the modern build is two compares where the object has one, and is wrong under the object's own flag (finding 2300). `make period` passes this binary's twenty groups and 77,967 checks."
+ },
+ "t_v90adid": {
+  "finding": 2304,
+  "checks": [
+   "V90AutoDigitalImpDetector::determineMaxUcode"
+  ],
+  "why": "`if (v == 0.0f) continue;` in the loop that picks the nearest linear-mapping entry. The object compares against the zero it has kept on the x87 stack since 0x4443c and jumps on ZF -- ONE `fcom`, no parity test -- so an unordered entry is skipped along with a zero one. IEEE C's `==` is false for a NaN and GCC 13 emits the parity test whatever it is told (finding 2304), so the modern build keeps four entries the object drops. This is the only check in this binary that diverges: the other twenty-one groups pass under both compilers, and the two operand-order corrections this file also took -- `ADID_PRINT_SIGN`'s negation and the merge tolerance hoisted into `lim` -- are IEEE-neutral by construction and change nothing here. `make period` passes this binary's twenty-two groups and 20,407 checks."
+ },
+ "t_v90p4dnan": {
+  "finding": 4812,
+  "checks": [
+   "V90Phase4Demodulator: the keep-rate flag on an unordered dB"
+  ],
+  "why": "`params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE < dB`, stored into +0x3510 at the tail of CalcErrorEnergyAfterEchoCancellation. The object issues ONE ordered compare and no parity test -- `flds 0x10(%esp); flds 0x404(%ebx); fcompp; fnstsw; sahf; setb %dl` at 0x26956..0x26976 and again at 0x275a0..0x275c6 -- so an UNORDERED result leaves CF set and the flag comes out 1. `dB` is unordered whenever the two silence energies have opposite signs, because then `1.0f / after * before` is negative and `fyl2x` answers a NaN. IEEE C requires a relational compare against a NaN to be false and GCC 13 emits the parity test whatever it is told, so the modern build stores 0 and cannot be made to store 1 from correct source; `-ffinite-math-only` is rejected on finding 2304's ground. THE OPERAND ORDER IS THE FIX AND NOT THE DECLARATION: written `dB > PARAM` the site is wrong under the object's own flag too, which is finding 2301's shape, and t_v90p4ddec's negative-accumulator trial is what caught it. IT IS ITS OWN BINARY on purpose: an excused binary exits non-zero, and tools/mutate.py judges a mutant caught by a non-zero exit, so a red binary cannot score a mutation set and refuses. Splitting the check out is what that refusal asks for, and it leaves t_v90p4ddec's three sweeps -- 65,984 checks -- green under both compilers and mutation-testable. `make period` has no allow-list and passes all four groups with the object's own compiler."
+ },
+ "t_v90equproc": {
+  "finding": 6003,
+  "checks": [
+   "V90Equalizer::process, the RESET arm"
+  ],
+  "why": "x87 excess precision on `float err = soft - fdec` inside `V90Equalizer::process`. The object subtracts two values it has already narrowed to `float` in memory and leaves the DIFFERENCE in a register (`fsub %st(1),%st` at 0x394ef); that difference then feeds the squared-error accumulator, the DFE step and the high-error test, and GCC 3.4.2 spills it -- rounding it back to `float` -- only where a call forces the x87 stack out. Where `soft` is past a short's range the RESET slicer returns the x87 indefinite -32768, so the exact difference needs ONE bit more than a `float` carries and the spilled and unspilled readings part company; half an ulp there is hundreds of counts in `word_78`. THE SAME SOURCE IS EXACTLY GREEN ON THE PERIOD COMPILER: 120,974 differential checks, 0 failed, GCC 3.4.2 at the project's own flags. On GCC 13 it fails 731, and the failures are `word_78`, `word_7c`, `meanErrorEnergyCurrent` and the connection evaluator's average -- every one of them downstream of that one subtraction. IT IS NOT CLOSABLE BY CHOOSING A TYPE, and all three candidates were measured: `long double err` gives 59 on GCC 13 and is wrong on 3.4.2 as well; forcing the narrowing at every use (`volatile float` round trip) gives 733 on GCC 13 and 1 on 3.4.2; the plain `float` the author wrote gives 731 and 0. The object's own behaviour is not expressible portably -- it rounds at some uses and not others, and which is which is the register allocator's -- so the source is the object's, `make period` proves it, and the modern build declares. `-fexcess-precision=standard` would close it and is a translation-unit-wide change to flags this tree derived from the object; finding 1453's t_psd entry is the same class with the same disposition."
+ }
 }
