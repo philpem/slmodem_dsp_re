@@ -58,7 +58,6 @@
  */
 
 #include <errno.h>
-#include <fcntl.h>
 #include <math.h>
 #include <string.h>
 #include <sys/mman.h>
