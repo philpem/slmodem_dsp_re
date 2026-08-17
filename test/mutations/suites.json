@@ -320,6 +320,10 @@
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cp"
  ],
+ "v90cpb2i": [
+  "src/pump/v90/V90CP.cpp",
+  "build/test/t_v90cpb2i"
+ ],
  "v90cpinfo": [
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cpinfo"

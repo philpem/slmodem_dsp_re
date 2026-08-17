@@ -63579,6 +63579,97 @@ which is what makes them `nofRecievedMp` and `nofRecievedMpNot` rather than
 two counters in an unknown order. Finding 3540 noted that `infoToBits` and
 `evaluateInfo` between them reach no string at all; this is the one that does.
 
+### 4360. `V90CP::bitsToInfo` IS THE RECEIVE-SIDE DRIVER, IT RETURNS ONE OF SIX VALUES, AND IT NAMES NOTHING
+
+`bitsToInfo` (0x52d20, 2391 bytes) is the largest symbol in `V90CP` and the
+last of its fifteen.  It takes one arriving bit, stores it into `bits` at
+`word_cac`, counts the bits of the current block in `word_cb0`, and steps
+`word_ca4` through fourteen states -- `cmp $0xd` / `ja` and a fourteen-entry
+jump table at `.rodata+0xe74`, whose slot 9 holds the default label, so 9 is a
+hole exactly as 4 and 9 are holes in `evaluateInfo`'s nine-entry one.
+
+    0   the preamble, seventeen ones      7   four nine-bit counts, 0x44 bits
+    1   the framing zero                  8   the four lists, `alpha` bits
+    2   the type bit, at index 18         10  values and counts, 0x55 bits
+    3   the short form, fifteen bits      11  the six buffers, `beta` bits
+    4   the three block flags             12  the CRC frame, 0x11 bits
+    5   the rest of the header, to 0x33   13  the tail, to a cursor divisible
+    6   six frames of pairs, to 0x99          by six
+
+Six of those states exist only on this side; the seven `evaluateInfo` decodes
+are a subset, and the two halves' constants agree -- 0x33 is one past the
+0x32 `case 5` stores into `word_cb4` and 0x99 is one past the 0x98 `case 6`
+stores.  The two were reconstructed independently and met.
+
+**IT RETURNS A VALUE, and the header said it did not.**  %edi is zeroed at
+entry and moved into %eax at both `ret`s, and six values reach it: 0 for
+nothing, 5 from the run-counter test at the top -- 2 * the group size of zeros
+with the cursor still at 18 -- and 1, 2, 3 or 4 from the end of the message.
+A return type is not mangled, so `void` in a declaration means "not
+established" and never "established as void"; this is the third member of the
+class to be caught by that (`evaluateCRC` was the first, `getBitVector` the
+second) and the sibling `V90MP::bitsToInfo` was the fourth.
+
+The four are the two bits that survive the whole message -- `word_00`, which
+selects the short form, and `byte_13`, which `infoToBits` puts at bits[0x21]
+in BOTH forms:
+
+    byte_13 == 0, word_00 == 0  ->  1        byte_13 != 0, word_00 == 0  ->  2
+    byte_13 == 0, word_00 != 0  ->  3        byte_13 != 0, word_00 != 0  ->  4
+
+and +0x3bbc is a hold-off over them: it sits at -1 until a 1 or a 2 starts it
+at 0, counts one per call to 0x320 and returns to -1, and while it runs the
+answers 4 and 2 are suppressed to 0 while 1, 3 and 5 come through.
+
+**AND IT NAMES NOTHING.**  Finding 3540 recorded that `V90CP` is fully typed
+and almost entirely unnamed because `infoToBits` and `evaluateInfo` reach no
+string at all; this member reaches two, and neither is a format string over a
+field.  One is a bounds check on the bit vector (4361) and the other is
+`"V90CP: recieved CP with bad CRC\r\n"`, which names the MESSAGE and not any
+part of it.  So all twenty-three members keep their offsets for names.  What
+did become established is the ROLE of five of them -- `word_ca4` the state,
+`word_cac` the cursor, `word_cb0` the count within the block, `byte_ca9` and
+`byte_caa` the run lengths of ones and of zeros -- and the sibling `V90MP`
+reached the same four roles from its own driver and kept `byte_19`,
+`byte_1a`, `byte_1b` and `word_14`.  That is the precedent and it was
+followed.
+
+`evaluateInfo` is CALLED, eight relocations against it.  `resetDetector`
+(three sites) and `evaluateCRC` (one) are not: both are global symbols in the
+same translation unit and there is no relocation at any of those sites, so
+GCC 3.4.2 at -O3 folded them in -- finding 4300's shape in the constructor and
+`reset`, and 306/333's rule that the ABSENCE of a relocation is what proves
+something.
+
+### 4361. THE "not enouch memory in the buffer" STRING IS ABOUT `bits`, WHICH MEASURES `V90CP_BITS`
+
+`.rodata.str1.4+0xd650` holds
+
+    "\n *** error CP bit , not enouch memory in the buffer *** \n"
+
+-- the leading newline, the misspelt "enouch", the space before the comma and
+the space before the trailing newline are all the author's -- and it has five
+referrers, all inside `bitsToInfo`.  Every one of them guards the same thing:
+
+    cmp    $0x2edf,%eax          the cursor
+    ja     <cold>                UNSIGNED above
+    mov    %bl,0xcb8(%eax,%esi,1)  bits[word_cac] = bit
+    inc    %eax
+    mov    %eax,0xcac(%esi)
+
+so the "buffer" is THE BIT VECTOR, and 0x2edf is the last index the author
+permits.  `bits` therefore runs 0xcb8..0x3b97 inclusive and 0xcb8 + 0x2ee0 is
+0x3b98, which is where `resetCRC` writes its sixteen ones.  Lower bound meets
+upper bound, and `V90CP_BITS` stops being a modelling choice.
+
+**THIS CORRECTS D390, WHICH IS OTHERWISE UNCHANGED.**  That deviation said the
+string was the guard that caught a peer asking for more entries than
+`short_58[k]` or `buf[k]` holds.  It is not: it is one layer further out, on
+the index into `bits`, and NOTHING guards the two counts.  The deviation is
+real and stays; only its attribution was wrong.  This is what a string
+reference is worth -- CLAUDE.md's first evidence tier -- and also what it is
+not worth: it settles an array bound and still names no field.
+
 ### 4362. `V90CP::word_cac` IS UNSIGNED, AND `bitsToInfo` IS THE ONLY MEMBER THAT SAYS SO
 
 The write cursor at +0xcac was declared `int` because nothing that had been
@@ -63607,3 +63698,63 @@ unmoved at 363 identical, 72 same-size, 1017 compared, 82.1% of the blob's
 bytes. That is what a retype has to show, because unlike a rename it is NOT
 free at the codegen tier -- it moves nothing here only because every other use
 of the field in the class is a plain 32-bit load or store.
+
+### 4363. `alpha` AND `beta` ARE THE TWO COUNTED BLOCKS' BIT LENGTHS
+
+The two function-local statics of `bitsToInfo` are `.bss` objects under their
+own mangled names, `_ZZN5V90CP10bitsToInfoEhE5alpha` at +0x8 and `...E4beta`
+at +0xc, so writing them as `static` locals inside the function is what closes
+the batch -- `tools/closure.py --batch --missing` reports the three together
+and nothing else.
+
+Each is computed once, at the moment the block's counts have just been
+decoded, and compared against `word_cb0` while the block itself arrives:
+
+    case 7 end:  alpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2] + nof_58[3])
+    case 10 end: beta  = 17 * (nof_buf[0] + ... + nof_buf[5])
+
+Seventeen is one frame per entry -- the framing bit and sixteen information
+bits -- which is the same grid `infoToBits` lays them out on, so the two
+halves agree on the block length from opposite directions.  The object builds
+the product as `shl $4` then `add`, and reads it back with a plain `cmp` and
+`jne`.
+
+Their SIGNEDNESS is not established and is recorded as not established: every
+use is an equality compare and the product is the same either way.  They are
+spelled `unsigned int` to match the counts they sum.
+
+The sibling `V92CP::bitsToInfo` has two of its own, `gamma` at .bss+0x0 and
+`delta` at +0x4, which is the same construction in the same shape and is not
+read here.
+
+### 4364. THE V.90 CP RECEIVER HARDCODES A GROUP SIZE OF SIX
+
+`infoToBits` closes by rounding the sequence length up to a whole number of
+`word_3ba8`, the group size, and pads with zeros to it -- the same computation
+`calcSequenceLength` performs, inlined (finding 3532's shape).  `bitsToInfo`'s
+`case 13`, which is the state that waits out that padding and hands the
+message over, does NOT read `word_3ba8`.  It tests
+
+    mov    $0xaaaaaaab,%ebx      word_cac % 6
+    mul    %ebx
+    shr    $0x2,%edx
+    lea    (%edx,%edx,2),%edx
+    add    %edx,%edx
+    cmp    %edx,%ebp
+
+with six as an immediate, and reports only when the cursor is a multiple of
+it.  The two halves therefore agree only when the group size is a multiple of
+six: at six the padded length is itself divisible by six and the message is
+delivered on the LAST bit of the sequence, every time.  At any other group
+size the delivery lands early, or -- when no cursor value in the padding is
+divisible by six -- not at all, and the receiver waits for the next preamble
+with the message still undelivered.
+
+Reproduced exactly.  `test/unit/t_v90cpb2i.cpp` sweeps the group size over
+1..6, 12 and 17 and counts both outcomes, so the asymmetry is measured rather
+than assumed, and it is recorded here because it is the kind of thing a future
+reader will "repair" into `word_3ba8` and break the six case with.
+
+`byte_caa`'s test at the top of the same member DOES use the group size --
+`2 * word_3ba8` -- so the member reads the field and declines to use it here,
+which is what makes this a hardcoded constant rather than an unread one.

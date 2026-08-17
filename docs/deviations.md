@@ -6850,11 +6850,14 @@ seeds instead.*
 count with no clamp, in both directions: `infoToBits` READS past the end and
 `evaluateInfo` WRITES past it.
 
-The author knew about the second one.  `bitsToInfo` carries
-"*** error CP bit , not enouch memory in the buffer ***" and reaches it from
-five separate sites, so the guard exists -- one layer out, in the member that
-feeds the bit vector, and not in the two that walk it.  Nothing was found that
-guards the first.
+**THE ATTRIBUTION ABOVE WAS WRONG AND IS CORRECTED HERE; THE DEVIATION IS
+NOT.**  This used to say that `bitsToInfo`'s
+"*** error CP bit , not enouch memory in the buffer ***" was the guard that
+caught the second one, one layer out.  `bitsToInfo` has now been read and it
+is not: all five of that string's referrers guard `word_cac`, the index into
+`bits`, against 0x2edf, and NOTHING anywhere guards either count against the
+array it indexes.  See finding 4361, and D500 for the five arms that carry
+that check and the five that do not.
 
 Recorded rather than clamped because clamping would be a behaviour change that
 no test could justify, and because a later reader who seeds a count of 384 into
@@ -7180,3 +7183,62 @@ one from inside a batch with other work in flight, and phase 6 collects the 27
 punned sites into a batch of their own. This is the 28th and it is not
 provably wrong in the way those are -- both readings are correct about the
 bytes -- so it is a modelling duplication rather than a defect.
+
+## D500 -- five of `bitsToInfo`'s ten store sites bound the cursor and five do not  `unmeasured`
+
+*Batch of 2026-08-17, from `V90CP::bitsToInfo` (blob 0x52d20).  **Reachability:
+any state entered with `word_cac` at or above 0x2ee0, which the state machine
+cannot reach on its own but a caller or a previous message can leave behind.**
+**Observability: identical on both sides, so it is not a DIFFERENCE -- what is
+observable is that the two halves of the member behave differently from each
+other.**  Status: verified bit-exact; driven by
+`test/unit/t_v90cpb2i.cpp`'s `run_cp_b2i_guard`.  Fix class: none proposed;
+adding the missing five would be a behaviour change no test could justify.*
+
+Ten arms store the arriving bit into `bits[word_cac]`.  Five of them --
+states 3, 8, 10, 11 and 12, which are the ones whose length the MESSAGE
+carries and which can therefore run long -- open with
+
+    cmp    $0x2edf,%eax
+    ja     <print "not enouch memory in the buffer" and store nothing>
+
+and five -- states 2, 4, 5, 6 and 7, whose lengths are all fixed constants in
+the code -- store unconditionally.  So the author bounded exactly the arms
+whose length a peer controls, which is a defensible reading of the risk and
+is not a uniform check; a cursor left above 0x2edf on entry to state 5 writes
+`crc[0]` and one left far above it writes past the object.
+
+The test drives a guarded arm at 0x2edf, where it must store, and at 0x2ee0,
+where it must not -- and 0x2ee0 IS `crc[0]`, so "it did not store" is read
+off the blob's own object rather than restated from our source -- then drives
+an unguarded arm at 0x2ee0 and watches both sides write `crc[0]` together.
+The sweep stops there rather than going further out for D390's reason: past
+the object there is nothing to compare and a faulting test reports nothing.
+
+## D501 -- `bitsToInfo` stalls for ever on a counted block of zero entries  `unmeasured`
+
+*Batch of 2026-08-17, from `V90CP::bitsToInfo` (blob 0x52d20).
+**Reachability: any peer that sets +0x08 or +0x0c and sends all-zero counts,
+which is legal on the wire.**  **Observability: identical on both sides.**
+Status: verified bit-exact; driven by `test/unit/t_v90cpb2i.cpp`'s
+`run_cp_b2i_corners`.  Fix class: none proposed.*
+
+States 8 and 11 advance on `word_cb0 == alpha` and `word_cb0 == beta`, the two
+block lengths computed as seventeen times the sum of the counts.  Both count
+FIRST and test afterwards --
+
+    word_cb0++;
+    if (word_cb0 == alpha) { ... }
+
+-- so a length of zero is never matched: `word_cb0` starts at 0, becomes 1 on
+the first bit of the block and climbs from there.  The transmitter is
+consistent about it, `infoToBits` emitting no entries at all for a count of
+zero, so a well-formed message with +0x08 set and four zero counts leaves the
+receiver sitting in state 8 for the rest of the sequence and for every
+sequence after it, until a caller resets the object.  There is no timeout in
+the member.
+
+The same argument applies to `beta` and state 11.  It is not reachable by
+accident from a peer that has anything to say -- a block flag set with
+nothing in the block is the degenerate case -- which is presumably why it was
+never hit.

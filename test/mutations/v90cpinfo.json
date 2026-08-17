@@ -91,8 +91,8 @@
  },
  {
   "label": "evaluateCRC covers one frame too many",
-  "find": "\t\tcrc[i] = 1;\n\n\tend = word_3bb0 - 0x11;",
-  "replace": "\t\tcrc[i] = 1;\n\n\tend = word_3bb0 - 0x10;"
+  "find": "\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x11;",
+  "replace": "\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x10;"
  },
  {
   "label": "evaluateCRC compares against the wrong sixteen bits",

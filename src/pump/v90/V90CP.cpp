@@ -549,6 +549,7 @@ V90CP::infoToBits()
 {
 	unsigned int i, j, k;
 	unsigned int pos, start, nbits, total, group, quot;
+	int c;
 	unsigned char a;
 
 	/* One frame of ones, then the first framing bit. */
@@ -765,8 +766,9 @@ V90CP::infoToBits()
 	nbits = start + 0x11;
 	word_3bb0 = nbits;
 
-	for (i = 0; i <= 0xf; i++)
-		crc[i] = 1;
+	/* SIGNED, exactly as in `evaluateCRC` and `resetCRC`: `jle`. */
+	for (c = 0; c <= 0xf; c++)
+		crc[c] = 1;
 
 	for (i = 0x12; i < start; ) {
 		if (i % 17 == 0)
@@ -840,11 +842,13 @@ int
 V90CP::evaluateCRC()
 {
 	unsigned int i, end;
+	int c;
 	unsigned char a;
 	unsigned char diff;
 
-	for (i = 0; i <= 0xf; i++)
-		crc[i] = 1;
+	/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */
+	for (c = 0; c <= 0xf; c++)
+		crc[c] = 1;
 
 	end = word_3bb0 - 0x11;
 	for (i = 0x12; i < end; ) {
@@ -881,4 +885,374 @@ V90CP::evaluateCRC()
 	}
 
 	return diff == 0;
+}
+
+/*
+ * bitsToInfo -- 0x52d20, 2391 bytes, and the RECEIVE-SIDE DRIVER of the class:
+ * take one arriving bit, drive `word_ca4` (the decoder state), `word_cac` (the
+ * cursor) and `word_cb0` (the count within the current block), and say what
+ * the bit completed.
+ *
+ * IT IS NOT `void`, which the header used to say it was, and the mangling
+ * cannot see the difference.  %edi is zeroed at entry, moved to %eax at BOTH
+ * `ret`s, and six distinct values reach it -- 0 for nothing, 5 from the
+ * run-counter test at the top, and 1, 2, 3 or 4 from the end of the message.
+ * That is the same mistake `evaluateCRC` was carrying and the same one the
+ * sibling `V90MP::bitsToInfo` turned out to have; a value built in %eax and a
+ * value merely left there are told apart by whether every path arranges it,
+ * and every path here does.
+ *
+ * WHAT THE FOUR MEAN, as far as the object states it: the two bits that
+ * survive the whole message are `word_00`, which selects the short form, and
+ * `byte_13`, which `infoToBits` places at bits[0x21] in BOTH forms.  The
+ * answer is one of four combinations of those two --
+ *
+ *      byte_13 == 0, word_00 == 0   ->  1
+ *      byte_13 == 0, word_00 != 0   ->  3
+ *      byte_13 != 0, word_00 == 0   ->  2
+ *      byte_13 != 0, word_00 != 0   ->  4
+ *
+ * -- and nothing in the object names any of them.  `V90MP::bitsToInfo`'s
+ * corresponding 1, 2 and 3 ARE named, by its own diagnostics, and this member
+ * has no such line, so the numbers stay numbers.  Finding 4360.
+ *
+ * THE TWO STATICS ARE THE BATCH.  `alpha` and `beta` are function-local
+ * statics -- .bss, mangled `_ZZN5V90CP10bitsToInfoEhE5alpha` and `...E4beta`,
+ * so their C++ names are the author's -- and each holds the bit LENGTH of one
+ * counted block, computed once when the block's counts have been decoded and
+ * compared against `word_cb0` while the block arrives.  Seventeen bits to the
+ * entry, which is one frame each:
+ *
+ *      alpha = 17 * (nof_58[0] + ... + nof_58[3])   the four shorts lists
+ *      beta  = 17 * (nof_buf[0] + ... + nof_buf[5])  the six buffers
+ *
+ * Their signedness is NOT established -- every use is an equality compare and
+ * the `shl $4` / `add` that makes the product is the same either way -- so
+ * they are spelled to match the counts they sum.  Finding 4363.
+ *
+ * THE ONE STRING THAT BOUNDS AN ARRAY.  Five of the arms guard the store into
+ * `bits` with `cmp $0x2edf` / `ja` and print "not enouch memory in the
+ * buffer" instead, which is the author saying in his own words that index
+ * 0x2edf is the last one that fits.  0xcb8 + 0x2ee0 is 0x3b98, which is where
+ * `crc` starts, so the two ends meet and V90CP_BITS is measured rather than
+ * modelled.  FIVE OF THE TEN STORE SITES ARE GUARDED AND FIVE ARE NOT --
+ * docs/deviations.md D500.  Finding 4361.
+ *
+ * THE RECEIVER HARDCODES SIX WHERE THE TRANSMITTER USES `word_3ba8`.
+ * `infoToBits` pads the sequence out to a whole number of +0x3ba8; `case 13`
+ * here waits for `word_cac % 6 == 0`, with the six as an immediate.  Finding
+ * 4364.
+ *
+ * `evaluateInfo` is CALLED -- eight relocations against it -- and
+ * `resetDetector` and `evaluateCRC` are not: those two are global symbols with
+ * no relocation at their sites, so GCC 3.4.2 at -O3 folded them in, which is
+ * finding 4300's shape in the constructor and `reset`.
+ */
+
+/*
+ * The author's own spelling, reproduced byte for byte: the leading newline,
+ * "enouch", the space before the comma and the space before the trailing
+ * newline are all in .rodata.str1.4+0xd650.  One pooled copy, five referrers.
+ */
+#define V90CP_NOMEM \
+	"\n *** error CP bit , not enouch memory in the buffer *** \n"
+
+int
+V90CP::bitsToInfo(unsigned char bit)
+{
+	/*
+	 * Declared in this order because that is the order they occupy in
+	 * .bss -- alpha at +0x8, beta at +0xc.
+	 */
+	static unsigned int alpha;
+	static unsigned int beta;
+
+	int rc = 0;
+
+	/*
+	 * THE RUN COUNTERS COME FIRST and are independent of the state: every
+	 * bit lengthens one run and clears the other.  A run of 2 * the group
+	 * size of zeros arriving while the cursor is still at its home 18 is
+	 * the far end having stopped, and that answer does NOT stop the state
+	 * machine below, which runs on and can overwrite it.
+	 *
+	 * `byte_caa` is read back out of the object rather than out of a
+	 * local -- the object stores 0 and reloads it four instructions later
+	 * -- which matters when `word_3ba8` is zero, because then the test is
+	 * true on a ONE bit as well.
+	 */
+	if (bit != 0) {
+		byte_ca9++;
+		byte_caa = 0;
+	} else {
+		byte_caa++;
+		byte_ca9 = 0;
+	}
+
+	if (byte_caa == 2 * word_3ba8 && word_cac == 18)
+		rc = 5;
+
+	switch (word_ca4) {
+	case 0:
+		/* Seventeen ones is the preamble; sixteen are not enough. */
+		if (byte_ca9 > 0x10)
+			word_ca4 = 1;
+		break;
+
+	case 1:
+		/* The framing zero, or start again. */
+		if (bit == 0)
+			word_ca4 = 2;
+		else
+			resetDetector();
+		break;
+
+	case 2:
+		/*
+		 * The type bit, at index 18.  It is stored whole into
+		 * `word_00` and read BACK from there for the branch -- 32-bit
+		 * `cmp $1`, not an 8-bit test of the argument -- and it picks
+		 * the short form's state 3 or the long form's 4.  State 4 is
+		 * one of `evaluateInfo`'s two holes, so nothing decodes it.
+		 */
+		word_00 = bit;
+		bits[word_cac] = bit;
+		word_cac++;
+		word_ca4 = (word_00 != 0) ? 3 : 4;
+		word_cb0 = 0;
+		break;
+
+	case 3:
+		/*
+		 * The short form: fifteen more bits, ending at 0x21, which is
+		 * exactly the two `evaluateInfo`'s `case 3` reads back.
+		 */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == 0xf) {
+			evaluateInfo();
+			word_ca4 = 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 4:
+		/*
+		 * The three block flags, one bit each, dispatched on the
+		 * count rather than shifted.  The object's `jb` on the tree's
+		 * `x < 1` arm is what makes `word_cb0` unsigned: a signed
+		 * index would have needed a second test for zero.
+		 */
+		bits[word_cac] = bit;
+		word_cac++;
+		switch (word_cb0) {
+		case 0:
+			word_04 = bit;
+			break;
+		case 1:
+			word_08 = bit;
+			break;
+		case 2:
+			word_0c = bit;
+			break;
+		}
+		word_cb0++;
+		if (word_cb0 == 3) {
+			word_ca4 = 5;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 5:
+		/*
+		 * The rest of the header, to the absolute 0x33 -- one past
+		 * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the
+		 * first of the two places that pick the next block, in the
+		 * order the blocks travel: +0x18, then +0x48/+0x58, then
+		 * everything from +0xc58, then the CRC.
+		 */
+		bits[word_cac] = bit;
+		word_cac++;
+		if (word_cac == 0x33) {
+			evaluateInfo();
+			if (word_04 != 0)
+				word_ca4 = 6;
+			else if (word_08 != 0)
+				word_ca4 = 7;
+			else
+				word_ca4 = (word_0c != 0) ? 10 : 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 6:
+		/* Six frames of pairs, to 0x99 -- one past the 0x98 that
+		 * `evaluateInfo`'s `case 6` stores.  The two halves were read
+		 * independently and agree. */
+		bits[word_cac] = bit;
+		word_cac++;
+		if (word_cac == 0x99) {
+			evaluateInfo();
+			if (word_08 != 0)
+				word_ca4 = 7;
+			else
+				word_ca4 = (word_0c != 0) ? 10 : 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 7:
+		/* The four nine-bit counts: four frames, 0x44 bits.  Once
+		 * they are decoded the next block's length is known. */
+		bits[word_cac] = bit;
+		word_cac++;
+		word_cb0++;
+		if (word_cb0 == 0x44) {
+			evaluateInfo();
+			word_ca4 = 8;
+			word_cb0 = 0;
+			alpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2] +
+				      nof_58[3]);
+		}
+		break;
+
+	case 8:
+		/* The four counted lists, `alpha` bits of them. */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == alpha) {
+			evaluateInfo();
+			word_ca4 = (word_0c != 0) ? 10 : 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 10:
+		/* Five frames, 0x55 bits: the six four-bit values and the six
+		 * eight-bit buffer counts.  Then the buffers' length. */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == 0x55) {
+			evaluateInfo();
+			word_ca4 = 11;
+			word_cb0 = 0;
+			beta = 17 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +
+				     nof_buf[3] + nof_buf[4] + nof_buf[5]);
+		}
+		break;
+
+	case 11:
+		/* The six buffers, `beta` bits of them. */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == beta) {
+			evaluateInfo();
+			word_ca4 = 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 12:
+		/*
+		 * The CRC frame: one framing zero and sixteen CRC bits.
+		 * `word_3bb0` is then the cursor itself, which is what
+		 * `evaluateCRC` wants -- it runs from 0x12 to
+		 * word_3bb0 - 0x11 and compares against the sixteen bits
+		 * ending at word_3bb0 - 1.  `infoToBits` computes the same
+		 * number as start + 0x11 from the other side.
+		 *
+		 * The call is INLINED by the compiler, exactly as `reset`'s
+		 * call of `resetDetector` is: `evaluateCRC` is a global symbol
+		 * and there is no relocation against it here.
+		 */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == 0x11) {
+			word_3bb0 = word_cac;
+			if (evaluateCRC()) {
+				word_cb0 = 0x11;
+				word_ca4 = 13;
+			} else {
+				resetDetector();
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90CP: recieved CP with bad CRC"
+					    "\r\n");
+			}
+		}
+		break;
+
+	case 13:
+		/*
+		 * The tail.  Zeros pad the sequence out and a one restarts
+		 * the detector; either way the message is handed over on the
+		 * next cursor position that is a multiple of SIX -- an
+		 * immediate, where `infoToBits` pads to a multiple of
+		 * `word_3ba8`.  A one therefore reports as well, because
+		 * `resetDetector` leaves the cursor at 18 and 18 % 6 is 0;
+		 * `evaluateInfo` is then called with a state of 0 and does
+		 * nothing.
+		 */
+		if (bit != 0)
+			resetDetector();
+		else
+			word_cac++;
+		if (word_cac % 6 == 0) {
+			evaluateInfo();
+			resetDetector();
+			if (byte_13 != 0)
+				rc = (word_00 != 0) ? 4 : 2;
+			else
+				rc = (word_00 != 0) ? 3 : 1;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	/*
+	 * THE HOLD-OFF, and it is the only thing in the class that reads
+	 * +0x3bbc.  It sits at -1 until an answer of 1 or 2 starts it, then
+	 * counts one per call to 0x320 and stops itself; while it is running,
+	 * the answers 4 and 2 are suppressed to 0 and 1, 3 and 5 are not.
+	 * What it is a hold-off FOR is not stated anywhere in the object, so
+	 * the field keeps its offset name.
+	 */
+	if (word_3bbc >= 0) {
+		if (rc == 4 || rc == 2)
+			rc = 0;
+		word_3bbc++;
+		if (word_3bbc == 0x320)
+			word_3bbc = -1;
+	} else if (rc == 1 || rc == 2) {
+		word_3bbc = 0;
+	}
+
+	return rc;
 }

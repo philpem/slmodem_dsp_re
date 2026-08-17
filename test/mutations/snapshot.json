@@ -4994,7 +4994,7 @@
    }
   },
   "v90cp": {
-   "key": "6d4c41f5421021835a2b1a720aafec20dcc69c7d1370d8587ddad8d201aff378",
+   "key": "bd40aa0e005c2d7d5b20dbe5bdbfd021797ca4507433dbb767cf2c34cd819cb3",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x13 left alone, as reset() leaves it": "caught",
@@ -5017,8 +5017,56 @@
     "the same buffer stored twice": "caught"
    }
   },
+  "v90cpb2i": {
+   "key": "336f253797a0f709383ce5b43e8c14df666228aa82517c19e98e774bb8bb510e",
+   "summary": "42 mutations: 42 caught (42 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Ed answers V90MP's 3 rather than 5": "caught",
+    "Ed does not require the cursor to be home": "caught",
+    "Ed is read from a local rather than back out of the object": "caught",
+    "a bad CRC does not reset the detector": "caught",
+    "alpha counts only the first three lists": "caught",
+    "alpha is sixteen bits to the entry, not seventeen": "caught",
+    "beta counts only five of the six buffers": "caught",
+    "beta is sixteen bits to the entry, not seventeen": "caught",
+    "bitsToInfo returns nothing": "caught",
+    "sixteen ones are enough for the preamble": "caught",
+    "the CRC extent is one past the cursor": "caught",
+    "the CRC frame is sixteen bits, not seventeen": "caught",
+    "the CRC verdict is inverted": "caught",
+    "the answer reads the two bits the wrong way round": "caught",
+    "the bad-CRC line is spelled correctly": "caught",
+    "the bound is one too high in the short form's arm": "caught",
+    "the buffers block is bounded by alpha rather than beta": "caught",
+    "the flag block is four bits, not three": "caught",
+    "the four counts are four frames of sixteen, not seventeen": "caught",
+    "the framing zero test is inverted": "caught",
+    "the header arm IS bounded, where the object leaves it open": "caught",
+    "the header ends at 0x32 rather than 0x33": "caught",
+    "the hold-off is started by 3 and 4 rather than by 1 and 2": "caught",
+    "the hold-off never stops": "caught",
+    "the hold-off runs to 0x321": "caught",
+    "the hold-off suppresses 1 and 3 rather than 2 and 4": "caught",
+    "the lists arm is not bounded at all": "caught",
+    "the lists block is bounded by beta rather than alpha": "caught",
+    "the next block is chosen in the wrong order": "caught",
+    "the overrun line loses the author's spelling": "caught",
+    "the pairs block ends at 0x98 rather than 0x99": "caught",
+    "the pairs block hands over to 10 whatever +0x08 says": "caught",
+    "the preamble hands over to state 2 rather than 1": "caught",
+    "the run counters are swapped": "caught",
+    "the short form is sixteen bits, not fifteen": "caught",
+    "the tail does not reset the detector before reporting": "caught",
+    "the tail waits on the group size rather than on six": "caught",
+    "the tail's bit test is inverted": "caught",
+    "the three block flags land in the wrong fields": "caught",
+    "the type bit is not stored": "caught",
+    "the type bit selects the wrong form": "caught",
+    "the values and counts block is four frames, not five": "caught"
+   }
+  },
   "v90cpinfo": {
-   "key": "3af5fe3ac61a364b355b9f5448b623eed27c154b6d1f84c8af685d8a7d8648cb",
+   "key": "18afa2a73f0a33ec4047b745292914a369206d2ba6183e928a251dfc9ec13e8b",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a fifth value of +0x11 writes zeros instead of nothing": "caught",
@@ -5046,7 +5094,7 @@
    }
   },
   "v90cpleaf": {
-   "key": "a964693c2558299c4e0e94fa6f0e8e6fb32d38c5a20ef39ad13f572d325bade7",
+   "key": "0a737b484655af1e85ce6eaa53e8e376180fe5ddd28cfa81696f565cf2d43389",
    "summary": "28 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "calcCRC covers one frame too many": "caught",
