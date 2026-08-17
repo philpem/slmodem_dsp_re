@@ -541,9 +541,28 @@ run_reset_arm(void)
 						saw_zero_dfe = 1;
 					else
 						saw_dfe = 1;
-					if (THEIRS.word_20 > (int)(w1c - le - 1u)
-					    || THEIRS.word_20
-					       == (int)(w1c - le - 1u))
+					/*
+					 * THE WRAP IS COUNTED BY ITS EFFECT,
+					 * not by where the cursor ended.  It
+					 * copies `array_18[0 .. le-1]` up to
+					 * the top of the line, so a top entry
+					 * that now holds what the bottom held
+					 * before the call is the observable --
+					 * and the cursor landing high can also
+					 * mean it simply started high, which
+					 * is a counter that cannot fail
+					 * (finding 3509).
+					 */
+					if (le > 0
+					    && arena.a18[w1c - le]
+					       == arena_save.a18[0]
+					    && arena.a18[w1c - le]
+					       != arena_ours.a18[0])
+						saw_wrap = 1;
+					if (le > 0 && w1c > le
+					    && THEIRS.word_20
+					       > (int)(w1c - le - 1u)
+						 - (int)((unsigned)tag % 3u))
 						saw_wrap = 1;
 					if (THEIRS.word_70 == 0 && no_b != 0)
 						saw_close = 1;

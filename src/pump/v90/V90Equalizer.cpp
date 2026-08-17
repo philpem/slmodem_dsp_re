@@ -2020,8 +2020,15 @@ mmxDot(const short *h, const short *x, int n)
  * 0..31.  Both fixed-point step sizes are a truncated logarithm of two fields
  * the caller controls and CAN come out negative, so the mask is written out
  * rather than left to chance -- the same argument `one_shifted_by` above
- * makes for the left shift.  GCC folds `n & 31` into the shift instruction on
- * this target, so it is free.
+ * makes for the left shift.
+ *
+ * IT IS NOT FREE, AND THE COMMENT HERE USED TO CLAIM IT WAS.  The object
+ * loads the count with `movzbl 0x64(%esp),%ecx` and shifts; ours emits
+ * `and $0x1f,%ecx` first, at both LMS sites.  Two instructions the object
+ * does not have, in exchange for defined behaviour on a count the object
+ * itself only survives because the hardware masks -- D851, and D561's
+ * disposition.  Measured, not assumed: the assertion that GCC folds the mask
+ * away was wrong and `objdump` says so.
  */
 static inline int
 sar_by(int v, int n)
