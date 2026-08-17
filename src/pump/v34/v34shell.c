@@ -506,19 +506,19 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	code = (unsigned char)s->trellis[(st << 4) + branch];
 
 	/* The two parameter pairs, each rounded up to a multiple of 4 plus 1. */
-	a = (((s->state[st].a / div) + (s->state[st].a > 0 ? 1 : 0)) & ~3) + 1;
-	b = (((s->state[st].b / div) + (s->state[st].b > 0 ? 1 : 0)) & ~3) + 1;
+	a = (((s->state[st].par[0] / div) + (s->state[st].par[0] > 0 ? 1 : 0)) & ~3) + 1;
+	b = (((s->state[st].par[1] / div) + (s->state[st].par[1] > 0 ? 1 : 0)) & ~3) + 1;
 
 	switch (code >> 2) {
 	case 1:
-		b = depth_nudge(b, s->state[st].b, div);
+		b = depth_nudge(b, s->state[st].par[1], div);
 		break;
 	case 2:
-		a = depth_nudge(a, s->state[st].a, div);
-		b = depth_nudge(b, s->state[st].b, div);
+		a = depth_nudge(a, s->state[st].par[0], div);
+		b = depth_nudge(b, s->state[st].par[1], div);
 		break;
 	case 3:
-		a = depth_nudge(a, s->state[st].a, div);
+		a = depth_nudge(a, s->state[st].par[0], div);
 		break;
 	default:
 		break;
@@ -526,19 +526,19 @@ decodeDepth(void *shellp, short *quad, short *idx)
 
 	k1 = depth_half(s, a, b, code, &r0, &r1);
 
-	c = (((s->state[st].c / div) + (s->state[st].c > 0 ? 1 : 0)) & ~3) + 1;
-	d = (((s->state[st].d / div) + (s->state[st].d > 0 ? 1 : 0)) & ~3) + 1;
+	c = (((s->state[st].par[2] / div) + (s->state[st].par[2] > 0 ? 1 : 0)) & ~3) + 1;
+	d = (((s->state[st].par[3] / div) + (s->state[st].par[3] > 0 ? 1 : 0)) & ~3) + 1;
 
 	switch (code & 3) {
 	case 1:
-		d = depth_nudge(d, s->state[st].d, div);
+		d = depth_nudge(d, s->state[st].par[3], div);
 		break;
 	case 2:
-		c = depth_nudge(c, s->state[st].c, div);
-		d = depth_nudge(d, s->state[st].d, div);
+		c = depth_nudge(c, s->state[st].par[2], div);
+		d = depth_nudge(d, s->state[st].par[3], div);
 		break;
 	case 3:
-		c = depth_nudge(c, s->state[st].c, div);
+		c = depth_nudge(c, s->state[st].par[2], div);
 		break;
 	default:
 		break;
@@ -643,21 +643,21 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	if (!(n & 1)) {
 		/* Even: fill four frame shorts and two sub-indices. */
 		decodeDepth(s, &s->frame[2 + (sub / 2) * 4], &s->sub[sub]);
-		*(int *)&s->state[s->state_idx].a = *(int *)ap;
+		s->state[s->state_idx].pair[0] = *(int *)ap;
 		return 0;
 	}
 
-	*(int *)&s->state[st].c = *(int *)ap;
+	s->state[st].pair[1] = *(int *)ap;
 
 	/* 1. Eight candidates, two per parameter. */
 	for (i = 0; i < 4; i++)
-		demap_candidates((&s->state[st].a)[i], div,
+		demap_candidates(s->state[st].par[i], div,
 				 &cand[i * 2], &cand[i * 2 + 1]);
 
 	/* 2. Squared distances, four combinations per parameter pair. */
 	for (i = 0; i < 2; i++) {
-		int p0 = (&s->state[st].a)[i * 2];
-		int p1 = (&s->state[st].a)[i * 2 + 1];
+		int p0 = s->state[st].par[i * 2];
+		int p1 = s->state[st].par[i * 2 + 1];
 		int sh = s->fa44 & 31;
 		int d0 = ((p0 - cand[i * 4 + 0]) * (p0 - cand[i * 4 + 0])) >> sh;
 		int d1 = ((p0 - cand[i * 4 + 1]) * (p0 - cand[i * 4 + 1])) >> sh;
@@ -772,7 +772,7 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	 * its width exceeds 16, and the only path that reads frame[1].
 	 */
 	if (s->latched) {
-		*(int *)&s->frame[0] = shellDemapper(s);
+		s->frame_wide = shellDemapper(s);
 		putFrame(s);
 		return 1;
 	}
@@ -780,7 +780,7 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	if (n <= 0x40)
 		return 1;
 
-	*(int *)&s->frame[0] = shellDemapper(s);
+	s->frame_wide = shellDemapper(s);
 	putFrame(s);
 
 	if (n >= 0x40 + (unsigned short)s->fa00 * 8)
@@ -882,7 +882,7 @@ getFrame(void *objp)
 		pos += nb & 15;
 		s->bitpos = (short)pos;
 	} else if (nb > 0) {
-		*(int *)&s->frame[0] =
+		s->frame_wide =
 		    (int)(((unsigned)s->bitbuf >> (pos & 31))
 			  & lsbMask[nb]);
 		pos += nb;
@@ -893,7 +893,7 @@ getFrame(void *objp)
 		 * putFrame simply emits nothing here, so the zeroing has no
 		 * counterpart on that side and is easy to miss.
 		 */
-		*(int *)&s->frame[0] = 0;
+		s->frame_wide = 0;
 		small = 2 - ((unsigned short)s->fa04 < 9 ? 1 : 0);
 		small_last = (short)(nb + small);
 	}
@@ -2052,7 +2052,7 @@ modulatevector(void *obj)
 
 		getFrame(obj);
 
-		target = (unsigned)*(int *)&tx->frame[0];
+		target = (unsigned)tx->frame_wide;
 		quad = (unsigned short)(short)tx->prev_k;
 
 		/* 1. Seven halvings over t3, unsigned. */

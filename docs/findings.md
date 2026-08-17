@@ -66435,3 +66435,43 @@ twenty mutation anchors in `test/mutations/{v90p34,v34k56,v34hstx1}.json`,
 which are text-exact against the source and were rewritten with the same
 substitution.  CLAUDE.md's warning about anchors is about COSMETIC renames;
 this one is forced by the type, and twenty is not 443.
+
+## 5304. `v34_shell`'s frame and its per-state parameters: two more wide stores, and one defect GCC never sees
+
+Shapes C and D of finding 5300, both in `struct v34_shell` and both settled
+the same way -- read the writer, take the instruction width.
+
+**`frame[0..1]` is one 32-bit quantity AND two shorts.**  `getFrame` stores
+the wide field with a single `movl`: `mov %eax,0x2a30(%esi)` at 0x57a68 for
+the value and `mov %edx,0x2a30(%esi)` at 0x57da5 for the explicit zero, with
+`%esi` the object and the transmit shell at +0x1be0, so 0x2a30 is +0xe50.
+On the split path -- `nb > 16`, the only path that reads `frame[1]` -- it
+stores the two halves separately with `mov %dx,0x2a30(%esi)` at 0x57cac, 16
+bits.  Five warned sites, and `demapFrame`'s `lea 0xe54(%ebx,%edx,8)` at
+0x5965a is the third reading: `frame[2 + ...]`, four shorts a group.  A
+union of `short frame[18]` and `int frame_wide`; the array keeps its name,
+so only the five punned accesses move.
+
+**`state[].a` .. `.d` were never four fields.**  `demapFrame` stores the
+caller's four bytes with ONE `movl` per pair -- `mov %edi,0x12d0(%ebx,%eax,4)`
+at 0x59673 on the even arm and `mov %edx,0x12d4(%ecx,%ebp,4)` at 0x59193 on
+the odd one, `%eax`/`%ebp` being `3 * state_idx` and the scale 4, so the
+stride is the twelve-byte group -- and reads them back one at a time with
+`movswl (%edi)` at 0x5923d off a pointer it steps by two.  One four-short
+parameter group, written as two 32-bit halves.  `short par[4]` in a union
+with `int pair[2]`.
+
+**AND THAT IS THE ONE WORTH THE PARAGRAPH.**  Only two of these sites warn.
+The tree also walked the group as `(&s->state[st].a)[i]` for `i` in 0..3, in
+three places in `demapFrame` -- pointer arithmetic across four separately
+declared members, which is 6.5.6p8 rather than 6.5p7, which no GCC 13
+diagnostic reaches, and which the owner's ruling covers just as squarely.
+Had the fix been written at the ACCESS -- a `memcpy`, or a `union` local --
+those three would have survived it.  Fixing the DECLARATION retired them
+without being aimed at them, and that is the argument for the rule rather
+than an incidental benefit.
+
+`decodeDepth` now reads `state[st].par[0..3]` where it read `.a` .. `.d`;
+that is a loss of four names in exchange for the pairing being visible, and
+the names carried no meaning the offsets did not.  `t_v34shell` and
+`t_v34rx` seed the group by index for the same reason.

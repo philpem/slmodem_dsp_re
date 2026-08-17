@@ -1420,13 +1420,13 @@ main(void)
 				for (k = 0; k < 32; k++) {
 					sa->state[k].seed =
 					sb->state[k].seed = 0;
-					sa->state[k].a = sb->state[k].a =
+					sa->state[k].par[0] = sb->state[k].par[0] =
 					    (short)((k % 9) * 4 - 16);
-					sa->state[k].b = sb->state[k].b =
+					sa->state[k].par[1] = sb->state[k].par[1] =
 					    (short)((k % 7) * 4 - 12);
-					sa->state[k].c = sb->state[k].c =
+					sa->state[k].par[2] = sb->state[k].par[2] =
 					    (short)((k % 11) * 4 - 20);
-					sa->state[k].d = sb->state[k].d =
+					sa->state[k].par[3] = sb->state[k].par[3] =
 					    (short)((k % 5) * 4 - 8);
 				}
 				for (k = 0; k < 16; k++)
