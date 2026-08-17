@@ -74340,3 +74340,894 @@ the comment saying that is documentation and not derivation.
 **`V90CP.cpp`'s claim is inherited and is now suspect for the same reason.**
 It is not corrected here -- that file is another batch's and `alpha`/`beta`
 have not been re-measured -- but anybody touching it should read this first.
+## 5800. THE BLOB'S FUNCTION ORDER INSIDE A TRANSLATION UNIT IS THE CALLGRAPH'S, NOT THE SOURCE'S, AND READING SOURCE ORDER OFF THE ADDRESSES IS WRONG
+
+`V90SpectralVerifier`'s fourteen text symbols come out of the blob in an order
+that looks like a source listing: constructor, destructor, `reset`,
+`startAccumulation`, the three `freqTo*Bin`, `getSpectrumOfBin`,
+`printSpectrum`, `getSpectrumOfNearestBin`, `checkSpecialSpectralConditions`,
+`process`.  Our reconstruction of the same class came out in *our* source
+order on the first build, which made the inference irresistible: GCC 3.4.2
+emits in source order, therefore the blob's addresses recover the original
+file's layout.
+
+**It was a coincidence and the probe kills it.**  `printSpectrum`'s definition
+was moved to *after* `process` in our file and the tree rebuilt on the period
+compiler.  The emission order did not move: `printSpectrum` stayed at 0xa60
+and `process` at 0xb50, the same two addresses and the same order as before.
+So the compiler is not laying functions out as it parses them; it is laying
+them out from the callgraph, and `process` calls `printSpectrum`, so
+`printSpectrum` is emitted first whichever order the source has them in.
+
+That matters beyond this class, because the temptation is general and the
+conclusion it leads to is unfalsifiable-looking: any two functions in one TU
+can be "shown" to be in a particular source order by their addresses, and the
+claim can never fail a test.  It is exactly the shape CLAUDE.md warns about
+under naming -- a statement no test can refute -- and it would have gone into
+this file's header comment as a derivation had the probe not been run.
+
+**What the addresses DO still bound** is the callgraph: a symbol appearing
+before another in the same TU is consistent with being its callee, and two
+symbols with no call between them can be in either order for any reason.
+Nothing about the source's layout follows.
+
+## 5801. ALL FOUR `V90SpecialSpectralConditions` VALUES ARE NAMED BY THE DETECTOR'S OWN SENTENCES, AND THE HEADER THAT DECLINED THREE OF THEM WAS ANSWERING A NARROWER QUESTION
+
+`include/dsplib/V90SpectralConditions.h` carried one enumerator,
+`V90_SPECTRAL_GERMAN_PBX = 2`, and a paragraph explaining why it would not
+name any others: `V90ConstellationDesigner::spectralDesign` compares its
+argument against the literal 2 and takes one of two arms, so it distinguishes
+2 from everything else and says nothing about what "everything else" contains.
+That was correct about `spectralDesign` and wrong as a statement about the
+object, because `spectralDesign` is not where the value comes from.
+
+`V90SpectralVerifier::checkSpecialSpectralConditions` is where it comes from,
+and it names all four in the author's own words -- each store adjacent to the
+`edprintf` that says what it means:
+
+    0x46559  movl $0x1,0x28(%edi)  "German ISDN NT1 box conditions detected!"
+    0x46588  movl $0x2,0x28(%edi)  "German PBX conditions detected!"
+    0x46573  movl $0x3,0x28(%edi)  "Severe Codec conditions detected!"
+    0x46517  mov 0x28(%edi),%ebx; test; jne  ->  "No special conditions"
+
+The fourth is the zero: 0x4651a tests the field and prints the sentence only
+when nothing has been stored into it, which makes 0 a value of the type rather
+than the absence of one.  This is evidence class 1 in CLAUDE.md's order -- a
+format string that prints the thing -- and the enumerators
+`V90_SPECTRAL_NONE`, `V90_SPECTRAL_GERMAN_ISDN_NT1` and
+`V90_SPECTRAL_SEVERE_CODEC` are added on it.
+
+**The 2 now has two independent derivations that agree**, which is why it was
+the one that could be named from `spectralDesign` alone: the shaper runs that
+function copies, and the string beside 0x46588.  Neither reading knew about
+the other.
+
+**What is still declined**: `EIA6_SPECTRAL_SHAPER_A1` at `V90Parameters+0x3d8`
+and `EIA6_SPECTRAL_VERIFIER_ENABLE` at +0x2a8 say a fourth shaper set exists,
+but nothing in 1.2 MB stores a fifth value into +0x28, so no enumerator is
+invented for it.  Naming it would be the mistake this finding is correcting,
+one step further out.
+
+## 5802. OUR COMPILER INLINES `printSpectrum` INTO `process` AND THE ORIGINAL'S DID NOT -- DEFINITION ORDER AND UNIT GROWTH BOTH PROBED AND BOTH REFUTED
+
+The blob's `V90SpectralVerifier::process` is 268 bytes and contains a real
+`call` to `printSpectrum` at 0x466b5.  Ours is 419 bytes with the body
+inlined, and the inlined copy is instruction-for-instruction the blob's
+`printSpectrum` -- which is itself the best evidence that `printSpectrum` is
+reconstructed correctly, since the same source text reproduces the blob's
+out-of-line function *and* appears verbatim inside our `process`.
+
+Two explanations were probed on the period compiler and neither survives:
+
+- **Definition order.**  Moving `printSpectrum` after `process` changed
+  nothing: still inlined, still 419 bytes.  (It is also what produced finding
+  5800.)
+- **Translation-unit growth.**  Our per-class file is far smaller than the
+  original's TU, and `--param inline-unit-growth` is a plausible reason a
+  large unit would decline what a small one accepts.  The file was padded with
+  400 unrelated functions and rebuilt: still inlined, still 419 bytes, to the
+  byte.
+
+So the cause is in the SOURCE of one of the two functions and has not been
+found.  It is recorded rather than chased, because the remaining move is to
+permute source text until the output matches, which finding 614 forbids by
+name.  The differential tier is unaffected -- an inlined call and an
+out-of-line one compute the same thing -- and `t_v90specacc.cpp` drives both
+functions and their transcripts.
+
+**Do not "fix" this with `__attribute__((noinline))`.**  That is fitting the
+compiler in its purest form: it would move `compare.py` without recovering
+anything, and it would put a construct in `src/` that the original cannot have
+had, since the original did not need one.
+
+## 5803. `cltd` AND `mov`+`sar $0x1f` ARE ONE `abs()` IN TWO ENCODINGS, THE BLOB USES BOTH, AND THE CHOICE IS THE REGISTER ALLOCATOR'S
+
+Our `printSpectrum` is 227 bytes against the blob's 231, and the whole
+difference is four bytes in one place.  The blob computes the hundredths'
+magnitude as
+
+    45e3b  mov 0x1c(%esp),%edx ; mov %edx,%ecx ; ... ; sar $0x1f,%ecx
+           xor %ecx,%edx ; sub %ecx,%edx
+
+and ours as
+
+    mov 0x14(%esp),%eax ; cltd ; xor %edx,%eax ; sub %edx,%eax
+
+`cltd` sign-extends `%eax` into `%edx` in one byte and is only available when
+the value is already in `%eax`; with the value in `%edx` the compiler must
+copy it and shift, which is five bytes for the same two-instruction idea.  The
+expression is identical, `sv_abs` is the same helper in both, and the encoding
+follows from which register the value landed in.
+
+**The blob itself uses both spellings for the same helper.**
+`checkSpecialSpectralConditions` compiles `sv_abs` to `cltd; xor; sub` at
+0x46015, 0x460a5, 0x4636b, 0x46407 and 0x464b1, and to `mov; sar; xor; sub` at
+0x45e3f in `printSpectrum` -- one source function, two encodings, in one
+object, seventy bytes apart.  That is finding 614's free column demonstrated
+inside the original rather than argued about across it, and it is why the
+four-byte gap is left alone.
+
+The remaining difference in the same function is a schedule: `fldz`/`fcompp`/
+`fnstsw` sit on the other side of the `xor`/`sub` pair.  Also free.
+
+## 5804. A DECLARED DIVERGENCE PROPAGATES UP THE CALL CHAIN, AND THE ANSWER IS A SEPARATE BINARY RATHER THAN A WIDER TOLERANCE
+
+`V90SpectralVerifier::process` calls `Psd::process` on the sample that
+completes an accumulation.  `Psd::process` has carried a `gccdiverge.json`
+entry since finding 1453 -- x87 excess precision in `four1`/`realfft` reaching
+the decibel scaling, measured at up to 0.043 dB and argued there to be
+uncloseable with a tolerance because 0.043 dB is four times the separation
+between two `V90PreFilter` reference loops that must give different answers.
+
+The first differential test of `process` inherited it exactly: 181 of 35,450
+checks red on GCC 13, **every one of them a spectrum-bin comparison, off by
+one or two ULP, and not one of them a return value, a state word, the
+progress counter, the accumulation buffer or a transcript**.  `make period`
+passes all 35,450 with the object's own compiler.  So the reconstruction is
+right, the modern build cannot reproduce it, and the cause is a function two
+call levels away that the register already names.
+
+**The first instinct is a tolerance on the spectrum, and it is wrong twice
+over.**  It would widen a comparison the tree has already ruled cannot be
+widened, and it would do it in a file that is not where the divergence lives,
+so the next reader would find a tolerance with no derivation attached to it.
+
+**The second instinct is to excuse the check inside the existing binary, and
+that is wrong once.**  An excused binary exits non-zero; `tools/mutate.py`
+judges a mutant caught by a non-zero exit, so a red binary cannot score a
+mutation set and refuses to try.  Excusing one group would take the class's
+other seven members out of mutation testing with it.  `t_v90p4dnan`'s entry
+in the register records the same problem and the same answer.
+
+**So the shape is: split the inheriting check into its own binary.**
+`t_v90specacc.cpp` holds `startAccumulation`, `printSpectrum` and the five
+frequency accessors, is green under both compilers and carries the mutation
+set; `t_v90specproc.cpp` holds `process` alone and is declared.  The rule
+generalises -- **a declared divergence is a property of a CALL GRAPH, not of a
+file** -- and the cost of getting it wrong is measured in mutation coverage
+rather than in a failing gate, which is why it is worth writing down.
+
+## 5805. AN IN-CLASS DEFINITION IS IMPLICITLY `inline`, AND MOVING `Scrambler::reset` OUT OF THE CLASS BODY GAINED THREE SYMBOLS AND LOST NONE
+
+`V90Modulator::reset` is 78 bytes in the object and came out 101 here.  The
+23 bytes were `Scrambler<int,unsigned char>::reset` inlined: the object makes
+a real call at 0x1a52d, to a weak symbol with **twenty** `R_386_PC32` call
+sites across the object, and ours had no call at all.
+
+The lever is where the body is written.  `Scrambler.h` defined `reset` inside
+the class body, which makes it implicitly `inline` and puts it under
+`--param max-inline-insns-single` (500) instead of `max-inline-insns-auto`
+(100), so GCC 3.4.2 inlines it almost everywhere.  Its sibling template has
+always been the other shape -- `DiffCoder.h` declares
+`ParallelDifferentialEncoder<T>::reset` in the class and defines it in
+`src/dsp/DiffCoder.cpp` -- and that one is a call in the object AND a call in
+ours, which is how the asymmetry was noticed at all: two templates, two
+spellings, one matching and one not.
+
+**MEASURED WITH THE SETS DIFFED AND NOT THE COUNTS**, which is what
+`docs/cleanup.md` asks for and what makes this reportable: one tree, two
+builds on the exact 3.4.2 compiler, everything else held fixed.
+
+| | identical |
+|---|--:|
+| `reset` in the class body | 452 |
+| `reset` out of the class body | **455** |
+
+**Nothing was lost.**  Three symbols moved in: `V90Modulator::reset`,
+`Scrambler<unsigned char,int>::Scrambler` and
+`Descrambler<unsigned char,int>::Scrambler`, the two constructors because
+they call `reset` as well.
+
+**The behaviour is identical by construction** -- same body, same semantics,
+only the implicit-`inline` property changes -- so this is a codegen-tier gain
+with nothing at risk on the differential tier, and `make phase` is green.
+
+**IT IS A SHARED HEADER AND THAT IS THE ONE COST.**  `Scrambler.h` reaches
+V.34 and the whole V.90/V.92 modulator family, and finding 3511 is about
+exactly this shape of change landing beside somebody else's work.  The edit
+is two bodies moved below their classes with no text changed inside either,
+so a conflict is textual and visible rather than silent -- but a merger
+should know it is there.
+
+**The general rule it earns**, and it is worth carrying to every other
+template in the tree: **where the object CALLS a template member, check
+whether our header defines it in the class body.**  That is a one-line
+question with a measurable answer, and finding 5802's `printSpectrum` is the
+case where the answer was "no, it is already out of line" and the cause is
+still open -- so this is a lever, not the lever.
+
+## 5810. THE TWO RATE-RENEGOTIATION TRANSMITTERS ARE `v90Phase34`'s LADDER WITH THE STATE NUMBERS MOVED UP, AND THE SILENCE ONE PARKS RATHER THAN FINISHING
+
+`v90RateReneg` (0x99b0, 555 B) and `v90RateRenegSilence` (0x95d0, 983 B) are
+the last two symbols of `VPcmV34Main.cpp` this tree had not written, and both
+turn out to be the phase 3/4 transmitter's own sequence at different state
+numbers.  `v34fsk.h` already recorded that `VPcmV34SetV90RateReneg` assigns
+`v90_receiver` 11 or 15 outright (D48); those are the two ladders' entry
+points, and `VPcmV34Progress` picks the transmitter by the same number --
+above 14 the silence one, above 10 the other.
+
+    v90RateReneg          11 -> 12 -> 13 -> 14 -> 2
+    v90RateRenegSilence   15 -> 16 -> 17 -> 18 -> 19,  and 20 -> 2
+
+State by state against `v90Phase34`: 11 and 15 are its case 6 (the S/S-bar
+pair, counted past 0x7f), 12 and 16 its case 7 (the point pair, counted to
+0x10 exactly, and the same three-field reset), 13 and 17 its case 9 (the
+constant symbol through the published emitters), 14 and 20 its case 10 (CP,
+then `getMPrecvdBits`, `initdigital`, `V34HS_EXMIT` and back to state 2).
+
+**THE SILENCE LADDER HAS TWO STATES THE OTHER HAS NOT, AND THEY ARE WHAT THE
+NAME MEANS.**  State 18 is a CP arm whose completion tail does NOT hand the
+handshake over: it prints "move to SCR on silence rrn (disabling SAS detector
+on silence)", clears `V34_EC_FROZEN` in `f25c2` and bit 2 of `pac3c[3]`, and
+drops into state 19.  State 19 then transmits scrambled idle symbols and never
+moves; nothing in either function writes state 20, so the closing CP is
+entered from outside.  So the silence renegotiation PARKS in an idle state and
+is restarted by its caller, where the plain one runs straight through.  What
+sets 20 is not in this batch -- `VPcmFloModem::runPcmModem` and the four
+`V92Phase4Modulator` members that write `V92CP+0x04` are the candidates and
+none of them is written.
+
+**STATE 19 IS NOT `v90Phase34`'s CASE 5, AND THE TWO DIFFERENCES ARE BOTH
+OBSERVABLE.**  Case 5 has three arms and privileges 0x8990; state 19 has TWO,
+so a constellation code that is neither takes the four-point arm here and the
+zero-point arm there -- different point, and the scrambler clocks here and
+does not there.  And state 19 WRITES `f25c6` from `f25c8`, which
+`v34pcmmain.cpp`'s case 5 note explicitly records as not happening.  The
+quadrant the handshake carries therefore advances across a silence idle symbol
+and does not across a phase 3/4 one.  `t_v90p34.cpp`'s "state 19 is not
+v90Phase34 case 5" section drives both from one seed, one call each.
+
+## 5811. NEITHER TRANSMITTER IS A `switch` IN THE OBJECT, AND `v90Phase34` PROBABLY IS NOT EITHER
+
+Both dispatch through a compare chain in ascending order -- `cmp $0xb,%eax;
+je; cmp $0xc,%eax; je; ...` at .text+0x99e2, and six of them at .text+0x9602.
+A `switch` over six dense values compiles to a jump table under this project's
+flags, and our own build proves it: `v90Phase34` is written as a `switch` over
+cases 3..10 and GCC 3.4.2 emits `sub $0x3,%eax; cmp $0x7,%eax; ja; jmp
+*table(,%eax,4)` for it.  **The blob's `v90Phase34` has a compare chain too**
+(.text+0x9c20 onwards), so the original was an if-chain there as well and our
+jump table is one of the ways that function still differs from the object.
+The two written here are if-chains for that reason; `v90Phase34` is left
+alone, because changing it is not this batch and its test is not this batch's
+either.
+
+This is a general lever and not a local observation: a dense `switch` is
+DETECTABLE in the object, so anywhere the blob compares consecutive small
+integers one at a time, the source was not a `switch`.
+
+## 5812. OUR TWO TRANSMITTERS ARE 45 AND 72 BYTES SHORT, AND EVERY BYTE OF IT IS THE THREE BASE POINTERS `v34fsk.h` CALLS AN ADDRESSING ARTIFACT
+
+Sizes, GCC 3.4.2 exact at `-O3`: `v90RateReneg` 510 against the blob's 555,
+`v90RateRenegSilence` 911 against 983.  The instruction sequences agree
+otherwise -- same arms in the same order, same calls, same constants.
+
+The difference is that the blob forms THREE base pointers at entry and we form
+none:
+
+    lea 0x221c(%ebx),%esi     then f25c0 as 0x3a4(%esi), f25c8 as 0x3ac(%esi)
+    lea 0x4(%ebx),%ebp        then v90_receiver as 0x248(%ebp)
+    lea 0x264(%ebx),%edi      then f382 as 0x11e(%edi)
+
+which costs 15 bytes of `lea`, two more callee-saved registers (8 bytes of
+prologue) and their reloads at three `ret`s (24 bytes) -- 47 against a
+measured 45, the remainder being where our register allocator does better.
+**Every displacement is over 127 either way**, so none of the three base
+pointers shortens a single field access; GCC does not emit a `lea` that buys
+nothing, so the source formed those pointers.
+
+`v34fsk.h` already records the `obj + 4` half of this and calls it "an
+addressing artifact in all three and not evidence of a sub-object at +4".
+That reading is WEAKER than it was.  It was made against `v90Phase34`, where
+`obj + 0x264` is genuinely needed for `rx->flags` and the compiler is free to
+reuse the base for `f382`; here `f382` is the ONLY thing read through it and
+the base is still formed.  The same goes for `obj + 0x221c`, which is
+`struct v34_queue txq` in our model and which the two published emitters also
+use as a base for `f25c0`..`txpoint` (v34fsk.h's own note at +0x25d0).
+
+**NOT ACTED ON, and deliberately.**  Modelling +0x11e would mean carving into
+`struct v34_receiver::pad_000[0x120]`, and +0x221c into a transmit-shell type
+that does not exist yet; both are wide changes to structs a live batch is
+already writing against, which is exactly finding 3511's shape.  Recorded here
+so the next `v34_receiver` batch has the measurement in hand: three base
+pointers, 117 bytes of `.text` across two functions, and a specific prediction
+(the sizes go to 555 and 983) that will confirm or refute it in one build.
+
+## 5813. A MUTATION ANCHOR IS A CLAIM ABOUT THE WHOLE FILE, AND WRITING A SECOND FUNCTION INTO IT BROKE SEVENTEEN AT ONCE
+
+`test/mutations/v90p34.json`'s header said "every `find` below is inside
+v90Phase34 and every one is unique in the file, which mutate.py checks for".
+Adding `v90RateReneg` and `v90RateRenegSilence` to `v34pcmmain.cpp` -- two
+functions that are v90Phase34's ladder renumbered -- made seventeen of those
+anchors match two or three times, and `tools/anchorcheck.py` failed `make
+phase` at the `refs` target before anything was compiled.
+
+That is the tool working, and it is worth saying why the failure matters
+rather than being a nuisance.  `mutate.py` mutates the FIRST match; an anchor
+labelled "case 9's quadbit is 0 rather than 15" that now also matches state 13
+and state 17 would still have been caught by `t_v90p34`, so the suite would
+have gone on reporting 71 of 71 caught while testing something other than what
+its labels say.  A mutation suite's labels are the only record of what each
+mutation means, and a silently retargeted anchor is a wrong name in exactly
+CLAUDE.md's sense.
+
+The repair is mechanical and is what was done: extend each ambiguous `find`
+BACKWARDS by whole lines until it is unique again, and prepend the same prefix
+to its `replace`, which leaves every mutation the mutation it was.  The
+alternative -- spelling the new functions differently so the old anchors stay
+unique -- is contorting `src/` to please a test and was not considered
+seriously.
+
+**The generalisation: a mutation suite over a FILE is coupled to every future
+function in that file.** Suites are named per function (`v90p34`, and the
+header even notes that `v34pcmmain` would be `getMPrecvdBits`'s), but the
+anchors are file-scoped strings, so the coupling is invisible until the file
+grows.  Anyone adding a function to a file that already has a suite should
+expect this and should run `tools/anchorcheck.py` before anything else.
+
+## 5820. GCC 3.4.2 COPIES A `float` WITH `movl` AT `-O3`, SO A FOUR-BYTE INTEGER MOVE BETWEEN TWO FLOAT FIELDS IS NOT EVIDENCE OF PUNNING
+
+`setV92CPpckFromParamsInfo` copies four spectral-shaper floats and one more
+out of a `tagV90AdditionalCPinfo` with plain `mov` pairs:
+
+    33a59  mov 0x628(%ecx),%ebx      params->shaperA1
+    33a65  mov %ebx,0x14(%edx)       cp->flt_14
+
+Under `-mfpmath=387` the obvious reading is that the author copied the WORDS
+-- `*(int *)&dst = *(const int *)&src` -- because a float assignment "would
+be" `flds`/`fstps`.  Probed on the period compiler, it is not:
+
+    c->f14 = p->a1;   ->   mov 0x628(%edx),%eax ; mov %eax,0x14(%ecx)
+
+GCC 3.4.2 at `-O3` moves SFmode through an integer register whenever the
+value is only being copied, exactly as it does for a 32-bit struct member.
+So the object's `movl` is what a plain assignment emits and carries no claim
+about the source at all.
+
+**This is the useful direction of `docs/cleanup.md` §3a's rule.**  Had the
+probe come out `flds`/`fstps`, the object's `movl` would have been a forced
+signal that the author punned, and the correct reconstruction would have been
+a union or a `memcpy` -- a real modelling decision resting on one instruction.
+Two minutes of container time separated the two readings.  Any float copy in
+this object should be read the same way before anything is punned to reproduce
+it.
+
+## 5821. A LOOP COUNTER THAT IS UNSIGNED AT ITS BOUND AND SIGNED AT ITS CLAMP IS TWO VARIABLES, WHICH MEANS THE CALL WAS INLINED AND NOT OPEN-CODED
+
+`setV92CPpckFromParamsInfo` holds `getConstellationsIndex`,
+`getConstellationMask` and `getCodecConstellationMask` with no call
+instruction anywhere in its 822 bytes, so on the face of it the author wrote
+the loops out.  The counter says otherwise.  Both mask loops do this:
+
+    33b28  movzwl 0x10c(%ebp),%esi   cp->word_10c
+    33b2f  cmp    0x1c(%esp),%esi
+    33b33  ja     .Lloop             UNSIGNED
+
+and, at the top of the same loop body,
+
+    33ab0  mov  0x1c(%esp),%eax
+    33ab4  cmp  $0x5,%eax
+    33ab7  jle  .Lok                 SIGNED
+    33ab9  xor  %eax,%eax
+
+One variable cannot be compared unsigned against the bound and signed against
+5 in the same iteration.  Two can: the loop counter is the CALLER's, unsigned
+because the bound is `unsigned short`, and the clamp is the CALLEE's, signed
+because `getConstellationMask` takes an `int which` -- which
+`V90MappingParams.h` already records for the out-of-line copy at 0x33450
+(`cmp $0x6,%esi; setl`).
+
+So the source is
+
+    for (i = 0; i < cp->word_10c; i++)
+        getConstellationMask(params, (int)i, cp->short_42[i]);
+
+and GCC inlined it.  **It does: the period compiler inlines all three at
+`-O3` from exactly that spelling**, 0 calls in our 858 bytes against the
+blob's 822, and it emits the same pair of comparisons for the same reason.
+The three out-of-line symbols are still emitted because they are `extern "C"`
+and externally visible.
+
+**The general form is worth keeping.**  An inlined callee's parameter
+conversions survive inlining as real operations, so a signedness or width
+change ACROSS a call boundary is visible in the inlined code and is
+inconsistent with any single-variable reading of it.  That is a way to detect
+an inlined call in a function with no relocations at all, which is otherwise
+the hardest case: `tools/tumap.py` can bracket such a function and nothing
+else about it says where its code came from.
+
+## 5822. THE SAME THREE-HELPER FLOAT-PRINTING IDIOM APPEARS TWICE WITH TWO DIFFERENT SCALE TYPES, AND THE CONSTANT POOL IS WHAT SAYS SO
+
+`V92setParamsInfoFromCPUnPck` (0x12f00) and `displaySpectralParams` (0x33ec0)
+both print floats as `%c%d.%06d` through the same three steps -- sign, integer
+part, and `abs((int)((v - (int)v) * 1e6))`.  The two differ in one thing and
+it is forced:
+
+    12f00's site   flds/fmuls off .rodata.cst4        a FLOAT constant
+    33ec0's site   fldl        off .rodata.cst8+0x30  a DOUBLE constant
+
+`.rodata.cst8 + 0x30` holds `00 00 00 00 80 84 2e 41`, which is 1000000.0
+exactly -- the same value the other site's four-byte entry holds.  GCC never
+widens a `float` constant into a `double` pool entry, and it narrows the other
+way only when the constant can be the memory operand of the operation, so an
+eight-byte entry means the SOURCE constant was a `double`.  `1.0e6f` in one
+function and `1.0e6` in the other.
+
+Nothing observable turns on it.  Both are exactly 1e6, the multiply happens in
+the x87's extended registers either way, and no input separates the two.  It
+is written as the object holds it because that is the whole method: the
+constant's type is recoverable, so it is recovered.
+
+**AND THE FOURTH BLOCK MATERIALISES THE SAME CONSTANT INLINE**, as two
+immediate stores to the stack and an `fldl` off them (0x340a0, 0x340cc), where
+the first three load it from the pool.  That is constant rematerialisation
+under register pressure, it is the same value, and it is free -- named here
+only so the next reader does not go looking for a fifth constant.
+
+## 5823. THE SIGN TEST'S SHAPE IS THE TYPE AGAIN, NOT THE OPERAND ORDER -- SEVEN SPELLINGS COMPILED, ONE MATCHES, AND THE IF-CONVERSION STILL DOES NOT
+
+`displaySpectralParams` picks '+' or '-' with
+
+    33f58  fldz
+    33f67  fcompp
+    33f69  fnstsw %ax ; sahf
+    33f6c  sbb  %edx,%edx
+    33f6e  and  $0xfffffffe,%edx
+    33f71  add  $0x2d,%edx
+
+-- the zero materialised in a REGISTER, both operands popped, and the result
+selected branchlessly.  `src/pump/v90/V92ParamsInfo.c`'s `sign_of` is
+`(0.0f < v) ? '+' : '-'` and produced the object's shape at ITS site, so the
+obvious move is to copy it.  Compiled on the period compiler with this
+project's flags it gives `fcomps` against a four-byte zero in memory, and a
+BRANCH with the whole `edprintf` call duplicated into both arms.
+
+Seven spellings, all compiled, none reasoned about:
+
+    (0.0f < v) ? '+' : '-'          float       fcomps mem, branch
+    (v > 0.0f) ? '+' : '-'          float       fcomps mem, branch
+    (v <= 0.0f) ? '-' : '+'         float       fcomps mem, branch
+    (0.0f >= v) ? '-' : '+'         float       fcomps mem, branch
+    (0.0 < (double)v) ? ...         double      fcomps mem, branch
+    double z = 0.0; z < (double)v   double       fcomps cst8, branch
+    (0.0L < v) ? '+' : '-'          LONG DOUBLE  fldz, fcompp, branch
+
+**Only the `long double` parameter emits `fldz; fcompp`, and no operand order
+changes anything.**  The rule this establishes: when a float comparison will
+not come out in the object's shape, vary the TYPE first and the operand order
+second, and compile the candidates rather than reasoning about them.  3529's
+operand-order lever is real -- `tree_swap_operands_p` does swap a comparison
+whose operand 0 is a local and whose operand 1 is a struct member -- but it is
+the second thing to try and not the first.
+
+**AND IT IS THE SECOND SITE TO SAY SO.**  `master` carries the same correction,
+measured independently at a V.90 phase-4 comparison in the same window: a site
+that looked like 3529's, where every `float` spelling emitted the wrong
+condition and only a `long double` one emitted the object's.  Two sites, two
+functions, two people, one lever.  The merge should wire this paragraph to
+that finding's number; it is deliberately not cited here because it does not
+exist on this branch and a reference that resolves to nothing fails the
+gate.
+
+**WHAT STILL DOES NOT REPRODUCE IS THE `sbb`**, and it is not this function's
+defect.  Our build branches where the object if-converts, and the same is true
+of the ALREADY-COMMITTED `V92ParamsInfo.c` at its own site: the blob has
+`fldz; fcompp; sahf; sbb %ebx,%ebx` at 0x12fcf and our object has
+`fcomps; sahf` and a branch.  So one phenomenon, two functions, and it was
+there before this batch.  Two things are known about it: the arithmetic form
+(`'-' - 2 * (0.0L < v)`) gets `setcc` and not `sbb`, so it is not the source
+spelling of the SELECT; and computing the sign into a local before the other
+two arguments removes the duplicated call and gets within 28 bytes a block, so
+part of it is evaluation order.  Left open, with the measurement recorded, and
+`V92ParamsInfo.c` named as the second site whose `sign_of` has the same
+`long double` correction available to whoever takes it.
+
+## 5814. THE `BLOB=` PATH EVERY AGENT IS HANDED WAS OVERWRITTEN MID-SESSION, AND `blobcheck` IS THE ONLY THING THAT NOTICED
+
+Two thirds of the way through this batch `make phase` stopped at
+`Makefile:572`:
+
+    blobcheck: REFUSING to run -- BLOB is NOT the reference object.
+        BLOB     /home/philpem/dev/sip-D-modem/slmodemd/dsplibs.o
+        sha256   1129d826ca23f1e3...
+        expected 1f3e56d0dfae1a6a...
+
+That path is the one the task brief exports, and it had been correct: two
+earlier `make phase` runs in this same session passed the same check with the
+same value, and `compare.py` read 1159 compared / 455 identical / 87 same size
+off it -- the number the batch before this one had reported.  Between those
+runs and this one the file was replaced, along with every other object under
+`slmodemd/`, all of them stamped to the same microsecond.  It is now the
+1,232,028-byte variant that `d-modem/slmodemd/dsplibs.o` has held since
+August, where the reference is 1,233,728 bytes.
+
+**NOTHING WAS MEASURED AGAINST IT.**  Re-run against the verified reference,
+every number reproduces exactly -- 1163 compared, 455 identical, 87 same size,
+the identical SET diffing empty against the pre-batch list, and
+`period differential: 229 passed, 0 failed`.  So this finding is about the
+hazard and not about a correction.
+
+**THE HAZARD IS THAT THE OVERRIDE IS UNNECESSARY.**  `BLOB` already defaults
+to `ref/slmodemd/dsplibs.o` resolved through `git rev-parse --git-common-dir`,
+which CLAUDE.md's worktree bullet describes, and every agent worktree has a
+correct copy at that path -- twelve of them checked, all
+`1f3e56d0dfae1a6a`.  `make -s print-BLOB` says so in one line.  Passing
+`BLOB=<some absolute path outside the tree>` opts out of that and points the
+whole measurement apparatus at a file no worktree owns and any process on the
+machine can rewrite.  **Do not pass `BLOB=` in a worktree.**  The default is
+right, it is inside the tree, and it is the one `blobcheck` verifies against.
+
+**AND `blobcheck` IS THE ONLY GATE THAT COULD HAVE CAUGHT IT.**  Every other
+tool would have run happily: `compare.py` would have compared 1,163 symbols
+against a different object and printed a plausible number, `samesize.py` would
+have listed a plausible set, and the differential tier would have linked
+`ref_*` aliases out of the wrong binary and failed in a way that reads like a
+reconstruction defect rather than a fixture one.  It is finding 134's argument
+in its strongest form -- an apparatus that cannot tell it is measuring the
+wrong thing -- and the check that exists for it earned its keep here.
+
+## 5850. `movzwl` SAID THESE BUFFERS WERE `unsigned short *`; THE CALLEES THEY ARE PASSED TO SAY `short *`, AND THE CALLEES WIN
+
+`V90SpectralShaper`'s two heap buffers, +0x28 and +0x2c, had been typed
+`unsigned short *`.  The whole argument was that every access to either is a
+`movzwl (%reg,%edx,2)`, so the stride is two and the load zero-extends.
+
+**The stride is real evidence and the extension is not.**  Every one of those
+loads has its 32-bit result discarded by a 16-bit store, or by a `neg` feeding
+one -- `movzwl (%ebx,%edx,2),%eax; f7 d8 neg %eax; 66 89 04 56 mov %ax,...` at
+0x32de0.  That is finding 614's FREE column exactly: a 16-bit value whose upper
+half nobody reads may be widened either way and the compiler picks.  The two
+readings agree over every value the buffer can hold, so no test could ever
+separate them and no amount of reading more `movzwl`s would have helped.
+
+**What is forced is the mangled type of the four callees they are handed to,
+with no conversion instruction between the load of the pointer and the push:**
+
+    0x330bb  progress(const short *)          <- +0x28, straight from 0x28(%edi)
+    0x32cd8  getMetric(const short *, unsigned)  <- +0x2c, straight from 0x2c(%eax)
+    applyAction(int, short *)                 <- called with +0x2c
+    applyFrameAction(ACTIONS, short *, int)   <- called with +0x28
+
+`_ZN24V90SpectralShapingFilter8progressEPKs` is `PKs`, `const short *`.  An
+`unsigned short *` would not convert to it silently in C++ at all -- it needs a
+cast, and a cast the author had to write is a claim the object gives no reason
+for.  Evidence class 2 beats an inference from a free encoding, so both members
+are `short *` and the two heap blocks are 24 `short`.
+
+**`compare.py` did not move by one symbol on the retype** (1163/455/87 before,
+same after, identical SET diffed empty), which is the check `docs/cleanup.md`
+asks for: a type change that shifts nothing is a type change that was already
+being compiled the same way, and a `pad` becoming a named field of the right
+width cannot move code it does not reach.  What DID move is
+`applyFrameAction`, which could not have been written at all while the
+destination and the source disagreed on signedness.
+
+Three fields settled with it, all of them previously `pad_0c[0x14]`: three
+six-byte `unsigned char` arrays at +0x0c, +0x12 and +0x18, which are the sign
+bits before coding, after the serial encoder and after the parallel one.  See
+5852.
+
+## 5851. `+0x00` AND `+0x24` HOLD THE SAME NUMBER AFTER `reset` AND ARE NOT THE SAME FIELD -- ONE IS THE PARAMETER, THE OTHER A COUNTDOWN
+
+`V90SpectralShaper::reset` stores its first argument into +0x00 and, at
+0x3285c, re-reads +0x00 and stores it into +0x24 as well.  The header recorded
+that neither could be shown to be the working copy from `reset` alone and left
++0x24 offset-named for `advanceTrellis` and `process` to settle.  They settle
+it, and the answer is that the question was the wrong one:
+
+- **`advanceTrellis` reads +0x00 three times** -- 0x32bba, 0x32cfa, 0x32f56 --
+  and never touches +0x24.  It is `shaperId`: the trellis depth, the row
+  selector for `actionLookupTable`, the digit count, and the divisor index into
+  `pow10Table`.
+- **`process` reads +0x24 and nothing else of the pair**, as a countdown:
+  `if (primeFrames != 0) primeFrames--; else advanceTrellis();` at
+  0x33080..0x3308c.  Once it reaches zero it stays there and the trellis runs
+  on every subsequent call.
+
+So +0x24 is not a copy that some member prefers; it is a DIFFERENT QUANTITY
+that happens to be initialised from the same word.  `shaperId` frames is
+exactly how long the delay line takes to fill -- `reset` seeds
+`writeIndex = shaperId * blockLength`, so the first `shaperId` frames of the
+line are the zeros `reset` left there -- and the countdown is what holds the
+search off until the lookahead it scores is real data.  Named `primeFrames`,
+from usage inference, which is the weakest class and is why the derivation is
+here rather than only in the header.
+
+**The general form is worth keeping.**  "Which of these two equal fields is
+the live one" is a question that presumes one is redundant.  Two fields with
+one initial value and two different readers are two fields, and the way to tell
+is not which is read MORE but whether any reader reads BOTH.  Nothing in this
+class does.
+
+## 5852. TWO DIFFERENT INLININGS OF THE SAME HELPER, IN ONE OBJECT, AND THE DEFAULT ARM IS WHAT TELLS THEM APART
+
+`V90SpectralShaper` has two polarity helpers with the same four arms:
+`applyFrameAction(ACTIONS, short *, int)` at 0x328f0 and `applyAction(int,
+short *)` at 0x32a10, which walks a decimal action code's digits and drives one
+frame per digit.  Both are also present INLINED -- `applyAction` inside
+`advanceTrellis`, `applyFrameAction` inside both `applyAction` and
+`advanceTrellis` -- with no call relocation for either, so `closure.py` cannot
+see the dependency and reports `advanceTrellis` as needing neither.  Finding
+3532's shape, one level deeper.
+
+**Three inlined instances, two shapes, and reading which is which is what made
+the source recoverable:**
+
+| site | switch | default arm | what that means |
+|---|---|---|---|
+| `applyFrameAction` out of line | inside the loop | an EMPTY LOOP at 0x32937 | `for (i...) switch (action)`, unswitched by `-O3` |
+| `applyAction`'s four arms | outside any loop | none at all, 0x32a75 jumps to the outer increment | four calls with CONSTANT actions, each folding the inner switch to one arm |
+| `advanceTrellis`'s tail | inside the loop | an EMPTY LOOP at 0x32d89 | one call with a VARIABLE action |
+
+An empty loop that counts an induction variable to a bound and writes nothing
+is what loop unswitching leaves behind for a `switch` arm with no body.  It
+appears only where the switch was written INSIDE the loop, and it is absent
+where the four arms are separate calls -- because a constant action folds the
+switch away before unswitching ever runs.  So the presence or absence of that
+loop distinguishes `switch (v) { case: applyFrameAction(CONST, ...) }` from
+`applyFrameAction(v, ...)`, which no other signal in the object does.
+
+**A second, independent tell for the variable-action site:** `applyFrameAction`
+computes its parity as `(i - start) & 1` and emits `sub %ebx,%eax; test
+$0x1,%al` (0x32997).  In `advanceTrellis`'s tail the `sub` is GONE and only
+`test $0x1,%cl` survives (0x32f2c, 0x32f45) -- `start` was the constant 0.
+That is the call `applyFrameAction(action, delayLine, 0)`.
+
+**Measured result of writing it that way.**  `applyFrameAction` came out
+287 bytes against the blob's 287, mnemonic-identical AND byte-identical, and
+`compare.py` gained it (455 -> 456 identical) with nothing lost.
+
+`applyAction` came out **388 against the blob's 387, so it is NOT
+byte-identical and its mnemonics are NOT identical either** -- and the
+distinction is worth stating precisely, because neither triage tool can show
+it.  `compare.py` drops operands, so it puts the symbol in the DIFFERENT SIZE
+bucket and prints nothing; `samesize.py` never sees it, because it is not the
+same size.  The measurement had to be made by hand, normalising registers and
+constants out of both streams: 128 instructions in the blob against 132 in
+ours, differing in four.  The blob spills the frame's start offset to a stack
+slot and reads it back (`lea (%ebx,%edx,1),%eax; mov %edx,0x20(%esp)` then
+`sub 0x20(%esp),%eax`); we keep it in a register, which replaces that pair with
+one `add`, adds a reload and a store elsewhere, and costs one byte of alignment
+padding.
+
+**Examined and DECLINED on CLAUDE.md's free/forced rule, and recorded so the
+next reader does not reopen it.**  A spill-versus-keep-in-register decision is
+the canonical member of the free column, alongside instruction scheduling and
+an alignment nop.  Permuting source until those four mnemonics match would be
+fitting the compiler rather than recovering the source, which is exactly what
+finding 614 forbids.  The shape -- switch outside the loop, four specialised
+arms, bound test in front of each, no default loop -- is what carries the
+evidence, and that matches exactly.
+
+**One further forced detail on the way.**  Writing `applyAction`'s
+`(shaperId - m) * blockLength` as a LOCAL computed before the switch came out
+18 bytes SHORT, because the unconditional member load of `blockLength` then
+gets hoisted into the loop preheader.  The blob re-reads `0x8(%ecx)` inside
+every arm, which is what a member load in a conditional branch does -- loop
+invariant motion will not hoist out of a branch.  So the expression is the CALL
+ARGUMENT and not a local, and a size difference of 18 bytes was the only thing
+that said so.
+
+
+## 5853. THE 128-ENTRY `actionLookupTable` IS GENERATED BY A THREE-TERM RULE, AND THE RULE REPRODUCES EVERY BYTE
+
+`V90SpectralShaper::actionLookupTable` is 512 bytes of `.data` at 0x8e0 with no
+code anywhere in the blob that writes to it, so it is an initialised table and
+not a built one.  Read with `tabdump.py --type s32` -- and `relocscan.py`
+first, which reports nothing pointing into the range, so these are integers and
+not the table-of-pointers trap CLAUDE.md warns about three times over.
+
+**It is eight rows of sixteen, indexed `[state + 2 * shaperId][candidate]`**,
+which is read off `advanceTrellis` at 0x32c2e: `lea (%eax,%edi,2),%ecx;
+shl $0x4,%ecx; add %ebx,%ecx` with `%eax` the state word at +0x20, `%edi`
+`shaperId` and `%ebx` the candidate.  Row `2 * shaperId + state` uses its first
+2^(shaperId+1) entries and the remainder are zero, so 60 of the 128 entries are
+live and 68 are padding that is present in the object.
+
+**Every live entry is a DECIMAL number of `shaperId + 1` digits, each digit in
+1..4, one digit per frame in the delay line, most significant digit for the
+oldest frame.  Reading the candidate index as a bit vector b[shaperId..0]:**
+
+    digit_k = 1 + 2 * previous_bit + this_bit
+
+with `state` standing in as the previous bit for the leading digit, and each
+digit's own bit becoming the next digit's previous bit.  So a digit encodes a
+state TRANSITION rather than a state, which is why `digit - 1` is an `ACTIONS`
+(the four polarity patterns) and why `advanceTrellis` leaves
+`state = action & 1`: the low bit of the digit IS `this_bit`.
+
+Worked, for row 6 (`shaperId` 3, `state` 0), candidate 10 = binary 1010:
+
+    b3=1  digit1 = 1 + 2*0 + 1 = 2       (previous bit is `state` = 0)
+    b2=0  digit2 = 1 + 2*1 + 0 = 3
+    b1=1  digit3 = 1 + 2*0 + 1 = 2
+    b0=0  digit4 = 1 + 2*1 + 0 = 3       -> 2323, and the table holds 2323
+
+**THE RULE WAS CHECKED AGAINST ALL 128 ENTRIES AND REPRODUCES EVERY ONE**,
+including which entries are zero, and that check is in
+`t_v90shapeact.cpp`'s `run_tables` as 128 separate comparisons against the
+BLOB's own copy of the table rather than against ours.  That is a stronger
+result than "our table matched ours": a transcription error would survive a
+memcmp of two copies of the same mistake, and cannot survive a rule that was
+derived from the structure and then regenerates the data.  Both tables are also
+compared byte for byte against the blob -- 512 and 20 bytes -- which is the only
+sharp check on data this size, and an eyeball against `tabdump.py`'s output is
+not one.
+
+**The table is nevertheless written out literally in `src/`, not generated.**
+`tabdump.py`'s own banner recommends a generator, and that is right where the
+object BUILDS a table at run time.  Here it does not: the bytes are in `.data`
+and the author shipped them.  A generator would be a different program that
+happens to agree, and the thing being reconstructed is the initialiser.
+
+**`pow10Table` is the same table's other half** -- a plain unmangled GLOBAL
+`D` symbol of five 4-byte entries, `{1, 10, 100, 1000, 10000}`.  The width is
+the USE SITE's and not the size's: `divl 0x0(,%esi,4)` at 0x32d32 scales the
+index by four, so five entries of four bytes and not ten of two.  Only 0..3 are
+reachable, because `shaperId` above 3 would run off `actionLookupTable`'s eight
+rows first; the fifth entry is dead in this object.  Its one use is recovering
+the winning candidate's LEADING digit in a single unsigned divide.
+
+## 5854. `getMetric` RETURNED A ROUNDED `float` WHERE THE OBJECT RETURNS ITS x87 ACCUMULATOR, AND THE TRELLIS IS WHERE THAT BECAME VISIBLE
+
+`V90SpectralShapingFilter::getMetric` was written returning `float`, ending
+`return (float)sum;` with `sum` a `long double`.  GCC narrows that through
+memory -- `fstps 0x2c(%esp); flds 0x2c(%esp)` at the tail of our object.  **The
+blob ends with three bare `fstp %st(1)` and a `ret` (0x33270), with no
+narrowing on the return path**, so the value reaching the caller keeps the x87
+stack's full 64-bit significand.
+
+**It does spill internally and that is a different thing** -- two `fstps` at
+0x3320d and 0x33213 with a matching `flds` at 0x33230.  An earlier draft of
+this finding said the function "contains no `fstps`/`flds` pair anywhere",
+which is wrong and was written from the last twenty instructions rather than
+from all of them; the claim that survives measurement is about the RETURN PATH
+only.  What the internal spills are NOT is the recurrence: declaring the four
+state variables and the four intermediates `float` makes this function's own
+suite fail 180 checks of 866, so the arithmetic is extended throughout and the
+spilled values are ones a four-byte slot holds exactly -- the coefficients,
+which are `float` members before they are ever loaded.
+
+**A C++ mangling carries no return type**, so
+`_ZNK24V90SpectralShapingFilter9getMetricEPKsj` says nothing here and the only
+evidence is what the function does with the value on the way out.  The correct
+declaration is `long double`: with a `float` return GCC narrows whether or not
+the cast is written, so removing the cast is not the fix and the return TYPE
+is.  Our symbol went 149 bytes -> 157 against the blob's 172 on the change.
+
+**THE FILE ALREADY KNEW.**  `V90SpectralShapingFilter.cpp`'s comment said the
+rounding "is not in the object", that it is unobservable to a STORE but not to
+a COMPARISON, that `advanceTrellis` is the caller that makes one, and -- in as
+many words -- "whoever writes `advanceTrellis` has to decide whether that is
+reachable in the values it sees; this comment is not permission to skip the
+question".  It closed with "nothing in this tree calls `getMetric` yet, so
+nothing is wrong today", which was true when it was written and stopped being
+true the moment this batch landed.  **That is the finding worth keeping: a
+deferred question with a named trigger, and the trigger firing.**
+
+**IT IS REACHABLE, AND NOT MARGINALLY.**  `advanceTrellis` holds its running
+best as a `float` in memory and compares the freshly returned value against it
+with `fcoms 0x30(%esp)` BEFORE `fstps` rounds it into that slot -- so the two
+operands are deliberately at different precisions.  Now note what the search is
+actually comparing.  With the filter state zeroed, the recurrence is linear and
+homogeneous, so negating its input negates its output exactly and squares to
+the same accumulator: **`actionLookupTable`'s candidates come in
+exactly-negating pairs whose metrics are bit-identical.**  For `shaperId` 0
+both candidates in either row are such a pair.  The comparison is a strict
+`metric < best`, so an exact tie should always keep the earlier candidate --
+and it does, once both sides carry the same precision.  Before the fix, ours
+rounded on the way out and every tie went to candidate 0, while the blob
+compared an unrounded metric against a `best` that had been rounded on STORE:
+where that rounding went up, the tied second candidate compared strictly
+smaller and won.  Different committed action, different `state`, different
+delay line.  Five trials in sixteen at `shaperId` 0 in the first run of
+`t_v90spectrellis`.
+
+**WHY THE SUITE THAT ALREADY COVERED `getMetric` COULD NOT CATCH IT.**
+`t_v90spectral.cpp` declared both sides' symbol as returning `float`.  Both
+sides' values are read out of `%st(0)` by the declaration, so declaring `float`
+made the harness round BOTH before comparing -- and a difference confined to
+the low 40 significand bits compared equal every time.  The suite was blind for
+the same reason the defect existed, and its mutation register said so in
+writing, listing "the ROUNDING of getMetric's return" among the three things it
+could not mutate into a caught failure "because ... a caller that captures a
+float cannot tell -- which is why the test captures a float and says so".
+**The apparatus and the code shared one assumption, so the test agreeing with
+the code was not evidence.**  That is finding 134's shape in its most
+expensive form: not a detector printing nothing, but a detector whose
+measurement is taken through the very conversion it should be measuring.  The
+suite now takes the value as `long double` and compares all 64 significand bits
+with a `memcmp`, keeping the `float` comparison beside it because that is what
+a caller storing the result would see.
+
+**The general rule this earns:** where a function's result crosses into the
+harness through a DECLARED type, the declaration is part of the measurement.
+An x87 return is the sharp case, because the ABI leaves the value in a register
+wider than any of the types that can name it, and the harness's own prototype
+silently decides how much of it is looked at.
+
+## 5855. THE TRELLIS COMPARE IS BEHAVIOURALLY EXACT AND ITS OPERAND ORDER IS NOT REPRODUCED -- SIX SPELLINGS COMPILED, AND THE LEVER IS THE TYPE, WHICH IS PINNED ELSEWHERE
+
+`advanceTrellis`'s one float comparison is, in the blob:
+
+    32cd8  call  getMetric
+    32cdd  fcoms 0x30(%esp)          <- the running best, a float in memory
+    32ce1  fnstsw %ax ; sahf
+    32ce4  jae   ...                 <- skip unless metric < best
+    32cea  fstps 0x30(%esp)
+
+and in ours:
+
+    6c8    call  getMetric
+    6cd    flds  0x38(%esp)
+    6d1    fcomp %st(1)
+    6d3    fnstsw %ax ; sahf
+    6d6    jbe   ...
+    6dc    fstps 0x38(%esp)
+
+**Same values, same branch, opposite operand order**: the blob keeps the metric
+in `%st(0)` and takes `best` as a memory operand; we load `best` and compare
+the other way round.  `metric < best` and `best > metric` are the same
+predicate, `-mno-ieee-fp` means there is no parity test either way, and the
+differential suite is green over 2,947 checks including every tie -- so this is
+a codegen difference and not a behavioural one.  It is 3 instructions and 16
+bytes of the 1,054: ours is 1,038.
+
+**WHY IT IS THE TYPE AND NOT THE ORDER.**  GCC 3.4.2's `tree_swap_operands_p`
+swaps a comparison when operand 0 is a bare DECL and operand 1 is not (finding
+3529).  Our operand 1 is `best` **converted** from `float` to `long double`, so
+it is a `NOP_EXPR` and not a DECL, and `metric` is -- so GCC swaps, `best`
+lands in operand 0, and the `float_extend`-of-memory form of the i387 compare
+no longer applies because that pattern wants the narrow memory operand SECOND.
+The `fcoms` is only reachable when BOTH operands are `float` DECLs, needing no
+conversion at all.  Measured, not reasoned:
+
+| spelling | what came out |
+|---|---|
+| `metric = getMetric(...); if (metric < best)`, `metric` long double | `flds`+`fcomp`, 1038 |
+| `... if (best > metric)` | `flds`+`fcomp`, 1038 |
+| `if ((metric = getMetric(...)) < best)` | `flds`+`fcomp`, 1038 |
+| `if (getMetric(...) < best) { metric = getMetric(...); }` | `flds`+`fcompp`, 1072, and calls twice |
+| `metric` declared `float`, `getMetric` returning `long double` | `fstps`/`flds` narrowing pair, then `fcoms` -- **rounds, and fails** |
+| `metric` declared `float`, `getMetric` returning `float` | **`fcoms` exactly**, and `getMetric` narrows on return -- fails |
+
+**So the order is reachable only by a declaration that is wrong for a reason
+that is pinned independently.** The two spellings that produce `fcoms` both
+make the metric a `float` at the comparison, which puts a narrowing between the
+call and the compare -- and 5854 is the measurement that says the object has no
+such narrowing and that removing it is what makes the trellis choose the same
+candidate as the blob.  A third possibility, that the object's own accumulator
+is `float` and merely held in a register, was tested too and is refused by
+`getMetric`'s own suite at 180 failures of 866.
+
+**Left as it is, and recorded rather than chased.**  Two of the six spellings
+match the object's instruction and both are refused by a differential test;
+four are green and none of the four matches.  CLAUDE.md's rule is that the
+differential tier decides and the codegen tier informs, and permuting source
+until the mnemonics agree while a stronger test says the result is wrong is the
+exact inversion of it.  What is NOT settled is how GCC 3.4.2 was made to emit
+`fcoms` against an un-narrowed accumulator from any source at all; that is a
+real open question about the original's declarations, and it is worth one
+measurement by whoever next has `V90SpectralShapingFilter` open -- the most
+likely answer is a mixed declaration this pass did not try, with the recurrence
+extended and the returned expression already `float`-typed without an
+intervening store.

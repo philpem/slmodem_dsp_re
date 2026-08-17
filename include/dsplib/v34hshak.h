@@ -479,30 +479,29 @@ int v90Phase34(void *obj);
 
 /*
  * The two rate-renegotiation transmitters, 0x95d0 (983 B) and 0x99b0 (555 B),
- * NEITHER OF THEM WRITTEN.  They sit immediately below `v90Phase34` in the
- * object, which is why they are declared beside it.
+ * BOTH WRITTEN, in `src/pump/v34/v34pcmmain.cpp` beside `v90Phase34`.  They
+ * sit immediately below it in the object, which is why they are declared here.
  *
  * `VPcmV34Progress` is their only caller and it picks between them by how far
  * the V.90 receiver has got: `v90_receiver > 14` takes the silence one,
  * `> 10` the other, and anything lower goes to `modulatevector` or
  * `v34handshak` instead (.text+0xbccc).
  *
- * DECLARED WEAK IN THE ONE TRANSLATION UNIT THAT CALLS THEM, on the
- * arrangement `include/dsplib/vpcm.h` sets out for the five `VPcmV34*` entry
- * points: `src/pump/v34/v34pcmmain.cpp` defines `DSPLIB_V34HSHAK_UNWRITTEN`
- * before including this file, so the reference resolves to zero instead of
- * breaking the link of every test binary, and the caller tests the pointer
- * before it calls through it.  A TU that DEFINES either must not define the
- * macro, or the definition itself becomes weak.
+ * `int`, and returning 0 at every `ret`, on exactly the evidence
+ * `v90Phase34`'s note above gives for itself: `xor %eax,%eax` reaches all
+ * three returns in each of them, and the one caller discards the value.  This
+ * used to say `void`, which was the honest reading while neither was written;
+ * writing them made the `xor` visible as something the object emits and a
+ * `void` definition would not.
  *
- * `void` is what the object supports: `VPcmV34Progress` discards the result
- * of both.
+ * THEY USED TO BE DECLARED WEAK here, under `DSPLIB_V34HSHAK_UNWRITTEN`, for
+ * `v34pcmmain.cpp` to make a resolvable reference to a symbol nobody had
+ * written.  That is gone with the reconstruction: the macro is not defined
+ * anywhere any more and the caller's two null tests went with it, which is
+ * what the object does -- .text+0xbccc calls both unconditionally.
  */
-#ifndef DSPLIB_V34HSHAK_UNWRITTEN
-#define DSPLIB_V34HSHAK_UNWRITTEN
-#endif
-void v90RateReneg(void *obj) DSPLIB_V34HSHAK_UNWRITTEN;
-void v90RateRenegSilence(void *obj) DSPLIB_V34HSHAK_UNWRITTEN;
+int v90RateReneg(void *obj);
+int v90RateRenegSilence(void *obj);
 
 /*
  * Send whichever PCM receiver is past phase 2 into phase 3, at the point in

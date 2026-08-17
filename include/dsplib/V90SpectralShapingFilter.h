@@ -73,8 +73,38 @@ public:
 	 * Returns the accumulator, and is `const`: it runs the same recurrence
 	 * over `blocks * blockLength` samples in x87 registers and writes not
 	 * one word of the object back.
+	 *
+	 * `long double` AND NOT `float`, WHICH IS A BEHAVIOURAL FACT AND NOT A
+	 * PREFERENCE.  A C++ mangling carries no return type, so nothing in
+	 * `_ZNK24V90SpectralShapingFilter9getMetricEPKsj` decides this; the
+	 * object does.  It ends `fstp %st(1)` three times and returns
+	 * (0x33270) with NO NARROWING ON THE RETURN PATH, so the value reaching
+	 * the caller has the x87 stack's full 64-bit significand.  A `float`
+	 * return narrows it through memory -- measured, with the explicit cast
+	 * and without it, and both emit `fstps`/`flds` -- which the object does
+	 * not do here.
+	 *
+	 * IT DOES SPILL INTERNALLY, and that is not the same thing.  There are
+	 * two `fstps` inside the loop (0x3320d, 0x33213) with a matching
+	 * `flds` (0x33230), so some value IS going through a four-byte slot.
+	 * It cannot be the accumulator or the running state: declaring all of
+	 * those `float` makes this function's own differential suite fail 180
+	 * checks of 866, so the recurrence is carried at extended precision and
+	 * the spilled values are ones a float slot holds exactly -- the
+	 * coefficients, which are `float` members to begin with.
+	 *
+	 * IT IS ONLY OBSERVABLE TO A COMPARISON, AND `V90SpectralShaper::
+	 * advanceTrellis` MAKES ONE.  That function keeps its running best as
+	 * a `float` in memory and compares the freshly returned value against
+	 * it with `fcoms` BEFORE rounding it, so the two operands are at
+	 * different precisions on purpose.  Rounding here collapses that and
+	 * changes which trellis candidate wins an exact tie -- which is not a
+	 * hypothetical: with a zeroed filter state the search's candidates come
+	 * in exactly-negating pairs whose metrics are bit-identical, and the
+	 * tie is broken by whether the stored `float` rounded up or down.
+	 * Finding 5854.
 	 */
-	float	getMetric(const short *in, unsigned int blocks) const;
+	long double getMetric(const short *in, unsigned int blocks) const;
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	float		coeff[4];	/* +0x00 setFilterCoeff's arguments  */

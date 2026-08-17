@@ -178,15 +178,7 @@ public:
 	 * the blob before the loop, so only the low bit of the argument can
 	 * reach the buffer.
 	 */
-	void reset(T value)
-	{
-		T bit = (T)(value & 1);
-		T *p;
-
-		resetHistoryIndexes();
-		for (p = pInitOut + 1; p <= pInitTap2; p++)
-			*p = bit;
-	}
+	void reset(T value);
 
 	/*
 	 * One symbol.  Both taps are read at their current positions and then
@@ -381,15 +373,7 @@ public:
 	 * buffer, and the loop runs from `pInitOut + 1` up to and including
 	 * `pInitTap2`.
 	 */
-	void reset(T value)
-	{
-		T bit = (T)(value & 1);
-		T *p;
-
-		resetHistoryIndexes();
-		for (p = pInitOut + 1; p <= pInitTap2; p++)
-			*p = bit;
-	}
+	void reset(T value);
 
 	/* One symbol.  Store, read back, XOR the two taps, step all three. */
 	T process(T in)
@@ -436,5 +420,58 @@ public:
 	T *pTap2;		/* +0x18 the far tap                       */
 	unsigned int tailLength;	/* +0x1c elements carried on restart */
 };
+
+/*
+ * ===========================================================================
+ * `reset` IS DEFINED OUT OF CLASS, AND THE OBJECT IS WHAT ASKS FOR IT
+ * ===========================================================================
+ *
+ * A member defined inside its class body is implicitly `inline`, which puts
+ * it under `max-inline-insns-single` rather than `max-inline-insns-auto` and
+ * makes GCC 3.4.2 inline it almost everywhere.  Defined out here it is an
+ * ordinary template member, and the compiler emits the call.
+ *
+ * THE BLOB EMITS THE CALL.  `_ZN9ScramblerIihE5resetEi` is a real weak symbol
+ * with TWENTY `R_386_PC32` call sites, one of them the whole middle of
+ * `V90Modulator::reset` (0x1a52d).  With the body in the class body ours
+ * inlined it at every one; `V90Modulator::reset` came out 101 bytes against
+ * the object's 78, and the 23 bytes were the inlined loop.
+ *
+ * MEASURED, NOT ASSUMED, AND WITH THE SETS DIFFED RATHER THAN THE COUNTS
+ * (docs/cleanup.md): one tree, two builds on the exact 3.4.2 compiler,
+ * identical-mnemonic set 452 -> 455 with **nothing lost** and three gained --
+ * `V90Modulator::reset`, `Scrambler<unsigned char,int>::Scrambler` and
+ * `Descrambler<unsigned char,int>::Scrambler`, the last two because they
+ * called `reset` too.  Finding 5805.
+ *
+ * `Descrambler::reset` moves with it because the two bodies are the same text
+ * and the same argument applies; the sibling template in `DiffCoder.h` has
+ * always been this shape -- declared in the class, defined in
+ * `src/dsp/DiffCoder.cpp` -- and `ParallelDifferentialEncoder<h>::reset` is
+ * the call the object makes from `V90SpectralShaper::reset` and the call we
+ * make.  This brings the two templates into line with each other and with the
+ * object.
+ */
+template <class T, class I>
+void Scrambler<T, I>::reset(T value)
+{
+	T bit = (T)(value & 1);
+	T *p;
+
+	resetHistoryIndexes();
+	for (p = pInitOut + 1; p <= pInitTap2; p++)
+		*p = bit;
+}
+
+template <class T, class I>
+void Descrambler<T, I>::reset(T value)
+{
+	T bit = (T)(value & 1);
+	T *p;
+
+	resetHistoryIndexes();
+	for (p = pInitOut + 1; p <= pInitTap2; p++)
+		*p = bit;
+}
 
 #endif /* DSPLIB_SCRAMBLER_H */

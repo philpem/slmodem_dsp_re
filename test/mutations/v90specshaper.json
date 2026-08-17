@@ -1,52 +1,51 @@
 [
  {"label": "NOTE: what this set covers, and what it cannot",
-  "why": "V90SpectralShaper.cpp entire: the constructor and the destructor, which are the only two of the class's eight members reconstructed.  What cannot be mutated into a caught failure is the SYNTAX of the +0x38 store: moving it from the member-initialiser list into the body changes the instruction order and nothing an observer can see, because the encoder's constructor does not read +0x38.  That is a codegen claim (finding 1243) and it is checked by the similarity tier, not here.  The two buffers' element type is likewise not mutable -- `unsigned short *` against `short *` allocates the same 48 bytes and this file never dereferences either."},
+  "why": "V90SpectralShaper.cpp's constructor and destructor.  What cannot be mutated into a caught failure is the SYNTAX of the +0x38 store: moving it from the member-initialiser list into the body changes the instruction order and nothing an observer can see, because the encoder's constructor does not read +0x38.  That is a codegen claim (finding 1243) and it is checked by the similarity tier, not here.  The two buffers' element type is likewise not mutable HERE -- `unsigned short *` against `short *` allocates the same 48 bytes and neither of these two members dereferences either pointer.  It is settled all the same, by the two callees that take them as `const short *` (finding 5850), and t_v90spectrellis.cpp's trials are where a wrong element type would show.  The rest of the file's members carry their own suites; this set is the two that were written first."},
 
  {"label": "the encoder is built with the wrong width",
-  "find": "\t: byte_38(0), pde(6)",
-  "replace": "\t: byte_38(0), pde(5)"},
-
+  "find": "\t: oddEncoder(), pde(6)",
+  "replace": "\t: oddEncoder(), pde(5)"},
  {"label": "the byte at +0x38 is initialised to one",
-  "find": "\t: byte_38(0), pde(6)",
-  "replace": "\t: byte_38(1), pde(6)"},
+  "find": "\twindowLength = 24;",
+  "replace": "\toddEncoder.prev_ = 1;\n\twindowLength = 24;"},
 
  {"label": "the first buffer holds one entry too many",
-  "find": "\tbuf_28 = (unsigned short *)\n\t    sysdep_malloc(24 * sizeof(unsigned short));",
-  "replace": "\tbuf_28 = (unsigned short *)\n\t    sysdep_malloc(25 * sizeof(unsigned short));"},
+  "find": "\tdelayLine = (short *)sysdep_malloc(24 * sizeof(short));",
+  "replace": "\tdelayLine = (short *)sysdep_malloc(25 * sizeof(short));"},
 
  {"label": "the second buffer is sized in bytes rather than entries",
-  "find": "\tbuf_2c = (unsigned short *)\n\t    sysdep_malloc(24 * sizeof(unsigned short));",
-  "replace": "\tbuf_2c = (unsigned short *)\n\t    sysdep_malloc(24);"},
+  "find": "\ttrialLine = (short *)sysdep_malloc(24 * sizeof(short));",
+  "replace": "\ttrialLine = (short *)sysdep_malloc(24);"},
 
  {"label": "both buffers are one allocation shared",
-  "find": "\tbuf_2c = (unsigned short *)\n\t    sysdep_malloc(24 * sizeof(unsigned short));",
-  "replace": "\tbuf_2c = buf_28;"},
+  "find": "\ttrialLine = (short *)sysdep_malloc(24 * sizeof(short));",
+  "replace": "\ttrialLine = delayLine;"},
 
  {"label": "the entry count is the allocation's size in bytes",
-  "find": "\tword_34 = 24;",
-  "replace": "\tword_34 = 48;"},
+  "find": "\twindowLength = 24;",
+  "replace": "\twindowLength = 48;"},
 
  {"label": "the constructor does not clear +0x30",
-  "find": "\tword_34 = 24;\n\tword_30 = 0;\n\tword_20 = 0;",
-  "replace": "\tword_34 = 24;\n\tword_20 = 0;"},
+  "find": "\twindowLength = 24;\n\twriteIndex = 0;\n\tstate = 0;",
+  "replace": "\twindowLength = 24;\n\tstate = 0;"},
 
  {"label": "the constructor does not clear +0x20",
-  "find": "\tword_34 = 24;\n\tword_30 = 0;\n\tword_20 = 0;",
-  "replace": "\tword_34 = 24;\n\tword_30 = 0;"},
+  "find": "\twindowLength = 24;\n\twriteIndex = 0;\n\tstate = 0;",
+  "replace": "\twindowLength = 24;\n\twriteIndex = 0;"},
 
  {"label": "the constructor clears the buffers it allocated",
-  "find": "\tword_34 = 24;",
-  "replace": "\tbuf_28[0] = 0;\n\tword_34 = 24;"},
+  "find": "\twindowLength = 24;",
+  "replace": "\tdelayLine[0] = 0;\n\twindowLength = 24;"},
 
  {"label": "the destructor forgets the second buffer",
-  "find": "\tif (buf_2c != 0)\n\t\tsysdep_free(buf_2c);",
+  "find": "\tif (trialLine != 0)\n\t\tsysdep_free(trialLine);",
   "replace": ""},
 
  {"label": "the destructor frees the first buffer without testing it",
-  "find": "\tif (buf_28 != 0)\n\t\tsysdep_free(buf_28);",
-  "replace": "\tsysdep_free(buf_28);"},
+  "find": "\tif (delayLine != 0)\n\t\tsysdep_free(delayLine);",
+  "replace": "\tsysdep_free(delayLine);"},
 
  {"label": "the destructor frees the first buffer twice",
-  "find": "\tif (buf_2c != 0)\n\t\tsysdep_free(buf_2c);",
-  "replace": "\tif (buf_2c != 0)\n\t\tsysdep_free(buf_28);"}
+  "find": "\tif (trialLine != 0)\n\t\tsysdep_free(trialLine);",
+  "replace": "\tif (trialLine != 0)\n\t\tsysdep_free(delayLine);"}
 ]

@@ -8276,3 +8276,143 @@ difference on exactly the inputs that matter, and CLAUDE.md's rule is that a
 defect recorded here is not quietly corrected in `src/`. `t_v92cpb2i` stays
 inside the array on purpose -- its longest message is six groups in both
 blocks, 1,785 of 2,000 -- and says so in its header. Finding 6600's batch.
+## D780 ✅ `getSpectrumOfBin` indexes the spectrum with no bound at all
+
+`V90SpectralVerifier::getSpectrumOfBin(unsigned long)` is fifteen bytes and
+four instructions:
+
+    45dc0  mov 0x4(%esp),%ecx      ; this
+    45dc4  mov 0x8(%esp),%eax      ; bin
+    45dc8  mov 0x1c(%ecx),%edx     ; this->spectrum
+    45dcb  flds (%edx,%eax,4)
+    45dce  ret
+
+There is no compare, no clamp and no mask.  `spectrum` is
+`sysdep_malloc(4 * (fftLength / 2))` and holds `fftLength / 2` floats, so any
+argument at or above that reads past the allocation.
+
+`getSpectrumOfNearestBin` is the same access with the index computed rather
+than passed -- `spectrum[(unsigned)(freq / binWidth + 0.5f)]` at 0x45ec0 --
+which puts the bound on the CALLER's frequency and on `binWidth`, neither of
+which the function sees.  A frequency above `sampleFreq / 2` indexes past the
+array, and a negative one converts to 0x80000000 through the object's
+`fistpll`, which is undefined in C and reads the low dword as zero on this
+target.
+
+**Reproduced, and the reconstruction adds no guard.**  Adding one would make
+the two disagree for exactly the callers that need reproducing, which is the
+one thing this tree may not do.
+
+**NOT DRIVEN OUT OF RANGE, deliberately.**  `t_v90specacc.cpp` computes every
+quotient it drives and marks each row `indexable` or not; the negative and
+huge rows go through `freqToLeftBin`, `freqToRightBin` and `freqToNearestBin`,
+which return the number without subscripting anything, and never through the
+two `getSpectrumOf*` entry points.  D561's rule: a trial that reaches
+undefined behaviour in the reconstruction is not a differential trial, so the
+out-of-range access is described here rather than executed.
+
+**Not corrected**: the guard would be a behavioural difference, and the
+callers inside the object -- `checkSpecialSpectralConditions`'s seven probes
+-- are bounded by parameter values rather than by anything the class checks.
+
+## D790 ✅ `setV92CPpckFromParamsInfo`'s mask loops write across `short_42` into `short_a2`, and the codec loop's last group overwrites the field bounding it
+
+`getConstellationMask` clears eight words and then sets `mask[b >> 4]` with no
+mask on the nibble, so a constellation byte of 0x80 or more addresses entries
+8 to 15 of a buffer it was handed as eight.  `V90MappingParams.h` records that
+for the out-of-line function and `t_v90cmask`'s `run_masks` drives it into a
+24-entry buffer with eight guard entries.
+
+`setV92CPpckFromParamsInfo` calls it -- inlined, but the arithmetic is the
+same -- with a ROW of `V92CP::short_42` and then of `short_a2`, which are
+eight words each and abut.  So the overflow is not into guard space:
+
+| the write | where it lands |
+|---|---|
+| `short_42[i][8..15]`, i < 5 | `short_42[i + 1]` |
+| `short_42[5][8..15]` | `short_a2[0]` |
+| `short_a2[i][8..15]`, i < 5 | `short_a2[i + 1]` |
+| `short_a2[5][8..15]` | `pad_102`, `word_104`, `suv`, **`word_10c`** |
+
+The last row is the interesting one.  `word_10c` is what BOUNDS both loops and
+the object re-reads it from memory on every iteration (`movzwl 0x10c(%ebp),%esi;
+cmp; ja` at .text+0x33b28 and .text+0x33be7), so the codec loop's last group can
+change its own trip count -- upwards as easily as downwards.  It also
+overwrites `suv`, which the same function set from the record eighty
+instructions earlier, and `word_104`, which `V92CP::setSUV` owns.
+
+**REPRODUCED, NOT FIXED**, and it is reproduced by construction rather than by
+choice: the source is `getConstellationMask(params, (int)i, cp->short_42[i])`,
+which is what the object inlines, and the overflow is entirely inside the
+callee.  Both sides do the same thing to the same bytes.
+
+**AND IT IS NOT DRIVEN, WHICH IS THE OTHER HALF OF THE ENTRY.**  Writing past
+a row of `short short[6][8]` is out of bounds in OUR source as well as the
+object's, and D561's ruling is that a differential trial reaching undefined
+behaviour in the reconstruction is not a differential trial.  So
+`t_v90cmask`'s `run_pack` sweep uses only the two byte alphabets that cannot
+produce a byte at or above 0x80 -- mode 2, masked below 0x80, and mode 3,
+`((id + n) & 3) * 0x11` -- and the overflow is recorded here with the offsets
+worked out rather than exercised.  `run_masks` still drives the same overflow
+against the same callee, into a buffer sized for it, so the BEHAVIOUR is
+covered where it can be covered safely; what is not covered is what it does to
+a `V92CP`.
+
+Closing it needs the mask region modelled as one addressable block -- the
+shape `v92-fold-oob` gave D561's own site -- which is a `V92CP` layout change
+and belongs to a batch that owns that header.  D570 is the same class of
+finding on the same two blocks from the reading end.
+
+## D930 🐛 `V90SpectralShaper` reads an uninitialised action, and runs a four-billion-iteration loop, on inputs its own tables and `reset` cannot produce
+
+*Renumbered from D800 on merge.*  The `v90-spectral-reneg` branch measured the
+deviation high-water when it was cut; `v92-modulator-tail` took D800 for
+`V92Modulator::resamplerPhaseOffset` while that branch ran.  Both measurements
+were right when made -- a number cannot be reserved across a branch's lifetime,
+only claimed at merge.  See finding 6100.
+
+Two undefined-behaviour sites in one class, both reproduced and neither driven.
+
+**ONE -- the leading digit's switch has no default, and the local it writes is
+read either way.**  `advanceTrellis` recovers the winning candidate's leading
+decimal digit as `bestAction / pow10Table[shaperId]` and converts it to an
+`ACTIONS` with a four-armed switch (0x32d39..0x32ed3).  Digits 1, 2, 3 and 4
+store 0, 1, 2 and 3 into a stack slot; **anything else falls through to
+0x32d4f with that slot never written**, and the two switches that follow read
+it -- one to pick a polarity pattern for the outgoing frame, one to update the
+trellis state.  `act = leading - 1` would have been a single `dec` and the
+object has four separate constant stores, so the switch is the source's, and
+a `default:` arm would be code the object does not contain.  Reproduced by
+writing no default and no initialiser.
+
+It is unreachable through the object's own data: finding 5853 regenerates all
+128 entries of `actionLookupTable` from the digit rule and every digit in every
+live entry is in 1..4, while the dead entries are zero and are never selected
+because the candidate loop runs to 2^(shaperId+1).  It becomes reachable only
+if `shaperId` exceeds 3, which walks off the table's eight rows first, or if
+the table is corrupted.
+
+**TWO -- `process` computes an unsigned bound as `blockLength - 1`.**
+`lea -0x1(%ecx),%ebx; cmp $0x0,%ebx; ja` at 0x32fd8 copies the caller's sign
+bits into `frameBits[1..blockLength-1]`.  With `blockLength` zero the
+subtraction wraps to 0xffffffff and the loop runs to four billion, writing
+through the object and everything after it.  `reset` can produce a zero
+`blockLength`: it is `6 / shaperSR` with an explicit guard storing 0 when
+`shaperSR` is zero (0x3286c), and `6 / shaperSR` is also 0 for any
+`shaperSR` above 6.  So the value is reachable from the parameter block, and
+only the caller's choice of `shaperSR` keeps it out.
+
+**NOT DRIVEN, AND THAT IS D561'S RULE.**  Both sites are undefined in OUR
+source as much as in the object's, so a trial reaching either is not a
+differential trial. `t_v90spectrellis.cpp` and `t_v90shapeact.cpp` therefore
+hold `shaperId <= 3` and `shaperSR` in {1, 2, 3, 6}, which gives
+`blockLength` in {6, 3, 2, 1} and never zero, and the exclusion is stated in
+both files' headers with the reason. `t_v90shapereset.cpp` DOES sweep
+`shaperSR` at 0, 7, 12 and 0xffffffff, because `reset` itself is total and
+storing a zero `blockLength` is the behaviour under test there; what no suite
+does is call `process` afterwards.
+
+Closing either needs a `default:` arm and a guard that the object does not
+have, so neither is fixed. Anyone linking this library for real should bound
+`shaperSR` to 1..6 at the parameter block, which is where the constraint
+actually lives.

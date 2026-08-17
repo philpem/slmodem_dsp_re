@@ -125,6 +125,48 @@ public:
 	 */
 	void checkSpecialSpectralConditions();
 
+	/*
+	 * Arm an accumulation: clear the progress counter and move the state
+	 * from idle to running.  Does nothing if one is already running, and
+	 * nothing at all unless `SPECTRAL_VERIFIER_ENABLE` is set -- the
+	 * parameter gates the STATE CHANGE and not just the diagnostic, so a
+	 * build with the verifier disabled never leaves state 0 and `process`
+	 * never accumulates.
+	 */
+	void startAccumulation();
+
+	/*
+	 * Copy up to `count` samples into the accumulation buffer and, on the
+	 * sample that fills it, run the periodogram and classify the line.
+	 * Returns 1 exactly on that sample and 0 every other time, including
+	 * every call made while the state is not `running`.
+	 */
+	int process(float *in, unsigned int count);
+
+	/* One `%c%d.%02d` line per bin, between two rules. */
+	void printSpectrum() const;
+
+	/*
+	 * A frequency in Hz to a bin index, three roundings.  All three
+	 * divide by `binWidth` and convert through the object's
+	 * `fistpll`-plus-low-dword idiom, which is the conversion to an
+	 * UNSIGNED 32-bit type; see the .cpp for why the return type is
+	 * `unsigned int` where `getSpectrumOfBin`'s parameter is
+	 * `unsigned long`.
+	 */
+	unsigned int freqToLeftBin(float freq) const;
+	unsigned int freqToRightBin(float freq) const;
+	unsigned int freqToNearestBin(float freq) const;
+
+	/*
+	 * UNCHECKED, in the object and here.  `getSpectrumOfBin` indexes
+	 * `spectrum` with whatever it is handed and the array is only
+	 * `fftLength / 2` long; the four instructions at 0x45dc0 contain no
+	 * bound.  Callers are the bound -- D780.
+	 */
+	float getSpectrumOfBin(unsigned long bin) const;
+	float getSpectrumOfNearestBin(float freq) const;
+
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	V90Parameters *params;		/* +0x00 the constructor's argument */
 	Psd *psd;			/* +0x04 owned, 16 bytes            */

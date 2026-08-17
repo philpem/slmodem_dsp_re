@@ -5,22 +5,15 @@
  * `include/dsplib/V90SpectralShapingFilter.h` carries the object map, the
  * evidence for it and the recurrence the last two share.
  *
- * THE RETURN OF `getMetric` IS ROUNDED HERE AND IS NOT IN THE OBJECT, which
- * leaves the 64-bit-significand accumulator in st(0) for the caller.  That is
- * unobservable TO A STORE -- a value rounded to float and then rounded to
- * float again is the value rounded to float -- which is why the test captures
- * the result as a `float`, and why capturing it as a `double` would be
- * comparing something the object does not promise.
- *
- * IT IS NOT UNOBSERVABLE TO A COMPARISON, and the one caller in the object
- * makes one.  `V90SpectralShaper::advanceTrellis` does `fcoms` against a
- * float in memory and only then `fstps` the value into one.  If the
- * accumulator sits strictly above some float c while rounding to exactly c,
- * the object's compare says "greater" and a caller of ours says "equal" --
- * one branch apart on a trellis decision.  Whoever writes `advanceTrellis`
- * has to decide whether that is reachable in the values it sees; this comment
- * is not permission to skip the question.  Nothing in this tree calls
- * `getMetric` yet, so nothing is wrong today.
+ * THE RETURN IS NOT ROUNDED, AND THAT WAS A DEFECT HERE UNTIL `advanceTrellis`
+ * WAS WRITTEN.  This function used to return `float` and end `return (float)
+ * sum;`, which GCC narrows through memory -- `fstps`/`flds` -- where the object
+ * ends with three bare `fstp %st(1)` and a `ret` (0x33270) and hands the caller
+ * the full 64-bit significand.  The question was left open in this comment on
+ * the ground that no caller existed yet.  A caller exists now, it compares
+ * before it stores, and the rounding changed which trellis candidate it chose;
+ * see the header, and finding 5854 for how the tie arises and why the suite
+ * that passed over this could not have caught it.
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding 215).
  *
@@ -183,7 +176,7 @@ V90SpectralShapingFilter::progress(const short *in)
  * object spells as a four-register rotation that comes back to the identity
  * after two passes and is not modelled here because it computes nothing.
  */
-float
+long double
 V90SpectralShapingFilter::getMetric(const short *in, unsigned int blocks) const
 {
 	long double lastIn, lastMid, lastOut, sum;
@@ -195,7 +188,7 @@ V90SpectralShapingFilter::getMetric(const short *in, unsigned int blocks) const
 	sum     = state[3];
 
 	if (blocks == 0)
-		return (float)sum;
+		return sum;
 
 	a0 = coeff[0];
 	a1 = coeff[1];
@@ -219,5 +212,5 @@ V90SpectralShapingFilter::getMetric(const short *in, unsigned int blocks) const
 		}
 	} while (--blocks != 0);
 
-	return (float)sum;
+	return sum;
 }

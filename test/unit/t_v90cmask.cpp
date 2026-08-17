@@ -48,14 +48,22 @@
 
 #include "harness.h"
 #include "dsplib/V90MappingParams.h"
+#include "dsplib/V92CP.h"
+#include "dsplib/tagV90AdditionalCPinfo.h"
 
 extern "C" {
+extern unsigned int dsplibs_debug_level;
+extern unsigned int ref_dsplibs_debug_level;
+
 unsigned int blobIndex(V90MappingParams *params, int *group)
 	asm("ref_getConstellationsIndex");
 void blobMask(V90MappingParams *params, int which, short *mask)
 	asm("ref_getConstellationMask");
 void blobCodecMask(V90MappingParams *params, int which, short *mask)
 	asm("ref_getCodecConstellationMask");
+void blobPack(V90MappingParams *params, tagV90AdditionalCPinfo *info,
+	      V92CP *cp) asm("ref_setV92CPpckFromParamsInfo");
+void blobDisplay(V90MappingParams *params) asm("ref_displaySpectralParams");
 }
 
 /* 16 entries are reachable (a byte of 0xff addresses entry 15); 8 are guard. */
@@ -458,6 +466,379 @@ run_masks(void)
 	return diff_end();
 }
 
+/* ================================================================= the pack */
+
+/*
+ * `setV92CPpckFromParamsInfo` -- the same six constellations, packed into a
+ * `V92CP` together with five dwords out of a `tagV90AdditionalCPinfo`.
+ *
+ * WHY IT IS IN THIS FILE AND NOT ITS OWN.  It is `getConstellationsIndex`,
+ * `getConstellationMask` and `getCodecConstellationMask` inlined by the
+ * compiler, over the same block the fixture above already knows how to shape;
+ * every case in `shapes[]` is a case for this function too, and a separate
+ * fixture would be a second copy of `seed_params` drifting away from this one.
+ *
+ * WHAT IS COMPARED is the whole 0x918-byte `V92CP` on each side, plus the
+ * `V90MappingParams` -- which this function WRITES, through
+ * `getConstellationsIndex`'s `distinctIndex` -- and the `tagV90AdditionalCPinfo`,
+ * which it must not write at all.
+ *
+ * `word_10c` IS NOT SWEPT PAST SIX.  Both mask blocks hold six groups and the
+ * two loops trust the field, so a larger value writes past `short_42` into
+ * `short_a2` and past `short_a2` into `word_104` -- D570 measured exactly that
+ * on `V92CP::infoToBits`.  The value here is `getConstellationsIndex`'s return,
+ * which is 1..6 by construction, and the fixture does not disturb it: a trial
+ * that reaches undefined behaviour in the RECONSTRUCTION is not a differential
+ * trial (D561).  What IS asserted is that the field ends up in 1..6, which is
+ * the property that keeps the two loops in bounds.
+ *
+ * AND THE BYTE ALPHABET IS RESTRICTED FOR THE SAME REASON, WHICH IS THE PART
+ * THAT COST A RUN.  `getConstellationMask` clears `mask[0..7]` and then sets
+ * `mask[b >> 4]` UNMASKED, so a table byte of 0x80 or more addresses entries 8
+ * to 15 -- the object's behaviour, driven deliberately by `run_masks` above
+ * into a buffer with eight guard entries.  Here the buffer is a ROW of
+ * `cp->short_42`, so the same write runs into the next row, and at row 5 it
+ * runs out of `short_42` into `short_a2`; the codec loop's row 5 then reaches
+ * +0x102..+0x111, which is `word_104`, `suv` AND `word_10c` -- the field that
+ * is bounding the loop it is inside.  Both sides do it and both sides agree,
+ * and it is still out of bounds in OUR source, which D561 says is not a trial.
+ *
+ * So the two alphabets that can produce a byte at or above 0x80 are left out
+ * of this sweep, and D790 records the behaviour with the measurement rather
+ * than the sweep driving it.  Modes 2 and 3 are the two that cannot: mode 2
+ * masks every byte below 0x80 and mode 3's are `((id + n) & 3) * 0x11`, at
+ * most 0x33.
+ */
+static V92CP ourCp, theirCp;
+static tagV90AdditionalCPinfo ourInfo, theirInfo;
+
+static void
+seed_cp(int trial, int gate)
+{
+	unsigned char *a = (unsigned char *)&ourCp;
+	unsigned char *b = (unsigned char *)&ourInfo;
+	unsigned int i;
+
+	lfsr_state = 0x2f19u + 0x7c1du * (unsigned)trial + 1u;
+	for (i = 0; i < sizeof(ourCp); i++)
+		a[i] = next_byte();
+	for (i = 0; i < sizeof(ourInfo); i++)
+		b[i] = next_byte();
+
+	/*
+	 * `byte_24` is a GATE and comes from `params->word_61c`, not from the
+	 * fill -- so it is set there rather than here, and both values are
+	 * driven.  What the fill leaves in `cp->byte_24` is overwritten before
+	 * the gate is read.
+	 */
+	ourParams.word_61c = (unsigned int)(gate ? 0x1234ff01u : 0x1234ff00u);
+	theirParams.word_61c = ourParams.word_61c;
+
+	/*
+	 * Through `unsigned char *`: `V92CP` has a constructor, so GCC 13
+	 * warns about a `memcpy` naming the class, and the point here is the
+	 * BYTES rather than the object.
+	 */
+	memcpy((unsigned char *)&theirCp, a, sizeof(theirCp));
+	memcpy((unsigned char *)&theirInfo, b, sizeof(theirInfo));
+}
+
+static int
+run_pack(void)
+{
+	int s, mode, gate, trial = 0;
+	int sawGateOn = 0, sawGateOff = 0;
+	int sawShortMsg = 0, sawLongMsg = 0;
+	int sawOneGroup = 0, sawSixGroups = 0;
+	int sawMaskWritten = 0, sawCodecUntouched = 0;
+
+	diff_begin("setV92CPpckFromParamsInfo");
+
+	for (s = 0; s < NSHAPE; s++)
+	for (mode = 2; mode < NMODE; mode++)		/* see the note above */
+	for (gate = 0; gate <= 1; gate++) {
+		long t = trial;
+		unsigned before_a2;
+
+		seed_params(trial, mode, &shapes[s], 0);
+		seed_cp(trial, gate);
+		before_a2 = (unsigned)(unsigned short)ourCp.short_a2[0][0];
+
+		setV92CPpckFromParamsInfo(&ourParams, &ourInfo, &ourCp);
+		blobPack(&theirParams, &theirInfo, &theirCp);
+
+		diff_eq_obj("V92CP block", V92CP, &ourCp, &theirCp, t);
+		diff_eq_obj("mapping params", V90MappingParams,
+			    &ourParams, &theirParams, t);
+		diff_eq_obj("additional CP info", tagV90AdditionalCPinfo,
+			    &ourInfo, &theirInfo, t);
+
+		/*
+		 * The record is READ-ONLY, which the comparison above cannot
+		 * say on its own -- both sides writing the same thing would
+		 * still agree.
+		 */
+		diff_eq_int("the record is not written %ld",
+			    memcmp(&ourInfo, &theirInfo, sizeof(ourInfo)) == 0,
+			    1, t);
+
+		/*
+		 * The group count is what bounds both mask loops, and it has
+		 * to be in range for the trial to be a trial at all.
+		 */
+		diff_eq_int("group count in 1..6 %ld",
+			    ourCp.word_10c >= 1 && ourCp.word_10c <= 6, 1, t);
+		if (ourCp.word_10c == 1)
+			sawOneGroup = 1;
+		if (ourCp.word_10c == 6)
+			sawSixGroups = 1;
+
+		/*
+		 * THE GATE IS A SEPARATING TRIAL AND THE OBSERVABLE IS THE
+		 * SECOND MASK BLOCK.  With `byte_24` zero the codec block must
+		 * still hold the fill; with it non-zero it must not.  Held
+		 * against our side alone, so it is a claim about the
+		 * reconstruction and not about agreement.
+		 */
+		if (gate) {
+			sawGateOn = 1;
+			if ((unsigned)(unsigned short)ourCp.short_a2[0][0]
+			    != before_a2)
+				sawMaskWritten = 1;
+		} else {
+			sawGateOff = 1;
+			diff_eq_int("the gate leaves the codec block %ld",
+				    (unsigned)(unsigned short)
+				    ourCp.short_a2[0][0], (long)before_a2, t);
+			sawCodecUntouched = 1;
+		}
+
+		/*
+		 * `char_01` selects between the two closing constants, and it
+		 * comes from the record's +0x04 -- which the varied fill makes
+		 * zero about one trial in 256, so both arms are counted rather
+		 * than assumed.
+		 */
+		if (ourCp.char_01 == 0)
+			sawShortMsg = 1;
+		else
+			sawLongMsg = 1;
+
+		trial++;
+	}
+
+	/*
+	 * The `char_01` = 0 arm is rare under a varied fill, so it gets its
+	 * own trials rather than being hoped for.  Both constants are checked
+	 * against our side directly: 0x14 and 8 differ by 12, so a wrong one
+	 * is visible in the byte and the differential would catch it anyway --
+	 * but only if this arm is ever entered, which is the part that needed
+	 * arranging.
+	 */
+	{
+		int k;
+
+		for (k = 0; k <= 1; k++) {
+			long t = 900 + k;
+
+			seed_params(3, 2, &shapes[0], 0);
+			seed_cp(3, 1);
+			ourInfo.word_04 = theirInfo.word_04 = (unsigned)k;
+			ourParams.word_0 = theirParams.word_0 = 0x40u;
+
+			setV92CPpckFromParamsInfo(&ourParams, &ourInfo,
+						  &ourCp);
+			blobPack(&theirParams, &theirInfo, &theirCp);
+
+			diff_eq_obj("V92CP block, closing byte", V92CP,
+				    &ourCp, &theirCp, t);
+			diff_eq_int("the closing byte %ld",
+				    (long)ourCp.char_02,
+				    k ? (long)(0x40 - 0x14) : (long)(0x40 - 8),
+				    t);
+			if (k == 0)
+				sawShortMsg = 1;
+			else
+				sawLongMsg = 1;
+		}
+	}
+
+	diff_eq_int("the codec gate was on", sawGateOn, 1, 0);
+	diff_eq_int("the codec gate was off", sawGateOff, 1, 0);
+	diff_eq_int("the codec block was written", sawMaskWritten, 1, 0);
+	diff_eq_int("the codec block was left alone", sawCodecUntouched, 1, 0);
+	diff_eq_int("char_01 zero was reached", sawShortMsg, 1, 0);
+	diff_eq_int("char_01 non-zero was reached", sawLongMsg, 1, 0);
+	diff_eq_int("one group was reached", sawOneGroup, 1, 0);
+	diff_eq_int("six groups were reached", sawSixGroups, 1, 0);
+
+	return diff_end();
+}
+
+/* ============================================================== the display */
+
+/*
+ * `displaySpectralParams` -- SIX `edprintf` LINES AND NOTHING ELSE.  It writes
+ * no memory and returns nothing, so the transcript is its whole observable
+ * surface and this is a tier-4 test in `docs/method/tiers.md`'s sense.
+ * `test/unit/t_printtitle.cpp` is the template and its two rules are followed
+ * here: BOTH `dsplibs_debug_level` and `ref_dsplibs_debug_level` are raised
+ * together, and level 0 is tested with its own anti-vacuity guard.
+ *
+ * WHAT LEVEL 0 PROVES HERE IS DIFFERENT FROM `printTitle`'s, and the
+ * difference is worth stating.  `printTitle`'s call sites are GATED -- each
+ * one is behind `dsplibs_debug_level > 1` -- so level 0 proves the gates did
+ * not fire.  There is no gate anywhere in this function: `tools/dis.py` over
+ * 0x33ec0..0x3412b shows fifteen relocations and not one `cmpl $0x1,
+ * dsplibs_debug_level`.  So at level 0 all six calls happen, `edprintf`
+ * formats and encodes all six lines and prints none of them, and what the
+ * empty transcript proves is that `edprintf` swallowed them.  Both readings
+ * are checked -- the transcripts agree, and they are empty exactly when the
+ * level is down.
+ *
+ * THE VALUES ARE CHOSEN FOR THE LAST DIGIT.  The `%06d` fraction is
+ * `abs((int)((v - (int)v) * 1e6))`, computed in the x87's extended registers,
+ * so a reconstruction that rounded the intermediate through `float` would
+ * agree on most inputs and differ on the ones whose scaled fraction lands
+ * within a few units of an integer.  `edge[]` below is those: both zeros,
+ * exact halves and quarters, sixths and thirds, values a unit in the last
+ * place under and over a whole number, the two ends of `float`'s exact
+ * integer range at 2^23, and two denormals.
+ *
+ * EVERY ENTRY CONVERTS TO `int` WITHOUT OVERFLOWING, and that is a
+ * constraint and not an accident.  Both helpers evaluate `(int)v` -- once as
+ * `(int)fabsf(v)` and once inside the subtraction -- and an out-of-range
+ * conversion is undefined in C, so a trial holding one is not a differential
+ * trial (D561).  On x87 it would not even look like one: `fistl` answers the
+ * integer indefinite deterministically, so both sides would agree and the
+ * trial would read as a pass.  The largest magnitudes here are +/-2.0e9,
+ * inside `INT_MAX`, and the smallest are denormals that convert to zero.
+ *
+ * WHAT IS THEREFORE NOT DRIVEN is the infinities and the NaNs, for the same
+ * reason and with the same consequence: nothing here says what either
+ * function does with them.  D790 is this batch's other entry of that shape.
+ */
+static const float edge[] = {
+	0.0f, -0.0f, 1.0f, -1.0f,
+	0.5f, -0.5f, 0.25f, 0.125f,
+	1.0f / 3.0f, -1.0f / 3.0f, 2.0f / 3.0f, 1.0f / 6.0f,
+	0.999999f, 0.9999995f, 1.000001f, -0.999999f,
+	0.1f, 0.2f, 0.3f, 0.7f,
+	123.456789f, -98765.4321f, 1e-7f, -1e-7f,
+	8388607.0f, 8388608.0f, 16777216.0f, -16777216.0f,
+	1.1754944e-38f, 5.877472e-39f, 2.0e9f, -2.0e9f
+};
+#define NEDGE ((int)(sizeof(edge) / sizeof(edge[0])))
+
+static int
+run_display(void)
+{
+	static const unsigned levels[4] = { 0u, 1u, 2u, 3u };
+	int li, k, trial = 0;
+	int sawPrinted = 0, sawSilent = 0, sawNegative = 0, sawFraction = 0;
+
+	diff_begin("displaySpectralParams");
+
+	for (li = 0; li < 4; li++)
+	for (k = 0; k < NEDGE; k++) {
+		long t = trial;
+		unsigned lines_ours, lines_theirs;
+
+		seed_params(k, 0, &shapes[0], 0);
+		ourParams.shaperSR = theirParams.shaperSR =
+		    (int)(k * 37 - 300);
+		ourParams.shaperId = theirParams.shaperId =
+		    (unsigned int)(k * 0x01010101u);
+		ourParams.shaperA1 = theirParams.shaperA1 = edge[k];
+		ourParams.shaperA2 = theirParams.shaperA2 =
+		    edge[(k + 7) % NEDGE];
+		ourParams.shaperB1 = theirParams.shaperB1 =
+		    edge[(k + 13) % NEDGE];
+		ourParams.shaperB2 = theirParams.shaperB2 =
+		    edge[(k + 19) % NEDGE];
+
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = levels[li];
+		ref_dsplibs_debug_level = levels[li];
+
+		displaySpectralParams(&ourParams);
+		blobDisplay(&theirParams);
+
+		dsplibs_debug_level = 0u;
+		ref_dsplibs_debug_level = 0u;
+		dsplib_debug_capture_on = 0;
+
+		lines_ours = dsplib_debug_capture_lines(0);
+		lines_theirs = dsplib_debug_capture_lines(1);
+
+		diff_eq_int("transcript line count %ld", (long)lines_ours,
+			    (long)lines_theirs, t);
+		diff_eq_int("transcript text %ld",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, t);
+
+		/*
+		 * IT WRITES NOTHING, which no transcript comparison can say.
+		 * Both blocks are compared to catch a store, and ours is
+		 * compared against the seed to catch two sides storing the
+		 * same thing.
+		 */
+		diff_eq_obj("mapping params", V90MappingParams,
+			    &ourParams, &theirParams, t);
+
+		/* The anti-vacuity guard, both sides separately. */
+		if (levels[li] > 1u) {
+			diff_eq_int("we printed at level > 1 %ld",
+				    lines_ours > 0, 1, t);
+			diff_eq_int("the blob printed too %ld",
+				    lines_theirs > 0, 1, t);
+			sawPrinted = 1;
+			if (edge[k] < 0.0f)
+				sawNegative = 1;
+			if (edge[k] != (float)(int)edge[k])
+				sawFraction = 1;
+		} else {
+			diff_eq_int("nothing reached the log %ld",
+				    (long)lines_ours, 0, t);
+			diff_eq_int("...on the blob's side either %ld",
+				    (long)lines_theirs, 0, t);
+			sawSilent = 1;
+		}
+
+		trial++;
+	}
+
+	/*
+	 * SIX LINES AND NOT FIVE OR SEVEN, taken from the BLOB at level 2 so
+	 * that it is a statement about the object.  A reconstruction that
+	 * dropped one of the four float prints would be caught by the text
+	 * comparison above; this is what catches the harness quietly counting
+	 * something other than lines.
+	 */
+	{
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = ref_dsplibs_debug_level = 2u;
+		blobDisplay(&theirParams);
+		diff_eq_int("the blob prints six lines",
+			    (long)dsplib_debug_capture_lines(1), 6, 0);
+		dsplib_debug_capture_reset();
+		displaySpectralParams(&ourParams);
+		diff_eq_int("...and so do we",
+			    (long)dsplib_debug_capture_lines(0), 6, 0);
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+		dsplib_debug_capture_on = 0;
+	}
+
+	diff_eq_int("something was printed", sawPrinted, 1, 0);
+	diff_eq_int("the silent levels were driven", sawSilent, 1, 0);
+	diff_eq_int("a negative value was printed", sawNegative, 1, 0);
+	diff_eq_int("a fractional value was printed", sawFraction, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -465,6 +846,8 @@ main(void)
 
 	rc |= run_index();
 	rc |= run_masks();
+	rc |= run_pack();
+	rc |= run_display();
 
 	return rc;
 }

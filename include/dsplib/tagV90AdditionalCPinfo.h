@@ -17,8 +17,29 @@
  * `V90Modem::V90Modem` takes its address and passes it on; it neither reads
  * nor writes a byte of it, and nothing else in this tree touches it."  That
  * was true of the tree when it was written.  `V90Demodulator::enterRRN` now
- * writes +0x10, which is what carved the field below out of the pad; the
- * other 0x14 bytes are still untouched by anything reconstructed.
+ * writes +0x10, which is what carved that field out of the pad.
+ *
+ * AND THE OTHER 0x10 BYTES ARE MODELLED NOW TOO, by the first READER anyone
+ * has written: `setV92CPpckFromParamsInfo` (.text+0x33920) copies five dwords
+ * out of this record into a `V92CP`, and each copy's width and destination is
+ * what types the field.  THAT THE RECORD IS THIS ONE is three independent
+ * things agreeing:
+ *
+ *   - `VPcmFloModem::runPcmModem` passes `this + 0x2410` as argument 2, and
+ *     `VPcmFloModem` embeds a `V90Modem` at +0x1758 whose `additionalCPinfo`
+ *     is at +0xcb8.  0x1758 + 0xcb8 = 0x2410 exactly.  Argument 1 is
+ *     `this + 0x1770` or `this + 0x1dc0`, which are 0x1758 + 0x18 and
+ *     0x1758 + 0x668 -- `mappingParams` and `mappingParamsAlt`.
+ *   - the V.90 twin of that function is
+ *     `V90CPPacker(V90MappingParams *, tagV90AdditionalCPinfo *, short *,
+ *     int)`, whose mangling gives the same two types in the same order.
+ *   - the five dwords end exactly at +0x14, where `pad_14` already was.
+ *
+ * NONE OF THE FIVE IS NAMED.  No format string prints any of them, and their
+ * destinations in `V92CP` are themselves offset-named for the reason that
+ * header sets out at length; carrying an offset name across would be
+ * adjacency rather than evidence.  What each one's comment records instead is
+ * where it goes, which is recoverable and is what a future reader needs.
  *
  * THE SIZE IS ADJACENCY AND IS NOT ASSERTED.  0xcd0 - 0xcb8 is where 0x18
  * comes from, and no allocation confirms it.
@@ -28,17 +49,58 @@
 #define DSPLIB_TAGV90ADDITIONALCPINFO_H
 
 struct tagV90AdditionalCPinfo {
-	unsigned char pad_00[0x10];		/* +0x00 not modelled     */
+	/*
+	 * +0x00  Loaded whole and stored as ONE BYTE into `V92CP::byte_04` --
+	 * `mov (%ecx),%ebx; mov %bl,0x4(%edx)`.  So the field is four bytes
+	 * and only its low one survives the copy.  `byte_04` reaches the
+	 * message as `bits[33]` and separately gates `V92CP::word_110`.
+	 */
+	unsigned int word_00;			/* +0x00                  */
+
+	/*
+	 * +0x04  The same shape, into `V92CP::char_01`, which that header
+	 * measures as SIGNED from its own readers (`jle`, `sar $1`).  The
+	 * copy says nothing about the sign of THIS field, so it keeps the
+	 * unsigned spelling its neighbours have and the conversion is stated
+	 * at the one site that performs it.  `char_01` is what selects the
+	 * long form of the CP message, and it also selects between the two
+	 * constants `setV92CPpckFromParamsInfo` subtracts at the end.
+	 */
+	unsigned int word_04;			/* +0x04                  */
+
+	/*
+	 * +0x08  A FLOAT, and it is the destination that types it: the four
+	 * bytes go to `V92CP::flt_10`, which `V92CP::infoToBits` sends as
+	 * sixteen magnitude entries weighted 4 down to 2^-13 off `fltTable_2`.
+	 * The copy itself is a `movl` -- GCC 3.4.2 copies a float that way at
+	 * `-O3`, which was probed rather than assumed (finding 5820) -- so the
+	 * width is forced and the type comes from the other end.
+	 */
+	float float_08;				/* +0x08                  */
+
+	/*
+	 * +0x0c  Four bytes, low one into `V92CP::byte_03`, which is
+	 * `bits[35]` stored whole.
+	 */
+	unsigned int word_0c;			/* +0x0c                  */
 
 	/*
 	 * +0x10  MODELLED, UNNAMED.  `V90Demodulator::enterRRN` stores a 0 or
-	 * a 1 here and is the only access to this record anywhere in the
-	 * object.  The 1 is reached only when the connection evaluator's
+	 * a 1 here.  The 1 is reached only when the connection evaluator's
 	 * +0x90 and both of `V90Phase4Demodulator`'s +0x3c and +0x38 are
 	 * non-zero, so it is a conjunction of three other flags recorded at
-	 * the moment a rate renegotiation is detected -- but nothing READS it
-	 * in the object, so what it is for is not recoverable here and a name
-	 * would be a guess.  The width is the store's (`mov %edx,0x10(%ecx)`).
+	 * the moment a rate renegotiation is detected.  The width is the
+	 * store's (`mov %edx,0x10(%ecx)`).
+	 *
+	 * "NOTHING READS IT IN THE OBJECT" USED TO END THAT SENTENCE AND IS
+	 * RETRACTED.  `setV92CPpckFromParamsInfo` copies it whole into
+	 * `V92CP::suv` (+0x108), which `V92CP::setSUV` also writes and which
+	 * `infoToBits` sends as `bits[32]` -- its low byte, whole.  So a flag
+	 * raised when a renegotiation is detected reaches the V.92 CP message
+	 * as one bit.  That is still not enough to NAME either end: `suv` is
+	 * named for its writer and not for its meaning, and finding 4342's
+	 * rule is why the retraction is spelled out rather than the sentence
+	 * simply deleted.
 	 */
 	unsigned int word_10;			/* +0x10                  */
 

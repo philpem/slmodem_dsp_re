@@ -90,9 +90,19 @@ void our_ssf_progress(void *self, const short *in)
 	asm("_ZN24V90SpectralShapingFilter8progressEPKs");
 void ref_ssf_progress(void *self, const short *in)
 	asm("ref__ZN24V90SpectralShapingFilter8progressEPKs");
-float our_ssf_metric(const void *self, const short *in, unsigned blocks)
+/*
+ * `long double`, NOT `float`.  The object hands the caller its x87 accumulator
+ * without narrowing it (0x33270, three bare `fstp %st(1)` and a `ret`), and
+ * this suite used to declare a `float` return -- which made both sides round
+ * before it looked, so a difference in the low 40 significand bits compared
+ * equal and the whole question was invisible here.  It was invisible because
+ * of the DECLARATION and not because of the values.  Finding 5854; the float
+ * checks below are kept beside the exact one because that is what a caller
+ * storing the result would see.
+ */
+long double our_ssf_metric(const void *self, const short *in, unsigned blocks)
 	asm("_ZNK24V90SpectralShapingFilter9getMetricEPKsj");
-float ref_ssf_metric(const void *self, const short *in, unsigned blocks)
+long double ref_ssf_metric(const void *self, const short *in, unsigned blocks)
 	asm("ref__ZNK24V90SpectralShapingFilter9getMetricEPKsj");
 
 int our_sd_process(void *self, unsigned sample)
@@ -612,6 +622,7 @@ run_ssf_metric(void)
 		unsigned char before_a[SSF_SLOT], before_b[SSF_SLOT];
 		short sig[64];
 		float ma, mb;
+		long double lda, ldb;
 		int i;
 
 		ssf_setup(trial, len);
@@ -621,11 +632,30 @@ run_ssf_metric(void)
 		memcpy(before_a, ssf_a, SSF_SLOT);
 		memcpy(before_b, ssf_b, SSF_SLOT);
 
-		ma = our_ssf_metric(ssf_a, sig, blocks);
-		mb = ref_ssf_metric(ssf_b, sig, blocks);
+		lda = our_ssf_metric(ssf_a, sig, blocks);
+		ldb = ref_ssf_metric(ssf_b, sig, blocks);
+		ma = (float)lda;
+		mb = (float)ldb;
 
 		diff_eq_int("the metric (len %ld)", fbits(ma), fbits(mb),
 			    len);
+		/*
+		 * THE EXACT ONE, all 64 significand bits, which is what
+		 * `advanceTrellis` compares against its running best before
+		 * anything rounds it.  memcmp rather than `==` so a NaN
+		 * cannot make two differing values compare equal.
+		 *
+		 * TEN BYTES AND NOT `sizeof`.  An x87 `long double` is 12
+		 * bytes here and only 10 of them are the value; the top two
+		 * are PADDING the compiler never writes, so they hold
+		 * whatever was in that stack slot.  Comparing `sizeof(lda)`
+		 * compares that garbage: it happened to agree at -O2 and
+		 * disagreed on every trial under the instrumented build,
+		 * which is how it was caught -- a check that was reading
+		 * uninitialised memory and calling the result a metric.
+		 */
+		diff_eq_int("the metric, unrounded (len %ld)",
+			    memcmp(&lda, &ldb, 10) == 0, 1, len);
 		diff_eq_int("blob: getMetric wrote nothing (trial %ld)",
 			    memcmp(before_b, ssf_b, SSF_SLOT) == 0, 1, trial);
 		diff_eq_int("ours: getMetric wrote nothing (trial %ld)",
@@ -1475,8 +1505,8 @@ ss_snapshot(void *dst, const unsigned char *src)
 	V90SpectralShaper *d = (V90SpectralShaper *)dst;
 
 	memcpy(dst, src, sizeof(V90SpectralShaper));
-	d->buf_28 = (unsigned short *)(long)(s->buf_28 != 0);
-	d->buf_2c = (unsigned short *)(long)(s->buf_2c != 0);
+	d->delayLine = (short *)(long)(s->delayLine != 0);
+	d->trialLine = (short *)(long)(s->trialLine != 0);
 	d->pde.state_ = (unsigned char *)(long)(s->pde.state_ != 0);
 }
 
@@ -1564,13 +1594,13 @@ run_ss(void)
 			    harness_alloc.bytes,
 			    2 * (2 * SS_BUF_BYTES + SS_PDE_SIZE), trial);
 		diff_eq_int("blob: +0x28 is left as allocated (trial %ld)",
-			    all_fill(xb->buf_28, SS_BUF_BYTES), 1, trial);
+			    all_fill(xb->delayLine, SS_BUF_BYTES), 1, trial);
 		diff_eq_int("blob: +0x2c is left as allocated (trial %ld)",
-			    all_fill(xb->buf_2c, SS_BUF_BYTES), 1, trial);
+			    all_fill(xb->trialLine, SS_BUF_BYTES), 1, trial);
 		diff_eq_int("ours: +0x28 is left as allocated (trial %ld)",
-			    all_fill(xa->buf_28, SS_BUF_BYTES), 1, trial);
+			    all_fill(xa->delayLine, SS_BUF_BYTES), 1, trial);
 		diff_eq_int("ours: +0x2c is left as allocated (trial %ld)",
-			    all_fill(xa->buf_2c, SS_BUF_BYTES), 1, trial);
+			    all_fill(xa->trialLine, SS_BUF_BYTES), 1, trial);
 
 		if (trial & 1) {
 			our_ss_dtor2(ss_a);
@@ -1602,15 +1632,15 @@ run_ss(void)
 			ref_ss_ctor(ss_b);
 
 			if (which == 0) {
-				sysdep_free(x->buf_28);
-				sysdep_free(y->buf_28);
-				x->buf_28 = 0;
-				y->buf_28 = 0;
+				sysdep_free(x->delayLine);
+				sysdep_free(y->delayLine);
+				x->delayLine = 0;
+				y->delayLine = 0;
 			} else {
-				sysdep_free(x->buf_2c);
-				sysdep_free(y->buf_2c);
-				x->buf_2c = 0;
-				y->buf_2c = 0;
+				sysdep_free(x->trialLine);
+				sysdep_free(y->trialLine);
+				x->trialLine = 0;
+				y->trialLine = 0;
 			}
 
 			our_ss_dtor(ss_a);

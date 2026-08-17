@@ -78,6 +78,9 @@
 #define V90_CONSTELLATION_MAX	128
 #define V90_CONSTELLATIONS	6
 
+class V92CP;
+struct tagV90AdditionalCPinfo;
+
 class V90MappingParams {
 public:
 	unsigned int word_0;					/* +0x000 */
@@ -182,6 +185,22 @@ void getConstellationMask(V90MappingParams *params, int which, short *mask);
 /* The same over the second table.  See getConstellationMask. */
 void getCodecConstellationMask(V90MappingParams *params, int which,
 			       short *mask);
+
+/*
+ * Fill a `V92CP` from this block and the record beside it.  The two source
+ * types are the object's, out of the mangling of the V.90 twin
+ * `V90CPPacker(V90MappingParams *, tagV90AdditionalCPinfo *, short *, int)`
+ * and out of the call site's three offsets into `VPcmFloModem`; see the .cpp.
+ */
+void setV92CPpckFromParamsInfo(V90MappingParams *params,
+			       tagV90AdditionalCPinfo *info, V92CP *cp);
+
+/*
+ * Print the six spectral-shaper fields, six `edprintf` lines and nothing
+ * else.  NOT GATED: the level test is inside `edprintf`, so at level 0 the
+ * calls still happen and print nothing.
+ */
+void displaySpectralParams(V90MappingParams *params);
 
 }
 
