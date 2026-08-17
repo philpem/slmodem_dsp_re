@@ -191,7 +191,7 @@ is still the fast loop between commits.
 The modern build runs in the same `phase` and still has to pass. It is the
 portability check, and `make check64` proves the tree is 64-bit clean. Where
 GCC 13 provably cannot reproduce the object from correct source, the site is
-declared in `tools/gccdiverge.json` -- six entries today, eleven checks --
+declared in `tools/gccdiverge.json` -- seven entries today, twelve checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
 a stale entry (an allow-listed test that starts passing) fails the gate.
 **`make period` has no allow-list and is not getting one.**
@@ -211,13 +211,29 @@ keeps its suite. Split the VALUE where you can rather than the group -- the
 blob treats a NaN and 177.0f as one input, so `t_v90leaves` lost one check of
 4,570 and kept every shape. Findings 6000, 6001 and 6002.
 
-Five of those six are one cause: the object's
-equality tests are a single ordered `fcom` with no parity test, which GCC 13
+`t_v90equproc` is declared without being a split -- it is `V90Equalizer::
+process`'s own binary and its divergence is the whole test's, not one check
+lifted out of a healthy group -- and the no-suite rule binds it just the same.
+**Do not register a mutation suite for it.**
+
+**The seven are two causes, and only two.** Five of them are the object's
+equality tests: a single ordered `fcom` with no parity test, which GCC 13
 will not emit at all -- `-mno-ieee-fp` is accepted by it and does nothing, and
 `-ffinite-math-only` does the job by withdrawing NaN semantics from the whole
 translation unit, which breaks eleven other sites that depend on them. So the
 source is the object's, `make period` proves it, and the modern build
-declares. Findings 2300 and 2304.
+declares. `t_agc`, `t_v90equ`, `t_v92ecnan`, `t_v90adidnan` and `t_v90p4dnan`.
+Findings 2300 and 2304.
+
+The other two are **x87 excess precision**, where the object narrows an
+intermediate the modern compiler keeps at 80 bits: `t_psd` in the FFT
+butterflies reaching a decibel (1453), and `t_v90equproc` on the one
+subtraction inside `V90Equalizer::process` whose difference feeds the squared
+error, the DFE step and the high-error test (6203). Neither is closable by
+choosing a type -- 6203 measured all three candidates, and the `float` the
+author wrote is the only one that is exactly green on the period compiler.
+`-fexcess-precision=standard` would close both and is a translation-unit-wide
+change to flags this tree derived from the object.
 
 **A rejection in `src/` under GCC 3.4.2 is a finding, not a portability
 nuisance** -- the author wrote this code for that compiler, so anything it

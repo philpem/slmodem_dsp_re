@@ -69230,3 +69230,44 @@ immediately reloaded is FORCED and has to be reproduced; a store that is
 never reloaded is a spill and is free. Both appear in this one function,
 fourteen instructions apart, and reading either onto the other costs hundreds
 of failing checks that look like arithmetic and are not.
+
+### 6102. A BRANCH THAT IS NOT AN ANCESTOR OF MASTER IS NOT NECESSARILY UNMERGED WORK
+
+Two of the branches sitting in the merge queue turned out to be **fully
+superseded**, and merging either would have REVERTED master rather than
+advanced it.
+
+| branch | looks like | actually |
+|---|---|---|
+| `fix/debugcov-zero-denominator` | 1 commit, #172, a gate improvement | `tools/debugcov.py` byte-identical to master's; all 148 finding lines already there |
+| `salvage/v90cd-determinedmin` | 3 commits, 953 insertions | every finding on master, both files strictly later there (6101) |
+
+The debugcov branch is the dangerous one, because the queue listed it as the
+only mergeable item and it reads as ready work.  Its content reached master by
+another route; what remains branch-only is five Makefile lines and three of
+CLAUDE.md's, **all of them older**.  Merging it would have restored the
+pre-`blobcheck` `prereq:`, the superseded `BLOB ?=` default, and an older
+`phase:` line -- a silent revert of three landed changes, with no conflict,
+because git would have seen a clean fast-forward of text master had moved past.
+
+**`git merge-base --is-ancestor B master` answering NO means only that B has
+commits master does not have BY SHA.**  It says nothing about content.  The
+check that answers the real question is the reverse diff -- what does the
+BRANCH have that master lacks:
+
+```
+git diff <branch> master -- <path> | grep -cE '^-[^-]'
+```
+
+Zero branch-only lines in the files that matter means the work has landed and
+the branch is a tombstone.  Where the count is non-zero, read those lines: on
+both of these they were stale prose and superseded defaults, not contributions.
+
+This is the same failure mode as the `gccdiverge.json` and `snapshot.json`
+resolutions in this session -- **a side of a merge can be OLDER rather than
+DIFFERENT, and every tool that offers "ours or theirs" hides that.**  Three
+times in one session is enough to state the rule: before merging any branch
+that has been open across other work, diff it in the reverse direction first.
+
+Neither branch is deleted.  Both are kept as tombstones with the reason
+recorded here, and **neither is to be merged.**
