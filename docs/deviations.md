@@ -2318,7 +2318,39 @@ Courier for filter 0 where we ask for 4 in the Courier's own units — and the
 request arrives: our received copy of that transmitter runs 1.5 dB hotter at
 2800-3400 Hz than the un-preemphasised reference.
 
-**PROPOSED FIX — deliberate, flagged, and NOT YET APPLIED.** Make index 0
+**APPLIED, 2026-08-16, and it is now the default.** Shape matching over all
+eleven templates replaces the counter in every build that does not define
+`DSPLIB_REPRODUCE_BUGS` — so the differential tier still proves bit-exactness
+against the blob, and the interop tier, the bench and anyone linking this
+library for real get the fix. `probe_preemp_shape` in `v34hshak.c`.
+`DSPLIB_V34_BLOB_PREEMP=1` forces the counter at runtime for A/B work; that is
+a bench convenience and not part of the contract.
+
+**WHAT CHANGED THE VERDICT.** The paragraph below said not to apply this
+without measuring, and that was right. What has since been measured:
+
+  * given a channel that is the exact inverse of template i, the selector
+    answers i — 11/11 at all five symbol rates. The counter manages 2–3 of 11
+    (finding 1961).
+  * on the bench's OWN ATA, the correct answer is index 0 at every symbol rate
+    below 3429, because the conformance band stops short of the 3450 Hz cliff
+    and the line is flat. The counter asks for 6 or 7 and so ADDS 1.5–3 dB of
+    tilt to a flat channel (1961).
+  * with 6 dB of tilt in the emulator the selector reaches a Table 3 index the
+    counter cannot, and the equaliser's off-centre tap energy falls 16% across
+    three seeds (1961).
+  * a regression test pins identity, noise robustness and interferer rejection
+    (1962), and caught a real defect — an unrejected outlier moved the fit
+    eight indices — before it reached the bench.
+
+**STILL NOT MEASURED: a rate improvement against real hardware.** On this bench
+the whole effect is ~0.13 dB (1956) because the path is flat and negotiates
+3429, the one rate where the counter is near-optimal. The fix is applied
+because rejecting five of eleven filters is a defect and the evidence above
+shows the replacement is correct and robust — not because a bench call got
+faster. It has not.
+
+**SUPERSEDED PROPOSAL, kept for the reasoning.** Make index 0
 reachable, so a channel that needs no pre-emphasis is told so. It belongs with
 the 8000 samp/s work and the floating-point defects on the list of things the
 reconstruction may deliberately do better, and it obeys the same rule as all
@@ -8098,3 +8130,114 @@ the thing, and it is exactly how finding 3527 retired +0x074 and +0x078 in
 this same class: `V90TRN2Design`'s own `%d` line named `maxUcode` and
 `nofUcodesInTrn2`, and the slot beside them at +0x080 kept its offset name
 because no string reached it. Nothing weaker should retire this one either.
+
+## D920 🐛 `V92CP::evaluateInfo` reads the mask words back bit-reversed
+
+`infoToBits` writes each sixteen-bit mask word LEAST significant bit first --
+`*p++ = (unsigned char)(s & 1); s = (short)(s >> 1)` over `j = 15; j >= 0`, so
+`bits[pos + 1]` carries bit 0 and `bits[pos + 16]` carries bit 15.
+`evaluateInfo`'s `case 7` and `case 8` read the same sixteen positions with
+`binaryTable[15 - i]` and `i` ascending, so `bits[pos + 1]` is given weight
+2^15 and `bits[pos + 16]` weight 2^0. **A mask word does not survive a round
+trip through the class**: `short_42[k][j]` comes back with its bits in the
+opposite order from the one it went out in.
+
+**Every other field DOES round trip**, which is what makes this an isolated
+defect rather than a misreading of the object. `word_104`, `char_02`,
+`word_28` and the five floats were all read out of `evaluateInfo` and checked
+against `infoToBits` field for field, and all of them agree on the positions
+and on the direction:
+
+    word_104     bits[27 + i] weight 2^i, both                     agree
+    char_02      bits[21 + i] weight 2^i, both                     agree
+    word_28[k]   bits[103 + 4k + i] weight 2^i, both               agree
+    flt_10       bits[52 + i] weight fltTable_2[15 - i], both      agree
+    flt_14..20   bits[69 + i] weight fltTable_1[6 - i], both       agree
+    masks        bits[pos + 1 + i] weight 2^i out, 2^(15-i) back   DISAGREE
+
+**WHICH OF THE TWO IS WRONG IS NOT ESTABLISHED HERE.** Settling it needs the
+V.92 CP message's own field order out of the recommendation, which nobody has
+read against this class; the object is self-consistent in every other field,
+so the odds are on the reader, but that is an impression and not a
+measurement. What IS measured is that the two disagree.
+
+**Reproduced, and not fixed**, per the rule above. `t_v92cpeval` drives it
+directly with bit vectors whose two readings differ (`i & 1`, `(i >> 1) & 1`
+and `i & 7` -- exactly the fills a symmetric round trip cannot tell apart) and
+`t_v92cpb2i` drives it through a real message, so the behaviour is pinned
+either way.
+
+**Reachability unmeasured.** Whether a live V.92 session ever puts a non-zero
+mask word on the wire depends on `setV92CPpckFromParamsInfo`, which fills the
+two blocks and is not written yet. Finding 6603.
+
+## D921 ⚠ The seven-position skip is an empty loop in the object
+
+At the end of `evaluateInfo`'s `case 6` the object emits
+
+    4f7bb:  48        dec  %eax          (%eax = 6 on entry)
+    4f7bc:  79 fd     jns  4f7bb
+    4f7be:  8d 6a 07  lea  0x7(%edx),%ebp
+
+-- a seven-iteration countdown with nothing in it, beside a `lea` that adds
+the seven in one instruction. That is what a source loop looks like after GCC
+3.4.2 has strength-reduced the induction variable out of the body and declined
+to delete the empty shell; the compiler has no pass that removes an empty
+loop.
+
+The reconstruction writes `word_124 += 7;`. The loop is unobservable -- it
+touches no memory, and its only effect on `%eax` is dead -- so this is
+"bit-exact, different structure", and an empty loop in the source would read
+as a defect to every future reader. The cost is two instructions' worth of
+`compare.py` in one function.
+
+**What would overturn this** is evidence that the body was not empty in the
+source: something the loop read and discarded. Nothing in the range suggests
+one -- there is no load between the `dec` and the `jns` -- so it is recorded
+as the compiler's and not as ours. Finding 6605.
+
+## D922 ⚠ `evaluateInfo`'s mask arms keep the read cursor in a register; the object reloads it
+
+The object reloads `word_124` from memory at the top of every one of the
+sixteen inner iterations -- `mov 0x124(%edi),%eax` at 4f810 and 4f81e -- and
+stores it straight back. Our source reads and writes the member and the
+compiler keeps it in a register across the loop, because `short_42[k][j]` is a
+`short` store and `word_124` is an `int` and type-based aliasing says the two
+cannot overlap.
+
+**They can, and `word_10c` is what makes them.** Nothing bounds it (D570), so
+the destination walks forward out of its array:
+
+    case 7   short_42[14][1] is +0x124, so word_10c >= 15 clobbers the cursor
+    case 8   short_a2[8][1]  is +0x124, so word_10c >= 9  clobbers the cursor
+
+At and above those the object's decoded mask value becomes the next read
+position. One trial measured it landing on 22,899, which is 20 KB past an
+object of 2,328 bytes; the reconstruction, holding the cursor in a register,
+walks on undisturbed. **The two behaviours differ, and neither is defensible
+as a behaviour** -- the object's reads unmapped memory and ours ignores a
+store the object honours.
+
+**Out-of-contract divergence, and the boundary is exactly the two numbers
+above.** `word_10c` is set by `evaluateInfo`'s own `case 6` as one more than
+the largest of six FOUR-BIT counts, so the largest value the class can give
+itself is 16 -- which is already past `case 8`'s ceiling of 9 and one past
+`case 7`'s of 15. So the boundary is NOT unreachable by construction and this
+is a bound on the FIELD, not a proof about it: a `word_10c` above 8 has to
+come either from a peer sending large counts in bits[103..127] or from
+`setV92CPpckFromParamsInfo`, which is unwritten. **Reachability unmeasured**,
+and the same for `case 7` above 14.
+
+`t_v92cpeval` drives right up to the boundary on both arms -- fourteen groups
+for `case 7`, eight for `case 8` -- so every aliasing target BELOW the cursor
+is tested: the state word, both other cursors, `word_10c` itself and, for
+`case 8`, `word_104` and `suv`. The object overwrites all of those while the
+loop runs and carries on regardless, because its own loop bound and indices
+are locals rather than fields, and that IS reproduced and IS green.
+
+**What would close it** is forcing the reload in a way both compilers honour.
+Nothing tried does so without either a `volatile` -- which changes codegen
+everywhere the field is touched, including in `bitsToInfo` -- or a
+type-punned access, which is undefined in its own right. The honest position
+is that the reconstruction is exact up to the boundary and undefined past it,
+which is where the object is too.

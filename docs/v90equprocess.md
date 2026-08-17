@@ -5,16 +5,30 @@
 the transcription. Every line below was read from `tools/dis.py` on
 `slmodemd/dsplibs.o`; nothing here came from a decompiler.*
 
-**Status: WRITTEN, PARTLY DRIVEN, NOT CLOSED.** The whole function is in
-`src/pump/v90/V90Equalizer.cpp` and `test/unit/t_v90equproc.cpp` drives the
-RESET arm at 120,974 differential checks with `make period` at zero failures.
-What is NOT driven is six of the seven state arms, both nested jump tables,
-all four re-convert blocks and the entire fixed-point half, so the function
-has not closed and the code in those regions is transcription that no test has
-adjudicated. Findings 6200-6203 are this batch; 6201 records what the object
+**Status: WRITTEN, MOSTLY DRIVEN, NOT CLOSED -- 74.25% of 532 lines.**
+The whole function is in `src/pump/v90/V90Equalizer.cpp` and
+`test/unit/t_v90equproc.cpp` drives it in three groups at 140,205 differential
+checks with `make period` at zero failures. **Six of the seven state arms, the
+state 4 jump table, all five re-convert blocks and the whole fixed-point half
+are now driven** -- findings 6500-6503, and 6502 is the region-by-region
+register of what is left.
+
+What remains undriven is **state 1 PHASE3, its eighteen-entry jump table,
+`<TAIL-P3>` and state 6 CHANNEL_VERIFY** -- about 180 lines, all of them
+waiting on a `V90Phase3Demodulator` fixture rather than on anything the object
+forbids. Findings 6200-6203 are the first batch; 6201 records what the object
 makes undrivable (`state` outside 0..6, `mmxMode` with states 0, 1, 2 and 6,
-and three of the eighteen phase 3 sub-cases), and D850 and D851 the two
-deviations.
+and three of the eighteen phase 3 sub-cases), 6500 adds a fourth -- the
+`dfeSum` cast at the three forward re-convert blocks, which is driven sixteen
+times each and still cannot be adjudicated because the value is dead -- and
+D850 and D851 are the two deviations.
+
+**AND THE `(short)` ASYMMETRY IS SETTLED.** §5's three forward re-convert
+blocks narrow the DFE output at exactly one of the three, and that is the
+object's: `fistpl 0xbc` at RECONVERT-A (0x39c5c) and RECONVERT-C (0x3a914)
+against `fistps 0x9a` plus `movzwl`/`cwtl` at RECONVERT-B (0x3a70a). It is
+also DEAD -- inverting the cast at all three sites moves zero of 19,231
+checks while a change to the statement above it moves 177. Finding 6500.
 
 **Two places below were re-read from `dis.py` and did not survive.** §3.4's
 fixed-point LMS is prose here and prose cannot be written from; the arithmetic

@@ -119,8 +119,8 @@
  },
  {
   "label": "the tail's mode-1 arm scales the baud rate by 2",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->faa96);",
-  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->faa96);",
+  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);",
+  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->baud_rate);",
   "fn": "t3m_tail"
  },
  {
@@ -1680,8 +1680,8 @@
  },
  {
   "label": "51 copies the carrier into the receive baud rate",
-  "find": "\t\tf->obj->faa96 = (short)T3M_U16(f, T3M_TXBAUD);",
-  "replace": "\t\tf->obj->faa96 = (short)T3M_U16(f, T3M_TXCARRIER);",
+  "find": "\t\tf->obj->baud_rate = (short)T3M_U16(f, T3M_TXBAUD);",
+  "replace": "\t\tf->obj->baud_rate = (short)T3M_U16(f, T3M_TXCARRIER);",
   "fn": "t3m_micro51"
  },
  {
@@ -1698,8 +1698,8 @@
  },
  {
   "label": "51 copies the four fields before the rate switch",
-  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->faa96 = (short)T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
-  "replace": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->faa96 = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+  "find": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->baud_rate = (short)T3M_U16(f, T3M_TXBAUD);\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
+  "replace": "\t\tT3M_I16(f, T3M_TOGGLE) = 0;\n\t\tf->obj->baud_rate = 0xab7;\n\t\tT3M_U16(f, T3M_RXCARRIER) = T3M_U16(f, T3M_TXCARRIER);",
   "fn": "t3m_micro51"
  },
  {

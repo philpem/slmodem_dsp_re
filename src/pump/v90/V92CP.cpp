@@ -737,7 +737,7 @@ int binaryTable[16] = {
  * writes each sixteen-bit mask word LEAST significant bit first (`*p++ =
  * s & 1; s >>= 1`); this function reads it back MOST significant first
  * (`binaryTable[15 - i]` with i ascending).  Every other field agrees.
- * docs/deviations.md D580.
+ * docs/deviations.md D920.
  *
  * THE WEIGHTS ARE A TABLE, NOT A SHIFT.  Where V90CP::evaluateInfo
  * accumulates `(acc << 1) | (bits[q] & 1)` walking DOWNWARDS, this one
@@ -938,7 +938,7 @@ V92CP::evaluateInfo()
 		 * the induction variable and declined to delete the empty
 		 * shell.  Written as the addition, because the empty loop is
 		 * unobservable and an empty loop in the source would read as a
-		 * defect.  docs/deviations.md D581.
+		 * defect.  docs/deviations.md D921.
 		 */
 		word_124 += 7;
 		break;
@@ -1080,7 +1080,7 @@ V92CP::bitsToInfo(unsigned char bit)
 	static unsigned int gamma;
 	static unsigned int delta;
 
-	unsigned int quantum;
+	unsigned int frameBits;
 	int rc = 0;
 
 	/*
@@ -1099,9 +1099,17 @@ V92CP::bitsToInfo(unsigned char bit)
 		byte_11a++;
 	}
 
-	quantum = 12u * bitsPerSymbol;
+	/*
+	 * Spelled `frameBits` and not `quantum`, which is what `infoToBits`
+	 * calls the same product: test/mutations/v92info.json anchors a
+	 * recorded mutation on the exact text `\tquantum = 12u *
+	 * bitsPerSymbol;`, and a second occurrence in this file would make
+	 * that anchor ambiguous and fail `mutsnap.py --check` for a suite
+	 * this batch has no other reason to touch.
+	 */
+	frameBits = 12u * bitsPerSymbol;
 
-	if (byte_11a == quantum && word_11c == 18)
+	if (byte_11a == frameBits && word_11c == 18)
 		rc = 5;
 
 	switch (word_114) {
@@ -1253,13 +1261,13 @@ V92CP::bitsToInfo(unsigned char bit)
 		 *
 		 * THE DIVISION IS UNSIGNED (`div`, not `idiv`), so a zero
 		 * `bitsPerSymbol` divides by zero here exactly as it does in
-		 * `infoToBits`.  docs/deviations.md D561 excludes it.
+		 * `infoToBits`.  docs/deviations.md D571 records it.
 		 */
 		word_11c++;
 		if (bit != 0)
 			resetDetector();
 
-		if ((unsigned int)word_11c % quantum == 0) {
+		if ((unsigned int)word_11c % frameBits == 0) {
 			resetDetector();
 
 			if (byte_00 == 1)

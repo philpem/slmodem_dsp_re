@@ -46,7 +46,7 @@
  * that turns a completed block of `bits` back into the message fields.  It is
  * `infoToBits` run backwards, field for field, and reading the two against
  * each other is what settled +0x124 and the state numbering.  Findings
- * 6410-6417.
+ * 6600-6607.
  *
  * The destructor is one byte -- a bare `ret`.  That is not an assumption
  * about an empty class: nothing here is allocated, and the V.90 sibling with
@@ -165,7 +165,7 @@ public:
 	 * `evaluateInfo` is the exact inverse of `infoToBits` -- every field
 	 * comes back out of the same bit positions it went in at -- so the
 	 * pair proves the LAYOUT twice over and says nothing more about what
-	 * any field means than the packer already did.  Finding 6412; the two
+	 * any field means than the packer already did.  Finding 6602; the two
 	 * fields that DID gain something are +0x114 and +0x124 below.
 	 * ===================================================================
 	 */
@@ -409,7 +409,7 @@ public:
 	 * both are, so a detector restart leaves it where the last decode left
 	 * it.  Every arm that reads a variable-length block sets it first, so
 	 * nothing written depends on that -- but it is the object's own
-	 * asymmetry and it is reproduced.  Was `pad_124`; finding 6411.
+	 * asymmetry and it is reproduced.  Was `pad_124`; finding 6601.
 	 */
 	int word_124;
 
@@ -499,7 +499,7 @@ public:
 	 * gives.  THE FIELD KEEPS ITS OFFSET NAME for that reason -- the
 	 * derivation above is usage inference, CLAUDE.md's weakest tier, and a
 	 * name like `holdoff` would be believed by every future reader on the
-	 * strength of one block of arithmetic.  Finding 6416.
+	 * strength of one block of arithmetic.  Finding 6606.
 	 */
 	int word_914;
 };
