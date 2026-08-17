@@ -7437,10 +7437,22 @@ parameter to keep the mangled name.
 values in that slot and asserts the mapping block is identical, so "never
 read" is measured rather than read off a listing.
 
-## D560 ⚠ Both phase 4 decision members return an uninitialised local on five arms
+## D600 ⚠ Both phase 4 decision members return an uninitialised local on five arms
 
 **Where:** `src/pump/v90/V90Phase4Demodulator.cpp`, `getV90Decision` and
 `getV92Decision`; blob 0x25ea0 and 0x26ac0.
+
+*RENUMBERED before merge.  `v92cp-infotobits` took the number this entry was
+first written under, in the same window, and landed on master first; nothing
+outside this batch had referenced it.*
+
+**IT IS THE PHASE 4 INSTANCE OF D321**, which records the same shape one class
+along in `V90Phase3Demodulator::getV90Decision`.  Two entries and not one
+because a deviation names a SITE: these are different functions in a different
+translation unit, the arms are five rather than one default block, and the
+reachability argument is different -- phase 3's four states are unmeasured and
+phase 4's four are states the receiver passes through.  Read D321 first; what
+follows is only what differs.
 
 **What the original does:** both build the returned decision in `%edi` and both
 save and restore `%edi` around the body, but neither writes it on every path.

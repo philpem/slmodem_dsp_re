@@ -65323,7 +65323,13 @@ constructed for them, which is finding 3509's point stated positively:
     the suite now catches **199 -> 198**, an off-by-one in a constant that a
     random sweep could not touch at all.
 
-### 4700. `V90Phase4Demodulator`'s SAMPLE COUNTER IS UNSIGNED AND ITS NEIGHBOUR IS THE AUTHOR'S `trn2dDDLength`
+*Findings 4800-4812 were written as 4700-4712 and RENUMBERED before merge:
+`v92cp-infotobits` claimed 4700-4709 and the two deviation numbers this
+batch had taken, in the same window, and landed on master first.  Nothing outside this batch ever referenced the old
+numbers.  CLAUDE.md's rule for a renumbering is to say so here, and this is
+the ninth collision the parallel-session numbering has produced.*
+
+### 4800. `V90Phase4Demodulator`'s SAMPLE COUNTER IS UNSIGNED AND ITS NEIGHBOUR IS THE AUTHOR'S `trn2dDDLength`
 
 The seven leaf members settled `+0x24` and `+0x2c` as far as they could and got
 both partly wrong, in the two ways CLAUDE.md's evidence order predicts.
@@ -65369,7 +65375,7 @@ The two writers disagree about which parameter fills it -- `reset` uses
 `RRN_TRN2D_DD_LENGTH` (+0x370) -- so the field is the length in force and not
 either parameter.
 
-### 4701. THE TWO PHASE 4 DECISION MEMBERS ARE NOT TWINS, AND THE CLOSURE SAYS SO BEFORE THE DISASSEMBLY DOES
+### 4801. THE TWO PHASE 4 DECISION MEMBERS ARE NOT TWINS, AND THE CLOSURE SAYS SO BEFORE THE DISASSEMBLY DOES
 
 `getV90Decision` (3,095 B) and `getV92Decision` (3,252 B) share a frame, an
 eighteen-way switch on the same field and the whole five-state silence chain.
@@ -65394,7 +65400,7 @@ with eleven wrong arms.**  The two are written out separately and the
 `V90CP`/`V90MP` split is what makes a shared helper impossible rather than
 merely unattractive.
 
-### 4702. ELEVEN MORE `Phase4DemodulatorState` NAMES CAME OUT OF THE TRANSITION MESSAGES, AND ONE WAS DECLINED
+### 4802. ELEVEN MORE `Phase4DemodulatorState` NAMES CAME OUT OF THE TRANSITION MESSAGES, AND ONE WAS DECLINED
 
 The enum had five enumerators, four of them from the `edprintf` at the site
 that stores the value.  The decision members' switch covers 0..0x11 and carries
@@ -65430,7 +65436,7 @@ prints "enter WaitForV90CP state" and `getV92Decision`'s RfNot arm prints
 "enter WaitForCPu state", both storing 4.  The V.90 spelling is kept because it
 was there first, and the disagreement is recorded rather than resolved.
 
-### 4703. THE FOUR ENERGY LINES TAKE THEIR SIGN FROM THE ENERGY AND THEIR MAGNITUDE FROM ITS SQUARE ROOT
+### 4803. THE FOUR ENERGY LINES TAKE THEIR SIGN FROM THE ENERGY AND THEIR MAGNITUDE FROM ITS SQUARE ROOT
 
 Both decision members print
 
@@ -65453,7 +65459,7 @@ and the two readings only disagree where `fsqrt` would return a NaN anyway.
 The dB line three instructions later does NOT do it: there the sign and the
 magnitude are the same register.
 
-### 4704. THE B1d BER's SIGN IS COMPUTED FROM A SECOND, DIFFERENTLY SPELLED QUOTIENT, AND NO TEST CAN SEE IT
+### 4804. THE B1d BER's SIGN IS COMPUTED FROM A SECOND, DIFFERENTLY SPELLED QUOTIENT, AND NO TEST CAN SEE IT
 
 `getV90Decision` at 0x26447 computes the ratio TWICE for one `edprintf`:
 
@@ -65474,9 +65480,9 @@ block readable at all: `de fa` prints as `fdivrp` and IS `FDIVP`.  The source
 is written as one quotient spelled three times and the residual is a codegen
 question, recorded here so the next reader does not mistake it for a defect.
 
-### 4710. THREE PHASE 4 STATE NAMES COME FROM THE ARM SHAPE AND NOT FROM A STRING
+### 4810. THREE PHASE 4 STATE NAMES COME FROM THE ARM SHAPE AND NOT FROM A STRING
 
-Split out of 4702 because it is the weakest claim in that header and a reader
+Split out of 4802 because it is the weakest claim in that header and a reader
 should be able to find it on its own.  `P4D_STATE_WAIT_FOR_RI`,
 `P4D_STATE_WAIT_FOR_RI_NOT` and `P4D_STATE_WAIT_FOR_RT_NOT` are tier-3 names.
 What licenses them is that state 0xe is called `WaitForRt` by the author, at
@@ -65488,9 +65494,9 @@ the only site that enters it, and that its arm is
 and the three above are that arm with `detectR`/"Ri detected",
 `detectRNot`/"RiNot detected" and `detectRNot`/"RtNot detected".  If a later
 batch finds the author calling any of the three something else, these are the
-names to change and 4702 is where the rest are.
+names to change and 4802 is where the rest are.
 
-### 4711. A FIXTURE THAT ARMS `detectR` DOES NOT ARM `detectRNot`, AND THIRTY-NINE MUTATIONS SAID SO
+### 4811. A FIXTURE THAT ARMS `detectR` DOES NOT ARM `detectRNot`, AND THIRTY-NINE MUTATIONS SAID SO
 
 `t_v90p4ddec`'s first run passed every differential check and caught 34 of 73
 mutations.  The 39 survivors were not 39 problems; they were four, and each was
@@ -65524,7 +65530,7 @@ eight distinct states came out -- and all four faults survived them, because a
 counter over the whole sweep cannot see that one arm of eighteen was never
 entered.  The mutations adjudicated and the counters did not.
 
-### 4712. THE PHASE 4 KEEP-RATE FLAG IS AN UNORDERED COMPARE, AND ITS OPERAND ORDER IS THE OBJECT'S
+### 4812. THE PHASE 4 KEEP-RATE FLAG IS AN UNORDERED COMPARE, AND ITS OPERAND ORDER IS THE OBJECT'S
 
 `CalcErrorEnergyAfterEchoCancellation`'s tail stores one bit into +0x3510:
 

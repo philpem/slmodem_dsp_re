@@ -167,7 +167,7 @@ class V90AutoDigitalImpDetector;
  * different message -- `detectR`/"Ri detected", `detectRNot`/"RiNot detected",
  * `detectRNot`/"RtNot detected" -- so `WAIT_FOR_RI`, `WAIT_FOR_RI_NOT` and
  * `WAIT_FOR_RT_NOT` name what the arm waits for, in the author's own scheme.
- * Finding 4710.
+ * Finding 4810.
  *
  * 0x11 IS DELIBERATELY UNNAMED.  Both functions send it to the same body as
  * state 8 -- return zero, touch nothing -- and no message anywhere in the
@@ -366,7 +366,7 @@ public:
 	 *     three more: the zero high word is the unsigned-to-float
 	 *     widening.  A signed `int` converts with a plain `fildl`.
 	 *
-	 * Finding 4700.
+	 * Finding 4800.
 	 */
 	unsigned int countInState;
 

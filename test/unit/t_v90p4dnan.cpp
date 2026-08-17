@@ -26,7 +26,7 @@
  * and mutation-testable.
  *
  * `make period` has no allow-list and passes this file with the object's own
- * compiler, which is the tier that decides.  Findings 4712 and 2301.
+ * compiler, which is the tier that decides.  Findings 4812 and 2301.
  *
  * THE FIXTURE IS TINY BECAUSE THE ARM IS.  State
  * `CALC_ENERGY_AFTER_EC` reads `params`, calls

@@ -422,8 +422,9 @@ V90Phase4Demodulator::detectFPE(short sample)
  * epilogue from states 4 and 0x10 (V.90), states 5 and 6 (V.92), or from the
  * out-of-range `ja` -- so what comes back is whatever the CALLER left in the
  * register.  A `short decision;` with no initialiser is what puts that in
- * front of the compiler and it is what GCC 3.4.2 reproduces.  Deviation D560
- * carries it, and `t_v90p4ddec` asserts the OBJECT and the transcript on
+ * front of the compiler and it is what GCC 3.4.2 reproduces.  Deviation D600
+ * carries it and D321 is the same shape one class along in
+ * `V90Phase3Demodulator`, and `t_v90p4ddec` asserts the OBJECT and the transcript on
  * those arms and never the return value, because there is no value there to
  * agree about.
  *
@@ -552,7 +553,7 @@ V90Phase4Demodulator::getDecision(short sample)
  * FROM ITS SQUARE ROOT.  `fldz ; fcomps 0x350c(%esi)` compares the FIELD,
  * while the `%d.%04d` pair comes from `fsqrt` of it -- at both sites here and
  * at both in `getV92Decision`, so it is a property of the original's own
- * print idiom and not an accident of one line.  Finding 4703.
+ * print idiom and not an accident of one line.  Finding 4803.
  */
 short
 V90Phase4Demodulator::getV90Decision(short sample)
@@ -899,7 +900,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			 * the ratio is negative and `fyl2x` answers a NaN.
 			 * `t_v90p4ddec` seeds a negative accumulator on a
 			 * third of its trials and caught it; findings 2300,
-			 * 2301 and 4712.
+			 * 2301 and 4812.
 			 */
 			int_3510 =
 			    (params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
@@ -1324,7 +1325,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			 * the ratio is negative and `fyl2x` answers a NaN.
 			 * `t_v90p4ddec` seeds a negative accumulator on a
 			 * third of its trials and caught it; findings 2300,
-			 * 2301 and 4712.
+			 * 2301 and 4812.
 			 */
 			int_3510 =
 			    (params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE

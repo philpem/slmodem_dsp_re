@@ -31,7 +31,7 @@
  * Both functions build the answer in %edi and never write it on the paths that
  * reach the epilogue from V.90's states 4 and 0x10, V.92's states 5 and 6, or
  * from the out-of-range `ja` at the top.  What comes back there is the
- * CALLER'S %edi.  Deviation D560 records it; here it means the return value is
+ * CALLER'S %edi.  Deviation D600 records it; here it means the return value is
  * asserted on the fifteen arms that define one and never on those five -- an
  * assertion there would be comparing two pieces of stack litter and would pass
  * or fail for reasons that have nothing to do with this reconstruction.  The
@@ -333,7 +333,7 @@ setup(int trial, int mode)
 		 * mutations reading NOT CAUGHT.  A constant buffer makes the
 		 * two taps cancel and the demapper's own bits reach `V90MP`
 		 * and `V90CP`; the varied half keeps the descrambler's own
-		 * state in the comparison.  Finding 4711.
+		 * state in the comparison.  Finding 4811.
 		 */
 		if (mode & 1)
 			fill(dscbuf_s[s], DSC_N, lf ^ 0x13u);
@@ -374,7 +374,7 @@ setup(int trial, int mode)
 		 * phase count" produce the same line and the mutation that
 		 * swaps them survives.  `resetNoSpectral` also computes
 		 * `word_08` as `word_0 - signBitsPerFrame`, which is 1 or 3,
-		 * so 5 is clear of both.  Finding 4711.
+		 * so 5 is clear of both.  Finding 4811.
 		 */
 		m->word_08 = 5u;
 		m->short_1eb4 = (short)((mode & 1) ? 1 : 0);
@@ -543,7 +543,7 @@ arm_r(V90RDetector *d, int want, int limit)
 	 * this suite got wrong: it counts down +0x08 and matches 0x07 rather
 	 * than counting +0x04 and matching 0x38, so a fixture armed for
 	 * `detectR` leaves every RNot arm in both functions unreached and
-	 * eleven mutations reading NOT CAUGHT.  Finding 4711.
+	 * eleven mutations reading NOT CAUGHT.  Finding 4811.
 	 */
 	case 2:
 		d->int_00 = 5;
@@ -663,7 +663,7 @@ run_one(int v92, int state, int arm, int phase, int trial, int mode,
 		 * below and its own entry in `tools/gccdiverge.json`, so that
 		 * the 32,000 checks in this sweep stay green under both
 		 * compilers and only the one check that provably cannot be is
-		 * excused.  Finding 4712.
+		 * excused.  Finding 4812.
 		 */
 		d->errorEnergyBeforeEC = 4.0f;
 		d->errorEnergyAfterEC = 1.0f;
@@ -684,7 +684,7 @@ run_one(int v92, int state, int arm, int phase, int trial, int mode,
 		 * past it cannot tell `+ 0x17` from `+ 0x18`.  So each list
 		 * below straddles: one value below the real threshold, one
 		 * between it and the nearest wrong one, and one above both.
-		 * Finding 4711.
+		 * Finding 4811.
 		 */
 		switch (state) {
 		case 2:
@@ -786,7 +786,7 @@ run_sweep(int v92)
 					 * that made `mode` constant per phase
 					 * across every state, arm and level --
 					 * half the seeds never met half the
-					 * thresholds.  Finding 4711.
+					 * thresholds.  Finding 4811.
 					 */
 					mode = (phase + arm + 1 + state) & 3;
 					/*

@@ -40,7 +40,7 @@
     "why": "`if (v == 0.0f) continue;` in the loop that picks the nearest linear-mapping entry. The object compares against the zero it has kept on the x87 stack since 0x4443c and jumps on ZF -- ONE `fcom`, no parity test -- so an unordered entry is skipped along with a zero one. IEEE C's `==` is false for a NaN and GCC 13 emits the parity test whatever it is told (finding 2304), so the modern build keeps four entries the object drops. This is the only check in this binary that diverges: the other twenty-one groups pass under both compilers, and the two operand-order corrections this file also took -- `ADID_PRINT_SIGN`'s negation and the merge tolerance hoisted into `lim` -- are IEEE-neutral by construction and change nothing here. `make period` passes this binary's twenty-two groups and 20,407 checks."
   },
   "t_v90p4dnan": {
-    "finding": 4712,
+    "finding": 4812,
     "checks": [
       "V90Phase4Demodulator: the keep-rate flag on an unordered dB"
     ],
