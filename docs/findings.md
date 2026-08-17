@@ -66199,3 +66199,50 @@ byte)`, `scrambler.reset(0)`, eleven fields cleared, `cp->bitsPerSymbol = 1`,
 `cp->byte_00 = 0`, `infoToBits`, `getBitVector`, `e2uExtended = 0`, and finally
 `for (i = arg4; i; i--) generateSymbol();`.  `+0x42` is still `pad_42` here
 because nothing this batch wrote touches it.
+
+## 4824. `V92EchoCanceller`'s three setters, and the file-static that had been standing in for two of them
+
+486 bytes over three members, and two of them were already written -- as
+file-statics, because neither was declared and a call to an undeclared member
+would have been a call to nothing.  `ec_set_echo_beta` and
+`ec_set_decay_factor` are now `V92EchoCanceller::setEchoBeta(float)` (0x10cc0)
+and `::setDecayFactor(float)` (0x10d60), `setState` calls them at its three
+sites, and GCC inlines them back exactly as it did -- so the factoring note
+that file already carried still describes the object, and the source now names
+what the object names.  The third, `setEchoParams(float, float, unsigned)`
+(0x10e00, 339 B), has a body of three calls and nothing else; the object
+inlines all three, ending in `setEchoDelay`'s diagnostic as a tail call.
+
+**THE ORDER IS FORCED BY THE DIAGNOSTICS.**  `echoBeta`'s message
+(`.rodata.str1.4:0x3028`) is emitted at +0xa2, the store to +0x34 at +0xb1 and
+`echoBetaDecay`'s (`:0x3054`) at +0x12a, so the three calls cannot be
+reordered without moving a message.  A mutation says so and is caught.
+
+**WHAT NO TEST CAN EVER HOLD, and the mutation set records it as such.**  The
+object stores +0x30 and then RELOADS it (`fcomps 0x30(%ecx)`) for the printed
+sign while the magnitude comes from the value still in the register.  That is
+the object's spelling and the source reproduces it -- but the store happens
+first, so the field and the argument hold the same float by then, and an entry
+that exchanged them read NOT CAUGHT.  Withdrawn as EQUIVALENT rather than
+fixed: the two entries that replaced it read the WRONG FIELD instead
+(`sign_of(echoBetaDecay)` in `setEchoBeta`) and both are caught, because the
+fixture seeds the two floats apart.  Same disposition as 4820's
+`generateCPu`/`generateSUVu` pair, and the same reason.
+
+**IT IS ITS OWN BINARY BECAUSE `mutate.py` REFUSED, and that refusal is the
+tool working.**  `t_v90leaves` already drives seven `V92EchoCanceller` members
+and is where three more rows belong.  It is also in `tools/gccdiverge.json`
+for `V92EchoCanceller::process`, so under GCC 13 it exits non-zero on the
+unmutated source -- and `mutate.py` judges a mutant caught by a non-zero exit,
+so it refuses the whole suite rather than score every mutation as caught.  The
+NEW members moved out into `t_v92ecparams` instead of `process` moving, which
+would have taken the state machine and both signal paths with it.
+`t_v90p4dnan` is the precedent and this is the second application of it.
+
+864 differential checks per level over three levels plus nine anti-vacuity
+assertions; 11 mutations, all caught.  The grid runs both signs and both
+zeros (`sign_of` is `0.0f < v`, so zero prints '-' and `-0.0f` is a different
+store that compares equal), fractional values (`frac_of` scales by 1e6 and a
+grid of whole numbers prints `.000000` for all of them), and stays inside
++/-3000 because `(int)v` outside `int`'s range is undefined in OUR source --
+D561's argument.  The floats are compared as BITS, not as numbers.

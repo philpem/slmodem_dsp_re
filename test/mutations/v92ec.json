@@ -260,16 +260,6 @@
   "replace": "\treturn (int)(((long double)v - (long double)(int)v)\n\t\t\t     * 1.0e6f);"
  },
  {
-  "label": "the beta is printed and not stored",
-  "find": "\tself->echoBeta = beta;\n",
-  "replace": ""
- },
- {
-  "label": "the decay factor is printed and not stored",
-  "find": "\tself->echoBetaDecay = decay;\n",
-  "replace": ""
- },
- {
   "label": "the filter is dumped on every entry to FILTER_ONLY",
   "find": "\t\tif (state == V92_ECHO_FAST_TRAINING\n\t\t    || state == V92_ECHO_SLOW_TRAINING) {",
   "replace": "\t\tif (state != V92_ECHO_FILTER_ONLY) {"
@@ -296,13 +286,13 @@
  },
  {
   "label": "fast training loads the slow beta",
-  "find": "\t\tec_set_echo_beta(this, params->V92_ECHO_FAST_BETA_FACTOR);",
-  "replace": "\t\tec_set_echo_beta(this, params->V92_ECHO_SLOW_BETA_FACTOR);"
+  "find": "\t\tsetEchoBeta(params->V92_ECHO_FAST_BETA_FACTOR);",
+  "replace": "\t\tsetEchoBeta(params->V92_ECHO_SLOW_BETA_FACTOR);"
  },
  {
   "label": "slow training loads the fast decay factor",
-  "find": "\t\tec_set_decay_factor(this, params->V92_ECHO_SLOW_DECAY_FACTOR);",
-  "replace": "\t\tec_set_decay_factor(this, params->V92_ECHO_FAST_DECAY_FACTOR);"
+  "find": "\t\tsetDecayFactor(params->V92_ECHO_SLOW_DECAY_FACTOR);",
+  "replace": "\t\tsetDecayFactor(params->V92_ECHO_FAST_DECAY_FACTOR);"
  },
  {
   "label": "fast training takes the slow duration",
