@@ -102,7 +102,7 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  * `resetDetector` and `reset` byte-for-byte identical to the object, operands
  * included, which is 617's acceptance test and not a store-order hint.  Three
  * symbols moved on one reordering, so it is the source order and not a
- * coincidence of scheduling.  Finding 4300.
+ * coincidence of scheduling.  Finding 4600.
  */
 V90CP::V90CP()
 {
@@ -164,7 +164,7 @@ V90CP::getBitVector(unsigned int &length)
  * resetDetector -- 0x51510, 46 bytes, and its whole body is five stores.
  * OURS IS BYTE-FOR-BYTE THE OBJECT'S, operands included, which is what
  * settles the order: +0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa.  See the
- * constructor above for what that order also repaired, and finding 4300.
+ * constructor above for what that order also repaired, and finding 4600.
  *
  * 18 is the write cursor's home: one preamble frame of seventeen bits, then
  * the next frame's framing bit at 17 and its first data bit at 18.
@@ -190,7 +190,7 @@ V90CP::resetDetector()
  * folds it in and the 73 bytes it emits are the object's, instruction for
  * instruction and operand for operand.  The constructor above does NOT get
  * the same treatment from us, because that is 1237's ruling and this measures
- * nothing about it either way.  Finding 4300.
+ * nothing about it either way.  Finding 4600.
  *
  * WHAT SEPARATES IT FROM THE CONSTRUCTOR is `byte_13`, which the constructor
  * clears and this does not.  That is the only field of the two the object
