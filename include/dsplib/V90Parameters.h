@@ -101,9 +101,10 @@ struct _tagModemParameters;
 class V90Parameters {
 public:
 	/*
-	 * The members, from the mangling.  Six of the seven are defined in
+	 * The members, from the mangling.  All seven are defined in
 	 * src/pump/v90/V90Parameters.cpp:
 	 *
+	 *     loadParams(char *)          7894 B
 	 *     setToDefault()              3589 B
 	 *     loadModemParamsData()        344 B
 	 *     V90Parameters(_tagModemParameters *)   89 B
@@ -111,23 +112,24 @@ public:
 	 *     initSession()                 24 B
 	 *     ~V90Parameters()               1 B   (a bare `ret`)
 	 *
-	 * The seventh is NOT declared here, on purpose:
-	 *
-	 *     loadParams(char *)          7894 B
-	 *
-	 * It is 295 straight-line calls to two functions that are `xor
-	 * %eax,%eax; ret` in the shipped object, so it has no observable
-	 * behaviour, no differential oracle exists for it, and a declaration
-	 * with no definition is an invitation to add one that was checked
-	 * only against the disassembly it was copied from.  Finding 879
-	 * records the oracle that was evaluated and what decided it.  Its
-	 * value -- the field map below -- is already extracted, and
-	 * `make params` re-extracts it from the object at every gate.
+	 * `loadParams` USED TO BE LEFT OUT and this comment used to say the
+	 * oracle for it did not exist.  It does: `Vparser_read_int` and
+	 * `Vparser_read_float` are reconstructed in src/core/Vparser.c, both
+	 * sides' copies are weakened out of the differential binary, and a
+	 * logging pair records the (reader, name, offset-from-`this`) triple
+	 * of every call the blob's member and ours make.  The two 295-entry
+	 * sequences are compared in order.  That is not a copy of
+	 * `vparse.py`'s output compared with itself: our third argument is
+	 * `&this->FIELD` resolved by the COMPILER through this header, so the
+	 * offset reaches the log by a path the static walk is not on, and the
+	 * ORDER and the PAIRING of the 295 calls are established by nothing
+	 * else in the tree.  Findings 879 (which this supersedes) and 6321.
 	 */
 	V90Parameters(_tagModemParameters *mp);
 	~V90Parameters();
 
 	void	setToDefault();
+	void	loadParams(char *paramFile);
 	void	loadModemParamsData();
 	void	init();
 	void	initSession();
