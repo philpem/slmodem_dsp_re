@@ -1,12 +1,18 @@
 /*
- * t_v90demap.cpp -- differential test of the V.90 demapper cluster: the five
- * members that turn PCM samples into bits.
+ * t_v90demap.cpp -- differential test of the V.90 demapper cluster: the ten
+ * members that turn PCM samples into bits, and the two that rebuild the
+ * tables they use.
  *
  *     V90SignBitsExtractor::applyFrameAction(ACTIONS, uchar *, uchar *)
  *     V90SignBitsExtractor::process(uchar *, uchar *)
  *     V90Demapper::resetLinearMappStudy(unsigned)
  *     V90Demapper::hardDecision(short)
  *     V90Demapper::process(uchar *, unsigned &)
+ *     V90Demapper::incrementRBSFramePosition()
+ *     V90Demapper::updateConstelation()
+ *     V90Demapper::resetNoSpectral(V90MappingParams *)
+ *     V90Demapper::linearMappingStudy(short, short)
+ *     V90Demapper::reset(V90MappingParams *)
  *
  * WHY THIS IS ITS OWN BINARY and not another suite inside t_v90demapctor.cpp:
  * finding 1264's rule, that a mutation suite is a (source file, test binary)
@@ -122,6 +128,11 @@ void our_resetns(void *self, void *mp)
 void ref_resetns(void *self, void *mp)
 	asm("ref__ZN11V90Demapper15resetNoSpectralEP16V90MappingParams");
 
+void our_reset(void *self, void *mp)
+	asm("_ZN11V90Demapper5resetEP16V90MappingParams");
+void ref_reset(void *self, void *mp)
+	asm("ref__ZN11V90Demapper5resetEP16V90MappingParams");
+
 void our_lms(void *self, short sample, short level)
 	asm("_ZN11V90Demapper18linearMappingStudyEss");
 void ref_lms(void *self, short sample, short level)
@@ -168,6 +179,14 @@ static unsigned char in_s[V90SBE_DECODER_SIZE];
 static unsigned char dem_before[2][DEM_SLOT];
 /* One snapshot of the SHARED detector, for the members that only read it. */
 static unsigned char adi_before[sizeof(V90AutoDigitalImpDetector)];
+/*
+ * And one taken IMMEDIATELY BEFORE a call, for the members that WRITE the
+ * detector.  `adi_before` above is written at other points in the file and
+ * `fill` reseeds every trial, so comparing a fresh seed against a stale
+ * snapshot is non-zero whatever the function did -- a counter that cannot
+ * fail, which is finding 134's shape.
+ */
+static unsigned char adi_pre[sizeof(V90AutoDigitalImpDetector)];
 static unsigned char scratch[2][DEM_SLOT];
 
 #define DEM(s)	(*(V90Demapper *)dem_s[s])
@@ -1420,6 +1439,412 @@ run_resetns(void)
 	return diff_end();
 }
 
+/* -------------------------------------------------------------- reset --- */
+
+/*
+ * `reset` is `resetNoSpectral` plus the sign-bit geometry, the extractor, the
+ * histogram arrays, the delay and the detector's 768 cumulative cells -- so
+ * this suite is `run_resetns`'s fixture with `run_rlms`'s detector rule: each
+ * side gets its OWN detector, because this one WRITES it, and +0x1ea0 comes
+ * out of the object comparison while the two detectors are compared whole.
+ *
+ * THE SPACINGS ARE CHOSEN FOR THE DIVIDE AND FOR ITS GUARD.
+ *
+ *   0   the guarded arm.  The object skips `divl` and LEAVES
+ *       `signBitGroupSize` unwritten, which is only visible because nothing
+ *       here is ever zeroed (finding 230): the seed is varied and non-zero,
+ *       so a reconstruction that stored a zero -- or that divided and trapped
+ *       -- differs.  It is a runnable input on both sides because
+ *       `V90SignBitsExtractor::reset` guards its own divide too.
+ *   1   width 6, the whole frame in one group.
+ *   2,3 the two that divide exactly.
+ *   6   width 1, one sample per group.
+ *   7   width 0 by truncation, and `6 - 7` as an UNSIGNED difference, which
+ *       is the reading `V90DEMAPPER_FRAME`'s `6u` forces.
+ *  -1   the same from the other side: the field is declared `int` in
+ *       `V90MappingParams.h` and the object divides it with `div`, so a
+ *       negative value is 0xffffffff to the arithmetic and the quotient is 0.
+ *
+ * WHAT IS NOT IN THE GRID, and why.  A doubled row longer than 64 makes the
+ * object write `constellation[5][k]` past the array's 128 entries and into
+ * `constellationSize` behind it -- which the object really does, and which
+ * would separate the object's SPILLED loop bound from a re-read of the member
+ * -- but in this reconstruction that index is out of bounds and reaching it
+ * is UB in our code rather than a differential trial (deviation D561's rule).
+ * The sizes stop at 63, as `run_resetns`'s do, and the distinction is settled
+ * by the encoding alone; docs/deviations.md D680.
+ */
+static const int spacing_v[] = { 0, 1, 2, 3, 6, 7, -1 };
+#define NSPACING ((int)(sizeof(spacing_v) / sizeof(spacing_v[0])))
+
+static int
+run_reset(void)
+{
+	long trial = 380000;
+	int si, mi, flag, eqpat, hist, s;
+	int saw_guarded = 0, saw_divided = 0, saw_pair = 0, saw_plain = 0;
+	int saw_equal = 0, saw_spill = 0, saw_delay = 0, saw_nodelay = 0;
+	int saw_detector = 0, saw_width = 0, saw_equaldelay = 0;
+
+	diff_begin("V90Demapper::reset");
+
+	dsplib_debug_capture_on = 1;
+
+	for (si = 0; si < NSPACING; si++)
+	  for (mi = 0; mi < NMSIZE; mi++)
+	    for (flag = 0; flag < 3; flag++)
+	      for (eqpat = 0; eqpat < 3; eqpat++)
+		/*
+		 * THREE ARMS AND THE THIRD IS EQUALITY.  `jl` and `jle`
+		 * separate on exactly one input -- the delay equal to the
+		 * length -- and nothing else in the grid produces it, so
+		 * without this arm the strictness of the branch would rest on
+		 * the byte alone.  Same reasoning as the equal-levels pattern
+		 * two loops up.
+		 */
+		for (hist = 0; hist < 3; hist++) {
+			unsigned lf = 0x4e17u + 0x1a4bu * (unsigned)trial;
+			unsigned int wantsz;
+			int i;
+
+			trial++;
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+			    (trial & 1) ? 2u : 0u;
+
+			fill(parm_s, (int)PARM_SLOT, lf ^ 0x2c5u);
+			/*
+			 * The delay and the length it is bounded by, driven
+			 * to both sides of the object's `jl`.  Both are `int`
+			 * and the branch is signed, so a negative delay is
+			 * kept when the length is larger.
+			 */
+			PARAMS->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM =
+			    (int)(trial % 97) - 13;
+			PARAMS->TRN2D_DD_LENGTH =
+			    hist == 0 ? -0x4000
+				      : hist == 1 ? 0x4000
+						  : PARAMS->
+						    DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;
+			PARAMS->DEBUG_DEMAPPER_ERROR_HISTOGRAM = 1;
+
+			/*
+			 * The mapping block, shared: `reset` only reads it.
+			 * The byte tables keep their varied seed, so a code of
+			 * 128 or more indexes past its own row of `linMapp`
+			 * into the next one -- which is what the object does.
+			 */
+			fill(mapp_s, (int)MAPP_SLOT, lf ^ 0x3fe1u);
+			MAPP->word_0 = (unsigned int)(trial % 61) + 3u;
+			MAPP->shaperSR = spacing_v[si];
+			for (i = 0; i < V90_CONSTELLATIONS; i++)
+				MAPP->constellationSize[i] =
+				    msize_v[(mi + i) % NMSIZE];
+
+			for (s = 0; s < 2; s++) {
+				/* Each side its own detector: this one WRITES. */
+				fill(adi_s[s], (int)sizeof adi_s[s],
+				     lf ^ 0x11a7u);
+				adi_plant_maps(s, eqpat);
+				for (i = 0; i < V90ADID_PHASES; i++)
+					ADI(s).short_2800[i] = (short)
+					    (flag == 0 ? 0 : flag == 1 ? i + 1
+								       : (i & 1));
+
+				dem_setup(s, s, 0, lf);
+				/*
+				 * The four sign-bit words and the three
+				 * cursors get RECOGNISABLE values rather than
+				 * the general seed, so "unwritten" and
+				 * "written with what happened to be there"
+				 * are different outcomes -- which is the whole
+				 * of the zero-spacing trial.
+				 */
+				DEM(s).signBitsPerFrame = 0xb1b1b1b1u;
+				DEM(s).signBitGroups = 0xb2b2b2b2u;
+				DEM(s).signBitGroupSize = 0xb3b3b3b3u;
+				DEM(s).word_08 = 0xb4b4b4b4u;
+				DEM(s).sampleCount = 0x1234u;
+				DEM(s).frameStart = 0x5678u;
+				DEM(s).rbsFramePosition = 3u;
+				DEM(s).histogramDelay = 0x5a5a;
+				DEM(s).histogramIntegration = 0x3c3c;
+				DEM(s).signDecoder.prev_ = 0xa7;
+				/*
+				 * Both histogram arrays carry a marker, so
+				 * clearing them is a change and not a no-op.
+				 */
+				memset(DEM(s).errorSum, 0x5b,
+				       sizeof DEM(s).errorSum);
+				memset(DEM(s).errorCount, 0x5b,
+				       sizeof DEM(s).errorCount);
+				memcpy(dem_before[s], dem_s[s], DEM_SLOT);
+			}
+			dsplib_debug_capture_reset();
+			memcpy(adi_pre, adi_s[1], sizeof adi_pre);
+
+			our_reset(&DEM(0), MAPP);
+			ref_reset(&DEM(1), MAPP);
+
+			cmp_obj("after reset", skip_write, DEM_SIZE,
+				"V90Demapper", trial);
+			diff_eq_int("the detector (%ld)",
+				    memcmp(adi_s[0], adi_s[1],
+					   sizeof adi_s[0]) == 0, 1, trial);
+			dem_cmp_arrays(trial);
+			diff_eq_int("the mapping block is untouched (%ld)",
+				    MAPP->word_0 ==
+				    (unsigned int)(trial % 61) + 3u, 1, trial);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, trial);
+
+			{
+				V90Demapper *d = &DEM(1);
+				unsigned int sr = (unsigned int)spacing_v[si];
+
+				/*
+				 * ASSERTED AND NOT ONLY COMPARED: two
+				 * reconstructions that both dropped the
+				 * argument would agree with each other
+				 * (finding 224).
+				 */
+				diff_eq_int("bitsPerFrame (%ld)",
+					    (long)d->bitsPerFrame,
+					    (long)MAPP->word_0, trial);
+				diff_eq_int("signBitGroups (%ld)",
+					    (long)d->signBitGroups, (long)sr,
+					    trial);
+				diff_eq_int("signBitsPerFrame (%ld)",
+					    (long)d->signBitsPerFrame,
+					    (long)(V90DEMAPPER_FRAME - sr),
+					    trial);
+				diff_eq_int("word_08 (%ld)", (long)d->word_08,
+					    (long)(MAPP->word_0
+						   - (V90DEMAPPER_FRAME - sr)),
+					    trial);
+				diff_eq_int("modulusDecoder tail (%ld)",
+					    (long)d->modulusDecoder.field_18,
+					    (long)d->word_08, trial);
+
+				/*
+				 * THE GUARDED DIVIDE.  With a zero spacing the
+				 * field keeps the marker planted above; with
+				 * any other it is `6 / spacing` truncated.
+				 */
+				if (sr == 0u) {
+					diff_eq_int("the divide was skipped"
+						    " (%ld)",
+						    (long)(unsigned long)
+						    d->signBitGroupSize,
+						    (long)0xb3b3b3b3u, trial);
+					saw_guarded = 1;
+				} else {
+					wantsz = V90DEMAPPER_FRAME / sr;
+					diff_eq_int("signBitGroupSize (%ld)",
+						    (long)d->signBitGroupSize,
+						    (long)wantsz, trial);
+					if (d->signBitGroupSize != 0xb3b3b3b3u)
+						saw_divided = 1;
+				}
+
+				/* The extractor, re-armed from the same word. */
+				diff_eq_int("the extractor's spacing (%ld)",
+					    (long)d->signBits.spacing,
+					    (long)sr, trial);
+				diff_eq_int("the extractor's width (%ld)",
+					    (long)d->signBits.width,
+					    (long)(sr ? V90SBE_DECODER_SIZE / sr
+						      : 0u), trial);
+				diff_eq_int("the extractor's state (%ld)",
+					    (long)d->signBits.state, 0, trial);
+				if (d->signBits.width != 0u)
+					saw_width = 1;
+
+				diff_eq_int("signDecoder cleared (%ld)",
+					    (long)d->signDecoder.prev_, 0,
+					    trial);
+				diff_eq_int("sampleCount (%ld)",
+					    (long)d->sampleCount, 0, trial);
+				diff_eq_int("frameStart (%ld)",
+					    (long)d->frameStart, 0, trial);
+				diff_eq_int("rbsFramePosition (%ld)",
+					    (long)d->rbsFramePosition, 0,
+					    trial);
+
+				for (i = 0; i < V90DEMAPPER_CONSTELLATIONS;
+				     i++) {
+					diff_eq_int("constellationSize (%ld)",
+						    (long)
+						    d->constellationSize[i],
+						    (long)
+						    MAPP->constellationSize[i],
+						    trial);
+					diff_eq_int("modulus word (%ld)",
+						    (long)(&d->modulusDecoder.
+							   field_00)[i],
+						    (long)
+						    d->constellationSize[i],
+						    trial);
+				}
+
+				/*
+				 * THE DELAY, and BOTH arms of the object's
+				 * signed `jl` against `TRN2D_DD_LENGTH`.
+				 */
+				if (PARAMS->
+				    DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM
+				    < PARAMS->TRN2D_DD_LENGTH) {
+					diff_eq_int("the delay is the"
+						    " parameter (%ld)",
+						    (long)d->histogramDelay,
+						    (long)PARAMS->
+						    DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM,
+						    trial);
+					if (d->histogramDelay != 0x5a5a)
+						saw_delay = 1;
+				} else {
+					diff_eq_int("the delay is zeroed"
+						    " (%ld)",
+						    (long)d->histogramDelay, 0,
+						    trial);
+					saw_nodelay = 1;
+					if (PARAMS->
+					    DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM
+					    == PARAMS->TRN2D_DD_LENGTH)
+						saw_equaldelay = 1;
+				}
+				diff_eq_int("the integration restarts (%ld)",
+					    (long)d->histogramIntegration, 0,
+					    trial);
+
+				/*
+				 * NO HISTOGRAM IS PRINTED.  `resetNoSpectral`
+				 * calls `printErrorHistogramAndReset` under
+				 * DEBUG_DEMAPPER_ERROR_HISTOGRAM and this one
+				 * does not; the parameter is set on every
+				 * trial above, so a body that had the call
+				 * would move this counter and print.
+				 */
+				diff_eq_int("the histogram was not printed"
+					    " (%ld)",
+					    (long)d->errorHistogramCount,
+					    (long)((V90Demapper *)dem_before[1])
+						  ->errorHistogramCount, trial);
+
+				/* The six study words, and the one between. */
+				diff_eq_int("uint_1eb0 (%ld)",
+					    (long)d->uint_1eb0, 0, trial);
+				diff_eq_int("uint_1ea8 (%ld)",
+					    (long)d->uint_1ea8, 0, trial);
+				diff_eq_int("short_1e9c (%ld)",
+					    (long)d->short_1e9c, 0, trial);
+				diff_eq_int("short_1ea4 (%ld)",
+					    (long)d->short_1ea4, 0, trial);
+				diff_eq_int("short_1ea6 (%ld)",
+					    (long)d->short_1ea6, 0, trial);
+				diff_eq_int("short_1eb4 (%ld)",
+					    (long)d->short_1eb4, 0, trial);
+				diff_eq_int("decisionFramePosition (%ld)",
+					    (long)d->decisionFramePosition, 0,
+					    trial);
+				diff_eq_int("decisionCode is untouched (%ld)",
+					    d->decisionCode ==
+					    ((V90Demapper *)dem_before[1])->
+					    decisionCode, 1, trial);
+
+				/*
+				 * OBSERVABLE: the detector's own bytes moved
+				 * and both histogram arrays lost their marker.
+				 * A no-op `clearCamulativeVal` loop, or a
+				 * clear that never ran, leaves every
+				 * comparison above passing.
+				 */
+				if (memcmp(adi_s[1], adi_pre, sizeof adi_pre)
+				    != 0
+				    && d->errorSum[5][127] == 0u
+				    && d->errorCount[5][127] == 0u)
+					saw_detector = 1;
+
+				/* The pair order, exactly as run_resetns. */
+				for (i = 0; i < V90DEMAPPER_CONSTELLATIONS;
+				     i++) {
+					unsigned int n =
+					    MAPP->constellationSize[i];
+					unsigned char c0;
+
+					if (n == 0u)
+						continue;
+					c0 = MAPP->constellation[i][0];
+					if (ADI(0).short_2800[i] != 0) {
+						if (d->constellation[i][0] >=
+						    d->constellation[i][1])
+							saw_pair = 1;
+						if (ADI(0).linMapp[0][
+						      i * V90ADID_CODES + c0]
+						    == ADI(0).linMappAlt[0][
+						      i * V90ADID_CODES + c0])
+							saw_equal = 1;
+					} else if (d->constellation[i][0] ==
+						   ADI(0).linMapp[0][
+						     i * V90ADID_CODES + c0]) {
+						saw_plain = 1;
+					}
+					if (c0 >= V90ADID_CODES)
+						saw_spill = 1;
+				}
+			}
+		}
+
+	{
+		/*
+		 * The 768 cells, by value on the last trial: both cumulative
+		 * arrays clear and the array beside them not, which is what
+		 * says the loop bounds are 6 and 128 rather than something
+		 * that happens to cover them.
+		 */
+		V90AutoDigitalImpDetector *a = &ADI(1);
+		int p, c, allz = 1, anyother = 0;
+
+		for (p = 0; p < V90ADID_PHASES; p++)
+			for (c = 0; c < V90ADID_CODES; c++) {
+				if (a->uint_1c00[p][c] != 0 ||
+				    a->float_1000[p][c] != 0.0f)
+					allz = 0;
+				if (a->linMapp[p][c] != 0)
+					anyother = 1;
+			}
+		diff_eq_int("all 6 x 128 cumulative cells are clear", allz, 1,
+			    0);
+		diff_eq_int("and the arrays beside them are not", anyother, 1,
+			    0);
+	}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+
+	diff_eq_int("a zero spacing left signBitGroupSize alone", saw_guarded,
+		    1, 0);
+	diff_eq_int("and a non-zero one divided into it", saw_divided, 1, 0);
+	diff_eq_int("the extractor came out with a non-zero width", saw_width,
+		    1, 0);
+	diff_eq_int("the doubled arm laid the pair down larger first",
+		    saw_pair, 1, 0);
+	diff_eq_int("the plain arm copied linMapp straight over", saw_plain, 1,
+		    0);
+	diff_eq_int("two equal levels were reached", saw_equal, 1, 0);
+	diff_eq_int("a code of 128 or more spilled into the next row",
+		    saw_spill, 1, 0);
+	diff_eq_int("the delay was kept on some trials", saw_delay, 1, 0);
+	diff_eq_int("and zeroed on others", saw_nodelay, 1, 0);
+	diff_eq_int("a delay EQUAL to the length was zeroed too",
+		    saw_equaldelay, 1, 0);
+	diff_eq_int("the detector and both histograms were cleared",
+		    saw_detector, 1, 0);
+
+	return diff_end();
+}
+
 /* ----------------------------------------------- linearMappingStudy ----- */
 
 /*
@@ -1624,6 +2049,7 @@ main(void)
 	rc |= run_incrbs();
 	rc |= run_updconst();
 	rc |= run_resetns();
+	rc |= run_reset();
 	rc |= run_lms();
 
 	return rc;

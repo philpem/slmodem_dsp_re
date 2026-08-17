@@ -140,12 +140,13 @@ public:
 	void updateConstelation();
 
 	/*
-	 * THE ONE STILL DECLARED AND DELIBERATELY UNDEFINED.  Its signature
-	 * comes from the mangling, so this is a specification and not a
-	 * guess.  It is not unwritten for want of reading: its closure
-	 * contains `V90SignBitsExtractor::reset`, which nothing in this tree
-	 * has, and one unwritten callee fails EVERY differential binary at
-	 * `t_encode` rather than only its own (finding 215).
+	 * AND THE LAST ONE, NOW DEFINED.  It used to be the one member of
+	 * this class declared and deliberately undefined -- not for want of
+	 * reading but because its closure contained
+	 * `V90SignBitsExtractor::reset`, which nothing in this tree had, and
+	 * one unwritten callee fails EVERY differential binary at `t_encode`
+	 * rather than only its own (finding 215).  That member is written and
+	 * so is this one.  The signature is still the mangling's.
 	 */
 	void reset(V90MappingParams *);
 

@@ -7550,3 +7550,37 @@ does not initialise it.
 Reproduced, and kept out of the grid: `t_v92info.cpp` uses 1..6.  A trial at
 zero would trap identically on both sides, which measures the CPU rather than
 the reading.  Finding 4750.
+
+## D680 ⚠ `V90Demapper::reset`'s doubled arm runs past the constellation row, and the trial that would reach it is not driven
+
+`reset` and `resetNoSpectral` both lay TWO levels down per code when the
+detector's `short_2800[i]` is set, so the cursor runs to `2 * n - 1` while the
+row holds 128 entries. With `n` above 64 the object writes past the row: for
+`i < 5` into the next row, and for `i = 5` past `constellation` entirely and
+into `constellationSize` behind it.
+
+It is the object's own arithmetic and there is no bound anywhere near it. One
+`shl $0x7` and an `add` form `i * 128 + k`, scaled by two —
+`mov %bx,0x30(%ebp,%eax,2)` at 0x30924 — and `V90Demapper.h` records the same
+flat indexing for `updateConstelation` and `linearMappingStudy`.
+
+**Reproduced in shape, and NOT DRIVEN.** `t_v90demap.cpp`'s row lengths stop at
+63, so `2 * n - 1` stays inside the row on every trial, in `run_reset` exactly
+as in `run_resetns`. Writing `constellation[i][k]` with `k >= 128` is out of
+bounds for the declared array whatever the object does with the same address,
+and a trial that reaches it is measuring undefined behaviour in the
+reconstruction rather than comparing two implementations — D561's rule, and
+the same reason that entry took its input out of the grid.
+
+**WHAT THAT COSTS IS ONE ENCODING CLAIM, AND IT IS NAMED HERE RATHER THAN
+TESTED.** The object loads `mapp->constellationSize[i]`, SPILLS it to
+`0x18(%esp)`, then stores it to `constellationSize[i]`, and every loop compare
+reads the spill (0x308e8..0x30955). This reconstruction keeps that as a local,
+because a re-read of the member would differ exactly when the sixth row's
+overrun rewrote it — which is the input above. So the local is settled by the
+instruction and by nothing in the differential tier, and the mutation that
+swaps it is registered `equivalent` with this entry as its reason.
+
+**Not corrected**: clamping the cursor would make the reconstruction disagree
+with the blob for any caller that does produce a row above 64, which is the one
+thing it may not do.

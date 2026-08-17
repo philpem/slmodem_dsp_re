@@ -66088,3 +66088,135 @@ REAL.**  Every mutation anchor has to include the entry string, the
 times in the file and `mutate.py` rejects an ambiguous `find`.  That is finding
 4708's problem arriving from the other direction: there, an anchor stopped
 being unique when the file grew; here it was never unique to begin with.
+
+## 5002. `V90Demapper::reset`, THE LAST MEMBER OF THE CLASS: THE SIGN-BIT GEOMETRY IS ONE PARAMETER AND THE DIVIDE IS GUARDED
+
+723 bytes at 0x30870, and the thirteenth of thirteen.  It was the one member
+left declared and undefined, and not for want of reading: its closure held
+`V90SignBitsExtractor::reset`, which nothing in this tree had, and one unwritten
+callee fails EVERY differential binary at `t_encode` rather than only its own
+(finding 215).  That member exists now, and `tools/closure.py --missing` reports
+this one closing on itself alone.
+
+**FOUR FIELDS COME OUT OF ONE WORD OF THE MAPPING BLOCK.**  `mapp->shaperSR`
+(+0x620) becomes `signBitGroups` unchanged, `6 - it` becomes `signBitsPerFrame`,
+`6 / it` becomes `signBitGroupSize`, and the same word is the sign-bit
+extractor's `spacing`.  The two identities `V90Demapper.h` derives those names
+from -- `groups * groupSize == 6` and `groups * (groupSize - 1) == 6 - groups`
+-- both hold, which is a third, independent agreement with the reading that
+came from `process` and from the extractor's own header.
+
+**THE FIELD IS SPELLED `int` AND THE OBJECT DIVIDES IT WITH `div`.**
+`V90MappingParams.h` types +0x620 `int` because
+`V90ConstellationDesigner::spectralDesign` copies `SPECTRAL_SHAPER_SR` into it
+and a four-byte copy carries the SOURCE's type; this function is the first
+reader that forces anything, and what it forces is UNSIGNED arithmetic --
+`f7 74 24 20  divl 0x20(%esp)` at 0x308b6, not `idiv`, with no signed fixup.
+The numerator is therefore `V90DEMAPPER_FRAME`, which `V90Demapper.h` already
+spells `6u`; `6 / mapp->shaperSR` would be a signed division and comes out
+`-1` where the object gives 0 for a negative spacing.  The name is NOT changed
+here -- it is the author's, from the parameter the designer copies -- and
+neither is the declared type, because the two readings agree over every value
+a spacing can legitimately hold and the `6u` is where the object's evidence
+actually lands.
+
+**THE GUARD IS A REAL EARLY-OUT AND THE FIELD STAYS UNWRITTEN.**
+`test %esi,%esi; je` at 0x308a7 skips the divide, and the `je` lands PAST the
+`mov %eax,0x14(%ebp)` -- so a zero spacing leaves `signBitGroupSize` holding
+whatever it held.  That is only observable because nothing in this fixture is
+ever zeroed (finding 230): `t_v90demap.cpp` plants 0xb3b3b3b3 in the field on
+both sides and asserts it survives.  The callee guards its own divide the same
+way (`V90SignBitsExtractor::reset` stores a width of zero instead), so a zero
+spacing is a runnable input on both sides and not a #DE either side of the
+call -- which is what made the trial possible at all.
+
+**THE HISTOGRAM DELAY IS BOUNDED BY `TRN2D_DD_LENGTH`, AND NO RATIONALE IS
+OFFERED.**
+
+```
+    30aa4:  8b 83 30 05 00 00  mov  0x530(%ebx),%eax   ; DEMAPPER_DELAY_...
+    30aaa:  3b 83 6c 03 00 00  cmp  0x36c(%ebx),%eax   ; TRN2D_DD_LENGTH
+    30ab0:  7c 02              jl   30ab4
+    30ab2:  31 c0              xor  %eax,%eax
+```
+
+so a delay that is not SHORTER than the TRN2D length is taken as zero and the
+histogram starts at once.  `jl` is the signed branch and both parameters are
+`int`.  Why those two quantities are compared is not established; the
+instructions are, and both arms are driven.
+
+**AND IT DOES NOT PRINT.**  `resetNoSpectral` calls
+`printErrorHistogramAndReset` under `DEBUG_DEMAPPER_ERROR_HISTOGRAM`; this one
+has no such arm and empties both 3,072-byte arrays itself, over the full 6 x
+128 (`cmp $0x7f,%edx; jbe` at 0x30a8f -- a constant, with no row length in the
+loop).  The suite sets the parameter on every trial so that a body carrying
+the call would print and would move `errorHistogramCount`.
+
+`decisionCode` (+0x1eac) is not written and its neighbour +0x1eae is, which is
+`resetLinearMappStudy`'s habit exactly.
+
+## 5003. WRITING `reset` COST FOURTEEN EXISTING MUTATION ANCHORS THEIR UNIQUENESS, AND `anchorcheck.py` IS WHY THAT WAS NOTICED
+
+`V90Demapper::reset` repeats `resetNoSpectral`'s two constellation loops and
+`resetLinearMappStudy`'s `clearCamulativeVal` pair almost word for word -- the
+object has them twice, so the source does too.  Fourteen anchors in
+`v90demap.json` that had been unique became two-way ambiguous the moment the
+member landed, and an ambiguous anchor is UNUSABLE, which does not fail a
+mutation run (finding 1264): the set would have gone on reporting the same
+totals while fourteen of its claims tested nothing.
+
+What caught it was `make refs`, which runs `tools/anchorcheck.py` and fails on
+an anchor matching other than exactly once.  This is finding 4708 from the
+other direction -- there an anchor stopped being unique because the file grew
+around it; here the new text was an exact copy of the old.  Both are the same
+hazard and the same gate is what makes it loud.
+
+The fix is the mechanical one: each of the fourteen was extended BACKWARDS by
+whole lines until it matched once again, and the extension applied to `find`
+and `replace` alike so the mutation itself is unchanged.  Every one of them
+still names `resetNoSpectral` or `resetLinearMappStudy`, which the
+"anchor lands in an arm its label does not name" check confirms.
+
+19 mutations were then added for `reset`.  102 in the set, 99 caught, 0 not
+caught, 3 equivalent -- the third being the loop bound of D680, which no
+runnable input can separate.
+
+## 5004. `V90MappingParams::shaperSR` HAS A READER, AND WHAT IT FORCES IS THE NUMERATOR AND NOT THE FIELD
+
+`V90MappingParams.h` said of the six spectral-shaper dwords at +0x620..+0x634
+that they were "read by nothing this tree has written".  That is retracted.
+`V90Demapper::reset` reads +0x620 four times over -- into `signBitGroups`
+unchanged, as `6 - it` into `signBitsPerFrame`, as `6 / it` into
+`signBitGroupSize`, and as `V90SignBitsExtractor::reset`'s `spacing` -- and
+`V90ConstellationDesigner.cpp` already quotes a second site forming the same
+difference, `mov $0x6,%cl; sub 0x620(%ebx),%cl`.  Finding 4342's rule is why
+this needed retracting rather than leaving: a claim that NOTHING reads a field
+is a claim about every function in the object, and it is believed by every
+reader until someone contradicts it.
+
+**THE SECOND WITNESS IS THE USEFUL PART.**  Two functions that share no code
+both form `6 - shaperSR` from this one word, which is independent support for
+`V90Demapper.h`'s reading of +0x0c as `signBitsPerFrame`: `groups *
+(groupSize - 1) == 6 - groups` is the identity that names it, and the identity
+now has a witness outside the class it was derived in.
+
+**THE FIELD IS NOT RETYPED AND THE REASONING IS THE POINT.**  The object
+divides six by it with `f7 74 24 20  divl` and not `idiv`, which is unsigned
+arithmetic -- but what an unsigned divide forces is the type of the NUMERATOR,
+and `V90Demapper.h` already spells that `V90DEMAPPER_FRAME` = `6u`.  With the
+`6u` in place the reading is satisfied and the field can stay `int`, which is
+what `V90ConstellationDesigner::spectralDesign` copying `SPECTRAL_SHAPER_SR`
+into it says.  The two spellings agree over every spacing a caller can produce:
+`6 - x` has identical bits either way and the quotient differs only for a
+negative divisor.  Retyping would be choosing between two readings the object
+does not separate, which is the thing CLAUDE.md's FORCED-versus-FREE rule
+exists to stop.
+
+**AND IT IS NOT RENAMED.**  `shaperSR` is the AUTHOR'S name, one rank down
+from a format string: it comes from the `V90Parameters` field `spectralDesign`
+copies, which `tools/vparse.py` names.  What the demapper does with the same
+word -- treat it as the number of sign-bit groups in a six-sample frame -- is
+usage inference, CLAUDE.md's weakest rank, and a weaker rank does not displace
+a stronger one.  That the two roles do not obviously agree is recorded here
+rather than resolved by inventing a name that suits one of them; finding 3120's
+rule, and the same reason `V90Demapper::word_08` is still offset-named.
