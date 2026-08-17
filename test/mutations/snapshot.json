@@ -7110,7 +7110,7 @@
    }
   },
   "v92cpb2i": {
-   "key": "5d6fbcd5343b017e9db0a063ed39d3c425b69dc7e00050072e68b82f6addb1b5",
+   "key": "e6e2f500a83fe760de8e359ceebb9bcffa79749d58c12748466476c2f2fb616e",
    "summary": "49 mutations: 47 caught (47 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a ONE does not clear the run of zeros": "caught",
@@ -7206,7 +7206,7 @@
    }
   },
   "v92cpeval": {
-   "key": "be5825e63fb9629630a5de31769b0791148186579615a45430c35d14f8341df9",
+   "key": "e63c1837e8faa7b8277a93d96a3b338c17e708def95ecffb0a08fdb338ebe25e",
    "summary": "49 mutations: 47 caught (47 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "binaryTable counts from one rather than from zero": "caught",
