@@ -2,11 +2,19 @@
  * V92BitsToSymbol.cpp -- construction and destruction of the V.92 upstream
  * bit-to-symbol stage.
  *
- * Reconstructed from dsplibs.o.  Four symbols, 378 bytes:
+ * Reconstructed from dsplibs.o.  Ten symbols, 1,661 bytes:
  *
  *     V92BitsToSymbol::V92BitsToSymbol(unsigned, V92Parameters *)
  *                                        .text+0x4ded0 (C2), +0x4df40 (C1)
  *     V92BitsToSymbol::~V92BitsToSymbol() .text+0x4dfb0 (D2), +0x4e010 (D1)
+ *     V92BitsToSymbol::reset(V92MappingParams *)        +0x4e070,  68 B
+ *     V92BitsToSymbol::nofBitsForNextTime()             +0x4e0c0, 100 B
+ *     V92BitsToSymbol::setSymbolsBlockSize(unsigned)    +0x4e130, 108 B
+ *     V92BitsToSymbol::process(unsigned char *, unsigned int &, short *)
+ *                                                       +0x4e1a0, 468 B
+ *     V92BitsToSymbol::process(unsigned char *, unsigned int)
+ *                                                       +0x4e380, 180 B
+ *     V92BitsToSymbol::process(unsigned int &, short *)  +0x4e440, 359 B
  *
  * Each pair is byte-identical; GCC emits both from one definition.
  * `include/dsplib/V92BitsToSymbol.h` carries the object map and the 0x20 the
@@ -25,6 +33,8 @@
 
 #include "dsplib/V92BitsToSymbol.h"
 #include "dsplib/V92Transmitter.h"
+#include "dsplib/V92ParamsInfo.h"
+#include "dsplib/debug.h"
 
 extern "C" {
 void *sysdep_malloc(unsigned int size);
@@ -116,4 +126,288 @@ V92BitsToSymbol::~V92BitsToSymbol()
 
 	if (symbols != 0)
 		sysdep_free(symbols);
+}
+
+/*
+ * ===========================================================================
+ * V92BitsToSymbol::reset (.text+0x4e070, 68 bytes)
+ *
+ * The transmitter first, then four stores.  The parameter block is read
+ * through its FIRST WORD ONLY -- `mov (%esi),%eax` -- and that word is
+ * `V92ParamsInfo::K`, which is the same field `V92Transmitter::reset` copies
+ * and prints as "K = %d".  The cast is the one V92Precoder.cpp and
+ * V92Transmitter.cpp already make: `V92MappingParams` is the mangling's name
+ * for the block this tree models as `struct V92ParamsInfo`.
+ *
+ * The load is hoisted above the three stores in the object, which is
+ * scheduling; the store ORDER, +0x10 before +0x18 before +0x14 before the
+ * byte at +0x1c, is what is written here.
+ * ===========================================================================
+ */
+void
+V92BitsToSymbol::reset(V92MappingParams *p)
+{
+	transmitter->reset(p);
+
+	symbolsDone = 0;
+	symbolsBlockSize = 0;
+	bitsPerFrame = (unsigned int)((struct V92ParamsInfo *)p)->K;
+	flag_1c = 1;
+}
+
+/*
+ * ===========================================================================
+ * V92BitsToSymbol::nofBitsForNextTime (.text+0x4e0c0, 100 bytes)
+ *
+ * How many bits the class wants before it can fill the block that has been
+ * asked of it.  The header carries the whole derivation, including why the
+ * two arms are written as two different expressions and must not be folded
+ * into one -- they disagree when `left * bitsPerFrame` wraps 32 bits, and
+ * agree everywhere else.
+ *
+ * The zero is a result and not an early return: the object clears the result
+ * register before the comparison (`xor %esi,%esi` at +0x4e0ce) and falls into
+ * the shared epilogue.
+ * ===========================================================================
+ */
+unsigned int
+V92BitsToSymbol::nofBitsForNextTime()
+{
+	unsigned int bits = 0;
+
+	if (symbolsBlockSize > symbolsDone) {
+		unsigned int left = symbolsBlockSize - symbolsDone;
+
+		if (left % V92BTOS_SYMBOLS_PER_FRAME != 0)
+			bits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)
+			       * bitsPerFrame;
+		else
+			bits = left * bitsPerFrame
+			       / V92BTOS_SYMBOLS_PER_FRAME;
+	}
+
+	return bits;
+}
+
+/*
+ * ===========================================================================
+ * V92BitsToSymbol::setSymbolsBlockSize (.text+0x4e130, 108 bytes)
+ *
+ * Two statements.  The object holds `nofBitsForNextTime` INLINED here rather
+ * than called -- there is no relocation on any call in the range and the 108
+ * bytes are the 100 above plus the store and one extra `mov`.  Nothing here
+ * re-reads +0x18 after storing it, which is what an inline of a member the
+ * compiler can see through gives.
+ *
+ * `nofBitsForNextTime` matches the blob's instruction sequence and THIS DOES
+ * NOT, so the inline is not reproduced exactly; the differential tier is
+ * green either way and 100% was never the target.
+ * ===========================================================================
+ */
+unsigned int
+V92BitsToSymbol::setSymbolsBlockSize(unsigned int n)
+{
+	symbolsBlockSize = n;
+
+	return nofBitsForNextTime();
+}
+
+/*
+ * ===========================================================================
+ * V92BitsToSymbol::process(unsigned char *, unsigned int)
+ *                                              (.text+0x4e380, 180 bytes)
+ *
+ * BITS IN, NOTHING OUT.  The transmitter appends its symbols at
+ * `symbols + symbolsDone` and reports how many through a local the address of
+ * which is passed; this adds them on and checks the total against the
+ * BUFFER's size, `nSymbols`, not against the block size.
+ *
+ * THE OVERFLOW ARM IS DIAGNOSED AFTER THE FACT AND THE CLAMP DOES NOT REPAIR
+ * IT.  By the time `symbolsDone > nSymbols` is true the transmitter has
+ * already written past the end of the buffer; setting `symbolsDone` back to
+ * `symbolsBlockSize` only tidies the count.  Reproduced -- docs/deviations.md
+ * D500.
+ * ===========================================================================
+ */
+int
+V92BitsToSymbol::process(unsigned char *bits, unsigned int nbits)
+{
+	int ret = V92BTOS_OK;
+
+	if (symbolsBlockSize == 0) {
+		ret = V92BTOS_SIZE_NOT_SET;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V92BitsToSymbol - error: "
+					     "process called, "
+					     "SIZE_NOT_SET\r\n");
+	} else {
+		unsigned int nout;
+
+		transmitter->process(bits, nbits, symbols + symbolsDone, nout);
+		symbolsDone += nout;
+
+		if (symbolsDone > nSymbols) {
+			ret = V92BTOS_BUFFER_OVERFLOW;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V92BitsToSymbol - "
+						     "error: process called, "
+						     "BUFFER_OVERFLOW\r\n");
+			symbolsDone = symbolsBlockSize;
+		}
+	}
+
+	if (flag_1c != 0)
+		flag_1c = 0;
+
+	return ret;
+}
+
+/*
+ * ===========================================================================
+ * V92BitsToSymbol::process(unsigned int &, short *)
+ *                                              (.text+0x4e440, 359 bytes)
+ *
+ * SYMBOLS OUT, NO BITS IN, and the transmitter is not called at all.
+ *
+ * THE UNDERFLOW ARM HANDS BACK WHAT IT HAS RATHER THAN REFUSING.  If fewer
+ * than `symbolsBlockSize` symbols are staged the whole staging buffer is
+ * copied out -- `symbolsDone` of them, not the block -- the count is cleared,
+ * and the status says UNDERFLOW.  The caller is told how much it got only
+ * through `nbits`, which comes back as the count for NEXT time and not as the
+ * count just delivered, so nothing in this overload tells the caller how many
+ * of the `symbolsBlockSize` shorts it asked for were actually written.  That
+ * is the object's design and not a reading of it -- docs/deviations.md D502.
+ *
+ * THE SHIFT-DOWN IS SHARED BETWEEN THE TWO ARMS and the compiler proves it:
+ * the underflow arm reaches it with `symbolsDone` provably zero, so GCC
+ * materialises the bound as `xor %esi,%esi` (+0x4e4e4) and enters the common
+ * tail two bytes later at +0x4e4e6 from the other arm.  One loop in the
+ * source, two entries in the object.
+ * ===========================================================================
+ */
+int
+V92BitsToSymbol::process(unsigned int &nbits, short *out)
+{
+	int ret = V92BTOS_OK;
+
+	if (symbolsBlockSize == 0) {
+		ret = V92BTOS_SIZE_NOT_SET;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V92BitsToSymbol - error: "
+					     "process called, "
+					     "SIZE_NOT_SET\r\n");
+	} else {
+		unsigned int i;
+		unsigned int j;
+
+		if (symbolsDone < symbolsBlockSize) {
+			ret = V92BTOS_BUFFER_UNDERFLOW;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V92BitsToSymbol - "
+						     "error: process called, "
+						     "BUFFER_UNDERFLOW\r\n");
+
+			for (i = 0; i < symbolsDone; i++)
+				out[i] = symbols[i];
+
+			symbolsDone = 0;
+		} else {
+			for (i = 0; i < symbolsBlockSize; i++)
+				out[i] = symbols[i];
+		}
+
+		for (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)
+			symbols[i] = symbols[j];
+
+		symbolsDone = i;
+
+		nbits = nofBitsForNextTime();
+	}
+
+	if (flag_1c != 0)
+		flag_1c = 0;
+
+	return ret;
+}
+
+/*
+ * ===========================================================================
+ * V92BitsToSymbol::process(unsigned char *, unsigned int &, short *)
+ *                                              (.text+0x4e1a0, 468 bytes)
+ *
+ * BOTH HALVES IN ONE CALL, and it is not the two above run back to back --
+ * the middle differs.  Bits go to the transmitter exactly as in the
+ * two-argument form, and then the staged symbols come out exactly as in the
+ * other, but the THREE outcomes are decided by one chain: too few staged is
+ * UNDERFLOW, enough is the normal path, and more than the buffer holds is
+ * OVERFLOW -- which still copies `symbolsBlockSize` out afterwards, where the
+ * two-argument form copies nothing at all.
+ *
+ * `nbits` IS READ BEFORE IT IS WRITTEN.  It arrives holding the number of
+ * bits in `bits` (`mov (%ecx),%eax` at +0x4e22f, straight into the
+ * transmitter's second argument) and leaves holding what
+ * `nofBitsForNextTime` wants next.
+ *
+ * The reload of `symbolsDone` at +0x4e294, where the two-argument form
+ * folded it to a constant, is the overflow arm's doing: that arm stores to it
+ * as well, so GCC cannot know its value on the join.
+ * ===========================================================================
+ */
+int
+V92BitsToSymbol::process(unsigned char *bits, unsigned int &nbits, short *out)
+{
+	int ret = V92BTOS_OK;
+
+	if (symbolsBlockSize == 0) {
+		ret = V92BTOS_SIZE_NOT_SET;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V92BitsToSymbol - error: "
+					     "process called, "
+					     "SIZE_NOT_SET\r\n");
+	} else {
+		unsigned int nout;
+		unsigned int i;
+		unsigned int j;
+
+		transmitter->process(bits, nbits, symbols + symbolsDone, nout);
+		symbolsDone += nout;
+
+		if (symbolsDone < symbolsBlockSize) {
+			ret = V92BTOS_BUFFER_UNDERFLOW;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V92BitsToSymbol - "
+						     "error: process called, "
+						     "BUFFER_UNDERFLOW\r\n");
+
+			for (i = 0; i < symbolsDone; i++)
+				out[i] = symbols[i];
+
+			symbolsDone = 0;
+		} else {
+			if (symbolsDone > nSymbols) {
+				ret = V92BTOS_BUFFER_OVERFLOW;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"V92BitsToSymbol - error: "
+						"process called, "
+						"BUFFER_OVERFLOW\r\n");
+				symbolsDone = symbolsBlockSize;
+			}
+
+			for (i = 0; i < symbolsBlockSize; i++)
+				out[i] = symbols[i];
+		}
+
+		for (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)
+			symbols[i] = symbols[j];
+
+		symbolsDone = i;
+
+		nbits = nofBitsForNextTime();
+	}
+
+	if (flag_1c != 0)
+		flag_1c = 0;
+
+	return ret;
 }

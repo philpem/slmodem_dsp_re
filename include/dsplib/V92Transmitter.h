@@ -1,14 +1,20 @@
 /*
  * V92Transmitter.h -- the V.92 upstream transmit chain: six owned pieces.
  *
- * Reconstructed from dsplibs.o.  Five of the class's six symbols are written
- * in src/pump/v90/V92Transmitter.cpp -- the constructor (C1 at .text+0x53b90
- * and C2 at +0x53c50, 180 bytes each), the destructor (D2 at +0x53a30 and
- * D1 at +0x53ae0, 173 bytes each) and `reset(V92MappingParams *)` (+0x53d10,
- * 2,161 bytes).  `process(unsigned char *, unsigned int, short *, unsigned
- * int &)` (+0x54590, 355 bytes) is declared here and deliberately left
- * undefined: defining a member whose callers are not written re-opens the
- * link closure for the whole suite, and it has not been read.
+ * Reconstructed from dsplibs.o.  ALL SIX of the class's symbols are now
+ * written in src/pump/v90/V92Transmitter.cpp -- the constructor (C1 at
+ * .text+0x53b90 and C2 at +0x53c50, 180 bytes each), the destructor (D2 at
+ * +0x53a30 and D1 at +0x53ae0, 173 bytes each), `reset(V92MappingParams *)`
+ * (+0x53d10, 2,161 bytes) and `process(unsigned char *, unsigned int,
+ * short *, unsigned int &)` (+0x54590, 355 bytes).  `process` came in with
+ * the V92BitsToSymbol batch, which is its only caller.
+ *
+ * `process` IS WHAT MADE THIS CLASS A DATAPUMP RATHER THAN A CONSTRUCTOR.
+ * It buffers input bits until it holds `K` of them, and then runs one frame:
+ * the modulus encoder over the buffer, three precoder/convolution-encoder
+ * steps of four symbols each, the pre-filter over all twelve, and twelve
+ * `(short)(x * gain)` stores into the caller's output.  Four of this
+ * header's names below are its doing.
  *
  * `reset` IS WHERE THREE OF THIS CLASS'S NAMES COME FROM.  It prints its own
  * +0x04 as "K" and its own +0x44 as "Gain", and it prints the parameter block
@@ -84,8 +90,26 @@ class V92PreFilter;
  */
 #define V92TX_FILTER_TAPS	0x140
 
-/* The raw buffer at +0x08: `movl $0x50,(%esp)` at .text+0x53b99. */
+/* The bit buffer at +0x08: `movl $0x50,(%esp)` at .text+0x53b99. */
 #define V92TX_BUF08_BYTES	0x50
+
+/*
+ * Twelve samples come out of every frame, and the object says so three times
+ * over: `process` runs its scaling loop `cmp $0xb,%ecx; jbe`, adds a literal
+ * 12 to the output count (`addl $0xc,0x28(%esp)`), and V92PreFilter.h already
+ * records that `V92PreFilter::process` moves twelve floats whatever path it
+ * takes.  It is also 3 precoder calls x 4 symbols each.
+ */
+#define V92TX_FRAME_SYMBOLS	12
+
+/*
+ * The precoder runs three times per frame, four symbols at a time:
+ * `cmp $0x2,%edi; jbe` at .text+0x54653 with the counter incremented before
+ * the test, so the values it is called with are 0, 1 and 2.  UNSIGNED is
+ * forced -- a signed counter would have compared with `jle`.
+ */
+#define V92TX_PRECODER_STEPS	3
+#define V92TX_PRECODER_SYMBOLS	4
 
 class V92Transmitter {
 public:
@@ -95,9 +119,10 @@ public:
 	/*
 	 * The argument types are the mangling's and exact; the return types
 	 * are not mangled and `void` here means "not established" rather than
-	 * "measured" -- `reset` leaves whatever the last call left in %eax.
-	 *
-	 * `process` is declared, not defined.
+	 * "measured" -- `reset` leaves whatever the last call left in %eax,
+	 * and `process` leaves whatever its last comparison did.  Neither
+	 * body ever sets %eax deliberately, which is what separates them from
+	 * V92BitsToSymbol's three `process` overloads.
 	 */
 	void reset(V92MappingParams *params);
 	void process(unsigned char *bits, unsigned int nbits, short *out,
@@ -127,30 +152,63 @@ public:
 
 	/*
 	 * +0x08  `sysdep_malloc(0x50)` with no constructor call after it, so
-	 * whatever this is, it is not one of the classes above.  The element
-	 * type is not established either; `void *` is what the object shows.
+	 * whatever this is, it is not one of the classes above.
+	 *
+	 * `process` IS WHAT NAMES IT, and the element type is forced twice
+	 * over: `process` fills it one byte at a time from its own `bits`
+	 * argument -- `movzbl (%ebx,%ebp,1),%eax; mov %al,(%ecx,%edi,1)` at
+	 * .text+0x545dc -- and then hands it to `V92ModulusEncoder::progress`,
+	 * whose mangling `EPhPj` types the first argument `unsigned char *`.
+	 * It was `void *` until that reader was written.
 	 */
-	void *buf_08;
-
-	/* +0x0c  Cleared by the constructor, immediately after +0x08 is
-	 * stored and before +0x04 is cleared.  Role not established. */
-	unsigned int word_0c;
-
-	/*
-	 * +0x10 .. +0x3f  Forty-eight bytes neither the constructor nor
-	 * `reset` touches.  `process` is still not written, so nothing here
-	 * can say what lives in them.  This region was 56 bytes until `reset`
-	 * was read; the last two words of it are below.
-	 */
-	unsigned char pad_10[0x30];
+	unsigned char *bitBuffer;
 
 	/*
-	 * +0x40  Zeroed by `reset`, in the same pair of stores as +0x0c and at
-	 * every one of its three exits.  Nothing reads it in anything written
-	 * here and no string names it, so its role is not established and the
-	 * neutral name stays.  Four bytes, stored as a word.
+	 * +0x0c  How many bits `bitBuffer` currently holds.  Cleared by the
+	 * constructor and by `reset`; `process` uses it as the store index,
+	 * increments it once per input bit, compares it against `K` and
+	 * subtracts `K` from it whenever a frame comes out.  It is never
+	 * reset to zero at that point, so a partial frame's tail carries.
+	 * The name is `process`'s arithmetic and nothing else.
 	 */
-	unsigned int word_40;
+	unsigned int bitsBuffered;
+
+	/*
+	 * +0x10 .. +0x3f  TWELVE WORDS, and `process` is what turned them from
+	 * forty-eight bytes of pad into an array.  Neither the constructor nor
+	 * `reset` touches them; `process` passes `this + 0x10` as the second
+	 * argument of `V92ModulusEncoder::progress(unsigned char *,
+	 * unsigned int *)` -- so the element type is the mangling's -- and
+	 * then as the first argument of `V92Precoder::process(unsigned int *,
+	 * int, int, int *, float *)`, which indexes it `i + 4 * a` for `i` in
+	 * 0..3 over `a` = 0, 1, 2.  Twelve is therefore the largest index the
+	 * only reader can form, and it is also exactly the forty-eight bytes
+	 * the region has: the two agree, which is why this is an array rather
+	 * than a bound.
+	 *
+	 * WHAT THE WORDS MEAN IS THE PRECODER'S BUSINESS and not established
+	 * here: it uses each as the `x` a constellation search is centred on.
+	 * The name says who fills it, which is what the object states.
+	 */
+	unsigned int modulusOut[V92TX_FRAME_SYMBOLS];
+
+	/*
+	 * +0x40  The convolution encoder's last output, carried from one 4D
+	 * symbol to the next.  Zeroed by `reset` at every one of its three
+	 * exits; `process` is its only other user and does exactly two things
+	 * with it -- passes it as `V92Precoder::process`'s third argument (the
+	 * `b` that enters the fourth symbol's parity) and then overwrites it
+	 * with `V92ConvolutionEncoder::process`'s return value, three times
+	 * per frame.  So it is read one iteration BEFORE the value that
+	 * replaces it is computed, and the first read of a frame sees the last
+	 * write of the one before.
+	 *
+	 * `int` rather than `unsigned int`, and that is the two neighbours'
+	 * doing: `V92ConvolutionEncoder::process` returns `int` and
+	 * `V92Precoder::process` takes `int`.  The width never changes and no
+	 * comparison forces a sign, so the retype cannot move code generation.
+	 */
+	int convEncoderOutput;
 
 	/*
 	 * +0x44  The constellation gain, copied by `reset` from the parameter

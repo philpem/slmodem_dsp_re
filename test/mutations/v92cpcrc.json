@@ -1,0 +1,183 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the claim it exists for",
+  "why": "The seven V92CP members below the constructor were read from .text+0x4e5d0-0x4ebdb in one sitting, so a green t_v92cpcrc says our reading and the object agree and not that either is right. THE ENTRY THAT MATTERS MOST is 'the shift register is updated in place': the object copies all sixteen stages into stack slots before the loop and back after it, and a version that worked on crc[] directly behaves identically for every message shorter than the bit vector -- the two separate only once the loop's index reaches 2000, where crc begins and the register starts feeding on itself. Three cases in t_v92cpcrc.cpp go there on purpose. WHAT NO ENTRY HERE REACHES: a length below seventeen, which wraps the unsigned bound and runs the loop off the address space on both sides -- docs/deviations.md D504, and a mutation of it would crash rather than be caught."
+ },
+ {
+  "label": "the CRC register is reset to zero",
+  "find": "\t\tcrc[i] = 1;",
+  "replace": "\t\tcrc[i] = 0;"
+ },
+ {
+  "label": "the CRC register is fifteen stages",
+  "find": "\tfor (i = 0; i <= V92CP_CRC - 1; i++)\n\t\tcrc[i] = 1;",
+  "replace": "\tfor (i = 0; i <= V92CP_CRC - 2; i++)\n\t\tcrc[i] = 1;"
+ },
+ {
+  "label": "resetDetector seeds the counter with seventeen",
+  "find": "\tword_11c = 18;\n\tword_120 = 0;\n\tword_114 = 0;",
+  "replace": "\tword_11c = 17;\n\tword_120 = 0;\n\tword_114 = 0;"
+ },
+ {
+  "label": "resetDetector leaves +0x120 alone",
+  "find": "\tword_11c = 18;\n\tword_120 = 0;\n\tword_114 = 0;",
+  "replace": "\tword_11c = 18;\n\tword_114 = 0;"
+ },
+ {
+  "label": "resetDetector leaves the two flag bytes alone",
+  "find": "\tbyte_119 = 0;\n\tbyte_11a = 0;\n}",
+  "replace": "}"
+ },
+ {
+  "label": "reset does not clear the detector",
+  "find": "\tresetDetector();\n\n\tword_914 = -1;",
+  "replace": "\tword_914 = -1;"
+ },
+ {
+  "label": "reset leaves +0x914 alone",
+  "find": "\tresetDetector();\n\n\tword_914 = -1;",
+  "replace": "\tresetDetector();"
+ },
+ {
+  "label": "reset sets +0x914 to zero rather than -1",
+  "find": "\tresetDetector();\n\n\tword_914 = -1;",
+  "replace": "\tresetDetector();\n\n\tword_914 = 0;"
+ },
+ {
+  "label": "resetDetector also writes +0x914, which it does NOT",
+  "find": "\tbyte_119 = 0;\n\tbyte_11a = 0;\n}",
+  "replace": "\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_914 = -1;\n}"
+ },
+ {
+  "label": "getBitVector reports the other length",
+  "find": "\tlength = vectorLen;",
+  "replace": "\tlength = msgLen;"
+ },
+ {
+  "label": "getBitVector hands back the CRC register",
+  "find": "\tlength = vectorLen;\n\n\treturn bits;",
+  "replace": "\tlength = vectorLen;\n\n\treturn crc;"
+ },
+ {
+  "label": "setSUV stores fifteen rather than sixteen",
+  "find": "\tword_104 = 16;\n\tsuv = v;",
+  "replace": "\tword_104 = 15;\n\tsuv = v;"
+ },
+ {
+  "label": "setSUV stores its argument in both slots",
+  "find": "\tword_104 = 16;\n\tsuv = v;",
+  "replace": "\tword_104 = v;\n\tsuv = v;"
+ },
+ {
+  "label": "the message starts at seventeen",
+  "find": "\tfor (i = 18; i < n; i++) {",
+  "replace": "\tfor (i = 17; i < n; i++) {"
+ },
+ {
+  "label": "the message runs to the very end",
+  "find": "\tunsigned int n = msgLen - 17;",
+  "replace": "\tunsigned int n = msgLen;"
+ },
+ {
+  "label": "the message stops sixteen short, not seventeen",
+  "find": "\tunsigned int n = msgLen - 17;",
+  "replace": "\tunsigned int n = msgLen - 16;"
+ },
+ {
+  "label": "no position is skipped",
+  "find": "\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
+  "replace": ""
+ },
+ {
+  "label": "every sixteenth position is skipped, not every seventeenth",
+  "find": "\t\tif (i % 17 == 0)",
+  "replace": "\t\tif (i % 16 == 0)"
+ },
+ {
+  "label": "the skip is on the residue one rather than zero",
+  "find": "\t\tif (i % 17 == 0)",
+  "replace": "\t\tif (i % 17 == 1)"
+ },
+ {
+  "label": "the feedback does not include the message bit",
+  "find": "\t\tt = (unsigned char)(crc[0] + bits[i]);",
+  "replace": "\t\tt = (unsigned char)crc[0];"
+ },
+ {
+  "label": "the feedback is taken from the far end of the register",
+  "find": "\t\tt = (unsigned char)(crc[0] + bits[i]);",
+  "replace": "\t\tt = (unsigned char)(crc[15] + bits[i]);"
+ },
+ {
+  "label": "the tap at stage three is a plain shift",
+  "find": "\t\tcrc[3] = (unsigned char)((crc[4] + t) & 1);",
+  "replace": "\t\tcrc[3] = crc[4];"
+ },
+ {
+  "label": "the tap at stage ten is a plain shift",
+  "find": "\t\tcrc[10] = (unsigned char)((crc[11] + t) & 1);",
+  "replace": "\t\tcrc[10] = crc[11];"
+ },
+ {
+  "label": "the tap at stage three is at stage two",
+  "find": "\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + t) & 1);",
+  "replace": "\t\tcrc[2] = (unsigned char)((crc[3] + t) & 1);\n\t\tcrc[3] = crc[4];"
+ },
+ {
+  "label": "the entering bit is not masked",
+  "find": "\t\tcrc[15] = (unsigned char)(t & 1);",
+  "replace": "\t\tcrc[15] = t;"
+ },
+ {
+  "label": "the register shifts the other way",
+  "find": "\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];",
+  "replace": "\t\tcrc[2] = crc[1];\n\t\tcrc[1] = crc[0];\n\t\tcrc[0] = crc[3];"
+ },
+ {
+  "label": "evaluateCRC does not reset the register first",
+  "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
+  "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();",
+  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding 4708's shape a second time."
+ },
+ {
+  "label": "evaluateCRC resets after calculating",
+  "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
+  "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();\n\tresetCRC();",
+  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding 4708's shape a second time."
+ },
+ {
+  "label": "the received CRC is read from the front of the message",
+  "find": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];",
+  "replace": "\t\tint d = (int)crc[j] - (int)bits[j];"
+ },
+ {
+  "label": "the received CRC is one place off",
+  "find": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];",
+  "replace": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j - 1];"
+ },
+ {
+  "label": "the difference is signed rather than absolute",
+  "find": "\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));",
+  "replace": "\t\tacc = (unsigned char)(acc + d);"
+ },
+ {
+  "label": "the accumulator is wider than a byte",
+  "find": "\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));\n\t}\n\n\treturn acc == 0;",
+  "replace": "\tunsigned int wide = 0;\n\n\tfor (j = 0; j < V92CP_CRC; j++) {\n\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];\n\n\t\twide += (unsigned int)(d < 0 ? -d : d);\n\t}\n\tacc = (unsigned char)wide;\n\n\treturn wide == 0;"
+ },
+ {
+  "label": "the verdict is inverted",
+  "find": "\treturn acc == 0;",
+  "replace": "\treturn acc != 0;"
+ },
+ {
+  "label": "only the first stage is checked",
+  "find": "\tfor (j = 0; j < V92CP_CRC; j++) {",
+  "replace": "\tfor (j = 0; j < 1; j++) {"
+ },
+ {
+  "label": "the differences are OR-ed rather than summed",
+  "find": "\t\tacc = (unsigned char)(acc + (d < 0 ? -d : d));",
+  "replace": "\t\tacc = (unsigned char)(acc | (d < 0 ? -d : d));"
+ }
+]

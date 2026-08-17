@@ -130,6 +130,14 @@ class V90Phase4Demodulator;
  */
 struct tagV90AdditionalCPinfo;
 
+/*
+ * `getAT_UD`'s argument, out of its own mangling
+ * (`P21TAG_DiagnosticResults`).  Forward-declared rather than included
+ * because this class only ever holds a pointer to one -- the definition is in
+ * dsplib/TAG_DiagnosticResults.h and there is exactly one of it.
+ */
+struct TAG_DiagnosticResults;
+
 class V90Demodulator {
 public:
 	/* Written -- wave 2. */
@@ -185,21 +193,46 @@ public:
 	~V90Demodulator();
 
 	/*
+	 * THE PHASE-4 AND DATA-PHASE ENTRY POINTS.  All five end in a `ret`
+	 * with nothing loaded into %eax on any path -- or, where the last
+	 * statement is a diagnostic, in a TAIL CALL to a `void` function --
+	 * so `void` is forced here rather than being want of evidence, which
+	 * is what it was while they were only declared.  Compare
+	 * `sessionTermination` above, which had to keep its `int` because its
+	 * single exit clears %eax and a `void` member does not.
+	 */
+	void enterDataSteadyState();
+	void enterDataPhase();
+	void enterRRN();
+	void enterFPE();
+	void enterPhase4();
+
+	/*
+	 * Fills the caller's six-element array with
+	 * `V90AutoDigitalImpDetector::byte_280c`, one word per frame phase.
+	 * `unsigned int *` is the mangling's (`Pj`); the count is the loop's
+	 * `cmp $0x5 / jbe`, and it is `V90ADID_PHASES`.
+	 */
+	void getRbsPattern(unsigned int *rbs) const;
+
+	/*
+	 * The AT-command diagnostics accessor.  `const` is the mangling's
+	 * (`_ZNK`), and the argument type is the only place in the object
+	 * where `TAG_DiagnosticResults` is named.
+	 */
+	void getAT_UD(TAG_DiagnosticResults *results) const;
+
+	void indicateRemoteRateReneg() const;
+
+	/*
 	 * Declared for the record and not defined; return types are not
 	 * mangled, so `void` here is want of evidence.
 	 */
 	void progress(int *, unsigned int &, float *, unsigned int);
 	void exitPhase3();
-	void enterDataSteadyState();
 	void reset(unsigned int);
-	void enterDataPhase();
-	void enterRRN();
 	void enterChannelVerification(short, short);
-	void enterFPE();
-	void enterPhase4();
-	void getRbsPattern(unsigned int *) const;
 	void reInit();
-	void indicateRemoteRateReneg() const;
 
 	/* --- data members; see the file comment on the naming --- */
 
@@ -293,7 +326,23 @@ public:
 	unsigned int word_40;		/* +0x040 cleared by `enterPhase3`   */
 	unsigned int word_44;		/* +0x044 receives the old +0x038    */
 
-	unsigned char pad_48[4];	/* +0x048                            */
+	/*
+	 * +0x048  WAS `pad_48`, and the three phase-entry members are what
+	 * modelled it.  Each stores a deadline built from
+	 * `phase2Info->rtd` with a single `lea`, and nothing in this batch
+	 * reads it back:
+	 *
+	 *     enterRRN, enterFPE   lea 0x10680(%edx,%edx,1)   0x10680 + 2*rtd
+	 *     enterPhase4          lea 0x28230(%edx,%edx,4)   0x28230 + 5*rtd
+	 *
+	 * A word, and no more than that is claimed.  At the 8000 Hz
+	 * downstream rate the two constants are 8.4 s and 20.6 s, which is
+	 * the right order for a phase timeout in samples and is why the name
+	 * is not `word_48` -- but the comparison site is in `progress`, which
+	 * is unwritten, so "deadline" is inference and "sample count" is
+	 * inference on top of it.  MODELLED, UNNAMED, per CLAUDE.md.
+	 */
+	unsigned int word_48;		/* +0x048                            */
 
 	/*
 	 * +0x04c  EMBEDDED, and now modelled: `V90Demodulator::reset` does

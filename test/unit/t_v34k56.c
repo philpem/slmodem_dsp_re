@@ -267,7 +267,7 @@ static void
 check_idle(int quad, short f25c6_before, long t)
 {
 	int q = oa.f25c8;
-	int pt = *(const int *)&oa.f25d0;
+	int pt = oa.txpoint.word;
 
 	diff_eq_int("idle leaves f25c6 alone %ld", oa.f25c6, f25c6_before, t);
 	diff_eq_int("idle quadrant in range %ld", q >= 0 && q <= 3, 1, t);
@@ -524,7 +524,7 @@ main(void)
 				if (gpc == 0) {
 					f25cc0 = oa.f25cc;
 					f25c80 = oa.f25c8;
-					pt0 = *(const int *)&oa.f25d0;
+					pt0 = oa.txpoint.word;
 				} else {
 					diff_eq_int("gpc does not move f25cc "
 						    "%ld", oa.f25cc, f25cc0,
@@ -534,7 +534,7 @@ main(void)
 						    c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",
-						    *(const int *)&oa.f25d0,
+						    oa.txpoint.word,
 						    pt0, c);
 				}
 			}

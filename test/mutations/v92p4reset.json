@@ -1,0 +1,256 @@
+[
+ {
+  "label": "NOTE: how this set counts to seventeen, and what it cannot reach",
+  "why": "Every entry below is a claim the 290 bytes at .text+0x19030 make, read at one sitting with t_v92p4reset.cpp. THE SEVENTEEN CLEARS ARE COUNTED LIKE THIS: sixteen stores of a zero are visible in the disassembly -- +0x0c, +0x04, +0x78, +0x1c0, the CALLER'S +0x110, +0x1c4, +0x28, +0x3c, +0x2c, +0x30, +0x34, +0x18, +0x1c (a `movb`, not a `movl`), +0x20, the caller's +0x000 (also a `movb`) and +0x1bc -- and the seventeenth claim of the same kind is `Scrambler<h,h>::reset`'s ARGUMENT, which is a zero passed rather than a zero stored. Anyone recounting and getting sixteen has counted the stores; anyone getting eighteen has counted `cp->bitsPerSymbol = 1`, which is not a clear and has entries of its own. THREE CLAIMS ARE BEHIND SOMETHING THE OBJECT COMPARE CANNOT SEE, because two sides that both failed the same way agree perfectly: `pattern` is checked against the side's OWN `cp->bits`, `patternLength` against its own `cp->vectorLen`, and `state` against the argument fed in -- absolute checks, not differential ones. WHAT NO ENTRY HERE REACHES: the ORDER of the fourteen clears among themselves, which write disjoint fields and admit no observable between any two permutations; the choice of `mov` widths at +0x40 and +0x44, which no input can separate from the values they carry; and everything inside `generateSymbol`, which t_v92p4sym.cpp's own set of 134 covers and which this set only ever reaches through a loop of at most four calls."
+ },
+ {
+  "label": "reset does not clear the report word at +0x0c",
+  "find": "\tword_0c = 0;\n\tword_44 = suvLimit;",
+  "replace": "\tword_44 = suvLimit;"
+ },
+ {
+  "label": "reset does not clear symbolCount",
+  "find": "\tbitsPerSymbol = (unsigned char)(bitsArg + 2);\n\tsymbolCount = 0;\n",
+  "replace": "\tbitsPerSymbol = (unsigned char)(bitsArg + 2);\n"
+ },
+ {
+  "label": "reset does not clear prevBit",
+  "find": "\tprevBit = 0;\n\tword_1c0 = 0;",
+  "replace": "\tword_1c0 = 0;"
+ },
+ {
+  "label": "reset does not clear word_1c0",
+  "find": "\tprevBit = 0;\n\tword_1c0 = 0;\n\tcp->word_110 = 0;",
+  "replace": "\tprevBit = 0;\n\tcp->word_110 = 0;"
+ },
+ {
+  "label": "reset does not clear the caller's V92CP word_110",
+  "find": "\tcp->word_110 = 0;\n\tword_1c4 = 0;",
+  "replace": "\tword_1c4 = 0;"
+ },
+ {
+  "label": "reset does not clear word_1c4",
+  "find": "\tword_1c4 = 0;\n\tword_28 = 0;",
+  "replace": "\tword_28 = 0;"
+ },
+ {
+  "label": "reset does not clear word_28",
+  "find": "\tword_28 = 0;\n\tflag_3c = 0;",
+  "replace": "\tflag_3c = 0;"
+ },
+ {
+  "label": "reset does not clear flag_3c",
+  "find": "\tflag_3c = 0;\n\tword_2c = 0;",
+  "replace": "\tword_2c = 0;"
+ },
+ {
+  "label": "reset does not clear word_2c",
+  "find": "\tflag_3c = 0;\n\tword_2c = 0;\n\tword_30 = 0;",
+  "replace": "\tflag_3c = 0;\n\tword_30 = 0;"
+ },
+ {
+  "label": "reset does not clear word_30",
+  "find": "\tword_30 = 0;\n\tword_34 = 0;\n\tword_18 = 0;",
+  "replace": "\tword_34 = 0;\n\tword_18 = 0;"
+ },
+ {
+  "label": "reset does not clear word_34",
+  "find": "\tword_34 = 0;\n\tword_18 = 0;",
+  "replace": "\tword_18 = 0;"
+ },
+ {
+  "label": "reset does not clear word_18",
+  "find": "\tword_18 = 0;\n\tbyte_1c = 0;\n\tflag_20 = 0;",
+  "replace": "\tbyte_1c = 0;\n\tflag_20 = 0;"
+ },
+ {
+  "label": "reset does not clear byte_1c",
+  "find": "\tbyte_1c = 0;\n\tflag_20 = 0;\n\n\tcp->bitsPerSymbol = 1;",
+  "replace": "\tflag_20 = 0;\n\n\tcp->bitsPerSymbol = 1;"
+ },
+ {
+  "label": "reset does not clear flag_20",
+  "find": "\tflag_20 = 0;\n\n\tcp->bitsPerSymbol = 1;",
+  "replace": "\n\tcp->bitsPerSymbol = 1;"
+ },
+ {
+  "label": "reset does not clear the caller's V92CP byte_00",
+  "find": "\tcp->bitsPerSymbol = 1;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();",
+  "replace": "\tcp->bitsPerSymbol = 1;\n\tcp->infoToBits();"
+ },
+ {
+  "label": "reset does not clear e2uExtended",
+  "find": "\tpattern = cp->getBitVector(patternLength);\n\te2uExtended = 0;\n",
+  "replace": "\tpattern = cp->getBitVector(patternLength);\n"
+ },
+ {
+  "label": "reset seeds the scrambler with ones",
+  "why": "The seventeenth clear, and the one that is an argument rather than a store: `call _ZN9ScramblerIhhE5resetEh` at .text+0x19097 is preceded by `xor %edx,%edx; mov %edx,0x4(%esp)`.",
+  "find": "\tmapper->reset(amplitude, bitsArg);\n\tscrambler.reset(0);",
+  "replace": "\tmapper->reset(amplitude, bitsArg);\n\tscrambler.reset(1);"
+ },
+ {
+  "label": "byte_1c is cleared as a word rather than as a byte",
+  "why": "The object's store is `movb $0x0,0x1c(%esi)` at .text+0x190e8, one byte wide. A four-byte store at the same offset would also clear `pad_1d`, which the fixture seeds with the top bit set on every trial for exactly this entry.",
+  "find": "\tword_18 = 0;\n\tbyte_1c = 0;\n\tflag_20 = 0;",
+  "replace": "\tword_18 = 0;\n\t*(unsigned int *)&byte_1c = 0;\n\tflag_20 = 0;"
+ },
+ {
+  "label": "the caller's V92CP byte_00 is cleared as a word rather than as a byte",
+  "why": "`movb $0x0,(%eax)` at .text+0x190fd. A word store would take `char_01`, `char_02` and `byte_03` with it, and `infoToBits` packs all three.",
+  "find": "\tcp->bitsPerSymbol = 1;\n\tcp->byte_00 = 0;\n",
+  "replace": "\tcp->bitsPerSymbol = 1;\n\t*(unsigned int *)&cp->byte_00 = 0;\n"
+ },
+ {
+  "label": "bitsPerSymbol is the argument plus one",
+  "find": "\tbitsPerSymbol = (unsigned char)(bitsArg + 2);",
+  "replace": "\tbitsPerSymbol = (unsigned char)(bitsArg + 1);"
+ },
+ {
+  "label": "the plus two saturates instead of wrapping in one byte",
+  "why": "THE ENTRY THIS BATCH EXISTS FOR.  `add $0x2,%dl` at .text+0x19065 is an eight-bit add, so 254 gives 0 and 255 gives 1; a reconstruction that noticed the wrap and decided it could not have been meant would clamp instead, and every trial below 254 would still agree.  IT IS REACHED ONLY BY RUN A, and that is D571 and D700 rather than a grid convenience: 254 and 255 are driven at `nSymbols == 0`, because `reset` survives a `bitsPerSymbol` of zero -- it forces `cp->bitsPerSymbol = 1` before `infoToBits` -- and `generateSymbol` does not.  Moving those two rows into RUN B would raise #DE identically on both sides and measure the CPU.  Caught at V92Phase4Modulator+67 (got ff, reference 00) from trial 56, by the object compare and by the named check \"bitsPerSymbol is the second argument plus two, in one byte\", and the anti-vacuity assertion that 254 left +0x43 at zero on both sides fires with it.",
+  "find": "\tbitsPerSymbol = (unsigned char)(bitsArg + 2);\n\tsymbolCount = 0;",
+  "replace": "\tbitsPerSymbol = (bitsArg > 253) ? (unsigned char)255\n\t\t\t\t       : (unsigned char)(bitsArg + 2);\n\tsymbolCount = 0;"
+ },
+ {
+  "label": "the plus two is computed in a wider type before the truncation",
+  "equivalent": true,
+  "why": "PROVABLY unobservable, from the language rather than from a green run. `bitsArg + 2` is ALREADY an `int` computation -- C's integral promotion applies to the `unsigned char` operand before the addition -- and the value that reaches the field is that `int` converted to `unsigned char`, which is defined as reduction modulo 256. Spelling the intermediate `unsigned int` changes neither the promotion nor the modulus, so the eight bits stored are the same for all 256 inputs, 254 and 255 included. The object's one-byte `add $0x2,%dl` is the compiler's encoding of that truncation and not a second semantics; it is kept in the source because it is what GCC 3.4.2 emits from the shorter spelling. Not deleted, so that nobody later reads a green run as evidence the width was tested.",
+  "find": "\tbitsPerSymbol = (unsigned char)(bitsArg + 2);\n\tsymbolCount",
+  "replace": "\tbitsPerSymbol = (unsigned char)((unsigned int)bitsArg + 2u);\n\tsymbolCount"
+ },
+ {
+  "label": "the CP's own bitsPerSymbol is not forced before the repack",
+  "why": "`movb $0x1,0x128(%ebx)` at .text+0x190f3, two instructions above the `infoToBits` call. The fixture seeds the field at 1..6 and NOT higher on purpose: `infoToBits` zero-fills `bits[word_11c .. vectorLen)` with `vectorLen` rounded up to a multiple of `12 * bitsPerSymbol`, so a larger seed would have this mutant run off the end of a 2000-byte array and be `caught` by a scribble.",
+  "find": "\tcp->bitsPerSymbol = 1;\n\tcp->byte_00 = 0;",
+  "replace": "\tcp->byte_00 = 0;"
+ },
+ {
+  "label": "the CP's own bitsPerSymbol is forced to five rather than one",
+  "find": "\tcp->bitsPerSymbol = 1;\n",
+  "replace": "\tcp->bitsPerSymbol = 5;\n"
+ },
+ {
+  "label": "the mapper is given the argument rather than the field",
+  "equivalent": true,
+  "why": "PROVABLY unobservable HERE, and only here. `amplitude = amplitudeArg` is four statements above the call, both are `short`, and nothing between the two writes either -- `byte_42`, `state`, `bitsPerSymbol` and `symbolCount` are distinct members of the same object, so no aliasing can carry a value from one to the other. The two spellings therefore name the same sixteen bits for every input. THE OBJECT NEVERTHELESS FORCES THE FIELD: `movswl 0x40(%esi),%eax` at .text+0x1907b is a memory operand, and the argument's own sign extension is two instructions earlier in %ebx and has been overwritten -- so the source says `amplitude`. What makes that reading TESTABLE is the ordering, not the spelling, and the catchable form of this claim is the entry labelled \"the mapper is reset before the amplitude is stored\", which moves the call above the assignment and makes the re-read return the seed. Kept rather than deleted so that a later reader does not take a green run for evidence the operand was checked.",
+  "find": "\tmapper->reset(amplitude, bitsArg);",
+  "replace": "\tmapper->reset(amplitudeArg, bitsArg);"
+ },
+ {
+  "label": "the mapper is reset before the amplitude is stored",
+  "why": "THE ORDER CLAIM THAT MAKES THE RE-READ OBSERVABLE. See the entry above; the fixture seeds `amplitude` to a value no row of the grid ever passes in, so the mapper's `scale` says which of the two the call received.",
+  "find": "\tamplitude = amplitudeArg;\n\tbyte_42 = bitsArg;\n\tstate = stateArg;\n\tbitsPerSymbol = (unsigned char)(bitsArg + 2);\n\tsymbolCount = 0;\n\n\tmapper->reset(amplitude, bitsArg);\n",
+  "replace": "\tmapper->reset(amplitude, bitsArg);\n\tamplitude = amplitudeArg;\n\tbyte_42 = bitsArg;\n\tstate = stateArg;\n\tbitsPerSymbol = (unsigned char)(bitsArg + 2);\n\tsymbolCount = 0;\n"
+ },
+ {
+  "label": "the mapper is given bitsPerSymbol rather than the raw argument",
+  "why": "`movzbl %cl,%ebx` at .text+0x1905f captures the argument BEFORE `add $0x2,%dl` at +0x19065, so what reaches `V92Mapper::reset`'s second parameter -- the mapper's `mode` -- is the raw byte. At `bitsArg == 0` the two readings give mode 0 against mode 2, which is `bits` 2 against 3 and `power` 5.0 against 21.0.",
+  "find": "\tmapper->reset(amplitude, bitsArg);\n",
+  "replace": "\tmapper->reset(amplitude, bitsPerSymbol);\n"
+ },
+ {
+  "label": "getBitVector's length goes to a scratch of its own",
+  "why": "The reference argument is `lea 0x1ac(%esi),%ecx; mov %ecx,0x4(%esp)` at .text+0x1910b -- the address of `patternLength` itself, not of a local.",
+  "find": "\tcp->infoToBits();\n\n\tpattern = cp->getBitVector(patternLength);",
+  "replace": "\tcp->infoToBits();\n\n\t{\n\t\tunsigned int scratch = patternLength;\n\n\t\tpattern = cp->getBitVector(scratch);\n\t}"
+ },
+ {
+  "label": "getBitVector's return value is discarded",
+  "why": "`mov %eax,0x1a8(%esi)` at .text+0x19120. The only witness is that `pattern` ends up equal to the side's own `cp->bits`, which is why the fixture seeds it to a block OUTSIDE the CP.",
+  "find": "\tpattern = cp->getBitVector(patternLength);\n\te2uExtended = 0;",
+  "replace": "\t(void)cp->getBitVector(patternLength);\n\te2uExtended = 0;"
+ },
+ {
+  "label": "e2uExtended is cleared after the loop rather than before it",
+  "why": "AN ORDER CLAIM WITH A REAL OBSERVABLE, because six of `generateSymbol`'s arms READ the flag -- `word_1b8 = (e2uExtended != 0) ? 13 : 12` -- and none of them writes it. The object clears it at .text+0x1912a, before the `test %edi,%edi` that guards the loop.",
+  "find": "\te2uExtended = 0;\n\n\tfor (i = 0; i < nSymbols; i++)\n\t\tgenerateSymbol();",
+  "replace": "\n\tfor (i = 0; i < nSymbols; i++)\n\t\tgenerateSymbol();\n\te2uExtended = 0;"
+ },
+ {
+  "label": "the loop bound is <= rather than <",
+  "why": "The object's guard is `test %edi,%edi; je` at .text+0x19128 with a `dec`/`jne` body: zero means not at all.  IT IS CAUGHT BY CHECKS RATHER THAN BY A SIGFPE ONLY BECAUSE OF THE FIXTURE'S `runb` SPLIT, so do not tidy that away.  The one stray call this mutant makes at nSymbols == 0 lands with a `symbolCount` of 1 and, on the 254 and 255 rows, a `bitsPerSymbol` of 0 and 1; six of `generateSymbol`'s arms reach `word_1b0 = patternLength / bitsPerSymbol` behind `symbolCount % word_1b0 == 0`, which at a count of 1 is true exactly when `word_1b0` is ONE.  t_v92p4reset.cpp therefore seeds `word_1b0` away from one in RUN A and at one in RUN B, where the loop is meant to run and `bitsPerSymbol` is 2 or 3.  Collapsing the two seeds to a single value turns this entry's verdict into a divide-by-zero, which is D571's \"measures the CPU, not the reading\".",
+  "find": "\tfor (i = 0; i < nSymbols; i++)",
+  "replace": "\tfor (i = 0; i <= nSymbols; i++)"
+ },
+ {
+  "label": "the loop starts at one",
+  "find": "\tfor (i = 0; i < nSymbols; i++)\n\t\tgenerateSymbol();",
+  "replace": "\tfor (i = 1; i < nSymbols; i++)\n\t\tgenerateSymbol();"
+ },
+ {
+  "label": "the loop generates two symbols per iteration",
+  "find": "\tfor (i = 0; i < nSymbols; i++)\n\t\tgenerateSymbol();\n}",
+  "replace": "\tfor (i = 0; i < nSymbols; i++) {\n\t\tgenerateSymbol();\n\t\tgenerateSymbol();\n\t}\n}"
+ },
+ {
+  "label": "the message is repacked before the CP's bitsPerSymbol is forced",
+  "why": "ONE OF THE TWO ORDER CLAIMS. `movb $0x1,0x128(%ebx)` at .text+0x190f3 and `movb $0x0,(%eax)` at +0x190fd both precede `call _ZN5V92CP10infoToBitsEv` at +0x19106, and `infoToBits` reads both: `bitsPerSymbol` is the padding quantum and `byte_00` is `bits[18]` and picks the whole message form.",
+  "find": "\tcp->bitsPerSymbol = 1;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();",
+  "replace": "\tcp->infoToBits();\n\tcp->bitsPerSymbol = 1;\n\tcp->byte_00 = 0;"
+ },
+ {
+  "label": "the bit vector is taken before the message is repacked",
+  "why": "THE OTHER ORDER CLAIM. `call _ZN5V92CP12getBitVectorERj` is at .text+0x1911b, after `infoToBits` at +0x19106, and `infoToBits` is what writes the `vectorLen` the accessor reports.",
+  "find": "\tcp->infoToBits();\n\n\tpattern = cp->getBitVector(patternLength);",
+  "replace": "\tpattern = cp->getBitVector(patternLength);\n\tcp->infoToBits();\n"
+ },
+ {
+  "label": "word_44 is not written",
+  "find": "\tword_44 = suvLimit;\n",
+  "replace": ""
+ },
+ {
+  "label": "byte_42 is not written",
+  "find": "\tbyte_42 = bitsArg;\n",
+  "replace": ""
+ },
+ {
+  "label": "amplitude is not written",
+  "find": "\tamplitude = amplitudeArg;\n",
+  "replace": ""
+ },
+ {
+  "label": "state is not written",
+  "find": "\tstate = stateArg;\n",
+  "replace": ""
+ },
+ {
+  "label": "byte_42 and bitsPerSymbol are exchanged",
+  "find": "\tbyte_42 = bitsArg;\n\tstate = stateArg;\n\tbitsPerSymbol = (unsigned char)(bitsArg + 2);",
+  "replace": "\tbyte_42 = (unsigned char)(bitsArg + 2);\n\tstate = stateArg;\n\tbitsPerSymbol = bitsArg;"
+ },
+ {
+  "label": "word_44 is written as a short",
+  "why": "`mov %eax,0x44(%esi)` at .text+0x19051 is a four-byte store, and the fifth argument's own type is `unsigned int`. The grid carries 0xffffffff for this entry: every other row of `suvs_a[]` fits in sixteen bits and would agree.",
+  "find": "\tword_44 = suvLimit;",
+  "replace": "\tword_44 = (unsigned int)(unsigned short)suvLimit;"
+ },
+ {
+  "label": "reset also clears patternIndex",
+  "why": "The first of five entries that break the OTHER half of the reading -- what the 290 bytes do NOT write. There is no store to +0x08 in them, and the fixture seeds every untouched field non-zero on every RUN A trial so that each absence is separable from a clear.",
+  "find": "\tsymbolCount = 0;\n\n\tmapper->reset(amplitude, bitsArg);",
+  "replace": "\tsymbolCount = 0;\n\tpatternIndex = 0;\n\n\tmapper->reset(amplitude, bitsArg);"
+ },
+ {
+  "label": "reset also writes word_1b0",
+  "why": "Written as 12 and not as 0: `word_1b0` is the divisor of an unsigned `div` in six of `generateSymbol`'s arms, so a zero would raise #DE in RUN B on both sides at once and measure the CPU rather than the reading (D571, D700). `word_1b0` staying at whatever the constructor left is D700's first divisor and is the object's.",
+  "find": "\tword_28 = 0;\n\tflag_3c = 0;",
+  "replace": "\tword_1b0 = 12;\n\tword_28 = 0;\n\tflag_3c = 0;"
+ },
+ {
+  "label": "reset also clears word_24",
+  "find": "\tflag_3c = 0;\n\tword_2c = 0;",
+  "replace": "\tflag_3c = 0;\n\tword_24 = 0;\n\tword_2c = 0;"
+ },
+ {
+  "label": "reset also clears word_38",
+  "find": "\tword_34 = 0;\n\tword_18 = 0;",
+  "replace": "\tword_38 = 0;\n\tword_34 = 0;\n\tword_18 = 0;"
+ },
+ {
+  "label": "reset also clears word_1b8",
+  "find": "\tword_34 = 0;\n\tword_18 = 0;",
+  "replace": "\tword_1b8 = 0;\n\tword_34 = 0;\n\tword_18 = 0;"
+ }
+]

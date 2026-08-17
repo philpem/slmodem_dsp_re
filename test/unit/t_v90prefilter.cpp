@@ -52,6 +52,25 @@ int ref_isV90WithEia6(const void *self)
 void ref_displayParamEia6(void *self)
 	asm("ref__ZN12V90PreFilter16displayParamEia6Ev");
 
+/*
+ * The filter-accessor batch.  Return types are not mangled and these
+ * declarations are the reconstruction's reading of them, so they are part of
+ * what is under test rather than given: a `float *` where the object returned
+ * something else would still link.
+ */
+unsigned int ref_getFilterLength(void *self, unsigned int gain)
+	asm("ref__ZN12V90PreFilter15getFilterLengthEj");
+float *ref_getFilterPointer(void *self, unsigned int gain)
+	asm("ref__ZN12V90PreFilter16getFilterPointerEj");
+void ref_setFilterGain(void *self, unsigned int gain)
+	asm("ref__ZN12V90PreFilter9setFilterEj");
+void ref_setFilterType(void *self, int type, unsigned int gain)
+	asm("ref__ZN12V90PreFilter9setFilterE17PreFilterCoefTypej");
+int ref_getV90Capability(void *self)
+	asm("ref__ZN12V90PreFilter16getV90CapabilityEv");
+int ref_getNofRefLoops(const void *self)
+	asm("ref__ZNK12V90PreFilter14getNofRefLoopsEv");
+
 extern float ref_coef1[31][20]
 	asm("ref__ZN12V90PreFilter18preFilterCoefType1E");
 extern float ref_coef2[31][20]
@@ -1344,6 +1363,521 @@ run_dtor(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * THE FILTER ACCESSORS -- `getNofRefLoops`, `getFilterLength`,
+ * `getFilterPointer` and the two `setFilter` overloads, plus
+ * `getV90Capability`.
+ *
+ * WHAT MAKES THESE HARD TO TEST IS THAT FOUR OF THE SIX RETURN SOMETHING.  A
+ * returned value is not in the object, so the whole-object comparison above
+ * says nothing about it -- a `getFilterPointer` that returned the wrong bank
+ * and stored nothing would pass every check `compare()` makes.  Each suite
+ * below therefore compares the RETURN as well, and the pointer is compared by
+ * resolving it against each side's own tables (see `resolve_ptr`).
+ *
+ * THE TRANSCRIPT IS THE SECOND OBSERVABLE, and it is the only one that can
+ * see the unsupported-type arm.  `getFilterLength` and `getFilterPointer`
+ * both answer 20 taps / bank 1 for an unrecognised `coefType`, exactly as
+ * they answer for type 1, so the two arms differ ONLY in the `BUGMSG` that
+ * one of them prints.  Both levels are raised and both transcripts compared.
+ *
+ * TWO ARMS FORM A COEFFICIENT POINTER OUTSIDE ITS BANK, and the trials below
+ * drive them, deliberately, exactly as `run_selectfilter_synthetic` above
+ * already does -- `getFilterPointer` skips its clamp entirely when no
+ * reference loop is selected, and neither `setFilter` overload clamps at all.
+ * The pointer is arithmetic and is never dereferenced (`FloatFIR::
+ * setCoefficients` stores it and reads nothing through it), which is the
+ * ground on which V90PreFilter.cpp's `bank1`/`bank2`/`bank3` already say
+ * "`row` is deliberately not range-checked".  docs/deviations.md D670.
+ *
+ * ONE PATH IS EXCLUDED AND IT IS A REAL DEREFERENCE, not arithmetic:
+ * `getV90Capability` reads `loops[refLoop].capability` after `autoSelection`
+ * has run, and if the search matched nothing `refLoop` is still negative
+ * there.  Every trial in `run_getv90capability` below leaves a well-formed
+ * measurement, so the search always lands on a record; a trial that did not
+ * would be testing OUR undefined behaviour and not the object's (D561).
+ * ===========================================================================
+ */
+
+/*
+ * Which (bank, row) a coefficient pointer names, asked of each side about its
+ * own tables.  Same argument as `which_bank` above and the same hazard: the
+ * blob's three banks are contiguous and ours are neither contiguous nor in
+ * that order, so an exhaustive search resolves one address to different
+ * (bank, row) pairs on the two sides and fails a correct run.  Only the four
+ * pairs these two functions can produce are tried, in a fixed order.
+ */
+static long
+resolve_ptr(int side, const float *p, unsigned int gain)
+{
+	static const int bank[4] = { 1, 1, 2, 3 };
+	int c30 = (gain > 30) ? 30 : (int)gain;
+	int c50 = (gain > 50) ? 50 : (int)gain;
+	int row[4];
+	int i;
+
+	row[0] = (int)gain;	/* refLoop == -1: no clamp on this arm  */
+	row[1] = c30;		/* bank 1, clamped                      */
+	row[2] = c30;		/* bank 2, clamped                      */
+	row[3] = c50;		/* bank 3, clamped; its row 0 is index 20 */
+
+	for (i = 0; i < 4; i++)
+		if (p == cand(side, bank[i], row[i]))
+			return bank[i] * 1000L + row[i] + 512;
+
+	return -1;
+}
+
+/*
+ * `getNofRefLoops` -- the table walk, and the empty name that ends it.
+ *
+ * The shipped tables give the count for free, but they cannot show that the
+ * TERMINATOR is what stops the walk rather than a fixed length: every codec
+ * that shares a table has the same count.  So the second half of the sweep
+ * blanks a name in the middle of one table, symmetrically on both sides, and
+ * asks again.
+ */
+static int
+run_getnofrefloops(void)
+{
+	int c, k, trial = 0;
+	int distinct = 0, prev = -1, sawcut = 0;
+
+	diff_begin("V90PreFilter::getNofRefLoops");
+
+	for (c = 0; c < 16; c++)
+		for (k = 0; k < 3; k++) {
+			int a, b;
+
+			trial++;
+			setup(trial, (c + k) % 4);
+			P(0)->codecType = P(1)->codecType = c;
+
+			a = P(0)->getNofRefLoops();
+			b = ref_getNofRefLoops(slot[1]);
+
+			diff_eq_int("getNofRefLoops (%ld)", a, b, trial);
+			diff_eq_int("and it is the table's length (%ld)", a,
+				    nloops(c), trial);
+			compare("after getNofRefLoops", trial);
+
+			if (a != prev) {
+				distinct++;
+				prev = a;
+			}
+			teardown();
+		}
+
+	/* The terminator, moved. */
+	for (c = 0; c < 16; c++) {
+		V90RefLoop keepA = V90PreFilter::dataBase[c].loops[1];
+		V90RefLoop keepB = ref_dataBase[c].loops[1];
+		int a, b;
+
+		if (nloops(c) < 3)
+			continue;
+
+		trial++;
+		V90PreFilter::dataBase[c].loops[1].name[0] = '\0';
+		ref_dataBase[c].loops[1].name[0] = '\0';
+
+		setup(trial, c % 4);
+		P(0)->codecType = P(1)->codecType = c;
+
+		a = P(0)->getNofRefLoops();
+		b = ref_getNofRefLoops(slot[1]);
+
+		diff_eq_int("getNofRefLoops, table cut short (%ld)", a, b,
+			    trial);
+		diff_eq_int("and the cut is where it stopped (%ld)", a, 1,
+			    trial);
+		if (a == 1)
+			sawcut++;
+		teardown();
+
+		V90PreFilter::dataBase[c].loops[1] = keepA;
+		ref_dataBase[c].loops[1] = keepB;
+	}
+
+	/*
+	 * Anti-vacuity, and every counter below counts trials whose RETURNED
+	 * VALUE differed -- never a branch believed taken (finding 3509).
+	 */
+	diff_eq_int("more than one distinct count was returned (%ld)",
+		    distinct > 1, 1, 0);
+	diff_eq_int("the terminator was moved and seen (%ld)", sawcut > 0, 1,
+		    0);
+
+	return diff_end();
+}
+
+/*
+ * `getFilterLength` and `getFilterPointer`, over a synthetic `coefType` that
+ * the shipped tables do not contain.
+ */
+static int
+run_filteraccessors(void)
+{
+	static const int types[] = { -1, 0, 1, 2, 3, 4, 9 };
+	static const unsigned int gains[] = {
+		0, 1, 5, 20, 29, 30, 31, 35, 49, 50, 51, 80
+	};
+	static const int loopsel[] = { -1, 0, 1 };
+	V90RefLoop saveA = V90PreFilter::refLoopsType1[1];
+	V90RefLoop saveB = ref_loops1[1];
+	V90RefLoop save0A = V90PreFilter::refLoopsType1[0];
+	V90RefLoop save0B = ref_loops1[0];
+	int ntypes = (int)(sizeof(types) / sizeof(types[0]));
+	int ngains = (int)(sizeof(gains) / sizeof(gains[0]));
+	int nsel = (int)(sizeof(loopsel) / sizeof(loopsel[0]));
+	int i, j, l, trial = 0;
+	int saw20 = 0, saw40 = 0;
+	int sawbank1 = 0, sawbank2 = 0, sawbank3 = 0;
+	int sawmsg = 0, sawquiet = 0;
+	int sawclamped = 0, sawunclamped = 0;
+
+	diff_begin("V90PreFilter::getFilterLength / getFilterPointer");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2u;
+
+	for (i = 0; i < ntypes; i++)
+		for (j = 0; j < ngains; j++)
+			for (l = 0; l < nsel; l++) {
+				unsigned int la, lb;
+				float *pa, *pb;
+				long ra, rb;
+
+				trial++;
+
+				V90PreFilter::refLoopsType1[1].coefType =
+				    types[i];
+				ref_loops1[1].coefType = types[i];
+				V90PreFilter::refLoopsType1[0].coefType =
+				    types[(i + 3) % ntypes];
+				ref_loops1[0].coefType = types[(i + 3) % ntypes];
+
+				setup(trial, (i + j + l) % 4);
+				/* Codec 1 is AD1821, whose table is type 1. */
+				P(0)->codecType = P(1)->codecType = 1;
+				P(0)->refLoop = P(1)->refLoop = loopsel[l];
+				P(0)->gain = P(1)->gain = (int)gains[j] + 7;
+
+				dsplib_debug_capture_reset();
+
+				la = P(0)->getFilterLength(gains[j]);
+				lb = ref_getFilterLength(slot[1], gains[j]);
+				pa = P(0)->getFilterPointer(gains[j]);
+				pb = ref_getFilterPointer(slot[1], gains[j]);
+
+				ra = resolve_ptr(0, pa, gains[j]);
+				rb = resolve_ptr(1, pb, gains[j]);
+
+				diff_eq_int("getFilterLength (%ld)", (long)la,
+					    (long)lb, trial);
+				diff_eq_int("getFilterPointer (%ld)", ra, rb,
+					    trial);
+				diff_eq_int("both sides resolved the pointer"
+					    " (%ld)", ra >= 0, 1, trial);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, trial);
+				compare("after the filter accessors", trial);
+
+				if (la == 20)
+					saw20++;
+				if (la == 40)
+					saw40++;
+				if (ra / 1000 == 1)
+					sawbank1++;
+				if (ra / 1000 == 2)
+					sawbank2++;
+				if (ra / 1000 == 3)
+					sawbank3++;
+				if (dsplib_debug_capture_lines(0) != 0)
+					sawmsg++;
+				else
+					sawquiet++;
+				if (ra >= 0 &&
+				    (ra % 1000) - 512 != (int)gains[j])
+					sawclamped++;
+				if (ra >= 0 &&
+				    (ra % 1000) - 512 == (int)gains[j])
+					sawunclamped++;
+
+				teardown();
+			}
+
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+	dsplib_debug_capture_on = 0;
+
+	V90PreFilter::refLoopsType1[1] = saveA;
+	ref_loops1[1] = saveB;
+	V90PreFilter::refLoopsType1[0] = save0A;
+	ref_loops1[0] = save0B;
+
+	/*
+	 * Anti-vacuity.  Every one of these counts trials whose RETURNED
+	 * VALUE or PRINTED OUTPUT differed from another trial's, which is what
+	 * finding 3509 asks for; none of them counts a branch believed taken.
+	 */
+	diff_eq_int("both tap counts were returned (%ld)",
+		    saw20 > 0 && saw40 > 0, 1, 0);
+	diff_eq_int("all three banks were returned (%ld)",
+		    sawbank1 > 0 && sawbank2 > 0 && sawbank3 > 0, 1, 0);
+	diff_eq_int("the unsupported-type message fired, and did not (%ld)",
+		    sawmsg > 0 && sawquiet > 0, 1, 0);
+	diff_eq_int("a clamp fired, and did not (%ld)",
+		    sawclamped > 0 && sawunclamped > 0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `setFilter(unsigned)` -- the same two accessors, installed, and the guard
+ * that makes a repeat call do nothing at all.
+ *
+ * THE GUARD NEEDS TWO CALLS TO BE VISIBLE.  Half the trials below enter with
+ * `gain` already equal to the argument, where the object stores nothing and
+ * leaves `fir.coefficients` at the NULL the FIR constructor left; the other
+ * half enter with it different.  Every trial then calls a SECOND time with
+ * the same argument, which must change nothing whatever the first call did.
+ */
+static int
+run_setfilter_gain(void)
+{
+	static const int types[] = { -1, 1, 2, 3, 4 };
+	static const unsigned int gains[] = {
+		0, 5, 20, 29, 30, 31, 35, 49, 50, 51, 80
+	};
+	static const int loopsel[] = { -1, 0, 1 };
+	V90RefLoop saveA = V90PreFilter::refLoopsType1[1];
+	V90RefLoop saveB = ref_loops1[1];
+	int ntypes = (int)(sizeof(types) / sizeof(types[0]));
+	int ngains = (int)(sizeof(gains) / sizeof(gains[0]));
+	int nsel = (int)(sizeof(loopsel) / sizeof(loopsel[0]));
+	int i, j, l, trial = 0;
+	int sawinstalled = 0, sawskipped = 0;
+
+	diff_begin("V90PreFilter::setFilter(unsigned)");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2u;
+
+	for (i = 0; i < ntypes; i++)
+		for (j = 0; j < ngains; j++)
+			for (l = 0; l < nsel; l++) {
+				int same = (trial & 1);
+
+				trial++;
+
+				V90PreFilter::refLoopsType1[1].coefType =
+				    types[i];
+				ref_loops1[1].coefType = types[i];
+
+				setup(trial, (i + j + l) % 4);
+				P(0)->codecType = P(1)->codecType = 1;
+				P(0)->refLoop = P(1)->refLoop = loopsel[l];
+				P(0)->gain = P(1)->gain =
+				    same ? (int)gains[j] : (int)gains[j] + 7;
+
+				dsplib_debug_capture_reset();
+
+				P(0)->setFilter(gains[j]);
+				ref_setFilterGain(slot[1], gains[j]);
+
+				compare("after setFilter(gain)", trial);
+				diff_eq_int("both sides resolved the bank the"
+					    " same way (%ld)", which_bank(0),
+					    which_bank(1), trial);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, trial);
+
+				if (P(1)->fir.coefficients == 0)
+					sawskipped++;
+				else
+					sawinstalled++;
+
+				/* Again, with the same gain: nothing may move. */
+				P(0)->setFilter(gains[j]);
+				ref_setFilterGain(slot[1], gains[j]);
+				compare("after setFilter(gain) repeated", trial);
+
+				teardown();
+			}
+
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+	dsplib_debug_capture_on = 0;
+
+	V90PreFilter::refLoopsType1[1] = saveA;
+	ref_loops1[1] = saveB;
+
+	diff_eq_int("the guard skipped a call, and let one through (%ld)",
+		    sawskipped > 0 && sawinstalled > 0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `setFilter(PreFilterCoefType, unsigned)` -- the caller names the bank, and
+ * nothing here consults a reference loop or clamps anything.
+ *
+ * `gain` IS THE OBSERVABLE FOR BANK 3.  Only that arm corrects the field to
+ * `gain - 20` after the call, and only the whole-object comparison sees it.
+ */
+static int
+run_setfilter_type(void)
+{
+	static const int types[] = { -3, 0, 1, 2, 3, 4, 7 };
+	static const unsigned int gains[] = {
+		0, 5, 20, 29, 30, 31, 35, 49, 50, 51, 80
+	};
+	int ntypes = (int)(sizeof(types) / sizeof(types[0]));
+	int ngains = (int)(sizeof(gains) / sizeof(gains[0]));
+	int i, j, trial = 0;
+	int sawcorrected = 0, sawplain = 0;
+
+	diff_begin("V90PreFilter::setFilter(PreFilterCoefType, unsigned)");
+
+	for (i = 0; i < ntypes; i++)
+		for (j = 0; j < ngains; j++) {
+			trial++;
+
+			setup(trial, (i + j) % 4);
+			P(0)->codecType = P(1)->codecType = 1;
+			P(0)->refLoop = P(1)->refLoop = 1;
+			P(0)->gain = P(1)->gain = (int)gains[j] + 7;
+
+			P(0)->setFilter((PreFilterCoefType)types[i], gains[j]);
+			ref_setFilterType(slot[1], types[i], gains[j]);
+
+			compare("after setFilter(type, gain)", trial);
+			diff_eq_int("both sides resolved the bank the same way"
+				    " (%ld)", which_bank(0), which_bank(1),
+				    trial);
+
+			if (P(1)->gain == (int)gains[j] - 20)
+				sawcorrected++;
+			if (P(1)->gain == (int)gains[j])
+				sawplain++;
+
+			teardown();
+		}
+
+	diff_eq_int("bank 3 corrected the row, and the others did not (%ld)",
+		    sawcorrected > 0 && sawplain > 0, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * `getV90Capability` -- 1 when the connection is EIA-6 by either of
+ * `isV90WithEia6`'s two routes, and the reference loop's own capability word
+ * otherwise.
+ *
+ * NO TRIAL LEAVES `refLoop` NEGATIVE ACROSS THE SEARCH.  The negative arms
+ * below hand `autoSelection` a well-formed measurement aimed at a real
+ * record, so it always selects one; see the block comment above for why a
+ * trial that did not would not be a trial.
+ */
+static int
+run_getv90capability(void)
+{
+	static const int caps[] = { 0, 1, 2, 3, -1 };
+	static const int reg[] = { 0, 5, 6, 7, -1 };
+	static const int sel[] = { 0, 1, -1, -5 };
+	int nsel = (int)(sizeof(sel) / sizeof(sel[0]));
+	int c, s, k, trial = 0;
+	int sawone = 0, sawother = 0, distinct = 0, prev = -99;
+
+	diff_begin("V90PreFilter::getV90Capability");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2u;
+
+	for (c = 0; c < 16; c++) {
+		int n = nloops(c);
+		V90RefLoop keep0A = V90PreFilter::dataBase[c].loops[0];
+		V90RefLoop keep0B = ref_dataBase[c].loops[0];
+		V90RefLoop keep1A = V90PreFilter::dataBase[c].loops[1];
+		V90RefLoop keep1B = ref_dataBase[c].loops[1];
+
+		if (n < 2)
+			continue;
+
+		for (s = 0; s < nsel; s++)
+			for (k = 0; k < 5; k++) {
+				int a, b, cap = caps[(s + k) % 5];
+
+				trial++;
+
+				V90PreFilter::dataBase[c].loops[0].capability =
+				    cap;
+				ref_dataBase[c].loops[0].capability = cap;
+				V90PreFilter::dataBase[c].loops[1].capability =
+				    caps[(s + k + 2) % 5];
+				ref_dataBase[c].loops[1].capability =
+				    caps[(s + k + 2) % 5];
+
+				setup(trial, (c + k) % 4);
+				P(0)->codecType = P(1)->codecType = c;
+				P(0)->refLoop = P(1)->refLoop = sel[s];
+				set_int(0x500, reg[k]);
+				/*
+				 * Aimed at entry 1, so the search lands on a
+				 * record whatever the shipped signatures are.
+				 */
+				set_measurement(c, 1, 1.0f, 0.0f);
+
+				dsplib_debug_capture_reset();
+
+				a = P(0)->getV90Capability();
+				b = ref_getV90Capability(slot[1]);
+
+				diff_eq_int("getV90Capability (%ld)", a, b,
+					    trial);
+				diff_eq_int("a reference loop was selected"
+					    " (%ld)", P(1)->refLoop >= 0, 1,
+					    trial);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, trial);
+				compare("after getV90Capability", trial);
+
+				if (a == 1)
+					sawone++;
+				else
+					sawother++;
+				if (a != prev) {
+					distinct++;
+					prev = a;
+				}
+
+				teardown();
+			}
+
+		V90PreFilter::dataBase[c].loops[0] = keep0A;
+		ref_dataBase[c].loops[0] = keep0B;
+		V90PreFilter::dataBase[c].loops[1] = keep1A;
+		ref_dataBase[c].loops[1] = keep1B;
+	}
+
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+	dsplib_debug_capture_on = 0;
+
+	diff_eq_int("it returned 1, and it returned something else (%ld)",
+		    sawone > 0 && sawother > 0, 1, 0);
+	diff_eq_int("more than two distinct answers were returned (%ld)",
+		    distinct > 2, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1360,6 +1894,11 @@ main(void)
 	rc |= run_selectfilter_registry();
 	rc |= run_selectfilter_auto();
 	rc |= run_selectfilter_synthetic();
+	rc |= run_getnofrefloops();
+	rc |= run_filteraccessors();
+	rc |= run_setfilter_gain();
+	rc |= run_setfilter_type();
+	rc |= run_getv90capability();
 
 	return rc;
 }

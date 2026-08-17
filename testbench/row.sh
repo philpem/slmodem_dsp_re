@@ -74,10 +74,10 @@ PIDF=""		# set before slmodemd starts; cleanup() runs on early exits too
 #
 # This guard caught four calls to 1903 before it was authorised, which is
 # exactly what it is for -- do not widen it to a pattern.
-case " 1901 1902 1903 4242 " in
+case " 1901 1902 1903 4242 4343 01138773693 01133501928 " in
 	*" $DIAL "*) ;;
 	*)
-		echo "REFUSING to dial '$DIAL': not 1901, 1902, 1903 or 4242" >&2
+		echo "REFUSING to dial '$DIAL': not in the allow-list: 1901 1902 1903 4242 4343 01138773693 01133501928" >&2
 		exit 2 ;;
 esac
 

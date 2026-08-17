@@ -34,7 +34,7 @@
 # `make phase` does not run this and must pass with neither fix applied.
 #
 
-BLOB=${BLOB:-../slmodemd/dsplibs.o}
+BLOB=${BLOB:-ref/slmodemd/dsplibs.o}
 OUT=build/blobfix
 CC=${CC:-gcc}
 CFLAGS="-m32 -fno-pie -O2 -Wall"

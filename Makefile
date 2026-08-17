@@ -4,7 +4,7 @@
 #
 #	Self-contained: this tree never builds from, or writes into,
 #	../slmodemd or ../re.  The only thing it reads outside itself is
-#	the reference object ../slmodemd/dsplibs.o.
+#	the reference object ref/slmodemd/dsplibs.o.
 #
 ###########################################################################
 
@@ -18,7 +18,7 @@
 # AND IT NO LONGER HAS TO BE PASSED.  Agent worktrees live under
 # `.claude/worktrees/`, where `../slmodemd` is `.claude/worktrees/slmodemd` and
 # does not exist, so every worktree run died at `No rule to make target
-# '../slmodemd/dsplibs.o'` until someone remembered the override.  The default
+# 'ref/slmodemd/dsplibs.o'` until someone remembered the override.  The default
 # is now resolved against the MAIN REPOSITORY rather than against $(CURDIR):
 # `--git-common-dir` names the main tree's .git from inside any worktree, which
 # is the same trick `prereq` below already uses to find spandsp, and outside a
@@ -29,7 +29,7 @@
 # expansion.  `make -s print-BLOB` says what it resolved to.
 #
 GIT_COMMON_DIR := $(shell git rev-parse --git-common-dir 2>/dev/null)
-BLOB       ?= $(abspath $(dir $(GIT_COMMON_DIR))../slmodemd/dsplibs.o)
+BLOB       ?= ref/slmodemd/dsplibs.o
 #
 # EXPORTED, because the recipes are not the only thing that opens it.
 # `tools/debugaudit.py` and `tools/coverage.py` are invoked with no path and

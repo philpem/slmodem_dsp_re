@@ -1793,7 +1793,7 @@ txmitdibit(void *obj, short bits)
 
 	q = (d + (unsigned short)o->f25c6) & 3;
 
-	*(int *)&o->f25d0 = vect4[q];
+	o->txpoint.word = vect4[q];
 	o->f25c8 = (short)q;
 	o->f25c6 = (short)q;
 
@@ -1828,7 +1828,7 @@ txmitquadbit(void *obj, short bits)
 
 	q = (unsigned short)o->f25c8;
 	o->f25c6 = (short)q;
-	*(int *)&o->f25d0 = vect16[d + q * 4];
+	o->txpoint.word = vect16[d + q * 4];
 
 	txmit(obj);
 }
@@ -3463,6 +3463,33 @@ ApplyBulkDelay(void *objp, short delay)
 #define T3C_FABFC	0xabfc	/* short: what the counter must reach      */
 #define T3C_RX_SAMPS	0x010c	/* receiver: where a detector reads from   */
 
+/*
+ * THE LAST TWO STRICT-ALIASING WARNINGS IN THE TREE ARE THIS LINE, AND IT IS
+ * A DOCUMENTED EXCEPTION RATHER THAN A SITE THAT WAS MISSED.  Findings 5300
+ * and 5305.
+ *
+ * It is not one of the three shapes the other 25 were.  Those were a field
+ * declared narrower than the object writes it, and the object's instruction
+ * width said what the declaration should have been.  This is a WHOLE STRUCT
+ * overlaid on another, and there is no width to read: `struct v34_receiver`
+ * really is a sub-object of `struct v34_object` at +0x264, and the correct
+ * model is to EMBED it there rather than to reinterpret the storage.
+ *
+ * The base is established, not guessed -- v34fsk.h's note on `f382` says "as
+ * a `struct v34_receiver` offset this is +0x11e", and 0x382 - 0x11e is 0x264,
+ * which is `rxq`.  What blocks the fix is that the two headers model the same
+ * 0x120 bytes twice and disagree about them: `v34_receiver::pad_000[0x120]`
+ * against `v34_object`'s `rxq`, `rxq_ring_tail[63]`, `unmapped_0370` and
+ * `f382`.  Merging those is a batch with its own differential test and its
+ * own offset assertions on both sides, and finding 3303 is the worked example
+ * of getting a double-counted region wrong.
+ *
+ * WHAT MUST NOT HAPPEN IS RESPELLING IT AS `(char *)(obj) + 0x264` to match
+ * the line below.  That silences the warning -- GCC stops seeing through a
+ * `char *` -- and changes nothing about the access, which is exactly the
+ * "papered over in `src/`" this tree forbids.  It stays visibly broken until
+ * it is really fixed.
+ */
 #define T3C_RX(obj)	((struct v34_receiver *)&(obj)->rxq)
 #define T3C_DET(obj)	((struct v34_detector *)((char *)(obj) + T3C_DETECTOR))
 
@@ -10511,7 +10538,7 @@ V34HS_OFF(f25c2,   struct v34_object,   f25c2,      0x25c2);
 V34HS_OFF(f25c6,   struct v34_object,   f25c6,      0x25c6);
 V34HS_OFF(f25c8,   struct v34_object,   f25c8,      0x25c8);
 V34HS_OFF(f25cc,   struct v34_object,   f25cc,      0x25cc);
-V34HS_OFF(f25d0,   struct v34_object,   f25d0,      0x25d0);
-V34HS_OFF(f25d2,   struct v34_object,   f25d2,      0x25d2);
+V34HS_OFF(txpoint, struct v34_object,   txpoint,    0x25d0);
+V34HS_OFF(txpim,   struct v34_object,   txpoint.c[1], 0x25d2);
 
 #endif

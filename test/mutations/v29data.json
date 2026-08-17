@@ -1,0 +1,115 @@
+[
+ {
+  "label": "NOTE: this function's whole content is WHICH sub-object, WHICH FORM and WHICH ORDER. The mutation that matters most is the one that writes `sym` instead of the two rails, because that is V.17's version of the same function and the two are otherwise near-identical; t_v29data.c evaluates it against a shaper configured the way it would have to be for that reading to mean anything."
+ },
+ {
+  "label": "the silence is a zero symbol index rather than two zeroed rails, which is V.17's form of this function",
+  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;",
+  "replace": "\t\tring->sym[widx] = 0;"
+ },
+ {
+  "label": "only the I rail is zeroed",
+  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;",
+  "replace": "\t\tring->i[widx] = 0;"
+ },
+ {
+  "label": "only the Q rail is zeroed",
+  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;",
+  "replace": "\t\tring->q[widx] = 0;"
+ },
+ {
+  "label": "both rails are written through the I pointer",
+  "find": "\t\tring->q[widx] = 0;",
+  "replace": "\t\tring->i[widx] = 0;"
+ },
+ {
+  "label": "the rails are zeroed one slot ahead of the cursor",
+  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;",
+  "replace": "\t\tring->i[widx + 1] = 0;\n\t\tring->q[widx + 1] = 0;"
+ },
+ {
+  "label": "the second argument is used as the rail source rather than ignored",
+  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;",
+  "replace": "\t\tring->i[widx] = (short)data[i];\n\t\tring->q[widx] = (short)data[i];"
+ },
+ {
+  "label": "the cursor advances before the store rather than after it",
+  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;\n\t\tnext = (short)(widx + 1);\n\t\twidx = next < len ? next : 0;",
+  "replace": "\t\tnext = (short)(widx + 1);\n\t\twidx = next < len ? next : 0;\n\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;"
+ },
+ {
+  "label": "the cursor wraps one short of the ring length",
+  "find": "\t\twidx = next < len ? next : 0;",
+  "replace": "\t\twidx = next < (short)(len - 1) ? next : 0;"
+ },
+ {
+  "label": "the cursor wraps one past it, so the slot at len is written",
+  "find": "\t\twidx = next < len ? next : 0;",
+  "replace": "\t\twidx = next <= len ? next : 0;"
+ },
+ {
+  "label": "the wrap test is unsigned, which agrees everywhere except at the truncation corner",
+  "find": "\t\twidx = next < len ? next : 0;",
+  "replace": "\t\twidx = (unsigned short)next < (unsigned short)len ? next : 0;"
+ },
+ {
+  "label": "the next cursor is not truncated to a short, so 32767 does not wrap to -32768",
+  "find": "\t\tnext = (short)(widx + 1);",
+  "replace": "\t\tnext = (short)((widx + 1) & 0xffff);\n\t\tif (widx + 1 > 32767)\n\t\t\tnext = 0;"
+ },
+ {
+  "label": "the loop runs one short, so the last slot is left as it was",
+  "find": "\tfor (i = 0; i < count; i++) {",
+  "replace": "\tfor (i = 1; i < count; i++) {"
+ },
+ {
+  "label": "the loop counter is signed, which is the same over every count the ring can hold and not over one above 32767",
+  "find": "\tfor (i = 0; i < count; i++) {",
+  "replace": "\tfor (i = 0; (short)i < (short)count; i++) {"
+ },
+ {
+  "label": "the ring length is read where the read cursor lives",
+  "find": "\tlen = ring->len;",
+  "replace": "\tlen = ring->ridx;"
+ },
+ {
+  "label": "the write cursor is initialised from the read cursor",
+  "find": "\twidx = ring->widx;",
+  "replace": "\twidx = ring->ridx;"
+ },
+ {
+  "label": "the write cursor is not written back, so a caller zeroing across calls overwrites the same slots",
+  "find": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING))->widx = widx;",
+  "replace": "\t(void)widx;"
+ },
+ {
+  "label": "the write cursor is written back into the read cursor",
+  "find": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING))->widx = widx;",
+  "replace": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING))->ridx = widx;"
+ },
+ {
+  "label": "the shaper runs before the rails are zeroed rather than after",
+  "find": "\tfor (i = 0; i < count; i++) {\n\t\tshort next;",
+  "replace": "\tproduced = FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\t\tFIELD(fp, V29FP_PPS),\n\t\t\t\t  ring, out, count);\n\tfor (i = 0; i < count; i++) {\n\t\tshort next;"
+ },
+ {
+  "label": "the shaper is taken from V.17's offset rather than V.29's",
+  "find": "\tproduced = FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\t\tFIELD(fp, V29FP_PPS),\n\t\t\t\t  ring, out, count);",
+  "replace": "\tproduced = FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\t\tFIELD(fp, 0x48),\n\t\t\t\t  ring, out, count);"
+ },
+ {
+  "label": "the ring is taken four bytes above the transmitter's block",
+  "find": "\tring = (struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING);",
+  "replace": "\tring = (struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING + 4);"
+ },
+ {
+  "label": "the transmitter's block is taken from the instance offset V.17 uses",
+  "find": "\tfp = FIELD_PTR(modem, V29TX_OBJ_FP);\n\tring =",
+  "replace": "\tfp = FIELD_PTR(modem, 0x28);\n\tring ="
+ },
+ {
+  "label": "the shaper is handed the sample count rather than the symbol count",
+  "find": "\t\t\t\t  ring, out, count);",
+  "replace": "\t\t\t\t  ring, out, (unsigned short)(count * 3));"
+ }
+]

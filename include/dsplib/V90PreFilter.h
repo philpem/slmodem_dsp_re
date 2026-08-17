@@ -107,10 +107,30 @@ struct V90CodecEntry {
 #include "dsplib/V90CodecType.h"
 
 /*
- * Named by setFilter's mangling; values not recovered.  A definition rather
- * than an opaque declaration because C++98 has none and the author's compiler
- * was C++98; `_BASE_PIN` is ours and fixes only the underlying type.
+ * Named by setFilter's mangling.  A definition rather than an opaque
+ * declaration because C++98 has none and the author's compiler was C++98;
+ * `_BASE_PIN` is ours and fixes only the underlying type.
  * docs/method/compilers.md, V2.
+ *
+ * THREE VALUES ARE NOW RECOVERED AND THE NAMES STILL ARE NOT.  Every member
+ * that dispatches on this type -- `setFilter(PreFilterCoefType, unsigned)`,
+ * and the `V90RefLoop::coefType` switches in `setFilter(unsigned)`,
+ * `getFilterPointer`, `getFilterLength` and `selectFilter` -- tests against
+ * exactly 2 and 3 and treats 1 as its own arm before falling to a default
+ * that complains.  So the enumerator VALUES are 1, 2 and 3, each selecting
+ * the coefficient bank of the same number, and every one of the five sites
+ * has a default arm, so there may be more.
+ *
+ * NO ENUMERATORS ARE ADDED FOR THEM.  What each value selects is known; what
+ * the author CALLED it is not, and a name invented here would be believed by
+ * every later reader and could never fail a test (CLAUDE.md, "Naming
+ * something wrongly is worse than leaving it padded").  The case labels in
+ * the .cpp are therefore integers, exactly as the constructor's sixteen-arm
+ * `__tHardwareCodecTypes__` switch spells its own.
+ *
+ * `_BASE_PIN` is load-bearing for the differential test as well as for the
+ * type: it is what makes `(PreFilterCoefType)7` a value of the enumeration
+ * rather than undefined, so the sweep can drive the default arm.
  */
 enum PreFilterCoefType { PreFilterCoefType_BASE_PIN = -0x7fffffff - 1 };
 
@@ -144,16 +164,37 @@ public:
 	void reset();
 
 	/*
-	 * Declared, not defined.  The signatures are the mangling's, so this
-	 * is a specification and not a guess; return types are not mangled and
-	 * are therefore unknown for all of them.
+	 * Written -- the filter-accessor batch.  The argument lists are the
+	 * mangling's, so they are a specification and not a guess.
+	 *
+	 * RETURN TYPES ARE NOT MANGLED, and four of these six are settled
+	 * anyway -- two of them by a CALLEE's mangling, which is the stronger
+	 * kind of evidence:
+	 *
+	 *   getFilterPointer  `float *`.  Its value is passed straight to
+	 *                     `_ZN8FloatFIR15setCoefficientsEPfj`, whose first
+	 *                     parameter the mangling spells `Pf`.
+	 *   getFilterLength   `unsigned int`.  Same call, second parameter,
+	 *                     spelled `j`.
+	 *   getV90Capability  `int`.  It returns either the literal 1 or the
+	 *                     `int` at V90RefLoop +0x40, in %eax.
+	 *   getNofRefLoops    `int`.  A count of table entries, in %eax.
+	 *
+	 * Both `setFilter`s are spelled `void` FOR WANT OF EVIDENCE, which is
+	 * this file's default: neither ever sets %eax deliberately.  The
+	 * one-argument one falls out of its epilogue with whatever the last
+	 * inlined body left there, and the two-argument one TAIL JUMPS to
+	 * `setCoefficients` on two arms and returns after it on the third, so
+	 * a caller reading %eax would get `setCoefficients`'s `int` from two
+	 * arms and something else from the other.  Nothing calls either in the
+	 * written tree, so nothing narrows it further.
 	 */
 	void setFilter(unsigned int gain);
 	void setFilter(PreFilterCoefType type, unsigned int gain);
-	void getFilterPointer(unsigned int gain);
-	void getFilterLength(unsigned int gain);
-	void getV90Capability();
-	void getNofRefLoops() const;
+	float *getFilterPointer(unsigned int gain);
+	unsigned int getFilterLength(unsigned int gain);
+	int getV90Capability();
+	int getNofRefLoops() const;
 
 	/*
 	 * Data members are public because the original's access specifiers are

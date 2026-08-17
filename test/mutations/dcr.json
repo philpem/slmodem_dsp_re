@@ -1,0 +1,194 @@
+[
+ ["The DC remover's claims, and the one that is not testable here.",
+  "",
+  "Every entry below is a decision `t_dcr.c` says it can see: a constant,",
+  "a comparison, a divisor, a phase transition, a gate.  The NOTE at the",
+  "end is the exception and is deliberate -- it records a claim held at the",
+  "codegen tier by compare.py and by nothing in the differential suite, so",
+  "that a future reader does not mistake its absence for an oversight."],
+
+ {
+  "label": "the blend's weights are the other way round: 0.1 old, 0.9 new",
+  "find": "\t\t\tdcr->dc_level = (short)((dcr->dc_level * 29491\n\t\t\t\t\t       + (sum / count) * 3277",
+  "replace": "\t\t\tdcr->dc_level = (short)((dcr->dc_level * 3277\n\t\t\t\t\t       + (sum / count) * 29491"
+ },
+ {
+  "label": "the blend rounds towards minus infinity, with no +16384",
+  "find": "\t\t\t\t       + 16384) >> 15);",
+  "replace": "\t\t\t\t       + 0) >> 15);"
+ },
+ {
+  "label": "the blend's rounding term is half a step out",
+  "find": "\t\t\t\t       + 16384) >> 15);",
+  "replace": "\t\t\t\t       + 8192) >> 15);"
+ },
+ {
+  "label": "the blend is Q14 rather than Q15",
+  "find": "\t\t\t\t       + 16384) >> 15);",
+  "replace": "\t\t\t\t       + 16384) >> 14);"
+ },
+ {
+  "label": "the initial evaluation rounds to nearest, like the blend does",
+  "find": "\t\tdcr->dc_level = (short)(sum / count);",
+  "replace": "\t\tdcr->dc_level = (short)((sum + count / 2) / count);"
+ },
+ {
+  "label": "the initial evaluation divides by the block count, not the sample count",
+  "find": "\t\tdcr->dc_level = (short)(sum / count);",
+  "replace": "\t\tdcr->dc_level = (short)(sum / len);"
+ },
+ {
+  "label": "the settle phase accumulates the samples it is meant to discard",
+  "find": "\tcase DCR_STATE_SETTLE:\n\t\t/*",
+  "replace": "\tcase DCR_STATE_SETTLE:\n\t\tfor (i = 0; i < len; i++)\n\t\t\tdcr->sum += buf[i];\n\t\t/*"
+ },
+ {
+  "label": "the settle phase ends on the evaluate interval",
+  "find": "\t\tif (count >= dcr->settle_samples) {",
+  "replace": "\t\tif (count >= dcr->evaluate_samples) {"
+ },
+ {
+  "label": "the evaluate phase ends on the track interval",
+  "find": "\t\tif (count >= dcr->evaluate_samples) {",
+  "replace": "\t\tif (count >= dcr->track_samples) {"
+ },
+ {
+  "label": "the track phase re-estimates on the evaluate interval",
+  "find": "\t\tif (count >= dcr->track_samples) {",
+  "replace": "\t\tif (count >= dcr->evaluate_samples) {"
+ },
+ {
+  "label": "the interval tests are strict, so a phase runs one block long",
+  "find": "\t\tif (count >= dcr->settle_samples) {",
+  "replace": "\t\tif (count > dcr->settle_samples) {"
+ },
+ {
+  "label": "DCR_TRACK selects the phases the other way round",
+  "find": "\t\t\tdcr->state = (dcr->flags & DCR_TRACK)\n\t\t\t\t   ? DCR_STATE_TRACK : DCR_STATE_HOLD;",
+  "replace": "\t\t\tdcr->state = (dcr->flags & DCR_TRACK)\n\t\t\t\t   ? DCR_STATE_HOLD : DCR_STATE_TRACK;"
+ },
+ {
+  "label": "the evaluation always hands over to TRACK, whatever the flag says",
+  "find": "\t\t\tdcr->state = (dcr->flags & DCR_TRACK)\n\t\t\t\t   ? DCR_STATE_TRACK : DCR_STATE_HOLD;",
+  "replace": "\t\t\tdcr->state = DCR_STATE_TRACK;"
+ },
+ {
+  "label": "the accumulators survive a phase change",
+  "find": "\t\t\tdcr->sum = 0;\n\t\t\tdcr->count = 0;\n\t\t}\n\t\tbreak;\n\n\tcase DCR_STATE_TRACK:",
+  "replace": "\t\t}\n\t\tbreak;\n\n\tcase DCR_STATE_TRACK:"
+ },
+ {
+  "label": "the silence gate is armed in every phase, not only 2 and 3",
+  "find": "\tif (dcr->state == DCR_STATE_TRACK || dcr->state == DCR_STATE_HOLD) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "there is no silence gate",
+  "find": "\tif (dcr->state == DCR_STATE_TRACK || dcr->state == DCR_STATE_HOLD) {",
+  "replace": "\tif (0) {"
+ },
+ {
+  "label": "the silence gate looks at the first sample rather than the block",
+  "find": "\t\tfor (i = 0; i < len; i++)\n\t\t\tif (buf[i] != 0)\n\t\t\t\tbreak;\n\t\tif (i == len)\n\t\t\treturn 0;",
+  "replace": "\t\tif (len > 0 && buf[0] == 0)\n\t\t\treturn 0;"
+ },
+ {
+  "label": "the verdict is strict, so a level exactly at the threshold passes",
+  "find": "\tif (__builtin_abs(dcr->dc_level) >= dcr->threshold)",
+  "replace": "\tif (__builtin_abs(dcr->dc_level) > dcr->threshold)"
+ },
+ {
+  "label": "the verdict is taken on the signed level, not its magnitude",
+  "find": "\tif (__builtin_abs(dcr->dc_level) >= dcr->threshold)",
+  "replace": "\tif (dcr->dc_level >= dcr->threshold)"
+ },
+ {
+  "label": "the correction clamps to the rails instead of wrapping",
+  "find": "\t\tfor (i = 0; i < len; i++)\n\t\t\tbuf[i] -= dcr->dc_level;",
+  "replace": "\t\tfor (i = 0; i < len; i++) {\n\t\t\tint v = buf[i] - dcr->dc_level;\n\t\t\tbuf[i] = (short)(v > 32767 ? 32767\n\t\t\t\t       : v < -32768 ? -32768 : v);\n\t\t}"
+ },
+ {
+  "label": "the correction adds the offset instead of removing it",
+  "find": "\t\t\tbuf[i] -= dcr->dc_level;",
+  "replace": "\t\t\tbuf[i] += dcr->dc_level;"
+ },
+ {
+  "label": "DCR_SUBTRACT and DCR_ACTIVE are the same bit",
+  "find": "\tif (dcr->flags & DCR_SUBTRACT)",
+  "replace": "\tif (dcr->flags & DCR_ACTIVE)"
+ },
+ {
+  "label": "the master gate is bit 1 rather than bit 0",
+  "find": "\tif (!dcr || !(dcr->flags & DCR_ACTIVE))",
+  "replace": "\tif (!dcr || !(dcr->flags & DCR_SUBTRACT))"
+ },
+ {
+  "label": "the diagnostic reports the flag with en and dis swapped",
+  "find": "\t\t\t\t    (dcr->flags & DCR_TRACK) ? \"en\" : \"dis\");",
+  "replace": "\t\t\t\t    (dcr->flags & DCR_TRACK) ? \"dis\" : \"en\");"
+ },
+ {
+  "label": "the diagnostic is gated at level 1 rather than level 2",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(",
+  "replace": "\t\t\tif (dsplibs_debug_level > 0)\n\t\t\t\tdsplibs_debug_printf("
+ },
+ {
+  "label": "the diagnostic prints the accumulated sum rather than the level",
+  "find": "\t\t\t\t    dcr->dc_level,\n\t\t\t\t    (dcr->flags & DCR_TRACK)",
+  "replace": "\t\t\t\t    sum,\n\t\t\t\t    (dcr->flags & DCR_TRACK)"
+ },
+ {
+  "label": "the diagnostic also fires when the tracking phase re-estimates",
+  "find": "\t\t\t/* 0.9 * old + 0.1 * new, Q15, rounded to nearest. */",
+  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"DCR: initial DC Evaluation done, \"\n\t\t\t\t    \"DC level %d, %sabled\\n\", dcr->dc_level,\n\t\t\t\t    (dcr->flags & DCR_TRACK) ? \"en\" : \"dis\");"
+ },
+ {
+  "label": "dcr_create leaves the flags at zero, as the memset left them",
+  "find": "\t\tdcr->flags |= DCR_ACTIVE | DCR_SUBTRACT | DCR_TRACK;",
+  "replace": "\t\tdcr->flags |= 0;"
+ },
+ {
+  "label": "dcr_create's three intervals are in the wrong order",
+  "find": "\t\tdcr->settle_samples = 5760;\n\t\tdcr->evaluate_samples = 9600;\n\t\tdcr->track_samples = 19200;",
+  "replace": "\t\tdcr->settle_samples = 19200;\n\t\tdcr->evaluate_samples = 9600;\n\t\tdcr->track_samples = 5760;"
+ },
+ {
+  "label": "dcr_create's threshold is 300 rather than 3000",
+  "find": "\t\tdcr->threshold = 3000;",
+  "replace": "\t\tdcr->threshold = 300;"
+ },
+ {
+  "label": "dcr_reset clears the phase too",
+  "find": "\tdcr->dc_level = 0;\n\tdcr->sum = 0;",
+  "replace": "\tdcr->state = DCR_STATE_SETTLE;\n\tdcr->dc_level = 0;\n\tdcr->sum = 0;"
+ },
+ {
+  "label": "dcr_reset leaves the estimate in place and clears only the accumulators",
+  "find": "\tdcr->dc_level = 0;\n\tdcr->sum = 0;",
+  "replace": "\tdcr->sum = 0;"
+ },
+ {
+  "label": "dcr_delete frees unconditionally, so delete(NULL) is a free(NULL)",
+  "find": "\tif (dcr)\n\t\tsysdep_free(dcr);",
+  "replace": "\tsysdep_free(dcr);"
+ },
+
+ ["NOT KILLABLE HERE, AND THE REASON, so its absence is not read as an",
+  "oversight.",
+  "",
+  "  `unsigned char flags = dcr->flags;` at the top of dcr_process, used",
+  "  everywhere below instead of re-reading the field.",
+  "",
+  "The object re-reads `dcr->flags` after the printf (0x2f6 `movzbl",
+  "(%ebx),%ecx`), which a cached local would not need, so the source reads",
+  "the field at each use site.  Nothing in `t_dcr.c` can hold that: the",
+  "only call in the function is `dsplibs_debug_printf`, and the harness's",
+  "printf does not write the object, so the cached and re-read forms agree",
+  "on every observable -- verdict, buffer, all 32 bytes, transcript -- for",
+  "every input there is.  It would be caught by a caller that mutated its",
+  "own flags from inside the logger, and no such caller exists.",
+  "",
+  "So the claim is held by `compare.py` at the codegen tier and recorded",
+  "here rather than dressed up as a mutation this suite kills.  Finding",
+  "4202."]
+]

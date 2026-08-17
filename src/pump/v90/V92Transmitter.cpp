@@ -1,12 +1,14 @@
 /*
- * V92Transmitter.cpp -- the V.92 transmit chain's construction, destruction
- * and reset.
+ * V92Transmitter.cpp -- the V.92 transmit chain: construction, destruction,
+ * reset and the frame loop.
  *
- * Reconstructed from dsplibs.o.  Five symbols, 2,867 bytes:
+ * Reconstructed from dsplibs.o.  Six symbols, 3,222 bytes:
  *
  *     V92Transmitter::V92Transmitter()   .text+0x53b90 (C1), +0x53c50 (C2)
  *     V92Transmitter::~V92Transmitter()  .text+0x53a30 (D2), +0x53ae0 (D1)
- *     V92Transmitter::reset(V92MappingParams *)  .text+0x53d10
+ *     V92Transmitter::reset(V92MappingParams *)    .text+0x53d10
+ *     V92Transmitter::process(unsigned char *, unsigned int, short *,
+ *                             unsigned int &)      .text+0x54590
  *
  * C1 and C2 are byte-identical bar the register allocation of two argument
  * setups, and so are D1 and D2; GCC emits both from one definition.
@@ -71,10 +73,10 @@ void v92tx_prefilter_ctor(void *self, unsigned int nTaps)
 
 V92TX_OFF(pad_00,		0x00, pad00);
 V92TX_OFF(K,			0x04, k);
-V92TX_OFF(buf_08,		0x08, buf08);
-V92TX_OFF(word_0c,		0x0c, word0c);
-V92TX_OFF(pad_10,		0x10, pad10);
-V92TX_OFF(word_40,		0x40, word40);
+V92TX_OFF(bitBuffer,		0x08, buf08);
+V92TX_OFF(bitsBuffered,		0x0c, word0c);
+V92TX_OFF(modulusOut,		0x10, pad10);
+V92TX_OFF(convEncoderOutput,	0x40, word40);
 V92TX_OFF(gain,			0x44, gain);
 V92TX_OFF(modulusEncoder,	0x48, modenc);
 V92TX_OFF(precoder,		0x4c, precoder);
@@ -125,8 +127,8 @@ V92Transmitter::V92Transmitter()
 {
 	void *p;
 
-	buf_08 = sysdep_malloc(V92TX_BUF08_BYTES);
-	word_0c = 0;
+	bitBuffer = (unsigned char *)sysdep_malloc(V92TX_BUF08_BYTES);
+	bitsBuffered = 0;
 	K = 0;
 
 	p = sysdep_malloc(sizeof(V92ModulusEncoder));
@@ -168,8 +170,8 @@ V92Transmitter::V92Transmitter()
  */
 V92Transmitter::~V92Transmitter()
 {
-	if (buf_08 != 0)
-		sysdep_free(buf_08);
+	if (bitBuffer != 0)
+		sysdep_free(bitBuffer);
 
 	if (modulusEncoder != 0)
 		sysdep_free(modulusEncoder);
@@ -390,6 +392,100 @@ V92Transmitter::reset(V92MappingParams *params)
 					     "\r\n");
 	}
 
-	word_40 = 0;
-	word_0c = 0;
+	convEncoderOutput = 0;
+	bitsBuffered = 0;
+}
+
+/*
+ * ===========================================================================
+ * V92Transmitter::process (.text+0x54590, 355 bytes)
+ *
+ * The frame loop, and the only member of this class that produces samples.
+ * It is `V92BitsToSymbol::process`'s worker and has no other caller.
+ *
+ * ONE BIT IN, ONE BYTE OF `bitBuffer`.  The input is bytes -- `movzbl
+ * (%ebx,%ebp,1)` -- and every one of them is stored whole into the buffer at
+ * `bitsBuffered`, so whatever the caller packs into them travels unexamined.
+ * Nothing masks, shifts or tests the value here.
+ *
+ * `K` IS THE FRAME'S APPETITE, and the comparison against it is UNSIGNED
+ * (`cmp 0x4(%esi),%ecx; jb`), which `int K` against an `unsigned` counter
+ * gives for free.  When the count reaches it a frame comes out and `K` is
+ * SUBTRACTED rather than the count cleared, so an input that overshoots
+ * carries its tail into the next frame.  The blob never checks `bitsBuffered`
+ * against the 0x50 bytes the buffer has; a `K` above 80 walks off the end,
+ * and that is reproduced.  docs/deviations.md D501.
+ *
+ * THE FOUR RELOADS ARE ALIASING AND NOT SLOPPINESS.  `bits`, `bitBuffer` and
+ * `bitsBuffered` are all re-read on every iteration (.text+0x545d2, +0x545d9,
+ * +0x545e3) because the store through `unsigned char *` may touch any of
+ * them.  Written straight, GCC emits exactly those reloads.
+ *
+ * THE FRAME, in the object's order:
+ *
+ *     modulusEncoder->progress(bitBuffer, modulusOut)
+ *     for k = 0, 1, 2:                          `cmp $0x2,%edi; jbe`
+ *         precoder->process(modulusOut, k, convEncoderOutput,
+ *                           precoded, &points[4 * k])
+ *         convEncoderOutput = convolutionEncoder->process(precoded)
+ *     preFilter->process(points, shaped)
+ *     for j = 0 .. 11:  out[n + j] = (short)(shaped[j] * gain)
+ *     n += 12
+ *
+ * `k` IS UNSIGNED AND THAT IS FORCED: the bound is `jbe`, where a signed
+ * counter would have been `jle`.  It is passed into a parameter the mangling
+ * types `int`, so the conversion is at the call and costs nothing.
+ *
+ * THE CAST TO `short` IS THE OBJECT'S OWN, not an inference from the output
+ * type: `fistps` is a 16-bit store, and it is bracketed by `fldcw` of a
+ * control word the function builds itself with `or $0xc00,%bx` -- round
+ * toward zero -- which is precisely what a C cast from floating point to
+ * integer requires and what the default rounding mode does not give.  The
+ * gain is loaded ONCE, before the loop, and multiplied in from %st(1).
+ *
+ * `nout` IS SET ON EVERY PATH, the `nbits == 0` one included: the count
+ * starts at zero and the store at .text+0x546e6 is after the join.
+ * ===========================================================================
+ */
+void
+V92Transmitter::process(unsigned char *bits, unsigned int nbits, short *out,
+			unsigned int &nout)
+{
+	unsigned int n = 0;
+	unsigned int i;
+
+	for (i = 0; i < nbits; i++) {
+		bitBuffer[bitsBuffered] = bits[i];
+		bitsBuffered++;
+
+		if (bitsBuffered >= (unsigned int)K) {
+			int precoded[V92TX_PRECODER_SYMBOLS];
+			float shaped[V92TX_FRAME_SYMBOLS];
+			float points[V92TX_FRAME_SYMBOLS];
+			unsigned int k;
+			unsigned int j;
+
+			modulusEncoder->progress(bitBuffer, modulusOut);
+
+			for (k = 0; k < V92TX_PRECODER_STEPS; k++) {
+				precoder->process(modulusOut, (int)k,
+						  convEncoderOutput, precoded,
+						  &points[V92TX_PRECODER_SYMBOLS
+							  * k]);
+				convEncoderOutput =
+					convolutionEncoder->process(precoded);
+			}
+
+			preFilter->process(points, shaped);
+
+			for (j = 0; j < V92TX_FRAME_SYMBOLS; j++)
+				out[n + j] = (short)(shaped[j] * gain);
+
+			n += V92TX_FRAME_SYMBOLS;
+
+			bitsBuffered -= K;
+		}
+	}
+
+	nout = n;
 }

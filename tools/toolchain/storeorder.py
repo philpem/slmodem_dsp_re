@@ -43,7 +43,7 @@ import re
 import subprocess
 import sys
 
-BLOB = os.environ.get("BLOB", "../slmodemd/dsplibs.o")
+BLOB = os.environ.get("BLOB", "ref/slmodemd/dsplibs.o")
 OURS = os.environ.get("TC_OUT", "build/tc_out")
 
 

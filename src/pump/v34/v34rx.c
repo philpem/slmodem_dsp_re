@@ -588,8 +588,8 @@ txmit(void *objp)
 	short local[38];
 	int sym, n, i;
 
-	sym = (int)(((unsigned)(unsigned short)obj->f25d2 << 16)
-		    | (unsigned short)obj->f25d0);
+	sym = (int)(((unsigned)(unsigned short)obj->txpoint.c[1] << 16)
+		    | (unsigned short)obj->txpoint.c[0]);
 	n = (short)V34ModulatorProcess(
 		(struct v34_modulator *)((char *)obj + 0x1450), sym, local);
 
@@ -1425,13 +1425,13 @@ modem_serrint(void *objp)
 	if (obj->f25c2 & V34_EC_FROZEN)
 		return 0;
 
-	/* The second history ring: the residual in both halves of an int. */
+	/* The second history ring: the residual in both halves of an entry. */
 	{
 		short k = obj->f2aa4;
 
 		obj->f2aa4 = (short)(k + 1);
-		((short *)&obj->hist_2aa8[k])[0] = (short)out;
-		((short *)&obj->hist_2aa8[k])[1] = (short)out;
+		obj->hist_2aa8[k][0] = (short)out;
+		obj->hist_2aa8[k][1] = (short)out;
 		if ((unsigned short)obj->f2aa4 > 0x12b)
 			obj->f2aa4 = 0;
 	}
@@ -2412,8 +2412,8 @@ receiver(void *objp)
 		/* And into the per-symbol history ring modem_serrint shares. */
 		k = obj->f2aa4;
 		obj->f2aa4 = (short)(k + 1);
-		((short *)&obj->hist_2aa8[k])[0] = rx->target_re;
-		((short *)&obj->hist_2aa8[k])[1] = rx->target_im;
+		obj->hist_2aa8[k][0] = rx->target_re;
+		obj->hist_2aa8[k][1] = rx->target_im;
 		if ((unsigned short)obj->f2aa4 > 0x12b)
 			obj->f2aa4 = 0;
 	}

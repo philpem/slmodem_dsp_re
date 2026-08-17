@@ -1,0 +1,237 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the claim it exists for",
+  "why": "The set below reaches V92CP::infoToBits, 1,916 bytes and the largest single member of the class.  A GREEN t_v92info says our reading and the object agree; these say the reading is TIGHT.  THE ONE THAT MATTERS MOST is 'char_02 is re-read for the thirteen bits at 36': the object shifts one register across the branch at .text+0x4ed10 and never reloads +0x002, so those thirteen entries are a signed byte's sign extension.  A version that re-read the field is identical for char_02 = 0 and for char_02 = -1 -- both give thirteen equal entries -- and differs the moment a bit below five is set, which is why four cases in t_v92info.cpp carry 0x0f, 0x01, 0x7f and -16.  SECOND is the fltTable_2 entry: the object's table has no 2^-8 and holds 2^-9 twice, so a generator reproduces the wrong weights and only a magnitude small enough to reach entry ten can tell.  WHAT NO ENTRY HERE REACHES: bitsPerSymbol = 0, which divides by zero on both sides; word_10c above six, which walks past both mask blocks (docs/deviations.md D570); and a NaN in any float, whose two sign forms disagree under -mno-ieee-fp.  All three are out of the grid on purpose, and a mutation of them would measure our own undefined behaviour rather than the object."
+ },
+ {
+  "label": "char_02 is re-read for the thirteen bits at 36, rather than shifted on",
+  "find": "\t\t\tfor (i = 0; i <= 12; i++) {\n\t\t\t\tbits[36 + i] = (unsigned char)(t & 1);",
+  "replace": "\t\t\tt = char_02;\n\t\t\tfor (i = 0; i <= 12; i++) {\n\t\t\t\tbits[36 + i] = (unsigned char)(t & 1);"
+ },
+ {
+  "label": "fltTable_2 holds 2^-8 where the object holds 2^-9 twice",
+  "find": "\t0.015625f,\t0.0078125f,\t0.001953125f,\t0.001953125f,",
+  "replace": "\t0.015625f,\t0.0078125f,\t0.00390625f,\t0.001953125f,"
+ },
+ {
+  "label": "fltTable_1 runs from the lightest weight up",
+  "find": "float fltTable_1[7] = {\n\t1.0f,\t\t0.5f,\t\t0.25f,\t\t0.125f,\n\t0.0625f,\t0.03125f,\t0.015625f\n};",
+  "replace": "float fltTable_1[7] = {\n\t0.015625f,\t0.03125f,\t0.0625f,\t0.125f,\n\t0.25f,\t\t0.5f,\t\t1.0f\n};"
+ },
+ {
+  "label": "the preamble is sixteen ones",
+  "find": "\tfloat x;\n\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\tfloat x;\n\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "the marker after the preamble is a one",
+  "find": "\tbits[17] = 0;\n\tbits[18] = byte_00;",
+  "replace": "\tbits[17] = 1;\n\tbits[18] = byte_00;"
+ },
+ {
+  "label": "byte_00 is masked to one bit rather than stored whole",
+  "find": "\tbits[18] = byte_00;\n",
+  "replace": "\tbits[18] = (unsigned char)(byte_00 & 1);\n"
+ },
+ {
+  "label": "the padded length is not rounded past an exact multiple",
+  "find": "\tvectorLen = ((unsigned int)word_11c / quantum + 1) * quantum;",
+  "replace": "\tvectorLen = ((unsigned int)word_11c / quantum) * quantum;"
+ },
+ {
+  "label": "the quantum ignores bitsPerSymbol",
+  "find": "\tquantum = 12u * bitsPerSymbol;",
+  "replace": "\tquantum = 12u;"
+ },
+ {
+  "label": "the message length is one entry short",
+  "find": "\tmsgLen = pos + 17;",
+  "replace": "\tmsgLen = pos + 16;"
+ },
+ {
+  "label": "the CRC register is not reset before the message is clocked",
+  "find": "\tmsgLen = pos + 17;\n\n\tresetCRC();\n\tcalcCRC();",
+  "replace": "\tmsgLen = pos + 17;\n\n\tcalcCRC();"
+ },
+ {
+  "label": "the sixteen-entry expansion is written ascending",
+  "find": "\t\t\tx = (float)fabs(flt_10);\n\t\t\tp = &bits[67];",
+  "replace": "\t\t\tx = (float)fabs(flt_10);\n\t\t\tp = &bits[52];"
+ },
+ {
+  "label": "the sixteen-entry expansion takes a weight equal to the residue as a zero",
+  "find": "\t\t\t\tif (fltTable_2[j] > x) {",
+  "replace": "\t\t\t\tif (fltTable_2[j] >= x) {"
+ },
+ {
+  "label": "flt_10 is expanded without its magnitude",
+  "find": "\t\t\tx = (float)fabs(flt_10);",
+  "replace": "\t\t\tx = flt_10;"
+ },
+ {
+  "label": "flt_14's sign entry is the other way up",
+  "find": "\t\t\tbits[76] = (unsigned char)(flt_14 < 0);",
+  "replace": "\t\t\tbits[76] = (unsigned char)(flt_14 > 0);"
+ },
+ {
+  "label": "flt_18's sign entry lands on flt_14's",
+  "find": "\t\t\tbits[84] = (unsigned char)(flt_18 < 0);",
+  "replace": "\t\t\tbits[76] = (unsigned char)(flt_18 < 0);"
+ },
+ {
+  "label": "the marker at 85 is not written",
+  "find": "\t\t\tbits[85] = 0;\n\n",
+  "replace": ""
+ },
+ {
+  "label": "the marker at 102 is a one",
+  "find": "\t\t\tbits[102] = 0;",
+  "replace": "\t\t\tbits[102] = 1;"
+ },
+ {
+  "label": "the marker at 51 is a one",
+  "find": "\t\t\tbits[51] = 0;",
+  "replace": "\t\t\tbits[51] = 1;"
+ },
+ {
+  "label": "the marker at 68 is a one",
+  "find": "\t\t\tbits[68] = 0;",
+  "replace": "\t\t\tbits[68] = 1;"
+ },
+ {
+  "label": "the marker at 119 is a one",
+  "find": "\t\t\tbits[119] = 0;",
+  "replace": "\t\t\tbits[119] = 1;"
+ },
+ {
+  "label": "the marker at 34 is not written",
+  "find": "\t\t\tbits[34] = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the four-bit entries take three bits",
+  "find": "\t\t\t\tp = &bits[103 + 4 * i];\n\t\t\t\tfor (j = 3; j >= 0; j--) {",
+  "replace": "\t\t\t\tp = &bits[103 + 4 * i];\n\t\t\t\tfor (j = 2; j >= 0; j--) {",
+  "why": "FIVE bits was tried first and is EQUIVALENT, which is worth recording rather than deleting: the fifth entry of each of the four runs is overwritten by the next run's first, and the last one at bits[119] is overwritten by the marker.  Three is what leaves an entry unwritten."
+ },
+ {
+  "label": "the second run of four-bit entries repeats the first",
+  "find": "\t\t\t\tshort s = (short)word_28[4 + i];",
+  "replace": "\t\t\t\tshort s = (short)word_28[i];"
+ },
+ {
+  "label": "the first mask block reads the second",
+  "find": "\t\t\t\t\tshort s = short_42[i][k];",
+  "replace": "\t\t\t\t\tshort s = short_a2[i][k];"
+ },
+ {
+  "label": "the second block's mask words go out byte-swapped",
+  "find": "\t\t\t\t\t\tshort s = short_a2[i][k];",
+  "replace": "\t\t\t\t\t\tshort s = (short)((short_a2[i][k] >> 8) | (short_a2[i][k] << 8));"
+ },
+ {
+  "label": "the second mask block is emitted when the gate is CLEAR",
+  "find": "\t\t\tif (bits[128] != 0) {",
+  "replace": "\t\t\tif (bits[128] == 0) {"
+ },
+ {
+  "label": "half the groups are sent",
+  "find": "\t\t\tn = word_10c;",
+  "replace": "\t\t\tn = (unsigned short)(word_10c / 2);"
+ },
+ {
+  "label": "the padding starts one entry late",
+  "find": "\tfor (i = (unsigned int)word_11c; i < vectorLen; i++)\n\t\tbits[i] = 0;",
+  "replace": "\tfor (i = (unsigned int)word_11c + 1; i < vectorLen; i++)\n\t\tbits[i] = 0;"
+ },
+ {
+  "label": "word_110 is raised whatever byte_04 holds",
+  "find": "\tif (e != 0)\n\t\tword_110 = 1;",
+  "replace": "\tword_110 = 1;"
+ },
+ {
+  "label": "word_08's two entries go out on the short form as well",
+  "find": "\t\tif (b <= 1) {\n\t\t\tbits[31] = (unsigned char)(word_08 & 1);",
+  "replace": "\t\tif (1) {\n\t\t\tbits[31] = (unsigned char)(word_08 & 1);"
+ },
+ {
+  "label": "bitsPerSymbol is left alone when char_01 is zero",
+  "find": "\t\tif (b == 0)\n\t\t\tbitsPerSymbol = 1;\n\n",
+  "replace": ""
+ },
+ {
+  "label": "the long form is taken below one rather than at it",
+  "find": "\t\tif (b <= 1) {\n\t\t\tunsigned short n;",
+  "replace": "\t\tif (b < 1) {\n\t\t\tunsigned short n;"
+ },
+ {
+  "label": "the SUV form sends five bits of the SUV rather than of +0x104",
+  "find": "\t\ts = (short)word_104;",
+  "replace": "\t\ts = (short)suv;"
+ },
+ {
+  "label": "the SUV byte is masked to one bit",
+  "find": "\t\tbits[32] = (unsigned char)suv;",
+  "replace": "\t\tbits[32] = (unsigned char)(suv & 1);"
+ },
+ {
+  "label": "the cursor after the fixed part is 33",
+  "find": "\t\te = byte_04;\n\t\tword_11c = 34;\n\t\tbits[33] = e;\n\t} else {",
+  "replace": "\t\te = byte_04;\n\t\tword_11c = 33;\n\t\tbits[33] = e;\n\t} else {"
+ },
+ {
+  "label": "the CRC entries are copied backwards",
+  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[pos + i] = crc[i];",
+  "replace": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[pos + 15 - i] = crc[i];"
+ },
+ {
+  "label": "the marker after the CRC is a one",
+  "find": "\tbits[pos + 16] = 0;",
+  "replace": "\tbits[pos + 16] = 1;"
+ },
+ {
+  "label": "char_01 is not copied to +0x118",
+  "find": "\t\tbyte_118 = (unsigned char)b;\n",
+  "replace": ""
+ },
+ {
+  "label": "char_01's two entries are swapped",
+  "find": "\t\tbits[19] = (unsigned char)(b & 1);\n\t\tbits[20] = (unsigned char)((b >> 1) & 1);",
+  "replace": "\t\tbits[19] = (unsigned char)((b >> 1) & 1);\n\t\tbits[20] = (unsigned char)(b & 1);"
+ },
+ {
+  "label": "the run of zeros before bits[33] is one short",
+  "find": "\t\tfor (i = 26; i <= 32; i++)\n\t\t\tbits[i] = 0;",
+  "replace": "\t\tfor (i = 26; i <= 31; i++)\n\t\t\tbits[i] = 0;"
+ },
+ {
+  "label": "byte_24 is masked into bits[128]",
+  "find": "\t\t\tbits[128] = byte_24;",
+  "replace": "\t\t\tbits[128] = (unsigned char)(byte_24 & 1);"
+ },
+ {
+  "label": "the zeros after bits[128] are six rather than seven",
+  "find": "\t\t\tfor (i = 129; i <= 135; i++)",
+  "replace": "\t\t\tfor (i = 129; i <= 134; i++)"
+ },
+ {
+  "label": "the cursor after the fixed long part is 135",
+  "find": "\t\t\tword_11c = 136;",
+  "replace": "\t\t\tword_11c = 135;"
+ },
+ {
+  "label": "byte_03 is masked rather than stored whole",
+  "find": "\t\t\tbits[35] = byte_03;",
+  "replace": "\t\t\tbits[35] = (unsigned char)(byte_03 & 1);"
+ },
+ {
+  "label": "word_0c's two entries are swapped",
+  "find": "\t\t\tbits[49] = (unsigned char)(word_0c & 1);\n\t\t\tbits[50] = (unsigned char)((word_0c >> 1) & 1);",
+  "replace": "\t\t\tbits[49] = (unsigned char)((word_0c >> 1) & 1);\n\t\t\tbits[50] = (unsigned char)(word_0c & 1);"
+ },
+ {
+  "label": "flt_20's expansion starts one entry low",
+  "find": "\t\t\tx = (float)fabs(flt_20);\n\t\t\tp = &bits[100];",
+  "replace": "\t\t\tx = (float)fabs(flt_20);\n\t\t\tp = &bits[99];"
+ }
+]

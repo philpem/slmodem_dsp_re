@@ -33,7 +33,14 @@ short DECv32_MAP_TRN[4] = { 1, 2, 0, 3 };
 short DECv32_IMAP4[4] = { -4096, -12288, 4096, 12288 };
 short DECv32_QMAP4[4] = { 12288, -4096, -12288, 4096 };
 
-/* Indexed by (|I| + |Q|) >> 1, less one. */
+/*
+ * The three L2 magnitudes of the sixteen-point constellation, to the unit:
+ * 4096*sqrt(2) = 5792.6, sqrt(12288^2 + 4096^2) = 12952.99 and
+ * 12288*sqrt(2) = 17377.9.  Indexed by (|I| + |Q|) >> 13, less one, which is
+ * an L1 -> L2 conversion over the only three sums the constellation can
+ * produce.  `FSE_decision_16pt` shifts by 1 instead and reads thousands of
+ * entries past the end -- that is the defect, D302, not this contract.
+ */
 short DECv32_MAG9600[3] = { 5792, 12953, 17378 };
 
 short DECv32_ANGL9600[16] = {

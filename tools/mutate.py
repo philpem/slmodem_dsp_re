@@ -349,7 +349,7 @@ def enter_workdir():
     reap_stale_workdirs()
     #
     # $BLOB is resolved HERE, while the cwd is still the real tree.  The
-    # Makefile's default is the RELATIVE `../slmodemd/dsplibs.o` and an
+    # Makefile's default is the RELATIVE `ref/slmodemd/dsplibs.o` and an
     # environment value wins over it, so both spellings have to be made
     # absolute or the copy compiles and links perfectly and then dies inside
     # `make strings`, which is the late and confusing place to find out.

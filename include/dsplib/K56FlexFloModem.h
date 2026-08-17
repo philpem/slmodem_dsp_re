@@ -44,7 +44,7 @@ struct _tagModemParameters;
 
 class K56FlexFloModem {
 public:
-	/* Defined in src/pump/v90/K56FlexFloModem.cpp.  All seven are stubs. */
+	/* Defined in src/pump/v90/K56FlexFloModem.cpp.  All thirteen are stubs. */
 	int getK56FlexMpBits(short *);
 	int getK56FlexJaBits(short *);
 	void setMinMaxRates(int, int);
@@ -61,18 +61,45 @@ public:
 	int k56FlexRunDemodulator(float *, unsigned int, int *, int *);
 
 	/*
-	 * Declared, not defined.  Signatures are the mangling's, so this is a
-	 * specification and not a guess; return types are unrecoverable and
-	 * are spelled `void` here to say exactly that -- no `void` below was
+	 * --- THE SIX VISUAL DIAGNOSTICS -------------------------------------
+	 *
+	 * Three bytes each, `31 c0 c3`, at .text+0x10210 through +0x10260 on a
+	 * 0x10 stride, and there is nothing else in any of them:
+	 *
+	 *     xor %eax,%eax
+	 *     ret
+	 *
+	 * So each one returns zero and touches neither `this` nor the array it
+	 * is handed.  Written as `return 0;` because that is the whole of what
+	 * the object does, and NOT as a filter, a clamp or an empty loop: the
+	 * bytes bound the body at two instructions and there is no room for
+	 * structure to have been optimised away.
+	 *
+	 * `int` RATHER THAN `void`, and it is measured the same way the two
+	 * `getK56Flex*Bits` above are: a function returning nothing leaves
+	 * %eax alone and these set it.  `VPcmV34GetVisualDiagnostics` reads
+	 * the result of five of the six back and returns it, which is the
+	 * caller-side half of the same statement.  The WIDTH and the
+	 * SIGNEDNESS are not recoverable -- `short`, `unsigned` or a null
+	 * pointer return would compile to the same two bytes -- and `int` is
+	 * this file's existing convention for exactly that.
+	 *
+	 * Argument types are the mangling's and exact.
+	 */
+	int getConstellation(int_complex *, unsigned long);
+	int getDFE(int_complex *, unsigned long);
+	int getDecisionErrors(int_complex *, unsigned long);
+	int getLinearEqualizer(int_complex *, unsigned long);
+	int getResamplerOffset(int_complex *, unsigned long);
+	int getResamplerPhase(int_complex *, unsigned long);
+
+	/*
+	 * Declared, not defined.  The signature is the mangling's, so this is
+	 * a specification and not a guess; the return type is unrecoverable
+	 * and is spelled `void` to say exactly that -- no `void` here was
 	 * measured.
 	 */
-	void getConstellation(int_complex *, unsigned long);
-	void getDFE(int_complex *, unsigned long);
-	void getDecisionErrors(int_complex *, unsigned long);
 	void getK56MPsReceiver();
-	void getLinearEqualizer(int_complex *, unsigned long);
-	void getResamplerOffset(int_complex *, unsigned long);
-	void getResamplerPhase(int_complex *, unsigned long);
 };
 
 /*

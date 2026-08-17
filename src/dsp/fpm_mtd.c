@@ -14,8 +14,37 @@
 #include "dsplib/fpm_iir.h"
 #include "dsplib/sysdep.h"
 
-/* The wideband reference filter, shared with the rest of the library. */
-extern const short COEF_DC[];
+/*
+ * COEF_DC (.data:0x081d0) -- the wideband reference filter, one section, used
+ * to estimate total signal energy.  Layout is FPM_iir_filt's: two recursive
+ * coefficients, two feedforward, and an output scale.
+ *
+ * IT IS DEFINED HERE, AND WHERE IT IS DEFINED IS MEASURABLE.  The object's
+ * `.data` puts it at 0x081d0, immediately after `DEF_COEFS` at 0x081bc --
+ * a LOCAL symbol whose STT_FILE association is `fpm_mtd.c` -- with no padding
+ * between, and the six `*_CFG` blocks below it appear in exactly the STT_FILE
+ * order of the modules that own them (ECC_CFG 0x08114 / fpm_ecc.c #614
+ * .. FPM_MTD_CFG 0x081b0 / fpm_mtd.c #623).  Its ONE reference in the whole
+ * object is at .text 0x0a921a, inside `FPM_MTD_detect`.  It cannot be in
+ * fpm_iir.c, which is #619 and would place it BELOW DEF_COEFS.
+ *
+ * IT ALSO USED TO BE LOAD-BEARING FOR fpm_phasor.c AND IS NOT ANY MORE.  In
+ * the OBJECT, `FPM_sin_sign` is the next `.data` object in the link and is
+ * read four entries BEFORE its base for any phase of 0x8000 or more, so
+ * COEF_DC's last three words and the two bytes of boundary padding after them
+ * ARE the sine's sign table over a quarter of the phasor's range.  We used to
+ * reproduce that by arranging for the same thing to happen in OUR link, which
+ * made the phasor's correctness a property of the linker; `fpm_phasor.c` now
+ * carries those four words as values, so nothing about where this array lands
+ * can reach the phasor, and `t_fpm_phasor` compares both outputs over all
+ * 65536 phases.  Only the DEPENDENCE was removed -- the attribution above
+ * rests on the address, the single reference and the binding, and stands
+ * without it.  Not `const`: the object's symbol is `D`.  Findings 3620, 3621,
+ * 3623, 3624 and 3700-3703, deviation D392.
+ */
+short COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {
+	-12971, 12917, 28620, -25834, 12917,
+};
 
 /*
  * Leaky-integrator weights: alpha = 820/32768 (~0.025) against

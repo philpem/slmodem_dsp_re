@@ -135,7 +135,7 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
+    ap.add_argument("--obj", default="ref/slmodemd/dsplibs.o")
     ap.add_argument("--tumap", default="build/tumap.json")
     ap.add_argument("--span", help="report one span's edges in both directions")
     ap.add_argument("--range", action="append", default=[],

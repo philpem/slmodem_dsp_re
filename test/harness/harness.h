@@ -5,9 +5,9 @@
  * the same input and compares the results.  The original is linked in as
  * dsplibs_ref.o, produced by:
  *
- *     python3 tools/symmap.py ../slmodemd/dsplibs.o -o build/symmap.txt
+ *     python3 tools/symmap.py ref/slmodemd/dsplibs.o -o build/symmap.txt
  *     objcopy --redefine-syms=build/symmap.txt \
- *             ../slmodemd/dsplibs.o build/dsplibs_ref.o
+ *             ref/slmodemd/dsplibs.o build/dsplibs_ref.o
  *
  * so every original entry point is reachable as `ref_<name>`.  Declare the
  * ones a test needs with DIFF_REF() and compare against them.

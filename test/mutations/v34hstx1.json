@@ -16,13 +16,13 @@
  },
  {
   "label": "65: only the first half of the silent point is cleared",
-  "find": "\to->f25d0 = 0;\n\to->f25d2 = 0;\n\ttxmit(o);",
-  "replace": "\to->f25d0 = 0;\n\ttxmit(o);"
+  "find": "\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;\n\ttxmit(o);",
+  "replace": "\to->txpoint.c[0] = 0;\n\ttxmit(o);"
  },
  {
   "label": "65: the point is cleared after the symbol is sent",
-  "find": "\to->f25d0 = 0;\n\to->f25d2 = 0;\n\ttxmit(o);",
-  "replace": "\ttxmit(o);\n\to->f25d0 = 0;\n\to->f25d2 = 0;"
+  "find": "\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;\n\ttxmit(o);",
+  "replace": "\ttxmit(o);\n\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;"
  },
  {
   "label": "65: f25cc is left alone when the segment is armed",

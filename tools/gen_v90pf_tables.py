@@ -14,7 +14,7 @@ four bytes before anything is written, so the output is bit-exact by
 construction and not by inspection.  Values that do not round-trip are emitted
 as C hex float literals instead; nothing in these tables needs that today.
 
-Usage:  python3 tools/gen_v90pf_tables.py ../slmodemd/dsplibs.o
+Usage:  python3 tools/gen_v90pf_tables.py ref/slmodemd/dsplibs.o
 """
 
 import re

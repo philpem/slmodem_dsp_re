@@ -565,7 +565,7 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--blob",
-                    default=os.environ.get("BLOB", "../slmodemd/dsplibs.o"))
+                    default=os.environ.get("BLOB", "ref/slmodemd/dsplibs.o"))
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     g = sub.add_parser("generate")

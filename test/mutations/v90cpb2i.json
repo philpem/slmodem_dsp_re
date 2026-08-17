@@ -1,0 +1,231 @@
+[
+ {
+  "label": "NOTE: THE GUARDED STORE IS WRITTEN OUT FIVE TIMES, so every anchor into one of them carries its arm's comment or its following statement with it.  The object repeats the block at all five sites (D500) and factoring it into a helper would move the source away from the object, so finding 1264's trap applies here at five times over: a bare `if (word_cac <= V90CP_BITS - 1) {` matches five times, mutate.py calls that UNUSABLE, and UNUSABLE DOES NOT FAIL A RUN.",
+  "why": "Recorded here because the same shape defeated three anchors in v90mp.json and two in this tree's own suites."
+ },
+ {
+  "label": "the run counters are swapped",
+  "why": "+0xca9 counts ones and +0xcaa zeros; swapping them stops the preamble ever completing.",
+  "find": "\tif (bit != 0) {\n\t\tbyte_ca9++;\n\t\tbyte_caa = 0;\n\t} else {\n\t\tbyte_caa++;\n\t\tbyte_ca9 = 0;\n\t}",
+  "replace": "\tif (bit != 0) {\n\t\tbyte_caa++;\n\t\tbyte_ca9 = 0;\n\t} else {\n\t\tbyte_ca9++;\n\t\tbyte_caa = 0;\n\t}"
+ },
+ {
+  "label": "Ed is read from a local rather than back out of the object",
+  "why": "The object stores 0 into +0xcaa on a one bit and reloads it four instructions later, so a group size of zero makes the test true on a ONE.  Guarding on `bit == 0` is what a cached counter would behave like, and the zero-group corner is what kills it.",
+  "find": "\tif (byte_caa == 2 * word_3ba8 && word_cac == 18)",
+  "replace": "\tif (bit == 0 && byte_caa == 2 * word_3ba8 && word_cac == 18)"
+ },
+ {
+  "label": "Ed does not require the cursor to be home",
+  "find": "\tif (byte_caa == 2 * word_3ba8 && word_cac == 18)",
+  "replace": "\tif (byte_caa == 2 * word_3ba8)"
+ },
+ {
+  "label": "Ed answers V90MP's 3 rather than 5",
+  "find": "\t\trc = 5;",
+  "replace": "\t\trc = 3;"
+ },
+ {
+  "label": "sixteen ones are enough for the preamble",
+  "why": "`cmp $0x10,%cl` / `jbe`, so it takes SEVENTEEN.  The test feeds sixteen and a zero and reads the blob's state back.",
+  "find": "\t\tif (byte_ca9 > 0x10)",
+  "replace": "\t\tif (byte_ca9 >= 0x10)"
+ },
+ {
+  "label": "the preamble hands over to state 2 rather than 1",
+  "find": "\t\tif (byte_ca9 > 0x10)\n\t\t\tword_ca4 = 1;",
+  "replace": "\t\tif (byte_ca9 > 0x10)\n\t\t\tword_ca4 = 2;"
+ },
+ {
+  "label": "the framing zero test is inverted",
+  "find": "\t\tif (bit == 0)\n\t\t\tword_ca4 = 2;\n\t\telse\n\t\t\tresetDetector();",
+  "replace": "\t\tif (bit != 0)\n\t\t\tword_ca4 = 2;\n\t\telse\n\t\t\tresetDetector();"
+ },
+ {
+  "label": "the type bit selects the wrong form",
+  "find": "\t\tword_ca4 = (word_00 != 0) ? 3 : 4;",
+  "replace": "\t\tword_ca4 = (word_00 != 0) ? 4 : 3;"
+ },
+ {
+  "label": "the type bit is not stored",
+  "find": "\t\tword_00 = bit;\n\t\tbits[word_cac] = bit;",
+  "replace": "\t\tbits[word_cac] = bit;"
+ },
+ {
+  "label": "the short form is sixteen bits, not fifteen",
+  "find": "\t\tif (word_cb0 == 0xf) {\n\t\t\tevaluateInfo();\n\t\t\tword_ca4 = 12;",
+  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tevaluateInfo();\n\t\t\tword_ca4 = 12;"
+ },
+ {
+  "label": "the three block flags land in the wrong fields",
+  "find": "\t\tcase 0:\n\t\t\tword_04 = bit;\n\t\t\tbreak;\n\t\tcase 1:\n\t\t\tword_08 = bit;\n\t\t\tbreak;\n\t\tcase 2:\n\t\t\tword_0c = bit;\n\t\t\tbreak;",
+  "replace": "\t\tcase 0:\n\t\t\tword_08 = bit;\n\t\t\tbreak;\n\t\tcase 1:\n\t\t\tword_04 = bit;\n\t\t\tbreak;\n\t\tcase 2:\n\t\t\tword_0c = bit;\n\t\t\tbreak;"
+ },
+ {
+  "label": "the flag block is four bits, not three",
+  "find": "\t\tif (word_cb0 == 3) {\n\t\t\tword_ca4 = 5;",
+  "replace": "\t\tif (word_cb0 == 4) {\n\t\t\tword_ca4 = 5;"
+ },
+ {
+  "label": "the header ends at 0x32 rather than 0x33",
+  "why": "`evaluateInfo`'s case 5 stores 0x32 into the READ cursor and the write cursor stops one past it.  The two halves were read independently and agree.",
+  "find": "\t\tif (word_cac == 0x33) {",
+  "replace": "\t\tif (word_cac == 0x32) {"
+ },
+ {
+  "label": "the next block is chosen in the wrong order",
+  "why": "+0x04, then +0x08, then +0x0c, which is the order the blocks travel.",
+  "find": "\t\t\tif (word_04 != 0)\n\t\t\t\tword_ca4 = 6;\n\t\t\telse if (word_08 != 0)\n\t\t\t\tword_ca4 = 7;",
+  "replace": "\t\t\tif (word_08 != 0)\n\t\t\t\tword_ca4 = 7;\n\t\t\telse if (word_04 != 0)\n\t\t\t\tword_ca4 = 6;"
+ },
+ {
+  "label": "the pairs block ends at 0x98 rather than 0x99",
+  "find": "\t\tif (word_cac == 0x99) {",
+  "replace": "\t\tif (word_cac == 0x98) {"
+ },
+ {
+  "label": "the pairs block hands over to 10 whatever +0x08 says",
+  "find": "\t\t\tif (word_08 != 0)\n\t\t\t\tword_ca4 = 7;\n\t\t\telse\n\t\t\t\tword_ca4 = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:",
+  "replace": "\t\t\tword_ca4 = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:"
+ },
+ {
+  "label": "the four counts are four frames of sixteen, not seventeen",
+  "find": "\t\tif (word_cb0 == 0x44) {",
+  "replace": "\t\tif (word_cb0 == 0x40) {"
+ },
+ {
+  "label": "alpha is sixteen bits to the entry, not seventeen",
+  "why": "One frame per entry: a framing bit and sixteen information bits.",
+  "find": "\t\t\talpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2] +\n\t\t\t\t      nof_58[3]);",
+  "replace": "\t\t\talpha = 16 * (nof_58[0] + nof_58[1] + nof_58[2] +\n\t\t\t\t      nof_58[3]);"
+ },
+ {
+  "label": "alpha counts only the first three lists",
+  "find": "\t\t\talpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2] +\n\t\t\t\t      nof_58[3]);",
+  "replace": "\t\t\talpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2]);"
+ },
+ {
+  "label": "the lists block is bounded by beta rather than alpha",
+  "why": "alpha is +0x8 in .bss and beta +0xc, and the object compares this arm against the first.",
+  "find": "\t\tword_cb0++;\n\t\tif (word_cb0 == alpha) {",
+  "replace": "\t\tword_cb0++;\n\t\tif (word_cb0 == beta) {"
+ },
+ {
+  "label": "the values and counts block is four frames, not five",
+  "find": "\t\tif (word_cb0 == 0x55) {",
+  "replace": "\t\tif (word_cb0 == 0x44) {"
+ },
+ {
+  "label": "beta is sixteen bits to the entry, not seventeen",
+  "find": "\t\t\tbeta = 17 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +\n\t\t\t\t     nof_buf[3] + nof_buf[4] + nof_buf[5]);",
+  "replace": "\t\t\tbeta = 16 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +\n\t\t\t\t     nof_buf[3] + nof_buf[4] + nof_buf[5]);"
+ },
+ {
+  "label": "beta counts only five of the six buffers",
+  "find": "\t\t\tbeta = 17 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +\n\t\t\t\t     nof_buf[3] + nof_buf[4] + nof_buf[5]);",
+  "replace": "\t\t\tbeta = 17 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +\n\t\t\t\t     nof_buf[3] + nof_buf[4]);"
+ },
+ {
+  "label": "the buffers block is bounded by alpha rather than beta",
+  "find": "\t\tword_cb0++;\n\t\tif (word_cb0 == beta) {",
+  "replace": "\t\tword_cb0++;\n\t\tif (word_cb0 == alpha) {"
+ },
+ {
+  "label": "the CRC frame is sixteen bits, not seventeen",
+  "why": "One framing zero and sixteen CRC bits.",
+  "find": "\t\tif (word_cb0 == 0x11) {\n\t\t\tword_3bb0 = word_cac;",
+  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tword_3bb0 = word_cac;"
+ },
+ {
+  "label": "the CRC extent is one past the cursor",
+  "why": "`infoToBits` computes the same number as start + 0x11 from the other side.",
+  "find": "\t\t\tword_3bb0 = word_cac;",
+  "replace": "\t\t\tword_3bb0 = word_cac + 1;"
+ },
+ {
+  "label": "the CRC verdict is inverted",
+  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\tword_ca4 = 13;\n\t\t\t} else {",
+  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\tword_ca4 = 13;\n\t\t\t} else {"
+ },
+ {
+  "label": "a bad CRC does not reset the detector",
+  "find": "\t\t\t} else {\n\t\t\t\tresetDetector();\n\t\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\t} else {\n\t\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the bad-CRC line is spelled correctly",
+  "why": "\"recieved\" is the author's.  The transcript is compared as text between the two sides.",
+  "find": "\"V90CP: recieved CP with bad CRC\"",
+  "replace": "\"V90CP: received CP with bad CRC\""
+ },
+ {
+  "label": "the tail waits on the group size rather than on six",
+  "why": "Finding 4364: the transmitter pads to a whole number of +0x3ba8 and the receiver hardcodes six.  The suite sweeps the group size over 1..6, 12 and 17.",
+  "find": "\t\tif (word_cac % 6 == 0) {",
+  "replace": "\t\tif (word_ca4 != 0 && word_3ba8 != 0 && word_cac % word_3ba8 == 0) {"
+ },
+ {
+  "label": "the tail's bit test is inverted",
+  "find": "\t\tif (bit != 0)\n\t\t\tresetDetector();\n\t\telse\n\t\t\tword_cac++;",
+  "replace": "\t\tif (bit == 0)\n\t\t\tresetDetector();\n\t\telse\n\t\t\tword_cac++;"
+ },
+ {
+  "label": "the tail does not reset the detector before reporting",
+  "find": "\t\t\tevaluateInfo();\n\t\t\tresetDetector();\n\t\t\tif (byte_13 != 0)",
+  "replace": "\t\t\tevaluateInfo();\n\t\t\tif (byte_13 != 0)"
+ },
+ {
+  "label": "the answer reads the two bits the wrong way round",
+  "find": "\t\t\tif (byte_13 != 0)\n\t\t\t\trc = (word_00 != 0) ? 4 : 2;\n\t\t\telse\n\t\t\t\trc = (word_00 != 0) ? 3 : 1;",
+  "replace": "\t\t\tif (word_00 != 0)\n\t\t\t\trc = (byte_13 != 0) ? 4 : 2;\n\t\t\telse\n\t\t\t\trc = (byte_13 != 0) ? 3 : 1;"
+ },
+ {
+  "label": "bitsToInfo returns nothing",
+  "why": "A return type is not mangled, so `void` had to be read out of the epilogues.  Both `ret`s move %edi into %eax.",
+  "find": "\treturn rc;\n}",
+  "replace": "\treturn 0;\n}"
+ },
+ {
+  "label": "the hold-off suppresses 1 and 3 rather than 2 and 4",
+  "find": "\t\tif (rc == 4 || rc == 2)\n\t\t\trc = 0;",
+  "replace": "\t\tif (rc == 3 || rc == 1)\n\t\t\trc = 0;"
+ },
+ {
+  "label": "the hold-off is started by 3 and 4 rather than by 1 and 2",
+  "find": "\t} else if (rc == 1 || rc == 2) {",
+  "replace": "\t} else if (rc == 3 || rc == 4) {"
+ },
+ {
+  "label": "the hold-off runs to 0x321",
+  "find": "\t\tif (word_3bbc == 0x320)",
+  "replace": "\t\tif (word_3bbc == 0x321)"
+ },
+ {
+  "label": "the hold-off never stops",
+  "find": "\t\tword_3bbc++;\n\t\tif (word_3bbc == 0x320)\n\t\t\tword_3bbc = -1;",
+  "replace": "\t\tword_3bbc++;"
+ },
+ {
+  "label": "the bound is one too high in the short form's arm",
+  "why": "`cmp $0x2edf` / `ja`: 0x2edf is the last index that fits, and 0x2ee0 is crc[0].",
+  "find": "\tcase 3:\n\t\t/*\n\t\t * The short form: fifteen more bits, ending at 0x21, which is\n\t\t * exactly the two `evaluateInfo`'s `case 3` reads back.\n\t\t */\n\t\tif (word_cac <= V90CP_BITS - 1) {",
+  "replace": "\tcase 3:\n\t\t/*\n\t\t * The short form: fifteen more bits, ending at 0x21, which is\n\t\t * exactly the two `evaluateInfo`'s `case 3` reads back.\n\t\t */\n\t\tif (word_cac <= V90CP_BITS) {"
+ },
+ {
+  "label": "the lists arm is not bounded at all",
+  "find": "\tcase 8:\n\t\t/* The four counted lists, `alpha` bits of them. */\n\t\tif (word_cac <= V90CP_BITS - 1) {\n\t\t\tbits[word_cac] = bit;\n\t\t\tword_cac++;\n\t\t} else if (DSPLIB_DEBUG_ON()) {\n\t\t\tdsplibs_debug_printf(V90CP_NOMEM);\n\t\t}",
+  "replace": "\tcase 8:\n\t\t/* The four counted lists, `alpha` bits of them. */\n\t\tbits[word_cac] = bit;\n\t\tword_cac++;"
+ },
+ {
+  "label": "the header arm IS bounded, where the object leaves it open",
+  "why": "D500: five of the ten store sites carry the check and five do not, and case 5 is one of the five that do not.  Adding it changes what happens at 0x2ee0.",
+  "find": "\tcase 5:\n\t\t/*\n\t\t * The rest of the header, to the absolute 0x33 -- one past\n\t\t * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the\n\t\t * first of the two places that pick the next block, in the\n\t\t * order the blocks travel: +0x18, then +0x48/+0x58, then\n\t\t * everything from +0xc58, then the CRC.\n\t\t */\n\t\tbits[word_cac] = bit;\n\t\tword_cac++;",
+  "replace": "\tcase 5:\n\t\t/*\n\t\t * The rest of the header, to the absolute 0x33 -- one past\n\t\t * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the\n\t\t * first of the two places that pick the next block, in the\n\t\t * order the blocks travel: +0x18, then +0x48/+0x58, then\n\t\t * everything from +0xc58, then the CRC.\n\t\t */\n\t\tif (word_cac <= V90CP_BITS - 1) {\n\t\t\tbits[word_cac] = bit;\n\t\t\tword_cac++;\n\t\t}"
+ },
+ {
+  "label": "the overrun line loses the author's spelling",
+  "why": "\"enouch\", the space before the comma, the space before the trailing newline and the LEADING newline are all in .rodata.str1.4+0xd650.",
+  "find": "\t\"\\n *** error CP bit , not enouch memory in the buffer *** \\n\"",
+  "replace": "\t\"\\n *** error CP bit, not enough memory in the buffer ***\\n\""
+ }
+]

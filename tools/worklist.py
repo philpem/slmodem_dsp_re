@@ -108,7 +108,7 @@ def stub_sites(root):
 def main():
     ap = argparse.ArgumentParser(
         description="Enumerate the functions still to be reconstructed.")
-    ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
+    ap.add_argument("--obj", default="ref/slmodemd/dsplibs.o")
     ap.add_argument("--build", default="build")
     ap.add_argument("--tumap", default="build/tumap.json")
     ap.add_argument("--root", default=".",

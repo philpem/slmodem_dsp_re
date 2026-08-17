@@ -494,12 +494,12 @@ check_idle(short constel, short c6_before, short c8_before, int cc_before,
 	   long t)
 {
 	int q = oa.f25c8;
-	int pt = *(const int *)&oa.f25d0;
+	int pt = oa.txpoint.word;
 
 	diff_eq_int("idle leaves f25c6 alone %ld", oa.f25c6, c6_before, t);
 	if (constel != (short)0x89b0 && constel != (short)0x8990) {
-		diff_eq_int("no-constel point re %ld", oa.f25d0, 0, t);
-		diff_eq_int("no-constel point im %ld", oa.f25d2, 0, t);
+		diff_eq_int("no-constel point re %ld", oa.txpoint.c[0], 0, t);
+		diff_eq_int("no-constel point im %ld", oa.txpoint.c[1], 0, t);
 		diff_eq_int("no-constel leaves f25c8 %ld", oa.f25c8,
 			    c8_before, t);
 		diff_eq_int("no-constel leaves the scrambler %ld", oa.f25cc,
@@ -963,7 +963,7 @@ main(void)
 				if (gpc == 0) {
 					cc0 = oa.f25cc;
 					c80 = oa.f25c8;
-					pt0 = *(const int *)&oa.f25d0;
+					pt0 = oa.txpoint.word;
 				} else {
 					diff_eq_int("gpc does not move f25cc "
 						    "%ld", oa.f25cc, cc0, c);
@@ -971,7 +971,7 @@ main(void)
 						    "%ld", oa.f25c8, c80, c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",
-						    *(const int *)&oa.f25d0,
+						    oa.txpoint.word,
 						    pt0, c);
 				}
 			}
