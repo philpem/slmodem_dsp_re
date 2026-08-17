@@ -611,5 +611,9 @@
  "v92cpcrc": [
   "src/pump/v90/V92CP.cpp",
   "build/test/t_v92cpcrc"
+ ],
+ "v92p4gen": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4gen"
  ]
 }
