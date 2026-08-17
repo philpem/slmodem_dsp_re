@@ -1061,9 +1061,36 @@ run_p3d_exitdil(void)
 				dirty(0, trial, st, 29u);
 				dirty(1, trial, st, 29u);
 
-				for (side = 0; side < 2; side++)
-					slot[side].o.phase3Modulator.eventCode =
-					    (unsigned int)e;
+				for (side = 0; side < 2; side++) {
+					V90Phase3Modulator *m =
+					    &slot[side].o.phase3Modulator;
+
+					m->eventCode = (unsigned int)e;
+					/*
+					 * THE MODULATOR HAS TO BE IN ITS OWN
+					 * DIL STATE OR ITS `exitDIL` RETURNS
+					 * AT ITS FIRST LINE, and then neither
+					 * "does not tell the modulator" nor
+					 * the ordering of the two statements
+					 * is observable -- both mutations read
+					 * NOT CAUGHT, which is how this was
+					 * found.  `reset` leaves it in
+					 * TRN1D, so it is placed here: half
+					 * the grid in DIL with a non-zero
+					 * symbol count, which is what makes
+					 * the modulator act, and the segment
+					 * position decides which of its two
+					 * arms -- only one of which sets the
+					 * event code this method then reads.
+					 */
+					if ((e & 1) != 0) {
+						m->state = P3M_STATE_DIL;
+						m->symbolCount =
+						    1u + (unsigned int)e;
+						m->segmentPos =
+						    (unsigned int)(e & 2);
+					}
+				}
 
 				slot[0].o.exitDIL();
 				ref_p3d_exitDIL(&slot[1].o);
@@ -1104,8 +1131,15 @@ run_p3d_exitdil(void)
 static int
 run_p3d_jdnotdetector(void)
 {
+	/*
+	 * 48 AND 120 ARE THE ONES THAT SEPARATE 72 FROM 36.  Every other value
+	 * here is 12 modulo 72, which is 12 modulo 36 as well, so a modulus of
+	 * 36 answers the same on all of them -- the mutation read NOT CAUGHT
+	 * until these two were added.
+	 */
 	static const unsigned int w2c_v[] = {
-		0u, 11u, 12u, 13u, 71u, 72u, 83u, 84u, 143u, 155u, 156u, 227u
+		0u, 11u, 12u, 13u, 48u, 71u, 72u, 83u, 84u, 120u, 143u, 155u,
+		156u, 227u
 	};
 	static const int sym_v[] = { 0, 1, -1, 7 };
 	int trial, w, c, k;

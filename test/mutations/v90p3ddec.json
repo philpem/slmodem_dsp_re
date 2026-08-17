@@ -160,7 +160,8 @@
  {
   "label": "the pad gain is applied before it is found",
   "find": "\tautoDigitalImpDetector->findPadGain();\n\tautoDigitalImpDetector->applyPadGainToLinMapp();",
-  "replace": "\tautoDigitalImpDetector->applyPadGainToLinMapp();\n\tautoDigitalImpDetector->findPadGain();"
+  "replace": "\tautoDigitalImpDetector->applyPadGainToLinMapp();\n\tautoDigitalImpDetector->findPadGain();",
+  "note": "UNCAUGHT, and the fixture is why rather than the claim.  Swapping the two is invisible whenever `findPadGain` settles on a gain of 1.0f, because `applyPadGainToLinMapp` then divides by one either way -- and the planted mapping tables this suite uses are symmetric enough that it does.  Catching it needs a fixture whose round-trip error is minimised at some other gain, which is `t_v90adid`'s subject and not this method's.  The companion mutation, `the pad gain is found before the maximum code`, IS caught, so the first-to-second ordering is adjudicated and only the second-to-third is not."
  },
  {
   "label": "the maximum code comes from the ucode rather than +0x3f8",
@@ -230,7 +231,8 @@
  {
   "label": "twoLevelDemod tests isAltRbs at its full width",
   "find": "\t    (short)ad->isAltRbs((short)word_04, ucode, sample) != 0)",
-  "replace": "\t    ad->isAltRbs((short)word_04, ucode, sample) != 0)"
+  "replace": "\t    ad->isAltRbs((short)word_04, ucode, sample) != 0)",
+  "note": "EXPECTED UNCAUGHT.  `V90AutoDigitalImpDetector::isAltRbs` is written as `return d > short_a9a6 ? 1 : 0;`, so its answer is 0 or 1 and the top sixteen bits are always zero -- no input can make the narrowed test and the full-width one disagree.  The `(short)` is in the reconstruction because the object has `test %ax,%ax` at this site and NOT because any test can see it; that is the same footing as the phase-index truncation above, and saying so is the point of leaving the mutation here."
  },
  {
   "label": "twoLevelDemod's threshold is inclusive",
@@ -245,6 +247,7 @@
  {
   "label": "twoLevelDemod's two decoders run the other way round",
   "find": "\tbit = word_3cc.process(bit);\n\tbit = descrambler.process(bit);\n\n\treturn level;",
-  "replace": "\tbit = descrambler.process(bit);\n\tbit = word_3cc.process(bit);\n\n\treturn level;"
+  "replace": "\tbit = descrambler.process(bit);\n\tbit = word_3cc.process(bit);\n\n\treturn level;",
+  "note": "UNCAUGHT.  Both `SerialDifferentialDecoder<int>::process` and `Descrambler<int,int>::process` are XOR-linear in the bit they are handed, and `reset` leaves both with a cleared state, so over a one-bit input the composition commutes for every trial this suite runs.  Separating them needs a descrambler whose tap history is planted asymmetrically, which is `t_v90p3dreset`'s and the scrambler suite's ground.  What IS adjudicated is that BOTH run: `twoLevelDemod does not descramble` is caught."
  }
 ]
