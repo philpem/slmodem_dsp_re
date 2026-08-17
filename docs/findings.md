@@ -67652,3 +67652,180 @@ input, not D561's: a trial that traps identically on both sides measures the
 CPU.  The second grid is clamped to one and says so.  Worth stating as a
 general shape: **a shared `setup` means widening one grid widens every grid
 built on it**, and the two may have different domains.
+
+## 5500. `TAG_DiagnosticResults` +0x0b4 IS THE RECEIVE SYMBOL RATE, AND THE PAIR IT BELONGS TO NAMES FOUR FIELDS AT ONCE
+
+Finding 4907's batch **declined** +0x0b4 and was right to.  All it could see
+was that `V90Demodulator::getAT_UD` stores the literal 8000 there and that the
+V.34 writer -- unreconstructed at the time -- stores a widened `short` into both
++0x0b0 and +0x0b4 from two different fields.  8000 is the V.90 downstream symbol
+rate and V.34's symbol rates all fit a short, so "a baud figure" was settled and
+"which direction" was not: `getAT_UD` is receive-only, so it could not separate
+the pair from one side.
+
+**`VPcmV34GetDiagnostics` is the other writer and it settles the pair by a
+CALLEE'S OWN FIELD NAMES**, which is CLAUDE.md's second evidence tier rather
+than the layout inference the same offsets invite.  Its V.34 arm copies four
+members of `struct v34_ratecfg` (v34fsk.h, at `v34_object + V34_RATECFG`) one
+for one:
+
+```
+    7658:  mov %eax,0xb0(%esi)     <- movswl 0xaa84  cfg->baud
+    76a0:  mov %ebx,0xb4(%esi)     <- movswl 0xaa96  cfg->rx_baud
+    7698:  mov %ebp,0xb8(%esi)     <- movswl 0xaa94  cfg->carrier
+    768b:  mov %eax,0xbc(%esi)     <- movswl 0xaaa8  cfg->rx_carrier
+```
+
+and those four members were themselves named by four exported getters that put
+the direction in their own names: `VPcmV34GetCurrentTxBaudRate` returns
+`cfg->baud`, `...GetCurrentRxBaudRate` returns `cfg->rx_baud`,
+`...GetCurrentTxCarrier` returns `cfg->carrier` and `...GetCurrentRxCarrier`
+returns `cfg->rx_carrier`.  One writer, four offsets, four names already
+established elsewhere.
+
+**TWO INDEPENDENT CONFIRMATIONS, and they are the ones the single-writer batch
+could not have.**
+
+- `getAT_UD` is the RECEIVE side and writes +0x0b4 = 8000 and +0x0bc = 0.
+  v34pcmif.h already records the same pair of answers for the same condition --
+  "Symbol rate in baud, or 8000 with a PCM receiver running", "Carrier in Hz,
+  or 0 with a PCM receiver running" -- so the two receive-side offsets get
+  exactly what the two receive-side getters answer.
+- The V.92 analog arm of `VPcmV34GetDiagnostics` writes +0x0b0 = 8000 and
+  +0x0b8 = 0.  V.92 upstream is PCM at 8000 symbols per second and has no
+  carrier, and upstream is the TRANSMIT direction seen from the analog modem.
+  So the same two constants appear on the other side of the pair when the
+  other direction is the PCM one, which is the control the V.90 arm alone
+  cannot provide.
+
+**THE SAME ARGUMENT SETTLES +0x0f8 AND +0x0fc**, which had one name between
+them.  V.34 stores `2400 * cfg->txbits` in +0x0f8 and `2400 * cfg->rxbits` in
++0x0fc; `getAT_UD` -- receive only -- writes +0x0fc and never +0x0f8; and the
+V.92 analog arm computes an upstream figure for +0x0f8 and leaves +0x0fc alone.
+So +0x0fc, which 4900 named `dataRate` from
+`"V90Demodulator: enter Data Phase, Rate = %d [bps]"`, is the RECEIVE data rate
+and +0x0f8 is its transmit twin.
+
+`dataRate` KEEPS ITS NAME rather than becoming `rxDataRate`: the format string
+licensed it, three files reference it, and a rename mid-batch across `src/`,
+`test/` and `docs/` while a sibling branch is live is finding 3511's shape for
+no gain.  The direction is recorded on both fields instead.
+
+**WHAT WAS NOT USED.**  The four pairs are laid out transmit-then-receive at
+ascending offsets (+0x0b0/+0x0b4, +0x0b8/+0x0bc, +0x0c0/+0x0c4, +0x0f8/+0x0fc),
+which is tempting and is NOT part of the derivation.  The pattern fails at the
+one place it can be checked against an independent answer: +0x068 is a receive
+level and +0x06c a transmit one, in that order.  A layout regularity that
+breaks where it is checkable cannot be load-bearing where it is not.
+
+## 5501. THE RECORD'S OTHER ELEVEN OFFSETS ARE FIELDS NOW, AND THE ELEVEN THAT WERE ALREADY FIELDS DID NOT MOVE
+
+`TAG_DiagnosticResults` had 11 of its 22 written offsets modelled as fields and
+the other 11 listed in a comment "for the record", on 4900's reasoning that a
+field declared from a disassembly nobody has reconstructed is exactly the
+wrong-but-plausible this project refuses.  Both writers are reconstructed now,
+so all 22 are typed from the instruction that touches them.
+
+Nine carry names and thirteen keep offset names.  The nine:
+`txBaudRate`, `rxBaudRate`, `txCarrier`, `rxCarrier` (finding 5500),
+`txDataRate` (5500), `dataRate` and `rbsPattern` and `roundTripDelay` (4900,
+4905, 4907), and `txBpsLatched`/`rxBpsLatched`, which take
+`v34_object::tx_bps` and `::rx_bps` verbatim on every path -- v34fsk.h has
+those as the negotiated rates in bits per second, "published once and latched,
+so a second negotiation does not overwrite them".  `Latched` is in the name
+because it is the only thing separating that pair from `txDataRate`/`dataRate`,
+which the same call fills from the live rate config four words later.
+
+Two of the thirteen declined names are results rather than gaps and are
+finding 5502.  The rest are ordinary: +0x0e8, +0x0f0 and +0x100 all take one
+signed short from `v34_object + 0xac12`, which has no name of its own; +0x0f4
+takes its neighbour at +0xac14; +0x0ec is `rrn_local + rrn_remote` under V.34
+and `V90Demodulator::word_264` under V.90, so the V.34 derivation is recorded
+without a name that would claim it held for both; +0x080 takes
+`v34_object::rtd` unscaled and is distinguished from +0x084 only by the V.90
+writer skipping it, which is a shape and not a meaning; and +0x228 takes
+`v34_object::fac0c`, which is itself offset-named.
+
+**THE 64-BYTE GUARD DID NOT MOVE AND `DR_BOUND` IS STILL 0x22c.**  Lifting
++0x228 out of `pad_224[8]` turns that pad into `pad_224[4]` plus a word and
+changes no offset; the record's declared length is still the lower bound
+`VPcmV34GetDiagnostics`'s highest store establishes, and t_v90dataph.cpp's
+guard past it is still the only thing that would catch a store past the end.
+t_v34diag.cpp carries the same guard, checked against the SEED rather than
+against the other side -- two identical mis-reads would agree with each other.
+
+## 5502. TWO WRITERS, ONE OFFSET, AND THREE PLACES THEY DISAGREE ABOUT WHAT IT HOLDS
+
+The interesting result of reconstructing the second writer is not the eleven
+new fields.  It is that three offsets turn out **not to hold one quantity**,
+and the batch that had one writer could not have known.
+
+**+0x074 IS LINEAR UNDER ONE WRITER AND dB UNDER THE OTHER.**  Its comment read
+"the linear value whose dB form is +0x070", which was true of `getAT_UD`:
+that member stores `V90Equalizer::meanErrorEnergyCurrent` raw at +0x074 and
+`10.0f * log10f` of the same field at +0x070.  `VPcmV34GetDiagnostics`'s V.34
+arm computes ONE integer dB figure and stores it to both, with a `fsts` at
+0x770a and a `fstps` at 0x770d off a single x87 value.  So under that writer
+the two offsets hold the same number and neither is linear.  The comment is
+corrected; the field keeps its offset name.
+
+**+0x070 IS A dB FIGURE UNDER BOTH AND OF OPPOSITE POLARITY.**  V.90's is a
+mean ERROR energy in dB, where larger is worse.  V.34's is an integer dB count
+built by stepping `f248 / f21a` down through `(x * 0x1013) >> 14` (a -6 dB
+step, `+= 6`) and then `(x * 0x32d6) >> 14` (a -1 dB step, `+= 1`) until it
+reaches zero -- which is `VPcmV34GetSNR`'s body verbatim, and that function's
+own name says larger is better.  Naming the offset for either writer would be
+believed by every future reader of the other.
+
+**+0x084 IS THE ROUND-TRIP DELAY UNDER BOTH AND IN TWO DIFFERENT UNITS.**
+`getAT_UD` divides `V90Phase2Info::rtd` by 9.6 (`* 10 / 96`, unsigned) before
+storing it, which is what made "very probably milliseconds" a reasonable
+inference from a 9600 Hz clock.  `VPcmV34GetDiagnostics` stores
+`v34_object::rtd` -- v34fsk.h's "round-trip delay, in samples" -- with no
+scaling at all, into +0x084 and +0x080 both.  The QUANTITY is the same under
+both writers, so `roundTripDelay` stands; the UNIT was never one thing, and
+4907's refusal to put one in the name is what makes the field survive its
+second writer.  Not entered as a deviation: which unit the application expects
+is outside the library and nothing here is provably the wrong one.
+
+**THE GENERAL SHAPE.**  A field named from one writer is named from a sample of
+size one.  Where the second writer disagrees, the disagreement is the finding
+and the offset name is the correct answer -- not a defect to be resolved by
+picking the writer that reads better.
+
+## 5503. THE V.92 UPSTREAM RATE IS FLOATING-POINT, UNSIGNED AT BOTH CONVERSIONS, AND `8000 * K / 12` IN INTEGERS DOES NOT REPRODUCE IT
+
+`VPcmV34GetDiagnostics`'s V.92 analog arm publishes the upstream bit rate at
++0x0f8, and every step of it is forced:
+
+```
+  78d8:  flds   .rodata.cst4+0x1c        0.5f, hoisted before the product
+  78e6:  imul   $0x1f40,0x4(%ecx),%eax   8000 * K, a 32-bit product
+  78ed:  push %edx (zero) ; push %eax
+  78ef:  fildll (%esp)                   converted as a 64-bit value whose
+                                         high word is a HARD ZERO
+  78f5:  fmuls  .rodata.cst4+0x18        * 0.083333336f, the float 1/12
+  7904:  faddp  %st,%st(1)               + 0.5f
+  7906:  or     $0xc00,%bx                round toward zero
+  7914:  fistpll 0x8(%esp)               into EIGHT bytes
+  791c:  mov    0x8(%esp),%eax           of which the low four are read
+```
+
+`xor %edx,%edx` before the `fild` is how this compiler converts an `unsigned`
+to floating point, and `fistpll` into eight bytes with only the low four read
+back is how it converts one the other way.  So both conversions are unsigned
+and the arithmetic between them is x87 at 80 bits.  `8000 * K / 12` written in
+integers agrees for small `K` and is a different function everywhere the
+rounding or the sign matters, which is why `t_v34diag.cpp`'s `k_v` table
+carries values past 268435 -- the point where `8000 * K` passes 2^31 and a
+signed reading of the product diverges.
+
+**WHAT THE 12 IS.**  `0x4c(%ecx)` off the `V92Modulator` is `bitsToSymbol`,
+its +0x00 is the `V92Transmitter`, and that object's +0x04 is the field
+`V92Transmitter::reset` prints as `"K = %d"` -- the author's own name, and
+V92BitsToSymbol.h records that `V92Transmitter::process` consumes exactly K
+input bits per twelve output samples.  So the divisor is a mapping-frame
+length and not a scale factor, and `8000 symbols/s * K bits per 12 symbols /
+12` is bits per second.  That is a third independent statement that +0x0f8 is
+a bit rate, arrived at from the V.92 side rather than from V.34's
+`2400 * txbits`.

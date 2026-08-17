@@ -7,9 +7,26 @@
 
 #include "dsplib/v34det.h"	/* struct v34_dftbin: chkForceBaudRate's arg */
 
+/*
+ * `VPcmV34GetDiagnostics`'s second argument.  A forward declaration, so this
+ * header does not drag TAG_DiagnosticResults.h in and neither definition can
+ * collide with the other (CLAUDE.md, "One type, one home"); the elaborated
+ * `struct` spelling is what lets one declaration serve both languages.
+ */
+struct TAG_DiagnosticResults;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/*
+ * Fill in the diagnostics record for whichever datapump is running -- V.34,
+ * V.90 or V.92, chosen by `v34_object::status`.  An external API entry point:
+ * the caller is the application and it owns the record.  See
+ * src/pump/v34/v34diag.cpp, which is a .cpp because the two PCM arms call a
+ * C++ member.
+ */
+void VPcmV34GetDiagnostics(void *obj, struct TAG_DiagnosticResults *results);
 
 /* Record the timing offset the V.34 receiver has settled on. */
 void VPcmV34LogTimingOffset(void *obj, short offset);

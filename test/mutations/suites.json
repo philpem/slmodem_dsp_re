@@ -671,5 +671,9 @@
  "v90eqdata": [
   "src/pump/v90/V90Equalizer.cpp",
   "build/test/t_v90eqdata"
+ ],
+ "v34diag": [
+  "src/pump/v34/v34diag.cpp",
+  "build/test/t_v34diag"
  ]
 }

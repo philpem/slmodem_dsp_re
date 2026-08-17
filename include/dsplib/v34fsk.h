@@ -1091,7 +1091,24 @@ struct v34_object {
 	 */
 	short rrn_local;				/* +0xac0e */
 	short rrn_remote;				/* +0xac10 */
-	unsigned char unmapped_ac12[0xac16 - 0xac12];
+	/*
+	 * +0xac12, +0xac14.  TWO SIGNED SHORTS, and the width and the sign
+	 * are both forced: `VPcmV34GetDiagnostics` reads each with a single
+	 * `movswl` into a 32-bit slot of `TAG_DiagnosticResults`, which is
+	 * the promotion of a `short` and not of an `unsigned short`.  The
+	 * other two accesses agree on the width -- `VPcmV34Create` clears
+	 * both with `mov %reg16`, and `v34handshakinit` reads each back with
+	 * `movzwl` and stores a halfword, where the upper half never
+	 * survives (CLAUDE.md's free column, finding 614).
+	 *
+	 * OFFSET-NAMED.  No format string in the object prints either, no
+	 * reconstructed function does arithmetic on them, and the one
+	 * consumer copies them out unchanged -- +0xac12 into three
+	 * diagnostics offsets at once and +0xac14 into a fourth.  They were
+	 * `unmapped_ac12[4]`.
+	 */
+	short short_ac12;				/* +0xac12 */
+	short short_ac14;				/* +0xac14 */
 	/*
 	 * +0xac16.  A BYTE, and past where this struct used to end: the
 	 * declared length of 0xac10 was the largest offset anything

@@ -1,0 +1,195 @@
+[
+ {
+  "note": "VPcmV34GetDiagnostics against t_v34diag.  The function has four arms that store the same six offsets from different sources, so most anchors are widened with a neighbouring statement to stay unique -- finding 347's remedy.  The two `status` tests and the two `info0Layout` tests are mutated as CONTROL-FLOW changes because the record alone cannot see the difference between a V.90 digital call and a V.92 digital one: only the transcript group separates those, which is finding 3403's point about diagnostics that land in no object."
+ },
+ {
+  "label": "the V.90 test is a range, not an equality",
+  "find": "\tif (obj->status == V34DIAG_STATUS_V90) {",
+  "replace": "\tif (obj->status >= V34DIAG_STATUS_V90) {"
+ },
+ {
+  "label": "the V.92 test is a range, not an equality",
+  "find": "\t} else if (obj->status == V34DIAG_STATUS_V92) {",
+  "replace": "\t} else if (obj->status >= V34DIAG_STATUS_V92) {"
+ },
+ {
+  "label": "the V.90 analog test is inverted",
+  "find": "\tif (obj->status == V34DIAG_STATUS_V90) {\n\t\tif (xf->info0Layout != 0) {",
+  "replace": "\tif (obj->status == V34DIAG_STATUS_V90) {\n\t\tif (xf->info0Layout == 0) {"
+ },
+ {
+  "label": "the V.92 analog test is inverted",
+  "find": "\t} else if (obj->status == V34DIAG_STATUS_V92) {\n\t\tif (xf->info0Layout != 0) {",
+  "replace": "\t} else if (obj->status == V34DIAG_STATUS_V92) {\n\t\tif (xf->info0Layout == 0) {"
+ },
+ {
+  "label": "the banner is not printed",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34GetDiagnostics called...\\r\\n\");",
+  "replace": "\tif (0)\n\t\tdsplibs_debug_printf(\"VPcmV34GetDiagnostics called...\\r\\n\");"
+ },
+ {
+  "label": "the banner's gate is level 1 rather than level 2",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34GetDiagnostics called",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"VPcmV34GetDiagnostics called"
+ },
+ {
+  "label": "V.90 arm: getAT_UD is not called",
+  "find": "\t\t\txf->modem.demodulator->getAT_UD(results);\n\n\t\t\t/*\n\t\t\t * The upstream of a V.90 call is V.34",
+  "replace": "\t\t\t(void)0;\n\n\t\t\t/*\n\t\t\t * The upstream of a V.90 call is V.34"
+ },
+ {
+  "label": "V.90 arm: the transmit baud rate is the receive one",
+  "find": "\t\t\tresults->txBaudRate = cfg->baud;\n\t\t\tresults->txCarrier = cfg->carrier;",
+  "replace": "\t\t\tresults->txBaudRate = cfg->rx_baud;\n\t\t\tresults->txCarrier = cfg->carrier;"
+ },
+ {
+  "label": "V.90 arm: the transmit carrier is the receive one",
+  "find": "\t\t\tresults->txCarrier = cfg->carrier;\n\t\t\tresults->txDataRate =",
+  "replace": "\t\t\tresults->txCarrier = cfg->rx_carrier;\n\t\t\tresults->txDataRate ="
+ },
+ {
+  "label": "V.90 arm: the transmit rate counts receive units",
+  "find": "\t\t\tresults->txDataRate =\n\t\t\t    V34DIAG_BPS_PER_RATE_UNIT * cfg->txbits;",
+  "replace": "\t\t\tresults->txDataRate =\n\t\t\t    V34DIAG_BPS_PER_RATE_UNIT * cfg->rxbits;"
+ },
+ {
+  "label": "V.90 arm: the transmit level adds the power reduction",
+  "find": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB -\n\t\t\t\t\t     obj->f25dc;",
+  "replace": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB +\n\t\t\t\t\t     obj->f25dc;"
+ },
+ {
+  "label": "V.92 arm: the upstream symbol rate is not 8000",
+  "find": "\t\t\tresults->txBaudRate = V34DIAG_PCM_BAUD;",
+  "replace": "\t\t\tresults->txBaudRate = V34DIAG_PCM_BAUD - 1;"
+ },
+ {
+  "label": "V.92 arm: the transmit level carries a power reduction",
+  "find": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB;",
+  "replace": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->f25dc;"
+ },
+ {
+  "label": "V.92 arm: the upstream mode test is a range",
+  "find": "\t\t\tif (mod->word_2c == V34DIAG_V92_UPSTREAM_ACTIVE) {",
+  "replace": "\t\t\tif (mod->word_2c >= V34DIAG_V92_UPSTREAM_ACTIVE) {"
+ },
+ {
+  "label": "V.92 arm: the upstream product is signed",
+  "find": "\t\t\t\tunsigned int bits = (unsigned int)\n\t\t\t\t    V34DIAG_PCM_BAUD * (unsigned int)\n\t\t\t\t    mod->bitsToSymbol->transmitter->K;",
+  "replace": "\t\t\t\tint bits = V34DIAG_PCM_BAUD *\n\t\t\t\t    mod->bitsToSymbol->transmitter->K;"
+ },
+ {
+  "label": "V.92 arm: the upstream rate loses its rounding",
+  "find": "\t\t\t\tresults->txDataRate = (unsigned int)(0.5f +\n\t\t\t\t    (float)bits *",
+  "replace": "\t\t\t\tresults->txDataRate = (unsigned int)(0.0f +\n\t\t\t\t    (float)bits *"
+ },
+ {
+  "label": "V.92 arm: the upstream rate is integer arithmetic",
+  "find": "\t\t\t\tresults->txDataRate = (unsigned int)(0.5f +\n\t\t\t\t    (float)bits *\n\t\t\t\t    (1.0f /\n\t\t\t\t     V34DIAG_UPSTREAM_SYMBOLS_PER_FRAME));",
+  "replace": "\t\t\t\tresults->txDataRate = bits / 12u;"
+ },
+ {
+  "label": "V.92 arm: the mapping frame is thirteen symbols",
+  "find": "#define V34DIAG_UPSTREAM_SYMBOLS_PER_FRAME\t12.0f",
+  "replace": "#define V34DIAG_UPSTREAM_SYMBOLS_PER_FRAME\t13.0f"
+ },
+ {
+  "label": "V.92 arm: the inactive upstream is not reported as zero",
+  "find": "\t\t\t} else {\n\t\t\t\tresults->txDataRate = 0;\n\t\t\t}",
+  "replace": "\t\t\t} else {\n\t\t\t\tresults->txDataRate = 1;\n\t\t\t}"
+ },
+ {
+  "label": "V.92 arm: the carrier is not cleared",
+  "find": "\t\t\tresults->txCarrier = 0;",
+  "replace": "\t\t\tresults->txCarrier = 1;"
+ },
+ {
+  "label": "V.34 arm: the two baud rates are swapped",
+  "find": "\t\tresults->txBaudRate = cfg->baud;\n\t\tresults->rxBaudRate = cfg->rx_baud;",
+  "replace": "\t\tresults->txBaudRate = cfg->rx_baud;\n\t\tresults->rxBaudRate = cfg->baud;"
+ },
+ {
+  "label": "V.34 arm: the two carriers are swapped",
+  "find": "\t\tresults->txCarrier = cfg->carrier;\n\t\tresults->rxCarrier = cfg->rx_carrier;",
+  "replace": "\t\tresults->txCarrier = cfg->rx_carrier;\n\t\tresults->rxCarrier = cfg->carrier;"
+ },
+ {
+  "label": "V.34 arm: the two data rates are swapped",
+  "find": "\t\tresults->txDataRate = V34DIAG_BPS_PER_RATE_UNIT * cfg->txbits;\n\t\tresults->dataRate   = V34DIAG_BPS_PER_RATE_UNIT * cfg->rxbits;",
+  "replace": "\t\tresults->txDataRate = V34DIAG_BPS_PER_RATE_UNIT * cfg->rxbits;\n\t\tresults->dataRate   = V34DIAG_BPS_PER_RATE_UNIT * cfg->txbits;"
+ },
+ {
+  "label": "V.34 arm: the rate unit is 2400 bit/s plus one",
+  "find": "#define V34DIAG_BPS_PER_RATE_UNIT\t2400",
+  "replace": "#define V34DIAG_BPS_PER_RATE_UNIT\t2401"
+ },
+ {
+  "label": "V.34 arm: the transmit level adds the power reduction",
+  "find": "\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->f25dc;",
+  "replace": "\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB + obj->f25dc;"
+ },
+ {
+  "label": "V.34 arm: the round trip delay is scaled the V.90 way",
+  "find": "\t\tresults->word_080 = results->roundTripDelay =\n\t\t    (unsigned int)obj->rtd;",
+  "replace": "\t\tresults->word_080 = results->roundTripDelay =\n\t\t    (unsigned int)obj->rtd * 10u / 96u;"
+ },
+ {
+  "label": "V.34 arm: only one of the two delay offsets is filled",
+  "find": "\t\tresults->word_080 = results->roundTripDelay =\n\t\t    (unsigned int)obj->rtd;",
+  "replace": "\t\tresults->roundTripDelay = (unsigned int)obj->rtd;"
+ },
+ {
+  "label": "V.34 arm: the SNR reaches only one of the two floats",
+  "find": "\t\tresults->float_070 = results->float_074 =\n\t\t    (float)VPcmV34GetSNR(obj);",
+  "replace": "\t\tresults->float_070 = (float)VPcmV34GetSNR(obj);"
+ },
+ {
+  "label": "V.34 arm: the SNR is negated",
+  "find": "\t\tresults->float_070 = results->float_074 =\n\t\t    (float)VPcmV34GetSNR(obj);",
+  "replace": "\t\tresults->float_070 = results->float_074 =\n\t\t    (float)-VPcmV34GetSNR(obj);"
+ },
+ {
+  "label": "the two latched bit rates are swapped",
+  "find": "\tresults->txBpsLatched = (unsigned int)obj->tx_bps;\n\tresults->rxBpsLatched = (unsigned int)obj->rx_bps;",
+  "replace": "\tresults->txBpsLatched = (unsigned int)obj->rx_bps;\n\tresults->rxBpsLatched = (unsigned int)obj->tx_bps;"
+ },
+ {
+  "label": "the renegotiation total counts only the local end",
+  "find": "\tresults->word_0ec = (unsigned int)(obj->rrn_local + obj->rrn_remote);",
+  "replace": "\tresults->word_0ec = (unsigned int)obj->rrn_local;"
+ },
+ {
+  "label": "the renegotiation total is computed unsigned",
+  "find": "\tresults->word_0ec = (unsigned int)(obj->rrn_local + obj->rrn_remote);",
+  "replace": "\tresults->word_0ec = (unsigned int)(unsigned short)obj->rrn_local +\n\t    (unsigned int)(unsigned short)obj->rrn_remote;"
+ },
+ {
+  "label": "+0xac12 and +0xac14 are exchanged",
+  "find": "\tresults->word_0f4 = (unsigned int)obj->short_ac14;\n\tresults->word_0e8 = results->word_100 = results->word_0f0 =\n\t    (unsigned int)obj->short_ac12;",
+  "replace": "\tresults->word_0f4 = (unsigned int)obj->short_ac12;\n\tresults->word_0e8 = results->word_100 = results->word_0f0 =\n\t    (unsigned int)obj->short_ac14;"
+ },
+ {
+  "label": "one of the three copies of +0xac12 is missing",
+  "find": "\tresults->word_0e8 = results->word_100 = results->word_0f0 =\n\t    (unsigned int)obj->short_ac12;",
+  "replace": "\tresults->word_100 = results->word_0f0 =\n\t    (unsigned int)obj->short_ac12;"
+ },
+ {
+  "label": "+0xac12 is widened unsigned",
+  "find": "\tresults->word_0e8 = results->word_100 = results->word_0f0 =\n\t    (unsigned int)obj->short_ac12;",
+  "replace": "\tresults->word_0e8 = results->word_100 = results->word_0f0 =\n\t    (unsigned int)(unsigned short)obj->short_ac12;"
+ },
+ {
+  "label": "+0x228's fallback is zero rather than -1",
+  "find": "\t\tresults->word_228 = (unsigned int)-1;",
+  "replace": "\t\tresults->word_228 = 0u;"
+ },
+ {
+  "label": "+0x228's zero test is inverted",
+  "find": "\tif (obj->fac0c != 0)\n\t\tresults->word_228 = (unsigned int)obj->fac0c;",
+  "replace": "\tif (obj->fac0c == 0)\n\t\tresults->word_228 = (unsigned int)obj->fac0c;"
+ },
+ {
+  "label": "+0x228 is widened unsigned",
+  "find": "\t\tresults->word_228 = (unsigned int)obj->fac0c;",
+  "replace": "\t\tresults->word_228 = (unsigned int)(unsigned short)obj->fac0c;"
+ }
+]

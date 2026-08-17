@@ -924,8 +924,15 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
 
 	results->dataRate = getBitRate();
 
-	results->word_0bc = 0;
-	results->word_0b4 = 8000;
+	/*
+	 * A PCM receiver has no carrier and its symbol rate is 8000, which is
+	 * exactly what `VPcmV34GetCurrentRxCarrier` and
+	 * `...GetCurrentRxBaudRate` answer for the same condition.  These two
+	 * offsets were `word_0bc` and `word_0b4` when this was written and
+	 * are named now; finding 5500 settled the direction.
+	 */
+	results->rxCarrier = 0;
+	results->rxBaudRate = 8000;
 
 	results->float_074 = equalizer->meanErrorEnergyCurrent;
 	results->float_070 = (float)(10.0f * dem_x87_log10(
