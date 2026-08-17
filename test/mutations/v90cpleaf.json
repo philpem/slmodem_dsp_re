@@ -1,0 +1,142 @@
+[
+ {
+  "label": "the length comes from +0x3bb0, not +0x3bac",
+  "find": "\tlength = word_3bac;",
+  "replace": "\tlength = word_3bb0;"
+ },
+ {
+  "label": "getBitVector returns the CRC register",
+  "find": "\treturn bits;",
+  "replace": "\treturn crc;"
+ },
+ {
+  "label": "getBitVector reports nothing",
+  "find": "\tlength = word_3bac;\n",
+  "replace": ""
+ },
+ {
+  "label": "resetDetector: the cursor starts at 17",
+  "find": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}",
+  "replace": "\tword_cac = 17;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}"
+ },
+ {
+  "label": "resetDetector: +0xcb0 left alone",
+  "find": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}",
+  "replace": "\tword_cac = 18;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}"
+ },
+ {
+  "label": "resetDetector: +0xcaa left alone",
+  "find": "\tbyte_caa = 0;\n}",
+  "replace": "}"
+ },
+ {
+  "label": "resetDetector: +0xca4 left alone",
+  "find": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}",
+  "replace": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}"
+ },
+ {
+  "label": "resetDetector also clears +0x13, as the ctor does",
+  "find": "\tbyte_caa = 0;\n}",
+  "replace": "\tbyte_caa = 0;\n\tbyte_13 = 0;\n}"
+ },
+ {
+  "label": "reset does not reset the detector",
+  "find": "\tresetDetector();\n",
+  "replace": ""
+ },
+ {
+  "label": "reset also clears +0x13, as the ctor does",
+  "find": "\tnofRecievedMpNot = 0;\n\n\tword_3bbc = -1;",
+  "replace": "\tnofRecievedMpNot = 0;\n\n\tbyte_13 = 0;\n\tword_3bbc = -1;"
+ },
+ {
+  "label": "reset: +0x3bbc starts at 0, not -1",
+  "find": "\tnofRecievedMpNot = 0;\n\n\tword_3bbc = -1;",
+  "replace": "\tnofRecievedMpNot = 0;\n\n\tword_3bbc = 0;"
+ },
+ {
+  "label": "reset: the MPNot counter is left alone",
+  "find": "\tnofRecievedMpNot = 0;\n\n\tword_3bbc = -1;",
+  "replace": "\n\tword_3bbc = -1;"
+ },
+ {
+  "label": "resetCRC sets fifteen, not sixteen",
+  "find": "\tfor (i = 0; i <= 0xf; i++)\n\t\tcrc[i] = 1;\n}",
+  "replace": "\tfor (i = 0; i <= 0xe; i++)\n\t\tcrc[i] = 1;\n}"
+ },
+ {
+  "label": "resetCRC sets seventeen, one past the register",
+  "find": "\tfor (i = 0; i <= 0xf; i++)\n\t\tcrc[i] = 1;\n}",
+  "replace": "\tfor (i = 0; i <= 0x10; i++)\n\t\tcrc[i] = 1;\n}"
+ },
+ {
+  "label": "resetCRC clears the register instead",
+  "find": "\tfor (i = 0; i <= 0xf; i++)\n\t\tcrc[i] = 1;\n}",
+  "replace": "\tfor (i = 0; i <= 0xf; i++)\n\t\tcrc[i] = 0;\n}"
+ },
+ {
+  "label": "calcSequenceLength rounds +0x3bb0, not +0x3bb0 + 1",
+  "find": "\ttotal = word_3bb0 + 1;",
+  "replace": "\ttotal = word_3bb0;"
+ },
+ {
+  "label": "calcSequenceLength rounds down, not up",
+  "find": "\t\tword_3bac = (quot + 1) * group;\n}",
+  "replace": "\t\tword_3bac = quot * group;\n}"
+ },
+ {
+  "label": "calcSequenceLength always rounds up",
+  "find": "\tif (quot * group == total)\n\t\tword_3bac = quot * group;\n\telse\n\t\tword_3bac = (quot + 1) * group;\n}",
+  "replace": "\tword_3bac = (quot + 1) * group;\n}"
+ },
+ {
+  "label": "calcSequenceLength writes the quotient, not the product",
+  "find": "\t\tword_3bac = (quot + 1) * group;\n}",
+  "replace": "\t\tword_3bac = quot + 1;\n}"
+ },
+ {
+  "label": "calcCRC seeds the register the way resetCRC does",
+  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;",
+  "replace": "\tunsigned char a;\n\tunsigned int k;\n\n\tfor (k = 0; k <= 0xf; k++)\n\t\tcrc[k] = 1;\n\tend = word_3bb0 - 0x11;"
+ },
+ {
+  "label": "calcCRC covers one frame too many",
+  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;",
+  "replace": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x10;"
+ },
+ {
+  "label": "calcCRC does not step over the framing bits",
+  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
+  "replace": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n"
+ },
+ {
+  "label": "calcCRC starts at the preamble, not at 0x12",
+  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
+  "replace": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x11; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n"
+ },
+ {
+  "label": "calcCRC drops the feedback into 15",
+  "find": "\t\tcrc[15] = a;\n\t}\n}",
+  "replace": "\t\tcrc[15] = 0;\n\t}\n}"
+ },
+ {
+  "label": "calcCRC drops the shift into 14",
+  "find": "\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n}",
+  "replace": "\t\tcrc[15] = a;\n\t}\n}"
+ },
+ {
+  "label": "the diagnostic is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90MP: received",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"V90MP: received"
+ },
+ {
+  "label": "the two counters are printed the other way round",
+  "find": "\t\t\t\t     nofRecievedMp, nofRecievedMpNot);",
+  "replace": "\t\t\t\t     nofRecievedMpNot, nofRecievedMp);"
+ },
+ {
+  "label": "the diagnostic says V90CP, as the class is named",
+  "find": "\t\tdsplibs_debug_printf(\"V90MP: received %d MP, %d MPNot\\r\\n\",",
+  "replace": "\t\tdsplibs_debug_printf(\"V90CP: received %d MP, %d MPNot\\r\\n\","
+ }
+]

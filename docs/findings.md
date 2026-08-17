@@ -64329,3 +64329,186 @@ so it is arithmetic and not the author's word for it, and
 `include/dsplib/V92CP.h` records `+0x910` as a modelled word rather than
 naming it. `infoToBits` and `bitsToInfo` are the two members that build the
 layout, both still unwritten, and they are where the names will come from.
+### 4600. `V90CP`'s DETECTOR RESET IS `+0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa`, AND THAT ONE ORDERING MOVED THREE SYMBOLS AT ONCE
+
+`V90CP::resetDetector` writes five fields and nothing else. The constructor
+writes the same five, and `reset` writes them and three more. All three were
+already differentially correct; none of the three matched the object's
+instruction sequence, and the reason was a store order nobody had had a reason
+to question.
+
+The order the tree carried was `+0xca4, +0xca9, +0xcaa, +0xcac, +0xcb0` --
+ascending by offset, which is what a reader writes when the object does not
+say otherwise. The object says otherwise. `resetDetector` at 0x51510 stores
++0xcac first, then +0xcb0, then +0xca4, then the two bytes; so does the
+constructor at 0x51590 and so does `reset` at 0x51540, with its own three
+interleaved by the scheduler.
+
+Reordering the source to match took:
+
+| | before | after |
+|---|---|---|
+| `V90CP::resetDetector` | same size, different instructions | **byte-for-byte identical** |
+| `V90CP::reset` | same size, different instructions | **byte-for-byte identical** |
+| `V90CP::V90CP` (C1 and C2) | different | mnemonics identical, registers apart |
+
+**Three symbols on one reordering is what makes this the source order and not
+a coincidence of scheduling.** 617's acceptance test for a store-order change
+is FULL-TEXT identity, operands included, and two of the three pass it
+outright; the constructor's residual is register allocation, which is 614's
+free column and which `compare.py` does not compare. `compare.py` went 355 to
+363 identical over this batch, and 8 is 6 new symbols plus these two.
+
+**IT DOES NOT OVERTURN 1237.** That finding ruled that the constructor repeats
+the assignments rather than calling `resetDetector`, on the evidence that the
+constructor carries no relocation against a GLOBAL `.text` symbol (306, 333).
+That is still what the object says and the constructor still repeats them
+here. What 1237 did not settle, and did not claim to, was the ORDER.
+
+**`reset` IS THE OTHER HALF, AND IT DOES CALL.** The object's `reset` also
+holds no call and no relocation, so the absence proves nothing on its own --
+it is equally consistent with a third repetition and with an inlined call. It
+was settled by writing the call and measuring: at `-O3` GCC 3.4.2 folds
+`resetDetector` in and emits the object's 73 bytes exactly. A repetition emits
+73 bytes too, and does not emit the object's. So the two halves of the class
+are written differently on purpose, and each spelling is the one that
+reproduces its own symbol.
+
+The general lesson is the cheap one: **where a function is nothing but a run
+of stores, the object's store order is a testable hypothesis about the source
+order, and testing it costs one build.** Ascending-by-offset is a reader's
+habit, not the author's.
+
+### 4601. `V90CP::calcCRC` IS `evaluateCRC`'s LOOP WITH BOTH ENDS REMOVED, AND THE ABSENCES ARE WHAT IDENTIFY IT
+
+`calcCRC` (0x512d0, 570 bytes) and `evaluateCRC` (0x51730, 668) run the same
+CCITT shift register over the same extent -- information bits from 0x12 up to
+`word_3bb0 - 0x11`, every multiple of seventeen stepped over as a framing bit,
+taps out of positions 4 and 11 into 3 and 10 and the feedback into 15.
+
+What separates them is two things `calcCRC` does NOT do, and both are
+absences rather than differences:
+
+- **It does not seed the register.** There is no store of 1 anywhere in its
+  570 bytes. It loads `crc[0..15]` into the frame at entry and writes them
+  back at exit, so it continues from whatever `resetCRC` or a previous call
+  left behind. `evaluateCRC` opens with the sixteen ones.
+- **It does not compare anything.** No `sete`, no accumulator, no return
+  value.
+
+An absence cannot be caught by comparing two objects that were both seeded the
+same way, which is why `t_v90cpleaf` runs the same bit vector twice from two
+different register states and requires the BLOB's two answers to differ. The
+mutation "seed the register the way `resetCRC` does" is what adjudicates, and
+it is caught.
+
+**The 12-byte gap is register allocation and scheduling, and it is left
+alone.** Ours is 582 against the blob's 570. The loop bodies agree
+instruction for instruction on everything the compiler was forced to encode --
+the `mul $0xf0f0f0f1` / `shr $4` divide by seventeen, the branchless
+`cmp $1` / `adc $0` increment, the operand order of `crc[0] + bits[i]`, the
+unsigned `jae`/`jb` on both bounds. What differs is which of the sixteen stack
+slots holds which register index and whether the cursor advances by `inc` or
+by `lea`. That is 614's free column; chasing it would be fitting the compiler.
+
+### 4602. `V90CP::printNofRecievedMpMpNot` PRINTS "V90MP", AND THE POOLED STRING IS WHY
+
+The format at `.rodata.str1.4+0xd6b0` is `"V90MP: received %d MP, %d MPNot\r\n"`
+and it has two referrers: `V90MP::printNofRecievedMpMpNot` at 0x20bef, where
+the tag is right, and `V90CP::printNofRecievedMpMpNot` at 0x536af, where it is
+not. One pooled copy, two classes, and the author copied the line across
+without changing the tag.
+
+We reproduce the object, so the tag stays wrong in `V90CP.cpp`. It is worth
+recording because it is a trap in both directions: a future reader who
+"corrects" it introduces a difference the differential tier cannot see and the
+string table can, and a future reader who greps the strings for `V90CP` finds
+nothing and concludes the class has no diagnostics.
+
+What it DOES establish is the naming, and it is the strongest tier available
+in this class: the first `%d` is fed from +0x3bb4 and the second from +0x3bb8,
+which is what makes them `nofRecievedMp` and `nofRecievedMpNot` rather than
+two counters in an unknown order. Finding 3540 noted that `infoToBits` and
+`evaluateInfo` between them reach no string at all; this is the one that does.
+
+### 4303. THE `V90CP` LEAF BATCH UNBLOCKED FIVE SYMBOLS, AND ALL FIVE WERE GATED ON THE 22-BYTE ONE
+
+Measured with `tools/readyqueue.py --obj $BLOB` at `aa54ea24` and again at
+`d7007ee9`, not projected:
+
+| | before | after |
+|---|--:|--:|
+| unwritten call symbols | 843 | 836 |
+| READY | 418 / 70,797 B | 416 / 70,964 B |
+| BLOCKED | 425 / 203,736 B | 420 / 202,669 B |
+
+Seven written, all seven previously READY, so READY should have fallen to 411
+and it fell to 416: **five symbols became READY, 1,067 bytes.** They are
+
+     282  V90Phase4Modulator::recivedCPtag
+     266  V90Phase4Modulator::recivedFirstSUVuPartTwoRrn
+     200  V90Phase4Modulator::recivedPartTwoSilenceRrnSUV
+     179  V90Phase4Modulator::recivedSUV
+     140  V90Phase4Modulator::enterRepeatedCPd
+
+and **every one of them was gated on `V90CP::getBitVector` alone** -- 22 bytes,
+six instructions, no branch. `V90CP::reset` has two referrers and both are
+still blocked on other things; the other five members have no referrer inside
+`.text` at all and unblocked nothing.
+
+So the batch's 900 bytes freed 1,067, and 878 of those 900 contributed
+nothing to the ready queue. That is `docs/plan.md` §1's "a few hundred bytes
+gate tens of thousands" at small scale, and it is worth recording because the
+ratio is not visible before the work is done: `getBitVector` is the smallest
+symbol in the class and was the only one that mattered to anything else.
+
+**HOW TO MEASURE THIS, because it is easy to get wrong.** `readyqueue.py`'s
+listing is truncated by `--limit` (40 rows by default) while its COUNTS are
+exact, so diffing two listings taken at different limits reports hundreds of
+spurious "newly READY" rows. The counts give the size of the answer; the
+identities come from scanning the blob's relocations for referrers of the
+symbols just written and intersecting with the current READY set. Note that
+`objdump -r --section=.rel.text` silently matches nothing -- the section is
+named `.text` in `objdump -r`'s own output -- and a scan that uses it reports
+"no referrer" for every symbol, which is what nearly buried this measurement.
+
+### 4304. A MUTATION THE DIFFERENTIAL TIER CAN NEVER CATCH, AND THE CODEGEN TIER CAN: `V90SignBitsExtractor::reset`'s ZERO GUARD
+
+`reset` derives its width as `6 / spacing` behind a guard:
+
+    spacing = spacing_;
+    if (spacing_ != 0)
+            width = V90SBE_DECODER_SIZE / spacing_;
+    else
+            width = 0;
+
+`t_v90sbereset` registered the mutation "the guard is a range test on six
+instead" -- `spacing_ != 0 && spacing_ <= 6` -- expecting to catch it with a
+spacing of 7, where the real body reaches the divide and the mutant takes the
+else arm. It came back **NOT CAUGHT**, and adding trials would not have
+helped: `6 / spacing` is zero for every spacing above six, which is the same
+zero the else arm stores, so **the two bodies agree on all 2^32 inputs.** No
+differential test can ever separate them.
+
+This is finding 3052's trap in its sharpest form. 3052's shape was a
+plausible reading that agrees with the true one over every REALISTIC input and
+is separated only by a downstream clamp; this one agrees over every input
+there is, and the file comment written before the mutation ran claimed the
+opposite -- that a spacing of 0 and a spacing of 7 were the pair that
+separated the guard from a range test. They are not. **The mutation registry
+caught a false claim in a test's own comment**, which is a use for it nobody
+had written down.
+
+**What DOES rule the range test out is `make similarity`.** The object issues
+one `test %edx,%edx` and one `je`; a second condition is a second compare and
+the function would be longer. Our source compiles under GCC 3.4.2 at `-O3` to
+the object's 119 bytes byte for byte, operands included, both arms of the
+duplicated tail included -- so the guard's FORM is settled at the codegen tier
+by a function that is exactly the object, and settled nowhere else.
+
+The mutation is kept and marked `equivalent` with the arithmetic as its
+reason, rather than deleted. A deleted mutation tells a later reader nothing;
+an `equivalent` one tells them the claim was tested, found untestable at this
+tier, and where the evidence actually lives. `mutate.py` already separates
+`survived, equivalent` from `NOT CAUGHT` in its totals, so this costs the
+suite's score nothing and preserves the record.

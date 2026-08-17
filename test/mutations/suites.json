@@ -611,5 +611,13 @@
  "v92cpcrc": [
   "src/pump/v90/V92CP.cpp",
   "build/test/t_v92cpcrc"
+ ],
+ "v90cpleaf": [
+  "src/pump/v90/V90CP.cpp",
+  "build/test/t_v90cpleaf"
+ ],
+ "v90sbereset": [
+  "src/pump/v90/V90SignBitsExtractor.cpp",
+  "build/test/t_v90sbereset"
  ]
 }

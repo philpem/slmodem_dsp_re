@@ -41,8 +41,8 @@
  },
  {
   "label": "the length is rounded down, not up",
-  "find": "\t\tword_3bac = (quot + 1) * group;",
-  "replace": "\t\tword_3bac = quot * group;"
+  "find": "\ttotal = nbits + 1;\n\tgroup = word_3ba8;\n\tquot = total / group;\n\tif (quot * group == total)\n\t\tword_3bac = quot * group;\n\telse\n\t\tword_3bac = (quot + 1) * group;",
+  "replace": "\ttotal = nbits + 1;\n\tgroup = word_3ba8;\n\tquot = total / group;\n\tif (quot * group == total)\n\t\tword_3bac = quot * group;\n\telse\n\t\tword_3bac = quot * group;"
  },
  {
   "label": "the pad is counted but not written",
@@ -91,8 +91,8 @@
  },
  {
   "label": "evaluateCRC covers one frame too many",
-  "find": "\tend = word_3bb0 - 0x11;",
-  "replace": "\tend = word_3bb0 - 0x10;"
+  "find": "\t\tcrc[i] = 1;\n\n\tend = word_3bb0 - 0x11;",
+  "replace": "\t\tcrc[i] = 1;\n\n\tend = word_3bb0 - 0x10;"
  },
  {
   "label": "evaluateCRC compares against the wrong sixteen bits",
