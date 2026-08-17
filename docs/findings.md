@@ -63523,6 +63523,141 @@ should not be scheduled against the V.34/V.90/V.92 push at all. Its content is
 fax (Phase 10) plus the V.22/V.32 remainder (Phases 4 and 5), and it should be
 absorbed into those rather than run as its own phase. What remains genuinely
 Phase 8's own is the dialler and call-progress half, which is unmeasured.
+### 3800. `FSE_decision_16pt` IS WRITTEN: 1603 IS RESOLVED, D302 IS FIXED BEHIND THE DEFINE, AND ONE OF THE THREE RINGS IS COMPARABLE
+
+Finding 1603 left the whole function out because `*mag` "is a property of the
+LINK and not of the code". That was right about `*mag` and too broad about the
+function: the decision, the angle, the returned bits and every byte of the
+datapump object are ordinary and are now compared on every trial. The
+magnitude store alone is fixed behind `DSPLIB_REPRODUCE_BUGS`, which is what
+D4 and D65 do and what D302 should have done. **1603's verdict is superseded;
+its analysis stands unchanged and every number in it is confirmed.**
+`docs/findings.md`'s later "`FSE_decision_16pt` STAYS OUT" paragraph, in the
+Viterbi batch, is superseded by this entry as well.
+
+**ONE RING IS COMPARABLE, NOT TWO, AND THAT IS NARROWER THAN THE DAEMON SAYS.**
+The three reads are at `DECv32_MAG9600 + 8190`, `+ 16382` and `+ 24574`.
+Measured in the linked daemon `slmodemd/slmodemd`, where the table is at
+0x110878, the first lands in `.data` and reads 0, the second in `.bss` and
+reads 0, and the third past the last section. **But the differential tier is
+not the daemon.** There the blob is `dsplibs_ref.o`, its `.data` is 0x9594
+bytes and the table is at 0x74f8, so the three reads are at `.data+0x94f6`,
+`+0xb4f6` and `+0xd4f6`. Only the FIRST is inside the blob's own section --
+158 bytes short of its end -- and only that byte travels with the blob into
+any link. It is 0. The other two leave the section and read whatever the
+linker put after it, which is 1603's argument, now bounded to two rings
+instead of three. So `t_v32fse.c` compares `*mag` on the inner ring and
+asserts that it excluded the other two.
+
+**THE OBJECT KILLS THE PROCESS BEFORE IT CAN BE TESTED AT ALL, AND THAT HAD TO
+BE SOLVED FIRST.** This binary's writable data is two LOAD segments -- the
+blob's `.data` ending the first, `.bss` starting the second at a 64 K boundary
+-- with a twenty-kilobyte unmapped hole between them, and BOTH the mid and the
+outer read land in it. The first exact constellation point drives a decision
+of point 0, which is on the outer ring, so the suite segfaulted inside
+`ref_FSE_decision_16pt` on trial zero. `provide_oob_pages()` maps the span
+and asserts that it did, so a link that moves it fails as an assertion rather
+than as a signal.
+
+**AND THEN THE PAGES HAD TO BE POISONED, WHICH IS THE PART WORTH KEEPING.**
+With the provided pages left at their natural zero, comparing `*mag` on ALL
+THREE rings is **green over the whole input set** -- because an anonymous page
+reads zero and the reproduce-bugs arm writes zero. A comparison that passes
+for a reason belonging to neither implementation is D65's trap exactly. The
+suite therefore fills the pages it provides with 0x5a, a value neither side
+can produce, and the same experiment then fails 1,377 checks reporting `got 0,
+reference 23130`. The exclusion is load-bearing, demonstrated rather than
+argued, and anyone who widens the gate gets a loud failure instead of a quiet
+pass. Pages that were already mapped are never written -- the inner ring's is
+one of the blob's own.
+
+**THE RING ORACLE USES NO PART OF OUR SEARCH.** `*angle` alone cannot classify
+a trial: `DECv32_ANGL9600` holds 12287 at points 0 and 3, 20480 at 5 and 6 and
+4095 at 9 and 10, and each pair straddles inner and outer. The PAIR
+(`*angle`, decision & 3) is unique over all sixteen, because the low two bits
+of the return are the decided point's index into `SMCv32_{I,Q}MAP16` and every
+`SMCv32_PMAP16` entry (4, 0, 8, 12) has its low two bits clear. Both halves
+come out of the blob's own tables and the suite asserts the uniqueness before
+it gates on it. Our copy of the search is kept, for choosing inputs and as an
+aggregate cross-check against the oracle's counts, and gates nothing.
+
+**COVERAGE, MEASURED.** 1,466 symbols: 89 on the inner ring and compared, 454
+on the mid and 923 on the outer, both excluded and both asserted non-zero.
+All eight decidable points are decided -- 0:795, 1:201, 2:152, 3:89, 4:65,
+5:85, 8:36, 10:43 -- and the other eight are asserted never to occur, which is
+finding 3801. Point 3 is the only decidable inner-ring point, so the 89 are
+all its.
+
+**FOUR MUTATIONS, EACH FAILING EXACTLY ONE SUITE.**
+
+| | mutation | checks failed |
+|---|---|--:|
+| M1 | the `DSPLIB_REPRODUCE_BUGS` literal `*mag = 0` made 1 | 89 |
+| M2 | the metric given the `>> 16` its siblings have | 3915 |
+| M3 | `\| (found & 3)` dropped from the return | 1377 |
+| M4 | the search tie-break `<` made `<=` | 3798 |
+
+**M1 fails exactly 89, which is exactly the inner-ring count.** That is the
+adjudication the whole gate rests on: the only mag coverage this function has
+is live, and its denominator is 89 rather than 1,466. M7 of the Viterbi batch
+reintroduced this same defect into `_16Tpt` and is a different check -- it
+proved the defect exists, this one proves our reproduction of it is measured.
+
+**NOTHING TESTS THE FIXED ARM, AND THE RECORD SAYS SO.** The differential tier
+is built with `-DDSPLIB_REPRODUCE_BUGS`, so `*mag = DECv32_MAG9600[(n >> 13) -
+1]` is compiled out of every binary that has a blob to compare against. What
+stands behind it instead is asserted in the same suite: that `DECv32_MAG9600`
+matches the blob's element for element, that its three entries are the
+constellation's three L2 magnitudes to within one count -- 4096*sqrt(2) =
+5792.6, sqrt(12288^2 + 4096^2) = 12952.99, 12288*sqrt(2) = 17377.9 -- and that
+`(|I| + |Q|) >> 13` less one lands in 0..2 for every one of the sixteen points
+while the object's `>> 1` gives 4095.
+
+### 3801. `FSE_decision_16pt`'s SQUARED-ERROR METRIC IS NOT SCALED, SO IT WRAPS -- AND EIGHT OF THE SIXTEEN POINTS CANNOT BE DECIDED AT ALL
+
+A second defect in the same function, independent of D302's, and it is the
+worse of the two. At 0x80f78..0x80f82 the object computes `imul`, `imul`,
+`add`, `cwtl` -- the two squared differences summed and truncated to sixteen
+bits, with **no shift anywhere between**. Every sibling scales both terms
+first: `_16Tpt` `>> 16` on each (0x80424 and 0x80427), `_4pt` 15 and 16,
+`_64pt` and `_128pt` 13 and 13. Reproduced as written; D451.
+
+**AT AN EXACT CONSTELLATION POINT ALL SIXTEEN CANDIDATES SCORE ZERO.** Both
+coordinates of every point are +-4096 or +-12288, so every difference between
+two of them is a multiple of 8192 and every squared difference a multiple of
+2^26 -- zero in the low sixteen bits. `min` starts at 0x7fff, point 0 takes it
+with 0, and `d < min` is false for the other fifteen. So a noiseless
+sixteen-point symbol is decided as point 0 whichever of the sixteen it is,
+which the suite drives and asserts: sixteen exact points, sixteen decisions of
+point 0.
+
+**AND ONLY EIGHT POINTS ARE REACHABLE OVER THE WHOLE PLANE.** Write `I[k] =
+4096*a`, `Q[k] = 4096*b` with a and b in {+-1, +-3}. Then
+
+    (i - I[k])^2 + (q - Q[k])^2  ==  i^2 + q^2 - 8192*(a*i + b*q)   (mod 2^16)
+
+because every `I[k]^2` and `Q[k]^2` is a multiple of 2^24. `8192 * x mod 2^16`
+depends only on `x mod 8`, so over the sixteen points the metric takes at most
+EIGHT distinct values, points sharing a value tie, and the strict `<` awards a
+tie to the lower index. Only the first index carrying each value can therefore
+win, and the union of those over all sixty-four residue pairs `(i mod 8, q mod
+8)` is exactly **{0, 1, 2, 3, 4, 5, 8, 10}**. This is a proof over the whole
+input domain and not a sampling result; the suite asserts both halves of it
+from the blob's own outputs, the eight seen and the eight not.
+
+**WHAT IT COSTS.** Point 3 is the only decidable point on the inner ring and
+points 6, 9 and 12 -- the other three inner points -- are unreachable, so the
+constellation the slicer can actually name is not the constellation the
+transmitter uses. The decision drives `*angle` into the carrier loop and the
+returned four bits into the data path, so this is not confined to the
+equaliser the way D302's `*mag` is. The two together are why the non-trellis
+9600 bit/s path cannot work, and neither alone is the whole story.
+
+**NOT FIXED, AND DELIBERATELY.** D302 has a right answer that four independent
+lines agree on. This has none: the shift the author meant is not recoverable
+from the object -- `_16Tpt` uses 16, `_4pt` 15 and 16, the others 13 -- and
+choosing one would be inventing a constant to make a defect look like an
+implementation. Reproduced as written and recorded here.
 
 ## 4300. `re/` REVIEWED AND DISPOSITIONED: 100 CLAIMS, AND EXACTLY ONE THING IN IT IS NOT HERE
 

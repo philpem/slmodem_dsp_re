@@ -5480,13 +5480,31 @@ How much of that transient it actually changes is measured rather than reasoned:
 
 **Renumbered twice: D298 -> D300 -> D302.** It was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the V.32 side moved to D300 at that merge. A later batch of V.22 work had meanwhile allocated D300 to `FPM_atan`, so it moved again. The V.22 entry stayed put both times because its own number is the product of a careful by-line renumber that its findings describe, and moving it would have falsified that account. Citations written before either merge may still say D298 or D300 -- it was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the collision surfaced at the merge and the V.32 side moved. Citations written before that merge may still say D298 -- `refcheck.py` cannot catch those, because they still resolve, just to the wrong entry.
 
-*Batch of 2026-08-12, from `FSE_decision_16pt` (blob 0x80e90, 490 bytes) +0x13b (`sar $1,%edi`) feeding +0x13d (`movzwl DECv32_MAG9600-0x2(%edi,%edi,1),%eax`). **Reachability: FIRES on every call.** Status: `measured` — the three reachable indices are 4095, 8191 and 12287 into a three-entry table. Fix class: none proposed.*
+*Batch of 2026-08-12, from `FSE_decision_16pt` (blob 0x80e90, 490 bytes) +0x13b (`sar $1,%edi`) feeding +0x13d (`movzwl DECv32_MAG9600-0x2(%edi,%edi,1),%eax`). **Reachability: FIRES on every call** — `FSEv32_decision` (`.data` 0x74cc) is three function pointers and `_16pt` is slot 1; `SetRxModeV32` installs it on one arm of its seven-way jump table (0x819d0). **Observability: `*mag`, and through it the equaliser's whole error term.** Status: CONFIRMED, and the shift that belongs there is established four ways. **Fix class: DELIBERATE FIX, behind `DSPLIB_REPRODUCE_BUGS`** — updated 2026-08-17, findings 3800 and 3801.*
+
+**Taxonomy: deliberate fix, with two rings that no setting can reproduce.** The entry is a *deliberate fix* under the register's own list: the original is wrong, the reconstruction corrects it, and `DSPLIB_REPRODUCE_BUGS` restores the object so bit-exactness stays provable. **The tension worth stating is the outer and mid rings.** `Added hardening`'s MECHANISM applies to them — "a differential test cannot compare against a fault" — but its PRECONDITION, "an input no caller produces", applies to neither: both rings are ordinary constellation points that any 9600 bit/s symbol reaches. That is exactly what makes this a live defect rather than a curiosity, and it is why the reproduce-bugs arm returns a stated value for them rather than a measured one.
 
 **Finding 1603.** `DECv32_MAG9600` has three entries and is indexed `[n - 1]` off `(short)(|I| + |Q|)` for the decided point, whose only three values are 8192, 16384 and 24576. `FSE_decision_16Tpt` divides that by 8192 first (`sar $0xd`) and lands on 0, 1 and 2. `_16pt` divides by 2 and lands on 4095, 8191 and 12287 — 8190, 16382 and 24574 bytes past a six-byte table. `.data` is 0x9594 bytes, so only the first of the three is even inside the section; `.data+0x94f6` holds 0 and the other two are past the end of it.
 
 The two functions are otherwise the same shape over the same table, which is what makes this a slip in `_16pt` rather than a misreading of either.
 
-It is the one thing in this batch that a differential test cannot decide, because what the function returns in `*mag` is a property of the LINK and not of the code: our build's bytes after the table are not the blob's and cannot be made to be. `FSE_decision_16pt` is therefore not reconstructed — the analysis is in finding 1603 and the function is left out rather than committed with a check steered around it.
+**WHAT THE OBJECT RETURNS**, measured in the linked daemon `slmodemd/slmodemd`, where `DECv32_MAG9600` is at 0x110878:
+
+| point | \|I\|+\|Q\| | index | lands in | value | correct |
+|---|--:|--:|---|--:|--:|
+| inner | 8192 | 4095 | `.data` | **0** | 5792 |
+| mid | 16384 | 8191 | `.bss` | **0** (zero at load) | 12953 |
+| outer | 24576 | 12287 | past the last section | fault / arbitrary | 17378 |
+
+**WHY 13 IS THE FIX, four independent lines.** (1) `>> 13` is the only shift that covers the table exactly: the three sums map to 1, 2, 3 and so to entries 0, 1, 2. (2) The table is right and complete — { 5792, 12953, 17378 } are the constellation's three L2 magnitudes to the unit (4096·√2 = 5792.6, √(12288² + 4096²) = 12952.99, 12288·√2 = 17377.9), so it is an L1 → L2 conversion. (3) `_16Tpt` computes the same quantity off the same two tables and shifts it `sar $0xd`. (4) `_4pt` and `_trn` hard-code `*mag = 0x3299` = 12953 = `DECv32_MAG9600[1]`, corroborating the table and its scaling from a third place.
+
+**THE IMPACT, and it is shared with D451.** `*mag` reaches `src/dsp/fpm_fse.c:385` as `err_i = ((ph.cos * mag) >> 14) - i_val` and its quadrature twin, and that error drives the LMS tap update — so a zero magnitude tells the equaliser the decided point is the ORIGIN and it adapts on the whole received vector instead of on the decision error. That is D302's half. **It is not the whole failure of this function**: D451 is a second, independent defect in the same slicer whose unscaled metric collapses the decision itself, so `*angle` and the returned bits are wrong too and the carrier loop and the data path are affected as well as the equaliser. Neither defect alone explains the non-trellis 9600 bit/s path; both are needed.
+
+**THE REPRODUCE-BUGS ARM IS A FLAT ZERO, and one third of that is measured.** Zero is what the daemon returns for the inner and mid rings. It is a stated CHOICE for the outer one, where there is nothing to reproduce. No out-of-range subscript is written at any setting: it would be undefined behaviour in a tree that has to stay 64-bit clean, and it would read OUR bytes rather than the object's.
+
+**AND ONLY THE INNER RING IS DIFFERENTIALLY COMPARABLE — narrower than the table above.** The differential tier links the blob as `dsplibs_ref.o`, so the reads are at `ref_DECv32_MAG9600 + 8190/16382/24574`, i.e. blob `.data+0x94f6`, `+0xb4f6` and `+0xd4f6`. Only the first is inside the blob's own section, 158 bytes short of its end, and only that byte travels with the blob into any link. The other two leave the section, which is 1603's argument bounded to two rings instead of three. `t_v32fse.c` compares `*mag` on the inner ring — 89 of 1,466 symbols — excludes the other two, asserts both exclusions non-zero, and POISONS the pages it has to provide so that widening the gate fails loudly rather than passing against an anonymous zero page. Finding 3800 has the measurement and the four mutations, of which M1 fails exactly 89 checks.
+
+**1603's verdict is superseded and its analysis is not.** Every number in it was re-derived and confirmed; what changed is the conclusion that the whole function had to stay out, when only one store did.
 
 ======================================================================
 
@@ -7180,3 +7198,45 @@ one from inside a batch with other work in flight, and phase 6 collects the 27
 punned sites into a batch of their own. This is the 28th and it is not
 provably wrong in the way those are -- both readings are correct about the
 bytes -- so it is a modelling duplication rather than a defect.
+
+## D451 🐛 `FSE_decision_16pt`'s squared-error metric is never scaled, so it wraps and eight of the sixteen points cannot be decided
+
+*Batch of 2026-08-17, from `FSE_decision_16pt` (blob 0x80e90) +0xe8..+0xf2 —
+`imul %edx,%edx; mov %ebp,%eax; imul %ebp,%eax; add %edx,%eax; cwtl`, with no
+shift between the products and the truncation. **Reachability: FIRES on every
+call**, on the same arm of `SetRxModeV32` that reaches D302. **Observability:
+the decided point, and so `*angle` into the carrier loop and the four
+differentially encoded bits into the data path — not only the equaliser's
+error term.** Status: CONFIRMED, and the reachable set is a proof over the
+whole input domain rather than a sample. Fix class: none proposed; reproduced
+as written. Finding 3801.*
+
+Every sibling scales both squared terms before summing them — `_16Tpt` `>> 16`
+on each, `_4pt` 15 and 16 (which is D301, its own defect), `_64pt` and
+`_128pt` 13 and 13. This one sums them raw and keeps the low sixteen bits, so
+the metric is `(short)(di² + dq²)` and wraps for any error above about 181
+counts per axis.
+
+**AT AN EXACT CONSTELLATION POINT EVERY CANDIDATE SCORES ZERO.** Both
+coordinates of all sixteen points are ±4096 or ±12288, so every difference is
+a multiple of 8192 and every squared difference a multiple of 2²⁶ — zero in
+the low sixteen bits. `min` starts at 0x7fff, point 0 takes it, and `d < min`
+is false for the other fifteen. A noiseless symbol is therefore decided as
+point 0 whichever of the sixteen it actually is.
+
+**AND ONLY EIGHT POINTS ARE DECIDABLE AT ALL.** With `I[k] = 4096a`, `Q[k] =
+4096b`, `(i - I[k])² + (q - Q[k])² ≡ i² + q² - 8192(ai + bq) (mod 2¹⁶)`, and
+`8192x mod 2¹⁶` depends only on `x mod 8` — so the metric takes at most eight
+distinct values over the sixteen points, ties go to the lower index, and only
+the first index carrying each value can win. Over all sixty-four residue pairs
+that union is exactly {0, 1, 2, 3, 4, 5, 8, 10}. Points 6, 9 and 12 are
+unreachable, which leaves point 3 as the only inner-ring point the slicer can
+name.
+
+**NOT FIXED, and that is the difference from D302.** D302 has a right answer
+four independent lines agree on. This has none: the shift the author meant is
+not recoverable from the object, since the family uses 16, 15/16 and 13 in
+different members, and picking one would be inventing a constant to make a
+defect look like an implementation. Reproduced exactly, and `t_v32fse.c`'s
+mutation M2 — the metric given `_16Tpt`'s `>> 16` — fails 3,915 checks, so the
+reproduction is measured rather than assumed.
