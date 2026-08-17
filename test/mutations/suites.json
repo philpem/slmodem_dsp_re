@@ -591,5 +591,9 @@
  "v32data": [
   "src/pump/v32/v32data.c",
   "build/test/t_v32data"
+ ],
+ "v90trn2design": [
+  "src/pump/v90/V90TRN2Designer.cpp",
+  "build/test/t_v90trn2design"
  ]
 }

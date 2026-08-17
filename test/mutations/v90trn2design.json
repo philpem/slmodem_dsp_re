@@ -1,0 +1,116 @@
+[
+ {
+  "label": "NOTE: what this set reaches, what it cannot, and the one mutation that is EQUIVALENT rather than uncaught",
+  "why": "V90TRN2Designer's four working members and t_v90trn2design.cpp were written from one reading of .text+0x3ca10-0x3da17. Every entry below is a claim the disassembly makes. THREE OF THEM NEEDED A BUILT INPUT RATHER THAN A SAMPLED ONE, and each is recorded in the test beside the case that reaches it: the 1e-6 guard in maxK only bites on an EXACT POWER OF TWO, so 2^21 and 2^22 are driven because they bracket the point where the guard runs out (finding 4400); `slot >= 0` differs from `slot > 0` only at zero, which only the descending arm can produce and only by breaking on its last placement, so that table is a step and not a ramp (finding 4404); and the 199-round cap only shows where a design succeeds later than a mutated cap and no later than the real one, which needed a sweep of the step height so the round count crosses the window -- it now catches 199 -> 198. WHAT NO ENTRY HERE CAN REACH: `V90TRN2Design`'s phase-K divide. Spelling it `x * (1.0f / y)` instead of `x / y` is a genuinely EQUIVALENT MUTANT, searched rather than assumed -- in 80-bit arithmetic there is no (N, level) with N <= 64 and level <= 32767, which is the whole of what a `short` table and this parameter can supply, where the two disagree after the `(short)` truncation. The codegen tier is what settles that site: `fdivp` against `fdivr`+`fmulp`, finding 4403. The SEED divide in the other arm is not equivalent and is caught."
+ },
+ {
+  "label": "setNofUcodesInTrn2 tests its argument as an int rather than a short",
+  "find": "\tif (on != 0)\n\t\tparams->nofUcodesInTrn2 = params->unnamed_080;",
+  "replace": "\tif (1)\n\t\tparams->nofUcodesInTrn2 = params->unnamed_080;"
+ },
+ {
+  "label": "setNofUcodesInTrn2 treats a negative short as off",
+  "find": "\tif (on != 0)\n\t\tparams->nofUcodesInTrn2",
+  "replace": "\tif (on > 0)\n\t\tparams->nofUcodesInTrn2"
+ },
+ {
+  "label": "the dummy fill starts at 77 rather than 78",
+  "find": "\t\tunsigned char value = 78;",
+  "replace": "\t\tunsigned char value = 77;"
+ },
+ {
+  "label": "the dummy fill runs one entry too far",
+  "find": "\t\tfor (i = 0; i < params->nofUcodesInTrn2; i++) {\n\t\t\tmappingParams->constellation[k][i] = value;",
+  "replace": "\t\tfor (i = 0; i <= params->nofUcodesInTrn2; i++) {\n\t\t\tmappingParams->constellation[k][i] = value;"
+ },
+ {
+  "label": "the dummy fill leaves the codec table alone",
+  "find": "\t\t\tmappingParams->codecConstellation[k][i] = value;\n\t\t\tvalue--;",
+  "replace": "\t\t\tvalue--;"
+ },
+ {
+  "label": "maxK drops the 1e-6 guard, which only an exact power of two can see",
+  "find": "\t\tk = (int)(unsigned int)(logProduct / logTwo + 1e-6f);",
+  "replace": "\t\tk = (int)(unsigned int)(logProduct / logTwo);"
+ },
+ {
+  "label": "maxK rounds to nearest instead of truncating towards zero",
+  "find": "logProduct / logTwo + 1e-6f);",
+  "replace": "logProduct / logTwo + 0.5f);"
+ },
+ {
+  "label": "maxK answers a zero product the other way round",
+  "find": "\tif (product != 0.0f) {",
+  "replace": "\tif (product == 0.0f) {"
+ },
+ {
+  "label": "maxK changes base to 10 rather than to 2",
+  "find": "\t\tfloat logTwo = (float)trn2_x87_log10((long double)2.0f);",
+  "replace": "\t\tfloat logTwo = (float)trn2_x87_log10((long double)10.0f);"
+ },
+ {
+  "label": "V90TRN2Design's dMin seed divides instead of multiplying by the reciprocal",
+  "find": "\t\t\td = (short)(ucode[k][top[k]]\n\t\t\t\t    * (1.0f\n\t\t\t\t       / (params->nofUcodesInTrn2 - 0.5f)));",
+  "replace": "\t\t\td = (short)(ucode[k][top[k]]\n\t\t\t\t    / (params->nofUcodesInTrn2 - 0.5f));"
+ },
+ {
+  "label": "the power ladder is indexed without the relocation's inline +4",
+  "find": "\t\tV90ConstellationPower::averagePowerLimits[maxTxIndex + 4]);",
+  "replace": "\t\tV90ConstellationPower::averagePowerLimits[maxTxIndex]);"
+ },
+ {
+  "label": "the ceiling takes the smaller of the two rather than the larger",
+  "find": "if (maxLevel < (unsigned char)params->maxUcode)",
+  "replace": "if (maxLevel > (unsigned char)params->maxUcode)"
+ },
+ {
+  "label": "the scan's lower bound excludes its own endpoint",
+  "find": "\t\t\t\t     i >= params->unnamed_360; i--) {",
+  "replace": "\t\t\t\t     i > params->unnamed_360; i--) {"
+ },
+ {
+  "label": "the scan ignores the permission table",
+  "find": "\t\t\t\t\t    && allow[k][i] != 0) {",
+  "replace": "\t\t\t\t\t    ) {"
+ },
+ {
+  "label": "the retry cap is 200 rounds rather than 199",
+  "find": "iter <= 199",
+  "replace": "iter <= 200"
+ },
+ {
+  "label": "the retry cap is 198 rounds rather than 199",
+  "find": "&& iter <= 199) {",
+  "replace": "&& iter <= 198) {"
+ },
+ {
+  "label": "a phase that placed nothing is treated as designed",
+  "find": "\t\tif (slot >= 0)\n\t\t\tgoto failed;",
+  "replace": "\t\tif (slot > 0)\n\t\t\tgoto failed;"
+ },
+ {
+  "label": "the two spectral shaper arms are exchanged",
+  "find": "\tif (cond == V90_SPECTRAL_GERMAN_PBX) {",
+  "replace": "\tif (cond != V90_SPECTRAL_GERMAN_PBX) {"
+ },
+ {
+  "label": "the frame's bit count loses its +6",
+  "find": "\t\t\t\t- mappingParams->shaperSR + 6;",
+  "replace": "\t\t\t\t- mappingParams->shaperSR;"
+ },
+ {
+  "label": "the codec fill never takes the ucode in place of the companded level",
+  "find": "\t\t\t\t    TRN2_COMPAND(ucode[k][u]) < u\n\t\t\t\t\t? TRN2_COMPAND(ucode[k][u])\n\t\t\t\t\t: mappingParams->constellation[k][i];",
+  "replace": "\t\t\t\t    TRN2_COMPAND(ucode[k][u]);"
+ },
+ {
+  "label": "the codec fill takes the same arm whichever way the two PcmTypes compare",
+  "find": "\t\t\tif (codecPcmType == pcmType)",
+  "replace": "\t\t\tif (codecPcmType != pcmType)"
+ },
+ {
+  "label": "the shaper identifier is not limited by the lookahead",
+  "find": "\tif (id > maxLookahead)\n\t\tid = maxLookahead;",
+  "replace": "\tif (0)\n\t\tid = maxLookahead;"
+ }
+]

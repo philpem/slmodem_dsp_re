@@ -63656,3 +63656,42 @@ two ucodes to place, a linear table, and a `topUcode` the walk reaches on the
 first placement, which is 11 because the threshold is `dMin / 2` and dMin is
 23.  `test/unit/t_v90trn2design.cpp` asserts the outcome is a FAILURE, which is
 what makes it a separator instead of another passing row.
+
+### 4405. `V90TRN2Design`'s PHASE-K DIVIDE IS AN EQUIVALENT MUTANT OVER THE WHOLE DRIVABLE DOMAIN, AND THAT IS SEARCHED RATHER THAN ASSUMED
+
+`test/mutations/v90trn2design.json` is 22 mutations and all 22 are caught by
+`t_v90trn2design`.  A twenty-third was written, run, and NOT included, and the
+reason is worth more than the entry would have been.
+
+Spelling the `dmin[k] == 0` arm's divide as a reciprocal-multiply --
+`0.85f * L * (1.0f / (N - 0.5f))` in place of `0.85f * L / (N - 0.5f)` --
+changes the instructions (finding 4403 measures that) and changes NOTHING
+observable.  Searched in 80-bit arithmetic over the entire domain the object
+can be given: every `N` from 1 to 64 against every `L` from 1 to 32767, which
+is the whole of what an `int` parameter and a `short` level table can supply,
+and the two spellings agree after the `(short)` truncation at every one of
+those 2,097,088 points.
+
+**That is the OPPOSITE of the seed divide in the other arm**, where the same
+search found separators immediately -- N = 21, level = 41 -- and the mutation
+is caught.  One expression family, two sites, and only one of them is
+reachable by a differential test.  So the phase-K site is settled by the
+codegen tier alone, and the honest record is that a mutation there would sit
+in the register for ever reading NOT CAUGHT while the source was right, which
+is finding 3403's failure mode with the sign reversed: a counter that cannot
+move is as useless as one that moves for the wrong reason.
+
+**THE THREE THAT NEEDED BUILT INPUTS.**  Three of the 22 survived a
+240-trial pseudorandom sweep and were only caught once the input was
+constructed for them, which is finding 3509's point stated positively:
+
+  - `maxK`'s 1e-6 guard, which bites only on an EXACT POWER OF TWO
+    (finding 4400);
+  - `slot >= 0` against `slot > 0`, which differ only at zero, reachable
+    only by the descending arm breaking on its last placement, and only on a
+    table with a STEP at `topUcode` rather than a ramp (finding 4404);
+  - the 199-round retry cap, which shows only where a design succeeds later
+    than the mutated cap and no later than the real one.  Sweeping the height
+    of that step makes the round count rise smoothly through the window, and
+    the suite now catches **199 -> 198**, an off-by-one in a constant that a
+    random sweep could not touch at all.
