@@ -7495,7 +7495,11 @@ array object in `V92Phase4Modulator.h`:
 
 `bitsExt[V92P4M_BITS_BELOW + i]` is the object's `bits[i]` and
 `bitsExt[V92P4M_BITS_BELOW - 1]` is its `bits[-1]`, so every index the fold can
-form is inside one array and the behaviour is defined. `compare.py` does not
+form is inside one array and the behaviour is defined. **The order is the
+source's in BOTH directions, measured rather than assumed**: unmutated, GCC
+3.4.2 emits the blob's order at all four sites; with the `generateTRN2u` order
+mutation in `src/`, it emits the mutation's, and `make period` goes 221 passed
+/ 1 failed against 222 / 0. `compare.py` does not
 move -- 410 identical (the same SET), 78 same size, 606 different size, 401355
 bytes, before and after, on GCC 3.4.2 exact -- because a constant bias on an
 index into a member array rides in the addressing mode. Finding 3701's

@@ -66325,6 +66325,31 @@ reorder them; one union member says they may overlap, and the order goes back
 to the source's.  Our source order was already the object's, so nothing in
 `src/` moved but the spelling.
 
+**AND THE PIN WAS MEASURED IN BOTH DIRECTIONS, WHICH THE ABOVE ON ITS OWN DOES
+NOT SHOW.**  Our source order is the blob's, so "3.4.2 emits the blob's order"
+is equally consistent with the union pinning nothing and the compiler
+scheduling byte-first regardless.  With the `generateTRN2u` order mutation
+applied to `src/` and the period toolchain run over it, the same site comes out
+
+```
+     fb3:  88 4c 3e 7b     mov    %cl,0x7b(%esi,%edi,1)   MUTATED source
+     fb7:  89 4f 78        mov    %ecx,0x78(%edi)
+```
+
+-- the byte store now AHEAD of the word store, following the source rather than
+a schedule.  The order is the source's in both directions, which is what makes
+a store-order mutation a claim again.
+
+**`whichfield.py` CANNOT NAME THESE OFFSETS, AND THAT IS NOT THE UNION'S
+DOING.**  `whichfield.py V92Phase4Modulator 0x7b` answers `past the end
+(V92Phase4Modulator is 0 bytes)`, and so does every offset of `V92CP` and
+`V92Phase3Modulator`, which have no unions at all -- the tool resolves C
+structs out of DWARF (`struct v34_receiver 680` still works) and finds no data
+members for these C++ classes.  Pre-existing and general; recorded because an
+anonymous union is a plausible suspect and is not the cause.  `cppstruct.py` is
+unaffected: it works from mangled member-function names and reports no data
+members by design.
+
 **`compare.py` DOES NOT MOVE, AND THAT IS FINDING 3701 AGAIN.**  Measured on
 GCC 3.4.2 exact at the period flags, before and after, from this branch's own
 runs and not from `ratchet.json`:
@@ -66361,8 +66386,12 @@ comes from its writers.
 **THERE IS EXACTLY ONE WRITER AMONG THE CLASS'S OWN THIRTY-SIX SYMBOLS** --
 scanned over .text 0x16de0 .. 0x19160, which is every `V92Phase4Modulator`
 member, and the claim is scoped to that range rather than to 1.2 MB.  Twenty-
-six instructions touch +0x43 and twenty-five are `movzbl`.  The one store is in
-`reset`:
+six instructions touch +0x43 and twenty-five are `movzbl`.  **The scan was
+widened to catch a MERGED store**, because a `movl` or `movw` at +0x40 would
+write `amplitude`, `byte_42` and `bitsPerSymbol` together and a `0x43(` grep
+cannot see it: the only stores anywhere in the range that land in +0x40 .. +0x43
+are `mov %bx,0x40(%esi)`, `mov %dl,0x42(%esi)` and `mov %dl,0x43(%esi)`, all
+three in `reset` and none of them merged.  The one store is:
 
 ```
    19043:  8b 54 24 28     mov    0x28(%esp),%edx      the 2nd argument
@@ -66415,6 +66444,14 @@ CAUGHT by the very checks that used to fail on unmutated source:
 
 -- the same two numbers, now measuring the mutation instead of the compiler.
 The suite is 134 mutations, 134 caught, 0 NOT caught, 0 unusable, 0 equivalent.
+
+**THOSE VERDICTS ARE THE MODERN BUILD'S, BECAUSE `mutate.py` BUILDS WITH g++,
+AND THE MODERN BUILD IS THE ONE THAT WAS ALREADY GREEN IN 4705.**  So the
+period compiler was asked directly: with the `generateTRN2u` order mutation in
+`src/`, `make period` goes **221 passed, 1 failed** and the failure is
+`t_v92p4sym`; without it, 222 passed, 0 failed.  The trial separates under the
+compiler that used to adjudicate it, which is the whole of what 4705 said could
+not be had.
 
 **THE ANTI-VACUITY COUNTER IS ON THE CONJUNCTION AND NOT ON THE AXIS**, which
 is finding 4756's shape avoided rather than repeated: `generateCPu`,
