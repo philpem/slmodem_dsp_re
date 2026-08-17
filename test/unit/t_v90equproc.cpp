@@ -744,8 +744,17 @@ static unsigned char mapp1_s[sizeof(V90MappingParams) + 64]
 	__attribute__((aligned(8)));
 static unsigned char mapp2_s[sizeof(V90MappingParams) + 64]
 	__attribute__((aligned(8)));
-static unsigned char adi_s[sizeof(V90AutoDigitalImpDetector)]
+/*
+ * SPLIT, AND `t_v90p4ddec` SHARES IT.  The difference is that this file drives
+ * `V90Demapper::linearMappingStudy` -- \`process\`'s state 3 arm calls it
+ * directly -- and that member ACCUMULATES into the detector at +0x1000 and
+ * +0x1c00.  A shared block would let our run's accumulation stand under the
+ * reference run, so the two sides would not see the same starting state and
+ * neither the arena replay nor any comparison would say so.
+ */
+static unsigned char adi_s[2][sizeof(V90AutoDigitalImpDetector)]
 	__attribute__((aligned(8)));
+static unsigned char adi_seed[sizeof(V90AutoDigitalImpDetector)];
 static unsigned char sv_s[sizeof(V90SpectralVerifier) + 64]
 	__attribute__((aligned(8)));
 static unsigned char pf_s[sizeof(V90PreFilter) + 64]
@@ -758,7 +767,7 @@ static unsigned char pf_s[sizeof(V90PreFilter) + 64]
 #define DSC(s)		(*(V90Descrambler *)dsc_s[s])
 #define MAPP1		((V90MappingParams *)mapp1_s)
 #define MAPP2		((V90MappingParams *)mapp2_s)
-#define ADI		((V90AutoDigitalImpDetector *)adi_s)
+#define ADI(s)		((V90AutoDigitalImpDetector *)adi_s[s])
 #define SPECVER		((V90SpectralVerifier *)sv_s)
 #define PREFILT		((V90PreFilter *)pf_s)
 
@@ -784,7 +793,9 @@ fill_bytes(unsigned char *p, unsigned n, unsigned lfsr)
 static const unsigned p4d_skip[] = {
 	0x14u, 0x18u, 0x3054u, 0x3058u, 0x34f8u, ~0u
 };
-static const unsigned dem_skip[] = { 0x1cu, 0x20u, 0x684u, ~0u };
+static const unsigned dem_skip[] = {
+	0x1cu, 0x20u, 0x684u, 0x1ea0u, ~0u
+};
 
 static void
 scrub(unsigned char *dst, const unsigned char *src, unsigned n,
@@ -944,7 +955,8 @@ p4_setup(long tag, int dly)
 
 	fill_bytes(mapp1_s, (unsigned)sizeof mapp1_s, lf ^ 0x8ac1u);
 	fill_bytes(mapp2_s, (unsigned)sizeof mapp2_s, lf ^ 0x1f77u);
-	fill_bytes(adi_s, (unsigned)sizeof adi_s, lf ^ 0x6d05u);
+	fill_bytes(adi_s[0], (unsigned)sizeof adi_s[0], lf ^ 0x6d05u);
+	memcpy(adi_s[1], adi_s[0], sizeof adi_s[0]);
 	fill_bytes(sv_s, (unsigned)sizeof sv_s, lf ^ 0x3b21u);
 	fill_bytes(pf_s, (unsigned)sizeof pf_s, lf ^ 0x55a3u);
 
@@ -970,14 +982,19 @@ p4_setup(long tag, int dly)
 		}
 	}
 	for (k = 0; k < V90ADID_PHASES; k++) {
-		int j;
+		int j, t;
 
-		ADI->short_2800[k] = (short)(k & 1);
-		for (j = 0; j < V90ADID_CODES; j++) {
-			ADI->linMapp[k][j] = (short)(4000 - 20 * j);
-			ADI->linMappAlt[k][j] = (short)(3990 - 20 * j);
+		for (t = 0; t < 2; t++) {
+			ADI(t)->short_2800[k] = (short)(k & 1);
+			for (j = 0; j < V90ADID_CODES; j++) {
+				ADI(t)->linMapp[k][j] =
+				    (short)(4000 - 20 * j);
+				ADI(t)->linMappAlt[k][j] =
+				    (short)(3990 - 20 * j);
+			}
 		}
 	}
+	memcpy(adi_seed, adi_s[0], sizeof adi_seed);
 
 	/*
 	 * `isV90WithEia6` reads the loop table only when `refLoop` is not
@@ -1023,7 +1040,7 @@ p4_setup(long tag, int dly)
 		d->mp = &MPR(s);
 
 		m->params = ARENA_PARAMS;
-		m->adiDetector = ADI;
+		m->adiDetector = ADI(s);
 		m->codes = code_s[s];
 		m->signs = sign_s[s];
 		m->sampleCapacity = NSAMPLE;
@@ -1058,6 +1075,18 @@ p4_setup(long tag, int dly)
 		m->signBits.decoder.size_ = 0u;
 		m->signBits.oddDecoder.prev_ = 0;
 		m->signDecoder.prev_ = 0;
+		/*
+		 * THE STUDY'S UNCONDITIONAL SIDE EFFECT.  Its accumulation
+		 * into the impairment detector is GATED on
+		 * `|diff| < 0.4 * (high - low)`, which this fixture's
+		 * constellation spacing puts out of reach, so "the detector
+		 * moved" is a counter that cannot fire.  The progress counter
+		 * at +0x1eb0 is incremented on every call that does not
+		 * complete a run, and `uint_1ea8` is planted far away so that
+		 * is every call.
+		 */
+		m->uint_1eb0 = 0u;
+		m->uint_1ea8 = 0x1000u;
 		m->errorHistogramCount = 0u;
 		m->histogramDelay = 0;
 		m->histogramIntegration = 0;
@@ -1137,6 +1166,8 @@ p4_compare(long tag)
 	diff_eq_int("the CP record's buffers (%ld)",
 		    memcmp(cpbuf_s[0], cpbuf_s[1], sizeof cpbuf_s[0]) == 0, 1,
 		    tag);
+	diff_eq_int("the impairment detector (%ld)",
+		    memcmp(adi_s[0], adi_s[1], sizeof adi_s[0]) == 0, 1, tag);
 	diff_eq_int("the MP record (%ld)",
 		    memcmp(mp_s[0], mp_s[1], MP_SLOT) == 0, 1, tag);
 	diff_eq_int("the descrambler's buffer (%ld)",
@@ -1202,6 +1233,21 @@ p4_equ_plant(long tag, unsigned int le, unsigned int dfe, int mmx)
 	OURS.stateCount = THEIRS.stateCount = 0x3c3c;
 	OURS.linearEquBeta = THEIRS.linearEquBeta = 0.0f;
 	OURS.dfeBeta = THEIRS.dfeBeta = 0.0f;
+	/*
+	 * THE TWO CONVERSION FACTORS ARE FLOATS AND THEY MUST BE PLANTED.
+	 * `restoreEqualizerToFloat` rebuilds every float coefficient as
+	 * `(1.0f / linearEquMmxConversionFactor) * <32-bit accumulator>`, so a
+	 * pseudorandom word there is a reciprocal of an arbitrary magnitude
+	 * and the product's rounding then depends on whether the compiler kept
+	 * the intermediate at 80 bits.  Measured: with these left to the fill,
+	 * one DATA trial of 48 disagreed with the blob on GCC 13 in
+	 * `linearEquCoefs[0..3]` and `word_94`, and the SAME trial was green on
+	 * the period compiler -- a fixture defect wearing finding 6203's
+	 * clothes.  A power of two makes the reciprocal exact.
+	 */
+	OURS.linearEquMmxConversionFactor =
+	    THEIRS.linearEquMmxConversionFactor = 1024.0f;
+	OURS.dfeMmxConversionFactor = THEIRS.dfeMmxConversionFactor = 512.0f;
 	OURS.linearEquMmxOutputConversionFactor =
 	    THEIRS.linearEquMmxOutputConversionFactor = 1024;
 	OURS.dfeMmxOutputConversionFactor =
@@ -1608,6 +1654,313 @@ run_p4_arms(void)
 	return diff_end();
 }
 
+/* ======================================================= the DATA state arm */
+
+/*
+ * State 3, and the two re-convert blocks that run the INVERSE direction.
+ *
+ * This arm is the only one that leaves the fixed-point representation: the
+ * demapper hard-decides, `detectRRN` and `detectFPE` are offered the decision,
+ * and each of `enterRRN` and `enterFPE` returns non-zero only when `mmxMode`
+ * was set -- so RECONVERT-D and RECONVERT-E can ONLY be driven from a
+ * fixed-point trial, and the mode is 0 for the rest of the call afterwards.
+ * That makes each of those trials drive the fixed-point head, the inverse
+ * conversion, the stepped `in` pointer AND the float head on the symbols after
+ * it, in one call.
+ *
+ * THE TWO DETECTORS ARE ARMED EXCLUSIVELY and that is forced by the object:
+ * `detectRRN` runs first and clears `mmxMode` through `enterRRN`, after which
+ * `enterFPE` sees a float equaliser and returns 0.  So a trial with both armed
+ * drives RECONVERT-D and can never reach RECONVERT-E.
+ */
+static int
+run_data_arm(void)
+{
+	static const unsigned int n_v[] = { 4u, 7u };
+	long tag = 5730000;
+	int which, mmx, ni, dly, study;
+	int saw_rrn = 0, saw_fpe = 0, saw_none = 0, saw_study = 0;
+	int saw_float_after = 0, saw_outfloat = 0, saw_b4step = 0;
+	int sep_sym = 0;
+	long prev_sym = -1;
+
+	diff_begin("V90Equalizer::process, the DATA state arm");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (which = 0; which < 3; which++)
+	    for (mmx = 0; mmx < 2; mmx++)
+		for (ni = 0; ni < 2; ni++)
+		    for (dly = 0; dly < 2; dly++)
+			for (study = 0; study < 2; study++) {
+				unsigned int le = (which & 1) ? 8u : 4u;
+				unsigned int dfe = 4u;
+				unsigned int n = n_v[ni];
+				unsigned int no_a = 0, no_b = 0;
+				unsigned int k;
+				int held;
+
+				tag++;
+				held = (int)(tag & 1);
+				/*
+				 * THE FPE ROWS FIRE ON THE LAST SYMBOL AND
+				 * THEY HAVE TO.  `detectFPE` leaves the
+				 * demodulator in state 0x10, and V.90's
+				 * `getV90Decision` is one of the two arms that
+				 * NEVER WRITES the answer there -- D600, and
+				 * `t_v90p4ddec` asserts no return value on it
+				 * for the same reason.  So a symbol after the
+				 * detection reads the caller's register and
+				 * the two sides differ for a reason belonging
+								 * to the object.  Measured: with `n` left
+				 * at 7 and the detection at symbol 1, trial
+				 * 5730033's `outSym[3]` came back 0x56 against
+				 * the blob's 0x00.
+				 *
+				 * THE RRN ROWS TAKE THE SAME RULE FOR A
+				 * DIFFERENT REASON.  After RECONVERT-D the
+				 * equaliser is back in FLOAT mode with
+				 * coefficients rebuilt from the fixed-point
+				 * pair, and a symbol demodulated after that
+				 * runs the whole float tail on values three
+				 * orders of magnitude larger than this
+				 * fixture's own -- which is finding 6203's
+				 * subtraction, in the one group that is
+				 * otherwise clear of it.  Measured: three
+				 * trials of 48 disagreed on `word_78` and
+				 * `word_7c` on GCC 13 and were green on the
+				 * period compiler.  Firing on the LAST symbol
+				 * drives the whole inverse block, its `b8`
+				 * loop and its `in` step, and stops before the
+				 * arithmetic this binary already declares.
+				 */
+				if (which != 0) {
+					n = 2u * (unsigned)(dly + 1);
+					held = 0;
+				}
+				seed(tag);
+				fill_arena(tag);
+				seed_ce_pair(tag);
+				wire(&OURS);
+				wire(&THEIRS);
+				p4_setup(tag, dly);
+				plant_params();
+				p4_equ_plant(tag, le, dfe, mmx);
+				OURS.word_68 = THEIRS.word_68 =
+				    (unsigned)(mmx ? held : 0);
+
+				OURS.state = THEIRS.state = V90EQU_STATE_DATA;
+				OURS.quickConnect = THEIRS.quickConnect = 0;
+				ARENA_PARAMS->LOOP_TYPE = (which & 1) ? 6 : 2;
+				/*
+				 * NOT 2, AND THIS GROUP CANNOT AFFORD IT.
+				 * `enterRRN`/`enterFPE` call
+				 * `setDfeBeta(GERMAN_PBX_DFE_TRN2D_FAST_BETA)`
+				 * on that arm, and with `mmxMode` still set
+				 * the setter recomputes the fixed-point step
+				 * size through a logarithm -- which is
+				 * `t_v90equ`'s DECLARED divergence
+				 * (gccdiverge.json, "enterRRN / enterFPE"),
+				 * not this binary's.  Measured: with word_28
+				 * at 2 the group failed 38 of 1209 on GCC 13,
+				 * in `word_94` and the restored linear
+				 * coefficients.  The EIA-6 arm is still
+				 * driven, because both its setters are handed
+				 * 0.0f against a step size already 0.0f, which
+				 * is ordered on both compilers.
+				 */
+				SPECVER->word_28 = 1u;
+
+				for (k = 0; k < 2; k++) {
+					V90Phase4Demodulator *d = &P4D((int)k);
+
+					d->state = P4D_STATE_TRN2D_DD;
+					d->sessionFlag = 0u;
+					d->countInState = 0x10u;
+					d->trn2dDDLength = 0x40;
+					d->linearMappStudyStart = 0x7d0;
+					d->b1dBits = 0x60u;
+					d->b1dZeros = 7u;
+					d->nbits = 0u;
+					d->int_0028 = 0;
+					d->uchar_0030 = 1;
+					d->int_0038 = 1;
+					d->int_003c = 1;
+					d->int_0040 = 1;
+					d->int_0044 = 1;
+					d->int_0048 = 0;
+					d->uint_0034 = 0u;
+					d->uint_004c = 0u;
+					arm_r(&d->rDetector1,
+					      which == 1 ? 1 + dly : 0, 0x60);
+					arm_rf(&d->rDetector2,
+					       which == 2 ? 1 + dly : 0, 0x60);
+					DEM((int)k).linearMappStudyEnabled =
+					    (short)study;
+				}
+
+				for (k = 0; k < NIN; k++) {
+					float v = 6.0f
+					    * (float)(((k + (unsigned)tag) % 5u)
+						      + 1u);
+
+					in_[0][k] = in_[1][k] = v;
+					outsym_[0][k] = outsym_[1][k] =
+					    (short)(0x1234 + k);
+					outflt_[0][k] = outflt_[1][k] =
+					    -1.5f * (float)k;
+				}
+
+				arena_snapshot();
+				dsplib_debug_capture_reset();
+				OURS.process(in_[0], n, outsym_[0], outflt_[0],
+					     no_a);
+				arena_switch();
+				ref_equ_process(&THEIRS, in_[1], n, outsym_[1],
+						outflt_[1], &no_b);
+
+				diff_eq_int("nOut (%ld)", (long)no_a,
+					    (long)no_b, tag);
+				diff_eq_obj_(__FILE__, __LINE__, "outSym",
+					     "short[NIN]", outsym_[0],
+					     outsym_[1], sizeof(outsym_[0]),
+					     tag);
+				diff_eq_obj_(__FILE__, __LINE__, "outFloat",
+					     "float[NIN]", outflt_[0],
+					     outflt_[1], sizeof(outflt_[0]),
+					     tag);
+				diff_eq_int("in is not written (%ld)",
+					    memcmp(in_[0], in_[1],
+						   sizeof(in_[0])) == 0, 1,
+					    tag);
+				diff_eq_int("the split peers are not written "
+					    "(%ld)",
+					    (long)(OURS.connEval
+					     == (V90ConnectionEvaluator *)ce_[0]
+					     && THEIRS.phase4Demod
+					     == (V90Phase4Demodulator *)p4d_s[1]
+					     && OURS.demapper
+					     == (V90Demapper *)dem_s[0]), 1,
+					    tag);
+				OURS.connEval = THEIRS.connEval =
+				    (V90ConnectionEvaluator *)ce_[0];
+				OURS.phase4Demod = THEIRS.phase4Demod =
+				    (V90Phase4Demodulator *)p4d_s[0];
+				OURS.demapper = THEIRS.demapper =
+				    (V90Demapper *)dem_s[0];
+
+				diff_eq_obj("after process", V90Equalizer,
+					    &OURS, &THEIRS, tag);
+				arena_compare("the arena after process", tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "the connection evaluator",
+					     "V90ConnectionEvaluator", ce_[0],
+					     ce_[1],
+					     sizeof(V90ConnectionEvaluator),
+					     tag);
+				p4_compare(tag);
+				diff_eq_int("no store past the object (%ld)",
+					    guard_equal(), 1, tag);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+
+				/*
+				 * THE OBSERVABLE FOR AN INVERSE RE-CONVERT is
+				 * the equaliser state the demodulator's
+				 * detector drove it into, plus `mmxMode`
+				 * FALLING -- and neither is something the
+				 * fixture plants.  Both are read off the
+				 * reference after the call.
+				 */
+				if (THEIRS.state == V90EQU_STATE_RRN) {
+					saw_rrn = 1;
+					if (mmx && !THEIRS.mmxMode)
+						saw_float_after = 1;
+				} else if (THEIRS.state == V90EQU_STATE_FPE) {
+					saw_fpe = 1;
+					if (mmx && !THEIRS.mmxMode)
+						saw_float_after = 1;
+				} else if (THEIRS.state == V90EQU_STATE_DATA) {
+					saw_none = 1;
+				}
+				/*
+				 * THE STUDY'S OWN OBSERVABLE.  It accumulates
+				 * into the impairment detector at +0x1000 and
+				 * counts at +0x1c00, and NOTHING else in this
+				 * arm writes that object -- so the reference
+				 * detector having moved off the seed is the
+				 * study having run, read off the blob's side
+				 * and not off the flag the fixture planted.
+				 */
+				if (((V90Demapper *)dem_s[1])->uint_1eb0 != 0u)
+					saw_study = 1;
+				/*
+				 * `outFloat[0]` came back as a converted
+				 * `block_b8` word, which only the inverse
+				 * block writes -- so a value equal to the
+				 * short it was planted from, where the fixture
+				 * planted a negative multiple of 1.5, is the
+				 * conversion having happened.
+				 */
+				if (no_b > 1
+				    && outflt_[1][0] != -0.0f
+				    && outflt_[1][0]
+				       == (float)(short)outflt_[1][0])
+					saw_outfloat = 1;
+				if (memcmp(arena.b4, arena_save.b4,
+					   sizeof(arena.b4)) != 0)
+					saw_b4step = 1;
+
+				/*
+				 * SEPARATION OVER THE WHOLE REFERENCE OUTPUT,
+				 * and the two counters this replaces both read
+				 * zero.  `outSym[0]` alone is a constellation
+				 * level and repeats across neighbouring
+				 * trials; the equaliser state takes three
+				 * values in three blocks and changes twice in
+				 * forty-eight.  Neither could ever reach its
+				 * threshold, which is finding 3509's shape --
+				 * so the observable is the sum of every symbol,
+				 * every float and the count, all off the
+				 * reference.
+				 */
+				{
+					long h = (long)no_b;
+					unsigned int q;
+
+					for (q = 0; q < NIN; q++)
+						h = h * 31
+						    + (long)outsym_[1][q]
+						    + (long)(int)outflt_[1][q];
+					if (prev_sym >= 0 && h != prev_sym)
+						sep_sym++;
+					prev_sym = h;
+				}
+			}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the RRN detector took the equaliser out of DATA",
+		    saw_rrn, 1, 0);
+	diff_eq_int("the FPE detector took the equaliser out of DATA",
+		    saw_fpe, 1, 0);
+	diff_eq_int("a trial stayed in DATA", saw_none, 1, 0);
+	diff_eq_int("the mapping study ran", saw_study, 1, 0);
+	diff_eq_int("the fixed-point mode fell inside a call",
+		    saw_float_after, 1, 0);
+	diff_eq_int("an inverse re-convert refilled outFloat", saw_outfloat, 1,
+		    0);
+	diff_eq_int("block_b4 was written", saw_b4step, 1, 0);
+	diff_eq_int("the reference output separated trials",
+		    sep_sym > 24 ? 1 : 0, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1616,6 +1969,8 @@ main(void)
 	if (run_reset_arm())
 		rc = 1;
 	if (run_p4_arms())
+		rc = 1;
+	if (run_data_arm())
 		rc = 1;
 	return rc;
 }
