@@ -1,5 +1,25 @@
 /*
- * t_v90p34.cpp -- differential test of `v90Phase34`.
+ * t_v90p34.cpp -- differential test of `v90Phase34`, `v90RateReneg` and
+ * `v90RateRenegSilence`.
+ *
+ * THREE FUNCTIONS, ONE FIXTURE, AND THAT IS THE POINT.  The two
+ * rate-renegotiation transmitters are `v90Phase34`'s own ladder with the Ja
+ * and arming arms trimmed and the state numbers moved up: they read and write
+ * exactly the same fields of exactly the same object, through the same two
+ * emitters, the same `VPcmFloModem` bit source and the same `initdigital`
+ * tail.  A second copy of the 250-line fixture below would be 250 lines that
+ * have to be kept in step with this one, and `t_v34k56.c` is the cautionary
+ * example of what a divergent twin fixture costs.  So `setup()`, `compare()`
+ * and the pointer bookkeeping are shared, and only the driving and the
+ * per-state accounting are per function.
+ *
+ * ONE THING THE SHARED FIXTURE HAD TO CHANGE FOR THEM.  `pac3c` used to be
+ * ONE buffer for both sides, because `v90Phase34` only reads through it.
+ * `v90RateRenegSilence` state 18 WRITES through it -- it clears bit 2 of
+ * `pac3c[3]` -- and the write is idempotent, so a shared buffer would compare
+ * equal even if only one side ever performed it.  Each side now owns a copy,
+ * `+0xac3c` is in the blanked-pointer list, and the two buffers are compared
+ * whole.  That is strictly stronger for `v90Phase34` too.
  *
  * One entry point and eleven arms, and -- unlike its K56flex twin -- EVERY
  * ONE OF THEM CAN BE ENTERED.  `t_v34k56.c`'s two completion arms are dead
@@ -59,6 +79,8 @@ extern "C" {
 extern unsigned int ref_dsplibs_debug_level;
 
 int ref_v90Phase34(void *obj);
+int ref_v90RateReneg(void *obj);
+int ref_v90RateRenegSilence(void *obj);
 void ref_txinit(void *obj);
 void ref_V34InitializeImplementationSpecific(void *obj);
 void ref_V34SetupModulator(void *m, short baud, short carrier,
@@ -101,9 +123,13 @@ extern const int ref_vect16[16];
  * one cannot.
  *
  * NOT IN THE LIST, deliberately: +0x20cc is `prefilter.coeff`, pointed at one
- * const table for both sides, and +0xac3c is the shared configuration buffer.
- * Blanking a slot the two sides agree on would hide a real difference there
- * rather than tolerate an unavoidable one.
+ * const table for both sides.  Blanking a slot the two sides agree on would
+ * hide a real difference there rather than tolerate an unavoidable one.
+ *
+ * +0xac3c IS in the list and used not to be.  See the head of the file: the
+ * configuration buffer is now one per side, because `v90RateRenegSilence`
+ * writes through it and the write is idempotent.  The two buffers are
+ * compared in `compare()`; only the ADDRESS is blanked here.
  */
 static const struct { unsigned lo, hi; } PTR[] = {
 	{ 0x0268, 0x0270 },
@@ -132,7 +158,8 @@ static const struct { unsigned lo, hi; } PTR[] = {
 	{ 0x0a24, 0x0a28 },
 	{ 0x2604, 0x2608 },
 	{ 0x2608, 0x260c },
-	{ 0xaa6c, 0xaa70 }
+	{ 0xaa6c, 0xaa70 },
+	{ 0xac3c, 0xac40 }
 };
 #define NPTR	((int)(sizeof(PTR) / sizeof(PTR[0])))
 
@@ -146,7 +173,7 @@ static short bra[RING_N], brb[RING_N];
 static unsigned char vp[2][VPCM_SLOT] __attribute__((aligned(8)));
 static unsigned char dem[2][DEM_SLOT] __attribute__((aligned(8)));
 static unsigned char seen[2][SEEN_SLOT] __attribute__((aligned(8)));
-static unsigned char cfgbuf[CFG_SLOT] __attribute__((aligned(8)));
+static unsigned char cfgbuf[2][CFG_SLOT] __attribute__((aligned(8)));
 static unsigned char pcmbuf[PCM_SLOT] __attribute__((aligned(8)));
 
 /*
@@ -163,6 +190,12 @@ static unsigned char pcmbuf[PCM_SLOT] __attribute__((aligned(8)));
  */
 static short divstore[64], rxdivstore[64];
 
+/*
+ * Which function the current sweep is driving.  Only the labels change; the
+ * comparison is the same object either way.
+ */
+static const char *who = "v90Phase34";
+
 /* Per-block "this really ran" counters; every one of them must fire. */
 static long n_ja, n_ja_tail, n_ja_clear, n_ja_noclear;
 static long n_arm_low, n_arm_high;
@@ -171,6 +204,18 @@ static long n_s4, n_s4_adv, n_s7, n_s7_adv;
 static long n_s5_16, n_s5_4, n_s5_zero;
 static long n_s8, n_s8_adv, n_s9_16, n_s9_4, n_s10, n_s10_adv;
 static long n_noarm, n_dbg_lines;
+
+/*
+ * The rate-renegotiation ladders' own counters.  `r11`..`r14` are
+ * `v90RateReneg`'s four states and `s15`..`s20` are the silence one's six;
+ * `_adv` counts the calls that moved the state on, which for four of the ten
+ * is a different call from the one that entered the state.
+ */
+static long n_r11, n_r11_adv, n_r12, n_r12_adv, n_r13, n_r14, n_r14_adv;
+static long n_rnone;
+static long n_s15, n_s15_adv, n_s16, n_s16_adv, n_s17, n_s18, n_s18_adv;
+static long n_s19_16, n_s19_4, n_s20, n_s20_adv, n_snone;
+static long n_s18_dbg, n_s18_sas, n_s20_freeze;
 
 static long tag;
 
@@ -288,9 +333,10 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 	memcpy(dem[1], dem[0], DEM_SLOT);
 	fill_varied(seen[0], SEEN_SLOT, seed ^ 0x1e1eu);
 	memcpy(seen[1], seen[0], SEEN_SLOT);
-	fill_varied(cfgbuf, sizeof(cfgbuf), seed ^ 0x0f0fu);
-	cfgbuf[0x50] = (unsigned char)((cfgbuf[0x50] & ~0x04) |
-				       (backclear ? 0x04 : 0));
+	fill_varied(cfgbuf[0], CFG_SLOT, seed ^ 0x0f0fu);
+	cfgbuf[0][0x50] = (unsigned char)((cfgbuf[0][0x50] & ~0x04) |
+					  (backclear ? 0x04 : 0));
+	memcpy(cfgbuf[1], cfgbuf[0], CFG_SLOT);
 
 	fill_varied(pcmbuf, sizeof(pcmbuf), seed ^ 0x2718u);
 
@@ -388,7 +434,7 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 	oa.f25c2 = ob.f25c2 = f25c2;
 
 	oa.p3548 = vp[0];    ob.p3548 = vp[1];
-	oa.pac3c = ob.pac3c = cfgbuf;
+	oa.pac3c = cfgbuf[0]; ob.pac3c = cfgbuf[1];
 	oa.pac18 = ob.pac18 = 0;
 
 	oa.v90_receiver = ob.v90_receiver = state;
@@ -444,7 +490,7 @@ compare(long t)
 	memcpy(&cb, &ob, sizeof(cb));
 	blank_pointers(&ca);
 	blank_pointers(&cb);
-	diff_eq_obj("v90Phase34", struct v34_object, &ca, &cb, t);
+	diff_eq_obj(who, struct v34_object, &ca, &cb, t);
 	diff_eq_int("shaped %ld", first_diff_short(shp_a, shp_b, SHAPED_N),
 		    -1, t);
 	diff_eq_int("bulk ring %ld", first_diff_short(bra, brb, RING_N),
@@ -452,14 +498,20 @@ compare(long t)
 
 	snap_vp(sa, 0);
 	snap_vp(sb, 1);
-	diff_eq_obj_(__FILE__, __LINE__, "v90Phase34", "VPcmFloModem block",
+	diff_eq_obj_(__FILE__, __LINE__, who, "VPcmFloModem block",
 		     sa, sb, VPCM_SLOT, t);
 	snap_dem(sa, 0);
 	snap_dem(sb, 1);
-	diff_eq_obj_(__FILE__, __LINE__, "v90Phase34", "V90Demodulator block",
+	diff_eq_obj_(__FILE__, __LINE__, who, "V90Demodulator block",
 		     sa, sb, DEM_SLOT, t);
-	diff_eq_obj_(__FILE__, __LINE__, "v90Phase34", "evaluator block",
+	diff_eq_obj_(__FILE__, __LINE__, who, "evaluator block",
 		     seen[0], seen[1], SEEN_SLOT, t);
+	/*
+	 * The configuration buffers.  One per side since the silence ladder
+	 * writes through them; see the head of the file.
+	 */
+	diff_eq_obj_(__FILE__, __LINE__, who, "configuration block",
+		     cfgbuf[0], cfgbuf[1], CFG_SLOT, t);
 
 	diff_eq_int("transcript text %ld",
 		    strcmp(dsplib_debug_capture_text(0),
@@ -726,6 +778,281 @@ run(short constel, int iters)
 	}
 }
 
+/*
+ * ===========================================================================
+ * The two rate-renegotiation ladders
+ * ===========================================================================
+ *
+ * Same object, same fixture, same comparison; what is new is the dispatch and
+ * the two states `v90Phase34` has no counterpart for -- 18's completion tail,
+ * which clears the echo-canceller freeze and the SAS detector instead of
+ * handing the handshake over, and 20's, which puts the freeze back before
+ * every symbol.
+ */
+
+/* Bit 2 of `pac3c[3]`; see v34pcmmain.cpp for why the byte is offset-named. */
+#define CFG_FLAGS03	0x03
+#define CFG_SAS_DETECT	0x04
+
+static void
+set_sas(int on)
+{
+	int side;
+
+	for (side = 0; side < 2; side++)
+		cfgbuf[side][CFG_FLAGS03] = (unsigned char)
+		    ((cfgbuf[side][CFG_FLAGS03] & ~CFG_SAS_DETECT)
+		     | (on ? CFG_SAS_DETECT : 0));
+}
+
+static void
+step_rrn(int silence)
+{
+	int r, rr;
+
+	dsplib_debug_capture_reset();
+	if (silence) {
+		r  = v90RateRenegSilence(&oa);
+		rr = ref_v90RateRenegSilence(&ob);
+	} else {
+		r  = v90RateReneg(&oa);
+		rr = ref_v90RateReneg(&ob);
+	}
+	diff_eq_int("return %ld", r, rr, tag);
+	diff_eq_int("returns 0 %ld", r, 0, tag);
+	compare(tag);
+}
+
+/*
+ * State 19's idle symbol, checked against our side alone -- the same three
+ * claims `check_idle` makes for case 5, with the two that differ stated as
+ * differences:
+ *
+ *   - there is NO third arm.  Anything that is not 0x89b0 is the four-point
+ *     arm, where case 5 gives 0x8990 an arm of its own and everything else
+ *     the zero point.
+ *   - `f25c6` IS written, from `f25c8`, where case 5 leaves it alone.
+ */
+static void
+check_idle_rrn(short constel, int cc_before, long t)
+{
+	int q = oa.f25c8;
+	int pt = oa.txpoint.word;
+
+	diff_eq_int("silence idle advances the quadrant %ld", oa.f25c6,
+		    oa.f25c8, t);
+	diff_eq_int("silence idle clocks the scrambler %ld",
+		    oa.f25cc != cc_before, 1, t);
+	diff_eq_int("silence idle quadrant in range %ld",
+		    q >= 0 && q <= 3, 1, t);
+	if (q < 0 || q > 3)
+		return;
+	if (constel == (short)0x89b0) {
+		int i, hit = 0;
+
+		for (i = 0; i < 4; i++)
+			if (pt == vect16[q * 4 + i])
+				hit = 1;
+		diff_eq_int("silence idle point is vect16 of f25c8 %ld", hit,
+			    1, t);
+	} else {
+		diff_eq_int("silence idle point is vect4[f25c8] %ld", pt,
+			    vect4[q], t);
+	}
+}
+
+static void
+account_rrn(int silence, int before_state, short constel, short before_c6,
+	    int before_cc, short before_f25c2, int before_sas)
+{
+	const unsigned char *cfg = (const unsigned char *)oa.pac3c;
+
+	(void)before_c6;
+	if (!silence) {
+		switch (before_state) {
+		case 11:
+			n_r11++;
+			if (oa.v90_receiver != 11) {
+				n_r11_adv++;
+				diff_eq_int("state 11 advances to 12 %ld",
+					    oa.v90_receiver, 12, tag);
+				diff_eq_int("state 11 zeroes f25c0 %ld",
+					    oa.f25c0, 0, tag);
+			}
+			break;
+		case 12:
+			n_r12++;
+			if (oa.v90_receiver != 12) {
+				n_r12_adv++;
+				diff_eq_int("state 12 advances to 13 %ld",
+					    oa.v90_receiver, 13, tag);
+				diff_eq_int("state 12 zeroes f25c6 %ld",
+					    oa.f25c6, 0, tag);
+				diff_eq_int("state 12 zeroes f25c0 %ld",
+					    oa.f25c0, 0, tag);
+				diff_eq_int("state 12 zeroes f25cc %ld",
+					    oa.f25cc, 0, tag);
+			}
+			break;
+		case 13:
+			n_r13++;
+			diff_eq_int("state 13 stays %ld", oa.v90_receiver, 13,
+				    tag);
+			break;
+		case 14:
+			n_r14++;
+			if (oa.v90_receiver != 14) {
+				n_r14_adv++;
+				diff_eq_int("state 14 hands over %ld",
+					    oa.v90_receiver, 2, tag);
+				diff_eq_int("state 14 sets the transmit "
+					    "state %ld",
+					    *(short *)((char *)&oa
+						       + OB_TXSTATE),
+					    V34HS_EXMIT, tag);
+			}
+			break;
+		default:
+			n_rnone++;
+			diff_eq_int("no reneg arm moves no byte %ld",
+				    memcmp(&oa, &snap, sizeof(oa)), 0, tag);
+			diff_eq_int("no reneg arm writes the shaped buffer "
+				    "%ld",
+				    first_diff_short(shp_a, snap_shp,
+						     SHAPED_N), -1, tag);
+			break;
+		}
+		return;
+	}
+
+	switch (before_state) {
+	case 15:
+		n_s15++;
+		if (oa.v90_receiver != 15) {
+			n_s15_adv++;
+			diff_eq_int("state 15 advances to 16 %ld",
+				    oa.v90_receiver, 16, tag);
+			diff_eq_int("state 15 zeroes f25c0 %ld", oa.f25c0, 0,
+				    tag);
+		}
+		break;
+	case 16:
+		n_s16++;
+		if (oa.v90_receiver != 16) {
+			n_s16_adv++;
+			diff_eq_int("state 16 advances to 17 %ld",
+				    oa.v90_receiver, 17, tag);
+			diff_eq_int("state 16 zeroes f25c6 %ld", oa.f25c6, 0,
+				    tag);
+			diff_eq_int("state 16 zeroes f25c0 %ld", oa.f25c0, 0,
+				    tag);
+			diff_eq_int("state 16 zeroes f25cc %ld", oa.f25cc, 0,
+				    tag);
+		}
+		break;
+	case 17:
+		n_s17++;
+		diff_eq_int("state 17 stays %ld", oa.v90_receiver, 17, tag);
+		break;
+	case 18:
+		n_s18++;
+		if (oa.v90_receiver != 18) {
+			n_s18_adv++;
+			diff_eq_int("state 18 goes to the idle state %ld",
+				    oa.v90_receiver, 19, tag);
+			diff_eq_int("state 18 lifts the freeze %ld",
+				    (long)(oa.f25c2 & V34_EC_FROZEN), 0, tag);
+			diff_eq_int("state 18 leaves the rest of f25c2 %ld",
+				    (long)(unsigned short)
+				    (oa.f25c2 ^ before_f25c2),
+				    (long)(before_f25c2 & V34_EC_FROZEN), tag);
+			diff_eq_int("state 18 clears the SAS detector %ld",
+				    (long)(cfg[CFG_FLAGS03] & CFG_SAS_DETECT),
+				    0, tag);
+			if (before_sas)
+				n_s18_sas++;
+			if (dsplib_debug_capture_lines(0) > 0)
+				n_s18_dbg++;
+		} else {
+			/*
+			 * NOT ADVANCING MUST LEAVE BOTH ALONE.  Both stores
+			 * are inside the completion tail, so a reconstruction
+			 * that hoisted either to the top of the arm would
+			 * agree with the blob on every advancing call and
+			 * disagree here.
+			 */
+			diff_eq_int("state 18 leaves f25c2 alone %ld",
+				    (long)(unsigned short)oa.f25c2,
+				    (long)(unsigned short)before_f25c2, tag);
+			diff_eq_int("state 18 leaves the SAS detector %ld",
+				    (long)(cfg[CFG_FLAGS03] & CFG_SAS_DETECT)
+				    != 0, before_sas != 0, tag);
+		}
+		break;
+	case 19:
+		if (constel == (short)0x89b0)
+			n_s19_16++;
+		else
+			n_s19_4++;
+		diff_eq_int("state 19 stays %ld", oa.v90_receiver, 19, tag);
+		check_idle_rrn(constel, before_cc, tag);
+		break;
+	case 20:
+		n_s20++;
+		/*
+		 * THE FREEZE GOES ON EVERY TIME, advancing or not: the store
+		 * is the first statement of the arm and not part of the
+		 * completion tail, which is the mirror image of state 18's
+		 * check above.
+		 */
+		diff_eq_int("state 20 sets the freeze %ld",
+			    (long)(oa.f25c2 & V34_EC_FROZEN) != 0, 1, tag);
+		if ((before_f25c2 & V34_EC_FROZEN) == 0)
+			n_s20_freeze++;
+		if (oa.v90_receiver != 20) {
+			n_s20_adv++;
+			diff_eq_int("state 20 hands over %ld",
+				    oa.v90_receiver, 2, tag);
+			diff_eq_int("state 20 sets the transmit state %ld",
+				    *(short *)((char *)&oa + OB_TXSTATE),
+				    V34HS_EXMIT, tag);
+		}
+		break;
+	default:
+		n_snone++;
+		diff_eq_int("no silence arm moves no byte %ld",
+			    memcmp(&oa, &snap, sizeof(oa)), 0, tag);
+		diff_eq_int("no silence arm writes the shaped buffer %ld",
+			    first_diff_short(shp_a, snap_shp, SHAPED_N), -1,
+			    tag);
+		break;
+	}
+}
+
+static void
+run_rrn(int silence, short constel, int iters)
+{
+	int it;
+
+	for (it = 0; it < iters; it++) {
+		int before_state = oa.v90_receiver;
+		short before_c6 = oa.f25c6;
+		short before_f25c2 = oa.f25c2;
+		int before_cc = oa.f25cc;
+		int before_sas =
+		    ((const unsigned char *)oa.pac3c)[CFG_FLAGS03]
+		    & CFG_SAS_DETECT;
+
+		memcpy(&snap, &oa, sizeof(snap));
+		memcpy(snap_shp, shp_a, sizeof(snap_shp));
+		memcpy(snap_bra, bra, sizeof(snap_bra));
+		step_rrn(silence);
+		account_rrn(silence, before_state, constel, before_c6,
+			    before_cc, before_f25c2, before_sas);
+		tag++;
+	}
+}
+
 int
 main(void)
 {
@@ -980,6 +1307,212 @@ main(void)
 	rc |= diff_end();
 
 	/*
+	 * ==================================================================
+	 * The two rate-renegotiation ladders.
+	 * ==================================================================
+	 *
+	 * The dispatch first, over every state either ladder names and five
+	 * it does not.  BOTH FUNCTIONS SEE THE WHOLE LIST, which is the check
+	 * that they are two ladders and not one: `v90RateReneg` must do
+	 * nothing for 15..20 and `v90RateRenegSilence` nothing for 11..14,
+	 * and "nothing" is asserted as a byte-for-byte memcmp against the
+	 * object before the call, not merely as agreement with the blob.
+	 */
+	who = "v90RateReneg";
+	diff_begin("rate renegotiation dispatch");
+	{
+		static const int states[15] = { -1, 0, 2, 10, 11, 12, 13, 14,
+						15, 16, 17, 18, 19, 20, 21 };
+		static const short constels[3] = { (short)0x89b0,
+						   (short)0x8990, 0x1234 };
+		static const short f25c2s[4] = { 0, 1, 4, 0x205 };
+		int sil, s, c, g;
+
+		for (sil = 0; sil <= 1; sil++) {
+			who = sil ? "v90RateRenegSilence" : "v90RateReneg";
+			for (s = 0; s < 15; s++)
+			for (c = 0; c < 3; c++)
+			for (g = 0; g < 4; g++) {
+				setup(1, 1, states[s], constels[c], 0x1234,
+				      f25c2s[g], &CFG_RUN, 0,
+				      0x8000u + (unsigned)tag);
+				set_sas((int)(tag & 1));
+				run_rrn(sil, constels[c], 8);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * ------------------------------------------------------------------
+	 * The four counted states, and the same two comparisons `v90Phase34`
+	 * has: 11 and 15 advance when the count passes 0x7f, 12 and 16 when
+	 * it reaches 0x10 EXACTLY.  The same eight counts, including the two
+	 * that separate the object's signed 16-bit comparison from every
+	 * other reading of it.
+	 */
+	diff_begin("rate renegotiation symbol counts");
+	{
+		static const int states[4] = { 11, 12, 15, 16 };
+		static const short cnts[8] = { 0, 0xd, 0xe, 0x7d, 0x7e,
+					       (short)0xfffe, (short)0x7ffe,
+					       (short)0x7fff };
+		int s, k;
+
+		for (s = 0; s < 4; s++)
+		for (k = 0; k < 8; k++) {
+			int sil = states[s] >= 15;
+
+			who = sil ? "v90RateRenegSilence" : "v90RateReneg";
+			setup(1, 1, states[s], (short)0x8990, cnts[k], 1,
+			      &CFG_RUN, 0, 0x9000u + (unsigned)tag);
+			set_sas(1);
+			run_rrn(sil, (short)0x8990, 4);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * ------------------------------------------------------------------
+	 * The three CP completion tails, which need `getV90CpBits` to report
+	 * termination.  `CFG_CP` lands the bit pointer exactly on `cpNofBits`
+	 * with `terminateCpNot` set; `CFG_LD` is the other end of the same
+	 * call, where the sequence ends and the CPnot vector is loaded
+	 * instead, so the arm emits and does NOT move the state.
+	 *
+	 * State 18 is the one that carries a diagnostic, so the levels are
+	 * swept 0, 1 and 2 -- level 1 being the only value that separates the
+	 * object's `> 1` gate from the `>= 1` a reader would write.  The SAS
+	 * bit is driven both ways so that "clears it" and "leaves it clear"
+	 * are two different trials, and `f25c2` carries the freeze both set
+	 * and clear so that state 18's clear and state 20's set each have a
+	 * trial in which they change something.
+	 */
+	diff_begin("rate renegotiation CP completion");
+	{
+		static const int states[3] = { 14, 18, 20 };
+		static const short constels[2] = { (short)0x89b0,
+						   (short)0x8990 };
+		static const short f25c2s[2] = { 1, 5 };
+		int lvl, s, c, g, k, sas;
+
+		for (lvl = 0; lvl <= 2; lvl++) {
+			set_level((unsigned int)lvl);
+			for (s = 0; s < 3; s++)
+			for (c = 0; c < 2; c++)
+			for (g = 0; g < 2; g++)
+			for (sas = 0; sas <= 1; sas++)
+			for (k = 0; k < 2; k++) {
+				int sil = states[s] != 14;
+
+				who = sil ? "v90RateRenegSilence"
+					  : "v90RateReneg";
+				setup(1, 1, states[s], constels[c], 0x1234,
+				      f25c2s[g], k ? &CFG_LD : &CFG_CP, 0,
+				      0xa000u + (unsigned)tag);
+				set_sas(sas);
+				run_rrn(sil, constels[c], 4);
+			}
+		}
+		set_level(0);
+	}
+	rc |= diff_end();
+
+	/*
+	 * ------------------------------------------------------------------
+	 * State 19's idle symbol carries the literal 0 as its scrambler mode,
+	 * exactly as `v90Phase34`'s case 5 does -- so flipping bit 0 of
+	 * `f25c2` with everything else held fixed must leave its outputs
+	 * IDENTICAL.  A claim about our side alone, and the one a
+	 * reconstruction that called `txmitdibit` here would fail even though
+	 * the blob agreed with it on every other sweep.
+	 *
+	 * Bit 9 is held clear: it gates `txmit`'s echo feed, which would move
+	 * the object for reasons that have nothing to do with the scrambler.
+	 */
+	who = "v90RateRenegSilence";
+	diff_begin("silence idle generator is not f25c2");
+	{
+		static const short constels[3] = { (short)0x89b0,
+						   (short)0x8990, 0x1234 };
+		static int cc0, c80, c60, pt0;
+		int c, gpc;
+
+		for (c = 0; c < 3; c++) {
+			for (gpc = 0; gpc <= 1; gpc++) {
+				setup(1, 1, 19, constels[c], 0x1234,
+				      (short)gpc, &CFG_RUN, 0,
+				      0xb000u + (unsigned)c);
+				set_sas(1);
+				run_rrn(1, constels[c], 6);
+				if (gpc == 0) {
+					cc0 = oa.f25cc;
+					c80 = oa.f25c8;
+					c60 = oa.f25c6;
+					pt0 = oa.txpoint.word;
+				} else {
+					diff_eq_int("gpc does not move f25cc "
+						    "%ld", oa.f25cc, cc0, c);
+					diff_eq_int("gpc does not move f25c8 "
+						    "%ld", oa.f25c8, c80, c);
+					diff_eq_int("gpc does not move f25c6 "
+						    "%ld", oa.f25c6, c60, c);
+					diff_eq_int("gpc does not move the "
+						    "point %ld",
+						    oa.txpoint.word, pt0, c);
+				}
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * ------------------------------------------------------------------
+	 * AND STATE 19 IS NOT `v90Phase34`'s CASE 5.  Two differences, and
+	 * each is a separating trial with an observable result:
+	 *
+	 *   - a constellation code that is neither 0x89b0 nor 0x8990 takes
+	 *     the FOUR-POINT arm here and the ZERO-POINT arm there, so the
+	 *     transmitted point and the scrambler both move here and neither
+	 *     moves there;
+	 *   - `f25c6` follows `f25c8` here and is untouched there.
+	 *
+	 * Both are driven from the same object with the same seed, one call
+	 * each, so the only difference between the two runs is which function
+	 * was called.
+	 */
+	diff_begin("state 19 is not v90Phase34 case 5");
+	{
+		int cc5, c65, pt5;
+
+		setup(1, 1, 5, 0x1234, 0x1234, 1, &CFG_RUN, 0, 0xc001u);
+		set_sas(1);
+		who = "v90Phase34";
+		run(0x1234, 1);
+		cc5 = oa.f25cc;
+		c65 = oa.f25c6;
+		pt5 = oa.txpoint.word;
+
+		setup(1, 1, 19, 0x1234, 0x1234, 1, &CFG_RUN, 0, 0xc001u);
+		set_sas(1);
+		who = "v90RateRenegSilence";
+		run_rrn(1, 0x1234, 1);
+
+		diff_eq_int("case 5 leaves the scrambler on an unknown "
+			    "constellation %ld", cc5, 0x2f6b3d51, 0);
+		diff_eq_int("state 19 clocks it %ld",
+			    oa.f25cc != 0x2f6b3d51, 1, 0);
+		diff_eq_int("the two transmit different points %ld",
+			    oa.txpoint.word != pt5, 1, 0);
+		diff_eq_int("case 5 leaves f25c6 at its seed %ld", c65, 2, 0);
+		diff_eq_int("state 19 advances f25c6 %ld", oa.f25c6,
+			    oa.f25c8, 0);
+	}
+	rc |= diff_end();
+
+	who = "v90Phase34";
+
+	/*
 	 * ------------------------------------------------------------------
 	 * Anti-vacuity.  Every arm of this function is reachable, so every
 	 * counter is asserted to have fired -- there is no complement here,
@@ -1018,6 +1551,46 @@ main(void)
 		for (i = 0; i < NPTR; i++)
 			diff_eq_int("pointer slot %ld held two addresses",
 				    ptr_seen[i], 1, i);
+	}
+	rc |= diff_end();
+
+	/*
+	 * The same for the two ladders.  Ten states between them and every
+	 * one of them entered; the four that advance on a count and the three
+	 * that advance on a CP have their advance counted separately, because
+	 * an arm that runs and never advances is the shape a case table stops
+	 * reaching without anything failing (findings 247, 262, 295).
+	 */
+	diff_begin("rate renegotiation coverage");
+	{
+		diff_eq_int("state 11 ran", n_r11 > 0, 1, 0);
+		diff_eq_int("state 11 advanced", n_r11_adv > 0, 1, 0);
+		diff_eq_int("state 12 ran", n_r12 > 0, 1, 0);
+		diff_eq_int("state 12 advanced", n_r12_adv > 0, 1, 0);
+		diff_eq_int("state 13 ran", n_r13 > 0, 1, 0);
+		diff_eq_int("state 14 ran", n_r14 > 0, 1, 0);
+		diff_eq_int("state 14 handed over", n_r14_adv > 0, 1, 0);
+		diff_eq_int("v90RateReneg's no-arm case ran", n_rnone > 0, 1,
+			    0);
+
+		diff_eq_int("state 15 ran", n_s15 > 0, 1, 0);
+		diff_eq_int("state 15 advanced", n_s15_adv > 0, 1, 0);
+		diff_eq_int("state 16 ran", n_s16 > 0, 1, 0);
+		diff_eq_int("state 16 advanced", n_s16_adv > 0, 1, 0);
+		diff_eq_int("state 17 ran", n_s17 > 0, 1, 0);
+		diff_eq_int("state 18 ran", n_s18 > 0, 1, 0);
+		diff_eq_int("state 18 advanced", n_s18_adv > 0, 1, 0);
+		diff_eq_int("state 18 printed", n_s18_dbg > 0, 1, 0);
+		diff_eq_int("state 18 cleared a set SAS bit", n_s18_sas > 0,
+			    1, 0);
+		diff_eq_int("state 19 sixteen-point ran", n_s19_16 > 0, 1, 0);
+		diff_eq_int("state 19 four-point ran", n_s19_4 > 0, 1, 0);
+		diff_eq_int("state 20 ran", n_s20 > 0, 1, 0);
+		diff_eq_int("state 20 handed over", n_s20_adv > 0, 1, 0);
+		diff_eq_int("state 20 set a clear freeze", n_s20_freeze > 0,
+			    1, 0);
+		diff_eq_int("v90RateRenegSilence's no-arm case ran",
+			    n_snone > 0, 1, 0);
 	}
 	rc |= diff_end();
 

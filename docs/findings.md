@@ -67868,3 +67868,131 @@ whether our header defines it in the class body.**  That is a one-line
 question with a measurable answer, and finding 5802's `printSpectrum` is the
 case where the answer was "no, it is already out of line" and the cause is
 still open -- so this is a lever, not the lever.
+
+## 5810. THE TWO RATE-RENEGOTIATION TRANSMITTERS ARE `v90Phase34`'s LADDER WITH THE STATE NUMBERS MOVED UP, AND THE SILENCE ONE PARKS RATHER THAN FINISHING
+
+`v90RateReneg` (0x99b0, 555 B) and `v90RateRenegSilence` (0x95d0, 983 B) are
+the last two symbols of `VPcmV34Main.cpp` this tree had not written, and both
+turn out to be the phase 3/4 transmitter's own sequence at different state
+numbers.  `v34fsk.h` already recorded that `VPcmV34SetV90RateReneg` assigns
+`v90_receiver` 11 or 15 outright (D48); those are the two ladders' entry
+points, and `VPcmV34Progress` picks the transmitter by the same number --
+above 14 the silence one, above 10 the other.
+
+    v90RateReneg          11 -> 12 -> 13 -> 14 -> 2
+    v90RateRenegSilence   15 -> 16 -> 17 -> 18 -> 19,  and 20 -> 2
+
+State by state against `v90Phase34`: 11 and 15 are its case 6 (the S/S-bar
+pair, counted past 0x7f), 12 and 16 its case 7 (the point pair, counted to
+0x10 exactly, and the same three-field reset), 13 and 17 its case 9 (the
+constant symbol through the published emitters), 14 and 20 its case 10 (CP,
+then `getMPrecvdBits`, `initdigital`, `V34HS_EXMIT` and back to state 2).
+
+**THE SILENCE LADDER HAS TWO STATES THE OTHER HAS NOT, AND THEY ARE WHAT THE
+NAME MEANS.**  State 18 is a CP arm whose completion tail does NOT hand the
+handshake over: it prints "move to SCR on silence rrn (disabling SAS detector
+on silence)", clears `V34_EC_FROZEN` in `f25c2` and bit 2 of `pac3c[3]`, and
+drops into state 19.  State 19 then transmits scrambled idle symbols and never
+moves; nothing in either function writes state 20, so the closing CP is
+entered from outside.  So the silence renegotiation PARKS in an idle state and
+is restarted by its caller, where the plain one runs straight through.  What
+sets 20 is not in this batch -- `VPcmFloModem::runPcmModem` and the four
+`V92Phase4Modulator` members that write `V92CP+0x04` are the candidates and
+none of them is written.
+
+**STATE 19 IS NOT `v90Phase34`'s CASE 5, AND THE TWO DIFFERENCES ARE BOTH
+OBSERVABLE.**  Case 5 has three arms and privileges 0x8990; state 19 has TWO,
+so a constellation code that is neither takes the four-point arm here and the
+zero-point arm there -- different point, and the scrambler clocks here and
+does not there.  And state 19 WRITES `f25c6` from `f25c8`, which
+`v34pcmmain.cpp`'s case 5 note explicitly records as not happening.  The
+quadrant the handshake carries therefore advances across a silence idle symbol
+and does not across a phase 3/4 one.  `t_v90p34.cpp`'s "state 19 is not
+v90Phase34 case 5" section drives both from one seed, one call each.
+
+## 5811. NEITHER TRANSMITTER IS A `switch` IN THE OBJECT, AND `v90Phase34` PROBABLY IS NOT EITHER
+
+Both dispatch through a compare chain in ascending order -- `cmp $0xb,%eax;
+je; cmp $0xc,%eax; je; ...` at .text+0x99e2, and six of them at .text+0x9602.
+A `switch` over six dense values compiles to a jump table under this project's
+flags, and our own build proves it: `v90Phase34` is written as a `switch` over
+cases 3..10 and GCC 3.4.2 emits `sub $0x3,%eax; cmp $0x7,%eax; ja; jmp
+*table(,%eax,4)` for it.  **The blob's `v90Phase34` has a compare chain too**
+(.text+0x9c20 onwards), so the original was an if-chain there as well and our
+jump table is one of the ways that function still differs from the object.
+The two written here are if-chains for that reason; `v90Phase34` is left
+alone, because changing it is not this batch and its test is not this batch's
+either.
+
+This is a general lever and not a local observation: a dense `switch` is
+DETECTABLE in the object, so anywhere the blob compares consecutive small
+integers one at a time, the source was not a `switch`.
+
+## 5812. OUR TWO TRANSMITTERS ARE 45 AND 72 BYTES SHORT, AND EVERY BYTE OF IT IS THE THREE BASE POINTERS `v34fsk.h` CALLS AN ADDRESSING ARTIFACT
+
+Sizes, GCC 3.4.2 exact at `-O3`: `v90RateReneg` 510 against the blob's 555,
+`v90RateRenegSilence` 911 against 983.  The instruction sequences agree
+otherwise -- same arms in the same order, same calls, same constants.
+
+The difference is that the blob forms THREE base pointers at entry and we form
+none:
+
+    lea 0x221c(%ebx),%esi     then f25c0 as 0x3a4(%esi), f25c8 as 0x3ac(%esi)
+    lea 0x4(%ebx),%ebp        then v90_receiver as 0x248(%ebp)
+    lea 0x264(%ebx),%edi      then f382 as 0x11e(%edi)
+
+which costs 15 bytes of `lea`, two more callee-saved registers (8 bytes of
+prologue) and their reloads at three `ret`s (24 bytes) -- 47 against a
+measured 45, the remainder being where our register allocator does better.
+**Every displacement is over 127 either way**, so none of the three base
+pointers shortens a single field access; GCC does not emit a `lea` that buys
+nothing, so the source formed those pointers.
+
+`v34fsk.h` already records the `obj + 4` half of this and calls it "an
+addressing artifact in all three and not evidence of a sub-object at +4".
+That reading is WEAKER than it was.  It was made against `v90Phase34`, where
+`obj + 0x264` is genuinely needed for `rx->flags` and the compiler is free to
+reuse the base for `f382`; here `f382` is the ONLY thing read through it and
+the base is still formed.  The same goes for `obj + 0x221c`, which is
+`struct v34_queue txq` in our model and which the two published emitters also
+use as a base for `f25c0`..`txpoint` (v34fsk.h's own note at +0x25d0).
+
+**NOT ACTED ON, and deliberately.**  Modelling +0x11e would mean carving into
+`struct v34_receiver::pad_000[0x120]`, and +0x221c into a transmit-shell type
+that does not exist yet; both are wide changes to structs a live batch is
+already writing against, which is exactly finding 3511's shape.  Recorded here
+so the next `v34_receiver` batch has the measurement in hand: three base
+pointers, 117 bytes of `.text` across two functions, and a specific prediction
+(the sizes go to 555 and 983) that will confirm or refute it in one build.
+
+## 5813. A MUTATION ANCHOR IS A CLAIM ABOUT THE WHOLE FILE, AND WRITING A SECOND FUNCTION INTO IT BROKE SEVENTEEN AT ONCE
+
+`test/mutations/v90p34.json`'s header said "every `find` below is inside
+v90Phase34 and every one is unique in the file, which mutate.py checks for".
+Adding `v90RateReneg` and `v90RateRenegSilence` to `v34pcmmain.cpp` -- two
+functions that are v90Phase34's ladder renumbered -- made seventeen of those
+anchors match two or three times, and `tools/anchorcheck.py` failed `make
+phase` at the `refs` target before anything was compiled.
+
+That is the tool working, and it is worth saying why the failure matters
+rather than being a nuisance.  `mutate.py` mutates the FIRST match; an anchor
+labelled "case 9's quadbit is 0 rather than 15" that now also matches state 13
+and state 17 would still have been caught by `t_v90p34`, so the suite would
+have gone on reporting 71 of 71 caught while testing something other than what
+its labels say.  A mutation suite's labels are the only record of what each
+mutation means, and a silently retargeted anchor is a wrong name in exactly
+CLAUDE.md's sense.
+
+The repair is mechanical and is what was done: extend each ambiguous `find`
+BACKWARDS by whole lines until it is unique again, and prepend the same prefix
+to its `replace`, which leaves every mutation the mutation it was.  The
+alternative -- spelling the new functions differently so the old anchors stay
+unique -- is contorting `src/` to please a test and was not considered
+seriously.
+
+**The generalisation: a mutation suite over a FILE is coupled to every future
+function in that file.** Suites are named per function (`v90p34`, and the
+header even notes that `v34pcmmain` would be `getMPrecvdBits`'s), but the
+anchors are file-scoped strings, so the coupling is invisible until the file
+grows.  Anyone adding a function to a file that already has a suite should
+expect this and should run `tools/anchorcheck.py` before anything else.

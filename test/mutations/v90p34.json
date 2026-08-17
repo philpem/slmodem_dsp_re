@@ -11,7 +11,17 @@
    "The pairs are the point.  Cases 3 and 6 are the same arm with a",
    "different next state and one diagnostic; cases 4 and 7 the same again",
    "with a different point pair and a different comparison.  A suite that",
-   "mutated only one of each would leave the other reading as covered."
+   "mutated only one of each would leave the other reading as covered.",
+   "",
+   "SEVENTEEN ANCHORS CARRY LEADING CONTEXT AND IT IS NOT DECORATION.",
+   "v90RateReneg and v90RateRenegSilence went into the same file, and they",
+   "are v90Phase34's ladder with the state numbers moved up -- so `\\t\\t\\t",
+   "txmitquadbit(o, 15);` and `getMPrecvdBits(...); initdigital(o);` now",
+   "occur two and three times each.  Each of those `find`s was extended",
+   "BACKWARDS, whole lines at a time, until it was unique again, and the",
+   "same prefix was prepended to its `replace`, so every mutation is the",
+   "one it was.  anchorcheck.py is what catches this; a suite whose anchor",
+   "matched twice would mutate whichever the tool found first."
   ]
  },
  {
@@ -113,8 +123,8 @@
  },
  {
   "label": "case 3's second point is vect4[1]",
-  "find": "\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */",
-  "replace": "\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */"
+  "find": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */",
+  "replace": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */"
  },
  {
   "label": "case 6's first point is vect4[2]",
@@ -193,23 +203,23 @@
  },
  {
   "label": "case 5 encodes differentially against f25c6",
-  "find": "\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t\to->txpoint.word =\n\t\t\t    vect4[(q + (unsigned short)o->f25c6) & 3];"
+  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word =\n\t\t\t    vect4[(q + (unsigned short)o->f25c6) & 3];"
  },
  {
   "label": "case 5 writes the quadrant back to f25c6",
-  "find": "\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
+  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
  },
  {
   "label": "case 5's quadbit index is q + d * 4",
-  "find": "vect16[d + q * 4]",
-  "replace": "vect16[q + d * 4]"
+  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[d + q * 4]",
+  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[q + d * 4]"
  },
  {
   "label": "case 5 scrambles three bits rather than two",
-  "find": "\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);",
-  "replace": "\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 3);"
+  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);",
+  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 3);"
  },
  {
   "label": "case 5 takes the four-point arm for any code but 0x89b0",
@@ -228,35 +238,35 @@
  },
  {
   "label": "case 5 does not bump f25c0",
-  "find": "\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the load and the store. */\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
-  "replace": "\t\ttxmit(o);"
+  "find": "\t\t\to->txpoint.c[1] = 0;\n\t\t}\n\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the load and the store. */\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "replace": "\t\t\to->txpoint.c[1] = 0;\n\t\t}\n\n\t\ttxmit(o);"
  },
  {
   "label": "case 5's quadbit arm uses the first read of f25c8",
   "equivalent": true,
   "why": "`q` was just stored into f25c8 and the only thing between the store and the re-read is V34scrambler, which is handed &o->f25cc and a mode, a bit count and a bit width -- it cannot reach f25c8.  So the re-read returns the value stored, and (short)q for a q that came from a (short) cast is q.  Held fixed: V34scrambler's argument list, which is v34rx.c's and not this function's.  The re-read is transcribed because the object performs it, a call sitting between the two accesses.",
-  "find": "\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[d + q * 4];",
-  "replace": "\t\t\to->txpoint.word = vect16[d + q * 4];"
+  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[d + q * 4];",
+  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->txpoint.word = vect16[d + q * 4];"
  },
  {
   "label": "case 9's quadbit is 0 rather than 15",
-  "find": "\t\t\ttxmitquadbit(o, 15);",
-  "replace": "\t\t\ttxmitquadbit(o, 0);"
+  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
+  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 0);"
  },
  {
   "label": "case 9's dibit is 1 rather than 3",
-  "find": "\t\t\ttxmitdibit(o, 3);",
-  "replace": "\t\t\ttxmitdibit(o, 1);"
+  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);",
+  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 1);"
  },
  {
   "label": "case 9 selects the sixteen-point map on 0x8990",
-  "find": "\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
-  "replace": "\t\tif (o->f382 == OB_CONSTEL_4)\n\t\t\ttxmitquadbit(o, 15);"
+  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
+  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_4)\n\t\t\ttxmitquadbit(o, 15);"
  },
  {
   "label": "case 9 does not bump f25c0",
-  "find": "\t\t\ttxmitdibit(o, 3);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
-  "replace": "\t\t\ttxmitdibit(o, 3);"
+  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);"
  },
  {
   "label": "case 8 does not consult the bit source",
@@ -280,23 +290,23 @@
  },
  {
   "label": "case 10 hands over to state 3",
-  "find": "\t\to->v90_receiver = 2;\n\t\treturn 0;",
-  "replace": "\t\to->v90_receiver = 3;\n\t\treturn 0;"
+  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;\n\t\to->v90_receiver = 2;\n\t\treturn 0;",
+  "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;\n\t\to->v90_receiver = 3;\n\t\treturn 0;"
  },
  {
   "label": "case 10 skips getMPrecvdBits",
-  "find": "\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
-  "replace": "\t\tinitdigital(o);"
+  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
+  "replace": "\t\t */\n\t\tinitdigital(o);"
  },
  {
   "label": "case 10 skips initdigital",
-  "find": "\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
-  "replace": "\t\tgetMPrecvdBits((struct tagV34Object *)objp);"
+  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
+  "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);"
  },
  {
   "label": "case 10 writes V34HS_DATAXMIT",
-  "find": "\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_DATAXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;"
+  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_DATAXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;"
  },
  {
   "label": "case 10's transmit state is at +0x3594",
@@ -307,8 +317,8 @@
   "label": "case 10's compare-then-store becomes a plain store",
   "equivalent": true,
   "why": "The value written is the value compared against, so the branch decides only whether a store of X happens where X is already there.  No test can separate them and no ordering can: nothing runs between the compare and the store.  Held fixed: that OB_TXSTATE is ordinary memory rather than a device register, which is true of every other access to it in the tree.  The compare is transcribed because the object performs it.",
-  "find": "\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;"
+  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;"
  },
  {
   "label": "the two CP arms use two different bit sources",
@@ -373,7 +383,7 @@
  },
  {
   "label": "the function returns 1 rather than 0 from its default arm",
-  "find": "\t}\n\n\treturn 0;\n}",
-  "replace": "\t}\n\n\treturn 1;\n}"
+  "find": "\t}\n\t}\n\n\treturn 0;\n}",
+  "replace": "\t}\n\t}\n\n\treturn 1;\n}"
  }
 ]

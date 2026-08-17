@@ -25,23 +25,28 @@
  */
 
 /*
- * THE THREE UNWRITTEN-CALLEE MACROS, AND THEY MUST COME BEFORE THE INCLUDES.
+ * THE UNWRITTEN-CALLEE MACROS, AND THEY MUST COME BEFORE THE INCLUDES.
  *
- * `VPcmV34Progress` at the bottom of this file calls seven symbols nobody has
- * reconstructed -- four `VPcmFloModem` members, `GenericToneDetector::process`
- * and the two V.90 rate-renegotiation transmitters.  Their declarations wear
- * these macros, so THIS translation unit makes a weak undefined reference to
- * each: it resolves to zero instead of leaving every test binary with an
- * undefined symbol, and each call site tests the pointer before using it.
+ * `VPcmV34Progress` at the bottom of this file calls five symbols nobody has
+ * reconstructed -- four `VPcmFloModem` members and
+ * `GenericToneDetector::process`.  Their declarations wear these macros, so
+ * THIS translation unit makes a weak undefined reference to each: it resolves
+ * to zero instead of leaving every test binary with an undefined symbol, and
+ * each call site tests the pointer before using it.
  * `include/dsplib/vpcm.h` sets the arrangement out at length for the five
  * `VPcmV34*` entry points; this is the same one, one level further down.
  *
- * A translation unit that DEFINES any of the seven must not define these --
+ * A translation unit that DEFINES any of them must not define these --
  * a definition compiled under the macro would itself be weak.
+ *
+ * `DSPLIB_V34HSHAK_UNWRITTEN` USED TO BE HERE AND IS DELIBERATELY GONE.  It
+ * covered `v90RateReneg` and `v90RateRenegSilence`, which this file now
+ * DEFINES; defining the macro would make both definitions weak.  The two call
+ * sites in `VPcmV34Progress` lost their null tests with it, which is what the
+ * object does -- it calls both unconditionally.
  */
 #define DSPLIB_VPCMFLO_UNWRITTEN	__attribute__((weak))
 #define DSPLIB_GTD_UNWRITTEN		__attribute__((weak))
-#define DSPLIB_V34HSHAK_UNWRITTEN	__attribute__((weak))
 
 #include <stdlib.h>
 
@@ -741,6 +746,311 @@ v90Phase34(void *objp)
 		o->v90_receiver = 2;
 		return 0;
 	}
+	}
+
+	return 0;
+}
+
+/*
+ * ===========================================================================
+ * v90RateReneg and v90RateRenegSilence -- the two rate-renegotiation
+ * transmit sequences
+ * ===========================================================================
+ *
+ * WHY THEY ARE IN THIS FILE, and it is `v90Phase34`'s argument twice over.
+ * Both are unmangled `T`, so both were declared `extern "C"`; both relocate a
+ * call against `_ZN12VPcmFloModem12getV90CpBitsEPs`, which a C translation
+ * unit cannot name; and both reach `_Z14getMPrecvdBitsP12tagV34Object` at
+ * .text+0x9250 through a resolved PC-relative displacement with NO relocation
+ * beside it -- .text+0x98cf and .text+0x9aa0 -- which in a non-PIC object
+ * happens only when the target is in the same section of the same translation
+ * unit.  They are also this file's immediate neighbours in .text: 0x95d0,
+ * 0x99b0, then `v90Phase34` at 0x9be0.
+ *
+ * ONE ARGUMENT each, the V.34 object, and each RETURNS 0 at all three of its
+ * `ret`s -- see the header for why the return type is `int`.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THEY ARE.  `VPcmV34SetV90RateReneg` assigns `v90_receiver` 11 or 15
+ * outright (v34fsk.h, D48), and those are the two entry points to the two
+ * ladders below.  `VPcmV34Progress` then picks the transmitter by the same
+ * number: above 14 the silence one, above 10 the other.  So the field is one
+ * state variable with two disjoint renegotiation sequences on it, and each
+ * function is the four or six states of its own:
+ *
+ *     v90RateReneg          11 -> 12 -> 13 -> 14 -> 2
+ *     v90RateRenegSilence   15 -> 16 -> 17 -> 18 -> 19, and 20 -> 2
+ *
+ * Each ladder is `v90Phase34`'s phase 3/4 sequence with the Ja and CP arms
+ * trimmed: the S/S-bar pair counted to 0x7f, then the point pair counted to
+ * 0x10, then a constant symbol, then CP.  Both end exactly as `v90Phase34`'s
+ * case 10 does -- `getMPrecvdBits`, `initdigital`, the handshake into
+ * `V34HS_EXMIT`, and `v90_receiver` back to 2.
+ *
+ * THE SILENCE ONE HAS TWO STATES THE OTHER HAS NOT, and they are what the
+ * name means.  State 18's CP-complete arm drops into state 19 rather than
+ * finishing, having cleared the echo-canceller freeze and the SAS detector;
+ * state 19 then transmits scrambled idle symbols indefinitely, and state 20
+ * -- which nothing here reaches, so a caller sets it -- runs the closing CP
+ * with the freeze put back.  So the silence ladder parks in 19 and is
+ * restarted from outside, where the plain one runs straight through.
+ *
+ * ---------------------------------------------------------------------------
+ * THE IDLE SYMBOL IN STATE 19 HAS TWO ARMS, NOT `v90Phase34`'s THREE.  Case 5
+ * there privileges 0x8990 and has a third arm transmitting the zero point;
+ * here `f382 != 0x89b0` IS the four-point arm, whatever it holds.  Everything
+ * else about it is the same -- mode 0, no differential encoding, the tables
+ * indexed unmasked -- with ONE addition: `f25c6` IS written, from `f25c8`,
+ * which `v90Phase34`'s note explicitly records as not happening there.  So
+ * the quadrant the handshake carries DOES advance across a silence idle
+ * symbol and does not across a phase 3/4 one.
+ *
+ * ---------------------------------------------------------------------------
+ * NEITHER FUNCTION IS A `switch` IN THE OBJECT.  Both dispatch through a
+ * compare chain in ascending order -- `cmp $0xb; je; cmp $0xc; je; ...` at
+ * .text+0x99e2 and six of them at .text+0x9602 -- where a `switch` over six
+ * dense values compiles to a jump table under these flags.  Written as an
+ * if-chain for that reason and not for taste; `v90Phase34` above is a
+ * `switch` and its jump table is one of the ways it still differs from the
+ * object.
+ */
+
+/*
+ * +0xac3c + 3.  A byte of flags in the configuration object, and BIT 2 IS THE
+ * ONLY ONE ANYTHING TOUCHES: `v90RateRenegSilence` clears it one line after
+ * printing "disabling SAS detector on silence", and
+ * `VPcmFloModem::runPcmModem` sets it again at .text+0xe86f on the way out of
+ * the V.92 CPt.
+ *
+ * THE OFFSET IS OFFSET-NAMED AND THE BIT IS NOT, which is deliberate.  The
+ * diagnostic is the author's own word for what the clear does, but the same
+ * statement clears TWO bits -- this one and `V34_EC_FROZEN` in `f25c2` -- so
+ * "SAS detector" names one of the two and the message does not say which.
+ * It is this one by elimination: bit 2 of `f25c2` already has a name from an
+ * independent reader (v34rx.h, and `v34FreezeEcho` is its writer), and
+ * nothing about an echo canceller is a detector of anything.  That is
+ * inference, which is CLAUDE.md's weakest rank, and it is why the byte itself
+ * keeps its offset.
+ */
+#define CFG_FLAGS03		0x03
+#define CFG_SAS_DETECT		0x04
+
+extern "C" int
+v90RateReneg(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
+	int r = o->v90_receiver;
+	short n;
+
+	if (r == 11) {
+		/* `v90Phase34`'s case 6, counted to 0x7f. */
+		o->txpoint.word = vect4[0];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->txpoint.word = vect4[3];
+		txmit(o);
+		/* Re-read: `txmit` is between the two counts. */
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n <= 0x7f) {
+			o->f25c0 = n;
+			return 0;
+		}
+		o->v90_receiver = 12;
+		o->f25c0 = 0;
+		return 0;
+	}
+
+	if (r == 12) {
+		/* `v90Phase34`'s case 7, counted to 0x10. */
+		o->txpoint.word = vect4[2];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->txpoint.word = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n != 0x10) {
+			o->f25c0 = n;
+			return 0;
+		}
+		o->v90_receiver = 13;
+		/* Reset the transmitter for the symbols that follow. */
+		o->f25c6 = 0;
+		o->f25c0 = 0;
+		o->f25cc = 0;
+		return 0;
+	}
+
+	if (r == 13) {
+		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
+		 * differentially encoded through the published emitters. */
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, 15);
+		else
+			txmitdibit(o, 3);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		return 0;
+	}
+
+	if (r == 14) {
+		/* `v90Phase34`'s case 10, and the end of the ladder. */
+		int done = (short)vp->getV90CpBits(&o->f25c8);
+
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->f25c8);
+		else
+			txmitdibit(o, o->f25c8);
+		if (done == 0)
+			return 0;
+
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->v90_receiver = 2;
+		return 0;
+	}
+
+	return 0;
+}
+
+extern "C" int
+v90RateRenegSilence(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
+	int r = o->v90_receiver;
+	short n;
+
+	if (r == 15) {
+		o->txpoint.word = vect4[0];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->txpoint.word = vect4[3];
+		txmit(o);
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n <= 0x7f) {
+			o->f25c0 = n;
+			return 0;
+		}
+		o->v90_receiver = 16;
+		o->f25c0 = 0;
+		return 0;
+	}
+
+	if (r == 16) {
+		o->txpoint.word = vect4[2];
+		txmit(o);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->txpoint.word = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->f25c0 + 1);
+		if (n != 0x10) {
+			o->f25c0 = n;
+			return 0;
+		}
+		o->v90_receiver = 17;
+		o->f25c6 = 0;
+		o->f25c0 = 0;
+		o->f25cc = 0;
+		return 0;
+	}
+
+	if (r == 17) {
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, 15);
+		else
+			txmitdibit(o, 3);
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		return 0;
+	}
+
+	if (r == 18) {
+		/*
+		 * CP, and on the symbol that ends it the machine goes to the
+		 * idle state rather than to the data phase: the freeze comes
+		 * off both echo cancellers and the SAS detector is disabled,
+		 * and 19 then transmits scrambled idle symbols until something
+		 * outside moves it on.
+		 */
+		int done = (short)vp->getV90CpBits(&o->f25c8);
+
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->f25c8);
+		else
+			txmitdibit(o, o->f25c8);
+		if (done == 0)
+			return 0;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("move to SCR on silence rrn "
+					     "(disabling SAS detector on "
+					     "silence)\r\n");
+		o->v90_receiver = 19;
+		o->f25c2 = (short)((unsigned short)o->f25c2 & ~V34_EC_FROZEN);
+		((unsigned char *)o->pac3c)[CFG_FLAGS03] &= ~CFG_SAS_DETECT;
+		return 0;
+	}
+
+	if (r == 19) {
+		/*
+		 * The idle symbol.  Two arms, and see the note at the top for
+		 * how it differs from `v90Phase34`'s three-armed case 5.
+		 */
+		int q;
+
+		if (o->f382 == OB_CONSTEL_16) {
+			int d;
+
+			q = (short)V34scrambler((unsigned *)&o->f25cc,
+						0, 3, 2);
+			o->f25c8 = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->f25cc,
+						0, 3, 2);
+			q = o->f25c8;
+			o->txpoint.word = vect16[d + q * 4];
+		} else {
+			q = (short)V34scrambler((unsigned *)&o->f25cc,
+						0, 3, 2);
+			o->f25c8 = (short)q;
+			o->txpoint.word = vect4[q];
+		}
+
+		txmit(o);
+		/* Re-read: `txmit` is between the load and the store. */
+		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		/* And the quadrant DOES advance here.  See the note above. */
+		o->f25c6 = o->f25c8;
+		return 0;
+	}
+
+	if (r == 20) {
+		/*
+		 * The closing CP.  Nothing in either function sets this state,
+		 * so the caller does; the freeze goes back on before every
+		 * symbol, not once at entry, because the state is re-entered
+		 * per symbol.
+		 */
+		int done;
+
+		o->f25c2 = (short)((unsigned short)o->f25c2 | V34_EC_FROZEN);
+		done = (short)vp->getV90CpBits(&o->f25c8);
+
+		if (o->f382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->f25c8);
+		else
+			txmitdibit(o, o->f25c8);
+		if (done == 0)
+			return 0;
+
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->v90_receiver = 2;
+		return 0;
 	}
 
 	return 0;
@@ -2134,17 +2444,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		while (obj->txq.count < obj->f2aa0) {
 			r = obj->v90_receiver;
 			if (r > 14) {
-				if (v90RateRenegSilence == 0)
-					v34pcm_notwritten(
-					    V34PCM_UNWRITTEN_RRNSILENCE);
-				else
-					v90RateRenegSilence(obj);
+				v90RateRenegSilence(obj);
 			} else if (r > 10) {
-				if (v90RateReneg == 0)
-					v34pcm_notwritten(
-					    V34PCM_UNWRITTEN_RRN);
-				else
-					v90RateReneg(obj);
+				v90RateReneg(obj);
 			} else if (obj->f25c2 & PROG_TXBIT_DATA) {
 				modulatevector(obj);
 			} else {
