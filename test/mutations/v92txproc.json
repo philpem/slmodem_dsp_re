@@ -1,0 +1,106 @@
+[
+ {
+  "label": "NOTE: what this set reaches",
+  "why": "V92Transmitter::process was read from .text+0x54590-0x546f2 in one sitting, so a green t_v92btosproc says our reading and the object agree and not that either is right. Every entry here is a claim that reading makes: which pointer the input byte lands in and at what index, that K is a THRESHOLD rather than a block size and is subtracted rather than cleared, that the precoder runs three times over four symbols each, that the convolution encoder's output is what the precoder gets NEXT time round, and that the twelve samples are scaled and truncated into the caller's buffer at the running count. WHAT NO ENTRY HERE REACHES: the mask that is not there. The object stores the caller's byte whole, and `V92ModulusEncoder::progress` reads it as `bytes[i] & 1`, so adding `& 1` at the store is unobservable through anything written and is left out rather than registered as equivalent -- see v92btosproc.json's note for the shape."
+ },
+ {
+  "label": "K is reached exactly rather than crossed",
+  "find": "\t\tif (bitsBuffered >= (unsigned int)K) {",
+  "replace": "\t\tif (bitsBuffered == (unsigned int)K) {"
+ },
+ {
+  "label": "the frame threshold is not reached until one bit past K",
+  "find": "\t\tif (bitsBuffered >= (unsigned int)K) {",
+  "replace": "\t\tif (bitsBuffered > (unsigned int)K) {"
+ },
+ {
+  "label": "the bit count is cleared rather than reduced by K",
+  "find": "\t\t\tbitsBuffered -= K;",
+  "replace": "\t\t\tbitsBuffered = 0;"
+ },
+ {
+  "label": "the bit count is not reduced at all",
+  "find": "\n\t\t\tbitsBuffered -= K;\n",
+  "replace": "\n"
+ },
+ {
+  "label": "the input byte is stored one place late",
+  "find": "\t\tbitBuffer[bitsBuffered] = bits[i];\n\t\tbitsBuffered++;",
+  "replace": "\t\tbitsBuffered++;\n\t\tbitBuffer[bitsBuffered] = bits[i];"
+ },
+ {
+  "label": "the buffer is filled from the input's front every time",
+  "find": "\t\tbitBuffer[bitsBuffered] = bits[i];",
+  "replace": "\t\tbitBuffer[bitsBuffered] = bits[0];"
+ },
+ {
+  "label": "the modulus encoder is given the caller's bits directly",
+  "find": "\t\t\tmodulusEncoder->progress(bitBuffer, modulusOut);",
+  "replace": "\t\t\tmodulusEncoder->progress(bits, modulusOut);"
+ },
+ {
+  "label": "the precoder runs twice rather than three times",
+  "find": "\t\t\tfor (k = 0; k < V92TX_PRECODER_STEPS; k++) {",
+  "replace": "\t\t\tfor (k = 0; k < V92TX_PRECODER_STEPS - 1; k++) {"
+ },
+ {
+  "label": "every precoder step writes over the first four symbols",
+  "find": "\t\t\t\t\t\t  &points[V92TX_PRECODER_SYMBOLS\n\t\t\t\t\t\t\t  * k]);",
+  "replace": "\t\t\t\t\t\t  &points[0]);"
+ },
+ {
+  "label": "the precoder is not told which step it is on",
+  "find": "\t\t\t\tprecoder->process(modulusOut, (int)k,",
+  "replace": "\t\t\t\tprecoder->process(modulusOut, 0,"
+ },
+ {
+  "label": "the convolution encoder's output is not carried forward",
+  "find": "\t\t\t\tconvEncoderOutput =\n\t\t\t\t\tconvolutionEncoder->process(precoded);",
+  "replace": "\t\t\t\tconvolutionEncoder->process(precoded);"
+ },
+ {
+  "label": "the convolution encoder's output is applied in the same step",
+  "find": "\t\t\t\tprecoder->process(modulusOut, (int)k,\n\t\t\t\t\t\t  convEncoderOutput, precoded,\n\t\t\t\t\t\t  &points[V92TX_PRECODER_SYMBOLS\n\t\t\t\t\t\t\t  * k]);\n\t\t\t\tconvEncoderOutput =\n\t\t\t\t\tconvolutionEncoder->process(precoded);",
+  "replace": "\t\t\t\tconvEncoderOutput =\n\t\t\t\t\tconvolutionEncoder->process(precoded);\n\t\t\t\tprecoder->process(modulusOut, (int)k,\n\t\t\t\t\t\t  convEncoderOutput, precoded,\n\t\t\t\t\t\t  &points[V92TX_PRECODER_SYMBOLS\n\t\t\t\t\t\t\t  * k]);"
+ },
+ {
+  "label": "the pre-filter's two buffers are the same way round",
+  "find": "\t\t\tpreFilter->process(points, shaped);",
+  "replace": "\t\t\tpreFilter->process(shaped, points);"
+ },
+ {
+  "label": "the pre-filter is skipped",
+  "find": "\n\t\t\tpreFilter->process(points, shaped);\n",
+  "replace": "\n\t\t\tfor (j = 0; j < V92TX_FRAME_SYMBOLS; j++)\n\t\t\t\tshaped[j] = points[j];\n"
+ },
+ {
+  "label": "the gain is not applied",
+  "find": "\t\t\t\tout[n + j] = (short)(shaped[j] * gain);",
+  "replace": "\t\t\t\tout[n + j] = (short)shaped[j];"
+ },
+ {
+  "label": "the samples are rounded rather than truncated",
+  "find": "\t\t\t\tout[n + j] = (short)(shaped[j] * gain);",
+  "replace": "\t\t\t\tout[n + j] = (short)(shaped[j] * gain\n\t\t\t\t\t\t     + (shaped[j] < 0.0f\n\t\t\t\t\t\t\t? -0.5f : 0.5f));"
+ },
+ {
+  "label": "every frame is written over the front of the output",
+  "find": "\t\t\t\tout[n + j] = (short)(shaped[j] * gain);",
+  "replace": "\t\t\t\tout[j] = (short)(shaped[j] * gain);"
+ },
+ {
+  "label": "the sample count advances by eleven",
+  "find": "\t\t\tn += V92TX_FRAME_SYMBOLS;",
+  "replace": "\t\t\tn += V92TX_FRAME_SYMBOLS - 1;"
+ },
+ {
+  "label": "the sample count is not reported",
+  "find": "\n\tnout = n;\n",
+  "replace": "\n"
+ },
+ {
+  "label": "the sample count is reported in frames",
+  "find": "\tnout = n;",
+  "replace": "\tnout = n / V92TX_FRAME_SYMBOLS;"
+ }
+]

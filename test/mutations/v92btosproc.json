@@ -1,0 +1,174 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the one claim it exists for",
+  "why": "The six V92BitsToSymbol members below the constructor were read from .text+0x4e070-0x4e5a7 in one sitting, so a green t_v92btosproc says our reading and the object agree and not that either is right. Every entry here is a claim that reading makes. THE ENTRY THAT MATTERS MOST is 'the two arms of the rounding are one expression': the object computes (left/12 + 1)*bitsPerFrame on the residue arm and left*bitsPerFrame/12 on the divisible one, which are the same number over every input that does not wrap 32 bits -- so the fold is invisible to any trial grid that stays in the plausible range, and the three trials in t_v92btosproc that leave it are the only thing standing between this file and finding 3052. WHERE A SHAPE APPEARS IN TWO OVERLOADS the mutation anchors in one of them, which is enough to prove the fixture sees it; anchoring in both would need context so long the entry would be a copy of the function. WHAT NO ENTRY HERE REACHES: the order of reset's four stores, which the fixture compares after the call and cannot sequence."
+ },
+ {
+  "label": "the two arms of the rounding are one expression",
+  "find": "\t\telse\n\t\t\tbits = left * bitsPerFrame\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;",
+  "replace": "\t\telse\n\t\t\tbits = left / V92BTOS_SYMBOLS_PER_FRAME\n\t\t\t       * bitsPerFrame;"
+ },
+ {
+  "label": "the residue arm multiplies first too",
+  "find": "\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)\n\t\t\t       * bitsPerFrame;",
+  "replace": "\t\t\tbits = (left * bitsPerFrame + bitsPerFrame)\n\t\t\t       / V92BTOS_SYMBOLS_PER_FRAME;"
+ },
+ {
+  "label": "the rounding does not round up",
+  "find": "\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME + 1)",
+  "replace": "\t\t\tbits = (left / V92BTOS_SYMBOLS_PER_FRAME)"
+ },
+ {
+  "label": "the two arms are swapped",
+  "find": "\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME != 0)",
+  "replace": "\t\tif (left % V92BTOS_SYMBOLS_PER_FRAME == 0)"
+ },
+ {
+  "label": "the empty-block test is inclusive",
+  "find": "\tif (symbolsBlockSize > symbolsDone) {",
+  "replace": "\tif (symbolsBlockSize >= symbolsDone) {",
+  "equivalent": true,
+  "why": "The extra state the `>=` admits is `symbolsBlockSize == symbolsDone`, where `left` is zero, twelve divides zero, and the divisible arm returns `0 * bitsPerFrame / 12` -- which is the zero the `>` form returns by not entering at all. The two agree on every input and no fixture can separate them. The `>` is written because it is the object's: `cmp %edx,%ecx; jbe` at .text+0x4e0d8 leaves the arithmetic unentered on equality."
+ },
+ {
+  "label": "the remaining count is subtracted the other way round",
+  "find": "\t\tunsigned int left = symbolsBlockSize - symbolsDone;",
+  "replace": "\t\tunsigned int left = symbolsDone - symbolsBlockSize;"
+ },
+ {
+  "label": "reset takes the bit count from the wrong word of the block",
+  "find": "\tbitsPerFrame = (unsigned int)((struct V92ParamsInfo *)p)->K;",
+  "replace": "\tbitsPerFrame = (unsigned int)((struct V92ParamsInfo *)p)->trellisType;"
+ },
+ {
+  "label": "reset leaves the symbol cursor alone",
+  "find": "\ttransmitter->reset(p);\n\n\tsymbolsDone = 0;\n",
+  "replace": "\ttransmitter->reset(p);\n\n"
+ },
+ {
+  "label": "reset leaves the block size alone",
+  "find": "\tsymbolsBlockSize = 0;\n\tbitsPerFrame",
+  "replace": "\tbitsPerFrame"
+ },
+ {
+  "label": "reset clears the flag rather than setting it",
+  "find": "->K;\n\tflag_1c = 1;",
+  "replace": "->K;\n\tflag_1c = 0;"
+ },
+ {
+  "label": "reset does not call the transmitter",
+  "find": "\ttransmitter->reset(p);\n\n",
+  "replace": "\n"
+ },
+ {
+  "label": "setSymbolsBlockSize reports the count from before the store",
+  "find": "\tsymbolsBlockSize = n;\n\n\treturn nofBitsForNextTime();",
+  "replace": "\tunsigned int r = nofBitsForNextTime();\n\n\tsymbolsBlockSize = n;\n\n\treturn r;"
+ },
+ {
+  "label": "setSymbolsBlockSize stores into the cursor instead",
+  "find": "\tsymbolsBlockSize = n;\n\n\treturn",
+  "replace": "\tsymbolsDone = n;\n\n\treturn"
+ },
+ {
+  "label": "the two-argument overload's overflow test is inclusive",
+  "find": "\n\t\tif (symbolsDone > nSymbols) {",
+  "replace": "\n\t\tif (symbolsDone >= nSymbols) {"
+ },
+ {
+  "label": "the two-argument overload clamps to the buffer, not the block",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tif (flag_1c != 0)",
+  "replace": "\t\t\tsymbolsDone = nSymbols;\n\t\t}\n\t}\n\n\tif (flag_1c != 0)"
+ },
+ {
+  "label": "the two-argument overload does not clamp at all",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tif (flag_1c != 0)",
+  "replace": "\t\t}\n\t}\n\n\tif (flag_1c != 0)"
+ },
+ {
+  "label": "the two-argument overload counts against the block, not the buffer",
+  "find": "\n\t\tif (symbolsDone > nSymbols) {",
+  "replace": "\n\t\tif (symbolsDone > symbolsBlockSize) {"
+ },
+ {
+  "label": "the two-argument overload appends at the front of the buffer",
+  "find": "\t\ttransmitter->process(bits, nbits, symbols + symbolsDone, nout);\n\t\tsymbolsDone += nout;\n\n\t\tif (symbolsDone > nSymbols) {",
+  "replace": "\t\ttransmitter->process(bits, nbits, symbols, nout);\n\t\tsymbolsDone += nout;\n\n\t\tif (symbolsDone > nSymbols) {"
+ },
+ {
+  "label": "the produced count replaces the cursor rather than adding to it",
+  "find": "\t\tsymbolsDone += nout;\n\n\t\tif (symbolsDone > nSymbols) {",
+  "replace": "\t\tsymbolsDone = nout;\n\n\t\tif (symbolsDone > nSymbols) {"
+ },
+ {
+  "label": "the two-argument overload leaves the flag alone",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tif (flag_1c != 0)\n\t\tflag_1c = 0;\n",
+  "replace": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n"
+ },
+ {
+  "label": "the two-argument overload clears the flag unconditionally",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tif (flag_1c != 0)\n\t\tflag_1c = 0;\n",
+  "replace": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tflag_1c = 0;\n",
+  "equivalent": true,
+  "why": "The two leave the same byte behind, so no fixture that compares the object after the call can tell them apart. It is registered because the difference is REAL in the object and is the whole reason the field is still called flag_1c: `cmpb $0x0,0x1c(%ebx); je; movb $0x0,0x1c(%ebx)` at .text+0x4e3a6 is a test GCC would never have added to a bare store, so the author wrote the condition, and the condition is the only evidence that anything anywhere reads this byte. Catching it would need a fixture that watches the STORE, which this tier cannot do."
+ },
+ {
+  "label": "the drain overload's underflow test is inclusive",
+  "find": "\t\tunsigned int j;\n\n\t\tif (symbolsDone < symbolsBlockSize) {",
+  "replace": "\t\tunsigned int j;\n\n\t\tif (symbolsDone <= symbolsBlockSize) {"
+ },
+ {
+  "label": "the drain overload's underflow arm copies the whole block out",
+  "find": "\t\tunsigned int j;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tret = V92BTOS_BUFFER_UNDERFLOW;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V92BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\n\t\t\tfor (i = 0; i < symbolsDone; i++)",
+  "replace": "\t\tunsigned int j;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tret = V92BTOS_BUFFER_UNDERFLOW;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V92BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)"
+ },
+ {
+  "label": "the drain overload's underflow arm does not clear the cursor",
+  "find": "\t\t\tsymbolsDone = 0;\n\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}",
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}",
+  "equivalent": true,
+  "why": "The arm is entered only when `symbolsDone < symbolsBlockSize`, and the shift-down that follows starts at `j = symbolsBlockSize` and runs while `j < symbolsDone` -- so it cannot run, `i` stays zero, and `symbolsDone = i` does the clear anyway. The object HAS both stores, `movl $0x0,0x10(%ebp)` at .text+0x4e4dd and `mov %ebx,0x10(%ebp)` at +0x4e50e, and the first is what lets GCC fold the loop bound to `xor %esi,%esi` at +0x4e4e4 -- which is the codegen tier's evidence for a statement the differential tier cannot reach."
+ },
+ {
+  "label": "the drain overload shifts from the front of the buffer",
+  "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tfor (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)",
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tfor (i = 0, j = 0; j < symbolsDone; i++, j++)"
+ },
+ {
+  "label": "the drain overload does not rewind the cursor after the shift",
+  "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tfor (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)\n\t\t\tsymbols[i] = symbols[j];\n\n\t\tsymbolsDone = i;\n",
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tfor (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)\n\t\t\tsymbols[i] = symbols[j];\n\n"
+ },
+ {
+  "label": "the drain overload counts for next time before the shift",
+  "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tfor (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)\n\t\t\tsymbols[i] = symbols[j];\n\n\t\tsymbolsDone = i;\n\n\t\tnbits = nofBitsForNextTime();",
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tnbits = nofBitsForNextTime();\n\n\t\tfor (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)\n\t\t\tsymbols[i] = symbols[j];\n\n\t\tsymbolsDone = i;"
+ },
+ {
+  "label": "the combined overload's overflow test is inclusive",
+  "find": "\t\t\tif (symbolsDone > nSymbols) {",
+  "replace": "\t\t\tif (symbolsDone >= nSymbols) {"
+ },
+ {
+  "label": "the combined overload clamps to the buffer, not the block",
+  "find": "\t\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t\t}",
+  "replace": "\t\t\t\tsymbolsDone = nSymbols;\n\t\t\t}"
+ },
+ {
+  "label": "the combined overload shifts from the front of the buffer",
+  "find": "\t\t\t}\n\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tfor (i = 0, j = symbolsBlockSize; j < symbolsDone; i++, j++)",
+  "replace": "\t\t\t}\n\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\tout[i] = symbols[i];\n\t\t}\n\n\t\tfor (i = 0, j = 0; j < symbolsDone; i++, j++)"
+ },
+ {
+  "label": "the combined overload does not read nbits before it writes it",
+  "find": "\t\ttransmitter->process(bits, nbits, symbols + symbolsDone, nout);\n\t\tsymbolsDone += nout;\n\n\t\tif (symbolsDone < symbolsBlockSize) {",
+  "replace": "\t\ttransmitter->process(bits, 0, symbols + symbolsDone, nout);\n\t\tsymbolsDone += nout;\n\n\t\tif (symbolsDone < symbolsBlockSize) {"
+ },
+ {
+  "label": "the combined overload's underflow arm does not clear the cursor",
+  "find": "\t\t\tsymbolsDone = 0;\n\t\t} else {\n\t\t\tif (symbolsDone > nSymbols) {",
+  "replace": "\t\t} else {\n\t\t\tif (symbolsDone > nSymbols) {",
+  "equivalent": true,
+  "why": "The same argument as the drain overload's entry above: the arm's own condition makes the shift-down empty, so `symbolsDone = i` clears the cursor whether or not the explicit store is there. The object carries both stores here as well, at .text+0x4e28d and +0x4e2be."
+ }
+]

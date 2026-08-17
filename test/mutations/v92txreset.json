@@ -45,13 +45,13 @@
  },
  {
   "label": "+0x40 is not zeroed on the way out",
-  "find": "\tword_40 = 0;\n\tword_0c = 0;",
-  "replace": "\tword_0c = 0;"
+  "find": "\tconvEncoderOutput = 0;\n\tbitsBuffered = 0;",
+  "replace": "\tbitsBuffered = 0;"
  },
  {
   "label": "+0x0c is not zeroed on the way out",
-  "find": "\tword_40 = 0;\n\tword_0c = 0;",
-  "replace": "\tword_40 = 0;"
+  "find": "\tconvEncoderOutput = 0;\n\tbitsBuffered = 0;",
+  "replace": "\tconvEncoderOutput = 0;"
  },
  {
   "label": "the modulus encoder is reset with the transmitter and not the block",

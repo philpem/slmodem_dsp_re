@@ -64066,3 +64066,266 @@ a longer delay. It is recorded because the generator is exactly the kind of
 artefact that gets picked up later by someone who trusts it, and because "40 taps
 plus 8 zeros" is a plausible-sounding convention that is simply not the object's.
 
+## 4500. `V92BitsToSymbol`'s ROUND-UP IS TWO EXPRESSIONS, AND ONLY AN OVERFLOWING TRIAL CAN TELL
+
+`nofBitsForNextTime` (.text+0x4e0c0) turns a symbol count into a bit count by
+rounding up to a whole twelve-symbol frame. The obvious reading is
+`ceil(left / 12) * bitsPerFrame`, and the object computes that on ONE of its
+two arms only:
+
+    left % 12 != 0   ->   (left / 12 + 1) * bitsPerFrame     .text+0x4e0f2
+    left % 12 == 0   ->   left * bitsPerFrame / 12           .text+0x4e108
+
+The divisible arm multiplies FIRST. That it does is not an inference from the
+scheduling: the `je` at +0x4e0f0 is taken on `left == (left / 12) * 12`, and
+the block it lands in immediately reloads `bitsPerFrame` into `%edx`, the
+register that held the quotient. The quotient is dead there, so it cannot be
+what the multiply uses; the `imul %edx,%ecx` at +0x4e10e multiplies `left`
+itself, and the 0xaaaaaaab reciprocal that follows divides the product.
+
+Over 32-bit arithmetic the two readings agree on every input where
+`left * bitsPerFrame` fits in a word, which is every input a modem produces.
+They separate the moment it wraps: `left = 12`, `bitsPerFrame = 0x20000000`
+gives 0x20000000 the obvious way and 0x0aaaaaaa the object's. **Finding 3052's
+trap, and the third time this tree has met it** -- a plausible reading agreeing
+with the true one over every realistic input, separated only by arithmetic
+nobody would think to try.
+
+`t_v92btosproc.cpp` carries three trials that leave the plausible range for
+exactly this reason, and `test/mutations/v92btosproc.json`'s "the two arms of
+the rounding are one expression" is what proves they bite. Without them the
+fold is invisible and would have shipped.
+
+`setSymbolsBlockSize` (+0x4e130) holds the same code a second time, inlined,
+and both `process` overloads that write to `nbits` hold it a third and fourth.
+One source expression, four copies in the object.
+
+## 4501. `V92BitsToSymbol::process` RETURNS A STATUS AND THE AUTHOR NAMED EVERY FAILURE
+
+All three overloads leave a small constant in `%eax` -- 0, 1, 2 or 3 -- and
+each non-zero one is set on the same path as a `dsplibs_debug_printf` whose
+string carries the name:
+
+    1  "V92BitsToSymbol - error: process called, SIZE_NOT_SET\r\n"
+                                              .rodata.str1.4:0xd484
+    2  "V92BitsToSymbol - error: process called, BUFFER_OVERFLOW\r\n"
+                                              .rodata.str1.4:0xd4bc
+    3  "V92BitsToSymbol - error: process called, BUFFER_UNDERFLOW\r\n"
+                                              .rodata.str1.4:0xd4f8
+
+So the constant-to-name pairing is the object's own, at CLAUDE.md's strongest
+evidence tier, and not a reading of what each arm does. The header had all
+three overloads declared `void`, which was wrong and was not detectable until
+a body was read: a return type is never mangled, and the two overloads with no
+`out` argument have no other observable at all on their error paths.
+
+Zero has no string. "OK" is this tree's word for it and says so.
+
+The four are `#define`s rather than an `enum`, deliberately: nothing in the
+object says whether the author wrote an enumeration, and inventing a type name
+would be a claim where a constant is a fact.
+
+## 4502. `V92Transmitter::process` NAMED FOUR FIELDS, AND ONE OF THEM WAS 48 BYTES OF PAD
+
+The class's last unwritten member (.text+0x54590, 355 bytes) turned four
+offset-named slots into named ones, each on evidence the object forces rather
+than suggests:
+
+  - **`+0x08  void *buf_08` -> `unsigned char *bitBuffer`.** `process` fills it
+    one byte at a time from its own `bits` argument and then passes it to
+    `V92ModulusEncoder::progress`, whose mangling `EPhPj` types the first
+    argument `unsigned char *`. Two independent readings of the same width.
+  - **`+0x0c  word_0c` -> `bitsBuffered`.** The store index, incremented once
+    per input byte, compared against `K` and reduced BY `K` -- never cleared --
+    when a frame comes out.
+  - **`+0x10  pad_10[0x30]` -> `unsigned int modulusOut[12]`.** The element
+    type is `progress`'s second argument, `unsigned int *`. The LENGTH is
+    confirmed twice over and the two agree: `V92Precoder::process` indexes it
+    `i + 4 * a` for `i` in 0..3 over `a` = 0, 1, 2, so twelve is the largest
+    index the only reader can form; and `V92ModulusEncoder::progress` writes
+    `out[0]` through `out[11]` on every one of its three arms. Forty-eight
+    bytes is exactly twelve words, so the region is closed rather than bounded.
+  - **`+0x40  word_40` -> `int convEncoderOutput`.** Written only from
+    `V92ConvolutionEncoder::process`'s return and read only as
+    `V92Precoder::process`'s `b`, one iteration BEFORE the value that replaces
+    it is computed. `int` is the two neighbours' signature and not a choice.
+
+**The lesson is 3120's inverted.** That finding declined to name `+0x2f64`
+because the role could be bounded and not established. Here four names arrived
+at once from one 355-byte function, and the reason is that `process` is where
+the class's sub-objects are USED: a constructor stores pointers and a reset
+copies parameters, but only the worker says what the storage is for. A class
+whose worker is unwritten will always look more anonymous than it is.
+
+## 4503. `V92BitsToSymbol::bitsPerFrame` IS `V92ParamsInfo::K`, AND `process` IS WHAT SAYS WHAT K COUNTS
+
+`V92BitsToSymbol::reset` reads the parameter block's first word and nothing
+else (`mov (%esi),%eax` at .text+0x4e091). That word is `V92ParamsInfo::K`,
+the same field `V92Transmitter::reset` copies into its own +0x04 and prints as
+`"K = %d"` -- so the two fields hold one quantity.
+
+V92ParamsInfo.h had recorded that "nothing here says what units K counts in
+and this file does not guess". `V92Transmitter::process` now does say:
+it consumes exactly `K` input bits per twelve output samples. That closes the
+loop with `nofBitsForNextTime`, which multiplies a count of twelve-symbol
+frames by this same field to get bits.
+
+**The name was NOT changed to `K`.** The author's letter is on the record for
+the two fields a format string prints, and it is opaque; the descriptive name
+is kept for the copy the object now explains, with the identity written into
+the comment. A reader who wants the author's word finds it one line away, and
+a reader who wants the meaning does not have to derive it twice.
+
+## 4504. A FIXTURE THAT HANDS `FloatFIR` A TAP COUNT THAT IS NOT A MULTIPLE OF FOUR CRASHES, AND THAT IS THE BLOB'S BEHAVIOUR
+
+`t_v92btosproc.cpp` turned the pre-filter and precoder FIRs on by setting the
+parameter block's four filter lengths to 3 and segfaulted inside
+`floatfir_carry_tail`. The cause is already documented in
+`src/dsp/FloatFIR.cpp` and was not connected to the fixture for twenty
+minutes: both the constructor and `setCoefficients` store `nTaps & ~3u`, so a
+length of three is a filter of ZERO taps, and `floatfir_carry_tail` counts
+`taps - 1` down with a `do`/`while`, which at zero is 2**32 iterations off the
+end of the history buffer.
+
+Two things worth keeping:
+
+  - **The apparatus has to obey the blob's preconditions.** A test that feeds
+    an input the library cannot survive is not testing a deviation, it is
+    crashing; and the crash's backtrace named `FloatFIR`, four frames below
+    the line that chose the number.
+  - **A NOT CAUGHT mutation can mean the fixture never reached the code**, not
+    that the claim is untestable. Three entries in
+    `test/mutations/v92txproc.json` -- the pre-filter being skipped, the gain
+    not being applied, the samples being rounded -- survived only because the
+    filters were off and the gain drew a whole number. Turning the filters on
+    and making the gain non-integral caught all three without changing a word
+    of `src/`.
+
+## 4505. `V92BitsToSymbol::flag_1c` HAS SIX WRITERS, NO BRANCH, AND STAYS UNNAMED
+
+The byte at +0x1c is set to 1 by the constructor and by `reset`, and all three
+`process` overloads end with
+
+    if (flag_1c != 0)
+            flag_1c = 0;
+
+on every path, the two error ones included -- `cmpb $0x0,0x1c(%ebx); je;
+movb $0x0,0x1c(%ebx)` at .text+0x4e3a6 and twice more. **The test is the
+author's, not the compiler's**: a bare store is one instruction and GCC does
+not add a load and a branch to avoid one.
+
+So the class's whole surface is now written and NOTHING BRANCHES ON THIS BYTE.
+It is a one-shot -- raised at construction and at every reset, lowered by the
+first `process` after either -- and its reader is somewhere else or nowhere.
+Naming it `firstProcess` would be believable and unfalsifiable, which is
+exactly what CLAUDE.md's "a wrong name is worse than a pad" forbids, so it
+keeps its offset name with the derivation beside it. This is 3120's ruling
+reached from the other direction: there the readers were unwritten, here they
+are all written and still say nothing.
+
+The differential tier cannot see the difference between the conditional clear
+and a bare one -- both leave the same byte -- so
+`test/mutations/v92btosproc.json` carries it as an `equivalent` entry whose
+`why` is the disassembly. It is the only evidence that anything, anywhere,
+reads this byte.
+
+## 4510. SIXTEEN STACK SLOTS AROUND A LOOP ARE LOOP-INVARIANT MOTION, NOT AN ARRAY THE AUTHOR WROTE
+
+`V92CP::calcCRC` (.text+0x4e5f0) loads all sixteen bytes of `this->crc` into
+stack slots before its loop, shuffles them there for the whole run, and stores
+them all back afterwards. Inside the loop it reads `this->bits[i]` and writes
+nothing to the object at all.
+
+**That was read as proof the author had copied the register into locals, and
+the reading was wrong.** The argument was that `bits` and `crc` are both
+`unsigned char` and abut, so an in-place loop would have to reload `crc[0]`
+after every store in case the next `bits[i]` aliased it.
+
+**WHAT IS MEASURED: both compilers hoist it anyway.** The in-place source --
+sixteen stores straight into `this->crc`, no local array, no copy either way --
+passes the differential test at every length in `t_v92cpcrc.cpp`'s grid, three
+of which are past 2,017 and therefore past the point where `bits[i]` addresses
+`crc`; `make phase` is green, which puts GCC 3.4.2 and GCC 13 both on that
+side. So loop-invariant motion does hoist the loads and sink the stores out of
+a loop whose only object access is a read of the other member, and the
+sixteen stack slots are the compiler's rather than the author's.
+
+**WHAT IS NOT ESTABLISHED IS WHY, and this finding deliberately does not say.**
+The obvious candidate -- that GCC disambiguates two distinct members by
+component -- does not obviously reach this case: telling `bits[i]` from
+`crc[j]` needs `i < 2000`, and `i` is bounded only by a run-time `n`. The
+other candidate is the out-of-bounds entitlement: an access to `bits[i]` past
+its 2,000 declared entries is undefined, so the compiler may assume it stays
+inside `bits`. Those are different rules with different reach, and naming the
+wrong one here would send the next reader to apply it where it does not hold.
+The measurement stands without it.
+
+**THE TWO SOURCES ARE STILL NOT THE SAME FUNCTION.** At the C level the
+in-place form feeds the register its own updated bytes once the index reaches
+2,000, and the copied form feeds it the values it started with. Neither tier
+can see it -- the compiler resolves it identically for both -- so the choice
+had to be made on which source produces the object's code, and it does.
+
+**The general shape is worth keeping, and so is the second half of it.** "The
+compiler could not have done this, so the source must have" needs the
+compiler's actual rules and not the ones a careful C programmer would assume
+-- and the way to settle it is to WRITE THE OTHER FORM AND RUN IT, which took
+one edit and one `make one` here. An argument about what GCC may do is worth
+less than a build that shows what it did, and it is worth less still when the
+rule it names has not been checked against the case in hand.
+
+## 4511. `V92CP::evaluateCRC` IS TWO MEMBERS INLINED AND A SUMMED ABSOLUTE DIFFERENCE
+
+668 bytes, and there is no call and no relocation anywhere in the range: it is
+`resetCRC` (32 bytes) and `calcCRC` (570) inlined, plus 60 bytes of check.
+That is most of the size and the reason it is nearly as large as the function
+it calls.
+
+The check is not a `memcmp` and not a boolean fold:
+
+    4ebbc  sub  %esi,%eax          ; crc[j] - bits[word_910 - 16 + j]
+    4ebbe  cltd
+    4ebbf  xor  %edx,%eax
+    4ebc1  sub  %edx,%eax          ; the branchless absolute value
+    4ebc3  add  %al,0x13(%esp)     ; into a BYTE
+    ...
+    4ebcc  cmpb $0x0,0x13(%esp)
+    4ebd1  sete %al
+
+so sixteen absolute differences are summed into one byte and the verdict is
+whether that byte is zero. The return is `int` and deliberate -- `xor
+%eax,%eax; sete %al` is a value built for a caller -- which is the second
+member of this class whose header declared `void` on no evidence.
+
+**On a 0/1 alphabet this is indistinguishable from three other functions** --
+a signed sum, a wider accumulator, an OR -- and a random grid separates none
+of them. Two crafted messages do, and `t_v92cpcrc.cpp` carries both: one
+received bit above its computed value and one below (absolute sum 2, signed sum
+0), and sixteen differences of sixteen (absolute sum 256, which is zero in a
+byte). The second is deviation D503 and the first is how the `abs` was pinned.
+
+Getting the first one right took two attempts, and the failure is worth
+recording: planting -1 on a stage that holds ZERO gives 255, and 255 + 1 is
+256, so the trial silently turned into the other one and the reference answered
+MATCH where the comment said MISMATCH. **A crafted trial needs its own
+anti-vacuity check on the value it crafted**, not only on the answer it
+expects.
+
+## 4512. THE V.92 CP MESSAGE CARRIES A FILL BIT IN EVERY SEVENTEENTH POSITION
+
+`calcCRC` skips one index in seventeen -- `i % 17 == 0` computed with the
+0xf0f0f0f1 reciprocal and applied as `cmp $0x1,%ebx; adc $0x0,%esi`, GCC's
+if-conversion of an increment (2411, and free). It starts at 18 and stops 17
+short of `word_910`, and `evaluateCRC` then reads the last sixteen entries as
+the received CRC.
+
+So the message's layout is: 18 entries of preamble the CRC does not cover, a
+body in which every seventeenth slot is a fill bit the CRC also does not cover,
+and 16 CRC bits at the end that are covered by neither. Sixteen data bits and
+one fill bit make seventeen, which is the frame the skip counts.
+
+None of that is named in the object -- there is no string and no accessor --
+so it is arithmetic and not the author's word for it, and
+`include/dsplib/V92CP.h` records `+0x910` as a modelled word rather than
+naming it. `infoToBits` and `bitsToInfo` are the two members that build the
+layout, both still unwritten, and they are where the names will come from.

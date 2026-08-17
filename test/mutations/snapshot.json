@@ -6288,6 +6288,55 @@
     "the transmitter's null test is dropped": "caught"
    }
   },
+  "v92btosproc": {
+   "key": "9eefca521215172d8e29cf2bc602482597e81cd6650a3e0651204b587c67e772",
+   "summary": "32 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
+   "verdicts": {
+    "reset clears the flag rather than setting it": "caught",
+    "reset does not call the transmitter": "caught",
+    "reset leaves the block size alone": "caught",
+    "reset leaves the symbol cursor alone": "caught",
+    "reset takes the bit count from the wrong word of the block": "caught",
+    "setSymbolsBlockSize reports the count from before the store": "caught",
+    "setSymbolsBlockSize stores into the cursor instead": "caught",
+    "the combined overload clamps to the buffer, not the block": "caught",
+    "the combined overload does not read nbits before it writes it": "caught",
+    "the combined overload shifts from the front of the buffer": "caught",
+    "the combined overload's overflow test is inclusive": "caught",
+    "the combined overload's underflow arm does not clear the cursor": "equivalent",
+    "the drain overload counts for next time before the shift": "caught",
+    "the drain overload does not rewind the cursor after the shift": "caught",
+    "the drain overload shifts from the front of the buffer": "caught",
+    "the drain overload's underflow arm copies the whole block out": "caught",
+    "the drain overload's underflow arm does not clear the cursor": "equivalent",
+    "the drain overload's underflow test is inclusive": "caught",
+    "the empty-block test is inclusive": "equivalent",
+    "the produced count replaces the cursor rather than adding to it": "caught",
+    "the remaining count is subtracted the other way round": "caught",
+    "the residue arm multiplies first too": "caught",
+    "the rounding does not round up": "caught",
+    "the two arms are swapped": "caught",
+    "the two arms of the rounding are one expression": "caught",
+    "the two-argument overload appends at the front of the buffer": "caught",
+    "the two-argument overload clamps to the buffer, not the block": "caught",
+    "the two-argument overload clears the flag unconditionally": "equivalent",
+    "the two-argument overload counts against the block, not the buffer": "caught",
+    "the two-argument overload does not clamp at all": "caught",
+    "the two-argument overload leaves the flag alone": "caught",
+    "the two-argument overload's overflow test is inclusive": "caught"
+   }
+  },
+  "v92btosprochdr": {
+   "key": "315f66a3bb974ba4e05ca5c9baf460d0d197d4d2bcd656dd2f27ff5e076e2da7",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "SIZE_NOT_SET is reported as success": "caught",
+    "success is reported as one": "caught",
+    "the frame is six symbols rather than twelve": "caught",
+    "the frame is twenty-four symbols": "caught",
+    "the two buffer faults report each other's code": "caught"
+   }
+  },
   "v92convenc": {
    "key": "3b91d725863c2e4ab1315b63dc04cda8a05055c0fc89bd0be9d12d2398f12b66",
    "summary": "40 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -6335,7 +6384,7 @@
    }
   },
   "v92cp": {
-   "key": "3d6a4e6b979598c00a269adc8ff6a16b7753def11c455949caade2e0aca9f0a2",
+   "key": "1adfa7c108c39e673846a1afc0d41f578949d992f1c067df9b229e84e41af808",
    "summary": "14 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x04 cleared as a word": "caught",
@@ -6352,6 +6401,47 @@
     "the detector's second flag left alone": "caught",
     "the two flags are one 16-bit field": "equivalent",
     "the two flags are one 32-bit field": "caught"
+   }
+  },
+  "v92cpcrc": {
+   "key": "95e21aaab5171f7536405362f6ee5140bd4386e18efd0299537ff34d0f787c48",
+   "summary": "35 mutations: 35 caught (35 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "evaluateCRC does not reset the register first": "caught",
+    "evaluateCRC resets after calculating": "caught",
+    "every sixteenth position is skipped, not every seventeenth": "caught",
+    "getBitVector hands back the CRC register": "caught",
+    "getBitVector reports the other length": "caught",
+    "no position is skipped": "caught",
+    "only the first stage is checked": "caught",
+    "reset does not clear the detector": "caught",
+    "reset leaves +0x914 alone": "caught",
+    "reset sets +0x914 to zero rather than -1": "caught",
+    "resetDetector also writes +0x914, which it does NOT": "caught",
+    "resetDetector leaves +0x120 alone": "caught",
+    "resetDetector leaves the two flag bytes alone": "caught",
+    "resetDetector seeds the counter with seventeen": "caught",
+    "setSUV stores fifteen rather than sixteen": "caught",
+    "setSUV stores its argument in both slots": "caught",
+    "the CRC register is fifteen stages": "caught",
+    "the CRC register is reset to zero": "caught",
+    "the accumulator is wider than a byte": "caught",
+    "the difference is signed rather than absolute": "caught",
+    "the differences are OR-ed rather than summed": "caught",
+    "the entering bit is not masked": "caught",
+    "the feedback does not include the message bit": "caught",
+    "the feedback is taken from the far end of the register": "caught",
+    "the message runs to the very end": "caught",
+    "the message starts at seventeen": "caught",
+    "the message stops sixteen short, not seventeen": "caught",
+    "the received CRC is one place off": "caught",
+    "the received CRC is read from the front of the message": "caught",
+    "the register shifts the other way": "caught",
+    "the skip is on the residue one rather than zero": "caught",
+    "the tap at stage ten is a plain shift": "caught",
+    "the tap at stage three is a plain shift": "caught",
+    "the tap at stage three is at stage two": "caught",
+    "the verdict is inverted": "caught"
    }
   },
   "v92ec": {
@@ -6891,7 +6981,7 @@
    }
   },
   "v92tx": {
-   "key": "67a953421f9d208df9ac2b26e2ad016fd1bf838d22861b49c7ed66621a8fc466",
+   "key": "2039805a01fbf91ba36c1c4daaba43ab00a69f77ec9790657b70e97d2e98a95e",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x04 is not cleared": "caught",
@@ -6914,8 +7004,34 @@
     "the raw buffer's null test is dropped": "caught"
    }
   },
+  "v92txproc": {
+   "key": "88d997f015953ef30c780c732157ede5187d8b5fec44db3b6a52709bfa61697a",
+   "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "K is reached exactly rather than crossed": "caught",
+    "every frame is written over the front of the output": "caught",
+    "every precoder step writes over the first four symbols": "caught",
+    "the bit count is cleared rather than reduced by K": "caught",
+    "the bit count is not reduced at all": "caught",
+    "the buffer is filled from the input's front every time": "caught",
+    "the convolution encoder's output is applied in the same step": "caught",
+    "the convolution encoder's output is not carried forward": "caught",
+    "the frame threshold is not reached until one bit past K": "caught",
+    "the gain is not applied": "caught",
+    "the input byte is stored one place late": "caught",
+    "the modulus encoder is given the caller's bits directly": "caught",
+    "the pre-filter is skipped": "caught",
+    "the pre-filter's two buffers are the same way round": "caught",
+    "the precoder is not told which step it is on": "caught",
+    "the precoder runs twice rather than three times": "caught",
+    "the sample count advances by eleven": "caught",
+    "the sample count is not reported": "caught",
+    "the sample count is reported in frames": "caught",
+    "the samples are rounded rather than truncated": "caught"
+   }
+  },
   "v92txreset": {
-   "key": "0102f7d11aab10b352532ffbd18a0afaca024960cb81dd4e992c1e60655901e6",
+   "key": "5263b48b688c72ab709f5c1c957415d7988279cf22b962644fd5f635d917683a",
    "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x0c is not zeroed on the way out": "caught",
