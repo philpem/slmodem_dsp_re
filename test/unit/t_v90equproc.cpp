@@ -1,15 +1,21 @@
 /*
  * t_v90equproc.cpp -- differential test of V90Equalizer::process.
  *
- * IT IS ITS OWN BINARY FOR `t_v90eqdata.cpp`'S REASON.  `t_v90equ` is in
- * `tools/gccdiverge.json` because six of its checks are the object's
- * one-ordered-compare equality, which GCC 13 cannot emit; `tools/mutate.py`
+ * IT IS ITS OWN BINARY, AND IT IS NOT MUTATION-SCORABLE.  `tools/mutate.py`
  * refuses to score a mutant set against an already-red binary, because caught
- * and already-red are indistinguishable.  This binary keeps NaN out of the
- * grid deliberately -- the only divergence class in `process` is the ordered
- * compare at the `long double` high-error test and the `== 0.0f` guard on the
- * before/after ratio, and both are ordinary on finite inputs -- so it stays
- * green on the modern tier and stays mutation-scorable.
+ * and already-red are indistinguishable -- and this binary IS red on the
+ * modern tier, declared in `tools/gccdiverge.json` for the x87
+ * excess-precision divergence finding 6003 measures.  So the defence against
+ * a vacuous grid here is the anti-vacuity counters at the bottom of this
+ * file and nothing else, and every one of them has to count an OBSERVABLE
+ * the reference produced rather than something the fixture planted.
+ *
+ * NaN is kept out of the grid deliberately all the same.  The two remaining
+ * divergence classes in `process` are the ordered compare at the `long
+ * double` high-error test and the `== 0.0f` guard on the before/after ratio,
+ * both of which are ordinary on finite inputs; a NaN would add a second,
+ * unrelated reason for the modern tier to be red and make the first one
+ * unreadable.
  *
  * THE FIXTURE IS `t_v90eqdata.cpp`'S, extended: the object in a byte array
  * carried by a union for its alignment, both sides seeded with the SAME
@@ -542,23 +548,16 @@ run_reset_arm(void)
 					else
 						saw_dfe = 1;
 					/*
-					 * THE WRAP IS COUNTED BY ITS EFFECT,
-					 * not by where the cursor ended.  It
-					 * copies `array_18[0 .. le-1]` up to
-					 * the top of the line, so a top entry
-					 * that now holds what the bottom held
-					 * before the call is the observable --
-					 * and the cursor landing high can also
-					 * mean it simply started high, which
-					 * is a counter that cannot fail
-					 * (finding 3509).
+					 * THE CURSOR RETREATS ON EVERY SYMBOL
+					 * AND ONLY THE WRAP CAN RAISE IT, so
+					 * a final position ABOVE the entering
+					 * one is the observable.  Counting
+					 * where it merely ENDED would be
+					 * satisfied by a trial that started
+					 * high and never wrapped, which is a
+					 * counter that cannot fail (finding
+					 * 3509).
 					 */
-					if (le > 0
-					    && arena.a18[w1c - le]
-					       == arena_save.a18[0]
-					    && arena.a18[w1c - le]
-					       != arena_ours.a18[0])
-						saw_wrap = 1;
 					if (le > 0 && w1c > le
 					    && THEIRS.word_20
 					       > (int)(w1c - le - 1u)
@@ -591,10 +590,26 @@ run_reset_arm(void)
 							    - (float)outsym_[1][q];
 
 							if (e > 300.0f
-							    || e < -300.0f) {
+							    || e < -300.0f)
 								saw_bigerr = 1;
-								break;
-							}
+							/*
+							 * THE ONLY CONDITION
+							 * UNDER WHICH THE
+							 * 64-BIT CONVERT AND A
+							 * 32-BIT ONE DIFFER.
+							 * Below it the two
+							 * spellings agree bit
+							 * for bit, so a
+							 * counter that fired
+							 * on "the large row
+							 * ran" would have been
+							 * a counter that
+							 * cannot fail
+							 * (finding 3509).
+							 */
+							if ((double)e * (double)e
+							    >= 4294967296.0)
+								saw_overflow = 1;
 						}
 					}
 					/*
