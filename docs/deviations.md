@@ -7685,3 +7685,54 @@ symbolsDone 2)` and `(2, 1)` -- both write the reference and both write the
 symbol, so the object, the transcript and the return value are all asserted on
 every trial.  Initialising it would be a behaviour change on exactly the path
 the object leaves open, so it is not done.
+## D670 ✅ Four `V90PreFilter` arms form a coefficient pointer outside its bank
+
+**Where:** `src/pump/v90/V90PreFilter.cpp`, `getFilterPointer` and both
+`setFilter` overloads; blob 0x44ff0, 0x45090 and 0x44a30.
+
+`getFilterPointer` clamps the row to the bank's last -- 30 for the 20-tap
+banks, 50 for the 40-tap one -- on every arm EXCEPT the one it takes when no
+reference loop is selected, where `je 0x45040` at 0x45002 jumps past the
+`cmp $0x1e` the other arms fall through.  Neither `setFilter(PreFilterCoefType,
+unsigned)` arm clamps at all.  So `bank1(80)` and `bank3(0)` are both
+reachable, and the second is a pointer 800 floats BEFORE its array.
+
+This is the same deviation the file already carries for `selectFilter`'s ISDN
+and PBX arms, which take the row straight out of the registry: the file comment
+says "THE INDEX IS NOT ALWAYS CLAMPED, AND THAT IS THE OBJECT'S DOING ...
+Reproduced literally", and `bank1`/`bank2`/`bank3` say "`row` is deliberately
+not range-checked".  These three members are where the unclamped arms come
+from -- `selectFilter`'s automatic arm is `getFilterLength` and
+`getFilterPointer` inlined.
+
+**Reproduced, and DRIVEN.**  `t_v90prefilter.cpp`'s `run_filteraccessors`,
+`run_setfilter_gain` and `run_setfilter_type` sweep gains 0..80 across every
+`coefType`, which is the same grid `run_selectfilter_synthetic` has been
+driving through the same three helpers since batch 3.  The pointer is
+arithmetic and is never dereferenced: `FloatFIR::setCoefficients` stores it,
+compares nothing through it and reads nothing through it, and the test resolves
+it by ADDRESS against each side's own bank bases rather than by loading from
+it.  Excluding it instead would leave the object's two unclamped paths with no
+trial at all, and the clamp mutations ("bank 3's clamp is bank 1's", "bank 2 is
+not clamped", "getFilterPointer clamps on the no-reference-loop arm too") are
+exactly the defects that would then be invisible.
+
+## D671 ✅ `getV90Capability` reads `loops[-1]` when the search selects nothing
+
+**Where:** `src/pump/v90/V90PreFilter.cpp`, `getV90Capability`; blob 0x45a10.
+
+The last line is `dataBase[codecType].loops[refLoop].capability`, and the only
+thing that has bounded `refLoop` by then is `autoSelection`, which leaves it
+untouched when no table entry beats its 1e10f starting distance.  The object
+computes `%ecx * 17` at 0x45a5c on a negative `%ecx` and loads through it; ours
+would subscript out of bounds.  It is reachable only when the search matched
+nothing AND the registry's +0x500 is not 6, because either alone returns 1
+before the load.
+
+**Reproduced, and NOT DRIVEN** -- and unlike D670 this one is a LOAD and not
+arithmetic.  Every trial in `run_getv90capability` calls `set_measurement`
+first, so the search always lands on a record and `refLoop >= 0` is asserted
+per trial rather than assumed.  A trial that arranged the empty case would be
+measuring our undefined behaviour and not the object's, which is D561's ruling.
+The same hazard is already inside `autoSelection`, whose closing `edprintf`
+prints `loops[refLoop].name` unguarded.

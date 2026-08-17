@@ -66747,3 +66747,246 @@ be settled by a differential test: every pair of spellings agrees over every
 input, and the only thing that separates them is what the compiler was forced
 to encode.  That is five results from the second tier in one batch, against
 one behavioural defect found (none).
+### 4970. `setFilter(unsigned)` IS THE TWO ACCESSORS, CALLED, AND THE OBJECT PROVES THE PAIR
+
+`V90PreFilter::setFilter(unsigned int)` is 312 bytes and holds `getFilterLength`
+and `getFilterPointer` whole, in that order, inlined:
+
+    450ab:  cmp  %edi,0x20(%esi)  ; gain already installed?  do nothing
+    450b4:  mov  0x24(%esi),%ecx  ; refLoop -- FIRST read
+    450bd:  mov  $0x14,%ebp       ; ... getFilterLength's balanced tree ...
+    450f9:  mov  0x24(%esi),%ecx  ; refLoop -- SECOND read, no store between
+    450fc:  ...                   ; ... getFilterPointer's, with the clamps ...
+    4515c:  call FloatFIR::setCoefficients
+    45161:  mov  %edi,0x20(%esi)  ; and only then record the gain
+
+**The second read of `refLoop` is what separates two calls from one block.**
+Nothing writes the field between 0x450b4 and 0x450f9, so a hand-written block
+would have kept the value in the register; two inlined function bodies each
+load it for themselves.  Both bodies are also present as their own out-of-line
+symbols at 0x44f90 and 0x44ff0, which is what GCC emits for a non-inline member
+it also inlined.
+
+The length is computed first, which is GCC evaluating the call's arguments
+right to left; both are pure, so it is not observable.
+
+`selectFilter`'s automatic arm is this function again -- the same two passes
+over the same field, the same `gain == want` early exit, the same two `BUGMSG`
+sites -- so the "two passes over the same field" comment that batch 3 wrote
+against `selectFilter` has its explanation here.  `selectFilter` is left as it
+stands: rewriting it to call `setFilter` is a source change nothing tests, and
+the two spellings are differentially identical.
+
+### 4971. `PreFilterCoefType`'S VALUES ARE 1, 2 AND 3, AND ITS NAMES ARE STILL NOT RECOVERED
+
+Five members dispatch on this type or on the `V90RefLoop::coefType` field that
+holds one: `setFilter(PreFilterCoefType, unsigned)`, `setFilter(unsigned)`,
+`getFilterPointer`, `getFilterLength` and `selectFilter`.  Every one of them
+tests against exactly 2 and 3, treats 1 as an arm of its own, and has a default
+that prints `BUGMSG`.  Value N selects `preFilterCoefType`N, whose name IS the
+author's because a static data member is in the mangling
+(`_ZN12V90PreFilter18preFilterCoefType3E`).
+
+So the values are settled and no enumerator is added for them.  What the author
+called them is not in the object anywhere -- the one string that prints the
+field, "Pre Filter Coeffs Type array %d", prints the NUMBER -- and a name
+invented here would be believed by every later reader and could never fail a
+test.  The case labels are integers, as the constructor's sixteen-arm
+`__tHardwareCodecTypes__` switch already spells its own; the header records the
+derivation.  `PreFilterCoefType_BASE_PIN` stays, and is now load-bearing for the
+test as well as for the underlying type: it is what makes `(PreFilterCoefType)7`
+a value of the enumeration rather than undefined, so the sweep may drive the
+default arm.
+
+### 4972. `getFilterLength`'S ARGUMENT IS IN THE MANGLING AND IS NEVER READ
+
+`_ZN12V90PreFilter15getFilterLengthEj` takes an `unsigned int`, so the signature
+is a specification.  Its 92 bytes touch `0x10(%esp)` -- `this` -- and never
+`0x14(%esp)`.  The tap count depends only on the selected reference loop's
+bank.  Spelled `(void)gain;`, and there is no mutation for it: the object does
+not read the argument either, so no input can separate reading it from not.
+
+### 4973. `getV90Capability` INLINES `isV90WithEia6`, AND THE SETCC COUNT IS THE CHECK
+
+The blob's 122 bytes contain exactly three `setcc`:
+
+    45a39:  sete %al   ; loops[refLoop].capability == 2
+    45a43:  sete %al   ; ... == 1, on a value already 0 or 1
+    45a52:  sete %dl   ; params +0x500 == 6
+    45a55:  or   %al,%dl
+
+The middle one is `isV90WithEia6`'s own `(cap == 1) || ...`, which this tree has
+carried in that function since batch 3 -- so the call site is
+`if (isV90WithEia6())` and NOT `if (isV90WithEia6() == 1)`, which would emit a
+fourth.  The entry test is a SIGN test (`test %ecx,%ecx ; js`) and not a
+comparison with -1, and it is the same test as the callee's `refLoop >= 0`,
+which is why the fall-through at 0x45a1e goes straight to the capability load
+and only the post-`autoSelection` path tests again.
+
+Our build emits that second test on both paths rather than only on the search
+path, which costs three bytes (0x7d against the blob's 0x7a).  That is jump
+threading, which the compiler was free to choose; it is recorded and not chased.
+
+### 4974. TWO SWITCH ARMS WITH THE SAME BODY: THE OBJECT SAYS WHETHER THEY SHARE A LABEL
+
+`getFilterLength` answers 20 taps for `coefType` 1 and for 2.  Written the
+obvious way, `case 1: case 2:` under one label, GCC merges them into a
+contiguous RANGE and emits `cmp $1 / jl` then `cmp $2 / jle`.  The blob has
+neither instruction: at 0x44fbd it compares against 2, `jg`s to the 3 arm, and
+only in the low half does the `dec %eax / je` that tests for 1 -- which is the
+balanced tree GCC builds over three SEPARATELY labelled cases, folded back
+together afterwards by cross-jumping onto one `ret`.
+
+Measured on the period compiler with everything else held:
+
+    spelling                          getFilterLength   setFilter(unsigned)
+    `case 1: case 2:`, shared `len`        0x5e               0x123
+    four separate `return 20`              0x5b               0x13b
+    blob                                   0x5c               0x138
+
+so the separate-label spelling is right at both sites, and it is the inlining
+site that makes the difference large enough to be worth having.  Neither is
+byte-exact and this is a similarity argument only: the two behave identically
+over every input, and no differential test can or should separate them.
+
+`getFilterPointer` needs none of this -- its four arms have four different
+bodies, so nothing could merge -- and it comes out at the blob's 0x9a exactly.
+
+### 4975. `V90Phase3Demodulator+0x3f8` IS A FIELD, AND ITS ONE USE DOES NOT NAME IT
+
+The header had it as `pad_3f8[1]`, "nothing reaches it".
+`setDigitalImairmentsInfo` reaches it:
+
+    20e88:  0f b6 83 f8 03 00 00  movzbl 0x3f8(%ebx),%eax
+    20e8f:  89 44 24 04           mov    %eax,0x4(%esp)
+    20e98:  call V90AutoDigitalImpDetector::determineMaxUcode(short)
+
+So it is ONE BYTE, unsigned -- `movzbl` and not `movsbl`, on a value whose
+32-bit result is used, which is finding 613's forced case -- and widened into
+the callee's `short`.  Modelled as `unsigned char byte_3f8` with a `P3D_OFF`
+assertion, and NOT named.
+
+`determineMaxUcode`'s parameter is spelled `maxCode` in this tree, which is
+tempting and is not evidence: the mangling carries `s` and no name, so
+`maxCode` is our own invention and naming the field after it would promote an
+invention into a second place.  Nothing writes the byte in anything written so
+far -- its writer is somewhere in the unwritten half -- and no format string
+prints it, which leaves usage inference alone.  CLAUDE.md's weakest tier, so a
+neutral name and the derivation in the comment.
+
+### 4976. `getMaxUcode` RETURNS A POINTER, AND THE CALLER'S SIBLING TYPES IT
+
+Twelve bytes: `mov (%eax),%eax ; add $0xa956,%eax ; ret`.  +0xa956 in
+`V90AutoDigitalImpDetector` is `unsigned char maxUcode[6]`, one entry per
+phase, so this is `&adid->maxUcode[0]` and the whole array is what comes back.
+
+The return type is `unsigned char *` on evidence that is not ours:
+`V90Demodulator::exitPhase3` is the one caller and hands the result to
+`V90TRN2Designer`'s `topUcode` parameter, which V90TRN2Designer.h already
+spells `unsigned char *` -- named there, as its own comment records, because
+it comes out of a mangled name.
+
+### 4977. `exitDIL`'S SEVEN STATES ARE ENUMERATED, AND THE `||` ORDER IS RECOVERABLE
+
+10..16 is contiguous, so the natural spelling folds to a range: written
+ascending, GCC 3.4.2 emits `sub $0xa ; cmp $6 ; jbe` and the function is 0x62
+bytes.  The blob has no such fold.  What it has is
+
+    cmp $0xc ; sete %dl ; cmp $0x10 ; sete %al ; or %al,%dl ; jne
+    cmp $0xa ; je   cmp $0xb ; je   cmp $0xd ; je   cmp $0xe ; je   cmp $0xf
+
+-- a branchless PAIR followed by five short-circuited compares, and the pair is
+{12, 16} rather than {10, 11}.
+
+`fold_truthop` collapses the INNERMOST pair of a left-associated `||` chain
+when both sides are cheap and leaves the rest in source order, so the pair is
+the first two terms the author wrote and the five `je`s are the remaining five
+in sequence: **12, 16, 10, 11, 13, 14, 15**.  Written that way the period build
+emits that seventeen-instruction chain instruction for instruction, and the
+function goes from 0x62 to 0x8f against the blob's 0xa4 -- the residue is block
+layout, the blob inverting its last branch and falling into the body.
+
+**No differential test can adjudicate this and none is claimed to.**  Every
+permutation of seven equality tests answers the same for every state, so this
+is a `make similarity` result and the mutation file says so rather than leaving
+a silent gap.  What it is NOT is fitting the compiler: the hypothesis predicted
+the exact five-compare sequence before it was built, and ascending order does
+not merely differ in size, it emits no `sete` at all.
+
+### 4978. `twoLevelDemod`'S NEGATE IS TRUNCATED TO SIXTEEN BITS, AND THAT IS ITS ONLY VISIBLE CLAIM
+
+    21627:  movl $0x0,(%edi)     ; the bit
+    2162d:  f7 da                neg    %edx
+    2162f:  0f bf f2             movswl %dx,%esi
+
+The level is a `short` out of `linMapp`/`linMappAlt`, and its negation is
+truncated back to sixteen bits before use.  For a mapping entry of -32768 the
+object answers -32768; `-level` on an `int` answers +32768, and the two agree
+over every other value the table can hold.  `t_v90p3ddec.cpp` plants that
+entry across the whole grid, and the mutation that drops the `(short)` is the
+one that fires on it.
+
+**The return type is `int` and the same two instructions say so.**  A `short`
+return needs no sign extension -- the caller widens -- so the `movswl` feeding
+a register that is returned unmodified is only there because the returned value
+is 32 bits wide.
+
+ONE CODEGEN DIFFERENCE IS RECORDED AND NOT CHASED: the period build INLINES
+`Descrambler<int,int>::process` here where the blob calls it, which is 135 of
+the 355 bytes against the blob's 220.  Inlining is the compiler's to choose,
+and it is the same difference the constructor's comment already records for
+`Descrambler`'s constructor (finding 1302's paragraph).  The
+`SerialDifferentialDecoder<int>::process` call stays a call in both.
+
+### 4979. STATE 30 IS `WaitForANSpcmDrop`, AND THE AUTHOR NAMED IT TWICE
+
+`enterWaitForANSpcmDrop` prints "V90Phase3Demodulator: enter WaitForANSpcmDrop"
+(.rodata.str1.4+0x5ae4) and then stores 0x1e into +0x28.  A format string that
+prints the thing is CLAUDE.md's strongest evidence, and the MEMBER's own
+mangled name is the same words again, so `P3D_STATE_WAIT_FOR_ANS_PCM_DROP = 30`
+joins the three `reset` supplied.
+
+The rest of the thirty-odd states stay as the `(Phase3DemodulatorState)0x13`
+casts the two decision functions already spell them with; nothing names them.
+`getV90Decision`'s `case 0x1e:` is left alone -- it is a case label inside an
+8 KB function this batch is not testing, and the header already records the
+same decision for `word_04`/`framePosition`.
+
+### 4980. TWO OBSERVATIONS THE PHASE 3 BATCH MADE ABOUT `V90AutoDigitalImpDetector`, NEITHER OF THEM ITS OWN
+
+`setDigitalImairmentsInfo` is three calls and a tail jump, so testing it means
+running `determineMaxUcode`, `findPadGain` and `applyPadGainToLinMapp` from a
+fixture that is not theirs.  Two things fell out, and both belong to that class
+rather than to this one.
+
+**D290 IS REACHABLE THROUGH THIS METHOD'S OWN FIRST LINE.**  `findPadGain`'s
+opening scan counts a byte down against a bound derived from `byte_a954`, and
+a `byte_a954` of 3..7 makes the bound negative so the loop never ends -- which
+docs/deviations.md D290 already records.  What is new is that `byte_a954` is
+whatever `determineMaxUcode` left, and `determineMaxUcode` runs immediately
+before, so this method can hand itself a non-terminating input.  The first
+grid this batch wrote hung on it.  `t_v90p3ddec.cpp` now runs
+`determineMaxUcode` alone on a saved copy first, reads the byte, restores, and
+skips the trial when it lands in the band -- reporting how many it skipped, so
+the denominator is visible.  A hang is not a differential result.
+
+The floor matters as well as the band: `short_a97a` near zero makes
+`determineMaxUcode` leave a byte near zero, which is both the hazardous band
+and a scan long enough to dominate the binary's run time.  The fixture uses
+0x30-ish, as t_v90adid's own `findPadGain` fixture does.
+
+**AND THE TWO DIAGNOSTIC PATHS DIVERGE AT INPUTS t_v90adid DOES NOT REACH.**
+Driven from here at `dsplibs_debug_level` 2, our report and the blob's differ
+-- 69 lines against 43 on one trial and 195 against 106 on another -- while the
+43 KB detector the two runs leave behind is IDENTICAL byte for byte.  So it is
+the printing and not the arithmetic.  Planting finite floats in `float_1000`,
+`float_9118` and `float_9d48` narrows it (131/105 before, 69/43 after), which
+says part of it is finding 2304's `v == 0.0f` under a seeded NaN and part of it
+is not.
+
+**This batch does not fix it and does not excuse it.**  `setDigitalImairmentsInfo`
+prints nothing of its own, so its transcript is entirely those two functions',
+and a `tools/gccdiverge.json` entry here would be declaring a divergence in
+somebody else's code on the strength of a fixture that is not theirs.  The
+suite runs at level 0, which is stated as a limit where the test can be read,
+and the measurement is left here for whoever owns those two functions.
