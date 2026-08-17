@@ -63476,3 +63476,50 @@ set" would have lost silently:
   the EXPORTED `FPM_cos_sign`, which nothing in `src/` reads and only the
   neighbourhood block can catch. That last one is what proves the two copies of
   the four real signs cannot drift apart.
+
+### 3900. THE DISPATCH BUCKET HOLDS NO V.34/V.90/V.92 WORK, AND A NAME-BASED PASS SAID IT DID
+
+*Phase 8 of `docs/plan.md` was blocked on `tools/indirect.py`, which crashed
+(3520). With it repaired the bucket can be measured, and the answer changes the
+plan: there is nothing in it for the modes currently being worked.*
+
+**TWO MECHANISMS, AND THE SECOND IS NOT THE FIRST AGAIN.** `indirect.py` finds
+relocations from data sections into `.text` -- 1,922, of which 163 land on a
+symbol boundary and name **125 distinct indirect entry points**. Separately,
+`R_386_32` relocations naming a `FUNC` symbol anywhere name **223 distinct
+functions**, 181 of them unwritten. The two overlap but neither contains the
+other; 3520 recorded the second and deliberately did not fold it into one count.
+
+**CLASSIFIED BY REACHABILITY, of the 181 unwritten:**
+
+| | symbols | bytes |
+|---|--:|--:|
+| fax only | 135 | 29,930 |
+| data mode, V.22 / V.32 | 33 | 24,670 |
+| voice / Caller ID / ring | 4 | 2,858 |
+| reached by no entry point | 9 | 323 |
+| **V.34 / V.90 / V.92** | **0** | **0** |
+
+**AND A NAME-BASED PASS GOT THIS WRONG, which is the fifth time in two days.**
+Bucketing the same 92 symbols by regex put 69 of them -- 9,164 bytes -- under
+"core/dsp/other", which reads as in-scope shared DSP. They are `faxvmi_hdlc_unframe`,
+`faxvmi_asyc_pack`, `init_vmi_v17rx`, `v17rx_create` and their kin: fax, all of
+it. The regex was case-sensitive and had no `vmi`. Every measurement in this
+tree that partitions work MUST seed `tools/service.py`'s entry points and follow
+reachability; the name is not evidence and has now cost five wrong answers
+(V.34's remainder, V.32's size, `v34_shell::pad_000`, the vtable bucket's
+contents, and this).
+
+**THE NINE ORPHANS.** Eight modulation message handlers at *exactly* 39 bytes
+each -- `v17rx_message`, `v17tx_message`, `v21rx_message`, `v21tx_message`,
+`v27rx_message`, `v27tx_message`, `v29rx_message`, `v29tx_message` -- and
+`null_message` at 11. Uniform size is one shape repeated; `null_message` is the
+table's default entry. V.21 is fax's 300-baud control channel, so these are
+reached through the fax VMI dispatch -- a table `indirect.py` resolves but whose
+caller it cannot follow, which is why they read as reached by nothing.
+
+**WHAT THIS MEANS FOR THE ORDER.** Phase 8 cannot be started as V.90 work and
+should not be scheduled against the V.34/V.90/V.92 push at all. Its content is
+fax (Phase 10) plus the V.22/V.32 remainder (Phases 4 and 5), and it should be
+absorbed into those rather than run as its own phase. What remains genuinely
+Phase 8's own is the dialler and call-progress half, which is unmeasured.

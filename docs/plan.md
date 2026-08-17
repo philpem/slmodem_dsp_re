@@ -258,9 +258,43 @@ phase; schedule it when those six files are free.
 `v34_object`'s did. `getAT_UD` carries `"RBS : %d (%d%d%d%d%d%d)"`, which names
 a six-bit field — these are naming oracles as well as functions.
 
-## Phase 8 — dialler, call progress, and the vtable bucket
+## Phase 8 — dialler, call progress, and the dispatch bucket
 
-Includes the 254 no-direct-caller symbols. Fix `tools/indirect.py` first.
+**MEASURED, now that `tools/indirect.py` works (3520/3521), and the headline is
+that NONE of it is V.34/V.90/V.92.** That dispatch surface is complete.
+
+Two mechanisms reach code without a direct call, and the second is not a
+duplicate of the first:
+
+1. **Relocations from a data section into `.text`** — 1,922 of them; 163 land
+   on a symbol boundary and name **125 distinct indirect entry points** (73
+   from `.rodata`, 37 from `.data`, 17 from the object's only four C++ vtables,
+   the `Resampler` family). **92 unwritten, 33,422 bytes.**
+2. **`R_386_32` naming a FUNC symbol anywhere** — **223 distinct functions,
+   181 unwritten, 57,781 bytes.**
+
+Classified by REACHABILITY from each service's own entry points. Not by name:
+a name-based pass put `faxvmi_*` and `v17rx_create` under "core/dsp" and made
+this bucket look like in-scope work when none of it is.
+
+| | symbols | bytes |
+|---|--:|--:|
+| fax only | 135 | 29,930 |
+| data mode, V.22 / V.32 | 33 | 24,670 |
+| voice / Caller ID / ring | 4 | 2,858 |
+| reached by no entry point | 9 | 323 |
+| **V.34 / V.90 / V.92** | **0** | **0** |
+
+**The nine orphans are worth a note for whoever comes back.** Eight modulation
+message handlers at *exactly* 39 bytes each -- `v17rx_message`, `v17tx_message`,
+`v21rx_message`, `v21tx_message`, `v27rx_message`, `v27tx_message`,
+`v29rx_message`, `v29tx_message` -- plus `null_message` at 11. The uniform size
+says one shape repeated, and `null_message` says the table has a default. V.21
+is fax's 300-baud control channel, so all nine are almost certainly reached
+through the fax VMI dispatch, which is a table `indirect.py` resolves but whose
+CALLER it cannot follow. They are cheap and they are fax; take them with fax.
+
+The dialler and call-progress half of this phase is unmeasured and still owed.
 
 ## Phase 9 — voice, Caller ID, ring detect
 
