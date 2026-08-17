@@ -75260,7 +75260,48 @@ actually contains. Naming the component under test is not the same as naming
 the components the control shares with it, and the six-pair matrix shares the
 ATA and the trunk with our calls but not the media stack.
 
-### 6701. THE JITTER BUFFER'S FABRICATED FRAMES ARE SUBSTITUTION, NOT SLIP — AND AN INDEPENDENT V.34 IMPLEMENTATION MEASURES THAT RATE AS FREE
+### 6701. THE JITTER BUFFER FABRICATES FRAMES TWO DIFFERENT WAYS — ONE IS SUBSTITUTION AND HARMLESS, THE OTHER IS A WHOLE-FRAME INSERTION AND IS THE IMPAIRMENT V.34 CANNOT ABSORB
+
+> **CORRECTED BEFORE THIS WAS MERGED OR CITED, AND THE CORRECTION REVERSES THE
+> CONCLUSION.** The first version of this finding was titled "the jitter
+> buffer's fabricated frames are SUBSTITUTION, NOT SLIP" and concluded that
+> 1941/1942 do not indict d-modem's media path and that an ASRC is not the next
+> thing to build. **That is right for one of the two mechanisms and wrong for
+> the other, and the other is the dangerous one.**
+>
+> `stream.c` zero-fills a frame's worth of output either way, which is what the
+> first reading looked at. The difference is one level down, in whether the
+> jitter buffer CONSUMES a frame from the sender's stream while doing it:
+>
+> * **`PJMEDIA_JB_MISSING_FRAME`** — the framelist is non-empty and the head
+>   slot is blank, so `jb_framelist_get` takes the slot and
+>   `jb_framelist_remove_head` consumes it. One sender-frame in, one
+>   receiver-frame out. **Substitution; alignment preserved.** The original
+>   reading holds here.
+> * **`PJMEDIA_JB_ZERO_EMPTY_FRAME`** — `jb_framelist_get` opens with
+>   `if (framelist->size)`, and on an empty list skips the whole body and
+>   returns `PJ_FALSE` **having consumed nothing** (`jbuf.c:276`). The caller
+>   emits zeros anyway (`jbuf.c:1184`). Zero sender-frames in, one
+>   receiver-frame out. **That is an INSERTION**: the sender's stream is now a
+>   whole frame behind the consumer's clock, and stays there.
+>
+> **AND 1941 MEASURED BOTH, AT ABOUT THE SAME RATE** — "roughly one `lost` and
+> one `empty` every four seconds". So about half the events are insertions, at
+> ~0.25/s, with zero network loss. A frame is 80 or 160 samples, so each one is
+> a phase step of tens of symbols — far larger than the SINGLE-SAMPLE slips
+> hsfuser measures as fatal at 0.08/s.
+>
+> **So the jitter buffer is a STRONGER suspect than before this finding was
+> written, not a weaker one, and the ASRC sentence below is withdrawn.** The
+> mechanism 1942 named — the consumer outrunning the producer with no net rate
+> error — is precisely a clock-reconciliation problem, and pjmedia reconciles
+> it by inserting frames. That is what an ASRC exists to replace.
+>
+> **HOW IT WAS CAUGHT, because it is a rule worth having.** `chanshim.py`'s own
+> comment for `CHAN_SLIP` says a jitter-buffer underrun INSERTS and contradicts
+> the paragraph below. Our own tool disagreed with our own finding, in writing,
+> and the finding was newer. Read what the apparatus already says before
+> concluding something about what it models.
 
 1941 measured d-modem's receive path fabricating a frame roughly every two to
 four seconds with zero network loss, and 1942 confirmed it across three
@@ -75280,8 +75321,12 @@ distinction is worth more than the measurement.**
 
 **The sample count is preserved.** A frame's worth of zeros is substituted for
 a frame's worth of audio; nothing is inserted and nothing is deleted, and the
-stream stays in phase across the event. `PJMEDIA_JB_ZERO_EMPTY_FRAME`
-(`stream.c:633`) does the same. These are *loss* events, not *slip* events.
+stream stays in phase across the event. ~~`PJMEDIA_JB_ZERO_EMPTY_FRAME`
+(`stream.c:633`) does the same. These are *loss* events, not *slip* events.~~
+**THAT LAST SENTENCE IS WITHDRAWN — see the correction at the head of this
+finding.** It is true of `MISSING_FRAME`, which is what the code quoted above
+is, and false of `ZERO_EMPTY_FRAME`, which consumes no sender frame and
+therefore inserts one. Roughly half of 1941's events are the second kind.
 
 **WHY THAT DISTINCTION DECIDES THE PRIORITY.** hsfuser — an independent
 userspace V.34 implementation (the Conexant HSF datapump, at
@@ -75308,13 +75353,22 @@ that modem returns a median of 33600. Had the events been slips, 0.3-0.5/s
 would sit between the 10 ppm row (no connect) and the 100 ppm row (4800) —
 the opposite conclusion from the same numbers.
 
-**SO 1941/1942 DO NOT INDICT d-modem's MEDIA PATH, AND AN ASRC IS NOT THE NEXT
-THING TO BUILD.** hsfuser's own sec 5 conclusion — that an RTP path needs an
-asynchronous sample-rate converter — is sound *for a path that reconciles
-clocks by inserting and deleting samples*. d-modem's does not: it reconciles by
-substituting whole frames and never changes the sample count. 1942 had already
-closed off the other reading independently — RTP arrival was 50.000 pkt/s to
-within 0.03% in all three arms, so there is no net sample deficit to reconcile.
+~~**SO 1941/1942 DO NOT INDICT d-modem's MEDIA PATH, AND AN ASRC IS NOT THE
+NEXT THING TO BUILD.**~~ **WITHDRAWN IN FULL — this paragraph is the one the
+correction at the head of the finding overturns, and it is left here rather
+than deleted because it is the mistake, not a rough edge.** It argued that
+hsfuser's sec 5 ASRC conclusion does not apply because "d-modem reconciles by
+substituting whole frames and never changes the sample count". The
+`ZERO_EMPTY_FRAME` half changes it every time it fires.
+
+**AND THE 1942 ARGUMENT IT LEANED ON DOES NOT SAY WHAT IT WAS USED TO SAY.**
+RTP arriving at 50.000 pkt/s to within 0.03% shows there is no net *rate* error
+between the two crystals. It says nothing about whether the buffer momentarily
+runs dry, and a buffer that sits three or four frames deep runs dry on jitter
+alone whatever the long-run average is. 1942's own title states the mechanism —
+"OUR CONSUMER BURSTS AS DEEP AS THE BUFFER" — and every burst deeper than the
+buffer is an insertion. A matched average rate does not prevent that; it only
+means the insertions are not accumulating without bound.
 
 **WHAT SURVIVES, AND IT IS NOT NOTHING.** 0.3-0.5% may not be free on *our*
 receiver even if it is free on that one — see 6702, which is where the
