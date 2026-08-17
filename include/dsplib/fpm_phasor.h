@@ -41,15 +41,29 @@ unsigned short FPM_phasor_sin_entry(int i);
 
 /*
  * The quadrant sign tables, GLOBAL and in `.data` because the object's are
- * (`D` at 0x081dc and 0x081e4, not `R`), and because the quadrant that indexes
- * them is never masked -- so what lies immediately BEFORE them is part of the
- * observable behaviour for any phase of 0x8000 or more.  Nothing outside
- * `fpm_phasor.c` reads them through this declaration; it exists so the unit
- * test can compare the four words before `FPM_cos_sign`, and the pair itself,
- * against the object's.  See the comment on their definition, and D392 for
- * why the four before `FPM_sin_sign` are not comparable.
+ * (`D` at 0x081dc and 0x081e4, not `R`).  These two hold exactly what the
+ * object's two symbols hold, and nothing indexes them out of range; they are
+ * the reconstruction's copy of the object's symbol table, and the unit test
+ * compares them word for word against `dsplibs_ref.o`'s own.
  */
 extern short FPM_cos_sign[4];
 extern short FPM_sin_sign[4];
+
+/*
+ * ... and the arrays the phasor ACTUALLY indexes.  `FPM_phasor` does not mask
+ * the quadrant, which therefore runs -4 .. 3 rather than 0 .. 3, so the object
+ * reads four entries BEFORE each of its two symbols.  Those eight words are
+ * constants -- `FPM_sin_sign` itself before `FPM_cos_sign`, and `COEF_DC`'s
+ * tail plus a padding word before `FPM_sin_sign` -- so they are carried HERE,
+ * as leading entries of one array, and the phasor indexes
+ * `ext[FPM_PHASOR_SIGN_BELOW + quad]`.  Every index it can form then lands
+ * inside a single array object and the behaviour is defined C rather than a
+ * bet on what the linker puts where.  D4 is the same fix one word forward.
+ * D392 and finding 3700 for the whole derivation.
+ */
+#define FPM_PHASOR_SIGN_BELOW 4
+
+extern short FPM_cos_sign_ext[FPM_PHASOR_SIGN_BELOW + 4];
+extern short FPM_sin_sign_ext[FPM_PHASOR_SIGN_BELOW + 4];
 
 #endif /* DSPLIB_FPM_PHASOR_H */

@@ -327,6 +327,35 @@
     "training holds the integrator down, as V.22 does": "caught"
    }
   },
+  "fpmmtd": {
+   "key": "8d67c3ca6b0d5aba0f9829e932cedb13fbdfae2215fe84be970e04bf7021e924",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "COEF_DC's output scale is one out": "caught",
+    "COEF_DC's third coefficient is one out": "caught"
+   }
+  },
+  "fpmmtdlayout": {
+   "key": "4de075a17c341a62f64d924376a54ea4f48edfa46a3623e3ee160f279b54ac5f",
+   "summary": "2 mutations: 0 caught (0 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "COEF_DC's third coefficient is one out": "equivalent",
+    "another of fpm_mtd.c's globals comes between COEF_DC and the phasor's sign tables": "equivalent"
+   }
+  },
+  "fpmphasor": {
+   "key": "430aa261155b86c903aff62f7b3f9255256f1618fb51d6ae35390ac05d78f632",
+   "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the cosine's window is the masked quadrant's own signs": "caught",
+    "the demodulator reads its phase unsigned": "caught",
+    "the exported FPM_cos_sign drifts from the extended copy of it": "caught",
+    "the phase is read unsigned, so the quadrant never goes negative": "caught",
+    "the quadrant is masked before it indexes the sign tables": "caught",
+    "the sine's window has COEF_DC's third coefficient one out": "caught",
+    "the sine's window pad is not zero, which is the quadrant -1 coincidence": "caught"
+   }
+  },
   "fpmpps": {
    "key": "285cf8a2f9305dc2589bcfa549a0f15b205e3ccc58259e26966989acd4cc42f7",
    "summary": "49 mutations: 45 caught (45 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
@@ -758,6 +787,38 @@
     "resetHistoryIndexes: pTap1 goes to pInitOut": "caught"
    }
   },
+  "v17data": {
+   "key": "53d2f60a0a9ff16e868f92ca81195bbd2578fd87d09e811880339c1c5bfc7e8c",
+   "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the coder and the ring are handed to the encoder the other way round": "caught",
+    "the coder is taken from the ring's offset, so the encoder is handed the ring twice": "caught",
+    "the cursor advances before the store rather than after it": "caught",
+    "the cursor wraps one past it, so the slot at len is written": "caught",
+    "the cursor wraps one short of the ring length": "caught",
+    "the encoder is dispatched from the slot above the one the selector names": "caught",
+    "the encoder table is read one slot high, which is V17TX_create's abs where it laid dif": "caught",
+    "the encoder's count is one short, so the last data word never reaches the ring": "caught",
+    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
+    "the no-carrier symbol comes from two bytes above it": "caught",
+    "the no-carrier symbol comes from two bytes below the field the object reads": "caught",
+    "the no-carrier symbol is written to the ring's rails, which is V.29's form of this function": "caught",
+    "the parameter block is taken from the instance's FP pointer instead of its own": "caught",
+    "the ring is taken from the instance rather than from the transmitter's block": "caught",
+    "the ring length is read where the read cursor lives": "caught",
+    "the second argument is used as the symbol source rather than ignored": "caught",
+    "the selector indexes the table unsigned, which agrees over every value V17TX_create can leave and not over a negative one": "caught",
+    "the selector is read from the two bytes above it": "caught",
+    "the shaper is filtered from a ring that is not the one the encoder wrote": "caught",
+    "the shaper is taken from the coder's offset": "caught",
+    "the shaper runs before the ring is filled rather than after": "caught",
+    "the shaper's count is the number of samples it may write rather than the number of symbols offered": "caught",
+    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught",
+    "the write cursor is initialised from the read cursor": "caught",
+    "the write cursor is not written back, so a caller filling the ring across calls overwrites the same slots": "caught",
+    "the write cursor is written back into the read cursor": "caught"
+   }
+  },
   "v22dec": {
    "key": "8f83645910657ec5bfde40ed0c7e8ed3bc0f0a43a41a24f135db64ccee5f23a9",
    "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -810,6 +871,67 @@
     "the history shifts by one more than the tap count": "caught",
     "the window clamp uses >= where the object uses >": "equivalent",
     "the window is not clamped while the history is still filling": "caught"
+   }
+  },
+  "v29data": {
+   "key": "c920501a44682e6a974689c34373f2c308b1c207586fa13e12a892cc40615768",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "both rails are written through the I pointer": "caught",
+    "only the I rail is zeroed": "caught",
+    "only the Q rail is zeroed": "caught",
+    "the cursor advances before the store rather than after it": "caught",
+    "the cursor wraps one past it, so the slot at len is written": "caught",
+    "the cursor wraps one short of the ring length": "caught",
+    "the loop counter is signed, which is the same over every count the ring can hold and not over one above 32767": "caught",
+    "the loop runs one short, so the last slot is left as it was": "caught",
+    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
+    "the rails are zeroed one slot ahead of the cursor": "caught",
+    "the ring is taken four bytes above the transmitter's block": "caught",
+    "the ring length is read where the read cursor lives": "caught",
+    "the second argument is used as the rail source rather than ignored": "caught",
+    "the shaper is handed the sample count rather than the symbol count": "caught",
+    "the shaper is taken from V.17's offset rather than V.29's": "caught",
+    "the shaper runs before the rails are zeroed rather than after": "caught",
+    "the silence is a zero symbol index rather than two zeroed rails, which is V.17's form of this function": "caught",
+    "the transmitter's block is taken from the instance offset V.17 uses": "caught",
+    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught",
+    "the write cursor is initialised from the read cursor": "caught",
+    "the write cursor is not written back, so a caller zeroing across calls overwrites the same slots": "caught",
+    "the write cursor is written back into the read cursor": "caught"
+   }
+  },
+  "v32data": {
+   "key": "066f8fcf67e15ffa551c0c98c970e584a08a52f5b135f0530fdef38b07ce1cd6",
+   "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the coder and the ring are handed to the encoder the other way round": "caught",
+    "the coder is taken from V.22's offset rather than V.32's": "caught",
+    "the coder is taken from the shaper's offset": "caught",
+    "the cursor advances before the store rather than after it": "caught",
+    "the cursor is not written back, so a caller filling the ring across calls overwrites the same slots": "caught",
+    "the cursor wraps one past it, so the slot at limit is written": "caught",
+    "the cursor wraps one short of the ring length": "caught",
+    "the encoder is dispatched from the slot above the one the selector names": "caught",
+    "the encoder table is read one slot high, which is abs where V32FP_recreate laid dif": "caught",
+    "the encoder's count is one short, so the last data word never reaches the ring": "caught",
+    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
+    "the no-carrier index carries a mode tag in its high byte": "caught",
+    "the no-carrier index is one below the seventeenth map entry": "caught",
+    "the no-carrier index is zero, which is a real constellation point": "caught",
+    "the quadrant accumulator is masked to three bits rather than two": "caught",
+    "the quadrant is not written back": "caught",
+    "the quadrant is stepped FORWARDS, which agrees at every count that is a multiple of four": "caught",
+    "the quadrant is stepped once per call rather than once per symbol": "caught",
+    "the quadrant is taken from the coder's mode instead": "caught",
+    "the ring bound is read where the read cursor lives": "caught",
+    "the selector indexes the table unsigned, which agrees over every value V32FP_recreate can leave and not over a negative one": "caught",
+    "the selector is read from the two bytes above it": "caught",
+    "the shaper is filtered from a ring the encoder did not write": "caught",
+    "the shaper is taken from the coder's offset": "caught",
+    "the shaper's count is the sample count rather than the symbol count": "caught",
+    "the transmitter's block is taken from V.17's instance offset": "caught",
+    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught"
    }
   },
   "v34datapump": {
@@ -7181,117 +7303,6 @@
     "the handle itself is forwarded": "caught",
     "the modulator is forwarded rather than the demodulator": "caught",
     "the phase 2 record is forwarded rather than the demodulator": "caught"
-   }
-  },
-  "fpmmtdlayout": {
-   "key": "4e3beb55c8e579462099358c74cb53782ca220bc27986bed2e82ab0a2c3bbd8e",
-   "summary": "2 mutations: 0 caught (0 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
-   "verdicts": {
-    "COEF_DC's third coefficient is one out": "uncaught",
-    "another of fpm_mtd.c's globals comes between COEF_DC and the phasor's sign tables": "uncaught"
-   }
-  },
-  "fpmphasor": {
-   "key": "7266ce4c92930789f0aa26a1530edabf771fbffda449a67c03fb8d13a97ab6b6",
-   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
-   "verdicts": {
-    "the demodulator reads its phase unsigned": "caught",
-    "the phase is read unsigned, so the quadrant never goes negative": "caught",
-    "the quadrant is masked before it indexes the sign tables": "caught",
-    "the sign tables are laid out cosine first": "caught"
-   }
-  },
-  "v17data": {
-   "key": "53d2f60a0a9ff16e868f92ca81195bbd2578fd87d09e811880339c1c5bfc7e8c",
-   "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
-   "verdicts": {
-    "the coder and the ring are handed to the encoder the other way round": "caught",
-    "the coder is taken from the ring's offset, so the encoder is handed the ring twice": "caught",
-    "the cursor advances before the store rather than after it": "caught",
-    "the cursor wraps one past it, so the slot at len is written": "caught",
-    "the cursor wraps one short of the ring length": "caught",
-    "the encoder is dispatched from the slot above the one the selector names": "caught",
-    "the encoder table is read one slot high, which is V17TX_create's abs where it laid dif": "caught",
-    "the encoder's count is one short, so the last data word never reaches the ring": "caught",
-    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
-    "the no-carrier symbol comes from two bytes above it": "caught",
-    "the no-carrier symbol comes from two bytes below the field the object reads": "caught",
-    "the no-carrier symbol is written to the ring's rails, which is V.29's form of this function": "caught",
-    "the parameter block is taken from the instance's FP pointer instead of its own": "caught",
-    "the ring is taken from the instance rather than from the transmitter's block": "caught",
-    "the ring length is read where the read cursor lives": "caught",
-    "the second argument is used as the symbol source rather than ignored": "caught",
-    "the selector indexes the table unsigned, which agrees over every value V17TX_create can leave and not over a negative one": "caught",
-    "the selector is read from the two bytes above it": "caught",
-    "the shaper is filtered from a ring that is not the one the encoder wrote": "caught",
-    "the shaper is taken from the coder's offset": "caught",
-    "the shaper runs before the ring is filled rather than after": "caught",
-    "the shaper's count is the number of samples it may write rather than the number of symbols offered": "caught",
-    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught",
-    "the write cursor is initialised from the read cursor": "caught",
-    "the write cursor is not written back, so a caller filling the ring across calls overwrites the same slots": "caught",
-    "the write cursor is written back into the read cursor": "caught"
-   }
-  },
-  "v29data": {
-   "key": "c920501a44682e6a974689c34373f2c308b1c207586fa13e12a892cc40615768",
-   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
-   "verdicts": {
-    "both rails are written through the I pointer": "caught",
-    "only the I rail is zeroed": "caught",
-    "only the Q rail is zeroed": "caught",
-    "the cursor advances before the store rather than after it": "caught",
-    "the cursor wraps one past it, so the slot at len is written": "caught",
-    "the cursor wraps one short of the ring length": "caught",
-    "the loop counter is signed, which is the same over every count the ring can hold and not over one above 32767": "caught",
-    "the loop runs one short, so the last slot is left as it was": "caught",
-    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
-    "the rails are zeroed one slot ahead of the cursor": "caught",
-    "the ring is taken four bytes above the transmitter's block": "caught",
-    "the ring length is read where the read cursor lives": "caught",
-    "the second argument is used as the rail source rather than ignored": "caught",
-    "the shaper is handed the sample count rather than the symbol count": "caught",
-    "the shaper is taken from V.17's offset rather than V.29's": "caught",
-    "the shaper runs before the rails are zeroed rather than after": "caught",
-    "the silence is a zero symbol index rather than two zeroed rails, which is V.17's form of this function": "caught",
-    "the transmitter's block is taken from the instance offset V.17 uses": "caught",
-    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught",
-    "the write cursor is initialised from the read cursor": "caught",
-    "the write cursor is not written back, so a caller zeroing across calls overwrites the same slots": "caught",
-    "the write cursor is written back into the read cursor": "caught"
-   }
-  },
-  "v32data": {
-   "key": "066f8fcf67e15ffa551c0c98c970e584a08a52f5b135f0530fdef38b07ce1cd6",
-   "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
-   "verdicts": {
-    "the coder and the ring are handed to the encoder the other way round": "caught",
-    "the coder is taken from V.22's offset rather than V.32's": "caught",
-    "the coder is taken from the shaper's offset": "caught",
-    "the cursor advances before the store rather than after it": "caught",
-    "the cursor is not written back, so a caller filling the ring across calls overwrites the same slots": "caught",
-    "the cursor wraps one past it, so the slot at limit is written": "caught",
-    "the cursor wraps one short of the ring length": "caught",
-    "the encoder is dispatched from the slot above the one the selector names": "caught",
-    "the encoder table is read one slot high, which is abs where V32FP_recreate laid dif": "caught",
-    "the encoder's count is one short, so the last data word never reaches the ring": "caught",
-    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
-    "the no-carrier index carries a mode tag in its high byte": "caught",
-    "the no-carrier index is one below the seventeenth map entry": "caught",
-    "the no-carrier index is zero, which is a real constellation point": "caught",
-    "the quadrant accumulator is masked to three bits rather than two": "caught",
-    "the quadrant is not written back": "caught",
-    "the quadrant is stepped FORWARDS, which agrees at every count that is a multiple of four": "caught",
-    "the quadrant is stepped once per call rather than once per symbol": "caught",
-    "the quadrant is taken from the coder's mode instead": "caught",
-    "the ring bound is read where the read cursor lives": "caught",
-    "the selector indexes the table unsigned, which agrees over every value V32FP_recreate can leave and not over a negative one": "caught",
-    "the selector is read from the two bytes above it": "caught",
-    "the shaper is filtered from a ring the encoder did not write": "caught",
-    "the shaper is taken from the coder's offset": "caught",
-    "the shaper's count is the sample count rather than the symbol count": "caught",
-    "the transmitter's block is taken from V.17's instance offset": "caught",
-    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught"
    }
   }
  }

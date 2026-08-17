@@ -28,15 +28,19 @@
  * object is at .text 0x0a921a, inside `FPM_MTD_detect`.  It cannot be in
  * fpm_iir.c, which is #619 and would place it BELOW DEF_COEFS.
  *
- * That matters beyond attribution: fpm_phasor.c's `FPM_sin_sign` is the next
- * `.data` object in the link and is read four entries BEFORE its base for any
- * phase of 0x8000 or more, so COEF_DC's last three words and the two bytes of
- * boundary padding after them ARE the sine's sign table for a quarter of the
- * phasor's range.  This reproduces that in the build that ships and cannot be
- * ASSERTED, because a compiler is free to append to a translation unit's
- * `.data` and `--coverage` does -- so `t_fpm_phasor` compares the sine only
- * inside the designed domain.  Not `const`: the object's symbol is `D`.
- * Findings 3620, 3621, 3623 and 3624, deviation D392.
+ * IT ALSO USED TO BE LOAD-BEARING FOR fpm_phasor.c AND IS NOT ANY MORE.  In
+ * the OBJECT, `FPM_sin_sign` is the next `.data` object in the link and is
+ * read four entries BEFORE its base for any phase of 0x8000 or more, so
+ * COEF_DC's last three words and the two bytes of boundary padding after them
+ * ARE the sine's sign table over a quarter of the phasor's range.  We used to
+ * reproduce that by arranging for the same thing to happen in OUR link, which
+ * made the phasor's correctness a property of the linker; `fpm_phasor.c` now
+ * carries those four words as values, so nothing about where this array lands
+ * can reach the phasor, and `t_fpm_phasor` compares both outputs over all
+ * 65536 phases.  Only the DEPENDENCE was removed -- the attribution above
+ * rests on the address, the single reference and the binding, and stands
+ * without it.  Not `const`: the object's symbol is `D`.  Findings 3620, 3621,
+ * 3623, 3624 and 3700-3703, deviation D392.
  */
 short COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {
 	-12971, 12917, 28620, -25834, 12917,
