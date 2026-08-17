@@ -1,17 +1,20 @@
 /*
  * V92Phase4Modulator.h -- the V.92 phase 4 upstream symbol source, PARTIAL.
  *
- * Reconstructed from dsplibs.o.  The class has 34 distinct members; TWENTY-SIX
- * of them are written in src/pump/v90/V92Phase4Modulator.cpp -- the constructor
- * (C1 at .text+0x17970 and C2 at +0x17a20, 164 bytes each), the destructor (D2
- * at +0x16de0 and D1 at +0x16e40, 87 bytes each) and the twenty-four members of
- * the "generate / recived / exit / resetBefor" surface.  The EIGHT not written
- * are `generateSymbol` (4,055 B), `recivedCPtag`,
- * `recivedPartOneSilenceRrnSUVtag`, `reset`, `recivedRt`, `recivedSUV`,
- * `recivedPartTwoSilenceRrnSUV` and `enterRepeatedCP`.  Every one of those
- * needs `V92CP::infoToBits`, directly or through `generateSymbol`, and that is
- * unwritten.  They are not declared here: a declaration whose signature is
- * guessed is worse than no declaration.
+ * Reconstructed from dsplibs.o.  The class has 34 distinct members and
+ * THIRTY-THREE of them are written in src/pump/v90/V92Phase4Modulator.cpp --
+ * the constructor (C1 at .text+0x17970 and C2 at +0x17a20, 164 bytes each),
+ * the destructor (D2 at +0x16de0 and D1 at +0x16e40, 87 bytes each), the
+ * thirty members of the "generate / recived / exit / resetBefor" surface, and
+ * `generateSymbol` (.text+0x18050, 4,055 B), which is the state machine the
+ * other generators are the arms of.
+ *
+ * The ONE not written is `reset`
+ * (`_ZN18V92Phase4Modulator5resetEsh23V92Phase4ModulatorStatejj`, 290 B at
+ * .text+0x19030).  It became READY the moment `generateSymbol` landed -- it
+ * calls it in a loop -- and it is not declared here, because the enum its
+ * mangling names is not modelled and a declaration whose signature is guessed
+ * is worse than no declaration.
  *
  * THE OBJECT'S SPELLING OF "received" IS "recived" throughout, and it is the
  * mangling's -- `_ZN18V92Phase4Modulator13recivedSUVtagEv`.  Reproduced.
@@ -71,9 +74,11 @@
  *     "V92Phase4Modulator: enter Rm @ %d"    ->  +0x00 = 26    generateData-
  *                                                              SymbolBeforeFPE
  *
- * The other nine values this batch sees -- 0, 1, 3, 4, 5, 9, 11, 12, 13 --
- * are written as bare numbers on purpose.  Nothing written names them, and a
- * guessed enumerator is exactly the wrong name that no test can fail on.
+ * Nine more values were bare when that paragraph was written and six of them
+ * are named now, by `generateSymbol`'s own messages -- see the block below
+ * the four `#define`s.  Every value still bare is bare on purpose: nothing
+ * written names it, and a guessed enumerator is exactly the wrong name that
+ * no test can fail on.
  *
  * THE FIELD IS A SIGNED `int` AND THAT IS FORCED, not chosen.  `recivedEd` and
  * `recivedSUVtag` lower their switch as `cmp $0x5; je; jl <default>; sub $0xc;
@@ -140,6 +145,38 @@ class V92Parameters;
 #define V92P4M_STATE_CPU	12
 #define V92P4M_STATE_REPEATED_CPU 13
 
+/*
+ * Six more, and they are `generateSymbol`'s -- that one function carries a
+ * thirty-arm switch and thirteen `.rodata.str1.4` messages, and six of the
+ * messages name the signal being entered with the state store on the very
+ * next instructions.  Same evidence tier as the seven above:
+ *
+ *   3   "RRN: enter TRN2uModulation @ %d"     :0x402c, then `movl $0x3`
+ *   10  "enter FinalSUVu @ %d"                :0x3ec4, then `movl $0xa`
+ *   16  "enter B1u @ %d"                      :0x3e9c, then `movl $0x10`
+ *   17  "enter FB1u @ %d"                     :0x3f4c, then `movl $0x11`
+ *   23  "enter TRN2u Second at RRN @ %d"      :0x4108, then `movl $0x17`
+ *   28  "Phase4 Terminated @ %d"              :0x3f1c, then `movl $0x1c`
+ *
+ * STILL BARE, and deliberately: 0, 1, 4, 6, 8, 9, 11, 18, 19, 20, 24, 25,
+ * 26, 27 and 29.  Four of those are all but named by a NEIGHBOUR and that is
+ * not the same thing -- `exitTRN2u` takes 3 to 4, and 4's own arm prints "on
+ * TRN2uModulationExit enter SUV", which names the TRANSITION OUT of 4 rather
+ * than 4; 23 and 24 stand in the same relation.  29 is set on three
+ * different null-pointer errors and no message names it either.
+ *
+ * 7, 14, 21 and 22 are the switch's HOLES.  Their jump-table slots hold the
+ * default label, which is what GCC fills a dense table's gaps with, so
+ * whether the source listed them at all is not recoverable and they are not
+ * named.
+ */
+#define V92P4M_STATE_TRN2U_MOD		3
+#define V92P4M_STATE_FINAL_SUVU		10
+#define V92P4M_STATE_B1U		16
+#define V92P4M_STATE_FB1U		17
+#define V92P4M_STATE_TRN2U_SECOND	23
+#define V92P4M_STATE_TERMINATED		28
+
 class V92Phase4Modulator {
 public:
 	V92Phase4Modulator(V92Parameters *params, V92BitsToSymbol *bitsToSymbol,
@@ -165,6 +202,13 @@ public:
 	int generateTRN2u();
 	int generateDataSymbolBeforeFPE();
 	int generateDataSymbolBeforeRRN();
+
+	/*
+	 * The phase 4 upstream state machine itself: one symbol per call,
+	 * dispatched on `state` through a thirty-entry jump table, with the
+	 * segment boundaries and their transitions in the same arms.
+	 */
+	int generateSymbol();
 
 	void enterRepeatedCP();
 
@@ -212,15 +256,49 @@ public:
 	 */
 	unsigned int patternIndex;
 
-	/* +0x0c .. +0x17  Not touched by anything written here. */
-	unsigned char pad_0c[0x0c];
+	/*
+	 * +0x0c  THE ONE THING THIS CLASS REPORTS BACK PER SYMBOL, and its
+	 * shape is established while its meaning is not.
+	 *
+	 * `generateSymbol` clears it before the switch, on every call and
+	 * whatever the state; exactly one arm then writes it, the value 9,
+	 * beside the message "Phase4 Terminated @ %d".  `reset` clears it too.
+	 * `V92Modulator::progress` is the reader and it latches rather than
+	 * consumes -- `sym = p4->generateSymbol(); ...; if (p4->word_0c)
+	 * this->word_34 = p4->word_0c;` at .text+0x14e2b and +0x14f12 -- and
+	 * then tests its own copy against 9.  `V92Phase3Modulator` is read
+	 * the same way at its own +0x14.
+	 *
+	 * So: a code, zero meaning "nothing happened this symbol", set once
+	 * and read by the layer above.  What the code 9 MEANS to that layer
+	 * is `V92Modulator::progress`'s business and that function is
+	 * unwritten, so the field keeps an offset name.
+	 */
+	unsigned int word_0c;
 
-	/* +0x18  Cleared by the constructor.  A four-byte store; its role is
-	 * not established. */
+	/* +0x10 .. +0x17  Not touched by anything written here. */
+	unsigned char pad_10[8];
+
+	/*
+	 * +0x18  A COUNTER, and `byte_1c` is its enable.  `generateSymbol`'s
+	 * state 5 arm increments it once per symbol and only while `byte_1c`
+	 * is non-zero, and enters the repeated CP once it passes
+	 * `word_44 + 800`.  Cleared by the constructor, by `reset`, by
+	 * `enterRepeatedCP`, by `recivedSUVtag`, by `recivedCPtag`, by
+	 * `resetRRNSecondSection` and on both of `generateSymbol`'s two
+	 * remaining paths that touch it.  What it counts is symbols in SUV,
+	 * but only because state 5 is where it is counted -- nothing prints
+	 * it and nothing else reads it.
+	 */
 	unsigned int word_18;
 
-	/* +0x1c  Cleared by the constructor, `movb $0x0` -- one byte, and the
-	 * last thing the constructor does. */
+	/*
+	 * +0x1c  Whether `word_18` is counting.  Set to 1 at exactly one site
+	 * -- `generateSymbol`'s state 12 arm, beside "CPu Terminated @ %d" --
+	 * and cleared by the constructor, `reset`, `enterRepeatedCP`,
+	 * `recivedSUVtag`, `recivedCPtag` and `resetRRNSecondSection`, always
+	 * alongside `word_18`.  One byte, stored as a byte.
+	 */
 	unsigned char byte_1c;
 
 	/* +0x1d .. +0x1f  Not touched. */
@@ -235,23 +313,56 @@ public:
 	 */
 	unsigned int flag_20;
 
-	/* +0x24 .. +0x27  Not touched. */
-	unsigned char pad_24[4];
+	/*
+	 * +0x24  A LENGTH IN SYMBOLS, written at one site and read at one
+	 * site, both inside `generateSymbol`.
+	 *
+	 * On entry to state 23 ("enter TRN2u Second at RRN") it is set to
+	 * 4000 or 8004 according to `word_38` -- the object's branchless
+	 * `cmp $0x1; sbb; and $0xfa4; add $0xfa0` -- and state 23's own arm
+	 * will not terminate the segment until `symbolCount` has reached it.
+	 * Nothing else in the class touches it, `reset` included.
+	 *
+	 * Not named beyond that: it is a bound on one segment's length and
+	 * the two constants are not established as anything but themselves.
+	 */
+	unsigned int word_24;
 
-	/* +0x28  Set to 1 by `resetBeforRRN`; nothing written reads it. */
+	/*
+	 * +0x28, +0x30, +0x34  ONE THREE-WAY CONDITION, and that is all that
+	 * is established about them.  `generateSymbol`'s E2u arm takes the
+	 * "TRN2u Second at RRN" transition when `word_28 != 0 && word_30 != 0
+	 * && word_34 == 0` and otherwise falls through to B1u; the three are
+	 * loaded and tested in that order at .text+0x18830.  `resetBeforRRN`
+	 * sets +0x28 to 1 and clears the other two, `resetRRNSecondSection`
+	 * and `generateSymbol`'s own state 23 and 24 arms set +0x34 to 1, and
+	 * `reset` clears all three.  Nothing prints any of them.
+	 */
 	unsigned int word_28;
 
-	/* +0x2c  Cleared by `resetBeforRRN`. */
+	/*
+	 * +0x2c  THE SUV VALUE, and the name is the CALLEE'S: two of
+	 * `generateSymbol`'s arms pass it straight to `V92CP::setSUV(unsigned
+	 * int)` -- `mov 0x2c(%esi),%edx` then the call, at .text+0x18193 and
+	 * +0x18f39 -- which stores it at `V92CP::suv`.  Cleared by
+	 * `resetBeforRRN` and by `reset`, and nothing written assigns it
+	 * anything else, so what it ever holds besides zero is not
+	 * established and the offset name stays.
+	 */
 	unsigned int word_2c;
 
-	/* +0x30  Cleared by `resetBeforRRN`. */
+	/* +0x30  See `word_28`. */
 	unsigned int word_30;
 
-	/* +0x34  Cleared by `resetBeforRRN`, set to 1 by
-	 * `resetRRNSecondSection`. */
+	/* +0x34  See `word_28`. */
 	unsigned int word_34;
 
-	/* +0x38  Cleared by `resetBeforRRN`. */
+	/*
+	 * +0x38  Cleared by `resetBeforRRN` and by `reset`, and read at two
+	 * sites: `recivedRt` will not act while it is clear, and
+	 * `generateSymbol` picks `word_24` as 4000 when it is set and 8004
+	 * when it is not.  Nothing written sets it.
+	 */
 	unsigned int word_38;
 
 	/*
@@ -289,8 +400,16 @@ public:
 	 */
 	unsigned char bitsPerSymbol;
 
-	/* +0x44 .. +0x47  Not touched. */
-	unsigned char pad_44[4];
+	/*
+	 * +0x44  `reset`'s FIFTH argument, stored and read once:
+	 * `mov 0x34(%esp),%eax; mov %eax,0x44(%esi)` at .text+0x1903f, and
+	 * `generateSymbol`'s state 5 arm gives up on SUV and enters the
+	 * repeated CP once `word_18` has passed `word_44 + 800`.  So it is a
+	 * threshold that the caller of `reset` sets, offset by 800; what it
+	 * counts is `word_18`'s business and nothing written establishes
+	 * that.
+	 */
+	unsigned int word_44;
 
 	/* +0x48  The constructor's FOURTH argument, stored and not owned. */
 	V92MappingParams *mappingParams;

@@ -59,12 +59,13 @@ void v92p4m_mapper_ctor(void *self) asm("_ZN9V92MapperC1Ev");
 V92P4M_OFF(state,		0x000, state);
 V92P4M_OFF(symbolCount,		0x004, symbolcount);
 V92P4M_OFF(patternIndex,	0x008, patternindex);
-V92P4M_OFF(pad_0c,		0x00c, pad0c);
+V92P4M_OFF(word_0c,		0x00c, word0c);
+V92P4M_OFF(pad_10,		0x010, pad10);
 V92P4M_OFF(word_18,		0x018, word18);
 V92P4M_OFF(byte_1c,		0x01c, byte1c);
 V92P4M_OFF(pad_1d,		0x01d, pad1d);
 V92P4M_OFF(flag_20,		0x020, flag20);
-V92P4M_OFF(pad_24,		0x024, pad24);
+V92P4M_OFF(word_24,		0x024, word24);
 V92P4M_OFF(word_28,		0x028, word28);
 V92P4M_OFF(word_2c,		0x02c, word2c);
 V92P4M_OFF(word_30,		0x030, word30);
@@ -73,7 +74,7 @@ V92P4M_OFF(word_38,		0x038, word38);
 V92P4M_OFF(flag_3c,		0x03c, flag3c);
 V92P4M_OFF(amplitude,		0x040, amplitude);
 V92P4M_OFF(bitsPerSymbol,	0x043, bitspersymbol);
-V92P4M_OFF(pad_44,		0x044, pad44);
+V92P4M_OFF(word_44,		0x044, word44);
 V92P4M_OFF(mappingParams,	0x048, mappingparams);
 V92P4M_OFF(scrambler,		0x04c, scrambler);
 V92P4M_OFF(bitsToSymbol,	0x06c, bitstosymbol);
@@ -105,9 +106,13 @@ typedef char v92p4m_tx_modenc[
 typedef char v92p4m_modenc_f50[
 	((int)__builtin_offsetof(V92ModulusEncoder, field_50) == 0x50) ? 1 : -1];
 
-/* The two words of the caller's V92CP this file writes. */
+/* The words of the caller's V92CP this file writes. */
 typedef char v92p4m_cp_byte04[
 	((int)__builtin_offsetof(V92CP, byte_04) == 0x04) ? 1 : -1];
+typedef char v92p4m_cp_suv[
+	((int)__builtin_offsetof(V92CP, suv) == 0x108) ? 1 : -1];
+typedef char v92p4m_cp_bps[
+	((int)__builtin_offsetof(V92CP, bitsPerSymbol) == 0x128) ? 1 : -1];
 
 /*
  * The scrambler is a member and its size is what makes +0x6c meet it, so the
@@ -986,4 +991,456 @@ void V92Phase4Modulator::enterRepeatedCP()
 	pattern = cp->getBitVector(patternLength);
 	symbolCount = 0;
 	word_1b0 = patternLength / cp->bitsPerSymbol;
+}
+
+/*
+ * ===========================================================================
+ * generateSymbol (.text+0x18050, 4,055 B) -- THE STATE MACHINE ITSELF
+ *
+ * One symbol per call.  Three statements happen whatever the state -- the
+ * count advances, the report word is cleared, and the state selects an arm --
+ * and then twenty-six arms each generate their segment's symbol and, where
+ * the segment can end here, take the transition out of it.  `V92Modulator::
+ * progress` calls it once per symbol of the block it is filling.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SWITCH IS DENSE 0..29 AND FOUR SLOTS ARE HOLES
+ *
+ *     1806f:  83 f8 1d      cmp  $0x1d,%eax
+ *     18072:  77 0c         ja   <default>
+ *     18074:  ff 24 85 ..   jmp  *0x624(,%eax,4)      <== R_386_32 .rodata
+ *
+ * -- a thirty-entry table at `.rodata+0x624`, of which slots 7, 14, 21 and 22
+ * hold the default label.  GCC fills a dense table's gaps that way, so those
+ * four are NOT written as arms: whether the source listed them is not
+ * recoverable, and an empty `case 7:` would be a claim the object cannot
+ * support.  The `ja` on a signed `state` is the same unsigned bound test GCC
+ * emits for any switch, and every negative value lands in the default.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ARMS ARE CALLS, AND THAT IS MEASURED RATHER THAN ASSUMED
+ *
+ * `generateCPu` and `generateSUVu` survive as real calls with relocations on
+ * them.  Every other generator's body appears inline -- there is no call to
+ * `generateCPt`, `generateE1u`, `generateE2u`, `generateTRN2u`, `generateRu`,
+ * `generateRuNot`, `generateDataSymbolBefore{FPE,RRN}`, `setMappingParams`,
+ * `resetRRNSecondSection` or `enterRepeatedCP` anywhere in the function --
+ * and they are written here as calls anyway, for three reasons:
+ *
+ *   1. Each inlined body brings its OWN stack slots.  The frame holds eight
+ *      distinct `short` slots (+0x30, 0x32, 0x34, 0x36, 0x38, 0x3a, 0x3c,
+ *      0x3e) and eight distinct `unsigned` ones, one pair per arm that needs
+ *      them, where a single function-scope pair written out per arm would
+ *      have been reused.  That is what inlining looks like and hand-written
+ *      bodies do not.
+ *   2. Inlining is the compiler's choice at `-O3` and not the source's
+ *      (CLAUDE.md's "act on what the compiler was FORCED to encode").
+ *   3. Nine of the ten bodies are UNIQUE to one member, so which member was
+ *      called is not a guess.  The tenth is not, and it is called out below.
+ *
+ * THE ONE THING THAT IS NOT RECOVERABLE.  `generateRm` and `generateB1u` are
+ * the same 149 bytes as each other, instruction for instruction (see their
+ * banner above), so the five arms that inline that body -- states 16, 17, 26,
+ * 27 and 28 -- name one of two indistinguishable members.  Neither the
+ * differential tier nor the codegen tier can see the difference, and no
+ * message fires on it.  The choice below follows the state each arm serves --
+ * `generateB1u` where the state is B1u or its neighbours, `generateRm` where
+ * it is Rm's -- and it is a CHOICE, not a reading.  Finding 4820.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE MESSAGES ESTABLISH
+ *
+ * Thirteen `.rodata.str1.4` strings, and six of them name a state code on the
+ * instruction after the store -- 3, 10, 16, 17, 23 and 28, all now `#define`d
+ * in the header.  The split between `edprintf` and `dsplibs_debug_printf` is
+ * the object's and is reproduced per site: nine arms take the encoded channel
+ * unconditionally and eight go through `dsplibs_debug_printf` under
+ * `dsplibs_debug_level > 1`.
+ *
+ * ---------------------------------------------------------------------------
+ * THE DIVISORS
+ *
+ * Six arms reduce `symbolCount` modulo `word_1b0`, two reduce it modulo
+ * `patternLength`, three divide `patternLength` by `bitsPerSymbol` and four
+ * by `cp->bitsPerSymbol`, and one takes `symbolCount % 12` through GCC's
+ * `mul $0xaaaaaaab; shr $3` reciprocal.  Every one of them is an unsigned
+ * `div` with no zero test in front of it, in the object as much as here --
+ * see docs/deviations.md D700, which is also where D571's "can this be
+ * reached" question is answered.
+ * ===========================================================================
+ */
+int V92Phase4Modulator::generateSymbol()
+{
+	short sym;
+
+	symbolCount++;
+	word_0c = 0;
+
+	switch (state) {
+	case 0:
+		sym = generateCPt();
+		break;
+
+	/* CPt again, and the boundary `exitCPt` misses: a whole number of
+	 * PATTERN lengths past 24, not of `word_1b0`. */
+	case 1:
+		sym = generateCPt();
+		if ((symbolCount - 24) % patternLength == 0) {
+			edprintf("V92Phase4Modulator: enter E1u @ %d\r\n",
+				 symbolCount);
+			state = V92P4M_STATE_E1U;
+			symbolCount = 0;
+			word_1b8 = 12;
+		}
+		break;
+
+	case V92P4M_STATE_E1U:
+		sym = generateE1u();
+		if (symbolCount == word_1b8) {
+			state = V92P4M_STATE_TRN2U_MOD;
+			symbolCount = 0;
+			scrambler.reset(0);
+		}
+		break;
+
+	case V92P4M_STATE_TRN2U_MOD:
+		sym = generateTRN2u();
+		break;
+
+	/* TRN2u after the exit tag -- `exitTRN2u` is what takes 3 to 4 -- and
+	 * the segment ends on a twelve-symbol boundary past 12599. */
+	case 4:
+		sym = generateTRN2u();
+		if (symbolCount > 12599 && symbolCount % 12 == 0) {
+			if (cp == 0) {
+				state = 29;
+				symbolCount = 0;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "V92Phase4Modulator: ERROR: Null CP"
+					    " @ end of TRN2d\r\n");
+			} else {
+				edprintf("V92Phase4Modulator: on"
+					 " TRN2uModulationExit enter SUV"
+					 " @ %d\r\n", symbolCount);
+				state = V92P4M_STATE_SUV;
+				symbolCount = 0;
+				patternIndex = 0;
+				cp->bitsPerSymbol = bitsPerSymbol;
+				cp->byte_00 = 1;
+				cp->setSUV(word_2c);
+				cp->infoToBits();
+				pattern = cp->getBitVector(patternLength);
+				word_1b0 = patternLength / bitsPerSymbol;
+			}
+		}
+		break;
+
+	/*
+	 * SUV.  The message is repacked on every period boundary, and once
+	 * the SUV has run `word_44 + 800` symbols past the point `byte_1c`
+	 * started the count, the repeated CP takes over.
+	 */
+	case V92P4M_STATE_SUV:
+		sym = generateSUVu();
+		if (byte_1c != 0)
+			word_18++;
+		if (symbolCount % word_1b0 == 0 && symbolCount != 0) {
+			cp->infoToBits();
+			pattern = cp->getBitVector(patternLength);
+			word_1b0 = patternLength / bitsPerSymbol;
+			if (word_18 > word_44 + 800)
+				enterRepeatedCP();
+		}
+		break;
+
+	case 6:
+		sym = generateSUVu();
+		if (symbolCount % word_1b0 == 0) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "V92Phase4Modulator: on SUVuToCPuModulation"
+				    " enter CPu @ %d\r\n", symbolCount);
+			state = V92P4M_STATE_CPU;
+			symbolCount = 0;
+			cp->byte_00 = 0;
+			cp->infoToBits();
+			pattern = cp->getBitVector(patternLength);
+			word_1c4 = 1;
+			word_1b0 = patternLength / cp->bitsPerSymbol;
+		}
+		break;
+
+	case 8:
+		sym = generateSUVu();
+		if (symbolCount % word_1b0 == 0) {
+			edprintf("V92Phase4Modulator: enter FinalSUVu"
+				 " @ %d\r\n", symbolCount);
+			state = V92P4M_STATE_FINAL_SUVU;
+			symbolCount = 0;
+			cp->byte_00 = 1;
+			cp->infoToBits();
+			pattern = cp->getBitVector(patternLength);
+			word_1b0 = patternLength / cp->bitsPerSymbol;
+		}
+		break;
+
+	case 9:
+		sym = generateSUVu();
+		if (symbolCount % word_1b0 == 0) {
+			edprintf("V92Phase4Modulator: enter E2u @ %d\r\n",
+				 symbolCount);
+			state = V92P4M_STATE_E2U;
+			symbolCount = 0;
+			word_1b8 = (e2uExtended != 0) ? 13 : 12;
+		}
+		break;
+
+	/* 10 and 12 test EQUALITY with `word_1b0` where 9 and 11 test the
+	 * remainder; the object's `cmp 0x1b0(%esi),%eax` against its
+	 * `divl 0x1b0(%esi)` is the whole difference. */
+	case V92P4M_STATE_FINAL_SUVU:
+		sym = generateSUVu();
+		if (symbolCount == word_1b0) {
+			edprintf("V92Phase4Modulator: enter E2u @ %d\r\n",
+				 symbolCount);
+			state = V92P4M_STATE_E2U;
+			symbolCount = 0;
+			word_1b8 = (e2uExtended != 0) ? 13 : 12;
+		}
+		break;
+
+	case 11:
+		sym = generateCPu();
+		if (symbolCount % word_1b0 == 0) {
+			edprintf("V92Phase4Modulator: enter E2u @ %d\r\n",
+				 symbolCount);
+			state = V92P4M_STATE_E2U;
+			symbolCount = 0;
+			word_1b8 = (e2uExtended != 0) ? 13 : 12;
+		}
+		break;
+
+	case V92P4M_STATE_CPU:
+		sym = generateCPu();
+		if (symbolCount == word_1b0) {
+			edprintf("V92Phase4Modulator: CPu Terminated"
+				 " @ %d\r\n", symbolCount);
+			word_18 = 0;
+			byte_1c = 1;
+			state = V92P4M_STATE_SUV;
+			symbolCount = 0;
+			cp->byte_00 = 1;
+			cp->infoToBits();
+			pattern = cp->getBitVector(patternLength);
+			word_1b0 = patternLength / cp->bitsPerSymbol;
+		}
+		break;
+
+	/* The repeated CP repacks and stays where it is. */
+	case V92P4M_STATE_REPEATED_CPU:
+		sym = generateCPu();
+		if (symbolCount % word_1b0 == 0 && symbolCount != 0) {
+			cp->infoToBits();
+			pattern = cp->getBitVector(patternLength);
+			word_1b0 = patternLength / bitsPerSymbol;
+		}
+		break;
+
+	/*
+	 * E2u, and the busiest boundary in the function: four ways out, in
+	 * the object's own test order.
+	 */
+	case V92P4M_STATE_E2U:
+		sym = generateE2u();
+		if (symbolCount == word_1b8) {
+			if (word_28 != 0 && word_30 != 0 && word_34 == 0) {
+				edprintf("V92Phase4Modulator: enter TRN2u"
+					 " Second at RRN @ %d\r\n",
+					 symbolCount);
+				symbolCount = 0;
+				state = V92P4M_STATE_TRN2U_SECOND;
+				word_24 = (word_38 != 0) ? 4000 : 8004;
+			} else if (mappingParams == 0) {
+				state = 29;
+				symbolCount = 0;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "V92Phase4Modulator: ERROR: Null"
+					    " dataPhaseMappingParams @ end of"
+					    " Ed\r\n");
+			} else if (flag_3c == 0) {
+				edprintf("V92Phase4Modulator: enter B1u"
+					 " @ %d\r\n", symbolCount);
+				state = V92P4M_STATE_B1U;
+				setMappingParams(mappingParams);
+				symbolCount = 0;
+				scrambler.reset(0);
+			} else {
+				edprintf("V92Phase4Modulator: enter FB1u"
+					 " @ %d\r\n", symbolCount);
+				state = V92P4M_STATE_FB1U;
+				symbolCount = 0;
+				scrambler.reset(0);
+			}
+		}
+		break;
+
+	case V92P4M_STATE_B1U:
+		sym = generateB1u();
+		if (symbolCount == 576) {
+			edprintf("V92Phase4Modulator: Phase4 Terminated"
+				 " @ %d\r\n", symbolCount);
+			state = V92P4M_STATE_TERMINATED;
+			symbolCount = 0;
+			word_0c = 9;
+		}
+		break;
+
+	case V92P4M_STATE_FB1U:
+		sym = generateB1u();
+		if (symbolCount == 576) {
+			edprintf("V92Phase4Modulator: enter B1u @ %d\r\n",
+				 symbolCount);
+			setMappingParams(mappingParams);
+			state = V92P4M_STATE_B1U;
+			symbolCount = 0;
+		}
+		break;
+
+	case 18:
+		sym = generateDataSymbolBeforeRRN();
+		break;
+
+	case V92P4M_STATE_RU:
+		sym = generateRu();
+		if (symbolCount == 384) {
+			state = 20;
+			symbolCount = 0;
+		}
+		break;
+
+	case 20:
+		sym = generateRuNot();
+		if (symbolCount == 24) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "V92Phase4Modulator: RRN: enter"
+				    " TRN2uModulation @ %d\r\n", symbolCount);
+			state = V92P4M_STATE_TRN2U_MOD;
+			symbolCount = 0;
+			scrambler.reset(0);
+			prevBit = 0;
+		}
+		break;
+
+	/*
+	 * The second TRN2u, whose length is `word_24` rather than a literal,
+	 * and its post-tag twin.  The two arms differ in the message, in the
+	 * bound, and in whether `cp->bitsPerSymbol` is refreshed.
+	 */
+	case V92P4M_STATE_TRN2U_SECOND:
+		sym = generateTRN2u();
+		if (symbolCount >= word_24 && symbolCount % 12 == 0) {
+			if (cp == 0) {
+				state = 29;
+				symbolCount = 0;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "V92Phase4Modulator: ERROR: Null CP"
+					    " @ RRN @ end of TRN2u\r\n");
+			} else {
+				edprintf("V92Phase4Modulator: RRN: Terminate"
+					 " TRN2uSecond @ %d\r\n", symbolCount);
+				resetRRNSecondSection();
+				state = V92P4M_STATE_SUV;
+				symbolCount = 0;
+				patternIndex = 0;
+				cp->byte_00 = 1;
+				cp->suv = 0;
+				cp->infoToBits();
+				pattern = cp->getBitVector(patternLength);
+				word_1b0 = patternLength / bitsPerSymbol;
+			}
+		}
+		break;
+
+	case 24:
+		sym = generateTRN2u();
+		if (symbolCount > 2399 && symbolCount % 12 == 0) {
+			if (cp == 0) {
+				state = 29;
+				symbolCount = 0;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "V92Phase4Modulator: ERROR: Null CP"
+					    " @ RRN @ end of TRN2u\r\n");
+			} else {
+				edprintf("V92Phase4Modulator: on"
+					 " TRN2uRrnSecondExit enter SUV"
+					 " @ %d\r\n", symbolCount);
+				resetRRNSecondSection();
+				state = V92P4M_STATE_SUV;
+				symbolCount = 0;
+				patternIndex = 0;
+				cp->bitsPerSymbol = bitsPerSymbol;
+				cp->byte_00 = 1;
+				cp->suv = 0;
+				cp->infoToBits();
+				pattern = cp->getBitVector(patternLength);
+				word_1b0 = patternLength / bitsPerSymbol;
+			}
+		}
+		break;
+
+	case 25:
+		sym = generateDataSymbolBeforeFPE();
+		break;
+
+	case V92P4M_STATE_RM:
+		sym = generateRm();
+		if (symbolCount == 384) {
+			state = 27;
+			symbolCount = 0;
+			bitsToSymbol->transmitter->modulusEncoder->field_50 = 2;
+		}
+		break;
+
+	case 27:
+		sym = generateRm();
+		if (symbolCount == 24) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "V92Phase4Modulator: FPE: enter SUVu"
+				    " @ %d\r\n", symbolCount);
+			state = V92P4M_STATE_SUV;
+			symbolCount = 0;
+			cp->bitsPerSymbol = bitsPerSymbol;
+			cp->byte_00 = 1;
+			cp->setSUV(word_2c);
+			cp->infoToBits();
+			pattern = cp->getBitVector(patternLength);
+			word_1b0 = patternLength / bitsPerSymbol;
+			setMappingParams(mappingParams);
+		}
+		break;
+
+	case V92P4M_STATE_TERMINATED:
+		sym = generateB1u();
+		break;
+
+	/* The one arm that generates nothing at all. */
+	case 29:
+		sym = 0;
+		break;
+
+	default:
+		sym = 0;
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V92Phase4Modulator: Illegal"
+					     " state\r\n");
+		break;
+	}
+
+	return sym;
 }

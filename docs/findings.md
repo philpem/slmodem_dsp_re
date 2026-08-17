@@ -66015,3 +66015,176 @@ reached.
 The grid gained 23 to `states` and 1200, 2399, 2400, 2406 and 2412 to `counts`,
 which is 16,320 trials per member per level against 10,240.  All 103 mutations
 are caught.
+
+## 4820. `V92Phase4Modulator::generateSymbol`: a thirty-arm switch, six state names, and one thing the object cannot say
+
+The largest ready function left in the object at 4,055 bytes, and it is the
+phase 4 upstream state machine itself: `V92Modulator::progress` calls it once
+per symbol of the block it is filling, and every one of the twenty-four
+`generate*`/`recived*`/`exit*` members already written is either an arm of it
+or a tag handler that steers it.
+
+**THE DISPATCH IS DENSE AND FOUR SLOTS ARE HOLES.**  `cmp $0x1d,%eax; ja
+<default>; jmp *0x624(,%eax,4)` -- a thirty-entry table at `.rodata+0x624`
+whose slots 7, 14, 21 and 22 hold the default label.  That is what GCC fills a
+dense table's gaps with, so whether the source listed those four is NOT
+recoverable and no arm was written for them.  The `ja` on a signed `state` is
+the ordinary unsigned bound test and puts every negative value in the default,
+where the object prints "V92Phase4Modulator: Illegal state" and returns zero.
+
+**THREE STATEMENTS RUN WHATEVER THE STATE**, before the switch: `symbolCount`
+advances, `word_0c` is cleared, and the state is loaded.  Finding 4822 is what
+the middle one turned out to be.
+
+**THE ARMS ARE CALLS, AND THE FRAME SAYS SO.**  `generateCPu` and
+`generateSUVu` survive as relocated calls (three and five of them).  Every
+other generator's body appears inline, and it is written here as a CALL anyway
+on three grounds: inlining is the compiler's choice at `-O3` and not the
+source's; nine of the ten bodies are unique to one member, so which member was
+called is a reading rather than a guess; and the frame carries EIGHT distinct
+`short` slots and eight distinct `unsigned` ones, one pair per arm that needs
+them, which is what inlined bodies leave behind and what a body written out per
+arm against one function-scope pair does not.  `setMappingParams`,
+`resetRRNSecondSection` and `enterRepeatedCP` are inlined the same way and are
+recovered the same way -- `enterRepeatedCP`'s eight statements and its
+`> 1`-gated message appear whole inside the state 5 arm, and
+`resetRRNSecondSection`'s eight appear whole inside states 23 and 24.
+
+**SIX MORE STATE CODES ARE NAMED, all by CLAUDE.md's strongest tier** -- a
+message that names the signal with the state store on the next instructions:
+3 TRN2u modulation, 10 FinalSUVu, 16 B1u, 17 FB1u, 23 TRN2u second at RRN, 28
+terminated.  Fourteen values are still bare and four of them are ALMOST named
+by a neighbour, which is not the same thing: `exitTRN2u` takes 3 to 4 and state
+4's own arm prints "on TRN2uModulationExit enter SUV", naming the transition
+OUT of 4 rather than 4 itself; 23 and 24 stand in the same relation.  29 is set
+on three separate null-pointer errors and no message names it either.
+
+**WHAT THE OBJECT CANNOT SAY, and it is recorded rather than guessed.**
+`generateRm` and `generateB1u` are the same 149 bytes as each other,
+instruction for instruction.  Five arms -- states 16, 17, 26, 27 and 28 --
+inline that body, so each of them names one of two indistinguishable members.
+Neither tier can separate them: the differential test cannot because they
+behave identically, and the codegen tier cannot because they compile
+identically.  The choice follows the state each arm serves and is declared as a
+choice in the source, in the header and in `test/mutations/v92p4sym.json`'s
+NOTE.  Two mutations that exchanged `generateCPu` for `generateSUVu` in states
+9 and 11 read NOT CAUGHT for exactly the same reason and were withdrawn rather
+than papered over -- what separates THOSE two in the object is the relocation
+on the call, which is evidence the differential tier does not have.
+
+## 4821. Extending a 4756-hardened suite: three fixture faults, and only the anti-vacuity block saw two of them
+
+`generateSymbol` went into `t_v92p4sym.cpp` and not into `t_v92p4gen.cpp`, and
+that is a domain question rather than a filing one.  It is the first member to
+need BOTH fixtures' constraint sets at once: this file's placed scrambler, its
+`reset` mapper, its 0/1 `pattern` and `bits[]` and its constructed transmitter
+chain, AND t_v92p4gen's V92CP-per-side seeded inside what `V92CP::infoToBits`
+survives.  t_v92p4gen's grid violates four of the five outright -- 64 random
+bytes for a mapper, byte-valued `pattern`, an unplaced scrambler subobject and
+a `patternIndex` never assigned at all -- so the row could not have gone there.
+
+**THE STATE AXIS.**  `t_v92p4gen`'s `states[]` holds seventeen values.  The
+object reaches twenty-six distinct arms.  Eleven of them -- 8, 10, 16, 17, 18,
+20, 24, 25, 27, 28 and 29 -- would have been unreachable while every check
+passed, which is 4756's third fault verbatim.  This grid runs every value 0..29
+plus -1, INT_MIN and 30, and `gs_saw_arm[]`/`gs_saw_trans[]`, indexed BY STATE
+VALUE and never by a position in a table, assert that each arm was entered and
+that each arm which can move the state did.
+
+**FAULT 1: THE RETURNED SYMBOL WAS STACK RESIDUE, and the differential tier
+caught this one.**  635 checks of "the symbol agrees" failed, every one of them
+`got 0, reference 1`, with the object, the CP, the chain, the scrambler and the
+mapper all agreeing.  `V92BitsToSymbol::process(unsigned int &, short *)`
+copies into `out` only what is staged, and `V92BitsToSymbol::reset` leaves
+`symbolsDone` at zero -- so the five arms that go through that call returned
+whatever the caller's frame slot held, and OUR frame is not the blob's.  The
+fixture now stocks the buffer.  Deviation D701.
+
+That is also why the eight generators in this file passed while doing the same
+thing: ours and the blob's `generateRm` are separate functions with the same
+frame, so the residue at the same offset was the same residue.  A difference
+that only appears once the body is INLINED into a bigger frame is not a
+difference the per-member tests could ever have shown.
+
+**FAULT 2: A STRIDE THAT SHARES A FACTOR WITH THE STATE AXIS.**  Several
+one-bit and small-modulus inputs were taken off `trial` directly.  `trial`
+decomposes as `si + 33 * (...)`, and 33 is divisible by 3 -- so `trial % 3`,
+`trial % 6` and `trial % 9` are CONSTANT for a given state.  Every trial of
+state 18 got `symbolsDone` of 3 and every trial of state 25 got 1, which is
+exactly the difference between `nofBitsForNextTime` returning `bitsPerFrame`
+and returning zero.  State 18's transition therefore never fired across
+1,056,001 passing differential checks, and the ONLY thing that said so was
+`gs_saw_trans[18]`.  Those inputs now come from `ci + 3*shi + 7*bi`, built from
+the three axes that vary within a state.
+
+**FAULT 3: TWO CONSTANTS THE GRID HELD ONLY ONE VALUE OF**, and mutations found
+both.  `state 4 does not require a twelve-symbol multiple` was NOT CAUGHT
+because the only count above 12599 in the grid was 12600, which is one; 12602
+was added.  `SUV's repeated-CP threshold ignores word_44` was NOT CAUGHT
+because `word_44` was always zero, so `word_18 > word_44 + 800` and
+`word_18 > 800` were the same predicate; it now takes 4 as well, and an
+anti-vacuity counter asserts that a trial ran at 801 against a threshold of
+804.
+
+Final: **80 mutations for `generateSymbol`, all caught**, over a grid of
+33 x 11 x 4 x 32 = 46,464 trials at each of three debug levels.  Level 1 earns
+its place here for the reason it does in t_v92p4gen: eight of the thirteen
+messages are gated `> 1`, and 0 and 2 fall the same side of `> 1` and `> 0`
+alike.
+
+## 4822. `V92Phase4Modulator+0x0c` is what the class reports back per symbol, and `V92Modulator::progress` latches it
+
+`generateSymbol` clears `+0x0c` before the switch, unconditionally and on every
+call; `reset` clears it too; and exactly one arm ever writes it -- state 16,
+the value 9, beside "V92Phase4Modulator: Phase4 Terminated @ %d".
+
+The reader is the caller.  `V92Modulator::progress` does, at both of its
+`generateSymbol` call sites (.text+0x14e2b and +0x14f12):
+
+    call V92Phase4Modulator::generateSymbol
+    mov  0x7c(%esi),%edi              ; the symbol block
+    mov  0x48(%esi),%edx              ; the phase 4 modulator
+    mov  %ax,(%edi,%ebx,2)            ; store the symbol
+    mov  0xc(%edx),%eax               ; <- the report word
+    test %eax,%eax
+    je   ...
+    mov  %eax,0x34(%esi)              ; latch it
+
+and later tests its own copy against 9.  `V92Phase3Modulator` is read the same
+way at its own +0x14.  So the shape is settled -- a code, zero meaning "nothing
+happened this symbol", written by the modulator and latched by the layer above
+-- and the MEANING of 9 is `V92Modulator::progress`'s business, which is
+unwritten.  The field keeps an offset name for that reason; it came out of
+`pad_0c[0x0c]`, leaving `pad_10[8]`.
+
+Two more came out of pad in the same pass and both are named the same way.
+`+0x24` is a length in symbols with exactly one writer and one reader, both
+inside `generateSymbol`: entering state 23 sets it to 4000 or 8004 according to
+`word_38` (the object's branchless `cmp $0x1; sbb; and $0xfa4; add $0xfa0`) and
+state 23's arm will not end the segment below it.  `+0x44` is `reset`'s FIFTH
+argument, `mov 0x34(%esp),%eax; mov %eax,0x44(%esi)` at .text+0x1903f, and the
+state 5 arm gives up on SUV once `word_18` passes `word_44 + 800`.
+
+`+0x2c` was already modelled and is now named by its CALLEE rather than by
+usage: two arms pass it straight to `V92CP::setSUV(unsigned int)`.
+
+## 4823. `V92Phase4Modulator::reset` is what `generateSymbol` freed, and it is one function from a complete class
+
+Measured with `readyqueue.py` before and after rather than projected.
+`generateSymbol` unblocked exactly one symbol,
+`_ZN18V92Phase4Modulator5resetEsh23V92Phase4ModulatorStatejj` (290 B at
+.text+0x19030) -- it calls `generateSymbol` in a loop over its fourth argument
+-- which is what the batch that scheduled this work predicted and measured.
+
+That leaves `V92Phase4Modulator` at THIRTY-THREE of thirty-four members
+written.  `reset` is the last, and the reason it is not declared in the header
+is its own mangling: `V92Phase4ModulatorState` is an enum this tree does not
+model, and a declaration whose signature is guessed is worse than none.  Its
+body is read and recorded here for whoever writes it -- five arguments at
+0x24, 0x28, 0x2c, 0x30 and 0x34 of the frame, which are `amplitude` (short),
+a byte stored at +0x42 with `bitsPerSymbol` set to it PLUS TWO, the state, a
+symbol count to pre-run, and `word_44`; then `mapper->reset(amplitude, that
+byte)`, `scrambler.reset(0)`, eleven fields cleared, `cp->bitsPerSymbol = 1`,
+`cp->byte_00 = 0`, `infoToBits`, `getBitVector`, `e2uExtended = 0`, and finally
+`for (i = arg4; i; i--) generateSymbol();`.  `+0x42` is still `pad_42` here
+because nothing this batch wrote touches it.

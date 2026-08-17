@@ -110,8 +110,8 @@
  },
  {
   "label": "recivedFirstRrnEd's word_1b8 is 13",
-  "find": "\t\tword_1b8 = 12;\n",
-  "replace": "\t\tword_1b8 = 13;\n"
+  "find": "\t\tword_1b8 = 12;\n\t\tif (e2uExtended",
+  "replace": "\t\tword_1b8 = 13;\n\t\tif (e2uExtended"
  },
  {
   "label": "recivedFirstRrnEd's word_1b8 follows e2uExtended as the other two do",

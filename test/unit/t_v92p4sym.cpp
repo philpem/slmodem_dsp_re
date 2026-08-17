@@ -131,6 +131,10 @@ unsigned int our_btos_setblock(void *, unsigned int)
 unsigned int ref_btos_setblock(void *, unsigned int)
 	asm("ref__ZN15V92BitsToSymbol19setSymbolsBlockSizeEj");
 
+int our_generateSymbol(void *) asm("_ZN18V92Phase4Modulator14generateSymbolEv");
+int ref_generateSymbol(void *)
+	asm("ref__ZN18V92Phase4Modulator14generateSymbolEv");
+
 void our_map_reset(void *, short, unsigned char) asm("_ZN9V92Mapper5resetEsh");
 void ref_map_reset(void *, short, unsigned char)
 	asm("ref__ZN9V92Mapper5resetEsh");
@@ -606,6 +610,469 @@ compare_text(long trial)
 }
 
 /* ------------------------------------------------------------------ */
+/* generateSymbol -- the state machine the eight above are the arms of.  */
+/* ------------------------------------------------------------------ */
+
+/*
+ * IT NEEDS BOTH FIXTURES' CONSTRAINT SETS AT ONCE, and that is the whole
+ * reason it gets its own grid inside this file rather than a row in the
+ * members[] table above or a row in t_v92p4gen.cpp.
+ *
+ *   - From THIS file: a placed scrambler, a `reset` mapper whose mode is 0 or
+ *     1, `pattern` and `bits[]` holding bits rather than bytes, a constructed
+ *     transmitter chain, and `symbolsBlockSize` at one.  Nine of its
+ *     twenty-six live arms reach `V92Mapper::process` or the chain.
+ *   - From t_v92p4gen.cpp: a V92CP PER SIDE, sane enough for
+ *     `V92CP::infoToBits` to survive -- `bitsPerSymbol` non-zero, `word_10c`
+ *     at most six, the five floats finite (D570, D571).  Ten arms call
+ *     `infoToBits`, `getBitVector` or `setSUV`, and six of them leave
+ *     `pattern` pointing INTO that CP.
+ *
+ * t_v92p4gen's grid violates four of this file's five constraints outright --
+ * `shared_mapper` is 64 random bytes, `shared_pattern` is random bytes rather
+ * than 0/1, the scrambler subobject is never placed, and `patternIndex` is
+ * never assigned -- so the row could not have gone there.
+ *
+ * ---------------------------------------------------------------------------
+ * THE STATE AXIS IS THE WHOLE POINT, AND IT IS EXHAUSTIVE
+ *
+ * The object dispatches through a dense thirty-entry jump table and reaches
+ * twenty-six distinct arms; `states[]` above holds seventeen values and would
+ * have left eleven arms -- 8, 10, 16, 17, 18, 20, 24, 25, 27, 28 and 29 --
+ * unreachable while every check passed.  That is finding 4756's third fixture
+ * fault exactly, so this grid runs EVERY value 0..29 plus three the switch
+ * cannot have: -1, INT_MIN and 30.  `saw_arm[]` below asserts that each of
+ * them was entered and `saw_trans[]` that each arm that CAN change the state
+ * did.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE COUNTS AND THE SHAPES ARE WHAT THEY ARE
+ *
+ * `generateSymbol` increments `symbolCount` BEFORE it dispatches, so every
+ * entry in `gs_counts` is one BELOW the value the arms test: 23 for the
+ * boundary at 24 that states 20 and 27 use, 383 for 384 (states 19 and 26),
+ * 575 for 576 (16 and 17), 2399 and 2411 for the two twelve-symbol multiples
+ * above 2399 that state 24 needs, 12599 for the one above 12599 that state 4
+ * needs, 11 for a multiple of twelve that is below every one of those
+ * magnitudes, and 0xffffffff so the increment wraps to zero.
+ *
+ * THE LAST TWO ARE MUTATIONS' DOING.  12601 gives 12602, which clears every
+ * magnitude and is NOT a multiple of twelve, without which dropping the
+ * `% 12 == 0` conjunction from states 4, 23 and 24 changes nothing.  12605
+ * gives 12606, which IS a multiple of six and is not one of twelve, without
+ * which reducing modulo six instead reads the same on every trial.  Both went
+ * NOT CAUGHT before they were added.
+ *
+ * `word_1b0`, `word_1b8` and `word_24` are the three fields the arms compare
+ * `symbolCount` against and none of them can be left to the object seed: at
+ * random they never agree with it.  Shape 2 sets all three FROM the count, so
+ * the six equality arms and the seven modulus arms fire; shapes 0, 1 and 3
+ * are fixed values that mostly do not.  `word_1b0` is never zero -- it is the
+ * divisor of an unsigned `div` in six arms, so a zero traps on both sides at
+ * once and proves nothing, which is `mods[]`'s rule in t_v92p4gen.
+ *
+ * `word_18` runs over 0, 800 and 801 against a `word_44` of zero, because the
+ * state 5 arm compares `word_18 > word_44 + 800` AFTER an increment that
+ * `byte_1c` gates: 800 with `byte_1c` clear must not fire and 800 with it set
+ * must, which is what separates the increment from the comparison.
+ *
+ * A NULL `cp` is given to states 4, 23 and 24 ONLY.  Those three have a real
+ * null arm -- state 29 and an ERROR message -- and every other arm
+ * dereferences `cp` without checking, exactly as `recivedRt` does in
+ * t_v92p4gen.  The trials that get one are chosen so that they also satisfy
+ * the magnitude and twelve-symbol tests above the arm; leaving that to
+ * chance is what left the same arm unreached there.
+ *
+ * `mappingParams` points at the SHARED PARAMETER BLOCK, not at
+ * `shared_dummy`, and that is forced rather than tidy: four arms hand it to
+ * `V92BitsToSymbol::reset` through `setMappingParams`, and sixty-four random
+ * bytes there is undefined behaviour on both sides at once.  It is null on
+ * half the trials, which is the other arm of the same four sites and of state
+ * 15's "Null dataPhaseMappingParams".
+ */
+
+static void set_level(unsigned int lvl);
+
+static unsigned char gscp[2][CPSZ] __attribute__((aligned(8)));
+
+static const int gs_states[] = {
+	(-2147483647 - 1), -1,
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+	15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+	30
+};
+#define NGSSTATE	((int)(sizeof(gs_states) / sizeof(gs_states[0])))
+
+static const unsigned int gs_counts[] = {
+	0u, 1u, 11u, 23u, 383u, 575u, 2399u, 2411u, 12599u, 12601u, 12605u,
+	0xffffffffu
+};
+#define NGSCOUNT	((int)(sizeof(gs_counts) / sizeof(gs_counts[0])))
+
+#define NGSSHAPE	4
+#define NGSBIT		32		/* word_28, word_30, word_34,     */
+					/* flag_3c, e2uExtended           */
+#define NGSTRIAL	(NGSSTATE * NGSCOUNT * NGSSHAPE * NGSBIT)
+
+/* What the grid must have reached, indexed BY STATE VALUE and not by any
+ * position in a table -- finding 4756's first fixture fault was an
+ * anti-vacuity check addressed by index that silently changed what it
+ * watched. */
+static int gs_saw_arm[30];
+static int gs_saw_trans[30];
+static int gs_saw_repack[30];
+static int gs_saw_default;
+static int gs_saw_nullcp[30];
+static int gs_saw_e2u_trn2u2, gs_saw_e2u_nullmp, gs_saw_e2u_b1u,
+	   gs_saw_e2u_fb1u;
+static int gs_saw_repeated_cp, gs_saw_word0c, gs_saw_nonzero_sym;
+static int gs_saw_bytelatch_fired, gs_saw_bytelatch_held;
+static int gs_saw_offset_held;
+
+static void
+gs_setup(int trial)
+{
+	int t = trial;
+	int si = t % NGSSTATE;		t /= NGSSTATE;
+	int ci = t % NGSCOUNT;		t /= NGSCOUNT;
+	int shi = t % NGSSHAPE;		t /= NGSSHAPE;
+	int bi = t % NGSBIT;
+	unsigned int sc = gs_counts[ci] + 1u;	/* what the arms will see */
+	unsigned int b0, b8, w24;
+	int nullcp;
+	int s;
+	/*
+	 * NOT `trial`, AND THAT IS FINDING 4756 AGAIN.  `trial` decomposes as
+	 * `si + NGSSTATE * (...)` and NGSSTATE is 33, so `trial % 3` and
+	 * `trial % 6` and `trial % 9` are CONSTANT for a given state -- every
+	 * trial of state 18 got `symbolsDone` of 3 and every trial of state 25
+	 * got 1, which is the difference between `nofBitsForNextTime`
+	 * returning `bitsPerFrame` and returning zero.  State 18's transition
+	 * therefore never fired while 1,056,001 differential checks passed,
+	 * and only `gs_saw_trans[18]` said so.  `mix` is built from the three
+	 * axes that DO vary within a state.
+	 */
+	int mix = ci + 3 * shi + 7 * bi;
+
+	setup(trial);
+
+	switch (shi) {
+	case 0:	 b0 = 1u;			b8 = 12u; w24 = 4000u; break;
+	case 1:	 b0 = 12u;			b8 = 13u; w24 = 8004u; break;
+	case 2:	 b0 = (sc != 0u) ? sc : 1u;	b8 = sc;  w24 = 12u;   break;
+	default: b0 = 7u;			b8 = 5u;  w24 = 4000u; break;
+	}
+
+	nullcp = (gs_states[si] == 4 || gs_states[si] == 23
+		  || gs_states[si] == 24) && ((ci + shi) % 4) == 0;
+
+	fill(gscp[0], CPSZ);
+	memcpy(gscp[1], gscp[0], CPSZ);
+
+	{
+		V92CP *c = (V92CP *)gscp[0];
+		int f;
+
+		/* D570, D571 and t_v92info's bounds -- outside them
+		 * `infoToBits` is undefined on both sides at once. */
+		c->bitsPerSymbol = (unsigned char)(1 + (mix % 6));
+		c->word_10c = (unsigned short)(mix % 7);
+		c->char_01 = (signed char)((mix % 5) - 1);
+		c->char_02 = (signed char)((mix % 9) - 4);
+		c->byte_00 = (unsigned char)(mix % 3);
+		c->byte_04 = (unsigned char)(mix & 1);
+		c->byte_24 = (unsigned char)((mix >> 1) & 1);
+
+		for (f = 0; f < 5; f++) {
+			float v = (float)((mix % 17) - 8) / 4.0f;
+
+			switch (f) {
+			case 0:	c->flt_10 = v;	break;
+			case 1:	c->flt_14 = -v;	break;
+			case 2:	c->flt_18 = v;	break;
+			case 3:	c->flt_1c = -v;	break;
+			default: c->flt_20 = v;	break;
+			}
+		}
+		memcpy(gscp[1], gscp[0], CPSZ);
+	}
+
+	for (s = 0; s < 2; s++) {
+		V92Phase4Modulator *o = M(s);
+
+		o->state = gs_states[si];
+		o->symbolCount = gs_counts[ci];
+		o->word_1b0 = b0;
+		o->word_1b8 = b8;
+		o->word_24 = w24;
+		o->word_28 = (unsigned int)((bi >> 0) & 1);
+		o->word_30 = (unsigned int)((bi >> 1) & 1);
+		o->word_34 = (unsigned int)((bi >> 2) & 1);
+		o->flag_3c = (unsigned int)((bi >> 3) & 1);
+		o->e2uExtended = (unsigned int)((bi >> 4) & 1);
+
+		o->word_38 = (unsigned int)((ci >> 1) & 1);
+		o->byte_1c = (unsigned char)(shi & 1);
+		/*
+		 * NON-ZERO ON HALF THE TRIALS, and that is a mutation's
+		 * doing: at zero, `word_18 > word_44 + 800` and
+		 * `word_18 > 800` are the same predicate, and the entry
+		 * that drops the field read NOT CAUGHT over 1,056,001
+		 * checks.  Four is enough -- 801 clears 800 and does not
+		 * clear 804.
+		 */
+		o->word_44 = ((mix & 4) != 0) ? 4u : 0u;
+		o->word_18 = (ci % 3 == 0) ? 0u
+			   : ((ci % 3 == 1) ? 800u : 801u);
+		o->word_2c = (unsigned int)(mix % 4);
+		o->word_1c0 = (unsigned int)((ci + shi) & 1);
+		o->word_1c4 = (unsigned int)((ci + bi) & 1);
+		o->flag_20 = (unsigned int)((shi + bi) & 1);
+		o->word_0c = 0xdeadbeefu;	/* the prologue must clear it */
+
+		o->cp = nullcp ? (V92CP *)0 : (V92CP *)gscp[s];
+		o->mappingParams = ((ci & 1) != 0)
+				 ? (V92MappingParams *)0
+				 : (V92MappingParams *)&params;
+	}
+
+	/*
+	 * SOMETHING HAS TO BE STAGED, and this is not tidiness either -- it
+	 * is the difference between a trial and a coin toss.
+	 *
+	 * `V92BitsToSymbol::process(unsigned int &, short *)` copies
+	 * `symbolsBlockSize` symbols into `out` only when `symbolsDone` is at
+	 * least that many; below it the call takes the UNDERFLOW arm and
+	 * copies `symbolsDone` of them, which at zero is none at all.  `out`
+	 * is the address of ONE `short` on the caller's frame and the caller
+	 * never initialises it, so with nothing staged the returned symbol is
+	 * whatever that frame slot held -- and OUR frame is not the blob's.
+	 *
+	 * `V92BitsToSymbol::reset` leaves `symbolsDone` at zero, so the five
+	 * arms that go through this call returned stack residue on both sides
+	 * and disagreed: 635 checks of "the symbol agrees", every one of them
+	 * `got 0, reference 1`, with the object, the CP and the chain all
+	 * agreeing.  A trial whose verdict is the frame layout's rather than
+	 * the source's proves nothing either way (D504, D561), so the buffer
+	 * is stocked instead.
+	 *
+	 * Only the first few entries are written: `process` shifts down from
+	 * `symbolsBlockSize` to `symbolsDone` and touches no more than that,
+	 * and filling all 2048 per side per trial would cost more than the
+	 * rest of the fixture put together.
+	 */
+	for (s = 0; s < 2; s++) {
+		V92BitsToSymbol *bts = B(s);
+		int i;
+
+		for (i = 0; i < 8; i++)
+			bts->symbols[i] = (short)(1 + ((mix + i) % 251));
+		bts->symbolsDone = 1u + (unsigned int)(mix % 3);
+	}
+}
+
+/*
+ * The object comparison for this run.  `cp` joins `mapper` and `bitsToSymbol`
+ * in the mask because there is one V92CP PER SIDE here -- which is the point
+ * of it, per t_v92p4gen's note: one shared block would let our side's failure
+ * to write be covered up by the reference writing a moment later.  `pattern`
+ * is NOT masked: the six arms that call `getBitVector` leave it pointing into
+ * the side's own CP, so it is normalised to the OFFSET within that block and
+ * still compared.
+ */
+static void
+gs_compare_obj(long trial)
+{
+	int t;
+
+	memcpy(cmp_a, obj[0], OBJSZ);
+	memcpy(cmp_b, obj[1], OBJSZ);
+	memset(cmp_a + 0x4c, 0x77, 7 * sizeof(void *));
+	memset(cmp_b + 0x4c, 0x77, 7 * sizeof(void *));
+	memset(cmp_a + 0x6c, 0x77, 3 * sizeof(void *));
+	memset(cmp_b + 0x6c, 0x77, 3 * sizeof(void *));
+
+	for (t = 0; t < 2; t++) {
+		unsigned char *pa = (unsigned char *)M(t)->pattern;
+		unsigned char *base = gscp[t];
+		unsigned char *dst = (t == 0 ? cmp_a : cmp_b) + 0x1a8;
+		unsigned long off;
+
+		if (pa < base || pa >= base + CPSZ)
+			continue;
+		off = (unsigned long)(pa - base);
+		memcpy(dst, &off, sizeof(void *));
+	}
+
+	diff_eq_obj_(__FILE__, __LINE__, "after generateSymbol",
+		     "V92Phase4Modulator", cmp_a, cmp_b, (size_t)OBJSZ, trial);
+}
+
+static int
+run_generate_symbol(unsigned int lvl)
+{
+	char title[128];
+	long trial;
+	int guards = 0;
+
+	strcpy(title, "V92Phase4Modulator::generateSymbol, level ");
+	strcat(title, lvl == 0 ? "0" : (lvl == 1 ? "1" : "2"));
+	diff_begin(title);
+
+	set_level(lvl);
+	dsplib_debug_capture_on = (lvl != 0);
+
+	for (trial = 0; trial < NGSTRIAL; trial++) {
+		int before, after;
+		int a, b;
+		unsigned char *before_pat;
+		int hadcp;
+		unsigned int before_18;
+		unsigned int before_44;
+		int before_latch;
+
+		gs_setup((int)trial);
+		before = M(0)->state;
+		before_pat = (unsigned char *)M(0)->pattern;
+		hadcp = (M(0)->cp != 0);
+		before_18 = M(0)->word_18;
+		before_44 = M(0)->word_44;
+		before_latch = (M(0)->byte_1c != 0);
+
+		if (lvl != 0)
+			dsplib_debug_capture_reset();
+
+		a = our_generateSymbol(obj[0]);
+		b = ref_generateSymbol(obj[1]);
+
+		diff_eq_int("the symbol agrees (trial %ld)", (long)a, (long)b,
+			    trial);
+		if (a != 0)
+			gs_saw_nonzero_sym = 1;
+
+		after = M(0)->state;
+		if (before >= 0 && before <= 29) {
+			gs_saw_arm[before] = 1;
+			if (after != before)
+				gs_saw_trans[before] = 1;
+			if ((unsigned char *)M(0)->pattern != before_pat)
+				gs_saw_repack[before] = 1;
+			if (!hadcp && after == 29)
+				gs_saw_nullcp[before] = 1;
+
+			if (before == 15 && after == 23)
+				gs_saw_e2u_trn2u2 = 1;
+			if (before == 15 && after == 29)
+				gs_saw_e2u_nullmp = 1;
+			if (before == 15 && after == 16)
+				gs_saw_e2u_b1u = 1;
+			if (before == 15 && after == 17)
+				gs_saw_e2u_fb1u = 1;
+			if (before == 5 && after == 13)
+				gs_saw_repeated_cp = 1;
+			/*
+			 * `byte_1c` gates state 5's counter, and 800 is the
+			 * value at which the increment is the whole
+			 * difference: with the latch clear it must not fire
+			 * and with it set it must.
+			 */
+			if (before == 5 && before_18 == 800u && before_44 == 0u
+			    && before_latch && after == 13)
+				gs_saw_bytelatch_fired = 1;
+			if (before == 5 && before_18 == 800u && before_44 == 0u
+			    && !before_latch && after != 13)
+				gs_saw_bytelatch_held = 1;
+			if (before == 5 && before_18 == 801u && before_44 == 4u
+			    && after != 13)
+				gs_saw_offset_held = 1;
+		} else {
+			gs_saw_default = 1;
+		}
+		if (M(0)->word_0c != 0)
+			gs_saw_word0c = 1;
+
+		gs_compare_obj(trial);
+		diff_eq_int("the V92CP agrees (trial %ld)",
+			    memcmp(gscp[0], gscp[1], CPSZ) == 0, 1, trial);
+		compare_scrambler(trial);
+		compare_mapper(trial);
+		compare_chain(trial);
+		if (lvl != 0)
+			compare_text(trial);
+		if (!guard_intact())
+			guards++;
+	}
+
+	diff_eq_int("nothing wrote past the object", guards, 0, 0);
+
+	dsplib_debug_capture_on = 0;
+	set_level(0);
+
+	return diff_end();
+}
+
+/*
+ * The arms with no transition of their own, and the four the jump table sends
+ * to the default label.  Everything else must have been seen to MOVE.
+ */
+static int
+gs_no_transition(int s)
+{
+	return s == 0 || s == 3 || s == 7 || s == 13 || s == 14 || s == 21
+	    || s == 22 || s == 28 || s == 29;
+}
+
+static int
+run_gs_antivacuity(void)
+{
+	int s;
+
+	diff_begin("generateSymbol's grid reached every arm it claims to");
+
+	for (s = 0; s < 30; s++) {
+		diff_eq_int("some trial entered this state's arm",
+			    gs_saw_arm[s], 1, (long)s);
+		if (!gs_no_transition(s))
+			diff_eq_int("some trial took this arm's transition",
+				    gs_saw_trans[s], 1, (long)s);
+	}
+
+	/* The two arms whose only observable is that the message was
+	 * repacked -- neither changes the state. */
+	diff_eq_int("state 13 repacked the CP message", gs_saw_repack[13], 1,
+		    0);
+	diff_eq_int("state 5 repacked the CP message", gs_saw_repack[5], 1, 0);
+
+	diff_eq_int("state 4 was given a null CP", gs_saw_nullcp[4], 1, 0);
+	diff_eq_int("state 23 was given a null CP", gs_saw_nullcp[23], 1, 0);
+	diff_eq_int("state 24 was given a null CP", gs_saw_nullcp[24], 1, 0);
+
+	diff_eq_int("E2u took the TRN2u-second way out", gs_saw_e2u_trn2u2, 1,
+		    0);
+	diff_eq_int("E2u took the null-mappingParams way out",
+		    gs_saw_e2u_nullmp, 1, 0);
+	diff_eq_int("E2u took the B1u way out", gs_saw_e2u_b1u, 1, 0);
+	diff_eq_int("E2u took the FB1u way out", gs_saw_e2u_fb1u, 1, 0);
+
+	diff_eq_int("SUV entered the repeated CP", gs_saw_repeated_cp, 1, 0);
+	diff_eq_int("the byte_1c latch made the difference at 800",
+		    gs_saw_bytelatch_fired, 1, 0);
+	diff_eq_int("the byte_1c latch held at 800", gs_saw_bytelatch_held, 1,
+		    0);
+	diff_eq_int("word_44 held the threshold above 801", gs_saw_offset_held,
+		    1, 0);
+
+	diff_eq_int("some trial fell to the illegal-state arm", gs_saw_default,
+		    1, 0);
+	diff_eq_int("some trial left a non-zero report word", gs_saw_word0c, 1,
+		    0);
+	diff_eq_int("some trial returned a non-zero symbol",
+		    gs_saw_nonzero_sym, 1, 0);
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------------------ */
 
 typedef int (*gen_fn)(void *);
 
@@ -813,7 +1280,11 @@ main(void)
 	rc |= run_set_mapping(0);
 	rc |= run_set_mapping(1);
 	rc |= run_set_mapping(2);
+	rc |= run_generate_symbol(0);
+	rc |= run_generate_symbol(1);
+	rc |= run_generate_symbol(2);
 	rc |= run_antivacuity();
+	rc |= run_gs_antivacuity();
 
 	tear_chain();
 
