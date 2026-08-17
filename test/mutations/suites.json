@@ -336,6 +336,10 @@
   "src/pump/v90/V90Demodulator.cpp",
   "build/test/t_v90demod"
  ],
+ "v90dataph": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90dataph"
+ ],
  "v90dil": [
   "src/pump/v90/V90Dil.cpp",
   "build/test/t_v90adid"

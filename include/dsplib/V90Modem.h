@@ -146,18 +146,19 @@ typedef char v90modem_side_is_unsigned[
 
 /*
  * +0xcb8, 0x18 bytes.  The mangling of both modulator constructors names the
- * type (`P22tagV90AdditionalCPinfo`) and `V90Demodulator.h` already carried
- * the forward declaration; this is the first place that needs a definition,
- * because the block is EMBEDDED and a member cannot be incomplete.
+ * type (`P22tagV90AdditionalCPinfo`) and this file used to be the one place
+ * that needed the definition, because the block is EMBEDDED and a member
+ * cannot be incomplete.
  *
- * NOTHING IS KNOWN ABOUT ITS CONTENTS.  `V90Modem::V90Modem` takes its
- * address and passes it on; it neither reads nor writes a byte of it, and
- * nothing else in this tree touches it.  The size is 0xcd0 - 0xcb8 and is
- * adjacency alone, so it is not asserted -- see the file comment.
+ * THE DEFINITION HAS MOVED TO ITS OWN HEADER and this is now an include, for
+ * the reason `V90ConnectionEvaluator`'s move had: a second file --
+ * V90Demodulator.cpp, whose `enterRRN` writes the record's +0x10 -- needs the
+ * complete type, and "one type, one home" means the home moves rather than
+ * the definition being spelled twice.  Nothing about the embedded member at
+ * +0xcb8 changed.  The size is 0xcd0 - 0xcb8 and is adjacency alone, so it is
+ * not asserted -- see the file comment.
  */
-struct tagV90AdditionalCPinfo {
-	unsigned char pad_00[0x18];		/* +0x00 not modelled     */
-};
+#include "dsplib/tagV90AdditionalCPinfo.h"
 
 class V90Modem {
 public:

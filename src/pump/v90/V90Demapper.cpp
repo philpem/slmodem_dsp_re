@@ -129,7 +129,7 @@ DEM_OFF(uint_1ea8,		0x1ea8, uint1ea8);
 DEM_OFF(decisionCode,		0x1eac, deccode);
 DEM_OFF(decisionFramePosition,	0x1eae, decpos);
 DEM_OFF(uint_1eb0,		0x1eb0, uint1eb0);
-DEM_OFF(short_1eb4,		0x1eb4, short1eb4);
+DEM_OFF(linearMappStudyEnabled,	0x1eb4, lmstudyenabled);
 
 /*
  * The allocation, and finding 1107's whole point: this number comes from
