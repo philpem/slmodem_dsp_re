@@ -75,6 +75,7 @@
 #include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/ModulusCoder.h"
 #include "dsplib/V90SignBitsExtractor.h"
+#include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Demapper.h"
 
 extern "C" {
@@ -107,6 +108,25 @@ void our_sbeafa(void *self, int action, unsigned char *in, unsigned char *out)
 void ref_sbeafa(void *self, int action, unsigned char *in, unsigned char *out)
 	asm("ref__ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_");
 
+void our_incrbs(void *self)
+	asm("_ZN11V90Demapper25incrementRBSFramePositionEv");
+void ref_incrbs(void *self)
+	asm("ref__ZN11V90Demapper25incrementRBSFramePositionEv");
+
+void our_updconst(void *self) asm("_ZN11V90Demapper18updateConstelationEv");
+void ref_updconst(void *self)
+	asm("ref__ZN11V90Demapper18updateConstelationEv");
+
+void our_resetns(void *self, void *mp)
+	asm("_ZN11V90Demapper15resetNoSpectralEP16V90MappingParams");
+void ref_resetns(void *self, void *mp)
+	asm("ref__ZN11V90Demapper15resetNoSpectralEP16V90MappingParams");
+
+void our_lms(void *self, short sample, short level)
+	asm("_ZN11V90Demapper18linearMappingStudyEss");
+void ref_lms(void *self, short sample, short level)
+	asm("ref__ZN11V90Demapper18linearMappingStudyEss");
+
 extern unsigned int ref_dsplibs_debug_level;
 }
 
@@ -127,6 +147,15 @@ extern unsigned int ref_dsplibs_debug_level;
 static unsigned char dem_s[2][DEM_SLOT] __attribute__((aligned(8)));
 static unsigned char sbe_s[2][SBE_SLOT] __attribute__((aligned(8)));
 static unsigned char parm_s[PARM_SLOT] __attribute__((aligned(8)));
+/*
+ * ONE MAPPING BLOCK, SHARED.  `resetNoSpectral` only READS it, so giving both
+ * sides the same pointer keeps the inputs identical by construction; nothing
+ * stores the pointer, so nothing has to be excluded from the comparison for
+ * it.  The 64 bytes past the end catch a store off the end of the last array.
+ */
+#define MAPP_SLOT	(sizeof(V90MappingParams) + 64)
+static unsigned char mapp_s[MAPP_SLOT] __attribute__((aligned(8)));
+#define MAPP	((V90MappingParams *)mapp_s)
 static unsigned char adi_s[2][sizeof(V90AutoDigitalImpDetector)]
 	__attribute__((aligned(8)));
 
@@ -137,6 +166,8 @@ static unsigned char out_s[2][NOUT];
 static unsigned char in_s[V90SBE_DECODER_SIZE];
 
 static unsigned char dem_before[2][DEM_SLOT];
+/* One snapshot of the SHARED detector, for the members that only read it. */
+static unsigned char adi_before[sizeof(V90AutoDigitalImpDetector)];
 static unsigned char scratch[2][DEM_SLOT];
 
 #define DEM(s)	(*(V90Demapper *)dem_s[s])
@@ -896,6 +927,681 @@ run_demproc(void)
 	return diff_end();
 }
 
+/* ------------------------------------- incrementRBSFramePosition -------- */
+
+/*
+ * THE POSITIONS THAT SEPARATE THE TWO READINGS OF `% 6` ARE THE HIGH ONES,
+ * and they are the reason this trivial function gets a suite of its own.
+ * Unsigned and signed agree over every value a frame position can really
+ * hold; they disagree from 0x80000000 up, where 0xfffffffe + 1 is 3 unsigned
+ * and -1 signed.  The blob divides with `mul` and not `idiv`, so the
+ * assertion below -- that the answer is always one of the six -- is the
+ * blob's own behaviour and fails on the signed reading.
+ */
+static int
+run_incrbs(void)
+{
+	long trial = 350000;
+	int pi, s;
+	int distinct = 0;
+	unsigned int seen[8];
+	static const unsigned int pos_v[] = {
+		0u, 1u, 3u, 4u, 5u, 6u, 7u, 11u, 12u, 0x7ffffffeu,
+		0x7fffffffu, 0x80000000u, 0xfffffffdu, 0xfffffffeu,
+		0xffffffffu
+	};
+
+	diff_begin("V90Demapper::incrementRBSFramePosition");
+
+	for (pi = 0; pi < (int)(sizeof(pos_v) / sizeof(pos_v[0])); pi++) {
+		unsigned lf = 0x1f3bu + 0x7a5du * (unsigned)pi;
+		int k;
+
+		trial++;
+		fill(adi_s[0], (int)sizeof adi_s[0], lf ^ 0x2211u);
+		fill(parm_s, (int)PARM_SLOT, lf ^ 0x66u);
+		for (s = 0; s < 2; s++) {
+			dem_setup(s, 0, 0, lf);
+			DEM(s).rbsFramePosition = pos_v[pi];
+			memcpy(dem_before[s], dem_s[s], DEM_SLOT);
+		}
+
+		our_incrbs(&DEM(0));
+		ref_incrbs(&DEM(1));
+
+		cmp_obj("after incrementRBSFramePosition", skip_read, DEM_SIZE,
+			"V90Demapper", trial);
+		dem_cmp_arrays(trial);
+		diff_eq_int("the position stays inside the six (%ld)",
+			    DEM(1).rbsFramePosition <
+			    V90DEMAPPER_CONSTELLATIONS, 1, trial);
+		/*
+		 * AND NOTHING ELSE OF THE OBJECT MOVED.  `cmp_obj` compares
+		 * the two sides against each other; this compares the blob's
+		 * side against its own seed, so a reconstruction that touched
+		 * a neighbouring word IN THE SAME WAY as the blob would still
+		 * be caught by the first and one that touched none would be
+		 * caught by neither without this.
+		 */
+		diff_eq_int("only +0x18 moved (%ld)",
+			    memcmp(dem_s[1], dem_before[1], 0x18) == 0 &&
+			    memcmp(dem_s[1] + 0x1c, dem_before[1] + 0x1c,
+				   DEM_SLOT - 0x1c) == 0, 1, trial);
+
+		for (k = 0; k < distinct; k++)
+			if (seen[k] == DEM(1).rbsFramePosition)
+				break;
+		if (k == distinct && distinct < 8)
+			seen[distinct++] = DEM(1).rbsFramePosition;
+	}
+
+	diff_eq_int("all six positions came out", distinct, 6, distinct);
+
+	return diff_end();
+}
+
+/* --------------------------------------------- updateConstelation ------- */
+
+/*
+ * The detector's two cumulative arrays, planted so that the quotient is
+ * exactly known and so that BOTH of the body's decisions are reachable:
+ *
+ *   a count of ZERO on one cell in seven, which is the `test %eax,%eax; je`
+ *   skip -- the cell keeps whatever the seed put there, and the seed is never
+ *   zero (finding 230), so "skipped" and "written zero" are distinguishable.
+ *
+ *   a count of TWO against an ODD sum, which puts the quotient exactly half
+ *   way between two integers.  That is the only input that separates
+ *   `(short)(mean + 0.5f)` under a truncating `fistps` from a plain
+ *   round-to-nearest, and it is reached on both signs.
+ */
+static void
+adi_plant_cells(int s, int zpat)
+{
+	V90AutoDigitalImpDetector *a = &ADI(s);
+	int p, c;
+
+	for (p = 0; p < V90ADID_PHASES; p++)
+		for (c = 0; c < V90ADID_CODES; c++) {
+			a->uint_1c00[p][c] =
+			    ((c + p + zpat) % 7 == 0)
+			    ? 0u : (unsigned int)(1 + ((c + p) % 4));
+			a->float_1000[p][c] =
+			    (float)((c * 13 + p * 101) % 2001 - 1000);
+		}
+}
+
+/*
+ * The row lengths.  70 with the detector's flag set gives 140, which is the
+ * deliberate overrun: the object indexes `i * 128 + j` with no bound on `j`,
+ * so the sixth row runs into `constellationSize` behind it.  Reproducing that
+ * is the point -- a reconstruction that clamped `j` to 128 would pass every
+ * other trial here.
+ */
+static const unsigned int usize_v[] = { 0u, 1u, 3u, 64u, 70u };
+#define NUSIZE ((int)(sizeof(usize_v) / sizeof(usize_v[0])))
+
+static int
+run_updconst(void)
+{
+	long trial = 360000;
+	int ui, flag, zpat, dbg, s;
+	int saw_written = 0, saw_skipped = 0, saw_half = 0;
+	int saw_double = 0, saw_line = 0, saw_quiet = 0;
+
+	diff_begin("V90Demapper::updateConstelation");
+
+	dsplib_debug_capture_on = 1;
+
+	for (ui = 0; ui < NUSIZE; ui++)
+	  for (flag = 0; flag < 3; flag++)
+	    for (zpat = 0; zpat < 3; zpat++)
+	      for (dbg = 0; dbg < 2; dbg++) {
+		unsigned lf = 0x4c1du + 0x2b93u * (unsigned)trial;
+		int i;
+
+		trial++;
+		dsplibs_debug_level = ref_dsplibs_debug_level = dbg ? 2u : 0u;
+
+		/*
+		 * ONE DETECTOR, SHARED: this function only reads it, so the
+		 * two sides store the same pointer and +0x1ea0 stays inside
+		 * the object comparison.
+		 */
+		fill(adi_s[0], (int)sizeof adi_s[0], lf ^ 0x5eedu);
+		adi_plant_cells(0, zpat);
+		for (i = 0; i < V90ADID_PHASES; i++)
+			ADI(0).short_2800[i] = (short)
+			    (flag == 0 ? 0 : flag == 1 ? i + 1 : (i & 1));
+
+		fill(parm_s, (int)PARM_SLOT, lf ^ 0x2b1u);
+
+		for (s = 0; s < 2; s++) {
+			dem_setup(s, 0, 0, lf);
+			for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
+				DEM(s).constellationSize[i] = usize_v[ui];
+			memcpy(dem_before[s], dem_s[s], DEM_SLOT);
+		}
+		memcpy(adi_before, adi_s[0], sizeof adi_before);
+		dsplib_debug_capture_reset();
+
+		our_updconst(&DEM(0));
+		ref_updconst(&DEM(1));
+
+		cmp_obj("after updateConstelation", skip_read, DEM_SIZE,
+			"V90Demapper", trial);
+		dem_cmp_arrays(trial);
+		diff_eq_int("the detector is untouched (%ld)",
+			    memcmp(adi_s[0], adi_before, sizeof adi_before)
+			    == 0, 1, trial);
+		diff_eq_int("transcript (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    trial);
+
+		/*
+		 * OBSERVABLE SEPARATION, off the BLOB's object rather than
+		 * restated from our own source (finding 3509).
+		 */
+		if (dbg) {
+			if (dsplib_debug_capture_text(1)[0] != '\0')
+				saw_line = 1;
+		} else if (dsplib_debug_capture_text(1)[0] == '\0') {
+			saw_quiet = 1;
+		}
+
+		{
+			V90Demapper *d = &DEM(1);
+			V90Demapper *b = (V90Demapper *)dem_before[1];
+			unsigned int n = usize_v[ui];
+			int j;
+
+			for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
+			    for (j = 0; j < (int)n && j < V90DEMAPPER_LEVELS;
+				 j++) {
+				unsigned int cnt = ADI(0).uint_1c00[i][j];
+				float sum = ADI(0).float_1000[i][j];
+
+				if (cnt == 0) {
+					if (d->constellation[i][j] ==
+					    b->constellation[i][j])
+						saw_skipped = 1;
+					continue;
+				}
+				if (d->constellation[i][j] !=
+				    b->constellation[i][j])
+					saw_written = 1;
+				/*
+				 * The exact half.  A quotient of x.5 must come
+				 * out as x + 1 and not as the even neighbour.
+				 */
+				if (cnt == 2u &&
+				    ((int)sum & 1) != 0 && sum > 0.0f &&
+				    d->constellation[i][j] ==
+				    (short)(((int)sum + 1) / 2))
+					saw_half = 1;
+			    }
+			/*
+			 * THE DOUBLED BOUND WROTE PAST THE ROW LENGTH.  With
+			 * the flag set the row runs to 2 * size, so a cell at
+			 * `size` itself moved -- which a reconstruction that
+			 * ignored `short_2800` would leave at its seed.
+			 */
+			if (flag != 0 && n != 0u && n < 64u &&
+			    ADI(0).short_2800[0] != 0 &&
+			    ADI(0).uint_1c00[0][n] != 0u &&
+			    d->constellation[0][n] != b->constellation[0][n])
+				saw_double = 1;
+		}
+	      }
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+
+	diff_eq_int("cells with a count were rewritten", saw_written, 1, 0);
+	diff_eq_int("and cells without one were left alone", saw_skipped, 1,
+		    0);
+	diff_eq_int("an exact half rounded away from zero", saw_half, 1, 0);
+	diff_eq_int("the flag doubled the row", saw_double, 1, 0);
+	diff_eq_int("the diagnostic printed at level 2", saw_line, 1, 0);
+	diff_eq_int("and said nothing at level 0", saw_quiet, 1, 0);
+
+	return diff_end();
+}
+
+/* ------------------------------------------------- resetNoSpectral ------ */
+
+/*
+ * The detector's two mapping tables, planted so that the LARGER-FIRST rule
+ * has all three cases: `linMapp` above, below and EXACTLY EQUAL to
+ * `linMappAlt`.  The equal case is the only input that separates the object's
+ * `>` (which puts `linMappAlt` first) from a `>=` (which would not), and no
+ * amount of varied seeding produces it by accident.
+ */
+static void
+adi_plant_maps(int s, int eqpat)
+{
+	V90AutoDigitalImpDetector *a = &ADI(s);
+	int p, c;
+
+	for (p = 0; p < V90ADID_PHASES; p++)
+		for (c = 0; c < V90ADID_CODES; c++) {
+			short lo = (short)(c * 7 + p * 3 - 400);
+			short hi = (short)(lo + 1 + ((c + p) % 5) * 40);
+
+			if ((c + eqpat) % 6 == 0) {
+				a->linMapp[p][c] = lo;
+				a->linMappAlt[p][c] = lo;
+			} else if ((c + eqpat) % 3 == 0) {
+				a->linMapp[p][c] = lo;
+				a->linMappAlt[p][c] = hi;
+			} else {
+				a->linMapp[p][c] = hi;
+				a->linMappAlt[p][c] = lo;
+			}
+		}
+}
+
+static const unsigned int msize_v[] = { 0u, 1u, 2u, 17u, 63u };
+#define NMSIZE ((int)(sizeof(msize_v) / sizeof(msize_v[0])))
+
+static int
+run_resetns(void)
+{
+	long trial = 370000;
+	int mi, flag, eqpat, hist, dbg, s;
+	int saw_hist = 0, saw_nohist = 0, saw_pair = 0, saw_plain = 0;
+	int saw_equal = 0, saw_spill = 0;
+
+	diff_begin("V90Demapper::resetNoSpectral");
+
+	dsplib_debug_capture_on = 1;
+
+	for (mi = 0; mi < NMSIZE; mi++)
+	  for (flag = 0; flag < 3; flag++)
+	    for (eqpat = 0; eqpat < 3; eqpat++)
+	      for (hist = 0; hist < 2; hist++)
+		for (dbg = 0; dbg < 2; dbg++) {
+			unsigned lf = 0x6d31u + 0x1a4bu * (unsigned)trial;
+			int i;
+
+			trial++;
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+			    dbg ? 2u : 0u;
+
+			fill(adi_s[0], (int)sizeof adi_s[0], lf ^ 0x11a7u);
+			adi_plant_maps(0, eqpat);
+			for (i = 0; i < V90ADID_PHASES; i++)
+				ADI(0).short_2800[i] = (short)
+				    (flag == 0 ? 0 : flag == 1 ? i + 1
+							       : (i & 1));
+
+			fill(parm_s, (int)PARM_SLOT, lf ^ 0x4c9u);
+			PARAMS->DEBUG_DEMAPPER_ERROR_HISTOGRAM = hist;
+			PARAMS->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM =
+			    (int)(trial % 97) - 13;
+
+			/*
+			 * The mapping block, shared.  The byte tables keep
+			 * their varied seed: a code of 128 or more indexes
+			 * past its own row of `linMapp` into the next one,
+			 * which is what the object does and is worth
+			 * exercising rather than avoiding.
+			 */
+			fill(mapp_s, (int)MAPP_SLOT, lf ^ 0x3fe1u);
+			MAPP->word_0 = (unsigned int)(trial % 61) + 3u;
+			for (i = 0; i < V90_CONSTELLATIONS; i++)
+				MAPP->constellationSize[i] =
+				    msize_v[(mi + i) % NMSIZE];
+
+			for (s = 0; s < 2; s++) {
+				dem_setup(s, 0, 0, lf);
+				/*
+				 * THE ROW LENGTHS THIS FUNCTION FINDS, not the
+				 * ones it leaves: `printErrorHistogramAndReset`
+				 * runs its print loop off them before anything
+				 * is rewritten, so a varied seed here is an
+				 * unbounded loop rather than a hard trial.
+				 * Zero on one phase in five reaches the
+				 * six-way guard's other arm.
+				 */
+				for (i = 0; i < V90DEMAPPER_CONSTELLATIONS;
+				     i++)
+					DEM(s).constellationSize[i] =
+					    (unsigned int)((trial + i) % 5);
+				DEM(s).signBitsPerFrame =
+				    (unsigned int)(trial % 7);
+				DEM(s).histogramDelay = 0x5a5a;
+				DEM(s).histogramIntegration = 0x3c3c;
+				memset(DEM(s).errorSum, 0,
+				       sizeof DEM(s).errorSum);
+				memset(DEM(s).errorCount, 0,
+				       sizeof DEM(s).errorCount);
+				DEM(s).errorHistogramCount = 0;
+				memcpy(dem_before[s], dem_s[s], DEM_SLOT);
+			}
+			dsplib_debug_capture_reset();
+
+			our_resetns(&DEM(0), MAPP);
+			ref_resetns(&DEM(1), MAPP);
+
+			cmp_obj("after resetNoSpectral", skip_read, DEM_SIZE,
+				"V90Demapper", trial);
+			dem_cmp_arrays(trial);
+			diff_eq_int("the mapping block is untouched (%ld)",
+				    MAPP->word_0 ==
+				    (unsigned int)(trial % 61) + 3u, 1, trial);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, trial);
+
+			{
+				V90Demapper *d = &DEM(1);
+				unsigned int w08;
+
+				/*
+				 * THE FOUR SCALARS, ASSERTED AND NOT ONLY
+				 * COMPARED: two reconstructions that both
+				 * dropped the argument would agree with each
+				 * other (finding 224).
+				 */
+				diff_eq_int("bitsPerFrame (%ld)",
+					    (long)d->bitsPerFrame,
+					    (long)MAPP->word_0, trial);
+				w08 = MAPP->word_0 - d->signBitsPerFrame;
+				diff_eq_int("word_08 (%ld)", (long)d->word_08,
+					    (long)w08, trial);
+				diff_eq_int("modulusDecoder tail (%ld)",
+					    (long)d->modulusDecoder.field_18,
+					    (long)w08, trial);
+				diff_eq_int("signDecoder cleared (%ld)",
+					    (long)d->signDecoder.prev_, 0,
+					    trial);
+				for (i = 0; i < V90DEMAPPER_CONSTELLATIONS;
+				     i++) {
+					diff_eq_int("constellationSize (%ld)",
+						    (long)
+						    d->constellationSize[i],
+						    (long)
+						    MAPP->constellationSize[i],
+						    trial);
+					diff_eq_int("modulus word (%ld)",
+						    (long)(&d->modulusDecoder.
+							   field_00)[i],
+						    (long)
+						    d->constellationSize[i],
+						    trial);
+				}
+
+				if (hist) {
+					diff_eq_int("the delay is reseeded"
+						    " (%ld)",
+						    (long)d->histogramDelay,
+						    (long)PARAMS->
+						    DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM,
+						    trial);
+					diff_eq_int("the integration restarts"
+						    " (%ld)",
+						    (long)
+						    d->histogramIntegration, 0,
+						    trial);
+					if (d->errorHistogramCount != 0u)
+						saw_hist = 1;
+				} else {
+					diff_eq_int("the delay is untouched"
+						    " (%ld)",
+						    (long)d->histogramDelay,
+						    0x5a5a, trial);
+					diff_eq_int("the histogram did not"
+						    " run (%ld)",
+						    (long)
+						    d->errorHistogramCount, 0,
+						    trial);
+					saw_nohist = 1;
+				}
+
+				/*
+				 * THE ORDER OF THE PAIR IS THE OBSERVABLE.
+				 * With the flag set each code yields two
+				 * levels, larger first; without it, one.
+				 */
+				for (i = 0; i < V90DEMAPPER_CONSTELLATIONS;
+				     i++) {
+					unsigned int n =
+					    MAPP->constellationSize[i];
+					unsigned char c0;
+
+					if (n == 0u)
+						continue;
+					c0 = MAPP->constellation[i][0];
+					if (ADI(0).short_2800[i] != 0) {
+						if (d->constellation[i][0] >=
+						    d->constellation[i][1])
+							saw_pair = 1;
+						if (ADI(0).linMapp[0][
+						      i * V90ADID_CODES + c0]
+						    == ADI(0).linMappAlt[0][
+						      i * V90ADID_CODES + c0])
+							saw_equal = 1;
+					} else if (d->constellation[i][0] ==
+						   ADI(0).linMapp[0][
+						     i * V90ADID_CODES + c0]) {
+						saw_plain = 1;
+					}
+					if (c0 >= V90ADID_CODES)
+						saw_spill = 1;
+				}
+			}
+		}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+
+	diff_eq_int("the histogram branch ran", saw_hist, 1, 0);
+	diff_eq_int("and was skipped on other trials", saw_nohist, 1, 0);
+	diff_eq_int("the doubled arm laid the pair down larger first",
+		    saw_pair, 1, 0);
+	diff_eq_int("the plain arm copied linMapp straight over", saw_plain, 1,
+		    0);
+	diff_eq_int("two equal levels were reached", saw_equal, 1, 0);
+	diff_eq_int("a code of 128 or more spilled into the next row",
+		    saw_spill, 1, 0);
+
+	return diff_end();
+}
+
+/* ----------------------------------------------- linearMappingStudy ----- */
+
+/*
+ * THE ARGUMENT PAIRS, AND WHY THESE.  The first thing the function does is
+ * `|sample| - |level|` compared against ZERO, and the branch is `jbe` on the
+ * fall-through, so the test is strictly greater.  A pair with EQUAL
+ * magnitudes is the only input that separates `>` from `>=`, and it is
+ * reached from both signs.  The rest straddle the 0.4 gate: with a row step
+ * of CSTEP the gate opens at 0.4 * CSTEP, so a difference either side of that
+ * decides whether the cell is accumulated at all.
+ */
+static const short lms_x[] = {
+	 0,   100, -100,  100,  -100,  4000, -4000,  92,  -92,   93,
+	 -93, 500,  -500, 30000, -30000
+};
+static const short lms_y[] = {
+	 0,   100,  100, -100,   100,  3000, -3000,   0,    0,    0,
+	   0, 600,   400,  4000,   4000
+};
+#define NLMS ((int)(sizeof(lms_x) / sizeof(lms_x[0])))
+
+static int
+run_lms(void)
+{
+	long trial = 380000;
+	int xi, code, flag, prog, dup, dbg, s;
+	int saw_accum = 0, saw_skip = 0, saw_end = 0, saw_mid = 0;
+	int saw_two = 0, saw_line = 0, saw_below = 0;
+	static const int code_v[] = { 0, 1, 5, 6, 31 };
+	static const unsigned int lsize_v[] = { 1u, 7u, 32u };
+
+	diff_begin("V90Demapper::linearMappingStudy");
+
+	dsplib_debug_capture_on = 1;
+
+	for (xi = 0; xi < NLMS; xi++)
+	  for (code = 0; code < (int)(sizeof(code_v) / sizeof(code_v[0]));
+	       code++)
+	    for (flag = 0; flag < 2; flag++)
+	      for (prog = 0; prog < 3; prog++)
+		for (dup = 0; dup < 2; dup++)
+		  for (dbg = 0; dbg < 2; dbg++) {
+			unsigned lf = 0x2a9du + 0x53b7u * (unsigned)trial;
+			int phase = (int)(trial % V90DEMAPPER_CONSTELLATIONS);
+			int i;
+			unsigned int cnt_before, cnt_after;
+
+			trial++;
+			dsplibs_debug_level = ref_dsplibs_debug_level =
+			    dbg ? 2u : 0u;
+
+			fill(parm_s, (int)PARM_SLOT, lf ^ 0x71cu);
+
+			for (s = 0; s < 2; s++) {
+				/*
+				 * EACH SIDE ITS OWN DETECTOR: this one
+				 * WRITES, both into the two cumulative cells
+				 * and, on the end-of-run pass, over all 768
+				 * of them through `clearCamulativeVal`.
+				 */
+				fill(adi_s[s], (int)sizeof adi_s[s],
+				     lf ^ 0x9a1u);
+				adi_plant_cells(s, xi);
+				for (i = 0; i < V90ADID_PHASES; i++)
+					ADI(s).short_2800[i] =
+					    (short)(flag ? i + 1 : 0);
+
+				dem_setup(s, s, dup, lf);
+				for (i = 0; i < V90DEMAPPER_CONSTELLATIONS;
+				     i++)
+					DEM(s).constellationSize[i] =
+					    lsize_v[(xi + i) % 3];
+				DEM(s).decisionFramePosition = (short)phase;
+				DEM(s).decisionCode = (short)code_v[code];
+				DEM(s).uint_1ea8 = 4u;
+				DEM(s).uint_1eb0 = (unsigned int)
+				    (prog == 0 ? 0 : prog == 1 ? 2 : 3);
+				DEM(s).short_1e9c = (short)(xi & 1);
+				DEM(s).short_1ea4 = 0;
+				DEM(s).short_1ea6 = 0;
+				memcpy(dem_before[s], dem_s[s], DEM_SLOT);
+			}
+			cnt_before = ADI(1).uint_1c00[phase][code_v[code]];
+			dsplib_debug_capture_reset();
+
+			our_lms(&DEM(0), lms_x[xi], lms_y[xi]);
+			ref_lms(&DEM(1), lms_x[xi], lms_y[xi]);
+
+			cmp_obj("after linearMappingStudy", skip_write,
+				DEM_SIZE, "V90Demapper", trial);
+			diff_eq_int("the detector (%ld)",
+				    memcmp(adi_s[0], adi_s[1], sizeof adi_s[0])
+				    == 0, 1, trial);
+			dem_cmp_arrays(trial);
+			diff_eq_int("transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, trial);
+
+			cnt_after = ADI(1).uint_1c00[phase][code_v[code]];
+
+			if (prog == 2) {
+				V90Demapper *d = &DEM(1);
+				V90Demapper *b =
+				    (V90Demapper *)dem_before[1];
+				int p, c, allz = 1;
+
+				/*
+				 * THE END OF A RUN, and every part of it is
+				 * asserted separately: the progress rewinds,
+				 * the per-run flag goes up, the run counter
+				 * moves, and all 768 cumulative cells are
+				 * clear -- which is `updateConstelation`
+				 * having run BEFORE `clearCamulativeVal`
+				 * wiped what it read.
+				 */
+				diff_eq_int("progress rewound (%ld)",
+					    (long)d->uint_1eb0, 0, trial);
+				diff_eq_int("short_1ea4 raised (%ld)",
+					    (long)d->short_1ea4, 1, trial);
+				diff_eq_int("short_1e9c advanced (%ld)",
+					    (long)d->short_1e9c,
+					    (long)(short)(b->short_1e9c + 1),
+					    trial);
+				diff_eq_int("short_1ea6 tracks the second run"
+					    " (%ld)",
+					    (long)d->short_1ea6,
+					    (long)(d->short_1e9c == 2 ? 1 : 0),
+					    trial);
+				for (p = 0; p < V90ADID_PHASES; p++)
+					for (c = 0; c < V90ADID_CODES; c++)
+						if (ADI(1).uint_1c00[p][c] !=
+						    0u ||
+						    ADI(1).float_1000[p][c] !=
+						    0.0f)
+							allz = 0;
+				diff_eq_int("all 768 cells cleared (%ld)",
+					    allz, 1, trial);
+				saw_end = 1;
+				if (d->short_1ea6 != 0)
+					saw_two = 1;
+				if (dbg &&
+				    dsplib_debug_capture_text(1)[0] != '\0')
+					saw_line = 1;
+			} else {
+				diff_eq_int("progress advanced (%ld)",
+					    (long)DEM(1).uint_1eb0,
+					    (long)(((V90Demapper *)
+						    dem_before[1])->uint_1eb0
+						   + 1u), trial);
+				diff_eq_int("short_1ea4 untouched (%ld)",
+					    (long)DEM(1).short_1ea4, 0, trial);
+				if (cnt_after == cnt_before + 1u)
+					saw_accum = 1;
+				if (cnt_after == cnt_before)
+					saw_skip = 1;
+				/*
+				 * THE MID-ROW PAIR WITH A ZERO GAP.  With the
+				 * plateau planted, code 6 and an exactly
+				 * equal magnitude give `|diff| == 0` against
+				 * a gap of 0 on the arm the object does NOT
+				 * take and a gap of 2 * CSTEP on the arm it
+				 * does.  That pair is what separates `> 0`
+				 * from `>= 0` and `<` from `<=` at once.
+				 */
+				if (dup && code_v[code] == 6 &&
+				    lms_x[xi] == lms_y[xi] &&
+				    cnt_after != cnt_before)
+					saw_mid = 1;
+				if (code_v[code] == 0 &&
+				    DEM(1).constellationSize[phase] == 1u &&
+				    !flag)
+					saw_below = 1;
+			}
+		  }
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+
+	diff_eq_int("a sample was accumulated", saw_accum, 1, 0);
+	diff_eq_int("and another was rejected by the gate", saw_skip, 1, 0);
+	diff_eq_int("a run completed", saw_end, 1, 0);
+	diff_eq_int("and a second one raised +0x1ea6", saw_two, 1, 0);
+	diff_eq_int("the zero-gap pair was reached", saw_mid, 1, 0);
+	diff_eq_int("the below-the-row read was reached", saw_below, 1, 0);
+	diff_eq_int("the update diagnostic printed at level 2", saw_line, 1,
+		    0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -906,6 +1612,10 @@ main(void)
 	rc |= run_rlms();
 	rc |= run_harddec();
 	rc |= run_demproc();
+	rc |= run_incrbs();
+	rc |= run_updconst();
+	rc |= run_resetns();
+	rc |= run_lms();
 
 	return rc;
 }

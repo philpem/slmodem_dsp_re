@@ -14,8 +14,8 @@
  },
  {
   "label": "the two cell coordinates are passed the other way round",
-  "find": "\t\t\tadiDetector->clearCamulativeVal(phase, code);",
-  "replace": "\t\t\tadiDetector->clearCamulativeVal(code & 5, phase);"
+  "find": "\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(code & 5, phase);"
  },
  {
   "label": "resetLinearMappStudy drops its argument on the floor",
