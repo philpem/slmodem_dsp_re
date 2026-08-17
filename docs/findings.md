@@ -66239,6 +66239,16 @@ NEW members moved out into `t_v92ecparams` instead of `process` moving, which
 would have taken the state machine and both signal paths with it.
 `t_v90p4dnan` is the precedent and this is the second application of it.
 
+**`reset` KEEPS THE FOLDED SPELLING, and that is a choice rather than an
+oversight.**  It writes `echoBeta = 0.0f;` and then `edprintf(..., '-', 0, 0)`
+where it could now call `setEchoBeta(0.0f)`.  The object folds the magnitude
+and the fraction there and still reloads the field for the sign (finding
+2411), so the fold and the call are indistinguishable at the differential tier
+and at the codegen tier alike -- and the file's existing note already records
+`reset` as carrying four of this class's members inlined, factoring recorded
+rather than reproduced.  Changing it would move nothing measurable and would
+put the same three statements behind two of `v92ec`'s anchors.
+
 864 differential checks per level over three levels plus nine anti-vacuity
 assertions; 11 mutations, all caught.  The grid runs both signs and both
 zeros (`sign_of` is `0.0f < v`, so zero prints '-' and `-0.0f` is a different
