@@ -33,8 +33,11 @@
  *                                      it zero the whole receive half of the
  *                                      record is left as seeded, which is a
  *                                      different observable from filling it.
- *   word_2c         3 / not 3          whether the V.92 upstream rate is
- *                                      computed or reported as zero.
+ *   phase           3 / not 3          whether the V.92 upstream rate is
+ *                                      computed or reported as zero.  3 is
+ *                                      `V92MOD_PHASE_DATA`; the arm below
+ *                                      uses 7, which is no phase at all, to
+ *                                      say "definitely not the data phase".
  *   f21a, f248      a table            the two dB loops.  `f21a <= 0` skips
  *                                      both; the pairs below make the -6 dB
  *                                      loop run 0, 1 and many times and the
@@ -261,7 +264,7 @@ static const int k_v[] = { 0, 1, 12, 33, 268435, 300000, 1000000, -1 };
 struct trial {
 	int	status;		/* v34_object::status                   */
 	int	analog;		/* VPcmFloModem::info0Layout            */
-	int	upstream;	/* V92Modulator::word_2c == 3           */
+	int	upstream;	/* V92Modulator::phase == PHASE_DATA    */
 	int	si;		/* index into snr_v                     */
 	int	fi;		/* index into fac_v                     */
 	int	pi;		/* index into pr_v                      */
@@ -311,7 +314,7 @@ setup(int n, const struct trial *t)
 		x->modem.demodulator = d;
 		x->v92modem.modulator = (V92Modulator *)v92mod_[side];
 
-		((V92Modulator *)v92mod_[side])->word_2c =
+		((V92Modulator *)v92mod_[side])->phase =
 		    t->upstream ? 3u : 7u;
 		((V92Modulator *)v92mod_[side])->bitsToSymbol =
 		    (V92BitsToSymbol *)b2s_[side];

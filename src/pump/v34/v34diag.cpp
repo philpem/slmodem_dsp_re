@@ -135,12 +135,14 @@
 #define V34DIAG_UPSTREAM_SYMBOLS_PER_FRAME	12.0f
 
 /*
- * `V92Modulator::word_2c` selects the upstream mode.  Only the value 3
- * publishes a rate; every other value reports zero, and nothing
- * reconstructed says what the other values are, so the constant states the
- * test and not a meaning.
+ * The upstream rate is published only while the V.92 modulator is in its DATA
+ * phase, and reported as zero in every other phase.  When this was first
+ * written the field was `word_2c` and the test was a bare 3 with no meaning
+ * attached; `V92Modulator` has since named the field `phase` and recovered all
+ * three values from the messages printed beside their stores, so this is that
+ * modulator's constant rather than a second spelling of the same number.
  */
-#define V34DIAG_V92_UPSTREAM_ACTIVE	3
+#define V34DIAG_V92_UPSTREAM_ACTIVE	V92MOD_PHASE_DATA
 
 /* The transmit level a V.PCM upstream transmitter reports; see +0x06c. */
 #define V34DIAG_TX_LEVEL_BASE_DB	(-12.0f)
