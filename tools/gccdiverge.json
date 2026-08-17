@@ -38,5 +38,12 @@
       "V90AutoDigitalImpDetector::determineMaxUcode"
     ],
     "why": "`if (v == 0.0f) continue;` in the loop that picks the nearest linear-mapping entry. The object compares against the zero it has kept on the x87 stack since 0x4443c and jumps on ZF -- ONE `fcom`, no parity test -- so an unordered entry is skipped along with a zero one. IEEE C's `==` is false for a NaN and GCC 13 emits the parity test whatever it is told (finding 2304), so the modern build keeps four entries the object drops. This is the only check in this binary that diverges: the other twenty-one groups pass under both compilers, and the two operand-order corrections this file also took -- `ADID_PRINT_SIGN`'s negation and the merge tolerance hoisted into `lim` -- are IEEE-neutral by construction and change nothing here. `make period` passes this binary's twenty-two groups and 20,407 checks."
+  },
+  "t_v90p4dnan": {
+    "finding": 4812,
+    "checks": [
+      "V90Phase4Demodulator: the keep-rate flag on an unordered dB"
+    ],
+    "why": "`params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE < dB`, stored into +0x3510 at the tail of CalcErrorEnergyAfterEchoCancellation. The object issues ONE ordered compare and no parity test -- `flds 0x10(%esp); flds 0x404(%ebx); fcompp; fnstsw; sahf; setb %dl` at 0x26956..0x26976 and again at 0x275a0..0x275c6 -- so an UNORDERED result leaves CF set and the flag comes out 1. `dB` is unordered whenever the two silence energies have opposite signs, because then `1.0f / after * before` is negative and `fyl2x` answers a NaN. IEEE C requires a relational compare against a NaN to be false and GCC 13 emits the parity test whatever it is told, so the modern build stores 0 and cannot be made to store 1 from correct source; `-ffinite-math-only` is rejected on finding 2304's ground. THE OPERAND ORDER IS THE FIX AND NOT THE DECLARATION: written `dB > PARAM` the site is wrong under the object's own flag too, which is finding 2301's shape, and t_v90p4ddec's negative-accumulator trial is what caught it. IT IS ITS OWN BINARY on purpose: an excused binary exits non-zero, and tools/mutate.py judges a mutant caught by a non-zero exit, so a red binary cannot score a mutation set and refuses. Splitting the check out is what that refusal asks for, and it leaves t_v90p4ddec's three sweeps -- 65,984 checks -- green under both compilers and mutation-testable. `make period` has no allow-list and passes all four groups with the object's own compiler."
   }
 }

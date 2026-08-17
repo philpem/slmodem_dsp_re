@@ -325,7 +325,7 @@ run_p4d_resetbeforrrn(void)
 		P4DA->int_0028 = P4DB->int_0028 = 0x7a660000 + trial;
 		P4DA->int_0040 = P4DB->int_0040 = 0x7a770000 + trial;
 		P4DA->uint_0034 = P4DB->uint_0034 = 0x7a880000u + trial;
-		P4DA->int_002c = P4DB->int_002c = 0x7a990000 + trial;
+		P4DA->trn2dDDLength = P4DB->trn2dDDLength = 0x7a990000u + trial;
 		P4DA->state = P4DB->state = P4D_STATE_WAIT_FOR_MP;
 
 		memcpy(before_b, p4d_b, P4D_SLOT);

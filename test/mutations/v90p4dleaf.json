@@ -4,8 +4,8 @@
  },
  {
   "label": "enterWaitForCP leaves the WaitForMP state behind",
-  "find": "\tstate = P4D_STATE_WAIT_FOR_V90CP;",
-  "replace": "\tstate = P4D_STATE_WAIT_FOR_MP;"
+  "find": "\tstate = P4D_STATE_WAIT_FOR_V90CP;\n\tcountInState = 0;\n}\n",
+  "replace": "\tstate = P4D_STATE_WAIT_FOR_MP;\n\tcountInState = 0;\n}\n"
  },
  {
   "label": "enterWaitForEd leaves the WaitForMP state behind",
@@ -79,8 +79,8 @@
  },
  {
   "label": "detectRRN detects on the second R detector",
-  "find": "\tV90RDetector *rd = &rDetector1;",
-  "replace": "\tV90RDetector *rd = &rDetector2;"
+  "find": "{\n\tV90RDetector *rd = &rDetector1;\n\n\tif (!rd->detectR(sample))",
+  "replace": "{\n\tV90RDetector *rd = &rDetector2;\n\n\tif (!rd->detectR(sample))"
  },
  {
   "label": "detectRRN prints the second detector's polarity",
