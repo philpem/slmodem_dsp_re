@@ -75356,3 +75356,51 @@ Both defects stay reproduced. Each is now a candidate to go behind
 owner's call and not taken here. D920's fix is one index; D923's is a compare
 before seven stores, and the sibling class shows what the author's own guard and
 message would have looked like.
+
+### 6810. A FIX BEHIND `DSPLIB_REPRODUCE_BUGS` NEEDS THE CONVERSE CHECK, AND THE FIRST ATTEMPT AT D920 PROVED IT
+
+D920's fix was written, verified, and was WRONG, and every check run against it
+passed. Recording it because the hole is in the method and not in the edit.
+
+**What went wrong.** The two mask-read sites were patched with a Python
+`replace(old, new, 1)` twice over. The replacement text CONTAINS the search
+text -- it is the original line inside the `#ifdef DSPLIB_REPRODUCE_BUGS` arm --
+so the second call matched inside the FIRST replacement rather than at the
+second site. Case 7 came out with nested `#ifdef`s and case 8 was never touched.
+**The fix was live in one of the two places it was needed.**
+
+**Why the checks did not catch it.**
+
+- The count assertion required exactly two `binaryTable[15 - i]` in the file and
+  got exactly two -- both of them in the wrong block. A count is not a location.
+- **The `.text` comparison passed, and could not have failed.** Under the define
+  the nested arms still resolve to the original, so the reproduce build was
+  genuinely byte-identical. *An inert-under-`DSPLIB_REPRODUCE_BUGS` check is
+  structurally blind to a fix that is wrong in the OTHER build* -- it tests that
+  nothing broke, never that anything was fixed.
+
+**The check that closes it, and it is cheap:** the default build must DIFFER
+from the reproduce build. Both objects are already produced by `make`:
+
+```
+objdump -d --no-show-raw-insn build/repro/<tu>.o >  a
+objdump -d --no-show-raw-insn build/src/<tu>.o   >  b
+diff a b        # EMPTY means the fix is not live -- fail
+```
+
+For this pair it is 714 instruction lines. **Two checks, not one:** identical
+against the previous reproduce build proves the object is undisturbed, and
+different against the default build proves the fix exists. Either alone is
+satisfiable by a broken edit.
+
+**The repair** was to split the file on the pattern and rejoin around the two
+occurrences, which cannot self-match, rather than to replace twice.
+
+**A second consequence, worth its own line.** Factoring the seven D923 store
+sites into `V92CP_PUT_BIT` and wrapping the two mask reads broke three mutation
+anchors -- `refcheck.py` reported `1 LIVE MUTANT` and the anchor sweep found the
+other two. Two of them, `v92cpeval`'s "case 7/8 reads the mask words least
+significant first", ARE this fix expressed as a mutation, and were rebuilt to
+flip only the reproduce arm so their meaning survives. **A fix behind the define
+will usually invalidate any mutation that encodes the same defect**; expect it
+and repair the anchors in the same commit.

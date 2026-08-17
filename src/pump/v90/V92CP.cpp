@@ -966,8 +966,36 @@ V92CP::evaluateInfo()
 				short_42[k][j] = 0;
 
 				for (i = 0; i <= 15; i++) {
+					/*
+					 * D920 -- the mask word comes back
+					 * bit-reversed.  `infoToBits` emits bit 0
+					 * first; this gives that same position
+					 * weight 2^15, so a mask does not survive
+					 * a round trip through the class.
+					 *
+					 * EFFECT: every Ucode in a received mask
+					 * is mirrored -- Ucode n is read as
+					 * Ucode 15 - n within its chord.
+					 *
+					 * FIX: ascending, as every other field in
+					 * this class already is.
+					 *
+					 * EVIDENCE: ITU-T V.90 Table 14 and V.92
+					 * Table 23 -- "bit 137 corresponds to
+					 * Ucode 0", "Bit 0 is transmitted first"
+					 * -- fix the WIRE; our own consumer
+					 * getConstellationMask fixes the STORAGE,
+					 * `mask[v >> 4] |= 1 << (v & 15)`.  Both
+					 * make bit j of word k Ucode 16k + j and
+					 * both convict the reader.  Finding 6800.
+					 */
+#ifdef DSPLIB_REPRODUCE_BUGS
 					acc += bits[word_124] *
 					       binaryTable[15 - i];
+#else
+					acc += bits[word_124] *
+					       binaryTable[i];
+#endif
 					word_124++;
 				}
 
@@ -989,8 +1017,14 @@ V92CP::evaluateInfo()
 				short_a2[k][j] = 0;
 
 				for (i = 0; i <= 15; i++) {
+					/* The second mask block, D920 again.  Finding 6800. */
+#ifdef DSPLIB_REPRODUCE_BUGS
 					acc += bits[word_124] *
 					       binaryTable[15 - i];
+#else
+					acc += bits[word_124] *
+					       binaryTable[i];
+#endif
 					word_124++;
 				}
 
@@ -1072,6 +1106,54 @@ V92CP::evaluateInfo()
  * state machine.  Called here; GCC 3.4.2 at -O3 folds them back in.
  * ===========================================================================
  */
+/*
+ * D923 -- `bitsToInfo` stores into `bits[word_11c]` at seven sites and the
+ * object guards none of them, while `word_11c` advances on every call in
+ * states 2 to 10 with no upper bound anywhere.
+ *
+ * EFFECT: a stream staying in one collecting state past 2,000 positions writes
+ * through `crc`, `vectorLen`, `msgLen` and `word_914` and then off the end of
+ * the 0x918-byte allocation.  ITU-T V.90 Table 14 and V.92 Table 23 bound each
+ * of the six constellation indices to "an integer between 0 and 5", so a
+ * CONFORMANT peer reaches about 1,786 of 2,000 and cannot get there; an index
+ * of 6 to 15 -- which the recommendations forbid and nothing here rejects --
+ * can.  The exposure is to a malformed or hostile peer.
+ *
+ * FIX: refuse the store above the last index that fits, exactly as the sibling
+ * does.  `V90CP::bitsToInfo` carries `cmp $0x2edf` / `ja` at five of its ten
+ * store sites and prints the author's own "not enouch memory in the buffer"
+ * instead, so the guard, its shape and its message are the original author's;
+ * they are simply absent from the V.92 class.  That string is already in the
+ * blob, pooled in .rodata, so it is not an invention.
+ *
+ * EVIDENCE: finding 6800 (the recommendations, and the translation verified
+ * faithful at .text+0x4f2f3 and +0x4f7f4 before anything was attributed), D923,
+ * and D520 / finding 4361 for the sibling's guard.
+ *
+ * Under DSPLIB_REPRODUCE_BUGS the macro is the object's bare store, so the
+ * reproduce build is unchanged instruction for instruction.
+ */
+#define V92CP_NOMEM \
+	"\n *** error CP bit , not enouch memory in the buffer *** \n"
+
+#ifdef DSPLIB_REPRODUCE_BUGS
+#define V92CP_PUT_BIT(b)						\
+	do {							\
+		bits[word_11c] = (b);				\
+		word_11c++;					\
+	} while (0)
+#else
+#define V92CP_PUT_BIT(b)						\
+	do {							\
+		if (word_11c <= V92CP_BITS - 1) {		\
+			bits[word_11c] = (b);			\
+			word_11c++;				\
+		} else if (DSPLIB_DEBUG_ON()) {			\
+			dsplibs_debug_printf(V92CP_NOMEM);	\
+		}						\
+	} while (0)
+#endif
+
 int
 V92CP::bitsToInfo(unsigned char bit)
 {
@@ -1143,8 +1225,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * ever enters it.
 		 */
 		byte_00 = bit;
-		bits[word_11c] = bit;
-		word_11c++;
+		V92CP_PUT_BIT(bit);
 		word_114 = (bit == 1) ? 3 : 5;
 		break;
 
@@ -1153,8 +1234,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * The short form: on to index 34, which is where `infoToBits`
 		 * leaves `word_11c` for the same message.
 		 */
-		bits[word_11c] = bit;
-		word_11c++;
+		V92CP_PUT_BIT(bit);
 		if (word_11c == 34) {
 			evaluateInfo();
 			word_114 = 9;
@@ -1176,8 +1256,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * The long form's header, to the same index 34.  `char_01` has
 		 * been decoded by then and picks what comes next.
 		 */
-		bits[word_11c] = bit;
-		word_11c++;
+		V92CP_PUT_BIT(bit);
 		if (word_11c == 34) {
 			evaluateInfo();
 			word_114 = (char_01 > 1) ? 9 : 6;
@@ -1190,8 +1269,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * The fixed part, to index 136 -- 8 * 17, and the value
 		 * `infoToBits` sets `word_11c` to at the same point.
 		 */
-		bits[word_11c] = bit;
-		word_11c++;
+		V92CP_PUT_BIT(bit);
 		if (word_11c == 136) {
 			evaluateInfo();
 			word_114 = 7;
@@ -1205,8 +1283,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * The first mask block, `gamma` positions of it, and then the
 		 * second only if `byte_24` asked for one.
 		 */
-		bits[word_11c] = bit;
-		word_11c++;
+		V92CP_PUT_BIT(bit);
 		word_120++;
 		if ((unsigned int)word_120 == gamma) {
 			evaluateInfo();
@@ -1218,8 +1295,7 @@ V92CP::bitsToInfo(unsigned char bit)
 
 	case 8:
 		/* The second mask block, `delta` positions of it. */
-		bits[word_11c] = bit;
-		word_11c++;
+		V92CP_PUT_BIT(bit);
 		word_120++;
 		if ((unsigned int)word_120 == delta) {
 			evaluateInfo();
@@ -1248,8 +1324,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 *
 		 * A BAD CRC RESTARTS THE DETECTOR, and says so.
 		 */
-		bits[word_11c] = bit;
-		word_11c++;
+		V92CP_PUT_BIT(bit);
 		word_120++;
 		if (word_120 == 17) {
 			msgLen = (unsigned int)word_11c;

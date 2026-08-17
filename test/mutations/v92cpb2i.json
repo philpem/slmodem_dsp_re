@@ -55,7 +55,7 @@
  },
  {
   "label": "state 2 does not store the type bit into the vector",
-  "find": "\t\tbyte_00 = bit;\n\t\tbits[word_11c] = bit;",
+  "find": "\t\tbyte_00 = bit;\n\t\tV92CP_PUT_BIT(bit);",
   "replace": "\t\tbyte_00 = bit;"
  },
  {

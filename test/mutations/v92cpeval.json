@@ -200,13 +200,13 @@
  },
  {
   "label": "case 7 reads the mask words least significant first",
-  "find": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;",
-  "replace": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;"
+  "find": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;",
+  "replace": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;"
  },
  {
   "label": "case 8 reads the mask words least significant first",
-  "find": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;",
-  "replace": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;"
+  "find": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;",
+  "replace": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;"
  },
  {
   "label": "case 7 does not skip the framing position of each mask word",
