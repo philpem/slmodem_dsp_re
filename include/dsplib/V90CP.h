@@ -463,7 +463,9 @@ public:
 	 * straight to the `case 0` body.  That is only correct for an
 	 * unsigned index; a signed one admits negatives below 1 and GCC emits
 	 * `jl` plus a second test against zero.  Every other use is an
-	 * equality compare and says nothing.  Finding 4362.
+	 * equality compare and says nothing, and no test can hold this --
+	 * the two readings agree over every value the field takes.  Finding
+	 * 4365.
 	 */
 	unsigned int word_cb0;
 

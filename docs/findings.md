@@ -63758,3 +63758,65 @@ reader will "repair" into `word_3ba8` and break the six case with.
 `byte_caa`'s test at the top of the same member DOES use the group size --
 `2 * word_3ba8` -- so the member reads the field and declines to use it here,
 which is what makes this a hardcoded constant rather than an unread one.
+
+### 4365. `V90CP::word_cb0` IS UNSIGNED, ON ONE INSTRUCTION, AND NO TEST CAN EVER HOLD IT
+
+The receive counter at +0xcb0 was `int`, on no evidence: `resetDetector` and
+the constructor store a constant into it and every one of `bitsToInfo`'s six
+tests against it is an EQUALITY compare, which says nothing about signedness.
+
+One site does say.  `bitsToInfo`'s `case 4` switches over the field to decide
+which of the three block flags the arriving bit is, and GCC compiles the
+three-way switch to a comparison tree:
+
+    530b0:  cmp    $0x1,%edx
+    530b9:  je     53352            <- case 1
+    530bf:  jb     53347            <- case 0, with no second test
+    530c5:  cmp    $0x2,%edx
+    530c8:  je     5366c            <- case 2
+
+`jb` is an UNSIGNED below, and taking it straight to the `case 0` body is only
+correct if nothing below 1 can be anything but 0.  For a signed index GCC
+emits `jl` and then a further test against zero, because a negative value is
+also "less than 1" and must reach the default.  `emit_case_nodes` takes that
+directly from `TREE_UNSIGNED` of the index type, so the instruction is the
+declaration.
+
+**NO TEST CAN HOLD THIS, and that is why the finding is its whole record.**
+The two readings agree over every value the field takes -- a negative +0xcb0
+reaches the default arm either way -- so this is 613's shape exactly: a defect
+no differential test can see, found only by reading what the compiler was
+FORCED to encode.  Our object emits `jb` at the same site.
+
+Measured with the function it came in with, not separately, because it is the
+only member that touches the field for anything but a constant store:
+`make phase` 209 passed / 0 failed and `compare.py` unmoved at 363 identical,
+72 same size, 1018 compared, 82.1%.  This used to be cited as finding 4362,
+which is the `word_cac` retype and says nothing about this field --
+`refcheck.py` cannot catch a reference that still resolves and points at the
+wrong entry, so it is written down here.
+
+### 4366. THE V90CP CRC's SIXTEEN-BYTE SEED LOOP IS SIGNED, IN ALL THREE COPIES
+
+`resetCRC` (0x512b0) walks `crc[0..0xf]` with `cmp $0xf,%eax` / `jle` and our
+source already had `int i` there.  The same sixteen stores appear twice more,
+written out rather than called, and both had `unsigned int` in this tree:
+
+    5174d:  jle    51740      inside `evaluateCRC`
+    522dd:  jle    522d0      inside `infoToBits`
+
+`jle` is signed; an unsigned `i <= 0xf` is `jbe`, which is what we emitted.
+The mismatch had gone unnoticed in two already-green functions because it is
+invisible -- the index runs 0..15 either way, so no differential test and no
+mutation can reach it -- and it surfaced only when `bitsToInfo`'s inlined copy
+of `evaluateCRC` was compared against the object instruction for instruction.
+
+Both are now `int c`, declared beside the `unsigned int i` the rest of each
+function uses, which is the shape the object encodes and not a tidiness to be
+undone.  The correction cost nothing: 21 bytes SMALLER across the whole tree
+and `compare.py`'s identical count unmoved at 363, so no symbol left the set.
+
+The general lesson is the one 4300 already paid for once: **a new function
+that repeats an old one's body is a second reading of that body, and where the
+two disagree the object is the arbiter.**  Three symbols carry this loop and
+now all three carry it the same way.

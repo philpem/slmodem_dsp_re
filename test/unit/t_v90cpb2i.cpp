@@ -881,7 +881,6 @@ run_cp_b2i_guard(void)
 			CPA->word_cac = CPB->word_cac = V90CP_BITS;
 			CPA->word_cb0 = CPB->word_cb0 = 1;
 			CPA->crc[0] = CPB->crc[0] = 0x37;
-			cp_s[0x3b98] = 0x37;
 
 			dsplib_debug_capture_on = 1;
 			dsplib_debug_capture_reset();
@@ -939,7 +938,6 @@ run_cp_b2i_guard(void)
 		CPA->word_cac = CPB->word_cac = V90CP_BITS;
 		CPA->word_cb0 = CPB->word_cb0 = 0;
 		CPA->crc[0] = CPB->crc[0] = 0x37;
-		cp_s[0x3b98] = 0x37;
 
 		{
 			int ra = CPA->bitsToInfo(1);
