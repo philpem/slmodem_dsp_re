@@ -64665,3 +64665,201 @@ bytes against the blob's 375, 103 instructions against 103, with the same
 displacements, immediates and branch structure; four registers are permuted
 (%eax/%ecx, %esi/%ebx, %edi/%esi). That is 614's free column, and
 `-frename-registers` is the pass that does it.
+### 4340. THE CONSTANT POOL IS PER FUNCTION, SO 0.5f APPEARS TWICE IN `.rodata.cst4` -- AND THE THIRD x87 OP IS WHAT PUTS A RECIPROCAL IN THE SOURCE
+
+`V90Demapper::updateConstelation` and the copy of it that GCC inlined into
+`V90Demapper::linearMappingStudy` do the same arithmetic and reach it through
+two different `.rodata.cst4` slots: `flds 0x1b8` at 0x312fd and `flds 0x1c4`
+at 0x31591. Both slots hold exactly `0x3f000000`, which is 0.5f.
+
+That looked at first like evidence that the two functions differ, and it is
+not. **The pool is emitted PER FUNCTION and the layout says so**, which is the
+part anyone can check against the object:
+
+    +0x1b0  24804.0f  |  an earlier function's, and duplicated at +0x1b4
+    +0x1b4  24804.0f  |
+    +0x1b8  0.5f         updateConstelation's ONLY float constant  (0x312f0)
+    +0x1bc  0.0f      |  linearMappingStudy's three, contiguous    (0x31410)
+    +0x1c0  0.4f      |
+    +0x1c4  0.5f      |
+
+Two consecutive pools in `.text` order, the second re-emitting a constant the
+first already holds, and a second duplicate pair three slots earlier. GCC 3.x
+runs `output_constant_pool` at the end of each function and `-fmerge-constants`
+leaves the folding to the LINKER through a `SHF_MERGE` section, so in a `.o`
+the duplicates are all still there.
+
+So **two slots with the same bytes in one translation unit says nothing at
+all**, and a reader who treats slot identity as expression identity will
+mis-read every inlined float constant in this object -- here, into believing
+that the inlined copy of `updateConstelation` rounds by something other than a
+half.
+
+The same pool is where the two constants that DO matter live: `+0x1bc` is
+`0.0f` (the `fcoms` in `linearMappingStudy`) and `+0x1c0` is `0.4f` (its
+`fmuls`). `fmuls` and not `fmull` is what makes the multiplier single
+precision; a `double` 0.4 would have gone to `.rodata.cst8`.
+
+**AND THE DIVIDE IS A RECIPROCAL IN THE SOURCE.** The body is
+
+    fildll (%esp)                  ; (float)(unsigned)count
+    fdivr  %st(2),%st              ; st0 = 1.0 / count
+    fmuls  0x1000(%esi,%ecx,4)     ; * sum
+    fadd   %st(1),%st              ; + 0.5f
+    fistps 0x30(%edx,%ecx,2)       ; under a control word OR'd with 0xc00
+
+which is THREE x87 operations where `sum / count` is two. The extra one exists
+only because there is a constant 1.0 to divide, and `fld1` is hoisted into the
+prologue beside the 0.5f for exactly that. `d8 fa` is a D8 register form, so
+finding 245's FDIVP/FDIVRP swap does not reach it and `dis.py` prints no Intel
+note. Written `1.0F / count * sum + 0.5F`, the function comes out
+byte-for-byte identical to the blob, alignment padding included.
+
+The `+ 0.5f` is a rounding term and the truncating control word is why: with
+round-toward-zero set, adding a half is what makes `fistps` round to nearest.
+`t_v90demap.cpp` plants a count of two against an odd sum so that the quotient
+lands exactly on a half, which is the only input that separates this from a
+plain round-to-nearest.
+
+### 4341. ONE ROW LENGTH, TWO LOCAL TYPES: `unsigned short` IN `updateConstelation` AND `short` IN `linearMappingStudy`
+
+Both functions compute the same quantity -- the phase's row length, doubled
+when the detector's `short_2800[phase]` is set -- and the object gives them
+different types. This is not a defect in either; it is two different FORCED
+encodings, and the distinction is worth stating precisely because the two look
+alike at a glance.
+
+`updateConstelation`, 0x31336 and 0x313ec:
+
+    mov    0x630(%ecx,%edx,4),%ebx     ; the 32-bit field
+    add    %ebx,%ebx
+    movzwl %bx,%edi                    ; -> unsigned short
+    ...
+    cmp    %di,%bx ; jb                 ; 16-bit UNSIGNED compare
+
+`linearMappingStudy`, 0x3152a and 0x31573:
+
+    mov    0x630(%ecx,%edx,4),%eax
+    add    %eax,%eax
+    movswl %ax,%ecx                    ; -> short, sign-extended to 32
+    ...
+    cmp    %ecx,%eax ; jge              ; 32-bit SIGNED compare
+
+The narrow load is FREE in the first (finding 614: the upper half dies in a
+16-bit compare) and FORCED in the second (the 32-bit result is what `jge`
+reads). So the second is a real type and the first is a real type too, by its
+compare rather than by its load -- an `unsigned short` gives `jb` on 16 bits,
+a `short` gives `jle`, an `unsigned int` gives neither the truncation nor the
+narrow compare.
+
+**`constellationSize` itself stays `unsigned int` and must not be retyped.**
+Both of these are truncating conversions INTO a local; the field is read
+32-bit wide by `hardDecision`, `printErrorHistogramAndReset` and
+`resetNoSpectral`, and `printErrorHistogramAndReset` bounds a loop with it
+under `ja`.
+
+### 4342. "NOTHING IN THE OBJECT READS THIS FIELD" IS REFUTED FOR THE THIRD TIME IN ONE HEADER, AND A DISPLACEMENT GREP IS WHAT TESTS IT
+
+`include/dsplib/V90Demapper.h` said of `+0x1ea4` and `+0x1ea6` that "nothing
+in the object LOADS either", and of `+0x08` that it is "read by nothing in the
+object that this tree has read". Both are withdrawn:
+
+  - `V90Equalizer::process` tests both flags, `cmpw $0x0,0x1ea4(%ecx)` at
+    0x3a403 and `cmpw $0x0,0x1ea6(%eax)` at 0x3a432, each off
+    `0x3054(%edx)`. The pointer identification is not a coincidence of
+    displacement: the same function CALLS `V90Demapper::linearMappingStudy` at
+    0x3a3dd, thirty bytes earlier.
+  - `V90Demapper::resetNoSpectral` computes `+0x08` as
+    `bitsPerFrame - signBitsPerFrame` at 0x30d11 and reads it back into the
+    embedded `ModulusDecoder`'s seventh word at 0x30e77.
+
+The `+0x1eac` comment in the same file already cites finding 3531 for exactly
+this error, which is what makes three in one header a finding about the
+header's METHOD rather than about three fields. **A claim that nothing reads a
+field is a claim about every one of the 938 symbols, and a batch that has read
+five of them cannot make it.**
+
+**What tests it cheaply is a grep of the whole disassembly for the
+displacement** -- `objdump -d | grep '1ea4('` finds every base register in one
+pass, which is how this was caught. The reusable part is its LIMIT: it works
+because `1ea4` is a rare four-digit displacement, and it would prove nothing
+for `0x08`, where the same grep returns thousands of lines belonging to every
+other class in the object. For a small displacement there is no cheap test and
+the honest comment says which functions were read, not which were not.
+
+### 4343. `resetNoSpectral`'s SECOND CURSOR LIVES ONLY IN THE DOUBLED ARM, AND NO DIFFERENTIAL TEST CAN SEE THE ALTERNATIVE
+
+With `short_2800[i]` set, each code of the mapping block yields TWO
+constellation entries -- the detector's `linMapp` and `linMappAlt` for that
+code, larger first -- so the write cursor advances twice per source code and
+is not the loop counter. With the flag clear it advances once and IS the loop
+counter. The object writes them differently and the difference is entirely in
+the encodings:
+
+    doubled arm    inc %edx ; movswl %dx,%edx     (0x30dc0)
+                   lea 0x1(%edx),%eax ; cwtl      (0x30dc9)
+    plain arm      inc %ecx                       (0x30eec)
+                   cmp %ecx,0x20(%esp) ; ja        -- 32-bit, unsigned
+
+So the doubled arm's cursor is a `short`, truncated on every one of its two
+increments per iteration, and the plain arm has no cursor of its own at all.
+Hoisting one `short k` out of the `if` to serve both arms gives the plain arm
+two truncations the object does not have.
+
+**And `make phase` cannot tell the two apart.** Both readings agree for every
+input where the cursor stays inside a `short`, which is every input a row of
+128 can produce; they diverge only past 32767 entries, which the object can
+never reach. This is finding 613's shape -- a real type difference invisible
+to the differential tier and visible in one instruction -- and it is settled
+here from the encoding alone.
+
+**The `>` that orders the pair is the other half, and it turned out NOT to be
+testable either -- which is worth more than the guess that it was.** The
+compare is `cmp %cx,%bx; jle` at 0x30dab, 16-bit and SIGNED, and the `jle` arm
+-- so EQUAL as well as smaller -- writes `linMappAlt` first. `t_v90demap.cpp`
+plants one cell in six with the two exactly equal and reaches the case on
+every trial, and the `>=` mutation SURVIVES: when the two values are equal,
+writing `a` then `b` and writing `b` then `a` put the same two numbers in the
+same two slots. The mutation is the identity function, so it is recorded as
+`equivalent` with that reason rather than as an untested claim.
+
+So both halves of this function's ordering rule are codegen claims: which
+value goes first is decided by the object's `jle` and by nothing a
+differential test can ever run. The general lesson is the one worth carrying
+-- **an input that REACHES a boundary case is not the same as an input that
+SEPARATES two readings of it**, and the suite is what tells them apart.
+
+### 4344. `resetNoSpectral` IS 90% OF THE BLOB'S BYTES AND NOTHING IS MISSING: THE GAP IS REMATERIALISATION UNDER REGISTER PRESSURE
+
+Ours is 548 bytes against the blob's 605, and the difference is one shape
+repeated. In the blob's inner loop both mapping values are loaded for the
+compare at 0x30d9c and 0x30da0 and then, inside each arm, the second one is
+loaded AGAIN through a fresh `movzbl` of the mapping block and a fresh index
+computation (0x30dd8..0x30de5, and the mirror at 0x30eb7..0x30ec4). It has to:
+the register holding it was reused for `this` at 0x30dbc. Ours keeps both in
+registers across the branch and each arm stores what it already has.
+
+**The obvious alternative was tried rather than assumed.** Spelling the two
+inner loop bounds `mapp->constellationSize[i]` instead of
+`constellationSize[i]` keeps the mapping pointer live across the loop, which
+is where the extra pressure would have to come from; it moves ours from 548 to
+566 and leaves 39 bytes still unexplained, so it is not the answer and was not
+adopted. Both spellings are the same behaviour -- GCC folds the load into the
+value just stored either way -- so the differential tier cannot choose between
+them and neither can this.
+
+That leaves register allocation, which is CLAUDE.md's free column, and the two
+functions agree instruction for instruction on everything the compiler was
+forced to encode -- the 16-bit signed compare and its arm assignment, the two
+cursor truncations, the unsigned 32-bit loop bound, the `movzbl` width of a
+code, the flat `i * 128 + j` with no clamp, and the seven `ModulusDecoder`
+words. It is recorded so the gap is not re-opened as missing code: finding
+605's rule, a byte count across a factoring difference measures the factoring.
+
+The seven words are written as seven field assignments and not as the
+seven-argument `ModulusDecoder` constructor the mangling advertises, because
+that constructor is declared and not defined in this tree -- the blob has it
+out of line at 0x320b0 and 0x32070 -- and spelling it here would put a symbol
+outside the batch's closure. The object inlines whatever the original wrote and
+emits the seven stores in the scheduler's order, 0, 3, 4, 1, 2, 5, 6, which is
+not a source order and was not chased (finding 617).

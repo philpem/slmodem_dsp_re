@@ -14,8 +14,8 @@
  },
  {
   "label": "the two cell coordinates are passed the other way round",
-  "find": "\t\t\tadiDetector->clearCamulativeVal(phase, code);",
-  "replace": "\t\t\tadiDetector->clearCamulativeVal(code & 5, phase);"
+  "find": "\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(code & 5, phase);"
  },
  {
   "label": "resetLinearMappStudy drops its argument on the floor",
@@ -213,5 +213,217 @@
   "label": "the drain reports failure",
   "find": "\tnbits = total;\n\treturn 1;\n}",
   "replace": "\tnbits = total;\n\treturn 0;\n}"
+ },
+ {
+  "label": "the frame position wraps at five, not six",
+  "find": "\trbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\trbsFramePosition = (rbsFramePosition + 1) % 5u;"
+ },
+ {
+  "label": "the wrap is a SIGNED remainder -- the `mul` at 0x30b60 is not",
+  "find": "\trbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\trbsFramePosition = (unsigned int)((int)(rbsFramePosition + 1) %\n\t\t\t\t\t   (int)V90DEMAPPER_CONSTELLATIONS);"
+ },
+ {
+  "label": "the position is left where it was",
+  "find": "\trbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the update walks five constellations, not six",
+  "find": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {\n\t\tunsigned short n;",
+  "replace": "\tfor (i = 0; i + 1 < V90DEMAPPER_CONSTELLATIONS; i++) {\n\t\tunsigned short n;"
+ },
+ {
+  "label": "the detector's flag does not double the row",
+  "find": "\t\tif (adiDetector->short_2800[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
+  "replace": "\t\tn = constellationSize[i];\n\t\tif (adiDetector->short_2800[i] == 0)\n\t\t\tn = constellationSize[i];"
+ },
+ {
+  "label": "every row is doubled, flag or no flag",
+  "find": "\t\tif (adiDetector->short_2800[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
+  "replace": "\t\tn = 2 * constellationSize[i];\n\t\tif (adiDetector->short_2800[i] == 0)\n\t\t\tn = 2 * constellationSize[i];"
+ },
+ {
+  "label": "the rounding half is dropped, so the mean truncates",
+  "find": "\t\t\t\t    (1.0F / adiDetector->uint_1c00[i][j] *\n\t\t\t\t     adiDetector->float_1000[i][j] + 0.5F);",
+  "replace": "\t\t\t\t    (1.0F / adiDetector->uint_1c00[i][j] *\n\t\t\t\t     adiDetector->float_1000[i][j]);"
+ },
+ {
+  "label": "a cell nothing landed on is rewritten anyway",
+  "find": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->uint_1c00[i][j] != 0)",
+  "replace": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->uint_1c00[i][j] + 1u != 0)"
+ },
+ {
+  "label": "the mean comes from the next phase's cell",
+  "find": "\t\t\t\t     adiDetector->float_1000[i][j] + 0.5F);",
+  "replace": "\t\t\t\t     adiDetector->float_1000[(i + 1) % 6][j] + 0.5F);"
+ },
+ {
+  "label": "the update line is spelt correctly (transcript only)",
+  "find": "\t\tdsplibs_debug_printf(\"V90Demapper: constelation update !!!\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Demapper: constellation update !!!\\n\");"
+ },
+ {
+  "label": "the update line is printed whatever the debug level (transcript only)",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demapper: constelation update !!!\\n\");",
+  "replace": "\tdsplibs_debug_printf(\"V90Demapper: constelation update !!!\\n\");"
+ },
+ {
+  "label": "the frame's bit count is left as it was found",
+  "find": "\tbitsPerFrame = mapp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tword_08 = bitsPerFrame - signBitsPerFrame;"
+ },
+ {
+  "label": "+0x08 is the SUM of the two counts, not the difference",
+  "find": "\tword_08 = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tword_08 = bitsPerFrame + signBitsPerFrame;"
+ },
+ {
+  "label": "the histogram is printed but the delay is not reseeded",
+  "find": "\t\thistogramIntegration = 0;\n\t\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;",
+  "replace": "\t\thistogramIntegration = 0;"
+ },
+ {
+  "label": "the delay comes from the integration time instead",
+  "find": "\t\thistogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;",
+  "replace": "\t\thistogramDelay = params->DEMAPPER_ERROR_HISTOGRAM_INTEGRATION_TIME;"
+ },
+ {
+  "label": "the row length is not copied over",
+  "find": "\t\tconstellationSize[i] = mapp->constellationSize[i];",
+  "replace": "\t\t(void)mapp->constellationSize[i];"
+ },
+ {
+  "label": "the pair is laid down smaller first",
+  "find": "\t\t\t\tif (adiDetector->linMapp[i][c] >\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
+  "replace": "\t\t\t\tif (adiDetector->linMapp[i][c] <\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {"
+ },
+ {
+  "label": "two equal levels go the other way round -- `>=` and not `>`",
+  "find": "\t\t\t\tif (adiDetector->linMapp[i][c] >\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
+  "replace": "\t\t\t\tif (adiDetector->linMapp[i][c] >=\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
+  "equivalent": true,
+  "why": "The two arms differ ONLY in which of `linMapp[i][c]` and `linMappAlt[i][c]` is written first, so on the input this mutation moves -- the two being EQUAL -- both orders store the same pair of values into the same two slots.  The mutation is behaviourally the identity and no seeding can change that; `t_v90demap.cpp` plants one cell in six with the two equal, reaches the case, and proves it makes no difference.  What decides `>` against `>=` is the object alone: `cmp %cx,%bx; jle` at 0x30dab puts the EQUAL case on the arm that writes `linMappAlt` first, and finding 4343 records that this half is a codegen claim and not a differential one."
+ },
+ {
+  "label": "the doubled arm advances its cursor once per code, not twice",
+  "find": "\t\t\t\t\tconstellation[i][k] =\n\t\t\t\t\t    adiDetector->linMappAlt[i][c];\n\t\t\t\t\tk++;\n\t\t\t\t} else {",
+  "replace": "\t\t\t\t\tconstellation[i][k] =\n\t\t\t\t\t    adiDetector->linMappAlt[i][c];\n\t\t\t\t} else {"
+ },
+ {
+  "label": "the plain arm copies the ALTERNATE table",
+  "find": "\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];",
+  "replace": "\t\t\t\tconstellation[i][j] = adiDetector->linMappAlt[i]\n\t\t\t\t    [mapp->constellation[i][j]];"
+ },
+ {
+  "label": "the code is read as a SIGNED byte, so 128 and above index backwards",
+  "find": "\t\t\t\tunsigned char c = mapp->constellation[i][j];",
+  "replace": "\t\t\t\tsigned char c = (signed char)\n\t\t\t\t    mapp->constellation[i][j];"
+ },
+ {
+  "label": "the modulus decoder's seventh word is the frame's whole bit count",
+  "find": "\tmodulusDecoder.field_18 = word_08;",
+  "replace": "\tmodulusDecoder.field_18 = bitsPerFrame;"
+ },
+ {
+  "label": "the six row lengths reach the modulus decoder one slot out",
+  "find": "\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];",
+  "replace": "\tmodulusDecoder.field_00 = constellationSize[1];\n\tmodulusDecoder.field_04 = constellationSize[0];"
+ },
+ {
+  "label": "the serial sign decoder keeps its previous bit",
+  "find": "\tsignDecoder.prev_ = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "an equal magnitude takes the upper pair -- `>=` and not `>`",
+  "find": "\tif (diff > 0.0F) {",
+  "replace": "\tif (diff >= 0.0F) {"
+ },
+ {
+  "label": "the study measures the level rather than the sample",
+  "find": "\t\t    __builtin_abs(sample);",
+  "replace": "\t\t    __builtin_abs(level);"
+ },
+ {
+  "label": "the gate opens on equality as well -- `<=` and not `<`",
+  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (__builtin_fabsf(diff) <= 0.4F * (high - low)) {"
+ },
+ {
+  "label": "the gate is half the gap, not four tenths of it",
+  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (__builtin_fabsf(diff) < 0.5F * (high - low)) {"
+ },
+ {
+  "label": "the sign of the difference is kept, so half the samples never gate in",
+  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (diff < 0.4F * (high - low)) {"
+ },
+ {
+  "label": "the sample count moves and the sum does not",
+  "find": "\t\tadiDetector->float_1000[decisionFramePosition][decisionCode] +=\n\t\t    __builtin_abs(sample);",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "the sum moves and the count does not",
+  "find": "\t\tadiDetector->uint_1c00[decisionFramePosition][decisionCode]++;",
+  "replace": "\t\t;"
+ },
+ {
+  "label": "code zero takes the pair BELOW the row on the upper arm too",
+  "find": "\t\tif (decisionCode - 1 >= 0) {",
+  "replace": "\t\tif (decisionCode >= 0) {"
+ },
+ {
+  "label": "the top of the row is one entry further up",
+  "find": "\t\tif (decisionCode + 1 >= n) {",
+  "replace": "\t\tif (decisionCode + 2 >= n) {"
+ },
+ {
+  "label": "the doubled row length is not doubled",
+  "find": "\t\tif (adiDetector->short_2800[decisionFramePosition] != 0)\n\t\t\tn = 2 * constellationSize[decisionFramePosition];",
+  "replace": "\t\tif (adiDetector->short_2800[decisionFramePosition] != 0)\n\t\t\tn = constellationSize[decisionFramePosition];"
+ },
+ {
+  "label": "the run ends one call late",
+  "find": "\tif (uint_1eb0 + 1 == uint_1ea8) {",
+  "replace": "\tif (uint_1eb0 == uint_1ea8) {"
+ },
+ {
+  "label": "the completed-run count is not kept",
+  "find": "\t\tshort_1e9c++;\n\t\tif (short_1e9c == 2)",
+  "replace": "\t\tif (short_1e9c == 2)"
+ },
+ {
+  "label": "+0x1ea6 goes up on the THIRD completed run",
+  "find": "\t\tif (short_1e9c == 2)\n\t\t\tshort_1ea6 = 1;",
+  "replace": "\t\tif (short_1e9c == 3)\n\t\t\tshort_1ea6 = 1;"
+ },
+ {
+  "label": "+0x1ea4 is left as the study found it",
+  "find": "\t\tuint_1eb0 = 0;\n\t\tshort_1ea4 = 1;",
+  "replace": "\t\tuint_1eb0 = 0;"
+ },
+ {
+  "label": "the progress is not rewound at the end of a run",
+  "find": "\t\tuint_1eb0 = 0;\n\t\tshort_1ea4 = 1;",
+  "replace": "\t\tshort_1ea4 = 1;"
+ },
+ {
+  "label": "the cells are cleared BEFORE they are read into the constellation",
+  "find": "\t\tupdateConstelation();\n\n\t\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\t\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\t\tupdateConstelation();"
+ },
+ {
+  "label": "the study's own clear stops one phase short",
+  "find": "\t\tfor (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);",
+  "replace": "\t\tfor (phase = 0; phase + 1 < V90DEMAPPER_CONSTELLATIONS; phase++)\n\t\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\t\tadiDetector->clearCamulativeVal(phase, code);"
+ },
+ {
+  "label": "the progress does not advance between runs",
+  "find": "\t} else {\n\t\tuint_1eb0++;\n\t}",
+  "replace": "\t} else {\n\t\t;\n\t}"
  }
 ]

@@ -1,16 +1,18 @@
 /*
- * V90Demapper.cpp -- eight of the fourteen members of the V.90 demapper: the
- * constructor, both destructors, the histogram diagnostic, and three of the
- * nine that do the work -- `hardDecision`, `process` and
- * `resetLinearMappStudy`.
+ * V90Demapper.cpp -- twelve of the thirteen members of the V.90 demapper: the
+ * constructor, both destructors, the histogram diagnostic, and seven of the
+ * eight that do the work -- `hardDecision`, `process`, `resetLinearMappStudy`,
+ * `incrementRBSFramePosition`, `updateConstelation`, `resetNoSpectral` and
+ * `linearMappingStudy`.
  *
  * Reconstructed from dsplibs.o.  `include/dsplib/V90Demapper.h` carries the
  * object map and the 0x1eb8 allocation the size comes from.
  *
- * THE SIX STILL OUTSTANDING are `reset`, `resetNoSpectral`,
- * `incrementRBSFramePosition`, `linearMappingStudy` and `updateConstelation`
- * -- about 2,400 bytes, declared in the header for the record.  One class,
- * one owner.
+ * THE ONE STILL OUTSTANDING is `reset` (0x30870, 723 bytes), and it is not
+ * outstanding for want of reading: it calls `V90SignBitsExtractor::reset`,
+ * which nothing in this tree has written, so a batch carrying it would not be
+ * CLOSED and would fail every differential binary at `t_encode` rather than
+ * only its own (finding 215).  It stays declared in the header.
  *
  * WHAT THE CLASS IS FOR, now that its middle is read.  `hardDecision` takes
  * one PCM sample, finds the nearest level of the constellation belonging to
@@ -78,6 +80,13 @@
  */
 #include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/ModulusCoder.h"
+/*
+ * `resetNoSpectral` takes one of these and reads three of its members, so the
+ * argument has to be a complete type here.  It is a DIFFERENT class from the
+ * `V90Parameters` above and the two are not interchangeable; finding 1112 is
+ * about the two `V90Parameters` maps and does not reach this one.
+ */
+#include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Demapper.h"
 
 /*
@@ -575,4 +584,342 @@ V90Demapper::process(unsigned char *out, unsigned int &nbits)
 
 	nbits = total;
 	return 1;
+}
+
+/*
+ * `incrementRBSFramePosition` -- 33 bytes at 0x30b50, and the whole function
+ * is the one statement below.
+ *
+ * THE DIVISION IS UNSIGNED AND THAT IS THE ONLY THING TO READ HERE.
+ * `mov $0xaaaaaaab,%edx; mul %edx; shr $0x2,%edx` is the reciprocal form of
+ * an UNSIGNED divide by six, `lea (%edx,%edx,2),%edx; add %edx,%edx`
+ * multiplies the quotient back by six and `sub %edx,%ebx` takes the
+ * remainder.  A signed `% 6` needs either an `idiv` or a sign-correction on
+ * the quotient and the object has neither, which is the same evidence
+ * `hardDecision`'s own copy of this advance carries at 0x312bc.
+ *
+ * That the member exists at all is worth a line: `hardDecision` does not call
+ * it, it repeats it.  So the class advances the position two ways and only
+ * this one is reachable from outside.
+ */
+void
+V90Demapper::incrementRBSFramePosition()
+{
+	rbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;
+}
+
+/*
+ * `updateConstelation` -- 286 bytes at 0x312f0, and the author's spelling of
+ * the name, with one `l`, is the blob's and is kept.
+ *
+ * WHAT IT IS: the automatic digital-impairment detector has been accumulating
+ * a magnitude sum and a sample count per (phase, code) cell -- `float_1000`
+ * and `uint_1c00`, which `linearMappingStudy` below is what fills.  This turns
+ * each cell's MEAN into the demapper's own constellation table, rounded to
+ * nearest, and leaves a cell nothing landed on alone.
+ *
+ * BOTH LOOP COUNTERS ARE `unsigned short` AND BOTH BOUNDS ARE 16-BIT.
+ * `cmp $0x5,%di; jbe` for the outer and `cmp %di,%bx; jb` for the inner, with
+ * `movzwl %bx,%edi` / `movzwl %cx,%ebx` truncating each increment back to 16
+ * bits.  An `unsigned int` counter has neither the truncation nor the 16-bit
+ * compare, and a `short` one would compare with `jle`.
+ *
+ * THE ROW LENGTH DOUBLES WITH THE DETECTOR'S PER-PHASE FLAG, the same rule
+ * `hardDecision` scans under: with `short_2800[i]` set the row holds two
+ * levels per code.  The zero arm loads `constellationSize[i]` with `movzwl`
+ * off a 32-bit field (0x313ec) and the non-zero arm loads it 32-bit, doubles
+ * it and truncates (0x31336 .. 0x3133f) -- so BOTH arms discard the upper
+ * half, which is what makes the narrow load finding 614's free case rather
+ * than evidence about the field.  `constellationSize` stays `unsigned int`;
+ * `hardDecision` and `printErrorHistogramAndReset` both depend on that.
+ *
+ * `linearMappingStudy` READS THE SAME QUANTITY AS A `short` AND THAT ONE IS
+ * FORCED -- see its comment below.  The two functions genuinely differ in the
+ * type of the local, and finding 4341 is why the difference is not a defect in
+ * either.
+ *
+ * THE CELL INDEX IS `i * 128 + j` AND j IS NOT BOUNDED BY 128.  The object
+ * forms `(i << 7) + j` once (`shl $0x7,%ebp`, `lea 0x0(%ebp,%ebx,1),%ecx`)
+ * and scales it by 4 for the detector's two arrays and by 2 for ours, so with
+ * the flag set and a count above 64 the row runs into the next one.  Writing
+ * it `[i][j]` gives the identical arithmetic and keeps the object's overrun
+ * rather than hiding it behind a bound the object does not have.
+ *
+ * THE RECIPROCAL IS IN THE SOURCE, not an optimisation of `sum / count`.
+ * The object computes `1.0 / count` with `fdivr %st(2),%st` and then
+ * `fmuls` -- three x87 operations where a plain divide is two, and the extra
+ * one only exists because the constant 1.0 is there to divide.  `d8 fa` is a
+ * D8 register form, which finding 245's swap does not touch, and `dis.py`
+ * prints no Intel note against it.
+ *
+ * BOTH CONSTANTS ARE HOISTED OUT OF BOTH LOOPS.  `fld1` and
+ * `flds .rodata.cst4+0x1b8` (which holds exactly 0.5) are in the prologue at
+ * 0x312f1 and 0x312fd, and each outer iteration pushes a working copy of the
+ * pair with two `fld %st(1)` and drops them with two `fstp %st(0)`.
+ *
+ * THE `+ 0.5f` IS A ROUNDING TERM AND `fistps` IS WHY.  The store runs under a
+ * control word OR'd with 0xc00 -- round toward zero -- so the half added
+ * before it is what makes the result round to nearest.  The `(short)` cast is
+ * what emits the whole `fnstcw`/`or`/`fldcw`/`fistps`/`fldcw` sequence.
+ *
+ * THE TAIL IS `dsplibs_debug_printf` AND NOT `edprintf`, which is the one
+ * place this file's habit is the wrong reflex: the object ends
+ * `jmp dsplibs_debug_printf` -- a tail call, no encoding, one argument -- under
+ * an explicit `cmpl $0x1,dsplibs_debug_level; ja`, which is `DSPLIB_DEBUG_ON()`
+ * written out.  Every `edprintf` site in this file is unconditional because
+ * the level gate lives inside `edprintf` instead.
+ */
+void
+V90Demapper::updateConstelation()
+{
+	unsigned short i, j;
+
+	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
+		unsigned short n;
+
+		if (adiDetector->short_2800[i] != 0)
+			n = 2 * constellationSize[i];
+		else
+			n = constellationSize[i];
+
+		for (j = 0; j < n; j++)
+			if (adiDetector->uint_1c00[i][j] != 0)
+				constellation[i][j] = (short)
+				    (1.0F / adiDetector->uint_1c00[i][j] *
+				     adiDetector->float_1000[i][j] + 0.5F);
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demapper: constelation update !!!\n");
+}
+
+/*
+ * `resetNoSpectral` -- 605 bytes at 0x30cf0.  Rebuild the whole demapper from
+ * a `V90MappingParams` and the detector's two measured mapping tables, with
+ * no spectral shaping involved; `reset` is the other half of the pair and is
+ * not written here.
+ *
+ * WHAT THE ARGUMENT SUPPLIES: the frame's bit count at its +0x00, the six row
+ * lengths at its +0x604, and the six 128-byte tables of CODES at its +0x004.
+ * `V90MappingParams.h` names all three from the three unmangled functions that
+ * read them, and this is a second reader agreeing with that map.
+ *
+ * A CODE IS AN `unsigned char` AND IS NOT BOUNDED BY 128.  The object loads it
+ * with `movzbl 0x4(%ecx,%ebp,1)` and adds it to `i * 128` before scaling by
+ * two, so a byte of 128 or more indexes past its own row of `linMapp` and into
+ * the next one.  That is the object's arithmetic and is reproduced rather than
+ * clamped; `t_v90demap.cpp` counts the trials that reach it.
+ *
+ * THE DOUBLED ARM LAYS THE PAIR DOWN LARGER FIRST, and the comparison is
+ * SIGNED and 16-BIT: `cmp %cx,%bx` with `jle` at 0x30dab, the two values
+ * loaded `movzwl` from `linMapp` and `linMappAlt` and never widened.  On the
+ * `jle` arm -- so on EQUAL as well as smaller -- `linMappAlt` is written
+ * first, which is what a `>` and not a `>=` puts there.
+ *
+ * `k` IS A `short` AND IT LIVES ONLY IN THE DOUBLED ARM.  Its two increments
+ * per iteration are truncated to 16 bits every time (`inc %edx; movswl %dx,%edx`
+ * at 0x30dc0 and `lea 0x1(%edx),%eax; cwtl` at 0x30dc9), while the plain arm
+ * indexes with `j` itself -- `inc %ecx` with no truncation and a 32-bit
+ * unsigned `ja`.  Hoisting one counter out of the `if` would give the plain
+ * arm truncations the object does not have, and no differential test could
+ * see the difference, so this one is settled by the encoding alone.
+ *
+ * THE SEVEN WORDS AT +0x648 ARE THE EMBEDDED `ModulusDecoder`, and they are
+ * written as seven field assignments rather than as the seven-argument
+ * constructor the mangling advertises.  That constructor is DECLARED AND NOT
+ * DEFINED in this tree -- the blob has it out of line at 0x320b0 and 0x32070
+ * and nobody has reconstructed it -- so spelling it here would add a symbol
+ * outside this batch's closure.  The object inlines whatever the original
+ * wrote: seven plain `mov`s in the scheduler's order, 0, 3, 4, 1, 2, 5, 6,
+ * which is not a source order and is not chased (finding 617).
+ *
+ * `histogramIntegration` BEFORE `histogramDelay` is the object's order and
+ * costs nothing to adopt; both are plain stores after the call, so it is a
+ * hint and not evidence.
+ */
+void
+V90Demapper::resetNoSpectral(V90MappingParams *mapp)
+{
+	unsigned int i, j;
+
+	bitsPerFrame = mapp->word_0;
+	word_08 = bitsPerFrame - signBitsPerFrame;
+
+	if (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM) {
+		printErrorHistogramAndReset();
+		histogramIntegration = 0;
+		histogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;
+	}
+
+	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
+		constellationSize[i] = mapp->constellationSize[i];
+
+		if (adiDetector->short_2800[i] != 0) {
+			short k = 0;
+
+			for (j = 0; j < constellationSize[i]; j++) {
+				unsigned char c = mapp->constellation[i][j];
+
+				if (adiDetector->linMapp[i][c] >
+				    adiDetector->linMappAlt[i][c]) {
+					constellation[i][k] =
+					    adiDetector->linMapp[i][c];
+					k++;
+					constellation[i][k] =
+					    adiDetector->linMappAlt[i][c];
+					k++;
+				} else {
+					constellation[i][k] =
+					    adiDetector->linMappAlt[i][c];
+					k++;
+					constellation[i][k] =
+					    adiDetector->linMapp[i][c];
+					k++;
+				}
+			}
+		} else {
+			for (j = 0; j < constellationSize[i]; j++)
+				constellation[i][j] = adiDetector->linMapp[i]
+				    [mapp->constellation[i][j]];
+		}
+	}
+
+	modulusDecoder.field_00 = constellationSize[0];
+	modulusDecoder.field_04 = constellationSize[1];
+	modulusDecoder.field_08 = constellationSize[2];
+	modulusDecoder.field_0c = constellationSize[3];
+	modulusDecoder.field_10 = constellationSize[4];
+	modulusDecoder.field_14 = constellationSize[5];
+	modulusDecoder.field_18 = word_08;
+	signDecoder.prev_ = 0;
+}
+
+/*
+ * `linearMappingStudy` -- 779 bytes at 0x31410, and the largest member of the
+ * class after `hardDecision`.  One decided sample in, one cell of the
+ * detector's running mean out, and every `uint_1ea8` calls a whole pass that
+ * turns those means into the constellation and starts again.
+ *
+ * ITS CALLER IS `V90Equalizer::process`, which calls it at 0x3a3dd -- so the
+ * two arguments are the equaliser's, and the pair it hands over is a SAMPLE
+ * and the LEVEL that was decided for it.  The names below are that reading
+ * and are the weakest of CLAUDE.md's three ranks; what is NOT inference is
+ * that the first argument is the one whose magnitude is accumulated into
+ * `float_1000`, which `V90AutoDigitalImpDetector.h` already documents as a sum
+ * of magnitudes with `uint_1c00` as its count.
+ *
+ * WHICH NEIGHBOURING PAIR IS MEASURED AGAINST, and the two tests that choose
+ * it are the whole first half:
+ *
+ *   `|sample| - |level| > 0` -- STRICTLY greater: `fcoms` against
+ *   `.rodata.cst4+0x1bc`, which holds exactly 0.0f, with `jbe` to the other
+ *   arm.  A sample bigger than its level sits ABOVE the level, and the row
+ *   descends, so the pair to bracket it with is the one an index LOWER.
+ *
+ *   otherwise the pair an index HIGHER, unless there is no such pair:
+ *   `decisionCode + 1 >= n` falls back to the lower one, with `n` the row
+ *   length doubled by the detector's per-phase flag exactly as `hardDecision`
+ *   doubles its scan.
+ *
+ * `n` IS A `short` HERE AND AN `unsigned short` IN `updateConstelation`, and
+ * both are forced by different encodings: 0x3152a loads `constellationSize[p]`
+ * with `movswl` and 0x31573 truncates the doubled value with `movswl %ax,%ecx`,
+ * and in both cases the 32-bit result feeds the SIGNED `jge` at 0x31545 -- the
+ * forced column of CLAUDE.md's rule.  `updateConstelation`'s `movzwl` feeds a
+ * 16-bit `jb` and discards its upper half, which is the free column.  Finding
+ * 4341.
+ *
+ * AND THE PAIR IS READ WITHOUT A LOWER BOUND.  With `decisionCode` zero and
+ * the row length one, `decisionCode + 1 >= n` holds and the object reads
+ * `constellation[p][-1]` -- two bytes before the row, which for phase 0 is the
+ * tail of `sampleCount`.  The object computes exactly that displacement
+ * (`0x2e(%ebp,%eax,2)`) and the reconstruction keeps it.
+ *
+ * THE GATE IS `|diff| < 0.4f * gap` AND THE MULTIPLIER IS SINGLE PRECISION.
+ * `fmuls .rodata.cst4+0x1c0` = 0.4f; a `double` 0.4 would be `fmull` against
+ * `.rodata.cst8`.  The comparison is `fcompp` with the product in ST(0) and
+ * `jbe` to skip, so the product must be strictly greater -- and `de d9` is
+ * FCOMPP, which has no reversed twin and is not finding 245's trap.  Nothing
+ * in the differential tier can separate `0.4f` from `0.4`: the two straddle no
+ * integer for any gap a `short` row can hold, so that half is a codegen claim.
+ *
+ * THE ABSOLUTE VALUE OF THE SAMPLE IS TAKEN TWICE, once into `diff` at 0x31434
+ * and again at 0x314bd, and both are the `cltd; xor; sub` triple finding 2117
+ * pins to `__builtin_abs` rather than to `x < 0 ? -x : x`.
+ *
+ * THE END-OF-RUN PASS INLINES `updateConstelation` -- the same 0.5f rounding
+ * loop, the same doubled bound and the same "constelation update" line, at
+ * 0x315bd..0x316f9 -- and then clears all 6 x 128 cells through
+ * `clearCamulativeVal`, exactly as `resetLinearMappStudy` does.  So the means
+ * are read into the constellation BEFORE they are wiped, and the order of
+ * those two is observable.
+ *
+ * `short_1e9c` IS NOT CLEARED HERE.  It counts completed runs and is only ever
+ * zeroed by `resetLinearMappStudy`, so the `== 2` test fires exactly once per
+ * study and `short_1ea6` is "a second run has finished" where `short_1ea4`,
+ * set unconditionally below, is "a run has finished".
+ */
+void
+V90Demapper::linearMappingStudy(short sample, short level)
+{
+	float diff = __builtin_abs(sample) - __builtin_abs(level);
+	short high, low;
+
+	if (diff > 0.0F) {
+		if (decisionCode - 1 >= 0) {
+			high = constellation[decisionFramePosition]
+					    [decisionCode - 1];
+			low = constellation[decisionFramePosition]
+					   [decisionCode];
+		} else {
+			high = constellation[decisionFramePosition]
+					    [decisionCode];
+			low = constellation[decisionFramePosition]
+					   [decisionCode + 1];
+		}
+	} else {
+		short n;
+
+		if (adiDetector->short_2800[decisionFramePosition] != 0)
+			n = 2 * constellationSize[decisionFramePosition];
+		else
+			n = constellationSize[decisionFramePosition];
+
+		if (decisionCode + 1 >= n) {
+			high = constellation[decisionFramePosition]
+					    [decisionCode - 1];
+			low = constellation[decisionFramePosition]
+					   [decisionCode];
+		} else {
+			high = constellation[decisionFramePosition]
+					    [decisionCode];
+			low = constellation[decisionFramePosition]
+					   [decisionCode + 1];
+		}
+	}
+
+	if (__builtin_fabsf(diff) < 0.4F * (high - low)) {
+		adiDetector->float_1000[decisionFramePosition][decisionCode] +=
+		    __builtin_abs(sample);
+		adiDetector->uint_1c00[decisionFramePosition][decisionCode]++;
+	}
+
+	if (uint_1eb0 + 1 == uint_1ea8) {
+		short phase, code;
+
+		short_1e9c++;
+		if (short_1e9c == 2)
+			short_1ea6 = 1;
+
+		uint_1eb0 = 0;
+		short_1ea4 = 1;
+
+		updateConstelation();
+
+		for (phase = 0; phase < V90DEMAPPER_CONSTELLATIONS; phase++)
+			for (code = 0; code < V90DEMAPPER_LEVELS; code++)
+				adiDetector->clearCamulativeVal(phase, code);
+	} else {
+		uint_1eb0++;
+	}
 }
