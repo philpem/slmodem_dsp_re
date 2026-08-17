@@ -627,5 +627,9 @@
  "v90p4dleaf": [
   "src/pump/v90/V90Phase4Demodulator.cpp",
   "build/test/t_v90p4dleaf"
+ ],
+ "v90cpb2i": [
+  "src/pump/v90/V90CP.cpp",
+  "build/test/t_v90cpb2i"
  ]
 }

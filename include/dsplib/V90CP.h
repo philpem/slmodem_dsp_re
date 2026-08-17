@@ -51,6 +51,8 @@
  * Two of the class's function-local statics are in .bss under their own
  * mangled names -- `V90CP::bitsToInfo(unsigned char)::alpha` and `::beta` --
  * so `bitsToInfo` carries state across calls.  Nothing here depends on that.
+ * They hold the two counted blocks' bit lengths, seventeen to the entry:
+ * `alpha` for `short_58` and `beta` for `buf`.  Finding 4363.
  *
  * THE MESSAGE IS SEVENTEEN-BIT FRAMES, and that is measured rather than
  * assumed.  `infoToBits` opens with seventeen ones at bits[0x00..0x10], and
@@ -106,25 +108,43 @@
  * `infoToBits` and `evaluateInfo` reference no string at all -- one
  * relocation between them, and it is `evaluateInfo`'s jump table -- and the
  * only three strings the whole translation unit reaches are `bitsToInfo`'s
- * two errors and `printNofRecievedMpMpNot`'s counter line.  So the fields
- * keep offset-anchored names and carry their derivation here.  The two
+ * two diagnostics and `printNofRecievedMpMpNot`'s counter line.  So the
+ * fields keep offset-anchored names and carry their derivation here.  The two
  * exceptions are the ones the code itself settles: `nof_58[k]` is the bound
  * of the loop over `short_58[k]` and `nof_buf[k]` the bound of the loop over
  * `buf[k]`, in BOTH directions, which makes "how many entries" a measured
  * fact and not a reading.  Finding 3540.
+ *
+ * `bitsToInfo` HAS NOW BEEN READ AND IT NAMES NOTHING EITHER.  Its two
+ * strings are a bounds check on `bits` and a bad-CRC line that names the
+ * message but no field of it, so all twenty-three members below keep their
+ * offsets for names.  What it does settle is the ROLE of five of them --
+ * `word_ca4` is the state, `word_cac` the cursor, `word_cb0` the count within
+ * the current block, `byte_ca9` and `byte_caa` the run lengths of ones and of
+ * zeros -- and roles are what the comments below now carry.  The sibling
+ * `V90MP` reached the same four roles from its own driver and kept
+ * `byte_19`, `byte_1a`, `byte_1b` and `word_14`, so this is the precedent and
+ * not a new caution.  Finding 4360.
  */
 
 #ifndef DSPLIB_V90CP_H
 #define DSPLIB_V90CP_H
 
 /*
- * The bit vector's extent.  Its START is proven -- `getBitVector` hands back
- * `this+0xcb8` -- and its END is where the CRC register begins.  That the
- * whole span is ONE array is the modelling choice, not a measurement: no
- * method establishes the array's own length, and the length `getBitVector`
- * reports is +0x3bac, which `calcSequenceLength` computes at run time.
+ * The bit vector's extent, AND IT IS NOW MEASURED FROM BOTH ENDS.  Its START
+ * is proven -- `getBitVector` hands back `this+0xcb8` -- and its LENGTH is
+ * what the author's own bounds check says it is: five arms of `bitsToInfo`
+ * refuse to store when the cursor is above 0x2edf and print "not enouch
+ * memory in the buffer" instead, so 0x2edf is the last index that fits and
+ * 0xcb8 + 0x2ee0 is 0x3b98, which is exactly where `crc` begins.  Lower bound
+ * meets upper bound, as for the class itself.  Finding 4361; this used to
+ * read "the modelling choice, not a measurement", which it was until
+ * `bitsToInfo` was read.
  *
- * What IS measured is that nothing else lives in the span at an offset of its
+ * The length `getBitVector` reports is a different quantity: +0x3bac, which
+ * `calcSequenceLength` computes at run time and which can be shorter.
+ *
+ * Also measured is that nothing else lives in the span at an offset of its
  * own.  Over all fifteen of the class's symbols, the only `this`-relative
  * displacements between +0xcb8 and +0x3b98 are +0xcb8 itself and +0xcc9..
  * +0xcdb -- constant indices into the first two dozen bytes -- and there is
@@ -146,10 +166,12 @@
  * How many entries fit in one of those six buffers.  `evaluateInfo` writes a
  * full 32-bit word at `(%edi,%ebp,4)` and `infoToBits` reads the signed low
  * half of the same slot with `movswl`, so the element is four bytes wide and
- * 0x200 bytes hold 0x80 of them.  Nothing bounds the count against this --
- * the count travels in eight bits, so a peer may legally ask for 255 -- and
- * `bitsToInfo` is where that is caught, with "*** error CP bit , not enouch
- * memory in the buffer ***".  See docs/deviations.md D390.
+ * 0x200 bytes hold 0x80 of them.  NOTHING bounds the count against this: the
+ * count travels in eight bits, so a peer may legally ask for 255, and both
+ * loops run to it.  See docs/deviations.md D390 -- which used to say that
+ * `bitsToInfo`'s "not enouch memory in the buffer" was the guard that caught
+ * it, and that is wrong.  That guard is on the BIT VECTOR's index, one layer
+ * further out, and nothing guards this.  Finding 4361.
  */
 #define V90CP_BUFENTS	(V90CP_BUFSIZE / 4)
 
@@ -190,13 +212,20 @@ public:
 	void printNofRecievedMpMpNot();
 
 	/*
-	 * Declared, not defined -- defining a method whose callees are not
-	 * written breaks the link for the whole suite (docs/v90cpp.md), and a
-	 * declaration is a specification where a definition is a claim.  The
-	 * argument type is the mangling's and is exact; the return type is
-	 * not mangled, so `void` here means "not established".
+	 * DEFINED in src/pump/v90/V90CP.cpp, AND NOT VOID -- which is what
+	 * this declaration used to say, on no evidence, because a return type
+	 * is not mangled.  %edi is zeroed at entry and moved into %eax at both
+	 * `ret`s, and 0, 1, 2, 3, 4 and 5 all reach it.  Same mistake as
+	 * `evaluateCRC` above and as the sibling `V90MP::bitsToInfo`, in the
+	 * same class and for the same reason.  Finding 4360.
+	 *
+	 * It is the receive-side driver: one arriving bit per call, storing
+	 * into `bits` at `word_cac`, counting within the block in `word_cb0`,
+	 * and stepping `word_ca4` through the states listed there.  Its two
+	 * function-local statics `alpha` and `beta` are the two counted
+	 * blocks' bit lengths.
 	 */
-	void bitsToInfo(unsigned char);
+	int bitsToInfo(unsigned char);
 
 	/*
 	 * Defined in src/pump/v90/V90CP.cpp.  Both really are void: neither
@@ -349,6 +378,28 @@ public:
 	 * the same `ret` as everything outside the range.  Each arm decodes
 	 * one block of the message, in the order the blocks appear on the
 	 * wire.  Which value means which arm is in src/pump/v90/V90CP.cpp.
+	 *
+	 * `bitsToInfo` IS WHAT DRIVES IT, over a wider range: its own switch
+	 * is `cmp $0xd` / `ja` and a fourteen-entry table, so the states are
+	 * 0..13 with 9 a hole there too.  What each one is collecting:
+	 *
+	 *      0   the preamble -- seventeen ones
+	 *      1   the framing zero after it
+	 *      2   the type bit at index 18
+	 *      3   the short form's remaining fifteen bits
+	 *      4   the three block flags
+	 *      5   the rest of the header, to 0x33
+	 *      6   six frames of pairs, to 0x99
+	 *      7   the four nine-bit counts, 0x44 bits
+	 *      8   the four counted lists, `alpha` bits
+	 *      10  the values and the buffer counts, 0x55 bits
+	 *      11  the six buffers, `beta` bits
+	 *      12  the CRC frame, 0x11 bits
+	 *      13  the tail, to the next cursor position divisible by six
+	 *
+	 * so the seven values `evaluateInfo` decodes are a subset of the
+	 * fourteen the receiver walks, and 0, 1, 2, 4, 12 and 13 exist only
+	 * on this side.  Finding 4360.
 	 */
 	unsigned int word_ca4;
 
@@ -359,25 +410,64 @@ public:
 	 */
 	unsigned char byte_ca8;
 
-	/* +0x0ca9  Cleared by `resetDetector`.  One byte, stored as a byte. */
+	/*
+	 * +0x0ca9  THE LENGTH OF THE CURRENT RUN OF ONES, in `bitsToInfo`:
+	 * every one bit increments it and every zero clears it, and state 0
+	 * leaves the preamble when it passes 0x10 -- seventeen ones, since
+	 * sixteen are not enough.  Eight bits and it wraps: the object's
+	 * `inc %cl` and `cmp $0x10,%cl` are both byte-wide.
+	 */
 	unsigned char byte_ca9;
 
-	/* +0x0caa  Cleared by `resetDetector` alongside +0xca9. */
+	/*
+	 * +0x0caa  AND THE LENGTH OF THE CURRENT RUN OF ZEROS, the mirror of
+	 * +0xca9: every zero increments it and every one clears it.  A run of
+	 * `2 * word_3ba8` zeros with the cursor still at its home 18 is the
+	 * far end having stopped, and `bitsToInfo` answers 5.  The member is
+	 * re-read out of the object after being cleared, which is why a
+	 * `word_3ba8` of zero makes that test true on a ONE bit as well.
+	 */
 	unsigned char byte_caa;
 
 	unsigned char pad_cab[1];	/* +0x0cab alignment              */
 
 	/*
 	 * +0x0cac  Set to 18 by `resetDetector`; the most-read field here.
-	 * IT IS THE WRITE CURSOR: `infoToBits` leaves the index of the next
-	 * free bit in it after every field it lays down, and 18 is where the
-	 * first data bit goes -- one preamble frame of seventeen, then the
-	 * next frame's framing bit at 17 and its first data bit at 18.
+	 * IT IS THE CURSOR, and it is the SAME cursor in both directions:
+	 * `infoToBits` leaves the index of the next free bit in it after
+	 * every field it lays down, and `bitsToInfo` stores each arriving bit
+	 * at it and steps it on.  18 is where the first data bit goes -- one
+	 * preamble frame of seventeen, then the next frame's framing bit at
+	 * 17 and its first data bit at 18.
+	 *
+	 * UNSIGNED, and that is forced rather than chosen.  `bitsToInfo`
+	 * bounds it with `cmp $0x2edf,%eax` / `ja` -- an unsigned above, not
+	 * `jg` -- and divides it by six with the 0xaaaaaaab reciprocal and a
+	 * plain `shr`, which is the unsigned magic; a signed `% 6` needs the
+	 * sign correction the object does not encode.  Nothing anywhere in
+	 * the class forces signed, so `unsigned int` is the simpler source.
+	 * Finding 4362.
 	 */
-	int word_cac;
+	unsigned int word_cac;
 
-	/* +0x0cb0  Zeroed by `resetDetector`. */
-	int word_cb0;
+	/*
+	 * +0x0cb0  Zeroed by `resetDetector`, and IT IS THE RECEIVE COUNTER:
+	 * `bitsToInfo` counts the bits of the block currently arriving in it
+	 * and compares the count against that block's length -- 0xf, 3, 0x44,
+	 * 0x55, 0x11, or `alpha` or `beta` for the two whose length the
+	 * message itself carries -- then clears it for the next block.
+	 *
+	 * UNSIGNED, and one instruction settles it.  `bitsToInfo`'s `case 4`
+	 * switches over this field for the three block flags and the tree it
+	 * compiles to reads `cmp $0x1` / `je` / `jb`, taking the `x < 1` edge
+	 * straight to the `case 0` body.  That is only correct for an
+	 * unsigned index; a signed one admits negatives below 1 and GCC emits
+	 * `jl` plus a second test against zero.  Every other use is an
+	 * equality compare and says nothing, and no test can hold this --
+	 * the two readings agree over every value the field takes.  Finding
+	 * 4365.
+	 */
+	unsigned int word_cb0;
 
 	/*
 	 * +0x0cb4  THE READ CURSOR, and the mirror of +0x0cac: every arm of
@@ -412,7 +502,17 @@ public:
 	/* +0x3bb8  MPNot frames received. */
 	int nofRecievedMpNot;
 
-	/* +0x3bbc  Set to -1 by `reset` and by the constructor. */
+	/*
+	 * +0x3bbc  Set to -1 by `reset` and by the constructor, and READ BY
+	 * ONE MEMBER ONLY: `bitsToInfo`'s tail.  It is a hold-off counter.
+	 * At -1 it is idle, and an answer of 1 or 2 starts it at 0; from then
+	 * on every call increments it until 0x320, where it goes back to -1,
+	 * and while it is running the answers 4 and 2 are suppressed to 0
+	 * (1, 3 and 5 are not).  `js` on the idle test, so signed.
+	 *
+	 * WHAT IT IS A HOLD-OFF FOR is not stated anywhere in the object, so
+	 * the field keeps its offset for a name.  Finding 4360.
+	 */
 	int word_3bbc;
 };
 
