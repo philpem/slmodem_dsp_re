@@ -149,8 +149,8 @@ ss_snapshot(void *dst, const unsigned char *src)
 	V90SpectralShaper *d = (V90SpectralShaper *)dst;
 
 	memcpy(dst, src, sizeof(V90SpectralShaper));
-	d->buf_28 = (unsigned short *)(long)(s->buf_28 != 0);
-	d->buf_2c = (unsigned short *)(long)(s->buf_2c != 0);
+	d->delayLine = (short *)(long)(s->delayLine != 0);
+	d->trialLine = (short *)(long)(s->trialLine != 0);
 	d->pde.state_ = (unsigned char *)(long)(s->pde.state_ != 0);
 }
 
@@ -231,12 +231,12 @@ run_ss_reset(void)
 				    tag);
 
 			diff_eq_int("trellis buffer +0x28 (%ld)",
-				    memcmp(SS_A.buf_28, SS_B.buf_28,
-					   SS_BUF * sizeof(unsigned short))
+				    memcmp(SS_A.delayLine, SS_B.delayLine,
+					   SS_BUF * sizeof(short))
 				    == 0, 1, tag);
 			diff_eq_int("trellis buffer +0x2c (%ld)",
-				    memcmp(SS_A.buf_2c, SS_B.buf_2c,
-					   SS_BUF * sizeof(unsigned short))
+				    memcmp(SS_A.trialLine, SS_B.trialLine,
+					   SS_BUF * sizeof(short))
 				    == 0, 1, tag);
 			diff_eq_int("encoder state (%ld)",
 				    memcmp(SS_A.pde.state_, SS_B.pde.state_,
@@ -260,12 +260,12 @@ run_ss_reset(void)
 			diff_eq_int("the blob's shaperSR (%ld)",
 				    (long)SS_B.shaperSR,
 				    (long)ss_cases[c].sr, tag);
-			diff_eq_int("the blob's word_30 (%ld)",
-				    (long)SS_B.word_30,
+			diff_eq_int("the blob's writeIndex (%ld)",
+				    (long)SS_B.writeIndex,
 				    (long)(unsigned)(ss_cases[c].id * width),
 				    tag);
-			diff_eq_int("the blob's word_34 (%ld)",
-				    (long)SS_B.word_34,
+			diff_eq_int("the blob's windowLength (%ld)",
+				    (long)SS_B.windowLength,
 				    (long)(unsigned)((ss_cases[c].id + 1u)
 						     * width), tag);
 			diff_eq_int("the filter took the width (%ld)",
@@ -281,11 +281,11 @@ run_ss_reset(void)
 				int allzero = 1, untouched = 1;
 
 				for (i = 0; i < SS_BUF; i++)
-					if (SS_B.buf_28[i] != 0)
+					if (SS_B.delayLine[i] != 0)
 						allzero = 0;
 				for (i = 0;
-				     i < SS_BUF * sizeof(unsigned short); i++)
-					if (((unsigned char *)SS_B.buf_2c)[i]
+				     i < SS_BUF * sizeof(short); i++)
+					if (((unsigned char *)SS_B.trialLine)[i]
 					    != HARNESS_MALLOC_FILL)
 						untouched = 0;
 
@@ -335,15 +335,15 @@ run_ss_reset(void)
 			our_ss_reset(ss_a.raw, i, 2u, ss_coef[0][0],
 				     ss_coef[0][1], ss_coef[0][2],
 				     ss_coef[0][3]);
-			if (i > 0 && SS_A.word_30 != prev)
+			if (i > 0 && SS_A.writeIndex != prev)
 				sep_id++;
-			prev = SS_A.word_30;
+			prev = SS_A.writeIndex;
 			our_ss_dtor(ss_a.raw);
 		}
 
 		diff_eq_int("the divide is not a subtraction, over 1..7",
 			    sep_div, 6, 0);
-		diff_eq_int("shaperId moves word_30", sep_id, 3, 0);
+		diff_eq_int("shaperId moves writeIndex", sep_id, 3, 0);
 	}
 
 	return diff_end();

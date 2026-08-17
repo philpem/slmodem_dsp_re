@@ -68197,3 +68197,205 @@ have listed a plausible set, and the differential tier would have linked
 reconstruction defect rather than a fixture one.  It is finding 134's argument
 in its strongest form -- an apparatus that cannot tell it is measuring the
 wrong thing -- and the check that exists for it earned its keep here.
+
+## 5850. `movzwl` SAID THESE BUFFERS WERE `unsigned short *`; THE CALLEES THEY ARE PASSED TO SAY `short *`, AND THE CALLEES WIN
+
+`V90SpectralShaper`'s two heap buffers, +0x28 and +0x2c, had been typed
+`unsigned short *`.  The whole argument was that every access to either is a
+`movzwl (%reg,%edx,2)`, so the stride is two and the load zero-extends.
+
+**The stride is real evidence and the extension is not.**  Every one of those
+loads has its 32-bit result discarded by a 16-bit store, or by a `neg` feeding
+one -- `movzwl (%ebx,%edx,2),%eax; f7 d8 neg %eax; 66 89 04 56 mov %ax,...` at
+0x32de0.  That is finding 614's FREE column exactly: a 16-bit value whose upper
+half nobody reads may be widened either way and the compiler picks.  The two
+readings agree over every value the buffer can hold, so no test could ever
+separate them and no amount of reading more `movzwl`s would have helped.
+
+**What is forced is the mangled type of the four callees they are handed to,
+with no conversion instruction between the load of the pointer and the push:**
+
+    0x330bb  progress(const short *)          <- +0x28, straight from 0x28(%edi)
+    0x32cd8  getMetric(const short *, unsigned)  <- +0x2c, straight from 0x2c(%eax)
+    applyAction(int, short *)                 <- called with +0x2c
+    applyFrameAction(ACTIONS, short *, int)   <- called with +0x28
+
+`_ZN24V90SpectralShapingFilter8progressEPKs` is `PKs`, `const short *`.  An
+`unsigned short *` would not convert to it silently in C++ at all -- it needs a
+cast, and a cast the author had to write is a claim the object gives no reason
+for.  Evidence class 2 beats an inference from a free encoding, so both members
+are `short *` and the two heap blocks are 24 `short`.
+
+**`compare.py` did not move by one symbol on the retype** (1163/455/87 before,
+same after, identical SET diffed empty), which is the check `docs/cleanup.md`
+asks for: a type change that shifts nothing is a type change that was already
+being compiled the same way, and a `pad` becoming a named field of the right
+width cannot move code it does not reach.  What DID move is
+`applyFrameAction`, which could not have been written at all while the
+destination and the source disagreed on signedness.
+
+Three fields settled with it, all of them previously `pad_0c[0x14]`: three
+six-byte `unsigned char` arrays at +0x0c, +0x12 and +0x18, which are the sign
+bits before coding, after the serial encoder and after the parallel one.  See
+5852.
+
+## 5851. `+0x00` AND `+0x24` HOLD THE SAME NUMBER AFTER `reset` AND ARE NOT THE SAME FIELD -- ONE IS THE PARAMETER, THE OTHER A COUNTDOWN
+
+`V90SpectralShaper::reset` stores its first argument into +0x00 and, at
+0x3285c, re-reads +0x00 and stores it into +0x24 as well.  The header recorded
+that neither could be shown to be the working copy from `reset` alone and left
++0x24 offset-named for `advanceTrellis` and `process` to settle.  They settle
+it, and the answer is that the question was the wrong one:
+
+- **`advanceTrellis` reads +0x00 three times** -- 0x32bba, 0x32cfa, 0x32f56 --
+  and never touches +0x24.  It is `shaperId`: the trellis depth, the row
+  selector for `actionLookupTable`, the digit count, and the divisor index into
+  `pow10Table`.
+- **`process` reads +0x24 and nothing else of the pair**, as a countdown:
+  `if (primeFrames != 0) primeFrames--; else advanceTrellis();` at
+  0x33080..0x3308c.  Once it reaches zero it stays there and the trellis runs
+  on every subsequent call.
+
+So +0x24 is not a copy that some member prefers; it is a DIFFERENT QUANTITY
+that happens to be initialised from the same word.  `shaperId` frames is
+exactly how long the delay line takes to fill -- `reset` seeds
+`writeIndex = shaperId * blockLength`, so the first `shaperId` frames of the
+line are the zeros `reset` left there -- and the countdown is what holds the
+search off until the lookahead it scores is real data.  Named `primeFrames`,
+from usage inference, which is the weakest class and is why the derivation is
+here rather than only in the header.
+
+**The general form is worth keeping.**  "Which of these two equal fields is
+the live one" is a question that presumes one is redundant.  Two fields with
+one initial value and two different readers are two fields, and the way to tell
+is not which is read MORE but whether any reader reads BOTH.  Nothing in this
+class does.
+
+## 5852. TWO DIFFERENT INLININGS OF THE SAME HELPER, IN ONE OBJECT, AND THE DEFAULT ARM IS WHAT TELLS THEM APART
+
+`V90SpectralShaper` has two polarity helpers with the same four arms:
+`applyFrameAction(ACTIONS, short *, int)` at 0x328f0 and `applyAction(int,
+short *)` at 0x32a10, which walks a decimal action code's digits and drives one
+frame per digit.  Both are also present INLINED -- `applyAction` inside
+`advanceTrellis`, `applyFrameAction` inside both `applyAction` and
+`advanceTrellis` -- with no call relocation for either, so `closure.py` cannot
+see the dependency and reports `advanceTrellis` as needing neither.  Finding
+3532's shape, one level deeper.
+
+**Three inlined instances, two shapes, and reading which is which is what made
+the source recoverable:**
+
+| site | switch | default arm | what that means |
+|---|---|---|---|
+| `applyFrameAction` out of line | inside the loop | an EMPTY LOOP at 0x32937 | `for (i...) switch (action)`, unswitched by `-O3` |
+| `applyAction`'s four arms | outside any loop | none at all, 0x32a75 jumps to the outer increment | four calls with CONSTANT actions, each folding the inner switch to one arm |
+| `advanceTrellis`'s tail | inside the loop | an EMPTY LOOP at 0x32d89 | one call with a VARIABLE action |
+
+An empty loop that counts an induction variable to a bound and writes nothing
+is what loop unswitching leaves behind for a `switch` arm with no body.  It
+appears only where the switch was written INSIDE the loop, and it is absent
+where the four arms are separate calls -- because a constant action folds the
+switch away before unswitching ever runs.  So the presence or absence of that
+loop distinguishes `switch (v) { case: applyFrameAction(CONST, ...) }` from
+`applyFrameAction(v, ...)`, which no other signal in the object does.
+
+**A second, independent tell for the variable-action site:** `applyFrameAction`
+computes its parity as `(i - start) & 1` and emits `sub %ebx,%eax; test
+$0x1,%al` (0x32997).  In `advanceTrellis`'s tail the `sub` is GONE and only
+`test $0x1,%cl` survives (0x32f2c, 0x32f45) -- `start` was the constant 0.
+That is the call `applyFrameAction(action, delayLine, 0)`.
+
+**Measured result of writing it that way.**  `applyFrameAction` came out
+287 bytes against the blob's 287, mnemonic-identical AND byte-identical, and
+`compare.py` gained it (455 -> 456 identical) with nothing lost.
+
+`applyAction` came out **388 against the blob's 387, so it is NOT
+byte-identical and its mnemonics are NOT identical either** -- and the
+distinction is worth stating precisely, because neither triage tool can show
+it.  `compare.py` drops operands, so it puts the symbol in the DIFFERENT SIZE
+bucket and prints nothing; `samesize.py` never sees it, because it is not the
+same size.  The measurement had to be made by hand, normalising registers and
+constants out of both streams: 128 instructions in the blob against 132 in
+ours, differing in four.  The blob spills the frame's start offset to a stack
+slot and reads it back (`lea (%ebx,%edx,1),%eax; mov %edx,0x20(%esp)` then
+`sub 0x20(%esp),%eax`); we keep it in a register, which replaces that pair with
+one `add`, adds a reload and a store elsewhere, and costs one byte of alignment
+padding.
+
+**Examined and DECLINED on CLAUDE.md's free/forced rule, and recorded so the
+next reader does not reopen it.**  A spill-versus-keep-in-register decision is
+the canonical member of the free column, alongside instruction scheduling and
+an alignment nop.  Permuting source until those four mnemonics match would be
+fitting the compiler rather than recovering the source, which is exactly what
+finding 614 forbids.  The shape -- switch outside the loop, four specialised
+arms, bound test in front of each, no default loop -- is what carries the
+evidence, and that matches exactly.
+
+**One further forced detail on the way.**  Writing `applyAction`'s
+`(shaperId - m) * blockLength` as a LOCAL computed before the switch came out
+18 bytes SHORT, because the unconditional member load of `blockLength` then
+gets hoisted into the loop preheader.  The blob re-reads `0x8(%ecx)` inside
+every arm, which is what a member load in a conditional branch does -- loop
+invariant motion will not hoist out of a branch.  So the expression is the CALL
+ARGUMENT and not a local, and a size difference of 18 bytes was the only thing
+that said so.
+
+
+## 5853. THE 128-ENTRY `actionLookupTable` IS GENERATED BY A THREE-TERM RULE, AND THE RULE REPRODUCES EVERY BYTE
+
+`V90SpectralShaper::actionLookupTable` is 512 bytes of `.data` at 0x8e0 with no
+code anywhere in the blob that writes to it, so it is an initialised table and
+not a built one.  Read with `tabdump.py --type s32` -- and `relocscan.py`
+first, which reports nothing pointing into the range, so these are integers and
+not the table-of-pointers trap CLAUDE.md warns about three times over.
+
+**It is eight rows of sixteen, indexed `[state + 2 * shaperId][candidate]`**,
+which is read off `advanceTrellis` at 0x32c2e: `lea (%eax,%edi,2),%ecx;
+shl $0x4,%ecx; add %ebx,%ecx` with `%eax` the state word at +0x20, `%edi`
+`shaperId` and `%ebx` the candidate.  Row `2 * shaperId + state` uses its first
+2^(shaperId+1) entries and the remainder are zero, so 60 of the 128 entries are
+live and 68 are padding that is present in the object.
+
+**Every live entry is a DECIMAL number of `shaperId + 1` digits, each digit in
+1..4, one digit per frame in the delay line, most significant digit for the
+oldest frame.  Reading the candidate index as a bit vector b[shaperId..0]:**
+
+    digit_k = 1 + 2 * previous_bit + this_bit
+
+with `state` standing in as the previous bit for the leading digit, and each
+digit's own bit becoming the next digit's previous bit.  So a digit encodes a
+state TRANSITION rather than a state, which is why `digit - 1` is an `ACTIONS`
+(the four polarity patterns) and why `advanceTrellis` leaves
+`state = action & 1`: the low bit of the digit IS `this_bit`.
+
+Worked, for row 6 (`shaperId` 3, `state` 0), candidate 10 = binary 1010:
+
+    b3=1  digit1 = 1 + 2*0 + 1 = 2       (previous bit is `state` = 0)
+    b2=0  digit2 = 1 + 2*1 + 0 = 3
+    b1=1  digit3 = 1 + 2*0 + 1 = 2
+    b0=0  digit4 = 1 + 2*1 + 0 = 3       -> 2323, and the table holds 2323
+
+**THE RULE WAS CHECKED AGAINST ALL 128 ENTRIES AND REPRODUCES EVERY ONE**,
+including which entries are zero, and that check is in
+`t_v90shapeact.cpp`'s `run_tables` as 128 separate comparisons against the
+BLOB's own copy of the table rather than against ours.  That is a stronger
+result than "our table matched ours": a transcription error would survive a
+memcmp of two copies of the same mistake, and cannot survive a rule that was
+derived from the structure and then regenerates the data.  Both tables are also
+compared byte for byte against the blob -- 512 and 20 bytes -- which is the only
+sharp check on data this size, and an eyeball against `tabdump.py`'s output is
+not one.
+
+**The table is nevertheless written out literally in `src/`, not generated.**
+`tabdump.py`'s own banner recommends a generator, and that is right where the
+object BUILDS a table at run time.  Here it does not: the bytes are in `.data`
+and the author shipped them.  A generator would be a different program that
+happens to agree, and the thing being reconstructed is the initialiser.
+
+**`pow10Table` is the same table's other half** -- a plain unmangled GLOBAL
+`D` symbol of five 4-byte entries, `{1, 10, 100, 1000, 10000}`.  The width is
+the USE SITE's and not the size's: `divl 0x0(,%esi,4)` at 0x32d32 scales the
+index by four, so five entries of four bytes and not ten of two.  Only 0..3 are
+reachable, because `shaperId` above 3 would run off `actionLookupTable`'s eight
+rows first; the fifth entry is dead in this object.  Its one use is recovering
+the winning candidate's LEADING digit in a single unsigned divide.

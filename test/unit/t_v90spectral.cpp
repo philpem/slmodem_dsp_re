@@ -1475,8 +1475,8 @@ ss_snapshot(void *dst, const unsigned char *src)
 	V90SpectralShaper *d = (V90SpectralShaper *)dst;
 
 	memcpy(dst, src, sizeof(V90SpectralShaper));
-	d->buf_28 = (unsigned short *)(long)(s->buf_28 != 0);
-	d->buf_2c = (unsigned short *)(long)(s->buf_2c != 0);
+	d->delayLine = (short *)(long)(s->delayLine != 0);
+	d->trialLine = (short *)(long)(s->trialLine != 0);
 	d->pde.state_ = (unsigned char *)(long)(s->pde.state_ != 0);
 }
 
@@ -1564,13 +1564,13 @@ run_ss(void)
 			    harness_alloc.bytes,
 			    2 * (2 * SS_BUF_BYTES + SS_PDE_SIZE), trial);
 		diff_eq_int("blob: +0x28 is left as allocated (trial %ld)",
-			    all_fill(xb->buf_28, SS_BUF_BYTES), 1, trial);
+			    all_fill(xb->delayLine, SS_BUF_BYTES), 1, trial);
 		diff_eq_int("blob: +0x2c is left as allocated (trial %ld)",
-			    all_fill(xb->buf_2c, SS_BUF_BYTES), 1, trial);
+			    all_fill(xb->trialLine, SS_BUF_BYTES), 1, trial);
 		diff_eq_int("ours: +0x28 is left as allocated (trial %ld)",
-			    all_fill(xa->buf_28, SS_BUF_BYTES), 1, trial);
+			    all_fill(xa->delayLine, SS_BUF_BYTES), 1, trial);
 		diff_eq_int("ours: +0x2c is left as allocated (trial %ld)",
-			    all_fill(xa->buf_2c, SS_BUF_BYTES), 1, trial);
+			    all_fill(xa->trialLine, SS_BUF_BYTES), 1, trial);
 
 		if (trial & 1) {
 			our_ss_dtor2(ss_a);
@@ -1602,15 +1602,15 @@ run_ss(void)
 			ref_ss_ctor(ss_b);
 
 			if (which == 0) {
-				sysdep_free(x->buf_28);
-				sysdep_free(y->buf_28);
-				x->buf_28 = 0;
-				y->buf_28 = 0;
+				sysdep_free(x->delayLine);
+				sysdep_free(y->delayLine);
+				x->delayLine = 0;
+				y->delayLine = 0;
 			} else {
-				sysdep_free(x->buf_2c);
-				sysdep_free(y->buf_2c);
-				x->buf_2c = 0;
-				y->buf_2c = 0;
+				sysdep_free(x->trialLine);
+				sysdep_free(y->trialLine);
+				x->trialLine = 0;
+				y->trialLine = 0;
 			}
 
 			our_ss_dtor(ss_a);
