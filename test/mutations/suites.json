@@ -20,6 +20,10 @@
   "src/callprog/callprog.c",
   "build/test/t_callprog_progress"
  ],
+ "dcr": [
+  "src/service/dcr.c",
+  "build/test/t_dcr"
+ ],
  "dialer": [
   "src/dialer/dialer.c",
   "build/test/t_dialerprog"
