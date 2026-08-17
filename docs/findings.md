@@ -60844,3 +60844,128 @@ post-init correction of two blocks' running state, or a soft spot in one of the
 two readings.  Nothing here decides it, and `v22prc.h`'s names are deliberately
 NOT propagated inward on the strength of an offset agreeing -- which is the
 same restraint 3510 rewards when the meanings DO line up.
+
+### 6400. `ld --wrap` cannot reach the reference object's own call, and `objcopy --weaken-symbol` can
+
+Finding 879 declined to reconstruct either `loadParams` and left a
+recommendation for whoever did: *"use `ld --wrap` rather than
+`--weaken-symbol`: it reaches both sides and touches neither `src/` nor the
+reference object."* **It does not reach both sides, and this batch measured it
+before writing a line of the test.**
+
+`--wrap=foo` redirects an *undefined* reference. In the reference object the
+caller and the callee are in the SAME object file --
+`ref__ZN13V90Parameters10loadParamsEPc` and `ref_Vparser_read_int` both come
+out of `dsplibs.o` -- so the reference is not undefined and ld leaves it alone.
+ld's own manual says so ("translation unit internal references to symbol are
+not resolved to `__wrap_symbol`"), and the two-line experiment says so too:
+
+```c
+/* a.c, compiled -m32 -fno-pic; the call carries R_386_PC32 against `foo` */
+int foo(void) { return 1; }
+int bar(void) { return foo(); }
+```
+
+Linked against a `main` defining `__wrap_foo` returning 42, with
+`-Wl,--wrap=foo`, it prints **1**. The same object through
+`objcopy --weaken-symbol=foo`, linked against a `main` defining a strong `foo`
+returning 42, prints **42**. A relocation against a global was present in both
+cases, which is the condition 879's recommendation implicitly assumed was
+sufficient; it is not.
+
+So the two halves of the oracle are ASYMMETRIC, and the asymmetry is a
+measurement rather than an inconsistency:
+
+| side | reference | mechanism |
+|---|---|---|
+| ours | `V90Parameters.o` -> `Vparser.o`, undefined at link | `--wrap`, per binary |
+| blob | inside `dsplibs_ref.o` | `--weaken-symbol` in the `$(REF)` recipe |
+
+Our wrapper forwards to `__real_Vparser_read_int`, so the reconstruction's own
+stub still executes and still supplies the return value; the blob's weakened
+copies are displaced outright, because there is no `__real_` for a weakened
+symbol. That is why `t_vparser` exists as a separate binary: it links both
+sides' stubs untouched and executes them, so the three-byte bodies are covered
+and differentially tested somewhere.
+
+Two smaller things this settles, both of which cost time here:
+
+- **`--weaken-symbol` in `$(REF)` reaches `make period` for free**, because
+  `period.sh` takes `REF=${REF:-build/dsplibs_ref.o}` -- the Makefile's own
+  object -- rather than building its own.
+- **The period link line had no per-binary hook**, so `--wrap` for our side
+  needed one. `test/unit/<name>.ldflags` is read by the Makefile's
+  `TESTLDFLAGS` and by `period_inner.sh`, from the same file, so the two tiers
+  cannot disagree about a flag. NO FLAG DERIVED FROM THE OBJECT WAS TOUCHED:
+  the variable is empty for all 92 existing binaries and the compiler flags in
+  that script are unchanged.
+
+### 6401. Both `loadParams` members, 349 calls, and what a SEQUENCE oracle proves that `make params` cannot
+
+`V90Parameters::loadParams` (7,894 B, 295 calls) and
+`V92Parameters::loadParams` (1,384 B, 54 calls) are written and pass a
+differential test. They were the largest and the eleventh-largest unwritten
+symbols in the object, and they were blocked on two three-byte leaves.
+
+**The circularity objection in finding 879 was too strong.** It ran: our
+`loadParams` would BE `vparse.py`'s output, so comparing our log against the
+blob's log compares the extraction with a copy of itself. Two things are wrong
+with that.
+
+- **Our third argument is `&this->FIELD`, not a literal offset.** The
+  displacement is produced by the COMPILER from
+  `include/dsplib/V90Parameters.h`, so it reaches the log by a path the static
+  walk is not on. A header whose layout disagreed with the object appears here
+  as a wrong offset, in a test, at run time.
+- **`make params` compares MAPS and this function is a SEQUENCE.** A generator
+  driven by the header's field list rather than by the call list emits 291
+  calls instead of 295 and `paramcheck.py` stays green, because the four
+  aliased offsets are one map entry each. Order, pairing and multiplicity are
+  established by nothing else in the tree.
+
+The four aliases are +0x0f0, +0x18c, +0x190 and +0x194 (finding 861); both
+calls are emitted at each, in the object's order, and the field keeps the
+LATER name. `BLL_TRN1_QC_SLOW_K1` precedes `BLL_TRN1_QC_SLOW_K2`, and three
+`GERMAN_PBX_` names follow the plain ones they override.
+
+**Two checks fired on the way in and neither was expected to.** The generator
+refuses if the header carries no field at an offset the blob reads, and if a
+call's reader disagrees with the declared type -- 349 of 349 agreed, which is
+finding 861's reader/default correspondence confirmed a third way, from the
+header text rather than from either walk. And `make strings` passed unchanged:
+every one of the 349 parameter-name literals is already in the blob, so
+`debugaudit.py --invented` had nothing to report.
+
+**The counts are checked against literals, not against the blob.** If the
+weakening or the `--wrap` silently stopped working, both logs would be empty
+and every ordered comparison over them would pass -- the dead-detector shape
+of 2400 and 3100. `t_v90loadparams` therefore requires exactly 295 and 54
+entries in each log before it compares anything.
+
+`init()` in both classes gains the guarded call the object has --
+`modemParams->paramFile` at +0x78, tested and passed straight on -- so
+`t_v90params.cpp`'s existing both-arms sweep now drives the real callee on
+both sides rather than driving a branch we did not take.
+
+### 6402. `V90Parameters` has had one home since task #116, and CLAUDE.md still says two
+
+CLAUDE.md's "One type, one home" section names `V90Parameters` as the live
+example of the rule, "0x504 in one header and 0x558 in the other", and says
+`tools/onedef.py` carries the pair deliberately. **That has not been true for
+some time.** `onedef.py`'s `KNOWN` holds exactly one entry today and it is
+`V90Phase4Demodulator`; `src/pump/v90/V90ModemCtor.cpp` records that the
+smaller `V90PreFilter.h` copy went with task #116, includes
+`V90Demodulator.h` again, and sizes its allocation with `sizeof` rather than a
+literal.
+
+Recorded because the stale paragraph is load-bearing in agent briefs: this
+batch was told to "settle which header your translation unit must include,
+from the object, and say so in a comment", and the honest answer is that there
+is nothing to settle. `include/dsplib/V90Parameters.h` is the only definition,
+`sizeof(V90Parameters)` is 0x558, and `V90ModemCtor.cpp` asserts it. The
+argument in that file's comment is kept -- of two possible mistakes, one
+silent and one loud, arrange for only the loud one to be reachable -- and it
+is worth keeping even though the trade it describes has expired.
+
+Nothing was removed for this. Removing a duplicate is progress; there was no
+duplicate here to remove.

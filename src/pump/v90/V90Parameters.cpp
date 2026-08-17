@@ -50,6 +50,7 @@
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/modem_params.h"
+#include "dsplib/Vparser.h"
 
 /*
  * The object divides by 2400 with the unsigned magic-number sequence GCC
@@ -553,6 +554,343 @@ V90Parameters::loadModemParamsData()
 }
 
 /*
+ * `loadParams(char *)` -- 7,894 bytes and 295 calls, in a straight line, to
+ * the two stubs in src/core/Vparser.c.  Nothing else: no branch, no store, no
+ * local, and an epilogue of four pops and a `ret` after the 295th call.
+ *
+ * EVERY LINE BELOW IS A MEASUREMENT AND NONE OF IT IS A READING BY EYE.  The
+ * call list comes from `tools/vparse.py`, which walks the instruction stream
+ * holding an abstract value per register and per outgoing stack slot, because
+ * GCC 3.4 shuffles the three arguments through whatever registers are free
+ * and stores them in whatever order it likes.  295 of 295 calls resolve; the
+ * one instruction that once made "0 unresolved" a lie is finding 860.
+ *
+ *     arg 0  (%esp)      `paramFile`, this member's own argument, passed on
+ *     arg 1  0x4(%esp)   an `R_386_32` against .rodata.str1.1 or .str1.4
+ *     arg 2  0x8(%esp)   `lea <off>(this),%reg`
+ *
+ * THE FIELD NAME IS NOT COPIED FROM THE OFFSET.  Each call names the header's
+ * member at that offset and lets the COMPILER produce the displacement, so
+ * the offset reaches the object by a path `vparse.py` is not on and the
+ * differential test can disagree with the extraction.  `make params` holds
+ * the header to the same map from the other end.
+ *
+ * FOUR OFFSETS ARE READ TWICE UNDER TWO NAMES, so 295 calls cover 291 fields:
+ * +0x0f0, +0x18c, +0x190 and +0x194 (finding 861).  Both calls are emitted,
+ * in the object's order, and the field is named for the LATER one -- three of
+ * the four are a `GERMAN_PBX_` override of the name beside it.  A generator
+ * driven by the header's field list rather than by the call list would emit
+ * 291 calls and `make params` would not notice, because that gate compares
+ * maps and this function is a SEQUENCE.
+ *
+ * WHAT IT DOES AT RUN TIME IS NOTHING.  Both callees are `xor %eax,%eax; ret`
+ * in the shipped object, so all 295 reads write nothing and the return values
+ * are discarded.  The call SEQUENCE is still the object's own field map and
+ * the only place in it that knows these names.  Finding 6400 for the oracle
+ * that tests this -- and for why finding 879's `ld --wrap` recommendation
+ * does not work.
+ */
+void
+V90Parameters::loadParams(char *paramFile)
+{
+	Vparser_read_int(paramFile, "PROBING_MODE", &PROBING_MODE);
+	Vparser_read_int(paramFile, "HW_CODEC_TYPE", &HW_CODEC_TYPE);
+	Vparser_read_int(paramFile, "LINE_CONNECTION_TYPE", &LINE_CONNECTION_TYPE);
+	Vparser_read_int(paramFile, "ENABLE_EQUALIZER_MMX", &ENABLE_EQUALIZER_MMX);
+	Vparser_read_int(paramFile, "EIA6_ENABLE_EQUALIZER_MMX", &EIA6_ENABLE_EQUALIZER_MMX);
+	Vparser_read_int(paramFile, "PHASE2_INFO_A_OR_MU", &PHASE2_INFO_A_OR_MU);
+	Vparser_read_int(paramFile, "PHASE2_INFO_RTD", &PHASE2_INFO_RTD);
+	Vparser_read_int(paramFile, "PHASE2_INFO_UINFO", &PHASE2_INFO_UINFO);
+	Vparser_read_int(paramFile, "PHASE2_INFO_MAX_TX_POWER", &PHASE2_INFO_MAX_TX_POWER);
+	Vparser_read_int(paramFile, "PHASE2_INFO_TX_POWER_MEASURE_POINT", &PHASE2_INFO_TX_POWER_MEASURE_POINT);
+	Vparser_read_int(paramFile, "DIGITAL_RATE_MASK", &DIGITAL_RATE_MASK);
+	Vparser_read_int(paramFile, "MAX_SPECTRAL_SHAPER_LOOKAHEAD", &MAX_SPECTRAL_SHAPER_LOOKAHEAD);
+	Vparser_read_int(paramFile, "V34_PHASE4_CONSTELLATION", &V34_PHASE4_CONSTELLATION);
+	Vparser_read_int(paramFile, "V34_RRN_CONSTELLATION", &V34_RRN_CONSTELLATION);
+	Vparser_read_int(paramFile, "V92_DIGITAL_RATE_MASK", &V92_DIGITAL_RATE_MASK);
+	Vparser_read_int(paramFile, "V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD", &V92_MAX_SPECTRAL_SHAPER_LOOKAHEAD);
+	Vparser_read_float(paramFile, "V92_JD_PHASE", &V92_JD_PHASE);
+	Vparser_read_int(paramFile, "ANALOG_RATE_MASK", &ANALOG_RATE_MASK);
+	Vparser_read_int(paramFile, "PRE_FILTER_GAIN", &PRE_FILTER_GAIN);
+	Vparser_read_int(paramFile, "PRE_FILTER_COEF_TYPE", &PRE_FILTER_COEF_TYPE);
+	Vparser_read_int(paramFile, "GERMAN_ISDN_NT1_BOX_FILTER_GAIN", &GERMAN_ISDN_NT1_BOX_FILTER_GAIN);
+	Vparser_read_int(paramFile, "GERMAN_PBX_PRE_FILTER_GAIN", &GERMAN_PBX_PRE_FILTER_GAIN);
+	Vparser_read_float(paramFile, "AGC_NOMINAL_ENERGY", &AGC_NOMINAL_ENERGY);
+	Vparser_read_float(paramFile, "AGC_K", &AGC_K);
+	Vparser_read_int(paramFile, "AGC_BLOCK_LEN", &AGC_BLOCK_LEN);
+	Vparser_read_int(paramFile, "AGC_ADAPTATION_DURATION", &AGC_ADAPTATION_DURATION);
+	Vparser_read_float(paramFile, "INITIAL_BAUD_OFFSET", &INITIAL_BAUD_OFFSET);
+	Vparser_read_float(paramFile, "BLL_INITIAL_K1", &BLL_INITIAL_K1);
+	Vparser_read_float(paramFile, "BLL_INITIAL_K2", &BLL_INITIAL_K2);
+	Vparser_read_float(paramFile, "BLL_FAST_K1", &BLL_FAST_K1);
+	Vparser_read_float(paramFile, "BLL_FAST_K2", &BLL_FAST_K2);
+	Vparser_read_float(paramFile, "BLL_MEDIUM_K1", &BLL_MEDIUM_K1);
+	Vparser_read_float(paramFile, "BLL_MEDIUM_K2", &BLL_MEDIUM_K2);
+	Vparser_read_float(paramFile, "BLL_SLOW_K1", &BLL_SLOW_K1);
+	Vparser_read_float(paramFile, "BLL_SLOW_K2", &BLL_SLOW_K2);
+	Vparser_read_float(paramFile, "BLL_SLOW2_K1", &BLL_SLOW2_K1);
+	Vparser_read_float(paramFile, "BLL_SLOW2_K2", &BLL_SLOW2_K2);
+	Vparser_read_float(paramFile, "BLL_DIL_K1", &BLL_DIL_K1);
+	Vparser_read_float(paramFile, "BLL_DIL_K2", &BLL_DIL_K2);
+	Vparser_read_float(paramFile, "BLL_TRN2_INITIAL_K1", &BLL_TRN2_INITIAL_K1);
+	Vparser_read_float(paramFile, "BLL_TRN2_INITIAL_K2", &BLL_TRN2_INITIAL_K2);
+	Vparser_read_float(paramFile, "BLL_TRN2_K1", &BLL_TRN2_K1);
+	Vparser_read_float(paramFile, "BLL_TRN2_K2", &BLL_TRN2_K2);
+	Vparser_read_float(paramFile, "BLL_STEADY_STATE_K1", &BLL_STEADY_STATE_K1);
+	Vparser_read_float(paramFile, "BLL_STEADY_STATE_K2", &BLL_STEADY_STATE_K2);
+	Vparser_read_float(paramFile, "BLL_PRE_ANSPCM_K1", &BLL_PRE_ANSPCM_K1);
+	Vparser_read_float(paramFile, "BLL_PRE_ANSPCM_K2", &BLL_PRE_ANSPCM_K2);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_INITIAL_K1", &BLL_TRN1_QC_INITIAL_K1);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_INITIAL_K2", &BLL_TRN1_QC_INITIAL_K2);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_FAST_K1", &BLL_TRN1_QC_FAST_K1);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_FAST_K2", &BLL_TRN1_QC_FAST_K2);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_MEDIUM_K1", &BLL_TRN1_QC_MEDIUM_K1);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_MEDIUM_K2", &BLL_TRN1_QC_MEDIUM_K2);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_SLOW_K1", &BLL_TRN1_QC_SLOW_K2);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_SLOW_K2", &BLL_TRN1_QC_SLOW_K2);
+	Vparser_read_int(paramFile, "BLL_TRN1D_INITIAL_TO_FAST_DURATION", &BLL_TRN1D_INITIAL_TO_FAST_DURATION);
+	Vparser_read_int(paramFile, "BLL_TRN1D_FAST_TO_SLOW_DURATION", &BLL_TRN1D_FAST_TO_SLOW_DURATION);
+	Vparser_read_float(paramFile, "EIA6_BLL_INITIAL_K1", &EIA6_BLL_INITIAL_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_INITIAL_K2", &EIA6_BLL_INITIAL_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_FAST_K1", &EIA6_BLL_FAST_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_FAST_K2", &EIA6_BLL_FAST_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_MEDIUM_K1", &EIA6_BLL_MEDIUM_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_MEDIUM_K2", &EIA6_BLL_MEDIUM_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_SLOW_K1", &EIA6_BLL_SLOW_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_SLOW_K2", &EIA6_BLL_SLOW_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_SLOW2_K1", &EIA6_BLL_SLOW2_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_SLOW2_K2", &EIA6_BLL_SLOW2_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_DIL_K1", &EIA6_BLL_DIL_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_DIL_K2", &EIA6_BLL_DIL_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_TRN2_INITIAL_K1", &EIA6_BLL_TRN2_INITIAL_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_TRN2_INITIAL_K2", &EIA6_BLL_TRN2_INITIAL_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_TRN2_K1", &EIA6_BLL_TRN2_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_TRN2_K2", &EIA6_BLL_TRN2_K2);
+	Vparser_read_float(paramFile, "EIA6_BLL_STEADY_STATE_K1", &EIA6_BLL_STEADY_STATE_K1);
+	Vparser_read_float(paramFile, "EIA6_BLL_STEADY_STATE_K2", &EIA6_BLL_STEADY_STATE_K2);
+	Vparser_read_int(paramFile, "EIA6_BLL_TRN1D_INITIAL_TO_FAST_DURATION", &EIA6_BLL_TRN1D_INITIAL_TO_FAST_DURATION);
+	Vparser_read_int(paramFile, "EIA6_BLL_TRN1D_FAST_TO_SLOW_DURATION", &EIA6_BLL_TRN1D_FAST_TO_SLOW_DURATION);
+	Vparser_read_int(paramFile, "TIMING_HISTORY_EVALUATION_ENABLED", &TIMING_HISTORY_EVALUATION_ENABLED);
+	Vparser_read_int(paramFile, "TIMING_HISTORY_EVALUATION_BUFFER_LENGTH", &TIMING_HISTORY_EVALUATION_BUFFER_LENGTH);
+	Vparser_read_int(paramFile, "TIMING_HISTORY_EVALUATION_PERIOD", &TIMING_HISTORY_EVALUATION_PERIOD);
+	Vparser_read_float(paramFile, "TIMING_OFFESET_MIN_STD_FOR_SAVE", &TIMING_OFFESET_MIN_STD_FOR_SAVE);
+	Vparser_read_int(paramFile, "LINEAR_EQU_LENGTH", &LINEAR_EQU_LENGTH);
+	Vparser_read_int(paramFile, "LINEAR_EQU_HISTORY_LENGTH", &LINEAR_EQU_HISTORY_LENGTH);
+	Vparser_read_int(paramFile, "LINEAR_EQU_FADE_EDGES_CYCLE", &LINEAR_EQU_FADE_EDGES_CYCLE);
+	Vparser_read_float(paramFile, "LINEAR_EQU_FADE_RIGHT_EDGE_RATIO", &LINEAR_EQU_FADE_RIGHT_EDGE_RATIO);
+	Vparser_read_float(paramFile, "LINEAR_EQU_FADE_LEFT_EDGE_RATIO", &LINEAR_EQU_FADE_LEFT_EDGE_RATIO);
+	Vparser_read_int(paramFile, "LINEAR_EQU_CURSOR_PLACE", &LINEAR_EQU_CURSOR_PLACE);
+	Vparser_read_float(paramFile, "LINEAR_EQU_TRN1D_BETA", &LINEAR_EQU_TRN1D_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_DIL_BETA", &GERMAN_PBX_LINEAR_EQU_DIL_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_DIL_MED_UCODE_BETA", &GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_DIL_HIGH_UCODE_BETA", &GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_DIL_ERROR_RELAX_BETA", &LINEAR_EQU_DIL_ERROR_RELAX_BETA);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_DIL_MED_UCODE_BETA", &EIA6_LINEAR_EQU_DIL_MED_UCODE_BETA);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_DIL_HIGH_UCODE_BETA", &EIA6_LINEAR_EQU_DIL_HIGH_UCODE_BETA);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_DIL_ERROR_RELAX_BETA", &EIA6_LINEAR_EQU_DIL_ERROR_RELAX_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_ALT_DIL_BETA", &LINEAR_EQU_ALT_DIL_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_ALT_DIL_MED_UCODE_BETA", &LINEAR_EQU_ALT_DIL_MED_UCODE_BETA);
+	Vparser_read_float(paramFile, "GERMAN_PBX_LINEAR_EQU_DIL_BETA", &GERMAN_PBX_LINEAR_EQU_DIL_BETA);
+	Vparser_read_float(paramFile, "GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA", &GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA);
+	Vparser_read_float(paramFile, "GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA", &GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA", &LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_TRN2D_INITIAL_BETA", &LINEAR_EQU_TRN2D_INITIAL_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_TRN2D_BETA", &LINEAR_EQU_TRN2D_BETA);
+	Vparser_read_float(paramFile, "LINEAR_EQU_DATA_BETA", &LINEAR_EQU_DATA_BETA);
+	Vparser_read_int(paramFile, "LINEAR_EQU_TRN1D_FREEZE_DURATION", &LINEAR_EQU_TRN1D_FREEZE_DURATION);
+	Vparser_read_int(paramFile, "LINEAR_EQU_TRN2D_INITIAL_DURATION", &LINEAR_EQU_TRN2D_INITIAL_DURATION);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_TRN1D_BETA", &EIA6_LINEAR_EQU_TRN1D_BETA);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_DIL_BETA", &EIA6_LINEAR_EQU_DIL_BETA);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_TRN2D_BETA", &EIA6_LINEAR_EQU_TRN2D_BETA);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_DATA_BETA", &EIA6_LINEAR_EQU_DATA_BETA);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_TRN2D_INITIAL_BETA", &EIA6_LINEAR_EQU_TRN2D_INITIAL_BETA);
+	Vparser_read_int(paramFile, "EIA6_LINEAR_EQU_FADE_EDGES_CYCLE", &EIA6_LINEAR_EQU_FADE_EDGES_CYCLE);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_FADE_LEFT_EDGE_RATIO", &EIA6_LINEAR_EQU_FADE_LEFT_EDGE_RATIO);
+	Vparser_read_float(paramFile, "EIA6_LINEAR_EQU_FADE_RIGHT_EDGE_RATIO", &EIA6_LINEAR_EQU_FADE_RIGHT_EDGE_RATIO);
+	Vparser_read_float(paramFile, "GERMAN_PBX_LINEAR_EQU_DATA_BETA", &GERMAN_PBX_LINEAR_EQU_DATA_BETA);
+	Vparser_read_float(paramFile, "GERMAN_ISDN_NT1_LINEAR_EQU_DATA_BETA", &GERMAN_ISDN_NT1_LINEAR_EQU_DATA_BETA);
+	Vparser_read_int(paramFile, "DFE_LENGTH", &DFE_LENGTH);
+	Vparser_read_float(paramFile, "DFE_TRN1D_BETA", &DFE_TRN1D_BETA);
+	Vparser_read_float(paramFile, "DFE_DIL_BETA", &DFE_DIL_BETA);
+	Vparser_read_float(paramFile, "DFE_DIL_MED_UCODE_BETA", &DFE_DIL_MED_UCODE_BETA);
+	Vparser_read_float(paramFile, "DFE_DIL_HIGH_UCODE_BETA", &DFE_DIL_HIGH_UCODE_BETA);
+	Vparser_read_float(paramFile, "DFE_DIL_ERROR_RELAX_BETA", &DFE_DIL_ERROR_RELAX_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_DIL_MED_UCODE_BETA", &EIA6_DFE_DIL_MED_UCODE_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_DIL_HIGH_UCODE_BETA", &EIA6_DFE_DIL_HIGH_UCODE_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_DIL_ERROR_RELAX_BETA", &EIA6_DFE_DIL_ERROR_RELAX_BETA);
+	Vparser_read_float(paramFile, "DFE_DIL_ALT_BETA", &DFE_DIL_ALT_BETA);
+	Vparser_read_float(paramFile, "DFE_DIL_ALT_MED_UCODE_BETA", &DFE_DIL_ALT_MED_UCODE_BETA);
+	Vparser_read_float(paramFile, "DFE_DIL_ALT_HIGH_UCODE_BETA", &DFE_DIL_ALT_HIGH_UCODE_BETA);
+	Vparser_read_float(paramFile, "DFE_TRN2D_BETA", &DFE_TRN2D_BETA);
+	Vparser_read_float(paramFile, "DFE_DATA_BETA", &DFE_DATA_BETA);
+	Vparser_read_int(paramFile, "DFE_TRN1D_FREEZE_DURATION", &DFE_TRN1D_FREEZE_DURATION);
+	Vparser_read_float(paramFile, "GERMAN_PBX_DFE_TRN2D_FAST_BETA", &GERMAN_PBX_DFE_TRN2D_FAST_BETA);
+	Vparser_read_float(paramFile, "GERMAN_PBX_DFE_TRN2D_SLOW_BETA", &GERMAN_PBX_DFE_TRN2D_SLOW_BETA);
+	Vparser_read_float(paramFile, "GERMAN_PBX_DFE_DATA_BETA", &GERMAN_PBX_DFE_DATA_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_DIL_BETA", &EIA6_DFE_DIL_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_TRN1D_BETA", &EIA6_DFE_TRN1D_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_DATA_BETA", &EIA6_DFE_DATA_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_TRN2D_FAST_BETA", &EIA6_DFE_TRN2D_FAST_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_TRN2D_SLOW_BETA", &EIA6_DFE_TRN2D_SLOW_BETA);
+	Vparser_read_float(paramFile, "EIA6_DFE_TRN2D_RRN_BETA", &EIA6_DFE_TRN2D_RRN_BETA);
+	Vparser_read_int(paramFile, "ERROR_ENERGY_MEAN_BLOCK_LEN", &ERROR_ENERGY_MEAN_BLOCK_LEN);
+	Vparser_read_float(paramFile, "ERROR_ENERGY_MEAN_K", &ERROR_ENERGY_MEAN_K);
+	Vparser_read_int(paramFile, "ERROR_ENERGY_PRINT_PERIOD_PHASE3", &ERROR_ENERGY_PRINT_PERIOD_PHASE3);
+	Vparser_read_int(paramFile, "ERROR_ENERGY_PRINT_PERIOD_PHASE4", &ERROR_ENERGY_PRINT_PERIOD_PHASE4);
+	Vparser_read_int(paramFile, "ERROR_ENERGY_PRINT_PERIOD_DATA", &ERROR_ENERGY_PRINT_PERIOD_DATA);
+	Vparser_read_int(paramFile, "NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE3", &NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE3);
+	Vparser_read_int(paramFile, "NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE4", &NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE4);
+	Vparser_read_int(paramFile, "TIMING_OFFSET_PRINT_PERIOD_PHASE3", &TIMING_OFFSET_PRINT_PERIOD_PHASE3);
+	Vparser_read_int(paramFile, "TIMING_OFFSET_PRINT_PERIOD_PHASE4", &TIMING_OFFSET_PRINT_PERIOD_PHASE4);
+	Vparser_read_int(paramFile, "TIMING_OFFSET_PRINT_PERIOD_DATA", &TIMING_OFFSET_PRINT_PERIOD_DATA);
+	Vparser_read_float(paramFile, "SD_DETECTOR_ENERGY_THRESHOLD", &SD_DETECTOR_ENERGY_THRESHOLD);
+	Vparser_read_float(paramFile, "SD_DETECTOR_POSITIVE_CORR_THRESHOLD", &SD_DETECTOR_POSITIVE_CORR_THRESHOLD);
+	Vparser_read_float(paramFile, "SD_DETECTOR_NEGATIVE_CORR_THRESHOLD", &SD_DETECTOR_NEGATIVE_CORR_THRESHOLD);
+	Vparser_read_int(paramFile, "SD_DETECTOR_DETECTION_COUNTER_THRESHOLD", &SD_DETECTOR_DETECTION_COUNTER_THRESHOLD);
+	Vparser_read_int(paramFile, "PHASE4_R_DETECTION_LENGTH", &PHASE4_R_DETECTION_LENGTH);
+	Vparser_read_int(paramFile, "RRN_R_DETECTION_LENGTH", &RRN_R_DETECTION_LENGTH);
+	Vparser_read_float(paramFile, "ENERGY_DROP_DETECTOR_THRESHOLD", &ENERGY_DROP_DETECTOR_THRESHOLD);
+	Vparser_read_int(paramFile, "NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN", &NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN);
+	Vparser_read_int(paramFile, "SPECTRAL_VERIFIER_ENABLE", &SPECTRAL_VERIFIER_ENABLE);
+	Vparser_read_int(paramFile, "EIA6_SPECTRAL_VERIFIER_ENABLE", &EIA6_SPECTRAL_VERIFIER_ENABLE);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_SAMPLE_FREQ", &SPECTRAL_VERIFIER_SAMPLE_FREQ);
+	Vparser_read_int(paramFile, "SPECTRAL_VERIFIER_FFT_LEN", &SPECTRAL_VERIFIER_FFT_LEN);
+	Vparser_read_int(paramFile, "SPECTRAL_VERIFIER_FFT_WINDOW", &SPECTRAL_VERIFIER_FFT_WINDOW);
+	Vparser_read_int(paramFile, "SPECTRAL_VERIFIER_PSD_LEN", &SPECTRAL_VERIFIER_PSD_LEN);
+	Vparser_read_int(paramFile, "SPECTRAL_VERIFIER_PSD_OVERLAP_LEN", &SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);
+	Vparser_read_int(paramFile, "SPECTRAL_VERIFIER_PRINT_SPECTRUM", &SPECTRAL_VERIFIER_PRINT_SPECTRUM);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_ISDN_NULL_FREQ", &SPECTRAL_VERIFIER_ISDN_NULL_FREQ);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ", &SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_FREQ);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_FREQ", &SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_FREQ);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA", &SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA", &SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_GERMAN_PBX_NULL_FREQ", &SPECTRAL_VERIFIER_GERMAN_PBX_NULL_FREQ);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_FREQ", &SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_FREQ);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_FREQ", &SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_FREQ);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_DELTA", &SPECTRAL_VERIFIER_GERMAN_PBX_LEFT_PEAK_DELTA);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA", &SPECTRAL_VERIFIER_GERMAN_PBX_RIGHT_PEAK_DELTA);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_SEVERE_CODEC_REF_FREQ", &SPECTRAL_VERIFIER_SEVERE_CODEC_REF_FREQ);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_SEVERE_CODEC_TEST_FREQ1", &SPECTRAL_VERIFIER_SEVERE_CODEC_TEST_FREQ1);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_SEVERE_CODEC_TEST_FREQ2", &SPECTRAL_VERIFIER_SEVERE_CODEC_TEST_FREQ2);
+	Vparser_read_float(paramFile, "SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA", &SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA);
+	Vparser_read_int(paramFile, "TRN1D_DD_LENGTH", &TRN1D_DD_LENGTH);
+	Vparser_read_int(paramFile, "SILENCE_SCR", &SILENCE_SCR);
+	Vparser_read_int(paramFile, "MINIMUM_RTD_FOR_NON_SILENCE_SCR", &MINIMUM_RTD_FOR_NON_SILENCE_SCR);
+	Vparser_read_int(paramFile, "TRN2D_DD_LENGTH", &TRN2D_DD_LENGTH);
+	Vparser_read_int(paramFile, "RRN_TRN2D_DD_LENGTH", &RRN_TRN2D_DD_LENGTH);
+	Vparser_read_int(paramFile, "USE_RESTRICED_DMIN", &USE_RESTRICED_DMIN);
+	Vparser_read_int(paramFile, "ENABLE_REDUNDANCY_OPTIMIZATION", &ENABLE_REDUNDANCY_OPTIMIZATION);
+	Vparser_read_int(paramFile, "ENABLE_DIGITAL_POWER_REDUCTION", &ENABLE_DIGITAL_POWER_REDUCTION);
+	Vparser_read_float(paramFile, "DIGITAL_POWER_REDUCTION", &DIGITAL_POWER_REDUCTION);
+	Vparser_read_float(paramFile, "UP_ROUND_K", &UP_ROUND_K);
+	Vparser_read_int(paramFile, "EIA6_USE_RESTRICED_DMIN", &EIA6_USE_RESTRICED_DMIN);
+	Vparser_read_float(paramFile, "DMIN_CALC_FACTOR1", &DMIN_CALC_FACTOR1);
+	Vparser_read_int(paramFile, "DMIN_CALC_FACTOR2", &DMIN_CALC_FACTOR2);
+	Vparser_read_float(paramFile, "DMIN_EIA6_FACTOR", &DMIN_EIA6_FACTOR);
+	Vparser_read_int(paramFile, "FORCED_DMIN", &FORCED_DMIN);
+	Vparser_read_int(paramFile, "FORCE_RATE_ENABLE", &FORCE_RATE_ENABLE);
+	Vparser_read_int(paramFile, "RATE_FORCE", &RATE_FORCE);
+	Vparser_read_float(paramFile, "SPECTRAL_SHAPER_A1", &SPECTRAL_SHAPER_A1);
+	Vparser_read_float(paramFile, "SPECTRAL_SHAPER_A2", &SPECTRAL_SHAPER_A2);
+	Vparser_read_float(paramFile, "SPECTRAL_SHAPER_B1", &SPECTRAL_SHAPER_B1);
+	Vparser_read_float(paramFile, "SPECTRAL_SHAPER_B2", &SPECTRAL_SHAPER_B2);
+	Vparser_read_int(paramFile, "SPECTRAL_SHAPER_SR", &SPECTRAL_SHAPER_SR);
+	Vparser_read_int(paramFile, "SPECTRAL_SHAPER_ID", &SPECTRAL_SHAPER_ID);
+	Vparser_read_float(paramFile, "GERMAN_PBX_SPECTRAL_SHAPER_A1", &GERMAN_PBX_SPECTRAL_SHAPER_A1);
+	Vparser_read_float(paramFile, "GERMAN_PBX_SPECTRAL_SHAPER_A2", &GERMAN_PBX_SPECTRAL_SHAPER_A2);
+	Vparser_read_float(paramFile, "GERMAN_PBX_SPECTRAL_SHAPER_B1", &GERMAN_PBX_SPECTRAL_SHAPER_B1);
+	Vparser_read_float(paramFile, "GERMAN_PBX_SPECTRAL_SHAPER_B2", &GERMAN_PBX_SPECTRAL_SHAPER_B2);
+	Vparser_read_int(paramFile, "GERMAN_PBX_SPECTRAL_SHAPER_SR", &GERMAN_PBX_SPECTRAL_SHAPER_SR);
+	Vparser_read_int(paramFile, "GERMAN_PBX_SPECTRAL_SHAPER_ID", &GERMAN_PBX_SPECTRAL_SHAPER_ID);
+	Vparser_read_float(paramFile, "EIA6_SPECTRAL_SHAPER_A1", &EIA6_SPECTRAL_SHAPER_A1);
+	Vparser_read_float(paramFile, "EIA6_SPECTRAL_SHAPER_A2", &EIA6_SPECTRAL_SHAPER_A2);
+	Vparser_read_float(paramFile, "EIA6_SPECTRAL_SHAPER_B1", &EIA6_SPECTRAL_SHAPER_B1);
+	Vparser_read_float(paramFile, "EIA6_SPECTRAL_SHAPER_B2", &EIA6_SPECTRAL_SHAPER_B2);
+	Vparser_read_int(paramFile, "EIA6_SPECTRAL_SHAPER_SR", &EIA6_SPECTRAL_SHAPER_SR);
+	Vparser_read_int(paramFile, "EIA6_SPECTRAL_SHAPER_ID", &EIA6_SPECTRAL_SHAPER_ID);
+	Vparser_read_int(paramFile, "RRN_SILENCE_REQUESTED", &RRN_SILENCE_REQUESTED);
+	Vparser_read_int(paramFile, "MASK_RRN_SILENCE_ON_PROBLEMATIC_ISP", &MASK_RRN_SILENCE_ON_PROBLEMATIC_ISP);
+	Vparser_read_int(paramFile, "RRN_SILENCE_SCR_LENGTH", &RRN_SILENCE_SCR_LENGTH);
+	Vparser_read_int(paramFile, "RRN_SILENCE_WAIT_BEFORE_ECHO_CALC", &RRN_SILENCE_WAIT_BEFORE_ECHO_CALC);
+	Vparser_read_int(paramFile, "RRN_SILENCE_ECHO_CALC_PERIOD", &RRN_SILENCE_ECHO_CALC_PERIOD);
+	Vparser_read_float(paramFile, "RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE", &RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE);
+	Vparser_read_int(paramFile, "MIN_RATE_FOR_SILENCE_RRN_KEEP_RATE", &MIN_RATE_FOR_SILENCE_RRN_KEEP_RATE);
+	Vparser_read_float(paramFile, "PDSNR_THRESHOLD_IN_PHASE3", &PDSNR_THRESHOLD_IN_PHASE3);
+	Vparser_read_float(paramFile, "PDSNR_THRESHOLD_IN_PHASE4", &PDSNR_THRESHOLD_IN_PHASE4);
+	Vparser_read_float(paramFile, "TRN1D_ERROR_FOR_V34_FALLBACK", &TRN1D_ERROR_FOR_V34_FALLBACK);
+	Vparser_read_int(paramFile, "TRN1D_MEAN_ERROR_STD_EVALUATION_ENABLE", &TRN1D_MEAN_ERROR_STD_EVALUATION_ENABLE);
+	Vparser_read_float(paramFile, "TRN1D_MAX_MEAN_ERROR_STD_IN_PHASE3", &TRN1D_MAX_MEAN_ERROR_STD_IN_PHASE3);
+	Vparser_read_int(paramFile, "TRN2D_MEAN_ERROR_STD_EVALUATION_ENABLE", &TRN2D_MEAN_ERROR_STD_EVALUATION_ENABLE);
+	Vparser_read_float(paramFile, "TRN2D_MAX_MEAN_ERROR_STD_IN_PHASE4", &TRN2D_MAX_MEAN_ERROR_STD_IN_PHASE4);
+	Vparser_read_float(paramFile, "TRN2D_MAX_MEAN_ERROR_ENERGY_IN_PHASE4", &TRN2D_MAX_MEAN_ERROR_ENERGY_IN_PHASE4);
+	Vparser_read_float(paramFile, "PHASE3_ERROR_FOR_V34_FALLBACK", &PHASE3_ERROR_FOR_V34_FALLBACK);
+	Vparser_read_float(paramFile, "PHASE4_ERROR_FOR_V34_FALLBACK", &PHASE4_ERROR_FOR_V34_FALLBACK);
+	Vparser_read_float(paramFile, "PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH", &PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH);
+	Vparser_read_float(paramFile, "QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH", &QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH);
+	Vparser_read_int(paramFile, "ENABLE_RRN_UP", &ENABLE_RRN_UP);
+	Vparser_read_int(paramFile, "ENABLE_RRN_DOWN", &ENABLE_RRN_DOWN);
+	Vparser_read_int(paramFile, "RATE_UP_DETECT_DURATION", &RATE_UP_DETECT_DURATION);
+	Vparser_read_int(paramFile, "RATE_DOWN_DETECT_DURATION", &RATE_DOWN_DETECT_DURATION);
+	Vparser_read_int(paramFile, "RETRAIN_DETECT_DURATION", &RETRAIN_DETECT_DURATION);
+	Vparser_read_int(paramFile, "NOF_REMOTE_RATE_RENEG_BEFORE_RETRAIN", &NOF_REMOTE_RATE_RENEG_BEFORE_RETRAIN);
+	Vparser_read_int(paramFile, "MAX_NOF_V90_RETRAINS", &MAX_NOF_V90_RETRAINS);
+	Vparser_read_int(paramFile, "MAX_NOF_REMOTE_RETRAINS", &MAX_NOF_REMOTE_RETRAINS);
+	Vparser_read_int(paramFile, "RETRAIN_COUNTER_FADE_COUNT", &RETRAIN_COUNTER_FADE_COUNT);
+	Vparser_read_int(paramFile, "REMOTE_RRN_COUNTER_FADE_COUNT", &REMOTE_RRN_COUNTER_FADE_COUNT);
+	Vparser_read_int(paramFile, "MINIMUM_DURATION_IN_DATA_BEFORE_RRN_UP", &MINIMUM_DURATION_IN_DATA_BEFORE_RRN_UP);
+	Vparser_read_int(paramFile, "MINIMUM_DURATION_IN_DATA_BEFORE_RRN_DOWN", &MINIMUM_DURATION_IN_DATA_BEFORE_RRN_DOWN);
+	Vparser_read_int(paramFile, "MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN", &MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN);
+	Vparser_read_int(paramFile, "MAX_NOF_RATES_DIFF_BEFORE_RETRAIN", &MAX_NOF_RATES_DIFF_BEFORE_RETRAIN);
+	Vparser_read_int(paramFile, "ENABLE_ERROR_CORRECTION_RRN", &ENABLE_ERROR_CORRECTION_RRN);
+	Vparser_read_float(paramFile, "EIA6_PDSNR_THRESHOLD_IN_PHASE3", &EIA6_PDSNR_THRESHOLD_IN_PHASE3);
+	Vparser_read_float(paramFile, "EIA6_PDSNR_THRESHOLD_IN_PHASE4", &EIA6_PDSNR_THRESHOLD_IN_PHASE4);
+	Vparser_read_float(paramFile, "EIA6_TRN1D_ERROR_FOR_V34_FALLBACK", &EIA6_TRN1D_ERROR_FOR_V34_FALLBACK);
+	Vparser_read_int(paramFile, "EIA6_MAX_NOF_V90_RETRAINS", &EIA6_MAX_NOF_V90_RETRAINS);
+	Vparser_read_int(paramFile, "ENABLE_DROP_2_V34_ON_SEVERE_CODEC", &ENABLE_DROP_2_V34_ON_SEVERE_CODEC);
+	Vparser_read_int(paramFile, "DEBUG_DIGITAL_MODEM_INITIATE_RRN", &DEBUG_DIGITAL_MODEM_INITIATE_RRN);
+	Vparser_read_int(paramFile, "DEBUG_DIGITAL_MODEM_INITIATE_RRN_TIME", &DEBUG_DIGITAL_MODEM_INITIATE_RRN_TIME);
+	Vparser_read_int(paramFile, "TRN1_QC_DD_LENGTH", &TRN1_QC_DD_LENGTH);
+	Vparser_read_int(paramFile, "TRN2D_QC_DD_LENGTH", &TRN2D_QC_DD_LENGTH);
+	Vparser_read_int(paramFile, "LINEAR_EQU_QC_TRN1D_FREEZE_DURATION", &LINEAR_EQU_QC_TRN1D_FREEZE_DURATION);
+	Vparser_read_int(paramFile, "DFE_QC_TRN1D_FREEZE_DURATION", &DFE_QC_TRN1D_FREEZE_DURATION);
+	Vparser_read_int(paramFile, "ANSPCM_DEMODULATION_LENGTH", &ANSPCM_DEMODULATION_LENGTH);
+	Vparser_read_int(paramFile, "QC_LOGGING_PERIOD_INITIAL", &QC_LOGGING_PERIOD_INITIAL);
+	Vparser_read_int(paramFile, "QC_LOGGING_PERIOD_STEADY_STATE", &QC_LOGGING_PERIOD_STEADY_STATE);
+	Vparser_read_float(paramFile, "ANSPCM_CORRELATION_THRESH_FOR_VALIDATION", &ANSPCM_CORRELATION_THRESH_FOR_VALIDATION);
+	Vparser_read_int(paramFile, "DEBUG_CONNECTION_EVALUATOR_ALTERNATE_DEBUG", &DEBUG_CONNECTION_EVALUATOR_ALTERNATE_DEBUG);
+	Vparser_read_int(paramFile, "DEBUG_CONNECTION_EVALUATOR_FALL_BACK", &DEBUG_CONNECTION_EVALUATOR_FALL_BACK);
+	Vparser_read_int(paramFile, "DEBUG_CONNECTION_EVALUATOR_RETRAIN", &DEBUG_CONNECTION_EVALUATOR_RETRAIN);
+	Vparser_read_int(paramFile, "DEBUG_CONNECTION_EVALUATOR_RATE_UP", &DEBUG_CONNECTION_EVALUATOR_RATE_UP);
+	Vparser_read_int(paramFile, "DEBUG_CONNECTION_EVALUATOR_RATE_DOWN", &DEBUG_CONNECTION_EVALUATOR_RATE_DOWN);
+	Vparser_read_int(paramFile, "DEBUG_CONNECTION_EVALUATOR_PERIOD", &DEBUG_CONNECTION_EVALUATOR_PERIOD);
+	Vparser_read_int(paramFile, "HIGH_LEVEL_TX_ACTIVE", &HIGH_LEVEL_TX_ACTIVE);
+	Vparser_read_int(paramFile, "SENSITIVE_ISP_DETECTED", &SENSITIVE_ISP_DETECTED);
+	Vparser_read_int(paramFile, "MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP", &MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP);
+	Vparser_read_int(paramFile, "LOOP_TYPE", &LOOP_TYPE);
+	Vparser_read_int(paramFile, "SEPARATE_PHASE3_CONSTELLATIONS", &SEPARATE_PHASE3_CONSTELLATIONS);
+	Vparser_read_int(paramFile, "SEPARATE_PHASE4_CONSTELLATIONS", &SEPARATE_PHASE4_CONSTELLATIONS);
+	Vparser_read_int(paramFile, "SEPARATE_DATA_PHASE_CONSTELLATIONS", &SEPARATE_DATA_PHASE_CONSTELLATIONS);
+	Vparser_read_int(paramFile, "WRITE_TIMING_PHASE_AND_OFFSET_TO_FILE", &WRITE_TIMING_PHASE_AND_OFFSET_TO_FILE);
+	Vparser_read_int(paramFile, "WRITE_ERROR_TO_FILE", &WRITE_ERROR_TO_FILE);
+	Vparser_read_int(paramFile, "WRITE_DEMOD_IN_SAMPLES_TO_FILE", &WRITE_DEMOD_IN_SAMPLES_TO_FILE);
+	Vparser_read_int(paramFile, "WRITE_EQU_COEFS_TO_FILE", &WRITE_EQU_COEFS_TO_FILE);
+	Vparser_read_int(paramFile, "LOAD_EQU_COEFS_FROM_FILE", &LOAD_EQU_COEFS_FROM_FILE);
+	Vparser_read_int(paramFile, "DEBUG_PRINT_MAPPER_CONSTELLATIONS", &DEBUG_PRINT_MAPPER_CONSTELLATIONS);
+	Vparser_read_int(paramFile, "DEBUG_PRINT_DEMAPPER_CONSTELLATIONS", &DEBUG_PRINT_DEMAPPER_CONSTELLATIONS);
+	Vparser_read_int(paramFile, "DEBUG_DEMAPPER_ERROR_HISTOGRAM", &DEBUG_DEMAPPER_ERROR_HISTOGRAM);
+	Vparser_read_int(paramFile, "DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM", &DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM);
+	Vparser_read_int(paramFile, "DEMAPPER_ERROR_HISTOGRAM_INTEGRATION_TIME", &DEMAPPER_ERROR_HISTOGRAM_INTEGRATION_TIME);
+	Vparser_read_int(paramFile, "TEMP_INT_PARAMETER1", &TEMP_INT_PARAMETER1);
+	Vparser_read_int(paramFile, "TEMP_INT_PARAMETER2", &TEMP_INT_PARAMETER2);
+	Vparser_read_int(paramFile, "TEMP_INT_PARAMETER3", &TEMP_INT_PARAMETER3);
+	Vparser_read_int(paramFile, "TEMP_INT_PARAMETER4", &TEMP_INT_PARAMETER4);
+	Vparser_read_float(paramFile, "TEMP_FLOAT_PARAMETER1", &TEMP_FLOAT_PARAMETER1);
+	Vparser_read_float(paramFile, "TEMP_FLOAT_PARAMETER2", &TEMP_FLOAT_PARAMETER2);
+	Vparser_read_float(paramFile, "TEMP_FLOAT_PARAMETER3", &TEMP_FLOAT_PARAMETER3);
+	Vparser_read_float(paramFile, "TEMP_FLOAT_PARAMETER4", &TEMP_FLOAT_PARAMETER4);
+}
+
+/*
  * Twenty-four bytes: the two fields `setToDefault` reads and never writes,
  * put back to what the constructor gave them.  14 is the top V.90 upstream
  * rate index, so the default is "no cap".
@@ -570,13 +908,18 @@ V90Parameters::init()
 	setToDefault();
 
 	/*
-	 * The object's branch is `if (modemParams->paramFile)
-	 * loadParams(modemParams->paramFile);` and both of its arms leave the
-	 * object identical, because every read `loadParams` makes goes to a
-	 * three-byte stub.  Finding 879.  The test runs this with the pointer
-	 * null and non-null and compares against the blob both ways, so the
-	 * claim is measured here rather than asserted.
+	 * `mov (%ebx),%eax; mov 0x78(%eax),%eax; test %eax,%eax` at 0x2a860 --
+	 * `modemParams->paramFile`, the field `modem_params.h` puts at +0x78 --
+	 * and both arms then TAIL-CALL `loadModemParamsData`, which is why the
+	 * object has two `jmp`s to it rather than one call.
+	 *
+	 * Both arms leave the object identical, because every read `loadParams`
+	 * makes goes to a three-byte stub; the test still drives both, so that
+	 * is measured rather than asserted.  Finding 879, and 6400 for the
+	 * oracle that finally tested the callee.
 	 */
+	if (modemParams->paramFile)
+		loadParams(modemParams->paramFile);
 
 	loadModemParamsData();
 }

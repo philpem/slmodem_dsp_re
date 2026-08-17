@@ -1,0 +1,1 @@
+-Wl,--wrap=Vparser_read_int -Wl,--wrap=Vparser_read_float
