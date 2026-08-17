@@ -6870,10 +6870,10 @@ override written after the name it overrides. **The fourth is not that shape
 and is a defect in the original.**
 
 ```
-    +0x0d8  BLL_TRN1_QC_INITIAL_K1        +0x0dc  BLL_TRN1_QC_INITIAL_K2
-    +0x0e0  BLL_TRN1_QC_FAST_K1  5e-4     +0x0e4  BLL_TRN1_QC_FAST_K2  7e-12
-    +0x0e8  BLL_TRN1_QC_MEDIUM_K1 3e-4    +0x0ec  BLL_TRN1_QC_MEDIUM_K2 5e-12
-    +0x0f0  BLL_TRN1_QC_SLOW_K1  1e-4     +0x0f4  unnamed_0f4          2e-12
+    +0x0d8  BLL_TRN1_QC_INITIAL_K1 2e-4   +0x0dc  BLL_TRN1_QC_INITIAL_K2 0.0
+    +0x0e0  BLL_TRN1_QC_FAST_K1    5e-4   +0x0e4  BLL_TRN1_QC_FAST_K2    7e-12
+    +0x0e8  BLL_TRN1_QC_MEDIUM_K1  3e-4   +0x0ec  BLL_TRN1_QC_MEDIUM_K2  5e-12
+    +0x0f0  BLL_TRN1_QC_SLOW_K1    1e-4   +0x0f4  unnamed_0f4            2e-12
                     ^ read TWICE, as _K1 and then as _K2
 ```
 
@@ -6882,7 +6882,12 @@ Four things converge and nothing dissents:
 - three complete `K1`/`K2` pairs precede it and the fourth pair's `K2` slot is
   the only `unnamed_*` field anywhere in that run;
 - `setToDefault` writes +0x0f4 with **2e-12f**, continuing the `K2` series
-  7e-12, 5e-12, 2e-12, while the `K1` series runs 5e-4, 3e-4, 1e-4;
+  7e-12, 5e-12, 2e-12 across FAST, MEDIUM and the slot in question. The
+  `INITIAL` pair is quoted above but carries no weight either way: its `K2` is
+  0.0f, which is a stage switched off rather than a term in the series, and its
+  `K1` is 2e-4 rather than the largest, so the `K1` column is not monotone
+  either. **The argument is the FAST/MEDIUM/SLOW triple and not a four-term
+  progression**, and it is stated that way rather than made to look tidier;
 - +0x0f4 is one of the nine `unnamed_*` slots finding 878 measured as a FLOAT
   declared `int` -- so it is a coefficient, not a count or a duration;
 - +0x0f0 being read twice is otherwise unexplained, where the other three

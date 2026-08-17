@@ -60969,3 +60969,46 @@ is worth keeping even though the trade it describes has expired.
 
 Nothing was removed for this. Removing a duplicate is progress; there was no
 duplicate here to remove.
+
+### 6403. `tools/mutate.py` could not run in ANY worktree, because the `$BLOB` fix never reached it
+
+`mutate.py` copies the tree into `$TMPDIR` and builds there, so it has to
+resolve `$BLOB` before the `chdir` -- nothing about a directory under `$TMPDIR`
+can find the reference object. It did that with
+
+```python
+os.environ["BLOB"] = os.path.abspath(
+    os.environ.get("BLOB") or os.path.join("..", "slmodemd", "dsplibs.o"))
+```
+
+which is **the default the Makefile abandoned when worktrees arrived.** The
+Makefile now says `BLOB ?= $(abspath $(dir $(GIT_COMMON_DIR))../slmodemd/
+dsplibs.o)` -- the main repository's `.git` seen from inside any worktree --
+and the tool kept the old relative spelling. From a worktree it therefore
+pointed at `.claude/worktrees/slmodemd/dsplibs.o`, which does not exist, and
+the run died in `make strings` with
+
+```
+objdump: '.../worktrees/slmodemd/dsplibs.o': No such file
+INVENTED STRING: the lines above are in src/ and not in the blob
+  2 of 2 shards died; this run is not a result.
+```
+
+**Every agent works in a worktree, so no mutation suite could be recorded from
+one at all.** It is loud rather than silent -- the shards die and say so -- but
+it is total, and the message names the wrong problem twice over: `strings`
+reports an invented string when nothing was invented, and the path it prints is
+one nobody typed.
+
+The fix is to ASK MAKE -- `make -s print-BLOB` -- rather than to repeat make's
+default in a second place. That is the same lesson as the `^TESTS\s*:=` regex
+in `debugcov.py` and `mewtsweep.py`: a tool that restates a Makefile variable
+is a tool that breaks the next time the Makefile is edited, and this one had
+been broken since the worktree default landed. An explicit `BLOB=` in the
+environment still wins, because make's `?=` gives it precedence and this asks
+make.
+
+Two things it does NOT change, and both were checked rather than assumed:
+`make -s print-BLOB` is run while the cwd is still the real tree, so it
+resolves the same path the gate uses; and `blobcheck` still verifies the
+sha256 inside the copy, so a wrong answer here cannot become a passing run.
