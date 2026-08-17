@@ -614,6 +614,46 @@ run_poked(void)
 		}
 	}
 
+	/*
+	 * The two restart arms, which no legal sequence reaches.  State 1
+	 * expects the framing ZERO and a ONE there restarts the detector;
+	 * state 10 is counting padding out to a frame boundary and a ONE
+	 * there does the same.  A message never supplies either -- the
+	 * framing position IS zero and the padding IS zeros -- so without
+	 * these two the arms are 99.0% line coverage and two `resetDetector`
+	 * calls that never run.  The MUTATIONS on both were caught anyway,
+	 * from the other side of each branch, which is the worked example of
+	 * why line coverage is quoted first.
+	 */
+	{
+		static const unsigned int st[] = { 1, 10 };
+		unsigned int k;
+
+		for (k = 0; k < 2u; k++) {
+			for (v = 0; v <= 1u; v++) {
+				long tag = (long)(300 + k * 2u + v);
+
+				blank(A);
+				blank(B);
+				A->bitsPerSymbol = B->bitsPerSymbol = 3;
+				A->word_114 = B->word_114 = st[k];
+				A->word_11c = B->word_11c = 20;
+				A->byte_119 = B->byte_119 = 4;
+
+				diff_eq_int("the answer matches (%ld)",
+					    (long)A->bitsToInfo(
+						(unsigned char)v),
+					    (long)ref_cp_bitstoinfo(cp_b,
+						(unsigned char)v), tag);
+				diff_eq_obj("after the restart arm", V92CP, A,
+					    B, tag);
+				diff_eq_int("the cursor agrees (%ld)",
+					    (long)A->word_11c,
+					    (long)B->word_11c, tag);
+			}
+		}
+	}
+
 	return diff_end();
 }
 
