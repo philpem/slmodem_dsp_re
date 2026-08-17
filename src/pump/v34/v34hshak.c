@@ -2092,11 +2092,17 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 * no SHAPE line in the log at all.
 	 *
 	 * So: `dsplib_v34_blob_preemp` defaults to 1 under
-	 * DSPLIB_REPRODUCE_BUGS and 0 otherwise, and `tools/benchflags.c`
-	 * -- linked only into the bench hybrid -- overrides it from
-	 * DSPLIB_V34_BLOB_PREEMP, defaulting to 0.  The differential tier
-	 * does not link benchflags, so it keeps the object's counter and
-	 * stays bit-exact.
+	 * DSPLIB_REPRODUCE_BUGS and 0 otherwise.  The differential tier builds
+	 * with DSPLIB_REPRODUCE_BUGS, so it keeps the object's counter and
+	 * stays bit-exact; every other build gets the shape matcher.
+	 *
+	 * The bench overrides it at run time from DSPLIB_V34_BLOB_PREEMP, via
+	 * a `tools/benchflags.c` that is linked only into the bench hybrid.
+	 * THAT FILE IS NOT ON master -- it lives on `v34-instrumentation` with
+	 * the rest of the V.34 bench instrumentation, so the override exists
+	 * only in a bench build made from that branch.  The variable is
+	 * declared here rather than there precisely so that removing the bench
+	 * cannot change what this function does.
 	 */
 	if (!dsplib_v34_blob_preemp) {
 		short f = probe_preemp_shape(bins, n, baud);
