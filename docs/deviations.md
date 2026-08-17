@@ -6856,7 +6856,7 @@ NOT.**  This used to say that `bitsToInfo`'s
 caught the second one, one layer out.  `bitsToInfo` has now been read and it
 is not: all five of that string's referrers guard `word_cac`, the index into
 `bits`, against 0x2edf, and NOTHING anywhere guards either count against the
-array it indexes.  See finding 4361, and D500 for the five arms that carry
+array it indexes.  See finding 4361, and D520 for the five arms that carry
 that check and the five that do not.
 
 Recorded rather than clamped because clamping would be a behaviour change that
@@ -7184,7 +7184,7 @@ punned sites into a batch of their own. This is the 28th and it is not
 provably wrong in the way those are -- both readings are correct about the
 bytes -- so it is a modelling duplication rather than a defect.
 
-## D500 -- five of `bitsToInfo`'s ten store sites bound the cursor and five do not  `unmeasured`
+## D520 -- five of `bitsToInfo`'s ten store sites bound the cursor and five do not  `unmeasured`
 
 *Batch of 2026-08-17, from `V90CP::bitsToInfo` (blob 0x52d20).  **Reachability:
 any state entered with `word_cac` at or above 0x2ee0, which the state machine
@@ -7215,7 +7215,7 @@ an unguarded arm at 0x2ee0 and watches both sides write `crc[0]` together.
 The sweep stops there rather than going further out for D390's reason: past
 the object there is nothing to compare and a faulting test reports nothing.
 
-## D501 -- `bitsToInfo` stalls for ever on a counted block of zero entries  `unmeasured`
+## D521 -- `bitsToInfo` stalls for ever on a counted block of zero entries  `unmeasured`
 
 *Batch of 2026-08-17, from `V90CP::bitsToInfo` (blob 0x52d20).
 **Reachability: any peer that sets +0x08 or +0x0c and sends all-zero counts,
