@@ -63658,6 +63658,178 @@ lines agree on. This has none: the shift the author meant is not recoverable
 from the object -- `_16Tpt` uses 16, `_4pt` 15 and 16, the others 13 -- and
 choosing one would be inventing a constant to make a defect look like an
 implementation. Reproduced as written and recorded here.
+### 4200. DCR IS THE DC REMOVER, IT IS THE HOST'S FIRST TOUCH ON EVERY RECEIVED BLOCK, AND THE OBJECT NAMES IT IN ITS OWN SENTENCE
+
+`dcr.c` is four symbols and 699 bytes at the very front of `.text` bar one
+translation unit -- `dcr_create` 0x60, `dcr_delete` 0xc0, `dcr_reset` 0xe0,
+`dcr_process` 0x100, with only `prop_dp_init` (0x00) and `prop_dp_exit` (0x30)
+ahead of them --
+and until now nothing in this tree said what it did beyond `docs/glossary.md`'s
+one-line "DC Remover, the state holds running means". Three separate pieces of
+the object settle it, and they agree.
+
+**The author's own sentence.** `dcr_process` holds the file's only diagnostic,
+at `.rodata.str1.4 + 0`:
+
+    "DCR: initial DC Evaluation done, DC level %d, %sabled\n"
+
+with `"en"` at `.rodata.str1.1 + 0` and `"dis"` at `+ 3`. Both of those
+sections *open* with this file's contributions: `.rodata.str1.1` starts
+`65 6e 00 64 69 73 00`, so cid's first string is at +7. That makes dcr.c the
+first translation unit to contribute a STRING, which is all it makes it --
+`prop_dp_init`/`prop_dp_exit` are ahead of it in `.text` and contribute no
+`.rodata`, so this is not evidence about link order. This is evidence order 1 in CLAUDE.md's list, and it names
+three things at once: the module ("DCR"), the quantity it estimates ("DC
+level"), and the phase that estimates it ("initial DC Evaluation").
+
+**Nobody inside the object calls it.** `readelf -rW` finds no relocation
+anywhere in dsplibs.o against any `dcr_*` symbol. It is external API, and the
+external caller is slmodemd: `modem.c:1135` creates one per modem alongside the
+rest of the datapump state, `modem.c:1201` deletes it, and `modem.c:677` runs
+every received block through it as the *first* statement of `modem_process` --
+ahead of the datapump, ahead of the sample log -- under a comment reading
+"clean DC". `dp_dummy.c` hands the same object between modems rather than
+building a second. So DCR sits between the sound card and every datapump in the
+library, and every one of them sees its output.
+
+**What it computes.** Not a highpass filter: a counter and a divide. Four
+phases, selected by `state` at +0x04, with the interval of each held in its own
+field rather than as a constant:
+
+| state | field | `dcr_create` | at 9600 Hz | what happens |
+|---|---|--:|--:|---|
+| 0 SETTLE | +0x14 | 5760 | 0.6 s | count only, **the accumulator is not touched** |
+| 1 EVALUATE | +0x18 | 9600 | 1.0 s | accumulate, then `dc_level = sum / count` |
+| 2 TRACK | +0x1c | 19200 | 2.0 s | accumulate, then blend at 0.1, repeat for ever |
+| 3 HOLD | -- | -- | -- | estimate frozen; correct the block and nothing else |
+
+The blend is `imul $0x7333` on the old estimate and `imul $0xccd` on the new
+mean, `+0x4000`, `sar $0xf`: 29491/32768 = 0.9 and 3277/32768 = 0.1, the two
+summing to 32768 exactly, so the smoother has unity DC gain and rounds to
+nearest. SETTLE existing at all is the interesting design decision -- the first
+0.6 s is *discarded* rather than merely outweighed, which is what a card's
+opening transient deserves.
+
+Then, on every path that reaches the end: the verdict, `|dc_level| >=
+threshold` with the threshold 3000 out of `dcr_create`, returned in `%eax`; and
+the correction, `buf[i] -= dcr->dc_level` over the block, gated on bit 1.
+slmodemd declares the function `void` (`modem.c:79`), so on the only host there
+is, the verdict is computed and thrown away.
+
+Two more shapes worth having recorded, because both are the kind of thing a
+reconstruction invents if it is not looking:
+
+- **The silence gate.** In TRACK and HOLD only, an all-zero block returns 0
+  immediately, before the verdict and before the correction. Digital silence is
+  not evidence about the line, and correcting a buffer that had nothing in it
+  would put `-dc_level` into it. The two measuring phases do not take the gate.
+- **No clamp.** The subtraction wraps at the rails. That is the behaviour to
+  reproduce, not to improve on.
+
+`dcr_reset` clears `dc_level`, `sum` and `count` and **not** `state`, so a
+reset drops the estimate and carries on in whatever phase it had reached. It is
+exported and declared by nobody -- not in dsplibs.o, not in slmodemd.
+
+The whole service is written and differentially green: `src/service/dcr.c`,
+`include/dsplib/dcr.h`, `test/unit/t_dcr.c`, 18,000-odd checks.
+
+### 4201. `dcr->state` IS UNSIGNED, AND THE OBJECT'S SWITCH TREE FORCES IT
+
+Written as `int state`, the field passes every differential test there is --
+the value only ever holds 0..3, so the two readings agree over every input.
+`compare.py` separated them, which is the case CLAUDE.md's "forced, so act on
+it" column exists for.
+
+The object dispatches with
+
+    167:  cmp  $0x1,%ecx
+    16a:  je   28e            <- phase 1
+    170:  jae  220            <- phase 2, or the default
+    176:                      <- phase 0, and NO further test
+
+`jae` is the *unsigned* branch, so its fall-through is "below 1 unsigned",
+which is exactly zero and needs nothing to confirm it. Declared `int`, GCC
+3.4.2 emits `jle` and then `test %ecx,%ecx; jne` to exclude the negatives that
+"below 1" also covers when the expression is signed. That extra pair was in our
+build and is not in the object; retyping the field to `unsigned int` removed
+it.
+
+**What it did NOT do is leave everything else alone, and the record should say
+so**: `dcr_process` went from 533 bytes to 546 across the change. Deleting a
+`test`/`jne` pair cannot grow a function, so the register allocation moved with
+it -- which is the free column, and is why the retype was still right. The
+evidence for the retype is the missing pair, not the size.
+
+What this does **not** settle is `unsigned int` against an `enum`. C gives an
+enumeration whose enumerators are all non-negative an unsigned compatible type,
+so `enum dcr_state` emits the same tree. The four phases are therefore `#define`
+in `dcr.h` rather than an enum, because that is the weaker of the two claims and
+"a wrong name is worse than a pad" applies to types as well as names.
+
+### 4202. `dcr_process` RE-READS `dcr->flags` AT EACH USE SITE, AND NO DIFFERENTIAL TEST CAN EVER HOLD THAT
+
+The object reloads the flags byte immediately after the diagnostic call:
+
+    2f1:  call  dsplibs_debug_printf
+    2f6:  movzbl (%ebx),%ecx
+    2f9:  mov    %cl,0x13(%esp)
+
+A source-level `unsigned char flags = dcr->flags;` would live in a callee-saved
+register or a spill slot and would not need refilling across a call; `0x13(%esp)`
+is GCC's own spill of the *field*, refilled because the call might have written
+it. So the source reads `dcr->flags` at each of its four use sites, and
+`src/service/dcr.c` is written that way.
+
+**Nothing in `t_dcr.c` can hold this, and that is provable rather than a gap
+somebody forgot to close.** The only call in the function is
+`dsplibs_debug_printf`; the harness's printf does not write the object; so the
+cached form and the re-read form agree on every observable there is -- verdict,
+buffer, all 32 struct bytes, transcript -- for every input there is. A caller
+that mutated its own flags from inside the logger would separate them, and no
+such caller exists.
+
+It is therefore registered as a NOTE at the end of `test/mutations/dcr.json`
+rather than as a mutation the suite claims to kill. That distinction is the
+point: 3509 and 3403 are about counters that measure something other than an
+observable, and the honest form of the same problem is a claim that says out
+loud which tier holds it. This one is held by `compare.py` and by nothing else.
+
+### 4203. THREE OF THE FOUR DCR SYMBOLS ARE MNEMONIC-IDENTICAL; `dcr_process` IS 546 AGAINST 568 AND THE RESIDUE IS ALL IN THE FREE COLUMN
+
+`compare.py` on GCC 3.4.2 exact at `-O3`, 355 identical before the batch and
+358 after: `dcr_create` (89 bytes), `dcr_delete` (17) and `dcr_reset` (25) all
+match instruction for instruction. `dcr_process` does not -- 546 bytes against
+the blob's 568, 155 instructions against 162 with padding dropped.
+
+The gap was walked instruction by instruction and every item in it is in
+CLAUDE.md's "free, so ignore it" column:
+
+- **Register allocation.** The blob keeps the return value in a stack slot and
+  `buf` in `%ebp`; we keep the return value in `%ebp` and `buf` in `%edi`. That
+  alone accounts for the frame size (0x2c against 0x5c), the `mov 0x18(%esp),%eax`
+  against `mov %ebp,%eax` at both exits, and the one `idivl 0x18(%esp)` against
+  `idiv %edi`.
+- **Comparison canonicalisation, three sites.** The blob writes the phase
+  threshold test `cmp 0x14(%ebx),%eax ; jl`; we get `cmp %eax,0x14(%ebx) ; jg`.
+  Same branch, operands swapped. Both source spellings were tried -- `count >=
+  dcr->settle_samples` and `dcr->settle_samples <= count` -- and so was
+  restructuring the arm as an early `break` on `<` so the branch is direct
+  rather than inverted. All three produce byte-identical output, so this is
+  downstream of anything the source can say.
+- **Scheduling**, including where `movswl 0xa(%ebx)` lands, and one dead spill
+  of the quotient the blob makes and we do not.
+- **Partial dead-store elimination.** The blob sinks `dcr->sum = sum;
+  dcr->count = count;` into the two paths where they are live -- the
+  "not finished" arm, and the debug arm of the "finished" one, where the call
+  makes them un-eliminable. We store them before the branch. Source order was
+  tried both ways round and does not move it. 617's acceptance test for a
+  store-order difference is FULL-TEXT identity and this is nowhere near it, so
+  it is a hint and was left alone.
+
+Nothing in the gap is a load whose signedness is forced: the two accumulate
+loops are `movswl` on both sides, the threshold is `movswl` on both, and the
+correction loop's `movzwl` is 614's discarded upper half on both. The one
+forced item that WAS in the gap is finding 4201, and it was acted on.
 
 ## 4300. `re/` REVIEWED AND DISPOSITIONED: 100 CLAIMS, AND EXACTLY ONE THING IN IT IS NOT HERE
 
