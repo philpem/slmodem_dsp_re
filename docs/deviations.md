@@ -7550,3 +7550,60 @@ does not initialise it.
 Reproduced, and kept out of the grid: `t_v92info.cpp` uses 1..6.  A trial at
 zero would trap identically on both sides, which measures the CPU rather than
 the reading.  Finding 4750.
+
+## D700 ✅ `generateSymbol` divides by four different fields and guards none of them, and that is how D571 is reached
+
+Twelve unguarded unsigned divisions in one function, in four groups:
+
+  - `symbolCount % word_1b0` in the arms for states 5, 6, 8, 9, 11 and 13, and
+    `symbolCount == word_1b0` in 10 and 12 which is not a division at all.
+    `word_1b0` is zero out of the constructor and out of `reset`, neither of
+    which writes it; only the arms that call `getBitVector` ever set it.
+  - `(symbolCount - 24) % patternLength` in state 1, and
+    `pattern[(symbolCount - 25) % patternLength]` inside `generateCPt`.
+    `patternLength` is likewise unwritten by the constructor.
+  - `patternLength / bitsPerSymbol` in states 4, 5, 13, 23, 24 and 27.
+  - `patternLength / cp->bitsPerSymbol` in states 6, 8 and 12.
+
+The object's own instructions are `divl 0x1b0(%esi)`, `divl 0x1ac(%esi)` and
+`div %edi` with nothing testing the divisor anywhere in the 4,055 bytes.
+
+**AND IT ANSWERS D571'S OPEN QUESTION.**  D571 records that `V92CP::infoToBits`
+raises #DE when `V92CP::bitsPerSymbol` is zero and leaves reachability to
+whoever writes the callers.  It is reachable from here: ten arms call
+`infoToBits`, three of them (states 4, 24 and 27) set `cp->bitsPerSymbol` from
+this class's own `bitsPerSymbol` immediately before -- which is zero out of the
+constructor -- and the other seven do not set it at all.  `reset` stores 1
+there, so the object's own lifecycle keeps it non-zero, and that is a property
+of the writer rather than a check in the reader, exactly as D570 says of
+`word_10c`.
+
+Reproduced with no guard added, and NOT DRIVEN at zero: `t_v92p4sym.cpp`'s
+`gs_setup` keeps `word_1b0` non-zero, `patternLength` in 1..7 and both
+`bitsPerSymbol` fields in 1..16.  A trial at zero raises #DE identically on
+both sides, which measures the CPU rather than the reading -- D571's argument.
+Finding 4820.
+
+## D701 ✅ Five `generateSymbol` arms return an uninitialised local when nothing is staged
+
+`V92BitsToSymbol::process(unsigned int &, short *)` copies `symbolsBlockSize`
+symbols into `out` when at least that many are staged and `symbolsDone` of them
+when fewer are -- which at zero is none.  `out` is the address of ONE `short`
+on the caller's frame, and the states 16, 17, 26, 27 and 28 arms never
+initialise it: the object's `lea 0x3a(%esp)` and its seven siblings point at
+slots nothing has stored to.  `V92BitsToSymbol::reset` leaves `symbolsDone` at
+zero, so the very first symbol after a reset returns frame residue.
+
+The same shape as D560, one level up, and it is the object's: there is no
+initialisation and no test of the return value at any of the five sites.
+Reproduced by writing the arms as the calls they are.
+
+**NOT DRIVEN, and it took 635 failing checks to notice.**  With `symbolsDone`
+left at zero the fixture disagreed on every trial of those arms -- `got 0,
+reference 1`, with the object, the CP, the chain, the scrambler and the mapper
+all agreeing -- because our frame is not the blob's and the residue therefore
+is not the same residue.  `t_v92p4sym.cpp` now stages symbols so the copy
+always happens.  This is why the per-member tests of `generateRm` and
+`generateB1u` never showed it: ours and the blob's are separate functions with
+the same frame, so both read the same residue and agreed for the wrong reason.
+Finding 4821.

@@ -155,6 +155,21 @@ public:
 	void reset();
 
 	/*
+	 * The two adaption constants and the one member that sets all three
+	 * at once.  Each of the first two stores its argument and then
+	 * announces the FIELD's sign with the ARGUMENT's magnitude, which is
+	 * the object's own spelling and not a tidy paraphrase -- see the .cpp.
+	 *
+	 * `setEchoParams` is the three calls and nothing else: the object's
+	 * 339 bytes are `setEchoBeta`, `setDecayFactor` and `setEchoDelay`
+	 * inlined back to back, ending in the last one's diagnostic as a tail
+	 * call (`jmp edprintf` at .text+0x10f4e).
+	 */
+	void setEchoBeta(float beta);
+	void setDecayFactor(float decay);
+	void setEchoParams(float beta, float decay, unsigned int delay);
+
+	/*
 	 * The state machine and the two signal paths.
 	 *
 	 * `process` is the only caller of `setState` in this class, and it
