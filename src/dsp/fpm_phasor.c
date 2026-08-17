@@ -115,9 +115,33 @@ static const unsigned short fpm_sin_table[FPM_PHASOR_TABLE] = {
  * entry yields 16384 rather than 32768 -- the generator's own scale factor
  * makes up the difference (FPM_TONE_generate multiplies by state->scale >> 14,
  * and a scale of 32767 restores full amplitude).
+ *
+ * GLOBAL, NOT `static const`, AND THAT IS LOAD-BEARING RATHER THAN A STYLE
+ * CHOICE.  The quadrant that indexes them is NOT masked (see FPM_phasor
+ * below), so a phase of 0x8000 or more reads four entries BEFORE each table,
+ * and what is there is a property of the LINK.  In the object they are
+ * `FPM_sin_sign` at .data 0x081dc and `FPM_cos_sign` at 0x081e4 -- both `D`,
+ * both GLOBAL, adjacent and in that order.
+ *
+ * WHAT THAT BUYS IS THE COSINE, WHOLE, AND HALF OF THE SINE'S CASE.
+ * `FPM_cos_sign[-4 .. -1]` is exactly `FPM_sin_sign[0 .. 3]` -- one
+ * translation unit's own two objects, which nothing can come between -- and
+ * `t_fpm_phasor` checks it and then sweeps the cosine over all 65536 phases.
+ * `FPM_sin_sign[-4 .. -1]` is the tail of `COEF_DC` (fpm_mtd.c, the PREVIOUS
+ * translation unit in link order) plus the two bytes of padding that .data's
+ * four-byte section alignment costs at the boundary.  That is right in the
+ * build that ships and is NOT assertable: `--coverage` appends
+ * `__gcov_.FPM_MTD_*` to fpm_mtd.c's .data, exactly there, and
+ * `tools/debugcov.py` builds that tree.  So the sine is compared only inside
+ * 0 .. 0x7fff and D392 stays open on that half.
+ *
+ * DECLARATION ORDER IS COS THEN SIN AND MUST STAY THAT WAY: both GCC 3.4.2
+ * and GCC 13 emit .data objects in REVERSE declaration order, so this puts
+ * FPM_sin_sign at the lower address, which is the object's order.  Findings
+ * 3588 and 3620-3624, deviation D392.
  */
-static const short fpm_cos_sign[4] = { 16384, -16384, -16384, 16384 };
-static const short fpm_sin_sign[4] = { 16384,  16384, -16384, -16384 };
+short FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };
+short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };
 
 unsigned short
 FPM_phasor_cos_entry(int i)
@@ -193,8 +217,8 @@ FPM_phasor(struct fpm_phasor *p)
 	int idx, frac, quad;
 
 	phasor_split(phase, &idx, &frac, &quad);
-	p->cos = phasor_value(fpm_cos_table, fpm_cos_sign, idx, frac, quad);
-	p->sin = phasor_value(fpm_sin_table, fpm_sin_sign, idx, frac, quad);
+	p->cos = phasor_value(fpm_cos_table, FPM_cos_sign, idx, frac, quad);
+	p->sin = phasor_value(fpm_sin_table, FPM_sin_sign, idx, frac, quad);
 	p->phase = phasor_advance(phase, (short)p->inc);
 }
 
@@ -217,6 +241,6 @@ FPM_phasor_demod(struct fpm_phasor *p)
 	int idx, frac, quad;
 
 	phasor_split(phase, &idx, &frac, &quad);
-	p->cos = phasor_value(fpm_cos_table, fpm_cos_sign, idx, frac, quad);
+	p->cos = phasor_value(fpm_cos_table, FPM_cos_sign, idx, frac, quad);
 	p->phase = phasor_advance(phase, (short)p->inc);
 }

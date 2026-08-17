@@ -423,6 +423,23 @@ sweep_derot_edge(const char *label, short carrier, int count_them)
 		if (ra != rb || out_a[0] != out_b[0])
 			diff_eq_int("swept tilt_out=%ld: symbol",
 				    out_a[0], out_b[0], t);
+		/*
+		 * AND `out_i`, AT EVERY POSITION RATHER THAN ONLY AT THE END.
+		 * A quarter of the sweep leaves the derotation angle negative
+		 * and `FPM_phasor` indexes its sign tables with an unmasked
+		 * quadrant, so this used to be uncomparable; it is comparable
+		 * now, for the COSINE, because `FPM_cos_sign`'s four preceding
+		 * entries are `FPM_sin_sign` in the same translation unit on
+		 * both sides.  16384 of these 65536 positions are outside the
+		 * phasor's designed domain and every one of them is checked.
+		 *
+		 * `out_q` is NOT compared here and that is the bounded
+		 * remainder, not an oversight: the sine's out-of-domain sign
+		 * comes from the tail of another translation unit, which the
+		 * instrumented build displaces.  D392, findings 3623 and 3624.
+		 */
+		diff_eq_int("swept tilt_out=%ld: out_i",
+			    ours.out_i[0], theirs.out_i[0], t);
 		if (out_b[0] == 0)
 			zero_hits++;
 		if (out_b[0] >= 0x8000)
@@ -474,21 +491,21 @@ sweep_derot_edge(const char *label, short carrier, int count_them)
 	sep_rerot_reach += rerot_edge_hits;
 
 	/*
-	 * WHY ONLY THE RETURNED ANGLE IS COMPARED AT EVERY POSITION.  A
-	 * quarter of the sweep leaves the derotation angle negative -- the
-	 * two adjustments are a pair of tests and not a loop -- and
-	 * `FPM_phasor` is only defined for 0 .. 0x7fff: past that it indexes
-	 * its quadrant sign table with a NEGATIVE quadrant and reads whatever
-	 * the linker put in front of it, which is `FPM_sin_sign` in the blob
-	 * and something else entirely here.  Finding 3588 and D392.  The
-	 * angle itself is integer arithmetic and is compared at all 65536
-	 * positions; `out_i`/`out_q` and the scatter log go through the
-	 * phasor, so they are compared once, at the end, where the check
-	 * below says the last position is in domain.  If that ever stops
-	 * being true this fails rather than quietly comparing nothing.
+	 * THE OBJECT COMPARISON BELOW STILL NEEDS THE LAST POSITION IN DOMAIN,
+	 * and this is still the check that says so.  D392 closed the COSINE
+	 * half of `FPM_phasor`'s out-of-domain behaviour and not the sine's,
+	 * so `out_i` is compared at all 65536 positions above while `out_q`
+	 * and the scatter log's `.q` -- which `compare_state` reads -- are
+	 * not.  They are compared once, here, where the walk has to have
+	 * ended inside 0 .. 0x7fff for the comparison to mean anything.
+	 * Finding 3588 named this hole in itself and it is narrower rather
+	 * than gone: what used to be uncomparable at 16384 positions on two
+	 * observables is uncomparable at those positions on one.
 	 */
 	diff_eq_int("the sweep ends in the phasor's domain (%ld)",
 		    out_b[0] < 0x8000, 1, 0);
+	diff_eq_int("positions driven outside it, with out_i compared (%ld)",
+		    high_bit, 16384, 0);
 
 	compare_state("state after the sweep", 0);
 	compare_buffers(0);
@@ -856,6 +873,15 @@ trial_tilt(void)
 		 * symbols.  These four are asymmetric, of two magnitudes and
 		 * of mixed sign, and the recursion through `tilt_out` settles
 		 * rather than growing.
+		 *
+		 * A LARGE-COEFFICIENT ARM WAS TRIED HERE AND TAKEN BACK OUT.
+		 * It drove the angle out of domain deliberately, which D392's
+		 * cosine half now supports -- but this trial's whole content
+		 * is `compare_state` and `compare_buffers`, and both read
+		 * `out_q` and the scatter log's `.q`, which are SINE-derived
+		 * and are the half D392 leaves open.  The sweep above is where
+		 * the out-of-domain cosine is driven instead.  Findings 3623
+		 * and 3624.
 		 */
 		ours.tilt_coeff[0] = theirs.tilt_coeff[0] = 2;
 		ours.tilt_coeff[1] = theirs.tilt_coeff[1] = -1;
@@ -877,14 +903,15 @@ trial_tilt(void)
 			/*
 			 * IN DOMAIN, and asserted rather than assumed.
 			 * `fixed_slicer` returns the derotation angle, and
-			 * `FPM_phasor` is only defined for 0 .. 0x7fff -- past
-			 * that it indexes its quadrant sign table with a
-			 * NEGATIVE quadrant and reads whatever precedes it,
-			 * which is not the same bytes in this build as in the
-			 * blob.  Finding 3588 and D392.  The coefficients
-			 * below are chosen to keep the bias small enough that
-			 * the angle stays inside it, and this is the check
-			 * that says so.
+			 * `FPM_phasor`'s SINE is only comparable for
+			 * 0 .. 0x7fff -- past that it indexes its sign table
+			 * with a NEGATIVE quadrant and reads the previous
+			 * translation unit's tail, which the instrumented
+			 * build displaces.  `compare_buffers` above reads
+			 * `out_q`, so it needs this.  D392, findings 3588,
+			 * 3623 and 3624.  The coefficients above are chosen to
+			 * keep the bias small enough that the angle stays
+			 * inside it, and this is the check that says so.
 			 */
 			diff_eq_int("derotation angle in phasor domain (%ld)",
 				    out_b[0] < 0x8000, 1,

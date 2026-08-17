@@ -39,4 +39,17 @@ void FPM_phasor_demod(struct fpm_phasor *p);
 unsigned short FPM_phasor_cos_entry(int i);
 unsigned short FPM_phasor_sin_entry(int i);
 
+/*
+ * The quadrant sign tables, GLOBAL and in `.data` because the object's are
+ * (`D` at 0x081dc and 0x081e4, not `R`), and because the quadrant that indexes
+ * them is never masked -- so what lies immediately BEFORE them is part of the
+ * observable behaviour for any phase of 0x8000 or more.  Nothing outside
+ * `fpm_phasor.c` reads them through this declaration; it exists so the unit
+ * test can compare the four words before `FPM_cos_sign`, and the pair itself,
+ * against the object's.  See the comment on their definition, and D392 for
+ * why the four before `FPM_sin_sign` are not comparable.
+ */
+extern short FPM_cos_sign[4];
+extern short FPM_sin_sign[4];
+
 #endif /* DSPLIB_FPM_PHASOR_H */

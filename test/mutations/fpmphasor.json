@@ -1,0 +1,31 @@
+[
+ {
+  "note": "FPM_phasor's OUT-OF-DOMAIN behaviour, which is the part `t_fpm_phasor`'s sweep could not reach until the sign tables became adjacent globals in `.data`.  Deviation D392, findings 3588 and 3620-3623."
+ },
+ {
+  "note": "Every entry here is dead against a sweep that stops at 0x7fff: the quadrant is 0..3 over the whole designed domain, so masking it, reading the phase unsigned and swapping the two tables' addresses are all no-ops there.  That is the point of the set -- it adjudicates the widening of the sweep to 0x10000 rather than the arithmetic, which the in-domain entries of the existing suite already cover."
+ },
+ {
+  "note": "WHAT IS NOT HERE, AND WHY.  The strongest single mutation would be to put the two tables back to `static const` -- `.rodata`, file-local, laid out with the 514-byte wave tables between them, which is what they were.  It cannot be written as a find/replace on this file alone: `fpm_phasor.h` declares them `extern short`, so a `static` or a `const` on the definition is a conflicting declaration and the mutation would not compile.  A build failure is not a kill, and recording one as a kill is worse than leaving the entry out.  `the sign tables are laid out cosine first` is the part of that claim which IS expressible here.  The cross-translation-unit half is `fpmmtdlayout`, whose two entries are recorded NOT CAUGHT and are the register of D392's bounded remainder."
+ },
+ {
+  "label": "the quadrant is masked before it indexes the sign tables",
+  "find": "\t\t\t* sign[quad]) >> 15);",
+  "replace": "\t\t\t* sign[quad & 3]) >> 15);"
+ },
+ {
+  "label": "the phase is read unsigned, so the quadrant never goes negative",
+  "find": "FPM_phasor(struct fpm_phasor *p)\n{\n\tint phase = (short)p->phase;",
+  "replace": "FPM_phasor(struct fpm_phasor *p)\n{\n\tint phase = p->phase;"
+ },
+ {
+  "label": "the demodulator reads its phase unsigned",
+  "find": "FPM_phasor_demod(struct fpm_phasor *p)\n{\n\tint phase = (short)p->phase;",
+  "replace": "FPM_phasor_demod(struct fpm_phasor *p)\n{\n\tint phase = p->phase;"
+ },
+ {
+  "label": "the sign tables are laid out cosine first",
+  "find": "short FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };\nshort FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };",
+  "replace": "short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };\nshort FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };"
+ }
+]

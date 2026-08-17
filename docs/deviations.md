@@ -6941,34 +6941,83 @@ wanted; but the same test also means `state->mse` is non-negative for ever, and
 the `mse > 0` gate below it can only fail on an exact zero.  Reproduced rather
 than corrected, and the consequence for the LMS gate is finding 3586.
 
-## D392 ⚠ `FPM_phasor` cannot match the blob for a phase of 0x8000 or more
+## D392 ⚠ `FPM_phasor` reads its quadrant sign tables four entries early for a phase of 0x8000 or more
+
+**PARTIALLY CLOSED.  The COSINE half is verified bit-exact over all 65536
+phases under both compilers; the SINE half is reproduced in the build that
+ships and is NOT tested, because the bytes it reads belong to another
+translation unit and no source arrangement can assert that.**  It was recorded
+as UNMEASURABLE -- "the two implementations read different memory and no input
+makes them agree" -- and half of that has turned out to be a property of the
+tree rather than of the object.
 
 *Batch of 2026-08-16, from `FPM_phasor` (blob 0x0a9300) at 0x0a9367 and
 0x0a9392 (`movswl 0x0(%esi,%esi,1)` against `FPM_cos_sign` and `FPM_sin_sign`,
-with no mask on the quadrant).  **Reachability: any caller that sets
-`phase` to 0x8000 or above -- `FPM_FSE_receive`'s derotation does, for a
-quarter of its angle range, because its reduction is a pair of tests and not a
-loop.**  **Observability: `cos`, and through it every output the caller
-derives from it; `sin` happens to agree because the four entries before
-`FPM_sin_sign` are `FPM_cos_sign` in the blob and a defined object here too.**
-Status: UNMEASURABLE, not verified -- the two implementations read different
-memory and no input makes them agree.  Fix class: would need
-`FPM_cos_sign`/`FPM_sin_sign` made global, `.data` and adjacent in the blob's
-order, which is a change to `src/dsp/fpm_phasor.c` with its own differential
-test to write, and even then the four entries before `FPM_sin_sign` belong to
-a neighbouring translation unit.*
+with no mask on the quadrant).  **Reachability: any caller that sets `phase`
+to 0x8000 or above.  `FPM_FSE_receive`'s derotation does, for a quarter of its
+angle range, because its reduction is a pair of tests and not a loop;
+`FPM_phasor_dp` (0x0a93e0, unreconstructed) is a third user of the same two
+tables.**  **Observability: both outputs, and every output a caller derives
+from them.**  Status as of 2026-08-17: `cos` VERIFIED against the blob at all
+65536 phases against fourteen increments, under the period build and the modern
+one, in `t_fpm_phasor` and `t_fpm_phasor_demod`'s sweep; `sin` verified over
+0 .. 0x7fff only.  Fix class: reproduced as found -- the unmasked index is kept
+and the LAYOUT it reads is now the object's.*
 
-The object indexes its two quadrant sign tables with an unmasked quadrant, so a
-negative phase reads four entries before each table.  Our reconstruction
-reproduces the unmasked index -- that part is right -- but the tables are
-`static const` in `.rodata` with the 514-byte wave tables laid out between
-them, where the blob's are adjacent globals in `.data`.  The out-of-range read
-is therefore deterministic on both sides and different.
+The object indexes its two quadrant sign tables with an unmasked quadrant, so
+a phase read as a negative short reads four entries before each table.  Our
+reconstruction always reproduced the unmasked index; what differed was where
+the tables sat.  Three changes moved them:
 
-`t_fpm_fse_recv` stays inside 0 .. 0x7fff wherever an observable depends on the
-phasor, and asserts that it has -- see the domain checks in its tilt trial and
-at the end of its derotation sweep.  Finding 3588 for the whole derivation and
-for why the symptom is a mismatched `out_i` beside a matching `out_q`.
+- `FPM_cos_sign` and `FPM_sin_sign` are now GLOBAL and in `.data` (the object's
+  are `D`, not `R`), declared cosine first in `src/dsp/fpm_phasor.c` so that
+  both compilers' reverse `.data` emission order puts `FPM_sin_sign` at the
+  lower address, adjacent, exactly as at 0x081dc and 0x081e4;
+- `COEF_DC` has moved from `src/dsp/fpm_iir_coeffs.c` (our own factoring, and
+  not one of the object's translation units) to `src/dsp/fpm_mtd.c`, where the
+  object says it belongs, and has lost its `const`;
+- `t_fpm_phasor` sweeps 0 .. 0xffff instead of 0 .. 0x7fff.
+
+**WHAT CLOSED.**  `FPM_cos_sign[-4 .. -1]` is `FPM_sin_sign[0 .. 3]` -- two
+`.data` objects of ONE translation unit, which nothing can come between.  The
+test compares those four words and both tables against `dsplibs_ref.o`'s own
+and then sweeps the cosine over the whole 16-bit range; `FPM_phasor_demod`,
+which computes only the cosine, is swept over it too.  `t_fpm_fse_recv`
+compares `out_i` at all 65536 positions of each derotation sweep, 16384 of them
+out of the designed domain.
+
+**WHAT IS STILL OPEN, AND EXACTLY HOW MUCH.**  `FPM_sin_sign[-4 .. -1]`, which
+is `{28620, -25834, 12917, 0}` in the object: `COEF_DC`'s last three words and
+the two bytes of padding a `.data` translation-unit boundary costs.  Our link
+produces those same bytes -- verified by hand on the ordinary binary, both
+compilers -- and the differential tier is not allowed to say so, because
+`--coverage` appends `__gcov_.FPM_MTD_create/delete/detect` to fpm_mtd.c's
+`.data` at offsets 0x0c, 0x24 and 0x3c, immediately after `COEF_DC` at 0.
+`tools/debugcov.py` builds exactly that tree and `make phase` runs it, so
+asserting the adjacency turns the gate red for a reason that is about the
+instrumentation and not about the reconstruction.  Finding 3624.
+
+The uncovered set is therefore precise: **the sine, and only the sine, for
+phase 0x8000 .. 0xffff -- 32768 of 65536 phases, quadrants -4 .. -1.**  Nothing
+else in the function is out of reach.  Two further notes so the bound is not
+read as smaller than it is:
+
+- quadrant -1 (phase 0xE000 .. 0xFFFF) agreed BEFORE any of this work, because
+  `fpm_cos_table[256]` is zero and so is the object's boundary pad.  That is a
+  coincidence of two layouts and is not coverage;
+- `FPM_phasor_dp` at 0x0a93e0 is not reconstructed.  It references both tables
+  (0x0a944b, 0x0a9472) and will inherit the same split when it is written.
+
+`test/mutations/fpmmtdlayout.json` is the register of the open half: two
+mutations against `src/dsp/fpm_mtd.c`, adjudicated by `build/test/t_fpm_phasor`
+rather than by a detector test, both recorded NOT CAUGHT with the derivation.
+`test/mutations/fpmphasor.json` is the closed half: four mutations, 0 of 4
+caught by the old 0 .. 0x7fff sweep and 4 of 4 by the new one.
+
+Findings 3588 for the original derivation, 3620-3622 for the translation-unit
+attribution and the emission order, 3623 for what each compiler showed before
+the fix, 3624 for the instrumented build.
+
 ## D410 ⚠ `V92setParamsInfoFromCPUnPck` stores through all ten of the block's array pointers without testing one of them
 
 **This entry was written with a number in the three-eighties and moved to 410

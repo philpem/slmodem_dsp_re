@@ -48,6 +48,14 @@
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
  ],
+ "fpmmtdlayout": [
+  "src/dsp/fpm_mtd.c",
+  "build/test/t_fpm_phasor"
+ ],
+ "fpmphasor": [
+  "src/dsp/fpm_phasor.c",
+  "build/test/t_fpm_phasor"
+ ],
  "fpmpps": [
   "src/dsp/fpm_pps.c",
   "build/test/t_fpm_pps"
