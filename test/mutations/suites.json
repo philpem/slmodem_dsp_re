@@ -647,5 +647,9 @@
  "v90p4ddec": [
   "src/pump/v90/V90Phase4Demodulator.cpp",
   "build/test/t_v90p4ddec"
+ ],
+ "v90p4mtab": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90p4mtab"
  ]
 }

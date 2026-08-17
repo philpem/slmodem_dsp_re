@@ -7516,3 +7516,38 @@ assertion there would be comparing two pieces of stack litter and would pass or
 fail for reasons unrelated to this reconstruction.  Initialising it would be a
 behaviour change on exactly the paths the object leaves open, so it is not
 done.
+
+## D660 ⚠ `generateRi` and `generateRiNot` read an uninitialised `short` on an unreachable path
+
+**Where:** `src/pump/v90/V90Phase4Modulator.cpp`, `generateRi` and
+`generateRiNot`; blob 0x2c6b0 and 0x2c710.
+
+**What the original does:** both compute `(symbolCount - 1) % 6` and dispatch
+on it with a two-range decision tree, and the tree's default edge falls into
+the tail that returns the value:
+
+    2c6d7:  83 f8 02      cmp   $0x2,%eax
+    2c6da:  76 1b         jbe   2c6f7            ; 0..2, sym = codeLevel
+    2c6dc:  83 f8 05      cmp   $0x5,%eax
+    2c6df:  77 1a         ja    2c6fb            ; -> the tail, %ebx unset
+    ...
+    2c6f7:  0f bf 59 3c   movswl 0x3c(%ecx),%ebx
+    2c6fb:  89 d8         mov   %ebx,%eax        ; the tail
+
+so on the `ja` what comes back is whatever the CALLER left in `%ebx`.
+`generateRiNot` has the same shape with `%ecx` and one more `neg`.
+
+**Impact:** none, and this one is arithmetically impossible rather than merely
+unreached.  `x % 6` on an unsigned dividend is at most 5, so the `ja` is never
+taken for any value of `symbolCount` including 0 and 0xffffffff -- 0 gives
+0xffffffff % 6 == 3, which is inside the range.  It is the switch's default
+edge, kept because GCC 3.4.2 emits the comparison rather than proving the
+modulus's range.
+
+**Status:** reproduced, and D561 does not bite: no input can drive the
+reconstruction into it either, so `test/unit/t_v90p4mtab.cpp` sweeps
+`symbolCount` over both periods and past zero with nothing excluded from the
+grid.  `short sym;` with no initialiser and a `switch` with no `default` is
+what puts it in front of the compiler.  Adding a `default:` would add an
+instruction the object does not have and would change behaviour on exactly the
+path the object leaves open, so it is not done.

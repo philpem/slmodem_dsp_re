@@ -1,0 +1,240 @@
+[
+ {
+  "_": [
+   "The thirteen V90Phase4Modulator members that neither print nor call a",
+   "peer's method, against t_v90p4mtab.  The claims worth attacking are the",
+   "two tables' SIGN PATTERNS and SOURCE ROWS, the two moduli and the -1 in",
+   "the six readers' index, the companding branch, and which of the six",
+   "storing members touches the CP record.",
+   "",
+   "P4M_LEVEL is a macro, so a mutation to it moves all eighteen call sites",
+   "at once; the per-element mutations below anchor on the assignment lines",
+   "instead, which is what keeps a wrong row or a wrong sign separable from",
+   "a wrong law."
+  ]
+ },
+
+ {
+  "label": "P4M_LEVEL: the companding branch is the wrong way round",
+  "find": "\t(pcmType != PCM_TYPE_MU_LAW \\\n\t    ? (short)alaw2linear",
+  "replace": "\t(pcmType == PCM_TYPE_MU_LAW \\\n\t    ? (short)alaw2linear"
+ },
+ {
+  "label": "P4M_LEVEL: A-law inverts rather than xors 0xd5",
+  "find": "(((m)->constellation[k][0] & 0x7f) ^ 0xd5))",
+  "replace": "(((m)->constellation[k][0] & 0x7f) ^ 0xff))"
+ },
+ {
+  "label": "P4M_LEVEL: mu-law xors 0xd5 rather than inverting",
+  "find": "(((m)->constellation[k][0] & 0x7f) ^ 0xff))",
+  "replace": "(((m)->constellation[k][0] & 0x7f) ^ 0xd5))"
+ },
+ {
+  "label": "P4M_LEVEL: the code keeps its sign bit",
+  "find": "\t    ? (short)alaw2linear((unsigned char) \\\n\t\t  (((m)->constellation[k][0] & 0x7f) ^ 0xd5))",
+  "replace": "\t    ? (short)alaw2linear((unsigned char) \\\n\t\t  (((m)->constellation[k][0] & 0xff) ^ 0xd5))"
+ },
+ {
+  "label": "P4M_LEVEL: the level comes from the row's second code",
+  "find": "\t    : (short)ulaw2linear((unsigned char) \\\n\t\t  (((m)->constellation[k][0] & 0x7f) ^ 0xff)))",
+  "replace": "\t    : (short)ulaw2linear((unsigned char) \\\n\t\t  (((m)->constellation[k][1] & 0x7f) ^ 0xff)))"
+ },
+
+ {
+  "label": "setRdRtSymbols: element 0 reads row 1",
+  "find": "\trdRtSymbols[0] = P4M_LEVEL(m, 0);",
+  "replace": "\trdRtSymbols[0] = P4M_LEVEL(m, 1);"
+ },
+ {
+  "label": "setRdRtSymbols: element 2 is negated",
+  "find": "\trdRtSymbols[2] = P4M_LEVEL(m, 2);",
+  "replace": "\trdRtSymbols[2] = -P4M_LEVEL(m, 2);"
+ },
+ {
+  "label": "setRdRtSymbols: element 3 is not negated",
+  "find": "\trdRtSymbols[3] = -P4M_LEVEL(m, 3);",
+  "replace": "\trdRtSymbols[3] = P4M_LEVEL(m, 3);"
+ },
+ {
+  "label": "setRdRtSymbols: element 5 is not negated",
+  "find": "\trdRtSymbols[5] = -P4M_LEVEL(m, 5);",
+  "replace": "\trdRtSymbols[5] = P4M_LEVEL(m, 5);"
+ },
+ {
+  "label": "setRdRtSymbols: elements 4 and 5 read the same row",
+  "find": "\trdRtSymbols[4] = -P4M_LEVEL(m, 4);",
+  "replace": "\trdRtSymbols[4] = -P4M_LEVEL(m, 5);"
+ },
+ {
+  "label": "setRdRtSymbols: the first element is left alone",
+  "find": "\trdRtSymbols[0] = P4M_LEVEL(m, 0);\n\trdRtSymbols[1]",
+  "replace": "\trdRtSymbols[1]"
+ },
+
+ {
+  "label": "setRfSymbols: element 2 is not negated",
+  "find": "\trfSymbols[2] = -P4M_LEVEL(m, 2);",
+  "replace": "\trfSymbols[2] = P4M_LEVEL(m, 2);"
+ },
+ {
+  "label": "setRfSymbols: element 4 is negated",
+  "find": "\trfSymbols[4] = P4M_LEVEL(m, 4);",
+  "replace": "\trfSymbols[4] = -P4M_LEVEL(m, 4);"
+ },
+ {
+  "label": "setRfSymbols: the second half does not restart at row 0",
+  "find": "\trfSymbols[6] = -P4M_LEVEL(m, 0);",
+  "replace": "\trfSymbols[6] = -P4M_LEVEL(m, 1);"
+ },
+ {
+  "label": "setRfSymbols: the second half repeats the first half's signs",
+  "find": "\trfSymbols[8] = P4M_LEVEL(m, 2);",
+  "replace": "\trfSymbols[8] = -P4M_LEVEL(m, 2);"
+ },
+ {
+  "label": "setRfSymbols: element 11 is not negated",
+  "find": "\trfSymbols[11] = -P4M_LEVEL(m, 5);",
+  "replace": "\trfSymbols[11] = P4M_LEVEL(m, 5);"
+ },
+ {
+  "label": "setRfSymbols: the last element is left alone",
+  "find": "\trfSymbols[11] = -P4M_LEVEL(m, 5);\n}",
+  "replace": "}"
+ },
+ {
+  "label": "setRfSymbols: it fills the Rd/Rt table instead",
+  "find": "\trfSymbols[0] = P4M_LEVEL(m, 0);",
+  "replace": "\trdRtSymbols[0] = P4M_LEVEL(m, 0);\n\trfSymbols[0] = P4M_LEVEL(m, 0);"
+ },
+
+ {
+  "label": "generateRdRt: the index does not count from the previous symbol",
+  "find": "\treturn rdRtSymbols[(symbolCount - 1) % V90P4M_RDRT_SYMBOLS];",
+  "replace": "\treturn rdRtSymbols[symbolCount % V90P4M_RDRT_SYMBOLS];"
+ },
+ {
+  "label": "generateRdRt: the period is twelve",
+  "find": "\treturn rdRtSymbols[(symbolCount - 1) % V90P4M_RDRT_SYMBOLS];",
+  "replace": "\treturn rdRtSymbols[(symbolCount - 1) % V90P4M_RF_SYMBOLS];"
+ },
+ {
+  "label": "generateRdRtNot: the answer is not negated",
+  "find": "\tint sym = rdRtSymbols[(symbolCount - 1) % V90P4M_RDRT_SYMBOLS];\n\n\treturn -sym;",
+  "replace": "\tint sym = rdRtSymbols[(symbolCount - 1) % V90P4M_RDRT_SYMBOLS];\n\n\treturn sym;"
+ },
+ {
+  "label": "generateRdRtNot: it reads the Rf table",
+  "find": "\tint sym = rdRtSymbols[(symbolCount - 1) % V90P4M_RDRT_SYMBOLS];",
+  "replace": "\tint sym = rfSymbols[(symbolCount - 1) % V90P4M_RDRT_SYMBOLS];"
+ },
+ {
+  "label": "generateRf: the index does not count from the previous symbol",
+  "find": "\treturn rfSymbols[(symbolCount - 1) % V90P4M_RF_SYMBOLS];",
+  "replace": "\treturn rfSymbols[symbolCount % V90P4M_RF_SYMBOLS];"
+ },
+ {
+  "label": "generateRf: the period is six",
+  "find": "\treturn rfSymbols[(symbolCount - 1) % V90P4M_RF_SYMBOLS];",
+  "replace": "\treturn rfSymbols[(symbolCount - 1) % V90P4M_RDRT_SYMBOLS];"
+ },
+ {
+  "label": "generateRfNot: the answer is not negated",
+  "find": "\tint sym = rfSymbols[(symbolCount - 1) % V90P4M_RF_SYMBOLS];\n\n\treturn -sym;",
+  "replace": "\tint sym = rfSymbols[(symbolCount - 1) % V90P4M_RF_SYMBOLS];\n\n\treturn sym;"
+ },
+
+ {
+  "label": "generateRi: the first half of the period is negated",
+  "find": "\tcase 2:\n\t\tsym = codeLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsym = -codeLevel;\n\t\tbreak;\n\t}\n\treturn sym;",
+  "replace": "\tcase 2:\n\t\tsym = -codeLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsym = codeLevel;\n\t\tbreak;\n\t}\n\treturn sym;"
+ },
+ {
+  "label": "generateRi: the sign changes after two symbols, not three",
+  "find": "\tcase 2:\n\t\tsym = codeLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsym = -codeLevel;\n\t\tbreak;\n\t}\n\treturn sym;",
+  "replace": "\t\tsym = codeLevel;\n\t\tbreak;\n\tcase 2:\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsym = -codeLevel;\n\t\tbreak;\n\t}\n\treturn sym;"
+ },
+ {
+  "label": "generateRiNot: the answer is not negated",
+  "find": "\t\tbreak;\n\t}\n\treturn -sym;",
+  "replace": "\t\tbreak;\n\t}\n\treturn sym;"
+ },
+ {
+  "label": "generateRiNot: the period is twelve",
+  "find": "\tunsigned int k = (symbolCount - 1) % V90P4M_RI_PERIOD;\n\tshort sym;\n\n\tswitch (k) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\tsym = codeLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsym = -codeLevel;\n\t\tbreak;\n\t}\n\treturn -sym;",
+  "replace": "\tunsigned int k = (symbolCount - 1) % V90P4M_RF_SYMBOLS;\n\tshort sym;\n\n\tswitch (k) {\n\tcase 0:\n\tcase 1:\n\tcase 2:\n\t\tsym = codeLevel;\n\t\tbreak;\n\tcase 3:\n\tcase 4:\n\tcase 5:\n\t\tsym = -codeLevel;\n\t\tbreak;\n\t}\n\treturn -sym;"
+ },
+
+ {
+  "label": "setNextStateAfterTRN2d: it writes the current state",
+  "find": "\tnextStateAfterTRN2d = next;",
+  "replace": "\tstate = next;"
+ },
+
+ {
+  "label": "resetBeforRRN: +0x24 is cleared like the rest",
+  "find": "\tword_0024 = 1;",
+  "replace": "\tword_0024 = 0;"
+ },
+ {
+  "label": "resetBeforRRN: +0x20 is left as it was found",
+  "find": "\tword_0034 = 0;\n\tword_0020 = 0;",
+  "replace": "\tword_0034 = 0;"
+ },
+ {
+  "label": "resetBeforRRN: +0x2fa0 is left as it was found",
+  "find": "\tword_2f9c = 0;\n\tword_2fa0 = 0;\n\tword_0024 = 1;",
+  "replace": "\tword_2f9c = 0;\n\tword_0024 = 1;"
+ },
+ {
+  "label": "resetBeforRRN: +0x2c is left as it was found",
+  "find": "\tword_0028 = 0;\n\tword_002c = 0;",
+  "replace": "\tword_0028 = 0;"
+ },
+
+ {
+  "label": "resetRRNSecondSection: +0x30 is cleared rather than set",
+  "find": "\tword_0030 = 1;\n\tword_0020 = 0;",
+  "replace": "\tword_0030 = 0;\n\tword_0020 = 0;"
+ },
+ {
+  "label": "resetRRNSecondSection: the CP's tag byte is left alone",
+  "find": "\tword_0018 = 0;\n\tcp->byte_13 = 0;",
+  "replace": "\tword_0018 = 0;"
+ },
+ {
+  "label": "resetRRNSecondSection: the CP's tag byte is set rather than cleared",
+  "find": "\tword_0018 = 0;\n\tcp->byte_13 = 0;",
+  "replace": "\tword_0018 = 0;\n\tcp->byte_13 = 1;"
+ },
+ {
+  "label": "resetRRNSecondSection: +0x1c is a word rather than a byte",
+  "find": "\tbyte_001c = 0;\n\tword_0018 = 0;",
+  "replace": "\tword_0018 = 0;"
+ },
+
+ {
+  "label": "recivedCP: the latch is cleared rather than set",
+  "find": "\tword_2f9c = 1;\n\tcp->byte_13 = 1;",
+  "replace": "\tword_2f9c = 0;\n\tcp->byte_13 = 1;"
+ },
+ {
+  "label": "recivedCP: the CP is not tagged",
+  "find": "\tword_2f9c = 1;\n\tcp->byte_13 = 1;",
+  "replace": "\tword_2f9c = 1;"
+ },
+ {
+  "label": "recivedCP: the latch is +0x2fa0",
+  "find": "\tword_2f9c = 1;\n\tcp->byte_13 = 1;",
+  "replace": "\tword_2fa0 = 1;\n\tcp->byte_13 = 1;"
+ },
+ {
+  "label": "recivedPartOneSilenceRrnSUV: it clears the CP's tag byte",
+  "find": "V90Phase4Modulator::recivedPartOneSilenceRrnSUV()\n{\n\tcp->byte_13 = 1;",
+  "replace": "V90Phase4Modulator::recivedPartOneSilenceRrnSUV()\n{\n\tcp->byte_13 = 0;"
+ },
+ {
+  "label": "recivedPartOneSilenceRrnSUV: it sets the latch as well",
+  "find": "V90Phase4Modulator::recivedPartOneSilenceRrnSUV()\n{\n\tcp->byte_13 = 1;",
+  "replace": "V90Phase4Modulator::recivedPartOneSilenceRrnSUV()\n{\n\tword_2f9c = 1;\n\tcp->byte_13 = 1;"
+ }
+]
