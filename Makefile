@@ -233,9 +233,35 @@ $(SYMMAP): tools/symmap.py $(BLOB) | $(BUILD)
 # names a `.gnu.linkonce.r.*` vtable section and nothing else.  It reads
 # exactly like "the merge broke everything", and the fix is `rm $(REF)`.
 # Finding 1387.
-$(REF): $(SYMMAP) $(BLOB) tools/refrename.py
+#
+# THE TWO `Vparser` STUBS COME OUT WEAK, and that is the only way the blob's
+# `loadParams` can be observed at all.  `V90Parameters::loadParams` is 295
+# calls to `Vparser_read_int`/`Vparser_read_float` and nothing else, and in
+# the reference object BOTH the caller and the callee live in the same file --
+# so the reference is not undefined at link time and `ld --wrap` cannot see
+# it.  That is measured, not assumed: a two-function object linked with
+# `--wrap=foo` calls the real `foo`, and the same object with `foo` weakened
+# takes a strong definition from elsewhere.  Finding 6400, which supersedes
+# 879's recommendation of `--wrap` for this job.
+#
+# Weakening changes no instruction and no address; it changes which definition
+# wins if another object supplies one.  Exactly one binary does --
+# `t_v90loadparams` -- and it asserts that its override took effect by
+# requiring 295 logged calls, so a weakening that silently stopped working
+# fails loudly rather than reporting a clean sequence of nothing.  Every other
+# binary links the blob's own three-byte stubs, unchanged.
+VPARSER_WEAK := --weaken-symbol=ref_Vparser_read_int \
+                --weaken-symbol=ref_Vparser_read_float
+
+# `Makefile` IS A PREREQUISITE, for finding 1387's reason one level up: the
+# weakening above is a recipe flag, not an input file, so an edit to it left a
+# stale reference object with STRONG stubs and the one binary that overrides
+# them died on `multiple definition of ref_Vparser_read_int`.  Loud, so not
+# 1387's silent class -- but the fix is the same and costs one objcopy.
+$(REF): $(SYMMAP) $(BLOB) tools/refrename.py Makefile
 	objcopy --globalize-symbols=$(GLOBALS) $(BLOB) $(BUILD)/dsplibs_glob.o
-	objcopy --redefine-syms=$(SYMMAP) $(BUILD)/dsplibs_glob.o $@
+	objcopy --redefine-syms=$(SYMMAP) $(VPARSER_WEAK) \
+	        $(BUILD)/dsplibs_glob.o $@
 	@# The blob's linkonce sections carry the SAME names our objects would
 	@# use if built by the period compiler, and linkonce keeps only the
 	@# first of a name -- so ours would silently discard the blob's copy and
@@ -298,9 +324,22 @@ $(BUILD)/repro/%.o: src/%.cpp
 # against a build carrying deliberate fixes the blob does not have.  If this
 # ever reverts to $(OBJ) the tier fails loudly rather than quietly passing --
 # which is the right failure mode, and is why the split is safe.
+#
+# PER-BINARY LINK FLAGS, in `test/unit/<name>.ldflags`.  One test needs
+# link-time interposition on a function OUR side calls across a translation
+# unit (`--wrap` works there; see the $(REF) recipe for the half where it does
+# not), and putting that on the shared link line would make all 92 binaries
+# demand a `__wrap_` definition.  A binary with no such file reads nothing and
+# links exactly as before.
+#
+# `tools/toolchain/period_inner.sh` READS THE SAME FILE.  Two link lines that
+# can disagree is the shape of defect this tree keeps finding, so there is one
+# source of the flags and both tiers take it from there.
+TESTLDFLAGS = $(shell cat test/unit/$(notdir $@).ldflags 2>/dev/null)
+
 $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ_REPRO) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
-	$(CC) $(ARCH32) $(LDFLAGS) -o $@ $^ -lm
+	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)

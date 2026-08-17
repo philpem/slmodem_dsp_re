@@ -123,7 +123,7 @@ public:
 	 * `&this->FIELD` resolved by the COMPILER through this header, so the
 	 * offset reaches the log by a path the static walk is not on, and the
 	 * ORDER and the PAIRING of the 295 calls are established by nothing
-	 * else in the tree.  Findings 879 (which this supersedes) and 6321.
+	 * else in the tree.  Findings 879 (which this supersedes) and 6400.
 	 */
 	V90Parameters(_tagModemParameters *mp);
 	~V90Parameters();
@@ -200,8 +200,8 @@ public:
 	float	BLL_TRN1_QC_FAST_K2;	/* +0x0e4 */
 	float	BLL_TRN1_QC_MEDIUM_K1;	/* +0x0e8 */
 	float	BLL_TRN1_QC_MEDIUM_K2;	/* +0x0ec */
-	float	BLL_TRN1_QC_SLOW_K2;	/* +0x0f0  alias BLL_TRN1_QC_SLOW_K1 */
-	int	unnamed_0f4;		/* +0x0f4  setToDefault only; the object stores 2e-12f (0x2c0cbccc) -- 878 */
+	float	BLL_TRN1_QC_SLOW_K2;	/* +0x0f0  alias BLL_TRN1_QC_SLOW_K1 -- D901 */
+	int	unnamed_0f4;		/* +0x0f4  setToDefault only; the object stores 2e-12f (0x2c0cbccc) -- 878, and D901 argues this is the real SLOW_K2 */
 	int  	BLL_TRN1D_INITIAL_TO_FAST_DURATION;	/* +0x0f8 */
 	int  	BLL_TRN1D_FAST_TO_SLOW_DURATION;	/* +0x0fc */
 	int	unnamed_100;		/* +0x100  setToDefault only */

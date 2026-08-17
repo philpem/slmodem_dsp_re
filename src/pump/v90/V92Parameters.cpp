@@ -26,6 +26,7 @@
 #include "dsplib/V92Parameters.h"
 
 #include "dsplib/modem_params.h"
+#include "dsplib/Vparser.h"
 
 void
 V92Parameters::setToDefault()
@@ -86,18 +87,87 @@ V92Parameters::setToDefault()
 	MODULATOR_QUEUE_LENGTH = 1000;
 }
 
+/*
+ * `loadParams(char *)` -- 1,384 bytes, 54 calls, 54 distinct offsets, no
+ * alias and no hole.  Same shape and same provenance as the V.90 member; see
+ * the long comment on that one in V90Parameters.cpp.  `this` arrives at
+ * `0x20(%esp)` here against `0x4(%esp)` in `setToDefault`, which is the trap
+ * finding 861 records: reading the second as the first shifts every offset
+ * down by four and yields a map that is wrong in all 54 lines and looks fine.
+ */
+void
+V92Parameters::loadParams(char *paramFile)
+{
+	Vparser_read_int(paramFile, "VPCM_SESSION_TYPE", &VPCM_SESSION_TYPE);
+	Vparser_read_int(paramFile, "V92_PHASE2_INFO_A_OR_MU", &V92_PHASE2_INFO_A_OR_MU);
+	Vparser_read_int(paramFile, "V92_PHASE2_INFO_RTD", &V92_PHASE2_INFO_RTD);
+	Vparser_read_int(paramFile, "V92_PHASE2_INFO_UINFO", &V92_PHASE2_INFO_UINFO);
+	Vparser_read_int(paramFile, "V92_PHASE2_INFO_MAX_TX_POWER", &V92_PHASE2_INFO_MAX_TX_POWER);
+	Vparser_read_int(paramFile, "V92_PHASE2_INFO_TX_POWER_MEASURE_POINT", &V92_PHASE2_INFO_TX_POWER_MEASURE_POINT);
+	Vparser_read_int(paramFile, "V92_EXTEND_EU", &V92_EXTEND_EU);
+	Vparser_read_int(paramFile, "V92_DELAY_BEFOR_STEADY_STATE", &V92_DELAY_BEFOR_STEADY_STATE);
+	Vparser_read_int(paramFile, "V92_RRN_SIMULATION_SWITCH", &V92_RRN_SIMULATION_SWITCH);
+	Vparser_read_int(paramFile, "V92_RRN_START_DELAY", &V92_RRN_START_DELAY);
+	Vparser_read_int(paramFile, "V92_SILENCE_RRN_REQUESTE", &V92_SILENCE_RRN_REQUESTE);
+	Vparser_read_int(paramFile, "V92_RRN_TRN2U_DD_LENGTH", &V92_RRN_TRN2U_DD_LENGTH);
+	Vparser_read_int(paramFile, "V92_MAX_SILENCE_LENGTH_FLAG", &V92_MAX_SILENCE_LENGTH_FLAG);
+	Vparser_read_int(paramFile, "V92_SILENCE_LENGTH", &V92_SILENCE_LENGTH);
+	Vparser_read_int(paramFile, "V92_FPE_SIMULATION_SWITCH", &V92_FPE_SIMULATION_SWITCH);
+	Vparser_read_int(paramFile, "V92_FPE_START_DELAY", &V92_FPE_START_DELAY);
+	Vparser_read_int(paramFile, "V92A_DIGITAL_RATE_MASK", &V92A_DIGITAL_RATE_MASK);
+	Vparser_read_int(paramFile, "V92A_MAX_SPECTRAL_SHAPER_LOOKAHEAD", &V92A_MAX_SPECTRAL_SHAPER_LOOKAHEAD);
+	Vparser_read_int(paramFile, "V92A_PHASE4_CONSTELLATION", &V92A_PHASE4_CONSTELLATION);
+	Vparser_read_int(paramFile, "V92A_RRN_CONSTELLATION", &V92A_RRN_CONSTELLATION);
+	Vparser_read_int(paramFile, "V92_PHASE4_CONSTELLATION", &V92_PHASE4_CONSTELLATION);
+	Vparser_read_int(paramFile, "V92_RRN_CONSTELLATION", &V92_RRN_CONSTELLATION);
+	Vparser_read_int(paramFile, "V92_NOF_FILTER_SECTIONS", &V92_NOF_FILTER_SECTIONS);
+	Vparser_read_int(paramFile, "V92_MAX_TOTAL_NOF_COEFFS", &V92_MAX_TOTAL_NOF_COEFFS);
+	Vparser_read_int(paramFile, "V92_MAX_NOF_COEFFS_IN_EACH_SECTION", &V92_MAX_NOF_COEFFS_IN_EACH_SECTION);
+	Vparser_read_int(paramFile, "V92_APPLY_TX_SHAPING_FILTER", &V92_APPLY_TX_SHAPING_FILTER);
+	Vparser_read_int(paramFile, "V92_ECHO_FILTER_LENGTH", &V92_ECHO_FILTER_LENGTH);
+	Vparser_read_int(paramFile, "V92_ECHO_INITIAL_DELAY", &V92_ECHO_INITIAL_DELAY);
+	Vparser_read_int(paramFile, "V92_ECHO_DELAY_OFFSET", &V92_ECHO_DELAY_OFFSET);
+	Vparser_read_float(paramFile, "V92_ECHO_FAST_BETA_FACTOR", &V92_ECHO_FAST_BETA_FACTOR);
+	Vparser_read_float(paramFile, "V92_ECHO_FAST_DECAY_FACTOR", &V92_ECHO_FAST_DECAY_FACTOR);
+	Vparser_read_float(paramFile, "V92_ECHO_SLOW_BETA_FACTOR", &V92_ECHO_SLOW_BETA_FACTOR);
+	Vparser_read_float(paramFile, "V92_ECHO_SLOW_DECAY_FACTOR", &V92_ECHO_SLOW_DECAY_FACTOR);
+	Vparser_read_int(paramFile, "V92_ECHO_FAST_UPDATE_DURATION", &V92_ECHO_FAST_UPDATE_DURATION);
+	Vparser_read_int(paramFile, "V92_ECHO_SLOW_UPDATE_DURATION", &V92_ECHO_SLOW_UPDATE_DURATION);
+	Vparser_read_int(paramFile, "V92_RESAMPLER_RESULOTION", &V92_RESAMPLER_RESULOTION);
+	Vparser_read_int(paramFile, "V92_LINEAR_EQU_LENGTH", &V92_LINEAR_EQU_LENGTH);
+	Vparser_read_float(paramFile, "V92_LE_PHASE_3_BETA", &V92_LE_PHASE_3_BETA);
+	Vparser_read_int(paramFile, "V92_LE_BETA_I_DURATION", &V92_LE_BETA_I_DURATION);
+	Vparser_read_float(paramFile, "V92_LE_PHASE_3_BETA_II", &V92_LE_PHASE_3_BETA_II);
+	Vparser_read_int(paramFile, "V92_DFE_LENGTH", &V92_DFE_LENGTH);
+	Vparser_read_float(paramFile, "V92_DFE_PHASE_3_BETA", &V92_DFE_PHASE_3_BETA);
+	Vparser_read_int(paramFile, "V92_DFE_TRN1U_FREEZE_DURATION", &V92_DFE_TRN1U_FREEZE_DURATION);
+	Vparser_read_int(paramFile, "ERROR_ENERGY_PRINT_PERIOD_PHASE3", &ERROR_ENERGY_PRINT_PERIOD_PHASE3);
+	Vparser_read_int(paramFile, "ERROR_ENERGY_PRINT_PERIOD_PHASE4", &ERROR_ENERGY_PRINT_PERIOD_PHASE4);
+	Vparser_read_float(paramFile, "V92_AGC_NOMINAL_ENERGY", &V92_AGC_NOMINAL_ENERGY);
+	Vparser_read_float(paramFile, "V92_AGC_K", &V92_AGC_K);
+	Vparser_read_int(paramFile, "V92_AGC_BLOCK_LEN", &V92_AGC_BLOCK_LEN);
+	Vparser_read_int(paramFile, "V92_AGC_ADAPTATION_DURATION", &V92_AGC_ADAPTATION_DURATION);
+	Vparser_read_float(paramFile, "SU_DETECTOR_ENERGY_THRESHOLD", &SU_DETECTOR_ENERGY_THRESHOLD);
+	Vparser_read_float(paramFile, "SU_DETECTOR_POSITIVE_CORR_THRESHOLD", &SU_DETECTOR_POSITIVE_CORR_THRESHOLD);
+	Vparser_read_float(paramFile, "SU_DETECTOR_NEGATIVE_CORR_THRESHOLD", &SU_DETECTOR_NEGATIVE_CORR_THRESHOLD);
+	Vparser_read_int(paramFile, "SU_DETECTOR_DETECTION_COUNTER_THRESHOLD", &SU_DETECTOR_DETECTION_COUNTER_THRESHOLD);
+	Vparser_read_int(paramFile, "MODULATOR_QUEUE_LENGTH", &MODULATOR_QUEUE_LENGTH);
+}
+
 void
 V92Parameters::init()
 {
 	setToDefault();
 
 	/*
-	 * `if (modemParams->paramFile) loadParams(modemParams->paramFile);`
-	 * in the object, as a tail call.  Not reconstructed -- finding 879,
-	 * and V90Parameters.cpp's `init()` for the same note.  The test runs
-	 * this with the pointer null and non-null and compares both against
-	 * the blob.
+	 * `mov (%ebx),%eax; mov 0x78(%eax),%eax; test %eax,%eax` at 0x15e60,
+	 * then a call to `loadParams` and `ret` -- so unlike the V.90 `init()`
+	 * there is nothing after it and this member ends here.  Finding 879 for
+	 * why the callee used to be left out, 6400 for the oracle that tested
+	 * it.  The test runs this with the pointer null and non-null.
 	 */
+	if (modemParams->paramFile)
+		loadParams(modemParams->paramFile);
 }
 
 /*

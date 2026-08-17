@@ -1,0 +1,40 @@
+[
+ {
+  "note": "The V.92 half, and the contrast with v90loadparams.json is the point: 54 calls, 54 distinct offsets, no alias and no hole, so there is no transposition-inside-an-alias case to break here.  Same five shapes otherwise, plus the call site in `init()`, which in this class is the LAST thing the member does -- the object returns straight after it, where the V.90 `init()` has `loadModemParamsData` to follow.  Both members' sets run against the same binary; suites.json says so."
+ },
+ {
+  "label": "two adjacent calls are transposed",
+  "find": "\tVparser_read_int(paramFile, \"VPCM_SESSION_TYPE\", &VPCM_SESSION_TYPE);\n\tVparser_read_int(paramFile, \"V92_PHASE2_INFO_A_OR_MU\", &V92_PHASE2_INFO_A_OR_MU);",
+  "replace": "\tVparser_read_int(paramFile, \"V92_PHASE2_INFO_A_OR_MU\", &V92_PHASE2_INFO_A_OR_MU);\n\tVparser_read_int(paramFile, \"VPCM_SESSION_TYPE\", &VPCM_SESSION_TYPE);"
+ },
+ {
+  "label": "one call is aimed at the next field along, four bytes out",
+  "find": "Vparser_read_int(paramFile, \"V92_RRN_START_DELAY\", &V92_RRN_START_DELAY);",
+  "replace": "Vparser_read_int(paramFile, \"V92_RRN_START_DELAY\", &V92_RRN_SIMULATION_SWITCH);"
+ },
+ {
+  "label": "one parameter is read as an int where the object reads a float",
+  "find": "Vparser_read_float(paramFile, \"V92_AGC_K\", &V92_AGC_K);",
+  "replace": "Vparser_read_int(paramFile, \"V92_AGC_K\", (int *)&V92_AGC_K);"
+ },
+ {
+  "label": "the last of the 54 calls is missing",
+  "find": "\tVparser_read_int(paramFile, \"MODULATOR_QUEUE_LENGTH\", &MODULATOR_QUEUE_LENGTH);\n",
+  "replace": ""
+ },
+ {
+  "label": "one parameter name is misspelt",
+  "find": "\"V92_AGC_BLOCK_LEN\", &V92_AGC_BLOCK_LEN);",
+  "replace": "\"V92_AGC_BLOCK_LENGTH\", &V92_AGC_BLOCK_LEN);"
+ },
+ {
+  "label": "init() no longer calls loadParams at all",
+  "find": "\tif (modemParams->paramFile)\n\t\tloadParams(modemParams->paramFile);\n",
+  "replace": ""
+ },
+ {
+  "label": "init() drops the guard and calls loadParams unconditionally",
+  "find": "\tif (modemParams->paramFile)\n\t\tloadParams(modemParams->paramFile);",
+  "replace": "\tloadParams(modemParams->paramFile);"
+ }
+]

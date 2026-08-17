@@ -5042,6 +5042,20 @@
     "unPackData reports a completed message on every call": "caught"
    }
   },
+  "v90loadparams": {
+   "key": "18e772bf68df60f08b14213caa0691eee7bc5af3538071dc5dd8dbbe25870dc9",
+   "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "init() drops the guard and calls loadParams unconditionally": "caught",
+    "init() no longer calls loadParams at all": "caught",
+    "one call is aimed at the next field along, four bytes out": "caught",
+    "one parameter is read as an int where the object reads a float": "caught",
+    "one parameter name is misspelt": "caught",
+    "the first of the 295 calls is missing": "caught",
+    "the last of the 295 calls is missing": "caught",
+    "two adjacent calls are transposed": "caught"
+   }
+  },
   "v90mapper": {
    "key": "ef756ace5cbc4e4d312eef2993634544f67be996e989a4e1e7b3e0c9855b37ed",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -6043,6 +6057,19 @@
     "the two lookahead bits are transposed": "caught"
    }
   },
+  "v92loadparams": {
+   "key": "1b46ca81e2bd28a7711daada99ba02923187fd33e59c9a7b768526fff5e2ac6d",
+   "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "init() drops the guard and calls loadParams unconditionally": "caught",
+    "init() no longer calls loadParams at all": "caught",
+    "one call is aimed at the next field along, four bytes out": "caught",
+    "one parameter is read as an int where the object reads a float": "caught",
+    "one parameter name is misspelt": "caught",
+    "the last of the 54 calls is missing": "caught",
+    "two adjacent calls are transposed": "caught"
+   }
+  },
   "v92mapper": {
    "key": "c33d9aebbc180e1feac228ec90abd92d74bf4fdb5bdf319fe04a02d77d73312f",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -6443,6 +6470,16 @@
     "the raw buffer's null test is dropped": "caught"
    }
   },
+  "vparser": {
+   "key": "38f5df9310975f8f585b59329ce94e108e4513338a6eebf1808f4865054d508a",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Vparser_read_float returns 1 instead of 0": "caught",
+    "Vparser_read_float writes a zero through its target": "caught",
+    "Vparser_read_int returns 1 instead of 0": "caught",
+    "Vparser_read_int writes a zero through its target": "caught"
+   }
+  },
   "vpcmcreate": {
    "key": "8d18d70ca0113bbc02dd7650afa538a376e40ac026265b734acaed5623f65ecc",
    "summary": "31 mutations: 29 caught (29 by test, 0 by strings), 1 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -6776,9 +6813,6 @@
    "verdicts": {
     "VPCMXF_Delete drops its null guard": "caught",
     "VPCMXF_Delete frees without destroying": "caught",
-    "v34BaudAllow[1] keeps the constructor's 1": "caught",
-    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
-    "v34BaudAllow[5] keeps the constructor's 1": "caught",
     "minNofTransmitSequences is left at the constructor's 0": "caught",
     "mode 1 sets the V.92 mode and not the V.90 one": "caught",
     "mode 2 sets the V.90 mode and not the V.92 one": "caught",
@@ -6797,7 +6831,10 @@
     "the object is allocated 64 bytes short": "caught",
     "the sample count is the duration, unconverted": "caught",
     "the side handed to the modem is not inverted": "caught",
-    "the three termination requests are not cleared": "equivalent"
+    "the three termination requests are not cleared": "equivalent",
+    "v34BaudAllow[1] keeps the constructor's 1": "caught",
+    "v34BaudAllow[2] is cleared where the object leaves it set": "caught",
+    "v34BaudAllow[5] keeps the constructor's 1": "caught"
    }
   },
   "vpcmxfterm": {

@@ -1,0 +1,45 @@
+[
+ {
+  "note": "The claims t_v90loadparams.cpp makes about `V90Parameters::loadParams`, each broken on purpose.  The set is chosen for the failures a 295-line GENERATED body actually has, which are not the failures a hand-written function has: a transposition, an offset off by one field, a reader swapped, a call dropped, a name misspelt.  A SET comparison would pass the first of those and a map comparison -- which is what `make params` does -- would pass all five, so this set is also the evidence that the ordered comparison is doing work the existing gates cannot.  The last two mutations are the CALL SITE in `init()` rather than the callee: because the callee writes nothing, no state comparison in this tree can see whether `init()` calls it at all, and driving `init()` through the same log is what closed that.  See v92loadparams.json for the other member and vparser.json for the two stubs."
+ },
+ {
+  "label": "two adjacent calls are transposed",
+  "find": "\tVparser_read_float(paramFile, \"BLL_TRN1_QC_FAST_K1\", &BLL_TRN1_QC_FAST_K1);\n\tVparser_read_float(paramFile, \"BLL_TRN1_QC_FAST_K2\", &BLL_TRN1_QC_FAST_K2);",
+  "replace": "\tVparser_read_float(paramFile, \"BLL_TRN1_QC_FAST_K2\", &BLL_TRN1_QC_FAST_K2);\n\tVparser_read_float(paramFile, \"BLL_TRN1_QC_FAST_K1\", &BLL_TRN1_QC_FAST_K1);"
+ },
+ {
+  "label": "one call is aimed at the next field along, four bytes out",
+  "find": "Vparser_read_int(paramFile, \"HW_CODEC_TYPE\", &HW_CODEC_TYPE);",
+  "replace": "Vparser_read_int(paramFile, \"HW_CODEC_TYPE\", &LINE_CONNECTION_TYPE);"
+ },
+ {
+  "label": "one parameter is read as an int where the object reads a float",
+  "find": "Vparser_read_float(paramFile, \"INITIAL_BAUD_OFFSET\", &INITIAL_BAUD_OFFSET);",
+  "replace": "Vparser_read_int(paramFile, \"INITIAL_BAUD_OFFSET\", (int *)&INITIAL_BAUD_OFFSET);"
+ },
+ {
+  "label": "the first of the 295 calls is missing",
+  "find": "\tVparser_read_int(paramFile, \"PROBING_MODE\", &PROBING_MODE);\n",
+  "replace": ""
+ },
+ {
+  "label": "the last of the 295 calls is missing",
+  "find": "\tVparser_read_float(paramFile, \"TEMP_FLOAT_PARAMETER4\", &TEMP_FLOAT_PARAMETER4);\n",
+  "replace": ""
+ },
+ {
+  "label": "one parameter name is misspelt",
+  "find": "\"MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP\", &MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP);",
+  "replace": "\"MAX_TX_RATE_INDEX_FOR_SENSITIV_ISP\", &MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP);"
+ },
+ {
+  "label": "init() no longer calls loadParams at all",
+  "find": "\tif (modemParams->paramFile)\n\t\tloadParams(modemParams->paramFile);\n",
+  "replace": ""
+ },
+ {
+  "label": "init() drops the guard and calls loadParams unconditionally",
+  "find": "\tif (modemParams->paramFile)\n\t\tloadParams(modemParams->paramFile);",
+  "replace": "\tloadParams(modemParams->paramFile);"
+ }
+]

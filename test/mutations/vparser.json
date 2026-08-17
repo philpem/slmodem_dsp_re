@@ -1,0 +1,25 @@
+[
+ {
+  "note": "src/core/Vparser.c is six bytes of .text, so the mutation surface is genuinely small: the only two things either function does are return zero and not write. Both are broken here in both functions. There is nothing else to mutate -- a stub has no arithmetic, no branch and no state -- which is why this set is four entries and not thirty, and why t_vparser can be complete rather than representative. The other half of the claim, that the CALL SEQUENCE in loadParams is right, is v90loadparams.json and v92loadparams.json; those two run against a binary that weakens these stubs out, so this is the only set that reaches the bodies."
+ },
+ {
+  "label": "Vparser_read_int returns 1 instead of 0",
+  "find": "Vparser_read_int(char *paramFile, const char *name, int *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t(void)value;\n\n\treturn 0;",
+  "replace": "Vparser_read_int(char *paramFile, const char *name, int *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t(void)value;\n\n\treturn 1;"
+ },
+ {
+  "label": "Vparser_read_float returns 1 instead of 0",
+  "find": "Vparser_read_float(char *paramFile, const char *name, float *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t(void)value;\n\n\treturn 0;",
+  "replace": "Vparser_read_float(char *paramFile, const char *name, float *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t(void)value;\n\n\treturn 1;"
+ },
+ {
+  "label": "Vparser_read_int writes a zero through its target",
+  "find": "Vparser_read_int(char *paramFile, const char *name, int *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t(void)value;",
+  "replace": "Vparser_read_int(char *paramFile, const char *name, int *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t*value = 0;"
+ },
+ {
+  "label": "Vparser_read_float writes a zero through its target",
+  "find": "Vparser_read_float(char *paramFile, const char *name, float *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t(void)value;",
+  "replace": "Vparser_read_float(char *paramFile, const char *name, float *value)\n{\n\t(void)paramFile;\n\t(void)name;\n\t*value = 0.0f;"
+ }
+]

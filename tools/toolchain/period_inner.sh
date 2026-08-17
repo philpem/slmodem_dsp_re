@@ -116,10 +116,18 @@ for t in $TESTS; do
 	# arise.  It costs a writable text section in a test binary, which is
 	# nothing.  The alternative -- a hand-written linker script with a
 	# PHDRS block -- buys the same result and one more thing to maintain.
+	# Per-binary link flags, from the SAME file the Makefile's TESTLDFLAGS
+	# reads -- one test needs `--wrap` on a cross-TU call, and two link
+	# lines that can disagree about that is a defect waiting to happen.
+	# A binary with no such file gets an empty string and links as before.
+	EXTRA_LD=""
+	[ -f "test/unit/$t.ldflags" ] && EXTRA_LD=$(cat "test/unit/$t.ldflags")
+
 	if [ -n "$KEEP" ] && [ -x "$OUT/$t" ] && [ "$OUT/$t" -nt "$(obj "$src")" ] \
 	   && { [ -z "$NEWEST_IN" ] || [ "$OUT/$t" -nt "$NEWEST_IN" ]; }; then
 		:					# inputs unmoved; keep the binary
-	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $OBJS "$REF" -lm \
+	elif ! gcc -static -Wl,-N -o "$OUT/$t" "$(obj "$src")" $OBJS "$REF" \
+	     $EXTRA_LD -lm \
 	     > "$OUT/$t.link.log" 2>&1; then
 		echo "  LINK-FAIL    $t"; sed -n '1,3p' "$OUT/$t.link.log"
 		fail=$((fail + 1)); failed="$failed $t"; continue

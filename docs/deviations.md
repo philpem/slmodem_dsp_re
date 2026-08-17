@@ -6825,3 +6825,84 @@ The object pushes a literal 1 as a second argument to `V22_PPS_free`,
 tree reconstructed all four from their own bodies, where the second parameter
 is dead, and one of the four headers belongs to another effort.  The same
 shape as D363, at four sites instead of one.
+
+## D900 ⚠ The shipped library ignores `_tagModemParameters::paramFile` entirely
+
+*Batch of 2026-08-17, from `Vparser_read_int` (blob 0x0b0990),
+`Vparser_read_float` (0x0b09a0), `V90Parameters::loadParams` (0x027a00) and
+`V92Parameters::loadParams` (0x0158e0).  **Reachability: every construction of
+either parameter block with a non-null `paramFile`.**  **Observability: none
+-- the two stubs write nothing, so both arms of the guard leave the object
+identical, which `t_v90params` and `t_v90loadparams` measure on both sides.**
+Status: verified bit-exact; reproduced as written.*
+
+`_tagModemParameters` carries a `char *paramFile` at +0x78, both parameter
+blocks' `init()` test it and call `loadParams` when it is set, and
+`loadParams` then makes 295 (V.90) or 54 (V.92) calls naming every overridable
+parameter in the class. **All 349 of them go to a three-byte stub.** Both
+`Vparser_read_int` and `Vparser_read_float` are `xor %eax,%eax; ret`, and an
+`awk` over `objdump -dr` of the whole of `.text` shows those two `loadParams`
+members are their only callers anywhere.
+
+So the released library accepts a parameter-file pointer, walks the entire
+parameter list against it, and applies nothing. Whatever read the file was
+removed before this object was linked -- the call sites, the names and the
+target addresses all survived, which is why the field map is recoverable at
+all (finding 860).
+
+Not proposed as a fix and not fixable from the object: what the parser did
+with the file is not in the object in any form, so writing one would be
+invention with no oracle. Recorded because a reader who finds `paramFile` in
+`modem_params.h` will otherwise assume it does something.
+
+## D901 🐛 `loadParams` reads `BLL_TRN1_QC_SLOW_K2` into `SLOW_K1`, and +0x0f4 is the field it should have used
+
+*Batch of 2026-08-17, from `V90Parameters::loadParams` (blob 0x027a00), calls
+53 and 54 of 295.  **Reachability: any parameter file naming either
+coefficient -- so, given D900, never in this build.**  **Observability: none
+in this object, for D900's reason; in a build with a real parser it is a wrong
+coefficient in the timing recovery's slow arm.**  Status: verified bit-exact;
+reproduced exactly as the object has it, both calls to the same address.*
+
+Finding 861 records four offsets that `loadParams` reads twice under two
+names, and reads three of them as what they plainly are: a `GERMAN_PBX_`
+override written after the name it overrides. **The fourth is not that shape
+and is a defect in the original.**
+
+```
+    +0x0d8  BLL_TRN1_QC_INITIAL_K1        +0x0dc  BLL_TRN1_QC_INITIAL_K2
+    +0x0e0  BLL_TRN1_QC_FAST_K1  5e-4     +0x0e4  BLL_TRN1_QC_FAST_K2  7e-12
+    +0x0e8  BLL_TRN1_QC_MEDIUM_K1 3e-4    +0x0ec  BLL_TRN1_QC_MEDIUM_K2 5e-12
+    +0x0f0  BLL_TRN1_QC_SLOW_K1  1e-4     +0x0f4  unnamed_0f4          2e-12
+                    ^ read TWICE, as _K1 and then as _K2
+```
+
+Four things converge and nothing dissents:
+
+- three complete `K1`/`K2` pairs precede it and the fourth pair's `K2` slot is
+  the only `unnamed_*` field anywhere in that run;
+- `setToDefault` writes +0x0f4 with **2e-12f**, continuing the `K2` series
+  7e-12, 5e-12, 2e-12, while the `K1` series runs 5e-4, 3e-4, 1e-4;
+- +0x0f4 is one of the nine `unnamed_*` slots finding 878 measured as a FLOAT
+  declared `int` -- so it is a coefficient, not a count or a duration;
+- +0x0f0 being read twice is otherwise unexplained, where the other three
+  aliases explain themselves.
+
+So the author wrote `Vparser_read_float(file, "BLL_TRN1_QC_SLOW_K2",
+&BLL_TRN1_QC_SLOW_K1)` -- the name advanced and the address did not. The
+consequences in a build with a real parser are that `BLL_TRN1_QC_SLOW_K2` in a
+parameter file lands on `SLOW_K1`, silently discarding the value the file gave
+`SLOW_K1` on the line before, and that the real slow `K2` at +0x0f4 cannot be
+overridden at all.
+
+**The field is NOT renamed and the alias is NOT unwound.** Both would be a
+rule-3 usage inference sitting among 291 rule-1 measurements, which is exactly
+what `V90Parameters.h`'s own header comment declines for the other fifty
+`unnamed_*` slots, and the header's layout is frozen for the whole tree. The
+reconstruction emits both calls against +0x0f0 because that is what the object
+does; `t_v90loadparams` compares the two logs entry for entry and would fail
+if it did not. What would settle the name outright is a reader of +0x0f4 --
+`V90Jd` or whatever consumes the TRN1 quality-control betas -- naming it in a
+diagnostic. That is CLAUDE.md's evidence rule 1, a format string that prints
+the thing, and it is how other `unnamed_*` slots in this class have been
+retired; nothing weaker should retire this one.
