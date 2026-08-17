@@ -30,6 +30,7 @@
  *     +0x114,+0x119,+0x11a,   `resetDetector` (0x4e830), whose whole body is
  *     +0x11c,+0x120           these five stores
  *     +0x118,+0x128           `infoToBits`
+ *     +0x124                  `evaluateInfo` (0x4f400), the READ cursor
  *     +0x129                  `getBitVector` (0x4ebe0) returns `this+0x129`
  *     +0x8f9                  `resetCRC` (0x4e5d0) writes 1 to sixteen bytes
  *                             from here
@@ -37,10 +38,15 @@
  *                             between them; see `msgLen` and `vectorLen`
  *     +0x914                  `reset` (0x4e860) and the constructor set -1
  *
- * EIGHT OF THE TWELVE ARE NOW WRITTEN.  `getBitVector`, `setSUV`, `resetCRC`,
- * `resetDetector`, `reset`, `calcCRC`, `evaluateCRC` and `infoToBits` are in
- * src/pump/v90/V92CP.cpp with the constructor and destructor; `evaluateInfo`
- * and `bitsToInfo` are the two still declared and undefined.
+ * ALL TWELVE ARE NOW WRITTEN.  `evaluateInfo` and `bitsToInfo` were the last
+ * two and they landed together, because `bitsToInfo` calls `evaluateInfo` at
+ * four sites and nothing else in the object calls either.  They are the
+ * RECEIVE half: `bitsToInfo` takes one bit at a time, lays it into `bits` and
+ * runs the eleven-state detector, and `evaluateInfo` is the per-state decoder
+ * that turns a completed block of `bits` back into the message fields.  It is
+ * `infoToBits` run backwards, field for field, and reading the two against
+ * each other is what settled +0x124 and the state numbering.  Findings
+ * 6410-6417.
  *
  * The destructor is one byte -- a bare `ret`.  That is not an assumption
  * about an empty class: nothing here is allocated, and the V.90 sibling with
@@ -124,7 +130,16 @@ public:
 	int evaluateCRC();
 	void evaluateInfo();
 	void infoToBits();
-	void bitsToInfo(unsigned char);
+
+	/*
+	 * `int`, and for the same reason `evaluateCRC` is: every path through
+	 * the object arranges %eax before returning -- `mov %edi,%eax` at all
+	 * three `ret`s, with %edi zeroed on entry and set to 1..5 on five
+	 * paths -- which is a value constructed for the caller and not a
+	 * leftover.  See the source for what the five mean, and for why they
+	 * are not named.
+	 */
+	int bitsToInfo(unsigned char);
 	void setSUV(unsigned int);
 
 	/* Public for the same reason as V90Jd's and V90CP's: it keeps the
@@ -143,8 +158,15 @@ public:
 	 * `VPcmFloModem+0x254c` whose author-printed names are tempting and
 	 * are NOT carried across: the correspondence would be adjacency and
 	 * not evidence, and CLAUDE.md's "a wrong name is worse than a pad"
-	 * covers exactly that.  `bitsToInfo` and `evaluateInfo` are the two
-	 * unwritten members that read this block; either may settle it.
+	 * covers exactly that.
+	 *
+	 * `bitsToInfo` and `evaluateInfo` were named here as the two unwritten
+	 * members that might settle it.  THEY ARE NOW WRITTEN AND THEY DO NOT.
+	 * `evaluateInfo` is the exact inverse of `infoToBits` -- every field
+	 * comes back out of the same bit positions it went in at -- so the
+	 * pair proves the LAYOUT twice over and says nothing more about what
+	 * any field means than the packer already did.  Finding 6412; the two
+	 * fields that DID gain something are +0x114 and +0x124 below.
 	 * ===================================================================
 	 */
 
@@ -291,17 +313,51 @@ public:
 	 */
 	unsigned int word_110;
 
-	/* +0x114  Zeroed by `resetDetector`, and so by `reset` and the ctor. */
+	/*
+	 * +0x114  THE STATE, and both members that use it agree on it.
+	 * `bitsToInfo` dispatches on it with `cmp $0xa; ja` over an
+	 * eleven-entry table, so the receive states are 0..10 and every other
+	 * value does nothing; `evaluateInfo` dispatches with `sub $0x3;
+	 * cmp $0x5; ja` over a six-entry table whose second slot is the bare
+	 * `ret`, so it decodes 3, 5, 6, 7 and 8 and 4 is a HOLE in the case
+	 * list rather than an arm that does nothing.  That is the same shape
+	 * V90CP's `word_ca4` has, read the same way, and the two machines line
+	 * up: `bitsToInfo`'s state N fills a block of `bits` and then calls
+	 * `evaluateInfo`, which is still in state N when it decodes it.
+	 *
+	 * UNSIGNED is forced by both dispatches: the range checks are `ja`.
+	 * Zeroed by `resetDetector`, and so by `reset` and the constructor,
+	 * which is state 0 -- waiting for the seventeen-one preamble.
+	 */
 	unsigned int word_114;
 
 	/* +0x118  `infoToBits` copies `char_01` here whole, and nothing
 	 * written reads it. */
 	unsigned char byte_118;
 
-	/* +0x119  Cleared by `resetDetector`.  One byte, stored as a byte. */
+	/*
+	 * +0x119  THE RUN OF ONES.  `bitsToInfo` raises it by one on every
+	 * `1` and clears it on every `0`, as an eight-bit `inc %al` that wraps
+	 * at 255, and state 0 leaves for state 1 once it passes sixteen --
+	 * which is the seventeen-one preamble `infoToBits` opens with.
+	 * Cleared by `resetDetector`.
+	 */
 	unsigned char byte_119;
 
-	/* +0x11a  Cleared by `resetDetector` alongside +0x119. */
+	/*
+	 * +0x11a  THE RUN OF ZEROS, the other half of the same pair: raised on
+	 * every `0` and cleared on every `1`.  `12 * bitsPerSymbol` of them
+	 * arriving while `word_11c` is still at its home 18 is `bitsToInfo`'s
+	 * answer 5, and that answer does NOT stop the state machine, which
+	 * runs on afterwards and can overwrite it.
+	 *
+	 * IT IS READ BACK OUT OF THE OBJECT rather than out of a register --
+	 * the object stores 0 and reloads it four instructions later -- which
+	 * matters when `bitsPerSymbol` is zero, because the quantum is then
+	 * zero and the test is true on a ONE bit as well.  Reproduced, and it
+	 * is the same shape V90CP's `byte_caa` has.  Cleared by
+	 * `resetDetector`.
+	 */
 	unsigned char byte_11a;
 
 	unsigned char pad_11b[1];	/* +0x11b alignment               */
@@ -312,17 +368,50 @@ public:
 	 * out, then advanced by seventeen for every group after that, and
 	 * finally left one past the message's closing marker.  Eighteen is
 	 * the first payload index, so the detector's seed and the packer's
-	 * cursor are the same quantity counted from the same place -- but
-	 * `bitsToInfo` and `evaluateInfo` are the members that would settle
-	 * whether the receive side means the same thing by it, and neither is
-	 * written.  Kept neutral for that reason.
+	 * cursor are the same quantity counted from the same place.
+	 *
+	 * AND THE RECEIVE SIDE DOES MEAN THE SAME THING BY IT.  This used to
+	 * say that `bitsToInfo` and `evaluateInfo` would settle that and were
+	 * not written.  They are, and they do: `bitsToInfo` stores each
+	 * arriving bit at `bits[word_11c]` and advances it by one, from the
+	 * same 18 `resetDetector` seeds, and stops each block at the same
+	 * absolute index `infoToBits` writes it at -- 34 for the header, 136
+	 * for the fixed part.  Kept neutral all the same, because what it
+	 * counts is still an index into `bits` and nothing names it.
 	 */
 	int word_11c;
 
-	/* +0x120  Zeroed by `resetDetector`. */
+	/*
+	 * +0x120  THE BITS TAKEN SO FAR IN THIS STATE, and it is a different
+	 * quantity from `word_11c`: `bitsToInfo` clears it at every state
+	 * change and compares it against the length of the block the state is
+	 * collecting -- 17 for the CRC, `gamma` and `delta` for the two
+	 * variable-length mask blocks.  Zeroed by `resetDetector`.
+	 */
 	int word_120;
 
-	unsigned char pad_124[4];	/* +0x124 not modelled            */
+	/*
+	 * +0x124  THE READ CURSOR, and the counterpart of `word_11c`.
+	 * `evaluateInfo` is the only member that touches it: every arm walks
+	 * it forward through `bits` -- `movzbl 0x129(%eax,%edi,1)` with %eax
+	 * loaded from here and the incremented value stored straight back --
+	 * and leaves it on the block boundary the next arm starts from.  The
+	 * arms that are not the first also SET it outright: state 6 stores 52,
+	 * which is the first magnitude bit `infoToBits` writes.
+	 *
+	 * FOUR BYTES is forced by the `incl` and by the 32-bit loads; the
+	 * SIGNEDNESS is not, because every use is either an index into `bits`
+	 * or an increment and neither reading differs over any value it holds.
+	 * Spelled `int` to match `word_11c` and `word_120`, the two cursors
+	 * beside it, and not because anything measures it.
+	 *
+	 * It is NOT reset by `resetDetector`, where `word_11c` and `word_120`
+	 * both are, so a detector restart leaves it where the last decode left
+	 * it.  Every arm that reads a variable-length block sets it first, so
+	 * nothing written depends on that -- but it is the object's own
+	 * asymmetry and it is reproduced.  Was `pad_124`; finding 6411.
+	 */
+	int word_124;
 
 	/*
 	 * +0x128  HOW MANY BITS GO INTO ONE SYMBOL, and the name is the
@@ -391,7 +480,27 @@ public:
 	 */
 	unsigned int msgLen;
 
-	/* +0x914  Set to -1 by `reset` and by the constructor. */
+	/*
+	 * +0x914  A HOLD-OFF COUNTER over `bitsToInfo`'s answer, and -1 is its
+	 * idle value -- which is why `reset` and the constructor set it there
+	 * rather than to zero.  The epilogue of `bitsToInfo` is, in full:
+	 *
+	 *     if (word_914 >= 0) {
+	 *             if (rc == 3 || rc == 4)   rc = 0;
+	 *             if (++word_914 == 400)    word_914 = -1;
+	 *     } else if (rc == 1 || rc == 2) {
+	 *             word_914 = 0;
+	 *     }
+	 *
+	 * so answers 1 and 2 start it, and while it runs -- 400 calls, one per
+	 * bit -- answers 3 and 4 are suppressed and 5 is not.  The 400 is an
+	 * immediate, `cmp $0x190`, and nothing in the object says what it
+	 * counts; the four answers are unnamed for the reason `bitsToInfo`
+	 * gives.  THE FIELD KEEPS ITS OFFSET NAME for that reason -- the
+	 * derivation above is usage inference, CLAUDE.md's weakest tier, and a
+	 * name like `holdoff` would be believed by every future reader on the
+	 * strength of one block of arithmetic.  Finding 6416.
+	 */
 	int word_914;
 };
 

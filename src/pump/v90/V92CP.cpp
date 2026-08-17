@@ -21,6 +21,7 @@
 #include <math.h>
 #include <stddef.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/V92CP.h"
 
 /* Hold the compiler to the map in the header; see V90CP.cpp for why.  This
@@ -57,6 +58,7 @@ V92CP_OFF(byte_119,	0x119, byte119);
 V92CP_OFF(byte_11a,	0x11a, byte11a);
 V92CP_OFF(word_11c,	0x11c, word11c);
 V92CP_OFF(word_120,	0x120, word120);
+V92CP_OFF(word_124,	0x124, word124);
 V92CP_OFF(bitsPerSymbol,	0x128, byte128);
 V92CP_OFF(bits,		0x129, bits);
 V92CP_OFF(crc,		0x8f9, crc);
@@ -665,4 +667,627 @@ V92CP::infoToBits()
 
 	if (e != 0)
 		word_110 = 1;
+}
+
+/*
+ * ===========================================================================
+ * binaryTable (.data+0x6a40, 64 bytes)
+ *
+ * THE RULE IS `binaryTable[i] == 1 << i`, i = 0..15, and it reproduces the
+ * blob's sixteen words byte for byte:
+ *
+ *     6a40  01000000 02000000 04000000 08000000
+ *     6a50  10000000 20000000 40000000 80000000
+ *     6a60  00010000 00020000 00040000 00080000
+ *     6a70  00100000 00200000 00400000 00800000
+ *
+ * -- little-endian 1, 2, 4, ... 0x8000, with no gap and no repeat, which is
+ * what separates it from `fltTable_2` two symbols along, whose missing 2^-8
+ * is why THAT one is transcribed and not generated.  There are no relocations
+ * anywhere in the range, so these are the integers they look like and not a
+ * pointer table that objdump has flattened.
+ *
+ * FIVE RELOCATIONS REFERENCE IT IN THE WHOLE OBJECT and all five are inside
+ * `V92CP::evaluateInfo`, which is why it lives here.  It also sits
+ * immediately after `fltTable_1`, the last `.data` symbol this file already
+ * defines, and `.data` follows link order exactly as `.text` does.
+ *
+ * Not `const`: a namespace-scope `const` array has internal linkage in C++
+ * and this is a GLOBAL `D` symbol, the same argument the two float tables
+ * carry.  `int` rather than `unsigned` is NOT forced -- every use is one
+ * operand of a 32-bit `imul` against a byte, where the two readings agree
+ * over the whole range the table holds.
+ * ===========================================================================
+ */
+int binaryTable[16] = {
+	1 <<  0,	1 <<  1,	1 <<  2,	1 <<  3,
+	1 <<  4,	1 <<  5,	1 <<  6,	1 <<  7,
+	1 <<  8,	1 <<  9,	1 << 10,	1 << 11,
+	1 << 12,	1 << 13,	1 << 14,	1 << 15
+};
+
+/*
+ * ===========================================================================
+ * V92CP::evaluateInfo (.text+0x4f400, 1,124 bytes)
+ *
+ * The receive half's decoder, and the exact inverse of `infoToBits`: one
+ * switch over `word_114` and nothing else, with each arm lifting ONE BLOCK of
+ * the message back out of `bits` into the fields at +0x000..+0x10c.  The
+ * dispatch is `sub $0x3; cmp $0x5; ja` over a six-entry table at
+ * .rodata+0xe0c whose entries are 0x4f420, 0x4f45f, 0x4f508, 0x4f56d,
+ * 0x4f7cc and 0x4f467.  The second is the function's own `ret`, so state 4 is
+ * a HOLE in the case list and not an arm that does nothing -- the same
+ * reading V90CP::evaluateInfo's nine-entry table gets, and for the same
+ * reason.
+ *
+ * EVERY BIT INDEX BELOW WAS READ OUT OF THIS FUNCTION AND THEN CHECKED
+ * AGAINST `infoToBits` ABOVE, which is the strongest cross-check available
+ * short of the differential test: the two were reconstructed from different
+ * addresses at different times and they agree on all of
+ *
+ *     bits[27..31] word_104   bits[32] suv        bits[33] byte_04
+ *     bits[19,20]  char_01    bits[21..25] char_02
+ *     bits[31,32]  word_08    bits[35] byte_03    bits[49,50] word_0c
+ *     bits[52..67] flt_10     bits[69..76] flt_14 bits[77..84] flt_18
+ *     bits[86..93] flt_1c     bits[94..101] flt_20
+ *     bits[103..118] word_28[0..3]              bits[120..127] word_28[4..5]
+ *     bits[128] byte_24
+ *
+ * ONE FIELD DOES NOT ROUND TRIP, and it is the mask blocks.  `infoToBits`
+ * writes each sixteen-bit mask word LEAST significant bit first (`*p++ =
+ * s & 1; s >>= 1`); this function reads it back MOST significant first
+ * (`binaryTable[15 - i]` with i ascending).  Every other field agrees.
+ * docs/deviations.md D580.
+ *
+ * THE WEIGHTS ARE A TABLE, NOT A SHIFT.  Where V90CP::evaluateInfo
+ * accumulates `(acc << 1) | (bits[q] & 1)` walking DOWNWARDS, this one
+ * accumulates `bits[p] * binaryTable[w]` walking UPWARDS.  That is the
+ * object's own difference between the two classes -- `imul 0x0(,%ecx,4)`
+ * against `binaryTable` at five sites here and not one anywhere in V90CP --
+ * and it is not carried across by analogy in either direction.
+ *
+ * WHERE THE ACCUMULATOR LIVES IS ALSO THE OBJECT'S, and it differs between
+ * arms in a way that is observable rather than cosmetic.  `word_28` is
+ * accumulated IN PLACE -- `mov 0x28(%edi,%esi,4),%eax; add %eax,%edx; mov
+ * %edx,0x28(...)`, a reload every iteration -- while the two mask arms hold
+ * the sum in a register and store once at the end, over a destination that
+ * has already been zeroed.  The difference only shows when the destination
+ * aliases something the loop reads, or the loop bound, and `word_10c` is
+ * unbounded (D570), so it can: `short_42[12][5]` IS `word_10c`, and
+ * `short_42[22][0]` is inside `bits`.  Reproduced as read.
+ *
+ * `word_124` IS THE READ CURSOR and this is its only user; see V92CP.h.
+ * ===========================================================================
+ */
+void
+V92CP::evaluateInfo()
+{
+	int i;
+	unsigned int j, k, n;
+
+	switch (word_114) {
+	case 3:
+		/*
+		 * The short form.  Five bits of `word_104`, then the two whole
+		 * bytes, and the cursor is not moved: every index here is an
+		 * absolute displacement in the object.
+		 */
+		word_104 = 0;
+		for (i = 0; i <= 4; i++)
+			word_104 += bits[27 + i] * binaryTable[i];
+
+		suv = bits[32];
+		byte_04 = bits[33];
+		break;
+
+	case 5:
+		/*
+		 * The header.  `char_01` is two bits and `char_02` five, and
+		 * `word_08` is present only for the long form -- the object's
+		 * `dec %bl; jg` is a SIGNED test of `char_01`, which is what
+		 * makes that field a `signed char` here and in `infoToBits`.
+		 */
+		char_01 = (signed char)((bits[19] & 1) | (bits[20] << 1));
+		byte_118 = (unsigned char)char_01;
+
+		char_02 = 0;
+		for (i = 25; i > 20; i--)
+			char_02 = (signed char)((char_02 << 1) |
+						(bits[i] & 1));
+
+		if (char_01 <= 1)
+			word_08 = (bits[31] & 1) | (bits[32] << 1);
+
+		byte_04 = bits[33];
+		break;
+
+	case 6: {
+		/*
+		 * The fixed part of the long form: two small fields, the five
+		 * floats, the six four-bit counts, and the group count that
+		 * sizes everything after it.  This is the only arm that seeds
+		 * the cursor -- `mov $0x34,%ecx; mov %ecx,0x124(%edi)` -- and
+		 * 52 is exactly where `infoToBits` puts the first magnitude
+		 * bit.
+		 */
+		int m;
+		int max;
+		float f;
+
+		byte_03 = bits[35];
+		word_0c = (bits[49] & 1) | (bits[50] << 1);
+
+		word_124 = 52;
+
+		/*
+		 * `flt_10` alone: sixteen magnitude entries and no sign, the
+		 * heaviest weight at the HIGHEST index, so reading forwards
+		 * takes the table backwards.
+		 */
+		f = 0.0f;
+		for (i = 0; i <= 15; i++) {
+			if (bits[word_124] != 0)
+				f += fltTable_2[15 - i];
+			word_124++;
+		}
+		flt_10 = f;
+
+		word_124++;		/* the framing position at 68 */
+
+		/*
+		 * THE FOUR SIGNED MAGNITUDES ARE TWO LOOPS OF TWO, and the
+		 * object says so: it stores through `0x14(%edi,%esi,4)` and
+		 * `0x1c(%edi,%esi,4)` with %esi running 0 then 1, which is a
+		 * variable index and therefore an array in the source.  The
+		 * header keeps four scalars all the same -- turning them into
+		 * `flt_14[2]` and `flt_1c[2]` would rename fifty sites across
+		 * two RECORDED mutation snapshots, and no tier here can tell
+		 * the two spellings apart.  The `if (m == 0)` is the cost of
+		 * that and is the one place in this function written for the
+		 * header rather than from the object.
+		 *
+		 * The sign entry follows the seven magnitude entries, and the
+		 * object applies it as `xor $0x80000000` on the bit pattern --
+		 * GCC 3.4.2's x87 spelling of `-f`, and not a separate
+		 * operation.  It flips the sign of a zero too, so a magnitude
+		 * of zero with the sign entry set decodes to -0.0f.
+		 */
+		for (m = 0; m <= 1; m++) {
+			f = 0.0f;
+			for (i = 0; i <= 6; i++) {
+				if (bits[word_124] != 0)
+					f += fltTable_1[6 - i];
+				word_124++;
+			}
+			if (bits[word_124] != 0)
+				f = -f;
+			word_124++;
+
+			if (m == 0)
+				flt_14 = f;
+			else
+				flt_18 = f;
+		}
+
+		word_124++;		/* the framing position at 85 */
+
+		for (m = 0; m <= 1; m++) {
+			f = 0.0f;
+			for (i = 0; i <= 6; i++) {
+				if (bits[word_124] != 0)
+					f += fltTable_1[6 - i];
+				word_124++;
+			}
+			if (bits[word_124] != 0)
+				f = -f;
+			word_124++;
+
+			if (m == 0)
+				flt_1c = f;
+			else
+				flt_20 = f;
+		}
+
+		word_124++;		/* the framing position at 102 */
+
+		/*
+		 * The six four-bit counts, in two runs because the framing
+		 * position at 119 falls between them, and `word_10c` is the
+		 * LARGEST of the six plus one.  The maximum starts at zero and
+		 * the comparison is signed (`cmp %ebp,%edx; jle`), so a block
+		 * of all-zero counts still asks for one group.
+		 */
+		max = 0;
+
+		for (k = 0; k <= 3; k++) {
+			word_28[k] = 0;
+			for (i = 0; i <= 3; i++) {
+				word_28[k] += bits[word_124] * binaryTable[i];
+				word_124++;
+			}
+			if (word_28[k] > max)
+				max = word_28[k];
+		}
+
+		word_124++;		/* the framing position at 119 */
+
+		for (k = 4; k <= 5; k++) {
+			word_28[k] = 0;
+			for (i = 0; i <= 3; i++) {
+				word_28[k] += bits[word_124] * binaryTable[i];
+				word_124++;
+			}
+			if (word_28[k] > max)
+				max = word_28[k];
+		}
+
+		word_10c = (unsigned short)(max + 1);
+
+		byte_24 = bits[word_124];
+		word_124++;
+
+		/*
+		 * And then seven positions are skipped, which lands the cursor
+		 * on 136 -- `word_11c`'s value at the same point in
+		 * `infoToBits`, and 8 * 17, the start of a group.
+		 *
+		 * THE OBJECT SPELLS THIS AS A LOOP WITH NOTHING LEFT IN IT:
+		 * `mov $0x6,%eax; dec %eax; jns .-2` beside a `lea 0x7(%edx)`
+		 * that does all the work.  That is what a seven-iteration
+		 * source loop looks like once GCC 3.4.2 has strength-reduced
+		 * the induction variable and declined to delete the empty
+		 * shell.  Written as the addition, because the empty loop is
+		 * unobservable and an empty loop in the source would read as a
+		 * defect.  docs/deviations.md D581.
+		 */
+		word_124 += 7;
+		break;
+	}
+
+	case 7: {
+		/*
+		 * The first mask block: `word_10c` groups of eight sixteen-bit
+		 * words, each word its own seventeen-position frame -- one
+		 * framing position and then the sixteen bits.
+		 *
+		 * THE BOUND IS TAKEN ONCE.  The object loads `word_10c` before
+		 * the loop and keeps it in a stack slot, so a store into
+		 * `short_42[12][5]` -- which IS `word_10c`, the two being 0xca
+		 * apart -- does not change the number of groups.
+		 * `infoToBits` reads it into a local the same way.
+		 */
+		n = word_10c;
+
+		for (k = 0; k < n; k++) {
+			for (j = 0; j <= 7; j++) {
+				int acc = 0;
+
+				word_124++;
+				short_42[k][j] = 0;
+
+				for (i = 0; i <= 15; i++) {
+					acc += bits[word_124] *
+					       binaryTable[15 - i];
+					word_124++;
+				}
+
+				short_42[k][j] = (short)acc;
+			}
+		}
+		break;
+	}
+
+	case 8: {
+		/* The second mask block, sent only when `byte_24` is set. */
+		n = word_10c;
+
+		for (k = 0; k < n; k++) {
+			for (j = 0; j <= 7; j++) {
+				int acc = 0;
+
+				word_124++;
+				short_a2[k][j] = 0;
+
+				for (i = 0; i <= 15; i++) {
+					acc += bits[word_124] *
+					       binaryTable[15 - i];
+					word_124++;
+				}
+
+				short_a2[k][j] = (short)acc;
+			}
+		}
+		break;
+	}
+
+	default:
+		break;
+	}
+}
+
+/*
+ * The author's own words, from .rodata.str1.4+0xd534, reproduced byte for
+ * byte -- "recieved" included.  One referrer, the bad-CRC arm below, and it
+ * is the only string in either of the two members reconstructed here.  It is
+ * also the strongest evidence in this file for what state 9 is: the object
+ * says in plain text that what has just been checked is a received CP
+ * message's CRC.
+ */
+#define V92CP_BADCRC	"V92CP: recieved CP with bad CRC\r\n"
+
+/*
+ * ===========================================================================
+ * V92CP::bitsToInfo (.text+0x4f870, 1,957 bytes)
+ *
+ * One bit in, one answer out: the detector and the state machine that drive
+ * `evaluateInfo`.  Eleven states, dispatched `cmp $0xa; ja` over a table at
+ * .rodata+0xe24, and every state that fills a block of `bits` calls
+ * `evaluateInfo` to decode it -- four call sites, and the only four
+ * relocations against that symbol in the object.
+ *
+ * THE RETURN TYPE IS `int` AND THE VALUE IS CONSTRUCTED.  All three `ret`s
+ * are reached through `mov %edi,%eax`, %edi is zeroed on entry and assigned
+ * on five paths, and the epilogue then MASKS it -- which is not worth doing
+ * to a leftover.  Same argument as `evaluateCRC`, and as
+ * `V90CP::bitsToInfo`, about which the opposite mistake was once made.
+ *
+ * WHAT THE FIVE ANSWERS MEAN IS NOT ESTABLISHED and they are left as numbers.
+ * 5 is "the far end has stopped" -- a run of `12 * bitsPerSymbol` zeros
+ * arriving while the cursor is still at its home 18 -- and it does NOT stop
+ * the state machine below, which runs on and can overwrite it.  1..4 are the
+ * four combinations of the two bits that survive the whole message,
+ * `byte_00`, which picks the short form, and `byte_04`:
+ *
+ *      byte_00 != 1, byte_04 == 0 -> 1     byte_00 != 1, byte_04 != 0 -> 2
+ *      byte_00 == 1, byte_04 == 0 -> 3     byte_00 == 1, byte_04 != 0 -> 4
+ *
+ * -- which is the shape `V90CP::bitsToInfo` has and which finding 4360
+ * declined to name there.  Declined here for the same reason: nothing in the
+ * object, the one string it carries included, names any of them.
+ *
+ * THE TWO STATICS ARE FUNCTION-LOCAL AND IN .bss, mangled
+ * `_ZZN5V92CP10bitsToInfoEhE5gamma` at +0x0 and `...E5delta` at +0x4, so
+ * their C++ names are the author's and their DECLARATION ORDER is fixed by
+ * their addresses -- gamma first.  Each holds the bit length of one mask
+ * block, computed once `evaluateInfo` has decoded the group count and
+ * compared against `word_120` while the block arrives:
+ *
+ *      gamma = 136 * word_10c     set entering state 7, tested in state 7
+ *      delta = 136 * word_10c     set entering state 8, tested in state 8
+ *
+ * 136 is 8 * 17 -- eight mask words to the group, seventeen positions to the
+ * word -- and the object spells it `shl $4; add; shl $3`.  The two are taken
+ * from the same field at different moments, so they differ only if something
+ * moved `word_10c` in between; `evaluateInfo` case 7 does not, and case 8 has
+ * not run yet.  Their signedness is not established -- every use is an
+ * equality compare -- and they are spelled to match V90CP's `alpha` and
+ * `beta`, which is a convention and not a measurement.
+ *
+ * `resetDetector`, `resetCRC`, `calcCRC` and `evaluateCRC` are all INLINED by
+ * the object -- five, one, one and one site, and no relocation against any of
+ * them anywhere in the range -- which is finding 4600's shape, and is what
+ * makes the CRC arm four hundred bytes of shift register in the middle of a
+ * state machine.  Called here; GCC 3.4.2 at -O3 folds them back in.
+ * ===========================================================================
+ */
+int
+V92CP::bitsToInfo(unsigned char bit)
+{
+	/*
+	 * Declared in this order because that is the order they occupy in
+	 * .bss -- gamma at +0x0, delta at +0x4.
+	 */
+	static unsigned int gamma;
+	static unsigned int delta;
+
+	unsigned int quantum;
+	int rc = 0;
+
+	/*
+	 * THE RUN COUNTERS COME FIRST and are independent of the state: every
+	 * bit lengthens one run and clears the other.  `byte_11a` is read
+	 * back out of the object rather than out of a register -- the object
+	 * stores 0 and reloads it four instructions later -- which matters
+	 * when `bitsPerSymbol` is zero, because the quantum is then zero and
+	 * the test is true on a ONE bit as well.
+	 */
+	if (bit != 0) {
+		byte_119++;
+		byte_11a = 0;
+	} else {
+		byte_119 = 0;
+		byte_11a++;
+	}
+
+	quantum = 12u * bitsPerSymbol;
+
+	if (byte_11a == quantum && word_11c == 18)
+		rc = 5;
+
+	switch (word_114) {
+	case 0:
+		/* Seventeen ones is the preamble; sixteen are not enough. */
+		if (byte_119 > 16)
+			word_114 = 1;
+		break;
+
+	case 1:
+		/* The framing zero, or start again. */
+		if (bit == 0)
+			word_114 = 2;
+		else
+			resetDetector();
+		break;
+
+	case 2:
+		/*
+		 * The type bit, at index 18, stored whole into `byte_00` and
+		 * tested against ONE -- which is `infoToBits`'s own test of
+		 * the same field.  It picks the short form's state 3 or the
+		 * long form's 5.  State 4 is `evaluateInfo`'s hole and nothing
+		 * ever enters it.
+		 */
+		byte_00 = bit;
+		bits[word_11c] = bit;
+		word_11c++;
+		word_114 = (bit == 1) ? 3 : 5;
+		break;
+
+	case 3:
+		/*
+		 * The short form: on to index 34, which is where `infoToBits`
+		 * leaves `word_11c` for the same message.
+		 */
+		bits[word_11c] = bit;
+		word_11c++;
+		if (word_11c == 34) {
+			evaluateInfo();
+			word_114 = 9;
+			word_120 = 0;
+		}
+		break;
+
+	case 4:
+		/*
+		 * Reachable from nothing -- state 2 chooses 3 or 5, and no
+		 * other arm writes 4 -- but it is a case and not the default:
+		 * the table's fifth entry is a block of its own rather than
+		 * the block `ja` falls through to.
+		 */
+		break;
+
+	case 5:
+		/*
+		 * The long form's header, to the same index 34.  `char_01` has
+		 * been decoded by then and picks what comes next.
+		 */
+		bits[word_11c] = bit;
+		word_11c++;
+		if (word_11c == 34) {
+			evaluateInfo();
+			word_114 = (char_01 > 1) ? 9 : 6;
+			word_120 = 0;
+		}
+		break;
+
+	case 6:
+		/*
+		 * The fixed part, to index 136 -- 8 * 17, and the value
+		 * `infoToBits` sets `word_11c` to at the same point.
+		 */
+		bits[word_11c] = bit;
+		word_11c++;
+		if (word_11c == 136) {
+			evaluateInfo();
+			word_114 = 7;
+			word_120 = 0;
+			gamma = 136u * word_10c;
+		}
+		break;
+
+	case 7:
+		/*
+		 * The first mask block, `gamma` positions of it, and then the
+		 * second only if `byte_24` asked for one.
+		 */
+		bits[word_11c] = bit;
+		word_11c++;
+		word_120++;
+		if ((unsigned int)word_120 == gamma) {
+			evaluateInfo();
+			word_114 = (byte_24 != 0) ? 8 : 9;
+			word_120 = 0;
+			delta = 136u * word_10c;
+		}
+		break;
+
+	case 8:
+		/* The second mask block, `delta` positions of it. */
+		bits[word_11c] = bit;
+		word_11c++;
+		word_120++;
+		if ((unsigned int)word_120 == delta) {
+			evaluateInfo();
+			word_114 = 9;
+			word_120 = 0;
+		}
+		break;
+
+	case 9:
+		/*
+		 * The closing frame: one framing position and sixteen CRC
+		 * entries, seventeen in all.  `msgLen` is set one past the
+		 * last of them, which is what `infoToBits` computes, and the
+		 * register is then reset, clocked over the message and
+		 * compared against what arrived.
+		 *
+		 * A BAD CRC RESTARTS THE DETECTOR, and says so.
+		 */
+		bits[word_11c] = bit;
+		word_11c++;
+		word_120++;
+		if (word_120 == 17) {
+			msgLen = (unsigned int)word_11c;
+
+			resetCRC();
+			calcCRC();
+
+			if (evaluateCRC()) {
+				word_114 = 10;
+			} else {
+				resetDetector();
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(V92CP_BADCRC);
+			}
+		}
+		break;
+
+	case 10:
+		/*
+		 * The message is complete and what is left is to land on a
+		 * frame boundary.  Nothing is stored into `bits` here: the
+		 * cursor advances alone, a ONE restarts the detector, and the
+		 * answer is delivered when the cursor reaches a whole number
+		 * of `12 * bitsPerSymbol` -- the same quantum `infoToBits`
+		 * pads the transmitted vector out to.
+		 *
+		 * THE DIVISION IS UNSIGNED (`div`, not `idiv`), so a zero
+		 * `bitsPerSymbol` divides by zero here exactly as it does in
+		 * `infoToBits`.  docs/deviations.md D561 excludes it.
+		 */
+		word_11c++;
+		if (bit != 0)
+			resetDetector();
+
+		if ((unsigned int)word_11c % quantum == 0) {
+			resetDetector();
+
+			if (byte_00 == 1)
+				rc = (byte_04 == 0) ? 3 : 4;
+			else
+				rc = (byte_04 == 0) ? 1 : 2;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	/*
+	 * The hold-off, in full; see `word_914` in V92CP.h.  Answers 1 and 2
+	 * start it from idle, and while it runs 3 and 4 are suppressed and 5
+	 * is not.
+	 */
+	if (word_914 >= 0) {
+		if (rc == 3 || rc == 4)
+			rc = 0;
+
+		word_914++;
+		if (word_914 == 400)
+			word_914 = -1;
+	} else if (rc == 1 || rc == 2) {
+		word_914 = 0;
+	}
+
+	return rc;
 }
