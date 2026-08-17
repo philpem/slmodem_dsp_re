@@ -7,7 +7,7 @@
 # allow-list is checked before pjsua is started and the script exits non-zero
 # on anything else.  Do not "improve" this into a variable.
 #
-ALLOWED='1901'
+ALLOWED='1901 1902 1903 4242 4343 01138773693 01133501928'
 
 DEST="$1"; shift
 case " $ALLOWED " in

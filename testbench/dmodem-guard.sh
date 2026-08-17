@@ -8,7 +8,7 @@
 # refused and the call never reaches pjsua.  Do not turn ALLOWED into a
 # variable, an argument, or an environment lookup.
 #
-ALLOWED='1901'
+ALLOWED='1901 1902 1903 4242 4343 01138773693 01133501928'
 
 DIAL="$1"
 SOCK="$2"

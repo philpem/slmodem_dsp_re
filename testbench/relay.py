@@ -60,7 +60,9 @@ import sys
 import tempfile
 import time
 
-ALLOWED = ("1901", "1902", "1903", "4242")   # 1903 = Oli'Net, added 2026-08-13
+ALLOWED = ("1901", "1902", "1903", "4242", "4343",
+           "01138773693", "01133501928")  # 1903 added 2026-08-13; 4343 and the
+                                          # two out-and-back-in DIDs 2026-08-17
 
 ROOT = "/home/philpem/dev/sip-D-modem"
 # WAS pjproject-2.11.1, which belonged to the older D-Modem fork and went when
