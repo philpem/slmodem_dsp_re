@@ -66256,3 +66256,42 @@ store that compares equal), fractional values (`frac_of` scales by 1e6 and a
 grid of whole numbers prints `.000000` for all of them), and stays inside
 +/-3000 because `(int)v` outside `int`'s range is undefined in OUR source --
 D561's argument.  The floats are compared as BITS, not as numbers.
+
+### 5200. BYTE-IDENTITY MEASURED FOR THE FIRST TIME: 238, WHERE THE MNEMONIC COUNT SAYS 410
+
+*`compare.py` has always compared MNEMONICS with operands dropped, which is
+stated in its own header and in CLAUDE.md. So every "identical" number this
+project has ever quoted is operand-insensitive, and nobody had measured the
+strict one.*
+
+**MEASURED** at `57acf633`, period compiler, `build/tc_out` against the blob,
+by disassembling each same-size pair and comparing the instruction BYTES:
+
+    compared        907 symbols the pairing could match
+    same byte size  389
+    byte-identical  238  (61% of those checked)
+
+**238 is a FLOOR.** The pairing used here matched 907 symbols where
+`compare.py` pairs 1,094 -- it takes only `T`/`t` with a non-zero size from
+`nm --size-sort -S` -- so the true figure is higher. It is quoted as a floor
+deliberately: the point of the measurement is that the strict number is lower
+than the quoted one, and a floor makes that point safely.
+
+**WHAT THE 410 − 238 GAP IS.** Functions whose instruction SEQUENCE is exactly
+the object's and whose register allocation or displacements are not. That is
+precisely the category finding 614 rules FREE, on the ground that chasing it is
+"fitting the compiler, not recovering the source".
+
+**BOTH RULINGS STAND, because they are about different things.** Byte-identity
+as a SCORE is worth tracking -- it says how close to perfect the reconstruction
+is, where the mnemonic count flatters it by 172 symbols. Byte-identity as a
+TARGET TO PERMUTE SOURCE TOWARDS remains forbidden by 614. The way the score
+rises is better source recovery: the right expression shape, operand order and
+declared types. `V90CP::maxK`, `setTrn2DummyConstel` and `setNofUcodesInTrn2`
+came out byte-identical on the first try because the declarations were right,
+not because anyone aimed at the bytes.
+
+**NOT ADDED TO THE GATE.** `compare.py --ratchet` still moves on the mnemonic
+count. A second ratchet on the strict number would be defensible, and is not
+proposed here: it would fail on register-allocation churn that 614 says is not a
+defect, and a gate that fails on non-defects gets disabled.

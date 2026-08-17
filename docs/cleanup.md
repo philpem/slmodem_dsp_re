@@ -135,11 +135,41 @@ every comment.
 ### When the transition happens
 
 **Per unit, at the same moment as the rest of the readability pass** — when the
-unit closes. "Verified" here means: every symbol written, `make phase` green,
-and its codegen difference either zero or explained. It does NOT mean
-byte-identical; 410 of ~1,094 compared symbols are identical today and a
-different factoring can differ for ever while behaving identically (`compare.py`
-`--ratchet`'s own note). Waiting for identity would mean never pivoting.
+unit closes. "Verified" means **behavioural equivalence**: every symbol written,
+`make phase` green, and the codegen difference either zero or explained.
+
+**Byte-identity is the ideal, not the gate**, and the distinction matters
+because the two are measured differently and the looser one is the one usually
+quoted. Three levels of sameness, on this tree today:
+
+| | count | ignores |
+|---|--:|---|
+| behavioural equivalence | the differential gate | everything but observable output |
+| mnemonic-identical (`compare.py`) | 410 | registers, displacements, all operands |
+| **byte-identical** | **238** | nothing |
+
+238 is a floor — the pairing that produced it matched 907 symbols where
+`compare.py` pairs 1,094 — and of the 389 same-size symbols it could check, 61%
+were byte-perfect. So where the SIZE is right the bytes usually are too, and the
+410 − 238 gap is functions whose instruction sequence is exactly right and whose
+register allocation is not.
+
+That gap is where the ideal meets finding 614, which classes register allocation
+as FREE and warns that chasing it "means permuting source until the output
+matches, which is fitting the compiler, not recovering the source". Both stand,
+because they are about different things:
+
+- **byte-identity as a SCORE** — track it; it says how close to perfect we are
+  where the mnemonic count flatters us;
+- **byte-identity as a target to permute source towards** — forbidden. A
+  function that matches only after locals were shuffled to please the allocator
+  is fitted, not recovered.
+
+The way to raise the score is better SOURCE RECOVERY — the right expression
+shape, operand order and types — which is what the forced/free rule already
+directs effort at. `V90CP`'s three small members came out byte-identical on the
+first try because the declarations were right, not because anyone aimed at the
+bytes.
 
 **The whole-tree pivot is a separate, later decision** and it is the owner's:
 at some point the reconstruction stops being a reconstruction and becomes the
