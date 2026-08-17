@@ -4230,8 +4230,8 @@
    }
   },
   "v90adid": {
-   "key": "35bd9d42ddda3a43205bbf01e0a09cbcb85cbd2ba4fa2063e81554e898ab4aca",
-   "summary": "481 mutations: 464 caught (460 by test, 0 by strings), 0 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
+   "key": "da1731a51773ea3eb12a3308c1fb683cbe5461cc40a1380ca12f60673660cde5",
+   "summary": "482 mutations: 462 caught (458 by test, 0 by strings), 3 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
    "verdicts": {
     "DIL: drop the redundant marked test inside the run": "equivalent",
     "DIL: drop the redundant reference test inside the run": "equivalent",
@@ -4285,7 +4285,6 @@
     "dmu: sum window ends at 58": "caught",
     "dmu: sum window starts at 41": "caught",
     "dmu: sum without the magnitude": "caught",
-    "dmu: the NaN half of the zero test dropped": "caught",
     "dmu: the answer is the window's top": "caught",
     "dmu: the answer's offset is added": "caught",
     "dmu: the fall-through answer is zero": "caught",
@@ -4328,7 +4327,8 @@
     "dmu: the small test is strict": "caught",
     "dmu: the window is four entries wide": "caught",
     "dmu: the window runs upwards": "caught",
-    "dmu: the zero half of the zero test dropped": "caught",
+    "dmu: the zero test admits every code at or below zero": "caught",
+    "dmu: the zero test spelt for IEEE, so an unordered code is not skipped": "uncaught",
     "dmu: threshold scale 0.05 -> 0.06": "caught",
     "dmu: threshold scaled by the wrong field": "caught",
     "do not advance the store index": "caught",
@@ -4362,6 +4362,7 @@
     "floor the squared-difference threshold at the MAXIMUM neighbour distance": "caught",
     "form the group mean even when it pooled nothing": "caught",
     "form the mean from the sum of squares": "caught",
+    "form the merge tolerance inside the test rather than before the distance": "uncaught",
     "fpg: only one companding law is tried": "caught",
     "fpg: the A-law error report's fraction scale": "caught",
     "fpg: the A-law gain report prints the mu-law gain": "caught",
@@ -4502,7 +4503,7 @@
     "pool the sum of squares into the mean": "caught",
     "pre-increment the store index rather than post-incrementing it": "caught",
     "print tenths where the object prints hundredths": "caught",
-    "print the sign with the ordered test rather than its negation": "caught",
+    "print the sign with the ternary the other way up, which GCC commutes": "uncaught",
     "quantise onto the phase's own mapping, not the reference's": "caught",
     "read the QC block on the default branch": "caught",
     "read the QC block one word low": "caught",
@@ -5579,7 +5580,7 @@
    }
   },
   "v90dil": {
-   "key": "d617328715afcceb9933a72d8edc2d77f7ab3b43e9057e995565b73a43aa2acb",
+   "key": "cec0666fa4309a327bab92cb8327970e355e35d46d27fee36da941a7e8f4456f",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "always take the A-law row": "caught",
