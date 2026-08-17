@@ -1961,6 +1961,176 @@ run_data_arm(void)
 	return diff_end();
 }
 
+/* ============================== the re-convert with a linear output too wide */
+
+/*
+ * `leSum = (short)y` AND `(int)y` AGREE OVER EVERY `y` THE OTHER GROUPS
+ * PRODUCE, and that is a property of those fixtures rather than of the
+ * object.  This one exists to remove the coincidence: the linear history is
+ * planted three orders of magnitude larger so `y` leaves a short's range, the
+ * re-convert fires on symbol ZERO, and `leSum` then reaches the fixed-point
+ * tail's `diff = (short)(leSum - decision)` and the linear LMS behind it,
+ * which lands in `array_d8` and is compared.
+ *
+ * ONE SYMBOL PER CALL, and it is what keeps this group clear of finding
+ * 6203.  With `nOut` at 1 the only symbol is the one the re-convert runs on,
+ * and `mmxMode` is set before its tail -- so the FLOAT tail, where
+ * `err = soft - fdec` on a `soft` of 10**5 needs a twenty-fifth mantissa bit,
+ * never executes.  Everything downstream of the wide `y` is integer.
+ */
+static int
+run_reconvert_wide(void)
+{
+	static const int est_v[] = {
+		V90EQU_STATE_PHASE4, V90EQU_STATE_RRN, V90EQU_STATE_FPE
+	};
+	long tag = 5740000;
+	int ei, li;
+	int saw_wide = 0, saw_reconv = 0, saw_diff = 0, saw_wided = 0;
+
+	diff_begin("V90Equalizer::process, a re-convert on a wide linear output");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (ei = 0; ei < 3; ei++)
+	    for (li = 0; li < 2; li++) {
+		unsigned int le = li ? 8u : 4u;
+		unsigned int dfe = 4u;
+		unsigned int n = 2u;
+		unsigned int no_a = 0, no_b = 0;
+		unsigned int k;
+
+		tag++;
+		seed(tag);
+		fill_arena(tag);
+		seed_ce_pair(tag);
+		wire(&OURS);
+		wire(&THEIRS);
+		p4_setup(tag, 0);
+		plant_params();
+		p4_equ_plant(tag, le, dfe, 0);
+		OURS.word_68 = THEIRS.word_68 = 0;
+
+		/*
+		 * Wide enough that `(short)y` and `(int)y` cannot agree, and
+		 * the DFE history with it so `(short)d` and `(int)d` cannot
+		 * either.  Both matter: the three forward re-convert blocks
+		 * narrow `y` at all three sites and `d` at exactly one, and a
+		 * fixture whose filters stay inside a short cannot tell any of
+		 * those four spellings apart.
+		 */
+		for (k = 0; k < ARR_F; k++) {
+			arena.a18[k] = 20000.0f
+			    * (float)(((k + (unsigned)tag) % 7) + 1u);
+			arena.a44[k] = 30000.0f
+			    * (float)(((k * 3u + (unsigned)tag) % 5) + 1u);
+		}
+
+		OURS.state = THEIRS.state = est_v[ei];
+		OURS.quickConnect = THEIRS.quickConnect = 0;
+		ARENA_PARAMS->LOOP_TYPE = 2;
+		SPECVER->word_28 = 1u;
+
+		for (k = 0; k < 2; k++) {
+			V90Phase4Demodulator *d = &P4D((int)k);
+
+			d->state = P4D_STATE_B1D;
+			d->sessionFlag = 0u;
+			d->countInState = 0x11fu;
+			d->trn2dDDLength = 0x40;
+			d->linearMappStudyStart = 0x7d0;
+			d->b1dBits = 0x60u;
+			d->b1dZeros = 7u;
+			d->nbits = 0u;
+			d->int_0028 = 0;
+			d->uchar_0030 = 1;
+			d->int_0038 = 1;
+			d->int_003c = 1;
+			d->int_0040 = 1;
+			d->int_0044 = 1;
+			d->int_0048 = 0;
+			d->uint_0034 = 0u;
+			d->uint_004c = 0u;
+			arm_rnot(&d->rDetector1, 0, 0x60);
+			arm_rfnot(&d->rDetector2, 0, 0x60);
+		}
+
+		for (k = 0; k < NIN; k++) {
+			in_[0][k] = in_[1][k] = 20000.0f
+			    * (float)(((k + (unsigned)tag) % 5u) + 1u);
+			outsym_[0][k] = outsym_[1][k] = (short)(0x1234 + k);
+			outflt_[0][k] = outflt_[1][k] = -1.5f * (float)k;
+		}
+
+		arena_snapshot();
+		dsplib_debug_capture_reset();
+		OURS.process(in_[0], n, outsym_[0], outflt_[0], no_a);
+		arena_switch();
+		ref_equ_process(&THEIRS, in_[1], n, outsym_[1], outflt_[1],
+				&no_b);
+
+		diff_eq_int("nOut (%ld)", (long)no_a, (long)no_b, tag);
+		diff_eq_obj_(__FILE__, __LINE__, "outSym", "short[NIN]",
+			     outsym_[0], outsym_[1], sizeof(outsym_[0]), tag);
+		diff_eq_obj_(__FILE__, __LINE__, "outFloat", "float[NIN]",
+			     outflt_[0], outflt_[1], sizeof(outflt_[0]), tag);
+		OURS.connEval = THEIRS.connEval =
+		    (V90ConnectionEvaluator *)ce_[0];
+		OURS.phase4Demod = THEIRS.phase4Demod =
+		    (V90Phase4Demodulator *)p4d_s[0];
+		OURS.demapper = THEIRS.demapper = (V90Demapper *)dem_s[0];
+		diff_eq_obj("after process", V90Equalizer, &OURS, &THEIRS, tag);
+		arena_compare("the arena after process", tag);
+		diff_eq_obj_(__FILE__, __LINE__, "the connection evaluator",
+			     "V90ConnectionEvaluator", ce_[0], ce_[1],
+			     sizeof(V90ConnectionEvaluator), tag);
+		p4_compare(tag);
+		diff_eq_int("no store past the object (%ld)", guard_equal(), 1,
+			    tag);
+		diff_eq_int("transcript (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+
+		/*
+		 * THE COUNTERS, off the reference.  `outFloat[0]` is the float
+		 * `soft` this symbol produced -- the re-convert runs after it
+		 * is published -- so a magnitude past a short's range is the
+		 * wide `y` having happened, and `mmxMode` rising is the
+		 * re-convert having run.
+		 */
+		if (no_b > 0 && (outflt_[1][0] > 32767.0f
+				 || outflt_[1][0] < -32767.0f))
+			saw_wide = 1;
+		if (THEIRS.mmxMode)
+			saw_reconv = 1;
+		if (memcmp(arena.ad8, arena_save.ad8, sizeof(arena.ad8)) != 0)
+			saw_diff = 1;
+		/*
+		 * AND THE DFE OUTPUT IS PAST A SHORT TOO.  `outFloat[0]` is
+		 * `y - d`, so it cannot witness `d` on its own; the history
+		 * this group plants makes `|d|` at least 30000 by
+		 * construction and the coefficients are all positive, which
+		 * is what puts the `(short)d` at RECONVERT-B inside the
+		 * domain where it differs from RECONVERT-A's `(int)d`.
+		 */
+		if (arena_save.a44[0] > 32767.0f)
+			saw_wided = 1;
+	    }
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("a linear output past a short's range was produced",
+		    saw_wide, 1, 0);
+	diff_eq_int("and a re-convert ran on it", saw_reconv, 1, 0);
+	diff_eq_int("and the fixed-point LMS moved array_d8", saw_diff, 1, 0);
+	diff_eq_int("the DFE history was past a short's range too", saw_wided,
+		    1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1971,6 +2141,8 @@ main(void)
 	if (run_p4_arms())
 		rc = 1;
 	if (run_data_arm())
+		rc = 1;
+	if (run_reconvert_wide())
 		rc = 1;
 	return rc;
 }

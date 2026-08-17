@@ -69370,23 +69370,36 @@ three sites driven -- `gcov` counts 16 executions of each block and 8 of each
 block's `b8` loop -- the casts were INVERTED at all three at once
 (`(short)`<->`(int)`) and the suite was re-run:
 
-| source | RESET arm | phase 4 arms | DATA arm |
+| source | phase 4 arms | DATA arm | wide re-convert |
 |---|--:|--:|--:|
-| as written | 731 (declared) | 0 of 18023 | 0 of 1208 |
-| all three casts inverted | 731 (declared) | **0 of 18023** | **0 of 1208** |
-| `softInt = (short)soft + 1` at the same three sites | 731 | **177 of 18023** | 0 of 1208 |
+| as written | 0 of 18023 | 0 of 1208 | 0 of 142 |
+| all three `dfeSum` casts inverted | **0 of 18023** | **0 of 1208** | **0 of 142** |
+| `softInt = (short)soft + 1`, same three sites | **177 of 18023** | 0 of 1208 | caught |
+| `leSum = (short)y` -> `(int)y`, same three sites | 0 of 18023 | 0 of 1208 | **6 of 141** |
 
-The third row is the denominator. A change to the statement DIRECTLY ABOVE the
-cast, in the same three blocks, is caught 177 times; the cast itself is caught
-zero times. That is what licenses "not differentially adjudicable" instead of
-"we did not manage to drive it".
+(The RESET arm's declared 731 is unmoved by every row and is omitted.)
 
-A fourth reading was tried and is also invisible for a reason worth recording:
-`leSum = (short)y` -> `(int)y` at the same three sites moves nothing either,
-because `leSum` reaches only `diff = (short)(leSum - decision)` and this
-fixture keeps `|y|` inside a short. That one is NOT dead -- it is merely
-outside the grid's domain -- and the two cases must not be reported as the
-same thing.
+The last two rows are the denominator, and they are two different denominators
+on purpose. A change to the statement DIRECTLY ABOVE the cast, in the same
+three blocks, is caught 177 times -- so the blocks are driven and the
+comparison can see into them. And **the `leSum` narrowing at those same three
+sites is caught six times**, which is the sharper control: it is the same KIND
+of edit, a 16-versus-32-bit narrowing of a filter output, at the same three
+sites, and it is visible.
+
+Making it visible needed a fourth group. `leSum` reaches only
+`diff = (short)(leSum - decision)`, so the two spellings agree over every `y`
+inside a short, and the other three groups keep the filters there deliberately
+(finding 6203's subtraction is what a wide `soft` costs). `a re-convert on a
+wide linear output` plants the linear history at 20,000 and the DFE history at
+30,000, fires the re-convert on symbol ZERO and passes `n = 2` -- so the only
+symbol in the call is the one the block runs on, `mmxMode` is set before its
+tail, and the float tail that would carry the excess precision never executes.
+
+**That group also puts `|d|` past a short by construction, which is what makes
+the `dfeSum` result domain-complete.** The zero in its column is not "the two
+spellings happened to agree"; it is "they provably differed and nothing
+observed it".
 
 ## 6501. DRIVING THE OTHER STATE ARMS: `int_0028` IS 6201'S `word_30` AGAIN, AND FOUR OF THE FIVE OBSTACLES WERE THE FIXTURE'S
 
@@ -69459,7 +69472,7 @@ twice in forty-eight.
 `_ZN12V90Equalizer7processEPfjPsS0_Rj`, before and after:
 
     Lines executed:20.49% of 532        109 lines, 120,974 checks
-    Lines executed:74.25% of 532        395 lines, 140,205 checks
+    Lines executed:74.25% of 532        395 lines, 140,347 checks
 
 The check count rose by 16%; the line count by 262%. That ratio is the whole
 argument of 6201 restated from the other side, and it is why the headline here
@@ -69474,7 +69487,7 @@ is the coverage and not the checks.
 | state 3 DATA | driven in both representations |
 | the state 4 jump table | all five sub-cases: 0x1c, 0x1d, 0x28, 0x2c, 0x35 |
 | the state 2 chain | 0x17, 0x18, 0x1c, 0x1d |
-| RECONVERT-A, -B, -C | 16 executions each, `b8` loop 8 each |
+| RECONVERT-A, -B, -C | 16 executions each, `b8` loop 8 each, plus a wide-output group where `(short)y` and `(int)y` provably differ |
 | RECONVERT-D, -E | 8 executions each, `outFloat` loop 4 each |
 | the whole fixed-point half | `mmxDot`, both `idivl`s, the split accumulators, `sar_by`, the `array_12c` shift, the `word_20Saved` wrap, `block_b8`, the held-sample prologue |
 | `<TAIL-P4>` | driven |
@@ -69500,8 +69513,8 @@ is the coverage and not the checks.
 ### The compiler split, per group
 
 `tools/gccdiverge.json` names CHECKS, and `t_v90equproc`'s entry names one:
-"V90Equalizer::process, the RESET arm". **The two new groups are NOT covered
-by it and are not being added to it.** Both are green on GCC 13 as well as on
+"V90Equalizer::process, the RESET arm". **The three new groups are NOT
+covered by it and are not being added to it.** All three are green on GCC 13 as well as on
 GCC 3.4.2, and that is a design constraint met rather than luck: the new
 groups freeze the float step sizes, keep `|soft|` inside a short, and stop the
 call before a symbol whose error could need a 25th mantissa bit. Where that
