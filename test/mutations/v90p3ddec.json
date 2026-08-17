@@ -108,5 +108,143 @@
   "find": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength) {",
   "replace": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength + 1) {",
   "note": "Anchor carries 4 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+ },
+ {
+  "note": "THE TEN SMALL PHASE 3 RECEIVE MEMBERS, against t_v90p3ddec's seven new suites.  Two claims below have no mutation and the reason is recorded rather than left silent: `exitDIL`'s `||` ORDER is behaviourally free -- every permutation of the seven states answers the same for every state -- so it is a `make similarity` claim (finding 4977) and nothing here can adjudicate it; and the detector pointer being re-read from the object before each of `setDigitalImairmentsInfo`'s three calls cannot be mutated into anything observable, because no path changes it between them."
+ },
+ {
+  "label": "the JdNot counter is set rather than cleared",
+  "find": "V90Phase3Demodulator::resetJdNotDetector()\n{\n\tword_404 = 0;",
+  "replace": "V90Phase3Demodulator::resetJdNotDetector()\n{\n\tword_404 = 1;"
+ },
+ {
+  "label": "getMaxUcode returns the linear mapping instead",
+  "find": "\treturn autoDigitalImpDetector->maxUcode;",
+  "replace": "\treturn (unsigned char *)autoDigitalImpDetector->linMapp;"
+ },
+ {
+  "label": "the alt-RBS copy goes the other way",
+  "find": "\tparams->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->unnamed_440;",
+  "replace": "\tparams->unnamed_440 =\n\t    params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;"
+ },
+ {
+  "label": "the alt-RBS copy lands one slot along",
+  "find": "\tparams->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->unnamed_440;",
+  "replace": "\tparams->QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->unnamed_440;"
+ },
+ {
+  "label": "the frame position wraps at seven",
+  "find": "\t\tunsigned int next_ = word_04 + 1; \\\n\t\tif (next_ == 6) \\",
+  "replace": "\t\tunsigned int next_ = word_04 + 1; \\\n\t\tif (next_ == 7) \\"
+ },
+ {
+  "label": "entering the ANSpcm drop state does not restart the counter",
+  "find": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;\n\t\tword_2c = 0;",
+  "replace": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;"
+ },
+ {
+  "label": "the ANSpcm drop state is entered unconditionally",
+  "find": "\tif (state != P3D_STATE_WAIT_FOR_ANS_PCM_DROP) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "the ANSpcm drop state is 29",
+  "find": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;\n\t\tword_2c = 0;",
+  "replace": "\t\tstate = (Phase3DemodulatorState)29;\n\t\tword_2c = 0;"
+ },
+ {
+  "label": "the pad gain is found before the maximum code",
+  "find": "\tautoDigitalImpDetector->determineMaxUcode(byte_3f8);\n\tautoDigitalImpDetector->findPadGain();",
+  "replace": "\tautoDigitalImpDetector->findPadGain();\n\tautoDigitalImpDetector->determineMaxUcode(byte_3f8);"
+ },
+ {
+  "label": "the pad gain is applied before it is found",
+  "find": "\tautoDigitalImpDetector->findPadGain();\n\tautoDigitalImpDetector->applyPadGainToLinMapp();",
+  "replace": "\tautoDigitalImpDetector->applyPadGainToLinMapp();\n\tautoDigitalImpDetector->findPadGain();"
+ },
+ {
+  "label": "the maximum code comes from the ucode rather than +0x3f8",
+  "find": "\tautoDigitalImpDetector->determineMaxUcode(byte_3f8);",
+  "replace": "\tautoDigitalImpDetector->determineMaxUcode(ucode);"
+ },
+ {
+  "label": "getDecision dispatches the other way round",
+  "find": "\tif (sessionFlag != 0)\n\t\treturn getV92Decision(sample);\n\n\treturn getV90Decision(sample);",
+  "replace": "\tif (sessionFlag != 0)\n\t\treturn getV90Decision(sample);\n\n\treturn getV92Decision(sample);"
+ },
+ {
+  "label": "getDecision takes the V.92 arm only for a flag of exactly one",
+  "find": "\tif (sessionFlag != 0)\n\t\treturn getV92Decision(sample);",
+  "replace": "\tif (sessionFlag == 1)\n\t\treturn getV92Decision(sample);"
+ },
+ {
+  "label": "JdNotDetector counts non-zero symbols",
+  "find": "\tif (symbol == 0)\n\t\tword_404++;\n\telse\n\t\tword_404 = 0;",
+  "replace": "\tif (symbol != 0)\n\t\tword_404++;\n\telse\n\t\tword_404 = 0;"
+ },
+ {
+  "label": "the JdNot run length is twelve, not eleven",
+  "find": "\tif (word_404 > 11 && word_2c % 72 == 12)",
+  "replace": "\tif (word_404 > 12 && word_2c % 72 == 12)"
+ },
+ {
+  "label": "the JdNot frame modulus is thirty-six",
+  "find": "\tif (word_404 > 11 && word_2c % 72 == 12)",
+  "replace": "\tif (word_404 > 11 && word_2c % 36 == 12)"
+ },
+ {
+  "label": "the JdNot frame position is eleven",
+  "find": "\tif (word_404 > 11 && word_2c % 72 == 12)",
+  "replace": "\tif (word_404 > 11 && word_2c % 72 == 11)"
+ },
+ {
+  "label": "exitDIL acts on state 17 as well",
+  "find": "\tif (state == 12 || state == 16 || state == 10 || state == 11 ||\n\t    state == 13 || state == 14 || state == 15) {",
+  "replace": "\tif (state == 12 || state == 16 || state == 10 || state == 11 ||\n\t    state == 13 || state == 14 || state == 15 || state == 17) {"
+ },
+ {
+  "label": "exitDIL does not act on state 15",
+  "find": "\tif (state == 12 || state == 16 || state == 10 || state == 11 ||\n\t    state == 13 || state == 14 || state == 15) {",
+  "replace": "\tif (state == 12 || state == 16 || state == 10 || state == 11 ||\n\t    state == 13 || state == 14) {"
+ },
+ {
+  "label": "exitDIL does not tell the modulator",
+  "find": "\t\tedprintf(\"V90Phase3Demodulator: exit DIL\\r\\n\");\n\t\tphase3Modulator.exitDIL();",
+  "replace": "\t\tedprintf(\"V90Phase3Demodulator: exit DIL\\r\\n\");"
+ },
+ {
+  "label": "exitDIL checks for termination before telling the modulator",
+  "find": "\t\tphase3Modulator.exitDIL();\n\t\tP3D_CHECK_TERMINATED();",
+  "replace": "\t\tP3D_CHECK_TERMINATED();\n\t\tphase3Modulator.exitDIL();"
+ },
+ {
+  "label": "twoLevelDemod's negate is not truncated to sixteen bits",
+  "find": "\t\tbit = 0;\n\t\tlevel = (short)-level;",
+  "replace": "\t\tbit = 0;\n\t\tlevel = -level;"
+ },
+ {
+  "label": "twoLevelDemod reads the alternate table whenever the flag is set",
+  "find": "\tif (ad->short_a948 != 0 &&\n\t    (short)ad->isAltRbs((short)word_04, ucode, sample) != 0)",
+  "replace": "\tif (ad->short_a948 != 0)"
+ },
+ {
+  "label": "twoLevelDemod tests isAltRbs at its full width",
+  "find": "\t    (short)ad->isAltRbs((short)word_04, ucode, sample) != 0)",
+  "replace": "\t    ad->isAltRbs((short)word_04, ucode, sample) != 0)"
+ },
+ {
+  "label": "twoLevelDemod's threshold is inclusive",
+  "find": "\tif (sample > 0.0f) {\n\t\tbit = 1;\n\t} else {\n\t\tbit = 0;\n\t\tlevel = (short)-level;",
+  "replace": "\tif (sample >= 0.0f) {\n\t\tbit = 1;\n\t} else {\n\t\tbit = 0;\n\t\tlevel = (short)-level;"
+ },
+ {
+  "label": "twoLevelDemod does not descramble",
+  "find": "\tbit = word_3cc.process(bit);\n\tbit = descrambler.process(bit);\n\n\treturn level;",
+  "replace": "\tbit = word_3cc.process(bit);\n\n\treturn level;"
+ },
+ {
+  "label": "twoLevelDemod's two decoders run the other way round",
+  "find": "\tbit = word_3cc.process(bit);\n\tbit = descrambler.process(bit);\n\n\treturn level;",
+  "replace": "\tbit = descrambler.process(bit);\n\tbit = word_3cc.process(bit);\n\n\treturn level;"
  }
 ]

@@ -97,6 +97,18 @@ enum Phase3DemodulatorState {
 	P3D_STATE_WAIT_FOR_SD = 0,		/* the Sd detector runs      */
 	P3D_STATE_TRN1D_KNOWN_DATA = 3,		/* TRN1d, known data         */
 	P3D_STATE_WAIT_FOR_QTS = 26,		/* V.92: wait for QTS        */
+
+	/*
+	 * ADDED BY THE PHASE 3 RECEIVE BATCH, on the same footing as the three
+	 * above.  `enterWaitForANSpcmDrop` prints "V90Phase3Demodulator: enter
+	 * WaitForANSpcmDrop" -- the author's own words, .rodata.str1.4+0x5ae4
+	 * -- and then stores 0x1e here, and the MEMBER's name is the same words
+	 * again.  A format string that names the thing is CLAUDE.md's strongest
+	 * evidence; the other 30-odd states have no such string and stay as the
+	 * casts the two decision functions already spell them with.
+	 */
+	P3D_STATE_WAIT_FOR_ANS_PCM_DROP = 30,	/* the ANSpcm energy drop    */
+
 	P3D_STATE_BASE_PIN = -0x7fffffff - 1	/* ours: pins the base       */
 };
 
@@ -172,17 +184,41 @@ public:
 	short getV90Decision(float);
 	short getV92Decision(float);
 
-	void getDecision(float);
-	void twoLevelDemod(float, int &);
+	/*
+	 * WRITTEN -- the phase 3 receive batch.  Four of these return
+	 * something, and none of the four is a guess:
+	 *
+	 *   getDecision     `int`.  It `cwtl`s each callee's `%ax` and returns
+	 *                   the widened value, which is the same two lines the
+	 *                   comment above uses to type `getV90Decision` and
+	 *                   `getV92Decision` as `short`.
+	 *   twoLevelDemod   `int`.  The level is a 16-bit table entry and the
+	 *                   negate is TRUNCATED to sixteen bits (`neg %edx ;
+	 *                   movswl %dx,%esi`), so the value is a `short`; the
+	 *                   sign extension that follows it feeds a register
+	 *                   returned unmodified, which a `short` return would
+	 *                   not need.
+	 *   JdNotDetector   `int`.  0 or 1 in %eax, from `sete`-class code.
+	 *   getMaxUcode     `unsigned char *`.  `mov (%eax),%eax ; add
+	 *                   $0xa956,%eax` is `&adid->maxUcode[0]`, and
+	 *                   V90TRN2Designer's `topUcode` parameter -- which
+	 *                   this is the one caller's source for -- is spelled
+	 *                   `unsigned char *` there.
+	 *
+	 * The rest set no return register deliberately and stay `void` for want
+	 * of evidence, which is this file's default.
+	 */
+	int getDecision(float);
+	int twoLevelDemod(float, int &);
 	void exitDIL();
-	void JdNotDetector(int);
+	int JdNotDetector(int);
 	void clearVerificationStatus();
 	void setDigitalImairmentsInfo();
 	void enterWaitForANSpcmDrop();
 	void incrementFramePosition();
 	void setAltRbsParams();
 	void resetJdNotDetector();
-	void getMaxUcode();
+	unsigned char *getMaxUcode();
 
 	/* --- data members; see the file comment on the naming --- */
 
@@ -431,7 +467,24 @@ public:
 	 * source are settled and what it is FOR is not.  Finding 2118.
 	 */
 	unsigned int word_3f4;		/* +0x3f4                        */
-	unsigned char pad_3f8[1];	/* +0x3f8 nothing reaches it     */
+
+	/*
+	 * +0x3f8  IT IS A FIELD NOW, and this comment used to say nothing
+	 * reaches it.  `setDigitalImairmentsInfo` reads it with
+	 * `movzbl 0x3f8(%ebx),%eax` and hands it to
+	 * `V90AutoDigitalImpDetector::determineMaxUcode(short)` as that
+	 * method's only argument -- so it is ONE BYTE, unsigned, and widened
+	 * rather than sign-extended.
+	 *
+	 * THE NAME IS DELIBERATELY NOT `maxCode`.  That is the name this tree
+	 * gave `determineMaxUcode`'s parameter when it reconstructed it; the
+	 * mangling carries `s` and no name, so calling the field after it would
+	 * be promoting our own invention into a second place.  Nothing writes
+	 * this byte in anything written so far and no format string prints it,
+	 * which leaves usage inference alone -- CLAUDE.md's weakest tier, and
+	 * not enough.
+	 */
+	unsigned char byte_3f8;
 
 	/* +0x3f9  Zeroed by `reset`. */
 	unsigned char byte_3f9;

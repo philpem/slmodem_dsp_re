@@ -65881,3 +65881,142 @@ over every input, and no differential test can or should separate them.
 
 `getFilterPointer` needs none of this -- its four arms have four different
 bodies, so nothing could merge -- and it comes out at the blob's 0x9a exactly.
+
+### 4975. `V90Phase3Demodulator+0x3f8` IS A FIELD, AND ITS ONE USE DOES NOT NAME IT
+
+The header had it as `pad_3f8[1]`, "nothing reaches it".
+`setDigitalImairmentsInfo` reaches it:
+
+    20e88:  0f b6 83 f8 03 00 00  movzbl 0x3f8(%ebx),%eax
+    20e8f:  89 44 24 04           mov    %eax,0x4(%esp)
+    20e98:  call V90AutoDigitalImpDetector::determineMaxUcode(short)
+
+So it is ONE BYTE, unsigned -- `movzbl` and not `movsbl`, on a value whose
+32-bit result is used, which is finding 613's forced case -- and widened into
+the callee's `short`.  Modelled as `unsigned char byte_3f8` with a `P3D_OFF`
+assertion, and NOT named.
+
+`determineMaxUcode`'s parameter is spelled `maxCode` in this tree, which is
+tempting and is not evidence: the mangling carries `s` and no name, so
+`maxCode` is our own invention and naming the field after it would promote an
+invention into a second place.  Nothing writes the byte in anything written so
+far -- its writer is somewhere in the unwritten half -- and no format string
+prints it, which leaves usage inference alone.  CLAUDE.md's weakest tier, so a
+neutral name and the derivation in the comment.
+
+### 4976. `getMaxUcode` RETURNS A POINTER, AND THE CALLER'S SIBLING TYPES IT
+
+Twelve bytes: `mov (%eax),%eax ; add $0xa956,%eax ; ret`.  +0xa956 in
+`V90AutoDigitalImpDetector` is `unsigned char maxUcode[6]`, one entry per
+phase, so this is `&adid->maxUcode[0]` and the whole array is what comes back.
+
+The return type is `unsigned char *` on evidence that is not ours:
+`V90Demodulator::exitPhase3` is the one caller and hands the result to
+`V90TRN2Designer`'s `topUcode` parameter, which V90TRN2Designer.h already
+spells `unsigned char *` -- named there, as its own comment records, because
+it comes out of a mangled name.
+
+### 4977. `exitDIL`'S SEVEN STATES ARE ENUMERATED, AND THE `||` ORDER IS RECOVERABLE
+
+10..16 is contiguous, so the natural spelling folds to a range: written
+ascending, GCC 3.4.2 emits `sub $0xa ; cmp $6 ; jbe` and the function is 0x62
+bytes.  The blob has no such fold.  What it has is
+
+    cmp $0xc ; sete %dl ; cmp $0x10 ; sete %al ; or %al,%dl ; jne
+    cmp $0xa ; je   cmp $0xb ; je   cmp $0xd ; je   cmp $0xe ; je   cmp $0xf
+
+-- a branchless PAIR followed by five short-circuited compares, and the pair is
+{12, 16} rather than {10, 11}.
+
+`fold_truthop` collapses the INNERMOST pair of a left-associated `||` chain
+when both sides are cheap and leaves the rest in source order, so the pair is
+the first two terms the author wrote and the five `je`s are the remaining five
+in sequence: **12, 16, 10, 11, 13, 14, 15**.  Written that way the period build
+emits that seventeen-instruction chain instruction for instruction, and the
+function goes from 0x62 to 0x8f against the blob's 0xa4 -- the residue is block
+layout, the blob inverting its last branch and falling into the body.
+
+**No differential test can adjudicate this and none is claimed to.**  Every
+permutation of seven equality tests answers the same for every state, so this
+is a `make similarity` result and the mutation file says so rather than leaving
+a silent gap.  What it is NOT is fitting the compiler: the hypothesis predicted
+the exact five-compare sequence before it was built, and ascending order does
+not merely differ in size, it emits no `sete` at all.
+
+### 4978. `twoLevelDemod`'S NEGATE IS TRUNCATED TO SIXTEEN BITS, AND THAT IS ITS ONLY VISIBLE CLAIM
+
+    21627:  movl $0x0,(%edi)     ; the bit
+    2162d:  f7 da                neg    %edx
+    2162f:  0f bf f2             movswl %dx,%esi
+
+The level is a `short` out of `linMapp`/`linMappAlt`, and its negation is
+truncated back to sixteen bits before use.  For a mapping entry of -32768 the
+object answers -32768; `-level` on an `int` answers +32768, and the two agree
+over every other value the table can hold.  `t_v90p3ddec.cpp` plants that
+entry across the whole grid, and the mutation that drops the `(short)` is the
+one that fires on it.
+
+**The return type is `int` and the same two instructions say so.**  A `short`
+return needs no sign extension -- the caller widens -- so the `movswl` feeding
+a register that is returned unmodified is only there because the returned value
+is 32 bits wide.
+
+ONE CODEGEN DIFFERENCE IS RECORDED AND NOT CHASED: the period build INLINES
+`Descrambler<int,int>::process` here where the blob calls it, which is 135 of
+the 355 bytes against the blob's 220.  Inlining is the compiler's to choose,
+and it is the same difference the constructor's comment already records for
+`Descrambler`'s constructor (finding 1302's paragraph).  The
+`SerialDifferentialDecoder<int>::process` call stays a call in both.
+
+### 4979. STATE 30 IS `WaitForANSpcmDrop`, AND THE AUTHOR NAMED IT TWICE
+
+`enterWaitForANSpcmDrop` prints "V90Phase3Demodulator: enter WaitForANSpcmDrop"
+(.rodata.str1.4+0x5ae4) and then stores 0x1e into +0x28.  A format string that
+prints the thing is CLAUDE.md's strongest evidence, and the MEMBER's own
+mangled name is the same words again, so `P3D_STATE_WAIT_FOR_ANS_PCM_DROP = 30`
+joins the three `reset` supplied.
+
+The rest of the thirty-odd states stay as the `(Phase3DemodulatorState)0x13`
+casts the two decision functions already spell them with; nothing names them.
+`getV90Decision`'s `case 0x1e:` is left alone -- it is a case label inside an
+8 KB function this batch is not testing, and the header already records the
+same decision for `word_04`/`framePosition`.
+
+### 4980. TWO OBSERVATIONS THE PHASE 3 BATCH MADE ABOUT `V90AutoDigitalImpDetector`, NEITHER OF THEM ITS OWN
+
+`setDigitalImairmentsInfo` is three calls and a tail jump, so testing it means
+running `determineMaxUcode`, `findPadGain` and `applyPadGainToLinMapp` from a
+fixture that is not theirs.  Two things fell out, and both belong to that class
+rather than to this one.
+
+**D290 IS REACHABLE THROUGH THIS METHOD'S OWN FIRST LINE.**  `findPadGain`'s
+opening scan counts a byte down against a bound derived from `byte_a954`, and
+a `byte_a954` of 3..7 makes the bound negative so the loop never ends -- which
+docs/deviations.md D290 already records.  What is new is that `byte_a954` is
+whatever `determineMaxUcode` left, and `determineMaxUcode` runs immediately
+before, so this method can hand itself a non-terminating input.  The first
+grid this batch wrote hung on it.  `t_v90p3ddec.cpp` now runs
+`determineMaxUcode` alone on a saved copy first, reads the byte, restores, and
+skips the trial when it lands in the band -- reporting how many it skipped, so
+the denominator is visible.  A hang is not a differential result.
+
+The floor matters as well as the band: `short_a97a` near zero makes
+`determineMaxUcode` leave a byte near zero, which is both the hazardous band
+and a scan long enough to dominate the binary's run time.  The fixture uses
+0x30-ish, as t_v90adid's own `findPadGain` fixture does.
+
+**AND THE TWO DIAGNOSTIC PATHS DIVERGE AT INPUTS t_v90adid DOES NOT REACH.**
+Driven from here at `dsplibs_debug_level` 2, our report and the blob's differ
+-- 69 lines against 43 on one trial and 195 against 106 on another -- while the
+43 KB detector the two runs leave behind is IDENTICAL byte for byte.  So it is
+the printing and not the arithmetic.  Planting finite floats in `float_1000`,
+`float_9118` and `float_9d48` narrows it (131/105 before, 69/43 after), which
+says part of it is finding 2304's `v == 0.0f` under a seeded NaN and part of it
+is not.
+
+**This batch does not fix it and does not excuse it.**  `setDigitalImairmentsInfo`
+prints nothing of its own, so its transcript is entirely those two functions',
+and a `tools/gccdiverge.json` entry here would be declaring a divergence in
+somebody else's code on the strength of a fixture that is not theirs.  The
+suite runs at level 0, which is stated as a limit where the test can be read,
+and the measurement is left here for whoever owns those two functions.
