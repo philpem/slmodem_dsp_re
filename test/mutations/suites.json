@@ -624,6 +624,14 @@
   "src/pump/v90/V92CP.cpp",
   "build/test/t_v92cpcrc"
  ],
+ "v92cpeval": [
+  "src/pump/v90/V92CP.cpp",
+  "build/test/t_v92cpeval"
+ ],
+ "v92cpb2i": [
+  "src/pump/v90/V92CP.cpp",
+  "build/test/t_v92cpb2i"
+ ],
  "v90cpleaf": [
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cpleaf"

@@ -1,0 +1,251 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the claim it exists for",
+  "why": "`V92CP::bitsToInfo` is the eleven-state receive driver at .text+0x4f870-0x50014 and t_v92cpb2i drives it with messages the already-verified `infoToBits` produced. THE ENTRIES THAT MATTER MOST are the two static ones -- `gamma` and `delta` hold the lengths of the two mask blocks and are function-local statics, so they carry across calls and OUR copies cannot be named from the test; the only thing that makes them observable is that a wrong value moves a state change, which is why the grid varies `word_10c` between consecutive cases. WHAT NO ENTRY HERE REACHES: `case 4`, which nothing writes -- a mutation of its body reads NOT CAUGHT and would be telling the truth, so none is offered; and a stream long enough to run `bits[word_11c]` off the object, which is unguarded at all seven store sites (docs/deviations.md D923)."
+ },
+ {
+  "label": "the preamble leaves on sixteen ones",
+  "find": "\t\tif (byte_119 > 16)",
+  "replace": "\t\tif (byte_119 >= 16)"
+ },
+ {
+  "label": "the run counters are the other way round",
+  "find": "\tif (bit != 0) {\n\t\tbyte_119++;\n\t\tbyte_11a = 0;\n\t} else {\n\t\tbyte_119 = 0;\n\t\tbyte_11a++;\n\t}",
+  "replace": "\tif (bit != 0) {\n\t\tbyte_11a++;\n\t\tbyte_119 = 0;\n\t} else {\n\t\tbyte_11a = 0;\n\t\tbyte_119++;\n\t}"
+ },
+ {
+  "label": "a ONE does not clear the run of zeros",
+  "find": "\t\tbyte_119++;\n\t\tbyte_11a = 0;",
+  "replace": "\t\tbyte_119++;"
+ },
+ {
+  "label": "the quantum ignores the symbol size",
+  "find": "\tframeBits = 12u * bitsPerSymbol;",
+  "replace": "\tframeBits = 12u;"
+ },
+ {
+  "label": "the far-end test is a threshold rather than an equality",
+  "find": "\tif (byte_11a == frameBits && word_11c == 18)",
+  "replace": "\tif (byte_11a >= frameBits && word_11c == 18)"
+ },
+ {
+  "label": "the far-end test does not require the cursor at home",
+  "find": "\tif (byte_11a == frameBits && word_11c == 18)\n\t\trc = 5;",
+  "replace": "\tif (byte_11a == frameBits)\n\t\trc = 5;"
+ },
+ {
+  "label": "the far-end test uses the cursor's seed minus one",
+  "find": "\tif (byte_11a == frameBits && word_11c == 18)\n",
+  "replace": "\tif (byte_11a == frameBits && word_11c == 17)\n"
+ },
+ {
+  "label": "state 0 goes straight to the type bit",
+  "find": "\t\tif (byte_119 > 16)\n\t\t\tword_114 = 1;",
+  "replace": "\t\tif (byte_119 > 16)\n\t\t\tword_114 = 2;"
+ },
+ {
+  "label": "state 1 takes a ONE as the framing bit",
+  "find": "\t\tif (bit == 0)\n\t\t\tword_114 = 2;\n\t\telse\n\t\t\tresetDetector();",
+  "replace": "\t\tif (bit != 0)\n\t\t\tword_114 = 2;\n\t\telse\n\t\t\tresetDetector();"
+ },
+ {
+  "label": "state 2 chooses the two forms the other way round",
+  "find": "\t\tword_114 = (bit == 1) ? 3 : 5;",
+  "replace": "\t\tword_114 = (bit == 1) ? 5 : 3;"
+ },
+ {
+  "label": "state 2 does not store the type bit into the vector",
+  "find": "\t\tbyte_00 = bit;\n\t\tbits[word_11c] = bit;",
+  "replace": "\t\tbyte_00 = bit;"
+ },
+ {
+  "label": "state 2 tests the type bit for non-zero rather than one",
+  "find": "\t\tword_114 = (bit == 1) ? 3 : 5;\n",
+  "replace": "\t\tword_114 = (bit != 0) ? 3 : 5;\n"
+ },
+ {
+  "label": "state 3 ends one position early",
+  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = 9;",
+  "replace": "\t\tif (word_11c == 33) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = 9;"
+ },
+ {
+  "label": "state 3 does not decode before moving on",
+  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = 9;\n\t\t\tword_120 = 0;\n\t\t}",
+  "replace": "\t\tif (word_11c == 34) {\n\t\t\tword_114 = 9;\n\t\t\tword_120 = 0;\n\t\t}"
+ },
+ {
+  "label": "state 5 chooses the long and short bodies the other way round",
+  "find": "\t\t\tword_114 = (char_01 > 1) ? 9 : 6;",
+  "replace": "\t\t\tword_114 = (char_01 > 1) ? 6 : 9;"
+ },
+ {
+  "label": "state 5 tests char_01 unsigned",
+  "find": "\t\t\tword_114 = (char_01 > 1) ? 9 : 6;\n",
+  "replace": "\t\t\tword_114 = ((unsigned char)char_01 > 1) ? 9 : 6;\n"
+ },
+ {
+  "label": "state 5 ends one position late",
+  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = (char_01 > 1) ? 9 : 6;",
+  "replace": "\t\tif (word_11c == 35) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = (char_01 > 1) ? 9 : 6;"
+ },
+ {
+  "label": "state 6 ends at the group boundary above 136",
+  "find": "\t\tif (word_11c == 136) {",
+  "replace": "\t\tif (word_11c == 153) {"
+ },
+ {
+  "label": "gamma counts mask words rather than positions",
+  "find": "\t\t\tgamma = 136u * word_10c;",
+  "replace": "\t\t\tgamma = 8u * word_10c;"
+ },
+ {
+  "label": "gamma counts one group of eight only",
+  "find": "\t\t\tgamma = 136u * word_10c;\n",
+  "replace": "\t\t\tgamma = 136u;\n"
+ },
+ {
+  "label": "delta counts mask words rather than positions",
+  "find": "\t\t\tdelta = 136u * word_10c;",
+  "replace": "\t\t\tdelta = 8u * word_10c;"
+ },
+ {
+  "label": "delta is taken from gamma rather than recomputed",
+  "find": "\t\t\tdelta = 136u * word_10c;\n",
+  "replace": "\t\t\tdelta = gamma;\n"
+ },
+ {
+  "label": "state 7 counts the first block against delta",
+  "find": "\t\tif ((unsigned int)word_120 == gamma) {",
+  "replace": "\t\tif ((unsigned int)word_120 == delta) {"
+ },
+ {
+  "label": "state 8 counts the second block against gamma",
+  "find": "\t\tif ((unsigned int)word_120 == delta) {",
+  "replace": "\t\tif ((unsigned int)word_120 == gamma) {"
+ },
+ {
+  "label": "state 7 gates the second block the other way round",
+  "find": "\t\t\tword_114 = (byte_24 != 0) ? 8 : 9;",
+  "replace": "\t\t\tword_114 = (byte_24 != 0) ? 9 : 8;"
+ },
+ {
+  "label": "state 7 always sends the second block",
+  "find": "\t\t\tword_114 = (byte_24 != 0) ? 8 : 9;\n",
+  "replace": "\t\t\tword_114 = 8;\n"
+ },
+ {
+  "label": "state 7 counts positions against the cursor rather than the count",
+  "find": "\t\tword_120++;\n\t\tif ((unsigned int)word_120 == gamma) {",
+  "replace": "\t\tif ((unsigned int)word_11c == gamma) {"
+ },
+ {
+  "label": "the closing frame is sixteen positions",
+  "find": "\t\tif (word_120 == 17) {",
+  "replace": "\t\tif (word_120 == 16) {"
+ },
+ {
+  "label": "msgLen is one short of the cursor",
+  "find": "\t\t\tmsgLen = (unsigned int)word_11c;",
+  "replace": "\t\t\tmsgLen = (unsigned int)word_11c - 1u;"
+ },
+ {
+  "label": "the register is not reset before it is clocked",
+  "find": "\t\t\tresetCRC();\n\t\t\tcalcCRC();",
+  "replace": "\t\t\tcalcCRC();"
+ },
+ {
+  "label": "the CRC verdict is inverted",
+  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\tword_114 = 10;",
+  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\tword_114 = 10;"
+ },
+ {
+  "label": "a bad CRC does not restart the detector",
+  "find": "\t\t\t} else {\n\t\t\t\tresetDetector();\n\t\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\t} else {\n\t\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "a good CRC goes back to the preamble instead of state 10",
+  "find": "\t\t\t\tword_114 = 10;",
+  "replace": "\t\t\t\tword_114 = 0;"
+ },
+ {
+  "label": "state 10 restarts on a ZERO rather than a ONE",
+  "find": "\t\tif (bit != 0)\n\t\t\tresetDetector();",
+  "replace": "\t\tif (bit == 0)\n\t\t\tresetDetector();"
+ },
+ {
+  "label": "state 10 does not advance the cursor",
+  "find": "\t\tword_11c++;\n\t\tif (bit != 0)\n\t\t\tresetDetector();",
+  "replace": "\t\tif (bit != 0)\n\t\t\tresetDetector();"
+ },
+ {
+  "label": "state 10 lands on the symbol rather than the frame",
+  "find": "\t\tif ((unsigned int)word_11c % frameBits == 0) {",
+  "replace": "\t\tif ((unsigned int)word_11c % (frameBits / 12u) == 0) {"
+ },
+ {
+  "label": "state 10 does not restart the detector before reporting",
+  "find": "\t\t\tresetDetector();\n\n\t\t\tif (byte_00 == 1)",
+  "replace": "\t\t\tif (byte_00 == 1)"
+ },
+ {
+  "label": "the answers for the two forms are the other way round",
+  "find": "\t\t\tif (byte_00 == 1)\n\t\t\t\trc = (byte_04 == 0) ? 3 : 4;\n\t\t\telse\n\t\t\t\trc = (byte_04 == 0) ? 1 : 2;",
+  "replace": "\t\t\tif (byte_00 == 1)\n\t\t\t\trc = (byte_04 == 0) ? 1 : 2;\n\t\t\telse\n\t\t\t\trc = (byte_04 == 0) ? 3 : 4;"
+ },
+ {
+  "label": "byte_04 selects the answer the other way round",
+  "find": "\t\t\t\trc = (byte_04 == 0) ? 3 : 4;",
+  "replace": "\t\t\t\trc = (byte_04 == 0) ? 4 : 3;"
+ },
+ {
+  "label": "byte_04 selects the short form's answer the other way round",
+  "find": "\t\t\t\trc = (byte_04 == 0) ? 1 : 2;",
+  "replace": "\t\t\t\trc = (byte_04 == 0) ? 2 : 1;"
+ },
+ {
+  "label": "the type test is for non-zero rather than one",
+  "find": "\t\t\tif (byte_00 == 1)\n",
+  "replace": "\t\t\tif (byte_00 != 0)\n"
+ },
+ {
+  "label": "the hold-off suppresses the wrong pair of answers",
+  "find": "\t\tif (rc == 3 || rc == 4)\n\t\t\trc = 0;",
+  "replace": "\t\tif (rc == 1 || rc == 2)\n\t\t\trc = 0;"
+ },
+ {
+  "label": "the hold-off suppresses the far-end answer as well",
+  "find": "\t\tif (rc == 3 || rc == 4)\n\t\t\trc = 0;\n",
+  "replace": "\t\tif (rc >= 3)\n\t\t\trc = 0;\n"
+ },
+ {
+  "label": "the hold-off is one call longer",
+  "find": "\t\tif (word_914 == 400)",
+  "replace": "\t\tif (word_914 == 401)"
+ },
+ {
+  "label": "the hold-off returns to zero rather than to idle",
+  "find": "\t\tif (word_914 == 400)\n\t\t\tword_914 = -1;",
+  "replace": "\t\tif (word_914 == 400)\n\t\t\tword_914 = 0;"
+ },
+ {
+  "label": "the hold-off is started by the wrong pair of answers",
+  "find": "\t} else if (rc == 1 || rc == 2) {\n\t\tword_914 = 0;",
+  "replace": "\t} else if (rc == 3 || rc == 4) {\n\t\tword_914 = 0;"
+ },
+ {
+  "label": "the hold-off treats zero as idle",
+  "find": "\tif (word_914 >= 0) {",
+  "replace": "\tif (word_914 > 0) {"
+ },
+ {
+  "label": "the hold-off does not advance",
+  "find": "\t\tword_914++;\n\t\tif (word_914 == 400)",
+  "replace": "\t\tif (word_914 == 400)"
+ },
+ {
+  "label": "the answer is not reported at all",
+  "find": "\treturn rc;\n}",
+  "replace": "\treturn 0;\n}"
+ }
+]

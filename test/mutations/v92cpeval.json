@@ -1,0 +1,251 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and the claim it exists for",
+  "why": "`V92CP::evaluateInfo` and `binaryTable` were read out of .text+0x4f400-0x4f863 in one sitting, so a green t_v92cpeval says our reading and the object agree and not that either is right. THE ENTRIES THAT MATTER MOST are the two bit-order ones: every field but the mask blocks is read least-significant-first and the mask blocks are read most-significant-first (docs/deviations.md D920), and a vector of all ones or all zeros cannot tell those apart. The fills in the driver are what make them separable and these mutations are what prove the fills work. WHAT NO ENTRY HERE REACHES: `word_10c` at or above 15 for case 7 and 9 for case 8, where the decoded mask value overwrites the read cursor itself and the object walks off the object -- docs/deviations.md D922, and a mutation of it would crash rather than be caught."
+ },
+ {
+  "label": "binaryTable drops an entry the way fltTable_2 does",
+  "find": "\t1 <<  8,\t1 <<  9,\t1 << 10,\t1 << 11,",
+  "replace": "\t1 <<  8,\t1 <<  9,\t1 <<  9,\t1 << 11,"
+ },
+ {
+  "label": "binaryTable counts from one rather than from zero",
+  "find": "\t1 <<  0,\t1 <<  1,\t1 <<  2,\t1 <<  3,",
+  "replace": "\t1 <<  1,\t1 <<  1,\t1 <<  2,\t1 <<  3,"
+ },
+ {
+  "label": "binaryTable's top entry is signed",
+  "find": "\t1 << 12,\t1 << 13,\t1 << 14,\t1 << 15",
+  "replace": "\t1 << 12,\t1 << 13,\t1 << 14,\t-(1 << 15)"
+ },
+ {
+  "label": "case 3 reads word_104 most significant first",
+  "find": "\t\t\tword_104 += bits[27 + i] * binaryTable[i];",
+  "replace": "\t\t\tword_104 += bits[27 + i] * binaryTable[4 - i];"
+ },
+ {
+  "label": "case 3 masks the entry to one bit before weighting it",
+  "find": "\t\tfor (i = 0; i <= 4; i++)\n\t\t\tword_104 += bits[27 + i] * binaryTable[i];",
+  "replace": "\t\tfor (i = 0; i <= 4; i++)\n\t\t\tword_104 += (bits[27 + i] & 1) * binaryTable[i];"
+ },
+ {
+  "label": "case 3 takes four bits of word_104 rather than five",
+  "find": "\t\tword_104 = 0;\n\t\tfor (i = 0; i <= 4; i++)",
+  "replace": "\t\tword_104 = 0;\n\t\tfor (i = 0; i <= 3; i++)"
+ },
+ {
+  "label": "case 3 does not clear word_104 first",
+  "find": "\t\tword_104 = 0;\n\t\tfor (i = 0; i <= 4; i++)\n",
+  "replace": "\t\tfor (i = 0; i <= 4; i++)\n"
+ },
+ {
+  "label": "case 3 finds the SUV byte one position early",
+  "find": "\t\tsuv = bits[32];\n\t\tbyte_04 = bits[33];",
+  "replace": "\t\tsuv = bits[31];\n\t\tbyte_04 = bits[33];"
+ },
+ {
+  "label": "case 3 finds byte_04 one position early",
+  "find": "\t\tsuv = bits[32];\n\t\tbyte_04 = bits[33];\n\t\tbreak;",
+  "replace": "\t\tsuv = bits[32];\n\t\tbyte_04 = bits[32];\n\t\tbreak;"
+ },
+ {
+  "label": "case 5 takes char_01's two bits the other way round",
+  "find": "\t\tchar_01 = (signed char)((bits[19] & 1) | (bits[20] << 1));",
+  "replace": "\t\tchar_01 = (signed char)((bits[20] & 1) | (bits[19] << 1));"
+ },
+ {
+  "label": "case 5 masks char_01's high bit as well",
+  "find": "(bits[19] & 1) | (bits[20] << 1));",
+  "replace": "(bits[19] & 1) | ((bits[20] & 1) << 1));"
+ },
+ {
+  "label": "case 5 does not copy char_01 to byte_118",
+  "find": "\t\tbyte_118 = (unsigned char)char_01;",
+  "replace": "\t\tbyte_118 = 0;"
+ },
+ {
+  "label": "case 5 reads char_02 upwards",
+  "find": "\t\tfor (i = 25; i > 20; i--)",
+  "replace": "\t\tfor (i = 21; i < 26; i++)"
+ },
+ {
+  "label": "case 5 takes four bits of char_02",
+  "find": "\t\tfor (i = 25; i > 20; i--)\n",
+  "replace": "\t\tfor (i = 25; i > 21; i--)\n"
+ },
+ {
+  "label": "case 5 does not clear char_02 first",
+  "find": "\t\tchar_02 = 0;\n\t\tfor (i = 25; i > 20; i--)",
+  "replace": "\t\tfor (i = 25; i > 20; i--)"
+ },
+ {
+  "label": "case 5 gates word_08 on char_01 below one",
+  "find": "\t\tif (char_01 <= 1)\n\t\t\tword_08 = (bits[31] & 1) | (bits[32] << 1);",
+  "replace": "\t\tif (char_01 < 1)\n\t\t\tword_08 = (bits[31] & 1) | (bits[32] << 1);"
+ },
+ {
+  "label": "case 5 gates word_08 on an unsigned comparison",
+  "find": "\t\tif (char_01 <= 1)\n",
+  "replace": "\t\tif ((unsigned char)char_01 <= 1)\n"
+ },
+ {
+  "label": "case 5 takes word_08's two bits the other way round",
+  "find": "\t\t\tword_08 = (bits[31] & 1) | (bits[32] << 1);",
+  "replace": "\t\t\tword_08 = (bits[32] & 1) | (bits[31] << 1);"
+ },
+ {
+  "label": "case 6 finds byte_03 one position late",
+  "find": "\t\tbyte_03 = bits[35];",
+  "replace": "\t\tbyte_03 = bits[36];"
+ },
+ {
+  "label": "case 6 takes word_0c's two bits the other way round",
+  "find": "\t\tword_0c = (bits[49] & 1) | (bits[50] << 1);",
+  "replace": "\t\tword_0c = (bits[50] & 1) | (bits[49] << 1);"
+ },
+ {
+  "label": "case 6 seeds the read cursor one position late",
+  "find": "\t\tword_124 = 52;",
+  "replace": "\t\tword_124 = 53;"
+ },
+ {
+  "label": "case 6 reads flt_10 lightest weight last",
+  "find": "\t\t\t\tf += fltTable_2[15 - i];",
+  "replace": "\t\t\t\tf += fltTable_2[i];"
+ },
+ {
+  "label": "case 6 takes fifteen magnitude entries for flt_10",
+  "find": "\t\tf = 0.0f;\n\t\tfor (i = 0; i <= 15; i++) {",
+  "replace": "\t\tf = 0.0f;\n\t\tfor (i = 0; i <= 14; i++) {"
+ },
+ {
+  "label": "case 6 tests the flt_10 entry against one rather than zero",
+  "find": "\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf += fltTable_2[15 - i];",
+  "replace": "\t\t\tif (bits[word_124] == 1)\n\t\t\t\tf += fltTable_2[15 - i];"
+ },
+ {
+  "label": "case 6 does not skip the framing position before flt_14",
+  "find": "\t\tflt_10 = f;\n\n\t\tword_124++;",
+  "replace": "\t\tflt_10 = f;\n"
+ },
+ {
+  "label": "case 6 reads the first magnitude pair lightest weight last",
+  "find": "\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;",
+  "replace": "\t\t\t\t\tf += fltTable_1[i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;"
+ },
+ {
+  "label": "case 6 ignores the sign entry of the first pair",
+  "find": "\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;",
+  "replace": "\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;"
+ },
+ {
+  "label": "case 6 ignores the sign entry of the second pair",
+  "find": "\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;",
+  "replace": "\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;"
+ },
+ {
+  "label": "case 6 puts the second pair the other way round",
+  "find": "\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;\n\t\t\telse\n\t\t\t\tflt_20 = f;",
+  "replace": "\t\t\tif (m == 0)\n\t\t\t\tflt_20 = f;\n\t\t\telse\n\t\t\t\tflt_1c = f;"
+ },
+ {
+  "label": "case 6 takes six magnitude entries for each signed value",
+  "find": "\t\t\tfor (i = 0; i <= 6; i++) {\n\t\t\t\tif (bits[word_124] != 0)\n\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;",
+  "replace": "\t\t\tfor (i = 0; i <= 5; i++) {\n\t\t\t\tif (bits[word_124] != 0)\n\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;"
+ },
+ {
+  "label": "case 6 does not skip the framing position before flt_1c",
+  "find": "\t\tword_124++;\t\t/* the framing position at 85 */",
+  "replace": ""
+ },
+ {
+  "label": "case 6 does not skip the framing position before word_28",
+  "find": "\t\tword_124++;\t\t/* the framing position at 102 */",
+  "replace": ""
+ },
+ {
+  "label": "case 6 takes the last count rather than the largest",
+  "find": "\t\t\tif (word_28[k] > max)\n\t\t\t\tmax = word_28[k];\n\t\t}\n\n\t\tword_124++;\t\t/* the framing position at 119 */",
+  "replace": "\t\t\tmax = word_28[k];\n\t\t}\n\n\t\tword_124++;\t\t/* the framing position at 119 */"
+ },
+ {
+  "label": "case 6 reads the first four counts most significant first",
+  "find": "\t\tfor (k = 0; k <= 3; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[i];",
+  "replace": "\t\tfor (k = 0; k <= 3; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[3 - i];"
+ },
+ {
+  "label": "case 6 reads the last two counts most significant first",
+  "find": "\t\tfor (k = 4; k <= 5; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[i];",
+  "replace": "\t\tfor (k = 4; k <= 5; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[3 - i];"
+ },
+ {
+  "label": "case 6 does not skip the framing position at 119",
+  "find": "\t\tword_124++;\t\t/* the framing position at 119 */",
+  "replace": ""
+ },
+ {
+  "label": "case 6 makes the group count the maximum rather than one more",
+  "find": "\t\tword_10c = (unsigned short)(max + 1);",
+  "replace": "\t\tword_10c = (unsigned short)max;"
+ },
+ {
+  "label": "case 6 reads byte_24 after advancing the cursor",
+  "find": "\t\tbyte_24 = bits[word_124];\n\t\tword_124++;",
+  "replace": "\t\tword_124++;\n\t\tbyte_24 = bits[word_124];"
+ },
+ {
+  "label": "case 6 skips six positions rather than seven",
+  "find": "\t\tword_124 += 7;",
+  "replace": "\t\tword_124 += 6;"
+ },
+ {
+  "label": "case 7 reads the mask words least significant first",
+  "find": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;",
+  "replace": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;"
+ },
+ {
+  "label": "case 8 reads the mask words least significant first",
+  "find": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;",
+  "replace": "\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;"
+ },
+ {
+  "label": "case 7 does not skip the framing position of each mask word",
+  "find": "\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;",
+  "replace": "\t\t\t\tshort_42[k][j] = 0;"
+ },
+ {
+  "label": "case 8 does not skip the framing position of each mask word",
+  "find": "\t\t\t\tword_124++;\n\t\t\t\tshort_a2[k][j] = 0;",
+  "replace": "\t\t\t\tshort_a2[k][j] = 0;"
+ },
+ {
+  "label": "case 7 does not zero the destination first",
+  "find": "\t\t\t\tshort_42[k][j] = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "case 8 does not zero the destination first",
+  "find": "\t\t\t\tshort_a2[k][j] = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "case 7 takes seven mask words to the group",
+  "find": "\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;",
+  "replace": "\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 6; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;"
+ },
+ {
+  "label": "case 7 bounds the group count at the six the class holds",
+  "find": "\t\tn = word_10c;\n\n\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;",
+  "replace": "\t\tn = word_10c > 6 ? 6 : word_10c;\n\n\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;"
+ },
+ {
+  "label": "case 8 writes into the first mask block",
+  "find": "\t\t\t\tshort_a2[k][j] = (short)acc;",
+  "replace": "\t\t\t\tshort_42[k][j] = (short)acc;"
+ },
+ {
+  "label": "the switch has no hole at state 4",
+  "find": "\tcase 3:\n\t\t/*\n\t\t * The short form.",
+  "replace": "\tcase 4:\n\tcase 3:\n\t\t/*\n\t\t * The short form."
+ }
+]
