@@ -39,6 +39,7 @@ extern short ref_SREv32_xCLOCK[];
 extern short ref_SREv32_yCLOCK[];
 
 extern void ref_FPM_SRE_init(void *sre, const void *cfg, int fresh);
+extern void ref_FPM_SRE_free(void *sre);
 extern unsigned short ref_FPM_SRE_recover(void *sre, const short *in,
 					  short *out, short count);
 
@@ -800,6 +801,83 @@ main(void)
 			    ours.ppm_count == refs.ppm_count
 			    && ours.ppm_n == refs.ppm_n, 1, 0);
 		(void)zb;
+	}
+	rc |= diff_end();
+
+	/*
+	 * FPM_SRE_free, and it is LAST in the file on purpose: it leaves four
+	 * dangling pointers behind in whatever state it is given, so anything
+	 * placed after it that reused `ours` or `refs` would fail in a way that
+	 * reads like a broken init.  It gets its own two objects as well.
+	 *
+	 * Nothing it does is visible in the state -- the pointers are not
+	 * cleared -- so the whole of its behaviour is in the allocator: four
+	 * releases, of the buffers this state owns and of nothing else.
+	 *
+	 * THE SECOND PASS FREES A ZEROED STATE.  That is what pins the NUMBER
+	 * of calls rather than their effect: `free_null` counts a release of
+	 * NULL where `frees` does not, so a version that released three of the
+	 * four agrees with the reference on `frees` in pass 0 and disagrees
+	 * here.
+	 */
+	diff_begin("FPM_SRE_free");
+	{
+		int pass;
+
+		/*
+		 * THE BOOKS HAVE TO BE RESET FIRST, and that is a measurement
+		 * rather than tidiness: every `fresh` init above leaks its four
+		 * buffers, this file reaches 8724 allocations with 8716 still
+		 * live, and the harness's live set is 4096 slots.  It had
+		 * overflowed 4620 times by the time this block ran, so the
+		 * pointers allocated here were never recorded and both sides'
+		 * releases came back as `bad_free` -- the reference's too,
+		 * which is what says it is the apparatus and not the code.
+		 * `t_fpm_tone`'s delete block resets for the same reason.
+		 *
+		 * Nothing after this frees anything allocated before it, which
+		 * is why the reset is safe here and would not be earlier.
+		 */
+		harness_alloc_reset();
+
+		for (pass = 0; pass < 2; pass++) {
+			static struct fpm_sre fs, gs;
+			int fa, fb, la, lb, na, nb;
+
+			memset(&fs, 0, sizeof(fs));
+			memset(&gs, 0, sizeof(gs));
+			if (pass == 0) {
+				make_cfg(&cfg);
+				ref_FPM_SRE_init(&fs, &cfg, 1);
+				FPM_SRE_init(&gs, &cfg, 1);
+			}
+
+			la = harness_alloc.live;
+			fa = harness_alloc.frees;
+			na = harness_alloc.free_null;
+			ref_FPM_SRE_free(&fs);
+			fa = harness_alloc.frees - fa;
+			la = la - harness_alloc.live;
+			na = harness_alloc.free_null - na;
+
+			lb = harness_alloc.live;
+			fb = harness_alloc.frees;
+			nb = harness_alloc.free_null;
+			FPM_SRE_free(&gs);
+			fb = harness_alloc.frees - fb;
+			lb = lb - harness_alloc.live;
+			nb = harness_alloc.free_null - nb;
+
+			diff_eq_int("frees (%ld)", fb, fa, pass);
+			diff_eq_int("live dropped by (%ld)", lb, la, pass);
+			diff_eq_int("null frees (%ld)", nb, na, pass);
+			diff_eq_int("frees for this pass (%ld)", fa,
+				    pass == 0 ? 4 : 0, pass);
+			diff_eq_int("null frees for this pass (%ld)", na,
+				    pass == 0 ? 0 : 4, pass);
+			diff_eq_int("no bad frees (%ld)", harness_alloc.bad_free,
+				    0, pass);
+		}
 	}
 	rc |= diff_end();
 

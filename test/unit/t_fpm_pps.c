@@ -1,11 +1,16 @@
 /*
  * t_fpm_pps.c -- the generic transmit pulse shaper, against the blob's.
  *
- * `FPM_PPS_init` is not in this batch, so both states are built with the
- * REFERENCE init and only `FPM_PPS_filter` is compared -- the same isolation
- * `t_fpm_tone` uses for `FPM_TONE_create`, and it is stronger than it sounds,
- * because both sides then start from byte-identical state including the two
- * history buffers init laid down.
+ * THE TWO SIDES NOW BUILD THEIR OWN STATE.  This file used to run the
+ * REFERENCE init on both, because ours did not exist; now `ours` is built by
+ * `FPM_PPS_init` and `refs` by the blob's, which is what makes every filter
+ * trial below also a test of init -- the filter is driven from a state our own
+ * code laid down, buffers included, rather than from one handed to it.
+ *
+ * `FPM_PPS_free` and init's REUSE PATH are invisible to a whole-object
+ * comparison -- every scalar is reset either way and a freed pointer is not
+ * readable -- so they are measured with the allocator's books instead:
+ * `harness_alloc.allocs`, `.frees`, `.live`, `.free_null` and `.bad_free`.
  *
  * The configuration is built here.  `FPM_PPS_CFG`'s four pointers are null and
  * a caller patches them, so the built-in on its own would fault on the first
@@ -25,6 +30,7 @@
 #include "dsplib/fpm_smc.h"
 
 extern void ref_FPM_PPS_init(void *state, const void *cfg, int fresh);
+extern void ref_FPM_PPS_free(void *state);
 extern unsigned short ref_FPM_PPS_filter(void *state, void *src, short *out,
 					 unsigned short count);
 
@@ -34,7 +40,18 @@ extern unsigned short ref_FPM_PPS_filter(void *state, void *src, short *out,
 #define RING_LEN	16
 #define MAP_LEN		256
 
-static short coeff_i[PPS_COEFFS], coeff_q[PPS_COEFFS];
+/*
+ * The coefficient arrays are LONGER than the configured count.  The reuse
+ * block below drives a thirteen-tap configuration, whose rail walk reaches
+ * `phase + (taps - 1) * phases` = 129, and a table sized at the configured 120
+ * would be read off the end -- by both sides, so the differential comparison
+ * would agree and say nothing.  Only `cfg.coeffs` is ever raised above 120;
+ * every trial before that one is unaffected, since a twelve-tap walk stops at
+ * 119 either way.
+ */
+#define PPS_COEFF_MAX	(PPS_COEFFS + 20)
+
+static short coeff_i[PPS_COEFF_MAX], coeff_q[PPS_COEFF_MAX];
 static short imap[MAP_LEN], qmap[MAP_LEN];
 static short ring_sym[RING_LEN], ring_i[RING_LEN], ring_q[RING_LEN];
 
@@ -128,7 +145,7 @@ main(void)
 	 * lands on a different number rather than the same one.  V.32's SRE
 	 * tables taught this the hard way -- see finding 3574.
 	 */
-	for (i = 0; i < PPS_COEFFS; i++) {
+	for (i = 0; i < PPS_COEFF_MAX; i++) {
 		coeff_i[i] = (short)((i * 271 + 13) % 4001 - 2000);
 		coeff_q[i] = (short)((i * 397 + 101) % 4001 - 2000);
 	}
@@ -136,6 +153,63 @@ main(void)
 		imap[i] = (short)((i * 173) % 8001 - 4000);
 		qmap[i] = (short)((i * 311) % 8001 - 4000);
 	}
+
+	/*
+	 * init on a never-initialised object.  Both sides allocate, and the
+	 * two buffers are compared BY CONTENT because their addresses cannot
+	 * agree -- with the request SIZES compared as well, which is what says
+	 * the histories are `taps` entries and not V.22's `2 * taps`.
+	 */
+	diff_begin("FPM_PPS_init fresh");
+	{
+		int aa, ab;
+
+		make_cfg(&cfg, 1, 3, 0, 32767);
+		memset(&ours, 0, sizeof(ours));
+		memset(&refs, 0, sizeof(refs));
+
+		aa = harness_alloc.allocs;
+		ref_FPM_PPS_init(&refs, &cfg, 1);
+		aa = harness_alloc.allocs - aa;
+
+		ab = harness_alloc.allocs;
+		FPM_PPS_init(&ours, &cfg, 1);
+		ab = harness_alloc.allocs - ab;
+
+		compare_state(&ours, &refs, 0);
+		diff_eq_int("allocations (%ld)", ab, aa, 0);
+		diff_eq_int("hist_i bytes (%ld)",
+			    (int)harness_alloc_reqsize(ours.hist_i),
+			    (int)harness_alloc_reqsize(refs.hist_i), 0);
+		diff_eq_int("hist_q bytes (%ld)",
+			    (int)harness_alloc_reqsize(ours.hist_q),
+			    (int)harness_alloc_reqsize(refs.hist_q), 0);
+
+		/*
+		 * Anti-vacuity, each against a number derived outside both
+		 * implementations: two buffers of `taps` shorts, a tap count
+		 * that is the quotient, a phase seeded from the STEP rather
+		 * than from zero, and a debt of zero.
+		 */
+		diff_eq_int("two buffers were allocated (%ld)", aa, 2, 0);
+		diff_eq_int("each is taps shorts (%ld)",
+			    (int)harness_alloc_reqsize(refs.hist_i),
+			    2 * PPS_TAPS, 0);
+		diff_eq_int("... and both the same (%ld)",
+			    (int)harness_alloc_reqsize(refs.hist_q),
+			    2 * PPS_TAPS, 0);
+		diff_eq_int("taps is coeffs / phases (%ld)", refs.taps,
+			    PPS_TAPS, 0);
+		diff_eq_int("phase is seeded from step (%ld)", refs.phase, 3, 0);
+		diff_eq_int("need starts at zero (%ld)", refs.need, 0, 0);
+		diff_eq_int("widx starts at zero (%ld)", refs.widx, 0, 0);
+		diff_eq_int("the histories are cleared (%ld)",
+			    refs.hist_i[PPS_TAPS - 1] == 0
+			    && refs.hist_q[PPS_TAPS - 1] == 0, 1, 0);
+		diff_eq_int("the configuration was copied (%ld)",
+			    refs.cfg.coeffs, PPS_COEFFS, 0);
+	}
+	rc |= diff_end();
 
 	/*
 	 * Both symbol sources, three phase steps, three gains.  A step that
@@ -156,7 +230,7 @@ main(void)
 			memset(&ours, 0, sizeof(ours));
 			memset(&refs, 0, sizeof(refs));
 			ref_FPM_PPS_init(&refs, &cfg, 1);
-			ref_FPM_PPS_init(&ours, &cfg, 1);
+			FPM_PPS_init(&ours, &cfg, 1);
 
 			sprintf(tag, "FPM_PPS_filter %s step %d",
 				mapped ? "mapped" : "direct", steps[s]);
@@ -212,7 +286,7 @@ main(void)
 		memset(&ours, 0, sizeof(ours));
 		memset(&refs, 0, sizeof(refs));
 		ref_FPM_PPS_init(&refs, &cfg, 1);
-		ref_FPM_PPS_init(&ours, &cfg, 1);
+		FPM_PPS_init(&ours, &cfg, 1);
 		make_ring(&ra, 5);
 		make_ring(&rb, 5);
 		/* Run a little first, so there is state worth preserving. */
@@ -255,7 +329,7 @@ main(void)
 		 * unless a caller seeds a debt above one, since nothing in the
 		 * block ever sets `need` to more than 1.
 		 */
-		for (i = 0; i < PPS_COEFFS; i++) {
+		for (i = 0; i < PPS_COEFF_MAX; i++) {
 			coeff_i[i] = (short)((i * 6421 + 977) % 65536 - 32768);
 			coeff_q[i] = (short)((i * 5237 + 311) % 65536 - 32768);
 		}
@@ -266,7 +340,7 @@ main(void)
 			memset(&ours, 0, sizeof(ours));
 			memset(&refs, 0, sizeof(refs));
 			ref_FPM_PPS_init(&refs, &cfg, 1);
-			ref_FPM_PPS_init(&ours, &cfg, 1);
+			FPM_PPS_init(&ours, &cfg, 1);
 			make_ring(&ra, trial);
 			make_ring(&rb, trial);
 
@@ -292,6 +366,176 @@ main(void)
 				diff_eq_int("seeded out[%ld]", ob[i], oa[i], i);
 			compare_state(&ours, &refs, trial);
 			compare_ring(&rb, &ra, trial);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * Re-init.  `fresh` zero keeps the two buffers unless the tap count
+	 * now asked for is LARGER than the one they were allocated with, and
+	 * that branch is invisible to a whole-object comparison -- every scalar
+	 * is reset either way and both histories are cleared either way -- so
+	 * it is read out of the allocator's books instead.
+	 *
+	 * PASS 1 IS THE ONE THAT SEPARATES THIS FUNCTION FROM ITS SIBLING.  It
+	 * raises `cfg.coeffs` from 120 to 125 with `phases` at ten, so the
+	 * quotient stays at twelve and both buffers must be KEPT.
+	 * `FPM_SRE_init` decides on `cfg.coeffs` itself and would reallocate
+	 * here; this one decides on the quotient, which is exactly the claim
+	 * deviation D400 rests on and which nothing before this drove.
+	 *
+	 * Pass 3 shrinks the count, so `taps` falls below what the buffers
+	 * hold: still a reuse, and the clear loop must run to the NEW count.
+	 */
+	diff_begin("FPM_PPS_init reuse and realloc");
+	{
+		static const struct {
+			short coeffs;
+			int moved;	/* frees, and allocations, per side */
+			short taps;
+		} pass[] = {
+			{ PPS_COEFFS,		0, PPS_TAPS	 },
+			{ PPS_COEFFS + 5,	0, PPS_TAPS	 },
+			{ PPS_COEFFS + 10,	2, PPS_TAPS + 1 },
+			{ PPS_COEFFS - 20,	0, PPS_TAPS - 2 }
+		};
+		int p;
+
+		make_cfg(&cfg, 1, 3, 0, 32767);
+		memset(&ours, 0, sizeof(ours));
+		memset(&refs, 0, sizeof(refs));
+		ref_FPM_PPS_init(&refs, &cfg, 1);
+		FPM_PPS_init(&ours, &cfg, 1);
+
+		for (p = 0; p < (int)(sizeof(pass) / sizeof(pass[0])); p++) {
+			struct fpm_pps_cfg c2 = cfg;
+			int fa, fb, aa, ab;
+
+			c2.coeffs = pass[p].coeffs;
+
+			/*
+			 * DIRTY THE STATE FIRST, and it is not decoration: a
+			 * re-init handed a state straight out of init agrees
+			 * with one that resets nothing at all, because every
+			 * field it would reset is already at its reset value.
+			 * Sixteen symbols moves `widx`, `phase` and `need` off
+			 * zero and fills BOTH histories to their full length --
+			 * which is also what lets the SHRINKING pass see a
+			 * clear loop that runs one entry too far, since the
+			 * entries above the new tap count have to survive it.
+			 */
+			make_ring(&ra, p + 1);
+			make_ring(&rb, p + 1);
+			(void)ref_FPM_PPS_filter(&refs, &ra, oa, 16);
+			(void)FPM_PPS_filter(&ours, &rb, ob, 16);
+			diff_eq_int("dirtied widx (%ld)", refs.widx != 0, 1,
+				    refs.widx);
+			diff_eq_int("both sides dirtied alike (%ld)",
+				    ours.widx, refs.widx, p);
+
+			fa = harness_alloc.frees;
+			aa = harness_alloc.allocs;
+			ref_FPM_PPS_init(&refs, &c2, 0);
+			fa = harness_alloc.frees - fa;
+			aa = harness_alloc.allocs - aa;
+
+			fb = harness_alloc.frees;
+			ab = harness_alloc.allocs;
+			FPM_PPS_init(&ours, &c2, 0);
+			fb = harness_alloc.frees - fb;
+			ab = harness_alloc.allocs - ab;
+
+			diff_eq_int("frees (%ld)", fb, fa, p);
+			diff_eq_int("allocations (%ld)", ab, aa, p);
+			/*
+			 * Anti-vacuity, and the whole point of the four passes:
+			 * a reconstruction that always reallocated would agree
+			 * with the reference on every state word and differ
+			 * only here.
+			 */
+			diff_eq_int("frees for this branch (%ld)", fa,
+				    pass[p].moved, p);
+			diff_eq_int("allocations for this branch (%ld)", aa,
+				    pass[p].moved, p);
+			diff_eq_int("taps for this branch (%ld)", refs.taps,
+				    pass[p].taps, p);
+			diff_eq_int("no bad frees (%ld)", harness_alloc.bad_free,
+				    0, p);
+
+			compare_state(&ours, &refs, p);
+			for (i = 0; i < pass[p].taps; i++) {
+				diff_eq_int("reinit hist_i[%ld]", ours.hist_i[i],
+					    refs.hist_i[i], i);
+				diff_eq_int("reinit hist_q[%ld]", ours.hist_q[i],
+					    refs.hist_q[i], i);
+			}
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * FPM_PPS_free.  Nothing it does is visible in the state -- it does not
+	 * clear the two pointers -- so the whole of its behaviour is in the
+	 * allocator: two releases, of the buffers this state owns and of
+	 * nothing else.
+	 *
+	 * THE SECOND PASS FREES A ZEROED STATE, and that is what pins the
+	 * NUMBER of calls rather than their effect.  `free_null` counts a
+	 * release of NULL and `frees` does not, so a version that released one
+	 * buffer and not the other agrees on `frees` in pass 0 -- both sides
+	 * would have dropped live by one -- and disagrees here.
+	 */
+	diff_begin("FPM_PPS_free");
+	{
+		int pass;
+
+		/*
+		 * The books are reset first because every `fresh` init above
+		 * leaks its two buffers and the harness's live set is 4096
+		 * slots.  This file does not reach that today; `t_fpm_sre.c`
+		 * does -- 8724 allocations, 8716 still live -- and its free
+		 * block read every release as a `bad_free` until it reset.
+		 * Nothing after this point frees anything allocated before it.
+		 */
+		harness_alloc_reset();
+
+		for (pass = 0; pass < 2; pass++) {
+			static struct fpm_pps fs, gs;
+			int fa, fb, la, lb, na, nb;
+
+			memset(&fs, 0, sizeof(fs));
+			memset(&gs, 0, sizeof(gs));
+			if (pass == 0) {
+				make_cfg(&cfg, 1, 3, 0, 32767);
+				ref_FPM_PPS_init(&fs, &cfg, 1);
+				FPM_PPS_init(&gs, &cfg, 1);
+			}
+
+			la = harness_alloc.live;
+			fa = harness_alloc.frees;
+			na = harness_alloc.free_null;
+			ref_FPM_PPS_free(&fs);
+			fa = harness_alloc.frees - fa;
+			la = la - harness_alloc.live;
+			na = harness_alloc.free_null - na;
+
+			lb = harness_alloc.live;
+			fb = harness_alloc.frees;
+			nb = harness_alloc.free_null;
+			FPM_PPS_free(&gs);
+			fb = harness_alloc.frees - fb;
+			lb = lb - harness_alloc.live;
+			nb = harness_alloc.free_null - nb;
+
+			diff_eq_int("frees (%ld)", fb, fa, pass);
+			diff_eq_int("live dropped by (%ld)", lb, la, pass);
+			diff_eq_int("null frees (%ld)", nb, na, pass);
+			diff_eq_int("frees for this pass (%ld)", fa,
+				    pass == 0 ? 2 : 0, pass);
+			diff_eq_int("null frees for this pass (%ld)", na,
+				    pass == 0 ? 0 : 2, pass);
+			diff_eq_int("no bad frees (%ld)", harness_alloc.bad_free,
+				    0, pass);
 		}
 	}
 	rc |= diff_end();

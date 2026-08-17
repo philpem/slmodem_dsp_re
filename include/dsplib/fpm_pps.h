@@ -30,8 +30,8 @@
  *
  * Reconstructed from dsplibs.o:
  *   FPM_PPS_filter  .text   0x0a9590  753 B
- *   FPM_PPS_init    .text   0x0a98c0  259 B   -- read, NOT written
- *   FPM_PPS_free    .text   0x0a9890   35 B   -- read, NOT written
+ *   FPM_PPS_init    .text   0x0a98c0  259 B
+ *   FPM_PPS_free    .text   0x0a9890   35 B
  *   FPM_PPS_CFG     .rodata 0x00c4a0   40 B   -- not written
  */
 
@@ -89,13 +89,42 @@ struct fpm_pps_cfg {
 struct fpm_pps {
 	struct fpm_pps_cfg cfg;	/* +0x00 copied wholesale by init            */
 	short need;		/* +0x28 1 if the next output takes a new
-				 *       symbol first, else 0                */
-	short phase;		/* +0x2a 0 .. phases-1                       */
+				 *       symbol first, else 0.  INIT SETS 0,
+				 *       where FPM_SRE_init sets its own
+				 *       `need` to 1                         */
+	/*
+	 * +0x2a.  0 .. phases-1 once the filter has run, but INIT SEEDS IT
+	 * FROM `cfg.step` rather than from zero and does not reduce it, so a
+	 * configuration whose step is not below `phases` starts outside that
+	 * range.
+	 */
+	short phase;
 	short widx;		/* +0x2c newest entry of both histories      */
 	short taps;		/* +0x2e cfg.coeffs / cfg.phases             */
 	short *hist_i;		/* +0x30 `taps` entries, CIRCULAR            */
 	short *hist_q;		/* +0x34                                     */
 };
+
+/*
+ * `fresh` non-zero means the two history buffers do not exist yet: allocate
+ * without inspecting them.
+ *
+ * Zero means re-initialise, and there is a REUSE PATH of the same shape as
+ * `FPM_SRE_init`'s: the two buffers are freed and reallocated only if the
+ * existing `taps` is smaller than `cfg.coeffs / cfg.phases` now asks for.
+ * Every scalar is reset either way and both histories are cleared either way.
+ *
+ * UNLIKE ITS SIBLING THE TEST GUARDS EXACTLY WHAT IT SIZES -- see deviation
+ * D400, and the note at the top of `src/dsp/fpm_pps.c`.  A re-init that
+ * raises `cfg.coeffs` without raising the quotient keeps its buffers.
+ *
+ * `cfg.phases` of zero divides by zero.  The object has no guard.
+ */
+void FPM_PPS_init(struct fpm_pps *state, const struct fpm_pps_cfg *cfg,
+		  int fresh);
+
+/* Releases both histories, `hist_q` first.  Does not clear the pointers. */
+void FPM_PPS_free(struct fpm_pps *state);
 
 /*
  * Consume up to `count` SYMBOLS from `src` and write one output sample per

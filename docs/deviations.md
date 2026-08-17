@@ -6918,6 +6918,31 @@ that is now too small, and the clear loop immediately below runs to the NEW
 guards. So this is a slip in one of two sibling functions rather than a
 convention.
 
+**CONFIRMED AT THE BATCH OF 2026-08-17, WHICH WROTE `FPM_PPS_init`, AND THE**
+**VERDICT IS UNCHANGED.** The claim above was a reading made while writing
+`FPM_PPS_filter`, and this entry is amended rather than rewritten because
+nothing in it turned out to be wrong. Two things are now firmer than they were.
+
+*The disassembly settles it outright.* `cltd; idiv %esi` at 0x0a9928 leaves the
+quotient in `si`; `cmp %si,0x2e(%ebx)` at 0x0a9932 tests `state->taps` against
+that register, and `lea (%esi,%esi,1)` at 0x0a9994 and `add %esi,%esi` at
+0x0a99a6 size both buffers from the same one. The quantity tested and the
+quantity allocated are one value, and this block has two buffers where SRE has
+four -- so there is no third size for the test to miss.
+
+*And it is measured rather than read.* `t_fpm_pps.c`'s reuse block now drives a
+re-init that raises `cfg.coeffs` from 120 to 125 with `cfg.phases` at ten: the
+quotient stays at twelve, so the buffers must be KEPT, and the allocator must
+record zero frees and zero allocations. An SRE-shaped guard reallocates on that
+input, and the mutation that rewrites `FPM_PPS_init`'s test into that shape is
+in `test/mutations/fpmpps.json` and is caught by that pass alone. So the
+sentence "this is a slip rather than a convention" is now something a test
+fails on. Finding 3661.
+
+The SRE half of this entry is UNCHANGED and still unmeasured: `FPM_SRE_free`
+was written in the same batch, which adds a release path but no caller, and
+nothing in it raises `rms_len`.
+
 Unmeasured because no caller of `FPM_SRE_init` is reconstructed: the built-in
 `FPM_SRE_CFG` is a template with null table pointers and whoever patches and
 passes it is not written yet. Whether any real configuration ever raises
