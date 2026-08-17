@@ -132,10 +132,21 @@ two SIP legs. `dial.sh` is the low-level dialler. `waitquiet.sh` blocks until
 the machine is quiet enough to measure on — a call taken on a loaded box
 degrades silently, which is worse than failing.
 
-**Batches.** `ab149.sh` is the pre-registered A/B harness (gates on a quiet
-machine before *every* call, not just the first); `ladder.sh` walks one
-modulation per call; `preemph_ab.sh` / `preemph_ab2.sh` / `preemph_fit_ab.sh`
-are the pre-emphasis arms; the `*-sweep.sh` scripts vary one parameter.
+**Batches.** `ladder.sh` walks one modulation per call; `preemph_ab.sh` /
+`preemph_ab2.sh` are the pre-emphasis arms; the `*-sweep.sh` scripts vary one
+parameter.
+
+`ab149.sh` and `preemph_fit_ab.sh` are **on the `v34-instrumentation` branch,
+not here.** Each is an A/B whose two arms differ only by a
+`dsplib_v34_*` flag — `DSPLIB_V34_RRN_ON_BADBLOCK` and `DSPLIB_V34_FIT_PREEMP`
+— and those flags are bench instrumentation that master's datapump no longer
+carries. Left here they would still have *run*, set a variable nothing reads,
+and reported one arm run twice as though it were two. Check out that branch to
+use them, and build the hybrid from it (`tools/hybrid_link.sh` is there too).
+
+`ab149.sh`'s quiet-machine gate — it waits before *every* call, not just the
+first, because a call taken at load 4.28 returned 4800 against 31200 quiet
+(1951) — is worth stealing for any new batch script that stays here.
 
 **No hardware needed.** `chanshim.py` puts two live datapumps on an emulated
 channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
