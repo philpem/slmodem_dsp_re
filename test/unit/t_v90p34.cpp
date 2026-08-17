@@ -971,7 +971,18 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 				    0, tag);
 			if (before_sas)
 				n_s18_sas++;
-			if (dsplib_debug_capture_lines(0) > 0)
+			/*
+			 * THE WITNESS IS THE TEXT AND NOT THE LINE COUNT.  At
+			 * level 2 `getV90CpBits` prints as well, so
+			 * `lines > 0` is satisfied whether or not this arm's
+			 * own site fired -- which is the counter that proves
+			 * nothing that findings 3509 and 3403 are about.  This
+			 * message goes out through `dsplibs_debug_printf` and
+			 * not `edprintf`, so it is in the capture in plain
+			 * text and can be looked for.
+			 */
+			if (strstr(dsplib_debug_capture_text(0),
+				   "move to SCR on silence rrn") != 0)
 				n_s18_dbg++;
 		} else {
 			/*
@@ -1580,7 +1591,8 @@ main(void)
 		diff_eq_int("state 17 ran", n_s17 > 0, 1, 0);
 		diff_eq_int("state 18 ran", n_s18 > 0, 1, 0);
 		diff_eq_int("state 18 advanced", n_s18_adv > 0, 1, 0);
-		diff_eq_int("state 18 printed", n_s18_dbg > 0, 1, 0);
+		diff_eq_int("state 18's own message was printed",
+			    n_s18_dbg > 0, 1, 0);
 		diff_eq_int("state 18 cleared a set SAS bit", n_s18_sas > 0,
 			    1, 0);
 		diff_eq_int("state 19 sixteen-point ran", n_s19_16 > 0, 1, 0);

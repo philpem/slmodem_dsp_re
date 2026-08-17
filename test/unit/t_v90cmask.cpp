@@ -700,11 +700,23 @@ run_pack(void)
  * `abs((int)((v - (int)v) * 1e6))`, computed in the x87's extended registers,
  * so a reconstruction that rounded the intermediate through `float` would
  * agree on most inputs and differ on the ones whose scaled fraction lands
- * within a few units of an integer.  `edge[]` below is those: sixths and
- * thirds, values just under and just over a whole number, denormals, and the
- * two infinities and a NaN -- for which `(int)v` is undefined in C and
- * whatever the object does is what we have to do.  Those three are driven
- * last and their own claim is only that the two sides agree.
+ * within a few units of an integer.  `edge[]` below is those: both zeros,
+ * exact halves and quarters, sixths and thirds, values a unit in the last
+ * place under and over a whole number, the two ends of `float`'s exact
+ * integer range at 2^23, and two denormals.
+ *
+ * EVERY ENTRY CONVERTS TO `int` WITHOUT OVERFLOWING, and that is a
+ * constraint and not an accident.  Both helpers evaluate `(int)v` -- once as
+ * `(int)fabsf(v)` and once inside the subtraction -- and an out-of-range
+ * conversion is undefined in C, so a trial holding one is not a differential
+ * trial (D561).  On x87 it would not even look like one: `fistl` answers the
+ * integer indefinite deterministically, so both sides would agree and the
+ * trial would read as a pass.  The largest magnitudes here are +/-2.0e9,
+ * inside `INT_MAX`, and the smallest are denormals that convert to zero.
+ *
+ * WHAT IS THEREFORE NOT DRIVEN is the infinities and the NaNs, for the same
+ * reason and with the same consequence: nothing here says what either
+ * function does with them.  D790 is this batch's other entry of that shape.
  */
 static const float edge[] = {
 	0.0f, -0.0f, 1.0f, -1.0f,
@@ -714,7 +726,7 @@ static const float edge[] = {
 	0.1f, 0.2f, 0.3f, 0.7f,
 	123.456789f, -98765.4321f, 1e-7f, -1e-7f,
 	8388607.0f, 8388608.0f, 16777216.0f, -16777216.0f,
-	1.1754944e-38f, 5.877472e-39f, 1e30f, -1e30f
+	1.1754944e-38f, 5.877472e-39f, 2.0e9f, -2.0e9f
 };
 #define NEDGE ((int)(sizeof(edge) / sizeof(edge[0])))
 
