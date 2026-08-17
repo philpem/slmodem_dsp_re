@@ -69,8 +69,8 @@
  },
  {
   "label": "V.92 arm: the upstream mode test is a range",
-  "find": "\t\t\tif (mod->word_2c == V34DIAG_V92_UPSTREAM_ACTIVE) {",
-  "replace": "\t\t\tif (mod->word_2c >= V34DIAG_V92_UPSTREAM_ACTIVE) {"
+  "find": "\t\t\tif (mod->phase == V34DIAG_V92_UPSTREAM_ACTIVE) {",
+  "replace": "\t\t\tif (mod->phase >= V34DIAG_V92_UPSTREAM_ACTIVE) {"
  },
  {
   "label": "V.92 arm: the upstream product is signed",

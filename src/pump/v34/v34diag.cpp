@@ -207,7 +207,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 			results->float_06c = V34DIAG_TX_LEVEL_BASE_DB;
 
 			mod = xf->v92modem.modulator;
-			if (mod->word_2c == V34DIAG_V92_UPSTREAM_ACTIVE) {
+			if (mod->phase == V34DIAG_V92_UPSTREAM_ACTIVE) {
 				unsigned int bits = (unsigned int)
 				    V34DIAG_PCM_BAUD * (unsigned int)
 				    mod->bitsToSymbol->transmitter->K;
