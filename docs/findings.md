@@ -66475,3 +66475,43 @@ than an incidental benefit.
 that is a loss of four names in exchange for the pairing being visible, and
 the names carried no meaning the offsets did not.  `t_v34shell` and
 `t_v34rx` seed the group by index for the same reason.
+
+## 5305. `T3C_RX` is left as it is, and the reason is that the fix is an EMBED and not a cast
+
+Two of the 27 warnings are one line, `v34hshak.c`:
+
+    #define T3C_RX(obj)	((struct v34_receiver *)&(obj)->rxq)
+
+and it is the only one of the six shapes in finding 5300 that is not a field
+declared narrower than the object writes it.  There is no instruction width
+to read here: it is a whole struct overlaid on another struct's storage.
+
+**The right model is known.**  `struct v34_receiver` really is a sub-object
+of `struct v34_object` at +0x264, and the base is established rather than
+inferred -- v34fsk.h's note on `f382` already says "as a `struct
+v34_receiver` offset this is +0x11e", and 0x382 - 0x11e is 0x264, which is
+`rxq`.  Declaring `struct v34_receiver rx;` at that offset would make every
+one of the eight uses a plain member access and the cast would go.
+
+**What stops it being done here** is that the two headers model the same
+0x120 bytes twice and disagree: `v34_receiver::pad_000[0x120]` on one side,
+and `rxq` + `rxq_ring_tail[63]` + `unmapped_0370` + `f382` on the other.
+Merging two independent pad maps is a batch with its own differential test
+and its own offset assertions on both sides -- finding 3303 is what a
+double-counted region costs when it is got wrong -- and it would put this
+one line's fix on the critical path of `v34_receiver`, which other work
+touches.  A documented exception beats a wrong declaration.
+
+**AND IT MUST NOT BE LAUNDERED.**  Respelling it `(char *)(obj) + 0x264`, to
+match `T3C_DET` on the next line, silences `-Wstrict-aliasing` because GCC
+stops seeing through a `char *` -- and changes nothing whatever about the
+access.  That is the "papered over in `src/`" CLAUDE.md rules against, and it
+would cost the tree the only signal it has that this is outstanding.  The
+comment at the site says so, so the next reader cannot mistake it for an
+oversight.
+
+Two other whole-struct overlays in the same family are worth naming as the
+same class and are equally not fixed here: `modulatevector`'s
+`(struct v34_shell *)((char *)obj + V34_SHELL_TX)` and its `(struct
+v34_shell *)obj`.  They already go through `char *`, so they do not warn --
+which is the point.  The warning count is not the defect count.

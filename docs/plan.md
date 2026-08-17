@@ -148,15 +148,17 @@ What is outstanding, and shrinking:
 | offset-named fields (`short_2800`, `flags_0217`) | 304 distinct |
 | bare `fNNNN` names | 189 distinct |
 | unnamed single-bit flags | 148 uses |
-| type-punned sites — provably mis-modelled | 27 |
+| type-punned sites — provably mis-modelled | **2** (was 27; see Phase 6) |
 
 Flags are named **by bit value**, never converted to bitfields; CLAUDE.md's
 "Naming: fields, and flags" carries the rule and the measurement behind it.
 
-The 27 punned sites are the exception to "name inside the batch": each is a
-*provable* modelling error (`*(int *)&o->f25d0` writes four bytes through a
-narrower field), they cluster in six files, and they can be corrected as one
-standalone batch — but only while no other batch holds those files.
+The 27 punned sites were the exception to "name inside the batch": each was a
+*provable* modelling error (`*(int *)&o->f25d0` wrote four bytes through a
+narrower field), they clustered in six files, and they were corrected as one
+standalone batch on `v34-type-punning`. Twenty-five are gone and the naming
+went with them — `f25d0`/`f25d2` became `txpoint`, and `state[].a`..`.d`
+became one four-short group. The two that remain are one line; see Phase 6.
 
 ## Phase 0 — landed
 
@@ -243,10 +245,40 @@ now blocks the rest is mostly **not V.22-named**: `connect_1200`,
 `Detect_Retrain`, `Detect_Rmloop2_ACK`. Seed by reachability or this phase
 looks smaller than it is.
 
-## Phase 6 — the type-punned sites
+## Phase 6 — the type-punned sites  ✅ 25 of 27, on `v34-type-punning`
 
-27 sites, six files, each provably wrong today. Independent of every other
-phase; schedule it when those six files are free.
+27 sites turned out to be **six shapes**, and the instruction width at each
+writer decided every one (finding 5300). Five files, not six —
+`v34hstx1.cpp` contributed no warning because its instance had already been
+worked around with a `memcpy`, which is not a fixed declaration and was in
+the batch anyway.
+
+| shape | sites | what the blob said | fix |
+|---|--:|---|---|
+| A `*(int *)&o->f25d0` | 15 | one `movl` at 0x5e6c5, 0x5e582, 0x59e94 | `union { int word; short c[2]; } txpoint` |
+| B `*(int *)&o->vect[2*n]` | 1 | `movl 0x2a80(%esi,%eax,4)`, scale 4 | union with `int vectp[8]` |
+| C `*(int *)&s->state[i].a` | 2 | one `movl` per pair, 0x59673 / 0x59193 | `short par[4]` / `int pair[2]` |
+| D `*(int *)&s->frame[0]` | 5 | `movl` at 0x57a68 AND `movw` at 0x57cac | union with `int frame_wide` |
+| E `((short *)&hist_2aa8[k])[0]` | 2 | **two `movw`**, 0x5d0f7 / 0x5d0fe | `short hist_2aa8[0x12c][2]` |
+| F `(v34_receiver *)&obj->rxq` | 2 | not a width at all | **left**, finding 5305 |
+
+E is the one that mattered most: the tree had declared it the other way
+round, so five of six confirmed what the comments already asserted and the
+sixth did not. Four further sites that GCC never warns about went with their
+partners — the `[1]` halves of E, and `demapFrame`'s `(&state[st].a)[i]`
+walks, which are pointer arithmetic across separate members. **A fix written
+at the access would have left all four**; fixing the declaration retired them
+without being aimed at them.
+
+F is the documented exception. The correct model is to EMBED `struct
+v34_receiver` in `v34_object` at +0x264 — the base is established, not
+guessed — but that means merging two independent pad maps and belongs in a
+`v34_receiver` batch. It must not be respelled through a `char *` to silence
+the warning. Finding 5305.
+
+`compare.py` did not move at any step: 1094 compared, 410 identical, 78 same
+size, and the identical SET diffed empty against the pre-batch list every
+time — GCC 3.4.2 exact at `-O3`.
 
 ## Phase 7 — the data-mode API and the two diagnostics
 
