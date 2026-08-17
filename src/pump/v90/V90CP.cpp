@@ -32,6 +32,7 @@
 
 #include <stddef.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90CP.h"
 
@@ -88,12 +89,20 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  * Six buffers, then the detector's five fields, the two frame counters, the
  * byte at +0x13 that only this member ever clears, and -1 at +0x3bbc.
  *
- * The five detector stores are `resetDetector`'s whole body and the eight
- * after the allocations are `reset`'s, byte for byte -- but `reset` and
- * `resetDetector` are ordinary GLOBAL functions in `.text`, not linkonce, so
- * neither was an in-class inline the compiler folded in here (GCC 3.4 at -O2
- * does not inline an ordinary global function).  The original repeated the
- * assignments; finding 1237.
+ * The five detector stores are `resetDetector`'s whole body -- but the
+ * constructor holds no relocation against that symbol, and a call to a GLOBAL
+ * in `.text` would carry one (findings 306, 333), so the original repeated
+ * the assignments here rather than calling it.  Finding 1237, and it stands.
+ *
+ * WHAT 1237 DID NOT SETTLE WAS THE ORDER, and this batch did.  It used to
+ * read +0xca4, +0xca9, +0xcaa, +0xcac, +0xcb0, which is the order the object
+ * does NOT encode; +0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa is, and with it the
+ * constructor's mnemonic sequence became the blob's -- register allocation
+ * apart, which `compare.py` does not compare.  The same order made
+ * `resetDetector` and `reset` byte-for-byte identical to the object, operands
+ * included, which is 617's acceptance test and not a store-order hint.  Three
+ * symbols moved on one reordering, so it is the source order and not a
+ * coincidence of scheduling.  Finding 4300.
  */
 V90CP::V90CP()
 {
@@ -104,11 +113,11 @@ V90CP::V90CP()
 	buf[4] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 	buf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 
+	word_cac = 18;
+	word_cb0 = 0;
 	word_ca4 = 0;
 	byte_ca9 = 0;
 	byte_caa = 0;
-	word_cac = 18;
-	word_cb0 = 0;
 
 	nofRecievedMp = 0;
 	nofRecievedMpNot = 0;
@@ -135,6 +144,196 @@ V90CP::~V90CP()
 		sysdep_free(buf[4]);
 	if (buf[5] != 0)
 		sysdep_free(buf[5]);
+}
+
+/*
+ * getBitVector -- 0x519d0, 22 bytes, and the member that PROVES where `bits`
+ * starts.  Six instructions: load `this`, load the reference, read +0x3bac
+ * into it, `add $0xcb8,%eax` and return.  The length it reports is the one
+ * `calcSequenceLength` computed, not the array's own extent -- see the
+ * comment on V90CP_BITS in the header for why those are different questions.
+ */
+unsigned char *
+V90CP::getBitVector(unsigned int &length)
+{
+	length = word_3bac;
+	return bits;
+}
+
+/*
+ * resetDetector -- 0x51510, 46 bytes, and its whole body is five stores.
+ * OURS IS BYTE-FOR-BYTE THE OBJECT'S, operands included, which is what
+ * settles the order: +0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa.  See the
+ * constructor above for what that order also repaired, and finding 4300.
+ *
+ * 18 is the write cursor's home: one preamble frame of seventeen bits, then
+ * the next frame's framing bit at 17 and its first data bit at 18.
+ */
+void
+V90CP::resetDetector()
+{
+	word_cac = 18;
+	word_cb0 = 0;
+	word_ca4 = 0;
+	byte_ca9 = 0;
+	byte_caa = 0;
+}
+
+/*
+ * reset -- 0x51540, 73 bytes.  `resetDetector`'s five stores, then the two
+ * frame counters and -1 at +0x3bbc.
+ *
+ * IT REALLY CALLS `resetDetector`, and the compiler really inlines it.  The
+ * object holds no call and no relocation here, which by itself is equally
+ * consistent with the assignments being repeated a third time -- so the
+ * question was settled by writing the call and measuring: at `-O3` GCC 3.4.2
+ * folds it in and the 73 bytes it emits are the object's, instruction for
+ * instruction and operand for operand.  The constructor above does NOT get
+ * the same treatment from us, because that is 1237's ruling and this measures
+ * nothing about it either way.  Finding 4300.
+ *
+ * WHAT SEPARATES IT FROM THE CONSTRUCTOR is `byte_13`, which the constructor
+ * clears and this does not.  That is the only field of the two the object
+ * treats differently, and it is why the header says +0x13 is cleared by the
+ * constructor "and by NOTHING else".
+ */
+void
+V90CP::reset()
+{
+	resetDetector();
+
+	nofRecievedMp = 0;
+	nofRecievedMpNot = 0;
+
+	word_3bbc = -1;
+}
+
+/*
+ * calcSequenceLength -- 0x521c0, 101 bytes.  Round +0x3bb0 + 1 up to a whole
+ * number of +0x3ba8 and leave it at +0x3bac.
+ *
+ * The object divides ONCE and then multiplies back to test exactness --
+ * `div %ecx` then `imul %eax,%edx` then `cmp %edi,%edx` -- rather than
+ * testing the remainder `div` has already left in %edx.  That is forced by
+ * the source shape and not a choice the compiler made for us: a `%` here
+ * would have reused %edx and needed no `imul` at all.  Both arms store the
+ * product, which is why the equal arm has its own `mov` to +0x3bac.
+ *
+ * `infoToBits` carries this same computation inlined; that copy is left
+ * exactly where it is.  The object holds both too -- this symbol and the
+ * inlined arithmetic at 0x52230 -- which is finding 3532's shape.
+ *
+ * Everything is unsigned: `div`, not `idiv`.
+ */
+void
+V90CP::calcSequenceLength()
+{
+	unsigned int total, group, quot;
+
+	total = word_3bb0 + 1;
+	group = word_3ba8;
+	quot = total / group;
+	if (quot * group == total)
+		word_3bac = quot * group;
+	else
+		word_3bac = (quot + 1) * group;
+}
+
+/*
+ * printNofRecievedMpMpNot -- 0x53680, 56 bytes, and the ONLY string this
+ * class reaches that names a field of it.
+ *
+ * IT PRINTS "V90MP", NOT "V90CP".  The format at .rodata.str1.4+0xd6b0 is the
+ * very same string `V90MP::printNofRecievedMpMpNot` uses -- one pooled copy,
+ * two referrers -- so the author copied the line across and left the tag
+ * wrong.  We reproduce the object, so the tag stays wrong here; changing it
+ * would be a difference the differential test cannot see and the string table
+ * can.
+ *
+ * The argument order is the object's: +0x3bb4 goes into the first `%d` and
+ * +0x3bb8 into the second, which is what names `nofRecievedMp` and
+ * `nofRecievedMpNot` and is the strongest evidence tier in the class.
+ *
+ * The gate is `cmpl $0x1,dsplibs_debug_level; ja`, which is
+ * `DSPLIB_DEBUG_ON()`, and the call relocates against `dsplibs_debug_printf`
+ * directly rather than through the encoder, so below the gate it says nothing
+ * at all.
+ */
+void
+V90CP::printNofRecievedMpMpNot()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90MP: received %d MP, %d MPNot\r\n",
+				     nofRecievedMp, nofRecievedMpNot);
+}
+
+/*
+ * calcCRC -- 0x512d0, 570 bytes.  The WRITE side of the CRC register, and the
+ * same CCITT shift register `evaluateCRC` runs on the read side: taps out of
+ * positions 4 and 11 into 3 and 10, and the feedback bit into 15.
+ *
+ * TWO THINGS SEPARATE IT FROM `evaluateCRC`, and both are absences.  It does
+ * not seed the register -- there is no store of 1 anywhere in it, so it
+ * continues from whatever `resetCRC` (or the previous call) left -- and it
+ * does not compare anything afterwards, so it returns nothing.  The extent
+ * and the frame skip are identical: information bits run from 0x12 up to
+ * `word_3bb0 - 0x11`, and every index that is a multiple of seventeen is a
+ * framing bit and is stepped over.
+ *
+ * The whole register lives in the sixteen bytes of the object's stack frame
+ * for the duration of the loop and is written back at the end.  That is
+ * register promotion the compiler is free to do and we do not encode: our
+ * source touches `crc[]` directly, exactly as `evaluateCRC`'s does.
+ *
+ * The `if (i % 17 == 0) i++` is `mul $0xf0f0f0f1` / `shr $4` for the divide
+ * and `cmp $1` / `adc $0` for the branchless increment.  Unsigned throughout:
+ * `jae` and `jb` on the bounds.
+ */
+void
+V90CP::calcCRC()
+{
+	unsigned int i, end;
+	unsigned char a;
+
+	end = word_3bb0 - 0x11;
+	for (i = 0x12; i < end; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = a;
+	}
+}
+
+/*
+ * resetCRC -- 0x512b0, 32 bytes.  Sixteen ones, one per bit of the register,
+ * written by a counted loop the object leaves rolled: `mov $0x1,%cl` hoisted
+ * out, `inc %eax`, `cmp $0xf,%eax`, `jle`.  The `<= 0xf` is the object's own
+ * bound and is why this is written that way rather than `< 16`.
+ */
+void
+V90CP::resetCRC()
+{
+	int i;
+
+	for (i = 0; i <= 0xf; i++)
+		crc[i] = 1;
 }
 
 /*

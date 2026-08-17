@@ -63476,3 +63476,105 @@ set" would have lost silently:
   the EXPORTED `FPM_cos_sign`, which nothing in `src/` reads and only the
   neighbourhood block can catch. That last one is what proves the two copies of
   the four real signs cannot drift apart.
+
+### 4300. `V90CP`'s DETECTOR RESET IS `+0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa`, AND THAT ONE ORDERING MOVED THREE SYMBOLS AT ONCE
+
+`V90CP::resetDetector` writes five fields and nothing else. The constructor
+writes the same five, and `reset` writes them and three more. All three were
+already differentially correct; none of the three matched the object's
+instruction sequence, and the reason was a store order nobody had had a reason
+to question.
+
+The order the tree carried was `+0xca4, +0xca9, +0xcaa, +0xcac, +0xcb0` --
+ascending by offset, which is what a reader writes when the object does not
+say otherwise. The object says otherwise. `resetDetector` at 0x51510 stores
++0xcac first, then +0xcb0, then +0xca4, then the two bytes; so does the
+constructor at 0x51590 and so does `reset` at 0x51540, with its own three
+interleaved by the scheduler.
+
+Reordering the source to match took:
+
+| | before | after |
+|---|---|---|
+| `V90CP::resetDetector` | same size, different instructions | **byte-for-byte identical** |
+| `V90CP::reset` | same size, different instructions | **byte-for-byte identical** |
+| `V90CP::V90CP` (C1 and C2) | different | mnemonics identical, registers apart |
+
+**Three symbols on one reordering is what makes this the source order and not
+a coincidence of scheduling.** 617's acceptance test for a store-order change
+is FULL-TEXT identity, operands included, and two of the three pass it
+outright; the constructor's residual is register allocation, which is 614's
+free column and which `compare.py` does not compare. `compare.py` went 355 to
+363 identical over this batch, and 8 is 6 new symbols plus these two.
+
+**IT DOES NOT OVERTURN 1237.** That finding ruled that the constructor repeats
+the assignments rather than calling `resetDetector`, on the evidence that the
+constructor carries no relocation against a GLOBAL `.text` symbol (306, 333).
+That is still what the object says and the constructor still repeats them
+here. What 1237 did not settle, and did not claim to, was the ORDER.
+
+**`reset` IS THE OTHER HALF, AND IT DOES CALL.** The object's `reset` also
+holds no call and no relocation, so the absence proves nothing on its own --
+it is equally consistent with a third repetition and with an inlined call. It
+was settled by writing the call and measuring: at `-O3` GCC 3.4.2 folds
+`resetDetector` in and emits the object's 73 bytes exactly. A repetition emits
+73 bytes too, and does not emit the object's. So the two halves of the class
+are written differently on purpose, and each spelling is the one that
+reproduces its own symbol.
+
+The general lesson is the cheap one: **where a function is nothing but a run
+of stores, the object's store order is a testable hypothesis about the source
+order, and testing it costs one build.** Ascending-by-offset is a reader's
+habit, not the author's.
+
+### 4301. `V90CP::calcCRC` IS `evaluateCRC`'s LOOP WITH BOTH ENDS REMOVED, AND THE ABSENCES ARE WHAT IDENTIFY IT
+
+`calcCRC` (0x512d0, 570 bytes) and `evaluateCRC` (0x51730, 668) run the same
+CCITT shift register over the same extent -- information bits from 0x12 up to
+`word_3bb0 - 0x11`, every multiple of seventeen stepped over as a framing bit,
+taps out of positions 4 and 11 into 3 and 10 and the feedback into 15.
+
+What separates them is two things `calcCRC` does NOT do, and both are
+absences rather than differences:
+
+- **It does not seed the register.** There is no store of 1 anywhere in its
+  570 bytes. It loads `crc[0..15]` into the frame at entry and writes them
+  back at exit, so it continues from whatever `resetCRC` or a previous call
+  left behind. `evaluateCRC` opens with the sixteen ones.
+- **It does not compare anything.** No `sete`, no accumulator, no return
+  value.
+
+An absence cannot be caught by comparing two objects that were both seeded the
+same way, which is why `t_v90cpleaf` runs the same bit vector twice from two
+different register states and requires the BLOB's two answers to differ. The
+mutation "seed the register the way `resetCRC` does" is what adjudicates, and
+it is caught.
+
+**The 12-byte gap is register allocation and scheduling, and it is left
+alone.** Ours is 582 against the blob's 570. The loop bodies agree
+instruction for instruction on everything the compiler was forced to encode --
+the `mul $0xf0f0f0f1` / `shr $4` divide by seventeen, the branchless
+`cmp $1` / `adc $0` increment, the operand order of `crc[0] + bits[i]`, the
+unsigned `jae`/`jb` on both bounds. What differs is which of the sixteen stack
+slots holds which register index and whether the cursor advances by `inc` or
+by `lea`. That is 614's free column; chasing it would be fitting the compiler.
+
+### 4302. `V90CP::printNofRecievedMpMpNot` PRINTS "V90MP", AND THE POOLED STRING IS WHY
+
+The format at `.rodata.str1.4+0xd6b0` is `"V90MP: received %d MP, %d MPNot\r\n"`
+and it has two referrers: `V90MP::printNofRecievedMpMpNot` at 0x20bef, where
+the tag is right, and `V90CP::printNofRecievedMpMpNot` at 0x536af, where it is
+not. One pooled copy, two classes, and the author copied the line across
+without changing the tag.
+
+We reproduce the object, so the tag stays wrong in `V90CP.cpp`. It is worth
+recording because it is a trap in both directions: a future reader who
+"corrects" it introduces a difference the differential tier cannot see and the
+string table can, and a future reader who greps the strings for `V90CP` finds
+nothing and concludes the class has no diagnostics.
+
+What it DOES establish is the naming, and it is the strongest tier available
+in this class: the first `%d` is fed from +0x3bb4 and the second from +0x3bb8,
+which is what makes them `nofRecievedMp` and `nofRecievedMpNot` rather than
+two counters in an unknown order. Finding 3540 noted that `infoToBits` and
+`evaluateInfo` between them reach no string at all; this is the one that does.

@@ -4994,7 +4994,7 @@
    }
   },
   "v90cp": {
-   "key": "ace9963eec36bb9a78c56dcb47622cc4f6eff25f60d3f5b60a1455d29080a52d",
+   "key": "6d4c41f5421021835a2b1a720aafec20dcc69c7d1370d8587ddad8d201aff378",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x13 left alone, as reset() leaves it": "caught",
@@ -5018,7 +5018,7 @@
    }
   },
   "v90cpinfo": {
-   "key": "788cbd608706defb0327756ec63c3950d1693c18bb21323af1b2e58a5ce221e6",
+   "key": "3af5fe3ac61a364b355b9f5448b623eed27c154b6d1f84c8af685d8a7d8648cb",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a fifth value of +0x11 writes zeros instead of nothing": "caught",
@@ -5043,6 +5043,40 @@
     "the sequence length is one frame short": "caught",
     "the short form drops +0xca0": "caught",
     "the short form's two decoded bits are swapped": "caught"
+   }
+  },
+  "v90cpleaf": {
+   "key": "a964693c2558299c4e0e94fa6f0e8e6fb32d38c5a20ef39ad13f572d325bade7",
+   "summary": "28 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "calcCRC covers one frame too many": "caught",
+    "calcCRC does not step over the framing bits": "caught",
+    "calcCRC drops the feedback into 15": "caught",
+    "calcCRC drops the shift into 14": "caught",
+    "calcCRC seeds the register the way resetCRC does": "caught",
+    "calcCRC starts at the preamble, not at 0x12": "caught",
+    "calcSequenceLength always rounds up": "caught",
+    "calcSequenceLength rounds +0x3bb0, not +0x3bb0 + 1": "caught",
+    "calcSequenceLength rounds down, not up": "caught",
+    "calcSequenceLength writes the quotient, not the product": "caught",
+    "getBitVector reports nothing": "caught",
+    "getBitVector returns the CRC register": "caught",
+    "reset also clears +0x13, as the ctor does": "caught",
+    "reset does not reset the detector": "caught",
+    "reset: +0x3bbc starts at 0, not -1": "caught",
+    "reset: the MPNot counter is left alone": "caught",
+    "resetCRC clears the register instead": "caught",
+    "resetCRC sets fifteen, not sixteen": "caught",
+    "resetCRC sets seventeen, one past the register": "caught",
+    "resetDetector also clears +0x13, as the ctor does": "caught",
+    "resetDetector: +0xca4 left alone": "caught",
+    "resetDetector: +0xcaa left alone": "caught",
+    "resetDetector: +0xcb0 left alone": "caught",
+    "resetDetector: the cursor starts at 17": "caught",
+    "the diagnostic is not gated": "caught",
+    "the diagnostic says V90CP, as the class is named": "caught",
+    "the length comes from +0x3bb0, not +0x3bac": "caught",
+    "the two counters are printed the other way round": "caught"
    }
   },
   "v90cpmembers": {

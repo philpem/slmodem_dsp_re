@@ -171,12 +171,15 @@ public:
 	~V90CP();
 
 	/*
-	 * Declared, not defined -- defining a method whose callees are not
-	 * written breaks the link for the whole suite (docs/v90cpp.md), and a
-	 * declaration is a specification where a definition is a claim.  The
-	 * argument types are the mangling's and are exact; the return types
-	 * are not mangled, so `void` here means "not established" for all but
-	 * `getBitVector`, which leaves `this+0xcb8` in %eax.
+	 * ALSO DEFINED, in src/pump/v90/V90CP.cpp.  Six of the seven leave
+	 * %eax alone on every path and really are `void`; `getBitVector` is
+	 * the exception and returns `this+0xcb8`.  The return type is not
+	 * mangled, so that had to be read out of each epilogue rather than
+	 * off the symbol.
+	 *
+	 * `reset` calls `resetDetector` and the compiler inlines it; the
+	 * constructor repeats the five stores instead.  Findings 1237 and
+	 * 4300 for why those two are spelled differently.
 	 */
 	unsigned char *getBitVector(unsigned int &length);
 	void reset();
@@ -184,8 +187,16 @@ public:
 	void resetCRC();
 	void calcCRC();
 	void calcSequenceLength();
-	void bitsToInfo(unsigned char);
 	void printNofRecievedMpMpNot();
+
+	/*
+	 * Declared, not defined -- defining a method whose callees are not
+	 * written breaks the link for the whole suite (docs/v90cpp.md), and a
+	 * declaration is a specification where a definition is a claim.  The
+	 * argument type is the mangling's and is exact; the return type is
+	 * not mangled, so `void` here means "not established".
+	 */
+	void bitsToInfo(unsigned char);
 
 	/*
 	 * Defined in src/pump/v90/V90CP.cpp.  Both really are void: neither
