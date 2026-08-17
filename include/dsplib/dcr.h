@@ -15,8 +15,11 @@
  *         "DCR: initial DC Evaluation done, DC level %d, %sabled\n"
  *
  *     with `"en"` and `"dis"` at `.rodata.str1.1 + 0` and `+ 3`.  Both of
- *     those sections OPEN with this file's contributions, which is a small
- *     corroboration that `dcr.c` is first in the link order.
+ *     those sections OPEN with this file's contributions -- cid's first
+ *     string is at +7, after `"en\0dis\0"`.  That says dcr.c is the first
+ *     translation unit to contribute a STRING and nothing more: it is the
+ *     second contributor to `.text`, behind `prop_dp_init` at 0x00 and
+ *     `prop_dp_exit` at 0x30.
  *   - No relocation anywhere in the object targets any `dcr_*` symbol, so
  *     nothing inside dsplibs.o calls it.  It is host-facing API, and the host
  *     is `slmodemd`: `modem.c:1135` creates one per modem, `modem.c:677` runs

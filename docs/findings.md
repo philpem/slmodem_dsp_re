@@ -63479,8 +63479,10 @@ set" would have lost silently:
 
 ### 4200. DCR IS THE DC REMOVER, IT IS THE HOST'S FIRST TOUCH ON EVERY RECEIVED BLOCK, AND THE OBJECT NAMES IT IN ITS OWN SENTENCE
 
-`dcr.c` is four symbols and 699 bytes at the very front of `.text` --
-`dcr_create` 0x60, `dcr_delete` 0xc0, `dcr_reset` 0xe0, `dcr_process` 0x100 --
+`dcr.c` is four symbols and 699 bytes at the very front of `.text` bar one
+translation unit -- `dcr_create` 0x60, `dcr_delete` 0xc0, `dcr_reset` 0xe0,
+`dcr_process` 0x100, with only `prop_dp_init` (0x00) and `prop_dp_exit` (0x30)
+ahead of them --
 and until now nothing in this tree said what it did beyond `docs/glossary.md`'s
 one-line "DC Remover, the state holds running means". Three separate pieces of
 the object settle it, and they agree.
@@ -63491,9 +63493,11 @@ at `.rodata.str1.4 + 0`:
     "DCR: initial DC Evaluation done, DC level %d, %sabled\n"
 
 with `"en"` at `.rodata.str1.1 + 0` and `"dis"` at `+ 3`. Both of those
-sections *open* with this file's contributions -- cid's begin at +6 -- which is
-a small corroboration that `dcr.c` is first in the link order, matching its
-`.text` position. This is evidence order 1 in CLAUDE.md's list, and it names
+sections *open* with this file's contributions: `.rodata.str1.1` starts
+`65 6e 00 64 69 73 00`, so cid's first string is at +7. That makes dcr.c the
+first translation unit to contribute a STRING, which is all it makes it --
+`prop_dp_init`/`prop_dp_exit` are ahead of it in `.text` and contribute no
+`.rodata`, so this is not evidence about link order. This is evidence order 1 in CLAUDE.md's list, and it names
 three things at once: the module ("DCR"), the quantity it estimates ("DC
 level"), and the phase that estimates it ("initial DC Evaluation").
 
@@ -63566,8 +63570,14 @@ The object dispatches with
 which is exactly zero and needs nothing to confirm it. Declared `int`, GCC
 3.4.2 emits `jle` and then `test %ecx,%ecx; jne` to exclude the negatives that
 "below 1" also covers when the expression is signed. That extra pair was in our
-build and is not in the object; retyping the field to `unsigned int` removed it
-and nothing else moved.
+build and is not in the object; retyping the field to `unsigned int` removed
+it.
+
+**What it did NOT do is leave everything else alone, and the record should say
+so**: `dcr_process` went from 533 bytes to 546 across the change. Deleting a
+`test`/`jne` pair cannot grow a function, so the register allocation moved with
+it -- which is the free column, and is why the retype was still right. The
+evidence for the retype is the missing pair, not the size.
 
 What this does **not** settle is `unsigned int` against an `enum`. C gives an
 enumeration whose enumerators are all non-negative an unsigned compatible type,
