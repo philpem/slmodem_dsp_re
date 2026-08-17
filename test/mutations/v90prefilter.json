@@ -48,5 +48,118 @@
   "label": "the switch's default keeps the value instead of falling back to zero",
   "find": "\t\tdefault:\tcodecType = 0;\tbreak;",
   "replace": "\t\tdefault:\tcodecType = V90PW(params)[0x008 / 4];\tbreak;"
+ },
+ {
+  "note": "THE FILTER-ACCESSOR BATCH.  Six members against t_v90prefilter's five new suites.  Two claims below have no mutation and the reason is recorded rather than left as a gap: `getFilterLength`'s unused `gain` argument cannot be mutated into anything observable because the object never reads it either, and the ORDER in which `setFilter(unsigned)` evaluates its two arguments is not observable because both are pure."
+ },
+ {
+  "label": "getNofRefLoops counts from one",
+  "find": "\tV90RefLoop *loops = dataBase[codecType].loops;\n\tint n = 0;",
+  "replace": "\tV90RefLoop *loops = dataBase[codecType].loops;\n\tint n = 1;"
+ },
+ {
+  "label": "getNofRefLoops always walks codec zero's table",
+  "find": "\tV90RefLoop *loops = dataBase[codecType].loops;\n\tint n = 0;",
+  "replace": "\tV90RefLoop *loops = dataBase[0].loops;\n\tint n = 0;"
+ },
+ {
+  "label": "the terminator is the second byte of the name",
+  "find": "\twhile (loops[n].name[0] != '\\0')",
+  "replace": "\twhile (loops[n].name[1] != '\\0')"
+ },
+ {
+  "label": "getFilterLength gives bank 3 twenty taps",
+  "find": "\t\tcase 3:\n\t\t\treturn 40;",
+  "replace": "\t\tcase 3:\n\t\t\treturn 20;"
+ },
+ {
+  "label": "getFilterLength does not complain about an unsupported type",
+  "find": "\t\tdefault:\n\t\t\tedprintf(BUGMSG);\n\t\t\treturn 20;",
+  "replace": "\t\tdefault:\n\t\t\treturn 20;"
+ },
+ {
+  "label": "getFilterLength answers for the loop it was not given",
+  "find": "\t\tswitch (dataBase[codecType].loops[refLoop].coefType) {\n\t\tcase 1:\n\t\t\treturn 20;",
+  "replace": "\t\tswitch (dataBase[codecType].loops[0].coefType) {\n\t\tcase 1:\n\t\t\treturn 20;"
+ },
+ {
+  "label": "getFilterPointer clamps on the no-reference-loop arm too",
+  "find": "\tif (refLoop == -1)\n\t\treturn bank1((int)gain);",
+  "replace": "\tif (refLoop == -1)\n\t\treturn bank1((int)(gain > 30 ? 30 : gain));"
+ },
+ {
+  "label": "bank 3's clamp is bank 1's",
+  "find": "\tcase 3:\n\t\tif (gain > 50)\n\t\t\tgain = 50;\n\t\treturn bank3((int)gain);",
+  "replace": "\tcase 3:\n\t\tif (gain > 30)\n\t\t\tgain = 30;\n\t\treturn bank3((int)gain);"
+ },
+ {
+  "label": "bank 2 is not clamped",
+  "find": "\tcase 2:\n\t\tif (gain > 30)\n\t\t\tgain = 30;\n\t\treturn bank2((int)gain);",
+  "replace": "\tcase 2:\n\t\treturn bank2((int)gain);"
+ },
+ {
+  "label": "the unsupported type takes bank 2, not bank 1",
+  "find": "\tif (gain > 30)\n\t\tgain = 30;\n\n\treturn bank1((int)gain);",
+  "replace": "\tif (gain > 30)\n\t\tgain = 30;\n\n\treturn bank2((int)gain);"
+ },
+ {
+  "label": "setFilter(unsigned) reinstalls a gain it already has",
+  "find": "\tif ((unsigned int)this->gain != gain) {",
+  "replace": "\tif (1) {"
+ },
+ {
+  "label": "setFilter(unsigned) always installs twenty taps",
+  "find": "\t\tfir.setCoefficients(getFilterPointer(gain),\n\t\t\t\t    getFilterLength(gain));",
+  "replace": "\t\tfir.setCoefficients(getFilterPointer(gain), 20);"
+ },
+ {
+  "label": "setFilter(unsigned) does not record the gain it installed",
+  "find": "\t\t\t\t    getFilterLength(gain));\n\t\tthis->gain = (int)gain;",
+  "replace": "\t\t\t\t    getFilterLength(gain));"
+ },
+ {
+  "label": "setFilter(type, gain) does not correct bank 3's row",
+  "find": "\t\tfir.setCoefficients(bank3((int)gain), 40);\n\t\tthis->gain = (int)gain - 20;",
+  "replace": "\t\tfir.setCoefficients(bank3((int)gain), 40);"
+ },
+ {
+  "label": "bank 3's row correction is applied to every bank",
+  "find": "\tthis->gain = (int)gain;\n\n\tswitch ((int)type) {",
+  "replace": "\tthis->gain = (int)gain - 20;\n\n\tswitch ((int)type) {"
+ },
+ {
+  "label": "the caller's type 2 selects bank 1",
+  "find": "\tcase 2:\n\t\tfir.setCoefficients(bank2((int)gain), 20);",
+  "replace": "\tcase 2:\n\t\tfir.setCoefficients(bank1((int)gain), 20);"
+ },
+ {
+  "label": "the caller's type 3 gets twenty taps",
+  "find": "\t\tfir.setCoefficients(bank3((int)gain), 40);",
+  "replace": "\t\tfir.setCoefficients(bank3((int)gain), 20);"
+ },
+ {
+  "label": "getV90Capability searches only for the -1 sentinel",
+  "find": "\tif (refLoop < 0)\n\t\tautoSelection();",
+  "replace": "\tif (refLoop == -1)\n\t\tautoSelection();"
+ },
+ {
+  "label": "getV90Capability never searches",
+  "find": "\tif (refLoop < 0)\n\t\tautoSelection();",
+  "replace": "\tif (0)\n\t\tautoSelection();"
+ },
+ {
+  "label": "EIA-6 answers 2 rather than 1",
+  "find": "\tif (isV90WithEia6())\n\t\treturn 1;",
+  "replace": "\tif (isV90WithEia6())\n\t\treturn 2;"
+ },
+ {
+  "label": "the EIA-6 test is dropped",
+  "find": "\tif (isV90WithEia6())\n\t\treturn 1;",
+  "replace": "\tif (0)\n\t\treturn 1;"
+ },
+ {
+  "label": "the capability comes from the codec's first loop",
+  "find": "\treturn dataBase[codecType].loops[refLoop].capability;",
+  "replace": "\treturn dataBase[codecType].loops[0].capability;"
  }
 ]

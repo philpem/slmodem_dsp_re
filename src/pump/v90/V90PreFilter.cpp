@@ -103,6 +103,197 @@ V90PreFilter::isV90WithEia6() const
 }
 
 /*
+ * How many reference loops this codec has.  The table is terminated by a
+ * record whose name is empty, which is the same convention the constructor
+ * walks and the same one `autoSelection` counts with.
+ *
+ * `const` IS IN THE MANGLING: the blob's symbol is `_ZNK12V90PreFilter...`,
+ * so dropping the qualifier emits `_ZN...` and links against nothing.
+ */
+int
+V90PreFilter::getNofRefLoops() const
+{
+	V90RefLoop *loops = dataBase[codecType].loops;
+	int n = 0;
+
+	while (loops[n].name[0] != '\0')
+		n++;
+
+	return n;
+}
+
+/*
+ * How many taps the selected reference loop's bank has: 40 for bank 3 and 20
+ * for everything else, INCLUDING the unsupported types the default arm
+ * complains about.
+ *
+ * THE ARGUMENT IS NEVER READ.  `gain` is at 0x14(%esp) and the 92 bytes touch
+ * only 0x10(%esp), which is `this`.  It is in the mangled name, so it is in
+ * the signature; the object simply does not use it.
+ *
+ * THE DEFAULT ARM'S MESSAGE NAMES THE OTHER FUNCTION.  It is `BUGMSG`, whose
+ * text is "V90PreFilter: getFilterPointer BUG !!!", printed here as well --
+ * the author's own copy, one string shared by three sites.
+ *
+ * SPELLED AS A `switch`, WHICH THE OBJECT'S BRANCH TREE SETTLES against the
+ * if/else chain `selectFilter` uses for the same three values.  GCC lays a
+ * switch over {1,2,3} out as a BALANCED TREE -- compare the median first,
+ * then take the low or the high half -- and 0x44fbd is exactly that:
+ * `cmp $2 / je`, then `jg` to the `cmp $3`, and only in the low half the
+ * `dec %eax / je` that tests for 1.  An if/else chain in source order would
+ * test its first-written value first, and `selectFilter`'s does.
+ *
+ * FOUR SEPARATE `return 20`s, AND THE PERIOD BUILD IS WHY.  The two arms that
+ * fall out at twenty taps are the same statement, so `case 1: case 2:` is the
+ * obvious spelling -- and it makes the compiler merge them into a contiguous
+ * RANGE, `cmp $1 / jl` then `cmp $2 / jle`, neither of which is in the blob.
+ * Measured, with everything else held: merged 0x5e bytes here and 0x123 in
+ * `setFilter(unsigned)`, which inlines this; separate 0x5b and 0x13b against
+ * the blob's 0x5c and 0x138.  So the arms are separately labelled in the
+ * original, which is what four `return`s give and what a shared `len` does
+ * not.  Neither spelling is byte-exact and this is a similarity argument, not
+ * a differential one -- the two behave identically over every input.
+ */
+unsigned int
+V90PreFilter::getFilterLength(unsigned int gain)
+{
+	unsigned int len = 20;
+
+	(void)gain;
+
+	if (refLoop != -1) {
+		switch (dataBase[codecType].loops[refLoop].coefType) {
+		case 1:
+			return 20;
+		case 2:
+			return 20;
+		case 3:
+			return 40;
+		default:
+			edprintf(BUGMSG);
+			return 20;
+		}
+	}
+
+	return len;
+}
+
+/*
+ * Where the coefficients for `gain` live.  The bank comes from the selected
+ * reference loop; the row is `gain`, clamped to the bank's last row -- and
+ * bank 3's rows start at index 20, which is where its `- 800` displacement
+ * comes from (see `bank3` above).
+ *
+ * WITH NO REFERENCE LOOP SELECTED THE CLAMP IS SKIPPED, and that is the
+ * object's: 0x45002's `je` goes to 0x45040, which is PAST the `cmp $0x1e` at
+ * 0x45032 that the type 1 and default arms fall through.  The same asymmetry
+ * is already recorded for `selectFilter`, and this is where it comes from --
+ * `selectFilter`'s automatic arm is this function inlined.
+ *
+ * So the caller owes this one a bounded `gain` when `refLoop` is -1, and a
+ * differential trial that does not give it one is testing our undefined
+ * behaviour rather than the object's (deviation D670).
+ */
+float *
+V90PreFilter::getFilterPointer(unsigned int gain)
+{
+	if (refLoop == -1)
+		return bank1((int)gain);
+
+	switch (dataBase[codecType].loops[refLoop].coefType) {
+	case 2:
+		if (gain > 30)
+			gain = 30;
+		return bank2((int)gain);
+	case 3:
+		if (gain > 50)
+			gain = 50;
+		return bank3((int)gain);
+	case 1:
+		break;
+	default:
+		edprintf(BUGMSG);
+		break;
+	}
+
+	if (gain > 30)
+		gain = 30;
+
+	return bank1((int)gain);
+}
+
+/*
+ * Install the coefficients for a new filter gain, and do nothing at all if it
+ * is the gain already installed.
+ *
+ * IT IS THE TWO ACCESSORS ABOVE, CALLED, and the object proves the pair by
+ * repeating both bodies whole: 0x450b4 is `getFilterLength` inlined -- the
+ * same balanced tree over the same field, leaving 20 or 40 in %ebp -- and
+ * 0x450fc is `getFilterPointer` inlined, which RE-READS `refLoop` at 0x450f9
+ * rather than reusing the register the first body left it in.  Two reads of
+ * one field across no intervening store is what two calls look like and is
+ * not what one hand-written block does.
+ *
+ * The length is computed FIRST, which is GCC evaluating a call's arguments
+ * right to left; both are pure, so nothing here depends on it.
+ */
+void
+V90PreFilter::setFilter(unsigned int gain)
+{
+	if ((unsigned int)this->gain != gain) {
+		fir.setCoefficients(getFilterPointer(gain),
+				    getFilterLength(gain));
+		this->gain = (int)gain;
+	}
+}
+
+/*
+ * Install a bank and a row chosen by the CALLER, with no reference loop and
+ * no clamp anywhere.
+ *
+ * `gain` IS STORED BEFORE THE SWITCH AND THEN CORRECTED, which is the object's
+ * order and not a tidy way of writing it: `mov %ebx,0x20(%esi)` at 0x44a4a
+ * precedes every branch, and only bank 3's arm follows its `setCoefficients`
+ * with `lea -0x14(%ebx),%eax ; mov %eax,0x20(%esi)`.  Storing it once per arm
+ * would put the bank 1 and bank 2 stores after their calls, and those two arms
+ * are TAIL JUMPS with nothing after them at all.
+ *
+ * WHY `gain - 20`.  Bank 3's row zero is at index 20, so the row this call
+ * installed is `gain - 20`, and that is what the field has to hold for the
+ * next `setFilter(unsigned)` to compare against.  The 20-tap banks index from
+ * zero and need no correction.  `selectFilter`'s registry arm already carries
+ * the same three-way tail and the same `- 20`.
+ *
+ * NO CLAMP ON ANY ARM, so bank 3 with `gain` below 20 walks off the front of
+ * the table.  The object does the arithmetic regardless; ours must not be
+ * asked to (D670).
+ *
+ * THE CASE LABELS ARE VALUES.  `PreFilterCoefType`'s enumerators are not
+ * recovered -- see the header -- and the condition is cast to `int` so that
+ * spelling them as integers is not a diagnostic about an enumeration they are
+ * not members of.  The cast changes no code: the object's `cmp $0x2` is on
+ * the 32-bit argument either way.
+ */
+void
+V90PreFilter::setFilter(PreFilterCoefType type, unsigned int gain)
+{
+	this->gain = (int)gain;
+
+	switch ((int)type) {
+	case 2:
+		fir.setCoefficients(bank2((int)gain), 20);
+		break;
+	case 3:
+		fir.setCoefficients(bank3((int)gain), 40);
+		this->gain = (int)gain - 20;
+		break;
+	default:
+		fir.setCoefficients(bank1((int)gain), 20);
+		break;
+	}
+}
+
+/*
  * Pick the reference loop whose six-point signature is closest, in squared
  * Euclidean distance, to what Phase 2 measured.
  *
@@ -166,6 +357,43 @@ V90PreFilter::autoSelection()
 		 dataBase[codecType].name);
 
 	return loops[refLoop].gain;
+}
+
+/*
+ * What V.90 capability this connection has: 1 if it is EIA-6, and otherwise
+ * whatever the selected reference loop's own capability word says.
+ *
+ * IT SELECTS A LOOP FIRST IF NONE IS SELECTED.  `test %ecx,%ecx ; js` at
+ * 0x45a1c is a SIGN test and not a comparison with -1, so any negative
+ * `refLoop` runs the search; `reset` leaves -1 there and this is one of the
+ * two places that undoes it.
+ *
+ * `isV90WithEia6()` IS INLINED HERE, and the count of setcc is the check.
+ * The object has exactly three -- `capability == 2` at 0x45a39, `== 1` at
+ * 0x45a43 and `+0x500 == 6` at 0x45a52, then `or %al,%dl` -- which is that
+ * function's body and nothing more.  Writing `isV90WithEia6() == 1` at the
+ * call site would emit a fourth: the `== 1` in the object is the callee's own
+ * (V90PreFilter.cpp above), on a value that is already 0 or 1.
+ *
+ * The entry test and the callee's `refLoop >= 0` are the same test, which is
+ * why the fall-through at 0x45a1e goes straight to the capability load.
+ *
+ * WITH `refLoop` STILL NEGATIVE AFTER THE SEARCH the last line indexes
+ * `loops[-1]`, which the object does and ours must not be asked to.  It is
+ * reachable only when `autoSelection` matched nothing AND the registry's
+ * +0x500 is not 6; a trial that arranges it is testing our undefined
+ * behaviour (D670).
+ */
+int
+V90PreFilter::getV90Capability()
+{
+	if (refLoop < 0)
+		autoSelection();
+
+	if (isV90WithEia6())
+		return 1;
+
+	return dataBase[codecType].loops[refLoop].capability;
 }
 
 /*

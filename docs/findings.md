@@ -65776,3 +65776,108 @@ reproducible, and a hard failure if we differ (CLAUDE.md).  GCC 13 cannot store
 `tools/gccdiverge.json` excuses THAT CHECK alone -- the other three groups in
 the same binary are 65,984 checks and pass under both compilers.  `make period`
 has no allow-list and passes all four.
+
+### 4970. `setFilter(unsigned)` IS THE TWO ACCESSORS, CALLED, AND THE OBJECT PROVES THE PAIR
+
+`V90PreFilter::setFilter(unsigned int)` is 312 bytes and holds `getFilterLength`
+and `getFilterPointer` whole, in that order, inlined:
+
+    450ab:  cmp  %edi,0x20(%esi)  ; gain already installed?  do nothing
+    450b4:  mov  0x24(%esi),%ecx  ; refLoop -- FIRST read
+    450bd:  mov  $0x14,%ebp       ; ... getFilterLength's balanced tree ...
+    450f9:  mov  0x24(%esi),%ecx  ; refLoop -- SECOND read, no store between
+    450fc:  ...                   ; ... getFilterPointer's, with the clamps ...
+    4515c:  call FloatFIR::setCoefficients
+    45161:  mov  %edi,0x20(%esi)  ; and only then record the gain
+
+**The second read of `refLoop` is what separates two calls from one block.**
+Nothing writes the field between 0x450b4 and 0x450f9, so a hand-written block
+would have kept the value in the register; two inlined function bodies each
+load it for themselves.  Both bodies are also present as their own out-of-line
+symbols at 0x44f90 and 0x44ff0, which is what GCC emits for a non-inline member
+it also inlined.
+
+The length is computed first, which is GCC evaluating the call's arguments
+right to left; both are pure, so it is not observable.
+
+`selectFilter`'s automatic arm is this function again -- the same two passes
+over the same field, the same `gain == want` early exit, the same two `BUGMSG`
+sites -- so the "two passes over the same field" comment that batch 3 wrote
+against `selectFilter` has its explanation here.  `selectFilter` is left as it
+stands: rewriting it to call `setFilter` is a source change nothing tests, and
+the two spellings are differentially identical.
+
+### 4971. `PreFilterCoefType`'S VALUES ARE 1, 2 AND 3, AND ITS NAMES ARE STILL NOT RECOVERED
+
+Five members dispatch on this type or on the `V90RefLoop::coefType` field that
+holds one: `setFilter(PreFilterCoefType, unsigned)`, `setFilter(unsigned)`,
+`getFilterPointer`, `getFilterLength` and `selectFilter`.  Every one of them
+tests against exactly 2 and 3, treats 1 as an arm of its own, and has a default
+that prints `BUGMSG`.  Value N selects `preFilterCoefType`N, whose name IS the
+author's because a static data member is in the mangling
+(`_ZN12V90PreFilter18preFilterCoefType3E`).
+
+So the values are settled and no enumerator is added for them.  What the author
+called them is not in the object anywhere -- the one string that prints the
+field, "Pre Filter Coeffs Type array %d", prints the NUMBER -- and a name
+invented here would be believed by every later reader and could never fail a
+test.  The case labels are integers, as the constructor's sixteen-arm
+`__tHardwareCodecTypes__` switch already spells its own; the header records the
+derivation.  `PreFilterCoefType_BASE_PIN` stays, and is now load-bearing for the
+test as well as for the underlying type: it is what makes `(PreFilterCoefType)7`
+a value of the enumeration rather than undefined, so the sweep may drive the
+default arm.
+
+### 4972. `getFilterLength`'S ARGUMENT IS IN THE MANGLING AND IS NEVER READ
+
+`_ZN12V90PreFilter15getFilterLengthEj` takes an `unsigned int`, so the signature
+is a specification.  Its 92 bytes touch `0x10(%esp)` -- `this` -- and never
+`0x14(%esp)`.  The tap count depends only on the selected reference loop's
+bank.  Spelled `(void)gain;`, and there is no mutation for it: the object does
+not read the argument either, so no input can separate reading it from not.
+
+### 4973. `getV90Capability` INLINES `isV90WithEia6`, AND THE SETCC COUNT IS THE CHECK
+
+The blob's 122 bytes contain exactly three `setcc`:
+
+    45a39:  sete %al   ; loops[refLoop].capability == 2
+    45a43:  sete %al   ; ... == 1, on a value already 0 or 1
+    45a52:  sete %dl   ; params +0x500 == 6
+    45a55:  or   %al,%dl
+
+The middle one is `isV90WithEia6`'s own `(cap == 1) || ...`, which this tree has
+carried in that function since batch 3 -- so the call site is
+`if (isV90WithEia6())` and NOT `if (isV90WithEia6() == 1)`, which would emit a
+fourth.  The entry test is a SIGN test (`test %ecx,%ecx ; js`) and not a
+comparison with -1, and it is the same test as the callee's `refLoop >= 0`,
+which is why the fall-through at 0x45a1e goes straight to the capability load
+and only the post-`autoSelection` path tests again.
+
+Our build emits that second test on both paths rather than only on the search
+path, which costs three bytes (0x7d against the blob's 0x7a).  That is jump
+threading, which the compiler was free to choose; it is recorded and not chased.
+
+### 4974. TWO SWITCH ARMS WITH THE SAME BODY: THE OBJECT SAYS WHETHER THEY SHARE A LABEL
+
+`getFilterLength` answers 20 taps for `coefType` 1 and for 2.  Written the
+obvious way, `case 1: case 2:` under one label, GCC merges them into a
+contiguous RANGE and emits `cmp $1 / jl` then `cmp $2 / jle`.  The blob has
+neither instruction: at 0x44fbd it compares against 2, `jg`s to the 3 arm, and
+only in the low half does the `dec %eax / je` that tests for 1 -- which is the
+balanced tree GCC builds over three SEPARATELY labelled cases, folded back
+together afterwards by cross-jumping onto one `ret`.
+
+Measured on the period compiler with everything else held:
+
+    spelling                          getFilterLength   setFilter(unsigned)
+    `case 1: case 2:`, shared `len`        0x5e               0x123
+    four separate `return 20`              0x5b               0x13b
+    blob                                   0x5c               0x138
+
+so the separate-label spelling is right at both sites, and it is the inlining
+site that makes the difference large enough to be worth having.  Neither is
+byte-exact and this is a similarity argument only: the two behave identically
+over every input, and no differential test can or should separate them.
+
+`getFilterPointer` needs none of this -- its four arms have four different
+bodies, so nothing could merge -- and it comes out at the blob's 0x9a exactly.
