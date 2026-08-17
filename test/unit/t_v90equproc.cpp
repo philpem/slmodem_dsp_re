@@ -828,49 +828,108 @@ plant_params(void)
 }
 
 /*
- * Put `rDetector1` one sample from an RNot decision.  `t_v90p4ddec`'s
- * `arm_r`, reduced to the two arms this file uses: 2 answers on a POSITIVE
- * sample, which is what the equaliser's output is planted to be, and 0 leaves
- * the detector well short so the arm does not fire at all.
+ * Put a detector one or two POSITIVE samples from a decision.  These are
+ * `t_v90p4ddec`'s `arm_r`/`arm_rf` narrowed to the positive-pattern arms --
+ * the equaliser's output is what the detector sees here and it is planted
+ * positive -- and widened by a `want` of 2, which arms the detector one group
+ * FURTHER out.
+ *
+ * THE SECOND SETTING IS NOT A CONVENIENCE.  The three re-convert blocks end
+ * with `for (i = 0; i < j; i++) b8[i] = (short)outFloat[i]`, whose body cannot
+ * run at all when the block fires on symbol ZERO -- which is where every
+ * detector armed one sample out fires.  Driving the same block one symbol
+ * later is the only way that loop executes, and gcov counted those three
+ * lines as unexecuted until this existed.
+ *
+ * `want` 0 leaves the detector well short of its group, so the arm never
+ * fires; the run counters are cleared either way so the two peers stay
+ * identical.
  */
 static void
-arm_rnot(V90RDetector *d, int want, int limit)
+arm_group6(V90RDetector *d, int want, int limit, int *run)
 {
 	d->int_04 = limit;
 	d->int_08 = limit;
 	d->int_1c = 0;
 	d->int_14 = 0;
 	d->int_18 = 0;
-	d->int_24 = 0x33;
 
-	if (want) {
+	switch (want) {
+	case 2:
+		d->int_00 = 4;
+		d->ushort_20 = 0x01;	/* -> 0x03 -> 0x07 on the second */
+		*run = limit - 6;
+		break;
+	case 1:
 		d->int_00 = 5;
-		d->ushort_20 = 0x03;		/* 0x03 * 2 | 1 = 0x07 */
-		d->int_1c = limit - 6;
-	} else {
+		d->ushort_20 = 0x03;	/* 0x03 * 2 | 1 = 0x07 */
+		*run = limit - 6;
+		break;
+	default:
 		d->int_00 = 2;
 		d->ushort_20 = 0x1c;
+		break;
 	}
 }
 
+/* `detectRNot`: one run counter, +0x1c, against the limit at +0x08. */
 static void
-arm_rfnot(V90RDetector *d, int want, int limit)
+arm_rnot(V90RDetector *d, int want, int limit)
+{
+	d->int_24 = 0x33;
+	arm_group6(d, want, limit, &d->int_1c);
+}
+
+/* `detectR`: two run counters, and a POSITIVE sample matches 0x07 -> +0x18. */
+static void
+arm_r(V90RDetector *d, int want, int limit)
+{
+	d->int_24 = 0x33;
+	arm_group6(d, want, limit, &d->int_18);
+	d->int_1c = 0;
+}
+
+/* The twelve-sample pair: 0x333 is the positive pattern, +0x0c the limit. */
+static void
+arm_group12(V90RDetector *d, int want, int limit, int *run)
 {
 	d->int_0c = limit;
 	d->int_10 = limit;
 	d->int_1c = 0;
 	d->int_14 = 0;
 	d->int_18 = 0;
-	d->int_24 = 0x44;
 
-	if (want) {
+	switch (want) {
+	case 2:
+		d->int_00 = 10;
+		d->ushort_20 = 0x0cc;	/* -> 0x199 -> 0x333 */
+		*run = limit - 12;
+		break;
+	case 1:
 		d->int_00 = 11;
-		d->ushort_20 = 0x199;		/* 0x199 * 2 | 1 = 0x333 */
-		d->int_1c = limit - 12;
-	} else {
+		d->ushort_20 = 0x199;	/* 0x199 * 2 | 1 = 0x333 */
+		*run = limit - 12;
+		break;
+	default:
 		d->int_00 = 4;
 		d->ushort_20 = 0x666;
+		break;
 	}
+}
+
+static void
+arm_rfnot(V90RDetector *d, int want, int limit)
+{
+	d->int_24 = 0x44;
+	arm_group12(d, want, limit, &d->int_1c);
+}
+
+static void
+arm_rf(V90RDetector *d, int want, int limit)
+{
+	d->int_24 = 0x44;
+	arm_group12(d, want, limit, &d->int_18);
+	d->int_1c = 0;
 }
 
 /*
@@ -878,7 +937,7 @@ arm_rfnot(V90RDetector *d, int want, int limit)
  * impairment detector shared.  Nothing here calls a constructor.
  */
 static void
-p4_setup(long tag)
+p4_setup(long tag, int dly)
 {
 	unsigned lf = 0x37c1u + 0x9e37u * (unsigned)tag;
 	int s, k;
@@ -968,7 +1027,14 @@ p4_setup(long tag)
 		m->codes = code_s[s];
 		m->signs = sign_s[s];
 		m->sampleCapacity = NSAMPLE;
-		m->sampleCount = 5u;
+		/*
+		 * ONE SAMPLE SHORT OF A FRAME, or two.  `hardDecision`
+		 * appends one per symbol and `process` yields a frame at six,
+		 * so this is what decides whether the message decoders answer
+		 * on symbol zero or on symbol one -- the same `dly` the
+		 * detectors take, for the same reason.
+		 */
+		m->sampleCount = (unsigned)(5 - dly);
 		m->frameStart = 0u;
 		m->bitsPerFrame = 8u;
 		m->signBitsPerFrame = 2u;
@@ -1228,11 +1294,12 @@ run_p4_arms(void)
 	};
 	static const unsigned int n_v[] = { 4u, 7u };
 	long tag = 5720000;
-	int ri, ei, mmx, ni, opt;
+	int ri, ei, mmx, ni, opt, dly;
 	int saw_code[0x40];
 	int saw_mmx = 0, saw_float = 0, saw_reconv = 0, saw_mmx_after = 0;
 	int saw_b4 = 0, saw_b8 = 0, saw_bll = 0, saw_beta = 0;
 	int saw_ratio = 0, saw_wrap = 0, saw_close = 0;
+	int saw_held = 0, saw_late = 0;
 	int sep_sym = 0, sep_state = 0;
 	long prev_sym = -1, prev_state = -1;
 	int i;
@@ -1249,13 +1316,14 @@ run_p4_arms(void)
 	    for (ei = 0; ei < 3; ei++)
 		for (mmx = 0; mmx < 2; mmx++)
 		    for (ni = 0; ni < 2; ni++)
-			for (opt = 0; opt < 4; opt++) {
+			for (dly = 0; dly < 2; dly++)
+			    for (opt = 0; opt < 4; opt++) {
 				unsigned int le = (ri & 1) ? 8u : 4u;
 				unsigned int dfe = (ei & 1) ? 4u : 2u;
 				unsigned int n = n_v[ni];
 				unsigned int no_a = 0, no_b = 0;
 				unsigned int k;
-				int st_before;
+				int held = (int)((tag + 1) & 1);
 				int code;
 
 				/*
@@ -1282,9 +1350,19 @@ run_p4_arms(void)
 				seed_ce_pair(tag);
 				wire(&OURS);
 				wire(&THEIRS);
-				p4_setup(tag);
+				p4_setup(tag, dly);
 				plant_params();
 				p4_equ_plant(tag, le, dfe, mmx);
+				/*
+				 * THE MMX PROLOGUE'S HELD-SAMPLE ARM, which is
+				 * four lines no float trial can reach: with
+				 * `word_68` set it plants `(short)word_6c` at
+				 * `block_b4[0]`, rewinds `cur` and makes `n`
+				 * odd.  The float arm's own carry is the RESET
+				 * group's; this is the fixed-point twin.
+				 */
+				OURS.word_68 = THEIRS.word_68 =
+				    (unsigned)held;
 
 				OURS.state = THEIRS.state = est_v[ei];
 				OURS.quickConnect = THEIRS.quickConnect =
@@ -1299,7 +1377,6 @@ run_p4_arms(void)
 				    ((V90ConnectionEvaluator *)ce_[1])->word_90
 				    = (unsigned)((tag >> 2) & 1);
 
-				st_before = p4_rows[ri].state;
 				for (k = 0; k < 2; k++) {
 					V90Phase4Demodulator *d =
 					    &P4D((int)k);
@@ -1308,9 +1385,26 @@ run_p4_arms(void)
 					    p4_rows[ri].state;
 					d->sessionFlag =
 					    (unsigned)p4_rows[ri].v92;
-					d->countInState = p4_rows[ri].count;
+					d->countInState =
+					    p4_rows[ri].count
+					    - (unsigned)dly;
 					d->trn2dDDLength = 0x40;
-					d->linearMappStudyStart = 0x20;
+					/*
+					 * OUT OF REACH, DELIBERATELY.  With
+					 * this equal to `countInState` the
+					 * TRN2dDD arm switches the demapper's
+					 * LINEAR MAPPING STUDY on, and that
+					 * member accumulates float sums whose
+					 * 80-bit intermediates are
+					 * `V90Demapper`'s divergence to own,
+					 * not this binary's: three trials of
+					 * 720 failed on `word_7c` and one
+					 * `array_d8` word with the study
+					 * running, and the arm being driven
+					 * here is `process`'s.  `t_v90demap`
+					 * is where the study is adjudicated.
+					 */
+					d->linearMappStudyStart = 0x7d0;
 					d->b1dBits = 0x60u;
 					d->b1dZeros = 7u;
 					d->nbits = 0u;
@@ -1327,7 +1421,8 @@ run_p4_arms(void)
 					d->errorEnergyAfterEC = 1.0f;
 					d->int_3510 = 0;
 					arm_rnot(&d->rDetector1,
-						 p4_rows[ri].rnot, 0x60);
+						 p4_rows[ri].rnot
+						 ? 1 + dly : 0, 0x60);
 					arm_rfnot(&d->rDetector2, 0, 0x60);
 				}
 
@@ -1466,7 +1561,10 @@ run_p4_arms(void)
 					sep_state++;
 				prev_sym = outsym_[1][0];
 				prev_state = THEIRS.state;
-				(void)st_before;
+				if (held)
+					saw_held = 1;
+				if (!mmx && THEIRS.mmxMode && dly)
+					saw_late = 1;
 			}
 
 	dsplib_debug_capture_on = 0;
@@ -1480,6 +1578,9 @@ run_p4_arms(void)
 		    0);
 	diff_eq_int("the re-convert refilled block_b4", saw_b4, 1, 0);
 	diff_eq_int("the re-convert refilled block_b8", saw_b8, 1, 0);
+	diff_eq_int("a re-convert ran past symbol zero", saw_late, 1, 0);
+	diff_eq_int("the fixed-point prologue carried a held sample", saw_held,
+		    1, 0);
 	diff_eq_int("the resampler was steered", saw_bll, 1, 0);
 	diff_eq_int("a step size was moved", saw_beta, 1, 0);
 	diff_eq_int("the before/after ratio was computed", saw_ratio, 1, 0);
