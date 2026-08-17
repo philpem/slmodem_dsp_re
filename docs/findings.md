@@ -65673,3 +65673,110 @@ Two fields did come out of pads on hard evidence: +0x118, which `infoToBits`
 fills with +0x001 whole, and +0x128, which is the frame quantum in twelfths --
 `infoToBits` multiplies it by twelve, rounds the message up to it, and stores
 1 there itself when +0x001 is zero.  Both are typed and neither is named.
+
+## 4754. THE SIX V92Phase4Modulator MEMBERS `infoToBits` UNBLOCKED, AND THE FOUR-STATEMENT TAIL THEY SHARE
+
+`enterRepeatedCP` (139 B), `recivedSUV` (177), `recivedPartTwoSilenceRrnSUV`
+(177), `recivedPartOneSilenceRrnSUVtag` (294), `recivedCPtag` (296) and
+`recivedRt` (251) -- 1,334 bytes, written and green.  They are the subset of
+the eight that `readyqueue.py` freed which closes without `generateSymbol`:
+`closure.py` over the six is 9 symbols and 3,623 bytes with nothing unwritten
+but themselves.
+
+**ALL SIX END THE SAME WAY**, and the block is spelled out once per function
+with no call and no helper symbol anywhere in .text+0x16f20..+0x1783a:
+
+    cp->byte_00 = k;
+    cp->infoToBits();
+    pattern = cp->getBitVector(patternLength);
+    word_1b0 = patternLength / cp->bitsPerSymbol;
+
+-- pack the message, take the vector and its padded length, and turn that
+length into a count in SYMBOLS.  `k` is 0 in `enterRepeatedCP`, `recivedSUV`
+and `recivedPartTwoSilenceRrnSUV` and 1 in the two tag handlers and
+`recivedRt`; that is the only thing that varies.
+
+**TWO OF THE SIX ARE THE SAME 177 BYTES.**  `recivedSUV` and
+`recivedPartTwoSilenceRrnSUV` share their guard (`word_1c4` then `state == 5`),
+their modulus test, their `.rodata.str1.4:0x3c40` string and their tail, and
+they are two ordinary GLOBAL symbols -- not linkonce, not an alias, no sibling
+`jmp`.  So the original spelled the body twice, which is finding 1237's ruling
+for `reset` against the constructor one class over, and the reconstruction
+repeats it.  The cost lands on the mutation set: every anchor inside either has
+to carry its function's signature, or it matches both.
+
+`recivedPartOneSilenceRrnSUVtag` writes `cp->byte_04 = 1` on EVERY path,
+including the one that returns because `flag_20` was already set, and again
+after each of the two arms has written it -- the object reloads `cp` at
++0x173ff to do it.  Reproduced as the trailing statement it is.
+
+`recivedRt`'s gate is `symbolCount > 2399 && symbolCount % 12 == 0` with a
+`0xaaaaaaab` reciprocal for the divide.  Whether the author wrote `> 2399` or
+`>= 2400` is not established -- both compile to `cmp $0x95f; jbe`.
+
+103 mutations over `t_v92p4gen`, 103 caught.
+
+## 4755. `V92CP::+0x128` IS `bitsPerSymbol`, NAMED BY A CALLER AND NOT BY ARITHMETIC; AND THREE MORE STATE CODES
+
+Finding 4750 left +0x128 as `byte_128` with "the frame quantum, in twelfths",
+which was a description of what `infoToBits` does with it and not a name.
+`recivedRt` settles it: `movzbl 0x43(%ebx),%eax; mov %al,0x128(%edx)` at
+.text+0x177e6 copies `V92Phase4Modulator::bitsPerSymbol` -- named in that
+header from the loop bound of `generateCPu`/`generateSUVu` and the count handed
+to `Scrambler<h,h>::processAllOnes` -- straight into it.  That is CLAUDE.md's
+second evidence tier, a caller that types the field, and it is the strongest
+evidence anything in this class has.
+
+It also explains the twelve.  `infoToBits` rounds the padded length up to a
+multiple of `12 * bitsPerSymbol`, and all six members then divide that length
+by `bitsPerSymbol` -- so `vectorLen` is a whole number of TWELVE-SYMBOL frames
+and `word_1b0` is a symbol count.  What the twelve counts is still not
+established and +0x1b0 keeps its offset name.
+
+**THREE STATE CODES CAME OUT OF FORMAT STRINGS**, which is the strongest tier
+of all.  Each is stored immediately after a message that names it:
+
+    5   "V92Phase4Modulator: on recivedRt enter SUV @ %d"     :0x3d44
+    12  "V92Phase4Modulator: on recivedSUV enter CPu @ %d"    :0x3c40
+    13  "V92Phase4Modulator: enter repeatedCPu @ %d"          :0x3be8
+
+so `V92P4M_STATE_SUV`, `V92P4M_STATE_CPU` and `V92P4M_STATE_REPEATED_CPU` join
+the four the header already had.  The other nine values the class mentions --
+1, 6, 8, 9, 10, 11, 23, 24 and 29 -- stay bare: no string fires on any of them.
+The four members written before this batch still spell 5, 12 and 13 as
+literals; the substitution is free and was left for whoever next re-records
+`v92p4gen`'s anchors, which quote three of those `case` labels.
+
+## 4756. THREE HOLES IN A GREEN GRID, ALL FOUND BY MUTATIONS AND NONE BY THE DIFFERENTIAL TIER
+
+`t_v92p4gen` was green over 100,000+ checks per member the moment the six
+compiled.  Nine of the twenty-six new mutations still read NOT CAUGHT, and each
+was a different way for a trial to exist without reaching what it names.
+
+**1. AN ANTI-VACUITY CHECK ADDRESSED BY INDEX.**  `if (m == 11)` selected
+`generateRu` for the `+amplitude`/`-amplitude` counters.  Six members inserted
+above it made that `generateDataSymbolBeforeRRN`, and both counters went to
+zero -- which the gate CAUGHT, because they are asserted rather than printed.
+It is now `strcmp(members[m].name, "generateRu")`.  A positional reference into
+a table another batch will extend is the same defect class as a mutation anchor
+that stops being unique (finding 4708).
+
+**2. TWO FIELDS SEEDED EQUAL MAKE A COPY BETWEEN THEM INVISIBLE.**  The fixture
+set `V92Phase4Modulator::bitsPerSymbol` and `V92CP::bitsPerSymbol` to the same
+value, so deleting `recivedRt`'s copy of one into the other changed nothing.
+They are now seeded from different expressions.  Nothing about the differential
+comparison could ever have seen this: both sides agreed, correctly, about a
+store that did not matter.
+
+**3. A GUARD THAT THE GRID COULD NOT OPEN.**  `recivedRt`'s live path needs
+`state == 23`, `word_38 != 0` and `symbolCount >= 2400` with `symbolCount % 12
+== 0`, and the grid held neither 23 nor any count above 48 that is a multiple
+of twelve.  Adding them fixed six mutations; the seventh, the NULL-CP arm,
+needed all three of those AND a null `cp`, and the trial indices that gave the
+first three never coincided with the bit that gave the fourth.  That arm is now
+forced open explicitly for that member, and `saw_null_cp` asserts it was
+reached.
+
+The grid gained 23 to `states` and 1200, 2399, 2400, 2406 and 2412 to `counts`,
+which is 16,320 trials per member per level against 10,240.  All 103 mutations
+are caught.

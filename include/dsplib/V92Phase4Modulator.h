@@ -124,6 +124,22 @@ class V92Parameters;
 #define V92P4M_STATE_RU		19
 #define V92P4M_STATE_RM		26
 
+/*
+ * Three more, named by the six members added with `V92CP::infoToBits`.  Each
+ * is the state stored immediately after a message that names it, and the
+ * message is the author's own `.rodata.str1.4` text:
+ *
+ *   5   "on recivedRt enter SUV @ %d"          :0x3d44, then `movl $0x5`
+ *   12  "on recivedSUV enter CPu @ %d"         :0x3c40, then `movl $0xc`
+ *   13  "enter repeatedCPu @ %d"               :0x3be8, then `movl $0xd`
+ *
+ * The remaining nine (6, 8, 9, 10, 11, 23, 24, 29 and 1) stay bare: no string
+ * fires on any of them.
+ */
+#define V92P4M_STATE_SUV	5
+#define V92P4M_STATE_CPU	12
+#define V92P4M_STATE_REPEATED_CPU 13
+
 class V92Phase4Modulator {
 public:
 	V92Phase4Modulator(V92Parameters *params, V92BitsToSymbol *bitsToSymbol,
@@ -131,7 +147,7 @@ public:
 	~V92Phase4Modulator();
 
 	/*
-	 * The twenty-four written members.  Return types are not mangled,
+	 * The thirty written members.  Return types are not mangled,
 	 * so `int` here means "the object leaves a 32-bit value in %eax and
 	 * the last thing done to it is a sign extension from 16 bits" and
 	 * `void` means "nothing is left in %eax".  The one argument type is
@@ -150,11 +166,18 @@ public:
 	int generateDataSymbolBeforeFPE();
 	int generateDataSymbolBeforeRRN();
 
+	void enterRepeatedCP();
+
 	void recivedCP();
+	void recivedCPtag();
 	void recivedEd();
 	void recivedFirstRrnEd();
+	void recivedRt();
+	void recivedSUV();
 	void recivedSUVtag();
 	void recivedPartOneSilenceRrnSUV();
+	void recivedPartOneSilenceRrnSUVtag();
+	void recivedPartTwoSilenceRrnSUV();
 	void recivedPartTwoSilenceRrnSUVtag();
 
 	void exitCPt();

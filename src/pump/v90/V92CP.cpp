@@ -57,7 +57,7 @@ V92CP_OFF(byte_119,	0x119, byte119);
 V92CP_OFF(byte_11a,	0x11a, byte11a);
 V92CP_OFF(word_11c,	0x11c, word11c);
 V92CP_OFF(word_120,	0x120, word120);
-V92CP_OFF(byte_128,	0x128, byte128);
+V92CP_OFF(bitsPerSymbol,	0x128, byte128);
 V92CP_OFF(bits,		0x129, bits);
 V92CP_OFF(crc,		0x8f9, crc);
 V92CP_OFF(vectorLen,	0x90c, vectorlen);
@@ -414,10 +414,10 @@ float fltTable_1[7] = {
  *
  * ---------------------------------------------------------------------------
  * THE TWO LENGTHS.  `msgLen` is the message including its CRC, `vectorLen` is
- * that rounded UP to the next strictly greater multiple of `12 * byte_128`
+ * that rounded UP to the next strictly greater multiple of `12 * bitsPerSymbol`
  * with the gap zero-filled.  This function is what settled which is which; the
  * header carries the argument.  The rounding is an unsigned `div`, so
- * `byte_128 == 0` divides by zero here as it does in the object, and the
+ * `bitsPerSymbol == 0` divides by zero here as it does in the object, and the
  * fixture's grid keeps away from it rather than letting the compiler
  * adjudicate our own undefined behaviour.
  * ===========================================================================
@@ -467,7 +467,7 @@ V92CP::infoToBits()
 		bits[20] = (unsigned char)((b >> 1) & 1);
 
 		if (b == 0)
-			byte_128 = 1;
+			bitsPerSymbol = 1;
 
 		t = char_02;
 		for (i = 0; i <= 4; i++) {
@@ -657,7 +657,7 @@ V92CP::infoToBits()
 	bits[pos + 16] = 0;
 	word_11c = (int)(pos + 17);
 
-	quantum = 12u * byte_128;
+	quantum = 12u * bitsPerSymbol;
 	vectorLen = ((unsigned int)word_11c / quantum + 1) * quantum;
 
 	for (i = (unsigned int)word_11c; i < vectorLen; i++)

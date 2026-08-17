@@ -15,7 +15,7 @@
  * reach undefined behaviour in OUR source, so a trial that used them would be
  * the period compiler adjudicating our UB rather than the object (D561):
  *
- *   - `byte_128 == 0`.  The padded length is `n / (12 * byte_128)` and the
+ *   - `bitsPerSymbol == 0`.  The padded length is `n / (12 * bitsPerSymbol)` and the
  *     object's `div` is unsigned, so zero divides by zero on both sides.  The
  *     grid uses 1..6.
  *
@@ -120,7 +120,7 @@ struct icase {
 	float f10, f14, f18, f1c, f20;
 	unsigned char byte_24;
 	unsigned short word_10c;
-	unsigned char byte_128;
+	unsigned char bitsPerSymbol;
 	unsigned int word_104;
 	unsigned int suv;
 	int fill;
@@ -162,7 +162,7 @@ static const struct icase cases[] = {
  { "the long form at char_01 = 1",
       0,  1,  0x0f, 0x00, 0x00, 0u, 0u,
       0.0f,     0.0f,    0.0f,    0.0f,    0.0f,     0,  0,  1, 16,  0, FILL_ZEROS },
- { "the long form at char_01 = 0, which sets byte_128",
+ { "the long form at char_01 = 0, which sets bitsPerSymbol",
       0,  0,  0x0f, 0x01, 0x01, 1u, 1u,
       1.0f,     0.5f,   -0.5f,    0.25f,  -0.25f,    1,  1,  4, 16,  0, FILL_PATTERN },
  { "the long form at char_01 = -1",
@@ -239,7 +239,7 @@ static const struct icase cases[] = {
  { "the longest message with the largest quantum",
       0,  1, 0x0f, 0xff, 0x01, ~0u, ~0u,
       3.0f,     0.5f,   -0.5f,    0.5f,   -0.5f,     1,  6,  6, 16,  0, FILL_DRAW },
- { "byte_128 = 5, which divides nothing evenly",
+ { "bitsPerSymbol = 5, which divides nothing evenly",
       0,  1, 0x0f, 0x12, 0x00, 5u, 5u,
       1.0f,     0.5f,   -0.5f,    0.5f,   -0.5f,     1,  3,  5, 16,  0, FILL_PATTERN },
  { "byte_04 set, which raises word_110",
@@ -298,7 +298,7 @@ setup(int c, unsigned int seed)
 	o->word_104 = k->word_104;
 	o->suv = k->suv;
 	o->word_10c = k->word_10c;
-	o->byte_128 = k->byte_128;
+	o->bitsPerSymbol = k->bitsPerSymbol;
 
 	for (i = 0; i < V92CP_GROUPS; i++) {
 		switch (k->fill) {
@@ -432,9 +432,9 @@ run_cases(void)
 		 * blob's own answer: the padded length is a multiple of twelve
 		 * quanta and is STRICTLY above the cursor.
 		 */
-		diff_eq_int("vectorLen is a multiple of 12*byte_128 (%ld)",
+		diff_eq_int("vectorLen is a multiple of 12*bitsPerSymbol (%ld)",
 			    (long)(C(1)->vectorLen %
-				   (12u * cases[c].byte_128)), 0, (long)c);
+				   (12u * cases[c].bitsPerSymbol)), 0, (long)c);
 		diff_eq_int("and strictly above the cursor (%ld)",
 			    (long)(C(1)->vectorLen >
 				   (unsigned int)C(1)->word_11c), 1, (long)c);
@@ -446,7 +446,7 @@ run_cases(void)
 /*
  * A sweep with the fields drawn rather than chosen.  The chosen grid above
  * says what each input does; this says that nothing else does.  `word_10c`
- * and `byte_128` are the two that are clamped, for the reasons at the top.
+ * and `bitsPerSymbol` are the two that are clamped, for the reasons at the top.
  */
 static int
 run_sweep(void)
@@ -471,7 +471,7 @@ run_sweep(void)
 		o->word_0c = (unsigned int)nextbyte();
 		o->byte_24 = (unsigned char)(nextbyte() & 1u);
 		o->word_10c = (unsigned short)(nextbyte() % 7u);
-		o->byte_128 = (unsigned char)(nextbyte() % 6u + 1u);
+		o->bitsPerSymbol = (unsigned char)(nextbyte() % 6u + 1u);
 		o->word_104 = (unsigned int)nextbyte();
 		o->suv = (unsigned int)nextbyte();
 
@@ -590,7 +590,7 @@ main(void)
 		    0xa2, 0xa2);
 	diff_eq_int("word_10c is at +0x%lx", (long)offsetof(V92CP, word_10c),
 		    0x10c, 0x10c);
-	diff_eq_int("byte_128 is at +0x%lx", (long)offsetof(V92CP, byte_128),
+	diff_eq_int("bitsPerSymbol is at +0x%lx", (long)offsetof(V92CP, bitsPerSymbol),
 		    0x128, 0x128);
 	diff_eq_int("vectorLen is at +0x%lx", (long)offsetof(V92CP, vectorLen),
 		    0x90c, 0x90c);

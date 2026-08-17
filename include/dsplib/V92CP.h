@@ -325,16 +325,28 @@ public:
 	unsigned char pad_124[4];	/* +0x124 not modelled            */
 
 	/*
-	 * +0x128  The frame quantum, in twelfths.  `infoToBits` reads it,
-	 * multiplies by twelve -- `lea (%ebx,%ebx,2),%edx; lea 0x0(,%edx,4)`
-	 * -- and rounds the message length UP to the next strictly greater
-	 * multiple of that to get `vectorLen`.  It is also the divisor of an
-	 * unsigned `div`, so a zero here is a division by zero in the object
-	 * as well as in ours; `infoToBits` itself stores 1 when `char_01` is
-	 * zero, and V92Phase4Modulator writes it at five sites.  What the
-	 * twelve counts is not established.
+	 * +0x128  HOW MANY BITS GO INTO ONE SYMBOL, and the name is the
+	 * CALLER'S rather than an inference from arithmetic:
+	 * `V92Phase4Modulator::recivedRt` assigns it from that class's own
+	 * `bitsPerSymbol` at its +0x43 -- `movzbl 0x43(%ebx),%eax; mov
+	 * %al,0x128(%edx)` at .text+0x177e6 -- and +0x43 was named from the
+	 * loop bound of `generateCPu`/`generateSUVu` and the count handed to
+	 * `Scrambler<h,h>::processAllOnes`.  That is CLAUDE.md's second
+	 * evidence tier, a callee or caller that types the field.
+	 *
+	 * It is consistent with what `infoToBits` does with it: the padded
+	 * length is rounded up to a multiple of `12 * bitsPerSymbol` --
+	 * `lea (%ebx,%ebx,2),%edx; lea 0x0(,%edx,4)` -- which is a whole
+	 * number of twelve-symbol frames, and five members of
+	 * V92Phase4Modulator then divide `vectorLen` by it to get a count in
+	 * SYMBOLS.  What the twelve counts is still not established.
+	 *
+	 * It is also the divisor of an unsigned `div`, so a zero here divides
+	 * by zero in the object as well as in ours; `infoToBits` stores 1
+	 * when `char_01` is zero, and V92Phase4Modulator writes it at five
+	 * sites.
 	 */
-	unsigned char byte_128;
+	unsigned char bitsPerSymbol;
 
 	/* +0x129  The bit vector, one byte per bit.  See V92CP_BITS. */
 	unsigned char bits[V92CP_BITS];
@@ -346,7 +358,7 @@ public:
 
 	/*
 	 * +0x90c  THE PADDED LENGTH, and what `getBitVector` reports.
-	 * `infoToBits` computes it as the next multiple of `12 * byte_128`
+	 * `infoToBits` computes it as the next multiple of `12 * bitsPerSymbol`
 	 * STRICTLY GREATER than the message -- `n / q + 1` times `q`, so an
 	 * exact multiple still gains a whole quantum -- and zero-fills
 	 * `bits[msgLen + 1 .. vectorLen)` up to it.  Named with `msgLen`; see

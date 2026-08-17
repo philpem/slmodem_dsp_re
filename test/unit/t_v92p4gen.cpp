@@ -104,7 +104,16 @@ int our_genFPE(void *)
 	asm("_ZN18V92Phase4Modulator27generateDataSymbolBeforeFPEEv");
 int our_genRRN(void *)
 	asm("_ZN18V92Phase4Modulator27generateDataSymbolBeforeRRNEv");
+void our_enterRepeatedCP(void *)
+	asm("_ZN18V92Phase4Modulator15enterRepeatedCPEv");
 void our_recivedCP(void *) asm("_ZN18V92Phase4Modulator9recivedCPEv");
+void our_recivedCPtag(void *) asm("_ZN18V92Phase4Modulator12recivedCPtagEv");
+void our_recivedRt(void *) asm("_ZN18V92Phase4Modulator9recivedRtEv");
+void our_recivedSUV(void *) asm("_ZN18V92Phase4Modulator10recivedSUVEv");
+void our_recivedP1tag(void *)
+	asm("_ZN18V92Phase4Modulator30recivedPartOneSilenceRrnSUVtagEv");
+void our_recivedP2(void *)
+	asm("_ZN18V92Phase4Modulator27recivedPartTwoSilenceRrnSUVEv");
 void our_recivedEd(void *) asm("_ZN18V92Phase4Modulator9recivedEdEv");
 void our_recivedFirstRrnEd(void *)
 	asm("_ZN18V92Phase4Modulator17recivedFirstRrnEdEv");
@@ -127,7 +136,17 @@ int ref_genFPE(void *)
 	asm("ref__ZN18V92Phase4Modulator27generateDataSymbolBeforeFPEEv");
 int ref_genRRN(void *)
 	asm("ref__ZN18V92Phase4Modulator27generateDataSymbolBeforeRRNEv");
+void ref_enterRepeatedCP(void *)
+	asm("ref__ZN18V92Phase4Modulator15enterRepeatedCPEv");
 void ref_recivedCP(void *) asm("ref__ZN18V92Phase4Modulator9recivedCPEv");
+void ref_recivedCPtag(void *)
+	asm("ref__ZN18V92Phase4Modulator12recivedCPtagEv");
+void ref_recivedRt(void *) asm("ref__ZN18V92Phase4Modulator9recivedRtEv");
+void ref_recivedSUV(void *) asm("ref__ZN18V92Phase4Modulator10recivedSUVEv");
+void ref_recivedP1tag(void *)
+	asm("ref__ZN18V92Phase4Modulator30recivedPartOneSilenceRrnSUVtagEv");
+void ref_recivedP2(void *)
+	asm("ref__ZN18V92Phase4Modulator27recivedPartTwoSilenceRrnSUVEv");
 void ref_recivedEd(void *) asm("ref__ZN18V92Phase4Modulator9recivedEdEv");
 void ref_recivedFirstRrnEd(void *)
 	asm("ref__ZN18V92Phase4Modulator17recivedFirstRrnEdEv");
@@ -212,12 +231,19 @@ M(int s)
  * and not others.
  */
 static const int states[] = {
-	-1, 0, 1, 2, 3, 4, 5, 6, 9, 11, 12, 13, 14, 15, 19, 26
+	-1, 0, 1, 2, 3, 4, 5, 6, 9, 11, 12, 13, 14, 15, 19, 23, 26
 };
 #define NSTATE ((int)(sizeof(states) / sizeof(states[0])))
 
+/*
+ * 2400 and 2412 are `recivedRt`'s gate -- `cmp $0x95f; jbe` and then a
+ * reciprocal divide by twelve -- and 2399 is the value just under it.  Without
+ * the three, six mutations of that member's guard read NOT CAUGHT while every
+ * differential check passed, which is finding 134's shape.
+ */
 static const unsigned int counts[] = {
-	0u, 1u, 2u, 12u, 23u, 24u, 25u, 36u, 48u, 0xffffffffu
+	0u, 1u, 2u, 12u, 23u, 24u, 25u, 36u, 48u, 1200u, 2399u, 2400u,
+	2406u, 2412u, 0xffffffffu
 };
 #define NCOUNT ((int)(sizeof(counts) / sizeof(counts[0])))
 
@@ -289,6 +315,75 @@ setup(int trial)
 		((V92CP *)cpbuf[s])->word_110 = (unsigned)((b >> 3) & 1);
 
 		/*
+		 * THE SIX MEMBERS ADDED WITH `V92CP::infoToBits` PACK A REAL
+		 * MESSAGE, so the CP's own fields have to be inside what that
+		 * function can survive.  All three bounds are the ones
+		 * t_v92info.cpp states and docs/deviations.md D570 and D571
+		 * record; none of them is tidiness:
+		 *
+		 *   - `bitsPerSymbol` non-zero.  It is the divisor of an
+		 *     unsigned `div` TWICE per call -- once inside
+		 *     `infoToBits` and once at `patternLength /
+		 *     cp->bitsPerSymbol` here -- so zero traps on both sides
+		 *     at once and proves nothing.
+		 *   - `word_10c` at most six, which is how many groups the two
+		 *     mask blocks hold.  Above that `infoToBits` walks off
+		 *     them, which is out of bounds in OUR source and would
+		 *     leave the answer to the compiler (D561's argument).
+		 *   - the five floats FINITE.  `infoToBits` takes the first
+		 *     sign entry as `0 > f` and the other three as `f < 0`,
+		 *     which are the same predicate for every number and
+		 *     opposite ones for a NaN under `-mno-ieee-fp`.  Random
+		 *     bytes would supply NaNs at about one draw in 250.
+		 *
+		 * `bitsPerSymbol` also feeds THIS class: `recivedRt` copies
+		 * +0x43 into the CP's +0x128, so both are set here.
+		 */
+		{
+			V92CP *c = (V92CP *)cpbuf[s];
+			int f;
+
+			c->bitsPerSymbol =
+			    (unsigned char)(1 + (trial % 6));
+			c->word_10c = (unsigned short)(trial % 7);
+			c->char_01 = (signed char)((trial % 5) - 1);
+			c->byte_00 = (unsigned char)(trial % 3);
+
+			for (f = 0; f < 5; f++) {
+				float v = (float)((trial % 17) - 8) / 4.0f;
+
+				switch (f) {
+				case 0:	c->flt_10 = v;	break;
+				case 1:	c->flt_14 = -v;	break;
+				case 2:	c->flt_18 = v;	break;
+				case 3:	c->flt_1c = -v;	break;
+				default: c->flt_20 = v;	break;
+				}
+			}
+
+			/*
+			 * DELIBERATELY NOT THE SAME as the CP's.  `recivedRt`
+			 * copies +0x43 into the CP's +0x128, and seeding the
+			 * two equal made that copy unobservable -- the
+			 * mutation that deletes it read NOT CAUGHT while every
+			 * differential check passed.
+			 */
+			o->bitsPerSymbol =
+			    (unsigned char)(1 + ((trial + 3) % 6));
+			o->word_38 = (unsigned)((trial >> 1) & 1);
+
+			/*
+			 * `word_1c4` is `recivedSUV`'s latch and it has to
+			 * take BOTH values or that member never runs: the
+			 * object seed alone leaves it non-zero 255 draws in
+			 * 256.  Taken off a trial bit rather than added to the
+			 * grid, which would multiply every member's trial
+			 * count for one member's benefit.
+			 */
+			o->word_1c4 = (unsigned)((trial >> 2) & 1);
+		}
+
+		/*
 		 * The staging chain.  THE BLOCK SIZE IS ONE AND `symbolsDone`
 		 * IS NEVER ZERO, and both of those are forced by what the two
 		 * generators hand `process` rather than chosen for tidiness:
@@ -347,6 +442,31 @@ compare_obj(const char *what, long trial)
 	memset(cmp_b + 0x6c, 0x77, sizeof(void *));
 	memset(cmp_a + 0x74, 0x77, sizeof(void *));
 	memset(cmp_b + 0x74, 0x77, sizeof(void *));
+
+	/*
+	 * `pattern` is compared AS DATA for the eleven members that never
+	 * write it -- both sides hold `shared_pattern` and a side that started
+	 * following its own CP would fail here.  The six that call
+	 * `getBitVector` replace it with a pointer INTO their own V92CP, which
+	 * is a per-side address by construction; those are normalised to the
+	 * offset within that block, so the check becomes "the same place in
+	 * each side's own CP" rather than being masked away.
+	 */
+	{
+		int t;
+
+		for (t = 0; t < 2; t++) {
+			unsigned char *pa = (unsigned char *)M(t)->pattern;
+			unsigned char *base = cpbuf[t];
+			unsigned char *dst = (t == 0 ? cmp_a : cmp_b) + 0x1a8;
+			unsigned long off;
+
+			if (pa < base || pa >= base + CPSZ)
+				continue;
+			off = (unsigned long)(pa - base);
+			memcpy(dst, &off, sizeof(void *));
+		}
+	}
 
 	diff_eq_obj_(__FILE__, __LINE__, what, "V92Phase4Modulator", cmp_a,
 		     cmp_b, (size_t)OBJSZ, trial);
@@ -431,7 +551,16 @@ struct member {
 };
 
 static const struct member members[] = {
+	{ "enterRepeatedCP",	our_enterRepeatedCP,	ref_enterRepeatedCP,
+								 0, 0 },
 	{ "recivedCP",		our_recivedCP,		ref_recivedCP,	 0, 0 },
+	{ "recivedCPtag",	our_recivedCPtag,	ref_recivedCPtag, 0, 0 },
+	{ "recivedRt",		our_recivedRt,		ref_recivedRt,	 0, 0 },
+	{ "recivedSUV",		our_recivedSUV,		ref_recivedSUV,	 0, 0 },
+	{ "recivedPartOneSilenceRrnSUVtag",
+				our_recivedP1tag,	ref_recivedP1tag, 0, 0 },
+	{ "recivedPartTwoSilenceRrnSUV",
+				our_recivedP2,		ref_recivedP2,	 0, 0 },
 	{ "recivedEd",		our_recivedEd,		ref_recivedEd,	 0, 0 },
 	{ "recivedFirstRrnEd",	our_recivedFirstRrnEd,	ref_recivedFirstRrnEd,
 								 0, 0 },
@@ -463,6 +592,8 @@ static int saw_state_change;
 static int saw_blocked_by_flag20;
 static int saw_cp_write;
 static int saw_transcript;
+static int saw_message_rebuilt;
+static int saw_null_cp;
 static int saw_ru_pos;
 static int saw_ru_neg;
 static int saw_nonzero_return;
@@ -504,6 +635,35 @@ run_member(int m, unsigned int lvl)
 		if (lvl != 0)
 			dsplib_debug_capture_reset();
 
+		/*
+		 * `recivedRt` HAS A NULL-CP ARM and it is a real one: the
+		 * object sets state 29 and prints an ERROR there, so it
+		 * expects to reach it.  Every other member dereferences `cp`
+		 * without checking, so the null is given to this member only
+		 * and on one trial in eight.
+		 */
+		if (strcmp(members[m].name, "recivedRt") == 0
+		    && (trial % 5) == 0) {
+			int t;
+
+			/*
+			 * The two guards above the arm are forced open as
+			 * well.  Leaving them to the grid made the arm
+			 * reachable only where three independent trial bits
+			 * happened to line up, and on this grid they never
+			 * did: the mutation that deletes `state = 29` read
+			 * NOT CAUGHT.  A trial that cannot reach the code it
+			 * names is finding 134's shape.
+			 */
+			for (t = 0; t < 2; t++) {
+				M(t)->cp = 0;
+				M(t)->word_38 = 1;
+				M(t)->state = 23;
+				M(t)->symbolCount = 2400;
+			}
+			saw_null_cp = 1;
+		}
+
 		if (members[m].our_v != 0) {
 			members[m].our_v(obj[0]);
 			members[m].ref_v(obj[1]);
@@ -515,13 +675,33 @@ run_member(int m, unsigned int lvl)
 				    (long)b, trial);
 			if (a != 0)
 				saw_nonzero_return = 1;
-			if (m == 11) {		/* generateRu */
+			/*
+			 * BY NAME, NOT BY INDEX.  This read `m == 11` until
+			 * six members were added above it, at which point it
+			 * silently started watching `generateDataSymbolBefore-
+			 * RRN` and the two anti-vacuity flags went to zero --
+			 * which the gate caught, because they are asserted.
+			 */
+			if (strcmp(members[m].name, "generateRu") == 0) {
 				if (a == M(0)->amplitude)
 					saw_ru_pos = 1;
 				if (a == -(int)(short)M(0)->amplitude)
 					saw_ru_neg = 1;
 			}
 		}
+
+		/*
+		 * DID ANY TRIAL ACTUALLY PACK A MESSAGE?  The six members
+		 * added with `V92CP::infoToBits` reach their tail only through
+		 * a guard and a modulus test, so a grid that never satisfied
+		 * both would pass every check above while exercising nothing.
+		 * `pattern` pointing INTO the side's own V92CP is the
+		 * observable outcome of that tail and of nothing else -- the
+		 * seed puts `shared_pattern` there, which is outside it.
+		 */
+		if ((unsigned char *)M(0)->pattern >= cpbuf[0]
+		    && (unsigned char *)M(0)->pattern < cpbuf[0] + CPSZ)
+			saw_message_rebuilt = 1;
 
 		after_state = M(0)->state;
 		if (after_state != before_state)
@@ -561,6 +741,9 @@ run_antivacuity(void)
 		    saw_blocked_by_flag20, 1, 0);
 	diff_eq_int("some trial wrote into the V92CP", saw_cp_write, 1, 0);
 	diff_eq_int("some trial printed something", saw_transcript, 1, 0);
+	diff_eq_int("some trial packed a CP message", saw_message_rebuilt, 1,
+		    0);
+	diff_eq_int("some trial gave recivedRt a null CP", saw_null_cp, 1, 0);
 	diff_eq_int("generateRu returned +amplitude somewhere", saw_ru_pos, 1,
 		    0);
 	diff_eq_int("generateRu returned -amplitude somewhere", saw_ru_neg, 1,

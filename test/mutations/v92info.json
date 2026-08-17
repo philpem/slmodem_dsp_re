@@ -1,7 +1,7 @@
 [
  {
   "label": "NOTE: what this set reaches, and the claim it exists for",
-  "why": "The set below reaches V92CP::infoToBits, 1,916 bytes and the largest single member of the class.  A GREEN t_v92info says our reading and the object agree; these say the reading is TIGHT.  THE ONE THAT MATTERS MOST is 'char_02 is re-read for the thirteen bits at 36': the object shifts one register across the branch at .text+0x4ed10 and never reloads +0x002, so those thirteen entries are a signed byte's sign extension.  A version that re-read the field is identical for char_02 = 0 and for char_02 = -1 -- both give thirteen equal entries -- and differs the moment a bit below five is set, which is why four cases in t_v92info.cpp carry 0x0f, 0x01, 0x7f and -16.  SECOND is the fltTable_2 entry: the object's table has no 2^-8 and holds 2^-9 twice, so a generator reproduces the wrong weights and only a magnitude small enough to reach entry ten can tell.  WHAT NO ENTRY HERE REACHES: byte_128 = 0, which divides by zero on both sides; word_10c above six, which walks past both mask blocks (docs/deviations.md D570); and a NaN in any float, whose two sign forms disagree under -mno-ieee-fp.  All three are out of the grid on purpose, and a mutation of them would measure our own undefined behaviour rather than the object."
+  "why": "The set below reaches V92CP::infoToBits, 1,916 bytes and the largest single member of the class.  A GREEN t_v92info says our reading and the object agree; these say the reading is TIGHT.  THE ONE THAT MATTERS MOST is 'char_02 is re-read for the thirteen bits at 36': the object shifts one register across the branch at .text+0x4ed10 and never reloads +0x002, so those thirteen entries are a signed byte's sign extension.  A version that re-read the field is identical for char_02 = 0 and for char_02 = -1 -- both give thirteen equal entries -- and differs the moment a bit below five is set, which is why four cases in t_v92info.cpp carry 0x0f, 0x01, 0x7f and -16.  SECOND is the fltTable_2 entry: the object's table has no 2^-8 and holds 2^-9 twice, so a generator reproduces the wrong weights and only a magnitude small enough to reach entry ten can tell.  WHAT NO ENTRY HERE REACHES: bitsPerSymbol = 0, which divides by zero on both sides; word_10c above six, which walks past both mask blocks (docs/deviations.md D570); and a NaN in any float, whose two sign forms disagree under -mno-ieee-fp.  All three are out of the grid on purpose, and a mutation of them would measure our own undefined behaviour rather than the object."
  },
  {
   "label": "char_02 is re-read for the thirteen bits at 36, rather than shifted on",
@@ -39,8 +39,8 @@
   "replace": "\tvectorLen = ((unsigned int)word_11c / quantum) * quantum;"
  },
  {
-  "label": "the quantum ignores byte_128",
-  "find": "\tquantum = 12u * byte_128;",
+  "label": "the quantum ignores bitsPerSymbol",
+  "find": "\tquantum = 12u * bitsPerSymbol;",
   "replace": "\tquantum = 12u;"
  },
  {
@@ -155,8 +155,8 @@
   "replace": "\t\tif (1) {\n\t\t\tbits[31] = (unsigned char)(word_08 & 1);"
  },
  {
-  "label": "byte_128 is left alone when char_01 is zero",
-  "find": "\t\tif (b == 0)\n\t\t\tbyte_128 = 1;\n\n",
+  "label": "bitsPerSymbol is left alone when char_01 is zero",
+  "find": "\t\tif (b == 0)\n\t\t\tbitsPerSymbol = 1;\n\n",
   "replace": ""
  },
  {

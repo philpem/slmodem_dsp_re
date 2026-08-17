@@ -45,8 +45,8 @@
  },
  {
   "label": "recivedEd's modulus test is inverted",
-  "find": "\tif (symbolCount % word_1b0 != 0) {\n\t\tswitch (state) {",
-  "replace": "\tif (symbolCount % word_1b0 == 0) {\n\t\tswitch (state) {"
+  "find": "{\n\tif (flag_20 != 0)\n\t\treturn;\n\n\tif (symbolCount % word_1b0 != 0) {\n\t\tswitch (state) {",
+  "replace": "{\n\tif (flag_20 != 0)\n\t\treturn;\n\n\tif (symbolCount % word_1b0 == 0) {\n\t\tswitch (state) {"
  },
  {
   "label": "recivedEd's case 5 goes to state 11",
@@ -65,18 +65,18 @@
  },
  {
   "label": "recivedEd's default arm falls through and sets flag_20",
-  "find": "\t\tdefault:\n\t\t\treturn;\n\t\t}",
-  "replace": "\t\tdefault:\n\t\t\tbreak;\n\t\t}"
+  "find": "\t\tcase 13:\n\t\t\tstate = 11;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\treturn;\n\t\t}",
+  "replace": "\t\tcase 13:\n\t\t\tstate = 11;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tbreak;\n\t\t}"
  },
  {
   "label": "recivedEd enters state 14 rather than E2u",
-  "find": "enter E2u @ %d\\r\\n\", symbolCount);\n\t\tstate = V92P4M_STATE_E2U;",
-  "replace": "enter E2u @ %d\\r\\n\", symbolCount);\n\t\tstate = 14;"
+  "find": "\t\tcase 13:\n\t\t\tstate = 11;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\treturn;\n\t\t}\n\t} else {\n\t\tedprintf(\"V92Phase4Modulator: enter E2u @ %d\\r\\n\", symbolCount);\n\t\tstate = V92P4M_STATE_E2U;",
+  "replace": "\t\tcase 13:\n\t\t\tstate = 11;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\treturn;\n\t\t}\n\t} else {\n\t\tedprintf(\"V92Phase4Modulator: enter E2u @ %d\\r\\n\", symbolCount);\n\t\tstate = 14;"
  },
  {
   "label": "recivedEd prints zero rather than the count it is at",
-  "find": "\t\tedprintf(\"V92Phase4Modulator: enter E2u @ %d\\r\\n\", symbolCount);",
-  "replace": "\t\tedprintf(\"V92Phase4Modulator: enter E2u @ %d\\r\\n\", 0u);"
+  "find": "\t\tcase 13:\n\t\t\tstate = 11;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\treturn;\n\t\t}\n\t} else {\n\t\tedprintf(\"V92Phase4Modulator: enter E2u @ %d\\r\\n\", symbolCount);",
+  "replace": "\t\tcase 13:\n\t\t\tstate = 11;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\treturn;\n\t\t}\n\t} else {\n\t\tedprintf(\"V92Phase4Modulator: enter E2u @ %d\\r\\n\", 0u);"
  },
  {
   "label": "recivedEd does not clear the count on entering E2u",
@@ -140,8 +140,8 @@
  },
  {
   "label": "recivedSUVtag does not clear +0x18",
-  "find": "\tbyte_1c = 0;\n\tword_18 = 0;\n\n\tif (dsplibs_debug_level",
-  "replace": "\tbyte_1c = 0;\n\n\tif (dsplibs_debug_level"
+  "find": "void V92Phase4Modulator::recivedSUVtag()\n{\n\tbyte_1c = 0;\n\tword_18 = 0;\n\n\tif (dsplibs_debug_level",
+  "replace": "void V92Phase4Modulator::recivedSUVtag()\n{\n\tbyte_1c = 0;\n\n\tif (dsplibs_debug_level"
  },
  {
   "label": "recivedSUVtag's trace is gated at level 1 rather than above it",
@@ -392,5 +392,134 @@
   "label": "generateDataSymbolBeforeRRN prints zero rather than the count it is at",
   "find": "enter Ru @ %d\\r\\n\", symbolCount);",
   "replace": "enter Ru @ %d\\r\\n\", 0u);"
+ },
+ {
+  "label": "NOTE: the six members added with V92CP::infoToBits",
+  "why": "The six all end with the same four statements -- pack the CP message, take the vector, turn its padded length into a symbol count -- and the blob holds that block once per function with no helper symbol.  The entries that matter most change which byte goes into cp->byte_00 or divide by the wrong length, because the object comparison would pass on either if the grid never packed a message.  t_v92p4gen.cpp's 'some trial packed a CP message' is the counter that says it did, and it counts an OBSERVABLE outcome -- `pattern` landing inside the side's own V92CP -- rather than a source path.  recivedSUV and recivedPartTwoSilenceRrnSUV have the SAME body, so every anchor inside either has to carry its function's signature.  WHAT NO ENTRY REACHES: cp->bitsPerSymbol == 0 and cp->word_10c above six, both out of the fixture's grid, docs/deviations.md D570 and D571."
+ },
+ {
+  "label": "recivedSUV sends the CP with byte_00 set rather than clear",
+  "find": "void V92Phase4Modulator::recivedSUV()\n{\n\tif (word_1c4 != 0 || state != V92P4M_STATE_SUV)",
+  "replace": "void V92Phase4Modulator::recivedSUV()\n{\n\tcp->byte_00 = 1;\n\n\tif (word_1c4 != 0 || state != V92P4M_STATE_SUV)"
+ },
+ {
+  "label": "recivedSUV acts whatever the state",
+  "find": "void V92Phase4Modulator::recivedSUV()\n{\n\tif (word_1c4 != 0 || state != V92P4M_STATE_SUV)\n\t\treturn;",
+  "replace": "void V92Phase4Modulator::recivedSUV()\n{\n\tif (word_1c4 != 0)\n\t\treturn;"
+ },
+ {
+  "label": "recivedSUV does not latch word_1c4",
+  "find": "\tword_1c4 = 1;\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n}\n\n/* recivedPartTwoSilenceRrnSUV",
+  "replace": "\tword_1b0 = patternLength / cp->bitsPerSymbol;\n}\n\n/* recivedPartTwoSilenceRrnSUV"
+ },
+ {
+  "label": "recivedPartTwoSilenceRrnSUV goes to state 7 off a period boundary",
+  "find": "\t\tstate = 6;\n\t\treturn;\n\t}\n\n\tedprintf(\"V92Phase4Modulator: on recivedSUV enter CPu @ %d\\r\\n\",\n\t\t symbolCount);\n\tstate = V92P4M_STATE_CPU;\n\tsymbolCount = 0;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();\n\tpattern = cp->getBitVector(patternLength);\n\tword_1c4 = 1;\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n}\n\n/*\n * recivedPartOneSilenceRrnSUVtag",
+  "replace": "\t\tstate = 7;\n\t\treturn;\n\t}\n\n\tedprintf(\"V92Phase4Modulator: on recivedSUV enter CPu @ %d\\r\\n\",\n\t\t symbolCount);\n\tstate = V92P4M_STATE_CPU;\n\tsymbolCount = 0;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();\n\tpattern = cp->getBitVector(patternLength);\n\tword_1c4 = 1;\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n}\n\n/*\n * recivedPartOneSilenceRrnSUVtag"
+ },
+ {
+  "label": "recivedPartOneSilenceRrnSUVtag tests the CP flag the other way",
+  "find": "\t\tif (cp->byte_04 == 1) {",
+  "replace": "\t\tif (cp->byte_04 != 1) {"
+ },
+ {
+  "label": "recivedPartOneSilenceRrnSUVtag does not set the CP flag on the way out",
+  "find": "\t\tflag_20 = 1;\n\t}\n\n\tcp->byte_04 = 1;\n}",
+  "replace": "\t\tflag_20 = 1;\n\t}\n}"
+ },
+ {
+  "label": "recivedPartOneSilenceRrnSUVtag's first arm goes to state 8, not 9",
+  "find": "\t\t\tif (symbolCount % word_1b0 != 0) {\n\t\t\t\tstate = 9;",
+  "replace": "\t\t\tif (symbolCount % word_1b0 != 0) {\n\t\t\t\tstate = 8;"
+ },
+ {
+  "label": "recivedPartOneSilenceRrnSUVtag takes 13 and 12 the other way round",
+  "find": "\t\t\t\tword_1b8 = (e2uExtended != 0) ? 13 : 12;\n\t\t\t}\n\t\t} else {",
+  "replace": "\t\t\t\tword_1b8 = (e2uExtended != 0) ? 12 : 13;\n\t\t\t}\n\t\t} else {"
+ },
+ {
+  "label": "recivedCPtag's first tag does not raise word_1c0",
+  "find": "\t\tword_1c0 = 1;\n\t\tcp->byte_04 = 1;\n\t\tcp->byte_00 = 1;",
+  "replace": "\t\tcp->byte_04 = 1;\n\t\tcp->byte_00 = 1;"
+ },
+ {
+  "label": "recivedCPtag's first tag clears the CP's byte_00 instead of setting it",
+  "find": "\t\tcp->byte_04 = 1;\n\t\tcp->byte_00 = 1;\n",
+  "replace": "\t\tcp->byte_04 = 1;\n\t\tcp->byte_00 = 0;\n"
+ },
+ {
+  "label": "recivedCPtag ignores flag_20 on the first tag",
+  "find": "\tif (word_1c0 == 0) {\n\t\tif (flag_20 != 0)\n\t\t\treturn;",
+  "replace": "\tif (word_1c0 == 0) {"
+ },
+ {
+  "label": "recivedCPtag acts in every state rather than 5, 12 and 13",
+  "find": "\t\tcase V92P4M_STATE_CPU:\n\t\tcase V92P4M_STATE_REPEATED_CPU:\n\t\t\tstate = 11;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\treturn;",
+  "replace": "\t\tcase V92P4M_STATE_CPU:\n\t\tcase V92P4M_STATE_REPEATED_CPU:\n\t\tdefault:\n\t\t\tstate = 11;\n\t\t\tbreak;"
+ },
+ {
+  "label": "recivedRt runs in state 22 as well",
+  "find": "\tif (state != 23 || word_38 == 0)",
+  "replace": "\tif (state < 22 || word_38 == 0)"
+ },
+ {
+  "label": "recivedRt ignores word_38",
+  "find": "\tif (state != 23 || word_38 == 0)\n\t\treturn;",
+  "replace": "\tif (state != 23)\n\t\treturn;"
+ },
+ {
+  "label": "recivedRt's symbol-count gate is 1200 rather than 2400",
+  "find": "\tif (symbolCount < 2400 || symbolCount % 12 != 0) {",
+  "replace": "\tif (symbolCount < 1200 || symbolCount % 12 != 0) {"
+ },
+ {
+  "label": "recivedRt's symbol-count gate is a multiple of six",
+  "find": "\tif (symbolCount < 2400 || symbolCount % 12 != 0) {\n\t\tstate = 24;",
+  "replace": "\tif (symbolCount < 2400 || symbolCount % 6 != 0) {\n\t\tstate = 24;"
+ },
+ {
+  "label": "recivedRt leaves the CP's bitsPerSymbol alone",
+  "find": "\tcp->bitsPerSymbol = bitsPerSymbol;\n\tcp->byte_00 = 1;\n\tcp->suv = 0;",
+  "replace": "\tcp->byte_00 = 1;\n\tcp->suv = 0;"
+ },
+ {
+  "label": "recivedRt leaves the CP's suv alone",
+  "find": "\tcp->byte_00 = 1;\n\tcp->suv = 0;\n\tcp->infoToBits();",
+  "replace": "\tcp->byte_00 = 1;\n\tcp->infoToBits();"
+ },
+ {
+  "label": "recivedRt does not clear patternIndex",
+  "find": "\tsymbolCount = 0;\n\tpatternIndex = 0;\n\tstate = V92P4M_STATE_SUV;",
+  "replace": "\tsymbolCount = 0;\n\tstate = V92P4M_STATE_SUV;"
+ },
+ {
+  "label": "recivedRt's null-CP arm does not set state 29",
+  "find": "\tif (cp == 0) {\n\t\tstate = 29;\n\t\tsymbolCount = 0;",
+  "replace": "\tif (cp == 0) {\n\t\tsymbolCount = 0;"
+ },
+ {
+  "label": "enterRepeatedCP announces the state through edprintf",
+  "find": "\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"V92Phase4Modulator: enter repeatedCPu \"\n\t\t\t\t     \"@ %d\\r\\n\", symbolCount);",
+  "replace": "\tedprintf(\"V92Phase4Modulator: enter repeatedCPu @ %d\\r\\n\",\n\t\t symbolCount);"
+ },
+ {
+  "label": "enterRepeatedCP does not clear the two trace fields",
+  "find": "\tbyte_1c = 0;\n\tword_18 = 0;\n\n\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"V92Phase4Modulator: enter repeatedCPu \"",
+  "replace": "\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"V92Phase4Modulator: enter repeatedCPu \""
+ },
+ {
+  "label": "enterRepeatedCP enters CPu rather than repeatedCPu",
+  "find": "\tstate = V92P4M_STATE_REPEATED_CPU;",
+  "replace": "\tstate = V92P4M_STATE_CPU;"
+ },
+ {
+  "label": "enterRepeatedCP does not restart the symbol count",
+  "find": "\tpattern = cp->getBitVector(patternLength);\n\tsymbolCount = 0;\n\tword_1b0 = patternLength / cp->bitsPerSymbol;",
+  "replace": "\tpattern = cp->getBitVector(patternLength);\n\tword_1b0 = patternLength / cp->bitsPerSymbol;"
+ },
+ {
+  "label": "enterRepeatedCP divides by the message length rather than the padded one",
+  "find": "\tsymbolCount = 0;\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n}",
+  "replace": "\tsymbolCount = 0;\n\tword_1b0 = cp->msgLen / cp->bitsPerSymbol;\n}"
  }
 ]
