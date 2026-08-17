@@ -63578,3 +63578,44 @@ in this class: the first `%d` is fed from +0x3bb4 and the second from +0x3bb8,
 which is what makes them `nofRecievedMp` and `nofRecievedMpNot` rather than
 two counters in an unknown order. Finding 3540 noted that `infoToBits` and
 `evaluateInfo` between them reach no string at all; this is the one that does.
+
+### 4303. THE `V90CP` LEAF BATCH UNBLOCKED FIVE SYMBOLS, AND ALL FIVE WERE GATED ON THE 22-BYTE ONE
+
+Measured with `tools/readyqueue.py --obj $BLOB` at `aa54ea24` and again at
+`d7007ee9`, not projected:
+
+| | before | after |
+|---|--:|--:|
+| unwritten call symbols | 843 | 836 |
+| READY | 418 / 70,797 B | 416 / 70,964 B |
+| BLOCKED | 425 / 203,736 B | 420 / 202,669 B |
+
+Seven written, all seven previously READY, so READY should have fallen to 411
+and it fell to 416: **five symbols became READY, 1,067 bytes.** They are
+
+     282  V90Phase4Modulator::recivedCPtag
+     266  V90Phase4Modulator::recivedFirstSUVuPartTwoRrn
+     200  V90Phase4Modulator::recivedPartTwoSilenceRrnSUV
+     179  V90Phase4Modulator::recivedSUV
+     140  V90Phase4Modulator::enterRepeatedCPd
+
+and **every one of them was gated on `V90CP::getBitVector` alone** -- 22 bytes,
+six instructions, no branch. `V90CP::reset` has two referrers and both are
+still blocked on other things; the other five members have no referrer inside
+`.text` at all and unblocked nothing.
+
+So the batch's 900 bytes freed 1,067, and 878 of those 900 contributed
+nothing to the ready queue. That is `docs/plan.md` §1's "a few hundred bytes
+gate tens of thousands" at small scale, and it is worth recording because the
+ratio is not visible before the work is done: `getBitVector` is the smallest
+symbol in the class and was the only one that mattered to anything else.
+
+**HOW TO MEASURE THIS, because it is easy to get wrong.** `readyqueue.py`'s
+listing is truncated by `--limit` (40 rows by default) while its COUNTS are
+exact, so diffing two listings taken at different limits reports hundreds of
+spurious "newly READY" rows. The counts give the size of the answer; the
+identities come from scanning the blob's relocations for referrers of the
+symbols just written and intersecting with the current READY set. Note that
+`objdump -r --section=.rel.text` silently matches nothing -- the section is
+named `.text` in `objdump -r`'s own output -- and a scan that uses it reports
+"no referrer" for every symbol, which is what nearly buried this measurement.
