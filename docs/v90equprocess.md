@@ -5,11 +5,23 @@
 the transcription. Every line below was read from `tools/dis.py` on
 `slmodemd/dsplibs.o`; nothing here came from a decompiler.*
 
-**Status: DECODED, NOT WRITTEN.** No line of this is in `src/`. The rule that
-is not relaxed says a function that cannot be shown differentially identical
-does not get committed, and this one has not been driven yet. What is recorded
-here is the reading, which is the expensive half and the half that was at risk
-of being lost.
+**Status: WRITTEN, PARTLY DRIVEN, NOT CLOSED.** The whole function is in
+`src/pump/v90/V90Equalizer.cpp` and `test/unit/t_v90equproc.cpp` drives the
+RESET arm at 120,974 differential checks with `make period` at zero failures.
+What is NOT driven is six of the seven state arms, both nested jump tables,
+all four re-convert blocks and the entire fixed-point half, so the function
+has not closed and the code in those regions is transcription that no test has
+adjudicated. Findings 6200-6203 are this batch; 6201 records what the object
+makes undrivable (`state` outside 0..6, `mmxMode` with states 0, 1, 2 and 6,
+and three of the eighteen phase 3 sub-cases), and D850 and D851 the two
+deviations.
+
+**Two places below were re-read from `dis.py` and did not survive.** §3.4's
+fixed-point LMS is prose here and prose cannot be written from; the arithmetic
+is in finding 6202. And §5's "plus 4 more when `((short *)block_b4)[0] != 0`"
+is wrong: RECONVERT-D steps `in` by `2*j + 2` floats normally and `2*j + 1`
+when the held sample is present. Treat every summary below as a pointer to an
+address, not as a transcription.
 
 ---
 

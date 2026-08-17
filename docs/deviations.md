@@ -7946,3 +7946,68 @@ gives the second segment at least eight input samples on every split trial and
 asserts that it produced at least one output.  A trial at zero walks off both
 sides' buffers at once, which measures the allocator rather than the reading
 (D571's argument).  Finding 5900.
+## D850 ⚠ The float DFE history shift is unguarded, and runs away at `dfeLength` 0 or 1
+
+*`V90Equalizer::process`, blob 0x39830. Reproduced as a bounded input
+requirement, not as code.*
+
+The decision-feedback history is shifted up by one before the new sample is
+pushed, and the object writes it as a counted loop over `dfeLength - 1`
+iterations with **no entry guard**:
+
+    39840:  lea (%esi,%ebp,4),%edx     ; &array_44[dfeLength]
+    39843:  lea -0x8(%edx),%ebx        ; src = &array_44[dfeLength - 2]
+    39846:  lea -0x4(%edx),%ecx        ; dst = &array_44[dfeLength - 1]
+    39849:  lea -0x1(%ebp),%edx        ; count = dfeLength - 1
+    39850:  mov (%ebx),%eax ; sub $4,%ebx ; mov %eax,(%ecx) ; sub $4,%ecx
+    3985a:  dec %edx ; jne 39850
+
+At `dfeLength == 1` the count starts at zero, the body runs once reading
+`array_44[-1]`, and the counter wraps to 0xffffffff; at `dfeLength == 0` it
+starts at -1. Either way the loop copies four billion floats downward through
+the heap. **The FIXED-POINT twin of the same shift, at 0x39421 over
+`array_12cAligned`, DOES have the guard** -- `cmp $0x1,%ebp; je` -- so the two
+arms disagree at exactly `dfeLength == 1`, which is what says the guard is
+something GCC placed rather than something the source spells differently at
+the two sites.
+
+**Our source carries the guarded shape at both sites**, because the two cannot
+both be written and the unguarded one has no defined behaviour to reproduce:
+an object that walks off a heap allocation for 2^32 iterations does not
+survive to be compared against. `dfeLength >= 2` is therefore a precondition
+of the reconstruction, it is what `V90Equalizer::V90Equalizer` and
+`V90Demodulator::reset` in fact pass, and the differential grid excludes 0 and
+1 deliberately rather than by oversight.
+
+**Not corrected**: nothing here is corrected, because at every value the object
+survives the two shapes are the same loop.
+
+## D851 ⚠ The fixed-point LMS shift is masked, and the object leaves it to the hardware
+
+*`V90Equalizer::process`, blob 0x3937a and 0x39405. Fix class: defined
+behaviour, at the cost of one instruction per loop.*
+
+Both fixed-point coefficient loops step by `(coef * beta) >> shift`, where the
+shift is `linearEquMmxShift` or `dfeMmxShift` -- each a truncated base-two
+logarithm `setLinearEquBeta` and `setDfeBeta` compute from two fields the
+caller controls, and each able to come out negative or above 31. The object
+loads the count as a byte and shifts:
+
+    39372:  0f b6 4c 24 64   movzbl 0x64(%esp),%ecx
+    3937a:  d3 fa            sar    %cl,%edx
+
+and `sar %cl` masks the count to five bits in hardware, so every value of the
+field does something defined *on this processor*. C does not: `v >> n` is
+undefined outside 0..31 whatever the target does.
+
+Ours writes `v >> (n & 31)`, which reproduces the hardware exactly and costs
+an `and $0x1f` the object does not have, at both sites. **The comment in the
+source used to assert GCC folded the mask into the shift and that assertion
+was wrong** -- `objdump` on the period-compiled object shows the `and` at
+0x3ac9 and 0x3b55. It is recorded rather than removed because D561's
+disposition stands: the reproduction keeps the value and the aliasing and
+removes the undefined access, and a source that is undefined for inputs the
+object survives is not a reproduction of it.
+
+**Not corrected**: nothing to correct. At every count the object survives, the
+two produce the same coefficient.
