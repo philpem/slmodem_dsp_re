@@ -75846,3 +75846,75 @@ This repository's `origin` is `strozfriedberg/D-Modem`, which is the *older*
 fork we removed in the consolidation. `d-modem/` came from cryan209/D-Modem
 (root `087f354f`), so a fork made from the configured remote would be a fork of
 the wrong tree.
+
+### 6902. WHOLE-FRAME INSERTIONS AT THE BENCH'S OWN MEASURED RATE WRECK V.34 — AND THEY WRECK THE CONEXANT HSF SLIGHTLY HARDER THAN THEY WRECK US
+
+The ladder 6701's correction called for. `testbench/ladder.py`, `CHAN_SLIP`
+(jitter-buffer insertion, events/second), 5 points, both peers, n=10, 75 s
+calls, `CHAN_DELAY_MS=70`. **100 of 100 calls executed**, 23 minutes, no bench
+time and no hardware.
+
+    peer   CHAN_SLIP   n   connected   median    p25     p75
+    ours   0.0        10    10/10       33600   33600   33600
+    ours   0.1        10     9/10       33600   31200   33600
+    ours   0.25       10     4/10       22800   12000   33600
+    ours   0.5        10     3/10       12000    9600   33600
+    ours   1.0        10     0/10           -       -       -
+    hsf    0.0        10    10/10       33600   33600   33600
+    hsf    0.1        10     5/10       33600   33600   33600
+    hsf    0.25       10     2/10       33600   33600   33600
+    hsf    0.5        10     0/10           -       -       -
+    hsf    1.0        10     0/10           -       -       -
+
+(The 22800 is the mean of the two middle values of an even sample, 21600 and
+24000. It is not a V.34 rate and must not be quoted as one.)
+
+**THE IMPAIRMENT IS AS SEVERE AS 6701 PREDICTED.** 1941 measured d-modem's
+receive path producing about **0.25 `empty` events per second** with zero
+network loss, and 0.25 on this ladder connects 4 times in 10 for us and 2 in 10
+for HSF. A clean channel is 10/10 at 33600 for both. So the rate the real bench
+exhibits is, in the model, enough to stop most calls connecting at all. The
+corrected reading of `ZERO_EMPTY_FRAME` is not a technicality.
+
+**AND THE SIGNATURE WE WENT LOOKING FOR IS NOT THERE.** The hypothesis behind
+#181/#182 was that our receiver might be abnormally sensitive — that our rate
+would fall where a known-good V.34 held. **The opposite is measured.** On
+connect fraction we are equal at 0.1 (9/10 against 5/10 in our favour), ahead
+at 0.25 (4/10 against 2/10) and ahead at 0.5 (3/10 against 0/10). Our receiver
+is not the weak component under this impairment; on this evidence it is the
+more robust of the two.
+
+**THERE IS A REAL QUALITATIVE DIFFERENCE AND IT IS NOT THE ONE EXPECTED.** HSF
+is all-or-nothing: where it connects at all it connects at 33600, median and
+both quartiles, at every slip rate. We connect more often and at degraded
+rates — median 22800 with p25 12000 at 0.25. Two different failure styles, and
+ours is the one that trades rate for a link. Neither is obviously better;
+what it means is that a comparison on median rate alone would have read as us
+being *worse* while the connect column says the reverse. Read both columns.
+
+**SO THE CONSEQUENCE POINTS AT THE MEDIA PATH, NOT THE DATAPUMP.** Putting the
+pieces together: d-modem's jitter buffer inserts frames into our receive path
+at ~0.25/s with no network loss (1941, as corrected by 6701); insertions at
+that rate stop most V.34 calls connecting, for two independent implementations
+(this finding); and hardware-to-hardware calls across the same PBX never
+traverse d-modem at all and run 28800-33600 (1927, scoped by 6700). The
+component that is unique to our leg is the one that is now measured to be
+capable of the damage.
+
+**THE DISCREPANCY THAT KEEPS THIS FROM BEING A CONCLUSION, and it is a big
+one.** The bench's calls DO connect and then thrash; the emulator at the
+bench's measured insertion rate mostly fails to connect at all. Those are not
+the same behaviour, so the model is harsher than reality somewhere. Three
+candidates, none tested: 1941's 0.25/s was measured over the CONNECTED period
+and the buffer may be better filled during training, so the training-time rate
+may be far lower; `chanshim.py` inserts by duplicating half a frame's tail
+where pjmedia inserts zeros; and the real events may be bursty where
+`CHAN_SLIP` is Poisson. **Measuring the insertion rate during TRAINING
+specifically is the next thing worth doing**, and 1941's instrumentation
+already emits what that needs.
+
+**LIMITS.** n=10 per cell. `CHAN_DELAY_MS=70` throughout, one operating point,
+no added noise. The retrain column is omitted from the table above because the
+two harnesses source it differently — `V34RTNCOUNT` from our log for the `ours`
+arm and HSF's own counter for the other — and a number that is not the same
+measurement on both sides of an A/B should not be put in one column.
