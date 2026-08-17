@@ -68786,3 +68786,106 @@ parent does not sweep while it runs.**  Delegation is still right -- CLAUDE.md's
 "Budget your turns, not your reading" is the only change that alters the
 exponent -- but `git worktree add` for the child costs nothing next to a
 mutation table nobody can trust.
+
+### 6100. 3511 TWICE IN ONE SESSION, AND A LATENT VARIANT NO GATE CAN SEE
+
+3511 is "parallel branches with disjoint files and clean git merges can still
+fail to compile".  **It landed twice** while merging the V.90/V.92 batch.  A
+third case of the same shape was found while repairing the second; it never
+landed and never failed anything, so it is a LATENT variant and is counted
+separately below -- the distinction matters because the two that landed were
+caught by a gate and the latent one could not have been.
+
+**Both that landed were field renames meeting a reader in another branch.**
+
+| # | renamer | reader | caught by |
+|---|---|---|---|
+| a | `V90Demapper.h`: `short_1eb4` -> `linearMappStudyEnabled` | a sibling writing `V90Demapper.cpp` | `make phase` |
+| b | `v92-modulator-tail`: `V92Modulator::word_2c` -> `phase` | `v34diag.cpp`, merged an hour EARLIER | `make phase` |
+
+They are mirrors: in (a) the rename landed first, in (b) the reader did.  Order
+does not matter, which is the point -- neither branch can see the other, git has
+no conflict to report, and no tool in the tree reads both sides.  Only the
+compiler, run after each individual merge, catches them.  **That is the whole
+argument for never batching merges**: both repairs took ten minutes because
+exactly one branch was in flight.
+
+**Repair (b) then needed a second pass, and the miss is instructive.**  The
+first grep was `(mod|modulator)->word_2c`, fitted to the site already seen.  The
+test reaches the same field through a cast on an array element --
+`((V92Modulator *)v92mod_[side])->word_2c` -- and matched nothing.  Search for
+the FIELD and filter by type; do not search for the access idiom you happen to
+have in front of you.
+
+**The scoping constraint that makes all of this delicate:** `word_2c` names a
+field in about a dozen unrelated structs, because the tree's convention is
+offset-anchored.  `V92Phase4Modulator::word_2c` is a live, different field in a
+different object.  A sweep would have been catastrophic; both repairs were
+scoped to `V92Modulator`-typed expressions, and `t_v92p4reset.cpp` compiling
+clean through the first pass is the evidence the other class was untouched.
+
+**THE LATENT VARIANT IS SILENT AND COULD NOT HAVE FAILED ANY GATE.**  `v34diag.cpp`
+tested the same field against its own `V34DIAG_V92_UPSTREAM_ACTIVE 3`, while
+`V92Modulator.h` defines `V92MOD_PHASE_DATA 3` for that exact state -- two
+spellings of one value with nothing connecting them.  A rename trips the
+compiler; **a re-encoding does not.**  Had the phase constants been renumbered,
+`v34diag` would have gone on testing 3, compiled clean, passed every tier, and
+reported a wrong upstream rate.  The constant now expands to `V92MOD_PHASE_DATA`.
+
+So the class has a loud half and a quiet half, and they want different
+defences.  The loud half needs per-merge gating, which the tree already does.
+The quiet half needs the rule `docs/cleanup.md` §1 was already reaching for:
+**a value that names another module's state is that module's constant, never a
+local literal with a comment.**  Grepping for a bare integer that equals a
+named constant elsewhere is a plausible aid, and its false-positive rate on
+small integers is likely fatal -- unmeasured, so not proposed as a gate.
+
+**The constant change is free by CONSTRUCTION, not by measurement, and that is
+worth stating because `make phase` does not run the ratchet.**
+`V34DIAG_V92_UPSTREAM_ACTIVE` expanded to `3` and now expands to
+`V92MOD_PHASE_DATA`, which expands to `3` -- the same token reaches the
+compiler, and `V92Modulator.h` was already included at line 100, so no
+translation unit gained a header.  `compare.py` therefore cannot move.  That is
+an argument rather than a run of the tool; it is recorded as an argument.
+
+One incidental correction: that constant's comment claimed "nothing
+reconstructed says what the other values are".  True when written, false now --
+`V92Modulator` recovered all three phases from the messages printed beside their
+stores, which is the strongest evidence tier there is.  **A comment asserting
+the absence of knowledge has a shelf life**, and nothing in the tree expires it.
+
+### 6101. A FAILED AGENT'S COMMITS CAN END UP REFERENCED BY NOTHING
+
+The `V90ConstellationDesigner` agent died on a stream watchdog rather than
+finishing.  Its last three commits -- 953 insertions, including
+`determineDminForRrn` and 141 lines of findings -- were reachable from **no ref
+at all**: not a branch, not a worktree HEAD, not a remote.  Only the reflog held
+them, and `git gc` expires that.
+
+`git worktree list` cannot show this, because the worktree was already gone.
+`git branch --contains <sha>` prints nothing and looks like a clean answer.  The
+check that actually answers it:
+
+```
+git for-each-ref --format='%(refname)' | while read -r r; do
+    git merge-base --is-ancestor <sha> "$r" 2>/dev/null && echo "reachable: $r"
+done
+```
+
+**In this case nothing was lost** -- master carries every one of those findings
+and a strictly later version of both files, so the work had landed by another
+route and these were the orphaned originals.  The 27 lines that exist only on
+the orphan are superseded prose ("Fifteen of the class's twenty-four symbols",
+"ONE is written here") and field declarations master has since named.  That was
+established by diffing, not assumed from the titles matching.
+
+`salvage/v90cd-determinedmin` now points at the tip so it cannot be collected.
+**It is FULLY SUPERSEDED and must not be merged** -- it is kept as evidence and
+as the anchor that stops a future `gc`, and merging it would reintroduce the
+older prose over master's.
+
+The process rule this argues for: **when an agent fails rather than reports,
+read its output and resolve its commits before its worktree is reused.** The
+existing rule -- wait for an agent to report and exit, do not merely wait for
+its branch to merge -- covers the agent that is still running.  This is the
+other end: the agent that will never report at all.

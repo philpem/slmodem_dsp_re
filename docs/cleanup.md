@@ -52,6 +52,16 @@ category; most of those numbers are table data, Q15 literals in expressions the
 object fixes exactly, and loop bounds that are already obvious. Name the ones a
 reader would otherwise have to derive.
 
+**A number that names ANOTHER MODULE'S state is that module's constant, and
+this sub-rule is exempt from "inside the batch that closes the TU".** Finding
+6100 is the worked example: `v34diag.cpp` tested a V.92 modulator phase against
+its own `V34DIAG_V92_UPSTREAM_ACTIVE 3` while `V92Modulator.h` defined
+`V92MOD_PHASE_DATA 3` for that same state, the two unconnected. A rename trips
+the compiler; **a re-encoding does not**, so the duplicate is a silent failure
+waiting on an unrelated edit. That is a live correctness hazard rather than a
+readability one, which is why it was fixed when found rather than deferred to
+`v34diag.cpp`'s own batch. Anything else in §1 waits its turn.
+
 ## 2. Shifts — 862 right, 203 left. LEAVE THEM ALONE.
 
 **This one is settled already and the answer is no.** Finding 1044 measured it:
