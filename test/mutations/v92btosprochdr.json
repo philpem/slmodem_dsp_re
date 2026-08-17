@@ -1,0 +1,31 @@
+[
+ {
+  "label": "NOTE: the header's own constants",
+  "why": "The four status constants and the frame length are #defines in include/dsplib/V92BitsToSymbol.h rather than statements in the source, so a mutation of one cannot be anchored in the .cpp. This set has the header as its source for the same reason the `scrambler` set has one. The status VALUES are the object's -- it moves 1, 2 and 3 into the return register on the three paths whose strings name SIZE_NOT_SET, BUFFER_OVERFLOW and BUFFER_UNDERFLOW -- so every entry here is a claim, not a preference."
+ },
+ {
+  "label": "the frame is six symbols rather than twelve",
+  "find": "#define V92BTOS_SYMBOLS_PER_FRAME\t12",
+  "replace": "#define V92BTOS_SYMBOLS_PER_FRAME\t6"
+ },
+ {
+  "label": "the frame is twenty-four symbols",
+  "find": "#define V92BTOS_SYMBOLS_PER_FRAME\t12",
+  "replace": "#define V92BTOS_SYMBOLS_PER_FRAME\t24"
+ },
+ {
+  "label": "the two buffer faults report each other's code",
+  "find": "#define V92BTOS_BUFFER_OVERFLOW\t\t2\n#define V92BTOS_BUFFER_UNDERFLOW\t3",
+  "replace": "#define V92BTOS_BUFFER_OVERFLOW\t\t3\n#define V92BTOS_BUFFER_UNDERFLOW\t2"
+ },
+ {
+  "label": "SIZE_NOT_SET is reported as success",
+  "find": "#define V92BTOS_SIZE_NOT_SET\t\t1",
+  "replace": "#define V92BTOS_SIZE_NOT_SET\t\t0"
+ },
+ {
+  "label": "success is reported as one",
+  "find": "#define V92BTOS_OK\t\t\t0",
+  "replace": "#define V92BTOS_OK\t\t\t4"
+ }
+]

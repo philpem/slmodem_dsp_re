@@ -7180,3 +7180,49 @@ one from inside a batch with other work in flight, and phase 6 collects the 27
 punned sites into a batch of their own. This is the 28th and it is not
 provably wrong in the way those are -- both readings are correct about the
 bytes -- so it is a modelling duplication rather than a defect.
+
+## D500 ✅ `V92BitsToSymbol::process` diagnoses BUFFER_OVERFLOW after the write has already happened
+
+Both overloads that take a `bits` argument hand the transmitter
+`symbols + symbolsDone` and let it append. Only afterwards do they add the
+produced count on and compare the total against `nSymbols`, the size the
+staging buffer was allocated for:
+
+    4e403  mov    0x10(%ebx),%edx        ; symbolsDone
+    4e406  add    %edx,%eax              ; + what the transmitter produced
+    4e408  cmp    0xc(%ebx),%eax         ; against nSymbols
+    4e40b  mov    %eax,0x10(%ebx)
+    4e40e  jbe    ...                    ; over -> BUFFER_OVERFLOW
+
+By the time the comparison is true the transmitter has written past the end of
+the buffer. The clamp that follows -- `symbolsDone = symbolsBlockSize` -- only
+tidies the count; nothing is undone and no caller is told which bytes are
+gone. Reproduced.
+
+`t_v92btosproc.cpp` reaches the arm without corrupting its own heap by
+allocating the staging buffer large and writing `nSymbols` DOWN afterwards:
+the object's comparison is against the field, so the arm is entered for the
+right reason while every store lands in real storage. A fixture that made the
+allocation as small as the field would be comparing two corrupted heaps.
+
+## D501 ✅ `V92Transmitter::process` never bounds its bit buffer
+
+`bitBuffer` is `sysdep_malloc(0x50)` and `process` stores into it at
+`bitsBuffered`, which rises one per input bit and falls by `K` when a frame
+comes out. Nothing anywhere compares either against 0x50. `K` reaches this
+class from the parameter block through `V92Transmitter::reset`, and the
+unpacker builds it as `2 * (drn + 17)` with no clamp that this tree has found,
+so a `drn` above 23 gives a `K` above 80 and the buffer is walked off on the
+first frame. `V92ModulusEncoder::progress` then reads `bytes[i]` for `i` down
+from `K - 1` and follows it out. Reproduced; the fixture stops at `K = 80`,
+which is the last value that fits.
+
+## D502 ✅ the drain overload never tells its caller how many symbols it delivered
+
+`V92BitsToSymbol::process(unsigned int &nbits, short *out)` writes
+`symbolsBlockSize` shorts on its normal path and only `symbolsDone` of them on
+its BUFFER_UNDERFLOW one, and the only number it hands back through `nbits` is
+what `nofBitsForNextTime` wants NEXT time -- not the count just written. A
+caller that ignores the status code cannot distinguish a full block from a
+partial one, and the rest of `out` keeps whatever it held. Reproduced. Not a
+fault the object ever hits with its own caller, which checks the status.

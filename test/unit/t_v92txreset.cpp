@@ -205,7 +205,7 @@ seed_params(unsigned int s, const struct pcase *c)
 
 /*
  * THE CONSTRUCTOR ALREADY CLEARS TWO OF THE THREE THINGS RESET CLEARS.
- * `*byte_58 = 0` and `word_0c = 0` are both in the constructor, so a reset
+ * `*byte_58 = 0` and `bitsBuffered = 0` are both in the constructor, so a reset
  * that dropped either would leave the same bytes behind and every check would
  * still pass -- two mutations survived on exactly that before this existed.
  * Both sides are dirtied identically, after construction and before the mask
@@ -221,7 +221,7 @@ dirty_the_cleared(void)
 	for (side = 0; side < 2; side++) {
 		V92Transmitter *t = (V92Transmitter *)tx[side];
 
-		t->word_0c = 0xa5a5a5a5u;
+		t->bitsBuffered = 0xa5a5a5a5u;
 		*t->byte_58 = 0x5a;
 	}
 }
@@ -387,10 +387,10 @@ run_level0(void)
 			    (long)(((V92Transmitter *)tx[1])->gain
 				   == params.gain), 1, (long)c);
 		diff_eq_int("+0x40 is zero (%ld)",
-			    (long)((V92Transmitter *)tx[1])->word_40, 0,
+			    (long)((V92Transmitter *)tx[1])->convEncoderOutput, 0,
 			    (long)c);
 		diff_eq_int("+0x0c is zero (%ld)",
-			    (long)((V92Transmitter *)tx[1])->word_0c, 0,
+			    (long)((V92Transmitter *)tx[1])->bitsBuffered, 0,
 			    (long)c);
 		diff_eq_int("the one byte at +0x58 is zero (%ld)",
 			    (long)*((V92Transmitter *)tx[1])->byte_58, 0,
@@ -467,8 +467,8 @@ main(void)
 		    (long)sizeof(V92Transmitter), 0x60, 0x60);
 	diff_eq_int("K is at +0x%lx",
 		    (long)offsetof(V92Transmitter, K), 0x04, 0x04);
-	diff_eq_int("word_40 is at +0x%lx",
-		    (long)offsetof(V92Transmitter, word_40), 0x40, 0x40);
+	diff_eq_int("convEncoderOutput is at +0x%lx",
+		    (long)offsetof(V92Transmitter, convEncoderOutput), 0x40, 0x40);
 	diff_eq_int("gain is at +0x%lx",
 		    (long)offsetof(V92Transmitter, gain), 0x44, 0x44);
 	rc |= diff_end();

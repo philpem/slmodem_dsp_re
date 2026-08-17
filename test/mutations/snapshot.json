@@ -6249,6 +6249,55 @@
     "the transmitter's null test is dropped": "caught"
    }
   },
+  "v92btosproc": {
+   "key": "10e32e499f69bcea4bdc6aef2ce33b4500b7b400e455d396d65cdab500ce1c73",
+   "summary": "32 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
+   "verdicts": {
+    "reset clears the flag rather than setting it": "caught",
+    "reset does not call the transmitter": "caught",
+    "reset leaves the block size alone": "caught",
+    "reset leaves the symbol cursor alone": "caught",
+    "reset takes the bit count from the wrong word of the block": "caught",
+    "setSymbolsBlockSize reports the count from before the store": "caught",
+    "setSymbolsBlockSize stores into the cursor instead": "caught",
+    "the combined overload clamps to the buffer, not the block": "caught",
+    "the combined overload does not read nbits before it writes it": "caught",
+    "the combined overload shifts from the front of the buffer": "caught",
+    "the combined overload's overflow test is inclusive": "caught",
+    "the combined overload's underflow arm does not clear the cursor": "equivalent",
+    "the drain overload counts for next time before the shift": "caught",
+    "the drain overload does not rewind the cursor after the shift": "caught",
+    "the drain overload shifts from the front of the buffer": "caught",
+    "the drain overload's underflow arm copies the whole block out": "caught",
+    "the drain overload's underflow arm does not clear the cursor": "equivalent",
+    "the drain overload's underflow test is inclusive": "caught",
+    "the empty-block test is inclusive": "equivalent",
+    "the produced count replaces the cursor rather than adding to it": "caught",
+    "the remaining count is subtracted the other way round": "caught",
+    "the residue arm multiplies first too": "caught",
+    "the rounding does not round up": "caught",
+    "the two arms are swapped": "caught",
+    "the two arms of the rounding are one expression": "caught",
+    "the two-argument overload appends at the front of the buffer": "caught",
+    "the two-argument overload clamps to the buffer, not the block": "caught",
+    "the two-argument overload clears the flag unconditionally": "equivalent",
+    "the two-argument overload counts against the block, not the buffer": "caught",
+    "the two-argument overload does not clamp at all": "caught",
+    "the two-argument overload leaves the flag alone": "caught",
+    "the two-argument overload's overflow test is inclusive": "caught"
+   }
+  },
+  "v92btosprochdr": {
+   "key": "d1d5e36ecbdd5a2320c37cbbdc5e7ff198986242afb5a0c4cc3edf113dd80f2a",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "SIZE_NOT_SET is reported as success": "caught",
+    "success is reported as one": "caught",
+    "the frame is six symbols rather than twelve": "caught",
+    "the frame is twenty-four symbols": "caught",
+    "the two buffer faults report each other's code": "caught"
+   }
+  },
   "v92convenc": {
    "key": "3b91d725863c2e4ab1315b63dc04cda8a05055c0fc89bd0be9d12d2398f12b66",
    "summary": "40 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -6873,6 +6922,32 @@
     "the precoder's null test is dropped": "caught",
     "the raw buffer at +0x08 is a byte short": "caught",
     "the raw buffer's null test is dropped": "caught"
+   }
+  },
+  "v92txproc": {
+   "key": "b3e3ad6968cdf83ee0dcc1c8ac38f3966e00f8e56e0300a5ef8704d0b0053ed3",
+   "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "K is reached exactly rather than crossed": "caught",
+    "every frame is written over the front of the output": "caught",
+    "every precoder step writes over the first four symbols": "caught",
+    "the bit count is cleared rather than reduced by K": "caught",
+    "the bit count is not reduced at all": "caught",
+    "the buffer is filled from the input's front every time": "caught",
+    "the convolution encoder's output is applied in the same step": "caught",
+    "the convolution encoder's output is not carried forward": "caught",
+    "the frame threshold is not reached until one bit past K": "caught",
+    "the gain is not applied": "caught",
+    "the input byte is stored one place late": "caught",
+    "the modulus encoder is given the caller's bits directly": "caught",
+    "the pre-filter is skipped": "caught",
+    "the pre-filter's two buffers are the same way round": "caught",
+    "the precoder is not told which step it is on": "caught",
+    "the precoder runs twice rather than three times": "caught",
+    "the sample count advances by eleven": "caught",
+    "the sample count is not reported": "caught",
+    "the sample count is reported in frames": "caught",
+    "the samples are rounded rather than truncated": "caught"
    }
   },
   "v92txreset": {

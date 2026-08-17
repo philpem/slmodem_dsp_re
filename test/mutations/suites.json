@@ -591,5 +591,17 @@
  "v32data": [
   "src/pump/v32/v32data.c",
   "build/test/t_v32data"
+ ],
+ "v92btosproc": [
+  "src/pump/v90/V92BitsToSymbol.cpp",
+  "build/test/t_v92btosproc"
+ ],
+ "v92btosprochdr": [
+  "include/dsplib/V92BitsToSymbol.h",
+  "build/test/t_v92btosproc"
+ ],
+ "v92txproc": [
+  "src/pump/v90/V92Transmitter.cpp",
+  "build/test/t_v92btosproc"
  ]
 }

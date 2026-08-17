@@ -63476,3 +63476,166 @@ set" would have lost silently:
   the EXPORTED `FPM_cos_sign`, which nothing in `src/` reads and only the
   neighbourhood block can catch. That last one is what proves the two copies of
   the four real signs cannot drift apart.
+
+## 4500. `V92BitsToSymbol`'s ROUND-UP IS TWO EXPRESSIONS, AND ONLY AN OVERFLOWING TRIAL CAN TELL
+
+`nofBitsForNextTime` (.text+0x4e0c0) turns a symbol count into a bit count by
+rounding up to a whole twelve-symbol frame. The obvious reading is
+`ceil(left / 12) * bitsPerFrame`, and the object computes that on ONE of its
+two arms only:
+
+    left % 12 != 0   ->   (left / 12 + 1) * bitsPerFrame     .text+0x4e0f2
+    left % 12 == 0   ->   left * bitsPerFrame / 12           .text+0x4e108
+
+The divisible arm multiplies FIRST. That it does is not an inference from the
+scheduling: the `je` at +0x4e0f0 is taken on `left == (left / 12) * 12`, and
+the block it lands in immediately reloads `bitsPerFrame` into `%edx`, the
+register that held the quotient. The quotient is dead there, so it cannot be
+what the multiply uses; the `imul %edx,%ecx` at +0x4e10e multiplies `left`
+itself, and the 0xaaaaaaab reciprocal that follows divides the product.
+
+Over 32-bit arithmetic the two readings agree on every input where
+`left * bitsPerFrame` fits in a word, which is every input a modem produces.
+They separate the moment it wraps: `left = 12`, `bitsPerFrame = 0x20000000`
+gives 0x20000000 the obvious way and 0x0aaaaaaa the object's. **Finding 3052's
+trap, and the third time this tree has met it** -- a plausible reading agreeing
+with the true one over every realistic input, separated only by arithmetic
+nobody would think to try.
+
+`t_v92btosproc.cpp` carries three trials that leave the plausible range for
+exactly this reason, and `test/mutations/v92btosproc.json`'s "the two arms of
+the rounding are one expression" is what proves they bite. Without them the
+fold is invisible and would have shipped.
+
+`setSymbolsBlockSize` (+0x4e130) holds the same code a second time, inlined,
+and both `process` overloads that write to `nbits` hold it a third and fourth.
+One source expression, four copies in the object.
+
+## 4501. `V92BitsToSymbol::process` RETURNS A STATUS AND THE AUTHOR NAMED EVERY FAILURE
+
+All three overloads leave a small constant in `%eax` -- 0, 1, 2 or 3 -- and
+each non-zero one is set on the same path as a `dsplibs_debug_printf` whose
+string carries the name:
+
+    1  "V92BitsToSymbol - error: process called, SIZE_NOT_SET\r\n"
+                                              .rodata.str1.4:0xd484
+    2  "V92BitsToSymbol - error: process called, BUFFER_OVERFLOW\r\n"
+                                              .rodata.str1.4:0xd4bc
+    3  "V92BitsToSymbol - error: process called, BUFFER_UNDERFLOW\r\n"
+                                              .rodata.str1.4:0xd4f8
+
+So the constant-to-name pairing is the object's own, at CLAUDE.md's strongest
+evidence tier, and not a reading of what each arm does. The header had all
+three overloads declared `void`, which was wrong and was not detectable until
+a body was read: a return type is never mangled, and the two overloads with no
+`out` argument have no other observable at all on their error paths.
+
+Zero has no string. "OK" is this tree's word for it and says so.
+
+The four are `#define`s rather than an `enum`, deliberately: nothing in the
+object says whether the author wrote an enumeration, and inventing a type name
+would be a claim where a constant is a fact.
+
+## 4502. `V92Transmitter::process` NAMED FOUR FIELDS, AND ONE OF THEM WAS 48 BYTES OF PAD
+
+The class's last unwritten member (.text+0x54590, 355 bytes) turned four
+offset-named slots into named ones, each on evidence the object forces rather
+than suggests:
+
+  - **`+0x08  void *buf_08` -> `unsigned char *bitBuffer`.** `process` fills it
+    one byte at a time from its own `bits` argument and then passes it to
+    `V92ModulusEncoder::progress`, whose mangling `EPhPj` types the first
+    argument `unsigned char *`. Two independent readings of the same width.
+  - **`+0x0c  word_0c` -> `bitsBuffered`.** The store index, incremented once
+    per input byte, compared against `K` and reduced BY `K` -- never cleared --
+    when a frame comes out.
+  - **`+0x10  pad_10[0x30]` -> `unsigned int modulusOut[12]`.** The element
+    type is `progress`'s second argument, `unsigned int *`. The LENGTH is
+    confirmed twice over and the two agree: `V92Precoder::process` indexes it
+    `i + 4 * a` for `i` in 0..3 over `a` = 0, 1, 2, so twelve is the largest
+    index the only reader can form; and `V92ModulusEncoder::progress` writes
+    `out[0]` through `out[11]` on every one of its three arms. Forty-eight
+    bytes is exactly twelve words, so the region is closed rather than bounded.
+  - **`+0x40  word_40` -> `int convEncoderOutput`.** Written only from
+    `V92ConvolutionEncoder::process`'s return and read only as
+    `V92Precoder::process`'s `b`, one iteration BEFORE the value that replaces
+    it is computed. `int` is the two neighbours' signature and not a choice.
+
+**The lesson is 3120's inverted.** That finding declined to name `+0x2f64`
+because the role could be bounded and not established. Here four names arrived
+at once from one 355-byte function, and the reason is that `process` is where
+the class's sub-objects are USED: a constructor stores pointers and a reset
+copies parameters, but only the worker says what the storage is for. A class
+whose worker is unwritten will always look more anonymous than it is.
+
+## 4503. `V92BitsToSymbol::bitsPerFrame` IS `V92ParamsInfo::K`, AND `process` IS WHAT SAYS WHAT K COUNTS
+
+`V92BitsToSymbol::reset` reads the parameter block's first word and nothing
+else (`mov (%esi),%eax` at .text+0x4e091). That word is `V92ParamsInfo::K`,
+the same field `V92Transmitter::reset` copies into its own +0x04 and prints as
+`"K = %d"` -- so the two fields hold one quantity.
+
+V92ParamsInfo.h had recorded that "nothing here says what units K counts in
+and this file does not guess". `V92Transmitter::process` now does say:
+it consumes exactly `K` input bits per twelve output samples. That closes the
+loop with `nofBitsForNextTime`, which multiplies a count of twelve-symbol
+frames by this same field to get bits.
+
+**The name was NOT changed to `K`.** The author's letter is on the record for
+the two fields a format string prints, and it is opaque; the descriptive name
+is kept for the copy the object now explains, with the identity written into
+the comment. A reader who wants the author's word finds it one line away, and
+a reader who wants the meaning does not have to derive it twice.
+
+## 4504. A FIXTURE THAT HANDS `FloatFIR` A TAP COUNT THAT IS NOT A MULTIPLE OF FOUR CRASHES, AND THAT IS THE BLOB'S BEHAVIOUR
+
+`t_v92btosproc.cpp` turned the pre-filter and precoder FIRs on by setting the
+parameter block's four filter lengths to 3 and segfaulted inside
+`floatfir_carry_tail`. The cause is already documented in
+`src/dsp/FloatFIR.cpp` and was not connected to the fixture for twenty
+minutes: both the constructor and `setCoefficients` store `nTaps & ~3u`, so a
+length of three is a filter of ZERO taps, and `floatfir_carry_tail` counts
+`taps - 1` down with a `do`/`while`, which at zero is 2**32 iterations off the
+end of the history buffer.
+
+Two things worth keeping:
+
+  - **The apparatus has to obey the blob's preconditions.** A test that feeds
+    an input the library cannot survive is not testing a deviation, it is
+    crashing; and the crash's backtrace named `FloatFIR`, four frames below
+    the line that chose the number.
+  - **A NOT CAUGHT mutation can mean the fixture never reached the code**, not
+    that the claim is untestable. Three entries in
+    `test/mutations/v92txproc.json` -- the pre-filter being skipped, the gain
+    not being applied, the samples being rounded -- survived only because the
+    filters were off and the gain drew a whole number. Turning the filters on
+    and making the gain non-integral caught all three without changing a word
+    of `src/`.
+
+## 4505. `V92BitsToSymbol::flag_1c` HAS SIX WRITERS, NO BRANCH, AND STAYS UNNAMED
+
+The byte at +0x1c is set to 1 by the constructor and by `reset`, and all three
+`process` overloads end with
+
+    if (flag_1c != 0)
+            flag_1c = 0;
+
+on every path, the two error ones included -- `cmpb $0x0,0x1c(%ebx); je;
+movb $0x0,0x1c(%ebx)` at .text+0x4e3a6 and twice more. **The test is the
+author's, not the compiler's**: a bare store is one instruction and GCC does
+not add a load and a branch to avoid one.
+
+So the class's whole surface is now written and NOTHING BRANCHES ON THIS BYTE.
+It is a one-shot -- raised at construction and at every reset, lowered by the
+first `process` after either -- and its reader is somewhere else or nowhere.
+Naming it `firstProcess` would be believable and unfalsifiable, which is
+exactly what CLAUDE.md's "a wrong name is worse than a pad" forbids, so it
+keeps its offset name with the derivation beside it. This is 3120's ruling
+reached from the other direction: there the readers were unwritten, here they
+are all written and still say nothing.
+
+The differential tier cannot see the difference between the conditional clear
+and a bare one -- both leave the same byte -- so
+`test/mutations/v92btosproc.json` carries it as an `equivalent` entry whose
+`why` is the disassembly. It is the only evidence that anything, anywhere,
+reads this byte.
