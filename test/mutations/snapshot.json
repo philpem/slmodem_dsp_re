@@ -328,7 +328,7 @@
    }
   },
   "fpmmtd": {
-   "key": "3ffb5231c64be40ec3d94a73b5641110c6aa87289a2313b424769e4d9ef8332b",
+   "key": "8d67c3ca6b0d5aba0f9829e932cedb13fbdfae2215fe84be970e04bf7021e924",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "COEF_DC's output scale is one out": "caught",
@@ -336,7 +336,7 @@
    }
   },
   "fpmmtdlayout": {
-   "key": "1581f65d27751322cd306082431510dac0fb259cf78640fe844dda5735dc4547",
+   "key": "4de075a17c341a62f64d924376a54ea4f48edfa46a3623e3ee160f279b54ac5f",
    "summary": "2 mutations: 0 caught (0 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "COEF_DC's third coefficient is one out": "equivalent",
@@ -344,7 +344,7 @@
    }
   },
   "fpmphasor": {
-   "key": "631469e3f0e65651f7fdd0e972be33d6f9c7166ff7b4aff677790b72a15425f4",
+   "key": "430aa261155b86c903aff62f7b3f9255256f1618fb51d6ae35390ac05d78f632",
    "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the cosine's window is the masked quadrant's own signs": "caught",

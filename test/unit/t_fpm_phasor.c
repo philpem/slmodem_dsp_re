@@ -39,10 +39,13 @@ extern void ref_FPM_phasor(struct fpm_phasor *p);
 extern void ref_FPM_phasor_demod(struct fpm_phasor *p);
 
 /*
- * The object's own sign tables, so the layout block can compare what lies
- * before ours against what lies before the object's.  `dsplibs_ref.o` is one
- * link contribution, so the relative placement of ref_COEF_DC, ref_FPM_sin_sign
- * and ref_FPM_cos_sign is the object's, byte for byte.
+ * The object's own sign tables, so the neighbourhood block can compare the
+ * window we carry as VALUES against what actually lies before the object's.
+ * Nothing lies before ours any more -- that is the point of the batch -- so
+ * this is the only side of the comparison that reads out of range.
+ * `dsplibs_ref.o` is one link contribution, so the relative placement of
+ * ref_COEF_DC, ref_FPM_sin_sign and ref_FPM_cos_sign is the object's, byte for
+ * byte, and no build of OURS can perturb it.
  */
 extern short ref_FPM_cos_sign[4];
 extern short ref_FPM_sin_sign[4];

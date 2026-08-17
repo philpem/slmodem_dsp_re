@@ -167,6 +167,15 @@ short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };
  * `--coverage` appends `__gcov_.FPM_MTD_*` to fpm_mtd.c's `.data` at exactly
  * those offsets; with no adjacency left to assert, it no longer applies.
  *
+ * FOR WHOEVER WRITES `FPM_phasor_dp` (0x0a93e0, not reconstructed): it is the
+ * third user of these two tables and reads them the same unmasked way --
+ * `readelf -rW` puts its relocations at 0x0a944b against `FPM_cos_sign` and
+ * 0x0a9472 against `FPM_sin_sign`.  Index `FPM_cos_sign_ext` and
+ * `FPM_sin_sign_ext` with the same `FPM_PHASOR_SIGN_BELOW` bias.  The
+ * four-entry `FPM_cos_sign`/`FPM_sin_sign` above are the symbol table and are
+ * NOT what the phasor reads; indexing those with a negative quadrant is the
+ * undefined behaviour this arrangement exists to remove.
+ *
  * `COEF_DC` STAYS IN fpm_mtd.c.  Its attribution rests on evidence that is
  * independent of any of this -- its one reference in 1.2 MB is inside
  * `FPM_MTD_detect`, `nm` marks it `D` and not `R`, and the two-byte pad at
