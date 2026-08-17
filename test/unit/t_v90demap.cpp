@@ -1273,6 +1273,15 @@ run_resetns(void)
 				    (unsigned int)(trial % 7);
 				DEM(s).histogramDelay = 0x5a5a;
 				DEM(s).histogramIntegration = 0x3c3c;
+				/*
+				 * `dem_setup` leaves the serial decoder at
+				 * zero because every other member here wants
+				 * it there, and zero is what this function
+				 * WRITES -- so a seed of zero cannot tell a
+				 * store from an omission.  Finding 230, at
+				 * the one byte the general seeding misses.
+				 */
+				DEM(s).signDecoder.prev_ = 0xa7;
 				memset(DEM(s).errorSum, 0,
 				       sizeof DEM(s).errorSum);
 				memset(DEM(s).errorCount, 0,
