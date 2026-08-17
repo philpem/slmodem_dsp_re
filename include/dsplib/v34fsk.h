@@ -440,10 +440,18 @@ struct v34_object {
 	/*
 	 * Two per-symbol history rings modem_serrint fills, indexed by f2aa4
 	 * and f2aa6 and wrapping at 0x12b and 0x257 respectively.  The first
-	 * holds each residual TWICE, as both halves of its int -- so it is a
-	 * complex buffer being written with a real value.
+	 * holds each residual TWICE, as both halves of its entry -- so it is
+	 * a complex buffer being written with a real value.
+	 *
+	 * ITS ELEMENT IS TWO SHORTS AND NOT AN INT, and modem_serrint is
+	 * what settles it: the entry is filled by TWO 16-bit stores,
+	 * `mov %si,0x2aa8(%edx)` at 0x5d0f7 and `mov %si,0x2aaa(%edx)` at
+	 * 0x5d0fe, where a 32-bit field would have taken one `movl`.  It was
+	 * declared `int[0x12c]` here and every writer reached the halves by
+	 * casting `(short *)&hist_2aa8[k]`, which is the declaration being
+	 * wrong rather than the access being clever.  Same 0x4b0 bytes.
 	 */
-	int hist_2aa8[0x12c];				/* +0x2aa8 */
+	short hist_2aa8[0x12c][2];			/* +0x2aa8 */
 	short hist_2f58[0x258];				/* +0x2f58 */
 	unsigned char unmapped_3408[0x3548 - 0x3408];
 	/*

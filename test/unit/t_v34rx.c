@@ -1276,7 +1276,8 @@ main(void)
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 			oa.echo1.adapt_count = ob.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
-				oa.hist_2aa8[b] = ob.hist_2aa8[b] = 0;
+				oa.hist_2aa8[b][0] = ob.hist_2aa8[b][0] =
+				oa.hist_2aa8[b][1] = ob.hist_2aa8[b][1] = 0;
 			for (b = 0; b < 0x258; b++)
 				oa.hist_2f58[b] = ob.hist_2f58[b] = 0;
 
@@ -2629,7 +2630,8 @@ main(void)
 			oa2.echo0.adapt_count = ob2.echo0.adapt_count = 0;
 			oa2.echo1.adapt_count = ob2.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
-				oa2.hist_2aa8[b] = ob2.hist_2aa8[b] = 0;
+				oa2.hist_2aa8[b][0] = ob2.hist_2aa8[b][0] =
+				oa2.hist_2aa8[b][1] = ob2.hist_2aa8[b][1] = 0;
 			for (b = 0; b < 0x258; b++)
 				oa2.hist_2f58[b] = ob2.hist_2f58[b] = 0;
 			for (b = 0; b < V34_TXQ_RING; b++)
