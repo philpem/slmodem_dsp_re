@@ -7607,3 +7607,81 @@ always happens.  This is why the per-member tests of `generateRm` and
 `generateB1u` never showed it: ours and the blob's are separate functions with
 the same frame, so both read the same residue and agreed for the wrong reason.
 Finding 4821.
+## D660 ⚠ `generateRi` and `generateRiNot` read an uninitialised `short` on an unreachable path
+
+**Where:** `src/pump/v90/V90Phase4Modulator.cpp`, `generateRi` and
+`generateRiNot`; blob 0x2c6b0 and 0x2c710.
+
+**What the original does:** both compute `(symbolCount - 1) % 6` and dispatch
+on it with a two-range decision tree, and the tree's default edge falls into
+the tail that returns the value:
+
+    2c6d7:  83 f8 02      cmp   $0x2,%eax
+    2c6da:  76 1b         jbe   2c6f7            ; 0..2, sym = codeLevel
+    2c6dc:  83 f8 05      cmp   $0x5,%eax
+    2c6df:  77 1a         ja    2c6fb            ; -> the tail, %ebx unset
+    ...
+    2c6f7:  0f bf 59 3c   movswl 0x3c(%ecx),%ebx
+    2c6fb:  89 d8         mov   %ebx,%eax        ; the tail
+
+so on the `ja` what comes back is whatever the CALLER left in `%ebx`.
+`generateRiNot` has the same shape with `%ecx` and one more `neg`.
+
+**Impact:** none, and this one is arithmetically impossible rather than merely
+unreached.  `x % 6` on an unsigned dividend is at most 5, so the `ja` is never
+taken for any value of `symbolCount` including 0 and 0xffffffff -- 0 gives
+0xffffffff % 6 == 3, which is inside the range.  It is the switch's default
+edge, kept because GCC 3.4.2 emits the comparison rather than proving the
+modulus's range.
+
+**Status:** reproduced, and D561 does not bite: no input can drive the
+reconstruction into it either, so `test/unit/t_v90p4mtab.cpp` sweeps
+`symbolCount` over both periods and past zero with nothing excluded from the
+grid.  `short sym;` with no initialiser and a `switch` with no `default` is
+what puts it in front of the compiler.  Adding a `default:` would add an
+instruction the object does not have and would change behaviour on exactly the
+path the object leaves open, so it is not done.
+
+## D661 ⚠ Both phase 4 data pumps pass an uninitialised `unsigned int` by reference and read it back
+
+**Where:** `src/pump/v90/V90Phase4Modulator.cpp`,
+`generateDataSymbolBeforeFPE` and `generateDataSymbolBeforeRRN`; blob 0x2d770
+and 0x2d7d0.
+
+**What the original does:** each reserves two stack slots, hands their
+addresses to `V90BitsToSymbol::process(unsigned int &nofBits, short
+*outSymbols)`, and reads the first back:
+
+    2d7dc:  8d 4c 24 10   lea    0x10(%esp),%ecx      ; &nofBits
+    2d7e4:  89 4c 24 04   mov    %ecx,0x4(%esp)
+    2d78e:  e8 ..         call   V90BitsToSymbol::process
+    2d793:  8b 44 24 10   mov    0x10(%esp),%eax      ; read straight back
+    2d797:  85 c0         test   %eax,%eax
+
+Nothing writes `0x10(%esp)` before the call in either function, and
+`process` writes through the reference only on the arm where
+`symbolsBlockSize` is non-zero -- with it zero the callee prints
+"SIZE_NOT_SET", returns status 1 and leaves the slot alone.  So there is a
+reachable configuration in which the `test` reads whatever was on the stack.
+
+Note that the STATUS is not what either pump looks at: `%eax` holds it on
+return and both discard it in favour of the reference.  A reconstruction that
+read the return value instead would agree on this configuration and disagree
+on the others; the mutation "the status is read rather than the demand" is
+what holds that.
+
+**Impact:** none that reaches a modem.  `symbolsBlockSize` is zero only
+between construction and the first `setSymbolsBlockSize`, and a pump asked for
+a symbol before the converter has been told its block size is already out of
+contract -- the object's own answer to it is a diagnostic line.
+
+**Status:** reproduced.  `unsigned int nofBits;` with no initialiser is what
+puts it in front of the compiler, and GCC 3.4.2 emits the object's shape from
+it.  Unlike D660 this one IS reachable, so `test/unit/t_v90p4mgen.cpp` keeps
+it out of the grid rather than running it and declining to assert: a trial
+that reaches undefined behaviour in the reconstruction is not a differential
+trial (D561).  The two configurations that are swept -- `(symbolsBlockSize 1,
+symbolsDone 2)` and `(2, 1)` -- both write the reference and both write the
+symbol, so the object, the transcript and the return value are all asserted on
+every trial.  Initialising it would be a behaviour change on exactly the path
+the object leaves open, so it is not done.

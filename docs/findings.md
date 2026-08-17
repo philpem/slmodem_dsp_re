@@ -66537,3 +66537,213 @@ This is not obviously what was meant, and it is reproduced rather than tidied.
 both arms were reached AND that they left different objects behind; a slot
 seeded with 2 would otherwise make all three compare equal for the worst
 possible reason.
+### 4930. `Phase4ModulatorState` IS THE OBJECT'S TYPE AND ITS ENUMERATORS ARE THE OBJECT'S MESSAGES
+
+The type name is in two manglings --
+`_ZN18V90Phase4Modulator22setNextStateAfterTRN2dE20Phase4ModulatorState` and
+`_ZN18V90Phase4Modulator5resetE7PcmTypeh20Phase4ModulatorStatejj` -- so it is
+`Phase4ModulatorState` at global scope, four bytes, and `V90Phase4Modulator`'s
++0x0004 is one because `reset`'s third argument lands there
+(`mov 0x2c(%esp),%edx ; mov %edx,0x4(%esi)`).
+
+**THE VALUE-TO-NAME PAIRING WAS MADE MECHANICALLY, NOT BY EYE.**  Across all
+forty-five members of the class, every `movl $N,0x4(%reg)` was walked backwards
+to the nearest `edprintf` or `dsplibs_debug_printf` **in the same straight-line
+run** -- stopping at any jump and at any address that is the target of one --
+and the format string read out of `.rodata.str1.4` through its relocation.
+Twenty-four distinct values are stored; fifteen of them pair with a message,
+and the naive "nearest preceding string in address order" heuristic paired
+three MORE and two of those three were wrong, `recivedCPtag`'s 0x0b among them,
+because the store is in a block reached by a `je` over the printf.  So the
+basic-block restriction is doing real work and is not a formality.
+
+The eight that carry a message and nothing else: 0x02 RiNot, 0x03 TRN2d, 0x07
+CPd, 0x0b FinalSUVd, 0x0e MPNot, 0x10 Ed, 0x11 B1d, 0x12 Terminated, plus 0x15
+Rd, 0x16 RdNot, 0x1a Rt, 0x1b RtNot, 0x1d Rf, 0x1e RfNot.
+
+**THREE MORE COME FROM METHOD NAMES, AND THE ARGUMENT IS CORROBORATED RATHER
+THAN ASSUMED.**  `exitMPNot()` acts only when the field is 0x0e, and 0x0e is
+independently "enter MPNot"; so `exitX` gating on one value names that value,
+and the shape then reads `exitMP()` on 0x04 as MP and `exitRi()` on 0x00 as Ri.
+`enterRepeatedCPd()` is the only V.90 assignment of 0x08.
+
+**0x05 IS THE ONE THAT NEEDED CARE.**  Three messages precede an assignment of
+5 -- "enter SUVd", "enter SUVd at RRN" and "CPd Terminated" -- and the third
+names the state being LEFT.  Two independent sites naming it SUVd is what
+carries it, with `recivedSUV()` acting only on 5 agreeing.
+
+**NINE VALUES ARE LEFT WITH OFFSET NAMES** (0x01, 0x06, 0x09, 0x0a, 0x0c, 0x0d,
+0x0f, 0x13, 0x17, 0x18, 0x19).  Eight are one shape -- entered when the symbol
+counter is not yet on a sequence boundary, carrying on until it is -- and
+`V90Phase3Modulator`'s `_END` states are exactly that, but calling them `_END`
+here would be usage inference wearing a derivation's clothes.  0x14, 0x1c and
+0x1f are stored and compared nowhere in the class and are simply absent from
+the enumeration; a C++ enumeration need not be contiguous and inventing three
+enumerators would be inventing three names.
+
+**THE BASE IS PINNED SIGNED AND THE PIN IS MEASURED.**  `recivedCPtag`,
+`recivedSUVtag` and `recivedE2u` dispatch with `cmp $0x5,%eax ; je ; jl` -- a
+signed `jl`.  All-non-negative enumerators give GCC an unsigned base and `jb`
+at those three sites.  One negative enumerator fixes it, and it is the
+`__tHardwareCodecTypes___BASE_PIN` / `P4D_STATE_BASE_PIN` device.
+
+### 4931. `V90Phase4Modulator::reset` SETTLES FOUR FIELD TYPES IN ONE FUNCTION
+
+`reset(PcmType, unsigned char, Phase4ModulatorState, unsigned int, unsigned
+int)` at .text+0x2f630 is not in this batch and is the strongest evidence in it.
+Its five arguments and what they do:
+
+    0x24(%esp) arg1  ->  mov %eax,0x38(%esi)      +0x38 is `PcmType`
+    0x28(%esp) arg2  ->  alaw2linear/ulaw2linear, mov %ax,0x3c(%esi)
+    0x2c(%esp) arg3  ->  mov %edx,0x4(%esi)       +0x04 is the state
+    0x30(%esp) arg4  ->  the generate loop's trip count
+    0x34(%esp) arg5  ->  mov %ebx,0x40(%esi)      +0x40 is `unsigned int`
+
+So +0x38 and +0x04 are typed by a mangling rather than by usage, and +0x3c is
+the linear level of a G.711 code -- `V90Phase3Modulator::codeLevel` filled by
+that class's own `reset` in the same two lines, which is where the name comes
+from.  Every read of +0x38 in the class is `!= 0` choosing A-law, the sense
+V90Phase3Modulator.h already measured.
+
+`reset` also seeds +0x10: `mov (%esi),%edx ; cmp $0x1,%edx ; sbb %eax,%eax ;
+add $0x5,%eax`, which is 4 when `sessionFlag` is zero and 5 when it is not.
+With 4 read as MP and 5 as SUVd (finding 4930), `nextStateAfterTRN2d` is MP
+under V.90 and SUVd under V.92 -- the two states TRN2d hands on to, and an
+independent check on both names.
+
+### 4932. THE PHASE 4 MODULATOR'S FIRST 0x40 BYTES ARE SIXTEEN SLOTS, THREE OF THEM NARROW
+
+`pad_0004[0x40]` is retired.  A displacement scan over the class's whole extent
+(.text+0x2c5a0..+0x2f72f, all forty-five symbols, on any base register so no
+register-tracking bug can weaken it) finds exactly sixteen four-byte-aligned
+offsets in [0x04, 0x44) and nothing between them.  Three are not dwords, and
+the store encodings say which: +0x14 and +0x1c are written `movb` and only
+`movb`, and +0x3c is read `movswl`/`movzwl` and written `mov %ax`.
+
+Named: +0x04 `state`, +0x08 `symbolCount`, +0x10 `nextStateAfterTRN2d`, +0x38
+`pcmType`, +0x3c `codeLevel`.  Offset-named with the derivation beside each:
++0x0c, +0x14, +0x18, +0x1c, +0x20, +0x24, +0x28, +0x2c, +0x30, +0x34, +0x40.
++0x2f9c and +0x2fa0 lose the names `cleared_2f9c`/`cleared_2fa0`, which
+recorded only that the constructor cleared them, and become `word_2f9c` and
+`word_2fa0` with their latch roles written out; both are still offset names,
+because what they latch is not established.
+
++0x08 is `symbolCount` on three independent grounds and not on usage alone: it
+is what every "@ %d" in the class prints, it is set to 0 beside almost every
+assignment to `state`, and it is the dividend of fifteen `divl` sites --
+`divl`, so unsigned.
+
+### 4933. THE FOUR `*Not` SYMBOL READERS NEED AN `int` INTERMEDIATE, AND NO TEST CAN SEE IT
+
+`return -rdRtSymbols[k]` from a `short`-returning member compiles to `movzwl ;
+neg ; cwtl`; the object has `movswl ; neg ; cwtl`.  The extension is free in
+the general rule -- `cwtl` throws the upper half away -- so the two spellings
+agree over every value and no differential trial can separate them.  Naming an
+`int` and negating that makes GCC load signed, and `generateRdRtNot` and
+`generateRfNot` go from differing to identical.  This is 613's case reached
+from the other side: there the forced signedness found a defect, here it picks
+between two readings that are behaviourally the same, and only the codegen tier
+can rule.
+
+### 4934. `generateRi` AND `generateRiNot` ARE A `switch`, AND THE BLOCK ORDER IS WHAT SAYS SO
+
+Written `if (k <= 2) sym = codeLevel; else if (k <= 5) sym = -codeLevel;`, GCC
+3.4.2 puts the first arm in the fall-through and opens with `cmp $0x2,%eax ;
+ja`.  The object opens with `cmp $0x2,%eax ; jbe` to a forward block and then
+`cmp $0x5,%eax ; ja`, which is the balanced two-range decision tree GCC builds
+for a `switch` over six labels with two destinations.  Spelled as a `switch`
+with cases 0-2 and 3-5 and no `default`, both members are identical to the
+object mnemonic for mnemonic.  The `ja` is the switch's own default edge, and
+what it reaches is deviation D660.
+
+### 4935. `setRdRtSymbols` IS IDENTICAL AND `setRfSymbols` IS THE SAME SOURCE SCHEDULED DIFFERENTLY
+
+The two setters are one source shape at two lengths -- six elements and twelve,
+the same macro, the same reload of `pcmType` before every element because
+`alaw2linear` is opaque and could write through `this`.  The six-element one
+matches the object exactly.  The twelve-element one differs in six places, and
+every one of them is a `mov` or a `neg` moved one or two slots against its
+neighbour: same instruction count, same instructions, same operands.  That is
+the free column, and the twin matching exactly is what makes it a scheduling
+difference rather than a coincidence of length -- a wrong shape would not
+produce an exact match at six elements and a permutation at twelve.
+
+### 4936. `V90CP::byte_13` HAS WRITERS, AND V90CP.h's "BY NOTHING ELSE" IS RETRACTED
+
+V90CP.h said +0x0013 was "cleared by the constructor and by NOTHING else --
+`reset` does not touch it, which is what separates the two".  The first half
+stands and the second does not.  Five `V90Phase4Modulator` members write it:
+`recivedCP`, `recivedPartOneSilenceRrnSUV`, `recivedCPtag` and
+`recivedPartOneSilenceRrnSUVtag` set it to 1 and `resetRRNSecondSection` clears
+it.  With `infoToBits` putting it at bits[0x21] of both the long and the short
+form -- the only field that appears in both -- that makes it a bit the
+modulator raises when the demodulator reports a CP, and lowers when the second
+section of a rate renegotiation starts.  The field keeps its offset name: what
+bits[0x21] MEANS is a V.90 question this object does not answer.
+
+### 4937. THE Ed BLOCK'S THREE STORES ARE IN TWO DIFFERENT ORDERS IN ONE TRANSLATION UNIT, AND GCC REPRODUCES BOTH
+
+Six members of `V90Phase4Modulator` enter state 0x10 with the same three
+stores -- `state`, `word_2f64 = bitsToSymbol->extraSymbols + 12`, and
+`symbolCount = 0` -- and the object does not emit them the same way twice:
+
+    exitMPNot (+0x2c954)   movl $0,0x8   mov 0x44   movl $0x10,0x4   mov 0x18
+    the other five         movl $0x10,0x4   mov 0x44   mov 0x18   movl $0,0x8
+
+`recivedCPtag`, `recivedSUVtag`, `recivedE2u`, `recivedFirstRrnE2u` and
+`recivedPartOneSilenceRrnSUVtag` are the five.  Written `symbolCount = 0;
+state = ED; word_2f64 = ...` GCC 3.4.2 emits `exitMPNot`'s shape, and it emits
+the SAME shape for `state = ED; symbolCount = 0; word_2f64 = ...` -- the two
+source orders are indistinguishable.  What produces the other five is
+`state = ED; word_2f64 = ...; symbolCount = 0`, with the store to +0x08
+scheduled into the load-use delay between `mov 0x18(%edx),%ecx` and the `add`.
+
+This is 617's territory and it passes 617's acceptance test: full-text
+identity, operands included, at all six sites.  What makes it worth recording
+is that the two orders are in ONE translation unit compiled ONE way, so the
+difference cannot be a flag or a version -- the author wrote the three
+statements in two different orders, and the compiler carried both through.
+
+### 4938. THE CPd BLOCK RAISES +0x2fa0 AFTER COMPUTING THE SEQUENCE LENGTH, NOT BEFORE
+
+`recivedSUV`, `recivedPartTwoSilenceRrnSUV` and `recivedFirstSUVuPartTwoRrn`
+share a nine-line block that repacks the CP message and rebuilds the sequence
+length.  The object stores +0x2fa0 BEFORE +0x2f94 -- `mov $0x1,%ecx ; mov
+%ecx,0x2fa0(%ebx) ; mov %eax,0x2f94(%ebx)` -- which reads like the source
+order, and it is not: written `word_2fa0 = 1; cpSequenceSymbols = ...` GCC
+puts the pair before the `divl`, and written the other way round it puts them
+after it, in the divide's shadow, exactly where the object has them.  So the
+STORE order is the reverse of the source order at this site, and taking the
+object's store order for its source order would have been wrong.  Full-text
+identity at all three sites.
+
+### 4939. TWO ADJACENT RANGE TESTS HAVE TO BE TWO STATEMENTS OR GCC FOLDS THEM
+
+`recivedPartTwoSilenceRrnSUV` opens with two range tests on the state,
+0x17..0x18 and 0x19..0x1b, as two `lea ; cmp ; jbe` triples.  The ranges are
+adjacent, so written as one `&&` chain -- `state != 0x17 && ... && state !=
+0x1b` -- GCC 3.4.2 folds them into a single `(state - 0x17) <= 4` and emits
+ONE triple.  Written as two early returns it emits two, and the function is
+identical to the object.
+
+The two spellings accept exactly the same set, so no differential trial can
+separate them and the mutation that drops the first guard is registered
+`equivalent` with that argument.  It is the codegen tier alone that holds the
+guard, which is the case CLAUDE.md's second tier exists for.
+
+### 4940. ALL TWENTY-EIGHT OF THIS BATCH MATCH THE OBJECT, AND ONE DOES SO ONLY AFTER A SCHEDULING CONCESSION
+
+Twenty-seven of the twenty-eight are identical to the blob mnemonic for
+mnemonic under GCC 3.4.2 at `-O3`; `setRfSymbols` differs in six places, every
+one of them a `mov` or a `neg` moved a slot against its neighbour, with the
+same instruction multiset (finding 4935).  `compare.py` goes 409 identical to
+436 across the two commits, with the same-size-different-instructions bucket
+unmoved at 75; `samesize.py --identical` lists twenty-eight
+`V90Phase4Modulator` symbols where before the batch it listed one.
+
+Four source shapes had to be measured rather than chosen, and they are 4933,
+4934, 4937, 4938 and 4939.  What they have in common is that NONE of them can
+be settled by a differential test: every pair of spellings agrees over every
+input, and the only thing that separates them is what the compiler was forced
+to encode.  That is five results from the second tier in one batch, against
+one behavioural defect found (none).

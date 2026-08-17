@@ -659,5 +659,13 @@
  "v90dataph": [
   "src/pump/v90/V90Demodulator.cpp",
   "build/test/t_v90dataph"
+ ],
+ "v90p4mtab": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90p4mtab"
+ ],
+ "v90p4mgen": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90p4mgen"
  ]
 }

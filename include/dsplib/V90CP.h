@@ -294,10 +294,20 @@ public:
 	unsigned char byte_12;
 
 	/*
-	 * +0x0013  Cleared by the constructor and by NOTHING else -- `reset`
-	 * does not touch it, which is what separates the two.  `infoToBits`
-	 * puts it at bits[0x21] in both the long and the short form, which is
-	 * the only field that appears in both.
+	 * +0x0013  Cleared by the constructor, and `reset` does not touch it,
+	 * which is what separates the two.  `infoToBits` puts it at bits[0x21]
+	 * in both the long and the short form, which is the only field that
+	 * appears in both.
+	 *
+	 * THE SENTENCE THAT USED TO SAY "AND BY NOTHING ELSE" IS RETRACTED.
+	 * Five `V90Phase4Modulator` members write it -- `recivedCP`,
+	 * `recivedPartOneSilenceRrnSUV`, `recivedCPtag` and
+	 * `recivedPartOneSilenceRrnSUVtag` set it to 1 and
+	 * `resetRRNSecondSection` clears it -- so it is a bit the modulator
+	 * raises when the demodulator reports a CP and lowers when the second
+	 * section of a rate renegotiation begins.  The name stays the
+	 * offset's: what bits[0x21] means on the wire is not something this
+	 * object states.  Finding 4936.
 	 */
 	unsigned char byte_13;
 
