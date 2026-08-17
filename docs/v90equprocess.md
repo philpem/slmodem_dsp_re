@@ -236,7 +236,13 @@ Then, at `0x392d0`:
 
     fdec = (float)(short)decision;         /* filds -- a 16-bit load */
     err  = soft - fdec;
-    if (300.0f < fabsf(err)) {             /* the object's operand order */
+    /* long double, and that is what selects the object's encoding: see
+       finding 5701.  Every `float` spelling emits `fcoms mem; jbe` and sends
+       a NaN error down the NOT-high arm; this one emits
+       `fld %st(0); fabs; flds; fcomp %st(1); jae` and sends it down the high
+       arm, which is what the object does.  Both operand orders work. */
+    long double aerr = __builtin_fabsl((long double)err);
+    if (aerr > 300.0) {
         if (state > 1) {
             if (word_94 <= 1)
                 edprintf("V90Equalizer: High momentary error, symbol#%d, "
@@ -257,8 +263,12 @@ Then, at `0x392d0`:
     /* 0x39830, reached whether or not the update ran, and rejoined at
        0x39840 from the update path: */
     memmove up array_44 by one; array_44[0] = y - decision;
-    word_20--;  if (word_20 < 0) <wrap: 0x3a2d4>;
-    word_78 += (unsigned)(err * err);      /* fistpll, truncating */
+    word_20--;  if ((int)word_20 < 0) <wrap: 0x3a2d4>;   /* OPEN: see below */
+    /* `fmul %st(0),%st ; fistpll 0xa0(%esp)`, and then the LOW 32 BITS of that
+       64-bit result are added.  A C `(unsigned)(err*err)` reproduces it only
+       while the product is in range and is UNDEFINED outside it -- D561's
+       shape with our side as the undefined one.  Convert through 64 bits. */
+    word_78 += (unsigned)(long long)(err * err);
     outFloat[j] = soft;
 
 **The two updates use different errors.** `0x396e0` is `fmul %st(2),%st`,
@@ -270,6 +280,15 @@ The `%c%d.%03d` triple is the tree's existing `edprint_stat` shape
 (`src/pump/v90/V90Equalizer.cpp`), except that the scale here is a **float**
 `1000.0f` loaded once with `flds` and reused for both values, not a
 `long double`.
+
+**OPEN: `word_20` and `word_20Saved` are `unsigned int` in the header and the
+object tests their SIGN.** `0x3985f` is `dec %eax; js 3a2d4` and `0x39457` is
+`dec %eax; js 398f5`. Written literally against an unsigned field the test
+folds to false and the wrap never runs, so either both fields are `int` -- and
+`reset`'s `word_1c - linearEquLength - 1` can go negative, which supports that
+-- or there is an `int` local the object is decrementing. The `js` is the
+forced encoding; the declared type is this batch's to settle, and it is not
+settled here.
 
 The wrap at `0x3a2d4`:
 
@@ -596,6 +615,16 @@ beside them.
                  == phase3Demod->word_2c)
         word_a4 = 1;
     if (phase3Demod->state == 10 || phase3Demod->state == 13) word_a4 = 0;
+
+### An observation about the two state fields
+
+`0x39717` tests `V90Equalizer::state` against 10, 11, 12, 16, 13, 14, 15 and
+`0x3a25a` tests `phase3Demod->state` against 5, 10, 11, 12, 16, 13, 14, 15 --
+the same odd ordering, with 10..12 folded into one range test both times. That
+is the strongest available hint that the two fields share one enum type, and
+it is why `V90Equalizer::state` can hold values the `enter*` family never
+writes (finding 5700 §2). Recorded as an observation and not acted on: no
+string names any of 10..16, and a wrong name is worse than a pad.
 
 ### state 0 — `RESET`, `0x3a0cb`
 

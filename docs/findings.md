@@ -67828,12 +67828,13 @@ divide is `de f1`, FDIVRP, `ST(1) = ST(0)/ST(1)`. Read from the annotation
     0x3a470  fldz; fcom %st(1)  the before/after ratio's zero guard
     0x3a527  fcomps 0x140(%esi) sign character for that ratio
 
-0x39501 is the `+0x3510` shape of findings 4800-4812 again: the CONSTANT is in
-`%st(0)` and the computed value in `%st(1)`, one ordered `fcomp` and no parity
-test, so an unordered compare leaves CF set and takes the high-error arm. Wri-
-tten the natural way round -- `fabs(err) > 300.0f` -- it is wrong under the
-object's own flag whenever the error is NaN. The equaliser has eight of these
-and only the modern tier is blind to them, so `make period` is the only thing
+0x39501 LOOKS like the `+0x3510` shape of findings 4800-4812 and **is not it**;
+finding 5701 measured the six candidate spellings on the period compiler and
+the lever is the `long double` type of the compared value, not an operand
+order. The paragraph that stood here asserted the operand order was the fix
+and was wrong; 5701 supersedes it. What survives is the consequence: one
+ordered compare, no parity test, so an unordered error takes the HIGH arm --
+and only the modern tier is blind to it, so `make period` is the only thing
 that decides.
 
 ### The complete transcription is `docs/v90equprocess.md`
@@ -67849,3 +67850,85 @@ wrong at exactly one of them.
 The source. This finding is the analysis and it is deliberately committed
 without it: the reading above cost more than the transcription will, and
 `docs/` is not `src/`, so recording it breaks no rule and losing it would.
+
+## 5701. THE OBJECT'S `flds; fcomp %st(1)` COMES FROM A `long double`, NOT FROM AN OPERAND ORDER -- MEASURED ON THE PERIOD COMPILER
+
+Finding 5700 recorded `V90Equalizer::process`'s high-error test at 0x394f7 as
+the `+0x3510` shape of 4800-4812 and said the fix was to write the comparison
+with the constant on the left. **That was an assertion, and it is wrong.** Six
+spellings through `dsplibs-tc342` settle it, and the lever is the TYPE of the
+value being compared.
+
+The object:
+
+    394f7:  d9 c0            fld    %st(0)
+    394f9:  d9 e1            fabs
+    394fb:  d9 05 90 02 ..   flds   <300.0f>          .rodata.cst4 + 0x290
+    39501:  d8 d9            fcomp  %st(1)
+    39503:  df e0            fnstsw %ax
+    39505:  9e               sahf
+    39506:  0f 83 ..         jae    397a0              the NOT-high arm
+
+Six probes, one translation unit, the project's own flags
+(`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args`), GCC 3.4.2 exact:
+
+| probe | source | emitted |
+|---|---|---|
+| A | `float a = e<0?-e:e;  a > 300.0f` | `fcoms mem` ; `jbe` |
+| B | same, `300.0f < a` | `fcoms mem` ; `jbe` |
+| C | `float a = __builtin_fabsf(e); a > 300.0f` | `fcoms mem` ; `jbe` |
+| D | same, `300.0f < a` | `fcoms mem` ; `jbe` |
+| E | `!(a <= 300.0f)`, `a` float | `fcoms mem` ; `jbe` |
+| F | `a > LIM`, `LIM` a `static const float` | `fcoms mem` ; `jbe` |
+| I | `a > 300.0` (double constant, float `a`) | `fcoms mem` ; `jbe` |
+| J | `a <= 300.0f` with the arms swapped | `fcoms mem` ; `ja` |
+| **G** | **`long double a = __builtin_fabsl((long double)e); a > 300.0`** | **`fld %st(0); fabs; flds; fcomp %st(1); jae`** |
+| **H** | the same with `300.0 < a` | **the same** |
+
+G and H are the object, instruction for instruction, `jae` included. **Both
+operand orders give it**, so the operand order is not what is doing the work
+-- GCC canonicalises the constant to the right in either spelling. What
+selects the register form is that the compared value is a `long double` living
+on the x87 stack rather than a `float` GCC can leave in memory.
+
+### And the NaN behaviour follows the type, not the order
+
+Under `-mno-ieee-fp` there is no parity test either way, so the whole question
+is which way the single CF test falls:
+
+- `fcoms mem` with `jbe`: unordered sets CF and ZF, `jbe` is taken, and the
+  error goes down the NOT-high arm.
+- `fcomp %st(1)` with `jae`: unordered sets CF, `jae` is NOT taken, and the
+  error goes down the HIGH arm -- which is what the object does.
+
+So **every `float` spelling disagrees with the object on a NaN error**, and
+the `long double` spelling agrees with it without anyone having to reason
+about operand order at all. This is not 2301's shape and it is not 4812's;
+those two are genuine operand-order findings and this one looked like them.
+
+### Why the `long double` was there anyway
+
+`|err|` is live past the comparison: the high arm prints it as the `%d` of a
+`%c%d.%03d` triple, and `src/pump/v90/V90Equalizer.cpp`'s existing
+`edprint_stat` already spells that `(int)__builtin_fabsl((long double)v)`.
+So the source computes the absolute value once, in `long double`, tests it and
+then prints it -- and the type that the print needs is the type that produces
+the comparison. Two constraints, one declaration, and neither of them is a
+trick.
+
+### The rule this is worth stating
+
+**A codegen shape that matches a known trap is not the trap.** 4800-4812's
+`fcompp`-with-no-parity-test and this `fcomp %st(1)` look alike and are
+produced by different things; reading the first onto the second cost a wrong
+sentence in 5700 that a reader would have believed. The probe is three turns
+and the period compiler is already built -- when a claim is about what source
+produces a given encoding, compile it and look, because that claim is
+MEASURABLE and an argument about `tree_swap_operands_p` is not.
+
+The two clamps in the same function, `fcomps 32767.0f` at 0x39f6c and
+`fcomps -32767.0f` at 0x3a33a, are the ordinary `float` form and want the
+ordinary `float` spelling; `soft > 32767.0f` and `soft < -32767.0f` map onto
+the single CF test correctly, including a NaN clamping low. Not every compare
+in the function is the interesting one, and three of the eight are not.
