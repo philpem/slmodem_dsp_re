@@ -69308,3 +69308,19 @@ Two consequences:
 The merge-commit form is still right where the branch history itself is the
 record worth keeping.  For an agent batch it is not -- the record is
 `docs/findings.md` and `docs/deviations.md`, which the merge carries either way.
+
+**AND SQUASH MERGING IS FOR FINISHED BRANCHES ONLY, WHICH THE ABOVE DOES NOT
+SAY LOUDLY ENOUGH.**  Because no merge parent is recorded, the merge base does
+not advance either -- so a SECOND `git merge --squash` of the same branch
+recomputes against the original base and tries to re-apply everything already on
+master, conflicting against our own landed work in every file the branch
+touched.  A branch that will keep receiving commits therefore needs one of:
+
+  - the agent rebases it onto master after the squash lands (then its earlier
+    commits go empty and only the new work remains), or
+  - an ordinary merge commit, which records the parent and lets the base
+    advance, with the squash saved for the final merge.
+
+Read this together with the delete-the-branch rule above: deleting after the
+gate is green is not tidiness, it is what stops a second squash of a branch
+whose work is already in.
