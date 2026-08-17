@@ -3728,7 +3728,7 @@ run_qcmapping(void)
  * whose exponent field is all ones are touched, and they are turned into the
  * largest finite exponent rather than into a constant, so the entry keeps its
  * sign and its significand and stays as varied as the seed made it.
- * Findings 5501 and 1436.
+ * Findings 6001 and 1436.
  */
 static long mu_finite_words;		/* rewritten */
 static long mu_finite_seen;		/* examined  */
@@ -3980,7 +3980,7 @@ run_maxucode(void)
 			 * zero row one instruction further on -- the object's
 			 * `fcomp`/`je` skips an unordered entry exactly as it
 			 * skips a zero -- and it is the half GCC 13 cannot
-			 * reproduce.  Findings 5501, 2304 and 1436.
+			 * reproduce.  Findings 6001, 2304 and 1436.
 			 */
 		};
 		int w;
@@ -4183,7 +4183,7 @@ run_maxucode(void)
 	 * whose non-finite word is at flat index 424 --
 	 * `float_9d48[3][40]`, the first of the twenty entries the threshold
 	 * averages, which is why the divergence showed in the REPORT and not
-	 * in the object.  Finding 5501.
+	 * in the object.  Finding 6001.
 	 */
 	diff_eq_int("the variance sanitiser examined %ld words",
 		    mu_finite_seen, 67490L, 0);

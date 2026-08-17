@@ -3530,7 +3530,7 @@ run_ec_process(void)
 				 * path for 177.0f as for a NaN, so every
 				 * block here evolves exactly as it did and
 				 * the group keeps all fifteen shapes, three
-				 * levels and both cursors.  Finding 5500.
+				 * levels and both cursors.  Finding 6000.
 				 */
 				int sentinel = (blk % 7) == 6 ? 1 : 0;
 

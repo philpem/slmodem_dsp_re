@@ -44,7 +44,7 @@
  * own writer cannot put a NaN there.  The deliberate half is this file.
  *
  * `make period` has no allow-list and passes this file with the object's own
- * compiler, which is the tier that decides.  Findings 5501, 2300 and 2304.
+ * compiler, which is the tier that decides.  Findings 6001, 2300 and 2304.
  *
  * THE FIXTURE IS THE WINDOW GRID AND NOTHING ELSE.  Everything outside the
  * planted window is 1.0e9f, so only the planted window can ever qualify and

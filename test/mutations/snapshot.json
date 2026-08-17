@@ -4230,7 +4230,7 @@
    }
   },
   "v90adid": {
-   "key": "da1731a51773ea3eb12a3308c1fb683cbe5461cc40a1380ca12f60673660cde5",
+   "key": "f993456a87f599490d6bb3239a7be32a9984ed4ac9bc355724b91e11127fca8e",
    "summary": "482 mutations: 462 caught (458 by test, 0 by strings), 3 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
    "verdicts": {
     "DIL: drop the redundant marked test inside the run": "equivalent",
@@ -4783,7 +4783,7 @@
    }
   },
   "v90cd": {
-   "key": "728b4e74bfdec2cd4e39d7f6310bc3a971fe4012d97a5db8fef45006bef63364",
+   "key": "93c079e52f38bdae33e899f6b42663c37e9711925affe2e89ae2c7e2601c2a94",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "one gate around both diagnostics": "caught",
@@ -5416,7 +5416,7 @@
    }
   },
   "v90demapper": {
-   "key": "9a8d2d9aad5299f54f515d8d34d8fb059ad1785f547b809576a26754716b9ac6",
+   "key": "77c8f5c21612403b2bac813ac037692af119e85de0353bf9c17b15fc148b5758",
    "summary": "13 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a level nothing landed on prints its raw error sum, not zero (transcript only)": "caught",
@@ -5580,7 +5580,7 @@
    }
   },
   "v90dil": {
-   "key": "cec0666fa4309a327bab92cb8327970e355e35d46d27fee36da941a7e8f4456f",
+   "key": "bf56ea8756937e48a5798d94c4ef671961176202400aa716c8b73f11385438b6",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "always take the A-law row": "caught",
@@ -6548,7 +6548,7 @@
    }
   },
   "v90rto": {
-   "key": "cc5e732c689de5b515d642ee700de1e405b853e9717594208c6558e1866e0fff",
+   "key": "8f0142807aae97496a9ee85af4ff8fe6993aba3f5191cdd54fbc6bd26e7a894a",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "1e-6 as a double, not a float": "caught",
@@ -6558,7 +6558,7 @@
    }
   },
   "v90sbe": {
-   "key": "a21f6c8ff6ce2f4081ebd3bffcee2305cf3ab9df0de73f7808d9f725e214e480",
+   "key": "6f63e7a83ff8601412ffafe733fcb05aaf0e6ff698f0c84961fb927ae788e934",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "state at +0x10 is left as the constructor found it": "caught",
@@ -7014,7 +7014,7 @@
    }
   },
   "v92ec": {
-   "key": "d8c8d2f13ebed3be88a7e311fd21987bf7ce3d4b293aa8d8cfedc939192bbf7c",
+   "key": "005f0353c2cfa6e0197787e0d5849731cf1bc0fdc8ea255f69957c9494d70421",
    "summary": "95 mutations: 94 caught (94 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a repeated state restarts the sample count anyway": "caught",

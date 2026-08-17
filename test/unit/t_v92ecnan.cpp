@@ -42,7 +42,7 @@
  * this file.
  *
  * `make period` has no allow-list and passes this file with the object's own
- * compiler, which is the tier that decides.  Findings 5500, 2300 and 2304.
+ * compiler, which is the tier that decides.  Findings 6000, 2300 and 2304.
  *
  * THE FIXTURE IS SMALL BECAUSE THE ARM IS.  The sentinel arm reads `params`
  * not at all, calls nothing, and touches four fields: it copies `count`
