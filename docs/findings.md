@@ -63669,3 +63669,66 @@ it. +0x28, +0x2c, +0x38, +0x3c, +0x40, +0x44 and +0x48 keep `int_NNNN`: the
 signedness, which is the same bound `V90RDetector.h` states for its own. Only
 +0x34 is typed by evidence beyond a width -- it is `reset`'s fourth argument,
 which the mangling types `unsigned int`.
+
+### 4323. `V90BitsToSymbol::nofBitsForNextTime` HOLDS TWO SPELLINGS OF ONE CEILING, AND THE BRANCH ORDER IS WHAT FIXES THEM
+
+The body is `ceil(owed / 6) * bitsPerFrame`, and the object writes it twice:
+
+    2f9ea:  imul %edx,%ecx ; mul $0xaaaaaaab ; shr $2    (owed * bpf) / 6
+    2f9b7:  lea 0x1(%edx),%esi ; imul %edx,%esi          (owed/6 + 1) * bpf
+
+The first arm is only entered when `owed % 6 == 0`, where the two agree
+exactly, so **no differential trial can separate them** -- what separates them
+is that the object contains both, and `(owed/6) * bpf` on the exact arm would
+be a third spelling that also agrees. The mutation set says so out loud rather
+than pretending the suite holds it.
+
+**Which arm is the fall-through is not free, and it settled the source.**
+Written `if (owed % 6 == 0) return owed * bpf / 6; return (owed/6 + 1) * bpf;`
+the compiler emits the same 49 instructions with the two blocks the other way
+round -- `jne` where the blob has `je` -- and the sizes come out 131 and 144
+against the blob's 134 and 137. Written with the rounding arm first,
+
+    if (owed % 6 != 0)
+            return (owed / 6 + 1) * bitsPerFrame;
+    return owed * bitsPerFrame / 6;
+
+both members are full-text identical at the blob's exact sizes. GCC 3.4.2
+lays the `if` body out as the fall-through, so the arm order in the source is
+recoverable from the object here, which is not generally true (617).
+
+`setSymbolsBlockSize` is `symbolsBlockSize = blockSize; return
+nofBitsForNextTime();` and the blob INLINES the call -- 137 bytes against the
+callee's 134, and no `call` in either. `process` inlines it a second time, at
+0x2fe21, which is why its 375 bytes carry the reciprocal divide twice over.
+
+### 4324. `V90BitsToSymbol::process` NAMES TWO OF ITS THREE STATUSES IN ITS OWN STRINGS
+
+`process(unsigned int &, short *)` answers 1 beside
+`"V90BitsToSymbol - error: process called, SIZE_NOT_SET\r\n"` and 3 beside
+`"... BUFFER_UNDERFLOW\r\n"`. 0 is the path with no message. So two of the
+three are the author's own words and the third is what is left, which is the
+strongest evidence a status code in this object has offered.
+
+**Two stores to `symbolsDone` on one path, and neither is redundant.** The
+underflow arm stores 0 at 0x2fded and the common tail stores the kept count at
+0x2fe1e. The blob's `xor %esi,%esi` at 0x2fdf4 is the compiler having
+constant-propagated the first store into the leftover loop's bound; on the
+other arm the same register holds the value loaded at 0x2fdb0. So the two
+stores are what makes the object's own code readable, and dropping the first
+is behaviourally equivalent -- recorded as such in `test/mutations/v90btsproc.
+json` rather than left looking like an untested claim.
+
+**`if (extraSymbolsPending) extraSymbolsPending = 0;` is the object's.** A
+plain assignment is one `movb`; the blob has `cmpb $0x0,0x20(%ebp) ; je ;
+movb $0x0,0x20(%ebp)`. It sits on the COMMON path, so the size-not-set arm
+reaches it too, and it runs AFTER the bit demand is computed -- which is
+observable, because the demand counts `extraSymbols` in only while the flag is
+still set. `t_v90btsproc` puts the flag back before asking the blob the same
+question again, and the mutation that clears it early is caught.
+
+**Every remaining difference in `process` is register naming.** Ours is 375
+bytes against the blob's 375, 103 instructions against 103, with the same
+displacements, immediates and branch structure; four registers are permuted
+(%eax/%ecx, %esi/%ebx, %edi/%esi). That is 614's free column, and
+`-frename-registers` is the pass that does it.

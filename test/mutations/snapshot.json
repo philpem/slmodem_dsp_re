@@ -4710,6 +4710,38 @@
     "dtor: the symbol buffer's free is not guarded": "caught"
    }
   },
+  "v90btsproc": {
+   "key": "fa4216b492b2998d34bab1df6c32b4ca5e73150931b5226f642c849e8e209409",
+   "summary": "26 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "nofBitsForNextTime answers 1 rather than 0 when nothing is owed": "caught",
+    "nofBitsForNextTime answers for an already-full block": "caught",
+    "nofBitsForNextTime counts the extra symbols in unconditionally": "caught",
+    "nofBitsForNextTime counts twelve symbols to the frame": "caught",
+    "nofBitsForNextTime forgets the divide on the exact arm": "caught",
+    "nofBitsForNextTime never counts the extra symbols in": "caught",
+    "nofBitsForNextTime rounds the part-frame down": "caught",
+    "nofBitsForNextTime subtracts the block size from the count done": "caught",
+    "process announces SIZE_NOT_SET below the debug gate too": "caught",
+    "process answers 2 rather than 1 for SIZE_NOT_SET": "caught",
+    "process answers 2 rather than 3 for BUFFER_UNDERFLOW": "caught",
+    "process clears the pending flag before it counts the bits": "caught",
+    "process copies out a whole block on the underflow arm": "caught",
+    "process copies out everything ready rather than one block": "caught",
+    "process does not clear symbolsDone on the underflow arm": "equivalent",
+    "process does not clear the pending flag": "caught",
+    "process does not record how much was kept": "caught",
+    "process does not write the next bit demand": "caught",
+    "process has its two error messages swapped": "caught",
+    "process leaves the pending flag alone on the size-not-set path": "caught",
+    "process shifts the whole buffer down rather than the leftover": "caught",
+    "process tests symbolsDone where the object tests the block size": "caught",
+    "process treats an exactly-filled block as an underflow": "caught",
+    "setSymbolsBlockSize answers before the store rather than after": "caught",
+    "setSymbolsBlockSize does not store the block size": "caught",
+    "setSymbolsBlockSize stores the block size into symbolsDone": "caught"
+   }
+  },
   "v90cd": {
    "key": "ae38f2b20642c9437eac2b979ac7f844550a3f388fad2bdbc4109adaa5febdf5",
    "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
