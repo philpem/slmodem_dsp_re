@@ -431,8 +431,22 @@ struct v34_object {
 	 * and the object reuses the space.  `preinitdigital` clearing those
 	 * three arrays on the receive side and on neither other says the same
 	 * thing from the other direction.  See finding 181.
+	 *
+	 * THE POINTS ARE ALSO ADDRESSED AS EIGHT INTS, and `modulatevector`
+	 * is what pins both readings at once: it writes single shorts here
+	 * (`mov %dx,0x2a80(%edi)` at 0x5a4fd, `mov %ax,0x2a80(%esi)` at
+	 * 0x5a78e) and then loads one whole point with `mov
+	 * 0x2a80(%esi,%eax,4),%edx` at 0x59e86, scaling the index by FOUR,
+	 * to hand to the 32-bit store at +0x25d0.  Sixteen shorts and eight
+	 * ints over the same 32 bytes, spelled as a union rather than
+	 * reached with `*(int *)&vect[2 * n]` -- which is what -O2 is
+	 * entitled to reorder.  `vect` keeps its name, so every short-wise
+	 * user is unchanged; `vectp` is the same storage as points.
 	 */
-	short vect[16];					/* +0x2a80 */
+	union {
+		short vect[16];				/* +0x2a80 */
+		int vectp[8];				/* +0x2a80, one per point */
+	};
 	short f2aa0;					/* +0x2aa0 */
 	short vect_idx;					/* +0x2aa2 */
 	short f2aa4;					/* +0x2aa4 */

@@ -2206,7 +2206,7 @@ modulatevector(void *obj)
 	if (o->f25c2 & 0x4000)
 		V34nlencoder(&o->vect[2 * n], &o->f25d0);
 	else
-		*(int *)&o->f25d0 = *(int *)&o->vect[2 * n];
+		*(int *)&o->f25d0 = o->vectp[n];
 
 	txmit(obj);
 }
