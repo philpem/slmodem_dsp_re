@@ -75404,3 +75404,77 @@ significant first", ARE this fix expressed as a mutation, and were rebuilt to
 flip only the reproduce arm so their meaning survives. **A fix behind the define
 will usually invalidate any mutation that encodes the same defect**; expect it
 and repair the anchors in the same commit.
+
+### 6900. THE −2 RATE PENALTY FIRES ON 38% OF SELF-RAISED RETRAINS AND COSTS EXACTLY THE 4800 bit/s IT LOOKS LIKE — MEASURED OVER 1,616 ARCHIVED RATE DECISIONS, NO BENCH CALLS
+
+`tx1_ts_rates` (`v34hstx1.cpp:2688`) drops the requested rate by two indices
+when the handshake lands within 96,000 samples of the timer mark and
+`TX1_F2218 <= 3`, and `:2699` then assigns that value to `cfg->rxbits` — the
+receive rate we ask the far end for. `TX1_F2218` and `DP_MODE` are both
+`0x2218`; verified by grep, not inferred.
+
+**NOTHING LOGS THE BRANCH, BUT THE OBJECT LEAVES AN EXACT WITNESS.** `rec[1]`
+is written in precisely two places and read in precisely one:
+
+    2687  rec[1] = (short)0xfffd;              unconditional
+    2695          rec[1] = rec[1] & ~1u;       ONLY inside the branch
+    2781  "V34DATARATE, txmp bits 0x%x,0x%x,…" prints it as word 1
+
+So word 1 of the `txmp bits` line is a one-bit flag: `0xfffd` not taken,
+`0xfffc` taken. That turns the existing archive into a finished experiment.
+`testbench/ratepenalty.py`, over `testbench/captures`:
+
+    2,037 .log files scanned, 671 carried a `txmp bits` line
+    1,616 rate decisions recorded
+    penalty TAKEN 196 (12.1%), not taken 1,420 (87.9%)
+
+**THE MODE MAPPING IS CONFIRMED, WITH ZERO COUNTER-EXAMPLES IN 79.**
+`V34HSINIT` logs the `mode` argument to `v34handshakinit`, and `datapumpv34`
+sets `DP_MODE` from that call immediately after:
+
+    mode                      n    taken   not    predicted
+    0  cold start           156        0   156    can fire
+    1  our own retrain       86       33    53    can fire
+    2  renegotiation         35        0    35    MUST NOT fire
+    3  far end asked         44        0    44    MUST NOT fire
+
+**THE EFFECT SIZE IS EXACTLY THE MECHANISM'S.** Pooling taken against not-taken
+is confounded — the branch can only fire on a self-raised retrain, and those
+happen on calls already going badly — so the comparison that counts is *within*
+mode 1, where every observation is a self-raised retrain and the only
+difference is whether the timer window was open:
+
+    mode 1, penalty taken       n=33   median 12000   min 9600  max 21600
+    mode 1, penalty not taken   n=53   median 16800   min 4800  max 28800
+
+**12000 against 16800 is 4800 bit/s — two rate indices, which is what the
+branch does.** The predicted effect size and the measured difference are the
+same number, and `automatic:` prints *after* the penalty so the taken row is
+already docked.
+
+**MY OWN PREDICTION ABOUT HANDSHAKE 0 IS DEAD, and that is the useful part.**
+Task #187 argued that because `VPcmV34Create` memsets the object, `DP_MODE` is
+0 on the first handshake, `0 <= 3` holds, and the penalty would therefore fire
+on the cold start — which would have given 3203/3204's "handshake 0 is the bad
+one" a mechanism. **It fires zero times in 156 cold starts.** The mode guard is
+satisfied and the timer guard is not, so the branch never runs there. 3203/3204
+still have no mechanism and this is not it.
+
+**LIMITS, and the first is the one that matters.** This is observational, not
+randomised: the window is "within ~10 s of the mark", so what separates the two
+mode-1 groups is how *quickly* the retrain came, and a fast retrain may
+independently indicate a worse call. The 4800 agreement is strong evidence for
+the mechanism operating; it is not proof the branch *caused* the whole gap.
+n=33 against 53. And 1,295 of 1,616 decisions (80%) have no preceding
+`V34HSINIT` at all, because that line is branch instrumentation present in only
+184 of the archive's files — so the mode table rests on 321 observations, not
+1,616, and the tool prints that split rather than hiding it.
+
+**A MEASUREMENT BUG WORTH RECORDING, because it is finding 2400's shape.** The
+first run of the tool reported "258 v34handshakinit call sites" from 162 files.
+There are fourteen (1928). `from` is `__builtin_return_address(0)` and the
+library loads at a different base every run, so the raw addresses are
+per-process ASLR noise. ASLR shifts by whole pages, so the page offset is the
+call site; grouping by `addr & 0xfff` gives 22, which is a number that can be
+argued with. A denominator that is silently counting the wrong thing reads
+exactly like a denominator that is right.
