@@ -1743,8 +1743,8 @@ run_reset(void)
 					    (long)d->short_1ea4, 0, trial);
 				diff_eq_int("short_1ea6 (%ld)",
 					    (long)d->short_1ea6, 0, trial);
-				diff_eq_int("short_1eb4 (%ld)",
-					    (long)d->short_1eb4, 0, trial);
+				diff_eq_int("linearMappStudyEnabled (%ld)",
+					    (long)d->linearMappStudyEnabled, 0, trial);
 				diff_eq_int("decisionFramePosition (%ld)",
 					    (long)d->decisionFramePosition, 0,
 					    trial);

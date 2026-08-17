@@ -959,7 +959,7 @@ V90Demapper::reset(V90MappingParams *mapp)
 	short_1ea6 = 0;
 	short_1e9c = 0;
 	uint_1ea8 = 0;
-	short_1eb4 = 0;
+	linearMappStudyEnabled = 0;
 }
 
 /*

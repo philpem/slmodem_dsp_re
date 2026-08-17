@@ -513,13 +513,13 @@
  },
  {
   "label": "the study length keeps whatever it held",
-  "find": "\tshort_1e9c = 0;\n\tuint_1ea8 = 0;\n\tshort_1eb4 = 0;\n",
-  "replace": "\tshort_1e9c = 0;\n\tshort_1eb4 = 0;\n"
+  "find": "\tshort_1e9c = 0;\n\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;\n",
+  "replace": "\tshort_1e9c = 0;\n\tlinearMappStudyEnabled = 0;\n"
  },
  {
   "label": "+0x1eb4 is written 32 bits wide",
-  "find": "\tuint_1ea8 = 0;\n\tshort_1eb4 = 0;\n}\n",
-  "replace": "\tuint_1ea8 = 0;\n\t*(unsigned int *)&short_1eb4 = 0;\n}\n"
+  "find": "\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;\n}\n",
+  "replace": "\tuint_1ea8 = 0;\n\t*(unsigned int *)&linearMappStudyEnabled = 0;\n}\n"
  },
  {
   "label": "reset's own phase loop clears five constellations, not six",
