@@ -69271,3 +69271,40 @@ that has been open across other work, diff it in the reverse direction first.
 
 Neither branch is deleted.  Both are kept as tombstones with the reason
 recorded here, and **neither is to be merged.**
+
+### 6103. SQUASH MERGING MAKES 6102'S TRAP THE NORM, NOT THE EXCEPTION
+
+The owner has ruled that squash-merging branches is fine where it makes the
+merge easier, and it does: conflicts are resolved ONCE against the branch's net
+diff rather than per replayed commit, which on the docs registers -- where every
+branch touches `findings.md` and `deviations.md` -- is most of the work.
+
+**But a squash merge does not record the branch as merged.**  `git merge` writes
+a merge commit with the branch as a parent; `git merge --squash` applies the
+combined diff and writes an ordinary commit with no such parent.  So after a
+squash merge:
+
+```
+git merge-base --is-ancestor <branch> master   ->  still says NO, for ever
+```
+
+Every squash-merged branch therefore reads as unmerged work in any
+ancestry-based queue, exactly like the two tombstones in 6102 -- and 6102 was
+written when that state was an ODDITY worth a finding.  Under squash merging it
+is the expected outcome of every successful merge.
+
+Two consequences:
+
+1. **The reverse diff stops being a precaution and becomes the only check.**
+   `git diff <branch> master -- <path> | grep -cE '^-[^-]'` answering zero means
+   the content landed.  Ancestry now answers nothing at all and must not be
+   quoted as if it did.
+2. **Delete the branch once its squash merge is gated green**, or the queue
+   fills with false positives until the real work is indistinguishable from the
+   tombstones.  Deleting is safe precisely because the content is on master; the
+   branch tip stays in the reflog, and where a tip is worth keeping as an anchor
+   (6101's orphan rescue) it gets a `salvage/` name and a recorded reason.
+
+The merge-commit form is still right where the branch history itself is the
+record worth keeping.  For an agent batch it is not -- the record is
+`docs/findings.md` and `docs/deviations.md`, which the merge carries either way.
