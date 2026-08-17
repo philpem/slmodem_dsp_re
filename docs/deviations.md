@@ -7226,3 +7226,30 @@ what `nofBitsForNextTime` wants NEXT time -- not the count just written. A
 caller that ignores the status code cannot distinguish a full block from a
 partial one, and the rest of `out` keeps whatever it held. Reproduced. Not a
 fault the object ever hits with its own caller, which checks the status.
+
+## D503 ✅ `V92CP::evaluateCRC` verifies a message whose CRC is wrong by 256
+
+The sixteen absolute differences between the computed register and the received
+one are summed into a single BYTE -- `add %al,0x13(%esp)` at .text+0x4ebc3 --
+and the verdict is whether that byte is zero. Sixteen stages differing by 16
+sum to 256, which is zero in a byte, so the message verifies. So does any other
+combination summing to a multiple of 256.
+
+Unreachable through the protocol, where every entry of `bits` is 0 or 1 and the
+largest possible sum is 16. It is reachable through the class, which never
+checks: `bitsToInfo` writes `bits` and nothing bounds what it writes.
+Reproduced, and `t_v92cpcrc.cpp` drives it on purpose because it is also the
+only trial that pins the accumulator's width.
+
+## D504 ✅ `V92CP::calcCRC` runs off the address space for a length below seventeen
+
+The loop bound is `word_910 - 17` in unsigned arithmetic and the guard is
+`cmp %ebp,%esi; jae` with `%esi` holding 18. A `word_910` of sixteen or less
+wraps the subtraction to about four billion, the guard passes, and the loop
+walks `bits[i]` upward until it faults. There is no check anywhere in
+.text+0x4e5f0.
+
+Reproduced, and NOT driven: a fixture that reached it would crash on both
+sides rather than compare them. `t_v92cpcrc.cpp`'s grid starts at seventeen,
+which is the first length that behaves -- and it behaves by computing a bound
+of zero and returning without clocking anything.

@@ -603,5 +603,9 @@
  "v92txproc": [
   "src/pump/v90/V92Transmitter.cpp",
   "build/test/t_v92btosproc"
+ ],
+ "v92cpcrc": [
+  "src/pump/v90/V92CP.cpp",
+  "build/test/t_v92cpcrc"
  ]
 }

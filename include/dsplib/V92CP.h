@@ -30,7 +30,15 @@
  *     +0x8f9                  `resetCRC` (0x4e5d0) writes 1 to sixteen bytes
  *                             from here
  *     +0x90c                  `getBitVector` reports it as the length
+ *     +0x910                  `calcCRC` (0x4e5f0) bounds its loop with it and
+ *                             `evaluateCRC` (0x4e940) finds the received CRC
+ *                             at its end -- a word, not the pad it was
  *     +0x914                  `reset` (0x4e860) and the constructor set -1
+ *
+ * SEVEN OF THE TWELVE ARE NOW WRITTEN.  `getBitVector`, `setSUV`, `resetCRC`,
+ * `resetDetector`, `reset`, `calcCRC` and `evaluateCRC` are in
+ * src/pump/v90/V92CP.cpp with the constructor and destructor; `evaluateInfo`,
+ * `infoToBits` and `bitsToInfo` are the three still declared and undefined.
  *
  * The destructor is one byte -- a bare `ret`.  That is not an assumption
  * about an empty class: nothing here is allocated, and the V.90 sibling with
@@ -82,7 +90,14 @@ public:
 	void resetDetector();
 	void resetCRC();
 	void calcCRC();
-	void evaluateCRC();
+
+	/*
+	 * `int`, and deliberately so: the object ends `xor %eax,%eax;
+	 * cmpb $0x0,..; sete %al` at .text+0x4ebca, which is a value
+	 * constructed for the caller and not a leftover.  Non-zero means the
+	 * sixteen computed CRC bits matched the sixteen received ones.
+	 */
+	int evaluateCRC();
 	void evaluateInfo();
 	void infoToBits();
 	void bitsToInfo(unsigned char);
@@ -152,7 +167,31 @@ public:
 	 * reference argument. */
 	unsigned int word_90c;
 
-	unsigned char pad_910[4];	/* +0x910 not modelled            */
+	/*
+	 * +0x910  The number of entries of `bits` the message occupies, its
+	 * sixteen CRC bits included.  Modelled and NOT named: `calcCRC` and
+	 * `evaluateCRC` are its only readers here, and between them they force
+	 * the shape without settling the word.
+	 *
+	 * What they force.  `calcCRC` runs its shift register over
+	 * `bits[18 .. word_910 - 17)` -- `mov 0x910(%edi),%ebp; sub $0x11,%ebp`
+	 * at .text+0x4e600, then `cmp %ebp,%esi; jb` -- so the value is an
+	 * index bound into `bits`, and `jae`/`jb` make it UNSIGNED.
+	 * `evaluateCRC` then compares the sixteen bytes of `crc` against
+	 * `bits[word_910 - 16 + j]`: the address it forms is
+	 * `-0x7e0(%ecx,%edi,1)` with `%ecx` walking from `this + 0x8f9`, which
+	 * is `this + 0x119 + word_910 + j` and therefore `bits` at
+	 * `word_910 - 16 + j`.  So the last sixteen entries are the received
+	 * CRC and the value is a length rather than a capacity.
+	 *
+	 * Why not a name.  `+0x90c` is ALSO a length -- it is what
+	 * `getBitVector` reports -- and nothing written here says which of the
+	 * two is the message and which the buffer, or whether they ever
+	 * differ.  `infoToBits` and `bitsToInfo` write them and are not
+	 * written.  Naming one of two lengths is exactly the guess CLAUDE.md
+	 * calls worse than a pad; this was `pad_910[4]` and is now a word.
+	 */
+	unsigned int word_910;
 
 	/* +0x914  Set to -1 by `reset` and by the constructor. */
 	int word_914;

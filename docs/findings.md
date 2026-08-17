@@ -63639,3 +63639,92 @@ and a bare one -- both leave the same byte -- so
 `test/mutations/v92btosproc.json` carries it as an `equivalent` entry whose
 `why` is the disassembly. It is the only evidence that anything, anywhere,
 reads this byte.
+
+## 4510. SIXTEEN STACK SLOTS AROUND A LOOP ARE LOOP-INVARIANT MOTION, NOT AN ARRAY THE AUTHOR WROTE
+
+`V92CP::calcCRC` (.text+0x4e5f0) loads all sixteen bytes of `this->crc` into
+stack slots before its loop, shuffles them there for the whole run, and stores
+them all back afterwards. Inside the loop it reads `this->bits[i]` and writes
+nothing to the object at all.
+
+**That was read as proof the author had copied the register into locals, and
+the reading was wrong.** The argument was that `bits` and `crc` are both
+`unsigned char` and abut, so an in-place loop would have to reload `crc[0]`
+after every store in case the next `bits[i]` aliased it. The premise fails:
+GCC's alias analysis is COMPONENT-BASED, two distinct members of one class
+never alias whatever their element types, so loop-invariant motion is free to
+hoist the loads and sink the stores out of a loop whose only object access is
+a read of a different member. Written in place, the object's code is what
+comes out.
+
+The correction was measured, not argued: the in-place source passes the
+differential test at every length in `t_v92cpcrc.cpp`'s grid, three of which
+are past 2,017 and therefore past the point where `bits[i]` addresses `crc`.
+
+**THE TWO SOURCES ARE STILL NOT THE SAME FUNCTION.** At the C level the
+in-place form feeds the register its own updated bytes once the index reaches
+2,000, and the copied form feeds it the values it started with. Neither tier
+can see it -- the compiler resolves it identically for both -- so the choice
+had to be made on which source produces the object's code, and it does.
+
+**The general shape is worth keeping.** "The compiler could not have done this,
+so the source must have" needs the compiler's actual rules, not the ones a
+careful C programmer would assume. This is the third reading in this tree
+overturned by remembering what GCC is allowed to assume rather than what the
+bytes could be.
+
+## 4511. `V92CP::evaluateCRC` IS TWO MEMBERS INLINED AND A SUMMED ABSOLUTE DIFFERENCE
+
+668 bytes, and there is no call and no relocation anywhere in the range: it is
+`resetCRC` (32 bytes) and `calcCRC` (570) inlined, plus 60 bytes of check.
+That is most of the size and the reason it is nearly as large as the function
+it calls.
+
+The check is not a `memcmp` and not a boolean fold:
+
+    4ebbc  sub  %esi,%eax          ; crc[j] - bits[word_910 - 16 + j]
+    4ebbe  cltd
+    4ebbf  xor  %edx,%eax
+    4ebc1  sub  %edx,%eax          ; the branchless absolute value
+    4ebc3  add  %al,0x13(%esp)     ; into a BYTE
+    ...
+    4ebcc  cmpb $0x0,0x13(%esp)
+    4ebd1  sete %al
+
+so sixteen absolute differences are summed into one byte and the verdict is
+whether that byte is zero. The return is `int` and deliberate -- `xor
+%eax,%eax; sete %al` is a value built for a caller -- which is the second
+member of this class whose header declared `void` on no evidence.
+
+**On a 0/1 alphabet this is indistinguishable from three other functions** --
+a signed sum, a wider accumulator, an OR -- and a random grid separates none
+of them. Two crafted messages do, and `t_v92cpcrc.cpp` carries both: one
+received bit above its computed value and one below (absolute sum 2, signed sum
+0), and sixteen differences of sixteen (absolute sum 256, which is zero in a
+byte). The second is deviation D503 and the first is how the `abs` was pinned.
+
+Getting the first one right took two attempts, and the failure is worth
+recording: planting -1 on a stage that holds ZERO gives 255, and 255 + 1 is
+256, so the trial silently turned into the other one and the reference answered
+MATCH where the comment said MISMATCH. **A crafted trial needs its own
+anti-vacuity check on the value it crafted**, not only on the answer it
+expects.
+
+## 4512. THE V.92 CP MESSAGE CARRIES A FILL BIT IN EVERY SEVENTEENTH POSITION
+
+`calcCRC` skips one index in seventeen -- `i % 17 == 0` computed with the
+0xf0f0f0f1 reciprocal and applied as `cmp $0x1,%ebx; adc $0x0,%esi`, GCC's
+if-conversion of an increment (2411, and free). It starts at 18 and stops 17
+short of `word_910`, and `evaluateCRC` then reads the last sixteen entries as
+the received CRC.
+
+So the message's layout is: 18 entries of preamble the CRC does not cover, a
+body in which every seventeenth slot is a fill bit the CRC also does not cover,
+and 16 CRC bits at the end that are covered by neither. Sixteen data bits and
+one fill bit make seventeen, which is the frame the skip counts.
+
+None of that is named in the object -- there is no string and no accessor --
+so it is arithmetic and not the author's word for it, and
+`include/dsplib/V92CP.h` records `+0x910` as a modelled word rather than
+naming it. `infoToBits` and `bitsToInfo` are the two members that build the
+layout, both still unwritten, and they are where the names will come from.
