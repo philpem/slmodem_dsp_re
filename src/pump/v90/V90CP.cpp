@@ -761,7 +761,7 @@ V90CP::infoToBits()
 
 	start = (unsigned int)word_cac;
 	bits[start] = 0;
-	word_cac = (int)(start + 1);
+	word_cac = start + 1;
 	nbits = start + 0x11;
 	word_3bb0 = nbits;
 
@@ -798,7 +798,7 @@ V90CP::infoToBits()
 		pos++;
 	}
 	bits[pos] = 0;
-	word_cac = (int)(pos + 1);
+	word_cac = pos + 1;
 
 	/* calcSequenceLength, inlined: round the bit count up to a whole
 	 * number of +0x3ba8 and record it at +0x3bac. */

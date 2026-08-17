@@ -63578,3 +63578,32 @@ in this class: the first `%d` is fed from +0x3bb4 and the second from +0x3bb8,
 which is what makes them `nofRecievedMp` and `nofRecievedMpNot` rather than
 two counters in an unknown order. Finding 3540 noted that `infoToBits` and
 `evaluateInfo` between them reach no string at all; this is the one that does.
+
+### 4362. `V90CP::word_cac` IS UNSIGNED, AND `bitsToInfo` IS THE ONLY MEMBER THAT SAYS SO
+
+The write cursor at +0xcac was declared `int` because nothing that had been
+read forced either reading: the constructor, `resetDetector` and `reset` store
+a constant into it, and `infoToBits` only loads it into an `unsigned int` local
+and stores the result back. A load and a store are the same instruction either
+way.
+
+`bitsToInfo` (0x52d20) encodes it twice, and both are forced:
+
+    52f0f:  cmp    $0x2edf,%eax        the bit-vector bound, five sites
+    52f14:  ja     ...                 UNSIGNED above -- a signed `> 0x2edf`
+                                       against an `int` is `jg`
+
+    52e9d:  mov    $0xaaaaaaab,%ebx    `word_cac % 6`, case 13
+    52ea4:  mul    %ebx                UNSIGNED multiply
+    52ea6:  shr    $0x2,%edx           and a plain shift; the signed magic
+                                       for 6 needs an `imul`, a `sar` and a
+                                       correction for the sign bit, none of
+                                       which is here
+
+So `unsigned int word_cac` is the source that produces the object and `int` is
+not, and the retype was measured before it was believed: header-only change, no
+new code in the tree, `make phase` 208 passed / 0 failed and `compare.py`
+unmoved at 363 identical, 72 same-size, 1017 compared, 82.1% of the blob's
+bytes. That is what a retype has to show, because unlike a rename it is NOT
+free at the codegen tier -- it moves nothing here only because every other use
+of the field in the class is a plain 32-bit load or store.

@@ -369,12 +369,22 @@ public:
 
 	/*
 	 * +0x0cac  Set to 18 by `resetDetector`; the most-read field here.
-	 * IT IS THE WRITE CURSOR: `infoToBits` leaves the index of the next
-	 * free bit in it after every field it lays down, and 18 is where the
-	 * first data bit goes -- one preamble frame of seventeen, then the
-	 * next frame's framing bit at 17 and its first data bit at 18.
+	 * IT IS THE CURSOR, and it is the SAME cursor in both directions:
+	 * `infoToBits` leaves the index of the next free bit in it after
+	 * every field it lays down, and `bitsToInfo` stores each arriving bit
+	 * at it and steps it on.  18 is where the first data bit goes -- one
+	 * preamble frame of seventeen, then the next frame's framing bit at
+	 * 17 and its first data bit at 18.
+	 *
+	 * UNSIGNED, and that is forced rather than chosen.  `bitsToInfo`
+	 * bounds it with `cmp $0x2edf,%eax` / `ja` -- an unsigned above, not
+	 * `jg` -- and divides it by six with the 0xaaaaaaab reciprocal and a
+	 * plain `shr`, which is the unsigned magic; a signed `% 6` needs the
+	 * sign correction the object does not encode.  Nothing anywhere in
+	 * the class forces signed, so `unsigned int` is the simpler source.
+	 * Finding 4362.
 	 */
-	int word_cac;
+	unsigned int word_cac;
 
 	/* +0x0cb0  Zeroed by `resetDetector`. */
 	int word_cb0;
