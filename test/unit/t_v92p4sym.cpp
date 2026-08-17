@@ -40,24 +40,31 @@
  *      corroboration of the reading rather than a convenience.
  *
  * ---------------------------------------------------------------------------
- * `bitsPerSymbol == 0` IS NOT IN THE GRID, AND IT WAS, AND THAT IS FINDING 4705
+ * `bitsPerSymbol == 0` IS BACK IN THE GRID, AND WHY IT LEFT MATTERS AS MUCH
  *
  * At zero, `bits[bitsPerSymbol - 1]` is `bits[-1]`, which is
  * V92Phase4Modulator+0x7b -- the top byte of `prevBit`.  The blob's own
  * `movzbl 0x7b(%esi,%ebx,1)` with %esi zero is that address, so the aliasing
- * is the OBJECT'S; in our source it is an out-of-bounds subscript and
- * therefore undefined behaviour, and the two overlapping stores may be
- * emitted in either order.
+ * is the OBJECT'S.
  *
- * They are.  With this input in the grid, generateE2u and generateTRN2u pass
- * under GCC 13 and FAIL under GCC 3.4.2 -- 80 and 160 checks, all of them
- * `V92Phase4Modulator+123 got 00, reference 01` -- because the period compiler
- * schedules the byte store first and the modern one does not.  A trial whose
- * verdict is the compiler's rather than the source's proves nothing either
- * way, which is what finding 617 says about store order and what D504 says
- * about a trial that cannot be driven.  So the grid starts at one, D561 records
- * the aliasing as reproduced and NOT driven, and no mutation here claims an
- * order.
+ * IT USED TO BE UNDEFINED IN OURS TOO.  While `prevBit` and the block were
+ * separate members, that subscript was out of bounds, the two overlapping
+ * stores were the compiler's to order, and the compilers disagreed: with this
+ * input in the grid, generateE2u and generateTRN2u passed under GCC 13 and
+ * failed under GCC 3.4.2 -- 80 and 160 checks, every one of them
+ * `V92Phase4Modulator+123 got 00, reference 01`.  A trial whose verdict is
+ * the compiler's rather than the source's proves nothing either way, so the
+ * grid started at one and four store-order mutations were withdrawn.  Finding
+ * 4705, and it was the right call about the TRIAL and not about the source.
+ *
+ * `V92Phase4Modulator.h` now holds `prevBit` and the block in ONE array
+ * object, so `bitsExt[V92P4M_BITS_BELOW - 1]` is an ordinary element, the
+ * order is the source's, and both compilers emit the blob's.  D561.  A trial
+ * withdrawn because our code was undefined has to come back once it is
+ * defined, or the fix is invisible to the suite that motivated it -- so the
+ * grid starts at zero again, `saw_bps_zero_folding` proves the fold is
+ * REACHED and not merely gridded, and the four store-order mutations are back
+ * in `test/mutations/v92p4sym.json`.
  *
  * ---------------------------------------------------------------------------
  * THE CHAIN, AND ITS MASK
@@ -397,7 +404,7 @@ compare_chain(long trial)
 /* The grid.                                                           */
 /* ------------------------------------------------------------------ */
 
-static const unsigned char bps[] = { 1, 2, 3, 5, 8, 12, 16 };
+static const unsigned char bps[] = { 0, 1, 2, 3, 5, 8, 12, 16 };
 #define NBPS	((int)(sizeof(bps) / sizeof(bps[0])))
 
 static const unsigned int patlens[] = { 1u, 2u, 3u, 5u, 7u };
@@ -416,6 +423,7 @@ static const short amps[] = { 0, 1, 1000, -1000, 4899, 32767 };
 /* Anti-vacuity: the paths a grid could silently miss. */
 static int saw_flag3c_zero, saw_flag3c_set;
 static int saw_bps_over_pattern, saw_scrambler_restart;
+static int saw_bps_zero_folding;
 static int saw_bulk_bits, saw_cpt_pattern, saw_cpt_toggle;
 
 static void
@@ -512,6 +520,16 @@ setup(int trial)
 		saw_flag3c_set = 1;
 	if ((unsigned int)bps[bi] > patlens[pi])
 		saw_bps_over_pattern = 1;
+	/*
+	 * THE CONJUNCTION AND NOT THE AXIS.  generateCPu, generateSUVu and
+	 * generateE2u only fold on the `flag_3c == 0` arm, so a counter on
+	 * `bps[bi] == 0` alone would be satisfied by trials that never reach
+	 * the statement this input exists for -- finding 4756's shape exactly.
+	 * generateTRN2u has no such test and folds either way, which is why
+	 * this is the tighter of the two conditions and not the looser.
+	 */
+	if (bps[bi] == 0 && f3 == 0)
+		saw_bps_zero_folding = 1;
 	if (scounts[ci] > 24u)
 		saw_cpt_pattern = 1;
 	else
@@ -799,6 +817,20 @@ gs_setup(int trial)
 
 	for (s = 0; s < 2; s++) {
 		V92Phase4Modulator *o = M(s);
+
+		/*
+		 * `bitsPerSymbol == 0` IS THE NINE MEMBERS' INPUT AND NOT
+		 * THIS GRID'S, and the difference is D571 rather than taste.
+		 * `setup` supplies it because the fold at zero is exactly
+		 * what D561 exists to drive; `generateSymbol` reaches
+		 * `word_1b0 = patternLength / cp->bitsPerSymbol` through
+		 * state 4, which copies THIS field into the CP first, so a
+		 * zero here raises #DE on both sides at once.  That measures
+		 * the CPU, not the reading -- D571's argument and D700's
+		 * twelve unguarded divisions -- so this grid starts at one.
+		 */
+		if (o->bitsPerSymbol == 0)
+			o->bitsPerSymbol = 1;
 
 		o->state = gs_states[si];
 		o->symbolCount = gs_counts[ci];
@@ -1254,6 +1286,8 @@ run_antivacuity(void)
 		    saw_scrambler_restart, 1, 0);
 	diff_eq_int("some trial took the bits-to-symbol arm", saw_bulk_bits, 1,
 		    0);
+	diff_eq_int("some trial folded at bitsPerSymbol == 0, on the arm that "
+		    "folds", saw_bps_zero_folding, 1, 0);
 	diff_eq_int("some trial put generateCPt past 24 symbols",
 		    saw_cpt_pattern, 1, 0);
 	diff_eq_int("some trial put generateCPt below 25 symbols",
