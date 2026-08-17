@@ -3,13 +3,13 @@
  *
  * Reconstructed from dsplibs.o:
  *   FPM_PPS_filter  .text 0x0a9590, 753 bytes
+ *   FPM_PPS_init    .text 0x0a98c0, 259 bytes
+ *   FPM_PPS_free    .text 0x0a9890,  35 bytes
  *
- * FPM_PPS_init (259 B) and FPM_PPS_free (35 B) are NOT here: they are outside
- * this batch, and the differential suite builds its states with the blob's own
- * init, which is the same thing `t_fpm_tone` does for `FPM_TONE_create`.
- * Reading them is still what settles the struct -- init is where `taps` comes
- * from (`cfg.coeffs / cfg.phases`, an `idiv`) and where the two history
- * buffers are sized at `taps` entries rather than V.22's `2 * taps`.
+ * `taps` comes from init (`cfg.coeffs / cfg.phases`, an `idiv`) and so does
+ * the two history buffers being `taps` entries rather than V.22's `2 * taps`
+ * (`sysdep_malloc(2 * taps)` BYTES).  Both readings were made while writing
+ * the filter and are now compiled and driven.
  *
  * See include/dsplib/fpm_pps.h for the block.  The arithmetic:
  *
@@ -25,8 +25,92 @@
  *     produced count above 32767 comes back as itself.
  */
 
+#include "dsplib/debug.h"
 #include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_smc.h"
+#include "dsplib/sysdep.h"
+
+/*
+ * THE REUSE TEST GUARDS EXACTLY WHAT IT SIZES, WHICH IS WHERE THIS DIFFERS
+ * FROM ITS SIBLING.  `FPM_SRE_init` decides on `cfg.coeffs` and then sizes a
+ * fourth buffer on `cfg.rms_len`, which the test never looks at (deviation
+ * D400).  Here the test is `state->taps < taps` and BOTH buffers are
+ * `2 * taps` bytes, so a re-init cannot leave a buffer that is too small --
+ * and a re-init that raises `cfg.coeffs` WITHOUT raising `coeffs / phases`
+ * takes the reuse path, which an SRE-shaped test would not.  That case is
+ * driven in `t_fpm_pps.c` and it is the only thing that separates the two
+ * siblings' guards.
+ *
+ * AND THE BYTE COUNTS ARE NOT TRUNCATED TO 16 BITS, where `FPM_SRE_init`'s
+ * are.  `lea (%esi,%esi,1)` and `add %esi,%esi` double the sign-extended
+ * 32-bit tap count; there is no `cwtl` or 16-bit store in either size, so a
+ * tap count above 16383 does not wrap here.  Measured, not carried over.
+ */
+void
+FPM_PPS_init(struct fpm_pps *state, const struct fpm_pps_cfg *cfg, int fresh)
+{
+	short taps;
+	short i;
+
+	/*
+	 * The configuration is copied FIRST and everything below reads the
+	 * copy, not the caller's -- the object's ten dword moves are followed
+	 * by loads from the state.  `FPM_SRE_init` is the other way round,
+	 * because its reuse test needs the OLD `cfg.coeffs`.
+	 */
+	state->cfg = *cfg;
+
+	/*
+	 * `phase` is SEEDED FROM THE NOMINAL STEP, not from zero, which is the
+	 * one initialisation here with no counterpart in V.22 -- there the
+	 * step is the literal 3 and there is nothing to seed from.  Nothing
+	 * reduces it modulo `phases`, so a configuration whose `step` is not
+	 * below `phases` starts outside the range the filter maintains.
+	 */
+	state->need = 0;
+	state->phase = state->cfg.step;
+	state->widx = 0;
+
+	/* Signed division, and it faults on a zeroed configuration. */
+	taps = (short)(state->cfg.coeffs / state->cfg.phases);
+
+	if (!fresh && state->taps < taps) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Reallocate FPM_PPS buffer");
+		sysdep_free(state->hist_q);
+		sysdep_free(state->hist_i);
+		fresh = 1;
+	}
+
+	state->taps = taps;
+
+	if (fresh) {
+		state->hist_i = (short *)sysdep_malloc(2 * state->taps);
+		state->hist_q = (short *)sysdep_malloc(2 * state->taps);
+	}
+
+	/*
+	 * Cleared to the NEW tap count either way, which on the reuse path is
+	 * at most the count the buffers were allocated with.
+	 */
+	for (i = 0; i < state->taps; i++) {
+		state->hist_i[i] = 0;
+		state->hist_q[i] = 0;
+	}
+}
+
+/*
+ * Release both histories, `hist_q` first -- the same order init's realloc path
+ * uses, and the reverse of the order they are allocated in.  Reproduced
+ * because the object encodes it; no test can see it, since nothing allocates
+ * afterwards.  The pointers are not cleared.
+ */
+void
+FPM_PPS_free(struct fpm_pps *state)
+{
+	sysdep_free(state->hist_q);
+	sysdep_free(state->hist_i);
+}
 
 /*
  * One rail: `taps` terms, newest first, over the circular history against

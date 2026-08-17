@@ -4,9 +4,7 @@
  * Reconstructed from dsplibs.o:
  *   FPM_SRE_recover  .text 0x0a9e90, 2286 bytes
  *   FPM_SRE_init     .text 0x0aa7c0,  574 bytes
- *
- * FPM_SRE_free is NOT here: 57 bytes and four sysdep_free calls, and it is
- * not in this batch.
+ *   FPM_SRE_free     .text 0x0aa780,   57 bytes
  *
  * See include/dsplib/fpm_sre.h for the block and for what differs from
  * `v22_sre.c`, which is the author's own specialisation of it.  This file is
@@ -120,6 +118,27 @@ FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg, int fresh)
 	sre->ppm_n = 1;
 	sre->ppm_slip = 0;
 	sre->ppm_first = 1;
+}
+
+/*
+ * Release the four buffers, in the SAME ORDER init's realloc path releases
+ * them -- clk, hist, coeff, rms_buf, which is neither the order they are
+ * allocated in nor the order they are declared in.  It is reproduced because
+ * the object encodes it and not because anything can see it: no allocation
+ * follows, so a permutation of these four is unobservable.  Recorded as a
+ * surviving mutation with that derivation.
+ *
+ * The pointers are NOT cleared afterwards, so a second call is a double free
+ * and a re-init with `fresh` zero reads four dangling pointers.  The object
+ * leaves both to the caller.
+ */
+void
+FPM_SRE_free(struct fpm_sre *sre)
+{
+	sysdep_free(sre->clk);
+	sysdep_free(sre->hist);
+	sysdep_free(sre->coeff);
+	sysdep_free(sre->rms_buf);
 }
 
 static int
