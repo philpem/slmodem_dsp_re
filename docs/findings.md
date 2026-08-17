@@ -63523,3 +63523,239 @@ should not be scheduled against the V.34/V.90/V.92 push at all. Its content is
 fax (Phase 10) plus the V.22/V.32 remainder (Phases 4 and 5), and it should be
 absorbed into those rather than run as its own phase. What remains genuinely
 Phase 8's own is the dialler and call-progress half, which is unmeasured.
+
+## 4300. `re/` REVIEWED AND DISPOSITIONED: 100 CLAIMS, AND EXACTLY ONE THING IN IT IS NOT HERE
+
+`re/` is an earlier, now-obsolete reverse-engineering effort against this same
+blob, sitting beside this tree at `../re`. `CLAUDE.md` has always said never to
+read it. **Phil lifted that rule for one purpose** -- "give `re/` a quick review
+pass and see if anything in there is of use ... Check it all for correctness
+before adopting any of it. The eventual goal is to be able to delete `re/`
+without losing anything" -- so this finding is the disposition that licenses the
+deletion. The rule is otherwise unchanged and goes back into force with this
+written.
+
+**THE DENOMINATOR, BECAUSE A REVIEW THAT DOES NOT REPORT ONE IS INDISTINGUISHABLE
+FROM A REVIEW THAT READ NOTHING.** `re/README.md` is 590 lines; 100 distinct
+checkable claims were extracted from it and every one was bucketed against this
+tree. Build commands, scope prose and the module list assert nothing and are
+excluded from the count.
+
+| bucket | n | meaning |
+|---|--:|---|
+| COVERED | 42 | here already, equally well or better, with a citation |
+| NEW | 20 | genuinely absent here |
+| CONTRADICTED | 10 | this tree says something incompatible |
+| INADMISSIBLE | 28 | may be true, could never enter `src/` in that form |
+
+Of the 20 NEW, **15 are one thing**: the V.92 CP bit-level packing layer, which
+is finding 4301 and the only real loss. Four are 8 kHz measurements weaker than
+they look, and one is a hypothesis this tree deliberately declines to adopt.
+
+**WHY NO CODE CROSSES OVER, WHATEVER THE FACTS.** Two structural bars, either of
+which is on its own sufficient. `re/v92_filter_equiv.c:115` accepts
+`fabsf(a-b) <= 1e-6`, and `CLAUDE.md` says any test disagreeing with the blob is
+a hard failure and **never a tolerance to widen** -- so every float-path result
+in `re/` would need re-verification bit-exactly before it could be believed. And
+`re/`'s flat C `sl_*` functions cannot satisfy one-class-one-owner, the GCC 3.4.2
+codegen tier, or the `ref_*`-alias differential harness. **Only facts travel;
+code never does.** `re/`'s own README labels parts of itself "a generated
+engineering model" and "not a complete V.8 clone", which is wrong-but-plausible
+by its author's own description.
+
+**THE 8 kHz MEASUREMENTS, AND WHY THEY ARE WEAKER THAN THE HEADLINE.** `re/`
+reports that an 8 kHz/9.6 kHz adapter around the original DSP is sample-identical
+to the 9.6 kHz path on five fixtures (`diff_samples=0`), and that forcing the
+lower DSP to run natively at 8 kHz is not (tens of thousands of differing samples
+on three fixtures of four). The first half is close to a construction artefact:
+`re/dsplibs_wrap.c:110-123` and `re/dp_equiv.c:313-334` are **the same linear
+interpolation with the same phase mapping** -- `pos = i*5; idx = pos/6; frac =
+pos%6` -- so the two paths feed the DSP nearly the same samples by arithmetic,
+not because the DSP is rate-agnostic. There is no denominator quoted, no stored
+log, and `dp_hybrid` is not currently built. The non-equivalence half is the
+load-bearing one, and **this tree already predicts it analytically** without
+having run it -- finding 1040 (one microstate step is four samples at 9,600 Hz,
+which is also one 2,400-baud symbol period, and the object never distinguishes
+them), finding 1045 (8000/2400 = 3.333 is not an integer), restated as R-11 in
+`docs/rate_assumptions.md`. So what `re/` holds is **an experiment this tree could
+run properly, not a fact only `re/` knows**, and the experiment is worth running
+here where the harness is bit-exact.
+
+**TWO CLAIMS IN `re/` ARE AFFIRMATIVELY WRONG ABOUT THE BLOB**, and both were
+load-bearing for its 8 kHz conclusion:
+
+- `VTB_BOUND_9600` / `VTB_REGION_9600` are cited as proof the V.PCM/V.34 path is
+  9.6 kHz-oriented. They are **V.32bis/V.17 Viterbi trellis tables keyed by line
+  BIT RATE**, one per member of {7200, 9600, 12000, 14400} **bps** --
+  `include/dsplib/vtb.h:117-125`, selected only at `src/pump/v32/v32vtb.c:73-74`.
+  Their sole caller is V.32, which is a native 8 kHz pump behind `dp_wrapper`
+  (finding 5). The citation is void.
+- "`VPcmV34Create` writes an internal `0x2580` sample-rate field" -- the `0x2580`
+  it writes is `bulk_len`, the bulk-delay ring length for the far echo canceller
+  (`src/pump/v34/v34pcmcreate.cpp:284`, typed at `include/dsplib/v34fsk.h:637`,
+  consumed at `src/pump/v34/v34rx.c:623-624`). 9600 samples is one second at
+  9600 Hz so the value may still be rate-derived, but it is not a sample-rate
+  field.
+
+The conclusion those supported -- that the lower V.PCM path is 9.6 kHz-oriented
+-- survives on its remaining evidence (the `VPcmFloModem` fixed-9600 ANSam call
+is real, `src/pump/v90/VPcmFloModemCtor.cpp:215-216`). Two of its four legs are
+simply not.
+
+**EIGHT MORE ARE LABEL ERRORS: THE MECHANICS HOLD AND THE NAME IS WRONG.** These
+are bucketed CONTRADICTED rather than COVERED deliberately, because a label is
+what a future reader carries over, and `CLAUDE.md` is explicit that naming
+something wrongly is worse than leaving it padded. The sharpest: `re/` calls the
+`+0xd14` queue a "V.92/PCM queue" -- this tree builds the identical six words at
+`seq[3]`, 60 bits, hand-built outside `initTxSequence`, gated on `cm->b2 & 0x10`,
+originate-only (`src/v8/v8hs.c:113-150`), and it is **QC1A quick connect**, named
+by the object's own string `quickConnectEnabled` and by `v8SequenceName[]`
+(`src/v8/v8seq.c:286-288`). `re/` also says `V92MappingParams +0x0` is "bits per
+symbol"; it is `K = 2*(drn+17)` and the destination field is `bitsPerFrame`,
+"bits per twelve symbols" (`include/dsplib/V92BitsToSymbol.h:110-114`). And it
+says `V92Precoder::reset()` resets the two FIR histories -- that is
+`V92PreFilter::reset()`; the no-arg precoder reset is the one member this tree
+declares and **deliberately does not write**, and `reset(V92MappingParams*)`
+deliberately does not touch `fir1`/`fir2`, a skip that is itself the object map's
+evidence (`src/pump/v90/V92Precoder.cpp:154-176`).
+
+**ONE OF THE TEN IS NOT `re/`'S FAULT.** It states that "the adjacent `claude_re/`
+tree ... does not contain V90CP/V92Precoder source". Both exist -- `V90CP.cpp` is
+685 lines including `evaluateCRC`, `V92Precoder.cpp` is 321. But `re/README.md`
+was last modified 2026-07-31 and the `V90CP: infoToBits, evaluateInfo,
+evaluateCRC` commit is dated 2026-08-16. **`re/` was overtaken, not mistaken**,
+and that is the honest summary of the whole review: the overlap is near-total
+because this tree kept going.
+
+**WHAT IS PRESERVED, AND WHAT IS DELETED WITH IT.** `docs/salvage/v92cp/` holds
+`re/`'s three V.92 CP files verbatim -- see 4301 for why those and nothing else.
+Everything else in `re/` is either here already, wrong, or a description of
+`re/`'s own deliverable, which dies with it. Two specific things are deliberately
+NOT kept: `re/tools/v8_filter_model.py`, which encodes the error in finding 4302,
+and `re/fixtures/`'s six 8 kHz raw files, which are regenerated by
+`re/spandsp3_gen.c` from the SpanDSP this tree already carries at
+`third_party/spandsp` -- reproducible, not unique. `re/`'s `.text` address
+citations are almost all `nm` output from the blob's own symbol table; the four
+interior ones land inside ranges finding 73 already brackets.
+
+## 4301. `V92CP::infoToBits` HAS FIFTEEN CALLERS AND IS UNWRITTEN, AND 3520 DOES NOT COVER IT
+
+**This is the one thing `re/` has that this tree does not**, and it is also a
+correction to how a finding here is being read.
+
+`src/pump/v90/V92CP.cpp` is 68 lines: the constructor and the destructor, two of
+the class's twelve symbols. The other ten are declared-and-undefined in
+`include/dsplib/V92CP.h:74-84`, which says outright that the bit vector's extent
+is bounded by `getBitVector` at one end and `resetCRC` at the other and that "the
+methods that walk it are not written here". **No bit-level packing layout for
+V.92 exists anywhere in this tree** -- not in `V92CP.h`, not in `V92CPUnPck.h`,
+and not in findings 330, 826, 838, 1235, 1282, 3600 or 3602, which are the ones
+that touch this class or its neighbours and which between them give the object
+map, the field offsets, the symbol's callers and the mapping block -- but not
+one bit of the wire layout. `setV92CPpckFromParamsInfo` and
+`setParamsInfoFromV92CPUnPck` are likewise undefined here; they are distinct
+symbols from `V92setParamsInfoFromCPUnPck`, which *is* written.
+
+**THE ABSENCE IS NOT A DOCUMENTED DECISION, AND THE FINDING THAT LOOKS LIKE ONE
+IS ABOUT A DIFFERENT SYMBOL.** Counted from the object, with controls:
+
+    _ZN5V92CP10infoToBitsEv   0x4ec80   15 R_386_PC32 relocations
+    _ZN5V92CP10bitsToInfoEh   0x4f870    0
+    _ZN5V92CP8resetCRCEv                 0
+    _ZN5V92CP5resetEv                    0
+    VOICE_process                        0     <-- control
+    FAX_process                          0     <-- control
+
+The two controls are the ones finding 3520 names, and they come back 0 as it
+says, so the count discriminates rather than returning 0 for everything.
+**3520's subject is `bitsToInfo` alone and it is correct about it.** It does not
+extend to `infoToBits`, which is called from fifteen sites in `.text` (0x14732,
+0x1484e, 0x16f4f, 0x17196, 0x17266, 0x17465, 0x175aa, 0x17801, 0x181ac, 0x184ee,
+0x18690, 0x18a36, 0x18abf, 0x18b2b, 0x19107) and which finding 826 already records
+as the reader of `fltTable_1`/`fltTable_2`. `docs/plan.md:74` names only
+`bitsToInfo` as well. So `infoToBits` is **not yet reached, with no recorded
+reason** -- an ordinary gap, not a ruling. It belongs in the Phase 3 (V.92)
+worklist, task #122.
+
+**WHAT `re/` ESTABLISHED, AND HOW.** `re/v92_cp_probe.c` (795 lines) declares the
+blob's real mangled symbols as `__asm__` aliases -- `_ZN5V92CP10infoToBitsEv`,
+`_ZN5V92CP10bitsToInfoEh`, `_ZN5V92CP12getBitVectorERj`, `setV92CPpckFromParamsInfo`,
+`setParamsInfoFromV92CPUnPck` -- links against the object, and compares its own
+packed vector against the blob's with **`memcmp`, no tolerance** (`:147`, `:160`,
+`:213`, `:548`, `:557`, `:719`). It is the one probe in `re/` exempt from that
+tree's `1e-6` float slop, because it compares bytes. Fifteen claims rest on it:
+state-1 compact packing; state-0 packing for 156-bit short-session layouts; the
+compact two-section layout; the state-0 scalar block (two flag bits, a 16-step
+unsigned float magnitude, four signed 7-step magnitudes, six 4-bit fields);
+one-group primary/secondary descriptor tables; the CRC/padding tail; the
+descriptor-mask byte-code rule (high nibble selects one of eight mask words, low
+nibble the bit); descriptor group compaction by length and code bytes with
+duplicate reuse; the unpack-side inverse traversal in descending mask-word and
+bit order; `+0x128` repeat handling (state-1 honours 2, state-0 repeat-zero
+resets to 1); the `setV92CPpckFromParamsInfo` field mapping with `info_byte =
+info_source - 8` / `- 20`, which `re/` itself calls modelled rather than
+recovered; `bitsToInfo` length inference (52 bits for state-1 and compact,
+descriptor count inferred from the six short scalar indexes for repeat-zero,
+pending at detector state 7); reaching detector state 10 on completed packets;
+the `setParamsInfoFromV92CPUnPck` reverse mapper including its bit-reversed
+internal mask storage; and a negative result worth as much as the rest --
+**`bitsToInfo` is packet-aligned, not a free-running preamble scanner**: feed
+arbitrary bits before a valid packet and the blob stays at detector state 0,
+write position 18, rather than resynchronising.
+
+**THE COVERAGE CAVEAT IS `re/`'S OWN**: the probe exercises the states `re/`
+managed to construct, not the states a live V.92 session produces. Its README
+says "the remaining V92CP work is broadening any unobserved `infoToBits()`
+states."
+
+**PRESERVED AT `docs/salvage/v92cp/`** -- `sl_v92_cp.c` (829 lines),
+`sl_v92_cp.h` (135) and `v92_cp_probe.c` (795), verbatim. **It is under `docs/`
+and not `src/` on purpose**: it has never seen GCC 3.4.2, never run under
+`make phase`, and is not built by anything here. It is evidence to re-derive
+from when Phase 3 reaches `V92CP`, in the way a disassembly listing is evidence
+-- not source, and never to be moved into `src/` without going through the
+differential tier like everything else.
+
+## 4302. THE V.21 BANKS HAVE 41 ACTIVE TAPS AND SEVEN ZEROS, NOT 40 AND EIGHT
+
+`re/` describes SmartLink's V.21 receive filter banks as "the 40-tap
+Hamming-windowed quadrature tone detectors plus SmartLink's eight-entry zero
+padding convention", and **`re/tools/v8_filter_model.py:42` implements that
+description as `values + [0] * 8`** -- so every native-8 kHz bank that generator
+emits has a zero where the original has a coefficient.
+
+Measured over this tree's transcription of the object's own tables
+(`src/v8/v8v21.c`), denominator printed:
+
+    tables parsed: 10
+      v21_coeff_ch2  len=61  [40]=    31   trailing zero run=1
+      v21_coeff_ch1  len=61  [40]=   118   trailing zero run=1
+      v21_ans_a      len=48  [40]=   -57   trailing zero run=7
+      v21_ans_b      len=48  [40]=  -212   trailing zero run=7
+      v21_ans_c      len=48  [40]=   155   trailing zero run=7
+      v21_ans_d      len=48  [40]=  -155   trailing zero run=7
+      v21_call_a     len=48  [40]=   190   trailing zero run=7
+      v21_call_b     len=48  [40]=  -110   trailing zero run=7
+      v21_call_c     len=48  [40]=   190   trailing zero run=7
+      v21_call_d     len=48  [40]=   110   trailing zero run=7
+
+    banks with a NONZERO tap at index 40: 10 of 10
+    banks whose trailing zero run is 7:     8 of 10
+
+A parse count of 0 would have meant a broken regex rather than a clean tree, so
+it is printed; the first version of this check matched `name[]` and silently
+found nothing against tables declared `name[48]`.
+
+**`re/`'S OWN COPIED TABLES AGREE WITH THIS TREE AND CONTRADICT `re/`'S PROSE.**
+`re/sl_v8_fsk.c:116-123` (`sl_v8_ls_filter2`) has index 40 = `-110`, which is
+exactly `v21_call_b[40]` above -- the same eight tables under other names. The
+data was transcribed correctly and only the sentence describing it is wrong; the
+generator then implemented the sentence.
+
+**THE ERROR IS LATENT IN `re/` RATHER THAN AUDIBLE**, which is why it survived:
+only taps 0..39 are ever read, `V8_V21_DELAY` being 40 (`src/v8/v8sig.c:722,725,
+734`). It would have become real the moment a generated 8 kHz bank was used with
+a longer delay. It is recorded because the generator is exactly the kind of
+artefact that gets picked up later by someone who trusts it, and because "40 taps
+plus 8 zeros" is a plausible-sounding convention that is simply not the object's.
+
