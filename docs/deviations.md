@@ -7044,3 +7044,16 @@ choice of `V90SBE_PASS_ALL` is OURS -- the object has no answer to reproduce --
 and because the batch that writes `reset` should check whether any caller
 passes a third value, in which case this becomes a real behavioural difference
 rather than a formal one.
+
+## D430 -- the transmit ring cursor is truncated to a short before the wrap test  `unmeasured`
+
+`TxNoCarrierV17`, `TxNoCarrierV29` and `TxNoCarrierV32` all compute the next
+write index as `lea 0x1(%r),%eax` followed by `cwtl` or `movswl %ax`, and only
+then compare it against the ring length. A cursor seeded at 32767 therefore
+wraps to -32768 rather than to 0, and the following store lands 64 KB below the
+ring's buffer. Not reachable through the constructors that have been read --
+`V17TX_create` sets the length to 50 and `V32FP_recreate` takes it from
+`V32_SYMBOL_LEN` -- so this is a property of the arithmetic and not a live
+fault. Recorded because the truncation is what distinguishes the object's
+expression from `widx + 1 < len`, and `t_v17data.c` seeds the corner to hold
+the reconstruction to it.

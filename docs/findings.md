@@ -62686,3 +62686,84 @@ under which it would be answered; the batch that met the condition changed one
 line each and the offset assertions caught nothing, because nothing had been
 assumed. Compare finding 3120's `+0x2f64`, where the same restraint was applied
 to a name rather than a type.
+
+### 3640. THE V.17 TRANSMITTER'S SYMBOL RING IS `struct fpm_smc_ring`, FIELD FOR FIELD, AND `V17TX_create` SAYS SO WITHOUT BEING ASKED
+
+`TxNoCarrierV17` reads a pointer at `fp + 0x10`, an index at `fp + 0x14` and a
+bound at `fp + 0x18`, and wraps the index at the bound. That alone is "a ring
+of some shape at some offset". What settles it is `V17TX_create`, which at
+0x98b59 writes `fp + 0x14 = 0`, `fp + 0x16 = 0`, `fp + 0x18 = 0x32`,
+`fp + 0x08 = NULL` and `fp + 0x0c = NULL`, fills `fp + 0x10` from
+`sysdep_malloc(0x64)` at 0x98d04, and then clears 50 shorts through it
+(`cmp $0x31,%ax`). Lay `struct fpm_smc_ring` at `fp + 0x08` and every one of
+those is a field: `i`, `q`, `sym`, `widx`, `ridx`, `len`, with a length of 50
+and a `sym` array of exactly 50 shorts.
+
+So the ring the V.17 transmitter shares between its coder and its shaper is
+the same type V.22's does, at `fp + 0x08` instead of `fp + 0xa0`, and nothing
+in either function had to be guessed to say so.
+
+### 3641. THE MAPPED/DIRECT CHOICE IS STATED TWICE IN EACH OF V.17 AND V.29, AND THE TWO STATEMENTS ARE INDEPENDENT
+
+`fpm_pps_cfg.mapped` selects whether `FPM_PPS_filter` takes the ring entry's
+low byte as a constellation index (`imap`/`qmap`) or reads the ring's own `i`
+and `q` rails. Which each modulation uses is said twice:
+
+| | `V*TX_create` builds `mapped` | `TxNoCarrier*` writes |
+|---|---|---|
+| V.17 | 1, with `SMCv17_IMAP4` / `SMCv17_QMAP4` (98be3..98c2b) | `sym` only (a0de8) |
+| V.29 | 0, with the built-in null maps (9bce8) | `i` and `q` only (a6658, a665e) |
+
+Neither reading is derived from the other -- one is a constructor's stack
+frame, the other is a different function's store -- and they agree. This is
+the check that would have caught modelling the V.17 no-carrier path on the
+V.29 one, which is the mistake the two functions' near-identical shape
+invites.
+
+### 3642. THE TWO `ModData*` FAMILIES DISAGREE ABOUT THE SIGNEDNESS OF A DATA WORD, AND EACH ENCODER FORCES ITS OWN
+
+`SMCv17_encoder_dif` loads its input with `movzwl (%edi)` at 0x9fd00;
+`SMCv32_encoder_dif` loads the same argument with `movswl (%edi)` at 0x7f9d0.
+Both results are 32-bit and both are used -- shifted and masked to select a
+quadrant -- so both are forced, and they differ. `ModDataV17` therefore takes
+`const unsigned short *` and `ModDataV32` takes `const short *`, and
+`v32smc.h` had already declared the V.32 side that way from its own reading.
+
+The point worth keeping is the negative one: the two families look like one
+layer and are written like one layer, and copying either signature onto the
+other would have been invisible to any test, because every value the fixture
+can produce agrees under both readings unless bit 15 is set. This is finding
+613's shape a second time.
+
+### 3643. `ModDataV17`'s ENCODER SELECTOR IS SIGNED, AND THE OBJECT WAS RUN AT -1 TO PROVE IT
+
+`ff 94 8a 80 00 00 00` is `call *0x80(%edx,%ecx,4)` with `%ecx` from
+`movswl 0x8c(%edx)`. `V17TX_create` lays three function pointers at
+`fp + 0x80`, `+0x84` and `+0x88` -- `SMCv17_encoder_dif`, `_abs` and `_tcm`,
+in that order, at 0x98c90, 0x98c98 and 0x98c9e -- and never writes `+0x8c`, so
+nothing in the constructor bounds the index.
+
+`movswl` is what the compiler was forced to encode, and `t_v17data.c` turns it
+into a measurement rather than a codegen note: the selector is SEEDED at -1 and
+the blob is run, and it dispatches through `fp + 0x7c`. An unsigned reading
+would have indexed 262,140 bytes past the block.
+
+`fp + 0x7c` is the shaper's own `hist_q` -- `struct fpm_pps` is 0x38 bytes and
+`V17FP_PPS` is 0x48, so the state ends exactly where the table begins. The
+trial therefore runs with a count of ZERO, where `FPM_PPS_filter`'s
+`while (count != 0)` never dereferences either history, and the stub still
+leaves a mark in a compared byte of the ring.
+
+### 3644. `TxNoCarrierV17` RE-READS THE NO-CARRIER SYMBOL ON EVERY ITERATION, AND THAT IS FORCED IN THE DIRECTION THAT IS USUALLY NOT
+
+`movzwl 0x1e(%edi),%eax` sits at the top of the loop at 0xa0de0, not above it.
+The usual reading of a loop-invariant load left in a loop is "the compiler
+could not hoist it", which says nothing about the source -- and here it indeed
+could not, because the loop's store is through a `short *` that may alias the
+`unsigned short` being loaded.
+
+But the converse does hold, and it is the useful half: a compiler does not
+SINK a load the source put outside the loop into it. So the load being inside
+means the source's was, and the reconstruction reads the field once per symbol
+rather than once per call. It is observable only if the parameter block
+overlaps the ring, which nothing traced arranges.
