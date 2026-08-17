@@ -114,6 +114,54 @@ class V90ConnectionEvaluator;
 class V90Phase3Demodulator;
 class V90AutoDigitalImpDetector;
 
+/*
+ * THE ENUM IS THE MANGLING'S, NOT AN INVENTION.  `V90Phase4Demodulator::reset`
+ * is `_ZN20V90Phase4Demodulator5resetEh22Phase4DemodulatorStatejj`, so a type
+ * spelled exactly `Phase4DemodulatorState` exists at namespace scope and is
+ * that member's second parameter -- and `reset` stores that parameter, and
+ * nothing else, into +0x20:
+ *
+ *     277ef:  8b 5c 24 38   mov 0x38(%esp),%ebx    ; argument 2
+ *     27801:  89 5e 20      mov %ebx,0x20(%esi)
+ *
+ * with `this` at 0x30(%esp) and the four arguments at 0x34, 0x38, 0x3c and
+ * 0x40.  So the field below is that enum and not an `unsigned int` that
+ * happens to hold the same numbers.  Same shape as `Phase3DemodulatorState`
+ * in V90Phase3Demodulator.h, and named the same way.
+ *
+ * FOUR OF THE FIVE ENUMERATORS ARE THE AUTHOR'S OWN WORDS -- the `edprintf`
+ * format string at the only site that stores each value:
+ *
+ *     4     "V90Phase4Demodulator: enter WaitForV90CP state @ %d\r\n"
+ *     5     "V90Phase4Demodulator: enter WaitForMP state @ %d\r\n"
+ *     6     "V90Phase4Demodulator: enter WaitForEd state @ %d\r\n"
+ *     0x10  "V90Phase4Demodulator: enter FPE !"
+ *
+ * THE FIFTH IS USAGE INFERENCE and is the weakest thing in this header.
+ * `detectRRN` is the only writer of 9 and it writes it immediately after
+ * printing "Rd detected"; the original's own name for the state is not
+ * recoverable, so `P4D_STATE_RD_DETECTED` says what the object does and
+ * claims nothing more.
+ *
+ * The gaps are real states this batch does not reach -- `getV90Decision`,
+ * `getV92Decision`, `reset` and `trn2dKnownDemod` are unwritten and between
+ * them hold the rest -- not missing enumerators.
+ *
+ * SPELLED AS A PIN RATHER THAN A BASE for the reason Phase3DemodulatorState
+ * gives: `: int` is C++11 and the author's compiler was C++98, where these
+ * five values alone would give the enum a range of 0..31 and make a
+ * differential sweep of a garbage-seeded +0x20 undefined.  `_BASE_PIN` is
+ * ours; docs/method/compilers.md, V2.
+ */
+enum Phase4DemodulatorState {
+	P4D_STATE_WAIT_FOR_V90CP = 4,	/* enterWaitForCP            */
+	P4D_STATE_WAIT_FOR_MP = 5,	/* enterWaitForMP            */
+	P4D_STATE_WAIT_FOR_ED = 6,	/* enterWaitForEd            */
+	P4D_STATE_RD_DETECTED = 9,	/* detectRRN; inferred       */
+	P4D_STATE_FPE = 0x10,		/* detectFPE                 */
+	P4D_STATE_BASE_PIN = -0x7fffffff - 1	/* ours: pins the base */
+};
+
 class V90Phase4Demodulator {
 public:
 	/*
@@ -135,10 +183,31 @@ public:
 	~V90Phase4Demodulator();
 
 	/*
+	 * THE SEVEN LEAVES, all in src/pump/v90/V90Phase4Demodulator.cpp.
+	 * Between them they are the whole state-entry surface of the class:
+	 * everything that stores `state` except `reset` and the two decision
+	 * members.
+	 *
+	 * `detectRRN` and `detectFPE` return `int` and not `bool` -- the blob
+	 * builds the answer in a full 32-bit register (`xor %edx,%edx` /
+	 * `mov $0x1,%edx` / `mov %edx,%eax`) rather than in `%al`.  Neither
+	 * return type reaches the mangling, so this is the only evidence
+	 * there is for it.
+	 */
+	void resetRRNDetector();
+	void resetBeforRRN();
+	void enterWaitForCP();
+	void enterWaitForMP();
+	void enterWaitForEd();
+	int detectRRN(short sample);
+	int detectFPE(short sample);
+
+	/*
 	 * The rest of the class -- `getV90Decision`, `getV92Decision`,
-	 * `reset`, the four state entries, the two detectors and the rest, 24
-	 * members and some 6,600 bytes -- is declared nowhere yet and belongs
-	 * to whichever batch writes it.
+	 * `reset`, `trn2dKnownDemod`, `setSessionFlag` and the rest -- is
+	 * declared nowhere yet and belongs to whichever batch writes it.
+	 * `trn2dKnownDemod` is blocked on `V90Phase4Modulator` and
+	 * `V90SpectralShaper`, neither of which is written.
 	 *
 	 * Data members are public for the reason V90Jd.h gives: the original's
 	 * access specifiers are not recoverable from the mangling, and a
@@ -181,10 +250,82 @@ public:
 	V90Phase3Demodulator *phase3Demodulator;
 
 	/*
-	 * +0x0020 .. +0x004f  NOT MODELLED.  Nothing the construction path
-	 * touches reaches here; the bound is the modulator's base below.
+	 * +0x0020 .. +0x004f  THE STATE BLOCK.  The construction path does
+	 * not reach it -- the constructor writes nothing here -- so every
+	 * offset and width below is read off the seven members this batch
+	 * wrote plus `reset`, which is not written and was read for its store
+	 * widths alone.  Signedness is NOT established for the `int_NNNN`
+	 * ones: `movl $0x0` and `movl $0x1` encode a width and nothing else,
+	 * which is the same bound V90RDetector.h states for its own fields.
 	 */
-	unsigned char pad_0020[0x30];
+
+	/*
+	 * +0x0020  The state.  `reset` stores its `Phase4DemodulatorState`
+	 * argument here and the three `enterWaitFor*`, `detectRRN` and
+	 * `detectFPE` store constants of it; see the enum above.
+	 */
+	Phase4DemodulatorState state;
+
+	/*
+	 * +0x0024  A COUNT SINCE THE LAST STATE CHANGE, and the unit is NOT
+	 * claimed.  Every function that stores `state` zeroes this in the same
+	 * breath -- the three `enterWaitFor*`, `detectRRN`, `detectFPE` and
+	 * `reset` -- and the three `enterWaitFor*` print its old value as the
+	 * "@ %d" of their message before doing so.  Nothing in this batch
+	 * increments it, so whether it counts samples, symbols or frames is
+	 * open.  `int` because the author's own conversion is `%d`.
+	 */
+	int countInState;
+
+	/*
+	 * +0x0028  Zeroed by `detectRRN`, `detectFPE` and `reset` -- the three
+	 * that move to a state on their own evidence -- and NOT by the three
+	 * `enterWaitFor*`, which is what tells it apart from `countInState`.
+	 */
+	int int_0028;
+
+	/*
+	 * +0x002c  Four bytes.  `reset` stores the result of `getV90Decision`
+	 * or `getV92Decision` here (`mov %eax,0x2c(%esi)` at 0x2792c);
+	 * nothing in this batch touches it.
+	 */
+	int int_002c;
+
+	/*
+	 * +0x0030  ONE byte: `movb $0x0,0x30(...)` in `resetBeforRRN` and in
+	 * `reset`, and nothing here reads it.
+	 */
+	unsigned char uchar_0030;
+	unsigned char pad_0031[3];	/* +0x31  alignment before +0x34   */
+
+	/*
+	 * +0x0034  `reset`'s FOURTH argument, which the mangling types
+	 * `unsigned int` (`...jj`, and this is the second of the two).
+	 */
+	unsigned int uint_0034;
+
+	/*
+	 * +0x0038 and +0x003c  A PAIR, always written together.
+	 * `resetBeforRRN` sets both to 1; `detectRRN` sets both to 1 when
+	 * `sessionFlag` is zero; `reset` sets +0x38 to 1 and +0x3c to 0, which
+	 * is the one place they differ and the reason they are two fields and
+	 * not one.
+	 */
+	int int_0038;
+	int int_003c;
+
+	/* +0x0040  Zeroed by `reset` alone. */
+	int int_0040;
+
+	/* +0x0044 and +0x0048  Zeroed by `resetBeforRRN` and by `reset`. */
+	int int_0044;
+	int int_0048;
+
+	/*
+	 * +0x004c  NOT MODELLED.  Nothing reconstructed here reaches it; the
+	 * bound is the modulator's base below.
+	 */
+	unsigned char pad_004c[4];
 
 	/*
 	 * +0x0050  EMBEDDED, not pointed at: `lea 0x50(%ebx),%edx` in the

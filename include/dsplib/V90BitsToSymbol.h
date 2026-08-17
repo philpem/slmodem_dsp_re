@@ -58,6 +58,34 @@ public:
 	V90BitsToSymbol(unsigned int nofSymbols, V90Parameters *params);
 	~V90BitsToSymbol();
 
+	/*
+	 * THREE MORE, and the return types are inference and not mangling:
+	 * none of the three reaches a mangled return type, and each builds
+	 * its answer in a full 32-bit %eax with no sign extension anywhere,
+	 * so `unsigned int` is what the arithmetic says.
+	 *
+	 * `nofBitsForNextTime` is how many bits the caller must supply to
+	 * fill what is left of the block; `setSymbolsBlockSize` stores its
+	 * argument into +0x1c and answers the same number -- the blob inlines
+	 * the first into the second and into `process`, and emits no `call`
+	 * in either.
+	 *
+	 * `process` hands out one block of symbols, shifts whatever is left
+	 * over down to the front, writes the next bit demand through its
+	 * reference parameter and answers a STATUS: 0 silently, 1 when
+	 * `symbolsBlockSize` is zero and 3 when there were not enough symbols
+	 * ready.  The two non-zero values are the object's own words --
+	 * "SIZE_NOT_SET" and "BUFFER_UNDERFLOW" in the two messages -- and 0
+	 * is the one with no message.
+	 *
+	 * The other two `process` overloads, `reset` and `resetNoSpectral`
+	 * are NOT written: each needs something unwritten, and one unwritten
+	 * callee fails every differential binary rather than only its own.
+	 */
+	unsigned int nofBitsForNextTime();
+	unsigned int setSymbolsBlockSize(unsigned int blockSize);
+	unsigned int process(unsigned int &nofBits, short *outSymbols);
+
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	V90Mapper *mapper;		/* +0x00 owned, 0x704 bytes         */
 	V90Parameters *params;		/* +0x04 borrowed                   */

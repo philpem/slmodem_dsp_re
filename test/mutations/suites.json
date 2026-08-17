@@ -619,5 +619,13 @@
  "v90sbereset": [
   "src/pump/v90/V90SignBitsExtractor.cpp",
   "build/test/t_v90sbereset"
+ ],
+ "v90btsproc": [
+  "src/pump/v90/V90BitsToSymbol.cpp",
+  "build/test/t_v90btsproc"
+ ],
+ "v90p4dleaf": [
+  "src/pump/v90/V90Phase4Demodulator.cpp",
+  "build/test/t_v90p4dleaf"
  ]
 }
