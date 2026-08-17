@@ -224,7 +224,7 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	for (i = 0; i < sizeof(v34BaudAllow); i++)
 		v34BaudAllow[i] = vpcm_ctor_flags_0217[i];
 
-	word_1740 = 0;
+	sweepCounter = 0;
 
 	sysdep_memset(cpBitVector, 0, sizeof(cpBitVector));
 

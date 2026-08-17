@@ -1,0 +1,61 @@
+[
+ {
+  "label": "NOTE: setEchoBeta, setDecayFactor and setEchoParams",
+  "why": "The entries at the end are the two members that came out of this file's two file-statics -- the reason they were statics was that neither was written, and both are written now -- plus `setEchoParams`, whose entire body is the three calls. Each is a claim about which field a store lands in, about which FIELD the printed sign is read back from (the object reloads +0x30 with `fcomps` after storing it, and takes the magnitude from the argument still live in the register), or about the order of the three calls, which the two diagnostics fix. What no entry here reaches is the 1e6 scale or the abs() around the fraction: `frac_of` is shared with `setState`'s six inlined copies and with V90Phase2Info's, and finding 256 measured the subtraction order there as unobservable through the abs(). Finding 4824. ONE ENTRY WAS WRITTEN AND WITHDRAWN: exchanging `sign_of(echoBeta), whole_of(beta)` for `sign_of(beta), whole_of(echoBeta)` read NOT CAUGHT, and it is EQUIVALENT rather than untested -- the store happens first, so the field and the argument hold the same float by the time either is read, and no input can ever separate them. The object's own spelling is the one in the source (`fsts 0x30(%ecx)` leaves the value live for the magnitude, `fcomps 0x30(%ecx)` reads the store back for the sign) and it is a reading of the instructions rather than a claim any test can hold. What IS catchable is reading the WRONG FIELD, and the two entries below do that."
+ },
+ {
+  "label": "setEchoBeta stores into echoBetaDecay",
+  "find": "V92EchoCanceller::setEchoBeta(float beta)\n{\n\techoBeta = beta;",
+  "replace": "V92EchoCanceller::setEchoBeta(float beta)\n{\n\techoBetaDecay = beta;"
+ },
+ {
+  "label": "setDecayFactor stores into echoBeta",
+  "find": "V92EchoCanceller::setDecayFactor(float decay)\n{\n\techoBetaDecay = decay;",
+  "replace": "V92EchoCanceller::setDecayFactor(float decay)\n{\n\techoBeta = decay;"
+ },
+ {
+  "label": "setDecayFactor prints the echoBeta message",
+  "find": "\tedprintf(\"V92EchoCanceller: echoBetaDecay = %c%d.%06d\\r\\n\",\n\t\t sign_of(echoBetaDecay), whole_of(decay), frac_of(decay));",
+  "replace": "\tedprintf(\"V92EchoCanceller: echoBeta = %c%d.%06d\\r\\n\",\n\t\t sign_of(echoBetaDecay), whole_of(decay), frac_of(decay));"
+ },
+ {
+  "label": "setEchoParams passes the two floats the other way round",
+  "find": "\tsetEchoBeta(beta);\n\tsetDecayFactor(decay);\n\tsetEchoDelay(delay);",
+  "replace": "\tsetEchoBeta(decay);\n\tsetDecayFactor(beta);\n\tsetEchoDelay(delay);"
+ },
+ {
+  "label": "setEchoParams does not move the delay",
+  "find": "\tsetEchoBeta(beta);\n\tsetDecayFactor(decay);\n\tsetEchoDelay(delay);",
+  "replace": "\tsetEchoBeta(beta);\n\tsetDecayFactor(decay);"
+ },
+ {
+  "label": "setEchoParams does not set the decay factor",
+  "find": "\tsetEchoBeta(beta);\n\tsetDecayFactor(decay);\n\tsetEchoDelay(delay);",
+  "replace": "\tsetEchoBeta(beta);\n\tsetEchoDelay(delay);"
+ },
+ {
+  "label": "setEchoParams announces the decay before the beta",
+  "find": "\tsetEchoBeta(beta);\n\tsetDecayFactor(decay);\n\tsetEchoDelay(delay);",
+  "replace": "\tsetDecayFactor(decay);\n\tsetEchoBeta(beta);\n\tsetEchoDelay(delay);"
+ },
+ {
+  "label": "the beta is printed and not stored",
+  "find": "\techoBeta = beta;\n",
+  "replace": ""
+ },
+ {
+  "label": "the decay factor is printed and not stored",
+  "find": "\techoBetaDecay = decay;\n",
+  "replace": ""
+ },
+ {
+  "label": "setEchoBeta takes the sign from echoBetaDecay",
+  "find": "\t\t sign_of(echoBeta), whole_of(beta), frac_of(beta));",
+  "replace": "\t\t sign_of(echoBetaDecay), whole_of(beta), frac_of(beta));"
+ },
+ {
+  "label": "setDecayFactor takes the sign from echoBeta",
+  "find": "\t\t sign_of(echoBetaDecay), whole_of(decay), frac_of(decay));",
+  "replace": "\t\t sign_of(echoBeta), whole_of(decay), frac_of(decay));"
+ }
+]

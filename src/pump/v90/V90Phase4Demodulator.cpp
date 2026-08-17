@@ -30,6 +30,14 @@
 
 #include <stddef.h>
 
+#include "dsplib/debug.h"
+#include "dsplib/encode.h"
+#include "dsplib/V90Parameters.h"
+#include "dsplib/V90MappingParams.h"
+#include "dsplib/V90ConnectionEvaluator.h"
+#include "dsplib/V90CP.h"
+#include "dsplib/V90MP.h"
+#include "dsplib/V90Demapper.h"
 #include "dsplib/V90Phase4Demodulator.h"
 
 /*
@@ -58,6 +66,44 @@ P4D_OFF(demapper,		0x3054, demapper);
 P4D_OFF(descrambler,		0x3058, descrambler);
 P4D_OFF(connectionEvaluator,	0x34f8, conneval);
 P4D_OFF(autoDigitalImpDetector,	0x3514, adid);
+
+/* The state block, from the seven leaves below and from `reset`'s widths. */
+P4D_OFF(state,			0x0020, state);
+P4D_OFF(countInState,		0x0024, countinstate);
+P4D_OFF(int_0028,		0x0028, i28);
+P4D_OFF(trn2dDDLength,		0x002c, trn2dddlen);
+P4D_OFF(uchar_0030,		0x0030, u30);
+P4D_OFF(uint_0034,		0x0034, u34);
+P4D_OFF(int_0038,		0x0038, i38);
+P4D_OFF(int_003c,		0x003c, i3c);
+P4D_OFF(int_0040,		0x0040, i40);
+P4D_OFF(int_0044,		0x0044, i44);
+P4D_OFF(int_0048,		0x0048, i48);
+P4D_OFF(uint_004c,		0x004c, u4c);
+
+/*
+ * The phase 4 receiver's own state, from the two decision members.  The bit
+ * buffer's BASE is asserted and its length is not, because 0x498 is a bound
+ * and not a measurement -- see the header.  What the assertion does hold is
+ * that `nbits` lands where `V90Demapper::process`'s reference argument
+ * pointed, which is what would break if the array were resized carelessly.
+ */
+P4D_OFF(bits,			0x305c, bits);
+P4D_OFF(nbits,			0x34f4, nbits);
+P4D_OFF(b1dZeros,		0x3500, b1dzeros);
+P4D_OFF(b1dBits,		0x3504, b1dbits);
+P4D_OFF(errorEnergyBeforeEC,	0x3508, eebefore);
+P4D_OFF(errorEnergyAfterEC,	0x350c, eeafter);
+P4D_OFF(int_3510,		0x3510, i3510);
+P4D_OFF(linearMappStudyStart,	0x3518, lmsstart);
+
+/*
+ * The enum is four bytes wide, which is what makes `state` a field at 0x20
+ * and `countInState` one at 0x24 rather than two halves of one word.  GCC
+ * 3.4.2 and GCC 13 both give it `int` here; the pin in the header is what
+ * keeps that true under C++98's minimum-range rule.
+ */
+typedef char v90p4d_statesize[(sizeof(Phase4DemodulatorState) == 4) ? 1 : -1];
 
 /*
  * The allocation, and finding 1107's point again: this number is
@@ -153,4 +199,1202 @@ V90Phase4Demodulator::V90Phase4Demodulator(V90MappingParams *mp1,
  */
 V90Phase4Demodulator::~V90Phase4Demodulator()
 {
+}
+
+/*
+ * ===========================================================================
+ * THE SEVEN LEAVES.
+ *
+ * All seven are state entries or the two detectors that cause one, and none
+ * of them reaches anything outside this class except `V90RDetector`,
+ * `edprintf` and one field of `V90Parameters`.  They are written here in the
+ * blob's address order -- 0x25bb0, 0x25be0, 0x25c10, 0x25c40, 0x25ca0,
+ * 0x25d30, 0x25d60 -- which is also GCC's emission order for a single
+ * translation unit, so the file's order is the original's.
+ *
+ * `trn2dKnownDemod` at 0x25de0 sits between `resetBeforRRN` and `detectFPE`
+ * in that run and is deliberately absent: it calls `V90Phase4Modulator` and
+ * `V90SpectralShaper` members that nothing in this tree has written, and one
+ * unwritten callee fails every differential binary rather than only its own
+ * (finding 215).
+ * ===========================================================================
+ */
+
+/*
+ * `enterWaitForCP` -- 46 bytes at 0x25bb0.
+ * `enterWaitForMP` -- 46 bytes at 0x25be0.
+ * `enterWaitForEd` -- 46 bytes at 0x25c10.
+ *
+ * THREE BODIES THAT DIFFER IN TWO TOKENS, which is exactly why the test does
+ * not stop at comparing the object: the state constant is observable in
+ * +0x20 and the format string is not, so a pair with their strings swapped
+ * would pass every object comparison ever written.  `t_v90p4dleaf` captures
+ * the diagnostic transcript on both sides and compares it.
+ *
+ * The message prints `countInState` BEFORE it is cleared -- the blob loads
+ * 0x24(%ebx) into %eax ahead of the call and stores the zero after it -- so
+ * the value that reaches the log is how long the outgoing state lasted.
+ */
+void
+V90Phase4Demodulator::enterWaitForCP()
+{
+	edprintf("V90Phase4Demodulator: enter WaitForV90CP state @ %d\r\n",
+		 countInState);
+	state = P4D_STATE_WAIT_FOR_V90CP;
+	countInState = 0;
+}
+
+void
+V90Phase4Demodulator::enterWaitForMP()
+{
+	edprintf("V90Phase4Demodulator: enter WaitForMP state @ %d\r\n",
+		 countInState);
+	state = P4D_STATE_WAIT_FOR_MP;
+	countInState = 0;
+}
+
+void
+V90Phase4Demodulator::enterWaitForEd()
+{
+	edprintf("V90Phase4Demodulator: enter WaitForEd state @ %d\r\n",
+		 countInState);
+	state = P4D_STATE_WAIT_FOR_ED;
+	countInState = 0;
+}
+
+/*
+ * `resetRRNDetector` -- 81 bytes at 0x25c40.
+ *
+ * THE ONLY THING IN THIS BATCH THAT DEREFERENCES `V90Parameters`, and the
+ * field it reads is named rather than an offset:
+ *
+ *     25c51:  8b 53 04         mov 0x4(%ebx),%edx        ; this->params
+ *     25c60:  8b 82 98 02 ..   mov 0x298(%edx),%eax      ; +0x298
+ *
+ * and V90Parameters.h already calls +0x298 `RRN_R_DETECTION_LENGTH`, which
+ * is the strongest agreement a member called `resetRRNDetector` could have
+ * asked for.  That is why this file includes the definition rather than the
+ * forward declaration the header carries.
+ *
+ * THE THREE CONSTANTS ARE LEFT AS NUMBERS.  `V90RDetector::reset` rounds its
+ * first argument down to multiples of 6 and 12 and its second the same way,
+ * so 0x18, 0xb4 and 0xc are sample counts -- but which detector is the R one
+ * and which the Rf one is a question about `rDetector1`/`rDetector2`, whose
+ * roles this header has never established (see its own comment at +0x2ffc).
+ * Naming them would be inventing that answer.
+ */
+void
+V90Phase4Demodulator::resetRRNDetector()
+{
+	rDetector1.reset(params->RRN_R_DETECTION_LENGTH, 0x18);
+	rDetector2.reset(0xb4, 0xc);
+}
+
+/*
+ * `detectRRN` -- 143 bytes at 0x25ca0.
+ *
+ * Answers 0 until `rDetector1` says it has seen Rd, and on the sample that
+ * it does, moves to state 9 and reports the detector's polarity.
+ *
+ * THE `sessionFlag == 0` ARM IS THE INTERESTING HALF.  `mov (%esi),%ebx ;
+ * test %ebx,%ebx ; jne` reads +0x00, which is the field `setSessionFlag`
+ * writes and which the constructor takes as its eleventh argument, and the
+ * pair +0x38/+0x3c is set to 1,1 only when it is zero -- the same pair, and
+ * the same values, that `resetBeforRRN` sets unconditionally.
+ *
+ * THE LOCAL POINTER IS THE OBJECT'S, AND IT WAS MEASURED RATHER THAN
+ * PREFERRED.  Written the obvious way -- `rDetector1.detectR(sample)` and
+ * then `rDetector1.int_24` -- this compiles to 123 bytes with one
+ * callee-saved register: GCC re-derives the field address as `0x3020(%ebx)`
+ * off `this` instead of keeping `&rDetector1` live across the call.  The
+ * blob is 143 bytes, holds `this` in %esi and `&rDetector1` in %ebx, and
+ * reads the polarity as `0x24(%ebx)` -- one address expression used twice,
+ * which is what a local pointer gives and what two independent member
+ * accesses do not.  With the pointer the function is byte-for-byte the
+ * blob's, 0x8f bytes and 35 instructions with the same operands.
+ *
+ * This is NOT register allocation being chased (CLAUDE.md's free column):
+ * the two spellings put a different expression tree in front of the
+ * compiler, the difference is twenty bytes and a whole extra callee-save,
+ * and the acceptance test is finding 617's full-text identity.  `detectFPE`
+ * below is the control -- its two detector references are to DIFFERENT
+ * objects, so no single pointer could serve both, and it is byte-identical
+ * written the obvious way.  Finding 4321.
+ */
+int
+V90Phase4Demodulator::detectRRN(short sample)
+{
+	V90RDetector *rd = &rDetector1;
+
+	if (!rd->detectR(sample))
+		return 0;
+
+	edprintf("V90Phase4Demodulator: Rd detected, polarity = %d\r\n",
+		 rd->int_24);
+	state = P4D_STATE_RD_DETECTED;
+	countInState = 0;
+	int_0028 = 0;
+	if (sessionFlag == 0) {
+		int_0038 = 1;
+		int_003c = 1;
+	}
+	return 1;
+}
+
+/*
+ * `resetBeforRRN` -- 37 bytes at 0x25d30.  The spelling is the blob's.
+ *
+ * FIVE STORES AND NOTHING ELSE, AND THE ORDER IS THE OBJECT'S: +0x38, +0x3c,
+ * +0x44, +0x48 and the byte at +0x30 LAST, not ascending by offset.  For a
+ * body that is nothing but stores the object's order is a testable
+ * hypothesis about the source's, and the acceptance test is finding 617's --
+ * full-text identity of the disassembly, operands included -- not "the same
+ * mnemonics".  Writing it ascending gives the same five instructions in a
+ * different order and fails that test.
+ */
+void
+V90Phase4Demodulator::resetBeforRRN()
+{
+	int_0038 = 1;
+	int_003c = 1;
+	int_0044 = 0;
+	int_0048 = 0;
+	uchar_0030 = 0;
+}
+
+/*
+ * `detectFPE` -- 115 bytes at 0x25d60.
+ *
+ * IT PRINTS THE OTHER DETECTOR'S POLARITY, and that is the blob's:
+ *
+ *     25d6d:  8d 83 28 30 ..   lea 0x3028(%ebx),%eax   ; rDetector2
+ *     25d7a:  call             V90RDetector::detectRf
+ *     25d90:  8b 8b 20 30 ..   mov 0x3020(%ebx),%ecx   ; 0x2ffc + 0x24
+ *
+ * -- the detection runs on `rDetector2` at +0x3028 and the "%d" comes from
+ * +0x3020, which is `rDetector1.int_24`.  `rDetector2.int_24` would be
+ * +0x304c.  Both are `lea`/`mov` off the same base in the same 22
+ * instructions, so this is not a misread of which object is which; it is a
+ * copy of `detectRRN` whose second reference was not updated.  Finding 4320.
+ * A test that seeded the two detectors alike could not see it, so
+ * `t_v90p4dleaf` gives them different polarities.
+ *
+ * THE SECOND MESSAGE TAKES NO ARGUMENT and has no "\r\n".  Two separate
+ * `edprintf` calls, not one string: 0x65e4 then 0x6618.
+ */
+int
+V90Phase4Demodulator::detectFPE(short sample)
+{
+	if (!rDetector2.detectRf(sample))
+		return 0;
+
+	edprintf("V90Phase4Demodulator: Rf detected, polarity = %d\r\n",
+		 rDetector1.int_24);
+	edprintf("V90Phase4Demodulator: enter FPE !");
+	state = P4D_STATE_FPE;
+	countInState = 0;
+	int_0028 = 0;
+	return 1;
+}
+
+/*
+ * ===========================================================================
+ * THE THREE DECISION MEMBERS.
+ *
+ * `getDecision` at 0x27780 (52 bytes), `getV90Decision` at 0x25ea0 (3,095)
+ * and `getV92Decision` at 0x26ac0 (3,252).  One sample in, one soft decision
+ * out, and the whole phase 4 state machine in between.
+ *
+ * THE TWO ARE NOT TWINS, AND THE ASYMMETRY IS THE POINT.  `getV90Decision`
+ * reaches `V90MP` -- `bitsToInfo`, `reset`, `printNofRecievedMpMpNot` -- and
+ * never touches `V90CP`; `getV92Decision` reaches `V90CP` and never touches
+ * `V90MP`.  A relocation scan of the whole object finds `getV92Decision` is
+ * the ONLY caller of `V90CP::bitsToInfo` anywhere.  Beyond that, V.92 has
+ * five arms V.90 does not have any form of -- the `WaitForCPu` state and its
+ * five-way switch on the CP decoder -- and V.90 has two, the MP arms, that
+ * V.92 sends straight to the exit.  Eleven of the eighteen jump-table entries
+ * do differ in body, so the file writes both out rather than sharing a helper
+ * that would have to be parameterised eleven ways.
+ *
+ * THE RETURNED DECISION IS READ UNINITIALISED ON FIVE OF THE EIGHTEEN ARMS,
+ * and that is the object's and not a slip here.  Both functions build the
+ * answer in %edi, and %edi is never written on the paths that reach the
+ * epilogue from states 4 and 0x10 (V.90), states 5 and 6 (V.92), or from the
+ * out-of-range `ja` -- so what comes back is whatever the CALLER left in the
+ * register.  A `short decision;` with no initialiser is what puts that in
+ * front of the compiler and it is what GCC 3.4.2 reproduces.  Deviation D600
+ * carries it and D321 is the same shape one class along in
+ * `V90Phase3Demodulator`, and `t_v90p4ddec` asserts the OBJECT and the transcript on
+ * those arms and never the return value, because there is no value there to
+ * agree about.
+ *
+ * THE SWITCH IS OVER 0..0x11 IN BOTH, `cmp $0x11,%eax` then `ja`, then an
+ * eighteen-entry jump table at .rodata:0x8dc (V.90) and 0x924 (V.92).  The
+ * range test is unsigned, which `state` being an enum pinned to `int` does
+ * not give on its own -- `P4D_STATE_MAX` and the cast below are what do.
+ * ===========================================================================
+ */
+
+/*
+ * `fsqrt` and log10 on the coprocessor.  Both are copies rather than a shared
+ * header, for the reason `V90TRN2Designer.cpp` gives at length (finding 876):
+ * a new C++ header has to be added to `offcheck.py`'s SKIP_HEADERS or the
+ * `offsets` gate breaks files nobody touched.  This is the fifth copy of the
+ * log10 pair and the third of `fsqrt`.
+ *
+ * GCC EMITS NEITHER FROM THE LIBRARY CALL at this tree's flags -- `sqrt()`
+ * and `log10()` both compile to a call, and only `-ffast-math` turns them
+ * into `fsqrt` and `fldlg2`/`fyl2x`.  The object has no relocation against
+ * either name anywhere in these two functions, so the sequences are written
+ * out.  `fyl2x` is not correctly rounded and `log10` is, so they are not the
+ * same function and the choice is not cosmetic.
+ */
+static inline long double
+p4d_x87_fsqrt(long double x)
+{
+	long double r;
+
+	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
+	return r;
+}
+
+static inline long double
+p4d_x87_log10(long double x)
+{
+	long double r;
+
+	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
+	return r;
+}
+
+/*
+ * THE FLOAT-AS-`%c%d.%0Nd` TRIPLE, the same three helpers `V92Transmitter`
+ * and `V90ConstellationDesigner` carry, and for the same reason: the object
+ * has no float conversion in `edprintf` and prints every real number as a
+ * sign character, a whole part and a scaled fraction.
+ *
+ *   sign    `fldz` then an ordered compare then `sbb`/`and $-2`/`add $0x2d`,
+ *           so '+' when the value is strictly above zero and '-' otherwise.
+ *   whole   `fabs` then a TRUNCATING `fistpl` -- magnitude toward zero.
+ *   frac    the value less its truncation, scaled, truncated, then integer
+ *           `abs`.  The `abs` is what makes the order of the two conversions
+ *           unobservable (finding 256).
+ */
+static char
+p4d_sign_of(float v)
+{
+	return (0.0f < v) ? '+' : '-';
+}
+
+static int
+p4d_whole_of(long double v)
+{
+	return (int)__builtin_fabsl(v);
+}
+
+static int
+p4d_frac4_of(long double v)
+{
+	return __builtin_abs((int)((v - (long double)(int)v) * 10000.0f));
+}
+
+static int
+p4d_frac8_of(long double v)
+{
+	return __builtin_abs((int)((v - (long double)(int)v) * 100000000.0f));
+}
+
+/*
+ * ONE FRAME IS SIX SAMPLES, and the three silence states step on frame
+ * boundaries: each tests `countInState % 6 == 0` before acting, which the
+ * object encodes as the unsigned 0xaaaaaaab reciprocal.  Spelled out because
+ * it is the same six in six places and because `V90DEMAPPER_FRAME` is the
+ * demapper's own constant for the same thing and this class does not include
+ * it for that purpose.
+ */
+#define P4D_FRAME	6u
+
+/*
+ * `getDecision` -- 52 bytes at 0x27780.
+ *
+ * The whole body is `mov (%edx),%ecx ; test %ecx,%ecx ; je`, which is +0x00,
+ * `sessionFlag`.  Non-zero picks V.92.
+ *
+ * THE `cwtl` AFTER EACH CALL IS THE ONLY EVIDENCE FOR ANY OF THE THREE RETURN
+ * TYPES, and the header says so at the declaration: a caller widens only what
+ * the callee left narrow.
+ */
+int
+V90Phase4Demodulator::getDecision(short sample)
+{
+	if (sessionFlag != 0)
+		return getV92Decision(sample);
+
+	return getV90Decision(sample);
+}
+
+/*
+ * `getV90Decision` -- 3,095 bytes at 0x25ea0.
+ *
+ * TWELVE OF THE EIGHTEEN STATES HAVE A BODY HERE.  4 and 0x10 fall to the
+ * exit and are absent from the switch, which is what the jump table says: the
+ * two entries point at the same block as the out-of-range `ja`.
+ *
+ * THE TWO ARMS THAT NAME A DETECTOR'S POLARITY HOLD A LOCAL POINTER, and
+ * that is finding 4321 again rather than register allocation being chased.
+ * `detectR` and then `rDetector1.int_24` written as two independent member
+ * accesses makes GCC re-derive the field address off `this`; the object keeps
+ * `&rDetector1` live across the call and reads `0x24(%ebx)`, which is one
+ * address expression used twice.  The arms that do NOT print a polarity --
+ * every `detectRNot` one -- take the address once and are written the obvious
+ * way, which is the same control `detectFPE` provides for the leaves.
+ *
+ * THE SIGN OF THE TWO ENERGY LINES IS TAKEN FROM THE ENERGY AND THE MAGNITUDE
+ * FROM ITS SQUARE ROOT.  `fldz ; fcomps 0x350c(%esi)` compares the FIELD,
+ * while the `%d.%04d` pair comes from `fsqrt` of it -- at both sites here and
+ * at both in `getV92Decision`, so it is a property of the original's own
+ * print idiom and not an accident of one line.  Finding 4803.
+ */
+short
+V90Phase4Demodulator::getV90Decision(short sample)
+{
+	short decision;
+
+	countInState++;
+	int_0028 = 0;
+
+	switch (state) {
+	/* Ri.  The polarity arm holds a local pointer; see above. */
+	case P4D_STATE_WAIT_FOR_RI: {
+		V90RDetector *rd = &rDetector1;
+
+		decision = sample;
+		if (rd->detectR(sample)) {
+			edprintf("V90Phase4Demodulator: Ri detected @ %d, "
+				 "polarity = %d\r\n", countInState, rd->int_24);
+			state = P4D_STATE_WAIT_FOR_RI_NOT;
+			countInState = 0;
+			int_0028 = 0x16;
+		}
+		break;
+	}
+
+	/* RiNot, and the two study lengths it chooses between. */
+	case P4D_STATE_WAIT_FOR_RI_NOT:
+		decision = sample;
+		if (rDetector1.detectRNot(sample)) {
+			edprintf("V90Phase4Demodulator: RiNot detected @ %d, "
+				 "enter TRN2dKnownData state\r\n", countInState);
+			state = P4D_STATE_TRN2D_KNOWN_DATA;
+			countInState = 0;
+			int_0028 = 0x17;
+			if (uint_0034 != 0) {
+				demapper->resetLinearMappStudy(0x960);
+				linearMappStudyStart = 0x258;
+			} else {
+				demapper->resetLinearMappStudy(0x1c20);
+				linearMappStudyStart = 0x7d0;
+			}
+		}
+		break;
+
+	/*
+	 * TRN2dKnownData IS ONE SAMPLE LONG.  Its entry sets the next state
+	 * and then falls into it -- `movl $0x3,0x20(%esi)` at 0x25ed5 with
+	 * the next instruction the head of state 3's body, and the jump table
+	 * pointing at both -- so the sample that arrives in state 2 is
+	 * demodulated by state 3's code, not deferred.
+	 */
+	case P4D_STATE_TRN2D_KNOWN_DATA:
+		state = P4D_STATE_TRN2D_DD;
+		/* FALLTHROUGH */
+	case P4D_STATE_TRN2D_DD:
+		decision = demapper->hardDecision(sample);
+		if (countInState == linearMappStudyStart) {
+			demapper->linearMappStudyEnabled = 1;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90Phase4Demodulator "
+						     "reset & enable linear "
+						     "mapping study in "
+						     "TRN2.\n");
+		}
+		if (demapper->linearMappStudyEnabled != 0)
+			demapper->linearMappingStudy(sample, decision);
+		demapper->process(bits, nbits);
+		if (countInState == trn2dDDLength / 2)
+			int_0028 = 0x18;
+		if (countInState == trn2dDDLength) {
+			int_0028 = 0x19;
+			demapper->linearMappStudyEnabled = 0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90Phase4Demodulator: "
+						     "disable linear mapping "
+						     "study\n");
+		}
+		break;
+
+	case P4D_STATE_WAIT_FOR_MP: {
+		unsigned int i;
+
+		decision = demapper->hardDecision(sample);
+		if (demapper->process(bits, nbits))
+			for (i = 0; i < nbits; i++) {
+				int info = mp->bitsToInfo(
+					descrambler->process(bits[i]));
+
+				if (info == 1) {
+					int_0028 = 0x1a;
+					edprintf("V90Phase4Demodulator: MP "
+						 "detected @ %d\r\n",
+						 countInState);
+				} else if (info == 2) {
+					int_0028 = 0x1b;
+					edprintf("V90Phase4Demodulator: MPnot "
+						 "detected @ %d\r\n",
+						 countInState);
+				}
+			}
+		break;
+	}
+
+	case P4D_STATE_WAIT_FOR_ED: {
+		unsigned int i;
+
+		decision = demapper->hardDecision(sample);
+		if (demapper->process(bits, nbits))
+			for (i = 0; i < nbits; i++) {
+				int info = mp->bitsToInfo(
+					descrambler->process(bits[i]));
+
+				if (info == 2) {
+					int_0028 = 0x1b;
+					/*
+					 * THE ONE SITE IN EITHER FUNCTION AT
+					 * LEVEL 3.  `cmpl $0x2` and not
+					 * `cmpl $0x1`, so it needs one more
+					 * than every other gate here --
+					 * exactly the distinction finding 150
+					 * says a single macro would flatten.
+					 */
+					if (DSPLIB_DEBUG_VERBOSE())
+						dsplibs_debug_printf(
+							"V90Phase4Demodulator:"
+							" MPnot detected on "
+							"WaitForEd @ %d\r\n",
+							countInState);
+				} else if (info == 3 &&
+					   state == P4D_STATE_WAIT_FOR_ED) {
+					int_0028 = 0x1c;
+					mp->printNofRecievedMpMpNot();
+					if (connectionEvaluator->word_90 != 0 &&
+					    int_003c != 0 && int_0038 != 0) {
+						edprintf("V90Phase4Demodulator:"
+							 " Ed detected @ %d, "
+							 "enter wait for Rt "
+							 "state\r\n",
+							 countInState);
+						countInState = 0;
+						errorEnergyBeforeEC = 0.0f;
+						state = P4D_STATE_SILENCE;
+						resetRRNDetector();
+					} else {
+						edprintf("V90Phase4Demodulator:"
+							 " Ed detected @ %d, "
+							 "enter B1d state\r\n",
+							 countInState);
+						state = P4D_STATE_B1D;
+						countInState = 0;
+						demapper->resetNoSpectral(
+							mappingParams2);
+						b1dZeros = 0;
+						b1dBits = 0;
+					}
+				}
+			}
+		break;
+	}
+
+	/*
+	 * B1d.  Every bit `process` hands back is descrambled and counted,
+	 * and the zeros among them are counted once the count has passed
+	 * `3 * mappingParams2->word_0 + 0x17` -- the "(after delay)" of the
+	 * termination message.  At 0x120 samples the phase ends and the bit
+	 * error ratio is reported.
+	 */
+	case P4D_STATE_B1D: {
+		unsigned int i;
+
+		decision = demapper->hardDecision(sample);
+		if (demapper->process(bits, nbits))
+			for (i = 0; i < nbits; i++) {
+				int bit = descrambler->process(bits[i]);
+
+				b1dBits++;
+				if (bit == 0 &&
+				    b1dBits > 3 * mappingParams2->word_0 + 0x17)
+					b1dZeros++;
+			}
+		if (countInState == 0x120) {
+			unsigned int n;
+
+			edprintf("V90Phase4Demodulator: Phase4 Terminated @ "
+				 "%d,  nof B1d bits = %d,  B1d Zeros (after "
+				 "delay) = %d\r\n", countInState, b1dBits,
+				 b1dZeros);
+			n = b1dBits - 3 * mappingParams2->word_0 - 0x17;
+			edprintf("V90Phase4Demodulator: B1d BER = "
+				 "%c%d.%08d\r\n",
+				 p4d_sign_of((float)((long double)b1dZeros /
+						     (long double)n)),
+				 p4d_whole_of((long double)b1dZeros /
+					      (long double)n),
+				 p4d_frac8_of((long double)b1dZeros /
+					      (long double)n));
+			int_0028 = 0x1d;
+			state = P4D_STATE_TERMINATED;
+			countInState = 0;
+			int_003c = 0;
+		}
+		break;
+	}
+
+	/*
+	 * Terminated, and whatever 0x11 is.  Both arms of the jump table
+	 * point at the same three instructions: zero the answer and leave.
+	 * The header says why 0x11 has no name.
+	 */
+	case P4D_STATE_TERMINATED:
+	case P4D_STATE_UNNAMED_11:
+		decision = 0;
+		break;
+
+	/*
+	 * TRN2d DD -- the Rd detection that ends it.  The detector runs on
+	 * the DECISION and not on the sample, which is what tells this arm
+	 * apart from the three that look like it.
+	 */
+	case P4D_STATE_RD_DETECTED:
+		decision = demapper->hardDecision(sample);
+		demapper->process(bits, nbits);
+		if (rDetector1.detectRNot(decision)) {
+			edprintf("V90Phase4Demodulator: RdNot detected @ %d, "
+				 "enter TRN2d DD state\r\n", countInState);
+			demapper->resetLinearMappStudy(0x1c20);
+			countInState = 0;
+			linearMappStudyStart = 0x7d0;
+			state = P4D_STATE_TRN2D_DD;
+			int_0028 = 0x2c;
+			trn2dDDLength = params->RRN_TRN2D_DD_LENGTH;
+			mp->reset();
+			mp->word_114 = mappingParams1->word_0;
+			demapper->resetNoSpectral(mappingParams1);
+		}
+		break;
+
+	/*
+	 * The three silence states, in the order the receiver walks them:
+	 * wait, measure the echo before cancellation, wait for the canceller,
+	 * measure it after, and report the ratio in dB.
+	 */
+	case P4D_STATE_SILENCE:
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (countInState >= (unsigned int)
+				    params->RRN_SILENCE_WAIT_BEFORE_ECHO_CALC &&
+		    countInState % P4D_FRAME == 0) {
+			edprintf("V90Phase4Demodulator: entering "
+				 "CalcErrorEnergyBeforeEchoCancellation state "
+				 "@ %d\r\n", countInState);
+			state = P4D_STATE_CALC_ENERGY_BEFORE_EC;
+			countInState = 0;
+		}
+		break;
+
+	/* The echo measurement before cancellation. */
+	case P4D_STATE_CALC_ENERGY_BEFORE_EC: {
+		float energy;
+
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		energy = errorEnergyBeforeEC + decision * decision;
+		if (countInState >= (unsigned int)
+				    params->RRN_SILENCE_ECHO_CALC_PERIOD &&
+		    countInState % P4D_FRAME == 0) {
+			errorEnergyBeforeEC = energy / countInState;
+			edprintf("V90Phase4Demodulator: entering "
+				 "WaitForEchoCancellation state @ %d\r\n",
+				 countInState);
+			edprintf("V90Phase4Demodulator: error energy before "
+				 "echo cancellation  = %c%d.%04d\r\n",
+				 p4d_sign_of(errorEnergyBeforeEC),
+				 p4d_whole_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyBeforeEC)),
+				 p4d_frac4_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyBeforeEC)));
+			state = P4D_STATE_WAIT_FOR_ECHO_CANCEL;
+			countInState = 0;
+		} else {
+			errorEnergyBeforeEC = energy;
+		}
+		break;
+	}
+
+	/* Waiting for the canceller to settle. */
+	case P4D_STATE_WAIT_FOR_ECHO_CANCEL:
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (countInState >= (unsigned int)
+				    (params->RRN_SILENCE_SCR_LENGTH -
+				     3 * params->RRN_SILENCE_ECHO_CALC_PERIOD) &&
+		    countInState % P4D_FRAME == 0) {
+			edprintf("V90Phase4Demodulator: entering "
+				 "CalcErrorEnergyAfterEchoCancellation state "
+				 "@ %d\r\n", countInState);
+			state = P4D_STATE_CALC_ENERGY_AFTER_EC;
+			countInState = 0;
+			errorEnergyAfterEC = 0.0f;
+		}
+		break;
+
+	/* The measurement after cancellation, and the dB ratio. */
+	case P4D_STATE_CALC_ENERGY_AFTER_EC: {
+		float energy;
+
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		energy = errorEnergyAfterEC + decision * decision;
+		if (countInState >= (unsigned int)
+				    params->RRN_SILENCE_ECHO_CALC_PERIOD &&
+		    countInState % P4D_FRAME == 0) {
+			float ratio;
+			float dB;
+
+			errorEnergyAfterEC = energy / countInState;
+			edprintf("V90Phase4Demodulator: entering WaitForRt "
+				 "state @ %d\r\n", countInState);
+			edprintf("V90Phase4Demodulator: error energy after "
+				 "echo cancellation  = %c%d.%04d\r\n",
+				 p4d_sign_of(errorEnergyAfterEC),
+				 p4d_whole_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyAfterEC)),
+				 p4d_frac4_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyAfterEC)));
+			ratio = 1.0f / errorEnergyAfterEC * errorEnergyBeforeEC;
+			dB = (float)(10.0f *
+				     p4d_x87_log10((long double)ratio));
+			edprintf("V90Phase4Demodulator: silence SCR echo "
+				 "energy [dB]  = %c%d.%04d\r\n",
+				 p4d_sign_of(dB), p4d_whole_of(dB),
+				 p4d_frac4_of(dB));
+			int_0028 = 0x2a;
+			state = P4D_STATE_WAIT_FOR_RT;
+			/*
+			 * THE PARAMETER IS THE LEFT OPERAND, and that is
+			 * measured rather than preferred.  The object is
+			 * `flds 0x10(%esp) ; flds 0x404(%ebx) ; fcompp ;
+			 * setb %dl` -- one ORDERED compare with no parity
+			 * test, so an unordered result leaves CF set and the
+			 * flag comes out 1.  Written `dB > PARAM` it comes
+			 * out 0 there instead, and `dB` IS unordered whenever
+			 * the two energies have opposite signs, because then
+			 * the ratio is negative and `fyl2x` answers a NaN.
+			 * `t_v90p4ddec` seeds a negative accumulator on a
+			 * third of its trials and caught it; findings 2300,
+			 * 2301 and 4812.
+			 */
+			int_3510 =
+			    (params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
+			     < dB);
+			countInState = 0;
+		} else {
+			errorEnergyAfterEC = energy;
+		}
+		break;
+	}
+
+	/* Rt.  V.90 records no progress code here and V.92 does. */
+	case P4D_STATE_WAIT_FOR_RT: {
+		V90RDetector *rd = &rDetector1;
+
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (rd->detectR(sample)) {
+			edprintf("V90Phase4Demodulator: Rt detected @ %d, "
+				 "polarity = %d\r\n", countInState, rd->int_24);
+			state = P4D_STATE_WAIT_FOR_RT_NOT;
+			countInState = 0;
+			int_0038 = 0;
+		}
+		break;
+	}
+
+	/* RtNot, and the WaitForMP entry inlined into it. */
+	case P4D_STATE_WAIT_FOR_RT_NOT:
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (rDetector1.detectRNot(sample)) {
+			edprintf("V90Phase4Demodulator: RtNot detected @ "
+				 "%d\r\n", countInState);
+			enterWaitForMP();
+			int_0028 = 0x28;
+			mp->reset();
+			mp->word_114 = mappingParams1->word_0;
+			edprintf("V90Phase4Demodulator: No reset to demapper, "
+				 "current Phase - %d\r\n",
+				 demapper->rbsFramePosition);
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	return decision;
+}
+
+/*
+ * `getV92Decision` -- 3,252 bytes at 0x26ac0.
+ *
+ * THE SAME EIGHTEEN-WAY SWITCH ON THE SAME FIELD, AND ELEVEN DIFFERENT ARMS.
+ * What it shares with `getV90Decision` is the frame -- increment, clear
+ * +0x28, dispatch, return %edi -- and the silence chain, which is the same
+ * five states doing the same arithmetic on the same two floats.  What it does
+ * not share:
+ *
+ *   - `V90CP` everywhere `getV90Decision` has `V90MP`.  This function is the
+ *     ONLY caller of `V90CP::bitsToInfo` in the whole object.
+ *   - state 0x10, the FPE state, which does nothing at all in V.90 and here
+ *     runs the RfNot detection on `rDetector2` and enters WaitForCPu.
+ *   - state 4 has a body.  In V.90 it is a state the receiver sits in and
+ *     this function's jump table sends it to a five-way switch on the CP
+ *     decoder, which is where the four flags at +0x3c/+0x40/+0x44/+0x48 and
+ *     the byte at +0x30 are read.
+ *   - states 5 and 6, the two MP states, fall to the exit.
+ *   - the Rt arm sets +0x28 to 0x27 and the V.90 one sets nothing, and the
+ *     RtNot arm does not print the WaitForMP message, so it is not
+ *     `enterWaitForMP` inlined the way V.90's is.
+ *
+ * THE CP SWITCH IS `cmp $0x5,%eax ; ja` AND A SIX-ENTRY TABLE at
+ * .rodata:0x96c -- six, not eighteen: entry six onwards belongs to a
+ * different function, which is why counting the table by the gap to the next
+ * one gets it wrong.  Answer 0 has no arm and rejoins the loop.
+ */
+short
+V90Phase4Demodulator::getV92Decision(short sample)
+{
+	short decision;
+
+	countInState++;
+	int_0028 = 0;
+
+	switch (state) {
+	/* Ri, and V.92's copy of it is V.90's sample for sample. */
+	case P4D_STATE_WAIT_FOR_RI: {
+		V90RDetector *rd = &rDetector1;
+
+		decision = sample;
+		if (rd->detectR(sample)) {
+			edprintf("V90Phase4Demodulator: Ri detected @ %d, "
+				 "polarity = %d\r\n", countInState, rd->int_24);
+			state = P4D_STATE_WAIT_FOR_RI_NOT;
+			countInState = 0;
+			int_0028 = 0x16;
+		}
+		break;
+	}
+
+	/* RiNot, V.92's copy. */
+	case P4D_STATE_WAIT_FOR_RI_NOT:
+		decision = sample;
+		if (rDetector1.detectRNot(sample)) {
+			edprintf("V90Phase4Demodulator: RiNot detected @ %d, "
+				 "enter TRN2dKnownData state\r\n", countInState);
+			state = P4D_STATE_TRN2D_KNOWN_DATA;
+			countInState = 0;
+			int_0028 = 0x17;
+			if (uint_0034 != 0) {
+				demapper->resetLinearMappStudy(0x960);
+				linearMappStudyStart = 0x258;
+			} else {
+				demapper->resetLinearMappStudy(0x1c20);
+				linearMappStudyStart = 0x7d0;
+			}
+		}
+		break;
+
+	/* TRN2dKnownData and TRN2d DD, V.92's copies. */
+	case P4D_STATE_TRN2D_KNOWN_DATA:
+		state = P4D_STATE_TRN2D_DD;
+		/* FALLTHROUGH */
+	case P4D_STATE_TRN2D_DD:
+		decision = demapper->hardDecision(sample);
+		if (countInState == linearMappStudyStart) {
+			demapper->linearMappStudyEnabled = 1;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90Phase4Demodulator "
+						     "reset & enable linear "
+						     "mapping study in "
+						     "TRN2.\n");
+		}
+		if (demapper->linearMappStudyEnabled != 0)
+			demapper->linearMappingStudy(sample, decision);
+		demapper->process(bits, nbits);
+		if (countInState == trn2dDDLength / 2)
+			int_0028 = 0x18;
+		if (countInState == trn2dDDLength) {
+			int_0028 = 0x19;
+			demapper->linearMappStudyEnabled = 0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90Phase4Demodulator: "
+						     "disable linear mapping "
+						     "study\n");
+		}
+		break;
+
+	/*
+	 * WaitForCPu.  Every descrambled bit goes to the CP decoder and its
+	 * answer picks one of five arms; 3 and 4 differ only in where the
+	 * `int_003c` test sits relative to the byte at +0x30 and in the four
+	 * progress codes, which is the sort of near-duplicate a shared helper
+	 * would hide.
+	 */
+	case P4D_STATE_WAIT_FOR_V90CP: {
+		unsigned int i;
+
+		decision = demapper->hardDecision(sample);
+		if (demapper->process(bits, nbits))
+			for (i = 0; i < nbits; i++)
+				switch (cp->bitsToInfo(
+						descrambler->process(bits[i]))) {
+				case 1:
+					int_0028 = 0x2d;
+					edprintf("V90Phase4Demodulator: CP "
+						 "detected @ %d\r\n",
+						 countInState);
+					break;
+
+				case 2:
+					int_0028 = 0x2e;
+					edprintf("V90Phase4Demodulator: CPnot "
+						 "detected @ %d\r\n",
+						 countInState);
+					break;
+
+				case 3:
+					uchar_0030 = 1;
+					if (int_003c == 0) {
+						int_0028 = 0x2f;
+						break;
+					}
+					uint_004c = cp->word_ca0;
+					if (int_0040 == 0 && uint_004c == 0) {
+						int_0028 = 0x2f;
+						break;
+					}
+					if (int_0048 != 0) {
+						int_0028 = 0x32;
+						break;
+					}
+					int_0044 = 1;
+					int_0028 = 0x31;
+					break;
+
+				case 4:
+					if (int_003c == 0) {
+						int_0028 = 0x30;
+						break;
+					}
+					uchar_0030 = 1;
+					uint_004c = cp->word_ca0;
+					if (int_0040 == 0 && uint_004c == 0) {
+						int_0028 = 0x30;
+						break;
+					}
+					if (int_0048 != 0) {
+						int_0028 = 0x34;
+						break;
+					}
+					int_0044 = 1;
+					int_0028 = 0x33;
+					break;
+
+				case 5:
+					if (uchar_0030 == 0)
+						break;
+					if (int_003c != 0 && int_0044 != 0 &&
+					    int_0048 == 0) {
+						int_0028 = 0x35;
+						edprintf("V90Phase4Demodulator:"
+							 " First Ed at RRN "
+							 "detected @ %d, "
+							 "Silence state\r\n",
+							 countInState);
+						countInState = 0;
+						errorEnergyBeforeEC = 0.0f;
+						resetRRNDetector();
+						int_0048 = 1;
+						uchar_0030 = 0;
+						state = uint_004c != 0
+							? P4D_STATE_WAIT_FOR_RT
+							: P4D_STATE_SILENCE;
+						break;
+					}
+					int_0028 = 0x1c;
+					edprintf("V90Phase4Demodulator: Ed "
+						 "detected @ %d, enter B1d "
+						 "state\r\n", countInState);
+					state = P4D_STATE_B1D;
+					countInState = 0;
+					demapper->resetNoSpectral(
+						mappingParams2);
+					b1dZeros = 0;
+					b1dBits = 0;
+					break;
+
+				default:
+					break;
+				}
+		break;
+	}
+
+	/* B1d, V.92's copy, and it reads the same mapping block. */
+	case P4D_STATE_B1D: {
+		unsigned int i;
+
+		decision = demapper->hardDecision(sample);
+		if (demapper->process(bits, nbits))
+			for (i = 0; i < nbits; i++) {
+				int bit = descrambler->process(bits[i]);
+
+				b1dBits++;
+				if (bit == 0 &&
+				    b1dBits > 3 * mappingParams2->word_0 + 0x17)
+					b1dZeros++;
+			}
+		if (countInState == 0x120) {
+			unsigned int n;
+
+			edprintf("V90Phase4Demodulator: Phase4 Terminated @ "
+				 "%d,  nof B1d bits = %d,  B1d Zeros (after "
+				 "delay) = %d\r\n", countInState, b1dBits,
+				 b1dZeros);
+			n = b1dBits - 3 * mappingParams2->word_0 - 0x17;
+			edprintf("V90Phase4Demodulator: B1d BER = "
+				 "%c%d.%08d\r\n",
+				 p4d_sign_of((float)((long double)b1dZeros /
+						     (long double)n)),
+				 p4d_whole_of((long double)b1dZeros /
+					      (long double)n),
+				 p4d_frac8_of((long double)b1dZeros /
+					      (long double)n));
+			int_0028 = 0x1d;
+			state = P4D_STATE_TERMINATED;
+			countInState = 0;
+			int_003c = 0;
+		}
+		break;
+	}
+
+	case P4D_STATE_TERMINATED:
+	case P4D_STATE_UNNAMED_11:
+		decision = 0;
+		break;
+
+	case P4D_STATE_RD_DETECTED:
+		decision = demapper->hardDecision(sample);
+		demapper->process(bits, nbits);
+		if (rDetector1.detectRNot(decision)) {
+			edprintf("V90Phase4Demodulator: RdNot detected @ %d, "
+				 "enter TRN2d DD state\r\n", countInState);
+			demapper->resetLinearMappStudy(0x1c20);
+			countInState = 0;
+			linearMappStudyStart = 0x7d0;
+			state = P4D_STATE_TRN2D_DD;
+			int_0028 = 0x2c;
+			trn2dDDLength = params->RRN_TRN2D_DD_LENGTH;
+			cp->reset();
+			cp->byte_13 = 0;
+			cp->word_3ba8 = mappingParams1->word_0;
+			uchar_0030 = 0;
+			demapper->resetNoSpectral(mappingParams1);
+		}
+		break;
+
+	/* The silence chain again, state for state as V.90's. */
+	case P4D_STATE_SILENCE:
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (countInState >= (unsigned int)
+				    params->RRN_SILENCE_WAIT_BEFORE_ECHO_CALC &&
+		    countInState % P4D_FRAME == 0) {
+			edprintf("V90Phase4Demodulator: entering "
+				 "CalcErrorEnergyBeforeEchoCancellation state "
+				 "@ %d\r\n", countInState);
+			state = P4D_STATE_CALC_ENERGY_BEFORE_EC;
+			countInState = 0;
+		}
+		break;
+
+	/* The echo measurement before cancellation, V.92's copy. */
+	case P4D_STATE_CALC_ENERGY_BEFORE_EC: {
+		float energy;
+
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		energy = errorEnergyBeforeEC + decision * decision;
+		if (countInState >= (unsigned int)
+				    params->RRN_SILENCE_ECHO_CALC_PERIOD &&
+		    countInState % P4D_FRAME == 0) {
+			errorEnergyBeforeEC = energy / countInState;
+			edprintf("V90Phase4Demodulator: entering "
+				 "WaitForEchoCancellation state @ %d\r\n",
+				 countInState);
+			edprintf("V90Phase4Demodulator: error energy before "
+				 "echo cancellation  = %c%d.%04d\r\n",
+				 p4d_sign_of(errorEnergyBeforeEC),
+				 p4d_whole_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyBeforeEC)),
+				 p4d_frac4_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyBeforeEC)));
+			state = P4D_STATE_WAIT_FOR_ECHO_CANCEL;
+			countInState = 0;
+		} else {
+			errorEnergyBeforeEC = energy;
+		}
+		break;
+	}
+
+	/* Waiting for the canceller, V.92's copy. */
+	case P4D_STATE_WAIT_FOR_ECHO_CANCEL:
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (countInState >= (unsigned int)
+				    (params->RRN_SILENCE_SCR_LENGTH -
+				     3 * params->RRN_SILENCE_ECHO_CALC_PERIOD) &&
+		    countInState % P4D_FRAME == 0) {
+			edprintf("V90Phase4Demodulator: entering "
+				 "CalcErrorEnergyAfterEchoCancellation state "
+				 "@ %d\r\n", countInState);
+			state = P4D_STATE_CALC_ENERGY_AFTER_EC;
+			countInState = 0;
+			errorEnergyAfterEC = 0.0f;
+		}
+		break;
+
+	/* The measurement after cancellation and the dB report. */
+	case P4D_STATE_CALC_ENERGY_AFTER_EC: {
+		float energy;
+
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		energy = errorEnergyAfterEC + decision * decision;
+		if (countInState >= (unsigned int)
+				    params->RRN_SILENCE_ECHO_CALC_PERIOD &&
+		    countInState % P4D_FRAME == 0) {
+			float ratio;
+			float dB;
+
+			errorEnergyAfterEC = energy / countInState;
+			edprintf("V90Phase4Demodulator: entering WaitForRt "
+				 "state @ %d\r\n", countInState);
+			edprintf("V90Phase4Demodulator: error energy after "
+				 "echo cancellation  = %c%d.%04d\r\n",
+				 p4d_sign_of(errorEnergyAfterEC),
+				 p4d_whole_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyAfterEC)),
+				 p4d_frac4_of(p4d_x87_fsqrt(
+					 (long double)errorEnergyAfterEC)));
+			ratio = 1.0f / errorEnergyAfterEC * errorEnergyBeforeEC;
+			dB = (float)(10.0f *
+				     p4d_x87_log10((long double)ratio));
+			edprintf("V90Phase4Demodulator: silence SCR echo "
+				 "energy [dB]  = %c%d.%04d\r\n",
+				 p4d_sign_of(dB), p4d_whole_of(dB),
+				 p4d_frac4_of(dB));
+			int_0028 = 0x2a;
+			state = P4D_STATE_WAIT_FOR_RT;
+			/*
+			 * THE PARAMETER IS THE LEFT OPERAND, and that is
+			 * measured rather than preferred.  The object is
+			 * `flds 0x10(%esp) ; flds 0x404(%ebx) ; fcompp ;
+			 * setb %dl` -- one ORDERED compare with no parity
+			 * test, so an unordered result leaves CF set and the
+			 * flag comes out 1.  Written `dB > PARAM` it comes
+			 * out 0 there instead, and `dB` IS unordered whenever
+			 * the two energies have opposite signs, because then
+			 * the ratio is negative and `fyl2x` answers a NaN.
+			 * `t_v90p4ddec` seeds a negative accumulator on a
+			 * third of its trials and caught it; findings 2300,
+			 * 2301 and 4812.
+			 */
+			int_3510 =
+			    (params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
+			     < dB);
+			countInState = 0;
+		} else {
+			errorEnergyAfterEC = energy;
+		}
+		break;
+	}
+
+	/* Rt, and V.92 records a progress code where V.90 records none. */
+	case P4D_STATE_WAIT_FOR_RT: {
+		V90RDetector *rd = &rDetector1;
+
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (rd->detectR(sample)) {
+			edprintf("V90Phase4Demodulator: Rt detected @ %d, "
+				 "polarity = %d\r\n", countInState, rd->int_24);
+			int_0028 = 0x27;
+			state = P4D_STATE_WAIT_FOR_RT_NOT;
+			countInState = 0;
+			int_0038 = 0;
+		}
+		break;
+	}
+
+	/* RtNot, and it does NOT print the WaitForMP message V.90 does. */
+	case P4D_STATE_WAIT_FOR_RT_NOT:
+		decision = sample;
+		demapper->incrementRBSFramePosition();
+		if (rDetector1.detectRNot(sample)) {
+			edprintf("V90Phase4Demodulator: RtNot detected @ "
+				 "%d\r\n", countInState);
+			state = P4D_STATE_WAIT_FOR_V90CP;
+			countInState = 0;
+			int_0028 = 0x28;
+			cp->reset();
+			cp->word_3ba8 = mappingParams1->word_0;
+			edprintf("V90Phase4Demodulator: No reset to demapper, "
+				 "current Phase - %d\r\n",
+				 demapper->rbsFramePosition);
+		}
+		break;
+
+	/*
+	 * FPE, and the state that gives V.92 its extra detection.  The
+	 * message calls the destination "WaitForCPu" where the V.90 side
+	 * calls the same state 4 "WaitForV90CP"; both are the author's.
+	 */
+	case P4D_STATE_FPE:
+		decision = demapper->hardDecision(sample);
+		demapper->process(bits, nbits);
+		if (rDetector2.detectRfNot(decision)) {
+			edprintf("V90Phase4Demodulator: RfNot detected @ %d, "
+				 "enter WaitForCPu state\r\n", countInState);
+			state = P4D_STATE_WAIT_FOR_V90CP;
+			countInState = 0;
+			cp->reset();
+			cp->byte_13 = 0;
+			cp->word_3ba8 = mappingParams2->word_0;
+			uchar_0030 = 0;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	return decision;
 }

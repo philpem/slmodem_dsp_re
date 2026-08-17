@@ -1,0 +1,137 @@
+[
+ {
+  "note": "V90BitsToSymbol's three arithmetic members, against t_v90btsproc.  The placement mutations move a loop bound, a store or a status; the DIAGNOSTIC ones swap the two error messages, which writes the same bytes into the object and is only catchable through the transcript.  NOT here: turning `wanted * bitsPerFrame / 6` into `(wanted / 6) * bitsPerFrame` on the exact arm.  The two agree for every value that arm can be given -- the arm is chosen by `wanted % 6 == 0` -- so it is equivalent by construction, and what holds the object's spelling there is finding 617's full-text identity, not a test."
+ },
+ {
+  "label": "nofBitsForNextTime answers for an already-full block",
+  "find": "\tif (symbolsBlockSize <= symbolsDone)\n\t\treturn 0;",
+  "replace": "\tif (symbolsBlockSize < symbolsDone)\n\t\treturn 0;"
+ },
+ {
+  "label": "nofBitsForNextTime answers 1 rather than 0 when nothing is owed",
+  "find": "\tif (symbolsBlockSize <= symbolsDone)\n\t\treturn 0;",
+  "replace": "\tif (symbolsBlockSize <= symbolsDone)\n\t\treturn 1;"
+ },
+ {
+  "label": "nofBitsForNextTime never counts the extra symbols in",
+  "find": "\tif (extraSymbolsPending)\n\t\twanted += extraSymbols;",
+  "replace": ""
+ },
+ {
+  "label": "nofBitsForNextTime counts the extra symbols in unconditionally",
+  "find": "\tif (extraSymbolsPending)\n\t\twanted += extraSymbols;",
+  "replace": "\twanted += extraSymbols;"
+ },
+ {
+  "label": "nofBitsForNextTime counts twelve symbols to the frame",
+  "find": "\tif (wanted % 6 != 0)\n\t\treturn (wanted / 6 + 1) * bitsPerFrame;",
+  "replace": "\tif (wanted % 12 != 0)\n\t\treturn (wanted / 12 + 1) * bitsPerFrame;"
+ },
+ {
+  "label": "nofBitsForNextTime rounds the part-frame down",
+  "find": "\t\treturn (wanted / 6 + 1) * bitsPerFrame;",
+  "replace": "\t\treturn (wanted / 6) * bitsPerFrame;"
+ },
+ {
+  "label": "nofBitsForNextTime forgets the divide on the exact arm",
+  "find": "\treturn wanted * bitsPerFrame / 6;",
+  "replace": "\treturn wanted * bitsPerFrame;"
+ },
+ {
+  "label": "nofBitsForNextTime subtracts the block size from the count done",
+  "find": "\twanted = symbolsBlockSize - symbolsDone;",
+  "replace": "\twanted = symbolsDone - symbolsBlockSize;"
+ },
+ {
+  "label": "setSymbolsBlockSize does not store the block size",
+  "find": "\tsymbolsBlockSize = blockSize;\n\treturn nofBitsForNextTime();",
+  "replace": "\treturn nofBitsForNextTime();"
+ },
+ {
+  "label": "setSymbolsBlockSize stores the block size into symbolsDone",
+  "find": "\tsymbolsBlockSize = blockSize;\n\treturn nofBitsForNextTime();",
+  "replace": "\tsymbolsDone = blockSize;\n\treturn nofBitsForNextTime();"
+ },
+ {
+  "label": "setSymbolsBlockSize answers before the store rather than after",
+  "find": "\tsymbolsBlockSize = blockSize;\n\treturn nofBitsForNextTime();",
+  "replace": "\tunsigned int n = nofBitsForNextTime();\n\tsymbolsBlockSize = blockSize;\n\treturn n;"
+ },
+ {
+  "label": "process answers 2 rather than 1 for SIZE_NOT_SET",
+  "find": "\t\tstatus = 1;",
+  "replace": "\t\tstatus = 2;"
+ },
+ {
+  "label": "process answers 2 rather than 3 for BUFFER_UNDERFLOW",
+  "find": "\t\t\tstatus = 3;",
+  "replace": "\t\t\tstatus = 2;"
+ },
+ {
+  "label": "process has its two error messages swapped",
+  "find": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");"
+ },
+ {
+  "label": "process announces SIZE_NOT_SET below the debug gate too",
+  "find": "\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"",
+  "replace": "\t\tif (dsplibs_debug_level > 0)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \""
+ },
+ {
+  "label": "process does not clear symbolsDone on the underflow arm",
+  "find": "\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
+  "replace": "\t\t\t\toutSymbols[i] = symbols[i];",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and it is a property of the arithmetic rather than a gap in the sweep.  On the underflow arm `symbolsDone < symbolsBlockSize`, so the leftover shift `for (i = symbolsBlockSize; i < symbolsDone; i++)` cannot run whether the zero was stored or not, `kept` stays 0, and `symbolsDone = kept` writes the same zero four lines later.  The store is in the reconstruction because the blob has `movl $0x0,0x10(%ebp)` at 0x2fded and then `mov %ebx,0x10(%ebp)` at 0x2fe1e -- two stores to +0x10 on one path -- and because it is what lets the compiler constant-propagate the loop bound to the `xor %esi,%esi` at 0x2fdf4.  So this one line rests on the instructions and not on the suite."
+ },
+ {
+  "label": "process copies out a whole block on the underflow arm",
+  "find": "\t\t\tfor (i = 0; i < symbolsDone; i++)",
+  "replace": "\t\t\tfor (i = 0; i < symbolsBlockSize; i++)"
+ },
+ {
+  "label": "process copies out everything ready rather than one block",
+  "find": "\t\t\tfor (i = 0; i < symbolsBlockSize; i++)",
+  "replace": "\t\t\tfor (i = 0; i < symbolsDone; i++)"
+ },
+ {
+  "label": "process shifts the whole buffer down rather than the leftover",
+  "find": "\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)",
+  "replace": "\t\tfor (i = 0; i < symbolsDone; i++)"
+ },
+ {
+  "label": "process does not record how much was kept",
+  "find": "\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;",
+  "replace": "\t\t\tsymbols[kept++] = symbols[i];"
+ },
+ {
+  "label": "process does not write the next bit demand",
+  "find": "\t\tnofBits = nofBitsForNextTime();",
+  "replace": ""
+ },
+ {
+  "label": "process does not clear the pending flag",
+  "find": "\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;\n\n\treturn status;",
+  "replace": "\treturn status;"
+ },
+ {
+  "label": "process clears the pending flag before it counts the bits",
+  "find": "\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;",
+  "replace": "\t\tif (extraSymbolsPending)\n\t\t\textraSymbolsPending = 0;\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;"
+ },
+ {
+  "label": "process treats an exactly-filled block as an underflow",
+  "find": "\t\tif (symbolsDone < symbolsBlockSize) {",
+  "replace": "\t\tif (symbolsDone <= symbolsBlockSize) {"
+ },
+ {
+  "label": "process tests symbolsDone where the object tests the block size",
+  "find": "\tif (symbolsBlockSize == 0) {",
+  "replace": "\tif (symbolsDone == 0) {"
+ },
+ {
+  "label": "process leaves the pending flag alone on the size-not-set path",
+  "find": "\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;",
+  "replace": "\t\tnofBits = nofBitsForNextTime();\n\n\t\tif (extraSymbolsPending)\n\t\t\textraSymbolsPending = 0;\n\t}"
+ }
+]

@@ -1,0 +1,149 @@
+[
+ {
+  "note": "VPcmV34GetVisualDiagnostics against t_v34diag.  Nine selectors that store the same output array from four different sources each, so every anchor is widened with the neighbouring statement that names the arm -- finding 347's remedy.  The two `maxCount` mutations on selectors 3 and 4 are the ones that adjudicate D710: they make the function HONOUR the bound, which is the fix the object does not have, and the suite has to catch that as a difference."
+ },
+ {
+  "label": "selector 0: the V.34 ring is not drained",
+  "find": "\t\t\tobj->f2aa4 = 0;",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "selector 0: the ring count is not clamped",
+  "find": "\t\t\tn = (unsigned int)obj->f2aa4;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;",
+  "replace": "\t\t\tn = (unsigned int)obj->f2aa4;"
+ },
+ {
+  "label": "selector 0: the ring count is read unsigned",
+  "find": "\t\t\tn = (unsigned int)obj->f2aa4;",
+  "replace": "\t\t\tn = (unsigned int)(unsigned short)obj->f2aa4;",
+  "equivalent": true,
+  "why": "An argument about the code and not about the grid: the two readings are the SAME FUNCTION over every defined execution.  They can only differ when `f2aa4` is negative, and then the signed read gives 0xffffffff and the unsigned one 0x0000ffff -- so they differ only where `maxCount` exceeds 65535 and the loop is already walking `hist_2aa8`, which has 300 entries.  Every input that separates them is one where the unmutated function is reading tens of thousands of elements past the end of that array, so there is no defined execution on which the mutation changes an observable.  The signedness stands on `movswl 0x2aa4` at 0x72ec, which is forced; this entry records that nothing behavioural can confirm it."
+ },
+ {
+  "label": "selector 0: the two halves of a point are swapped",
+  "find": "\t\t\t\tpoints[i].re = VDIAG_V34_POINT_SCALE *\n\t\t\t\t    obj->hist_2aa8[i][0];\n\t\t\t\tpoints[i].im = VDIAG_V34_POINT_SCALE *\n\t\t\t\t    obj->hist_2aa8[i][1];",
+  "replace": "\t\t\t\tpoints[i].re = VDIAG_V34_POINT_SCALE *\n\t\t\t\t    obj->hist_2aa8[i][1];\n\t\t\t\tpoints[i].im = VDIAG_V34_POINT_SCALE *\n\t\t\t\t    obj->hist_2aa8[i][0];"
+ },
+ {
+  "label": "selector 0: the point is not doubled",
+  "find": "#define VDIAG_V34_POINT_SCALE\t2",
+  "replace": "#define VDIAG_V34_POINT_SCALE\t1"
+ },
+ {
+  "label": "selector 0: the V.90 role test is inverted",
+  "find": "\t\tif (obj->status == V34DIAG_STATUS_V92 ||\n\t\t    (obj->status == V34DIAG_STATUS_V90 &&\n\t\t     obj->f359c == VDIAG_ROLE_ANSWER)) {\n\t\t\tn = xf->getConstellation(points, maxCount);",
+  "replace": "\t\tif (obj->status == V34DIAG_STATUS_V92 ||\n\t\t    (obj->status == V34DIAG_STATUS_V90 &&\n\t\t     obj->f359c == VDIAG_ROLE_CALL)) {\n\t\t\tn = xf->getConstellation(points, maxCount);"
+ },
+ {
+  "label": "selector 1: the equaliser cap is not applied",
+  "find": "\t\t\tn = maxCount;\n\t\t\tif (n > V34_EQ_TAPS)\n\t\t\t\tn = V34_EQ_TAPS;",
+  "replace": "\t\t\tn = maxCount;"
+ },
+ {
+  "label": "selector 1: the equaliser cap is one tap out",
+  "find": "\t\t\tif (n > V34_EQ_TAPS)\n\t\t\t\tn = V34_EQ_TAPS;",
+  "replace": "\t\t\tif (n > V34_EQ_TAPS - 1)\n\t\t\t\tn = V34_EQ_TAPS - 1;"
+ },
+ {
+  "label": "selector 1: the two equaliser halves are swapped",
+  "find": "\t\t\t\tpoints[i].re = VDIAG_V34_POINT_SCALE * q->re[i];\n\t\t\t\tpoints[i].im = VDIAG_V34_POINT_SCALE * q->im[i];",
+  "replace": "\t\t\t\tpoints[i].re = VDIAG_V34_POINT_SCALE * q->im[i];\n\t\t\t\tpoints[i].im = VDIAG_V34_POINT_SCALE * q->re[i];"
+ },
+ {
+  "label": "selector 1: the equaliser is read from the delay line",
+  "find": "\t\t\t    ((const unsigned char *)rx + V34_RX_EQ_OFFSET);",
+  "replace": "\t\t\t    ((const unsigned char *)rx + V34_RX_EQ_OFFSET - 4);"
+ },
+ {
+  "label": "selector 2: V.34 answers the DFE from the equaliser",
+  "find": "\t\t/* V.34 has no decision-feedback filter to report. */\n\t\tbreak;",
+  "replace": "\t\telse\n\t\t\tn = maxCount;\n\t\tbreak;"
+ },
+ {
+  "label": "selector 3: the resampler phase honours maxCount",
+  "find": "\t\tif (obj->status != V34DIAG_STATUS_V90 &&\n\t\t    obj->status != V34DIAG_STATUS_V92) {\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->f359c == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);\n\t\t\telse\n\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;",
+  "replace": "\t\tif (maxCount == 0)\n\t\t\tbreak;\n\t\tif (obj->status != V34DIAG_STATUS_V90 &&\n\t\t    obj->status != V34DIAG_STATUS_V92) {\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->f359c == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);\n\t\t\telse\n\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;"
+ },
+ {
+  "label": "selector 3: the phase goes in the imaginary half",
+  "find": "\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;",
+  "replace": "\t\t\t\tpoints[0].im = rx->f1d8;\n\t\t}\n\t\tpoints[0].re = 0;"
+ },
+ {
+  "label": "selector 3: the PCM arms fill the real half too",
+  "find": "\t\tif (obj->status != V34DIAG_STATUS_V90 &&\n\t\t    obj->status != V34DIAG_STATUS_V92) {\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->f359c == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);",
+  "replace": "\t\t{\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->f359c == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);"
+ },
+ {
+  "label": "selector 4: the offset comes from the phase's field",
+  "find": "\t\t\t\tpoints[0].re = rx->f1d0;",
+  "replace": "\t\t\t\tpoints[0].re = rx->f1d8;"
+ },
+ {
+  "label": "selector 4: the offset is widened unsigned",
+  "find": "\t\t\t\tpoints[0].re = rx->f1d0;\n\t\t}",
+  "replace": "\t\t\t\tpoints[0].re = (unsigned short)rx->f1d0;\n\t\t}"
+ },
+ {
+  "label": "selectors 3 and 4 return no points",
+  "find": "\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;",
+  "replace": "\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 0;"
+ },
+ {
+  "label": "selector 5: the V.92 canceller is used on every session",
+  "find": "\tcase VDIAG_ECHO_NEAR:\n\t\tif (obj->status == V34DIAG_STATUS_V92) {",
+  "replace": "\tcase VDIAG_ECHO_NEAR:\n\t\tif (obj->status != 0) {"
+ },
+ {
+  "label": "selector 5: the near canceller is the far one",
+  "find": "\t\t\tn = obj->echo0.taps;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;\n\t\t\tcoefs = obj->echo0.coeff;",
+  "replace": "\t\t\tn = obj->echo1.taps;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;\n\t\t\tcoefs = obj->echo1.coeff;"
+ },
+ {
+  "label": "selector 5: the V.34 taps go in the real half",
+  "find": "\t\t\tn = obj->echo0.taps;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;\n\t\t\tcoefs = obj->echo0.coeff;\n\n\t\t\tfor (i = 0; i < n; i++) {\n\t\t\t\tpoints[i].re = 0;\n\t\t\t\tpoints[i].im = coefs[i];\n\t\t\t}",
+  "replace": "\t\t\tn = obj->echo0.taps;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;\n\t\t\tcoefs = obj->echo0.coeff;\n\n\t\t\tfor (i = 0; i < n; i++) {\n\t\t\t\tpoints[i].im = 0;\n\t\t\t\tpoints[i].re = coefs[i];\n\t\t\t}"
+ },
+ {
+  "label": "selector 5: the V.92 taps are not scaled",
+  "find": "#define VDIAG_ECHO_SCALE\t10000.0f",
+  "replace": "#define VDIAG_ECHO_SCALE\t1000.0f"
+ },
+ {
+  "label": "selector 5: the V.92 taps are not clamped",
+  "find": "\t\t\tn = xf->echoCanceller.filterLength;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;",
+  "replace": "\t\t\tn = xf->echoCanceller.filterLength;"
+ },
+ {
+  "label": "selector 6: the far canceller answers every session",
+  "find": "\t\tif (obj->status == 0) {\n\t\t\tconst short *coefs;\n\n\t\t\tn = obj->echo1.taps;",
+  "replace": "\t\tif (obj->status != 4) {\n\t\t\tconst short *coefs;\n\n\t\t\tn = obj->echo1.taps;"
+ },
+ {
+  "label": "selector 6: the far canceller is the near one",
+  "find": "\t\t\tn = obj->echo1.taps;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;\n\t\t\tcoefs = obj->echo1.coeff;",
+  "replace": "\t\t\tn = obj->echo0.taps;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;\n\t\t\tcoefs = obj->echo0.coeff;"
+ },
+ {
+  "label": "selector 7 answers like selector 6",
+  "find": "\tdefault:\n\t\t/* Selector 7, and everything above 8. */\n\t\tbreak;",
+  "replace": "\tdefault:\n\t\tn = obj->echo1.taps;\n\t\tif (n > maxCount)\n\t\t\tn = maxCount;\n\t\tbreak;"
+ },
+ {
+  "label": "selector 8: the decision errors ignore the role",
+  "find": "\t\tif ((unsigned int)(obj->status - 1) > 1u &&\n\t\t    obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t    obj->f359c == VDIAG_ROLE_CALL)",
+  "replace": "\t\tif ((unsigned int)(obj->status - 1) > 1u &&\n\t\t    obj->status == V34DIAG_STATUS_K56FLEX)",
+  "equivalent": true,
+  "why": "Every K56flex member this function calls is a three-byte stub -- `xor %eax,%eax; ret` -- so `getDecisionErrors` returns 0 and writes nothing whatever the role is, and the arm's only other outcome is the 0 it starts with. The role test on this arm is therefore invisible in the OBJECT and not merely untested here.  It is the object's test all the same and is reproduced; the day the class gains a body this becomes a real mutation and this entry will start failing, which is the alarm it exists to raise."
+ },
+ {
+  "label": "the K56flex role is the answerer's",
+  "find": "#define VDIAG_ROLE_CALL\t\t0x65",
+  "replace": "#define VDIAG_ROLE_CALL\t\t0x66"
+ },
+ {
+  "label": "the receiver is reached one word early",
+  "find": "#define V34_RECEIVER_OFFSET\t0x264",
+  "replace": "#define V34_RECEIVER_OFFSET\t0x260"
+ }
+]

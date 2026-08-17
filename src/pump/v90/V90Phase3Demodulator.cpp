@@ -74,6 +74,7 @@ P3D_OFF(word_3cc,		0x3cc, word3cc);
 P3D_OFF(descrambler,		0x3d0, descrambler);
 P3D_OFF(sdDetector,		0x3f0, sddetector);
 P3D_OFF(word_3f4,		0x3f4, word3f4);
+P3D_OFF(byte_3f8,		0x3f8, byte3f8);
 P3D_OFF(byte_3f9,		0x3f9, byte3f9);
 P3D_OFF(word_3fc,		0x3fc, word3fc);
 P3D_OFF(short_400,		0x400, short400);
@@ -2302,6 +2303,239 @@ V90Phase3Demodulator::getV92Decision(float sample)
 	}
 
 	return decision;
+}
+
+/*
+ * ===========================================================================
+ * THE TEN SMALL PHASE 3 RECEIVE MEMBERS.  680 bytes between them, and four of
+ * them are blocks this file already carries as macros because the two decision
+ * functions have the same code inlined -- `P3D_BUMP_FRAME`,
+ * `P3D_COPY_440_TO_438`, `P3D_CHECK_TERMINATED` and the demod-bit block.  Each
+ * is used here rather than re-derived, so that a correction to either spelling
+ * reaches both places.
+ * ===========================================================================
+ */
+
+/*
+ * `resetJdNotDetector` -- thirteen bytes at 0x20d60, one store.  `reset` makes
+ * the same store, which is why the field is `word_404` in both places.
+ */
+void
+V90Phase3Demodulator::resetJdNotDetector()
+{
+	word_404 = 0;
+}
+
+/*
+ * `getMaxUcode` -- twelve bytes at 0x20f00, and IT RETURNS A POINTER:
+ *
+ *      20f04:  8b 00           mov  (%eax),%eax        ; the detector
+ *      20f06:  05 56 a9 00 00  add  $0xa956,%eax       ; + maxUcode
+ *
+ * which is `&autoDigitalImpDetector->maxUcode[0]` and not a value -- +0xa956
+ * is a six-byte array, one entry per phase, and the whole array is what the
+ * one caller wants.  `V90Demodulator::exitPhase3` passes this to
+ * `V90TRN2Designer`'s `topUcode`, which V90TRN2Designer.h spells
+ * `unsigned char *`.
+ */
+unsigned char *
+V90Phase3Demodulator::getMaxUcode()
+{
+	return autoDigitalImpDetector->maxUcode;
+}
+
+/*
+ * `setAltRbsParams` -- twenty bytes at 0x20ee0, one word moved inside the
+ * parameter block and nothing touched in the object at all.  Both decision
+ * functions do the same copy inline; `P3D_COPY_440_TO_438`'s comment above
+ * carries the argument for why both slots are `float`.
+ */
+void
+V90Phase3Demodulator::setAltRbsParams()
+{
+	params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =
+	    params->unnamed_440;
+}
+
+/*
+ * `incrementFramePosition` -- twenty-five bytes at 0x20ec0.  The frame
+ * position runs 0,1,2,3,4,5,0, which is `P3D_BUMP_FRAME` and is the block
+ * `getV92Decision` already has inlined.
+ */
+void
+V90Phase3Demodulator::incrementFramePosition()
+{
+	P3D_BUMP_FRAME();
+}
+
+/*
+ * `enterWaitForANSpcmDrop` -- 45 bytes at 0x20f60.
+ *
+ * IDEMPOTENT BY CONSTRUCTION: already in the state, and it neither announces
+ * itself nor restarts the counter.  The message is where
+ * `P3D_STATE_WAIT_FOR_ANS_PCM_DROP` gets its name (see the header).
+ */
+void
+V90Phase3Demodulator::enterWaitForANSpcmDrop()
+{
+	if (state != P3D_STATE_WAIT_FOR_ANS_PCM_DROP) {
+		edprintf("V90Phase3Demodulator: enter WaitForANSpcmDrop\r\n");
+		state = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;
+		word_2c = 0;
+	}
+}
+
+/*
+ * `setDigitalImairmentsInfo` -- 54 bytes at 0x20e80, and the object's own
+ * misspelling is the SYMBOL, so it is not corrected here.
+ *
+ * Three calls on the detector in a fixed order, the last of them a tail jump,
+ * and the order is load-bearing rather than incidental: `determineMaxUcode`
+ * leaves `byte_a954` behind, `findPadGain` starts from that byte and stores
+ * `padGain`, and `applyPadGainToLinMapp` divides both mapping tables by
+ * `padGain`.  Run in any other order the third does nothing, because `reset`
+ * seeds the gain with 1.0f.
+ *
+ * The detector pointer is re-read from the object before each call, which is
+ * the calls clobbering the register and not three different pointers.
+ */
+void
+V90Phase3Demodulator::setDigitalImairmentsInfo()
+{
+	autoDigitalImpDetector->determineMaxUcode(byte_3f8);
+	autoDigitalImpDetector->findPadGain();
+	autoDigitalImpDetector->applyPadGainToLinMapp();
+}
+
+/*
+ * `getDecision` -- 52 bytes at 0x258f0, and nothing but a two-way dispatch on
+ * the session flag.  `cwtl` after each call is what types both callees `short`
+ * and this `int`; the header carries that argument.
+ */
+int
+V90Phase3Demodulator::getDecision(float sample)
+{
+	if (sessionFlag != 0)
+		return getV92Decision(sample);
+
+	return getV90Decision(sample);
+}
+
+/*
+ * `JdNotDetector` -- 75 bytes at 0x20f10.  A run-length detector: count
+ * consecutive zero symbols, and once more than eleven have gone by, answer yes
+ * on the one frame position in seventy-two that is twelve.
+ *
+ * BOTH FIELDS ARE UNSIGNED AND THE OBJECT SAYS SO.  The bound is `jbe`, an
+ * unsigned branch, and the modulus is `mul $0x38e38e39 ; shr $4`, which is
+ * GCC's reciprocal for an UNSIGNED divide by 72; a signed one needs an
+ * `imul`, a sign-bit correction and two more instructions.
+ *
+ * `getV90Decision`'s state 9 has the same test inline, which is what
+ * t_v90p3ddec.cpp's `w404_v` grid was already built to straddle.
+ */
+int
+V90Phase3Demodulator::JdNotDetector(int symbol)
+{
+	if (symbol == 0)
+		word_404++;
+	else
+		word_404 = 0;
+
+	if (word_404 > 11 && word_2c % 72 == 12)
+		return 1;
+
+	return 0;
+}
+
+/*
+ * `exitDIL` -- 164 bytes at 0x20dd0.  Leave the DIL if we are in it, and then
+ * check whether the modulator has finished phase 3 while we were about it.
+ *
+ * SEVEN STATES ENUMERATED, NOT A RANGE, AND THE ORDER IS THE AUTHOR'S.
+ *
+ * Ascending, `state == 10 || ... || state == 16`, GCC 3.4.2 folds to a RANGE:
+ * `sub $0xa ; cmp $6 ; jbe`, three instructions, 0x62 bytes for the whole
+ * function.  The blob has no such fold.  What it has at 0x20de2 is
+ *
+ *      cmp $0xc ; sete %dl        <-- 12 and 16 as a branchless PAIR
+ *      cmp $0x10 ; sete %al ; or %al,%dl ; jne
+ *      cmp $0xa ; je      cmp $0xb ; je     cmp $0xd ; je
+ *      cmp $0xe ; je      cmp $0xf ; jne
+ *
+ * which is a `||` chain in the order 12, 16, 10, 11, 13, 14, 15 and nothing
+ * else: GCC's `fold_truthop` collapses the INNERMOST pair of a left-associated
+ * chain into `sete/sete/or` when both sides are cheap, and short-circuits the
+ * rest in source order.  So the pair is the first two terms written and the
+ * five `je`s are the remaining five, in sequence.  Written that way the period
+ * build emits that seventeen-instruction chain byte for byte -- the same two
+ * `sete`s, the same `or`, the same five `cmp`/`je` pairs in the same order.
+ * The function is 0x8f against the blob's 0xa4 and the residue is block
+ * layout: the blob inverts the last branch and falls into the body, ours jumps
+ * forward to it.  Ascending order does not get close -- it is 0x62 and has no
+ * `sete` at all.
+ *
+ * The order is behaviourally free -- every permutation answers the same for
+ * every state -- so no differential test can see this, and it is recorded as
+ * a similarity result.  Finding 4977.
+ *
+ * The tail is `P3D_CHECK_TERMINATED`, which both decision functions carry --
+ * the modulator's `exitDIL` may set `eventCode` to 6, and this is one of the
+ * places that notices.
+ */
+void
+V90Phase3Demodulator::exitDIL()
+{
+	if (state == 12 || state == 16 || state == 10 || state == 11 ||
+	    state == 13 || state == 14 || state == 15) {
+		edprintf("V90Phase3Demodulator: exit DIL\r\n");
+		phase3Modulator.exitDIL();
+		P3D_CHECK_TERMINATED();
+	}
+}
+
+/*
+ * `twoLevelDemod` -- 220 bytes at 0x215a0, and the block `getV90Decision`
+ * carries four times over as its own symbol is not `inline`.
+ *
+ * THE NEGATE IS TRUNCATED TO SIXTEEN BITS AND THAT IS THE ONE THING HERE A
+ * TEST CAN SEE.  The object spells it `neg %edx ; movswl %dx,%esi`, so a
+ * mapping entry of -32768 comes back as -32768 and not as +32768; written as
+ * `-level` on an `int` it would be the latter, and the two agree over every
+ * other value the table can hold.  `t_v90p3ddec.cpp` plants that entry.
+ *
+ * `isAltRbs` IS TESTED SIXTEEN BITS WIDE (`test %ax,%ax`) although
+ * V90AutoDigitalImpDetector.h declares it `int`, which is the same narrowing
+ * `P3D_DEMOD_BIT` above records.
+ *
+ * The bit goes out through the reference argument at every step, and the
+ * object RE-LOADS it from memory for each -- `mov (%edi),%eax` at 0x215eb --
+ * rather than keeping the immediate it just stored, which is what a reference
+ * parameter does.
+ */
+int
+V90Phase3Demodulator::twoLevelDemod(float sample, int &bit)
+{
+	V90AutoDigitalImpDetector *ad = autoDigitalImpDetector;
+	int level;
+
+	if (ad->short_a948 != 0 &&
+	    (short)ad->isAltRbs((short)word_04, ucode, sample) != 0)
+		level = P3D_LINMAPPALT(ad, ucode);
+	else
+		level = P3D_LINMAPP(ad, ucode);
+
+	if (sample > 0.0f) {
+		bit = 1;
+	} else {
+		bit = 0;
+		level = (short)-level;
+	}
+
+	bit = word_3cc.process(bit);
+	bit = descrambler.process(bit);
+
+	return level;
 }
 
 #undef P3D_ABS

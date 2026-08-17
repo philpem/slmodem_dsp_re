@@ -43,6 +43,8 @@
 #include "dsplib/debug.h"
 #include "dsplib/DILdescriptorPacker.h"
 #include "dsplib/encode.h"
+#include "dsplib/int_complex.h"
+#include "dsplib/V90Equalizer.h"
 #include "dsplib/v34pcmif.h"
 /*
  * `V92Parameters::init()` is one of the three `externalReset` calls.  This
@@ -743,4 +745,218 @@ VPcmFloModem::setV34BaudForV34()
 	v34BaudAllow[3] = 1;		/* +0x21a */
 	v34BaudAllow[4] = 1;		/* +0x21b */
 	v34BaudAllow[5] = 1;		/* +0x21c */
+}
+
+/*
+ * ===========================================================================
+ * THE THREE VISUAL DIAGNOSTICS
+ * ===========================================================================
+ *
+ * `VPcmV34GetVisualDiagnostics` (src/pump/v34/v34diag.cpp) dispatches to these
+ * three when a PCM receiver is running; the V.34 and K56flex arms of that
+ * function answer the same three selectors from elsewhere.  Each fills an
+ * array of `int_complex` and returns how many it filled.
+ *
+ * THE GUARD IS THE SAME IN ALL THREE and it is the object's, not a copy of
+ * one written here: `if (pcmSessionType != 0 && info0Layout == 0) return 0`.
+ * Read it as "a V.92 session that is not the analog end has nothing to show":
+ * the demodulator these read through exists only on the analog side, and a
+ * V.90 session (`pcmSessionType == 0`) skips the second test entirely.
+ *
+ * WHAT IS FORCED IN THEM
+ *
+ * 1. THE TWO EQUALISER SCALES ARE FLOATS AND THE CONSTELLATION SCALE IS A
+ *    DOUBLE.  `flds` against .rodata.cst4 in the first two, `fldl` against
+ *    .rodata.cst8+0x8 in the third; a `1.7f` would have been a `flds` and a
+ *    `10000.0` a `fldl`.  Under `-mfpmath=387` the whole product stays on the
+ *    x87 stack at 80 bits either way, so the difference is in the CONSTANT
+ *    and not in the precision of the multiply.
+ *
+ * 2. EVERY CONVERSION TO int ROUNDS TOWARD ZERO.  `fnstcw`, `or $0xc00`,
+ *    `fldcw`, `fistpl`, `fldcw` is what a C cast compiles to, and there is no
+ *    rounding term added anywhere: a coefficient of 1.99999 reports 19999 and
+ *    not 20000.
+ *
+ * 3. THE COUNT IS CLAMPED UNSIGNED.  `cmp; ja` against `maxCount`, so a length
+ *    field is compared as the `unsigned int` it is declared to be.
+ *
+ * 4. `sweepCounter` IS DIVIDED SIGNED, which is what retyped it; see
+ *    include/dsplib/VPcmFloModem.h.
+ */
+
+/*
+ * The two equaliser getters scale their coefficients by ten thousand, and the
+ * object has the constant TWICE in .rodata.cst4 (+0x44 and +0x48) -- one slot
+ * per function, which is what says the literal is written out in each rather
+ * than shared through a variable.  Spelled once here; a macro is a
+ * compile-time substitution and cannot move code generation.
+ */
+#define VPCM_EQU_SCALE		10000.0f
+
+/*
+ * The constellation getter's scale, and it is a `double`: `fldl` against
+ * .rodata.cst8+0x8, which holds 1.7 exactly.
+ */
+#define VPCM_CONSTEL_SCALE	1.7
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE HORIZONTAL AXIS OF THE CONSTELLATION TRACE
+ *
+ * `getConstellation` does not return the constellation POINT the demodulator
+ * decided; it returns a strip-chart.  The imaginary half of each point is the
+ * sample, and the real half is a horizontal coordinate synthesised from
+ * `sweepCounter`, which advances once per point and never resets.  Two
+ * geometries, chosen by `inPhase3`:
+ *
+ *   phase 3    x = 35 * ((n / 5) % 750) - 14000
+ *              one sweep of 750 positions, 35 units apart, advancing every
+ *              fifth point: a span of 26,215 units starting at -14,000.
+ *
+ *   otherwise  x = 35 * ((n / 15) % 100 + 140 * ((word_260 + i) % 6)) - 14000
+ *              SIX LANES, one per value of `(word_260 + i) % 6`, 140 * 35 =
+ *              4,900 units apart, each carrying 100 positions (3,465 units)
+ *              that advance every fifteenth point.
+ *
+ * The six lanes are why the data-phase trace is not one line: the V.90 frame
+ * has six phases and the sample's phase picks its lane, so the display shows
+ * each frame phase separately.  That is what `word_260` is being used FOR
+ * here; it stays offset-named because being a phase counter's base is not the
+ * same as being established as one, and this is its only reconstructed
+ * reader.
+ *
+ * The constants are the object's, at 0xf471/0xf4a1/0xf4ad and
+ * 0xf555/0xf560.  Named because a bare 0x8c and a bare 0x36b0 state a number
+ * and hide a geometry.
+ */
+#define VPCM_TRACE_X_STEP	35	/* horizontal units per position    */
+#define VPCM_TRACE_X_ORIGIN	14000	/* subtracted: the left-hand edge   */
+#define VPCM_TRACE_P3_POSITIONS	750	/* positions in the phase-3 sweep   */
+#define VPCM_TRACE_P3_DIVISOR	5	/* points per phase-3 position      */
+#define VPCM_TRACE_POSITIONS	100	/* positions in one data-phase lane */
+#define VPCM_TRACE_DIVISOR	15	/* points per data-phase position   */
+#define VPCM_TRACE_LANE_PITCH	140	/* positions between lanes          */
+
+/*
+ * The number of lanes, and the divisor of the `% 6` at 0xf48a.  It is the
+ * unsigned reciprocal `0xaaaaaaab >> 2`, so both the modulus and its
+ * signedness are read off the instruction rather than assumed.
+ */
+#define VPCM_TRACE_LANES	6u
+
+/* `inPhase3`'s value for phase 3, as `cmpl $0x1,0x34(%eax)` tests it. */
+#define VPCM_IN_PHASE3		1u
+
+unsigned long
+VPcmFloModem::getConstellation(int_complex *points, unsigned long maxCount)
+{
+	V90Demodulator *dem;
+	const float *values;
+	unsigned int lane;
+	unsigned long n, i;
+
+	if (pcmSessionType != 0 && info0Layout == 0)
+		return 0;
+
+	dem = modem.demodulator;
+
+	n = dem->word_258;
+	if (n > maxCount)
+		n = maxCount;
+
+	/*
+	 * `array_254` is a `void *` in V90Demodulator.h because the code that
+	 * ALLOCATES it sizes it at eight bytes an element, and this reader
+	 * steps it by four.  The two are not in contradiction -- `word_258` is
+	 * a running fill level and not the allocated length -- but nothing
+	 * settles which of the two strides is the element, so the declaration
+	 * stays neutral and the cast is here with the reason on it.
+	 */
+	values = (const float *)dem->array_254;
+	lane = dem->word_260;
+
+	if (dem->inPhase3 == VPCM_IN_PHASE3) {
+		for (i = 0; i < n; i++) {
+			int t = sweepCounter++;
+
+			points[i].re = VPCM_TRACE_X_STEP *
+			    (t / VPCM_TRACE_P3_DIVISOR % VPCM_TRACE_P3_POSITIONS)
+			    - VPCM_TRACE_X_ORIGIN;
+			points[i].im = (int)(VPCM_CONSTEL_SCALE * values[i]);
+		}
+	} else {
+		for (i = 0; i < n; i++) {
+			int t = sweepCounter++;
+
+			points[i].re = VPCM_TRACE_X_STEP *
+			    (t / VPCM_TRACE_DIVISOR % VPCM_TRACE_POSITIONS +
+			     VPCM_TRACE_LANE_PITCH * (int)((lane +
+			      (unsigned int)i) % VPCM_TRACE_LANES))
+			    - VPCM_TRACE_X_ORIGIN;
+			points[i].im = (int)(VPCM_CONSTEL_SCALE * values[i]);
+		}
+	}
+
+	return n;
+}
+
+/*
+ * The linear equaliser's taps and the decision-feedback filter's, and the two
+ * functions are the same fifteen lines against two different pairs of
+ * `V90Equalizer` fields.  They are written out twice because the object has
+ * them twice, with a scale constant each.
+ *
+ * BOTH PUT THE COEFFICIENT IN THE IMAGINARY HALF and zero in the real one.
+ * V.90's downstream signal is real, so the taps have no imaginary part and the
+ * author had a slot to spare; which slot he used is recorded rather than
+ * explained (include/dsplib/int_complex.h).
+ */
+unsigned long
+VPcmFloModem::getLinearEqualizer(int_complex *points, unsigned long maxCount)
+{
+	V90Equalizer *eq;
+	const float *coefs;
+	unsigned long n, i;
+
+	if (pcmSessionType != 0 && info0Layout == 0)
+		return 0;
+
+	eq = modem.demodulator->equalizer;
+
+	n = eq->linearEquLength;
+	if (n > maxCount)
+		n = maxCount;
+	coefs = eq->linearEquCoefs;
+
+	for (i = 0; i < n; i++) {
+		points[i].re = 0;
+		points[i].im = (int)(coefs[i] * VPCM_EQU_SCALE);
+	}
+
+	return n;
+}
+
+unsigned long
+VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
+{
+	V90Equalizer *eq;
+	const float *coefs;
+	unsigned long n, i;
+
+	if (pcmSessionType != 0 && info0Layout == 0)
+		return 0;
+
+	eq = modem.demodulator->equalizer;
+
+	n = eq->dfeLength;
+	if (n > maxCount)
+		n = maxCount;
+	coefs = eq->dfeCoefs;
+
+	for (i = 0; i < n; i++) {
+		points[i].re = 0;
+		points[i].im = (int)(coefs[i] * VPCM_EQU_SCALE);
+	}
+
+	return n;
 }

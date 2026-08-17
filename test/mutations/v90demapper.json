@@ -9,8 +9,8 @@
  },
  {
   "label": "the row loop runs to 128 instead of to the row length (transcript only)",
-  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {",
-  "replace": "\t\t\tfor (j = 0; j < V90DEMAPPER_LEVELS; j++) {"
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned int mean = 0;",
+  "replace": "\t\t\tfor (j = 0; j < V90DEMAPPER_LEVELS; j++) {\n\t\t\t\tunsigned int mean = 0;"
  },
  {
   "label": "the histogram number moves only when something was printed",

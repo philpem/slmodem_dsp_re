@@ -148,15 +148,17 @@ What is outstanding, and shrinking:
 | offset-named fields (`short_2800`, `flags_0217`) | 304 distinct |
 | bare `fNNNN` names | 189 distinct |
 | unnamed single-bit flags | 148 uses |
-| type-punned sites — provably mis-modelled | 27 |
+| type-punned sites — GCC-warned, provably mis-modelled | **2** (was 27) |
 
 Flags are named **by bit value**, never converted to bitfields; CLAUDE.md's
 "Naming: fields, and flags" carries the rule and the measurement behind it.
 
-The 27 punned sites are the exception to "name inside the batch": each is a
-*provable* modelling error (`*(int *)&o->f25d0` writes four bytes through a
-narrower field), they cluster in six files, and they can be corrected as one
-standalone batch — but only while no other batch holds those files.
+The 27 punned sites were the exception to "name inside the batch": each was a
+*provable* modelling error (`*(int *)&o->f25d0` wrote four bytes through a
+narrower field), they clustered in six files, and they were corrected as one
+standalone batch on `v34-type-punning`. Twenty-five are gone and the naming
+went with them — `f25d0`/`f25d2` became `txpoint`, and `state[].a`..`.d`
+became one four-short group. The two that remain are one line; see Phase 6.
 
 ## Phase 0 — landed
 
@@ -243,20 +245,78 @@ now blocks the rest is mostly **not V.22-named**: `connect_1200`,
 `Detect_Retrain`, `Detect_Rmloop2_ACK`. Seed by reachability or this phase
 looks smaller than it is.
 
-## Phase 6 — the type-punned sites
+## Phase 6 — the type-punned sites  ✅ 25 of 27, on `v34-type-punning`
 
-27 sites, six files, each provably wrong today. Independent of every other
-phase; schedule it when those six files are free.
+27 sites turned out to be **six shapes**, and the instruction width at each
+writer decided every one (finding 5300). Five files, not six —
+`v34hstx1.cpp` contributed no warning because its instance had already been
+worked around with a `memcpy`, which is not a fixed declaration and was in
+the batch anyway.
 
-## Phase 7 — the data-mode API and the two diagnostics
+| shape | sites | what the blob said | fix |
+|---|--:|---|---|
+| A `*(int *)&o->f25d0` | 15 | one `movl` at 0x5e6c5, 0x5e582, 0x59e94 | `union { int word; short c[2]; } txpoint` |
+| B `*(int *)&o->vect[2*n]` | 1 | `movl 0x2a80(%esi,%eax,4)`, scale 4 | union with `int vectp[8]` |
+| C `*(int *)&s->state[i].a` | 2 | one `movl` per pair, 0x59673 / 0x59193 | `short par[4]` / `int pair[2]` |
+| D `*(int *)&s->frame[0]` | 5 | `movl` at 0x57a68 AND `movw` at 0x57cac | union with `int frame_wide` |
+| E `((short *)&hist_2aa8[k])[0]` | 2 | **two `movw`**, 0x5d0f7 / 0x5d0fe | `short hist_2aa8[0x12c][2]` |
+| F `(v34_receiver *)&obj->rxq` | 2 | not a width at all | **left**, finding 5305 |
 
-`VPcmV34GetDiagnostics` needs `V90Demodulator::getAT_UD` (418 B);
-`VPcmV34GetVisualDiagnostics` needs nine, including
+E is the one that mattered most: the tree had declared it the other way
+round, so five of six confirmed what the comments already asserted and the
+sixth did not. Four further sites that GCC never warns about went with their
+partners — the `[1]` halves of E, and `demapFrame`'s `(&state[st].a)[i]`
+walks, which are pointer arithmetic across separate members. **A fix written
+at the access would have left all four**; fixing the declaration retired them
+without being aimed at them.
+
+F is the documented exception. The correct model is to EMBED `struct
+v34_receiver` in `v34_object` at +0x264 — the base is established, not
+guessed — but that means merging two independent pad maps and belongs in a
+`v34_receiver` batch. It must not be respelled through a `char *` to silence
+the warning. Finding 5305.
+
+`compare.py` did not move at any step: 1094 compared, 410 identical, 78 same
+size, and the identical SET diffed empty against the pre-batch list every
+time — GCC 3.4.2 exact at `-O3`.
+
+**The row above counts WARNED sites, and the warning count is not the defect
+count.** Six more of the same class were found while fixing these and are in
+findings 5300 and 5305: four went with their partners (E's `[1]` halves and
+`demapFrame`'s three `(&state[st].a)[i]` walks), and two are recorded and
+outstanding — `T3C_RX`, and `demapFrame`'s `*(int *)ap`, which is the
+receiver's `target_re`/`target_im` pair read as one word through `char *`
+arithmetic. Both belong to the same future `v34_receiver` batch.
+
+## Phase 7 — the data-mode API and the two diagnostics  ✅ 11/11, on `v34-diagnostics`
+
+Both diagnostics and the nine symbols the second one needs, 2,624 bytes:
+`VPcmV34GetDiagnostics` (821), `VPcmV34GetVisualDiagnostics` (1,023),
 `VPcmFloModem::getConstellation` (469), `::getLinearEqualizer` (155),
-`::getDFE` (138). `TAG_DiagnosticResults` is unmodelled and runs to at least
-`0x22c`; no allocation site bounds it, so its tail needs declaring the way
-`v34_object`'s did. `getAT_UD` carries `"RBS : %d (%d%d%d%d%d%d)"`, which names
-a six-bit field — these are naming oracles as well as functions.
+`::getDFE` (138) and the six 3-byte `K56FlexFloModem` stubs, which are
+`xor %eax,%eax; ret` and are written as what they are.
+
+**They were naming oracles, as expected, and the yield is in the record
+rather than in the byte count.** `TAG_DiagnosticResults` goes from 11 of its
+22 written offsets modelled to all 22, nine of them named, and its tail is
+still declared as the lower bound 0x22c with the 64-byte guard past it
+unmoved — +0x228 came out of the pad without changing an offset.
+
+| what it settled | how |
+|---|---|
+| +0x0b4 is the RECEIVE symbol rate (5500) | six `v34_ratecfg` members copied one for one into six result offsets, four of them already named by four direction-named getters |
+| +0x0f8/+0x0fc are the transmit/receive data rates (5500) | same, plus `getAT_UD` writing only the receive one |
+| +0x070, +0x074 and +0x084 are NOT one quantity each (5502) | the second writer disagrees with the first about linear-vs-dB, about polarity, and about units |
+| `VPcmFloModem::sweepCounter` is `int` and the constellation is a strip chart (5511) | two signed divisions, six lanes at 140 positions |
+| `v34_object::pac18` is a `K56FlexFloModem *` (5510) | five `this` arguments; the field is NOT retyped and the finding says why |
+| the equaliser arm's cap of 80 is `V34_EQ_TAPS` (5512) | two derivations that share no evidence |
+
+One deviation: **D710**, selectors 3 and 4 write `points[0]` and return 1
+whatever `maxCount` says, including zero. Driven, not fixed.
+
+`make phase` green; 39,000-odd checks over five groups; 99 mutations in four
+sets, 96 caught, 0 NOT caught, 0 unusable, 3 equivalent with the argument for
+each written down.
 
 ## Phase 8 — dialler, call progress, and the dispatch bucket
 
@@ -303,6 +363,20 @@ The dialler and call-progress half of this phase is unmeasured and still owed.
 ## Phase 10 — fax Class 1, last
 
 286 symbols, 78,718 bytes that nothing in data mode reaches.
+
+## The readability pass — `docs/cleanup.md`
+
+Magic numbers, comments that cite an address instead of stating an intent,
+parameter names, file headers. **Not a phase and not an end-stage sweep**: it
+runs inside the batch that closes a translation unit, for the same reasons §3
+gives for naming, plus one more -- a cleanup pass over a file another agent is
+writing is exactly finding 3511's shape.
+
+The one item that is settled and CLOSED: **shifts are not to be rewritten as
+divides.** Finding 1044 measured that the object's choice is forced and
+detectable -- six signed divides by a power of two in 1.2 MB, all `/ 2`, at six
+named addresses -- so a rewrite would move codegen and destroy evidence.
+`docs/cleanup.md` §2.
 
 ## Continuous, not a phase
 

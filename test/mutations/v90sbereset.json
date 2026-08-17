@@ -1,0 +1,86 @@
+[
+ {
+  "label": "the width is the spacing, not six over it",
+  "find": "\t\twidth = V90SBE_DECODER_SIZE / spacing_;",
+  "replace": "\t\twidth = spacing_;"
+ },
+ {
+  "label": "the division is the other way round",
+  "find": "\t\twidth = V90SBE_DECODER_SIZE / spacing_;",
+  "replace": "\t\twidth = spacing_ / V90SBE_DECODER_SIZE;"
+ },
+ {
+  "label": "the frame is five samples, not six",
+  "find": "\t\twidth = V90SBE_DECODER_SIZE / spacing_;",
+  "replace": "\t\twidth = 5u / spacing_;"
+ },
+ {
+  "label": "the zero-spacing guard is dropped and it divides anyway",
+  "find": "\tif (spacing_ != 0)\n\t\twidth = V90SBE_DECODER_SIZE / spacing_;\n\telse\n\t\twidth = 0;\n",
+  "replace": "\twidth = V90SBE_DECODER_SIZE / spacing_;\n"
+ },
+ {
+  "label": "the guard is a range test on six instead",
+  "find": "\tif (spacing_ != 0)\n\t\twidth = V90SBE_DECODER_SIZE / spacing_;\n\telse\n\t\twidth = 0;\n",
+  "replace": "\tif (spacing_ != 0 && spacing_ <= V90SBE_DECODER_SIZE)\n\t\twidth = V90SBE_DECODER_SIZE / spacing_;\n\telse\n\t\twidth = 0;\n",
+  "equivalent": true,
+  "why": "behaviourally identical over all 2^32 spacings, and that is arithmetic rather than a gap in the trials: the guard's else arm and the divide both yield zero, and 6/spacing is zero for every spacing above six, so the extra `<= 6` can never change a stored value.  What rules it out is the CODEGEN tier -- the object has one `test`/`je` where two compares would be two.  Finding 4304."
+ },
+ {
+  "label": "the guard is inverted",
+  "find": "\tif (spacing_ != 0)\n\t\twidth = V90SBE_DECODER_SIZE / spacing_;\n\telse\n\t\twidth = 0;\n",
+  "replace": "\tif (spacing_ == 0)\n\t\twidth = 0;\n\telse\n\t\twidth = V90SBE_DECODER_SIZE / spacing_;\n",
+  "equivalent": true,
+  "why": "the same two arms written the other way up; no instruction of the object depends on which the compiler makes the fallthrough"
+ },
+ {
+  "label": "the spacing is not stored",
+  "find": "\tspacing = spacing_;\n",
+  "replace": ""
+ },
+ {
+  "label": "the spacing takes the state argument",
+  "find": "\tspacing = spacing_;",
+  "replace": "\tspacing = state_;"
+ },
+ {
+  "label": "the odd decoder is not cleared",
+  "find": "\toddDecoder.prev_ = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the odd decoder is set, not cleared",
+  "find": "\toddDecoder.prev_ = 0;",
+  "replace": "\toddDecoder.prev_ = 1;"
+ },
+ {
+  "label": "the parallel decoder is not re-armed",
+  "find": "\tdecoder.reset(width, 0);\n",
+  "replace": ""
+ },
+ {
+  "label": "the parallel decoder is armed with the capacity",
+  "find": "\tdecoder.reset(width, 0);",
+  "replace": "\tdecoder.reset(V90SBE_DECODER_SIZE, 0);"
+ },
+ {
+  "label": "the parallel decoder is armed with the spacing",
+  "find": "\tdecoder.reset(width, 0);",
+  "replace": "\tdecoder.reset(spacing_, 0);"
+ },
+ {
+  "label": "the parallel decoder's init is one, not zero",
+  "find": "\tdecoder.reset(width, 0);",
+  "replace": "\tdecoder.reset(width, 1);"
+ },
+ {
+  "label": "the state is not stored",
+  "find": "\tstate = state_;\n",
+  "replace": ""
+ },
+ {
+  "label": "the state takes the spacing argument",
+  "find": "\tstate = state_;",
+  "replace": "\tstate = spacing_;"
+ }
+]

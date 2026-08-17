@@ -379,12 +379,17 @@ frac_of(float v)
  *
  * `setState` reaches them three times over, at 0x113ab, 0x1145b and 0x11598,
  * and the object has the whole body at each site: store the field, then print
- * the field's sign and the argument's magnitude.  Neither member is written
- * in this tree, so a call to one would be a call to nothing; the shared body
- * is spelled once as a file-static instead, which GCC inlines back into the
- * three sites.  Writing it out three times would also put three occurrences
- * behind every `find` string the mutation suite has here, and an anchor must
- * be unique (finding 1264).
+ * the field's sign and the argument's magnitude.
+ *
+ * THEY WERE FILE-STATICS UNTIL NOW, AND THE REASON HAS EXPIRED.  Neither
+ * member was written, so a call to one would have been a call to nothing, and
+ * the shared body was spelled once as a file-static that GCC inlined back
+ * into the three sites.  Both are now the real members the object defines --
+ * 0x10cc0 and 0x10d60, 147 bytes between them -- `setState` calls them, and
+ * GCC inlines them back exactly as before.  So the factoring note above still
+ * describes the object and the source now names what the object names.
+ * Writing the body out three times is still wrong for the other reason it
+ * always was: an anchor must be unique (finding 1264).
  *
  * The sign comes from the FIELD and the two integers from the ARGUMENT, which
  * is what the object does -- `fsts 0x30(%ebx)` leaves the value live in the
@@ -402,21 +407,45 @@ frac_of(float v)
  * a test to pin.  `setState` is therefore 5 of the object's 7 selects and
  * stays that way; finding 2411.
  */
-static void
-ec_set_echo_beta(V92EchoCanceller *self, float beta)
+void
+V92EchoCanceller::setEchoBeta(float beta)
 {
-	self->echoBeta = beta;
+	echoBeta = beta;
 	edprintf("V92EchoCanceller: echoBeta = %c%d.%06d\r\n",
-		 sign_of(self->echoBeta), whole_of(beta), frac_of(beta));
+		 sign_of(echoBeta), whole_of(beta), frac_of(beta));
 }
 
-static void
-ec_set_decay_factor(V92EchoCanceller *self, float decay)
+void
+V92EchoCanceller::setDecayFactor(float decay)
 {
-	self->echoBetaDecay = decay;
+	echoBetaDecay = decay;
 	edprintf("V92EchoCanceller: echoBetaDecay = %c%d.%06d\r\n",
-		 sign_of(self->echoBetaDecay), whole_of(decay),
-		 frac_of(decay));
+		 sign_of(echoBetaDecay), whole_of(decay), frac_of(decay));
+}
+
+/*
+ * setEchoParams (.text+0x10e00, 339 B) -- all three at once.
+ *
+ * THE WHOLE BODY IS THREE CALLS, and every one of them is inlined in the
+ * object: the two float stores and their two messages in order, then
+ * `echoLength += delay - echoDelay; echoDelay = delay;` and the third
+ * message as a TAIL CALL -- `jmp edprintf` at +0x14e, with the arguments
+ * written into this function's own outgoing slots, which is what
+ * `setEchoDelay` being the last statement of a `void` function compiles to.
+ *
+ * THE ORDER IS FORCED BY THE TWO DIAGNOSTICS rather than chosen: echoBeta's
+ * message (`.rodata.str1.4:0x3028`) is emitted at +0xa2 and echoBetaDecay's
+ * (`:0x3054`) at +0x12a, with the store to +0x34 at +0xb1 between them.
+ * Only the delay arithmetic has an ordering constraint of its own, and
+ * `setEchoDelay` already carries it.
+ */
+void
+V92EchoCanceller::setEchoParams(float beta, float decay,
+				 unsigned int delay)
+{
+	setEchoBeta(beta);
+	setDecayFactor(decay);
+	setEchoDelay(delay);
 }
 
 /*
@@ -465,8 +494,8 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 		}
 
 		state = V92_ECHO_FILTER_ONLY;
-		ec_set_echo_beta(this, 0.0f);
-		ec_set_decay_factor(this, 0.0f);
+		setEchoBeta(0.0f);
+		setDecayFactor(0.0f);
 		break;
 
 	case V92_ECHO_COUNT_DELAY:
@@ -485,8 +514,8 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 		edprintf("V92EchoCanceller: echo state set to fast echo "
 			 "training\r\n");
 		state = V92_ECHO_FAST_TRAINING;
-		ec_set_echo_beta(this, params->V92_ECHO_FAST_BETA_FACTOR);
-		ec_set_decay_factor(this, params->V92_ECHO_FAST_DECAY_FACTOR);
+		setEchoBeta(params->V92_ECHO_FAST_BETA_FACTOR);
+		setDecayFactor(params->V92_ECHO_FAST_DECAY_FACTOR);
 		updateDuration =
 			(unsigned int)params->V92_ECHO_FAST_UPDATE_DURATION;
 		break;
@@ -495,8 +524,8 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 		edprintf("V92EchoCanceller: echo state set to slow echo "
 			 "training\r\n");
 		state = V92_ECHO_SLOW_TRAINING;
-		ec_set_echo_beta(this, params->V92_ECHO_SLOW_BETA_FACTOR);
-		ec_set_decay_factor(this, params->V92_ECHO_SLOW_DECAY_FACTOR);
+		setEchoBeta(params->V92_ECHO_SLOW_BETA_FACTOR);
+		setDecayFactor(params->V92_ECHO_SLOW_DECAY_FACTOR);
 		updateDuration =
 			(unsigned int)params->V92_ECHO_SLOW_UPDATE_DURATION;
 		break;

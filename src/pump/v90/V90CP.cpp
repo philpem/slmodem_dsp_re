@@ -32,6 +32,7 @@
 
 #include <stddef.h>
 
+#include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90CP.h"
 
@@ -88,12 +89,20 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  * Six buffers, then the detector's five fields, the two frame counters, the
  * byte at +0x13 that only this member ever clears, and -1 at +0x3bbc.
  *
- * The five detector stores are `resetDetector`'s whole body and the eight
- * after the allocations are `reset`'s, byte for byte -- but `reset` and
- * `resetDetector` are ordinary GLOBAL functions in `.text`, not linkonce, so
- * neither was an in-class inline the compiler folded in here (GCC 3.4 at -O2
- * does not inline an ordinary global function).  The original repeated the
- * assignments; finding 1237.
+ * The five detector stores are `resetDetector`'s whole body -- but the
+ * constructor holds no relocation against that symbol, and a call to a GLOBAL
+ * in `.text` would carry one (findings 306, 333), so the original repeated
+ * the assignments here rather than calling it.  Finding 1237, and it stands.
+ *
+ * WHAT 1237 DID NOT SETTLE WAS THE ORDER, and this batch did.  It used to
+ * read +0xca4, +0xca9, +0xcaa, +0xcac, +0xcb0, which is the order the object
+ * does NOT encode; +0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa is, and with it the
+ * constructor's mnemonic sequence became the blob's -- register allocation
+ * apart, which `compare.py` does not compare.  The same order made
+ * `resetDetector` and `reset` byte-for-byte identical to the object, operands
+ * included, which is 617's acceptance test and not a store-order hint.  Three
+ * symbols moved on one reordering, so it is the source order and not a
+ * coincidence of scheduling.  Finding 4600.
  */
 V90CP::V90CP()
 {
@@ -104,11 +113,11 @@ V90CP::V90CP()
 	buf[4] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 	buf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 
+	word_cac = 18;
+	word_cb0 = 0;
 	word_ca4 = 0;
 	byte_ca9 = 0;
 	byte_caa = 0;
-	word_cac = 18;
-	word_cb0 = 0;
 
 	nofRecievedMp = 0;
 	nofRecievedMpNot = 0;
@@ -135,6 +144,196 @@ V90CP::~V90CP()
 		sysdep_free(buf[4]);
 	if (buf[5] != 0)
 		sysdep_free(buf[5]);
+}
+
+/*
+ * getBitVector -- 0x519d0, 22 bytes, and the member that PROVES where `bits`
+ * starts.  Six instructions: load `this`, load the reference, read +0x3bac
+ * into it, `add $0xcb8,%eax` and return.  The length it reports is the one
+ * `calcSequenceLength` computed, not the array's own extent -- see the
+ * comment on V90CP_BITS in the header for why those are different questions.
+ */
+unsigned char *
+V90CP::getBitVector(unsigned int &length)
+{
+	length = word_3bac;
+	return bits;
+}
+
+/*
+ * resetDetector -- 0x51510, 46 bytes, and its whole body is five stores.
+ * OURS IS BYTE-FOR-BYTE THE OBJECT'S, operands included, which is what
+ * settles the order: +0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa.  See the
+ * constructor above for what that order also repaired, and finding 4600.
+ *
+ * 18 is the write cursor's home: one preamble frame of seventeen bits, then
+ * the next frame's framing bit at 17 and its first data bit at 18.
+ */
+void
+V90CP::resetDetector()
+{
+	word_cac = 18;
+	word_cb0 = 0;
+	word_ca4 = 0;
+	byte_ca9 = 0;
+	byte_caa = 0;
+}
+
+/*
+ * reset -- 0x51540, 73 bytes.  `resetDetector`'s five stores, then the two
+ * frame counters and -1 at +0x3bbc.
+ *
+ * IT REALLY CALLS `resetDetector`, and the compiler really inlines it.  The
+ * object holds no call and no relocation here, which by itself is equally
+ * consistent with the assignments being repeated a third time -- so the
+ * question was settled by writing the call and measuring: at `-O3` GCC 3.4.2
+ * folds it in and the 73 bytes it emits are the object's, instruction for
+ * instruction and operand for operand.  The constructor above does NOT get
+ * the same treatment from us, because that is 1237's ruling and this measures
+ * nothing about it either way.  Finding 4600.
+ *
+ * WHAT SEPARATES IT FROM THE CONSTRUCTOR is `byte_13`, which the constructor
+ * clears and this does not.  That is the only field of the two the object
+ * treats differently, and it is why the header says +0x13 is cleared by the
+ * constructor "and by NOTHING else".
+ */
+void
+V90CP::reset()
+{
+	resetDetector();
+
+	nofRecievedMp = 0;
+	nofRecievedMpNot = 0;
+
+	word_3bbc = -1;
+}
+
+/*
+ * calcSequenceLength -- 0x521c0, 101 bytes.  Round +0x3bb0 + 1 up to a whole
+ * number of +0x3ba8 and leave it at +0x3bac.
+ *
+ * The object divides ONCE and then multiplies back to test exactness --
+ * `div %ecx` then `imul %eax,%edx` then `cmp %edi,%edx` -- rather than
+ * testing the remainder `div` has already left in %edx.  That is forced by
+ * the source shape and not a choice the compiler made for us: a `%` here
+ * would have reused %edx and needed no `imul` at all.  Both arms store the
+ * product, which is why the equal arm has its own `mov` to +0x3bac.
+ *
+ * `infoToBits` carries this same computation inlined; that copy is left
+ * exactly where it is.  The object holds both too -- this symbol and the
+ * inlined arithmetic at 0x52230 -- which is finding 3532's shape.
+ *
+ * Everything is unsigned: `div`, not `idiv`.
+ */
+void
+V90CP::calcSequenceLength()
+{
+	unsigned int total, group, quot;
+
+	total = word_3bb0 + 1;
+	group = word_3ba8;
+	quot = total / group;
+	if (quot * group == total)
+		word_3bac = quot * group;
+	else
+		word_3bac = (quot + 1) * group;
+}
+
+/*
+ * printNofRecievedMpMpNot -- 0x53680, 56 bytes, and the ONLY string this
+ * class reaches that names a field of it.
+ *
+ * IT PRINTS "V90MP", NOT "V90CP".  The format at .rodata.str1.4+0xd6b0 is the
+ * very same string `V90MP::printNofRecievedMpMpNot` uses -- one pooled copy,
+ * two referrers -- so the author copied the line across and left the tag
+ * wrong.  We reproduce the object, so the tag stays wrong here; changing it
+ * would be a difference the differential test cannot see and the string table
+ * can.
+ *
+ * The argument order is the object's: +0x3bb4 goes into the first `%d` and
+ * +0x3bb8 into the second, which is what names `nofRecievedMp` and
+ * `nofRecievedMpNot` and is the strongest evidence tier in the class.
+ *
+ * The gate is `cmpl $0x1,dsplibs_debug_level; ja`, which is
+ * `DSPLIB_DEBUG_ON()`, and the call relocates against `dsplibs_debug_printf`
+ * directly rather than through the encoder, so below the gate it says nothing
+ * at all.
+ */
+void
+V90CP::printNofRecievedMpMpNot()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90MP: received %d MP, %d MPNot\r\n",
+				     nofRecievedMp, nofRecievedMpNot);
+}
+
+/*
+ * calcCRC -- 0x512d0, 570 bytes.  The WRITE side of the CRC register, and the
+ * same CCITT shift register `evaluateCRC` runs on the read side: taps out of
+ * positions 4 and 11 into 3 and 10, and the feedback bit into 15.
+ *
+ * TWO THINGS SEPARATE IT FROM `evaluateCRC`, and both are absences.  It does
+ * not seed the register -- there is no store of 1 anywhere in it, so it
+ * continues from whatever `resetCRC` (or the previous call) left -- and it
+ * does not compare anything afterwards, so it returns nothing.  The extent
+ * and the frame skip are identical: information bits run from 0x12 up to
+ * `word_3bb0 - 0x11`, and every index that is a multiple of seventeen is a
+ * framing bit and is stepped over.
+ *
+ * The whole register lives in the sixteen bytes of the object's stack frame
+ * for the duration of the loop and is written back at the end.  That is
+ * register promotion the compiler is free to do and we do not encode: our
+ * source touches `crc[]` directly, exactly as `evaluateCRC`'s does.
+ *
+ * The `if (i % 17 == 0) i++` is `mul $0xf0f0f0f1` / `shr $4` for the divide
+ * and `cmp $1` / `adc $0` for the branchless increment.  Unsigned throughout:
+ * `jae` and `jb` on the bounds.
+ */
+void
+V90CP::calcCRC()
+{
+	unsigned int i, end;
+	unsigned char a;
+
+	end = word_3bb0 - 0x11;
+	for (i = 0x12; i < end; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = a;
+	}
+}
+
+/*
+ * resetCRC -- 0x512b0, 32 bytes.  Sixteen ones, one per bit of the register,
+ * written by a counted loop the object leaves rolled: `mov $0x1,%cl` hoisted
+ * out, `inc %eax`, `cmp $0xf,%eax`, `jle`.  The `<= 0xf` is the object's own
+ * bound and is why this is written that way rather than `< 16`.
+ */
+void
+V90CP::resetCRC()
+{
+	int i;
+
+	for (i = 0; i <= 0xf; i++)
+		crc[i] = 1;
 }
 
 /*
@@ -350,6 +549,7 @@ V90CP::infoToBits()
 {
 	unsigned int i, j, k;
 	unsigned int pos, start, nbits, total, group, quot;
+	int c;
 	unsigned char a;
 
 	/* One frame of ones, then the first framing bit. */
@@ -562,12 +762,13 @@ V90CP::infoToBits()
 
 	start = (unsigned int)word_cac;
 	bits[start] = 0;
-	word_cac = (int)(start + 1);
+	word_cac = start + 1;
 	nbits = start + 0x11;
 	word_3bb0 = nbits;
 
-	for (i = 0; i <= 0xf; i++)
-		crc[i] = 1;
+	/* SIGNED, exactly as in `evaluateCRC` and `resetCRC`: `jle`. */
+	for (c = 0; c <= 0xf; c++)
+		crc[c] = 1;
 
 	for (i = 0x12; i < start; ) {
 		if (i % 17 == 0)
@@ -599,7 +800,7 @@ V90CP::infoToBits()
 		pos++;
 	}
 	bits[pos] = 0;
-	word_cac = (int)(pos + 1);
+	word_cac = pos + 1;
 
 	/* calcSequenceLength, inlined: round the bit count up to a whole
 	 * number of +0x3ba8 and record it at +0x3bac. */
@@ -641,11 +842,13 @@ int
 V90CP::evaluateCRC()
 {
 	unsigned int i, end;
+	int c;
 	unsigned char a;
 	unsigned char diff;
 
-	for (i = 0; i <= 0xf; i++)
-		crc[i] = 1;
+	/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */
+	for (c = 0; c <= 0xf; c++)
+		crc[c] = 1;
 
 	end = word_3bb0 - 0x11;
 	for (i = 0x12; i < end; ) {
@@ -682,4 +885,374 @@ V90CP::evaluateCRC()
 	}
 
 	return diff == 0;
+}
+
+/*
+ * bitsToInfo -- 0x52d20, 2391 bytes, and the RECEIVE-SIDE DRIVER of the class:
+ * take one arriving bit, drive `word_ca4` (the decoder state), `word_cac` (the
+ * cursor) and `word_cb0` (the count within the current block), and say what
+ * the bit completed.
+ *
+ * IT IS NOT `void`, which the header used to say it was, and the mangling
+ * cannot see the difference.  %edi is zeroed at entry, moved to %eax at BOTH
+ * `ret`s, and six distinct values reach it -- 0 for nothing, 5 from the
+ * run-counter test at the top, and 1, 2, 3 or 4 from the end of the message.
+ * That is the same mistake `evaluateCRC` was carrying and the same one the
+ * sibling `V90MP::bitsToInfo` turned out to have; a value built in %eax and a
+ * value merely left there are told apart by whether every path arranges it,
+ * and every path here does.
+ *
+ * WHAT THE FOUR MEAN, as far as the object states it: the two bits that
+ * survive the whole message are `word_00`, which selects the short form, and
+ * `byte_13`, which `infoToBits` places at bits[0x21] in BOTH forms.  The
+ * answer is one of four combinations of those two --
+ *
+ *      byte_13 == 0, word_00 == 0   ->  1
+ *      byte_13 == 0, word_00 != 0   ->  3
+ *      byte_13 != 0, word_00 == 0   ->  2
+ *      byte_13 != 0, word_00 != 0   ->  4
+ *
+ * -- and nothing in the object names any of them.  `V90MP::bitsToInfo`'s
+ * corresponding 1, 2 and 3 ARE named, by its own diagnostics, and this member
+ * has no such line, so the numbers stay numbers.  Finding 4360.
+ *
+ * THE TWO STATICS ARE THE BATCH.  `alpha` and `beta` are function-local
+ * statics -- .bss, mangled `_ZZN5V90CP10bitsToInfoEhE5alpha` and `...E4beta`,
+ * so their C++ names are the author's -- and each holds the bit LENGTH of one
+ * counted block, computed once when the block's counts have been decoded and
+ * compared against `word_cb0` while the block arrives.  Seventeen bits to the
+ * entry, which is one frame each:
+ *
+ *      alpha = 17 * (nof_58[0] + ... + nof_58[3])   the four shorts lists
+ *      beta  = 17 * (nof_buf[0] + ... + nof_buf[5])  the six buffers
+ *
+ * Their signedness is NOT established -- every use is an equality compare and
+ * the `shl $4` / `add` that makes the product is the same either way -- so
+ * they are spelled to match the counts they sum.  Finding 4363.
+ *
+ * THE ONE STRING THAT BOUNDS AN ARRAY.  Five of the arms guard the store into
+ * `bits` with `cmp $0x2edf` / `ja` and print "not enouch memory in the
+ * buffer" instead, which is the author saying in his own words that index
+ * 0x2edf is the last one that fits.  0xcb8 + 0x2ee0 is 0x3b98, which is where
+ * `crc` starts, so the two ends meet and V90CP_BITS is measured rather than
+ * modelled.  FIVE OF THE TEN STORE SITES ARE GUARDED AND FIVE ARE NOT --
+ * docs/deviations.md D520.  Finding 4361.
+ *
+ * THE RECEIVER HARDCODES SIX WHERE THE TRANSMITTER USES `word_3ba8`.
+ * `infoToBits` pads the sequence out to a whole number of +0x3ba8; `case 13`
+ * here waits for `word_cac % 6 == 0`, with the six as an immediate.  Finding
+ * 4364.
+ *
+ * `evaluateInfo` is CALLED -- eight relocations against it -- and
+ * `resetDetector` and `evaluateCRC` are not: those two are global symbols with
+ * no relocation at their sites, so GCC 3.4.2 at -O3 folded them in, which is
+ * finding 4600's shape in the constructor and `reset`.
+ */
+
+/*
+ * The author's own spelling, reproduced byte for byte: the leading newline,
+ * "enouch", the space before the comma and the space before the trailing
+ * newline are all in .rodata.str1.4+0xd650.  One pooled copy, five referrers.
+ */
+#define V90CP_NOMEM \
+	"\n *** error CP bit , not enouch memory in the buffer *** \n"
+
+int
+V90CP::bitsToInfo(unsigned char bit)
+{
+	/*
+	 * Declared in this order because that is the order they occupy in
+	 * .bss -- alpha at +0x8, beta at +0xc.
+	 */
+	static unsigned int alpha;
+	static unsigned int beta;
+
+	int rc = 0;
+
+	/*
+	 * THE RUN COUNTERS COME FIRST and are independent of the state: every
+	 * bit lengthens one run and clears the other.  A run of 2 * the group
+	 * size of zeros arriving while the cursor is still at its home 18 is
+	 * the far end having stopped, and that answer does NOT stop the state
+	 * machine below, which runs on and can overwrite it.
+	 *
+	 * `byte_caa` is read back out of the object rather than out of a
+	 * local -- the object stores 0 and reloads it four instructions later
+	 * -- which matters when `word_3ba8` is zero, because then the test is
+	 * true on a ONE bit as well.
+	 */
+	if (bit != 0) {
+		byte_ca9++;
+		byte_caa = 0;
+	} else {
+		byte_caa++;
+		byte_ca9 = 0;
+	}
+
+	if (byte_caa == 2 * word_3ba8 && word_cac == 18)
+		rc = 5;
+
+	switch (word_ca4) {
+	case 0:
+		/* Seventeen ones is the preamble; sixteen are not enough. */
+		if (byte_ca9 > 0x10)
+			word_ca4 = 1;
+		break;
+
+	case 1:
+		/* The framing zero, or start again. */
+		if (bit == 0)
+			word_ca4 = 2;
+		else
+			resetDetector();
+		break;
+
+	case 2:
+		/*
+		 * The type bit, at index 18.  It is stored whole into
+		 * `word_00` and read BACK from there for the branch -- 32-bit
+		 * `cmp $1`, not an 8-bit test of the argument -- and it picks
+		 * the short form's state 3 or the long form's 4.  State 4 is
+		 * one of `evaluateInfo`'s two holes, so nothing decodes it.
+		 */
+		word_00 = bit;
+		bits[word_cac] = bit;
+		word_cac++;
+		word_ca4 = (word_00 != 0) ? 3 : 4;
+		word_cb0 = 0;
+		break;
+
+	case 3:
+		/*
+		 * The short form: fifteen more bits, ending at 0x21, which is
+		 * exactly the two `evaluateInfo`'s `case 3` reads back.
+		 */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == 0xf) {
+			evaluateInfo();
+			word_ca4 = 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 4:
+		/*
+		 * The three block flags, one bit each, dispatched on the
+		 * count rather than shifted.  The object's `jb` on the tree's
+		 * `x < 1` arm is what makes `word_cb0` unsigned: a signed
+		 * index would have needed a second test for zero.
+		 */
+		bits[word_cac] = bit;
+		word_cac++;
+		switch (word_cb0) {
+		case 0:
+			word_04 = bit;
+			break;
+		case 1:
+			word_08 = bit;
+			break;
+		case 2:
+			word_0c = bit;
+			break;
+		}
+		word_cb0++;
+		if (word_cb0 == 3) {
+			word_ca4 = 5;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 5:
+		/*
+		 * The rest of the header, to the absolute 0x33 -- one past
+		 * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the
+		 * first of the two places that pick the next block, in the
+		 * order the blocks travel: +0x18, then +0x48/+0x58, then
+		 * everything from +0xc58, then the CRC.
+		 */
+		bits[word_cac] = bit;
+		word_cac++;
+		if (word_cac == 0x33) {
+			evaluateInfo();
+			if (word_04 != 0)
+				word_ca4 = 6;
+			else if (word_08 != 0)
+				word_ca4 = 7;
+			else
+				word_ca4 = (word_0c != 0) ? 10 : 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 6:
+		/* Six frames of pairs, to 0x99 -- one past the 0x98 that
+		 * `evaluateInfo`'s `case 6` stores.  The two halves were read
+		 * independently and agree. */
+		bits[word_cac] = bit;
+		word_cac++;
+		if (word_cac == 0x99) {
+			evaluateInfo();
+			if (word_08 != 0)
+				word_ca4 = 7;
+			else
+				word_ca4 = (word_0c != 0) ? 10 : 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 7:
+		/* The four nine-bit counts: four frames, 0x44 bits.  Once
+		 * they are decoded the next block's length is known. */
+		bits[word_cac] = bit;
+		word_cac++;
+		word_cb0++;
+		if (word_cb0 == 0x44) {
+			evaluateInfo();
+			word_ca4 = 8;
+			word_cb0 = 0;
+			alpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2] +
+				      nof_58[3]);
+		}
+		break;
+
+	case 8:
+		/* The four counted lists, `alpha` bits of them. */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == alpha) {
+			evaluateInfo();
+			word_ca4 = (word_0c != 0) ? 10 : 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 10:
+		/* Five frames, 0x55 bits: the six four-bit values and the six
+		 * eight-bit buffer counts.  Then the buffers' length. */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == 0x55) {
+			evaluateInfo();
+			word_ca4 = 11;
+			word_cb0 = 0;
+			beta = 17 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +
+				     nof_buf[3] + nof_buf[4] + nof_buf[5]);
+		}
+		break;
+
+	case 11:
+		/* The six buffers, `beta` bits of them. */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == beta) {
+			evaluateInfo();
+			word_ca4 = 12;
+			word_cb0 = 0;
+		}
+		break;
+
+	case 12:
+		/*
+		 * The CRC frame: one framing zero and sixteen CRC bits.
+		 * `word_3bb0` is then the cursor itself, which is what
+		 * `evaluateCRC` wants -- it runs from 0x12 to
+		 * word_3bb0 - 0x11 and compares against the sixteen bits
+		 * ending at word_3bb0 - 1.  `infoToBits` computes the same
+		 * number as start + 0x11 from the other side.
+		 *
+		 * The call is INLINED by the compiler, exactly as `reset`'s
+		 * call of `resetDetector` is: `evaluateCRC` is a global symbol
+		 * and there is no relocation against it here.
+		 */
+		if (word_cac <= V90CP_BITS - 1) {
+			bits[word_cac] = bit;
+			word_cac++;
+		} else if (DSPLIB_DEBUG_ON()) {
+			dsplibs_debug_printf(V90CP_NOMEM);
+		}
+		word_cb0++;
+		if (word_cb0 == 0x11) {
+			word_3bb0 = word_cac;
+			if (evaluateCRC()) {
+				word_cb0 = 0x11;
+				word_ca4 = 13;
+			} else {
+				resetDetector();
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90CP: recieved CP with bad CRC"
+					    "\r\n");
+			}
+		}
+		break;
+
+	case 13:
+		/*
+		 * The tail.  Zeros pad the sequence out and a one restarts
+		 * the detector; either way the message is handed over on the
+		 * next cursor position that is a multiple of SIX -- an
+		 * immediate, where `infoToBits` pads to a multiple of
+		 * `word_3ba8`.  A one therefore reports as well, because
+		 * `resetDetector` leaves the cursor at 18 and 18 % 6 is 0;
+		 * `evaluateInfo` is then called with a state of 0 and does
+		 * nothing.
+		 */
+		if (bit != 0)
+			resetDetector();
+		else
+			word_cac++;
+		if (word_cac % 6 == 0) {
+			evaluateInfo();
+			resetDetector();
+			if (byte_13 != 0)
+				rc = (word_00 != 0) ? 4 : 2;
+			else
+				rc = (word_00 != 0) ? 3 : 1;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	/*
+	 * THE HOLD-OFF, and it is the only thing in the class that reads
+	 * +0x3bbc.  It sits at -1 until an answer of 1 or 2 starts it, then
+	 * counts one per call to 0x320 and stops itself; while it is running,
+	 * the answers 4 and 2 are suppressed to 0 and 1, 3 and 5 are not.
+	 * What it is a hold-off FOR is not stated anywhere in the object, so
+	 * the field keeps its offset name.
+	 */
+	if (word_3bbc >= 0) {
+		if (rc == 4 || rc == 2)
+			rc = 0;
+		word_3bbc++;
+		if (word_3bbc == 0x320)
+			word_3bbc = -1;
+	} else if (rc == 1 || rc == 2) {
+		word_3bbc = 0;
+	}
+
+	return rc;
 }

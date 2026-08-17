@@ -30,23 +30,23 @@
  },
  {
   "label": "the symbol cursor is not cleared",
-  "find": "\tsymbolsDone = 0;\n",
-  "replace": ""
+  "find": "\tnSymbols = n;\n\tsymbolsDone = 0;\n",
+  "replace": "\tnSymbols = n;\n"
  },
  {
   "label": "the block size is not cleared",
-  "find": "\tsymbolsBlockSize = 0;\n",
-  "replace": ""
+  "find": "\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
+  "replace": "\tsymbolsDone = 0;\n\tflag_1c = 1;"
  },
  {
   "label": "the flag is cleared rather than set",
-  "find": "\tflag_1c = 1;",
-  "replace": "\tflag_1c = 0;"
+  "find": "\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
+  "replace": "\tsymbolsBlockSize = 0;\n\tflag_1c = 0;"
  },
  {
   "label": "the flag is written as a word",
-  "find": "\tflag_1c = 1;\n}",
-  "replace": "\t*(unsigned int *)&flag_1c = 1;\n}"
+  "find": "\tsymbolsBlockSize = 0;\n\tflag_1c = 1;\n}",
+  "replace": "\tsymbolsBlockSize = 0;\n\t*(unsigned int *)&flag_1c = 1;\n}"
  },
  {
   "label": "the constructor also clears the bit count at +0x14, which it does NOT",

@@ -128,17 +128,27 @@ public:
 	void resetLinearMappStudy(unsigned int);
 
 	/*
-	 * Declared for the record and deliberately left undefined -- their
-	 * signatures come from the mangling, so this list is a specification
-	 * rather than a guess, and a return type is not mangled and is
-	 * therefore unknown for all of them.  They are the rest of this
-	 * class's processing half and belong to whichever batch writes it.
+	 * FOUR MORE, WRITTEN.  All four return nothing and the object says so
+	 * -- each ends on a bare `ret` or a tail `jmp` with `%eax` never set
+	 * on any path -- which is as much as an unmangled return type can be
+	 * pinned to.  `updateConstelation` keeps the blob's own spelling, one
+	 * `l`, because the SYMBOL is spelt that way.
 	 */
-	void reset(V90MappingParams *);
 	void resetNoSpectral(V90MappingParams *);
 	void incrementRBSFramePosition();
-	void linearMappingStudy(short, short);
+	void linearMappingStudy(short sample, short level);
 	void updateConstelation();
+
+	/*
+	 * AND THE LAST ONE, NOW DEFINED.  It used to be the one member of
+	 * this class declared and deliberately undefined -- not for want of
+	 * reading but because its closure contained
+	 * `V90SignBitsExtractor::reset`, which nothing in this tree had, and
+	 * one unwritten callee fails EVERY differential binary at `t_encode`
+	 * rather than only its own (finding 215).  That member is written and
+	 * so is this one.  The signature is still the mangling's.
+	 */
+	void reset(V90MappingParams *);
 
 	/*
 	 * Data members are public for the reason V90Jd.h gives: the original's
@@ -176,8 +186,30 @@ public:
 	unsigned int bitsPerFrame;
 
 	/*
-	 * +0x08  Read by nothing in the object that this tree has read.  The
-	 * constructor zeroes it and that is all that is known.
+	 * +0x08  MODELLED, UNNAMED, AND THE "READ BY NOTHING" SENTENCE THAT
+	 * STOOD HERE IS RETRACTED -- `resetNoSpectral` both computes it and
+	 * reads it back:
+	 *
+	 *     30d09:  mov  0xc(%ecx),%ebp          <- signBitsPerFrame
+	 *     30d0e:  mov  %ebx,0x4(%ecx)          <- bitsPerFrame = mapp->[0]
+	 *     30d11:  sub  %ebp,%ebx
+	 *     30d13:  mov  %ebx,0x8(%ecx)          <- HERE
+	 *     ...
+	 *     30e77:  mov  %esi,0x18(%eax)         <- modulusDecoder's +0x18
+	 *
+	 * So it is `bitsPerFrame - signBitsPerFrame` and it is the seventh
+	 * word handed to the embedded `ModulusDecoder`.  Both halves of that
+	 * are read straight off the object.
+	 *
+	 * IT IS STILL NOT NAMED, and that is a decision rather than an
+	 * omission.  The arithmetic makes "the bits of a frame that are NOT
+	 * sign bits" certain; calling it the MODULUS bit count additionally
+	 * assumes what `ModulusDecoder` does with its seventh word, and that
+	 * class's seven members are all `field_NN` because nothing in the
+	 * object names them either.  Finding 3120's rule -- a wrong name is
+	 * believed by every future reader and no test can fail on it -- so
+	 * the derivation goes here and the name waits for
+	 * `ModulusDecoder::progress`.
 	 */
 	unsigned int word_08;
 
@@ -216,6 +248,12 @@ public:
 	 * `(pos + 1) % 6` with an UNSIGNED division by six
 	 * (`mul $0xaaaaaaab; shr $0x2`), and copies its pre-advance value to
 	 * +0x1eae.
+	 *
+	 * `incrementRBSFramePosition` IS THE SAME ADVANCE AGAIN, all 33 bytes
+	 * of it, and `hardDecision` does NOT call it -- it repeats it inline.
+	 * So the member exists for a caller outside this class, and the two
+	 * copies are a second, independent witness that the division is
+	 * unsigned.
 	 */
 	unsigned int rbsFramePosition;
 
@@ -280,6 +318,17 @@ public:
 	 * `short` because the load that feeds `printErrorHistogramAndReset`'s
 	 * per-level line is `movswl` and its 32-bit result is used; see the
 	 * file comment.  `updateConstelation` fills it with `fistps`.
+	 *
+	 * TWO OF ITS FIVE USERS INDEX IT OUTSIDE [6][128] AND BOTH ARE THE
+	 * OBJECT'S, not this reconstruction's.  `updateConstelation` and
+	 * `resetNoSpectral` form `i * 128 + j` with `j` bounded by twice the
+	 * row length rather than by 128, so a long enough row runs into the
+	 * next one and the sixth runs past the array into `constellationSize`
+	 * behind it; `linearMappingStudy` reads `[phase][code - 1]` with the
+	 * code at zero, which is two bytes BELOW the row.  `t_v90demap.cpp`
+	 * reaches both on purpose.  Anything that re-shapes this array has to
+	 * keep the flat arithmetic, because the flattening is what the object
+	 * encodes -- there is one `shl $0x7` and an `add`, and no bound.
 	 */
 	short constellation[V90DEMAPPER_CONSTELLATIONS][V90DEMAPPER_LEVELS];
 
@@ -404,11 +453,17 @@ public:
 	 * +0x1e9c  MODELLED, UNNAMED.  `resetLinearMappStudy` clears it with a
 	 * 16-bit store; `linearMappingStudy` increments it once per completed
 	 * run and compares the result against TWO (`movzwl 0x1e9c(%edx),%ebx;
-	 * inc %ebx; cmp $0x2,%bx; mov %bx,0x1e9c(%edx); je`).  So it counts
-	 * something that happens twice, and that is as far as the object goes:
-	 * a name here would be a guess about what the second pass is for, and
-	 * finding 3120 declined exactly that.  The compare is an equality, so
-	 * it carries no signedness evidence either.
+	 * inc %ebx; cmp $0x2,%bx; mov %bx,0x1e9c(%edx); je`).  The compare is
+	 * an equality, so it carries no signedness evidence either.
+	 *
+	 * RECONSTRUCTING `linearMappingStudy` ADDS THE PART THAT MAKES THE
+	 * COUNT MEAN SOMETHING: it is a count of COMPLETED STUDY RUNS -- the
+	 * increment is on the path where `uint_1eb0 + 1` reaches `uint_1ea8`
+	 * -- and NOTHING IN THAT FUNCTION EVER CLEARS IT.  Only
+	 * `resetLinearMappStudy` and `reset` do.  So the `== 2` test fires
+	 * exactly once per study, on the second completed run, and what it
+	 * does there is raise `short_1ea6` below.  The old comment's "counts
+	 * something that happens twice" is right and this is what it counts.
 	 */
 	short short_1e9c;
 	unsigned char pad_1e9e[2];
@@ -424,12 +479,39 @@ public:
 	V90AutoDigitalImpDetector *adiDetector;
 
 	/*
-	 * +0x1ea4 and +0x1ea6  MODELLED, UNNAMED.  `resetLinearMappStudy` and
-	 * `reset` clear both with 16-bit stores and `linearMappingStudy`
-	 * stores a literal 1 into each (0x315b6 and 0x3170f) at the two points
-	 * where its end-of-run pass begins.  Nothing in the object LOADS
-	 * either, so they are flags something else reads and the something
-	 * else is not in this class.
+	 * +0x1ea4 and +0x1ea6  MODELLED, UNNAMED, AND TWO CLAIMS THAT USED TO
+	 * STAND HERE ARE WITHDRAWN.  They were that nothing in the object
+	 * LOADS either, and that the two stores at 0x315b6 and 0x3170f are
+	 * "the two points where the end-of-run pass begins".  Both are wrong.
+	 *
+	 * THEY ARE READ, BY `V90Equalizer::process`, and the identification is
+	 * not a displacement coincidence -- the same function CALLS
+	 * `linearMappingStudy` thirty bytes earlier:
+	 *
+	 *     3a3dd:  call  V90Demapper::linearMappingStudy(short, short)
+	 *     ...
+	 *     3a3fd:  mov   0x3054(%edx),%ecx
+	 *     3a403:  cmpw  $0x0,0x1ea4(%ecx)     ; je  -> skip
+	 *     ...
+	 *     3a42c:  mov   0x3054(%edx),%eax
+	 *     3a432:  cmpw  $0x0,0x1ea6(%eax)     ; je  -> skip
+	 *
+	 * so +0x3054 of the equaliser's argument is this demapper, each flag
+	 * is tested against zero, and each gates a second `cmpw $0x0` on a
+	 * flag at +0x144 / +0x146 of another object.  Finding 3531's rule is
+	 * why this matters and finding 4342 records it: a claim that NOTHING
+	 * reads a field is a claim about every function in the object, and
+	 * the way to test it is a displacement grep -- which works here only
+	 * because `1ea4` is a rare displacement and would prove nothing for,
+	 * say, `0x08`.
+	 *
+	 * AND THE TWO STORES ARE UNDER DIFFERENT CONDITIONS.  0x315b6 sets
+	 * +0x1ea4 on EVERY completed run; 0x3170f sets +0x1ea6 only when
+	 * `short_1e9c` reaches two, which is the SECOND completed run and
+	 * happens once per study.  So one is "a run has finished" and the
+	 * other "a second run has finished" -- bounded, but what the equaliser
+	 * does with the distinction is in a function nobody has written, so
+	 * the names stay neutral and this comment carries the derivation.
 	 */
 	short short_1ea4;
 	short short_1ea6;
@@ -451,10 +533,15 @@ public:
 	 * neither carries signedness evidence and both are `unsigned int` by
 	 * the argument's type rather than by the branch.
 	 *
-	 * `linearMappingStudy` IS READ HERE AND NOT RECONSTRUCTED, which is
-	 * the weakest of CLAUDE.md's three evidence ranks and is said out
-	 * loud.  What the two names rest on is the shape above and nothing
-	 * else.
+	 * `linearMappingStudy` IS NOW RECONSTRUCTED AND BOTH NAMES SURVIVE IT,
+	 * with the reading upgraded from the weakest of CLAUDE.md's three
+	 * evidence ranks to the function's own behaviour.  The test is
+	 * `uint_1eb0 + 1 == uint_1ea8` and the progress is stored ONLY on the
+	 * arm that fails it; the arm that passes REWINDS it to zero
+	 * (`mov %edx,0x1eb0(%ecx)` with `%edx` zeroed at 0x31599) and runs the
+	 * end-of-run pass.  A length that is set once and only read, against a
+	 * progress that counts to it and restarts, is exactly what the pair
+	 * was named for.
 	 */
 	unsigned int uint_1ea8;			/* the length  */
 
@@ -483,6 +570,16 @@ public:
 	 * sign-extended and the zero-extending load is the free half of
 	 * finding 614 -- an extension whose upper bits are discarded by the
 	 * next instruction.
+	 *
+	 * AND `decisionCode`'S SIGNEDNESS IS NOW FORCED BY MORE THAN THAT,
+	 * which matters because 614's half is by itself only an absence of
+	 * evidence.  `linearMappingStudy` tests `decisionCode - 1` with `js`
+	 * (0x31466) and `decisionCode + 1` against the row length with `jge`
+	 * (0x31545): a SIGN test and a SIGNED compare, neither of which an
+	 * `unsigned short` promoted to `int` can ever produce, since such a
+	 * value is never negative and GCC knows it.  The consequence is in the
+	 * object too -- with the code at zero and the row length at one, the
+	 * second test holds and `constellation[phase][-1]` is read.
 	 */
 	short decisionCode;
 	short decisionFramePosition;
@@ -490,13 +587,46 @@ public:
 	unsigned int uint_1eb0;			/* the progress; see +0x1ea8 */
 
 	/*
-	 * +0x1eb4  MODELLED, UNNAMED, and it is a HALFWORD rather than the
-	 * four-byte pad this file used to carry: `reset` writes it 16-bit wide
-	 * (`mov %si,0x1eb4(%ebp)` at 0x30b34) and nothing else in the object
-	 * touches it.  The two bytes after it are the tail of the 0x1eb8
-	 * allocation and nothing reaches them.
+	 * +0x1eb4  NAMED, AND BY THE ONLY EVIDENCE CLAUDE.md RATES FIRST.
+	 *
+	 * This was `short_1eb4`, "MODELLED, UNNAMED ... `reset` writes it
+	 * 16-bit wide (`mov %si,0x1eb4(%ebp)` at 0x30b34) and nothing else in
+	 * the object touches it".  The width is unchanged and still forced;
+	 * the "nothing else" was true of the tree at the time and is now
+	 * false.  `V90Demodulator`'s two data-phase entries write it, and each
+	 * prints what it just did:
+	 *
+	 *   enterDataPhase        resetLinearMappStudy(...); this = 1
+	 *     "V90Demodulator: reset and enable linear mapping study in data"
+	 *
+	 *   enterDataSteadyState  this = 0
+	 *     "V90Demodulator: disable linear mapping study."
+	 *
+	 * Two writers, opposite values, and a format string beside each saying
+	 * "enable" for the 1 and "disable" for the 0.  So the field is the
+	 * study's enable flag and the polarity is the object's own.
+	 *
+	 * AND THE READER SETTLES IT INDEPENDENTLY.  `V90Phase4Demodulator`'s
+	 * two decision members -- landed before this batch and not changed by
+	 * it -- do the same pair of writes with their own pair of strings
+	 * ("reset & enable linear mapping study in TRN2", "disable linear
+	 * mapping study") and, between them, GATE the call:
+	 *
+	 *     if (demapper->linearMappStudyEnabled != 0)
+	 *             demapper->linearMappingStudy(sample, decision);
+	 *
+	 * That is the third tier of evidence agreeing with the first, and it
+	 * is what makes the name a description of the field's role rather
+	 * than of one writer's intent: the flag is read, and what it gates is
+	 * `linearMappingStudy`.
+	 *
+	 * It stays a `short` and does NOT become a flag constant: CLAUDE.md
+	 * names flags by bit value where a mask test reads a bit, and nothing
+	 * masks this -- all three writers store a whole halfword.  The two
+	 * bytes after it are the tail of the 0x1eb8 allocation and nothing
+	 * reaches them.
 	 */
-	short short_1eb4;
+	short linearMappStudyEnabled;
 	unsigned char pad_1eb6[2];
 };
 

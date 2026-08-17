@@ -89,10 +89,51 @@ V90SignBitsExtractor::~V90SignBitsExtractor()
 
 /*
  * ===========================================================================
- * THE PROCESSING HALF -- two of the three, 614 bytes of the object.  `reset`
- * is the one still outstanding, at 119.
+ * THE PROCESSING HALF -- all three now, 733 bytes of the object.
  * ===========================================================================
  */
+
+/*
+ * reset -- 0x31960, 119 bytes.  Set the spacing, derive the width from it,
+ * clear the odd decoder, re-arm the parallel one, and take the state.
+ *
+ * THE WIDTH IS `6 / spacing` AND THE DIVIDE IS UNSIGNED: `mov $0x6,%eax` /
+ * `xor %edx,%edx` / `div %ecx`, never `idiv` and with no signed fixup.  Six
+ * is V90SBE_DECODER_SIZE -- the same six the constructor fixes the parallel
+ * decoder's capacity at, and the same six that is one V.90 frame -- so a
+ * spacing of one gives a width of six and a spacing of six a width of one.
+ *
+ * `spacing` IS STORED BEFORE ANYTHING BRANCHES, which is the one thing the
+ * order settles: `mov %edx,(%ebx)` sits above the `test`/`je`, so it is the
+ * first statement and not part of either arm.
+ *
+ * A ZERO SPACING IS GUARDED, and the guard is the reason the function is
+ * 119 bytes rather than 60.  The object tests the argument and takes a
+ * separate arm that stores a width of zero instead of dividing -- so the
+ * divide is never reached with a zero divisor and there is no #DE to
+ * reproduce.  What follows the `if` is duplicated into both arms by the
+ * compiler, not written twice: the odd decoder's clear, the parallel
+ * decoder's reset and the state store are byte-identical in each.
+ *
+ * THE PARALLEL DECODER IS RE-ARMED WITH THE NEW WIDTH AND AN INIT OF ZERO.
+ * Its `reset(unsigned, T)` is reloaded from the member at +0x04 rather than
+ * from the register the divide left it in -- `mov 0x4(%ebx),%ecx` after the
+ * store -- which is what a member read compiles to and is why `width` is
+ * assigned before the call rather than passed as an expression.
+ */
+void
+V90SignBitsExtractor::reset(unsigned int spacing_, unsigned int state_)
+{
+	spacing = spacing_;
+	if (spacing_ != 0)
+		width = V90SBE_DECODER_SIZE / spacing_;
+	else
+		width = 0;
+
+	oddDecoder.prev_ = 0;
+	decoder.reset(width, 0);
+	state = state_;
+}
 
 /*
  * `applyFrameAction` -- 197 bytes at 0x319e0.  One inversion pattern applied

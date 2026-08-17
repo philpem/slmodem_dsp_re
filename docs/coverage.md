@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#####################.............]  60.8%    446781 bytes, 1014 symbols
-  tested      [##################################] 100.0%    446758 bytes, 1007 of 1014 that can be
+  translated  [#######################...........]  68.2%    500921 bytes, 1170 symbols
+  tested      [##################################]  99.8%    500118 bytes, 1154 of 1170 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,9 +17,18 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 21 of ours (10728 bytes).
 
   translated, alias exists, and NOT tested:
+    _ZN12VPcmFloModem16getConstellationEP11int_complexm    469 bytes
+    _ZN12VPcmFloModem18getLinearEqualizerEP11int_complexm    155 bytes
+    _ZN12VPcmFloModem6getDFEEP11int_complexm        138 bytes
     _ZN5QueueIfE5resetEv                             13 bytes
+    _ZN15K56FlexFloModem6getDFEEP11int_complexm       3 bytes
+    _ZN15K56FlexFloModem18getResamplerOffsetEP11int_complexm      3 bytes
+    _ZN15K56FlexFloModem18getLinearEqualizerEP11int_complexm      3 bytes
+    _ZN15K56FlexFloModem17getResamplerPhaseEP11int_complexm      3 bytes
+    _ZN15K56FlexFloModem17getDecisionErrorsEP11int_complexm      3 bytes
     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes
+    _ZN15K56FlexFloModem16getConstellationEP11int_complexm      3 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
     _ZN15K56FlexFloModem21enterPhase3FullDuplexEv      1 bytes
@@ -86,8 +95,8 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    VPcmV34Main.cpp +72                           112429 bytes   299 symbols
     class1tx.c +94                                 75848 bytes   305 symbols
+    VPcmV34Main.cpp +72                            60133 bytes   145 symbols
     V32mod.c +39                                   37698 bytes    76 symbols
     Dialer.c +18                                   10605 bytes    38 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
@@ -95,7 +104,7 @@ dsplibs.o reconstruction coverage
     Beepgen.c +3                                    6546 bytes    27 symbols
     class1.c                                        4626 bytes    14 symbols
     class1rx.c                                      2495 bytes     5 symbols
-    b103.c +2                                       2476 bytes     7 symbols
     v32.c                                           1691 bytes     5 symbols
     v22.c                                           1071 bytes     5 symbols
+    dp_init.c +2                                     753 bytes     5 symbols
 ```

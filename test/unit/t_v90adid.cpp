@@ -3705,6 +3705,61 @@ run_qcmapping(void)
  */
 
 /*
+ * THE SWEEP'S VARIANCES ARE FINITE, AND THIS IS THE ONE PLACE THAT IS FORCED.
+ *
+ * `determineMaxUcode`'s scan skips an entry with `if (v == 0.0f) continue;`,
+ * which the object compiles to ONE ordered `fcom` and a `je` with no parity
+ * test -- so an UNORDERED entry sets C3 and is skipped along with a zero one.
+ * GCC 13 emits the parity test whatever it is told (finding 2304), keeps the
+ * entry, and the count comes out different.
+ *
+ * `float_9d48` holds VARIANCES, and the object's own writer --
+ * `updateLinMappMeanAndVar`, behind a guard on a zero sample count -- cannot
+ * put a NaN there.  The sweep seeds the whole object from an LFSR, so one
+ * trial in sixty-four lands a non-finite word in the window the scan reads,
+ * and that trial alone made this group RED on the modern build and the whole
+ * BINARY with it: `t_v90adid` carries the `v90adid` and `v90dil` mutation
+ * suites, 497 mutations, and `tools/mutate.py` refuses a red baseline
+ * (findings 2157 and 3002).
+ *
+ * So the accidental case is removed and the DELIBERATE one is kept, in its own
+ * binary: `t_v90adidnan` drives a window of planted NaNs and is declared in
+ * `tools/gccdiverge.json`.  Nothing else about the sweep moves -- only words
+ * whose exponent field is all ones are touched, and they are turned into the
+ * largest finite exponent rather than into a constant, so the entry keeps its
+ * sign and its significand and stays as varied as the seed made it.
+ * Findings 6001 and 1436.
+ */
+static long mu_finite_words;		/* rewritten */
+static long mu_finite_seen;		/* examined  */
+
+static void
+mu_finite_variances(void)
+{
+	float *a = &ours_o.float_9d48[0][0];
+	float *b = &theirs_o.float_9d48[0][0];
+	int i;
+
+	/*
+	 * Through the BITS and not through `v != v`: the period build sets
+	 * `-mno-ieee-fp`, which folds a self-comparison to zero and deleted a
+	 * NaN detector in the harness once already (finding 2303).
+	 */
+	for (i = 0; i <= ADID_VAR_LAST; i++) {
+		unsigned int u;
+
+		mu_finite_seen++;
+		memcpy(&u, &a[i], sizeof u);
+		if ((u & 0x7f800000u) != 0x7f800000u)
+			continue;
+		u &= ~0x00800000u;
+		memcpy(&a[i], &u, sizeof u);
+		memcpy(&b[i], &u, sizeof u);
+		mu_finite_words++;
+	}
+}
+
+/*
  * determineMaxUcode.
  *
  * THE METHOD IS FIVE DECISIONS DEEP AND A SEEDED OBJECT REACHES ONE SIDE OF
@@ -3719,13 +3774,18 @@ run_qcmapping(void)
  * twenty entries directly: all zero clamps it up to 500, all 1e9 clamps it
  * down to 100000, and a middling set leaves it alone.
  *
- * THE TWO SKIPS IN THE SCAN ARE WHERE THE UNORDERED COMPARE LIVES.  An entry
- * joins the count when it is smaller than the threshold AND is not zero --
- * and the object's zero test is an `fcomp`/`je`, which a NaN satisfies.  Two
- * grids plant exactly three NaNs and exactly three zeros in a five-entry
- * window with two small entries beside them, so the count is 2 and the window
- * does NOT qualify; a reading that counted either would make it 5 and qualify,
- * and the answer moves.  Finding 1436.
+ * THE ZERO SKIP IN THE SCAN.  An entry joins the count when it is smaller than
+ * the threshold AND is not zero, so a grid plants exactly three zeros in a
+ * five-entry window with two small entries beside them: the count is 2 and the
+ * window does NOT qualify, where a reading that counted them would make it 5,
+ * qualify, and move the answer.  Finding 1436.
+ *
+ * THE OTHER HALF OF THAT SKIP IS `t_v90adidnan`'s.  The object's zero test is
+ * one `fcomp`/`je` with no parity test, so an UNORDERED entry is skipped too --
+ * which GCC 13 cannot reproduce and which therefore cannot be observed in a
+ * binary that has to exit zero on the modern build.  The NaN window row moved
+ * out with it; `mu_finite_variances` above is why the SWEEP no longer trips
+ * over the same arm by accident.
  */
 static int
 run_maxucode(void)
@@ -3760,6 +3820,7 @@ run_maxucode(void)
 		int p;
 
 		seed(trial, trial % 4);
+		mu_finite_variances();
 		BOTH(unSuspectedPhase, usp);
 		BOTH(short_a97a, a97a);
 		BOTH(float_a980, a980v[IDX(trial, 5)]);
@@ -3863,6 +3924,7 @@ run_maxucode(void)
 			int i;
 
 			seed(700 + g, 0);
+			mu_finite_variances();
 			BOTH(unSuspectedPhase, (short)(g % NPHASE));
 			BOTH(short_a97a, 0x30);
 			BOTH(float_a980, 1.0f);
@@ -3896,7 +3958,7 @@ run_maxucode(void)
 	 * variances at codes 0x5a down to 0x56, top first.
 	 */
 	{
-		static const unsigned int win[6][5] = {
+		static const unsigned int win[5][5] = {
 			/* three small: qualifies, and the first is at the top */
 			{ 0x3f800000u, 0x3f800000u, 0x3f800000u, 0x7f7fffffu,
 			  0x7f7fffffu },
@@ -3906,24 +3968,30 @@ run_maxucode(void)
 			/* three small, the first at the BOTTOM of the window */
 			{ 0x7f7fffffu, 0x7f7fffffu, 0x3f800000u, 0x3f800000u,
 			  0x3f800000u },
-			/* two small and three NaN: must NOT qualify */
-			{ 0x7fc00000u, 0x3f800000u, 0x7fc00000u, 0x3f800000u,
-			  0x7fc00000u },
 			/* two small and three zeros: must NOT qualify */
 			{ 0x00000000u, 0x3f800000u, 0x00000000u, 0x3f800000u,
 			  0x00000000u },
 			/* nothing small at all */
 			{ 0x7f7fffffu, 0x7f7fffffu, 0x7f7fffffu, 0x7f7fffffu,
 			  0x7f7fffffu }
+			/*
+			 * THE SIXTH ROW WAS `two small and three NaN`, and it
+			 * is `t_v90adidnan`'s now.  It is the same claim as the
+			 * zero row one instruction further on -- the object's
+			 * `fcomp`/`je` skips an unordered entry exactly as it
+			 * skips a zero -- and it is the half GCC 13 cannot
+			 * reproduce.  Findings 6001, 2304 and 1436.
+			 */
 		};
 		int w;
-		unsigned char seen[6];
+		unsigned char seen[5];
 
 		study_debug_on();
-		for (w = 0; w < 6; w++) {
+		for (w = 0; w < 5; w++) {
 			int i;
 
 			seed(760 + w, 0);
+			mu_finite_variances();
 			BOTH(unSuspectedPhase, 2);
 			BOTH(short_a97a, 0x30);
 			BOTH(float_a980, 1.0f);
@@ -3964,7 +4032,7 @@ run_maxucode(void)
 		/*
 		 * The three qualifying rows put the highest small entry at
 		 * three different places, so the answer has to move with it;
-		 * the three that do not qualify all fall through to the floor.
+		 * the two that do not qualify both fall through to the floor.
 		 */
 		diff_eq_int("a window qualifying at its top gives that code",
 			    seen[0], 0x5a, 0);
@@ -3972,12 +4040,10 @@ run_maxucode(void)
 			    seen[1], 0x59, 0);
 		diff_eq_int("a window qualifying at its foot gives that code",
 			    seen[2], 0x58, 0);
-		diff_eq_int("three NaNs do not make a window qualify",
-			    seen[3] != 0x5a && seen[3] != 0x59, 1, 0);
 		diff_eq_int("three zeros do not make a window qualify",
-			    seen[4] != 0x5a && seen[4] != 0x59, 1, 0);
+			    seen[3] != 0x5a && seen[3] != 0x59, 1, 0);
 		diff_eq_int("no small entry at all falls through to the floor",
-			    seen[5], 0x30, 0);
+			    seen[4], 0x30, 0);
 	}
 
 	/*
@@ -4020,6 +4086,7 @@ run_maxucode(void)
 			int i;
 
 			seed(830 + r, 0);
+			mu_finite_variances();
 			BOTH(unSuspectedPhase, 1);
 			BOTH(float_a980, 1.0f);
 			BOTH(ucode, 0x41);
@@ -4073,6 +4140,7 @@ run_maxucode(void)
 		study_debug_off();
 		for (a = 0; a < 6; a++) {
 			seed(800 + a, a % 4);
+			mu_finite_variances();
 			BOTH(unSuspectedPhase, (short)(a % 5));
 			BOTH(short_a97a, 0x30);
 			BOTH(float_a980, 1.0f);
@@ -4102,6 +4170,24 @@ run_maxucode(void)
 	diff_eq_int("a phase had to walk down for a usable code", walked, 1, 0);
 	diff_eq_int("the report was exercised", level2, 1, 0);
 	diff_eq_int("the gate was exercised shut", level0, 1, 0);
+
+	/*
+	 * THE SANITISER REPORTS ITS DENOMINATOR, because a fixture guard that
+	 * silently did nothing and one that silently rewrote half the array
+	 * both leave this group green -- 2400's argument, and 3100's.  Both
+	 * numbers are PINNED rather than bounded: they are a function of the
+	 * seed alone and of nothing in `src/`, so either one moving means the
+	 * sweep's inputs moved and every verdict this group carries describes
+	 * a different grid.  459 of 67,490 is 0.68% of the words examined,
+	 * and what it removed was ONE trial's worth of failure: trial 27,
+	 * whose non-finite word is at flat index 424 --
+	 * `float_9d48[3][40]`, the first of the twenty entries the threshold
+	 * averages, which is why the divergence showed in the REPORT and not
+	 * in the object.  Finding 6001.
+	 */
+	diff_eq_int("the variance sanitiser examined %ld words",
+		    mu_finite_seen, 67490L, 0);
+	diff_eq_int("and rewrote %ld of them", mu_finite_words, 459L, 0);
 
 	return diff_end();
 }

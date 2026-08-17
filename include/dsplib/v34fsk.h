@@ -392,8 +392,40 @@ struct v34_object {
 	unsigned char unmapped_25ca[0x25cc - 0x25ca];
 	/* The transmit scrambler's shift register. */
 	int f25cc;					/* +0x25cc */
-	short f25d0;					/* +0x25d0 symbol re */
-	short f25d2;					/* +0x25d2 symbol im */
+	/*
+	 * +0x25d0.  The point being transmitted: two shorts, real then
+	 * imaginary, and EVERY ARM THAT SENDS A CONSTELLATION POINT WRITES
+	 * BOTH WITH ONE 32-BIT STORE --
+	 *
+	 *   txmitdibit     0x5e6c5   mov %edx,0x3b4(%edi)   edi = obj+0x221c
+	 *   txmitquadbit   0x5e582   mov %ecx,0x3b4(%edi)   edi = obj+0x221c
+	 *   modulatevector 0x59e94   mov %edx,0x25d0(%esi)  esi = obj
+	 *
+	 * which is why `vect4` and `vect16` hold ints at all.  The halves
+	 * are ALSO written and read separately as shorts: the silent symbol
+	 * zeroes each on its own, and `txmit` reassembles them as
+	 * `(im << 16) | (unsigned short)re` before handing the result to
+	 * `V34ModulatorProcess`.  That reader is the whole of the evidence
+	 * for the name -- `txmit` is the only thing in the object that reads
+	 * this pair, so it is the point going OUT and not one coming in.
+	 * Was `f25d0` (`symbol re`) and `f25d2` (`symbol im`).
+	 *
+	 * The union spells the aliasing out rather than casting a pointer,
+	 * which -O2 is entitled to reorder; `v34_receiver::energy` is the
+	 * same reading and the same remedy.  `c` is an ARRAY rather than two
+	 * named fields because `V34nlencoder` is handed `txpoint.c` and
+	 * writes `out[0]` and `out[1]` through it -- two named shorts would
+	 * make that second store its own out-of-bounds defect.
+	 *
+	 * A 4-byte STRUCT ASSIGNMENT would emit the same single `movl` and
+	 * is an equally consistent reading of the original; nothing in the
+	 * object separates the two, so this does not claim to have settled
+	 * which the author wrote.  See finding 5303.
+	 */
+	union {
+		int word;				/* +0x25d0 both at once */
+		short c[2];				/* [0] real, [1] imag  */
+	} txpoint;
 	short f25d4;					/* +0x25d4 tx scale  */
 	unsigned char unmapped_25d6[0x25dc - 0x25d6];
 	/*
@@ -431,8 +463,22 @@ struct v34_object {
 	 * and the object reuses the space.  `preinitdigital` clearing those
 	 * three arrays on the receive side and on neither other says the same
 	 * thing from the other direction.  See finding 181.
+	 *
+	 * THE POINTS ARE ALSO ADDRESSED AS EIGHT INTS, and `modulatevector`
+	 * is what pins both readings at once: it writes single shorts here
+	 * (`mov %dx,0x2a80(%edi)` at 0x5a4fd, `mov %ax,0x2a80(%esi)` at
+	 * 0x5a78e) and then loads one whole point with `mov
+	 * 0x2a80(%esi,%eax,4),%edx` at 0x59e86, scaling the index by FOUR,
+	 * to hand to the 32-bit store at +0x25d0.  Sixteen shorts and eight
+	 * ints over the same 32 bytes, spelled as a union rather than
+	 * reached with `*(int *)&vect[2 * n]` -- which is what -O2 is
+	 * entitled to reorder.  `vect` keeps its name, so every short-wise
+	 * user is unchanged; `vectp` is the same storage as points.
 	 */
-	short vect[16];					/* +0x2a80 */
+	union {
+		short vect[16];				/* +0x2a80 */
+		int vectp[8];				/* +0x2a80, one per point */
+	};
 	short f2aa0;					/* +0x2aa0 */
 	short vect_idx;					/* +0x2aa2 */
 	short f2aa4;					/* +0x2aa4 */
@@ -440,10 +486,18 @@ struct v34_object {
 	/*
 	 * Two per-symbol history rings modem_serrint fills, indexed by f2aa4
 	 * and f2aa6 and wrapping at 0x12b and 0x257 respectively.  The first
-	 * holds each residual TWICE, as both halves of its int -- so it is a
-	 * complex buffer being written with a real value.
+	 * holds each residual TWICE, as both halves of its entry -- so it is
+	 * a complex buffer being written with a real value.
+	 *
+	 * ITS ELEMENT IS TWO SHORTS AND NOT AN INT, and modem_serrint is
+	 * what settles it: the entry is filled by TWO 16-bit stores,
+	 * `mov %si,0x2aa8(%edx)` at 0x5d0f7 and `mov %si,0x2aaa(%edx)` at
+	 * 0x5d0fe, where a 32-bit field would have taken one `movl`.  It was
+	 * declared `int[0x12c]` here and every writer reached the halves by
+	 * casting `(short *)&hist_2aa8[k]`, which is the declaration being
+	 * wrong rather than the access being clever.  Same 0x4b0 bytes.
 	 */
-	int hist_2aa8[0x12c];				/* +0x2aa8 */
+	short hist_2aa8[0x12c][2];			/* +0x2aa8 */
 	short hist_2f58[0x258];				/* +0x2f58 */
 	unsigned char unmapped_3408[0x3548 - 0x3408];
 	/*
@@ -1037,7 +1091,24 @@ struct v34_object {
 	 */
 	short rrn_local;				/* +0xac0e */
 	short rrn_remote;				/* +0xac10 */
-	unsigned char unmapped_ac12[0xac16 - 0xac12];
+	/*
+	 * +0xac12, +0xac14.  TWO SIGNED SHORTS, and the width and the sign
+	 * are both forced: `VPcmV34GetDiagnostics` reads each with a single
+	 * `movswl` into a 32-bit slot of `TAG_DiagnosticResults`, which is
+	 * the promotion of a `short` and not of an `unsigned short`.  The
+	 * other two accesses agree on the width -- `VPcmV34Create` clears
+	 * both with `mov %reg16`, and `v34handshakinit` reads each back with
+	 * `movzwl` and stores a halfword, where the upper half never
+	 * survives (CLAUDE.md's free column, finding 614).
+	 *
+	 * OFFSET-NAMED.  No format string in the object prints either, no
+	 * reconstructed function does arithmetic on them, and the one
+	 * consumer copies them out unchanged -- +0xac12 into three
+	 * diagnostics offsets at once and +0xac14 into a fourth.  They were
+	 * `unmapped_ac12[4]`.
+	 */
+	short short_ac12;				/* +0xac12 */
+	short short_ac14;				/* +0xac14 */
 	/*
 	 * +0xac16.  A BYTE, and past where this struct used to end: the
 	 * declared length of 0xac10 was the largest offset anything
