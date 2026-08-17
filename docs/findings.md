@@ -62790,3 +62790,67 @@ The `+1` is the shaper's, not an off-by-one: `FPM_PPS_init` seeds `phase` from
 `step`, so the first output is produced before any symbol is consumed. The
 bound asserted is the symbol count with room for that debt, and the mutation
 that makes the counter signed is caught.
+
+### 3646. THE V.32 SYMBOL RING IS ONE OBJECT WITH TWO STRUCT TAGS, AND `ModDataV32` SAYS SO IN TWO INSTRUCTIONS
+
+`lea 0xb0(%edx),%eax` at 0x81baa hands `fp + 0xb0` to an `SMCv32_encoder_*`,
+where `v32smc.h` types it `struct v32_symout *`. `lea 0xb0(%eax),%edx` at
+0x81bd1 hands the same address to `FPM_PPS_filter`, where `fpm_pps.h` types it
+`struct fpm_smc_ring *`. Three instructions apart, from two separate loads of
+the instance pointer.
+
+The two declarations describe the same bytes:
+
+| | `v32_symout` | `fpm_smc_ring` |
+|---|---|---|
+| +0x00 | `pad00[8]` | `i`, `q` |
+| +0x08 | `buf` | `sym` |
+| +0x0c | `widx` | `widx` |
+| +0x0e | `pad0e` | `ridx` |
+| +0x10 | `limit` | `len` |
+
+Neither header could have known. `v32smc.h` was written from the three
+encoders, which only ever write; `fpm_smc.h` was written from the producer and
+consumer of the generic ring, which V.32 does not use. Each named what its own
+side could see and padded the rest, and the two paddings are each other's
+fields.
+
+`v32data.c` does NOT unify them. Merging two struct tags is a type change, and
+`docs/plan.md` §3 rules that a batch with other work in flight must not make
+one; phase 6 collects the punned sites into a batch of their own. D431 records
+it and the cast is the whole of the deviation.
+
+### 3647. V.32's NO-CARRIER SYMBOL IS 0x10 BECAUSE THE CONSTELLATION MAPS HAVE SEVENTEEN ENTRIES
+
+`TxNoCarrierV32` writes the bare literal `movw $0x10` into every ring slot, and
+a literal explains nothing on its own. What explains it is the map size:
+`SMCv32_IMAP16` and `SMCv32_QMAP16` are 0x22 bytes each, which is SEVENTEEN
+shorts, one past the sixteen points a V.32bis constellation carries.
+`FPM_PPS_filter` indexes both with the ring entry's LOW BYTE, so 0x10 selects
+that seventeenth entry -- a point appended to both maps for this path and
+reachable from nowhere else.
+
+`PPSv32_CFG + 0x04` is 1, so the mapped form is the one in use and the index
+is really an index; `+0x10` and `+0x14` of the same config are the two maps.
+Read with `tabdump.py`, which prints the relocation warning that stops the
+four pointers in that config being read as small integers.
+
+### 3648. THE V.32 NO-CARRIER PATH MOVES THE CODER'S QUADRANT AND NEVER READS IT, AND ITS WRITE-BACKS COME FIRST
+
+`add $0x3` then `and $0x3` on `fp + 0x4e`, once per symbol, written back at
+0x825ad and read by nothing in the function. `fp + 0x4e` is `struct v32_smc`'s
+`quad` -- 0x4e - 0x48 = 6 -- and that name is `v32smc.h`'s, given by the three
+encoders that do read it, so nothing is being named here. What is new is that a
+function OUTSIDE the coder steps it, backwards, one quadrant per symbol of
+silence. Why is not established and is not guessed at.
+
+Two things follow that a reader of the V.17 and V.29 twins would get wrong:
+
+- **The write-backs precede the shaper.** `quad` at 0x825ad and `widx` at
+  0x825bb, then the call at 0x825d8. V.17 and V.29 write their cursor AFTER,
+  through a fresh load of the instance pointer. Neither ordering is observable
+  -- `FPM_PPS_filter` writes only `ridx` -- but they are different source and
+  are written differently.
+- **A forwards step is invisible at counts that are multiples of four**, which
+  is finding 3574's shape without a table: the test drives 1, 2, 3, 5, 7, 11,
+  13, 47 and 49 alongside 12, 48 and 0, and seeds `quad` at all four residues.

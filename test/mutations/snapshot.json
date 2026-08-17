@@ -848,6 +848,39 @@
     "the write cursor is written back into the read cursor": "caught"
    }
   },
+  "v32data": {
+   "key": "066f8fcf67e15ffa551c0c98c970e584a08a52f5b135f0530fdef38b07ce1cd6",
+   "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the coder and the ring are handed to the encoder the other way round": "caught",
+    "the coder is taken from V.22's offset rather than V.32's": "caught",
+    "the coder is taken from the shaper's offset": "caught",
+    "the cursor advances before the store rather than after it": "caught",
+    "the cursor is not written back, so a caller filling the ring across calls overwrites the same slots": "caught",
+    "the cursor wraps one past it, so the slot at limit is written": "caught",
+    "the cursor wraps one short of the ring length": "caught",
+    "the encoder is dispatched from the slot above the one the selector names": "caught",
+    "the encoder table is read one slot high, which is abs where V32FP_recreate laid dif": "caught",
+    "the encoder's count is one short, so the last data word never reaches the ring": "caught",
+    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
+    "the no-carrier index carries a mode tag in its high byte": "caught",
+    "the no-carrier index is one below the seventeenth map entry": "caught",
+    "the no-carrier index is zero, which is a real constellation point": "caught",
+    "the quadrant accumulator is masked to three bits rather than two": "caught",
+    "the quadrant is not written back": "caught",
+    "the quadrant is stepped FORWARDS, which agrees at every count that is a multiple of four": "caught",
+    "the quadrant is stepped once per call rather than once per symbol": "caught",
+    "the quadrant is taken from the coder's mode instead": "caught",
+    "the ring bound is read where the read cursor lives": "caught",
+    "the selector indexes the table unsigned, which agrees over every value V32FP_recreate can leave and not over a negative one": "caught",
+    "the selector is read from the two bytes above it": "caught",
+    "the shaper is filtered from a ring the encoder did not write": "caught",
+    "the shaper is taken from the coder's offset": "caught",
+    "the shaper's count is the sample count rather than the symbol count": "caught",
+    "the transmitter's block is taken from V.17's instance offset": "caught",
+    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught"
+   }
+  },
   "v34datapump": {
    "key": "f01fd489d9cd08294bda68389256163f0ffeb25ec99f358aa05a199d826ea623",
    "summary": "78 mutations: 72 caught (72 by test, 0 by strings), 4 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",

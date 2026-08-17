@@ -128,6 +128,10 @@
   "src/pump/v29/v29data.c",
   "build/test/t_v29data"
  ],
+ "v32data": [
+  "src/pump/v32/v32data.c",
+  "build/test/t_v32data"
+ ],
  "v34datapump": [
   "src/pump/v34/v34hshak.c",
   "build/test/t_v34datapump"
