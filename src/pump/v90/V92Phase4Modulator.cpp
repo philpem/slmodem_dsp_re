@@ -73,6 +73,7 @@ V92P4M_OFF(word_34,		0x034, word34);
 V92P4M_OFF(word_38,		0x038, word38);
 V92P4M_OFF(flag_3c,		0x03c, flag3c);
 V92P4M_OFF(amplitude,		0x040, amplitude);
+V92P4M_OFF(byte_42,		0x042, byte42);
 V92P4M_OFF(bitsPerSymbol,	0x043, bitspersymbol);
 V92P4M_OFF(word_44,		0x044, word44);
 V92P4M_OFF(mappingParams,	0x048, mappingparams);
@@ -81,7 +82,18 @@ V92P4M_OFF(bitsToSymbol,	0x06c, bitstosymbol);
 V92P4M_OFF(mapper,		0x070, mapper);
 V92P4M_OFF(cp,			0x074, cp);
 V92P4M_OFF(prevBit,		0x078, prevbit);
-V92P4M_OFF(bits,		0x07c, bits);
+V92P4M_OFF(bitsExt,		0x078, bitsext);
+
+/*
+ * AND WHERE `bits[0]` LANDS INSIDE IT, which is the assertion the union
+ * replaced `V92P4M_OFF(bits, 0x07c, bits)` with.  If the bias and the array
+ * ever drift apart, every fold moves by the difference and no differential
+ * trial below `bitsPerSymbol == 1` could tell.  D561.
+ */
+typedef char v92p4m_off_bits[
+    ((int)__builtin_offsetof(V92Phase4Modulator, bitsExt)
+     + V92P4M_BITS_BELOW == 0x07c) ? 1 : -1];
+
 V92P4M_OFF(pattern,		0x1a8, pattern);
 V92P4M_OFF(patternLength,	0x1ac, patternlength);
 V92P4M_OFF(word_1b0,		0x1b0, word1b0);
@@ -262,6 +274,29 @@ int V92Phase4Modulator::generateE1u()
 }
 
 /*
+ * WHY THE SIX GENERATORS BELOW SAY `bitsExt[V92P4M_BITS_BELOW + i]` WHERE THE
+ * OBJECT SAYS `bits[i]`.
+ *
+ * The bit block and `prevBit` are ONE array object here, because the object
+ * addresses one byte below the block: the differential fold writes
+ * `bits[bitsPerSymbol - 1]`, which at a count of zero is `prevBit`'s top byte,
+ * and the blob's `0x7b(%count,%this,1)` is that address.  The header carries
+ * the four instruction pairs that say so and D561 carries the ruling.  Written
+ * as two members the subscript was out of bounds, the two overlapping stores
+ * were the compiler's to order, and GCC 3.4.2 and GCC 13 ordered them
+ * differently (finding 4705).
+ *
+ * Spelling every block access through the wider array rather than through a
+ * local pointer is DELIBERATE and was measured: the bias rides in the
+ * addressing mode exactly as finding 3701 predicted, and `compare.py` comes
+ * out at 410 identical / 78 same size / 606 different size / 401355 bytes,
+ * unchanged in every figure.  A local `unsigned char *bits = &bitsExt[...]`
+ * reads better and does not: it hoists the address, moves six functions by 27
+ * bytes in total, and is a source change this deviation is not entitled to
+ * make.
+ */
+
+/*
  * generateCPu (.text+0x17d50, 304 B) and generateSUVu (+0x17e80, 304 B).
  *
  * THE TWO BODIES ARE THE SAME INSTRUCTIONS IN THE SAME ORDER, differing only
@@ -284,23 +319,26 @@ int V92Phase4Modulator::generateCPu()
 
 	if (flag_3c == 0) {
 		for (i = 0; i < bitsPerSymbol; i++) {
-			bits[i] = scrambler.process(pattern[patternIndex]);
+			bitsExt[V92P4M_BITS_BELOW + i] =
+				scrambler.process(pattern[patternIndex]);
 			patternIndex = (patternIndex + 1) % patternLength;
 		}
-		last = bits[bitsPerSymbol - 1] ^ prevBit;
-		bits[bitsPerSymbol - 1] = (unsigned char)last;
+		last = bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] ^ prevBit;
+		bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] =
+			(unsigned char)last;
 		prevBit = last;
-		sym = mapper->process(bits);
+		sym = mapper->process(&bitsExt[V92P4M_BITS_BELOW]);
 		return sym;
 	}
 
 	n = bitsToSymbol->nofBitsForNextTime();
 	if (n != 0) {
 		for (i = 0; i < n; i++) {
-			bits[i] = scrambler.process(pattern[patternIndex]);
+			bitsExt[V92P4M_BITS_BELOW + i] =
+				scrambler.process(pattern[patternIndex]);
 			patternIndex = (patternIndex + 1) % patternLength;
 		}
-		bitsToSymbol->process(bits, n);
+		bitsToSymbol->process(&bitsExt[V92P4M_BITS_BELOW], n);
 	}
 	bitsToSymbol->process(n, &sym);
 	return sym;
@@ -315,23 +353,26 @@ int V92Phase4Modulator::generateSUVu()
 
 	if (flag_3c == 0) {
 		for (i = 0; i < bitsPerSymbol; i++) {
-			bits[i] = scrambler.process(pattern[patternIndex]);
+			bitsExt[V92P4M_BITS_BELOW + i] =
+				scrambler.process(pattern[patternIndex]);
 			patternIndex = (patternIndex + 1) % patternLength;
 		}
-		last = bits[bitsPerSymbol - 1] ^ prevBit;
-		bits[bitsPerSymbol - 1] = (unsigned char)last;
+		last = bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] ^ prevBit;
+		bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] =
+			(unsigned char)last;
 		prevBit = last;
-		sym = mapper->process(bits);
+		sym = mapper->process(&bitsExt[V92P4M_BITS_BELOW]);
 		return sym;
 	}
 
 	n = bitsToSymbol->nofBitsForNextTime();
 	if (n != 0) {
 		for (i = 0; i < n; i++) {
-			bits[i] = scrambler.process(pattern[patternIndex]);
+			bitsExt[V92P4M_BITS_BELOW + i] =
+				scrambler.process(pattern[patternIndex]);
 			patternIndex = (patternIndex + 1) % patternLength;
 		}
-		bitsToSymbol->process(bits, n);
+		bitsToSymbol->process(&bitsExt[V92P4M_BITS_BELOW], n);
 	}
 	bitsToSymbol->process(n, &sym);
 	return sym;
@@ -348,18 +389,20 @@ int V92Phase4Modulator::generateE2u()
 	short sym;
 
 	if (flag_3c == 0) {
-		scrambler.processAllZeros(bits, bitsPerSymbol);
-		last = bits[bitsPerSymbol - 1] ^ prevBit;
+		scrambler.processAllZeros(&bitsExt[V92P4M_BITS_BELOW],
+					  bitsPerSymbol);
+		last = bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] ^ prevBit;
 		prevBit = last;
-		bits[bitsPerSymbol - 1] = (unsigned char)last;
-		sym = mapper->process(bits);
+		bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] =
+			(unsigned char)last;
+		sym = mapper->process(&bitsExt[V92P4M_BITS_BELOW]);
 		return sym;
 	}
 
 	n = bitsToSymbol->nofBitsForNextTime();
 	if (n != 0) {
-		scrambler.processAllZeros(bits, n);
-		bitsToSymbol->process(bits, n);
+		scrambler.processAllZeros(&bitsExt[V92P4M_BITS_BELOW], n);
+		bitsToSymbol->process(&bitsExt[V92P4M_BITS_BELOW], n);
 	}
 	bitsToSymbol->process(n, &sym);
 	return sym;
@@ -374,11 +417,11 @@ int V92Phase4Modulator::generateTRN2u()
 	unsigned int last;
 	short sym;
 
-	scrambler.processAllOnes(bits, bitsPerSymbol);
-	last = bits[bitsPerSymbol - 1] ^ prevBit;
+	scrambler.processAllOnes(&bitsExt[V92P4M_BITS_BELOW], bitsPerSymbol);
+	last = bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] ^ prevBit;
 	prevBit = last;
-	bits[bitsPerSymbol - 1] = (unsigned char)last;
-	sym = mapper->process(bits);
+	bitsExt[V92P4M_BITS_BELOW + bitsPerSymbol - 1] = (unsigned char)last;
+	sym = mapper->process(&bitsExt[V92P4M_BITS_BELOW]);
 	return sym;
 }
 
@@ -396,8 +439,8 @@ int V92Phase4Modulator::generateRm()
 
 	n = bitsToSymbol->nofBitsForNextTime();
 	if (n != 0) {
-		scrambler.processAllOnes(bits, n);
-		bitsToSymbol->process(bits, n);
+		scrambler.processAllOnes(&bitsExt[V92P4M_BITS_BELOW], n);
+		bitsToSymbol->process(&bitsExt[V92P4M_BITS_BELOW], n);
 	}
 	bitsToSymbol->process(n, &sym);
 	return sym;
@@ -410,8 +453,8 @@ int V92Phase4Modulator::generateB1u()
 
 	n = bitsToSymbol->nofBitsForNextTime();
 	if (n != 0) {
-		scrambler.processAllOnes(bits, n);
-		bitsToSymbol->process(bits, n);
+		scrambler.processAllOnes(&bitsExt[V92P4M_BITS_BELOW], n);
+		bitsToSymbol->process(&bitsExt[V92P4M_BITS_BELOW], n);
 	}
 	bitsToSymbol->process(n, &sym);
 	return sym;

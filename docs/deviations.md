@@ -7453,22 +7453,71 @@ not try; finding 4704.
 
 ## D561 ✅ `bits[-1]` at `bitsPerSymbol == 0` writes into `prevBit`
 
+**CLOSED AND DRIVEN.  The write is the OBJECT'S, our access is defined C now,
+and the input and the four store-order mutations it settles are back in
+`t_v92p4sym` and green on both compilers.**
+
+*Batch of 2026-08-17, on branch `v92-fold-oob`.  Fix class: reproduced as
+found -- the value and the aliasing are kept and the undefined access is
+removed, which is D392's disposition and D4's before it.  **Reachability:
+`bitsPerSymbol` is written at exactly one site among the class's own
+thirty-six symbols, `reset`'s `add $0x2,%dl; mov %dl,0x43(%esi)` at
+.text+0x19065, and the add is EIGHT BITS WIDE -- a second argument of 254
+gives zero.  The constructor never writes the field at all.**
+**Observability: `prevBit`, the block, and every symbol the mapper derives
+from them.**  Findings 5400, 5401, 5402.*
+
 `generateCPu`, `generateSUVu`, `generateE2u` and `generateTRN2u` fold the
 carried differential bit into `bits[bitsPerSymbol - 1]`. With `bitsPerSymbol`
 zero that subscript is -1, which is `V92Phase4Modulator+0x7b` -- the top byte
-of the `unsigned int prevBit` at +0x78. Out of bounds for the `bits` array and
-inside the object, which is why it neither faults nor is caught by a checking
-allocator.
+of the `unsigned int prevBit` at +0x78. Inside the object, which is why it
+neither faults nor is caught by a checking allocator.
 
-It is the object's own arithmetic: `movzbl 0x7b(%esi,%ebx,1)` with %esi holding
-the (zero) count is that address, and the blob has no guard.
+**IT IS THE OBJECT'S OWN ARITHMETIC, AND THE OVERLAP IS LOAD-BEARING.** All
+four sites LOAD and STORE through `0x7b(%count,%this,1)` with the count
+zero-extended from +0x43 -- `movzbl 0x7b(%edx,%ebx,1)` then
+`mov %al,0x7b(%edx,%ebx,1)` at .text+0x17c3a/+0x17c44, and the same pair at
++0x17c91/+0x17c9b, +0x17dc0/+0x17dc7 and +0x17ef0/+0x17ef7 -- and the blob has
+no guard. So the byte the fold reads is `prevBit >> 24`, and which of the two
+overlapping stores lands last decides what +0x7b holds. The object commits to
+both orders: byte then `prevBit` in `generateCPu` and `generateSUVu`, `prevBit`
+then byte in `generateE2u` and `generateTRN2u`.
 
-Reproduced, and NOT DRIVEN. `t_v92p4sym.cpp` had the input in its grid and took
-it out: the two stores overlap only there, so their ORDER decides the result,
-and an out-of-bounds subscript leaves that order to the compiler. GCC 13 and
-GCC 3.4.2 disagree -- the modern build passed and `make period` failed 240
-checks on the unmutated source. A trial that measures which compiler built it
-is not a differential trial. Finding 4705.
+**WHAT CHANGED IS OUR ACCESS, NOT THE VALUE.** `prevBit` and the block are one
+array object in `V92Phase4Modulator.h`:
+
+```c
+	union {
+		unsigned int prevBit;
+		unsigned char bitsExt[V92P4M_BITS_BELOW + V92P4M_BITS_LEN];
+	};
+```
+
+`bitsExt[V92P4M_BITS_BELOW + i]` is the object's `bits[i]` and
+`bitsExt[V92P4M_BITS_BELOW - 1]` is its `bits[-1]`, so every index the fold can
+form is inside one array and the behaviour is defined. **The order is the
+source's in BOTH directions, measured rather than assumed**: unmutated, GCC
+3.4.2 emits the blob's order at all four sites; with the `generateTRN2u` order
+mutation in `src/`, it emits the mutation's, and `make period` goes 221 passed
+/ 1 failed against 222 / 0. `compare.py` does not
+move -- 410 identical (the same SET), 78 same size, 606 different size, 401355
+bytes, before and after, on GCC 3.4.2 exact -- because a constant bias on an
+index into a member array rides in the addressing mode. Finding 3701's
+argument, one class along.
+
+**WHAT IT REPLACED.** The entry used to read *reproduced, and NOT DRIVEN*:
+`t_v92p4sym.cpp` had the input in its grid and took it out, because while the
+subscript was out of bounds the two stores' ORDER belonged to the compiler --
+GCC 13 kept our order, GCC 3.4.2 did not, and `make period` failed 240 checks
+on unmutated source. Four store-order mutations were withdrawn with it. That
+was right about the TRIAL (finding 4705) and it was not the fix; the owner's
+ruling is that an implementation must not depend on the ordering of objects in
+memory, and this was the same ruling with two members of one class rather than
+two objects in one section. **A trial withdrawn because our code was undefined
+comes back once it is defined**, or the fix is invisible to the suite that
+motivated it: the grid starts at zero again, `saw_bps_zero_folding` proves the
+fold is reached on the arm that folds, and the four mutations are back and
+caught -- by the same 80 and 160 checks that used to fail on unmutated source.
 ## D600 ⚠ Both phase 4 decision members return an uninitialised local on five arms
 
 **Where:** `src/pump/v90/V90Phase4Demodulator.cpp`, `getV90Decision` and
@@ -7537,6 +7586,15 @@ grid to 0..6 and says so at the top: past six the subscript is out of bounds in
 OUR source, and a trial there would be the compiler adjudicating our undefined
 behaviour rather than the object adjudicating our reading -- D561's argument,
 one class up.  Finding 4750.
+
+**AND D561 HAS SINCE BEEN CLOSED THE OTHER WAY, WHICH IS THE STANDING WORK
+HERE.**  The clamp is a statement about OUR source and not about the object, so
+it expires the moment our access is made defined: D561 gave `V92Phase4Modulator`
+one array object spanning `prevBit` and the block, and its withdrawn trial and
+mutations came straight back.  The same move is available here -- the walk runs
+off `short_a2` into `word_104`, `suv` and `word_10c`, all members of the same
+class -- and until someone makes it, this grid stops at six for the reason
+above rather than because the object does.  Findings 5400 and 5402.
 
 ## D571 ✅ `byte_128 == 0` divides by zero in the padded-length round-up
 
