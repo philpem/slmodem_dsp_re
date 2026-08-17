@@ -63476,3 +63476,114 @@ set" would have lost silently:
   the EXPORTED `FPM_cos_sign`, which nothing in `src/` reads and only the
   neighbourhood block can catch. That last one is what proves the two copies of
   the four real signs cannot drift apart.
+
+### 4400. `V90TRN2Designer::maxK` GUARDS ITS TRUNCATION WITH 1e-6 AND THE GUARD RUNS OUT AT 2^22, SO EVERY LARGE POWER OF TWO COMES BACK ONE BIT SHORT
+
+`maxK` (0x3ca30, 204 bytes) is log2 of the product of the six constellation
+lengths, and it is written as a base change through log10 rather than as a
+`fyl2x` against 1:
+
+    fldlg2 ; fxch ; fyl2x           log10(product), extended precision
+    flds .rodata.cst4+0x2b0         2.0f
+    fldlg2 ; fxch ; fyl2x           log10(2), extended precision
+    fstps 0xc(%esp) ; flds 0xc(%esp)    ROUNDED TO FLOAT, then reloaded
+    fdivrp                          (Intel FDIVP -- finding 245)
+    fadds .rodata.cst4+0x2b4        + 1e-6f
+    or $0xc00 ... fistpll           truncate towards zero
+
+**THE DIVISOR IS ROUNDED TO A FLOAT AND THE DIVIDEND IS NOT.**  That is the
+whole of it.  `(float)log10(2)` is `0x3E9A209B` = 0.30103000998497009, against
+a true 0.30102999566398119 -- larger by 4.757e-8 in relative terms.  So
+
+    q = k * log10(2) / (float)log10(2) = k * (1 - 4.757e-8)
+
+and the quotient for an exact power of two lands `k * 4.757e-8` BELOW `k`.
+The 1e-6 covers that only while
+
+    k * 4.757e-8 < 1e-6      i.e.  k <= 21.02
+
+Measured, and the object agrees with the arithmetic at every point:
+
+| product | quotient | `maxK` |
+|---|--:|--:|
+| 2^18 | 18.000000143680722 | 18 |
+| 2^20 | 20.000000048534135 | 20 |
+| **2^21** | **21.000000000960842** | **21** |
+| **2^22** | **21.999999953387549** | **21** |
+| 2^36 | 35.999999287361446 | 35 |
+| 2^42 | 41.999990019216872 | 41 |
+| 2^60 | 59.999998145602411 | 59 |
+
+2^21 clears the guard by 9.6e-10 and 2^22 misses it by 4.7e-8, which is why
+`test/unit/t_v90trn2design.cpp` drives both: they are one bit apart and they
+bracket the entire behaviour.  Every case's expected value was derived from
+the arithmetic above in 60-digit decimal BEFORE the blob was asked, so the
+table is a prediction the object confirmed rather than a transcript of what it
+returned -- which is the difference between a test and a tautology.
+
+**IT IS REACHABLE, NOT A CORNER.**  `V90TRN2Design` inlines `maxK` and uses
+its result as `mappingParams->word_0 = k - shaperSR + 6`, and
+`V90ConstellationPower` reads that back as
+`codewordCount = 1LL << (shaperSR + word_0 - 6)` -- so the value IS the frame's
+bit count, V.90 downstream frames carry into the forties, and every power-of-two
+constellation product above 2^21 is designed one bit small.  D470 carries it.
+
+Two things this is NOT.  It is not float-vs-double in the PRODUCT: the six
+`fildll`/`fmulp` never leave the register, so the product is extended
+whatever it is declared, and the declaration shows up only in the `fcoms`
+against a float zero.  And it is not the ordering of the guard against the
+truncation: moving the `+1e-6` inside or outside the cast changes nothing,
+because the control word is already set to round towards zero.
+
+### 4401. GCC 3.4.2 NEEDS `-ffast-math` TO INLINE `log10`, NOT `-funsafe-math-optimizations`, AND FINDING 876's FLAG IS MEASURED INSUFFICIENT
+
+Finding 876 records that the `fldlg2`/`fxch`/`fyl2x` sequence is what GCC
+emits for `log10()` "only under `-funsafe-math-optimizations`", and three
+files -- `Psd.cpp`, `V90Equalizer.cpp`, `VPcmFloModem.cpp` -- carry an inline
+x87 helper on the strength of it.  The CONCLUSION is right and the flag is
+not.  Measured on the period compiler in `tools/toolchain/` (GCC 3.4.2 exact,
+`dsplibs-tc342`), one probe function whose body is
+`log10(prod) / (float)log10(2.0f)`, compiled at `build.sh`'s exact flag list
+plus one:
+
+| extra flag | log10 |
+|---|---|
+| (nothing) | `call log10` |
+| `-funsafe-math-optimizations` | `call log10` |
+| `-funsafe-math-optimizations -fno-math-errno` | `call log10` |
+| `-funsafe-math-optimizations -fno-trapping-math` | `call log10` |
+| `-fno-math-errno` | `call log10` |
+| **`-ffast-math`** | **`fldlg2 ; fxch ; fyl2x`** |
+
+So `-funsafe-math-optimizations` is NECESSARY and not SUFFICIENT for a
+`double` argument, and nothing narrower than the whole of `-ffast-math`
+reproduces the object.  That strengthens 876's ruling rather than weakening
+it: the flag that would be needed is the one CLAUDE.md records withdrawing
+NaN semantics from a whole translation unit and breaking eleven other sites,
+so it is further out of reach than 876 thought, and the inline-asm helper is
+the only route.  `V90TRN2Designer.cpp` carries the fourth copy.
+
+**AND THE OBJECT COMPUTES `log10(2.0f)` AT RUNTIME**, which is itself
+evidence about the compiler: GCC 3.4 has no constant folding for `log10`, so
+a literal argument reaches the inline expander and is evaluated on the
+coprocessor at every call.  A compiler that folded it would have left the
+constant 0.30103f in `.rodata` and no second `fyl2x`, and finding 4400's
+whole behaviour would not exist -- the fold would have used the correctly
+rounded value.
+
+### 4402. THE `V90TRN2Designer` OBJECT IS EIGHT BYTES AND FIVE OF ITS SIX MEMBERS PROVE IT, WHICH IS WHY `maxK` TAKES ITS TABLE AS AN ARGUMENT
+
+`include/dsplib/V90TRN2Designer.h` bounded the class at eight bytes across
+four members and said the bound's scope was four, because `V90TRN2Design` had
+not been read.  Three more members are now written and the bound is unchanged:
+`setNofUcodesInTrn2` reaches `(%ecx)` and nothing else, `setTrn2DummyConstel`
+reaches `0x0(%ebp)` and nothing else, and **`maxK` does not touch `this` at
+all** -- its 204 bytes work entirely through the `V90MappingParams *` it is
+handed, which is why it can be tested with a null designer.
+
+That is worth recording because it is the shape a designer HAS in this object:
+the constellation table is not a member, it is passed in, and the class holds
+only the two collaborators the constructor stored.  `V90ConstellationDesigner`
+is the opposite -- it holds its `mappingParams` -- so the two are not
+interchangeable and a reader coming from one to the other will expect the
+wrong thing.

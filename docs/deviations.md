@@ -7180,3 +7180,49 @@ one from inside a batch with other work in flight, and phase 6 collects the 27
 punned sites into a batch of their own. This is the 28th and it is not
 provably wrong in the way those are -- both readings are correct about the
 bytes -- so it is a modelling duplication rather than a defect.
+
+## D470 🐛 `V90TRN2Designer::maxK` returns one bit short for every exact power of two above 2^21
+
+**Where:** `src/pump/v90/V90TRN2Designer.cpp`, `maxK`; blob 0x3ca30.
+
+**What the original does:** computes `log10(product) / (float)log10(2) + 1e-6`
+and truncates towards zero.  The dividend stays in the coprocessor at extended
+precision and the divisor is ROUNDED TO A FLOAT, which makes it 4.757e-8 too
+large; the quotient for an exact power of two therefore lands `k * 4.757e-8`
+below `k`, and the 1e-6 guard only covers that up to `k = 21.02`.  2^22 comes
+back as 21, 2^36 as 35, 2^42 as 41.
+
+**Impact:** `V90TRN2Design` uses the result as the frame's bit count --
+`mappingParams->word_0 = maxK - shaperSR + 6`, read back by
+`V90ConstellationPower` as `1LL << (shaperSR + word_0 - 6)` -- so a TRN2
+constellation set whose lengths multiply to an exact power of two above 2^21
+is designed one bit smaller than it could be.  It is a lost bit, not a wrong
+answer: everything downstream is consistent with the smaller count.
+
+**Status:** reproduced, not fixed, and not behind `DSPLIB_REPRODUCE_BUGS`.
+The fix would be `1.0f / (float)log10(2)`'s error running the other way, or
+simply `fyl2x` against `fld1`, and either changes the designed constellation
+for real calls -- so this is a defect in the original that the reconstruction
+is required to keep.  Finding 4400 has the measurement and the table.
+
+## D471 🐛 `V90TRN2Designer::setTrn2DummyConstel` has no bound against the 128-byte row
+
+**Where:** `src/pump/v90/V90TRN2Designer.cpp`, `setTrn2DummyConstel`; blob
+0x3cb00.
+
+**What the original does:** `for (i = 0; i < params->nofUcodesInTrn2; i++)`
+over `constellation[k][i]` and `codecConstellation[k][i]`, both of which are
+128 bytes per row.  Nothing tests the count against 128, and nothing tests it
+against the row's own length -- the count comes from `V90Parameters` +0x078,
+which `setToDefault` seeds to 8 and `setNofUcodesInTrn2` can replace with
++0x080.
+
+**Impact:** a count above 128 writes into the next constellation's row, and
+above 768 past the end of the second table.  No caller in the object produces
+one: the two writers of +0x078 are `setToDefault` (8) and `setNofUcodesInTrn2`
+(the +0x080 default, 4).
+
+**Status:** reproduced, not fixed.  Out-of-contract for every input the object
+itself can produce, so there is nothing for a differential test to compare
+against beyond 128; `test/unit/t_v90trn2design.cpp` drives 0, 1, 78, 79, 80,
+127 and 128 and deliberately stops there.

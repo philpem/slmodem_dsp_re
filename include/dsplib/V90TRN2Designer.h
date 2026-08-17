@@ -59,6 +59,7 @@
  */
 class V90Parameters;
 class V90ConstellationPower;
+class V90MappingParams;
 
 class V90TRN2Designer {
 public:
@@ -71,6 +72,25 @@ public:
 	 */
 	V90TRN2Designer(V90Parameters *params, V90ConstellationPower *power);
 	~V90TRN2Designer();
+
+	/*
+	 * Adopt `V90Parameters` +0x080 as `nofUcodesInTrn2` -- the ARGUMENT IS
+	 * A FLAG, not a length; a zero does nothing.  See the .cpp.
+	 */
+	void setNofUcodesInTrn2(short on);
+
+	/*
+	 * Fill all six of `mappingParams`' constellations with a descending run
+	 * from 78, `params->nofUcodesInTrn2` entries long.  Unbounded against
+	 * the 128-byte row length.
+	 */
+	void setTrn2DummyConstel(V90MappingParams *mappingParams);
+
+	/*
+	 * log2 of the product of the six constellation lengths, truncated,
+	 * with the object's own 1e-6 guard.  Touches nothing through `this`.
+	 */
+	int maxK(V90MappingParams *mappingParams);
 
 	/*
 	 * Public for `offsetof`; the original's access specifiers are not
