@@ -63587,12 +63587,27 @@ two different `.rodata.cst4` slots: `flds 0x1b8` at 0x312fd and `flds 0x1c4`
 at 0x31591. Both slots hold exactly `0x3f000000`, which is 0.5f.
 
 That looked at first like evidence that the two functions differ, and it is
-not. **GCC 3.x emits the constant pool PER FUNCTION** -- `output_constant_pool`
-runs at the end of each one -- and `-fmerge-constants` puts each entry in a
-`SHF_MERGE` section for the LINKER to fold. In a `.o` the duplicates are still
-there. So two slots with the same bytes in one translation unit says nothing
-at all, and a reader who treats slot identity as expression identity will
-mis-read every inlined float constant in this object.
+not. **The pool is emitted PER FUNCTION and the layout says so**, which is the
+part anyone can check against the object:
+
+    +0x1b0  24804.0f  |  an earlier function's, and duplicated at +0x1b4
+    +0x1b4  24804.0f  |
+    +0x1b8  0.5f         updateConstelation's ONLY float constant  (0x312f0)
+    +0x1bc  0.0f      |  linearMappingStudy's three, contiguous    (0x31410)
+    +0x1c0  0.4f      |
+    +0x1c4  0.5f      |
+
+Two consecutive pools in `.text` order, the second re-emitting a constant the
+first already holds, and a second duplicate pair three slots earlier. GCC 3.x
+runs `output_constant_pool` at the end of each function and `-fmerge-constants`
+leaves the folding to the LINKER through a `SHF_MERGE` section, so in a `.o`
+the duplicates are all still there.
+
+So **two slots with the same bytes in one translation unit says nothing at
+all**, and a reader who treats slot identity as expression identity will
+mis-read every inlined float constant in this object -- here, into believing
+that the inlined copy of `updateConstelation` rounds by something other than a
+half.
 
 The same pool is where the two constants that DO matter live: `+0x1bc` is
 `0.0f` (the `fcoms` in `linearMappingStudy`) and `+0x1c0` is `0.4f` (its
@@ -63738,7 +63753,16 @@ computation (0x30dd8..0x30de5, and the mirror at 0x30eb7..0x30ec4). It has to:
 the register holding it was reused for `this` at 0x30dbc. Ours keeps both in
 registers across the branch and each arm stores what it already has.
 
-That is register allocation, which is CLAUDE.md's free column, and the two
+**The obvious alternative was tried rather than assumed.** Spelling the two
+inner loop bounds `mapp->constellationSize[i]` instead of
+`constellationSize[i]` keeps the mapping pointer live across the loop, which
+is where the extra pressure would have to come from; it moves ours from 548 to
+566 and leaves 39 bytes still unexplained, so it is not the answer and was not
+adopted. Both spellings are the same behaviour -- GCC folds the load into the
+value just stored either way -- so the differential tier cannot choose between
+them and neither can this.
+
+That leaves register allocation, which is CLAUDE.md's free column, and the two
 functions agree instruction for instruction on everything the compiler was
 forced to encode -- the 16-bit signed compare and its arm assignment, the two
 cursor truncations, the unsigned 32-bit loop bound, the `movzbl` width of a
