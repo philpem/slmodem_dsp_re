@@ -152,7 +152,7 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
+    ap.add_argument("--obj", default="ref/slmodemd/dsplibs.o")
     ap.add_argument("--func")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--selftest", action="store_true")

@@ -41,7 +41,7 @@ from elftools.elf.sections import SymbolTableSection        # noqa: E402
 def default_blob():
     """$BLOB, else the main repository's copy -- the Makefile's own rule.
 
-    A plain `../slmodemd/dsplibs.o` is wrong in every agent worktree, since
+    A plain `ref/slmodemd/dsplibs.o` is wrong in every agent worktree, since
     those live under `.claude/worktrees/` and it resolves to
     `.claude/worktrees/slmodemd`.  `git rev-parse --git-common-dir` names the
     MAIN repository's .git from inside any worktree, which is how `BLOB` in
@@ -53,7 +53,7 @@ def default_blob():
         gcd = subprocess.check_output(["git", "rev-parse", "--git-common-dir"],
                                       text=True).strip()
     except Exception:
-        return "../slmodemd/dsplibs.o"
+        return "ref/slmodemd/dsplibs.o"
     return os.path.abspath(os.path.join(gcd, os.pardir, os.pardir,
                                         "slmodemd", "dsplibs.o"))
 

@@ -204,7 +204,7 @@ def main():
     ap = argparse.ArgumentParser(
         description="Call graph of dsplibs.o, and the reconstruction order "
                     "it implies.")
-    ap.add_argument("--obj", default="../slmodemd/dsplibs.o")
+    ap.add_argument("--obj", default="ref/slmodemd/dsplibs.o")
     ap.add_argument("--src", nargs="*", default=None,
                     help="sources to scan for what is already reconstructed; "
                          "defaults to src/**/*.c")

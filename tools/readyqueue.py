@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 ap = argparse.ArgumentParser(
     description="Which unwritten symbols are startable today.")
 ap.add_argument("--tumap", default="build/tumap.json")
-ap.add_argument("--obj", default="../slmodemd/dsplibs.o",
+ap.add_argument("--obj", default="ref/slmodemd/dsplibs.o",
                 help="the blob; also exported as BLOB for closure.py")
 ap.add_argument("--span", help="only this translation-unit span")
 ap.add_argument("--kind", default="call",

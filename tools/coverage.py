@@ -71,7 +71,7 @@ in build/; naming the one directory our compiler writes to cannot.  See
 finding 222.
 
 Usage:
-    coverage.py [--obj ../slmodemd/dsplibs.o] [--build build] [--md FILE]
+    coverage.py [--obj ref/slmodemd/dsplibs.o] [--build build] [--md FILE]
 """
 
 import argparse
@@ -334,7 +334,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--obj",
                     default=os.environ.get("BLOB",
-                                           "../slmodemd/dsplibs.o"))
+                                           "ref/slmodemd/dsplibs.o"))
     ap.add_argument("--build", default="build")
     ap.add_argument("--tumap", default="build/tumap.json")
     ap.add_argument("--md", help="also write a markdown summary here")

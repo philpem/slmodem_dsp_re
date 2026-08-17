@@ -352,7 +352,7 @@ def main():
                     "reconstruction.")
     ap.add_argument("--obj",
                     default=os.environ.get("BLOB",
-                                           "../slmodemd/dsplibs.o"))
+                                           "ref/slmodemd/dsplibs.o"))
     ap.add_argument("--src", nargs="*", default=None)
     ap.add_argument("--missing", action="store_true")
     ap.add_argument("--strings", metavar="FUNC", nargs="?", const="",

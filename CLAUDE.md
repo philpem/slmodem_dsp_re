@@ -532,7 +532,7 @@ Task numbers are not safe across sessions either: two task stores exist whose
     log everybody read the tail of, so `make phase` gained a `prereq` target
     that runs FIRST, refuses if the library is absent, and symlinks the main
     tree's copy when it can find one (finding 1563).
-  - `BLOB ?= ../slmodemd/dsplibs.o` pointed at `.claude/worktrees/slmodemd` and
+  - `BLOB ?= ref/slmodemd/dsplibs.o` pointed at `.claude/worktrees/slmodemd` and
     every run died at `No rule to make target`. Loud, so not the same class of
     bug, but it blocked every worktree run until someone passed `BLOB=/abs/…`.
     The default is now resolved through `git rev-parse --git-common-dir` —

@@ -4,7 +4,7 @@
  * Three symbols, all undefined in the object and supplied by whatever links
  * it:
  *
- *     nm -u ../slmodemd/dsplibs.o | grep -E 'debug'
+ *     nm -u ref/slmodemd/dsplibs.o | grep -E 'debug'
  *
  * They are separate from sysdep.h because they are a different kind of
  * dependency.  `sysdep_*` are libc wrappers the datapumps genuinely need;

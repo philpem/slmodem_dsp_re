@@ -85,7 +85,7 @@
 set -eu
 GHIDRA=${GHIDRA:-$HOME/ghidra/ghidra_11.4.2_PUBLIC}
 HEADLESS="$GHIDRA/support/analyzeHeadless"
-BLOB=${BLOB:-../slmodemd/dsplibs.o}
+BLOB=${BLOB:-ref/slmodemd/dsplibs.o}
 [ -x "$HEADLESS" ] || { echo "no analyzeHeadless at $HEADLESS; set \$GHIDRA" >&2; exit 1; }
 [ $# -ge 1 ] || { sed -n '2,/^set -eu/p' "$0" >&2; exit 1; }
 

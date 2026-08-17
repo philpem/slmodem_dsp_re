@@ -168,7 +168,7 @@ TU_GROUPS = (
 )
 
 def _default_blob():
-    """`../slmodemd/dsplibs.o` is relative to the MAIN tree, not to a worktree.
+    """`ref/slmodemd/dsplibs.o` is relative to the MAIN tree, not to a worktree.
 
     From `.claude/worktrees/<name>` that literal path resolves inside
     `.claude/worktrees/`, where there is no blob -- and `nm` on a missing file
@@ -177,7 +177,7 @@ def _default_blob():
     3121.  `git rev-parse --git-common-dir` is how the `Makefile` already
     resolves this, so it is the tree's existing answer rather than a new one.
     """
-    literal = "../slmodemd/dsplibs.o"
+    literal = "ref/slmodemd/dsplibs.o"
     if os.path.exists(literal):
         return literal
     try:
