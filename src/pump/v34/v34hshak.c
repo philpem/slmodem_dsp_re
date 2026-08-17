@@ -1387,29 +1387,6 @@ v34handshakinit(void *objp, int mode)
 	int delta;
 	int base;
 
-	/*
-	 * EVERY ENTRY TO THE HANDSHAKE, logged HERE rather than at a call site.
-	 *
-	 * The first attempt instrumented the branch at the old 0x653f7 --
-	 * `V34_RX_FLAG_RETRAIN` or the `f124 > 7*baud_rate` timeout -- and it fired
-	 * ZERO times across six 120-second calls that between them ran 3 to 13
-	 * `RX_PHASE1_CALL` entries and up to 12 SILENCERETRAINs.  The retrains
-	 * were real; that branch simply is not the door they come through.
-	 * There are FOURTEEN call sites of this function and instrumenting one
-	 * of them measured nothing (findings 1926, 1928).
-	 *
-	 * `mode` is the discriminator the call sites already carry: 0, 1, 2 and
-	 * 3 all appear.  Logging it with the receiver's state says which entry
-	 * ran and what the receiver looked like when it did, which is what
-	 * splitting 1921's 66% duty cycle actually requires.
-	 */
-	if (dsplib_v34_dump_probe_bins)
-		dsplibs_debug_printf(
-		    "V34HSINIT, mode = %d, from = %p, f124 = %d, "
-		    "equerr = %d, rxflags = 0x%x\n", mode,
-		    __builtin_return_address(0), (int)rx->f124,
-		    (int)rx->f21a, (unsigned)rx->flags);
-
 	*(int *)(m + 0x2218) = 0;
 
 	delta = *(int *)(m + 0x248);
@@ -1486,41 +1463,6 @@ v34handshakinit(void *objp, int mode)
 			hs_put(obj, 0xac12,
 			       (short)(*(unsigned short *)(m + 0xac12) + 1));
 		}
-
-		/*
-		 * WHO ASKED FOR THIS RETRAIN, from the object's OWN counters.
-		 *
-		 * +0xac14 is bumped when the remote asked -- either our tone
-		 * detector set bit 6, or the byte at +0xac17 was set, and the
-		 * object's name for the routine that sets that byte is
-		 * `VPcmV34SetIndicationOfRemoteRetrain`.  +0xac12 is bumped
-		 * when neither, i.e. we decided.  +0xac10 counts remote RATE
-		 * RENEGOTIATIONS, incremented by `VPcmV34IndicateRemoteRRN`
-		 * four bytes below it.
-		 *
-		 * WHY THIS IS WORTH A LINE.  Finding 1931 attributed "at least
-		 * 6 of 11" retrains to our own bad-block run using our own
-		 * instrumentation.  These three are the OBJECT's accounting of
-		 * the same question, and on a V.34 call the remote arm is
-		 * expected to be structurally unreachable: every caller of
-		 * SetIndicationOfRemoteRetrain is in `VPcmFloModem`, the V.90
-		 * PCM path, which does not run when AT+MS=34,1 forces V.34.
-		 * That expectation has never been measured, and the whole
-		 * ladder argument rests on which counter moves.
-		 *
-		 * GATED ON THE DUMP FLAG, NOT ON DSPLIB_DEBUG_ON(), and this
-		 * is not a style choice: the differential tier compares debug
-		 * transcripts character for character, so an unconditional
-		 * line here would fail every V.34 handshake test.  The flag is
-		 * set only by tools/benchflags.c, which the tier never links.
-		 */
-		if (dsplib_v34_dump_probe_bins)
-			dsplibs_debug_printf(
-			    "V34RTNWHO, remote = %d, local = %d, "
-			    "remote_rrn = %d\n",
-			    (int)*(unsigned short *)(m + 0xac14),
-			    (int)*(unsigned short *)(m + 0xac12),
-			    (int)*(unsigned short *)(m + 0xac10));
 
 		v34modeminit(obj);
 
@@ -1884,38 +1826,6 @@ txmitquadbit(void *obj, short bits)
  * transcript tells them apart.
  */
 /*
- * THE LEAST-SQUARES ESTIMATOR (branch `improve/v34-training`, task #144
- * "improve the training itself").  Reachable only through
- * `dsplib_v34_fit_preemp`, which defaults to zero.
- *
- * The object measures tilt from TWO bins: the band edge against bin 4, counted
- * in 4.06 dB steps.  Measured on this bench, that reads **2.13 dB** on a
- * channel whose actual trend across the passband is **0.47 dB** -- a factor of
- * 4.5, because the single band-edge bin it samples sits in the codec's
- * anti-alias corner rather than on the trend.
- *
- * V.34 5.4.1's templates are shapes across the WHOLE band -- Figure 1 rises to
- * alpha over normalised frequency 0..1.2, and conformance is required from
- * (d/e - 0.45) to (d/e + 0.45), which at 3429 baud and a 1959 Hz carrier is
- * 415 Hz to 3502 Hz.  They correct the general trend of a subscriber loop, not
- * a notch at one frequency.  So the quantity to estimate is the slope over the
- * band, and the estimator should use every bin that carries a tone.
- *
- * FOUR BINS CARRY NO TONE BY DESIGN and must be excluded: V.34 Table 17 omits
- * 900, 1200, 1800 and 2400 Hz so the receiver can measure noise there.  Those
- * are bins 6, 8, 12 and 16, i.e. indices 5, 7, 11 and 15.  Including them
- * would fit a line through four noise-floor points twenty decibels down.
- *
- * THE LOG IS FREE.  `dftenergy` leaves `shift` as the count of redundant sign
- * bits of the energy, which is an exponent -- so log2(e) is about
- * (31 - shift), refined by the mantissa in `energy`.  No log function is
- * needed and none is called.
- */
-int dsplib_v34_fit_preemp;		/* see include/dsplib/debug.h */
-int dsplib_v34_dump_probe_bins;	/* likewise */
-int dsplib_v34_seed_defect;	/* likewise -- harness self-test */
-int dsplib_v34_rrn_on_badblock;	/* likewise -- see debug.h */
-/*
  * Default 1 for the differential tier, 0 for everyone else.  See the note in
  * probe_preemp() for why this is a flag with a define-set default rather than
  * an #ifndef around the call site.
@@ -1926,156 +1836,17 @@ int dsplib_v34_blob_preemp =
 #else
 	0;
 #endif
-int dsplib_v34_dump_eq_taps;	/* likewise -- equaliser workload */
 
 #define PROBE_FIT_MAX		32	/* bins 1..25, comfortably */
 #define PROBE_NOISE_SLOT(i)	((i) == 5 || (i) == 7 || (i) == 11 || (i) == 15)
-
-static short
-probe_preemp_fit(const struct v34_dftbin *bins, unsigned edge, short baud)
-{
-	/*
-	 * Ordinary least squares of level against bin number, over the bins
-	 * that carry a tone from 300 Hz up to the band edge.  Sums are double
-	 * because this arm is not reproducing anything -- the object has no
-	 * counterpart -- and because 25 points of x87 costs nothing here.
-	 */
-	double px[PROBE_FIT_MAX], py[PROBE_FIT_MAX];
-	unsigned i, cnt = 0;
-	double slope, tilt_db;
-	short idx;
-
-	for (i = 1; i <= edge; i++) {		/* bin 2 (300 Hz) upward */
-		double y;
-
-		if (PROBE_NOISE_SLOT(i))
-			continue;
-		if (bins[i].energy <= 0)	/* below the mantissa's floor */
-			continue;
-		/*
-		 * log2 by exponent plus a LINEAR mantissa term -- no libm, and
-		 * no 6 dB staircase.  `energy` is already e >> 16, so it is
-		 * proportional to the bin's power and the constant offset drops
-		 * out of a slope.  Max error 0.086 in log2 = 0.26 dB, which is
-		 * far inside the 2 dB grid this feeds.  Using `shift` alone
-		 * would quantise to 6.02 dB -- COARSER than the two-point
-		 * counter it replaces, which would make the fit pointless.
-		 */
-		{
-			unsigned e = (unsigned)bins[i].energy;
-			int b = 0;
-
-			while (e >> (b + 1))
-				b++;
-			/*
-			 * 10*log10, NOT 20*log10.  `energy` is dftenergy's
-			 * (short)(e >> 16) where e = re*re + im*im -- a POWER
-			 * quantity, so the decibel conversion is 10*log10 and
-			 * 3.0103 is 10/log2(10).  Written as 6.0206 first,
-			 * which reported exactly TWICE the real tilt on every
-			 * channel; the bench could not see it because a fixed
-			 * digital filter makes a constant factor look like a
-			 * stable reading, and it took a simulated loop with a
-			 * known answer to catch it.  Findings 1909, 1910.
-			 */
-			y = 3.0102999566
-			  * ((double)b + ((double)e / (double)(1u << b) - 1.0));
-		}
-		if (cnt >= PROBE_FIT_MAX)
-			break;
-		px[cnt] = (double)i;
-		py[cnt] = y;
-		cnt++;
-	}
-	if (cnt < 6)				/* not enough to fit */
-		return -1;
-
-	/*
-	 * THEIL-SEN, not ordinary least squares: the slope is the MEDIAN of the
-	 * pairwise slopes rather than the one minimising squared error.
-	 *
-	 * Both fit the same points, and on a clean channel they agree to two
-	 * decimal places.  They part company when a bin goes dud, which is the
-	 * case the whole exercise is about.  An unweighted least-squares fit
-	 * gives a wrecked bin its full leverage: simulated at 8% duds it leaves
-	 * MORE tilt uncorrected than the object's crude two-point counter does
-	 * (1.36 dB against 0.85), which would have made the change a
-	 * regression on exactly the channels it was meant to help.  A median of
-	 * pairwise slopes cannot be moved by one wild point.  Finding 1911's
-	 * table; it is best or joint-best in every cell with duds and never
-	 * materially worse without them.
-	 *
-	 * Not hypothetical: one real probe in ninety on this bench produced a
-	 * 6.22 dB reading against a 1.5 dB norm, and OLS passed it straight
-	 * through.
-	 *
-	 * Cost is n*(n-1)/2 slopes and a median -- 153 of them over 18 bins,
-	 * five times per handshake, on a path that is already floating point.
-	 */
-	{
-		double sl[(PROBE_FIT_MAX * (PROBE_FIT_MAX - 1)) / 2];
-		unsigned a, b, ns = 0;
-
-		for (a = 0; a < cnt; a++)
-			for (b = a + 1; b < cnt; b++)
-				if (px[b] != px[a])
-					sl[ns++] = (py[b] - py[a])
-						 / (px[b] - px[a]);
-		if (ns == 0)
-			return -1;
-		/*
-		 * Insertion sort.  ns is at most 231 and this runs five times
-		 * per call, so the simplest correct thing is the right thing;
-		 * a qsort here would cost a function pointer per comparison
-		 * for no measurable gain.
-		 */
-		for (a = 1; a < ns; a++) {
-			double v = sl[a];
-			for (b = a; b > 0 && sl[b - 1] > v; b--)
-				sl[b] = sl[b - 1];
-			sl[b] = v;
-		}
-		slope = (ns & 1) ? sl[ns / 2]
-				 : 0.5 * (sl[ns / 2 - 1] + sl[ns / 2]);
-	}
-
-	/*
-	 * Loss across the band, from the reference bin to the edge, in dB.
-	 * Positive means the edge is DOWN on the reference, which is what
-	 * pre-emphasis exists to lift.
-	 */
-	tilt_db = -slope * (double)((int)edge - PROBE_REF_BIN);
-	if (tilt_db < 0.0)
-		tilt_db = 0.0;
-
-	/*
-	 * Choose the filter whose correction is closest to the measured tilt.
-	 * Table 3 (indices 0-5) is alpha = 0,2,4,6,8,10 dB; Table 4 (6-10) is
-	 * gamma = 1,2,3,4,5 dB with a different shape.  Table 3's 2 dB grid is
-	 * finer and spans further, so it is preferred where it fits; Table 4 is
-	 * what the object uses and is kept reachable.
-	 */
-	idx = (short)((tilt_db + 1.0) / 2.0);	/* nearest alpha/2 */
-	if (idx > 5)
-		idx = 5;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34PREEMPHASIS, - FIT tilt %d.%02d dB "
-				     "over %d bins -> index %d, baudrate= %d\n",
-				     (int)tilt_db,
-				     (int)((tilt_db - (int)tilt_db) * 100.0),
-				     (int)cnt, (int)idx, (int)baud);
-	return idx;
-}
 
 /*
  * ---------------------------------------------------------------------------
  * `probe_preemp_shape` -- choose the filter whose SHAPE fits the channel.
  *
- * WHAT IS WRONG WITH BOTH OF THE ALTERNATIVES ABOVE.  The object reduces the
- * channel to a two-point tilt; `probe_preemp_fit` reduces it to a least-
- * squares tilt.  A tilt is one number, and only one of the two filter families
- * IS a tilt.  Findings 1956 and 1957:
+ * WHAT IS WRONG WITH THE COUNTER BELOW.  The object reduces the channel to a
+ * two-point tilt.  A tilt is one number, and only one of the two filter
+ * families IS a tilt.  Findings 1956 and 1957:
  *
  *   Figure 1/V.34, indices 0-5:  a straight line, 0 dB at f/S = 0 rising to
  *                                alpha at f/S = 1.0.  A BROADBAND tilt.
@@ -2292,33 +2063,11 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	short i = 5;
 
 	/*
-	 * THE FITTED ESTIMATOR, off unless the CALLER asks for it.
-	 *
-	 * NOT AN ENTRY IN docs/deviations.md, deliberately.  That file records
-	 * places the reconstruction does not behave like the original, and with
-	 * the flag clear this one behaves identically -- the period differential
-	 * proves it, since nothing in the test tiers ever sets the flag.  It is
-	 * an experiment carried on a branch, and it belongs to task #144
-	 * (improve the training itself), not to the equivalence contract.
-	 *
-	 * Gated at RUNTIME only, deliberately.  A `#ifndef
-	 * DSPLIB_REPRODUCE_BUGS` here as well would compile it out of the
-	 * standard build -- which is the build the bench hybrid links -- so the
-	 * arm could never be tested without a second, differently-configured
-	 * tree.  One gate, defaulting off, is what keeps the differential tier
-	 * green (it never sets the flag) while leaving the code reachable.  The
-	 * two-point reading below is the object's and stays the default.  On this bench the fit answers index 1 where the
-	 * object answers 6 or 7 -- comparable CORRECTION (Table 3 alpha = 2 dB
-	 * against Table 4 gamma = 1-2 dB), different SHAPE.  Whether that is
-	 * worth anything on the wire is an open question and NOT assumed here:
-	 * finding 1904 withdrew the mechanism that predicted it would be.
-	 */
-	/*
-	 * SHAPE FIRST, then the tilt fit, then the object's counter.  Ordered
-	 * most-informed to least: the shape matcher uses every usable bin and
-	 * both filter families, the tilt fit uses every bin and one family,
-	 * the counter uses two bins and half of one family.  Each falls
-	 * through to the next when it has too little to work with.
+	 * SHAPE FIRST, then the object's counter.  Ordered most-informed to
+	 * least: the shape matcher uses every usable bin and both filter
+	 * families, the counter uses two bins and half of one family.  The
+	 * matcher falls through to the counter when it has too little to work
+	 * with.
 	 *
 	 * DELIBERATE FIX, AND IT IS THE DEFAULT.  D53: the object's counter
 	 * starts at 5 and is advanced before its test, so indices 0-5 are
@@ -2351,12 +2100,6 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 */
 	if (!dsplib_v34_blob_preemp) {
 		short f = probe_preemp_shape(bins, n, baud);
-
-		if (f >= 0)
-			return f;		/* else fall through */
-	}
-	if (dsplib_v34_fit_preemp) {
-		short f = probe_preemp_fit(bins, n, baud);
 
 		if (f >= 0)
 			return f;		/* else fall through */
@@ -2732,32 +2475,6 @@ band_edges:
 	}
 
 	chkForceBaudRate(obj, bins);
-
-	/*
-	 * BRANCH-ONLY INSTRUMENTATION -- not in the object, not on master.
-	 *
-	 * Nobody has ever looked at these twenty-two numbers.  Every statement
-	 * this project has made about the channel's tilt is inferred from the
-	 * INDEX the search reports, which is a two-point slope -- one band-edge
-	 * bin against bin 4 -- quantised to 4.06 dB steps (finding 1475).  The
-	 * bins themselves are the actual measured spectrum and they are right
-	 * here.
-	 *
-	 * Printed as raw energy and shift, exactly as `dftenergy` left them, so
-	 * the reader can do their own arithmetic rather than trusting mine.
-	 * Gated on debug level 3 so an ordinary run is unaffected.
-	 */
-	if (dsplib_v34_dump_probe_bins
-	    && DSPLIB_DEBUG_ON() && dsplibs_debug_level >= 3) {
-		unsigned bi;
-
-		dsplibs_debug_printf("V34PROBEBINS, n=%d:", V34_PROBE_BINS);
-		for (bi = 0; bi < V34_PROBE_BINS; bi++)
-			dsplibs_debug_printf(" %d/%d",
-					     (int)bins[bi].energy,
-					     (int)bins[bi].shift);
-		dsplibs_debug_printf("\n");
-	}
 
 	/*
 	 * --- and now the ladder --------------------------------------------
@@ -8920,35 +8637,6 @@ t4_rx_receive(struct v34_object *obj)
 	    || ((int)rx->f124 > 7 * (int)obj->baud_rate
 		&& (flags & 0x80) == 0)) {
 		/*
-		 * WHICH ARM FIRED, and it is the whole question.
-		 *
-		 * There are TWO ways into a full handshake here and the
-		 * object's own diagnostics cannot tell them apart:
-		 *
-		 *   ASKED   -- V34_RX_FLAG_RETRAIN, the far end requesting a
-		 *              retrain by holding its constellation point
-		 *              still for 140 symbols (v34rx.c:2290).
-		 *   TIMEOUT -- f124 past seven frame lengths with flag 0x80
-		 *              clear.  NOBODY REQUESTED THIS ONE; the modem
-		 *              decides on its own initiative.
-		 *
-		 * Finding 1921 measured 66% of connected time going into full
-		 * handshakes, and 1927 established the path is not causing
-		 * them -- six of six hardware pairs cross it at 28800-33600
-		 * with normal terminations.  So the retrains are ours, and
-		 * splitting this counter is what says whether we are ANSWERING
-		 * requests or MANUFACTURING them.  The two lead to opposite
-		 * fixes: §11.6 rate renegotiation for the first (#149), and
-		 * whatever arms flag 0x80 for the second.
-		 */
-		if (dsplib_v34_dump_probe_bins)
-			dsplibs_debug_printf(
-			    "V34RTNWHY, %s, f124 = %d, 7*frame = %d, "
-			    "flag80 = %d, equerr = %d\n",
-			    (flags & V34_RX_FLAG_RETRAIN) ? "ASKED" : "TIMEOUT",
-			    (int)rx->f124, 7 * (int)obj->baud_rate,
-			    (flags & 0x80) ? 1 : 0, (int)rx->f21a);
-		/*
 		 * 0x6544e.  The second argument is a literal 1, pushed at
 		 * 0x65447, and nothing follows the call but the trace and the
 		 * shared tail -- the retrain path writes no state of its own.
@@ -9184,41 +8872,6 @@ t72_measure(struct v34_object *obj, unsigned noise_off, unsigned signal_off,
 	 */
 	t3c_puti(obj, signal_off, signal);		/* 0x69d55 */
 	t3c_puti(obj, noise_off, noise);		/* 0x69d5b */
-
-	/*
-	 * THE NOISE BANK, dumped where it is computed.
-	 *
-	 * `probe_bins`' own noise slots -- indices 5, 7, 11, 15, V.34 Table
-	 * 17's omitted tones -- read `energy` 0 and `shift` 12 on every call
-	 * of every batch, standard deviation zero: a constant, not a
-	 * measurement (finding 1914).  So the 25-bin dump cannot answer what
-	 * the noise floor is, and a per-band SNR computed from it is a ratio
-	 * against a fixed number.
-	 *
-	 * THIS bank is the one the object actually measures noise with:
-	 * `nl_noise_bins` at +0xa76c, filled by its own `dftupdate` and scaled
-	 * by `dftenergy(..., 6)` rather than the main bank's shift.  Whether
-	 * it carries usable magnitude has never been looked at, and it is the
-	 * only path to the per-band SNR that 1913 proposes.  The four signal
-	 * bins it is divided against (probe_bins[0..3], 150-600 Hz) go out
-	 * beside it, because the ratio is only interpretable with both.
-	 */
-	if (dsplib_v34_dump_probe_bins && DSPLIB_DEBUG_ON()) {
-		unsigned bi;
-
-		dsplibs_debug_printf("V34NLBINS, sig:");
-		for (bi = 0; bi < V34_NL_BINS; bi++)
-			dsplibs_debug_printf(" %d/%d",
-					     (int)obj->probe_bins[bi].energy,
-					     (int)obj->probe_bins[bi].shift);
-		dsplibs_debug_printf(" noise:");
-		for (bi = 0; bi < V34_NL_BINS; bi++)
-			dsplibs_debug_printf(" %d/%d",
-					     (int)obj->nl_noise_bins[bi].energy,
-					     (int)obj->nl_noise_bins[bi].shift);
-		dsplibs_debug_printf(" sum_sig=%u sum_noise=%u\n",
-				     signal, noise);
-	}
 
 	/*
 	 * The zero-noise arm is out of line in both rungs -- 0x6aa0b writes
@@ -10345,91 +9998,6 @@ datapumpv34(void *objp)
 	 * the same test again, so a `v34handshakinit` that cleared the run
 	 * would report 3 where the entry condition was the flag.
 	 */
-	/*
-	 * THE BAD-BLOCK ARM, ROUTED TO A RENEGOTIATION (branch only, default
-	 * off).  Findings 1921, 1925, 1931.
-	 *
-	 * The condition below has two arms and they are not the same event:
-	 * bit 0x40 is the FAR END asking for a retrain, and `DP_RX_BAD` past
-	 * half the block rate is OUR OWN bad-block run.  Both currently take
-	 * `v34handshakinit(obj, 1)` -- a complete Phase 1/2, ~10 s on this
-	 * bench, after which the rate ladder restarts near the bottom.
-	 *
-	 * Measured at the point the far-end flag is SET rather than read (1931,
-	 * after 1930 showed a read at entry can be stale): at least 6 of 11 of
-	 * these are the bad-block arm, and two calls ran full handshakes with
-	 * NO far-end request anywhere in them.  With 66% of connected time
-	 * going into handshakes (1921), that is the first-order cost.
-	 *
-	 * V.34 §11.6 exists for exactly this: "This procedure can also be used
-	 * to resynchronize the receiver without going through a complete
-	 * retrain" -- S for 128T, S-bar for 16T, TRN for at most 2000 ms plus a
-	 * round trip, then MP.  Two to three seconds, no Phase 1, no re-probe.
-	 *
-	 * AND THE OBJECT ALREADY DOES THIS FOR ITS OWN RATE STEPS.
-	 * `VPcmV34InitiateRateRenegotiation` ends in `v34handshakinit(obj, 2)`,
-	 * and modes 2 and 3 share the lighter body.  So this is not new
-	 * machinery -- it is the asymmetry that the bad-block run alone takes
-	 * the heavy path.  `req` 0 steps the rate DOWN one index, which is what
-	 * the object's own step-down renegotiation asks for and the right
-	 * direction when blocks are failing.
-	 *
-	 * THE FAR END'S ARM IS LEFT ALONE.  Responding to a retrain request
-	 * with something other than a retrain is not ours to reinterpret.
-	 */
-	/*
-	 * THE RECOVERY LADDER IS INVERTED, and this is the one constant that
-	 * rights it (branch only, default off).  Finding 1933.
-	 *
-	 * Forty lines below, the object renegotiates DOWN when
-	 * `DP_RX_BAD_LONG > 2 * baud_rate` -- V.34 §11.6, two to three seconds, no
-	 * Phase 1, no re-probe.  Here it takes a FULL retrain, ~10 s, at
-	 * `DP_RX_BAD > baud_rate / 2`.  The expensive response needs a QUARTER the
-	 * evidence the cheap one does, so on this bench the short counter wins
-	 * every race, the retrain clears all three counters, and the
-	 * renegotiation-down path never runs.  1921 measured the result: 66%
-	 * of connected time spent re-handshaking.
-	 *
-	 * `dsplib_v34_rrn_on_badblock` raises this arm's threshold above the
-	 * renegotiation's so the cheap recovery gets first refusal and the
-	 * retrain becomes the fallback.  A THRESHOLD, not a new code path:
-	 * 1932 tried adding a fifth branch that called
-	 * `VPcmV34InitiateRateRenegotiation` from here, and it regressed to
-	 * 1 connect in 4 -- it bypassed the layering instead of correcting it,
-	 * and skipped the DP_MODE/DP_RX_WHY/DP_RX_RATE bookkeeping the
-	 * object's own renegotiation sites perform.
-	 *
-	 * The far end's own request (bit 0x40) is untouched and still takes the
-	 * full retrain immediately, because answering a request with something
-	 * else is not ours to decide.
-	 */
-	/*
-	 * HOLD THE SHORT COUNTER DOWN so the cheap path gets first refusal.
-	 *
-	 * The object's line below is anchored by FOUR mutations -- "tests bit 5
-	 * rather than bit 6", "wants the flag AND the run", "fires on a run
-	 * EQUAL to half the block rate", "the halving is a division" -- so its
-	 * text cannot be touched.  Rewriting `(short)(obj->baud_rate >> 1)` into a
-	 * ternary dropped all four to zero matches and `anchorcheck.py` caught
-	 * it, the second time in this change that it has.
-	 *
-	 * Clearing `DP_RX_BAD` here achieves the same thing from outside:
-	 * below the raised threshold the retrain simply does not see a run.
-	 * `DP_RX_BAD_LONG` is a SEPARATE counter and is deliberately left
-	 * alone, so it keeps accumulating and reaches its own
-	 * `> 2 * baud_rate` test forty lines down -- the V.34 §11.6 renegotiation,
-	 * two to three seconds against the retrain's ten.  That is the whole
-	 * intent: right the inverted ladder of finding 1933 without moving a
-	 * line the mutation tier is pinned to.
-	 *
-	 * The far end's own request (bit 0x40) is exempt and still retrains
-	 * immediately.
-	 */
-	if (dsplib_v34_rrn_on_badblock
-	    && !(T3C_RX(obj)->flags & 0x40)
-	    && dp_rxget(obj, DP_RX_BAD) <= (short)((int)obj->baud_rate * 3))
-		dp_rxput(obj, DP_RX_BAD, 0);
-
 	if ((T3C_RX(obj)->flags & 0x40)
 	    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {
 		v34handshakinit(obj, 1);

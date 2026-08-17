@@ -1598,26 +1598,6 @@ decoderv34(void *objp)
 				dsplibs_debug_printf(
 					"V34RENEG, may be renegotiation,"
 					"equalizer adaptation disabled\n");
-			/*
-			 * THE OBJECT'S OWN MESSAGE UNDERCOUNTS THIS, and the
-			 * comment above says why: the flag is set for every
-			 * f798 < -64, but the message prints only in the
-			 * six-wide band -70 < f798 < -64.  So the log shows a
-			 * fraction of the freezes and there is no way to tell
-			 * what fraction.
-			 *
-			 * That matters because this DISABLES EQUALISER
-			 * ADAPTATION.  A receiver that stops adapting cannot
-			 * track the channel, and 1917 measured links reaching
-			 * 33600 and then collapsing through failed retrains.
-			 * Counting every freeze, with the counter that caused
-			 * it, is what tells us whether the two are the same
-			 * event.
-			 */
-			if (dsplib_v34_dump_probe_bins)
-				dsplibs_debug_printf(
-				    "V34EQFREEZE, f798 = %d\n",
-				    (int)(short)rx->f798);
 		}
 
 		rx->f218 = 0x2000;
@@ -2348,19 +2328,6 @@ receiver(void *objp)
 				rx->f798 = (short)n;
 			} else {
 				flags |= V34_RX_FLAG_RETRAIN;
-				/*
-				 * `rtncount` in the object's message below is
-				 * ALWAYS ZERO: f798 is cleared on the line
-				 * above, and the printf reads it afterwards.
-				 * The diagnostic cannot report the count that
-				 * triggered it, which is the only number worth
-				 * having here.  Captured before the clear.
-				 */
-				if (dsplib_v34_dump_probe_bins)
-					dsplibs_debug_printf(
-					    "V34RTNCOUNT, triggered at %d, "
-					    "equerr = %d\n", (int)n,
-					    (int)rx->f21a);
 				rx->f798 = 0;
 				rx->flags = (unsigned short)flags;
 				if (DSPLIB_DEBUG_ON()) {
@@ -2667,30 +2634,6 @@ carrier_loop:
 				 - (unsigned short)rx->target_im);
 		int er = (dr * (short)rx->f218) >> 16;
 		int ei = (di * (short)rx->f218) >> 16;
-
-		/*
-		 * HARNESS SELF-TEST, and nothing else.  Zero unless
-		 * `DSPLIB_V34_SEED_DEFECT` is set in the environment by
-		 * tools/benchflags.c, which is linked ONLY into the bench
-		 * hybrid -- never into the library, the unit tests or either
-		 * differential tier.
-		 *
-		 * It exists because `replaycmp.sh` reported our receiver
-		 * byte-identical to the blob's over 25 blocks (finding 1906),
-		 * and an identical result is worth exactly as much as the
-		 * demonstration that a DIFFERENT one would have shown.  Halving
-		 * the equaliser's adaptation error is a small, realistic
-		 * receiver defect: it does not break the handshake, it just
-		 * adapts slower.  If the replay cannot see that, it cannot see
-		 * anything, and 1906's headline is unsupported.
-		 *
-		 * CLAUDE.md: "Any tool here must be shown to fire."  This is
-		 * how this one is shown to fire.
-		 */
-		if (dsplib_v34_seed_defect) {
-			er /= 2;
-			ei /= 2;
-		}
 		int mag = dr * dr + di * di + rx->f220;
 		int n;
 
@@ -2722,107 +2665,6 @@ carrier_loop:
 				dsplibs_debug_printf(
 					"V34EQU, equerr = %d, preerr = %d,\n",
 					(int)rx->f21a, (int)rx->f224);
-				/*
-				 * THE SIGNAL POWER, on its own line.
-				 *
-				 * `equerr` is raw error and is never divided by
-				 * anything; the rate ladder compares it against
-				 * absolute thresholds.  f248 is the scale to
-				 * divide it BY, computed in THIS block from the
-				 * same symbols, so the pair is a slicer SNR:
-				 * 10*log10(f248/f21a).
-				 *
-				 * IT WAS LOGGED, AND THE SCALE DOES NOT MOVE.
-				 * 1904, 1913 and 1914 read the ~50-in-phase-3
-				 * against ~2200-in-phase-4 step as the transmit
-				 * level moving under `equerr` at the V34TXSCALE
-				 * boundary.  It is not: f248 is 163815-163836
-				 * over every settled block in 196 captures, on
-				 * both sides of that boundary, because it is the
-				 * power of the DECISION and V.34 holds the
-				 * constellation's power constant as it grows.
-				 * The step is a real 16 dB of SNR, and `equerr`
-				 * alone was always an SNR with a fixed 52.14 dB
-				 * offset.  Findings 3200 and 3201, and the
-				 * extractor is `testbench/snrblocks.py`.
-				 *
-				 * A SEPARATE LINE, not an edit to V34EQU above:
-				 * the differential tier compares debug
-				 * transcripts character for character, and the
-				 * object's own format string has to stay
-				 * exactly what the object emits.
-				 */
-				if (dsplib_v34_dump_probe_bins)
-					dsplibs_debug_printf(
-					    "V34EQUPOW, sigpow = %d, equerr = "
-					    "%d\n", (int)rx->f248,
-					    (int)rx->f21a);
-				/*
-				 * HOW MUCH WORK THE EQUALISER IS DOING.
-				 *
-				 * `equerr` says how well the receiver is
-				 * decoding; it does not say how hard the
-				 * equaliser had to work to get there.  Those
-				 * are different questions, and the second is
-				 * the one that answers whether a pre-emphasis
-				 * choice was any good: a filter that matches
-				 * the channel leaves the equaliser with
-				 * nothing to do, and a filter that does not
-				 * leaves it correcting the shortfall itself.
-				 *
-				 * A perfectly matched channel needs the CENTRE
-				 * tap and nothing else, so energy in the
-				 * off-centre taps is precisely the work.  The
-				 * ratio is what to compare between arms --
-				 * the absolute figures move with the transmit
-				 * level, exactly as `equerr` does.
-				 *
-				 * Integer parts only.  The fractional halves
-				 * would add a bit of precision to a number
-				 * that is being used to rank two arms against
-				 * each other, and would cost 64-bit arithmetic
-				 * in a routine that runs every 1024 symbols.
-				 *
-				 * Sum-of-magnitudes rather than sum-of-squares
-				 * for the same reason: 80 taps of squared
-				 * shorts overflows a 32-bit accumulator only
-				 * at implausible tap values, but the magnitude
-				 * sum cannot overflow at all and ranks
-				 * identically.
-				 */
-				if (dsplib_v34_dump_eq_taps) {
-					unsigned long ctr = 0, off = 0;
-					int t;
-
-					for (t = 0; t < V34_EQ_TAPS; t++) {
-						int a = eq->re[t];
-						int b = eq->im[t];
-						unsigned long m;
-
-						/*
-						 * By hand rather than abs():
-						 * this file does not include
-						 * <stdlib.h> and the period
-						 * compiler will not invent it.
-						 */
-						if (a < 0)
-							a = -a;
-						if (b < 0)
-							b = -b;
-						m = (unsigned long)a
-						  + (unsigned long)b;
-
-						/* centre run: 8 taps at 36 */
-						if (t >= 36 && t < 44)
-							ctr += m;
-						else
-							off += m;
-					}
-					dsplibs_debug_printf(
-					    "V34EQTAPS, centre = %lu, off = %lu"
-					    ", equerr = %d\n", ctr, off,
-					    (int)rx->f21a);
-				}
 				flags = rx->flags;
 			}
 		}

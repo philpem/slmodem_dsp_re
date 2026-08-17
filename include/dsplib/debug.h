@@ -35,62 +35,26 @@ extern "C" {
 extern unsigned int dsplibs_debug_level;
 
 /*
- * EXPERIMENTAL KNOB, branch `improve/v34-training` only, default 0.
+ * THE V.34 BENCH INSTRUMENTATION FLAGS LIVE ON `v34-instrumentation`, NOT HERE.
  *
- * Non-zero selects the least-squares tilt estimator in `probe_preemp` instead
- * of the object's two-point counter.  It is a runtime flag rather than a
- * compile-time one so a single hybrid build can serve both arms of an A/B and
- * the two arms cannot differ in anything else -- the pre-emphasis A/B runs so
- * far used two separate binaries, which leaves the compiler as an uncontrolled
- * variable.  Set from the environment by the caller; never set in library code.
- */
-extern int dsplib_v34_fit_preemp;
-
-/*
- * Dump all 25 probe DFT bins (V34PROBEBINS).  Default 0 for the same reason
- * the flag above exists, plus one the estimator does not have: this
- * instrumentation prints text the object never printed, and the differential
- * tests compare our debug transcript against the reference's CHARACTER FOR
- * CHARACTER.  Left unconditional at level 3 it fails
- * `t_v34hshak`'s "probeselect narrates every decision" on 150 checks -- which
- * is the differential tier doing exactly its job.  The bench sets this from
- * the environment; nothing in the library sets it.
- */
-extern int dsplib_v34_dump_probe_bins;
-
-/*
- * Deliberately degrade the equaliser's adaptation, to prove the replay harness
- * can tell two receivers apart.  Default 0; set only by tools/benchflags.c
- * from the environment, and that file is linked only into the bench hybrid.
- * See v34rx.c and finding 1906 -- this is a test instrument, not a knob.
- */
-extern int dsplib_v34_seed_defect;
-
-/*
- * Route the BAD-BLOCK arm of the retrain test to a V.34 §11.6 rate
- * renegotiation instead of a full retrain.  Default 0; branch experiment,
- * set only by tools/benchflags.c from DSPLIB_V34_RRN_ON_BADBLOCK.
+ * Six `dsplib_v34_*` externs were declared at this point -- `fit_preemp`,
+ * `dump_probe_bins`, `seed_defect`, `rrn_on_badblock`, `shape_preemp` and
+ * `dump_eq_taps` -- each one's own comment describing it as a branch
+ * experiment or a test instrument.  They are A/B arms and debug dumps for the
+ * V.34 training investigation, and they were never meant to arrive here; they
+ * came in with the `improve/v34-training` merge and are removed again for the
+ * reason master exists, which is to be the faithful reconstruction.
  *
- * The far end's own retrain request is unaffected -- only the arm this modem
- * raises against itself.  Findings 1921, 1925, 1931.
+ * They are not lost.  `git log v34-instrumentation` has them, still wired to
+ * `tools/benchflags.c` and the bench, and that is where the training work
+ * continues.
+ *
+ * `dsplib_v34_blob_preemp` is DIFFERENT and deliberately stays -- it is not an
+ * instrument.  It selects between the object's pre-emphasis counter and the
+ * shape matcher that replaced it, defaults to the object's under
+ * DSPLIB_REPRODUCE_BUGS, and is declared in `v34hshak.c` beside the code it
+ * governs.  See docs/deviations.md.
  */
-extern int dsplib_v34_rrn_on_badblock;
-
-/*
- * Choose the pre-emphasis filter by matching the measured channel against all
- * eleven transmit-spectrum templates, instead of reducing it to a tilt and
- * indexing a counter that can only reach 6-10.  Set only by
- * tools/benchflags.c from DSPLIB_V34_SHAPE_PREEMP.  Findings 1956, 1957.
- */
-extern int dsplib_v34_shape_preemp;
-
-/*
- * Log the equaliser's tap energy, split centre-run against off-centre, every
- * 1024-symbol block.  Off-centre energy IS the work the equaliser is doing to
- * undo a channel the pre-emphasis failed to match, which `equerr` alone cannot
- * distinguish from a simply noisier line.  DSPLIB_V34_DUMP_EQ_TAPS.
- */
-extern int dsplib_v34_dump_eq_taps;
 
 int dsplibs_debug_printf(const char *fmt, ...);
 
