@@ -66515,3 +66515,30 @@ same class and are equally not fixed here: `modulatevector`'s
 `(struct v34_shell *)((char *)obj + V34_SHELL_TX)` and its `(struct
 v34_shell *)obj`.  They already go through `char *`, so they do not warn --
 which is the point.  The warning count is not the defect count.
+
+**AND THE SAME SHAPE AGAIN, ONE FRAME OUT, WHERE NOTHING WARNS.**
+`demapFrame`'s `*(int *)ap` was left alone while its store side was fixed,
+on the ground that `ap` is a `void *` and GCC says nothing.  Traced properly
+it is the same defect: `decoderv34` calls it as
+
+    demapFrame(obj, (char *)obj + 0x474, (char *)obj + 0x470, n)
+
+and 0x474 - 0x264 is +0x210 in `struct v34_receiver`, which is `target_re`,
+with `target_im` at +0x212.  So `ap` is the decision target's REAL AND
+IMAGINARY PARTS read as one 32-bit word -- shape A of finding 5300, reached
+through `char *` arithmetic that GCC cannot see through.  (`bp` at 0x470 is
++0x20c, `dp.point`, which is already an `int` and is not this case.)
+
+Not fixed here.  The declaration fix has to move `demapFrame`'s parameter
+type and the receiver's target pair together, and that is the same
+`v34_receiver` batch `T3C_RX` is waiting on -- so it is recorded here rather
+than left for someone to rediscover.  **Two, not one, is what the parameter
+list of that future batch owes.**
+
+**One more thing this batch checked and did not find.**  `txpoint` (finding
+5303) was named on usage inference, evidence level 3.  Level 1 -- a format
+string that prints the thing -- was looked for and is EMPTY: `txmit`,
+`txmitdibit`, `txmitquadbit` and `modulatevector` between them carry no
+`.rodata` relocation at all, so no diagnostic in the object names this
+field.  The name rests on `txmit` being its unique reader and handing the
+value to `V34ModulatorProcess`, and on nothing stronger.

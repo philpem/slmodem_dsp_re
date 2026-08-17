@@ -148,7 +148,7 @@ What is outstanding, and shrinking:
 | offset-named fields (`short_2800`, `flags_0217`) | 304 distinct |
 | bare `fNNNN` names | 189 distinct |
 | unnamed single-bit flags | 148 uses |
-| type-punned sites — provably mis-modelled | **2** (was 27; see Phase 6) |
+| type-punned sites — GCC-warned, provably mis-modelled | **2** (was 27) |
 
 Flags are named **by bit value**, never converted to bitfields; CLAUDE.md's
 "Naming: fields, and flags" carries the rule and the measurement behind it.
@@ -279,6 +279,14 @@ the warning. Finding 5305.
 `compare.py` did not move at any step: 1094 compared, 410 identical, 78 same
 size, and the identical SET diffed empty against the pre-batch list every
 time — GCC 3.4.2 exact at `-O3`.
+
+**The row above counts WARNED sites, and the warning count is not the defect
+count.** Six more of the same class were found while fixing these and are in
+findings 5300 and 5305: four went with their partners (E's `[1]` halves and
+`demapFrame`'s three `(&state[st].a)[i]` walks), and two are recorded and
+outstanding — `T3C_RX`, and `demapFrame`'s `*(int *)ap`, which is the
+receiver's `target_re`/`target_im` pair read as one word through `char *`
+arithmetic. Both belong to the same future `v34_receiver` batch.
 
 ## Phase 7 — the data-mode API and the two diagnostics
 
