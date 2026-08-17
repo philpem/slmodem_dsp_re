@@ -68510,3 +68510,279 @@ recovered from the equaliser's own adapt and filter loops.
 Written as `V34_EQ_TAPS` rather than 0x50 for exactly that reason -- the name
 carries the derivation and the number does not, which is docs/cleanup.md's
 test for when a constant has earned one.
+## 5900. THE V.92 MODULATOR TAIL: ELEVEN SYMBOLS, AND THE TWO HOLES IN `V92Modulator` ARE NAMED BY THE FUNCTION THAT READS THEM
+
+The batch: `V92Modulator::reset`, `enterPhase3`, `enterDataPhase`, `exitJa`,
+`exitSilence`, `exitSuSecond`, `exitTRN1uSecond`, `exitCPt`,
+`getV92TxFilterDelay`, `mkResampledSignal`, and `V92Phase4Modulator::reset`.
+1,706 bytes, closed by `tools/closure.py` at eleven roots reaching 31 symbols
+with nothing unwritten outside the set.
+
+**`V92Phase4Modulator` IS NOW 34 OF 34.**  `V92Modulator` is 14 of 18; what is
+left is `enterPhase4` (113 B), `initiateRRN` (260), `initiateFPE` (276) and
+`progress` (1,075), and all four are blocked on the same reading of `progress`.
+
+### The codegen tier, measured before and after on the exact 3.4.2
+
+`compare.py` went 1148 -> 1159 symbols compared, 449 -> **457** identical, 81
+same-size either way; the identical SET gained eight and lost none, which is
+the check that matters because a count can gain four and lose four.  The eight
+are `enterPhase3`, `enterDataPhase`, the four phase 3 exits, `exitCPt` and
+`getV92TxFilterDelay`.
+
+The three that are not identical are all one cause and it is not this batch's:
+`V92Modulator::reset` is 205 against the blob's 186 and
+`V92Phase4Modulator::reset` is 306 against 290, and in both the entire
+difference is `Scrambler<T,I>::reset` INLINED in ours and CALLED out of line in
+the blob.  The blob carries `_ZN9ScramblerIihE5resetEi` and
+`_ZN9ScramblerIhhE5resetEh` as weak symbols in their own `.gnu.linkonce.t.`
+sections; GCC inlines ours at every site, which the tree accepted long ago as
+the resolution for this template family -- see the `V90Phase3Modulator` batch
+above, "The four are written as a header-defined template and emit no symbol".
+Mnemonic-diffing both functions shows that block and nothing else.
+
+`mkResampledSignal` is 661 against 662 with 183 mnemonics against 181; the
+residue is block layout in the join loops and the evaluation order of the three
+diagnostic conversions, which is unspecified in C++ and free by 613/614's rule.
+It got there: the first shape, an `if/else` on the code with an `int` flag, was
+655 bytes and mis-ordered the dispatch, and the `switch` and the one-byte flag
+below took it to 661 without moving the identical SET by one symbol either way.
+Both numbers are the exact GCC 3.4.2 at `-O3`, measured in this tree.
+
+### WHAT IT ACTUALLY UNBLOCKED, measured rather than projected
+
+`readyqueue.py` before and after, in this tree, with `make coverage` run first
+both times:
+
+| | before | after |
+|---|--:|--:|
+| unwritten call symbols | 705 | 694 |
+| READY | 323 / 62,736 B | 317 / 62,892 B |
+| BLOCKED | 382 / 170,162 B | 377 / 168,300 B |
+
+Eleven written and READY fell by six, so **five symbols and 1,862 bytes became
+READY**, and the arithmetic closes exactly: `V92Modulator::progress` (1,075),
+`::initiateFPE` (276), `::initiateRRN` (260), `::enterPhase4` (113) -- the whole
+of what this class still owes -- and `V92Modem::reset` (138).  `progress` was
+blocked on `mkResampledSignal` and `V92Phase4Modulator::reset` and on nothing
+else, which is why 1,706 bytes freed 1,862.
+
+So the natural next batch is the rest of `V92Modulator`, and it is one batch
+rather than four: `progress` is what would settle `word_30`, `word_34` and
+`byte_0c`, and `initiateRRN`/`initiateFPE` are the only writers of the phase
+change `mkResampledSignal` consumes.
+
+### What the batch named, and what it declined to name
+
+`V92Modulator.h` had carried `+0x24` and `+0x3c` as `pad_*` since the
+constructor landed, on the ground that nothing written wrote them.  Both are
+named now and by the same function:
+
+| was | is | evidence |
+|---|---|---|
+| `pad_3c` | `resamplerPhaseChangeAt` | the count given to the first `resample` and the offset into `resampleIn` given to the second |
+| `pad_24` | `resamplerPhaseOffset` | `float`, forced by three single-precision loads, and the value the message `"V92Modulator: setPhase = %c%d.%05d"` prints |
+| `word_2c` | `phase` | three literals, each stored on the instruction after a message naming it |
+| `word_38` | `resamplerPhaseChange` | the code `mkResampledSignal` dispatches on and clears |
+| `buf_80` | `resampleIn`, and `int *` -> `float *` | `Resampler::resample`'s `const float *in` -- a callee that types it |
+| `buf_84` | `resampleOut` | that call's `float *out` |
+| `buf_8c` | `resampleTail` | the second segment's output, copied up behind the first |
+
+`word_30` and `word_34` are NOT named.  `enterDataPhase` stores 10 into
+`word_34` and every other member clears it, and `V92Phase4Modulator.h` already
+records `progress` latching that class's own `+0x0c` into it -- but `progress`
+is unwritten, so what the codes mean to the layer above is not established and
+a name would be the wrong kind of guess.  `byte_0c` is the same restraint from
+the other side: `enterPhase4` passes it as `V92Phase4Modulator::reset`'s second
+argument, which makes it "bitsPerSymbol minus two", and that is a relation
+rather than a meaning.
+
+`V92MOD_TX_FILTER_DELAY` is 18 and the derivation is INFERENCE, said so at the
+`#define`: the object holds the literal `and $0x12,%eax` and nothing links it to
+the 36-tap shaping filter whose group delay it would be.
+
+### `phase` is an alphabet of three and the fourth value is `reset`'s
+
+    1  enterPhase3     "V92Modulator enter Phase 3"       +0x144bf
+    2  enterPhase4     "V92Modulator: enter Phase 4"      +0x148f9
+    3  enterDataPhase  "V92Modulator:enter  Data Phase:"  +0x1494a
+
+`reset` stores 0, which is none of them, so every `enter*` will act after a
+reset -- their early return tests for their own value and not for "already
+entered".  `initiateRRN` and `initiateFPE` also store 2, guarded on 3.
+
+### `enterDataPhase`'s diagnostic is not gated and the other nine are
+
+Nine members test `dsplibs_debug_level > 1` and print through
+`dsplibs_debug_printf`.  `enterDataPhase` calls `edprintf` unconditionally --
+there is no `cmpl $0x1,0x0` anywhere in its 69 bytes -- which is the always-on
+obfuscated channel.  Reproduced; `t_v92modstate.cpp` sweeps the level 0..3 and
+asserts one line at 0 and 1 against eleven at 2 and 3.
+
+### `mkResampledSignal` is a `switch` and an `if/else` would be wrong
+
+The object dispatches `cmp $0x2; je; dec %eax; je` on `resamplerPhaseChange`
+after the first resample and FALLS THROUGH to the second when the code is
+neither 1 nor 2 -- so a code outside the pair still splits the block and changes
+no phase, where `if (code == 2) ... else ...` would apply the half-sample step
+to every such value.  Only `progress` writes the field and it writes only 1 and
+2, so no differential trial can separate the two readings; the dispatch is the
+only thing that says which is right, and this is what "act on what the compiler
+was FORCED to encode" means when no test can decide.
+
+The wrap flag is ONE BYTE and that is forced: `movb $0x0`, `movb $0x1` and
+`cmpb $0x0` on `0x1f(%esp)`.  It selects between two join loops that differ in
+exactly three places -- the source index starts at 1, the trip count is `n2 - 1`,
+and the joined length is `n1 + n2 - 1` -- because a phase that wrapped past 1.0
+has already advanced a whole output sample.
+
+Three deviations came out of the same 662 bytes: **D800** (`resamplerPhaseOffset`
+is read here and written by nothing in the class), **D801** (the split point is
+subtracted from the block length unsigned and untested) and **D802** (the
+wrapped join's trip count is `n2 - 1` unsigned, entered at zero because the
+object's guard is `jbe` on the decremented value).
+
+## 5901. `V92Phase4Modulator::reset` IS THE WRITER THAT CREATES D571/D700's STATE, AND IT SURVIVES IT ITSELF
+
+5401 recorded that `bitsPerSymbol` at `+0x43` is computed `arg + 2` in one byte,
+that an argument of 254 gives zero, and that `reset` -- then unwritten -- was
+where that happened.  `reset` is written now and the whole shape is visible.
+
+**The wrap is the declaration's and not a choice.**
+
+    19062:  88 56 42     mov %dl,0x42(%esi)     byte_42 = bitsArg
+    19065:  80 c2 02     add $0x2,%dl
+    1906a:  88 56 43     mov %dl,0x43(%esi)     bitsPerSymbol = bitsArg + 2
+
+`add $0x2,%dl` is an eight-bit add on the eight-bit argument, which is exactly
+what C's integral promotion followed by truncation into an `unsigned char` field
+is forced to emit.  There is no test, no clamp and no saturation in the 290
+bytes, and the constructor does not initialise the field at all.  254 gives 0
+and 255 gives 1.  Reproducible, and reproduced with nothing added.
+
+**But `reset` cannot trip over it.**  The only division it can reach is inside
+`V92CP::infoToBits`, and two instructions before that call it stores
+`movb $0x1,0x128(%ebx)` -- the CP's own `bitsPerSymbol` forced to one, so the
+`12 * bitsPerSymbol` round-up is a round-up by twelve whatever was passed here.
+The fault fires later and elsewhere: `recivedRt` copies THIS class's `+0x43`
+into `cp->+0x128` (`movzbl 0x43(%ebx),%eax; mov %al,0x128(%edx)` at
+.text+0x177e6) and the next `infoToBits` divides by zero.
+
+So the lifecycle D700 describes has a named writer and a named reader, and they
+are different members.  The trial at 254 is therefore driven with `nSymbols`
+zero and compares the OBJECT STATE `reset` leaves -- which is observable on both
+sides -- rather than driving `generateSymbol`, which would raise #DE identically
+on both and measure the CPU.  D571's argument, applied to the function that
+creates the input rather than the one that consumes it.
+
+**The enum the mangling names carries no state codes.**  `reset`'s third
+argument is `23V92Phase4ModulatorState`, so the type has to exist; `state` is a
+signed `int` because `recivedEd` and `recivedSUVtag` branch on it with `jl`, and
+an enum of non-negative enumerators may have an unsigned underlying type.
+Spelling the thirteen named codes as enumerators as well as as `#define`s would
+be two homes for one alphabet; spelling them there INSTEAD would retype every
+comparison in the class.  So `enum V92Phase4ModulatorState` is defined in
+`V92Phase4Modulator.h` with one enumerator, zero, which is the only value any
+caller in the object passes (`V92Modulator::enterPhase4`, .text+0x148d3) and is
+one of the fifteen codes nothing names.  `reset` stores the argument whole with
+one 32-bit `mov`, which neither signedness would distinguish, so it settles
+nothing about the field and the field keeps its `int`.
+
+**The amplitude handed to `V92Mapper::reset` is re-read from the field.**
+`movswl 0x40(%esi),%eax` at .text+0x1907b, where the argument's own
+sign-extension is two instructions earlier in %ebx and has been overwritten.
+Same value, different memory operand, and the operand is forced -- so the source
+says `amplitude`, not `amplitudeArg`.
+
+## 5902. `V92Modulator::reset` MOVES FROM A FILE-STATIC HELPER TO THE MEMBER IT ALWAYS WAS, AND THE CONSTRUCTOR STILL INLINES IT
+
+The constructor batch could not write `reset` -- it was not in that closure --
+so it carried the body as `static void v92mod_reset(V92Modulator *)` "so that
+the duplication is visible rather than hidden", and finding 1283 measured that
+the constructor's closing 152 bytes are that body statement for statement.
+
+With `reset` in the batch the helper becomes the member and the constructor
+calls `reset()`.  GCC 3.4.2 at `-O3` inlines it there AND emits the standalone
+symbol, which is what the blob holds; `V92Phase3Modulator`'s constructor has
+called its own `reset` the same way since that class landed and is the
+precedent.  Nothing in the constructor's codegen moved.
+
+`test/mutations/v92mod.json` needed all eleven of its `m->` find-strings
+rewritten to the member spelling and none of its claims changed; the
+"reset does not put the scrambler back at all" entry, marked `equivalent` with a
+proof that it is the identity THROUGH THE CONSTRUCTOR only, now also has a
+non-equivalent sibling in `t_v92modstate.cpp`'s `reset` run, which is what that
+entry's `why` predicted would happen "for free" once this member was written.
+
+## 5903. A MUTATION SWEEP THAT RESTORES THE SOURCE WITH `shutil.copy2` LEAVES THE MUTATED BINARY IN PLACE, AND THE NEXT RUN TESTS IT
+
+Seventy mutations against `t_v92modstate` were applied and restored by a
+scratchpad script whose `finally` clause was `shutil.copy2(backup, source)`.
+`copy2` copies the file's METADATA, mtime included, so the restored source
+carried its ORIGINAL timestamp -- older than the object that had just been
+built from the LAST mutation.  `make` compared the two, found the object
+newer, and relinked rather than recompiling.
+
+The next run therefore exercised the binary built from
+`"the two setPhase messages are exchanged"`, and it failed exactly as it
+should have: our `mkResampledSignal` printed the `%c%d.%05d` message where the
+blob printed `setPhase = 0.5`, with the argument slots holding stack residue.
+Half an hour went into reading the source, the disassembly and the string
+section for a defect that was not there -- the give-away, once found, was that
+our `.rodata.str1.4` held only THREE strings and both `dsplibs_debug_printf`
+relocations in `mkResampledSignal` pointed at the same one, which correct
+source cannot produce.
+
+**It is the same class as findings 2400 and 3100 with the mutation harness
+behind it rather than a triage aid or the gate**: an apparatus that measured
+something other than what it reported, and reported it confidently.  It is
+worse than either, because a stale-object sweep can only ever be OPTIMISTIC --
+every "caught" after the first mutation would be the previous mutation still
+being caught, and a clean sweep proves nothing.  This one was caught by the
+run AFTER it rather than by the sweep, which is luck and not a check.
+
+Write the bytes, not the file: `open(src, 'w').write(original)` gives the
+restored source a current mtime and make rebuilds.  If a sweep must use
+`copy2`, follow it with `os.utime(src, None)`.  The sweep was re-run after the
+fix and all seventy were caught.
+
+## 5904. TWO AGENTS MUTATING ONE WORKTREE INVALIDATE EACH OTHER'S VERDICTS, AND WHAT CAUGHT IT WAS A REFUSAL RATHER THAN A CHECK
+
+This batch delegated one differential suite (`t_v92p4reset.cpp` and its 46
+mutations) to a sub-agent working IN THE PARENT'S WORKTREE, while the parent
+hand-swept its own seventy mutations over
+`src/pump/v90/V92Modulator.cpp`.  Part way through, `tools/mutate.py` refused
+in the sub-agent's session:
+
+    this tree already holds 1 live mutant(s) ... the resampler is given
+    one more phase
+
+-- the parent's mutant, seen by the child, and `make one` failed `refs` for the
+same reason until it cleared.
+
+**EVERY TEST BINARY LINKS ALL OF `src/`.**  `mutsnap.py`'s own CLOSURE note
+says so and is the reason its key is deliberately coarse.  So a live mutant
+anywhere in `src/` invalidates every verdict measured anywhere in the tree
+while it is applied, in BOTH directions: the other agent's "caught" may be
+catching the wrong defect, and its "NOT CAUGHT" may be a mutation masked by an
+unrelated one.  A sweep run against a contaminated tree is not conservative, it
+is simply unmeasured.
+
+**NOTHING IN THE DESIGN PREVENTED IT.**  Two things kept this instance clean
+and neither was chosen: `mutate.py` REFUSED instead of proceeding, which is a
+detector firing in the sense of finding 134; and the parent's own sweep wrote
+to `src/` while the child's `mutate.py` worked in a `$TMPDIR` copy, so
+contamination could only ever run one way.  Both sweeps were re-run to
+completion afterwards on a quiet tree -- 70 of 70 and 44 of 46 with two
+equivalent -- and those re-runs are what the batch stands on, not the
+concurrent ones.
+
+It is finding 3511's shape with the mutation tier behind it instead of the
+compiler: concurrent work off one base, no git conflict, and a result that is
+silently wrong rather than loudly broken.
+
+**THE RULE: a delegated agent that runs mutations gets its OWN worktree, or the
+parent does not sweep while it runs.**  Delegation is still right -- CLAUDE.md's
+"Budget your turns, not your reading" is the only change that alters the
+exponent -- but `git worktree add` for the child costs nothing next to a
+mutation table nobody can trust.

@@ -1,0 +1,356 @@
+[
+ {
+  "label": "NOTE: what this set reaches, and what it deliberately cannot",
+  "why": "The ten V92Modulator members that drive an already-built transmit graph, read out of .text+0x14450..+0x14c19 and +0x15060..+0x1511a. Every entry below is a claim the disassembly makes: the branchless non-zero test in getV92TxFilterDelay, the six arguments enterPhase3 hands the phase 3 modulator, the four state codes the four exits guard on and the four different callees they reach, exitCPt's guard on a DIFFERENT sub-object, enterDataPhase's ungated channel and its block size, reset's twelve writes and its priming loop, and mkResampledSignal's split, its dispatch, its wrap and its two join loops. WHAT NO ENTRY HERE CAN REACH: the `switch` versus an `if (code == 2) ... else ...` on `resamplerPhaseChange`. The two differ only for codes outside {0, 1, 2}, `progress` is the only writer and writes only 1 and 2, and the fixture drives 3 -- so the trial exists and the MUTATION would be caught, but the reading is licensed by the object's `cmp $0x2; je; dec; je` fall-through and not by any behaviour the blob can be asked about. Nor the ORDER of reset's five clears against each other, which no observer between them can see. Finding 5900."
+ },
+ {
+  "label": "the filter delay is reported when the shaping filter is OFF",
+  "find": "\treturn params->V92_APPLY_TX_SHAPING_FILTER ? V92MOD_TX_FILTER_DELAY : 0;",
+  "replace": "\treturn params->V92_APPLY_TX_SHAPING_FILTER ? 0 : V92MOD_TX_FILTER_DELAY;"
+ },
+ {
+  "label": "the filter delay is half a tap out",
+  "find": "V92MOD_TX_FILTER_DELAY : 0;",
+  "replace": "(V92MOD_TX_FILTER_DELAY - 1) : 0;"
+ },
+ {
+  "label": "the filter delay tests the parameter as a SIGNED positive rather than for non-zero",
+  "find": "\treturn params->V92_APPLY_TX_SHAPING_FILTER ? V92MOD_TX_FILTER_DELAY : 0;\n",
+  "replace": "\treturn params->V92_APPLY_TX_SHAPING_FILTER > 0 ? V92MOD_TX_FILTER_DELAY : 0;\n"
+ },
+ {
+  "label": "enterPhase3's guard tests the data phase instead",
+  "find": "\tif (phase == V92MOD_PHASE_3)\n\t\treturn;",
+  "replace": "\tif (phase == V92MOD_PHASE_DATA)\n\t\treturn;"
+ },
+ {
+  "label": "enterPhase3 has no guard at all",
+  "find": "\tif (phase == V92MOD_PHASE_3)\n\t\treturn;\n",
+  "replace": ""
+ },
+ {
+  "label": "enterPhase3 resets the phase 3 modulator into TRN1u rather than Ru",
+  "find": "\tphase3Modulator->reset(4000, V92P3M_STATE_RU, 0, ja, dil,",
+  "replace": "\tphase3Modulator->reset(4000, V92P3M_STATE_TRN1U, 0, ja, dil,"
+ },
+ {
+  "label": "enterPhase3 exchanges the Ja vector and the DIL descriptor",
+  "find": "\tphase3Modulator->reset(4000, V92P3M_STATE_RU, 0, ja, dil,\n",
+  "replace": "\tphase3Modulator->reset(4000, V92P3M_STATE_RU, 0, (V92Ja *)dil,\n\t\t\t       (const tagV90DILdescriptor *)ja,\n"
+ },
+ {
+  "label": "enterPhase3's last argument is the PCM type rather than the round-trip delay",
+  "find": "\t\t\t       (unsigned int)phase2Info->rtd);",
+  "replace": "\t\t\t       (unsigned int)phase2Info->pcmType);"
+ },
+ {
+  "label": "enterPhase3 takes the phase to 3",
+  "find": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;",
+  "replace": "\tphase = V92MOD_PHASE_DATA;\n\tword_30 = 0;"
+ },
+ {
+  "label": "enterPhase3 leaves the pending phase change staged",
+  "find": "\tword_34 = 0;\n\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n}",
+  "replace": "\tword_34 = 0;\n}"
+ },
+ {
+  "label": "enterPhase3 leaves +0x30 alone",
+  "find": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;\n",
+  "replace": "\tphase = V92MOD_PHASE_3;\n"
+ },
+ {
+  "label": "enterPhase3's diagnostic is gated at the verbose level",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modulator enter Phase 3\\r\\n\");",
+  "replace": "\tif (DSPLIB_DEBUG_VERBOSE())\n\t\tdsplibs_debug_printf(\"V92Modulator enter Phase 3\\r\\n\");"
+ },
+ {
+  "label": "enterDataPhase's guard tests phase 3 instead",
+  "find": "\tif (phase == V92MOD_PHASE_DATA)\n\t\treturn;",
+  "replace": "\tif (phase == V92MOD_PHASE_3)\n\t\treturn;"
+ },
+ {
+  "label": "enterDataPhase's line goes through the GATED channel",
+  "find": "\tedprintf(\"V92Modulator:enter  Data Phase:\\r\\n\");",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modulator:enter  Data Phase:\\r\\n\");"
+ },
+ {
+  "label": "enterDataPhase's line loses one of its two spaces",
+  "find": "\tedprintf(\"V92Modulator:enter  Data Phase:\\r\\n\");\n",
+  "replace": "\tedprintf(\"V92Modulator:enter Data Phase:\\r\\n\");\n"
+ },
+ {
+  "label": "enterDataPhase leaves the status at zero rather than ten",
+  "find": "\tword_34 = 10;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);",
+  "replace": "\tword_34 = 0;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);"
+ },
+ {
+  "label": "enterDataPhase hands on what is LEFT of the block rather than the block",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(blockSize);",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(blockRemaining);"
+ },
+ {
+  "label": "enterDataPhase does not size the bit-to-symbol block at all",
+  "find": "\tword_34 = 10;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);\n",
+  "replace": "\tword_34 = 10;\n"
+ },
+ {
+  "label": "exitJa acts on JaEnd rather than on Ja",
+  "find": "\tif (phase3Modulator->state != V92P3M_STATE_JA)",
+  "replace": "\tif (phase3Modulator->state != V92P3M_STATE_JA_END)"
+ },
+ {
+  "label": "exitJa has no guard",
+  "find": "\tif (phase3Modulator->state != V92P3M_STATE_JA)\n\t\treturn;\n",
+  "replace": ""
+ },
+ {
+  "label": "exitJa does not clear the status",
+  "find": "\tphase3Modulator->exitJa();\n\tword_34 = 0;",
+  "replace": "\tphase3Modulator->exitJa();"
+ },
+ {
+  "label": "exitJa forwards to exitSilence",
+  "find": "\tphase3Modulator->exitJa();\n",
+  "replace": "\tphase3Modulator->exitSilence();\n"
+ },
+ {
+  "label": "exitSilence acts on Su rather than on Silence",
+  "find": "\tif (phase3Modulator->state != V92P3M_STATE_SILENCE)",
+  "replace": "\tif (phase3Modulator->state != V92P3M_STATE_SU)"
+ },
+ {
+  "label": "exitSilence forwards to exitJa",
+  "find": "\tphase3Modulator->exitSilence();\n\tword_34 = 0;",
+  "replace": "\tphase3Modulator->exitJa();\n\tword_34 = 0;"
+ },
+ {
+  "label": "exitSuSecond acts on SuSecondEnd rather than on SuSecond",
+  "find": "\tif (phase3Modulator->state != V92P3M_STATE_SU_SECOND)",
+  "replace": "\tif (phase3Modulator->state != V92P3M_STATE_SU_SECOND_END)"
+ },
+ {
+  "label": "exitSuSecond does not clear the status",
+  "find": "\tphase3Modulator->exitSuSecond();\n\tword_34 = 0;",
+  "replace": "\tphase3Modulator->exitSuSecond();"
+ },
+ {
+  "label": "exitTRN1uSecond acts on the FIRST TRN1u",
+  "find": "\tif (phase3Modulator->state != V92P3M_STATE_TRN1U_SECOND)",
+  "replace": "\tif (phase3Modulator->state != V92P3M_STATE_TRN1U)"
+ },
+ {
+  "label": "exitTRN1uSecond forwards to exitSuSecond",
+  "find": "\tphase3Modulator->exitTRN1u();\n\tword_34 = 0;",
+  "replace": "\tphase3Modulator->exitSuSecond();\n\tword_34 = 0;"
+ },
+ {
+  "label": "exitCPt guards on the PHASE 3 modulator's state",
+  "find": "\tif (phase4Modulator->state != 0)",
+  "replace": "\tif (phase3Modulator->state != 0)"
+ },
+ {
+  "label": "exitCPt acts on the E1u state instead of on 0",
+  "find": "\tif (phase4Modulator->state != 0)\n\t\treturn;",
+  "replace": "\tif (phase4Modulator->state != V92P4M_STATE_E1U)\n\t\treturn;"
+ },
+ {
+  "label": "exitCPt does not clear the status",
+  "find": "\tphase4Modulator->exitCPt();\n\tword_34 = 0;",
+  "replace": "\tphase4Modulator->exitCPt();"
+ },
+ {
+  "label": "reset's diagnostic loses its carriage return",
+  "find": "\t\tdsplibs_debug_printf(\"V92Modulator reset\\r\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"V92Modulator reset\\n\");"
+ },
+ {
+  "label": "reset seeds the scrambler with ones",
+  "find": "\tscrambler.reset(0);\n\tphase = 0;",
+  "replace": "\tscrambler.reset(1);\n\tphase = 0;"
+ },
+ {
+  "label": "reset does not put the scrambler back",
+  "find": "\tscrambler.reset(0);\n\tphase = 0;\n",
+  "replace": "\tphase = 0;\n"
+ },
+ {
+  "label": "reset leaves the phase alone",
+  "find": "\tscrambler.reset(0);\n\tphase = 0;\n\tword_30 = 0;",
+  "replace": "\tscrambler.reset(0);\n\tword_30 = 0;"
+ },
+ {
+  "label": "reset takes the phase to phase 3 rather than to zero",
+  "find": "\tphase = 0;\n\tword_30 = 0;\n\tblockRemaining = blockSize;",
+  "replace": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;\n\tblockRemaining = blockSize;"
+ },
+ {
+  "label": "reset copies the block size the other way round",
+  "find": "\tblockRemaining = blockSize;",
+  "replace": "\tblockSize = blockRemaining;"
+ },
+ {
+  "label": "reset leaves the pending phase change staged",
+  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tqueue->reset();",
+  "replace": "\tqueue->reset();"
+ },
+ {
+  "label": "reset also clears the split point",
+  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tqueue->reset();",
+  "replace": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tresamplerPhaseChangeAt = 0;\n\tqueue->reset();"
+ },
+ {
+  "label": "reset helpfully clears the phase step nothing writes",
+  "find": "\tfloat_28 = 0.0f;",
+  "replace": "\tfloat_28 = 0.0f;\n\tresamplerPhaseOffset = 0.0f;"
+ },
+ {
+  "label": "reset does not put the queue back",
+  "find": "\tqueue->reset();\n\tbyte_0c = 0;",
+  "replace": "\tbyte_0c = 0;"
+ },
+ {
+  "label": "reset does not put the transmit filter back",
+  "find": "\ttxFilter->reset();\n}",
+  "replace": "}"
+ },
+ {
+  "label": "the priming loop runs one extra time",
+  "find": "\tfor (i = 0; i < queuePrime; i++)",
+  "replace": "\tfor (i = 0; i <= queuePrime; i++)"
+ },
+ {
+  "label": "the queue is primed with the whole parameter",
+  "find": "\tqueuePrime = (unsigned int)(params->MODULATOR_QUEUE_LENGTH >> 1);",
+  "replace": "\tqueuePrime = (unsigned int)(params->MODULATOR_QUEUE_LENGTH);"
+ },
+ {
+  "label": "the queue is primed with ones",
+  "find": "\t\tqueue->write(0.0f);",
+  "replace": "\t\tqueue->write(1.0f);"
+ },
+ {
+  "label": "mkResampledSignal's simple path is taken in every phase",
+  "find": "\tif (phase != V92MOD_PHASE_3\n\t    || resamplerPhaseChange == V92MOD_PHASECHG_NONE) {",
+  "replace": "\tif (resamplerPhaseChange == V92MOD_PHASECHG_NONE) {"
+ },
+ {
+  "label": "mkResampledSignal splits the block whenever it is in phase 3",
+  "find": "\tif (phase != V92MOD_PHASE_3\n\t    || resamplerPhaseChange == V92MOD_PHASECHG_NONE) {",
+  "replace": "\tif (phase != V92MOD_PHASE_3) {"
+ },
+ {
+  "label": "the simple path resamples the whole block rather than what is left of it",
+  "find": "\t\tresampler->resample(resampleIn, blockRemaining, resampleOut, n);",
+  "replace": "\t\tresampler->resample(resampleIn, blockSize, resampleOut, n);"
+ },
+ {
+  "label": "the first segment is resampled into the split scratch",
+  "find": "\tresampler->resample(resampleIn, resamplerPhaseChangeAt, resampleOut,\n\t\t\t    n1);",
+  "replace": "\tresampler->resample(resampleIn, resamplerPhaseChangeAt, resampleTail,\n\t\t\t    n1);"
+ },
+ {
+  "label": "the first segment runs to the whole block rather than to the split point",
+  "find": "\tresampler->resample(resampleIn, resamplerPhaseChangeAt, resampleOut,",
+  "replace": "\tresampler->resample(resampleIn, blockRemaining, resampleOut,"
+ },
+ {
+  "label": "the offset arm applies the half-sample step",
+  "find": "\t\tphaseNow = resampler->getNormalizedPhase()\n\t\t\t + resamplerPhaseOffset;",
+  "replace": "\t\tphaseNow = resampler->getNormalizedPhase()\n\t\t\t + V92MOD_PHASECHG_HALF_STEP;"
+ },
+ {
+  "label": "the offset arm SETS the phase rather than advancing it",
+  "find": "\t\tphaseNow = resampler->getNormalizedPhase()\n\t\t\t + resamplerPhaseOffset;",
+  "replace": "\t\tphaseNow = resamplerPhaseOffset;"
+ },
+ {
+  "label": "the half-sample arm applies a quarter",
+  "find": "\t\tphaseNow = resampler->getNormalizedPhase()\n\t\t\t + V92MOD_PHASECHG_HALF_STEP;",
+  "replace": "\t\tphaseNow = resampler->getNormalizedPhase() + 0.25f;"
+ },
+ {
+  "label": "the wrap test is strict",
+  "find": "\t\tif (phaseNow >= 1.0f) {\n\t\t\twrapped = 1;\n\t\t\tphaseNow -= 1.0f;\n\t\t}\n\t\tresampler->setNormalizedPhase(phaseNow);\n\t\tbreak;\n\n\tcase V92MOD_PHASECHG_HALF:",
+  "replace": "\t\tif (phaseNow > 1.0f) {\n\t\t\twrapped = 1;\n\t\t\tphaseNow -= 1.0f;\n\t\t}\n\t\tresampler->setNormalizedPhase(phaseNow);\n\t\tbreak;\n\n\tcase V92MOD_PHASECHG_HALF:"
+ },
+ {
+  "label": "the offset arm does not record that it wrapped",
+  "find": "\t\tif (phaseNow >= 1.0f) {\n\t\t\twrapped = 1;\n\t\t\tphaseNow -= 1.0f;\n\t\t}\n\t\tresampler->setNormalizedPhase(phaseNow);\n\t\tbreak;\n\n\tcase V92MOD_PHASECHG_HALF:",
+  "replace": "\t\tif (phaseNow >= 1.0f)\n\t\t\tphaseNow -= 1.0f;\n\t\tresampler->setNormalizedPhase(phaseNow);\n\t\tbreak;\n\n\tcase V92MOD_PHASECHG_HALF:"
+ },
+ {
+  "label": "the second segment starts at the head of the block",
+  "find": "\tresampler->resample(resampleIn + resamplerPhaseChangeAt,",
+  "replace": "\tresampler->resample(resampleIn,"
+ },
+ {
+  "label": "the second segment is given the whole block",
+  "find": "\t\t\t    blockRemaining - resamplerPhaseChangeAt,",
+  "replace": "\t\t\t    blockRemaining,"
+ },
+ {
+  "label": "the second segment is resampled straight over the first",
+  "find": "\t\t\t    resampleTail, n2);",
+  "replace": "\t\t\t    resampleOut, n2);"
+ },
+ {
+  "label": "the wrapped join keeps the sample it should drop",
+  "find": "\t\tn = n1 + n2 - 1;\n\t\tfor (i = 0; i < n2 - 1; i++)\n\t\t\tresampleOut[n1 + i] = resampleTail[i + 1];",
+  "replace": "\t\tn = n1 + n2 - 1;\n\t\tfor (i = 0; i < n2 - 1; i++)\n\t\t\tresampleOut[n1 + i] = resampleTail[i];"
+ },
+ {
+  "label": "the wrapped join reports the unwrapped length",
+  "find": "\t\tn = n1 + n2 - 1;",
+  "replace": "\t\tn = n1 + n2;"
+ },
+ {
+  "label": "the wrapped join copies one sample too many",
+  "find": "\t\tfor (i = 0; i < n2 - 1; i++)",
+  "replace": "\t\tfor (i = 0; i < n2; i++)"
+ },
+ {
+  "label": "the unwrapped join drops the first sample too",
+  "find": "\t\tn = n1 + n2;\n\t\tfor (i = 0; i < n2; i++)\n\t\t\tresampleOut[n1 + i] = resampleTail[i];",
+  "replace": "\t\tn = n1 + n2;\n\t\tfor (i = 0; i < n2; i++)\n\t\t\tresampleOut[n1 + i] = resampleTail[i + 1];"
+ },
+ {
+  "label": "the join writes over the head of the first segment",
+  "find": "\t\t\tresampleOut[n1 + i] = resampleTail[i];",
+  "replace": "\t\t\tresampleOut[i] = resampleTail[i];"
+ },
+ {
+  "label": "the pending phase change is not cleared",
+  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tresamplerPhaseChangeAt = 0;\n}",
+  "replace": "\tresamplerPhaseChangeAt = 0;\n}"
+ },
+ {
+  "label": "the split point is not cleared",
+  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tresamplerPhaseChangeAt = 0;\n}",
+  "replace": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n}"
+ },
+ {
+  "label": "the diagnostic's sign is taken the other way round at zero",
+  "find": "\treturn (0.0f < v) ? '+' : '-';",
+  "replace": "\treturn (v < 0.0f) ? '-' : '+';"
+ },
+ {
+  "label": "the diagnostic's whole part keeps the sign",
+  "find": "\treturn (int)__builtin_fabsf(v);",
+  "replace": "\treturn (int)v;"
+ },
+ {
+  "label": "the diagnostic's fractional part is scaled by ten thousand",
+  "find": "\t\t\t\t   * V92MOD_PHASE_PRINT_SCALE));",
+  "replace": "\t\t\t\t   * 10000.0f));"
+ },
+ {
+  "label": "the diagnostic's fractional part keeps its sign",
+  "find": "\treturn __builtin_abs((int)(((long double)v - (long double)(int)v)\n\t\t\t\t   * V92MOD_PHASE_PRINT_SCALE));",
+  "replace": "\treturn (int)(((long double)v - (long double)(int)v)\n\t\t\t     * V92MOD_PHASE_PRINT_SCALE);"
+ },
+ {
+  "label": "the two setPhase messages are exchanged",
+  "find": "\t\t\t    \"V92Modulator: setPhase = 0.5\\r\\n\");",
+  "replace": "\t\t\t    \"V92Modulator: setPhase = %c%d.%05d\\r\\n\");"
+ }
+]

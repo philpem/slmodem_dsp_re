@@ -1,12 +1,13 @@
 /*
  * V92Phase4Modulator.cpp -- the V.92 phase 4 upstream symbol source.
  *
- * Reconstructed from dsplibs.o.  Twenty-eight symbols, 3,133 bytes: the four
- * below, plus the twenty-four members at the bottom of this file that generate
- * the phase 4 upstream signals, take the tag-driven state transitions, and
- * reset the object between segments.  `include/dsplib/V92Phase4Modulator.h`
- * carries the object map, the state codes four format strings name, and the
- * eight members still outstanding -- all of them behind `V92CP::infoToBits`.
+ * Reconstructed from dsplibs.o.  ALL 34 MEMBERS: the four below, the members
+ * that generate the phase 4 upstream signals, take the tag-driven state
+ * transitions and reset the object between segments, `generateSymbol` -- the
+ * state machine the generators are the arms of -- and `reset`, at the bottom,
+ * which is the writer every one of the others reads its state out of.
+ * `include/dsplib/V92Phase4Modulator.h` carries the object map, the state codes
+ * the format strings name, and the enum `reset`'s mangling requires.
  *
  * The original four:
  *
@@ -1486,4 +1487,121 @@ int V92Phase4Modulator::generateSymbol()
 	}
 
 	return sym;
+}
+
+/*
+ * ===========================================================================
+ * V92Phase4Modulator::reset (.text+0x19030, 290 bytes)
+ *
+ * The whole object back to a known state, the CP message repacked, and then
+ * `nSymbols` symbols generated before returning.  The last of the class's 34
+ * members, and the only one that writes `amplitude`, `byte_42`,
+ * `bitsPerSymbol` or `word_44`.
+ *
+ * IN THE OBJECT'S ORDER, with nothing elided:
+ *
+ *     word_0c = 0                 word_44 = suvLimit
+ *     amplitude = amplitudeArg    byte_42 = bitsArg
+ *     state = stateArg            bitsPerSymbol = bitsArg + 2
+ *     symbolCount = 0
+ *     mapper->reset(amplitude, bitsArg)
+ *     scrambler.reset(0)
+ *     prevBit = 0
+ *     word_1c0 = 0 ; cp->word_110 = 0 ; word_1c4 = 0
+ *     word_28 = 0 ; flag_3c = 0 ; word_2c = 0 ; word_30 = 0 ; word_34 = 0
+ *     word_18 = 0 ; byte_1c = 0 ; flag_20 = 0
+ *     cp->bitsPerSymbol = 1
+ *     cp->byte_00 = 0
+ *     cp->infoToBits()
+ *     pattern = cp->getBitVector(patternLength)
+ *     e2uExtended = 0
+ *     for (i = 0; i < nSymbols; i++) generateSymbol()
+ *
+ * THE AMPLITUDE HANDED TO THE MAPPER IS RE-READ FROM THE FIELD, not passed
+ * through from the argument: `movswl 0x40(%esi),%eax` at .text+0x1907b, where
+ * the argument's own sign-extension is two instructions earlier in %ebx and
+ * has been overwritten.  Same value, different memory operand, and the operand
+ * is forced -- so the source says `amplitude`, not `amplitudeArg`.
+ *
+ * WHAT IT DOES NOT WRITE, and each absence is checkable: `word_24`, `word_38`,
+ * `word_1b0`, `word_1b8`, `patternLength` other than through `getBitVector`,
+ * `mappingParams`, `bitsToSymbol`, `mapper`, `cp` and `params`.  `word_1b0` in
+ * particular stays at whatever the constructor left, which is D700's first
+ * divisor.
+ *
+ * ---------------------------------------------------------------------------
+ * `bitsPerSymbol = bitsArg + 2` IS COMPUTED IN ONE BYTE AND WRAPS.  D571/D700.
+ *
+ *     19062:  88 56 42     mov %dl,0x42(%esi)      byte_42 = bitsArg
+ *     19065:  80 c2 02     add $0x2,%dl            <- eight bits wide
+ *     1906a:  88 56 43     mov %dl,0x43(%esi)      bitsPerSymbol = ...
+ *
+ * `add $0x2,%dl` is an eight-bit add on the eight-bit argument, which is what
+ * C's integral promotion followed by truncation into an `unsigned char` field
+ * is FORCED to produce, so the wrap is the declaration's and not a choice.  A
+ * `bitsArg` of 254 leaves `bitsPerSymbol` at 0 and 255 leaves it at 1; nothing
+ * in the 290 bytes tests either, and the constructor does not initialise the
+ * field at all.
+ *
+ * **RESET ITSELF SURVIVES IT.**  The one division reset can reach is inside
+ * `V92CP::infoToBits`, and the store two instructions above the call is
+ * `movb $0x1,0x128(%ebx)` -- reset forces the CP's OWN `bitsPerSymbol` to 1
+ * before packing, so `12 * bitsPerSymbol` is 12 whatever was passed here.  The
+ * fault fires later and elsewhere: `recivedRt` copies THIS field into
+ * `cp->bitsPerSymbol` (`movzbl 0x43(%ebx),%eax; mov %al,0x128(%edx)` at
+ * .text+0x177e6), and the next `infoToBits` then divides by zero.
+ *
+ * So reset is the writer that CREATES the state D700 records and is not the
+ * reader that trips over it.  Reproduced with no clamp and no test; a trial at
+ * 254 is in t_v92p4reset.cpp and compares the state reset leaves, which is
+ * observable on both sides, rather than driving the divide, which would raise
+ * #DE identically on both and measure the CPU (D571's argument).
+ *
+ * ---------------------------------------------------------------------------
+ * THE GENERATION LOOP is `for (i = 0; i < nSymbols; i++) generateSymbol();`
+ * and the object's `test %edi,%edi; je` guard with a `dec`/`jne` body is what
+ * GCC 3.4.2 at -O3 emits for it.  The return value is discarded at every
+ * iteration, which is the object: nothing stores %eax between calls.
+ * ===========================================================================
+ */
+void
+V92Phase4Modulator::reset(short amplitudeArg, unsigned char bitsArg,
+			  V92Phase4ModulatorState stateArg,
+			  unsigned int nSymbols, unsigned int suvLimit)
+{
+	unsigned int i;
+
+	word_0c = 0;
+	word_44 = suvLimit;
+	amplitude = amplitudeArg;
+	byte_42 = bitsArg;
+	state = stateArg;
+	bitsPerSymbol = (unsigned char)(bitsArg + 2);
+	symbolCount = 0;
+
+	mapper->reset(amplitude, bitsArg);
+	scrambler.reset(0);
+
+	prevBit = 0;
+	word_1c0 = 0;
+	cp->word_110 = 0;
+	word_1c4 = 0;
+	word_28 = 0;
+	flag_3c = 0;
+	word_2c = 0;
+	word_30 = 0;
+	word_34 = 0;
+	word_18 = 0;
+	byte_1c = 0;
+	flag_20 = 0;
+
+	cp->bitsPerSymbol = 1;
+	cp->byte_00 = 0;
+	cp->infoToBits();
+
+	pattern = cp->getBitVector(patternLength);
+	e2uExtended = 0;
+
+	for (i = 0; i < nSymbols; i++)
+		generateSymbol();
 }

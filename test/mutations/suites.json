@@ -687,5 +687,13 @@
  "v34diagk56": [
   "src/pump/v90/K56FlexFloModem.cpp",
   "build/test/t_v34diag"
+ ],
+ "v92modstate": [
+  "src/pump/v90/V92Modulator.cpp",
+  "build/test/t_v92modstate"
+ ],
+ "v92p4reset": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4reset"
  ]
 }
