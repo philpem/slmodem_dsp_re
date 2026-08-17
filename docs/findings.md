@@ -67836,6 +67836,14 @@ object's own flag whenever the error is NaN. The equaliser has eight of these
 and only the modern tier is blind to them, so `make period` is the only thing
 that decides.
 
+### The complete transcription is `docs/v90equprocess.md`
+
+Every arm, every sub-case of both nested tables, the four re-convert blocks
+and the epilogue, written out as the C they came from. Two of the four
+re-convert blocks truncate the DFE output through 16 bits and two do not, so
+they are three source sites and not one helper -- writing them as one would be
+wrong at exactly one of them.
+
 ### What is still owed
 
 The source. This finding is the analysis and it is deliberately committed
