@@ -75992,3 +75992,88 @@ records why file position cannot do it. So "0-10s" is SIP setup, ringing and
 early training mixed together, and the training window proper is probably the
 10-30s buckets at ~0.086/s. A CONNECT-anchored split would sharpen this and
 needs the anchor work. 76 series, one bench, one ATA, one period of time.
+
+### 6904. #181 AND #182 ANSWER NULL: ACROSS TEN CELLS AND 200 CALLS OUR RECEIVER IS NOT MEASURABLY DIFFERENT FROM THE HSF — AND hsfuser's LOSS CURVE DISAGREES WITH OURS ABOUT ITS OWN MODEM
+
+The second `ladder.py` arm, `CHAN_LOSS` (frame substitution), same rig and same
+method as 6902. **100 of 100 calls executed**, 23 minutes.
+
+    peer   CHAN_LOSS   n   connected   median    p25     p75
+    ours   0.0        10    10/10       33600   33600   33600
+    ours   0.005      10     8/10       33600   33600   33600
+    ours   0.01       10     4/10       33600   33600   33600
+    ours   0.02       10     3/10       31200    4800   33600
+    ours   0.04       10     1/10        4800    4800    4800
+    hsf    0.0        10    10/10       33600   33600   33600
+    hsf    0.005      10     9/10       33600   33600   33600
+    hsf    0.01       10     9/10       33600    9600   33600
+    hsf    0.02       10     4/10       18000    7200   31200
+    hsf    0.04       10     1/10       31200   31200   31200
+
+**NO CELL IS SIGNIFICANT, IN EITHER LADDER.** Two-tailed Fisher exact on
+connect fraction, ours against HSF on the identical channel and seeds:
+
+    loss 0.5%   8/10 vs 9/10   p = 1.000
+    loss 1%     4/10 vs 9/10   p = 0.057
+    loss 2%     3/10 vs 4/10   p = 1.000
+    loss 4%     1/10 vs 1/10   p = 1.000
+    slip 0.1    9/10 vs 5/10   p = 0.141
+    slip 0.25   4/10 vs 2/10   p = 0.628
+    slip 0.5    3/10 vs 0/10   p = 0.211
+
+Ten cells, 200 calls, nothing below 0.05. **The question #181 and #182 were
+raised to answer — is our receiver abnormally sensitive to what a packet
+network does to a stream — comes back NULL.**
+
+**AND 6902's CLAIM OF AN ADVANTAGE IS DOWNGRADED ACCORDINGLY.** That finding
+said we are "ahead of HSF on connect fraction at 0.1, 0.25 and 0.5". The raw
+counts do read that way and the arithmetic above says they are noise at n=10.
+The sentence should have carried a test. The one cell that even approaches a
+difference runs the OTHER way — 1% loss, ours 4/10 against HSF's 9/10, p=0.057
+— and one borderline cell out of ten examined is what chance produces.
+
+**THE RESULT THAT IS NOT NULL IS ABOUT THE CHANNEL MODELS.** hsfuser's own
+`docs/channel-results.md` sec 4 publishes HSF's loss curve measured in
+hsfuser's own emulator, 15 trials a point:
+
+                        HSF in ITS model      HSF in OUR model
+    0.5% loss           15/15, median 33600   9/10, median 33600
+    1%   loss           14/15, median 31200   9/10, median 33600
+    2%   loss           14/15, median 28800   4/10, median 18000
+    4%   loss           14/15, median 21600   1/10, median 31200
+
+**The same modem, at the same nominal loss, connects 14 times in 15 in one
+model and once in ten in the other.** That is not a small disagreement and it
+is not about receivers at all, because the receiver is identical on both sides
+of that table.
+
+**SO 6702's DISAGREEMENT IS LOCALISED, AND NOT WHERE IT WAS LOOKED FOR.** 6702
+recorded that 1937 (ours, n=1) and hsfuser (n=15) disagree by several rate
+steps at 1% loss, and named three candidate causes: n, operating point, and the
+receiver. This run holds the receiver fixed and the disagreement survives at
+full size. **The channel models are the variable.** 1937's numbers are not
+obviously wrong for the model they were taken in.
+
+**WHAT THE DIFFERENCE IS HAS NOT BEEN ESTABLISHED, and the candidates are not
+subtle.** The two runs differ in more than the loss generator: ours carries
+`CHAN_DELAY_MS=70` and the fitted VG204 band limit with no added noise; theirs
+is `CHAN_LINE=1 CHAN_TILT=-6 CHAN_SNR=36`. Burstiness is the sharpest
+suspect — hsfuser's `impair.c` runs a two-state burst model with `p_enter` and
+`p_leave`, and whether `chanshim.py`'s loss is bursty or Bernoulli per frame
+was NOT checked before this run and should have been. A Bernoulli process and a
+burst process at the same mean rate are different impairments, and 1937's own
+title calls its loss "bursty".
+
+**CONSEQUENCE FOR THE INVESTIGATION.** Three of the mechanisms this thread has
+pursued are now measured and none of them carries the bench's symptom: the peer
+(6901), the receiver's impairment sensitivity (this finding), and the jitter
+buffer at its true rate (6903). What has NOT been excluded is everything about
+the real path that no model here contains, and the object's own recovery
+ladder — where 6900 measured a real 4800 bit/s penalty that fires on 38% of
+self-raised retrains.
+
+**LIMITS.** n=10 per cell; a p=0.057 cell is exactly the sort that a run at
+n=30 should be spent on before it is either believed or dismissed. One
+operating point, one delay, no added noise. The cross-model table compares our
+measurement against hsfuser's published one rather than two runs we made, so it
+inherits every difference between the two setups.
