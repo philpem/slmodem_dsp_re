@@ -664,8 +664,843 @@ run_reset_arm(void)
 	return diff_end();
 }
 
+/* ==================================================== the phase 4 peer set */
+
+/*
+ * THE FOUR ARMS THAT GO THROUGH `V90Phase4Demodulator` -- equaliser states 2,
+ * 4 and 5, and state 3's two detectors -- need the demodulator's own peer set
+ * behind it, because `int_0028` is CLEARED on entry to both decision
+ * functions (`int_0028 = 0` at the head of `getV90Decision` and again at
+ * `getV92Decision`'s) and cannot be planted.  It is 6201's `word_30` problem
+ * exactly: the value has to be PRODUCED by the demodulator, so the axis is
+ * driven through the demodulator's own state and counters and read back off
+ * the reference peer afterwards.
+ *
+ * THE WIRING IS `t_v90p4ddec.cpp`'S, adapted rather than invented: the same
+ * split/shared split (the demapper, the CP and MP records and the descrambler
+ * are written and get one copy per side; the mapping blocks, the
+ * impairment detector and the parameters are read-only and are SHARED so the
+ * pointer word stays IN the comparison, finding 1105), the same
+ * `resetNoSpectral`-safe mapping blocks, and the same "one bit from an
+ * answer" plant of the two message decoders.  Its `arm_r` puts a detector one
+ * sample from a decision, which is what makes 0x28 and 0x2c reachable inside
+ * one call instead of six.
+ *
+ * WHAT THE SAMPLES ARE IS NOT FREE HERE.  The demodulator sees the
+ * EQUALISER'S output, not a planted short, so every arm whose detector tests
+ * `sample > 0` needs the filters arranged to produce a positive soft
+ * decision -- in both representations.  That is why the fixed-point arrays
+ * below are planted positive and the two output conversion factors are
+ * planted at all: a pseudorandom `dfeMmxOutputConversionFactor` is a divide
+ * by zero, and a pseudorandom sign is an arm that never fires.
+ */
+
+#include "dsplib/Scrambler.h"
+#include "dsplib/V90MappingParams.h"
+#include "dsplib/V90AutoDigitalImpDetector.h"
+#include "dsplib/V90CP.h"
+#include "dsplib/V90MP.h"
+#include "dsplib/V90Demapper.h"
+#include "dsplib/V90Phase4Demodulator.h"
+#include "dsplib/V90SpectralVerifier.h"
+#include "dsplib/V90PreFilter.h"
+
+#define P4D_SLOT	((unsigned)sizeof(V90Phase4Demodulator) + 64u)
+#define DEM_SLOT	((unsigned)sizeof(V90Demapper) + 64u)
+#define CP_SLOT		((unsigned)sizeof(V90CP) + 64u)
+#define MP_SLOT		((unsigned)sizeof(V90MP) + 64u)
+
+#define NSAMPLE		72
+#define NCPBUF		16
+
+/* The V.90 descrambler's geometry, from `V90ModemCtor`. */
+#define DSC_A		18u
+#define DSC_B		23u
+#define DSC_C		99u
+#define DSC_N		(1u + DSC_B + DSC_C)
+
+typedef Descrambler<unsigned char, int> V90Descrambler;
+
+static unsigned char p4d_s[2][P4D_SLOT] __attribute__((aligned(8)));
+static unsigned char p4d_seedb[P4D_SLOT];
+static unsigned char p4d_cmp[2][P4D_SLOT];
+
+static unsigned char dem_s[2][DEM_SLOT] __attribute__((aligned(8)));
+static unsigned char dem_cmp[2][DEM_SLOT];
+static unsigned char cp_s[2][CP_SLOT] __attribute__((aligned(8)));
+static unsigned char mp_s[2][MP_SLOT] __attribute__((aligned(8)));
+
+static unsigned int code_s[2][NSAMPLE];
+static unsigned char sign_s[2][NSAMPLE];
+static unsigned char sbstate_s[2][V90SBE_DECODER_SIZE];
+static int cpbuf_s[2][V90CP_BUFS][NCPBUF];
+
+static unsigned char dsc_s[2][sizeof(V90Descrambler)]
+	__attribute__((aligned(8)));
+static unsigned char dscbuf_s[2][DSC_N];
+
+/* Shared: nothing under test writes through any of these. */
+static unsigned char mapp1_s[sizeof(V90MappingParams) + 64]
+	__attribute__((aligned(8)));
+static unsigned char mapp2_s[sizeof(V90MappingParams) + 64]
+	__attribute__((aligned(8)));
+static unsigned char adi_s[sizeof(V90AutoDigitalImpDetector)]
+	__attribute__((aligned(8)));
+static unsigned char sv_s[sizeof(V90SpectralVerifier) + 64]
+	__attribute__((aligned(8)));
+static unsigned char pf_s[sizeof(V90PreFilter) + 64]
+	__attribute__((aligned(8)));
+
+#define P4D(s)		(*(V90Phase4Demodulator *)p4d_s[s])
+#define DEM(s)		(*(V90Demapper *)dem_s[s])
+#define CPR(s)		(*(V90CP *)cp_s[s])
+#define MPR(s)		(*(V90MP *)mp_s[s])
+#define DSC(s)		(*(V90Descrambler *)dsc_s[s])
+#define MAPP1		((V90MappingParams *)mapp1_s)
+#define MAPP2		((V90MappingParams *)mapp2_s)
+#define ADI		((V90AutoDigitalImpDetector *)adi_s)
+#define SPECVER		((V90SpectralVerifier *)sv_s)
+#define PREFILT		((V90PreFilter *)pf_s)
+
+/* Varied, never zero: findings 223, 224, 230. */
+static unsigned
+fill_bytes(unsigned char *p, unsigned n, unsigned lfsr)
+{
+	unsigned i;
+
+	for (i = 0; i < n; i++) {
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		p[i] = (unsigned char)((lfsr >> 3) | 1u);
+	}
+	return lfsr;
+}
+
+/*
+ * The four split peers' pointer words, and the demapper's own three.  +0x34f8
+ * is a FIFTH here that `t_v90p4ddec` does not have: the connection evaluator
+ * is shared there and split here, because in this binary the EQUALISER writes
+ * through it -- `updateAvePdsnr` runs whenever a block closes.
+ */
+static const unsigned p4d_skip[] = {
+	0x14u, 0x18u, 0x3054u, 0x3058u, 0x34f8u, ~0u
+};
+static const unsigned dem_skip[] = { 0x1cu, 0x20u, 0x684u, ~0u };
+
+static void
+scrub(unsigned char *dst, const unsigned char *src, unsigned n,
+      const unsigned *skip)
+{
+	int i;
+
+	memcpy(dst, src, n);
+	for (i = 0; skip[i] != ~0u; i++)
+		memset(dst + skip[i], 0, 4);
+}
+
+/*
+ * EVERY PARAMETER THESE ARMS READ IS PLANTED FINITE, and that is a
+ * correctness requirement rather than tidiness.  `setLinearEquBeta` and
+ * `setDfeBeta` decide with ONE ORDERED COMPARE and no parity test
+ * (`linearEquBeta != beta`, findings 2300 and 2304) -- so a pseudorandom word
+ * that happens to be a NaN takes a different arm on the two compilers and
+ * turns this binary's declared divergence into two.  The fill gives varied
+ * bytes; these fifteen words are planted on top of it.
+ */
+static void
+plant_params(void)
+{
+	ARENA_PARAMS->LINEAR_EQU_FADE_EDGES_CYCLE = 3;
+	ARENA_PARAMS->LINEAR_EQU_DATA_BETA = 0.001953125f;
+	ARENA_PARAMS->DFE_DATA_BETA = 0.0009765625f;
+	ARENA_PARAMS->LINEAR_EQU_TRN2D_BETA = 0.00390625f;
+	ARENA_PARAMS->LINEAR_EQU_TRN2D_INITIAL_BETA = 0.0078125f;
+	ARENA_PARAMS->DFE_TRN2D_BETA = 0.001953125f;
+	ARENA_PARAMS->GERMAN_PBX_DFE_TRN2D_SLOW_BETA = 0.000244140625f;
+	ARENA_PARAMS->GERMAN_PBX_DFE_TRN2D_FAST_BETA = 0.00048828125f;
+	ARENA_PARAMS->EIA6_DFE_TRN2D_SLOW_BETA = 0.0001220703125f;
+	ARENA_PARAMS->EIA6_DFE_TRN2D_FAST_BETA = 0.00390625f;
+	ARENA_PARAMS->EIA6_DFE_TRN2D_RRN_BETA = 0.015625f;
+	ARENA_PARAMS->LINEAR_EQU_TRN2D_INITIAL_DURATION = 0x20;
+	ARENA_PARAMS->RRN_TRN2D_DD_LENGTH = 0x2a0;
+	ARENA_PARAMS->RRN_R_DETECTION_LENGTH = 0x60;
+	ARENA_PARAMS->DEBUG_DEMAPPER_ERROR_HISTOGRAM = 0;
+	ARENA_PARAMS->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM = 0;
+}
+
+/*
+ * Put `rDetector1` one sample from an RNot decision.  `t_v90p4ddec`'s
+ * `arm_r`, reduced to the two arms this file uses: 2 answers on a POSITIVE
+ * sample, which is what the equaliser's output is planted to be, and 0 leaves
+ * the detector well short so the arm does not fire at all.
+ */
+static void
+arm_rnot(V90RDetector *d, int want, int limit)
+{
+	d->int_04 = limit;
+	d->int_08 = limit;
+	d->int_1c = 0;
+	d->int_14 = 0;
+	d->int_18 = 0;
+	d->int_24 = 0x33;
+
+	if (want) {
+		d->int_00 = 5;
+		d->ushort_20 = 0x03;		/* 0x03 * 2 | 1 = 0x07 */
+		d->int_1c = limit - 6;
+	} else {
+		d->int_00 = 2;
+		d->ushort_20 = 0x1c;
+	}
+}
+
+static void
+arm_rfnot(V90RDetector *d, int want, int limit)
+{
+	d->int_0c = limit;
+	d->int_10 = limit;
+	d->int_1c = 0;
+	d->int_14 = 0;
+	d->int_18 = 0;
+	d->int_24 = 0x44;
+
+	if (want) {
+		d->int_00 = 11;
+		d->ushort_20 = 0x199;		/* 0x199 * 2 | 1 = 0x333 */
+		d->int_1c = limit - 12;
+	} else {
+		d->int_00 = 4;
+		d->ushort_20 = 0x666;
+	}
+}
+
+/*
+ * One demodulator and its peers per side, and the mapping blocks and
+ * impairment detector shared.  Nothing here calls a constructor.
+ */
+static void
+p4_setup(long tag)
+{
+	unsigned lf = 0x37c1u + 0x9e37u * (unsigned)tag;
+	int s, k;
+
+	fill_bytes(mapp1_s, (unsigned)sizeof mapp1_s, lf ^ 0x8ac1u);
+	fill_bytes(mapp2_s, (unsigned)sizeof mapp2_s, lf ^ 0x1f77u);
+	fill_bytes(adi_s, (unsigned)sizeof adi_s, lf ^ 0x6d05u);
+	fill_bytes(sv_s, (unsigned)sizeof sv_s, lf ^ 0x3b21u);
+	fill_bytes(pf_s, (unsigned)sizeof pf_s, lf ^ 0x55a3u);
+
+	/*
+	 * `3 * word_0 + 0x17` is the B1d delay; the blocks also have to be
+	 * sane because four arms reach `resetNoSpectral`, which copies
+	 * `constellationSize` straight out and then walks it.
+	 */
+	MAPP1->word_0 = 3u;
+	MAPP2->word_0 = 5u;
+	for (k = 0; k < V90_CONSTELLATIONS; k++) {
+		int j;
+
+		MAPP1->constellationSize[k] = 32u;
+		MAPP2->constellationSize[k] = 24u;
+		for (j = 0; j < V90_CONSTELLATION_MAX; j++) {
+			MAPP1->constellation[k][j] =
+			    (unsigned char)((V90_CONSTELLATION_MAX - 1 - j)
+					    & 0x7f);
+			MAPP2->constellation[k][j] =
+			    (unsigned char)((V90_CONSTELLATION_MAX - 1 - j)
+					    & 0x7f);
+		}
+	}
+	for (k = 0; k < V90ADID_PHASES; k++) {
+		int j;
+
+		ADI->short_2800[k] = (short)(k & 1);
+		for (j = 0; j < V90ADID_CODES; j++) {
+			ADI->linMapp[k][j] = (short)(4000 - 20 * j);
+			ADI->linMappAlt[k][j] = (short)(3990 - 20 * j);
+		}
+	}
+
+	/*
+	 * `isV90WithEia6` reads the loop table only when `refLoop` is not
+	 * negative, so -1 leaves the whole answer to `LOOP_TYPE` -- which is
+	 * this fixture's EIA-6 axis and is planted per trial.
+	 */
+	PREFILT->refLoop = -1;
+	PREFILT->params = ARENA_PARAMS;
+
+	fill_bytes(p4d_s[0], P4D_SLOT, lf);
+	memcpy(p4d_s[1], p4d_s[0], P4D_SLOT);
+	memcpy(p4d_seedb, p4d_s[0], P4D_SLOT);
+
+	for (s = 0; s < 2; s++) {
+		V90Phase4Demodulator *d = &P4D(s);
+		V90Demapper *m = &DEM(s);
+		V90Descrambler *x = &DSC(s);
+
+		fill_bytes(dem_s[s], DEM_SLOT, lf ^ 0x77u);
+		fill_bytes(cp_s[s], CP_SLOT, lf ^ 0x31u);
+		fill_bytes(mp_s[s], MP_SLOT, lf ^ 0x9bu);
+		fill_bytes((unsigned char *)code_s[s],
+			   (unsigned)sizeof code_s[s], lf ^ 0xa5u);
+		fill_bytes(sign_s[s], NSAMPLE, lf ^ 0xc3u);
+		fill_bytes(sbstate_s[s], V90SBE_DECODER_SIZE, lf ^ 0x5eu);
+		fill_bytes((unsigned char *)cpbuf_s[s],
+			   (unsigned)sizeof cpbuf_s[s], lf ^ 0x2du);
+		/*
+		 * A CONSTANT DESCRAMBLER BUFFER, so the two taps cancel and
+		 * the demapper's own bits reach the message decoders -- which
+		 * is what makes 0x1c and 0x35 reachable at all.  Finding 4811
+		 * measured the other half of this.
+		 */
+		memset(dscbuf_s[s], 0x55, DSC_N);
+
+		d->params = ARENA_PARAMS;
+		d->mappingParams1 = MAPP1;
+		d->mappingParams2 = MAPP2;
+		d->connectionEvaluator = (V90ConnectionEvaluator *)ce_[s];
+		d->demapper = m;
+		d->descrambler = x;
+		d->cp = &CPR(s);
+		d->mp = &MPR(s);
+
+		m->params = ARENA_PARAMS;
+		m->adiDetector = ADI;
+		m->codes = code_s[s];
+		m->signs = sign_s[s];
+		m->sampleCapacity = NSAMPLE;
+		m->sampleCount = 5u;
+		m->frameStart = 0u;
+		m->bitsPerFrame = 8u;
+		m->signBitsPerFrame = 2u;
+		m->signBitGroups = 0u;
+		m->signBitGroupSize = 1u;
+		m->rbsFramePosition = 2u;
+		m->word_08 = 5u;
+		m->linearMappStudyEnabled = 0;
+		m->modulusDecoder.field_00 = 7u;
+		m->modulusDecoder.field_04 = 11u;
+		m->modulusDecoder.field_08 = 5u;
+		m->modulusDecoder.field_0c = 13u;
+		m->modulusDecoder.field_10 = 3u;
+		m->modulusDecoder.field_14 = 0u;
+		m->modulusDecoder.field_18 = 6u;
+		m->signBits.spacing = 1u;
+		m->signBits.width = 1u;
+		m->signBits.state = 0u;
+		m->signBits.decoder.state_ = sbstate_s[s];
+		m->signBits.decoder.capacity_ = V90SBE_DECODER_SIZE;
+		m->signBits.decoder.size_ = 0u;
+		m->signBits.oddDecoder.prev_ = 0;
+		m->signDecoder.prev_ = 0;
+		m->errorHistogramCount = 0u;
+		m->histogramDelay = 0;
+		m->histogramIntegration = 0;
+
+		for (k = 0; k < V90DEMAPPER_CONSTELLATIONS; k++) {
+			int j;
+
+			m->constellationSize[k] = V90DEMAPPER_LEVELS;
+			for (j = 0; j < V90DEMAPPER_LEVELS; j++)
+				m->constellation[k][j] =
+				    (short)(8000 - j * 60 - k * 7);
+		}
+
+		/* Both message decoders one bit from an answer. */
+		MPR(s).word_14 = 0u;
+		MPR(s).byte_19 = 0;
+		MPR(s).byte_1a = 1;
+		MPR(s).byte_1b = 18;
+		MPR(s).word_114 = 1u;
+		CPR(s).word_ca4 = 0u;
+		CPR(s).byte_ca9 = 0;
+		CPR(s).byte_caa = 1;
+		CPR(s).word_cac = 18u;
+		CPR(s).word_cb0 = 0u;
+		CPR(s).word_3ba8 = 1u;
+		for (k = 0; k < V90CP_BUFS; k++) {
+			CPR(s).buf[k] = cpbuf_s[s][k];
+			CPR(s).nof_buf[k] = 1u;
+		}
+
+		x->pLimit = dscbuf_s[s];
+		x->pInitOut = dscbuf_s[s] + DSC_C;
+		x->pInitTap1 = dscbuf_s[s] + DSC_C + DSC_A;
+		x->pInitTap2 = dscbuf_s[s] + DSC_C + DSC_B;
+		x->tailLength = DSC_B;
+		x->pOut = x->pInitOut;
+		x->pTap1 = x->pInitTap1;
+		x->pTap2 = x->pInitTap2;
+	}
+}
+
+static void
+p4_compare(long tag)
+{
+	unsigned n = (unsigned)sizeof(V90Phase4Demodulator);
+
+	scrub(p4d_cmp[0], p4d_s[0], P4D_SLOT, p4d_skip);
+	scrub(p4d_cmp[1], p4d_s[1], P4D_SLOT, p4d_skip);
+	diff_eq_obj_(__FILE__, __LINE__, "the phase 4 demodulator",
+		     "V90Phase4Demodulator", p4d_cmp[0], p4d_cmp[1], n, tag);
+	diff_eq_int("nothing stored past the demodulator (%ld)",
+		    memcmp(p4d_s[1] + n, p4d_seedb + n, P4D_SLOT - n) == 0, 1,
+		    tag);
+
+	scrub(dem_cmp[0], dem_s[0], DEM_SLOT, dem_skip);
+	scrub(dem_cmp[1], dem_s[1], DEM_SLOT, dem_skip);
+	diff_eq_obj_(__FILE__, __LINE__, "the demapper", "V90Demapper",
+		     dem_cmp[0], dem_cmp[1], (unsigned)sizeof(V90Demapper),
+		     tag);
+	diff_eq_int("the demapper's codes (%ld)",
+		    memcmp(code_s[0], code_s[1], sizeof code_s[0]) == 0, 1,
+		    tag);
+	diff_eq_int("the demapper's signs (%ld)",
+		    memcmp(sign_s[0], sign_s[1], sizeof sign_s[0]) == 0, 1,
+		    tag);
+	diff_eq_int("the sign decoder's state (%ld)",
+		    memcmp(sbstate_s[0], sbstate_s[1], sizeof sbstate_s[0])
+		    == 0, 1, tag);
+	diff_eq_int("the CP record (%ld)",
+		    memcmp(cp_s[0], cp_s[1],
+			   __builtin_offsetof(V90CP, buf)) == 0, 1, tag);
+	diff_eq_int("the CP record past its buffers (%ld)",
+		    memcmp(cp_s[0] + __builtin_offsetof(V90CP, word_ca0),
+			   cp_s[1] + __builtin_offsetof(V90CP, word_ca0),
+			   CP_SLOT - __builtin_offsetof(V90CP, word_ca0)) == 0,
+		    1, tag);
+	diff_eq_int("the CP record's buffers (%ld)",
+		    memcmp(cpbuf_s[0], cpbuf_s[1], sizeof cpbuf_s[0]) == 0, 1,
+		    tag);
+	diff_eq_int("the MP record (%ld)",
+		    memcmp(mp_s[0], mp_s[1], MP_SLOT) == 0, 1, tag);
+	diff_eq_int("the descrambler's buffer (%ld)",
+		    memcmp(dscbuf_s[0], dscbuf_s[1], DSC_N) == 0, 1, tag);
+	diff_eq_int("the descrambler's output cursor (%ld)",
+		    (long)(DSC(0).pOut - dscbuf_s[0]),
+		    (long)(DSC(1).pOut - dscbuf_s[1]), tag);
+	diff_eq_int("the descrambler's near tap (%ld)",
+		    (long)(DSC(0).pTap1 - dscbuf_s[0]),
+		    (long)(DSC(1).pTap1 - dscbuf_s[1]), tag);
+	diff_eq_int("the descrambler's far tap (%ld)",
+		    (long)(DSC(0).pTap2 - dscbuf_s[0]),
+		    (long)(DSC(1).pTap2 - dscbuf_s[1]), tag);
+}
+
+/*
+ * The equaliser's own state for a phase 4 trial.  Everything is planted
+ * POSITIVE and inside a short: the demodulator's detectors test `sample > 0`,
+ * and keeping `|soft|` under 32767 keeps the RESET slicer's wrap -- and with
+ * it finding 6203's excess-precision divergence -- out of these groups.  The
+ * float step sizes are FROZEN here for the same reason: `(0.0f * err) * x` is
+ * exactly zero in both precisions, so the float LMS cannot carry an 80-bit
+ * intermediate into `dfeCoefs`.  The RESET group is what drives the float LMS
+ * with a live step size, and it is the group the divergence is declared for.
+ */
+static void
+p4_equ_plant(long tag, unsigned int le, unsigned int dfe, int mmx)
+{
+	unsigned int w1c = le + 8u;
+	unsigned int k;
+
+	for (k = 0; k < ARR_F; k++) {
+		arena.lecoefs[k] = (k == 0) ? 1.0f
+		    : 0.03125f * (float)(k % 5);
+		arena.a18[k] = 8.0f
+		    * (float)(((k + (unsigned)tag) % 7) + 1u);
+		arena.dfecoefs[k] = 0.0625f * (float)(k % 3) + 0.015625f;
+		arena.a44[k] = 0.5f
+		    * (float)(((k * 3u + (unsigned)tag) % 5) + 1u);
+		arena.lewin[k] = 0.5f + 0.015625f * (float)(k % 9);
+		arena.dfewin[k] = 0.25f + 0.03125f * (float)(k % 7);
+	}
+	for (k = 0; k < V90EQU_MEAN_ERROR_LEN; k++)
+		arena.meanerr[k] = 0.125f * (float)((k % 11) + 1u);
+	for (k = 0; k < ARR_S; k++) {
+		arena.lemmx[k] = (short)(0x40 + (int)(k % 7));
+		arena.ad8[k] = (short)(0x100 + (int)(k % 5));
+		arena.aec[k] = (short)(0x200 + 16 * (int)(k % 9));
+		arena.dfemmx[k] = (short)(1 + (int)(k % 3));
+		arena.a118[k] = (short)(2 + (int)(k % 4));
+		arena.a12c[k] = (short)(3 + (int)(k % 5));
+	}
+
+	OURS.linearEquLength = THEIRS.linearEquLength = le;
+	OURS.dfeLength = THEIRS.dfeLength = dfe;
+	OURS.word_1c = THEIRS.word_1c = w1c;
+	OURS.word_20 = THEIRS.word_20 =
+	    (int)(w1c - le - 1u) - (int)((unsigned)tag % 3u);
+	OURS.word_20Saved = THEIRS.word_20Saved =
+	    (int)(w1c - le - 1u) - (int)((unsigned)tag % 3u);
+	OURS.mmxMode = THEIRS.mmxMode = mmx;
+	OURS.mmxArraysPresent = THEIRS.mmxArraysPresent = 1;
+	OURS.stateCount = THEIRS.stateCount = 0x3c3c;
+	OURS.linearEquBeta = THEIRS.linearEquBeta = 0.0f;
+	OURS.dfeBeta = THEIRS.dfeBeta = 0.0f;
+	OURS.linearEquMmxOutputConversionFactor =
+	    THEIRS.linearEquMmxOutputConversionFactor = 1024;
+	OURS.dfeMmxOutputConversionFactor =
+	    THEIRS.dfeMmxOutputConversionFactor = 512;
+	OURS.linearEquMmxBeta = THEIRS.linearEquMmxBeta = 4;
+	OURS.linearEquMmxShift = THEIRS.linearEquMmxShift = 12;
+	OURS.dfeMmxBeta = THEIRS.dfeMmxBeta = 2;
+	OURS.dfeMmxShift = THEIRS.dfeMmxShift = 10;
+	OURS.word_68 = THEIRS.word_68 = 0;
+	OURS.word_6c = THEIRS.word_6c = 12.5f;
+	OURS.word_70 = THEIRS.word_70 = (unsigned)(tag % 3);
+	OURS.word_78 = THEIRS.word_78 = 0x1000u;
+	OURS.word_7c = THEIRS.word_7c = 3.5f;
+	OURS.word_94 = THEIRS.word_94 = (unsigned)(tag % 4);
+	OURS.errorEnergyMeanBlockLen = THEIRS.errorEnergyMeanBlockLen = 4;
+	OURS.errorEnergyMeanK = THEIRS.errorEnergyMeanK = 0.75f;
+	OURS.meanErrorEnergyCurrent = THEIRS.meanErrorEnergyCurrent = 2.25f;
+	OURS.meanErrorEnergyMean = THEIRS.meanErrorEnergyMean = 1.5f;
+	OURS.word_a4 = THEIRS.word_a4 = (unsigned)(tag & 1);
+	OURS.meanErrorCount = THEIRS.meanErrorCount = 3u;
+	OURS.meanErrorFull = THEIRS.meanErrorFull = 0;
+	OURS.word_34 = THEIRS.word_34 = (unsigned)(tag % 4);
+	OURS.linearEquWindowHalf = THEIRS.linearEquWindowHalf =
+	    le > 2u ? 2u : 1u;
+	OURS.dfeWindowHalf = THEIRS.dfeWindowHalf = dfe > 2u ? 2u : 1u;
+	OURS.timingOffset = THEIRS.timingOffset = 0.125f;
+	OURS.short_08 = THEIRS.short_08 = 2;
+	OURS.savedBllState = THEIRS.savedBllState = 0;
+	OURS.ph4MeanErrorEnergyBeforeUpdate =
+	    THEIRS.ph4MeanErrorEnergyBeforeUpdate = 1.0f;
+	OURS.ph4MeanErrorEnergyBeforeToAfterUpdateRatio =
+	    THEIRS.ph4MeanErrorEnergyBeforeToAfterUpdateRatio = 1.0f;
+
+	OURS.connEval = (V90ConnectionEvaluator *)ce_[0];
+	THEIRS.connEval = (V90ConnectionEvaluator *)ce_[1];
+	OURS.phase4Demod = (V90Phase4Demodulator *)p4d_s[0];
+	THEIRS.phase4Demod = (V90Phase4Demodulator *)p4d_s[1];
+	OURS.demapper = (V90Demapper *)dem_s[0];
+	THEIRS.demapper = (V90Demapper *)dem_s[1];
+	OURS.spectralVerifier = THEIRS.spectralVerifier = SPECVER;
+	OURS.preFilter = THEIRS.preFilter = PREFILT;
+}
+
+/*
+ * The rows.  Each names a demodulator entry state and the counter that puts
+ * it one sample from the progress code in the last column; the code itself is
+ * NEVER planted and is read back off the reference peer after the call, which
+ * is 6201's rule for an axis a callee clears on entry.
+ */
+struct p4_row {
+	int		state;		/* the demodulator's entry state */
+	int		rnot;		/* arm rDetector1 for RNot	 */
+	int		v92;		/* sessionFlag			 */
+	unsigned int	count;		/* countInState, one short	 */
+	int		want;		/* the progress code aimed at	 */
+};
+
+static const struct p4_row p4_rows[] = {
+	{ P4D_STATE_WAIT_FOR_RI,	0, 0, 0x10u,  0    },
+	{ P4D_STATE_WAIT_FOR_RI_NOT,	1, 0, 0x10u,  0x17 },
+	{ P4D_STATE_TRN2D_DD,		0, 0, 0x1fu,  0x18 },
+	{ P4D_STATE_TRN2D_DD,		0, 0, 0x3fu,  0x19 },
+	{ P4D_STATE_WAIT_FOR_ED,	0, 0, 0x10u,  0x1c },
+	{ P4D_STATE_B1D,		0, 0, 0x11fu, 0x1d },
+	{ P4D_STATE_WAIT_FOR_RT_NOT,	1, 0, 0x10u,  0x28 },
+	{ P4D_STATE_RD_DETECTED,	1, 0, 0x10u,  0x2c },
+	{ P4D_STATE_WAIT_FOR_V90CP,	0, 1, 0x10u,  0x35 }
+};
+#define NP4ROW ((int)(sizeof(p4_rows) / sizeof(p4_rows[0])))
+
+static int
+run_p4_arms(void)
+{
+	static const int est_v[] = {
+		V90EQU_STATE_PHASE4, V90EQU_STATE_RRN, V90EQU_STATE_FPE
+	};
+	static const unsigned int n_v[] = { 4u, 7u };
+	long tag = 5720000;
+	int ri, ei, mmx, ni, opt;
+	int saw_code[0x40];
+	int saw_mmx = 0, saw_float = 0, saw_reconv = 0, saw_mmx_after = 0;
+	int saw_b4 = 0, saw_b8 = 0, saw_bll = 0, saw_beta = 0;
+	int saw_ratio = 0, saw_wrap = 0, saw_close = 0;
+	int sep_sym = 0, sep_state = 0;
+	long prev_sym = -1, prev_state = -1;
+	int i;
+
+	for (i = 0; i < 0x40; i++)
+		saw_code[i] = 0;
+
+	diff_begin("V90Equalizer::process, the phase 4 state arms");
+
+	dsplib_debug_capture_on = 1;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+
+	for (ri = 0; ri < NP4ROW; ri++)
+	    for (ei = 0; ei < 3; ei++)
+		for (mmx = 0; mmx < 2; mmx++)
+		    for (ni = 0; ni < 2; ni++)
+			for (opt = 0; opt < 4; opt++) {
+				unsigned int le = (ri & 1) ? 8u : 4u;
+				unsigned int dfe = (ei & 1) ? 4u : 2u;
+				unsigned int n = n_v[ni];
+				unsigned int no_a = 0, no_b = 0;
+				unsigned int k;
+				int st_before;
+				int code;
+
+				/*
+				 * `mmxMode` WITH STATE 2 IS UNDRIVABLE, and it
+				 * is 6201 §2 rather than a gap: PHASE4 clamps
+				 * and slices `soft`, which the fixed-point arm
+				 * NEVER WRITES -- the two sides read a stack
+				 * slot no path has filled and disagree by
+				 * whatever their frames held.  The fixed-point
+				 * representation is only ever entered from the
+				 * data phase, and states 3, 4 and 5 are
+				 * exactly the three that read `softInt`.
+				 * Measured before it was believed: this grid
+				 * ran with state 2 included and trial 5720009
+				 * came back with our `outSym[0]` at the x87
+				 * indefinite and the blob's at 0x19.
+				 */
+				if (mmx && est_v[ei] == V90EQU_STATE_PHASE4)
+					continue;
+
+				tag++;
+				seed(tag);
+				fill_arena(tag);
+				seed_ce_pair(tag);
+				wire(&OURS);
+				wire(&THEIRS);
+				p4_setup(tag);
+				plant_params();
+				p4_equ_plant(tag, le, dfe, mmx);
+
+				OURS.state = THEIRS.state = est_v[ei];
+				OURS.quickConnect = THEIRS.quickConnect =
+				    (int)(tag & 1);
+				OURS.flag_144 = THEIRS.flag_144 =
+				    (short)(tag & 1);
+				OURS.flag_146 = THEIRS.flag_146 =
+				    (short)((tag >> 1) & 1);
+				ARENA_PARAMS->LOOP_TYPE = (opt & 1) ? 6 : 2;
+				SPECVER->word_28 = (opt & 2) ? 2u : 1u;
+				((V90ConnectionEvaluator *)ce_[0])->word_90 =
+				    ((V90ConnectionEvaluator *)ce_[1])->word_90
+				    = (unsigned)((tag >> 2) & 1);
+
+				st_before = p4_rows[ri].state;
+				for (k = 0; k < 2; k++) {
+					V90Phase4Demodulator *d =
+					    &P4D((int)k);
+
+					d->state = (Phase4DemodulatorState)
+					    p4_rows[ri].state;
+					d->sessionFlag =
+					    (unsigned)p4_rows[ri].v92;
+					d->countInState = p4_rows[ri].count;
+					d->trn2dDDLength = 0x40;
+					d->linearMappStudyStart = 0x20;
+					d->b1dBits = 0x60u;
+					d->b1dZeros = 7u;
+					d->nbits = 0u;
+					d->int_0028 = 0;
+					d->uchar_0030 = 1;
+					d->int_0038 = 1;
+					d->int_003c = 1;
+					d->int_0040 = 1;
+					d->int_0044 = 1;
+					d->int_0048 = 0;
+					d->uint_0034 = 0u;
+					d->uint_004c = 0u;
+					d->errorEnergyBeforeEC = 4.0f;
+					d->errorEnergyAfterEC = 1.0f;
+					d->int_3510 = 0;
+					arm_rnot(&d->rDetector1,
+						 p4_rows[ri].rnot, 0x60);
+					arm_rfnot(&d->rDetector2, 0, 0x60);
+				}
+
+				for (k = 0; k < NIN; k++) {
+					float v = 6.0f
+					    * (float)(((k + (unsigned)tag) % 5u)
+						      + 1u);
+
+					in_[0][k] = in_[1][k] = v;
+					outsym_[0][k] = outsym_[1][k] =
+					    (short)(0x1234 + k);
+					outflt_[0][k] = outflt_[1][k] =
+					    -1.5f * (float)k;
+				}
+
+				arena_snapshot();
+				dsplib_debug_capture_reset();
+				OURS.process(in_[0], n, outsym_[0], outflt_[0],
+					     no_a);
+				arena_switch();
+				ref_equ_process(&THEIRS, in_[1], n, outsym_[1],
+						outflt_[1], &no_b);
+
+				diff_eq_int("nOut (%ld)", (long)no_a,
+					    (long)no_b, tag);
+				diff_eq_obj_(__FILE__, __LINE__, "outSym",
+					     "short[NIN]", outsym_[0],
+					     outsym_[1], sizeof(outsym_[0]),
+					     tag);
+				diff_eq_obj_(__FILE__, __LINE__, "outFloat",
+					     "float[NIN]", outflt_[0],
+					     outflt_[1], sizeof(outflt_[0]),
+					     tag);
+				diff_eq_int("in is not written (%ld)",
+					    memcmp(in_[0], in_[1],
+						   sizeof(in_[0])) == 0, 1,
+					    tag);
+
+				/* The three fields the sides MEAN to differ in. */
+				diff_eq_int("the split peers are not written "
+					    "(%ld)",
+					    (long)(OURS.connEval
+					     == (V90ConnectionEvaluator *)ce_[0]
+					     && THEIRS.connEval
+					     == (V90ConnectionEvaluator *)ce_[1]
+					     && OURS.phase4Demod
+					     == (V90Phase4Demodulator *)p4d_s[0]
+					     && THEIRS.phase4Demod
+					     == (V90Phase4Demodulator *)p4d_s[1]
+					     && OURS.demapper
+					     == (V90Demapper *)dem_s[0]
+					     && THEIRS.demapper
+					     == (V90Demapper *)dem_s[1]), 1,
+					    tag);
+				OURS.connEval = THEIRS.connEval =
+				    (V90ConnectionEvaluator *)ce_[0];
+				OURS.phase4Demod = THEIRS.phase4Demod =
+				    (V90Phase4Demodulator *)p4d_s[0];
+				OURS.demapper = THEIRS.demapper =
+				    (V90Demapper *)dem_s[0];
+
+				diff_eq_obj("after process", V90Equalizer,
+					    &OURS, &THEIRS, tag);
+				arena_compare("the arena after process", tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "the connection evaluator",
+					     "V90ConnectionEvaluator", ce_[0],
+					     ce_[1],
+					     sizeof(V90ConnectionEvaluator),
+					     tag);
+				p4_compare(tag);
+				diff_eq_int("no store past the object (%ld)",
+					    guard_equal(), 1, tag);
+				diff_eq_int("transcript (%ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, tag);
+
+				/*
+				 * THE COUNTERS, every one read off the
+				 * REFERENCE peer after the call.  `stateCount`
+				 * is what the object copied out of
+				 * `int_0028`, so it records the progress code
+				 * the demodulator actually PRODUCED -- not the
+				 * one this row aimed at.
+				 */
+				code = (int)THEIRS.stateCount;
+				if (code >= 0 && code < 0x40)
+					saw_code[code] = 1;
+				if (mmx)
+					saw_mmx = 1;
+				else
+					saw_float = 1;
+				/*
+				 * A RE-CONVERT RAN ONLY IF THE MODE FLIPPED.
+				 * `enterDataPhase` returns non-zero exactly
+				 * when `convertEqualizerToMmx` took, and the
+				 * three re-convert blocks are its `if` body --
+				 * so `mmxMode` rising from 0 within the call
+				 * is the observable, and it is one the
+				 * fixture cannot plant.
+				 */
+				if (!mmx && THEIRS.mmxMode) {
+					saw_reconv = 1;
+					if (no_b > 1)
+						saw_mmx_after = 1;
+					if (arena.b4[0] != arena_save.b4[0]
+					    || arena.b4[1] != arena_save.b4[1])
+						saw_b4 = 1;
+					if (arena.b8[0] != arena_save.b8[0])
+						saw_b8 = 1;
+				}
+				if (memcmp(arena.rsamp, arena_save.rsamp,
+					   sizeof(arena.rsamp)) != 0)
+					saw_bll = 1;
+				if (THEIRS.linearEquBeta
+				    != arena_save.lecoefs[0] * 0.0f
+				    || THEIRS.dfeBeta != 0.0f)
+					saw_beta = 1;
+				if (THEIRS.ph4MeanErrorEnergyBeforeToAfterUpdateRatio
+				    != 1.0f)
+					saw_ratio = 1;
+				if (le > 0
+				    && THEIRS.word_20
+				       > (int)(le + 8u - le - 1u)
+					 - (int)((unsigned)tag % 3u))
+					saw_wrap = 1;
+				if (THEIRS.word_70 == 0 && no_b != 0)
+					saw_close = 1;
+
+				if (prev_sym >= 0
+				    && (long)outsym_[1][0] != prev_sym)
+					sep_sym++;
+				if (prev_state >= 0
+				    && (long)THEIRS.state != prev_state)
+					sep_state++;
+				prev_sym = outsym_[1][0];
+				prev_state = THEIRS.state;
+				(void)st_before;
+			}
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("the float representation was driven", saw_float, 1, 0);
+	diff_eq_int("the fixed-point representation was driven", saw_mmx, 1,
+		    0);
+	diff_eq_int("a re-convert block ran", saw_reconv, 1, 0);
+	diff_eq_int("and the fixed-point arm ran after it", saw_mmx_after, 1,
+		    0);
+	diff_eq_int("the re-convert refilled block_b4", saw_b4, 1, 0);
+	diff_eq_int("the re-convert refilled block_b8", saw_b8, 1, 0);
+	diff_eq_int("the resampler was steered", saw_bll, 1, 0);
+	diff_eq_int("a step size was moved", saw_beta, 1, 0);
+	diff_eq_int("the before/after ratio was computed", saw_ratio, 1, 0);
+	diff_eq_int("the cursor wrapped", saw_wrap, 1, 0);
+	diff_eq_int("an error block closed", saw_close, 1, 0);
+	diff_eq_int("the symbol output separated trials",
+		    sep_sym > 16 ? 1 : 0, 1, 0);
+	diff_eq_int("the equaliser state separated trials",
+		    sep_state > 4 ? 1 : 0, 1, 0);
+
+	/*
+	 * PER PROGRESS CODE, and this is the check the row table cannot make
+	 * for itself: a row aims at a code and the demodulator decides.  Each
+	 * of these fails if the sub-case it names was never produced.
+	 */
+	diff_eq_int("progress code 0x17 was produced", saw_code[0x17], 1, 0);
+	diff_eq_int("progress code 0x18 was produced", saw_code[0x18], 1, 0);
+	diff_eq_int("progress code 0x19 was produced", saw_code[0x19], 1, 0);
+	diff_eq_int("progress code 0x1c was produced", saw_code[0x1c], 1, 0);
+	diff_eq_int("progress code 0x1d was produced", saw_code[0x1d], 1, 0);
+	diff_eq_int("progress code 0x28 was produced", saw_code[0x28], 1, 0);
+	diff_eq_int("progress code 0x2c was produced", saw_code[0x2c], 1, 0);
+	diff_eq_int("progress code 0x35 was produced", saw_code[0x35], 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
-	return run_reset_arm();
+	int rc = 0;
+
+	if (run_reset_arm())
+		rc = 1;
+	if (run_p4_arms())
+		rc = 1;
+	return rc;
 }
