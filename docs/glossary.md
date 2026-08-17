@@ -96,3 +96,22 @@ Two concrete costs already paid for guessing an expansion:
 
 The rule that follows: treat an abbreviation as a hypothesis until the code
 confirms it, and record which it is.
+
+**pre-emphasis, and how it is spelled here.** The object spells it **`preemp`**,
+one 'h' short of the English word, and so does this tree: `preemp_index`,
+`preemp0`, `m->preemp`, `preempindex` (the object's own name for the selector),
+`tx_preemp`. Our own additions were briefly spelled `preemph` and have been
+renamed to match; nothing in `src/`, `include/` or `tools/` uses the long form
+any more.
+
+**Grep for `preemp`, never `preemph`.** Searching the long form finds nothing
+and invites the conclusion that the subsystem is absent -- which is exactly what
+happened in finding 1959, where four searches missed the entire transmit-side
+implementation and a "we never comply with the far end's request" finding was
+one step from being written. Findings numbered 1956-1959 still contain the old
+spelling because the record is append-only and is not rewritten.
+
+Two related names that are NOT this: `ec_prem_coef_*` is the echo canceller's
+pre-filter, and `V34PREEMPHASIS` is the object's debug string prefix, which
+keeps the long spelling because the differential tier compares transcripts
+character for character.

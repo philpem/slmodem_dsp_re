@@ -108,7 +108,7 @@ os.chdir(REAL_TREE)
 #
 # A MUTATION CAN HANG THE BINARY, and until one did there was no timeout here.
 #
-# `probe_preemph`'s counter is advanced before the test that leaves its loop.
+# `probe_preemp`'s counter is advanced before the test that leaves its loop.
 # Mutating the advance to below that test -- which is exactly the claim worth
 # breaking -- produces a loop with no exit, and the sweep then sat on one
 # `t_v34hshak` for sixty-two minutes with no output, because mutate.py prints

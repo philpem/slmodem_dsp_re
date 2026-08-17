@@ -31,32 +31,32 @@
  },
  {
   "label": "the entry's baud compare is `>=` rather than `>`",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
-  "replace": "\t    || ((int)rx->f124 >= 7 * (int)obj->faa96",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->f124 >= 7 * (int)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's multiplier is six, not seven",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
-  "replace": "\t    || ((int)rx->f124 > 6 * (int)obj->faa96",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->f124 > 6 * (int)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's product is TRUNCATED to a short",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
-  "replace": "\t    || ((int)rx->f124 > (short)(7 * (int)obj->faa96)",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->f124 > (short)(7 * (int)obj->baud_rate)",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's baud rate is read UNSIGNED",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
-  "replace": "\t    || ((int)rx->f124 > 7 * (int)(unsigned short)obj->faa96",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->f124 > 7 * (int)(unsigned short)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's counter is read UNSIGNED",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->faa96",
-  "replace": "\t    || ((int)(unsigned short)rx->f124 > 7 * (int)obj->faa96",
+  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)(unsigned short)rx->f124 > 7 * (int)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
@@ -301,20 +301,20 @@
  },
  {
   "label": "the MD length's ratio is 0x23e",
-  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)",
-  "replace": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23e) >> 14)",
+  "find": "\t\tshort md = (short)(((((int)obj->baud_rate * 0x23d) >> 14)",
+  "replace": "\t\tshort md = (short)(((((int)obj->baud_rate * 0x23e) >> 14)",
   "fn": "t4_receive_body"
  },
  {
   "label": "the MD length shifts thirteen, not fourteen",
-  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)",
-  "replace": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 13)",
+  "find": "\t\tshort md = (short)(((((int)obj->baud_rate * 0x23d) >> 14)",
+  "replace": "\t\tshort md = (short)(((((int)obj->baud_rate * 0x23d) >> 13)",
   "fn": "t4_receive_body"
  },
  {
   "label": "the MD length reads its baud rate UNSIGNED",
-  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)",
-  "replace": "\t\tshort md = (short)(((((int)(unsigned short)obj->faa96 * 0x23d) >> 14)",
+  "find": "\t\tshort md = (short)(((((int)obj->baud_rate * 0x23d) >> 14)",
+  "replace": "\t\tshort md = (short)(((((int)(unsigned short)obj->baud_rate * 0x23d) >> 14)",
   "fn": "t4_receive_body"
  },
  {
@@ -333,8 +333,8 @@
  },
  {
   "label": "the MD length's bias is added before the multiply",
-  "find": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14)\n\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN)) + 0x1e);",
-  "replace": "\t\tshort md = (short)(((((int)obj->faa96 * 0x23d) >> 14) + 0x1e)\n\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN));",
+  "find": "\t\tshort md = (short)(((((int)obj->baud_rate * 0x23d) >> 14)\n\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN)) + 0x1e);",
+  "replace": "\t\tshort md = (short)(((((int)obj->baud_rate * 0x23d) >> 14) + 0x1e)\n\t\t\t\t    * (int)T4_U16(obj, T4_MDLEN));",
   "fn": "t4_receive_body"
  },
  {

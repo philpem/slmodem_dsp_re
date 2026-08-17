@@ -17,17 +17,9 @@
     "",
     "It is not a place to silence an inconvenient reference.  An entry needs",
     "a branch that really contains the target and a reason a reader can",
-    "check."
+    "check.",
+    "",
+    "EMPTY, and kept rather than deleted: the mechanism is documented here for the next branch that has to be held.  Its first entry covered 13 findings on improve/v34-training and was removed the moment that branch merged -- the gate reported them STALE and refused, which is the property this file exists to have."
   ],
-
-  "pending": [
-    {
-      "kind": "finding",
-      "refs": ["1904", "1906", "1907", "1911", "1914", "1916", "1918",
-               "1922", "1940", "1941", "1956", "1960", "3200"],
-      "branch": "improve/v34-training",
-      "why": "The bench-side findings that justify the testbench tools citing them -- the pre-emphasis estimator work (1904-1916), the channel shim's model (1918-1956), the shape matcher (1960) and #170's SNR derivation (3200).  Held unmerged until the V.34 receiver deficit is settled, because the branch also carries pre-emphasis and rate-collapse SOURCE changes that are not wanted on master yet.  The findings themselves are sound; only the branch is held.",
-      "cited_by": "testbench/ -- chanshim.py, fitplot.py, freezescan.py, g711level.py, lastlink.py, linesim.py, preemphshape.py, replay.py, snrblocks.py, test_preempshape.py, ab149scan.py"
-    }
-  ]
+  "pending": []
 }
