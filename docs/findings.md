@@ -67829,3 +67829,95 @@ length and not a scale factor, and `8000 symbols/s * K bits per 12 symbols /
 12` is bits per second.  That is a third independent statement that +0x0f8 is
 a bit rate, arrived at from the V.92 side rather than from V.34's
 `2400 * txbits`.
+
+## 5510. `v34_object::pac18` IS A `K56FlexFloModem *`, AND THE FIELD IS STILL NOT RETYPED
+
+v34fsk.h has +0xac18 as "a second pointer into the C++ side", named `pac18`
+from what stores it: `vpcm_create` puts `K56FLEX_Create`'s twenty-byte block
+there (through root +0xac44), and `V34GiveINFO1aBits` reads exactly one thing
+back through it -- an int at +0xc, printed as the local PCM type.
+
+`VPcmV34GetVisualDiagnostics` passes it as the first STACK argument of five
+`K56FlexFloModem` members -- `getConstellation`, `getLinearEqualizer`,
+`getDFE`, `getDecisionErrors`, `getResamplerPhase` and `getResamplerOffset`
+between them, at 0x73c3, 0x7543, 0x756c, 0x7595, 0x75be and 0x75e5 -- and that
+slot is `this` in this object (finding 215).  So the block `K56FLEX_Create`
+allocates IS the K56flex modem, which `K56FlexFloModem.h` could previously
+only say was "NOT settled": the class's seventeen members do not touch `this`,
+so no member bounds a size to compare against twenty.
+
+**THE FIELD KEEPS ITS `void *` ALL THE SAME, and that is not timidity.**
+`K56FlexFloModem` has no data members -- it cannot, since nothing in the class
+reads one -- so `sizeof` is 1 and the type carries no layout at all.  Declaring
++0xac18 as a `K56FlexFloModem *` would therefore add no information, while
+making `V34GiveINFO1aBits`'s read of +0xc a read past the end of the declared
+type in a translation unit that has no business knowing about the class.  The
+cast is at the one use site, with this finding on it.
+
+**WHAT IT DOES CHANGE is the return type of the six stubs.**  They were
+declared `void` in K56FlexFloModem.h with "no `void` below was measured"
+against them.  Each is `31 c0 c3`, and this function consumes the result of
+four of the six into `%ebx` and returns it, so the value is measured at both
+ends: `int` now, on the same evidence and with the same limits as the two
+`getK56Flex*Bits` the file already had.  The other two -- the resampler pair --
+are called and their answer is DISCARDED, which is the caller's doing and is
+reproduced.
+
+## 5511. THE VISUAL DIAGNOSTICS ARE A STRIP CHART, AND THAT IS WHAT `VPcmFloModem::sweepCounter` IS FOR
+
+`VPcmFloModem::getConstellation` does not return the constellation points the
+demodulator decided.  It returns a PLOT: the imaginary half of each
+`int_complex` is the sample, and the real half is a horizontal coordinate the
+function synthesises from a counter at +0x1740 that advances once per point
+and is never reset.
+
+```
+  phase 3    x = 35 * ((n / 5) % 750) - 14000
+  otherwise  x = 35 * ((n / 15) % 100 + 140 * ((word_260 + i) % 6)) - 14000
+```
+
+The second is six lanes 4,900 units apart, each 3,465 units wide, selected by
+`(word_260 + i) % 6` -- one lane per V.90 frame phase, so the display separates
+the six phases instead of overlaying them.  That is the same six
+`V90ADID_PHASES` counts and the same six the RBS pattern packs, seen from the
+display side.
+
+**THE COUNTER IS `int` AND NOT `unsigned int`, AND THE DIVISIONS ARE WHAT SAY
+SO.**  0xf43d and 0xf51d are `imul` against a reciprocal followed by
+`sar $0x1f` and a `sub` -- the quotient fix-up a negative dividend needs.  An
+unsigned divide by 15 or by 5 is `mul` then `shr` with no fix-up at all.  The
+field had only a store of zero behind it (the constructor's) when it was
+carved out of `pad_173f`, which fixes a width and nothing else; it is
+`sweepCounter` and `int` now.  CLAUDE.md's forced column, finding 613's case
+with a division rather than a table index behind it.  It WILL go negative: it
+is incremented once per point for the life of the session.
+
+**THE OTHER FOUR DIAGNOSTICS ARE NOT PLOTS** and that is the contrast that
+makes the reading solid rather than a story about the arithmetic.  The two
+equaliser getters put the coefficient in the imaginary half and zero in the
+real one; the two resampler ones put their value in the real half and zero in
+the imaginary; only the constellation fills both, and only the constellation
+touches the counter.  A caller plotting `re` against `im` gets a strip chart
+from one selector and a column of points from the others, which is what an
+array indexed by position gives you for free.
+
+## 5512. THE V.34 EQUALISER ARM'S CAP OF 80 IS `V34_EQ_TAPS`, ARRIVED AT FROM THE OTHER SIDE
+
+`VPcmV34GetVisualDiagnostics` selector 1's V.34 arm clamps `maxCount` against
+the literal 0x50 (`cmp $0x50,%ebx; jbe` at 0x7356) and then walks two arrays at
+0x50c and 0x5ac off the V.34 receiver.  Both facts were read out of this
+function, and neither needed the other:
+
+    0x264 (the receiver) + 0x3cc (V34_RX_EQ_OFFSET) + 0x140 = 0x770 = obj+0x50c
+    0x264               + 0x3cc                    + 0x1e0 = 0x810 = obj+0x5ac
+
+which are `v34_equalizer::re` and `::im`, whose declared length in v34filt.h is
+`V34_EQ_TAPS` = 80 and whose separation is 0xa0 = 160 bytes = 80 shorts.  So
+the literal in the object and the array bound in the header are the same
+eighty, established from two directions that share no evidence: one is a
+compare immediate in a function nobody had read, the other is a struct layout
+recovered from the equaliser's own adapt and filter loops.
+
+Written as `V34_EQ_TAPS` rather than 0x50 for exactly that reason -- the name
+carries the derivation and the number does not, which is docs/cleanup.md's
+test for when a constant has earned one.

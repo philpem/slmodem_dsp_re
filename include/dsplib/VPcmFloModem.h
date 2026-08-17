@@ -102,6 +102,9 @@
 #include "dsplib/V92Modem.h"		/* embedded at +0x6124, 0xaac   */
 #include "dsplib/V92Phase2Info.h"
 
+/* The three getters below take one; include/dsplib/int_complex.h defines it. */
+struct int_complex;
+
 /* A pointer only; src/pump/v90/VPcmFloModem.cpp includes the definition. */
 class V92Parameters;
 
@@ -209,6 +212,32 @@ public:
 	 */
 	void setV34BaudForV90();
 	void setV34BaudForV34();
+
+	/*
+	 * --- THE THREE VISUAL DIAGNOSTICS -----------------------------------
+	 *
+	 * `VPcmV34GetVisualDiagnostics` dispatches to these three for a PCM
+	 * session; see src/pump/v34/v34diag.cpp for the dispatch and
+	 * include/dsplib/int_complex.h for what a point is.
+	 *
+	 * ARGUMENT TYPES ARE THE MANGLING'S and exact --
+	 * `P11int_complexm` is `(int_complex *, unsigned long)`.  RETURN
+	 * TYPES ARE NOT MANGLED (docs/v90cpp.md); all three leave the number
+	 * of points written in %eax on every path, including zero on the
+	 * paths that write none, and `unsigned long` is that count with the
+	 * same width and signedness as the bound it was clamped against.  A
+	 * `size_t` or an `unsigned int` return would compile identically.
+	 *
+	 * ALL THREE ANSWER NOTHING UNLESS A PCM RECEIVER IS RUNNING: the
+	 * first thing each does is `if (pcmSessionType != 0 && info0Layout
+	 * == 0) return 0`, which is the object's `test`/`je` pair at 0xf3c1
+	 * and 0xf3cd and its twins.
+	 */
+	unsigned long getConstellation(int_complex *points,
+				       unsigned long maxCount);
+	unsigned long getLinearEqualizer(int_complex *points,
+					 unsigned long maxCount);
+	unsigned long getDFE(int_complex *points, unsigned long maxCount);
 
 	/*
 	 * --- FOUR MEMBERS THIS TREE HAS NOT WRITTEN --------------------------
@@ -367,14 +396,30 @@ public:
 	unsigned char pad_173f[1];			/* +0x173f         */
 
 	/*
-	 * +0x1740  Four bytes the constructor zeroes
-	 * (`mov %ebp,0x1740(%ebx)` at 0xfc10, with %ebp zero) and nothing
-	 * else in this tree touches.  Carved out of `pad_173f`, which used to
-	 * run from +0x173f to +0x1758; the two spans either side of it are
-	 * still unmodelled.  Offset-named -- a store of zero says a field is
-	 * there and four bytes wide, and nothing else.
+	 * +0x1740  THE VISUAL DIAGNOSTICS SWEEP COUNTER, and it is `int`
+	 * rather than `unsigned int` because `getConstellation` DIVIDES it.
+	 *
+	 * The constructor zeroes it (`mov %ebp,0x1740(%ebx)` at 0xfc10, with
+	 * %ebp zero) and that is all this tree could see when the field was
+	 * carved out of `pad_173f`; a store of zero says a field is there and
+	 * four bytes wide and nothing else.  `getConstellation` reads it now,
+	 * once per point, and steps the horizontal coordinate of the trace
+	 * with `counter / 15` in the data phase and `counter / 5` in phase 3.
+	 *
+	 * BOTH DIVISIONS ARE SIGNED, WHICH IS FORCED: 0xf43d and 0xf51d are
+	 * `imul` against a reciprocal followed by `sar $0x1f` and a `sub`,
+	 * which is the quotient fix-up a negative dividend needs.  An unsigned
+	 * divide by 15 or by 5 is `mul` then `shr` with no fix-up at all.  So
+	 * the declared type is `int` -- CLAUDE.md's forced column, finding
+	 * 613's case with a division rather than a table index behind it.
+	 * The field WILL go negative: it is incremented once per point
+	 * forever and never reset.
+	 *
+	 * `sweepCounter` and not `traceX`: what it counts is calls to
+	 * `getConstellation`, one per point, and the coordinate is derived
+	 * from it rather than stored in it.
 	 */
-	unsigned int word_1740;				/* +0x1740         */
+	int sweepCounter;				/* +0x1740         */
 	unsigned char pad_1744[0x1758 - 0x1744];	/* +0x1744         */
 
 	/*

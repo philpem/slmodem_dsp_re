@@ -1072,7 +1072,7 @@
    }
   },
   "v34diag": {
-   "key": "6842dfba361e5cbd49584adc0683b30c2efb8c6f606505249dd7e86eb662e25b",
+   "key": "b1bba95091440edb915373bb5480974671cf64c3fadb00d914422e7b3be96094",
    "summary": "38 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x228 is widened unsigned": "caught",
@@ -1113,6 +1113,51 @@
     "the renegotiation total counts only the local end": "caught",
     "the renegotiation total is computed unsigned": "caught",
     "the two latched bit rates are swapped": "caught"
+   }
+  },
+  "v34diagflo": {
+   "key": "80fc5dc33552917cbd427323a8ac9ef73def087d11a7ed4751c0a1dd64f2d0cd",
+   "summary": "27 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "getConstellation: phase 3 and the data phase are exchanged": "caught",
+    "getConstellation: the PCM guard is inverted": "caught",
+    "getConstellation: the count is not clamped": "caught",
+    "getConstellation: the data sweep advances every fourteenth point": "caught",
+    "getConstellation: the data sweep is 99 positions": "caught",
+    "getConstellation: the horizontal step is 34": "caught",
+    "getConstellation: the lane ignores word_260": "caught",
+    "getConstellation: the lanes are 139 positions apart": "caught",
+    "getConstellation: the origin is not subtracted": "caught",
+    "getConstellation: the phase-3 sweep advances every fourth point": "caught",
+    "getConstellation: the phase-3 sweep is 749 positions": "caught",
+    "getConstellation: the sample rounds to nearest": "caught",
+    "getConstellation: the scale is 1.8": "caught",
+    "getConstellation: the scale is a float, not a double": "caught",
+    "getConstellation: the sweep counter does not advance": "caught",
+    "getConstellation: the sweep counter is unsigned": "caught",
+    "getConstellation: there are five lanes": "caught",
+    "getDFE: the PCM guard is dropped": "caught",
+    "getDFE: the count is not clamped": "caught",
+    "getDFE: the linear equaliser's taps are reported": "caught",
+    "getLinearEqualizer: the DFE's taps are reported": "caught",
+    "getLinearEqualizer: the PCM guard is dropped": "caught",
+    "getLinearEqualizer: the count is not clamped": "caught",
+    "getLinearEqualizer: the tap goes in the real half": "caught",
+    "the equaliser scale is a double": "equivalent",
+    "the equaliser scale is a thousand": "caught",
+    "the phase-3 test is against zero": "caught"
+   }
+  },
+  "v34diagk56": {
+   "key": "5403d0fe46412d866dcc3ccadcedef7d4e94d26c58fcb7cf9a24a52fab9fe8a2",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "K56flex getConstellation reports a point": "caught",
+    "K56flex getDFE reports a point": "caught",
+    "K56flex getDecisionErrors reports a point": "caught",
+    "K56flex getLinearEqualizer reports a point": "caught",
+    "K56flex getResamplerOffset writes the point it is handed": "caught",
+    "K56flex getResamplerPhase writes the point it is handed": "caught"
    }
   },
   "v34filters": {
@@ -4122,6 +4167,40 @@
     "the preliminary report has tx and rx swapped": "caught",
     "the receive divisor is not halved": "caught",
     "the receive divisor table is indexed without the use_max stride": "caught"
+   }
+  },
+  "v34vdiag": {
+   "key": "f8c43018367457d5ba4dea4cb90c0a291ed7db3fd38a2b05970385b9bb97d94e",
+   "summary": "28 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "selector 0: the V.34 ring is not drained": "caught",
+    "selector 0: the V.90 role test is inverted": "caught",
+    "selector 0: the point is not doubled": "caught",
+    "selector 0: the ring count is not clamped": "caught",
+    "selector 0: the ring count is read unsigned": "equivalent",
+    "selector 0: the two halves of a point are swapped": "caught",
+    "selector 1: the equaliser cap is not applied": "caught",
+    "selector 1: the equaliser cap is one tap out": "caught",
+    "selector 1: the equaliser is read from the delay line": "caught",
+    "selector 1: the two equaliser halves are swapped": "caught",
+    "selector 2: V.34 answers the DFE from the equaliser": "caught",
+    "selector 3: the PCM arms fill the real half too": "caught",
+    "selector 3: the phase goes in the imaginary half": "caught",
+    "selector 3: the resampler phase honours maxCount": "caught",
+    "selector 4: the offset comes from the phase's field": "caught",
+    "selector 4: the offset is widened unsigned": "caught",
+    "selector 5: the V.34 taps go in the real half": "caught",
+    "selector 5: the V.92 canceller is used on every session": "caught",
+    "selector 5: the V.92 taps are not clamped": "caught",
+    "selector 5: the V.92 taps are not scaled": "caught",
+    "selector 5: the near canceller is the far one": "caught",
+    "selector 6: the far canceller answers every session": "caught",
+    "selector 6: the far canceller is the near one": "caught",
+    "selector 7 answers like selector 6": "caught",
+    "selector 8: the decision errors ignore the role": "equivalent",
+    "selectors 3 and 4 return no points": "caught",
+    "the K56flex role is the answerer's": "caught",
+    "the receiver is reached one word early": "caught"
    }
   },
   "v8agc": {
@@ -8013,6 +8092,7 @@
     "minNofTransmitSequences starts at VPCMXF_Create's 1 and not at 0": "caught",
     "nofBitsPerSymbol starts at VPCMXF_Create's 2 and not at 0": "caught",
     "only five of the six flags are written": "caught",
+    "sweepCounter is left holding the storage's bytes": "caught",
     "the 848-byte block is not cleared at all": "caught",
     "the ANSam detector's first tone is 6001 Hz": "caught",
     "the ANSam detector's sample rate is 8000 and not 9600": "caught",
@@ -8040,8 +8120,7 @@
     "the sine wave's frequency and amplitude are swapped": "caught",
     "the sine wave's sample rate is 8000.0f": "caught",
     "the six flags are set to zero and not to one": "caught",
-    "the three tail fields after the entrance filter are not cleared": "caught",
-    "word_1740 is left holding the storage's bytes": "caught"
+    "the three tail fields after the entrance filter are not cleared": "caught"
    }
   },
   "vpcmdp": {

@@ -82,6 +82,9 @@
 #include "dsplib/V92BitsToSymbol.h"
 #include "dsplib/V92Modulator.h"
 #include "dsplib/V92Transmitter.h"
+#include "dsplib/int_complex.h"
+#include "dsplib/K56FlexFloModem.h"
+#include "dsplib/v34filt.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
@@ -91,6 +94,11 @@ extern "C" {
 
 void ref_VPcmV34GetDiagnostics(void *obj, void *results)
     asm("ref_VPcmV34GetDiagnostics");
+
+unsigned long ref_VPcmV34GetVisualDiagnostics(void *obj, int what,
+					      void *points,
+					      unsigned long maxCount)
+    asm("ref_VPcmV34GetVisualDiagnostics");
 
 extern unsigned int ref_dsplibs_debug_level;
 
@@ -714,6 +722,495 @@ run_transcript(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * VPcmV34GetVisualDiagnostics
+ * ===========================================================================
+ *
+ * NINE SELECTORS, FOUR SOURCES EACH, AND A TENTH SELECTOR THAT MUST DO
+ * NOTHING.  The grid sweeps `what` 0..9 -- one past the jump table -- against
+ * `status` 0..3 and `f359c` over both roles and a third value that is
+ * neither, because three of the arms test the role and three do not.
+ *
+ * THE OUTPUT ARRAY IS SEEDED AND HAS A GUARD PAST `maxCount`.  Both matter:
+ *
+ *   - seeding is the only way to see a PARTIAL fill, and selectors 3 and 4
+ *     write only the imaginary half on the two PCM arms;
+ *   - the guard is the only way to see an OVERRUN, and selectors 3 and 4
+ *     overrun by construction (D710) -- they ignore `maxCount` entirely, so
+ *     `maxCount == 0` is in the grid and the eight bytes they write past the
+ *     caller's bound are compared rather than assumed.
+ *
+ * EVERY LENGTH FIELD IS PLANTED AND NEVER SEEDED.  A seeded `unsigned int`
+ * length leaves `maxCount` as the only bound and the loop reads a long way
+ * off the end of a small array; the six are `V90Equalizer::linearEquLength`
+ * and `::dfeLength`, `V90Demodulator::word_258`,
+ * `V92EchoCanceller::filterLength` and both `v34_echo::taps`.
+ *
+ * THE THREE MUTATING ARMS ARE WHY THE OBJECTS ARE COMPARED AND NOT JUST THE
+ * POINTS.  `VPcmFloModem::sweepCounter` moves once per point in both
+ * constellation arms and not at all when none come out, and selector 0's V.34
+ * arm clears `v34_object::f2aa4` unconditionally -- reading the residual ring
+ * EMPTIES it, even when the caller asked for no points.
+ */
+
+#define PTS_N		192		/* points the array can hold        */
+#define PTS_GUARD	32		/* points past it nothing may reach */
+#define PTS_SLOT	(PTS_N + PTS_GUARD)
+
+#define COEF_N		256
+
+#define K56_SLOT	64
+
+static struct int_complex pts[2][PTS_SLOT];
+/* What both sides were seeded with, kept so the guard can be checked against
+ * it: comparing the two sides against each other cannot see an overrun both
+ * of them make. */
+static struct int_complex seed_pts[PTS_SLOT];
+static float lin_[2][COEF_N];
+static float dfe_[2][COEF_N];
+static float con_[2][COEF_N];
+static float ecc_[2][COEF_N];
+/*
+ * The two V.34 cancellers' coefficients live OUTSIDE the object even though
+ * the real ones are inside it: `v34_object::echo0_coeff` is 144 shorts and is
+ * followed by `echo1`, whose `coeff` and `dline` are POINTERS -- so a trial
+ * whose tap count runs past 144 would compare two different addresses and
+ * report a difference the fixture made.  The two pointer words are masked in
+ * `obj_ptrs_v` either way.
+ */
+static short scoef_[2][2][COEF_N];
+static unsigned char k56_[2][K56_SLOT] __attribute__((aligned(8)));
+
+/*
+ * The pointers `setup_visual` wires, per slot.  Same argument as `obj_ptrs`
+ * above: exhaustive by construction, because it is exactly the set of words
+ * the fixture writes an address into.
+ */
+static const unsigned int obj_ptrs_v[] = {
+	0x3548,		/* p3548          -> the VPcmFloModem   */
+	0x80c0,		/* echo0.coeff    -> inside the object   */
+	0x9140,		/* echo1.coeff    -> inside the object   */
+	0xac18		/* pac18          -> the K56FlexFloModem */
+};
+static const unsigned int xf_ptrs_v[] = {
+	0x175c,		/* modem.demodulator                     */
+	0x6124,		/* v92modem.modulator                    */
+	0x6bf0		/* echoCanceller.echoCoeff               */
+};
+static const unsigned int dem_ptrs_v[] = {
+	0x004, 0x018, 0x1d8, 0x23c,
+	0x254		/* array_254 -- the constellation floats */
+};
+static const unsigned int equ_ptrs_v[] = {
+	0x14,		/* linearEquCoefs                        */
+	0x40		/* dfeCoefs                              */
+};
+
+/*
+ * Finite coefficient values.  A seeded 32-bit pattern is a NaN or an infinity
+ * often enough that the run would be measuring what two compilations do to
+ * `fistpl` of one, which is the x87's answer and not this reconstruction's.
+ * The extremes are here on purpose: 1e30 times the scale overflows the 32-bit
+ * conversion and both sides must produce the same integer indefinite.
+ */
+static const float coef_v[] = {
+	0.0f, 1.0f, -1.0f, 0.5f, -0.25f, 3.0f, 1.0e-8f, 1.0e30f, -1.0e30f,
+	0.9999f, -0.9999f, 12345.6f,
+	/*
+	 * THESE THREE SEPARATE THE CONSTELLATION SCALE'S TYPE, and nothing
+	 * else in the table does.  1.7 as a `double` is 1.6999999999999999
+	 * and as a `float` is 1.7000000476837158; the two truncate to the
+	 * same `int` for every small value, and differ by one for a value
+	 * whose product sits just below an integer.  1e7 is the worked case:
+	 * 1.7 * 1e7 truncates to 16999999 and 1.7f * 1e7 to 17000000.
+	 */
+	1.0e7f, 2.0e7f, 1.0e8f
+};
+#define NCOEF	((int)(sizeof coef_v / sizeof coef_v[0]))
+
+/* Length fields, against the `maxCount` table below. */
+static const unsigned int len_v[] = { 0u, 1u, 7u, 80u, 200u, 0xffffffffu };
+#define NLEN	((int)(sizeof len_v / sizeof len_v[0]))
+
+static const unsigned long max_v[] = { 0ul, 1ul, 7ul, 80ul, 192ul };
+#define NMAX	((int)(sizeof max_v / sizeof max_v[0]))
+
+/*
+ * `sweepCounter` values.  The two arms wrap at `n / 5 == 750` and at
+ * `n / 15 == 100`, and the field is signed and never reset, so the negative
+ * rows are the ones a wrong declaration gets wrong.
+ */
+static const int sweep_v[] = {
+	0, 1, 14, 15, 74, 1499, 1500, 3749, 3750, 22499, -1, -16, -3751
+};
+#define NSWEEP	((int)(sizeof sweep_v / sizeof sweep_v[0]))
+
+/* `v34_object::f359c`: both roles the object tests for, and a third value. */
+static const short role_v[] = { 0x65, 0x66, 0x12 };
+#define NROLE	((int)(sizeof role_v / sizeof role_v[0]))
+
+struct vtrial {
+	int		status;
+	int		ri;		/* index into role_v      */
+	int		li;		/* index into len_v       */
+	int		mi;		/* index into max_v       */
+	int		si;		/* index into sweep_v     */
+	int		phase3;		/* V90Demodulator::inPhase3 */
+	int		analog;		/* VPcmFloModem::info0Layout */
+	int		session;	/* VPcmFloModem::pcmSessionType */
+};
+
+static void
+setup_visual(int n, const struct vtrial *t)
+{
+	int side, k;
+
+	lfsr_state = 0x31c7u + 0x9e37u * (unsigned)n;
+
+	fill_pair(obj_[0], obj_[1], OBJ_SLOT);
+	fill_pair(xf_[0], xf_[1], XF_SLOT);
+	fill_pair(dem_[0], dem_[1], DEM_SLOT);
+	fill_pair(equ_[0], equ_[1], EQU_SLOT);
+	fill_pair(v92mod_[0], v92mod_[1], V92MOD_SLOT);
+	fill_pair(k56_[0], k56_[1], K56_SLOT);
+	fill_pair(pts[0], pts[1], sizeof pts[0]);
+	memcpy(seed_pts, pts[0], sizeof seed_pts);
+
+	for (k = 0; k < COEF_N; k++) {
+		float v = coef_v[(k + n) % NCOEF];
+
+		lin_[0][k] = lin_[1][k] = v;
+		dfe_[0][k] = dfe_[1][k] = coef_v[(k + n + 3) % NCOEF];
+		con_[0][k] = con_[1][k] = coef_v[(k + n + 5) % NCOEF];
+		ecc_[0][k] = ecc_[1][k] = coef_v[(k + n + 7) % NCOEF];
+		scoef_[0][0][k] = scoef_[1][0][k] =
+		    (short)((k * 977 + n * 31) & 0xffff);
+		scoef_[0][1][k] = scoef_[1][1][k] =
+		    (short)((k * 1543 + n * 17) & 0xffff);
+	}
+
+	for (side = 0; side < 2; side++) {
+		struct v34_object *o = O(side);
+		VPcmFloModem *x = XF(side);
+		V90Demodulator *d = D(side);
+		V90Equalizer *eq = (V90Equalizer *)equ_[side];
+
+		o->status = t->status;
+		o->p3548 = x;
+		o->pac18 = k56_[side];
+		o->f359c = role_v[t->ri];
+
+		/* Selector 0's V.34 arm: the ring's write cursor. */
+		o->f2aa4 = (short)len_v[t->li];
+
+		o->echo0.taps = len_v[t->li];
+		o->echo0.coeff = scoef_[side][0];
+		o->echo1.taps = len_v[t->li];
+		o->echo1.coeff = scoef_[side][1];
+
+		x->info0Layout = t->analog;
+		x->pcmSessionType = t->session;
+		x->sweepCounter = sweep_v[t->si];
+		x->modem.demodulator = d;
+		x->v92modem.modulator = (V92Modulator *)v92mod_[side];
+		x->echoCanceller.filterLength = len_v[t->li];
+		x->echoCanceller.echoCoeff = ecc_[side];
+
+		d->equalizer = eq;
+		d->phase2Info = (V90Phase2Info *)ph2_[side];
+		d->mappingParamsAlt = (V90MappingParams *)mpar_[side];
+		d->autoDigitalImpDetector =
+		    (V90AutoDigitalImpDetector *)adid_[side];
+		d->inPhase3 = (unsigned int)t->phase3;
+		d->word_258 = len_v[t->li];
+		d->word_260 = (unsigned int)(n * 7);
+		d->array_254 = con_[side];
+
+		eq->linearEquLength = len_v[t->li];
+		eq->linearEquCoefs = lin_[side];
+		eq->dfeLength = len_v[t->li];
+		eq->dfeCoefs = dfe_[side];
+	}
+}
+
+static void
+compare_visual(const char *what, long tag)
+{
+	diff_eq_obj_(__FILE__, __LINE__, what, "the points",
+		     pts[0], pts[1], sizeof pts[0], tag);
+	CMP_MASKED(what, "the V.34 object", obj_, OBJ_SLOT, obj_ptrs_v, tag);
+	CMP_MASKED(what, "the VPcmFloModem", xf_, XF_SLOT, xf_ptrs_v, tag);
+	CMP_MASKED(what, "the demodulator", dem_, DEM_SLOT, dem_ptrs_v, tag);
+	CMP_MASKED(what, "the equaliser", equ_, EQU_SLOT, equ_ptrs_v, tag);
+	CMP_MASKED(what, "the V.92 modulator", v92mod_, V92MOD_SLOT,
+		   v92mod_ptrs, tag);
+	diff_eq_obj_(__FILE__, __LINE__, what, "the K56flex modem",
+		     k56_[0], k56_[1], K56_SLOT, tag);
+}
+
+/*
+ * The guard past what the caller said the array holds.  Checked against the
+ * SEED and not against the other side, for the reason `compare_all`'s guard
+ * gives: two identical overruns would agree with each other.
+ *
+ * `beyond` is where the caller's bound ends, and it is NOT always `maxCount`:
+ * selectors 3 and 4 write `points[0]` regardless, which is D710, so those two
+ * are allowed one point and the guard starts after it.
+ */
+static int
+guard_touched(unsigned long beyond)
+{
+	unsigned long k;
+
+	for (k = beyond; k < PTS_SLOT; k++)
+		if (pts[1][k].re != seed_pts[k].re ||
+		    pts[1][k].im != seed_pts[k].im ||
+		    pts[0][k].re != seed_pts[k].re ||
+		    pts[0][k].im != seed_pts[k].im)
+			return 1;
+	return 0;
+}
+
+static int
+run_visual(void)
+{
+	int what, status, ri, li, mi, si, ph, an, se;
+	int n = 0;
+	int sawPoints = 0, sawNone = 0, sawDrain = 0, sawSweep = 0;
+	int sawOverrun = 0, sawPartial = 0, sawK56 = 0, sawAboveTable = 0;
+
+	diff_begin("VPcmV34GetVisualDiagnostics");
+
+	set_level(0);
+
+	for (what = 0; what <= 9; what++)
+	for (status = 0; status <= 3; status++)
+	for (ri = 0; ri < NROLE; ri++)
+	for (li = 0; li < NLEN; li++)
+	for (mi = 0; mi < NMAX; mi++) {
+		struct vtrial t;
+		unsigned long got0, got1;
+		long tag;
+
+		si = (li * NMAX + mi) % NSWEEP;
+		ph = (mi & 1);
+		an = ((li + mi) & 1);
+		se = ((li + what) & 1);
+
+		t.status = status;
+		t.ri = ri;
+		t.li = li;
+		t.mi = mi;
+		t.si = si;
+		t.phase3 = ph;
+		t.analog = an;
+		t.session = se;
+
+		tag = (long)what * 1000000 + status * 100000 + ri * 10000
+		    + li * 1000 + mi * 10;
+
+		setup_visual(n++, &t);
+
+		got0 = VPcmV34GetVisualDiagnostics(obj_[0], what,
+						   pts[0], max_v[mi]);
+		got1 = ref_VPcmV34GetVisualDiagnostics(obj_[1], what,
+						       pts[1], max_v[mi]);
+
+		diff_eq_int("the count (%ld)", (long)got0, (long)got1, tag);
+		compare_visual("VPcmV34GetVisualDiagnostics", tag);
+
+		/*
+		 * The bound the caller stated, plus D710's one point for the
+		 * two selectors that do not read it.
+		 */
+		{
+			unsigned long beyond = max_v[mi];
+
+			if (what == 3 || what == 4)
+				if (beyond < 1ul)
+					beyond = 1ul;
+			diff_eq_int("nothing past the caller's bound (%ld)",
+				    guard_touched(beyond), 0, tag);
+
+			if ((what == 3 || what == 4) && max_v[mi] == 0ul &&
+			    (pts[1][0].re != seed_pts[0].re ||
+			     pts[1][0].im != seed_pts[0].im))
+				sawOverrun = 1;
+		}
+
+		if (got1 > 0ul)
+			sawPoints = 1;
+		else
+			sawNone = 1;
+
+		/* The ring drain, which happens even when nothing comes out. */
+		if (what == 0 && O(1)->f2aa4 == 0 &&
+		    len_v[li] != 0u && (short)len_v[li] != 0)
+			sawDrain = 1;
+
+		if (XF(1)->sweepCounter != sweep_v[si])
+			sawSweep = 1;
+
+		/* A partial fill: the real half left as the caller had it. */
+		if ((what == 3 || what == 4) &&
+		    (status == 1 || status == 2) &&
+		    pts[1][0].re == seed_pts[0].re && pts[1][0].im == 0 &&
+		    seed_pts[0].im != 0)
+			sawPartial = 1;
+
+		if (status == 3 && role_v[ri] == 0x65 && got1 == 0ul &&
+		    (what == 0 || what == 1 || what == 2 || what == 8))
+			sawK56 = 1;
+
+		if (what == 9 && got1 == 0ul)
+			sawAboveTable = 1;
+	}
+
+	diff_eq_int("some selector returned points", sawPoints, 1, 0);
+	diff_eq_int("some selector returned none", sawNone, 1, 0);
+	diff_eq_int("reading the residual ring emptied it", sawDrain, 1, 0);
+	diff_eq_int("the sweep counter advanced", sawSweep, 1, 0);
+	diff_eq_int("D710: selectors 3 and 4 wrote past a zero bound",
+		    sawOverrun, 1, 0);
+	diff_eq_int("the PCM arms of 3 and 4 left the real half alone",
+		    sawPartial, 1, 0);
+	diff_eq_int("the K56flex stubs reported nothing", sawK56, 1, 0);
+	diff_eq_int("a selector past the table returned nothing",
+		    sawAboveTable, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * One axis moves, the blob runs twice, and the two point arrays must differ.
+ * Same argument as `run_separation` above: an observable difference in the
+ * object under test, which no path counter stands in for.
+ */
+static int
+saw_points_differ(const struct vtrial *a, const struct vtrial *b, int what,
+		  unsigned long maxCount, int n)
+{
+	static struct int_complex first[PTS_SLOT];
+
+	setup_visual(n, a);
+	(void)ref_VPcmV34GetVisualDiagnostics(obj_[1], what, pts[1], maxCount);
+	memcpy(first, pts[1], sizeof first);
+
+	setup_visual(n, b);
+	(void)ref_VPcmV34GetVisualDiagnostics(obj_[1], what, pts[1], maxCount);
+
+	return memcmp(first, pts[1], sizeof first) != 0;
+}
+
+static int
+run_visual_separation(void)
+{
+	struct vtrial base, other;
+	int n = 70000;
+
+	diff_begin("VPcmV34GetVisualDiagnostics: the axes separate");
+
+	set_level(0);
+
+	base.status = 0;
+	base.ri = 0;
+	base.li = 4;		/* 200 -- longer than any maxCount below */
+	base.mi = 3;		/* 80                                    */
+	base.si = 1;
+	base.phase3 = 0;
+	base.analog = 1;
+	base.session = 0;
+
+	/* The V.34 residual ring against the PCM constellation. */
+	other = base;
+	other.status = 2;
+	diff_eq_int("selector 0: status separates V.34 from the PCM modem",
+		    saw_points_differ(&base, &other, 0, 80ul, n++), 1, 0);
+
+	/* The role test on the V.90 arm. */
+	other = base;
+	other.status = 1;
+	base.status = 1;
+	base.ri = 1;		/* answer -> the PCM modem                */
+	other.ri = 0;		/* call   -> V.34's own ring             */
+	diff_eq_int("selector 0: the role separates on a V.90 session",
+		    saw_points_differ(&base, &other, 0, 80ul, n++), 1, 0);
+
+	base.status = 0;
+	base.ri = 0;
+
+	/* The equaliser's two arms. */
+	other = base;
+	other.status = 2;
+	diff_eq_int("selector 1: status separates the two equalisers",
+		    saw_points_differ(&base, &other, 1, 80ul, n++), 1, 0);
+
+	/* The sweep counter drives the horizontal axis. */
+	base.status = 2;
+	base.session = 0;
+	other = base;
+	other.si = 8;
+	diff_eq_int("selector 0: the sweep counter separates",
+		    saw_points_differ(&base, &other, 0, 80ul, n++), 1, 0);
+
+	/* Phase 3 and the data phase are two different geometries. */
+	other = base;
+	other.phase3 = 1;
+	diff_eq_int("selector 0: inPhase3 separates the two geometries",
+		    saw_points_differ(&base, &other, 0, 80ul, n++), 1, 0);
+
+	/* The analog gate inside VPcmFloModem. */
+	base.session = 1;
+	base.analog = 1;
+	other = base;
+	other.analog = 0;
+	diff_eq_int("selector 0: info0Layout separates",
+		    saw_points_differ(&base, &other, 0, 80ul, n++), 1, 0);
+
+	/* The two echo cancellers are two different sources. */
+	base.status = 0;
+	base.session = 0;
+	base.analog = 1;
+
+	{
+		static struct int_complex five[PTS_SLOT];
+
+		setup_visual(n, &base);
+		(void)ref_VPcmV34GetVisualDiagnostics(obj_[1], 5, pts[1],
+						      80ul);
+		memcpy(five, pts[1], sizeof five);
+
+		setup_visual(n, &base);
+		(void)ref_VPcmV34GetVisualDiagnostics(obj_[1], 6, pts[1],
+						      80ul);
+
+		diff_eq_int("selectors 5 and 6 answer from different arrays",
+			    memcmp(five, pts[1], sizeof five) != 0, 1, 0);
+		n++;
+	}
+
+	/* The two resampler fields. */
+	{
+		static struct int_complex three[PTS_SLOT];
+
+		setup_visual(n, &base);
+		(void)ref_VPcmV34GetVisualDiagnostics(obj_[1], 3, pts[1],
+						      80ul);
+		memcpy(three, pts[1], sizeof three);
+
+		setup_visual(n, &base);
+		(void)ref_VPcmV34GetVisualDiagnostics(obj_[1], 4, pts[1],
+						      80ul);
+
+		diff_eq_int("selectors 3 and 4 answer from different fields",
+			    memcmp(three, pts[1], sizeof three) != 0, 1, 0);
+		n++;
+	}
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -722,6 +1219,8 @@ main(void)
 	bad |= run_sweep();
 	bad |= run_separation();
 	bad |= run_transcript();
+	bad |= run_visual();
+	bad |= run_visual_separation();
 
 	return bad;
 }

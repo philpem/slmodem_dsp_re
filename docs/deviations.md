@@ -7827,3 +7827,44 @@ swaps it is registered `equivalent` with this entry as its reason.
 **Not corrected**: clamping the cursor would make the reconstruction disagree
 with the blob for any caller that does produce a row above 64, which is the one
 thing it may not do.
+
+## D710 🐛 `VPcmV34GetVisualDiagnostics` selectors 3 and 4 write `points[0]` whatever `maxCount` says
+
+**Where:** `src/pump/v34/v34diag.cpp`, `VPcmV34GetVisualDiagnostics`, the
+`VDIAG_RESAMPLER_PHASE` and `VDIAG_RESAMPLER_OFFSET` arms.  Blob 0x73d0 and
+0x7412.
+
+**What:** every other arm of this function clamps its point count against the
+caller's `maxCount`.  These two never read it at all.  Both write eight bytes
+at `points[0]` -- the real half from the receiver on the V.34 arm, the
+imaginary half always -- and return 1, so
+
+```
+    VPcmV34GetVisualDiagnostics(obj, 3, points, 0)
+```
+
+writes one point into an array the caller has just said has room for none, and
+tells the caller it wrote one.
+
+**How it is known:** `0x3c(%esp)` holds `maxCount` and is loaded in seven of
+the nine arms.  In these two the only reference to it is the argument slot of
+the K56flex stub at 0x75be and 0x75e5, whose result is then discarded; the
+stores at 0x73e9, 0x742c and 0x73f0 are unconditional and no compare against
+`0x3c(%esp)` exists anywhere between the jump-table entry and the return.
+
+**Consequence:** an application that sizes its buffer from a run-time count
+and passes zero -- which selector 7 and any selector above 8 make a reasonable
+thing to do, since both legitimately return nothing -- gets one point of
+overrun.  Eight bytes, on the caller's own storage.
+
+**Reproduced, not fixed.**  The bound is the caller's and the object ignores
+it; clamping here would make the reconstruction disagree with the blob for
+every caller that passes zero, which is the one thing it may not do.  Not
+behind `DSPLIB_REPRODUCE_BUGS`: the right fix is in the API contract rather
+than in this function, since a caller that passes a buffer of one is served
+correctly and the fault only exists at zero.
+
+**Driven:** `t_v34diag.cpp`'s `run_visual` sweeps `maxCount == 0` over all ten
+selectors and compares the point array PAST the caller's bound against the
+seed on both sides -- `sawOverrun` requires the overrun to have been observed,
+so the deviation is a checked claim and not a comment.
