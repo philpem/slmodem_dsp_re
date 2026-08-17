@@ -575,5 +575,17 @@
  "v90sbeproc": [
   "src/pump/v90/V90SignBitsExtractor.cpp",
   "build/test/t_v90demap"
+ ],
+ "v17data": [
+  "src/pump/v17/v17data.c",
+  "build/test/t_v17data"
+ ],
+ "v29data": [
+  "src/pump/v29/v29data.c",
+  "build/test/t_v29data"
+ ],
+ "v32data": [
+  "src/pump/v32/v32data.c",
+  "build/test/t_v32data"
  ]
 }

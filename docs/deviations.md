@@ -7118,3 +7118,28 @@ choice of `V90SBE_PASS_ALL` is OURS -- the object has no answer to reproduce --
 and because the batch that writes `reset` should check whether any caller
 passes a third value, in which case this becomes a real behavioural difference
 rather than a formal one.
+
+## D430 -- the transmit ring cursor is truncated to a short before the wrap test  `unmeasured`
+
+`TxNoCarrierV17`, `TxNoCarrierV29` and `TxNoCarrierV32` all compute the next
+write index as `lea 0x1(%r),%eax` followed by `cwtl` or `movswl %ax`, and only
+then compare it against the ring length. A cursor seeded at 32767 therefore
+wraps to -32768 rather than to 0, and the following store lands 64 KB below the
+ring's buffer. Not reachable through the constructors that have been read --
+`V17TX_create` sets the length to 50 and `V32FP_recreate` takes it from
+`V32_SYMBOL_LEN` -- so this is a property of the arithmetic and not a live
+fault. Recorded because the truncation is what distinguishes the object's
+expression from `widx + 1 < len`, and `t_v17data.c` seeds the corner to hold
+the reconstruction to it.
+
+## D431 -- the V.32 symbol ring is declared as two different structs  `unmeasured`
+
+`ModDataV32` and `TxNoCarrierV32` hand `fp + 0xb0` to an `SMCv32_encoder_*` as
+`struct v32_symout *` and to `FPM_PPS_filter` as `struct fpm_smc_ring *`. The
+two are the same layout under two tags -- finding 3646 has the field-by-field
+table -- so `src/pump/v32/v32data.c` carries a cast at each of the three sites.
+Not repaired here: unifying them is a TYPE change, `docs/plan.md` §3 forbids
+one from inside a batch with other work in flight, and phase 6 collects the 27
+punned sites into a batch of their own. This is the 28th and it is not
+provably wrong in the way those are -- both readings are correct about the
+bytes -- so it is a modelling duplication rather than a defect.

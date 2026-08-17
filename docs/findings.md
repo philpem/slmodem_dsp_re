@@ -63030,3 +63030,273 @@ So the sine's out-of-domain sign is reproduced and not tested, `t_fpm_phasor`
 says so where a reader will meet it, and `test/mutations/fpmmtdlayout.json`
 records the two mutations that would have caught it with the derivation
 attached. D392, and 3620-3623 for the rest of the batch.
+### 3640. THE V.17 TRANSMITTER'S SYMBOL RING IS `struct fpm_smc_ring`, FIELD FOR FIELD, AND `V17TX_create` SAYS SO WITHOUT BEING ASKED
+
+`TxNoCarrierV17` reads a pointer at `fp + 0x10`, an index at `fp + 0x14` and a
+bound at `fp + 0x18`, and wraps the index at the bound. That alone is "a ring
+of some shape at some offset". What settles it is `V17TX_create`, which at
+0x98b59 writes `fp + 0x14 = 0`, `fp + 0x16 = 0`, `fp + 0x18 = 0x32`,
+`fp + 0x08 = NULL` and `fp + 0x0c = NULL`, fills `fp + 0x10` from
+`sysdep_malloc(0x64)` at 0x98d04, and then clears 50 shorts through it
+(`cmp $0x31,%ax`). Lay `struct fpm_smc_ring` at `fp + 0x08` and every one of
+those is a field: `i`, `q`, `sym`, `widx`, `ridx`, `len`, with a length of 50
+and a `sym` array of exactly 50 shorts.
+
+So the ring the V.17 transmitter shares between its coder and its shaper is
+the same type V.22's does, at `fp + 0x08` instead of `fp + 0xa0`, and nothing
+in either function had to be guessed to say so.
+
+### 3641. THE MAPPED/DIRECT CHOICE IS STATED TWICE IN EACH OF V.17 AND V.29, AND THE TWO STATEMENTS ARE INDEPENDENT
+
+`fpm_pps_cfg.mapped` selects whether `FPM_PPS_filter` takes the ring entry's
+low byte as a constellation index (`imap`/`qmap`) or reads the ring's own `i`
+and `q` rails. Which each modulation uses is said twice:
+
+| | `V*TX_create` builds `mapped` | `TxNoCarrier*` writes |
+|---|---|---|
+| V.17 | 1, with `SMCv17_IMAP4` / `SMCv17_QMAP4` (98be3..98c2b) | `sym` only (a0de8) |
+| V.29 | 0, with the built-in null maps (9bce8) | `i` and `q` only (a6658, a665e) |
+
+Neither reading is derived from the other -- one is a constructor's stack
+frame, the other is a different function's store -- and they agree. This is
+the check that would have caught modelling the V.17 no-carrier path on the
+V.29 one, which is the mistake the two functions' near-identical shape
+invites.
+
+### 3642. THE TWO `ModData*` FAMILIES DISAGREE ABOUT THE SIGNEDNESS OF A DATA WORD, AND EACH ENCODER FORCES ITS OWN
+
+`SMCv17_encoder_dif` loads its input with `movzwl (%edi)` at 0x9fd00;
+`SMCv32_encoder_dif` loads the same argument with `movswl (%edi)` at 0x7f9d0.
+Both results are 32-bit and both are used -- shifted and masked to select a
+quadrant -- so both are forced, and they differ. `ModDataV17` therefore takes
+`const unsigned short *` and `ModDataV32` takes `const short *`, and
+`v32smc.h` had already declared the V.32 side that way from its own reading.
+
+The point worth keeping is the negative one: the two families look like one
+layer and are written like one layer, and copying either signature onto the
+other would have been invisible to any test, because every value the fixture
+can produce agrees under both readings unless bit 15 is set. This is finding
+613's shape a second time.
+
+### 3643. `ModDataV17`'s ENCODER SELECTOR IS SIGNED, AND THE OBJECT WAS RUN AT -1 TO PROVE IT
+
+`ff 94 8a 80 00 00 00` is `call *0x80(%edx,%ecx,4)` with `%ecx` from
+`movswl 0x8c(%edx)`. `V17TX_create` lays three function pointers at
+`fp + 0x80`, `+0x84` and `+0x88` -- `SMCv17_encoder_dif`, `_abs` and `_tcm`,
+in that order, at 0x98c90, 0x98c98 and 0x98c9e -- and never writes `+0x8c`, so
+nothing in the constructor bounds the index.
+
+`movswl` is what the compiler was forced to encode, and `t_v17data.c` turns it
+into a measurement rather than a codegen note: the selector is SEEDED at -1 and
+the blob is run, and it dispatches through `fp + 0x7c`. An unsigned reading
+would have indexed 262,140 bytes past the block.
+
+`fp + 0x7c` is the shaper's own `hist_q` -- `struct fpm_pps` is 0x38 bytes and
+`V17FP_PPS` is 0x48, so the state ends exactly where the table begins. The
+trial therefore runs with a count of ZERO, where `FPM_PPS_filter`'s
+`while (count != 0)` never dereferences either history, and the stub still
+leaves a mark in a compared byte of the ring.
+
+### 3644. `TxNoCarrierV17` RE-READS THE NO-CARRIER SYMBOL ON EVERY ITERATION, AND THAT IS FORCED IN THE DIRECTION THAT IS USUALLY NOT
+
+`movzwl 0x1e(%edi),%eax` sits at the top of the loop at 0xa0de0, not above it.
+The usual reading of a loop-invariant load left in a loop is "the compiler
+could not hoist it", which says nothing about the source -- and here it indeed
+could not, because the loop's store is through a `short *` that may alias the
+`unsigned short` being loaded.
+
+But the converse does hold, and it is the useful half: a compiler does not
+SINK a load the source put outside the loop into it. So the load being inside
+means the source's was, and the reconstruction reads the field once per symbol
+rather than once per call. It is observable only if the parameter block
+overlaps the ring, which nothing traced arranges.
+
+### 3645. THE SYMBOL COUNT IS UNSIGNED, AND A 50-SLOT RING CANNOT TELL -- SO THE TRIAL WAS SEEDED ABOVE 32767
+
+`TxNoCarrierV29` loads its fourth argument with `movzwl 0x3c(%esp),%esi` and
+compares the loop counter against it with `jb`, both unsigned, and the same
+pair appears in `TxNoCarrierV17`. That is forced at the codegen tier and
+invisible at the differential one over anything a real caller does: the ring
+holds 50 slots and no plausible count comes near 32767, so a signed reading
+agrees everywhere.
+
+`t_v29data.c` therefore seeds the corner. The trial hands the function 40,000
+symbols, and under a signed counter `(short)40000` is negative and the loop
+does not run at all -- the rails keep their pseudorandom fill instead of being
+zeroed, which is compared. Making it affordable took one fixture change and no
+claim: the shaper's `step` is set equal to its phase count for that trial only,
+so one output is produced per symbol instead of ten per three, and 40,000
+symbols is 40,001 samples rather than 133,000. The function under test never
+reads that field.
+
+The `+1` is the shaper's, not an off-by-one: `FPM_PPS_init` seeds `phase` from
+`step`, so the first output is produced before any symbol is consumed. The
+bound asserted is the symbol count with room for that debt, and the mutation
+that makes the counter signed is caught.
+
+### 3646. THE V.32 SYMBOL RING IS ONE OBJECT WITH TWO STRUCT TAGS, AND `ModDataV32` SAYS SO IN TWO INSTRUCTIONS
+
+`lea 0xb0(%edx),%eax` at 0x81baa hands `fp + 0xb0` to an `SMCv32_encoder_*`,
+where `v32smc.h` types it `struct v32_symout *`. `lea 0xb0(%eax),%edx` at
+0x81bd1 hands the same address to `FPM_PPS_filter`, where `fpm_pps.h` types it
+`struct fpm_smc_ring *`. Three instructions apart, from two separate loads of
+the instance pointer.
+
+The two declarations describe the same bytes:
+
+| | `v32_symout` | `fpm_smc_ring` |
+|---|---|---|
+| +0x00 | `pad00[8]` | `i`, `q` |
+| +0x08 | `buf` | `sym` |
+| +0x0c | `widx` | `widx` |
+| +0x0e | `pad0e` | `ridx` |
+| +0x10 | `limit` | `len` |
+
+Neither header could have known. `v32smc.h` was written from the three
+encoders, which only ever write; `fpm_smc.h` was written from the producer and
+consumer of the generic ring, which V.32 does not use. Each named what its own
+side could see and padded the rest, and the two paddings are each other's
+fields.
+
+`v32data.c` does NOT unify them. Merging two struct tags is a type change, and
+`docs/plan.md` §3 rules that a batch with other work in flight must not make
+one; phase 6 collects the punned sites into a batch of their own. D431 records
+it and the cast is the whole of the deviation.
+
+### 3647. V.32's NO-CARRIER SYMBOL IS 0x10 BECAUSE THE CONSTELLATION MAPS HAVE SEVENTEEN ENTRIES
+
+`TxNoCarrierV32` writes the bare literal `movw $0x10` into every ring slot, and
+a literal explains nothing on its own. What explains it is the map size:
+`SMCv32_IMAP16` and `SMCv32_QMAP16` are 0x22 bytes each, which is SEVENTEEN
+shorts, one past the sixteen points a V.32bis constellation carries.
+`FPM_PPS_filter` indexes both with the ring entry's LOW BYTE, so 0x10 selects
+that seventeenth entry -- a point appended to both maps for this path and
+reachable from nowhere else.
+
+`PPSv32_CFG + 0x04` is 1, so the mapped form is the one in use and the index
+is really an index; `+0x10` and `+0x14` of the same config are the two maps.
+Read with `tabdump.py`, which prints the relocation warning that stops the
+four pointers in that config being read as small integers.
+
+### 3648. THE V.32 NO-CARRIER PATH MOVES THE CODER'S QUADRANT AND NEVER READS IT, AND ITS WRITE-BACKS COME FIRST
+
+`add $0x3` then `and $0x3` on `fp + 0x4e`, once per symbol, written back at
+0x825ad and read by nothing in the function. `fp + 0x4e` is `struct v32_smc`'s
+`quad` -- 0x4e - 0x48 = 6 -- and that name is `v32smc.h`'s, given by the three
+encoders that do read it, so nothing is being named here. What is new is that a
+function OUTSIDE the coder steps it, backwards, one quadrant per symbol of
+silence. Why is not established and is not guessed at.
+
+Two things follow that a reader of the V.17 and V.29 twins would get wrong:
+
+- **The write-backs precede the shaper.** `quad` at 0x825ad and `widx` at
+  0x825bb, then the call at 0x825d8. V.17 and V.29 write their cursor AFTER,
+  through a fresh load of the instance pointer. Neither ordering is observable
+  -- `FPM_PPS_filter` writes only `ridx` -- but they are different source and
+  are written differently.
+- **A forwards step is invisible at counts that are multiples of four**, which
+  is finding 3574's shape without a table: the test drives 1, 2, 3, 5, 7, 11,
+  13, 47 and 49 alongside 12, 48 and 0, and seeds `quad` at all four residues.
+
+### 3649. THE FAX RECEIVER'S BLOCK IS A STRAIGHT CONCATENATION OF FIVE DSP OBJECTS, AND THEIR `sizeof`s PROVE THE OFFSETS
+
+`DemodDataV27` reaches five sub-objects of the block at `obj + 0x54`. Their
+offsets are read from its call sites; their SIZES come from headers written by
+other batches, from the objects' own constructors, and the two agree with no
+slack at all:
+
+| offset | object | `sizeof` | ends at |
+|--:|---|--:|--:|
+| 0x004c | `struct fpm_mrf` | 0x1c | 0x0068 |
+| 0x0068 | `struct fpm_agc` | 0x2c | 0x0094 |
+| 0x0094 | `struct fpm_sre` | 0x90 | 0x0124 |
+| 0x0124 | `struct fpm_fse` | 0x4e18 | 0x4f3c |
+| 0x4f40 | two `short *` scratch pointers, four-byte aligned | | |
+
+Five objects, four exact abutments and one four-byte alignment pad. Nothing
+was fitted: the sizes were fixed before this function was read, and any one
+offset being wrong would have made the chain overlap. `DemodDataV29`'s block
+at `obj + 0x50` is the same five in the same order four bytes lower --
+0x48, 0x64, 0x90, 0x120 -- but its scratch pointers are at 0x4f54 and 0x4f58
+rather than immediately after the equaliser, leaving 0x1c bytes unaccounted
+for between them. `struct fpm_mrf` is 0x1c bytes, which is a hypothesis and
+not a reading.
+
+### 3650. `FPM_AGC_agc` RETURNS THE VALUE IT STORES IN `agc->signal`, AND THE OBJECT HAS ONE `ret` TO PROVE IT
+
+`v23rx.c`, `bwchdem.c` and `b103fp.c` all read `agc.signal` after the call and
+say the returned value "is the same number". That was an assertion; here is the
+measurement. `FPM_AGC_agc` has exactly ONE `ret`, at 0xa6894, and the three
+instructions before its epilogue are
+
+    a6884  setg   %dl
+    a6887  movzbl %dl,%eax
+    a688a  mov    %eax,0x1c(%edi)
+
+with `%edi` the state pointer and 0x1c the field `fpm_agc.h` already calls
+`signal`. The value returned and the value stored are computed once and are
+the same on the only path out of the function, so reading the field after the
+call is exactly equivalent and not merely close.
+
+All four `DemodData*` functions use that return. `DemodDataV27` moves it
+straight into `%esi` at 0xa5992; V.17, V.29 and V.32 stash it on the stack.
+Our `FPM_AGC_agc` is declared `void`, so the reconstruction must read the
+field -- the convention the three files above already set. Correcting the
+signature belongs to whoever owns `src/dsp/fpm_agc.c`, not to a caller's batch.
+
+### 3651. THE `signal` FLAG GATES THREE FIELDS INTO THREE OTHERS, AND V.27 AND V.29 DISAGREE ABOUT THE THIRD
+
+Both functions do the same three-and-a-zero, at different offsets in their own
+receiver block. Writing V.29's relative to 0x164 and V.27's relative to 0x168
+lines them up:
+
+| | source | destination |
+|---|---|---|
+| the early one | `+0x04 & signal` | V.27 `+0xdc`, V.29 `+0xd8` |
+| base + 0 | `+0x08 & signal` | |
+| base + 4 | zero, unconditionally | |
+| base + 8 | V.27 `+0x10 & signal`, V.29 `+0x20 & signal` | |
+
+So the two agree on the shape, on the first two sources and on the
+unconditional zero, and take their third source from different fields. All six
+are 32-bit and `signal` is 0 or 1, so the operation is a pass-or-clear rather
+than a mask. What the six fields MEAN is not established and no name is given
+to any of them here; they are recorded at their offsets so that the batch that
+writes these functions has the shape without having to re-derive it.
+
+### 3652. THE FOUR `DemodData*` FUNCTIONS WERE NOT WRITTEN, AND THIS IS WHAT STOPPED THEM
+
+Read, disassembled and understood; not committed, because no differential test
+was built for them and CLAUDE.md's rule is not relaxed for a function that
+merely looks right.
+
+What the test needs, and why it is not small: the receiver block is about
+0x4f60 bytes and holds five initialised DSP objects (3649), so the fixture must
+build an `fpm_mrf`, an `fpm_agc`, an `fpm_sre`, an `fpm_fse` and an `fpm_mtd`
+-- and for V.29 and V.17 an `fpm_tone` as well -- each through its own `ref_`
+constructor with its own configuration and tables, laid at exact offsets, on
+both sides. Then the separating trials: the `signal` gate of 3651 needs its
+three sources seeded to three DIFFERENT multi-bit values or transposing them is
+invisible (finding 3574's shape), and needs `signal` driven at both 0 and 1,
+which means seeding the AGC so its `setg` goes both ways rather than hoping a
+stimulus sweep gets there.
+
+The shape is settled and recorded, so the next batch starts from
+`docs/findings.md` rather than from `dis.py`:
+
+- `DemodDataV27` (0xa5950): AGC, then a gate on `*(short *)(obj+0x50 + 0x10)`
+  around `FPM_MTD_detect`, which returns 0 from the whole function if it fires;
+  then MRF, SRE and FSE with two scratch buffers between them.
+- `DemodDataV29` (0xa5ff0) adds, before the detector, a halving loop --
+  `scratch[i] = in[i] >> 1` over `count` samples, arithmetic shift -- and a
+  `FPM_TONE_kill` pass over that scratch. Its gate is at `+0x14` of the shared
+  block and its detector and tone objects are its `+0x00` and `+0x04`.
+- `DemodDataV17` (0xa50a0) is the same shape as V.29 with the block at
+  `obj + 0x5c`, the shared block at `obj + 0x4c` and the gate at `+0x18`.
+- `DemodDataV32` (0x81c00) is NOT a fourth copy: it runs MRF and
+  `FPM_ECC_cancel` BEFORE the AGC, has no `FPM_MTD_detect` at all, and ends
+  with `FPM_rms` and a second diagnostic. Model it on itself.
+
+Three different gate offsets -- 0x10, 0x14, 0x18 -- across the three fax
+modulations is a transposable set, so whoever writes them must make the shared
+block hold different values at all three or a swap will not separate.
