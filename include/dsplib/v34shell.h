@@ -202,8 +202,24 @@ struct v34_shell {
 	/*
 	 * The frame putFrame emits: one wide value, then four groups of
 	 * (1 bit, a small width, and two of `fa14`).
+	 *
+	 * THE WIDE VALUE IS `frame[0..1]` AS ONE 32-BIT QUANTITY, and
+	 * `getFrame` stores it that way -- `mov %eax,0x2a30(%esi)` at
+	 * 0x57a68 for the value and `mov %edx,0x2a30(%esi)` at 0x57da5 for
+	 * the explicit zero, with `%esi` the object and the transmit shell
+	 * at +0x1be0, so 0x2a30 is this offset.  The SPLIT path stores the
+	 * two halves separately instead -- `mov %dx,0x2a30(%esi)` at
+	 * 0x57cac, 16 bits -- and `demapFrame` reaches `frame[2 + ...]` with
+	 * `lea 0xe54(%ebx,%edx,8)` at 0x5965a, four shorts a group.
+	 *
+	 * So it is genuinely both, and the union says so.  `frame` keeps its
+	 * name and its type; only the five `*(int *)&frame[0]` accesses
+	 * become `frame_wide`.
 	 */
-	short           frame[18];		/* +0xe50 */
+	union {
+		short           frame[18];	/* +0xe50 */
+		int             frame_wide;	/* +0xe50, frame[0..1] as one */
+	};
 	/*
 	 * +0xe74.  The scrambler's shift register, three words wide, shared
 	 * by both contexts -- scrambleGP* drives it forwards and
@@ -251,14 +267,28 @@ struct v34_shell {
 	/*
 	 * Per-state parameters, one six-short group each.  The second entry
 	 * of every group is unread by decodeDepth.
+	 *
+	 * THE LAST FOUR WERE NEVER FOUR FIELDS.  `demapFrame` stores the
+	 * caller's four bytes with ONE `movl` per pair -- `mov %edi,0x12d0
+	 * (%ebx,%eax,4)` at 0x59673 on the even arm and `mov %edx,0x12d4
+	 * (%ecx,%ebp,4)` at 0x59193 on the odd one -- and reads them back
+	 * one at a time with `movswl (%edi)` at 0x5923d, off a pointer it
+	 * steps by two.  So it is one four-short parameter group written as
+	 * two 32-bit halves.
+	 *
+	 * The tree spelled the store `*(int *)&state[i].a`, which GCC 13
+	 * warns about, and the walk `(&state[st].a)[i]` for i in 0..3, which
+	 * warns NOWHERE and is the same defect: pointer arithmetic across
+	 * four separately declared members.  The declaration retires both.
+	 * `par` was `a`, `b`, `c`, `d`.
 	 */
 	struct {
 		short   seed;			/* +0x0 walk's first branch */
 		short   unread_2;		/* +0x2 */
-		short   a;			/* +0x4 */
-		short   b;			/* +0x6 */
-		short   c;			/* +0x8 */
-		short   d;			/* +0xa */
+		union {
+			short   par[4];		/* +0x4 was a, b, c, d */
+			int     pair[2];	/* +0x4 as demapFrame stores */
+		};
 	}               state[32];		/* +0x12cc */
 	short           state_idx;		/* +0x144c */
 };

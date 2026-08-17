@@ -482,13 +482,13 @@ main(void)
 			 */
 			for (k = 0; k < 32; k++) {
 				a.state[k].seed = b.state[k].seed = 0;
-				a.state[k].a = b.state[k].a =
+				a.state[k].par[0] = b.state[k].par[0] =
 				    (short)((k % 9) * 4 - 16);
-				a.state[k].b = b.state[k].b =
+				a.state[k].par[1] = b.state[k].par[1] =
 				    (short)((k % 7) * 4 - 12);
-				a.state[k].c = b.state[k].c =
+				a.state[k].par[2] = b.state[k].par[2] =
 				    (short)((k % 11) * 4 - 20);
-				a.state[k].d = b.state[k].d =
+				a.state[k].par[3] = b.state[k].par[3] =
 				    (short)((k % 5) * 4 - 8);
 			}
 			a.state_idx = b.state_idx = (short)(si * 7 + 1);
@@ -560,13 +560,13 @@ main(void)
 				a.trellis[k] = b.trellis[k] = 0;
 			for (k = 0; k < 32; k++) {
 				a.state[k].seed = b.state[k].seed = 0;
-				a.state[k].a = b.state[k].a =
+				a.state[k].par[0] = b.state[k].par[0] =
 				    (short)((k % 9) * 4 - 16);
-				a.state[k].b = b.state[k].b =
+				a.state[k].par[1] = b.state[k].par[1] =
 				    (short)((k % 7) * 4 - 12);
-				a.state[k].c = b.state[k].c =
+				a.state[k].par[2] = b.state[k].par[2] =
 				    (short)((k % 11) * 4 - 20);
-				a.state[k].d = b.state[k].d =
+				a.state[k].par[3] = b.state[k].par[3] =
 				    (short)((k % 5) * 4 - 8);
 			}
 			for (k = 0; k < 16; k++)
@@ -800,7 +800,7 @@ main(void)
 			 * that way rather than as a short and a zero.
 			 */
 			if (nb > 16)
-				*(int *)&tx->frame[0] =
+				tx->frame_wide =
 				    (int)((((unsigned)1 << nb) - 1)
 					  & 0x395a5au);
 			else {

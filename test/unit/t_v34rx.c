@@ -514,8 +514,8 @@ main(void)
 			for (it = 0; it < 60; it++) {
 				unsigned b;
 
-				oa.f25d0 = ob.f25d0 = (short)(it * 811 - 9000);
-				oa.f25d2 = ob.f25d2 = (short)(it * 337 - 5000);
+				oa.txpoint.c[0] = ob.txpoint.c[0] = (short)(it * 811 - 9000);
+				oa.txpoint.c[1] = ob.txpoint.c[1] = (short)(it * 337 - 5000);
 				txmit(&oa); ref_txmit(&ob);
 
 				for (b = 0; b < sizeof(oa); b++) {
@@ -1276,7 +1276,8 @@ main(void)
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 			oa.echo1.adapt_count = ob.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
-				oa.hist_2aa8[b] = ob.hist_2aa8[b] = 0;
+				oa.hist_2aa8[b][0] = ob.hist_2aa8[b][0] =
+				oa.hist_2aa8[b][1] = ob.hist_2aa8[b][1] = 0;
 			for (b = 0; b < 0x258; b++)
 				oa.hist_2f58[b] = ob.hist_2f58[b] = 0;
 
@@ -1419,13 +1420,13 @@ main(void)
 				for (k = 0; k < 32; k++) {
 					sa->state[k].seed =
 					sb->state[k].seed = 0;
-					sa->state[k].a = sb->state[k].a =
+					sa->state[k].par[0] = sb->state[k].par[0] =
 					    (short)((k % 9) * 4 - 16);
-					sa->state[k].b = sb->state[k].b =
+					sa->state[k].par[1] = sb->state[k].par[1] =
 					    (short)((k % 7) * 4 - 12);
-					sa->state[k].c = sb->state[k].c =
+					sa->state[k].par[2] = sb->state[k].par[2] =
 					    (short)((k % 11) * 4 - 20);
-					sa->state[k].d = sb->state[k].d =
+					sa->state[k].par[3] = sb->state[k].par[3] =
 					    (short)((k % 5) * 4 - 8);
 				}
 				for (k = 0; k < 16; k++)
@@ -2629,7 +2630,8 @@ main(void)
 			oa2.echo0.adapt_count = ob2.echo0.adapt_count = 0;
 			oa2.echo1.adapt_count = ob2.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
-				oa2.hist_2aa8[b] = ob2.hist_2aa8[b] = 0;
+				oa2.hist_2aa8[b][0] = ob2.hist_2aa8[b][0] =
+				oa2.hist_2aa8[b][1] = ob2.hist_2aa8[b][1] = 0;
 			for (b = 0; b < 0x258; b++)
 				oa2.hist_2f58[b] = ob2.hist_2f58[b] = 0;
 			for (b = 0; b < V34_TXQ_RING; b++)
