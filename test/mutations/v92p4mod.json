@@ -35,8 +35,8 @@
  },
  {
   "label": "+0x18 is not cleared",
-  "find": "\tword_18 = 0;\n\tbyte_1c = 0;",
-  "replace": "\tbyte_1c = 0;"
+  "find": "\tword_18 = 0;\n\tbyte_1c = 0;\n}",
+  "replace": "\tbyte_1c = 0;\n}"
  },
  {
   "label": "+0x1c is not cleared",

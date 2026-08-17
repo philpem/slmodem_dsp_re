@@ -1,20 +1,19 @@
 /*
- * V92Phase4Modulator.h -- the V.92 phase 4 upstream symbol source, PARTIAL.
+ * V92Phase4Modulator.h -- the V.92 phase 4 upstream symbol source, COMPLETE.
  *
- * Reconstructed from dsplibs.o.  The class has 34 distinct members and
- * THIRTY-THREE of them are written in src/pump/v90/V92Phase4Modulator.cpp --
+ * Reconstructed from dsplibs.o.  The class has 34 distinct members and ALL
+ * THIRTY-FOUR are written in src/pump/v90/V92Phase4Modulator.cpp --
  * the constructor (C1 at .text+0x17970 and C2 at +0x17a20, 164 bytes each),
  * the destructor (D2 at +0x16de0 and D1 at +0x16e40, 87 bytes each), the
  * thirty members of the "generate / recived / exit / resetBefor" surface, and
  * `generateSymbol` (.text+0x18050, 4,055 B), which is the state machine the
  * other generators are the arms of.
  *
- * The ONE not written is `reset`
+ * ALL 34 ARE NOW WRITTEN.  The last was `reset`
  * (`_ZN18V92Phase4Modulator5resetEsh23V92Phase4ModulatorStatejj`, 290 B at
- * .text+0x19030).  It became READY the moment `generateSymbol` landed -- it
- * calls it in a loop -- and it is not declared here, because the enum its
- * mangling names is not modelled and a declaration whose signature is guessed
- * is worse than no declaration.
+ * .text+0x19030), which became READY the moment `generateSymbol` landed -- it
+ * calls it in a loop.  The enum its mangling names is defined below and
+ * carries no state codes; the note there says why.
  *
  * THE OBJECT'S SPELLING OF "received" IS "recived" throughout, and it is the
  * mangling's -- `_ZN18V92Phase4Modulator13recivedSUVtagEv`.  Reproduced.
@@ -85,8 +84,10 @@
  * cmp $0x1; ja <default>` -- the `jl` at .text+0x17657 and +0x17331 is a
  * SIGNED branch, which GCC cannot emit for an unsigned switch value.  The
  * enum `V92Phase4ModulatorState` that `reset`'s mangling names is therefore
- * NOT this field's type as far as anything measured goes; `reset` is unwritten
- * and the question is left to whoever writes it.
+ * NOT this field's type as far as anything measured goes, and `reset` -- now
+ * written -- does not settle it either: it stores the argument whole with one
+ * 32-bit `mov` that neither signedness would distinguish.  So the field stays
+ * `int` and the enum carries no state codes; see its definition below.
  *
  * ---------------------------------------------------------------------------
  * WHAT +0x7c IS, AND WHAT ITS LENGTH IS NOT
@@ -119,6 +120,31 @@ class V92Parameters;
 #define V92P4M_SCRAM_TAP1	5
 #define V92P4M_SCRAM_TAP2	23
 #define V92P4M_SCRAM_SLACK	99
+
+/*
+ * THE TYPE THE MANGLING NAMES.  `reset`'s third argument is
+ * `23V92Phase4ModulatorState` and the object stores it whole into `state` with
+ * one 32-bit `mov %eax,(%esi)` at .text+0x19068, so the enum's value set IS
+ * `state`'s value set and this is its one home.
+ *
+ * IT IS DELIBERATELY EMPTY OF ENUMERATORS.  `state` itself stays an `int`,
+ * because `recivedEd`'s and `recivedSUVtag`'s `jl` are SIGNED branches and
+ * GCC cannot emit those for an unsigned switch value -- and an enum whose
+ * enumerators are all non-negative may have an unsigned underlying type.
+ * Naming the codes here as well as in the thirteen `#define`s below would be
+ * two spellings of one alphabet, which is what "one type, one home" exists to
+ * stop; naming them here INSTEAD would change `state`'s comparisons from
+ * `int` to enum ones.  So the type carries the mangled name and nothing else,
+ * and the codes stay where they were derived.
+ *
+ * The one enumerator is what C++98 requires: an enum with no enumerators is
+ * ill-formed.  It is not a state code and no arm dispatches on it -- 0 is one
+ * of the fifteen values NOTHING NAMES, and `V92Modulator::enterPhase4` is the
+ * only caller in the object, passing a literal zero (.text+0x148d3).
+ */
+enum V92Phase4ModulatorState {
+	V92P4M_RESET_STATE_ZERO = 0
+};
 
 /*
  * The four `state` codes a format string names.  See the block comment above
@@ -198,6 +224,22 @@ public:
 	V92Phase4Modulator(V92Parameters *params, V92BitsToSymbol *bitsToSymbol,
 			   V92CP *cp, V92MappingParams *mappingParams);
 	~V92Phase4Modulator();
+
+	/*
+	 * .text+0x19030, 290 bytes.  All five argument types are the
+	 * mangling's; the return type is measured `void`.
+	 *
+	 *   amplitudeArg  -> `amplitude` (+0x40) and on to `V92Mapper::reset`
+	 *   bitsArg       -> `byte_42` raw, and `bitsPerSymbol = bitsArg + 2`
+	 *   stateArg      -> `state`
+	 *   nSymbols      -> how many times `generateSymbol` is called before
+	 *                    returning; zero means not at all
+	 *   suvLimit      -> `word_44`, the SUV threshold state 5 compares
+	 *                    `word_18` against, offset by 800
+	 */
+	void reset(short amplitudeArg, unsigned char bitsArg,
+		   V92Phase4ModulatorState stateArg, unsigned int nSymbols,
+		   unsigned int suvLimit);
 
 	/*
 	 * The thirty written members.  Return types are not mangled,

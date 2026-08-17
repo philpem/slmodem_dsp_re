@@ -7827,3 +7827,82 @@ swaps it is registered `equivalent` with this entry as its reason.
 **Not corrected**: clamping the cursor would make the reconstruction disagree
 with the blob for any caller that does produce a row above 64, which is the one
 thing it may not do.
+
+## D800 ✅ `V92Modulator::resamplerPhaseOffset` is read by `mkResampledSignal` and written by no member of the class
+
+`+0x24` is loaded three times, all of them inside `mkResampledSignal` and all of
+them single-precision:
+
+    14ae6:  d8 43 24   fadds  0x24(%ebx)    the phase step itself
+    14b75:  d9 43 24   flds   0x24(%ebx)    the diagnostic's whole and fractional
+    14bdb:  d8 5b 24   fcomps 0x24(%ebx)    the diagnostic's sign
+
+The whole class was swept for a store to it -- .text+0x14050 to +0x156e0, which
+is all eighteen symbols including both constructor and both destructor variants
+-- and there is none.  `progress`'s four `0x24(%esp)` are its own frame and not
+the object.  So a modulator that reaches `resamplerPhaseChange == 2` before
+something OUTSIDE the class has filled the word advances the resampler's phase
+by whatever `sysdep_malloc` left there, and `Resampler::setNormalizedPhase`
+takes anything outside `[0, 1)` to zero, so the observable effect ranges from a
+small timing error to the phase being reset.
+
+It is the second half of the pair `V92Modulator.h` has recorded since the
+constructor batch, and the halves have separated: `+0x3c` turned out to be
+written after all, by `progress`, so only `+0x24` is left.
+
+Reproduced with no initialisation added, and DRIVEN: `t_v92modstate.cpp` seeds
+the word identically on both sides, never zeroes it, and sweeps the `OFFSET` arm
+over five values including a negative one and one past 1.0.  The two sides agree
+BECAUSE nobody wrote it, and a reconstruction that helpfully cleared it fails.
+Finding 5900.
+
+## D801 ⚠ `mkResampledSignal` subtracts the split point from the block length without testing it
+
+The second of the two resample calls is given
+`blockRemaining - resamplerPhaseChangeAt` as its sample count:
+
+    14a36:  mov 0x3c(%ebx),%eax
+    14a39:  mov 0x8(%ebx),%ecx
+    14a3c:  sub %eax,%ecx
+
+-- an unsigned subtraction with nothing between it and the call.  A split point
+past the end of the block therefore asks `Resampler::resample` for about four
+billion input samples out of a buffer of `blockSize + 10` floats.  Its input
+pointer, `resampleIn + resamplerPhaseChangeAt`, is already past the end by then.
+
+`progress` is the only writer of the pair and is unwritten, so whether the
+condition is reachable is not settled here; nothing in the 662 bytes bounds it
+either way.
+
+Reproduced with no guard added, and NOT DRIVEN: `t_v92modstate.cpp` keeps the
+split point in `0 .. blockRemaining`.  A trial past it walks off both sides'
+buffers at once and would measure the allocator rather than the reading, which
+is D571's argument.  Finding 5900.
+
+## D802 ⚠ `mkResampledSignal`'s wrapped join computes its trip count as `n2 - 1` unsigned, and does not test for zero
+
+The second `Resampler::resample` reports how many samples it produced through a
+reference argument.  When the resampler's phase wrapped past 1.0 the join drops
+that segment's first sample, so the copy runs `n2 - 1` times:
+
+    14a79:  8b 7c 24 28   mov 0x28(%esp),%edi     n2
+    14a7d:  4f            dec %edi
+    14a7e:  83 ff 00      cmp $0x0,%edi
+    14a81:  76 2d         jbe 14ab0
+
+`jbe` is CF or ZF, so at `n2 == 0` the decrement leaves 0xffffffff, neither flag
+is set, and the loop is ENTERED -- four billion four-byte copies out of
+`resampleTail` and into `resampleOut`, both of which hold `nSamples + 10`
+floats.  The reported length is `n1 + n2 - 1`, which underflows the same way.
+
+`n2` is zero when the second segment is given no input and the resampler has
+fewer than two samples pending, which `Resampler::resample`'s `avail > 1` guard
+makes reachable: `resamplerPhaseChangeAt == blockRemaining` is enough.  So this
+is the same shape as D801 one call later and from a different instruction.
+
+Reproduced with no guard added -- the C is `for (i = 0; i < n2 - 1; i++)` over
+an `unsigned int`, which is the object -- and NOT DRIVEN: `t_v92modstate.cpp`
+gives the second segment at least eight input samples on every split trial and
+asserts that it produced at least one output.  A trial at zero walks off both
+sides' buffers at once, which measures the allocator rather than the reading
+(D571's argument).  Finding 5900.
