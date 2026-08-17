@@ -495,11 +495,17 @@ public:
 	 * mangling types the element, and then walk it with
 	 * `movzbl 0x305c(%ebx,%esi,1)` -- a byte load with a stride of one.
 	 *
-	 * THE LENGTH IS A BOUND, NOT A MEASUREMENT.  `nbits` below is at
-	 * +0x34f4 and nothing anywhere reaches between, so 0x498 is how much
-	 * room there is; no allocation, no memset and no bounds test in the
-	 * object states the array's declared size.  If a later batch finds a
-	 * field inside this run, the array shortens and nothing else moves.
+	 * THE LENGTH IS A BOUND, NOT A MEASUREMENT, and the scan behind it is
+	 * named so a later reader can widen it rather than repeat it.  Every
+	 * `.text` symbol whose name carries `V90Phase4Demodulator` or
+	 * `V90Demodulator` -- forty of them, which is this class's own members
+	 * plus the only class that holds one (at its +0x1e0) -- was
+	 * disassembled and searched for a displacement in 0x3060..0x34f3 off
+	 * any register.  There are NONE.  So 0x498 is how much room there is
+	 * and nothing in the object subdivides it; no allocation, no memset
+	 * and no bounds test states the array's declared size.  If a later
+	 * batch finds a field inside this run -- through a pointer this scan
+	 * cannot follow, say -- the array shortens and nothing else moves.
 	 */
 	unsigned char bits[0x498];
 
