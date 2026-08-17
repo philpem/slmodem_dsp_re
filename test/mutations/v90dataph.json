@@ -177,8 +177,8 @@
  },
  {
   "label": "getAT_UD: the symbol rate is not 8000",
-  "find": "\tresults->word_0b4 = 8000;",
-  "replace": "\tresults->word_0b4 = 7999;"
+  "find": "\tresults->rxBaudRate = 8000;",
+  "replace": "\tresults->rxBaudRate = 7999;"
  },
  {
   "label": "getAT_UD: the dB scale is twenty",
@@ -212,8 +212,8 @@
  },
  {
   "label": "getAT_UD: the reserved word is not cleared",
-  "find": "\tresults->word_0bc = 0;",
-  "replace": "\tresults->word_0bc = 1;"
+  "find": "\tresults->rxCarrier = 0;",
+  "replace": "\tresults->rxCarrier = 1;"
  },
  {
   "label": "getRbsPattern: the loop stops one short",

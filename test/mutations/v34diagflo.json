@@ -1,0 +1,142 @@
+[
+ {
+  "note": "The three VPcmFloModem visual diagnostics against t_v34diag.  A SECOND suite over this source, beside `vpcmflomodem` and `vpcmep3`: suites.json maps one name to one source and one binary, and t_vpcmflomodem does not call these three at all, so a mutation in them would read NOT CAUGHT against it -- which is the same output an untested claim gives.  Twenty-nine other sources in this file are already shared that way."
+ },
+ {
+  "label": "getConstellation: the PCM guard is inverted",
+  "find": "\tif (pcmSessionType != 0 && info0Layout == 0)\n\t\treturn 0;\n\n\tdem = modem.demodulator;",
+  "replace": "\tif (pcmSessionType == 0 && info0Layout != 0)\n\t\treturn 0;\n\n\tdem = modem.demodulator;"
+ },
+ {
+  "label": "getConstellation: the count is not clamped",
+  "find": "\tn = dem->word_258;\n\tif (n > maxCount)\n\t\tn = maxCount;",
+  "replace": "\tn = dem->word_258;"
+ },
+ {
+  "label": "getConstellation: the sweep counter does not advance",
+  "find": "\t\t\tint t = sweepCounter++;\n\n\t\t\tpoints[i].re = VPCM_TRACE_X_STEP *\n\t\t\t    (t / VPCM_TRACE_P3_DIVISOR % VPCM_TRACE_P3_POSITIONS)",
+  "replace": "\t\t\tint t = sweepCounter;\n\n\t\t\tpoints[i].re = VPCM_TRACE_X_STEP *\n\t\t\t    (t / VPCM_TRACE_P3_DIVISOR % VPCM_TRACE_P3_POSITIONS)"
+ },
+ {
+  "label": "getConstellation: the sweep counter is unsigned",
+  "find": "\t\t\tint t = sweepCounter++;\n\n\t\t\tpoints[i].re = VPCM_TRACE_X_STEP *\n\t\t\t    (t / VPCM_TRACE_DIVISOR % VPCM_TRACE_POSITIONS +\n\t\t\t     VPCM_TRACE_LANE_PITCH * (int)((lane +\n\t\t\t      (unsigned int)i) % VPCM_TRACE_LANES))\n\t\t\t    - VPCM_TRACE_X_ORIGIN;",
+  "replace": "\t\t\tunsigned int t = (unsigned int)sweepCounter++;\n\n\t\t\tpoints[i].re = (int)(VPCM_TRACE_X_STEP *\n\t\t\t    (t / VPCM_TRACE_DIVISOR % VPCM_TRACE_POSITIONS +\n\t\t\t     VPCM_TRACE_LANE_PITCH * ((lane +\n\t\t\t      (unsigned int)i) % VPCM_TRACE_LANES))\n\t\t\t    - VPCM_TRACE_X_ORIGIN);"
+ },
+ {
+  "label": "getConstellation: phase 3 and the data phase are exchanged",
+  "find": "\tif (dem->inPhase3 == VPCM_IN_PHASE3) {",
+  "replace": "\tif (dem->inPhase3 != VPCM_IN_PHASE3) {"
+ },
+ {
+  "label": "getConstellation: the phase-3 sweep is 749 positions",
+  "find": "#define VPCM_TRACE_P3_POSITIONS\t750",
+  "replace": "#define VPCM_TRACE_P3_POSITIONS\t749"
+ },
+ {
+  "label": "getConstellation: the phase-3 sweep advances every fourth point",
+  "find": "#define VPCM_TRACE_P3_DIVISOR\t5",
+  "replace": "#define VPCM_TRACE_P3_DIVISOR\t4"
+ },
+ {
+  "label": "getConstellation: the data sweep is 99 positions",
+  "find": "#define VPCM_TRACE_POSITIONS\t100",
+  "replace": "#define VPCM_TRACE_POSITIONS\t99"
+ },
+ {
+  "label": "getConstellation: the data sweep advances every fourteenth point",
+  "find": "#define VPCM_TRACE_DIVISOR\t15",
+  "replace": "#define VPCM_TRACE_DIVISOR\t14"
+ },
+ {
+  "label": "getConstellation: the lanes are 139 positions apart",
+  "find": "#define VPCM_TRACE_LANE_PITCH\t140",
+  "replace": "#define VPCM_TRACE_LANE_PITCH\t139"
+ },
+ {
+  "label": "getConstellation: there are five lanes",
+  "find": "#define VPCM_TRACE_LANES\t6u",
+  "replace": "#define VPCM_TRACE_LANES\t5u"
+ },
+ {
+  "label": "getConstellation: the lane ignores word_260",
+  "find": "\t\t\t     VPCM_TRACE_LANE_PITCH * (int)((lane +\n\t\t\t      (unsigned int)i) % VPCM_TRACE_LANES))",
+  "replace": "\t\t\t     VPCM_TRACE_LANE_PITCH * (int)((unsigned int)i %\n\t\t\t      VPCM_TRACE_LANES))"
+ },
+ {
+  "label": "getConstellation: the horizontal step is 34",
+  "find": "#define VPCM_TRACE_X_STEP\t35",
+  "replace": "#define VPCM_TRACE_X_STEP\t34"
+ },
+ {
+  "label": "getConstellation: the origin is not subtracted",
+  "find": "#define VPCM_TRACE_X_ORIGIN\t14000",
+  "replace": "#define VPCM_TRACE_X_ORIGIN\t0"
+ },
+ {
+  "label": "getConstellation: the scale is a float, not a double",
+  "find": "#define VPCM_CONSTEL_SCALE\t1.7",
+  "replace": "#define VPCM_CONSTEL_SCALE\t1.7f"
+ },
+ {
+  "label": "getConstellation: the scale is 1.8",
+  "find": "#define VPCM_CONSTEL_SCALE\t1.7",
+  "replace": "#define VPCM_CONSTEL_SCALE\t1.8"
+ },
+ {
+  "label": "getConstellation: the sample rounds to nearest",
+  "find": "\t\t\tpoints[i].im = (int)(VPCM_CONSTEL_SCALE * values[i]);\n\t\t}\n\t} else {",
+  "replace": "\t\t\tpoints[i].im = (int)(VPCM_CONSTEL_SCALE * values[i] +\n\t\t\t\t\t     0.5);\n\t\t}\n\t} else {"
+ },
+ {
+  "label": "getLinearEqualizer: the PCM guard is dropped",
+  "find": "\tif (pcmSessionType != 0 && info0Layout == 0)\n\t\treturn 0;\n\n\teq = modem.demodulator->equalizer;\n\n\tn = eq->linearEquLength;",
+  "replace": "\teq = modem.demodulator->equalizer;\n\n\tn = eq->linearEquLength;"
+ },
+ {
+  "label": "getLinearEqualizer: the DFE's taps are reported",
+  "find": "\tn = eq->linearEquLength;\n\tif (n > maxCount)\n\t\tn = maxCount;\n\tcoefs = eq->linearEquCoefs;",
+  "replace": "\tn = eq->dfeLength;\n\tif (n > maxCount)\n\t\tn = maxCount;\n\tcoefs = eq->dfeCoefs;"
+ },
+ {
+  "label": "getLinearEqualizer: the count is not clamped",
+  "find": "\tn = eq->linearEquLength;\n\tif (n > maxCount)\n\t\tn = maxCount;",
+  "replace": "\tn = eq->linearEquLength;"
+ },
+ {
+  "label": "getLinearEqualizer: the tap goes in the real half",
+  "find": "\tn = eq->linearEquLength;\n\tif (n > maxCount)\n\t\tn = maxCount;\n\tcoefs = eq->linearEquCoefs;\n\n\tfor (i = 0; i < n; i++) {\n\t\tpoints[i].re = 0;\n\t\tpoints[i].im = (int)(coefs[i] * VPCM_EQU_SCALE);\n\t}",
+  "replace": "\tn = eq->linearEquLength;\n\tif (n > maxCount)\n\t\tn = maxCount;\n\tcoefs = eq->linearEquCoefs;\n\n\tfor (i = 0; i < n; i++) {\n\t\tpoints[i].im = 0;\n\t\tpoints[i].re = (int)(coefs[i] * VPCM_EQU_SCALE);\n\t}"
+ },
+ {
+  "label": "the equaliser scale is a thousand",
+  "find": "#define VPCM_EQU_SCALE\t\t10000.0f",
+  "replace": "#define VPCM_EQU_SCALE\t\t1000.0f"
+ },
+ {
+  "label": "the equaliser scale is a double",
+  "find": "#define VPCM_EQU_SCALE\t\t10000.0f",
+  "replace": "#define VPCM_EQU_SCALE\t\t10000.0",
+  "equivalent": true,
+  "why": "10000 is exactly representable as both a `float` and a `double`, and under `-mfpmath=387` the product is computed at 80 bits either way, so `coefs[i] * 10000.0f` and `coefs[i] * 10000.0` are the same value for every input.  The object's `flds` is what says the literal was a float; nothing observable turns on it, which is why `getConstellation`'s `fldl` -- where the two constants are NOT the same value -- is the one that separates."
+ },
+ {
+  "label": "getDFE: the PCM guard is dropped",
+  "find": "\tif (pcmSessionType != 0 && info0Layout == 0)\n\t\treturn 0;\n\n\teq = modem.demodulator->equalizer;\n\n\tn = eq->dfeLength;",
+  "replace": "\teq = modem.demodulator->equalizer;\n\n\tn = eq->dfeLength;"
+ },
+ {
+  "label": "getDFE: the linear equaliser's taps are reported",
+  "find": "\tn = eq->dfeLength;\n\tif (n > maxCount)\n\t\tn = maxCount;\n\tcoefs = eq->dfeCoefs;",
+  "replace": "\tn = eq->linearEquLength;\n\tif (n > maxCount)\n\t\tn = maxCount;\n\tcoefs = eq->linearEquCoefs;"
+ },
+ {
+  "label": "getDFE: the count is not clamped",
+  "find": "\tn = eq->dfeLength;\n\tif (n > maxCount)\n\t\tn = maxCount;",
+  "replace": "\tn = eq->dfeLength;"
+ },
+ {
+  "label": "the phase-3 test is against zero",
+  "find": "#define VPCM_IN_PHASE3\t\t1u",
+  "replace": "#define VPCM_IN_PHASE3\t\t0u"
+ }
+]

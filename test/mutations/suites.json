@@ -671,5 +671,21 @@
  "v90eqdata": [
   "src/pump/v90/V90Equalizer.cpp",
   "build/test/t_v90eqdata"
+ ],
+ "v34diag": [
+  "src/pump/v34/v34diag.cpp",
+  "build/test/t_v34diag"
+ ],
+ "v34vdiag": [
+  "src/pump/v34/v34diag.cpp",
+  "build/test/t_v34diag"
+ ],
+ "v34diagflo": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_v34diag"
+ ],
+ "v34diagk56": [
+  "src/pump/v90/K56FlexFloModem.cpp",
+  "build/test/t_v34diag"
  ]
 }

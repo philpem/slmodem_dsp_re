@@ -1,0 +1,35 @@
+[
+ {
+  "note": "The six K56FlexFloModem visual diagnostics against t_v34diag.  Three bytes each in the object, so the interesting claim is what they do NOT do: each mutation gives one of them a body that reports a point or writes through the array, which is what a stub must be shown not to do.  The two resampler ones are mutated on the ARRAY rather than on the return value, because the dispatcher discards their result and only a write is observable."
+ },
+ {
+  "label": "K56flex getConstellation reports a point",
+  "find": "int\nK56FlexFloModem::getConstellation(int_complex *, unsigned long)\n{\n\treturn 0;\n}",
+  "replace": "int\nK56FlexFloModem::getConstellation(int_complex *p, unsigned long n)\n{\n\tif (n == 0)\n\t\treturn 0;\n\tp[0].re = 1;\n\tp[0].im = 1;\n\treturn 1;\n}"
+ },
+ {
+  "label": "K56flex getLinearEqualizer reports a point",
+  "find": "int\nK56FlexFloModem::getLinearEqualizer(int_complex *, unsigned long)\n{\n\treturn 0;\n}",
+  "replace": "int\nK56FlexFloModem::getLinearEqualizer(int_complex *p, unsigned long n)\n{\n\tif (n == 0)\n\t\treturn 0;\n\tp[0].re = 2;\n\tp[0].im = 2;\n\treturn 1;\n}"
+ },
+ {
+  "label": "K56flex getDFE reports a point",
+  "find": "int\nK56FlexFloModem::getDFE(int_complex *, unsigned long)\n{\n\treturn 0;\n}",
+  "replace": "int\nK56FlexFloModem::getDFE(int_complex *p, unsigned long n)\n{\n\tif (n == 0)\n\t\treturn 0;\n\tp[0].re = 3;\n\tp[0].im = 3;\n\treturn 1;\n}"
+ },
+ {
+  "label": "K56flex getDecisionErrors reports a point",
+  "find": "int\nK56FlexFloModem::getDecisionErrors(int_complex *, unsigned long)\n{\n\treturn 0;\n}",
+  "replace": "int\nK56FlexFloModem::getDecisionErrors(int_complex *p, unsigned long n)\n{\n\tif (n == 0)\n\t\treturn 0;\n\tp[0].re = 4;\n\tp[0].im = 4;\n\treturn 1;\n}"
+ },
+ {
+  "label": "K56flex getResamplerPhase writes the point it is handed",
+  "find": "int\nK56FlexFloModem::getResamplerPhase(int_complex *, unsigned long)\n{\n\treturn 0;\n}",
+  "replace": "int\nK56FlexFloModem::getResamplerPhase(int_complex *p, unsigned long)\n{\n\tp[0].re = 5;\n\treturn 0;\n}"
+ },
+ {
+  "label": "K56flex getResamplerOffset writes the point it is handed",
+  "find": "int\nK56FlexFloModem::getResamplerOffset(int_complex *, unsigned long)\n{\n\treturn 0;\n}",
+  "replace": "int\nK56FlexFloModem::getResamplerOffset(int_complex *p, unsigned long)\n{\n\tp[0].re = 6;\n\treturn 0;\n}"
+ }
+]

@@ -288,15 +288,35 @@ outstanding — `T3C_RX`, and `demapFrame`'s `*(int *)ap`, which is the
 receiver's `target_re`/`target_im` pair read as one word through `char *`
 arithmetic. Both belong to the same future `v34_receiver` batch.
 
-## Phase 7 — the data-mode API and the two diagnostics
+## Phase 7 — the data-mode API and the two diagnostics  ✅ 11/11, on `v34-diagnostics`
 
-`VPcmV34GetDiagnostics` needs `V90Demodulator::getAT_UD` (418 B);
-`VPcmV34GetVisualDiagnostics` needs nine, including
+Both diagnostics and the nine symbols the second one needs, 2,624 bytes:
+`VPcmV34GetDiagnostics` (821), `VPcmV34GetVisualDiagnostics` (1,023),
 `VPcmFloModem::getConstellation` (469), `::getLinearEqualizer` (155),
-`::getDFE` (138). `TAG_DiagnosticResults` is unmodelled and runs to at least
-`0x22c`; no allocation site bounds it, so its tail needs declaring the way
-`v34_object`'s did. `getAT_UD` carries `"RBS : %d (%d%d%d%d%d%d)"`, which names
-a six-bit field — these are naming oracles as well as functions.
+`::getDFE` (138) and the six 3-byte `K56FlexFloModem` stubs, which are
+`xor %eax,%eax; ret` and are written as what they are.
+
+**They were naming oracles, as expected, and the yield is in the record
+rather than in the byte count.** `TAG_DiagnosticResults` goes from 11 of its
+22 written offsets modelled to all 22, nine of them named, and its tail is
+still declared as the lower bound 0x22c with the 64-byte guard past it
+unmoved — +0x228 came out of the pad without changing an offset.
+
+| what it settled | how |
+|---|---|
+| +0x0b4 is the RECEIVE symbol rate (5500) | six `v34_ratecfg` members copied one for one into six result offsets, four of them already named by four direction-named getters |
+| +0x0f8/+0x0fc are the transmit/receive data rates (5500) | same, plus `getAT_UD` writing only the receive one |
+| +0x070, +0x074 and +0x084 are NOT one quantity each (5502) | the second writer disagrees with the first about linear-vs-dB, about polarity, and about units |
+| `VPcmFloModem::sweepCounter` is `int` and the constellation is a strip chart (5511) | two signed divisions, six lanes at 140 positions |
+| `v34_object::pac18` is a `K56FlexFloModem *` (5510) | five `this` arguments; the field is NOT retyped and the finding says why |
+| the equaliser arm's cap of 80 is `V34_EQ_TAPS` (5512) | two derivations that share no evidence |
+
+One deviation: **D710**, selectors 3 and 4 write `points[0]` and return 1
+whatever `maxCount` says, including zero. Driven, not fixed.
+
+`make phase` green; 39,000-odd checks over five groups; 99 mutations in four
+sets, 96 caught, 0 NOT caught, 0 unusable, 3 equivalent with the argument for
+each written down.
 
 ## Phase 8 — dialler, call progress, and the dispatch bucket
 
