@@ -48,6 +48,10 @@
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
  ],
+ "fpmfserecv": [
+  "src/dsp/fpm_fse.c",
+  "build/test/t_fpm_fse_recv"
+ ],
  "fpmpps": [
   "src/dsp/fpm_pps.c",
   "build/test/t_fpm_pps"
@@ -99,6 +103,10 @@
  "scrambler": [
   "include/dsplib/Scrambler.h",
   "build/test/t_scrambler"
+ ],
+ "v17data": [
+  "src/pump/v17/v17data.c",
+  "build/test/t_v17data"
  ],
  "v22dec": [
   "src/pump/v22/v22dec.c",
@@ -304,6 +312,10 @@
   "src/pump/v90/V90ConstellationPower.cpp",
   "build/test/t_v90designers"
  ],
+ "v90demap": [
+  "src/pump/v90/V90Demapper.cpp",
+  "build/test/t_v90demap"
+ ],
  "v90demapctor": [
   "src/pump/v90/V90Demapper.cpp",
   "build/test/t_v90demapctor"
@@ -408,6 +420,10 @@
   "src/pump/v90/V90SignBitsExtractor.cpp",
   "build/test/t_v90leaves"
  ],
+ "v90sbeproc": [
+  "src/pump/v90/V90SignBitsExtractor.cpp",
+  "build/test/t_v90demap"
+ ],
  "v90sddet": [
   "src/pump/v90/V90SdDetector.cpp",
   "build/test/t_v90spectral"
@@ -415,6 +431,10 @@
  "v90sessionflag": [
   "src/pump/v90/V90SessionFlag.cpp",
   "build/test/t_v90sessionflag"
+ ],
+ "v90specialcond": [
+  "src/pump/v90/V90SpectralVerifier.cpp",
+  "build/test/t_v90specialcond"
  ],
  "v90specshaper": [
   "src/pump/v90/V90SpectralShaper.cpp",
@@ -551,21 +571,5 @@
  "vpcmxfterm": [
   "src/pump/v90/VPcmXfTerm.cpp",
   "build/test/t_v90demod"
- ],
- "v90specialcond": [
-  "src/pump/v90/V90SpectralVerifier.cpp",
-  "build/test/t_v90specialcond"
- ],
- "fpmfserecv": [
-  "src/dsp/fpm_fse.c",
-  "build/test/t_fpm_fse_recv"
- ],
- "v90demap": [
-  "src/pump/v90/V90Demapper.cpp",
-  "build/test/t_v90demap"
- ],
- "v90sbeproc": [
-  "src/pump/v90/V90SignBitsExtractor.cpp",
-  "build/test/t_v90demap"
  ]
 }
