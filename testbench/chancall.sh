@@ -48,11 +48,17 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	# CHAN_SEED must reach BOTH sides and be the SAME on each: the two shims
 	# model one channel, so different seeds would give the two directions
 	# independent noise, which no real line does.
+	#
+	# DSPLIB_V34_DUMP_PROBE_BINS and DSPLIB_V34_FIT_PREEMP used to be on the
+	# assignment list below.  Those variables no longer reach anything on
+	# master: the flags that read them are V.34 bench instrumentation and now
+	# live on the `v34-instrumentation` branch.  An override that silently
+	# does nothing is worse than no override at all -- it makes an A/B look
+	# like it ran two arms when it ran one arm twice.  Set them from a bench
+	# built on that branch instead.
 	CHAN_ROLE=$1 CHAN_PORT=$PORT CHAN_SEED=${CHAN_SEED:-12345} \
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
 	CHAN_TILT=${CHAN_TILT:-0} \
-	DSPLIB_V34_DUMP_PROBE_BINS=${DSPLIB_V34_DUMP_PROBE_BINS:-1} \
-	DSPLIB_V34_FIT_PREEMP=${DSPLIB_V34_FIT_PREEMP:-0} \
 		setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
 		_ "$pidf" "$SL" "$BENCH/chanshim.py" "$OUT.$2.log" &
 	sleep 2
