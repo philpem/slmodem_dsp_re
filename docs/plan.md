@@ -304,6 +304,20 @@ The dialler and call-progress half of this phase is unmeasured and still owed.
 
 286 symbols, 78,718 bytes that nothing in data mode reaches.
 
+## The readability pass — `docs/cleanup.md`
+
+Magic numbers, comments that cite an address instead of stating an intent,
+parameter names, file headers. **Not a phase and not an end-stage sweep**: it
+runs inside the batch that closes a translation unit, for the same reasons §3
+gives for naming, plus one more -- a cleanup pass over a file another agent is
+writing is exactly finding 3511's shape.
+
+The one item that is settled and CLOSED: **shifts are not to be rewritten as
+divides.** Finding 1044 measured that the object's choice is forced and
+detectable -- six signed divides by a power of two in 1.2 MB, all `/ 2`, at six
+named addresses -- so a rewrite would move codegen and destroy evidence.
+`docs/cleanup.md` §2.
+
 ## Continuous, not a phase
 
 - **The mutation snapshot is stale** — 131 suites registered, 0 current after
