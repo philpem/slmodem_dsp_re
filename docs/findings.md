@@ -69324,3 +69324,205 @@ touched.  A branch that will keep receiving commits therefore needs one of:
 Read this together with the delete-the-branch rule above: deleting after the
 gate is green is not tidiness, it is what stops a second squash of a branch
 whose work is already in.
+
+## 6500. THE `(short)` ON THE DFE OUTPUT AT RECONVERT-B IS REAL, AND IT IS DEAD -- THE OBJECT'S BYTES SETTLE IT AND NO DIFFERENTIAL TEST EVER CAN
+
+`V90Equalizer::process` writes the float-to-fixed-point re-convert out three
+times, and finding 6201 listed the asymmetry between them as an untested
+guess: `dfeSum = (short)d` at one of the three sites and `(int)d` at the other
+two. It is not a guess. `tools/dis.py` on the blob gives the discriminating
+pair directly.
+
+RECONVERT-A, 0x39bd9, and RECONVERT-C, 0x3a89c, both convert `d` with a
+**32-bit** store:
+
+    39c4e:  d9 84 24 b4 ..   flds   0xb4(%esp)          ; d
+    39c5c:  db 9c 24 bc ..   fistpl 0xbc(%esp)          ; -> dfeSum, 32 bits
+
+    3a906:  d9 84 24 b4 ..   flds   0xb4(%esp)
+    3a914:  db 9c 24 bc ..   fistpl 0xbc(%esp)
+
+RECONVERT-B, 0x3a682, converts it with a **16-bit** store and then widens:
+
+    3a6ec:  d9 84 24 b4 ..   flds   0xb4(%esp)          ; d
+    3a70a:  df 9c 24 9a ..   fistps 0x9a(%esp)          ; 16 bits
+    3a726:  0f b7 84 24 9a   movzwl 0x9a(%esp),%eax
+    3a730:  98               cwtl                       ; sign-extend
+    3a731:  89 84 24 bc ..   mov    %eax,0xbc(%esp)     ; -> dfeSum
+
+Three `fistps` in that block against A's and C's two-plus-one. So the
+asymmetry is the object's, `src/` already spells it, and nothing needs
+changing.
+
+### AND IT CANNOT BE DRIVEN, because the value is dead on every path
+
+`0xbc` is read at exactly two addresses, 0x39e3b and 0x39f18 -- RECONVERT-D
+and RECONVERT-E, the two INVERSE blocks in the state 3 arm. Both are preceded
+in the same loop iteration by the fixed-point head's own write at 0x39061, and
+the forward blocks only run when `enterDataPhase()` returned non-zero, which
+it does only when `convertEqualizerToMmx` set `mmxMode` -- so the next
+iteration is a fixed-point one and overwrites the slot before anything reads
+it. GCC kept the store because the slot is read on OTHER paths; the value is
+not.
+
+**Measured rather than reasoned about, which is the whole point.** With all
+three sites driven -- `gcov` counts 16 executions of each block and 8 of each
+block's `b8` loop -- the casts were INVERTED at all three at once
+(`(short)`<->`(int)`) and the suite was re-run:
+
+| source | RESET arm | phase 4 arms | DATA arm |
+|---|--:|--:|--:|
+| as written | 731 (declared) | 0 of 18023 | 0 of 1208 |
+| all three casts inverted | 731 (declared) | **0 of 18023** | **0 of 1208** |
+| `softInt = (short)soft + 1` at the same three sites | 731 | **177 of 18023** | 0 of 1208 |
+
+The third row is the denominator. A change to the statement DIRECTLY ABOVE the
+cast, in the same three blocks, is caught 177 times; the cast itself is caught
+zero times. That is what licenses "not differentially adjudicable" instead of
+"we did not manage to drive it".
+
+A fourth reading was tried and is also invisible for a reason worth recording:
+`leSum = (short)y` -> `(int)y` at the same three sites moves nothing either,
+because `leSum` reaches only `diff = (short)(leSum - decision)` and this
+fixture keeps `|y|` inside a short. That one is NOT dead -- it is merely
+outside the grid's domain -- and the two cases must not be reported as the
+same thing.
+
+## 6501. DRIVING THE OTHER STATE ARMS: `int_0028` IS 6201'S `word_30` AGAIN, AND FOUR OF THE FIVE OBSTACLES WERE THE FIXTURE'S
+
+`process`'s state 2, 4 and 5 arms all dispatch on `phase4Demod->int_0028`,
+and that field is **cleared on entry to both decision functions** --
+`int_0028 = 0` at the head of `getV90Decision` and again in `getV92Decision`.
+So it cannot be planted, exactly as 6201 found for `phase3Demod->word_30`, and
+the axis has to be driven through the demodulator's own state and counters and
+read back off the reference peer after the call. `t_v90equproc`'s counters do
+that: `stateCount` is what `process` copied out of `int_0028`, so it records
+the code the demodulator PRODUCED rather than the one the row aimed at.
+
+Nine rows produce eight distinct codes -- 0x17, 0x18, 0x19, 0x1c, 0x1d, 0x28,
+0x2c and 0x35 -- which is every sub-case of the state 4 jump table and every
+sub-case of the state 2 chain. Two shapes make that cheap: a row whose arm
+tests `countInState` is planted one short of the threshold, and a row whose
+arm tests a detector is planted one group short with `t_v90p4ddec`'s `arm_r`.
+A second setting of each arms it TWO groups short, so the same arm fires on
+symbol one -- without which the `for (i = 0; i < j; i++) b8[i] = ...` tail of
+every re-convert block cannot execute at all.
+
+### Four obstacles, and only one of them was in `src/`
+
+1. **The connection evaluator is a fifth split-peer pointer here.**
+   `t_v90p4ddec` shares it; in this binary the EQUALISER writes through it
+   (`updateAvePdsnr` on every block close), so it is one copy per side and
+   +0x34f8 joins the demodulator's scrub list.
+2. **The resampler's own `params` pointer had to be planted.** `setBllState`
+   reads a K1/K2 pair out of it on twelve of its sixteen arms; the RESET group
+   never calls it, so the pseudorandom word the fill left there survived a
+   whole group and then segfaulted the first trial that steered the timing.
+3. **The impairment detector had to be SPLIT.** `linearMappingStudy`
+   accumulates into it at +0x1000 and +0x1c00, so a shared block lets our
+   run's accumulation stand under the reference run's.
+4. **`linearEquMmxConversionFactor` and `dfeMmxConversionFactor` are FLOATS
+   and were left to the fill.** `restoreEqualizerToFloat` rebuilds every
+   coefficient as `(1.0f / factor) * <32-bit accumulator>`; a pseudorandom
+   reciprocal makes the product's rounding depend on whether the compiler kept
+   the intermediate at 80 bits. One DATA trial of 48 then failed on GCC 13 and
+   was green on the period compiler -- **a fixture defect wearing 6203's
+   clothes**, and the reason a divergence has to be re-measured on `make
+   period` before it is believed to be one.
+
+### Two arms are undrivable and both are the object's
+
+- **`mmxMode` with state 2.** 6201 §2 said so and this grid measured it: with
+  state 2 included in the fixed-point rows, trial 5720009 returned our
+  `outSym[0]` as the x87 indefinite against the blob's 0x19, because PHASE4
+  clamps and slices `soft` and the fixed-point arm never writes it.
+- **A symbol AFTER `detectFPE` has fired.** The detector leaves the
+  demodulator in state 0x10, where `getV90Decision` never writes the answer
+  (D600), so the next symbol publishes the caller's register. The FPE rows
+  therefore fire on the LAST symbol of their call. `t_v90p4ddec` declines to
+  assert a return value on the same arm for the same reason.
+
+### And two anti-vacuity counters that could not fire
+
+Both were written into the DATA group and both read ZERO on both compilers,
+which is 3509's shape caught by 3509's own rule. "The mapping study ran"
+watched the impairment detector, whose accumulation is gated on
+`|diff| < 0.4 * (high - low)` and never passed it with this fixture's
+constellation spacing; it now watches the study's progress counter at
++0x1eb0, which is stepped on every call. "The equaliser state separated
+trials" watched a value that takes three settings in three blocks and changes
+twice in forty-eight.
+
+## 6502. `V90Equalizer::process` IS AT 74.25% OF 532 LINES, FROM 20.49%, AND WHAT IS LEFT IS THE PHASE 3 HALF
+
+`gcov -f` over `build-cov/repro/pump/v90/V90Equalizer.gcda`, on
+`_ZN12V90Equalizer7processEPfjPsS0_Rj`, before and after:
+
+    Lines executed:20.49% of 532        109 lines, 120,974 checks
+    Lines executed:74.25% of 532        395 lines, 140,205 checks
+
+The check count rose by 16%; the line count by 262%. That ratio is the whole
+argument of 6201 restated from the other side, and it is why the headline here
+is the coverage and not the checks.
+
+**Driven now**, all of it green on the period compiler:
+
+| region | state |
+|---|---|
+| state 0 RESET | driven (6201) |
+| state 2 PHASE4, 4 RRN, 5 FPE | driven, float; 4 and 5 in fixed point too |
+| state 3 DATA | driven in both representations |
+| the state 4 jump table | all five sub-cases: 0x1c, 0x1d, 0x28, 0x2c, 0x35 |
+| the state 2 chain | 0x17, 0x18, 0x1c, 0x1d |
+| RECONVERT-A, -B, -C | 16 executions each, `b8` loop 8 each |
+| RECONVERT-D, -E | 8 executions each, `outFloat` loop 4 each |
+| the whole fixed-point half | `mmxDot`, both `idivl`s, the split accumulators, `sar_by`, the `array_12c` shift, the `word_20Saved` wrap, `block_b8`, the held-sample prologue |
+| `<TAIL-P4>` | driven |
+
+**Not driven, and the reason for each:**
+
+- **state 1 PHASE3, the eighteen-entry jump table and `<TAIL-P3>`** -- about
+  170 lines, and the only remaining *large* region. NOT YET DRIVEN rather than
+  undrivable: it needs `V90Phase3Demodulator` wired the way this batch wired
+  the phase 4 one, and `word_30` has to come through the demodulator's own
+  inputs because both decision functions clear it (6201 §3).
+- **state 6 CHANNEL_VERIFY** -- ten lines, same dependency, same disposition.
+- **three of the eighteen phase 3 sub-cases** -- UNDRIVABLE, 6201 §3
+  unchanged: 11, 13 and 14 are never written by any path of either decision
+  function.
+- **`mmxMode` with states 0, 1, 2 and 6** -- UNDRIVABLE, 6201 §2, and now
+  measured rather than quoted (6501).
+- **the `state`-outside-0..6 tail tests** -- UNDRIVABLE, 6201 §1 unchanged.
+- **the `dfeSum` cast at all three forward re-convert blocks** -- driven and
+  UNADJUDICABLE, 6500: the value is dead and the object's bytes are the only
+  evidence there will ever be.
+
+### The compiler split, per group
+
+`tools/gccdiverge.json` names CHECKS, and `t_v90equproc`'s entry names one:
+"V90Equalizer::process, the RESET arm". **The two new groups are NOT covered
+by it and are not being added to it.** Both are green on GCC 13 as well as on
+GCC 3.4.2, and that is a design constraint met rather than luck: the new
+groups freeze the float step sizes, keep `|soft|` inside a short, and stop the
+call before a symbol whose error could need a 25th mantissa bit. Where that
+was not possible the trial was removed rather than the declaration widened,
+and 6501 records the three places.
+
+## 6503. OPEN, AND NOT THIS BATCH'S: `V90Demapper::linearMappingStudy` DIVERGED ON GCC 13 WHEN `process` DROVE IT
+
+With `linearMappStudyStart == countInState`, the TRN2dDD arm switches the
+demapper's linear mapping study on, and three trials of 720 then disagreed
+with the blob **on GCC 13** -- in `word_7c`, `meanErrorEnergyCurrent` and one
+`array_d8` word, with `decision` itself differing by exactly one constellation
+row. The member accumulates float sums, so excess precision is the obvious
+suspect and finding 6203's shape fits.
+
+**It is not adjudicated here and must not be reported as adjudicated.** The
+study was parked out of reach (`linearMappStudyStart = 0x7d0`) so that this
+binary measures `process`, and the period compiler was therefore never asked
+the question for those three trials. What is known: `t_v90demap` is not in
+`tools/gccdiverge.json`, so either it does not drive the divergent path or
+there is nothing to drive. Someone owning `V90Demapper` should re-enable the
+study in `t_v90equproc`'s phase 4 group -- one line -- and run `make period
+T=t_v90equproc`. Green there and red on GCC 13 is 6203's class and belongs in
+the register under `t_v90demap`; red on both is a defect.
