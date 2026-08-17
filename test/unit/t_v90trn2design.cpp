@@ -45,6 +45,7 @@
 #include "harness.h"
 
 #include "dsplib/V90TRN2Designer.h"
+#include "dsplib/V90ConstellationPower.h"
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Parameters.h"
 
@@ -402,6 +403,438 @@ run_maxk(void)
 	return diff_end();
 }
 
+/* ------------------------------------------------------------------ */
+
+/*
+ * `V90TRN2Design` -- the whole class in one call.
+ *
+ * WHAT HAS TO BE DRIVEN, and none of it is optional:
+ *
+ *   both arms of `dmin[k] != 0`, EACH reaching both outcomes.  The two share
+ *   one `slot` variable with opposite senses -- a count upwards in one and a
+ *   descending index in the other -- and both converge on the same
+ *   `slot >= 0` test.  Get that wrong and the failure path fires on the
+ *   wrong inputs while every ordinary case still passes.
+ *
+ *   `codecPcmType == pcmType` and `!=`.  The codec fill takes `min(c, u)` in
+ *   the first and the raw companded value in the second.
+ *
+ *   both `PcmType` values.  There are six `linear2alaw`/`linear2ulaw` pairs.
+ *
+ *   `cond == V90_SPECTRAL_GERMAN_PBX` and not, which selects between two
+ *   disjoint runs of `V90Parameters`.
+ *
+ *   `unnamed_360` at 0x100.  Its low byte is zero and its int value is 256:
+ *   the iterative arm compares it as a SIGNED INT against a scan index that
+ *   never reaches 128, and the other arm takes it as an UNSIGNED BYTE and
+ *   gets 0.  Nothing else in the sweep separates the two widths.
+ *
+ *   `maxTxIndex` over a range where `averagePowerLimits` differs, which is
+ *   what separates the object's `[maxTxIndex + 4]` from `[maxTxIndex]`.
+ *
+ *   `dsplibs_debug_level` at 0, 1 and 2.  The gated dump is a large fraction
+ *   of the function and `debugcov.py` counts sites that never execute.
+ *
+ *   `unused` varying, asserting nothing changes -- which is how "+0x120 is
+ *   never read" becomes a measurement instead of a claim about a listing.
+ *
+ * THE TABLES ARE SHARED AND THE MAPPING BLOCKS ARE NOT.  Both sides read the
+ * same `ucode`, `alt`, `allow`, `dmin`, `topUcode` and `V90Parameters` -- none
+ * of which this function writes -- and each writes its own `V90MappingParams`
+ * and its own `V90ConstellationPower`, both of which are compared whole.
+ *
+ * THE ROWS HAVE SLACK PAST THEM ON PURPOSE.  `while (compand(...) > maxLevel)
+ * top[k]--` has no floor, so a table whose entries never fall under the
+ * ceiling wraps the `unsigned char` to 255 and reads past row 5.  Entry 0 of
+ * every row is zero, whose companded value is 0 and therefore always under
+ * the ceiling, so the walk terminates -- and the slack is there so that a
+ * defect which walks anyway reads defined bytes that BOTH sides see, rather
+ * than turning a wrong answer into a crash.
+ */
+extern "C" {
+short our_trn2_design(void *, void *, void *, void *, void *, void *,
+		      int, int, int, void *, unsigned int, int, int)
+	asm("_ZN15V90TRN2Designer13V90TRN2DesignEP16V90MappingParamsPA128_sS3_"
+	    "PA128_hPs7PcmTypeS7_sPhjh28V90SpecialSpectralConditions");
+short ref_trn2_design(void *, void *, void *, void *, void *, void *,
+		      int, int, int, void *, unsigned int, int, int)
+	asm("ref__ZN15V90TRN2Designer13V90TRN2DesignEP16V90MappingParamsPA128_"
+	    "sS3_PA128_hPs7PcmTypeS7_sPhjh28V90SpecialSpectralConditions");
+extern unsigned int dsplibs_debug_level;
+}
+
+#define ROWS		6
+#define ROWLEN		128
+#define SLACK		512
+#define TABLE		(ROWS * ROWLEN + SLACK)
+
+static short tabUcode[TABLE];
+static short tabAlt[TABLE];
+static unsigned char tabAllow[TABLE];
+static short tabDmin[ROWS];
+static unsigned char tabTop[ROWS];
+
+static unsigned char powerOurs[256] __attribute__((aligned(8)));
+static unsigned char powerTheirs[256] __attribute__((aligned(8)));
+
+static unsigned char mp2Ours[MP_BYTES + GUARD] __attribute__((aligned(8)));
+static unsigned char mp2Theirs[MP_BYTES + GUARD] __attribute__((aligned(8)));
+
+/*
+ * A rising level table, so that walking an index DOWN lowers the companded
+ * value and the unbounded walk above terminates.  `shape` moves the top of
+ * the range across the four power decades the ladder covers, which is what
+ * makes some trials design cleanly and others run out of candidates.
+ */
+static void
+build_tables(int trial, int shape)
+{
+	int k, i;
+
+	lfsr = 0x7ac1u + 0x9e37u * (unsigned)trial + 1u;
+	for (i = 0; i < TABLE; i++) {
+		tabUcode[i] = 0;
+		tabAlt[i] = 0;
+		tabAllow[i] = 0;
+	}
+	for (k = 0; k < ROWS; k++) {
+		int base = k * ROWLEN;
+		int step = 4 + shape * 13 + k;
+
+		for (i = 0; i < ROWLEN; i++) {
+			int v = i * step + (i * i) / (2 + (shape & 3));
+
+			tabUcode[base + i] = (short)v;
+			/*
+			 * The alternate table is close to the first but not
+			 * equal to it, because the scan tests BOTH and takes
+			 * their minimum: two identical tables would make the
+			 * second test unreachable.
+			 */
+			tabAlt[base + i] = (short)(v - (int)(next_byte() & 7));
+			tabAllow[base + i] =
+				(unsigned char)((next_byte() % 5) != 0);
+		}
+		tabUcode[base] = 0;
+		tabAlt[base] = 0;
+		tabTop[k] = (unsigned char)(96 + (int)(next_byte() % 32));
+	}
+}
+
+static int
+run_design(void)
+{
+	int trial;
+	int sawOk = 0, sawFail = 0;
+	int sawTargetOk = 0, sawTargetFail = 0;
+	int sawFreeOk = 0, sawFreeFail = 0;
+	int sawSamePcm = 0, sawDiffPcm = 0, sawPbx = 0, sawPlain = 0;
+	int sawLevel[3];
+	int distinct = 0;
+	unsigned char firstMp[MP_BYTES];
+	int haveFirst = 0;
+
+	sawLevel[0] = sawLevel[1] = sawLevel[2] = 0;
+
+	diff_begin("V90TRN2Designer::V90TRN2Design");
+
+	for (trial = 0; trial < 240; trial++) {
+		V90Parameters *pp = (V90Parameters *)paramsOurs;
+		int shape = trial % 6;
+		int dminMask = trial % 64;
+		int pcm = (trial >> 1) & 1;
+		int codecPcm = (trial >> 2) & 1;
+		int level = trial % 3;
+		static const int nofs[] = { 1, 2, 3, 4, 7, 8, 10, 13, 21 };
+		int nof = nofs[trial % 9];
+		int lower = (trial % 7) == 0 ? 0x100
+					     : (trial % 7) == 1 ? 0 : trial % 7;
+		int maxTx = trial % 21;
+		int cond = (trial % 5) == 0 ? V90_SPECTRAL_GERMAN_PBX : 0;
+		unsigned int look = (unsigned int)(trial * 37);
+		int unusedArg = (int)(short)(0x1234 + trial * 977);
+		short gotOurs, gotRef;
+		int k;
+
+		build_tables(trial, shape);
+
+		/*
+		 * The parameter block is SHARED: nothing in this function
+		 * writes it, so both sides read byte-for-byte the same input
+		 * and a difference cannot come from the parameters.
+		 */
+		fill_pair(paramsOurs, paramsTheirs, 0x558 + GUARD, trial);
+		pp->nofUcodesInTrn2 = nof;
+		pp->maxUcode = 60 + (trial % 40);
+		pp->unnamed_360 = lower;
+		pp->SPECTRAL_SHAPER_A1 = 1.5f;
+		pp->SPECTRAL_SHAPER_A2 = -0.25f;
+		pp->SPECTRAL_SHAPER_B1 = 0.75f;
+		pp->SPECTRAL_SHAPER_B2 = 0.125f;
+		pp->SPECTRAL_SHAPER_SR = 3 + (trial % 4);
+		pp->SPECTRAL_SHAPER_ID = 5 + (trial % 9);
+		pp->GERMAN_PBX_SPECTRAL_SHAPER_A1 = -1.5f;
+		pp->GERMAN_PBX_SPECTRAL_SHAPER_A2 = 0.25f;
+		pp->GERMAN_PBX_SPECTRAL_SHAPER_B1 = -0.75f;
+		pp->GERMAN_PBX_SPECTRAL_SHAPER_B2 = -0.125f;
+		pp->GERMAN_PBX_SPECTRAL_SHAPER_SR = 2 + (trial % 5);
+		pp->GERMAN_PBX_SPECTRAL_SHAPER_ID = 3 + (trial % 11);
+
+		for (k = 0; k < ROWS; k++)
+			tabDmin[k] = (dminMask & (1 << k)) ? (short)(40 + k)
+							   : (short)0;
+
+		memcpy(paramsBefore, paramsOurs, sizeof(paramsBefore));
+		fill_pair(mp2Ours, mp2Theirs, MP_BYTES + GUARD, trial);
+		fill_pair(powerOurs, powerTheirs, 256, trial + 1);
+		memcpy(mpBefore, mp2Ours, sizeof(mpBefore));
+
+		dsplibs_debug_level = (unsigned int)level;
+		sawLevel[level]++;
+
+		set_designer(paramsOurs);
+		((V90TRN2Designer *)designer)->power =
+			(V90ConstellationPower *)powerOurs;
+		gotOurs = our_trn2_design(designer, mp2Ours, tabUcode, tabAlt,
+					  tabAllow, tabDmin, codecPcm, pcm,
+					  unusedArg, tabTop, look, maxTx, cond);
+
+		/*
+		 * The SAME parameter block, deliberately: this function only
+		 * reads it, so handing both sides one object makes the input
+		 * identical by construction rather than by a fill that has to
+		 * be kept in step.
+		 */
+		((V90TRN2Designer *)designer)->power =
+			(V90ConstellationPower *)powerTheirs;
+		gotRef = ref_trn2_design(designer, mp2Theirs, tabUcode, tabAlt,
+					 tabAllow, tabDmin, codecPcm, pcm,
+					 unusedArg, tabTop, look, maxTx, cond);
+		dsplibs_debug_level = 0;
+
+		diff_eq_int("V90TRN2Design returned, trial %ld",
+			    gotOurs, gotRef, trial);
+		diff_eq_obj("after V90TRN2Design", V90MappingParams,
+			    mp2Ours, mp2Theirs, trial);
+		/*
+		 * THE POWER OBJECT IS COMPARED PAST ITS FIRST FOUR BYTES, and
+		 * the skipped four are checked a different way.  +0x00 is a
+		 * pointer INTO the caller's mapping block, so the two sides
+		 * hold two different addresses and always will -- CLAUDE.md's
+		 * case for a loop rather than a whole-object compare.  What
+		 * has to be equal is the OFFSET each points at, which is the
+		 * part the function chose.
+		 */
+		diff_eq_int("the power object agrees past its pointer, "
+			    "trial %ld",
+			    memcmp(powerOurs + 4, powerTheirs + 4,
+				   sizeof(powerOurs) - 4) == 0, 1, trial);
+		/*
+		 * ONLY WHERE THE DESIGN SUCCEEDED.  The failure path returns
+		 * before `getPower`, so the pointer is still the fill and the
+		 * two sides hold the same garbage at two different bases --
+		 * which the offset comparison would read as a difference.
+		 * That it is untouched at all is what the compare above says.
+		 */
+		if (gotOurs) {
+			unsigned char *co =
+			    ((V90ConstellationPower *)powerOurs)->constellation;
+			unsigned char *ct =
+			    ((V90ConstellationPower *)powerTheirs)
+				->constellation;
+
+			diff_eq_int("the selected constellation is the same "
+				    "offset, trial %ld",
+				    co - mp2Ours, ct - mp2Theirs, trial);
+		}
+		diff_eq_int("no store past the mapping block, trial %ld",
+			    memcmp(mp2Ours + MP_BYTES, mpBefore + MP_BYTES,
+				   GUARD) == 0 &&
+			    memcmp(mp2Theirs + MP_BYTES, mpBefore + MP_BYTES,
+				   GUARD) == 0, 1, trial);
+		diff_eq_int("the shared parameter block was not written, "
+			    "trial %ld",
+			    memcmp(paramsOurs, paramsBefore,
+				   sizeof(paramsOurs)) == 0, 1, trial);
+
+		if (gotOurs)
+			sawOk++;
+		else
+			sawFail++;
+		if (dminMask != 0) {
+			if (gotOurs)
+				sawTargetOk++;
+			else
+				sawTargetFail++;
+		}
+		if (dminMask != 63) {
+			if (gotOurs)
+				sawFreeOk++;
+			else
+				sawFreeFail++;
+		}
+		if (codecPcm == pcm)
+			sawSamePcm++;
+		else
+			sawDiffPcm++;
+		if (cond == V90_SPECTRAL_GERMAN_PBX)
+			sawPbx++;
+		else
+			sawPlain++;
+
+		if (!haveFirst) {
+			memcpy(firstMp, mp2Ours, MP_BYTES);
+			haveFirst = 1;
+		} else if (memcmp(firstMp, mp2Ours, MP_BYTES) != 0) {
+			distinct = 1;
+		}
+	}
+
+	/*
+	 * THE RECIPROCAL, SEPARATED.  `x * (1.0f / (N - 0.5f))` and
+	 * `x / (N - 0.5f)` agree over almost every input and differ in the
+	 * last bits, which only shows once the `(short)` truncation lands on
+	 * the far side of an integer.  Searched rather than guessed, in 80-bit
+	 * arithmetic over every `(N, level)` up to 32 x 32768: the first pair
+	 * that separates is N = 21, level = 41, where the reciprocal gives
+	 * dMin 1 and the divide gives 2.
+	 *
+	 * A different dMin then designs a DIFFERENT constellation -- with 1 it
+	 * takes consecutive ucodes and with 2 it takes every other one -- so
+	 * the difference reaches the compared object rather than dying inside
+	 * an intermediate.  The table is linear and fully permitted so that
+	 * both spellings SUCCEED and the comparison is between two designs
+	 * rather than between two failures, which `setTrn2DummyConstel` would
+	 * make identical again.
+	 */
+	{
+		V90Parameters *pp = (V90Parameters *)paramsOurs;
+		int k, i;
+		short a, b;
+
+		for (i = 0; i < TABLE; i++) {
+			tabUcode[i] = 0;
+			tabAlt[i] = 0;
+			tabAllow[i] = 1;
+		}
+		for (k = 0; k < ROWS; k++) {
+			for (i = 0; i < ROWLEN; i++) {
+				tabUcode[k * ROWLEN + i] = (short)i;
+				tabAlt[k * ROWLEN + i] = (short)i;
+			}
+			tabTop[k] = 41;
+			tabDmin[k] = 1;
+		}
+		fill_pair(paramsOurs, paramsTheirs, 0x558 + GUARD, 11);
+		pp->nofUcodesInTrn2 = 21;
+		pp->maxUcode = 92;
+		pp->unnamed_360 = 0;
+		pp->SPECTRAL_SHAPER_SR = 3;
+		pp->SPECTRAL_SHAPER_ID = 5;
+		pp->SPECTRAL_SHAPER_A1 = 1.0f;
+		pp->SPECTRAL_SHAPER_A2 = 0.0f;
+		pp->SPECTRAL_SHAPER_B1 = 0.0f;
+		pp->SPECTRAL_SHAPER_B2 = 0.0f;
+
+		fill_pair(mp2Ours, mp2Theirs, MP_BYTES + GUARD, 11);
+		fill_pair(powerOurs, powerTheirs, 256, 12);
+		dsplibs_debug_level = 0;
+		set_designer(paramsOurs);
+		((V90TRN2Designer *)designer)->power =
+			(V90ConstellationPower *)powerOurs;
+		a = our_trn2_design(designer, mp2Ours, tabUcode, tabAlt,
+				    tabAllow, tabDmin, 1, 1, 0, tabTop, 9u,
+				    7, 0);
+		((V90TRN2Designer *)designer)->power =
+			(V90ConstellationPower *)powerTheirs;
+		b = ref_trn2_design(designer, mp2Theirs, tabUcode, tabAlt,
+				    tabAllow, tabDmin, 1, 1, 0, tabTop, 9u,
+				    7, 0);
+
+		diff_eq_int("the reciprocal case returned", a, b, 0);
+		diff_eq_obj("the reciprocal case designed", V90MappingParams,
+			    mp2Ours, mp2Theirs, 0);
+		/*
+		 * The trial is only a separator if it DESIGNED: a failure on
+		 * both sides is `setTrn2DummyConstel`'s output either way and
+		 * separates nothing.  Assert the outcome the search predicted.
+		 */
+		diff_eq_int("the reciprocal case designed rather than failed",
+			    a, 1, 0);
+		diff_eq_int("and it took consecutive ucodes, so dMin was 1",
+			    ((V90MappingParams *)mp2Ours)->constellation[0][1],
+			    40, 0);
+	}
+
+	/*
+	 * `unused` is never read, and this is the measurement rather than the
+	 * claim: the same trial run twice with two different values in that
+	 * slot must produce the same mapping block.
+	 */
+	{
+		unsigned char a[MP_BYTES + GUARD];
+		int same;
+
+		build_tables(3, 2);
+		fill_pair(paramsOurs, paramsTheirs, 0x558 + GUARD, 3);
+		((V90Parameters *)paramsOurs)->nofUcodesInTrn2 = 8;
+		((V90Parameters *)paramsOurs)->maxUcode = 92;
+		((V90Parameters *)paramsOurs)->unnamed_360 = 2;
+		tabDmin[0] = 1;
+		tabDmin[1] = 0;
+		tabDmin[2] = 1;
+		tabDmin[3] = 0;
+		tabDmin[4] = 1;
+		tabDmin[5] = 0;
+
+		fill_pair(mp2Ours, mp2Theirs, MP_BYTES + GUARD, 3);
+		set_designer(paramsOurs);
+		((V90TRN2Designer *)designer)->power =
+			(V90ConstellationPower *)powerOurs;
+		our_trn2_design(designer, mp2Ours, tabUcode, tabAlt, tabAllow,
+				tabDmin, 1, 1, 0x0000, tabTop, 9u, 7, 0);
+		memcpy(a, mp2Ours, sizeof(a));
+
+		fill_pair(mp2Ours, mp2Theirs, MP_BYTES + GUARD, 3);
+		our_trn2_design(designer, mp2Ours, tabUcode, tabAlt, tabAllow,
+				tabDmin, 1, 1, 0x7fff, tabTop, 9u, 7, 0);
+		same = memcmp(a, mp2Ours, sizeof(a)) == 0;
+		diff_eq_int("the eighth argument is never read", same, 1, 0);
+	}
+
+	/*
+	 * Every outcome, or the sweep proves only that two objects agree about
+	 * one path (findings 149, 223, 3509).
+	 */
+	diff_eq_int("designed on %ld trials", sawOk > 0, 1, sawOk);
+	diff_eq_int("failed on %ld trials", sawFail > 0, 1, sawFail);
+	diff_eq_int("the dmin arm designed on %ld trials", sawTargetOk > 0, 1,
+		    sawTargetOk);
+	diff_eq_int("the dmin arm failed on %ld trials", sawTargetFail > 0, 1,
+		    sawTargetFail);
+	diff_eq_int("the free arm designed on %ld trials", sawFreeOk > 0, 1,
+		    sawFreeOk);
+	diff_eq_int("the free arm failed on %ld trials", sawFreeFail > 0, 1,
+		    sawFreeFail);
+	diff_eq_int("equal PcmType on %ld trials", sawSamePcm > 0, 1,
+		    sawSamePcm);
+	diff_eq_int("unequal PcmType on %ld trials", sawDiffPcm > 0, 1,
+		    sawDiffPcm);
+	diff_eq_int("the German PBX arm on %ld trials", sawPbx > 0, 1, sawPbx);
+	diff_eq_int("the plain shaper arm on %ld trials", sawPlain > 0, 1,
+		    sawPlain);
+	diff_eq_int("debug level 0 on %ld trials", sawLevel[0] > 0, 1,
+		    sawLevel[0]);
+	diff_eq_int("debug level 1 on %ld trials", sawLevel[1] > 0, 1,
+		    sawLevel[1]);
+	diff_eq_int("debug level 2 on %ld trials", sawLevel[2] > 0, 1,
+		    sawLevel[2]);
+	diff_eq_int("the design was not the same block every trial", distinct,
+		    1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -410,6 +843,7 @@ main(void)
 	rc |= run_setnof();
 	rc |= run_dummy();
 	rc |= run_maxk();
+	rc |= run_design();
 
 	return rc;
 }

@@ -7226,3 +7226,21 @@ one: the two writers of +0x078 are `setToDefault` (8) and `setNofUcodesInTrn2`
 itself can produce, so there is nothing for a differential test to compare
 against beyond 128; `test/unit/t_v90trn2design.cpp` drives 0, 1, 78, 79, 80,
 127 and 128 and deliberately stops there.
+
+## D472 ⚠ `V90TRN2Design`'s eighth argument is never read
+
+**Where:** `src/pump/v90/V90TRN2Designer.cpp`, `V90TRN2Design`; blob 0x3cb60.
+
+**What the original does:** the mangling gives twelve parameters and the
+eighth is a `short`.  There is no reference to `+0x120` anywhere in the 3,767
+bytes.  The one caller, `V90Demodulator::exitPhase3`, computes it --
+`movswl 0xa968(%edx),%ecx` -- and passes it.
+
+**Impact:** none.  It is recorded because a reader who sees the caller do work
+for it will look for the use, and because the reconstruction has to keep the
+parameter to keep the mangled name.
+
+**Status:** reproduced -- the parameter is declared and unused.
+`test/unit/t_v90trn2design.cpp` runs the same design twice with two different
+values in that slot and asserts the mapping block is identical, so "never
+read" is measured rather than read off a listing.

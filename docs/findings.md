@@ -63587,3 +63587,72 @@ only the two collaborators the constructor stored.  `V90ConstellationDesigner`
 is the opposite -- it holds its `mappingParams` -- so the two are not
 interchangeable and a reader coming from one to the other will expect the
 wrong thing.
+
+### 4403. `V90TRN2Design` SPELLS ONE DIVIDE AS A RECIPROCAL-MULTIPLY AND THE OTHER AS A DIVIDE, IN THE SAME FUNCTION, AND BOTH SPELLINGS ARE IN THE SOURCE
+
+The function computes a starting `dMin` twice over, once in each of its two
+design arms, from the same quantities.  The two arms compile to different
+instructions and **the compiler cannot be the reason**, because the
+transformation that turns one into the other is exactly what
+`-funsafe-math-optimizations` licenses and this tree's flags do not set it.
+
+    iterative arm     fld1 (hoisted out of the loop)
+    0x3cece..0x3cf25  fdivr %st(3),%st ; fmulp %st,%st(2)      x * (1/y)
+    free arm          fildl ; fsubs ; filds ; fmuls
+    0x3d7a6..0x3d7ee  de f1 -- Intel FDIVRP, one instruction   x / y
+
+Measured on the period compiler, one probe per spelling at `build.sh`'s exact
+flags: `(short)(lm[u] / (N - 0.5f))` emits `fildl/fsubs/fild/fdivp` and
+`(short)(lm[u] * (1.0f / (N - 0.5f)))` emits `fdivrs`+`fmulp`.  The blob's
+free arm is the first sequence instruction for instruction; the iterative arm
+is the second with the 1.0 in a register instead of memory, which is what
+loop-invariant hoisting does to a constant used twice in a loop.
+
+**AND THE `fld1` IS CONSUMED TWICE**, at `%st(3)` for the seed and at `%st(4)`
+for the per-round update, which couples the two: a plain divide in the update
+would leave the constant with one consumer and it would not still be on the
+stack at that depth.  So the update is a reciprocal-multiply for the same
+reason the seed is, and that is structural rather than separately measured.
+
+**IT IS NOT A FREE CODEGEN DIFFERENCE.**  Both results go straight through a
+`(short)` truncation and become a constellation's minimum spacing, so a last-
+bit difference is a different constellation.  Searched in 80-bit arithmetic
+over every `(N, level)` pair up to 32 x 32768: the first that separates the
+two spellings is **N = 21, level = 41**, where the reciprocal gives dMin 1 and
+the divide gives 2, and a linear fully-permitted table then designs
+consecutive ucodes under one and every other ucode under the other.
+`test/unit/t_v90trn2design.cpp` drives exactly that, and mutating the source
+to a divide turns it red.
+
+The per-round update's spelling is separated by the coupling above and NOT by
+a behavioural trial: the same search over `(N, dMin, v)` finds separators only
+where `v` is negative -- the scan's stopping value below zero -- and every
+construction that reaches one also runs the retry loop out and fails on both
+sides, which `setTrn2DummyConstel` makes identical again.  Said here rather
+than left to be rediscovered.
+
+### 4404. `V90TRN2Design`'S TWO DESIGN ARMS SHARE ONE COUNTER WITH OPPOSITE SENSES, AND THE FAILURE TEST IS THE SAME `>= 0` FOR BOTH
+
+The stack slot at `0x94(%esp)` is a `short` and it is two source variables:
+
+  - in the `dmin[k] != 0` arm it COUNTS UP -- the number of ucodes placed,
+    which starts at 1 the moment `constellation[k][0]` is stored and rises to
+    `params->nofUcodesInTrn2` on success;
+  - in the `dmin[k] == 0` arm it COUNTS DOWN -- the index being filled, from
+    `nofUcodesInTrn2 - 1` to -1.
+
+Both arms then converge on `cmpw $0x0,0x94(%esp) ; jns 3d913`, so **a
+non-negative value means the phase failed** whichever arm produced it.  That
+reads backwards for the counting arm until you notice the arm exits early --
+`cmp 0x78(%ebp),%esi ; je 3d294` -- whenever the count reached the target, so
+anything that arrives at the shared test has already failed.
+
+**THE ONE VALUE THAT SEPARATES `>= 0` FROM `> 0` IS ZERO, AND ONLY THE
+DESCENDING ARM CAN PRODUCE IT.**  The counting arm stores before it counts, so
+it is at 1 or more from its first round; the descending arm reaches 0 by
+breaking on its LAST placement.  A random sweep of 240 trials never produced
+it and the mutation survived; the case is now built rather than searched --
+two ucodes to place, a linear table, and a `topUcode` the walk reaches on the
+first placement, which is 11 because the threshold is `dMin / 2` and dMin is
+23.  `test/unit/t_v90trn2design.cpp` asserts the outcome is a FAILURE, which is
+what makes it a separator instead of another passing row.

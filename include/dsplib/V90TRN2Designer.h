@@ -61,6 +61,16 @@ class V90Parameters;
 class V90ConstellationPower;
 class V90MappingParams;
 
+/*
+ * `PcmType` and `V90SpecialSpectralConditions` are ENUMS, so they cannot be
+ * forward-declared in C++98 (docs/method/compilers.md) and the two headers
+ * that define them are included.  Neither defines `V90Parameters`, so this
+ * header stays compatible with either of that type's two definitions --
+ * which is the whole reason the pointers above are declarations.
+ */
+#include "dsplib/V90Phase3Modulator.h"
+#include "dsplib/V90SpectralConditions.h"
+
 class V90TRN2Designer {
 public:
 	/*
@@ -91,6 +101,24 @@ public:
 	 * with the object's own 1e-6 guard.  Touches nothing through `this`.
 	 */
 	int maxK(V90MappingParams *mappingParams);
+
+	/*
+	 * Lay out all six TRN2 constellations into `mappingParams`.  1 when
+	 * every phase was designed, 0 when one could not be -- and on the
+	 * failure path the mapping block is left holding
+	 * `setTrn2DummyConstel`'s descending run rather than a half-design.
+	 *
+	 * SIXTEEN BITS OF RETURN, because the one caller tests `%ax`.
+	 * `unused` is never read; see the .cpp.
+	 */
+	short V90TRN2Design(V90MappingParams *mappingParams,
+			    short (*ucode)[128], short (*alt)[128],
+			    unsigned char (*allow)[128], short *dmin,
+			    PcmType codecPcmType, PcmType pcmType,
+			    short unused, unsigned char *topUcode,
+			    unsigned int maxLookahead,
+			    unsigned char maxTxIndex,
+			    V90SpecialSpectralConditions cond);
 
 	/*
 	 * Public for `offsetof`; the original's access specifiers are not
