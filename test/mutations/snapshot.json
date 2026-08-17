@@ -820,6 +820,34 @@
     "the window is not clamped while the history is still filling": "caught"
    }
   },
+  "v29data": {
+   "key": "c920501a44682e6a974689c34373f2c308b1c207586fa13e12a892cc40615768",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "both rails are written through the I pointer": "caught",
+    "only the I rail is zeroed": "caught",
+    "only the Q rail is zeroed": "caught",
+    "the cursor advances before the store rather than after it": "caught",
+    "the cursor wraps one past it, so the slot at len is written": "caught",
+    "the cursor wraps one short of the ring length": "caught",
+    "the loop counter is signed, which is the same over every count the ring can hold and not over one above 32767": "caught",
+    "the loop runs one short, so the last slot is left as it was": "caught",
+    "the next cursor is not truncated to a short, so 32767 does not wrap to -32768": "caught",
+    "the rails are zeroed one slot ahead of the cursor": "caught",
+    "the ring is taken four bytes above the transmitter's block": "caught",
+    "the ring length is read where the read cursor lives": "caught",
+    "the second argument is used as the rail source rather than ignored": "caught",
+    "the shaper is handed the sample count rather than the symbol count": "caught",
+    "the shaper is taken from V.17's offset rather than V.29's": "caught",
+    "the shaper runs before the rails are zeroed rather than after": "caught",
+    "the silence is a zero symbol index rather than two zeroed rails, which is V.17's form of this function": "caught",
+    "the transmitter's block is taken from the instance offset V.17 uses": "caught",
+    "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught",
+    "the write cursor is initialised from the read cursor": "caught",
+    "the write cursor is not written back, so a caller zeroing across calls overwrites the same slots": "caught",
+    "the write cursor is written back into the read cursor": "caught"
+   }
+  },
   "v34datapump": {
    "key": "f01fd489d9cd08294bda68389256163f0ffeb25ec99f358aa05a199d826ea623",
    "summary": "78 mutations: 72 caught (72 by test, 0 by strings), 4 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",

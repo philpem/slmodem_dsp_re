@@ -62767,3 +62767,26 @@ SINK a load the source put outside the loop into it. So the load being inside
 means the source's was, and the reconstruction reads the field once per symbol
 rather than once per call. It is observable only if the parameter block
 overlaps the ring, which nothing traced arranges.
+
+### 3645. THE SYMBOL COUNT IS UNSIGNED, AND A 50-SLOT RING CANNOT TELL -- SO THE TRIAL WAS SEEDED ABOVE 32767
+
+`TxNoCarrierV29` loads its fourth argument with `movzwl 0x3c(%esp),%esi` and
+compares the loop counter against it with `jb`, both unsigned, and the same
+pair appears in `TxNoCarrierV17`. That is forced at the codegen tier and
+invisible at the differential one over anything a real caller does: the ring
+holds 50 slots and no plausible count comes near 32767, so a signed reading
+agrees everywhere.
+
+`t_v29data.c` therefore seeds the corner. The trial hands the function 40,000
+symbols, and under a signed counter `(short)40000` is negative and the loop
+does not run at all -- the rails keep their pseudorandom fill instead of being
+zeroed, which is compared. Making it affordable took one fixture change and no
+claim: the shaper's `step` is set equal to its phase count for that trial only,
+so one output is produced per symbol instead of ten per three, and 40,000
+symbols is 40,001 samples rather than 133,000. The function under test never
+reads that field.
+
+The `+1` is the shaper's, not an off-by-one: `FPM_PPS_init` seeds `phase` from
+`step`, so the first output is produced before any symbol is consumed. The
+bound asserted is the symbol count with room for that debt, and the mutation
+that makes the counter signed is caught.

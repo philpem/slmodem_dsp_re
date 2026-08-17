@@ -124,6 +124,10 @@
   "src/pump/v22/v22_fse.c",
   "build/test/t_v22recv"
  ],
+ "v29data": [
+  "src/pump/v29/v29data.c",
+  "build/test/t_v29data"
+ ],
  "v34datapump": [
   "src/pump/v34/v34hshak.c",
   "build/test/t_v34datapump"
