@@ -7401,8 +7401,8 @@
    }
   },
   "v92p4sym": {
-   "key": "1da88ec890f616419d1bd215783f1436d89dd0f9545d786fed6055d7fc408706",
-   "summary": "130 mutations: 130 caught (130 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "18182c6d8dd3a558d2be8d25ce34edcaa212dafb3a84636c497f640c2de5a39b",
+   "summary": "134 mutations: 134 caught (134 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "B1u does not report the termination code": "caught",
     "B1u reports 8 rather than 9": "caught",
@@ -7453,6 +7453,7 @@
     "generateCPu folds prevBit into the FIRST bit rather than the last": "caught",
     "generateCPu scrambles the pattern index rather than the pattern byte": "caught",
     "generateCPu steps the pattern index by two": "caught",
+    "generateCPu stores prevBit before the folded bit": "caught",
     "generateCPu takes the bits-to-symbol arm when flag_3c is clear": "caught",
     "generateCPu's second arm does not push the bits it made": "caught",
     "generateCPu's second arm fills bitsPerSymbol bits rather than n": "caught",
@@ -7462,6 +7463,7 @@
     "generateE1u scrambles a one rather than a zero": "caught",
     "generateE2u folds prevBit into the FIRST bit rather than the last": "caught",
     "generateE2u scrambles all ones rather than all zeros": "caught",
+    "generateE2u stores the folded bit before prevBit": "caught",
     "generateE2u takes the bits-to-symbol arm when flag_3c is clear": "caught",
     "generateE2u's first arm uses one bit rather than bitsPerSymbol": "caught",
     "generateE2u's second arm does not push the bits it made": "caught",
@@ -7473,6 +7475,7 @@
     "generateSUVu folds prevBit into the FIRST bit rather than the last": "caught",
     "generateSUVu scrambles a constant one rather than the pattern": "caught",
     "generateSUVu steps the pattern index by two": "caught",
+    "generateSUVu stores prevBit before the folded bit": "caught",
     "generateSUVu takes the bits-to-symbol arm when flag_3c is clear": "caught",
     "generateSUVu's second arm does not push the bits it made": "caught",
     "generateSymbol advances the count after the switch rather than before": "caught",
@@ -7482,6 +7485,7 @@
     "generateTRN2u does not carry the bit forward": "caught",
     "generateTRN2u folds prevBit into the FIRST bit rather than the last": "caught",
     "generateTRN2u scrambles all zeros rather than all ones": "caught",
+    "generateTRN2u stores the folded bit before prevBit": "caught",
     "setMappingParams acts on a null argument and diagnoses a live one": "caught",
     "setMappingParams does not reset the bits-to-symbol object": "caught",
     "setMappingParams leaves the symbol block size where reset left it": "caught",
