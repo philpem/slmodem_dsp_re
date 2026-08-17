@@ -208,8 +208,8 @@
  },
  {
   "label": "resetRRNSecondSection: +0x1c is a word rather than a byte",
-  "find": "\tbyte_001c = 0;\n\tword_0018 = 0;",
-  "replace": "\tword_0018 = 0;"
+  "find": "\tword_0020 = 0;\n\tbyte_001c = 0;\n\tword_0018 = 0;",
+  "replace": "\tword_0020 = 0;\n\tword_0018 = 0;"
  },
 
  {

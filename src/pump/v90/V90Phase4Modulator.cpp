@@ -1,11 +1,15 @@
 /*
- * V90Phase4Modulator.cpp -- the phase 4 modulator's construction, destruction
- * and session flag.
+ * V90Phase4Modulator.cpp -- the phase 4 modulator: construction, the two
+ * symbol tables, the six symbol readers, the fifteen state-machine edges and
+ * the two data pumps.
  *
- * Reconstructed from dsplibs.o.  Three of the class's forty-three members:
- * the constructor, the destructor, and `setSessionFlag`, which is the one
- * `v34handshak` reaches.  `include/dsplib/V90Phase4Modulator.h` carries the
- * object map, the 0x2fac size and the ownership argument.
+ * Reconstructed from dsplibs.o.  THIRTY-ONE of the class's forty-three
+ * members.  The twelve that are NOT here are `reset`, `setMappingParams`,
+ * `generateSymbol`, the six `generate*` sequence sources, `generateV90Symbol`
+ * and `generateV92Symbol` -- the last two are 2,235 and 3,922 bytes and are
+ * where the state machine is dispatched rather than edged.
+ * `include/dsplib/V90Phase4Modulator.h` carries the object map, the 0x2fac
+ * size, the ownership argument and `Phase4ModulatorState`.
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding 215).
  *
@@ -30,10 +34,13 @@
  */
 extern "C" {
 #include "dsplib/pcm.h"
+#include "dsplib/debug.h"
+#include "dsplib/encode.h"
 }
 #include "dsplib/sysdep.h"
 #include "dsplib/V90BitsToSymbol.h"
 #include "dsplib/V90CP.h"
+#include "dsplib/V90MP.h"
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Phase4Modulator.h"
 
@@ -406,4 +413,452 @@ void
 V90Phase4Modulator::recivedPartOneSilenceRrnSUV()
 {
 	cp->byte_13 = 1;
+}
+
+/*
+ * ===========================================================================
+ * THE FIFTEEN STATE-MACHINE EDGES.
+ *
+ * Two shapes, and everything here is one or the other.
+ *
+ * AN `exitX` LEAVES A STATE ON A SEQUENCE BOUNDARY.  It checks that the
+ * machine is in the state it is named for, that the symbol counter has moved
+ * at all, and then whether the counter is a whole multiple of the current
+ * sequence's length in symbols.  On a boundary it announces the next state
+ * and resets the counter; off one it moves to a state that goes on emitting
+ * the same thing until the boundary arrives.
+ *
+ * A `recivedX` IS THE DEMODULATOR'S NEWS ARRIVING, and the same boundary test
+ * decides whether it can be acted on now or has to wait.
+ *
+ * THE GUARDS ARE THE OBJECT'S AND THEIR ORDER IS THE OBJECT'S.
+ * `recivedPartTwoSilenceRrnSUV` tests the 0x17..0x18 range, then 0x19..0x1b,
+ * then +0x2fa0, and only then `state == SUVd` -- the first two are dead given
+ * the last, but they are in the object and in that order, and GCC will not
+ * re-derive a redundant guard that is dropped.  `recivedSUV` asks the same
+ * questions in a different order and is a different function for it.
+ *
+ * AND THAT ONE'S TWO RANGES HAVE TO BE TWO STATEMENTS.  0x17..0x18 and
+ * 0x19..0x1b are adjacent, so written as one `&&` chain GCC folds them into
+ * a single `(state - 0x17) <= 4` and emits ONE `lea ; cmp ; jbe` where the
+ * object has two.  The same set either way -- so no differential trial can
+ * tell -- but as two early returns the function is identical to the object
+ * again.  It is 617's territory and it passed 617's test.
+ *
+ * `word_0020` IS NOT A SIMPLE "ALREADY DONE" LATCH AND THE CODE SAYS SO.
+ * Four of the five members that read it act when it is ZERO; `recivedCPtag`
+ * acts when it is NOT.  That is why the field keeps an offset name: a name
+ * that fitted four sites and contradicted the fifth would be worse than none.
+ *
+ * THE CP SEQUENCE IS RE-DERIVED IN FIVE PLACES BY THE SAME THREE LINES --
+ * `getBitVector` into `cpBits`/`cpBitCount`, then `6 * cpBitCount /
+ * cp->word_3ba8` into `cpSequenceSymbols` -- and `exitMP` is the MP copy of
+ * it against `mp->word_114`.  Six symbols carry one group, so the quotient is
+ * a count of symbols; V90Phase4Modulator.h has the argument in full.
+ * ===========================================================================
+ */
+
+/*
+ * exitRi -- .text+0x2d010.  The Ri period is the same six the Rd/Rt table is
+ * indexed on, and it is a literal here because it is not a table length.
+ */
+void
+V90Phase4Modulator::exitRi()
+{
+	if (state == P4M_STATE_RI && symbolCount != 0) {
+		if (symbolCount % V90P4M_RI_PERIOD != 0) {
+			state = P4M_STATE_UNNAMED_01;
+		} else {
+			edprintf("V90Phase4Modulator: enter RiNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RI_NOT;
+			symbolCount = 0;
+		}
+	}
+}
+
+/* exitSilence -- .text+0x2ce90.  The same shape leaving the silence pair. */
+void
+V90Phase4Modulator::exitSilence()
+{
+	if ((state == P4M_STATE_UNNAMED_17 || state == P4M_STATE_UNNAMED_18) &&
+	    symbolCount != 0) {
+		if (symbolCount % V90P4M_RI_PERIOD != 0) {
+			state = P4M_STATE_UNNAMED_19;
+		} else {
+			edprintf("V90Phase4Modulator: enter Rt @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RT;
+			symbolCount = 0;
+		}
+	}
+}
+
+/* exitMP -- .text+0x2d090.  The MP half of the sequence-length triple. */
+void
+V90Phase4Modulator::exitMP()
+{
+	if (state == P4M_STATE_MP && symbolCount != 0) {
+		if (symbolCount % mpSequenceSymbols != 0) {
+			state = P4M_STATE_UNNAMED_0D;
+		} else {
+			edprintf("V90Phase4Modulator: enter MPNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_MP_NOT;
+			symbolCount = 0;
+			mpBits = mp->getBitVector(mpBitCount);
+			mpSequenceSymbols = 6 * mpBitCount / mp->word_114;
+		}
+	}
+}
+
+/*
+ * exitMPNot -- .text+0x2c910.  Entering Ed sets the deadline at +0x2f64; five
+ * other members do the same three lines.
+ */
+void
+V90Phase4Modulator::exitMPNot()
+{
+	if (state == P4M_STATE_MP_NOT && symbolCount != 0) {
+		if (symbolCount % mpSequenceSymbols != 0) {
+			state = P4M_STATE_UNNAMED_0F;
+		} else {
+			edprintf("V90Phase4Modulator: enter Ed @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+		}
+	}
+}
+
+/*
+ * enterRepeatedCPd -- .text+0x2c780.  The only member of the class whose
+ * message is a bare `dsplibs_debug_printf` behind `DSPLIB_DEBUG_ON()` rather
+ * than an `edprintf`: the call at +0x2c805 relocates against
+ * `dsplibs_debug_printf` directly and the gate is the object's own
+ * `cmpl $0x1,dsplibs_debug_level ; ja`.
+ */
+void
+V90Phase4Modulator::enterRepeatedCPd()
+{
+	byte_001c = 0;
+	word_0018 = 0;
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Phase4Modulator: enter repeatedCPd "
+				     "@ %d\r\n", symbolCount);
+	state = P4M_STATE_REPEATED_CPD;
+	cp->word_00 = 0;
+	cp->infoToBits();
+	cpBits = cp->getBitVector(cpBitCount);
+	cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+	symbolCount = 0;
+}
+
+/*
+ * recivedSUV -- .text+0x2c980.  The CPd entry, and the first of the three
+ * that set +0x2fa0 once the CP sequence has been rebuilt.
+ */
+void
+V90Phase4Modulator::recivedSUV()
+{
+	if (word_2fa0 == 0 && state == P4M_STATE_SUVD) {
+		if (symbolCount % cpSequenceSymbols != 0) {
+			state = P4M_STATE_UNNAMED_06;
+		} else {
+			edprintf("V90Phase4Modulator: enter CPd @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			cp->word_00 = 0;
+			state = P4M_STATE_CPD;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			word_2fa0 = 1;
+		}
+	}
+}
+
+/*
+ * recivedPartTwoSilenceRrnSUV -- .text+0x2ca50.  `recivedSUV`'s body behind
+ * two extra range guards that the final `state == SUVd` already implies.
+ * They are the object's, in the object's order; see the block comment above.
+ */
+void
+V90Phase4Modulator::recivedPartTwoSilenceRrnSUV()
+{
+	if (state == P4M_STATE_UNNAMED_17 || state == P4M_STATE_UNNAMED_18)
+		return;
+	if (state == P4M_STATE_UNNAMED_19 || state == P4M_STATE_RT ||
+	    state == P4M_STATE_RT_NOT)
+		return;
+	if (word_2fa0 == 0 && state == P4M_STATE_SUVD) {
+		if (symbolCount % cpSequenceSymbols != 0) {
+			state = P4M_STATE_UNNAMED_06;
+		} else {
+			edprintf("V90Phase4Modulator: enter CPd @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			cp->word_00 = 0;
+			state = P4M_STATE_CPD;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			word_2fa0 = 1;
+		}
+	}
+}
+
+/*
+ * recivedFirstSUVuPartTwoRrn -- .text+0x2cf00.  `exitSilence`'s body and
+ * `recivedSUV`'s body as the two arms of one test on the state.
+ */
+void
+V90Phase4Modulator::recivedFirstSUVuPartTwoRrn()
+{
+	if (state == P4M_STATE_UNNAMED_17 || state == P4M_STATE_UNNAMED_18) {
+		if (symbolCount != 0) {
+			if (symbolCount % V90P4M_RI_PERIOD != 0) {
+				state = P4M_STATE_UNNAMED_19;
+			} else {
+				edprintf("V90Phase4Modulator: enter Rt @ "
+					 "%d\r\n", symbolCount);
+				state = P4M_STATE_RT;
+				symbolCount = 0;
+			}
+		}
+	} else if (state == P4M_STATE_SUVD && word_2fa0 == 0) {
+		if (symbolCount % cpSequenceSymbols != 0) {
+			state = P4M_STATE_UNNAMED_06;
+		} else {
+			edprintf("V90Phase4Modulator: enter CPd @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			cp->word_00 = 0;
+			state = P4M_STATE_CPD;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			word_2fa0 = 1;
+		}
+	}
+}
+
+/*
+ * recivedCPtag -- .text+0x2cc70, the largest of the fifteen.  The one member
+ * that acts when `word_0020` is NON-zero, and the only one that sets
+ * `cp->word_00` to 1 rather than 0 -- V90CP.h reads that as selecting the
+ * short form of the message.
+ */
+void
+V90Phase4Modulator::recivedCPtag()
+{
+	byte_001c = 0;
+	word_0018 = 0;
+	if (word_0020 != 0) {
+		if (word_2f9c != 0) {
+			if (symbolCount % cpSequenceSymbols == 0) {
+				edprintf("V90Phase4Modulator: enter Ed @ "
+					 "%d\r\n", symbolCount);
+				state = P4M_STATE_ED;
+				word_2f64 = bitsToSymbol->extraSymbols + 12;
+				symbolCount = 0;
+				word_0020 = 1;
+			} else {
+				switch (state) {
+				case P4M_STATE_SUVD:
+					state = P4M_STATE_UNNAMED_0A;
+					word_0020 = 1;
+					break;
+				case P4M_STATE_CPD:
+				case P4M_STATE_REPEATED_CPD:
+					state = P4M_STATE_UNNAMED_09;
+					word_0020 = 1;
+					break;
+				default:
+					break;
+				}
+			}
+		} else {
+			word_2f9c = 1;
+			cp->byte_13 = 1;
+			cp->word_00 = 1;
+			if (symbolCount % cpSequenceSymbols != 0) {
+				state = P4M_STATE_UNNAMED_0C;
+				word_0020 = 1;
+			} else {
+				state = P4M_STATE_FINAL_SUVD;
+				symbolCount = 0;
+				word_0020 = 1;
+				cpBits = cp->getBitVector(cpBitCount);
+				cpSequenceSymbols =
+				    6 * cpBitCount / cp->word_3ba8;
+			}
+		}
+	}
+}
+
+/*
+ * recivedSUVtag -- .text+0x2cb40.  Two cases whose boundary arms are
+ * identical, which is why the object has one copy of the Ed block reached
+ * from both.
+ */
+void
+V90Phase4Modulator::recivedSUVtag()
+{
+	byte_001c = 0;
+	word_0018 = 0;
+	if (word_2f9c != 0 && word_0020 == 0) {
+		switch (state) {
+		case P4M_STATE_SUVD:
+			if (symbolCount % cpSequenceSymbols != 0) {
+				state = P4M_STATE_UNNAMED_0A;
+			} else {
+				edprintf("V90Phase4Modulator: enter Ed @ "
+					 "%d\r\n", symbolCount);
+				state = P4M_STATE_ED;
+				word_2f64 = bitsToSymbol->extraSymbols + 12;
+				symbolCount = 0;
+			}
+			word_0020 = 1;
+			break;
+		case P4M_STATE_CPD:
+		case P4M_STATE_REPEATED_CPD:
+			if (symbolCount % cpSequenceSymbols != 0) {
+				state = P4M_STATE_UNNAMED_09;
+			} else {
+				edprintf("V90Phase4Modulator: enter Ed @ "
+					 "%d\r\n", symbolCount);
+				state = P4M_STATE_ED;
+				word_2f64 = bitsToSymbol->extraSymbols + 12;
+				symbolCount = 0;
+			}
+			word_0020 = 1;
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+/* recivedE2u -- .text+0x2cd90.  The boundary test first, the state second. */
+void
+V90Phase4Modulator::recivedE2u()
+{
+	if (word_0020 == 0) {
+		if (symbolCount % cpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter Ed @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+			symbolCount = 0;
+			word_0020 = 1;
+		} else {
+			switch (state) {
+			case P4M_STATE_SUVD:
+				state = P4M_STATE_UNNAMED_0A;
+				word_0020 = 1;
+				break;
+			case P4M_STATE_CPD:
+			case P4M_STATE_REPEATED_CPD:
+				state = P4M_STATE_UNNAMED_09;
+				word_0020 = 1;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+}
+
+/*
+ * recivedFirstRrnE2u -- .text+0x2ce20.  `recivedE2u` with no switch and its
+ * own message: this is the only site that says "enter Ed first at RRN".
+ */
+void
+V90Phase4Modulator::recivedFirstRrnE2u()
+{
+	if (word_0020 == 0) {
+		if (symbolCount % cpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter Ed first at RRN "
+				 "@ %d\r\n", symbolCount);
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+			symbolCount = 0;
+		} else {
+			state = P4M_STATE_UNNAMED_0A;
+		}
+		word_0020 = 1;
+	}
+}
+
+/*
+ * recivedPartOneSilenceRrnSUVtag -- .text+0x2cbf0.  `recivedFirstRrnE2u` with
+ * the plain "enter Ed" message and the CP's tag byte raised first.
+ */
+void
+V90Phase4Modulator::recivedPartOneSilenceRrnSUVtag()
+{
+	cp->byte_13 = 1;
+	if (word_0020 == 0) {
+		if (symbolCount % cpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter Ed @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+			symbolCount = 0;
+		} else {
+			state = P4M_STATE_UNNAMED_0A;
+		}
+		word_0020 = 1;
+	}
+}
+
+/*
+ * ===========================================================================
+ * THE TWO DATA-SYMBOL PUMPS -- generateDataSymbolBeforeFPE (.text+0x2d770)
+ * and generateDataSymbolBeforeRRN (+0x2d7d0), 96 bytes each and identical
+ * apart from their message and the state they move to.
+ *
+ * Each asks the bits-to-symbol converter for one symbol and reads the BIT
+ * DEMAND back through the reference argument -- `mov 0x10(%esp),%eax ; test
+ * %eax,%eax` after the call, never the return value in %eax, which is the
+ * status.  A non-zero demand means the block was not complete, and that is
+ * what ends the state.
+ *
+ * `nofBits` IS PASSED UNINITIALISED AND `V90BitsToSymbol::process` LEAVES IT
+ * UNINITIALISED WHEN `symbolsBlockSize` IS ZERO.  Nothing writes 0x10(%esp)
+ * before the call in either function, so the object has the same hole.
+ * Deviation D661; `test/unit/t_v90p4mgen.cpp` says which trials are kept out
+ * of the grid because of it.
+ * ===========================================================================
+ */
+short
+V90Phase4Modulator::generateDataSymbolBeforeFPE()
+{
+	unsigned int nofBits;
+	short sym;
+
+	bitsToSymbol->process(nofBits, &sym);
+	if (nofBits != 0) {
+		edprintf("V90Phase4Modulator: enter Rf @ %d\r\n", symbolCount);
+		state = P4M_STATE_RF;
+		symbolCount = 0;
+	}
+	return sym;
+}
+
+short
+V90Phase4Modulator::generateDataSymbolBeforeRRN()
+{
+	unsigned int nofBits;
+	short sym;
+
+	bitsToSymbol->process(nofBits, &sym);
+	if (nofBits != 0) {
+		edprintf("V90Phase4Modulator: enter Rd @ %d\r\n", symbolCount);
+		state = P4M_STATE_RD;
+		symbolCount = 0;
+	}
+	return sym;
 }

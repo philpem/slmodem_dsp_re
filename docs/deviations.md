@@ -7551,3 +7551,47 @@ grid.  `short sym;` with no initialiser and a `switch` with no `default` is
 what puts it in front of the compiler.  Adding a `default:` would add an
 instruction the object does not have and would change behaviour on exactly the
 path the object leaves open, so it is not done.
+
+## D661 ⚠ Both phase 4 data pumps pass an uninitialised `unsigned int` by reference and read it back
+
+**Where:** `src/pump/v90/V90Phase4Modulator.cpp`,
+`generateDataSymbolBeforeFPE` and `generateDataSymbolBeforeRRN`; blob 0x2d770
+and 0x2d7d0.
+
+**What the original does:** each reserves two stack slots, hands their
+addresses to `V90BitsToSymbol::process(unsigned int &nofBits, short
+*outSymbols)`, and reads the first back:
+
+    2d7dc:  8d 4c 24 10   lea    0x10(%esp),%ecx      ; &nofBits
+    2d7e4:  89 4c 24 04   mov    %ecx,0x4(%esp)
+    2d78e:  e8 ..         call   V90BitsToSymbol::process
+    2d793:  8b 44 24 10   mov    0x10(%esp),%eax      ; read straight back
+    2d797:  85 c0         test   %eax,%eax
+
+Nothing writes `0x10(%esp)` before the call in either function, and
+`process` writes through the reference only on the arm where
+`symbolsBlockSize` is non-zero -- with it zero the callee prints
+"SIZE_NOT_SET", returns status 1 and leaves the slot alone.  So there is a
+reachable configuration in which the `test` reads whatever was on the stack.
+
+Note that the STATUS is not what either pump looks at: `%eax` holds it on
+return and both discard it in favour of the reference.  A reconstruction that
+read the return value instead would agree on this configuration and disagree
+on the others; the mutation "the status is read rather than the demand" is
+what holds that.
+
+**Impact:** none that reaches a modem.  `symbolsBlockSize` is zero only
+between construction and the first `setSymbolsBlockSize`, and a pump asked for
+a symbol before the converter has been told its block size is already out of
+contract -- the object's own answer to it is a diagnostic line.
+
+**Status:** reproduced.  `unsigned int nofBits;` with no initialiser is what
+puts it in front of the compiler, and GCC 3.4.2 emits the object's shape from
+it.  Unlike D660 this one IS reachable, so `test/unit/t_v90p4mgen.cpp` keeps
+it out of the grid rather than running it and declining to assert: a trial
+that reaches undefined behaviour in the reconstruction is not a differential
+trial (D561).  The two configurations that are swept -- `(symbolsBlockSize 1,
+symbolsDone 2)` and `(2, 1)` -- both write the reference and both write the
+symbol, so the object, the transcript and the return value are all asserted on
+every trial.  Initialising it would be a behaviour change on exactly the path
+the object leaves open, so it is not done.

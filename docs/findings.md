@@ -65920,3 +65920,70 @@ form -- the only field that appears in both -- that makes it a bit the
 modulator raises when the demodulator reports a CP, and lowers when the second
 section of a rate renegotiation starts.  The field keeps its offset name: what
 bits[0x21] MEANS is a V.90 question this object does not answer.
+
+### 4937. THE Ed BLOCK'S THREE STORES ARE IN TWO DIFFERENT ORDERS IN ONE TRANSLATION UNIT, AND GCC REPRODUCES BOTH
+
+Six members of `V90Phase4Modulator` enter state 0x10 with the same three
+stores -- `state`, `word_2f64 = bitsToSymbol->extraSymbols + 12`, and
+`symbolCount = 0` -- and the object does not emit them the same way twice:
+
+    exitMPNot (+0x2c954)   movl $0,0x8   mov 0x44   movl $0x10,0x4   mov 0x18
+    the other five         movl $0x10,0x4   mov 0x44   mov 0x18   movl $0,0x8
+
+`recivedCPtag`, `recivedSUVtag`, `recivedE2u`, `recivedFirstRrnE2u` and
+`recivedPartOneSilenceRrnSUVtag` are the five.  Written `symbolCount = 0;
+state = ED; word_2f64 = ...` GCC 3.4.2 emits `exitMPNot`'s shape, and it emits
+the SAME shape for `state = ED; symbolCount = 0; word_2f64 = ...` -- the two
+source orders are indistinguishable.  What produces the other five is
+`state = ED; word_2f64 = ...; symbolCount = 0`, with the store to +0x08
+scheduled into the load-use delay between `mov 0x18(%edx),%ecx` and the `add`.
+
+This is 617's territory and it passes 617's acceptance test: full-text
+identity, operands included, at all six sites.  What makes it worth recording
+is that the two orders are in ONE translation unit compiled ONE way, so the
+difference cannot be a flag or a version -- the author wrote the three
+statements in two different orders, and the compiler carried both through.
+
+### 4938. THE CPd BLOCK RAISES +0x2fa0 AFTER COMPUTING THE SEQUENCE LENGTH, NOT BEFORE
+
+`recivedSUV`, `recivedPartTwoSilenceRrnSUV` and `recivedFirstSUVuPartTwoRrn`
+share a nine-line block that repacks the CP message and rebuilds the sequence
+length.  The object stores +0x2fa0 BEFORE +0x2f94 -- `mov $0x1,%ecx ; mov
+%ecx,0x2fa0(%ebx) ; mov %eax,0x2f94(%ebx)` -- which reads like the source
+order, and it is not: written `word_2fa0 = 1; cpSequenceSymbols = ...` GCC
+puts the pair before the `divl`, and written the other way round it puts them
+after it, in the divide's shadow, exactly where the object has them.  So the
+STORE order is the reverse of the source order at this site, and taking the
+object's store order for its source order would have been wrong.  Full-text
+identity at all three sites.
+
+### 4939. TWO ADJACENT RANGE TESTS HAVE TO BE TWO STATEMENTS OR GCC FOLDS THEM
+
+`recivedPartTwoSilenceRrnSUV` opens with two range tests on the state,
+0x17..0x18 and 0x19..0x1b, as two `lea ; cmp ; jbe` triples.  The ranges are
+adjacent, so written as one `&&` chain -- `state != 0x17 && ... && state !=
+0x1b` -- GCC 3.4.2 folds them into a single `(state - 0x17) <= 4` and emits
+ONE triple.  Written as two early returns it emits two, and the function is
+identical to the object.
+
+The two spellings accept exactly the same set, so no differential trial can
+separate them and the mutation that drops the first guard is registered
+`equivalent` with that argument.  It is the codegen tier alone that holds the
+guard, which is the case CLAUDE.md's second tier exists for.
+
+### 4940. ALL TWENTY-EIGHT OF THIS BATCH MATCH THE OBJECT, AND ONE DOES SO ONLY AFTER A SCHEDULING CONCESSION
+
+Twenty-seven of the twenty-eight are identical to the blob mnemonic for
+mnemonic under GCC 3.4.2 at `-O3`; `setRfSymbols` differs in six places, every
+one of them a `mov` or a `neg` moved a slot against its neighbour, with the
+same instruction multiset (finding 4935).  `compare.py` goes 409 identical to
+436 across the two commits, with the same-size-different-instructions bucket
+unmoved at 75; `samesize.py --identical` lists twenty-eight
+`V90Phase4Modulator` symbols where before the batch it listed one.
+
+Four source shapes had to be measured rather than chosen, and they are 4933,
+4934, 4937, 4938 and 4939.  What they have in common is that NONE of them can
+be settled by a differential test: every pair of spellings agrees over every
+input, and the only thing that separates them is what the compiler was forced
+to encode.  That is five results from the second tier in one batch, against
+one behavioural defect found (none).

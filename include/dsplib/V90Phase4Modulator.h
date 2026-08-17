@@ -2,8 +2,9 @@
  * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
  *
  * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, of which THREE are written here: the constructor, the destructor and
- * `setSessionFlag`, the only member of the class `v34handshak` reaches.
+ * code, of which THIRTY-ONE are written in src/pump/v90/V90Phase4Modulator.cpp
+ * -- everything except `reset`, `setMappingParams`, `generateSymbol`, the six
+ * `generate*` sequence sources and the two symbol pumps.
  *
  * NOT POLYMORPHIC: `~V90Phase4Modulator` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
