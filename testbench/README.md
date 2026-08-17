@@ -139,7 +139,11 @@ are the pre-emphasis arms; the `*-sweep.sh` scripts vary one parameter.
 
 **No hardware needed.** `chanshim.py` puts two live datapumps on an emulated
 channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
-`CHAN_SLIP`, the jitter-buffer underrun model. `replay.py` feeds a recording
+`CHAN_SLIP`, the jitter-buffer underrun model. `hsfcall.sh` drives the same
+channel with a DIFFERENT far end — the Conexant HSF datapump (`hsfshim.py`
+makes the socketpair and rings it), which is the only readable, known-good
+V.34 we can put opposite ours in the emulator; `chancall.sh` can only tell us
+what we do against ourselves. `replay.py` feeds a recording
 to slmodemd in d-modem's place, `replaydte.py` acts as the DTE, `replaycmp.sh`
 compares two builds on one recording. `linesim.py` is the offline line model.
 
