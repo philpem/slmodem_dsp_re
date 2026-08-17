@@ -66015,3 +66015,76 @@ reached.
 The grid gained 23 to `states` and 1200, 2399, 2400, 2406 and 2412 to `counts`,
 which is 16,320 trials per member per level against 10,240.  All 103 mutations
 are caught.
+
+## 5000. `V90Equalizer::enterDataPhase` IS `enterPhase4`'S DUMP AROUND A STATE OF THREE, AND THE STATE VALUE IS NOW WITNESSED
+
+1,688 bytes at 0x37d40, and about 1,500 of them are the same two filter
+summaries `enterPhase4` prints -- the same `summarise_coefs` inlined twice, the
+same four format strings at the same `.rodata` offsets, the same three rules.
+Once that is seen, the function is forty lines and every one of them was
+already written somewhere in `V90Equalizer.cpp`.
+
+**THE STATE IS 3 AND `V90Equalizer.h` SAID THAT WAS UNESTABLISHED.**  The
+header's list of `V90EQU_STATE_*` carried a sentence saying "whether 0, 2 and 3
+are used is not established here".  This function opens `cmpl $0x3,0x60(%ebx);
+je` at 0x37d4b and stores `movl $0x3,0x60(%ebx)` at 0x37d61, which is the
+`enter*` family's shape exactly, so `V90EQU_STATE_DATA` is named from the
+SYMBOL and not from an inference.  Only 0 is still unwitnessed outside `reset`.
+`stateCount` is not touched, which is `enterRRN`'s and `enterPhase4`'s habit
+and not `enterPhase3`'s.
+
+**THE `mmxMode` GUARD IS READ TWICE AND THE SECOND READ IS THE RETURN VALUE.**
+`mov 0xb0(%ebx),%eax; test; jne` at 0x37d73 sends an equaliser already in
+fixed-point mode straight out -- after the state store and after
+`V90Phase4Demodulator::resetRRNDetector`, so those two happen on every
+non-idempotent path and the whole dump happens on none of the fixed-point ones.
+At the other end, 0x383ba RELOADS the same field after
+`convertEqualizerToMmx()` and 0x383c4 is the only `mov $0x1,%esi` in the
+function.  The function has just proved the field was zero on the way in, so
+the reload is asking whether the conversion TOOK -- and that callee has three
+arms that leave it zero.  A body that returned a constant, or that cached the
+field it tested at the top, is identical in the object comparison and in the
+transcript and differs only in the returned `int`.  Finding 2134 is the same
+`int`-returning shape in `enterRRN` and `enterFPE`.
+
+**THE 1e10-AS-A-FLOAT / 1e6-AS-A-DOUBLE ASYMMETRY IS CONFIRMED BY A SECOND
+SITE.**  `enterPhase4` already passes `1.0e10f` for the two `%010d` lines and
+`1.0e6` for the four `%06d` ones, which reads like an inconsistency in the
+original.  This function encodes the same pair independently -- `flds
+.rodata.cst4+0x280` (1e10 exactly, and it IS exact in single precision: 10^10 =
+9765625 * 2^10 and 9765625 < 2^24) against `fldl .rodata.cst8+0x98` -- so it is
+the author's and not a misreading.  The fourth line of each half materialises
+the same 1e6 double from two immediates instead of loading it, which is the
+compiler's choice under stack pressure and not a different constant.
+
+## 5001. THE MUTATION SET FOR `enterDataPhase` NEEDED ITS OWN BINARY, BECAUSE `t_v90equ` IS ALLOW-LISTED RED
+
+`tools/mutate.py` judges a mutant CAUGHT by a non-zero exit, and `t_v90equ` is
+in `tools/gccdiverge.json` with six checks that GCC 13 cannot pass (findings
+2300, 2304): on the modern build the binary already exits non-zero, so caught
+and already-red are indistinguishable and the suite is refused rather than
+scored wrongly.  `t_v90p4dnan.cpp` was split out of `t_v90p4ddec.cpp` for
+exactly this reason and the remedy transfers: `test/unit/t_v90eqdata.cpp` is
+`run_enterdataphase` alone, with `t_v90equ`'s fixture copied into it, and it is
+GREEN under both compilers -- `enterDataPhase` reaches none of the six ordered
+-equality sites, because the two step sizes are planted at zero and zero is
+ordered against zero on every compiler.  10 mutations, 10 caught.
+
+**THE PEER IS SPLIT WHERE EVERY OTHER OBJECT IN THAT FIXTURE IS SHARED.**
+`t_v90equ`'s arena is one block both sides walk, snapshotted before ours runs
+and restored before the reference's; that works because the two sides are
+meant to write it identically.  `phase4Demod` cannot be shared: our side calls
+our `resetRRNDetector` and the reference side calls the blob's, and the point
+of the trial is that the two must be ABLE to disagree.  So each side gets its
+own 0x351c-byte peer seeded from the same varied bytes, the two are compared
+afterwards, and the one field that is meant to differ -- the pointer at +0x4c
+-- is asserted unwritten and then normalised before the object comparison, so
+the other 0x14c bytes are still compared exactly.
+
+**AND THE DUMP BEING TEXTUALLY IDENTICAL TO `enterPhase4`'S COSTS SOMETHING
+REAL.**  Every mutation anchor has to include the entry string, the
+`resetRRNDetector` call, the `mmxMode` early-out or the trailing
+`convertEqualizerToMmx`, because a bare `edprint_stat` line now appears four
+times in the file and `mutate.py` rejects an ambiguous `find`.  That is finding
+4708's problem arriving from the other direction: there, an anchor stopped
+being unique when the file grew; here it was never unique to begin with.

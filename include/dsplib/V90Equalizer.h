@@ -112,15 +112,22 @@ typedef char v90equ_compmode_is_signed[
 #define V90EQU_COMP_MODE_1	1
 
 /*
- * The values `state` (+0x60) takes.  Each of the four `enter*` methods opens
- * with `cmpl $N,0x60(this); je <return>` and, having done its work, stores
- * the same N back -- so the field is a state and these are four of its
- * values.  What the state is called in the original, and whether 0, 2 and 3
- * are used, is not established here; `reset` stores 0.
+ * The values `state` (+0x60) takes.  Each of the `enter*` methods opens with
+ * `cmpl $N,0x60(this); je <return>` and, having done its work, stores the
+ * same N back -- so the field is a state and these are its values.  What the
+ * state is CALLED in the original is still not established; `reset` stores 0.
+ *
+ * THREE IS NOW ACCOUNTED FOR, and the sentence that used to say "whether 0, 2
+ * and 3 are used is not established here" is retracted for that one value.
+ * `enterDataPhase` opens `cmpl $0x3,0x60(%ebx); je` at 0x37d4b and stores
+ * `movl $0x3,0x60(%ebx)` at 0x37d61, exactly the family's shape, so the name
+ * below is the SYMBOL's and not an inference.  Only 0 is still unwitnessed
+ * outside `reset`.
  */
 #define V90EQU_STATE_RESET		0	/* V90Equalizer::reset       */
 #define V90EQU_STATE_PHASE3		1	/* enterPhase3()             */
 #define V90EQU_STATE_PHASE4		2	/* enterPhase4()             */
+#define V90EQU_STATE_DATA		3	/* enterDataPhase()          */
 #define V90EQU_STATE_RRN		4	/* enterRRN()                */
 #define V90EQU_STATE_FPE		5	/* enterFPE()                */
 #define V90EQU_STATE_CHANNEL_VERIFY	6	/* enterChannelVerification()*/
@@ -178,6 +185,14 @@ public:
 	 */
 	int enterRRN();
 	int enterFPE();
+
+	/*
+	 * `_ZN12V90Equalizer14enterDataPhaseEv`, and an `int` for the same
+	 * reason those two are (finding 2134): %esi is zeroed at entry, set to
+	 * 1 on the one path where `convertEqualizerToMmx` leaves the equaliser
+	 * in fixed-point mode, and moved to %eax at the single return.
+	 */
+	int enterDataPhase();
 
 	/*
 	 * `_ZN12V90Equalizer11enterPhase4Ev`, and void: it falls off the end

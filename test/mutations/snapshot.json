@@ -5415,6 +5415,22 @@
     "use seven boundaries under mu-law too": "caught"
    }
   },
+  "v90eqdata": {
+   "key": "f5e29b68fe93dd60d1e6aacbd711044ee48575e2201592d39be80bc04296b61b",
+   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the DFE half prints the two sums the other way round": "caught",
+    "the DFE half summarises the linear filter": "caught",
+    "the DFE minimum is scaled by 1e6 like its maximum": "caught",
+    "the RRN detector is re-armed only on the path that prints": "caught",
+    "the conversion is not run": "caught",
+    "the fixed-point entry runs the dump anyway": "caught",
+    "the linear half's maximum and minimum are exchanged": "caught",
+    "the return does not re-read the mode after the conversion": "caught",
+    "the state is not stored, so the entry is not idempotent": "caught",
+    "the state is phase 4's rather than the data phase's": "caught"
+   }
+  },
   "v90equ": {
    "key": "8dc039af5d55c5cb55234bf33619f0e5bc183e0e45b52df99982a69e20af9ce3",
    "summary": "15 mutations: 11 caught (10 by test, 0 by strings), 2 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",

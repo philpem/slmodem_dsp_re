@@ -115,6 +115,13 @@
 #include "dsplib/V90PreFilter.h"
 
 /*
+ * `enterDataPhase` dereferences a THIRD of the six, `phase4Demod`, for the
+ * one call it makes: `mov 0x4c(%ebx),%edx; call
+ * V90Phase4Demodulator::resetRRNDetector()`.
+ */
+#include "dsplib/V90Phase4Demodulator.h"
+
+/*
  * Hold the compiler to the map in the header.  tools/offcheck.py only parses
  * `struct name {` out of include/dsplib, so a C++ class has to assert its own
  * -- and this is exactly the check that catches an object right in size and
@@ -1636,6 +1643,95 @@ V90Equalizer::enterPhase4()
 	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
 	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
 	edprintf("=======================================================\r\n");
+}
+
+/*
+ * enterDataPhase -- 1,688 bytes at 0x37d40, and the `enter*` family's shape
+ * around a body that is `enterPhase4`'s second half repeated.
+ *
+ * FOUR THINGS HAPPEN AND TWO OF THEM ARE THE STATE:
+ *
+ *  1. the idempotence test and the state store, `cmpl $0x3,0x60(%ebx); je` at
+ *     0x37d4b and `movl $0x3,0x60(%ebx)` at 0x37d61 -- `stateCount` is NOT
+ *     touched, which is `enterRRN`'s and `enterPhase4`'s habit and not
+ *     `enterPhase3`'s;
+ *  2. the phase 4 demodulator's RRN detector re-armed;
+ *  3. both filters summarised and dumped, byte for byte the same four
+ *     `edprint_stat` lines and the same three rules `enterPhase4` prints --
+ *     the same format strings, at the same .rodata offsets, and the same
+ *     `summarise_coefs`;
+ *  4. the equaliser converted to fixed point.
+ *
+ * THE WHOLE DUMP IS UNDER `mmxMode == 0` AND THE CONVERSION IS INSIDE IT.
+ * `mov 0xb0(%ebx),%eax; test %eax,%eax; jne <return 0>` at 0x37d73 guards
+ * everything from the first summary to `convertEqualizerToMmx`, so an
+ * equaliser already in fixed-point mode does the state transition, re-arms the
+ * detector and prints nothing at all.
+ *
+ * THE RETURN IS READ TWICE FROM THE SAME FIELD AND THE SECOND READ IS THE
+ * POINT.  %esi is zeroed at 0x37d41 and is the return value at every exit;
+ * the only `mov $0x1,%esi` is at 0x383c4, behind `mov 0xb0(%ebx),%edx; test;
+ * je` -- a RELOAD of `mmxMode` after `convertEqualizerToMmx` has run.  The
+ * function has just proved the field was zero on the way in, so this tests
+ * whether the conversion took, and the callee has three arms that leave it
+ * zero.  `enterRRN` and `enterFPE` return 1 for the opposite transition;
+ * finding 2134 for the family.
+ *
+ * `summarise_coefs` AND `edprint_stat` ARE `enterPhase4`'S AND ARE NOT
+ * REPEATED.  The object inlines the summary four times across the two
+ * functions and prints the same 1e10-as-a-float / 1e6-as-a-double pair at
+ * each -- `flds .rodata.cst4+0x280` for the two `%010d` lines and
+ * `fldl .rodata.cst8+0x98` for the four `%06d` ones, which is the asymmetry
+ * `enterPhase4` already carries and a second, independent witness to it.
+ * D325 covers `coefs[0]` being read unconditionally and counted in neither
+ * sum; it is the same helper and the same deviation.
+ */
+int
+V90Equalizer::enterDataPhase()
+{
+	float sum, absSum;
+
+	if (state == V90EQU_STATE_DATA)
+		return 0;
+
+	edprintf("V90Equalizer: enter Data Phase\r\n");
+	state = V90EQU_STATE_DATA;
+
+	phase4Demod->resetRRNDetector();
+
+	if (mmxMode != 0)
+		return 0;
+
+	summarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,
+			&minLeCoefValue, &sum, &absSum);
+
+	edprintf("=======================================================\r\n");
+	edprintf("Linear Equalizer:\r\n");
+	edprint_stat("minLeCoefValue  = %c%d.%010d\r\n", minLeCoefValue,
+		     1.0e10f);
+	edprint_stat("maxLeCoefValue  = %c%d.%06d\r\n", maxLeCoefValue, 1.0e6);
+	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
+	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
+	edprintf("=======================================================\r\n");
+
+	summarise_coefs(dfeCoefs, dfeLength, &maxDfeCoefValue,
+			&minDfeCoefValue, &sum, &absSum);
+
+	edprintf("DFE:\r\n");
+	edprint_stat("minDfeCoefValue  = %c%d.%010d\r\n", minDfeCoefValue,
+		     1.0e10f);
+	edprint_stat("maxDfeCoefValue  = %c%d.%06d\r\n", maxDfeCoefValue,
+		     1.0e6);
+	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
+	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
+	edprintf("=======================================================\r\n");
+
+	convertEqualizerToMmx();
+
+	if (mmxMode != 0)
+		return 1;
+
+	return 0;
 }
 
 /*
