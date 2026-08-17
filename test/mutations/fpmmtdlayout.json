@@ -1,24 +1,25 @@
 [
  {
-  "note": "COEF_DC's PLACEMENT, and THIS SET IS A REGISTER OF WHAT IS NOT TESTED.  Both entries are recorded NOT CAUGHT, deliberately, with the derivation below.  A surviving mutation with a written derivation is a legitimate deliverable here; a set quietly deleted because it went red is not."
+  "note": "REPURPOSED, NOT RETIRED.  This set was the register of D392's open half: two mutations to `src/dsp/fpm_mtd.c` adjudicated by `build/test/t_fpm_phasor`, both recorded NOT CAUGHT on purpose, because `FPM_phasor` read four entries below `FPM_sin_sign` and what it found there was `COEF_DC`'s tail -- the PREVIOUS translation unit's `.data` -- which no arrangement of source could assert.  The dependence has been removed: the eight out-of-range words are values in `src/dsp/fpm_phasor.c` now and the phasor indexes inside one array object.  So the same two mutations stand, with the same pairing, and their expected verdict has INVERTED.  They are `equivalent` -- expected to survive, with the argument -- and their survival is the positive statement of the fix rather than a gap in it.  Findings 3700 and 3703, deviation D392."
  },
  {
-  "note": "The source is `src/dsp/fpm_mtd.c` and the binary is `build/test/t_fpm_phasor` -- deliberately not the pairing the rest of `suites.json` uses.  COEF_DC is the last `.data` object of fpm_mtd.c and `FPM_sin_sign` is the first of fpm_phasor.c, the next translation unit in link order; `FPM_phasor` does not mask its quadrant, so for a phase of 0x8000 or more it reads COEF_DC's last three words and the two bytes of boundary padding as its SINE sign.  Where a coefficient array lives is therefore a claim about what the phasor returns.  Findings 3620 and 3621."
+  "note": "WHY THE PAIRING IS STILL fpm_mtd.c AGAINST t_fpm_phasor, WHICH IS NOT THE PAIRING THE REST OF `suites.json` USES.  The claim being measured is exactly a cross-file one: that perturbing fpm_mtd.c's `.data` -- its values, and how much of it there is -- cannot reach what the phasor returns.  Pairing the source with its own test would measure something else entirely.  If either of these is ever CAUGHT, `mutate.py` fails the run and says so, and that is the alarm this set exists to raise: it would mean the phasor had acquired a dependence on another translation unit's layout again."
  },
  {
-  "note": "WHY NEITHER IS CAUGHT.  The claim is true of the build that ships and is not ASSERTABLE, so `t_fpm_phasor` compares the sine only inside 0 .. 0x7fff and never reads COEF_DC at all.  `--coverage` appends `__gcov_.FPM_MTD_create`, `__gcov_.FPM_MTD_delete` and `__gcov_.FPM_MTD_detect` to fpm_mtd.c's `.data` at offsets 0x0c, 0x24 and 0x3c, immediately after COEF_DC at 0 -- so in the instrumented tree `tools/debugcov.py` builds, `FPM_sin_sign[-4 .. -1]` reads gcov metadata.  Asserting the adjacency would make `make phase` red for a reason that is about the instrumentation and not about the reconstruction, and exempting the instrumented build would be an undeclared allow-list.  Finding 3624, deviation D392."
- },
- {
-  "note": "WHAT WOULD CHANGE THIS.  Anything that lets the differential tier see the shipped link's `.data` neighbourhood -- a non-instrumented arm of the coverage tier, or a declaration in a register `tools/debugcov.py` reads.  Neither exists today.  The COSINE half of the same defect IS asserted and IS adjudicated, by `fpmphasor`, because `FPM_cos_sign`'s four preceding entries are `FPM_sin_sign` in the same translation unit and nothing can come between them."
+  "note": "WHERE COEF_DC'S VALUE IS STILL ADJUDICATED.  Being equivalent HERE is a statement about the phasor, not a licence for the coefficient to be wrong: `COEF_DC` is the wideband reference filter and its one reference in the object is inside `FPM_MTD_detect`.  The `fpmmtd` set pairs the same source with `build/test/t_fpm_mtd`, where the same one-word change IS caught.  Splitting it that way is deliberate -- one set says what the value does, this one says what its ADDRESS no longer does."
  },
  {
   "label": "COEF_DC's third coefficient is one out",
   "find": "\t-12971, 12917, 28620, -25834, 12917,",
-  "replace": "\t-12971, 12917, 28621, -25834, 12917,"
+  "replace": "\t-12971, 12917, 28621, -25834, 12917,",
+  "equivalent": true,
+  "why": "28620 is COEF_DC[2] and it is also the first word of the object's FPM_sin_sign[-4 .. -1] window -- but the phasor now reads that word from FPM_sin_sign_ext[0] in its own translation unit, so fpm_mtd.c's copy is not on any path t_fpm_phasor drives.  Caught by the fpmmtd set, which drives FPM_MTD_detect."
  },
  {
   "label": "another of fpm_mtd.c's globals comes between COEF_DC and the phasor's sign tables",
   "find": "short COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {",
-  "replace": "short mutant_between[4] = { 1, 2, 3, 4 };\nshort COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {"
+  "replace": "short mutant_between[4] = { 1, 2, 3, 4 };\nshort COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {",
+  "equivalent": true,
+  "why": "This is the mutation the whole fix is for.  It inserts a `.data` object into fpm_mtd.c, which under reverse emission order lands between COEF_DC and the next translation unit -- exactly what `--coverage` does with `__gcov_.FPM_MTD_*` (finding 3624), and exactly what used to change the sine for 32768 phases.  The phasor reads no address it does not own, so it changes nothing, and this surviving is the measurement of that."
  }
 ]

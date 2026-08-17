@@ -63300,3 +63300,179 @@ The shape is settled and recorded, so the next batch starts from
 Three different gate offsets -- 0x10, 0x14, 0x18 -- across the three fax
 modulations is a transposable set, so whoever writes them must make the shared
 block hold different values at all three or a swap will not separate.
+
+### 3700. `FPM_phasor`'S OUT-OF-RANGE WINDOW IS A VALUE NOW, NOT A LAYOUT -- D4'S FIX RUN BACKWARDS, AND IT CLOSES D392 WHOLE
+
+`FPM_phasor` indexes its two quadrant sign tables with an UNMASKED quadrant
+(`movswl 0x0(%esi,%esi,1)` at 0x0a9367 and 0x0a9392, `%esi` the sign-extended
+quadrant). The phase is read as a signed short, so the quadrant runs -4 .. 3
+rather than 0 .. 3 and every phase of 0x8000 or more reads four entries BELOW
+each table. That is the object's behaviour and we reproduce it.
+
+**What changed is HOW.** The previous batch reproduced it by arranging memory:
+`FPM_sin_sign` and `FPM_cos_sign` were made `.data` globals and declared in an
+order chosen so that both compilers' reverse `.data` emission put them adjacent
+in the object's order, and `COEF_DC` was moved into `fpm_mtd.c` so that its
+tail would land immediately before `FPM_sin_sign`. Every one of those steps is
+individually right about the OBJECT, and together they made OUR correctness a
+property of the linker and of two compilers' emission order. Reading before an
+array is undefined behaviour whatever the link happens to produce, and the
+owner ruled it out: an implementation must not depend on the ordering of
+objects in memory.
+
+**The fix is D4's, at the other end of the array.** `FPM_div` indexes a
+128-entry table with 0 .. 128, and `src/dsp/fpm_div.c` reproduces the overrun by
+giving OUR table a 129th entry holding the neighbour's first word -- the
+adjacency became a VALUE and the layout dependence vanished. The same move
+backwards: the eight out-of-range words are constants, measured from the blob,
+
+    COEF_DC       0x0081d0 (10 B)  [-12971, 12917, 28620, -25834, 12917]
+    pad           0x0081da ( 2 B)  [0]
+    FPM_sin_sign  0x0081dc ( 8 B)  [16384, 16384, -16384, -16384]
+    FPM_cos_sign  0x0081e4 ( 8 B)  [16384, -16384, -16384, 16384]
+
+    FPM_sin_sign[-4 .. -1] = [28620, -25834, 12917, 0]
+    FPM_cos_sign[-4 .. -1] = [16384, 16384, -16384, -16384]
+
+so `FPM_cos_sign_ext` and `FPM_sin_sign_ext` carry them as four LEADING entries
+each and the phasor indexes `ext[FPM_PHASOR_SIGN_BELOW + quad]`. The bound is
+exact rather than defensive: phase in -32768 .. 32767 gives `idx = phase >> 5`
+in -1024 .. 1023 and `quad = idx >> 8` in -4 .. 3, so the index is 0 .. 7 and
+cannot be otherwise. Every read is inside one array object and the behaviour is
+defined C.
+
+**THE EXPORTED SYMBOLS ARE UNCHANGED, and that was a decision.** `FPM_sin_sign`
+and `FPM_cos_sign` keep the object's names, the object's four words and the
+object's `.data` binding; nothing in `src/` indexes them any more. The
+alternative considered was one twelve-word array holding the object's whole
+neighbourhood -- `[sin window, sin signs, cos signs]`, in which the cosine's
+window IS the sine's signs exactly as in the blob, with no duplication at all --
+reached through `#define FPM_cos_sign (FPM_phasor_signs + 8)`. It is the more
+elegant construction and it was declined: a macro makes `grep FPM_sin_sign`
+ambiguous between the object's symbol and a pointer expression, and it costs
+two symbols that `nm` shows the blob exporting as `D`. Eight duplicated words
+of `.data` is the price, and the duplication cannot drift, because
+`t_fpm_phasor` compares BOTH copies against `dsplibs_ref.o`'s single reference.
+
+**Nothing outside the translation unit is affected, and that is measured.**
+`readelf -rW` finds five relocations naming the two symbols -- 0x0a936b and
+0x0a9396 in `FPM_phasor`, 0x0a944b and 0x0a9472 in `FPM_phasor_dp`, 0x0a9540 in
+`FPM_phasor_demod` -- and all five fall inside 0x0a9300 .. 0x0a9580, which is
+`fpm_phasor.c`. Nothing else in 1.2 MB names either one. `COEF_DC` has exactly
+one, at 0x0a921a inside `FPM_MTD_detect`.
+
+**`COEF_DC` STAYS IN `fpm_mtd.c`.** Its attribution rests on evidence that is
+independent of all of this -- its single reference is inside `FPM_MTD_detect`,
+`nm` marks it `D` and not `R`, and the two-byte pad at 0x081da is itself proof
+of a translation-unit boundary (findings 3620-3622). Only the DEPENDENCE on
+where it lands has been removed.
+
+**`FPM_phasor_dp` (0x0a93e0) is not reconstructed and will inherit this.**
+Whoever writes it must index `FPM_cos_sign_ext` and `FPM_sin_sign_ext` with the
+same bias, not the four-entry exported tables; its two relocations are the
+object's own evidence that it reads the same two tables the same unmasked way.
+
+### 3701. THE BIAS FOLDS INTO THE RELOCATED DISPLACEMENT, SO THE OBJECT'S OWN INSTRUCTION COMES OUT WITH A DIFFERENT ADDEND AND `compare.py` DOES NOT MOVE
+
+The object computes `base + 2*quad` and we now compute `(ext_base + 8) +
+2*quad`. The prediction was that GCC folds the `+ 8` into the relocated
+displacement rather than emitting an extra `add`, giving the same instruction
+against a different symbol and addend. Measured on GCC 3.4.2 at the period
+flags, `build/tc_out/src_dsp_fpm_phasor.c.o`:
+
+```
+  before   0f bf 94 36 00 00 00 00   movswl 0x0(%esi,%esi,1),%edx
+                                     R_386_32  FPM_cos_sign
+  after    0f bf 94 36 08 00 00 00   movswl 0x8(%esi,%esi,1),%edx
+                                     R_386_32  FPM_cos_sign_ext
+```
+
+One instruction, same mnemonic, same operand shape, displacement 0 -> 8. The
+same at the sine site. `compare.py` compares MNEMONICS, so the two functions
+score exactly as they did: identical 355, same size 74, different size 581,
+total 366187 bytes of 446487, unchanged in every figure, with `FPM_phasor` at
+199 bytes against the blob's 211 and `FPM_phasor_demod` at 142 against 161 --
+the same four numbers as before the change.
+
+That is the general point and it is worth more than the instance: **an
+addressing-mode displacement is free to us and forced on the compiler.** A
+constant bias on an index into a static array costs nothing at all on x86,
+because the addend rides in the relocation, so removing this class of
+undefined behaviour is not a trade against codegen fidelity. CLAUDE.md's rule
+is "the same compiled code, or a provable equivalent"; here it is the same
+compiled code.
+
+### 3702. THE SINE'S FOURTH WINDOW WORD IS A PAD, SEPARATES NOTHING, AND THE WIDENED SWEEP MUST NOT BE READ AS COVERING QUADRANT -1
+
+`t_fpm_phasor` now sweeps sine AND cosine over all 65536 phases against
+fourteen increments -- 2752512 checks against 2293760 before, the difference
+being 14 * 32768, the sine over the upper half. Both compilers pass. But the
+32768 out-of-domain phases are not 32768 equally informative trials, and
+finding 3623 already recorded why in one direction: quadrant -1 agreed BEFORE
+any of this work, because the old `static const` layout put `fpm_cos_table[256]`
+below `fpm_sin_sign` and that entry is zero, exactly as the object's boundary
+pad is.
+
+An out-of-domain trial multiplies the interpolated magnitude by ONE word of the
+window, so it can only tell that word from zero when the reference's own output
+is non-zero. Counted per quadrant, over the 8192 phases each:
+
+```
+    quadrant -4   sin  8191   cos  8192
+    quadrant -3   sin  8192   cos  8191
+    quadrant -2   sin  8191   cos  8192
+    quadrant -1   sin     0   cos  8191
+```
+
+The sine's zero is not a gap in the test, it is a property of the object: the
+fourth word of that window is the two bytes of padding at 0x081da, so the
+object returns zero for every phase in 0xE000 .. 0xFFFF and so do we, and no
+input can separate "the word is right" from "the word is zero" there. What
+separates them is the neighbourhood block, which compares that word against
+`dsplibs_ref.o`'s own byte directly, and the `fpmphasor` mutation that makes it
+non-zero, which the sweep catches. The counter is asserted at 0 with the
+derivation beside it so that nobody reads the number 65536 as 65536 trials.
+
+Per 3509, this is a `sep_`-class counter and not a path counter: it counts
+trials whose REPORTED VALUE differs between the two readings, and the mutation
+set is what adjudicates it. The cosine's window contains no zero, which is why
+all four of its quadrants separate and it is the control.
+
+### 3703. THE MUTATION SET THAT REGISTERED THE OPEN HALF NOW REGISTERS THE FIX, BY INVERTING ITS EXPECTED VERDICT RATHER THAN BEING DELETED
+
+`test/mutations/fpmmtdlayout.json` existed for one purpose: to record, with the
+derivation attached, that two mutations to `src/dsp/fpm_mtd.c` were NOT CAUGHT
+by `build/test/t_fpm_phasor` -- deliberately, at 0 of 2 -- because the sine's
+out-of-domain sign came from another translation unit's `.data` and no source
+arrangement could assert it.
+
+It is kept, with the same source, the same binary and the same two mutations,
+and both are now `"equivalent": true`. The claim has inverted: perturbing
+`COEF_DC`'s value, and inserting another `.data` global into `fpm_mtd.c` ahead
+of it, must now change NOTHING the phasor returns. `mutate.py` fails the run if
+an equivalent mutation is caught, so the set has become an alarm: if either
+fires again, the phasor has re-acquired a dependence on another translation
+unit's layout. The second mutation is the sharp one -- inserting a global there
+is precisely what `--coverage` does with `__gcov_.FPM_MTD_*` (finding 3624),
+and it is what used to move the sine over 32768 phases.
+
+Two things had to move with it, and both are the kind of thing a "retire the
+set" would have lost silently:
+
+- **`COEF_DC`'s value needed a new home.** Being equivalent against
+  `t_fpm_phasor` is a statement about the phasor and not a licence for the
+  coefficient to be wrong. `test/mutations/fpmmtd.json` pairs the same source
+  with `build/test/t_fpm_mtd`, where the value IS caught, so what used to be
+  one set making a weak claim about two things is two sets making a sharp claim
+  each.
+- **`fpmphasor`'s fourth entry had to go.** "The sign tables are laid out
+  cosine first" swapped the two definitions' declaration order, which used to
+  swap their addresses and so swap what each read below itself; under the fix
+  it changes nothing observable and would have flipped CAUGHT -> UNCAUGHT and
+  turned the gate red. A mutation that cannot be caught because the claim it
+  attacked no longer exists is a stale entry, not a survivor worth recording.
+  It is replaced by three that attack the claim which replaced it -- a wrong
+  cosine window, a wrong sine window, a non-zero pad -- plus one that mutates
+  the EXPORTED `FPM_cos_sign`, which nothing in `src/` reads and only the
+  neighbourhood block can catch. That last one is what proves the two copies of
+  the four real signs cannot drift apart.

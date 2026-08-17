@@ -1,17 +1,20 @@
 [
  {
-  "note": "FPM_phasor's OUT-OF-DOMAIN behaviour, which is the part `t_fpm_phasor`'s sweep could not reach until the sign tables became adjacent globals in `.data`.  Deviation D392, findings 3588 and 3620-3623."
+  "note": "FPM_phasor's OUT-OF-DOMAIN behaviour: the quadrant is not masked, so it runs -4 .. 3 and the object reads four entries BELOW each of its two sign tables.  Deviation D392, findings 3588, 3620-3624 and 3700-3703."
  },
  {
-  "note": "Every entry here is dead against a sweep that stops at 0x7fff: the quadrant is 0..3 over the whole designed domain, so masking it, reading the phase unsigned and swapping the two tables' addresses are all no-ops there.  That is the point of the set -- it adjudicates the widening of the sweep to 0x10000 rather than the arithmetic, which the in-domain entries of the existing suite already cover."
+  "note": "WHAT THIS SET ADJUDICATES NOW, AND WHAT IT USED TO.  It used to adjudicate the WIDENING of `t_fpm_phasor`'s sweep from 0x8000 to 0x10000, against a source whose out-of-range reads landed wherever the linker put the neighbouring object: four entries were dead against the narrow sweep and all four were caught by the wide one.  The layout dependence is gone -- the eight out-of-range words are leading entries of `FPM_cos_sign_ext` and `FPM_sin_sign_ext` and the phasor indexes `ext[FPM_PHASOR_SIGN_BELOW + quad]` -- so the set now adjudicates the two claims that replaced it: that the widened sweep still catches a wrong INDEX, and that it catches a wrong WINDOW VALUE."
  },
  {
-  "note": "WHAT IS NOT HERE, AND WHY.  The strongest single mutation would be to put the two tables back to `static const` -- `.rodata`, file-local, laid out with the 514-byte wave tables between them, which is what they were.  It cannot be written as a find/replace on this file alone: `fpm_phasor.h` declares them `extern short`, so a `static` or a `const` on the definition is a conflicting declaration and the mutation would not compile.  A build failure is not a kill, and recording one as a kill is worse than leaving the entry out.  `the sign tables are laid out cosine first` is the part of that claim which IS expressible here.  The cross-translation-unit half is `fpmmtdlayout`, whose two entries are recorded NOT CAUGHT and are the register of D392's bounded remainder."
+  "note": "THE ENTRY THAT WAS RETIRED WITH THE LAYOUT.  `the sign tables are laid out cosine first` swapped the two definitions' declaration order, which used to swap their addresses and so swap what each read below itself.  Under the fix it changes nothing any caller can see, and a mutation that cannot be caught because the claim it attacks no longer exists is not a survivor worth recording -- it is a stale entry.  It is replaced by the two window-value mutations below, which attack the claim that DID replace it.  Finding 3703."
+ },
+ {
+  "note": "AND WHAT IS STILL NOT HERE.  Putting the two tables back to `static const` was named in the old set as the strongest single mutation that could not be written, because `fpm_phasor.h` declares them `extern short` and the mutation would not compile -- a build failure is not a kill.  That is now moot rather than pending: nothing depends on their section, their binding or their addresses, so there is no claim left for such a mutation to attack.  They are `.data` globals because the object's are `D` and not `R`, which is symbol-table fidelity and not behaviour."
  },
  {
   "label": "the quadrant is masked before it indexes the sign tables",
-  "find": "\t\t\t* sign[quad]) >> 15);",
-  "replace": "\t\t\t* sign[quad & 3]) >> 15);"
+  "find": "\t\t\t* sign[FPM_PHASOR_SIGN_BELOW + quad]) >> 15);",
+  "replace": "\t\t\t* sign[FPM_PHASOR_SIGN_BELOW + (quad & 3)]) >> 15);"
  },
  {
   "label": "the phase is read unsigned, so the quadrant never goes negative",
@@ -24,8 +27,23 @@
   "replace": "FPM_phasor_demod(struct fpm_phasor *p)\n{\n\tint phase = p->phase;"
  },
  {
-  "label": "the sign tables are laid out cosine first",
-  "find": "short FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };\nshort FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };",
-  "replace": "short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };\nshort FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };"
+  "label": "the cosine's window is the masked quadrant's own signs",
+  "find": "\t 16384,  16384, -16384, -16384,\n\t/* [ 0 ..  3]: FPM_cos_sign itself. */",
+  "replace": "\t 16384, -16384, -16384,  16384,\n\t/* [ 0 ..  3]: FPM_cos_sign itself. */"
+ },
+ {
+  "label": "the sine's window has COEF_DC's third coefficient one out",
+  "find": "\t 28620, -25834,  12917,      0,",
+  "replace": "\t 28621, -25834,  12917,      0,"
+ },
+ {
+  "label": "the sine's window pad is not zero, which is the quadrant -1 coincidence",
+  "find": "\t 28620, -25834,  12917,      0,\n\t/* [ 0 ..  3]: FPM_sin_sign itself. */",
+  "replace": "\t 28620, -25834,  12917,  16384,\n\t/* [ 0 ..  3]: FPM_sin_sign itself. */"
+ },
+ {
+  "label": "the exported FPM_cos_sign drifts from the extended copy of it",
+  "find": "short FPM_cos_sign[4] = { 16384, -16384, -16384, 16384 };",
+  "replace": "short FPM_cos_sign[4] = { 16383, -16384, -16384, 16384 };"
  }
 ]

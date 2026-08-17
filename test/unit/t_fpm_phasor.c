@@ -10,24 +10,27 @@
  * A cycle is 0x8000 units, so 0x8000 and above are out of the DESIGNED domain
  * -- but the object reads `phase` as a SIGNED short and indexes its quadrant
  * sign tables with the result UNMASKED, so those values reach four entries
- * BEFORE each table and return something perfectly definite.  What they read
- * is a property of the LINK, not of the code, and reproducing it is what
- * `FPM_sin_sign` and `FPM_cos_sign` being adjacent globals in `.data` is for.
+ * BEFORE each table and return something perfectly definite.
  *
- * THE COSINE IS COMPARED OVER THE WHOLE RANGE AND THE SINE IS NOT, and the
- * asymmetry is derived rather than convenient: the cosine's out-of-domain
- * sign is `FPM_sin_sign`, the next `.data` object of the SAME translation
- * unit, and the sine's is the tail of `COEF_DC` in the PREVIOUS one.  A
- * compiler that appends anything to that unit's `.data` -- `--coverage` does,
- * and `tools/debugcov.py` builds exactly that -- displaces the second and not
- * the first.  The layout block below asserts the half that is assertable and
- * says why the other half is not.  D392, findings 3588, 3623 and 3624.
+ * BOTH HALVES ARE COMPARED OVER THE WHOLE RANGE, and they are only able to be
+ * because the eight out-of-range words are now VALUES in `src/` rather than
+ * an arrangement of memory.  They used to be a property of OUR link -- two
+ * `.data` globals in a chosen declaration order, with `COEF_DC` positioned to
+ * land before one of them -- which is undefined behaviour we could not
+ * guarantee, and which `--coverage` displaced, so the sine could not be
+ * compared at all above 0x7fff.  `FPM_cos_sign_ext` and `FPM_sin_sign_ext`
+ * carry those words as leading entries and the phasor indexes
+ * `ext[FPM_PHASOR_SIGN_BELOW + quad]`.  The neighbourhood block below compares
+ * all sixteen of them against `dsplibs_ref.o`'s own `.data`, which is the
+ * BLOB's bytes and nothing we compile, so no instrumentation of ours can move
+ * it.  D392, findings 3588, 3620-3624 and 3700-3703.
  *
  * Also checks the recovered table derivation against all 257 extracted
  * entries, so a future regeneration at another scale cannot silently drift.
  */
 
 #include <math.h>
+#include <stdio.h>
 
 #include "harness.h"
 #include "dsplib/fpm_phasor.h"
@@ -48,8 +51,14 @@ extern short ref_FPM_sin_sign[4];
  * Read four entries BEFORE a table.  Through a volatile pointer, so the
  * compiler cannot fold the out-of-bounds index against the array's declared
  * size -- this is the whole point of the check and not an accident to warn
- * about.  Test plumbing only; `src/dsp/fpm_phasor.c` indexes through an
- * ordinary pointer parameter and needs no such thing.
+ * about.
+ *
+ * USED ON THE REFERENCE SIDE ONLY.  `ref_FPM_sin_sign` and `ref_FPM_cos_sign`
+ * are the blob's symbols and the bytes below them are the blob's `.data`, so
+ * reading before them is how the object's own window is recovered.  Our side
+ * does not do this any more and no longer may: `src/dsp/fpm_phasor.c` carries
+ * the same sixteen bytes as leading entries of `FPM_cos_sign_ext` and
+ * `FPM_sin_sign_ext` and every index it forms is inside one array object.
  */
 static short
 below(const short *table, int i)
@@ -76,6 +85,9 @@ main(void)
 	int rc = 0;
 	unsigned k;
 	int i;
+	int q;
+	int sep_sin_below[FPM_PHASOR_SIGN_BELOW];
+	int sep_cos_below[FPM_PHASOR_SIGN_BELOW];
 
 	diff_begin("phasor table generator");
 	for (i = 0; i < FPM_PHASOR_TABLE; i++) {
@@ -89,39 +101,51 @@ main(void)
 	rc |= diff_end();
 
 	/*
-	 * THE LAYOUT, AND IT IS AN OBSERVABLE RATHER THAN AN INVARIANT.
+	 * THE OUT-OF-RANGE WINDOW, AS SIXTEEN VALUES RATHER THAN A LAYOUT.
 	 *
 	 * `FPM_phasor` does not mask the quadrant, so a phase of 0x8000 or
-	 * more indexes the sign tables at -4 .. -1.  Those sixteen bytes are
-	 * decided by the LINK, not by any statement in `fpm_phasor.c`, and the
-	 * two halves of that are NOT equally assertable:
+	 * more indexes the sign tables at -4 .. -1.  On the OBJECT's side
+	 * those sixteen bytes are decided by its link, and `dsplibs_ref.o` is
+	 * one contribution, so `ref_FPM_sin_sign[-4 .. -1]` and
+	 * `ref_FPM_cos_sign[-4 .. -1]` are the blob's own bytes -- read here
+	 * through `below()`, which is the only side that still needs it.
 	 *
-	 *   - the four before `FPM_cos_sign` are `FPM_sin_sign` itself, which
-	 *     is the SAME translation unit.  Nothing a compiler does to
-	 *     fpm_phasor.c can come between two adjacent `.data` globals of
-	 *     fpm_phasor.c, so this is checked here and the cosine is compared
-	 *     over the whole 16-bit range below;
-	 *   - the four before `FPM_sin_sign` are the tail of `COEF_DC`, which
-	 *     is fpm_mtd.c's -- ANOTHER translation unit -- plus the two bytes
-	 *     of padding the boundary costs.  They agree in the build that
-	 *     ships, and they do NOT agree in the instrumented build
-	 *     `tools/debugcov.py` makes, because `--coverage` appends
-	 *     `__gcov_.FPM_MTD_create/delete/detect` to fpm_mtd.c's `.data`
-	 *     exactly there.  So it is not asserted and the SINE is compared
-	 *     only inside 0 .. 0x7fff.  D392 is partially closed on that
-	 *     boundary and findings 3623 and 3624 are the derivation; the
-	 *     `fpmmtdlayout` mutation set is the register of what it costs.
+	 * On OUR side they are the leading entries of `FPM_cos_sign_ext` and
+	 * `FPM_sin_sign_ext`: ordinary array elements, read with a defined
+	 * index.  So this block is a plain differential comparison of sixteen
+	 * words, it does not depend on where anything is linked, and NOTHING
+	 * `--coverage` appends to any translation unit's `.data` can perturb
+	 * it.  That is what lets both sweeps below run the whole 16-bit range.
+	 *
+	 * It also ties the two copies of the four real signs together: the
+	 * exported `FPM_cos_sign`/`FPM_sin_sign` carry the object's symbols
+	 * and the extended arrays' upper halves carry the same four words, and
+	 * both are compared against the same reference, so neither can drift.
 	 */
 	diff_begin("sign table neighbourhood");
 	for (i = 0; i < 4; i++) {
-		diff_eq_int("cos_sign[-4 + %ld]",
-			    below(FPM_cos_sign, i), below(ref_FPM_cos_sign, i), i);
+		/* the four the object reads BELOW each table */
+		diff_eq_int("cos_sign_ext[%ld] = cos_sign[-4 + i]",
+			    FPM_cos_sign_ext[i], below(ref_FPM_cos_sign, i), i);
+		diff_eq_int("sin_sign_ext[%ld] = sin_sign[-4 + i]",
+			    FPM_sin_sign_ext[i], below(ref_FPM_sin_sign, i), i);
+		/* the four real signs, in the extended arrays ... */
+		diff_eq_int("cos_sign_ext[4 + %ld]",
+			    FPM_cos_sign_ext[FPM_PHASOR_SIGN_BELOW + i],
+			    ref_FPM_cos_sign[i], i);
+		diff_eq_int("sin_sign_ext[4 + %ld]",
+			    FPM_sin_sign_ext[FPM_PHASOR_SIGN_BELOW + i],
+			    ref_FPM_sin_sign[i], i);
+		/* ... and at the object's own two symbols */
 		diff_eq_int("cos_sign[%ld]",
 			    FPM_cos_sign[i], ref_FPM_cos_sign[i], i);
 		diff_eq_int("sin_sign[%ld]",
 			    FPM_sin_sign[i], ref_FPM_sin_sign[i], i);
 	}
 	rc |= diff_end();
+
+	for (i = 0; i < 4; i++)
+		sep_sin_below[i] = sep_cos_below[i] = 0;
 
 	diff_begin("FPM_phasor exhaustive");
 	for (k = 0; k < sizeof(increments) / sizeof(increments[0]); k++) {
@@ -135,20 +159,77 @@ main(void)
 			ref_FPM_phasor(&a);
 			FPM_phasor(&b);
 
-			diff_eq_int("phase 0x%04lx: cos", b.cos, a.cos, i);
 			/*
-			 * THE SINE STOPS AT 0x8000 AND THE COSINE DOES NOT.
-			 * Not a tolerance: the cosine's out-of-domain sign is
-			 * `FPM_sin_sign`, one translation unit's own next
-			 * object, and the sine's is another unit's tail, which
-			 * `--coverage` displaces.  See the layout block above.
+			 * BOTH OUTPUTS, OVER THE WHOLE RANGE.  The sine used
+			 * to stop at 0x8000 because its out-of-domain sign was
+			 * a neighbouring translation unit's tail that our own
+			 * instrumented build displaced; it is a value in
+			 * `FPM_sin_sign_ext` now and the asymmetry is gone.
 			 */
-			if (i < 0x8000)
-				diff_eq_int("phase 0x%04lx: sin",
-					    b.sin, a.sin, i);
+			diff_eq_int("phase 0x%04lx: cos", b.cos, a.cos, i);
+			diff_eq_int("phase 0x%04lx: sin", b.sin, a.sin, i);
 			diff_eq_int("phase 0x%04lx: next", b.phase, a.phase, i);
+
+			/*
+			 * Counted on the first increment only, so the figure
+			 * is per PHASE and not per trial: neither output
+			 * depends on `inc`.
+			 */
+			if (k == 0 && i >= 0x8000) {
+				int q = ((((short)i) >> 5) >> 8)
+					+ FPM_PHASOR_SIGN_BELOW;
+
+				if (a.sin != 0)
+					sep_sin_below[q]++;
+				if (a.cos != 0)
+					sep_cos_below[q]++;
+			}
 		}
 	}
+	rc |= diff_end();
+
+	/*
+	 * WHICH OF THOSE 32768 OUT-OF-DOMAIN PHASES ACTUALLY SEPARATE, AND THE
+	 * COINCIDENCE THIS EXISTS TO EXPOSE.
+	 *
+	 * An out-of-domain trial multiplies the interpolated magnitude by ONE
+	 * word of the window, so it can only tell that word apart from zero
+	 * when the reference's own output is non-zero.  Counting those is
+	 * therefore a count of trials whose OBSERVED VALUE separates the two
+	 * readings, not a count of trials that took a path (finding 3509).
+	 *
+	 * The sine's fourth window word IS zero -- it is the two bytes of
+	 * padding at .data 0x081da, not a coefficient -- so quadrant -1
+	 * (phases 0xE000 .. 0xFFFF) returns zero on both sides for every
+	 * phase and separates NOTHING.  It agreed before any of this work,
+	 * when our `static const` layout put `fpm_cos_table[256]` there and
+	 * that is zero too, and finding 3623 records that as two layouts
+	 * coinciding rather than as coverage.  It is asserted at 0 here so
+	 * that nobody reads the sweep as covering it: the check that this
+	 * word is the object's is the neighbourhood block above, which
+	 * compares it against the blob's byte directly, and the `fpmphasor`
+	 * mutation that makes it non-zero is what proves the sweep would
+	 * notice if it were wrong in the other direction.
+	 *
+	 * The cosine's window has no zero in it, so all four of its quadrants
+	 * separate.  The mutation set adjudicates all of this; these numbers
+	 * are the denominator behind it.
+	 */
+	printf("  out-of-domain separating trials, of 8192 phases per quadrant:\n");
+	for (q = 0; q < 4; q++)
+		printf("    quadrant %2d   sin %5d   cos %5d\n",
+		       q - FPM_PHASOR_SIGN_BELOW,
+		       sep_sin_below[q], sep_cos_below[q]);
+
+	diff_begin("out-of-domain separation");
+	for (q = 0; q < 3; q++)
+		diff_eq_int("sine quadrant %ld separates the window from zero",
+			    sep_sin_below[q] > 0, 1, q - FPM_PHASOR_SIGN_BELOW);
+	diff_eq_int("sine quadrant -1 separates nothing (%ld): its word is the pad and is 0",
+		    sep_sin_below[3], 0, sep_sin_below[3]);
+	for (q = 0; q < 4; q++)
+		diff_eq_int("cosine quadrant %ld separates the window from zero",
+			    sep_cos_below[q] > 0, 1, q - FPM_PHASOR_SIGN_BELOW);
 	rc |= diff_end();
 
 	/*

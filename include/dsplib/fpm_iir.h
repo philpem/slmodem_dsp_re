@@ -52,12 +52,13 @@ void FPM_iir_filt_II(short *samples, const short *coeff, short *state,
  * file of its own: the object's `.data` runs DEF_COEFS (a fpm_mtd.c local)
  * straight into COEF_DC with no padding, and COEF_DC straight into
  * fpm_phasor.c's `FPM_sin_sign` with the two bytes a translation-unit
- * boundary costs.  Where it lives is therefore observable, not cosmetic --
- * `FPM_phasor` reads COEF_DC's tail as the SINE's quadrant sign for a quarter
- * of its phase range.  Observable is not the same as assertable: a compiler
- * may append to a translation unit's `.data` and `--coverage` does, so the
- * placement is reproduced and deliberately not tested.  Findings 3621 and
- * 3624, deviation D392.
+ * boundary costs.  In the OBJECT that makes COEF_DC's tail the SINE's
+ * quadrant sign over a quarter of the phasor's phase range; in OURS it no
+ * longer does, because `fpm_phasor.c` carries those four words as values of
+ * its own rather than reading whatever the linker put below its table.  The
+ * attribution above is unaffected -- it rests on the address, on the single
+ * reference at .text 0x0a921a and on the `D` binding.  Findings 3621, 3624
+ * and 3700, deviation D392.
  */
 extern short COEF_DC[FPM_IIR_COEFF_PER_SECTION];
 
