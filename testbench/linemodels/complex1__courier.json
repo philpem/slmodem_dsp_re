@@ -1,0 +1,262 @@
+{
+ "binary": "/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit",
+ "bins": [
+  {
+   "db": -15.051499783199056,
+   "floored_frac": 0.0,
+   "hz": 150.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.7414701378448001,
+   "floored_frac": 0.0,
+   "hz": 300.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.12846962358776182,
+   "floored_frac": 0.0,
+   "hz": 450.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": 0.13512473846780892,
+   "floored_frac": 0.0,
+   "hz": 600.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": 0.0,
+   "floored_frac": 0.0,
+   "hz": 750.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 900.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": -0.21091275261396447,
+   "floored_frac": 0.0,
+   "hz": 1050.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 1200.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": -0.5396746060550441,
+   "floored_frac": 0.0,
+   "hz": 1350.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.6678305938101943,
+   "floored_frac": 0.0,
+   "hz": 1500.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.889410833367819,
+   "floored_frac": 0.0,
+   "hz": 1650.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 1800.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": -1.220207335910871,
+   "floored_frac": 0.0,
+   "hz": 1950.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -1.4282982630726906,
+   "floored_frac": 0.0,
+   "hz": 2100.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -1.6219648323495477,
+   "floored_frac": 0.0,
+   "hz": 2250.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 2400.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": -2.0865316340268265,
+   "floored_frac": 0.0,
+   "hz": 2550.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -2.3894657692207204,
+   "floored_frac": 0.0,
+   "hz": 2700.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -2.6470124953362415,
+   "floored_frac": 0.0,
+   "hz": 2850.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -3.0005075177243157,
+   "floored_frac": 0.0,
+   "hz": 3000.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -3.180241227843325,
+   "floored_frac": 0.0,
+   "hz": 3150.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -3.7517700944846126,
+   "floored_frac": 0.0,
+   "hz": 3300.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -4.85920575622707,
+   "floored_frac": 0.0,
+   "hz": 3450.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -8.843513391619311,
+   "floored_frac": 0.0,
+   "hz": 3600.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -16.921612167837445,
+   "floored_frac": 0.0,
+   "hz": 3750.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  }
+ ],
+ "captures": [
+  "ls-complex1-courier-20260818-1012-1",
+  "ls-complex1-courier-20260818-1012-2",
+  "ls-complex1-courier-20260818-1012-3",
+  "ls-complex1-courier-20260818-1012-4",
+  "ls-complex1-courier-20260818-1012-5",
+  "ls-complex1-courier-20260818-1012-6",
+  "ls-complex1-courier-20260818-1012-7",
+  "ls-complex1-courier-20260818-1012-8",
+  "ls-complex1-courier-20260818-1012-9",
+  "ls-complex1-courier-20260818-1012-10"
+ ],
+ "corners_hz": {
+  "minus3db_hz": 3053.2,
+  "minus6db_hz": 3495.4
+ },
+ "impedance": {
+  "asserted": "complex1",
+  "evidence": {
+   "impedance_lines": [
+    "impedance complex1"
+   ],
+   "path": "/srv/tftp/incoming/vg204-config-complex1",
+   "ports_setting_impedance": 4,
+   "sha256": "eaf4573e573d777c842ca87788f0be656a65c256868638ef885527898769b2b6"
+  }
+ },
+ "measured_utc": "2026-08-18T09:29:53Z",
+ "modem": {
+  "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
+  "role": "courier"
+ },
+ "n_bins_floored": 4,
+ "n_bins_read": 21,
+ "n_bins_total": 25,
+ "n_calls": 10,
+ "n_probes": 19,
+ "note": null,
+ "passband_ref_db": -0.064,
+ "schema": 1,
+ "tilt": {
+  "band_hz": [
+   450.0,
+   3150.0
+  ],
+  "db": -3.313,
+  "n_points": 15
+ },
+ "tilt_wide": {
+  "band_hz": [
+   300.0,
+   3400.0
+  ],
+  "db": -3.585,
+  "n_points": 17
+ },
+ "vs_1907_fit": [
+  {
+   "delta_db": -3.75,
+   "fit_db": 0.0,
+   "hz": 3300.0,
+   "measured_db": -3.75
+  },
+  {
+   "delta_db": 2.89,
+   "fit_db": -7.75,
+   "hz": 3450.0,
+   "measured_db": -4.86
+  },
+  {
+   "delta_db": 3.56,
+   "fit_db": -12.4,
+   "hz": 3600.0,
+   "measured_db": -8.84
+  },
+  {
+   "delta_db": 3.1,
+   "fit_db": -20.02,
+   "hz": 3750.0,
+   "measured_db": -16.92
+  }
+ ]
+}

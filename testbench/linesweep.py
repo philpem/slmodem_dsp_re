@@ -276,13 +276,17 @@ def cmd_ingest(a):
 
 
 def probe_capable(binary):
-    """Does this slmodemd actually emit the V.34 line probe?"""
+    """Does this slmodemd actually emit the V.34 line probe?
+
+    None means "could not tell", which is deliberately not the same as False:
+    an unreadable binary is a reason to warn, not a reason to refuse.
+    """
     try:
         out = subprocess.run(["strings", "-a", binary], capture_output=True,
                              text=True, timeout=60).stdout
         return "V34PROBEBINS" in out
     except Exception:
-        return None            # could not tell -- not the same as "no"
+        return None
 
 
 def cmd_measure(a):
