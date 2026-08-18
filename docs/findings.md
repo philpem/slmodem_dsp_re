@@ -75538,3 +75538,101 @@ codewords and assumes the network delivers them unaltered. Over SIP that means
 adjustment and no packet-loss concealment** -- which is a property of the call
 path, not of this code, and it is the first thing to establish before any of
 the 11.6 KB is worth writing.
+
+======================================================================
+
+### 7001. What data mode still needs: 30 KB, and V.34 is not in it
+
+Measured at `12beb26d` with `tools/service.py`, which seeds each service from
+its OWN entry points and walks reachability in the BLOB. Companion to 7000,
+which costed the digital side; this is the analogue client's own remainder.
+
+    python3 tools/service.py
+    python3 tools/service.py --list data
+
+| service | symbols | bytes |
+|---|--:|--:|
+| **data mode** V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8 | 132 | 74,248 |
+| fax only | 283 | 78,331 |
+| voice / Caller ID / ring detect only | 70 | 24,467 |
+| no entry point reaches it | 172 | 23,545 |
+
+**Most of the data-mode figure is V.32 and V.22, which are fenced.** By span:
+`V32mod.c +39` is 50 symbols / 31,230 B, `v32.c` 5 / 1,691, `v22.c` 5 / 1,071,
+and `Dialer.c +18` is 35 / 9,539 -- that last one is named for the FILE symbol
+that anchors the span and its unwritten members are `V32FP_recreate`,
+`DemodDataV32`, `SetRxModeV32`, `TxHdx*`: V.32 half-duplex, not dialling.
+95 symbols and 43,531 bytes of the 132 / 74,248 are those two modulations.
+
+#### The in-scope remainder is 32 symbols and 29,984 bytes
+
+All of it in the `VPcmV34Main.cpp +72` span, plus 186 bytes of plumbing
+(`dp_vpcm_exit` 70, `dp_call_exit` 28, `dp_init.c` 88). Split against 7000's
+digital-side closure, matching by prefix because `--list`'s name column is
+truncated:
+
+| | symbols | bytes |
+|---|--:|--:|
+| V.90/V.92 data-mode remainder | 32 | 29,984 |
+| — analogue client only | **18** | **20,062** |
+| — shared with the digital transmit chain | 14 | 9,922 |
+
+The five that dominate the analogue half:
+
+     7276  V90Demodulator::progress
+     3013  VPcmFloModem::v90RunDemodulator
+     2641  V90CPPacker(V90MappingParams*, tagV90AdditionalCPinfo*, short*, int)
+     2041  VPcmFloModem::runPcmModem
+     1075  V92Modulator::progress
+
+then `qcLineVerification` (779), `V90Demodulator::exitPhase3` (768),
+`V90Phase4Demodulator::reset` (504), `setDilDescriptor` (305), `float2Bits`
+(283), `V92Modulator::{initiateFPE,initiateRRN}` (276, 260), the four
+`{V90,V92}Modem::{reset,progress}` (668 together), `vPcmResetPhase3Modem` (149)
+and `getDataBitRate` (24).
+
+**`V90CPPacker` closes the direction question 7000 left open.** 7000 mapped
+every caller of the three phase-4 message classes and found no analogue-side
+encoder for V.90's own CP -- the analogue modem's §9.4.2.3 obligation. It is
+this free function, called by `VPcmFloModem::v90RunDemodulator`, and it reaches
+`float2Bits` and `getDataBitRate`. So the analogue side's CP builder is a free
+function outside the `V90CP` class, which is why a caller map over the class
+could not see it. 2,948 bytes for the three together, all unwritten.
+
+#### Finishing data mode drags in 85% of the digital side
+
+7000 costed the digital branch at 27 symbols / 11,628 B. **9,922 of those bytes
+are inside the data-mode closure** -- `V90Modem::progress` calls
+`V90Modulator::progress` on a pointer that is null on the analogue side, and
+static reachability does not know that, so `generateV90Symbol`,
+`generateV92Symbol`, `V90Mapper`, `V90BitsToSymbol` and `V90Phase4Modulator::
+{reset,setMappingParams,generateSymbol}` are all required for the data-mode
+call graph to close.
+
+What is left over is **13 symbols and 1,706 bytes**, and every one is a small
+phase-machine edge:
+
+    initiateFPE  enterDataPhase  exitRi  acknowledgeCPNotReception  exitDIL
+    enterPhase3  enterPhase4  acknowledgeEReception  acknowledgeCPReception
+    exitJd  exitJdPhase  (+ V90Phase3Modulator::exitJd, exitJdPhase)
+
+So 7000's "11.6 KB on top of the V.90 work already planned" is right about the
+closure and misleading as a plan: **the true incremental cost of the digital
+side, once data mode is finished, is 1.7 KB.** Quote that one.
+
+#### V.34 is done, and so is the constellation designer
+
+No unwritten symbol in the data-mode set is V.34 -- the span is named
+`VPcmV34Main.cpp` and every member of it still missing is `V90*`, `V92*` or
+`VPcmFloModem*`. The V.34 pump is complete as far as data mode reaches it.
+
+`V90ConstellationDesigner` is complete on `master`: all twenty-two distinct
+members of the blob's class have a counterpart in
+`src/pump/v90/V90ConstellationDesigner.cpp`, including `process`,
+`constellationDesign`, `spectralDesign`, `adjustConstellationsToNewK`,
+`findNextUcodeToAdd` and both `setConstellationToNoise` variants. It is
+ANALOGUE-side -- `process` is called by `V90Demodulator::progress` and nothing
+else -- which is V.90 §9.4.2.3: the receiver of the downstream designs the
+constellation and sends it in CP. **It is written but not yet driven in
+anger**, because its only caller is the 7,276-byte function at the top of the
+list above.
