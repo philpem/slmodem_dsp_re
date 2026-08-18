@@ -130,7 +130,8 @@ def modem_identity(role):
 
 # -------------------------------------------------------------------- reduce
 
-def build_model(impedance, modem, logs, ata_config=None, note=None):
+def build_model(impedance, modem, logs, ata_config=None, note=None,
+                binary=None):
     logs = [p for pat in logs for p in sorted(glob.glob(pat))] or []
     if not logs:
         sys.exit("linesweep: no logs matched -- refusing to build a model "
@@ -228,6 +229,7 @@ def build_model(impedance, modem, logs, ata_config=None, note=None):
         "n_bins_floored": sum(1 for b in bins if not b["is_reading"]),
         "vs_1907_fit": fit_delta,
         "note": note,
+        "binary": binary,
         "captures": [os.path.basename(p).split(".")[0] for p in logs],
         "bins": bins,
     }
@@ -255,7 +257,8 @@ def load_all():
 # ------------------------------------------------------------------ commands
 
 def cmd_ingest(a):
-    m = build_model(a.impedance, a.modem, a.logs, a.ata_config, a.note)
+    m = build_model(a.impedance, a.modem, a.logs, a.ata_config, a.note,
+                    getattr(a, "_binary", os.environ.get("SLMODEMD")))
     p = save(m)
     ev = "EVIDENCED" if m["impedance"]["evidence"] else "ASSERTED"
     print(f'stored {os.path.relpath(p, BENCH)}')
@@ -283,30 +286,47 @@ def probe_capable(binary):
 
 
 def cmd_measure(a):
-    # PRE-FLIGHT BEFORE ANY CALL GOES OUT.  The reduction needs V34PROBEBINS
-    # lines, which only an instrumented build emits.  Discovering that AFTER
-    # dialling means ten real calls through a PBX that reaches the PSTN,
-    # producing logs that reduce to nothing -- which is exactly what happened
-    # once and is what this check exists to stop.  Refuse early, and say what
-    # to do about it rather than just that it is wrong.
-    sl = os.environ.get(
-        "SLMODEMD",
-        "/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit")
+    # RESOLVE THE BINARY HERE AND PASS IT DOWN.  row.sh defaults SLMODEMD to
+    # $ROOT/slmodemd/slmodemd -- the FORK's blob-based build -- and this tool
+    # used to pre-flight a different default (build/hybrid-fit/slmodemd-fit).
+    # So it validated one binary and measured with another: ten real calls came
+    # back with zero probes and zero V34DATARATE, because the blob does not
+    # carry our instrumentation at all.  Two defaults for one thing is the
+    # whole bug; there is now one, and it is passed explicitly.
+    #
+    # `preemph_fit_ab.sh` is the pattern that always worked and is worth
+    # copying rather than rediscovering: SLMODEMD=$FIT together with
+    # DSPLIB_V34_DUMP_PROBE_BINS=1, both on the same command.
+    # The hybrid lives in the MAIN tree, not in whichever worktree this copy of
+    # the script is sitting in -- `os.path.dirname(BENCH)` gave a path under
+    # the worktree and found nothing.  Candidates in order, and the one chosen
+    # is printed, because "which binary" is the question this whole bug was.
+    CANDIDATES = [
+        "/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit",
+        os.path.join(os.path.dirname(BENCH), "build", "hybrid-fit",
+                     "slmodemd-fit"),
+    ]
+    sl = os.environ.get("SLMODEMD")
+    if not sl:
+        sl = next((c for c in CANDIDATES if os.access(c, os.X_OK)), None)
+    if not sl or not os.access(sl, os.X_OK):
+        sys.exit("linesweep: no usable slmodemd. Tried:\n  " +
+                 "\n  ".join(CANDIDATES) +
+                 "\nSet SLMODEMD, or build the hybrid "
+                 "(tools/hybrid.sh && tools/hybrid_link.sh).")
     cap = probe_capable(sl)
     if cap is False:
         sys.exit(
-            f"linesweep: {os.path.basename(sl)} does not contain V34PROBEBINS,\n"
-            "so it cannot emit the V.34 line probe and every call would reduce\n"
-            "to zero probes. NOT DIALLING.\n\n"
-            "  The probe dump is V.34 bench instrumentation and lives on the\n"
-            "  `v34-instrumentation` branch; master's source does not have it.\n"
-            "  Either build slmodemd from that branch, or point SLMODEMD at a\n"
-            "  build that predates the split, or use `ingest` on archived logs.")
-    if cap is None:
-        print(f"  WARNING: could not inspect {sl} for V34PROBEBINS; "
-              f"proceeding, but check the probe count afterwards.")
-    else:
-        print(f"  pre-flight: {os.path.basename(sl)} carries V34PROBEBINS")
+            f"linesweep: {sl}\n"
+            "  does not contain V34PROBEBINS, so it cannot emit the V.34 line\n"
+            "  probe and every call would reduce to zero probes. NOT DIALLING.\n\n"
+            "  The probe dump is V.34 bench instrumentation: it is in OUR\n"
+            "  reconstruction, not in the blob, and master's source no longer\n"
+            "  has it either. The fork's slmodemd/slmodemd will never emit it.\n"
+            "  Use a hybrid build, or a build from `v34-instrumentation`, or\n"
+            "  run `ingest` over archived logs instead.")
+    print(f'  binary: {sl}')
+    print(f'  pre-flight: {"carries V34PROBEBINS" if cap else "UNVERIFIABLE"}')
 
     row = os.path.join(BENCH, "row.sh")
     ext = subprocess.run(["bash", "-c",
@@ -336,9 +356,13 @@ def cmd_measure(a):
         pass
     for i in range(1, a.calls + 1):
         lab = f"ls-{a.impedance}-{a.modem}-{stamp}-{i}"
+        env = dict(os.environ)
+        env["SLMODEMD"] = sl
+        env["DSPLIB_V34_DUMP_PROBE_BINS"] = os.environ.get(
+            "DSPLIB_V34_DUMP_PROBE_BINS", "1")
         r = subprocess.run(["timeout", "220", row,
                             os.path.join(BENCH, "captures", lab), "pty", ext],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, env=env)
         ok = r.returncode == 0
         print(f'  {i}/{a.calls} {lab} {"ok" if ok else "FAILED rc=%d" % r.returncode}')
         if ok:
@@ -348,6 +372,7 @@ def cmd_measure(a):
         sys.exit("linesweep: no call completed; nothing to model.")
     a.logs = [os.path.join(BENCH, "captures", l + ".slmodemd.log")
               for l in labels]
+    a._binary = sl
     return cmd_ingest(a)
 
 
