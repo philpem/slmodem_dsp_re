@@ -166,6 +166,46 @@ def build_model(impedance, modem, logs, ata_config=None, note=None):
     tilt = None if tdb is None else round(float(tdb), 3)
     pts = [0] * tn
 
+    # Second band, reported alongside and never instead.  450-3150 is finding
+    # 1956's band and stops short of the codec corner, so it is TILT; the wider
+    # 300-3400 includes the corner, so it is tilt PLUS band limit.  They are
+    # different quantities and quoting one as the other is how a roll-off gets
+    # reported as a slope.
+    wdb, wn = bandshape.tilt(np.asarray(r["f"], float),
+                             np.asarray(r["med"], float),
+                             np.asarray(r["ffrac"], float), 300.0, 3400.0)
+
+    # CORNER FREQUENCIES, by linear interpolation BETWEEN TWO MEASURED BINS.
+    # That is interpolation, not extrapolation: both endpoints are readings and
+    # the answer lies between them.  If the curve never crosses, the corner is
+    # None -- it is not pinned to the last bin.
+    read = [(b["hz"], b["db"]) for b in bins
+            if b["is_reading"] and not b["is_noise_bin"]]
+    ref = None
+    corners = {}
+    if read:
+        band = [d for f, d in read if 300.0 <= f <= 1000.0]
+        ref = float(np.median(band)) if band else float(read[0][1])
+        for drop in (3.0, 6.0):
+            hit = None
+            for (f0, d0), (f1, d1) in zip(read, read[1:]):
+                if f1 < 1000.0:
+                    continue
+                if (d0 - ref) >= -drop > (d1 - ref):
+                    t = ((ref - drop) - d0) / (d1 - d0)
+                    hit = round(f0 + t * (f1 - f0), 1)
+                    break
+            corners[f"minus{int(drop)}db_hz"] = hit
+
+    fit_delta = []
+    for hz in (3300.0, 3450.0, 3600.0, 3750.0):
+        b = next((x for x in bins if x["hz"] == hz), None)
+        if b and b["db"] is not None:
+            fit_delta.append({"hz": hz, "measured_db": round(b["db"], 2),
+                              "fit_db": round(float(bandshape.fit_db(hz)), 2),
+                              "delta_db": round(b["db"]
+                                                - float(bandshape.fit_db(hz)), 2)})
+
     return {
         "schema": SCHEMA,
         "impedance": {
@@ -180,7 +220,13 @@ def build_model(impedance, modem, logs, ata_config=None, note=None):
         "n_bins_read": sum(1 for b in bins if b["is_reading"]),
         "n_bins_total": len(bins),
         "tilt": {"band_hz": [lo, hi], "db": tilt,
-                 "n_points": len(pts)} if tilt is not None else None,
+                 "n_points": tn} if tilt is not None else None,
+        "tilt_wide": ({"band_hz": [300.0, 3400.0], "db": round(float(wdb), 3),
+                       "n_points": wn} if wdb is not None else None),
+        "passband_ref_db": (None if ref is None else round(ref, 3)),
+        "corners_hz": corners,
+        "n_bins_floored": sum(1 for b in bins if not b["is_reading"]),
+        "vs_1907_fit": fit_delta,
         "note": note,
         "captures": [os.path.basename(p).split(".")[0] for p in logs],
         "bins": bins,
@@ -235,11 +281,26 @@ def cmd_measure(a):
         sys.exit(f"linesweep: cannot resolve an extension for '{a.modem}'")
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M")
     labels = []
+    # THIS DOES NOT WAIT FOR A QUIET MACHINE, DELIBERATELY.  Whether the box
+    # is quiet enough to measure on is the caller's policy, not this tool's: a
+    # measurement tool that blocks on its own judgement cannot be used to
+    # characterise a loaded machine on purpose, and it hides a decision the
+    # operator should be making.  `waitquiet.sh` is right there:
+    #
+    #     testbench/waitquiet.sh && linesweep.py measure ...
+    #
+    # Finding 1951 is why it matters -- a call at load 4.28 returned CONNECT
+    # 4800 against 31200 quiet.  The load is recorded with every arm so a
+    # result taken on a busy box can at least be identified later.
     print(f'measuring {a.modem} (ext {ext}) at impedance '
           f'{a.impedance} -- {a.calls} calls')
+    try:
+        print(f'  load at start: {os.getloadavg()[0]:.2f}  '
+              f'(this tool does not gate on it -- see waitquiet.sh)')
+    except OSError:
+        pass
     for i in range(1, a.calls + 1):
         lab = f"ls-{a.impedance}-{a.modem}-{stamp}-{i}"
-        subprocess.run([os.path.join(BENCH, "waitquiet.sh")], check=False)
         r = subprocess.run(["timeout", "220", row,
                             os.path.join(BENCH, "captures", lab), "pty", ext],
                            capture_output=True, text=True)
@@ -314,6 +375,86 @@ def cmd_compare(a):
     return 0
 
 
+
+def _fmt_arm(m):
+    out = []
+    a = out.append
+    imp, role = m["impedance"]["asserted"], m["modem"]["role"]
+    ev = "EVIDENCED" if m["impedance"]["evidence"] else "ASSERTED (operator's word)"
+    a(f'{imp} / {role}')
+    a(f'  provenance     {ev}')
+    if m["impedance"]["evidence"]:
+        e = m["impedance"]["evidence"]
+        a(f'                 {os.path.basename(e["path"])}  '
+          f'sha256 {e["sha256"][:16]}...')
+        a(f'                 {e["ports_setting_impedance"]} port(s) set it: '
+          f'{", ".join(e["impedance_lines"]) or "(none in file)"}')
+    if m["modem"].get("identity"):
+        a(f'  modem          {m["modem"]["identity"][:88]}')
+    a(f'  measured       {m["measured_utc"]}')
+    a(f'  denominators   {m["n_calls"]} calls, {m["n_probes"]} probes, '
+      f'{m["n_bins_read"]}/{m["n_bins_total"]} bins read '
+      f'({m["n_bins_floored"]} floored)')
+    if m.get("note"):
+        a(f'  note           {m["note"]}')
+    a('')
+    t, w = m.get("tilt"), m.get("tilt_wide")
+    if t:
+        a(f'  tilt   {t["band_hz"][0]:.0f}-{t["band_hz"][1]:.0f} Hz  '
+          f'{t["db"]:+6.2f} dB over {t["n_points"]} bins   '
+          f'<- 1956 band, stops short of the corner: this IS the tilt')
+    if w:
+        a(f'  tilt   {w["band_hz"][0]:.0f}-{w["band_hz"][1]:.0f} Hz  '
+          f'{w["db"]:+6.2f} dB over {w["n_points"]} bins   '
+          f'<- includes the corner: tilt PLUS band limit')
+    c = m.get("corners_hz") or {}
+    ref = m.get("passband_ref_db")
+    if ref is not None:
+        a(f'  passband ref   {ref:+.2f} dB  (median 300-1000 Hz)')
+    for k, lbl in (("minus3db_hz", "-3 dB"), ("minus6db_hz", "-6 dB")):
+        v = c.get(k)
+        a(f'  corner {lbl}   ' + (f'{v:.0f} Hz  (interpolated between two '
+                                  f'measured bins)' if v else
+                                  'not crossed within the measured band'))
+    if m.get("vs_1907_fit"):
+        a('')
+        a("  against the curve chanshim.py hardcodes (finding 1907's fit):")
+        a(f'    {"Hz":>6} {"measured":>10} {"fit":>9} {"delta":>9}')
+        for d in m["vs_1907_fit"]:
+            a(f'    {d["hz"]:>6.0f} {d["measured_db"]:>10.2f} '
+              f'{d["fit_db"]:>9.2f} {d["delta_db"]:>+9.2f}')
+    return out
+
+
+def cmd_stats(a):
+    ms = [m for m in load_all() if not a.modem or m["modem"]["role"] == a.modem]
+    if not ms:
+        sys.exit("linesweep: no models match. Nothing to report.")
+    for m in ms:
+        print("=" * 74)
+        print("\n".join(_fmt_arm(m)))
+        print()
+    if len(ms) >= 2:
+        print("=" * 74)
+        print("ARM TO ARM\n")
+        base = ms[0]
+        for m in ms[1:]:
+            print(f'  {m["impedance"]["asserted"]}/{m["modem"]["role"]} '
+                  f'minus {base["impedance"]["asserted"]}/{base["modem"]["role"]}')
+            for k, lbl in (("tilt", "tilt 450-3150"), ("tilt_wide", "tilt 300-3400")):
+                if m.get(k) and base.get(k):
+                    print(f'    {lbl:<16} {m[k]["db"] - base[k]["db"]:+.2f} dB')
+            for k, lbl in (("minus3db_hz", "-3 dB corner"),
+                           ("minus6db_hz", "-6 dB corner")):
+                x, y = (m.get("corners_hz") or {}).get(k), (base.get("corners_hz") or {}).get(k)
+                if x and y:
+                    print(f'    {lbl:<16} {x - y:+.0f} Hz  ({y:.0f} -> {x:.0f})')
+            print(f'    n                {base["n_probes"]} vs {m["n_probes"]} probes'
+                  f'  -- read every number above against these')
+            print()
+    return 0
+
+
 def cmd_plot(a):
     import matplotlib
     matplotlib.use("Agg")
@@ -328,17 +469,56 @@ def cmd_plot(a):
     axes = axes[:, 0]
 
     def draw(ax, models, title):
+        facts = []
         for m in models:
             f = [b["hz"] for b in m["bins"]]
             d = [b["db"] if b["db"] is not None else np.nan for b in m["bins"]]
-            ax.plot(f, d, marker="o", ms=3, lw=1.3,
-                    label=f'{m["impedance"]["asserted"]}/{m["modem"]["role"]}'
-                          f'  (n={m["n_probes"]})')
+            ln, = ax.plot(f, d, marker="o", ms=3, lw=1.4,
+                          label=f'{m["impedance"]["asserted"]}/'
+                                f'{m["modem"]["role"]}  (n={m["n_probes"]}p/'
+                                f'{m["n_calls"]}c)')
+            col = ln.get_color()
+            # tilt, drawn where it was measured so the number has a place
+            t = m.get("tilt")
+            if t and m.get("passband_ref_db") is not None:
+                lo_, hi_ = t["band_hz"]
+                y0 = m["passband_ref_db"]
+                ax.plot([lo_, hi_], [y0, y0 + t["db"]], ls=":", lw=1.6,
+                        color=col, alpha=.9)
+                ax.annotate(f'{t["db"]:+.2f} dB', xy=(hi_, y0 + t["db"]),
+                            xytext=(4, -10), textcoords="offset points",
+                            fontsize=7, color=col)
+            for k, ls_ in (("minus3db_hz", "--"), ("minus6db_hz", "-.")):
+                hz = (m.get("corners_hz") or {}).get(k)
+                if hz:
+                    ax.axvline(hz, ls=ls_, lw=.9, color=col, alpha=.55)
+                    ax.annotate(f'{k[6]}{"" if k[5]=="3" else ""}'
+                                f'{"-3dB" if "3" in k else "-6dB"} {hz:.0f}',
+                                xy=(hz, ax.get_ylim()[0]), xytext=(2, 4),
+                                textcoords="offset points", fontsize=6,
+                                color=col, rotation=90)
+            c = m.get("corners_hz") or {}
+            facts.append(
+                f'{m["impedance"]["asserted"]}/{m["modem"]["role"]}: '
+                f'tilt {t["db"]:+.2f} dB (450-3150), '
+                f'-3dB {c.get("minus3db_hz") or float("nan"):.0f} Hz, '
+                f'-6dB {c.get("minus6db_hz") or float("nan"):.0f} Hz, '
+                f'{m["n_bins_read"]}/{m["n_bins_total"]} bins'
+                if t else f'{m["impedance"]["asserted"]}: tilt not computable')
+        # the curve the emulator hardcodes, for reference only
+        fr = np.linspace(150, 3750, 200)
+        ax.plot(fr, [bandshape.fit_db(x) for x in fr], color="0.55", lw=1.0,
+                ls=(0, (6, 3)), label="chanshim fit (finding 1907)")
         ax.set_title(title, fontsize=10)
-        ax.set_xlabel("Hz"); ax.set_ylabel("dB rel. lowest bin")
-        ax.grid(alpha=.3); ax.legend(fontsize=7)
+        ax.set_xlabel("Hz"); ax.set_ylabel("dB rel. passband")
+        ax.grid(alpha=.3); ax.legend(fontsize=7, loc="lower left")
+        if facts:
+            ax.text(0.015, 0.04, "\n".join(facts), transform=ax.transAxes,
+                    fontsize=6.5, va="bottom", family="monospace",
+                    bbox=dict(fc="white", ec="0.7", alpha=.85, pad=3))
 
-    draw(axes[0], ms, "All arms — gaps are bins with no reading, not zeros")
+    draw(axes[0], ms, "All arms  —  gaps are bins with no reading, not zeros; "
+                      "dotted = measured tilt, dashed grey = chanshim's fit")
     if n > 1:
         for ax, role in zip(axes[1:], roles):
             draw(ax, [m for m in ms if m["modem"]["role"] == role],
@@ -378,6 +558,9 @@ def main():
     p = sub.add_parser("compare")
     p.add_argument("--modem"); p.add_argument("--emit-chanshim", action="store_true")
     p.set_defaults(fn=cmd_compare)
+
+    p = sub.add_parser("stats", help="full text report, all the numbers")
+    p.add_argument("--modem"); p.set_defaults(fn=cmd_stats)
 
     p = sub.add_parser("plot")
     p.add_argument("-o", "--out"); p.add_argument("--per-modem", action="store_true",

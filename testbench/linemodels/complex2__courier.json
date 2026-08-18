@@ -188,6 +188,10 @@
   "cx2-off-8",
   "cx2-off-9"
  ],
+ "corners_hz": {
+  "minus3db_hz": 2879.3,
+  "minus6db_hz": 3483.4
+ },
  "impedance": {
   "asserted": "complex2",
   "evidence": {
@@ -199,16 +203,18 @@
    "sha256": "449f05af7285ce7c9cb3a67dd65c4cba9e98cd4610503ea30c3648f938cb006f"
   }
  },
- "measured_utc": "2026-08-18T00:58:46Z",
+ "measured_utc": "2026-08-18T01:04:10Z",
  "modem": {
   "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
   "role": "courier"
  },
+ "n_bins_floored": 4,
  "n_bins_read": 21,
  "n_bins_total": 25,
  "n_calls": 10,
  "n_probes": 23,
  "note": null,
+ "passband_ref_db": -0.038,
  "schema": 1,
  "tilt": {
   "band_hz": [
@@ -217,5 +223,39 @@
   ],
   "db": -3.721,
   "n_points": 15
- }
+ },
+ "tilt_wide": {
+  "band_hz": [
+   300.0,
+   3400.0
+  ],
+  "db": -4.047,
+  "n_points": 17
+ },
+ "vs_1907_fit": [
+  {
+   "delta_db": -4.08,
+   "fit_db": 0.0,
+   "hz": 3300.0,
+   "measured_db": -4.08
+  },
+  {
+   "delta_db": 2.59,
+   "fit_db": -7.75,
+   "hz": 3450.0,
+   "measured_db": -5.16
+  },
+  {
+   "delta_db": 3.28,
+   "fit_db": -12.4,
+   "hz": 3600.0,
+   "measured_db": -9.12
+  },
+  {
+   "delta_db": 2.97,
+   "fit_db": -20.02,
+   "hz": 3750.0,
+   "measured_db": -17.06
+  }
+ ]
 }
