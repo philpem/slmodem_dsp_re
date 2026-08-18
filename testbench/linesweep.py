@@ -24,6 +24,37 @@ designs of different vintage and market.  A setting that improves one may make
 another worse, and the only way to know is to measure each modem under each
 setting and keep every arm.  That is what this tool is for.
 
+WHICH END THIS MEASURES, AND WHY THAT IS THE RIGHT ONE
+------------------------------------------------------
+OUR end has no hybrid at all.  slmodemd talks to d-modem over a socket and
+d-modem talks RTP; the path is digital from the datapump to the network.  The
+2-to-4-wire conversion the impedance setting configures is at the VG204, on the
+analogue drop to the HARDWARE modem -- so it is the far end's termination, not
+ours.
+
+That is not a limitation of this tool, it is the shape of the problem:
+
+  * The RESPONSE here is far-end-to-us, which is the direction our receiver has
+    to equalise, and #132 measured the deficit as being on our receive side.
+  * The ECHO here is OUR OWN TRANSMIT returning to OUR OWN RECEIVER
+    (echoscan correlates modem_tx against modem_rx, both captured at our end)
+    after reflecting off that hybrid.  It is pure interference to our receiver
+    with no compensating benefit anywhere, which makes it the operative number
+    of the two when the two disagree -- and on this bench they do.
+
+What is NOT measured is how our transmit arrives at the far end's receiver.
+That governs the rate the FAR END asks for, and we cannot change the hardware
+modems anyway; only the ATA is ours to configure.  Worth knowing, second-order.
+
+AND THE WHOLE ANALOGUE HOP IS A PROPERTY OF THE BENCH, NOT OF THE TARGET.
+Digital termination (task #110) removes the hybrid entirely, and finding 6901
+already measured that configuration: our datapump against the Conexant HSF over
+SIP with no analogue anywhere trained 33600 both ways with zero retrains, 8 of
+9 runs.  So these impedance arms characterise a hop the eventual system does
+not have.  They matter for reading the archive, which was all taken across it,
+and for interop with real hardware modems -- which is exactly what this bench
+exists to test and is a real requirement, not a detour.
+
 WHAT IT MEASURES
 ----------------
 The V.34 line probe (V.34 sec 11.2 / Table 17): 25 tones 150 Hz apart from 150

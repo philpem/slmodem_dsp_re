@@ -192,6 +192,15 @@ python3 linesweep.py stats
 python3 linesweep.py plot -o linemodels/compare.png
 ```
 
+**Which end:** our side is digital — slmodemd to d-modem over a socket, then
+RTP — so the hybrid the impedance configures is the far end's analogue drop.
+The response measured is far-end-to-us (the direction our receiver equalises),
+and the echo is our own transmit returning to our own receiver off that hybrid.
+Both are the end that matters; what is not measured is how our transmit lands
+at the far end's receiver, which governs the rate *it* asks for. Digital
+termination (#110) removes the hybrid altogether, and finding 6901 measured
+that case at 33600 with no retrains.
+
 Each arm carries its **echo** as well as its response — median lag and level
 from `echoscan`, with a detections/attempted split, because an arm where 3 of
 10 calls showed an echo and one where 10 of 10 did are different findings. A
