@@ -216,6 +216,28 @@ machine before *every* call, not just the first); `ladder.sh` walks one
 modulation per call; `preemph_ab.sh` / `preemph_ab2.sh` / `preemph_fit_ab.sh`
 are the pre-emphasis arms; the `*-sweep.sh` scripts vary one parameter.
 
+**Impedance sweeps.** `linesweep.py` measures, stores, models, compares and
+plots the line response under different ATA impedance settings, per modem —
+`ingest` builds an arm from existing capture logs, `measure` places the calls
+itself, and `list` / `compare` / `plot` read the store in `linemodels/`. It
+imports `bandshape.py` rather than re-implementing the reduction, so arms taken
+months apart go through identical code.
+
+Two things about it are deliberate and worth knowing before you trust an arm.
+The impedance is **your assertion** — nothing here can interrogate the VG204 —
+so pass `--ata-config /srv/tftp/incoming/vg204-runconf-new` and the tool stores
+that file's sha256 and the actual `impedance` lines it found; `list` then shows
+the arm as EVIDENCED rather than asserted. And a bin floored on more than half
+the probes is stored as **null**, not as its floor value, so `compare` prints
+`--` and `plot` breaks the line: a floor is the instrument running out, not a
+measurement of the channel.
+
+The point of it is that the right impedance is probably not the same for every
+modem. The Courier answers `Product type: UK External MSK` to ATI7, so its
+front end was designed against BT line impedance (Cisco's `complex1`); the
+Oli'Net and the SupraExpress are different designs of different vintage. Keep
+every arm and compare, rather than picking one setting for the bench.
+
 **No hardware needed.** `chanshim.py` puts two live datapumps on an emulated
 channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
 `CHAN_SLIP`, the jitter-buffer underrun model. `hsfcall.sh` drives the same
