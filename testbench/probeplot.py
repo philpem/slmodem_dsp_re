@@ -100,12 +100,67 @@ def to_db(energy, shift):
     return np.array(db), np.array(floored)
 
 
+def emit_csv(logs):
+    """One row per bin per probe, and the denominators on stderr.
+
+    Denominators, because a detector that does not report them cannot be
+    told from a broken one (findings 2400, 2401, 3100): logs read, logs that
+    carried a probe, and probes emitted.  A run over a glob that matched
+    nothing must not look like a run over a clean channel.
+    """
+    print("log,probe,bin,hz,db_rel_750,floored,noise_bin")
+    n_logs = n_with = n_probe = 0
+    for path in logs:
+        n_logs += 1
+        probes = parse(path)
+        if probes:
+            n_with += 1
+        name = os.path.basename(path).replace(".slmodemd.log", "")
+        for k, (energy, shift) in enumerate(probes):
+            n_probe += 1
+            db, floored = to_db(energy, shift)
+            db = db - db[REF_BIN]
+            for i in range(len(db)):
+                print("%s,%d,%d,%.0f,%.2f,%d,%d"
+                      % (name, k + 1, i + 1, (i + 1) * HZ_PER_BIN, db[i],
+                         int(floored[i]), int(i in NOISE_BINS)))
+    print("probeplot --csv: %d logs read, %d carried a probe, %d probes, "
+          "%d rows" % (n_logs, n_with, n_probe, n_probe * 25), file=sys.stderr)
+    if n_probe == 0:
+        print("probeplot --csv: NO V34PROBEBINS ANYWHERE -- refusing to exit 0 "
+              "on a zero denominator", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("logs", nargs="+")
     ap.add_argument("--out", default=None)
     ap.add_argument("--baud", type=int, default=3429)
+    #
+    # THE NUMBERS, NOT THE PICTURE.  A plot cannot be compared with another
+    # plot taken six months earlier by anything except an eye, and the
+    # 600r-versus-complex2 question is a per-bin difference of a few dB in
+    # four bins at the top of the band.  `--csv` emits exactly what is
+    # plotted -- same parse, same `to_db`, same 750 Hz reference, same
+    # floored/noise-bin marking -- so BOTH arms can go through one tool and
+    # one set of parameters, which is the only way the comparison means
+    # anything.
+    #
+    # `floored` is not a measurement.  It says `energy` quantised to zero and
+    # the value came from `shift` alone, i.e. the bin is a LOWER BOUND.  At a
+    # rolling-off band edge the top bins are precisely the ones that go
+    # floored, so a consumer that averages them as though they were readings
+    # will report a roll-off that is too shallow.  The column is emitted so
+    # that cannot happen silently.
+    #
+    ap.add_argument("--csv", action="store_true",
+                    help="print one row per bin per probe instead of plotting")
     args = ap.parse_args()
+
+    if args.csv:
+        return emit_csv(args.logs)
 
     fig, ax = plt.subplots(figsize=(10, 6))
     edge = EDGE.get(args.baud, 22)
