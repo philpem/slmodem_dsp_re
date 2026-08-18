@@ -356,15 +356,50 @@ def cmd_measure(a):
         pass
     for i in range(1, a.calls + 1):
         lab = f"ls-{a.impedance}-{a.modem}-{stamp}-{i}"
+        # THE FULL ENVIRONMENT row.sh NEEDS, copied from cx2batch.sh:59 which
+        # is the invocation that has always worked.  Getting this wrong is not
+        # a degraded measurement, it is no measurement:
+        #
+        #   SLMODEMD_IODELAY  V.34 CANNOT CONNECT below 86 and the driver
+        #                     answers 0 (deviation D77).  Omit it and the call
+        #                     never reaches V.34 -- no probe, no V34DATARATE,
+        #                     and no .wav either, because the recordings are
+        #                     written from the datapump's /tmp/modem_*.raw and
+        #                     there is nothing to write.  That is exactly the
+        #                     "10 ok / 0 probes" run this comment exists for.
+        #   TTY               which far-end modem row.sh sets up and reads the
+        #                     link report from.
+        #   HOLD              how long to hold the call, so training and the
+        #                     probe have time to happen.
         env = dict(os.environ)
         env["SLMODEMD"] = sl
         env["DSPLIB_V34_DUMP_PROBE_BINS"] = os.environ.get(
             "DSPLIB_V34_DUMP_PROBE_BINS", "1")
+        env["SLMODEMD_IODELAY"] = os.environ.get("SLMODEMD_IODELAY", "240")
+        env["TTY"] = os.environ.get("TTY", a.modem)
+        env["HOLD"] = os.environ.get("HOLD", "45")
         r = subprocess.run(["timeout", "220", row,
                             os.path.join(BENCH, "captures", lab), "pty", ext],
                            capture_output=True, text=True, env=env)
-        ok = r.returncode == 0
-        print(f'  {i}/{a.calls} {lab} {"ok" if ok else "FAILED rc=%d" % r.returncode}')
+
+        # ROW.SH EXITING 0 IS NOT A CALL THAT CONNECTED, and reporting its exit
+        # code as "ok" is how ten useless calls looked like ten good ones.
+        # Score the artefacts instead.
+        base = os.path.join(BENCH, "captures", lab)
+        conn = probes = 0
+        try:
+            with open(base + ".call.log", errors="replace") as fh:
+                conn = fh.read().count("CONNECT")
+        except OSError:
+            pass
+        try:
+            with open(base + ".slmodemd.log", errors="replace") as fh:
+                probes = fh.read().count("V34PROBEBINS")
+        except OSError:
+            pass
+        ok = probes > 0
+        print(f'  {i}/{a.calls} {lab}  connect={conn} probes={probes}'
+              f'  {"OK" if ok else "NO PROBE -- not usable"}')
         if ok:
             labels.append(lab)
     print(f'  {len(labels)} of {a.calls} calls completed')
