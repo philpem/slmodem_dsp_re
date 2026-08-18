@@ -11,6 +11,12 @@ Purpose: find out what the reconstruction and the blob actually do against
 hardware, as opposed to against each other. A blob-versus-blob call proves
 sequencing; only a third-party modem tests whether the signals are right.
 
+**Every tool in this directory is catalogued in [TOOLS.md](TOOLS.md)** —
+what each one is for, which ones place real calls, which need a build from
+`v34-instrumentation`, and a worked example of an impedance comparison. That
+file carries a coverage check so a tool added without a line in it shows up as
+UNDOCUMENTED.
+
 ## Safety
 
 The PBX is live and can reach the PSTN, so the dial destination is restricted
