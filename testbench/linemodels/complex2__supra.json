@@ -2,28 +2,28 @@
  "binary": null,
  "bins": [
   {
-   "db": -15.103960496557072,
-   "floored_frac": 0.0,
+   "db": -13.637109192892922,
+   "floored_frac": 0.041666666666666664,
    "hz": 150.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.6460809533120511,
+   "db": -0.26545975229820584,
    "floored_frac": 0.0,
    "hz": 300.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.07569594360840881,
+   "db": 0.09770829025179495,
    "floored_frac": 0.0,
    "hz": 450.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": 0.16804069407272948,
+   "db": 0.20315943236306566,
    "floored_frac": 0.0,
    "hz": 600.0,
    "is_noise_bin": false,
@@ -44,7 +44,7 @@
    "is_reading": false
   },
   {
-   "db": -0.27779630113687404,
+   "db": -0.3267793254919269,
    "floored_frac": 0.0,
    "hz": 1050.0,
    "is_noise_bin": false,
@@ -58,21 +58,21 @@
    "is_reading": false
   },
   {
-   "db": -0.7018297809161425,
+   "db": -0.6737558091441684,
    "floored_frac": 0.0,
    "hz": 1350.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.818680079294424,
+   "db": -0.809825737403223,
    "floored_frac": 0.0,
    "hz": 1500.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -1.0925145168497608,
+   "db": -1.0441889719733197,
    "floored_frac": 0.0,
    "hz": 1650.0,
    "is_noise_bin": false,
@@ -86,21 +86,21 @@
    "is_reading": false
   },
   {
-   "db": -1.4958617168686885,
+   "db": -1.2911281729211126,
    "floored_frac": 0.0,
    "hz": 1950.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -1.7133442637552463,
+   "db": -1.374134475221723,
    "floored_frac": 0.0,
    "hz": 2100.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -1.9134849824677502,
+   "db": -1.430793530395789,
    "floored_frac": 0.0,
    "hz": 2250.0,
    "is_noise_bin": false,
@@ -114,165 +114,165 @@
    "is_reading": false
   },
   {
-   "db": -2.404153455188222,
+   "db": -1.4875524138718248,
    "floored_frac": 0.0,
    "hz": 2550.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -2.70124217212566,
+   "db": -1.604286748280984,
    "floored_frac": 0.0,
    "hz": 2700.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -2.963651336078115,
+   "db": -1.7658987521265601,
    "floored_frac": 0.0,
    "hz": 2850.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -3.3437822824283643,
+   "db": -2.113501493248137,
    "floored_frac": 0.0,
    "hz": 3000.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -3.5100397062581976,
+   "db": -2.520234912607748,
    "floored_frac": 0.0,
    "hz": 3150.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -4.0815027519720815,
+   "db": -3.454566248466911,
    "floored_frac": 0.0,
    "hz": 3300.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -5.1552577384691745,
+   "db": -5.268545290610156,
    "floored_frac": 0.0,
    "hz": 3450.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -9.118836515090791,
+   "db": -10.259066765659412,
    "floored_frac": 0.0,
    "hz": 3600.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -17.056736906305254,
-   "floored_frac": 0.0,
+   "db": -20.36428118062586,
+   "floored_frac": 0.041666666666666664,
    "hz": 3750.0,
    "is_noise_bin": false,
    "is_reading": true
   }
  ],
  "captures": [
-  "cx2-off-10",
-  "cx2-off-1",
-  "cx2-off-2",
-  "cx2-off-3",
-  "cx2-off-4",
-  "cx2-off-5",
-  "cx2-off-6",
-  "cx2-off-7",
-  "cx2-off-8",
-  "cx2-off-9"
+  "ls-complex2-supra-20260818-1414-10",
+  "ls-complex2-supra-20260818-1414-1",
+  "ls-complex2-supra-20260818-1414-2",
+  "ls-complex2-supra-20260818-1414-3",
+  "ls-complex2-supra-20260818-1414-4",
+  "ls-complex2-supra-20260818-1414-5",
+  "ls-complex2-supra-20260818-1414-6",
+  "ls-complex2-supra-20260818-1414-7",
+  "ls-complex2-supra-20260818-1414-8",
+  "ls-complex2-supra-20260818-1414-9"
  ],
  "corners_hz": {
-  "minus3db_hz": 2879.3,
-  "minus6db_hz": 3483.4
+  "minus3db_hz": 3219.2,
+  "minus6db_hz": 3470.5
  },
  "echo": {
-  "db_median": -23.974293141706276,
-  "floor_db_median": -53.73871757646219,
-  "lag_ms_max": 171.5,
-  "lag_ms_median": 171.5,
-  "lag_ms_min": 161.5,
+  "db_median": -26.620300744249086,
+  "floor_db_median": -53.15329265964209,
+  "lag_ms_max": 171.625,
+  "lag_ms_median": 171.625,
+  "lag_ms_min": 161.625,
   "max_ms_searched": 400.0,
   "min_ratio_required": 4.0,
   "n_calls_with_audio": 10,
-  "n_detected": 10,
+  "n_detected": 8,
   "per_call": [
    {
-    "db": -21.44298073001531,
-    "detected": true,
-    "floor_db": -54.3578011013725,
-    "lag_ms": 171.5,
-    "ratio": 44.23245237392726
+    "db": -22.864224680307533,
+    "detected": false,
+    "floor_db": -28.278504932030387,
+    "lag_ms": 171.625,
+    "ratio": 1.8651510650559522
    },
    {
-    "db": -21.87595212149902,
+    "db": -26.014399580661177,
     "detected": true,
-    "floor_db": -39.77044182050311,
-    "lag_ms": 171.5,
-    "ratio": 7.84737641578979
+    "floor_db": -59.33432925693615,
+    "lag_ms": 171.625,
+    "ratio": 46.34431675378177
    },
    {
-    "db": -26.424535813645583,
+    "db": -26.42765587807972,
     "detected": true,
-    "floor_db": -48.627009043171626,
-    "lag_ms": 171.5,
-    "ratio": 12.886164214803419
+    "floor_db": -59.310802473476905,
+    "lag_ms": 171.625,
+    "ratio": 44.0714490106532
    },
    {
-    "db": -21.930434581275776,
-    "detected": true,
-    "floor_db": -49.246793514326015,
-    "lag_ms": 171.5,
-    "ratio": 23.217633246492106
+    "db": -24.737469979252218,
+    "detected": false,
+    "floor_db": -34.51678817245633,
+    "lag_ms": 171.625,
+    "ratio": 3.0829459421094194
    },
    {
-    "db": -26.08504071093045,
+    "db": -26.81294561041845,
     "detected": true,
-    "floor_db": -58.27300642464836,
-    "lag_ms": 171.5,
-    "ratio": 40.68162439012561
+    "floor_db": -57.46348145496006,
+    "lag_ms": 171.625,
+    "ratio": 34.08213498921477
    },
    {
-    "db": -25.501513573618944,
+    "db": -27.951568022922075,
     "detected": true,
-    "floor_db": -58.770494909747256,
-    "lag_ms": 161.5,
-    "ratio": 46.073273170268905
+    "floor_db": -50.481863440244794,
+    "lag_ms": 171.625,
+    "ratio": 13.381807274805276
    },
    {
-    "db": -21.531075225478045,
+    "db": -20.249419880683206,
     "detected": true,
-    "floor_db": -50.650146150082314,
-    "lag_ms": 171.5,
-    "ratio": 28.572849010987213
+    "floor_db": -52.44796951413554,
+    "lag_ms": 171.625,
+    "ratio": 40.731225927930375
    },
    {
-    "db": -22.970028745866152,
+    "db": -30.164709520341198,
     "detected": true,
-    "floor_db": -53.287202592300204,
-    "lag_ms": 171.5,
-    "ratio": 32.798855714398584
+    "floor_db": -53.85861580514863,
+    "lag_ms": 161.625,
+    "ratio": 15.300136811855882
    },
    {
-    "db": -27.186016951969407,
+    "db": -24.79187431765454,
     "detected": true,
-    "floor_db": -54.19023256062418,
-    "lag_ms": 171.5,
-    "ratio": 22.398079429356965
+    "floor_db": -56.241344743349586,
+    "lag_ms": 171.625,
+    "ratio": 37.365734298809805
    },
    {
-    "db": -24.9785575375464,
+    "db": -27.12938476987695,
     "detected": true,
-    "floor_db": -58.63201440855463,
-    "lag_ms": 171.5,
-    "ratio": 48.15848803786198
+    "floor_db": -50.209080018015186,
+    "lag_ms": 171.625,
+    "ratio": 14.255575758187657
    }
   ]
  },
@@ -287,25 +287,25 @@
    "sha256": "73bf6466229b8c394ff2ae402660db15d6fc1b6205681282625e4c44b85fa67e"
   }
  },
- "measured_utc": "2026-08-18T13:53:03Z",
+ "measured_utc": "2026-08-18T13:53:00Z",
  "modem": {
-  "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
-  "role": "courier"
+  "identity": "supra | ext 1901 | Rev 2.000-01 (c) 1993-1998 / SupraExpress 56e PRO | /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG00D17G-if00-port0",
+  "role": "supra"
  },
  "n_bins_floored": 4,
  "n_bins_read": 21,
  "n_bins_total": 25,
  "n_calls": 10,
- "n_probes": 23,
+ "n_probes": 24,
  "note": null,
- "passband_ref_db": -0.038,
+ "passband_ref_db": 0.049,
  "schema": 1,
  "tilt": {
   "band_hz": [
    450.0,
    3150.0
   ],
-  "db": -3.721,
+  "db": -2.417,
   "n_points": 15
  },
  "tilt_wide": {
@@ -313,33 +313,33 @@
    300.0,
    3400.0
   ],
-  "db": -4.047,
+  "db": -2.906,
   "n_points": 17
  },
  "vs_1907_fit": [
   {
-   "delta_db": -4.08,
+   "delta_db": -3.45,
    "fit_db": 0.0,
    "hz": 3300.0,
-   "measured_db": -4.08
+   "measured_db": -3.45
   },
   {
-   "delta_db": 2.59,
+   "delta_db": 2.48,
    "fit_db": -7.75,
    "hz": 3450.0,
-   "measured_db": -5.16
+   "measured_db": -5.27
   },
   {
-   "delta_db": 3.28,
+   "delta_db": 2.14,
    "fit_db": -12.4,
    "hz": 3600.0,
-   "measured_db": -9.12
+   "measured_db": -10.26
   },
   {
-   "delta_db": 2.97,
+   "delta_db": -0.34,
    "fit_db": -20.02,
    "hz": 3750.0,
-   "measured_db": -17.06
+   "measured_db": -20.36
   }
  ]
 }

@@ -287,7 +287,7 @@
    "sha256": "eaf4573e573d777c842ca87788f0be656a65c256868638ef885527898769b2b6"
   }
  },
- "measured_utc": "2026-08-18T09:48:14Z",
+ "measured_utc": "2026-08-18T13:52:54Z",
  "modem": {
   "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
   "role": "courier"

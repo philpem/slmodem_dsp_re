@@ -393,8 +393,25 @@ def cmd_measure(a):
             "  has it either. The fork's slmodemd/slmodemd will never emit it.\n"
             "  Use a hybrid build, or a build from `v34-instrumentation`, or\n"
             "  run `ingest` over archived logs instead.")
+    # AND CHECK THE CONFIG FILE BEFORE DIALLING, NOT AFTER.  --ata-config is
+    # only opened at the very end, when the model is built, so a typo or a file
+    # that has not been dumped yet threw FileNotFoundError AFTER ten live calls
+    # had already gone out -- every one of them fine, and the run lost to a
+    # traceback.  Nothing is recoverable-looking at that moment even though
+    # everything is, which is its own cost.
+    #
+    # (The captures survive: `ingest` over the same logs rebuilds the arm with
+    # no re-dialling.  This check is so that is never needed.)
+    if a.ata_config and not os.path.exists(a.ata_config):
+        sys.exit(f"linesweep: --ata-config {a.ata_config}\n"
+                 "  does not exist. NOT DIALLING -- it is only read at the end,\n"
+                 "  and finding out then would cost the whole batch.\n\n"
+                 "  Dump the running config to it first, or omit --ata-config\n"
+                 "  and the arm records as ASSERTED rather than EVIDENCED.")
     print(f'  binary: {sl}')
     print(f'  pre-flight: {"carries V34PROBEBINS" if cap else "UNVERIFIABLE"}')
+    if a.ata_config:
+        print(f'  ata config: {a.ata_config} (readable)')
 
     row = os.path.join(BENCH, "row.sh")
     ext = subprocess.run(["bash", "-c",

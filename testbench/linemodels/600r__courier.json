@@ -2,28 +2,28 @@
  "binary": null,
  "bins": [
   {
-   "db": -15.601237583491297,
+   "db": -15.517545759714729,
    "floored_frac": 0.0,
    "hz": 150.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.9872125738620952,
+   "db": -0.9507243233130609,
    "floored_frac": 0.0,
    "hz": 300.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.291788939191413,
+   "db": -0.28204567110314116,
    "floored_frac": 0.0,
    "hz": 450.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": 0.03972316398422038,
+   "db": 0.0591347043828776,
    "floored_frac": 0.0,
    "hz": 600.0,
    "is_noise_bin": false,
@@ -44,7 +44,7 @@
    "is_reading": false
   },
   {
-   "db": 0.013220542382953226,
+   "db": 0.011723799087491216,
    "floored_frac": 0.0,
    "hz": 1050.0,
    "is_noise_bin": false,
@@ -58,7 +58,7 @@
    "is_reading": false
   },
   {
-   "db": -0.031281850629426344,
+   "db": -0.033413843297509516,
    "floored_frac": 0.0,
    "hz": 1350.0,
    "is_noise_bin": false,
@@ -72,7 +72,7 @@
    "is_reading": true
   },
   {
-   "db": -0.06661104561968756,
+   "db": -0.08252921646837308,
    "floored_frac": 0.0,
    "hz": 1650.0,
    "is_noise_bin": false,
@@ -86,21 +86,21 @@
    "is_reading": false
   },
   {
-   "db": -0.07956781234059918,
+   "db": -0.08233317327683665,
    "floored_frac": 0.0,
    "hz": 1950.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.11051346479480628,
+   "db": -0.11809365849231312,
    "floored_frac": 0.0,
    "hz": 2100.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.13605537850060756,
+   "db": -0.14815151549522199,
    "floored_frac": 0.0,
    "hz": 2250.0,
    "is_noise_bin": false,
@@ -114,63 +114,63 @@
    "is_reading": false
   },
   {
-   "db": -0.2575713203258161,
+   "db": -0.2817712280055886,
    "floored_frac": 0.0,
    "hz": 2550.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.4104246343553015,
+   "db": -0.4206517299569654,
    "floored_frac": 0.0,
    "hz": 2700.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.501456077498716,
+   "db": -0.5179786923378842,
    "floored_frac": 0.0,
    "hz": 2850.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.7330241779386952,
+   "db": -0.7386175881680543,
    "floored_frac": 0.0,
    "hz": 3000.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.7482185551208929,
+   "db": -0.7578037163614155,
    "floored_frac": 0.0,
    "hz": 3150.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -1.1497064356355438,
+   "db": -1.1598728313890732,
    "floored_frac": 0.0,
    "hz": 3300.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -2.1279157892242964,
+   "db": -2.138179458198721,
    "floored_frac": 0.0,
    "hz": 3450.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -5.929166118880929,
+   "db": -5.9352128943228735,
    "floored_frac": 0.0,
    "hz": 3600.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -13.702819600834207,
+   "db": -13.74137093999412,
    "floored_frac": 0.0,
    "hz": 3750.0,
    "is_noise_bin": false,
@@ -178,405 +178,101 @@
   }
  ],
  "captures": [
-  "b103-courier-b1",
-  "b103-ours-courier",
-  "ec3-courier-1",
-  "ec3-courier-2",
-  "ec3-courier-3",
-  "ec3-courier-4",
-  "ec3-courier-5",
-  "ec-courier-1",
-  "ec-courier-2",
-  "ec-courier-3",
-  "ec-courier-4",
-  "ec-courier-5",
-  "frz-courier-1",
-  "frz-courier-2",
-  "frz-courier-3",
-  "hs-courier-1",
-  "hs-courier-2",
-  "hs-courier-3",
-  "instr-courier-fit-1",
-  "instr-courier-fit-2",
-  "instr-courier-off-1",
-  "instr-courier-off-2",
-  "qk-courier-1",
-  "qk-courier-2",
-  "row10-v34-courier",
-  "row12-v34-courier-nofax",
-  "rrn-courier-off-1",
-  "rrn-courier-off-2",
-  "rrn-courier-on-1",
-  "rrn-courier-on-2",
-  "src-courier-1",
-  "src-courier-2",
-  "src-courier-3",
-  "why-courier-1",
-  "why-courier-2",
-  "why-courier-3",
-  "ab149-1902-a0-1",
-  "ab149-1902-a0-2",
-  "ab149-1902-a0-3",
-  "ab149-1902-a0-4",
-  "ab149-1902-a0-5",
-  "ab149-1902-a0-6",
-  "ab149-1902-a1-1",
-  "ab149-1902-a1-2",
-  "ab149-1902-a1-3",
-  "ab149-1902-a1-4",
-  "ab149-1902-a1-5",
-  "ab149-1902-a1-6"
+  "ls-default-courier-20260818-1258-10",
+  "ls-default-courier-20260818-1258-1",
+  "ls-default-courier-20260818-1258-2",
+  "ls-default-courier-20260818-1258-3",
+  "ls-default-courier-20260818-1258-4",
+  "ls-default-courier-20260818-1258-5",
+  "ls-default-courier-20260818-1258-6",
+  "ls-default-courier-20260818-1258-7",
+  "ls-default-courier-20260818-1258-8",
+  "ls-default-courier-20260818-1258-9"
  ],
  "corners_hz": {
-  "minus3db_hz": 3490.2,
-  "minus6db_hz": 3604.2
+  "minus3db_hz": 3489.6,
+  "minus6db_hz": 3604.0
  },
  "echo": {
-  "db_median": -32.87256346236215,
-  "floor_db_median": -56.95214198611173,
-  "lag_ms_max": 363.0,
+  "db_median": -34.98599693388627,
+  "floor_db_median": -56.7591068839527,
+  "lag_ms_max": 171.625,
   "lag_ms_median": 171.625,
-  "lag_ms_min": 161.375,
+  "lag_ms_min": 161.625,
   "max_ms_searched": 400.0,
   "min_ratio_required": 4.0,
-  "n_calls_with_audio": 48,
-  "n_detected": 32,
+  "n_calls_with_audio": 10,
+  "n_detected": 8,
   "per_call": [
    {
-    "db": -28.001922030514432,
-    "detected": false,
-    "floor_db": -31.73238467770638,
-    "lag_ms": 172.125,
-    "ratio": 1.5364666298584895
-   },
-   {
-    "db": -34.72179625015808,
-    "detected": false,
-    "floor_db": -38.62062181384819,
-    "lag_ms": 160.5,
-    "ratio": 1.5665392409197503
-   },
-   {
-    "db": -35.01638979901468,
-    "detected": false,
-    "floor_db": -46.01669217668356,
-    "lag_ms": 201.375,
-    "ratio": 3.5482574139524155
-   },
-   {
-    "db": -35.42204375757955,
+    "db": -36.48797863501392,
     "detected": true,
-    "floor_db": -52.37847224680873,
-    "lag_ms": 201.625,
-    "ratio": 7.044033690489858
-   },
-   {
-    "db": -28.83977714366258,
-    "detected": false,
-    "floor_db": -33.25223038436202,
-    "lag_ms": 201.375,
-    "ratio": 1.6619680173533447
-   },
-   {
-    "db": -36.11536409664613,
-    "detected": true,
-    "floor_db": -52.426038001268374,
-    "lag_ms": 201.375,
-    "ratio": 6.539336642233529
-   },
-   {
-    "db": -34.808772956917835,
-    "detected": true,
-    "floor_db": -59.81914699232949,
-    "lag_ms": 201.625,
-    "ratio": 17.80404575729315
-   },
-   {
-    "db": -240.0,
-    "detected": false,
-    "floor_db": -240.0,
-    "lag_ms": 0.125,
-    "ratio": 0.0
-   },
-   {
-    "db": -240.0,
-    "detected": false,
-    "floor_db": -240.0,
-    "lag_ms": 0.125,
-    "ratio": 0.0
-   },
-   {
-    "db": -240.0,
-    "detected": false,
-    "floor_db": -240.0,
-    "lag_ms": 0.125,
-    "ratio": 0.0
-   },
-   {
-    "db": -240.0,
-    "detected": false,
-    "floor_db": -240.0,
-    "lag_ms": 0.125,
-    "ratio": 0.0
-   },
-   {
-    "db": -240.0,
-    "detected": false,
-    "floor_db": -240.0,
-    "lag_ms": 0.125,
-    "ratio": 0.0
-   },
-   {
-    "db": -31.25091653913853,
-    "detected": true,
-    "floor_db": -45.576239706482994,
-    "lag_ms": 219.25,
-    "ratio": 5.2031477494219
-   },
-   {
-    "db": -32.29356507936926,
-    "detected": true,
-    "floor_db": -62.94329834689974,
-    "lag_ms": 171.625,
-    "ratio": 34.078985942257425
-   },
-   {
-    "db": -31.38292130433323,
-    "detected": true,
-    "floor_db": -63.23498831592521,
-    "lag_ms": 171.625,
-    "ratio": 39.138425512799365
-   },
-   {
-    "db": -33.19039529163368,
-    "detected": true,
-    "floor_db": -63.040995925110494,
-    "lag_ms": 171.625,
-    "ratio": 31.0835083927445
-   },
-   {
-    "db": -32.683768944539196,
-    "detected": true,
-    "floor_db": -57.54734738348954,
-    "lag_ms": 171.625,
-    "ratio": 17.505677442501433
-   },
-   {
-    "db": -32.12534875054294,
-    "detected": true,
-    "floor_db": -61.685670037160534,
-    "lag_ms": 171.625,
-    "ratio": 30.061874979105134
-   },
-   {
-    "db": -32.13709263030795,
-    "detected": true,
-    "floor_db": -60.10316467834013,
-    "lag_ms": 171.625,
-    "ratio": 25.020938901399116
-   },
-   {
-    "db": -31.803312354650703,
-    "detected": true,
-    "floor_db": -59.15947144924885,
-    "lag_ms": 171.625,
-    "ratio": 23.324264338917096
-   },
-   {
-    "db": -31.614609658458676,
-    "detected": true,
-    "floor_db": -46.696434205125065,
+    "floor_db": -55.89188064701404,
     "lag_ms": 171.375,
-    "ratio": 5.676638356115205
+    "ratio": 9.336736461624895
    },
    {
-    "db": -29.981901822216102,
-    "detected": false,
-    "floor_db": -41.70288221522513,
+    "db": -32.411207881371695,
+    "detected": true,
+    "floor_db": -60.323955189171215,
     "lag_ms": 171.625,
-    "ratio": 3.8552186980233247
+    "ratio": 24.86779997169804
    },
    {
-    "db": -34.45395813579853,
+    "db": -37.82883762222743,
     "detected": true,
-    "floor_db": -54.27949926810933,
-    "lag_ms": 171.625,
-    "ratio": 9.801150469075884
-   },
-   {
-    "db": -32.63943528014903,
-    "detected": true,
-    "floor_db": -62.26537027610867,
-    "lag_ms": 171.625,
-    "ratio": 30.28982399580829
-   },
-   {
-    "db": -32.788925960647994,
-    "detected": true,
-    "floor_db": -46.40745638762543,
-    "lag_ms": 363.0,
-    "ratio": 4.796522889942322
-   },
-   {
-    "db": -38.195197149716336,
-    "detected": true,
-    "floor_db": -54.18954828184711,
+    "floor_db": -53.95713891443858,
     "lag_ms": 161.625,
-    "ratio": 6.305471348087774
+    "ratio": 6.403465361347282
    },
    {
-    "db": -31.273732702895032,
+    "db": -29.824072266538025,
     "detected": false,
-    "floor_db": -39.550634567086654,
+    "floor_db": -35.45348138178902,
     "lag_ms": 171.375,
-    "ratio": 2.593254219489099
+    "ratio": 1.9119232556343346
    },
    {
-    "db": -36.622752888314714,
+    "db": -35.082475408616205,
     "detected": true,
-    "floor_db": -56.35693658873392,
-    "lag_ms": 161.375,
-    "ratio": 9.698603058489871
+    "floor_db": -58.87168434470463,
+    "lag_ms": 171.625,
+    "ratio": 15.46893614817386
    },
    {
-    "db": -30.87241307056758,
+    "db": -31.986556355431123,
     "detected": true,
-    "floor_db": -53.67834745933959,
-    "lag_ms": 161.375,
-    "ratio": 13.813276954138006
+    "floor_db": -60.09745117060276,
+    "lag_ms": 171.625,
+    "ratio": 25.441618776693765
    },
    {
-    "db": -29.533856495688482,
+    "db": -28.65795090357196,
     "detected": false,
-    "floor_db": -34.04463643764003,
+    "floor_db": -32.50465439223785,
     "lag_ms": 171.375,
-    "ratio": 1.6808888528939512
+    "ratio": 1.557166939055237
    },
    {
-    "db": -32.78831738773987,
-    "detected": false,
-    "floor_db": -39.48381409223843,
+    "db": -34.889518459156335,
+    "detected": true,
+    "floor_db": -57.62633312089136,
     "lag_ms": 171.375,
-    "ratio": 2.161597529021677
+    "ratio": 13.70379120870949
    },
    {
-    "db": -31.93154298825197,
+    "db": -29.06553887449112,
     "detected": true,
-    "floor_db": -63.25893995119781,
+    "floor_db": -59.06225596212087,
     "lag_ms": 171.625,
-    "ratio": 36.84426083187981
+    "ratio": 31.61082673904441
    },
    {
-    "db": -39.39373892364579,
+    "db": -36.64127088135466,
     "detected": true,
-    "floor_db": -63.245095660881134,
+    "floor_db": -54.08385957257522,
     "lag_ms": 171.625,
-    "ratio": 15.580013758695632
-   },
-   {
-    "db": -32.32961225635475,
-    "detected": true,
-    "floor_db": -63.093155162536064,
-    "lag_ms": 171.625,
-    "ratio": 34.52845494727674
-   },
-   {
-    "db": -32.18238265096798,
-    "detected": true,
-    "floor_db": -63.48818246374198,
-    "lag_ms": 171.625,
-    "ratio": 36.752762711538416
-   },
-   {
-    "db": -30.13012950334813,
-    "detected": false,
-    "floor_db": -34.777751234335256,
-    "lag_ms": 171.375,
-    "ratio": 1.7075801063720577
-   },
-   {
-    "db": -33.75229372621601,
-    "detected": true,
-    "floor_db": -55.940538280352364,
-    "lag_ms": 171.625,
-    "ratio": 12.86507219561496
-   },
-   {
-    "db": -37.72389107488765,
-    "detected": true,
-    "floor_db": -55.89866843447985,
-    "lag_ms": 161.625,
-    "ratio": 8.104735908117492
-   },
-   {
-    "db": -35.97508807955409,
-    "detected": true,
-    "floor_db": -58.79590188914429,
-    "lag_ms": 171.625,
-    "ratio": 13.836960159328624
-   },
-   {
-    "db": -33.02451390140598,
-    "detected": true,
-    "floor_db": -54.259226193726924,
-    "lag_ms": 171.625,
-    "ratio": 11.527512839533282
-   },
-   {
-    "db": -34.80450569225184,
-    "detected": true,
-    "floor_db": -58.23651362525321,
-    "lag_ms": 171.625,
-    "ratio": 14.845690309390346
-   },
-   {
-    "db": -36.25205227198295,
-    "detected": true,
-    "floor_db": -55.75238993742428,
-    "lag_ms": 171.625,
-    "ratio": 9.440975775269075
-   },
-   {
-    "db": -32.95620096407631,
-    "detected": true,
-    "floor_db": -61.04001967672901,
-    "lag_ms": 171.625,
-    "ratio": 25.362434335383853
-   },
-   {
-    "db": -31.79933022516054,
-    "detected": false,
-    "floor_db": -37.201507202824615,
-    "lag_ms": 171.375,
-    "ratio": 1.8625538971579205
-   },
-   {
-    "db": -32.47276521910797,
-    "detected": true,
-    "floor_db": -61.029313522979194,
-    "lag_ms": 171.625,
-    "ratio": 26.78103858415311
-   },
-   {
-    "db": -34.67401163797507,
-    "detected": true,
-    "floor_db": -60.207542878538085,
-    "lag_ms": 161.625,
-    "ratio": 18.909348327822695
-   },
-   {
-    "db": -30.107802439843773,
-    "detected": false,
-    "floor_db": -38.67114267440266,
-    "lag_ms": 171.625,
-    "ratio": 2.6801988204779583
-   },
-   {
-    "db": -32.69671504873638,
-    "detected": true,
-    "floor_db": -60.23893428562637,
-    "lag_ms": 171.625,
-    "ratio": 23.829282275781765
+    "ratio": 7.449539625011202
    }
   ]
  },
@@ -584,12 +280,12 @@
   "asserted": "600r",
   "evidence": {
    "impedance_lines": [],
-   "path": "/srv/tftp/incoming/vg204-runconf",
+   "path": "/srv/tftp/incoming/vg204-config-default",
    "ports_setting_impedance": 0,
-   "sha256": "f07b85d72caf3d07c9341d7295166e128d1f471b4ad676d6d4cbc04fec4b56d7"
+   "sha256": "cf7908ede23e9cfa268a5ea80d51fc93b837083e11c889b2c16a54333bf80a7b"
   }
  },
- "measured_utc": "2026-08-18T09:48:06Z",
+ "measured_utc": "2026-08-18T13:52:48Z",
  "modem": {
   "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
   "role": "courier"
@@ -597,17 +293,17 @@
  "n_bins_floored": 4,
  "n_bins_read": 21,
  "n_bins_total": 25,
- "n_calls": 48,
- "n_probes": 64,
+ "n_calls": 10,
+ "n_probes": 30,
  "note": null,
- "passband_ref_db": -0.146,
+ "passband_ref_db": -0.141,
  "schema": 1,
  "tilt": {
   "band_hz": [
    450.0,
    3150.0
   ],
-  "db": -0.607,
+  "db": -0.631,
   "n_points": 15
  },
  "tilt_wide": {
@@ -615,33 +311,33 @@
    300.0,
    3400.0
   ],
-  "db": -0.528,
+  "db": -0.561,
   "n_points": 17
  },
  "vs_1907_fit": [
   {
-   "delta_db": -1.15,
+   "delta_db": -1.16,
    "fit_db": 0.0,
    "hz": 3300.0,
-   "measured_db": -1.15
+   "measured_db": -1.16
   },
   {
-   "delta_db": 5.62,
+   "delta_db": 5.61,
    "fit_db": -7.75,
    "hz": 3450.0,
-   "measured_db": -2.13
+   "measured_db": -2.14
   },
   {
-   "delta_db": 6.47,
+   "delta_db": 6.46,
    "fit_db": -12.4,
    "hz": 3600.0,
-   "measured_db": -5.93
+   "measured_db": -5.94
   },
   {
-   "delta_db": 6.32,
+   "delta_db": 6.28,
    "fit_db": -20.02,
    "hz": 3750.0,
-   "measured_db": -13.7
+   "measured_db": -13.74
   }
  ]
 }

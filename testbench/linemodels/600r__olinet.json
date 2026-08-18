@@ -2,28 +2,28 @@
  "binary": null,
  "bins": [
   {
-   "db": -15.103960496557072,
+   "db": -14.149733479708168,
    "floored_frac": 0.0,
    "hz": 150.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.6460809533120511,
+   "db": -0.5999792967528492,
    "floored_frac": 0.0,
    "hz": 300.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.07569594360840881,
+   "db": -0.1563913430717463,
    "floored_frac": 0.0,
    "hz": 450.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": 0.16804069407272948,
+   "db": 0.08796138290881572,
    "floored_frac": 0.0,
    "hz": 600.0,
    "is_noise_bin": false,
@@ -44,7 +44,7 @@
    "is_reading": false
   },
   {
-   "db": -0.27779630113687404,
+   "db": -0.011121503693672707,
    "floored_frac": 0.0,
    "hz": 1050.0,
    "is_noise_bin": false,
@@ -58,21 +58,21 @@
    "is_reading": false
   },
   {
-   "db": -0.7018297809161425,
+   "db": -0.07131432520036185,
    "floored_frac": 0.0,
    "hz": 1350.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -0.818680079294424,
+   "db": -0.05603877517998512,
    "floored_frac": 0.0,
    "hz": 1500.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -1.0925145168497608,
+   "db": -0.09886805418082645,
    "floored_frac": 0.0,
    "hz": 1650.0,
    "is_noise_bin": false,
@@ -86,21 +86,21 @@
    "is_reading": false
   },
   {
-   "db": -1.4958617168686885,
+   "db": -0.07038962545257732,
    "floored_frac": 0.0,
    "hz": 1950.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -1.7133442637552463,
+   "db": -0.05618376958176441,
    "floored_frac": 0.0,
    "hz": 2100.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -1.9134849824677502,
+   "db": 0.02775054054772852,
    "floored_frac": 0.0,
    "hz": 2250.0,
    "is_noise_bin": false,
@@ -114,63 +114,63 @@
    "is_reading": false
   },
   {
-   "db": -2.404153455188222,
+   "db": 0.09908288660248843,
    "floored_frac": 0.0,
    "hz": 2550.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -2.70124217212566,
+   "db": 0.0,
    "floored_frac": 0.0,
    "hz": 2700.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -2.963651336078115,
+   "db": -0.08433167536863095,
    "floored_frac": 0.0,
    "hz": 2850.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -3.3437822824283643,
+   "db": -0.41948404340773493,
    "floored_frac": 0.0,
    "hz": 3000.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -3.5100397062581976,
+   "db": -0.7585330269869672,
    "floored_frac": 0.0,
    "hz": 3150.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -4.0815027519720815,
+   "db": -1.684623015976726,
    "floored_frac": 0.0,
    "hz": 3300.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -5.1552577384691745,
+   "db": -3.3467709622240136,
    "floored_frac": 0.0,
    "hz": 3450.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -9.118836515090791,
+   "db": -8.220567360827246,
    "floored_frac": 0.0,
    "hz": 3600.0,
    "is_noise_bin": false,
    "is_reading": true
   },
   {
-   "db": -17.056736906305254,
+   "db": -17.536924667488584,
    "floored_frac": 0.0,
    "hz": 3750.0,
    "is_noise_bin": false,
@@ -178,134 +178,132 @@
   }
  ],
  "captures": [
-  "cx2-off-10",
-  "cx2-off-1",
-  "cx2-off-2",
-  "cx2-off-3",
-  "cx2-off-4",
-  "cx2-off-5",
-  "cx2-off-6",
-  "cx2-off-7",
-  "cx2-off-8",
-  "cx2-off-9"
+  "ls-default-olinet-20260818-1316-10",
+  "ls-default-olinet-20260818-1316-1",
+  "ls-default-olinet-20260818-1316-2",
+  "ls-default-olinet-20260818-1316-3",
+  "ls-default-olinet-20260818-1316-4",
+  "ls-default-olinet-20260818-1316-5",
+  "ls-default-olinet-20260818-1316-6",
+  "ls-default-olinet-20260818-1316-7",
+  "ls-default-olinet-20260818-1316-8",
+  "ls-default-olinet-20260818-1316-9"
  ],
  "corners_hz": {
-  "minus3db_hz": 2879.3,
-  "minus6db_hz": 3483.4
+  "minus3db_hz": 3425.8,
+  "minus6db_hz": 3534.1
  },
  "echo": {
-  "db_median": -23.974293141706276,
-  "floor_db_median": -53.73871757646219,
+  "db_median": -35.607290017220514,
+  "floor_db_median": -60.18561011999083,
   "lag_ms_max": 171.5,
   "lag_ms_median": 171.5,
   "lag_ms_min": 161.5,
   "max_ms_searched": 400.0,
   "min_ratio_required": 4.0,
   "n_calls_with_audio": 10,
-  "n_detected": 10,
+  "n_detected": 9,
   "per_call": [
    {
-    "db": -21.44298073001531,
+    "db": -37.94513225737066,
     "detected": true,
-    "floor_db": -54.3578011013725,
+    "floor_db": -57.792274111638136,
     "lag_ms": 171.5,
-    "ratio": 44.23245237392726
+    "ratio": 9.8255550383118
    },
    {
-    "db": -21.87595212149902,
+    "db": -34.12343074926072,
     "detected": true,
-    "floor_db": -39.77044182050311,
+    "floor_db": -60.12571284953131,
     "lag_ms": 171.5,
-    "ratio": 7.84737641578979
+    "ratio": 19.957866120854383
    },
    {
-    "db": -26.424535813645583,
+    "db": -34.90893848443951,
     "detected": true,
-    "floor_db": -48.627009043171626,
+    "floor_db": -60.362429551459364,
     "lag_ms": 171.5,
-    "ratio": 12.886164214803419
+    "ratio": 18.735899723762834
    },
    {
-    "db": -21.930434581275776,
+    "db": -35.36452909460598,
     "detected": true,
-    "floor_db": -49.246793514326015,
+    "floor_db": -59.58946068642231,
     "lag_ms": 171.5,
-    "ratio": 23.217633246492106
+    "ratio": 16.26471956422388
    },
    {
-    "db": -26.08504071093045,
+    "db": -35.607290017220514,
     "detected": true,
-    "floor_db": -58.27300642464836,
+    "floor_db": -60.24550739045034,
     "lag_ms": 171.5,
-    "ratio": 40.68162439012561
+    "ratio": 17.057322813919054
    },
    {
-    "db": -25.501513573618944,
+    "db": -34.58666781892123,
     "detected": true,
-    "floor_db": -58.770494909747256,
+    "floor_db": -60.43252856176434,
+    "lag_ms": 171.5,
+    "ratio": 19.601668361596168
+   },
+   {
+    "db": -37.28713923429461,
+    "detected": false,
+    "floor_db": -43.86856320369571,
+    "lag_ms": 171.5,
+    "ratio": 2.1333946343384627
+   },
+   {
+    "db": -38.21498533541971,
+    "detected": true,
+    "floor_db": -60.38237749709332,
+    "lag_ms": 171.5,
+    "ratio": 12.834223798327535
+   },
+   {
+    "db": -42.772659552513275,
+    "detected": true,
+    "floor_db": -60.45063921593621,
     "lag_ms": 161.5,
-    "ratio": 46.073273170268905
+    "ratio": 7.654185499685342
    },
    {
-    "db": -21.531075225478045,
+    "db": -35.85199505145091,
     "detected": true,
-    "floor_db": -50.650146150082314,
+    "floor_db": -53.03242121052935,
     "lag_ms": 171.5,
-    "ratio": 28.572849010987213
-   },
-   {
-    "db": -22.970028745866152,
-    "detected": true,
-    "floor_db": -53.287202592300204,
-    "lag_ms": 171.5,
-    "ratio": 32.798855714398584
-   },
-   {
-    "db": -27.186016951969407,
-    "detected": true,
-    "floor_db": -54.19023256062418,
-    "lag_ms": 171.5,
-    "ratio": 22.398079429356965
-   },
-   {
-    "db": -24.9785575375464,
-    "detected": true,
-    "floor_db": -58.63201440855463,
-    "lag_ms": 171.5,
-    "ratio": 48.15848803786198
+    "ratio": 7.228052659995186
    }
   ]
  },
  "impedance": {
-  "asserted": "complex2",
+  "asserted": "600r",
   "evidence": {
-   "impedance_lines": [
-    "impedance complex2"
-   ],
-   "path": "/srv/tftp/incoming/vg204-config-complex2",
-   "ports_setting_impedance": 4,
-   "sha256": "73bf6466229b8c394ff2ae402660db15d6fc1b6205681282625e4c44b85fa67e"
+   "impedance_lines": [],
+   "path": "/srv/tftp/incoming/vg204-config-default",
+   "ports_setting_impedance": 0,
+   "sha256": "cf7908ede23e9cfa268a5ea80d51fc93b837083e11c889b2c16a54333bf80a7b"
   }
  },
- "measured_utc": "2026-08-18T13:53:03Z",
+ "measured_utc": "2026-08-18T13:52:49Z",
  "modem": {
-  "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
-  "role": "courier"
+  "identity": "olinet | ext 1903 | Oli'Net V92 Ready | /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_B002XHV6-if00-port0",
+  "role": "olinet"
  },
  "n_bins_floored": 4,
  "n_bins_read": 21,
  "n_bins_total": 25,
  "n_calls": 10,
- "n_probes": 23,
+ "n_probes": 21,
  "note": null,
- "passband_ref_db": -0.038,
+ "passband_ref_db": -0.078,
  "schema": 1,
  "tilt": {
   "band_hz": [
    450.0,
    3150.0
   ],
-  "db": -3.721,
+  "db": -0.309,
   "n_points": 15
  },
  "tilt_wide": {
@@ -313,33 +311,33 @@
    300.0,
    3400.0
   ],
-  "db": -4.047,
+  "db": -0.552,
   "n_points": 17
  },
  "vs_1907_fit": [
   {
-   "delta_db": -4.08,
+   "delta_db": -1.68,
    "fit_db": 0.0,
    "hz": 3300.0,
-   "measured_db": -4.08
+   "measured_db": -1.68
   },
   {
-   "delta_db": 2.59,
+   "delta_db": 4.4,
    "fit_db": -7.75,
    "hz": 3450.0,
-   "measured_db": -5.16
+   "measured_db": -3.35
   },
   {
-   "delta_db": 3.28,
+   "delta_db": 4.18,
    "fit_db": -12.4,
    "hz": 3600.0,
-   "measured_db": -9.12
+   "measured_db": -8.22
   },
   {
-   "delta_db": 2.97,
+   "delta_db": 2.49,
    "fit_db": -20.02,
    "hz": 3750.0,
-   "measured_db": -17.06
+   "measured_db": -17.54
   }
  ]
 }
