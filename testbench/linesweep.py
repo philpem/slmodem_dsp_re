@@ -272,7 +272,42 @@ def cmd_ingest(a):
     return 0
 
 
+def probe_capable(binary):
+    """Does this slmodemd actually emit the V.34 line probe?"""
+    try:
+        out = subprocess.run(["strings", "-a", binary], capture_output=True,
+                             text=True, timeout=60).stdout
+        return "V34PROBEBINS" in out
+    except Exception:
+        return None            # could not tell -- not the same as "no"
+
+
 def cmd_measure(a):
+    # PRE-FLIGHT BEFORE ANY CALL GOES OUT.  The reduction needs V34PROBEBINS
+    # lines, which only an instrumented build emits.  Discovering that AFTER
+    # dialling means ten real calls through a PBX that reaches the PSTN,
+    # producing logs that reduce to nothing -- which is exactly what happened
+    # once and is what this check exists to stop.  Refuse early, and say what
+    # to do about it rather than just that it is wrong.
+    sl = os.environ.get(
+        "SLMODEMD",
+        "/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit")
+    cap = probe_capable(sl)
+    if cap is False:
+        sys.exit(
+            f"linesweep: {os.path.basename(sl)} does not contain V34PROBEBINS,\n"
+            "so it cannot emit the V.34 line probe and every call would reduce\n"
+            "to zero probes. NOT DIALLING.\n\n"
+            "  The probe dump is V.34 bench instrumentation and lives on the\n"
+            "  `v34-instrumentation` branch; master's source does not have it.\n"
+            "  Either build slmodemd from that branch, or point SLMODEMD at a\n"
+            "  build that predates the split, or use `ingest` on archived logs.")
+    if cap is None:
+        print(f"  WARNING: could not inspect {sl} for V34PROBEBINS; "
+              f"proceeding, but check the probe count afterwards.")
+    else:
+        print(f"  pre-flight: {os.path.basename(sl)} carries V34PROBEBINS")
+
     row = os.path.join(BENCH, "row.sh")
     ext = subprocess.run(["bash", "-c",
                           f'. "{BENCH}/modems.sh" && modem_ext {a.modem}'],

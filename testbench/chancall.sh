@@ -26,6 +26,11 @@
 #
 set -u
 BENCH=/home/philpem/dev/sip-D-modem/claude_re/testbench
+# Sourced from THIS script's directory, not from $BENCH.  $BENCH is a
+# hardcoded absolute path into the main tree, so a copy of this script
+# running in a worktree would otherwise pull the MAIN tree's helpers --
+# a different branch's idea of what these functions do.
+. "$(dirname "$(readlink -f "$0")")/modems.sh"
 SL=${SLMODEMD:-/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit}
 L=${1:?usage: chancall.sh LABEL [seconds]}
 SECS=${2:-60}
@@ -49,13 +54,19 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	# model one channel, so different seeds would give the two directions
 	# independent noise, which no real line does.
 	#
-	# DSPLIB_V34_DUMP_PROBE_BINS and DSPLIB_V34_FIT_PREEMP used to be on the
-	# assignment list below.  Those variables no longer reach anything on
-	# master: the flags that read them are V.34 bench instrumentation and now
-	# live on the `v34-instrumentation` branch.  An override that silently
-	# does nothing is worse than no override at all -- it makes an A/B look
-	# like it ran two arms when it ran one arm twice.  Set them from a bench
-	# built on that branch instead.
+	# THE PROBE DUMP IS DECIDED FROM THE BINARY, NOT FROM THE BRANCH.
+	# `probe_flag_for` (modems.sh) emits DSPLIB_V34_DUMP_PROBE_BINS only if
+	# this slmodemd actually contains V34PROBEBINS, and nothing otherwise.
+	#
+	# Both halves of that are the fix for a real regression.  The assignment
+	# was once unconditional, which meant a binary without the flag got an
+	# override that silently did nothing -- an A/B looking like two arms when
+	# it ran one twice.  It was then deleted outright as "master does not read
+	# this", which is true of master's SOURCE and false of the deployed
+	# hybrid, built before the split and still carrying the dump: ten fresh
+	# calls reduced to zero probes and bandshape.py had nothing to read.
+	# Asking the binary is the only reading that is right in both cases.
+	$(probe_flag_for "$SL") \
 	CHAN_ROLE=$1 CHAN_PORT=$PORT CHAN_SEED=${CHAN_SEED:-12345} \
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
 	CHAN_TILT=${CHAN_TILT:-0} \

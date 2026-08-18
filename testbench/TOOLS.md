@@ -156,6 +156,12 @@ flag, and master's datapump does not carry those flags — run here they would
 set an environment variable nothing reads and report one arm run twice as two.
 `tools/benchflags.c` and `tools/hybrid_link.sh` are there for the same reason.
 
+**How to tell, rather than guess:** `probe_flag_for <binary>` in `modems.sh`
+answers from the binary itself, and `linesweep.py measure` pre-flights it and
+refuses to dial at all if the probe dump is absent. The deployed
+`build/hybrid-fit/slmodemd-fit` predates the branch split and still carries it,
+so "am I on master?" is the wrong question — ask the artefact.
+
 That is also what **BRANCH** means above: those tools read a debug dump only an
 instrumented build emits. They work on the archive from anywhere; to gather
 *new* data, build from that branch.

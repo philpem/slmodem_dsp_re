@@ -39,6 +39,11 @@
 #
 set -u
 BENCH="$(cd "$(dirname "$0")" && pwd)"
+# Sourced from THIS script's directory, not from $BENCH.  $BENCH is a
+# hardcoded absolute path into the main tree, so a copy of this script
+# running in a worktree would otherwise pull the MAIN tree's helpers --
+# a different branch's idea of what these functions do.
+. "$(dirname "$(readlink -f "$0")")/modems.sh"
 SL=${SLMODEMD:-/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit}
 HSF_ROOT=${HSF_ROOT:-/home/philpem/dev/softmodems/conexant/hsfuser}
 L=${1:?usage: hsfcall.sh LABEL [seconds]}
@@ -113,6 +118,8 @@ rm -f "$OUT.sl.pgid" "$OUT.sl.log" "$OUT.hsf.log" "$OUT.sl.dte"
 # They still work on archived logs; to gather NEW probe data, build from that
 # branch.  (The note sits above the block because a `#` line inside a `\`
 # continuation is joined to the line above and comments out the command.)
+# Probe dump decided from the binary -- see chancall.sh and modems.sh.
+$(probe_flag_for "$SL") \
 CHAN_ROLE=server \
 	setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
 	_ "$OUT.sl.pgid" "$SL" "$BENCH/chanshim.py" "$OUT.sl.log" &

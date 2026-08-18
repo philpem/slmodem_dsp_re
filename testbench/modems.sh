@@ -382,3 +382,35 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
 	   exit 2 ;;
 	esac
 fi
+
+# ---------------------------------------------------------------------------
+# probe_flag_for <binary>  -- echo the env assignment that turns the V.34 line
+# probe dump on, but ONLY if this binary can actually emit it.
+#
+# The dump is gated on `dsplib_v34_dump_probe_bins`, which is V.34 bench
+# instrumentation: it lives on the `v34-instrumentation` branch and master's
+# source does not contain it.  But a binary BUILT BEFORE the split still has
+# it, and that is the binary the bench actually runs -- so "master does not
+# read this" is true of the source and false of the deployed artefact.
+#
+# Getting that wrong once already cost a batch: the assignment was removed as
+# dead, the deployed hybrid stopped dumping, and bandshape.py/linesweep.py
+# reduced ten fresh calls to zero probes.  So decide from the BINARY, not from
+# which branch you think you are on, and say which case you are in either way.
+# An unset variable that silently does nothing is the failure mode; an unset
+# variable that ANNOUNCES it does nothing is fine.
+probe_flag_for() {
+	if strings -a "$1" 2>/dev/null | grep -q V34PROBEBINS; then
+		echo "DSPLIB_V34_DUMP_PROBE_BINS=${DSPLIB_V34_DUMP_PROBE_BINS:-1}"
+	else
+		echo ""
+	fi
+}
+probe_flag_note() {
+	if [ -n "$(probe_flag_for "$1")" ]; then
+		echo "line probe: ON (binary carries V34PROBEBINS)"
+	else
+		echo "line probe: ABSENT from this binary -- bandshape.py and \
+linesweep.py will find nothing. Build from v34-instrumentation to gather it."
+	fi
+}
