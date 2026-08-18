@@ -277,7 +277,7 @@
   ]
  },
  "impedance": {
-  "asserted": "600r",
+  "asserted": "default",
   "evidence": {
    "impedance_lines": [],
    "path": "/srv/tftp/incoming/vg204-config-default",
@@ -285,7 +285,7 @@
    "sha256": "cf7908ede23e9cfa268a5ea80d51fc93b837083e11c889b2c16a54333bf80a7b"
   }
  },
- "measured_utc": "2026-08-18T13:52:51Z",
+ "measured_utc": "2026-08-18T13:54:07Z",
  "modem": {
   "identity": "supra | ext 1901 | Rev 2.000-01 (c) 1993-1998 / SupraExpress 56e PRO | /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG00D17G-if00-port0",
   "role": "supra"
@@ -295,7 +295,7 @@
  "n_bins_total": 25,
  "n_calls": 10,
  "n_probes": 35,
- "note": null,
+ "note": "fresh controlled batch, same session as complex1/complex2",
  "passband_ref_db": -0.134,
  "schema": 1,
  "tilt": {
