@@ -90,6 +90,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bandshape                                          # noqa: E402
+import echoscan                                           # noqa: E402
 
 BENCH = os.path.dirname(os.path.abspath(__file__))
 STORE = os.path.join(BENCH, "linemodels")
@@ -230,8 +231,71 @@ def build_model(impedance, modem, logs, ata_config=None, note=None,
         "vs_1907_fit": fit_delta,
         "note": note,
         "binary": binary,
+        "echo": measure_echo(logs),
         "captures": [os.path.basename(p).split(".")[0] for p in logs],
         "bins": bins,
+    }
+
+
+def measure_echo(logs, max_ms=400.0, min_ratio=4.0):
+    """Echo per arm, from the recordings each call already leaves behind.
+
+    WHY THIS BELONGS IN AN IMPEDANCE TOOL AT ALL, and arguably ahead of the
+    frequency response: terminating impedance IS the hybrid's balance network.
+    Trans-hybrid loss is the thing it sets most directly, and a tool that
+    compares impedances on bandwidth alone is measuring the side effect and
+    missing the mechanism.
+
+    Uses echoscan.report -- the repaired one (task #168) -- so an arm measured
+    here and a call examined by hand go through identical code.  NOT
+    echoratio.py: its lag search caps at 120 ms and the echo on this path sits
+    at 160-175 ms, which is how finding 1971 came to report "no linear echo"
+    from a null it could not have avoided producing.
+
+    A PEAK IS NOT A DETECTION.  echoscan returns the estimator's own noise
+    floor beside the peak; a peak that does not stand `min_ratio` above that
+    floor is two unrelated signals correlating, and is counted as a
+    non-detection rather than averaged in as a very quiet echo.  The
+    detections/attempted split is reported, because an arm where 3 of 10 calls
+    showed an echo and one where 10 of 10 did are different findings.
+    """
+    import contextlib
+    import io
+    rows = []
+    for lg in logs:
+        base = lg[:-len(".slmodemd.log")] if lg.endswith(".slmodemd.log") else lg
+        tx_p, rx_p = base + ".modem_tx_8k.wav", base + ".modem_rx_8k.wav"
+        if not (os.path.exists(tx_p) and os.path.exists(rx_p)):
+            continue
+        try:
+            tx, rate = echoscan.load_mono(tx_p)
+            rx, _ = echoscan.load_mono(rx_p)
+            with contextlib.redirect_stdout(io.StringIO()):
+                lag_ms, rho, floor = echoscan.report(
+                    "arm", tx, rx, rate, max_ms)
+        except Exception:
+            continue
+        ratio = (abs(rho) / floor) if floor else 0.0
+        rows.append({"lag_ms": float(lag_ms),
+                     "db": float(echoscan.db(abs(rho))),
+                     "floor_db": float(echoscan.db(floor)),
+                     "ratio": float(ratio),
+                     "detected": bool(ratio >= min_ratio)}) 
+    if not rows:
+        return None
+    hits = [r for r in rows if r["detected"]]
+    med = lambda xs: float(np.median(xs)) if xs else None
+    return {
+        "n_calls_with_audio": len(rows),
+        "n_detected": len(hits),
+        "min_ratio_required": min_ratio,
+        "max_ms_searched": max_ms,
+        "lag_ms_median": med([r["lag_ms"] for r in hits]),
+        "lag_ms_min": (min(r["lag_ms"] for r in hits) if hits else None),
+        "lag_ms_max": (max(r["lag_ms"] for r in hits) if hits else None),
+        "db_median": med([r["db"] for r in hits]),
+        "floor_db_median": med([r["floor_db"] for r in rows]),
+        "per_call": rows,
     }
 
 
@@ -515,6 +579,22 @@ def _fmt_arm(m):
         a(f'  corner {lbl}   ' + (f'{v:.0f} Hz  (interpolated between two '
                                   f'measured bins)' if v else
                                   'not crossed within the measured band'))
+    e = m.get("echo")
+    a("")
+    if not e:
+        a("  echo           no recordings found for these calls")
+    elif not e["n_detected"]:
+        a(f'  echo           NONE DETECTED in {e["n_calls_with_audio"]} calls '
+          f'(no peak {e["min_ratio_required"]:.0f}x over the floor)')
+    else:
+        a(f'  echo           {e["db_median"]:+.2f} dB at '
+          f'{e["lag_ms_median"]:.2f} ms   '
+          f'({e["n_detected"]}/{e["n_calls_with_audio"]} calls, '
+          f'lag {e["lag_ms_min"]:.1f}-{e["lag_ms_max"]:.1f} ms)')
+        a(f'                 estimator floor {e["floor_db_median"]:+.2f} dB; '
+          f'searched 0-{e["max_ms_searched"]:.0f} ms '
+          f'(echoratio.py stops at 120 and would miss this)')
+
     if m.get("vs_1907_fit"):
         a('')
         a("  against the curve chanshim.py hardcodes (finding 1907's fit):")
@@ -548,6 +628,12 @@ def cmd_stats(a):
                 x, y = (m.get("corners_hz") or {}).get(k), (base.get("corners_hz") or {}).get(k)
                 if x and y:
                     print(f'    {lbl:<16} {x - y:+.0f} Hz  ({y:.0f} -> {x:.0f})')
+            eb, em = base.get("echo"), m.get("echo")
+            if eb and em and eb.get("db_median") and em.get("db_median"):
+                print(f'    {"echo":<16} {em["db_median"] - eb["db_median"]:+.2f} dB'
+                      f'  ({eb["db_median"]:+.2f} -> {em["db_median"]:+.2f}),'
+                      f' detected {eb["n_detected"]}/{eb["n_calls_with_audio"]}'
+                      f' vs {em["n_detected"]}/{em["n_calls_with_audio"]}')
             print(f'    n                {base["n_probes"]} vs {m["n_probes"]} probes'
                   f'  -- read every number above against these')
             print()

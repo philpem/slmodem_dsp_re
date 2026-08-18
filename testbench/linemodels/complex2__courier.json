@@ -1,4 +1,5 @@
 {
+ "binary": null,
  "bins": [
   {
    "db": -15.103960496557072,
@@ -177,8 +178,8 @@
   }
  ],
  "captures": [
-  "cx2-off-1",
   "cx2-off-10",
+  "cx2-off-1",
   "cx2-off-2",
   "cx2-off-3",
   "cx2-off-4",
@@ -192,6 +193,89 @@
   "minus3db_hz": 2879.3,
   "minus6db_hz": 3483.4
  },
+ "echo": {
+  "db_median": -23.974293141706276,
+  "floor_db_median": -53.73871757646219,
+  "lag_ms_max": 171.5,
+  "lag_ms_median": 171.5,
+  "lag_ms_min": 161.5,
+  "max_ms_searched": 400.0,
+  "min_ratio_required": 4.0,
+  "n_calls_with_audio": 10,
+  "n_detected": 10,
+  "per_call": [
+   {
+    "db": -21.44298073001531,
+    "detected": true,
+    "floor_db": -54.3578011013725,
+    "lag_ms": 171.5,
+    "ratio": 44.23245237392726
+   },
+   {
+    "db": -21.87595212149902,
+    "detected": true,
+    "floor_db": -39.77044182050311,
+    "lag_ms": 171.5,
+    "ratio": 7.84737641578979
+   },
+   {
+    "db": -26.424535813645583,
+    "detected": true,
+    "floor_db": -48.627009043171626,
+    "lag_ms": 171.5,
+    "ratio": 12.886164214803419
+   },
+   {
+    "db": -21.930434581275776,
+    "detected": true,
+    "floor_db": -49.246793514326015,
+    "lag_ms": 171.5,
+    "ratio": 23.217633246492106
+   },
+   {
+    "db": -26.08504071093045,
+    "detected": true,
+    "floor_db": -58.27300642464836,
+    "lag_ms": 171.5,
+    "ratio": 40.68162439012561
+   },
+   {
+    "db": -25.501513573618944,
+    "detected": true,
+    "floor_db": -58.770494909747256,
+    "lag_ms": 161.5,
+    "ratio": 46.073273170268905
+   },
+   {
+    "db": -21.531075225478045,
+    "detected": true,
+    "floor_db": -50.650146150082314,
+    "lag_ms": 171.5,
+    "ratio": 28.572849010987213
+   },
+   {
+    "db": -22.970028745866152,
+    "detected": true,
+    "floor_db": -53.287202592300204,
+    "lag_ms": 171.5,
+    "ratio": 32.798855714398584
+   },
+   {
+    "db": -27.186016951969407,
+    "detected": true,
+    "floor_db": -54.19023256062418,
+    "lag_ms": 171.5,
+    "ratio": 22.398079429356965
+   },
+   {
+    "db": -24.9785575375464,
+    "detected": true,
+    "floor_db": -58.63201440855463,
+    "lag_ms": 171.5,
+    "ratio": 48.15848803786198
+   }
+  ]
+ },
  "impedance": {
   "asserted": "complex2",
   "evidence": {
@@ -203,7 +287,7 @@
    "sha256": "449f05af7285ce7c9cb3a67dd65c4cba9e98cd4610503ea30c3648f938cb006f"
   }
  },
- "measured_utc": "2026-08-18T01:04:10Z",
+ "measured_utc": "2026-08-18T09:48:11Z",
  "modem": {
   "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
   "role": "courier"

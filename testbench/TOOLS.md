@@ -130,6 +130,7 @@ self-paced over blocking sockets.
 | tool | what it does |
 |---|---|
 | `echoscan.py` | Is our own transmit present in our own receive, and at what lag? `--selftest` plants a known ladder and checks it comes back. **This is the one to use.** |
+| `linesweep.py` | Also measures echo, per impedance arm, via `echoscan` — see §5. Terminating impedance IS the hybrid balance network, so echo is the mechanism and bandwidth is the side effect. |
 | `echoratio.py` | How much of what we receive is our own transmit coming back? **Its lag search caps at 120 ms**, and the echo on this path is at 171.5 ms — it produced finding 1971's null because it could not see that far. Kept because archived numbers reproduce; it warns on stderr. |
 | `echofit.py` | One line of echo numbers for a call, for tabulating. |
 
@@ -190,6 +191,12 @@ python3 linesweep.py ingest --impedance 600r --modem courier \
 python3 linesweep.py stats
 python3 linesweep.py plot -o linemodels/compare.png
 ```
+
+Each arm carries its **echo** as well as its response — median lag and level
+from `echoscan`, with a detections/attempted split, because an arm where 3 of
+10 calls showed an echo and one where 10 of 10 did are different findings. A
+peak that does not stand 4x above the estimator's own noise floor is counted as
+a non-detection, not averaged in as a very quiet echo.
 
 Two things that tool will not do, on purpose: it will not treat a bin floored
 on more than half the probes as a reading (stored null, printed `--`, and the
