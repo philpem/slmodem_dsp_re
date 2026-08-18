@@ -1,0 +1,297 @@
+{
+ "bins": [
+  {
+   "db": -15.601237583491297,
+   "floored_frac": 0.0,
+   "hz": 150.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.9872125738620952,
+   "floored_frac": 0.0,
+   "hz": 300.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.291788939191413,
+   "floored_frac": 0.0,
+   "hz": 450.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": 0.03972316398422038,
+   "floored_frac": 0.0,
+   "hz": 600.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": 0.0,
+   "floored_frac": 0.0,
+   "hz": 750.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 900.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": 0.013220542382953226,
+   "floored_frac": 0.0,
+   "hz": 1050.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 1200.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": -0.031281850629426344,
+   "floored_frac": 0.0,
+   "hz": 1350.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": 0.0,
+   "floored_frac": 0.0,
+   "hz": 1500.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.06661104561968756,
+   "floored_frac": 0.0,
+   "hz": 1650.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 1800.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": -0.07956781234059918,
+   "floored_frac": 0.0,
+   "hz": 1950.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.11051346479480628,
+   "floored_frac": 0.0,
+   "hz": 2100.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.13605537850060756,
+   "floored_frac": 0.0,
+   "hz": 2250.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": null,
+   "floored_frac": 1.0,
+   "hz": 2400.0,
+   "is_noise_bin": true,
+   "is_reading": false
+  },
+  {
+   "db": -0.2575713203258161,
+   "floored_frac": 0.0,
+   "hz": 2550.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.4104246343553015,
+   "floored_frac": 0.0,
+   "hz": 2700.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.501456077498716,
+   "floored_frac": 0.0,
+   "hz": 2850.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.7330241779386952,
+   "floored_frac": 0.0,
+   "hz": 3000.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -0.7482185551208929,
+   "floored_frac": 0.0,
+   "hz": 3150.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -1.1497064356355438,
+   "floored_frac": 0.0,
+   "hz": 3300.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -2.1279157892242964,
+   "floored_frac": 0.0,
+   "hz": 3450.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -5.929166118880929,
+   "floored_frac": 0.0,
+   "hz": 3600.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  },
+  {
+   "db": -13.702819600834207,
+   "floored_frac": 0.0,
+   "hz": 3750.0,
+   "is_noise_bin": false,
+   "is_reading": true
+  }
+ ],
+ "captures": [
+  "b103-courier-b1",
+  "b103-ours-courier",
+  "ec3-courier-1",
+  "ec3-courier-2",
+  "ec3-courier-3",
+  "ec3-courier-4",
+  "ec3-courier-5",
+  "ec-courier-1",
+  "ec-courier-2",
+  "ec-courier-3",
+  "ec-courier-4",
+  "ec-courier-5",
+  "frz-courier-1",
+  "frz-courier-2",
+  "frz-courier-3",
+  "hs-courier-1",
+  "hs-courier-2",
+  "hs-courier-3",
+  "instr-courier-fit-1",
+  "instr-courier-fit-2",
+  "instr-courier-off-1",
+  "instr-courier-off-2",
+  "qk-courier-1",
+  "qk-courier-2",
+  "row10-v34-courier",
+  "row12-v34-courier-nofax",
+  "rrn-courier-off-1",
+  "rrn-courier-off-2",
+  "rrn-courier-on-1",
+  "rrn-courier-on-2",
+  "src-courier-1",
+  "src-courier-2",
+  "src-courier-3",
+  "why-courier-1",
+  "why-courier-2",
+  "why-courier-3",
+  "ab149-1902-a0-1",
+  "ab149-1902-a0-2",
+  "ab149-1902-a0-3",
+  "ab149-1902-a0-4",
+  "ab149-1902-a0-5",
+  "ab149-1902-a0-6",
+  "ab149-1902-a1-1",
+  "ab149-1902-a1-2",
+  "ab149-1902-a1-3",
+  "ab149-1902-a1-4",
+  "ab149-1902-a1-5",
+  "ab149-1902-a1-6"
+ ],
+ "corners_hz": {
+  "minus3db_hz": 3490.2,
+  "minus6db_hz": 3604.2
+ },
+ "impedance": {
+  "asserted": "600r",
+  "evidence": {
+   "impedance_lines": [],
+   "path": "/srv/tftp/incoming/vg204-runconf",
+   "ports_setting_impedance": 0,
+   "sha256": "f07b85d72caf3d07c9341d7295166e128d1f471b4ad676d6d4cbc04fec4b56d7"
+  }
+ },
+ "measured_utc": "2026-08-18T01:04:08Z",
+ "modem": {
+  "identity": "courier | ext 1902 | USRobotics Courier HST Dual Standard V.34 Fax Settings... / LAST DIALLED #: | /dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_CGEGb135B02-if00-port0",
+  "role": "courier"
+ },
+ "n_bins_floored": 4,
+ "n_bins_read": 21,
+ "n_bins_total": 25,
+ "n_calls": 48,
+ "n_probes": 64,
+ "note": null,
+ "passband_ref_db": -0.146,
+ "schema": 1,
+ "tilt": {
+  "band_hz": [
+   450.0,
+   3150.0
+  ],
+  "db": -0.607,
+  "n_points": 15
+ },
+ "tilt_wide": {
+  "band_hz": [
+   300.0,
+   3400.0
+  ],
+  "db": -0.528,
+  "n_points": 17
+ },
+ "vs_1907_fit": [
+  {
+   "delta_db": -1.15,
+   "fit_db": 0.0,
+   "hz": 3300.0,
+   "measured_db": -1.15
+  },
+  {
+   "delta_db": 5.62,
+   "fit_db": -7.75,
+   "hz": 3450.0,
+   "measured_db": -2.13
+  },
+  {
+   "delta_db": 6.47,
+   "fit_db": -12.4,
+   "hz": 3600.0,
+   "measured_db": -5.93
+  },
+  {
+   "delta_db": 6.32,
+   "fit_db": -20.02,
+   "hz": 3750.0,
+   "measured_db": -13.7
+  }
+ ]
+}

@@ -40,3 +40,4 @@ docs/worklist.md
 # The reference driver is TRACKED despite *.o above -- ref/slmodemd/dsplibs.o
 # is the object under reconstruction, not a build product.
 !ref/**
+testbench/linemodels/*.png

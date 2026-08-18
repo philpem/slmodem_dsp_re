@@ -69,11 +69,90 @@ reply that identifies nothing, and which would have been pinned as that modem's
 name had the first non-empty answer been taken. A candidate must contain a
 letter, which drops the timer and falls through to `ATI4`.
 
+## The ATA's terminating impedance: 600r and complex2 are two channels
+
+The VG204's analogue ports used to carry no `impedance` line, so they ran at
+the platform default of **600 ohm resistive**; they now carry **`impedance
+complex2`** on all four voice ports. Nothing else in the gateway config moved.
+Terminating impedance sets the 2-to-4-wire hybrid match, so it moves
+trans-hybrid loss, the reflected frequency response and the level transfer.
+
+**2,037 of the 2,039 archived capture logs predate the change**, so every
+number in this file that is not marked complex2 is a 600r number.
+
+    bandshape.py --label 600r a/*.slmodemd.log --label complex2 b/*.slmodemd.log
+
+`bandshape.py` reads the **V.34 line probe** out of `-d9` logs (25 bins,
+150 Hz apart, 150–3750 Hz — needs `DSPLIB_V34_DUMP_PROBE_BINS=1` and a hybrid
+build). It is the right instrument for this and the chirp is not: the chirp
+injector was an uncommitted change to `d-modem.c` that commit df93682d
+reverted, and its sweep stopped at ~3000 Hz, which is below every point in
+dispute. The probe is emitted before the far end applies pre-emphasis, which
+finding 1907 says is the only safe window for a channel measurement.
+
+Measured (dB relative to the 750 Hz reference bin), 600r = 112 calls /
+354 probes, complex2 = 10 calls / 23 probes:
+
+| Hz | 600r | complex2 | delta |
+|---|---|---|---|
+| 1050 | +0.01 | −0.28 | −0.29 |
+| 2100 | −0.11 | −1.71 | −1.60 |
+| 3150 | −0.75 | −3.51 | −2.76 |
+| 3300 | −1.16 | −4.08 | −2.92 |
+| 3450 | −2.14 | −5.16 | −3.02 |
+| 3600 | −5.94 | −9.12 | −3.18 |
+| 3750 | −13.71 | −17.06 | −3.35 |
+
+**THIS BENCH NOW HAS TILT, AND IT DID NOT BEFORE.** In-band slope over
+450–3150 Hz (finding 1956's band) goes **−0.60 dB → −3.72 dB**, monotonic bin
+by bin, interquartile range under 0.05 dB. Task #162 recorded that this bench
+"physically cannot show a pre-emphasis benefit" because the path measured
+flat. That is no longer true and **#163 is runnable for the first time**.
+
+The negotiated symbol rate went with it: **3429 baud on the 600r arm, 3200 on
+10 of 10 complex2 calls**, which is what the band edge losing 3 dB should do.
+
+`chanshim.py` carries both as selectable models — `CHAN_LINE_MODEL=vg204-1907`
+(the default, unchanged), `vg204-600r-probe`, `vg204-complex2-probe` — with
+the provenance of each beside its coefficients. Every run prints which one it
+used. **The default is deliberately still 1907's fit even though the probe
+says that fit is about 6 dB too steep through the roll-off**, because every
+archived emulator result was taken with it.
+
 ## Measuring the echo
 
     echoscan.py captures/asym-1           # full report, lags and noise floor
+    echoscan.py --selftest                # plant a known echo, watch it appear
     echofit.py  captures/asym-1           # three numbers, for a table column
     echo-compare.sh courier captures/ec-courier 5
+
+**`echoscan.py` could not run at all between its last edit and task #168** —
+`from capture_io import load` then `def load(path): a = load(path)[0]` shadowed
+the import with its own wrapper and recursed until the stack went (finding
+1971). It is repaired, it reports its denominators, and `--selftest` plants
+finding 1971's ladder and checks it comes back: null −39.3 dB, and −10/−20/−30
+dB echoes recovered at −10.31/−19.72/−29.05 dB, all at the planted 30.00 ms
+lag.
+
+**And repairing it overturned the finding that retired the question.** There
+*is* a linear echo on this path, at **171.5 ms in 19 of 20 calls to within
+0.25 ms** — the same quantity 1204/1215/1216 measured at 205.62 and
+165.62/175.62 ms. `echoratio.py`, which produced 1971's "below −25 dB, no
+linear echo" bound, cannot see it: its lag search caps at 120 ms and its
+coherence window is 128 ms, both shorter than the delay. A −20 dB echo planted
+at 171.5 ms reads **−24.56 dB (its null floor) at a lag of 47.8 ms** to
+`echoratio` and **−20.15 dB at 171.50 ms** to `echoscan`. A mismatched-pair
+control — one call's transmit against another call's receive — scatters at
+98/280/239 ms and −43 to −45 dB, so the 171.5 ms peak is not an artefact of
+the file structure.
+
+| | 600r (n=10) | complex2 (n=10) |
+|---|---|---|
+| lag | 171.38–171.62 ms | 171.50 ms (one at 161.5) |
+| echo/received, median | **−29.8 dB** | **−24.0 dB** |
+
+So the better-matched hybrid returns **~6 dB more** of our own signal, and it
+sits about 1 ms inside the canceller's 172.5 ms delay line (1216).
 
 `row.sh` writes both directions from the same loop on the same timebase, so
 they line up sample for sample and a cross-correlation of transmit against
@@ -132,25 +211,40 @@ two SIP legs. `dial.sh` is the low-level dialler. `waitquiet.sh` blocks until
 the machine is quiet enough to measure on — a call taken on a loaded box
 degrades silently, which is worse than failing.
 
-**Batches.** `ladder.sh` walks one modulation per call; `preemph_ab.sh` /
-`preemph_ab2.sh` are the pre-emphasis arms; the `*-sweep.sh` scripts vary one
-parameter.
+**Batches.** `ab149.sh` is the pre-registered A/B harness (gates on a quiet
+machine before *every* call, not just the first); `ladder.sh` walks one
+modulation per call; `preemph_ab.sh` / `preemph_ab2.sh` / `preemph_fit_ab.sh`
+are the pre-emphasis arms; the `*-sweep.sh` scripts vary one parameter.
 
-`ab149.sh` and `preemph_fit_ab.sh` are **on the `v34-instrumentation` branch,
-not here.** Each is an A/B whose two arms differ only by a
-`dsplib_v34_*` flag — `DSPLIB_V34_RRN_ON_BADBLOCK` and `DSPLIB_V34_FIT_PREEMP`
-— and those flags are bench instrumentation that master's datapump no longer
-carries. Left here they would still have *run*, set a variable nothing reads,
-and reported one arm run twice as though it were two. Check out that branch to
-use them, and build the hybrid from it (`tools/hybrid_link.sh` is there too).
+**Impedance sweeps.** `linesweep.py` measures, stores, models, compares and
+plots the line response under different ATA impedance settings, per modem —
+`ingest` builds an arm from existing capture logs, `measure` places the calls
+itself, and `list` / `compare` / `plot` read the store in `linemodels/`. It
+imports `bandshape.py` rather than re-implementing the reduction, so arms taken
+months apart go through identical code.
 
-`ab149.sh`'s quiet-machine gate — it waits before *every* call, not just the
-first, because a call taken at load 4.28 returned 4800 against 31200 quiet
-(1951) — is worth stealing for any new batch script that stays here.
+Two things about it are deliberate and worth knowing before you trust an arm.
+The impedance is **your assertion** — nothing here can interrogate the VG204 —
+so pass `--ata-config /srv/tftp/incoming/vg204-runconf-new` and the tool stores
+that file's sha256 and the actual `impedance` lines it found; `list` then shows
+the arm as EVIDENCED rather than asserted. And a bin floored on more than half
+the probes is stored as **null**, not as its floor value, so `compare` prints
+`--` and `plot` breaks the line: a floor is the instrument running out, not a
+measurement of the channel.
+
+The point of it is that the right impedance is probably not the same for every
+modem. The Courier answers `Product type: UK External MSK` to ATI7, so its
+front end was designed against BT line impedance (Cisco's `complex1`); the
+Oli'Net and the SupraExpress are different designs of different vintage. Keep
+every arm and compare, rather than picking one setting for the bench.
 
 **No hardware needed.** `chanshim.py` puts two live datapumps on an emulated
 channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
-`CHAN_SLIP`, the jitter-buffer underrun model. `replay.py` feeds a recording
+`CHAN_SLIP`, the jitter-buffer underrun model. `hsfcall.sh` drives the same
+channel with a DIFFERENT far end — the Conexant HSF datapump (`hsfshim.py`
+makes the socketpair and rings it), which is the only readable, known-good
+V.34 we can put opposite ours in the emulator; `chancall.sh` can only tell us
+what we do against ourselves. `replay.py` feeds a recording
 to slmodemd in d-modem's place, `replaydte.py` acts as the DTE, `replaycmp.sh`
 compares two builds on one recording. `linesim.py` is the offline line model.
 
