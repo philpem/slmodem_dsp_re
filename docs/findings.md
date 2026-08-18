@@ -60225,6 +60225,16 @@ about -25 dB relative to received power, in both arms.**
 not a scaled copy of what we sent, and no coherence measure can find it.
 `echoscan.py` states the same caveat and it remains true.
 
+> **CORRECTION, from 6911.** The headline of this finding does not survive.
+> `echoscan.py` was repaired under #168 and there IS a linear echo on this
+> path, at 171.5 ms in 29 of 30 calls. `echoratio.py` cannot reach it: its lag
+> search caps at 120 ms and its coherence window is 128 ms, both shorter than
+> the delay. A −20 dB echo planted at 171.5 ms reads −24.56 dB — the floor
+> quoted below — where the same echo at 30 ms reads −20.68 dB. **What survives
+> is "no linear echo within 120 ms above about −25 dB"**, and the "scattered
+> lags" below are the cap truncating a consistent 171.5 ms peak. Everything
+> this finding says about the CONTROLS and about non-linear echo stands.
+
 **AND `echoscan.py` ITSELF IS BROKEN** — `from capture_io import load` followed
 by `def load(path): a = load(path)[0]` shadows the import with the wrapper, so
 it recurses until the stack goes. It cannot have run since that edit. Recorded
@@ -76077,3 +76087,179 @@ n=30 should be spent on before it is either believed or dismissed. One
 operating point, one delay, no added noise. The cross-model table compares our
 measurement against hsfuser's published one rather than two runs we made, so it
 inherits every difference between the two setups.
+
+======================================================================
+
+### 6910. THE ATA'S IMPEDANCE CHANGE PUT REAL TILT ON THIS BENCH FOR THE FIRST TIME — −0.60 dB BECOMES −3.72 dB ACROSS 450–3150 Hz, AND #162 IS ANSWERED
+
+The VG204's four voice ports carried no `impedance` line, so they ran at the
+platform default of 600 ohm resistive; they now carry `impedance complex2`.
+Nothing else in the config moved. **2,037 of the 2,039 archived capture logs
+predate the change**, so the whole archive is a 600r measurement.
+
+**THE INSTRUMENT IS THE V.34 LINE PROBE, NOT THE CHIRP**, and that is a result
+rather than a substitution. The chirp injector was an uncommitted change to
+`d-modem.c` and commit `df93682d` reverted it away; it is in no built binary
+and `git log -S DMODEM_CHIRP` finds it only in `testbench/`. **And it could not
+have answered this question anyway** — every archived `.chirp.wav` is a 100 ms
+sweep over roughly 600–3000 Hz, while every point of the emulator's fit that is
+in dispute is at 3400, 3700 and 3900 Hz. The chirp has no energy where the
+answer is. The probe has 25 tones 150 Hz apart from 150 to 3750 Hz (V.34 11.2,
+Table 17), is emitted before the far end applies pre-emphasis — the only safe
+window per 1907 — and `probeplot.py` already read it. `testbench/bandshape.py`
+is the new reduction and prints its denominators.
+
+**MEASURED**, dB relative to the 750 Hz reference bin. 600r = 112 calls /
+354 probes (12–13 Aug); complex2 = 10 calls / 23 probes (18 Aug), same
+`slmodemd-fit` binary, same flags, same far end, same HOLD:
+
+    Hz      600r    complex2    delta     1907's fit (chanshim.py:73-74)
+    1050   +0.01      -0.28     -0.29       0.00
+    2100   -0.11      -1.71     -1.60       0.00
+    3150   -0.75      -3.51     -2.76       0.00
+    3300   -1.16      -4.08     -2.92       0.00
+    3450   -2.14      -5.16     -3.02      -7.75
+    3600   -5.94      -9.12     -3.18     -12.40
+    3750  -13.71     -17.06     -3.35     -20.02
+
+**#162 IS ANSWERED AND IT FLIPS.** That task records that this bench
+"physically cannot show a pre-emphasis benefit" because the path measured flat,
+which was true: 1956 measured ±0.4 dB from 450 to 3150 Hz and this arm
+reproduces it at **−0.60 dB across the band**. Under complex2 the same
+measurement gives **−3.72 dB, monotonic bin by bin, interquartile range under
+0.05 dB over 23 probes**. Over the brief's wider 300–3400 Hz band it is
+−4.05 dB, but that band includes the codec corner and the honest tilt number is
+the first one.
+
+**SO #163 IS RUNNABLE, AND FOR THE RIGHT REASON.** 1956's whole prize was
+0.07 dB (0.13 dB after 1957's correction) *because there was no tilt to
+correct*, and its second complaint was that indices 0–5 — V.34 Table 3, alpha =
+0/2/4/6/8/10 dB — are unreachable by the selector. A −3.72 dB monotonic
+broadband tilt is exactly the impairment Table 3 exists for. The unreachable
+indices now have something to correct, where before the entire mechanism was
+worth hundredths of a decibel.
+
+**THE FAR END IS NOT THE EXPLANATION.** Restricting the 600r arm to the same
+peer (courier, ext 1902 — 52 calls, 154 probes) reproduces the 600r column to
+0.02 dB at every bin.
+
+**AND THE NEGOTIATION MOVED WITH IT: 3429 baud on the 600r arm, 3200 baud on
+10 of 10 complex2 calls.** 1956 noted that the band-edge cliff sits inside
+V.34's conformance band at 3429 baud; 3450 Hz losing a further 3 dB is enough
+to take that symbol rate off the table. This cannot be a load artefact — the
+600r arm ran at *higher* load and chose the *higher* symbol rate.
+
+**1907's FIT IS ABOUT 6 dB TOO STEEP THROUGH THE ROLL-OFF EVEN FOR 600r**, the
+era it describes: it wants −7.75 / −12.40 / −20.02 at 3450 / 3600 / 3750 where
+354 probes of its own era read −2.14 / −5.94 / −13.71, and it wants 0 dB at
+3300 where they read −1.16. Its −33.6 dB at 3900 Hz **has no source in this
+file at all**. 3300 Hz now has three different values in the tree: 0 dB
+(chanshim), −3.7 dB (1907), −1.5 dB (1956).
+
+**IT HAS NOT BEEN REFITTED IN PLACE, deliberately.** `chanshim.py` keeps
+`vg204-1907` as the default and byte-identical — verified `array_equal` on
+`band_filter(0.0)`, `(-3.0)` and `(+7.5)` against the pre-edit values — because
+every archived emulator number was taken with it. `CHAN_LINE_MODEL` selects
+`vg204-600r-probe` or `vg204-complex2-probe` beside it, each carrying its
+provenance and the ATA config line it corresponds to, and every run prints the
+model on its status line. It is not called `CHAN_LINE` because hsfuser's shim
+uses that name as a boolean.
+
+### 6911. THERE IS A LINEAR ECHO ON THIS PATH AT 171.5 ms, AND 1971's "NO LINEAR ECHO" WAS ITS TOOL'S BLIND SPOT RATHER THAN THE CHANNEL
+
+`echoscan.py` could not run between its last edit and task #168 — `from
+capture_io import load` followed by `def load(path): a = load(path)[0]` shadowed
+the import with its own wrapper and recursed until the stack went. 1971 recorded
+that and used `echoratio.py` instead.
+
+Repaired, given denominators, and given a `--selftest` that plants 1971's own
+ladder (null −39.3 dB; −10 / −20 / −30 dB recovered at −10.31 / −19.72 /
+−29.05 dB, all at the planted 30.00 ms lag), it finds an echo at
+**171.4–171.6 ms in 29 of 30 calls, across both impedance configurations, to
+within 0.25 ms** — the same quantity 1204, 1215 and 1216 measured at 205.62 and
+165.62/175.62 ms. A mismatched-pair control, one call's transmit against a
+different call's receive, scatters at 98 / 280 / 239 ms and −43 to −45 dB, so
+the peak is not an artefact of the file structure.
+
+**`echoratio.py` CANNOT SEE IT, AND THAT IS MEASURED RATHER THAN ARGUED.** Its
+`peak_lag_ms` caps the lag search at 120 ms and its coherence window is 1024
+samples = 128 ms; both are shorter than the delay, and its docstring says why —
+it was written for "the ~30 ms hybrid delay", a premise that is false on this
+path. A −20 dB echo planted at 30 ms reads −20.68 dB there and is found at
+30.0 ms. **The same −20 dB echo planted at 171.5 ms reads −24.56 dB — its null
+floor — at a lag of 47.8 ms**, while `echoscan` returns −20.15 dB at 171.50 ms
+for the identical file.
+
+**SO 1971's BOUND SHRINKS TO: no linear echo WITHIN 120 ms above about
+−25 dB.** Its "scattered lags, no consistent path delay" was a 120 ms cap
+truncating a 171.5 ms peak. `echoratio.py`'s arithmetic is untouched so every
+number it has published still reproduces; it now prints the blind spot on
+stderr.
+
+**THE MAGNITUDE, STRATIFIED BY HANDSHAKE COUNT** because pooling confounds it —
+`echoscan` normalises over the whole call and a retrain is ~10 s of handshake
+(1921):
+
+    stratum        600r   n     complex2   n     delta
+    hs = 1       -29.75  10       -25.50   3    +4.25 dB
+    hs >= 2      -32.18  10       -21.93   7   +10.25 dB
+    pooled       -31.96  20       -23.98  10    +7.99 dB
+
+The direction is the same in both strata, so it is not the stratum; the
+magnitude is somewhere between about 4 and 10 dB and this data cannot pin it
+tighter. Note the two arms disagree about the SIGN of the handshake effect
+itself — retraining calls are 2.4 dB quieter at 600r and 3.6 dB louder at
+complex2 — which is unexplained and is a reason not to quote the pooled figure.
+
+**AND THE MAGNITUDE IS CONFOUNDED BY LOAD IN THE DIRECTION OF THE CLAIM.** See
+6912: every 600r call in this comparison ran at load ≥ 4.28 and no complex2 call
+did, and jitter-buffer disturbance (1941, 1949) decorrelates an echo and would
+lower `rho` on the 600r side for a reason that is not the hybrid. **The lag is
+not affected by this and the lag is the solid half of the finding.** The
+magnitude needs a load-matched arm, which cannot now be taken — see 6912.
+
+**IT SITS ABOUT 1 ms INSIDE THE CANCELLER'S REACH.** 1216 established that the
+delay line covers 1656 samples = 172.5 ms. 171.5 ms is inside it, barely.
+
+### 6912. THE V.34 BATCH UNDER complex2, AND THE RATE COMPARISON IS NOT USABLE — EVERY ARCHIVE CALL RAN AT A LOAD THE COMPLEX2 ARM NEVER SAW
+
+Ten calls to ext 1902, `waitquiet.sh` before every one, pinned to the archive's
+`pfit-off`/`ts0-off` arm in every other variable: the same `slmodemd-fit`
+binary, `DSPLIB_V34_FIT_PREEMP=0`, `SLMODEMD_IODELAY=240`, `HOLD=45`.
+
+                          600r (n=24)      complex2 (n=10)
+    connected                22 / 24            10 / 10
+    handshakes per call   median 2.0         median 2.0
+                          mean 2.75          mean 2.30
+    retrains per call     median 1.0         median 1.0
+                          mean 1.75          mean 1.30
+    calls with >=1 retrain  13/24 = 54%       7/10 = 70%
+    our RX rate           median 12000       median 14400
+    far end's TX rate     median 28800       median 28800
+    symbol rate           3429 (majority)    3200 (10 of 10)
+
+**THE 1917/1921 SYMPTOM IS STILL THERE AND IS NOT MEASURABLY WORSE.** Seven of
+ten calls retrained; the median call still retrains once. At n=10 against n=24
+nothing here separates 54% from 70%.
+
+**BUT THE RATE ROW MUST NOT BE READ.** The archive arm's own CSVs record the
+load: **600r ran at 5.76 before and 6.48 after the median call (range
+4.13–8.27); the complex2 arm ran at 2.43 and 2.69 (range 2.03–4.15). All 24 of
+the 600r calls finished at or above the 4.28 that finding 1951's degraded call
+was taken at. None of the 10 complex2 calls did.** The load difference points
+the same way as the apparent 12000 → 14400 improvement, so the improvement
+cannot be attributed to the impedance. This was discovered after the calls were
+placed, by reading the archive's own `load_before`/`load_after` columns — which
+is what they are for.
+
+**AND IT CANNOT BE FIXED.** The 600r arm is frozen: the ATA is now complex2, so
+no load-matched 600r baseline can ever be taken. Every future 600r-versus-
+complex2 comparison inherits whatever the archive's conditions were. The
+band-shape and symbol-rate results in 6910 survive this because load runs the
+wrong way for them; the rate and the echo magnitude do not.
+
+**WHAT WAS NOT MEASURED, and why.** The line probe measures the far end's
+transmit arriving at us, so this is a one-directional response — the impedance
+changes both hybrids and our transmit direction is unmeasured by this
+instrument. And the whole comparison is one far end (the USR Courier on 1902);
+the other two peers were not re-run under complex2.
