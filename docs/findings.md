@@ -75404,3 +75404,137 @@ significant first", ARE this fix expressed as a mutation, and were rebuilt to
 flip only the reproduce arm so their meaning survives. **A fix behind the define
 will usually invalidate any mutation that encodes the same defect**; expect it
 and repair the anchors in the same commit.
+
+======================================================================
+
+### 7000. Re-costing the digital side: 11.6 KB, and 702's "no oracle" is wrong
+
+Reserved block for this question: **7000-7009**. The highest number in use on
+any branch before this was 6912 (`v34-instrumentation`); `master` was at 6810.
+
+Asked what it would take to make this object the **digital** side of a V.90
+call -- the ISP-side modem sending PCM downstream rather than the analogue
+client receiving it. Findings 701 and 702 and `docs/forkblob.md` answered the
+shape of it; both are 700-odd commits stale on the numbers, and 702 carries one
+claim that is now demonstrably false.
+
+#### The cost, measured at `8758e86e`
+
+    tools/closure.py --missing V90Modulator
+    make coverage
+
+| | 702, then | today |
+|---|--:|--:|
+| unwritten closure of `V90Modulator` | 90 symbols, 26,334 B | **27 symbols, 11,628 B** |
+| — of which data | 2 symbols, 532 B | **none** — both written |
+
+702 also said that reaching the point where any of it could be EXERCISED needs
+the rest of the V.90 receive path first, "the 290 KB `VPcmV34Main.cpp` span",
+because `V90Modem` is built by `VPcmFloModem` which is built by
+`VPCMXF_Create`, all inside it. That span is now **41,526 bytes / 122
+symbols**, and the 11,628 is a SUBSET of it: `make coverage`'s remaining spans
+are `class1tx.c`, `VPcmV34Main.cpp +72`, `V32mod.c`, `Dialer.c`, `voice.c#3`,
+`Fdspkrnl.c`, `Beepgen.c`, `class1.c`, `class1rx.c`, `v32.c`, `v22.c` and
+`dp_init.c`, and by elimination no V.90 symbol can be in any row but the
+second.
+
+**So the number to quote is not 11.6 KB standalone. It is 11.6 KB of the 41.5
+KB the analogue client needs finished anyway** -- the digital side is about a
+quarter of the remaining V.90/V.92 work, not a project beside it.
+
+#### The symbol set is a complete phase machine
+
+All 27 are transmit-side, and they are not a fragment:
+
+    progress  enterPhase3  enterPhase4  enterDataPhase  exitJd  exitJdPhase
+    exitDIL  exitRi  acknowledgeCPReception  acknowledgeCPNotReception
+    acknowledgeEReception  initiateRRN  initiateFPE
+
+plus `V90Mapper::{reset,resetNoSpectral,process}`,
+`V90BitsToSymbol::{reset,resetNoSpectral,process x2}`,
+`V90Phase4Modulator::{reset,setMappingParams,generateSymbol,generateV90Symbol,
+generateV92Symbol}` and `V90Phase3Modulator::{exitJd,exitJdPhase}`.
+
+Entry, both training phases, data phase, DIL exit, CP acknowledge in both
+polarities, and rate renegotiation. **The claim is that the symbol set is
+complete, which is NOT the claim that the code is correct** -- 701's caution
+that dead vendor branches are often unfinished stands, and nothing in the
+object can settle it.
+
+#### No phase-4 message codec has to be written from spec
+
+Cross-referencing every caller of the three message classes. `.rel.text`
+carries a relocation for every GLOBAL target even within a translation unit
+(finding 306), and all of these are GLOBAL, so this caller map is complete
+rather than cross-TU-only:
+
+| | encoded by | decoded by |
+|---|---|---|
+| `V90MP` | `V90Modulator::acknowledgeCP{,Not}Reception`, `initiateRRN` | `V90Phase4Demodulator::getV90Decision` |
+| `V90CP` | `V90Phase4Modulator::enterRepeatedCPd`, `generateV92Symbol`, the SUV/RRN edges | `V90Phase4Demodulator::getV92Decision` |
+| `V92CP` | `V92Phase4Modulator::{enterRepeatedCP,generateSymbol,recived*}` | **nothing** |
+
+Row 1 is V.90 §9.4.1.3 exactly -- the digital modem sends MP, the analogue
+modem reads it. Row 2 is digital-to-analogue as well: the `d` in
+`enterRepeatedCPd` and the `generateV92Symbol` caller put it in V.92's
+upstream, where the receiver of the upstream is the digital modem and it is
+the one that specifies the constellation. Row 3 is the analogue client's own
+V.92 upstream CP, and **its decode arm has no caller in 1.2 MB** -- it is
+orphaned exactly as `V90Modulator` is, and it is the digital side's CP parser.
+
+Every class carries both an encode pipeline (`infoToBits`, `calcCRC`,
+`getBitVector`) and a decode pipeline (`bitsToInfo`, `evaluateCRC`,
+`evaluateInfo`, `resetDetector`). **This is a reconstruction job end to end.**
+
+#### 702's tier-1 caution is wrong, and this tree already disproves it
+
+702 said "a path the original never executed has no behavioural oracle...
+tier 1 cannot [apply], and correctness would rest entirely on interop against a
+real client modem."
+
+That confuses the vendor's product with our harness. **The differential tier
+calls blob symbols directly, through renamed aliases; it does not drive the
+shipped modem.** A function the vendor never reached is as callable as any
+other, and the tree is already doing it:
+
+- `test/unit/t_v90modchain.cpp` differentially tests `V90Mapper`,
+  `V90BitsToSymbol`, `V90Phase4Modulator` and `V90Modulator` construction, all
+  four symbol variants of each, against the blob.
+- `test/unit/t_vpcmctor.cpp` drives `side = 0` -- the DIGITAL arm -- in two
+  trials.
+- `V92CP::bitsToInfo` and `evaluateInfo`, the callerless CP parser above, are
+  written, differentially tested (`t_v92cpb2i`, `t_v92cpeval`), mutation-covered
+  and are where D920 and D923 were settled this week.
+
+So the oracle exists for the code. What does NOT have one is the **system**:
+whether a real analogue client trains against us, and whether the vendor's dead
+branch was ever finished. Those need the hardware peer with the roles inverted
+from every previous use of it.
+
+The one thing that genuinely weakens on this branch is `coverage.py`'s notion
+of "translated": it counts a same-named function as done, so every digital arm
+already written -- `V90ModemCtor.cpp:255`, `V92Modem.cpp:221`,
+`VPcmXfCreate.cpp` -- counts as translated whether or not any test drives it.
+Check `tested`, not `translated`, when costing this branch.
+
+#### The host side subtracts work rather than adding it
+
+- `src/pump/v90/vpcm.c:674` passes a literal `0` to `VPCMXF_Create`, whose
+  side is `(arg0 == NULL)`. Digital is passing `1`. That is the whole switch,
+  and it is the same one the `cryan209` fork reached by patching one immediate
+  byte (`docs/forkblob.md`).
+- `vpcm_create` already takes a `caller` argument, so originate/answer is a
+  parameter and not a rebuild. The digital modem is always the answerer.
+- `VPCMXF_Create` scales `maxDataBuffer` by **8.0** on the digital arm against
+  **9.6** on the analogue one -- 8 kHz against the client's internal 9600 Hz.
+  So the digital side wants the network rate natively and the `RcFixed_Resample`
+  bridge in the fork's `modem_main.c` becomes unnecessary rather than rewritten.
+
+#### The transport constraint is the hard one
+
+56k downstream is codeword-exact by construction: the digital modem chooses PCM
+codewords and assumes the network delivers them unaltered. Over SIP that means
+**end-to-end G.711 with no transcoding, no mu-law/A-law conversion, no level
+adjustment and no packet-loss concealment** -- which is a property of the call
+path, not of this code, and it is the first thing to establish before any of
+the 11.6 KB is worth writing.
