@@ -62,16 +62,159 @@ FRAME_AUDIO = 0
 RATE = 8000
 
 
-def band_filter(tilt_db=0.0):
+#
+# ============================ THE LINE MODELS ============================
+#
+# The bench's ATA is a Cisco VG204 and its analogue ports have been run at TWO
+# DIFFERENT TERMINATING IMPEDANCES.  Terminating impedance sets the 2-to-4-wire
+# hybrid match, so it moves trans-hybrid loss, the reflected frequency response
+# and the level transfer -- it is not a detail.  2,037 of the 2,039 archived
+# capture logs were taken at the first setting and every emulator result this
+# project has quoted rides on a curve fitted to that era.
+#
+# So the channel is SELECTABLE and the default is the old one.  `CHAN_SEED`
+# made exactly this trade for exactly this reason: a caller who sets nothing
+# gets the behaviour every archived number was taken with, byte for byte.
+#
+#   CHAN_LINE_MODEL=vg204-1907             (default -- do not change it)
+#   CHAN_LINE_MODEL=vg204-600r-probe
+#   CHAN_LINE_MODEL=vg204-complex2-probe
+#
+# WHY NOT `CHAN_LINE`, WHICH IS THE OBVIOUS NAME.  hsfuser's own chanshim uses
+# `CHAN_LINE=1` as a BOOLEAN meaning "enable the VG204 response at all".  Give
+# this variable that name with STRING values and the two projects' shims each
+# read the other's setting as something it is not -- `CHAN_LINE=vg204-1907` is
+# truthy over there, and `CHAN_LINE=1` here would name a model that does not
+# exist.  A cross-project comparison would then silently be comparing two
+# different channels.  Hence a distinct name.
+#
+# EVERY RUN PRINTS WHICH MODEL IT USED, on the status line beside delay, loss,
+# slip and tilt.  A run whose output does not say which channel it modelled
+# cannot be compared with anything later, which is the same rule the
+# denominators exist for.
+#
+DEFAULT_LINE_MODEL = "vg204-1907"
+
+LINE_MODELS = {
+    #
+    # THE DEFAULT, AND IT IS NOT REFITTED.  These are the literals this file
+    # has always carried, attributed to finding 1907's spectrum work.  They
+    # stay because every emulator result in the archive was produced with
+    # them, and a silent refit would move every one of those numbers without
+    # moving anything that names them.
+    #
+    # WHAT IS NOW KNOWN ABOUT THEM, recorded here rather than acted on: the
+    # V.34 line probe over the 600r archive (112 calls, 354 probes) reads
+    # -1.16 dB at 3300 where this curve says 0, and -2.14 / -5.94 / -13.71 at
+    # 3450 / 3600 / 3750 where interpolating this curve gives -7.75 / -12.40 /
+    # -20.02.  So the default is about 6 dB TOO STEEP through the roll-off
+    # even for the era it describes, and the -33.6 at 3900 has no source in
+    # `docs/findings.md` at all.  Use `vg204-600r-probe` for a 600r channel
+    # you want to be right; use this one to reproduce an old result.
+    #
+    "vg204-1907": {
+        "ata": "no `impedance` line -- the platform default, 600 ohm resistive",
+        "source": "finding 1907, spectrum of base-cx2-3.modem_rx_8k.wav, Aug 2026",
+        "measured": "one capture, by eye off a spectrum",
+        "f": [0, 300, 3000, 3300, 3400, 3700, 3900, 4000],
+        "d": [0, 0, 0, 0, -6.2, -15.5, -33.6, -40.0],
+    },
+    #
+    # THE SAME LINE, MEASURED PROPERLY.  V.34 line probe, 25 bins at 150 Hz
+    # spacing, median over 354 probes in 112 calls of 12-13 Aug 2026, dB
+    # relative to the 750 Hz reference bin exactly as `probeplot.py` plots it.
+    # `bandshape.py` is the tool and it prints its denominators.
+    #
+    # The four omitted tones (900/1200/1800/2400 Hz, V.34 Table 17) are absent
+    # from the list rather than interpolated into it: what the receiver reads
+    # there is the noise floor, not the channel.
+    #
+    "vg204-600r-probe": {
+        "ata": "no `impedance` line -- the platform default, 600 ohm resistive",
+        "source": "V.34 line probe, testbench/bandshape.py, 112 calls / 354 probes",
+        "measured": "2026-08-12/13, exts 1901+1902+1903; the 1902-only subset "
+                    "(52 calls / 154 probes) reproduces it to 0.02 dB",
+        "f": [150, 300, 450, 600, 750, 1050, 1350, 1500, 1650, 1950, 2100,
+              2250, 2550, 2700, 2850, 3000, 3150, 3300, 3450, 3600, 3750, 4000],
+        "d": [-15.58, -0.99, -0.29, 0.04, 0.00, 0.01, -0.04, 0.00, -0.07,
+              -0.08, -0.11, -0.12, -0.25, -0.39, -0.49, -0.72, -0.75, -1.16,
+              -2.14, -5.94, -13.71, -26.66],
+    },
+    #
+    # THE NEW TERMINATION.  Same instrument, same tool, same far end, same
+    # slmodemd binary and flags as the arm above -- 10 calls of 18 Aug 2026,
+    # 23 probes, every bin a real reading (nothing floored, so no point here
+    # is a lower bound wearing a measurement's clothes).  The per-bin
+    # interquartile range is under 0.05 dB.
+    #
+    # THIS CHANNEL HAS TILT AND THE OTHER ONE DOES NOT: -3.72 dB across
+    # 450-3150 Hz against -0.60 dB, monotonic bin by bin.  That is what makes
+    # the pair worth having -- an A/B between these two models is the first
+    # one this project can run where the channels differ in the quantity V.34's
+    # pre-emphasis exists to correct.
+    #
+    "vg204-complex2-probe": {
+        "ata": "`impedance complex2` on all four voice ports",
+        "source": "V.34 line probe, testbench/bandshape.py, 10 calls / 23 probes",
+        "measured": "2026-08-18, ext 1902 (USR Courier), captures/cx2-off-*",
+        "f": [150, 300, 450, 600, 750, 1050, 1350, 1500, 1650, 1950, 2100,
+              2250, 2550, 2700, 2850, 3000, 3150, 3300, 3450, 3600, 3750, 4000],
+        "d": [-15.10, -0.65, -0.08, 0.17, 0.00, -0.28, -0.70, -0.82, -1.09,
+              -1.50, -1.71, -1.91, -2.40, -2.70, -2.96, -3.34, -3.51, -4.08,
+              -5.16, -9.12, -17.06, -30.29],
+    },
+}
+#
+# TWO POINTS IN THE MEASURED CURVES ARE NOT MEASUREMENTS, and both are said so
+# here rather than left for a reader to assume:
+#
+#   * **4000 Hz.**  The probe stops at 3750 Hz, and a filter design needs a
+#     value at Nyquist.  It continues the last measured slope (3600 -> 3750,
+#     which is -7.77 dB/150 Hz at 600r and -7.94 at complex2) for one more
+#     step.  EXTRAPOLATED.  It is above the band either model is used for and
+#     is there to stop the interpolation inventing something flatter.
+#   * **Below 150 Hz.**  Not probed at all; `np.interp` holds the 150 Hz value
+#     flat down to DC, which under-states a real high-pass.  The 150 Hz bin
+#     itself reads -15.58 (600r) and -15.10 (complex2) -- within half a dB of
+#     each other, so whatever it is, it is not the impedance and it cannot
+#     affect a comparison between these two arms.
+#
+# AND ONE PLACE THE 129-TAP FIR CANNOT FOLLOW ITS OWN TARGET.  The 150-to-300
+# Hz step is far sharper than 129 taps can render, so the realised response at
+# 300 Hz comes out about 1.4 dB below the target on both measured models
+# (-2.38 against -0.99, and -2.04 against -0.65).  Everything from 1050 Hz to
+# 3750 Hz tracks to within 0.35 dB.  The error is IDENTICAL IN BOTH ARMS --
+# the realised 300 Hz difference between them is 0.34 dB and the intended one
+# is 0.34 dB -- so it cannot bias a 600r-against-complex2 comparison, which is
+# what these two exist for.  It would bias an absolute claim about the bottom
+# of the band, so do not make one from this filter.
+#
+
+
+def band_filter(tilt_db=0.0, model=None):
     """FIR matching the VG204's measured response.
 
-    Fitted to the points finding 1907 measured, not to a textbook template:
-    0 dB through 3300, -6.2 at 3400, -15.5 at 3700, -33.6 at 3900.  A plain
-    rectangular low-pass would be wrong in the one region that decides whether
-    3429 baud survives.
+    `model` selects one of LINE_MODELS above; None means the default, which is
+    finding 1907's fit and is left exactly as it was -- 0 dB through 3300,
+    -6.2 at 3400, -15.5 at 3700, -33.6 at 3900.  A plain rectangular low-pass
+    would be wrong in the one region that decides whether 3429 baud survives.
+
+    THE DEFAULT PATH IS THE ORIGINAL CODE, deliberately down to the literals,
+    so that an unset `CHAN_LINE_MODEL` cannot produce a different coefficient
+    by any route.  Checked rather than asserted: `band_filter(0.0)`,
+    `band_filter(-3.0)` and `band_filter(+7.5)` are array-equal to the values
+    the function returned before the models were added.
     """
-    f = np.array([0, 300, 3000, 3300, 3400, 3700, 3900, 4000], float)
-    d = np.array([0, 0, 0, 0, -6.2, -15.5, -33.6, -40.0], float)
+    if model in (None, "", DEFAULT_LINE_MODEL):
+        f = np.array([0, 300, 3000, 3300, 3400, 3700, 3900, 4000], float)
+        d = np.array([0, 0, 0, 0, -6.2, -15.5, -33.6, -40.0], float)
+    else:
+        spec = LINE_MODELS.get(model)
+        if spec is None:
+            raise SystemExit("chanshim: CHAN_LINE_MODEL=%r is not a model.  "
+                             "Known: %s" % (model, ", ".join(sorted(LINE_MODELS))))
+        f = np.array(spec["f"], float)
+        d = np.array(spec["d"], float)
     #
     # CHAN_TILT adds a linear slope in dB across the voice band, on top of the
     # VG204's measured response.  This bench has none of its own -- finding
@@ -99,7 +242,8 @@ def band_filter(tilt_db=0.0):
 class Channel:
     def __init__(self):
         self.tilt_db = float(os.environ.get("CHAN_TILT", "0"))
-        self.h = band_filter(self.tilt_db)
+        self.line_model = os.environ.get("CHAN_LINE_MODEL") or DEFAULT_LINE_MODEL
+        self.h = band_filter(self.tilt_db, self.line_model)
         self.tail = np.zeros(len(self.h) - 1)
         self.delay_ms = float(os.environ.get("CHAN_DELAY_MS", "70"))
         self.snr = os.environ.get("CHAN_SNR")
@@ -228,9 +372,14 @@ def main():
     fd = int(sys.argv[-2])
     ch = Channel()
     peer = peer_socket()
-    sys.stderr.write("chanshim: role=%s delay=%.0fms snr=%s loss=%.3f slip=%.2f/s "
-                     "tilt=%.1fdB\n"
-                     % (os.environ.get("CHAN_ROLE"), ch.delay_ms,
+    # THE MODEL GOES ON THIS LINE AND IS NOT OPTIONAL.  A run that does not
+    # say which channel it modelled cannot be compared with anything taken
+    # later, exactly as a detector that does not print its denominator cannot
+    # be told from a broken one.
+    sys.stderr.write("chanshim: role=%s line=%s (%s) delay=%.0fms snr=%s "
+                     "loss=%.3f slip=%.2f/s tilt=%.1fdB\n"
+                     % (os.environ.get("CHAN_ROLE"), ch.line_model,
+                        LINE_MODELS[ch.line_model]["ata"], ch.delay_ms,
                         ch.snr or "off", ch.loss, ch.slip, ch.tilt_db))
     silence = b"\0" * AUDIO_BYTES
     nf = 0

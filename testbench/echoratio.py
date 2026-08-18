@@ -32,6 +32,35 @@ WINDOWING.  1024-sample Hann at 8 kHz is 128 ms, comfortably longer than the
 ~30 ms hybrid delay, so the echo stays inside a window and shows up as
 coherence rather than being split across two.  Both directions come from the
 same loop on the same timebase (row.sh), so no alignment step is needed.
+
+*** AND THE ~30 ms PREMISE IS FALSE, WHICH MAKES THIS TOOL BLIND ON THIS PATH.
+
+The echo on the bench path is not at 30 ms.  `echoscan.py`, repaired under
+task #168, finds it at **171.5 ms in 19 of 20 calls to within 0.25 ms**, in
+both ATA impedance configurations -- which is the same quantity findings 1204,
+1215 and 1216 measured at 205.62 and 165.62/175.62 ms.  Two things here are
+shorter than that delay:
+
+  * `peak_lag_ms(..., max_ms=120.0)` -- the lag search stops at 120 ms, so a
+    peak at 171.5 ms is outside the array before anything is compared.
+  * the 128 ms coherence window itself -- an echo delayed further than the
+    window is split across two segments and its coherence is destroyed.
+
+MEASURED, not reasoned.  A -20 dB echo planted at a 30 ms lag reads -20.68 dB
+here and is found at 30.0 ms.  The SAME -20 dB echo planted at 171.5 ms reads
+**-24.56 dB -- the null floor -- and the lag comes back 47.8 ms**, i.e. this
+tool reports "no echo" for an echo twenty times the power of its own floor.
+`echoscan.py` returns -20.15 dB at 171.50 ms for the same file.
+
+SO FINDING 1971's "-25 dB, no linear echo on this path" IS THIS BLIND SPOT and
+not a property of the channel; 1971's "scattered lags, no consistent path
+delay" is the 120 ms cap truncating a 171.5 ms peak.  What survives is
+narrower: there is no linear echo WITHIN 120 ms above about -25 dB.
+
+NOTHING IN THE ARITHMETIC HAS BEEN CHANGED, deliberately -- every number 1971
+and the ATA-attenuation work quote came out of this code and must keep
+reproducing.  Use `echoscan.py` for the lag and for any echo beyond 120 ms;
+use this one for a coherence-integrated ratio inside that window.
 """
 
 import math
@@ -93,6 +122,15 @@ def main(argv):
     if len(argv) < 2:
         print(__doc__)
         return 2
+    # THE BLIND SPOT, ON EVERY RUN.  stdout keeps its exact old format so
+    # every archived parse of this tool still works; the caveat goes to
+    # stderr, because a tool that reports its floor for a real -20 dB echo
+    # must not be able to do so silently.  See the docstring for the
+    # measurement that established it.
+    print("this tool sees %.0f ms of lag and uses a %.0f ms window; the bench's "
+          "echo is at 171.5 ms, OUTSIDE BOTH.  A null here is a null within "
+          "120 ms only -- use echoscan.py for the real lag."
+          % (120.0, NFFT / 8.0), file=sys.stderr)
     print("%-18s %9s %9s %11s %8s %7s"
           % ("capture", "txdBFS", "rxdBFS", "echo/rx dB", "lag ms", "peak r"))
     for pre in argv[1:]:
