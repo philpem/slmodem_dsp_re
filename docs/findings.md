@@ -75930,3 +75930,14 @@ same rate choice and peer-requested failure shape.  Therefore neither this
 burst-loss retrain nor the 18 dB AWGN retrain is a candidate equaliser fix in
 reconstructed DSP code; the channel model must first be parameterised from the
 real ATA/RTP trace.
+
+The available physical-probe archive is an important counterexample to treating
+the synthetic 1%/five-frame case as an ATA preset.  The 2026-08-18 SIP-to-SIP
+probe records zero frame loss, -226.84 ppm clock offset and approximately
+-28 dB echo; the analogue-ATA trunk probe records just one lost frame in 30 s
+(0.052%, run length one), +124.06 ppm slipping, strong AGC/nonlinearity, and
+roughly -27 dB echo.  Neither trace supports a generic 1% burst assumption.
+They instead prioritise measured clock-drift, echo and level/nonlinearity
+replay primitives.  `CHAN_BURST` remains a validated discriminator and a way
+to replay a trace once it has been measured, not a claim about normal line
+quality.
