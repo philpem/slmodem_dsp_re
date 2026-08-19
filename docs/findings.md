@@ -75828,7 +75828,46 @@ counter would be an overfit: it agrees on this seed, but a second paired seed
 gave 19200 under both policies and a slightly higher error for the blob-style
 arm.  No default selector change is justified yet.
 
+The repaired SmartLink-to-SmartLink harness provides a first peer control.
+At the same 26 dB, 70 ms, seed-20260820 legacy profile, forcing index 9
+connected at 19200 bit/s in both directions with errors 776 and 741.  The
+ordinary index-10 control also connected at 19200 bit/s (828 and 762).  This
+small improvement is compatible with the HSF result, but does not establish a
+rate or failure difference for a SmartLink peer.  The currently observed
+one-rung rate effect is therefore HSF-specific until a repeated peer matrix
+and the physical ATA comparison say otherwise.
+
 **Required confirmation:** repeat the winning-versus-current comparison on the
 physical VG204/Conexant path before promoting any policy.  The hardware harness
 currently refuses before dialling because no USB serial adapter is attached;
 that is an unavailable confirmation, not a negative result.
+
+### 6110. Reviewed v3 channel model narrows the real-world interpretation of the present stress results
+
+`pstn_voiceband_channel_model_v3_reviewed.md` confirms that the shared model's
+`CHAN_SNR` mechanism is valuable for deterministic robustness testing but has
+no physical noise calibration: it scales AWGN to each 20 ms signal frame.
+Consequently `CHAN_SNR=18` is a severe synthetic stress condition, not a
+normal-PSTN quality claim.  It is harsher even than V.56bis's severe
+analogue-carrier examples, which use 30 dB TNR alongside their other bearer
+impairments.  The matched blob/reconstruction result in 6108 therefore remains
+valid, but must not be used to judge either modem's ordinary subscriber-line
+performance.
+
+The present C model is deliberately narrower than a complete physical channel:
+it has exact G.711, measured or V.56bis magnitude curves, fixed delay and
+reproducible stress controls, but not absolute dBm0/dBr levels, weighted
+signal-independent noise, codec/line-card group delay, frequency-dependent
+two-way hybrid echo, RTP packet/jitter-buffer/PLC behaviour, or real
+sample-clock drift.  A V.34 training or retrain result under it should thus be
+classified as either (a) a useful controlled regression or (b) a specific
+endpoint-profile result, never as a generic field-line prediction.
+
+In particular, the VG204 profiles remain measurements of a named ATA mode,
+impedance and peer/direction rather than generic European PSTN curves.  The
+next realistic model priorities are calibrated noise and level measurement
+points, a bidirectional impedance/hybrid echo path, and explicit RTP
+packet/jitter-buffer events.  Keep classic FDM frequency offset, phase jitter,
+and analogue-carrier envelope-delay distortion in separate legacy-carrier
+profiles; do not add them to the normal all-digital PSTN baseline.  No V.34
+equaliser or pre-emphasis policy change follows from this review alone.
