@@ -75694,5 +75694,11 @@ AWGN (`CHAN_SNR`) and silent-frame loss (`CHAN_LOSS`) with a specified local
 PRNG.  Its 18 dB complex2 self-call connects at 9600 bit/s both ways, matching
 the prior Python stress outcome; exact sample streams intentionally differ
 from NumPy's generator.  The C implementation is therefore ready to replace
-Python for clean, delayed, noisy and loss profiles.  Jitter-buffer slip is
-the one remaining Python-only stress primitive.
+Python for clean, delayed, noisy and loss profiles.  C now also implements
+the existing 10 ms repeat-insertion `CHAN_SLIP` model, including the bounded
+queue and immediate `VBTSLIP` diagnostics.  At 0.5 events/s it recorded ten
+insertions in each direction during a short run and failed training with
+`NO CARRIER`, which is the expected severe stress outcome.  Thus the C shim
+now covers all Python stress primitives.  Keep Python temporarily only for
+legacy line-profile compatibility and unported `CHAN_TILT` experiments, not
+for the shared named profiles.
