@@ -75916,3 +75916,12 @@ altering the V.34 equaliser.  It does not explain the intentionally extreme
 18 dB stationary-AWGN failure in 6108, where the original blob behaves the
 same, but it provides a more realistic matched-channel route to the observed
 interoperability symptom.
+
+The original SmartLink blob supplies the fidelity control on the exact same
+burst trace: zero erasures through frames 500 and 1000, ten by frame 1500,
+28800/24000 CONNECT, then an HSF retrain request about seven seconds after
+CONNECT.  Its training error is 233 versus the reconstruction's 230, with the
+same rate choice and peer-requested failure shape.  Therefore neither this
+burst-loss retrain nor the 18 dB AWGN retrain is a candidate equaliser fix in
+reconstructed DSP code; the channel model must first be parameterised from the
+real ATA/RTP trace.
