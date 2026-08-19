@@ -66,7 +66,7 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	# hybrid, built before the split and still carrying the dump: ten fresh
 	# calls reduced to zero probes and bandshape.py had nothing to read.
 	# Asking the binary is the only reading that is right in both cases.
-	$(probe_flag_for "$SL") \
+	env $(probe_flag_for "$SL") \
 	CHAN_ROLE=$1 CHAN_PORT=$PORT CHAN_SEED=${CHAN_SEED:-12345} \
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
 	CHAN_TILT=${CHAN_TILT:-0} \

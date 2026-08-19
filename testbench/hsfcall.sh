@@ -119,7 +119,7 @@ rm -f "$OUT.sl.pgid" "$OUT.sl.log" "$OUT.hsf.log" "$OUT.sl.dte"
 # branch.  (The note sits above the block because a `#` line inside a `\`
 # continuation is joined to the line above and comments out the command.)
 # Probe dump decided from the binary -- see chancall.sh and modems.sh.
-$(probe_flag_for "$SL") \
+env $(probe_flag_for "$SL") \
 CHAN_ROLE=server \
 	setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
 	_ "$OUT.sl.pgid" "$SL" "$BENCH/chanshim.py" "$OUT.sl.log" &
