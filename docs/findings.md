@@ -75901,6 +75901,11 @@ the old independent random-draw path for replay compatibility.  It emits
 `VBTLOSS` counters every 500 frames so a long HSF run records the impairment
 actually delivered despite ordered teardown.
 
+The shared-model unit test fixes the primitive's semantics independently of
+the modem calls: `CHAN_BURST=1` consumes exactly the same PRNG sequence as the
+former `rng_uniform() < CHAN_LOSS` path, while a 200000-frame deterministic
+1%/five-frame run measured 1.037% erased frames and a 5.134-frame mean burst.
+
 With the current reconstruction and HSF, `vg204-1907`, 70 ms one-way delay,
 30 dB relative AWGN, seed 20260825 and **the same 1% long-run loss**, both
 arms trained at 28800 transmit / 24000 receive and reached CONNECT.  The
