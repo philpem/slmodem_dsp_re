@@ -75659,3 +75659,29 @@ Next experiment: capture and compare the MP/MP' octets on the successful
 clean run and the first noisy attempt, then vary only the SmartLink selected
 rate.  A change to equaliser adaptation is not justified until it changes
 this controlled post-selection failure.
+
+### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
+
+The first C implementation used a `vbt_loop_target_db()` convention derived
+from V.56bis, whose LL-1/LL-2 tables are published as positive attenuation,
+for the VG204 probe tables, whose entries are measured transfer gains and are
+already negative for loss.  It negated every curve.  Consequently the
+`vg204-complex2-probe` C FIR produced **+5.55 dB at 3450 Hz relative to
++0.84 dB at 1500 Hz**, rather than the measured high-frequency roll-off.
+This was an implementation defect in the new shared model, not evidence that
+the legacy Python model was wrong.
+
+The shared model now stores all curves as transfer gain: the published ETSI
+attenuations are negated on entry, while VG204 measurements are retained as
+measured.  Its unit suite independently checks the held 150 Hz endpoint, the
+3.0 kHz complex2 value, and the realised 3450 Hz roll-off.  After the fix,
+the C self-call's initial V.34 choice is the same asymmetric 33600/31200
+choice as the zero-delay Python call.  That is the relevant validation;
+earlier C 33600/33600 results must not be used for performance comparison.
+
+The Python shim still retrains this call to 24000 after initial connect,
+while the corrected C shim held the initial rate in the one observed call.
+This is now a bounded adapter-fidelity question (integer quantisation and
+per-frame pacing), not a channel-curve question.  Neither implementation is
+currently treated as the oracle; retain Python until a sample-stream fixture
+and a repeated call distribution resolve that difference.
