@@ -224,6 +224,7 @@ def main():
 
     env = dict(os.environ)
     env.pop("HSF_NOCTL", None)          # we speak its control format; see above
+    env["HSF_RAWCTL"] = "1"             # dmframe audio, local text RING control
     #
     # chanshim.py wants `<dial> <audio-fd> <sip-fd>` and reads argv[-2] for the
     # audio fd -- NOT argv[-1]; the fork passes a call-info socket last.  The
