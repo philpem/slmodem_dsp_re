@@ -75731,6 +75731,13 @@ also prints `V34RTNCOUNT` at that point, but that is optional bench
 instrumentation carried by its older `hybrid-fit` artefact; the blob has no
 such diagnostic string.  It is not a behavioural difference.
 
+At **30 dB** on the same profile, seed and delay, the two versions again match
+and now connect: each selects 28800 transmit / 26400 receive, SmartLink's DTE
+gets `CONNECT 26400`, and HSF reports `+MRR: 26400,28800` followed by LAPM,
+V.42bis and `CONNECT 28800`.  This makes the calibration conclusion direct:
+18 and 22 dB are deliberate relative-AWGN stress points, not a plausible
+normal-PSTN baseline or a useful discriminator of reconstruction quality.
+
 ### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
 
 The first C implementation used a `vbt_loop_target_db()` convention derived
