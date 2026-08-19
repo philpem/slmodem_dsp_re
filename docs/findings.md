@@ -75786,3 +75786,49 @@ the shared C shim at both ends by default.  Final C-only clean calls connected
 at 33600 on SmartLink↔SmartLink and SmartLink↔HSF (the HSF answerer reported
 `+MRR: 33600,33600`).  This is the end of the Python channel implementation,
 not a claim that the legacy profile accurately represents a physical line.
+
+### 6109. The ideal-template pre-emphasis fitter overdrives the actual HSF transmitter by one shelf step on the legacy VG204 model
+
+The 26 dB `vg204-1907` case initially looked like a receiver/equaliser
+regression: the normal reconstruction selected receive index 8 (19200 bit/s)
+with `equerr=585`, while the original blob selected index 9 (21600 bit/s) with
+`equerr=534`.  The rate ladder itself is not the difference: both execute the
+same threshold calculation, and the different 1024-symbol error measurement
+is what moves the exact ladder by one rung.
+
+Two otherwise-identical hybrids isolate the cause.  Replacing only
+`v34hshak.o` with its `DSPLIB_REPRODUCE_BUGS` build restores the blob's
+two-point pre-emphasis selector while leaving the normal timing-filter
+initialisation in place.  On seed 20260820 it produces the blob's exact
+`equerr=534`, rate index 9 and 21600 bit/s.  The full compatibility hybrid
+does the same.  Therefore neither the equaliser adaptation nor the timing
+filter initialisation explains this particular rate loss; the requested FAR
+transmitter pre-emphasis does.
+
+The new diagnostic-only `DSPLIB_V34_TEST_PREEMP_INDEX` guard holds that
+request fixed.  It is compile-time only, accepts 0..10, and is absent from
+ordinary and differential builds.  With the same HSF answerer, channel,
+delay and seed, its direct measured curve is:
+
+| requested HSF index | rate-decision `equerr` | selected receive rate |
+|---:|---:|---:|
+| 7 | 566 | 21600 |
+| 8 | 543 | 21600 |
+| 9 | **534** | **21600** |
+| 10 | 585 | 19200 |
+
+The shape matcher requests 10.  Its result is internally consistent with its
+*ideal* V.34 template model: the 3429-baud conformance band includes the
+legacy model's sharp 3.4 kHz roll-off, and the maximum ideal shelf minimises
+the residual.  But the HSF's realised filter response plus this channel has a
+minimum at 9.  The optimisation target must therefore be the realised
+far-transmitter/channel response (or a selector robustly calibrated to it),
+not merely the closest ideal template.  Reverting to the blob's two-point
+counter would be an overfit: it agrees on this seed, but a second paired seed
+gave 19200 under both policies and a slightly higher error for the blob-style
+arm.  No default selector change is justified yet.
+
+**Required confirmation:** repeat the winning-versus-current comparison on the
+physical VG204/Conexant path before promoting any policy.  The hardware harness
+currently refuses before dialling because no USB serial adapter is attached;
+that is an unavailable confirmation, not a negative result.
