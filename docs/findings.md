@@ -75724,6 +75724,13 @@ not a discriminator for reconstruction accuracy or a candidate performance
 fix.  The lower outgoing-rate control in 6107 remains useful only to exclude
 rate selection as the reason the HSF peer requests the retrain.
 
+The same comparison at **22 dB** strengthens rather than changes that result:
+both choose 19200/16800, the same thresholds and outgoing MP word `0xaf82`,
+then receive the HSF retrain request 0.400 s after finalisation.  The hybrid
+also prints `V34RTNCOUNT` at that point, but that is optional bench
+instrumentation carried by its older `hybrid-fit` artefact; the blob has no
+such diagnostic string.  It is not a behavioural difference.
+
 ### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
 
 The first C implementation used a `vbt_loop_target_db()` convention derived
