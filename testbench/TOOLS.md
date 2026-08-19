@@ -155,7 +155,9 @@ self-paced over blocking sockets.
 not on master. Each is an A/B whose two arms differ only by a `dsplib_v34_*`
 flag, and master's datapump does not carry those flags — run here they would
 set an environment variable nothing reads and report one arm run twice as two.
-`tools/benchflags.c` and `tools/hybrid_link.sh` are there for the same reason.
+`tools/benchflags.c` is there for the same reason.  `tools/hybrid_link.sh` is
+also kept on this branch because it is the ordinary reproducible final link
+for a hybrid artefact; it contains no experimental DSP controls.
 
 **How to tell, rather than guess:** `probe_flag_for <binary>` in `modems.sh`
 answers from the binary itself, and `linesweep.py measure` pre-flights it and

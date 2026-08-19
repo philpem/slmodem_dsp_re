@@ -75680,6 +75680,28 @@ SmartLink transmit rate: the AT interface constrains the advertised receive
 limit, while the outgoing MP still reflects the peer negotiation.  Do not
 interpret this control as a rate-independent proof.
 
+### 6107. Forcing the outgoing MP proposal to 12000 does not prevent the HSF retrain
+
+The missing control in 6106 is now available without changing the normal
+reconstruction.  `v34hstx1.cpp` has a diagnostic-only
+`DSPLIB_V34_TEST_TX_RATE_CAP` compile-time guard, and the harness builds it in
+an isolated object and hybrid directory.  Without that define the original
+outgoing-MP path is unchanged, including in the differential build.
+
+At the same `vg204-1907`, 70 ms, 18 dB, seed-20260819 condition, a cap of
+rate index 5 produces a valid MP/MP′/E exchange and a final **12000/12000**
+link configuration (rather than the ordinary 14400/12000).  Nevertheless the
+Conexant peer asks SmartLink to retrain roughly 83 ms after the data link is
+declared.  SmartLink logs `V34RETRAIN, retrain request detected`, not its own
+`V34RTNCOUNT`; this is a peer-requested retrain after Conexant has received
+the lower-rate SmartLink signal.
+
+This disproves the narrow theory that the 14400 bit/s outgoing proposal alone
+causes the failure.  It does **not** isolate a particular equaliser defect:
+the useful next comparison is the SmartLink transmit/data-phase waveform and
+the far receiver's diagnostic state, with the equaliser held unchanged.  The
+run is an early-retrain diagnostic, not a long-call throughput result.
+
 ### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
 
 The first C implementation used a `vbt_loop_target_db()` convention derived
