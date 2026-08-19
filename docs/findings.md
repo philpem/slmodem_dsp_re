@@ -75679,9 +75679,14 @@ the C self-call's initial V.34 choice is the same asymmetric 33600/31200
 choice as the zero-delay Python call.  That is the relevant validation;
 earlier C 33600/33600 results must not be used for performance comparison.
 
-The Python shim still retrains this call to 24000 after initial connect,
-while the corrected C shim held the initial rate in the one observed call.
-This is now a bounded adapter-fidelity question (integer quantisation and
-per-frame pacing), not a channel-curve question.  Neither implementation is
-currently treated as the oracle; retain Python until a sample-stream fixture
-and a repeated call distribution resolve that difference.
+The remaining C/Python difference was also resolved by a deterministic
+512-sample fixture: C `lrint()` agrees exactly with NumPy `rint()`, while
+legacy NumPy `astype(int16)` truncates 254 of the 512 values toward zero.
+With nearest quantisation, the Python complex2 call holds the same initial
+33600/31200 choice without a `V34RTNCOUNT`; its pacing distribution is also
+indistinguishable from C after training (about 2.35 ms per 20 ms frame).
+Nearest rounding is now the Python default; `CHAN_QUANTISE=truncate` exists
+only to replay historical captures.  The C implementation is therefore ready
+to replace Python for the currently modelled no-noise/no-slip profiles, while
+delay, noise, loss and slip still need C implementations before Python can be
+removed outright.

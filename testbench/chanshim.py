@@ -248,6 +248,13 @@ class Channel:
         self.delay_ms = float(os.environ.get("CHAN_DELAY_MS", "70"))
         self.snr = os.environ.get("CHAN_SNR")
         self.loss = float(os.environ.get("CHAN_LOSS", "0"))
+        # The shared C implementation quantises its FIR output with lrint(),
+        # i.e. nearest integer.  Make the physically usual conversion the
+        # default so the legacy shim and shared C shim feed identical PCM;
+        # retain truncation only for replaying historical captures.
+        self.quantise = os.environ.get("CHAN_QUANTISE", "nearest")
+        if self.quantise not in ("truncate", "nearest"):
+            raise SystemExit("chanshim: CHAN_QUANTISE must be truncate or nearest")
         n = int(RATE * self.delay_ms / 1000.0)
         self.delay_buf = np.zeros(n) if n > 0 else None
         #
@@ -321,7 +328,10 @@ class Channel:
             p = np.mean(y ** 2) or 1.0
             y = y + self.rng.normal(0, (p / (10 ** (float(self.snr) / 10))) ** .5,
                                     len(y))
-        return np.clip(y, -32768, 32767).astype("<i2").tobytes()
+        y = np.clip(y, -32768, 32767)
+        if self.quantise == "nearest":
+            y = np.rint(y)
+        return y.astype("<i2").tobytes()
 
 
 def read_exactly(fd, n):
@@ -377,10 +387,11 @@ def main():
     # later, exactly as a detector that does not print its denominator cannot
     # be told from a broken one.
     sys.stderr.write("chanshim: role=%s line=%s (%s) delay=%.0fms snr=%s "
-                     "loss=%.3f slip=%.2f/s tilt=%.1fdB\n"
+                     "loss=%.3f slip=%.2f/s tilt=%.1fdB quantise=%s\n"
                      % (os.environ.get("CHAN_ROLE"), ch.line_model,
                         LINE_MODELS[ch.line_model]["ata"], ch.delay_ms,
-                        ch.snr or "off", ch.loss, ch.slip, ch.tilt_db))
+                        ch.snr or "off", ch.loss, ch.slip, ch.tilt_db,
+                        ch.quantise))
     silence = b"\0" * AUDIO_BYTES
     nf = 0
     timing = os.environ.get("CHAN_TIMING") == "1"
