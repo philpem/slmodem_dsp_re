@@ -75699,6 +75699,12 @@ the existing 10 ms repeat-insertion `CHAN_SLIP` model, including the bounded
 queue and immediate `VBTSLIP` diagnostics.  At 0.5 events/s it recorded ten
 insertions in each direction during a short run and failed training with
 `NO CARRIER`, which is the expected severe stress outcome.  Thus the C shim
-now covers all Python stress primitives.  Keep Python temporarily only for
-legacy line-profile compatibility and unported `CHAN_TILT` experiments, not
-for the shared named profiles.
+now covers all Python stress primitives.  The legacy `vg204-1907` curve and
+`CHAN_TILT` were subsequently ported as well; 1907 remains explicitly a
+historical reproduction profile, not a recommendation for new work.
+
+`chanshim.py` is now retired.  `chancall.sh` and the SmartLink↔HSF adapter use
+the shared C shim at both ends by default.  Final C-only clean calls connected
+at 33600 on SmartLink↔SmartLink and SmartLink↔HSF (the HSF answerer reported
+`+MRR: 33600,33600`).  This is the end of the Python channel implementation,
+not a claim that the legacy profile accurately represents a physical line.

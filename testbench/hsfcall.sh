@@ -98,6 +98,11 @@ export CHAN_SLIP=${CHAN_SLIP:-0}
 export CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500}
 export CHAN_TILT=${CHAN_TILT:-0}
 export HSF_ROOT
+VBT_ROOT=${VBT_ROOT:-/home/philpem/dev/sip-D-modem/claude_re/third_party/slopmodem-pstn-model}
+VBT_PROFILE=${VBT_PROFILE:-${CHAN_LINE_MODEL:-vg204-1907}}
+export VBT_PROFILE VBT_ROOT
+make -s -C "$VBT_ROOT" vbt-chanshim || exit 2
+SHIM=$VBT_ROOT/build/vbt-chanshim
 
 echo "hsfcall: $L, ${SECS}s, port $PORT"
 echo "  ours: $SL"
@@ -105,7 +110,7 @@ echo "        $(ls -l --time-style=+%Y-%m-%d\ %H:%M "$SL" | awk '{print $6, $7}'
 echo "  hsf:  $HSF_ROOT/build/hsfuser  role $ROLE"
 echo "  chan: delay ${CHAN_DELAY_MS}ms loss ${CHAN_LOSS} slip ${CHAN_SLIP} tilt ${CHAN_TILT} seed ${CHAN_SEED}"
 
-# ---- our side: slmodemd with chanshim.py in d-modem's place ---------------
+# ---- our side: slmodemd with the selected channel shim in d-modem's place --
 rm -f "$OUT.sl.pgid" "$OUT.sl.log" "$OUT.hsf.log" "$OUT.sl.dte"
 # DSPLIB_V34_DUMP_PROBE_BINS and DSPLIB_V34_FIT_PREEMP were set on the
 # assignment list below.  Master's datapump does not read them -- they are V.34
@@ -122,7 +127,7 @@ rm -f "$OUT.sl.pgid" "$OUT.sl.log" "$OUT.hsf.log" "$OUT.sl.dte"
 env $(probe_flag_for "$SL") \
 CHAN_ROLE=server \
 	setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
-	_ "$OUT.sl.pgid" "$SL" "$BENCH/chanshim.py" "$OUT.sl.log" &
+	_ "$OUT.sl.pgid" "$SL" "$SHIM" "$OUT.sl.log" &
 sleep 2
 PTY=$(grep -a -oE '/dev/pts/[0-9]+' "$OUT.sl.log" | head -1)
 SL_PID=$(cat "$OUT.sl.pgid" 2>/dev/null)

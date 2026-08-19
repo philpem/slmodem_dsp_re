@@ -194,7 +194,9 @@ def main():
     if role not in ("answer", "originate"):
         sys.exit("hsfshim: role must be answer or originate, got %r" % role)
     hsf_bin = os.path.join(HSF_ROOT, "build", "hsfuser")
-    shim = os.path.join(HERE, "chanshim.py")
+    shim = os.path.join(os.environ.get("VBT_ROOT", os.path.join(HERE, "..", "third_party",
+                                                                  "slopmodem-pstn-model")),
+                        "build", "vbt-chanshim")
     for p in (hsf_bin, shim):
         if not os.access(p, os.X_OK):
             sys.exit("hsfshim: %s is not executable" % p)
@@ -232,7 +234,7 @@ def main():
     # makes this rig structurally incapable of placing a call.
     #
     p_chan = subprocess.Popen(
-        [sys.executable, shim, "", str(fd_chan), str(null)],
+        [shim, "", str(fd_chan), str(null)],
         pass_fds=(fd_chan, null), stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, env=env)
     #
