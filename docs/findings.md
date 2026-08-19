@@ -75686,7 +75686,10 @@ With nearest quantisation, the Python complex2 call holds the same initial
 33600/31200 choice without a `V34RTNCOUNT`; its pacing distribution is also
 indistinguishable from C after training (about 2.35 ms per 20 ms frame).
 Nearest rounding is now the Python default; `CHAN_QUANTISE=truncate` exists
-only to replay historical captures.  The C implementation is therefore ready
-to replace Python for the currently modelled no-noise/no-slip profiles, while
-delay, noise, loss and slip still need C implementations before Python can be
-removed outright.
+only to replay historical captures.  C now also implements `CHAN_DELAY_MS`.
+At the normal 70 ms delay, the C and Python complex2 calls have the same rate
+choices, the same `V34RTNCOUNT` at symbol 141 with equaliser error 34, and
+the same final 31200/33600 endpoints.  The C implementation is therefore
+ready to replace Python for clean/delayed profiles.  Noise, frame loss and
+jitter-buffer slip still need C implementations before Python can be removed
+outright for stress testing.
