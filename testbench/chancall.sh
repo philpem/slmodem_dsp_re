@@ -32,12 +32,18 @@ BENCH=/home/philpem/dev/sip-D-modem/claude_re/testbench
 # a different branch's idea of what these functions do.
 . "$(dirname "$(readlink -f "$0")")/modems.sh"
 SL=${SLMODEMD:-/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit}
+VBT_ROOT=${VBT_ROOT:-/home/philpem/dev/sip-D-modem/claude_re/third_party/slopmodem-pstn-model}
+SHIM=$BENCH/chanshim.py
 L=${1:?usage: chancall.sh LABEL [seconds]}
 SECS=${2:-60}
 PORT=${CHAN_PORT:-$((45000 + RANDOM % 500))}
 OUT=$BENCH/captures/$L
 
 [ -x "$SL" ] || { echo "chancall: $SL not executable" >&2; exit 2; }
+if [ -n "${VBT_PROFILE:-}" ]; then
+	make -s -C "$VBT_ROOT" vbt-chanshim || exit 2
+	SHIM=$VBT_ROOT/build/vbt-chanshim
+fi
 
 cleanup() {
 	for p in ${PIDS:-}; do kill -TERM -"$p" 2>/dev/null; done
@@ -71,7 +77,7 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
 	CHAN_TILT=${CHAN_TILT:-0} \
 		setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
-		_ "$pidf" "$SL" "$BENCH/chanshim.py" "$OUT.$2.log" &
+		_ "$pidf" "$SL" "$SHIM" "$OUT.$2.log" &
 	sleep 2
 	#
 	# NO `PIDS="$PIDS $pg"` HERE.  start_side is called in a command
