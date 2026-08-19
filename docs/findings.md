@@ -75837,6 +75837,18 @@ rate or failure difference for a SmartLink peer.  The currently observed
 one-rung rate effect is therefore HSF-specific until a repeated peer matrix
 and the physical ATA comparison say otherwise.
 
+Two further controls disprove a global “use one less shelf” replacement.  On
+the legacy profile, four HSF runs (seeds 20--23) produce normal/forced-9
+errors of 585/534, 577/603, 540/522 and 558/560 respectively: index 9 wins
+two and loses two, with a receive-rate gain only on seed 20.  Each HSF side
+reported 1.00x real time, so these are valid runs rather than clock-starvation
+artefacts.  On the independently measured `vg204-complex2-probe` profile the
+shape fitter selects index 5.  Its neighbours gave index 4: error 501, 21600;
+index 5: 522, 21600; index 6: 616, 19200.  Thus a lower neighbour can improve
+the scalar error without a rate gain, while the upper neighbour is plainly
+harmful.  The selector needs physical-ATA calibration or a robust realised
+response objective, not an unconditional one-step bias.
+
 **Required confirmation:** repeat the winning-versus-current comparison on the
 physical VG204/Conexant path before promoting any policy.  The hardware harness
 currently refuses before dialling because no USB serial adapter is attached;
