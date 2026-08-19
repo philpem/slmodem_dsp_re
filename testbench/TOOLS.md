@@ -53,7 +53,7 @@ self-paced over blocking sockets.
 |---|---|
 | `chancall.sh` | One emulated call: two of our datapumps, one channel, no hardware. **BRANCH** |
 | `hsfcall.sh` | One emulated call: our datapump against the Conexant HSF. **BRANCH** |
-| `vbt-chanshim` | The shared C channel model — runs in d-modem's place for each end and joins them over loopback. Band limit, delay, noise, loss, `CHAN_SLIP`, and tilt. Carries selectable profiles under `VBT_PROFILE` (or `CHAN_LINE_MODEL` for harness compatibility). |
+| `vbt-chanshim` | The shared C channel model — runs in d-modem's place for each end and joins them over loopback. Band limit, delay, noise, independent or burst loss (`CHAN_BURST`), `CHAN_SLIP`, and tilt. Carries selectable profiles under `VBT_PROFILE` (or `CHAN_LINE_MODEL` for harness compatibility). |
 | `hsfshim.py` | Puts the HSF datapump on the far end of `vbt-chanshim`: socketpairs, ring generation, framed relay. |
 | `ladder.py` | The impairment ladder — sweeps `CHAN_SLIP` or `CHAN_LOSS` across both peers and reports median rate with connect fraction. |
 | `replay.py` | Feed a recorded call into slmodemd in d-modem's place. Open loop: the far end cannot react. |

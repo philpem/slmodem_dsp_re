@@ -75891,3 +75891,28 @@ packet/jitter-buffer events.  Keep classic FDM frequency offset, phase jitter,
 and analogue-carrier envelope-delay distortion in separate legacy-carrier
 profiles; do not add them to the normal all-digital PSTN baseline.  No V.34
 equaliser or pre-emphasis policy change follows from this review alone.
+
+### 6111. Burst structure, not an equaliser difference, reproduces the HSF post-CONNECT retrain at fixed loss rate
+
+The shared C shim previously modelled `CHAN_LOSS` as independent erased 20 ms
+frames only.  It now accepts an opt-in `CHAN_BURST` mean erased-run length
+using a deterministic two-state process, while an unset or unit value retains
+the old independent random-draw path for replay compatibility.  It emits
+`VBTLOSS` counters every 500 frames so a long HSF run records the impairment
+actually delivered despite ordered teardown.
+
+With the current reconstruction and HSF, `vg204-1907`, 70 ms one-way delay,
+30 dB relative AWGN, seed 20260825 and **the same 1% long-run loss**, both
+arms trained at 28800 transmit / 24000 receive and reached CONNECT.  The
+independent arm (`CHAN_BURST=1`) had ten erased frames by frame 1500 and did
+not retrain during the 70-second call.  The burst arm (`CHAN_BURST=5`) also
+had ten erased frames by frame 1500, but HSF requested a retrain shortly after
+CONNECT and SmartLink logged `V34RETRAIN, retrain request detected`.
+
+This directly supports the channel-model review: an AWGN number or average
+packet-loss fraction is insufficient to diagnose a retrain.  The immediate
+work item is to measure and replay real ATA/RTP loss run lengths before
+altering the V.34 equaliser.  It does not explain the intentionally extreme
+18 dB stationary-AWGN failure in 6108, where the original blob behaves the
+same, but it provides a more realistic matched-channel route to the observed
+interoperability symptom.
