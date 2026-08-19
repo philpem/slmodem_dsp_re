@@ -118,7 +118,7 @@ flat. That is no longer true and **#163 is runnable for the first time**.
 The negotiated symbol rate went with it: **3429 baud on the 600r arm, 3200 on
 10 of 10 complex2 calls**, which is what the band edge losing 3 dB should do.
 
-`chanshim.py` carries both as selectable models — `CHAN_LINE_MODEL=vg204-1907`
+The shared C model carries both as selectable profiles — `CHAN_LINE_MODEL=vg204-1907`
 (the default, unchanged), `vg204-600r-probe`, `vg204-complex2-probe` — with
 the provenance of each beside its coefficients. Every run prints which one it
 used. **The default is deliberately still 1907's fit even though the probe
@@ -244,7 +244,7 @@ front end was designed against BT line impedance (Cisco's `complex1`); the
 Oli'Net and the SupraExpress are different designs of different vintage. Keep
 every arm and compare, rather than picking one setting for the bench.
 
-**No hardware needed.** `chanshim.py` puts two live datapumps on an emulated
+**No hardware needed.** `vbt-chanshim` puts two live datapumps on an emulated
 channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
 `CHAN_SLIP`, the jitter-buffer underrun model. `hsfcall.sh` drives the same
 channel with a DIFFERENT far end — the Conexant HSF datapump (`hsfshim.py`

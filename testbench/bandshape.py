@@ -62,7 +62,7 @@ import numpy as np
 from probeplot import HZ_PER_BIN, NOISE_BINS, REF_BIN, parse, to_db
 
 #
-# THE CURVE EVERY EMULATOR RESULT RIDES ON.  chanshim.py:73-74, attributed to
+# THE LEGACY CURVE EVERY HISTORICAL EMULATOR RESULT RIDES ON, attributed to
 # finding 1907.  Reproduced here verbatim so the comparison is against the
 # literal the emulator uses, not against a paraphrase of it.
 #

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hsfshim.py -- put the Conexant HSF datapump on the far end of chanshim.py.
+"""hsfshim.py -- put the Conexant HSF datapump on the far end of vbt-chanshim.
 
     hsfshim.py <answer|originate>
 
@@ -7,7 +7,7 @@
 cannot make a socketpair, and one is exactly what is missing from the HSF half
 of the rig:
 
-    slmodemd -e chanshim.py            chanshim.py            hsfuser
+    slmodemd -e vbt-chanshim           vbt-chanshim           hsfuser
       (CHAN_ROLE=server)  <-loopback->  (CHAN_ROLE=client) <->  modem ... dmframe
         socketpair made by                  socketpair made HERE
         slmodemd itself
@@ -15,13 +15,13 @@ of the rig:
 slmodemd makes the socketpair for its own `-e` child (`socket_start`, and there
 is no other arrangement -- it is always the parent).  Nothing makes the one on
 the HSF side, so this does: `socket.socketpair()`, both ends marked
-inheritable, one end handed to `chanshim.py` as its "audio fd" and the other to
+inheritable, one end handed to `vbt-chanshim` as its "audio fd" and the other to
 `hsfuser modem <audio_fd> <ctl_fd> <role> dmframe` with `pass_fds`, which keeps
 the fd NUMBERS unchanged in the child.
 
 WHAT EACH SIDE OF THAT SOCKET SPEAKS.  324-byte slmodemd `socket_frame`s in
 both directions -- 4-byte type plus a 320-byte union, 160 samples S16LE at
-8 kHz.  `chanshim.py` speaks it because slmodemd does; hsfuser speaks it
+8 kHz.  `vbt-chanshim` speaks it because slmodemd does; hsfuser speaks it
 because `dmframe` selects it (`src/dmframe.h` documents the same three type
 codes in the same order).  HSF's engine runs at 16 kHz and `dmframe.c`
 resamples internally, so there is no resampler here and there must not be one.
@@ -49,7 +49,7 @@ its own socketpair, in HSF's own newline-delimited control format
 for it, and the same one `exchange.c` uses to reach `CONNECT 33600`.
 
 NONE OF THIS TOUCHES slmodemd's SIP SOCKET, which stays exactly as unused as
-`chanshim.py` leaves it.  The two control channels are different formats --
+`vbt-chanshim` leaves it.  The two control channels are different formats --
 slmodemd's `SR`/`SH`/`MD` ride 324-byte SIP_INFO datagrams -- and joining them
 would feed each side noise.  This one runs between hsfshim.py and hsfuser and
 carries line state only.
@@ -76,7 +76,7 @@ TEARDOWN IS ORDERED, and that is a measurement decision.  On SIGTERM the shim
 is stopped FIRST; hsfuser then sees EOF on the audio fd, leaves its loop, and
 prints `exiting after N blocks (M rings, frames in X / out Y)`.  Killing the
 group flat loses that line, which is the only place HSF's own frame counters
-are reported -- the same mistake chanshim.py's docstring records for CHANLAT.
+are reported -- the same teardown hazard recorded by the old Python shim.
 """
 
 import os
@@ -228,7 +228,7 @@ def main():
     env.pop("HSF_NOCTL", None)          # we speak its control format; see above
     env["HSF_RAWCTL"] = "1"             # dmframe audio, local text RING control
     #
-    # chanshim.py wants `<dial> <audio-fd> <sip-fd>` and reads argv[-2] for the
+    # vbt-chanshim accepts the same trailing audio-fd convention as slmodemd's
     # audio fd -- NOT argv[-1]; the fork passes a call-info socket last.  The
     # dial string is ignored by it exactly as it is by replay.py, which is what
     # makes this rig structurally incapable of placing a call.

@@ -5,11 +5,11 @@
 #   chancall.sh LABEL [seconds]
 #   CHAN_DELAY_MS=70 CHAN_LOSS=0.001 chancall.sh noisy 90
 #
-# Spawns two slmodemd instances, each with `chanshim.py` in d-modem's place,
+# Spawns two slmodemd instances, each with the shared C channel shim in d-modem's place,
 # joined over loopback with the bench path's measured characteristics applied.
 # One answers, one originates; the pty side of each is driven by replaydte.py.
 #
-# NO PBX, NO ATA, NO SERIAL MODEM.  Nothing here can dial: `chanshim.py`
+# NO PBX, NO ATA, NO SERIAL MODEM.  Nothing here can dial: the channel shim
 # ignores the dial string entirely, exactly as `replay.py` does, so the four
 # destination guards are not involved and cannot be involved.
 #
@@ -101,7 +101,7 @@ echo "  answer pty $PTY_A   origin pty $PTY_B"
 # THE ANSWERING SIDE TAKES `ATA`, NOT `ATS0=1`.  Auto-answer is gated on
 # `sip_ringing` in modem_main.c, and `sip_ringing` is set by exactly one thing:
 # an `SR` message arriving on the SIP socket from the `-e` child.  That child
-# is chanshim.py, which models a wire and knows nothing about call setup, so no
+# is the channel shim, which models a wire and knows nothing about call setup, so no
 # ring is ever reported and `ATS0=1` waits for a bell that cannot ring.  `ATA`
 # reaches modem_answer() directly and needs no ring; socket_dial() accepts it
 # on the `strncasecmp(m->at_cmd,"ATA",3)` arm.

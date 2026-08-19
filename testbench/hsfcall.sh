@@ -7,7 +7,7 @@
 #   hsfcall.sh LABEL [seconds]
 #   HSF_ROLE=originate CHAN_DELAY_MS=0 hsfcall.sh clean0 60
 #
-#     slmodemd -e chanshim.py                chanshim.py            hsfuser
+#     slmodemd -e vbt-chanshim               vbt-chanshim           hsfuser
 #       (CHAN_ROLE=server)     <-loopback->  (CHAN_ROLE=client) <->  modem dmframe
 #            OUR datapump                                          CONEXANT HSF
 #
@@ -21,7 +21,7 @@
 # the emulator.  It makes "is our receiver worse than a good receiver on
 # IDENTICAL INPUT" a controlled question.
 #
-# IT IS NOT A BENCH CALL AND NEVER REPORTS ONE.  chanshim.py ignores the dial
+# IT IS NOT A BENCH CALL AND NEVER REPORTS ONE.  The channel shim ignores the dial
 # string entirely, exactly as replay.py does, so no destination guard is or can
 # be involved.
 #
@@ -134,7 +134,7 @@ SL_PID=$(cat "$OUT.sl.pgid" 2>/dev/null)
 PIDS="$SL_PID"
 [ -n "$PTY" ] || { echo "hsfcall: slmodemd gave no pty -- see $OUT.sl.log" >&2; exit 1; }
 
-# ---- far side: chanshim.py + hsfuser, joined by a socketpair --------------
+# ---- far side: vbt-chanshim + hsfuser, joined by a socketpair -------------
 CHAN_ROLE=client \
 	setsid sh -c 'echo $$ > "$1"; exec python3 -u "$2" "$3" > "$4" 2>&1' \
 	_ "$OUT.hsf.pgid" "$BENCH/hsfshim.py" "$ROLE" "$OUT.hsf.log" &
@@ -167,7 +167,7 @@ echo "  hsf modem loop up: $(grep -a "modem\[$ROLE\] pid" "$OUT.hsf.log" | head 
 # `ATA`, NOT `ATS0=1`, when it is our side that answers.  Auto-answer is gated
 # on `sip_ringing` in modem_main.c, which is set by exactly one thing: an `SR`
 # message arriving on the SIP socket from the `-e` child.  That child is
-# chanshim.py, which models a wire and knows nothing about call setup, so no
+# the channel shim, which models a wire and knows nothing about call setup, so no
 # ring is ever reported and `ATS0=1` waits for a bell that cannot ring.
 #
 # HSF IS UNDER THE SAME CONSTRAINT AND THE OPPOSITE ANSWER IS RIGHT FOR IT.
@@ -185,7 +185,7 @@ wait $DTE 2>/dev/null || true
 # LAUNCHER (not the group): hsfshim.py stops the shim first, hsfuser then sees
 # EOF on the audio fd and prints `exiting after N blocks (frames in X / out Y)`
 # -- the only place HSF's own frame counters appear.  Killing the group flat
-# loses it, which is the mistake chanshim.py's docstring already records for
+# loses it, which is the mistake the retired shim's documentation recorded for
 # CHANLAT.
 #
 kill -TERM "$HSF_PID" 2>/dev/null
@@ -204,7 +204,7 @@ rate() {
 eval "$(python3 "$BENCH/hsfshim.py" --summary "$OUT.hsf.log")"
 #
 # THE SHIM'S OWN TOTAL COMES FROM OUR SIDE'S LOG, and that is not an accident
-# of where it was easy to grep.  chanshim.py prints `N frames, X s of audio`
+# of where it was easy to grep.  vbt-chanshim prints `N frames, X s of audio`
 # only when its loop ENDS, and the far shim is stopped with a signal, so its
 # copy of that line never exists (its docstring records the same hazard for
 # CHANLAT).  The NEAR shim ends differently: the far one closing the loopback
