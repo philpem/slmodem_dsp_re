@@ -1478,7 +1478,21 @@ reconstructed; **the consequence is unmeasured** and recorded as such.
 
 **Not fixed.** `t_v34ec` asserts the upper twenty entries still hold the
 harness fill after init, so a reconstruction that helpfully zeroed all forty
-fails rather than passes.
+fails rather than passes in the binary-comparison tier.
+
+**Fix.** The default (shipping/interoperability) build now clears all forty
+prefilter entries. `DSPLIB_REPRODUCE_BUGS` retains the object's eighty-short
+extent, preserving bit-exact comparison. This follows the same ifdef polarity
+as the other deliberate fixes: real modem builds do not consume heap contents
+as timing-filter history.
+
+**Performance result (2026-08-19): no effect in the seeded model.** With
+`CHAN_SEED=20260819`, 70 ms delay and 18 dB SNR, the blob-compatible and fixed
+builds produced byte-for-byte identical Phase-4 decisions: answer `equerr`
+4627, origin `equerr` 4197, rate index 4 / 9600 bit/s at both ends. The fix
+remains worthwhile hardening, but this controlled run disproves it as the
+cause of that particular equaliser/rate gap. It must not be cited as evidence
+of a performance gain without a different, reproducible channel outcome.
 
 ---
 

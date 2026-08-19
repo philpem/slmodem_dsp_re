@@ -1663,21 +1663,27 @@ V34TimingFiltersInit(struct v34_timing *t)
 			t->iir[i][j] = 0;
 
 	/*
-	 * Eighty SHORTS from +0x024, which is not the same as "both arrays".
-	 * The high-pass history is forty shorts and the prefilter state is
-	 * forty INTS, so this run covers the first and only half of the
-	 * second -- twenty of its forty entries.  The upper twenty are left
-	 * holding whatever was there.
+	 * The object writes eighty SHORTS from +0x024.  That covers `hist`
+	 * and only the first twenty entries of the forty-int prefilter state.
+	 * The latter feeds timing recovery at the beginning of acquisition,
+	 * immediately upstream of the equaliser.
 	 *
-	 * Written as two loops rather than one, because a single loop over
-	 * `hist` would be indexing past the end of an array in C even though
-	 * it is exactly what the object does.  The bytes touched are the
-	 * same.  See docs/deviations.md, D29.
+	 * It is a live initialisation defect, not a layout convenience.  Keep
+	 * the exact object extent in the reproduction tree; the normal build
+	 * clears the complete declared state.  This is the same polarity as
+	 * the other deliberate fixes: DSPLIB_REPRODUCE_BUGS is for binary
+	 * comparison, while the shipping build must not consume heap contents
+	 * as filter history.  See docs/deviations.md, D29.
 	 */
 	for (i = 0; i < V34_TIMING_HP_TAPS; i++)
 		t->hist[i] = 0;
+#ifdef DSPLIB_REPRODUCE_BUGS
 	for (i = 0; i < (V34_TIMING_INIT_SHORTS - V34_TIMING_HP_TAPS) / 2; i++)
 		t->pre_state[i] = 0;
+#else
+	for (i = 0; i < V34_TIMING_PRE_TAPS; i++)
+		t->pre_state[i] = 0;
+#endif
 
 	t->prefilter_coeff = V34TimingPrefilterCoeff;
 	t->hp_coeff = V34TimingHPFilterCoeff;

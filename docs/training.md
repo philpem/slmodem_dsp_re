@@ -414,7 +414,7 @@ without placing a call.
 | 3 | pre-emphasis is fire-and-forget; no path from a struggling equaliser back to the shaping request | §1, §3.3 | two-stage: connect at the object's conservative index, renegotiate to the fitted one once trained |
 | 4 | `CenterAdapt` discards the fractional half of the 8 dominant taps | §4.4 | fix and run the differential tier; it must not change anything else |
 | 5 | no tap leakage over 80 taps on a band-limited signal | §4.5 | long-hold call, watch for drift (#143) |
-| 6 | step size scheduled by symbol count, cannot gear back up | §4.3 | error-driven gearing |
+| 6 | step size scheduled by symbol count, cannot gear back up | §4.3 | error-driven gearing; simply retaining 0x4000 through the Phase-4 decision window was tested on the seeded 18 dB model and increased error at both ends, so it is not retained as a knob |
 | 7 | two-point estimator: 5× biased, 4 dB quantised, samples the codec corner | §3.3 | done — findings 1910, 1912 |
 
 **THE TRADE THAT THE ARCHITECTURE CANNOT EXPRESS.** Finding 1912 measured
