@@ -75636,3 +75636,26 @@ else -- which is V.90 §9.4.2.3: the receiver of the downstream designs the
 constellation and sends it in CP. **It is written but not yet driven in
 anger**, because its only caller is the 7,276-byte function at the top of the
 list above.
+
+### 6104. 18 dB shared-channel failure is MP/retrain interop, not a clean equaliser failure
+
+`testbench/chanshim.py` is the common channel for both runs: 70 ms one-way
+delay, flat response, `CHAN_SNR=18`, seed 20260819.  SmartLink against itself
+connects at **9600 bit/s**; its Phase-4 errors are 4197 (origin) and 4627
+(answer).  SmartLink against the Conexant HSF is cleanly known to connect at
+33600 in the same harness when noise is disabled (`+MRR: 33600,33600`).
+
+With 18 dB noise, the HSF answerer is demonstrably live (off-hook, 3085 audio
+frames each direction in 61.7 s, real-time clock), while SmartLink repeatedly
+selects **12000 bit/s** at error 2566--2679.  It then triggers
+`V34RTNCOUNT` at 141 symbols and retrains; three attempts complete without
+either modem reporting CONNECT.  This rules out call setup, a silent peer, or
+the raw first equaliser diagnostic as an explanation.  It does **not** show
+that Conexant would negotiate a higher speed on this exact path--the call has
+not reached data mode--but it does localise the current gap to noisy MP
+exchange/retrain interoperability after SmartLink's rate decision.
+
+Next experiment: capture and compare the MP/MP' octets on the successful
+clean run and the first noisy attempt, then vary only the SmartLink selected
+rate.  A change to equaliser adaptation is not justified until it changes
+this controlled post-selection failure.
