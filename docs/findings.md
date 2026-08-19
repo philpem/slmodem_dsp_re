@@ -75689,7 +75689,10 @@ Nearest rounding is now the Python default; `CHAN_QUANTISE=truncate` exists
 only to replay historical captures.  C now also implements `CHAN_DELAY_MS`.
 At the normal 70 ms delay, the C and Python complex2 calls have the same rate
 choices, the same `V34RTNCOUNT` at symbol 141 with equaliser error 34, and
-the same final 31200/33600 endpoints.  The C implementation is therefore
-ready to replace Python for clean/delayed profiles.  Noise, frame loss and
-jitter-buffer slip still need C implementations before Python can be removed
-outright for stress testing.
+the same final 31200/33600 endpoints.  C now also implements frame-local
+AWGN (`CHAN_SNR`) and silent-frame loss (`CHAN_LOSS`) with a specified local
+PRNG.  Its 18 dB complex2 self-call connects at 9600 bit/s both ways, matching
+the prior Python stress outcome; exact sample streams intentionally differ
+from NumPy's generator.  The C implementation is therefore ready to replace
+Python for clean, delayed, noisy and loss profiles.  Jitter-buffer slip is
+the one remaining Python-only stress primitive.
