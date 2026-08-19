@@ -75639,7 +75639,7 @@ list above.
 
 ### 6104. 18 dB shared-channel failure is MP/retrain interop, not a clean equaliser failure
 
-`testbench/chanshim.py` is the common channel for both runs: 70 ms one-way
+The shared C channel shim is the common channel for both runs: 70 ms one-way
 delay, flat response, `CHAN_SNR=18`, seed 20260819.  SmartLink against itself
 connects at **9600 bit/s**; its Phase-4 errors are 4197 (origin) and 4627
 (answer).  SmartLink against the Conexant HSF is cleanly known to connect at
@@ -75659,6 +75659,26 @@ Next experiment: capture and compare the MP/MP' octets on the successful
 clean run and the first noisy attempt, then vary only the SmartLink selected
 rate.  A change to equaliser adaptation is not justified until it changes
 this controlled post-selection failure.
+
+### 6106. C-channel 18 dB HSF interop reproduces a post-MP failure; receive-rate capping does not avert it
+
+The C-only harness removes the old Python channel implementation from this
+experiment.  With `VBT_PROFILE=vg204-1907`, 70 ms one-way delay,
+`CHAN_SNR=18`, and seed 20260819, SmartLink receives a stable repeated MP
+sequence, selects 12000 bit/s (`equerr=2754`, `preerr=2623`), receives MP′
+and E, and then triggers `V34RTNCOUNT` at symbol 141 with `equerr=2713`.
+Neither endpoint reports CONNECT.  This is the same failure shape as 6104:
+the received MP words are not visibly corrupt, and failure is after their
+exchange.
+
+As a narrow control, SmartLink was sent `AT+MS=34,1,9600,9600` while every
+other condition remained the same.  Its rate decision reports `min=9600,
+max=9600`, but the final exchange remains asymmetric (14400 transmit, 9600
+receive) and retrains at the same symbol with `equerr=2714`.  This rules out a
+simple receive-ceiling explanation.  It does **not** yet test a forced
+SmartLink transmit rate: the AT interface constrains the advertised receive
+limit, while the outgoing MP still reflects the peer negotiation.  Do not
+interpret this control as a rate-independent proof.
 
 ### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
 

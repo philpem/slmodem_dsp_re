@@ -61,8 +61,8 @@ OUT=$BENCH/captures/$L
 #
 ROLE=${HSF_ROLE:-answer}
 case $ROLE in
-answer)		OUR_CMDS='ATZ;AT+MS=34,1;ATDT1903'; OUR_ROLE=originate ;;
-originate)	OUR_CMDS='ATZ;AT+MS=34,1;ATA';      OUR_ROLE=answer ;;
+answer)		OUR_CMDS=${OUR_DTE_CMDS:-'ATZ;AT+MS=34,1;ATDT1903'}; OUR_ROLE=originate ;;
+originate)	OUR_CMDS=${OUR_DTE_CMDS:-'ATZ;AT+MS=34,1;ATA'};      OUR_ROLE=answer ;;
 *)		echo "hsfcall: HSF_ROLE must be answer or originate" >&2; exit 2 ;;
 esac
 
