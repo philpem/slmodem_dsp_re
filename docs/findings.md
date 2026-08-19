@@ -75849,6 +75849,14 @@ the scalar error without a rate gain, while the upper neighbour is plainly
 harmful.  The selector needs physical-ATA calibration or a robust realised
 response objective, not an unconditional one-step bias.
 
+Finally, the original SmartLink blob was rerun at the fresh legacy-profile
+seed 23 rather than inferred from the reconstruction.  It reports the same
+error and choice as the forced-index-9 reconstruction (`equerr=560`, receive
+21600 bit/s, HSF at 1.00x real time).  This is a direct fidelity control: the
+remaining normal-selector variation is an intentional reconstruction
+improvement whose benefit is mixed, while the original blob's noisy-channel
+behaviour is already reproducible without changing equaliser adaptation.
+
 **Required confirmation:** repeat the winning-versus-current comparison on the
 physical VG204/Conexant path before promoting any policy.  The hardware harness
 currently refuses before dialling because no USB serial adapter is attached;
