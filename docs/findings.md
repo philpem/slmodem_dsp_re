@@ -75702,6 +75702,28 @@ the useful next comparison is the SmartLink transmit/data-phase waveform and
 the far receiver's diagnostic state, with the equaliser held unchanged.  The
 run is an early-retrain diagnostic, not a long-call throughput result.
 
+### 6108. The original SmartLink blob has the same 18 dB HSF failure; this is not a reconstruction defect
+
+The decisive control is the original `d-modem/slmodemd/slmodemd` against the
+same HSF build and the same shared C channel (`vg204-1907`, 70 ms,
+`CHAN_SNR=18`, seed 20260819).  Its first attempt has the same received MP
+words as the reconstruction, chooses the same receive-rate index 5, emits the
+same `txmp bits 0xae82`, and finalises at **14400 transmit / 12000 receive**.
+Its measured training error is 2758/2629, versus 2754/2623 reconstructed;
+both use retrain threshold 7038, down threshold 4689 and up threshold 2022.
+
+Most importantly, both runs receive a Conexant retrain request exactly 0.400
+seconds after the `finally txbitrate` line.  The blob then repeats the same
+failure cycle.  This falsifies the working theory that a difference in the
+reimplemented V.34 equaliser or data transmitter caused this particular
+SmartLink↔HSF 18 dB failure.  Do not change equaliser adaptation in response
+to it.
+
+The condition is still useful as an interoperability stress test, but it is
+not a discriminator for reconstruction accuracy or a candidate performance
+fix.  The lower outgoing-rate control in 6107 remains useful only to exclude
+rate selection as the reason the HSF peer requests the retrain.
+
 ### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
 
 The first C implementation used a `vbt_loop_target_db()` convention derived
