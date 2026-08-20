@@ -59,8 +59,8 @@
  },
  {
   "label": "the demodulator produces three outputs per call, not four",
-  "find": "\trx->f128 = 4;",
-  "replace": "\trx->f128 = 3;"
+  "find": "\trx->timing_output_count = 4;",
+  "replace": "\trx->timing_output_count = 3;"
  },
  {
   "label": "the echo energy report has energy and BETA swapped",
@@ -104,7 +104,7 @@
  },
  {
   "label": "the retrain report prints the count before it is cleared",
-  "find": "\t\t\t\trx->f798 = 0;\n\t\t\t\trx->flags = (unsigned short)flags;",
+  "find": "\t\t\t\trx->retrain_reneg_motion_count = 0;\n\t\t\t\trx->flags = (unsigned short)flags;",
   "replace": "\t\t\t\trx->flags = (unsigned short)flags;"
  },
  {
@@ -134,8 +134,8 @@
  },
  {
   "label": "the S-S1 report has the symbol count and the PLL count swapped",
-  "find": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)n, (int)rx->f1c0,\n\t\t\t\t\t    (int)rx->agc_gain);",
-  "replace": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)rx->f1c0, (int)n,\n\t\t\t\t\t    (int)rx->agc_gain);"
+  "find": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)n, (int)rx->timing_state,\n\t\t\t\t\t    (int)rx->agc_gain);",
+  "replace": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)rx->timing_state, (int)n,\n\t\t\t\t\t    (int)rx->agc_gain);"
  },
  {
   "label": "the S-S1 threshold 0x600 becomes 0x601",
@@ -144,13 +144,13 @@
  },
  {
   "label": "the equaliser report has equerr and preerr swapped",
-  "find": "\t\t\t\t\t\"V34EQU, equerr = %d, preerr = %d,\\n\",\n\t\t\t\t\t(int)rx->f21a, (int)rx->f224);",
-  "replace": "\t\t\t\t\t\"V34EQU, equerr = %d, preerr = %d,\\n\",\n\t\t\t\t\t(int)rx->f224, (int)rx->f21a);"
+  "find": "\t\t\t\t\t\"V34EQU, equerr = %d, preerr = %d,\\n\",\n\t\t\t\t\t(int)rx->equalizer_error_1024, (int)rx->predictor_error_1024);",
+  "replace": "\t\t\t\t\t\"V34EQU, equerr = %d, preerr = %d,\\n\",\n\t\t\t\t\t(int)rx->predictor_error_1024, (int)rx->equalizer_error_1024);"
  },
  {
   "label": "the equaliser report's symbol bound is exclusive",
-  "find": "\t\t\tif (rx->f124 <= 0x7530 && DSPLIB_DEBUG_ON()) {",
-  "replace": "\t\t\tif (rx->f124 < 0x7530 && DSPLIB_DEBUG_ON()) {"
+  "find": "\t\t\tif (rx->rx_symbol_count <= 0x7530 && DSPLIB_DEBUG_ON()) {",
+  "replace": "\t\t\tif (rx->rx_symbol_count < 0x7530 && DSPLIB_DEBUG_ON()) {"
  },
  {
   "label": "the far counter reads this call's count, not the previous one",

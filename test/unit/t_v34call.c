@@ -48,7 +48,8 @@
  *
  * HOW A CALL IS DRIVEN, read off the object rather than invented:
  *
- *   per sample   `obj->f260` is the sample off the line and `obj->f25e` the
+ *   per sample   `obj->rx_work_sample` is the sample off the line and
+ *                `obj->tx_sample` the
  *                sample onto it -- v34fsk.h names the pair, and
  *                `modem_serrint` reads the first, cancels the echo, pushes
  *                the residual onto the receive queue, and pops the next

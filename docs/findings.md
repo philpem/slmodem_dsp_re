@@ -18214,7 +18214,7 @@ does not pass. Asked for with no V.90 receiver running it is demoted to 0,
 which is the arm that *keeps* a running receiver; asked for while one is up it
 is not validated, not complained about, and reaches the dispatch intact, where
 it tears both receivers down. 34 is accepted by the validation and then falls
-into the dispatch's default -- `fa23c` set, both counters cleared -- and the
+into the dispatch's default -- `far_echo_enabled` set, both counters cleared -- and the
 object shares that tail rather than duplicating it.
 
 Two smaller readings that a plausible reconstruction would have got wrong:
@@ -58612,7 +58612,7 @@ delay, and rejects it two ways:
     if (d <= 0)              d = 0x90;   /* prints "bulk delay first estimation" */
     if ((unsigned)d >= (unsigned)obj->bulk_len) d = 0;   /* same message */
     ...
-    if ((short)d > 0x1d) obj->fa23c = 1;                 /* far EC stays on */
+    if ((short)d > 0x1d) obj->far_echo_enabled = 1;      /* far EC stays on */
     else  /* "RTD (%d) lower than min (%d), masking Far EC..."  */
 
 So a round trip at or beyond `bulk_len` -- the ring at +0x35b8 that feeds the
@@ -76098,3 +76098,93 @@ selected index 5, sent `0xae82,0xfffd,0x0000,0x0000,0x0000`, finalised at
 This closes the possible "only matters near the retrain threshold" escape:
 the D29 correction neither creates nor prevents the observed failure under
 controlled heap contents.
+
+### 6118. V.8bis is named and detected, but is deliberately disabled and has no negotiation implementation
+
+The reconstructed library implements the ordinary asynchronous V.8 CM/JM
+handshake, not V.8bis.  The decisive configuration write is
+`src/v8/v8dp.c:71`: `v8_create` clears CM byte 0 bit 1 before it constructs
+the V.8 object.  `src/v8/v8hs.c:272-274` is the only V.8-side read of that
+bit: it prints it as `v8bisIndication`; it does not branch into a V.8bis
+state machine.  The corresponding original-object instruction is
+`andb $0xfd,(%eax)` at `d-modem/slmodemd/dsplibs.o` `v8_create+0xb8`
+(`.text+0x35f8`), so this is blob behaviour rather than a reconstruction
+policy choice.
+
+There is no datapump route to add the missing negotiation.  The only V.8
+operations table is registered as DP 8 in `src/v8/v8dp.c:111-131`; the
+original's `dp_v8_init` likewise calls `modem_dp_register(8, ...)`.
+`DP_V8BIS = 108` survives in the host enumeration
+(`ref/slmodemd/modem_defs.h:346`) and display table
+(`ref/slmodemd/modem.c:171-191`), but has no registered operation.  At call
+progress level, `CALLPROG_V8BIS_MODEM_ANSWER` is only one of several generic
+answer verdicts: `src/call/call.c:196-203` sets `answered` and returns
+`DPSTAT_CHANGEDP`, without selecting DP 108 or feeding any V.21/HDLC
+receiver.
+
+The apparent country/manufacturer fields are not evidence of a partial
+V.8bis responder.  The old interpretation is explicitly corrected in
+`include/dsplib/v8.h:222-230`: `ext1[4]` and `ext2[4]` are V.8 raw call-
+function and protocol octets.  They are emitted by the ordinary ten-bit V.8
+sequence builder (`src/v8/v8seq.c:61-128`) and matched as call function and
+protocol by `src/v8/v8jm.c:72-152`; neither path constructs or parses a
+V.8bis country code, manufacturer code, CRe/CRd, MS/CL/CLR, ACK, or NAK
+message.  The blob's V.8 diagnostic strings independently call these fields
+"raw CF" and "raw Protocol" (`src/v8/v8hs.c:246-269` reproduces them), and
+contain no V.8bis message-name/state strings.
+
+The only HDLC/V.21 V.8bis material in this tree is intentionally external
+test tooling.  `testbench/v8bisprobe.c:1-7` says it is not a second V.8bis
+implementation, and `testbench/v8bisprobe.c:148-151` limits its live peer to
+a dual-tone stimulus and V.21 recording, explicitly not a CRe state machine.
+It therefore demonstrates a usable physical-layer experiment, not a
+partially wired dsplibs feature.  No evidence of a country- or
+manufacturer-code response was found in the reconstructed source or the
+original `dsplibs.o` string/symbol inventory.
+
+### 6119. Hardware call connects, but an RTP-tapped recording proves no V.8bis exchange
+
+The first direct hardware test used the SupraExpress on extension 1901 as
+caller and the Oli'Net V92 Ready on extension 1903 as answerer.  After the ATA
+line-impedance correction, the caller returned `CONNECT 115200`; this is the
+DTE rate and is not evidence of V.8bis.  Both modems accepted V.8-related
+configuration writes (`AT+A8E=6,5,1,1,0,0` on the Supra and
+`AT+A8E=1,1,00,1,0,0` on the Oli'Net), but those values only describe accepted
+configuration.
+
+The hardware DTE diagnostics were then probed.  The Oli'Net accepts
+`AT+MR=2` (verbose modulation result reporting) and `AT+DR=1` (verbose data
+compression reporting); the Supra returns `ERROR` for both.  Neither modem
+implements `AT+A8T?` or `AT+A8R?`, and the DTE result-code interface exposes no
+V.8bis CRe/CRd/HDLC event trace.  A later successful direct call still only
+reported `CONNECT 115200`.
+
+The required diagnostic was therefore obtained from the audio path.  The
+local `testbench/rtprelay.py` registered extension 4242 on the remote PBX,
+bridged the inbound 1901 call to 1903 with PCMA RTP forwarded untouched, and
+recorded both directions as `/tmp/v8bis-relay.legA.alaw` and
+`/tmp/v8bis-relay.legB.alaw`.  A-law was converted to 16-bit 8-kHz WAV and
+passed to `testbench/v8analyse`.
+
+The caller-side recording recognised `ANSam/` and decoded repeated CM frames;
+the answerer-side recording decoded JM.  The decoded capabilities were V.90,
+V.34, V.32/V.32bis, V.22/V.22bis, V.23 and V.21, with LAPM/V.42.  Most
+importantly, both analyses ended with:
+
+```
+Transcript complete ... 0 valid V.8bis HDLC frames
+```
+
+This is the first authoritative result for the real modems: the call performs
+ordinary V.8 and reaches a modem connection, but does not perform V.8bis.
+`AT+A8E` acceptance and `CONNECT 115200` must not be reported as V.8bis proof.
+
+The V.8bis test plan is consequently revised.  First, use a genuine V.8bis
+peer (hardware or a complete SpanDSP V.8bis state machine) rather than relying
+on a modem configuration bit.  Second, capture both RTP directions or an
+analogue two-channel recording for every attempt, retaining the raw payloads
+and timestamps.  Third, require decoded V.8bis evidence—CRe/CRd tones followed
+by V.21 HDLC messages such as CL/MS/ACK/CM/JM—before calling a negotiation
+successful.  Finally, keep the ordinary V.8 result, DTE result codes, and
+V.8bis frame count as separate outcomes; a normal V.8 `CONNECT` is only a
+transport/control result, not a V.8bis result.

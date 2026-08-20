@@ -378,7 +378,7 @@ dpskinit(void *objp, short mode, short high)
 	V34SetupModulator((struct v34_modulator *)((char *)obj + 0x1450),
 			  600, carrier, 0, 0, 1);
 
-	rx->f2a4 = high ? bpv22high : bpv22low;
+	rx->fir60_coeffs = high ? bpv22high : bpv22low;
 
 	fsk_state_init(obj);
 
@@ -389,7 +389,7 @@ dpskinit(void *objp, short mode, short high)
 	 * the data-mode one.
 	 */
 	rx->agc_step = 0x199a;
-	rx->agc_gain = rx->f262;
+	rx->agc_gain = rx->agc_reset_gain;
 
 	/*
 	 * Bits 9 and 11 of the receiver's flag word, set together.  Bit 9 is
@@ -413,7 +413,7 @@ dpskinit(void *objp, short mode, short high)
 		for (i = 0; i <= 0x2f; i++)
 			w[i] = 0;
 	}
-	rx->f19c = 0;
+	rx->rms_window_index = 0;
 	rx->f19e = 0;
 }
 
@@ -487,11 +487,11 @@ v34modeminit(void *objp)
 	*(short *)(m + 0xa254) = 9;
 	*(int *)(m + 0xa8a0) = 0;
 
-	rx->f25e = 0;
-	rx->f260 = 0;
+	rx->rate_change_reason = 0;
+	rx->rate_change_rate_index = 0;
 	obj->is_short = 0;
 	obj->f25c2 = 4;
-	obj->f354c = 0;
+	obj->echo_adapt_count = 0;
 	*(short *)(m + 0x3588) = 0;
 	*(short *)(m + 0x358a) = 0;
 	*(short *)(m + 0xaa78) = 0;
@@ -518,12 +518,12 @@ v34modeminit(void *objp)
 			"V34SetupDemodulator: baudrate %ld, carrier %ld\n",
 			(long)2400, (long)1800);
 
-	rx->f128 = 4;
-	rx->f1b0 = 0x3e80;
+	rx->timing_output_count = 4;
+	rx->timing_phase_wrap = 0x3e80;
 	rx->f1be = 0x3e80;
-	rx->f1ae = 0x3e80;
-	rx->f1ac = 0x1f40;
-	rx->f1ba = 0x10;
+	rx->timing_phase_increment = 0x3e80;
+	rx->timing_phase = 0x1f40;
+	rx->carrier_quadrature_offset = 0x10;
 	rx->carrier = hsine1800;
 
 	originate = (obj->f359c == 0x65);
@@ -533,12 +533,12 @@ v34modeminit(void *objp)
 
 	fsk_clear(obj);
 	V34SetupModulator(mod, 600, (short)(originate ? 1200 : 2400), 0, 0, 1);
-	rx->f2a4 = originate ? bpv22high : bpv22low;
+	rx->fir60_coeffs = originate ? bpv22high : bpv22low;
 	fsk_state_init(obj);
 
 	rx->agc_step = 0x199a;
 	rx->flags = (unsigned short)(rx->flags | 0xa00);
-	rx->agc_gain = rx->f262;
+	rx->agc_gain = rx->agc_reset_gain;
 
 	{
 		short *w = (short *)((char *)rx + 0x13c);
@@ -546,7 +546,7 @@ v34modeminit(void *objp)
 		for (i = 0; i <= 0x2f; i++)
 			w[i] = 0;
 	}
-	rx->f19c = 0;
+	rx->rms_window_index = 0;
 	rx->f19e = 0;
 
 	preinitdigital(obj);
@@ -768,55 +768,55 @@ setupreceiver(void *objp)
 			"V34SetupDemodulator: baudrate %ld, carrier %ld\n",
 			(long)baud, (long)carrier);
 
-	rx->f128 = 4;
+	rx->timing_output_count = 4;
 
 	switch (baud) {
 	case 2400:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x3e80;
-		rx->f1be = 0x3e80; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x3e80;
+		rx->f1be = 0x3e80; rx->timing_phase = 0x1f40;
 		break;
 	case 2743:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x36b0;
-		rx->f1be = 0x36b0; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x36b0;
+		rx->f1be = 0x36b0; rx->timing_phase = 0x1f40;
 		break;
 	case 2800:
-		rx->f1b0 = 0x3e82; rx->f1ae = 0x3594;
-		rx->f1be = 0x3594; rx->f1ac = 0x1f41;
+		rx->timing_phase_wrap = 0x3e82; rx->timing_phase_increment = 0x3594;
+		rx->f1be = 0x3594; rx->timing_phase = 0x1f41;
 		break;
 	case 3000:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x3200;
-		rx->f1be = 0x3200; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x3200;
+		rx->f1be = 0x3200; rx->timing_phase = 0x1f40;
 		break;
 	case 3200:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x2ee0;
-		rx->f1be = 0x2ee0; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x2ee0;
+		rx->f1be = 0x2ee0; rx->timing_phase = 0x1f40;
 		break;
 	case 3429:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x2bc0;
-		rx->f1be = 0x2bc0; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x2bc0;
+		rx->f1be = 0x2bc0; rx->timing_phase = 0x1f40;
 		break;
 	default:
 		break;
 	}
 
 	switch (carrier) {
-	case 1600: rx->carrier = hsine1600; rx->f1ba = 6;    break;
-	case 1680: rx->carrier = hsine1680; rx->f1ba = 0x28; break;
-	case 1800: rx->carrier = hsine1800; rx->f1ba = 0x10; break;
-	case 1829: rx->carrier = hsine1829; rx->f1ba = 0x15; break;
-	case 1867: rx->carrier = hsine1867; rx->f1ba = 0x24; break;
-	case 1920: rx->carrier = hsine1920; rx->f1ba = 5;    break;
-	case 1959: rx->carrier = hsine1959; rx->f1ba = 0x31; break;
-	case 2000: rx->carrier = hsine2000; rx->f1ba = 0x18; break;
+	case 1600: rx->carrier = hsine1600; rx->carrier_quadrature_offset = 6;    break;
+	case 1680: rx->carrier = hsine1680; rx->carrier_quadrature_offset = 0x28; break;
+	case 1800: rx->carrier = hsine1800; rx->carrier_quadrature_offset = 0x10; break;
+	case 1829: rx->carrier = hsine1829; rx->carrier_quadrature_offset = 0x15; break;
+	case 1867: rx->carrier = hsine1867; rx->carrier_quadrature_offset = 0x24; break;
+	case 1920: rx->carrier = hsine1920; rx->carrier_quadrature_offset = 5;    break;
+	case 1959: rx->carrier = hsine1959; rx->carrier_quadrature_offset = 0x31; break;
+	case 2000: rx->carrier = hsine2000; rx->carrier_quadrature_offset = 0x18; break;
 	default: break;
 	}
 
 	rx->agc_step = 0x2000;
-	rx->agc_gain = rx->f262;
+	rx->agc_gain = rx->agc_reset_gain;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34AGC, setup receiver gain = 0x%x\n",
-				     rx->f262);
+				     rx->agc_reset_gain);
 
 	/*
 	 * Clear bits 8..11 before arming the detector and set bit 9 after.
@@ -1472,7 +1472,7 @@ v34handshakinit(void *objp, int mode)
 		 * that leaves it alone. */
 
 		rx->flags = (unsigned short)(rx->flags | 0x1000);
-		rx->agc_gain = rx->f262;
+		rx->agc_gain = rx->agc_reset_gain;
 		hs_put(obj, 0x358a, 2);
 		hs_put(obj, 0x3588, 2);
 		break;
@@ -1520,7 +1520,7 @@ v34handshakinit(void *objp, int mode)
 		obj->f25cc = 0;
 		obj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);
 
-		rx->f124 = 0x21e;
+		rx->rx_symbol_count = 0x21e;
 		obj->f382 = (short)0x8990;
 		rx->flags = (unsigned short)((rx->flags & ~0x1d8) | 0x18);
 
@@ -1529,7 +1529,7 @@ v34handshakinit(void *objp, int mode)
 
 		preinitdigital(obj);
 
-		rx->f218 = 0x400;
+		rx->equalizer_error_gain = 0x400;
 		rx->flags = (unsigned short)(rx->flags & ~0x2000);
 
 		if (DSPLIB_DEBUG_ON())
@@ -1545,7 +1545,7 @@ v34handshakinit(void *objp, int mode)
 		 */
 		m[0xabe8] = 1;
 		v34modeminit(obj);
-		rx->agc_gain = rx->f262;
+		rx->agc_gain = rx->agc_reset_gain;
 
 		hs_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);
 		hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
@@ -2203,13 +2203,13 @@ mp_put_preemp(short *msg, short idx)
 static void
 probe_backoff(struct v34_receiver *rx, int n)
 {
-	short g = rx->f262;
+	short g = rx->agc_reset_gain;
 	int i;
 
 	for (i = 0; i < n; i++)
 		g = (short)(((int)g * 0x47cf + 0x2000) >> 14);
 
-	rx->f262 = g;
+	rx->agc_reset_gain = g;
 }
 
 /*
@@ -2405,18 +2405,18 @@ probeselect(void *objp)
 		dsplibs_debug_printf("V34PROBE, asking for a power reduction "
 				     "of %d\n", (int)req);
 		dsplibs_debug_printf("V34PROBE, agc gainestimate of L1 signal "
-				     "is %d\n", (int)rx->f262);
+				     "is %d\n", (int)rx->agc_reset_gain);
 	}
 
 	probe_backoff(rx, req);
 
-	if (rx->f262 > 0x1b58)
-		rx->f262 = 0x1b58;
+	if (rx->agc_reset_gain > 0x1b58)
+		rx->agc_reset_gain = 0x1b58;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34PROBE, agc gainestimate due to power "
 				     "reduction request is %d\n",
-				     (int)rx->f262);
+				     (int)rx->agc_reset_gain);
 	goto band_edges;
 
 not_asking:
@@ -3057,7 +3057,7 @@ emit:
  * nothing.
  *
  * THEN THE FAR CANCELLER.  With either PCM receiver running, or with the far
- * canceller not armed to begin with, `fa23c` is simply cleared.  Otherwise a
+ * canceller not armed to begin with, `far_echo_enabled` is simply cleared.  Otherwise a
  * delay of 30 or more normalises it to 1 and leaves it on, and a delay below
  * that turns it off AND pulls the DMA delay at +0x25c back by `delay + 15`,
  * capped at 30 -- the object's own words, "RTD (%d) lower than min (%d),
@@ -3092,9 +3092,9 @@ ApplyBulkDelay(void *objp, short delay)
 	sysdep_memset(m + 0x35b8, 0, (size_t)(d * 2));
 
 	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0
-	    && obj->fa23c != 0) {
+	    && obj->far_echo_enabled != 0) {
 		if ((short)d > 0x1d) {
-			obj->fa23c = 1;
+			obj->far_echo_enabled = 1;
 		} else {
 			int back;
 
@@ -3104,7 +3104,7 @@ ApplyBulkDelay(void *objp, short delay)
 				    "masking Far EC...\r\n", d, 0x1e);
 
 			back = (short)(d + 15);
-			obj->fa23c = 0;
+			obj->far_echo_enabled = 0;
 			if ((short)back > 0x1e)
 				back = 0x1e;
 
@@ -3116,12 +3116,12 @@ ApplyBulkDelay(void *objp, short delay)
 			obj->dmadelay = (short)((unsigned short)obj->dmadelay - back);
 		}
 	} else {
-		obj->fa23c = 0;
+		obj->far_echo_enabled = 0;
 	}
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34 bulk delay estimation %d (FAR=%d)\n",
-				     d, obj->fa23c);
+				     d, obj->far_echo_enabled);
 }
 
 /*
@@ -3600,7 +3600,7 @@ t3m_tail(struct t3m_frame *f, short tx)
 		 * back as one.  THE RELOAD IS THE NEXT INSTRUCTION, 0x62b5f
 		 * `movzwl 0x3596(%ebx),%ecx`, and 0x62b66 writes the 4.
 		 */
-		f->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);
+		f->rx->timing_report_interval_symbols = (short)(3 * (int)f->obj->baud_rate);
 		tx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);
 		*f->progress = 4;
 	}
@@ -6834,40 +6834,40 @@ t44_setup_rate(struct v34_receiver *rx, short baud)
 {
 	switch (baud) {
 	case 0x960:					/* 2400, 0x6f31b */
-		rx->f1b0 = 0x3e80;
-		rx->f1ae = 0x3e80;
+		rx->timing_phase_wrap = 0x3e80;
+		rx->timing_phase_increment = 0x3e80;
 		rx->f1be = 0x3e80;
-		rx->f1ac = 0x1f40;
+		rx->timing_phase = 0x1f40;
 		break;
 	case 0xab7:					/* 2743, 0x6f2e2 */
-		rx->f1b0 = 0x3e80;
-		rx->f1ae = 0x36b0;
+		rx->timing_phase_wrap = 0x3e80;
+		rx->timing_phase_increment = 0x36b0;
 		rx->f1be = 0x36b0;
-		rx->f1ac = 0x1f40;
+		rx->timing_phase = 0x1f40;
 		break;
 	case 0xaf0:					/* 2800, 0x6f3a7 */
-		rx->f1b0 = 0x3e82;
-		rx->f1ae = 0x3594;
+		rx->timing_phase_wrap = 0x3e82;
+		rx->timing_phase_increment = 0x3594;
 		rx->f1be = 0x3594;
-		rx->f1ac = 0x1f41;
+		rx->timing_phase = 0x1f41;
 		break;
 	case 0xbb8:					/* 3000, 0x6f36e */
-		rx->f1b0 = 0x3e80;
-		rx->f1ae = 0x3200;
+		rx->timing_phase_wrap = 0x3e80;
+		rx->timing_phase_increment = 0x3200;
 		rx->f1be = 0x3200;
-		rx->f1ac = 0x1f40;
+		rx->timing_phase = 0x1f40;
 		break;
 	case 0xc80:					/* 3200, 0x6f412 */
-		rx->f1b0 = 0x3e80;
-		rx->f1ae = 0x2ee0;
+		rx->timing_phase_wrap = 0x3e80;
+		rx->timing_phase_increment = 0x2ee0;
 		rx->f1be = 0x2ee0;
-		rx->f1ac = 0x1f40;
+		rx->timing_phase = 0x1f40;
 		break;
 	case 0xd65:					/* 3429, 0x6f3ec */
-		rx->f1b0 = 0x3e80;
-		rx->f1ae = 0x2bc0;
+		rx->timing_phase_wrap = 0x3e80;
+		rx->timing_phase_increment = 0x2bc0;
 		rx->f1be = 0x2bc0;
-		rx->f1ac = 0x1f40;
+		rx->timing_phase = 0x1f40;
 		break;
 	default:
 		break;
@@ -6892,35 +6892,35 @@ t44_setup_carrier(struct v34_receiver *rx, short carrier)
 	switch (carrier) {
 	case 0x640:					/* 1600, 0x6f022 */
 		rx->carrier = (short *)(unsigned long)hsine1600;
-		rx->f1ba = 6;
+		rx->carrier_quadrature_offset = 6;
 		break;
 	case 0x690:					/* 1680, 0x6f202 */
 		rx->carrier = (short *)(unsigned long)hsine1680;
-		rx->f1ba = 0x28;
+		rx->carrier_quadrature_offset = 0x28;
 		break;
 	case 0x708:					/* 1800, 0x6f1e2 */
 		rx->carrier = (short *)(unsigned long)hsine1800;
-		rx->f1ba = 0x10;
+		rx->carrier_quadrature_offset = 0x10;
 		break;
 	case 0x725:					/* 1829, 0x6f25c */
 		rx->carrier = (short *)(unsigned long)hsine1829;
-		rx->f1ba = 0x15;
+		rx->carrier_quadrature_offset = 0x15;
 		break;
 	case 0x74b:					/* 1867, 0x6f23c */
 		rx->carrier = (short *)(unsigned long)hsine1867;
-		rx->f1ba = 0x24;
+		rx->carrier_quadrature_offset = 0x24;
 		break;
 	case 0x780:					/* 1920, 0x6f2b0 */
 		rx->carrier = (short *)(unsigned long)hsine1920;
-		rx->f1ba = 5;
+		rx->carrier_quadrature_offset = 5;
 		break;
 	case 0x7a7:					/* 1959, 0x6f2c9 */
 		rx->carrier = (short *)(unsigned long)hsine1959;
-		rx->f1ba = 0x31;
+		rx->carrier_quadrature_offset = 0x31;
 		break;
 	case 0x7d0:					/* 2000, 0x6f290 */
 		rx->carrier = (short *)(unsigned long)hsine2000;
-		rx->f1ba = 0x18;
+		rx->carrier_quadrature_offset = 0x18;
 		break;
 	default:
 		break;
@@ -6979,12 +6979,12 @@ t44_accept_len26(struct v34_object *obj, short *rec)
 		dsplibs_debug_printf("V34SetupDemodulator: baudrate %ld, "
 				     "carrier %ld\n", (long)baud, (long)carrier);
 
-	rx->f128 = 4;
+	rx->timing_output_count = 4;
 	t44_setup_rate(rx, baud);
 	t44_setup_carrier(rx, carrier);
 
 	/* 0x6f03d.  The gain is read BEFORE the step is stored beside it. */
-	rx->agc_gain = rx->f262;
+	rx->agc_gain = rx->agc_reset_gain;
 	rx->agc_step = 0x2000;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34AGC, setup receiver gain = 0x%x\n",
@@ -7961,7 +7961,7 @@ t4_mp_e_sequence(struct v34_object *obj, unsigned acc, unsigned short f)
 
 	/* 0x71189 */
 	rx->flags = (unsigned short)(rx->flags | 0x98);
-	rx->f266 = 0;
+	rx->demap_subframe_index = 0;
 	T4_I16(obj, T3C_COUNT) = 0;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34MP - E sequence detected,"
@@ -7998,7 +7998,7 @@ t4_mp_e_sequence(struct v34_object *obj, unsigned acc, unsigned short f)
 	 * 0x68c78, onto the flag reload behind them.  E leaves the index and
 	 * the run where they are; only the framing paths clear them.
 	 */
-	rx->f218 = 0x4000;					/* 0x7123d */
+	rx->equalizer_error_gain = 0x4000;					/* 0x7123d */
 	return rx->flags;
 }
 
@@ -8313,7 +8313,7 @@ t4_md_over(struct v34_object *obj, unsigned short flags)
 	if (md == 0)						/* 0x6aad3 */
 		return;
 	/* 0x6d293 again, and 0x6a0b2's `cmp %ax,%cx`/`jle` is signed. */
-	if ((short)rx->f124 <= (short)md)			/* 0x6d293 */
+	if ((short)rx->rx_symbol_count <= (short)md)			/* 0x6d293 */
 		return;
 
 	/*
@@ -8326,8 +8326,8 @@ t4_md_over(struct v34_object *obj, unsigned short flags)
 	if (DSPLIB_DEBUG_ON())					/* 0x71667 */
 		dsplibs_debug_printf("RX MDLENGTH over, it was %d bauds,"
 				     "rxflgs = 0x%x,pllcnt = %d,rxgain=0x%x\n",
-				     (int)rx->f124, (unsigned)flags,
-				     (int)rx->f1c0, (int)rx->agc_gain);
+				     (int)rx->rx_symbol_count, (unsigned)flags,
+				     (int)rx->timing_state, (int)rx->agc_gain);
 
 	/*
 	 * 0x6a0c8.  The call there is `rxinit`; the rest of `setupreceiver`
@@ -8418,7 +8418,7 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 		 * a counter that has gone negative takes the same exit as a
 		 * small one.
 		 */
-		} else if ((short)rx->f124 > 0xbb8) {		/* 0x679b5 */
+		} else if ((short)rx->rx_symbol_count > 0xbb8) {		/* 0x679b5 */
 			flags = t4_trn2(obj, flags);
 		}
 	}
@@ -8445,17 +8445,17 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 		v34setuptxmit(obj);				/* 0x68e50 */
 
 		/* 0x68f86.  0x6666 is 0.8 in Q15, 0x4000 the rounding. */
-		rx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);
+		rx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Agc gain estimate at the end of "
-					     "phase 3 is %d\n", (int)rx->f262);
+					     "phase 3 is %d\n", (int)rx->agc_reset_gain);
 
 		/*
 		 * 0x68fb1 zeroes +0x1c0 and 0x68fbd raises 0x10 in the same
 		 * flag word; 0x68fc7 then copies the stored value back into
 		 * %esi, which is the `flags` the rest of the arm works from.
 		 */
-		rx->f1c0 = 0;					/* 0x68fb1 */
+		rx->timing_state = 0;					/* 0x68fb1 */
 		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRN_WATCH);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34TIMING, detected  J, Phase =  "
@@ -8468,9 +8468,9 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 	}
 
 	/* 0x67a2f.  The baud counter, capped rather than wrapped. */
-	n = rx->f124;
+	n = rx->rx_symbol_count;
 	if (n <= 0x61a7)
-		rx->f124 = (short)(n + 1);
+		rx->rx_symbol_count = (short)(n + 1);
 
 	/*
 	 * 0x67a4b.  `test $0x4,%dh` -- bit 0x400, tested in the high byte of
@@ -8558,7 +8558,7 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 	 * `movzwl`/`inc`/`mov` on +0x3be: sixteen bits, unsigned and with no
 	 * cap, so this counter wraps where the one at 0x67a3a saturates.
 	 */
-	rx->f124 = 0;
+	rx->rx_symbol_count = 0;
 	T4_U16(obj, T4_PLLCNT)++;				/* 0x67b37 */
 
 	if (T4_U16(obj, T4_MDLEN) != 0) {
@@ -8589,7 +8589,7 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 
 	/* 0x67b56.  Re-read, for the reason above. */
 	flags = rx->flags;
-	rx->f1c0 = 1;
+	rx->timing_state = 1;
 	flags = (unsigned short)(flags & ~(V34_RX_FLAG_TRAINED
 					   | V34_RX_FLAG_DET_PENDING));
 	rx->flags = flags;
@@ -8658,7 +8658,7 @@ t4_rx_receive(struct v34_object *obj)
 	flags = rx->flags;				/* 0x653f7 */
 
 	if ((flags & V34_RX_FLAG_RETRAIN) != 0
-	    || ((int)rx->f124 > 7 * (int)obj->baud_rate
+	    || ((int)rx->rx_symbol_count > 7 * (int)obj->baud_rate
 		&& (flags & 0x80) == 0)) {
 		/*
 		 * 0x6544e.  The second argument is a literal 1, pushed at
@@ -9046,7 +9046,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * into %ecx and 0x69a0b jumps to the once-per-block dispatch
 		 * at 0x62af1.
 		 */
-		rx->f124 = (short)(rx->f124 + 1);	/* 0x699fd */
+		rx->rx_symbol_count = (short)(rx->rx_symbol_count + 1);	/* 0x699fd */
 	} else if (count == 0x40) {
 		/*
 		 * 0x6a4f4.  The gain the AGC settled on becomes the starting
@@ -9083,7 +9083,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 			 * the call -- three loads, and 0x6aec1's serves
 			 * both tests.
 			 */
-			rx->f262 = 0x6000;		/* 0x6aed9 */
+			rx->agc_reset_gain = 0x6000;		/* 0x6aed9 */
 		} else {
 			/*
 			 * 0x6a525.  `add %eax,%eax` on the same register
@@ -9091,7 +9091,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 			 * receiver +0x262 -- so the doubled gain is
 			 * truncated to sixteen bits, not saturated.
 			 */
-			rx->f262 = (short)(rx->agc_gain * 2);	/* 0x6a525 */
+			rx->agc_reset_gain = (short)(rx->agc_gain * 2);	/* 0x6a525 */
 		}
 
 		/*
@@ -10101,21 +10101,21 @@ V34HS_OFF(fsk,     struct v34_object,   fsk,        0xaad0);
 V34HS_OFF(interp,  struct v34_object,   fsk_interp, 0xaae6);
 V34HS_OFF(lpf,     struct v34_object,   fsk_lpf,    0xab00);
 
-V34HS_OFF(f128,    struct v34_receiver, f128,       0x128);
+V34HS_OFF(timing_output_count,    struct v34_receiver, timing_output_count,       0x128);
 V34HS_OFF(flags,   struct v34_receiver, flags,      0x122);
 V34HS_OFF(gain,    struct v34_receiver, agc_gain,   0x136);
 V34HS_OFF(step,    struct v34_receiver, agc_step,   0x13a);
 V34HS_OFF(rms,     struct v34_receiver, rms_buf,    0x13c);
-V34HS_OFF(f19c,    struct v34_receiver, f19c,       0x19c);
+V34HS_OFF(rms_window_index,    struct v34_receiver, rms_window_index,       0x19c);
 V34HS_OFF(f19e,    struct v34_receiver, f19e,       0x19e);
-V34HS_OFF(f1ac,    struct v34_receiver, f1ac,       0x1ac);
-V34HS_OFF(f1ae,    struct v34_receiver, f1ae,       0x1ae);
-V34HS_OFF(f1b0,    struct v34_receiver, f1b0,       0x1b0);
+V34HS_OFF(timing_phase,    struct v34_receiver, timing_phase,       0x1ac);
+V34HS_OFF(timing_phase_increment,    struct v34_receiver, timing_phase_increment,       0x1ae);
+V34HS_OFF(timing_phase_wrap,    struct v34_receiver, timing_phase_wrap,       0x1b0);
 V34HS_OFF(carrier, struct v34_receiver, carrier,    0x1b4);
-V34HS_OFF(f1ba,    struct v34_receiver, f1ba,       0x1ba);
+V34HS_OFF(carrier_quadrature_offset,    struct v34_receiver, carrier_quadrature_offset,       0x1ba);
 V34HS_OFF(f1be,    struct v34_receiver, f1be,       0x1be);
-V34HS_OFF(f262,    struct v34_receiver, f262,       0x262);
-V34HS_OFF(f2a4,    struct v34_receiver, f2a4,       0x2a4);
+V34HS_OFF(agc_reset_gain,    struct v34_receiver, agc_reset_gain,       0x262);
+V34HS_OFF(fir60_coeffs,    struct v34_receiver, fir60_coeffs,       0x2a4);
 
 /*
  * The clear runs to +0xab00 + 100*2 - (0xab00 - 0xaae6) = 0xabae, which is

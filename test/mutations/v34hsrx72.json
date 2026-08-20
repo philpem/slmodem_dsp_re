@@ -616,7 +616,7 @@
  {
   "label": "the upper window bumps the receiver's counter too",
   "find": "\t\tt72_update_both(obj, rx, n);\n\t} else if (count == 0x180) {",
-  "replace": "\t\tt72_update_both(obj, rx, n);\n\t\trx->f124 = (short)(rx->f124 + 1);\n\t} else if (count == 0x180) {",
+  "replace": "\t\tt72_update_both(obj, rx, n);\n\t\trx->rx_symbol_count = (short)(rx->rx_symbol_count + 1);\n\t} else if (count == 0x180) {",
   "fn": "t72_ladder"
  },
  {
@@ -665,14 +665,14 @@
  },
  {
   "label": "the lower window does not bump the receiver's counter",
-  "find": "\t\trx->f124 = (short)(rx->f124 + 1);\t/* 0x699fd */",
+  "find": "\t\trx->rx_symbol_count = (short)(rx->rx_symbol_count + 1);\t/* 0x699fd */",
   "replace": "\t\t/* 0x699fd */;",
   "fn": "t72_ladder"
  },
  {
   "label": "the receiver's counter is bumped by two",
-  "find": "\t\trx->f124 = (short)(rx->f124 + 1);\t/* 0x699fd */",
-  "replace": "\t\trx->f124 = (short)(rx->f124 + 2);\t/* 0x699fd */",
+  "find": "\t\trx->rx_symbol_count = (short)(rx->rx_symbol_count + 1);\t/* 0x699fd */",
+  "replace": "\t\trx->rx_symbol_count = (short)(rx->rx_symbol_count + 2);\t/* 0x699fd */",
   "fn": "t72_ladder"
  },
  {
@@ -713,25 +713,25 @@
  },
  {
   "label": "the substituted gain is 0x6001",
-  "find": "\t\t\trx->f262 = 0x6000;\t\t/* 0x6aed9 */",
-  "replace": "\t\t\trx->f262 = 0x6001;\t\t/* 0x6aed9 */",
+  "find": "\t\t\trx->agc_reset_gain = 0x6000;\t\t/* 0x6aed9 */",
+  "replace": "\t\t\trx->agc_reset_gain = 0x6001;\t\t/* 0x6aed9 */",
   "fn": "t72_ladder"
  },
  {
   "label": "the error path writes nothing",
-  "find": "\t\t\trx->f262 = 0x6000;\t\t/* 0x6aed9 */",
+  "find": "\t\t\trx->agc_reset_gain = 0x6000;\t\t/* 0x6aed9 */",
   "replace": "\t\t\t/* 0x6aed9 */;",
   "fn": "t72_ladder"
  },
  {
   "label": "the gain is not doubled",
-  "find": "\t\t\trx->f262 = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
-  "replace": "\t\t\trx->f262 = rx->agc_gain;\t\t/* 0x6a525 */",
+  "find": "\t\t\trx->agc_reset_gain = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
+  "replace": "\t\t\trx->agc_reset_gain = rx->agc_gain;\t\t/* 0x6a525 */",
   "fn": "t72_ladder"
  },
  {
   "label": "the doubled gain goes to +0x264, not +0x262",
-  "find": "\t\t\trx->f262 = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
+  "find": "\t\t\trx->agc_reset_gain = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
   "replace": "\t\t\t*(short *)((char *)rx + 0x264) =\n\t\t\t    (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
   "fn": "t72_ladder"
  },
@@ -744,13 +744,13 @@
  {
   "label": "the gain line prints the substituted value",
   "find": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->agc_gain);",
-  "replace": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->f262);",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->agc_reset_gain);",
   "fn": "t72_ladder"
  },
  {
   "label": "the gain line is inside the else and not after it",
   "find": "\t\tif (DSPLIB_DEBUG_ON())\t\t\t/* 0x6a531 */",
-  "replace": "\t\tif (DSPLIB_DEBUG_ON() && rx->f262 != 0x6000)\t/* 0x6a531 */",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON() && rx->agc_reset_gain != 0x6000)\t/* 0x6a531 */",
   "fn": "t72_ladder"
  },
  {

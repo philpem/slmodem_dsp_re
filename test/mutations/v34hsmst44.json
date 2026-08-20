@@ -986,13 +986,13 @@
  },
  {
   "label": "+0x128 is set to five",
-  "find": "\trx->f128 = 4;\n\tt44_setup_rate(rx, baud);",
-  "replace": "\trx->f128 = 5;\n\tt44_setup_rate(rx, baud);",
+  "find": "\trx->timing_output_count = 4;\n\tt44_setup_rate(rx, baud);",
+  "replace": "\trx->timing_output_count = 5;\n\tt44_setup_rate(rx, baud);",
   "fn": "t44_accept_len26"
  },
  {
   "label": "+0x128 is not set",
-  "find": "\trx->f128 = 4;\n\tt44_setup_rate(rx, baud);",
+  "find": "\trx->timing_output_count = 4;\n\tt44_setup_rate(rx, baud);",
   "replace": "\tt44_setup_rate(rx, baud);",
   "fn": "t44_accept_len26"
  },
@@ -1010,14 +1010,14 @@
  },
  {
   "label": "the AGC gain is taken from the step it stores",
-  "find": "\trx->agc_gain = rx->f262;\n\trx->agc_step = 0x2000;",
+  "find": "\trx->agc_gain = rx->agc_reset_gain;\n\trx->agc_step = 0x2000;",
   "replace": "\trx->agc_step = 0x2000;\n\trx->agc_gain = rx->agc_step;",
   "fn": "t44_accept_len26"
  },
  {
   "label": "the AGC step",
-  "find": "\trx->agc_gain = rx->f262;\n\trx->agc_step = 0x2000;",
-  "replace": "\trx->agc_gain = rx->f262;\n\trx->agc_step = 0x2001;",
+  "find": "\trx->agc_gain = rx->agc_reset_gain;\n\trx->agc_step = 0x2000;",
+  "replace": "\trx->agc_gain = rx->agc_reset_gain;\n\trx->agc_step = 0x2001;",
   "fn": "t44_accept_len26"
  },
  {
@@ -1090,8 +1090,8 @@
  },
  {
   "label": "2800 baud takes 3000's first constant",
-  "find": "\tcase 0xaf0:\t\t\t\t\t/* 2800, 0x6f3a7 */\n\t\trx->f1b0 = 0x3e82;",
-  "replace": "\tcase 0xaf0:\t\t\t\t\t/* 2800, 0x6f3a7 */\n\t\trx->f1b0 = 0x3e80;",
+  "find": "\tcase 0xaf0:\t\t\t\t\t/* 2800, 0x6f3a7 */\n\t\trx->timing_phase_wrap = 0x3e82;",
+  "replace": "\tcase 0xaf0:\t\t\t\t\t/* 2800, 0x6f3a7 */\n\t\trx->timing_phase_wrap = 0x3e80;",
   "fn": "t44_setup_rate"
  },
  {
@@ -1102,8 +1102,8 @@
  },
  {
   "label": "3429 baud takes 3200's second constant",
-  "find": "\t\trx->f1ae = 0x2bc0;\n\t\trx->f1be = 0x2bc0;",
-  "replace": "\t\trx->f1ae = 0x2ee0;\n\t\trx->f1be = 0x2bc0;",
+  "find": "\t\trx->timing_phase_increment = 0x2bc0;\n\t\trx->f1be = 0x2bc0;",
+  "replace": "\t\trx->timing_phase_increment = 0x2ee0;\n\t\trx->f1be = 0x2bc0;",
   "fn": "t44_setup_rate"
  },
  {
@@ -1114,14 +1114,14 @@
  },
  {
   "label": "2400 baud sets +0x1ac to 2800's value",
-  "find": "\tcase 0x960:\t\t\t\t\t/* 2400, 0x6f31b */\n\t\trx->f1b0 = 0x3e80;\n\t\trx->f1ae = 0x3e80;\n\t\trx->f1be = 0x3e80;\n\t\trx->f1ac = 0x1f40;",
-  "replace": "\tcase 0x960:\t\t\t\t\t/* 2400, 0x6f31b */\n\t\trx->f1b0 = 0x3e80;\n\t\trx->f1ae = 0x3e80;\n\t\trx->f1be = 0x3e80;\n\t\trx->f1ac = 0x1f41;",
+  "find": "\tcase 0x960:\t\t\t\t\t/* 2400, 0x6f31b */\n\t\trx->timing_phase_wrap = 0x3e80;\n\t\trx->timing_phase_increment = 0x3e80;\n\t\trx->f1be = 0x3e80;\n\t\trx->timing_phase = 0x1f40;",
+  "replace": "\tcase 0x960:\t\t\t\t\t/* 2400, 0x6f31b */\n\t\trx->timing_phase_wrap = 0x3e80;\n\t\trx->timing_phase_increment = 0x3e80;\n\t\trx->f1be = 0x3e80;\n\t\trx->timing_phase = 0x1f41;",
   "fn": "t44_setup_rate"
  },
  {
   "label": "an unknown baud rate is given a rate constant",
   "find": "\tdefault:\n\t\tbreak;\n\t}\n}\n\n/*\n * And the half-sine window for the receive carrier",
-  "replace": "\tdefault:\n\t\trx->f1b0 = 0x3e80;\n\t\tbreak;\n\t}\n}\n\n/*\n * And the half-sine window for the receive carrier"
+  "replace": "\tdefault:\n\t\trx->timing_phase_wrap = 0x3e80;\n\t\tbreak;\n\t}\n}\n\n/*\n * And the half-sine window for the receive carrier"
  },
  {
   "label": "1800 and 1829 swap their half-sine windows",
@@ -1131,14 +1131,14 @@
  },
  {
   "label": "1600's half-sine count is one too many",
-  "find": "\t\trx->carrier = (short *)(unsigned long)hsine1600;\n\t\trx->f1ba = 6;",
-  "replace": "\t\trx->carrier = (short *)(unsigned long)hsine1600;\n\t\trx->f1ba = 7;",
+  "find": "\t\trx->carrier = (short *)(unsigned long)hsine1600;\n\t\trx->carrier_quadrature_offset = 6;",
+  "replace": "\t\trx->carrier = (short *)(unsigned long)hsine1600;\n\t\trx->carrier_quadrature_offset = 7;",
   "fn": "t44_setup_carrier"
  },
  {
   "label": "1959's half-sine count is the whole table",
-  "find": "\t\trx->f1ba = 0x31;",
-  "replace": "\t\trx->f1ba = 0x62;",
+  "find": "\t\trx->carrier_quadrature_offset = 0x31;",
+  "replace": "\t\trx->carrier_quadrature_offset = 0x62;",
   "fn": "t44_setup_carrier"
  },
  {
@@ -1149,14 +1149,14 @@
  },
  {
   "label": "2000's window is not installed",
-  "find": "\t\trx->carrier = (short *)(unsigned long)hsine2000;\n\t\trx->f1ba = 0x18;",
-  "replace": "\t\trx->f1ba = 0x18;",
+  "find": "\t\trx->carrier = (short *)(unsigned long)hsine2000;\n\t\trx->carrier_quadrature_offset = 0x18;",
+  "replace": "\t\trx->carrier_quadrature_offset = 0x18;",
   "fn": "t44_setup_carrier"
  },
  {
   "label": "an unknown carrier is given a half-sine count",
   "find": "\tdefault:\n\t\tbreak;\n\t}\n}\n\n/*\n * A MESSAGE OF 0x26 BITS",
-  "replace": "\tdefault:\n\t\trx->f1ba = 6;\n\t\tbreak;\n\t}\n}\n\n/*\n * A MESSAGE OF 0x26 BITS"
+  "replace": "\tdefault:\n\t\trx->carrier_quadrature_offset = 6;\n\t\tbreak;\n\t}\n}\n\n/*\n * A MESSAGE OF 0x26 BITS"
  },
  {
   "label": "the INFO1c arm does not zero the first trace counter",

@@ -191,7 +191,7 @@ begin(short count)
 	v34hs_poke_short(RX72_RX_F124, 0x1234);
 	/*
 	 * THREE, and the value is not free: `rxtiming` loops `for (i = 0;
-	 * i < rx->f128; i++)` and writes `rx->timing_out[i]`, which is seven
+	 * i < rx->timing_output_count; i++)` and writes `rx->timing_out[i]`, which is seven
 	 * shorts -- so a large seed here runs thousands of iterations and
 	 * scribbles over half the object, on BOTH sides, which compares and
 	 * measures nothing.  Three is inside the array and is not the 4 the
@@ -323,7 +323,7 @@ banks(int live)
  * Make the correlation a no-op, which is the only way to zero a bank.
  *
  * `rxtiming` sets `rx_samples` to the start of the burst and then advances
- * it once per output, so `rx->f128 == 0` leaves the two equal and the sample
+ * it once per output, so `rx->timing_output_count == 0` leaves the two equal and the sample
  * count every `dftupdate` here is given is ZERO.  With the accumulators
  * seeded to zero as well, `dftenergy` produces nothing and the denominator
  * guard is reached.  Zeroing the burst itself does NOT work: the receiver's

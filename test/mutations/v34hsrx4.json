@@ -31,32 +31,32 @@
  },
  {
   "label": "the entry's baud compare is `>=` rather than `>`",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
-  "replace": "\t    || ((int)rx->f124 >= 7 * (int)obj->baud_rate",
+  "find": "\t    || ((int)rx->rx_symbol_count > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->rx_symbol_count >= 7 * (int)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's multiplier is six, not seven",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
-  "replace": "\t    || ((int)rx->f124 > 6 * (int)obj->baud_rate",
+  "find": "\t    || ((int)rx->rx_symbol_count > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->rx_symbol_count > 6 * (int)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's product is TRUNCATED to a short",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
-  "replace": "\t    || ((int)rx->f124 > (short)(7 * (int)obj->baud_rate)",
+  "find": "\t    || ((int)rx->rx_symbol_count > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->rx_symbol_count > (short)(7 * (int)obj->baud_rate)",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's baud rate is read UNSIGNED",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
-  "replace": "\t    || ((int)rx->f124 > 7 * (int)(unsigned short)obj->baud_rate",
+  "find": "\t    || ((int)rx->rx_symbol_count > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)rx->rx_symbol_count > 7 * (int)(unsigned short)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
   "label": "the entry's counter is read UNSIGNED",
-  "find": "\t    || ((int)rx->f124 > 7 * (int)obj->baud_rate",
-  "replace": "\t    || ((int)(unsigned short)rx->f124 > 7 * (int)obj->baud_rate",
+  "find": "\t    || ((int)rx->rx_symbol_count > 7 * (int)obj->baud_rate",
+  "replace": "\t    || ((int)(unsigned short)rx->rx_symbol_count > 7 * (int)obj->baud_rate",
   "fn": "t4_rx_receive"
  },
  {
@@ -109,20 +109,20 @@
  },
  {
   "label": "the TRN2 branch is taken on 0xbb8 as well",
-  "find": "\t\t} else if ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
-  "replace": "\t\t} else if ((short)rx->f124 >= 0xbb8) {\t\t/* 0x679b5 */",
+  "find": "\t\t} else if ((short)rx->rx_symbol_count > 0xbb8) {\t\t/* 0x679b5 */",
+  "replace": "\t\t} else if ((short)rx->rx_symbol_count >= 0xbb8) {\t\t/* 0x679b5 */",
   "fn": "t4_receive_body"
  },
  {
   "label": "the TRN2 branch's threshold is 0xbb9",
-  "find": "\t\t} else if ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
-  "replace": "\t\t} else if ((short)rx->f124 > 0xbb9) {\t\t/* 0x679b5 */",
+  "find": "\t\t} else if ((short)rx->rx_symbol_count > 0xbb8) {\t\t/* 0x679b5 */",
+  "replace": "\t\t} else if ((short)rx->rx_symbol_count > 0xbb9) {\t\t/* 0x679b5 */",
   "fn": "t4_receive_body"
  },
  {
   "label": "the TRN2 branch runs beside the packer, not instead of it",
-  "find": "\t\t} else if ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
-  "replace": "\t\t}\n\t\tif ((short)rx->f124 > 0xbb8) {\t\t/* 0x679b5 */",
+  "find": "\t\t} else if ((short)rx->rx_symbol_count > 0xbb8) {\t\t/* 0x679b5 */",
+  "replace": "\t\t}\n\t\tif ((short)rx->rx_symbol_count > 0xbb8) {\t\t/* 0x679b5 */",
   "fn": "t4_receive_body"
  },
  {
@@ -145,31 +145,31 @@
  },
  {
   "label": "the gain estimate rounds down rather than to nearest",
-  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
-  "replace": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666) >> 15);",
+  "find": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6666) >> 15);",
   "fn": "t4_receive_body"
  },
  {
   "label": "the gain estimate's ratio is 0x6667",
-  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
-  "replace": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6667 + 0x4000) >> 15);",
+  "find": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6667 + 0x4000) >> 15);",
   "fn": "t4_receive_body"
  },
  {
   "label": "the gain estimate shifts fourteen, not fifteen",
-  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
-  "replace": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 14);",
+  "find": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 14);",
   "fn": "t4_receive_body"
  },
  {
   "label": "the gain estimate reads the step rather than the gain",
-  "find": "\t\trx->f262 = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
-  "replace": "\t\trx->f262 = (short)(((int)rx->agc_step * 0x6666 + 0x4000) >> 15);",
+  "find": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_gain * 0x6666 + 0x4000) >> 15);",
+  "replace": "\t\trx->agc_reset_gain = (short)(((int)rx->agc_step * 0x6666 + 0x4000) >> 15);",
   "fn": "t4_receive_body"
  },
  {
   "label": "the J path does not clear +0x1c0",
-  "find": "\t\trx->f1c0 = 0;\t\t\t\t\t/* 0x68fb1 */",
+  "find": "\t\trx->timing_state = 0;\t\t\t\t\t/* 0x68fb1 */",
   "replace": "\t\t;\t\t\t\t\t\t/* 0x68fb1 */",
   "fn": "t4_receive_body"
  },
@@ -199,14 +199,14 @@
  },
  {
   "label": "the baud counter is capped UNSIGNED",
-  "find": "\tn = rx->f124;\n\tif (n <= 0x61a7)",
-  "replace": "\tn = rx->f124;\n\tif ((unsigned short)n <= 0x61a7)",
+  "find": "\tn = rx->rx_symbol_count;\n\tif (n <= 0x61a7)",
+  "replace": "\tn = rx->rx_symbol_count;\n\tif ((unsigned short)n <= 0x61a7)",
   "fn": "t4_receive_body"
  },
  {
   "label": "the baud counter is never stepped",
-  "find": "\tif (n <= 0x61a7)\n\t\trx->f124 = (short)(n + 1);",
-  "replace": "\tif (0)\n\t\trx->f124 = (short)(n + 1);",
+  "find": "\tif (n <= 0x61a7)\n\t\trx->rx_symbol_count = (short)(n + 1);",
+  "replace": "\tif (0)\n\t\trx->rx_symbol_count = (short)(n + 1);",
   "fn": "t4_receive_body"
  },
  {
@@ -260,7 +260,7 @@
  {
   "label": "the S trace prints the gain it has not read yet",
   "find": "\t\tdsplibs_debug_printf(\"S detected,rxflgs= 0x%x,rxgain=0x%x\\n\",\n\t\t\t\t     (unsigned)rx->flags, (int)rx->agc_gain);",
-  "replace": "\t\tdsplibs_debug_printf(\"S detected,rxflgs= 0x%x,rxgain=0x%x\\n\",\n\t\t\t\t     (unsigned)rx->flags, (int)rx->f262);",
+  "replace": "\t\tdsplibs_debug_printf(\"S detected,rxflgs= 0x%x,rxgain=0x%x\\n\",\n\t\t\t\t     (unsigned)rx->flags, (int)rx->agc_reset_gain);",
   "fn": "t4_receive_body"
  },
  {
@@ -289,7 +289,7 @@
  },
  {
   "label": "S detected does not clear the baud counter",
-  "find": "\trx->f124 = 0;\n\tT4_U16(obj, T4_PLLCNT)++;\t\t\t\t/* 0x67b37 */",
+  "find": "\trx->rx_symbol_count = 0;\n\tT4_U16(obj, T4_PLLCNT)++;\t\t\t\t/* 0x67b37 */",
   "replace": "\tT4_U16(obj, T4_PLLCNT)++;\t\t\t\t/* 0x67b37 */",
   "fn": "t4_receive_body"
  },
@@ -345,16 +345,16 @@
  },
  {
   "label": "the flags are NOT re-read after the detector",
-  "find": "\tflags = rx->flags;\n\trx->f1c0 = 1;",
-  "replace": "\trx->f1c0 = 1;",
+  "find": "\tflags = rx->flags;\n\trx->timing_state = 1;",
+  "replace": "\trx->timing_state = 1;",
   "fn": "t4_receive_body",
   "equivalent": true,
   "why": "EQUIVALENT BECAUSE THE NEXT STATEMENT MASKS OFF THE ONLY BIT THAT MOVED.  `tone_detect` touches exactly one field of the receiver -- 0x73869 loads +0x122, 0x73870 ANDs it with 0xfffffdff and 0x73875 stores it back, and those are the ONLY reference to +0x122 in the function, whose extent is `nm --print-size`'s rather than a guess: 0x1a4 bytes at 0x736e0, so 0x736e0..0x73884.  So the cached value and the reloaded one differ in bit 9 and nothing else, and 0x67b69's `and $0xfffffcff` clears bits 8 and 9 of whichever it is used.  The object reloads at 0x67b56 and this reconstruction does too, because that is what is there; it cannot be shown to matter."
  },
  {
   "label": "the commit writes 0 to +0x1c0 rather than 1",
-  "find": "\tflags = rx->flags;\n\trx->f1c0 = 1;",
-  "replace": "\tflags = rx->flags;\n\trx->f1c0 = 0;",
+  "find": "\tflags = rx->flags;\n\trx->timing_state = 1;",
+  "replace": "\tflags = rx->flags;\n\trx->timing_state = 0;",
   "fn": "t4_receive_body"
  },
  {
@@ -443,34 +443,34 @@
  },
  {
   "label": "the MD-over comparison is `<` rather than `<=`",
-  "find": "\tif ((short)rx->f124 <= (short)md)\t\t\t/* 0x6d293 */",
-  "replace": "\tif ((short)rx->f124 < (short)md)\t\t\t\t/* 0x6d293 */",
+  "find": "\tif ((short)rx->rx_symbol_count <= (short)md)\t\t\t/* 0x6d293 */",
+  "replace": "\tif ((short)rx->rx_symbol_count < (short)md)\t\t\t\t/* 0x6d293 */",
   "fn": "t4_md_over"
  },
  {
   "label": "the MD-over comparison is UNSIGNED",
-  "find": "\tif ((short)rx->f124 <= (short)md)\t\t\t/* 0x6d293 */",
-  "replace": "\tif ((unsigned short)rx->f124 <= md)\t\t\t/* 0x6d293 */",
+  "find": "\tif ((short)rx->rx_symbol_count <= (short)md)\t\t\t/* 0x6d293 */",
+  "replace": "\tif ((unsigned short)rx->rx_symbol_count <= md)\t\t\t/* 0x6d293 */",
   "fn": "t4_md_over"
  },
  {
   "label": "the MD-over trace prints the descriptor, not the counter",
-  "find": "\t\t\t\t     (int)rx->f124, (unsigned)flags,",
+  "find": "\t\t\t\t     (int)rx->rx_symbol_count, (unsigned)flags,",
   "replace": "\t\t\t\t     (int)(short)md, (unsigned)flags,",
   "fn": "t4_md_over"
  },
  {
   "label": "the MD-over trace prints the flags as they are NOW",
-  "find": "\t\t\t\t     (int)rx->f124, (unsigned)flags,",
-  "replace": "\t\t\t\t     (int)rx->f124, (unsigned)rx->flags,",
+  "find": "\t\t\t\t     (int)rx->rx_symbol_count, (unsigned)flags,",
+  "replace": "\t\t\t\t     (int)rx->rx_symbol_count, (unsigned)rx->flags,",
   "fn": "t4_md_over",
   "equivalent": true,
   "why": "EQUIVALENT BECAUSE THE CACHED VALUE IS THE FIELD ON EVERY PATH THAT REACHES HERE.  The trace's third argument is 0x67a48's `%esi`, which is the flags word as it stood at 0x67a1e.  Between there and 0x6a0c2 the only writer of +0x122 is the J block at 0x68edd, and 0x69007 reloads `%esi` from the field immediately afterwards; the two head branches either do not write it (0x6a3a4, 0x6b4a2) or write it and reload (0x6a3c1, 0x6cb5e, 0x68c85).  The packer cannot reach here at all -- it needs bit 10, which 0x67a4b leaves through.  So `%esi` == +0x122 whenever this line runs."
  },
  {
   "label": "the MD-over trace's last two arguments are swapped",
-  "find": "\t\t\t\t     (int)rx->f1c0, (int)rx->agc_gain);",
-  "replace": "\t\t\t\t     (int)rx->agc_gain, (int)rx->f1c0);",
+  "find": "\t\t\t\t     (int)rx->timing_state, (int)rx->agc_gain);",
+  "replace": "\t\t\t\t     (int)rx->agc_gain, (int)rx->timing_state);",
   "fn": "t4_md_over"
  },
  {
@@ -997,20 +997,20 @@
  },
  {
   "label": "E raises 0x90 rather than 0x98",
-  "find": "\trx->flags = (unsigned short)(rx->flags | 0x98);\n\trx->f266 = 0;",
-  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x90);\n\trx->f266 = 0;",
+  "find": "\trx->flags = (unsigned short)(rx->flags | 0x98);\n\trx->demap_subframe_index = 0;",
+  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x90);\n\trx->demap_subframe_index = 0;",
   "fn": "t4_mp_e_sequence"
  },
  {
   "label": "E leaves +0x266 alone",
-  "find": "\trx->f266 = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
+  "find": "\trx->demap_subframe_index = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
   "replace": "\tT4_I16(obj, T3C_COUNT) = 0;",
   "fn": "t4_mp_e_sequence"
  },
  {
   "label": "E leaves the trace counter alone",
-  "find": "\trx->f266 = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
-  "replace": "\trx->f266 = 0;",
+  "find": "\trx->demap_subframe_index = 0;\n\tT4_I16(obj, T3C_COUNT) = 0;",
+  "replace": "\trx->demap_subframe_index = 0;",
   "fn": "t4_mp_e_sequence"
  },
  {
@@ -1063,13 +1063,13 @@
  },
  {
   "label": "E writes 0x2000 to +0x218",
-  "find": "\trx->f218 = 0x4000;\t\t\t\t\t/* 0x7123d */",
-  "replace": "\trx->f218 = 0x2000;\t\t\t\t\t/* 0x7123d */",
+  "find": "\trx->equalizer_error_gain = 0x4000;\t\t\t\t\t/* 0x7123d */",
+  "replace": "\trx->equalizer_error_gain = 0x2000;\t\t\t\t\t/* 0x7123d */",
   "fn": "t4_mp_e_sequence"
  },
  {
   "label": "E leaves +0x218 alone",
-  "find": "\trx->f218 = 0x4000;\t\t\t\t\t/* 0x7123d */",
+  "find": "\trx->equalizer_error_gain = 0x4000;\t\t\t\t\t/* 0x7123d */",
   "replace": "\t;\t\t\t\t\t\t\t/* 0x7123d */",
   "fn": "t4_mp_e_sequence"
  }

@@ -237,8 +237,8 @@ txinit(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	obj->f3550 = 0;
-	obj->f3552 = 0;
+	obj->near_echo_alpha = 0;
+	obj->far_echo_alpha = 0;
 	obj->f25cc = 0;
 	obj->f25c6 = 0;
 	obj->f25c0 = 0;
@@ -487,16 +487,16 @@ rxtiminginit(void *objp)
 	/* Where rxreadqueue leaves its four samples. */
 	rx->rx_samples = (short *)((char *)obj + 0x370);
 
-	rx->f124 = 0;
-	rx->f1b8 = 1;
-	rx->f1bc = 0;
-	rx->f1c0 = -1;
+	rx->rx_symbol_count = 0;
+	rx->carrier_phase_increment = 1;
+	rx->carrier_phase = 0;
+	rx->timing_state = -1;
 	rx->f1c8 = 1;
 	rx->f1cc = 0;
 	rx->f1ce = 0;
 	rx->f1d0 = 0;
 	/* The slowest V.34 rate: what the receiver assumes until told. */
-	rx->f1d2 = 2400;
+	rx->timing_report_interval_symbols = 2400;
 	rx->f1d4 = 0;
 	rx->f1d8 = 0;
 	rx->f1e0 = 0;
@@ -507,9 +507,9 @@ rxtiminginit(void *objp)
 	rx->f20a = 0;
 	rx->dp.point = 0;
 	rx->f22e = 0;
-	rx->f230 = 0;
-	rx->f244 = 0;
-	rx->f246 = 0;
+	rx->timing_state_dwell = 0;
+	rx->demod_prev_i = 0;
+	rx->demod_prev_q = 0;
 }
 
 void
@@ -520,7 +520,7 @@ rxinit(void *objp)
 
 	rx->agc_gain = 0x200;
 	rx->agc_step = 0x3333;
-	rx->f1b8 = 1;
+	rx->carrier_phase_increment = 1;
 
 	V34EqualizerCleanUp((struct v34_equalizer *)((char *)obj + 0x630));
 
@@ -548,7 +548,7 @@ rxinit(void *objp)
 	 * suggests at a glance -- which is exactly how this was read wrong
 	 * the first time.  See finding 122.
 	 */
-	rx->f218 = 0x4000;
+	rx->equalizer_error_gain = 0x4000;
 	rx->f1f2 = 0x4000;
 	rx->agc_accum = 0;
 	rx->agc_level = 0;
@@ -558,18 +558,18 @@ rxinit(void *objp)
 		rx->f200 = 2;
 		rx->f202 = 10;		/* and f1f8 is left alone */
 	} else {
-		rx->f1f8 = 0;
+		rx->carrier_loop_integrator = 0;
 		rx->f200 = 2;
 		rx->f202 = 8;
 	}
 
-	rx->f798 = 0;   rx->f21c = 0;  rx->f206 = 0;  rx->f21a = 0;
-	rx->f204 = 0;   rx->f224 = 0;  rx->f220 = 0;  rx->f228 = 0;
-	rx->f1a0 = 0;   rx->f246 = 0;  rx->f124 = 0;  rx->scrambler_sr = 0;
-	rx->f244 = 0;   rx->f1bc = 0;  rx->energy.sum = 0;
-	rx->f120 = 0;   rx->f12a = 0;  obj->f2aa4 = 0;
+	rx->retrain_reneg_motion_count = 0;   rx->error_window_symbols = 0;  rx->f206 = 0;  rx->equalizer_error_1024 = 0;
+	rx->f204 = 0;   rx->predictor_error_1024 = 0;  rx->equalizer_error_accum = 0;  rx->predictor_error_accum = 0;
+	rx->f1a0 = 0;   rx->demod_prev_q = 0;  rx->rx_symbol_count = 0;  rx->scrambler_sr = 0;
+	rx->demod_prev_i = 0;   rx->carrier_phase = 0;  rx->energy.sum = 0;
+	rx->vectpp_cursor = 0;   rx->agc_decimation_phase = 0;  obj->history_2aa8_index = 0;
 	rx->rx_samples = (short *)((char *)rx + 0x10c);
-	rx->f248 = 0;   rx->f24c = 0;
+	rx->target_signal_power_1024 = 0;   rx->target_signal_power_accum = 0;
 }
 
 /* The bulk ring's wrap: reset to zero, not subtract.  See finding 116. */
@@ -669,12 +669,12 @@ V34agc(struct v34_receiver *rx)
 	 * is therefore feed-forward rather than feedback.
 	 */
 	for (i = 0; i < V34_QUEUE_BURST; i++) {
-		short idx = rx->f19c;
+		short idx = rx->rms_window_index;
 
-		rx->f19c = (short)(idx + 1);
+		rx->rms_window_index = (short)(idx + 1);
 		rx->rms_buf[idx] = buf[i];
 		if ((short)(idx + 1) > V34_AGC_RMS_TAPS - 1)
-			rx->f19c = 0;
+			rx->rms_window_index = 0;
 	}
 
 	for (i = 0; i < V34_QUEUE_BURST; i++)
@@ -731,11 +731,11 @@ V34demodulate(struct v34_receiver *rx)
 	q->rd = q_next(q, q->rd + 1, V34_RXQ_END);
 
 	/* Only the first of the pair joins the energy window, ungained. */
-	idx = rx->f19c;
+	idx = rx->rms_window_index;
 	rx->rms_buf[idx] = (short)s0;
-	rx->f19c = (short)(idx + 1);
+	rx->rms_window_index = (short)(idx + 1);
 	if ((short)(idx + 1) > V34_AGC_RMS_TAPS - 1)
-		rx->f19c = 0;
+		rx->rms_window_index = 0;
 
 	/*
 	 * Both samples are gained; only the first is kept.  The second goes
@@ -752,23 +752,23 @@ V34demodulate(struct v34_receiver *rx)
 	 * energy sum accumulates across them; both are cleared whenever the
 	 * loop is given a chance to adapt, whether or not it actually did.
 	 */
-	count = (short)((unsigned short)rx->f12a + 1);
+	count = (short)((unsigned short)rx->agc_decimation_phase + 1);
 	sum = rx->energy.sum + g0 * g0;
 
 	if (count <= 3) {
-		rx->f12a = count;
+		rx->agc_decimation_phase = count;
 		rx->energy.sum = sum;
 	} else if (rx->flags & V34_RX_FLAG_AGC_FREEZE) {
-		rx->f12a = 0;
+		rx->agc_decimation_phase = 0;
 		rx->energy.sum = 0;
 	} else {
-		rx->f12a = count;
+		rx->agc_decimation_phase = count;
 		if (agc_rms(rx->rms_buf) > V34_AGC_RMS_FLOOR) {
 			/* agcadapt's input is the high half of this. */
 			rx->energy.sum = sum;
 			agcadapt(rx);
 		}
-		rx->f12a = 0;
+		rx->agc_decimation_phase = 0;
 		rx->energy.sum = 0;
 	}
 
@@ -778,20 +778,20 @@ V34demodulate(struct v34_receiver *rx)
 	 * so the second read is the sine of the first.  The index wraps by
 	 * subtracting f1ba rather than masking.
 	 */
-	phase = (unsigned short)rx->f1bc;
-	quarter = (unsigned short)rx->f1ba;
-	step = (unsigned short)rx->f1b8;
+	phase = (unsigned short)rx->carrier_phase;
+	quarter = (unsigned short)rx->carrier_quadrature_offset;
+	step = (unsigned short)rx->carrier_phase_increment;
 
 	cos_v = rx->carrier[(short)phase];
 	sin_v = rx->carrier[(short)phase + (short)quarter];
 
-	rx->f240 = (short)((g0 * sin_v + g1 * cos_v + 0x2000) >> 14);
-	rx->f242 = (short)((g1 * sin_v - g0 * cos_v + 0x2000) >> 14);
+	rx->demod_i = (short)((g0 * sin_v + g1 * cos_v + 0x2000) >> 14);
+	rx->demod_q = (short)((g1 * sin_v - g0 * cos_v + 0x2000) >> 14);
 
 	phase += step;
 	if ((short)quarter <= (short)phase)
 		phase -= quarter;
-	rx->f1bc = (short)phase;
+	rx->carrier_phase = (short)phase;
 }
 
 /*
@@ -813,22 +813,22 @@ rx_iir(struct v34_receiver *rx, int store_prev)
 	short prev;
 
 	prev = rx->f208;
-	acc = (((int)rx->f240 << 10) + (int)prev * V34_RXTIMING_IIR_A1
+	acc = (((int)rx->demod_i << 10) + (int)prev * V34_RXTIMING_IIR_A1
 	       + (int)rx->dp.iir2.i * V34_RXTIMING_IIR_A2) >> 14;
 	rx->dp.iir2.i = prev;
-	rx->f240 = (short)acc;
+	rx->demod_i = (short)acc;
 	rx->f208 = (short)acc;
 	if (store_prev)
-		rx->f244 = (short)acc;
+		rx->demod_prev_i = (short)acc;
 
 	prev = rx->f20a;
-	acc = (((int)rx->f242 << 10) + (int)prev * V34_RXTIMING_IIR_A1
+	acc = (((int)rx->demod_q << 10) + (int)prev * V34_RXTIMING_IIR_A1
 	       + (int)rx->dp.iir2.q * V34_RXTIMING_IIR_A2) >> 14;
 	rx->dp.iir2.q = prev;
-	rx->f242 = (short)acc;
+	rx->demod_q = (short)acc;
 	rx->f20a = (short)acc;
 	if (store_prev)
-		rx->f246 = (short)acc;
+		rx->demod_prev_q = (short)acc;
 }
 
 /*
@@ -870,38 +870,38 @@ rxtiming(void *objp)
 	/* Set before the count is even tested, so it lands on an empty call. */
 	rx->rx_samples = (short *)((char *)obj + 0x370);
 
-	for (i = 0; i < rx->f128; i = (short)(i + 1)) {
-		int wa = (unsigned short)rx->f1ac;
-		int wb = (short)((unsigned short)rx->f1b0
-				 - (unsigned short)rx->f1ac);
-		int wrap = (short)rx->f1b0;
+	for (i = 0; i < rx->timing_output_count; i = (short)(i + 1)) {
+		int wa = (unsigned short)rx->timing_phase;
+		int wb = (short)((unsigned short)rx->timing_phase_wrap
+				 - (unsigned short)rx->timing_phase);
+		int wrap = (short)rx->timing_phase_wrap;
 		int I, Q, m, pos;
 
 		/* Linear interpolation between the two symbols, both axes. */
-		I = (short)((rx->f240 * wa + rx->f244 * wb + 0x2000) >> 14);
-		Q = (short)((rx->f242 * wa + rx->f246 * wb + 0x2000) >> 14);
+		I = (short)((rx->demod_i * wa + rx->demod_prev_i * wb + 0x2000) >> 14);
+		Q = (short)((rx->demod_q * wa + rx->demod_prev_q * wb + 0x2000) >> 14);
 		m = (short)((I * I + Q * Q + 0x2000) >> 14);
 
 		rx->timing_out[i] = (short)V34TimingHPFilter(t, (short)m);
 
-		pos = (unsigned short)rx->f1ac + (unsigned short)rx->f1ae;
+		pos = (unsigned short)rx->timing_phase + (unsigned short)rx->timing_phase_increment;
 
 		if ((int)(unsigned short)pos < wrap) {
-			rx->f1ac = (short)pos;
+			rx->timing_phase = (short)pos;
 			continue;
 		}
 
-		pos -= (unsigned short)rx->f1b0;
+		pos -= (unsigned short)rx->timing_phase_wrap;
 
 		if ((int)(unsigned short)pos < wrap) {
 			/* One wrap: the current symbol becomes the previous. */
-			rx->f1ac = (short)pos;
-			rx->f244 = rx->f240;
-			rx->f246 = rx->f242;
+			rx->timing_phase = (short)pos;
+			rx->demod_prev_i = rx->demod_i;
+			rx->demod_prev_q = rx->demod_q;
 		} else {
 			/* Two: the first pull supplies the previous symbol. */
-			pos -= (unsigned short)rx->f1b0;
-			rx->f1ac = (short)pos;
+			pos -= (unsigned short)rx->timing_phase_wrap;
+			rx->timing_phase = (short)pos;
 			V34demodulate(rx);
 			rx_iir(rx, 1);
 		}
@@ -1084,46 +1084,46 @@ V34SetupDemodulator(void *objp, short baud, short carrier)
 			(long)baud, (long)carrier);
 
 	/* Four outputs per call, whatever the rate. */
-	rx->f128 = 4;
+	rx->timing_output_count = 4;
 
 	switch (baud) {
 	case 2400:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x3e80;
-		rx->f1be = 0x3e80; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x3e80;
+		rx->f1be = 0x3e80; rx->timing_phase = 0x1f40;
 		break;
 	case 2743:
-		rx->f1ae = 0x36b0; rx->f1b0 = 0x3e80;
-		rx->f1be = 0x36b0; rx->f1ac = 0x1f40;
+		rx->timing_phase_increment = 0x36b0; rx->timing_phase_wrap = 0x3e80;
+		rx->f1be = 0x36b0; rx->timing_phase = 0x1f40;
 		break;
 	case 2800:
-		rx->f1b0 = 0x3e82; rx->f1ae = 0x3594;
-		rx->f1be = 0x3594; rx->f1ac = 0x1f41;
+		rx->timing_phase_wrap = 0x3e82; rx->timing_phase_increment = 0x3594;
+		rx->f1be = 0x3594; rx->timing_phase = 0x1f41;
 		break;
 	case 3000:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x3200;
-		rx->f1be = 0x3200; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x3200;
+		rx->f1be = 0x3200; rx->timing_phase = 0x1f40;
 		break;
 	case 3200:
-		rx->f1ae = 0x2ee0; rx->f1b0 = 0x3e80;
-		rx->f1be = 0x2ee0; rx->f1ac = 0x1f40;
+		rx->timing_phase_increment = 0x2ee0; rx->timing_phase_wrap = 0x3e80;
+		rx->f1be = 0x2ee0; rx->timing_phase = 0x1f40;
 		break;
 	case 3429:
-		rx->f1b0 = 0x3e80; rx->f1ae = 0x2bc0;
-		rx->f1be = 0x2bc0; rx->f1ac = 0x1f40;
+		rx->timing_phase_wrap = 0x3e80; rx->timing_phase_increment = 0x2bc0;
+		rx->f1be = 0x2bc0; rx->timing_phase = 0x1f40;
 		break;
 	default:
 		break;
 	}
 
 	switch (carrier) {
-	case 1600: rx->carrier = hsine1600; rx->f1ba = 6;    break;
-	case 1680: rx->carrier = hsine1680; rx->f1ba = 0x28; break;
-	case 1800: rx->carrier = hsine1800; rx->f1ba = 0x10; break;
-	case 1829: rx->carrier = hsine1829; rx->f1ba = 0x15; break;
-	case 1867: rx->carrier = hsine1867; rx->f1ba = 0x24; break;
-	case 1920: rx->carrier = hsine1920; rx->f1ba = 5;    break;
-	case 1959: rx->carrier = hsine1959; rx->f1ba = 0x31; break;
-	case 2000: rx->carrier = hsine2000; rx->f1ba = 0x18; break;
+	case 1600: rx->carrier = hsine1600; rx->carrier_quadrature_offset = 6;    break;
+	case 1680: rx->carrier = hsine1680; rx->carrier_quadrature_offset = 0x28; break;
+	case 1800: rx->carrier = hsine1800; rx->carrier_quadrature_offset = 0x10; break;
+	case 1829: rx->carrier = hsine1829; rx->carrier_quadrature_offset = 0x15; break;
+	case 1867: rx->carrier = hsine1867; rx->carrier_quadrature_offset = 0x24; break;
+	case 1920: rx->carrier = hsine1920; rx->carrier_quadrature_offset = 5;    break;
+	case 1959: rx->carrier = hsine1959; rx->carrier_quadrature_offset = 0x31; break;
+	case 2000: rx->carrier = hsine2000; rx->carrier_quadrature_offset = 0x18; break;
 	default:   break;
 	}
 }
@@ -1175,23 +1175,24 @@ adaptecho(void *objp)
 	txq->count = (short)(txq->count - 1);
 
 	/* The residual carries a one-shot correction, which is consumed. */
-	acc = (short)((unsigned short)obj->f260 + (unsigned short)obj->fa23e);
+	acc = (short)((unsigned short)obj->rx_work_sample
+		      + (unsigned short)obj->residual_correction);
 
-	obj->f25e = (short)*txq->rd;
+	obj->tx_sample = (short)*txq->rd;
 	txq->rd = q_next(txq, txq->rd + 1, V34_TXQ_END);
-	obj->fa23e = 0;
+	obj->residual_correction = 0;
 
 	y = V34EchoFilter(&obj->echo0, lag);
 
 	/* Q14 in, Q16 out: the filter's output is scaled by 4 then rounded. */
 	e = (short)(acc + ((y * 4 + 0x8000) >> 16));
-	obj->f260 = (short)e;
+	obj->rx_work_sample = (short)e;
 
 	if (obj->f25c2 & V34_EC_FROZEN)
 		return 0;
 
-	count = obj->f354c + 1;
-	obj->f354c = count;
+	count = obj->echo_adapt_count + 1;
+	obj->echo_adapt_count = count;
 
 	if (count > 0x8f) {
 		/*
@@ -1199,7 +1200,8 @@ adaptecho(void *objp)
 		 * tenth call once `f3554` has been passed, and the delay
 		 * line is measured exactly once, on call 0x90.
 		 */
-		if (count > obj->f3554 && count == (count / 10) * 10)
+		if (count > obj->echo_alpha_decay_start
+		    && count == (count / 10) * 10)
 			decay_now = 1;
 
 		if (count == 0x90) {
@@ -1210,32 +1212,32 @@ adaptecho(void *objp)
 			 * over the first 0x8f calls.  A loud echo gets a
 			 * smaller shift, i.e. a bigger step.
 			 */
-			if (obj->f355c > 4
-			    && (unsigned)obj->f3560 <= 0x26259f) {
-				obj->f355c = 4;
-				if ((unsigned)obj->f3560 > 0xc65d40)
-					obj->f355c = 2;
-			} else if (obj->f355c > 5
-				   && (unsigned)obj->f3560 > 0xa7d8c0) {
-				obj->f355c = 5;
-				if ((unsigned)obj->f3560 > 0xc65d40)
-					obj->f355c = 2;
-			} else if (obj->f355c > 2) {
-				if ((unsigned)obj->f3560 > 0xc65d40)
-					obj->f355c = 2;
+			if (obj->echo_beta > 4
+			    && (unsigned)obj->near_echo_startup_energy <= 0x26259f) {
+				obj->echo_beta = 4;
+				if ((unsigned)obj->near_echo_startup_energy > 0xc65d40)
+					obj->echo_beta = 2;
+			} else if (obj->echo_beta > 5
+				   && (unsigned)obj->near_echo_startup_energy > 0xa7d8c0) {
+				obj->echo_beta = 5;
+				if ((unsigned)obj->near_echo_startup_energy > 0xc65d40)
+					obj->echo_beta = 2;
+			} else if (obj->echo_beta > 2) {
+				if ((unsigned)obj->near_echo_startup_energy > 0xc65d40)
+					obj->echo_beta = 2;
 			}
 
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"Echo Energy = %d, BETA = %d\n",
-					obj->f3560, obj->f355c);
+					obj->near_echo_startup_energy, obj->echo_beta);
 		}
 
-		updateAlpha(&obj->f3550, energy, decay_now, 0x7999,
-			    obj->f3558, "NE");
+		updateAlpha(&obj->near_echo_alpha, energy, decay_now, 0x7999,
+			    obj->echo_alpha_decay_factor, "NE");
 	} else {
 		/* Still gathering: the residual's energy, scaled by 1/64. */
-		obj->f3560 += ((int)acc * acc) >> 6;
+		obj->near_echo_startup_energy += ((int)acc * acc) >> 6;
 	}
 
 	/*
@@ -1246,7 +1248,7 @@ adaptecho(void *objp)
 	obj->echo0.adapt_count = (short)(obj->echo0.adapt_count + 1);
 
 	{
-		short err = (short)(((int)obj->f3550 * obj->f355c * e
+		short err = (short)(((int)obj->near_echo_alpha * obj->echo_beta * e
 				     + 0x2000) >> 14);
 
 		/*
@@ -1305,7 +1307,7 @@ serr_dequeue(struct v34_object *obj)
 
 	lag = (short)((unsigned short)obj->dmadelay - (unsigned short)txq->count);
 	txq->count = (short)(txq->count - 1);
-	obj->f25e = (short)*txq->rd;
+	obj->tx_sample = (short)*txq->rd;
 	txq->rd = q_next(txq, txq->rd + 1, V34_TXQ_END);
 	return lag;
 }
@@ -1333,14 +1335,16 @@ modem_serrint(void *objp)
 	 * correction that adaptecho merely consumes; here it is recomputed,
 	 * so the two functions are the producer and the consumer of it.
 	 */
-	acc = (short)((unsigned short)obj->f260 + (unsigned short)obj->fa23e);
-	obj->fa23e = (short)((acc * 0xed8 - ((int)obj->f260 << 12)) >> 12);
+	acc = (short)((unsigned short)obj->rx_work_sample
+		      + (unsigned short)obj->residual_correction);
+	obj->residual_correction =
+		(short)((acc * 0xed8 - ((int)obj->rx_work_sample << 12)) >> 12);
 
 	if (obj->f25c2 & V34_EC_FEED) {
 		int near = V34EchoFilter(&obj->echo0, lag);
 		int far = 0;
 
-		if (obj->fa23c != 0)
+		if (obj->far_echo_enabled != 0)
 			far = V34EchoFilter(&obj->echo1, lag);
 
 		cancel = (near * 4 + far * 4 + 0x8000) >> 16;
@@ -1365,11 +1369,11 @@ modem_serrint(void *objp)
 	 * same instruction pair one branch along, so the two sites now agree
 	 * with each other as well as with the object.  Finding 781.
 	 */
-	idx = obj->f2aa6;
+	idx = obj->history_2f58_index;
 	obj->hist_2f58[idx] = sample;
-	obj->f2aa6 = (short)(idx + 1);
+	obj->history_2f58_index = (short)(idx + 1);
 	if ((unsigned short)(idx + 1) > 0x257)
-		obj->f2aa6 = 0;
+		obj->history_2f58_index = 0;
 
 	rxq->count = (short)(rxq->count + 1);
 	wr = (short *)rxq->wr;
@@ -1386,7 +1390,7 @@ modem_serrint(void *objp)
 		 * one place as its product is accumulated.
 		 */
 		short *dl = obj->echo1.coeff_frac;
-		const short *c = rx->f2a4;
+		const short *c = rx->fir60_coeffs;
 		int sum = 0x8000;
 		int i;
 
@@ -1427,21 +1431,21 @@ modem_serrint(void *objp)
 
 	/* The second history ring: the residual in both halves of an entry. */
 	{
-		short k = obj->f2aa4;
+		short k = obj->history_2aa8_index;
 
-		obj->f2aa4 = (short)(k + 1);
+		obj->history_2aa8_index = (short)(k + 1);
 		obj->hist_2aa8[k][0] = (short)out;
 		obj->hist_2aa8[k][1] = (short)out;
-		if ((unsigned short)obj->f2aa4 > 0x12b)
-			obj->f2aa4 = 0;
+		if ((unsigned short)obj->history_2aa8_index > 0x12b)
+			obj->history_2aa8_index = 0;
 	}
 
-	obj->fa240 = (short)(((out * out) >> 10)
-			     + (((int)obj->fa240 * 0x3f48) >> 14));
+	obj->residual_energy_estimate = (short)(((out * out) >> 10)
+			     + (((int)obj->residual_energy_estimate * 0x3f48) >> 14));
 
-	prev = obj->f354c;
+	prev = obj->echo_adapt_count;
 	count = prev + 1;
-	obj->f354c = count;
+	obj->echo_adapt_count = count;
 
 	if (count == 0) {
 		if (DSPLIB_DEBUG_ON())
@@ -1478,23 +1482,23 @@ modem_serrint(void *objp)
 		if (count == 0x90)
 			near_energy =
 				V34EchoEstimateDelayLineEnergy(&obj->echo0);
-		if (far_count == 0x90 && obj->fa23c != 0)
+		if (far_count == 0x90 && obj->far_echo_enabled != 0)
 			far_energy =
 				V34EchoEstimateDelayLineEnergy(&obj->echo1);
 
-		updateAlpha(&obj->f3550, near_energy, near_step, 0x6666,
+		updateAlpha(&obj->near_echo_alpha, near_energy, near_step, 0x6666,
 			    0x7f5c, "NE");
-		if (obj->fa23c != 0)
-			updateAlpha(&obj->f3552, far_energy, far_step, 0x2b84,
+		if (obj->far_echo_enabled != 0)
+			updateAlpha(&obj->far_echo_alpha, far_energy, far_step, 0x2b84,
 				    0x7f5c, "FE");
 	}
 
 	obj->echo0.adapt_count = (short)(obj->echo0.adapt_count + 1);
-	near_err = (short)((((int)obj->f3550 * out) * 2 + 0x2000) >> 14);
+	near_err = (short)((((int)obj->near_echo_alpha * out) * 2 + 0x2000) >> 14);
 
-	if (obj->fa23c != 0) {
+	if (obj->far_echo_enabled != 0) {
 		obj->echo1.adapt_count = (short)(obj->echo1.adapt_count + 1);
-		far_err = (short)((((int)obj->f3552 * out) * 2 + 0x2000)
+		far_err = (short)((((int)obj->far_echo_alpha * out) * 2 + 0x2000)
 				  >> 14);
 	}
 
@@ -1505,17 +1509,17 @@ modem_serrint(void *objp)
 		return 0;
 	}
 
-	if (obj->f354c <= 0x464f) {
+	if (obj->echo_adapt_count <= 0x464f) {
 		V34EchoAdapt(&obj->echo0, near_err);
-	} else if (obj->f354c == 0x4650) {
+	} else if (obj->echo_adapt_count == 0x4650) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34NEC - stop NEC adaptation\n");
 	}
 
-	if (obj->fa23c != 0) {
-		if (obj->f354c > 0x2bc)
+	if (obj->far_echo_enabled != 0) {
+		if (obj->echo_adapt_count > 0x2bc)
 			V34EchoAdapt(&obj->echo1, far_err);
-		else if (obj->f354c == 0x2bc && DSPLIB_DEBUG_ON())
+		else if (obj->echo_adapt_count == 0x2bc && DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34FEC - start FEC adaptation\n");
 	}
 
@@ -1568,9 +1572,9 @@ decoderv34(void *objp)
 	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
 
 	if ((rx->flags & 0x98) == 0x98) {
-		short n = rx->f266;
+		short n = rx->demap_subframe_index;
 
-		rx->f266 = (short)(n + 1);
+		rx->demap_subframe_index = (short)(n + 1);
 
 		if (demapFrame(obj, (char *)obj + 0x474,
 			       (char *)obj + 0x470, n)) {
@@ -1592,15 +1596,15 @@ decoderv34(void *objp)
 		 * A narrow band, not a threshold: the message fires only for
 		 * -70 < f798 < -64.  Below -64 the flag is set regardless.
 		 */
-		if ((short)rx->f798 < -64) {
+		if ((short)rx->retrain_reneg_motion_count < -64) {
 			rx->flags = (unsigned short)(rx->flags | 0x100);
-			if ((short)rx->f798 > -70 && DSPLIB_DEBUG_ON())
+			if ((short)rx->retrain_reneg_motion_count > -70 && DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"V34RENEG, may be renegotiation,"
 					"equalizer adaptation disabled\n");
 		}
 
-		rx->f218 = 0x2000;
+		rx->equalizer_error_gain = 0x2000;
 		return;
 	}
 
@@ -1629,16 +1633,16 @@ decoderv34(void *objp)
 		rx->dp.point = rxvect4[bestidx];
 
 		/* Differential: the change in quadrant since last symbol. */
-		diff = (bestidx - (unsigned short)rx->f1aa) & 3;
-		rx->f1aa = (short)bestidx;
+		diff = (bestidx - (unsigned short)rx->previous_constellation_index) & 3;
+		rx->previous_constellation_index = (short)bestidx;
 
 		rx->best_index = (short)V34descrambler(rx, (short)diff, 2);
 	}
 
-	if (rx->f124 == (short)(obj->baud_rate >> 1))
-		rx->f218 = 0x4000;
-	else if (rx->f124 == obj->baud_rate)
-		rx->f218 = 0x2000;
+	if (rx->rx_symbol_count == (short)(obj->baud_rate >> 1))
+		rx->equalizer_error_gain = 0x4000;
+	else if (rx->rx_symbol_count == obj->baud_rate)
+		rx->equalizer_error_gain = 0x2000;
 }
 
 
@@ -1754,12 +1758,12 @@ setInitialPhase(void *objp)
 		}
 	}
 
-	pos = (10 - besti) * 0x230 + (unsigned short)rx->f1ac;
+	pos = (10 - besti) * 0x230 + (unsigned short)rx->timing_phase;
 
-	if ((int)(unsigned short)pos < (int)(short)rx->f1b0)
-		rx->f1ac = (short)pos;
+	if ((int)(unsigned short)pos < (int)(short)rx->timing_phase_wrap)
+		rx->timing_phase = (short)pos;
 	else
-		rx->f1ac = (short)(rx->f1b0 - 1);
+		rx->timing_phase = (short)(rx->timing_phase_wrap - 1);
 }
 
 
@@ -1788,44 +1792,44 @@ setTimingStateParameters(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
 	int variant = (obj->f359c == 0x65);
-	int state = (short)rx->f1c0;
+	int state = (short)rx->timing_state;
 	int report = 0;
 
 	if ((unsigned)state <= 8) {
 		switch (state) {
 		case 2:
-			rx->f234 = 0x36b0; rx->f236 = 0;    rx->f232 = 0x190;
+			rx->timing_proportional_gain_q11 = 0x36b0; rx->timing_integral_gain_q15 = 0;    rx->timing_state_dwell_limit = 0x190;
 			break;
 		case 3:
-			rx->f234 = 0x2ee0; rx->f236 = 0xd2; rx->f232 = 0x3e8;
+			rx->timing_proportional_gain_q11 = 0x2ee0; rx->timing_integral_gain_q15 = 0xd2; rx->timing_state_dwell_limit = 0x3e8;
 			break;
 		case 4:
-			rx->f234 = 0x1770; rx->f236 = 0x5a; rx->f232 = 0x3e8;
+			rx->timing_proportional_gain_q11 = 0x1770; rx->timing_integral_gain_q15 = 0x5a; rx->timing_state_dwell_limit = 0x3e8;
 			break;
 		case 5:
-			rx->f234 = 0xdac;  rx->f236 = 0x1e;
-			rx->f232 = (short)(variant ? -1 : 0x3e8);
+			rx->timing_proportional_gain_q11 = 0xdac;  rx->timing_integral_gain_q15 = 0x1e;
+			rx->timing_state_dwell_limit = (short)(variant ? -1 : 0x3e8);
 			report = 1;
 			break;
 		case 6:
 			if (variant) {
-				rx->f234 = 0xdac; rx->f236 = 3;
+				rx->timing_proportional_gain_q11 = 0xdac; rx->timing_integral_gain_q15 = 3;
 			} else {
-				rx->f234 = 0x7d0; rx->f236 = 0xa;
+				rx->timing_proportional_gain_q11 = 0x7d0; rx->timing_integral_gain_q15 = 0xa;
 			}
-			rx->f232 = 0x7d0;
+			rx->timing_state_dwell_limit = 0x7d0;
 			break;
 		case 7:
 			if (variant) {
-				rx->f234 = 0x3e8; rx->f236 = 2;
-				rx->f232 = 0x7d0;
+				rx->timing_proportional_gain_q11 = 0x3e8; rx->timing_integral_gain_q15 = 2;
+				rx->timing_state_dwell_limit = 0x7d0;
 			} else {
-				rx->f234 = 0x5dc; rx->f236 = 2;
-				rx->f232 = 0xfa0;
+				rx->timing_proportional_gain_q11 = 0x5dc; rx->timing_integral_gain_q15 = 2;
+				rx->timing_state_dwell_limit = 0xfa0;
 			}
 			break;
 		case 8:
-			rx->f234 = 0x1f4;  rx->f236 = 1;    rx->f232 = -1;
+			rx->timing_proportional_gain_q11 = 0x1f4;  rx->timing_integral_gain_q15 = 1;    rx->timing_state_dwell_limit = -1;
 			report = 1;
 			break;
 		default:		/* 0 and 1 install nothing */
@@ -1837,8 +1841,8 @@ setTimingStateParameters(void *objp)
 		VPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));
 
 	/* State 2 alone also sets the dwell from the frame length. */
-	if ((unsigned short)rx->f1c0 == 2)
-		rx->f1d2 = (short)(obj->baud_rate >> 3);
+	if ((unsigned short)rx->timing_state == 2)
+		rx->timing_report_interval_symbols = (short)(obj->baud_rate >> 3);
 }
 
 
@@ -1884,35 +1888,35 @@ TimingV34(void *objp)
 	int whole;
 	int n;
 
-	state = (unsigned short)rx->f1c0;
+	state = (unsigned short)rx->timing_state;
 
 	if (state == 0xffff)
 		return;
 
 	if (state == 1) {
-		rx->f230 = 0;
+		rx->timing_state_dwell = 0;
 		setInitialPhase(obj);
 		if (rx->f1c8 == 1) {
-			rx->f1c0 = 2;
+			rx->timing_state = 2;
 			rx->f1c8 = 0;
 		} else {
-			rx->f1c0 = 6;
+			rx->timing_state = 6;
 		}
 		setTimingStateParameters(obj);
-		state = (unsigned short)rx->f1c0;
+		state = (unsigned short)rx->timing_state;
 	}
 
 	/* Dwell: advance a state once f230 reaches f232, which -1 disables. */
-	if ((unsigned short)rx->f232 != 0xffff && state != 0) {
-		int next = (unsigned short)(rx->f230 + 1);
+	if ((unsigned short)rx->timing_state_dwell_limit != 0xffff && state != 0) {
+		int next = (unsigned short)(rx->timing_state_dwell + 1);
 
-		if (next == (int)(short)rx->f232) {
-			rx->f230 = 0;
-			rx->f1c0 = (short)(state + 1);
+		if (next == (int)(short)rx->timing_state_dwell_limit) {
+			rx->timing_state_dwell = 0;
+			rx->timing_state = (short)(state + 1);
 			setTimingStateParameters(obj);
-			state = (unsigned short)rx->f1c0;
+			state = (unsigned short)rx->timing_state;
 		} else {
-			rx->f230 = (short)next;
+			rx->timing_state_dwell = (short)next;
 		}
 	}
 
@@ -1964,21 +1968,21 @@ TimingV34(void *objp)
 		if ((a | b) != 0)
 			err = (((b - a) << 15) + (a + b) / 2) / (a + b);
 
-		acc = rx->f1e0 + (((int)rx->f236 * err + 0x4000) >> 15);
+		acc = rx->f1e0 + (((int)rx->timing_integral_gain_q15 * err + 0x4000) >> 15);
 		rx->f1e0 = acc;
-		acc += ((int)rx->f234 * err + 0x200) >> 11;
+		acc += ((int)rx->timing_proportional_gain_q11 * err + 0x200) >> 11;
 	}
 
 	/* Carry the fraction, hand the whole part to the interpolator. */
 	acc += rx->f1d8;
 	whole = (short)((acc + 0x4000) >> 15);
 	rx->f1d8 = acc - (whole << 15);
-	rx->f1ae = (short)(whole + (unsigned short)rx->f1be);
+	rx->timing_phase_increment = (short)(whole + (unsigned short)rx->f1be);
 
 	n = (unsigned short)(rx->f1ce + 1);
 	acc = whole + (unsigned short)rx->f1cc;
 
-	if (n < (int)(short)rx->f1d2) {
+	if (n < (int)(short)rx->timing_report_interval_symbols) {
 		rx->f1ce = (short)n;
 		rx->f1cc = (short)acc;
 		return;
@@ -2234,15 +2238,15 @@ receiver(void *objp)
 
 	rx->rx_samples = (short *)((char *)obj + 0x370);
 
-	for (i = 0; i < rx->f128; i = (short)(i + 1)) {
-		int wa = (unsigned short)rx->f1ac;
-		int wb = (short)((unsigned short)rx->f1b0
-				 - (unsigned short)rx->f1ac);
-		int wrap = (short)rx->f1b0;
+	for (i = 0; i < rx->timing_output_count; i = (short)(i + 1)) {
+		int wa = (unsigned short)rx->timing_phase;
+		int wb = (short)((unsigned short)rx->timing_phase_wrap
+				 - (unsigned short)rx->timing_phase);
+		int wrap = (short)rx->timing_phase_wrap;
 		int ir, ii, pos;
 
-		ir = (rx->f240 * wa + rx->f244 * wb + 0x2000) >> 14;
-		ii = (rx->f242 * wa + rx->f246 * wb + 0x2000) >> 14;
+		ir = (rx->demod_i * wa + rx->demod_prev_i * wb + 0x2000) >> 14;
+		ii = (rx->demod_q * wa + rx->demod_prev_q * wb + 0x2000) >> 14;
 
 		rx->timing_out[i] = (short)V34TimingFilter(t,
 			(int)(((unsigned)ii << 16)
@@ -2256,26 +2260,26 @@ receiver(void *objp)
 						    (short)(v >> 16));
 		}
 
-		pos = (unsigned short)rx->f1ac + (unsigned short)rx->f1ae;
+		pos = (unsigned short)rx->timing_phase + (unsigned short)rx->timing_phase_increment;
 
 		if ((int)(unsigned short)pos < wrap) {
-			rx->f1ac = (short)pos;
+			rx->timing_phase = (short)pos;
 			continue;
 		}
 
-		pos -= (unsigned short)rx->f1b0;
+		pos -= (unsigned short)rx->timing_phase_wrap;
 
 		if ((int)(unsigned short)pos >= wrap) {
 			/* Two wraps: the first pull is the previous symbol. */
-			pos -= (unsigned short)rx->f1b0;
-			rx->f1ac = (short)pos;
+			pos -= (unsigned short)rx->timing_phase_wrap;
+			rx->timing_phase = (short)pos;
 			V34demodulate(rx);
 		} else {
-			rx->f1ac = (short)pos;
+			rx->timing_phase = (short)pos;
 		}
 
-		rx->f244 = rx->f240;
-		rx->f246 = rx->f242;
+		rx->demod_prev_i = rx->demod_i;
+		rx->demod_prev_q = rx->demod_q;
 		V34demodulate(rx);
 	}
 
@@ -2299,49 +2303,49 @@ receiver(void *objp)
 		int d1, d2;
 
 		d1 = (((short)((unsigned short)rx->f208
-			       - (unsigned short)rx->f268)
+			       - (unsigned short)rx->retrain_prev_i)
 		       * (short)((unsigned short)rx->f208
-				 - (unsigned short)rx->f268))
+				 - (unsigned short)rx->retrain_prev_i))
 		      + ((short)((unsigned short)rx->f20a
-				 - (unsigned short)rx->f26a)
+				 - (unsigned short)rx->retrain_prev_q)
 			 * (short)((unsigned short)rx->f20a
-				   - (unsigned short)rx->f26a))) >> 14;
+				   - (unsigned short)rx->retrain_prev_q))) >> 14;
 		d2 = (((short)((unsigned short)rx->f208
-			       - (unsigned short)rx->f26c)
+			       - (unsigned short)rx->retrain_prev2_i)
 		       * (short)((unsigned short)rx->f208
-				 - (unsigned short)rx->f26c))
+				 - (unsigned short)rx->retrain_prev2_i))
 		      + ((short)((unsigned short)rx->f20a
-				 - (unsigned short)rx->f26e)
+				 - (unsigned short)rx->retrain_prev2_q)
 			 * (short)((unsigned short)rx->f20a
-				   - (unsigned short)rx->f26e))) >> 14;
+				   - (unsigned short)rx->retrain_prev2_q))) >> 14;
 
 		/* Both pairs shift along, as one 32-bit move each. */
-		rx->f26c = rx->f268;
-		rx->f26e = rx->f26a;
-		rx->f268 = rx->f208;
-		rx->f26a = rx->f20a;
+		rx->retrain_prev2_i = rx->retrain_prev_i;
+		rx->retrain_prev2_q = rx->retrain_prev_q;
+		rx->retrain_prev_i = rx->f208;
+		rx->retrain_prev_q = rx->f20a;
 
 		if ((short)((short)d1 - 0x80) <= 0) {
-			int n = (unsigned short)rx->f798 + 1;
+			int n = (unsigned short)rx->retrain_reneg_motion_count + 1;
 
 			if ((short)n <= 0x8c) {
-				rx->f798 = (short)n;
+				rx->retrain_reneg_motion_count = (short)n;
 			} else {
 				flags |= V34_RX_FLAG_RETRAIN;
-				rx->f798 = 0;
+				rx->retrain_reneg_motion_count = 0;
 				rx->flags = (unsigned short)flags;
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "V34RETRAIN, retrain request "
 					    "detected, rtncount = %d \n",
-					    (int)rx->f798);
+					    (int)rx->retrain_reneg_motion_count);
 					flags = rx->flags;
 				}
 			}
 		} else if ((short)((short)d2 - 0x80) <= 0) {
-			rx->f798 = (short)((unsigned short)rx->f798 - 1);
+			rx->retrain_reneg_motion_count = (short)((unsigned short)rx->retrain_reneg_motion_count - 1);
 		} else {
-			short n = rx->f798;
+			short n = rx->retrain_reneg_motion_count;
 
 			if (n + 0x78 <= 0 && n + 0x84 > 0) {
 				flags |= V34_RX_FLAG_RENEG;
@@ -2353,7 +2357,7 @@ receiver(void *objp)
 					flags = rx->flags;
 				}
 			}
-			rx->f798 = 0;
+			rx->retrain_reneg_motion_count = 0;
 		}
 	}
 
@@ -2377,12 +2381,12 @@ receiver(void *objp)
 		rx->target_im = (short)((cr * xi - ci * xr + 0x2000) >> 14);
 
 		/* And into the per-symbol history ring modem_serrint shares. */
-		k = obj->f2aa4;
-		obj->f2aa4 = (short)(k + 1);
+		k = obj->history_2aa8_index;
+		obj->history_2aa8_index = (short)(k + 1);
 		obj->hist_2aa8[k][0] = rx->target_re;
 		obj->hist_2aa8[k][1] = rx->target_im;
-		if ((unsigned short)obj->f2aa4 > 0x12b)
-			obj->f2aa4 = 0;
+		if ((unsigned short)obj->history_2aa8_index > 0x12b)
+			obj->history_2aa8_index = 0;
 	}
 
 	flags = rx->flags;
@@ -2395,27 +2399,27 @@ receiver(void *objp)
 		 */
 		short n;
 
-		if (rx->f124 <= 0x11) {
+		if (rx->rx_symbol_count <= 0x11) {
 			/* Before TRN there is nothing to predict from. */
 			sysdep_memset(rx->pred_b, 0,
 				      sizeof rx->pred_b + sizeof rx->pred_a);
-			rx->f120 = 0;
+			rx->vectpp_cursor = 0;
 			rx->scrambler_sr = 0;
 			return;
 		}
 
-		n = rx->f124;
+		n = rx->rx_symbol_count;
 		if (flags & V34_RX_FLAG_LATE_TRN)
 			n = (short)(n + 0x120);
 
 		if (!(flags & V34_RX_FLAG_LATE_TRN) && n <= 0x132) {
 			/* Phase 3: the PP sequence, known and generated. */
-			int k = (short)rx->f120;
+			int k = (short)rx->vectpp_cursor;
 
 			rx->dp.iir2.i = (short)(vectpp[k * 2] >> 1);
 			rx->dp.iir2.q = (short)(vectpp[k * 2 + 1] >> 1);
-			k = (unsigned short)rx->f120 + 1;
-			rx->f120 = (short)((short)k <= 0x2f ? k : 0);
+			k = (unsigned short)rx->vectpp_cursor + 1;
+			rx->vectpp_cursor = (short)((short)k <= 0x2f ? k : 0);
 		} else if (n > 0x332) {
 			/* Past TRN: the real decoder. */
 			decoderv34(obj);
@@ -2423,7 +2427,7 @@ receiver(void *objp)
 		} else {
 			flags = rx_train_point(rx, eq, n, flags);
 		}
-	} else if (rx->f1c0 > 1) {
+	} else if (rx->timing_state > 1) {
 		/*
 		 * The handshake's reference generator.  Two of the four
 		 * `rxvect4` points, alternating with the symbol count -- the
@@ -2433,7 +2437,7 @@ receiver(void *objp)
 		short n;
 		int err;
 
-		if (rx->f124 == 0) {
+		if (rx->rx_symbol_count == 0) {
 			/*
 			 * Symbol zero has no parity to carry forward, so both
 			 * candidates are tried and the closer one names the
@@ -2446,14 +2450,14 @@ receiver(void *objp)
 			rx->dp.point = rxvect4[0];
 			e0 = rx_slice_err(rx);
 
-			rx->f124 = (short)((short)e0 <= (short)e3 ? 2 : 1);
+			rx->rx_symbol_count = (short)((short)e0 <= (short)e3 ? 2 : 1);
 		}
 
-		rx->dp.point = (rx->f124 & 1) ? rxvect4[3] : rxvect4[0];
-		rx->f218 = 0x7000;
+		rx->dp.point = (rx->rx_symbol_count & 1) ? rxvect4[3] : rxvect4[0];
+		rx->equalizer_error_gain = 0x7000;
 
 		err = rx_slice_err(rx);
-		n = rx->f124;
+		n = rx->rx_symbol_count;
 
 		if (n == 0x40 && !(flags & V34_RX_FLAG_DET_PENDING)
 		    && DSPLIB_DEBUG_ON()) {
@@ -2484,9 +2488,9 @@ receiver(void *objp)
 					dsplibs_debug_printf(
 					    "S-S1 is detected,rxsymcnt= %d,"
 					    "pllcnt= %d,gain= 0x%x\n",
-					    (int)n, (int)rx->f1c0,
+					    (int)n, (int)rx->timing_state,
 					    (int)rx->agc_gain);
-				rx->f124 = 0;
+				rx->rx_symbol_count = 0;
 				flags = (rx->flags & ~V34_RX_FLAG_TRAINED)
 					| 0x600;
 				rx->flags = (unsigned short)flags;
@@ -2495,8 +2499,8 @@ receiver(void *objp)
 			}
 		}
 
-		rx->f1fc = rx_phase_error(rx);
-		pherr = rx->f1fc;
+		rx->carrier_phase_error = rx_phase_error(rx);
+		pherr = rx->carrier_phase_error;
 
 		if (flags & V34_RX_FLAG_DATA) {
 			/*
@@ -2523,8 +2527,8 @@ receiver(void *objp)
 		return;
 	}
 
-	rx->f1fc = rx_phase_error(rx);
-	pherr = rx->f1fc;
+	rx->carrier_phase_error = rx_phase_error(rx);
+	pherr = rx->carrier_phase_error;
 
 carrier_loop:
 	/*
@@ -2536,16 +2540,16 @@ carrier_loop:
 		int ei, eqv;
 		int k;
 
-		rx->f214 = (short)((unsigned short)rx->target_re
+		rx->predictor_work_re = (short)((unsigned short)rx->target_re
 				   - (unsigned short)rx->dp.iir2.i);
-		rx->f216 = (short)((unsigned short)rx->target_im
+		rx->predictor_work_im = (short)((unsigned short)rx->target_im
 				   - (unsigned short)rx->dp.iir2.q);
 
-		rx_predict(rx, &rx->f214, &rx->f216);
+		rx_predict(rx, &rx->predictor_work_re, &rx->predictor_work_im);
 
-		ei = rx->f214;
-		eqv = rx->f216;
-		rx->f228 += ei * ei + eqv * eqv;
+		ei = rx->predictor_work_re;
+		eqv = rx->predictor_work_im;
+		rx->predictor_error_accum += ei * ei + eqv * eqv;
 
 		/*
 		 * dc = -e . conj(hist), at 32-bit precision with the taps
@@ -2594,10 +2598,10 @@ carrier_loop:
 		rx->target_re = (short)((cr * xr - ci * xi + 0x2000) >> 14);
 		rx->target_im = (short)((ci * xr + cr * xi + 0x2000) >> 14);
 
-		rx->f1f8 += pherr >> ((short)rx->f202 & 31);
+		rx->carrier_loop_integrator += pherr >> ((short)rx->f202 & 31);
 
 		phase = (pherr >> ((short)rx->f200 & 31))
-			+ (rx->f1f8 >> 5)
+			+ (rx->carrier_loop_integrator >> 5)
 			+ (int)(((unsigned)(short)rx->f206 << 16)
 				+ (unsigned)(short)rx->f204);
 		rx->f204 = (short)phase;
@@ -2632,19 +2636,19 @@ carrier_loop:
 				 - (unsigned short)rx->target_re);
 		int di = (short)((unsigned short)rx->f20a
 				 - (unsigned short)rx->target_im);
-		int er = (dr * (short)rx->f218) >> 16;
-		int ei = (di * (short)rx->f218) >> 16;
-		int mag = dr * dr + di * di + rx->f220;
+		int er = (dr * (short)rx->equalizer_error_gain) >> 16;
+		int ei = (di * (short)rx->equalizer_error_gain) >> 16;
+		int mag = dr * dr + di * di + rx->equalizer_error_accum;
 		int n;
 
-		rx->f24c += ((int)rx->target_re * rx->target_re
+		rx->target_signal_power_accum += ((int)rx->target_re * rx->target_re
 			     + (int)rx->target_im * rx->target_im) >> 8;
 
-		n = ((unsigned short)rx->f21c + 1) & 0x3ff;
-		rx->f21c = (short)n;
+		n = ((unsigned short)rx->error_window_symbols + 1) & 0x3ff;
+		rx->error_window_symbols = (short)n;
 
 		if (n != 0) {
-			rx->f220 = mag;
+			rx->equalizer_error_accum = mag;
 		} else {
 			/*
 			 * Published as shorts, and saturated rather than
@@ -2653,18 +2657,18 @@ carrier_loop:
 			 * small value.  A sum of squares cannot be negative
 			 * otherwise.
 			 */
-			rx->f21a = (short)(mag < 0 ? 0x7fff : mag >> 16);
-			rx->f224 = (short)(rx->f228 < 0 ? 0x7fff
-							: rx->f228 >> 16);
-			rx->f220 = 0;
-			rx->f228 = 0;
-			rx->f248 = rx->f24c >> 8;
-			rx->f24c = 0;
+			rx->equalizer_error_1024 = (short)(mag < 0 ? 0x7fff : mag >> 16);
+			rx->predictor_error_1024 = (short)(rx->predictor_error_accum < 0 ? 0x7fff
+							: rx->predictor_error_accum >> 16);
+			rx->equalizer_error_accum = 0;
+			rx->predictor_error_accum = 0;
+			rx->target_signal_power_1024 = rx->target_signal_power_accum >> 8;
+			rx->target_signal_power_accum = 0;
 
-			if (rx->f124 <= 0x7530 && DSPLIB_DEBUG_ON()) {
+			if (rx->rx_symbol_count <= 0x7530 && DSPLIB_DEBUG_ON()) {
 				dsplibs_debug_printf(
 					"V34EQU, equerr = %d, preerr = %d,\n",
-					(int)rx->f21a, (int)rx->f224);
+					(int)rx->equalizer_error_1024, (int)rx->predictor_error_1024);
 				flags = rx->flags;
 			}
 		}
@@ -2702,27 +2706,27 @@ carrier_loop:
 		? 1 : -1]
 
 V34RX_ASSERT(flags,      0x122);
-V34RX_ASSERT(f128,       0x128);
+V34RX_ASSERT(timing_output_count,       0x128);
 V34RX_ASSERT(rms_buf,    0x13c);
 V34RX_ASSERT(f1a0,       0x1a0);
 V34RX_ASSERT(scrambler_sr, 0x1a4);
-V34RX_ASSERT(f1f8,       0x1f8);
-V34RX_ASSERT(f1fc,       0x1fc);
+V34RX_ASSERT(carrier_loop_integrator,       0x1f8);
+V34RX_ASSERT(carrier_phase_error,       0x1fc);
 V34RX_ASSERT(f208,       0x208);
 V34RX_ASSERT(target_re,  0x210);
-V34RX_ASSERT(f214,       0x214);
-V34RX_ASSERT(f216,       0x216);
-V34RX_ASSERT(f228,       0x228);
-V34RX_ASSERT(f24c,       0x24c);
-V34RX_ASSERT(f268,       0x268);
-V34RX_ASSERT(f26e,       0x26e);
+V34RX_ASSERT(predictor_work_re,       0x214);
+V34RX_ASSERT(predictor_work_im,       0x216);
+V34RX_ASSERT(predictor_error_accum,       0x228);
+V34RX_ASSERT(target_signal_power_accum,       0x24c);
+V34RX_ASSERT(retrain_prev_i,       0x268);
+V34RX_ASSERT(retrain_prev2_q,       0x26e);
 V34RX_ASSERT(timing_out, 0x27a);
 V34RX_ASSERT(pred_b,     0x288);
 V34RX_ASSERT(pred_a,     0x28e);
 V34RX_ASSERT(pred_i,     0x294);
 V34RX_ASSERT(pred_q,     0x29c);
-V34RX_ASSERT(f2a4,       0x2a4);
-V34RX_ASSERT(f798,       0x798);
+V34RX_ASSERT(fir60_coeffs,       0x2a4);
+V34RX_ASSERT(retrain_reneg_motion_count,       0x798);
 
 typedef char v34rx_timing_out_len[
 	(sizeof ((struct v34_receiver *)0)->timing_out == 14) ? 1 : -1];
@@ -2734,6 +2738,6 @@ typedef char v34rx_timing_out_len[
  */
 typedef char v34rx_eq_extent[
 	(V34_RX_EQ_OFFSET + (int)sizeof(struct v34_equalizer)
-	 == (int)__builtin_offsetof(struct v34_receiver, f798)) ? 1 : -1];
+       == (int)__builtin_offsetof(struct v34_receiver, retrain_reneg_motion_count)) ? 1 : -1];
 
 #endif

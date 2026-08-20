@@ -320,12 +320,12 @@
  },
  {
   "label": "70: the receiver's +0x220 is left alone",
-  "find": "\trx->f220 = 0;\n",
+  "find": "\trx->equalizer_error_accum = 0;\n",
   "replace": ""
  },
  {
   "label": "70: the receiver's +0x21c is left alone",
-  "find": "\trx->f21c = 0;\n",
+  "find": "\trx->error_window_symbols = 0;\n",
   "replace": ""
  },
  {
@@ -3331,14 +3331,14 @@
  },
  {
   "label": "66: the settled error may equal the mark plus ten",
-  "find": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)",
-  "replace": "\t\t\tif ((int)rx->f21a >= (int)tx1_get(o, TX1_RX250) + 10)",
+  "find": "\t\t\tif ((int)rx->equalizer_error_1024 > (int)tx1_get(o, TX1_RX250) + 10)",
+  "replace": "\t\t\tif ((int)rx->equalizer_error_1024 >= (int)tx1_get(o, TX1_RX250) + 10)",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the settled error's window is eleven",
-  "find": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)",
-  "replace": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 11)",
+  "find": "\t\t\tif ((int)rx->equalizer_error_1024 > (int)tx1_get(o, TX1_RX250) + 10)",
+  "replace": "\t\t\tif ((int)rx->equalizer_error_1024 > (int)tx1_get(o, TX1_RX250) + 11)",
   "fn": "v34tx1_trnseg4a"
  },
  {
@@ -3367,20 +3367,20 @@
  },
  {
   "label": "66: the short snapshot leaves the record's word 0",
-  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
-  "replace": "\t\trec[2] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equalizer_error_1024);",
+  "replace": "\t\trec[2] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equalizer_error_1024);",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the short snapshot leaves the record's word 2",
-  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
-  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equalizer_error_1024);",
+  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equalizer_error_1024);",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the short snapshot moves the mark to the predictor error",
-  "find": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
-  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f224);",
+  "find": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equalizer_error_1024);",
+  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->predictor_error_1024);",
   "fn": "v34tx1_trnseg4a"
  },
  {
@@ -3409,52 +3409,52 @@
  },
  {
   "label": "66: the difference is taken signed",
-  "find": "\tt = (short)((unsigned short)rx->f21a - (unsigned short)rx->f224);",
-  "replace": "\tt = rx->f21a - rx->f224;",
+  "find": "\tt = (short)((unsigned short)rx->equalizer_error_1024 - (unsigned short)rx->predictor_error_1024);",
+  "replace": "\tt = rx->equalizer_error_1024 - rx->predictor_error_1024;",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: a difference of zero is kept",
-  "find": "\tif (t <= 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
-  "replace": "\tif (t < 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
+  "find": "\tif (t <= 0)\n\t\tt = rx->predictor_error_1024;\t\t\t\t/* 0x6874c */",
+  "replace": "\tif (t < 0)\n\t\tt = rx->predictor_error_1024;\t\t\t\t/* 0x6874c */",
   "fn": "tx1_ts_snapshot",
   "equivalent": true,
   "why": "`t == 0` means the two errors are equal in sixteen bits, and the fourth condition below requires +0x224 STRICTLY below +0x21a -- so on every object where the substitution could matter the predictor is thrown away anyway, whatever the force does to the sum.  The two readings are separable in no object at all"
  },
  {
   "label": "66: the substitute for a non-positive difference is the equaliser error",
-  "find": "\tif (t <= 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
-  "replace": "\tif (t <= 0)\n\t\tt = rx->f21a;\t\t\t\t/* 0x6874c */",
+  "find": "\tif (t <= 0)\n\t\tt = rx->predictor_error_1024;\t\t\t\t/* 0x6874c */",
+  "replace": "\tif (t <= 0)\n\t\tt = rx->equalizer_error_1024;\t\t\t\t/* 0x6874c */",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the threshold subtracts half the error rather than a quarter",
-  "find": "\tt = (short)(t - (rx->f21a >> 2));",
-  "replace": "\tt = (short)(t - (rx->f21a >> 1));",
+  "find": "\tt = (short)(t - (rx->equalizer_error_1024 >> 2));",
+  "replace": "\tt = (short)(t - (rx->equalizer_error_1024 >> 1));",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force fires at 0x1f40 exactly",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
-  "replace": "\tif (sum >= 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "find": "\tif (sum > 0x1f40 && rx->equalizer_error_1024 > 0xc8 && t > 0)",
+  "replace": "\tif (sum >= 0x1f40 && rx->equalizer_error_1024 > 0xc8 && t > 0)",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force ignores the equaliser error",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "find": "\tif (sum > 0x1f40 && rx->equalizer_error_1024 > 0xc8 && t > 0)",
   "replace": "\tif (sum > 0x1f40 && t > 0)",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force ignores the threshold",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
-  "replace": "\tif (sum > 0x1f40 && rx->f21a > 0xc8)",
+  "find": "\tif (sum > 0x1f40 && rx->equalizer_error_1024 > 0xc8 && t > 0)",
+  "replace": "\tif (sum > 0x1f40 && rx->equalizer_error_1024 > 0xc8)",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force's error test is at or above 0xc8",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
-  "replace": "\tif (sum > 0x1f40 && rx->f21a >= 0xc8 && t > 0)",
+  "find": "\tif (sum > 0x1f40 && rx->equalizer_error_1024 > 0xc8 && t > 0)",
+  "replace": "\tif (sum > 0x1f40 && rx->equalizer_error_1024 >= 0xc8 && t > 0)",
   "fn": "tx1_ts_snapshot"
  },
  {
@@ -3465,26 +3465,26 @@
  },
  {
   "label": "66: the snapshot ignores +0x359a",
-  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\tif (rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->equalizer_error_1024 <= 0x1ff\n\t    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum <= 0x3fff) {",
+  "replace": "\tif (rx->equalizer_error_1024 <= 0x1ff\n\t    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum <= 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the snapshot's error bound is exclusive",
-  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a < 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->equalizer_error_1024 <= 0x1ff\n\t    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum <= 0x3fff) {",
+  "replace": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->equalizer_error_1024 < 0x1ff\n\t    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum <= 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the predictor error may equal the equaliser error",
-  "find": "\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\t    && rx->f224 <= rx->f21a && sum <= 0x3fff) {",
+  "find": "\t    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum <= 0x3fff) {",
+  "replace": "\t    && rx->predictor_error_1024 <= rx->equalizer_error_1024 && sum <= 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the magnitude bound is exclusive",
-  "find": "\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\t    && rx->f224 < rx->f21a && sum < 0x3fff) {",
+  "find": "\t    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum <= 0x3fff) {",
+  "replace": "\t    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum < 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
@@ -3561,8 +3561,8 @@
  },
  {
   "label": "66: the kept path moves the mark to the equaliser error",
-  "find": "\t\ttx1_put(o, TX1_RX250, rx->f224);",
-  "replace": "\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "find": "\t\ttx1_put(o, TX1_RX250, rx->predictor_error_1024);",
+  "replace": "\t\ttx1_put(o, TX1_RX250, rx->equalizer_error_1024);",
   "fn": "tx1_ts_snapshot"
  },
  {
@@ -3707,14 +3707,14 @@
  },
  {
   "label": "66: the clamps run at +0x25e of one",
-  "find": "\tif (rx->f25e > 1) {",
-  "replace": "\tif (rx->f25e >= 1) {",
+  "find": "\tif (rx->rate_change_reason > 1) {",
+  "replace": "\tif (rx->rate_change_reason >= 1) {",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: the down clamp is selected by +0x25e of three",
-  "find": "\t\tif (rx->f25e == 2 && rate > d - 1)",
-  "replace": "\t\tif (rx->f25e == 3 && rate > d - 1)",
+  "find": "\t\tif (rx->rate_change_reason == 2 && rate > d - 1)",
+  "replace": "\t\tif (rx->rate_change_reason == 3 && rate > d - 1)",
   "fn": "tx1_ts_rates"
  },
  {
@@ -3731,8 +3731,8 @@
  },
  {
   "label": "66: a rate at or below +0x260 - 1 is left alone",
-  "find": "\t\tif (rx->f25e == 2 && rate > d - 1) {\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\t\tif (dsplibs_debug_level > 1)\t/* 0x68334 */\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\" TRNSEG4A : returning from local rrn\"\n\t\t\t\t\t\" down => forcing rate down\\n\");\n\t\t} else if (rate < d + 1) {",
-  "replace": "\t\tif (rx->f25e == 2) {\n\t\t\tif (rate > d - 1) {\n\t\t\t\trate = (short)(d - 1);\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\" TRNSEG4A : returning from\"\n\t\t\t\t\t\t\" local rrn down => forcing\"\n\t\t\t\t\t\t\" rate down\\n\");\n\t\t\t}\n\t\t} else if (rate < d + 1) {",
+  "find": "\t\tif (rx->rate_change_reason == 2 && rate > d - 1) {\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\t\tif (dsplibs_debug_level > 1)\t/* 0x68334 */\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\" TRNSEG4A : returning from local rrn\"\n\t\t\t\t\t\" down => forcing rate down\\n\");\n\t\t} else if (rate < d + 1) {",
+  "replace": "\t\tif (rx->rate_change_reason == 2) {\n\t\t\tif (rate > d - 1) {\n\t\t\t\trate = (short)(d - 1);\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\" TRNSEG4A : returning from\"\n\t\t\t\t\t\t\" local rrn down => forcing\"\n\t\t\t\t\t\t\" rate down\\n\");\n\t\t\t}\n\t\t} else if (rate < d + 1) {",
   "fn": "tx1_ts_rates"
  },
  {
@@ -3743,43 +3743,43 @@
  },
  {
   "label": "66: +0x252 takes the term unscaled",
-  "find": "\trx->f252 = (short)(2 * term);",
-  "replace": "\trx->f252 = (short)term;",
+  "find": "\trx->retrain_error_threshold = (short)(2 * term);",
+  "replace": "\trx->retrain_error_threshold = (short)term;",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x254 is not averaged with the term",
-  "find": "\t\trx->f254 = (short)((rx->f254 + term) >> 1);\n",
+  "find": "\t\trx->reneg_down_error_threshold = (short)((rx->reneg_down_error_threshold + term) >> 1);\n",
   "replace": "",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x254's other term is the ladder's own offset",
-  "find": "\t\trx->f254 = tx1_ts_scale(cfg, rate, -2);",
-  "replace": "\t\trx->f254 = tx1_ts_scale(cfg, rate, -1);",
+  "find": "\t\trx->reneg_down_error_threshold = tx1_ts_scale(cfg, rate, -2);",
+  "replace": "\t\trx->reneg_down_error_threshold = tx1_ts_scale(cfg, rate, -1);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x254's fallback scales the mark by four",
-  "find": "\t\trx->f254 = (short)(tx1_get(o, TX1_RX250) << 3);",
-  "replace": "\t\trx->f254 = (short)(tx1_get(o, TX1_RX250) << 2);",
+  "find": "\t\trx->reneg_down_error_threshold = (short)(tx1_get(o, TX1_RX250) << 3);",
+  "replace": "\t\trx->reneg_down_error_threshold = (short)(tx1_get(o, TX1_RX250) << 2);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x256 is computed when txbits equals the rate",
-  "find": "\tif ((short)cfg->txbits > (short)rate)\n\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
-  "replace": "\tif ((short)cfg->txbits >= (short)rate)\n\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
+  "find": "\tif ((short)cfg->txbits > (short)rate)\n\t\trx->reneg_up_error_threshold = tx1_ts_scale(cfg, rate, 0);",
+  "replace": "\tif ((short)cfg->txbits >= (short)rate)\n\t\trx->reneg_up_error_threshold = tx1_ts_scale(cfg, rate, 0);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x256's term is the ladder's",
-  "find": "\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
-  "replace": "\t\trx->f256 = tx1_ts_scale(cfg, rate, -1);",
+  "find": "\t\trx->reneg_up_error_threshold = tx1_ts_scale(cfg, rate, 0);",
+  "replace": "\t\trx->reneg_up_error_threshold = tx1_ts_scale(cfg, rate, -1);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x258 is left alone",
-  "find": "\trx->f258 = 0;\n",
+  "find": "\trx->retrain_bad_block_run = 0;\n",
   "replace": "",
   "fn": "tx1_ts_rates"
  },

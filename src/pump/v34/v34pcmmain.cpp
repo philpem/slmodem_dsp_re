@@ -1085,7 +1085,7 @@ v90RateRenegSilence(void *objp)
  *     So the same argument means opposite things according to a field the
  *     caller does not pass.
  *   - 34 is accepted by the validation and then falls into the dispatch's
- *     default: `fa23c` set, both counters cleared.  It shares the tail in the
+ *     default: `far_echo_enabled` set, both counters cleared.  It shares the tail in the
  *     object and shares it here.
  *
  * ---------------------------------------------------------------------------
@@ -1337,7 +1337,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		break;
 
 	case DP_V34:
-		obj->fa23c = 1;
+		obj->far_echo_enabled = 1;
 		/* FALLTHROUGH -- the object shares the default arm's tail. */
 	default:
 		obj->v90_receiver = 0;
@@ -1351,9 +1351,9 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	obj->status = 0;
 	*(int *)(m + OB_F2218) = 2;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->retrain_bad_block_run = 0;
+	rx->reneg_down_bad_block_run = 0;
+	rx->reneg_up_good_block_run = 0;
 
 	/*
 	 * +0x254, and 336 is `x * 21 * 16` written as two `lea`s and a shift.
@@ -2117,9 +2117,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			int left = n;
 
 			do {
-				obj->f260 = (short)*in++;
+				obj->rx_work_sample = (short)*in++;
 				modem_serrint(obj);
-				*out++ = (float)obj->f25e;
+				*out++ = (float)obj->tx_sample;
 				if (obj->txq.count < obj->f2aa0
 				    || obj->rxq.count > 5) {
 					if (obj->f25c2 & PROG_TXBIT_DATA)
@@ -2461,9 +2461,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int s;
 				int idx;
 
-				obj->f260 = (short)*in;
+				obj->rx_work_sample = (short)*in;
 				adaptecho(obj);
-				s = obj->f260;
+				s = obj->rx_work_sample;
 				if (PROG_U16(obj, O_DCCOUNT) != 0) {
 					int acc = PROG_S32(obj, O_DCACC) + s;
 
@@ -2487,17 +2487,17 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					} else {
 						PROG_S32(obj, O_DCACC) = acc;
 					}
-					s = obj->f260;
+					s = obj->rx_work_sample;
 				}
 				s = (short)(s - PROG_S16(obj, O_DCEST));
-				idx = obj->f2aa6;
+				idx = obj->history_2f58_index;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-					obj->f2aa6 = (short)(idx + 1);
+					obj->history_2f58_index = (short)(idx + 1);
 				else
-					obj->f2aa6 = 0;
+					obj->history_2f58_index = 0;
 				*in++ = (float)(short)s;
-				*out++ = (float)obj->f25e;
+				*out++ = (float)obj->tx_sample;
 			} while (--left != 0);
 		}
 		in -= n;
@@ -2644,15 +2644,15 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		/* 0xc564: the modem's own output block goes into the echo
 		 * history, not the caller's input. */
 		for (i = 0; i < n; i++) {
-			int idx = obj->f2aa6;
+			int idx = obj->history_2f58_index;
 
 			obj->hist_2f58[idx] = (short)
 			    ((const float *)((unsigned char *)sess
 					     + SESS_OUTBLOCK))[i];
 			if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-				obj->f2aa6 = (short)(idx + 1);
+				obj->history_2f58_index = (short)(idx + 1);
 			else
-				obj->f2aa6 = 0;
+				obj->history_2f58_index = 0;
 		}
 		goto reload;
 
@@ -2673,9 +2673,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int s;
 				int idx;
 
-				obj->f260 = (short)*in;
+				obj->rx_work_sample = (short)*in;
 				adaptecho(obj);
-				s = obj->f260;
+				s = obj->rx_work_sample;
 				if (PROG_U16(obj, O_DCCOUNT) != 0) {
 					int acc = PROG_S32(obj, O_DCACC) + s;
 
@@ -2699,17 +2699,17 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					} else {
 						PROG_S32(obj, O_DCACC) = acc;
 					}
-					s = obj->f260;
+					s = obj->rx_work_sample;
 				}
 				s = (short)(s - PROG_S16(obj, O_DCEST));
-				idx = obj->f2aa6;
+				idx = obj->history_2f58_index;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-					obj->f2aa6 = (short)(idx + 1);
+					obj->history_2f58_index = (short)(idx + 1);
 				else
-					obj->f2aa6 = 0;
+					obj->history_2f58_index = 0;
 				*in++ = (float)(short)s;
-				*out++ = (float)obj->f25e;
+				*out++ = (float)obj->tx_sample;
 			} while (--left != 0);
 		}
 		in -= n;
@@ -2945,13 +2945,13 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 hist_from_in:
 	for (i = 0; i < n; i++) {
-		int idx = obj->f2aa6;
+		int idx = obj->history_2f58_index;
 
 		obj->hist_2f58[idx] = (short)in[i];
 		if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-			obj->f2aa6 = (short)(idx + 1);
+			obj->history_2f58_index = (short)(idx + 1);
 		else
-			obj->f2aa6 = 0;
+			obj->history_2f58_index = 0;
 	}
 	goto reload;
 
@@ -3006,7 +3006,7 @@ done:
 	 */
 	if ((unsigned int)(ret - 3) <= 3) {
 		const short *hist = obj->hist_2f58;
-		int limit = obj->f2aa6;
+		int limit = obj->history_2f58_index;
 		int k0 = PROG_S16(obj, O_NOTCH_K0);
 		int k1 = PROG_S16(obj, O_NOTCH_K1);
 		int k2 = PROG_S16(obj, O_NOTCH_K2);
@@ -3396,9 +3396,9 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 
 	obj->f0004 = 7;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->retrain_bad_block_run = 0;
+	rx->reneg_down_bad_block_run = 0;
+	rx->reneg_up_good_block_run = 0;
 
 	PROG_S32(obj, OB_F2218) = 2;
 	obj->status = 0;
@@ -3455,7 +3455,7 @@ V34PCMMAIN_ASSERT(k56rx,   k56flex_receiver, 0x0250);
 V34PCMMAIN_ASSERT(dmadly,  dmadelay,             0x025c);
 V34PCMMAIN_ASSERT(p3548,   p3548,            0x3548);
 V34PCMMAIN_ASSERT(f359c,   f359c,            0x359c);
-V34PCMMAIN_ASSERT(fa23c,   fa23c,            0xa23c);
+V34PCMMAIN_ASSERT(farec,   far_echo_enabled, 0xa23c);
 V34PCMMAIN_ASSERT(lshort,  local_short,      0xabca);
 V34PCMMAIN_ASSERT(isshort, is_short,         0xabcc);
 V34PCMMAIN_ASSERT(pac18,   pac18,            0xac18);
@@ -3468,9 +3468,9 @@ V34PCMMAIN_ASSERT(pac3c,   pac3c,            0xac3c);
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
-V34PCMMAIN_RXASSERT(f258, f258, 0x4bc);
-V34PCMMAIN_RXASSERT(f25a, f25a, 0x4be);
-V34PCMMAIN_RXASSERT(f25c, f25c, 0x4c0);
+V34PCMMAIN_RXASSERT(retrain_bad_run, retrain_bad_block_run, 0x4bc);
+V34PCMMAIN_RXASSERT(reneg_down_run, reneg_down_bad_block_run, 0x4be);
+V34PCMMAIN_RXASSERT(reneg_up_run, reneg_up_good_block_run, 0x4c0);
 
 /*
  * The two classes this file constructs a `this` for by adding a constant, and

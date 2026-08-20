@@ -807,6 +807,22 @@ $(BUILD)/test/t_spandsp_v8: test/interop/t_spandsp_v8.c test/interop/runtime64.c
 	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ test/interop/t_spandsp_v8.c \
 	    test/interop/runtime64.c $(SRC) $(CXXOBJ64) $(SPANDSP_LIB) -lm
 
+$(BUILD)/test/v8analyse: testbench/v8analyse.c $(SPANDSP_LIB) | $(BUILD)
+	@test -f $(SPANDSP_LIB) || { \
+	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
+	    exit 1; }
+	@mkdir -p $(BUILD)/test
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ testbench/v8analyse.c \
+	    $(SPANDSP_LIB) -lm
+
+$(BUILD)/test/v8bisprobe: testbench/v8bisprobe.c $(SPANDSP_LIB) | $(BUILD)
+	@test -f $(SPANDSP_LIB) || { \
+	    echo "SpanDSP not built; run: (cd $(SPANDSP) && ./configure && make)"; \
+	    exit 1; }
+	@mkdir -p $(BUILD)/test
+	$(CC) $(CFLAGS) -no-pie -I$(SPANDSP)/src -o $@ testbench/v8bisprobe.c \
+	    $(SPANDSP_LIB) -lm
+
 $(BUILD)/test/t_spandsp_b103: $(INTEROP_SRC) $(SRC) $(CXXOBJ64) | $(BUILD)
 	@test -f $(SPANDSP_LIB) || { \
 	  echo "$(SPANDSP_LIB) not built -- see third_party/README.md"; \

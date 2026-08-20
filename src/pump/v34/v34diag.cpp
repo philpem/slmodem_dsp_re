@@ -414,10 +414,10 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			 * advances and it is cleared here whether or not any
 			 * point comes out.
 			 */
-			n = (unsigned int)obj->f2aa4;
+			n = (unsigned int)obj->history_2aa8_index;
 			if (n > maxCount)
 				n = maxCount;
-			obj->f2aa4 = 0;
+			obj->history_2aa8_index = 0;
 
 			for (i = 0; i < n; i++) {
 				points[i].re = VDIAG_V34_POINT_SCALE *

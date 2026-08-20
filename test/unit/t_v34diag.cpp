@@ -307,8 +307,8 @@ setup(int n, const struct trial *t)
 		o->f25dc = pr_v[t->pi];
 		o->fac0c = fac_v[t->fi];
 
-		RX(side)->f248 = snr_v[t->si].num;
-		RX(side)->f21a = snr_v[t->si].den;
+		RX(side)->target_signal_power_1024 = snr_v[t->si].num;
+		RX(side)->equalizer_error_1024 = snr_v[t->si].den;
 
 		x->info0Layout = t->analog;
 		x->modem.demodulator = d;
@@ -905,7 +905,7 @@ setup_visual(int n, const struct vtrial *t)
 		o->f359c = role_v[t->ri];
 
 		/* Selector 0's V.34 arm: the ring's write cursor. */
-		o->f2aa4 = (short)len_v[t->li];
+		o->history_2aa8_index = (short)len_v[t->li];
 
 		o->echo0.taps = len_v[t->li];
 		o->echo0.coeff = scoef_[side][0];
@@ -1048,7 +1048,7 @@ run_visual(void)
 			sawNone = 1;
 
 		/* The ring drain, which happens even when nothing comes out. */
-		if (what == 0 && O(1)->f2aa4 == 0 &&
+		if (what == 0 && O(1)->history_2aa8_index == 0 &&
 		    len_v[li] != 0u && (short)len_v[li] != 0)
 			sawDrain = 1;
 

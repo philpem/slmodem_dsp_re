@@ -126,8 +126,8 @@
  },
  {
   "label": "the receiver's +0x262 is 0x610 rather than 0x600",
-  "find": "\trx->f262 = 0x600;",
-  "replace": "\trx->f262 = 0x610;"
+  "find": "\trx->agc_reset_gain = 0x600;",
+  "replace": "\trx->agc_reset_gain = 0x610;"
  },
  {
   "label": "the handshake is started in retrain mode rather than cold",

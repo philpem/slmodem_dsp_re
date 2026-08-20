@@ -619,11 +619,11 @@ v34tx1_txmd(void *objp)
 			dsplibs_debug_printf(
 				"On MD - enabling echo adaptation...\r\n");
 
-		o->f354c = 0;				/* 0x6700e */
+		o->echo_adapt_count = 0;			/* 0x6700e */
 		o->f25c2 =				/* 0x67017 */
 			(short)((unsigned short)o->f25c2 & ~4u);
-		o->f3550 = 0;				/* 0x6701e */
-		o->f3552 = 0;				/* 0x67025 */
+		o->near_echo_alpha = 0;			/* 0x6701e */
+		o->far_echo_alpha = 0;			/* 0x67025 */
 	}
 
 	if ((unsigned short)o->vect_idx
@@ -780,8 +780,8 @@ v34tx1_dataxmit(void *objp)
 	if (!(o->f25c2 & 0x10))
 		return V34TX1_LOOP;
 
-	rx->f220 = 0;
-	rx->f21c = 0;
+	rx->equalizer_error_accum = 0;
+	rx->error_window_symbols = 0;
 	tx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));
 
 	idx = tx1_get(o, TX1_RATEIDX);
@@ -1246,7 +1246,7 @@ v34tx1_silence(void *objp)
 				"V34RETRAIN, SILENCERETRAIN finished,"
 				" rx->rxflgs,=0x%x,rx->gain=0x%x,"
 				"gainestimate=0x%x\n",
-				rx->flags, rx->agc_gain, rx->f262);
+				rx->flags, rx->agc_gain, rx->agc_reset_gain);
 		return V34TX1_LOOP;			/* 0x63941 */
 	}
 
@@ -2333,7 +2333,7 @@ v34tx1_tx_dpsk(void *objp)
  *     n == lim                                        the segment is over
  *     n  > lim  and  f2218 > 3                        likewise
  *     n  < lim  and  f2218 > 3  and  n >= baud+period
- *               and  rx->f21a <= rx+0x250 + 10        likewise (0x6559c)
+ *               and  rx->equalizer_error_1024 <= rx+0x250 + 10        likewise (0x6559c)
  *
  * so a run that has passed the nominal length finishes at once, and a run
  * that has passed the SHORTER threshold finishes early when the equaliser
@@ -2479,15 +2479,15 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		sum += (v < 0) ? -v : v;
 	}
 
-	t = (short)((unsigned short)rx->f21a - (unsigned short)rx->f224);
+	t = (short)((unsigned short)rx->equalizer_error_1024 - (unsigned short)rx->predictor_error_1024);
 	if (t <= 0)
-		t = rx->f224;				/* 0x6874c */
-	t = (short)(t - (rx->f21a >> 2));
-	if (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)
+		t = rx->predictor_error_1024;				/* 0x6874c */
+	t = (short)(t - (rx->equalizer_error_1024 >> 2));
+	if (sum > 0x1f40 && rx->equalizer_error_1024 > 0xc8 && t > 0)
 		sum = 0x5000;
 
-	if (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff
-	    && rx->f224 < rx->f21a && sum <= 0x3fff) {
+	if (tx1_get(o, TX1_F359A) == 0 && rx->equalizer_error_1024 <= 0x1ff
+	    && rx->predictor_error_1024 < rx->equalizer_error_1024 && sum <= 0x3fff) {
 		/* 0x6738c */
 		if (dsplibs_debug_level > 1)		/* 0x6adf6 */
 			dsplibs_debug_printf(
@@ -2525,7 +2525,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 
 		rx->flags = (unsigned short)(rx->flags | 0x4000u);
 		sysdep_memset(&rx->pred_i[0], 0, 0x10);
-		tx1_put(o, TX1_RX250, rx->f224);
+		tx1_put(o, TX1_RX250, rx->predictor_error_1024);
 	} else {
 		/* 0x674e5 */
 		if (dsplibs_debug_level > 1)		/* 0x683b2 */
@@ -2538,7 +2538,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		rec[5] = 0;
 		rec[6] = 0;
 		rec[7] = 0;
-		tx1_put(o, TX1_RX250, rx->f21a);
+		tx1_put(o, TX1_RX250, rx->equalizer_error_1024);
 	}
 
 	/* 0x674c8 */
@@ -2635,10 +2635,10 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	}
 
 	/* 0x630e9 */
-	if (rx->f25e > 1) {
-		int d = rx->f260;
+	if (rx->rate_change_reason > 1) {
+		int d = rx->rate_change_rate_index;
 
-		if (rx->f25e == 2 && rate > d - 1) {
+		if (rx->rate_change_reason == 2 && rate > d - 1) {
 			rate = (short)(d - 1);		/* 0x68308 */
 			if (dsplibs_debug_level > 1)	/* 0x68334 */
 				dsplibs_debug_printf(
@@ -2663,27 +2663,27 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			(unsigned short)tx1_get(o, TX1_F382), term);
 	if (dsplibs_debug_level > 1)			/* 0x675e6 */
 		dsplibs_debug_printf("V34DATARATE, equerr = %d,preerr=%d\n",
-				     rx->f21a, rx->f224);
+				     rx->equalizer_error_1024, rx->predictor_error_1024);
 
-	rx->f252 = (short)(2 * term);
+	rx->retrain_error_threshold = (short)(2 * term);
 	if ((short)rate > (short)ratemin) {
-		rx->f254 = tx1_ts_scale(cfg, rate, -2);
-		rx->f254 = (short)((rx->f254 + term) >> 1);
+		rx->reneg_down_error_threshold = tx1_ts_scale(cfg, rate, -2);
+		rx->reneg_down_error_threshold = (short)((rx->reneg_down_error_threshold + term) >> 1);
 	} else {
 		/* 0x672ad */
-		rx->f254 = (short)(tx1_get(o, TX1_RX250) << 3);
+		rx->reneg_down_error_threshold = (short)(tx1_get(o, TX1_RX250) << 3);
 	}
 
 	/* 0x63234 */
 	if ((short)cfg->txbits > (short)rate)
-		rx->f256 = tx1_ts_scale(cfg, rate, 0);
+		rx->reneg_up_error_threshold = tx1_ts_scale(cfg, rate, 0);
 	else
-		rx->f256 = 0;				/* 0x6729b */
+		rx->reneg_up_error_threshold = 0;				/* 0x6729b */
 
 	/* 0x63299 */
-	rx->f25a = 0;
-	rx->f25c = 0;
-	rx->f258 = 0;
+	rx->reneg_down_bad_block_run = 0;
+	rx->reneg_up_good_block_run = 0;
+	rx->retrain_bad_block_run = 0;
 	rec[1] = (short)0xfffd;
 	if ((unsigned)tx1_get_int(o, TX1_TIMER)
 	    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)
@@ -2735,7 +2735,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			"V34DATARATE, Final choice data rate = %d,"
 			" retrainThresh = %d, renegDownthresh = %d,"
 			" renegUpthresh = %d\n",
-			cfg->rxbits, rx->f252, rx->f254, rx->f256);
+			cfg->rxbits, rx->retrain_error_threshold, rx->reneg_down_error_threshold, rx->reneg_up_error_threshold);
 
 	/* 0x6340f */
 	if (o->f359c == 0x65)
@@ -2855,7 +2855,7 @@ v34tx1_trnseg4a(void *objp)
 			/* 0x6559c */
 			if (n < baud + period)
 				return V34TX1_LOOP;	/* 0x6409a */
-			if ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)
+			if ((int)rx->equalizer_error_1024 > (int)tx1_get(o, TX1_RX250) + 10)
 				return V34TX1_LOOP;	/* 0x6431f */
 		}
 	}
@@ -2869,7 +2869,7 @@ v34tx1_trnseg4a(void *objp)
 		/* 0x62f5f */
 		rec[2] = 0;
 		rec[0] = 0;
-		tx1_put(o, TX1_RX250, rx->f21a);
+		tx1_put(o, TX1_RX250, rx->equalizer_error_1024);
 	} else {
 		tx1_ts_snapshot(o, rx, rec);
 	}
@@ -2981,11 +2981,11 @@ v34tx1_trnseg4(void *objp)
 
 	if (tx1_get(o, TX1_COUNT) == o->f25c0) {
 		/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
-		o->f354c = 0;
+		o->echo_adapt_count = 0;
 		o->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);
-		o->f3550 = 0;
-		o->f3552 = 0;
-		o->f3560 = 0;
+		o->near_echo_alpha = 0;
+		o->far_echo_alpha = 0;
+		o->near_echo_startup_energy = 0;
 		VPcmV34ReportStartOfEchoAdapt(o);
 	}
 

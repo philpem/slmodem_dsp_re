@@ -333,7 +333,7 @@
  },
  {
   "label": "the three receiver scalars are left alone",
-  "find": "\t*(int *)(m + OB_F2218) = 2;\n\n\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;",
+  "find": "\t*(int *)(m + OB_F2218) = 2;\n\n\trx->retrain_bad_block_run = 0;\n\trx->reneg_down_bad_block_run = 0;\n\trx->reneg_up_good_block_run = 0;",
   "replace": "\t*(int *)(m + OB_F2218) = 2;\n\n\t(void)rx;"
  },
  {

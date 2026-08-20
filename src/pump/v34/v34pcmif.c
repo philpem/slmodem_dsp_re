@@ -209,24 +209,25 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 
 	if (red > 0) {
 		*(int *)(pcm + 0x4f4) = 0;
-		obj->f3554 = 0x7d0;
-		obj->f3558 = 0x7fdf;
-		obj->f355c = 2;
+		obj->echo_alpha_decay_start = 0x7d0;
+		obj->echo_alpha_decay_factor = 0x7fdf;
+		obj->echo_beta = 2;
 	} else {
 		*(int *)(pcm + 0x4f4) = 1;
-		obj->f3554 = 0x7d0;
-		obj->f3558 = 0x7fcb;
+		obj->echo_alpha_decay_start = 0x7d0;
+		obj->echo_alpha_decay_factor = 0x7fcb;
 		/*
 		 * 4 when the configuration's +0x54 is exactly 4 and 6
 		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
 		 * a two-way choice and not arithmetic on the field.
 		 */
-		obj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;
+		obj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;
 	}
 
 	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
 		 "decay start = %d, decay fact = %d, beta = %d\r\n",
-		 (int)red, obj->f3554, obj->f3558, obj->f355c);
+		 (int)red, obj->echo_alpha_decay_start,
+		 obj->echo_alpha_decay_factor, obj->echo_beta);
 
 	/*
 	 * The session pointer is RE-LOADED for the second report rather than
@@ -329,8 +330,8 @@ VPcmV34GetCleanedSamples(void *objp, int *n)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	*n = obj->f2aa6;
-	obj->f2aa6 = 0;
+	*n = obj->history_2f58_index;
+	obj->history_2f58_index = 0;
 	return obj->hist_2f58;
 }
 
@@ -613,9 +614,9 @@ VPcmV34InitiateHangUp(void *objp)
 	obj->f0004 = 6;
 	*(int *)(m + 0x2218) = 5;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->retrain_bad_block_run = 0;
+	rx->reneg_down_bad_block_run = 0;
+	rx->reneg_up_good_block_run = 0;
 }
 
 /*
@@ -694,9 +695,9 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 
 	obj->f0004 = 6;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->retrain_bad_block_run = 0;
+	rx->reneg_down_bad_block_run = 0;
+	rx->reneg_up_good_block_run = 0;
 
 	*(int *)(m + 0x2218) = 5;
 
@@ -1175,8 +1176,8 @@ VPcmV34GetSNR(void *objp)
 	int db = 0;
 	int last = 0;
 
-	if (rx->f21a > 0) {
-		int v = rx->f248 / rx->f21a;
+	if (rx->equalizer_error_1024 > 0) {
+		int v = rx->target_signal_power_1024 / rx->equalizer_error_1024;
 
 		if (v > 0) {
 			for (;;) {
@@ -1475,9 +1476,9 @@ V34PCMIF_ASSERT(pbins,   probe_bins,       0xa320);
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
-V34PCMIF_RXASSERT(f258, f258, 0x4bc);
-V34PCMIF_RXASSERT(f25a, f25a, 0x4be);
-V34PCMIF_RXASSERT(f25c, f25c, 0x4c0);
+        V34PCMIF_RXASSERT(retrain_bad_run, retrain_bad_block_run, 0x4bc);
+        V34PCMIF_RXASSERT(reneg_down_run, reneg_down_bad_block_run, 0x4be);
+        V34PCMIF_RXASSERT(reneg_up_run, reneg_up_good_block_run, 0x4c0);
 
 /*
  * The doubles are the first floating-point member the struct has ever had,

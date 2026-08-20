@@ -142,18 +142,18 @@ prime(struct v34_object *o, int amp, int gain, int step, int freeze)
 	rx->agc_level = 0;
 	rx->agc_accum = 0;
 	rx->agc_step = 0x3333;
-	rx->f19c = 0;
-	rx->f12a = 0;
+	rx->rms_window_index = 0;
+	rx->agc_decimation_phase = 0;
 	rx->energy.sum = 0;
 	for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 		rx->rms_buf[b] = 0;
 
 	rx->carrier = carrier_table;
-	rx->f1ba = QUARTER;
-	rx->f1b8 = (short)step;
-	rx->f1bc = 0;
-	rx->f240 = 0;
-	rx->f242 = 0;
+	rx->carrier_quadrature_offset = QUARTER;
+	rx->carrier_phase_increment = (short)step;
+	rx->carrier_phase = 0;
+	rx->demod_i = 0;
+	rx->demod_q = 0;
 
 	/* The ring, and both cursors, as t_v34rx primes them for V34agc. */
 	q->count = V34_RXQ_RING;
@@ -233,7 +233,7 @@ main(void)
 					    struct v34_receiver, &na, &nb,
 					    tag + burst * 10 + k);
 
-				if (RX(&oa)->f240 != 0 || RX(&oa)->f242 != 0)
+				if (RX(&oa)->demod_i != 0 || RX(&oa)->demod_q != 0)
 					distinct_out++;
 				if (memcmp(&na, &at_start, sizeof(na)) != 0)
 					moved++;

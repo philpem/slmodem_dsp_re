@@ -1316,16 +1316,16 @@ main(void)
 			v34hs_compare(what, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1b0",
 				    v34hs_peek_short(0, T44T_RX_F1B0),
-				    rates[k].f1b0, 200 + (long)k);
+				    rates[k].timing_phase_wrap, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1ae",
 				    v34hs_peek_short(0, T44T_RX_F1AE),
-				    rates[k].f1ae, 200 + (long)k);
+				    rates[k].timing_phase_increment, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1be",
 				    v34hs_peek_short(0, T44T_RX_F1BE),
 				    rates[k].f1be, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1ac",
 				    v34hs_peek_short(0, T44T_RX_F1AC),
-				    rates[k].f1ac, 200 + (long)k);
+				    rates[k].timing_phase, 200 + (long)k);
 		}
 
 		for (k = 0; k < sizeof(carriers) / sizeof(carriers[0]); k++) {
@@ -1345,7 +1345,7 @@ main(void)
 			v34hs_compare(what, 210 + (long)k);
 			diff_eq_int("0x26 bits: the half-sine count",
 				    v34hs_peek_short(0, T44T_RX_F1BA),
-				    carriers[k].f1ba, 210 + (long)k);
+				    carriers[k].carrier_quadrature_offset, 210 + (long)k);
 			if (carriers[k].tbl != NULL) {
 				diff_eq_int("0x26 bits: the half-sine table",
 					    peek_ptr_a(T44T_RX_CARRIER)
@@ -1353,7 +1353,7 @@ main(void)
 					    1, 210 + (long)k);
 				diff_eq_int("0x26 bits: and its count is half "
 					    "the table's length",
-					    2 * (int)carriers[k].f1ba,
+					    2 * (int)carriers[k].carrier_quadrature_offset,
 					    carriers[k].taps, 210 + (long)k);
 			}
 		}

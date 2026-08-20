@@ -277,7 +277,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 
 	V34InitializeImplementationSpecific(obj);
 
-	obj->fa23c = 1;
+	obj->far_echo_enabled = 1;
 	obj->bulk_tail = 0;
 	obj->bulk_head = 0;
 	obj->bulk_ring = (short *)(m + OB_BULK_RING);
@@ -418,7 +418,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	*(int *)(m + OB_F0238) = 0;
 	*(int *)(m + OB_F0248) = (int)0xfffe8900;
 	*(short *)(m + OB_FORCE_LOW_BAUD) = 0;
-	rx->f262 = 0x600;
+	rx->agc_reset_gain = 0x600;
 	*(int *)((unsigned char *)rx + RX_F238) = 0;
 	*(int *)(m + OB_F000C) = 0;
 	obj->nof_tx_bits = 0;
@@ -434,7 +434,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 */
 	*(short *)(m + OB_F0254) =
 		(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);
-	obj->f2aa6 = 0;
+	obj->history_2f58_index = 0;
 	*(short *)(m + OB_F0254 + 2) = 0;
 	*(int *)(m + OB_F0254 + 4) = 0;
 
@@ -477,10 +477,10 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->rrn_remote = 0;
 	*(short *)(m + OB_FAC12) = 0;
 	*(short *)(m + OB_FAC14) = 0;
-	obj->f3554 = 0x7d0;
+	obj->echo_alpha_decay_start = 0x7d0;
 	*(short *)(m + OB_FA248) = 0;
-	obj->f3558 = 0x7fdf;
-	obj->f355c = 2;
+	obj->echo_alpha_decay_factor = 0x7fdf;
+	obj->echo_beta = 2;
 
 	/*
 	 * THE RATE BLOCK, and it is `VPcmV34InitiateRetrain`'s to the
@@ -642,18 +642,18 @@ V34PCMCREATE_ASSERT(floor,    rx_energy_floor,  0x0230);
 V34PCMCREATE_ASSERT(v90rx,    v90_receiver,     0x024c);
 V34PCMCREATE_ASSERT(k56rx,    k56flex_receiver, 0x0250);
 V34PCMCREATE_ASSERT(dmadly,   dmadelay,             0x025c);
-V34PCMCREATE_ASSERT(f2aa6,    f2aa6,            0x2aa6);
+V34PCMCREATE_ASSERT(hist2f58, history_2f58_index, 0x2aa6);
 V34PCMCREATE_ASSERT(p3548,    p3548,            0x3548);
-V34PCMCREATE_ASSERT(f3554,    f3554,            0x3554);
-V34PCMCREATE_ASSERT(f3558,    f3558,            0x3558);
-V34PCMCREATE_ASSERT(f355c,    f355c,            0x355c);
+V34PCMCREATE_ASSERT(adecay_start, echo_alpha_decay_start, 0x3554);
+V34PCMCREATE_ASSERT(adecay_factor, echo_alpha_decay_factor, 0x3558);
+V34PCMCREATE_ASSERT(ebeta,    echo_beta,        0x355c);
 V34PCMCREATE_ASSERT(f359c,    f359c,            0x359c);
 V34PCMCREATE_ASSERT(f35a4,    f35a4,            0x35a4);
 V34PCMCREATE_ASSERT(bhead,    bulk_head,        0x35a8);
 V34PCMCREATE_ASSERT(btail,    bulk_tail,        0x35ac);
 V34PCMCREATE_ASSERT(bring,    bulk_ring,        0x35b0);
 V34PCMCREATE_ASSERT(blen,     bulk_len,         0x35b4);
-V34PCMCREATE_ASSERT(fa23c,    fa23c,            0xa23c);
+V34PCMCREATE_ASSERT(farec,    far_echo_enabled, 0xa23c);
 V34PCMCREATE_ASSERT(filtdly,  filtdelay,        0xaa7c);
 V34PCMCREATE_ASSERT(lv92,     local_v92,        0xabc6);
 V34PCMCREATE_ASSERT(rv92,     remote_v92,       0xabc8);
@@ -682,7 +682,7 @@ V34PCMCREATE_ASSERT(pac3c,    pac3c,            0xac3c);
 typedef char v34pcmcreate_rxsize[
 	((int)sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
 typedef char v34pcmcreate_rxf262[
-	((int)__builtin_offsetof(struct v34_receiver, f262) == 0x262)
+        ((int)__builtin_offsetof(struct v34_receiver, agc_reset_gain) == 0x262)
 	? 1 : -1];
 
 /* And the V.34 object's own extent, which is the first memset's length. */

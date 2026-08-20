@@ -1149,7 +1149,7 @@ run_handshakinit(const struct hsi_case *c, long tag)
 	poke_short(HSI_TXSTATE, c->txst);
 	poke_short(0x2aa2, c->trace1);
 	poke_short(0xaa78, c->trace2);
-	poke_short(0x264 + 0x262, c->f262);
+	poke_short(0x264 + 0x262, c->agc_reset_gain);
 
 	v34handshakinit(&oa, c->mode);
 	ref_v34handshakinit(ob, c->mode);

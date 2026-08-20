@@ -296,8 +296,8 @@ struct v34_object {
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
 	 * `dmadelay` is the base the echo filter's lag is measured from,
-	 * f25e the transmit sample it just dequeued, f260 the running
-	 * residual.
+	 * `tx_sample` is the transmit sample it just dequeued;
+	 * `rx_work_sample` is the running residual.
 	 *
 	 * +0x25c IS `V34dmadelay`, and it is the object's own spelling:
 	 * `VPcmV34SetDelays` computes `0x610 - cfg[0x68]`, stores it here and
@@ -307,8 +307,8 @@ struct v34_object {
 	 * same expression against the same offset.
 	 */
 	short dmadelay;					/* +0x25c */
-	short f25e;					/* +0x25e */
-	short f260;					/* +0x260 */
+	short tx_sample;				/* +0x25e */
+	short rx_work_sample;			/* +0x260 */
 	/*
 	 * +0x262.  `VPcmV34NotifyDP` sets it to 1 under "VPcmV34
 	 * Notification: Valid in samples..." and to 0 under "...Invalid in
@@ -481,11 +481,12 @@ struct v34_object {
 	};
 	short f2aa0;					/* +0x2aa0 */
 	short vect_idx;					/* +0x2aa2 */
-	short f2aa4;					/* +0x2aa4 */
-	short f2aa6;					/* +0x2aa6 */
+	short history_2aa8_index;			/* +0x2aa4 */
+	short history_2f58_index;			/* +0x2aa6 */
 	/*
-	 * Two per-symbol history rings modem_serrint fills, indexed by f2aa4
-	 * and f2aa6 and wrapping at 0x12b and 0x257 respectively.  The first
+	 * Two per-symbol history rings modem_serrint fills, indexed by
+	 * `history_2aa8_index` and `history_2f58_index`, and wrapping at 0x12b
+	 * and 0x257 respectively.  The first
 	 * holds each residual TWICE, as both halves of its entry -- so it is
 	 * a complex buffer being written with a real value.
 	 *
@@ -518,30 +519,30 @@ struct v34_object {
 	 */
 	void *p3548;					/* +0x3548 */
 	/*
-	 * adaptecho's adaptation state.  f354c counts calls and gates the
-	 * whole slow path; f3550 is the LMS step (updateAlpha's alpha, and
-	 * the only short here); f3558 its decay; f355c a shift the step is
-	 * scaled by, which the ladder at 0x90 moves between 2, 4 and 5; and
-	 * f3560 the energy accumulated over the first 0x8f calls.
+	 * `adaptecho`'s adaptation state. `echo_adapt_count` counts calls and
+	 * gates the whole slow path; `near_echo_alpha` / `far_echo_alpha` are
+	 * the two LMS alphas; `echo_alpha_decay_factor` controls decay;
+	 * `echo_beta` is the beta/step scale; and `near_echo_startup_energy`
+	 * is accumulated over the first 0x8f calls.
 	 *
 	 * AND THREE OF THEM ARE NAMED BY THEIR OTHER WRITER.
-	 * `GetVPcmMinimalTxPowerReduction` sets f3554, f3558 and f355c
+	 * `GetVPcmMinimalTxPowerReduction` sets `echo_alpha_decay_start`,
+	 * `echo_alpha_decay_factor` and `echo_beta`
 	 * together and then prints what it set: "setting echo: decay start =
-	 * %d, decay fact = %d, beta = %d".  So f3554 is the call count decay
-	 * starts at -- which is exactly what `adaptecho` compares it against
-	 * -- f3558 is the decay factor and f355c is beta.
+	 * %d, decay fact = %d, beta = %d".  The first is the call count where
+	 * decay starts; the second is the decay factor; the third is beta.
 	 *
 	 * The two writers do not agree on beta's range: `adaptecho`'s ladder
 	 * moves it between 2, 4 and 5, and the PCM side sets 2, 4 or 6.  Both
 	 * readings are the object's; nothing here reconciles them.
 	 */
-	int f354c;					/* +0x354c */
-	short f3550;					/* +0x3550 */
-	short f3552;					/* +0x3552 */
-	int f3554;					/* +0x3554 */
-	int f3558;					/* +0x3558 */
-	int f355c;					/* +0x355c */
-	int f3560;					/* +0x3560 */
+	int echo_adapt_count;				/* +0x354c */
+	short near_echo_alpha;			/* +0x3550 */
+	short far_echo_alpha;			/* +0x3552 */
+	int echo_alpha_decay_start;			/* +0x3554 */
+	int echo_alpha_decay_factor;			/* +0x3558 */
+	int echo_beta;					/* +0x355c */
+	int near_echo_startup_energy;		/* +0x3560 */
 	/*
 	 * +0x3564 IS THE OBJECT'S OWN `struct v34_detector`, and the two
 	 * ends meet exactly: `sizeof(struct v34_detector)` is 0x24 and
@@ -722,15 +723,15 @@ struct v34_object {
 	 * and adapts echo1 only when this is set, and adaptecho never looks
 	 * at it because it only ever drives the near one.
 	 */
-	short fa23c;					/* +0xa23c */
+	short far_echo_enabled;				/* +0xa23c */
 	/*
 	 * adaptecho reads this, adds it to the residual, and clears it -- so
 	 * it is a one-shot correction somebody upstream deposits.  Whoever
 	 * writes it has not been reconstructed yet.
 	 */
-	short fa23e;					/* +0xa23e */
+	short residual_correction;			/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
-	short fa240;					/* +0xa240 */
+	short residual_energy_estimate;		/* +0xa240 */
 	unsigned char unmapped_a242[0xa24a - 0xa242];
 	/*
 	 * The retrain-request detector's five scalars, all five written by

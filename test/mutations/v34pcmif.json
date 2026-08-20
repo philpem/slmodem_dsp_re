@@ -195,13 +195,13 @@
  },
  {
   "label": "hangup: f0004 gets 5",
-  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;",
-  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;"
+  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->retrain_bad_block_run = 0;",
+  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->retrain_bad_block_run = 0;"
  },
  {
   "label": "reneg: f0004 gets 5",
-  "find": "\tobj->f0004 = 6;\n\n\trx->f258 = 0;",
-  "replace": "\tobj->f0004 = 5;\n\n\trx->f258 = 0;",
+  "find": "\tobj->f0004 = 6;\n\n\trx->retrain_bad_block_run = 0;",
+  "replace": "\tobj->f0004 = 5;\n\n\trx->retrain_bad_block_run = 0;",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
@@ -212,13 +212,13 @@
  },
  {
   "label": "hangup: 0x2218 gets 6",
-  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;",
-  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\trx->f258 = 0;"
+  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->retrain_bad_block_run = 0;",
+  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\trx->retrain_bad_block_run = 0;"
  },
  {
   "label": "reneg: 0x2218 gets 6",
-  "find": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
-  "replace": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 6;",
+  "find": "\trx->reneg_up_good_block_run = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
+  "replace": "\trx->reneg_up_good_block_run = 0;\n\n\t*(int *)(m + 0x2218) = 6;",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
@@ -229,24 +229,24 @@
  },
  {
   "label": "hangup: rx f258 not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for",
-  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for"
+  "find": "\trx->retrain_bad_block_run = 0;\n\trx->reneg_down_bad_block_run = 0;\n\trx->reneg_up_good_block_run = 0;\n}\n\n/*\n * Ask for",
+  "replace": "\trx->reneg_down_bad_block_run = 0;\n\trx->reneg_up_good_block_run = 0;\n}\n\n/*\n * Ask for"
  },
  {
   "label": "hangup: rx f25c not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for",
-  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n}\n\n/*\n * Ask for"
+  "find": "\trx->retrain_bad_block_run = 0;\n\trx->reneg_down_bad_block_run = 0;\n\trx->reneg_up_good_block_run = 0;\n}\n\n/*\n * Ask for",
+  "replace": "\trx->retrain_bad_block_run = 0;\n\trx->reneg_down_bad_block_run = 0;\n}\n\n/*\n * Ask for"
  },
  {
   "label": "reneg: rx f258 not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
+  "find": "\trx->retrain_bad_block_run = 0;\n\trx->reneg_down_bad_block_run = 0;\n\trx->reneg_up_good_block_run = 0;\n\n\t*(int *)(m + 0x2218)",
+  "replace": "\trx->reneg_down_bad_block_run = 0;\n\trx->reneg_up_good_block_run = 0;\n\n\t*(int *)(m + 0x2218)",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: rx f25c not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n\n\t*(int *)(m + 0x2218)",
+  "find": "\trx->retrain_bad_block_run = 0;\n\trx->reneg_down_bad_block_run = 0;\n\trx->reneg_up_good_block_run = 0;\n\n\t*(int *)(m + 0x2218)",
+  "replace": "\trx->retrain_bad_block_run = 0;\n\trx->reneg_down_bad_block_run = 0;\n\n\t*(int *)(m + 0x2218)",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
@@ -256,8 +256,8 @@
  },
  {
   "label": "reneg: handshakinit asked for mode 1",
-  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->f0004 = 6;\n\n\trx->f258",
-  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\n\trx->f258",
+  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->f0004 = 6;\n\n\trx->retrain_bad_block_run",
+  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\n\trx->retrain_bad_block_run",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {

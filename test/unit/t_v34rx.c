@@ -425,7 +425,7 @@ main(void)
 				    ((unsigned char *)&ob)[b], b);
 		}
 		diff_eq_int("baud starts at 2400",
-			    ((struct v34_receiver *)((char *)&oa + 0x264))->f1d2,
+			    ((struct v34_receiver *)((char *)&oa + 0x264))->timing_report_interval_symbols,
 			    2400, 0);
 	}
 	rc |= diff_end();
@@ -591,7 +591,7 @@ main(void)
 			ra.agc_level = rb.agc_level = 0;
 			ra.agc_accum = rb.agc_accum = 0;
 			ra.agc_step = rb.agc_step = 0x3333;
-			ra.f19c = rb.f19c = 0;
+			ra.rms_window_index = rb.rms_window_index = 0;
 			ra.energy.sum = rb.energy.sum = 0;
 			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 				ra.rms_buf[b] = rb.rms_buf[b] = 0;
@@ -713,9 +713,9 @@ main(void)
 			((struct v34_queue *)rb)->count = V34_RXQ_RING;
 
 			ra->carrier = rb->carrier = carrier;
-			ra->f1b8 = rb->f1b8 = 3;
-			ra->f1ba = rb->f1ba = 64;
-			ra->f1bc = rb->f1bc = 5;
+			ra->carrier_phase_increment = rb->carrier_phase_increment = 3;
+			ra->carrier_quadrature_offset = rb->carrier_quadrature_offset = 64;
+			ra->carrier_phase = rb->carrier_phase = 5;
 
 			/*
 			 * The RMS index is NOT set by rxinit or
@@ -724,11 +724,11 @@ main(void)
 			 * the fixture stands in for them; left at the fill it
 			 * would be -23131 and index 46 KB below rms_buf.
 			 */
-			ra->f19c = rb->f19c = 0;
+			ra->rms_window_index = rb->rms_window_index = 0;
 
-			ra->f1ac = rb->f1ac = 17;
-			ra->f1ae = rb->f1ae = steps[sw];
-			ra->f1b0 = rb->f1b0 = 1024;
+			ra->timing_phase = rb->timing_phase = 17;
+			ra->timing_phase_increment = rb->timing_phase_increment = steps[sw];
+			ra->timing_phase_wrap = rb->timing_phase_wrap = 1024;
 			/*
 			 * THE BOUND, and it is far tighter than timing_out[]
 			 * suggests.  V34demodulate appends one gained sample
@@ -744,7 +744,7 @@ main(void)
 			 * not something to test past: driving it further
 			 * measures the overrun, not the interpolator.
 			 */
-			ra->f128 = rb->f128 = 6;
+			ra->timing_output_count = rb->timing_output_count = 6;
 			ra->agc_gain = rb->agc_gain = 0x400;
 			ra->agc_step = rb->agc_step = 0x3333;
 
@@ -757,7 +757,7 @@ main(void)
 
 				/* It must not have reached f128. */
 				if ((char *)ra->rx_samples
-				    > (char *)&ra->f128) {
+				    > (char *)&ra->timing_output_count) {
 					printf("FIXTURE: the burst reached "
 					       "+0x128 -- lower f128\n");
 					return 1;
@@ -1008,7 +1008,7 @@ main(void)
 			{
 				int k;
 
-				for (k = 0; k < 2 * (int)ra->f1ba; k++)
+				for (k = 0; k < 2 * (int)ra->carrier_quadrature_offset; k++)
 					diff_eq_int("carrier entry",
 						    ra->carrier[k],
 						    rb->carrier[k],
@@ -1043,7 +1043,7 @@ main(void)
 			V34SetupDemodulator(&o, 2400, tab[i].c);
 			r = (struct v34_receiver *)((char *)&o + 0x264);
 			diff_eq_int("2 x half length",
-				    2 * (unsigned)r->f1ba, tab[i].len,
+				    2 * (unsigned)r->carrier_quadrature_offset, tab[i].len,
 				    tab[i].c);
 		}
 	}
@@ -1077,11 +1077,11 @@ main(void)
 			txinit(&oa); ref_txinit(&ob);
 
 			oa.f25c2 = ob.f25c2 = 0;
-			oa.f260  = ob.f260  = 0;
-			oa.fa23e = ob.fa23e = 0;
-			oa.f3550 = ob.f3550 = -0x2000;
-			oa.f3554 = ob.f3554 = 0x95;
-			oa.f3558 = ob.f3558 = 0x7000;
+			oa.rx_work_sample = ob.rx_work_sample = 0;
+			oa.residual_correction = ob.residual_correction = 0;
+			oa.near_echo_alpha = ob.near_echo_alpha = -0x2000;
+			oa.echo_alpha_decay_start = ob.echo_alpha_decay_start = 0x95;
+			oa.echo_alpha_decay_factor = ob.echo_alpha_decay_factor = 0x7000;
 			/*
 			 * THE THIRD ARM OF THE STEP-SIZE CHOICE, which
 			 * nothing reached.  It is picked when `f355c > 2` and
@@ -1097,9 +1097,9 @@ main(void)
 			 * block -- with `f3560` still exactly as seeded
 			 * rather than 143 calls of accumulation on top.
 			 */
-			oa.f355c = ob.f355c = (short)(beta ? 5 : 6);
-			oa.f3560 = ob.f3560 = beta ? -1 : 0;
-			oa.f354c = ob.f354c = beta ? 0x8f : 0;
+			oa.echo_beta = ob.echo_beta = (short)(beta ? 5 : 6);
+			oa.near_echo_startup_energy = ob.near_echo_startup_energy = beta ? -1 : 0;
+			oa.echo_adapt_count = ob.echo_adapt_count = beta ? 0x8f : 0;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 
 			/*
@@ -1119,7 +1119,7 @@ main(void)
 			dsplib_debug_capture_reset();
 
 			for (it = 0; it < 200; it++) {
-				oa.fa23e = ob.fa23e = (short)(it * 37 - 900);
+				oa.residual_correction = ob.residual_correction = (short)(it * 37 - 900);
 				adaptecho(&oa);
 				ref_adaptecho(&ob);
 			}
@@ -1230,16 +1230,16 @@ main(void)
 
 			ra->flags = rb->flags = (unsigned short)
 			    (mode == 0 ? 0x8000 : mode == 1 ? 0x0800 : 0);
-			ra->f2a4 = rb->f2a4 = coeff;
+			ra->fir60_coeffs = rb->fir60_coeffs = coeff;
 
 			oa.dmadelay  = ob.dmadelay  = (short)(lag ? 8 : 0x40);
 			oa.f25c2 = ob.f25c2 = (short)(feed ? V34_EC_FEED : 0);
-			oa.f260  = ob.f260  = 1234;
-			oa.fa23c = ob.fa23c = (short)(far ? 1 : 0);
-			oa.fa23e = ob.fa23e = 0;
-			oa.fa240 = ob.fa240 = 0;
-			oa.f2aa4 = ob.f2aa4 = 0;
-			oa.f2aa6 = ob.f2aa6 = 0;
+			oa.rx_work_sample = ob.rx_work_sample = 1234;
+			oa.far_echo_enabled = ob.far_echo_enabled = (short)(far ? 1 : 0);
+			oa.residual_correction = ob.residual_correction = 0;
+			oa.residual_energy_estimate = ob.residual_energy_estimate = 0;
+			oa.history_2aa8_index = ob.history_2aa8_index = 0;
+			oa.history_2f58_index = ob.history_2f58_index = 0;
 			/*
 			 * EACH SEED IS ONE COUNT BELOW A BOUNDARY, because
 			 * the function increments before it tests: `count =
@@ -1270,9 +1270,9 @@ main(void)
 			 * exactly right.
 			 */
 
-			oa.f354c = ob.f354c = cnt_seed[cnt];
-			oa.f3550 = ob.f3550 = -0x1800;
-			oa.f3552 = ob.f3552 = -0x1400;
+			oa.echo_adapt_count = ob.echo_adapt_count = cnt_seed[cnt];
+			oa.near_echo_alpha = ob.near_echo_alpha = -0x1800;
+			oa.far_echo_alpha = ob.far_echo_alpha = -0x1400;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 			oa.echo1.adapt_count = ob.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
@@ -1467,10 +1467,10 @@ main(void)
 			}
 
 			ra->flags = rb->flags = flags;
-			ra->f266 = rb->f266 = 0;
-			ra->f1aa = rb->f1aa = 0;
-			ra->f124 = rb->f124 = 20;
-			ra->f798 = rb->f798 = (short)(-60 - (re / 3000));
+			ra->demap_subframe_index = rb->demap_subframe_index = 0;
+			ra->previous_constellation_index = rb->previous_constellation_index = 0;
+			ra->rx_symbol_count = rb->rx_symbol_count = 20;
+			ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = (short)(-60 - (re / 3000));
 			ra->scrambler_sr = rb->scrambler_sr = 0x2a2a2a2a;
 			oa.baud_rate = ob.baud_rate = 40;
 
@@ -1487,7 +1487,7 @@ main(void)
 
 				diff_eq_int("dec best", ra->best_index,
 					    rb->best_index, tag);
-				diff_eq_int("dec f218", ra->f218, rb->f218,
+				diff_eq_int("dec f218", ra->equalizer_error_gain, rb->equalizer_error_gain,
 					    tag);
 				diff_eq_int("dec flags", ra->flags, rb->flags,
 					    tag);
@@ -1562,7 +1562,7 @@ main(void)
 						    * 1000 + reneg[q] + 100)
 						   * 10 + lv;
 
-					ra->f798 = rb->f798 = reneg[q];
+					ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = reneg[q];
 					ra->flags = rb->flags = flags;
 
 					dsplibs_debug_level = lv;
@@ -1577,10 +1577,10 @@ main(void)
 
 					diff_eq_int("reneg flags", ra->flags,
 						    rb->flags, tag);
-					diff_eq_int("reneg f218", ra->f218,
-						    rb->f218, tag);
-					diff_eq_int("reneg f798", ra->f798,
-						    rb->f798, tag);
+					diff_eq_int("reneg f218", ra->equalizer_error_gain,
+						    rb->equalizer_error_gain, tag);
+					diff_eq_int("reneg f798", ra->retrain_reneg_motion_count,
+						    rb->retrain_reneg_motion_count, tag);
 					diff_eq_int("reneg transcripts agree",
 						    strcmp(
 						      dsplib_debug_capture_text(0),
@@ -1675,8 +1675,8 @@ main(void)
 				ra->timing_out[k] = rb->timing_out[k] = v;
 			}
 
-			ra->f1ac = rb->f1ac = (short)(ph * 700);
-			ra->f1b0 = rb->f1b0 = (short)(wrap * 0x1f40);
+			ra->timing_phase = rb->timing_phase = (short)(ph * 700);
+			ra->timing_phase_wrap = rb->timing_phase_wrap = (short)(wrap * 0x1f40);
 			ra->f1ec = rb->f1ec = 0;
 			ra->f1ee = rb->f1ee = 0;
 
@@ -1703,7 +1703,7 @@ main(void)
 				} else if (dsplib_debug_capture_text(1)[0]) {
 					saw_sip_said = 1;
 				}
-				diff_eq_int("phase", ra->f1ac, rb->f1ac, tag);
+				diff_eq_int("phase", ra->timing_phase, rb->timing_phase, tag);
 				diff_eq_int("idx lo", ra->f1ec, rb->f1ec, tag);
 				diff_eq_int("idx hi", ra->f1ee, rb->f1ee, tag);
 			}
@@ -1745,21 +1745,21 @@ main(void)
 
 			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
 			oa.baud_rate = ob.baud_rate = 400;
-			ra->f1c0 = rb->f1c0 = states[si];
+			ra->timing_state = rb->timing_state = states[si];
 			ra->f1d0 = rb->f1d0 = (short)d0;
-			ra->f232 = rb->f232 = 0;
-			ra->f234 = rb->f234 = 0;
-			ra->f236 = rb->f236 = 0;
-			ra->f1d2 = rb->f1d2 = 0;
+			ra->timing_state_dwell_limit = rb->timing_state_dwell_limit = 0;
+			ra->timing_proportional_gain_q11 = rb->timing_proportional_gain_q11 = 0;
+			ra->timing_integral_gain_q15 = rb->timing_integral_gain_q15 = 0;
+			ra->timing_report_interval_symbols = rb->timing_report_interval_symbols = 0;
 			oa.fac0c = ob.fac0c = 0;
 
 			setTimingStateParameters(&oa);
 			ref_setTimingStateParameters(&ob);
 
-			diff_eq_int("sts f232", ra->f232, rb->f232, tag);
-			diff_eq_int("sts f234", ra->f234, rb->f234, tag);
-			diff_eq_int("sts f236", ra->f236, rb->f236, tag);
-			diff_eq_int("sts f1d2", ra->f1d2, rb->f1d2, tag);
+			diff_eq_int("sts f232", ra->timing_state_dwell_limit, rb->timing_state_dwell_limit, tag);
+			diff_eq_int("sts f234", ra->timing_proportional_gain_q11, rb->timing_proportional_gain_q11, tag);
+			diff_eq_int("sts f236", ra->timing_integral_gain_q15, rb->timing_integral_gain_q15, tag);
+			diff_eq_int("sts f1d2", ra->timing_report_interval_symbols, rb->timing_report_interval_symbols, tag);
 			diff_eq_int("sts offset", oa.fac0c, ob.fac0c, tag);
 		}
 	}
@@ -1804,24 +1804,24 @@ main(void)
 			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
 			oa.baud_rate = ob.baud_rate = 400;
 			oa.fac0c = ob.fac0c = 0;
-			ra->f1c0 = rb->f1c0 = (short)st;
+			ra->timing_state = rb->timing_state = (short)st;
 			ra->f1c8 = rb->f1c8 = skip;
 			ra->f1ec = rb->f1ec = 1;
 			ra->f1ee = rb->f1ee = 2;
-			ra->f1ac = rb->f1ac = 700;
-			ra->f1ae = rb->f1ae = 0x3e80;
-			ra->f1b0 = rb->f1b0 = 0x3e80;
+			ra->timing_phase = rb->timing_phase = 700;
+			ra->timing_phase_increment = rb->timing_phase_increment = 0x3e80;
+			ra->timing_phase_wrap = rb->timing_phase_wrap = 0x3e80;
 			ra->f1be = rb->f1be = 0x3e80;
 			ra->f1cc = rb->f1cc = 0;
 			ra->f1ce = rb->f1ce = 0;
 			ra->f1d0 = rb->f1d0 = 0;
-			ra->f1d2 = rb->f1d2 = 40;
+			ra->timing_report_interval_symbols = rb->timing_report_interval_symbols = 40;
 			ra->f1d8 = rb->f1d8 = 0;
 			ra->f1e0 = rb->f1e0 = 0;
-			ra->f230 = rb->f230 = 0;
-			ra->f232 = rb->f232 = 0;
-			ra->f234 = rb->f234 = 0;
-			ra->f236 = rb->f236 = 0;
+			ra->timing_state_dwell = rb->timing_state_dwell = 0;
+			ra->timing_state_dwell_limit = rb->timing_state_dwell_limit = 0;
+			ra->timing_proportional_gain_q11 = rb->timing_proportional_gain_q11 = 0;
+			ra->timing_integral_gain_q15 = rb->timing_integral_gain_q15 = 0;
 
 			for (it = 0; it < 120; it++) {
 				long tag = (((long)(st + 1) * 10 + skip) * 10
@@ -1854,15 +1854,15 @@ main(void)
 					saw_tv_said = 1;
 				}
 
-				diff_eq_int("tv state", ra->f1c0, rb->f1c0, tag);
-				diff_eq_int("tv step",  ra->f1ae, rb->f1ae, tag);
+				diff_eq_int("tv state", ra->timing_state, rb->timing_state, tag);
+				diff_eq_int("tv step",  ra->timing_phase_increment, rb->timing_phase_increment, tag);
 				diff_eq_int("tv acc",  (long)ra->f1d8,
 					    (long)rb->f1d8, tag);
 				diff_eq_int("tv int",  (long)ra->f1e0,
 					    (long)rb->f1e0, tag);
 				diff_eq_int("tv ppm",   ra->f1d0, rb->f1d0, tag);
-				diff_eq_int("tv dwell", ra->f230, rb->f230, tag);
-				diff_eq_int("tv phase", ra->f1ac, rb->f1ac, tag);
+				diff_eq_int("tv dwell", ra->timing_state_dwell, rb->timing_state_dwell, tag);
+				diff_eq_int("tv phase", ra->timing_phase, rb->timing_phase, tag);
 			}
 		}
 
@@ -2066,7 +2066,7 @@ main(void)
 			 * The RMS index, as in the rxtiming fixture: neither
 			 * init writes it, dpskinit and v34modeminit do.
 			 */
-			ra->f19c = rb->f19c = 0;
+			ra->rms_window_index = rb->rms_window_index = 0;
 			ra->agc_gain = rb->agc_gain = cases[cs].gain;
 			ra->agc_step = rb->agc_step = 0x3333;
 
@@ -2076,10 +2076,10 @@ main(void)
 			 * dwell.  At 1 or below `receiver` returns before the
 			 * slicer, which would leave two thirds of it untested.
 			 */
-			ra->f1c0 = rb->f1c0 = 4;
-			ra->f232 = rb->f232 = -1;
-			ra->f234 = rb->f234 = 0x1000;
-			ra->f236 = rb->f236 = 0x0800;
+			ra->timing_state = rb->timing_state = 4;
+			ra->timing_state_dwell_limit = rb->timing_state_dwell_limit = -1;
+			ra->timing_proportional_gain_q11 = rb->timing_proportional_gain_q11 = 0x1000;
+			ra->timing_integral_gain_q15 = rb->timing_integral_gain_q15 = 0x0800;
 			ra->f1ec = rb->f1ec = 1;
 			ra->f1ee = rb->f1ee = 2;
 
@@ -2100,11 +2100,11 @@ main(void)
 				ra->pred_i[k] = rb->pred_i[k] =
 				ra->pred_q[k] = rb->pred_q[k] = 0;
 
-			ra->f268 = rb->f268 = 0;
-			ra->f26a = rb->f26a = 0;
-			ra->f26c = rb->f26c = 0;
-			ra->f26e = rb->f26e = 0;
-			ra->f798 = rb->f798 = 0;
+			ra->retrain_prev_i = rb->retrain_prev_i = 0;
+			ra->retrain_prev_q = rb->retrain_prev_q = 0;
+			ra->retrain_prev2_i = rb->retrain_prev2_i = 0;
+			ra->retrain_prev2_q = rb->retrain_prev2_q = 0;
+			ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = 0;
 
 			oa.rx_energy_floor = ob.rx_energy_floor =
 			    (tweak & RXT_NO_SIGNAL) ? 0x40000000 : 900;
@@ -2117,7 +2117,7 @@ main(void)
 				 * pulls at four outputs still fits the burst.
 				 */
 				ra->f1be = rb->f1be = 20000;
-				ra->f1ae = rb->f1ae = 20000;
+				ra->timing_phase_increment = rb->timing_phase_increment = 20000;
 			}
 			if (tweak & RXT_DEAD_EQ) {
 				memset(qa2->re, 0, sizeof qa2->re);
@@ -2131,10 +2131,10 @@ main(void)
 					qa2->im[k] = qb2->im[k] = -0x1800;
 				}
 			if (tweak & RXT_REPORT)
-				ra->f21c = rb->f21c = 0x3fd;
+				ra->error_window_symbols = rb->error_window_symbols = 0x3fd;
 			if (tweak & RXT_SATURATE) {
-				ra->f220 = rb->f220 = 0x7ffffff0;
-				ra->f228 = rb->f228 = 0x7ffffff0;
+				ra->equalizer_error_accum = rb->equalizer_error_accum = 0x7ffffff0;
+				ra->predictor_error_accum = rb->predictor_error_accum = 0x7ffffff0;
 			}
 
 			ra->flags = rb->flags = cases[cs].flags;
@@ -2150,25 +2150,25 @@ main(void)
 				 * the S-S1 reset writes 0, so leaving it
 				 * alone would collapse the sweep to those.
 				 */
-				ra->f124 = rb->f124 =
+				ra->rx_symbol_count = rb->rx_symbol_count =
 				    syms[it % (sizeof(syms) / sizeof(syms[0]))];
 				if (tweak & RXT_RTN_UP)
-					ra->f798 = rb->f798 = 0x8c;
+					ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = 0x8c;
 				if (tweak & RXT_RTN_DOWN)
-					ra->f798 = rb->f798 =
+					ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count =
 					    (short)((it & 1) ? -0x7c : -0x85);
 
 				receiver(&oa);
 				ref_receiver(&ob);
 
 				if ((char *)ra->rx_samples
-				    > (char *)&ra->f120) {
+				    > (char *)&ra->vectpp_cursor) {
 					printf("FIXTURE: the burst reached "
 					       "+0x120 -- it is eating "
 					       "flags, not spare buffer\n");
 					return 1;
 				}
-				if (ra->f128 > 7) {
+				if (ra->timing_output_count > 7) {
 					printf("FIXTURE: f128 > 7 runs "
 					       "timing_out into the "
 					       "predictor\n");
@@ -2296,21 +2296,21 @@ main(void)
 			((struct v34_queue *)ra)->count =
 			((struct v34_queue *)rb)->count = V34_RXQ_RING;
 
-			ra->f19c = rb->f19c = 0;
+			ra->rms_window_index = rb->rms_window_index = 0;
 			ra->agc_gain = rb->agc_gain = 0x4000;
 			ra->agc_step = rb->agc_step = 0x3333;
-			ra->f1c0 = rb->f1c0 = 4;
-			ra->f232 = rb->f232 = -1;
-			ra->f234 = rb->f234 = 0x1000;
-			ra->f236 = rb->f236 = 0x0800;
+			ra->timing_state = rb->timing_state = 4;
+			ra->timing_state_dwell_limit = rb->timing_state_dwell_limit = -1;
+			ra->timing_proportional_gain_q11 = rb->timing_proportional_gain_q11 = 0x1000;
+			ra->timing_integral_gain_q15 = rb->timing_integral_gain_q15 = 0x0800;
 			ra->f1ec = rb->f1ec = 1;
 			ra->f1ee = rb->f1ee = 2;
 			memset(ra->pred_b, 0, 12); memset(rb->pred_b, 0, 12);
 			memset(ra->pred_i, 0, 16); memset(rb->pred_i, 0, 16);
-			ra->f268 = rb->f268 = 0; ra->f26a = rb->f26a = 0;
-			ra->f26c = rb->f26c = 0; ra->f26e = rb->f26e = 0;
-			ra->f798 = rb->f798 = 0;
-			ra->f21c = rb->f21c = 0x3fd;
+			ra->retrain_prev_i = rb->retrain_prev_i = 0; ra->retrain_prev_q = rb->retrain_prev_q = 0;
+			ra->retrain_prev2_i = rb->retrain_prev2_i = 0; ra->retrain_prev2_q = rb->retrain_prev2_q = 0;
+			ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = 0;
+			ra->error_window_symbols = rb->error_window_symbols = 0x3fd;
 			oa.status = ob.status = 0;
 
 			/*
@@ -2351,10 +2351,10 @@ main(void)
 			for (it = 0; it < 32; it++) {
 				long tag = (long)cs * 1000 + it;
 
-				ra->f124 = rb->f124 =
+				ra->rx_symbol_count = rb->rx_symbol_count =
 				    syms[it % (sizeof(syms)/sizeof(syms[0]))];
 				if (cs == 1)
-					ra->f798 = rb->f798 = 0x8c;
+					ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = 0x8c;
 				if (cs == 2) {
 					/*
 					 * BOTH EDGES OF THE WINDOW.  It is
@@ -2376,7 +2376,7 @@ main(void)
 						-0x85	/* -133, outside      */
 					};
 
-					ra->f798 = rb->f798 = rrn[it & 3];
+					ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = rrn[it & 3];
 				}
 
 				dsplib_debug_capture_reset();
@@ -2540,7 +2540,7 @@ main(void)
 			ra2.agc_level = rb2.agc_level = 0;
 			ra2.agc_accum = rb2.agc_accum = 0;
 			ra2.agc_step = rb2.agc_step = 0x3333;
-			ra2.f19c = rb2.f19c = 0;
+			ra2.rms_window_index = rb2.rms_window_index = 0;
 			ra2.energy.sum = rb2.energy.sum = 0;
 			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 				ra2.rms_buf[b] = rb2.rms_buf[b] = 0;
@@ -2572,16 +2572,16 @@ main(void)
 			((struct v34_queue *)rb)->count = V34_RXQ_RING;
 			ra->agc_gain = rb->agc_gain = 0x4000;
 			ra->agc_step = rb->agc_step = 0x3333;
-			ra->f1c0 = rb->f1c0 = 4;
-			ra->f19c = rb->f19c = 0;
-			ra->f232 = rb->f232 = -1;
-			ra->f234 = rb->f234 = 0x1000;
-			ra->f236 = rb->f236 = 0x0800;
+			ra->timing_state = rb->timing_state = 4;
+			ra->rms_window_index = rb->rms_window_index = 0;
+			ra->timing_state_dwell_limit = rb->timing_state_dwell_limit = -1;
+			ra->timing_proportional_gain_q11 = rb->timing_proportional_gain_q11 = 0x1000;
+			ra->timing_integral_gain_q15 = rb->timing_integral_gain_q15 = 0x0800;
 			ra->f1ec = rb->f1ec = 1;
 			ra->f1ee = rb->f1ee = 2;
-			ra->f798 = rb->f798 = 0;
-			ra->f21c = rb->f21c = 0x3fd;
-			ra->f124 = rb->f124 = 0x40;
+			ra->retrain_reneg_motion_count = rb->retrain_reneg_motion_count = 0;
+			ra->error_window_symbols = rb->error_window_symbols = 0x3fd;
+			ra->rx_symbol_count = rb->rx_symbol_count = 0x40;
 			ra->flags = rb->flags =
 			    (unsigned short)V34_RX_FLAG_DET_PENDING;
 			oa2.status = ob2.status = 0;
@@ -2611,22 +2611,22 @@ main(void)
 			 * leaves `f25c` -- the lag -- garbage, and it is used
 			 * as an index.
 			 */
-			ra->f2a4 = rb->f2a4 = coeff2;
+			ra->fir60_coeffs = rb->fir60_coeffs = coeff2;
 			oa2.dmadelay  = ob2.dmadelay  = 0x40;
 			oa2.f25c2 = ob2.f25c2 = V34_EC_FEED;
-			oa2.f260  = ob2.f260  = 1234;
-			oa2.fa23c = ob2.fa23c = 1;
-			oa2.fa23e = ob2.fa23e = 0;
-			oa2.fa240 = ob2.fa240 = 0;
-			oa2.f2aa4 = ob2.f2aa4 = 0;
-			oa2.f2aa6 = ob2.f2aa6 = 0;
-			oa2.f354c = ob2.f354c = 0;
-			oa2.f3550 = ob2.f3550 = -0x1800;
-			oa2.f3552 = ob2.f3552 = -0x1400;
-			oa2.f3554 = ob2.f3554 = 0x95;
-			oa2.f3558 = ob2.f3558 = 0x7000;
-			oa2.f355c = ob2.f355c = 6;
-			oa2.f3560 = ob2.f3560 = 0;
+			oa2.rx_work_sample = ob2.rx_work_sample = 1234;
+			oa2.far_echo_enabled = ob2.far_echo_enabled = 1;
+			oa2.residual_correction = ob2.residual_correction = 0;
+			oa2.residual_energy_estimate = ob2.residual_energy_estimate = 0;
+			oa2.history_2aa8_index = ob2.history_2aa8_index = 0;
+			oa2.history_2f58_index = ob2.history_2f58_index = 0;
+			oa2.echo_adapt_count = ob2.echo_adapt_count = 0;
+			oa2.near_echo_alpha = ob2.near_echo_alpha = -0x1800;
+			oa2.far_echo_alpha = ob2.far_echo_alpha = -0x1400;
+			oa2.echo_alpha_decay_start = ob2.echo_alpha_decay_start = 0x95;
+			oa2.echo_alpha_decay_factor = ob2.echo_alpha_decay_factor = 0x7000;
+			oa2.echo_beta = ob2.echo_beta = 6;
+			oa2.near_echo_startup_energy = ob2.near_echo_startup_energy = 0;
 			oa2.echo0.adapt_count = ob2.echo0.adapt_count = 0;
 			oa2.echo1.adapt_count = ob2.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
@@ -2653,18 +2653,18 @@ main(void)
 				ra->timing_out[b] = rb->timing_out[b] =
 				    (short)(b <= 2 ? 900 - (int)b * 40
 						   : -700 + (int)b * 30);
-			ra->f1ac = rb->f1ac = 700;
-			ra->f1ae = rb->f1ae = 0x3e80;
-			ra->f1b0 = rb->f1b0 = 0x3e80;
+			ra->timing_phase = rb->timing_phase = 700;
+			ra->timing_phase_increment = rb->timing_phase_increment = 0x3e80;
+			ra->timing_phase_wrap = rb->timing_phase_wrap = 0x3e80;
 			ra->f1be = rb->f1be = 0x3e80;
 			ra->f1c8 = rb->f1c8 = 0;
 			ra->f1cc = rb->f1cc = 0;
 			ra->f1ce = rb->f1ce = 0;
 			ra->f1d0 = rb->f1d0 = 0;
-			ra->f1d2 = rb->f1d2 = 40;
+			ra->timing_report_interval_symbols = rb->timing_report_interval_symbols = 40;
 			ra->f1d8 = rb->f1d8 = 0;
 			ra->f1e0 = rb->f1e0 = 0;
-			ra->f230 = rb->f230 = 0;
+			ra->timing_state_dwell = rb->timing_state_dwell = 0;
 			oa2.f359c = ob2.f359c = 0x65;
 			oa2.baud_rate = ob2.baud_rate = 400;
 			oa2.fac0c = ob2.fac0c = 0;
@@ -2705,7 +2705,7 @@ main(void)
 	 * THE S-S1 THRESHOLD, PLACED EXACTLY.  `receiver` gives up on the
 	 * equaliser and restarts when the slicing error passes 0x600:
 	 *
-	 *      if ((short)err > 0x600) { ... rx->f124 = 0; ... }
+	 *      if ((short)err > 0x600) { ... rx->rx_symbol_count = 0; ... }
 	 *
 	 * and moving that bound by one is observable ONLY when err is 0x601.
 	 * Nothing in the sweeps above ever produced it -- err is
@@ -2798,14 +2798,14 @@ main(void)
 
 				ra->agc_gain = rb->agc_gain = 0x4000;
 				ra->agc_step = rb->agc_step = 0x3333;
-				ra->f124 = rb->f124 = 0x100;
-				ra->f1c0 = rb->f1c0 = 4;
+				ra->rx_symbol_count = rb->rx_symbol_count = 0x100;
+				ra->timing_state = rb->timing_state = 4;
 				ra->f1f2 = rb->f1f2 = 0x4000;
 				ra->f1f4 = rb->f1f4 = 0;
-				ra->f19c = rb->f19c = 0;
+				ra->rms_window_index = rb->rms_window_index = 0;
 				ra->f1ec = rb->f1ec = 1;
 				ra->f1ee = rb->f1ee = 2;
-				ra->f21c = rb->f21c = 0x3fd;
+				ra->error_window_symbols = rb->error_window_symbols = 0x3fd;
 				ra->flags = rb->flags =
 				    (unsigned short)V34_RX_FLAG_TRAINED;
 
@@ -2829,9 +2829,9 @@ main(void)
 			 * this fixture's arithmetic.
 			 */
 			diff_eq_int("the reference crossed the bound",
-				    ra->f124 == 0, ss1[c].cross,
+				    ra->rx_symbol_count == 0, ss1[c].cross,
 				    (long)ss1[c].err);
-			diff_eq_int("and so did ours", rb->f124 == 0,
+			diff_eq_int("and so did ours", rb->rx_symbol_count == 0,
 				    ss1[c].cross, (long)ss1[c].err);
 			if (ss1[c].cross)
 				saw_ss1 = 1;

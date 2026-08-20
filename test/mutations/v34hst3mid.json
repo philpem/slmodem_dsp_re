@@ -119,8 +119,8 @@
  },
  {
   "label": "the tail's mode-1 arm scales the baud rate by 2",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);",
-  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->baud_rate);",
+  "find": "\t\tf->rx->timing_report_interval_symbols = (short)(3 * (int)f->obj->baud_rate);",
+  "replace": "\t\tf->rx->timing_report_interval_symbols = (short)(2 * (int)f->obj->baud_rate);",
   "fn": "t3m_tail"
  },
  {

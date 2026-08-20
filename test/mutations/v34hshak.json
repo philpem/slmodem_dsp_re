@@ -900,14 +900,14 @@
  },
  {
   "label": "probe: the AGC ceiling is 0x1b57",
-  "find": "\tif (rx->f262 > 0x1b58)\n\t\trx->f262 = 0x1b58;",
-  "replace": "\tif (rx->f262 > 0x1b57)\n\t\trx->f262 = 0x1b57;",
+  "find": "\tif (rx->agc_reset_gain > 0x1b58)\n\t\trx->agc_reset_gain = 0x1b58;",
+  "replace": "\tif (rx->agc_reset_gain > 0x1b57)\n\t\trx->agc_reset_gain = 0x1b57;",
   "fn": "probeselect"
  },
  {
   "label": "probe: the AGC ceiling applies to the sensitive arms too",
   "find": "\tprobe_backoff(rx, n);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
-  "replace": "\tprobe_backoff(rx, n);\n\tif (rx->f262 > 0x1b58)\n\t\trx->f262 = 0x1b58;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
+  "replace": "\tprobe_backoff(rx, n);\n\tif (rx->agc_reset_gain > 0x1b58)\n\t\trx->agc_reset_gain = 0x1b58;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
   "fn": "probe_ask"
  },
  {
