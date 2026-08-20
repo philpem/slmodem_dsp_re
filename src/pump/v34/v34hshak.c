@@ -2104,6 +2104,24 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 * declared here rather than there precisely so that removing the bench
 	 * cannot change what this function does.
 	 */
+	/*
+	 * Bench-only actuator for measuring the FAR transmitter's real Table 3/4
+	 * responses.  The selector is normally estimating the channel and asking
+	 * the remote modem for a filter; this hook holds that request fixed so an
+	 * HSF/Smart Link shared-channel sweep can distinguish a selector-model
+	 * error from equaliser convergence.  It is deliberately compile-time only:
+	 * production and the differential tree retain their existing behaviour.
+	 */
+#ifdef DSPLIB_V34_TEST_PREEMP_INDEX
+# if DSPLIB_V34_TEST_PREEMP_INDEX < 0 || DSPLIB_V34_TEST_PREEMP_INDEX > 10
+#  error "DSPLIB_V34_TEST_PREEMP_INDEX must be in 0..10"
+# endif
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34PREEMPHASIS, - TEST index %d, baudrate= %d\n",
+				     DSPLIB_V34_TEST_PREEMP_INDEX, (int)baud);
+	return DSPLIB_V34_TEST_PREEMP_INDEX;
+#endif
+
 	if (!dsplib_v34_blob_preemp) {
 		short f = probe_preemp_shape(bins, n, baud);
 

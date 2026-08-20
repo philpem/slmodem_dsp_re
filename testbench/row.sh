@@ -53,6 +53,13 @@ MODEM=${TTY:-supra}
 CAPTURES=/home/philpem/dev/sip-D-modem/claude_re/testbench/captures
 mkdir -p "$CAPTURES"
 LOG=${1:-$CAPTURES/row}
+# A caller may provide a relative prefix (for example `captures/run-1`) even
+# though this script lives one directory below the repository root.  Create
+# the selected prefix's directory rather than assuming it is $CAPTURES.
+# Without this, the pre-flight succeeds but slmodemd is never started, and the
+# resulting cleanup errors obscure that no call was actually placed.
+LOGDIR=$(dirname "$LOG")
+mkdir -p "$LOGDIR"
 WHO=${2:-pty}
 DIAL=${3:-1901}
 SLPGID=""

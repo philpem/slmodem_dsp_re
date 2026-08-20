@@ -75639,7 +75639,7 @@ list above.
 
 ### 6104. 18 dB shared-channel failure is MP/retrain interop, not a clean equaliser failure
 
-`testbench/chanshim.py` is the common channel for both runs: 70 ms one-way
+The shared C channel shim is the common channel for both runs: 70 ms one-way
 delay, flat response, `CHAN_SNR=18`, seed 20260819.  SmartLink against itself
 connects at **9600 bit/s**; its Phase-4 errors are 4197 (origin) and 4627
 (answer).  SmartLink against the Conexant HSF is cleanly known to connect at
@@ -75659,6 +75659,84 @@ Next experiment: capture and compare the MP/MP' octets on the successful
 clean run and the first noisy attempt, then vary only the SmartLink selected
 rate.  A change to equaliser adaptation is not justified until it changes
 this controlled post-selection failure.
+
+### 6106. C-channel 18 dB HSF interop reproduces a post-MP failure; receive-rate capping does not avert it
+
+The C-only harness removes the old Python channel implementation from this
+experiment.  With `VBT_PROFILE=vg204-1907`, 70 ms one-way delay,
+`CHAN_SNR=18`, and seed 20260819, SmartLink receives a stable repeated MP
+sequence, selects 12000 bit/s (`equerr=2754`, `preerr=2623`), receives MP′
+and E, and then triggers `V34RTNCOUNT` at symbol 141 with `equerr=2713`.
+Neither endpoint reports CONNECT.  This is the same failure shape as 6104:
+the received MP words are not visibly corrupt, and failure is after their
+exchange.
+
+As a narrow control, SmartLink was sent `AT+MS=34,1,9600,9600` while every
+other condition remained the same.  Its rate decision reports `min=9600,
+max=9600`, but the final exchange remains asymmetric (14400 transmit, 9600
+receive) and retrains at the same symbol with `equerr=2714`.  This rules out a
+simple receive-ceiling explanation.  It does **not** yet test a forced
+SmartLink transmit rate: the AT interface constrains the advertised receive
+limit, while the outgoing MP still reflects the peer negotiation.  Do not
+interpret this control as a rate-independent proof.
+
+### 6107. Forcing the outgoing MP proposal to 12000 does not prevent the HSF retrain
+
+The missing control in 6106 is now available without changing the normal
+reconstruction.  `v34hstx1.cpp` has a diagnostic-only
+`DSPLIB_V34_TEST_TX_RATE_CAP` compile-time guard, and the harness builds it in
+an isolated object and hybrid directory.  Without that define the original
+outgoing-MP path is unchanged, including in the differential build.
+
+At the same `vg204-1907`, 70 ms, 18 dB, seed-20260819 condition, a cap of
+rate index 5 produces a valid MP/MP′/E exchange and a final **12000/12000**
+link configuration (rather than the ordinary 14400/12000).  Nevertheless the
+Conexant peer asks SmartLink to retrain roughly 83 ms after the data link is
+declared.  SmartLink logs `V34RETRAIN, retrain request detected`, not its own
+`V34RTNCOUNT`; this is a peer-requested retrain after Conexant has received
+the lower-rate SmartLink signal.
+
+This disproves the narrow theory that the 14400 bit/s outgoing proposal alone
+causes the failure.  It does **not** isolate a particular equaliser defect:
+the useful next comparison is the SmartLink transmit/data-phase waveform and
+the far receiver's diagnostic state, with the equaliser held unchanged.  The
+run is an early-retrain diagnostic, not a long-call throughput result.
+
+### 6108. The original SmartLink blob has the same 18 dB HSF failure; this is not a reconstruction defect
+
+The decisive control is the original `d-modem/slmodemd/slmodemd` against the
+same HSF build and the same shared C channel (`vg204-1907`, 70 ms,
+`CHAN_SNR=18`, seed 20260819).  Its first attempt has the same received MP
+words as the reconstruction, chooses the same receive-rate index 5, emits the
+same `txmp bits 0xae82`, and finalises at **14400 transmit / 12000 receive**.
+Its measured training error is 2758/2629, versus 2754/2623 reconstructed;
+both use retrain threshold 7038, down threshold 4689 and up threshold 2022.
+
+Most importantly, both runs receive a Conexant retrain request exactly 0.400
+seconds after the `finally txbitrate` line.  The blob then repeats the same
+failure cycle.  This falsifies the working theory that a difference in the
+reimplemented V.34 equaliser or data transmitter caused this particular
+SmartLink↔HSF 18 dB failure.  Do not change equaliser adaptation in response
+to it.
+
+The condition is still useful as an interoperability stress test, but it is
+not a discriminator for reconstruction accuracy or a candidate performance
+fix.  The lower outgoing-rate control in 6107 remains useful only to exclude
+rate selection as the reason the HSF peer requests the retrain.
+
+The same comparison at **22 dB** strengthens rather than changes that result:
+both choose 19200/16800, the same thresholds and outgoing MP word `0xaf82`,
+then receive the HSF retrain request 0.400 s after finalisation.  The hybrid
+also prints `V34RTNCOUNT` at that point, but that is optional bench
+instrumentation carried by its older `hybrid-fit` artefact; the blob has no
+such diagnostic string.  It is not a behavioural difference.
+
+At **30 dB** on the same profile, seed and delay, the two versions again match
+and now connect: each selects 28800 transmit / 26400 receive, SmartLink's DTE
+gets `CONNECT 26400`, and HSF reports `+MRR: 26400,28800` followed by LAPM,
+V.42bis and `CONNECT 28800`.  This makes the calibration conclusion direct:
+18 and 22 dB are deliberate relative-AWGN stress points, not a plausible
+normal-PSTN baseline or a useful discriminator of reconstruction quality.
 
 ### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
 
@@ -75708,3 +75786,315 @@ the shared C shim at both ends by default.  Final C-only clean calls connected
 at 33600 on SmartLink↔SmartLink and SmartLink↔HSF (the HSF answerer reported
 `+MRR: 33600,33600`).  This is the end of the Python channel implementation,
 not a claim that the legacy profile accurately represents a physical line.
+
+### 6109. The ideal-template pre-emphasis fitter overdrives the actual HSF transmitter by one shelf step on the legacy VG204 model
+
+The 26 dB `vg204-1907` case initially looked like a receiver/equaliser
+regression: the normal reconstruction selected receive index 8 (19200 bit/s)
+with `equerr=585`, while the original blob selected index 9 (21600 bit/s) with
+`equerr=534`.  The rate ladder itself is not the difference: both execute the
+same threshold calculation, and the different 1024-symbol error measurement
+is what moves the exact ladder by one rung.
+
+Two otherwise-identical hybrids isolate the cause.  Replacing only
+`v34hshak.o` with its `DSPLIB_REPRODUCE_BUGS` build restores the blob's
+two-point pre-emphasis selector while leaving the normal timing-filter
+initialisation in place.  On seed 20260820 it produces the blob's exact
+`equerr=534`, rate index 9 and 21600 bit/s.  The full compatibility hybrid
+does the same.  Therefore neither the equaliser adaptation nor the timing
+filter initialisation explains this particular rate loss; the requested FAR
+transmitter pre-emphasis does.
+
+The new diagnostic-only `DSPLIB_V34_TEST_PREEMP_INDEX` guard holds that
+request fixed.  It is compile-time only, accepts 0..10, and is absent from
+ordinary and differential builds.  With the same HSF answerer, channel,
+delay and seed, its direct measured curve is:
+
+| requested HSF index | rate-decision `equerr` | selected receive rate |
+|---:|---:|---:|
+| 7 | 566 | 21600 |
+| 8 | 543 | 21600 |
+| 9 | **534** | **21600** |
+| 10 | 585 | 19200 |
+
+The shape matcher requests 10.  Its result is internally consistent with its
+*ideal* V.34 template model: the 3429-baud conformance band includes the
+legacy model's sharp 3.4 kHz roll-off, and the maximum ideal shelf minimises
+the residual.  But the HSF's realised filter response plus this channel has a
+minimum at 9.  The optimisation target must therefore be the realised
+far-transmitter/channel response (or a selector robustly calibrated to it),
+not merely the closest ideal template.  Reverting to the blob's two-point
+counter would be an overfit: it agrees on this seed, but a second paired seed
+gave 19200 under both policies and a slightly higher error for the blob-style
+arm.  No default selector change is justified yet.
+
+The repaired SmartLink-to-SmartLink harness provides a first peer control.
+At the same 26 dB, 70 ms, seed-20260820 legacy profile, forcing index 9
+connected at 19200 bit/s in both directions with errors 776 and 741.  The
+ordinary index-10 control also connected at 19200 bit/s (828 and 762).  This
+small improvement is compatible with the HSF result, but does not establish a
+rate or failure difference for a SmartLink peer.  The currently observed
+one-rung rate effect is therefore HSF-specific until a repeated peer matrix
+and the physical ATA comparison say otherwise.
+
+Two further controls disprove a global “use one less shelf” replacement.  On
+the legacy profile, four HSF runs (seeds 20--23) produce normal/forced-9
+errors of 585/534, 577/603, 540/522 and 558/560 respectively: index 9 wins
+two and loses two, with a receive-rate gain only on seed 20.  Each HSF side
+reported 1.00x real time, so these are valid runs rather than clock-starvation
+artefacts.  On the independently measured `vg204-complex2-probe` profile the
+shape fitter selects index 5.  Its neighbours gave index 4: error 501, 21600;
+index 5: 522, 21600; index 6: 616, 19200.  Thus a lower neighbour can improve
+the scalar error without a rate gain, while the upper neighbour is plainly
+harmful.  The selector needs physical-ATA calibration or a robust realised
+response objective, not an unconditional one-step bias.
+
+Finally, the original SmartLink blob was rerun at the fresh legacy-profile
+seed 23 rather than inferred from the reconstruction.  It reports the same
+error and choice as the forced-index-9 reconstruction (`equerr=560`, receive
+21600 bit/s, HSF at 1.00x real time).  This is a direct fidelity control: the
+remaining normal-selector variation is an intentional reconstruction
+improvement whose benefit is mixed, while the original blob's noisy-channel
+behaviour is already reproducible without changing equaliser adaptation.
+
+**Required confirmation:** repeat the winning-versus-current comparison on the
+physical VG204/Conexant path before promoting any policy.  The hardware harness
+currently refuses before dialling because no USB serial adapter is attached;
+that is an unavailable confirmation, not a negative result.
+
+### 6110. Reviewed v3 channel model narrows the real-world interpretation of the present stress results
+
+`pstn_voiceband_channel_model_v3_reviewed.md` confirms that the shared model's
+`CHAN_SNR` mechanism is valuable for deterministic robustness testing but has
+no physical noise calibration: it scales AWGN to each 20 ms signal frame.
+Consequently `CHAN_SNR=18` is a severe synthetic stress condition, not a
+normal-PSTN quality claim.  It is harsher even than V.56bis's severe
+analogue-carrier examples, which use 30 dB TNR alongside their other bearer
+impairments.  The matched blob/reconstruction result in 6108 therefore remains
+valid, but must not be used to judge either modem's ordinary subscriber-line
+performance.
+
+The present C model is deliberately narrower than a complete physical channel:
+it has exact G.711, measured or V.56bis magnitude curves, fixed delay and
+reproducible stress controls, but not absolute dBm0/dBr levels, weighted
+signal-independent noise, codec/line-card group delay, frequency-dependent
+two-way hybrid echo, RTP packet/jitter-buffer/PLC behaviour, or real
+sample-clock drift.  A V.34 training or retrain result under it should thus be
+classified as either (a) a useful controlled regression or (b) a specific
+endpoint-profile result, never as a generic field-line prediction.
+
+In particular, the VG204 profiles remain measurements of a named ATA mode,
+impedance and peer/direction rather than generic European PSTN curves.  The
+next realistic model priorities are calibrated noise and level measurement
+points, a bidirectional impedance/hybrid echo path, and explicit RTP
+packet/jitter-buffer events.  Keep classic FDM frequency offset, phase jitter,
+and analogue-carrier envelope-delay distortion in separate legacy-carrier
+profiles; do not add them to the normal all-digital PSTN baseline.  No V.34
+equaliser or pre-emphasis policy change follows from this review alone.
+
+### 6111. Burst structure, not an equaliser difference, reproduces the HSF post-CONNECT retrain at fixed loss rate
+
+The shared C shim previously modelled `CHAN_LOSS` as independent erased 20 ms
+frames only.  It now accepts an opt-in `CHAN_BURST` mean erased-run length
+using a deterministic two-state process, while an unset or unit value retains
+the old independent random-draw path for replay compatibility.  It emits
+`VBTLOSS` counters every 500 frames so a long HSF run records the impairment
+actually delivered despite ordered teardown.
+
+The shared-model unit test fixes the primitive's semantics independently of
+the modem calls: `CHAN_BURST=1` consumes exactly the same PRNG sequence as the
+former `rng_uniform() < CHAN_LOSS` path, while a 200000-frame deterministic
+1%/five-frame run measured 1.037% erased frames and a 5.134-frame mean burst.
+
+With the current reconstruction and HSF, `vg204-1907`, 70 ms one-way delay,
+30 dB relative AWGN, seed 20260825 and **the same 1% long-run loss**, both
+arms trained at 28800 transmit / 24000 receive and reached CONNECT.  The
+independent arm (`CHAN_BURST=1`) had ten erased frames by frame 1500 and did
+not retrain during the 70-second call.  The burst arm (`CHAN_BURST=5`) also
+had ten erased frames by frame 1500, but HSF requested a retrain shortly after
+CONNECT and SmartLink logged `V34RETRAIN, retrain request detected`.
+
+This directly supports the channel-model review: an AWGN number or average
+packet-loss fraction is insufficient to diagnose a retrain.  The immediate
+work item is to measure and replay real ATA/RTP loss run lengths before
+altering the V.34 equaliser.  It does not explain the intentionally extreme
+18 dB stationary-AWGN failure in 6108, where the original blob behaves the
+same, but it provides a more realistic matched-channel route to the observed
+interoperability symptom.
+
+The original SmartLink blob supplies the fidelity control on the exact same
+burst trace: zero erasures through frames 500 and 1000, ten by frame 1500,
+28800/24000 CONNECT, then an HSF retrain request about seven seconds after
+CONNECT.  Its training error is 233 versus the reconstruction's 230, with the
+same rate choice and peer-requested failure shape.  Therefore neither this
+burst-loss retrain nor the 18 dB AWGN retrain is a candidate equaliser fix in
+reconstructed DSP code; the channel model must first be parameterised from the
+real ATA/RTP trace.
+
+The available physical-probe archive is an important counterexample to treating
+the synthetic 1%/five-frame case as an ATA preset.  The 2026-08-18 SIP-to-SIP
+probe records zero frame loss, -226.84 ppm clock offset and approximately
+-28 dB echo; the analogue-ATA trunk probe records just one lost frame in 30 s
+(0.052%, run length one), +124.06 ppm slipping, strong AGC/nonlinearity, and
+roughly -27 dB echo.  Neither trace supports a generic 1% burst assumption.
+They instead prioritise measured clock-drift, echo and level/nonlinearity
+replay primitives.  `CHAN_BURST` remains a validated discriminator and a way
+to replay a trace once it has been measured, not a claim about normal line
+quality.
+
+### 6112. MP/MP′ comparison is now machine-checkable; the 22 dB blob/reconstruction control matches exactly
+
+`testbench/hsfmpcompare.py` reduces a pair of SmartLink `-d9` HSF-interoperability
+logs to one record per completed final-rate exchange: rate index, outgoing
+five-word MP proposal, negotiated transmit/receive bit rates, and the delay to
+any peer retrain request. It deliberately reports the reconstruction-only
+`V34RTNCOUNT` stillness diagnostic separately: the original blob does not emit
+that optional bench line, so treating it as a protocol mismatch would create a
+false reconstruction difference.
+
+Against the held 22 dB matched control, every completed exchange matches:
+both sides select receive-rate index 7, send the same MP words (`0xaf82` on the
+two retraining attempts and `0x9f82` on the terminal attempt), finalise at
+24000 transmit / 19200 receive, and receive HSF's retrain request 0.400 s
+later on the first two attempts. The reconstruction additionally logs its
+local stillness counter at the same instant, which is a consequence of the
+already-lost signal, not evidence that it originated the request.
+
+The 18 dB captures match on each overlapping exchange too, but their ordered
+teardown retained a different number of terminal attempts. The comparator
+correctly reports that truncated-tail difference instead of silently ignoring
+it; finding 6108 remains the authoritative matched-run conclusion for that
+condition. This tool makes future claims of a reconstruction MP/MP′ mismatch
+falsifiable before any equaliser adaptation change is considered.
+
+### 6113. A radically different requested HSF pre-emphasis does not avert the 18 dB peer retrain
+
+The final MP-controlled transmitter-shape variable was tested directly, rather
+than inferred from the normal selector. `build/preemp-4-hybrid/slmodemd-fit`
+forces request index 4 at every supported baud rate; it differs from the normal
+reconstruction only in the existing diagnostic `DSPLIB_V34_TEST_PREEMP_INDEX`
+hook. With `vg204-1907`, 70 ms one-way delay, `CHAN_SNR=18` and seed
+20260819, HSF ran 31.7 seconds of audio in 31.7 seconds of wall time, so this
+is not a clock-starvation result.
+
+SmartLink still chose rate index 5, finalised at **14400 transmit / 12000
+receive**, and received HSF's retrain request **0.400 s** later. Its training
+error was 3327, worse than the original blob's 2758 on the matched default
+exchange. The run began its next retrain cycle before ordered teardown; neither
+endpoint reached CONNECT.
+
+Thus a materially different receiver-requested far-transmitter spectrum does
+not bypass the noisy HSF failure, and in this direction loses margin. Together
+with the successful 12000-transmit cap control in 6107, this rules out the
+remaining practical MP-controlled rate/shape levers as an equaliser-change
+substitute for this synthetic 18 dB condition.
+
+### 6114. Physical ATA/Conexant control does not show an original-blob advantage
+
+The hardware serial adapters are visible to the host when the test is run
+outside the ordinary filesystem sandbox.  The guarded harness identified
+`/dev/ttyUSB0` as the Oli'Net Conexant CX06827-11 on extension 1903 and placed
+two otherwise-identical SmartLink-originated calls through the remote Asterisk
+PBX: first the reconstruction, then the original SmartLink blob.  Each used
+the normal 60-second no-data hold and retained the RTP, SmartLink and
+far-modem diagnostic records.  The RTP leg itself was clean in the
+reconstruction record (zero loss, no reordering, and about 0.16 ms mean
+jitter), so this is not evidence for a packet-loss explanation.
+
+Both calls ultimately failed after the Conexant recorded two **remote**
+retrains.  The reconstruction initially reported 33600 transmit / 12000
+receive, renegotiated to symmetric 24000 and then 26400, and the far modem
+reported `TERMINATION REASON: RETRAIN FAILURE`, last/highest transmit 26400,
+highest receive 33600, line quality 008.  The blob initially reported 33600
+transmit / 4800 receive, stayed at 4800 on its completed retrains, and the
+Conexant reported the same retrain-failure termination with last/highest
+transmit 4800, highest receive 33600 and line quality 037.  The later
+hang-up commands are only harness cleanup; they are not the termination
+cause recorded by the far modem.
+
+This is one paired sample, not a throughput claim: the calls are sequential
+and the ATA path can vary.  It is, however, a strong falsification of the
+working hypothesis that a reconstruction-only equaliser defect explains the
+observed SmartLink--Conexant instability.  On the available real path the
+original blob fails too, and with markedly less recovered receive rate.  Do
+not alter equaliser convergence or replace the line-training/pre-emphasis
+policy on this evidence.  Repeat a randomized blob/reconstruction ATA matrix
+and capture the ATA-side audio/diagnostics before promoting any DSP change.
+
+### 6115. The first order-balanced ATA pair confirms high variation, not a persistent retrain failure
+
+`ata_blob_recon_ab.sh` now runs an order-balanced blob/reconstruction pair and
+`callstats.py` retains the peer's final rate, termination and retrain fields
+in its CSV row.  On its first blob-first Oli'Net pair, both arms connected and
+survived the complete 60-second no-data hold; the peer reported `LOCAL
+REQUEST` only after the harness deliberately hung up, with zero local and
+zero remote retrains in both reports.  This does **not** reproduce the two
+remote-retrain terminations in 6114.
+
+The blob's far-end report for this pair was 9600 final/highest transmit and
+31200 final/highest receive; reconstruction's was 4800 final / 7200 highest
+transmit and 33600 final/highest receive.  The actual initial CONNECT strings
+were likewise stale lower bounds (9600 blob, 7200 reconstruction), while
+SmartLink's internal reconstruction trace recorded a transient 31200/7200
+choice followed by the Conexant-requested rate reduction.  The peer reports
+line qualities 126 and 127 respectively, not a controlled impairment level.
+
+Consequently the ATA has demonstrated both a blob-worse retrain-failure run
+(6114) and a blob-higher but stable-rate run under otherwise nominally equal
+setup.  A single ordering-balanced pair is deliberately insufficient to call
+either outcome a DSP advantage; it establishes that the physical path is a
+high-variance confirmation environment, not a substitute for the deterministic
+HSF/shared-channel differential.  The matrix runner should be used for a
+larger alternating sequence, with its full CSV retained, only after the
+deterministic reconstruction-vs-blob comparison identifies a candidate change.
+
+### 6116. Fresh HSF 22 dB control again matches the original MP exchange exactly
+
+The deterministic shared-channel control was repeated at a new fixed seed,
+20260820, rather than relying on the older 22 dB capture.  Both the original
+blob and the reconstruction used `vg204-1907`, 70 ms one-way delay and
+`CHAN_SNR=22`; HSF was the answerer in each run.  Both HSF logs reached
+`CONNECT 19200` and processed about 46.7 seconds of audio with no erased
+frames before the ordered test shutdown.
+
+`hsfmpcompare.py` reports one completed final-rate exchange on each side and
+an exact match: receive-rate index 7, outgoing MP words
+`0x9f82,0xfffd,0x0000,0x0000,0x0000`, and SmartLink link rates 19200 transmit /
+16800 receive.  The matching HSF report is `+MRR: 16800, 19200`.
+
+This independent, fresh replay reinforces 6112: under a deterministic noisy
+shared channel, the reconstructed V.34 MP/MP′ proposal and final choice are
+not a measurable divergence from the binary blob.  The 18 dB peer-retrain
+case remains a common endpoint/channel limit, not an equaliser-convergence
+candidate, unless a future trace produces a reproducible blob-only success or
+a completed MP exchange difference.
+
+### 6117. Perturbing allocator contents does not expose a timing-prefilter cause
+
+D29 is a deliberate normal-build V.34 correction: the blob-compatible
+`V34TimingFiltersInit` clears only the low half of its forty-entry timing
+prefilter history, while the normal build clears all forty.  The older null
+test had not deliberately made uninitialised allocation contents non-zero, so
+it was insufficient to exercise the hardening rationale.
+
+The direct control ran the normal `current-hybrid` and faithful
+`repro-hybrid` SmartLink binaries with `MALLOC_PERTURB_=165`, identical
+`vg204-1907` settings (22 dB, 70 ms, seed 20260824), and HSF as answerer.
+Both reached HSF `CONNECT 19200` and carried 46.7 seconds of audio with zero
+erased frames.  `hsfmpcompare.py` found one completed exchange in each trace
+and an exact match: index 7, MP
+`0x9f82,0xfffd,0x0000,0x0000,0x0000`, and 19200 transmit / 16800 receive.
+
+Thus fully clearing timing history remains a correct robustness improvement
+for a normal build, but allocator perturbation does not make it explain the
+noisy shared-channel MP/retrain failure.  It must stay behind the existing
+`DSPLIB_REPRODUCE_BUGS` idiom and must not motivate an equaliser adaptation
+change.
+
+The margin-sensitive converse was also run at the established failing point:
+18 dB, seed 20260819, with the same perturbation and endpoints.  Both arms
+selected index 5, sent `0xae82,0xfffd,0x0000,0x0000,0x0000`, finalised at
+14400/12000, and received the HSF peer retrain exactly 0.400 seconds later.
+This closes the possible "only matters near the retrain threshold" escape:
+the D29 correction neither creates nor prevents the observed failure under
+controlled heap contents.

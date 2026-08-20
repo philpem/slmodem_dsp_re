@@ -61,8 +61,8 @@ OUT=$BENCH/captures/$L
 #
 ROLE=${HSF_ROLE:-answer}
 case $ROLE in
-answer)		OUR_CMDS='ATZ;AT+MS=34,1;ATDT1903'; OUR_ROLE=originate ;;
-originate)	OUR_CMDS='ATZ;AT+MS=34,1;ATA';      OUR_ROLE=answer ;;
+answer)		OUR_CMDS=${OUR_DTE_CMDS:-'ATZ;AT+MS=34,1;ATDT1903'}; OUR_ROLE=originate ;;
+originate)	OUR_CMDS=${OUR_DTE_CMDS:-'ATZ;AT+MS=34,1;ATA'};      OUR_ROLE=answer ;;
 *)		echo "hsfcall: HSF_ROLE must be answer or originate" >&2; exit 2 ;;
 esac
 
@@ -94,6 +94,7 @@ export CHAN_SEED=${CHAN_SEED:-12345}
 export CHAN_DELAY_MS=${CHAN_DELAY_MS:-70}
 export CHAN_SNR=${CHAN_SNR:-}
 export CHAN_LOSS=${CHAN_LOSS:-0}
+export CHAN_BURST=${CHAN_BURST:-1}
 export CHAN_SLIP=${CHAN_SLIP:-0}
 export CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500}
 export CHAN_TILT=${CHAN_TILT:-0}
@@ -108,7 +109,7 @@ echo "hsfcall: $L, ${SECS}s, port $PORT"
 echo "  ours: $SL"
 echo "        $(ls -l --time-style=+%Y-%m-%d\ %H:%M "$SL" | awk '{print $6, $7}')  role $OUR_ROLE"
 echo "  hsf:  $HSF_ROOT/build/hsfuser  role $ROLE"
-echo "  chan: delay ${CHAN_DELAY_MS}ms loss ${CHAN_LOSS} slip ${CHAN_SLIP} tilt ${CHAN_TILT} seed ${CHAN_SEED}"
+echo "  chan: delay ${CHAN_DELAY_MS}ms loss ${CHAN_LOSS} burst ${CHAN_BURST} slip ${CHAN_SLIP} tilt ${CHAN_TILT} seed ${CHAN_SEED}"
 
 # ---- our side: slmodemd with the selected channel shim in d-modem's place --
 rm -f "$OUT.sl.pgid" "$OUT.sl.log" "$OUT.hsf.log" "$OUT.sl.dte"

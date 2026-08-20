@@ -36,6 +36,12 @@ FIELDS = [
     "equerr_pre", "equerr_post", "n_pre", "n_post",
     "tx_baud", "rx_baud",
     "connect_secs",
+    # The initial CONNECT rate is only the data-pump result before any
+    # subsequent V.34 rate renegotiation.  On a hardware peer, its retained
+    # post-call report is the authoritative final outcome.
+    "far_termination", "far_last_tx", "far_highest_tx",
+    "far_last_rx", "far_highest_rx", "far_line_quality",
+    "far_local_retrains", "far_remote_retrains",
 ]
 
 
@@ -60,6 +66,7 @@ def main():
     pre = args.prefix
     run = read(pre + ".run.log")
     sl = read(pre + ".slmodemd.log")
+    far = read(pre + ".lastlink.log")
 
     row = {k: "" for k in FIELDS}
     row["call"] = os.path.basename(pre)
@@ -113,6 +120,28 @@ def main():
             capture_output=True, text=True).stdout.split()
         if len(out) == 3:
             row["echo_lag_ms"], row["erl_db"], row["sig_echo_db"] = out
+
+    # `modem_diag` selects the correct command per physical modem.  Its
+    # ordinary text report survives the V.34 rate changes that make CONNECT
+    # stale, so retain its numbers verbatim instead of trying to reconstruct
+    # them from one endpoint's early console line.
+    def far_field(label):
+        m = re.search(r"^" + re.escape(label) + r"\.*\s+(.+?)\s*$", far,
+                      re.M)
+        return m.group(1).strip() if m else ""
+
+    row["far_termination"] = far_field("TERMINATION REASON")
+    for label, field in (
+            ("LAST TX rate", "far_last_tx"),
+            ("HIGHEST TX rate", "far_highest_tx"),
+            ("LAST RX rate", "far_last_rx"),
+            ("HIGHEST RX rate", "far_highest_rx"),
+            ("Line QUALITY", "far_line_quality"),
+            ("Local Rtrn Count", "far_local_retrains"),
+            ("Remote Rtrn Count", "far_remote_retrains")):
+        value = far_field(label)
+        m = re.search(r"\d+", value)
+        row[field] = m.group(0) if m else value
 
     print(",".join(row[k] for k in FIELDS))
     return 0

@@ -53,7 +53,7 @@ self-paced over blocking sockets.
 |---|---|
 | `chancall.sh` | One emulated call: two of our datapumps, one channel, no hardware. **BRANCH** |
 | `hsfcall.sh` | One emulated call: our datapump against the Conexant HSF. **BRANCH** |
-| `vbt-chanshim` | The shared C channel model — runs in d-modem's place for each end and joins them over loopback. Band limit, delay, noise, loss, `CHAN_SLIP`, and tilt. Carries selectable profiles under `VBT_PROFILE` (or `CHAN_LINE_MODEL` for harness compatibility). |
+| `vbt-chanshim` | The shared C channel model — runs in d-modem's place for each end and joins them over loopback. Band limit, delay, noise, independent or burst loss (`CHAN_BURST`), `CHAN_SLIP`, and tilt. Carries selectable profiles under `VBT_PROFILE` (or `CHAN_LINE_MODEL` for harness compatibility). |
 | `hsfshim.py` | Puts the HSF datapump on the far end of `vbt-chanshim`: socketpairs, ring generation, framed relay. |
 | `ladder.py` | The impairment ladder — sweeps `CHAN_SLIP` or `CHAN_LOSS` across both peers and reports median rate with connect fraction. |
 | `replay.py` | Feed a recorded call into slmodemd in d-modem's place. Open loop: the far end cannot react. |
@@ -106,6 +106,7 @@ self-paced over blocking sockets.
 | `batchanalyse.py` | Test covariates against a sample that can reject one. |
 | `handshakeorder.py` | The rate decision, broken out by **which** handshake it is (findings 3203/3204). |
 | `snrblocks.py` | The receiver's own SNR at the moment it chooses a rate. |
+| `hsfmpcompare.py` | Compare completed SmartLink↔HSF MP/MP′ exchanges from a blob and reconstruction log; reports optional local diagnostics without mistaking them for a wire-level difference. |
 | `ratepenalty.py` | Did the −2 rate penalty fire, and on which handshakes? (finding 6900) **BRANCH** |
 | `jbtiming.py` | Is the jitter buffer's insertion rate lower during training? (finding 6903) Reads archived `JBSTAT`; that instrumentation no longer exists in `d-modem.c`, so the archive is all there is. |
 | `freezescan.py` | Did a frozen equaliser manufacture the retrain? **BRANCH** |
@@ -155,7 +156,9 @@ self-paced over blocking sockets.
 not on master. Each is an A/B whose two arms differ only by a `dsplib_v34_*`
 flag, and master's datapump does not carry those flags — run here they would
 set an environment variable nothing reads and report one arm run twice as two.
-`tools/benchflags.c` and `tools/hybrid_link.sh` are there for the same reason.
+`tools/benchflags.c` is there for the same reason.  `tools/hybrid_link.sh` is
+also kept on this branch because it is the ordinary reproducible final link
+for a hybrid artefact; it contains no experimental DSP controls.
 
 **How to tell, rather than guess:** `probe_flag_for <binary>` in `modems.sh`
 answers from the binary itself, and `linesweep.py measure` pre-flights it and

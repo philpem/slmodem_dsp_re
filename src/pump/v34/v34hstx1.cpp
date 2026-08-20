@@ -2714,6 +2714,18 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	if (o->rate_want >= 0 && o->rate_want != o->rate_now)
 		cfg->rxbits = (short)o->rate_want;
 
+	/*
+	 * Bench-only rate cap.  This is deliberately a compile-time switch: the
+	 * normal reconstruction, including the differential build, retains the
+	 * blob's exact outgoing-MP choice.  It lets the interop harness distinguish
+	 * an early data-phase failure caused by the rate proposed to the peer from
+	 * one which occurs independently of that proposal.
+	 */
+#ifdef DSPLIB_V34_TEST_TX_RATE_CAP
+	if (cfg->txbits > DSPLIB_V34_TEST_TX_RATE_CAP)
+		cfg->txbits = DSPLIB_V34_TEST_TX_RATE_CAP;
+#endif
+
 	/* 0x633b5 */
 	rate = (short)bitreverse((unsigned short)cfg->rxbits, 4);
 	tx1_put(o, TX1_F358C,

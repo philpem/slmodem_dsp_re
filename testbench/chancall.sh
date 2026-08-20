@@ -52,6 +52,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 PIDS=""
+START_PTY=""
 
 start_side() {	# $1 = role (server|client), $2 = log suffix
 	local pidf="$OUT.$2.pgid"
@@ -74,25 +75,29 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	# Asking the binary is the only reading that is right in both cases.
 	env $(probe_flag_for "$SL") \
 	CHAN_ROLE=$1 CHAN_PORT=$PORT CHAN_SEED=${CHAN_SEED:-12345} \
+	CHAN_LOSS=${CHAN_LOSS:-0} CHAN_BURST=${CHAN_BURST:-1} \
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
 	CHAN_TILT=${CHAN_TILT:-0} \
 		setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
 		_ "$pidf" "$SL" "$SHIM" "$OUT.$2.log" &
 	sleep 2
 	#
-	# NO `PIDS="$PIDS $pg"` HERE.  start_side is called in a command
-	# substitution, so it runs in a subshell and any assignment it makes dies
-	# with that subshell -- `PIDS` in the parent stayed empty and `cleanup`
-	# iterated over nothing.  Three runs' worth of slmodemd and chanshim
-	# processes were still alive, holding /tmp/ttySL* and the loopback port,
-	# before this was fixed.  The parent reads the pgid files instead.
+	# Return through a global rather than command substitution.  A shell waits
+	# for asynchronous jobs when a command-substitution subshell exits, so
+	# `PTY_A=$(start_side ...)` killed the just-launched modem before it could
+	# create a PTY.  That made every self-call fail at setup while hsfcall.sh,
+	# which launches directly from its parent shell, continued to work.
 	#
-	grep -a -oE '/dev/pts/[0-9]+' "$OUT.$2.log" | head -1
+	# PIDS is still reconstructed from the pid files below: it needs both
+	# process groups, and the files are the authoritative values after setsid.
+	START_PTY=$(grep -a -oE '/dev/pts/[0-9]+' "$OUT.$2.log" | head -1)
 }
 
 echo "chancall: $L, ${SECS}s, port $PORT, binary $(basename "$SL")"
-PTY_A=$(start_side server answer)
-PTY_B=$(start_side client origin)
+start_side server answer
+PTY_A=$START_PTY
+start_side client origin
+PTY_B=$START_PTY
 PIDS="$(cat "$OUT.answer.pgid" 2>/dev/null) $(cat "$OUT.origin.pgid" 2>/dev/null)"
 [ -n "$PTY_A" ] && [ -n "$PTY_B" ] || { echo "chancall: a side gave no pty" >&2; exit 1; }
 echo "  answer pty $PTY_A   origin pty $PTY_B"

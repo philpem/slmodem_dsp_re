@@ -246,7 +246,10 @@ every arm and compare, rather than picking one setting for the bench.
 
 **No hardware needed.** `vbt-chanshim` puts two live datapumps on an emulated
 channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
-`CHAN_SLIP`, the jitter-buffer underrun model. `hsfcall.sh` drives the same
+`CHAN_SLIP`, the jitter-buffer underrun model. `CHAN_BURST` changes
+`CHAN_LOSS` from independent erased 20 ms frames to deterministic loss bursts
+with the requested mean run length; leave it at its default of 1 for legacy
+independent-loss tests. `hsfcall.sh` drives the same
 channel with a DIFFERENT far end — the Conexant HSF datapump (`hsfshim.py`
 makes the socketpair and rings it), which is the only readable, known-good
 V.34 we can put opposite ours in the emulator; `chancall.sh` can only tell us
@@ -260,7 +263,11 @@ pre-registration says (connect success first, then the fixed window).
 older batch formats. `freezescan.py` tests equaliser-freeze clustering against
 a null. `echoscan.py` / `echofit.py` / `chirpdelay.py` measure the path.
 `modemid.py` asks a modem what it is before trusting an init string.
-`v21decode.py` and `v8analyse.c` decode V.8 out of a recording.
+`v21decode.py` and `v8analyse.c` decode V.8 out of a recording. `v8analyse`
+accepts the 16-bit PCM WAV captures directly, including `*.stereo_8k.wav`;
+with `both` it follows caller and answerer views on both directions (left is
+received, right is transmitted). It requires the 8 kHz SIP capture, not the
+9600 Hz datapump-native one.
 `probeplot.py` / `fitplot.py` plot probe bins and pre-emphasis fits.
 
 **Keeping things.** `archive.py` copies the captures a finding or a tool
@@ -567,8 +574,9 @@ failure -- the modems were connected and in ARQ.
 the blob nor our reconstruction, and our reconstruction is derived from the
 blob, so it is the only impartial reader available.
 
-    v8analyse <file>_8k.raw answerer   # read the ORIGINATOR's CM
-    v8analyse <file>_8k.raw caller     # read the ANSWERER's ANSam and JM
+    v8analyse <file>_8k.wav answerer   # read the ORIGINATOR's CM
+    v8analyse <file>_8k.wav caller     # read the ANSWERER's ANSam and JM
+    v8analyse <file>.stereo_8k.wav both # follow both wire directions
 
 **The blob's CM is valid.** From row 10's transmit recording:
 
