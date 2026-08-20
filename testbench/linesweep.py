@@ -100,10 +100,11 @@ arm.  The files are plain JSON on purpose: they outlive this tool.
 
 RELATION TO THE EMULATOR
 ------------------------
-`chanshim.py` carries selectable curves under `CHAN_LINE_MODEL`.  This tool
-prints a ready-to-paste stanza (`compare --emit-chanshim`) so a measured arm
-can become an emulator model without anybody retyping numbers.  It does NOT
-edit `chanshim.py` -- the default there is byte-identical to finding 1907's fit
+The shared C channel model carries selectable curves under `VBT_PROFILE` (with
+`CHAN_LINE_MODEL` retained as a harness alias).  This tool prints a
+ready-to-paste stanza (`compare --emit-chanshim`) so a measured arm can become
+an emulator model without anybody retyping numbers.  It does NOT edit the
+shared model -- the default is byte-identical to finding 1907's fit
 and every archived emulator result depends on it staying that way.
 """
 
@@ -645,7 +646,7 @@ def _fmt_arm(m):
 
     if m.get("vs_1907_fit"):
         a('')
-        a("  against the curve chanshim.py hardcodes (finding 1907's fit):")
+        a("  against the legacy vg204-1907 curve in the shared model:")
         a(f'    {"Hz":>6} {"measured":>10} {"fit":>9} {"delta":>9}')
         for d in m["vs_1907_fit"]:
             a(f'    {d["hz"]:>6.0f} {d["measured_db"]:>10.2f} '

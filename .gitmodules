@@ -1,0 +1,3 @@
+[submodule "third_party/slopmodem-pstn-model"]
+	path = third_party/slopmodem-pstn-model
+	url = git@github.com:philpem/slopmodem-pstn-model.git

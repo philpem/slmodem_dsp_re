@@ -38,12 +38,12 @@ METHOD, and the two rules it exists to obey:
     point where the rate has collapsed, so a binary outcome saturates and hides
     the whole effect.  Connect fraction is reported too, as a second column,
     never as the headline.
-  * A DISTINCT SEED PER RUN.  chanshim.py's seed defaulted to a constant once,
+  * A DISTINCT SEED PER RUN.  The old Python channel shim's seed defaulted to a constant once,
     and an A/B of eight calls per arm came back with all eight rates identical
     -- n=1 reported as n=8.  Seeds here are deterministic from (cell, index) so
     a run is reproducible, and never shared between reps.
 
-Emulator only.  No PBX, no hardware, no dialling: chanshim.py ignores the dial
+Emulator only.  No PBX, no hardware, no dialling: vbt-chanshim ignores the dial
 string, so no destination guard is involved and none can be.  Does not need a
 quiet machine -- both ends are self-paced over blocking sockets -- but it does
 take cores, so concurrency defaults to half of them.

@@ -45,7 +45,7 @@ Legend used throughout:
 
 ### Emulated — no hardware, no PBX — **EMU**
 
-`chanshim.py` ignores the dial string entirely, so no destination guard is
+`vbt-chanshim` ignores the dial string entirely, so no destination guard is
 involved and none can be. These do not need a quiet machine: both ends are
 self-paced over blocking sockets.
 
@@ -53,8 +53,8 @@ self-paced over blocking sockets.
 |---|---|
 | `chancall.sh` | One emulated call: two of our datapumps, one channel, no hardware. **BRANCH** |
 | `hsfcall.sh` | One emulated call: our datapump against the Conexant HSF. **BRANCH** |
-| `chanshim.py` | The channel model — runs in d-modem's place for each end and joins them over loopback. Band limit, delay, noise, loss, `CHAN_SLIP`. Carries selectable line models under `CHAN_LINE_MODEL`. |
-| `hsfshim.py` | Puts the HSF datapump on the far end of `chanshim.py`: socketpairs, ring generation, framed relay. |
+| `vbt-chanshim` | The shared C channel model — runs in d-modem's place for each end and joins them over loopback. Band limit, delay, noise, loss, `CHAN_SLIP`, and tilt. Carries selectable profiles under `VBT_PROFILE` (or `CHAN_LINE_MODEL` for harness compatibility). |
+| `hsfshim.py` | Puts the HSF datapump on the far end of `vbt-chanshim`: socketpairs, ring generation, framed relay. |
 | `ladder.py` | The impairment ladder — sweeps `CHAN_SLIP` or `CHAN_LOSS` across both peers and reports median rate with connect fraction. |
 | `replay.py` | Feed a recorded call into slmodemd in d-modem's place. Open loop: the far end cannot react. |
 | `replaydte.py` | Act as the DTE for a replayed call. |

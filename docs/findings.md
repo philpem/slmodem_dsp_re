@@ -75659,3 +75659,52 @@ Next experiment: capture and compare the MP/MP' octets on the successful
 clean run and the first noisy attempt, then vary only the SmartLink selected
 rate.  A change to equaliser adaptation is not justified until it changes
 this controlled post-selection failure.
+
+### 6105. Shared C VG204 endpoint model inverted measured attenuation; fixed before it could become the Python replacement
+
+The first C implementation used a `vbt_loop_target_db()` convention derived
+from V.56bis, whose LL-1/LL-2 tables are published as positive attenuation,
+for the VG204 probe tables, whose entries are measured transfer gains and are
+already negative for loss.  It negated every curve.  Consequently the
+`vg204-complex2-probe` C FIR produced **+5.55 dB at 3450 Hz relative to
++0.84 dB at 1500 Hz**, rather than the measured high-frequency roll-off.
+This was an implementation defect in the new shared model, not evidence that
+the legacy Python model was wrong.
+
+The shared model now stores all curves as transfer gain: the published ETSI
+attenuations are negated on entry, while VG204 measurements are retained as
+measured.  Its unit suite independently checks the held 150 Hz endpoint, the
+3.0 kHz complex2 value, and the realised 3450 Hz roll-off.  After the fix,
+the C self-call's initial V.34 choice is the same asymmetric 33600/31200
+choice as the zero-delay Python call.  That is the relevant validation;
+earlier C 33600/33600 results must not be used for performance comparison.
+
+The remaining C/Python difference was also resolved by a deterministic
+512-sample fixture: C `lrint()` agrees exactly with NumPy `rint()`, while
+legacy NumPy `astype(int16)` truncates 254 of the 512 values toward zero.
+With nearest quantisation, the Python complex2 call holds the same initial
+33600/31200 choice without a `V34RTNCOUNT`; its pacing distribution is also
+indistinguishable from C after training (about 2.35 ms per 20 ms frame).
+Nearest rounding is now the Python default; `CHAN_QUANTISE=truncate` exists
+only to replay historical captures.  C now also implements `CHAN_DELAY_MS`.
+At the normal 70 ms delay, the C and Python complex2 calls have the same rate
+choices, the same `V34RTNCOUNT` at symbol 141 with equaliser error 34, and
+the same final 31200/33600 endpoints.  C now also implements frame-local
+AWGN (`CHAN_SNR`) and silent-frame loss (`CHAN_LOSS`) with a specified local
+PRNG.  Its 18 dB complex2 self-call connects at 9600 bit/s both ways, matching
+the prior Python stress outcome; exact sample streams intentionally differ
+from NumPy's generator.  The C implementation is therefore ready to replace
+Python for clean, delayed, noisy and loss profiles.  C now also implements
+the existing 10 ms repeat-insertion `CHAN_SLIP` model, including the bounded
+queue and immediate `VBTSLIP` diagnostics.  At 0.5 events/s it recorded ten
+insertions in each direction during a short run and failed training with
+`NO CARRIER`, which is the expected severe stress outcome.  Thus the C shim
+now covers all Python stress primitives.  The legacy `vg204-1907` curve and
+`CHAN_TILT` were subsequently ported as well; 1907 remains explicitly a
+historical reproduction profile, not a recommendation for new work.
+
+`chanshim.py` is now retired.  `chancall.sh` and the SmartLink↔HSF adapter use
+the shared C shim at both ends by default.  Final C-only clean calls connected
+at 33600 on SmartLink↔SmartLink and SmartLink↔HSF (the HSF answerer reported
+`+MRR: 33600,33600`).  This is the end of the Python channel implementation,
+not a claim that the legacy profile accurately represents a physical line.

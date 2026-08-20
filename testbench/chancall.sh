@@ -5,11 +5,11 @@
 #   chancall.sh LABEL [seconds]
 #   CHAN_DELAY_MS=70 CHAN_LOSS=0.001 chancall.sh noisy 90
 #
-# Spawns two slmodemd instances, each with `chanshim.py` in d-modem's place,
+# Spawns two slmodemd instances, each with the shared C channel shim in d-modem's place,
 # joined over loopback with the bench path's measured characteristics applied.
 # One answers, one originates; the pty side of each is driven by replaydte.py.
 #
-# NO PBX, NO ATA, NO SERIAL MODEM.  Nothing here can dial: `chanshim.py`
+# NO PBX, NO ATA, NO SERIAL MODEM.  Nothing here can dial: the channel shim
 # ignores the dial string entirely, exactly as `replay.py` does, so the four
 # destination guards are not involved and cannot be involved.
 #
@@ -32,12 +32,18 @@ BENCH=/home/philpem/dev/sip-D-modem/claude_re/testbench
 # a different branch's idea of what these functions do.
 . "$(dirname "$(readlink -f "$0")")/modems.sh"
 SL=${SLMODEMD:-/home/philpem/dev/sip-D-modem/claude_re/build/hybrid-fit/slmodemd-fit}
+VBT_ROOT=${VBT_ROOT:-/home/philpem/dev/sip-D-modem/claude_re/third_party/slopmodem-pstn-model}
+SHIM=
 L=${1:?usage: chancall.sh LABEL [seconds]}
 SECS=${2:-60}
 PORT=${CHAN_PORT:-$((45000 + RANDOM % 500))}
 OUT=$BENCH/captures/$L
 
 [ -x "$SL" ] || { echo "chancall: $SL not executable" >&2; exit 2; }
+VBT_PROFILE=${VBT_PROFILE:-${CHAN_LINE_MODEL:-vg204-1907}}
+export VBT_PROFILE
+make -s -C "$VBT_ROOT" vbt-chanshim || exit 2
+SHIM=$VBT_ROOT/build/vbt-chanshim
 
 cleanup() {
 	for p in ${PIDS:-}; do kill -TERM -"$p" 2>/dev/null; done
@@ -71,7 +77,7 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
 	CHAN_TILT=${CHAN_TILT:-0} \
 		setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
-		_ "$pidf" "$SL" "$BENCH/chanshim.py" "$OUT.$2.log" &
+		_ "$pidf" "$SL" "$SHIM" "$OUT.$2.log" &
 	sleep 2
 	#
 	# NO `PIDS="$PIDS $pg"` HERE.  start_side is called in a command
@@ -95,7 +101,7 @@ echo "  answer pty $PTY_A   origin pty $PTY_B"
 # THE ANSWERING SIDE TAKES `ATA`, NOT `ATS0=1`.  Auto-answer is gated on
 # `sip_ringing` in modem_main.c, and `sip_ringing` is set by exactly one thing:
 # an `SR` message arriving on the SIP socket from the `-e` child.  That child
-# is chanshim.py, which models a wire and knows nothing about call setup, so no
+# is the channel shim, which models a wire and knows nothing about call setup, so no
 # ring is ever reported and `ATS0=1` waits for a bell that cannot ring.  `ATA`
 # reaches modem_answer() directly and needs no ring; socket_dial() accepts it
 # on the `strncasecmp(m->at_cmd,"ATA",3)` arm.
