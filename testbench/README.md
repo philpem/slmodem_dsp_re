@@ -249,7 +249,9 @@ channel (`chancall.sh` drives it) — band limit, delay, noise, loss and
 `CHAN_SLIP`, the jitter-buffer underrun model. `CHAN_BURST` changes
 `CHAN_LOSS` from independent erased 20 ms frames to deterministic loss bursts
 with the requested mean run length; leave it at its default of 1 for legacy
-independent-loss tests. `hsfcall.sh` drives the same
+independent-loss tests. `CHAN_SMOOTH_PPM` is the separate continuous
+sample-clock-offset control; it is not the discontinuous `CHAN_SLIP` stress
+model. `hsfcall.sh` drives the same
 channel with a DIFFERENT far end — the Conexant HSF datapump (`hsfshim.py`
 makes the socketpair and rings it), which is the only readable, known-good
 V.34 we can put opposite ours in the emulator; `chancall.sh` can only tell us

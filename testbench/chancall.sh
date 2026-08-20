@@ -76,6 +76,7 @@ start_side() {	# $1 = role (server|client), $2 = log suffix
 	env $(probe_flag_for "$SL") \
 	CHAN_ROLE=$1 CHAN_PORT=$PORT CHAN_SEED=${CHAN_SEED:-12345} \
 	CHAN_LOSS=${CHAN_LOSS:-0} CHAN_BURST=${CHAN_BURST:-1} \
+	CHAN_SMOOTH_PPM=${CHAN_SMOOTH_PPM:-0} \
 	CHAN_SLIP=${CHAN_SLIP:-0} CHAN_SLIP_MAX_MS=${CHAN_SLIP_MAX_MS:-500} \
 	CHAN_TILT=${CHAN_TILT:-0} \
 		setsid sh -c 'echo $$ > "$1"; exec "$2" -d9 -e "$3" > "$4" 2>&1' \
