@@ -57,13 +57,14 @@ this question.
 | Appendix B | D70–D161 | can anyone HIT it? | 14 fires today, 26 needs a caller, 31 latent, 21 cannot fire |
 | Appendix C | selected | would fixing it improve CONNECT or RATE? | 8 ranked |
 
-Counting only the explicit classification lists — the `> D73 D74 …`
-blockquotes, Appendix A's table rows and its retraction list — **117 of the
-232 🐛 entries carry an appendix grade and 115 do not.**
+**121 of the 232 🐛 entries carry an appendix grade.** That counts Appendix
+B's four blockquotes and the whole of Appendix A's scope: the appendix's own
+arithmetic is 33 + 16 + 8 + 7 = 64 with "each entry in exactly one row", so
+every D1–D64 is graded there whether the row is a blockquote or a sentence.
 
-**That second number is misleading on its own, and correcting it is the first
-useful thing this pass did.** The entries written from D163 up do not appear
-in any appendix, but most carry their own four-field preamble in italics:
+**The remaining 111 are not undispositioned, and establishing that is the
+first useful thing this pass did.** The entries written from D163 up appear in
+no appendix, but most carry their own four-field preamble in italics:
 *Reachability*, *Observability*, *Status* and *Fix class*. That is a
 disposition, written by the batch that found the defect, and a mechanical
 count finds it:
@@ -71,26 +72,34 @@ count finds it:
 | | 🐛 entries |
 |---|---|
 | appendix grade AND a full inline preamble | 87 |
-| appendix grade only | 30 |
+| appendix grade only | 34 |
 | inline preamble only (no appendix grade) | 90 |
-| **neither — a bare entry** | **25** |
+| **neither — a bare entry** | **21** |
 
 So **177 of 232 carry a reachability judgement and a fix class somewhere**,
-and only **25 carry neither**. The register is in far better shape than the
-"115 undispositioned" figure suggests, and any plan built on that figure would
-be planning work that is already done. The 25 are:
+and only **21 carry neither**. The register is in far better shape than a
+naive count suggests, and a plan built on "115 undispositioned" would be
+planning work that is already done. The 21 bare entries are:
 
-> D6 D9 D27 D33 D65 D162 D176 D178 D179 D190 D275 D276 D277 D304 D306
-> D321 D470 D471 D710 D901 D920 D923 D930 D-V92DEC-1 D-V92DEC-2
+> D65 D162 D176 D178 D179 D190 D275 D276 D277 D304 D306 D321 D470 D471
+> D710 D901 D920 D923 D930 D-V92DEC-1 D-V92DEC-2
 
-*(Two counting traps were hit and are worth passing on. First: do not compute
-appendix coverage by searching the appendices for `D<n>` mentions — entry
-bodies continue AFTER Appendix C's heading, D780 and D790 sit past line 4743,
-so a prose-mention count scores those bodies' internal citations as appendix
-coverage and reports 13 uncovered instead of 115. Second: do not stop at the
-appendix lists either, or you report 115 bare entries against a true 25. Both
-mistakes were made during this pass and caught by measuring rather than
-reading.)*
+D920 and D923 are on that list only because their dispositions are written as
+prose rather than as a labelled preamble; they are the two best-argued entries
+in the file. The other nineteen are genuinely bare.
+
+*(Three counting traps were hit here and are worth passing on, because each
+one produced a confident wrong number. First: do not compute appendix coverage
+by searching the appendices for `D<n>` mentions — entry bodies continue AFTER
+Appendix C's heading, D780 and D790 sit past line 4743, so a prose-mention
+count scores those bodies' internal citations as appendix coverage and reports
+13 uncovered against a true 111. Second: do not stop at the appendix lists
+either, or you report 115 bare entries against a true 21. Third: do not read
+Appendix A's membership out of its blockquote alone — its UNMEASURABLE and
+RETRACTED rows are prose, and taking only the blockquote drops sixteen graded
+entries and puts D6, D9, D27 and D33 on the bare list, where they do not
+belong. All three mistakes were made during this pass and caught by measuring
+rather than by reading.)*
 
 Appendix B itself was audited and **is internally consistent**: 14 + 26 + 31 +
 21 = 92 listed, 92 distinct, every entry D70–D161 graded exactly once and
