@@ -2737,32 +2737,32 @@
  },
  {
   "label": "21: the echo-adapt start leaves f354c alone",
-  "find": "\t\to->f354c = 0;\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
+  "find": "\t\to->echo_adapt_count = 0;\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
   "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start leaves f3550 alone",
-  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
+  "find": "\t\to->near_echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->near_echo_startup_energy = 0;",
+  "replace": "\t\to->far_echo_alpha = 0;\n\t\to->near_echo_startup_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start leaves f3552 alone",
-  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3550 = 0;\n\t\to->f3560 = 0;",
+  "find": "\t\to->near_echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->near_echo_startup_energy = 0;",
+  "replace": "\t\to->near_echo_alpha = 0;\n\t\to->near_echo_startup_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start leaves f3560 alone",
-  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;",
+  "find": "\t\to->near_echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->near_echo_startup_energy = 0;",
+  "replace": "\t\to->near_echo_alpha = 0;\n\t\to->far_echo_alpha = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start writes f3560 as a halfword",
-  "find": "\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3552 = 0;\n\t\t*(short *)&o->f3560 = 0;",
+  "find": "\t\to->far_echo_alpha = 0;\n\t\to->near_echo_startup_energy = 0;",
+  "replace": "\t\to->far_echo_alpha = 0;\n\t\t*(short *)&o->near_echo_startup_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -4156,45 +4156,45 @@
  {
   "label": "86: the echo block does not clear f354c",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */",
+  "replace": "\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block raises bit 2 of f25c2 rather than clearing it",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 | 4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 | 4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block clears bit 3 of f25c2",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~8u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~8u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block leaves f3550 alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block leaves f3552 alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n"
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n"
  },
  {
   "label": "86: the echo block clears f3560 too, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\to->f3560 = 0;",
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */\n\t\to->near_echo_startup_energy = 0;",
   "note": "0x67613 in 21 TRNSEG4 clears the same four AND f3560; 0x66fe9 does not."
  },
  {
   "label": "86: the echo block reports the start of echo adaptation, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
  },
  {
   "label": "86: the echo diagnostic is dropped",
@@ -4205,8 +4205,8 @@
  {
   "label": "86: the segment end returns rather than falling into the reconfiguration",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t}",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
+  "find": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */\n\t}",
+  "replace": "\t\to->echo_adapt_count = 0;\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->near_echo_alpha = 0;\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
   "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive."
  }
 ]

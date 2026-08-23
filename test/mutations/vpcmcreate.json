@@ -136,8 +136,8 @@
  },
  {
   "label": "+0x3558 is one less",
-  "find": "\tobj->f3558 = 0x7fdf;",
-  "replace": "\tobj->f3558 = 0x7fde;"
+  "find": "\tobj->echo_alpha_decay_factor = 0x7fdf;",
+  "replace": "\tobj->echo_alpha_decay_factor = 0x7fde;"
  },
  {
   "label": "the hardware entrance-filter test is inverted",
@@ -161,8 +161,8 @@
  },
  {
   "label": "+0xa23c is left at zero",
-  "find": "\tobj->fa23c = 1;",
-  "replace": "\tobj->fa23c = 0;"
+  "find": "\tobj->far_echo_enabled = 1;",
+  "replace": "\tobj->far_echo_enabled = 0;"
  },
  {
   "label": "the channel-verification status is 3 rather than 4",

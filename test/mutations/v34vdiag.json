@@ -4,18 +4,18 @@
  },
  {
   "label": "selector 0: the V.34 ring is not drained",
-  "find": "\t\t\tobj->f2aa4 = 0;",
+  "find": "\t\t\tobj->history_2aa8_index = 0;",
   "replace": "\t\t\t(void)0;"
  },
  {
   "label": "selector 0: the ring count is not clamped",
-  "find": "\t\t\tn = (unsigned int)obj->f2aa4;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;",
-  "replace": "\t\t\tn = (unsigned int)obj->f2aa4;"
+  "find": "\t\t\tn = (unsigned int)obj->history_2aa8_index;\n\t\t\tif (n > maxCount)\n\t\t\t\tn = maxCount;",
+  "replace": "\t\t\tn = (unsigned int)obj->history_2aa8_index;"
  },
  {
   "label": "selector 0: the ring count is read unsigned",
-  "find": "\t\t\tn = (unsigned int)obj->f2aa4;",
-  "replace": "\t\t\tn = (unsigned int)(unsigned short)obj->f2aa4;",
+  "find": "\t\t\tn = (unsigned int)obj->history_2aa8_index;",
+  "replace": "\t\t\tn = (unsigned int)(unsigned short)obj->history_2aa8_index;",
   "equivalent": true,
   "why": "An argument about the code and not about the grid: the two readings are the SAME FUNCTION over every defined execution.  They can only differ when `f2aa4` is negative, and then the signed read gives 0xffffffff and the unsigned one 0x0000ffff -- so they differ only where `maxCount` exceeds 65535 and the loop is already walking `hist_2aa8`, which has 300 entries.  Every input that separates them is one where the unmutated function is reading tens of thousands of elements past the end of that array, so there is no defined execution on which the mutation changes an observable.  The signedness stands on `movswl 0x2aa4` at 0x72ec, which is forced; this entry records that nothing behavioural can confirm it."
  },

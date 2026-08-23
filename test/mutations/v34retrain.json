@@ -298,13 +298,13 @@
  },
  {
   "label": "V.34 does not set +0xa23c",
-  "find": "\t\tobj->fa23c = 1;",
+  "find": "\t\tobj->far_echo_enabled = 1;",
   "replace": "\t\t(void)0;"
  },
  {
   "label": "V.34 does not share the default arm's tail",
-  "find": "\t\tobj->fa23c = 1;\n\t\t/* FALLTHROUGH -- the object shares the default arm's tail. */\n\tdefault:",
-  "replace": "\t\tobj->fa23c = 1;\n\t\tbreak;\n\tdefault:"
+  "find": "\t\tobj->far_echo_enabled = 1;\n\t\t/* FALLTHROUGH -- the object shares the default arm's tail. */\n\tdefault:",
+  "replace": "\t\tobj->far_echo_enabled = 1;\n\t\tbreak;\n\tdefault:"
  },
  {
   "label": "the default arm leaves the K56flex counter alone",

@@ -605,38 +605,38 @@
  },
  {
   "label": "power: the positive arm's decay factor is the negative arm's",
-  "find": "\t\tobj->f3558 = 0x7fdf;",
-  "replace": "\t\tobj->f3558 = 0x7fcb;"
+  "find": "\t\tobj->echo_alpha_decay_factor = 0x7fdf;",
+  "replace": "\t\tobj->echo_alpha_decay_factor = 0x7fcb;"
  },
  {
   "label": "power: the positive arm's beta is four",
-  "find": "\t\tobj->f355c = 2;",
-  "replace": "\t\tobj->f355c = 4;"
+  "find": "\t\tobj->echo_beta = 2;",
+  "replace": "\t\tobj->echo_beta = 4;"
  },
  {
   "label": "power: decay start differs between the arms",
-  "find": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->f3554 = 0x7d0;",
-  "replace": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->f3554 = 0x7d1;"
+  "find": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_alpha_decay_start = 0x7d0;",
+  "replace": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_alpha_decay_start = 0x7d1;"
  },
  {
   "label": "power: the beta choice tests the wrong constant",
-  "find": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 5) ? 4 : 6;"
+  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
+  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 5) ? 4 : 6;"
  },
  {
   "label": "power: the beta choice is inverted",
-  "find": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 6 : 4;"
+  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
+  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 6 : 4;"
  },
  {
   "label": "power: beta's other value is five, as adaptecho's ladder has it",
-  "find": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 5;"
+  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
+  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 5;"
  },
  {
   "label": "power: the returned value is the unclamped one",
-  "find": "\t\t (int)red, obj->f3554, obj->f3558, obj->f355c);",
-  "replace": "\t\t (int)want, obj->f3554, obj->f3558, obj->f355c);"
+  "find": "\t\t (int)red, obj->echo_alpha_decay_start,\n\t\t obj->echo_alpha_decay_factor, obj->echo_beta);",
+  "replace": "\t\t (int)want, obj->echo_alpha_decay_start,\n\t\t obj->echo_alpha_decay_factor, obj->echo_beta);"
  },
  {
   "label": "power: the second report prints the flag before the write",

@@ -14,8 +14,8 @@
  },
  {
   "label": "updateAlpha's near call is tagged FE",
-  "find": "\t\t\t    obj->f3558, \"NE\");",
-  "replace": "\t\t\t    obj->f3558, \"FE\");"
+  "find": "\t\t\t    obj->echo_alpha_decay_factor, \"NE\");",
+  "replace": "\t\t\t    obj->echo_alpha_decay_factor, \"FE\");"
  },
  {
   "label": "updateAlpha's overflow substitute becomes a clamp",
@@ -64,13 +64,13 @@
  },
  {
   "label": "the echo energy report has energy and BETA swapped",
-  "find": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->f3560, obj->f355c);",
-  "replace": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->f355c, obj->f3560);"
+  "find": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->near_echo_startup_energy, obj->echo_beta);",
+  "replace": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->echo_beta, obj->near_echo_startup_energy);"
  },
  {
   "label": "the BETA threshold comparison is signed in the third arm",
-  "find": "\t\t\t} else if (obj->f355c > 2) {\n\t\t\t\tif ((unsigned)obj->f3560 > 0xc65d40)",
-  "replace": "\t\t\t} else if (obj->f355c > 2) {\n\t\t\t\tif (obj->f3560 > 0xc65d40)"
+  "find": "\t\t\t} else if (obj->echo_beta > 2) {\n\t\t\t\tif ((unsigned)obj->near_echo_startup_energy > 0xc65d40)",
+  "replace": "\t\t\t} else if (obj->echo_beta > 2) {\n\t\t\t\tif (obj->near_echo_startup_energy > 0xc65d40)"
  },
  {
   "label": "NEC adaptation starts at count 1 rather than 0",
@@ -79,18 +79,18 @@
  },
  {
   "label": "the NEC stop announcement fires one sample early",
-  "find": "\t} else if (obj->f354c == 0x4650) {",
-  "replace": "\t} else if (obj->f354c == 0x464f) {"
+  "find": "\t} else if (obj->echo_adapt_count == 0x4650) {",
+  "replace": "\t} else if (obj->echo_adapt_count == 0x464f) {"
  },
  {
   "label": "the NEC adapt bound is exclusive",
-  "find": "\tif (obj->f354c <= 0x464f) {",
-  "replace": "\tif (obj->f354c < 0x464f) {"
+  "find": "\tif (obj->echo_adapt_count <= 0x464f) {",
+  "replace": "\tif (obj->echo_adapt_count < 0x464f) {"
  },
  {
   "label": "the FEC start announcement is gated on the wrong count",
-  "find": "\t\telse if (obj->f354c == 0x2bc && DSPLIB_DEBUG_ON())",
-  "replace": "\t\telse if (obj->f354c == 0x2bb && DSPLIB_DEBUG_ON())"
+  "find": "\t\telse if (obj->echo_adapt_count == 0x2bc && DSPLIB_DEBUG_ON())",
+  "replace": "\t\telse if (obj->echo_adapt_count == 0x2bb && DSPLIB_DEBUG_ON())"
  },
  {
   "label": "the far adaptation offset is 0x2bc rather than 0x2bb",
