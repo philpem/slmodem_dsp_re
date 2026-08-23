@@ -3044,7 +3044,46 @@ nowhere in `docs/findings.md` -- finding 1026 recommends 240. This entry is
 also MISFILED (its own *Where* field names a host file, not the object) and
 should merge into D77, as D77 instructs.
 
-*Task #98 sweep, from fix list §3. **Reachability: FIRES TODAY.** Status: CONFIRMED, FIXED.*
+*Task #98 sweep, from fix list §3. **Reachability: FIRES TODAY.** Status:
+CONFIRMED, **REOPENED 2026-08-23** — was "CONFIRMED, FIXED", and that was not
+true of any tree.*
+
+**The reopening, measured rather than asserted.** Three checks over the parent
+repository, none of which needs the modem:
+
+    grep -rn SLMODEMD_IODELAY .            nothing, in either host tree
+    d-modem/slmodemd/modem_main.c:941      case MDMCTL_IODELAY: ... ret = 48;
+    slmodemd/modem_main.c:682              case MDMCTL_IODELAY: ret = 0;
+
+So the environment override this entry records as the fix **does not exist**,
+the fork returns a hard-coded 48, and upstream returns 0 with the real
+expression commented out beside it. (Do not confuse these with the
+`MDMCTL_IODELAY` arms at `modem_main.c:539` and `:654`, which return
+`dev->delay` — those are the device path, not the VoIP shim, and both trees
+have them.)
+
+**And the fix's own numbers do not survive the check either.** This entry says
+the usable band is "roughly 88–150" and that the fix defaults to 120. The
+shipping fork sits at **48**, below that band; upstream sits at 0, far below
+it. Yet this repository's own bench record has completed V.34 calls against
+that fork. Both cannot be right, and the entry cannot be closed until one of
+them gives:
+
+- if the band is right, the fork is running outside it and the calls that
+  succeeded did so despite the setting, not because of it;
+- if the calls are right, the band was measured on something this path does
+  not reproduce, and finding 1022's threshold of 86 is measuring something
+  else again.
+
+**One `--log` line settles it** — the derived `ext_delay`, `filtdelay`,
+`dmadelay` and `echo_delay` are all printed, and the fork's own comment at
+`:941` predicts 4, 47, 1548 and 108 for an iodelay of 48. Read them off a live
+call before touching anything.
+
+**This entry is also MISFILED.** Its *Where* names a host file, not the
+object, so it is not a deviation of `dsplibs.o` at all and belongs with D77,
+as D77 instructs. Reopening it does not fix that; merging it into D77 is the
+tidy-up, and should carry this evidence with it.
 
 **Where** `slmodemd/modem_main.c`, D-Modem fork.
 
