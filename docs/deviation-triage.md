@@ -806,3 +806,458 @@ run both at once is a one-line inference from them, and the entry says so.
   against the blob; if the two sides agree, the sharing is faithful and the
   question is only whether a caller does it.
 - **Citation:** finding 1397. AGREES — the finding is this entry's text.
+
+---
+
+# Family 4 — destructors that leave pointers dangling
+
+**Entries: D5, D8, D101, D102, D103, D170, D181, D210, D211, D231.** All ten
+reached and all ten decided.
+
+## The shared question, and the instruction that answers it
+
+**Does the object outlive its own destructor?** A member pointer not nulled in
+storage that is released on the next instruction is unobservable, and calling
+that a defect is a misreading. Three exceptions would make it real: storage the
+CALLER supplied and keeps, a `reset`-then-reuse path that runs after the free,
+or a second destruction.
+
+**The discriminating instruction is not in the destructor at all — it is the
+one AFTER the destructor call in its caller**, and it is per-call-site. No
+class in this family has a `D0` deleting destructor (`nm` shows only `D1`/`D2`
+for `V92Modem`, `V92Modulator`, `V92Transmitter`, `V92BitsToSymbol`,
+`V92Phase4Modulator`, `V92Precoder`, `V92PreFilter`), which is *not* evidence
+the object survives: with a non-virtual destructor GCC inlines the release at
+the call site. Read that way, the entire V.92 teardown chain is
+`dtor(p); sysdep_free(p);` at every link:
+
+| caller | member | destructor call | free of the same pointer |
+|---|---|---|---|
+| `VPCMXF_Delete` 0xf6c0 | `V92Modem` **embedded** at `this+0x6124` (`lea`, not `mov`) | 0xf70d | **0xf723** |
+| `~V92Modem` 0x13a80 | `+0xaa0` params block | 0x13ab1 / 0x13abf | **0x13b4a** |
+| `~V92Modem` | `+0x00` modulator | 0x13b38 | **0x13b40** |
+| `~V92Modulator` 0x14250 | `+0x48` phase-4 modulator | 0x14313 | **0x1431b** |
+| `~V92Modulator` | `+0x4c` bits-to-symbol | 0x14333 | **0x1433b** |
+| `~V92BitsToSymbol` 0x4e010 | `+0x00` transmitter | 0x4e03b | **0x4e043** |
+| `~V92Transmitter` 0x53ae0 | `+0x50` pre-filter | 0x53b37 | **0x53b3f** |
+| `~V92Transmitter` | `+0x4c` precoder | 0x53b49 | **0x53b51** |
+
+**And no second destruction is reachable.** `_ZN12VPcmFloModemD1Ev` (0xd0a0)
+and its `D2` copy have **no callers at all** in the object;
+`VPCMXF_Delete`'s three call sites are `vpcm_create+0x2c8` (.text+0x3cc7),
+`vpcm_create+0x3b2` (.text+0x3db1) and `vpcm_delete+0x3d` (.text+0x3e0c), and
+**the two unwind sites are mutually exclusive** — 0x3dc4 jumps to 0x3ccc,
+which is past the first site's call, both falling into `sysdep_free(%ebx)` at
+0x3ccf and returning NULL at 0x3cd7. So a failed create never reaches
+`vpcm_delete`. `V92createConstellations` / `V92createFilterCoefficients` are
+called only from the two `V92Modem` constructors and the deleters only from
+the two destructors, so no `reset` path touches the `+0xaa0` block;
+`V92Precoder::reset(V92MappingParams*)` is reached only through
+`V92Transmitter::reset` ← `V92BitsToSymbol::reset` ←
+`V92Phase4Modulator::setMappingParams`/`generateSymbol`, all live-object paths
+during a connection.
+
+**Uniform test for the seven that rest on this:** re-run the `.text`
+relocation scan for callers of each destructor and confirm each call site is
+still followed by `sysdep_free` of the same register at the offsets above, and
+that `_ZN12VPcmFloModemD1Ev` still has zero callers. If a caller ever destroys
+without freeing, or destroys twice, every one of these flips.
+
+## The verdicts
+
+**NOT A DEFECT — D101, D102, D170, D181, D210, D211, D231 (seven).** Every
+"dangling pointer" in these entries lives in storage released one or two
+instructions after the destructor that failed to null it. Evidence tier 2
+throughout: the callers type the lifetime.
+
+- **D101 / D170** are the same claim about the same two functions
+  (`V92deleteConstellations` 0x12de0 and `V92deleteFilterCoefficients`
+  0x12e90), citing findings 831 and 1226 respectively. Confirmed: not one
+  store in either. The ten slots live in the 180-byte block at
+  `V92Modem+0xaa0`, and `~V92Modem` frees that block at **0x13b4a** with
+  nothing reading the slots in between. **D170 is the better-argued of the
+  pair** — it already names the `+0xaa0` free and stops at "documentation only
+  until a caller is found that deletes without freeing the block", which is
+  the correct verdict. D101's "a second delete double-frees and any later read
+  is a use-after-free" describes a second delete that cannot happen and a
+  later read that has no storage to occur in.
+- **D102** — `CALLPROG_Delete` 0x79440 nulls `+0x70` and `+0x64` and leaves
+  three. But CALLPROG is **embedded at `+0x444`** of the block `call_delete`
+  frees at **0x2e1a**, and nothing reads `+0x6c`, `+0x78` or `+0x84` in
+  between. The entry inherits finding 55's "the object itself is never freed",
+  which is true of the FUNCTION and false of the PATH. Its second worry —
+  "`CALLPROG_Delete` is a global symbol and the asymmetry is invisible from
+  outside" — is true and harmless: **there is no outside.** `nm -u` shows the
+  blob imports only `sysdep_*`, `modem_*` and the debug hooks, and the host
+  reaches the datapump solely through `modem_dp_register`'s vtable
+  (`ref/slmodemd/modem.c:1601` and `:1194`).
+- **D181** — `~V92Precoder` 0x56d10 frees `+0x68`/`+0x6c`, `~V92PreFilter`
+  0x573b0 frees `+0x04`/`+0x08`, neither stores. Both objects are released by
+  `~V92Transmitter` at 0x53b51 and 0x53b3f. The reset-then-reuse exception the
+  entry raises is closed: every `reset` path is a live-object path.
+- **D210** — six released, exactly one null store (`movl $0x0,0x4c(%esi)` at
+  0x53b56 in the `D1` copy), and the transmitter itself is freed by
+  `~V92BitsToSymbol` at **0x4e043**.
+- **D211** — fourteen pointers over three objects, no store anywhere; each
+  object freed by its parent one instruction after its destructor returns
+  (0x4e043, 0x1431b, 0x1433b, 0x13b40). The entry is candid that "nothing
+  drives a second destruction, because a double free is what it would be
+  measuring" — that is the right call and no test should be added.
+- **D231** — five released, one null store (`movl $0x0,0x8(%esi)` at 0x13af8),
+  and `V92Modem` is **embedded** at `VPcmFloModem+0x6124`, reached by
+  `VPCMXF_Delete` with `lea` rather than a pointer load and freed whole at
+  **0xf723**, five instructions later.
+
+**DEFECT, UNREACHABLE — D5, D8, D103 (three).** These are the genuine (a)
+shape: a free of storage the caller supplied, which WOULD be observable
+because the harm lands outside the dying object. What bounds them is that no
+caller supplies such storage.
+
+- **D8** — `B103FP_delete` 0x8ef00 ends `jmp sysdep_free` with the object in
+  `%ebx` on both exits (0x8efd0, 0x8f00b). It has exactly one caller,
+  `b103_create+0x151`, and the instruction before it is `movl $0x0,(%esp)` at
+  0x5549 — **a compile-time NULL**. The measured `bad_free=1` comes from a
+  fixture constructing a state no caller constructs.
+- **D5 / D103** — `FPM_TONE_create` 0xaaa00 sets its "I allocated this" flag
+  only on the `state == NULL` branch, and `FPM_TONE_delete` 0xaad00 frees the
+  four buffers on `len > 0` alone and then `jmp sysdep_free(this)` at 0xaad49
+  unconditionally. The asymmetry is real.
+
+  **D5's stated reason for unreachability is arithmetically wrong and must be
+  replaced.** It says "Every call site passes NULL to `create` — the four in
+  `B103FP_create` and the one in `FPM_FSM_init`." There are **20 call sites in
+  14 functions**, and six pass a member read rather than a constant NULL:
+  `SetToneDetect+0x65`, `V32FP_recreate+0x80b/+0x844/+0x876`,
+  `V22FP_create+0x2e2`, and `v22_answer`/`v22_originate`. `SetToneDetect`
+  alone has eight callers across the V.32 state machines, so the non-NULL path
+  runs in every V.32 handshake.
+
+  **It is still unreachable, for a better reason.** In every non-NULL case the
+  value is a slot `FPM_TONE_create` itself filled, and the author NULLs the
+  slot wherever a fresh object is wanted (`V32FP_recreate`'s
+  `movl $0x0,0x2c(%ebx)` at 0x7f062, `V22FP_create`'s `movl $0x0,0x14(%eax)`
+  at 0x88255). And `SetToneDetect` 0x83600 builds its config as a **copy of
+  the object's own first 0x24 bytes**, patching only the frequency halfword at
+  0x8365c — so `len` at `+0x14` is preserved *by construction* and the
+  retained buffers stay correctly sized. That is a structural argument, not
+  usage inference. **D103's own reachability line is the safer of the two** and
+  needs no change.
+
+## What this family changes about the register
+
+- **Two duplicate pairs.** D5 ≡ D103 (D103 says so) and D101 ≡ D170 — the same
+  functions and the same claim under two numbers, citing different findings.
+  `refcheck.py` reads citations structurally and **cannot catch a duplicate
+  ENTRY**; nothing in the tree can. Two of 232 found in one family is worth a
+  sweep.
+- **D231's header contradicts its own body.** The header says "**Reachability:
+  FIRES** on every destruction"; the body concedes "Harmless as shipped". The
+  header is what a future reader acts on. What FIRES is an omitted store, and
+  an omitted store is not an event.
+- **Three citations that do not support what they are cited for:**
+  - **D181 — DRIFTED.** Finding 1245 establishes `+0x68`/`+0x6c` and the
+    `reset` skip for `V92Precoder` exactly as cited, but D181's headline also
+    names `~V92PreFilter` and attributes the same two offsets to it. The
+    pre-filter's owned words are `+0x04` and `+0x08`, and its map is finding
+    **1246**, which D181 does not cite.
+  - **D231 — DRIFTED.** Finding 1322 is titled "A NULL GUARD CAN BE
+    UNREACHABLE IN THE OBJECT ITSELF", is entirely about a dead null guard on
+    `+0xaa0`, and concludes "**It is not a deviation either.**" The claim D231
+    needs — the embedding at `VPcmFloModem+0x6124` — is finding **1333**, and
+    it is uncited. (D231's other citation, finding 1272, AGREES.)
+  - **D211 — PARTIAL.** Finding 1288 is a METHOD finding about how a
+    null-guard sweep covers a graph it cannot poison. It confirms the eleven
+    guarded pointers and "twenty guards over four destructors", but it does not
+    state "null nothing at all"; that comes from 1281's contrast.
+- **One adjacent thing found and deliberately not verdicted**, recorded so
+  nobody rediscovers it: `V32FP_recreate`'s second `FPM_TONE_create` site
+  makes its slot-clear **conditional** (`movl $0x0,0x30(%ebx)` at 0x7f09f runs
+  only when `0x48(%esp)` is non-zero), so when it is zero the previous tone
+  object is re-initialised in place against a freshly built stack config whose
+  `len` need not match the buffers already allocated. That is buffer-size
+  retention rather than a bad free, and outside this family. The first site at
+  0x7f062 clears unconditionally, which on a second `V32FP_recreate` leaks the
+  previous object — also outside this family.
+- **Method disclosure.** All verdicts were read off the `D1` copies of each
+  destructor; the `D2` copies were spot-checked as equivalent (D210 cites
+  0x53aa6 in `D2`, the same store read at 0x53b56 in `D1`) but not diffed
+  instruction by instruction.
+
+---
+
+# Family 5 — allocation results used without a null test
+
+**Entries: D96, D171, D180, D212, D232, D235, D236, D303.** All eight reached
+and decided.
+
+## The shared question, and it does not collapse the way either answer predicted
+
+**What does `sysdep_malloc` do on failure?** If it aborts, "no null test" is a
+style observation and the family is not a defect at all.
+
+**It returns NULL.** `slmodemd/sysdep_common.c:54` is
+`void *sysdep_malloc(unsigned int size) { return malloc(size); }` — no abort,
+no exit, no failure hook, no arena. `test/harness/runtime.c:204` is the same
+plus a fill, and returns `p` through when `p == 0`. Neither injects failure,
+which is why `t_vpcmdp.c:1132` records that "nothing in this tree can make
+`sysdep_malloc` return zero".
+
+**And the author knew.** `dp_runtime_create` at `.text+0x58f1` does
+`movl $0x88; call sysdep_malloc; test %ebx,%ebx; je 59f4` and returns 0;
+`vpcm_create` tests `VPCMXF_Create` at 0x3b08 and `K56FLEX_Create` at 0x3b31
+and branches into an unwind. So the absence of a test elsewhere is **a real
+inconsistency in the original**, not a misreading.
+
+**So the discriminator is the SIZE OPERAND, and every one was read.** An
+*immediate* size can only fail if the daemon's whole heap is exhausted, and a
+process that cannot obtain 908 bytes is already dead by other means. A
+*computed* size can be inflated by a degenerate input until glibc returns NULL
+deterministically. The result is the finding that decides the family:
+
+> **In this entire family, no computed-size allocation is dereferenced
+> in-function.** All five in `V92Modulator` (`.text+0x154b7`, `0x154ca`,
+> `0x154dd`, `0x154eb`, `0x154fb`) and the one in `V92BitsToSymbol`
+> (`0x4df0c`/`0x4df7c`) are `mov %eax,off(%reg)` and nothing more. Every
+> allocation that IS dereferenced immediately has an immediate size. **The two
+> risk factors are disjoint across the whole family.**
+
+**All eight grade DEFECT, UNREACHABLE, and none warrants a fix.** The bound is
+named per row rather than asserted: an immediate size, in bytes, at an
+address.
+
+| entry | what is dereferenced without a test | the bound |
+|---|---|---|
+| D171 | nothing — ten results stored to fields and nothing more | immediates `$0x200` ×6, `$0x600` ×4 |
+| D180 | three `FloatFIR` and one `FloatIIR` constructor | immediate `$0x14` ×4 |
+| D212 | twelve sub-object constructors; purest is `movl $0x1,(%esp); call sysdep_malloc; movb $0x0,(%eax)` at 0x53c96 | immediates; the six argument-sized ones are merely stored |
+| D232 | five constructors, incl. `V92createConstellations`'s `mov %eax,0x84(%ebx)` through NULL | immediates, largest `$0x918` |
+| D236 | `VPcmFloModem`'s constructor, before the test at 0xfdd2 | immediate `$0x7f68` |
+| D303 | `mov %cx,0x33c(%ebx)` at 0x90bce, rejoining after the only test | immediate `$0x38c` |
+
+**Two of these carry tier-1 evidence, which is rare and worth naming.**
+`D236`'s message at `.rodata.str1.4+0x2f7c` reads *"VPCMXF_Create: new
+VPcmFloModem() fa…"* — **the author wrote a diagnostic for a case his own
+instruction ordering makes unreachable**, which is as direct a statement of
+intent as this object offers. `D235`'s at `+0x42d8` reads *"V90Modem
+Constructor: Il…"* on the illegal-`side` arm.
+
+**Corrections this family makes to the register:**
+
+- **D180 — the fourth constructor is `FloatIIR`, not `FloatFIR`.** `0x572a7`
+  is `call _ZN8FloatIIRC1EjPfj`. The entry says "four times across the pair".
+- **D96 is misfiled and its own prose drifts.** It says "two host answers";
+  one of the two is the object's own `dp_param_get` (0x58c0), a one-line
+  wrapper for `modem_get_param(m, 0xa)`. The two halves are bounded
+  differently and both are bounded: `MDMPRM_DSPINFO` returns
+  `(long)(&m->dsp_info)` (`modem_param.c:80`) — **address-of an embedded
+  member, never NULL** — and `MDMPRM_DPRUNTIME` returns `m->dp_runtime`
+  (`:78`), which `modem.c:1136` sets inside `do_modem_start` with a `goto
+  error` on failure, before the `op->create` at `:1051` that reaches
+  `vpcm_create`. The obvious reentrancy trap was checked: `dp_runtime_create`
+  does not call `vpcm_create`.
+  **What could not be settled:** the entry says the SIGSEGV was "found by
+  running". Since `&m->dsp_info` is never NULL under `slmodemd`, that crash
+  cannot have come from the shipped host — almost certainly a harness with a
+  stubbed `modem_get_param` — and the entry does not say which host it ran
+  under.
+- **D235 is misfiled** into this family: its mechanism is an uninitialised
+  pointer consumed later, not an allocation. Its verdict is unchanged —
+  DEFECT, UNREACHABLE, bounded exactly as the entry says by `VPCMXF_Create`'s
+  `test %ebx,%ebx; sete %al` at 0xfd05, which yields 0 or 1 and nothing else.
+- **D175 cites finding 1230 for "reproduced as written", and 1230 does not say
+  that.** 1230 says the signed divide makes the length negative and the
+  allocation enormous; its only *driven* claim is that `sysdep_malloc(0)`
+  succeeds and `reset` writes into a zero-length block. **Nobody in this tree
+  has observed `sysdep_malloc` return NULL**, and this citation is the one
+  place the family's reasoning could have been taken for measured.
+
+**Stated test for the family**, and it is one fixture: a failing allocator in
+`test/harness/runtime.c`, off by default. Under it, `V92createConstellations`
+must return normally with ten NULL fields and the fault must appear in a
+*different* function; `V92Modulator`'s constructor driven with a symbol rate
+large enough that `*this << 3` exceeds `PTRDIFF_MAX` must still return, with
+six NULL fields and no fault. If either faults in-function, the disjointness
+claim above is wrong and the family needs regrading.
+
+---
+
+# Family 6 — a value returned or read that nothing on that path wrote
+
+**Entries: D261, D262, D281, D284, D290, D293, D321, D324, D330,
+D-V92DEC-1, D-V92DEC-2.** All eleven reached.
+
+**The shared question: does any caller CONSUME the value?** A dead value left
+in a register that nothing reads is a reading artifact of the disassembly. The
+family splits sharply on it, and the split is the result.
+
+## NOT A DEFECT — D293
+
+`studyUrefHandler`'s two local arrays are filled by six loops and read by
+nothing: exactly **six** stores (`0x4254c`, `0x4257c`, `0x4281c`, `0x4284c`,
+`0x42b2c`, `0x42b5c`) and **zero** reads, over the function's whole 5,335
+bytes. **The misreading is one of category** — this is the inverse of the
+family's mechanism, a value *written* that nothing reads rather than a value
+*read* that nothing wrote. Dead stores the compiler kept because the locals
+are arrays. No consumer, therefore no wrong answer and nothing observable; the
+cost is six stores per call. Evidence tier 3. **Test:** a `lea` of
+`0x50(%esp)` anywhere in the function would refute it — the scan proves
+absence of indexed and direct references, not of a `lea`, and that limit is
+stated rather than glossed.
+
+## DEFECT, REACHABLE — D284 and D290, and these are the two to act on
+
+**D284 — `uniteLinMappInfoOfUnsuspectedPhases` reads an uninitialised group
+number, and a CLEAN LINE is the trigger.** The slot `0x1c(%esp)` has exactly
+one write, `mov %ebp,0x1c(%esp)` at **0x4178c**, inside the scan; it is read
+at **0x415fd** (`mov 0x1c(%esp),%ebp; cmp %bp,0x30(%esp,%edx,2)`) to steer
+`je 416c0`, the pooling. The skip guard at 0x415f3 means that if all five of
+phases 0..4 are suspected, the scan body never runs and the read takes stack
+residue. **Four bytes of frame then decide which phases get pooled**, and the
+mean written into every unsuspected phase becomes a function of the frame.
+
+The producer is named, and it is the ordinary case rather than a corner:
+finding 1427 records that `porcessFirstStudy` marks a phase suspected unless
+it collects more than nine rough neighbours out of fifteen, and that "a smooth
+mapping, which is what a **clean line** produces, collects none: the counter
+starts at 1, ends at 1, and every phase comes out suspected."
+
+- Evidence tier 2 (the read is a 16-bit compare against a per-phase group
+  table, which types the slot).
+- **The fix, named and not written, is a fix to the ORIGINAL:** give the
+  group-number local a defined initial value and take the "no group formed"
+  exit when the scan does not run. **`src/` should not change** — the current
+  handling (declare it, leave it uninitialised, exclude the path from the
+  differential test because two builds have two stack frames) is correct
+  reconstruction behaviour. **What warrants changing is the entry's
+  reachability field**, which reads `unmeasured` where finding 1427 already
+  establishes the trigger.
+- **Test:** run `porcessFirstStudy` on a smooth mapping, let it set `+0x280c`
+  itself rather than forcing it, and confirm all six come out suspected and the
+  next call reads the unwritten slot.
+- Citation: finding 1427 AGREES, emphatically — **the finding is more definite
+  than the entry citing it.**
+
+**D290 — `findPadGain` hangs outright for five values of `byte_a954`, and the
+producer is now traced.** `start = (unsigned char)(a954 - 3)` and
+`bound = (int)start - 5`, and the loop test is a **signed** compare of a
+zero-extended byte (`movzbl %dl,%eax; cmp %ebx,%eax; jg 43674`). Worked
+through: `a954` of 0..2 wraps `start` to 253..255 and terminates; **`a954` of
+3..7 puts `start` at 0..4 and `bound` at −5..−1, which a zero-extended byte
+can never fall under**; 8 gives bound 0 and terminates. The body also runs
+before the first test, and each pass loads `flds 0x9d48(%esi,%edi,4)`, so a
+non-terminating loop sweeps all 256 indices — past the end of the object at
+phase 5.
+
+**A hang needs no consumer**, which is what makes this the most severe item in
+the family. The producer the entry lacked: **`byte_a954` is written by
+`V90AutoDigitalImpDetector::determineMaxUcode(short)`** at 0x4449f, 0x444d7,
+0x4450a and 0x4468a, and nothing on those paths clamps it away from 3..7.
+
+- **Fix named, not written, to the ORIGINAL:** make the loop bound and the
+  counter the same signedness so the descending scan terminates for every byte
+  value.
+- **Test:** drive `determineMaxUcode` and record the range of `byte_a954` it
+  emits. **The reconstruction's current test forces the field into
+  [8, 0x9c] — precisely the range that avoids the hang**, so the existing
+  fixture cannot see this and its bound should be widened deliberately or its
+  narrowness recorded.
+- The entry's second half (the uninitialised `0xa1(%esp)`, written only at
+  0x43664 inside the accept arm and read unconditionally at 0x43695) stays
+  **UNDECIDABLE**; the entry's note that an unordered compare *takes*, so one
+  NaN writes the slot and it is five *ordered* non-improvements that reach the
+  bug, is correct for `jb`.
+- Citation: finding 1439 AGREES.
+
+## UNDECIDABLE FROM HERE — the rest, each with the evidence that would decide it
+
+- **D321 and D-V92DEC-1** — undecidable, but **for a far narrower reason than
+  recorded, and the "dead register" reading is definitively excluded.** Both
+  methods return the caller's `%edi`, never written. The consumption chain is
+  fully traced: one relocation each, both from
+  `V90Phase3Demodulator::getDecision` (0x258f0), whose two call sites are in
+  `V90Equalizer::process` (0x39b39, 0x3a093); at both the next instructions
+  are `cwtl; mov %eax,0x88(%esp)`, and `0x88(%esp)` is read seven times —
+  including **`mov %dx,(%esi,%eax,2)` at 0x39268 where `%esi` is
+  `0xec(%esp)`, the third parameter of
+  `process(float*, unsigned, short*, short*, unsigned&)`.** So the
+  uninitialised value **is written into the caller's own output array**, and
+  at 0x39279–0x3928c it is subtracted, absolute-valued and compared against
+  `$0x12c` to steer a branch. Both paths converge on `jmp 39250`, so the
+  zeroed state does not route around the read. **What remains open is only
+  whether the states are live** — and there is a lead the entries do not have:
+  states 7 and 8 are written to `+0x28` by `getV92Decision` itself (0x2213e,
+  0x233db), the two halves share one state word, and each function's default
+  set is largely the other's live set. **Deciding evidence:** instrument
+  `+0x08` and `+0x28` across a V.90 and a V.92 session and record whether
+  `getV90Decision` is ever entered with `+0x28` in {7, 8, 0x12, >0x21}. If
+  never, both close as DEFECT, UNREACHABLE with a clean bound.
+- **D-V92DEC-2 — half NOT A DEFECT, half undecidable, and misfiled.** It is a
+  narrowing question, not an uninitialised one. `isThereAnyAltRbsPhase`
+  (0x40570) and `isAltRbs` (0x405b0) provably return exactly 0 or 1, so
+  `test %ax,%ax` on them is exact: **the misreading is treating a narrow test
+  as narrowing when the callee cannot produce a value with a zero low half and
+  a nonzero upper half.** The two `V92Jd` methods are open; **deciding
+  evidence:** enumerate every `mov …,%eax` reaching each `ret` in
+  `unPackJdData` (0x128e0) and `unPackJdPhaseData` (0x12500). If all are
+  ≤ 0xff the row closes as NOT A DEFECT.
+- **D261** — consumption is PROVEN, not assumed: the two post-loop reads at
+  0x571ed and 0x5720c each feed `FloatFIR::process(float)` and land in
+  `+0x74` and `+0x70`, so the contamination enters two filter histories and
+  two object fields and outlives the call. **Deciding evidence:** the actual
+  range of the modulus field in `V92MappingParams` — a writer that can produce
+  a negative value converts this to REACHABLE at once.
+- **D262** — **the entry's caller survey is the most rigorous in the register
+  and could not be improved on.** It is relocation-exhaustive, correctly notes
+  that a relocation's *absence* is what would hide a same-TU caller (findings
+  306, 333), records that an earlier draft said CANNOT FIRE on "three arms are
+  a plausible complete set" reasoning and was corrected, and names its own gap.
+  **Deciding evidence:** every writer of `V92MappingParams+0x10`, read at
+  0x53da6 — a fourth value there makes this REACHABLE.
+- **D281** — DEFECT, UNREACHABLE from inside the object, and the bound is
+  positive rather than merely absent: **finding 1427 states explicitly that
+  D281 has no producer where D284 does** — it needs a caller to flag every
+  phase at `+0x2800`, and `updateUref` passes the flags through untouched.
+  **Deciding evidence:** any writer that can set all five
+  `short_2800[0..4]` non-zero.
+- **D324 — the entry's caller claim is wrong in both directions.** It says
+  "`process` is the only caller and is not yet written". A relocation sweep
+  finds **three** call sites and `process` **is** in the object:
+  `V90Equalizer::process` at 0x3a461 and 0x3a9ea, where the very next
+  instruction is **`fstp %st(0)`** — the value is popped and discarded, twice —
+  and `V90Demodulator::progress` at 0x1d1f7, which does `fstps 0x44(%esp)`
+  then `mov 0x44(%esp),%ebx`. **That third one is the real consumer and the
+  entry does not mention it.** Consumption there is path-dependent (`%ebx` is
+  reloaded with an immediate on the fall-through at 0x1d23d). **Deciding
+  evidence:** a liveness trace of `%ebx` from 0x1d20c across every successor.
+  If every path overwrites it before use, this closes as NOT A DEFECT.
+- **D330 — the entry's reachability note rests on a miscitation.** It says
+  "nothing in the object calls this member (D345)". **Both halves are wrong:**
+  there are two `R_386_PC32` call sites, both in
+  `V90ConstellationDesigner::adjustConstellationsToNewK` (0x4c2ea, 0x4c59d),
+  and **D345 does not list this member** — its eleven names are `pow6`,
+  `calcK`, `realK`, `maxK`, `calcMtoMatchKtarget`, `findMinValueIndex`,
+  `findConstelMaxValueIndex`, `constelBuild`, `spectralDesign`,
+  `reconstructInitialConditions` and `findNextUcodeToAdd`. The member IS
+  reachable from inside the object; what is unknown is whether
+  `adjustConstellationsToNewK` can present a constellation size above 255.
+  **Deciding evidence:** instrument `m[phase]` at the two call sites.
+
+## What this family changes about the register
+
+**Four entries are misfiled** — D96 (a host pointer, not an allocation), D235
+(an uninitialised pointer, not an allocation), D-V92DEC-2 (narrow-width
+testing) and D293 (dead stores, the inverse mechanism). Misfiling is not
+harmless in a register organised by mechanism: it is how a shared argument
+gets applied to a row it does not fit.
+
+**Two entries state caller facts the object contradicts** — D324 and D330 —
+and both were stated as reasons the entry could not be decided. An entry that
+cannot be decided *because nobody looked* is not the same as one that cannot
+be decided at all, and the register does not currently distinguish them.
+
+**Not verified, stated for the record.** D261's and D281's functions were not
+disassembled in full — D261 only for the slot writes, reads and post-loop
+consumption; D281 rests on the entry plus finding 1420. `isAltRbs`'s
+zero-initialisation is inferred from its tail. The two `V92Jd` return-path
+surveys are incomplete. D293's "no reads" is proven against indexed and direct
+references, not against a `lea` of the slot.
