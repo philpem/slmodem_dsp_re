@@ -76236,9 +76236,12 @@ So the fix is not another check. `refs` now runs both and fails afterwards:
      exit $$rc
 
 Shown to fire: with a dangling reference AND a detached anchor injected
-together, the target prints `DANGLING docs/remaining.md:309 finding 9999` and
-`NOT UNIQUE ... matches 0 time(s)` and exits 2; before the change the second
-line did not appear. **A red gate must report everything it knows, not just the
+together, the target prints a DANGLING line for the injected citation and a
+`NOT UNIQUE ... matches 0 time(s)` line for the injected anchor, and exits 2;
+before the change the second line did not appear.  (The injected citation is
+not quoted here: `refcheck` reads its own finding numbers out of this file, so
+writing the fake one down would make this paragraph dangle -- which is exactly
+what happened on the first attempt.) **A red gate must report everything it knows, not just the
 first thing that went wrong** -- which is findings 2400, 3100 and 3055 turned
 one notch: those were detectors measuring nothing, this is a detector that
 measured correctly and was never asked.
