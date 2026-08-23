@@ -98,6 +98,19 @@ PENDINGREFS = "tools/pendingrefs.json"
 #
 FINDING_HEAD = re.compile(r"^#{2,4} (\d+[a-z]?)\.\s*(.*)$", re.M)
 DEV_HEAD = re.compile(r"^## D(\d+[a-z]?)\b\s*(.*)$", re.M)
+#
+# NOT EVERY DEVIATION ID IS A NUMBER.  `docs/deviations.md` also carries
+# `D-V92DEC-1` and `D-V92DEC-2`, and the numeric patterns above and below
+# cannot match either -- so both their definitions AND the five references to
+# them, one of which is in `src/`, were invisible to this tool while it
+# reported "0 resolve to nothing".  That is a detector excluding part of its
+# own denominator, which is finding 2401 in a new place.
+#
+# The tag must START with an upper-case letter, and that is the whole reason
+# this pattern is not simply `D-\w+`: this project is called D-modem and the
+# looser spelling turns every mention of it into a dangling reference.
+#
+DEV_HEAD_TAG = re.compile(r"^## (D-[A-Z][A-Z0-9]*-\d+)\b\s*(.*)$", re.M)
 
 #
 # MARKDOWN EMPHASIS MADE A CITATION INVISIBLE.
@@ -123,6 +136,7 @@ FINDING_REF = re.compile(
     r"\bfindings?" + _EM + r"\s" + _EM +
     r"(\d+[a-z]?(?:\s*(?:,|and)\s*" + _EM + r"\d+[a-z]?)*)", re.I)
 DEV_REF = re.compile(r"\bD(\d+[a-z]?)\b")
+DEV_REF_TAG = re.compile(r"\b(D-[A-Z][A-Z0-9]*-\d+)\b")
 
 #
 # Itanium ABI constructor and destructor variant tags, which collide with
@@ -246,6 +260,11 @@ def refs_in(path, text):
             continue
         found.append(("D", m.group(1), lines[m.start()],
                       ctx(m.start(), m.end())))
+    for m in DEV_REF_TAG.finditer(flat):
+        if any(a <= m.start() < b for a, b in masked):
+            continue
+        found.append(("D", m.group(1), lines[m.start()],
+                      ctx(m.start(), m.end())))
     return found
 
 
@@ -254,6 +273,8 @@ def titles(findings_text, deviations_text):
          for n, ttl in FINDING_HEAD.findall(findings_text)}
     t.update({("D", n): ttl.strip()
               for n, ttl in DEV_HEAD.findall(deviations_text)})
+    t.update({("D", n): ttl.strip()
+              for n, ttl in DEV_HEAD_TAG.findall(deviations_text)})
     return t
 
 
