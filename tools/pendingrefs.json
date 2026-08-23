@@ -24,9 +24,14 @@
   "pending": [
     {
       "kind": "finding",
-      "refs": ["6701", "6900", "6903"],
+      "refs": [
+        "6701",
+        "6900",
+        "6901",
+        "6903"
+      ],
       "branch": "v34-instrumentation",
-      "why": "79852cc9 and a7300cec brought the testbench analysis tooling from v34-instrumentation onto master -- 'the analysis tooling belongs on master, not on a branch' -- and brought the TOOLS that cite these findings without the FINDINGS themselves, which turned `make refs` red.  Check with `git show v34-instrumentation:docs/findings.md | grep -E '^### (6701|6900|6903)\\.'`; 6701 is also on findings/hsfuser-crosscheck.  The citing lines are testbench/TOOLS.md:109 and :110 (ratepenalty.py, jbtiming.py -- TOOLS.md marks the first **BRANCH**) and testbench/ladder.py:9.  THIS ENTRY IS A HOLD, NOT A VERDICT: if the right answer is that these three findings should follow their tools onto master, delete the entry and copy them across instead.  That is the migrating session's call."
+      "why": "79852cc9 and a7300cec brought the testbench analysis tooling from v34-instrumentation onto master -- 'the analysis tooling belongs on master, not on a branch' -- and brought the TOOLS that cite these findings without the FINDINGS themselves, which turned `make refs` red.  6901 arrived the same way a second time, with the linesweep commits (testbench/linesweep.py:50, testbench/TOOLS.md:204).  Check with `git show v34-instrumentation:docs/findings.md | grep -E '^### (6701|6900|6901|6903)\\.'`; 6701 is also on findings/hsfuser-crosscheck.  The other citing lines are testbench/TOOLS.md:109 and :110 (ratepenalty.py, jbtiming.py) and testbench/ladder.py:9.  THIS ENTRY IS A HOLD, NOT A VERDICT, and a SECOND recurrence is the argument for copying the four findings onto master beside the tools they document rather than holding them one at a time."
     }
   ]
 }
