@@ -39,12 +39,37 @@ missing entries are real: `D-V92DEC-1` and `D-V92DEC-2`. They are the only
 entries whose heading does not match `^## D\d+`, which is the pattern
 `tools/refcheck.py` uses (`DEV_HEAD`) to learn what deviations exist.
 
-The consequence is not cosmetic. `refcheck.py` cannot see those two headings,
-so it cannot report a citation of them as dangling, and it cannot report one
-that drifts. They are outside the register's own gate. **Renumbering them into
-the `D\d+` scheme is the fix**, and it is a documentation change, not a source
+**The consequence is measured, not inferred, because the inferred version was
+wrong.** The hazard is not that a citation of them dangles — `DEV_REF` is
+`\bD(\d+[a-z]?)\b`, and the string `D-V92DEC-1` contains no `D` followed by a
+digit, so a citation of them matches nothing and cannot be reported either
+way. The hazard is that **such citations exist and are entirely invisible to
+the gate**. Grepping the tree for `D-V92DEC` outside `docs/deviations.md`
+finds four:
+
+    src/pump/v90/V90Phase3Demodulator.cpp:1538   docs/deviations.md, D-V92DEC-1
+    test/unit/t_v92dec.cpp:54                    docs/deviations.md D-V92DEC-1
+    docs/findings.md:53704                       docs/deviations.md D-V92DEC-1
+    docs/findings.md:53883                       (D-V92DEC-2)
+
+plus one inside the register itself. Five live cross-references — one of them
+from `src/`, one from a test — that `refcheck.py` counts as zero. If either
+entry is renumbered or retitled, nothing fails. **Renumbering them into the
+`D\d+` scheme is the fix**, and it is a documentation change, not a source
 change — but it belongs to whoever owns the numbering, not to this pass, and
-it must be done with `refcheck.py --since` across every branch.
+the five sites above must move with it.
+
+### A second gap in the gate, found while using it
+
+**`tools/refcheck.py` only scans TRACKED files.** Writing this document and
+running the tool reported 6,519 references — exactly the baseline, unchanged —
+because the new file was untracked. `git add` alone took it to 6,571. Nothing
+warned. A new document full of `D<n>` and `finding <n>` citations can
+therefore be written, checked, and reported clean while the checker has not
+read a line of it: the dead-detector shape this tree has hit four times
+(findings 134, 2400, 3100, 3055). The habit that defends against it is the one
+`CLAUDE.md` already states — **read the denominator, not the exit code**. It
+moved, so the tool was working.
 
 ### What was already dispositioned, and on which axis
 
@@ -537,11 +562,28 @@ and the comparison that consumes it is `jle`, not `jl`.** The loop leaves
 `%ebx` at N, the number of named entries; `dec` makes it N − 1, the highest
 valid index; `jle` accepts everything up to and including it.
 
-**And the table settles what N is.** `V90PreFilter::dataBase` is
-`V90CodecEntry[17]` — sixteen named entries, indices 0 to 15, followed by
-`{ "", 0 }` as the terminator. So the loop stops at 16, `dec` gives 15, and
-`codecType == 15` — `"Squeezer_545A_ITE"`, the last real entry — is accepted.
-**No named entry is unreachable.**
+**And the table settles what N is — read out of the blob, not out of our
+source.** `nm -S` gives `_ZN12V90PreFilter8dataBaseE` in `.data` at `0x6760`,
+**size 612**, and the entry stride the constructor uses is `add $0x24,%eax` =
+36 bytes. 612 / 36 = **17 entries exactly**, and dumping them from the
+object's own `.data`:
+
+    0 Unknown            4 USB_STLC_7550    8 ALS300_WOLFSON   12 Panther_AD1803
+    1 AD1821             5 ALS300_AD1819    9 AMR_SILABS       13 Squeezer_545A_ALC
+    2 Lucent             6 ALS300_AKM4542  10 SIL3052_INTERNAL 14 Raptor_SL2800
+    3 Siemens            7 ALS300_ICE      11 CodecType_SIL3054 15 Squeezer_545A_ITE
+                                                               16 ""  (name[0] == 0x00)
+
+Sixteen named entries at indices 0–15 and the empty terminator at 16. So the
+loop stops at 16, `dec` gives 15, and `codecType == 15` —
+`"Squeezer_545A_ITE"`, the last real entry — is accepted. **No named entry is
+unreachable.**
+
+*(This was checked against the object deliberately. The first draft of this
+argument took the table from `src/pump/v90/V90PreFilter_loops.cpp`, and a
+reconstruction can carry a table length as an assumption that no differential
+test would catch — the argument is only worth its evidence tier if the count
+comes from the blob.)*
 
 **What the entry saw, and it is real but is somewhere else.** The diagnostic
 prints the decremented value under the label "table length":
@@ -556,17 +598,29 @@ cosmetic defect in a diagnostic, gated behind `dsplibs_debug_level`, which
 `--log` opens.
 
 - **Evidence tier 2** for the verdict (the object's own instructions and the
-  table that types the index), tier 1 for the residual message defect.
+  object's own table), tier 1 for the residual message defect.
 - **Verdict: NOT A DEFECT** as written. The 🐛 should be withdrawn and
   replaced by the mislabelled-diagnostic claim, which is true.
 - **Test.** Construct a `V90PreFilter` with `codecType == 15` and confirm both
   sides keep it rather than resetting it to 0, and that the transcript emits
   `"HardwareCodecType: Squeezer_545A_ITE"` rather than the "exceeds table
   length" line. If the object resets it, this verdict is wrong.
-- **Citation:** finding 1233. The finding is cited by D176 and D178 together;
-  it records the constructor's shape, and D178's use of it survives while
-  D176's reading of it does not. Report: **DRIFTED at D176** — the entry's
-  conclusion is not supported by what it cites.
+- **Citation: finding 1233 — AGREES, AND THE FINDING IS WRONG TOO.** This is
+  the outcome that matters and it is not the one that was expected. The
+  finding's own heading is *"V90PREFILTER'S CONSTRUCTOR: THE REGISTRY DECIDES,
+  THE ARGUMENT IS ONLY THE FALLBACK, AND THE RANGE CHECK IS ONE SHORT"*, and
+  its step 4 reads: *"The check in step 4 is one short. `dataBase` is walked to
+  its first empty name and the count is DECREMENTED before the comparison, so
+  the last named entry of the table is unreachable through the argument path."*
+  So D176 reports its source faithfully — the citation is sound — and **the
+  error originates in the finding**. Correcting the register alone would leave
+  the wrong claim standing in `docs/findings.md`, where D178 also cites it and
+  where the next reader will find it. The finding needs the correction more
+  than the deviation does.
+- **What the finding gets right, and it is most of it.** The sixteen-arm switch
+  is a switch and not a range test, and the jump table at `.rodata+0xd8c` is
+  the evidence; the diagnostics are plain rather than `edprintf`-encoded, so
+  they do not move that class's rotating key. Only step 4's sentence is wrong.
 - **Note.** The configuration path cannot produce an out-of-range value
   either: `cmp $0xf,%eax; jbe` at `+0x44db6` gates a sixteen-way jump table at
   `.rodata+0xdcc`, and everything else falls to `codecType = 0`.
