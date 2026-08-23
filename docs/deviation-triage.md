@@ -59,20 +59,51 @@ this question.
 
 Counting only the explicit classification lists — the `> D73 D74 …`
 blockquotes, Appendix A's table rows and its retraction list — **117 of the
-232 🐛 entries carry an explicit disposition on some axis, and 115 carry
-none.**
+232 🐛 entries carry an appendix grade and 115 do not.**
 
-*(Do not compute this by searching the appendices for `D<n>` mentions. Entry
-bodies continue AFTER Appendix C's heading — D780 and D790 sit past line 4743
-— so a prose-mention count silently scores those bodies' internal citations as
-appendix coverage and reports 13 uncovered instead of 115. That mistake was
-made and caught during this pass.)*
+**That second number is misleading on its own, and correcting it is the first
+useful thing this pass did.** The entries written from D163 up do not appear
+in any appendix, but most carry their own four-field preamble in italics:
+*Reachability*, *Observability*, *Status* and *Fix class*. That is a
+disposition, written by the batch that found the defect, and a mechanical
+count finds it:
 
-**And neither existing axis asks whether the entry is a defect at all.**
-Appendix A asks whether a claim is driven; a driven claim can still be a
-misreading. Appendix B asks whether a mechanism is reachable; an unreachable
-mechanism can still be correct behaviour. The register has no column for "we
-looked again and the object is right".
+| | 🐛 entries |
+|---|---|
+| appendix grade AND a full inline preamble | 87 |
+| appendix grade only | 30 |
+| inline preamble only (no appendix grade) | 90 |
+| **neither — a bare entry** | **25** |
+
+So **177 of 232 carry a reachability judgement and a fix class somewhere**,
+and only **25 carry neither**. The register is in far better shape than the
+"115 undispositioned" figure suggests, and any plan built on that figure would
+be planning work that is already done. The 25 are:
+
+> D6 D9 D27 D33 D65 D162 D176 D178 D179 D190 D275 D276 D277 D304 D306
+> D321 D470 D471 D710 D901 D920 D923 D930 D-V92DEC-1 D-V92DEC-2
+
+*(Two counting traps were hit and are worth passing on. First: do not compute
+appendix coverage by searching the appendices for `D<n>` mentions — entry
+bodies continue AFTER Appendix C's heading, D780 and D790 sit past line 4743,
+so a prose-mention count scores those bodies' internal citations as appendix
+coverage and reports 13 uncovered instead of 115. Second: do not stop at the
+appendix lists either, or you report 115 bare entries against a true 25. Both
+mistakes were made during this pass and caught by measuring rather than
+reading.)*
+
+Appendix B itself was audited and **is internally consistent**: 14 + 26 + 31 +
+21 = 92 listed, 92 distinct, every entry D70–D161 graded exactly once and
+nothing graded from outside that range.
+
+**And no existing axis asks whether the entry is a defect at all.** Appendix A
+asks whether a claim is driven; a driven claim can still be a misreading.
+Appendix B and the inline preambles ask whether a mechanism is reachable; an
+unreachable mechanism can still be correct behaviour, and a *reachable* one
+can still be harmless. `Status:` records whether the claim was demonstrated,
+not whether what was demonstrated is a fault. **The register has no column for
+"we looked again and the object is right", and that is the column this
+document adds.**
 
 ### Provenance: where the 🐛 marks came from
 
