@@ -1,0 +1,79 @@
+PRE-REGISTRATION -- #110 digital-termination mode, bench A/B, 20 pairs per far end
+Written 2026-08-23 before any call of THIS batch was placed.
+
+WHY PRE-REGISTER, AND WHY IT MATTERS MORE THAN USUAL HERE.  An exploratory run
+of this same change has already been done and I have seen its result: Courier
+6/1/1 on rate (p=0.125), Oli'Net 5/2/0 (p=0.453), and POOLED 11/3/1 at
+p=0.057.  That pooling was a choice I made AFTER seeing both batches, which is
+exactly the move that manufactures a borderline p-value, and I said so at the
+time.  This document exists so that the confirmatory run cannot be analysed
+the same way.  The exploratory data is kept, labelled exploratory, and is NOT
+merged into this one.
+
+THE CHANGE UNDER TEST
+  src/pump/v34/v34rx.c, gated on DSPLIB_V34_DIGITAL_TERM (default 0):
+
+      if (obj->f354c <= 0x464f) {
+              if (!dsplib_v34_digital_term)
+                      V34EchoAdapt(&obj->echo0, near_err);
+      }
+
+  Non-zero leaves the NEAR echo canceller unadapted at zero.  `adaptecho`
+  subtracts its filter output unconditionally, so zero coefficients make that
+  subtraction a no-op -- the state finding 1212 asked for.  The FAR canceller
+  (echo1) is untouched.  Findings 1212 and 1214.
+
+DESIGN
+  20 matched pairs per far end, two far ends: courier (ext 1902) and olinet
+  (ext 1903).  80 calls.  ONE BINARY -- build/hybrid-dt/slmodemd-fit -- with
+  DSPLIB_V34_DIGITAL_TERM the only difference between arms, so the compiler is
+  not an uncontrolled variable (the fault that cost an earlier pre-emphasis
+  A/B).  Arms INTERLEAVED within each pair index, because a batch drifts and
+  off-then-on would confound drift with treatment.
+  Labels: dt20-<far>-<arm>-<i>.
+
+PRIMARY OUTCOME -- fixed here, one only
+  OUR negotiated receive rate, read as the FIRST `pty << CONNECT <n>` in the
+  call log.  Paired sign test, two-tailed, per far end, alpha 0.05.
+  NOT the `tty <<` line: that is the far end's report, and it is not even the
+  same QUANTITY between modems -- a line rate on the Courier, a serial port
+  speed on the Supra under AT&B1.  496 of 524 archived call logs put it first.
+
+SECONDARY, reported but not decisive
+  Handshake count (`V34DATARATE, automatic` lines) and retrain count
+  (`V34TIMING,Retrain started`).  Both lower-is-better.
+
+EXPLICITLY NOT AN OUTCOME: equerr.
+  It is confounded by the primary.  The mode arm negotiates a HIGHER rate, so
+  its equaliser works a denser constellation and a larger error there means
+  nothing.  Finding #134 settled this exact trap -- "two operating points, not
+  a defect" -- and the exploratory run reproduced it, equerr rising in the arm
+  whose rate improved.  Two exploratory readings also saturated at 32767,
+  which is a short overflowing, not a measurement.
+
+EXCLUSION RULE, fixed in advance
+  A pair contributes to the sign test only if BOTH arms produced a
+  `pty << CONNECT`.  A pair where either arm failed to connect is EXCLUDED
+  from the rate test and counted separately as a connect failure, with the arm
+  named.  No other exclusion.  In particular a call is NOT excluded for a high
+  load reading; the load is recorded per call and reported, and any
+  load-based exclusion after the fact would be a choice made on seeing the
+  data.
+
+STOPPING RULE
+  20 pairs per far end, run to completion.  No interim look, no early stop.
+
+WHAT WOULD FALSIFY THE CLAIM
+  A sign test that does not reach p < 0.05 on EITHER far end.  The
+  exploratory 11/14 split predicts roughly 14-15 of 20 per far end if the
+  effect is real and that size; 10/20 is the null.
+
+POOLING
+  Declared IN ADVANCE as a SECONDARY analysis only, and reported with the
+  per-far-end results beside it, never instead of them.  Two far ends
+  disagreeing is a finding in itself and pooling would hide it.
+
+MACHINE
+  waitquiet before every call at threshold 4 -- NOT the default of 8, because
+  finding 1951 measured a call degraded at load 4.28 and the default would not
+  have caught it.  Load recorded per call.
