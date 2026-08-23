@@ -41541,10 +41541,33 @@ its own constant. A `(unsigned)v <= 15 ? v : 0` would have been a compare and
 a conditional move. The case labels are VALUES; what the enumeration calls
 them is not in the object.
 
-**The check in step 4 is one short.** `dataBase` is walked to its first empty
-name and the count is DECREMENTED before the comparison, so the last named
-entry of the table is unreachable through the argument path -- and the message
-prints the decremented number as "table length". docs/deviations.md D176.
+**CORRECTED 2026-08-23: the check in step 4 is NOT one short. Only the
+message is wrong.** This paragraph used to read "The check in step 4 is one
+short ... so the last named entry of the table is unreachable through the
+argument path", and that is a misreading of the object which stood here for
+months and was copied into D176.
+
+`dataBase` is walked to its first empty name and the count IS decremented
+before the comparison -- but the decrement converts a COUNT into a MAXIMUM
+INDEX, and the compare that consumes it is `jle`, not `jl`:
+
+    44dd9:  dec  %ebx              ebx = N - 1, the highest valid index
+    44dda:  cmp  %ebx,0x14(%esi)
+    44ddd:  jle  44def             <= N-1 is ACCEPTED
+
+`nm -S` puts `_ZN12V90PreFilter8dataBaseE` in `.data` at `0x6760` with size
+612, and the constructor's own stride is `add $0x24,%eax`; 612 / 36 is
+seventeen entries exactly -- sixteen named, index 16 the empty terminator. So
+the loop leaves 16, `dec` gives 15, and `codecType == 15`
+(`"Squeezer_545A_ITE"`, the last real entry) is accepted. **No named entry is
+unreachable.**
+
+What IS off by one is the DIAGNOSTIC, which prints the maximum index under the
+label "table length" -- a real defect, in the message rather than in the check.
+docs/deviations.md D176, whose title carried the same error and has been
+rewritten. The count and the stride were both read out of the blob rather than
+out of `src/`, deliberately: a reconstruction can carry a table length as an
+assumption no differential test would catch.
 
 **And it is bounded from above only.** Nothing puts a floor under
 `codecType`, so a negative constructor argument -- which is what the

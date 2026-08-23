@@ -4489,7 +4489,12 @@ displacement. Three hit, and only three — the two constructor copies, both
 
 ---
 
-## D176 🐛 `V90PreFilter`'s constructor can never select the last entry of `dataBase`
+## D176 🐛 `V90PreFilter`'s "table length" banner prints the maximum index, not the length
+
+*Titled "`V90PreFilter`'s constructor can never select the last entry of
+`dataBase`" until 2026-08-23. That title was the defect claim itself and it
+is refuted below; the number is kept and the old wording recorded here so
+citations still resolve to something that makes sense.*
 
 **REFUTED BY `docs/deviation-triage.md`, family 3, from the object.** The
 `dec %ebx` at `.text+0x44dd9` converts a COUNT into a MAXIMUM INDEX and the
