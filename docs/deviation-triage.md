@@ -177,3 +177,146 @@ refute the verdict. A disposition without one is an opinion.
 - It did not re-derive D1–D64. Those are the oldest and best-argued entries in
   the file, most are driven by a named test, and Appendix A already audits
   them on the axis that was missing.
+
+---
+
+# Family 1 — dead stores and redundant work
+
+**Entries: D190, D195, D196, D294, D296.** Triaged in this session, from the
+object.
+
+**The shared question.** Does anything read the value, or observe the
+redundancy? A store no path reads, a memset that clears bytes already zero, or
+a reload the compiler was obliged to emit are all *surprising* — which is why
+they were written down — but the register's 🐛 means "defect in the original",
+and code with no observable consequence is not a defect. It is usually the
+compiler being correct.
+
+**The verdict for the family is NOT A DEFECT, five for five**, and each row
+says what the misreading was.
+
+### D196 — `VPcmV34Create` re-loads `sess + 0x612c` between two byte stores
+
+*Claim: the two stores "are not guaranteed to reach the same record".*
+
+**Mechanism.** The two loads are at `.text+0xabb6` and `+0xabca`, and
+everything between them is visible:
+
+    abb6:  mov    0x612c(%ecx),%eax
+    abbc:  shr    $0x3,%edx
+    abbf:  mov    %dx,0xabfc(%ebx)
+    abc6:  movb   $0x0,0x10(%eax)
+    abca:  mov    0x612c(%ecx),%edx
+    abd2:  movb   $0x0,0x11(%edx)
+
+**The misreading.** The reload is *aliasing*, not a hazard. GCC could not
+prove that `movb $0x0,0x10(%eax)` — a byte store, which under C's aliasing
+rules may touch anything — does not overwrite `0x612c(%ecx)`, so it reloaded.
+For the two stores to reach different records, one of the two intervening
+stores would have to overwrite the pointer itself: `%ebx`-based at `+0xabfc`,
+which is a different object, or `%eax + 0x10`, which would require the record
+to contain the pointer to itself at offset 0x10. Neither is possible, and the
+program is single-threaded. **The two stores necessarily reach the same
+record.**
+
+- **Evidence tier 3** (usage inference over the object's own instructions);
+  the instruction sequence is direct, the aliasing argument is inference.
+- **Verdict: NOT A DEFECT.** Keeping both loads in `src/` remains right — it
+  is what `make similarity` compares — but the 🐛 mark is wrong.
+- **Test.** Fold the two loads into one in the reconstruction and run the
+  differential tier: it will pass, because no input can separate them. That is
+  the mutation-survivor shape, and it is the same instrument D195 already has.
+- **Citation:** finding 1260. AGREES — 1260 records the reload from the
+  disassembly and does not itself claim a hazard.
+
+### D195 — the second `sysdep_memset` clears what the first already cleared
+
+**Already proven unobservable, by the strongest instrument in the tree.**
+`test/mutations/vpcmcreate.json` carries `"the redundant second memset is
+dropped"` as a **deliberate recorded survivor**, and its header states the
+count: *"31 entries: 29 caught, 1 equivalent and recorded as such, 1
+survivor"*. A surviving mutant is a proof of unobservability — the suite
+cannot distinguish the object's behaviour with the memset from its behaviour
+without it, because there is nothing to distinguish.
+
+- **Evidence tier 2** (a recorded mutation result, i.e. the suite typing the
+  behaviour).
+- **Verdict: NOT A DEFECT.** Redundant, not wrong.
+- **Test.** Already run and recorded; re-run `tools/mutate.py` over
+  `vpcmcreate` and the survivor must still survive. If it were ever *caught*,
+  that would mean the two memsets are not redundant and this verdict is wrong.
+- **Citation:** finding 1260. AGREES.
+
+### D190 — `V90Phase3Modulator`'s constructor stores a pointer nothing reads
+
+**Mechanism.** Finding 1257 disassembled all nineteen `V90Phase3Modulator`
+text symbols and searched every `0x50` displacement: three hit, and only the
+two constructor copies are the object at all — `reset`'s `mov 0x50(%esp),%ebp`
+is a stack slot. So the field is written and never read *within the class*.
+
+- **Evidence tier 2** (the class's own symbols type the access), and the
+  entry's own status line is honest that what reads `+0x50` from OUTSIDE the
+  class was not looked for.
+- **Verdict: NOT A DEFECT** as recorded — a write-only member is a dead store,
+  and the entry's own comparison to the V.92 sibling is a note about
+  divergence between two classes, not a defect in either.
+- **Test.** `tools/relocscan.py` and a displacement sweep over every symbol
+  that can hold a `V90Phase3Modulator *` — if an outside reader of `+0x50`
+  exists, this becomes a live field and the entry becomes a *naming* question,
+  not a defect one.
+- **Note on the record:** this entry was renumbered from the 162 slot on the
+  coordinator's assignment and says so, which is exactly what `CLAUDE.md`
+  requires of a renumber. Good practice; leave it.
+- **Citation:** finding 1257. AGREES.
+
+### D294 — the study's states are numbered out of the order it runs them in
+
+**Two claims, and neither is behavioural.** A state *number* is a label; the
+dispatch is through the jump table at `.rodata+0xd70`, and the entry's own
+text says "the chain is measured from the arms and not from the numbers" —
+i.e. the code does the right thing and only the labelling is surprising. The
+second half, `int_a9a0` being "read by nobody", is a dead store: the entry
+reports it is named in no displacement of any of the class's thirty-two
+members.
+
+- **Evidence tier 3** (usage inference).
+- **Verdict: NOT A DEFECT**, both halves. Out-of-order labels change nothing a
+  caller sees, and a write-only field changes nothing at all.
+- **Test.** Renumber the states in the reconstruction to run order and the
+  differential tier must stay green; if it does not, the numbers are load
+  bearing and this verdict is wrong.
+- **Citation:** finding 1441. AGREES.
+
+### D296 — the retrain detector stores three accumulators it is about to clear
+
+**Mechanism.** `VPcmV34Progress` stores at `+0x30b`, `+0x311` and `+0x314`
+into `+0xac30`, `+0xac34` and `+0xac38`, and writes zero into all three
+unconditionally eight instructions later at `+0x349`, `+0x350` and `+0x357`,
+on every path out of the block.
+
+**The entry's own text already contains the verdict**: "Nothing reads any of
+the three between the store and the clear, and the compiler kept them because
+they are member stores through a live pointer."
+
+- **Evidence tier 3**, and the entry graded itself **FIRES** — which is true of
+  the *store* and irrelevant, because what fires is a write nobody reads.
+  **This is the clearest case in the register of the reachability axis being
+  read as a severity axis.** A dead store that executes on every call is still
+  a dead store.
+- **Verdict: NOT A DEFECT.**
+- **Test.** Delete the three stores in the reconstruction and run the
+  differential tier plus `make similarity`: the first must stay green (nothing
+  observes them) and the second must move (the object contains them). That
+  pair of outcomes is what distinguishes "dead" from "wrong".
+- **Citation:** finding 1464. AGREES.
+
+### What this family costs the register
+
+Five entries carry a 🐛 that means "defect in the original" and describe code
+with no observable consequence. That is 2% of the 232, found in the first
+family looked at, and the shape is common enough — a reload, a redundant
+clear, a write-only field, a label out of order — that a sweep for it over the
+entries this pass did not reach would likely find more. **The
+recommendation is not to delete these entries.** They are worth recording; the
+`🐛` is what is wrong, and `⚠`, or a new neutral mark, is what they should
+carry.
