@@ -1608,3 +1608,253 @@ member, so there is no caller range to check and no wire field reaches `arg5`.
 whether `arg5[k]` is a Ucode (≤ 127, and V.90 §3.5 makes it safe) or a count
 or difference (up to 255, unsafe). **No test is possible until then** — driving
 it directly measures the fixture, not the object.
+
+---
+
+# Family 8 — unguarded divisions, and loops with no bound
+
+**Entries: D33, D113, D126, D185, D226, D228, D229, D282, D292, D297, D304,
+D331, D336, D337, D338, D343, D356, D930.** Eighteen examined, seventeen
+decided, one left.
+
+## THE SHARED BOUND, and it is stronger than the one the register uses
+
+Six entries in this family are bounded by "a parameter cannot take a bad
+value". The register argues that as *"slmodemd never supplies a parameter
+file"* — a claim about the host. **The object proves something stronger.**
+
+`Vparser_read_int` (**0xb0990**) and `Vparser_read_float` (**0xb09a0**) are
+three-byte stubs in the shipped object:
+
+    b0990:  31 c0    xor %eax,%eax
+    b0992:  c3       ret
+
+**They write nothing through `*value`.** `V90Parameters::loadParams` and
+`V92Parameters::loadParams` are their only callers, and
+`V90Parameters::loadModemParamsData` — the *unconditional* second writer,
+which runs on both arms of `if (paramFile)` — touches only
+`DIGITAL_POWER_REDUCTION`, `PROBING_MODE`, `LINE_CONNECTION_TYPE` and
+`TRN2D_MEAN_ERROR_STD_EVALUATION_ENABLE`. `V92Parameters::init` tail-calls
+`loadParams` and has no equivalent at all.
+
+**Therefore every other `V90Parameters` / `V92Parameters` field holds its
+`setToDefault` value for the life of the process, whatever
+`modemParams->paramFile` is.** That needs no claim about the host at all, and
+it is the correct form of the argument. Defaults it fixes, used below:
+`V92_ECHO_FILTER_LENGTH = 180`, `RATE_FORCE = 45333`, `SPECTRAL_SHAPER_SR = 1`,
+`GERMAN_PBX_SPECTRAL_SHAPER_SR = 3`, `ENABLE_DIGITAL_POWER_REDUCTION = 1`,
+`SPECTRAL_VERIFIER_FFT_LEN = 1024`, `SPECTRAL_VERIFIER_FFT_WINDOW = 1`.
+
+**Integer and float divides are different severities and the register does not
+separate them.** An integer divide by zero is `#DE` → SIGFPE, immediate and
+fatal. An x87 float divide by zero is an infinity or the real indefinite
+0xffc00000, which propagates silently into a decision. Every row below says
+which it is.
+
+## The verdicts
+
+| entry | kind | verdict |
+|---|---|---|
+| D33 | integer, SIGFPE | UNDECIDABLE FROM HERE |
+| D113 | integer, SIGFPE | UNDECIDABLE — duplicate of D33 |
+| D126 | float, NaN | UNDECIDABLE — two of three routes closed |
+| D185 | integer, SIGFPE | DEFECT, UNREACHABLE — bounded by `$0x32` |
+| D226 | integer, SIGFPE | DEFECT, UNREACHABLE — **bounded host-side, not by the object** |
+| D228 | unsigned wrap | DEFECT, UNREACHABLE — the shared bound |
+| D229 | signed→unsigned | DEFECT, UNREACHABLE — the shared bound |
+| D282 | float, NaN | DEFECT, REACHABLE, FIX WARRANTED |
+| D292 | float, NaN | DEFECT, REACHABLE, FIX WARRANTED |
+| D297 | loop | UNDECIDABLE — the one not closed |
+| D304 | loop | DEFECT, UNREACHABLE — **now closed, see below** |
+| D331 | float, infinity | DEFECT, REACHABLE — **hang claim REFUTED** |
+| D336 | loop | DEFECT, UNREACHABLE — `RATE_FORCE` gives n = 29 |
+| D337 | loop | DEFECT, REACHABLE, FIX WARRANTED |
+| D338 | loop | DEFECT, REACHABLE, FIX WARRANTED |
+| D343 | loop | DEFECT, UNREACHABLE — **no caller exists** |
+| D356 | integer, SIGFPE | DEFECT, REACHABLE, FIX WARRANTED |
+| D930 (loop half) | loop | DEFECT, UNREACHABLE — `shaperSR ∈ {1,3}` |
+
+## The reachable ones, with the fix named and not written
+
+**D356 — `calcModulusParameters`'s `__moddi3` by an empty phase. The only
+entry in the family with a REPRODUCED fault**, `constellationSize = {0, 8, 0,
+18, 1, 22}` and `__moddi3` as the top frame. Five `__moddi3` and six
+`__divdi3` calls at 0x3dddb..0x3df13 on `remaining[i] % constellationSize[i]`;
+integer, so SIGFPE. The gate chain is real — `constellationDesign` →
+`adjustConstellationsPower` (0x4cb89) → `getPower` → `calcModulusParameters`
+(0x3e0fd), and `process` reaches it the same way at 0x4cf57 — and **the gate
+is `ENABLE_DIGITAL_POWER_REDUCTION`, whose default is 1, so it is OPEN on the
+shipped configuration and cannot be closed at run time.**
+**Fix, host-side or opt-in:** floor the per-phase length at one before the
+power pass, or skip the pass on an empty phase. **What stays open and must
+not be glossed:** whether a live session can produce an empty phase. Nothing
+bounds the ucode tables a real detector fills, so **do not promote this to
+FIRES TODAY on the fixture alone.**
+
+**D337 and D338 — two non-terminating loops in
+`setConstellationToNoise_forceRate`, and D338's is visible in the
+fall-through.** D338 at 0x4a560–0x4a5b4: the `cmp $0x74` give-up at 0x4a56d
+skips the inner `for` and lands at 0x4a5ad, and the path from 0x4a5ab to
+0x4a5b4 **touches neither `%di` nor `constellation[k][0]`**, so the outer
+`while` re-tests identically and repeats for ever. That is not a claim, it is
+the control flow. D337 at 0x49b8e–0x49bf9: the scan skips flagged phases
+(`cmpb $0x0,(%edi,%edx,1); jne 49bc0`), so **a flagged phase holding a zero
+count is never incremented, the product stays 0, and `0 < 2^n` never fails.**
+(D337's other candidate — `2^n` overflowing to infinity — does not survive
+reading: `fadd %st(0),%st` doubles in an 80-bit register whose exponent needs
+n > 16384.)
+**Fixes:** make D338's give-up exit the outer `while` rather than the inner
+`for`; cap D337's refinement at a turn count or refuse to enter it when an
+unflagged-eligible count is zero. **D338 is coupled to D339** — an insert
+writes zero into `constellation[k][0]` rather than advancing it, which is what
+makes the give-up ineffective even on the insert path — so D339 must be
+re-read before either is touched.
+
+**D282 and D292 — one NaN, produced in one function and consumed in the
+other.** D292: `studyUrefHandler` at 0x42260 loads the sample count and
+`fildll`s it straight into a divide with **no `test` between**, where its four
+sibling loops all test; float, so a NaN rather than a trap. D282:
+`getAltVarThresh` at 0x406cc divides by a 16-bit count (`push %cx; filds
+(%esp)`) that the selection loop increments only on the accumulate arm — so
+six equal entries select nothing, the count is 0, and 0.0/0 is the real
+indefinite. Finding 1442 traces the first NaN into `var[phase]`, into
+`getAltVarThresh`, and out as **the threshold every phase is compared
+against**, after which the ordered `>` flags nothing.
+**Fix, host-side and shared:** reject a threshold that is not ordered against
+itself — treat a NaN return as "no threshold yet". Reproducing the object's
+NaN is required; **the caller is the place to absorb it.**
+**Test, and it is already half-built:** compare the return **as a bit
+pattern** against 0xffc00000. `t_v90adid` already carries the row of six zeros
+and compares as bits for exactly this reason, because `==` is false for a NaN
+on both sides and would pass for ever.
+
+**D331 — real, but the severity claim is REFUTED and should be struck.** The
+divide at 0x47d5a is `1.0 / (double)maxSize` with `maxSize` starting at zero
+(`xor %edx,%edx`, 0x47cf4) and updated only for phases whose guard byte at
+`constelTable + 0x280c + k` is zero — so it can stay 0, and x87 gives
++infinity, not a trap. **But D331 says "the two truncations that follow yield
+0x80000000 — after which each of the two doubling loops runs about 2^31
+times", and both are 64-bit `fistpll` (0x47e13, 0x47e4e) whose readers take
+the LOW dword, which for the x87 integer indefinite is ZERO — and both are
+guarded:** `test %eax,%eax; je` at 0x47e28/0x47e2a and 0x47e65/0x47e67.
+**Neither doubling loop runs.** The infinity propagates as a nonsense `dmin`;
+there is no hang. This is the one claim in the family a reader would act on
+and that the object contradicts.
+**Test:** plant a nonzero guard byte in all six of `constelTable+0x280c..
++0x2811`, call `determineDminForRrn`, and observe that it **returns**. A hang
+would refute the correction.
+
+## The unreachable ones, each with its bound named
+
+- **D185** — the divisor is `GenericToneDetector`'s tenth argument, and its
+  only producer is `ANSamToneDetector`'s seventh, which is **the immediate
+  `$0x32` = 50 written into the object's own `.text`** at 0xfaef and 0x2135a.
+  Those are the only two construction sites, and the `C1` entry point D185
+  cites has **no relocation naming it at all**.
+- **D226 — real, and the bound is HOST-SIDE, which the register states as
+  though it were the object's.** `vpcm_create` bounds its fifth argument
+  ABOVE (`cmpl $0x30,0x40(%esp); jg 3c7f` — arg5 ≤ 48) **and not below**, then
+  computes `blk = (int)trunc(((arg5 * 1000) / 9600) * 8.0 + 0.5)`. **Any
+  `arg5 ≤ 9` gives `blk = 0` and the `div %edi` at 0x11278 faults with
+  SIGFPE.** So "CANNOT FIRE — finding 1188 reads it as 40" reads as an object
+  bound and is not one; a host passing a block count of nine or fewer takes
+  SIGFPE during construction. Finding 1188 says this explicitly and **the
+  entry understates its own citation.**
+- **D228, D229** — the shared bound above: `V92_ECHO_FILTER_LENGTH` is 180 in
+  `setToDefault` and no run-time path can change it.
+- **D336** — computed rather than asserted: `(short)(45333 × 0.00075 + 0.5)` =
+  `(short)34.4998` = **34**, and `n = 34 + shaperSR − 6` is **29** at
+  `SPECTRAL_SHAPER_SR = 1` or **31** at the German PBX value 3. Reaching a
+  negative `n` needs `RATE_FORCE < 8000` at `shaperSR = 0`. The entry's "needs
+  only a small forced rate and a `shaperSR` under 6" is right about the shape
+  and wrong about the shipped configuration. *(Both guards at 0x49a39 and
+  0x49a47 are equality tests, so a negative `n` does count round the whole
+  32-bit range — the entry says there is one guard and there are two, which
+  does not change the conclusion.)*
+- **D343 — no caller exists.** An exhaustive relocation sweep over every
+  `.rel.*` section finds **zero** references to
+  `_ZN24V90ConstellationDesigner19calcMtoMatchKtargetEff`. The symbol survives
+  only because a non-static member has external linkage. Its trip count is
+  exactly `2^32 − |v|` rather than "about 2^32".
+- **D930's loop half** — `blockLength = 6 / shaperSR` with an explicit zero
+  guard at 0x3286c, so it is zero only for `shaperSR == 0` or `> 6`.
+  `V90SpectralShaper::reset` has exactly one caller (`V90Mapper::reset`,
+  0x3025c) and `process` exactly one (`V90Mapper::process`, 0x30505), and
+  `mappingParams->shaperSR` has only two writers, both from the two defaults.
+  **`blockLength` is 6 or 2 and cannot be 0.** The entry's closing advice —
+  "anyone linking this library for real should bound `shaperSR` to 1..6 at the
+  parameter block" — is right and should be kept; what should be corrected is
+  "the value is reachable from the parameter block", which is true of a
+  hypothetical build with a real `Vparser` and false of the shipped object.
+
+## D304 is now CLOSED, and this supersedes Family 3
+
+Family 3 left D304 UNDECIDABLE and named the deciding evidence: *"where
+`cid_modem` obtains the sample count it passes, and whether any path can make
+it negative."* **That trace was done.** `CID_FSD_demodulate` has exactly one
+reference in the object, `cid_modem` at `.text+0x9207e`, whose third argument
+slot `0x18(%esp)` has three writers — zero at 0x91ccd, `FPM_MRF_filter`'s
+unsigned-16 return at 0x91e32, and at 0x91dfa a value that `cid_modem`
+sign-extends from its own count argument (`movzwl 0x1f4(%esp),%esi` at
+0x91cc5, `movswl %si,%ebx` at 0x91cf4). So a negative count IS producible, at
+a count of 0x8000 or more.
+
+**But it cannot be the FIRST failure.** `cid_modem`'s prologue copies `count`
+shorts into `0x40(%esp)` at 0x91cd3–0x91ce4, inside a 0x1ec-byte frame with
+room for about 214 — so a caller passing 0x8000 destroys `cid_modem`'s own
+frame long before the demodulator is entered. **DEFECT, UNREACHABLE**, and the
+real host-side rule is the one the register already names: bound the block
+length.
+
+## The unclosed one, and it is named rather than guessed
+
+**D297 — two transmit loops with no iteration bound.** The K56flex arm was
+read (0xbb7c–0xbbbd): nothing counts turns, and the only exit is the transmit
+queue reaching `f2aa0` at `jge bf38`. **Deciding it needs a return-path audit
+of four callees** — `modulatevector`, `v34handshak`, `v90RateReneg`,
+`v90RateRenegSilence` — establishing for each whether a return without
+enqueueing is possible. That is four functions of nontrivial size and it is
+the whole of the work; it was not attempted rather than guessed at. One point
+cuts *against* the hang: the exit compare is **signed** (`jge` on two 16-bit
+values), so a queue count that went negative would also exit.
+
+## Corrections this family makes to the register
+
+1. **D33's caller list is wrong.** It names `rxinit`, `agcadapt` and
+   `adaptecho`; the object contains exactly **two** references to
+   `updateAlpha`, both `R_386_PC32`, **both inside `modem_serrint`**
+   (`.text+0x5d200` and `+0x5d560`). `adaptecho` calls the energy *producer*
+   at 0x5db99, which is probably how it got in. The error is the entry's, not
+   the finding's — finding 127 agrees on mechanism, range and producer, and
+   makes no caller claim.
+2. **D331's "each of the two doubling loops runs about 2^31 times" must be
+   struck** — both are guarded, as shown above.
+3. **D336, D337 and D338 all cite D345 for "nothing calls this member", and
+   `setConstellationToNoise_forceRate` is not among D345's eleven names.** An
+   exhaustive sweep finds two callers: `constellationDesign` (0x4cb27) and
+   `process` (0x4cf3e). **DANGLING in the sense that matters** — it is the
+   difference between "no call site can constrain the input" and "two do", and
+   it is the same shape as D330's mis-citation of D345 in Family 6. **D345 is
+   being cited as a general licence for "uncalled" when it is a specific list
+   of eleven.**
+4. **D226, D228 and D229 cite finding 879 for "slmodemd never supplies a
+   parameter file", and 879 says nothing of the sort** — it contains no
+   occurrence of `paramFile`, `slmodemd` or `null`. The real support is the
+   `Vparser_read_*` stubs (finding 860), which is a *better* bound. Re-point
+   the citation.
+5. **Four defects found in passing that are NOT in the register**, recorded
+   here so they are not lost:
+   - `updateAlpha` at `energy == 0x80000000` exactly: bit 30 is clear so the
+     normalisation loop runs, `add %edx,%edx` gives 0, and **0 doubles to 0 for
+     ever** — an infinite loop at 0x5d5d8–0x5d5e2, inside the function D33 is
+     about.
+   - **`cid_modem`'s two unguarded `idiv` by the sample count** at 0x91d5c and
+     0x91db7: with `arg2 == 0` the accumulate loop is skipped, `%ecx` is 0, and
+     `idiv %ebx` is **0/0 → SIGFPE**. Integer, immediate, and reached by a
+     zero-length block from `cid_progress`, with no guard anywhere above it.
+     **This is more urgent than D304, which is in the same function.**
+   - `cid_modem`'s signed/unsigned prologue copy at 0x91cd3 (the frame smash
+     that closes D304).
+   - `V90SpectralVerifier::C2`'s unguarded `fdivrp` at 0x45aca by
+     `(double)SPECTRAL_VERIFIER_FFT_LEN` — float, so an infinity rather than a
+     trap, and bounded by the default 1024 under the shared bound.
