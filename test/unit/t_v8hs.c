@@ -227,10 +227,10 @@ trace_setup(const struct trace_case *c, unsigned seed)
 	 * that want the receiver dispatched have to fill it first.
 	 */
 	if (c->f9d4 == 5) {
-		obj_a.error_window_symbols = obj_b.error_window_symbols = 0x60;
+		obj_a.f21c = obj_b.f21c = 0x60;
 		obj_a.fa3e = obj_b.fa3e = 0x60;
 	} else {
-		obj_a.error_window_symbols = obj_b.error_window_symbols = 0;
+		obj_a.f21c = obj_b.f21c = 0;
 		obj_a.fa3e = obj_b.fa3e = 0x60;
 	}
 
@@ -538,7 +538,7 @@ main(void)
 				obj_a.f9d6 = obj_b.f9d6 = 0x28;
 				obj_a.f9d8 = obj_b.f9d8 = sub;
 				/* Queue already full: skip the transmit loop. */
-				obj_a.error_window_symbols = obj_b.error_window_symbols = 0x60;
+				obj_a.f21c = obj_b.f21c = 0x60;
 				obj_a.fa3e = obj_b.fa3e = 0x60;
 				/*
 				 * Enough symbols for all three passes: the

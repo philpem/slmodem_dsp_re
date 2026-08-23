@@ -301,7 +301,7 @@ main(void)
 				 * one state that has to reach the machine to
 				 * report that it has finished.
 				 */
-				da->v8->error_window_symbols = db->v8->error_window_symbols = 0x60;
+				da->v8->f21c = db->v8->f21c = 0x60;
 				da->v8->fa3e = db->v8->fa3e = 0;
 				da->v8->f110 = db->v8->f110 =
 					states[si].f9d6 == 0x63 ? 40 : -40;
