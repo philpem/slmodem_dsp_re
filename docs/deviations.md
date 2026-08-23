@@ -4034,6 +4034,19 @@ reconstruction writes it as the two byte tests it plainly is.
 
 *Task #98 sweep, from fix list §7.25. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
+**REFUTED BY `docs/deviation-triage.md`, family 7.** Both halves fail against
+the object. The two loads are `movzwl` — `0x2aea5` and `0x2b022` — not
+`movswl`, so the search exits at index 7 on **every** top-segment level
+(a valid A-law level is a positive `alaw2linear` result, 0..32256, and any
+level in 16385..32256 exits there). And "both users" is seven references
+across five functions: `updateCodeSegmentPointer`, `resetDILGenerator`,
+`generateDIL`, `generateV90Symbol` (twice) and `generateV92Symbol` (twice).
+The residual true fact — that an unsigned load lets a slot content of 32,769
+or more fall out at index 8 — belongs to D107. **The claim originates in
+finding 231, which does not account for the `movzwl`, so the correction is
+owed there too.** Status here was already SUSPECTED rather than CONFIRMED,
+which is what a suspected claim is for.
+
 **The A-law boundary row's last entry can never be reached (finding 231,
 `docs/findings.md:13235` — the material is in that finding's body, not in its
 heading, which is about `callgraph.py`).**
@@ -4440,6 +4453,21 @@ displacement. Three hit, and only three — the two constructor copies, both
 ---
 
 ## D176 🐛 `V90PreFilter`'s constructor can never select the last entry of `dataBase`
+
+**REFUTED BY `docs/deviation-triage.md`, family 3, from the object.** The
+`dec %ebx` at `.text+0x44dd9` converts a COUNT into a MAXIMUM INDEX and the
+compare that consumes it is `jle`, not `jl`. `dataBase` is 612 bytes at
+`.data 0x6760` with a 0x24 stride — seventeen entries, sixteen named, index 16
+the empty terminator — so the loop leaves 16, `dec` gives 15, and
+`codecType == 15` (`"Squeezer_545A_ITE"`, the last real entry) is **accepted**.
+No named entry is unreachable. What IS off by one is the diagnostic, which
+prints the maximum index under the label "table length"; that is a real
+tier-1 defect and it belongs with the other diagnostics. **The error
+originates in finding 1233's step 4, which states the same thing, so the
+correction is owed there too.** The rest of 1233 stands.
+
+The text below is the original claim, kept because a wrong route is worth as
+much as a right one:
 
 The table is walked to its first empty name and the count is decremented before `codecType` is compared against it, so the highest index the constructor will accept is `count - 2`, and an index of `count - 1` -- a real, named entry -- is rejected with "External Hardware Codec Index exceeds table length" and replaced by 0. The message prints the decremented number as "table length", which is where the off-by-one shows. Reproduced (finding 1233). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
 
