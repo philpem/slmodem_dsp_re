@@ -97,6 +97,19 @@ PENDINGREFS = "tools/pendingrefs.json"
 # every reference into the other half into a false dangling report.
 #
 FINDING_HEAD = re.compile(r"^#{2,4} (\d+[a-z]?)\.\s*(.*)$", re.M)
+#
+# THE PERIOD IS LOAD-BEARING, and a heading that lacks it is INVISIBLE rather
+# than wrong-looking: `### 7410 Title` defines nothing, so the number stays
+# free for the next writer to reuse and the first reference to it dangles.
+# Five findings arrived that way in one merge and the tool reported a clean
+# tree, because nothing had cited them yet.
+#
+# LEVEL 2 AND 3 ONLY.  `####` is used for prose sub-headings that legitimately
+# open with a number -- "#### 88 mutations, 80 caught", "#### 47 `TX_PHASE2_ANS`"
+# -- and there are eleven of those today against zero real finding headings at
+# that level.  Widening this to `#{2,4}` makes every one of them a failure.
+#
+FINDING_HEAD_BAD = re.compile(r"^#{2,3} (\d+[a-z]?)[ \t]", re.M)
 DEV_HEAD = re.compile(r"^## D(\d+[a-z]?)\b\s*(.*)$", re.M)
 #
 # NOT EVERY DEVIATION ID IS A NUMBER.  `docs/deviations.md` also carries
@@ -617,6 +630,19 @@ def check_suites():
 # every mutation's `find` string is present.  If `find` is ABSENT and
 # `replace` is PRESENT, that mutation is live in the tree.  Finding 349.
 #
+def check_finding_headings():
+    """A finding heading whose number has lost its period defines nothing."""
+    text = read(FINDINGS)
+    lines = text[:].split("\n")
+    bad = []
+    for m in FINDING_HEAD_BAD.finditer(text):
+        n = text.count("\n", 0, m.start()) + 1
+        print("  MALFORMED HEAD  %s:%d  %s"
+              % (FINDINGS, n, lines[n - 1][:64]))
+        bad.append(m.group(1))
+    return bad, len(FINDING_HEAD.findall(text))
+
+
 def check_live_mutants():
     reg_path = os.path.join("test", "mutations", "suites.json")
     if not os.path.exists(reg_path):
@@ -712,18 +738,21 @@ def check_dangling():
     marks = check_conflict_markers()
     suites = check_suites()
     live = check_live_mutants()
+    badhead, nheads = check_finding_headings()
     #
     # EVERY COUNT CARRIES ITS DENOMINATOR (finding 2401), including the held
     # one: "0 resolve to nothing" over a silently exempted set is the same
     # lie as a coverage tier reporting 0.0% (0/0) and calling it OK.
     #
     print("\n  %d references checked, %d resolve to nothing, %d held pending "
-          "an unmerged branch, %d stale entr(y/ies)%s%s%s"
+          "an unmerged branch, %d stale entr(y/ies)%s%s%s%s"
           % (total, len(bad), len(held), len(stale),
              "" if not marks else ", %d conflict marker(s)" % len(marks),
              "" if not suites else ", %d bad mutation suite(s)" % len(suites),
-             "" if not live else ", %d LIVE MUTANT(S)" % len(live)))
-    return 1 if (bad or stale or marks or suites or live) else 0
+             "" if not live else ", %d LIVE MUTANT(S)" % len(live),
+             "" if not badhead else ", %d MALFORMED HEADING(S)" % len(badhead)))
+    print("  %d finding heading(s) checked for their number's period" % nheads)
+    return 1 if (bad or stale or marks or suites or live or badhead) else 0
 
 
 def check_since(rev):
