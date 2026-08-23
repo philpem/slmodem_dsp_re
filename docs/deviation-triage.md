@@ -28,9 +28,15 @@ A detector must report its denominator (`CLAUDE.md`, findings 134, 2400,
 |---|---|
 | entries in `docs/deviations.md` | 351 |
 | marked 🐛 | **232** |
-| of those, examined here | *(see the closing census)* |
-| decided here | *(see the closing census)* |
-| left undecided, and named | *(see the closing census)* |
+| of those, **examined** here | **118** |
+| **decided** here | **97** |
+| left **undecidable**, each with the deciding evidence named | **21** |
+| not reached, and named in full at the end | **114** |
+
+Of the 118 examined, **20 turned out not to be defects of the object** — 17
+NOT A DEFECT and 3 misfiled. **One in six.** The full breakdown is in the
+closing census; it is repeated here because it is the headline: *the 🐛 count
+is not a defect count, and the gap is large enough to matter.*
 
 ### 232 and 230 are both right, and that is itself a defect in the record
 
@@ -2412,3 +2418,127 @@ shipped country is inside the sixteen-entry table**; only index 15 goes unused.
   original vendor header or driver naming parameter 33. If it is "modifier
   validation", D83 stands; if it is anything like "modifiers already
   validated", it inverts.
+
+---
+
+# The closing census
+
+Computed by a script over the verdict ledger and the register's own headings,
+not counted by hand — the same discipline `CLAUDE.md` requires of a detector.
+
+| | count |
+|---|---|
+| 🐛 entries in `docs/deviations.md` | **232** |
+| **examined here** | **118** |
+| **decided here** | **97** |
+| **left undecidable**, each with the deciding evidence named | **21** |
+| not reached | **114** |
+
+| disposition | count |
+|---|---|
+| NOT A DEFECT | **17** |
+| MISFILED — real, but not a deviation of the object | **3** |
+| DEFECT, UNREACHABLE | **36** |
+| DEFECT, REACHABLE — NO FIX WARRANTED | **14** |
+| DEFECT, REACHABLE, FIX WARRANTED | **26** |
+| ALREADY DISPOSITIONED by an existing fix | **1** |
+| UNDECIDABLE FROM HERE | **21** |
+
+**Twenty of 118 — one in six — are not defects of the object at all.** That is
+the number this document exists to produce, and it is high enough that the
+register's 🐛 count should not be quoted as a defect count again without
+qualification.
+
+## What was NOT reached, and what shape it is in
+
+The 114 are named in full here so nobody re-derives the list.
+
+> D1 D4 D6 D9 D11 D12 D13 D14 D15 D16 D17 D19 D21 D22 D23 D24 D25 D26 D27 D28
+> D29 D30 D32 D36 D39 D64 D70 D71 D72 D75 D89 D90 D91 D92 D95 D97 D98 D99
+> D100 D104 D105 D106 D108 D109 D110 D111 D112 D114 D115 D116 D117 D118 D119
+> D120 D121 D122 D123 D124 D125 D127 D128 D129 D130 D132 D133 D134 D136 D137
+> D138 D139 D140 D141 D142 D143 D144 D145 D146 D147 D148 D149 D150 D151 D152
+> D153 D154 D155 D156 D157 D158 D159 D160 D161 D230 D252 D254 D260 D272 D273
+> D274 D280 D283 D286 D305 D307 D320 D322 D325 D329 D339 D340 D342 D355 D920
+> D923
+
+They are not equally unattended:
+
+- **11 are already behind a `DSPLIB_REPRODUCE_BUGS` arm** — D1, D4, D26, D27,
+  D28, D29, D30, D32, D36, **D920 and D923**. Someone decided each was real,
+  decided a fix, and gated it. D920 and D923 are the standard this document
+  was measured against and were deliberately not re-argued.
+- **26 are in D1–D64**, the oldest and best-argued block, every one graded by
+  Appendix A and most driven by a named test. They were skipped deliberately:
+  the axis Appendix A supplies is the one that was missing there.
+- **66 are in D70–D161**, all graded by Appendix B — but this is where the risk
+  concentrates. **They are the task #98 sweep, derived from prose in
+  `docs/findings.md` rather than from a fresh reading of the object**, and
+  Family 10 audited fourteen of them and found three misfiled, one mechanism
+  refuted and one bounded. **There is no reason to think the remaining 66 have
+  a better hit rate than the fourteen that were checked.** Extrapolating the
+  audited rate would put roughly a third of that block in need of correction;
+  that is an extrapolation and is offered as a reason to look, not as a
+  finding.
+- **22 are elsewhere** — mostly the 2026-08 batches, which carry their own
+  four-field preamble and are the best-conditioned unexamined entries in the
+  file.
+
+## What I would want next, in priority order
+
+1. **Settle D77 and D74 with one live call.** The blob prints
+   `vpcm: Delays: HW %d, DMA %d` at debug level > 1, which Family 2 shows is
+   one `--log` away, and `dp_vpcm_shim.c` prints `io_delay=%ld`. That single
+   log line resolves a three-way contradiction between a fixture threshold, a
+   host that answers 48, and this repository's own record of dozens of
+   completed V.34 calls — and it decides whether Appendix C's **rank #1** is
+   real. It is the cheapest high-value measurement available and it needs an
+   idle machine, not an analyst.
+2. **Fix the two wire-reachable defects, host-side.** D94's V.8 collector and
+   D256's DIL sample store are both reachable from a *conformant* peer, both
+   with a quoted clause, and both are memory-safety defects rather than
+   quality ones. D94 is the sharper of the two because V.8 §5.2 and §6.6
+   permit an unbounded character count by design and §6 makes tolerating
+   unknown octets mandatory.
+3. **Answer D88's one question**, because it is cheap and it might be the third
+   wire-reachable defect. Which of the tables at `+0xa48`, `+0xb48`, `+0xc48`
+   is subscripted by the eight-fold shell-mapper sum? V.34 Table 10's largest
+   M is 18, so the g8 domain reaches 136 against a 128-entry table, and a
+   conformant 14 400/2743 connection would overrun it by nine.
+4. **Audit the remaining 66 of D70–D161 as a block**, with Family 10's method
+   and its hit rate as the prior. The right output is a corrected Appendix B,
+   not new entries.
+5. **Correct the four findings this pass convicted**, because a register
+   correction that leaves the finding standing fixes the smaller half:
+   finding 1233's step 4 (D176), finding 231's `movzwl` (D135), finding 1020's
+   correction being absorbed (D78), and D65's citation of D4 where D1 is meant.
+6. **Adopt "DEFECT, REACHABLE — NO FIX WARRANTED" as a register grade.**
+   Fourteen entries currently carry a 🐛 and an implied to-do that nobody
+   should ever do, and the discriminating test — can the correct value be
+   derived independently — is already the test this tree applies without
+   naming it.
+7. **Renumber `D-V92DEC-1` and `D-V92DEC-2`** into the `D\d+` scheme, moving
+   the five cross-references with them, so the register's own gate can see
+   them.
+
+## What would make this document wrong
+
+Stated plainly, because a triage without one is an opinion:
+
+- **Any of the "bounded by the only caller" verdicts** falls the moment a
+  second caller appears. That covers most of the 36 UNREACHABLE rows, and each
+  names its bound with an address, an immediate or a clause so the check is
+  mechanical.
+- **The destructor family's seven NOT A DEFECT verdicts** all rest on
+  `_ZN12VPcmFloModemD1Ev` having zero callers and on each destructor call
+  being followed by `sysdep_free` of the same register. One caller that
+  destroys without freeing flips all seven at once.
+- **The allocation family's disjointness claim** — that no allocation is both
+  argument-sized and immediately dereferenced — was established by reading
+  every size operand in the family. A failing allocator in
+  `test/harness/runtime.c` would test it directly, and nothing in this tree
+  can currently make `sysdep_malloc` return NULL.
+- **D176's refutation** is the strongest claim here and rests on the object's
+  own `.data` and `.text`: 612 bytes at 0x6760, a 0x24 stride, `dec %ebx` then
+  `jle`. If `dataBase` is ever regenerated at a different length the argument
+  must be re-run, not assumed.
