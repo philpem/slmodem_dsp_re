@@ -320,3 +320,141 @@ entries this pass did not reach would likely find more. **The
 recommendation is not to delete these entries.** They are worth recording; the
 `🐛` is what is wrong, and `⚠`, or a new neutral mark, is what they should
 carry.
+
+---
+
+# Family 2 — defects in diagnostics, and the gate that does not hold
+
+**Entries: D163, D267, D291.** Triaged in this session, from the object and
+from the host. **This family's shared argument overturns a reachability line
+that several entries state about themselves**, so read the argument before the
+rows.
+
+## The shared question, and the answer is not the one the entries assume
+
+Every diagnostic call site in the object is gated on `dsplibs_debug_level`.
+`include/dsplib/debug.h` states the consequence plainly: *"every use is gated
+on `dsplibs_debug_level`, and slmodemd ships with that at zero — so on a
+working modem none of the call sites do anything at all."* Several entries
+repeat it: D163's own reachability line reads *"diagnostic only, and only
+above `dsplibs_debug_level > 1`"*.
+
+**Measured against the object rather than believed** (`CLAUDE.md`: when a
+paragraph states a count, check it against the tool):
+
+| | count in `ref/slmodemd/dsplibs.o` |
+|---|---|
+| relocations naming `dsplibs_debug_printf` | 1,670 |
+| relocations naming `dsplibs_debug_level` | 1,733 |
+| `cmpl $0x1,<abs32>` in `.text` | 1,328 |
+| `cmpl $0x2,<abs32>` in `.text` | 21 |
+
+There are more references to the level than calls to the printf, so "every
+call site is gated" is at least consistent with the object at this
+granularity. A per-site proof was not done here, and is what would make it
+certain.
+
+**But the gate is opened by a documented command-line flag, and that is what
+nobody had checked.** In the host, `slmodemd/modem_debug.c`:
+
+    60: unsigned int modem_debug_level=0;
+    61: unsigned int modem_debug_logging=0;
+    62: unsigned int dsplibs_debug_level=0;
+   ...
+   139:         dsplibs_debug_level = modem_debug_level;
+   140:         if(modem_debug_logging) {
+   ...
+   156:                 if(dsplibs_debug_level < 3)
+   157:                         dsplibs_debug_level = 3;
+
+and in `slmodemd/modem_cmdline.c`:
+
+    127: {'l',"log","logging mode",OPTIONAL,INTEGER,"5"},
+   ...
+    281: if(opt_list[OPT_LOG].found) {
+    282:         modem_debug_logging = 5;
+
+So `slmodemd --log` — an option that appears in the program's own `--help`
+output as "logging mode" — sets `modem_debug_logging` to 5, and
+`modem_debug_init` then **forces `dsplibs_debug_level` to 3**, which is above
+BOTH of the object's gate thresholds: the 1,328 sites gated at 1 and the 21
+gated at 2. `--debug=2` reaches the first set by itself.
+
+**Conclusion for the family: the default is zero and the gate is one flag
+deep.** "Only above `dsplibs_debug_level > 1`" is true and is not a bound;
+Appendix B's own wording for FIRES TODAY is "an ordinary call **or a shipped
+configuration**", and this is a shipped configuration. Every diagnostic defect
+in the register is therefore reachable, and what limits them is **severity,
+not reachability**: they corrupt a transcript, not a call.
+
+- **Evidence tier 1 throughout** — these entries rest on the format strings
+  themselves, which are the original author's own words and the strongest
+  evidence this project recognises. That is unusual in the register and worth
+  saying: this small family has the best evidence in it.
+
+### D163 — the CP class's debug line names the other class
+
+`V90CP::printNofRecievedMpMpNot` prints `"V90MP: received %d MP, %d MPNot"`.
+The entry establishes the literal at `.rodata.str1.4+0xd6b0` is byte for byte
+`V90MP`'s at `+0x5a34`, so it is a copied line, not a coincidence.
+
+- **Verdict: DEFECT, REACHABLE — documentation only.** Real (the label is
+  wrong and the author's own text proves what it should say), reachable under
+  `--log`, and its entire consequence is that a log line attributes a count to
+  the wrong class. **No fix warranted in `src/`**: correcting it would change
+  the transcript the differential tier compares, for no gain to anyone but a
+  log reader, and the register's rule forbids it.
+- **Test.** Run the transcript comparison at a debug level of 2 or more and
+  confirm both sides emit the `V90MP:` prefix from the CP class. That is
+  already how the class's other diagnostics are compared.
+- **Citation:** finding 1239. AGREES.
+
+### D267 — `evaluatePhase4` prints a `%d` with no argument behind it
+
+**The most serious entry in this family, and it is undefined behaviour.** The
+call site at `.text+0x3ffcf` pushes only the format pointer and stores nothing
+to `0x4(%esp)`; `edprintf` formats with `vsnprintf`, which reads that slot as
+an `int`. The sibling call forty-four bytes later at `0x3fffb` stores
+`nofV90Retrains` there for a string with the same conversion — so this is one
+line written without its argument, not a different convention. That comparison
+is what makes the entry sound.
+
+- **Verdict: DEFECT, REACHABLE — and correctly NOT FIXED.** Reachable on every
+  delayed retrain past `MAX_NOF_V90_RETRAINS` once `--log` is passed. The
+  consequence is a garbage integer in one log line.
+- **This entry is also the register's best worked example of a defect the
+  reconstruction cannot reproduce.** Both sides run the same code and read
+  their own frame, and the frames differ because the compilers differ, so
+  `test/unit/t_v90conneval.cpp` compares object state, verdict and line count
+  on that path instead of the transcript text. The entry records that the
+  attempt to make the slot deterministic was made and measured and failed.
+  That is the right handling and it should not be revisited.
+- **Test.** Already built: `t_v90conneval` compares everything except the one
+  line. If a future change makes that line comparable, the verdict is wrong
+  and the frame was deterministic after all.
+- **Citation:** finding 1388. AGREES.
+
+### D291 — `studyUrefHandler` prints a float through `%d`, twice
+
+`fsts 0xa964(%ebx)` at `+0xb1f` stores the field as a `float`; `fstpl
+0x4(%esp)` at `+0x12fe` pushes the same quantity as a `double` under the
+format `"first update : trn1Sigma = %d"`. So the field and the report get two
+different roundings of one value, and the report's is then read as an integer.
+
+- **Verdict: DEFECT, REACHABLE — documentation only.** Real, tier 1 (the
+  format string is the evidence), and confined to the transcript. The entry
+  grades itself FIRES "with the debug level above 1", which this family's
+  argument confirms is one flag away rather than a bound.
+- **Test.** At a debug level of 2 or more, drive state 3 and state 5 to
+  completion and compare the two lines: they must be byte-identical between
+  the blob and the reconstruction, because unlike D267 the argument IS pushed
+  and the value IS deterministic.
+- **Citation:** finding 1443. AGREES.
+
+## What this family changes about the register
+
+Nothing in `src/`, and one thing in the record: **"only above
+`dsplibs_debug_level > 1`" is not a reachability bound and should stop being
+written as one.** It is one documented flag from a user's shell. The correct
+statement for these entries is that they are reachable and cosmetic, which is
+a different and more honest claim than unreachable.
