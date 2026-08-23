@@ -498,3 +498,257 @@ Nothing in `src/`, and one thing in the record: **"only above
 written as one.** It is one documented flag from a user's shell. The correct
 statement for these entries is that they are reachable and cosmetic, which is
 a different and more honest claim than unreachable.
+
+---
+
+# Family 3 — the bare entries, triaged one at a time
+
+**Entries: D162, D176, D178, D179, D275, D304, D306, D710, D901.** These are
+nine of the twenty-one entries carrying neither an appendix grade nor a full
+inline preamble, so nothing at all had been decided about them. They do not
+share a mechanism; what they share is that nobody had looked. Each is argued
+on its own below.
+
+## D176 — `V90PreFilter`'s constructor "can never select the last entry of `dataBase`"
+
+# **NOT A DEFECT. The object is right and the entry is a misreading.**
+
+This is the most consequential single result in this document, so it is
+argued from the object rather than from our source.
+
+**What the entry claims.** "The table is walked to its first empty name and
+the count is decremented before `codecType` is compared against it, so the
+highest index the constructor will accept is `count - 2`, and an index of
+`count - 1` — a real, named entry — is rejected."
+
+**What the object does**, at `.text+0x44dd3` in
+`_ZN12V90PreFilterC2E23__tHardwareCodecTypes__P13V90Phase2InfoP13V90Parameters`:
+
+    44dd0:  add    $0x24,%eax          ; stride one V90CodecEntry
+    44dd3:  inc    %ebx                ; count the named entries
+    44dd4:  cmpb   $0x0,(%eax)          ; ...until name[0] == 0
+    44dd7:  jne    44dd0
+    44dd9:  dec    %ebx                ; ebx = N - 1
+    44dda:  cmp    %ebx,0x14(%esi)      ; codecType against it
+    44ddd:  jle    44def                ; <= N-1 is ACCEPTED
+
+**The `dec` is not an off-by-one; it converts a COUNT into a MAXIMUM INDEX,
+and the comparison that consumes it is `jle`, not `jl`.** The loop leaves
+`%ebx` at N, the number of named entries; `dec` makes it N − 1, the highest
+valid index; `jle` accepts everything up to and including it.
+
+**And the table settles what N is.** `V90PreFilter::dataBase` is
+`V90CodecEntry[17]` — sixteen named entries, indices 0 to 15, followed by
+`{ "", 0 }` as the terminator. So the loop stops at 16, `dec` gives 15, and
+`codecType == 15` — `"Squeezer_545A_ITE"`, the last real entry — is accepted.
+**No named entry is unreachable.**
+
+**What the entry saw, and it is real but is somewhere else.** The diagnostic
+prints the decremented value under the label "table length":
+
+    "External Hardware Codec Index exceeds table length
+     (codec inx = %d, table length = %d)"
+
+and passes `n`, which is 15, where the table holds 16 named entries. So the
+MESSAGE is off by one; the BOUND is exact. That is a tier-1 observation — the
+author's own format string is the evidence — and it belongs to Family 2: a
+cosmetic defect in a diagnostic, gated behind `dsplibs_debug_level`, which
+`--log` opens.
+
+- **Evidence tier 2** for the verdict (the object's own instructions and the
+  table that types the index), tier 1 for the residual message defect.
+- **Verdict: NOT A DEFECT** as written. The 🐛 should be withdrawn and
+  replaced by the mislabelled-diagnostic claim, which is true.
+- **Test.** Construct a `V90PreFilter` with `codecType == 15` and confirm both
+  sides keep it rather than resetting it to 0, and that the transcript emits
+  `"HardwareCodecType: Squeezer_545A_ITE"` rather than the "exceeds table
+  length" line. If the object resets it, this verdict is wrong.
+- **Citation:** finding 1233. The finding is cited by D176 and D178 together;
+  it records the constructor's shape, and D178's use of it survives while
+  D176's reading of it does not. Report: **DRIFTED at D176** — the entry's
+  conclusion is not supported by what it cites.
+- **Note.** The configuration path cannot produce an out-of-range value
+  either: `cmp $0xf,%eax; jbe` at `+0x44db6` gates a sixteen-way jump table at
+  `.rodata+0xdcc`, and everything else falls to `codecType = 0`.
+
+## D178 — the same constructor bounds `codecType` from above and not from below
+
+**DEFECT, REACHABLE ONLY FROM A CALLER NOTHING VALIDATES.** Real, and D176's
+collapse does not touch it: the two claims are about opposite ends of the
+range and only one of them was wrong.
+
+The object's single range test is the `jle` above — an upper bound and nothing
+else. The configuration path is bounded below as well, because its jump table
+maps only 0 to 15 and everything else to 0. **The argument path is not**: when
+the parameter word at `+0x008` is negative, meaning "not configured", the
+constructor stores the caller's `__tHardwareCodecTypes__` straight into
+`codecType`, and a negative argument arrives intact.
+
+What makes it serious rather than theoretical is what happens next, and the
+entry has this right: `isV90WithEia6`, `autoSelection` and `selectFilter` all
+index `dataBase[codecType]` with no gate of any kind, and **those reads are
+not behind the debug level**. The constructor's own use of the index is —
+`dataBase[codecType].name` sits inside `DSPLIB_DEBUG_ON()` — so the one read
+that is gated is the harmless one and the three that are not are the ones that
+subscript below the base of the table.
+
+- **Evidence tier 2** (the callers type the index; the object's instructions
+  show the single-sided compare).
+- **Verdict: DEFECT, REACHABLE, FIX WARRANTED — host-side.** The fix is to
+  clamp `HW_CODEC_TYPE` to 0..15 before it reaches the constructor, in the
+  host, which is form one of the register's own table of fix forms. Nothing in
+  `src/` should change: a floor added here would disagree with the blob for
+  exactly the callers that need reproducing.
+- **Test.** `t_v90prefilter.cpp`'s constructor sweep deliberately stops at
+  zero, and the entry explains why — below zero each side reads beneath the
+  base of its OWN table, so the comparison would be reporting the fixture. The
+  test that WOULD decide it is a caller census: enumerate every construction
+  of `V90PreFilter` in the object and in the host and show whether any can
+  pass a negative. That is the missing evidence and it is cheap.
+- **Citation:** finding 1233. AGREES.
+
+## D179 — `V90Equalizer` with fewer than four taps allocates nothing and writes to it
+
+**DEFECT, REACHABLE ONLY FROM A CONFIGURATION NOTHING VALIDATES.** Both halves
+are the object's and neither is wrong alone: the constructor's `len & ~3`
+makes any length below four zero, so `sysdep_malloc(0)`; `reset`'s clamp is
+`if (linearEquLength - 1 < cursor)` on unsigned values, so `0xffffffff < 0` is
+false, the clamp does not fire, and `linearEquCoefs[0] = 1.0f` lands in a
+zero-length block.
+
+- **Evidence tier 2**, and unusually strong for this register: the entry
+  records the path as **DRIVEN** — `t_v90equ.cpp`'s constructor sweep includes
+  lengths 0 and 1, so both sides take it in every trial that uses them.
+- **Verdict: DEFECT, REACHABLE from a configuration, and correctly reproduced.**
+  The entry's own note that it "survives only because glibc's smallest chunk
+  has twelve usable bytes" is the right way to state it: the object is wrong
+  and the allocator is covering for it, exactly as `.rodata` adjacency covered
+  for D1.
+- **Test.** Run the existing sweep under a checking allocator — the
+  `V90Parameters` lesson in `CLAUDE.md` is that an under-allocation passes
+  every test not run under one. That converts a reasoned claim into a measured
+  one and is the single cheapest confirmation in this document.
+- **Citation:** finding 1233. AGREES.
+
+## D710 — `VPcmV34GetVisualDiagnostics` selectors 3 and 4 ignore `maxCount`
+
+**DEFECT, REACHABLE, AND ALREADY CORRECTLY DISPOSITIONED.** Seven of the nine
+arms load `maxCount` from `0x3c(%esp)`; these two reference it only as the
+argument slot of a K56flex stub whose result is discarded, and the stores at
+`0x73e9`, `0x742c` and `0x73f0` are unconditional. So
+`VPcmV34GetVisualDiagnostics(obj, 3, points, 0)` writes eight bytes into an
+array the caller has said holds none, and returns 1.
+
+- **Evidence tier 2**, and the entry is **DRIVEN with a denominator**:
+  `t_v34diag.cpp`'s `run_visual` sweeps `maxCount == 0` over all ten selectors
+  and its `sawOverrun` flag *requires* the overrun to have been observed. That
+  is the discipline `CLAUDE.md` asks for — a detector that cannot report a
+  clean run it did not earn.
+- **Verdict: no change.** The entry's own reasoning is correct: the fix belongs
+  in the API contract, not in this function, because a caller passing a buffer
+  of one is served correctly and only zero faults. It is right that this is
+  NOT behind `DSPLIB_REPRODUCE_BUGS`.
+- **Test.** Already built and already passing; `sawOverrun` is the guard
+  against it silently ceasing to fire.
+- **Citation:** none. The entry carries its own addresses, which is stronger.
+
+## D901 — `loadParams` reads `BLL_TRN1_QC_SLOW_K2` into `SLOW_K1`
+
+**DEFECT, UNREACHABLE IN THIS BUILD, and one of the best-argued entries in the
+register.** Four independent lines converge — three complete `K1`/`K2` pairs
+precede it, `setToDefault` continues the `K2` series 7e-12, 5e-12, 2e-12
+across FAST/MEDIUM/SLOW, `+0x0f4` is one of the nine slots finding 878
+measured as a float declared `int`, and `+0x0f0` being read twice is otherwise
+unexplained — and the entry states plainly that nothing dissents.
+
+- **Evidence tier 3 with a tier-1 exit named.** The entry declines to rename
+  the field, on the ground that a usage inference must not sit among 291
+  rule-1 measurements, and names what would settle it: a reader of `+0x0f4`
+  printing it in a diagnostic. That is `CLAUDE.md`'s evidence rule 1 and it is
+  precisely how finding 3527 retired `+0x074` and `+0x078` in the same class.
+  **This is the correct handling of a strong inference and should be the model
+  for the rest of the register.**
+- **Verdict: no change.** Unreachable in this build because, per D900, no
+  parameter file is parsed; a wrong slow-arm coefficient in any build with a
+  real parser.
+- **Test.** `t_v90loadparams` already compares the two logs entry for entry
+  and fails if both calls do not go to `+0x0f0`.
+- **Citation:** findings 861, 878 and 3527. AGREE.
+
+## D306 — `CID_MTD_detect`'s energy accumulators wrap after 257 full-scale samples
+
+**DEFECT, UNREACHABLE — and the bound is named in the entry itself.**
+`(x*x + 32) >> 6` is 16777216 for a sample of −32768, so 256 of them are
+exactly 2^32 and a 32-bit accumulator returns to zero. The bound is the only
+caller: `cid_modem` builds its block in a stack array inside a 0x1dc-byte
+frame, "which bounds it well below 257 samples".
+
+- **Evidence tier 2** (the caller's frame types the block length).
+- **Verdict: DEFECT, UNREACHABLE from the only caller in the object.** This is
+  the D923 shape with a stack frame in place of an ITU table, and the entry
+  reached it without prompting.
+- **Test.** Already driven — `t_cid_mtd.c` drives 256 and 300 full-scale
+  samples so both sides are compared either side of the wrap. What would
+  overturn the verdict is a second caller of `CID_MTD_detect` with a longer
+  block; a symbol census would settle that.
+- **Citation:** none; addresses given.
+
+## D304 — `CID_FSD_demodulate` runs 65535 times on a negative count
+
+**DEFECT, UNDECIDABLE FROM HERE.** The mechanism is exact and shown:
+`dec %eax; movswl %ax,%edx; inc %ax; je` is `while (count-- != 0)`, not
+`while (count > 0)`, with the counter truncated to a short on every pass, so
+−1 runs 65535 further iterations, each reading a sample past the caller's
+array and each able to write a bit past the caller's bit buffer.
+
+- **Evidence tier 2** (the object's own instructions, and the reconstruction
+  reproduces the idiom with the count declared `short`).
+- **Verdict: UNDECIDABLE FROM HERE**, and the entry says why: "this batch did
+  not trace where `cid_modem`'s count comes from". **The evidence that would
+  decide it is one trace** — where `cid_modem` obtains the sample count it
+  passes, and whether any path can make it negative. If it cannot, this
+  becomes DEFECT, UNREACHABLE with the caller named, exactly like D306 next to
+  it. That trace is the highest value-per-effort item this pass leaves behind.
+- **Test.** Not drivable as it stands, and correctly so: both sides would
+  agree while scribbling over the harness, which by D561's rule is not a
+  differential trial.
+- **Citation:** none; addresses given.
+
+## D162 — `V92Jd`'s constructor leaves one constellation bit unwritten
+
+**DEFECT, UNDECIDABLE FROM HERE.** `V90Jd`'s constructor, otherwise the same
+function, fills both `bits[47]` and `bits[48]` — from
+`V34_PHASE4_CONSTELLATION` and `V34_RRN_CONSTELLATION` — and the header's bit
+map calls the pair "constellation size, 2 bits". `V92Jd` writes a literal 0
+into `bits[47]` and never writes `bits[48]`. A two-bit field with one bit
+initialised and one inherited is the shape of a slip, and the sibling
+comparison is the same instrument that made D920 convincing.
+
+- **Evidence tier 2** (the sibling class and the header's bit map type the
+  field).
+- **Verdict: UNDECIDABLE FROM HERE.** **The evidence that would decide it is
+  `packJdData`**, which is not written yet and may fill `bits[48]` before
+  anything transmits the vector. If it does, this is not a defect at all; if
+  it does not, an uninitialised bit reaches the wire and the entry becomes one
+  of the most serious in the register.
+- **Test.** Already correctly guarded: `t_v92jd.cpp` seeds the slot with
+  varied bytes and compares the whole object, so a reconstruction that
+  helpfully cleared `bits[48]` fails rather than passes. Leave it.
+- **Citation:** finding 1223. AGREES.
+
+## D275 — `V92Jd`'s two receive directions share one pair of state bytes
+
+**DEFECT, UNDECIDABLE FROM HERE.** `unPackJdData` and `unPackJdPhaseData` both
+store state to `+0x00` and `+0x01` while switching on two different state
+words, `+0xd4` and `+0xd8`. The offsets are measured; that a receiver cannot
+run both at once is a one-line inference from them, and the entry says so.
+
+- **Evidence tier 3** (usage inference, declared).
+- **Verdict: UNDECIDABLE FROM HERE.** **The evidence that would decide it is a
+  caller census of the two unpackers in the object** — if no caller can
+  interleave them, this is not a defect but a description of the design. That
+  census is cheap and nobody has run it.
+- **Test.** Drive both unpackers alternately over one object and compare
+  against the blob; if the two sides agree, the sharing is faithful and the
+  question is only whether a caller does it.
+- **Citation:** finding 1397. AGREES — the finding is this entry's text.
