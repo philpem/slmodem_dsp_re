@@ -231,6 +231,30 @@ refute the verdict. A disposition without one is an opinion.
 - **UNDECIDABLE FROM HERE** — the row says precisely what evidence would
   decide it, so the next person does not repeat the work.
 
+### And a fifth, which the evidence forced
+
+The four above were the shape this triage set out with. Family 9 does not fit
+them, and forcing it would have falsified the result, so there is a fifth:
+
+- **DEFECT, REACHABLE — NO FIX WARRANTED.** Real, reachable, faithfully
+  reproduced, and **the right answer is not recoverable.**
+
+It is not NOT A DEFECT: the object genuinely does the wrong thing. It is not
+UNREACHABLE: ordinary input reaches it. And it is not FIX WARRANTED, because
+**there is nothing to put in the fix.** D451 is the clean case — the metric is
+never scaled and the decision collapses over the whole domain, but the shift
+the author meant is not recoverable, the family using 16, 15/16, 13 and none.
+Inventing one would make a defect look like an implementation, which is the
+worst outcome available to a record whose only value is its accuracy.
+
+**The discriminating test is whether the correct value can be derived
+independently** — and it is the test D302 passed, D451 failed, and D250 passes
+four times over. That test, not severity, is what separates a defect worth
+fixing from one worth only recording. **This is the most useful thing this
+document learned, and the register should adopt the category:** fourteen of
+its entries currently carry a 🐛 and an implied to-do that nobody should ever
+do.
+
 ### What this pass did NOT do
 
 - It ran no build. `make phase` was deliberately not run: this changes no
@@ -1858,3 +1882,533 @@ values), so a queue count that went negative would also exit.
    - `V90SpectralVerifier::C2`'s unguarded `fdivrp` at 0x45aca by
      `(double)SPECTRAL_VERIFIER_FFT_LEN` — float, so an infinity rather than a
      trap, and bounded by the default 1024 under the shared bound.
+
+---
+
+# Family 9 — decision devices, tables and fixed-point conversions
+
+**Entries: D65, D250, D298, D299, D300, D301, D302, D326, D327, D328, D335,
+D348, D349, D360, D363, D370, D371, D372, D451, D470.** All twenty reached.
+
+## This family needed a fifth disposition, and the register needs it too
+
+The four dispositions this document opened with do not fit most of this
+family, and forcing them would have falsified it. Fourteen of these twenty are:
+
+> **DEFECT, REACHABLE — NO FIX WARRANTED.** Real, reachable, faithfully
+> reproduced, and **the right answer is not recoverable**.
+
+That is not NOT A DEFECT — the object genuinely does the wrong thing. It is not
+DEFECT, UNREACHABLE — ordinary input reaches it. And it is not FIX WARRANTED,
+because **there is nothing to put in the fix.** D451 is the clean example: the
+metric is never scaled, the decision collapses over the whole domain, and the
+shift the author meant is not recoverable — the family uses 16, 15/16, 13 and
+none. Inventing one would make a defect look like an implementation, which is
+the worst outcome for a record whose value is its accuracy.
+
+**The discriminating test is whether the correct value can be derived
+independently**, and it is exactly the test D302 passed and D451 failed. It is
+also what separates the one entry in this family that DOES warrant a fix.
+
+## The one fix this document recommends: D250
+
+**`MTD7_COEF_9600`'s numerator puts the notch's zeros at 1328 Hz while its
+poles stay at 1477.** `MTD7_COEF_9600` at `.data:0x78da` is
+{−13271, 16384, **16751**, **−21143**, 16384}. `a1 = 16751` is 1477.04 Hz at
+9600 Hz; the matching `b1` would be **−18613**, and the object has −21143. The
+zeros land 150 Hz away from the poles, so the section is not a notch at either
+frequency. Behaviourally: **eleven of sixteen DTMF pairs mis-decode at 9600
+Hz**, all eleven being 1477 Hz chosen-when-absent or missed-when-present; all
+sixteen decode correctly at 8000 Hz.
+
+**Why this one and not the other nineteen: the right answer is recoverable
+four independent ways** — from the design formula, from the matching `a1`,
+from the other fifteen tables (the closed form fits all of them to within
+0.1 Hz), and from the 8000 Hz twin. Nothing is invented.
+
+- **Evidence tier 3, unusually strongly corroborated.**
+- **VERDICT: DEFECT, REACHABLE, FIX WARRANTED.** **The fix, named and not
+  written: replace element 3 with −18613 behind `DSPLIB_REPRODUCE_BUGS`** —
+  the D302 pattern exactly, and the sixth such arm in the tree.
+- **Test.** `t_dtmfrx.c` already asserts the mis-decode count at each rate: a
+  fixed arm must take the 9600 Hz count from eleven to zero while the
+  reproduce-bugs arm keeps eleven.
+- **Register hygiene:** the entry contradicts itself. Its batch line says
+  "**it is MEASURED** … Finding 1416" and the `Status:` field on the same line
+  says `unmeasured`. The measurement exists; the field is stale.
+- **Citations:** findings 1413 and 1416. Both AGREE.
+
+## Two more NOT A DEFECT
+
+**D372 — "the region tree puts the same `rq` boundary in two different
+places", and the inconsistency is real while the defect is not.** All four
+sites verified: arms 1 and 2 cut at `rq ≥ 0x2d41` and `rq ≥ 0x16a0`, arm 3 at
+`rq ≤ 0x2d41` and `rq ≤ 0x16a0`. **But 0x16a0 = 5792 is EXACTLY the midpoint
+of the Q rows 4344 and 7240, and 0x2d41 = 11585 is EXACTLY the midpoint of
+10137 and 13033.** A symbol on the line is genuinely equidistant from both
+rows and both cells offer the same two I values. Enumerated: of the 21,182
+`ri` values at `rq = 5792, ri > 11585`, the point index differs at **all
+21,182**, the Euclidean distance is equal at **20,136**, the object is
+strictly nearer at **1,046**, and strictly farther at **zero**. The same
+argument covers the `_64pt` half, whose cut at 8192 is the exact midpoint of
+4096 and 12288.
+
+- **The misreading:** treating a boundary that sits on an exact perpendicular
+  bisector as a right/wrong choice. **The object is never worse than the
+  uniform convention and is sometimes better.**
+- **VERDICT: NOT A DEFECT.** A genuine tie-breaking *inconsistency* between
+  arms, worth keeping recorded, and it does move `*mag` and `*angle` — but
+  neither convention ever names a farther point. **Re-mark 🐛 → ⚠**, and
+  rewrite "the two never agree on the point", which is true of the index and
+  misleading about distance.
+- **Test.** For every `ri` in 11586..32767 at `rq = 5792`, compute the true
+  squared distance to the point the object names and to the point base 0x18
+  names; assert equality or object-nearer at every one.
+- **Citation:** finding 3217. AGREES — its headline is "the boundaries that
+  are one apart", which is the inconsistency and not a distance claim.
+
+**D363 — `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not
+have.** `FPM_AGC_agc` (0xa6750) has exactly one return, `0xa6894: c3 ret` — **a
+bare `ret`, not `ret $imm`.** That is cdecl: the caller cleans up. The extra
+push is popped by the caller's own stack adjustment, the callee never reads
+the slot, and the return value is discarded at this site.
+
+- **Evidence tier 2** — and this is the one entry in the family where
+  disassembling a *different* function decides the verdict.
+- **VERDICT: NOT A DEFECT.** The misreading is calling an ABI-harmless extra
+  argument a defect. It is real evidence that the author's *declaration* of
+  `FPM_AGC_agc` had four parameters, which is worth recording — but that is a
+  fact about the source, not a defect in behaviour. **Re-mark 🐛 → ⚠**,
+  alongside D366, which is the same shape at four sites and is already ⚠ ✅.
+
+## D327 — DEFECT, UNREACHABLE, and its reachability line conflates two things
+
+`convertEqualizerToMmx` computes `1.0/(beta·2²⁴)` and multiplies;
+`setLinearEquBeta` divides directly. *(Read from the bytes: `de fc` at
+0x373e2 is **FDIVP**, which objdump prints as `fdivrp` — `CLAUDE.md`'s trap
+and `dis.py`'s Intel annotation both apply, and finding 2148 notes it too.)*
+Both run at x87 extended precision — the `fldcw`s touch only the rounding
+control — so **the two quotients differ by at most one 64-bit-mantissa ulp,
+relative 2⁻⁶⁴ ≈ 5.4 × 10⁻²⁰**, and often by zero. That reaches
+`linearEquMmxShift` only if `log₂(q)` sits within about 8 × 10⁻²⁰ of the
+truncation boundary.
+
+**The entry's "every pair that is not a power of two" conflates *the reciprocal
+rounds* (nearly always) with *the shift differs* (essentially never).** And the
+one structured case a reader would expect to break does not: the divisor at
+0x373ee is `(float)log₁₀(2)`, whose error pulls an exact power of two about
+1e-6 **below** the integer — vastly more than 5e-20 — so both forms truncate to
+`k−1` identically.
+
+- **VERDICT: DEFECT, UNREACHABLE**, bounded by the arithmetic itself. **Suggest
+  🐛 → ⚠** and a rewritten reachability line.
+
+## A defect found in passing that is NOT in the register
+
+Chasing D327 turned up two more sites of D348/D470's shape. `maxK` guards its
+truncation with `fadds 1e-6f`; **`convertEqualizerToMmx` (0x373ee) and
+`setLinearEquBeta` (0x36571) have no epsilon at all** — the sequence goes
+straight `de f9 ; fldcw (RC=trunc) ; fistpl`. So **both return a shift one
+short for every exact power of two**, always, and neither is covered by any
+entry. That makes the shape **four sites, three entries, one uncovered.**
+
+## D348 and D470 are NOT duplicates, and the register's count of two is right
+
+Both were checked for the duplication the brief asked about. They are
+instruction-for-instruction identical — including the `fstps`/`flds`
+round-trip of the divisor through a 32-bit float, and the `de f9` — and both
+constant pools hold the identical triple {0.0f, 2.0f, 9.99999997e-07f}. But
+they are **two distinct symbols at two distinct addresses in two distinct
+classes**: `_ZN24V90ConstellationDesigner4maxKEP16V90MappingParams` at 0x47a10
+and `_ZN15V90TRN2Designer4maxKEP16V90MappingParams` at 0x3ca30, each with its
+own constant-pool copy. One defect *shape* at two *sites* is two entries, which
+is what D363 and D366 already established. **What they should gain is a
+cross-reference to each other; neither has one.**
+
+The magnitude is exact rather than approximate: `(float)log₁₀(2)` is
+0.3010300099849701 against 0.3010299956639812, a relative error of
+**+4.757 × 10⁻⁸**, so an exact 2^k returns as `k(1 − 4.757e-8)` and the
+absolute 1e-6 guard covers it only to **k ≤ 21.02**. Computed: 20 → 20,
+21 → 21, **22 → 21**, 23 → 22, **36 → 35**, **42 → 41**, 48 → 47.
+Downstream in D470's case, `word_0 = maxK − shaperSR + 6` is read back as
+`1LL << (shaperSR + word_0 − 6)`, so the constellation is designed one bit
+small and everything below is *consistent* with the smaller count — **a lost
+bit, not an inconsistency**, which is why no test sees it.
+
+## D349 — UNDECIDABLE, and the rule that keeps it so
+
+`calcModulusParameters` at 0x3dd96 is the canonical GCC 64-bit variable shift
+with `%ebx:%esi` = 1 and **no test of any kind on the count**; above 62 the one
+lands in or past the sign bit of the signed `long long codewordCount`.
+**Nothing in the object calls this member (D345 — and here the citation is
+correct), so no caller's range is known.** By the same rule applied to D65,
+**"no caller reconstructed" is not grounds for DEFECT, UNREACHABLE.** **What
+would decide it:** a reconstructed writer of `V90MappingParams::shaperSR` other
+than `spectralDesign`, or a reconstructed caller whose parameter block bounds
+`shaperSR + word_0` into [6, 69]. Until then `unmeasured` is the correct
+status and holding the differential count in 0..62 is the correct handling — a
+shift outside that is undefined in the source language and the two compilers
+may legitimately differ. **Citation: finding 3050 AGREES**, and states "The
+shift count has no guard of any kind; D349" explicitly.
+
+## Already dispositioned — D302
+
+`FSE_decision_16pt` reads `DECv32_MAG9600` (`.data:0x74f8`, **6 bytes, three
+entries**) at indices 4095/8191/12287 because `sar $1` stands where the sibling
+`_16Tpt` has `sar $0xd`. **Fixed at `src/pump/v32/v32fse.c:500`** — `>> 13`
+restored in the default arm, flat `*mag = 0` under `DSPLIB_REPRODUCE_BUGS`. Not
+re-argued. **Citation note: finding 1603 is DRIFTED for its verdict and AGREES
+for its analysis**, by the register's own words — so anything elsewhere citing
+1603 for "cannot be differentially tested" is now wrong.
+
+## The fourteen that are real, reached and not fixable
+
+Each was quantified rather than asserted; the magnitudes are the point.
+
+| entry | magnitude, measured | why no fix |
+|---|---|---|
+| **D301** `_4pt` weights I twice Q | the two rules **agree for every symbol within 7,606 counts of the nearest point** — 41.5% of the 18,317 spacing; within half the spacing only 2.7% disagree, within 7,240 none. `*mag` unaffected (all four points share `0x3299`) | the intended shift is not recoverable; the family uses 16, 15/16, 13 and none |
+| **D451** `_16pt` metric never scaled | **structural and total**: all coordinates are ±4096/±12288, so at any exact point every squared difference is a multiple of 2²⁶, all sixteen score 0, and point 0 always wins | same |
+| **D370** outer ambiguous cell returns the farther | over the cell's 334,396,082 rotated pairs the object is Euclidean-farther at **81.8%, not 100%** — because its own `>>13` metric wraps over 61.9% of the cell; restricted to the non-wrapping sub-region it is farther at 99.99%. Cost 2,281 counts = **25.06° of carrier phase**; `*mag` unaffected (14 and 26 are mirror images, both 18881). Entry cost: the nearest cell corner is 4,578 counts from both points, 1.58× the spacing — an already-lost symbol | the `setle` sibling recovers the *operator*, not a right *answer*, because the metric has wrapped where the defect fires |
+| **D371** point 26's I literal is one high | `0x3e3a` = 15930 against `DECv32_ANA_IMAP128[26]` = 15929; flips 39,703 of 334,396,082 pairs, **0.012%**. New evidence: the whole rotated ladder is the **floor** of `k·2896.31` (1448, 4344, 7240, 10137, 13033, 15929 — all six floors), while 15930 is the **rounded** value. A generated table and a hand-typed constant | the object's value is the defect; reproduced at `v32fse.c:837` |
+| **D298** MRF startup window | newest samples weighted by the phase's **oldest** taps; buffer's first 30 entries are zeroed so no uninitialised read; transient is thirteen outputs per stream, then never again | reproduced; `t_v22_mrf.c` compares from sample 0 |
+| **D299** PPS startup indexes at `phase` | startup uses `coeff + 2·phase`, steady uses `coeff + 2·phase·hlen`; for `p` not a multiple of 3 the three taps straddle two phases. ~40 outputs. **The two branches of one function disagree with each other**, which is the whole claim and needs no layout argument | reproduced; a measured mutation gives 26 failing checks in each of three drive patterns |
+| **D360** `V22_FSE_init` zeroes 49 entries twice | **zero** — both write 0 to the same 49 shorts and the second loop covers the whole 98 | nothing can distinguish the two forms; a source change no test can see |
+| **D65** `FPM_log10` reads past its table | the 129th short is `FPM_PPS_CFG[0]` = **10**, and `10 >> 3 = 1` against a correct 0: **exactly 1 LSB of Q12 too high, 0.00244 dB** — smaller than D66's own error in the same function. Domain **127 of 32,767 mantissas (0.39%)**, not 64: 64 land there unshifted and 63 arrive by normalisation | reproduced, and the reproduction is the interesting part — the 129th entry is a transcription of `FPM_PPS_CFG[0]`, so the test does not depend on our linker |
+| **D300** `FPM_atan` fourth-quadrant reflection | **exactly 1 count of a 0x8000 turn = 0.011°**, uniform over one eighth of the plane, no discontinuity. Likely motive the entry does not name: `0x8000` does not fit the signed short the other three arms produce, so `0x7fff` reads as an overflow dodge — the correct dodge being `(0x8000 − t) & 0x7fff` | one count, and the only caller in the object folds at 0x4000 immediately |
+| **D326** empty filter prints 65536 | **nil in computed state**; `0x50(%esp)` is read once in the whole function, immediately before `edprintf`. **Evidence tier 1** — `"V90Equalizer: short high LE coeffs min value = %d\r\n"` | transcript only, but the printed number is genuinely impossible and a tier-1 label makes that the author's own claim |
+| **D328** magnitude of −32768 is −32768 | **nil in computed state** — the array element is stored *before* the branchless abs, so only the printed min/max move. **Evidence tier 1** — `"V90Equalizer: Min LE History = %d\r\n"` | transcript only |
+| **D335** zero threshold prints with a minus | **nil in computed state**; `FCOM` sets C0 for `0.0 < v` strictly, so `v ≤ 0` including zero takes `'-'`. Four sites, one shape. **Evidence tier 1** | transcript only, and the entry says so |
+| **D348** | 22 → 21, 36 → 35, 42 → 41, 48 → 47 | see above |
+| **D470** | identical, and one bit lost consistently downstream | see above |
+
+## Corrections this family makes to the register
+
+- **D65's load-bearing citation is wrong, and it inverts the paragraph's
+  argument.** D65 cites **D4** twice for the lucky-adjacency story — "returns
+  the right answer by coincidence (D4's entry)" and "`FPM_sqrt` sets the
+  precedent by adding a 193rd entry (D4)". Both should be **D1**, which is
+  `FPM_sqrt` and whose overrun lands on `FPM_div_table[0]` = 32768, exactly
+  right. **D4 is `FPM_div`, the UNLUCKY one**, whose overrun lands on
+  `FPM_xor_table[0]` = 0 where 16384 belongs. Citing the unlucky entry as the
+  precedent for luck is precisely the drift `refcheck.py` cannot catch: both
+  resolve.
+- **D360 cites finding 3500 and the material is in 3501.** 3500 is "THE V.22
+  EQUALISER IS ITS OWN BLOCK … AND ITS `fresh` FLAG MEANS THE OPPOSITE" and
+  has no account of the two clears. *(Neighbouring, outside this family: D362
+  also cites 3501, whose headline is about `V22_FSE_init`'s coefficient
+  reversal rather than `FSEv22_decision12` — worth a look by whoever owns
+  D362.)*
+- **`src/` carries a comment that understates D370.**
+  `src/pump/v32/v32fse.c:765` and `:844` describe it as a tie-break — "The
+  FARTHER wins on a tie". **The code at `:844` is correct**
+  (`e26 >= e14 ? 26 : 14`); the comment understates a wholesale inversion over
+  99.996% of the cell. Comment-only drift in `src/`, and the register and
+  finding 3218 are both right — **this document changes no source, so it is
+  recorded here for whoever next edits that file.**
+- **D370's own "at every one of them" needs a qualifier**: true of the
+  object's own metric, true of Euclidean distance at 81.8%, because the metric
+  wraps over 61.9% of the cell.
+
+---
+
+# Family 10 — the fourteen graded FIRES TODAY
+
+**Entries: D73, D74, D76, D77, D78, D79, D80, D81, D82, D83, D84, D85, D86,
+D87.** All fourteen audited.
+
+Appendix B put these in **FIRES TODAY** — *"these change what a user sees, on a
+call nobody has to construct"* — and asked whether anyone can HIT them.
+**Nobody had asked whether they are defects at all**, and this is the one place
+in the register where that question is most expensive to leave open: a
+FIRES-TODAY 🐛 that is not a defect is a lie at the exact spot a reader looks
+first.
+
+## The structural result: the list double-counts, by about 30%
+
+Before any per-entry work:
+
+- **D76 = D4**, **D85 = D6**, **D86 = D16** — each says so in its own header
+  ("that entry is the authority for the mechanism").
+- **D74 and D77** are declared, in D77's own text, to be **"one defect — do not
+  file them separately"**, and both are in the fourteen.
+- **D86's authority, D16, is marked 💤 and says "Harmless in practice".**
+  Appendix B promotes it to FIRES TODAY without touching that assessment or
+  saying why.
+
+**Fourteen FIRES-TODAY slots therefore hold at most ten distinct defects.**
+Appendix B's grade is sound as a per-entry statement and misleading as a count,
+and the count is what a planner reads.
+
+## The verdicts
+
+| entry | verdict | which side |
+|---|---|---|
+| D73 | **MISFILED** | neither — the object cannot distinguish 32 from 132 |
+| D74 | **MISFILED**, and its FIXED status is not true of either host tree | host |
+| D76 | DEFECT, REACHABLE (legacy pumps only) | object |
+| D77 | **UNDECIDABLE** — the threshold is contradicted by live data | object mechanism, host workaround |
+| D78 | **UNDECIDABLE — mechanism REFUTED**, citation drifted | neither |
+| D79 | **MISFILED** | host |
+| D80 | **DEFECT, UNREACHABLE** — bounded by a 16-entry table | object |
+| D81 | UNDECIDABLE on reachability | object |
+| D82 | DEFECT, REACHABLE — 1 of 50 countries | object |
+| D83 | **UNDECIDABLE — the name is the host's** | object behaviour, host name |
+| D84 | DEFECT, REACHABLE — documentation only | object |
+| D85 | DEFECT, REACHABLE — **the entry's own prose is garbled** | object |
+| D86 | DEFECT, REACHABLE only against a peer omitting V.21 | object |
+| D87 | DEFECT, REACHABLE on an error path | object |
+
+**Net: three misfiled, one mechanism refuted, one bounded and unable to fire on
+any shipped configuration, four undecided, and six sound object defects** — of
+which three are re-registrations and two of those were graded harmless or
+legacy-only where they were first filed.
+
+## The three misfiled, and two are exactly the predicted shape
+
+**D73 — "`DP_V32BIS` (132) never connects".** `dp_v32_init` (0x4bb3–0x4bd8)
+registers **id 0x20 and id 0x84 against the same `struct dp_operations` at
+`.data+0x48`**. `v32_create` (0x4560) stores the `dp_id` argument at `dp+0`
+(0x45cc) and **never reads it again**; there is no `cmp $0x84` anywhere in
+0x4560–0x4bb0, and the 14400 ceiling is set unconditionally at 0x45ba
+(`movl $0x3840,0x18(%esi)`) with the `MDMPRM_MAX_RATE` clamp at 0x4641 the same
+0x3840. **The object cannot behave differently for 32 and 132.** The bench
+symptom may be real; the object is provably not where it comes from.
+**Test:** call `ref_v32_create` twice, with 32 and with 132, and diff the two
+0x348-byte objects — anything but `dp+0` differing refutes this.
+
+**D74 — "`MDMCTL_IODELAY` was a hard-coded constant".** There is **no mechanism
+in the object**; the entry's own *Where* field reads
+*"`slmodemd/modem_main.c`, D-Modem fork"*. Per the register's own preamble,
+"anything that does not fit one of those… belongs in the issue list rather
+than here". It should be merged into D77 as D77 itself instructs — **and its
+status must drop from FIXED**, see below.
+
+**D79 — "`GetDialToneFilterSubindex` is hardcoded to zero".** The object asks
+and the host answers zero: `modem_homolog.h:94` carries
+`//u8 DialToneFilterSubindex;` **commented out**, and `modem_param.c:172-173`
+is a literal `return 0;`. `cadence_create`'s dispatch then takes each bank's
+own fallback, and finding 49 measured bank 3 falling back to `CP_276_504` —
+*its own nearest equivalent* — which it calls "deliberate and sensible, not an
+oversight". **The entry convicts itself**: *"host-side — restore the field.
+Nothing in the object needs to change."*
+
+## D74 and D77: a three-way contradiction that must not be resolved by assertion
+
+**D74 records the IODELAY defect as "CONFIRMED, FIXED" in D-Modem `09ca128c`,
+`SLMODEMD_IODELAY`, default 120, and Appendix C item 1 repeats it. The fix is
+not in either host tree.**
+
+- `grep -rn SLMODEMD_IODELAY` over `/home/philpem/dev/sip-D-modem/` returns
+  **nothing**. The string does not exist.
+- `d-modem/slmodemd/modem_main.c:941-953` returns a **hard-coded 48**, with a
+  comment computing `filtdelay = 47` — and that file is dated **six days after
+  D74 was written**.
+- `slmodemd/modem_main.c:682` still returns **0**.
+- `d-modem`'s `main()` installs `socket_modem_driver` by default (line 1847);
+  ALSA only under `--alsa`.
+- **120 appears nowhere in `docs/findings.md`.** Finding 1026 — the tree's own
+  recommendation — says **240**, with 216 as the conservative alternative.
+
+That leaves three claims that cannot all be true:
+
+1. the live socket driver reports IODELAY 48, so
+   `filtdelay = ((48+6)>>2)+34 = 47`;
+2. finding 1022 measures `filtdelay >= 57` (IODELAY 86) as the V.34 connect
+   threshold;
+3. Appendix C records live bench data — *"Five IDENTICAL V.34 calls at one
+   setting: 4 of 5 connected, at 14400, 14400, 4800, none, 14400"* — and this
+   repository's recent history is dozens of live V.34 calls.
+
+**The most likely casualty is (2).** `t_v34link` is blob-against-blob over a
+simulated wire, and finding 960 itself notes the mechanism depends on a
+carrierless slicer producing all-ones against a peer that is **exactly**
+silent, which a real far end is not.
+
+**So: do not record "D77 fires on this deployment" as settled, and do not
+record "D74 is fixed" at all.** D77's mechanism is real and was read out of
+`.text` — arm 47 must sit out `0x5f - filtdelay` four-sample blocks, with the
+counter at `+0xaa78` loaded at 0x6601f, compared against `0x5f` at 0x66027, and
+bit 0x200 set at 0x66045 only on `>`. What is not established is the
+**threshold**. **One line of a live-call log settles it**: the blob prints
+`vpcm: Delays: HW %d, DMA %d` at debug level > 1 (which Family 2 shows is one
+`--log` away), and `dp_vpcm_shim.c`'s create log prints `io_delay=%ld`. If HW
+is 52 and the call connects, **D77's CONFIRMED/MEASURED status and its
+Appendix C rank #1 both have to come down.**
+
+## D78 — the mechanism is refuted, and the citation drifted the day before the entry was written
+
+D78 says `MDMPRM_MIN_RATE` and `MDMPRM_MAX_RATE` "reach nothing" — that the
+pair at params `+0x30`/`+0x34` is "what one debug `printf` reads and nothing
+else". **They are not write-only:**
+
+- `VPcmV34InitiateRetrain` at 0x66b5/0x66c5 divides both by 2400 (`imul
+  $0x1b4e81b5`, shift 40) into `+0x21c`/`+0x220`, orders them, and clamps the
+  max to **14** at 0x66fb–0x6709 — and 14 × 2400 = 33600.
+- 0x6870/0x6877 pass the pair to
+  `_ZN15K56FlexFloModem14setMinMaxRatesEii`; 0x6acc/0x6acf pass it to
+  `_ZN24V90ConstellationDesigner14setMinMaxRatesEjj` (0x4ac00), which stores
+  them at `this+0x50`/`+0x4c`. **The mangled callee names type the field** —
+  evidence tier 2.
+- `VPcmV34InitiateRetrain` is called from `V34GiveINFO1dBits` (0x8429) and five
+  sites in `VPcmV34Progress`.
+
+And the literals at `+0x38`/`+0x3c` — 4800 and 33600 — are **a different
+quantity, not a lost copy of the host's**: `V90Parameters::setToDefault` reads
+them (`mull 0x38(%ebx)` at 0x29971, `mull 0x3c(%ebx)` at 0x2997e, same ÷2400),
+and **4800…33600 is exactly the V.90 upstream rate window the Recommendation
+fixes** — V.90 §5 f) and §8.1, *"4800 bit/s to 28 800 … with optional support
+for 31 200 and 33 600"*, and Table 9's *"bit 36:4800; …; bit 48:33 600"*.
+
+- **Evidence tier 1** for the label (`.rodata.str1.4+0x5f8` =
+  `"vpcm: VPCM rate limits: %d-%d\n"`) and **tier 2** for the consumers.
+- **VERDICT: UNDECIDABLE FROM HERE, and the entry cannot stand as written.**
+  What survives is only the weaker claim that a narrowed window has no
+  observable effect — a *different* claim from the one filed. Two honest
+  caveats: `K56FlexFloModem::setMinMaxRates` is **one byte at 0x101f0, a bare
+  `ret`**, so that arm really does discard them; and finding 824's sweep saw no
+  movement, which is *probably* because its baseline runs at IODELAY 0 — a
+  configuration D77 says never completes phase 2 — but that reconciliation is
+  inference, not measurement.
+- **Test.** Re-run finding 824's MAX_RATE sweep at IODELAY 216 instead of 0 and
+  watch `+0x220`. If it moves, the window is live.
+- **CITATION: DRIFTED, and it was drifted on the day it was filed.** Findings
+  823 and 824 say what D78 quotes, but **finding 1020** (commit `2c98999f`,
+  **2026-08-10**) explicitly corrects them — *"`configuration.md`'s note that
+  the +0x30/+0x34 rate pair 'is what `vpcm: VPCM rate limits` prints and
+  nothing else reads' is wrong"* — and **D78 was written in commit `7db93c88`
+  on 2026-08-11.** This is the sharpest case in the register of a citation that
+  still resolves and no longer means what it is cited for, which is exactly
+  what `refcheck.py` says it cannot catch.
+
+## D80 — the mechanism is described wrongly, and the correct one bounds it
+
+**There is no dB-to-linear conversion and nothing wraps.** `cadence_create`
+fetches parameter 0x27 at 0x7d492–0x7d4ad and hands it to
+`Get_Detection_Threshold_Table` (0x7d4b8), which is **seven instructions at
+0x7e2c0**: `ecx = 0x2d - p`, sign-extend, `movswl ThresholdsTable(%edx,%edx,1),
+%eax`, `ret`. **An unbounded signed index into a table** — that is the whole
+function. `ThresholdsTable` is `.rodata:0x6900` with **`st_size` 32, sixteen
+entries**: 90, 92, 96, 97, 99, 102, 185, 188, 190, 250, 280, 285, 370, 390,
+470, 560. Index 16+ walks into the neighbouring table; a negative index reads
+backwards. Every number in finding 60's table reproduces exactly from this, and
+`cadence_create` is the **only** caller.
+
+**And the host's own data bounds it.** Parameter 0x27 = 39 =
+`GetDialToneDetectionThreshold`, and across **all fifty** shipped
+`homolog_params` tables, field 18 spans **31…45** — indices **14…0**. **Every
+shipped country is inside the sixteen-entry table**; only index 15 goes unused.
+
+- **Evidence tier 2** — the symbol's own `st_size` is the bound.
+- **VERDICT: DEFECT, UNREACHABLE.** The missing bound is the object's and is
+  real; "a country table **can** disable detection" is hypothetical, and **no
+  shipped country table does.** The grade belongs in *NEEDS A CALLER OR
+  CONFIGURATION NOTHING VALIDATES*, and the fix class "validate the parameter
+  to 30..50" should read **30…45**, since 46 and above index backwards.
+- **CITATION:** finding 60's numbers AGREE; its and the entry's *description*
+  of the mechanism — "converts it to a linear threshold exponentially",
+  "wraps" — is **DRIFTED**. It is a table index, not arithmetic.
+
+## The six sound object defects, with their grades qualified
+
+- **D76** — `FPM_div` reads `FPM_div_table` (`.rodata:0xc6a0`, `st_size` 256 =
+  128 entries) at index 128 when `m = 0xff80`, landing on the **0** at 0xc7a0,
+  so the reciprocal is zero and the AGC gain collapses. Sound, tier 2.
+  **Two corrections:** finding 40 says it is **already fixed by default** with
+  `-DDSPLIB_REPRODUCE_BUGS` restoring the zero — that is the preamble's
+  *deliberate-fix* form, not the *opt-in extension* the entry's fix class
+  claims. And reachability is **legacy pumps only** (nothing in V.34/V.90/V.92
+  calls it), so "FIRES TODAY" means "on an `AT+MS=103/22/23/32` call", not on
+  the V.34 path being debugged. Already driven: `t_spandsp_replay`, 116,954
+  agreeing checks, both implementations losing lock at the same bit.
+- **D82** — the calling tone's three constants are all in `GenerateCallingTone`
+  (0x7e030): step `add $0x8ab` = 2219 at 0x7e0da, off `movl $0x41a0` = 16800 at
+  0x7e07e, on `movl $0x1680` = 5760 at 0x7e0fb/0x7e12f, against a fixed 8000 Hz
+  caller. V.25 §2.1 requires *"1300 Hz ± 15 Hz … ON not less than 0.5 s and not
+  more than 0.7 s and OFF not less than 1.5 s and not more than 2.0 s"*. **At
+  8000: 1083.7 Hz, 0.72 s, 2.10 s — all three outside. At 9600: 1300.2 Hz,
+  0.60 s, 1.75 s — all three inside.** Sound. **Reachability qualifier the
+  entry lacks: `CallingToneFlag` is 1 in exactly ONE of the fifty tables** —
+  `params014`, `CZECH_REPUBLIC` — and the default country is USA. So it needs a
+  shipped-but-non-default configuration *and* an originating call.
+- **D84** — read directly at 0x5c100–0x5c19d: `%edi` is seeded 0x2000 at
+  0x5c111, the first product accumulates into it, **0x5c161 `neg %ecx`**, the
+  second product accumulates into the negated total, `sar $0xe` at 0x5c18d. So
+  the real accumulator is `Σ₂ − Σ₁ − 0x2000` — **the rounding constant enters
+  with the wrong sign** — while 0x5c194 seeds a fresh `+0x2000` for the other
+  axis. Half an LSB the wrong way, every symbol, at both call sites. Sound;
+  documentation-only. **Test:** drive `receiver` with a conjugate-symmetric
+  input pair — correct rounding gives conjugate-symmetric output and this does
+  not.
+- **D85** — sound, and **the entry's own prose is garbled.** The object has
+  `.data:0x780c AGC_DEF_BETA = {16384, 1638}` and
+  `.data:0x7810 AGC_DEF_ALPHA = {16384, 32604}`, so the slow pair is
+  1638 + 32604 = 34242 and the DC gain is 1.045; the correct sibling
+  `.rodata:0xa0fc AGC_DEF_BETA_v21 = {16384, 164}` gives 164 + 32604 = 32768
+  exactly. **D85 says the copies of `AGC_DEF_ALPHA` carry "16384, 1638" — in
+  the object 1638 lives in BETA**, and ALPHA is 32604 in all three copies
+  including the correct one. **Two self-consistent repairs exist and the entry
+  names one as if settled**: `alpha → 31130` (finding 30's, because
+  `FPM_TONE_detect` writes `31130*x + 1638*y` longhand) or `beta → 164` (the
+  object's own v21 sibling — though `relocscan` shows that pair is
+  **unreferenced**). Someone acting on "opt-in extension" would write a number.
+  **Test:** drive `FPM_AGC_agc` at fixed input through the b103 config; 1.045
+  confirms the defect, and the settling *time constant* discriminates the two
+  repairs.
+- **D86** — `V8UpdateModemParameters` at 0x74bd5–0x74beb: `test $0x40,%dl` is
+  the V.23 test and is correct, and **`test $0x3,%dl` is the V.21 test, which
+  takes in the stop bit at word bit 0** — set in every V.21 character — so it
+  is never zero and the `andb $0xdf,0x1(%edi)` at 0x74beb is dead. `& 3` where
+  `& 2` was meant. Tier 2, and the framing is corroborated the strongest way
+  available: finding 75 decodes the object's own sequence words back to the
+  V.8 octets `0xE0 0xC1 0x05 …`. **The FIRES TODAY grade overstates it**: the
+  dead `and` executes on every call, but an *observable* difference needs a far
+  end that omits V.21 from its CM, which is unusual — and D16, the authority,
+  grades it 💤 "harmless in practice". **Test:** `t_spandsp_v8sock` with
+  SpanDSP offering V.32 alone; our `cm->b1` bit 5 must still be set after
+  intersection.
+- **D87** — the real `V34SetINFO0dBits` at 0x8020 loads `0x248(%edx)`, tests it
+  at 0x8030 and **returns at 0x8047 if zero**, writing `movw $0x1e,0x18(%ecx)`
+  only past the guard. The inlined copy compares `dsplibs_debug_level` at
+  0x718fc and then **executes `movw $0x1e,0x18(%eax)` unconditionally at
+  0x71903**, before the `jbe` at 0x71909 that only skips the print.
+  **Evidence tier 1**, and unusually: the two copies carry *different strings
+  the author wrote for the same operation* — `"SetINFO0dBits  \n"` with two
+  trailing spaces at `.rodata.str1.1+0x2c58`, against
+  `"V90, setINFO0dBits\n"` — which is what proves they are two hand-written
+  copies rather than one inlined. The same `+0x248` guard survives intact
+  elsewhere in the same function (0x71924–0x7192c), so the field is not in
+  doubt. **Grade qualifier:** `v90_receiver == 0` is normal for a plain V.34
+  call, but the arm needs a **CRC failure in `DET_INFO`** to be entered, so
+  this is an error path and belongs one grade below FIRES TODAY. **Appendix C
+  already places it there** ("affects handshake robustness on a retry path"),
+  so **Appendix B and Appendix C disagree about this entry.**
+
+## The two left undecided on reachability, and why
+
+- **D81 — "a loud busy tone is not detected".** The cadence detector's IIR
+  cascade has about 42 dB of passband gain taken back out only at the end, so
+  above ~8000 amplitude it wraps internally and the interval envelope stops
+  being steady (6,995…17,438 at 12,000, against 5,267…5,355 at 8,000). The
+  defect is real and measured; **the FIRES TODAY grade is not established, and
+  the entry says so itself** — *"whatever holds the level down is outside this
+  module and is not identified."* The host is `MFMT_S16_LE`; if G.711 decodes
+  at the usual scaling a −10 dBm0 busy tone lands near 10,000 and it fires, but
+  that scaling is not established. **Test:** log the peak sample magnitude at
+  `CALLPROG_Progress`'s input over one real busy-tone call.
+- **D83 — "`modifier_validation` is tested the wrong way round", and the name
+  is the HOST's.** The polarity is exactly as filed — `AnalyseDialString` at
+  0x7aac0 grades flag-zero as **1 (INVALID)** and flag-non-zero as **2
+  (TOLERABLE)**, and twenty of the fifty tables set field 14. But **the only
+  string this function prints is `"AnalyzeDialString: LAST_DIAL…"`, and nothing
+  in the object names the flag.** "Wrong way round" rests entirely on
+  slmodemd's field name `DialModifierValidation` — a host word from a
+  reimplemented header, **not the original author's**, and therefore outside
+  the register's own evidence order. Finding 52 applies exactly the right
+  discipline to the other two flags ("the names are what mislead, not the
+  code") and then declines to apply it to this one. Per `CLAUDE.md` — *naming
+  something wrongly is worse than leaving it padded* — **this should be a ⚠
+  observation with a neutral name, not a 🐛.** **What would decide it:** an
+  original vendor header or driver naming parameter 33. If it is "modifier
+  validation", D83 stands; if it is anything like "modifiers already
+  validated", it inverts.
