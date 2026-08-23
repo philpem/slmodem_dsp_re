@@ -688,6 +688,436 @@ run_mapper_dtor(const char *name, mapper_ctor our_c, mapper_ctor ref_c,
 	return diff_end();
 }
 
+/* ------------------------------------- V90Mapper::reset, ::resetNoSpectral */
+
+/*
+ * THE `PcmType` ARGUMENT IS DECLARED `int` HERE ON PURPOSE.  The object tests
+ * it for nonzero (`test %ebx,%ebx ; jne`) rather than comparing it against a
+ * value, so the interesting inputs are the ones OUTSIDE the enumeration --
+ * 2, 0xff, 0x100 -- and naming them as `PcmType` in the caller would be a
+ * value no enumerator has.  The asm() label is exact either way, and an enum
+ * and an `int` occupy the same 4-byte cdecl stack slot.
+ */
+extern "C" {
+void our_map_reset(void *, V90MappingParams *, int)
+	asm("_ZN9V90Mapper5resetEP16V90MappingParams7PcmType");
+void ref_map_reset(void *, V90MappingParams *, int)
+	asm("ref__ZN9V90Mapper5resetEP16V90MappingParams7PcmType");
+void our_map_resetns(void *, V90MappingParams *, int)
+	asm("_ZN9V90Mapper15resetNoSpectralEP16V90MappingParams7PcmType");
+void ref_map_resetns(void *, V90MappingParams *, int)
+	asm("ref__ZN9V90Mapper15resetNoSpectralEP16V90MappingParams7PcmType");
+}
+
+typedef void (*map_reset)(void *, V90MappingParams *, int);
+
+/* The mapping block the reset cases are driven from; see build_mp(). */
+static unsigned char rst_mp[sizeof(V90MappingParams)]
+	__attribute__((aligned(8)));
+#define RST_MP	((V90MappingParams *)(void *)rst_mp)
+
+/*
+ * THE SENTINELS, AND WHY A SEEDED FIXTURE IS NOT ENOUGH ON ITS OWN HERE.
+ *
+ * The object these two functions run over has to be CONSTRUCTED -- it owns
+ * three allocations and a destructor that dereferences them -- and the
+ * constructor zeroes nine of the words the resets write.  So over a
+ * constructed object a reset that fails to store zero into `cleared_01c`,
+ * `uint_6f8`, `signBitGroupSize` or the sign encoder is INVISIBLE: the field
+ * already holds the value the store would have left.  Five mutations proved
+ * exactly that and are the reason this table exists; the seed cannot reach
+ * these fields because the constructor runs after it.
+ *
+ * Each entry is therefore a value the function in question could not have
+ * computed, written over the constructor's zero on BOTH sides before the call.
+ * A field the reset writes comes back zero and the mutation that drops the
+ * store fails; a field it leaves alone comes back holding the sentinel, which
+ * is a stronger claim than the two sides agreeing on it.
+ *
+ * `+0x00c` is the one that was always needed rather than one of the five:
+ * `resetNoSpectral` READS `signBitsPerFrame` and never writes it, which is its
+ * whole difference from `reset` at the top of the function.  0x1234 is
+ * unmistakable in `word_08` because `6 - shaperSR` is at most 6.
+ */
+static const struct {
+	unsigned int off;
+	unsigned int val;
+	unsigned int width;
+} pokes[] = {
+	{ 0x00cu, 0x1234u, 4u },	/* signBitsPerFrame  */
+	{ 0x010u, 0x5151u, 4u },	/* signBitGroups     */
+	{ 0x014u, 0x6262u, 4u },	/* signBitGroupSize  */
+	{ 0x01cu, 0x7373u, 4u },	/* cleared_01c       */
+	{ 0x6f8u, 0x8484u, 4u },	/* uint_6f8          */
+	{ 0x6fcu, 0x00a5u, 1u }		/* signEncoder.prev_ */
+};
+#define NPOKE	((int)(sizeof(pokes) / sizeof(pokes[0])))
+#define POKE_00C	0x1234u
+
+static void
+poke_fields(unsigned char *o)
+{
+	int i;
+
+	for (i = 0; i < NPOKE; i++)
+		memcpy(o + pokes[i].off, &pokes[i].val, pokes[i].width);
+}
+
+static unsigned int
+peek(const unsigned char *o, unsigned int off, unsigned int width)
+{
+	unsigned int v = 0;
+
+	memcpy(&v, o + off, width);
+	return v;
+}
+
+struct reset_case {
+	unsigned int size[V90MAPPER_CONSTELLATIONS];
+	int	     sr;		/* mp->shaperSR                     */
+	unsigned int id;		/* mp->shaperId                     */
+	unsigned int word0;		/* mp->word_0, the frame's bits     */
+	int	     pcm;
+};
+
+/*
+ * The cases, and what each is for.
+ *
+ *   0 and 128 entries are both present, because the tail-fill runs to index
+ *   127 whatever the count is: zero means the whole row is zeroed over the
+ *   seed, and 128 means the fill does not run at all and every entry is a
+ *   converted code.
+ *
+ *   `shaperSR` covers 0, which is the arm where `reset` stores zero into
+ *   `signBitGroupSize` and skips the shaper entirely, and the divisors 1, 2,
+ *   3 and 6, which are the block lengths 6, 3, 2 and 1.
+ *
+ *   `shaperId` DIFFERS FROM `shaperSR` in five of the eight, because
+ *   `V90SpectralShaper::reset` takes them adjacent and in that order and a
+ *   swap is silent whenever they are equal.  Case 7 has them equal on purpose
+ *   as the control.
+ *
+ *   `pcm` covers both arms and three values outside the enumeration.
+ */
+static const struct reset_case reset_cases[] = {
+	{ {   0,   0,   0,   0,   0,   0 }, 1, 0, 28u, 0 },
+	{ { 128, 128, 128, 128, 128, 128 }, 1, 3, 40u, 0 },
+	{ {   1,   2,   3,   4,   5,   6 }, 2, 3, 32u, 1 },
+	{ { 127,   1,  64,   0, 128,   7 }, 3, 1, 35u, 1 },
+	{ {  12,   0, 128,   5,   0,  64 }, 6, 2, 30u, 2 },
+	{ {  64,  64,  64,  64,  64,  64 }, 0, 3, 24u, 0xff },
+	{ {   8,  16,  32,  48,  96, 128 }, 1, 1, 48u, 0x100 },
+	{ {   3,   3,   3,   3,   3,   3 }, 2, 2, 20u, 1 }
+};
+#define NRESET	((int)(sizeof(reset_cases) / sizeof(reset_cases[0])))
+
+/*
+ * Build the mapping block for one case.  Everything not named by the case is
+ * varied LFSR bytes, so the four shaper floats and the tables this class does
+ * not read are different on every trial; `sweep` replaces the code table with
+ * a walk that covers all 256 byte values three times over, which is what makes
+ * both companding conversions exercised across their whole domain rather than
+ * over whatever the LFSR happened to emit.
+ */
+static void
+build_mp(const struct reset_case *c, int sweep)
+{
+	unsigned int i, j;
+
+	fill(rst_mp, rst_mp, (unsigned char *)0, sizeof(rst_mp), 0);
+
+	if (sweep)
+		for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++)
+			for (j = 0; j < V90MAPPER_LEVELS; j++)
+				RST_MP->constellation[i][j] =
+				    (unsigned char)(i * V90MAPPER_LEVELS + j);
+
+	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++)
+		RST_MP->constellationSize[i] = c->size[i];
+	RST_MP->word_0 = c->word0;
+	RST_MP->shaperSR = c->sr;
+	RST_MP->shaperId = c->id;
+}
+
+/*
+ * ONE SIDE'S OWN CANONICAL FORM.  `canon_mapper` makes the two sides
+ * comparable; this makes one side comparable against ITSELF from an earlier
+ * run, which is what the `pcm` check needs -- the 0x50 buffer and the shaper's
+ * two come back at different addresses across a free/allocate cycle, and
+ * nothing about which arm the mapping took is in those three words.
+ */
+static void
+canon_one(unsigned char *o)
+{
+	live_refresh();
+	mask_word(o, o, 0x018);
+	mask_live(o, o, SHAPER_LO, SHAPER_HI);
+}
+
+/*
+ * WHAT THE TAIL-FILL DETECTOR COUNTS, and it reports its denominator for
+ * finding 134's reason.  A row shorter than 128 must come back ZEROED to index
+ * 127 and not left holding the seed, which is only observable where the seed
+ * put a nonzero byte there in the first place.  `saw` counts the bytes for
+ * which that was true and which did come back zero; `had` counts the ones the
+ * seed made observable at all.  If `had` is zero the check proved nothing and
+ * the aggregate assertion below says so.
+ */
+static void
+count_tail(const unsigned char *after, const unsigned char *seed,
+	   const struct reset_case *c, long *had, long *saw)
+{
+	unsigned int i, j;
+
+	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++)
+		for (j = c->size[i]; j < V90MAPPER_LEVELS; j++) {
+			unsigned off = 0x056u
+			    + 2u * (i * V90MAPPER_LEVELS + j);
+			int k;
+
+			for (k = 0; k < 2; k++) {
+				if (seed[off + k] == 0)
+					continue;
+				(*had)++;
+				if (after[off + k] == 0)
+					(*saw)++;
+			}
+		}
+}
+
+static int
+run_mapper_reset(const char *name, mapper_ctor our_c, mapper_ctor ref_c,
+		 dtor our_d, dtor ref_d, map_reset our_r, map_reset ref_r,
+		 int spectral)
+{
+	long tail_had = 0, tail_saw = 0;
+	int trial, ci, moved = 0;
+
+	diff_begin(name);
+
+	for (trial = 0; trial < NTRIAL; trial++)
+		for (ci = 0; ci < NRESET; ci++) {
+		const struct reset_case *c = &reset_cases[ci];
+		unsigned char post_ctor[MAPPER_SLOT];
+		int a_allocs, a_frees, b_allocs, b_frees;
+		long tag = (long)(ci * 100 + trial);
+
+		seed_trial(trial);
+		build_mp(c, trial & 1);
+		harness_alloc_reset();
+
+		our_c(map_a, PARAMS);
+		ref_c(map_b, PARAMS);
+
+		/* See the `pokes` table: the constructor's zeroes hide five
+		 * of the stores these two functions make. */
+		poke_fields(map_a);
+		poke_fields(map_b);
+
+		memcpy(post_ctor, map_a, MAPPER_SLOT);
+
+		a_allocs = harness_alloc.allocs;
+		a_frees = harness_alloc.frees;
+		our_r(map_a, RST_MP, c->pcm);
+		a_allocs = harness_alloc.allocs - a_allocs;
+		a_frees = harness_alloc.frees - a_frees;
+
+		b_allocs = harness_alloc.allocs;
+		b_frees = harness_alloc.frees;
+		ref_r(map_b, RST_MP, c->pcm);
+		b_allocs = harness_alloc.allocs - b_allocs;
+		b_frees = harness_alloc.frees - b_frees;
+
+		live_refresh();
+
+		diff_eq_int("reset allocated nothing (case %ld)", a_allocs, 0,
+			    tag);
+		diff_eq_int("ref reset allocated nothing (case %ld)", b_allocs,
+			    0, tag);
+		diff_eq_int("reset freed nothing (case %ld)", a_frees, 0, tag);
+		diff_eq_int("ref reset freed nothing (case %ld)", b_frees, 0,
+			    tag);
+		diff_eq_int("no bad free (case %ld)", harness_alloc.bad_free, 0,
+			    tag);
+
+		compare_mapper("after reset", map_a, map_b, tag);
+		diff_eq_int("nothing stored past the object (case %ld)",
+			    guard_intact(map_a, map_b, map_seed, MAPPER_SIZE,
+					 MAPPER_SLOT), 1, tag);
+
+		/*
+		 * `+0x0c` and the four fields beside it belong to `reset`
+		 * alone.  Asserting on OUR side that `resetNoSpectral` left
+		 * the poked value there is a stronger claim than the two sides
+		 * agreeing: it says the read is a read.
+		 */
+		if (!spectral) {
+			diff_eq_int("resetNoSpectral did not write +0x0c "
+				    "(case %ld)",
+				    (int)peek(map_a, 0x00c, 4),
+				    (int)POKE_00C, tag);
+			diff_eq_int("word_08 is bitsPerFrame minus what it "
+				    "found at +0x0c (case %ld)",
+				    (int)peek(map_a, 0x008, 4),
+				    (int)(c->word0 - POKE_00C), tag);
+			diff_eq_int("resetNoSpectral did not write +0x10 "
+				    "(case %ld)",
+				    (int)peek(map_a, 0x010, 4), 0x5151, tag);
+			diff_eq_int("resetNoSpectral did not write +0x14 "
+				    "(case %ld)",
+				    (int)peek(map_a, 0x014, 4), 0x6262, tag);
+			diff_eq_int("resetNoSpectral did not write +0x1c "
+				    "(case %ld)",
+				    (int)peek(map_a, 0x01c, 4), 0x7373, tag);
+			diff_eq_int("resetNoSpectral did not write +0x6f8 "
+				    "(case %ld)",
+				    (int)peek(map_a, 0x6f8, 4), 0x8484, tag);
+		} else {
+			diff_eq_int("reset zeroed +0x1c (case %ld)",
+				    (int)peek(map_a, 0x01c, 4), 0, tag);
+			diff_eq_int("reset set +0x10 to shaperSR (case %ld)",
+				    (int)peek(map_a, 0x010, 4), c->sr, tag);
+			diff_eq_int("reset set +0x14 to the block length "
+				    "(case %ld)", (int)peek(map_a, 0x014, 4),
+				    c->sr ? 6 / c->sr : 0, tag);
+			diff_eq_int("reset set +0x6f8 (case %ld)",
+				    (int)peek(map_a, 0x6f8, 4),
+				    c->sr ? (int)c->id : 0, tag);
+		}
+
+		/* Both of them clear these two, whatever was there. */
+		diff_eq_int("the sign encoder was cleared (case %ld)",
+			    (int)peek(map_a, 0x6fc, 1), 0, tag);
+		diff_eq_int("+0x700 was cleared (case %ld)",
+			    (int)peek(map_a, 0x700, 4), 0, tag);
+
+		count_tail(map_a, map_seed, c, &tail_had, &tail_saw);
+
+		if (memcmp(post_ctor, map_a, MAPPER_SLOT) != 0)
+			moved = 1;
+
+		our_d(map_a);
+		ref_d(map_b);
+		diff_eq_int("nothing left allocated (case %ld)",
+			    harness_alloc.live, 0, tag);
+		}
+
+	diff_eq_int("the reset changed the object", moved, 1, 0);
+
+	/*
+	 * The tail-fill detector's denominator, printed whether it fires or
+	 * not: a run in which the seed never put a nonzero byte past a short
+	 * row proved nothing about the fill, and would otherwise be
+	 * indistinguishable from one in which it did.
+	 */
+	diff_eq_int("the seed made the tail-fill observable (%ld bytes)",
+		    tail_had > 0, 1, tail_had);
+	diff_eq_int("every observable tail byte came back zeroed (%ld seen)",
+		    (int)(tail_had - tail_saw), 0, tail_saw);
+
+	return diff_end();
+}
+
+/*
+ * `pcm` IS TESTED FOR NONZERO AND NOT COMPARED, and this is the check that
+ * says so rather than assuming it.  The object's arm selector is
+ * `test %ebx,%ebx ; jne`, so 2, 0xff and 0x100 must all produce exactly what 1
+ * produces -- and 0x100 is the sharpest of the three, because a byte-wide test
+ * would read it as zero and take the mu-law arm.
+ *
+ * The claim is made on BOTH sides separately, against that side's own pcm=1
+ * result, because it is a claim about one function's branch and not about the
+ * two agreeing.
+ */
+static const int pcm_nonzero[] = { 1, 2, 0xff, 0x100, 0x7fffffff };
+#define NPCM	((int)(sizeof(pcm_nonzero) / sizeof(pcm_nonzero[0])))
+
+static int
+run_mapper_pcm(const char *name, mapper_ctor our_c, mapper_ctor ref_c,
+	       dtor our_d, dtor ref_d, map_reset our_r, map_reset ref_r)
+{
+	static unsigned char base_a[MAPPER_SIZE], base_b[MAPPER_SIZE];
+	static unsigned char mu_a[MAPPER_SIZE], mu_b[MAPPER_SIZE];
+	int ci, k, differ = 0;
+
+	diff_begin(name);
+
+	for (ci = 0; ci < NRESET; ci++) {
+		/*
+		 * The mu-law arm over the same block, taken first and in a
+		 * construction of its own so the allocator's state is the same
+		 * at the start of every run below.  `seed_trial` and `build_mp`
+		 * are deterministic in `ci`, so all NPCM + 1 runs of this case
+		 * see byte-for-byte the same mapper seed and the same mapping
+		 * block.
+		 */
+		seed_trial(ci);
+		build_mp(&reset_cases[ci], 1);
+		harness_alloc_reset();
+		our_c(map_a, PARAMS);
+		ref_c(map_b, PARAMS);
+		our_r(map_a, RST_MP, 0);
+		ref_r(map_b, RST_MP, 0);
+		memcpy(mu_a, map_a, MAPPER_SIZE);
+		memcpy(mu_b, map_b, MAPPER_SIZE);
+		canon_one(mu_a);
+		canon_one(mu_b);
+		our_d(map_a);
+		ref_d(map_b);
+
+		for (k = 0; k < NPCM; k++) {
+			long tag = (long)pcm_nonzero[k];
+			unsigned char now_a[MAPPER_SIZE], now_b[MAPPER_SIZE];
+
+			seed_trial(ci);
+			build_mp(&reset_cases[ci], 1);
+			harness_alloc_reset();
+			our_c(map_a, PARAMS);
+			ref_c(map_b, PARAMS);
+			our_r(map_a, RST_MP, pcm_nonzero[k]);
+			ref_r(map_b, RST_MP, pcm_nonzero[k]);
+
+			memcpy(now_a, map_a, MAPPER_SIZE);
+			memcpy(now_b, map_b, MAPPER_SIZE);
+			canon_one(now_a);
+			canon_one(now_b);
+
+			if (k == 0) {
+				memcpy(base_a, now_a, MAPPER_SIZE);
+				memcpy(base_b, now_b, MAPPER_SIZE);
+			} else {
+				diff_eq_int("pcm %ld maps as pcm 1 does",
+					    memcmp(base_a, now_a,
+						   MAPPER_SIZE) == 0, 1, tag);
+				diff_eq_int("ref: pcm %ld maps as pcm 1 does",
+					    memcmp(base_b, now_b,
+						   MAPPER_SIZE) == 0, 1, tag);
+			}
+
+			/*
+			 * And the two arms are not one arm: over a block with
+			 * entries in it, mu-law must differ from A-law, or the
+			 * check above would pass on a function that ignored
+			 * `pcm` altogether.  Aggregated, because the case with
+			 * six empty constellations legitimately agrees.
+			 */
+			if (memcmp(mu_a, now_a, MAPPER_SIZE) != 0
+			    && memcmp(mu_b, now_b, MAPPER_SIZE) != 0)
+				differ++;
+
+			our_d(map_a);
+			ref_d(map_b);
+			diff_eq_int("nothing left allocated (pcm %ld)",
+				    harness_alloc.live, 0, tag);
+		}
+	}
+
+	diff_eq_int("mu-law and A-law differ, on both sides (%ld runs)",
+		    differ > 0, 1, differ);
+
+	return diff_end();
+}
+
 /* ========================================================== V90BitsToSymbol */
 
 /* Varied, and never zero: nofSymbols scales the second allocation. */
@@ -1458,6 +1888,20 @@ main(void)
 			      ref_mapper_c1, our_mapper_d1, ref_mapper_d1);
 	rc |= run_mapper_dtor("V90Mapper::~V90Mapper (D2)", our_mapper_c2,
 			      ref_mapper_c2, our_mapper_d2, ref_mapper_d2);
+
+	rc |= run_mapper_reset("V90Mapper::reset", our_mapper_c1, ref_mapper_c1,
+			       our_mapper_d1, ref_mapper_d1, our_map_reset,
+			       ref_map_reset, 1);
+	rc |= run_mapper_reset("V90Mapper::resetNoSpectral", our_mapper_c1,
+			       ref_mapper_c1, our_mapper_d1, ref_mapper_d1,
+			       our_map_resetns, ref_map_resetns, 0);
+	rc |= run_mapper_pcm("V90Mapper::reset, pcm is a nonzero test",
+			     our_mapper_c1, ref_mapper_c1, our_mapper_d1,
+			     ref_mapper_d1, our_map_reset, ref_map_reset);
+	rc |= run_mapper_pcm("V90Mapper::resetNoSpectral, pcm is a nonzero "
+			     "test", our_mapper_c1, ref_mapper_c1,
+			     our_mapper_d1, ref_mapper_d1, our_map_resetns,
+			     ref_map_resetns);
 
 	rc |= run_bts_ctor("V90BitsToSymbol::V90BitsToSymbol (C1)",
 			   our_bts_c1, ref_bts_c1, our_bts_d1, ref_bts_d1);
