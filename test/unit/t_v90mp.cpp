@@ -71,6 +71,27 @@
  *                      asserts that all four answers -- 0, 1, 2 and 3 -- came
  *                      back from the blob at least once.
  *
+ *   run_mp_calccrc     the CRC register's write side.  Three claims that are
+ *                      each an ABSENCE and so need their own trial: it does
+ *                      not seed (the incoming register must reach the
+ *                      answer), it does not read +0x119 (two runs differing
+ *                      only in that byte must agree), and its extent comes
+ *                      from the type flag (the other type must move it).
+ *
+ *   run_mp_evaluatecrc the read side, which DOES seed and DOES read +0x119 --
+ *                      and takes its two extents from two different fields,
+ *                      unlike the V.90 CP twin.  The trials that matter are
+ *                      the ones where +0x18 and +0x119 disagree, because the
+ *                      CP form and the MP form are the same arithmetic on
+ *                      every object the class can build.
+ *
+ *   run_mp_crc_spec    NOT A DIFFERENTIAL BLOCK.  The CRC judged against
+ *                      ITU-T V.34 10.1.2.3.2 and Table 16/V.90 rather than
+ *                      against the blob, because "we match the object" and
+ *                      "the object implements the standard" are two
+ *                      questions and a defect can live in the gap.  Both
+ *                      sides are held to the same spec-derived numbers.
+ *
  * THE RULES, applied everywhere below: both sides are seeded with the SAME
  * varied pseudorandom bytes and are NEVER zeroed; the slot is 64 bytes longer
  * than the object and the tail is compared against the seed on both sides; and
@@ -111,6 +132,14 @@ void ref_mp_printnof(void *) asm("ref__ZN5V90MP23printNofRecievedMpMpNotEv");
 
 void ref_mp_evaluateinfo(void *) asm("ref__ZN5V90MP12evaluateInfoEv");
 void ref_mp_infotobits(void *) asm("ref__ZN5V90MP10infoToBitsEv");
+
+/*
+ * The CRC pair.  `evaluateCRC` is NOT void -- 0x1f6ec builds its answer with
+ * `xor %eax,%eax` / `test %bl,%bl` / `sete %al` -- and the mangling cannot
+ * say so, since return types are not mangled.
+ */
+void ref_mp_calccrc(void *) asm("ref__ZN5V90MP7calcCRCEv");
+int ref_mp_evalcrc(void *) asm("ref__ZN5V90MP11evaluateCRCEv");
 
 /* NOT void: the blob leaves 0, 1, 2 or 3 in %eax.  See run_mp_bitstoinfo. */
 int ref_mp_bitstoinfo(void *, int) asm("ref__ZN5V90MP10bitsToInfoEi");
@@ -1424,6 +1453,750 @@ run_mp_bitstoinfo_answers(void)
 	return diff_end();
 }
 
+/* ------------------------------------------------------------ the CRC pair */
+
+/*
+ * WHAT THESE TWO BLOCKS HAVE TO SEPARATE, and it is not obvious.
+ *
+ * `V90MP::calcCRC` and `V90CP::calcCRC` are the same shift register at two
+ * message sizes, and the reconstruction of the second was written first.  The
+ * temptation is to transcribe it -- and a transcription PASSES every trial in
+ * which +0x18 and +0x119 agree with each other, because
+ *
+ *     0xbb - 0x11 == 0xaa      0x55 - 0x11 == 0x44
+ *     0xbb - 0x10 == 0xab      0x55 - 0x10 == 0x45
+ *
+ * so the CP form `end = byte_119 - 0x11` and the MP form
+ * `end = type ? 0xaa : 0x44` are indistinguishable on every object the class
+ * itself can build.  The MP member really does read the TYPE FLAG for the
+ * extent and the LENGTH FIELD for where the peer's CRC sits, and the only
+ * trials that can tell the two apart are the ones where those two fields
+ * DISAGREE:
+ *
+ *     type != 0 with +0x119 == 0x55     long extent, CRC read at 0x45
+ *     type == 0 with +0x119 == 0xbb     short extent, CRC read at 0xab
+ *
+ * Both are entirely inside `bits`, so no overrun is needed to reach them.
+ * They are driven below with `crc_split` asserting that the two formulas
+ * actually parted on some trial, because a sweep that never separates them
+ * is the same evidence a sweep that was never run gives.
+ *
+ * The other three claims each get their own assertion:
+ *
+ *   - `calcCRC` NEVER SEEDS.  There is no store of 1 in its 583 bytes, so it
+ *     continues from whatever is in `crc`.  Two runs from the same bits and
+ *     different incoming registers must differ (`carried`).
+ *   - `calcCRC` NEVER READS +0x119.  Two runs differing only in that byte
+ *     must agree (`ignored_119`).
+ *   - `evaluateCRC` DOES seed, so the converse: two runs differing only in
+ *     the incoming register must agree (`seeded`).
+ */
+
+/* A bit vector in both objects.  mode 0: real 0/1 bits.  mode 1: arbitrary
+ * bytes, which only the parity of reaches the register but which a wrong
+ * mask would expose. */
+static void
+fill_bits(int mode)
+{
+	unsigned i;
+
+	for (i = 0; i < V90MP_BITS; i++) {
+		unsigned char v;
+
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		v = (unsigned char)(mode ? (lfsr >> 3) : (lfsr & 1u));
+		MPA->bits[i] = MPB->bits[i] = v;
+	}
+}
+
+/*
+ * The register in both objects.  mode 0 is the sixteen ones `resetCRC`
+ * writes; the others are states no reset can produce, which is what makes
+ * "carried in, not seeded" a testable claim.  `crc[k] = crc[k + 1]` copies a
+ * WHOLE byte where the three taps mask with 1, so mode 3 is not decoration.
+ */
+static void
+fill_crc(int mode, unsigned char *keep)
+{
+	unsigned i;
+
+	for (i = 0; i < V90MP_CRC; i++) {
+		unsigned char v;
+
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		switch (mode) {
+		case 0:  v = 1;					break;
+		case 1:  v = (unsigned char)((i + 1u) & 1u);	break;
+		case 2:  v = (unsigned char)(lfsr & 1u);	break;
+		default: v = (unsigned char)((lfsr >> 3) | 2u);	break;
+		}
+		MPA->crc[i] = MPB->crc[i] = v;
+		if (keep != 0)
+			keep[i] = v;
+	}
+}
+
+/*
+ * The extents the class can be put in.  0x55 and 0xbb are the two Table
+ * 16/V.90 message lengths; the rest are values +0x119 can hold and
+ * `bitsToInfo` never writes.  0x10 is the smallest that keeps the sixteen
+ * compared positions inside `bits[]`, and 0xf0 and 0xff run PAST it, into
+ * `crc` and the two fields above it -- reads only, and the widest address the
+ * byte can name is `this + 0x11a` against a `sizeof` of 0x124, so nothing
+ * leaves the object and `guard_intact` still has to hold.
+ */
+static const unsigned char crc_lens[] = {
+	0x55, 0xbb, 0x10, 0x30, 0x45, 0x70, 0xab, 0xe6, 0xf0, 0xff
+};
+#define CRC_NLENS	((int)(sizeof(crc_lens) / sizeof(crc_lens[0])))
+
+static int
+run_mp_calccrc(void)
+{
+	unsigned char keep[MP_SLOT];
+	unsigned char r1[V90MP_CRC], r2[V90MP_CRC];
+	int trial;
+	int moved = 0, carried = 0, ignored_119 = 0, type_split = 0;
+
+	diff_begin("V90MP::calcCRC");
+	set_level(0);
+
+	for (trial = 0; trial < 60; trial++) {
+		long tag = 3400 + trial;
+		int t = trial & 1;
+		unsigned char in[V90MP_CRC];
+		unsigned char alt;
+
+		seed_pair(trial + 400, trial % 4);
+		MPA->type = MPB->type =
+		    (char)(t ? (0x80 | (trial + 1)) & 0xff : 0);
+		MPA->byte_119 = MPB->byte_119 = crc_lens[trial % CRC_NLENS];
+		fill_bits(trial & 1);
+		fill_crc(trial % 4, in);
+		memcpy(keep, mp_b, MP_SLOT);
+
+		/*
+		 * +0x119 IS NOT READ.  Same state, a different length byte,
+		 * and the register must come out identical.  Run first, so
+		 * the differential comparison below sees a pristine object.
+		 */
+		alt = (unsigned char)(crc_lens[(trial + 3) % CRC_NLENS]);
+		ref_mp_calccrc(mp_b);
+		memcpy(r1, MPB->crc, V90MP_CRC);
+		memcpy(mp_b, keep, MP_SLOT);
+		MPB->byte_119 = alt;
+		ref_mp_calccrc(mp_b);
+		memcpy(r2, MPB->crc, V90MP_CRC);
+		if (alt != crc_lens[trial % CRC_NLENS]) {
+			diff_eq_int("+0x119 did not reach calcCRC (%ld)",
+				    memcmp(r1, r2, V90MP_CRC) == 0, 1, tag);
+			if (memcmp(r1, in, V90MP_CRC) != 0)
+				ignored_119 = 1;
+		}
+
+		/*
+		 * THE TYPE FLAG DOES.  Same state, the other type, and the
+		 * register must move -- 0x12..0x43 against 0x12..0xa9 is a
+		 * different sequence through the same generator.
+		 */
+		memcpy(mp_b, keep, MP_SLOT);
+		MPB->type = (char)(t ? 0 : 1);
+		ref_mp_calccrc(mp_b);
+		if (memcmp(r1, MPB->crc, V90MP_CRC) != 0)
+			type_split = 1;
+
+		/*
+		 * THE REGISTER IS CARRIED IN.  Same bits, a different
+		 * incoming register, and the answer must change; if it did
+		 * not, the member would be seeding and `resetCRC` would be
+		 * dead code.
+		 */
+		memcpy(mp_b, keep, MP_SLOT);
+		MPB->crc[0] = (unsigned char)(MPB->crc[0] ^ 1);
+		MPB->crc[7] = (unsigned char)(MPB->crc[7] ^ 1);
+		ref_mp_calccrc(mp_b);
+		if (memcmp(r1, MPB->crc, V90MP_CRC) != 0)
+			carried = 1;
+
+		/* ------------------------------- the differential trial */
+		memcpy(mp_b, keep, MP_SLOT);
+
+		MPA->calcCRC();
+		ref_mp_calccrc(mp_b);
+
+		diff_eq_obj("after calcCRC", V90MP, MPA, MPB, tag);
+		guard_intact(tag);
+
+		if (memcmp(keep, mp_b, sizeof(V90MP)) != 0)
+			moved = 1;
+
+		/*
+		 * The extent is never empty -- 0x12 is below both 0x44 and
+		 * 0xaa -- so the register is written on EVERY trial, and the
+		 * guard at 0x1f194 is unreachable.  Say so as a check rather
+		 * than as a comment.
+		 */
+		diff_eq_int("the register was written (%ld)",
+			    memcmp(in, MPB->crc, V90MP_CRC) != 0 ||
+			    memcmp(in, r1, V90MP_CRC) != 0, 1, tag);
+	}
+
+	diff_eq_int("calcCRC changed the object", moved, 1, 0);
+	diff_eq_int("the incoming register reached the answer", carried, 1, 0);
+	diff_eq_int("a live +0x119 sweep proved it unread", ignored_119, 1, 0);
+	diff_eq_int("the type flag moved the extent", type_split, 1, 0);
+	return diff_end();
+}
+
+/*
+ * A message the BLOB built, with the BLOB's own CRC in it, so that
+ * `evaluateCRC` is asked about a vector our source never touched.  Returns
+ * the length byte the message wants at +0x119.
+ *
+ * `infoToBits` cannot be used for the short form: finding 1386's reproduced
+ * defect pads from 0x45, which is where the type-zero CRC has just gone, so
+ * a type-zero message always fails its own CRC.  This builds both forms the
+ * other way round -- seed the register the way `resetCRC` does, let the
+ * blob's `calcCRC` run, and lay the sixteen result bits where Table 16 puts
+ * them -- which is the only route to a passing SHORT message.
+ */
+static unsigned char
+blob_good_message(int type1)
+{
+	unsigned int end = type1 ? 0xaau : 0x44u;
+	unsigned int i;
+
+	for (i = 0; i < V90MP_BITS; i++) {
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		MPB->bits[i] = (unsigned char)(lfsr & 1u);
+	}
+	for (i = 0; i <= 0x10; i++)
+		MPB->bits[i] = 1;
+	for (i = 0x11; i <= 0xaa; i += 0x11)
+		MPB->bits[i] = 0;
+	MPB->bits[0x12] = (unsigned char)(type1 ? 1 : 0);
+	MPB->type = (char)(type1 ? 1 : 0);
+
+	for (i = 0; i < V90MP_CRC; i++)
+		MPB->crc[i] = 1;
+	ref_mp_calccrc(mp_b);
+	for (i = 0; i < V90MP_CRC; i++)
+		MPB->bits[end + 1 + i] = MPB->crc[i];
+
+	return (unsigned char)(end + 0x11);
+}
+
+/*
+ * A message whose CRC really is where +0x119 says and is NOT where the type
+ * flag would put it.
+ *
+ * THIS IS THE ONLY SHAPE THAT CAN SEPARATE `bits[byte_119 - 0x10 + k]` FROM
+ * `bits[end + 1 + k]`, and the mutation set proves it: with only the trials
+ * above, "evaluateCRC finds the peer's CRC from the type flag" survived.  The
+ * two expressions name the same sixteen positions for every +0x119 the class
+ * writes -- 0xbb - 0x10 is 0xab and 0xaa + 1 is 0xab -- and on a message that
+ * fails its CRC both readings answer 0, so an inconsistent pair alone is not
+ * enough either.  What is needed is a message that PASSES under one reading
+ * and fails under the other.
+ *
+ * Type 0, so the register covers 0x12..0x43 and the sixteen positions at
+ * 0xab are outside it: moving the CRC up there does not change what the CRC
+ * is computed over.  The positions the type flag would have named, 0x45:0x54,
+ * are filled with the complement, so the wrong reading cannot agree by luck.
+ */
+static unsigned char
+blob_displaced_message(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < V90MP_BITS; i++) {
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		MPB->bits[i] = (unsigned char)(lfsr & 1u);
+	}
+	for (i = 0; i <= 0x10; i++)
+		MPB->bits[i] = 1;
+	for (i = 0x11; i <= 0xaa; i += 0x11)
+		MPB->bits[i] = 0;
+	MPB->bits[0x12] = 0;
+	MPB->type = 0;
+
+	for (i = 0; i < V90MP_CRC; i++)
+		MPB->crc[i] = 1;
+	ref_mp_calccrc(mp_b);
+	for (i = 0; i < V90MP_CRC; i++) {
+		MPB->bits[0xab + i] = MPB->crc[i];
+		MPB->bits[0x45 + i] = (unsigned char)(MPB->crc[i] == 0);
+	}
+	return 0xbb;
+}
+
+static int
+run_mp_evaluatecrc(void)
+{
+	unsigned char keep[MP_SLOT];
+	unsigned char alt_reg[V90MP_CRC];
+	int trial;
+	int moved = 0, seeded = 0, crc_split = 0, displaced = 0;
+	int said[2];
+
+	said[0] = said[1] = 0;
+
+	diff_begin("V90MP::evaluateCRC");
+	set_level(0);
+
+	for (trial = 0; trial < 72; trial++) {
+		long tag = 3500 + trial;
+		int t = trial & 1;
+		int good = (trial % 3) == 0;
+		int ours, theirs, other;
+
+		seed_pair(trial + 600, trial % 4);
+		fill_bits(trial & 1);
+		fill_crc(trial % 4, 0);
+		MPA->type = MPB->type = (char)(t ? 1 : 0);
+		MPA->byte_119 = MPB->byte_119 = crc_lens[trial % CRC_NLENS];
+
+		if (good) {
+			/*
+			 * A message that must be ACCEPTED, and its length
+			 * byte taken from Table 16 rather than from the
+			 * sweep.  Built in the blob's object and copied
+			 * across, so both sides see bits nothing of ours
+			 * wrote.
+			 */
+			MPB->byte_119 = blob_good_message(t);
+			memcpy(mp_a, mp_b, sizeof(V90MP));
+			if (trial % 6 == 3) {
+				/* ... unless one information bit is bent. */
+				MPA->bits[0x20] = MPB->bits[0x20] =
+				    (unsigned char)(MPB->bits[0x20] == 0);
+				good = 0;
+			}
+		} else if (trial % 6 == 1) {
+			/* The CRC where +0x119 says and nowhere else. */
+			MPB->byte_119 = blob_displaced_message();
+			memcpy(mp_a, mp_b, sizeof(V90MP));
+			good = 1;
+			displaced = 1;
+		}
+		memcpy(keep, mp_b, MP_SLOT);
+
+		/*
+		 * IT SEEDS, unlike `calcCRC`: a different incoming register
+		 * must not change the answer.  Runs first, on a copy.
+		 */
+		MPB->crc[0] = (unsigned char)(MPB->crc[0] ^ 3);
+		MPB->crc[9] = (unsigned char)(MPB->crc[9] ^ 5);
+		other = ref_mp_evalcrc(mp_b);
+		memcpy(alt_reg, MPB->crc, V90MP_CRC);
+		memcpy(mp_b, keep, MP_SLOT);
+		theirs = ref_mp_evalcrc(mp_b);
+		diff_eq_int("the incoming register did not reach the "
+			    "answer (%ld)", (long)other, (long)theirs, tag);
+		diff_eq_int("nor the register it left behind (%ld)",
+			    memcmp(alt_reg, MPB->crc, V90MP_CRC) == 0, 1, tag);
+
+		/*
+		 * AND THE MARKER HAS TO BE ABLE TO FAIL.  `seeded = 1` here
+		 * unconditionally would be true whatever the member did, which
+		 * is the dead-detector shape CLAUDE.md names.  What is
+		 * recorded instead is that the call OVERWROTE the register it
+		 * was handed on some trial -- if `evaluateCRC` left `crc`
+		 * alone, the two checks above would still pass and this would
+		 * stay 0.
+		 */
+		if (memcmp(keep + 0x102, MPB->crc, V90MP_CRC) != 0)
+			seeded = 1;
+
+		/*
+		 * THE TWO FIELDS ARE READ SEPARATELY.  Flip the type flag
+		 * alone and the extent moves without the compared positions
+		 * moving; move +0x119 alone and the compared positions move
+		 * without the extent.  Either parting from the run above is
+		 * what the CP transcription cannot do.
+		 */
+		{
+			unsigned char alt[V90MP_CRC];
+
+			memcpy(alt, MPB->crc, V90MP_CRC);
+			memcpy(mp_b, keep, MP_SLOT);
+			MPB->type = (char)(t ? 0 : 1);
+			ref_mp_evalcrc(mp_b);
+			if (memcmp(alt, MPB->crc, V90MP_CRC) != 0)
+				crc_split = 1;
+			memcpy(mp_b, keep, MP_SLOT);
+		}
+
+		/* ------------------------------- the differential trial */
+		memcpy(mp_a, keep, sizeof(V90MP));
+		memcpy(mp_b, keep, MP_SLOT);
+
+		ours = MPA->evaluateCRC();
+		theirs = ref_mp_evalcrc(mp_b);
+
+		diff_eq_int("evaluateCRC returned (%ld)", (long)ours,
+			    (long)theirs, tag);
+		diff_eq_obj("after evaluateCRC", V90MP, MPA, MPB, tag);
+		guard_intact(tag);
+
+		if (memcmp(keep, mp_b, sizeof(V90MP)) != 0)
+			moved = 1;
+		if (theirs == 0 || theirs == 1)
+			said[theirs] = 1;
+		if (good)
+			diff_eq_int("a message carrying the blob's own CRC "
+				    "was accepted (%ld)", (long)theirs, 1,
+				    tag);
+	}
+
+	diff_eq_int("evaluateCRC changed the object", moved, 1, 0);
+	diff_eq_int("the seed was shown to override the incoming register",
+		    seeded, 1, 0);
+	diff_eq_int("the extent and the compared positions were separated",
+		    crc_split, 1, 0);
+	diff_eq_int("a message whose CRC is not where the extent implies was "
+		    "accepted", displaced, 1, 0);
+	diff_eq_int("the blob answered 0 at least once", said[0], 1, 0);
+	diff_eq_int("the blob answered 1 at least once", said[1], 1, 0);
+	return diff_end();
+}
+
+/* ------------------------------------------ the CRC against 10.1.2.3.2/V.34 */
+
+/*
+ * WHY THIS BLOCK IS NOT THE TWO ABOVE.
+ *
+ * Everything else in this file asks "does our source do what the blob does".
+ * That question cannot answer "does the blob do what the Recommendation
+ * says", and a defect living in the gap between the two would pass every
+ * differential check ever written here.  So this block asks the second
+ * question and never consults the blob for an expected value: the expected
+ * values come from ITU-T V.34 (02/98) 10.1.2.3.2 and Figure 14, and from
+ * Table 16/V.90.  It judges OUR source and the blob against the same
+ * spec-derived numbers, so it fires whichever of the two is wrong.
+ *
+ * WHAT V.90 SAYS ABOUT THE GENERATOR: nothing of its own.  8.6.3 says only
+ * "The CRC generator used is described in 10.1.2.3.2/V.34", and every other
+ * MP, CP and CPt clause says the same, so V.34 is the normative text.
+ *
+ * WHAT 10.1.2.3.2/V.34 SAYS, clause by clause:
+ *
+ *   "The CRC is formed by passing all of the information bits in a sequence,
+ *    except the frame sync bits, the start bits, and the fill bits, through
+ *    the CRC generator described in Figure 14."
+ *   "The polynomial used to compute the CRC is: x16 + x12 + x5 + 1."
+ *   "1) load the shift register in the CRC generator with all ones;"
+ *   "2) shift in the binary sequence;"
+ *   "3) output the contents of the shift register, starting with bit 0 in
+ *    Figure 14.  Bit 0 of the CRC is the LSB."
+ *
+ * NEITHER RECOMMENDATION CARRIES A TEST VECTOR.  V.34 and V.90 were both
+ * searched for a worked CRC example -- no numeric result, no sample sequence,
+ * nothing in the V.34 Annex A precode-CRC clause either -- so the
+ * known-answer had to come from outside, and this comment says so rather
+ * than leaving a reader to assume the number is ITU's.
+ *
+ * The variant is derived from the figure, not guessed.  Figure 14 draws
+ * sixteen stages numbered 15..0 with "Information Bits In" entering at the
+ * bit-0 end and its two adders between stages 11/10 and 4/3, which is the
+ * REFLECTED form of x^16 + x^12 + x^5 + 1: 0x1021 reversed is 0x8408, whose
+ * set bits are 15, 10 and 3.  With the all-ones preload of clause 1 and no
+ * final inversion (clause 3 outputs the register itself) that is the
+ * catalogued CRC-16/MCRF4XX, whose published check value over the ASCII
+ * string "123456789" shifted in LSB first is 0x6F91.  `spec_crc16` is
+ * asserted against that number before it is used to judge anything, so the
+ * reference implementation is pinned to something outside this tree.
+ *
+ * AND IT HAS BEEN SHOWN TO FIRE, which finding 134 requires of anything that
+ * can report a clean tree.  Changing clause 1's preload from 0xffff to 0
+ * inside `spec_crc16` failed 337 of this block's 1,084 checks while every
+ * differential block above stayed green -- so the block really is comparing
+ * the two sides against the Recommendation and not against each other.
+ * Restored, and green again, before the commit.
+ */
+
+/* Figure 14/V.34, written from the Recommendation and not from the object. */
+static unsigned int
+spec_crc16(const unsigned char *bit, unsigned int n)
+{
+	unsigned int reg = 0xffffu;		/* clause 1: all ones */
+	unsigned int k;
+
+	for (k = 0; k < n; k++) {		/* clause 2: shift it in */
+		unsigned int fb = (reg ^ (unsigned int)bit[k]) & 1u;
+
+		reg >>= 1;
+		if (fb)
+			reg ^= 0x8408u;
+	}
+	return reg & 0xffffu;
+}
+
+/*
+ * Table 16/V.90's start bits, copied off the table rather than computed.
+ * They happen to be the multiples of seventeen, which is what the object's
+ * `i % 17` skip exploits, but writing them out is the point: a test that
+ * derived them the same way the code does could not catch the code deriving
+ * them wrongly.
+ */
+static const unsigned char spec_start_bits[] = {
+	17, 34, 51, 68, 85, 102, 119, 136, 153, 170
+};
+#define SPEC_NSTART	((int)(sizeof(spec_start_bits) / \
+			       sizeof(spec_start_bits[0])))
+
+static int
+spec_is_start_bit(unsigned int i)
+{
+	int k;
+
+	for (k = 0; k < SPEC_NSTART; k++)
+		if ((unsigned int)spec_start_bits[k] == i)
+			return 1;
+	return 0;
+}
+
+/* Where Table 16 puts the CRC: 171:186 for Type 1, 69:84 for Type 0. */
+static unsigned int
+spec_crc_at(int type1)
+{
+	return type1 ? 171u : 69u;
+}
+
+/*
+ * The information bits of a Table 16 sequence, gathered the way the clause
+ * words it: everything from the MP Type bit at 18 up to the CRC field, less
+ * the start bits.  The frame sync (0:16) is excluded by starting at 18 and
+ * the fill bits are excluded by stopping below the CRC.
+ */
+static unsigned int
+spec_info_bits(const unsigned char *b, int type1, unsigned char *out)
+{
+	unsigned int stop = spec_crc_at(type1) - 1u;	/* the last start bit */
+	unsigned int i, n = 0;
+
+	for (i = 18; i < stop; i++) {
+		if (spec_is_start_bit(i))
+			continue;
+		out[n++] = (unsigned char)(b[i] & 1u);
+	}
+	return n;
+}
+
+/* A Table 16 sequence, laid out from the table.  NOT `infoToBits`, whose
+ * reproduced defects (finding 1386) are exactly what a spec test must not
+ * inherit. */
+static void
+spec_layout(unsigned char *b, int type1, unsigned seed)
+{
+	unsigned int i;
+
+	lfsr = 0x2f19u + 0x9e37u * seed;
+	for (i = 0; i < V90MP_BITS; i++) {
+		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
+		b[i] = (unsigned char)((lfsr >> 5) & 1u);
+	}
+	for (i = 0; i <= 16; i++)			/* frame sync   */
+		b[i] = 1;
+	for (i = 0; i < (unsigned)SPEC_NSTART; i++)	/* start bits   */
+		b[spec_start_bits[i]] = 0;
+	b[18] = (unsigned char)(type1 ? 1 : 0);		/* MP Type bit  */
+}
+
+/* Seed the register the way clause 1 and `resetCRC` both do. */
+static void
+spec_seed(V90MP *o)
+{
+	int k;
+
+	for (k = 0; k < V90MP_CRC; k++)
+		o->crc[k] = 1;
+}
+
+static int
+run_mp_crc_spec(void)
+{
+	unsigned char info[V90MP_BITS];
+	unsigned char base[V90MP_CRC];
+	int trial;
+	int order_split = 0;
+
+	diff_begin("V90MP CRC against 10.1.2.3.2/V.34");
+	set_level(0);
+
+	/* The reference implementation, pinned to a published number. */
+	{
+		static const char probe[] = "123456789";
+		unsigned char b[72];
+		unsigned int n = 0;
+		unsigned j, k;
+
+		for (j = 0; j < 9; j++)
+			for (k = 0; k < 8; k++)
+				b[n++] = (unsigned char)
+				    (((unsigned)(unsigned char)probe[j] >> k)
+				     & 1u);
+		diff_eq_int("Figure 14/V.34 over \"123456789\" is the "
+			    "published 0x6f91 (%ld)",
+			    (long)spec_crc16(b, n), 0x6f91L, 0);
+	}
+
+	/* Table 16's two message lengths are the object's two constants. */
+	diff_eq_int("Type 1: CRC ends at 186, so +0x119 is 0xbb (%ld)",
+		    (long)(spec_crc_at(1) + 16u), 0xbbL, 0);
+	diff_eq_int("Type 0: CRC ends at 84, so +0x119 is 0x55 (%ld)",
+		    (long)(spec_crc_at(0) + 16u), 0x55L, 0);
+
+	for (trial = 0; trial < 24; trial++) {
+		long tag = 3600 + trial;
+		int t1 = trial & 1;
+		unsigned int crc_at = spec_crc_at(t1);
+		unsigned int n, reg, k;
+
+		seed_pair(trial + 900, trial % 3);
+		spec_layout(MPB->bits, t1, (unsigned)trial);
+		memcpy(MPA->bits, MPB->bits, V90MP_BITS);
+		MPA->type = MPB->type = (char)(t1 ? 1 : 0);
+		MPA->byte_119 = MPB->byte_119 =
+		    (unsigned char)(crc_at + 16u);
+		spec_seed(MPA);
+		spec_seed(MPB);
+
+		MPA->calcCRC();
+		ref_mp_calccrc(mp_b);
+
+		n = spec_info_bits(MPB->bits, t1, info);
+		reg = spec_crc16(info, n);
+		memcpy(base, MPB->crc, V90MP_CRC);
+
+		/*
+		 * Nine sixteen-bit groups for Type 1 and three for Type 0 --
+		 * the count Table 16 implies, checked so that a layout bug in
+		 * this test cannot quietly shrink what is being covered.
+		 */
+		diff_eq_int("information bits per Table 16 (%ld)", (long)n,
+			    t1 ? 144L : 48L, tag);
+
+		for (k = 0; k < 16u; k++) {
+			long want = (long)((reg >> k) & 1u);
+
+			diff_eq_int("ours: register bit against Figure 14 "
+				    "(%ld)", (long)MPA->crc[k], want,
+				    tag * 100 + (long)k);
+			diff_eq_int("blob: register bit against Figure 14 "
+				    "(%ld)", (long)MPB->crc[k], want,
+				    tag * 100 + (long)k);
+		}
+
+		/*
+		 * "except the frame sync bits, the start bits, and the fill
+		 * bits".  Flip one of each -- and one bit of the CRC field
+		 * itself, which is not an information bit either -- and the
+		 * register must not move.  Flip an information bit and it
+		 * must: a single-bit change inside one CRC period always
+		 * changes the remainder.
+		 */
+		{
+			unsigned int excluded[4];
+			unsigned int included[3];
+			unsigned int e, m;
+
+			excluded[0] = 5u;		/* frame sync   */
+			excluded[1] = 34u;		/* start bit    */
+			excluded[2] = crc_at + 3u;	/* the CRC      */
+			excluded[3] = crc_at + 18u;	/* a fill bit   */
+
+			included[0] = 18u;		/* MP Type bit  */
+			included[1] = 24u;		/* drn          */
+			included[2] = crc_at - 3u;	/* last group   */
+
+			for (e = 0; e < 4u; e++) {
+				m = excluded[e];
+				MPB->bits[m] = (unsigned char)
+				    (MPB->bits[m] == 0);
+				spec_seed(MPB);
+				ref_mp_calccrc(mp_b);
+				diff_eq_int("an excluded bit did not reach "
+					    "the CRC (%ld)",
+					    memcmp(base, MPB->crc,
+						   V90MP_CRC) == 0, 1,
+					    tag * 100 + (long)m);
+				MPB->bits[m] = (unsigned char)
+				    (MPB->bits[m] == 0);
+			}
+			for (e = 0; e < 3u; e++) {
+				m = included[e];
+				MPB->bits[m] = (unsigned char)
+				    (MPB->bits[m] == 0);
+				spec_seed(MPB);
+				ref_mp_calccrc(mp_b);
+				diff_eq_int("an information bit did reach "
+					    "the CRC (%ld)",
+					    memcmp(base, MPB->crc,
+						   V90MP_CRC) != 0, 1,
+					    tag * 100 + (long)m);
+				MPB->bits[m] = (unsigned char)
+				    (MPB->bits[m] == 0);
+			}
+			spec_seed(MPB);
+			ref_mp_calccrc(mp_b);
+			diff_eq_int("the vector was restored (%ld)",
+				    memcmp(base, MPB->crc, V90MP_CRC) == 0,
+				    1, tag);
+		}
+
+		/*
+		 * Clause 3, and it is D920's question asked of this class:
+		 * the register is output "starting with bit 0", and Table 16
+		 * says "Bit 0 is transmitted first", so position crc_at + k
+		 * carries register bit k.  Lay the SPEC's register -- not the
+		 * blob's -- that way and both sides must accept; lay it the
+		 * other way round and both must reject.
+		 */
+		for (k = 0; k < 16u; k++)
+			MPB->bits[crc_at + k] =
+			    (unsigned char)((reg >> k) & 1u);
+		memcpy(MPA->bits, MPB->bits, V90MP_BITS);
+		diff_eq_int("ours accepts the spec's own CRC (%ld)",
+			    (long)MPA->evaluateCRC(), 1L, tag);
+		diff_eq_int("the blob accepts the spec's own CRC (%ld)",
+			    (long)ref_mp_evalcrc(mp_b), 1L, tag);
+
+		for (k = 0; k < 16u; k++)
+			MPB->bits[crc_at + k] =
+			    (unsigned char)((reg >> (15u - k)) & 1u);
+		memcpy(MPA->bits, MPB->bits, V90MP_BITS);
+		{
+			/*
+			 * Only meaningful where the register is not its own
+			 * reverse -- a palindrome reads the same either way
+			 * and proves nothing.  `order_split` records that
+			 * some trial really did put the two orders apart.
+			 */
+			int rev_differs = 0;
+
+			for (k = 0; k < 16u; k++)
+				if (((reg >> k) & 1u) !=
+				    ((reg >> (15u - k)) & 1u))
+					rev_differs = 1;
+			if (rev_differs) {
+				order_split = 1;
+				diff_eq_int("ours rejects the reversed CRC "
+					    "(%ld)", (long)MPA->evaluateCRC(),
+					    0L, tag);
+				diff_eq_int("the blob rejects the reversed "
+					    "CRC (%ld)",
+					    (long)ref_mp_evalcrc(mp_b), 0L,
+					    tag);
+			}
+		}
+	}
+
+	diff_eq_int("a trial separated the two output bit orders",
+		    order_split, 1, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1440,6 +2213,9 @@ main(void)
 	rc |= run_mp_bitstoinfo_crc();
 	rc |= run_mp_bitstoinfo_report();
 	rc |= run_mp_bitstoinfo_answers();
+	rc |= run_mp_calccrc();
+	rc |= run_mp_evaluatecrc();
+	rc |= run_mp_crc_spec();
 
 	set_level(0);
 	dsplib_debug_capture_on = 0;

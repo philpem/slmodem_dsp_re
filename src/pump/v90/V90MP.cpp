@@ -1,10 +1,19 @@
 /*
- * V90MP.cpp -- V.90 MP message: construction and destruction.
+ * V90MP.cpp -- the V.90 MP message: build it, read it back, check its CRC.
  *
- * Reconstructed from dsplibs.o V90MP.cpp.  Two of the class's sixteen
- * symbols: the constructor (0x1f410, 40 bytes) and the destructor (0x1f130,
- * one byte -- a bare `ret`).  `include/dsplib/V90MP.h` carries the object map
- * and says which member proved which offset.
+ * Reconstructed from dsplibs.o V90MP.cpp.  TEN of the class's sixteen
+ * symbols, in the order they appear below -- the constructor (0x1f410, 40
+ * bytes), the destructor (0x1f130, one byte, a bare `ret`), `reset`
+ * (0x1f3e0), `getBitVector` (0x1f700), `printNofRecievedMpMpNot` (0x20bc0),
+ * `evaluateInfo` (0x1f720), `infoToBits` (0x1f990), `calcCRC` (0x1f170),
+ * `evaluateCRC` (0x1f470) and `bitsToInfo` (0x20190).
+ * `include/dsplib/V90MP.h` carries the object map and says which member
+ * proved which offset.
+ *
+ * THIS PARAGRAPH USED TO SAY "TWO", and had said it since the file held two.
+ * It is findings 6100 and 6103's class exactly -- a count in a comment with
+ * no gate behind it -- and it is the first thing a reader of any member here
+ * sees, so it is worth the edit every time one lands.
  *
  * THE CONSTRUCTOR AND `reset` ARE THE SAME FORTY BYTES, instruction for
  * instruction: the two symbols at 0x1f410 and 0x1f3e0 disassemble alike down
@@ -231,6 +240,11 @@ V90MP::evaluateInfo()
  * again -- the same argument that says `reset` repeats the constructor -- and
  * it applies three times over, since `bitsToInfo` carries two more copies.
  *
+ * `calcCRC` and `evaluateCRC` are now written, further down this file, and
+ * the four copies of the register are the ORIGINAL'S OWN repetition.  Do not
+ * turn any of them into a call to the others: that would remove instructions
+ * the object has.
+ *
  * TWO DEFECTS OF THE ORIGINAL ARE REPRODUCED HERE ON PURPOSE.  Finding 1386.
  *
  *   - The type-zero arm pads from 0x45, which is where it has just put the
@@ -403,6 +417,215 @@ V90MP::infoToBits()
 		for (i = 0x45; i < len; i++)
 			bits[i] = 0;
 	}
+}
+
+/*
+ * calcCRC -- 0x1f170, 583 bytes.  The WRITE side of the CRC register: pass
+ * the information bits of the sequence now in `bits` through the CCITT shift
+ * register, leaving the sixteen result bits in `crc`.
+ *
+ * THE REGISTER IS THE SAME ONE AS `V90CP::calcCRC`'s, tap for tap -- the
+ * feedback bit `crc[0] ^ bits[i]` enters at 15 and is XORed into 3 and 10,
+ * and the frame skip is the same `if (i % 17 == 0) i++` compiled as
+ * `mul $0xf0f0f0f1` / `shr $4` for the divide and `cmp $1` / `adc $0` for
+ * the branchless increment.  Unsigned bounds throughout: `jae` on the guard
+ * at 0x1f194 and `jb` on the back edge at 0x1f30e.  Neither member seeds the
+ * register (there is no store of 1 anywhere in either) and neither returns
+ * anything.
+ *
+ * WHERE IT GENUINELY DIFFERS FROM THE V.90 CP TWIN IS THE EXTENT, and this
+ * is the whole of the difference.  `V90CP::calcCRC` computes `end` as
+ * `word_3bb0 - 0x11` from the four-byte sequence length; this one takes it
+ * from the ONE-BYTE type flag at +0x18 and a pair of constants:
+ *
+ *     1f180:  movzbl 0x18(%edi),%edx
+ *     1f184:  cmp    $0x1,%dl
+ *     1f187:  sbb    %eax,%eax           -1 when type == 0, else 0
+ *     1f189:  and    $0xffffff9a,%eax    -0x66 when type == 0, else 0
+ *     1f18c:  lea    0xaa(%eax),%ebp     0x44 when type == 0, else 0xaa
+ *
+ * so `calcCRC` never reads +0x118 or +0x119 at all.  It is the same
+ * `end = type ? 0xaa : 0x44` that `infoToBits` and `bitsToInfo` compute, and
+ * IT IS NOT ALGEBRAICALLY THE CP FORM: 0xbb - 0x11 is 0xaa and 0x55 - 0x11 is
+ * 0x44, so the two agree on every consistent object and part the moment
+ * +0x119 and +0x18 disagree.  t_v90mp.cpp drives exactly those pairs.
+ *
+ * The object promotes the whole register into the sixteen bytes of its stack
+ * frame for the duration of the loop and writes it back at the end.  That is
+ * register promotion the compiler is free to do and we do not encode; our
+ * source touches `crc[]` directly, exactly as the CP twin's does.
+ *
+ * The guard at 0x1f194 is DEAD CODE -- `end` is 0x44 or 0xaa and `i` starts
+ * at 0x12 -- and is just the loop guard GCC emits for a `for` whose bound it
+ * cannot fold.
+ *
+ * THE FEEDBACK BIT IS NOT MASKED WHERE IT IS FORMED, and that is measurable
+ * rather than a preference.  `add 0x1c(%esi,%edi,1),%al` at 0x1f277 is a
+ * plain byte add, and there is no `and` on %al before either of its uses --
+ * the mask is at each store instead (`and $0x1,%bl` at 0x1f2b0, `and $0x1,%cl`
+ * at 0x1f2e9, `and $0x1,%al` at 0x1f2f5).  Writing `a = (crc[0] + bits[i]) &
+ * 1` puts an extra `and` in the loop under the period compiler, so this is
+ * the object's form; it is also the form the three copies elsewhere in this
+ * file already use.  Mod-2 arithmetic makes the two identical in behaviour,
+ * so NO differential test can tell them apart and the codegen tier is the
+ * only thing that can.
+ *
+ * WHAT IS LEFT is 595 bytes against the object's 583, and 666 against 651 for
+ * `evaluateCRC`, on GCC 3.4.2 at this tree's flags.  The residue is three
+ * things, all in CLAUDE.md's "free" column: a seven-byte `lea` NOP aligning
+ * the loop head, `lea 0x1(%ecx),%esi` where the object reuses %esi with
+ * `inc`, and one `movzbl` widening the feedback byte whose upper half is then
+ * discarded (finding 614).  Nothing forced is outstanding.
+ *
+ * CONFORMANT WITH 10.1.2.3.2/V.34, which is what 8.6.3/V.90 cites for MP.
+ * See the note above `evaluateCRC` for the derivation and for the extent
+ * clause, which is the part this member decides.
+ */
+void
+V90MP::calcCRC()
+{
+	unsigned int i, end;
+	unsigned char a;
+
+	end = type ? 0xaa : 0x44;
+
+	for (i = 0x12; i < end; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)(crc[0] + bits[i]);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = (unsigned char)(a & 1);
+	}
+}
+
+/*
+ * evaluateCRC -- 0x1f470, 651 bytes.  The read side: seed the register,
+ * recompute the CRC over the information bits of a RECEIVED sequence, and
+ * compare it against the sixteen bits the peer sent.
+ *
+ * IT RETURNS A VALUE.  0x1f6ec is `xor %eax,%eax` / `test %bl,%bl` /
+ * `sete %al`; see V90MP.h.
+ *
+ * THE TWO EXTENTS COME FROM TWO DIFFERENT FIELDS, and that is the sharpest
+ * difference from `V90CP::evaluateCRC`, which takes both from `word_3bb0`:
+ *
+ *   - the information bits are bounded by `type ? 0xaa : 0x44`, read from
+ *     +0x18 by the same five instructions `calcCRC` uses (0x1f48f..0x1f4a0);
+ *   - the peer's sixteen CRC bits are found from +0x119, through the single
+ *     displacement `0xc(%edi,%ecx,1)` with %edi holding `this + byte_119`
+ *     (0x1f6cb, 0x1f6d8).  `bits` is at +0x1c, so +0x119 + 0xc + k is
+ *     `bits[byte_119 - 0x10 + k]` -- the same expression `bitsToInfo`'s two
+ *     inlined copies use with its own `n`.
+ *
+ * They agree for every value `bitsToInfo` writes (0xbb and 0x55, whose -0x11
+ * and -0x10 land on 0xaa/0xab and 0x44/0x45), and only for those.
+ *
+ * THAT EXPRESSION REACHES OUTSIDE `bits[]` for values of +0x119 the class
+ * never writes: below 0x10 it runs back into the decoded message at +0x0c,
+ * and above 0xe6 it runs forward into `crc` and the fields past it.  It
+ * cannot leave the object -- the widest address the byte can name is
+ * `this + 0x11a`, and `sizeof(V90MP)` is 0x124 -- so this is not D923's
+ * family (an unbounded store running off an allocation) and it is not
+ * recorded in docs/deviations.md.  Finding 7411.
+ *
+ * THE SEED IS THE SAME SIXTEEN ONES `resetCRC` (0x1f150) writes, inlined
+ * rather than called for finding 1237's reason, and it runs BEFORE the guard
+ * so it happens whatever the extent.  It is a SIGNED bound -- `cmp $0xf` /
+ * `jle` at 0x1f48a -- where the comparison loop below is UNSIGNED
+ * (`cmp $0xf` / `jbe` at 0x1f6e7), which is why the two counters here have
+ * different types.
+ *
+ * THE COMPARISON IS A BYTE.  `cltd` / `xor %edx,%eax` / `sub %edx,%eax` is
+ * the object's inlined `abs` and `add %al,%bl` accumulates sixteen of them
+ * into one byte, so sixteen differences summing to a multiple of 256 read as
+ * a match.  As in `bitsToInfo`, the truncation is the DECLARATION's job and
+ * `sum` is accumulated with `+=`: written `sum = (unsigned char)(sum + ...)`
+ * the declared width would stop mattering and the mutation that tests this
+ * claim would survive.
+ *
+ * CONFORMANCE WITH 10.1.2.3.2/V.34.  8.6.3/V.90 says only "The CRC generator
+ * used is described in 10.1.2.3.2/V.34", and that clause says: load the
+ * register with all ones; shift in the binary sequence; output the register
+ * starting with bit 0, bit 0 being the LSB; and pass "all of the information
+ * bits in a sequence, except the frame sync bits, the start bits, and the
+ * fill bits".  Figure 14/V.34 draws sixteen stages numbered 15..0 with the
+ * information bits entering at the bit-0 end and adders between stages 11/10
+ * and 4/3 -- which is this register exactly, and is the reflected form of
+ * x^16 + x^12 + x^5 + 1 (0x1021 reversed is 0x8408, bits 15, 10 and 3).
+ *
+ * The extent clause checks out against Table 16/V.90, which is where the
+ * object's two constants come from.  Frame sync is bits 0:16 and every start
+ * bit is a multiple of 17 (17, 34, ... 170), which is what the `i % 17` skip
+ * steps over; the CRC itself is 171:186 for Type 1 and 69:84 for Type 0, so
+ * the information bits run 18..169 and 18..67 and the two bounds are 0xaa
+ * and 0x44.  Nine sixteen-bit groups for Type 1, three for Type 0.  The
+ * fill bits are past the CRC and are never reached.  Neither the object nor
+ * the recommendation is wrong here, so there is nothing to deviate.
+ * t_v90mp.cpp's `run_mp_crc_spec` is the test that says so without asking
+ * the blob.
+ */
+int
+V90MP::evaluateCRC()
+{
+	unsigned int i, end;
+	int c;
+	unsigned char a;
+	unsigned char sum, n;
+
+	for (c = 0; c <= 0xf; c++)
+		crc[c] = 1;
+
+	end = type ? 0xaa : 0x44;
+
+	for (i = 0x12; i < end; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)(crc[0] + bits[i]);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = (unsigned char)(a & 1);
+	}
+
+	n = byte_119;
+	sum = 0;
+	for (i = 0; i <= 0xf; i++) {
+		int d = (int)crc[i] - (int)bits[n - 0x10 + i];
+
+		sum += (unsigned char)(d < 0 ? -d : d);
+	}
+
+	return sum == 0;
 }
 
 /*

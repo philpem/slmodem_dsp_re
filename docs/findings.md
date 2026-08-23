@@ -76829,3 +76829,188 @@ constructor's reach -- but the intersection of "the constructor writes it" and
 "the reset writes the same value" is a blind spot that no amount of varying
 the seed can open. Poke it, or accept that those stores are untested and say
 so. Every `::reset` fixture in this tree is worth re-reading against that.
+
+======================================================================
+
+### 7410. V90MP's CRC pair takes its extent from the TYPE FLAG, not from the length
+
+`V90MP::calcCRC` (.text+0x1f170, 583 bytes) and `V90MP::evaluateCRC`
+(.text+0x1f470, 651 bytes) are the same CCITT shift register as
+`V90CP::calcCRC`/`evaluateCRC`, tap for tap: the feedback bit
+`crc[0] ^ bits[i]` enters at 15 and is XORed into 3 and 10, the frame skip is
+`if (i % 17 == 0) i++` compiled as `mul $0xf0f0f0f1` / `shr $4` and
+`cmp $1` / `adc $0`, and the bounds are unsigned (`jae` on the guard, `jb` on
+the back edge). The whole register is promoted into the sixteen bytes of the
+stack frame for the duration of the loop, which is the compiler's choice and
+is not encoded in our source.
+
+**Where they part is the extent, and it is a trap.** The CP twin computes
+`end = word_3bb0 - 0x11` from a four-byte sequence length. The MP pair takes
+it from the one-byte type flag at +0x18 and a pair of constants:
+
+    1f180:  movzbl 0x18(%edi),%edx
+    1f184:  cmp    $0x1,%dl
+    1f187:  sbb    %eax,%eax           -1 when type == 0, else 0
+    1f189:  and    $0xffffff9a,%eax    -0x66 when type == 0, else 0
+    1f18c:  lea    0xaa(%eax),%ebp     0x44 when type == 0, else 0xaa
+
+so `calcCRC` never reads +0x118 or +0x119 at all, and `evaluateCRC` reads
++0x119 only to locate the peer's sixteen CRC bits -- `0xc(%edi,%ecx,1)` with
+%edi = `this + byte_119`, which is `bits[byte_119 - 0x10 + k]` since `bits` is
+at +0x1c.
+
+**The two formulas are indistinguishable on every object the class can
+build**: `0xbb - 0x11 == 0xaa`, `0x55 - 0x11 == 0x44`, `0xbb - 0x10 == 0xab`,
+`0x55 - 0x10 == 0x45`, and `bitsToInfo` writes 0xbb or 0x55 into +0x119 and
+nothing else. A transcription of the CP source therefore passes every trial
+in which +0x18 and +0x119 agree, which is every trial anyone would think to
+write. `t_v90mp.cpp` drives the inconsistent pairs deliberately and asserts
+that they parted.
+
+**One of those separations needed a shape nobody would guess.** With
+inconsistent pairs alone, the mutation "evaluateCRC finds the peer's CRC from
+the type flag" SURVIVED: on a message that fails its CRC, both readings answer
+0, so the return value does not move and the object state does not either.
+What catches it is a message that PASSES under one reading and fails under the
+other -- a Type 0 message (register over 0x12..0x43) with its CRC written at
+0xab, outside the covered range, +0x119 at 0xbb, and the complement at
+0x45:0x54 so the wrong reading cannot agree by luck. `blob_displaced_message`
+is that trial. Suite `v90mp`: 107 mutations, 106 caught, 0 not caught, 1
+equivalent (the pre-existing +0x118 one, finding 1386) -- **and that number is
+recorded in `test/mutations/snapshot.json` rather than only here**, so
+`mutsnap.py --check` can say whether it is still true of the tree reading it.
+A bare count in a finding is what that tool exists to replace.
+
+`resetCRC` (.text+0x1f150) is NOT written -- the task that produced this
+believed it was -- and neither member calls it: `calcCRC` has no store of 1 in
+its 583 bytes and `evaluateCRC` inlines the sixteen ones itself, for finding
+1237's reason. That makes four copies of the register in one file, the
+original's own repetition, and none of them may be turned into a call to
+another.
+
+### 7411. `evaluateCRC` reads outside `bits[]` for +0x119 values the class never writes, and it is NOT a deviation
+
+`bits[byte_119 - 0x10 + k]` with `byte_119` an unsigned char and `k` in 0..15
+reaches `bits[-16]` at one end and `bits[239]` at the other, against a
+declared `bits[0xe6]` (230). Below 0x10 it runs back into the decoded message
+at +0x0c; above 0xe6 it runs forward into `crc` and the fields above it.
+
+**It is not D923's family and is not recorded in `docs/deviations.md`.** D923
+is an unbounded STORE that runs off the end of a 0x918-byte allocation; this
+is a bounded READ that cannot leave the object at all. The widest address the
+byte can name is `this + 0xff + 0xc + 0xf` = `this + 0x11a`, and
+`sizeof(V90MP)` is 0x124. Nothing outside the object is touched under any
+value the field can hold, so there is no memory-safety claim to make and
+nothing for `DSPLIB_REPRODUCE_BUGS` to carry. The only writer of +0x119 is
+`bitsToInfo` state 2, which sets it to 0xbb or 0x55.
+
+`t_v90mp.cpp` sweeps +0x119 over 0x10, 0x30, 0x45, 0x55, 0x70, 0xab, 0xbb,
+0xe6, 0xf0 and 0xff -- the last two reaching past the array and into the
+register the loop has just written -- and `guard_intact` holds on both sides
+throughout. Values below 0x10 are NOT driven: the address arithmetic is the
+same on both sides but the C++ index would be negative, and there is nothing
+to learn there that the forward overrun does not already show.
+
+### 7412. `V90MP::evaluateCRC` returns a value; the header said `void`
+
+`include/dsplib/V90MP.h` declared it `void`, in the group of members that are
+declared and deliberately left undefined. The epilogue at 0x1f6ec is
+`xor %eax,%eax` / `test %bl,%bl` / `sete %al`, and a leftover in %eax is never
+built with a `sete`: it answers 1 when the sixteen received CRC bits match the
+sixteen it computed and 0 otherwise. Return types are not mangled, so the
+symbol `_ZN5V90MP11evaluateCRCEv` is unchanged and nothing outside the header
+had to move.
+
+This is the third time in this family -- `V90CP::evaluateCRC`,
+`V90CP::bitsToInfo` and `V90MP::bitsToInfo` were all declared `void` and all
+return -- and the test that tells the two apart is the same one every time:
+whether EVERY path arranges %eax, or whether the value is merely what the last
+instruction happened to leave there. `calcCRC` is the negative case in the
+same pair of functions: nothing arranges %eax before its `ret`, and the byte
+in %al is the last feedback bit by accident.
+
+### 7413. The V.90 MP CRC conforms to 10.1.2.3.2/V.34, and now has a test that says so without asking the blob
+
+The differential tier proves our source matches the object. It cannot prove
+the object matches the Recommendation, and a defect in that gap would pass
+every check in this tree. `t_v90mp.cpp`'s `run_mp_crc_spec` closes it: it
+judges OUR source and the blob against the same spec-derived numbers, so it
+fires whichever of the two is wrong.
+
+8.6.3/V.90 delegates entirely -- "The CRC generator used is described in
+10.1.2.3.2/V.34" -- so V.34 is the normative text. Clause by clause, against
+the object:
+
+  - *"load the shift register with all ones"* -- `evaluateCRC` writes sixteen
+    ones at 0x1f480..0x1f48d, the same loop `resetCRC` is. **Conforms.**
+  - *"x^16 + x^12 + x^5 + 1"* -- Figure 14 draws sixteen stages numbered 15..0
+    with "Information Bits In" entering at the bit-0 end and adders between
+    stages 11/10 and 4/3. That is the reflected form (0x1021 reversed is
+    0x8408, set bits 15, 10 and 3) and it is the object's three taps exactly.
+    **Conforms.**
+  - *"output the contents of the shift register, starting with bit 0 ... Bit 0
+    of the CRC is the LSB"*, with Table 16/V.90's "Bit 0 is transmitted first"
+    -- `infoToBits` writes `bits[end + 1 + k] = crc[k]` and `evaluateCRC`
+    compares `crc[k]` against `bits[byte_119 - 0x10 + k]`, so wire position
+    171 + k (or 69 + k) carries register bit k. **Conforms**, and this is
+    D920's question asked of this class with the opposite answer.
+  - *"all of the information bits in a sequence, except the frame sync bits,
+    the start bits, and the fill bits"* -- Table 16 puts frame sync at 0:16,
+    start bits at 17, 34, 51, 68, 85, 102, 119, 136, 153 and 170 (the
+    multiples of seventeen), the CRC at 171:186 for Type 1 and 69:84 for Type
+    0, and fill bits above that. The object walks 0x12 (18) up to but not
+    including 0xaa (170) or 0x44 (68), skipping every multiple of seventeen:
+    nine sixteen-bit groups for Type 1 and three for Type 0, which is
+    18:33, 35:50, 52:67, 69:84, 86:101, 103:118, 120:135, 137:152, 154:169
+    and 18:33, 35:50, 52:67 respectively. **Conforms**, and the two constants
+    0xaa and 0x44 are Table 16's own layout rather than an approximation of
+    it.
+
+**So there is no deviation to record.** The MP pair implements the
+Recommendation.
+
+**NEITHER RECOMMENDATION CARRIES A TEST VECTOR.** V.34 and V.90 were both
+searched -- no worked example, no numeric result, nothing in V.34 Annex A's
+precode-CRC clause either -- so the known-answer had to come from outside, and
+the test says so rather than letting a reader assume the number is ITU's. The
+variant the figure describes is the catalogued CRC-16/MCRF4XX (poly 0x1021,
+init 0xffff, reflected in and out, no final XOR), whose published check value
+over the ASCII string "123456789" fed LSB first is 0x6F91. `spec_crc16` is
+asserted against that before it judges anything.
+
+The block was shown to fire, per finding 134: changing the preload from
+0xffff to 0 failed 337 of its 1,084 checks while every differential block
+above stayed green.
+
+### 7414. The MP CRC pair's codegen residue is three free differences, and the feedback mask is not one of them
+
+GCC 3.4.2 at this tree's flags gives `V90MP::calcCRC` 595 bytes against the
+object's 583 and `V90MP::evaluateCRC` 666 against 651 -- a 2% overshoot, in
+`compare.py`'s DIFFERENT SIZE bucket rather than its identical one.
+
+**One of the four differences was forced and is now closed.** The object's
+feedback bit is formed by a plain byte add -- `add 0x1c(%esi,%edi,1),%al` at
+0x1f277 -- with no `and` on %al before either of its uses; the mask lives at
+each store instead (0x1f2b0, 0x1f2e9, 0x1f2f5). Writing
+`a = (unsigned char)((crc[0] + bits[i]) & 1)`, which is what the V.90 CP twin's
+source does, put an extra `and` in the loop. Deferring it --
+`a = (unsigned char)(crc[0] + bits[i])` with `crc[15] = (unsigned char)(a & 1)`
+-- removed it. The two are identical mod 2, so **no differential test can tell
+them apart**; the codegen tier is the only instrument that could see it, and
+this is what it is for. The three other copies of this register in
+`V90MP.cpp`, which were written before this pair, already had the object's
+form.
+
+**The three that remain are free** and were not chased, per CLAUDE.md's rule:
+
+  - a seven-byte `lea 0x0(%esi,%eiz,1),%esi` aligning the loop head, which the
+    blob has as raw padding bytes rather than as an instruction;
+  - `mov %esi,%ecx` / `adc $0x0,%ecx` / `lea 0x1(%ecx),%esi` where the object
+    updates %esi in place with `adc` and `inc` -- register allocation;
+  - one `movzbl %al,%ebp` widening the feedback byte for an add whose upper
+    half is then discarded, which is finding 614 exactly.
+
+Curiously the deferred mask cost two bytes overall (0x253 -> 0x255) while
+removing an instruction: the alignment NOP and the allocation moved under it.
+**That is why the mnemonic diff and not the byte count is what settled it** --
+the byte count said the wrong form was better.
