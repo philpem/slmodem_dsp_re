@@ -76098,3 +76098,128 @@ selected index 5, sent `0xae82,0xfffd,0x0000,0x0000,0x0000`, finalised at
 This closes the possible "only matters near the retrain threshold" escape:
 the D29 correction neither creates nor prevents the observed failure under
 controlled heap contents.
+
+======================================================================
+
+### 7002. A rename is free for the compiler and not for the apparatus
+
+`CLAUDE.md` says a name "is a compile-time substitution and **cannot** move code
+generation, so this is free and `compare.py` must not budge". That is true and
+it is only half the sentence. `refactor/v34-anonymous-fields` renames 62 V.34
+fields, every one of them justified, and the rename cost four differential
+tests and thirty-three mutation anchors. Neither cost is visible in `src/`.
+
+#### Thirty-three anchors, and thirty-two of them silent
+
+Measured on the branch against `master`, which has none, so all 33 are the
+rename's:
+
+| suite | anchors detached |
+|---|--:|
+| `v34hstx1` | 13 |
+| `v34pcmif` | 7 |
+| `v34rx` | 6 |
+| `v34vdiag` | 3 |
+| `v34retrain` | 2 |
+| `vpcmcreate` | 2 |
+
+`refcheck`'s live-mutant check fired on exactly ONE of them -- "21: the
+echo-adapt start leaves f354c alone" -- because it tests `find` gone AND
+`replace` present, which is only true where the mutation happens to describe
+deleting the very line the rename touched. The other 32 have a `find` that
+matches nothing, so `mutate.py` cannot locate the site at all, and **a mutation
+that cannot be applied is indistinguishable from one that is always killed**.
+
+**THE TREE COULD ALREADY SEE ALL 33, AND THAT IS THE REAL FINDING.**
+`anchorcheck.py` fails on any anchor matching "other than exactly once", and
+zero is not once: injecting one detached anchor gives `NOT UNIQUE v34rx: ...
+matches 0 time(s)` and exit 1. It never ran. `refs` was two plain recipe lines,
+`refcheck.py` then `anchorcheck.py`, so the dangling-reference failure aborted
+the target and the second checker's verdict was never printed -- and the branch
+had BOTH defects at once. The 33 anchors were not undetectable; they were
+downstream of an earlier `make` failure.
+
+So the fix is not another check. `refs` now runs both and fails afterwards:
+
+    @rc=0; $(PYTHON) tools/refcheck.py   || rc=1; \
+     $(PYTHON) tools/anchorcheck.py      || rc=1; \
+     exit $$rc
+
+Shown to fire: with a dangling reference AND a detached anchor injected
+together, the target prints a DANGLING line for the injected citation and a
+`NOT UNIQUE ... matches 0 time(s)` line for the injected anchor, and exits 2;
+before the change the second line did not appear.  (The injected citation is
+not quoted here: `refcheck` reads its own finding numbers out of this file, so
+writing the fake one down would make this paragraph dangle -- which is exactly
+what happened on the first attempt.) **A red gate must report everything it knows, not just the
+first thing that went wrong** -- which is findings 2400, 3100 and 3055 turned
+one notch: those were detectors measuring nothing, this is a detector that
+measured correctly and was never asked.
+
+A first draft of this finding added an UNANCHORED check to `refcheck.py`
+instead. It was reverted: the check already existed, and duplicating it would
+have hidden the sequencing defect that is the actual cause.
+
+#### Four compile failures, from offsets that name fields in other structs
+
+The rename also replaced identifiers in `test/unit/` by name, and four of the
+names belonged to other types:
+
+    t_v34hshak.c     c->f262        struct hsi_case, a case description
+    t_v34hsmst44.c   rates[k].f1b0, .f1ae, .f1ac, carriers[k].f1ba
+    t_v8dp.c         da->v8->f21c   the V.8 object
+    t_v8hs.c         obj_a.f21c     the V.8 object
+
+`error_window_symbols` is the sharp one. Receiver `+0x21c` really is the
+1024-symbol counter; V.8 object `+0x21c` is an unrelated field that wears the
+same offset-derived name, and renaming by identifier cannot tell them apart.
+The branch's own review document warned about this for `f25e` and `f260` --
+which name a receiver field AND an object field -- and the sweep hit `f21c`
+anyway. **Naming the hazard is not the same as being protected from it.**
+
+#### What to do instead
+
+- **Rewrite anchors by ACCESSOR, and verify.** `rx->` takes the receiver map
+  and everything else the object map; accept a rewritten anchor only if it then
+  matches the source. That repaired 32 of 33 mechanically with no judgement
+  calls, 8 of them needing re-alignment because longer names moved the tab stops
+  before the trailing address comments, and left exactly one -- a `printf`
+  argument list a human had re-wrapped -- for a person.
+- **Run the gate before committing a rename, and read past the first tier.**
+  The branch's `refs` tier failed first, `make -j` stopped after the jobs in
+  flight, and the four compile failures were never printed. A red tier can hide
+  a redder one.
+- **`git diff master...branch -- test/` is the review that finds this**, because
+  every one of the four bad sites is a one-line change whose left side names a
+  struct that is not the receiver.
+
+#### The repair is verified, not just textually matched
+
+`anchorcheck` proves an anchor MATCHES. What a mutation is for is that applying
+it makes a test fail, so all 33 were run:
+
+    tools/mutate.py --suite v34rx | v34vdiag | vpcmcreate | v34retrain
+                            | v34pcmif | v34hstx1
+
+**32 of the 33 are `caught (test)`** -- a test assertion failed, not the
+compiler -- and the 33rd, "selector 0: the ring count is read unsigned", is
+recorded `survived, equivalent` with the tool's own reason. **`unusable` is 0
+in every suite**, which is the check that matters here: `mutate.py` judges a
+mutant caught by a non-zero exit, so a mutant that fails to COMPILE reads as
+killed, and eight of these anchors had been re-aligned and one re-wrapped by
+hand. None of them scored that way.
+
+Suite totals, for the denominator: v34rx 31/31, v34vdiag 26 caught + 2
+equivalent, vpcmcreate 29 + 1 equivalent + 1 uncaught, v34retrain 67 + 7
+equivalent, v34pcmif 120 + 6 equivalent, v34hstx1 751 + 23 equivalent + 2
+uncaught. The three uncaught rows -- "the redundant second memset is dropped",
+"67: initdigital is not called", "67: +0x3598 is not set" -- are pre-existing
+untested claims the tool already lists as such, and none is one of the 33.
+
+**Where the pieces live.** The `refs` change is here on `master`, because the
+sequencing defect is `master`'s and any branch can hit it. The 33 repaired
+anchors and the four test fixes are on `review/v34-anon-anchor-repair`, which
+is based on `refactor/v34-anonymous-fields` and must not be merged here until
+that branch's owner has taken them -- merging it would land the rename.
+
+Companion to 7000 and 7001 only in numbering; this is about method, not V.90.

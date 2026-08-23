@@ -546,8 +546,19 @@ debugcov:
 #     git log --merges -1 --format=%P | tr ' ' '\n' | \
 #         xargs -I{} tools/refcheck.py --since {}
 refs:
-	@$(PYTHON) tools/refcheck.py
-	@$(PYTHON) tools/anchorcheck.py
+#
+# BOTH RUN, THEN THE TARGET FAILS.  As two plain recipe lines, a red
+# refcheck aborted the target and anchorcheck never ran -- so when the V.34
+# field rename detached 33 mutation anchors AND left two dangling finding
+# references, the gate printed only the references and the 33 anchors were
+# invisible.  anchorcheck had always been able to see them (a detached
+# anchor "matches 0 time(s)", which is not exactly once); it was simply
+# never reached.  A red gate must report everything it knows, not just the
+# first thing that went wrong.  Finding 7002.
+#
+	@rc=0; $(PYTHON) tools/refcheck.py || rc=1; \
+	 $(PYTHON) tools/anchorcheck.py || rc=1; \
+	 exit $$rc
 #
 # The mutation snapshot: hashing only, 0.03 s, runs nothing.  It fails on
 # MISSING, ORPHANED and INCONSISTENT -- always defects -- and REPORTS
