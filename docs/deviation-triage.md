@@ -40,10 +40,12 @@ is not a defect count, and the gap is large enough to matter.*
 
 ### 232 and 230 are both right, and that is itself a defect in the record
 
-Every mechanical census of this file returns **230**, not 232, and the two
-missing entries are real: `D-V92DEC-1` and `D-V92DEC-2`. They are the only
-entries whose heading does not match `^## D\d+`, which is the pattern
-`tools/refcheck.py` uses (`DEV_HEAD`) to learn what deviations exist.
+A census keyed on `^## D\d+` returns **230**, not 232, and the two missing
+entries are real: `D-V92DEC-1` and `D-V92DEC-2`. They are the only entries
+whose heading does not match that pattern — which is the pattern
+`tools/refcheck.py` uses (`DEV_HEAD`) to learn what deviations exist. Widening
+the key to `^## D[\w-]+` recovers both, and every count in this document is
+computed with the wider key.
 
 **The consequence is measured, not inferred, because the inferred version was
 wrong.** The hazard is not that a citation of them dangles — `DEV_REF` is
@@ -2462,12 +2464,19 @@ The 114 are named in full here so nobody re-derives the list.
 > D274 D280 D283 D286 D305 D307 D320 D322 D325 D329 D339 D340 D342 D355 D920
 > D923
 
-They are not equally unattended:
+**D920 and D923 are inside that list, and they are NOT unexamined.** They are
+this document's own standard — read at the top, quoted in the method, and used
+as the template for family 7 — and they were **deliberately not re-argued**
+because they are already settled, already gated behind `DSPLIB_REPRODUCE_BUGS`
+in `src/pump/v90/V92CP.cpp`, and already carry a full prose disposition. They
+are the only two entries in the 114 of which that is true. Anyone grepping the
+list for them should read "left alone on purpose", not "missed".
+
+The rest are not equally unattended either:
 
 - **11 are already behind a `DSPLIB_REPRODUCE_BUGS` arm** — D1, D4, D26, D27,
-  D28, D29, D30, D32, D36, **D920 and D923**. Someone decided each was real,
-  decided a fix, and gated it. D920 and D923 are the standard this document
-  was measured against and were deliberately not re-argued.
+  D28, D29, D30, D32, D36, and the two above. Someone decided each was real,
+  decided a fix, and gated it.
 - **26 are in D1–D64**, the oldest and best-argued block, every one graded by
   Appendix A and most driven by a named test. They were skipped deliberately:
   the axis Appendix A supplies is the one that was missing there.
