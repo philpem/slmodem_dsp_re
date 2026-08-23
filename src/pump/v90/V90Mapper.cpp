@@ -1,8 +1,8 @@
 /*
- * V90Mapper.cpp -- V90Mapper's constructor and destructor.
+ * V90Mapper.cpp -- V90Mapper's constructor, destructor and two resets.
  *
  * Reconstructed from dsplibs.o.  `include/dsplib/V90Mapper.h` carries the
- * object map and the argument for the 0x704 size; this file is the two
+ * object map and the argument for the 0x704 size; this file is the four
  * functions and the assertions that hold the compiler to that map.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
@@ -26,11 +26,50 @@
  * so it runs for 0..5 inclusive and covers 0x658..0x66f, which is exactly the
  * gap up to the modulus encoder.  Written as six unrolled stores the
  * behaviour is identical and the code is not, so it is written as the loop.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TWO RESETS ARE ONE FUNCTION WITH TWO ENDS, and reading them side by side
+ * is how the shared part was settled.  `.text+0x30070` (`reset`, 517 bytes)
+ * and `.text+0x30280` (`resetNoSpectral`, 404 bytes) both run
+ *
+ *     bitsPerFrame = mp->word_0
+ *     word_08      = bitsPerFrame - signBitsPerFrame
+ *     the six-constellation fill
+ *     the seven-word modulusEncoder fill
+ *     signEncoder.prev_ = 0
+ *     word_700 = 0
+ *
+ * byte for byte the same, and differ only in what surrounds it: `reset`
+ * COMPUTES `signBitsPerFrame` (and `signBitGroups`, `signBitGroupSize`,
+ * `cleared_01c`) where `resetNoSpectral` reads the first and leaves the rest
+ * alone, and the two call different members of the spectral shaper.  That
+ * "+0x0c is read and never written here" is exactly the split
+ * `V90Demapper::resetNoSpectral` has against `V90Demapper::reset`, and it is
+ * only visible over storage that was never zeroed -- findings 223 and 224, and
+ * `t_v90modchain.cpp` pokes a value that is not any `6 - shaperSR` into it
+ * before the call for that reason.
+ *
+ * THE ORDER OF THE STORES IS NOT THE OBJECT'S AND CANNOT BE.  GCC schedules
+ * this block heavily -- in `reset` the `word_700` store lands between two
+ * halves of the modulusEncoder fill -- so what is reproduced is the set of
+ * stores and their values, which is what the differential test compares.
+ * Finding 617's full-text acceptance test is not claimed for either function.
  */
 
 #include <stddef.h>
 
+/*
+ * `pcm.h` is a C header with no linkage block of its own, so it is wrapped
+ * here exactly as `V90AutoDigitalImpDetector.cpp` wraps it -- without this the
+ * two conversions are looked up under their mangled C++ names and nothing in
+ * `src/service/pcm.c` matches.
+ */
+extern "C" {
+#include "dsplib/pcm.h"
+}
+
 #include "dsplib/sysdep.h"
+#include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Mapper.h"
 
 /*
@@ -45,17 +84,34 @@
 	    ((int)__builtin_offsetof(V90Mapper, field) == (off)) ? 1 : -1]
 
 V90MAPPER_OFF(params,		0x000, params);
-V90MAPPER_OFF(cleared_004,	0x004, c004);
-V90MAPPER_OFF(cleared_014,	0x014, c014);
+V90MAPPER_OFF(bitsPerFrame,	0x004, c004);
+V90MAPPER_OFF(word_08,		0x008, c008);
+V90MAPPER_OFF(signBitsPerFrame,	0x00c, c00c);
+V90MAPPER_OFF(signBitGroups,	0x010, c010);
+V90MAPPER_OFF(signBitGroupSize,	0x014, c014);
 V90MAPPER_OFF(buf,		0x018, buf);
 V90MAPPER_OFF(cleared_01c,	0x01c, c01c);
-V90MAPPER_OFF(cleared_658,	0x658, c658);
+V90MAPPER_OFF(constellation,	0x056, cons);
+V90MAPPER_OFF(constellationSize,0x658, c658);
 V90MAPPER_OFF(modulusEncoder,	0x670, modenc);
 V90MAPPER_OFF(spectralShaper,	0x68c, shaper);
-V90MAPPER_OFF(cleared_6f8,	0x6f8, c6f8);
-V90MAPPER_OFF(cleared_6fc,	0x6fc, c6fc);
+V90MAPPER_OFF(uint_6f8,		0x6f8, c6f8);
+V90MAPPER_OFF(signEncoder,	0x6fc, c6fc);
+V90MAPPER_OFF(word_700,		0x700, c700);
 typedef char v90mapper_size[(sizeof(V90Mapper) == 0x704) ? 1 : -1];
 #endif
+
+/*
+ * THE ASSERTIONS ABOVE ARE NOT WHAT PROTECTS THE NEW OFFSETS, and saying so
+ * is the point of this note.  `__SIZEOF_POINTER__` is a GCC 4.6+ predefine,
+ * so under the period compiler the guard reads `#if 0` and every one of them
+ * vanishes while the file still compiles -- CLAUDE.md's silent variance, and
+ * `docs/method/compilers.md` is its register.  What actually holds
+ * `constellation`'s base and stride is `t_v90modchain`'s byte-for-byte
+ * comparison of the whole 0x704 against the blob's: the tail-fill writes
+ * every row out to index 127 on every call, so a base or a stride that is
+ * wrong by one element differs somewhere in 1,536 bytes and is reported.
+ */
 
 /*
  * ===========================================================================
@@ -70,17 +126,17 @@ V90Mapper::V90Mapper(V90Parameters *p)
 {
 	unsigned int i;
 
-	cleared_6fc = 0;
+	signEncoder.prev_ = 0;
 	buf = sysdep_malloc(0x50);
 	cleared_01c = 0;
-	cleared_6f8 = 0;
-	cleared_014 = 0;
-	cleared_010 = 0;
-	cleared_00c = 0;
-	cleared_008 = 0;
-	cleared_004 = 0;
+	uint_6f8 = 0;
+	signBitGroupSize = 0;
+	signBitGroups = 0;
+	signBitsPerFrame = 0;
+	word_08 = 0;
+	bitsPerFrame = 0;
 	for (i = 0; i <= 5; i++)
-		cleared_658[i] = 0;
+		constellationSize[i] = 0;
 	params = p;
 }
 
@@ -98,4 +154,185 @@ V90Mapper::~V90Mapper()
 {
 	if (buf)
 		sysdep_free(buf);
+}
+
+/*
+ * ===========================================================================
+ * The part both resets share: build the six constellations out of the
+ * companded code tables, then hand the six sizes and `word_08` to the
+ * embedded ModulusEncoder and clear the sign encoder.
+ *
+ * It is written out TWICE below rather than factored into a helper, because
+ * the blob has no helper: both functions carry their own copy of these loops
+ * and of the seven stores, and a static helper here would put bytes against
+ * neither side of `compare.py`'s per-function count (finding 605).
+ * ===========================================================================
+ */
+
+/*
+ * ===========================================================================
+ * V90Mapper::resetNoSpectral -- .text+0x30280, 404 bytes.
+ *
+ * `this` at 0x30(%esp), `mp` at 0x34, `pcm` at 0x38; plain cdecl as
+ * everywhere here (finding 215).
+ *
+ * THE TWO CODE CONVERSIONS ARE G.711 WRITTEN OUT LONGHAND, and both are in
+ * the object as arithmetic rather than as a table:
+ *
+ *     30300:  24 7f     and  $0x7f,%al     mu-law: complement the low seven
+ *     30302:  f6 d0     not  %al
+ *     303f0:  24 7f     and  $0x7f,%al     A-law:  toggle them against 0xd5
+ *     303f2:  34 d5     xor  $0xd5,%al
+ *
+ * The `not` is on the BYTE and the result is then zero-extended
+ * (`movzbl %al,%ecx`), so the argument that reaches `ulaw2linear` is
+ * `(unsigned char)~(b & 0x7f)` and not `~(b & 0x7f)`, which would be
+ * 0xffffff80 or above.  `V90Phase3Demodulator.h` records the same pair the
+ * other way round, as `(ucode & 0x7f) ^ 0xff`, which is the same eight bits.
+ *
+ * THE ENTRY COUNT IS RE-READ FROM THE OBJECT ON EVERY ITERATION -- the loop
+ * guard is `mov 0x658(%ebp,%edi,4),%eax ; cmp %esi,%eax ; ja` at 0x30314,
+ * INSIDE the loop and after the call -- because `ulaw2linear` is an external
+ * function that may alias `this`.  So the member is read in the condition and
+ * not hoisted into a local; the demapper's `reset` caches its copy and its
+ * `resetNoSpectral` does not, and here neither does.
+ *
+ * THE TAIL-FILL RUNS TO 127 UNCONDITIONALLY, so a short constellation leaves
+ * the rest of its row ZEROED rather than stale.  That is invisible to a test
+ * over zeroed storage and is one of the things `t_v90modchain.cpp` seeds
+ * against.
+ * ===========================================================================
+ */
+void
+V90Mapper::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
+{
+	unsigned int i, j;
+
+	bitsPerFrame = mp->word_0;
+	word_08 = bitsPerFrame - signBitsPerFrame;
+
+	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
+		constellationSize[i] = mp->constellationSize[i];
+
+		for (j = 0; j < constellationSize[i]; j++) {
+			unsigned char b = mp->constellation[i][j];
+
+			if (pcm)
+				constellation[i][j] = (short)alaw2linear(
+				    (unsigned char)((b & 0x7f) ^ 0xd5));
+			else
+				constellation[i][j] = (short)ulaw2linear(
+				    (unsigned char)~(b & 0x7f));
+		}
+
+		for (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)
+			constellation[i][j] = 0;
+	}
+
+	modulusEncoder.field_00 = constellationSize[0];
+	modulusEncoder.field_04 = constellationSize[1];
+	modulusEncoder.field_08 = constellationSize[2];
+	modulusEncoder.field_0c = constellationSize[3];
+	modulusEncoder.field_10 = constellationSize[4];
+	modulusEncoder.field_14 = constellationSize[5];
+	modulusEncoder.field_18 = word_08;
+	signEncoder.prev_ = 0;
+
+	spectralShaper.resetSSFilter(mp->shaperA1, mp->shaperA2,
+				     mp->shaperB1, mp->shaperB2);
+
+	word_700 = 0;
+}
+
+/*
+ * ===========================================================================
+ * V90Mapper::reset -- .text+0x30070, 517 bytes.
+ *
+ * `this` at 0x40(%esp), `mp` at 0x44, `pcm` at 0x48.
+ *
+ * `signBitGroupSize` IS STORED ZERO WHEN THERE IS NO SHAPER, which is where
+ * this function and `V90Demapper::reset` part company.  The demapper wraps
+ * only the division in its `if` and leaves the field stale; here the zero arm
+ * is an explicit `movl $0x0,0x14(%ebp)` at 0x30206, jumping back into the
+ * common path.  Both are reproduced as the object has them.
+ *
+ * THE DIVISION IS UNSIGNED -- `f7 f1  div %ecx` at 0x3009c and not `idiv`,
+ * with no signed fixup anywhere near it -- so the numerator is `6u` and not
+ * `6`.  `V90MappingParams::shaperSR` is declared `int` and stays so for the
+ * reason that header gives at length; what forces the instruction is
+ * `V90MAPPER_FRAME`'s type on the left.  This is a codegen difference the
+ * differential tier cannot see: the two spellings agree over every divisor a
+ * caller can produce and separate only for a negative one.
+ *
+ * `signBitsPerFrame` IS COMPUTED BEFORE `word_08` READS IT.  The object does
+ * `mov $0x6,%edx ; sub %ecx,%edx ; mov %edx,0xc(%ebp) ; sub %edx,%ebx ; mov
+ * %ebx,0x8(%ebp)` at 0x300a1..0x300b1 -- one value, stored and then used --
+ * which is what makes `resetNoSpectral`'s bare read of the same field the
+ * same statement with the definition removed.
+ *
+ * THE SHAPER'S ARGUMENT ORDER IS `(shaperId, shaperSR, ...)` AND THE OBJECT
+ * SAYS SO, which is worth writing down because the two are adjacent words of
+ * the same block and swapping them is silent whenever they are equal:
+ *
+ *     30244:  mov 0x620(%edx),%edi ; mov %edi,0x8(%esp)   <- 2nd param, sr
+ *     3024e:  mov 0x624(%edx),%esi ; mov %esi,0x4(%esp)   <- 1st param, id
+ *
+ * and `V90SpectralShaper::reset(unsigned id, unsigned sr, ...)` is the
+ * mangling's `Ejjffff` with the shaper's own body agreeing.
+ * ===========================================================================
+ */
+void
+V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
+{
+	unsigned int i, j;
+
+	bitsPerFrame = mp->word_0;
+	signBitGroups = mp->shaperSR;
+
+	if (mp->shaperSR != 0)
+		signBitGroupSize = V90MAPPER_FRAME / mp->shaperSR;
+	else
+		signBitGroupSize = 0;
+
+	signBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;
+	word_08 = bitsPerFrame - signBitsPerFrame;
+
+	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
+		constellationSize[i] = mp->constellationSize[i];
+
+		for (j = 0; j < constellationSize[i]; j++) {
+			unsigned char b = mp->constellation[i][j];
+
+			if (pcm)
+				constellation[i][j] = (short)alaw2linear(
+				    (unsigned char)((b & 0x7f) ^ 0xd5));
+			else
+				constellation[i][j] = (short)ulaw2linear(
+				    (unsigned char)~(b & 0x7f));
+		}
+
+		for (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)
+			constellation[i][j] = 0;
+	}
+
+	if (signBitGroups != 0) {
+		spectralShaper.reset(mp->shaperId, (unsigned int)mp->shaperSR,
+				     mp->shaperA1, mp->shaperA2,
+				     mp->shaperB1, mp->shaperB2);
+		uint_6f8 = mp->shaperId;
+	} else {
+		uint_6f8 = 0;
+	}
+
+	modulusEncoder.field_00 = constellationSize[0];
+	modulusEncoder.field_04 = constellationSize[1];
+	modulusEncoder.field_08 = constellationSize[2];
+	modulusEncoder.field_0c = constellationSize[3];
+	modulusEncoder.field_10 = constellationSize[4];
+	modulusEncoder.field_14 = constellationSize[5];
+	modulusEncoder.field_18 = word_08;
+	signEncoder.prev_ = 0;
+
+	word_700 = 0;
+	cleared_01c = 0;
 }

@@ -76589,3 +76589,220 @@ records why file position cannot do it. So "0-10s" is SIP setup, ringing and
 early training mixed together, and the training window proper is probably the
 10-30s buckets at ~0.086/s. A CONNECT-anchored split would sharpen this and
 needs the anchor work. 76 series, one bench, one ATA, one period of time.
+
+### 7100. `V90Mapper` IS `V90Demapper` SEEN FROM THE TRANSMIT SIDE, AND THAT IS WHERE FIVE OF ITS FIELD NAMES COME FROM
+
+`V90Mapper::reset` (`.text+0x30070`, 517 bytes) and `V90Mapper::resetNoSpectral`
+(`.text+0x30280`, 404 bytes) are written, and reading them beside
+`V90Demapper::reset` and `V90Demapper::resetNoSpectral` -- which this tree
+already had, tested -- settles five members that were `cleared_NNN`, named for
+the constructor because nothing else was written when the header was made.
+
+The two classes compute the same five quantities, out of the same
+`V90MappingParams`, by the same arithmetic, and store them at the same five
+offsets:
+
+    +0x04   bitsPerFrame       = mp->word_0
+    +0x08   word_08            = bitsPerFrame - signBitsPerFrame
+    +0x0c   signBitsPerFrame   = 6 - mp->shaperSR
+    +0x10   signBitGroups      = mp->shaperSR
+    +0x14   signBitGroupSize   = 6 / mp->shaperSR
+
+so the names are this tree's own from the other class rather than five fresh
+inventions, which is the difference between usage inference and a name already
+carried by a written, tested member. Two of the five are corroborated a second
+time by what `V90Mapper::process` does with them: it branches on
+`signBitGroups` being zero exactly as the demapper does, and it strides the
+frame it hands `V90SpectralShaper::process` by `signBitGroupSize` -- which is
+that class's own `blockLength`, `6 / shaperSR`, arrived at independently.
+
+`word_08` KEEPS THE DEMAPPER'S DELIBERATELY UNNAMED SPELLING. That header
+declined to call it the modulus bit count because doing so assumes what the
+`ModulusCoder` pair do with their seventh word, and both classes' seven members
+are `field_NN`. The same reasoning binds here and the same name is used.
+
+**THE ONE PLACE THE TWO DISAGREE IS WORTH RECORDING, because a shared name
+hides it.** With `shaperSR` zero the demapper leaves `signBitGroupSize` STALE
+-- its `if (shaperSR != 0)` wraps only the division -- and the mapper stores
+zero, an explicit `movl $0x0,0x14(%ebp)` at 0x30206 that jumps back into the
+common path. Both are reproduced as the object has them, and
+`test/mutations/v90mapper.json` carries the demapper's version of the mapper's
+arm as a mutation so the difference is defended rather than merely noticed.
+
+The seven-word fill of the embedded `ModulusEncoder` is the same correspondence
+again: both mapper resets store the six constellation sizes into +0x670..+0x684
+and `word_08` into +0x688, which is what `V90Demapper`'s two resets do to their
+embedded `ModulusDecoder`. There is no call in either -- the blob has no
+`ModulusEncoder::reset` symbol at all, though `V92ModulusEncoder::reset` exists
+-- so the stores are the author's own and not an inlined member.
+
+### 7101. `docs/v90demodprogress.md` CALLS `V90Mapper::resetNoSpectral` "FULLY DECODED" AND ITS DECODE STOPS 150 BYTES EARLY
+
+The batch plan's decode of `resetNoSpectral` ends at the tail-fill to index
+127. The function does not: 0x30346..0x303de is another 152 bytes, and every
+one of the stores in it is also in `reset`. In blob order they are the
+seven-word `ModulusEncoder` fill at +0x670..+0x688, `movb $0x0,0x6fc`, the call
+to `V90SpectralShaper::resetSSFilter`, and `mov %edi,0x700(%ebp)` with `%edi`
+zero.
+
+That misplaces the boundary between the two functions, which is the thing the
+document was for. Its closing paragraph attributes to `reset` alone a list of
+stores -- `+0x670`, `+0x68c`, `+0x6fc` and `+0x700` -- that BOTH resets make;
+what is `reset`'s alone is `+0x0c`, `+0x10`, `+0x14`, `+0x1c` and `+0x6f8`,
+plus `V90SpectralShaper::reset` in place of `resetSSFilter`. It also understates
+`+0x670` as one word where it is the whole 0x1c-byte embedded `ModulusEncoder`.
+
+The corrected split is now in `docs/v90demodprogress.md` and in
+`src/pump/v90/V90Mapper.cpp`'s file comment. Nothing in the document's
+arithmetic was wrong -- the mu-law and A-law conversions, the `pcm` nonzero
+test, the `128 * k + i` addressing and the unconditional tail-fill all
+reproduce exactly -- so this is a finding about where the reading stopped, not
+about what it said. Findings 7102 and 7103 are the two object-map claims the
+same document flagged for re-derivation, and one of them did not survive it.
+
+### 7102. `V90Mapper`+0x700 IS A FOUR-BYTE MEMBER WRITTEN BY BOTH RESETS, READ BY NOTHING, AND NOT WRITTEN BY THE CONSTRUCTOR
+
+`include/dsplib/V90Mapper.h` used to hide it inside `pad_6fd[7]` and record
+that the class ended "with six bytes of tail padding and one member of unknown
+width at 0x700 -- either reading is consistent". It is now settled, and the
+sentence is retracted.
+
+Both resets store the constant zero into it with a 32-bit `mov`, at 0x301aa and
+0x303d1, which forces four bytes and nothing else. A sweep of every `0x700(%`
+displacement in `.text` -- the right denominator, because any access to a
+member of a class laid out at that offset has to appear as one -- returns
+exactly five hits: those two stores, and three `movswl 0x700(%ebx,%esi,2)`
+inside `V90AutoDigitalImpDetector::studyUrefHandler`, a different class
+entirely. So "nothing reads it" is a measurement over the whole object rather
+than an impression, which is what finding 4342 requires of that claim.
+
+**THE CONSTRUCTOR DOES NOT WRITE IT.** Eleven stores, an allocation and a
+six-word loop, and none of them reaches +0x700; only the resets do. That is
+unusual enough to say out loud, and it is also what makes the store visible to
+a test at all -- `t_v90modchain` seeds its storage and never zeroes it
+(findings 223 and 224), so the field arrives at `reset` holding LFSR bytes and
+the zero it leaves behind is a difference the comparison can see. Over zeroed
+storage this member would be indistinguishable from padding, which is exactly
+how it came to be inside `pad_6fd`.
+
+It is named `word_700`, which is CLAUDE.md's `type_NNNN` state: modelled,
+unnamed. A write-only slot has no meaning to take a name from, and
+`V90MappingParams::word_61c` -- the constant 1, stored by
+`V90ConstellationDesigner::process` and read by nothing -- is the same case and
+the precedent for the spelling. The class is therefore 0x704 with no tail
+padding at all rather than with six bytes of it.
+
+### 7103. `V90Mapper`+0x020..+0x055 IS NOT UNMODELLED SPACE: `process` TILES ALL 54 BYTES AS FOUR SIX-ENTRY ARRAYS
+
+`docs/v90demodprogress.md` records these 54 bytes as "genuinely unmodelled"
+once `constellation` is placed at +0x056, and asks that they be left padded
+rather than guessed at. The first half does not survive re-derivation.
+`V90Mapper::process` addresses four arrays in them, all with an index counted
+0..5 (`cmp $0x5,%edx; jbe` and `cmp $0x5,%esi; jbe`), and the four bases meet
+exactly:
+
+    +0x20   mov 0x20(%ebx,%edx,4),%ecx    6 * 4 = 24  -> +0x38
+    +0x38   mov %si,0x38(%ebx,%edx,2)     6 * 2 = 12  -> +0x44
+    +0x44   mov %al,0x44(%esi,%ebx,1)     6 * 1 =  6  -> +0x4a
+    +0x4a   mov %dx,0x4a(%ebx,%esi,2)     6 * 2 = 12  -> +0x56
+
+and +0x56 is where `constellation` starts. Four independent bases and three
+exact meetings, which is the standard `include/dsplib/V90Demapper.h` set for
+its own four parallel arrays. One entry per sample of a six-sample V.90 frame
+in each, and `process`'s use bounds each one further: +0x20 is a per-position
+index into `constellation` (`edi = (edx << 7) + [0x20 + 4*edx]`, then
+`movzwl 0x56(%ebx,%edi,2)`), +0x38 the levels it selected, +0x44 the bytes
+`SerialDifferentialEncoder<unsigned char>::process` returned, and +0x4a the
+frame after the signs are applied -- which is what the tail copies out to the
+caller's buffer.
+
+**THE HEADER STILL SAYS `pad_020[0x36]`, DELIBERATELY.** Neither reset touches
+any of the four, so nothing in this batch can put a differential test behind
+them, and four field names no test can fail on is finding 3120's hazard rather
+than progress. `process` is the member that reads and writes them and is the
+batch that should model them; this finding exists so the tiling is not
+re-derived from scratch when it does.
+
+### 7104. `V90Mapper`+0x6fc IS A `SerialDifferentialEncoder<unsigned char>`, AND THE EVIDENCE IS A MANGLED `this`
+
+It was `unsigned char cleared_6fc`, named for the constructor's `movb
+$0x0,0x6fc(%ebx)` because that was the only instruction that touched it. Both
+resets make the same store, and `V90Mapper::process` settles what it is:
+
+    304c1:  8d bb fc 06 00 00     lea    0x6fc(%ebx),%edi
+    30577:  89 3c 24              mov    %edi,(%esp)
+    3057e:  e8 ..                 call   _ZN25SerialDifferentialEncoderIhE7processEh
+
+-- the field's ADDRESS handed over as the first stack argument, which for a
+cdecl member is the `this`. A mangled parameter type is CLAUDE.md's
+second-strongest kind of evidence and this is one, so the member is that class
+and not a byte that happens to be zeroed.
+
+It is the transmit twin of `V90Demapper`'s
+`SerialDifferentialDecoder<unsigned char> signDecoder` at +0x664, down to the
+detail that `include/dsplib/DiffCoder.h` predicted before either was read: the
+serial coders emit no constructor of their own, so an enclosing class that
+value-initialises one gets exactly one inlined `movb $0x0` where the member
+sits. Two classes, two such stores, two `this` arguments naming the two
+templates. `process`'s use is the same correspondence a third time -- it is the
+path taken when `signBitGroups` is zero, which is precisely when the demapper
+uses its decoder.
+
+The rename cost `test/mutations/v90mapper.json` five of its eleven anchors,
+which is finding 347's failure mode and is why the anchor check in `make
+phase`'s `refs` target exists: an unusable mutation does not fail a run. The
+gate caught all five, and 7002 is the general case of the same lesson.
+
+### 7105. A SEEDED FIXTURE IS NOT ENOUGH FOR A `reset`: THE CONSTRUCTOR RUNS AFTER THE SEED AND HIDES FIVE OF THE STORES
+
+`t_v90modchain.cpp` does everything findings 223 and 224 ask for -- both sides
+filled with the same varied pseudorandom bytes before every trial, never
+zeroed, guard bytes past the object, four seeding modes so a store of a
+constant is not invisible against a seed that already holds it. Over
+`V90Mapper::reset` and `::resetNoSpectral` that was still not sufficient, and
+the mutation suite is what said so rather than any amount of reading.
+
+**The seed cannot reach these two functions' inputs, because the CONSTRUCTOR
+runs between.** A reset can only be driven over a constructed object -- this
+class owns three allocations and a destructor that dereferences them, so
+`t_v90cp`'s trick of handing a destructor seeded garbage is not available
+(the fixture's own header comment says as much for a different reason) -- and
+`V90Mapper::V90Mapper` zeroes nine of the words the resets write. Every one of
+those fields therefore arrives at the reset holding zero, whatever the seed
+put there, and a reset that fails to store its zero leaves exactly the value
+the store would have left.
+
+Five mutations, all of the form "this store is dropped", were NOT CAUGHT:
+
+    resetNoSpectral: the sign encoder is left as it was found
+    reset: signBitGroupSize is left stale when there is no shaper
+    reset: +0x6f8 is left as it was found when there is no shaper
+    reset: +0x1c is left as it was found
+    reset: the sign encoder is left as it was found
+
+and the second of those is not a hypothetical: leaving `signBitGroupSize`
+stale is precisely what `V90Demapper::reset` does with the same field, so the
+untestable claim was the one real difference between the two classes
+(finding 7100). A test that cannot fail on it is a test that would have let
+the demapper's version of the mapper through.
+
+**THE FIX IS A SENTINEL TABLE, NOT MORE SEEDING.** The fixture now writes a
+value the function could not have computed over each of the six affected
+fields AFTER construction and before the call, on both sides: 0x1234 at
++0x0c, 0x5151 at +0x10, 0x6262 at +0x14, 0x7373 at +0x1c, 0x8484 at +0x6f8
+and 0xa5 at +0x6fc. A field the reset writes comes back zero and the dropped
+store fails; a field it LEAVES ALONE comes back holding the sentinel, which is
+asserted on our side directly and is a stronger claim than the two sides
+agreeing on it -- that is how `resetNoSpectral` reading `+0x0c` and writing
+neither it nor +0x10, +0x14, +0x1c or +0x6f8 is pinned. All 33 mutations are
+caught with the table in place, against 28 of 33 without it.
+
+**THE GENERAL RULE, and it is not specific to this class.** Wherever a
+differential fixture drives a `reset` rather than a constructor, the seed is
+masked by the constructor over every field the constructor initialises, and
+that is most of them. The seed still does the work it was put there for --
+`constellation`'s 1,536 bytes, `word_700`, and everything above the
+constructor's reach -- but the intersection of "the constructor writes it" and
+"the reset writes the same value" is a blind spot that no amount of varying
+the seed can open. Poke it, or accept that those stores are untested and say
+so. Every `::reset` fixture in this tree is worth re-reading against that.

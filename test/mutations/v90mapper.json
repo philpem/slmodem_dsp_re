@@ -5,7 +5,21 @@
    "six-word loop; its destructor is one guarded free.  Every mutation here",
    "is meant to be caught by t_v90modchain's whole-object comparison over",
    "never-zeroed storage, by its absolute allocation accounting, or by the",
-   "free/free_null split that makes the null guard testable."
+   "free/free_null split that makes the null guard testable.",
+   "",
+   "THE FIELD NAMES CHANGED WHEN THE TWO RESETS WERE WRITTEN.  cleared_004,",
+   "cleared_00c, cleared_010, cleared_014, cleared_658, cleared_6f8 and",
+   "cleared_6fc are now bitsPerFrame, signBitsPerFrame, signBitGroups,",
+   "signBitGroupSize, constellationSize, uint_6f8 and signEncoder.prev_;",
+   "the anchors below were rewritten with them.  A find string that no",
+   "longer matches is an UNUSABLE mutation and does NOT fail a run",
+   "(finding 347), so `make phase`'s anchor check is what caught this.",
+   "",
+   "ANCHORING IN THE RESETS NEEDS EXTRA CONTEXT.  The two functions share a",
+   "long identical run -- the six-constellation fill and the seven-word",
+   "modulusEncoder fill are written out twice -- so a find string taken from",
+   "inside it matches twice and is rejected as NOT UNIQUE.  Each anchor",
+   "below therefore reaches back to the nearest line that differs."
   ]
  },
  {
@@ -14,24 +28,24 @@
   "replace": "\tbuf = sysdep_malloc(0x40);"
  },
  {
-  "label": "ctor: the flag byte at +0x6fc is set rather than cleared",
-  "find": "\tcleared_6fc = 0;\n\tbuf = sysdep_malloc(0x50);",
-  "replace": "\tcleared_6fc = 1;\n\tbuf = sysdep_malloc(0x50);"
+  "label": "ctor: the sign encoder is set rather than cleared",
+  "find": "\tsignEncoder.prev_ = 0;\n\tbuf = sysdep_malloc(0x50);",
+  "replace": "\tsignEncoder.prev_ = 1;\n\tbuf = sysdep_malloc(0x50);"
  },
  {
   "label": "ctor: +0x1c is left as it was found",
-  "find": "\tcleared_01c = 0;\n\tcleared_6f8 = 0;",
-  "replace": "\tcleared_6f8 = 0;"
+  "find": "\tcleared_01c = 0;\n\tuint_6f8 = 0;",
+  "replace": "\tuint_6f8 = 0;"
  },
  {
   "label": "ctor: +0x6f8 is left as it was found",
-  "find": "\tcleared_6f8 = 0;\n\tcleared_014 = 0;",
-  "replace": "\tcleared_014 = 0;"
+  "find": "\tuint_6f8 = 0;\n\tsignBitGroupSize = 0;",
+  "replace": "\tsignBitGroupSize = 0;"
  },
  {
   "label": "ctor: +0x04 is left as it was found",
-  "find": "\tcleared_008 = 0;\n\tcleared_004 = 0;",
-  "replace": "\tcleared_008 = 0;"
+  "find": "\tword_08 = 0;\n\tbitsPerFrame = 0;",
+  "replace": "\tword_08 = 0;"
  },
  {
   "label": "ctor: the loop clears five words, not six",
@@ -41,15 +55,15 @@
  {
   "_": [
    "OVER-RUNNING THE LOOP CANNOT BE TESTED.  `for (i = 0; i <= 6; i++)` was",
-   "tried and is NOT CAUGHT: cleared_658[6] is the first word of the",
+   "tried and is NOT CAUGHT: constellationSize[6] is the first word of the",
    "ModulusEncoder embedded at +0x670, whose own constructor has already",
    "stored zero over it by the time the body runs.  The extra iteration",
    "writes the value that is there.  Under-running it is testable and is",
    "the mutation above; starting late is testable and is the one below."
   ],
   "label": "ctor: the loop skips the first word",
-  "find": "\tfor (i = 0; i <= 5; i++)\n\t\tcleared_658[i] = 0;",
-  "replace": "\tfor (i = 1; i <= 5; i++)\n\t\tcleared_658[i] = 0;"
+  "find": "\tfor (i = 0; i <= 5; i++)\n\t\tconstellationSize[i] = 0;",
+  "replace": "\tfor (i = 1; i <= 5; i++)\n\t\tconstellationSize[i] = 0;"
  },
  {
   "label": "ctor: params is not stored",
@@ -70,5 +84,138 @@
   "label": "dtor: the buffer is nulled after the free",
   "find": "\tif (buf)\n\t\tsysdep_free(buf);",
   "replace": "\tif (buf) {\n\t\tsysdep_free(buf);\n\t\tbuf = 0;\n\t}"
+ },
+
+ {
+  "_": [
+   "resetNoSpectral.  The first anchor is the pair of lines that opens it,",
+   "which is what distinguishes it from `reset`."
+  ],
+  "label": "resetNoSpectral: +0x0c is written rather than read",
+  "find": "\tbitsPerFrame = mp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tbitsPerFrame = mp->word_0;\n\tsignBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;\n\tword_08 = bitsPerFrame - signBitsPerFrame;"
+ },
+ {
+  "label": "resetNoSpectral: word_08 is bitsPerFrame, with no sign bits taken off",
+  "find": "\tbitsPerFrame = mp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tbitsPerFrame = mp->word_0;\n\tword_08 = bitsPerFrame;"
+ },
+ {
+  "label": "resetNoSpectral: the tail-fill is skipped, so a short row is left stale",
+  "find": "\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tmodulusEncoder.field_00 = constellationSize[0];\n\tmodulusEncoder.field_04 = constellationSize[1];\n\tmodulusEncoder.field_08 = constellationSize[2];\n\tmodulusEncoder.field_0c = constellationSize[3];\n\tmodulusEncoder.field_10 = constellationSize[4];\n\tmodulusEncoder.field_14 = constellationSize[5];\n\tmodulusEncoder.field_18 = word_08;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter",
+  "replace": "\t}\n\n\tmodulusEncoder.field_00 = constellationSize[0];\n\tmodulusEncoder.field_04 = constellationSize[1];\n\tmodulusEncoder.field_08 = constellationSize[2];\n\tmodulusEncoder.field_0c = constellationSize[3];\n\tmodulusEncoder.field_10 = constellationSize[4];\n\tmodulusEncoder.field_14 = constellationSize[5];\n\tmodulusEncoder.field_18 = word_08;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter"
+ },
+ {
+  "label": "resetNoSpectral: the modulus encoder gets a size rather than word_08",
+  "find": "\tmodulusEncoder.field_18 = word_08;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter",
+  "replace": "\tmodulusEncoder.field_18 = constellationSize[5];\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter"
+ },
+ {
+  "label": "resetNoSpectral: the sign encoder is left as it was found",
+  "find": "\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter",
+  "replace": "\n\tspectralShaper.resetSSFilter"
+ },
+ {
+  "label": "resetNoSpectral: +0x700 is left as it was found",
+  "find": "\t\t\t\t     mp->shaperB1, mp->shaperB2);\n\n\tword_700 = 0;\n}",
+  "replace": "\t\t\t\t     mp->shaperB1, mp->shaperB2);\n}"
+ },
+ {
+  "label": "resetNoSpectral: the shaper's filter coefficients are transposed",
+  "find": "\tspectralShaper.resetSSFilter(mp->shaperA1, mp->shaperA2,\n\t\t\t\t     mp->shaperB1, mp->shaperB2);",
+  "replace": "\tspectralShaper.resetSSFilter(mp->shaperB1, mp->shaperB2,\n\t\t\t\t     mp->shaperA1, mp->shaperA2);"
+ },
+
+ {
+  "_": [
+   "reset.  Its own opening lines are unique to it, and so is everything",
+   "from the spectral-shaper branch to the end."
+  ],
+  "label": "reset: signBitGroupSize is left stale when there is no shaper",
+  "find": "\tif (mp->shaperSR != 0)\n\t\tsignBitGroupSize = V90MAPPER_FRAME / mp->shaperSR;\n\telse\n\t\tsignBitGroupSize = 0;",
+  "replace": "\tif (mp->shaperSR != 0)\n\t\tsignBitGroupSize = V90MAPPER_FRAME / mp->shaperSR;"
+ },
+ {
+  "label": "reset: signBitsPerFrame is shaperSR itself, not 6 minus it",
+  "find": "\tsignBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;",
+  "replace": "\tsignBitsPerFrame = (unsigned int)mp->shaperSR;"
+ },
+ {
+  "label": "reset: signBitGroups and signBitGroupSize are swapped",
+  "find": "\tsignBitGroups = mp->shaperSR;",
+  "replace": "\tsignBitGroups = V90MAPPER_FRAME / (mp->shaperSR ? mp->shaperSR : 1);"
+ },
+ {
+  "label": "reset: the shaper is given (shaperSR, shaperId), not (shaperId, shaperSR)",
+  "find": "\t\tspectralShaper.reset(mp->shaperId, (unsigned int)mp->shaperSR,",
+  "replace": "\t\tspectralShaper.reset((unsigned int)mp->shaperSR, mp->shaperId,"
+ },
+ {
+  "label": "reset: +0x6f8 gets shaperSR rather than shaperId",
+  "find": "\t\tuint_6f8 = mp->shaperId;\n\t} else {",
+  "replace": "\t\tuint_6f8 = (unsigned int)mp->shaperSR;\n\t} else {"
+ },
+ {
+  "label": "reset: +0x6f8 is left as it was found when there is no shaper",
+  "find": "\t} else {\n\t\tuint_6f8 = 0;\n\t}",
+  "replace": "\t}"
+ },
+ {
+  "label": "reset: the shaper runs whatever signBitGroups says",
+  "find": "\tif (signBitGroups != 0) {\n\t\tspectralShaper.reset(",
+  "replace": "\tif (1) {\n\t\tspectralShaper.reset("
+ },
+ {
+  "label": "reset: +0x1c is left as it was found",
+  "find": "\tword_700 = 0;\n\tcleared_01c = 0;\n}",
+  "replace": "\tword_700 = 0;\n}"
+ },
+ {
+  "label": "reset: +0x700 is left as it was found",
+  "find": "\tword_700 = 0;\n\tcleared_01c = 0;\n}",
+  "replace": "\tcleared_01c = 0;\n}"
+ },
+ {
+  "label": "reset: the sign encoder is left as it was found",
+  "find": "\tsignEncoder.prev_ = 0;\n\n\tword_700 = 0;",
+  "replace": "\n\tword_700 = 0;"
+ },
+ {
+  "_": [
+   "The law arms, mutated in `reset`'s copy: the anchor reaches forward to",
+   "the spectral-shaper branch, which only `reset` has.  Mutating the pair",
+   "in resetNoSpectral's copy would be the same three verdicts over the",
+   "same fill loop, so it is done once.",
+   "",
+   "ONE CONVERSION CANNOT BE MUTATED HERE.  Dropping the (unsigned char)",
+   "cast from `~(b & 0x7f)` is NOT caught, and that is a property of the",
+   "callee rather than a gap in the test: `ulaw2linear` takes an",
+   "`unsigned char`, so the int the mutation produces is truncated back to",
+   "the same eight bits at the call.  The cast is in the source because the",
+   "object's `not %al` is on the byte, not because anything can fail on it."
+  ],
+  "label": "reset: the two companding arms are swapped",
+  "find": "\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {",
+  "replace": "\t\t\tif (!pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {"
+ },
+ {
+  "label": "reset: A-law toggles 0x55, not 0xd5",
+  "find": "\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {",
+  "replace": "\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0x55));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {"
+ },
+ {
+  "label": "reset: the code byte keeps its top bit",
+  "find": "\t\t\tunsigned char b = mp->constellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {",
+  "replace": "\t\t\tunsigned char b = mp->constellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)(b ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~b);\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {"
+ },
+ {
+  "label": "reset: the codes come from the codec table, not the constellation table",
+  "find": "\t\t\tunsigned char b = mp->constellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {",
+  "replace": "\t\t\tunsigned char b = mp->codecConstellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {"
+ },
+ {
+  "label": "reset: the sizes are copied from the wrong entry",
+  "find": "\t\tconstellationSize[i] = mp->constellationSize[i];\n\n\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\tunsigned char b = mp->constellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {",
+  "replace": "\t\tconstellationSize[i] = mp->constellationSize[0];\n\n\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\tunsigned char b = mp->constellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {"
  }
 ]
