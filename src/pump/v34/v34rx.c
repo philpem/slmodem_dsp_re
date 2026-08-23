@@ -1840,7 +1840,15 @@ setTimingStateParameters(void *objp)
 	if (report)
 		VPcmV34LogTimingOffset(obj, (short)(rx->f1d0 * 10));
 
-	/* State 2 alone also sets the dwell from the frame length. */
+	/*
+	 * State 2 alone also re-arms the timing-offset REPORTING interval,
+	 * and it does so from the receive baud rate rather than from the
+	 * frame length: the instruction is a shift of `baud_rate` by three.
+	 * It is not the dwell -- that is timing_state_dwell_limit at +0x232,
+	 * and this field is the period the slip-to-ppm conversion above runs
+	 * at.  An earlier spelling of this comment said "the dwell from the
+	 * frame length" and was wrong on both halves.
+	 */
 	if ((unsigned short)rx->timing_state == 2)
 		rx->timing_report_interval_symbols = (short)(obj->baud_rate >> 3);
 }

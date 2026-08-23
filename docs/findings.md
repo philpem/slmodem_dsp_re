@@ -76188,3 +76188,77 @@ by V.21 HDLC messages such as CL/MS/ACK/CM/JM—before calling a negotiation
 successful.  Finally, keep the ordinary V.8 result, DTE result codes, and
 V.8bis frame count as separate outcomes; a normal V.8 `CONNECT` is only a
 transport/control result, not a V.8bis result.
+
+======================================================================
+
+### 7002. A rename is free for the compiler and not for the apparatus
+
+`CLAUDE.md` says a name "is a compile-time substitution and **cannot** move code
+generation, so this is free and `compare.py` must not budge". That is true and
+it is only half the sentence. `refactor/v34-anonymous-fields` renames 62 V.34
+fields, every one of them justified, and the rename cost four differential
+tests and thirty-three mutation anchors. Neither cost is visible in `src/`.
+
+#### Thirty-three anchors, and thirty-two of them silent
+
+Measured on the branch against `master`, which has none, so all 33 are the
+rename's:
+
+| suite | anchors detached |
+|---|--:|
+| `v34hstx1` | 13 |
+| `v34pcmif` | 7 |
+| `v34rx` | 6 |
+| `v34vdiag` | 3 |
+| `v34retrain` | 2 |
+| `vpcmcreate` | 2 |
+
+`refcheck`'s live-mutant check fired on exactly ONE of them -- "21: the
+echo-adapt start leaves f354c alone" -- because it tests `find` gone AND
+`replace` present, which is only true where the mutation happens to describe
+deleting the very line the rename touched. The other 32 have a `find` that
+matches nothing, so `mutate.py` cannot locate the site at all. **A mutation
+that cannot be applied is indistinguishable from one that is always killed**,
+which is finding 134's dead detector with a whole suite behind it: six suites'
+worth of echo, power, retrain and diagnostic coverage had gone inert with no
+output changing anywhere.
+
+`refcheck` now reports UNANCHORED for that case, fails on it, and prints the
+anchor count -- 7,700 today -- so a run over zero anchors cannot read as a clean
+one. Shown to fire by breaking one anchor and watching it appear and the exit
+go to 1, then restoring.
+
+#### Four compile failures, from offsets that name fields in other structs
+
+The rename also replaced identifiers in `test/unit/` by name, and four of the
+names belonged to other types:
+
+    t_v34hshak.c     c->f262        struct hsi_case, a case description
+    t_v34hsmst44.c   rates[k].f1b0, .f1ae, .f1ac, carriers[k].f1ba
+    t_v8dp.c         da->v8->f21c   the V.8 object
+    t_v8hs.c         obj_a.f21c     the V.8 object
+
+`error_window_symbols` is the sharp one. Receiver `+0x21c` really is the
+1024-symbol counter; V.8 object `+0x21c` is an unrelated field that wears the
+same offset-derived name, and renaming by identifier cannot tell them apart.
+The branch's own review document warned about this for `f25e` and `f260` --
+which name a receiver field AND an object field -- and the sweep hit `f21c`
+anyway. **Naming the hazard is not the same as being protected from it.**
+
+#### What to do instead
+
+- **Rewrite anchors by ACCESSOR, and verify.** `rx->` takes the receiver map
+  and everything else the object map; accept a rewritten anchor only if it then
+  matches the source. That repaired 32 of 33 mechanically with no judgement
+  calls, 8 of them needing re-alignment because longer names moved the tab stops
+  before the trailing address comments, and left exactly one -- a `printf`
+  argument list a human had re-wrapped -- for a person.
+- **Run the gate before committing a rename, and read past the first tier.**
+  The branch's `refs` tier failed first, `make -j` stopped after the jobs in
+  flight, and the four compile failures were never printed. A red tier can hide
+  a redder one.
+- **`git diff master...branch -- test/` is the review that finds this**, because
+  every one of the four bad sites is a one-line change whose left side names a
+  struct that is not the receiver.
+
+Companion to 7000 and 7001 only in numbering; this is about method, not V.90.

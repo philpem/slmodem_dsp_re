@@ -1,8 +1,15 @@
 # V.34 anonymous field-name review
 
 This records the anonymous-field mapping and the source refactor.  The renamed
-members retain their original offsets, types, ABI layout, and differential
-fixtures.
+members retain their original offsets, types and ABI layout.
+
+**The differential fixtures did NOT come through unchanged, and the first
+revision of this sentence said they did.**  The rename detached 33 mutation
+anchors across six suites -- 32 of them silently -- and broke four test
+translation units by replacing identifiers that belonged to `struct hsi_case`,
+to two fixture tables and to the V.8 object rather than to the receiver.  All
+are repaired; finding 7002 records what happened and how to avoid it next
+time.
 
 Receiver offsets are relative to `struct v34_receiver` (which begins at
 `struct v34_object+0x264`); object offsets are labelled explicitly.  This
@@ -75,7 +82,7 @@ remain in this table solely as offset keys.
 | `+0x1ba` | `f1ba` | `carrier_quadrature_offset` | `short` | Offset from the sine table to the cosine half of the carrier table (`include/dsplib/v34recv.h:87-90`). |
 | `+0x1bc` | `f1bc` | `carrier_phase` | `short` | Current carrier-table phase (`include/dsplib/v34recv.h:87-90`). |
 | `+0x1c0` | `f1c0` | `timing_state` | `short` | Despite a diagnostic calling it `pllcnt`, it is the nine-state timing-recovery machine; `-1` is done and `f230`/`f232` advance it (`src/pump/v34/v34rx.c:1768-1783`, `1847-1916`). |
-| `+0x1d2` | `f1d2` | `timing_report_interval_symbols` | `short` | Installed from frame length/8 and used as the timing-offset reporting interval (`include/dsplib/v34recv.h:106-113`). |
+| `+0x1d2` | `f1d2` | `timing_report_interval_symbols` | `short` | The READER settles it: `v34rx.c:1985` counts symbols in `f1ce` and converts the accumulated slip to ppm once the count reaches this field, so it is a reporting period in symbols.  Three writers install it -- 2400 as a default, `baud_rate >> 3` in timing state 2, and `3 * baud_rate` from the handshake (`v34hshak.c:3603`).  **Not "frame length/8"**: that came from a source comment which also miscalled it the dwell, and both halves were wrong.  Corrected in `v34rx.c`. |
 | `+0x1f8` | `f1f8` | `carrier_loop_integrator` | `int` | Carrier-loop integrator (`include/dsplib/v34recv.h:132-133`). |
 | `+0x1fc` | `f1fc` | `carrier_phase_error` | `int` | Phase error produced by `decision` and consumed by the NCO (`include/dsplib/v34recv.h:135-140`). |
 | `+0x214` | `f214` | `predictor_work_re` | `short` | Initially receives the real `target - decision` error, then is modified in place by `rx_predict` and accumulated as `preerr` (`src/pump/v34/v34rx.c:2078-2127`, `2539-2552`). |
