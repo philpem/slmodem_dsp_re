@@ -76280,4 +76280,27 @@ anyway. **Naming the hazard is not the same as being protected from it.**
   every one of the four bad sites is a one-line change whose left side names a
   struct that is not the receiver.
 
+#### The repair is verified, not just textually matched
+
+`anchorcheck` proves an anchor MATCHES. What a mutation is for is that applying
+it makes a test fail, so all 33 were run:
+
+    tools/mutate.py --suite v34rx | v34vdiag | vpcmcreate | v34retrain
+                            | v34pcmif | v34hstx1
+
+**32 of the 33 are `caught (test)`** -- a test assertion failed, not the
+compiler -- and the 33rd, "selector 0: the ring count is read unsigned", is
+recorded `survived, equivalent` with the tool's own reason. **`unusable` is 0
+in every suite**, which is the check that matters here: `mutate.py` judges a
+mutant caught by a non-zero exit, so a mutant that fails to COMPILE reads as
+killed, and eight of these anchors had been re-aligned and one re-wrapped by
+hand. None of them scored that way.
+
+Suite totals, for the denominator: v34rx 31/31, v34vdiag 26 caught + 2
+equivalent, vpcmcreate 29 + 1 equivalent + 1 uncaught, v34retrain 67 + 7
+equivalent, v34pcmif 120 + 6 equivalent, v34hstx1 751 + 23 equivalent + 2
+uncaught. The three uncaught rows -- "the redundant second memset is dropped",
+"67: initdigital is not called", "67: +0x3598 is not set" -- are pre-existing
+untested claims the tool already lists as such, and none is one of the 33.
+
 Companion to 7000 and 7001 only in numbering; this is about method, not V.90.
