@@ -1261,3 +1261,350 @@ consumption; D281 rests on the entry plus finding 1420. `isAltRbs`'s
 zero-initialisation is inferred from its tail. The two `V92Jd` return-path
 surveys are incomplete. D293's "no reads" is proven against indexed and direct
 references, not against a `lea` of the slot.
+
+---
+
+# Family 7 — an index fed from a field that arrives ON THE WIRE
+
+**Entries: D88, D93, D94, D107, D131, D135, D162, D256, D259, D265, D266,
+D276, D277, D287, D288, D289, D323, D333, D344, D351, D352, D471.**
+**Examined 22, decided 19, left undecidable 3.**
+
+This is the D923 family — the only one where the ITU-T text decides — and it
+is where this document's most consequential results are. Every bound below is
+a quoted clause with its number, per the standard D923 set. Where no clause
+could be found, the row says so rather than asserting one.
+
+## THE TWO THAT ARE REACHABLE FROM A CONFORMANT PEER
+
+### D94 — the V.8 CM/JM collector reads before it checks, and the match path never checks at all
+
+**MECHANISM.** In `v8handshak`, with `%esi = this+0xc4c` (a
+`struct v8_tx_sequence *`) and `%ebx = movswl` of the index `fdbc`:
+
+    78070:  movzwl (%esi,%ebx,2),%ebp     ; THE READ -- no compare before it
+    78074:  cmp    %ecx,%ebp ; je 780f7   ; match path
+    78078:  cmp    $0xe,%dx  ; jg 78095   ; the bound, AFTER the read
+    7807e:  mov    %cx,(%esi,%ebx,2)      ; it gates only the STORE
+    780f7:  lea    0x1(%edx),%ebx ; mov %bx,0xdbc(%esi)   ; match path: no test
+
+**It is worse than the entry says.** The bound gates the store only; the match
+path at `0x780f7` raises `fdbc` **with no test at all**, so once the index
+passes 14 it keeps climbing every time the stale word beyond the array happens
+to equal the received character — and `%ebx` is a `movswl` of a `short`, so it
+can walk ±32767 entries either side of the struct. The array is fifteen
+entries: `include/dsplib/v8.h:173,180` puts `short word[V8_TX_SEQ_WORDS]` at
++0x00 and `short crc` at +0x1e.
+
+**THE BOUND — there is none, and the recommendation says so twice.**
+
+- ITU-T V.8 §5: *"A sequence consists of 10 ONEs followed by 10 bits for
+  synchronization and then information-bearing octets, each octet being
+  preceded by a start-bit (ZERO), and followed by a stop-bit (ONE)."* **No
+  count.**
+- ITU-T V.8 §5.2, extension octets: *"When 3 option bits are inadequate for a
+  particular category, **any number of extension octets may follow directly
+  after a category octet**."*
+- ITU-T V.8 §6.6 / Table 8: the non-standard facilities field carries a length
+  octet of up to 255 and *"**Multiple concatenated NS information blocks may
+  be transmitted**"*, with the NS field parsed by §5.2's extension rules,
+  distributing each five bits over ten. **A 255-octet NS block alone expands
+  to about 408 extension octets.**
+- ITU-T V.8 §6: *"a receiver shall ignore all bits, codes and octets reserved
+  for such future definition"* — tolerance is **mandatory**.
+- Clause 8 (§8.1.2, §8.2.2, §8.2.3) was read for a cap and has none; it speaks
+  only of *"a minimum of 2 identical CM sequences"*.
+
+The sync detector is `cmp $0xf,%cx` at 0x78056 and the marker written into
+`word[0]` is `movw $0xf,(%edx)` at 0x780b5 — 15 is Table 1/V.8's ten
+synchronisation bits `0 0 0 0 0 0 1 1 1 1`. `fdbc` resets to 1 at each sync,
+so the index is bounded only by **how many characters a conformant peer puts
+between two syncs**, and the recommendation permits hundreds.
+
+- **Evidence tier 2** for the wire identity (`v8handshak`, and the sync
+  constant is Table 1's own pattern); **tier 3** for the fifteen-entry extent,
+  which rests on `crc` sitting at +0x1e.
+- **VERDICT: DEFECT, REACHABLE FROM THE WIRE, FIX WARRANTED.** A conformant CM
+  or JM carrying a non-standard facilities field, or enough extension octets,
+  exceeds fifteen characters and drives an unbounded read. **Fix: test `fdbc`
+  against the array extent before the read at 0x78070 and before the unguarded
+  increment at 0x780f7, not only before the store.**
+- **Test.** Feed the collector a synthetic CM of 20+ ten-bit characters whose
+  16th to 20th equal the bytes at +0x1e..+0x26 of the sequence struct, and
+  watch `fdbc` climb past 15 while the match counter at +0xdb6 rises. Refuted
+  if `fdbc` is clamped anywhere upstream of `v8handshak`.
+- **Citation:** finding 73. AGREES — its body restates the claim verbatim and
+  records the fifteen-word message and the 0x00f marker.
+
+### D256 — `addReceivedSampleToStorage` overruns on a DIL the recommendation explicitly permits
+
+**MECHANISM.** `V90AutoDigitalImpDetector::addReceivedSampleToStorage`, blob
+0x41ff0, 149 bytes, and **no compare against anything in the whole method**:
+
+    42004:  imul $0x83e,%ecx,%esi          ; row stride 2,110 shorts
+    4200e:  mov  0x9100(%edi,%ecx,4),%ebx  ; the index
+    42045:  mov  %ebx,0x9100(%edi,%ecx,4)  ; written back, incremented
+    42055:  mov  %ax,0x2818(%edi,%esi,2)   ; the store
+
+**The caller check the entry says was missing is now done.** `objdump -r`
+gives eight call sites, all in `V90Phase3Demodulator::getV92Decision(float)`
+(0x21be7, 0x21cbb, 0x21d91, 0x223cd) and `getV90Decision(float)` (0x23d52,
+0x23e2d, 0x242bf, 0x243cb) — one sample per phase per data frame, offered from
+the per-symbol decision path, **with no guard at any call site**.
+
+**THE BOUND — the recommendation does NOT keep it inside the array.**
+
+- ITU-T V.90 §9.3.2.10: *"**Within 5000 ms** of transmitting S in 9.3.2.8 the
+  analogue modem shall again transmit signal S for 128T followed by S for 16T.
+  This indicates to the digital modem that the analogue modem has received
+  enough of the DIL sequence."*
+- ITU-T V.90 §8.4.1: *"The entire sequence, not just the last DIL-segment, is
+  repeated until either the analogue modem causes it to be terminated or a
+  timeout occurs."*
+- ITU-T V.90 §5.3: *"Data frames in the digital modem have a six-symbol
+  structure."*
+
+At T = 1/8000 s, 5,000 ms is 40,000 symbols; at six symbols per data frame
+that is **up to about 6,667 samples per phase against a 2,110-entry row**. The
+row holds 12,660 symbols ≈ **1,582 ms** of DIL where the recommendation
+permits 5,000. **Overrun begins at any DIL longer than about 1.6 s, which is
+well inside the permitted window, and the peer is REQUIRED to keep sending
+until we stop it.**
+
+- **Evidence tier 2** — `linear2alaw` and the two decision methods type both
+  arguments; the 0x83e stride is read straight from the object.
+- **VERDICT: DEFECT, REACHABLE FROM THE WIRE, FIX WARRANTED.** **Fix: bound
+  `int_9100[phase]` at 0x83e before the store at 0x42055 and stop accumulating
+  rather than wrapping, or size the row for the 5,000 ms the recommendation
+  allows.**
+- **Test.** Run a DIL longer than about 1.6 s and watch `int_9100[phase]` pass
+  2,110 — the next store lands in `sampleStore[phase+1][0]`, and at phase 5 it
+  leaves the 43,440-byte object. Refuted if some state above `getV90Decision`
+  stops offering samples before 2,110 per phase; **that is the one thing this
+  trace does not cover**, since neither method's callers are reconstructed.
+- **Citation:** finding 1363. AGREES.
+
+## D107 — a conformant ZERO-LENGTH DIL request reads an uninitialised slot
+
+`V90Phase3Modulator::resetDILGenerator` (0x2aed0) fills the `dilLevel` row only
+while the index is below `dilCount`, so **`dilCount == 0` leaves `dilLevel[0]`
+unwritten** — and then reads it back unconditionally at 0x2b022 and runs the
+boundary search at 0x2b040..0x2b050, storing the result at `this+0x390`. The
+loop reads indices 0..7 and **falls out with 8**, one past the eight-entry
+row. Both callers are in `V90Phase3Modulator::reset` (0x2c3ac, 0x2c45d) and
+neither guards on `dilCount`.
+
+**THE BOUND — N = 0 IS EXPLICITLY LEGAL, which is what makes this reachable.**
+
+- ITU-T V.90 §8.4.1: *"The DIL consists of N DIL-segments of length Lc where:
+  **0 ≤ N ≤ 255** … **When N = 0, DIL is not transmitted.**"*
+- ITU-T V.90 Table 12, DIL descriptor, bits **18:25 = N** — eight bits, so 0
+  is representable and is the "no DIL" request.
+- ITU-T V.90 §9.3.2.8: *"If the analogue modem requested a DIL of zero length
+  it shall proceed with Phase 4."*
+
+**Which side, in D920's terms:** this fires on the **DIGITAL-modem side**.
+`V90Phase3Modulator` is the DIL transmitter, V.90 §8.4 is headed *"Phase 3
+signals for the digital modem"*, and §8.4.1 says the parameters are *"sent to
+it by the analogue modem using the DIL descriptor"* — so the descriptor is a
+RECEIVED message on the side that faults.
+
+- **Evidence tier 2** — the mangled argument type `tagV90DILdescriptor const*`
+  and the `alaw2linear`/`ulaw2linear` callees.
+- **VERDICT: DEFECT, REACHABLE, FIX WARRANTED.** **Fix: skip the segment
+  search, or seed `dilLevel[0]`, when `dilCount == 0`, and clamp the search
+  result at 7.**
+- **Limit of the trace, stated rather than glossed:** what consumes
+  `this+0x390` was not followed. The out-of-row 8 is an out-of-range VALUE
+  today; whether `generateDIL` or `generateV90Symbol` then subscripts an
+  eight-entry array with it is untraced, and that is the difference between
+  "wrong segment chosen" and "read past a row".
+- **Test.** Reset the modulator with a descriptor whose byte +0 is zero and
+  whose `dilLevel[0]` slot has been seeded with 0x8000..0xFFFF, and read
+  `+0x390` — it will be 8.
+- **Citation:** finding 232. AGREES.
+
+## D135 — REFUTED. "The A-law boundary row's last entry can never be reached"
+
+**Both halves of the claim fail against the object.**
+
+1. **"Can never be reached."** The two loads are `movzwl 0x188(%esi,%eax,2)`
+   at 0x2aea5 and `movzwl 0x188(%esi)` at 0x2b022 — **UNSIGNED**. The search
+   exits at the first boundary ≥ level, and a valid A-law level is a positive
+   `alaw2linear` result, 0..32256, so **any level in 16385..32256 exits at
+   index 7**. Entry 7 is the deciding comparison for the top segment and is
+   reached on every top-segment level. What *would* have made index 8
+   unreachable is a `movswl` load, and that is not what the object does.
+2. **"Both users."** There are **seven** references to
+   `codeSegmentsBoundriesLookupTable` across **five** functions:
+   `updateCodeSegmentPointer`, `resetDILGenerator`, `generateDIL`,
+   `generateV90Symbol` (twice) and `generateV92Symbol` (twice).
+
+- **Evidence tier 1/2** — the table's own bytes, and the `alaw2linear` callee
+  typing the level.
+- **VERDICT: NOT A DEFECT as stated.** The residual true fact is D107's:
+  because the load is unsigned, a slot content of 32,769 or more — any
+  negative short — does fall out at index 8. **The entry should be replaced by
+  that observation, which belongs to D107.**
+- **Test.** Feed level 32000 with `pcmType` A-law and observe index 7; feed
+  0x9000 and observe index 8.
+- **Citation:** finding 231. AGREES with the entry's own caveat — **and the
+  finding is where the claim originates and does not account for the
+  `movzwl`.** Like D176/finding 1233, the correction belongs upstream.
+
+## Settled against the recommendation — unreachable from a conformant peer
+
+**D259 — the code histogram's index is unmasked.** The code argument is a full
+`unsigned char` (`movzbl 0x20(%esp),%edx` at 0x4205d) into a 6 × 128 array at
+0x8b00..0x9100, and **0x9100 is `int_9100[0]`, D256's own cursor** — the
+adjacency is confirmed from the object. But ITU-T V.90 §3.5: *"**Uchord**:
+Ucodes are grouped into eight Uchords. Uchord1 contains **Ucodes 0 to 15**; …
+Uchord 8 contains **Ucodes 112 to 127**."* Every wire field carrying one is
+seven bits (Table 12's `REF1`, Table 14's eight 16-bit masks), so a legal
+Ucode is 0..127 against a row of exactly 128 — **zero margin, and in range.**
+The object's own callers honour it: at 0x21bb4–0x21bce the sample is made
+non-negative, encoded by `linear2alaw`, then `xor $0xd5` — the exact inverse
+of `resetDILGenerator`'s `(byte & 0x7f) ^ 0xd5` at 0x2af40. **DEFECT,
+UNREACHABLE from a conformant peer**; what would reach it is not a malformed
+peer but a *caller* passing the raw eight-bit PCM codeword instead of its
+Ucode, which would fire on roughly half of all samples. No such caller exists
+today. **Citation: finding 1366 — DRIFTED, harmlessly.** 1366 is headed *"THE
+OBJECT DIVIDES IN ONE METHOD AND MULTIPLIES BY A RECIPROCAL IN TWO"* and is
+about mean/variance arithmetic; the histogram material is in **finding 1363**.
+The claim is true and the number is one off.
+
+**D276 — a preamble longer than seventeen 1 bits desynchronises Jd.** ITU-T
+V.90 **Table 13**, first row: *"Jd bits LSB:MSB **0:16** — Frame Sync:
+11111111111111111"*, then *"17 — Start bit: 0"* and *"68:71 — Fill bits:
+0000"*; §8.4.2: *"Sequence Jd consists of a whole number of repetitions of the
+bit pattern given in Table 13. Bit 0 is transmitted first."* **Every
+repetition presents exactly seventeen 1 bits terminated by a 0**, and a
+conformant transmitter cannot emit an eighteenth. **DEFECT, UNREACHABLE from a
+conformant peer** — but reachable from **a single channel bit error flipping
+the bit-17 start bit to 1**, and that is worth recording because it costs
+almost nothing: the receiver needs a fresh seventeen and the next repetition
+supplies them, 72 bits at 8000 sign bits/s ≈ 9 ms against §9.3.2.7's 4,500 ms
+Jd-detection window. A resynchronisation delay, not a memory hazard.
+**Citation: finding 1397. AGREES.**
+
+**D471 — `setTrn2DummyConstel` has no bound against the 128-byte row.** The
+only bound is a signed compare against `nofUcodesInTrn2` at 0x3cb24/0x3cb40.
+The one-hop question is answered: `setNofUcodesInTrn2(short)` (0x3ca10) uses
+its `short` argument **only as a gate** and takes the value from
+`V90Parameters+0x80`, and a sweep of all 75 `mov …,0x80(%reg)` sites in
+`.text` finds the only writer of that field is `V90Parameters::setToDefault()`
+(0x29a75). **No wire field reaches this count**, so the entry is misfiled here;
+both writers of +0x78 are internal constants. **DEFECT, UNREACHABLE.**
+**Test:** grep the object for any store to `V90Parameters+0x78` or `+0x80`
+other than the two named — a third, wire-fed one reopens it.
+
+## Reachable, but not from a wire field — D351 and D352
+
+`adjustConstellationsToNewK` accepts a row of exactly 128 (`cmp $0x80,%eax;
+ja` at 0x4c726) and its shift loop then writes `constellation[k][128]`, which
+tiles onto the neighbour; `constellation[k+1][0]` is what
+`reconstructInitialConditions` searches for, whose `drop` over-decrements an
+unsigned length to 0xFFFFFFFF and never terminates.
+
+**128 is IN CONTRACT, which is exactly why the accept is right and the shift is
+wrong.** ITU-T V.90 Table 14 specifies the constellation as eight 16-bit
+Uchord masks — *"137:152 Constellation mask for Uchord1 (bit 137 corresponds
+to Ucode 0)"* through *"256:271 … Uchord8 (bit 256 corresponds to Ucode
+112)"* — 8 × 16 = **128 bits, one per Ucode**; §5.4.3: *"Mi is equal to the
+number of positive levels in the constellation to be used in data frame
+interval i as signalled by the analogue modem using the CP sequences."* So
+Mi = 128 is representable and legal.
+
+**But the index is not wire-fed:** `V90ConstellationDesigner` is the analogue
+modem's OWN design code, producing the mask that CP later carries. The wire
+influences it only through the rate the peer advertises in Jd bits 18:46.
+
+- **Evidence tier 3**, on top of the entry's own core-dump measurement.
+- **VERDICT (both): DEFECT, REACHABLE, FIX WARRANTED** — from the modem's own
+  legal design space rather than from a wire field, so **misfiled in this
+  family**. **Fix: bound the shift at 127 (D351) and bound `drop` by
+  `constellationSize[k]` or widen `i` (D352). D352 is a total hang and D351 is
+  its trigger, so they must be fixed as one.**
+- **Test.** Already run: `t_v90cdadjust.cpp` at constellation lengths above 60
+  reproduces the write and the core shows `n = 4294967295, k = 5`. **The open
+  question is whether the add pass reaches 128 at a rate a real session
+  negotiates**, and that is the deciding evidence.
+
+## Misfiled — the index is internal, and no wire field bounds it
+
+Traced far enough to establish that in each case, and no further. Evidence
+tier 3 throughout.
+
+| entry | where the index actually comes from | verdict |
+|---|---|---|
+| D131 | `max_bits` and the caller's fragment size — Bell 103, no V.8/V.34/V.90 field. `DemodDataB103` feeds 48 samples against a 64-sample/8-bit ceiling. | DEFECT, UNREACHABLE |
+| D162 | not an index at all — see the correction below | UNDECIDABLE on observability |
+| D265 | a transmit-side constant slip (0x45 where 0x55/0x56 was meant); nothing subscripted by a received value | defect stands as recorded; misfiled |
+| D266 | a fixed constant; wire-*triggered* by any CRC failure, but nothing is indexed | misfiled |
+| D277 | caller behaviour. Its own non-entry hazard `vec[unpack[1]]` is bounded by Table 13's 72-bit Jd plus each storing state's cap | misfiled |
+| D287 | the cursor is `short_8b00[phase][code]` in scan order — the object's own histogram, filled by D259's path; the `[-2]`/`[-1]` window is internal | misfiled; the negative-index read fires on every call |
+| D288, D289 | a `short` produced inside the class; `ci` walks down from it as an `unsigned char` | misfiled |
+| D323 | `linearEquLength` and `dfeWindowHalf` from `reset` / `setLinearEquEdgesFadingParams` — the parameter block | misfiled |
+| D344 | `(which << 7) + i` inside the constellation designer. The recommendation bounds the CONTENT (Ucodes 0..127, §3.5, exactly the 128-entry row); what is unbounded is the walk, which stops only on a `signed char` sign flip at 0x80 | misfiled |
+
+**A correction worth carrying, on D162.** ITU-T V.90 Table 13 makes bits 47
+and 48 **two independent one-bit fields** — *"47 Size of constellation used to
+transmit CP, E and SCR **during training sequences**"* and *"48 … **during
+rate renegotiation procedures**"* — not "constellation size, 2 bits" as the
+class header says. **So the uninitialised byte is a whole field, not half of
+one**, which strengthens D162 rather than weakening it: an unwritten
+`bits[48]` is an unwritten *rate-renegotiation constellation size*, not one
+bit of a two-bit number.
+
+## Left undecidable — 3, with the evidence that would decide each
+
+**D88 — `shellDemapper`, and this is the one to chase next.** The V.34 text
+gives a quotable bound that does NOT settle it. ITU-T V.34 §9.4: *"the shell
+mapper maps K input bits … into 8 output ring indices {mi,0,0, …, mi,3,1},
+where **0 ≤ mi,j,K < M**"*; §9.2: *"The number of bits put into the shell
+mapper per mapping frame is denoted by K where **0 ≤ K < 32**"*, and Table 10's
+largest M is **18** (2743 baud, 14 600 bit/s, K = 31). So across the whole of
+V.34:
+
+| sum | maximum | 128-entry table? |
+|---|---|---|
+| g2 index ≤ 2(M−1) | 34 | inside |
+| g4 index ≤ 4(M−1) | 68 | inside |
+| **z8/g8 index ≤ 8(M−1)** | **136** | **OUTSIDE** |
+
+**What would decide it: which of the tables at +0xa48 / +0xb48 / +0xc48 is
+subscripted by the EIGHT-fold sum** (§9.4's `0 ≤ p ≤ 8(M−1)` domain). If any
+of them is, **M = 18 makes a conformant V.34 connection at 14 400/2743 overrun
+a 128-entry table by nine entries**, and this becomes the third REACHABLE in
+the register. Only the first 0xe0 bytes of a ~450-byte function were read and
+that site was not reached. Two secondary points: the register's "a parameter
+of 200 gives an index near 1200" is a value no legal ring index or sum can
+take — the maximum sum-of-four is 68 — so **the recorded segfault is an
+artefact of driving the function directly rather than a wire path**; and
+`movswl 0x4(%ebp),%edx` at 0x5875b loads one sub-index SIGNED, so a negative
+index is representable, which is a `demapFrame` question.
+**Citation: finding 129. AGREES** — it says three tables where the entry
+heading says four, which is consistent: the fourth is the 529-entry grid in
+`decodeDepth`.
+
+**D93 — two halves, two answers.** `ApplyBulkDelay`'s `bulk_len` is a
+configuration field with no wire path — misfiled, unreachable from this
+family's question. `getbit` (0x5eaf0) reads a bit cursor over `word[10]` at
++0xaa3c with `crc` at +0xaa50, fed by `getMPrecvdBits`, so the underlying wire
+object is a **V.34 MP sequence** and `v34handshak` hands the record to `getbit`
+thirty-six times. **What would decide it: the identity of the message `getbit`
+actually parses out of +0xaa3c.** Finding 227 describes +0xaa3c/+0xaa3e as
+`info_caps`, a *rebuilt capability word*, not the raw received MP. If `getbit`
+is ever pointed at a raw MP, MP is longer than 160 bits and this is reachable;
+if it only ever reads the rebuilt word, ten words is a real bound.
+**Citation: finding 227. AGREES.**
+
+**D333 — `setConstellationToNoise`'s 128-byte staging array.** The span is
+`arg5[k] − params->unnamed_360` with `arg5` an `unsigned char *`, so up to 256
+against 128 bytes at 0xc0 in a 0x14c frame. **No bound applies because there
+is no caller**: the entry records (D345) that nothing in the object calls this
+member, so there is no caller range to check and no wire field reaches `arg5`.
+**What would decide it: one caller.** Given one, the question reduces to
+whether `arg5[k]` is a Ucode (≤ 127, and V.90 §3.5 makes it safe) or a count
+or difference (up to 255, unsafe). **No test is possible until then** — driving
+it directly measures the fixture, not the object.
