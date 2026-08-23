@@ -1153,6 +1153,23 @@ V34SetupDemodulator(void *objp, short baud, short carrier)
  * fixed-point chain is indistinguishable from a correct one until something
  * disagrees.  Reconstructing this is what exposed finding 126.
  */
+/*
+ * DIGITAL TERMINATION MODE.  Default 0, and it must stay 0: on a real PSTN
+ * line the near echo canceller is doing its job.
+ *
+ * Non-zero says "this end has no 2-wire hybrid", which is true of the SIP path
+ * today -- our end is a socket, and the only real reflection is the VG204's FXS
+ * hybrid at 205.62 ms, which is the FAR echo and outside both cancellers'
+ * 172.5 ms delay line anyway (finding 1205).  It will also be true of the V.90
+ * conversion, whose whole premise is a digitally attached end; finding 1214
+ * records that so the later work does not rediscover it.
+ *
+ * NOT read from the environment here.  Nothing under `src/` calls `getenv` --
+ * this is a library, the host owns its configuration, and the object never did
+ * either.  `tools/modeflags.c` is the host-side setter for bench builds.
+ */
+int dsplib_v34_digital_term;
+
 int
 adaptecho(void *objp)
 {
@@ -1506,7 +1523,46 @@ modem_serrint(void *objp)
 	}
 
 	if (obj->f354c <= 0x464f) {
-		V34EchoAdapt(&obj->echo0, near_err);
+		/*
+		 * DIGITAL TERMINATION: this end has no 2-wire hybrid, so the
+		 * near canceller has nothing to cancel.  Leaving it unadapted
+		 * keeps its coefficients at their reset value of zero, and
+		 * `adaptecho` subtracts `V34EchoFilter(&obj->echo0, lag)`
+		 * unconditionally -- so a zero filter makes that subtraction a
+		 * true no-op.  That is exactly the condition finding 1212's
+		 * proposed experiment asked for ("cannot adapt away from
+		 * zero"), reached without touching the subtraction itself.
+		 * Findings 1212 and 1214, task #110.
+		 *
+		 * THE GATE IS INSIDE THE OBJECT'S OWN `if`, NOT AN ARM IN
+		 * FRONT OF IT.  Written the other way first -- an
+		 * `if (dsplib_v34_digital_term) { } else if (obj->f354c ...`
+		 * chain, equivalent code -- and it broke the mutation anchor
+		 * "the NEC adapt bound is exclusive", which pins the text
+		 * `\tif (obj->f354c <= 0x464f) {` and matched zero times once
+		 * an `} else ` prefix was in front of it.  `anchorcheck.py`
+		 * failed the gate.  That is the second time a rewrite of an
+		 * anchored line has been caught here (see `baud_rate >> 1`),
+		 * and the rule it teaches is worth stating: a mode flag has no
+		 * business moving the object's control flow.
+		 *
+		 * THE FAR CANCELLER IS DELIBERATELY LEFT ALONE, which is why
+		 * this is not the object's own `V34_EC_FROZEN`.  That flag is
+		 * tested at `modem_serrint`'s head, ABOVE both adapt calls, so
+		 * it freezes near and far together; 1214 asks for the near one
+		 * only.  1212 measured the far canceller holding 230-270 RMS
+		 * on both passes while the near one collapses fifty-fold, so
+		 * they are not doing the same job and should not share a
+		 * switch.
+		 *
+		 * NOT A DEFECT AND NOT A FIX.  On a real PSTN line the near
+		 * canceller is doing its job and disabling it there would be
+		 * actively wrong; the object is entitled to assume a hybrid,
+		 * because in 1996 there always was one.  Default off, and the
+		 * default path is byte-for-byte what it was.
+		 */
+		if (!dsplib_v34_digital_term)
+			V34EchoAdapt(&obj->echo0, near_err);
 	} else if (obj->f354c == 0x4650) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34NEC - stop NEC adaptation\n");

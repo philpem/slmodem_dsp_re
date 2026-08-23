@@ -56,6 +56,20 @@ extern unsigned int dsplibs_debug_level;
  * governs.  See docs/deviations.md.
  */
 
+/*
+ * DIGITAL TERMINATION: this end has no 2-wire hybrid, so the near echo
+ * canceller has nothing to cancel and is left unadapted at zero.  Default 0
+ * -- on a real PSTN line the near canceller is doing its job and switching it
+ * off there would be actively wrong.  Findings 1212 and 1214, task #110.
+ *
+ * A MODE, NOT AN INSTRUMENT, which is why it is declared here on master and
+ * not on `v34-instrumentation` with the debug dumps.  It changes what the
+ * modem DOES; it is the same class as `dsplib_v34_blob_preemp`.
+ *
+ * Set by the host: nothing under src/ reads the environment.
+ */
+extern int dsplib_v34_digital_term;
+
 int dsplibs_debug_printf(const char *fmt, ...);
 
 /*
