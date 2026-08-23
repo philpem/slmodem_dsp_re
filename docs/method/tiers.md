@@ -1,4 +1,4 @@
-# The four oracles, and what each cannot see
+# The five oracles, and what each cannot see
 
 Every number here cites `docs/findings.md` in this tree. Nothing in this file
 is advice that was not measured.
@@ -254,6 +254,26 @@ choose.** Five mistakes in one session came from getting that backwards
   **full-text identity, operands included**. Two functions of nineteen passed
   it and were changed; seventeen were left alone.
 
+### The three grades, and why the weak one is still worth naming
+
+A codegen result is one of three things, and saying which is not pedantry --
+each grade licenses a different conclusion:
+
+- **grade 0 -- the function's binary code is identical.** Nothing is left to
+  argue about.
+- **grade 1 -- the instructions are the same and only register allocation
+  differs.** `compare.py` drops operands, so this already scores as a match:
+  register allocation is the compiler's free choice (finding 614) and chasing
+  it means permuting source until the output matches, which is fitting the
+  compiler rather than recovering the source.
+- **grade 2 -- minor instruction differences that change neither the result
+  nor the execution.** Scheduling, an extension on a load whose upper half is
+  discarded, integer if-conversion. `samesize.py` is the tool for this bucket
+  and 2900 classified 69 of them: three were real defects, three were 614 and
+  declined, ten were forced and named.
+
+Below grade 2 is not a grade. It is a difference to explain.
+
 ### Count matches, not bytes
 
 The size ratio is the weak number and it moves when you emit more code, not
@@ -455,3 +475,43 @@ the part the message text will mislead you about:
 > short; another shares a name with a message fifteen lines away in `.rodata`
 > that carries one extra character, and transcribing that character onto both
 > produced **two missing lines and two spurious ones** (finding 650).
+
+## 5. Spec conformance -- the only oracle that can indict the OBJECT
+
+**Every tier above measures agreement with the blob. None of them can tell you
+whether the blob is right.** The differential tier compares our output to the
+object's; the codegen tier compares our instructions to the object's; mutation
+asks whether our tests can tell our code from a broken copy of it. Give all
+three a function that faithfully reproduces an object which mis-implements the
+standard, and all three go green.
+
+So where an ITU-T Recommendation states how a function must WORK, that function
+gets an explicit test against the SPEC, beside its differential test and not
+instead of it. Use the Recommendation's own test vectors where it provides
+them; where it does not, say so in the test rather than leaving it implied, and
+use a published known-answer for the algorithm, deriving the variant from the
+spec's stated bit order rather than assuming one.
+
+**The CRC is the worked case.** V.90 never defines its own: every place it
+mentions one says "The CRC generator used is described in 10.1.2.3.2/V.34", and
+that clause fixes four things a reconstruction can get plausibly wrong ---
+
+    polynomial x^16 + x^12 + x^5 + 1
+    the shift register is loaded with ALL ONES before anything is shifted in
+    the contents are output starting with bit 0, and bit 0 of the CRC is the LSB
+    the CRC covers every information bit in the sequence EXCEPT the frame sync
+        bits, the start bits and the fill bits
+
+--- of which the last is the one a differential test can never see, because
+both sides skip the same fields whether or not those are the right fields.
+
+**A conformance failure is a DEVIATION, never a licence to change the
+reconstruction.** The reconstruction must match the object; that rule does not
+bend for a spec. Record it in `docs/deviations.md` with the clause quoted and
+the side named, exactly as D920 and D923 do -- D920 was settled this way, by
+reading the object's instructions and then the ITU text and concluding that the
+blob was faithful at one site and defective at another. A fix goes behind
+`DSPLIB_REPRODUCE_BUGS`, with `src/dsp/fpm_div.c` as the pattern.
+
+This is a fifth oracle and not a refinement of the fourth: it is the only one
+whose failure says something about the ORIGINAL rather than about us.
