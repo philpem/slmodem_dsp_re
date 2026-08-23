@@ -190,9 +190,19 @@ struct v34_receiver {
 	short           timing_state_dwell;            /* +0x230 */
 	/*
 	 * setTimingStateParameters installs these three together, one triple
-	 * per timing state.  timing_proportional_gain_q11 and timing_integral_gain_q15 are the loop's two gains -- see
-	 * TimingV34, which scales them by the phase error in Q15 and Q11 --
-	 * and timing_state_dwell_limit is a dwell count, or -1 for "no limit".
+	 * per timing state.  Two of them are the timing loop's gains, and
+	 * TimingV34 fixes both their ROLES and their SCALES in one place:
+	 *
+	 *	f1e0 += (timing_integral_gain_q15 * err + 0x4000) >> 15;
+	 *	acc   = f1e0
+	 *	      + ((timing_proportional_gain_q11 * err + 0x200) >> 11);
+	 *
+	 * so the Q15 gain is the one that feeds the accumulator -- the
+	 * integral term -- and the Q11 gain is added straight to the output.
+	 * The rounding constants pin the scales rather than a comment doing
+	 * it: 0x4000 is 1 << 14 against a >> 15, and 0x200 is 1 << 10 against
+	 * a >> 11.  timing_state_dwell_limit is a dwell count, or -1 for
+	 * "no limit".
 	 */
 	short           timing_state_dwell_limit;            /* +0x232 */
 	short           timing_proportional_gain_q11;            /* +0x234 */

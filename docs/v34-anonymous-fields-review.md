@@ -34,8 +34,13 @@ publishes their scaled values and the accumulated target-point energy.
 | `+0x24c` | `f24c` | `target_signal_power_accum` | `int` | Accumulates `target_re² + target_im²` until the counter wrap. |
 
 The recovery supervisor in `datapumpv34()` accesses the next eight receiver
-words by offset (`src/pump/v34/v34hshak.c:10252-10260`), but their behaviours
-are fully determined there and can be named without inference:
+words by offset, and their behaviours are fully determined there, so they can
+be named without inference.  The site is the `DP_RX_THR_A`/`_B`/`_C` defines
+(`src/pump/v34/v34hshak.c:9930-9932`) and the three `dp_run` calls that consume
+them (`10005-10015`) -- **an earlier revision of this table cited
+`v34hshak.c:10252-10260`, which is past the end of a 10,136-line file.**  Cite a
+grep-able token, not a line number: eight names rested on a range that could not
+be opened.
 
 | offset | former member | current name | type | evidence |
 |---:|---|---|---|---|
@@ -45,8 +50,8 @@ are fully determined there and can be named without inference:
 | `+0x258` | `f258` | `retrain_bad_block_run` | `short` | Consecutive `equerr > threshold` count used by the full-retrain gate. |
 | `+0x25a` | `f25a` | `reneg_down_bad_block_run` | `short` | Consecutive high-error count, enabled after the 18-second guard. |
 | `+0x25c` | `f25c` | `reneg_up_good_block_run` | `short` | Consecutive low-error count, enabled after the 144-second guard. |
-| `+0x25e` | `f25e` | `rate_change_reason` | `short` | Written as 1 (remote), 2 (down), or 3 (up). |
-| `+0x260` | `f260` | `rate_change_rate_index` | `short` | Captures the current baud/rate index when the supervisor starts a rate change. |
+| `+0x25e` | `f25e` | `rate_change_reason` | `short` | The reader is the object's own words: `== 2` takes the arm printing " TRNSEG4A : returning from local rrn down => forcing rate down" and any other value above 1 takes the "...rrn up => forcing rate up" arm (`src/pump/v34/v34hstx1.cpp:2638-2654`).  So 2 = down and 3 = up are established; **1 = remote is NOT** -- no reconstructed writer stores 1, 2 or 3, and the only in-tree writer clears it (`v34hshak.c:490`). |
+| `+0x260` | `f260` | `rate_change_rate_index` | `short` | Read as `d` and compared against the freshly computed rate, which is then forced to `d - 1` or `d + 1` (`src/pump/v34/v34hstx1.cpp:2639-2650`) -- so it is a rate INDEX and one step either side of it is the request. |
 
 ## Refactored receiver fields
 
