@@ -19,19 +19,7 @@
     "a branch that really contains the target and a reason a reader can",
     "check.",
     "",
-    "Its first entry covered 13 findings on improve/v34-training and was removed the moment that branch merged -- the gate reported them STALE and refused, which is the property this file exists to have."
+    "EMPTY, and kept rather than deleted: the mechanism is documented here for the next branch that has to be held.  Its first entry covered 13 findings on improve/v34-training and was removed the moment that branch merged -- the gate reported them STALE and refused, which is the property this file exists to have.  Its second covered 6701, 6900, 6901 and 6903 on v34-instrumentation, and was removed by copying those four findings onto master instead: the tools that cite them were already here, the register went red twice in three days, and a hold that keeps recurring is telling you to fix the split rather than to widen the hold."
   ],
-  "pending": [
-    {
-      "kind": "finding",
-      "refs": [
-        "6701",
-        "6900",
-        "6901",
-        "6903"
-      ],
-      "branch": "v34-instrumentation",
-      "why": "79852cc9 and a7300cec brought the testbench analysis tooling from v34-instrumentation onto master -- 'the analysis tooling belongs on master, not on a branch' -- and brought the TOOLS that cite these findings without the FINDINGS themselves, which turned `make refs` red.  6901 arrived the same way a second time, with the linesweep commits (testbench/linesweep.py:50, testbench/TOOLS.md:204).  Check with `git show v34-instrumentation:docs/findings.md | grep -E '^### (6701|6900|6901|6903)\\.'`; 6701 is also on findings/hsfuser-crosscheck.  The other citing lines are testbench/TOOLS.md:109 and :110 (ratepenalty.py, jbtiming.py) and testbench/ladder.py:9.  THIS ENTRY IS A HOLD, NOT A VERDICT, and a SECOND recurrence is the argument for copying the four findings onto master beside the tools they document rather than holding them one at a time."
-    }
-  ]
+  "pending": []
 }

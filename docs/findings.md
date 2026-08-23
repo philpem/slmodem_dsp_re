@@ -76223,3 +76223,369 @@ is based on `refactor/v34-anonymous-fields` and must not be merged here until
 that branch's owner has taken them -- merging it would land the rename.
 
 Companion to 7000 and 7001 only in numbering; this is about method, not V.90.
+
+
+======================================================================
+
+*The four findings below were written on `v34-instrumentation` and are copied
+here verbatim, unrenumbered, because the TOOLS that cite them are already on
+`master` -- `testbench/ratepenalty.py`, `testbench/jbtiming.py`,
+`testbench/linesweep.py` and `testbench/ladder.py`, brought over by 79852cc9,
+a7300cec and the linesweep commits. Holding the references in
+`tools/pendingrefs.json` turned `make refs` red twice in three days; this is
+the durable fix and the register entry goes with it. 6701 is byte-identical
+on `v34-instrumentation` and `findings/hsfuser-crosscheck`, and it is the
+CORRECTED text -- checked, because the two branches each carry a version.
+They cite only finding 2400, which is already here.*
+
+### 6701. THE JITTER BUFFER FABRICATES FRAMES TWO DIFFERENT WAYS — ONE IS SUBSTITUTION AND HARMLESS, THE OTHER IS A WHOLE-FRAME INSERTION AND IS THE IMPAIRMENT V.34 CANNOT ABSORB
+
+> **CORRECTED BEFORE THIS WAS MERGED OR CITED, AND THE CORRECTION REVERSES THE
+> CONCLUSION.** The first version of this finding was titled "the jitter
+> buffer's fabricated frames are SUBSTITUTION, NOT SLIP" and concluded that
+> 1941/1942 do not indict d-modem's media path and that an ASRC is not the next
+> thing to build. **That is right for one of the two mechanisms and wrong for
+> the other, and the other is the dangerous one.**
+>
+> `stream.c` zero-fills a frame's worth of output either way, which is what the
+> first reading looked at. The difference is one level down, in whether the
+> jitter buffer CONSUMES a frame from the sender's stream while doing it:
+>
+> * **`PJMEDIA_JB_MISSING_FRAME`** — the framelist is non-empty and the head
+>   slot is blank, so `jb_framelist_get` takes the slot and
+>   `jb_framelist_remove_head` consumes it. One sender-frame in, one
+>   receiver-frame out. **Substitution; alignment preserved.** The original
+>   reading holds here.
+> * **`PJMEDIA_JB_ZERO_EMPTY_FRAME`** — `jb_framelist_get` opens with
+>   `if (framelist->size)`, and on an empty list skips the whole body and
+>   returns `PJ_FALSE` **having consumed nothing** (`jbuf.c:276`). The caller
+>   emits zeros anyway (`jbuf.c:1184`). Zero sender-frames in, one
+>   receiver-frame out. **That is an INSERTION**: the sender's stream is now a
+>   whole frame behind the consumer's clock, and stays there.
+>
+> **AND 1941 MEASURED BOTH, AT ABOUT THE SAME RATE** — "roughly one `lost` and
+> one `empty` every four seconds". So about half the events are insertions, at
+> ~0.25/s, with zero network loss. A frame is 80 or 160 samples, so each one is
+> a phase step of tens of symbols — far larger than the SINGLE-SAMPLE slips
+> hsfuser measures as fatal at 0.08/s.
+>
+> **So the jitter buffer is a STRONGER suspect than before this finding was
+> written, not a weaker one, and the ASRC sentence below is withdrawn.** The
+> mechanism 1942 named — the consumer outrunning the producer with no net rate
+> error — is precisely a clock-reconciliation problem, and pjmedia reconciles
+> it by inserting frames. That is what an ASRC exists to replace.
+>
+> **HOW IT WAS CAUGHT, because it is a rule worth having.** `chanshim.py`'s own
+> comment for `CHAN_SLIP` says a jitter-buffer underrun INSERTS and contradicts
+> the paragraph below. Our own tool disagreed with our own finding, in writing,
+> and the finding was newer. Read what the apparatus already says before
+> concluding something about what it models.
+
+1941 measured d-modem's receive path fabricating a frame roughly every two to
+four seconds with zero network loss, and 1942 confirmed it across three
+prefetch settings (0.483, 0.455, 0.274 events/s). Neither finding claimed a
+mechanism by which that breaks V.34. The obvious reading — that these are
+timing discontinuities of the kind V.34 cannot absorb — **is wrong, and the
+distinction is worth more than the measurement.**
+
+**WHAT pjmedia ACTUALLY DOES, READ RATHER THAN ASSUMED.** With
+`setting.plc = 0` on both codecs (`d-modem.c:811,816`), `stream.c:594`'s
+`PJMEDIA_JB_MISSING_FRAME` arm takes `status = -1` and falls to
+
+    pjmedia_zero_samples(p_out_samp + samples_count,
+                         samples_required - samples_count);
+    ...
+    samples_count += samples_per_frame;
+
+**The sample count is preserved.** A frame's worth of zeros is substituted for
+a frame's worth of audio; nothing is inserted and nothing is deleted, and the
+stream stays in phase across the event. ~~`PJMEDIA_JB_ZERO_EMPTY_FRAME`
+(`stream.c:633`) does the same. These are *loss* events, not *slip* events.~~
+**THAT LAST SENTENCE IS WITHDRAWN — see the correction at the head of this
+finding.** It is true of `MISSING_FRAME`, which is what the code quoted above
+is, and false of `ZERO_EMPTY_FRAME`, which consumes no sender frame and
+therefore inserts one. Roughly half of 1941's events are the second kind.
+
+**WHY THAT DISTINCTION DECIDES THE PRIORITY.** hsfuser — an independent
+userspace V.34 implementation (the Conexant HSF datapump, at
+`~/dev/softmodems/conexant/hsfuser`) — separates the two impairments and
+measures them against the same modem, 15 trials per point with a fresh channel
+seed each:
+
+    zero-filled substitution      whole-sample insert/delete
+    (channel-results.md sec 4)    (CHAN_DRIFT_PPM, same file)
+
+    0.5% -> median 33600          5 ppm  (0.04 slips/s) -> 33600
+    1%   -> median 31200          10 ppm (0.08 slips/s) -> NO CONNECT
+    2%   -> median 28800          100 ppm (0.80 slips/s) -> 4800
+    4%   -> median 21600, 14/15 connect
+
+Its `impair.c:489-505` zero-fills the output for loss, with the comment "the
+samples still came down the line and still leave the delay line, so the stream
+stays in phase" — the same semantics as pjmedia's, so the comparison is like
+for like.
+
+**OUR MEASURED RATE MAPS ONTO THE LEFT-HAND COLUMN, NEAR ITS TOP.** At 10 ms
+frames, ~100 frames/s, 0.27-0.48 events/s is **0.3-0.5% substitution**, where
+that modem returns a median of 33600. Had the events been slips, 0.3-0.5/s
+would sit between the 10 ppm row (no connect) and the 100 ppm row (4800) —
+the opposite conclusion from the same numbers.
+
+~~**SO 1941/1942 DO NOT INDICT d-modem's MEDIA PATH, AND AN ASRC IS NOT THE
+NEXT THING TO BUILD.**~~ **WITHDRAWN IN FULL — this paragraph is the one the
+correction at the head of the finding overturns, and it is left here rather
+than deleted because it is the mistake, not a rough edge.** It argued that
+hsfuser's sec 5 ASRC conclusion does not apply because "d-modem reconciles by
+substituting whole frames and never changes the sample count". The
+`ZERO_EMPTY_FRAME` half changes it every time it fires.
+
+**AND THE 1942 ARGUMENT IT LEANED ON DOES NOT SAY WHAT IT WAS USED TO SAY.**
+RTP arriving at 50.000 pkt/s to within 0.03% shows there is no net *rate* error
+between the two crystals. It says nothing about whether the buffer momentarily
+runs dry, and a buffer that sits three or four frames deep runs dry on jitter
+alone whatever the long-run average is. 1942's own title states the mechanism —
+"OUR CONSUMER BURSTS AS DEEP AS THE BUFFER" — and every burst deeper than the
+buffer is an insertion. A matched average rate does not prevent that; it only
+means the insertions are not accumulating without bound.
+
+**WHAT SURVIVES, AND IT IS NOT NOTHING.** 0.3-0.5% may not be free on *our*
+receiver even if it is free on that one — see 6702, which is where the
+interesting number now is. And the mechanism 1942 named, a consumer that bursts
+as deep as the buffer, is still unexplained and still ours.
+
+**LIMITS.** hsfuser's curve is one V.34 receiver, on a modelled channel, at
+**36 dB SNR with tilt -6 dB** — a comfortable operating point, and twelve
+decibels above where 1937 measured ours. It establishes that 0.5% substitution
+need not cost rate on a link with margin; it cannot establish that ours should
+be equally tolerant at 24 dB, and 6702 is the reason that matters.
+
+The part of this finding that does NOT depend on the operating point is the
+substitution-versus-slip distinction, which is a property of the code in
+`stream.c` and `impair.c` and holds at any SNR.
+
+======================================================================
+
+### 6900. THE −2 RATE PENALTY FIRES ON 38% OF SELF-RAISED RETRAINS AND COSTS EXACTLY THE 4800 bit/s IT LOOKS LIKE — MEASURED OVER 1,616 ARCHIVED RATE DECISIONS, NO BENCH CALLS
+
+`tx1_ts_rates` (`v34hstx1.cpp:2688`) drops the requested rate by two indices
+when the handshake lands within 96,000 samples of the timer mark and
+`TX1_F2218 <= 3`, and `:2699` then assigns that value to `cfg->rxbits` — the
+receive rate we ask the far end for. `TX1_F2218` and `DP_MODE` are both
+`0x2218`; verified by grep, not inferred.
+
+**NOTHING LOGS THE BRANCH, BUT THE OBJECT LEAVES AN EXACT WITNESS.** `rec[1]`
+is written in precisely two places and read in precisely one:
+
+    2687  rec[1] = (short)0xfffd;              unconditional
+    2695          rec[1] = rec[1] & ~1u;       ONLY inside the branch
+    2781  "V34DATARATE, txmp bits 0x%x,0x%x,…" prints it as word 1
+
+So word 1 of the `txmp bits` line is a one-bit flag: `0xfffd` not taken,
+`0xfffc` taken. That turns the existing archive into a finished experiment.
+`testbench/ratepenalty.py`, over `testbench/captures`:
+
+    2,037 .log files scanned, 671 carried a `txmp bits` line
+    1,616 rate decisions recorded
+    penalty TAKEN 196 (12.1%), not taken 1,420 (87.9%)
+
+**THE MODE MAPPING IS CONFIRMED, WITH ZERO COUNTER-EXAMPLES IN 79.**
+`V34HSINIT` logs the `mode` argument to `v34handshakinit`, and `datapumpv34`
+sets `DP_MODE` from that call immediately after:
+
+    mode                      n    taken   not    predicted
+    0  cold start           156        0   156    can fire
+    1  our own retrain       86       33    53    can fire
+    2  renegotiation         35        0    35    MUST NOT fire
+    3  far end asked         44        0    44    MUST NOT fire
+
+**THE EFFECT SIZE IS EXACTLY THE MECHANISM'S.** Pooling taken against not-taken
+is confounded — the branch can only fire on a self-raised retrain, and those
+happen on calls already going badly — so the comparison that counts is *within*
+mode 1, where every observation is a self-raised retrain and the only
+difference is whether the timer window was open:
+
+    mode 1, penalty taken       n=33   median 12000   min 9600  max 21600
+    mode 1, penalty not taken   n=53   median 16800   min 4800  max 28800
+
+**12000 against 16800 is 4800 bit/s — two rate indices, which is what the
+branch does.** The predicted effect size and the measured difference are the
+same number, and `automatic:` prints *after* the penalty so the taken row is
+already docked.
+
+**MY OWN PREDICTION ABOUT HANDSHAKE 0 IS DEAD, and that is the useful part.**
+Task #187 argued that because `VPcmV34Create` memsets the object, `DP_MODE` is
+0 on the first handshake, `0 <= 3` holds, and the penalty would therefore fire
+on the cold start — which would have given 3203/3204's "handshake 0 is the bad
+one" a mechanism. **It fires zero times in 156 cold starts.** The mode guard is
+satisfied and the timer guard is not, so the branch never runs there. 3203/3204
+still have no mechanism and this is not it.
+
+**LIMITS, and the first is the one that matters.** This is observational, not
+randomised: the window is "within ~10 s of the mark", so what separates the two
+mode-1 groups is how *quickly* the retrain came, and a fast retrain may
+independently indicate a worse call. The 4800 agreement is strong evidence for
+the mechanism operating; it is not proof the branch *caused* the whole gap.
+n=33 against 53. And 1,295 of 1,616 decisions (80%) have no preceding
+`V34HSINIT` at all, because that line is branch instrumentation present in only
+184 of the archive's files — so the mode table rests on 321 observations, not
+1,616, and the tool prints that split rather than hiding it.
+
+**A MEASUREMENT BUG WORTH RECORDING, because it is finding 2400's shape.** The
+first run of the tool reported "258 v34handshakinit call sites" from 162 files.
+There are fourteen (1928). `from` is `__builtin_return_address(0)` and the
+library loads at a different base every run, so the raw addresses are
+per-process ASLR noise. ASLR shifts by whole pages, so the page offset is the
+call site; grouping by `addr & 0xfff` gives 22, which is a number that can be
+argued with. A denominator that is silently counting the wrong thing reads
+exactly like a denominator that is right.
+
+======================================================================
+
+### 6901. AN INDEPENDENT, KNOWN-GOOD V.34 PEER DOES NOT REPRODUCE THE RETRAINING EITHER — OURS AGAINST THE CONEXANT HSF IS 33600/33600 WITH ZERO RETRAINS, 8 RUNS OF 9
+
+`testbench/hsfcall.sh` puts our datapump and the Conexant HSF datapump
+(`~/dev/softmodems/conexant/hsfuser`) on the same modelled channel, through the
+same `chanshim.py` the ours-against-ours rig uses. No PBX, no hardware, no
+dialling — `chanshim.py` ignores the dial string, so no destination guard is
+involved and none can be.
+
+    ours vs HSF, clean, 9 runs   8 connected 33600 / 33600, train 14.2-19.5 s
+    ours vs ours  (control)      33600, V34DATARATE 10, probes 1, RETRAINS 0
+
+Reproduced independently of the run that built it, on a seed of my own
+choosing: `CHAN_DELAY_MS=0 CHAN_SEED=4242` gives CONNECT 33600 both ways,
+14.2 s training, real time 1.00x (61.7 s of audio in 61.7 s wall, so the run is
+not starved), `V34RTNCOUNT 0`.
+
+**THIS IS A NEGATIVE RESULT AND IT IS THE POINT.** #151/1948 established that
+the emulator does not reproduce the bench's retraining, and the obvious reading
+was that two copies of our own datapump might handshake perfectly with each
+other while failing against a real modem — an interop effect that a self-pairing
+cannot show. `chanshim.py`'s own header says exactly that: *"Smart Link against
+Smart Link is not Smart Link against a Rockwell or a USR."*
+
+**That reading is now tested and it does not survive.** The peer is no longer
+ours: HSF is a different implementation, a different vendor, a different era's
+code, and it trains 33600 against us in both directions with no retrains at
+all. So the symptom does not come from "our datapump against a competent
+foreign V.34" — it needs something this channel model does not contain.
+
+**WHAT THAT LEAVES.** Between the emulated rig and the bench the differences
+are the real SIP path (packetisation, two jitter buffers, the ATA's own
+processing) and the specific behaviour of the three hardware far ends. 1927
+cleared the ATA and the trunk for *hardware-to-hardware* traffic and 6700
+records why that does not extend to our leg. So the remaining suspects are the
+media path our leg alone traverses, and far-end behaviour no software peer
+imitates.
+
+**THE ONE RUN THAT DID NOT CONNECT, reported because it is the interesting
+one.** At `CHAN_DELAY_MS=70` over 60 s, the two ends trained V.34 at 33600 both
+ways — `+MRR` at 21.2 s — and then never reached CONNECT, with no `+ER: LAPM`
+in the remaining 40 s. It is the only run of nine with three probe rounds
+(`V34PROBEBINS 3`, `V34DATARATE 20`). n=1, not chased, and there is a live
+alternative to channel variance: the two runs with `V34DATARATE 20` were the
+first two executed, so first-run state is as good a candidate as the seed —
+and it is NOT a seed effect, because all four seeded 70 ms runs were
+`DATARATE 10`. Worth one repeat before anyone builds on it.
+
+**TWO CORRECTIONS TO hsfuser's OWN DOCUMENTATION, both measured here.**
+
+* `HSF_NOCTL` does not work for this. It swaps the answering side's `ATS0=1`
+  for a bare `ATA`, and over 70 s the modem stayed `offhook=0 tx_nz=0 rx_nz=0`
+  and emitted no sample. `ATS1=1` first changed the symptom to `NO CARRIER` in
+  about a second and not the outcome. `hsfshim.py` therefore makes a SECOND
+  socketpair for HSF's control channel and rings it in HSF's own newline
+  format — 24 ms cycles, 2 s bursts every 6 s, `exchange.c`'s numbers, because
+  `CRingDetector` accepts only 14-66 ms per cycle. HSF then keeps its built-in
+  `ATS0=1` and lifts after 84 rings.
+* HSF cannot originate over a bare channel. `DialerDialString` arms a
+  `DialtoneWaitTime` unconditionally and `ATX3` does not disable it; measured
+  here as `NO DIALTONE` 4.7 s after dialling, then on-hook. `exchange.c`
+  synthesises 350+440 Hz to satisfy it and a channel model carrying our silence
+  does not. So HSF answers and we dial — which is the bench's arrangement in
+  any case. `HSF_ROLE=originate` stays reachable so the failure can be
+  re-measured, not because it works.
+
+**LIMITS.** This inherits every limitation of the channel model, including the
+one that matters most: the model has never reproduced the retraining with ANY
+peer, so a clean result here is weak evidence about a mechanism the rig cannot
+show. What it does establish is narrower and worth having — the PEER is no
+longer a candidate explanation. `chanshim.py` and `chancall.sh` are unmodified
+and the ours-against-ours control was re-run alongside to prove the rig can
+still report a connect.
+
+======================================================================
+
+### 6903. THE JITTER BUFFER'S INSERTION RATE IS 0.096/s ACROSS 76 CALLS, NOT 1941's 0.25 — AND AT THAT RATE 6902's LADDER SAYS IT COSTS ABOUT ONE CALL IN TEN, NOT SIX
+
+6902 left one thing between it and a conclusion: the bench CONNECTS and then
+thrashes, where the emulator at what we believed was the bench's insertion rate
+mostly failed to connect at all. The proposed explanation was that 1941
+measured 0.25/s over the CONNECTED period and the training window might be
+gentler. **`testbench/jbtiming.py` over the archive refutes that explanation
+and replaces it with a simpler one.**
+
+The `JBSTAT` instrumentation lives only in the archive — master reverted
+`d-modem.c` to cryan209's tree and `grep -c JBSTAT` is 0 — so 76 logs are the
+whole available evidence and no new bench call can add to it without
+re-modifying a tree we deliberately restored.
+
+    elapsed within call   sec obs   empty/s   lost/s   mean buffer (frames)
+        0-10s               767      0.196    0.171          2.86
+       10-20s               756      0.085    0.097          2.76
+       20-30s               757      0.087    0.098          2.70
+       30-45s              1126      0.101    0.107          3.45
+       45-60s              1057      0.084    0.095          4.35
+         60s+              1721      0.064    0.069          9.87
+
+**THE HYPOTHESIS IS DEAD, AND BACKWARDS.** The early window is not gentler, it
+is the WORST — 0.196/s against 0.064/s after a minute, three times the rate —
+and the buffer is shallowest exactly then (2.9 frames against 9.9). That is the
+same direction 1941 saw within one call and the opposite of what was proposed
+here.
+
+**BUT THE HEADLINE IS THE DENOMINATOR, NOT THE SHAPE.** Across 6,184 observed
+seconds the rate is **0.096 insertions/s and 0.100 substitutions/s**, 0.196
+combined. 1941 reported roughly one of each every four seconds — 0.25/s each —
+from a single call, `jb-base-1`. 1942's three arms were 0.274 to 0.483/s
+COMBINED, so 1942 is consistent with this; **1941's per-mechanism figure is
+about 2.6x the archive-wide value and should not have been carried forward as
+typical.** It was one call and it is quoted throughout as though it were the
+bench's rate.
+
+**AND THAT DISSOLVES 6902's DISCREPANCY BY MOVING THE OPERATING POINT.** 6902
+swept `CHAN_SLIP` at 0.25 insertions/s because that is what 1941 said. The
+archive says 0.096. Reading 6902's own table at the point that actually
+obtains:
+
+    CHAN_SLIP 0.1/s   ours  9/10 connected, median 33600, p25 31200
+    CHAN_SLIP 0.25/s  ours  4/10 connected, median 22800, p25 12000
+
+**At the real rate the model gives 9 connects in 10 at full rate.** That agrees
+with the bench, which connects. It also means the jitter buffer costs us
+something like one call in ten and a little rate on the survivors — real, worth
+fixing, and **nowhere near enough to explain 66% of connected time spent
+re-handshaking.**
+
+**SO THE IMPLICATION I DREW FROM 6902 IS WITHDRAWN.** That finding's closing
+argument — d-modem's insertions are unique to our leg, they are measured to be
+capable of the damage, therefore the fix is in the media path — used 0.25/s.
+At 0.096/s the same table says they are not capable of the damage. The media
+path remains a contributor and is no longer a candidate for the principal
+cause.
+
+**WHAT SURVIVES, and it is worth keeping.** The insertions are real, they are
+concentrated in the first ten seconds where the buffer is shallowest, and
+that IS the window a handshake lives in. A defect that triples during training
+and costs one call in ten is a good thing to fix even when it is not the main
+event — and 6703's `hsfsip`, which counts underruns instead of hiding them,
+is the instrument that would let it be fixed and verified without re-modifying
+cryan209's tree.
+
+**LIMITS, and the first is structural.** The buckets are elapsed time from
+d-modem's first tick, not anchored to CONNECT, because aligning d-modem's
+block-buffered stdout to slmodemd's log needs row.sh's BENCHANCHOR and 1941
+records why file position cannot do it. So "0-10s" is SIP setup, ringing and
+early training mixed together, and the training window proper is probably the
+10-30s buckets at ~0.086/s. A CONNECT-anchored split would sharpen this and
+needs the anchor work. 76 series, one bench, one ATA, one period of time.
