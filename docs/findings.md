@@ -76217,16 +76217,35 @@ rename's:
 echo-adapt start leaves f354c alone" -- because it tests `find` gone AND
 `replace` present, which is only true where the mutation happens to describe
 deleting the very line the rename touched. The other 32 have a `find` that
-matches nothing, so `mutate.py` cannot locate the site at all. **A mutation
-that cannot be applied is indistinguishable from one that is always killed**,
-which is finding 134's dead detector with a whole suite behind it: six suites'
-worth of echo, power, retrain and diagnostic coverage had gone inert with no
-output changing anywhere.
+matches nothing, so `mutate.py` cannot locate the site at all, and **a mutation
+that cannot be applied is indistinguishable from one that is always killed**.
 
-`refcheck` now reports UNANCHORED for that case, fails on it, and prints the
-anchor count -- 7,700 today -- so a run over zero anchors cannot read as a clean
-one. Shown to fire by breaking one anchor and watching it appear and the exit
-go to 1, then restoring.
+**THE TREE COULD ALREADY SEE ALL 33, AND THAT IS THE REAL FINDING.**
+`anchorcheck.py` fails on any anchor matching "other than exactly once", and
+zero is not once: injecting one detached anchor gives `NOT UNIQUE v34rx: ...
+matches 0 time(s)` and exit 1. It never ran. `refs` was two plain recipe lines,
+`refcheck.py` then `anchorcheck.py`, so the dangling-reference failure aborted
+the target and the second checker's verdict was never printed -- and the branch
+had BOTH defects at once. The 33 anchors were not undetectable; they were
+downstream of an earlier `make` failure.
+
+So the fix is not another check. `refs` now runs both and fails afterwards:
+
+    @rc=0; $(PYTHON) tools/refcheck.py   || rc=1; \
+     $(PYTHON) tools/anchorcheck.py      || rc=1; \
+     exit $$rc
+
+Shown to fire: with a dangling reference AND a detached anchor injected
+together, the target prints `DANGLING docs/remaining.md:309 finding 9999` and
+`NOT UNIQUE ... matches 0 time(s)` and exits 2; before the change the second
+line did not appear. **A red gate must report everything it knows, not just the
+first thing that went wrong** -- which is findings 2400, 3100 and 3055 turned
+one notch: those were detectors measuring nothing, this is a detector that
+measured correctly and was never asked.
+
+A first draft of this finding added an UNANCHORED check to `refcheck.py`
+instead. It was reverted: the check already existed, and duplicating it would
+have hidden the sequencing defect that is the actual cause.
 
 #### Four compile failures, from offsets that name fields in other structs
 
