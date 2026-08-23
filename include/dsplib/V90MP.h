@@ -107,8 +107,6 @@ public:
 	void reset();
 	void resetDetector();
 	void resetCRC();
-	void calcCRC();
-	void evaluateCRC();
 	void calcSequenceLength();
 
 	/*
@@ -124,6 +122,23 @@ public:
 	void evaluateInfo();
 	void infoToBits();
 	int bitsToInfo(int bit);
+
+	/*
+	 * The CRC pair, also defined in src/pump/v90/V90MP.cpp.  `calcCRC`
+	 * (0x1f170) is void -- it ends `add $0x10,%esp` / four pops / `ret`
+	 * with nothing arranging %eax, and the byte left in %al is the last
+	 * feedback bit by accident.
+	 *
+	 * `evaluateCRC` (0x1f470) is NOT, and this declaration used to say it
+	 * was: the epilogue at 0x1f6ec is `xor %eax,%eax` / `test %bl,%bl` /
+	 * `sete %al`, and a leftover is never built with a `sete`.  It is the
+	 * same correction the V90CP twin's comment records making, and the
+	 * mangling cannot see it because return types are not mangled -- the
+	 * symbol is `_ZN5V90MP11evaluateCRCEv` either way.  It answers 1 when
+	 * the sixteen received CRC bits match the sixteen it computed.
+	 */
+	void calcCRC();
+	int evaluateCRC();
 	/*
 	 * Void, and MEASURED rather than assumed: 0x20bef is a CALL to
 	 * `dsplibs_debug_printf` and the two instructions after it are

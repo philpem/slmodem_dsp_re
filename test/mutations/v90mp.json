@@ -107,7 +107,7 @@
 
  {"label": "the CRC of a short message covers as much as a long one's", "find": "\tend = t ? 0xaa : 0x44;\n", "replace": "\tend = 0xaa;\n"},
 
- {"label": "infoToBits does not skip the framing bits", "find": "\n\t\tif (i % 17 == 0)\n\t\t\ti++;", "replace": "\n\t\tif (0)\n\t\t\ti++;"},
+ {"label": "infoToBits does not skip the framing bits", "why": "The anchor used to be the bare `if (i % 17 == 0)` two tabs in.  `calcCRC` and `evaluateCRC` landed with the same two lines at the same indentation -- the original's own repetition, four copies of the register in one file -- and it began matching three times, which mutate.py reports UNUSABLE and which does not fail a run.  It now carries infoToBits's `for` line, whose `; i++)` the two standalone members do not have.  Finding 1264's rule again.", "find": "\n\tfor (i = 0x12; i < end; i++) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;", "replace": "\n\tfor (i = 0x12; i < end; i++) {\n\t\tif (0)\n\t\t\ti++;"},
 
  {"label": "infoToBits taps the CRC at 4 and 11 rather than at 3 and 10", "find": "\t\tcrc[3] = (unsigned char)((crc[3] + x) & 1);\n\t\tcrc[10] = (unsigned char)((crc[10] + x) & 1);", "replace": "\t\tcrc[4] = (unsigned char)((crc[4] + x) & 1);\n\t\tcrc[11] = (unsigned char)((crc[11] + x) & 1);"},
 
@@ -201,5 +201,23 @@
 
  {"label": "CPack is printed unsigned, in the arm where it is not zero", "why": "It has to be the MPnot arm.  The MP arm's CPack is zero by construction -- the branch that reached it is `test %dl,%dl; je` on that very byte -- so a cast there cannot change any transcript and would be an uncatchable mutation for a reason that has nothing to do with the claim.  The MPnot arm's CPack is driven to 0x80.", "find": "\t\t\t\t\t    \"nLin%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, CPack);", "replace": "\t\t\t\t\t    \"nLin%d,Shaping%d,CPack%d\\r\\n\",\n\t\t\t\t\t    Type, Rate * 2400, Trellis, NonLin,\n\t\t\t\t\t    Shaping, (unsigned char)CPack);"},
 
- {"label": "h1 is printed as an unsigned short", "why": "`movswl 0x8(%ebx),%ecx` at 0x20225.  The six shorts are swept over 0x8000, 0xabcd, 0xaaaa and 0xff00 by info_vals, so the signed and unsigned readings give different transcripts.", "find": "\t\t\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\t\t\tdsplibs_debug_printf(\"V90MP: h1 real =\"\n\t\t\t\t\t\t\t     \" %d, imag = %d\\r\"\n\t\t\t\t\t\t\t     \"\\n\", h1Real,\n\t\t\t\t\t\t\t     h1Imag);", "replace": "\t\t\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\t\t\tdsplibs_debug_printf(\"V90MP: h1 real =\"\n\t\t\t\t\t\t\t     \" %d, imag = %d\\r\"\n\t\t\t\t\t\t\t     \"\\n\", (unsigned short)h1Real,\n\t\t\t\t\t\t\t     h1Imag);"}
+ {"label": "h1 is printed as an unsigned short", "why": "`movswl 0x8(%ebx),%ecx` at 0x20225.  The six shorts are swept over 0x8000, 0xabcd, 0xaaaa and 0xff00 by info_vals, so the signed and unsigned readings give different transcripts.", "find": "\t\t\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\t\t\tdsplibs_debug_printf(\"V90MP: h1 real =\"\n\t\t\t\t\t\t\t     \" %d, imag = %d\\r\"\n\t\t\t\t\t\t\t     \"\\n\", h1Real,\n\t\t\t\t\t\t\t     h1Imag);", "replace": "\t\t\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\t\t\tdsplibs_debug_printf(\"V90MP: h1 real =\"\n\t\t\t\t\t\t\t     \" %d, imag = %d\\r\"\n\t\t\t\t\t\t\t     \"\\n\", (unsigned short)h1Real,\n\t\t\t\t\t\t\t     h1Imag);"},
+
+ {"label": "NOTE: the CRC pair landed with this batch", "why": "`calcCRC` (0x1f170) and `evaluateCRC` (0x1f470) put a THIRD and FOURTH copy of the shift register in this file -- the original's own repetition, not an inlining, for finding 1237's reason -- so every anchor below names the member it means.  The first five are the ONE trap this pair has: the V.90 CP twin bounds the information bits with `word_3bb0 - 0x11` and finds the peer's CRC at `word_3bb0 - 0x10`, and 0xbb-0x11 is 0xaa while 0x55-0x11 is 0x44, so a transcription of the CP source is indistinguishable from the MP source on every object the class itself can build.  t_v90mp.cpp's inconsistent type/+0x119 pairs are what tell them apart, and these mutations are what prove those trials work."},
+
+ {"label": "calcCRC bounds the extent with +0x119, as the V.90 CP twin does", "find": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = type ? 0xaa : 0x44;", "replace": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = byte_119 - 0x11;"},
+
+ {"label": "calcCRC seeds the register instead of carrying it in", "find": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend", "replace": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\tint s;\n\n\tfor (s = 0; s <= 0xf; s++)\n\t\tcrc[s] = 1;\n\tend"},
+
+ {"label": "calcCRC does not skip the framing bits", "find": "\tunsigned char a;\n\n\tend = type ? 0xaa : 0x44;\n\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)", "replace": "\tunsigned char a;\n\n\tend = type ? 0xaa : 0x44;\n\n\tfor (i = 0x12; i < end; ) {\n\t\tif (0)"},
+
+ {"label": "evaluateCRC bounds the extent with +0x119, as the V.90 CP twin does", "find": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = type ? 0xaa : 0x44;", "replace": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = byte_119 - 0x11;"},
+
+ {"label": "evaluateCRC finds the peer's CRC from the type flag, not from +0x119", "find": "\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];", "replace": "\t\tint d = (int)crc[i] - (int)bits[end + 1 + i];"},
+
+ {"label": "evaluateCRC seeds the register with zeros, not the ones of clause 1", "find": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;", "replace": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 0;"},
+
+ {"label": "the peer's CRC is read most significant bit first", "find": "\tn = byte_119;\n\tsum = 0;\n\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];", "replace": "\tn = byte_119;\n\tsum = 0;\n\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + (15u - i)];"},
+
+ {"label": "the tap at 11 is at 12", "why": "The polynomial itself: 0x8408's set bits are 15, 10 and 3, so a tap one place over is a different generator.  Caught by the differential tier AND, independently, by run_mp_crc_spec against Figure 14/V.34.", "find": "\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n}\n\n/*\n * evaluateCRC", "replace": "\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n}\n\n/*\n * evaluateCRC"}
 ]
