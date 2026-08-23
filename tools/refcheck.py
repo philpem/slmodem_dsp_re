@@ -597,6 +597,22 @@ def check_suites():
 # `replace` is PRESENT, that mutation is live in the tree.  Finding 349.
 #
 def check_live_mutants():
+    """Two failures, and the quiet one is the reason this returns a count.
+
+    A LIVE MUTANT is a mutation whose `find` has gone from the source and
+    whose `replace` is present: the source now IS the mutated form, so the
+    defect the mutation describes has been committed.  That is loud and was
+    the only thing checked here.
+
+    An UNANCHORED mutation is one whose `find` matches nothing at all.  It is
+    not loud, and it is the more common failure: `mutate.py` cannot apply a
+    mutation it cannot locate, so the row scores nothing while still being
+    registered.  A rename of 62 V.34 fields detached 33 anchors across six
+    suites and exactly ONE of them was live -- the other 32 went silently
+    inert, which is finding 134's dead detector with a mutation suite behind
+    it.  Both now fail, and the anchor count is printed so a run over zero
+    anchors cannot read as a clean one (finding 2401).
+    """
     reg_path = os.path.join("test", "mutations", "suites.json")
     if not os.path.exists(reg_path):
         return []
@@ -604,7 +620,7 @@ def check_live_mutants():
         reg = json.load(open(reg_path))
     except ValueError:
         return []                       # check_suites() reports this
-    live = []
+    live, loose, checked = [], [], 0
     for name, entry in sorted(reg.items()):
         if name.startswith("_") or not isinstance(entry, list) or len(entry) != 2:
             continue
@@ -621,11 +637,18 @@ def check_live_mutants():
         for m in muts:
             if not isinstance(m, dict) or "find" not in m or "replace" not in m:
                 continue
-            if m["find"] not in text and m["replace"] in text:
+            checked += 1
+            if m["find"] in text:
+                continue
+            if m["replace"] in text:
                 print("  LIVE MUTANT  %s: %s"
                       % (entry[0], m.get("label", "(unlabelled)")))
                 live.append(entry[0])
-    return live
+            else:
+                print("  UNANCHORED   %s: %s"
+                      % (entry[0], m.get("label", "(unlabelled)")))
+                loose.append(entry[0])
+    return live, loose, checked
 
 
 def read_pending():
@@ -690,19 +713,21 @@ def check_dangling():
                      len(nums), branch, ", ".join(nums)))
     marks = check_conflict_markers()
     suites = check_suites()
-    live = check_live_mutants()
+    live, loose, anchors = check_live_mutants()
     #
     # EVERY COUNT CARRIES ITS DENOMINATOR (finding 2401), including the held
     # one: "0 resolve to nothing" over a silently exempted set is the same
     # lie as a coverage tier reporting 0.0% (0/0) and calling it OK.
     #
     print("\n  %d references checked, %d resolve to nothing, %d held pending "
-          "an unmerged branch, %d stale entr(y/ies)%s%s%s"
+          "an unmerged branch, %d stale entr(y/ies)%s%s%s%s"
           % (total, len(bad), len(held), len(stale),
              "" if not marks else ", %d conflict marker(s)" % len(marks),
              "" if not suites else ", %d bad mutation suite(s)" % len(suites),
-             "" if not live else ", %d LIVE MUTANT(S)" % len(live)))
-    return 1 if (bad or stale or marks or suites or live) else 0
+             "" if not live else ", %d LIVE MUTANT(S)" % len(live),
+             "" if not loose else ", %d UNANCHORED" % len(loose)))
+    print("  %d mutation anchor(s) checked against their source" % anchors)
+    return 1 if (bad or stale or marks or suites or live or loose) else 0
 
 
 def check_since(rev):
