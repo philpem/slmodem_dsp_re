@@ -879,6 +879,9 @@ period: $(REF)
 
 # The period-toolchain build and the similarity ratchet.  NOT part of `phase`:
 .PHONY: similarity
+byteident:
+	@$(PYTHON) tools/toolchain/byteident.py
+
 similarity:
 	tools/toolchain/build.sh
 	python3 tools/toolchain/compare.py --ratchet

@@ -274,12 +274,52 @@ each grade licenses a different conclusion:
 
 Below grade 2 is not a grade. It is a difference to explain.
 
-### Count matches, not bytes
+**Grades 0 and 1 are now MEASURED, by `tools/toolchain/byteident.py`, and
+`compare.py` measures neither.** `make byteident`, over the same denominator
+`compare.py` uses -- the symbols the blob and `build/tc_out` both define:
+
+| | of 1,200 | |
+|---|--:|---|
+| **grade 0** — same bytes in the same places | **393** | 32.8% |
+| — as grade 0 but a section relocation cannot be compared by name (604) | 5 | |
+| **grade 1** — same instructions and operands under one consistent register bijection | 10 | |
+| **grade 0 or 1** | **408** | **34.0%** |
+| same size, bytes differ | 163 | |
+| different size | 629 | |
+
+**Read that against `compare.py`'s 480 "identical instruction sequences" on
+the same tree.** 144 functions have the same mnemonic sequence and are NOT
+equivalent under a register bijection, because `compare.py` drops operands
+entirely -- `mov $1,%eax` and `mov $2,%ebx` are one instruction to it.
+`CarrierDetectB103` is the shape: same mnemonics, and the two loads are
+`0x8(%edx)`/`0x4(%edx)` in the blob against `0x4(%edx)`/`0x8(%edx)` in ours.
+That may still be functionally equivalent -- deciding needs the dataflow, which
+is grade 2 and is a judgement -- but it is not the same instructions, and the
+older number counted it as if it were.
+
+**Three artefacts inflate a text comparison of disassembly, and each was found
+by looking at what the tool called a difference.** Absolute branch targets
+(`jmp 7e321` against `jmp f1` is one jump printed twice; 310 functions scored
+different by that alone). Section-symbol relocations against named ones
+(finding 604). And relocated displacements, where the blob's addend rides
+inline and ours is a zero with a relocation beside it. `byteident.py` corrects
+all three -- branch targets are made function-relative, relocated fields are
+compared by TARGET rather than by value, and a section-vs-symbol pair is
+reported as UNRESOLVED rather than as a difference. A tool that has not been
+made to handle them is reporting its own artefacts.
+
+### The size ratio is a completion gauge, not a codegen metric
+
+**And the number below is not what its sentence used to call it.** This
+paragraph said "the count of BYTE-IDENTICAL functions"; `compare.py` runs
+`objdump --no-show-raw-insn` and cannot see a byte, so what stayed flat at 92
+was the count of functions whose MNEMONIC SEQUENCES matched. Byte identity was
+not measured by anything until `byteident.py` was written; see below for what
+it actually says.
 
 The size ratio is the weak number and it moves when you emit more code, not
-only more of the right code. `-O3` took it from 77.3% to 89.0% while the count
-of byte-identical functions stayed **flat at 92 across that entire 12-point
-swing** — our code grew 17 KB, we were undershooting, and the gap closed
+only more of the right code. `-O3` took it from 77.3% to 89.0% while that count
+stayed **flat at 92 across that entire 12-point swing** — our code grew 17 KB, we were undershooting, and the gap closed
 arithmetically (finding 616). Every one of `-O3`'s extra matches came from
 `-frename-registers` alone; `-finline-functions`, `-funswitch-loops` and
 `-fpeel-loops` added 17 KB and **not one additional match**.

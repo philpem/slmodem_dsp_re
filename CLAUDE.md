@@ -364,8 +364,19 @@ came from getting that backwards.
 
 ### The tools, and their precision
 
+- `byteident.py` (`make byteident`) — **grade 0 and grade 1, and the only
+  tool that measures either.** Grade 0 is positional byte identity: the
+  same bytes in the same places, which is the first question anybody
+  actually asks. Grade 1 is the same instructions and operands under one
+  consistent register bijection. **393 of 1,200 at grade 0 and 408 at
+  grade 0-or-1 today**, against `compare.py`'s 480 on the same tree — the
+  144 in between have identical mnemonics and different operands.
+  Relocated fields are compared by TARGET and branch targets are made
+  function-relative; without both, a text comparison reports its own
+  artefacts rather than the code's.
 - `compare.py` — the per-symbol comparison and the ratchet. It compares
-  MNEMONICS, not bytes: two functions storing the same constants to different
+  MNEMONICS, not bytes, and drops OPERANDS, so it is an upper bound on
+  grade 1 rather than a measurement of it: two functions storing the same constants to different
   offsets both read as `mov mov mov`. The total-bytes percentage is the weak
   number and moves when we emit more code, not only more of the right code.
 - `compare.py --ratchet` — fails only on a DECREASE, and is deliberately not
