@@ -41,7 +41,7 @@
  *
  * byte for byte the same, and differ only in what surrounds it: `reset`
  * COMPUTES `signBitsPerFrame` (and `signBitGroups`, `signBitGroupSize`,
- * `cleared_01c`) where `resetNoSpectral` reads the first and leaves the rest
+ * `bitsBuffered`) where `resetNoSpectral` reads the first and leaves the rest
  * alone, and the two call different members of the spectral shaper.  That
  * "+0x0c is read and never written here" is exactly the split
  * `V90Demapper::resetNoSpectral` has against `V90Demapper::reset`, and it is
@@ -90,7 +90,11 @@ V90MAPPER_OFF(signBitsPerFrame,	0x00c, c00c);
 V90MAPPER_OFF(signBitGroups,	0x010, c010);
 V90MAPPER_OFF(signBitGroupSize,	0x014, c014);
 V90MAPPER_OFF(buf,		0x018, buf);
-V90MAPPER_OFF(cleared_01c,	0x01c, c01c);
+V90MAPPER_OFF(bitsBuffered,	0x01c, c01c);
+V90MAPPER_OFF(codes,		0x020, codes);
+V90MAPPER_OFF(levels,		0x038, levels);
+V90MAPPER_OFF(signs,		0x044, signs);
+V90MAPPER_OFF(samples,		0x04a, samples);
 V90MAPPER_OFF(constellation,	0x056, cons);
 V90MAPPER_OFF(constellationSize,0x658, c658);
 V90MAPPER_OFF(modulusEncoder,	0x670, modenc);
@@ -128,7 +132,7 @@ V90Mapper::V90Mapper(V90Parameters *p)
 
 	signEncoder.prev_ = 0;
 	buf = sysdep_malloc(0x50);
-	cleared_01c = 0;
+	bitsBuffered = 0;
 	uint_6f8 = 0;
 	signBitGroupSize = 0;
 	signBitGroups = 0;
@@ -334,5 +338,127 @@ V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
 	signEncoder.prev_ = 0;
 
 	word_700 = 0;
-	cleared_01c = 0;
+	bitsBuffered = 0;
+}
+
+/*
+ * ===========================================================================
+ * V90Mapper::process -- .text+0x30420, 530 bytes
+ *
+ * ONE V.90 FRAME AT A TIME, OUT OF A BIT STREAM THAT NEED NOT BE A WHOLE
+ * NUMBER OF THEM.  Each input byte is one payload bit; they go into `buf` at
+ * `bitsBuffered` and nothing else happens until `bitsPerFrame` of them are
+ * there.  Then the frame is built, `bitsPerFrame` is taken back OFF
+ * `bitsBuffered` rather than the count being cleared, and whatever arrived
+ * after the frame boundary stays buffered for the next call.  The blob's
+ * epilogue does not set `%eax`, so nothing is returned; `nofSymbols` is the
+ * only answer.
+ *
+ * `buf` IS `void *` AND THAT IS WHAT THE RELOADS ARE.  The store at 0x30466
+ * goes through it as an `unsigned char`, which may alias anything, so
+ * `bitsBuffered` is re-read at 0x30469 and `buf` itself at 0x3045f on every
+ * pass.  A `unsigned char *` member would not have needed either.
+ *
+ * THE FRAME IS THREE STAGES AND THE MIDDLE ONE HAS TWO ARMS:
+ *
+ *   - `ModulusEncoder::progress` turns the `word_08` bits above the sign bits
+ *     into six mixed-radix digits, and each digit picks a level out of its own
+ *     constellation: `levels[k] = constellation[k][codes[k]]`, which the
+ *     object addresses as one flat `(k << 7) + codes[k]` with no bound on the
+ *     digit at all.
+ *   - With `signBitGroups` nonzero the sign bits go through the spectral
+ *     shaper, `signBitGroups` calls of `signBitGroupSize` samples each.  The
+ *     bit pointer advances by `signBitGroupSize - 1` per group and the sample
+ *     pointers by `signBitGroupSize`, because position 0 of every shaper frame
+ *     is the trellis's and not a payload bit (see V90SpectralShaper.h).  All
+ *     three members are RE-READ inside the loop, at 0x304d0, 0x304de and
+ *     0x304f2, which is what a member as a loop expression compiles to across
+ *     a call that could change it.
+ *   - With `signBitGroups` zero there is no shaper: the six bits go through
+ *     the serial differential encoder one at a time and a ZERO NEGATES, which
+ *     is the same polarity `V90SpectralShaper::process` uses for its own sign
+ *     bits.  `signs` is written and never read back by this class.
+ *
+ * THE TAIL IS THE PRIMING COUNTDOWN AND IT HAS THREE ARMS, not two.  +0x6f8
+ * starts at `mp->shaperId` and the shaper does not emit anything real until it
+ * has been fed that many frames, so:
+ *
+ *      +0x6f8 == 0                 all six samples go out
+ *      +0x6f8 <  signBitGroups     the last `6 - +0x6f8 * signBitGroupSize`
+ *                                  of them do, and the countdown ends
+ *      otherwise                   none do, and +0x6f8 loses signBitGroups
+ *
+ * -- which totals `shaperId * signBitGroupSize` suppressed samples over the
+ * whole countdown.  Where `shaperSR` divides six, and it does for every value
+ * V.90 uses, that is exactly `V90BitsToSymbol::reset`'s `extraSymbols`,
+ * `6 * shaperId / shaperSR`, computed by a different function in a different
+ * class out of the same two parameters -- so the three arms are confirmed from
+ * outside themselves.  The two part company for a `shaperSR` that does not
+ * divide six, and finding 7422 carries the algebra.
+ *
+ * `nofOut += V90MAPPER_FRAME - start` IS OUTSIDE THE LOOP AND UNCONDITIONAL,
+ * and the object is what says so: the guard at 0x305e7 skips the copy when
+ * `start` exceeds 5 and lands on 0x30611, which does the update anyway.  With
+ * `start` counted up inside the loop instead, a skipped loop would leave
+ * `nofOut` alone.  No state `reset` can produce reaches that -- `start` is at
+ * most `6 - signBitGroupSize` on this arm -- so the fixture pokes the three
+ * fields by hand to drive it.  Findings 7423 and 3120.
+ * ===========================================================================
+ */
+void
+V90Mapper::process(unsigned char *bits, unsigned int nofBits, short *symbols,
+		   unsigned int &nofSymbols)
+{
+	unsigned int i;
+	unsigned int nofOut = 0;
+
+	for (i = 0; i < nofBits; i++) {
+		unsigned int k;
+
+		((unsigned char *)buf)[bitsBuffered] = bits[i];
+		bitsBuffered++;
+		if (bitsBuffered < bitsPerFrame)
+			continue;
+
+		modulusEncoder.progress((unsigned char *)buf
+					    + signBitsPerFrame, codes);
+
+		for (k = 0; k < V90MAPPER_FRAME; k++)
+			levels[k] = constellation[k][codes[k]];
+
+		if (signBitGroups != 0) {
+			for (k = 0; k < signBitGroups; k++)
+				spectralShaper.process(
+				    &levels[k * signBitGroupSize],
+				    (unsigned char *)buf
+					+ k * (signBitGroupSize - 1),
+				    &samples[k * signBitGroupSize]);
+		} else {
+			for (k = 0; k < V90MAPPER_FRAME; k++) {
+				signs[k] = signEncoder.process(
+				    ((unsigned char *)buf)[k]);
+				samples[k] = signs[k] ? levels[k]
+						      : (short)-levels[k];
+			}
+		}
+
+		if (uint_6f8 == 0) {
+			for (k = 0; k < V90MAPPER_FRAME; k++)
+				symbols[nofOut + k] = samples[k];
+			nofOut += V90MAPPER_FRAME;
+		} else if (uint_6f8 < signBitGroups) {
+			unsigned int start = uint_6f8 * signBitGroupSize;
+
+			for (k = start; k < V90MAPPER_FRAME; k++)
+				symbols[nofOut + k - start] = samples[k];
+			nofOut += V90MAPPER_FRAME - start;
+			uint_6f8 = 0;
+		} else {
+			uint_6f8 -= signBitGroups;
+		}
+
+		bitsBuffered -= bitsPerFrame;
+	}
+
+	nofSymbols = nofOut;
 }

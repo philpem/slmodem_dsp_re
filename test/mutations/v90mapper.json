@@ -34,7 +34,7 @@
  },
  {
   "label": "ctor: +0x1c is left as it was found",
-  "find": "\tcleared_01c = 0;\n\tuint_6f8 = 0;",
+  "find": "\tbitsBuffered = 0;\n\tuint_6f8 = 0;",
   "replace": "\tuint_6f8 = 0;"
  },
  {
@@ -167,13 +167,13 @@
  },
  {
   "label": "reset: +0x1c is left as it was found",
-  "find": "\tword_700 = 0;\n\tcleared_01c = 0;\n}",
+  "find": "\tword_700 = 0;\n\tbitsBuffered = 0;\n}",
   "replace": "\tword_700 = 0;\n}"
  },
  {
   "label": "reset: +0x700 is left as it was found",
-  "find": "\tword_700 = 0;\n\tcleared_01c = 0;\n}",
-  "replace": "\tcleared_01c = 0;\n}"
+  "find": "\tword_700 = 0;\n\tbitsBuffered = 0;\n}",
+  "replace": "\tbitsBuffered = 0;\n}"
  },
  {
   "label": "reset: the sign encoder is left as it was found",
@@ -217,5 +217,84 @@
   "label": "reset: the sizes are copied from the wrong entry",
   "find": "\t\tconstellationSize[i] = mp->constellationSize[i];\n\n\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\tunsigned char b = mp->constellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {",
   "replace": "\t\tconstellationSize[i] = mp->constellationSize[0];\n\n\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\tunsigned char b = mp->constellation[i][j];\n\n\t\t\tif (pcm)\n\t\t\t\tconstellation[i][j] = (short)alaw2linear(\n\t\t\t\t    (unsigned char)((b & 0x7f) ^ 0xd5));\n\t\t\telse\n\t\t\t\tconstellation[i][j] = (short)ulaw2linear(\n\t\t\t\t    (unsigned char)~(b & 0x7f));\n\t\t}\n\n\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tif (signBitGroups != 0) {"
+ },
+ {
+  "_": [
+   "V90Mapper::process, written in this batch.  Every row below is meant to",
+   "be caught by t_v90modchain's two `V90Mapper::process` groups, which",
+   "compare the whole 0x704 object, the symbol buffer and its guard, and the",
+   "`nofSymbols` answer after every call.  The first row is the one that",
+   "needs the poked arm rather than any reachable state -- finding 7423."
+  ]
+ },
+ {
+  "label": "process: nofOut is counted inside the copy loop",
+  "find": "\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\tsymbols[nofOut + k - start] = samples[k];\n\t\t\tnofOut += V90MAPPER_FRAME - start;",
+  "replace": "\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\tsymbols[nofOut++] = samples[k];"
+ },
+ {
+  "label": "process: the bit count is cleared rather than reduced by a frame",
+  "find": "\t\tbitsBuffered -= bitsPerFrame;",
+  "replace": "\t\tbitsBuffered = 0;"
+ },
+ {
+  "label": "process: the frame is declared ready one bit early",
+  "find": "\t\tif (bitsBuffered < bitsPerFrame)",
+  "replace": "\t\tif (bitsBuffered + 1 < bitsPerFrame)"
+ },
+ {
+  "label": "process: the modulus bits start at the top of the buffer",
+  "find": "\t\tmodulusEncoder.progress((unsigned char *)buf\n\t\t\t\t\t    + signBitsPerFrame, codes);",
+  "replace": "\t\tmodulusEncoder.progress((unsigned char *)buf, codes);"
+ },
+ {
+  "label": "process: a zero sign bit is taken as positive",
+  "find": "\t\t\t\tsamples[k] = signs[k] ? levels[k]\n\t\t\t\t\t\t      : (short)-levels[k];",
+  "replace": "\t\t\t\tsamples[k] = signs[k] ? (short)-levels[k]\n\t\t\t\t\t\t      : levels[k];"
+ },
+ {
+  "label": "process: the shaper's bit pointer strides by the whole block",
+  "find": "\t\t\t\t\t+ k * (signBitGroupSize - 1),",
+  "replace": "\t\t\t\t\t+ k * signBitGroupSize,"
+ },
+ {
+  "label": "process: the countdown is ended rather than counted down",
+  "find": "\t\t\tuint_6f8 -= signBitGroups;",
+  "replace": "\t\t\tuint_6f8 = 0;"
+ },
+ {
+  "label": "process: the partial arm leaves the countdown running",
+  "find": "\t\t\tnofOut += V90MAPPER_FRAME - start;\n\t\t\tuint_6f8 = 0;",
+  "replace": "\t\t\tnofOut += V90MAPPER_FRAME - start;"
+ },
+ {
+  "label": "process: the countdown boundary is inclusive",
+  "find": "\t\t} else if (uint_6f8 < signBitGroups) {",
+  "replace": "\t\t} else if (uint_6f8 <= signBitGroups) {"
+ },
+ {
+  "label": "process: the answer is never written back",
+  "find": "\tnofSymbols = nofOut;",
+  "replace": "\t(void)nofOut;"
+ },
+ {
+  "label": "process: the sign encoder is fed the frame backwards",
+  "find": "\t\t\t\tsigns[k] = signEncoder.process(\n\t\t\t\t    ((unsigned char *)buf)[k]);",
+  "replace": "\t\t\t\tsigns[k] = signEncoder.process(\n\t\t\t\t    ((unsigned char *)buf)[V90MAPPER_FRAME - 1 - k]);"
+ },
+ {
+  "label": "process: every shaper group starts at the head of the frame",
+  "find": "\t\t\t\t    &levels[k * signBitGroupSize],",
+  "replace": "\t\t\t\t    &levels[0],"
+ },
+ {
+  "label": "process: all six levels come from constellation zero",
+  "find": "\t\t\tlevels[k] = constellation[k][codes[k]];",
+  "replace": "\t\t\tlevels[k] = constellation[0][codes[k]];"
+ },
+ {
+  "label": "process: each frame is written to the head of the caller's buffer",
+  "find": "\t\t\t\tsymbols[nofOut + k] = samples[k];",
+  "replace": "\t\t\t\tsymbols[k] = samples[k];"
  }
 ]

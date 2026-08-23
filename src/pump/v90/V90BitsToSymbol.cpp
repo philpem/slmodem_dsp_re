@@ -45,6 +45,7 @@
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90BitsToSymbol.h"
+#include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Mapper.h"
 
 extern "C" {
@@ -236,4 +237,62 @@ V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)
 		extraSymbolsPending = 0;
 
 	return status;
+}
+
+/*
+ * ===========================================================================
+ * `V90BitsToSymbol::reset` -- 108 bytes at 0x2f8d0
+ * `V90BitsToSymbol::resetNoSpectral` -- 58 bytes at 0x2f940
+ *
+ * THE MAPPER POINTER IS RELOADED FROM THE MEMBER, not carried in a register:
+ * both functions push their two arguments and then `mov (%esi),%edx` to fetch
+ * `this->mapper` (0x2f8ef, 0x2f95f).  Same reading as the constructor's second
+ * argument -- the blob reads the field, so this does.
+ *
+ * `extraSymbols` IS AN UNSIGNED DIVIDE AND THE ZERO IS GUARDED.  The object
+ * builds `6 * shaperId` with `lea (%eax,%eax,2)` and `add %eax,%eax`, then
+ * `f7 f3  div %ebx` at 0x2f919 -- `div`, not `idiv`, although
+ * `V90MappingParams::shaperSR` is declared `int`.  That is the same reading
+ * `V90Mapper::reset` records for its own `6 / shaperSR` and the same one
+ * `V90MAPPER_FRAME`'s `u` suffix exists for.  A zero `shaperSR` skips the
+ * divide with `%eax` already cleared (`xor %eax,%eax` at 0x2f904, before the
+ * test), so the answer is zero and not a trap.
+ *
+ * WHAT IT COUNTS is the symbols the mapper will swallow while its spectral
+ * shaper primes: `V90Mapper::process` suppresses whole frames while +0x6f8
+ * counts down and part of one at the end, `shaperId * signBitGroupSize` in
+ * all, and `6 * shaperId / shaperSR` is that number FOR EVERY `shaperSR` THAT
+ * DIVIDES SIX -- which is every value V.90 uses, and is where the shaper's own
+ * block length comes from.  Two classes, two spellings, one quantity; finding
+ * 7422 has the algebra and the case that separates them.
+ *
+ * `bitsPerFrame` AND `extraSymbols` ARE THE TWO FIELDS THE CONSTRUCTOR LEAVES
+ * ALONE, so a fixture that never zeroes its storage sees both stores directly.
+ * The other three are the constructor's as well as `reset`'s and need the
+ * sentinel treatment finding 7105 describes.
+ * ===========================================================================
+ */
+void
+V90BitsToSymbol::reset(V90MappingParams *mp, PcmType pcm)
+{
+	mapper->reset(mp, pcm);
+
+	bitsPerFrame = mp->word_0;
+
+	if (mp->shaperSR != 0)
+		extraSymbols = V90MAPPER_FRAME * mp->shaperId / mp->shaperSR;
+	else
+		extraSymbols = 0;
+
+	symbolsDone = 0;
+	symbolsBlockSize = 0;
+	extraSymbolsPending = 1;
+}
+
+void
+V90BitsToSymbol::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
+{
+	mapper->resetNoSpectral(mp, pcm);
+
+	bitsPerFrame = mp->word_0;
 }

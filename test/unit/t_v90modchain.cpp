@@ -1118,6 +1118,553 @@ run_mapper_pcm(const char *name, mapper_ctor our_c, mapper_ctor ref_c,
 	return diff_end();
 }
 
+/* ------------------------------------------------------ V90Mapper::process */
+
+extern "C" {
+/*
+ * The reference parameter is spelled `unsigned int *` for the same reason
+ * `PcmType` is spelled `int` above: it is one cdecl stack slot either way, the
+ * asm() label is exact, and the caller wants to read the answer back.
+ */
+void our_map_process(void *, unsigned char *, unsigned int, short *,
+		     unsigned int *) asm("_ZN9V90Mapper7processEPhjPsRj");
+void ref_map_process(void *, unsigned char *, unsigned int, short *,
+		     unsigned int *) asm("ref__ZN9V90Mapper7processEPhjPsRj");
+}
+
+/*
+ * WHAT BOUNDS A `process` CASE, and why it needs its own table rather than
+ * `reset_cases`.  Three of those eight would fault rather than fail:
+ *
+ *   - `ModulusEncoder::progress` DIVIDES by `constellationSize[0..4]`, so a
+ *     zero-sized constellation is a division by zero and not a test.  Cases 0,
+ *     3 and 4 all have one.
+ *   - The digit that comes back is used as `constellation[k][codes[k]]` with
+ *     no bound of any kind -- the object forms `(k << 7) + codes[k]` and loads
+ *     -- and the SIXTH digit is the accumulator's whole remaining quotient.
+ *     So a bit string that does not fit in `128 * size[0] * .. * size[4]`
+ *     reads outside the object.  `proc_case_safe` is that arithmetic and it is
+ *     asserted per case rather than assumed.
+ *   - `bitsPerFrame` must be at most 0x50, the size of `buf`, and at least
+ *     `signBitsPerFrame`; the table gives the MODULUS bit count and the frame
+ *     size is derived, so neither can drift.
+ *
+ * `shaperId` is capped at 3 by `V90SpectralShaper` and not by this class:
+ * `actionLookupTable` has eight rows indexed `state + 2 * shaperId`, and
+ * `delayLine` holds 24 entries against a `(shaperId + 1) * blockLength`
+ * window.
+ */
+struct proc_case {
+	unsigned int size[V90MAPPER_CONSTELLATIONS];
+	int	     sr;		/* mp->shaperSR                     */
+	unsigned int id;		/* mp->shaperId                     */
+	unsigned int payload;		/* word_08, the modulus bit count   */
+	int	     pcm;
+};
+
+static const struct proc_case proc_cases[] = {
+	/* No shaper at all: signBitGroups is zero and the six sign bits go
+	 * through the serial differential encoder instead. */
+	{ { 128, 128, 128, 128, 128, 128 }, 0, 0, 24u, 0 },
+	{ {  17,   9,  33,   5, 128,  64 }, 0, 2, 12u, 1 },
+
+	/* One group of six: the widest shaper frame there is. */
+	{ { 128, 128, 128, 128, 128, 128 }, 1, 0, 30u, 0 },
+	{ { 128, 128, 128, 128, 128, 128 }, 1, 1, 30u, 1 },
+	{ {  64,  32,  16,   8,   4, 128 }, 1, 3, 16u, 0 },
+
+	/* Two groups of three, three of two, six of one. */
+	{ { 128, 128, 128, 128, 128, 128 }, 2, 1, 28u, 0 },
+	{ { 100,  60,  20,  10,   5,  99 }, 2, 3, 20u, 1 },
+	{ { 128, 128, 128, 128, 128, 128 }, 3, 2, 26u, 0 },
+	{ {   2,   3,   4,   5,   6,   7 }, 3, 1, 10u, 1 },
+	{ { 128, 128, 128, 128, 128, 128 }, 6, 3, 22u, 0 },
+	{ {  40,  40,  40,  40,  40,  40 }, 6, 0,  8u, 0xff }
+};
+#define NPROC	((int)(sizeof(proc_cases) / sizeof(proc_cases[0])))
+
+#define PROC_BITS	1024u
+#define PROC_SYMS	128u
+#define PROC_SYMBYTES	(2u * PROC_SYMS)
+#define PROC_SLOT	(PROC_SYMBYTES + GUARD)
+
+static unsigned char proc_bits[PROC_BITS];
+static unsigned char sym_a[PROC_SLOT] __attribute__((aligned(8)));
+static unsigned char sym_b[PROC_SLOT] __attribute__((aligned(8)));
+static unsigned char sym_seed[PROC_SLOT];
+
+static unsigned int
+proc_frame_bits(const struct proc_case *c)
+{
+	return c->payload + (V90MAPPER_FRAME - (unsigned int)c->sr);
+}
+
+/*
+ * Can the sixth modulus digit reach outside its row?  `progress` reads
+ * `payload` bits as one integer, divides it by the first five constellation
+ * sizes and hands the rest over as `codes[5]`, which is then used as an index
+ * into a 128-entry row.  So the case is safe exactly when
+ * `2^payload <= 128 * size[0] * .. * size[4]`.
+ */
+static int
+proc_case_safe(const struct proc_case *c)
+{
+	unsigned long long room = (unsigned long long)V90MAPPER_LEVELS;
+	unsigned int bits = proc_frame_bits(c);
+	int i;
+
+	if (c->payload >= 63u || bits > 0x50u)
+		return 0;
+	for (i = 0; i < 5; i++) {
+		if (c->size[i] == 0u || c->size[i] > V90MAPPER_LEVELS)
+			return 0;
+		room *= (unsigned long long)c->size[i];
+	}
+	return (1ULL << c->payload) <= room;
+}
+
+/*
+ * The mapping block a `process` case is driven from.  It is `build_mp`'s work
+ * plus one thing that block cannot be left random for: THE FOUR SHAPER
+ * COEFFICIENTS.  `V90SpectralShaper::reset` hands them to the shaping filter
+ * and `advanceTrellis` runs that filter over the delay line, so LFSR bytes
+ * reinterpreted as `float` are a signalling NaN or a 10^38 as often as not --
+ * and NaN semantics are exactly where the modern compiler is allowed to differ
+ * from the object (CLAUDE.md's declared divergences).  Exact binary fractions
+ * keep the arithmetic away from that without making it trivial.
+ */
+static void
+build_mp_proc(const struct proc_case *c, int sweep)
+{
+	unsigned int i;
+
+	fill(rst_mp, rst_mp, (unsigned char *)0, sizeof(rst_mp), 0);
+
+	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
+		unsigned int j;
+
+		for (j = 0; j < V90MAPPER_LEVELS; j++)
+			RST_MP->constellation[i][j] = sweep
+			    ? (unsigned char)(i * V90MAPPER_LEVELS + j)
+			    : next_byte();
+		RST_MP->constellationSize[i] = c->size[i];
+	}
+
+	RST_MP->word_0 = proc_frame_bits(c);
+	RST_MP->shaperSR = c->sr;
+	RST_MP->shaperId = c->id;
+	RST_MP->shaperA1 = 0.5f;
+	RST_MP->shaperA2 = -0.25f;
+	RST_MP->shaperB1 = 0.125f;
+	RST_MP->shaperB2 = -0.0625f;
+}
+
+/* One bit per byte, and every fourth trial hands over whole bytes instead. */
+static void
+fill_bits(unsigned int n, int wide)
+{
+	unsigned int i;
+
+	for (i = 0; i < PROC_BITS; i++)
+		proc_bits[i] = wide ? next_byte()
+				    : (unsigned char)(next_byte() & 1u);
+	(void)n;
+}
+
+/*
+ * How many symbols the whole priming countdown swallows, stated INDEPENDENTLY
+ * of `V90Mapper::process`: it is `V90BitsToSymbol::reset`'s `extraSymbols`,
+ * `6 * shaperId / shaperSR`, computed by a different function in a different
+ * class out of the same two mapping parameters.  Asserting the mapper's three
+ * countdown arms against it is what makes the decode of that tail a
+ * measurement rather than a reading -- finding 7422.
+ */
+static unsigned int
+proc_expected_suppressed(const struct proc_case *c)
+{
+	if (c->sr == 0)
+		return 0u;
+	return V90MAPPER_FRAME * c->id / (unsigned int)c->sr;
+}
+
+static int
+run_mapper_process(void)
+{
+	int trial, ci;
+	long saw_full = 0, saw_partial = 0, saw_subtract = 0, saw_carry = 0;
+	long saw_overfull = 0;
+
+	diff_begin("V90Mapper::process");
+
+	for (trial = 0; trial < NTRIAL; trial++)
+		for (ci = 0; ci < NPROC; ci++) {
+		const struct proc_case *c = &proc_cases[ci];
+		unsigned int frame = proc_frame_bits(c);
+		long tag = (long)(ci * 100 + trial);
+		int call;
+
+		diff_eq_int("case %ld keeps the modulus digits inside the row",
+			    proc_case_safe(c), 1, (long)ci);
+		if (!proc_case_safe(c))
+			continue;
+
+		seed_trial(trial);
+		build_mp_proc(c, trial & 1);
+		harness_alloc_reset();
+
+		our_mapper_c1(map_a, PARAMS);
+		ref_mapper_c1(map_b, PARAMS);
+		our_map_reset(map_a, RST_MP, c->pcm);
+		ref_map_reset(map_b, RST_MP, c->pcm);
+
+		/*
+		 * FIVE CALLS, AND THE LENGTHS ARE NOT MULTIPLES OF THE FRAME.
+		 * `bitsBuffered` is reduced by `bitsPerFrame` rather than
+		 * cleared, so a call that ends part-way through a frame must
+		 * leave those bits in `buf` for the next one; a `process` that
+		 * cleared the count instead would agree with the blob on every
+		 * call whose length divides.  The zero-length call is the
+		 * object's `cmp %eax,%ebp ; jae` exit at 0x30439.
+		 */
+		for (call = 0; call < 5; call++) {
+			static const unsigned int mul[5] = { 0u, 1u, 3u, 2u,
+							     4u };
+			static const unsigned int add[5] = { 0u, 0u, 1u, 3u,
+							     0u };
+			unsigned int nb = mul[call] * frame + add[call];
+			unsigned int na = 0xa5a5a5a5u, nbo = 0x5a5a5a5au;
+			unsigned int before, after;
+			int allocs, frees;
+
+			if (nb > PROC_BITS)
+				nb = PROC_BITS;
+
+			fill_bits(nb, (trial & 3) == 3);
+			fill(sym_a, sym_b, sym_seed, PROC_SLOT,
+			     (trial + call) & 3);
+
+			/*
+			 * THE LAST CALL STARTS WITH THE BUFFER OVER-FULL, and
+			 * that is the only way to tell `bitsBuffered -=
+			 * bitsPerFrame` from `bitsBuffered = 0`.  Everywhere
+			 * else the two agree exactly: the count is raised one
+			 * bit at a time and the frame is run the moment it
+			 * REACHES `bitsPerFrame`, so the subtraction always
+			 * has an identical operand pair and always yields
+			 * zero.  It differs only when the count arrives at
+			 * `process` already at or above a frame, which no
+			 * reachable sequence of `reset` and `process` produces
+			 * -- so it is poked, on both sides, exactly as finding
+			 * 7423's copy arm is.  `frame + 4` stays inside the
+			 * 0x50-byte buffer for every case in the table.
+			 */
+			if (call == 4) {
+				unsigned int over = frame + 3u;
+
+				memcpy(map_a + 0x01c, &over, sizeof(over));
+				memcpy(map_b + 0x01c, &over, sizeof(over));
+				saw_overfull++;
+			}
+
+			before = peek(map_a, 0x6f8, 4);
+			allocs = harness_alloc.allocs;
+			frees = harness_alloc.frees;
+
+			our_map_process(map_a, proc_bits, nb,
+					(short *)(void *)sym_a, &na);
+			ref_map_process(map_b, proc_bits, nb,
+					(short *)(void *)sym_b, &nbo);
+
+			allocs = harness_alloc.allocs - allocs;
+			frees = harness_alloc.frees - frees;
+			after = peek(map_a, 0x6f8, 4);
+
+			live_refresh();
+
+			diff_eq_int("nofSymbols matches the blob (case %ld)",
+				    (int)na, (int)nbo, tag);
+			diff_eq_obj_(__FILE__, __LINE__,
+				     "the symbols and the guard past them",
+				     "short[]", sym_a, sym_b,
+				     (size_t)PROC_SLOT, tag);
+			compare_mapper("after process", map_a, map_b, tag);
+			diff_eq_int("nothing stored past the mapper "
+				    "(case %ld)",
+				    guard_intact(map_a, map_b, map_seed,
+						 MAPPER_SIZE, MAPPER_SLOT), 1,
+				    tag);
+			diff_eq_int("nothing stored past the symbols "
+				    "(case %ld)",
+				    guard_intact(sym_a, sym_b, sym_seed,
+						 PROC_SYMBYTES, PROC_SLOT), 1,
+				    tag);
+			diff_eq_int("process allocated nothing (case %ld)",
+				    allocs, 0, tag);
+			diff_eq_int("process freed nothing (case %ld)", frees,
+				    0, tag);
+
+			/*
+			 * Which arm of the countdown ran, so the aggregate
+			 * below can say all three were driven rather than
+			 * leaving that to the case table's good intentions.
+			 */
+			if (nb >= frame) {
+				if (before == 0u)
+					saw_full++;
+				else if (after == 0u)
+					saw_partial++;
+				else
+					saw_subtract++;
+			}
+			if (nb % frame != 0u)
+				saw_carry++;
+		}
+
+		/*
+		 * THE COUNTDOWN'S TOTAL, AGAINST `V90BitsToSymbol::reset`.
+		 * Eight frames in one call is more than any countdown here
+		 * needs -- it ends after at most `shaperId` subtractions and
+		 * one partial frame -- so the symbols missing from `8 * 6` are
+		 * exactly the ones the priming swallowed.  Driven over a
+		 * freshly reset object so the countdown starts at `shaperId`.
+		 */
+		{
+			unsigned int na = 0u, nbo = 1u;
+
+			our_map_reset(map_a, RST_MP, c->pcm);
+			ref_map_reset(map_b, RST_MP, c->pcm);
+			fill_bits(8u * frame, 0);
+			fill(sym_a, sym_b, sym_seed, PROC_SLOT, 0);
+
+			our_map_process(map_a, proc_bits, 8u * frame,
+					(short *)(void *)sym_a, &na);
+			ref_map_process(map_b, proc_bits, 8u * frame,
+					(short *)(void *)sym_b, &nbo);
+			live_refresh();
+
+			diff_eq_int("eight frames match the blob (case %ld)",
+				    (int)na, (int)nbo, tag);
+			diff_eq_obj_(__FILE__, __LINE__, "eight frames out",
+				     "short[]", sym_a, sym_b,
+				     (size_t)PROC_SLOT, tag);
+			diff_eq_int("the countdown swallowed extraSymbols "
+				    "(case %ld)",
+				    (int)(8u * V90MAPPER_FRAME - na),
+				    (int)proc_expected_suppressed(c), tag);
+			diff_eq_int("the countdown finished (case %ld)",
+				    (int)peek(map_a, 0x6f8, 4), 0, tag);
+			diff_eq_int("nothing stored past the mapper over "
+				    "eight frames (case %ld)",
+				    guard_intact(map_a, map_b, map_seed,
+						 MAPPER_SIZE, MAPPER_SLOT), 1,
+				    tag);
+			diff_eq_int("nothing stored past the symbols over "
+				    "eight frames (case %ld)",
+				    guard_intact(sym_a, sym_b, sym_seed,
+						 PROC_SYMBYTES, PROC_SLOT), 1,
+				    tag);
+		}
+
+		our_mapper_d1(map_a);
+		ref_mapper_d1(map_b);
+		diff_eq_int("nothing left allocated (case %ld)",
+			    harness_alloc.live, 0, tag);
+		}
+
+	diff_eq_int("the full-frame arm was driven (%ld calls)", saw_full > 0,
+		    1, saw_full);
+	diff_eq_int("the partial arm was driven (%ld calls)", saw_partial > 0,
+		    1, saw_partial);
+	diff_eq_int("the subtract arm was driven (%ld calls)",
+		    saw_subtract > 0, 1, saw_subtract);
+	diff_eq_int("a part-filled frame was carried over (%ld calls)",
+		    saw_carry > 0, 1, saw_carry);
+	diff_eq_int("the buffer was driven over-full (%ld calls)",
+		    saw_overfull > 0, 1, saw_overfull);
+
+	return diff_end();
+}
+
+/*
+ * THE ARM NO `reset` CAN REACH, and finding 7423 is why it is driven by hand.
+ *
+ * The object's partial-copy arm computes `start = uint_6f8 * signBitGroupSize`
+ * and guards the copy with `cmp $0x5,%edx ; ja` -- but the block it jumps to
+ * updates `nofOut` by `6 - start` ANYWAY.  Written with the count advanced
+ * inside the loop instead, a skipped loop would leave `nofOut` alone, and the
+ * two spellings agree over every state a `reset` can produce: that arm needs
+ * `0 < uint_6f8 < signBitGroups`, which bounds `start` at `6 - signBitGroupSize`
+ * and so at 5.
+ *
+ * So the three fields are poked directly, on BOTH sides, after a reset that
+ * leaves the spectral shaper properly set up.  `signBitGroupSize` is left as
+ * the reset computed it (6, from `shaperSR` of 1) and only the group COUNT and
+ * the countdown are moved, which keeps every pointer the shaper loop forms
+ * inside the object: with three groups of six the second and third frames land
+ * on `signs` and on `constellation`'s first rows rather than outside the
+ * allocation.  Both sides do exactly the same thing to exactly the same
+ * bytes, and the answer is asserted absolutely as well as differentially --
+ * `6 - 12` as an unsigned int is 0xfffffffa, and nothing else is.
+ */
+static int
+run_mapper_process_arm(void)
+{
+	static const struct proc_case arm_case =
+	    { { 128, 128, 128, 128, 128, 128 }, 1, 0, 20u, 0 };
+	unsigned int frame = proc_frame_bits(&arm_case);
+	int trial;
+
+	diff_begin("V90Mapper::process, the unreachable copy arm");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned int na = 0u, nbo = 1u;
+		unsigned int poke_groups = 3u, poke_count = 2u;
+
+		seed_trial(trial);
+		build_mp_proc(&arm_case, trial & 1);
+		harness_alloc_reset();
+
+		our_mapper_c1(map_a, PARAMS);
+		ref_mapper_c1(map_b, PARAMS);
+		our_map_reset(map_a, RST_MP, arm_case.pcm);
+		ref_map_reset(map_b, RST_MP, arm_case.pcm);
+
+		diff_eq_int("the reset left signBitGroupSize at six (%ld)",
+			    (int)peek(map_a, 0x014, 4), 6, (long)trial);
+
+		memcpy(map_a + 0x010, &poke_groups, sizeof(poke_groups));
+		memcpy(map_b + 0x010, &poke_groups, sizeof(poke_groups));
+		memcpy(map_a + 0x6f8, &poke_count, sizeof(poke_count));
+		memcpy(map_b + 0x6f8, &poke_count, sizeof(poke_count));
+
+		fill_bits(frame, 0);
+		fill(sym_a, sym_b, sym_seed, PROC_SLOT, trial & 3);
+
+		our_map_process(map_a, proc_bits, frame,
+				(short *)(void *)sym_a, &na);
+		ref_map_process(map_b, proc_bits, frame,
+				(short *)(void *)sym_b, &nbo);
+		live_refresh();
+
+		diff_eq_int("nofSymbols matches the blob (trial %ld)", (int)na,
+			    (int)nbo, (long)trial);
+		diff_eq_int("nofSymbols is 6 - 12 as an unsigned int "
+			    "(trial %ld)", (int)na, (int)(6u - 12u),
+			    (long)trial);
+		diff_eq_obj_(__FILE__, __LINE__, "nothing was copied out",
+			     "short[]", sym_a, sym_b, (size_t)PROC_SLOT,
+			     (long)trial);
+		compare_mapper("after the skipped copy", map_a, map_b,
+			       (long)trial);
+		diff_eq_int("the poked shaper loop stayed inside the object "
+			    "(trial %ld)",
+			    guard_intact(map_a, map_b, map_seed, MAPPER_SIZE,
+					 MAPPER_SLOT), 1, (long)trial);
+		diff_eq_int("nothing stored past the symbols (trial %ld)",
+			    guard_intact(sym_a, sym_b, sym_seed, PROC_SYMBYTES,
+					 PROC_SLOT), 1, (long)trial);
+		diff_eq_int("the countdown still ended (trial %ld)",
+			    (int)peek(map_a, 0x6f8, 4), 0, (long)trial);
+
+		our_mapper_d1(map_a);
+		ref_mapper_d1(map_b);
+		diff_eq_int("nothing left allocated (trial %ld)",
+			    harness_alloc.live, 0, (long)trial);
+	}
+
+	return diff_end();
+}
+
+
+/*
+ * THE BOUNDARY BETWEEN THE SECOND AND THIRD ARMS, which is `jb` at 0x3052e and
+ * therefore STRICT.  Written `<=` instead, the two arms agree for every
+ * `shaperSR` that divides six: with `+0x6f8` equal to `signBitGroups` the
+ * partial arm's `start` is `signBitGroups * signBitGroupSize`, which is exactly
+ * 6, so it copies nothing, adds nothing to `nofOut` and clears the countdown --
+ * letter for letter what the subtract arm does when the two are equal.
+ *
+ * `shaperSR` OF 4 IS WHAT SEPARATES THEM.  `signBitGroupSize` is `6 / 4` = 1,
+ * so four groups cover four of the six samples and `start` comes out at 4
+ * rather than 6: the inclusive spelling would copy `samples[4]` and
+ * `samples[5]` and answer 2 where the object answers 0.  `reset` cannot put
+ * `+0x6f8` equal to `signBitGroups` on its own -- it puts `shaperId` there and
+ * the two parameters are independent -- so the countdown is poked to 4 after a
+ * reset that built the shaper for `shaperId` of 1.  One frame is driven, which
+ * is fewer than `primeFrames`, and the answer is asserted absolutely: the
+ * object emits NOTHING on this arm.
+ */
+static int
+run_mapper_process_boundary(void)
+{
+	static const struct proc_case bound_case =
+	    { { 128, 128, 128, 128, 128, 128 }, 4, 1, 20u, 0 };
+	unsigned int frame = proc_frame_bits(&bound_case);
+	int trial;
+
+	diff_begin("V90Mapper::process, the countdown boundary is strict");
+
+	diff_eq_int("the boundary case keeps the digits inside the row",
+		    proc_case_safe(&bound_case), 1, 0);
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned int na = 0u, nbo = 1u;
+		unsigned int equal = 4u;
+
+		seed_trial(trial);
+		build_mp_proc(&bound_case, trial & 1);
+		harness_alloc_reset();
+
+		our_mapper_c1(map_a, PARAMS);
+		ref_mapper_c1(map_b, PARAMS);
+		our_map_reset(map_a, RST_MP, bound_case.pcm);
+		ref_map_reset(map_b, RST_MP, bound_case.pcm);
+
+		diff_eq_int("the reset left signBitGroups at four (%ld)",
+			    (int)peek(map_a, 0x010, 4), 4, (long)trial);
+		diff_eq_int("the reset left signBitGroupSize at one (%ld)",
+			    (int)peek(map_a, 0x014, 4), 1, (long)trial);
+
+		memcpy(map_a + 0x6f8, &equal, sizeof(equal));
+		memcpy(map_b + 0x6f8, &equal, sizeof(equal));
+
+		fill_bits(frame, 0);
+		fill(sym_a, sym_b, sym_seed, PROC_SLOT, trial & 3);
+
+		our_map_process(map_a, proc_bits, frame,
+				(short *)(void *)sym_a, &na);
+		ref_map_process(map_b, proc_bits, frame,
+				(short *)(void *)sym_b, &nbo);
+		live_refresh();
+
+		diff_eq_int("nofSymbols matches the blob (trial %ld)", (int)na,
+			    (int)nbo, (long)trial);
+		diff_eq_int("the equal case emits nothing (trial %ld)",
+			    (int)na, 0, (long)trial);
+		diff_eq_int("the countdown lost exactly signBitGroups "
+			    "(trial %ld)", (int)peek(map_a, 0x6f8, 4), 0,
+			    (long)trial);
+		diff_eq_obj_(__FILE__, __LINE__, "nothing was copied out",
+			     "short[]", sym_a, sym_b, (size_t)PROC_SLOT,
+			     (long)trial);
+		compare_mapper("after the subtract arm", map_a, map_b,
+			       (long)trial);
+		diff_eq_int("nothing stored past the mapper (trial %ld)",
+			    guard_intact(map_a, map_b, map_seed, MAPPER_SIZE,
+					 MAPPER_SLOT), 1, (long)trial);
+		diff_eq_int("nothing stored past the symbols (trial %ld)",
+			    guard_intact(sym_a, sym_b, sym_seed, PROC_SYMBYTES,
+					 PROC_SLOT), 1, (long)trial);
+
+		our_mapper_d1(map_a);
+		ref_mapper_d1(map_b);
+		diff_eq_int("nothing left allocated (trial %ld)",
+			    harness_alloc.live, 0, (long)trial);
+	}
+
+	return diff_end();
+}
+
 /* ========================================================== V90BitsToSymbol */
 
 /* Varied, and never zero: nofSymbols scales the second allocation. */
@@ -1318,6 +1865,295 @@ run_bts_dtor(const char *name, bts_ctor our_c, bts_ctor ref_c, dtor our_d,
 
 	diff_eq_int("a null pointer was tried", saw_null, 1, 0);
 	diff_eq_int("a live pointer was tried", saw_live, 1, 0);
+
+	return diff_end();
+}
+
+
+/* --------------------------- V90BitsToSymbol::reset, ::resetNoSpectral */
+
+extern "C" {
+void our_bts_reset(void *, V90MappingParams *, int)
+	asm("_ZN15V90BitsToSymbol5resetEP16V90MappingParams7PcmType");
+void ref_bts_reset(void *, V90MappingParams *, int)
+	asm("ref__ZN15V90BitsToSymbol5resetEP16V90MappingParams7PcmType");
+void our_bts_resetns(void *, V90MappingParams *, int)
+	asm("_ZN15V90BitsToSymbol15resetNoSpectralEP16V90MappingParams7PcmType");
+void ref_bts_resetns(void *, V90MappingParams *, int)
+	asm("ref__ZN15V90BitsToSymbol15resetNoSpectralEP16V90MappingParams7PcmType");
+}
+
+typedef void (*bts_reset)(void *, V90MappingParams *, int);
+
+/*
+ * THE SENTINELS THIS CLASS NEEDS ARE A DIFFERENT SET FROM THE MAPPER'S, and
+ * which fields are in it is the whole content of the header's remark that
+ * `bitsPerFrame` and `extraSymbols` are the two the CONSTRUCTOR leaves alone.
+ *
+ * `symbolsDone`, `symbolsBlockSize` and `extraSymbolsPending` are written by
+ * the constructor with exactly the values `reset` writes -- 0, 0 and 1 -- so
+ * finding 7105's masking applies to all three and each needs a value the
+ * function could not have produced.  0x01 is what seed mode 1 puts everywhere,
+ * so the flag byte's sentinel has to be neither 0 nor 1.
+ *
+ * `bitsPerFrame` and `extraSymbols` need NOTHING: the constructor does not
+ * touch either, so the seed reaches them and a dropped store leaves varied
+ * pseudorandom bytes.  That is also what lets `resetNoSpectral` be pinned as
+ * writing the first and not the second -- the assertion below is against the
+ * SEED, on our side, and no store can pass it by accident.
+ */
+static const struct {
+	unsigned int off;
+	unsigned int val;
+	unsigned int width;
+} bts_pokes[] = {
+	{ 0x10u, 0x31313131u, 4u },	/* symbolsDone         */
+	{ 0x1cu, 0x32323232u, 4u },	/* symbolsBlockSize    */
+	{ 0x20u, 0x00a5u,     1u }	/* extraSymbolsPending */
+};
+#define NBTSPOKE ((int)(sizeof(bts_pokes) / sizeof(bts_pokes[0])))
+
+static void
+poke_bts(unsigned char *o)
+{
+	int i;
+
+	for (i = 0; i < NBTSPOKE; i++)
+		memcpy(o + bts_pokes[i].off, &bts_pokes[i].val,
+		       bts_pokes[i].width);
+}
+
+static unsigned int
+bts_expected_extra(const struct reset_case *c)
+{
+	if (c->sr == 0)
+		return 0u;
+	return V90MAPPER_FRAME * c->id / (unsigned int)c->sr;
+}
+
+/*
+ * `spectral` selects which of the two is under test.  Both hand their two
+ * arguments straight to the same-named member of the mapper they own, so the
+ * mapper is compared as well as the 0x24 -- an argument dropped or swapped on
+ * the way through shows up there and nowhere else.
+ */
+static int
+run_bts_reset(const char *name, bts_reset our_r, bts_reset ref_r, int spectral)
+{
+	int trial, ci, moved = 0;
+
+	diff_begin(name);
+
+	for (trial = 0; trial < NTRIAL; trial++)
+		for (ci = 0; ci < NRESET; ci++) {
+		const struct reset_case *c = &reset_cases[ci];
+		unsigned int n = bts_n[(trial + ci) % (int)(sizeof(bts_n)
+							   / sizeof(bts_n[0]))];
+		unsigned char post_ctor[BTS_SLOT];
+		unsigned char *mapper_a, *mapper_b;
+		long tag = (long)(ci * 100 + trial);
+		int a_allocs, a_frees;
+
+		seed_trial(trial);
+		build_mp(c, trial & 1);
+		harness_alloc_reset();
+
+		our_bts_c1(bts_a, n, PARAMS);
+		ref_bts_c1(bts_b, n, PARAMS);
+
+		mapper_a = (unsigned char *)slot_ptr(bts_a, 0x00);
+		mapper_b = (unsigned char *)slot_ptr(bts_b, 0x00);
+
+		poke_bts(bts_a);
+		poke_bts(bts_b);
+		poke_fields(mapper_a);
+		poke_fields(mapper_b);
+
+		memcpy(post_ctor, bts_a, BTS_SLOT);
+
+		a_allocs = harness_alloc.allocs;
+		a_frees = harness_alloc.frees;
+		our_r(bts_a, RST_MP, c->pcm);
+		ref_r(bts_b, RST_MP, c->pcm);
+		a_allocs = harness_alloc.allocs - a_allocs;
+		a_frees = harness_alloc.frees - a_frees;
+
+		live_refresh();
+
+		diff_eq_int("the resets allocated nothing (case %ld)", a_allocs,
+			    0, tag);
+		diff_eq_int("the resets freed nothing (case %ld)", a_frees, 0,
+			    tag);
+		diff_eq_int("no bad free (case %ld)", harness_alloc.bad_free, 0,
+			    tag);
+
+		compare_bts("after reset", bts_a, bts_b, tag);
+		compare_mapper("the mapper it owns", mapper_a, mapper_b, tag);
+		diff_eq_int("nothing stored past the object (case %ld)",
+			    guard_intact(bts_a, bts_b, bts_seed, BTS_SIZE,
+					 BTS_SLOT), 1, tag);
+
+		/* Both of them, and it is the ONE store `resetNoSpectral`
+		 * makes of its own. */
+		diff_eq_int("bitsPerFrame is the mapping block's first word "
+			    "(case %ld)", (int)peek(bts_a, 0x14, 4),
+			    (int)c->word0, tag);
+
+		if (spectral) {
+			diff_eq_int("extraSymbols is 6 * shaperId / shaperSR "
+				    "(case %ld)", (int)peek(bts_a, 0x18, 4),
+				    (int)bts_expected_extra(c), tag);
+			diff_eq_int("symbolsDone was cleared (case %ld)",
+				    (int)peek(bts_a, 0x10, 4), 0, tag);
+			diff_eq_int("symbolsBlockSize was cleared (case %ld)",
+				    (int)peek(bts_a, 0x1c, 4), 0, tag);
+			diff_eq_int("extraSymbolsPending was set (case %ld)",
+				    (int)peek(bts_a, 0x20, 1), 1, tag);
+		} else {
+			/*
+			 * FOUR FIELDS `resetNoSpectral` MUST NOT TOUCH, and
+			 * the claim is made on our side against what was there
+			 * rather than against the blob: two sides agreeing on
+			 * a field neither wrote is not evidence that neither
+			 * wrote it.  `extraSymbols` is checked against the
+			 * SEED because nothing has written it since.
+			 */
+			diff_eq_int("resetNoSpectral did not write "
+				    "extraSymbols (case %ld)",
+				    (int)peek(bts_a, 0x18, 4),
+				    (int)peek(bts_seed, 0x18, 4), tag);
+			diff_eq_int("resetNoSpectral did not write "
+				    "symbolsDone (case %ld)",
+				    (int)peek(bts_a, 0x10, 4), 0x31313131, tag);
+			diff_eq_int("resetNoSpectral did not write "
+				    "symbolsBlockSize (case %ld)",
+				    (int)peek(bts_a, 0x1c, 4), 0x32323232, tag);
+			diff_eq_int("resetNoSpectral did not write "
+				    "extraSymbolsPending (case %ld)",
+				    (int)peek(bts_a, 0x20, 1), 0xa5, tag);
+		}
+
+		if (memcmp(post_ctor, bts_a, BTS_SLOT) != 0)
+			moved = 1;
+
+		our_bts_d1(bts_a);
+		ref_bts_d1(bts_b);
+		diff_eq_int("nothing left allocated (case %ld)",
+			    harness_alloc.live, 0, tag);
+		}
+
+	diff_eq_int("the reset changed the object", moved, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * THE DIVIDE IS `div` AND NOT `idiv`, and no case above can tell.  The object
+ * builds `6 * shaperId` and divides by `shaperSR` with `f7 f3` at 0x2f919,
+ * although `V90MappingParams::shaperSR` is declared `int` -- so a NEGATIVE
+ * `shaperSR` is the discriminator: unsigned it is an enormous divisor and the
+ * quotient is zero, signed it is `-6 * shaperId`.  The wide `shaperId` cases
+ * are the other half of the same question, where `6 * shaperId` wraps 32 bits
+ * before the divide rather than after it.
+ *
+ * NONE OF THESE OBJECTS IS EVER HANDED TO `process`.  A negative `shaperSR`
+ * gives the mapper a `signBitGroupSize` of zero and the shaper a `blockLength`
+ * of zero, which both resets survive because neither indexes anything by them;
+ * `process` would.
+ */
+static const struct {
+	int	     sr;
+	unsigned int id;
+	unsigned int word0;
+} bts_div_cases[] = {
+	{	  -1,	       3u, 40u },
+	{	  -1,	       0u, 30u },
+	{	  -6,	       1u, 26u },
+	{ (int)0x80000000u,    2u, 24u },
+	{	   4,	       2u, 24u },
+	{	   5,	       1u, 26u },
+	{	   7,	       3u, 28u },
+	{     0x10000,	       2u, 32u },
+	{	   6,	       7u, 20u },
+	{	   1,  0x40000000u, 18u },
+	{	   3,  0xffffffffu, 22u }
+};
+#define NBTSDIV	((int)(sizeof(bts_div_cases) / sizeof(bts_div_cases[0])))
+
+static int
+run_bts_reset_div(void)
+{
+	int trial, ci, saw_wrap = 0, saw_zero = 0;
+
+	diff_begin("V90BitsToSymbol::reset, the divide is unsigned");
+
+	for (trial = 0; trial < 4; trial++)
+		for (ci = 0; ci < NBTSDIV; ci++) {
+		struct reset_case rc;
+		unsigned int expect;
+		long tag = (long)(ci * 100 + trial);
+		int i;
+
+		for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++)
+			rc.size[i] = (unsigned int)(1 + i);
+		rc.sr = bts_div_cases[ci].sr;
+		rc.id = bts_div_cases[ci].id;
+		rc.word0 = bts_div_cases[ci].word0;
+		rc.pcm = trial & 1;
+
+		seed_trial(trial);
+		build_mp(&rc, trial & 1);
+		harness_alloc_reset();
+
+		our_bts_c1(bts_a, 0x40u, PARAMS);
+		ref_bts_c1(bts_b, 0x40u, PARAMS);
+		poke_bts(bts_a);
+		poke_bts(bts_b);
+		poke_fields((unsigned char *)slot_ptr(bts_a, 0x00));
+		poke_fields((unsigned char *)slot_ptr(bts_b, 0x00));
+
+		our_bts_reset(bts_a, RST_MP, rc.pcm);
+		ref_bts_reset(bts_b, RST_MP, rc.pcm);
+		live_refresh();
+
+		compare_bts("after reset", bts_a, bts_b, tag);
+		compare_mapper("the mapper it owns",
+			       (unsigned char *)slot_ptr(bts_a, 0x00),
+			       (unsigned char *)slot_ptr(bts_b, 0x00), tag);
+		diff_eq_int("nothing stored past the object (case %ld)",
+			    guard_intact(bts_a, bts_b, bts_seed, BTS_SIZE,
+					 BTS_SLOT), 1, tag);
+
+		/*
+		 * `bts_expected_extra` guards the zero and this must too: a
+		 * later case with `sr` of 0 would divide by it here, in the
+		 * FIXTURE, and a crash is not a verdict.
+		 */
+		diff_eq_int("the case has a divisor (case %ld)", rc.sr != 0, 1,
+			    tag);
+		expect = bts_expected_extra(&rc);
+		diff_eq_int("extraSymbols is the UNSIGNED quotient (case %ld)",
+			    (int)peek(bts_a, 0x18, 4), (int)expect, tag);
+
+		if (rc.sr < 0) {
+			diff_eq_int("a negative shaperSR gives zero, not a "
+				    "negative (case %ld)",
+				    (int)peek(bts_a, 0x18, 4), 0, tag);
+			saw_zero++;
+		}
+		if (V90MAPPER_FRAME * rc.id < rc.id)
+			saw_wrap++;
+
+		our_bts_d1(bts_a);
+		ref_bts_d1(bts_b);
+		diff_eq_int("nothing left allocated (case %ld)",
+			    harness_alloc.live, 0, tag);
+		}
+
+	diff_eq_int("a negative shaperSR was tried (%ld cases)", saw_zero > 0,
+		    1, (long)saw_zero);
+	diff_eq_int("6 * shaperId wrapped 32 bits (%ld cases)", saw_wrap > 0, 1,
+		    (long)saw_wrap);
 
 	return diff_end();
 }
@@ -1903,6 +2739,10 @@ main(void)
 			     our_mapper_d1, ref_mapper_d1, our_map_resetns,
 			     ref_map_resetns);
 
+	rc |= run_mapper_process();
+	rc |= run_mapper_process_arm();
+	rc |= run_mapper_process_boundary();
+
 	rc |= run_bts_ctor("V90BitsToSymbol::V90BitsToSymbol (C1)",
 			   our_bts_c1, ref_bts_c1, our_bts_d1, ref_bts_d1);
 	rc |= run_bts_ctor("V90BitsToSymbol::V90BitsToSymbol (C2)",
@@ -1913,6 +2753,12 @@ main(void)
 	rc |= run_bts_dtor("V90BitsToSymbol::~V90BitsToSymbol (D2)",
 			   our_bts_c2, ref_bts_c2, our_bts_d2, ref_bts_d2,
 			   our_mapper_d2, ref_mapper_d2);
+
+	rc |= run_bts_reset("V90BitsToSymbol::reset", our_bts_reset,
+			    ref_bts_reset, 1);
+	rc |= run_bts_reset("V90BitsToSymbol::resetNoSpectral",
+			    our_bts_resetns, ref_bts_resetns, 0);
+	rc |= run_bts_reset_div();
 
 	rc |= run_p4m_ctor("V90Phase4Modulator (C1, converter supplied)",
 			   our_p4m_c1, ref_p4m_c1, our_p4m_d1, ref_p4m_d1, 1);
