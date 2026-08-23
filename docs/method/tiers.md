@@ -282,9 +282,9 @@ Below grade 2 is not a grade. It is a difference to explain.
 |---|--:|---|
 | **grade 0** — same bytes in the same places | **393** | 32.8% |
 | — as grade 0 but a section relocation cannot be compared by name (604) | 5 | |
-| **grade 1** — same instructions and operands under one consistent register bijection | 18 | |
-| **grade 0 or 1** | **416** | **34.7%** |
-| same size, bytes differ | 152 | |
+| **grade 1** — same instructions and operands, renamed per live range | 38 | |
+| **grade 0 or 1** | **436** | **36.3%** |
+| same size, bytes differ | 132 | |
 | different size | 629 | |
 
 **Read that against `compare.py`'s 480 "identical instruction sequences" on
@@ -296,6 +296,19 @@ entirely -- `mov $1,%eax` and `mov $2,%ebx` are one instruction to it.
 That may still be functionally equivalent -- deciding needs the dataflow, which
 is grade 2 and is a judgement -- but it is not the same instructions, and the
 older number counted it as if it were.
+
+**Grade 1's renaming is PER LIVE RANGE, not per function.** A single
+bijection held across a whole function rejected 20 pairs that differ in nothing
+but allocation -- the blob puts two successive values in `%eax` where ours puts
+the second in `%edx`, which no function-wide map can express. A destination
+written without being read ends the range and the pairing lapses there;
+`add %eax,%ebx` reads and writes `%ebx` and is not a definition. That took
+grade 1 from 18 to 38. **It is a LOOSENING, so its self-test is inverted:
+`byteident.py --self-test` carries eight cases and SIX are things the check
+must still reject** -- a different immediate, a different displacement, crossed
+live ranges, a pinned `%esp`, a read-modify-write mistaken for a definition,
+and an indexed memory operand mistaken for three operands. A tool that only
+proves it accepts has proved nothing.
 
 **AND THE TOOL'S OWN RELOCATION NORMALISER DID NOT FIRE FOR ITS FIRST DAY.**
 It patched relocations in a second loop over the disassembly, so `rows[-1]` was

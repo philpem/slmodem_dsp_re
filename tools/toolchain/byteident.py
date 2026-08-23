@@ -107,6 +107,32 @@ REG32 = {"al": "eax", "ah": "eax", "ax": "eax", "eax": "eax",
          "si": "esi", "esi": "esi", "di": "edi", "edi": "edi",
          "bp": "ebp", "ebp": "ebp", "sp": "esp", "esp": "esp"}
 REGTOK = re.compile(r"%(\w+)")
+BARE_REG = re.compile(r"%\w+")
+DEFS = {"mov", "movl", "movw", "movb", "movzbl", "movzwl", "movsbl",
+        "movswl", "movzbw", "movsbw", "lea", "pop", "movd", "movq"}
+
+
+def _fields(ops):
+    """Top-level comma-separated operands.
+
+    AT&T memory operands contain commas -- `0x56(%ebp,%ebx,2)` is ONE operand
+    with two of them -- so a naive split puts the destination in the wrong
+    place and every indexed instruction reads as a definition of `2`.
+    """
+    out, depth, cur = [], 0, ""
+    for ch in ops:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        out.append(cur)
+    return out
 
 
 def insns(path, sym):
@@ -179,34 +205,83 @@ def insns(path, sym):
 
 
 def alpha_equal(x, y):
-    """Same instructions and operands up to a CONSISTENT register bijection.
+    """Same instructions and operands up to a register renaming, PER LIVE RANGE.
 
     This is grade 1 and it is STRICTER than `compare.py`, which drops operands
     altogether -- there, `mov $1,%eax` and `mov $2,%ebx` both read as `mov`.
     Here every immediate and displacement must match exactly and only the
-    register NAMES may differ, under one bijection held for the whole function
-    (%eax<->%edx implies %al<->%dl, so tokens are folded to their 32-bit
-    family and the width must still agree).  `%esp` and `%ebp` are pinned to
-    themselves: the frame is not a free choice.
+    register NAMES may differ (%eax<->%edx implies %al<->%dl, so tokens are
+    folded to their 32-bit family and the width must still agree).  `%esp` and
+    `%ebp` are pinned to themselves: the frame is not a free choice.
+
+    THE RENAMING IS PER LIVE RANGE, NOT PER FUNCTION, because that is what a
+    register allocator actually chooses.  One bijection held for the whole
+    function rejected 20 pairs that differ in nothing but allocation: the blob
+    puts two successive values in %eax while ours puts the second in %edx, and
+    a function-wide map cannot express that.  A DESTINATION WRITTEN WITHOUT
+    BEING READ ends the range that was in it and the pairing lapses there --
+    `mov`, `lea`, `pop`, the `movzx`/`movsx` family, `set*`, `cmov*` and the
+    `xor r,r` idiom.  `add %eax,%ebx` reads and writes %ebx and is NOT a
+    definition; a memory destination is a store, not a definition.
+
+    THIS IS A LOOSENING, so it is the direction that risks calling different
+    code equivalent, and `--self-test` exists for that reason: four of its
+    eight cases are things this must still REJECT.
     """
     if len(x) != len(y):
         return False
     fwd, rev = {"esp": "esp", "ebp": "ebp"}, {"esp": "esp", "ebp": "ebp"}
+
+    def bind(fu, fv):
+        return fwd.setdefault(fu, fv) == fv and rev.setdefault(fv, fu) == fu
+
+    def rebind(fu, fv):
+        if fu in ("esp", "ebp") or fv in ("esp", "ebp"):
+            return fu == fv
+        old = fwd.pop(fu, None)
+        if old is not None:
+            rev.pop(old, None)
+        old = rev.pop(fv, None)
+        if old is not None:
+            fwd.pop(old, None)
+        fwd[fu], rev[fv] = fv, fu
+        return True
+
     for (mx, ox), (my, oy) in zip(x, y):
         if mx != my:
             return False
-        rx, ry = REGTOK.findall(ox), REGTOK.findall(oy)
+        fx, fy = _fields(ox), _fields(oy)
+        if len(fx) != len(fy):
+            return False
+        dx = fx[-1].strip() if fx else ""
+        dy = fy[-1].strip() if fy else ""
+        isdef = bool(fx) and bool(BARE_REG.fullmatch(dx)) and bool(BARE_REG.fullmatch(dy)) and (
+            mx in DEFS or mx.startswith("set") or mx.startswith("cmov")
+            or (mx in ("xor", "sub") and len(fx) == 2
+                and fx[0].strip() == dx and fy[0].strip() == dy))
+        ux = fx[:-1] if isdef else fx
+        uy = fy[:-1] if isdef else fy
+        rx = REGTOK.findall(" ".join(ux))
+        ry = REGTOK.findall(" ".join(uy))
         if len(rx) != len(ry):
             return False
         for u, v in zip(rx, ry):
             fu, fv = REG32.get(u), REG32.get(v)
-            if fu is None or fv is None:          # segment or x87 -- exact
+            if fu is None or fv is None:
                 if u != v:
                     return False
                 continue
-            if len(u) != len(v):                  # same access width
+            if len(u) != len(v):
                 return False
-            if fwd.setdefault(fu, fv) != fv or rev.setdefault(fv, fu) != fu:
+            if not bind(fu, fv):
+                return False
+        if isdef:
+            u, v = dx[1:], dy[1:]
+            fu, fv = REG32.get(u), REG32.get(v)
+            if fu is None or fv is None:
+                if u != v:
+                    return False
+            elif len(u) != len(v) or not rebind(fu, fv):
                 return False
         if REGTOK.sub("%r", ox) != REGTOK.sub("%r", oy):
             return False
@@ -252,12 +327,59 @@ def verdict(a, ra, b, rb):
     return "EXACT", 0
 
 
+SELF_TESTS = [
+    ("pure renaming accepted", True,
+     ["mov 0x4(%esp),%eax", "add $0x1,%eax", "mov %eax,(%edx)"],
+     ["mov 0x4(%esp),%ecx", "add $0x1,%ecx", "mov %ecx,(%edx)"]),
+    ("reuse after a redefinition accepted -- the whole point", True,
+     ["mov (%esi),%eax", "mov %eax,(%edi)",
+      "mov 0x4(%esi),%eax", "mov %eax,0x4(%edi)"],
+     ["mov (%esi),%eax", "mov %eax,(%edi)",
+      "mov 0x4(%esi),%edx", "mov %edx,0x4(%edi)"]),
+    ("read-modify-write is NOT a redefinition", False,
+     ["mov (%esi),%eax", "add $0x1,%eax", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "add $0x1,%edx", "mov %edx,(%edi)"]),
+    ("different immediate rejected", False,
+     ["mov $0x1,%eax"], ["mov $0x2,%eax"]),
+    ("different displacement rejected", False,
+     ["mov 0x4(%edx),%eax"], ["mov 0x8(%edx),%eax"]),
+    ("crossed live ranges rejected", False,
+     ["mov (%esi),%eax", "mov 0x4(%esi),%ecx", "add %eax,%ecx"],
+     ["mov (%esi),%eax", "mov 0x4(%esi),%ecx", "add %ecx,%eax"]),
+    ("%esp is pinned", False, ["mov %esp,%eax"], ["mov %ebx,%eax"]),
+    ("indexed memory is one operand, not a definition of the scale", False,
+     ["movswl 0x56(%ebp,%ebx,2),%eax"], ["movswl 0x56(%ebp,%ebx,4),%eax"]),
+]
+
+
+def self_test():
+    """Half of these must FAIL to match.  A looser check needs both halves."""
+    def rows(src):
+        return [tuple(s.split(None, 1)) if " " in s else (s, "") for s in src]
+    bad = 0
+    for name, want, a, b in SELF_TESTS:
+        got = alpha_equal(rows(a), rows(b))
+        if got != want:
+            bad += 1
+        print("  %s  %-56s want=%-5s got=%s"
+              % ("ok  " if got == want else "FAIL", name, want, got))
+    print("\n  %d case(s), %d accept, %d reject, %d failure(s)"
+          % (len(SELF_TESTS), sum(1 for c in SELF_TESTS if c[1]),
+             sum(1 for c in SELF_TESTS if not c[1]), bad))
+    return 1 if bad else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list-exact", action="store_true")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prove alpha_equal both accepts and REJECTS")
     ap.add_argument("--limit", type=int, default=25)
     a = ap.parse_args()
+
+    if a.self_test:
+        return self_test()
 
     blob = sizes(BLOB)
     if not blob:
@@ -313,8 +435,8 @@ def main():
     print("                      relocation cannot be")
     print("                      compared by name (604)")
     print("  grade 1  REGALLOC   same instructions and    : %4d" % ra)
-    print("                      operands, one consistent")
-    print("                      register bijection")
+    print("                      operands, renamed per")
+    print("                      live range")
     print("           ------------------------------------------")
     print("           grade 0 or 1                        : %4d  (%.1f%%)"
           % (ex + un + ra, 100.0 * (ex + un + ra) / n))

@@ -367,8 +367,11 @@ came from getting that backwards.
 - `byteident.py` (`make byteident`) — **grade 0 and grade 1, and the only
   tool that measures either.** Grade 0 is positional byte identity: the
   same bytes in the same places, which is the first question anybody
-  actually asks. Grade 1 is the same instructions and operands under one
-  consistent register bijection. **393 of 1,200 at grade 0 and 416 at
+  actually asks. Grade 1 is the same instructions and operands under a
+  renaming taken PER LIVE RANGE, which is what an allocator actually
+  chooses; `--self-test` carries eight cases and six of them are things it
+  must still REJECT, because a looser check fails by calling different code
+  equivalent. **393 of 1,200 at grade 0 and 436 at
   grade 0-or-1 today**, against `compare.py`'s 480 on the same tree — the
   144 in between have identical mnemonics and different operands.
   Relocated fields are compared by TARGET and branch targets are made
