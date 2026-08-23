@@ -118,6 +118,31 @@ def insns(path, sym):
     for line in out.splitlines():
         m = re.match(r"^\s*([0-9a-f]+):\t", line)
         if not m:
+            #
+            # A RELOCATION LINE BELONGS TO THE INSTRUCTION ABOVE IT, and it
+            # must be applied THERE.  The first version of this did it in a
+            # second loop over the whole output, so `rows[-1]` was the
+            # function's LAST instruction every time -- usually a `ret` with
+            # no operands -- and the normaliser silently did nothing at all
+            # for 210 relocated instructions across the tree while reporting
+            # a clean run.  Findings 134 and 2401: a detector that cannot be
+            # seen to fire has not been shown to work.
+            #
+            r = RELOC.match(line)
+            if r and rows:
+                tag = "@" + r.group(3)
+                sub, k = re.subn(r"0x[0-9a-f]+|\$0x[0-9a-f]+", tag, rows[-1][1])
+                #
+                # A CALL HAS NO NUMERIC LITERAL LEFT TO REPLACE -- its operand
+                # is a bare address already rewritten to `.+N` above -- so a
+                # substitution alone drops the target on the floor, and two
+                # calls to DIFFERENT functions compare equal.  That is not
+                # hypothetical: `V90PreFilter`'s destructors call
+                # `FloatFIR::~FloatFIR` D2 in the blob and D1 in ours, and
+                # both were being certified as "same instructions and
+                # operands".  Append where nothing was replaced.
+                #
+                rows[-1][1] = sub if k else (rows[-1][1] + " " + tag).strip()
             continue
         at = int(m.group(1), 16)
         if base is None:
@@ -138,6 +163,7 @@ def insns(path, sym):
         if re.fullmatch(r"[0-9a-f]+", ops):
             ops = ".%+d" % (int(ops, 16) - base)
         rows.append([parts[0], ops])
+        continue
     #
     # A RELOCATED OPERAND'S PRINTED NUMBER IS A PLACEHOLDER, and the two
     # objects do not use the same one: the blob prints
@@ -149,11 +175,6 @@ def insns(path, sym):
     # the relocation's TARGET, so two instructions relocated against the same
     # thing compare equal and two relocated against different things do not.
     #
-    for line in out.splitlines():
-        m = RELOC.match(line)
-        if m and rows:
-            rows[-1][1] = re.sub(r"0x[0-9a-f]+|\$0x[0-9a-f]+",
-                                 "@" + m.group(3), rows[-1][1])
     return [tuple(r) for r in rows]
 
 
@@ -268,7 +289,13 @@ def main():
         # function is trivially alpha-equal and asking again costs two
         # disassemblies for no information.
         #
-        if v not in ("EXACT", "UNRESOLVED", "NODATA"):
+        #
+        # RELOC IS NOT A CANDIDATE FOR GRADE 1.  A differing relocation target
+        # means the function calls or reads something else, which no amount of
+        # register renaming makes equivalent; letting `alpha_equal` overrule it
+        # promoted two destructors that call a different symbol.
+        #
+        if v not in ("EXACT", "UNRESOLVED", "NODATA", "RELOC"):
             if alpha_equal(insns(BLOB, k), insns(ours[k], k)):
                 v, n = "REGALLOC", 0
         buckets[v].append((n, blob[k], k))

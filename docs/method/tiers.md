@@ -282,13 +282,13 @@ Below grade 2 is not a grade. It is a difference to explain.
 |---|--:|---|
 | **grade 0** — same bytes in the same places | **393** | 32.8% |
 | — as grade 0 but a section relocation cannot be compared by name (604) | 5 | |
-| **grade 1** — same instructions and operands under one consistent register bijection | 10 | |
-| **grade 0 or 1** | **408** | **34.0%** |
-| same size, bytes differ | 163 | |
+| **grade 1** — same instructions and operands under one consistent register bijection | 18 | |
+| **grade 0 or 1** | **416** | **34.7%** |
+| same size, bytes differ | 152 | |
 | different size | 629 | |
 
 **Read that against `compare.py`'s 480 "identical instruction sequences" on
-the same tree.** 144 functions have the same mnemonic sequence and are NOT
+the same tree.** Around 140 functions have the same mnemonic sequence and are NOT
 equivalent under a register bijection, because `compare.py` drops operands
 entirely -- `mov $1,%eax` and `mov $2,%ebx` are one instruction to it.
 `CarrierDetectB103` is the shape: same mnemonics, and the two loads are
@@ -297,8 +297,23 @@ That may still be functionally equivalent -- deciding needs the dataflow, which
 is grade 2 and is a judgement -- but it is not the same instructions, and the
 older number counted it as if it were.
 
-**Three artefacts inflate a text comparison of disassembly, and each was found
-by looking at what the tool called a difference.** Absolute branch targets
+**AND THE TOOL'S OWN RELOCATION NORMALISER DID NOT FIRE FOR ITS FIRST DAY.**
+It patched relocations in a second loop over the disassembly, so `rows[-1]` was
+the function's LAST instruction every time -- usually a `ret` with no operands
+-- and 210 relocated instructions across the tree were normalised into nothing
+while the run reported cleanly. Worse, a `call`'s operand is a bare address
+already rewritten function-relative, so there was no numeric literal for the
+target to replace at all: `V90PreFilter`'s two destructors call
+`FloatFIR::~FloatFIR` **D2** in the blob and **D1** in ours, and both were
+certified grade 1, "same instructions and operands". Fixed by applying the
+relocation to the instruction it belongs to, appending the target where nothing
+was substituted, and refusing to let grade 1 overrule a differing relocation
+target at all. The correction moved grade 1 from 10 to 18 and RELOC from 0 to
+3 -- found by an independent agent and reproduced here, arriving at the same
+four numbers from a different repair.
+
+**Three further artefacts inflate a text comparison of disassembly, and each
+was found by looking at what the tool called a difference.** Absolute branch targets
 (`jmp 7e321` against `jmp f1` is one jump printed twice; 310 functions scored
 different by that alone). Section-symbol relocations against named ones
 (finding 604). And relocated displacements, where the blob's addend rides

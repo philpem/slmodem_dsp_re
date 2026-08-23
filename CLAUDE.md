@@ -368,7 +368,7 @@ came from getting that backwards.
   tool that measures either.** Grade 0 is positional byte identity: the
   same bytes in the same places, which is the first question anybody
   actually asks. Grade 1 is the same instructions and operands under one
-  consistent register bijection. **393 of 1,200 at grade 0 and 408 at
+  consistent register bijection. **393 of 1,200 at grade 0 and 416 at
   grade 0-or-1 today**, against `compare.py`'s 480 on the same tree — the
   144 in between have identical mnemonics and different operands.
   Relocated fields are compared by TARGET and branch targets are made
