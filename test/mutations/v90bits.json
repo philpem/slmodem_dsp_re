@@ -37,28 +37,28 @@
  },
  {
   "label": "ctor: symbolsDone is left as it was found",
-  "find": "\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;",
-  "replace": "\tsymbolsBlockSize = 0;"
+  "find": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;",
+  "replace": "\tnofSymbols = n;\n\tsymbolsBlockSize = 0;"
  },
  {
   "label": "ctor: symbolsBlockSize starts at one",
-  "find": "\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;",
-  "replace": "\tsymbolsBlockSize = 1;\n\textraSymbolsPending = 1;"
+  "find": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;",
+  "replace": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 1;"
  },
  {
   "label": "ctor: extraSymbolsPending starts clear",
-  "find": "\textraSymbolsPending = 1;\n}",
-  "replace": "\textraSymbolsPending = 0;\n}"
+  "find": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;\n}",
+  "replace": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 0;\n}"
  },
  {
   "label": "ctor: bitsPerFrame is initialised, which the blob does not do",
-  "find": "\textraSymbolsPending = 1;\n}",
-  "replace": "\textraSymbolsPending = 1;\n\tbitsPerFrame = 0;\n}"
+  "find": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;\n}",
+  "replace": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;\n\tbitsPerFrame = 0;\n}"
  },
  {
   "label": "ctor: extraSymbols is initialised, which the blob does not do",
-  "find": "\textraSymbolsPending = 1;\n}",
-  "replace": "\textraSymbolsPending = 1;\n\textraSymbols = 0;\n}"
+  "find": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;\n}",
+  "replace": "\tnofSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;\n\textraSymbols = 0;\n}"
  },
  {
   "label": "dtor: the mapper is freed without being destroyed",
@@ -84,5 +84,64 @@
   "label": "dtor: the mapper guard is inverted",
   "find": "\tif (mapper) {",
   "replace": "\tif (!mapper) {"
+ },
+ {
+  "_": [
+   "V90BitsToSymbol::reset and ::resetNoSpectral, written in this batch.",
+   "Both are driven by t_v90modchain over a CONSTRUCTED object whose three",
+   "constructor-written fields carry sentinels -- finding 7105 -- and the",
+   "unsigned divide needs the negative-shaperSR group, which no case in",
+   "`reset_cases` reaches."
+  ]
+ },
+ {
+  "label": "reset: the mapper is given the no-spectral reset",
+  "find": "\tmapper->reset(mp, pcm);",
+  "replace": "\tmapper->resetNoSpectral(mp, pcm);"
+ },
+ {
+  "label": "resetNoSpectral: the mapper is given the full reset",
+  "find": "\tmapper->resetNoSpectral(mp, pcm);",
+  "replace": "\tmapper->reset(mp, pcm);"
+ },
+ {
+  "label": "reset: bitsPerFrame is not stored",
+  "find": "\tmapper->reset(mp, pcm);\n\n\tbitsPerFrame = mp->word_0;",
+  "replace": "\tmapper->reset(mp, pcm);"
+ },
+ {
+  "label": "resetNoSpectral: bitsPerFrame is not stored",
+  "find": "\tmapper->resetNoSpectral(mp, pcm);\n\n\tbitsPerFrame = mp->word_0;\n}",
+  "replace": "\tmapper->resetNoSpectral(mp, pcm);\n}"
+ },
+ {
+  "label": "reset: the divide is signed",
+  "find": "\t\textraSymbols = V90MAPPER_FRAME * mp->shaperId / mp->shaperSR;",
+  "replace": "\t\textraSymbols = (unsigned int)((int)V90MAPPER_FRAME\n\t\t\t       * (int)mp->shaperId / mp->shaperSR);"
+ },
+ {
+  "label": "reset: the numerator is shaperId and not six times it",
+  "find": "\t\textraSymbols = V90MAPPER_FRAME * mp->shaperId / mp->shaperSR;",
+  "replace": "\t\textraSymbols = mp->shaperId / mp->shaperSR;"
+ },
+ {
+  "label": "reset: the guard tests shaperSR against one, not zero",
+  "find": "\tif (mp->shaperSR != 0)",
+  "replace": "\tif (mp->shaperSR != 1)"
+ },
+ {
+  "label": "reset: the no-shaper arm answers one",
+  "find": "\t\textraSymbols = 0;\n\n\tsymbolsDone = 0;",
+  "replace": "\t\textraSymbols = 1;\n\n\tsymbolsDone = 0;"
+ },
+ {
+  "label": "reset: symbolsDone is left as it was found",
+  "find": "\t\textraSymbols = 0;\n\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;",
+  "replace": "\t\textraSymbols = 0;\n\n\tsymbolsBlockSize = 0;"
+ },
+ {
+  "label": "reset: extraSymbolsPending is cleared rather than set",
+  "find": "\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;\n}\n\nvoid\nV90BitsToSymbol::resetNoSpectral",
+  "replace": "\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 0;\n}\n\nvoid\nV90BitsToSymbol::resetNoSpectral"
  }
 ]

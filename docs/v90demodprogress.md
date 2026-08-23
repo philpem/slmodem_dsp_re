@@ -16,15 +16,15 @@ the tree as a whole.
 | 3,922 | `V90Phase4Modulator::generateV92Symbol` |
 | 2,235 | `V90Phase4Modulator::generateV90Symbol` |
 | 768 | `V90Demodulator::exitPhase3` |
-| 530 | `V90Mapper::process` |
+| 530 | `V90Mapper::process` -- WRITTEN |
 | 517 | `V90Mapper::reset` -- WRITTEN |
 | 504 | `V90Phase4Demodulator::reset` |
 | 404 | `V90Mapper::resetNoSpectral` -- WRITTEN |
 | 255 | `V90Phase4Modulator::reset` |
 | 180 | `V90BitsToSymbol::process(unsigned char *, unsigned int)` |
-| 108 | `V90BitsToSymbol::reset` |
+| 108 | `V90BitsToSymbol::reset` -- WRITTEN |
 | 96 | `V90Phase4Modulator::setMappingParams` |
-| 58 | `V90BitsToSymbol::resetNoSpectral` |
+| 58 | `V90BitsToSymbol::resetNoSpectral` -- WRITTEN |
 
 **Nothing can be landed alone.** Every test binary links all of `$(OBJ)`, so one
 unwritten callee fails all 92 binaries rather than its own. `progress` reaches
@@ -34,17 +34,23 @@ the batch is the unit.
 **The order is bottom-up**, and the bottom is the two `V90Mapper` resets:
 their four callees -- `alaw2linear`, `ulaw2linear`, `V90SpectralShaper::reset`
 and `::resetSSFilter` -- were all written, so they were the only members of the
-batch that could be started. **BOTH ARE NOW WRITTEN AND DIFFERENTIALLY GREEN**,
-so the next rung is `V90BitsToSymbol`'s pair.
+batch that could be started. **FOUR MORE ARE NOW WRITTEN AND DIFFERENTIALLY
+GREEN**: both `V90BitsToSymbol` resets and `V90Mapper::process`, whose closure
+was itself alone once the mapper resets landed.
 
-    V90Mapper::{resetNoSpectral, reset}     DONE         -> unblocks
-    V90BitsToSymbol::{resetNoSpectral, reset}            -> unblocks
-    V90Mapper::process, V90BitsToSymbol::process
+    V90Mapper::{resetNoSpectral, reset}     DONE         -> unblocked
+    V90BitsToSymbol::{resetNoSpectral, reset}    DONE
+    V90Mapper::process                           DONE
+    V90BitsToSymbol::process(unsigned char *, unsigned int)   180 B
     V90Phase4Modulator::{setMappingParams, reset}
     V90Phase4Modulator::{generateV90Symbol, generateV92Symbol}   6,157 B
     V90Phase4Demodulator::reset
     V90Demodulator::exitPhase3
     V90Demodulator::progress
+
+`V90BitsToSymbol::process(unsigned char *, unsigned int)` is the next rung and
+is 180 bytes; the other overload, `process(unsigned int &, short *)`, was
+already written.
 
 ## Two object-map corrections that fall out of the mapper resets
 
@@ -69,13 +75,17 @@ one was too cautious; the paragraph below is what it now says.**
   displacement in `.text` finds no reader anywhere in the object. So the class
   is 0x704 with NO tail padding, and the member is `word_700`. Finding 7102.
 - **`+0x020..+0x055` is NOT "genuinely unmodelled"** -- this document's claim,
-  and it does not survive. `V90Mapper::process` tiles all 54 bytes as four
+  and it did not survive. `V90Mapper::process` tiles all 54 bytes as four
   six-entry arrays -- `uint[6]` at `+0x20`, `short[6]` at `+0x38`,
   `unsigned char[6]` at `+0x44`, `short[6]` at `+0x4a` -- and the four bases
-  meet exactly at `constellation`'s `+0x56`. It is still `pad_020[0x36]` in the
-  header, because neither reset touches any of the four and a field no
-  differential test can fail on is finding 3120's hazard; `process` is the
-  batch that should model them. Finding 7103 carries the tiling.
+  meet exactly at `constellation`'s `+0x56`. **THEY ARE NOW NAMED**, `process`
+  being written: `codes`, `levels`, `signs` and `samples`, of which the first
+  three are typed by a mangling and `samples` is inference and labelled as
+  such. Findings 7103 and 7420.
+- **`+0x01c` is `bitsBuffered`**, on the header's own terms -- `process` is the
+  member that settles it, and it is the index at which the next input bit goes
+  into `buf`. `uint_6f8` was deliberately NOT renamed in the same pass.
+  Finding 7421.
 - **Five members at `+0x04`..`+0x14` are now named, from `V90Demapper`.** That
   class computes the same five quantities out of the same block by the same
   arithmetic and this tree already names all five, so `cleared_004` and its
@@ -154,14 +164,47 @@ CAUGHT, because the field already held the value the store would have left.
 The fixture now writes a sentinel over each after construction and before the
 call. With that, all 33 of `test/mutations/v90mapper.json` are caught.
 
-## What `V90BitsToSymbol` then needs, already read
+## `V90BitsToSymbol`'s pair -- WRITTEN, and the header's decode held exactly
 
 `include/dsplib/V90BitsToSymbol.h` documented both resets before they could be
-written, and the disassembly agrees exactly: `bitsPerFrame = mp[0]`,
+written, and the disassembly agrees to the instruction: `bitsPerFrame = mp[0]`,
 `extraSymbols = (6 * mp[+0x624]) / mp[+0x620]` when the divisor is nonzero and
 0 otherwise, then `symbolsDone = 0`, `symbolsBlockSize = 0`,
 `extraSymbolsPending = 1`. `resetNoSpectral` is the mapper call and
-`bitsPerFrame` alone. Both are ~30 lines once the mapper exists.
+`bitsPerFrame` alone. Nothing in that paragraph needed correcting.
+
+Two things it did not say, and both are now in the header:
+
+- **The divide is `div` and not `idiv`** -- `f7 f3` at 0x2f919, although
+  `V90MappingParams::shaperSR` is declared `int`. No case in `reset_cases` can
+  tell, because none has a negative `shaperSR`; `t_v90modchain` has a group of
+  eleven that does, and it also drives `6 * shaperId` wrapping 32 bits.
+- **`extraSymbols` is the mapper's priming loss**, `shaperId *
+  signBitGroupSize`, which `V90Mapper::process` swallows one frame at a time.
+  Two classes, one quantity, computed independently -- finding 7422, and the
+  fixture asserts the mapper's count against this class's formula. The identity
+  needs `shaperSR` to divide six, which every value V.90 uses does; 7422 has
+  the counter-example and why it is not pedantry.
+
+## What `V90Mapper::process` turned out to be
+
+530 bytes, and the shape is one loop over the input bits with everything else
+inside it. Each byte is one bit, buffered at `bitsBuffered` until
+`bitsPerFrame` of them are there; then `ModulusEncoder::progress` turns the
+`word_08` bits above the sign bits into six digits, each digit picks a level
+out of its own constellation, the sign bits go either through
+`V90SpectralShaper::process` in `signBitGroups` groups or -- when there is no
+shaper -- through `SerialDifferentialEncoder<unsigned char>::process` one at a
+time, and the finished frame is copied out under the priming countdown at
+`+0x6f8`. `bitsBuffered` loses `bitsPerFrame` rather than being cleared, which
+is what carries a part-filled frame between calls.
+
+**Two of its statements are untestable over any object a `reset` can produce**,
+and both are poked by hand rather than left unclaimed: the unconditional
+`nofOut += 6 - start` on the partial-copy arm (finding 7423) and the
+`bitsBuffered -= bitsPerFrame` that only differs from `= 0` when the buffer
+arrives over-full. A third, the strictness of the `<` between the second and
+third countdown arms, needs a `shaperSR` that does not divide six.
 
 ## The fixture
 

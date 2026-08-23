@@ -49,7 +49,10 @@
 #ifndef DSPLIB_V90BITSTOSYMBOL_H
 #define DSPLIB_V90BITSTOSYMBOL_H
 
+#include "dsplib/V90Phase3Modulator.h"	/* for `PcmType`; see the resets */
+
 class V90Mapper;
+class V90MappingParams;
 class V90Parameters;
 
 class V90BitsToSymbol {
@@ -78,13 +81,31 @@ public:
 	 * "SIZE_NOT_SET" and "BUFFER_UNDERFLOW" in the two messages -- and 0
 	 * is the one with no message.
 	 *
-	 * The other two `process` overloads, `reset` and `resetNoSpectral`
-	 * are NOT written: each needs something unwritten, and one unwritten
-	 * callee fails every differential binary rather than only its own.
+	 * The other two `process` overloads are NOT written: each needs
+	 * something unwritten, and one unwritten callee fails every
+	 * differential binary rather than only its own.
 	 */
 	unsigned int nofBitsForNextTime();
 	unsigned int setSymbolsBlockSize(unsigned int blockSize);
 	unsigned int process(unsigned int &nofBits, short *outSymbols);
+
+	/*
+	 * BOTH RESETS ARE THE MAPPER'S OWN, PLUS WHAT THIS CLASS ADDS.  The
+	 * mangled names are `_ZN15V90BitsToSymbol5resetEP16V90MappingParams
+	 * 7PcmType` and `..15resetNoSpectral..`, and each begins by handing
+	 * both of its arguments straight to the same-named member of
+	 * `mapper` -- the pointer at +0x00 is RELOADED from the member
+	 * (`mov (%esi),%edx`) rather than kept, as in the constructor.
+	 *
+	 * `resetNoSpectral` then sets `bitsPerFrame` and stops, 58 bytes
+	 * altogether.  `reset` sets `bitsPerFrame` too, computes
+	 * `extraSymbols`, and ends with the same three stores the constructor
+	 * ends with.  So the ONE field neither this class's constructor nor
+	 * `resetNoSpectral` ever writes is `extraSymbols`, which is what a
+	 * differential test over never-zeroed storage is for.
+	 */
+	void reset(V90MappingParams *mp, PcmType pcm);
+	void resetNoSpectral(V90MappingParams *mp, PcmType pcm);
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	V90Mapper *mapper;		/* +0x00 owned, 0x704 bytes         */

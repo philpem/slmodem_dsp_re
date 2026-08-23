@@ -77,25 +77,44 @@
  * reproduced as written.
  *
  * ---------------------------------------------------------------------------
- * +0x020..+0x055 IS 54 BYTES AND IS *NOT* OPAQUE -- but it is left padded
+ * +0x020..+0x055 IS 54 BYTES, AND IT IS NOW FOUR NAMED ARRAYS
  *
- * `V90Mapper::process` tiles all 54 of them, and the four bases meet exactly
- * at `constellation`:
+ * It was `pad_020[0x36]` while `process` was unwritten, deliberately: finding
+ * 7103 had already tiled it, and a field no differential test can fail on is
+ * finding 3120's hazard rather than progress.  `process` is written now, it is
+ * the only member that touches any of the four, and `t_v90modchain`'s
+ * `V90Mapper::process` group compares all 54 bytes against the blob's after
+ * every frame -- so the tiling has a test behind it and the names go in.
  *
  *     +0x20   `mov 0x20(%ebx,%edx,4),%ecx`   %edx 0..5   6 * 4 = 24 -> +0x38
  *     +0x38   `mov %si,0x38(%ebx,%edx,2)`    %edx 0..5   6 * 2 = 12 -> +0x44
  *     +0x44   `mov %al,0x44(%esi,%ebx,1)`    %esi 0..5   6 * 1 =  6 -> +0x4a
  *     +0x4a   `mov %dx,0x4a(%ebx,%esi,2)`    %esi 0..5   6 * 2 = 12 -> +0x56
  *
- * -- one entry per sample of a six-sample V.90 frame in each.  That is the
- * same standard of evidence `V90Demapper.h` used for its own four parallel
- * arrays: four independent bases and three exact meetings.
+ * -- one entry per sample of a six-sample V.90 frame in each, four independent
+ * bases and three exact meetings, which is the standard `V90Demapper.h` set
+ * for its own four parallel arrays.
  *
- * IT IS STILL `pad_020` HERE, DELIBERATELY.  Neither reset touches any of the
- * four, so nothing in this batch can put a differential test behind them, and
- * a field nobody can fail on is finding 3120's hazard rather than progress.
- * `process` is the member that reads and writes them and it is the batch that
- * should model them.  Finding 7103 carries the tiling so it is not re-derived.
+ * THREE OF THE FOUR ARE TYPED BY A MANGLING and one is not, which is the
+ * difference worth carrying (CLAUDE.md's evidence order; finding 7420):
+ *
+ *   - `codes` and `signs` are `V90Demapper`'s own two names, for the same two
+ *     quantities, reached the same way.  `codes` is handed to
+ *     `ModulusEncoder::progress(unsigned char *, unsigned int *)` as its
+ *     second operand and `signs` holds what
+ *     `SerialDifferentialEncoder<unsigned char>::process(unsigned char)`
+ *     returned -- element types from the manglings, roles from the demapper's
+ *     twin pair at +0x1c and +0x20 of that class.
+ *   - `levels` is `V90SpectralShaper::process(short *in, ...)`'s first
+ *     operand, so `short` is forced; the name is what `process` puts in it,
+ *     one `constellation[k][codes[k]]` per sample.
+ *   - `samples` is the ONE INFERENCE.  Both of the shaper's other operands are
+ *     `short *` too, so the mangling cannot separate `out` from `in`, and the
+ *     demapper has no twin for it.  What bounds it is that `process` writes it
+ *     from three places and reads it from one: the shaper's `out`, and
+ *     `levels[k]` with the sign from `signs[k]` applied on the other arm; and
+ *     the only reader is the tail that copies it to the caller's `short *`.
+ *     So it is the frame as it leaves this class.  Evidence class 3.
  *
  * ---------------------------------------------------------------------------
  * Data member names are invented unless said otherwise; the mangling never
@@ -158,11 +177,26 @@ public:
 	void resetNoSpectral(V90MappingParams *mp, PcmType pcm);
 
 	/*
-	 * `process` is NOT declared here.  It is another batch's work, and a
-	 * declaration would have to state a return type the object does not
-	 * carry -- the mangling has none and the epilogue at 0x30558 leaves
-	 * `%eax` holding whatever the last store computed.
+	 * `_ZN9V90Mapper7processEPhjPsRj`, and the return type is `void`
+	 * BECAUSE THE EPILOGUE DOES NOT SET ONE.  The mangling carries no
+	 * return type; the exit at 0x30558 loads the reference operand and
+	 * `%ebp`, stores one through the other and pops, leaving `%eax`
+	 * holding whatever the last path put there -- `nofBits` itself on the
+	 * zero-length path at 0x30439.  A function returning a value would
+	 * have to agree with itself across those paths and this one does not.
+	 *
+	 * `bits` is one V.90 payload BIT PER BYTE -- `movzbl (%esi,%ebp,1)`
+	 * into a `0x50`-byte buffer, whose contents reach
+	 * `ModulusEncoder::progress` as its `unsigned char *` bit string and
+	 * `V90SpectralShaper::process` as its sign bits, both of which read a
+	 * byte as one bit.  `nofBits` is how many are supplied, `symbols`
+	 * where the finished frames go, and `nofSymbols` how many were
+	 * written -- which is NOT `nofBits / bitsPerFrame * 6`, because the
+	 * priming countdown at +0x6f8 suppresses whole frames and then part
+	 * of one.
 	 */
+	void process(unsigned char *bits, unsigned int nofBits, short *symbols,
+		     unsigned int &nofSymbols);
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	V90Parameters *params;			/* +0x000 the argument   */
@@ -178,16 +212,29 @@ public:
 	void *buf;				/* +0x018 malloc(0x50)   */
 
 	/*
-	 * +0x01c  Zeroed by the constructor and again by `reset`, and NOT by
-	 * `resetNoSpectral`.  `process` runs it as a bit account against
-	 * `bitsPerFrame` (`mov 0x1c(%ebx),%eax ; sub 0x4(%ebx),%eax ; mov
-	 * %eax,0x1c(%ebx)`), which bounds what it is without settling it, so
-	 * the name stays the offset's until that member is written.
+	 * +0x01c  HOW MANY BITS ARE IN `buf`.  Zeroed by the constructor and
+	 * again by `reset`, and NOT by `resetNoSpectral`.  It was
+	 * `cleared_01c`, on the header's own terms -- "the name stays the
+	 * offset's until that member is written" -- and `process` is that
+	 * member: it indexes `buf` with this (`mov %al,(%ecx,%edi,1)`),
+	 * increments it once per input byte, runs a frame when it reaches
+	 * `bitsPerFrame`, and takes `bitsPerFrame` back off it afterwards
+	 * (`mov 0x1c(%ebx),%eax ; sub 0x4(%ebx),%eax ; mov %eax,0x1c(%ebx)`)
+	 * rather than clearing it, which is what carries a part-filled frame
+	 * across calls.  That is mechanism and not inference.  Finding 7421.
 	 */
-	unsigned int cleared_01c;
+	unsigned int bitsBuffered;
 
-	/* +0x020  Four arrays of six; see the file comment and finding 7103. */
-	unsigned char pad_020[0x36];
+	/*
+	 * +0x020 .. +0x055  ONE ENTRY PER SAMPLE OF THE SIX-SAMPLE FRAME, in
+	 * four parallel arrays, and `process` is the only member that touches
+	 * any of them.  See the file comment for which three are typed by a
+	 * mangling and which one is not, and finding 7103 for the tiling.
+	 */
+	unsigned int  codes[V90MAPPER_FRAME];	/* +0x020 modulus digits */
+	short	      levels[V90MAPPER_FRAME];	/* +0x038 the PCM levels */
+	unsigned char signs[V90MAPPER_FRAME];	/* +0x044 1 is positive  */
+	short	      samples[V90MAPPER_FRAME];	/* +0x04a the frame out  */
 
 	/*
 	 * +0x056  THE SIX CONSTELLATIONS, up to 128 linear PCM levels each,

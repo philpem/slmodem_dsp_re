@@ -77014,3 +77014,181 @@ Curiously the deferred mask cost two bytes overall (0x253 -> 0x255) while
 removing an instruction: the alignment NOP and the allocation moved under it.
 **That is why the mnemonic diff and not the byte count is what settled it** --
 the byte count said the wrong form was better.
+
+======================================================================
+
+### 7420. `V90Mapper`+0x020..+0x055 IS NOW FOUR NAMED ARRAYS, AND THREE OF THE FOUR NAMES ARE FORCED BY A MANGLING
+
+Finding 7103 tiled these 54 bytes off `V90Mapper::process` and deliberately
+left them as `pad_020[0x36]`, because no reset touches any of the four and a
+field no differential test can fail on is finding 3120's hazard. `process` is
+written now, `t_v90modchain`'s two new `V90Mapper::process` groups compare the
+whole 0x704 against the blob's after every frame, and the tiling holds exactly
+as 7103 recorded it -- four bases counted 0..5, three exact meetings, landing
+on `constellation` at +0x56. Nothing in that finding needed correcting.
+
+What `process` adds is the ELEMENT TYPES and the roles, and the four are not
+equally well evidenced. The distinction is the point of this finding:
+
+    +0x20  unsigned int codes[6]    ModulusEncoder::progress(unsigned char *,
+                                    unsigned int *) -- second operand
+    +0x38  short        levels[6]   V90SpectralShaper::process(short *in,
+                                    unsigned char *, short *) -- first operand
+    +0x44  unsigned char signs[6]   what SerialDifferentialEncoder<unsigned
+                                    char>::process(unsigned char) returned
+    +0x4a  short        samples[6]  the shaper's THIRD operand
+
+Three manglings, which is CLAUDE.md's second-strongest kind of evidence, and
+`codes` and `signs` are `V90Demapper`'s own two names for the same two
+quantities reached the same way -- that class's `unsigned int *codes` and
+`unsigned char *signs` at +0x1c and +0x20 are typed by
+`ModulusDecoder::progress` and `V90SignBitsExtractor::process`, one entry per
+sample, and this pair is the transmit side of it. `levels` holds
+`constellation[k][codes[k]]`, one entry of a table this header already
+describes as "up to 128 linear PCM levels", so the name is what the store puts
+in it.
+
+**`samples` IS THE ONE INFERENCE AND IS LABELLED AS ONE.** The shaper's `in`
+and `out` are both `short *`, so the mangling cannot separate them; there is no
+`V90Demapper` twin, because the demapper never assembles a frame. What bounds
+it is that `process` writes it from two arms -- the shaper's output, and
+`levels[k]` with `signs[k]`'s sign applied -- and reads it from exactly one
+place, the tail that copies it into the caller's `short *`. So it is the frame
+as it leaves this class. Evidence class 3, said so in the header, and a better
+name is welcome from whoever writes `V90BitsToSymbol::process(unsigned char *,
+unsigned int)`.
+
+**ONE SENTENCE OF 7103 NEEDS QUALIFYING**, and it is the one that would have
+led to a wrong name. It calls +0x4a "the frame after the signs are applied",
+which is exact on the SERIAL arm and not on the other: where `signBitGroups` is
+nonzero, +0x4a is `V90SpectralShaper::process`'s `out` operand, and that is the
+frame leaving a delay line `shaperId` frames deep, whose polarity the trellis
+may have flipped. It is not this frame's levels with this frame's signs on
+them, and it need not have any relation to the `levels` sitting beside it. That
+is why `samples` is right as "the frame as it leaves this class" and would have
+been wrong as "the signed levels" -- the two arms produce it by completely
+different mechanisms and only agree on what it is FOR.
+
+**PROMOTING THEM COST NO MUTATION ANCHORS AT ALL**, which is worth recording
+because the batch was briefed to expect otherwise. Finding 347's failure mode
+is that an anchor is literal source text, and 7104 lost five anchors to a
+rename -- but no anchor in `test/mutations/v90mapper.json` ever named
+`pad_020`, because nothing in the constructor, the destructor or either reset
+mentions it. The anchors this batch DID break are the rename in 7421 and five
+in `v90bits.json` that stopped being unique, and neither is the promotion.
+
+### 7421. `V90Mapper`+0x01c IS `bitsBuffered`, ON THE HEADER'S OWN TERMS
+
+It was `cleared_01c`, and `include/dsplib/V90Mapper.h` said why: "`process`
+runs it as a bit account against `bitsPerFrame` ... which bounds what it is
+without settling it, so the name stays the offset's until that member is
+written." That member is written now and it settles it, by mechanism rather
+than by inference:
+
+    30466:  88 04 39     mov  %al,(%ecx,%edi,1)     buf[+0x1c] = bits[i]
+    3046c:  41           inc  %ecx
+    3046d:  3b 4b 04     cmp  0x4(%ebx),%ecx        against bitsPerFrame
+    30540:  8b 43 1c     mov  0x1c(%ebx),%eax
+    30547:  29 f0        sub  %esi,%eax             minus bitsPerFrame
+    3054b:  89 43 1c     mov  %eax,0x1c(%ebx)
+
+-- it is the index at which the next input bit is stored in `buf`, incremented
+once per byte, tested against `bitsPerFrame` to decide whether a frame is
+ready, and REDUCED BY `bitsPerFrame` rather than cleared when one is. That last
+detail is the one that makes the name more than a description: subtracting is
+what carries a part-filled frame from one `process` call to the next, and
+`t_v90modchain` drives call lengths that are not multiples of the frame for
+exactly that reason.
+
+**THE RENAME COST THREE ANCHORS IN `test/mutations/v90mapper.json`** -- 7104's
+lesson a second time, and `make phase`'s `anchorcheck` reported all three as
+`matches 0 time(s)` before anything was committed. `uint_6f8` was left alone in
+the same pass, although `process` corroborates it (see 7422): its role is still
+an inference about `V90SpectralShaper::primeFrames`, which is not in this
+batch, and CLAUDE.md's rule is that a wrong name is worse than a padded one.
+One of the two, not both.
+
+### 7422. THE PRIMING COUNTDOWN'S THREE ARMS ARE CONFIRMED FROM OUTSIDE THEMSELVES, BY `V90BitsToSymbol::reset`
+
+`V90Mapper::process`'s tail is three arms rather than two, and the third is
+easy to mis-read as dead code:
+
+    +0x6f8 == 0                 copy all six samples out
+    +0x6f8 <  signBitGroups     copy the last 6 - +0x6f8 * signBitGroupSize
+                                of them, and end the countdown
+    otherwise                   copy none, and take signBitGroups off +0x6f8
+
+`reset` starts +0x6f8 at `mp->shaperId`, so over the whole countdown the
+samples NOT emitted number `shaperId * signBitGroupSize`, with
+`signBitGroupSize = 6 / shaperSR`.
+
+`V90BitsToSymbol::reset`, 58 bytes away in a different class, computes
+`extraSymbols = 6 * shaperId / shaperSR` out of the same two parameters and
+does nothing else with them. **The two are the same number WHENEVER `shaperSR`
+DIVIDES SIX**, and that is what `nofBitsForNextTime` adds to its demand while
+`extraSymbolsPending` is set: the converter asks its caller for the extra bits
+that will be swallowed while the shaper primes. Neither function can see the
+other, so the agreement is a measurement of the decode and not a restatement of
+it.
+
+**THE DIVISIBILITY QUALIFIER IS NOT PEDANTRY AND THIS FINDING WOULD BE WRONG
+WITHOUT IT.** Write `shaperId` as `q * shaperSR + r`: the mapper suppresses
+`6q + r * (6 / shaperSR)` and the converter asks for `6q + floor(6r /
+shaperSR)`, and those agree exactly when `shaperSR` divides 6 and not
+otherwise. `shaperSR` of 4 is the counter-example and it is not hypothetical --
+`t_v90modchain` drives it in `run_mapper_process_boundary` for a different
+reason -- where `shaperId` of 2 suppresses 2 samples against an `extraSymbols`
+of 3. Every value V.90 uses is a divisor of six, `V90SpectralShaper` derives
+its whole block length by that division, and every case in `proc_cases` is one,
+so the identity holds over the whole tested domain; but it is an identity about
+the PROTOCOL'S parameters and not about the two functions, and a reader who
+took it for the latter would mis-derive one of them from the other.
+
+`t_v90modchain` asserts it directly rather than leaving it as an observation.
+Every `process` case runs eight frames over a freshly reset mapper -- more than
+any countdown here needs, since it ends after at most `shaperId` subtractions
+and one partial frame -- and checks `8 * 6 - nofSymbols` against
+`6 * shaperId / shaperSR` computed in the fixture. Eleven cases covering
+`shaperSR` of 0, 1, 2, 3 and 6 against `shaperId` of 0 to 3.
+
+### 7423. `V90Mapper::process` UPDATES `nofOut` OUTSIDE THE COPY LOOP, AND NO STATE A `reset` CAN PRODUCE TELLS THE TWO SPELLINGS APART
+
+The partial-copy arm is
+
+    305e0:  0f af d6     imul %esi,%edx        start = +0x6f8 * signBitGroupSize
+    305e7:  83 fa 05     cmp  $0x5,%edx
+    305ea:  77 25        ja   30611            skip the copy
+    30600:  ...          the copy loop
+    30611:  8b 4c 24 10  mov  0x10(%esp),%ecx  ... and 30611 runs ANYWAY
+    3061c:  29 f2        sub  %esi,%edx        nofOut -= start
+    3061e:  83 c2 06     add  $0x6,%edx        nofOut += 6
+
+so `nofOut += 6 - start` is outside the loop and unconditional. Written the
+other obvious way -- `symbols[nofOut++] = samples[k]` inside the loop -- a
+skipped loop would leave `nofOut` alone. The two agree for every `start` the
+loop actually runs over, and they differ only when `start` exceeds 5.
+
+**THAT CANNOT HAPPEN OVER ANY OBJECT A `reset` PRODUCED.** The arm needs
+`0 < +0x6f8 < signBitGroups`, and `reset` sets `signBitGroups = shaperSR` and
+`signBitGroupSize = 6 / shaperSR`, so `start` is at most
+`(shaperSR - 1) * (6 / shaperSR)`. That product is 0, 3, 4, 4, 4 and 5 for
+`shaperSR` of 1 to 6 and falls to zero above it, so it never reaches 6 for any
+`shaperSR` at all. (It is `6 - signBitGroupSize` only where `shaperSR` divides
+six; see 7422 for why that qualifier matters.) A differential test driven only
+through `reset` therefore cannot
+fail on the difference, which is finding 3120's hazard one level up from a
+field: not a name nobody can test, but a STATEMENT nobody can test.
+
+So the fixture pokes it. `run_mapper_process_arm` resets with `shaperSR` of 1
+-- one group of six, `signBitGroupSize` of 6 -- and then writes
+`signBitGroups = 3` and `+0x6f8 = 2` over both sides before the call, which
+makes `start` 12. `signBitGroupSize` is deliberately NOT poked, because it also
+strides the shaper loop; moving only the group count keeps every pointer that
+loop forms inside the 0x704 object (the second and third groups land on `signs`
+and on `constellation`'s first row) instead of outside the allocation. One
+frame is driven, so the wrapped `nofOut` is read out through the reference and
+never used to index anything. The answer is asserted absolutely as well as
+differentially: `6u - 12u` is 0xfffffffa and nothing else is.
+
+`test/mutations/v90mapper.json` carries the counted-inside-the-loop spelling as
+a mutation, so the poke is not merely present but shown to be load-bearing.
