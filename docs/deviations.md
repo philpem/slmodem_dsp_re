@@ -3004,6 +3004,15 @@ does not carry over: the V.34 datapump shares neither the structure nor the
 
 ## D73 🐛 `DP_V32BIS` (132) never connects
 
+**MISFILED, per `docs/deviation-triage.md` family 10 — the object cannot
+distinguish 32 from 132.** `dp_v32_init` (0x4bb3-0x4bd8) registers id 0x20 and
+id 0x84 against the SAME `struct dp_operations` at `.data+0x48`; `v32_create`
+(0x4560) stores the `dp_id` argument at `dp+0` (0x45cc) and never reads it
+again, there is no `cmp $0x84` anywhere in 0x4560-0x4bb0, and the 14400 ceiling
+at 0x45ba is unconditional. The bench symptom may be real; the object is not
+where it comes from. Test: call `ref_v32_create` with 32 and with 132 and diff
+the two 0x348-byte objects.
+
 *Task #98 sweep, from fix list §2. **Reachability: FIRES TODAY.** Status: SUSPECTED.*
 
 **Where** the blob's datapump registration, reached through slmodemd's
@@ -3025,6 +3034,15 @@ the disassembly with no calls.
 ---
 
 ## D74 🐛 `MDMCTL_IODELAY` was a hard-coded constant
+
+**ITS "FIXED" STATUS IS NOT TRUE OF EITHER HOST TREE**, per
+`docs/deviation-triage.md` family 10. `grep -rn SLMODEMD_IODELAY` over the
+parent repository returns NOTHING; `d-modem/slmodemd/modem_main.c:941-953`
+returns a hard-coded 48 in a file dated six days AFTER this entry was written,
+and `slmodemd/modem_main.c:682` still returns 0. The default of 120 appears
+nowhere in `docs/findings.md` -- finding 1026 recommends 240. This entry is
+also MISFILED (its own *Where* field names a host file, not the object) and
+should merge into D77, as D77 instructs.
 
 *Task #98 sweep, from fix list §3. **Reachability: FIRES TODAY.** Status: CONFIRMED, FIXED.*
 
@@ -3104,6 +3122,18 @@ defect — do not file them separately.**
 
 ## D78 🐛 `MDMPRM_MIN_RATE` and `MDMPRM_MAX_RATE` reach nothing
 
+**MECHANISM REFUTED, per `docs/deviation-triage.md` family 10.** The
+`+0x30`/`+0x34` pair is NOT write-only: `VPcmV34InitiateRetrain` divides both
+by 2400 at 0x66b5/0x66c5 into `+0x21c`/`+0x220` and clamps the max to 14
+(0x66fb-0x6709), and 0x6870/0x6877 and 0x6acc/0x6acf pass the pair to
+`K56FlexFloModem::setMinMaxRates` and `V90ConstellationDesigner::
+setMinMaxRates` -- mangled names that TYPE the field. The `+0x38`/`+0x3c`
+literals 4800 and 33600 are a different quantity, read by
+`V90Parameters::setToDefault`, and are exactly ITU-T V.90 Table 9's upstream
+rate window. **The citation drifted the day before this entry was filed:**
+finding 1020 (commit `2c98999f`, 2026-08-10) corrects 823/824 in these words,
+and this entry is commit `7db93c88`, 2026-08-11.
+
 *Task #98 sweep, from fix list §5.3. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: documentation only.*
 
 **Findings 823, 824.** The host's rate window lands at runtime `+0x30`/`+0x34`,
@@ -3122,6 +3152,13 @@ knob that does nothing.
 ---
 
 ## D79 🐛 `GetDialToneFilterSubindex` is hardcoded to zero, and 21 filter banks are dead
+
+**MISFILED, per `docs/deviation-triage.md` family 10 -- this is a HOST
+integration gap.** `modem_homolog.h:94` carries `//u8
+DialToneFilterSubindex;` commented out and `modem_param.c:172-173` is a literal
+`return 0;`. The object does the right thing with the answer it is given, and
+finding 49 measured bank 3's fallback landing on its own nearest equivalent.
+The entry's own fix line says it: "Nothing in the object needs to change."
 
 *Task #98 sweep, from fix list §5.4. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: host-side.*
 
@@ -6366,6 +6403,14 @@ read both unconditionally. Finding 2160.
 
 ## D331 🐛 `determineDminForRrn` divides one by a constellation count that nothing stops being zero
 
+**THE HANG CLAIM IS REFUTED, per `docs/deviation-triage.md` family 8, and
+should be struck.** Both truncations are 64-bit `fistpll` (0x47e13, 0x47e4e)
+whose readers take the LOW dword, which for the x87 integer indefinite is
+ZERO -- and both doubling loops are guarded by `test %eax,%eax; je` at
+0x47e28/0x47e2a and 0x47e65/0x47e67. **Neither loop runs.** The divide is real
+and gives +infinity (x87 float, not a trap), which propagates as a nonsense
+`dmin`; there is no 2^31 iteration and no hang.
+
 *Batch of 2026-08-16, same function, at 0x47d54..0x47d5a. **Reachability: no
 `pParams->m[k]` with a zero byte at `constelTable + 0x280c + k`.**
 **Observability: `1.0f / 0` is an infinity, every scaled size is a NaN, the
@@ -6767,6 +6812,18 @@ would not have to.  Finding 3218.
 
 ## D372 🐛 `FSE_decision_128pt`'s region tree puts the same rq boundary in two different places
 
+**NOT A DEFECT, per `docs/deviation-triage.md` family 9.** The
+inconsistency between the arms is real and the defect is not: **0x16a0 = 5792
+is EXACTLY the midpoint of the Q rows 4344 and 7240, and 0x2d41 = 11585 is
+EXACTLY the midpoint of 10137 and 13033**, so a symbol on the line is
+genuinely equidistant and both cells offer the same two I values. Enumerated
+over the 21,182 `ri` values at `rq = 5792, ri > 11585`: the index differs at
+all 21,182, the Euclidean distance is EQUAL at 20,136, the object is strictly
+NEARER at 1,046, and strictly farther at **zero**. The `_64pt` cut at 8192 is
+likewise the exact midpoint of 4096 and 12288. Suggest 🐛 -> ⚠, and rewrite
+"the two never agree on the point" -- true of the index, misleading about
+distance.
+
 *Batch of 2026-08-16, from `FSE_decision_128pt`'s region tree.  Two arms cut
 the rotated Q axis one way -- 0x80750 and 0x80801 both encode `cmp $0x2d40,%bx
 ; jg` and 0x8075d and 0x80811 both encode `cmp $0x169f,%bx`, so the bands are
@@ -6866,6 +6923,15 @@ shifted down sixteen, and only then are the two added -- and the sum is
 truncated to a short again before the comparison.  Finding 3501.
 
 ## D363 🐛 `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not have
+
+**NOT A DEFECT, per `docs/deviation-triage.md` family 9.** `FPM_AGC_agc`
+(0xa6750) has exactly one return, `0xa6894: c3 ret` -- **a bare `ret`, not
+`ret $imm`** -- so the call is cdecl and the caller cleans up. The extra push
+is popped by the caller's own stack adjustment and the callee never reads the
+slot. The observation is real evidence that the author's DECLARATION of
+`FPM_AGC_agc` had four parameters, which is worth recording; it is not a defect
+in behaviour. Suggest 🐛 -> ⚠, alongside D366, which is the same shape at four
+sites and is already ⚠.
 
 *Batch of 2026-08-16, from `Detect_v22` (blob 0x08c1c0).  **Reachability: every
 call.**  **Observability: none -- the call is cdecl, the caller cleans up, and
