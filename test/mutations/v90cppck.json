@@ -1,0 +1,337 @@
+[
+ {
+  "label": "NOTE: this set covers src/pump/v90/V90CPpck.cpp, caught by t_v90cmask. getDataBitRate lives in V90MappingParamsInt.cpp and is not reachable from here; its two constants are covered by the v90cmask suite's own rows.",
+  "note": "THE ONE THAT MATTERS MOST is 'fltTable2 gets its missing 2^-8 back'. The object's table has no 2^-8 and holds 2^-9 twice, so a generated table differs only for a magnitude that reaches entry ten -- which is why 0.00390625f is in `fbEdge` by name rather than by luck. SECOND is the pair of truncation rows: bits[19] and bits[30] carry a whole dword narrowed to a short, and with the 0/1 values a flag fixture would use, `(short)x` and `x != 0` are the same function (7458). WHAT NO ROW HERE REACHES: a NaN or an infinity in any of the five floats, whose ordered `fcom` comparisons read unordered as `below` under -mno-ieee-fp and would need a gccdiverge entry; a `word_10c` above six, which is the other caller's problem (D570/D790); and a bit buffer shorter than the message, which is out of bounds on both sides."
+ },
+
+ {
+  "label": "fltTable2 gets its missing 2^-8 back, as a generator would produce",
+  "find": "\t0.015625f,\t0.0078125f,\t0.001953125f,\t0.001953125f,",
+  "replace": "\t0.015625f,\t0.0078125f,\t0.00390625f,\t0.001953125f,"
+ },
+ {
+  "label": "fltTable2's heaviest entry is 8 rather than 4",
+  "find": "float fltTable2[16] = {\n\t4.0f,",
+  "replace": "float fltTable2[16] = {\n\t8.0f,"
+ },
+ {
+  "label": "fltTable1 runs from the lightest weight up",
+  "find": "float fltTable1[7] = {\n\t1.0f,\t\t0.5f,\t\t0.25f,\t\t0.125f,\n\t0.0625f,\t0.03125f,\t0.015625f\n};",
+  "replace": "float fltTable1[7] = {\n\t0.015625f,\t0.03125f,\t0.0625f,\t0.125f,\n\t0.25f,\t\t0.5f,\t\t1.0f\n};"
+ },
+
+ {
+  "label": "Q3.13 writes the heaviest weight at bits[0]",
+  "find": "\t\t\tif (fltTable2[i] > x) {\n\t\t\t\tbits[15 - i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[15 - i] = 1;",
+  "replace": "\t\t\tif (fltTable2[i] > x) {\n\t\t\t\tbits[i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[i] = 1;"
+ },
+ {
+  "label": "Q1.6 writes the heaviest weight at bits[0]",
+  "find": "\t\t\tif (fltTable1[i] > x) {\n\t\t\t\tbits[6 - i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[6 - i] = 1;",
+  "replace": "\t\t\tif (fltTable1[i] > x) {\n\t\t\t\tbits[i] = 0;\n\t\t\t} else {\n\t\t\t\tbits[i] = 1;"
+ },
+ {
+  "label": "Q3.13's greedy test admits equality",
+  "find": "\t\t\tif (fltTable2[i] > x) {",
+  "replace": "\t\t\tif (fltTable2[i] >= x) {"
+ },
+ {
+  "label": "Q3.13 keeps the sign instead of taking fabs",
+  "find": "\t\tx = __builtin_fabsf(f);\n\n\t\tfor (i = 0; i <= 15; i++) {",
+  "replace": "\t\tx = f;\n\n\t\tfor (i = 0; i <= 15; i++) {"
+ },
+ {
+  "label": "Q3.13 stops one entry short",
+  "find": "\t\tfor (i = 0; i <= 15; i++) {\n\t\t\tif (fltTable2[i] > x) {",
+  "replace": "\t\tfor (i = 0; i <= 14; i++) {\n\t\t\tif (fltTable2[i] > x) {"
+ },
+ {
+  "label": "Q1.6 stops one entry short",
+  "find": "\t\tfor (i = 0; i <= 6; i++) {\n\t\t\tif (fltTable1[i] > x) {",
+  "replace": "\t\tfor (i = 0; i <= 5; i++) {\n\t\t\tif (fltTable1[i] > x) {"
+ },
+ {
+  "label": "the sign entry lands before the magnitude rather than after it",
+  "find": "\t\tbits[7] = (short)(f < 0.0f);",
+  "replace": "\t\tbits[7] = 0;\n\t\tbits[6] = (short)(f < 0.0f);"
+ },
+ {
+  "label": "the sign is taken after the fabs, so it is never set",
+  "find": "\t\tbits[7] = (short)(f < 0.0f);\n\t\tx = __builtin_fabsf(f);",
+  "replace": "\t\tx = __builtin_fabsf(f);\n\t\tbits[7] = (short)(x < 0.0f);"
+ },
+ {
+  "label": "the sign entry treats -0.0f as negative",
+  "find": "\t\tbits[7] = (short)(f < 0.0f);",
+  "replace": "\t\tbits[7] = (short)(f <= 0.0f);"
+ },
+ {
+  "label": "Q3.13 warns at 8 rather than above it",
+  "find": "\t\tif (f > 8.0f || f < 0.0f) {",
+  "replace": "\t\tif (f >= 8.0f || f < 0.0f) {"
+ },
+ {
+  "label": "Q1.6's lower bound is 0 rather than -1",
+  "find": "\t\tif (f > 1.0f || f < -1.0f) {",
+  "replace": "\t\tif (f > 1.0f || f < 0.0f) {"
+ },
+ {
+  "label": "the warning is ungated, as edprintf's would be",
+  "find": "\t\tif (f > 8.0f || f < 0.0f) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(",
+  "replace": "\t\tif (f > 8.0f || f < 0.0f) {\n\t\t\tif (1)\n\t\t\t\tdsplibs_debug_printf("
+ },
+ {
+  "label": "any mode but 1 runs the Q3.13 arm",
+  "find": "\tif (mode == 0) {\n\t\tif (f > 8.0f || f < 0.0f) {",
+  "replace": "\tif (mode != 1) {\n\t\tif (f > 8.0f || f < 0.0f) {"
+ },
+
+ {
+  "label": "the opening run of ones is sixteen rather than seventeen",
+  "find": "\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "bits[19] carries word_04 as a flag rather than truncated",
+  "find": "\tbits[19] = (short)info->word_04;",
+  "replace": "\tbits[19] = (short)(info->word_04 != 0);"
+ },
+ {
+  "label": "bits[30] carries word_10 as a flag rather than truncated",
+  "find": "\tbits[30] = (short)info->word_10;",
+  "replace": "\tbits[30] = (short)(info->word_10 != 0);"
+ },
+ {
+  "label": "bits[33] carries word_00 as a flag rather than truncated",
+  "find": "\tbits[33] = (short)info->word_00;",
+  "replace": "\tbits[33] = (short)(info->word_00 != 0);"
+ },
+ {
+  "label": "the codec gate is a test for non-zero rather than an equality",
+  "find": "\tbits[128] = (short)(params->word_61c == 1u);",
+  "replace": "\tbits[128] = (short)(params->word_61c != 0u);"
+ },
+ {
+  "label": "cleardown sends the rate and a normal call sends zero",
+  "find": "\t\trate = 0;\n\t} else {\n\t\trate = getDataBitRate(params, (int)info->word_04);\n\t}",
+  "replace": "\t\trate = getDataBitRate(params, (int)info->word_04);\n\t} else {\n\t\trate = 0;\n\t}"
+ },
+ {
+  "label": "getDataBitRate is asked the wrong question",
+  "find": "\t\trate = getDataBitRate(params, (int)info->word_04);",
+  "replace": "\t\trate = getDataBitRate(params, (int)info->word_00);"
+ },
+ {
+  "label": "the rate is four bits rather than five",
+  "find": "\tfor (i = 0; i <= 4; i++) {\n\t\tbits[20 + i] = (short)(rate & 1);",
+  "replace": "\tfor (i = 0; i <= 3; i++) {\n\t\tbits[20 + i] = (short)(rate & 1);"
+ },
+ {
+  "equivalent": true,
+  "why": "MEASURED AND WRONG, AND KEPT FOR THAT REASON.  The object shifts the rate with `sar`, so the variable is signed and `getDataBitRate` returns `int` -- but only FIVE bits are extracted, and bits 0..4 of a 32-bit value are the same under an arithmetic and a logical right shift whatever its sign.  A negative rate is driven (block value 4, long arm, rate -16) and cannot separate the two.  The same argument covers the four-bit group numbers and the thirteen-bit short_14; the `sar` is a codegen-tier reading throughout, not a behavioural one.",
+  "label": "the rate is shifted as an unsigned, so a negative one differs",
+  "find": "\t\tbits[20 + i] = (short)(rate & 1);\n\t\trate >>= 1;",
+  "replace": "\t\tbits[20 + i] = (short)(rate & 1);\n\t\trate = (int)((unsigned int)rate >> 1);"
+ },
+ {
+  "label": "shaperSR's two bits are the other way round",
+  "find": "\tbits[31] = (short)((unsigned int)params->shaperSR & 1u);\n\tbits[32] = (short)(((unsigned int)params->shaperSR >> 1) & 1u);",
+  "replace": "\tbits[31] = (short)(((unsigned int)params->shaperSR >> 1) & 1u);\n\tbits[32] = (short)((unsigned int)params->shaperSR & 1u);"
+ },
+ {
+  "label": "shaperId's two bits are the other way round",
+  "find": "\tbits[49] = (short)(params->shaperId & 1u);\n\tbits[50] = (short)((params->shaperId >> 1) & 1u);",
+  "replace": "\tbits[49] = (short)((params->shaperId >> 1) & 1u);\n\tbits[50] = (short)(params->shaperId & 1u);"
+ },
+ {
+  "label": "short_14 is twelve bits rather than thirteen",
+  "find": "\tfor (i = 0; i <= 12; i++) {\n\t\tbits[36 + i] = (short)(t & 1);",
+  "replace": "\tfor (i = 0; i <= 11; i++) {\n\t\tbits[36 + i] = (short)(t & 1);"
+ },
+ {
+  "label": "short_14 is re-read inside the loop instead of shifted",
+  "find": "\tt = info->short_14;\n\tfor (i = 0; i <= 12; i++) {\n\t\tbits[36 + i] = (short)(t & 1);\n\t\tt >>= 1;\n\t}",
+  "replace": "\tfor (i = 0; i <= 12; i++)\n\t\tbits[36 + i] = (short)(info->short_14 & 1);"
+ },
+ {
+  "label": "float_08 is sent as Q1.6",
+  "find": "\tfloat2Bits(info->float_08, &bits[52], 0);",
+  "replace": "\tfloat2Bits(info->float_08, &bits[52], 1);"
+ },
+ {
+  "label": "shaperA1 is sent as Q3.13",
+  "find": "\tfloat2Bits(params->shaperA1, &bits[69], 1);",
+  "replace": "\tfloat2Bits(params->shaperA1, &bits[69], 0);"
+ },
+ {
+  "label": "the A pair and the B pair are swapped",
+  "find": "\tfloat2Bits(params->shaperB1, &bits[86], 1);\n\tfloat2Bits(params->shaperB2, &bits[94], 1);",
+  "replace": "\tfloat2Bits(params->shaperB2, &bits[86], 1);\n\tfloat2Bits(params->shaperB1, &bits[94], 1);"
+ },
+ {
+  "label": "the framing bit at 68 is a one",
+  "find": "\tbits[68] = 0;",
+  "replace": "\tbits[68] = 1;"
+ },
+ {
+  "label": "the framing bit at 102 is dropped",
+  "find": "\tbits[102] = 0;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the first four group numbers go out MSB first",
+  "find": "\t\t\tbits[103 + 4 * i + j] = (short)(t & 1);",
+  "replace": "\t\t\tbits[103 + 4 * i + (3 - j)] = (short)(t & 1);"
+ },
+ {
+  "label": "the last two group numbers repeat the first two",
+  "find": "\t\tt = group[4 + i];",
+  "replace": "\t\tt = group[i];"
+ },
+ {
+  "label": "the group numbers are three bits each",
+  "find": "\t\tt = group[i];\n\t\tfor (j = 0; j <= 3; j++) {\n\t\t\tbits[103 + 4 * i + j] = (short)(t & 1);",
+  "replace": "\t\tt = group[i];\n\t\tfor (j = 0; j <= 2; j++) {\n\t\t\tbits[103 + 4 * i + j] = (short)(t & 1);"
+ },
+ {
+  "label": "the mask blocks are sixteen entries rather than seventeen",
+  "find": "\t\t\tint base = 136 + 136 * k + 17 * j;",
+  "replace": "\t\t\tint base = 136 + 136 * k + 16 * j;"
+ },
+ {
+  "label": "the constellation mask block has no framing bit",
+  "find": "\t\t\tbits[base] = 0;\n\t\t\tm = (int)(unsigned short)mask[j];\n\t\t\tfor (n = 0; n <= 15; n++) {\n\t\t\t\tbits[base + 1 + n] = (short)(m & 1);\n\t\t\t\tm >>= 1;\n\t\t\t}\n\t\t}\n\t}\n\n\tpos = 136 + 136 * nofGroups;",
+  "replace": "\t\t\tm = (int)(unsigned short)mask[j];\n\t\t\tfor (n = 0; n <= 15; n++) {\n\t\t\t\tbits[base + 1 + n] = (short)(m & 1);\n\t\t\t\tm >>= 1;\n\t\t\t}\n\t\t}\n\t}\n\n\tpos = 136 + 136 * nofGroups;"
+ },
+ {
+  "label": "the mask words go out MSB first",
+  "find": "\t\t\tm = (int)(unsigned short)mask[j];\n\t\t\tfor (n = 0; n <= 15; n++) {\n\t\t\t\tbits[base + 1 + n] = (short)(m & 1);\n\t\t\t\tm >>= 1;\n\t\t\t}\n\t\t}\n\t}\n\n\tpos = 136 + 136 * nofGroups;",
+  "replace": "\t\t\tm = (int)(unsigned short)mask[j];\n\t\t\tfor (n = 0; n <= 15; n++) {\n\t\t\t\tbits[base + 16 - n] = (short)(m & 1);\n\t\t\t\tm >>= 1;\n\t\t\t}\n\t\t}\n\t}\n\n\tpos = 136 + 136 * nofGroups;"
+ },
+ {
+  "label": "only the first eight groups' worth of mask entries are sent",
+  "find": "\t\tfor (j = 0; j <= 7; j++) {\n\t\t\tint base = 136 + 136 * k + 17 * j;",
+  "replace": "\t\tfor (j = 0; j <= 6; j++) {\n\t\t\tint base = 136 + 136 * k + 17 * j;"
+ },
+ {
+  "label": "the codec block runs when the gate is clear",
+  "find": "\tif (bits[128] != 0) {",
+  "replace": "\tif (bits[128] == 0) {"
+ },
+ {
+  "label": "the codec block does not advance the cursor",
+  "find": "\t\tpos += 136 * nofGroups;",
+  "replace": "\t\tpos += 0;"
+ },
+ {
+  "label": "the codec block reads the first table",
+  "find": "\t\t\tgetCodecConstellationMask(params, k, mask);",
+  "replace": "\t\t\tgetConstellationMask(params, k, mask);"
+ },
+ {
+  "label": "the CRC register is seeded with zeros",
+  "find": "\tfor (i = 0; i <= 0xf; i++)\n\t\tcrc[i] = 1;",
+  "replace": "\tfor (i = 0; i <= 0xf; i++)\n\t\tcrc[i] = 0;"
+ },
+ {
+  "label": "the CRC runs over the opening block of ones as well",
+  "find": "\tfor (b = 1; b < nofBlocks; b++) {",
+  "replace": "\tfor (b = 0; b < nofBlocks; b++) {"
+ },
+ {
+  "label": "the CRC extent includes the block it is about to be written into",
+  "find": "\tfor (b = 1; b < nofBlocks; b++) {",
+  "replace": "\tfor (b = 1; b <= nofBlocks; b++) {"
+ },
+ {
+  "label": "the CRC steps over the framing bit and one information bit",
+  "find": "\t\tfor (i = 17 * b + 1; i <= 17 * b + 16; i++) {",
+  "replace": "\t\tfor (i = 17 * b + 2; i <= 17 * b + 16; i++) {"
+ },
+ {
+  "label": "the CRC block size is sixteen",
+  "find": "\tnofBlocks = pos / 17;",
+  "replace": "\tnofBlocks = pos / 16;"
+ },
+ {
+  "label": "the CRC tap out of position 4 is dropped",
+  "find": "\t\t\tcrc[3] = (crc[4] + t) & 1;",
+  "replace": "\t\t\tcrc[3] = crc[4];"
+ },
+ {
+  "label": "the CRC tap out of position 11 is dropped",
+  "find": "\t\t\tcrc[10] = (crc[11] + t) & 1;",
+  "replace": "\t\t\tcrc[10] = crc[11];"
+ },
+ {
+  "label": "the CRC feedback bit is inverted",
+  "find": "\t\t\tcrc[15] = t & 1;",
+  "replace": "\t\t\tcrc[15] = (t + 1) & 1;"
+ },
+ {
+  "label": "the CRC feeds back the input bit rather than the sum",
+  "find": "\t\t\tt = bits[i] + crc[0];",
+  "replace": "\t\t\tt = bits[i];"
+ },
+ {
+  "label": "the CRC lands on the framing bit rather than after it",
+  "find": "\t\tbits[pos + 1 + i] = (short)crc[i];",
+  "replace": "\t\tbits[pos + i] = (short)crc[i];"
+ },
+ {
+  "label": "the CRC goes out in the other order",
+  "find": "\t\tbits[pos + 1 + i] = (short)crc[i];",
+  "replace": "\t\tbits[pos + 1 + i] = (short)crc[15 - i];"
+ },
+ {
+  "label": "two trailing zeros rather than three",
+  "find": "\tfor (i = 0; i <= 2; i++)\n\t\tbits[pos + 17 + i] = 0;",
+  "replace": "\tfor (i = 0; i <= 1; i++)\n\t\tbits[pos + 17 + i] = 0;"
+ },
+ {
+  "label": "the returned length is one short",
+  "find": "\treturn pos + 0x14;",
+  "replace": "\treturn pos + 0x13;"
+ },
+
+ {
+  "label": "the CPt flag is not inverted",
+  "find": "\t\t info->word_04 != 0 ? \"\" : \"t\",",
+  "replace": "\t\t info->word_04 != 0 ? \"t\" : \"\","
+ },
+ {
+  "label": "the CPs and CP' flags are swapped",
+  "find": "\t\t info->word_10 != 0 ? \"s\" : \"\",\n\t\t info->word_00 != 0 ? \"'\" : \"\");",
+  "replace": "\t\t info->word_00 != 0 ? \"s\" : \"\",\n\t\t info->word_10 != 0 ? \"'\" : \"\");"
+ },
+ {
+  "label": "the row dump starts at the opening block rather than block 1",
+  "find": "\t\tconst short *r = &bits[17 + 17 * i];",
+  "replace": "\t\tconst short *r = &bits[17 * i];"
+ },
+ {
+  "label": "the row dump is six rows rather than seven",
+  "find": "\tfor (i = 0; i <= 6; i++) {\n\t\tconst short *r = &bits[17 + 17 * i];",
+  "replace": "\tfor (i = 0; i <= 5; i++) {\n\t\tconst short *r = &bits[17 + 17 * i];"
+ },
+ {
+  "label": "the row dump prints sixteen of the seventeen",
+  "find": "\t\t\t r[15], r[16]);",
+  "replace": "\t\t\t r[15], r[15]);"
+ },
+
+ {
+  "equivalent": true,
+  "why": "The mask word is loaded with `movzwl` in the object and shifted with `sar`, which is what the cast spells; but only bits 0..15 are ever extracted, so the sign extension cannot reach an output. The reading is a codegen-tier one (CLAUDE.md's 613 rule) and no differential trial can separate the two. It is here so that a later reader can see it was measured and found unobservable rather than never asked.",
+  "label": "the mask word is sign-extended rather than zero-extended",
+  "find": "\t\t\tm = (int)(unsigned short)mask[j];\n\t\t\tfor (n = 0; n <= 15; n++) {\n\t\t\t\tbits[base + 1 + n] = (short)(m & 1);\n\t\t\t\tm >>= 1;\n\t\t\t}\n\t\t}\n\t}\n\n\tpos = 136 + 136 * nofGroups;",
+  "replace": "\t\t\tm = (int)mask[j];\n\t\t\tfor (n = 0; n <= 15; n++) {\n\t\t\t\tbits[base + 1 + n] = (short)(m & 1);\n\t\t\t\tm >>= 1;\n\t\t\t}\n\t\t}\n\t}\n\n\tpos = 136 + 136 * nofGroups;"
+ },
+ {
+  "equivalent": true,
+  "why": "`short_14` is thirteen bits wide in the message and sixteen in the field, and bits 0..12 of a 16-bit value are the same whether it is sign- or zero-extended into an int. The object's `movswl` is faithful to the field's declared type and is written that way; no input can separate the two readings.",
+  "label": "short_14 is read unsigned",
+  "find": "\tt = info->short_14;",
+  "replace": "\tt = (int)(unsigned short)info->short_14;"
+ }
+]

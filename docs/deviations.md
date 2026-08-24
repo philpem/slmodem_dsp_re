@@ -8580,6 +8580,46 @@ shape `v92-fold-oob` gave D561's own site -- which is a `V92CP` layout change
 and belongs to a batch that owns that header.  D570 is the same class of
 finding on the same two blocks from the reading end.
 
+## D791 ✅ `V90CPPacker`'s mask buffer is sixteen words where the object's stack slot is eight, and the object's overspill is inert
+
+The same `getConstellationMask` overflow as D790, reached from the OTHER
+caller, and this time the destination is a LOCAL rather than a field -- which
+is what makes it closable instead of merely recorded.
+
+`getConstellationMask` clears eight words and then sets `mask[b >> 4]` with no
+mask on the nibble, so a constellation byte at or above 0x80 addresses entries
+8 to 15 of a buffer it was handed as eight.  In the object, `V90CPPacker`'s
+buffer is `%esp+0xf0` and the sixteen-entry CRC register is `%esp+0x100`
+immediately above it, so entries 8..15 land exactly on `crc[0..3]`:
+
+| the write | where it lands |
+|---|---|
+| `mask[0..7]` | the eight words the function reads back |
+| `mask[8..15]` | `crc[0]`, `crc[1]`, `crc[2]`, `crc[3]` |
+
+**AND IT IS INERT, WHICH IS MEASURED AND NOT ASSUMED.**  Both mask loops --
+the constellation one at .text+0x3c1fc and the codec one at .text+0x3c2f8 --
+finish before the CRC register is seeded at .text+0x3c404, which writes all
+sixteen entries unconditionally.  Nothing reads `crc[]` in between, and
+nothing reads `mask[8..15]` ever: the extraction loop runs `j` from 0 to 7.
+So the object's own overspill cannot reach the message.
+
+**OUR LOCAL IS `short mask[16]`.**  Same behaviour, because only the low eight
+are read and the CRC is seeded afterwards on both sides; but the write is in
+bounds in our source, which is what lets the case be DRIVEN rather than
+avoided.  That is the whole difference from D790, whose destination is a row
+of `V92CP::short_42` and cannot be widened without a layout change to a header
+that batch does not own.  `t_v90cmask`'s `run_packer` therefore sweeps all
+four byte alphabets, including the two that guarantee a byte at or above 0x80,
+and counts that it reached one -- where `run_pack` beside it must exclude
+them under D561.
+
+Nothing is hidden by the wider local.  A reconstruction that read
+`mask[8..15]` would be caught by the differential, because the object's
+entries 8..15 hold whatever the previous group left in `crc[0..3]` and ours
+hold whatever the previous group left in `mask[8..15]`; the two are different
+values and the two sides would disagree the moment either was used.
+
 ## D930 🐛 `V90SpectralShaper` reads an uninitialised action, and runs a four-billion-iteration loop, on inputs its own tables and `reset` cannot produce
 
 *Renumbered from D800 on merge.*  The `v90-spectral-reneg` branch measured the

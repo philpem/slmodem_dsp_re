@@ -78219,6 +78219,268 @@ is 7474's move made before the fact: the inlined `enterPhase4()`'s own
 on it would be caught by `t_v90dataph`'s latch sweep over the out-of-line
 member and credited to the wrong function.
 
+### 7500. The analogue side's CP builder, written: `V90CPpck.cpp` and its two tables
+
+Reserved block for this batch: **7500-7509**.  The highest number in use on
+any branch when it was claimed was 7485, on `master` and on two agent
+worktrees, so the gap is deliberate -- another agent is numbering
+concurrently and 7486-7499 is left for it.
+
+Closes the last unwritten piece of the analogue side's phase 4 transmit path,
+which 7000 could not find and 7001 located:
+
+    V90CPPacker(V90MappingParams *, tagV90AdditionalCPinfo *, short *, int)
+                                              .text+0x3bf50  2,641 B
+    float2Bits(float, short *, int)           .text+0x3be30    283 B
+    getDataBitRate                            .text+0x33670     24 B
+    fltTable2                                 .data+0xb00       64 B
+    fltTable1                                 .data+0xb40       28 B
+
+3,040 bytes, five symbols, and the closure holds nothing else.  **`make
+coverage` moves by 2,948 bytes and three symbols, not by 3,040 and five**, and
+that is not a discrepancy: its denominator is `.text`, so the 92 bytes of
+`.data` the two tables occupy are outside it.  Quote whichever is meant and
+say which.
+
+#### The file is `V90CPpck.cpp`, and the attribution is two orderings agreeing
+
+`tools/tumap.py` puts `V90CPpck.cpp` at TU 57, between `V90SdDetector.cpp`
+(56) and `V90TRN2dDesigner.cpp` (58).  Both of those are shared brackets in
+the usual weak sense, so on its own that would be inference.  It is not on its
+own:
+
+- **`.text`.**  `float2Bits` and `V90CPPacker` are the ONLY symbols between
+  `V90SdDetector::process` (which ends at 0x3be30) and
+  `V90TRN2Designer::V90TRN2Designer` (0x3c9b0).  Nothing else is in the gap.
+- **`.data`.**  `fltTable2` and `fltTable1` are the only data between TU 48's
+  (`V90SpectralShaper::actionLookupTable` and `pow10Table`, both at
+  .data+0x8e0..0xaf4) and TU 60's (`V90ConstellationPower::
+  averagePowerLimits`, .data+0xb60), and **no other TU in 49..59 defines any
+  `.data` at all**.
+
+Two independent orderings, each excluding every other candidate.  That is
+stronger than the shared bracket `setV92CPpckFromParamsInfo` rests on, and
+the name is the author's rather than ours -- `setV92CPpckFromParamsInfo`
+spells the same three letters.  `tumap.py`'s TU 58 is `V90TRN2dDesigner.cpp`
+where this tree uses `V90TRN2Designer.cpp`, so a name from that tool is not
+infallible; this one is corroborated by the V.92 twin's own symbol name.
+
+#### `fltTable1`/`fltTable2` are NOT the objects `V92CP.cpp` names
+
+The brief asked this to be settled before anything was defined, and the answer
+is that they are four symbols, not two:
+
+| symbol | address | size | referenced by |
+|---|---|--:|---|
+| `fltTable2` | .data+0xb00 | 64 | `float2Bits(float, short *, int)` |
+| `fltTable1` | .data+0xb40 | 28 | `float2Bits(float, short *, int)` |
+| `fltTable_2` | .data+0x69e0 | 64 | `V92CP::infoToBits`, `V92CP::evaluateInfo` |
+| `fltTable_1` | .data+0x6a20 | 28 | `V92CP::infoToBits`, `V92CP::evaluateInfo` |
+
+Different names, different addresses, and finding 826 had already measured
+them as separate symbols rather than aliases.  The CONTENTS are byte-identical
+-- the missing 2^-8 and the doubled 2^-9 included -- which is exactly why the
+confusion is available, and why the reading has to come from the relocation
+and not from the spelling.  `V90CPpck.cpp` defines the unsuffixed pair and
+`V92CP.cpp` keeps the suffixed one; "one type, one home" is not engaged,
+because these are objects and their names already differ.
+
+`t_v90cmask` asserts the ADDRESSES differ, not just the contents, which is the
+one check a merge of the two files would break.  And `V92CP.cpp`'s comment
+saying the second pair is "which nothing written references" was true when it
+was written and is retracted in the same commit -- 6100/6103's defect, and
+4342's rule that an unqualified "nothing reads it" is a claim about every
+function in the object.
+
+#### The two `float2Bits` are overloads and only one is written
+
+`_Z10float2BitsfPsi` (283 B, `short *`) and `_Z10float2BitsfPhi` (125 B,
+`unsigned char *`) are ordinary C++ overloads: neither mangling carries a
+template-argument section, both are `T` rather than the `W` an instantiation
+would be, and both are in `.text` rather than `.gnu.linkonce.t.*`.  Only the
+`short *` one is written.  **Which one `V90CPPacker` calls was settled from
+the relocation**: all five call sites are `R_386_PC32` against
+`_Z10float2BitsfPsi`.
+
+`float2Bits` is a Q-format packer with three arms.  Mode 0 is Q3.13 -- sixteen
+magnitude entries off `fltTable2`, heaviest at `bits[15]`, magnitude through
+`fabs` and no sign entry.  Mode 1 is Q1.6 -- seven entries off `fltTable1`,
+heaviest at `bits[6]`, then the sign at `bits[7]`, taken with `setb` BEFORE
+the `fabs`.  Anything else returns having written nothing.  The two out-of-
+range warnings, "Q3.13 format violation!!" and "Q1.6 format violation!!", are
+the author's own words and are what NAME the two modes; nothing is clamped, so
+the warning is the arm's only observable.
+
+#### The CP layout is seventeen-bit frames, and that is proved by closure
+
+Every literal-zero store in `V90CPPacker`, in index order, is a multiple of
+seventeen: 17, 34, 51, 68, 85, 102, 119, 136, then 136 + 136k + 17j for each
+group and mask word, then the same again for the codec block, then `pos`, then
+`pos+17..pos+19`.  Block 0 is `bits[0..16]`, seventeen ones.  **Nothing is
+written twice, nothing between 0 and `pos+19` is left unwritten, and the CRC
+loop's own extent -- `17m+1 .. 17m+16` for m from 1 -- lands on the same
+grid.**  So the frame size is confirmed by internal consistency rather than by
+reading each store separately; that is the strongest single statement
+available about the layout.
+
+The fixed part is blocks 1 to 7, `bits[17..135]`, and it is also exactly what
+the closing diagnostic dumps -- seven rows of seventeen from `bits[17]`,
+whatever the group count.  Then `groups` × 8 blocks of a constellation mask
+word each; then the same again if `bits[128]`; then the CRC block and three
+trailing zeros.  The return is `pos + 20`.
+
+`bits[128]` is `params->word_61c == 1`, an EQUALITY (`sete`), not a test for
+non-zero -- and it gates both the codec block and therefore the message
+length.  `word_61c = 2` separates the two readings and is in the sweep.
+
+**FOUR FIELDS REACH THE MESSAGE TRUNCATED RATHER THAN AS FLAGS.**  `bits[19]`,
+`bits[30]`, `bits[33]` and `bits[35]` are `(short)` of a whole dword out of
+the record -- `mov 0x4(%ecx),%eax; mov %ax,0x26(%edx)` and three like it -- so
+a "bit" slot can hold 0x1234.  With the 0/1 values a flag fixture would use,
+`(short)x` and `x != 0` are the same function, which is 7458's shape exactly;
+the fixture drives 0x1234 through `bits[19]` and reads the value back.
+
+#### Its relation to Table 14/V.90 is INTERPRETATION and is flagged as such
+
+What is measured is the grid above and the field ORIGINS.  Read against
+Table 14 the seventeen-bit frame, the leading all-ones block, the terminating
+CRC-16 and the per-constellation bitmaps line up; but the object states no
+field names, so nothing in `src/` or in the header carries a spec name.  A
+tidy mapping is not evidence.
+
+What the object DOES name is the message: the closing `edprintf` is
+"V90CP packed: CP%s%s%s bits:" with three separate ternaries --
+`word_04 == 0` gives "t", `word_10 != 0` gives "s", `word_00 != 0` gives "'".
+So CP, CPt, CPs and CP' are the author's own four spellings, the first flag is
+INVERTED with respect to the other two, and the same `word_04` also selects
+`getDataBitRate`'s constant.  All eight combinations are driven and compared
+as transcript text, because under a varied fill all three are non-zero almost
+always.
+
+#### The CRC is `V90CP::calcCRC`'s register in a different container
+
+Taps out of positions 4 and 11 into 3 and 10, feedback into 15 --
+x^16 + x^12 + x^5 + 1, identical to `V90CP::calcCRC` and `::evaluateCRC`.
+What differs is the WIDTH: `V90CP`'s register is `unsigned char crc[16]` and
+this one's is `int crc[16]` (`movl $0x1` at a four-byte stride at 0x3c40b, a
+32-bit load feeding a 16-bit store at 0x3c81a).  Carrying the class's spelling
+across would have been wrong in a way no test names.
+
+`nofBlocks = pos / 17` is `imul $0x78787879` / `sar $3` with a signed
+correction, so `pos` is signed; and because every framing bit is a multiple of
+seventeen, the division is exact for every input the function can produce.
+
+**A NOTE FOR THE CONFORMANCE QUESTION THIS BATCH WAS TOLD TO STAY OFF.**
+`docs/method/conformance-plan.md` ranks "`V90CP`'s CRC extent against
+Table 14/V.90" in its top three.  Nothing here settles it, and nothing here
+was changed for it -- but the evidence this batch turned up is worth recording
+where that batch will find it: this function's CRC extent is blocks 1 through
+`nofBlocks - 1` inclusive, with the block holding the CRC excluded and every
+framing bit stepped over, and its first information bit is index 0x12.
+`V90CP::calcCRC` runs 0x12 to `word_3bb0 - 0x11` with `i % 17 == 0` skipped,
+which is the same rule expressed the other way round.  Two independent
+functions agreeing on the extent is a data point for that question; it is not
+an answer to it, and it was not acted on.
+
+#### `getDataBitRate`, and the limit of what one call site forces
+
+Twenty-four bytes: `*(int *)arg1 - (arg2 ? 0x14 : 8)`, two arms each with its
+own subtract and its own `ret`, which is the out-of-line twin of the four
+lines `setV92CPpckFromParamsInfo` ends with.  It lives in
+`V90MappingParamsInt.cpp`, whose own header already named it as one of that
+file's unwritten members.
+
+**`readelf -r` finds exactly ONE relocation naming the symbol in the whole
+object**, at .text+0x3c996 inside `V90CPPacker`.  So `V90MappingParams *` for
+the first parameter is inference from that one site and is stated as such:
+the body only does `mov (%eax),%eax`, and anything with an `int` at offset 0
+would satisfy it.  Nothing bounds `word_0`, so a small one returns a negative
+rate; that is reproduced and driven, not guarded.
+
+#### The fixture is `t_v90cmask`, and that is a deliberate departure from the brief's list
+
+The brief enumerated `t_v90cp`, `t_v90cpb2i`, `t_v90cpinfo` and `t_v90cpleaf`
+and asked which the widest arm needs.  The answer is **none of them**: all
+four build a `V90CP`, and `V90CPPacker` never touches one.  What its widest
+arm needs constructed is a populated `V90MappingParams` driving
+`getConstellationsIndex` to a group count, both mask functions over that
+count, and a `tagV90AdditionalCPinfo` beside it -- which is `t_v90cmask`'s
+existing fixture exactly, `shapes[]`, `table_byte()` and all.  Extending it
+cost three `seed_*` helpers and reused fourteen constellation shapes and four
+byte alphabets.
+
+`t_v90cmask` is not in `tools/gccdiverge.json`, so the no-mutation-suite rule
+does not bind and the new suite is registered.
+
+**AND IT DRIVES A CASE `run_pack` BESIDE IT CANNOT.**  D790 records that
+`getConstellationMask` writes `mask[b >> 4]` unmasked, so a table byte at or
+above 0x80 reaches entries 8..15 of a buffer handed to it as eight; for
+`setV92CPpckFromParamsInfo` the destination is a row of `V92CP::short_42` and
+the overflow leaves the object, so that sweep has to exclude the two high byte
+alphabets under D561.  `V90CPPacker`'s destination is a LOCAL, so ours is
+sixteen words and all four alphabets are in the sweep.  In the object the
+overspill lands on `crc[0..3]`, which is re-seeded after the last mask call
+and is therefore inert -- measured, not assumed.  New entry **D791**.
+
+#### Counts
+
+`make phase` exit 0.  **`period differential: 241 passed, 0 failed`, and the
+241 DID NOT MOVE** -- that number counts test BINARIES, and this batch
+extended `t_v90cmask` rather than adding one, which is the whole point of the
+fixture choice above.  That line therefore says NOTHING about whether the new
+groups ran under GCC 3.4.2, so it was checked separately and the answer is in
+`build/period/`: `src_pump_v90_V90CPpck.o.log` is empty (no warning from the
+period compiler) and `t_v90cmask.run.log` holds all seven PASS lines with the
+same check counts as the modern build.  The period tier never skips a run,
+only a relink, so a cached pass is not possible here.
+
+**ONE GATE TOOL WAS EDITED:** `V90CPpck.h` is added to `tools/offcheck.py`'s
+`SKIP_HEADERS`.  That list is for C++ headers, which cannot go into the C
+translation unit `offsets` builds; this one declares two functions over a
+forward-declared `class` and defines no struct at all, so there is no layout
+being excused, and the comment above the list now says so.  What moved is `make coverage`: **72.2% -> 72.6%,
+533,293 bytes over 1,212 symbols**, and suite line coverage over `src/` is
+95.7% (33,498/34,995).  `tools/onedef.py` is unchanged at 222 types, 135
+files, 1 known duplicate.
+
+`t_v90cmask` goes from 4,004 checks in four groups to **29,330 in seven**:
+
+    PASS getConstellationsIndex                        232
+    PASS getConstellationMask / getCodecConstellationMask  2806
+    PASS setV92CPpckFromParamsInfo                     320
+    PASS displaySpectralParams                         646
+    PASS float2Bits(float, short *, int)              2657
+    PASS getDataBitRate                                123
+    PASS V90CPPacker                                 22546
+
+Two mutation suites, both new and both recorded:
+`test/mutations/v90cppck.json` is **64 mutations, 61 caught, 0 NOT caught,
+0 unusable, 3 equivalent, 0 MIScounted**, and
+`test/mutations/v90mapint.json` -- `getDataBitRate`'s two constants and the
+sense of its one test -- is **5 of 5 caught, 0 unusable**.  The second one's
+NOTE says what it does NOT cover: the other five members of
+`V90MappingParamsInt.cpp` still have no mutation set, which nobody had
+recorded before.
+
+**AND THE FIVE `V92CP.cpp` SUITES ARE RE-RECORDED, WHICH IS THE POINT OF
+DOING IT.**  This batch's only edit to that file is a COMMENT, so its four
+current snapshot entries went stale for nothing.  Re-running `v92cp`,
+`v92cpcrc`, `v92cpeval`, `v92cpb2i` and `v92info` leaves every verdict and
+every summary line byte-identical and moves only the key hash -- so "a comment
+changed nothing" is measured rather than asserted, and the next merge does not
+inherit five stale entries from here.
+
+All three of `v90cppck`'s equivalents carry a
+`why`, and one of them is a MEASUREMENT THAT CAME OUT THE OTHER WAY and was
+kept for that reason: the object shifts the data rate with `sar`, so the
+variable is signed -- but only five bits are extracted, and bits 0..4 of a
+32-bit value are identical under an arithmetic and a logical right shift
+whatever the sign.  A negative rate is driven and cannot separate them.  The
+same argument covers the four-bit group numbers and the thirteen-bit
+`short_14`, so every `sar` in this function is a codegen-tier reading and not
+a behavioural one.  Saying that once, here, is cheaper than three future
+readers each rediscovering it.
+
 ### 7485. `V90ConnectionEvaluator` +0x78 GAINS THE AUTHOR'S OWN WORD AND KEEPS ITS OFFSET NAME
 
 `exitPhase3` is the fourth function in the tree to touch the +0x78/+0x7c pair

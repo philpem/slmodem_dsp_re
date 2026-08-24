@@ -14,10 +14,11 @@
  *   0x33330  286  getConstellationsIndex
  *   0x33450  130  getConstellationMask
  *   0x334e0  130  getCodecConstellationMask
+ *   0x33670   24  getDataBitRate
  *   0x33920  822  setV92CPpckFromParamsInfo
  *   0x33ec0  619  displaySpectralParams
  *
- * All five are UNMANGLED `T` symbols, so the original declared them
+ * All six are UNMANGLED `T` symbols, so the original declared them
  * `extern "C"`; a plain C++ prototype would emit `_Z...` and be a different
  * function.  The first three hold NO relocations at all -- `tools/dis.py`
  * prints its "N relocation(s) in this range" banner only when there are some,
@@ -30,11 +31,12 @@
  * and every one of them is `edprintf` or a string.  Their own blocks below
  * carry the evidence.
  *
- * SIX MORE SYMBOLS ARE IN THE SAME BRACKET AND ARE NOT WRITTEN:
+ * FIVE MORE SYMBOLS ARE IN THE SAME BRACKET AND ARE NOT WRITTEN:
  * `setConstellationMask` (0x33570), `setCodecConstellationMask` (0x335f0),
- * `getDataBitRate` (0x33670), `setDataBitRate` (0x33690),
+ * `setDataBitRate` (0x33690),
  * `setParamsInfoFromCPUnPck` (0x336b0) and `setParamsInfoFromV92CPUnPck`
- * (0x33c60).  The last two are NOT `src/pump/v90/V92ParamsInfo.c`'s -- that
+ * (0x33c60).  `getDataBitRate` used to be a sixth and is now written, below.
+ * The last two are NOT `src/pump/v90/V92ParamsInfo.c`'s -- that
  * file's `V92setParamsInfoFromCPUnPck` is a different symbol at .text+0x12f00
  * -- and the name similarity is exactly the trap `tools/tumap.py` exists to
  * avoid.
@@ -183,6 +185,47 @@ getCodecConstellationMask(V90MappingParams *params, int which, short *mask)
 
 		mask[v >> 4] = (short)(mask[v >> 4] | (1 << (v & 15)));
 	}
+}
+
+/*
+ * ===========================================================================
+ * getDataBitRate (.text+0x33670, 24 bytes)
+ * ===========================================================================
+ *
+ * Twenty-four bytes and two arms, and it is the out-of-line twin of the four
+ * lines `setV92CPpckFromParamsInfo` ends with:
+ *
+ *	mov  0x8(%esp),%edx		the flag
+ *	mov  0x4(%esp),%eax		the block
+ *	test %edx,%edx
+ *	je   .Lshort
+ *	mov  (%eax),%eax  ;  sub $0x14,%eax  ;  ret
+ *   .Lshort:
+ *	mov  (%eax),%eax  ;  sub $0x8,%eax   ;  ret
+ *
+ * TWO CONSTANTS AND NOT ONE EXPRESSION, exactly as in the twin: each arm has
+ * its own subtract, its own move and its own `ret`.
+ *
+ * THE FIRST PARAMETER'S TYPE IS INFERENCE FROM ONE CALL SITE, and it is the
+ * only call site: `readelf -r` finds exactly ONE relocation naming this
+ * symbol in the whole object, at .text+0x3c996 inside `V90CPPacker`, which
+ * passes its own first argument.  The function itself only does `mov (%eax)`,
+ * so anything with an `int` at offset 0 would satisfy it.  The second
+ * parameter is `info->word_04` at the same site, tested and not otherwise
+ * used, so its signedness is not forced either.
+ *
+ * THE RETURN IS SIGNED and its five low bits are what reach the message:
+ * `V90CPPacker` shifts it with `sar`.  Nothing bounds `params->word_0`, so a
+ * value below 0x14 returns a negative rate and the five bits sent are its
+ * two's complement -- reproduced, not guarded.
+ */
+extern "C" int
+getDataBitRate(V90MappingParams *params, int islong)
+{
+	if (islong != 0)
+		return (int)params->word_0 - 0x14;
+
+	return (int)params->word_0 - 8;
 }
 
 /*

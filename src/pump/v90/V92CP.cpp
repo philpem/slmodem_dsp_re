@@ -307,9 +307,15 @@ V92CP::evaluateCRC()
  * most significant first.  Both are GLOBAL `D` symbols, so neither is `const`
  * here: a namespace-scope `const` array has INTERNAL linkage in C++ and the
  * symbol would disappear.  The object holds a second, identical pair --
- * `fltTable2` at .data+0xb00 and `fltTable1` at .data+0xb40 -- which nothing
- * written references; finding 826 measured that the two pairs are separate
- * symbols and not aliases.
+ * `fltTable2` at .data+0xb00 and `fltTable1` at .data+0xb40 -- and finding
+ * 826 measured that the two pairs are separate symbols and not aliases.
+ *
+ * "WHICH NOTHING WRITTEN REFERENCES" USED TO END THAT SENTENCE AND IS
+ * RETRACTED.  `src/pump/v90/V90CPpck.cpp` defines the unsuffixed pair now and
+ * `float2Bits(float, short *, int)` reads them; the four symbols are still
+ * four, and the two files must not be merged.  A reference to one of these
+ * two names from anywhere but this file is a defect: check the relocation,
+ * not the spelling.
  *
  * THEY ARE TRANSCRIBED AND NOT GENERATED, and fltTable_2 is why.  Read as a
  * geometric sequence it is 2^2 down to 2^-13, sixteen entries -- except that

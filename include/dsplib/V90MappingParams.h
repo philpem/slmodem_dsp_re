@@ -187,6 +187,18 @@ void getCodecConstellationMask(V90MappingParams *params, int which,
 			       short *mask);
 
 /*
+ * `params->word_0` less 0x14 when `islong` is non-zero and less 8 when it is
+ * not -- the same two constants `setV92CPpckFromParamsInfo` ends with, out of
+ * line.  `V90CPPacker` sends the low five bits of the result.
+ *
+ * BOTH PARAMETER TYPES ARE INFERENCE FROM ONE CALL SITE and the object forces
+ * neither: the body reads four bytes at offset 0 and tests the second
+ * argument against zero, and there is exactly one relocation naming the
+ * symbol in the whole object.  See the .cpp.
+ */
+int getDataBitRate(V90MappingParams *params, int islong);
+
+/*
  * Fill a `V92CP` from this block and the record beside it.  The two source
  * types are the object's, out of the mangling of the V.90 twin
  * `V90CPPacker(V90MappingParams *, tagV90AdditionalCPinfo *, short *, int)`

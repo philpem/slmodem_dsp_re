@@ -1,0 +1,31 @@
+[
+ {
+  "label": "NOTE: this set covers getDataBitRate ONLY, the one member of src/pump/v90/V90MappingParamsInt.cpp this batch wrote. getConstellationsIndex, getConstellationMask, getCodecConstellationMask, setV92CPpckFromParamsInfo and displaySpectralParams have no mutation set of their own and are not covered here -- t_v90cmask drives all five differentially, but nothing has yet measured how tightly.",
+  "note": "The function is twenty-four bytes and its whole surface is two constants and the sense of one test, so a set of four rows is the whole of it. Its second caller does not exist: readelf -r finds exactly ONE relocation naming the symbol in the object, inside V90CPPacker, which is why the parameter types are stated as inference in the header and the .cpp."
+ },
+ {
+  "label": "the long arm subtracts 0x10 rather than 0x14",
+  "find": "\t\treturn (int)params->word_0 - 0x14;",
+  "replace": "\t\treturn (int)params->word_0 - 0x10;"
+ },
+ {
+  "label": "the short arm subtracts 4 rather than 8",
+  "find": "\treturn (int)params->word_0 - 8;",
+  "replace": "\treturn (int)params->word_0 - 4;"
+ },
+ {
+  "label": "the two arms are swapped",
+  "find": "\tif (islong != 0)\n\t\treturn (int)params->word_0 - 0x14;\n\n\treturn (int)params->word_0 - 8;",
+  "replace": "\tif (islong != 0)\n\t\treturn (int)params->word_0 - 8;\n\n\treturn (int)params->word_0 - 0x14;"
+ },
+ {
+  "label": "the flag is tested the other way round",
+  "find": "\tif (islong != 0)\n\t\treturn (int)params->word_0 - 0x14;",
+  "replace": "\tif (islong == 0)\n\t\treturn (int)params->word_0 - 0x14;"
+ },
+ {
+  "label": "the block is read one dword in",
+  "find": "\tif (islong != 0)\n\t\treturn (int)params->word_0 - 0x14;\n\n\treturn (int)params->word_0 - 8;",
+  "replace": "\tif (islong != 0)\n\t\treturn (int)params->constellation[0][0] - 0x14;\n\n\treturn (int)params->constellation[0][0] - 8;"
+ }
+]

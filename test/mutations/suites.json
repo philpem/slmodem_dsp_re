@@ -320,6 +320,14 @@
   "src/pump/v90/V90ConstellationPower.cpp",
   "build/test/t_v90designers"
  ],
+ "v90cppck": [
+  "src/pump/v90/V90CPpck.cpp",
+  "build/test/t_v90cmask"
+ ],
+ "v90mapint": [
+  "src/pump/v90/V90MappingParamsInt.cpp",
+  "build/test/t_v90cmask"
+ ],
  "v90demapctor": [
   "src/pump/v90/V90Demapper.cpp",
   "build/test/t_v90demapctor"
