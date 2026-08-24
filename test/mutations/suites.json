@@ -744,6 +744,10 @@
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmrun"
  ],
+ "vpcmrunpcm": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_vpcmrunpcm"
+ ],
  "vpcmtabs": [
   "src/pump/v90/vpcm_tables.c",
   "build/test/t_vpcmtabs"
