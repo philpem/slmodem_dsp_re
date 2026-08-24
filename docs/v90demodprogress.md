@@ -44,21 +44,53 @@ GREEN**: both `V90BitsToSymbol` resets, `V90Mapper::process`,
     V90Mapper::process                           DONE
     V90BitsToSymbol::process(unsigned char *, unsigned int)   DONE
     V90Phase4Modulator::setMappingParams          DONE
+    V90Phase4Modulator::generateV90Symbol          DONE   2,235 B
+    V90Phase4Modulator::generateV92Symbol          DONE   3,922 B
     V90Phase4Modulator::reset                                    255 B
-    V90Phase4Modulator::{generateV90Symbol, generateV92Symbol}   6,157 B
-    V90Phase4Demodulator::reset
-    V90Demodulator::exitPhase3
-    V90Demodulator::progress
+    V90Phase4Demodulator::reset                                  504 B
+    V90Demodulator::exitPhase3                                   768 B
+    V90Demodulator::progress                                   7,276 B
+
+**THE TWO PUMPS ARE WRITTEN AND DIFFERENTIALLY GREEN**, 6,157 bytes of the
+batch's remaining 16,853, and what is left is the four in the tail above.
+Findings 7450-7460; `docs/findings.md` 7450 has the two jump tables and 7452
+the seven places the V.92 pump genuinely differs from the V.90 one.
 
 **`setMappingParams` IS AT `.text+0x2d120` AND IS 96 BYTES**, which the table
 above always said and a task brief did not: `0x30310` is inside
 `V90Mapper::reset`. `nm -S -C` on the blob is what settles an address, every
 time.
 
-The two just landed clear the way to `generateV90Symbol` and
-`generateV92Symbol`, 6,157 bytes and the bulk of what is left. The remaining
-`process` overload, `(unsigned char *, unsigned int &, short *)` at 0x2faa0, is
-484 bytes and is NOT in this batch's closure.
+The remaining `process` overload, `(unsigned char *, unsigned int &, short *)`
+at 0x2faa0, is 484 bytes and is NOT in this batch's closure.
+
+## What the two symbol pumps turned out to be
+
+One `switch` over `state` each, dispatched through a jump table in `.rodata` --
+`+0xa94` with twenty-eight entries for the V.90 pump and `+0xb04` with
+thirty-one for the V.92 one -- and the two tables are what say WHICH states
+each has a `case` for. The middles are disjoint: V.90 dispatches the MP ladder
+at 0x04 and 0x0d..0x0f and sends 0x05..0x0c to the default edge, and V.92 does
+exactly the reverse against `cpSequenceSymbols`. V.92 also owns the
+silence/Rt/Rf ladder at 0x18..0x1e, which the shorter table stops before.
+
+Nine V.90 arms and fourteen V.92 ones share one idiom -- `nofBitsForNextTime`,
+a conditional fill, then the drain into a one-`short` slot -- and the arms
+CALL the class's existing members rather than repeating them, which a
+redundant `cmpl $0xe,0x4(%esi)` at +0x2e0a4 is the evidence for (7451).
+
+**Two header corrections fell out and both are made**: `pad_000c` is a live
+`unsigned int` written by three members and read by none of the forty-five, and
+the enumeration gains 0x14 and 0x1c, which the header had said were absent
+because nothing stored or compared them. Both keep offset names. Finding 7453.
+
+Three things the fixture had to be given beyond a seed, each of which read as a
+defect in `src/` first: the drain writes whole symbols into a ONE-`short` slot,
+so any converter setting that lets it copy two smashes the pump's frame (7455);
+a fill straight after a reset can yield NO symbols, because the mapper's
+priming countdown swallows them, and the drain then writes nothing at all
+(7456); and the scrambler's history is a heap allocation OUTSIDE the object, so
+`reset(0)` over allocator-zeroed memory moved nothing that was compared (7457).
 
 ## Two object-map corrections that fall out of the mapper resets
 

@@ -3,13 +3,12 @@
  * symbol tables, the six symbol readers, the fifteen state-machine edges and
  * the two data pumps.
  *
- * Reconstructed from dsplibs.o.  THIRTY-TWO of the class's forty-three
- * members.  The eleven that are NOT here are `reset`, `generateSymbol`, the
- * six `generate*` sequence sources, `generateV90Symbol` and
- * `generateV92Symbol` -- the last two are 2,235 and 3,922 bytes and are
- * where the state machine is dispatched rather than edged.
- * `setMappingParams` used to be on that list and is now written, below
- * `setSessionFlag`.
+ * Reconstructed from dsplibs.o.  THIRTY-FOUR of the class's forty-three
+ * members.  The nine that are NOT here are `reset`, `generateSymbol` and the
+ * six `generate*` sequence sources.  `setMappingParams`, `generateV90Symbol`
+ * and `generateV92Symbol` used to be on that list and are now written; the
+ * last two are 2,235 and 3,922 bytes and are where the state machine is
+ * dispatched rather than edged, which is the block comment above them.
  * `include/dsplib/V90Phase4Modulator.h` carries the object map, the 0x2fac
  * size, the ownership argument and `Phase4ModulatorState`.
  *
@@ -66,6 +65,7 @@ void v90p4_bts_ctor(void *self, unsigned int nofSymbols, V90Parameters *params)
 V90P4_OFF(sessionFlag,		0x0000, sessionflag);
 V90P4_OFF(state,		0x0004, state);
 V90P4_OFF(symbolCount,		0x0008, symbolcount);
+V90P4_OFF(word_000c,		0x000c, w000c);
 V90P4_OFF(nextStateAfterTRN2d,	0x0010, nextafter);
 V90P4_OFF(byte_0014,		0x0014, b0014);
 V90P4_OFF(word_0018,		0x0018, w0018);
@@ -900,4 +900,846 @@ V90Phase4Modulator::generateDataSymbolBeforeRRN()
 		symbolCount = 0;
 	}
 	return sym;
+}
+
+/*
+ * ===========================================================================
+ * THE TWO SYMBOL PUMPS -- generateV90Symbol (.text+0x2dc80, 0x8bb = 2,235
+ * bytes) and generateV92Symbol (+0x2e6a0, 0xf52 = 3,922).
+ *
+ * ONE `switch` OVER `state` EACH, AND THE JUMP TABLES ARE WHAT SAY SO.
+ * `.rodata+0xa94` holds twenty-eight `R_386_32 .text` entries for the V.90
+ * pump and `.rodata+0xb04` thirty-one for the V.92 one, so the case labels run
+ * 0x00..0x1b and 0x00..0x1e respectively and `cmp $0x1b,%eax ; ja` /
+ * `cmp $0x1e,%eax ; ja` is the range check GCC puts in front of each.  A slot
+ * holding the default label is a state with no `case`; a slot holding anything
+ * else is a `case` this file has to spell.  Read with `tools/tabdump.py --at
+ * .rodata:0xa94 --type u32 --count 28`, which prints the relocations rather
+ * than dropping them.
+ *
+ * WHICH LABELS EACH PUMP HAS IS THE WHOLE OF THE V.90/V.92 DIFFERENCE IN
+ * SHAPE.  The V.90 table dispatches 0x04 and 0x0d..0x0f -- the MP ladder --
+ * and sends 0x05..0x0c to the default edge; the V.92 table does exactly the
+ * reverse, dispatching the SUVd/CPd ladder at 0x05..0x0c against
+ * `cpSequenceSymbols` and sending 0x04 and 0x0d..0x0f to the default.  That is
+ * §9.4.1 the right way round: under V.90 the digital modem sends MP, and under
+ * V.92 the rate renegotiation puts CP in its place.  V.92 also has 0x18, 0x19,
+ * 0x1a, 0x1b, 0x1c, 0x1d and 0x1e, which is the silence/Rt/Rf ladder the
+ * shorter table stops before.
+ *
+ * THE ARM SHARED BY NINE V.90 STATES AND FOURTEEN V.92 ONES IS THIS:
+ *
+ *     nofBits = bitsToSymbol->nofBitsForNextTime();
+ *     if (nofBits != 0) {
+ *             <fill>;
+ *             bitsToSymbol->process(scrambledBits, <count>);
+ *     }
+ *     bitsToSymbol->process(nofBits, &sym);
+ *
+ * -- one variable for the demand and for the status, because the object uses
+ * one stack slot for both and `process(unsigned int &, short *)` writes the
+ * reference on the way out.  Three fills appear, and which one a state gets is
+ * the state's own business: `scrambler.processAllOnes` for TRN2d, B1d and the
+ * terminated state, `processAllZeros` for Ed, and `scrambler.process` over the
+ * message vector -- `mpBits`/`mpBitCount` under V.90, `cpBits`/`cpBitCount`
+ * under V.92 -- for every state that is emitting a sequence.  THE MESSAGE FILL
+ * PASSES THE MESSAGE'S OWN LENGTH AND NOT `nofBits`: `mov 0x2f5c(%esi),%ebx ;
+ * mov %ebx,0xc(%esp)` at +0x2e34f, where the all-ones fill passes the demand
+ * it was just given.
+ *
+ * EACH `case` HAS ITS OWN PAIR OF LOCALS, and the object proves it: the nine
+ * V.90 arms use nine disjoint pairs of stack slots (0x1c/0x40, 0x20/0x42, ...
+ * 0x38/0x4e) where one shared pair would have been one.  So they are declared
+ * inside the arms.
+ *
+ * THE MEMBERS ARE CALLED, NOT COPIED, AND A REDUNDANT GUARD IS THE EVIDENCE.
+ * The V.90 pump's `case P4M_STATE_MP_NOT` re-tests `cmpl $0xe,0x4(%esi)` at
+ * +0x2e0a4 -- a question the jump table has already answered.  GCC does not
+ * invent a guard it can fold away, so what is inlined there is `exitMPNot()`,
+ * whose own body opens with `state == P4M_STATE_MP_NOT`.  The same argument
+ * names `enterRepeatedCPd()` inside the V.92 SUVd arm (its seven stores and
+ * its trailing `symbolCount = 0` appear verbatim and in order),
+ * `resetRRNSecondSection()` inside the V.92 RtNot arm, and
+ * `generateRi`/`generateRiNot`/`generateRdRt`/`generateRdRtNot`/`generateRf`/
+ * `generateRfNot`/`generateDataSymbolBeforeRRN`/`generateDataSymbolBeforeFPE`
+ * wherever their bodies appear.  Where a member's OWN guard would reject --
+ * `case P4M_STATE_UNNAMED_01` cannot call `exitRi()`, which guards on
+ * `state == P4M_STATE_RI` -- the arm is written out, and that is why the
+ * boundary block appears more than once below.
+ *
+ * THE COMPARISON CONSTANTS ARE LITERALS ON PURPOSE.  0x18, 0x120, 0x180,
+ * 0x3e7c, 0x95f and 0x320 are how long the object lets a state run; naming
+ * them would be inventing a meaning for a number the object only ever
+ * compares.  0x3e7c against `symbolCount` and then `0x3e7c` again in the
+ * message is ONE `symbolCount` in the source -- GCC 3.4 propagates the
+ * constant out of the equality test, which it does identically at +0x2ddd1,
+ * +0x2df29 and +0x2e1b8.
+ * ===========================================================================
+ */
+short
+V90Phase4Modulator::generateV90Symbol()
+{
+	short symbol;
+
+	symbolCount++;
+	word_000c = 0;
+
+	switch (state) {
+	case P4M_STATE_RI:
+		symbol = generateRi();
+		break;
+
+	case P4M_STATE_UNNAMED_01:
+		symbol = generateRi();
+		if (symbolCount % V90P4M_RI_PERIOD == 0) {
+			edprintf("V90Phase4Modulator: enter RiNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RI_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_RI_NOT:
+		symbol = generateRiNot();
+		if (symbolCount == 0x18) {
+			state = P4M_STATE_TRN2D;
+			symbolCount = 0;
+			edprintf("V90Phase4Modulator: enter TRN2d\r\n");
+			scrambler.reset(0);
+		}
+		break;
+
+	case P4M_STATE_TRN2D: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllOnes(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == 0x3e7c) {
+			if (mp == 0) {
+				state = P4M_STATE_UNNAMED_13;
+				symbolCount = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90Phase4Modulator: ERROR: Null "
+					    "MP @ end of TRN2d\r\n");
+				break;
+			}
+			state = nextStateAfterTRN2d;
+			edprintf("V90Phase4Modulator: enter %s @ %d\n",
+				 state == P4M_STATE_MP ? "MP"
+						       : "DIRECTLY to MPNot",
+				 symbolCount);
+			symbolCount = 0;
+			mpBits = mp->getBitVector(mpBitCount);
+			mpSequenceSymbols = 6 * mpBitCount / mp->word_114;
+		}
+		break;
+	}
+
+	case P4M_STATE_MP: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(mpBits, scrambledBits, mpBitCount);
+			bitsToSymbol->process(scrambledBits, mpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_0D: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(mpBits, scrambledBits, mpBitCount);
+			bitsToSymbol->process(scrambledBits, mpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount % mpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter MPNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_MP_NOT;
+			symbolCount = 0;
+			mpBits = mp->getBitVector(mpBitCount);
+			mpSequenceSymbols = 6 * mpBitCount / mp->word_114;
+		}
+		break;
+	}
+
+	case P4M_STATE_MP_NOT: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(mpBits, scrambledBits, mpBitCount);
+			bitsToSymbol->process(scrambledBits, mpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (byte_0014 != 0) {
+			byte_0014 = 0;
+			exitMPNot();
+		}
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_0F: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(mpBits, scrambledBits, mpBitCount);
+			bitsToSymbol->process(scrambledBits, mpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount % mpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter Ed @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+		}
+		break;
+	}
+
+	case P4M_STATE_ED: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllZeros(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == word_2f64) {
+			if (mappingParams == 0) {
+				state = P4M_STATE_UNNAMED_13;
+				symbolCount = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90Phase4Modulator: ERROR: Null "
+					    "dataPhaseMappingParams @ end of "
+					    "Ed\r\n");
+				break;
+			}
+			edprintf("V90Phase4Modulator: enter B1d @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_B1D;
+			symbolCount = 0;
+			bitsToSymbol->resetNoSpectral(mappingParams, pcmType);
+			scrambler.reset(0);
+		}
+		break;
+	}
+
+	case P4M_STATE_B1D: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllOnes(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == 0x120) {
+			edprintf("V90Phase4Modulator: Phase4 Terminated @ "
+				 "%d\r\n", symbolCount);
+			state = P4M_STATE_TERMINATED;
+			symbolCount = 0;
+			word_000c = 7;
+		}
+		break;
+	}
+
+	case P4M_STATE_TERMINATED: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllOnes(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_13:
+	case P4M_STATE_RT:
+	case P4M_STATE_RT_NOT:
+		symbol = 0;
+		break;
+
+	case P4M_STATE_UNNAMED_14:
+		symbol = generateDataSymbolBeforeRRN();
+		break;
+
+	case P4M_STATE_RD:
+		symbol = generateRdRt();
+		if (symbolCount == 0x180) {
+			edprintf("V90Phase4Modulator: enter RdNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RD_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_RD_NOT:
+		symbol = generateRdRtNot();
+		if (symbolCount == 0x18) {
+			edprintf("V90Phase4Modulator: enter TRN2d @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_TRN2D;
+			symbolCount = 0;
+			bitsToSymbol->resetNoSpectral(mappingParams2, pcmType);
+			edprintf("V90Phase4Modulator: TRN2d spectral "
+				 "parameters:\r\n");
+			displaySpectralParams(mappingParams2);
+			edprintf("V90Phase4Modulator: TRN2d D = %d\r\n",
+				 mappingParams2->word_0);
+		}
+		break;
+
+	default:
+		symbol = 0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Phase4Modulator: Illegal "
+					     "state\r\n");
+		break;
+	}
+
+	return symbol;
+}
+
+/*
+ * ===========================================================================
+ * generateV92Symbol -- .text+0x2e6a0, 0xf52 = 3,922 bytes.
+ *
+ * THE SAME SHAPE AND SEVEN GENUINE DIFFERENCES, and they are listed here
+ * because everything else is the arm above with `cpSequenceSymbols` in place
+ * of `mpSequenceSymbols`.  Nothing below was transcribed from the V.90 pump;
+ * each is at the address named.
+ *
+ *  1. RiNot ends differently.  V.90 prints "enter TRN2d" and then
+ *     `scrambler.reset(0)`; V.92 prints "RiNot Terminated" -- .rodata.str1.4
+ *     +0x8504, a message no other member of the class references -- and does
+ *     NOT reset the scrambler.  +0x2ef60..+0x2efba against +0x2e245..+0x2e2b0,
+ *     and the two are otherwise instruction for instruction the same.
+ *
+ *  2. TRN2d hands on to SUVd and not to `nextStateAfterTRN2d`.  The null guard
+ *     is on `cp` rather than `mp` (+0x2f003), the message names CP, the state
+ *     is 5 unconditionally, and BOTH exits set `word_000c` to 4 -- the only
+ *     site in the class that stores that value.  Where V.90 rebuilds the MP
+ *     sequence, V.92 sets `cp->word_00 = 1`, copies `word_0028` into
+ *     `cp->word_ca0` and rebuilds the CP sequence.
+ *
+ *  3. The whole SUVd/CPd ladder at 0x05..0x0c exists only here, and its Ed
+ *     entry at 0x09/0x0a, its FinalSUVd entry at 0x0c and its CPd termination
+ *     at 0x07 are what carry the SUV half of the rate renegotiation.
+ *
+ *  4. SUVd counts CPd repetitions.  `if (byte_001c) word_0018++` at +0x2ee7c,
+ *     and once `word_0018` passes `word_0040 + 0x320` the arm runs
+ *     `enterRepeatedCPd()`.  Nothing in the V.90 pump reads either field.
+ *
+ *  5. Ed has a THIRD exit.  `word_0024 && word_002c && !word_0030` sends it to
+ *     "enter Silence" and to state 0x17 or 0x18 chosen by `word_0034`
+ *     (+0x2f5c5: `cmp $0x1,%edx ; sbb %eax,%eax ; not %eax ; add $0x18,%eax`,
+ *     which is 0x17 for non-zero and 0x18 for zero).  V.90's Ed has the null
+ *     guard and the B1d arm and nothing else.
+ *
+ *  6. RdNot copies `mappingParams2->word_0` into `cp->word_3ba8` before it
+ *     resets the converter (+0x2ea60).  V.90's RdNot is the same five calls
+ *     without that store.
+ *
+ *  7. The silence/Rt/Rf ladder at 0x18..0x1e is here alone, and RtNot's
+ *     boundary runs `resetRRNSecondSection()` -- its seven stores in its own
+ *     order at +0x2eb85..+0x2eba8 -- before rebuilding the CP sequence.
+ *
+ * The RANGE CHECK is `cmp $0x1e` and not `cmp $0x1b`, which is what makes
+ * 0x1c, 0x1d and 0x1e reachable here and not there.
+ * ===========================================================================
+ */
+short
+V90Phase4Modulator::generateV92Symbol()
+{
+	short symbol;
+
+	symbolCount++;
+	word_000c = 0;
+
+	switch (state) {
+	case P4M_STATE_RI:
+		symbol = generateRi();
+		break;
+
+	case P4M_STATE_UNNAMED_01:
+		symbol = generateRi();
+		if (symbolCount % V90P4M_RI_PERIOD == 0) {
+			edprintf("V90Phase4Modulator: enter RiNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RI_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_RI_NOT:
+		symbol = generateRiNot();
+		if (symbolCount == 0x18) {
+			state = P4M_STATE_TRN2D;
+			symbolCount = 0;
+			edprintf("V90Phase4Modulator: RiNot Terminated\r\n");
+		}
+		break;
+
+	case P4M_STATE_TRN2D: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllOnes(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == 0x3e7c) {
+			if (cp == 0) {
+				state = P4M_STATE_UNNAMED_13;
+				symbolCount = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90Phase4Modulator: ERROR: Null "
+					    "CP @ end of TRN2d\r\n");
+			} else {
+				state = P4M_STATE_SUVD;
+				edprintf("V90Phase4Modulator: enter SUVd @ "
+					 "%d\r\n", symbolCount);
+				symbolCount = 0;
+				cp->word_00 = 1;
+				cp->word_ca0 = word_0028;
+				cp->infoToBits();
+				cpBits = cp->getBitVector(cpBitCount);
+				cpSequenceSymbols =
+				    6 * cpBitCount / cp->word_3ba8;
+			}
+			word_000c = 4;
+		}
+		break;
+	}
+
+	case P4M_STATE_SUVD: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (byte_001c != 0)
+			word_0018++;
+		if (symbolCount % cpSequenceSymbols == 0 && symbolCount != 0) {
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			if (word_0018 > word_0040 + 0x320)
+				enterRepeatedCPd();
+		}
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_06: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount % cpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter CPd @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			cp->word_00 = 0;
+			state = P4M_STATE_CPD;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			word_2fa0 = 1;
+		}
+		break;
+	}
+
+	case P4M_STATE_CPD: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == cpSequenceSymbols) {
+			edprintf("V90Phase4Modulator: CPd Terminated @ "
+				 "%d\r\n", symbolCount);
+			word_0018 = 0;
+			byte_001c = 1;
+			state = P4M_STATE_SUVD;
+			symbolCount = 0;
+			cp->word_00 = 1;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+		}
+		break;
+	}
+
+	case P4M_STATE_REPEATED_CPD: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount % cpSequenceSymbols == 0 && symbolCount != 0) {
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+		}
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_09: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount % cpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter Ed @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+		}
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_0A: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount % cpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter Ed @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+		}
+		break;
+	}
+
+	case P4M_STATE_FINAL_SUVD: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == cpSequenceSymbols) {
+			edprintf("V90Phase4Modulator: enter Ed @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			state = P4M_STATE_ED;
+			word_2f64 = bitsToSymbol->extraSymbols + 12;
+		}
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_0C: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.process(cpBits, scrambledBits, cpBitCount);
+			bitsToSymbol->process(scrambledBits, cpBitCount);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount % cpSequenceSymbols == 0) {
+			edprintf("V90Phase4Modulator: enter FinalSUVd @ "
+				 "%d\r\n", symbolCount);
+			state = P4M_STATE_FINAL_SUVD;
+			symbolCount = 0;
+			cp->word_00 = 1;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+		}
+		break;
+	}
+
+	case P4M_STATE_ED: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllZeros(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == word_2f64) {
+			if (word_0024 != 0 && word_002c != 0 &&
+			    word_0030 == 0) {
+				edprintf("V90Phase4Modulator: enter Silence @ "
+					 "%d\r\n", symbolCount);
+				symbolCount = 0;
+				state = word_0034 != 0
+				    ? P4M_STATE_UNNAMED_17
+				    : P4M_STATE_UNNAMED_18;
+				break;
+			}
+			if (mappingParams == 0) {
+				state = P4M_STATE_UNNAMED_13;
+				symbolCount = 0;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90Phase4Modulator: ERROR: Null "
+					    "dataPhaseMappingParams @ end of "
+					    "Ed\r\n");
+				break;
+			}
+			edprintf("V90Phase4Modulator: enter B1d @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_B1D;
+			symbolCount = 0;
+			bitsToSymbol->resetNoSpectral(mappingParams, pcmType);
+			scrambler.reset(0);
+		}
+		break;
+	}
+
+	case P4M_STATE_B1D: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllOnes(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+
+		if (symbolCount == 0x120) {
+			edprintf("V90Phase4Modulator: Phase4 Terminated @ "
+				 "%d\r\n", symbolCount);
+			state = P4M_STATE_TERMINATED;
+			symbolCount = 0;
+			word_000c = 7;
+		}
+		break;
+	}
+
+	case P4M_STATE_TERMINATED: {
+		unsigned int nofBits;
+		short sym;
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		if (nofBits != 0) {
+			scrambler.processAllOnes(scrambledBits, nofBits);
+			bitsToSymbol->process(scrambledBits, nofBits);
+		}
+		bitsToSymbol->process(nofBits, &sym);
+		symbol = sym;
+		break;
+	}
+
+	case P4M_STATE_UNNAMED_13:
+	case P4M_STATE_UNNAMED_17:
+		symbol = 0;
+		break;
+
+	case P4M_STATE_UNNAMED_14:
+		symbol = generateDataSymbolBeforeRRN();
+		break;
+
+	case P4M_STATE_RD:
+		symbol = generateRdRt();
+		if (symbolCount == 0x180) {
+			edprintf("V90Phase4Modulator: enter RdNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RD_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_RD_NOT:
+		symbol = generateRdRtNot();
+		if (symbolCount == 0x18) {
+			edprintf("V90Phase4Modulator: enter TRN2d @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			state = P4M_STATE_TRN2D;
+			cp->word_3ba8 = mappingParams2->word_0;
+			bitsToSymbol->resetNoSpectral(mappingParams2, pcmType);
+			edprintf("V90Phase4Modulator: TRN2d spectral "
+				 "parameters:\r\n");
+			displaySpectralParams(mappingParams2);
+			edprintf("V90Phase4Modulator: TRN2d D = %d\r\n",
+				 mappingParams2->word_0);
+		}
+		break;
+
+	case P4M_STATE_UNNAMED_18:
+		symbol = 0;
+		if (symbolCount > 0x95f &&
+		    symbolCount % V90P4M_RI_PERIOD == 0) {
+			edprintf("V90Phase4Modulator: enter Rt @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_UNNAMED_19:
+		symbol = 0;
+		if (symbolCount % V90P4M_RI_PERIOD == 0) {
+			edprintf("V90Phase4Modulator: enter Rt @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_RT:
+		symbol = generateRdRt();
+		if (symbolCount == 0x180) {
+			edprintf("V90Phase4Modulator: enter RtNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RT_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_RT_NOT:
+		symbol = generateRdRtNot();
+		if (symbolCount == 0x18) {
+			edprintf("V90Phase4Modulator: enter SUVd at RRN @ "
+				 "%d\r\n", symbolCount);
+			state = P4M_STATE_SUVD;
+			symbolCount = 0;
+			resetRRNSecondSection();
+			cp->word_00 = 1;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+		}
+		break;
+
+	case P4M_STATE_UNNAMED_1C:
+		symbol = generateDataSymbolBeforeFPE();
+		break;
+
+	case P4M_STATE_RF:
+		symbol = generateRf();
+		if (symbolCount == 0x180) {
+			edprintf("V90Phase4Modulator: enter RfNot @ %d\r\n",
+				 symbolCount);
+			state = P4M_STATE_RF_NOT;
+			symbolCount = 0;
+		}
+		break;
+
+	case P4M_STATE_RF_NOT:
+		symbol = generateRfNot();
+		if (symbolCount == 0x18) {
+			edprintf("V90Phase4Modulator: enter SUVd @ %d\r\n",
+				 symbolCount);
+			symbolCount = 0;
+			state = P4M_STATE_SUVD;
+			cp->word_00 = 1;
+			cp->word_3ba8 = mappingParams->word_0;
+			cp->word_ca0 = word_0028;
+			cp->infoToBits();
+			cpBits = cp->getBitVector(cpBitCount);
+			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+		}
+		break;
+
+	default:
+		symbol = 0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Phase4Modulator: Illegal "
+					     "state\r\n");
+		break;
+	}
+
+	return symbol;
 }

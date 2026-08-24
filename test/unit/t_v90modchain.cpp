@@ -3410,6 +3410,721 @@ run_p4m_setmp(void)
 	return diff_end();
 }
 
+/* ------------------------------- V90Phase4Modulator's two symbol pumps ---
+ *
+ * `generateV90Symbol` (2,235 bytes) and `generateV92Symbol` (3,922) are one
+ * `switch` over `state` each, so what has to be driven is EVERY case label of
+ * both jump tables and, inside each, both sides of whatever boundary test the
+ * arm carries.
+ *
+ * NOTHING HERE IS REACHED BY DRIVING A PUBLIC ENTRY POINT, and that is not a
+ * shortcut being taken.  `V90Phase4Modulator::reset` is not written yet, so
+ * there is no member of this class that can put the object into state 0x0f or
+ * 0x14 or 0x1c at all; and even with `reset` written, a state machine that
+ * takes 15,996 symbols to leave TRN2d cannot be walked into its later states
+ * by a unit test.  So `state` is poked, and with it every field the arms read
+ * that no constructor writes: `symbolCount`, `mpBits`/`mpBitCount`,
+ * `cpBits`/`cpBitCount`, the two sequence lengths, `word_2f64`, `byte_0014`,
+ * `word_0018`, `byte_001c`, `word_0024`..`word_0034`, `word_0040`, `codeLevel`
+ * and the two symbol tables.  Findings 7422, 7423 and 7430 are the same shape
+ * with two statements; this is the same shape with a whole function.
+ *
+ * WHAT IS DRIVEN RATHER THAN POKED IS EVERYTHING THE ARMS CALL.  The
+ * converter is CONSTRUCTED and `reset` against a valid mapping block, so
+ * `V90Mapper::process` runs for real under the fill; the modulator is
+ * CONSTRUCTED, so its embedded scrambler owns a real history buffer and
+ * `processAllOnes`/`processAllZeros`/`process` move it; and the V.92 arms run
+ * `V90CP::infoToBits` over a CP planted the way t_v90cpinfo plants one.
+ *
+ * THE CONVERTER'S BLOCK SIZE IS THE KNOB THAT SELECTS THE FILL, AND IT IS
+ * BOUNDED AT BOTH ENDS.  `reset` leaves `symbolsBlockSize` at zero, where
+ * `nofBitsForNextTime` answers 0, the fill is skipped and `process(unsigned
+ * int &, short *)` takes its SIZE_NOT_SET arm and leaves the reference
+ * UNWRITTEN -- which the pump then reads.  That is deviation D661's hole and
+ * it is out of the grid here for the same reason it is out of t_v90p4mgen's.
+ * At the other end, the drain copies whole symbols into a ONE-SHORT stack slot,
+ * so any setting that lets it copy two smashes the pump's frame.  The three
+ * settings between those bounds are set out beside `setup_pump`'s code.
+ *
+ * THE TRANSCRIPT IS THE POINT AND NOT A GARNISH.  Half of what separates the
+ * two pumps is WHICH message an otherwise identical arm prints -- V.92's RiNot
+ * says "RiNot Terminated" where V.90's says "enter TRN2d", the "enter Rt" and
+ * "enter RtNot" arms have the same shape, and "enter Ed @ %d" appears at four
+ * separate sites.  An object comparison cannot see any of it, so the levels
+ * are swept over 0, 1 and 2 and the captured text is compared as text.
+ */
+
+extern "C" {
+short our_p4m_genv90(void *) asm("_ZN18V90Phase4Modulator17generateV90SymbolEv");
+short ref_p4m_genv90(void *)
+	asm("ref__ZN18V90Phase4Modulator17generateV90SymbolEv");
+short our_p4m_genv92(void *) asm("_ZN18V90Phase4Modulator17generateV92SymbolEv");
+short ref_p4m_genv92(void *)
+	asm("ref__ZN18V90Phase4Modulator17generateV92SymbolEv");
+}
+
+typedef short (*pump)(void *);
+
+/*
+ * The CP is SPLIT -- `V90CP::infoToBits` rewrites the bit vector and the V.92
+ * arms call it, so one shared record would have the second side reading the
+ * first side's result.  The MP is not: `V90MP::getBitVector` writes nothing,
+ * which keeps `mp` at +0x48 and `mpBits` at +0x2f58 inside the comparison
+ * rather than masked out of it.
+ */
+static unsigned char cp2_store[sizeof(V90CP)] __attribute__((aligned(8)));
+#define CP2		((V90CP *)(void *)cp2_store)
+
+static int pump_cpbuf[2][V90CP_BUFS][V90CP_BUFENTS];
+
+/* The second mapping block, so `mappingParams2` is not `mappingParams`. */
+static unsigned char pump_mp2[sizeof(V90MappingParams)]
+	__attribute__((aligned(8)));
+#define PUMP_MP2	((V90MappingParams *)(void *)pump_mp2)
+
+static unsigned char pump_cmp_a[P4M_SLOT];
+static unsigned char pump_cmp_b[P4M_SLOT];
+
+/*
+ * The mapper as it stood before the call.  The ONLY route from a pump to the
+ * mapper is the fill, so "this changed" is what says the fill ran -- where
+ * `symbolsDone` moving is not, since the drain moves it too.
+ */
+static unsigned char pump_map_pre[MAPPER_SIZE];
+
+/*
+ * The MP record's two fields the V.90 arms read: the length `getBitVector`
+ * reports, which is also how many bytes the scrambler reads out of the MP, and
+ * the group size `6 * mpBitCount / word_114` divides by.  A pseudorandom
+ * divisor is legal; a pseudorandom ZERO is a SIGFPE.
+ */
+/*
+ * Both are held ABOVE the widest `bitsPerFrame` any `proc_case` produces --
+ * 35, at cases 2 and 3 -- because the message fill hands the mapper this many
+ * bits and not `nofBits`, and a fill shorter than one frame emits no symbol
+ * for the drain to hand back.  Both are well inside the record they point
+ * into: the MP's vector starts at +0x1c below `word_114` at +0x114, and the
+ * CP's is V90CP_BITS long.
+ */
+#define PUMP_MPLEN	0x48u
+#define PUMP_CPLEN	0x50u
+
+/* Plant one CP the way t_v90cpinfo plants one: every count bounded. */
+static void
+plant_cp(V90CP *c, int side, int trial)
+{
+	int k;
+
+	c->word_00 = 0;
+	c->word_04 = (trial & 1);
+	c->word_08 = (trial & 2) >> 1;
+	c->word_0c = (trial & 4) >> 2;
+	c->byte_10 = (signed char)(trial * 7);
+	c->byte_11 = (unsigned char)(trial % 4);
+	c->byte_12 = (unsigned char)(trial & 1);
+	c->byte_13 = (unsigned char)(trial & 1);
+	c->word_14 = (int)(0x1234u * (unsigned)(trial + 1));
+	for (k = 0; k < 12; k++)
+		c->word_18[k] = (int)(0x33u * (unsigned)(trial + k) - 0x1000);
+	for (k = 0; k < 4; k++) {
+		int j;
+
+		c->nof_58[k] = (unsigned int)((trial * (k + 3)) % 13);
+		for (j = 0; j < V90CP_SHORTS; j++)
+			c->short_58[k][j] =
+			    (short)(0x5bu * (unsigned)(trial + k * 7 + j));
+	}
+	for (k = 0; k < V90CP_BUFS; k++) {
+		c->buf[k] = pump_cpbuf[side][k];
+		c->nof_buf[k] = (unsigned int)((trial * (k + 2)) % 13);
+		c->word_c70[k] = (int)(0x17u * (unsigned)(trial + k));
+	}
+	c->word_ca0 = (unsigned int)(trial * 3);
+	c->word_3ba8 = 17u;
+	c->word_3bac = PUMP_CPLEN;
+}
+
+/*
+ * The counters poked into `symbolCount`, each ONE BELOW the value the arm
+ * tests: every pump does `symbolCount++` before it dispatches.  0x17, 0x11f,
+ * 0x17f and 0x3e7b are the four literal deadlines; 0x95f is V.92's state 0x18
+ * threshold, driven from both sides; and the small ones put the counter on and
+ * off a multiple of the two sequence lengths and of six.
+ */
+static const unsigned int pump_counts[] = {
+	0u, 1u, 2u, 5u, 0x17u, 0x11fu, 0x17fu, 0x3e7bu, 0x95eu, 0x95fu,
+	0x960u,
+	/*
+	 * THE ONE THAT MAKES THE POST-INCREMENT COUNTER ZERO.  Two V.92 arms
+	 * ask `symbolCount % cpSequenceSymbols == 0 && symbolCount != 0`, and
+	 * `symbolCount++` on entry means the second half of that can only be
+	 * false if the counter WRAPPED.  Without this value the `!= 0` is
+	 * dead and a mutation dropping it survives; with it the two arms
+	 * differ.
+	 */
+	0xffffffffu
+};
+#define NPUMPCOUNT	((int)(sizeof pump_counts / sizeof pump_counts[0]))
+
+/*
+ * Build both sides.  `variant` moves the five things a boundary test can turn
+ * on that the counter alone cannot: whether the block size lets the fill run,
+ * whether `word_2f64` and `cpSequenceSymbols` equal the counter the arm is
+ * about to see, whether the V.92 Ed arm's three-way silence guard is
+ * satisfied, and whether `word_0018` has passed `word_0040 + 0x320`.
+ */
+static void
+setup_pump(int trial, int ci, int st, int cnt_i, int variant)
+{
+	const struct proc_case *c = &proc_cases[ci];
+	unsigned int cnt = pump_counts[cnt_i];
+	unsigned int post = cnt + 1u;
+	int s;
+
+	seed_trial(trial);
+	build_mp_proc(c, trial & 1);
+	memcpy(pump_mp2, rst_mp, sizeof pump_mp2);
+
+	/*
+	 * THE SECOND BLOCK HAS TO DIFFER IN EVERY FIELD EITHER ARM READS, and
+	 * a copy that differs only in its constellation bytes is not enough:
+	 * `displaySpectralParams` prints the four shaper coefficients and the
+	 * RdNot arms print `word_0` and (under V.92) copy it into the CP, so
+	 * with those equal a swapped `mappingParams2` is invisible.  What must
+	 * NOT move is any COUNT -- `resetNoSpectral` walks
+	 * `constellationSize[k]` entries of each row, so a perturbed size is a
+	 * read outside the block rather than a second configuration.
+	 *
+	 * `word_0` is `bitsPerFrame` to the converter's reset, so +1 keeps it
+	 * inside the 0x50-byte frame buffer for every case in the table (the
+	 * widest is 35).  The coefficients stay exact binary fractions for the
+	 * reason build_mp_proc gives.
+	 */
+	PUMP_MP2->word_0 = RST_MP->word_0 + 1u;
+	PUMP_MP2->shaperA1 = -0.75f;
+	PUMP_MP2->shaperA2 = 0.375f;
+	PUMP_MP2->shaperB1 = -0.1875f;
+	PUMP_MP2->shaperB2 = 0.03125f;
+
+	{
+		unsigned int i;
+
+		for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
+			unsigned int j;
+
+			for (j = 0; j < V90MAPPER_LEVELS; j++)
+				PUMP_MP2->constellation[i][j] =
+				    (unsigned char)
+				    (RST_MP->constellation[i][j] ^ 0x5au);
+		}
+	}
+
+	fill(mp_store, mp_store, (unsigned char *)0, sizeof(mp_store), 0);
+	MP->byte_118 = (unsigned char)PUMP_MPLEN;
+	MP->word_114 = 3u;
+
+	fill(cp2_store, cp2_store, (unsigned char *)0, sizeof(cp2_store), 0);
+	fill((unsigned char *)pump_cpbuf[0], (unsigned char *)pump_cpbuf[0],
+	     (unsigned char *)0, (unsigned)sizeof pump_cpbuf[0], 0);
+	memcpy(pump_cpbuf[1], pump_cpbuf[0], sizeof pump_cpbuf[0]);
+	memcpy(cp2_store, cp_store, sizeof cp2_store);
+	plant_cp(CP, 0, trial);
+	plant_cp(CP2, 1, trial);
+
+	harness_alloc_reset();
+
+	our_bts_c1(bts_a, FILL_N, PARAMS);
+	ref_bts_c1(bts_b, FILL_N, PARAMS);
+	our_bts_reset(bts_a, RST_MP, c->pcm);
+	ref_bts_reset(bts_b, RST_MP, c->pcm);
+
+	/*
+	 * WARM THE CONVERTER PAST THE MAPPER'S PRIMING, and this is not
+	 * decoration.  `V90Mapper::reset` loads a countdown at +0x6f8 with
+	 * `shaperId` and `V90Mapper::process` swallows that many frames before
+	 * it emits anything, so a fill straight after a reset can produce NO
+	 * symbols at all.  The drain then finds `symbolsDone` at zero, takes
+	 * its underflow arm, copies `symbolsDone` symbols -- none -- and the
+	 * pump returns a `short` nothing ever wrote.  That is not a difference
+	 * between the reconstruction and the blob; it is two indeterminate
+	 * values, and it read as a symbol mismatch until it was chased.
+	 *
+	 * Eight frames is more than the three the countdown can ever be
+	 * (`shaperId` is capped at 3 by V90SpectralShaper) and leaves
+	 * `bitsBuffered` at zero, since it is a whole number of frames.  Both
+	 * sides are warmed by the same already-tested member over the same
+	 * bits, so the mapper the trial then runs against is in one state.
+	 */
+	{
+		unsigned int warm = 8u * RST_MP->word_0;
+
+		((V90BitsToSymbol *)(void *)bts_a)->symbolsBlockSize = 1u;
+		((V90BitsToSymbol *)(void *)bts_b)->symbolsBlockSize = 1u;
+		fill_bits(warm, 0);
+		our_bts_fill(bts_a, proc_bits, warm);
+		ref_bts_fill(bts_b, proc_bits, warm);
+	}
+
+	our_p4m_c1(p4m_a, PARAMS, 1u, (V90BitsToSymbol *)(void *)bts_a, MP,
+		   RST_MP, PUMP_MP2, CP, 0x11u);
+	ref_p4m_c1(p4m_b, PARAMS, 1u, (V90BitsToSymbol *)(void *)bts_b, MP,
+		   RST_MP, PUMP_MP2, CP2, 0x11u);
+
+	/*
+	 * DIRTY THE SCRAMBLER'S HISTORY, and this is finding 7105's shape once
+	 * more: a seeded fixture is not enough where a CONSTRUCTOR runs after
+	 * the seed.  The history is a heap allocation the constructor makes,
+	 * the allocator hands it back zeroed, and `Scrambler::reset(0)` writes
+	 * zeros -- so the two arms that call it moved nothing, and a mutation
+	 * DROPPING the call survived while the one seeding with a ONE was
+	 * caught.  A non-zero pattern over both sides' history makes the zero
+	 * fill visible.  The extent is `pLimit` up to and including
+	 * `pInitTap2`, taken from the object rather than assumed.
+	 */
+	{
+		int s;
+
+		for (s = 0; s < 2; s++) {
+			unsigned char *o = (s ? p4m_b : p4m_a) + P4M_SCRAMBLER;
+			unsigned char *lim = (unsigned char *)slot_ptr(o, 0);
+			unsigned char *t2 = (unsigned char *)slot_ptr(o, 0x0c);
+
+			memset(lim, 0xa5, (size_t)(t2 - lim) + 1);
+		}
+	}
+
+	for (s = 0; s < 2; s++) {
+		V90Phase4Modulator *m = (V90Phase4Modulator *)(void *)
+		    (s ? p4m_b : p4m_a);
+		V90BitsToSymbol *b = (V90BitsToSymbol *)(void *)
+		    (s ? bts_b : bts_a);
+		V90CP *cc = s ? CP2 : CP;
+		unsigned int len;
+		int k;
+
+		m->state = (Phase4ModulatorState)st;
+		m->symbolCount = cnt;
+		m->word_000c = 0x3333u;
+		m->nextStateAfterTRN2d = (variant & 1) ? P4M_STATE_MP
+						       : P4M_STATE_MP_NOT;
+		m->byte_0014 = (unsigned char)((variant & 2) ? 1 : 0);
+
+		/*
+		 * THE V.92 Ed ARM'S SILENCE GUARD IS THREE INDEPENDENT FLAGS
+		 * -- `word_0024 && word_002c && !word_0030` -- so they take
+		 * three bits of their own and all eight combinations are
+		 * driven.  Tying them together (all set, or all clear) makes
+		 * "the third flag is dropped" and "it reads +0x28 instead of
+		 * +0x2c" both invisible, which is what the first pass did.
+		 * `word_0028` is left permanently non-zero for the second of
+		 * those: it is the CP payload the TRN2d and RfNot arms copy,
+		 * and a mutant reading it in place of `word_002c` then differs
+		 * exactly when `word_002c` is clear.
+		 */
+		m->word_0024 = (unsigned int)((variant >> 2) & 1);
+		m->word_0028 = 0x2727u;
+		m->word_002c = (unsigned int)((variant >> 3) & 1);
+		m->word_0030 = (unsigned int)((variant >> 4) & 1);
+
+		/*
+		 * `word_0018` against `word_0040 + 0x320` in three positions
+		 * -- below, exactly on, and above -- because the V.92 SUVd arm
+		 * repeats CPd on a STRICT `>` and both the strictness and the
+		 * 0x320 are claims.
+		 */
+		m->word_0040 = 0x40u;
+		m->word_0018 = (variant & 1) ? 0x361u
+					     : ((variant & 2) ? 0x360u : 1u);
+		m->byte_001c = (unsigned char)((variant & 1) ? 1 : 0);
+		m->word_0020 = 0;
+		m->word_0034 = (unsigned int)(variant & 1);
+		m->pcmType = (PcmType)c->pcm;
+		m->codeLevel = (short)(0x1234 + trial);
+		m->word_2f9c = 0;
+		m->word_2fa0 = 0;
+
+		for (k = 0; k < V90P4M_RDRT_SYMBOLS; k++)
+			m->rdRtSymbols[k] = (short)(0x100 * (k + 1) + trial);
+		for (k = 0; k < V90P4M_RF_SYMBOLS; k++)
+			m->rfSymbols[k] = (short)(-0x80 * (k + 1) - trial);
+
+		/*
+		 * The two message vectors.  Both pointers are taken from the
+		 * records they belong to rather than computed here, and both
+		 * lengths are held down to what the scrambler may read out of
+		 * those records.
+		 */
+		m->mpBits = MP->getBitVector(len);
+		m->cpBits = cc->getBitVector(len);
+
+		/*
+		 * THE TWO COUNTS ARE PLANTED FOUR SHORT OF WHAT `getBitVector`
+		 * WOULD REPORT.  Five arms re-read the vector and put the
+		 * reported length back into these fields; if the planted value
+		 * already equalled it, dropping the re-read would change
+		 * nothing and the mutation would survive against correct code.
+		 * Four bytes short still leaves both above the widest
+		 * `bitsPerFrame`, which is what the fill needs.
+		 */
+		m->mpBitCount = PUMP_MPLEN - 4u;
+		m->cpBitCount = PUMP_CPLEN - 4u;
+
+		/*
+		 * A ZERO DIVISOR IS A SIGFPE AND NOT A FAILING CHECK, and the
+		 * wrap-around counter above makes `post` zero, so neither
+		 * sequence length may simply take it.
+		 */
+		/*
+		 * THE DEADLINE AND THE CP SEQUENCE LENGTH TAKE THEIR AXIS FROM
+		 * `cnt_i` AND NOT FROM `variant`, because the three silence
+		 * flags already own three of the variant's five bits and the
+		 * V.92 Ed arm needs an INDEPENDENT choice of both: its guard
+		 * is only ever evaluated on the trials where the deadline is
+		 * met, so a deadline sharing a bit with `word_002c` can never
+		 * present the one combination that separates that flag from
+		 * `word_0028`.  A zero divisor is a SIGFPE and not a failing
+		 * check, so neither length may take `post` when the counter
+		 * has wrapped.
+		 */
+		m->mpSequenceSymbols = (variant & 2) && post ? post : 3u;
+		m->cpSequenceSymbols = (cnt_i & 1) && post ? post : 4u;
+
+		/*
+		 * Ed's deadline in three positions: ON the counter, one past
+		 * it, and a PROPER DIVISOR of it.  The third is what separates
+		 * the object's `symbolCount == word_2f64` from a modulus --
+		 * the two agree everywhere else, so without it that mutation
+		 * survives.
+		 */
+		if (cnt_i % 3 == 0)
+			m->word_2f64 = post;
+		else if (cnt_i % 3 == 1 && post > 2u && (post & 1u) == 0u)
+			m->word_2f64 = post / 2u;
+		else
+			m->word_2f64 = post + 1u;
+
+		/*
+		 * THE CONVERTER'S CONFIGURATION IS BOUNDED BY THE ONE-SHORT
+		 * OUTPUT SLOT.  Every arm hands `process(unsigned int &,
+		 * short *)` the address of a single `short`, and that overload
+		 * copies `symbolsBlockSize` symbols into it on the full path
+		 * and `symbolsDone` on the underflow one -- so any setting
+		 * where either can exceed ONE smashes the pump's own frame.
+		 * It does so in both builds at different offsets, which
+		 * arrives as a mismatched symbol rather than as the fixture
+		 * fault it is.  Three settings survive that bound:
+		 *
+		 *   blockSize 1, done 2   no fill; the drain writes one
+		 *   blockSize 1, done 0   the FILL runs; the drain writes one
+		 *   blockSize 2, done 1   underflow; writes one, and leaves a
+		 *                         NON-ZERO demand behind
+		 *
+		 * The third is the only one that makes `nofBits` non-zero
+		 * afterwards, which is what ends states 0x14 and 0x1c -- and
+		 * it is safe ONLY for those two, whose arms drain without
+		 * filling.  Every other arm calls `nofBitsForNextTime` first,
+		 * and on that setting the fill runs and takes `symbolsDone`
+		 * past one before the drain looks at it.
+		 */
+		if (st == (int)P4M_STATE_UNNAMED_14 ||
+		    st == (int)P4M_STATE_UNNAMED_1C) {
+			b->symbolsBlockSize = (variant & 1) ? 2u : 1u;
+			b->symbolsDone = (variant & 1) ? 1u : 2u;
+		} else if (variant & 1) {
+			b->symbolsBlockSize = 1u;
+			b->symbolsDone = 0u;
+		} else {
+			b->symbolsBlockSize = 1u;
+			b->symbolsDone = 2u;
+		}
+		b->extraSymbolsPending = (unsigned char)((variant >> 1) & 1);
+	}
+}
+
+static void
+teardown_pump(void)
+{
+	our_p4m_d1(p4m_a);
+	ref_p4m_d1(p4m_b);
+	our_bts_d1(bts_a);
+	ref_bts_d1(bts_b);
+}
+
+/*
+ * `bitsToSymbol` (+0x44), `cp` (+0x54) and `cpBits` (+0x2f8c) hold two
+ * different addresses for ever -- one converter and one CP record per side,
+ * and the bit vector points INTO the second of them.  `mp` and `mpBits` are
+ * deliberately not masked: the MP record is shared, so those two words are a
+ * real comparison.
+ */
+static void
+compare_pump(const char *what, long tag)
+{
+	memcpy(pump_cmp_a, p4m_a, P4M_SIZE);
+	memcpy(pump_cmp_b, p4m_b, P4M_SIZE);
+	mask_word(pump_cmp_a, pump_cmp_b, 0x0044);
+	mask_word(pump_cmp_a, pump_cmp_b, 0x0054);
+	mask_word(pump_cmp_a, pump_cmp_b, 0x2f8c);
+	canon_scrambler(pump_cmp_a, P4M_SCRAMBLER);
+	canon_scrambler(pump_cmp_b, P4M_SCRAMBLER);
+	diff_eq_obj_(__FILE__, __LINE__, what, "V90Phase4Modulator",
+		     pump_cmp_a, pump_cmp_b, (size_t)P4M_SIZE, tag);
+
+	/*
+	 * THE SCRAMBLER'S HISTORY LIVES OUTSIDE THE OBJECT, so comparing the
+	 * modulator compares seven pointers and a length and NOT one bit of
+	 * what the scrambler did.  Two arms call `reset(0)`, which fills that
+	 * buffer and moves nothing else at all -- dropping the call, or
+	 * seeding with one instead of zero, left the object identical and
+	 * every mutation to it survived until this was added.  The extent is
+	 * the object's own: `pLimit` up to and including `pInitTap2`, which is
+	 * the whole span the taps and the restart can reach.
+	 */
+	{
+		const unsigned char *sa = (const unsigned char *)p4m_a +
+					  P4M_SCRAMBLER;
+		const unsigned char *sb = (const unsigned char *)p4m_b +
+					  P4M_SCRAMBLER;
+		const unsigned char *la = (const unsigned char *)slot_ptr(sa, 0);
+		const unsigned char *lb = (const unsigned char *)slot_ptr(sb, 0);
+		const unsigned char *ta = (const unsigned char *)
+					  slot_ptr(sa, 0x0c);
+		unsigned int n = (unsigned int)(ta - la) + 1u;
+
+		diff_eq_int("the scrambler's history (%ld)",
+			    memcmp(la, lb, n) == 0, 1, tag);
+	}
+
+	compare_bts("the converter", bts_a, bts_b, tag);
+	compare_mapper("the mapper under the converter",
+		       (const unsigned char *)slot_ptr(bts_a, 0x00),
+		       (const unsigned char *)slot_ptr(bts_b, 0x00), tag);
+
+	diff_eq_int("the converter's symbols (%ld)",
+		    memcmp(slot_ptr(bts_a, 0x08), slot_ptr(bts_b, 0x08),
+			   2u * FILL_N) == 0, 1, tag);
+
+	/* The CP record, either side of the six buffer pointers. */
+	diff_eq_int("the CP record (%ld)",
+		    memcmp((const unsigned char *)CP +
+			   __builtin_offsetof(V90CP, word_00),
+			   (const unsigned char *)CP2 +
+			   __builtin_offsetof(V90CP, word_00),
+			   __builtin_offsetof(V90CP, buf) -
+			   __builtin_offsetof(V90CP, word_00)) == 0, 1, tag);
+	/*
+	 * `buf` is SIX POINTERS SITTING BETWEEN `word_c70` and `word_ca0`, one
+	 * array per side, so it is the gap between the two ranges and not the
+	 * end of the first.
+	 */
+	diff_eq_int("the CP record past its buffer pointers (%ld)",
+		    memcmp((const unsigned char *)CP +
+			   __builtin_offsetof(V90CP, word_ca0),
+			   (const unsigned char *)CP2 +
+			   __builtin_offsetof(V90CP, word_ca0),
+			   sizeof(V90CP) -
+			   __builtin_offsetof(V90CP, word_ca0)) == 0, 1, tag);
+	diff_eq_int("the CP record's buffers (%ld)",
+		    memcmp(pump_cpbuf[0], pump_cpbuf[1],
+			   sizeof pump_cpbuf[0]) == 0, 1, tag);
+
+	diff_eq_int("the transcripts agreed (%ld)",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+}
+
+/* Every case label of the larger table, plus 0x1f, which neither has. */
+#define NPUMPSTATE	0x20
+
+static int
+run_pump(const char *name, pump ours, pump theirs, long base)
+{
+	long trial = base;
+	int st, cnt_i, variant, printed = 0, moved = 0, varied = 0;
+	int states = 0, filled = 0;
+	short first = 0;
+	int seen = 0;
+	unsigned char seen_state[NPUMPSTATE];
+
+	diff_begin(name);
+	memset(seen_state, 0, sizeof seen_state);
+
+	for (st = 0; st < NPUMPSTATE; st++)
+		for (cnt_i = 0; cnt_i < NPUMPCOUNT; cnt_i++)
+			for (variant = 0; variant < 32; variant++) {
+				int ci = (st + cnt_i + variant) % NPROC;
+				/*
+				 * THE LEVEL MOVES WITH `variant` AND NOT WITH
+				 * THE STATE.  Keyed on `st + cnt_i` it is a
+				 * CONSTANT for each arm's boundary trial --
+				 * the RiNot handover needs count 0x17, and
+				 * (2 + 4) % 3 is 0, so that arm was only ever
+				 * driven with the transcript off and every
+				 * mutation to its message survived.
+				 */
+				unsigned int lvl = (unsigned int)(variant % 3);
+				short rc[2];
+
+				if (!proc_case_safe(&proc_cases[ci]))
+					continue;
+
+				setup_pump((int)trial, ci, st, cnt_i, variant);
+				memcpy(pump_map_pre, slot_ptr(bts_a, 0x00),
+				       MAPPER_SIZE);
+
+				set_level(lvl);
+				dsplib_debug_capture_reset();
+				dsplib_debug_capture_on = 1;
+				rc[0] = ours(p4m_a);
+				rc[1] = theirs(p4m_b);
+				dsplib_debug_capture_on = 0;
+				set_level(0);
+				live_refresh();
+
+				compare_pump(name, trial);
+				diff_eq_int("the symbol (%ld)", (long)rc[0],
+					    (long)rc[1], trial);
+
+				if (dsplib_debug_capture_text(0)[0] != '\0')
+					printed++;
+				if (((V90Phase4Modulator *)(void *)p4m_a)->
+				    symbolCount != pump_counts[cnt_i])
+					moved++;
+				if (memcmp(pump_map_pre, slot_ptr(bts_a, 0x00),
+					   MAPPER_SIZE) != 0)
+					filled++;
+				{
+					unsigned int ns =
+					    (unsigned int)
+					    ((V90Phase4Modulator *)(void *)
+					     p4m_a)->state;
+
+					if (ns < NPUMPSTATE && !seen_state[ns]) {
+						seen_state[ns] = 1;
+						states++;
+					}
+				}
+				if (!seen) {
+					first = rc[0];
+					seen = 1;
+				} else if (rc[0] != first) {
+					varied++;
+				}
+
+				teardown_pump();
+				diff_eq_int("nothing left allocated (%ld)",
+					    harness_alloc.live, 0, trial);
+				trial++;
+			}
+
+	diff_eq_int("something was printed (%ld)", printed > 0, 1, trial);
+	diff_eq_int("the counter moved (%ld)", moved > 0, 1, trial);
+	diff_eq_int("the fill ran (%ld)", filled > 0, 1, trial);
+	diff_eq_int("more than one state was left behind (%ld)", states > 1, 1,
+		    trial);
+	diff_eq_int("more than one symbol came back (%ld)", varied > 0, 1,
+		    trial);
+
+	return diff_end();
+}
+
+/*
+ * THE FOUR NULL-GUARDED ARMS, which the sweep above cannot reach because it
+ * hands every trial a usable record.  Each pump has two: TRN2d checks `mp`
+ * under V.90 and `cp` under V.92, and Ed checks `mappingParams` in both.  All
+ * four announce through `dsplibs_debug_printf` behind the level gate rather
+ * than through `edprintf`, so the level is swept as well -- the message and
+ * its absence are two different claims.
+ *
+ * NULLING THE POINTER IS SAFE ONLY IN THE STATE THAT GUARDS IT.  Both arms
+ * check before they use, and neither reaches the record before the check:
+ * TRN2d's fill is `processAllOnes` over the scrambled buffer and Ed's is
+ * `processAllZeros`, so neither touches `mp`, `cp` or `mappingParams` at all.
+ * In any other state the same null is a dereference, which is why this is a
+ * separate sweep over two states rather than another variant of the first.
+ */
+static int
+run_pump_null(const char *name, pump ours, pump theirs, long base)
+{
+	static const int nullstate[] = { 0x03, 0x10 };
+	long trial = base;
+	int which, si, lvl, ci, printed = 0, quiet = 0, moved = 0;
+
+	diff_begin(name);
+
+	for (which = 0; which < 3; which++)
+		for (si = 0; si < 2; si++)
+			for (lvl = 0; lvl < 3; lvl++)
+				for (ci = 0; ci < NPROC; ci++) {
+					int st = nullstate[si];
+					int s;
+
+					if (!proc_case_safe(&proc_cases[ci]))
+						continue;
+
+					/*
+					 * Variant 0: no fill, and `word_2f64`
+					 * one past the counter.  The counter
+					 * is then set so that TRN2d is on its
+					 * deadline and Ed on its own, and the
+					 * three flags that would divert Ed to
+					 * "enter Silence" are left clear.
+					 */
+					setup_pump((int)trial, ci, st, 0, 0);
+
+					for (s = 0; s < 2; s++) {
+						V90Phase4Modulator *m =
+						    (V90Phase4Modulator *)
+						    (void *)(s ? p4m_b
+							       : p4m_a);
+
+						m->symbolCount = 0x3e7bu;
+						m->word_2f64 = 0x3e7cu;
+						if (which == 0)
+							m->mp = 0;
+						else if (which == 1)
+							m->cp = 0;
+						else
+							m->mappingParams = 0;
+					}
+
+					set_level((unsigned int)lvl);
+					dsplib_debug_capture_reset();
+					dsplib_debug_capture_on = 1;
+					ours(p4m_a);
+					theirs(p4m_b);
+					dsplib_debug_capture_on = 0;
+					set_level(0);
+					live_refresh();
+
+					compare_pump(name, trial);
+
+					if (dsplib_debug_capture_text(0)[0] !=
+					    '\0')
+						printed++;
+					else
+						quiet++;
+					if (((V90Phase4Modulator *)(void *)
+					     p4m_a)->state !=
+					    (Phase4ModulatorState)st)
+						moved++;
+
+					teardown_pump();
+					diff_eq_int("nothing left allocated "
+						    "(%ld)",
+						    harness_alloc.live, 0,
+						    trial);
+					trial++;
+				}
+
+	diff_eq_int("a null record was announced (%ld)", printed > 0, 1, trial);
+	diff_eq_int("and gated off at a lower level (%ld)", quiet > 0, 1,
+		    trial);
+	diff_eq_int("a null record moved the state (%ld)", moved > 0, 1, trial);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -3475,6 +4190,15 @@ main(void)
 			   our_p4m_c2, ref_p4m_c2, our_p4m_d2, ref_p4m_d2);
 
 	rc |= run_p4m_setmp();
+
+	rc |= run_pump("V90Phase4Modulator::generateV90Symbol", our_p4m_genv90,
+		       ref_p4m_genv90, 880000L);
+	rc |= run_pump("V90Phase4Modulator::generateV92Symbol", our_p4m_genv92,
+		       ref_p4m_genv92, 890000L);
+	rc |= run_pump_null("generateV90Symbol, the null-guarded arms",
+			    our_p4m_genv90, ref_p4m_genv90, 900000L);
+	rc |= run_pump_null("generateV92Symbol, the null-guarded arms",
+			    our_p4m_genv92, ref_p4m_genv92, 910000L);
 
 	rc |= run_mod_ctor("V90Modulator::V90Modulator (C1)", our_mod_c1,
 			   ref_mod_c1, our_mod_d1, ref_mod_d1);

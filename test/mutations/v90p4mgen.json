@@ -13,7 +13,6 @@
    "to say where they fired."
   ]
  },
-
  {
   "label": "exitRi: it guards on the RiNot state rather than Ri",
   "find": "\tif (state == P4M_STATE_RI && symbolCount != 0) {",
@@ -31,10 +30,9 @@
  },
  {
   "label": "exitRi: the counter survives the transition",
-  "find": "\t\t\tstate = P4M_STATE_RI_NOT;\n\t\t\tsymbolCount = 0;",
-  "replace": "\t\t\tstate = P4M_STATE_RI_NOT;"
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter RiNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_RI_NOT;\n\t\t\tsymbolCount = 0;",
+  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter RiNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_RI_NOT;"
  },
-
  {
   "label": "exitSilence: only the first of the two silence states is caught",
   "find": "\tif ((state == P4M_STATE_UNNAMED_17 || state == P4M_STATE_UNNAMED_18) &&\n\t    symbolCount != 0) {",
@@ -45,7 +43,6 @@
   "find": "\t    symbolCount != 0) {\n\t\tif (symbolCount % V90P4M_RI_PERIOD != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_19;",
   "replace": "\t    symbolCount != 0) {\n\t\tif (symbolCount % V90P4M_RF_SYMBOLS != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_19;"
  },
-
  {
   "label": "exitMP: the boundary is the CP sequence, not the MP one",
   "find": "\tif (state == P4M_STATE_MP && symbolCount != 0) {\n\t\tif (symbolCount % mpSequenceSymbols != 0) {",
@@ -53,36 +50,34 @@
  },
  {
   "label": "exitMP: the MP sequence is not re-derived",
-  "find": "\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->word_114;",
-  "replace": "\t\t\tmpBits = mp->getBitVector(mpBitCount);"
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->word_114;",
+  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);"
  },
  {
   "label": "exitMP: the sequence length is bits, not symbols",
-  "find": "\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->word_114;",
-  "replace": "\t\t\tmpSequenceSymbols = mpBitCount / mp->word_114;"
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->word_114;",
+  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = mpBitCount / mp->word_114;"
  },
  {
   "label": "exitMP: it hands on to Ed rather than MPNot",
-  "find": "\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits",
-  "replace": "\t\t\tstate = P4M_STATE_ED;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits"
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits",
+  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits"
  },
-
  {
   "label": "exitMPNot: the Ed deadline is the extra symbols alone",
-  "find": "\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols + 12;",
-  "replace": "\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols;"
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter Ed @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols + 12;",
+  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter Ed @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols;"
  },
  {
   "label": "exitMPNot: the Ed deadline reads the frame width",
-  "find": "\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols + 12;",
-  "replace": "\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->bitsPerFrame + 12;"
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter Ed @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols + 12;",
+  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter Ed @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->bitsPerFrame + 12;"
  },
  {
   "label": "exitMPNot: it guards on MP rather than MPNot",
   "find": "\tif (state == P4M_STATE_MP_NOT && symbolCount != 0) {\n\t\tif (symbolCount % mpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_0F;",
   "replace": "\tif (state == P4M_STATE_MP && symbolCount != 0) {\n\t\tif (symbolCount % mpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_0F;"
  },
-
  {
   "label": "enterRepeatedCPd: the CP message takes the short form",
   "find": "\tstate = P4M_STATE_REPEATED_CPD;\n\tcp->word_00 = 0;",
@@ -108,7 +103,6 @@
   "find": "\tbyte_001c = 0;\n\tword_0018 = 0;\n\tif (DSPLIB_DEBUG_ON())",
   "replace": "\tbyte_001c = 0;\n\tif (DSPLIB_DEBUG_ON())"
  },
-
  {
   "label": "recivedSUV: the latch it reads is +0x2f9c",
   "find": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {",
@@ -129,7 +123,6 @@
   "find": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {\n\t\tif (symbolCount % cpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_06;",
   "replace": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {\n\t\tif (symbolCount % cpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_CPD;"
  },
-
  {
   "label": "recivedPartTwoSilenceRrnSUV: the first range guard is dropped",
   "find": "\tif (state == P4M_STATE_UNNAMED_17 || state == P4M_STATE_UNNAMED_18)\n\t\treturn;\n\tif (state == P4M_STATE_UNNAMED_19 ||",
@@ -147,7 +140,6 @@
   "find": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t\tword_2fa0 = 1;\n\t\t}\n\t}\n}\n\n/*\n * recivedFirstSUVuPartTwoRrn",
   "replace": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t}\n\t}\n}\n\n/*\n * recivedFirstSUVuPartTwoRrn"
  },
-
  {
   "label": "recivedFirstSUVuPartTwoRrn: the silence arm runs the CP branch's guard",
   "find": "\tif (state == P4M_STATE_UNNAMED_17 || state == P4M_STATE_UNNAMED_18) {\n\t\tif (symbolCount != 0) {",
@@ -163,7 +155,6 @@
   "find": "\t\t\tif (symbolCount % V90P4M_RI_PERIOD != 0) {\n\t\t\t\tstate = P4M_STATE_UNNAMED_19;",
   "replace": "\t\t\tif (symbolCount % V90P4M_RI_PERIOD != 0) {\n\t\t\t\tstate = P4M_STATE_RT;"
  },
-
  {
   "label": "recivedCPtag: it acts when +0x20 is clear",
   "find": "\tword_0018 = 0;\n\tif (word_0020 != 0) {\n\t\tif (word_2f9c != 0) {",
@@ -214,7 +205,6 @@
   "find": "\t\tif (word_2f9c != 0) {\n\t\t\tif (symbolCount % cpSequenceSymbols == 0) {",
   "replace": "\t\tif (word_2f9c != 0) {\n\t\t\tif (symbolCount % cpSequenceSymbols != 0) {"
  },
-
  {
   "label": "recivedSUVtag: it acts when +0x20 is set",
   "find": "\tif (word_2f9c != 0 && word_0020 == 0) {\n\t\tswitch (state) {",
@@ -235,7 +225,6 @@
   "find": "\tif (word_2f9c != 0 && word_0020 == 0) {\n\t\tswitch (state) {",
   "replace": "\tif (word_0020 == 0) {\n\t\tswitch (state) {"
  },
-
  {
   "label": "recivedE2u: the boundary test is inverted",
   "find": "V90Phase4Modulator::recivedE2u()\n{\n\tif (word_0020 == 0) {\n\t\tif (symbolCount % cpSequenceSymbols == 0) {",
@@ -251,7 +240,6 @@
   "find": "V90Phase4Modulator::recivedE2u()\n{\n\tif (word_0020 == 0) {\n\t\tif (symbolCount % cpSequenceSymbols == 0) {",
   "replace": "V90Phase4Modulator::recivedE2u()\n{\n\tif (word_0020 == 0) {\n\t\tif (symbolCount % mpSequenceSymbols == 0) {"
  },
-
  {
   "label": "recivedFirstRrnE2u: it prints the plain Ed message",
   "find": "\t\t\tedprintf(\"V90Phase4Modulator: enter Ed first at RRN \"\n\t\t\t\t \"@ %d\\r\\n\", symbolCount);",
@@ -267,7 +255,6 @@
   "find": "\t\t\tedprintf(\"V90Phase4Modulator: enter Ed first at RRN \"\n\t\t\t\t \"@ %d\\r\\n\", symbolCount);\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols + 12;\n\t\t\tsymbolCount = 0;\n\t\t} else {\n\t\t\tstate = P4M_STATE_UNNAMED_0A;",
   "replace": "\t\t\tedprintf(\"V90Phase4Modulator: enter Ed first at RRN \"\n\t\t\t\t \"@ %d\\r\\n\", symbolCount);\n\t\t\tstate = P4M_STATE_ED;\n\t\t\tword_2f64 = bitsToSymbol->extraSymbols + 12;\n\t\t\tsymbolCount = 0;\n\t\t} else {\n\t\t\tstate = P4M_STATE_UNNAMED_09;"
  },
-
  {
   "label": "recivedPartOneSilenceRrnSUVtag: the CP is not tagged",
   "find": "V90Phase4Modulator::recivedPartOneSilenceRrnSUVtag()\n{\n\tcp->byte_13 = 1;",
@@ -278,7 +265,6 @@
   "find": "V90Phase4Modulator::recivedPartOneSilenceRrnSUVtag()\n{\n\tcp->byte_13 = 1;\n\tif (word_0020 == 0) {",
   "replace": "V90Phase4Modulator::recivedPartOneSilenceRrnSUVtag()\n{\n\tif (word_0020 == 0) {\n\t\tcp->byte_13 = 1;"
  },
-
  {
   "label": "generateDataSymbolBeforeFPE: the demand is read the wrong way round",
   "find": "\tbitsToSymbol->process(nofBits, &sym);\n\tif (nofBits != 0) {\n\t\tedprintf(\"V90Phase4Modulator: enter Rf @ %d\\r\\n\", symbolCount);",

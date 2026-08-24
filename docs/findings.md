@@ -77345,3 +77345,296 @@ declaration below (one).
 gate working: an unusable mutation does not fail a run (finding 347), so
 without the anchor check the five would have gone on being counted as caught
 while testing nothing.
+
+### 7450. BOTH SYMBOL PUMPS ARE ONE `switch` OVER `state`, AND THE JUMP TABLES ARE WHAT SAY SO
+
+`V90Phase4Modulator::generateV90Symbol` is `.text+0x2dc80`, 0x8bb = 2,235
+bytes; `generateV92Symbol` is `+0x2e6a0`, 0xf52 = 3,922.  Both open the same
+way -- `mov 0x4(%esi),%eax ; incl 0x8(%esi) ; movl $0x0,0xc(%esi)` -- and both
+then dispatch through an indirect jump into `.rodata`: `cmp $0x1b,%eax ; ja ;
+jmp *0xa94(,%eax,4)` for the V.90 pump and `cmp $0x1e,%eax ; ja ;
+jmp *0xb04(,%eax,4)` for the V.92 one.
+
+The tables were read with `tools/tabdump.py --at .rodata:0xa94 --type u32
+--count 28` and `--at .rodata:0xb04 --count 31`, which prints the twenty-eight
+and thirty-one `R_386_32 .text` relocations rather than dropping them the way
+every convenient trim of `objdump` does.  **A slot holding the default label is
+a state with no `case`; a slot holding anything else is a `case` the source
+has to spell**, and that is the whole map:
+
+| state | V.90 | V.92 |
+|---|---|---|
+| 0x00..0x03 | Ri, its non-boundary arm, RiNot, TRN2d | the same four |
+| 0x04, 0x0d..0x0f | the MP ladder | default |
+| 0x05..0x0c | default | the SUVd/CPd ladder |
+| 0x10..0x16 | Ed, B1d, terminated, 0x13, 0x14, Rd, RdNot | the same seven |
+| 0x17..0x1b | 0x1a and 0x1b silent, the rest default | the silence/Rt ladder |
+| 0x1c..0x1e | past the end of the table | 0x1c, Rf, RfNot |
+
+So the two functions are the SAME state machine with two disjoint middles, and
+that is §9.4.1 the right way round: under V.90 the digital modem sends MP, and
+under V.92 the rate renegotiation puts CP in its place.
+
+Nine V.90 arms and fourteen V.92 ones share one idiom --
+`nofBitsForNextTime()`, a conditional fill, then
+`process(unsigned int &, short *)` into a one-`short` slot -- with ONE variable
+for the demand and the status, because the object uses one stack slot for both
+and that overload writes its reference on the way out.  Each `case` has its own
+pair of locals and the object proves it: the nine V.90 arms use nine disjoint
+slot pairs (0x1c/0x40 through 0x38/0x4e) where one shared pair would have been
+one.
+
+Three fills appear and which one an arm gets is the arm's own business:
+`processAllOnes` for TRN2d, B1d and the terminated state, `processAllZeros` for
+Ed, and `scrambler.process` over the message vector for anything emitting a
+sequence.  **The message fill passes the MESSAGE'S length and not the demand**
+-- `mov 0x2f5c(%esi),%ebx ; mov %ebx,0xc(%esp)` at +0x2e34f against the
+all-ones fill's `mov %eax,0x8(%esp)` at +0x2e42b -- and a mutation swapping the
+two is caught.
+
+### 7451. THE MEMBERS ARE CALLED AND NOT COPIED, AND A REDUNDANT GUARD IS THE EVIDENCE
+
+The V.90 pump's `case P4M_STATE_MP_NOT` re-tests `cmpl $0xe,0x4(%esi)` at
++0x2e0a4 -- a question the jump table has already answered.  GCC does not
+invent a guard it can fold away, so what is inlined there is `exitMPNot()`,
+whose own body opens with exactly that test.  The same argument names
+`enterRepeatedCPd()` inside the V.92 SUVd arm (its seven stores and its
+trailing `symbolCount = 0` appear verbatim and in order at +0x2eefb..+0x2ef59),
+`resetRRNSecondSection()` inside the V.92 RtNot arm (+0x2eb85..+0x2eba8), and
+the eight `generate*` readers wherever their bodies appear.
+
+**Where a member's own guard would REJECT, the arm is written out instead**, and
+that is why the boundary block appears more than once in the file:
+`case P4M_STATE_UNNAMED_01` cannot call `exitRi()`, which guards on
+`state == P4M_STATE_RI`.  That is a real duplication in the source and not a
+factoring choice, and it is what cost seven anchors their uniqueness (7459).
+
+### 7452. WHERE THE V.92 PUMP GENUINELY DIFFERS FROM THE V.90 ONE -- SEVEN PLACES
+
+The brief warned that this batch is the MP CRC trap's shape: two functions that
+look like one another until a constant differs.  Read against each other rather
+than transcribed, the differences are these, and each is at the address named.
+
+1. **RiNot ends differently.**  V.90 prints "enter TRN2d" (`.rodata.str1.4
+   +0x83ac`) and then calls `Scrambler<h,h>::reset(0)`; V.92 prints "RiNot
+   Terminated" (+0x8504) and does **not** reset the scrambler.
+   +0x2ef60..+0x2efba against +0x2e245..+0x2e2b0, otherwise instruction for
+   instruction the same.  Two constants and one call, in the two arms that are
+   most alike.
+2. **TRN2d hands on to SUVd unconditionally.**  The null guard is on `cp`
+   (+0x2f003) rather than on `mp` (+0x2e1cd), the message names CP, and where
+   V.90 reads `nextStateAfterTRN2d` and chooses between the strings "MP" and
+   "DIRECTLY to MPNot", V.92 stores 5, sets `cp->word_00 = 1`, copies
+   `word_0028` into `cp->word_ca0` and rebuilds the CP sequence.  **Both of its
+   exits then set `word_000c` to 4**, which is the only site in the class that
+   stores that value.
+3. **The SUVd/CPd ladder at 0x05..0x0c exists only in the V.92 pump.**
+4. **SUVd counts CPd repetitions.**  `cmpb $0x0,0x1c(%esi) ; je ; incl
+   0x18(%esi)` at +0x2ee7c, and once `word_0018` passes `word_0040 + 0x320` --
+   a STRICT `ja` at +0x2eef5 -- the arm runs `enterRepeatedCPd()`.  Nothing in
+   the V.90 pump reads either field.
+5. **Ed has a third exit.**  `word_0024 && word_002c && !word_0030` sends it to
+   "enter Silence" and to state 0x17 or 0x18 chosen by `word_0034`:
+   `cmp $0x1,%edx ; sbb %eax,%eax ; not %eax ; add $0x18,%eax` at +0x2f5c5,
+   which is 0x17 for a non-zero flag and 0x18 for a clear one.
+6. **RdNot copies `mappingParams2->word_0` into `cp->word_3ba8`** before it
+   resets the converter (+0x2ea60).  V.90's RdNot is the same five calls without
+   that store.
+7. **The silence/Rt/Rf ladder at 0x18..0x1e is V.92's alone**, and RtNot's
+   boundary runs `resetRRNSecondSection()` before rebuilding the CP sequence.
+
+`test/mutations/v90p4msym.json` states all seven FROM BOTH SIDES -- a mutation
+giving the V.90 arm the V.92 spelling and one giving the V.92 arm the V.90
+spelling -- because a suite that only asks "is this arm right" cannot tell a
+transcription from a derivation.
+
+### 7453. `pad_000c` IS A LIVE FIELD, AND THE ENUMERATION GAINS 0x14 AND 0x1c
+
+Two corrections to `include/dsplib/V90Phase4Modulator.h`, both forced by the
+pumps and both recorded because the header asserted the opposite.
+
+**+0x000c is `unsigned int word_000c` and not padding.**  Four `movl` sites over
+the class's whole extent: `reset` zeroes it, both pumps zero it on entry before
+the dispatch, both set it to 7 on the "Phase4 Terminated" arm, and
+`generateV92Symbol` alone sets it to 4 on both exits from TRN2d.  A sweep of
+every `0xc(%` displacement in `.text+0x2c5a0..+0x2f730` finds **no reader
+anywhere in the class**, so whatever consumes it is outside and the meaning is
+not established here; the name stays the offset's and the width is the stores'.
+
+**0x14 and 0x1c are enumerators after all.**  The header said "0x14, 0x1c and
+0x1f ARE ABSENT DELIBERATELY.  No member of the class stores or compares them",
+and the jump tables disprove it for two of the three: 0x14 is a distinct arm in
+BOTH tables and 0x1c is one in the larger.  Both dispatch to an existing member
+-- `generateDataSymbolBeforeRRN` and `generateDataSymbolBeforeFPE`
+respectively -- so the temptation is to name them for it.  **They keep offset
+names**, `P4M_STATE_UNNAMED_14` and `P4M_STATE_UNNAMED_1C`, with the dispatch
+written in the comment: what the object proves is that the state RUNS that
+code, and "the state IS the data-before-RRN state" is one inferential step past
+that.  3120's rule, and the file already carries nine enumerators of exactly
+this kind.  0x1f stays out: it is past the end of the larger table and nothing
+else in the class mentions it.
+
+### 7454. EVERY ARM NEEDED A POKED STATE, BECAUSE `reset` IS NOT WRITTEN -- AND THAT IS THE WHOLE FUNCTION, NOT TWO STATEMENTS
+
+Findings 7422, 7423 and 7430 each record ONE statement that no sequence of
+public calls can falsify.  For the two pumps it is the entire body.
+`V90Phase4Modulator::reset` is still unwritten, so no member of this class can
+put the object into state 0x0f or 0x14 or 0x1c at all; and even with `reset`
+written, a machine that takes 15,996 symbols to leave TRN2d cannot be walked
+into its later states by a unit test.
+
+So `state` is poked, and with it every field the arms read that no constructor
+writes: `symbolCount`, `mpBits`/`mpBitCount`, `cpBits`/`cpBitCount`,
+`mpSequenceSymbols`, `cpSequenceSymbols`, `word_2f64`, `byte_0014`,
+`word_0018`, `byte_001c`, `word_0024`, `word_0028`, `word_002c`, `word_0030`,
+`word_0034`, `word_0040`, `codeLevel`, `nextStateAfterTRN2d` and both symbol
+tables.  What is DRIVEN rather than poked is everything the arms call: the
+converter is constructed and `reset` against a valid mapping block so
+`V90Mapper::process` runs for real under the fill, the modulator is constructed
+so its embedded scrambler owns a real history buffer, and the V.92 arms run
+`V90CP::infoToBits` over a CP planted the way `t_v90cpinfo` plants one.
+
+Two counts had to be planted DIFFERENT from what `getBitVector` reports.  Five
+arms re-read the message vector and put the reported length back; with the
+planted value already equal to it, dropping the re-read changed nothing and the
+mutation survived against correct code.  `mpBitCount` and `cpBitCount` are now
+seeded four short of `MP->byte_118` and `CP->word_3bac`.
+
+### 7455. THE DRAIN WRITES INTO A ONE-`short` SLOT, AND THAT BOUNDS THE FIXTURE AT BOTH ENDS
+
+Every arm hands `V90BitsToSymbol::process(unsigned int &, short *)` the address
+of a single `short`.  That overload copies `symbolsBlockSize` symbols into it on
+the full path and `symbolsDone` on the underflow one, so the fixture is boxed in
+from both sides:
+
+- `symbolsBlockSize == 0` takes the SIZE_NOT_SET arm, which leaves the
+  reference UNWRITTEN for the pump to read.  Deviation D661's hole, out of the
+  grid here for the reason it is out of `t_v90p4mgen`'s.
+- anything that lets the drain copy TWO symbols smashes the pump's own frame --
+  in both builds, at different offsets, which arrives as a mismatched symbol
+  and reads exactly like a defect in `src/`.  It cost two rounds of chasing.
+
+Three settings survive: `(1, 2)` no fill, `(1, 0)` the fill runs, and `(2, 1)`
+underflow.  **The third is the only one that leaves a non-zero demand behind**,
+which is what ends states 0x14 and 0x1c -- and it is safe only for those two,
+because their arms drain WITHOUT filling.  Every other arm calls
+`nofBitsForNextTime` first, and on that setting the fill runs and takes
+`symbolsDone` past one before the drain looks at it.
+
+### 7456. A FILL CAN YIELD NOTHING, AND THEN THE PUMP RETURNS A `short` NOTHING WROTE
+
+The second round of the same failure, and it is not a defect in `src/` either.
+`V90Mapper::reset` loads a countdown at +0x6f8 with `shaperId` and
+`V90Mapper::process` swallows that many frames before it emits anything, so a
+fill issued straight after a reset can produce NO symbols.  `symbolsDone` is
+then still zero, the drain takes its underflow arm, copies `symbolsDone`
+symbols -- none -- and the pump returns the uninitialised `short`.  Both sides
+read their own stack garbage and the two disagree; the blob's was a constant
+0xa5a5 while ours varied, which is the signature to recognise.
+
+The same hole opens from the other direction on the message fills, which hand
+the mapper `mpBitCount` or `cpBitCount` rather than a whole number of frames: a
+count below `bitsPerFrame` buffers and emits nothing.
+
+`t_v90modchain` closes both.  It WARMS the converter with eight frames through
+the already-tested `process(unsigned char *, unsigned int)` before each trial --
+more than the three the countdown can ever be, and a whole number of frames so
+`bitsBuffered` comes back to zero -- and it holds `PUMP_MPLEN` and `PUMP_CPLEN`
+above the widest `bitsPerFrame` any `proc_case` produces, which is 35.
+
+### 7457. THE SCRAMBLER'S HISTORY IS OUTSIDE THE OBJECT, SO `reset(0)` WAS INVISIBLE
+
+Comparing a `V90Phase4Modulator` compares the embedded `Scrambler`'s seven
+pointers and its `tailLength` and **not one bit of what the scrambler did**:
+the history is a heap allocation, `canon_scrambler` normalises six of the
+pointers to distances and masks the seventh, and the buffer itself was never
+looked at.
+
+Two arms call `Scrambler<h,h>::reset(0)` and nothing else, and the harness's
+allocator hands back zeroed memory, so the call moved nothing that was
+compared.  The mutation seeding with a ONE was caught and the mutation DROPPING
+the call survived -- a pair that says precisely "the test sees the value and
+not the store".  The fixture now writes 0xa5 over `[pLimit, pInitTap2]` on both
+sides after construction, taking the extent from the object rather than
+assuming it, and both mutations are caught.  Finding 7105's shape a second
+time: a seeded fixture is not enough where a CONSTRUCTOR runs after the seed.
+
+### 7458. AN ANTI-VACUITY AXIS KEYED ON THE STATE IS CONSTANT FOR EVERY BOUNDARY TRIAL
+
+The sweep's debug level started as `(st + cnt_i) % 3`, which looks like it
+covers all three levels and does -- across the sweep, but not across any one
+ARM'S BOUNDARY.  Each arm reaches its transition at ONE count: RiNot at 0x17,
+so `(2 + 4) % 3` is 0 and that arm was only ever driven with the transcript
+off.  Every mutation to its message survived, including the one that gives it
+the V.92 pump's message, which is the single most important claim in the batch.
+
+The level now moves with `variant`, which is orthogonal to both the state and
+the count.  The same defect had a second instance: the V.92 Ed arm's silence
+guard is three independent flags, and its deadline shared a variant bit with
+`word_002c` -- so the guard was only ever evaluated on trials where that flag
+was set, and "it reads +0x28 rather than +0x2c" could not fire.  The deadline
+and the CP sequence length took their axis from `cnt_i` instead.
+
+**Read this beside 3509.**  A counter that names an observable is necessary and
+not sufficient; the SWEEP has to be able to present the observable and the
+guard at the same time, and an axis derived from the same variables as the
+condition cannot.
+
+### 7459. SEVEN ANCHORS LOST UNIQUENESS, WHICH IS FINDING 7432 EXACTLY
+
+`make refs` failed the moment `generateV90Symbol` compiled, with seven
+`NOT UNIQUE` reports across `v90p4mctor` and `v90p4mgen`: one in
+`setMappingParams` (`if (mp == 0) {`, now a substring of the pump's own null
+guard) and six in `exitRi`, `exitMP` and `exitMPNot`, whose boundary blocks the
+pumps repeat verbatim for the reason 7451 gives.
+
+**Nothing in `src/` was touched to repair them.**  Each anchor was located
+inside the member its label names and then extended BACKWARDS a whole line at a
+time until it matched exactly once -- one to six lines each.  The same walk was
+then applied in advance when `v90p4msym.json` was generated, because several
+arms are textually identical between the two pumps (B1d, the terminated state,
+Rd, 0x14 and the prologue) and an anchor written naively would have named
+whichever the file happened to hold first.
+
+`v90p4msym` is 171 mutations against `t_v90modchain`: **169 caught, 0 NOT
+caught, 0 unusable, 2 equivalent, 0 MIScounted.**  The two equivalents carry
+their argument in `why`: `exitMPNot` does not alias +0x14, so the order of the
+store and the call is the same program; and `> 0x95f` against `>= 0x95f`
+differs at exactly one counter value, 2399, which fails the arm's own
+`% 6 == 0` and so can never reach the guarded block.
+
+### 7460. THE PUMPS' CODEGEN GAP IS FINDING 4703'S, AND EVERY BYTE OF IT IS ACCOUNTED FOR
+
+`tools/toolchain/compare.py` reports `generateV90Symbol` at 3,502 bytes against
+the blob's 2,235 (`+1267`) and `generateV92Symbol` at 6,046 against 3,922
+(`+2124`).  **The call inventories account for every byte of both.**  Taken
+together the two functions we emit make exactly the union of the blob's two
+inventories -- 33 `edprintf`, 23 `process(unsigned int &, short *)`, 20
+`process(unsigned char *, unsigned int)`, 20 `nofBitsForNextTime`, seven
+`dsplibs_debug_printf`, five `V90CP::getBitVector`, five `V90CP::infoToBits`,
+four `resetNoSpectral`, two `Scrambler::reset`, two `displaySpectralParams`,
+one `V90MP::getBitVector` -- with NOTHING extra and nothing missing except the
+twenty calls the blob makes to `Scrambler<h,h>::process`, `processAllOnes` and
+`processAllZeros`.  Eight of those are the V.90 pump's and twelve the V.92
+one's, and 1267/8 and 2124/12 are 158 and 177 bytes an inlined site.
+
+That inventory identity is the structural check a poked-state differential grid
+cannot make on its own: a missing or extra call to anything else would be code
+factored differently, and the grid could agree with the blob while it was.
+
+That is finding 4703 and not a defect in this reconstruction: the three bulk
+members are defined INSIDE the class body in `include/dsplib/Scrambler.h` and
+are therefore implicitly `inline`, the blob calls all 27 of its sites out of
+line, and `V92Phase4Modulator::generateB1u` is already 288 bytes against the
+blob's 149 for the same reason.  Closing it means restructuring a header 34
+symbols and every caller depend on, which is a change of its own and not this
+batch's.  Recorded here so the number is not re-derived a third time.
+
+**THE GROWTH DID NOT MOVE THE REST OF THE TRANSLATION UNIT**, which is worth
+checking rather than assuming: adding ~800 lines to a file can change `-O3`'s
+inlining decisions for the members already in it, and `compare.py --ratchet` is
+deliberately outside `make phase` so the gate cannot see that.
+`V90Phase4Modulator::setRdRtSymbols` was the canary -- 512 bytes and in the
+IDENTICAL set before the pumps were written -- and it is still there.  The
+ratchet run is `ratchet OK -- gained: compared 986->1207, identical 350->485,
+same_size 71->89`.

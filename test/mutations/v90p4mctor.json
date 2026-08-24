@@ -170,8 +170,8 @@
  },
  {
   "label": "setMappingParams: the null guard is inverted",
-  "find": "\tif (mp == 0) {",
-  "replace": "\tif (mp != 0) {"
+  "find": "{\n\tif (mp == 0) {",
+  "replace": "{\n\tif (mp != 0) {"
  },
  {
   "label": "setMappingParams: the null block is announced below the gate",
