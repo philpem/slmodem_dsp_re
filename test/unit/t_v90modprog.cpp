@@ -90,12 +90,15 @@
  * indexes wildly.
  *
  * WHAT IS POKED RATHER THAN REACHED, and it is stated rather than implied:
- * `V90Modulator::state` is never set to 1 by any member of the class --
- * `reset` sets 0, `progress` sets 2 and 3, `initiateRRN` sets 2 -- because
- * entry to phase 3 comes from `vPcmResetPhase3Modem`, which is outside this
- * translation unit and is not written.  So the fixture writes `state`
- * directly, identically on both sides, and the same goes for the phase 3
- * modulator's DIL cursors and the phase 4 modulator's terminal counts.
+ * no WRITTEN member of `V90Modulator` sets `state` to 1.  The member that
+ * does is `enterPhase3` -- `movl $0x1,0x2c(%ebx)` at 0x19dca -- and it is one
+ * of the eleven phase edges still missing, as is `V90Modem::reset`, the
+ * object's only caller of `V90Modulator::reset`.  So the fixture writes
+ * `state` directly, identically on both sides, and the same goes for the
+ * phase 3 modulator's DIL cursors and the phase 4 modulator's terminal
+ * counts.  (This comment first said "never set to 1 by any member of the
+ * class", which was true of the five written members and false of the class;
+ * finding 7520.)
  *
  * EACH SIDE PREPARES ITSELF WITH ITS OWN CODE.  Every setup member --
  * `V90Modulator::reset`, `V90BitsToSymbol::reset`, `setSymbolsBlockSize`,

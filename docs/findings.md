@@ -78883,10 +78883,17 @@ the wrong one passes every trial.** The fixture drives them apart on purpose.
 The arithmetic is forced at every step. `imul $0x1f40,0x4(%eax),%esi` then
 `push $0 ; push %esi ; fildll` is an INTEGER multiply by 8000 widened as
 UNSIGNED; `fmuls` against 0x3e2aaaab is a multiply by the float nearest 1/6 and
-not a divide by 6.0f, which GCC will not introduce; `flds` of 0.5 comes FIRST,
-so the source is `0.5f + ...`; and `fistpll` into eight bytes with the low word
-taken is a conversion to `unsigned int`, where a cast to `int` emits `fistpl`.
-Six symbols to a frame at 8 kHz, with the 0.5 making the truncation a round.
+not a divide by 6.0f, which GCC will not introduce; and `fistpll` into eight
+bytes with the low word taken is a conversion to `unsigned int`, where a cast
+to `int` emits `fistpl`. Six symbols to a frame at 8 kHz, with the 0.5 making
+the truncation a round.
+
+**THE OPERAND ORDER IS NOT FORCED, and this finding briefly said it was.** The
+blob loads 0.5 FIRST and closes with `faddp`; our build, from source that
+spells `0.5f + (...)`, emits `fildll ; fmuls ; fadds` and loads it last. Same
+operation on the same two operands, identically rounded, and our own object in
+this same session is the counter-example to the inference. It is the
+compiler's choice, so by CLAUDE.md's rule it is ignored.
 
 #### THE DIGITAL SIDE HAS NO WRITER FOR THE MAPPING BLOCK IT READS
 
@@ -78938,12 +78945,29 @@ rather than letting the seed through.
 
 Two smaller members of the same shape:
 
-- **`V90Modulator::state` is never set to 1 by any member of the class.**
-  `reset` sets 0, `progress` sets 2 and 3, `initiateRRN` sets 2. Entry to
-  phase 3 comes from outside, and the only caller of `V90Modulator::reset` in
-  the object is `V90Modem::reset` (0x199a0), which is still unwritten. So a
-  digital session cannot start until that member and `vPcmResetPhase3Modem`
-  exist, and the fixture has to poke `state = 1` rather than reach it.
+- **No WRITTEN member of `V90Modulator` sets `state` to 1, and the member that
+  does is one of the eleven still missing.** This bullet first said "never set
+  to 1 by any member of the class", which was derived from the five written
+  members and is wrong -- eleven of the seventeen had not been looked at. A
+  scan of every store to +0x2c, +0x30 and +0x34 across all nineteen
+  `V90Modulator` symbols settles it: **fourteen of them write those words**,
+  and `enterPhase3` at 0x19dca is `movl $0x1,0x2c(%ebx)` followed by zeroes
+  into +0x30 and +0x34.
+
+  The rest agree with the names this batch gave the three words, which is
+  independent confirmation of them. `enterPhase4`, `exitDIL` and `initiateFPE`
+  each write `state = 2, symbolCount = 0, eventCode = 0`; `enterDataPhase`
+  writes `state = 3, symbolCount = 0, eventCode = 8`, which is exactly what
+  `progress` does inline at 0x1a9b8 and 0x1a9c9; and the six `exit*` and
+  `acknowledge*` edges write nothing but `eventCode = 0`.
+
+  So the fixture still has to poke `state = 1` -- `enterPhase3` is unwritten,
+  and so is `V90Modem::reset` (0x199a0), the object's only caller of
+  `V90Modulator::reset` -- but the reason is that those members are missing and
+  not that nothing sets it. **The mistake is kept in the record because of its
+  shape: a claim about a CLASS derived from a SUBSET of it, made in the same
+  batch that wrote a finding about not believing a count with no tool behind
+  it.**
 - **`V90ConstellationDesigner::spectralDesign` has no relocation anywhere in
   the object** -- orphaned exactly as `V90Modulator` is, and on the other side
   of the same wall.

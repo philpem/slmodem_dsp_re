@@ -4,9 +4,10 @@
  *
  * The original translation unit is `V90Modem.cpp`, STT_FILE #31.  The
  * constructor and the destructors live in src/pump/v90/V90ModemCtor.cpp; what
- * is still missing from the TU is `V90Modem::reset`, which is the member that
- * calls `V90Modulator::reset` and is therefore the digital side's only route
- * to a defined `state`.
+ * is still missing from the TU is `V90Modem::reset` (0x199a0), which is the
+ * object's ONLY caller of `V90Modulator::reset` -- so until it is written,
+ * nothing this tree builds can put the modulator's `state` into a defined
+ * condition.
  *
  * THE SOURCE ORDER IS NOT THE DISASSEMBLY ORDER.  GCC split the body on the
  * first `dsplibs_debug_level` test and put the gated block at the END of the
@@ -120,12 +121,13 @@ V90Modem::printTitle()
  * `V90ModemSide` -- the same three-way shape V90ModemCtor.cpp has and the
  * same one the destructor's `cmpl $0x1 ; jbe` range test agrees with.
  *
- * `V90Modem` DOES NOT RESET ITS SIDE OBJECT.  Neither arm touches anything
- * but the pointer it forwards through, so the state every one of these calls
- * depends on -- `V90Modulator::state`, `symbolCount`, `eventCode` -- is
- * whatever the last `reset` left, and this class has no member that calls
- * one.  On the digital arm that reset is `vPcmResetPhase3Modem`'s, which is
- * outside this translation unit and is not written yet.  Finding 7520.
+ * `V90Modem::progress` DOES NOT RESET ITS SIDE OBJECT.  Neither arm touches
+ * anything but the pointer it forwards through, so the state every one of
+ * these calls depends on -- `V90Modulator::state`, `symbolCount`, `eventCode`
+ * -- is whatever the last `reset` and the last phase edge left.  The caller
+ * of `V90Modulator::reset` is `V90Modem::reset`, in this same translation
+ * unit and not written; the member that first sets `state` to 1 is
+ * `V90Modulator::enterPhase3`, also not written.  Finding 7520.
  * ===========================================================================
  */
 void
