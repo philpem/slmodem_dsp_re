@@ -79856,12 +79856,20 @@ called anyway.  Arm 0x2e has no such test and goes straight to
 | the block | `V92ParamsInfo`, 0xb4 bytes | `V90MappingParams`, 0x650 bytes |
 | where it lives | HEAP, `V92Modem::mappingParams` | EMBEDDED in `V90Modem` at +0x18 and +0x668 |
 | initialised by a constructor? | **no** -- raw `sysdep_malloc(0xb4)` | **no** -- 7520 |
-| who writes it | `V92setParamsInfoFromCPUnPck` | `setParamsInfoFromCPUnPck` |
-| how many callers | **TWO**, both in a live entry point | **ZERO**, in the whole object |
+| its unpacker | `V92setParamsInfoFromCPUnPck` | `setParamsInfoFromCPUnPck` |
+| that unpacker's callers | **TWO**, both in a live entry point | **ZERO**, in the whole object |
 | how the modulator gets it | constructor argument 6 | constructor arguments 6 and 7 |
 
-Both sides allocate the block without constructing it and both rely entirely
-on an unpacker to fill it.  The difference is not the design; it is that one
+**The row that says "that unpacker's callers" says exactly what was
+measured and no more.**  Two relocations name `V92setParamsInfoFromCPUnPck`
+and zero name `setParamsInfoFromCPUnPck`; that is a count of CALLS TO THE
+UNPACKER, not a claim that no other function in the object writes either
+block.  7520 did the harder bound on the V.90 side and enumerated every
+candidate writer; the V.92 side has had no such sweep and is not asserted to
+have had one.
+
+Both sides allocate the block without constructing it and both rely on an
+unpacker to fill it.  The difference is not the design; it is that one
 unpacker is called from `runPcmModem` on two demodulator events and the other
 is called from nowhere.  **That is the whole of 7520's blocker, stated in the
 form that makes it actionable**: a V.90 digital bring-up needs the equivalent
