@@ -49,14 +49,28 @@ GREEN**: both `V90BitsToSymbol` resets, `V90Mapper::process`,
     V90Phase4Modulator::reset                     DONE     255 B
     V90Phase4Demodulator::reset                   DONE     504 B
     V90Demodulator::exitPhase3                    DONE     768 B
-    V90Demodulator::progress                                   7,276 B
+    V90Demodulator::progress                      DONE   7,276 B
 
-**THE TWO PUMPS, BOTH `reset`s AND `exitPhase3` ARE WRITTEN AND DIFFERENTIALLY
-GREEN**, 7,684 bytes of the batch's remaining 16,853, and **the only thing left
-in the batch is `V90Demodulator::progress` itself** (7,276 B).  Findings
+**THE BATCH IS COMPLETE.**  All thirteen symbols are written and
+differentially green, and the V.90 receive path closes with
+`V90Demodulator::progress` -- 7,276 bytes, 1,708 instructions, 129 calls, four
+dispatch tables, and NO `*_notwritten()` stub anywhere in it.  Findings
 7450-7460 for the pumps -- 7450 has the two jump tables and 7452 the seven
 places the V.92 pump genuinely differs from the V.90 one -- 7470-7477 for the
-two resets, and 7480-7485 for `exitPhase3`.
+two resets, 7480-7485 for `exitPhase3`, and 7510-7513 for `progress`.
+
+**WHAT `progress` COST AND WHAT IT DID NOT BUY.**  Its own binary,
+`t_v90demprog`, is 1,868 differential checks green, and its suite is **100
+mutations, 26 caught, 74 NOT caught** -- the 26 are the prologue, the phase
+dispatch and part of the common tail, and the 74 are the `word_3c` arms, kept
+rather than deleted because NOT CAUGHT is a measurement and a suite reading 26
+of 26 would be a headline with its denominator removed.  The arm is not
+plantable: `V90Equalizer::process` clears `stateCount` on entry and refills it
+from a chain that bottoms out in the phase 3 demodulator's own state machine,
+so the sweep reaches THREE distinct arms of thirty-one (7513).  Driving the
+rest is the next pass's work and it needs the equaliser walked to each of its
+events -- and 7513 records what happened when this fixture tried to take a
+short cut to that.
 
 **BOTH `reset`s COME OUT OF GCC 3.4.2 AT THE BLOB'S OWN SIZE**, 255 and 504
 bytes, the modulator's byte for byte and the demodulator's instruction for

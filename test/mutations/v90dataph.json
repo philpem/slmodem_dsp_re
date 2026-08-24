@@ -1,228 +1,228 @@
 [
-	{
-		"note": "V90Demodulator's five phase entries and three diagnostics accessors, against t_v90dataph.  Three of the entries are near-copies of each other -- enterRRN and enterFPE share the deadline line verbatim -- so those anchors are widened with the preceding statement, which differs.  Finding 347's remedy applied to a smaller case.  THE THREE CONST MEMBERS CARRY NO \"fn\" FIELD, and that is tools/anchorcheck.py's limitation rather than a choice: its definition index requires the closing parenthesis to be followed by `{`, and a const member has ` const` between them, so `getAT_UD`, `getRbsPattern` and `indicateRemoteRateReneg` are invisible to it and an `fn` naming any of them reads as `names no function`.  The field is opt-in, so dropping it costs only rule 2's cross-check on those eleven anchors; rule 1's uniqueness check still applies to all of them and every one of the eleven is verified unique.  No const member anywhere in the tree can use `fn` today."
-	},
-	{
-		"label": "enterRRN: the deadline base moves",
-		"fn": "enterRRN",
-		"find": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
-		"replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10681 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
-	},
-	{
-		"label": "enterRRN: the delay is not doubled",
-		"fn": "enterRRN",
-		"find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
-		"replace": "\tword_48 = 0x10680 + 1 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
-	},
-	{
-		"label": "enterRRN: the conjunction loses its second term",
-		"fn": "enterRRN",
-		"find": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;",
-		"replace": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;"
-	},
-	{
-		"label": "enterRRN: the conjunction loses its third term",
-		"fn": "enterRRN",
-		"find": "\t     phase4Demodulator->int_003c != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;",
-		"replace": "\t     phase4Demodulator->int_003c != 0) ? 1 : 0;"
-	},
-	{
-		"label": "enterRRN: the conjunction becomes a disjunction",
-		"fn": "enterRRN",
-		"find": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&",
-		"replace": "\t    (connectionEvaluator->word_90 != 0 ||\n\t     phase4Demodulator->int_003c != 0 &&"
-	},
-	{
-		"label": "enterRRN: the rate gate is not cleared",
-		"fn": "enterRRN",
-		"find": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
-		"replace": "\tdemapper->linearMappStudyEnabled = 0;"
-	},
-	{
-		"label": "enterRRN: the study is left enabled",
-		"fn": "enterRRN",
-		"find": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
-		"replace": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 1;"
-	},
-	{
-		"label": "enterRRN: the latch tests the wrong state",
-		"fn": "enterRRN",
-		"find": "\tif (inPhase3 == 2)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: RRN detected: \"",
-		"replace": "\tif (inPhase3 == 3)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: RRN detected: \""
-	},
-	{
-		"label": "enterFPE: the deadline base moves",
-		"fn": "enterFPE",
-		"find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
-		"replace": "\tword_48 = 0x10600 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}"
-	},
-	{
-		"label": "enterFPE: the counter is not cleared",
-		"fn": "enterFPE",
-		"find": "\tword_38 = 0;\n\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
-		"replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}"
-	},
-	{
-		"label": "enterFPE: the two parameter copies are swapped",
-		"fn": "enterFPE",
-		"find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
-		"replace": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_27C];\n\tword_290 = V90PW(params)[PARAMS_WORD_268];\n}"
-	},
-	{
-		"label": "enterPhase4: the deadline base moves",
-		"fn": "enterPhase4",
-		"find": "\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
-		"replace": "\tword_48 = 0x28231 + 5 * (unsigned int)phase2Info->rtd;"
-	},
-	{
-		"label": "enterPhase4: the delay multiplier is four",
-		"fn": "enterPhase4",
-		"find": "\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
-		"replace": "\tword_48 = 0x28230 + 4 * (unsigned int)phase2Info->rtd;"
-	},
-	{
-		"label": "enterPhase4: the total is assigned, not accumulated",
-		"fn": "enterPhase4",
-		"find": "\tword_44 += word_38;\n\tword_38 = 0;",
-		"replace": "\tword_44 = word_38;\n\tword_38 = 0;"
-	},
-	{
-		"label": "enterPhase4: the counter is cleared before it is added",
-		"fn": "enterPhase4",
-		"find": "\tword_44 += word_38;\n\tword_38 = 0;",
-		"replace": "\tword_38 = 0;\n\tword_44 += word_38;"
-	},
-	{
-		"label": "enterDataPhase: the two study lengths are swapped",
-		"fn": "enterDataPhase",
-		"find": "\tdemapper->resetLinearMappStudy(quickConnect != 0 ? 12600u : 30000u);",
-		"replace": "\tdemapper->resetLinearMappStudy(quickConnect != 0 ? 30000u : 12600u);"
-	},
-	{
-		"label": "enterDataPhase: the study is left disabled",
-		"fn": "enterDataPhase",
-		"find": "\tdemapper->linearMappStudyEnabled = 1;",
-		"replace": "\tdemapper->linearMappStudyEnabled = 0;"
-	},
-	{
-		"label": "enterDataPhase: the BLL enters the wrong state",
-		"fn": "enterDataPhase",
-		"find": "\tresampler.setBllState(V90_BLL_STEADY_STATE, 1);",
-		"replace": "\tresampler.setBllState(V90_BLL_TRN2, 1);"
-	},
-	{
-		"label": "enterDataPhase: the BLL is given the wrong count",
-		"fn": "enterDataPhase",
-		"find": "\tresampler.setBllState(V90_BLL_STEADY_STATE, 1);",
-		"replace": "\tresampler.setBllState(V90_BLL_STEADY_STATE, 2);"
-	},
-	{
-		"label": "enterDataPhase: the retrain count is not seeded",
-		"fn": "enterDataPhase",
-		"find": "\tword_3c = 0x1e;",
-		"replace": "\tword_3c = 0x1f;"
-	},
-	{
-		"label": "enterDataSteadyState: the evaluation flag is read, not copied",
-		"fn": "enterDataSteadyState",
-		"find": "\tword_278 = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];\n\tif (word_278 != 0) {",
-		"replace": "\tif (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {"
-	},
-	{
-		"label": "enterDataSteadyState: the save threshold is strict",
-		"fn": "enterDataSteadyState",
-		"find": "\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \"",
-		"replace": "\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] > std) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \""
-	},
-	{
-		"label": "enterDataSteadyState: the save threshold is the other way round",
-		"fn": "enterDataSteadyState",
-		"find": "\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \"",
-		"replace": "\t\tif (std >= V90PF(params)[PARAMS_MIN_STD_FOR_SAVE]) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \""
-	},
-	{
-		"label": "enterDataSteadyState: the mean's sign is the naive spelling",
-		"fn": "enterDataSteadyState",
-		"find": "\t\tedprintf(\"V90Demodulator: mean of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= mean) ? '+' : '-',",
-		"replace": "\t\tedprintf(\"V90Demodulator: mean of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t (0.0f < mean) ? '+' : '-',"
-	},
-	{
-		"label": "enterDataSteadyState: the std's sign is the naive spelling",
-		"fn": "enterDataSteadyState",
-		"find": "\t\tedprintf(\"V90Demodulator: std of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= std) ? '+' : '-',",
-		"replace": "\t\tedprintf(\"V90Demodulator: std of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t (0.0f < std) ? '+' : '-',"
-	},
-	{
-		"label": "enterDataSteadyState: the saved deviation loses its scale",
-		"fn": "enterDataSteadyState",
-		"find": "\t\t\tmodemParams[MODEM_CLOCK_DEVIATION] =\n\t\t\t    (int)(1000.0f * mean);",
-		"replace": "\t\t\tmodemParams[MODEM_CLOCK_DEVIATION] =\n\t\t\t    (int)(100.0f * mean);"
-	},
-	{
-		"label": "enterDataSteadyState: the study is left enabled",
-		"fn": "enterDataSteadyState",
-		"find": "\tdemapper->linearMappStudyEnabled = 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: disable linear mapping \"\n\t\t\t\t     \"study.\\n\");",
-		"replace": "\tdemapper->linearMappStudyEnabled = 1;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: disable linear mapping \"\n\t\t\t\t     \"study.\\n\");"
-	},
-	{
-		"label": "enterDataSteadyState: the state is phase 3",
-		"fn": "enterDataSteadyState",
-		"find": "\tinPhase3 = 4;\n\tedprintf(\"V90Demodulator: enter Data steady state\\r\\n\");",
-		"replace": "\tinPhase3 = 3;\n\tedprintf(\"V90Demodulator: enter Data steady state\\r\\n\");"
-	},
-	{
-		"label": "getAT_UD: the RBS pattern is packed the other way up",
-		"find": "\tresults->rbsPattern = rbs[0] + 2 * (rbs[1] + 2 * (rbs[2] + 2 *\n\t\t\t      (rbs[3] + 2 * (rbs[4] + 2 * rbs[5]))));",
-		"replace": "\tresults->rbsPattern = rbs[5] + 2 * (rbs[4] + 2 * (rbs[3] + 2 *\n\t\t\t      (rbs[2] + 2 * (rbs[1] + 2 * rbs[0]))));"
-	},
-	{
-		"label": "getAT_UD: the symbol rate is not 8000",
-		"find": "\tresults->rxBaudRate = 8000;",
-		"replace": "\tresults->rxBaudRate = 7999;"
-	},
-	{
-		"label": "getAT_UD: the dB scale is twenty",
-		"find": "\tresults->float_070 = (float)(10.0f * dem_x87_log10(",
-		"replace": "\tresults->float_070 = (float)(20.0f * dem_x87_log10("
-	},
-	{
-		"label": "getAT_UD: the round trip delay is divided signed",
-		"find": "\tresults->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 96u;",
-		"replace": "\tresults->roundTripDelay = (unsigned int)(phase2Info->rtd * 10 / 96);"
-	},
-	{
-		"label": "getAT_UD: the round trip delay loses its scale",
-		"find": "\tresults->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 96u;",
-		"replace": "\tresults->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 95u;"
-	},
-	{
-		"label": "getAT_UD: the two level fields are swapped",
-		"find": "\tresults->float_074 = equalizer->meanErrorEnergyCurrent;",
-		"replace": "\tresults->float_074 = agc.level;"
-	},
-	{
-		"label": "getAT_UD: the three copies are shifted by one",
-		"find": "\tresults->word_0ec = word_264;\n\tresults->word_0f0 = word_268;\n\tresults->word_0f4 = word_26c;",
-		"replace": "\tresults->word_0ec = word_268;\n\tresults->word_0f0 = word_26c;\n\tresults->word_0f4 = word_264;"
-	},
-	{
-		"label": "getAT_UD: the rate is not reported",
-		"find": "\tresults->dataRate = getBitRate();",
-		"replace": "\tresults->dataRate = 0;"
-	},
-	{
-		"label": "getAT_UD: the reserved word is not cleared",
-		"find": "\tresults->rxCarrier = 0;",
-		"replace": "\tresults->rxCarrier = 1;"
-	},
-	{
-		"label": "getRbsPattern: the loop stops one short",
-		"find": "\tfor (i = 0; i < V90ADID_PHASES; i++)\n\t\trbs[i] = autoDigitalImpDetector->byte_280c[i];",
-		"replace": "\tfor (i = 0; i + 1 < V90ADID_PHASES; i++)\n\t\trbs[i] = autoDigitalImpDetector->byte_280c[i];"
-	},
-	{
-		"label": "indicateRemoteRateReneg: the designer's flag is cleared",
-		"find": "\tconnectionEvaluator->indicateRemoteRateReneg();\n\tconstellationDesigner->word_48 = 1;",
-		"replace": "\tconnectionEvaluator->indicateRemoteRateReneg();\n\tconstellationDesigner->word_48 = 0;"
-	}
+ {
+  "note": "V90Demodulator's five phase entries and three diagnostics accessors, against t_v90dataph.  Three of the entries are near-copies of each other -- enterRRN and enterFPE share the deadline line verbatim -- so those anchors are widened with the preceding statement, which differs.  Finding 347's remedy applied to a smaller case.  THE THREE CONST MEMBERS CARRY NO \"fn\" FIELD, and that is tools/anchorcheck.py's limitation rather than a choice: its definition index requires the closing parenthesis to be followed by `{`, and a const member has ` const` between them, so `getAT_UD`, `getRbsPattern` and `indicateRemoteRateReneg` are invisible to it and an `fn` naming any of them reads as `names no function`.  The field is opt-in, so dropping it costs only rule 2's cross-check on those eleven anchors; rule 1's uniqueness check still applies to all of them and every one of the eleven is verified unique.  No const member anywhere in the tree can use `fn` today."
+ },
+ {
+  "label": "enterRRN: the deadline base moves",
+  "fn": "enterRRN",
+  "find": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
+  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10681 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
+ },
+ {
+  "label": "enterRRN: the delay is not doubled",
+  "fn": "enterRRN",
+  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
+  "replace": "\tword_48 = 0x10680 + 1 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
+ },
+ {
+  "label": "enterRRN: the conjunction loses its second term",
+  "fn": "enterRRN",
+  "find": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;",
+  "replace": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;"
+ },
+ {
+  "label": "enterRRN: the conjunction loses its third term",
+  "fn": "enterRRN",
+  "find": "\t     phase4Demodulator->int_003c != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;",
+  "replace": "\t     phase4Demodulator->int_003c != 0) ? 1 : 0;"
+ },
+ {
+  "label": "enterRRN: the conjunction becomes a disjunction",
+  "fn": "enterRRN",
+  "find": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&",
+  "replace": "\t    (connectionEvaluator->word_90 != 0 ||\n\t     phase4Demodulator->int_003c != 0 &&"
+ },
+ {
+  "label": "enterRRN: the rate gate is not cleared",
+  "fn": "enterRRN",
+  "find": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
+  "replace": "\tdemapper->linearMappStudyEnabled = 0;"
+ },
+ {
+  "label": "enterRRN: the study is left enabled",
+  "fn": "enterRRN",
+  "find": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
+  "replace": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 1;"
+ },
+ {
+  "label": "enterRRN: the latch tests the wrong state",
+  "fn": "enterRRN",
+  "find": "\tif (inPhase3 == 2)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: RRN detected: \"",
+  "replace": "\tif (inPhase3 == 3)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: RRN detected: \""
+ },
+ {
+  "label": "enterFPE: the deadline base moves",
+  "fn": "enterFPE",
+  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tword_48 = 0x10600 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}"
+ },
+ {
+  "label": "enterFPE: the counter is not cleared",
+  "fn": "enterFPE",
+  "find": "\tword_38 = 0;\n\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}"
+ },
+ {
+  "label": "enterFPE: the two parameter copies are swapped",
+  "fn": "enterFPE",
+  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_27C];\n\tword_290 = V90PW(params)[PARAMS_WORD_268];\n}"
+ },
+ {
+  "label": "enterPhase4: the deadline base moves",
+  "fn": "enterPhase4",
+  "find": "\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
+  "replace": "\tword_48 = 0x28231 + 5 * (unsigned int)phase2Info->rtd;"
+ },
+ {
+  "label": "enterPhase4: the delay multiplier is four",
+  "fn": "enterPhase4",
+  "find": "\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
+  "replace": "\tword_48 = 0x28230 + 4 * (unsigned int)phase2Info->rtd;"
+ },
+ {
+  "label": "enterPhase4: the total is assigned, not accumulated",
+  "fn": "enterPhase4",
+  "find": "\tword_44 += word_38;\n\tword_38 = 0;",
+  "replace": "\tword_44 = word_38;\n\tword_38 = 0;"
+ },
+ {
+  "label": "enterPhase4: the counter is cleared before it is added",
+  "fn": "enterPhase4",
+  "find": "\tword_44 += word_38;\n\tword_38 = 0;",
+  "replace": "\tword_38 = 0;\n\tword_44 += word_38;"
+ },
+ {
+  "label": "enterDataPhase: the two study lengths are swapped",
+  "fn": "enterDataPhase",
+  "find": "\tdemapper->resetLinearMappStudy(quickConnect != 0 ? 12600u : 30000u);",
+  "replace": "\tdemapper->resetLinearMappStudy(quickConnect != 0 ? 30000u : 12600u);"
+ },
+ {
+  "label": "enterDataPhase: the study is left disabled",
+  "fn": "enterDataPhase",
+  "find": "\tdemapper->linearMappStudyEnabled = 1;",
+  "replace": "\tdemapper->linearMappStudyEnabled = 0;"
+ },
+ {
+  "label": "enterDataPhase: the BLL enters the wrong state",
+  "fn": "enterDataPhase",
+  "find": "\tresampler.setBllState(V90_BLL_STEADY_STATE, 1);",
+  "replace": "\tresampler.setBllState(V90_BLL_TRN2, 1);"
+ },
+ {
+  "label": "enterDataPhase: the BLL is given the wrong count",
+  "fn": "enterDataPhase",
+  "find": "\tresampler.setBllState(V90_BLL_STEADY_STATE, 1);",
+  "replace": "\tresampler.setBllState(V90_BLL_STEADY_STATE, 2);"
+ },
+ {
+  "label": "enterDataPhase: the retrain count is not seeded",
+  "fn": "enterDataPhase",
+  "find": "\tword_3c = 0x1e;",
+  "replace": "\tword_3c = 0x1f;"
+ },
+ {
+  "label": "enterDataSteadyState: the evaluation flag is read, not copied",
+  "fn": "enterDataSteadyState",
+  "find": "\tword_278 = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];\n\tif (word_278 != 0) {",
+  "replace": "\tif (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {"
+ },
+ {
+  "label": "enterDataSteadyState: the save threshold is strict",
+  "fn": "enterDataSteadyState",
+  "find": "\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \"",
+  "replace": "\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] > std) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \""
+ },
+ {
+  "label": "enterDataSteadyState: the save threshold is the other way round",
+  "fn": "enterDataSteadyState",
+  "find": "\t\tif (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \"",
+  "replace": "\t\tif (std >= V90PF(params)[PARAMS_MIN_STD_FOR_SAVE]) {\n\t\t\tint *modemParams;\n\n\t\t\tedprintf(\"V90Demodulator: Timing offset saved in \""
+ },
+ {
+  "label": "enterDataSteadyState: the mean's sign is the naive spelling",
+  "fn": "enterDataSteadyState",
+  "find": "\t\tedprintf(\"V90Demodulator: mean of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= mean) ? '+' : '-',",
+  "replace": "\t\tedprintf(\"V90Demodulator: mean of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t (0.0f < mean) ? '+' : '-',"
+ },
+ {
+  "label": "enterDataSteadyState: the std's sign is the naive spelling",
+  "fn": "enterDataSteadyState",
+  "find": "\t\tedprintf(\"V90Demodulator: std of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= std) ? '+' : '-',",
+  "replace": "\t\tedprintf(\"V90Demodulator: std of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t (0.0f < std) ? '+' : '-',"
+ },
+ {
+  "label": "enterDataSteadyState: the saved deviation loses its scale",
+  "fn": "enterDataSteadyState",
+  "find": "\t\t\tmodemParams[MODEM_CLOCK_DEVIATION] =\n\t\t\t    (int)(1000.0f * mean);",
+  "replace": "\t\t\tmodemParams[MODEM_CLOCK_DEVIATION] =\n\t\t\t    (int)(100.0f * mean);"
+ },
+ {
+  "label": "enterDataSteadyState: the study is left enabled",
+  "fn": "enterDataSteadyState",
+  "find": "\tdemapper->linearMappStudyEnabled = 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: disable linear mapping \"\n\t\t\t\t     \"study.\\n\");",
+  "replace": "\tdemapper->linearMappStudyEnabled = 1;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: disable linear mapping \"\n\t\t\t\t     \"study.\\n\");"
+ },
+ {
+  "label": "enterDataSteadyState: the state is phase 3",
+  "fn": "enterDataSteadyState",
+  "find": "\tinPhase3 = 4;\n\tedprintf(\"V90Demodulator: enter Data steady state\\r\\n\");",
+  "replace": "\tinPhase3 = 3;\n\tedprintf(\"V90Demodulator: enter Data steady state\\r\\n\");"
+ },
+ {
+  "label": "getAT_UD: the RBS pattern is packed the other way up",
+  "find": "\tresults->rbsPattern = rbs[0] + 2 * (rbs[1] + 2 * (rbs[2] + 2 *\n\t\t\t      (rbs[3] + 2 * (rbs[4] + 2 * rbs[5]))));",
+  "replace": "\tresults->rbsPattern = rbs[5] + 2 * (rbs[4] + 2 * (rbs[3] + 2 *\n\t\t\t      (rbs[2] + 2 * (rbs[1] + 2 * rbs[0]))));"
+ },
+ {
+  "label": "getAT_UD: the symbol rate is not 8000",
+  "find": "\tresults->rxBaudRate = 8000;",
+  "replace": "\tresults->rxBaudRate = 7999;"
+ },
+ {
+  "label": "getAT_UD: the dB scale is twenty",
+  "find": "\tresults->float_070 = (float)(10.0f * dem_x87_log10(",
+  "replace": "\tresults->float_070 = (float)(20.0f * dem_x87_log10("
+ },
+ {
+  "label": "getAT_UD: the round trip delay is divided signed",
+  "find": "\tresults->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 96u;",
+  "replace": "\tresults->roundTripDelay = (unsigned int)(phase2Info->rtd * 10 / 96);"
+ },
+ {
+  "label": "getAT_UD: the round trip delay loses its scale",
+  "find": "\tresults->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 96u;",
+  "replace": "\tresults->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 95u;"
+ },
+ {
+  "label": "getAT_UD: the two level fields are swapped",
+  "find": "\tresults->float_074 = equalizer->meanErrorEnergyCurrent;",
+  "replace": "\tresults->float_074 = agc.level;"
+ },
+ {
+  "label": "getAT_UD: the three copies are shifted by one",
+  "find": "\tresults->word_0ec = word_264;\n\tresults->word_0f0 = word_268;\n\tresults->word_0f4 = word_26c;",
+  "replace": "\tresults->word_0ec = word_268;\n\tresults->word_0f0 = word_26c;\n\tresults->word_0f4 = word_264;"
+ },
+ {
+  "label": "getAT_UD: the rate is not reported",
+  "find": "\tresults->dataRate = getBitRate();",
+  "replace": "\tresults->dataRate = 0;"
+ },
+ {
+  "label": "getAT_UD: the reserved word is not cleared",
+  "find": "\tresults->rxCarrier = 0;",
+  "replace": "\tresults->rxCarrier = 1;"
+ },
+ {
+  "label": "getRbsPattern: the loop stops one short",
+  "find": "\tfor (i = 0; i < V90ADID_PHASES; i++)\n\t\trbs[i] = autoDigitalImpDetector->byte_280c[i];",
+  "replace": "\tfor (i = 0; i + 1 < V90ADID_PHASES; i++)\n\t\trbs[i] = autoDigitalImpDetector->byte_280c[i];"
+ },
+ {
+  "label": "indicateRemoteRateReneg: the designer's flag is cleared",
+  "find": "\tconnectionEvaluator->indicateRemoteRateReneg();\n\tconstellationDesigner->word_48 = 1;",
+  "replace": "\tconnectionEvaluator->indicateRemoteRateReneg();\n\tconstellationDesigner->word_48 = 0;"
+ }
 ]

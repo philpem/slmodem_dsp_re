@@ -95,6 +95,15 @@ void ref_td_ctor(void *s, void *p, void *pw) asm("ref_" TD_CTOR);
  * with it, so the sixteen-against-eight shape is the fixture's own
  * requirement and not a taste.  t_v90demod's `wire_life` uses the same pair.
  */
+/*
+ * HOW MANY DISTINCT `word_3c` ARMS THE SWEEP ACTUALLY REACHES.  It is not a
+ * target and it is not plantable (7513); it is a DENOMINATOR, asserted so that
+ * a fixture change which narrowed the spread fails here instead of passing
+ * silently with fewer arms driven.  Against the thirty-one the two tables
+ * between them dispatch, this is what the receive chain produces.
+ */
+#define PROG_ARMS	3
+
 #define PROG_LELEN	8u
 #define PROG_M		16u
 #define PROG_DFELEN	6u
@@ -324,6 +333,19 @@ prog_wire(int side, int trial)
 	e->params = (V90Parameters *)parm[side];
 	e->resampler = &d->resampler;
 	e->spectralVerifier = &d->spectralVerifier;
+	/*
+	 * THE EQUALISER'S SIX PEERS ARE LEFT AS v90demfix.h SEEDED THEM, AND
+	 * THAT IS MEASURED RATHER THAN LAZY.  Wiring them real -- and forcing
+	 * `state` to PHASE3 so `process` would take the arm that reads
+	 * `phase3Demod->word_30` -- was tried, and it makes the equaliser call
+	 * `V90Phase3Demodulator::getDecision` once per symbol over inputs that
+	 * member's own binary never presents.  `make phase` then failed on the
+	 * PERIOD compiler, 155 of 1,868, on the equalised symbols: a real
+	 * divergence in an already-written callee, reached from here, and not
+	 * this member's to chase.  With them seeded the equaliser takes its
+	 * cheap arms, both sides agree, and what `progress` does with the
+	 * answer is still compared.  Finding 7513.
+	 */
 
 	memset(&eqa[side], 0, sizeof eqa[side]);
 	for (i = 0; i < PROG_EQARR; i++)
@@ -469,8 +491,11 @@ run_progress(void)
 	int sawLevel[3];
 	int seen[5];
 	int sawDrop = 0, sawNoDrop = 0, sawPrint = 0;
+	int seenState[64];
+	int distinct = 0;
 
 	sawLevel[0] = sawLevel[1] = sawLevel[2] = 0;
+	memset(seenState, 0, sizeof seenState);
 	seen[0] = seen[1] = seen[2] = seen[3] = seen[4] = 0;
 
 	diff_begin("V90Demodulator::progress");
@@ -546,8 +571,31 @@ run_progress(void)
 		 * overwritten before the switch ever saw it -- and planting it
 		 * here is what makes "the copy was made" observable.
 		 */
-		((V90Equalizer *)equ[0])->stateCount = state;
-		((V90Equalizer *)equ[1])->stateCount = state;
+		/*
+		 * THE ARM IS PLANTED THROUGH THE EQUALISER'S OWN INPUT, and
+		 * that is forced rather than chosen.  `V90Equalizer::process`
+		 * opens with `stateCount = 0` and then sets it from
+		 * `phase3Demod->word_30` in its PHASE3 arm and from
+		 * `phase4Demod->int_0028` in its RRN one, so a value planted
+		 * in `stateCount` -- or in `word_3c` -- is gone before
+		 * `progress` reads it.  Planting the SOURCE is also the only
+		 * spelling that can tell "progress copied the equaliser's
+		 * answer" from "progress kept what was there", which is the
+		 * first mutation in the suite.
+		 */
+		for (side = 0; side < 2; side++) {
+			V90Equalizer *e = (V90Equalizer *)equ[side];
+
+			/*
+			 * `state` is left where `V90Equalizer::reset` put it
+			 * -- RESET -- because every other arm of `process`
+			 * dereferences a peer this fixture seeds rather than
+			 * builds.  See prog_wire.
+			 */
+			P3(side)->word_30 = (unsigned int)state;
+			P4D(side)->int_0028 = state;
+			e->stateCount = 0x7f;
+		}
 		D(0)->word_3c = D(1)->word_3c = 0x7fu;
 
 		for (side = 0; side < 2; side++) {
@@ -614,6 +662,7 @@ run_progress(void)
 				   dsplib_debug_capture_text(1)) == 0, 1,
 			    trial);
 
+		seenState[(unsigned)D(1)->word_3c & 0x3fu]++;
 		if (D(1)->word_27c == 0)
 			sawDrop++;
 		else
@@ -627,6 +676,19 @@ run_progress(void)
 
 	set_level(0);
 
+	for (si = 0; si < 64; si++)
+		if (seenState[si])
+			distinct++;
+	/*
+	 * A DENOMINATOR FOR THE ARM COVERAGE, and it is the honest number.
+	 * `word_3c` is `equalizer->stateCount`, which `V90Equalizer::process`
+	 * clears on entry and refills from its own state arms, so the arm this
+	 * sweep takes is the equaliser's answer and not a planted value.  This
+	 * counts the DISTINCT answers the sweep produced, so a fixture change
+	 * that narrowed them would fail here rather than pass silently.
+	 */
+	diff_eq_int("the sweep reached the same number of word_3c arms it did "
+		    "when this count was taken", distinct, PROG_ARMS, 0);
 	diff_eq_int("the demodulator was driven in every phase",
 		    seen[0] && seen[1] && seen[2] && seen[3] && seen[4], 1, 0);
 	diff_eq_int("level 0 was driven", sawLevel[0] > 0, 1, 0);

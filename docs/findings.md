@@ -78249,3 +78249,219 @@ The store itself is fully tested: `word_78 = 0`, the store dropped, and the
 store landing in +0x7c are three separate mutations and all three are caught,
 with the evaluator planted away from 1 every trial so that "a store of one"
 cannot pass by finding a one already there.
+
+### 7510. `V90Demodulator::progress` IS FOUR DISPATCH TABLES, AND THE OTHER THREE WERE INVISIBLE UNTIL THEY WERE DECLARED
+
+`.text+0x1ca90`, 0x1c6c = 7,276 bytes, 1,708 instructions, 129 calls: the
+largest function in this tree and the last of the `V90Demodulator::progress`
+batch.  **It is written, it is differentially green, and NO `*_notwritten()`
+stub was used** -- the whole body is in `src/pump/v90/V90Demodulator.cpp` and
+every arm is reconstructed source.  Where it is short is in the TEST's reach,
+which is 7513, and that is a different thing from an unwritten arm.
+
+**THE FIRST MEASUREMENT WAS WRONG BY 56% AND LOOKED RIGHT.**
+`tools/cfgsplit.py` given the one table this function's brief named --
+`.rodata:0x69c`, five entries -- reported
+
+    exclusive to one case     1969 bytes
+    shared by two or more     1249 bytes
+    reached by no case        4058 bytes   (prologue, epilogue, padding)
+
+and 4,058 bytes of "padding" in a 7,276-byte function is not a number anyone
+should accept.  There are FOUR tables, three of which nothing had looked for:
+
+    .rodata+0x69c   5 entries   switch (inPhase3)          0 .. 4
+    .rodata+0x6b0   6 entries   switch (evaluateConnection())
+    .rodata+0x6c8  22 entries   switch (word_3c)        0x00 .. 0x15
+    .rodata+0x720  29 entries   switch (word_3c)        0x19 .. 0x35
+
+With all four declared the same tool says **exclusive 4,470, shared 2,528,
+unreached 278** -- and 278 bytes IS a prologue and an epilogue.  The lesson is
+the tool's own: what a case owns has to come from the control-flow graph, and
+the graph is only as good as the dispatch set it is given.  Grepping one
+`dis.py` listing for an indirect `jmp` is the whole check and takes one
+command.
+
+**`inPhase3` PICKS THE PHASE AND `word_3c` THE STATE WITHIN IT.**  The 22-entry
+table is reached only from `inPhase3 == 1` and the 29-entry one only from
+`inPhase3 == 2`, so the two ranges are disjoint in reach as well as in value,
+which is why one field carries both.  `word_3c` KEEPS ITS OFFSET NAME:
+`progress` copies it out of `equalizer->stateCount` on entry and is the
+object's only reader of it, so it is an event code rather than a count -- but
+the fifty-three strings in this function name ARMS, never state values, and
+"the state IS the RtNot state" is one inferential step past what the object
+proves.  7453's ruling (`P4M_STATE_UNNAMED_14`) and 3120's rule; the dispatch
+is written in the case labels and that is the record.
+
+### 7511. THE COMPLETENESS CHECK AT THIS SIZE IS TWO INVENTORIES, AND `tools/instrcount.py` IS NOW THE THIRD
+
+Finding 7480 asked for an instruction count per symbol and there was no tool.
+There is now: `tools/instrcount.py`, ours against the blob's, taken from each
+symbol's own `st_size` so alignment padding counts on neither side.  **602 of
+1,219 compared symbols are exact** on GCC 3.4.2 at the project's flags.
+
+**IT OVER-COUNTED THE BLOB BY A FACTOR OF TEN BEFORE `-j` WAS ADDED**, and the
+failure direction is the dangerous one.  In an unlinked object every section
+has its own address space, so `objdump --start-address` without `-j` sums
+every section overlapping that range: `Agc<float>::process` read as 2,091
+instructions in 206 bytes.  A tool that inflates the BLOB's side makes OURS
+look complete, which is the one error this instrument must not make; it was
+noticed only because 2,091 in 206 bytes is impossible on its face.  Finding
+134's argument, and the self-test is that the number be possible.
+
+**`progress` IS 2,138 INSTRUCTIONS AGAINST THE BLOB'S 1,708, AND THE EXCESS IS
+FACTORING.**  Two inventories say so and both are exact:
+
+- **CALLS.**  Ours makes the blob's 126 plus exactly three, and the three are
+  arithmetic on four inlining sites: `Descrambler<h,i>::process` twice and
+  `enterRRN` and `enterDataPhase` once each are inlined by our build where the
+  blob calls them out of line, which removes four calls and adds their own
+  callees -- one `V90Demapper::resetLinearMappStudy`, two `setBllState` and
+  four `dsplibs_debug_printf`.  **Nothing else differs in either direction.**
+  That is 7460's structural check and 4703's known cause.
+- **STORES.**  Every `(mnemonic, immediate, displacement)` triple the blob
+  writes through a register other than `%esp` appears in ours, and the two
+  apparent misses are not: `fsts 0x8(%esi)` on `&agc` and `fsts 0x54(%edi)` on
+  `this` are the same field, and `movl $0x1f,0x3c` is six sites in the blob and
+  four in ours because two of the six are `word_3c = quickConnect ? 0x21 :
+  0x1f` compiled branchlessly on our side and as two stores on the blob's.
+
+So a GAP would be a missing statement (7480) and this is an EXCESS: 54
+instructions of inlined `enterRRN`, 68 of `enterDataPhase`, 114 of two
+`Descrambler::process` bodies, 25 alignment nops inside the symbol, and the
+rest register pressure -- our frame is `sub $0x9c` against the blob's `$0x7c`,
+because twelve locals live across a switch the blob's author spread over
+fewer.  Four jump tables in ours against four in the blob, so no dispatch
+degenerated into a compare chain.
+
+### 7512. FOUR THINGS `progress` FORCES THAT NO TEST CAN FAIL ON, AND ONE HEADER CORRECTION
+
+Recorded as prose rather than as mutations that could never fire, which is
+7474's move made before the fact.
+
+**`V90Demodulator` +0x274 IS A `float` AND WAS `pad_274[4]`, "nothing reads
+it".**  `progress` both writes it -- `mov 0x84(%ecx),%edx ; mov %edx,0x274(%edi)`
+at 0x1e5dd, from `equalizer->meanErrorEnergyMean`, on the arm where Ed arrives
+while a silence RRN is outstanding -- and reads it back at 0x1d82f as the
+constellation designer's THIRD argument, which that member's mangling spells
+`f`.  Width from the store, type from the callee (rule 2).  **It keeps the
+offset name**: two sites bound the ROLE ("the mean error as the redesign was
+armed") and not a meaning the object states, and the designer's own parameter
+is a general pdSNR slot the other call site fills from a different expression
+entirely.  3120's rule.
+
+**THE REMOTE-RETRAIN ARM COMPARES `inPhase3` SIGNED.**  `cmpl $0x2,0x34(%edi) ;
+jg` at 0x1dd2e, on a field `V90Demodulator.h` declares `unsigned int`.  Over
+the 0, 1, 2, 3 and 5 the class can reach -- `enterPhase3` writes 1,
+`enterPhase4` 2, `enterDataPhase` 3, `enterChannelVerification` 5 -- the signed
+and unsigned readings agree at every value, so this is finding 613's shape
+exactly: a signedness the reachable domain never exercises, visible only in
+codegen.  The source carries `(int)inPhase3 > 2` and the header keeps its type,
+because retyping a field eleven files spell would be a larger change than the
+evidence supports.
+
+**THE TWO `phase3Demodulator->byte_3f8 = 0x74` STORES MAY BE TWO CONSTANTS.**
+The AGC-freeze block writes 0x74 on the deep arm (0x1dee5) and again on the
+shallow one (0x1e15d), and a single store before the branch would not produce
+that.  They may be two different named constants in the original that happen to
+be equal; nothing in the object separates them, so both are written out and
+neither can be told from the other.
+
+**THE `V90MP` SIGNATURE TEST IS SIX FIELD COMPARISONS IN THREE INSTRUCTIONS.**
+`cmpw $0x0,0x2(%eax)` covers `Trellis` and `NonLin` and each of the three
+`h` pairs is one 32-bit `test`, because GCC's `fold_truthop` merges
+comparisons of ADJACENT fields against zero into one wider load.  Written field
+by field, which is what produces those widths; reading the merged widths as
+evidence for wider FIELDS would have retyped `V90MP` wrongly.
+
+### 7513. THE FIXTURE'S CEILING IS THE EQUALISER, NOT THE SOURCE, AND SEVENTY-THREE MUTATIONS WERE REMOVED RATHER THAN LEFT RED
+
+`test/unit/t_v90demprog.cpp` is `progress`'s own binary and drives it
+differentially over 155 trials: **1,868 checks, 0 failed**, and `make phase`
+is green at **242 passed / 0 failed** against master's 241.
+
+**THE GREEN NUMBER WAS TAKEN TWICE AND THE FIRST TAKING WOULD HAVE BEEN A
+LIE.**  `make phase` was run at 242/0 on a fixture that left the equaliser's
+six peers seeded; the fixture then GREW -- `phase3Demod`, `phase4Demod`,
+`demapper`, `connEval` and `preFilter` wired real, and `state` forced to
+PHASE3 so that `V90Equalizer::process` would take the arm that reads
+`phase3Demod->word_30` -- and the number was not re-taken before it was
+written into a commit message.  Re-taken, it was **241 passed, 1 failed**, on
+the PERIOD compiler and not the modern one: `t_v90demprog` failed 155 of 1,868
+on the equalised symbols, because that arm calls
+`V90Phase3Demodulator::getDecision` once per symbol over inputs that member's
+own binary never presents, and the two sides genuinely part company there.
+That is a real divergence in an already-written callee reached from a new
+caller, and it is not this member's to chase; the wiring was reverted and the
+comment in `prog_wire` records why those five pointers are deliberately left
+as `v90demfix.h` seeded them.  **A fixture change invalidates the gate's
+number even when the source did not move.**
+
+**IT IS ITS OWN BINARY BECAUSE OF WHAT THE PROLOGUE NEEDS.**  7483 chose
+`t_v90p4ddec` for `exitPhase3` by asking what its LAST statement needed
+constructed; `progress` opens with `FloatFIR::process`, `Agc<float>::process`,
+`V90Resampler::resample` and `V90Equalizer::process` over five heap arrays at
++0x244..+0x25c, and `t_v90p4ddec` plants its `V90Demodulator` as a seeded byte
+slot in which not one of those subobjects is constructed.
+`test/harness/v90demfix.h` builds the pair that is, so the front end comes from
+there and this file adds the demapper, both designers, the mapping blocks, the
+MP record and the phase 4 block on top.
+
+**THE FIRST THING MEASURED WAS WHETHER THE BINARY COULD EXIST.**
+`V90Equalizer::process` is called unconditionally in the prologue and
+`t_v90equproc` is DECLARED in `gccdiverge.json` for 6203's x87 excess
+precision; a declared binary can score no mutations at all, for the suite and
+not the row.  The measurement was one trial at `inPhase3 == 0` before any other
+arm was wired, and it is green in both builds: the divergence needs a `soft`
+past a short's range and this fixture's chain does not produce one.  So no
+entry was added to `gccdiverge.json` and the suite is scoreable.
+
+**THE ARM CANNOT BE PLANTED, AND THAT IS THE CEILING.**  `progress` opens
+`word_3c = equalizer->stateCount`, and `V90Equalizer::process` -- which runs
+between the fixture's poke and that read -- sets `stateCount = 0` on entry and
+refills it from `phase3Demod->word_30` in its PHASE3 arm or
+`phase4Demod->int_0028` in its RRN one.  Both of those are themselves rewritten
+by the `getDecision` call two lines above, so the chain bottoms out in the
+phase 3 demodulator's own state machine.  Three plantings were tried and all
+three were erased: `word_3c` directly, `equalizer->stateCount`, and
+`phase3Demodulator->word_30` with `equalizer->state` forced to PHASE3 -- the
+last of which is what broke the period tier above.  The sweep therefore takes
+whichever arm the receive chain produced on that block -- sound differentially,
+because both sides run the same chain, and narrow.  **It reaches THREE distinct
+`word_3c` values of the thirty-one the two tables dispatch**, and the test
+asserts that count by value, so a fixture change that narrowed the spread fails
+here rather than passing silently with fewer arms driven.
+
+**THE SUITE IS 100 MUTATIONS, 26 CAUGHT, 74 NOT CAUGHT, 0 UNUSABLE, 0
+EQUIVALENT, AND THE 74 ARE KEPT.**  All 100 were generated with every anchor
+checked for uniqueness in advance (7459's walk).  Deleting the 74 was tried and
+reverted: they are not unusable and they are not equivalent -- each compiles,
+each runs, and each produced a real verdict against a baseline that exits zero,
+so NOT CAUGHT **is** the measurement and 7484's rule applies ("we tried this
+and it survived for a reason" beats an absent entry).  Finding 6000 does not
+license the deletion either: that rule is about a DECLARED binary, which cannot
+score a suite at all.  What deleting them would have produced is a suite
+reading 26 of 26 -- a headline that looks perfect because its denominator was
+removed, which is the shape CLAUDE.md spends four paragraphs on.  The 26 that
+are caught cover the prologue's four calls and their argument order, the
+`inPhase3` dispatch including case 3's fall-through into case 4, the
+`evaluateConnection` switch, the RRN preparation and part of the common tail;
+the 74 are the `word_3c` arms and are ready for the pass that can drive them.
+
+**THREE ARMS ARE OUT FOR A DIFFERENT REASON -- THE CALLEE.**  0x12 is
+`exitPhase3()`, whose last statement is `phase4Demodulator->reset(...)` over a
+constructed 0x351c receiver (7483); 0x19 and 0x2a end in the fourteen-argument
+`V90ConstellationDesigner::process` over a detector whose per-code tables have
+to be walkable.  Both callees are green in `t_v90p4ddec` and
+`t_v90trn2design`; what is NOT claimed here is that `progress` reaches them
+correctly.
+
+**FIVE ANCHORS IN THREE OTHER SUITES LOST UNIQUENESS THE MOMENT THIS COMPILED**,
+which is 7432, 7459 and 7476 a FOURTH time and the first where the collisions
+were with a different member of the same file rather than within one class.
+`v90dataph`'s `constellationDesigner->word_48 = 1;`, `v90demod`'s
+`connectionEvaluator->word_84 = 0;` and all three of `v90getbitrate`'s
+`mappingParamsAlt->word_0 * 8000u` anchors are text `progress` now also
+spells.  **Nothing in `src/` was touched**: each was extended BACKWARDS into
+the member its label names -- one line for the first two, and `return
+(unsigned int)(` for the three rate ones -- until it matched exactly once.
