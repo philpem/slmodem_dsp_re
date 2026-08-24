@@ -1269,7 +1269,7 @@ run_debug(void)
 {
 	int lvl, saw = 0;
 
-	diff_begin("V92Modulator's ten diagnostics");
+	diff_begin("V92Modulator's fifteen diagnostics");
 
 	dsplib_debug_capture_on = 1;
 
@@ -1319,6 +1319,50 @@ run_debug(void)
 
 		our_reset(ours);
 		ref_reset(theirs);
+
+		/*
+		 * `enterPhase4`'s message, and BOTH arms of each `initiate`
+		 * member -- five gated sites that no other trial in this file
+		 * reaches, because every other runner drives them at level 0.
+		 * `debugcov.py` counts a site that never executes, so a
+		 * message with no trial behind it is a claim about the object's
+		 * text with nothing testing it.
+		 *
+		 * The two `initiate` members reach
+		 * `V92Phase4Modulator::reset` and through it `V92CP::
+		 * infoToBits`, which prints ADDRESSES at level 2 -- the CP is
+		 * the SHARED argument block here, so both sides print the same
+		 * one and the transcript still compares.  `sane_cp` is what
+		 * keeps that call inside D570 and D571.
+		 */
+		sane_cp(lvl);
+		M(0)->phase = 0;
+		M(1)->phase = 0;
+		our_enterPhase4(ours);
+		ref_enterPhase4(theirs);
+
+		M(0)->phase = 0;
+		M(1)->phase = 0;
+		diff_eq_int("a refused RRN agrees (level %ld)",
+			    our_initiateRRN(ours), ref_initiateRRN(theirs), lvl);
+		diff_eq_int("a refused FPE agrees (level %ld)",
+			    our_initiateFPE(ours), ref_initiateFPE(theirs), lvl);
+
+		M(0)->phase = V92MOD_PHASE_DATA;
+		M(1)->phase = V92MOD_PHASE_DATA;
+		M(0)->bitsToSymbol->symbolsDone = 0u;
+		M(1)->bitsToSymbol->symbolsDone = 0u;
+		M(0)->bitsToSymbol->bitsPerFrame = 24u;
+		M(1)->bitsToSymbol->bitsPerFrame = 24u;
+		diff_eq_int("an approved RRN agrees (level %ld)",
+			    our_initiateRRN(ours), ref_initiateRRN(theirs), lvl);
+
+		M(0)->phase = V92MOD_PHASE_DATA;
+		M(1)->phase = V92MOD_PHASE_DATA;
+		M(0)->bitsToSymbol->symbolsDone = 3u;
+		M(1)->bitsToSymbol->symbolsDone = 3u;
+		diff_eq_int("an approved FPE agrees (level %ld)",
+			    our_initiateFPE(ours), ref_initiateFPE(theirs), lvl);
 
 		/* Both `mkResampledSignal` messages, one call each. */
 		{
@@ -1417,12 +1461,19 @@ run_debug(void)
 		 *                                         per `diag_offsets`
 		 *   $!$ ...                               enterDataPhase
 		 *
-		 * Eight of this class's own plus one per `diag_offsets`, and
-		 * three encoded.  The encoded
-		 * three are not readable by construction, so they are counted
-		 * by `edprintf`'s own `"$!$ "` framing; two of them belong to
-		 * sub-modulators and one to `enterDataPhase`, and only their
-		 * TOTAL is asserted because nothing here can tell them apart.
+		 *   V92Modulator: enter Phase 4           enterPhase4
+		 *   ... RRN requested but NOT approved     initiateRRN
+		 *   ... FPE requested but NOT approved     initiateFPE
+		 *   ... RRN requested, enter Phase 4       initiateRRN
+		 *   ... FPE requested, enter Phase 4       initiateFPE
+		 *
+		 * THIRTEEN of this class's own plus one per `diag_offsets`, and
+		 * FIVE encoded.  The encoded five are not readable by
+		 * construction, so they are counted by `edprintf`'s own
+		 * `"$!$ "` framing; two of them belong to sub-modulators, one
+		 * to `enterDataPhase` and two to the `initiate` members' state
+		 * messages, and only their TOTAL is asserted because nothing
+		 * here can tell them apart.
 		 *
 		 * At 0 and 1 everything is silent, `enterDataPhase` included:
 		 * `edprintf` gates its own `dsplibs_debug_printf` at the same
@@ -1433,9 +1484,9 @@ run_debug(void)
 		enc = count_prefix(dsplib_debug_capture_text(0), "$!$ ");
 		want = (lvl > 1) ? 1 : 0;
 		diff_eq_int("this class printed its own lines (level %ld)",
-			    own, (8 + NDIAGOFF) * want, lvl);
-		diff_eq_int("and three went through edprintf (level %ld)",
-			    enc, 3 * want, lvl);
+			    own, (13 + NDIAGOFF) * want, lvl);
+		diff_eq_int("and five went through edprintf (level %ld)",
+			    enc, 5 * want, lvl);
 		diff_eq_int("and there was nothing else (level %ld)",
 			    (int)lines, own + enc, lvl);
 		if (lines > 0)

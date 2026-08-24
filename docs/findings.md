@@ -78727,3 +78727,303 @@ were with a different member of the same file rather than within one class.
 spells.  **Nothing in `src/` was touched**: each was extended BACKWARDS into
 the member its label names -- one line for the first two, and `return
 (unsigned int)(` for the three rate ones -- until it matched exactly once.
+
+### 7540. V92Modulator::progress is the V.92 upstream block engine, and the phase machine drives itself
+
+`V92Modulator::progress(int *, unsigned int &, float *, unsigned int)`
+(.text+0x14c20, 1,075 B) is written, with `enterPhase4` (+0x148b0, 113 B),
+`initiateRRN` (+0x14680, 260 B), `initiateFPE` (+0x14790, 276 B),
+`V92Modem::progress` (+0x13b70, 121 B) and `V92Modem::reset` (+0x13ca0,
+138 B).  That is all eighteen symbols of `V92Modulator` and all six of
+`V92Modem`.
+
+**THE FUNCTION IS A FIVE-ARM SWITCH ON `phase` WITH ONE SHARED TAIL.**  It
+converts the caller's `nSamples` to a symbol count with the CONSTRUCTOR'S OWN
+expression -- `(unsigned)(nSamples * 5/6 + 0.5f)`, the same `.rodata.cst4`
+pair from a different slot of the pool -- then sizes the block as
+`queuePrime - queue->count() + n` in four arms and as `n` flat in the fifth,
+generates that many symbols, resamples them, pushes them through the queue and
+reads `nSamples` back out.
+
+**IT MAKES ITS OWN PHASE TRANSITIONS, AND THAT IS WHAT THE CLASS IS FOR.**
+Nothing outside calls `enterPhase4` or `enterDataPhase`; `progress` does, from
+inside its own symbol loop:
+
+    phase 3, eventCode 5   entering SuSecond      stage a HALF phase change
+    phase 3, eventCode 7   entering TRN1uSecond   stage the OFFSET change
+    phase 3, eventCode 8   entering End           enterPhase4()
+    phase 4, word_0c 9     Phase4 Terminated      enterDataPhase()
+
+and the sample index the code arrived at is what `resamplerPhaseChangeAt`
+becomes, which is the whole reason `mkResampledSignal` has a split path: the
+resampler's phase moves exactly where the phase 3 segment boundary fell.  So
+`enterPhase3` starts the machine and the caller only has to keep calling
+`progress`.
+
+**THE PHASE IS RE-READ ONCE PER SYMBOL AND NOT ONCE PER BLOCK.**  The object
+reloads +0x2c at the top of every iteration (.text+0x14e3b), so the block that
+raises code 8 finishes on the PHASE 4 modulator: one loop, two sources.  A
+hoisted test would produce a whole block of phase 3 symbols after the
+transition and pass every check that does not drive the transition mid-block.
+
+**BOTH TRANSITIONS ARE CALLS THAT GCC INLINED.**  +0x14e78..+0x14ecb is
+`enterPhase4`'s body, guard and all, with the early exit landing on the join of
+the NEXT statement, and +0x14f2c..+0x14f5f is `enterDataPhase`'s the same way.
+Written as the calls they are; the period compiler inlines both and emits both
+out of line, which is what the object holds.  `enterDataPhase` was already
+written, so it is also the control experiment: if only one of the two had
+inlined, the difference would have been in our source and not in GCC.
+
+**THE OBJECT HAS TWO STORES OF `blockRemaining = want` AND THE SOURCE HAS ONE
+PER ARM, WHICH IS NOT THE SAME COUNT.**  +0x14cad serves cases 2, 3 and the
+default reached from ABOVE the tree's split; +0x14f9b serves the default
+reached from BELOW it, where `jle` has already taken phase <= 1 and `test
+%edx,%edx` has ruled out zero.  One `default:` label cannot store two different
+things, so this is GCC tail-splitting one statement across its own dispatch and
+there is nothing for a mutation to separate: the grid drives phase 9 and
+phase -1 so that both stores execute, and a mutant of the arm fails on both.
+
+`t_v92modstate.cpp` gained `run_progress` (twelve rows x filter x two calls,
+1,194 checks) and `run_initiate` (579); `run_debug` grew from ten diagnostics
+to fifteen, which is what took `debugcov.py`'s "never execute" count for this
+file back down.  `t_v92modem.cpp` gained `run_reset_progress` (4,215) and
+`run_debug_rp` (25).
+
+### 7541. initiateRRN and initiateFPE are one function four differences apart, and the sharpest is four levels down
+
+536 bytes between them and they differ in four places: the two state codes,
+`resetBeforRRN` against `resetBeforFPE`, the four messages, and ONE STORE --
+`bitsToSymbol->transmitter->modulusEncoder->field_50 = 1`, which only FPE
+makes.  Everything else is the same statements in the same order.
+
+That store is the MP CRC trap's shape (7432's warning) and it is invisible to
+any fixture that compares the modulator and its own sub-objects: it is four
+pointers deep, and `V92ModulusEncoder` is the transmitter's, which is the
+bit-to-symbol stage's, which is the modulator's.  `t_v92modstate.cpp` now
+reaches it -- `modenc_selector()` -- and the suite carries the body swap in
+both directions plus "RRN arms the encoder" and "FPE does not"; all four are
+caught and none of them by anything else in the file.
+
+**THE BIT COUNT GOES THE OPPOSITE WAY FROM THE OBVIOUS READING**, and the
+fixture caught the comment before the reader did.  Both members call
+`setSymbolsBlockSize(1)` and then branch on `nofBitsForNextTime()`:
+
+    != 0   nothing banked      ->  RuModulation / RmModulation   19 / 26
+    == 0   a symbol in flight  ->  DataToRu... / DataToRm...     18 / 25
+
+so a NON-ZERO count starts the renegotiation signal at once and a ZERO one
+enters the state that finishes the data first.  The first draft of the source
+comment had it round the other way; `run_initiate` failed on both arms at once
+and named the swap.
+
+**THEY DO NOT CALL `enterPhase4`**, and that is measured rather than read:
+`enterPhase4` passes `byte_0c` and state zero, these pass `byte_0d` and a
+state chosen from the bit count.  Only the three closing stores are shared.
+
+### 7542. Three type corrections the object forced: the phase is signed, the two requests return a status, the bit block is bytes
+
+`V92Modulator::phase` at +0x2c was `unsigned int` and is `int`.  `progress`
+lowers its five-way dispatch as `cmp $0x1,%edx; je; jle` at .text+0x14c9e -- a
+SIGNED branch, which GCC cannot emit for an unsigned switch value; it would
+have used `jbe`.  Every other member of the class compares the field for
+equality only, so nothing before `progress` could have settled it.  The change
+is codegen-neutral at all seven other sites, measured rather than assumed:
+`samesize.py --identical` is 488 before and 488 after, nothing gained and
+nothing lost.
+
+`initiateRRN` and `initiateFPE` were declared `void` and return `int`.  Both
+converge on one epilogue with `xor %eax,%eax` on the approved path (+0x14736,
++0x14852) and `mov $0xffffffff,%eax` on the refusal (+0x1476a, +0x1477d,
++0x1488a, +0x1489d) -- a value deliberately produced on every path, and 0/-1
+makes it signed.  Nothing in the object calls either, so this is the
+mangling's silence being filled by the epilogue rather than by a caller.
+
+`buf_88` at +0x88 was `void *` and is `unsigned char *`: `progress` hands it to
+`Scrambler<int, unsigned char>::process(const int *, unsigned char *,
+unsigned)` and to `V92BitsToSymbol::process(unsigned char *, unsigned int &,
+short *)`, and the mangling spells both parameters.  CLAUDE.md's second
+evidence tier, exactly as it arrived for +0x80.
+
+### 7543. Scrambler's bulk process was inlined at all nineteen sites the blob calls it, and finding 5805's move closes it
+
+`progress` came out 355 instructions against the object's 298 with the CALL
+COUNT ONE SHORT -- 18 against 19.  Finding 7480's rule read exactly right: an
+EXCESS of instructions with a MISSING call is an inlining difference and not a
+missing statement.
+
+`_ZN9ScramblerIihE7processEPKiPhj` and `_ZN9ScramblerIhhE7processEPKhPhj` are
+real weak symbols in the blob with THREE and SIXTEEN `R_386_PC32` call sites.
+Ours had **zero**: the member was defined inside the class body, so it was
+implicitly `inline`, and GCC 3.4.2 inlined it at every one of the nineteen
+while still emitting the weak symbol.  Moving the definition out of the class
+-- 5805's move, on 5805's evidence -- takes `progress` from **+57 to +3** (301
+against 298, 1,094 bytes against 1,075).
+
+**THE CALL SITES DO NOT CLOSE, AND THE RESIDUAL IS ON THE V.90 SIDE.**
+Attributing every `R_386_PC32` in the blob's `.text` to the function that
+contains it gives 17: `V90Modulator::progress` and `V92Modulator::progress`
+take the `<i,h>` form, and `V90Phase4Modulator`'s `generateMP`, `generateCPd`,
+`generateSUVd`, `generateV90Symbol` (x4) and `generateV92Symbol` (x8) take the
+`<h,h>` one.  Ours has 13 -- the `<i,h>` in `V92Modulator::progress` and 12 of
+the 15 `<h,h>`.  The four missing are `V90Modulator::progress`, which is being
+written on another branch, and three in `V90Phase4Modulator`, which
+`compare.py` already shows at +1390 and +2124 instructions and which this batch
+did not look at.  So the move closes this function's gap and NOT the tree's.
+
+**MEASURED WITH THE SETS DIFFED AND NOT THE COUNTS.**  One tree, two builds on
+the exact 3.4.2 compiler: identical-mnemonic set **488 before and 488 after,
+nothing lost and nothing gained**.  `t_scrambler`'s suite is unchanged at 33
+caught, 3 equivalent, 0 unusable.  So the move costs nothing on the codegen
+tier and buys 54 instructions in the one function that showed it.
+
+`Descrambler`'s bulk `process` STAYS in the class body, and that is the same
+evidence read the other way: the blob carries no `Descrambler<...>::process(
+const ...)` symbol at all, so moving it out would make us emit a weak symbol
+the original does not have.  The two templates differ here because the object
+says they differ.
+
+### 7544. A store in progress that no test can ever see, and why it is in the source anyway
+
+`progress`'s phase 4 arm ends
+
+    if (word_34 == 9) {
+            enterDataPhase();
+            nbits = bitsToSymbol->nofBitsForNextTime();
+    }
+
+and the shared tail then runs `if (phase == V92MOD_PHASE_DATA) nbits =
+bitsToSymbol->setSymbolsBlockSize(blockRemaining);` -- where `enterDataPhase`,
+two lines above, is exactly what has just made `phase` the data phase.  So the
+arm's assignment is dead on every path that reaches it.
+
+The mutation is registered and marked `equivalent` with that derivation rather
+than dropped, because the alternative is a line in `src/` that rests on nothing
+a reader can check.  It is there because .text+0x14f64..+0x14f73 makes the call
+and stores the result through the reference, and for no other reason.
+
+### 7545. The V.92 transmit chain is degenerate over a synthesised parameter block, and one surviving mutation is what said so
+
+`progress`'s data arm scrambles the caller's words into `buf_88` and hands that
+to `V92BitsToSymbol::process`.  The mutation that hands it the UNSCRAMBLED
+words instead survived, and the reason was four objects down: a
+`struct V92ParamsInfo` built by `V92createConstellations` and
+`V92createFilterCoefficients` alone is DEGENERATE IN TWO PLACES.
+
+  - `gain` is zero, and `V92Transmitter::process` ends
+    `out[n + j] = (short)(shaped[j] * gain)`.  Every symbol is zero whatever
+    went in.
+  - the two creators ALLOCATE the six 512-byte constellations and fill none of
+    them -- the DIL unpacker does that -- so each holds the allocator's one
+    repeated byte, and a constellation whose every point is the same value maps
+    every codeword to the same symbol.
+
+Either alone makes the whole chain insensitive to its own input, and a data arm
+compared over constant symbols cannot fail however it is mutated.  This is
+7105's vacuity at four removes: the fixture was seeded, the objects were real,
+and the comparison still could not move.
+
+**WHAT FOUND IT WAS A CHECK ADDED TO ANSWER THE SURVIVING MUTATION**, not a
+reading: "the symbols it made are not all one value" fired immediately, which
+is finding 134's ritual -- show the detector firing before trusting a clean run
+from it.  `t_v92modstate.cpp` now sets `gain`, the twelve moduli, the six
+`indexConstel` and the six constellations' contents, each with the reason
+beside it, and the mutation is caught.
+
+The three lines are also a warning to anyone building a V.92 transmit fixture
+from the creators alone: the chain will run, produce output, and measure
+nothing.
+
+### 7546. The blob sibling-calls its gated debug printf and we do not, in every function of two files
+
+`V92Modem::reset` is 40 instructions against the object's 41 and
+`V92Modem::progress` is 33 against 35, and the difference in both is the same
+shape: the blob's illegal-side arm stores the string into the INCOMING argument
+slot and `jmp`s to `dsplibs_debug_printf`, where ours pushes to its own frame,
+`call`s and returns.
+
+**IT IS NOT THESE TWO FUNCTIONS.**  `objdump -dr` over the whole
+`V92Modem.cpp` object shows fourteen calls to `dsplibs_debug_printf` and
+`edprintf` and ZERO sibling calls, and the blob tail-calls at the same sites in
+the constructor and in `printTitle` -- both written long before this batch.  So
+the -1 and the -2 are a pre-existing tree-wide property surfacing in two more
+symbols, not a defect introduced here.
+
+The hypothesis, NOT verified: GCC 3.4.2's sibcall pass requires the callee's
+return mode to be compatible with the caller's, and `dsplibs_debug_printf` is
+declared `int` here while these callers are `void`.  `edprintf` is declared
+`void` and is not sibling-called either, which does not fit, so the declaration
+alone is not the whole answer.  Named here rather than acted on: changing a
+declaration in `debug.h` moves every caller in the tree and wants its own
+before-and-after on the identical set.
+
+### 7547. Two more V92Phase4Modulator states are named, by V92Modulator's messages
+
+18 is `DataToRuModulation` and 25 is `DataToRmModulation`, from the two messages
+`initiateRRN` and `initiateFPE` print on the instruction that loads the code
+(.rodata.str1.4+0x363c with `mov $0x12,%esi`, +0x3728 with `mov $0x19,%esi`).
+CLAUDE.md's strongest evidence tier, and the naming home stays
+`V92Phase4Modulator.h` although the strings are `V92Modulator.cpp`'s -- one
+type, one home.
+
+The same two members put a SECOND string on 19 and 26 -- "RuModulation" and
+"RmModulation" -- which agree with the "enter Ru @ %d" and "enter Rm @ %d"
+those arms print for themselves.  That leaves 0, 1, 4, 6, 8, 9, 11, 20, 24, 27
+and 29 bare, and 7, 14, 21, 22 as the switch's holes.
+
+`word_34`'s own alphabet is NOT respelled in `V92Modulator.h`: every non-zero
+value but one is COPIED IN from `V92Phase3Modulator::eventCode` or
+`V92Phase4Modulator::word_0c`, so the codes belong to those classes and
+`progress` compares against 5, 7, 8 and 9 as bare numbers with the transition
+named beside each.  The one exception is 1, which `progress` originates and a
+message names -- "V92Modulator: Queue is Empty/Full !!!" on the instruction
+before the store -- and that one is `V92MOD_STATUS_QUEUE_LIMIT`.
+
+### 7548. Queue::isEmpty and ::isFull are the object's spellings, and both are forced
+
+`progress` closes with `if (queue->isEmpty() || queue->isFull())` and the object
+writes both predicates in a form no equivalent would produce:
+
+    14d97:  39 d3   cmp %edx,%ebx      rd == wr, and NO division
+    14d99:  74 16   je  <the message>
+    ...     count() ...
+    14dac:  29 d5   sub %edx,%ebp      size - count()
+    14dae:  4d      dec %ebp           - 1
+    14daf:  75 10   jne <return>       != 0 -> not full
+
+`isEmpty()` is `rd == wr` and not `count() == 0`, which would have emitted the
+`div`; `isFull()` is `size - count() - 1 == 0` and not `count() == size - 1`,
+which would have emitted `lea -1(%ebp); cmp` rather than `sub; dec`.  The
+short-circuit order is the object's too -- the cheap test first, and the `je`
+jumping straight to the joint arm.
+
+Both are `always_inline` for `count()`'s reason: the object has no symbol for
+either, and an ordinary in-class definition makes GCC emit a weak copy even
+where every call is inlined.  Queue.h's note that "no `space()` is inlined
+anywhere, so its spelling is unknown" is corrected: the FULL test is inlined and
+its form is `size - count() - 1 == 0`; whether the author spelled a separate
+`space()` is still not recoverable, because nothing calls it on its own.
+
+### 7549. Eight anchors lost uniqueness or their text, and one mutation stopped compiling
+
+`anchorcheck.py` reported eight the moment the batch compiled, which is 7432,
+7459, 7476 and 7511 a FIFTH time.  Two causes, and nothing in `src/` was touched
+to fix either:
+
+  - **FOUR LOST THEIR TEXT.**  `scrambler`'s four `process(bulk)` anchors quote
+    the body with class-body indentation, and moving the definition out of the
+    class (7543) took one tab off every line of it.  Re-indented; the Descrambler
+    twin's three anchors still match because that body did not move.  `v92mod`'s
+    "the third buffer carries the same ten elements" quotes
+    `buf_88 = sysdep_malloc(...)`, which gained a cast when the member was
+    retyped (7542).
+  - **THREE LOST UNIQUENESS.**  `V92Modem::reset` brought a second
+    `printTitle();` and a second `case V92_MODEM_SIDE_DIGITAL:`, `::progress` a
+    third; and `phase2Info->rtd` went from being `enterPhase3`'s last argument
+    to being the last argument of four members.  Each `find` was extended into
+    the member its label names until it matched exactly once.
+
+**AND ONE MUTATION DID NOT COMPILE**, which scores as CAUGHT while testing
+nothing.  "progress forwards on the digital side rather than the analog one"
+renamed one `case` label to a value the switch already had; rewritten to swap
+BOTH labels.  `t_v92modem`'s suite is 50 of 50 with `unusable` at zero, and that
+zero is the check that matters.

@@ -861,7 +861,9 @@ frac_of(float v)
  * and `blockRemaining - changeAt` is computed as written -- an unsigned
  * subtraction with no test, so a `changeAt` past the end of the block asks the
  * resampler for about four billion samples.  `progress` is the only writer of
- * the pair and is unwritten; nothing here bounds it.  D801.
+ * the pair and stages the split from inside `i < blockRemaining`, so it never
+ * offers one past the block it was staged against; nothing here bounds it and
+ * nothing has to.  D801.
  *
  * ---------------------------------------------------------------------------
  * THE JOIN IS TWO DIFFERENT LOOPS AND THE DIFFERENCE IS THE WHOLE POINT
