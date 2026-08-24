@@ -78045,6 +78045,24 @@ references over five files and two mutation sets moved with it; `make refs`
 reports 0 anchors matching other than exactly once and the suite reports 0
 unusable, which is 7476's fourth case checked rather than hoped for.
 
+**AND THE RENAME DELETED A STORE, SILENTLY, IN A WAY NEITHER COMPILER WARNED
+ABOUT.**  `V90Demodulator::reset`'s PARAMETER was already called
+`quickConnect`, so `word_294 = quickConnect;` became `quickConnect =
+quickConnect;` -- the parameter assigned to itself, the member store gone, and
+`-Wall -Wextra` silent on both GCC 13 and GCC 3.4.2.  It cost two suites at the
+phase boundary: `t_v90demod` (`reset` 576 of 14,979 checks and
+`enterChannelVerification` 50 of 1,250) and `t_vpcmcreate`, which builds the
+whole graph and calls `reset` on the way through.  The parameter is now
+`quickConnectArg`, the spelling `V90Phase4Demodulator::reset` already uses for
+the same value.
+
+**The general rule this is worth: renaming a FIELD to a name some function's
+LOCAL already has does not fail to compile, it changes what the function
+does.**  7476 said a rename breaks every mutation that names the field and only
+the `unusable` column says so; this is the other half, and no column says
+anything at all.  The check is a grep for `<newname> = <newname>` and for the
+new name in every parameter list of the class, and it takes one command.
+
 **And one paragraph of `V90Demodulator.h` was simply out of date.**  It said
 the header CLAIMS `DSPLIB_V90PARAMETERS_H` for itself so that the named
 `V90Parameters` map can never arrive, and that a translation unit wanting named

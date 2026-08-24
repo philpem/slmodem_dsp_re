@@ -676,8 +676,8 @@ run_reset(void)
 					diff_eq_int("byte_280 (%ld)",
 						    (long)D(1)->byte_280, 0,
 						    tag);
-					diff_eq_int("quickConnect = quickConnect "
-						    "(%ld)",
+					diff_eq_int("+0x294 took the quick "
+						    "connect argument (%ld)",
 						    (long)D(1)->quickConnect,
 						    (long)quick, tag);
 					/*

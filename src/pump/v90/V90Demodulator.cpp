@@ -802,8 +802,8 @@ V90Demodulator::exitPhase3()
  * and NEITHER line carries a relocation, which is the whole of finding 245's
  * point: they are the integers 12600 and 30000 and not offsets into
  * `.rodata`.  12600 when `quickConnect` is set and 30000 when it is not, and
- * `quickConnect` is what `reset` stored `quickConnect` into -- so a quick connect
- * studies for the shorter run.  That reading is the field's provenance and
+ * `quickConnect` is the field `reset` stores its argument into -- so a quick
+ * connect studies for the shorter run.  That reading is the field's provenance and
  * not this function's, which only picks between two numbers.
  *
  * THE RATE DIAGNOSTIC IS `getBitRate()` AND NOT A COPY OF IT.  0x1bf06 is the
@@ -1117,13 +1117,13 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
  *    second independent statement that the length is unsigned.  The test is
  *    `js`, so zero takes the configured branch.
  *
- * 4. THE LAST STORE IS INTO ANOTHER OBJECT.  `quickConnect` goes to this
+ * 4. THE LAST STORE IS INTO ANOTHER OBJECT.  The argument goes to this
  *    object's +0x294 and then to the EQUALISER's +0x148, which is the only
  *    write anywhere in the blob to that offset of that class and the reason
  *    `sizeof(V90Equalizer)` is 0x150 (finding 1107).
  */
 void
-V90Demodulator::reset(unsigned int quickConnect)
+V90Demodulator::reset(unsigned int quickConnectArg)
 {
 	float offset;
 	int whole, frac, cursor;
@@ -1131,7 +1131,7 @@ V90Demodulator::reset(unsigned int quickConnect)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V90Demodulator reset, quick connect flag = %d\r\n",
-		    quickConnect);
+		    quickConnectArg);
 
 	inPhase3 = 0;
 	word_27c = 0;
@@ -1177,9 +1177,9 @@ V90Demodulator::reset(unsigned int quickConnect)
 	word_260 = 0;
 	word_278 = 0;
 	byte_280 = 0;
-	quickConnect = quickConnect;
+	quickConnect = quickConnectArg;
 
-	equalizer->quickConnect = quickConnect;
+	equalizer->quickConnect = quickConnectArg;
 }
 
 /*
