@@ -80968,3 +80968,282 @@ rollup: 12,334 bytes and 78 symbols down to 9,321 and 77, which is the same
 3,013 and the same 1 seen from the other side.  That is the bracket this
 function was counted against before it was written, and its dropping one
 place in a list sorted by size is the whole of the rest of the diff.
+
+### 7600. `V90Dil.cpp` was an invented name and the blob carries the real one, `V90DilDescriptorSettings.cpp`; the tables prove the membership
+
+`include/dsplib/V90Dil.h` and `src/pump/v90/V90Dil.cpp` were named by the
+batch that wrote `calculateDilLength`, and that file said so at the top:
+"a free function, not a member -- its mangling has no class component -- so it
+needs a home of its own".  A home of its own had to be *invented* because
+nothing then said what the original's was.
+
+**Two things say so now, and they are independent.**
+
+1. `readelf -sW` lists an `STT_FILE` entry `V90DilDescriptorSettings.cpp`,
+   #244 of the blob's 283.
+2. `setDilDescriptor`'s two `edprintf` messages, `.rodata.str1.4+0x8710` and
+   `+0x8754`, both open `"V90DilDescriptorSettings: "`.  Every neighbouring
+   diagnostic in this area names a **class and a member** -- "V90Modem Reset:
+   Illegal modemSide", "V90Modem progress: Illegal modemSide",
+   "V90Phase3Demodulator: enter ..." -- and these two name the file, because
+   there is no class to name.  CLAUDE.md's evidence rule 1.
+
+**THE TRANSLATION UNIT IS FOUR FREE FUNCTIONS, and two of the four are proved
+rather than inferred.**  In `.text` order:
+
+	0x31c60  setDilDescriptor(tagV90DILdescriptor *, DilType)   0x131
+	0x31da0  getSegmentPointer(PcmType, int)                    0x073
+	0x31e20  calculateDilLength(DilType, PcmType)               0x0f1
+	0x31f20  calculateDilLength(tagV90DILdescriptor *, PcmType) 0x0c4
+
+contiguous, bounded below by `V90SignBitsExtractor::process` (ends 0x31c51)
+and above by `ModulusDecoder::ModulusDecoder` (0x31ff0), and every one a
+mangled free function with no class component.  The eight tables below are
+**LOCAL** `.data` symbols, and a local symbol can only be referenced from its
+own translation unit; `tools/relocscan.py --range .data:0x480-0x8c4` finds
+seventeen references and every one is in `[0x31c70, 0x31ee4]`, which is
+`setDilDescriptor` and `calculateDilLength(DilType, PcmType)`.  So those two
+are necessarily one file.  The other two are adjacency plus the overload
+relationship, which is weaker and is labelled as such.
+
+Both files are renamed by `git mv`, six references updated -- `t_v90adid.cpp`,
+`V90Phase3Demodulator.cpp`, two header comments, `tools/offcheck.py`'s
+`SKIP_HEADERS` and `test/mutations/suites.json`'s `v90dil` row -- and the
+include guard becomes `DSPLIB_V90DILDESCRIPTORSETTINGS_H`.  **Findings before
+this one that name `V90Dil.cpp` or `V90Dil.h` mean these files**; history is
+not renamed (CLAUDE.md, and 212/213's worked example).
+
+`getSegmentPointer` and `calculateDilLength(DilType, PcmType)` are still
+unwritten and `tools/service.py --list none` puts both in "no entry point
+reaches it", so neither blocks a link and neither is in this batch.
+
+### 7601. Seven of the eight DIL table names are Recommendation V.90's own notation; `TO` is not, and none of the CONTENTS is derivable from the spec
+
+**The names.**  `N`, `SP`, `TP`, `H`, `REF`, `Lsp` and `Ltp` are the
+Recommendation's, not the author's invention.  Table 12/V.90 in section 8.3.1
+defines the DIL descriptor's bit fields as
+
+	18:25          N
+	35:41          LSP - 1
+	43:49          LTP - 1
+	52:67          SP           (continuing every 16 bits)
+	52+a:67+a      TP           (continuing every 16 bits)
+	52+b:58+b ...  H1 .. H8
+	120+b:126+b .. REF1 .. REF8
+
+and section 8.4.1 ("DIL") defines every one of them again in prose: "The DIL
+consists of N DIL-segments of length Lc", "Eight Hc values are used to
+calculate the length of the DIL-segments", "Eight Ucodes, REFc, define the
+PCM codeword used as a reference symbol", "A single Sign Pattern (SP) and
+Training Pattern (TP) is used for the entire DIL", "1 <= LSP <= 128; and 1 <=
+LTP <= 128".  The abbreviations list at the end of the Recommendation carries
+`Hc`, `Lc` and `N` again.  The object's `Lsp` and `Ltp` are the spec's `LSP`
+and `LTP` down-cased, and they hold the length itself where the descriptor's
+bit field holds length minus one.
+
+**`TO` IS NOT THE SPEC'S.**  Section 8.3.1 spells that field out as "The Ucode
+of the training symbol used for the 1st DIL segment" and section 8.4.1 as "A
+set of N Ucodes determine the training symbol that is assigned to each
+DIL-segment", and neither gives it a symbol.  So seven of eight are the
+Recommendation's notation and the eighth is the author's own name for the
+ucode set.
+
+**The contents are NOT derivable from the Recommendation, and this is the
+useful half of the answer.**  V.90 gives ranges and semantics and no values:
+
+	0 <= N <= 255                      N = 144 in both rows
+	1 <= LSP <= 128, 1 <= LTP <= 128   120 and 60
+	7 bits for Hc                      19, 39, 9
+	7 bits for REFc, 7 for each ucode  78, 25; max ucode 116
+	Lc = (Hc + 1) * 6 symbols          the existing calculateDilLength
+
+Every observed value satisfies all of it and none of it is determined by it:
+**which** DIL to request is the analogue modem's choice, and these two rows
+are this vendor's.  `T-REC-V.92-200011` and its three amendments add nothing
+-- V.92 inherits V.90's phase 3 and republishes no DIL values.  So this is
+**not** the situation `docs/method/conformance-plan.md` records for Table
+1/V.90, whose 512 published numbers `ulaw2linear`/`alaw2linear` reproduce with
+zero mismatches: there is no published table to check these against, and a
+conformance test here would have nothing to be a test of.  Not chased further,
+per the brief.
+
+**One free corroboration each way.**  `calculateDilLength`, written before any
+of this, sums `6 * segmentSize[seg] + 6` over `dilCount` entries -- which is
+exactly section 8.4.1's `Lc = (Hc + 1) * 6` over the `N` DIL-segments.  So
+`tagV90DILdescriptor::segmentSize` **is** the spec's `Hc` and `dilCount` its
+`N`, derived from the object by two batches that never met.  The struct's
+field names are left alone rather than renamed to the spec's: they are real
+names already, not `pad_`/`type_` placeholders, and finding 7481 is what a
+rename in this area costs.  The correspondence is recorded in
+`V90DilDescriptorSettings.h` instead:
+
+	dilCount     N        seq1     SP    segmentSize  Hc
+	seq1Length   LSP      seq2     TP    segmentCode  REFc
+	seq2Length   LTP                     dilCode      the N Ucodes
+
+### 7602. The eight tables are two-row arrays chosen by `DilType`, and `setDilDescriptor` writes only as far as each count says
+
+**The shapes are forced, not chosen.**  `setDilDescriptor` indexes `N`, `Lsp`
+and `Ltp` by `%ecx` itself, `SP` and `TP` by `%ecx << 7`, `TO` by `%ecx << 8`,
+and `H` and `REF` by `lea 0x0(,%ecx,8)`, where `%ecx` is the `DilType`
+argument.  The eight symbol sizes agree exactly -- 2, 2, 2, 256, 256, 16, 16,
+512 -- so every table is two rows and there are exactly two `DilType`s.
+
+**They are not `const`.**  All eight are `d` (LOCAL OBJECT) in `.data`,
+section 143.  A `static const unsigned char` array goes to `.rodata` under
+GCC 3.4.2 at `-O3`, so the author wrote them without the qualifier; nothing
+writes them.  Pasting `tabdump.py`'s output verbatim, which emits `static
+const`, would have put ours in the wrong section.
+
+**`DilType` is `{ DIL_TYPE_ADI = 0, DIL_TYPE_ADI_QC = 1 }`.**  The values are
+the object's -- `test %ecx,%ecx; je` to the message ending "option ADI." and
+`dec %ecx; je` to the one ending "option ADI_QC." -- and the two words are the
+author's.  Only the `DIL_TYPE_` prefix is ours, following
+`PcmType`/`PCM_TYPE_*`.
+
+**What the two rows differ in.**  `TO`'s two rows are **byte-for-byte
+identical** and so are `REF`'s.  `DilType` changes only `H` (39 against 19
+through the middle) and the two pattern lengths (120 against 60).  So ADI_QC
+is the same 144-ucode sweep at roughly half the dwell, which is what a
+quick-connect variant of an impairment-learning sequence should be -- and it
+is the one check on the arm-to-enumerator mapping that does not depend on
+reading the two strings.
+
+Three counts agree with the tables they count: `N` is 144 and each `TO` row
+has exactly 144 non-zero entries before its tail of zeros; `Lsp` is 120/60 and
+each `SP` row is zero from that index; `Ltp` likewise for `TP`.
+
+**AND THE FUNCTION WRITES ONLY AS FAR AS EACH COUNT SAYS.**  `seq1` past
+`seq1Length`, `seq2` past `seq2Length` and `dilCode` past `dilCount` are left
+alone; only `segmentSize` and `segmentCode` are filled unconditionally, and
+their loops are `cmp $0x7,%edx; jbe` where the other three are `cmp %edx,%eax;
+ja` against a **reloaded** count.  This is finding 7105 inverted: a fixture
+that zeroes the descriptor first cannot tell "not written" from "written
+zero", so the descriptor is seeded with a distinctive pattern and the ADI_QC
+row -- 60 and 60, leaving 68 bytes of each pattern array and 112 ucode slots
+untouched -- is the arm that exercises the boundary.
+
+**The three bounds are re-read inside their loops** (0x31cad, 0x31ce0,
+0x31d10) because the `unsigned char` store may alias the `unsigned char`
+table, so GCC cannot hoist them; a local would be hoisted and would emit a
+different loop.  Finding 2302 is the same shape the other way round.
+
+**An out-of-range `DilType` is not testable and must not be tested.**  Every
+index is `type` scaled by the row width with no bound check, so a `type` of 2
+reads past the end of all eight tables and what lies there is `.data`'s own
+layout -- the blob's for the blob and GCC's choice for ours.  The object's
+only constructor of a `DilType` is `V90Modem::reset`'s `qcFlag ? 1 : 0`, so no
+in-object path can produce one.
+
+### 7603. `qcLineVerification` names the four words `externalReset` zeroes, and one of them has to be signed
+
+`VPcmFloModem.h` carried `word_6f98`, `word_6fac`, `word_6fb0` and `word_6fb4`
+with the note "nothing reconstructed reads any of them, so they are
+offset-named".  `qcLineVerification` is the **only** member of the class that
+touches any of the four, and it touches all four together: they are the whole
+state of the quick-connect line-verification period and of nothing else.  Its
+seven `dsplibs_debug_printf` messages, all prefixed `"VPcmFloModem (QC
+LineVerify): "`, are what name them -- evidence rule 1.
+
+	word_6f98  ->  qcVerifyState          0 waiting, 1 TONEq, 2 silence
+	word_6fac  ->  qcSampleCount          int, NOT unsigned
+	word_6fb0  ->  qcTerminateRequested   0/1 latch
+	word_6fb4  ->  verificationStatus
+
+`qcVerifyState`'s three values come from the object; the word "state" is
+inference over three arms and is labelled as such in the header.
+`qcTerminateRequested` is named by the message at the site that sets it,
+"TONEq termination requested, still bellow 50mS" (the author's spelling).
+`verificationStatus` is a **copy** of `V90Phase3Demodulator::verificationStatus`,
+which this tree already names that, and `v34pcmmain.cpp` is the reader -- it
+compares `local_short` against this word to choose "short phase2 due to same
+line verification".
+
+**`qcSampleCount` IS `int`, AND THAT IS CLAUDE.md's FORCED COLUMN.**  `jle` at
+0xf8a2 and 0xf931 against `$0x1df`, and `js` at 0xf96c: an unsigned count
+would be `jbe` and could never be negative at all.  It has to be signed
+because the silence period is spelled as a **negative** count, `0xfffffe80` =
+-384, that counts up through zero.
+
+**Two constants fall out with a sample rate behind them.**  "still bellow
+50mS" beside `cmp $0x1df` gives 480 samples = 50 ms, and the rate that makes
+that true, 9600 Hz, is the one this class's `SineWave` is constructed with
+(4800.0f, 980.0f, 0.0f, 9600.0f).  The silence is then 384/9600 = 40 ms.
+
+**And `+0x6fa4` is not a word at all** -- `vPcmResetPhase3Modem` stores zero
+there and 0x6f9c + 8 is `sineWave.phase`, the third of the embedded
+`SineWave<float, float>`'s four `Tparam`s.  The store is an integer `mov
+$0x0`, which is what GCC emits for `= 0.0f` because the bit pattern is zero,
+so nothing in the instruction says "float" and only the field map does.  It
+restarts the TONEq oscillator, and `qcLineVerification` is its only caller.
+
+The rename touched eighteen sites over five files and one mutation anchor
+(`vpcmctor`'s "the three tail fields ... are not cleared" pair).  A grep for
+each of the four names assigned to itself is clean, which is finding 7481's
+check.
+
+### 7604. `qcLineVerification` never reads its sixth argument, and the two it writes are the two a fixture would have watched
+
+`_ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_` is `runPcmModem`'s
+mangling exactly, so the header declares the same seven parameters --
+`(float *in, float *out, unsigned int n, int *rxbits, int *nrx, int *txbits,
+int *nbits)`.  **`txbits` is never read**: there is no reference to
+`0x48(%esp)` anywhere in the 779 bytes.  That is what an entry point with a
+fixed argument list looks like when one entry has nothing to say, and it is
+recorded here rather than left as a fixture that looks incomplete -- **no
+mutation can ever be caught on that parameter.**
+
+**`*nrx` and `*nbits` are both zeroed on every path** (0xf7f9 and 0xf7ff),
+including the paths that ran `V90Modem::progress` with `*nrx` as its
+`unsigned int &`.  So the bit count the demodulator hands back is discarded
+unconditionally, and a test that watched `*nrx` for evidence that `progress`
+ran would be watching the one word this function guarantees is zero.
+
+**Two more forced types.**  `verificationStatus`'s source is
+`movzwl 0x41c(%ecx)` whose 32-bit result **is** stored, so the read is sixteen
+bits wide -- CLAUDE.md's forced case, not 614's free one, even though both the
+field it comes from and the field it goes to are declared 32 bits.  And the
+two event codes this function dispatches on, 0x3a and 0x3b, are **past the end
+of both existing tables** over the same field: `v90RunDemodulator`'s runs to
+0x2b and `runPcmModem`'s to 0x35.  They are this period's alone, which is why
+the dispatch is two `cmp`s and not a third jump table.
+
+**One site repeats another and the repetition is real.**  The 0x3b arm's
+"TONEq already running and 50 ms are up" branch prints the same message and
+makes the same two stores as the `qcTerminateRequested` test in the common
+tail, and then falls into the **silence** half rather than the tone half --
+0xf95f jumps to 0xf7d3, past the `qcVerifyState == 1` test, because the store
+it just made settles that test.  Two source statements, not one: after the
+first the buffer is zeroed, after the second it has just been filled by
+`SineWave::generate`.
+
+### 7605. One anchor had to grow, and the proof is a byte-for-byte identity on the file where both were unambiguous
+
+`v90rundemod`'s "the demodulator is run with the wrong sample count" anchored
+on the single line `modem.progress(rxbits, *(unsigned int *)nrx, in, n);`,
+which was unique in `VPcmFloModem.cpp` until `qcLineVerification` landed in
+the same file calling `V90Modem::progress` with the same argument list.
+`anchorcheck.py` reported `matches 2 time(s)` and `make one` refused --
+loudly, which is the good case; findings 347 and 7521 are what a
+doubly-matching anchor costs when it is only reported UNUSABLE.
+
+The anchor is grown upward by the site's own comment line,
+`/* 0xd890.  Unconditional; there is no gate in front of it. */`.
+`tools/reanchor.py` exists for exactly this and would have chosen the same
+occurrence; the edit was made by hand and checked against the tool's rule.
+
+**7521's test, and it is not "the grown anchor is unique".**  What has to be
+proved is that it mutates the SAME SITE.  So: take `9ddfc5bc`'s
+`VPcmFloModem.cpp`, where **both** anchors match exactly once, apply each, and
+compare the two mutants.
+
+	master:  short anchor matches 1, grown anchor matches 1
+	short  sha256 f96ce52891514c0855a462c625a950bb16f9e3b3f833acbf8b3642895057b41b
+	grown  sha256 f96ce52891514c0855a462c625a950bb16f9e3b3f833acbf8b3642895057b41b
+	BYTE-FOR-BYTE IDENTICAL, and 4 bytes from the baseline (not vacuous)
+	HEAD:    short anchor matches 2, grown anchor matches 1
+	the grown anchor's enclosing definition at HEAD is v90RunDemodulator
+
+The last line matters on its own: uniqueness at HEAD would be satisfied just
+as well by an anchor that had drifted onto the `qcLineVerification`
+occurrence, and that is the wrong-repair 7521 warns `anchorcheck` cannot see.

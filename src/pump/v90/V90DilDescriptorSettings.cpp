@@ -219,10 +219,17 @@ static unsigned char TO[DIL_TYPES][256] = {
  * `V90Modem::reset`, the object's only caller, discards it.
  *
  * The switch has no `default`: a `DilType` outside {0, 1} falls off the end
- * having written the descriptor from row 0's tables -- `test %ecx,%ecx; je`
- * then `dec %ecx; je` then `ret`, the same three-way shape `V90Modem` uses
- * for `side`.  Reading row 0 for any out-of-range value is what the strides
- * do, not something the code checks.
+ * silently -- `test %ecx,%ecx; je` then `dec %ecx; je` then `ret`, the same
+ * three-way shape `V90Modem` uses for `side`.
+ *
+ * AND SUCH A VALUE IS NOT TESTABLE AND MUST NOT BE TESTED.  Every index above
+ * is `type` scaled by the row width with no bound check, so a `type` of 2
+ * reads PAST the end of all eight tables, and what lies past them is
+ * `.data`'s own layout -- which is the blob's for the blob's copy and GCC's
+ * choice for ours.  The two would legitimately differ, so a fixture that
+ * drove an out-of-range `DilType` would be measuring section placement.  The
+ * object's only constructor of a `DilType` is `V90Modem::reset`'s
+ * `qcFlag ? 1 : 0`, so no in-object path can produce one.
  */
 void
 setDilDescriptor(tagV90DILdescriptor *d, DilType type)
