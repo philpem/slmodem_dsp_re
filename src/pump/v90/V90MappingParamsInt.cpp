@@ -44,10 +44,15 @@
  * avoid.
  *
  * THE FIRST TWO OF THOSE FOUR ARE THIS FILE'S OWN INLINED HELPER.  The two
- * `static` functions below reproduce `setConstellationMask` and
- * `setCodecConstellationMask` instruction for instruction, because
- * `setParamsInfoFromCPUnPck` calls them three times between them and the
- * compiler inlines all three.  They are `static` and not `extern "C"`
+ * `static` functions below are `setConstellationMask` and
+ * `setCodecConstellationMask` -- the same body, with the register and
+ * stack-slot allocation each inline site forces rather than the standalone
+ * function's -- because `setParamsInfoFromCPUnPck` calls them three times
+ * between them and the compiler inlines all three.  The INNER LOOP is
+ * byte-identical to the object's at every one of the three sites, from the
+ * `test $0x1,%cl` to the `jns` that closes the word loop; the setup around it
+ * is the same operations in different registers, which is the allocator's.
+ * They are `static` and not `extern "C"`
  * because writing the two GLOBALS is a separate 256 bytes of reconstruction
  * with its own differential test, which this batch did not take on; whoever
  * takes it can delete the `static` and the two calls become the object's own.

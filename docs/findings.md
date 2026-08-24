@@ -79551,7 +79551,17 @@ it:
 
 So the source is a structure with exactly one reader in the object and no
 writer, and `include/dsplib/V90CPUnPck.h` says so at the top: the layout rests
-on one orphaned function's displacements and nothing corroborates it.  What
+on one orphaned function's displacements and nothing corroborates it.
+
+**AND "ONE READER" IS MEASURED, because a negative claim about a whole object
+is the shape 7520 got wrong.**  Over the 196,503 disassembled lines of the
+object, the enclosing symbol of every address formed at each of the layout's
+four distinctive displacements was listed and the four lists intersected.
+`setParamsInfoFromCPUnPck` is the **only** symbol that touches all four of
++0x31, +0x3a, +0x9c and +0xfc, and one of only **six** that touch both bitmap
+bases at all -- the other five being `B103FP_create`, `FPM_FSE_receive`,
+`_iir_filter_progress`, `modulatevector` and `V27RX_create`, none of which is
+within reach of this data.  That is the denominator this claim needed.  What
 the header does have is rank-2 evidence for most of the NAMES, because every
 field is copied into a destination that is already named -- the six spectral
 words into `shaperSR`..`shaperB2`, the six bytes into `distinctIndex`, and the
@@ -79601,8 +79611,14 @@ between two calls would change nothing here and would change everything there.
 #### The two 128-byte globals are the same body, and are deliberately NOT claimed
 
 `setConstellationMask` (.text+0x33570) and `setCodecConstellationMask`
-(+0x335f0) exist as `T` symbols and are byte-for-byte the inlined body this
-function uses three times.  They are written here as two `static` helpers, so
+(+0x335f0) exist as `T` symbols and are the body this function inlines three
+times.  **"Byte-for-byte" would be too strong and is not claimed**: what is
+byte-identical is the INNER LOOP, at all three sites and in the standalone,
+from `test $0x1,%cl` through `incl (%esi)` to the `jns` that closes the word
+loop.  The setup around it is the same operations in different registers and
+different stack slots, because the inline site has a caller's live values to
+place and the standalone has parameters -- the allocator's, and free by
+CLAUDE.md's rule.  They are written here as two `static` helpers, so
 their code is reconstructed and their SYMBOLS are not: writing the globals is
 a further 256 bytes with a differential test of their own, and the batch was
 scoped to one symbol.  Delete the `static` and add two prototypes to claim
@@ -79638,6 +79654,50 @@ of the `6` downwards is not.
 **No call was added and none should be.**  Supplying one would be new code
 with no blob behaviour to compare against, which is not reconstruction.  The
 differential test reaches it directly.
+
+#### The numbers
+
+`make phase` exits 0.  `make period` is **244 passed / 0 failed** against the
+base commit's 243 -- one new binary, `t_v90unpck`, and nothing else moved.
+`t_v90unpck` is 1,098 checks in two groups, 15 of them offset assertions.
+`test/mutations/v90unpck.json` is **25 mutations: 23 caught, 0 NOT caught,
+0 unusable, 2 equivalent, 0 miscounted**, recorded by `mutsnap.py --update`.
+The two equivalent rows are both the dead clamp and both carry the argument.
+
+`make coverage` reads **74.2%, 544,979 bytes, 1,225 symbols** against
+**74.1%, 544,357 bytes, 1,224 symbols** at the base commit: **+1 symbol and
++622 bytes**.  That 622 is this symbol's own size and nothing else, **and it
+is exactly right only because the two helpers are inlined and claim no blob
+symbol.**  Saying so matters for the next batch: if someone un-`static`s them
+to claim `setConstellationMask` and `setCodecConstellationMask`, coverage
+gains a further 256 bytes and two symbols, and this arithmetic will not
+explain itself.
+
+The instruction count is **185 ours against 200 the blob's**, 613 bytes
+against 622, with **zero calls on both sides** -- the three inlined helper
+calls are inlined by our compiler exactly as they are by the original's, which
+is the check that the `static` spelling is not hiding a missing call.  The
+whole of the -15 is the `which < 6 ? which : 0` clamp: the blob emits
+`cmp $0x6 ; setl ; neg ; and` and GCC gives us `cmp $0x5 ; jle ; xor` at each
+of the three sites.  The already-committed `getConstellationMask` and
+`getCodecConstellationMask` carry the same -2 each at 130 bytes on both sides,
+so this is the tree's existing state for the idiom and not something this
+batch introduced.  It was NOT chased further: permuting source until the
+compiler if-converts is fitting the compiler, which CLAUDE.md puts in the free
+column.
+
+**One source shape WAS forced by the codegen and is worth recording**, because
+it is the difference between a faithful transcription and a plausible one.
+Written as `params->constellation[c][params->constellationSize[c]]`, GCC keeps
+the length in a register across the byte store -- it can see that two distinct
+FIELDS of one struct do not overlap.  The object re-reads it (`mov (%esi),%edx`
+before the store, `incl (%esi)` after), which is what a length reached through
+a separate `unsigned int *` gives, because an `unsigned char` store through
+another pointer may alias it.  With the two locals spelled out, our inner loop
+is byte-identical to the object's.  Nothing observable rides on it here -- the
+population cannot exceed 128 and the store index never leaves the table -- so
+no test can tell the two apart, and the object's own instructions are the only
+evidence there is.
 
 ======================================================================
 
@@ -79806,7 +79866,18 @@ pass every test not run under a checking allocator.
 Nothing under `src/` declares, allocates or takes the size of a
 `V92CPUnPck`; the only object of that type in the tree is the `static` in
 `test/unit/t_v92unpck.c`, which is the fixture's own storage and is never
-handed to anything that thinks it is a `V90CP`.  `tools/onedef.py` is not
+handed to anything that thinks it is a `V90CP`.
+
+**That fixture is where this will bite first, so it is named here.**
+`t_v92unpck.c` seeds `sizeof(cp)` bytes of a `static struct V92CPUnPck` --
+**0xca0** -- where every call site in the object hands the unpacker a
+**0x3bc0**-byte `V90CP`.  Every trial in that suite therefore runs against a
+source object about a quarter of the real one, and it is sound only because
+the reader stops at +0xc9c and the fixture's own seeding stops there too.  The
+moment the declaration is extended -- which is exactly what closing this
+finding means -- the fixture's storage and its seeding have to grow with it or
+the suite starts reading past its own object.  7572 is what a future reader
+will consult before touching either, which is why it says so.  `tools/onedef.py` is not
 violated either -- these are two type NAMES, not two definitions of one name,
 so the gate cannot see this and never could.
 
