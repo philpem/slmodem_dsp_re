@@ -2,11 +2,14 @@
  * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
  *
  * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, of which THIRTY-SIX are written in
+ * code, of which THIRTY-NINE are written in
  * src/pump/v90/V90Phase4Modulator.cpp -- `grep -c '^V90Phase4Modulator::'`
  * is where that number comes from, so it can be re-measured rather than
- * believed.  Both symbol pumps, `reset` and `generateSymbol` (finding 7520,
- * the newest) are among them.
+ * believed.  Both symbol pumps, `reset`, `generateSymbol` (finding 7520) and
+ * the three callerless message sources `generateMP`, `generateCPd` and
+ * `generateSUVd` (the newest) are among them; the four that are not are
+ * `generateB1d`, `generateTRN2d`, `generateEd` and
+ * `recivedPartTwoSilenceRrnSUVtag`.
  *
  * This paragraph used to end "everything except `generateSymbol` and the six
  * `generate*` sequence sources", and that clause was ALREADY STALE before
@@ -351,6 +354,20 @@ public:
 	short generateRiNot();
 	short generateDataSymbolBeforeFPE();
 	short generateDataSymbolBeforeRRN();
+
+	/*
+	 * The three message sources, 167 bytes each, and THE ONLY MEMBERS OF
+	 * THIS CLASS WITH NO CALLER ANYWHERE IN THE OBJECT -- `readelf -r`
+	 * finds zero relocations naming any of them, against 43 naming
+	 * `V90BitsToSymbol::nofBitsForNextTime`.  Reconstructed and left
+	 * callerless; the derivation, the byte comparison that makes
+	 * `generateCPd` and `generateSUVd` one body, and the argument for
+	 * `short` rather than `int` are in
+	 * src/pump/v90/V90Phase4Modulator.cpp above `generateMP`.
+	 */
+	short generateMP();
+	short generateCPd();
+	short generateSUVd();
 
 	/*
 	 * The two symbol pumps.  One `switch` over `state` each, and the

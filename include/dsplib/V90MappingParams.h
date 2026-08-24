@@ -213,6 +213,21 @@ int getDataBitRate(V90MappingParams *params, int islong);
 void setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp);
 
 /*
+ * Fill this block from a `V92CP`, the received V.92 CP message.  It is the
+ * exact inverse of `setV92CPpckFromParamsInfo` below and writes the same
+ * members `setParamsInfoFromCPUnPck` does, from the other source.
+ *
+ * **IT HAS NO CALLER IN THE OBJECT AND MUST NOT BE GIVEN ONE HERE**, for the
+ * reason `setParamsInfoFromCPUnPck` gives above: zero relocations of any kind
+ * name the symbol in the whole of dsplibs.o.  The two relocations that DO name
+ * something spelled like it belong to `V92setParamsInfoFromCPUnPck`, a
+ * different symbol at .text+0x12f00 with two call sites in `runPcmModem`
+ * (finding 7571).  Declared so that its differential test can reach it and for
+ * no other reason.  See the .cpp.
+ */
+void setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp);
+
+/*
  * Fill a `V92CP` from this block and the record beside it.  The two source
  * types are the object's, out of the mangling of the V.90 twin
  * `V90CPPacker(V90MappingParams *, tagV90AdditionalCPinfo *, short *, int)`
