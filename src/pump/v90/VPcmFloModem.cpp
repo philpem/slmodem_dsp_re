@@ -52,6 +52,22 @@
  * the `V90Parameters` this file already has through `V90SessionFlag.h`.
  */
 #include "dsplib/V92Parameters.h"
+/*
+ * `runPcmModem` reaches through both embedded modems into their sub-objects,
+ * so it needs the definitions of everything the two carry pointers to.
+ * `V92CPUnPck.h` and `V92ParamsInfo.h` are the two C blocks the V.92 CP
+ * unpacker takes; see the comment on the two calls to it below.
+ */
+#include "dsplib/modem_params.h"
+#include "dsplib/ResamplerTimingOffset.h"
+#include "dsplib/V90ConnectionEvaluator.h"
+#include "dsplib/V90CP.h"
+#include "dsplib/V90MappingParams.h"
+#include "dsplib/V92CPUnPck.h"
+#include "dsplib/V92Jd.h"
+#include "dsplib/V92Modulator.h"
+#include "dsplib/V92ParamsInfo.h"
+#include "dsplib/V92Phase4Modulator.h"
 #include "dsplib/VPcmFloModem.h"
 
 /*
@@ -959,4 +975,486 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
 	}
 
 	return n;
+}
+
+/*
+ * ===========================================================================
+ * `VPcmFloModem::runPcmModem` -- .text+0xe430, 0x7f9 = 2,041 bytes
+ * ===========================================================================
+ *
+ * ONE BLOCK OF SAMPLES THROUGH A V.92 SESSION.  `VPcmV34Progress`'s arm 2
+ * calls it and turns the small code it returns into a new `f0004`; the
+ * argument order is the mangling's and the names are the header's.  `in` is
+ * the line signal, `out` is the block this session transmits, and the four
+ * `int *` are the two bit pipes and their two counts.
+ *
+ * THE SHAPE IS THREE DISPATCHES, and only the middle one is large:
+ *
+ *   1. `byte_6118`, 0..4, the jump table at .rodata+0x4ac -- five entries,
+ *      `[0]` and `[1]` sharing an arm.  It runs BEFORE anything else and its
+ *      only job is to seed the return value; nothing above 4 is an error and
+ *      the `ja` falls straight through.
+ *   2. `modem.demodulator->word_3c`, 0..0x35, the jump table at .rodata+0x4c0
+ *      -- 54 entries of which 33 are the shared default at 0xe5f0.  This is
+ *      the demodulator telling the layer above what it just saw on the line,
+ *      and each arm is what the transmitter and the V.34 shell have to do
+ *      about it.
+ *   3. `v92modem.modulator->word_34` over {2, 3, 10}, a compare chain rather
+ *      than a table, AFTER the transmit block has been produced.
+ *
+ * `info0Layout` IS THE MASTER GATE.  `mov 0x6120(%esi); test; je` at 0xe470
+ * returns whatever dispatch 1 seeded and does nothing else -- no echo
+ * canceller, no demodulator, no transmitter.  Dispatch 1's case 3 tests it a
+ * second time before it reaches for the demodulator, which is why that arm
+ * re-enters the gate at 0xe476 rather than at 0xe470: GCC kept the load.
+ *
+ * THE RETURN VALUE lives in one stack slot, `0x20(%esp)`, cleared at entry
+ * and read back at 0xe530.  Eight values reach it -- 0, 1, 2, 3, 5, 6, 7 and
+ * 8 -- and 4 is not among them.  Every store is written where the object
+ * stores it and nowhere else.
+ *
+ * THE COMPARE AT 0xe65b IS SIGNED (`cmp $0x3; je; jg`), which is why dispatch
+ * 3 goes through an `int` local.  `V92Modulator::word_34` is declared
+ * `unsigned int` and an unsigned switch over {2, 3, 10} compiles to `ja`, not
+ * `jg`; that is CLAUDE.md's forced column, and the local states the reading
+ * this site makes without moving a declaration eleven other files share.
+ *
+ * FIVE ARMS END IN THE SAME TIMING-OFFSET LINE and the object has it once,
+ * at 0xe7eb, reached by `jmp` from all five.  That is GCC cross-jumping five
+ * copies of one statement, not a helper: case 0x2b enters it at 0xe7f6,
+ * halfway in, because it had already computed the address the first two
+ * instructions compute.  The five copies are written out below.
+ *
+ * DEBUG GATES ARE PER SITE.  Five `cmpl $0x1,dsplibs_debug_level` at 0xe584,
+ * 0xe679, 0xe6dd, 0xe952 and 0xe995, each re-reading the level; the head of
+ * src/pump/v90/V92ParamsInfo.c is this tree's worked statement of why they
+ * are not collapsed.  The sixth diagnostic, at 0xe726, goes through
+ * `edprintf`, which gates itself.
+ */
+
+/*
+ * `_tagModemParameters::unnamed_0003`, and the two bits this function
+ * touches.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
+ * reached the other way round -- that file gets there as `obj->pac3c + 3` and
+ * this one as `modem.ptr_49b4->modemParams->unnamed_0003`, and they are the
+ * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
+ * `v90RateRenegSilence` clears again after printing "disabling SAS detector
+ * on silence".
+ */
+#define CFG_FLAG3_PHASE2	0x02
+#define CFG_FLAG3_RETRAIN	0x04
+
+/*
+ * `flds 0x30` in .rodata.cst4 -- 0x3ecccccd.  Every transmitted sample is
+ * scaled by it on the way out, once the V.92 modem has produced the block.
+ */
+#define VPCM_TX_SCALE		0.4f
+
+/*
+ * `fmuls 0x2c` -- 0x41200000.  The timing offset is logged in tenths of a
+ * part per million, as a `short`: `fistps` writes 16 bits and the `cwtl`
+ * after it sign-extends them into the argument slot.
+ */
+#define VPCM_TIMING_LOG_SCALE	10.0f
+
+/*
+ * The two counters at +0x7f60 and +0x7f64 drive the echo canceller's
+ * sentinel.  `V92EchoCanceller::process` passes its input through untouched
+ * when `out[0]` is exactly 177.0f, and 177 is 0xb1: the ramp starts at 0xaa
+ * when the silence arm sets the mode, steps by one per block, and stops at
+ * the sentinel.  Any other mode writes 0.0f there, which is not the sentinel,
+ * and the canceller filters.
+ */
+#define VPCM_EC_RAMP_MODE	0x21
+#define VPCM_EC_RAMP_START	0xaa
+#define VPCM_EC_RAMP_SENTINEL	0xb1
+
+int
+VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
+			  int *nrx, int *txbits, int *nbits)
+{
+	/*
+	 * +0x6c0c, the 848-byte block the constructor clears.  It is the
+	 * echo-cancelled receive buffer: `V92EchoCanceller::process` writes it
+	 * and `V90Modem::progress` reads it, and its first element carries the
+	 * sentinel described above.
+	 */
+	float *rx = (float *)block_6c0c;
+	unsigned char *cfgFlags;
+	unsigned int i;
+	int event;
+	int ret = 0;
+
+	switch (byte_6118) {
+	case 0:				/* 0xe6a0 */
+	case 1:
+		ret = 0;
+		break;
+
+	case 2:				/* 0xe6ab */
+		ret = 1;
+		break;
+
+	/*
+	 * 0xe6b9.  The one arm that reads anything: a rate renegotiation is
+	 * outstanding, and it becomes an error-correction retrain only if the
+	 * receiver is in phase 4 and the parameter block allows it.
+	 */
+	case 3:
+		if (info0Layout != 0
+		    && modem.demodulator->inPhase3 == 4
+		    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {
+			byte_6118 = 4;
+			ret = 3;
+		} else {
+			ret = 2;
+		}
+		break;
+
+	case 4:				/* 0xe460, and it falls through */
+		ret = 3;
+		break;
+
+	default:
+		break;
+	}
+
+	if (info0Layout == 0)		/* 0xe470 */
+		return ret;
+
+	if (word_7f60 == VPCM_EC_RAMP_MODE) {			/* 0xe53c */
+		if (word_7f64 != VPCM_EC_RAMP_SENTINEL)
+			word_7f64++;
+		rx[0] = (float)word_7f64;
+	} else {						/* 0xe48b */
+		rx[0] = 0.0f;
+	}
+
+	echoCanceller.process(in, rx, n);
+	modem.progress(rxbits, *(unsigned int *)nrx, rx, n);
+
+	/*
+	 * 0xe4f5.  The receiver's recovered timing offset, NEGATED, becomes
+	 * the transmitter's -- the two ends of the same loop, so what the
+	 * demodulator had to add the modulator has to subtract.
+	 */
+	v92modem.modulator->float_28 =
+	    -modem.demodulator->resampler.getTimingOffsetPPM();
+
+	switch (modem.demodulator->word_3c) {
+	/*
+	 * 0xe952.  Rate renegotiation with silence: stop cancelling echo (the
+	 * ramp above walks `rx[0]` to the sentinel) and stop sending Ja.
+	 */
+	case 1:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(" *** Echo Silence ON *** \n");
+		word_7f60 = VPCM_EC_RAMP_MODE;
+		word_7f64 = VPCM_EC_RAMP_START;
+		byte_6118 = 1;
+		ret = 0;
+		v92modem.modulator->exitJa();
+		break;
+
+	/* 0xe995.  The other end of it, and it logs the timing offset. */
+	case 6:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(" *** Echo Silence Off *** \n");
+		word_7f60 = 1;
+		word_7f64 = VPCM_EC_RAMP_START;
+		v92modem.modulator->exitSilence();
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_TIMING_LOG_SCALE));
+		break;
+
+	/*
+	 * 0xe562.  Jd detected.  The two constellation sizes go to the
+	 * transmitter, the phase goes to its resampler, and the retrain bit
+	 * in the shared flag byte is cleared unless phase 2 is in progress.
+	 *
+	 * THE FORMAT STRING NAMES THE TWO BYTES: "trainConstel" is
+	 * `flags_173a[0]` and "rrnConstel" is `flags_173a[1]`.  The array
+	 * keeps its offset name because `enterPhase3`, `externalReset` and
+	 * `VPcmXfCreate` clear all three of it as a run and splitting it is
+	 * not this batch's change.
+	 */
+	case 7:
+		modem.jd92->getConstelationSize(&flags_173a[0],
+						&flags_173a[1]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V92): Jd Detected:"
+			    " trainConstel = %d, rrnConstel =%d\r\n",
+			    flags_173a[0], flags_173a[1]);
+		v92modem.modulator->byte_0c = flags_173a[0];
+		v92modem.modulator->byte_0d = flags_173a[1];
+		v92modem.modulator->resamplerPhaseOffset =
+		    modem.jd92->getJdPhase();
+		v92modem.modulator->exitSuSecond();
+
+		cfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;
+		if ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)
+			*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;
+		break;
+
+	/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */
+	case 0x14:
+		setV92CPpckFromParamsInfo(&modem.mappingParams,
+					  &modem.additionalCPinfo,
+					  v92modem.cp);
+		v92modem.modulator->exitTRN1uSecond();
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_TIMING_LOG_SCALE));
+		break;
+
+	case 0x15:			/* 0xe786 */
+	case 0x21:
+		ret = 5;
+		break;
+
+	/*
+	 * 0xe83c.  End of CPt.  `byte_6119` is the flag that says the retrain
+	 * bit has to go back on in the shared byte.
+	 */
+	case 0x16:
+		byte_6118 = 2;
+		ret = 1;
+		v92modem.modulator->exitCPt();
+		if (byte_6119 != 0)
+			modem.ptr_49b4->modemParams->unnamed_0003 |=
+			    CFG_FLAG3_RETRAIN;
+		break;
+
+	/* 0xe878.  End of TRN2u, and the CP message comes from the ALT set. */
+	case 0x19:
+		setV92CPpckFromParamsInfo(&modem.mappingParamsAlt,
+					  &modem.additionalCPinfo,
+					  v92modem.cp);
+		v92modem.modulator->phase4Modulator->exitTRN2u();
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_TIMING_LOG_SCALE));
+		break;
+
+	case 0x1c:			/* 0xe8b0 */
+		v92modem.modulator->phase4Modulator->recivedEd();
+		break;
+
+	/* 0xe8c6.  Retrain: set the bit unconditionally this time. */
+	case 0x1e:
+		byte_6118 = 3;
+		ret = 2;
+		modem.ptr_49b4->modemParams->unnamed_0003 |=
+		    CFG_FLAG3_RETRAIN;
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_TIMING_LOG_SCALE));
+		break;
+
+	/*
+	 * 0xe913.  V.34 fallback is being asked for, so the handshake's
+	 * per-baud permissions are rewritten -- and this pattern is not
+	 * either of `setV34BaudForV90`'s or `setV34BaudForV34`'s: index 1 is
+	 * barred and index 5 is allowed, which is the opposite of both.
+	 */
+	case 0x1f:
+		flag_173d = 1;
+		ret = 7;
+		v34BaudAllow[0] = 1;
+		v34BaudAllow[1] = 0;
+		v34BaudAllow[2] = 1;
+		v34BaudAllow[3] = 1;
+		v34BaudAllow[4] = 1;
+		v34BaudAllow[5] = 1;
+		break;
+
+	case 0x20:			/* 0xea4b */
+		ret = 6;
+		break;
+
+	/*
+	 * 0xea59 and 0xea88.  Local and remote rate renegotiation, the same
+	 * arm twice but for which of the two V.34 shell entry points it
+	 * calls.  The transmitter is only told to start RRN if it is in phase
+	 * 3, and the threshold the phase 4 modulator will use comes from the
+	 * connection evaluator.
+	 */
+	case 0x22:
+		byte_6118 = 2;
+		ret = 1;
+		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
+			v92modem.modulator->initiateRRN();
+			v92modem.modulator->phase4Modulator->word_2c =
+			    modem.demodulator->connectionEvaluator->word_90;
+		}
+		VPcmV34IndicateLocalRRN(v34Object);
+		break;
+
+	case 0x23:
+		byte_6118 = 2;
+		ret = 1;
+		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
+			v92modem.modulator->initiateRRN();
+			v92modem.modulator->phase4Modulator->word_2c =
+			    modem.demodulator->connectionEvaluator->word_90;
+		}
+		VPcmV34IndicateRemoteRRN(v34Object);
+		break;
+
+	/* 0xe759.  Fast phase exchange, and the same phase-3 guard. */
+	case 0x24:
+	case 0x25:
+		byte_6118 = 2;
+		ret = 1;
+		if (v92modem.modulator->phase == V92MOD_PHASE_DATA)
+			v92modem.modulator->initiateFPE();
+		break;
+
+	case 0x26:			/* 0xea1d */
+		ret = 5;
+		VPcmV34SetIndicationOfRemoteRetrain(v34Object);
+		break;
+
+	case 0x27:			/* 0xe7a5 */
+		v92modem.modulator->phase4Modulator->recivedRt();
+		break;
+
+	/* 0xeab7.  Nothing but the code and the timing-offset line. */
+	case 0x2b:
+		ret = 8;
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_TIMING_LOG_SCALE));
+		break;
+
+	/*
+	 * 0xeacb and 0xeb14.  THE TWO CALLS INTO THE V.92 CP UNPACKER.  Both
+	 * refill `V92Modem::mappingParams` -- the 180-byte block at +0x6bc4,
+	 * which `V92ParamsInfo.h` shows is the same block the mangling calls
+	 * `V92MappingParams` -- from the CP message the demodulator has just
+	 * finished collecting.  That message is `modem.cp`, the `V90CP`
+	 * embedded at +0x254c, read through the field map
+	 * `include/dsplib/V92CPUnPck.h` carries; both are opaque to the C++
+	 * side, so both arguments are cast, which is the arrangement
+	 * `V92ParamsInfo.h` already licenses for this pair of types.
+	 *
+	 * The two differ in ONE thing: the tagged form does not test
+	 * `extendEu`.  `cmpb $0x0,0x255e(%esi)` at 0xeae3 is +0x12 of the
+	 * block, which the unpacker has just written, and a non-zero one sets
+	 * the phase 4 modulator's `e2uExtended`.
+	 */
+	case 0x2d:
+		V92setParamsInfoFromCPUnPck(
+		    (struct V92ParamsInfo *)v92modem.mappingParams,
+		    (struct V92CPUnPck *)&modem.cp);
+		if (((struct V92CPUnPck *)&modem.cp)->extendEu != 0)
+			v92modem.modulator->phase4Modulator->e2uExtended = 1;
+		v92modem.modulator->phase4Modulator->recivedCP();
+		break;
+
+	case 0x2e:
+		V92setParamsInfoFromCPUnPck(
+		    (struct V92ParamsInfo *)v92modem.mappingParams,
+		    (struct V92CPUnPck *)&modem.cp);
+		v92modem.modulator->phase4Modulator->recivedCPtag();
+		break;
+
+	case 0x2f:			/* 0xeb42 */
+		v92modem.modulator->phase4Modulator->recivedSUV();
+		break;
+
+	case 0x30:			/* 0xeb58 */
+		v92modem.modulator->phase4Modulator->recivedSUVtag();
+		break;
+
+	/*
+	 * 0xe9cb and 0xe9f4.  The first half of a silent RRN SUV.  The
+	 * modulator is told to expect one section and how long the received
+	 * CP's counted block was; `word_ca0` is reached through
+	 * `demodulator->cp`, which is the same storage as `modem.cp` above.
+	 */
+	case 0x31:
+		v92modem.modulator->phase4Modulator->word_30 = 1;
+		v92modem.modulator->phase4Modulator->word_38 =
+		    modem.demodulator->cp->word_ca0;
+		v92modem.modulator->phase4Modulator
+		    ->recivedPartOneSilenceRrnSUV();
+		break;
+
+	case 0x33:
+		v92modem.modulator->phase4Modulator->word_30 = 1;
+		v92modem.modulator->phase4Modulator->word_38 =
+		    modem.demodulator->cp->word_ca0;
+		v92modem.modulator->phase4Modulator
+		    ->recivedPartOneSilenceRrnSUVtag();
+		break;
+
+	case 0x32:			/* 0xea35 */
+		v92modem.modulator->phase4Modulator
+		    ->recivedPartTwoSilenceRrnSUV();
+		break;
+
+	case 0x34:			/* 0xe8e7 */
+		v92modem.modulator->phase4Modulator
+		    ->recivedPartTwoSilenceRrnSUVtag();
+		break;
+
+	case 0x35:			/* 0xe8fd */
+		v92modem.modulator->phase4Modulator->recivedFirstRrnEd();
+		break;
+
+	default:			/* 0xe5f0, and 33 of the 54 entries */
+		break;
+	}
+
+	/* 0xe5f0.  The transmit half, and every arm above arrives here. */
+	v92modem.progress(txbits, *(unsigned int *)nbits, out, n);
+
+	for (i = 0; i < n; i++)
+		out[i] *= VPCM_TX_SCALE;
+
+	echoCanceller.updateEchoHistory(out, n);
+
+	event = (int)v92modem.modulator->word_34;
+	switch (event) {
+	/*
+	 * 0xe672.  The transmitter has started sending, so the canceller can
+	 * begin measuring the delay.
+	 */
+	case 2:
+		byte_6118 = 1;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V92): Starting "
+					     "echo canceller training...\r\n");
+		echoCanceller.setState(V92_ECHO_COUNT_DELAY);
+		break;
+
+	/*
+	 * 0xe6dd.  Freeze it instead, hand the receiver back to phase 3, and
+	 * -- if the receiver answers that it is falling back -- say so and
+	 * return 6.
+	 */
+	case 3:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V92): Freezing "
+					     "echo canceller...\r\n");
+		echoCanceller.setState(V92_ECHO_FILTER_ONLY);
+		modem.demodulator->enterPhase3();
+		if (modem.demodulator->word_3c == 0x20) {
+			edprintf("VPcmFloModem (V92): got V90 Fallback "
+				 "request...\r\n");
+			ret = 6;
+		}
+		break;
+
+	case 10:			/* 0xe518 */
+		byte_6118 = 3;
+		break;
+
+	default:
+		break;
+	}
+
+	return ret;			/* 0xe530 */
 }

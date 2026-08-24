@@ -79834,3 +79834,588 @@ anchor that is a substring of `progress`'s triple-tab one) and two in the
 "RfModulation" message that separates the twins.
 
 A `x = x;` scan (7481) over all 471 sources and headers is clean at zero.
+
+======================================================================
+
+### 7570. The orphaned V.90 CP unpacker IS the writer 7520 could not find, and it is `extern "C"`, which is why the bound missed it
+
+Reserved block for this batch: **7570-7579**.  `master` was at **7562** when
+this was written -- not 7549, which is where this branch's base commit
+`9f074dee` leaves it and what the batch was briefed with -- and four sibling
+worktree branches sit at 7549, 7460, 7432 and 7002.  The block starts clear of
+all of them rather than at 7563, on the same reasoning 7520 gives for its own.
+
+`setParamsInfoFromCPUnPck` (.text+0x336b0, **622 bytes**, `nm -S` confirmed) is
+reconstructed in `src/pump/v90/V90MappingParamsInt.cpp`, with its source
+structure in the new `include/dsplib/V90CPUnPck.h`, and **it is still
+callerless** -- see the last section, which measures that rather than asserting
+it.
+
+#### What it writes, against what 7520 said had no writer
+
+7520's closing section is titled "THE DIGITAL SIDE HAS NO WRITER FOR THE
+MAPPING BLOCK IT READS", and the block is `V90MappingParams`.  This function
+writes essentially the whole of it:
+
+| destination | from |
+|---|---|
+| `word_0` (+0x000) | `cp->dataBitRate` plus 0x14 or plus 8 |
+| `constellation[6][128]` (+0x004) | the six occupancy bitmaps at `cp+0x3a` |
+| `codecConstellation[6][128]` (+0x304) | `cp+0x9c`, or `cp+0x3a` again |
+| `constellationSize[6]` (+0x604) | the populations, written twice (below) |
+| `word_61c` (+0x61c) | `cp->codecConstellationPresent != 0`, exactly 0 or 1 |
+| `shaperSR`..`shaperB2` (+0x620..+0x634) | `cp+0x18`..`cp+0x2c`, six whole words |
+| `distinctIndex[6]` (+0x638) | `cp+0x31`, six bytes widened |
+
+That is every member `include/dsplib/V90MappingParams.h` declares.  The only
+thing it does not do is allocate the block.
+
+**7520's BOUND HAD A HOLE, AND THE HOLE HAS A NAME.**  7520 measured its
+population as "**30 symbols whose MANGLING names a `V90MappingParams *`**", and
+said in terms that "a writer that never takes one as a parameter is outside
+it".  This function DOES take one -- it is the first argument -- and it was
+still outside the population, because it is `extern "C"` and therefore has no
+mangled name for `nm | grep 16V90MappingParams` to find.  Six of this file's
+symbols are in the same position (`getConstellationsIndex`,
+`getConstellationMask`, `getCodecConstellationMask`, `getDataBitRate`,
+`setV92CPpckFromParamsInfo`, `displaySpectralParams`), and so are
+`setConstellationMask`, `setCodecConstellationMask`, `setDataBitRate` and
+`setParamsInfoFromV92CPUnPck`.
+
+This is the same shape as the mistake 7520 itself chose to keep in the record
+-- a claim about a population derived from a subset of it -- and it is kept
+here for the same reason.  **7520's CONCLUSION IS NOT OVERTURNED.**  What it
+was really measuring is reachability, and reachability is untouched: the writer
+exists, and it has no caller.
+
+**AND THERE ARE TWO ORPHANED WRITERS, NOT ONE.**
+`setParamsInfoFromV92CPUnPck` (.text+0x33c60, 601 bytes, also zero
+relocations) writes the SAME `V90MappingParams` layout -- the same +0x604,
++0x61c, +0x620, +0x638 and the same two byte tables -- from a `V92CP` instead.
+Its displacements are `V92CP::char_01`, `byte_2`, `byte_24`, `word_28`,
+`short_42` and `short_a2` field for field, which is what identifies its source
+type; it is the exact inverse of `setV92CPpckFromParamsInfo`, already written
+in this file.  It is NOT written by this batch and remains the obvious next
+622-byte-class piece of the same question.
+
+#### THE SOURCE TYPE IS NOT A `V90CP`, AND THAT WAS CHECKED
+
+The name invites the reading and the V.92 sibling supports it, so it was
+tested rather than assumed.  Three disagreements, of which the third settles
+it:
+
+- `V90CP+0x014` is sixteen bits read `movzwl`; this function reads a full
+  32-bit word at +0x14.
+- `V90CP+0x018` is six frames of two eight-bit values on an 8-byte stride;
+  this function reads six consecutive 32-bit words from +0x18.
+- **The decisive one.**  This function loads a POINTER from +0x0fc and
+  dereferences its +0x04 (`mov 0xfc(%ecx),%ebp ; mov 0x4(%ebp),%esi` at
+  .text+0x338ec).  `V90CP+0x0fc` is in the middle of the 0x300-byte `short`
+  array at +0x058, so on a `V90CP` that would take two coefficient shorts and
+  dereference them.
+
+So the source is a structure with exactly one reader in the object and no
+writer, and `include/dsplib/V90CPUnPck.h` says so at the top: the layout rests
+on one orphaned function's displacements and nothing corroborates it.
+
+**AND "ONE READER" IS MEASURED, because a negative claim about a whole object
+is the shape 7520 got wrong.**  Over the 196,503 disassembled lines of the
+object, the enclosing symbol of every address formed at each of the layout's
+four distinctive displacements was listed and the four lists intersected.
+`setParamsInfoFromCPUnPck` is the **only** symbol that touches all four of
++0x31, +0x3a, +0x9c and +0xfc, and one of only **six** that touch both bitmap
+bases at all -- the other five being `B103FP_create`, `FPM_FSE_receive`,
+`_iir_filter_progress`, `modulatevector` and `V27RX_create`, none of which is
+within reach of this data.  That is the denominator this claim needed.  What
+the header does have is rank-2 evidence for most of the NAMES, because every
+field is copied into a destination that is already named -- the six spectral
+words into `shaperSR`..`shaperB2`, the six bytes into `distinctIndex`, and the
+32-bit word at +0x14 into `word_0` by the exact inverse of `getDataBitRate`.
+The pointer at +0x0fc is a `tagV90AdditionalCPinfo *` because its `word_04` is
+tested for precisely what `V90CPPacker` passes as `getDataBitRate`'s `islong`
+at .text+0x3c996.
+
+`codecConstellationPresent` (+0x030) is the one name that is rank 3, usage
+inference, and the header says so.
+
+**AND THE TWO BITMAP ARRAYS DO NOT ABUT, WHERE THE V.92 TWIN'S DO.**
+0xa2 - 0x42 = 0x60 = 6 * 16 exactly in `setParamsInfoFromV92CPUnPck`'s source,
+so `V92CP`'s two blocks are adjacent.  0x9c - 0x3a = 0x62 here, so **two bytes
+sit between them that nothing reads**.  It is not alignment: two `short` arrays
+need none between them, and the trailing pointer would land on a multiple of
+four either way.  `pad_9a[2]`.
+
+#### What the function does, and the three things a test has to separate
+
+Four steps, and only the third is conditional.  The gate is re-read from the
+SOURCE on every iteration (`cmpb $0x0,0x30(%ecx)` at .text+0x337c5, inside the
+loop the back edge at +0x338e2 closes), which is the OPPOSITE of
+`V92setParamsInfoFromCPUnPck`, whose three gates read back the copies it has
+just made in the DESTINATION.  So a caller that scribbled on `word_61c`
+between two calls would change nothing here and would change everything there.
+
+- **With the gate CLEAR the codec tables are not skipped**; they are unpacked
+  from the ORDINARY bitmaps.  Same source, other destination.  A fixture that
+  only ever set the gate could not tell the two destination bases apart (0x4
+  against 0x304); one that only ever cleared it could not see a wrong source
+  base in the else arm.
+- **`constellationSize` ENDS UP DESCRIBING THE CODEC TABLE.**  Both halves
+  store to the same word (`0x604(%ebx)` at .text+0x337ff and at +0x3388e), so
+  the second zeroes and refills what the first wrote.  When the two bitmaps
+  have different populations the first table keeps entries past the length that
+  nothing will read.  With equal populations that is invisible, which is why
+  the fixture carries cases whose two arrays differ in WEIGHT and asserts that
+  at least one trial did.
+- **The bitmap ordering is the sharp part.**  Eight `short` scanned from
+  `mask[7]` down to `mask[0]`, bit 0 first within each word and the emitted
+  byte counting DOWN from `j * 16 + 15`.  So bit `b` of word `j` becomes byte
+  `j * 16 + (15 - b)`, and the table comes out in strictly DESCENDING byte
+  order, 127 down to 0.  128 possible entries into a 128-byte table: an
+  all-ones bitmap fills one constellation exactly and cannot overrun it.
+
+#### The two 128-byte globals are the same body, and are deliberately NOT claimed
+
+`setConstellationMask` (.text+0x33570) and `setCodecConstellationMask`
+(+0x335f0) exist as `T` symbols and are the body this function inlines three
+times.  **"Byte-for-byte" would be too strong and is not claimed**: what is
+byte-identical is the INNER LOOP, at all three sites and in the standalone,
+from `test $0x1,%cl` through `incl (%esi)` to the `jns` that closes the word
+loop.  The setup around it is the same operations in different registers and
+different stack slots, because the inline site has a caller's live values to
+place and the standalone has parameters -- the allocator's, and free by
+CLAUDE.md's rule.  They are written here as two `static` helpers, so
+their code is reconstructed and their SYMBOLS are not: writing the globals is
+a further 256 bytes with a differential test of their own, and the batch was
+scoped to one symbol.  Delete the `static` and add two prototypes to claim
+them.
+
+**THAT IT IS A CALL AND NOT THREE OPEN-CODED LOOPS IS MEASURED, NOT PREFERRED**,
+and the measurement is finding 5821's, made on `setV92CPpckFromParamsInfo` in
+this same file.  The three loops count with an UNSIGNED variable --
+`cmpl $0x5,(%esp) ; jbe` at .text+0x338de -- and each inlined body then clamps
+that same variable with a SIGNED test, `cmp $0x6,%ebp ; setl` at .text+0x3373c,
++0x337e0 and +0x33872.  One variable cannot be compared both ways; a call whose
+argument is `(int)i` can, because the bound is the caller's and the clamp is
+the callee's.
+
+**AND THE CLAMP IS DEAD IN THIS CALLER**, which is stated rather than left to
+be discovered: `which` is the loop counter, the loop runs 0..5, so
+`which < 6 ? which : 0` always yields `which`.  It is reachable only through
+the two globals.  A mutation of the `<` is therefore equivalent and a mutation
+of the `6` downwards is not.
+
+#### It is still callerless, and that is measured
+
+- `readelf -r ref/slmodemd/dsplibs.o` finds **zero relocations of any type**
+  naming `setParamsInfoFromCPUnPck` anywhere in the object.
+- `python3 tools/closure.py --missing setParamsInfoFromCPUnPck` is **1 symbol,
+  622 bytes -- itself**.
+- `grep -rn setParamsInfoFromCPUnPck src/` finds the definition and nothing
+  else; the only other references in the tree are the header's declaration,
+  the test, and this finding.
+- `nm build/repro/pump/v90/V90MappingParamsInt.o` defines it and no object
+  under `build/` holds an undefined reference to it.
+
+**No call was added and none should be.**  Supplying one would be new code
+with no blob behaviour to compare against, which is not reconstruction.  The
+differential test reaches it directly.
+
+#### The numbers
+
+`make phase` exits 0.  `make period` is **244 passed / 0 failed** against the
+base commit's 243 -- one new binary, `t_v90unpck`, and nothing else moved.
+`t_v90unpck` is 1,098 checks in two groups, 15 of them offset assertions.
+`test/mutations/v90unpck.json` is **26 mutations: 24 caught, 0 NOT caught,
+0 unusable, 2 equivalent, 0 miscounted**, recorded by `mutsnap.py --update`.
+The two equivalent rows are both the dead clamp and both carry the argument.
+
+**SHOWN TO FIRE, and the ritual itself has a trap worth naming.**  Three
+defects were injected into `src/` and each turned a different slice red:
+the codec loop's else arm reading the codec bitmaps rather than the ordinary
+ones, **182 of 1,083**; the bitmap selected by `i` rather than through
+`distinctIndex`, **40**; the long rate arm adding 8 rather than 0x14, **64**.
+Reverted immediately, and the suite is green after each.
+
+A fourth -- the byte counting UP within a word rather than down -- **printed
+no verdict at all, and the reason is the trap**: `make one` runs
+`anchorcheck.py` BEFORE it builds, the injected defect was textually the same
+edit as two of this suite's own mutation rows, so their `find` stopped
+matching and the gate refused before the test ever ran.  A fire check that
+aborts prints exactly what a fire check that fails to fire prints, which is
+finding 134's argument arriving inside the ritual meant to satisfy it.  **That
+defect is covered anyway and by the right tool**: `v90unpck`'s rows "the
+ordinary helper counts the byte up within a word rather than down" and its
+codec twin are that exact mutation, and both are `caught (test)`.  Inject a
+defect that no anchor quotes, or run the binary directly.
+
+**THREE MUTATION ANCHORS BROKE MID-BATCH AND `anchorcheck` CAUGHT IT**, which
+is 7521's lesson being paid rather than re-learned.  Reshaping the tail into
+`setDataBitRateInline` (below) deleted the three lines the rate rows quoted;
+`anchorcheck.py` reported them as `matches 0 time(s)` and `mutate.py` would
+have scored them UNUSABLE, which reads as CAUGHT while testing nothing.  They
+were re-anchored on the helper's own text -- checked unique against
+`getDataBitRate`'s near-identical `if (islong != 0)` -- and the suite re-run
+from scratch rather than trusted.  **A suite is not re-recorded across a
+source reshape; it is re-run.**
+
+`make coverage` reads **74.2%, 544,979 bytes, 1,225 symbols** against
+**74.1%, 544,357 bytes, 1,224 symbols** at the base commit: **+1 symbol and
++622 bytes**.  That 622 is this symbol's own size and nothing else, **and it
+is exactly right only because the two helpers are inlined and claim no blob
+symbol.**  Saying so matters for the next batch: if someone un-`static`s them
+to claim `setConstellationMask` and `setCodecConstellationMask`, coverage
+gains a further 256 bytes and two symbols, and this arithmetic will not
+explain itself.
+
+The instruction count is **183 ours against 200 the blob's**, 606 bytes
+against 622, with **zero calls on both sides** -- the three inlined helper
+calls are inlined by our compiler exactly as they are by the original's, which
+is the check that the `static` spelling is not hiding a missing call.  Six of
+the -17 are the `which < 6 ? which : 0` clamp: the blob emits
+`cmp $0x6 ; setl ; neg ; and` and GCC gives us `cmp $0x5 ; jle ; xor` at each
+of the three sites, which is -2 apiece.  The rest is the blob's loop
+alignment, which `instrcount.py` counts and which 7520 already records as
+noise at this scale -- `mov %esi,%esi` at .text+0x33787 and the `jmp 0x33840`
+at +0x33831 are two of them.  **The gap SHRANK at every step that moved a
+source shape toward the object and the count still reads further away**, which
+is why 7480's rule is about CALLS and not about the total: calls are 0 on both
+sides and every named instruction is accounted for.
+The already-committed `getConstellationMask` and
+`getCodecConstellationMask` carry the same -2 each at 130 bytes on both sides,
+so this is the tree's existing state for the idiom and not something this
+batch introduced.  It was NOT chased further: permuting source until the
+compiler if-converts is fitting the compiler, which CLAUDE.md puts in the free
+column.
+
+#### TWO source shapes were FORCED by the codegen, and both were measured
+
+These are the difference between a faithful transcription and a plausible one,
+and neither is visible to any test: the two spellings agree on every input in
+both cases.  Each was found by diffing our instructions against the object's
+and each was confirmed by the change moving us TOWARD the object rather than
+by argument.
+
+**1.  THE TAIL IS `setDataBitRate` INLINED, NOT AN OPEN-CODED `if`.**
+`setDataBitRate` (.text+0x33690, 28 bytes) is a fourth unwritten symbol in this
+file's bracket and is the exact inverse of `getDataBitRate`:
+`params->word_0 = rate + 0x14` or `+ 8` on a flag.  The object's tail is its
+body.  What separates a call from an open-coded `if` is **when the rate is
+loaded**: the object loads it ONCE before the test (`mov 0x14(%ecx),%edx` at
+.text+0x338f2, then `test %esi,%esi`) and adds with `lea` in each arm, because
+a function argument has to be evaluated before the call.  Written as
+`if (flag) p->word_0 = cp->dataBitRate + 0x14; else ... + 8;` GCC 3.4.2 SINKS
+the load into both arms and uses `add` -- and that is measured, not argued:
+it is what this file emitted before the call form was tried.  With the call
+form our tail is **byte-identical to the object's, registers included**
+(`mov 0x34(%esp),%ebx ; lea 0x14(%edx),%edi ; mov %edi,(%ebx)` and
+`lea 0x8(%edx),%eax ; mov 0x34(%esp),%edx ; mov %eax,(%edx)`).  That is 617's
+full-text acceptance test, passed.
+
+So `setParamsInfoFromCPUnPck` inlines **four** calls to **three** of this
+file's other symbols, and reproducing it means writing all three.  They are
+`static` here for the reason the section above gives.
+
+**2.  THE LENGTH IS HELD THROUGH A POINTER.**
+Written as `params->constellation[c][params->constellationSize[c]]`, GCC keeps
+the length in a register across the byte store -- it can see that two distinct
+FIELDS of one struct do not overlap.  The object re-reads it (`mov (%esi),%edx`
+before the store, `incl (%esi)` after), which is what a length reached through
+a separate `unsigned int *` gives, because an `unsigned char` store through
+another pointer may alias it.  With the two locals spelled out, our inner loop
+is byte-identical to the object's.  Nothing observable rides on it here -- the
+population cannot exceed 128 and the store index never leaves the table -- so
+no test can tell the two apart, and the object's own instructions are the only
+evidence there is.
+
+======================================================================
+
+### 7571. `runPcmModem`'s two calls to `V92setParamsInfoFromCPUnPck`: the V.92 mapping block has a reachable writer where the V.90 one does not, and this is the contrast 7520 needs
+
+The batch that wrote 7570 was asked for this description rather than for a
+call site, and **no call was added to the V.90 unpacker.**  This finding is
+about the V.92 twin, which already has two, so that the two sides can be put
+beside each other.  The reconstruction of `VPcmFloModem::runPcmModem` itself
+(.text+0xe430, 2,041 bytes) is a separate piece of work reported alongside
+this one; what is below is measured from the object and is independent of it.
+
+#### Where the two calls are
+
+Both are arms of the SECOND of `runPcmModem`'s two jump tables.  The selector
+is read at .text+0xe4fc:
+
+	mov  0x175c(%esi),%ecx	  the embedded V90Modem's `demodulator`
+	mov  0x3c(%ecx),%eax	  the demodulator's event word
+	cmp  $0x35,%eax
+	ja   0xe5f0		  the common join
+	jmp  *0x4c0(,%eax,4)	  54 entries, .rodata:0x4c0..0x598
+
+`this + 0x1758` is the embedded `V90Modem` and `+0x04` of it is
+`demodulator`, so `this + 0x175c` is that pointer; the switch is on
+`V90Demodulator + 0x3c`.  Two of the 54 arms call the unpacker:
+
+| arm | .rodata slot | entry | the call | what follows |
+|---|---|---|---|---|
+| **0x2d** | 0x574 | 0xeacb | 0xeade | `V92Phase4Modulator::recivedCP()` |
+| **0x2e** | 0x578 | 0xeb14 | 0xeb27 | `V92Phase4Modulator::recivedCPtag()` |
+
+**AND THAT SELECTOR IS A FIELD THIS TREE CURRENTLY CALLS `word_3c`.**
+`include/dsplib/V90Demodulator.h` has +0x03c as "modelled, unnamed", on the
+evidence that `enterPhase3` clears it and its one failure exit sets it to 0x20.
+`runPcmModem` is the reader that was missing: it is a 54-arm dispatch on this
+word, and 0x20 is one of the arms (it sets the return to 6).  So the field is
+the demodulator's EVENT CODE -- what it reports upward for the modem's driver
+to act on -- and that is a much stronger derivation than the one the name
+rests on now.  **It is NOT renamed here**: V90Demodulator.h is another batch's
+file and the reconstruction of `runPcmModem` is a separate piece of work, so
+the evidence is recorded and left for whoever owns that header next, exactly
+as 7520 did with `P4M_STATE_UNNAMED_14`.
+
+**These are the ONLY two references to the symbol in the object.**
+`objdump -dr | grep R_386_PC32.*etParamsInfo` over the whole 1.2 MB gives
+exactly two rows, both `V92setParamsInfoFromCPUnPck` and both inside
+`runPcmModem`.  Neither `setParamsInfoFromCPUnPck` nor
+`setParamsInfoFromV92CPUnPck` appears at all.
+
+#### What each is passed, and what those two addresses are
+
+Both calls pass the same two arguments, built the same way:
+
+	lea  0x254c(%esi),%ecx		argument 2
+	mov  0x6bc4(%esi),%eax		argument 1
+	push ; push ; call V92setParamsInfoFromCPUnPck
+
+- **Argument 1, `*(this + 0x6bc4)`, is `V92Modem::mappingParams`.**  The
+  `V92Modem` is embedded at `+0x6124` and 0x6bc4 - 0x6124 is 0xaa0;
+  `include/dsplib/V92Modem.h` records that slot as `sysdep_malloc(0xb4)` with
+  **no constructor after it**, followed by `V92createConstellations` and
+  `V92createFilterCoefficients`, and identifies it as `struct V92ParamsInfo`
+  (`sizeof` 0xb4) by way of being `V92Modulator`'s constructor's sixth
+  argument, whose mangling spells it `V92MappingParams *` (finding 1321).
+- **Argument 2, `this + 0x254c`, is the received CP message block**, and see
+  7572: it is the storage of `V90Modem::cp`.
+
+#### What is filled by the time the modulator reads it
+
+`V92Modem::mappingParams` is handed to `V92Modulator`'s constructor as its
+sixth argument, so the modulator holds the pointer from construction and reads
+whatever is behind it.  On entry to the first of these two calls it holds:
+the ten pointers the two `V92create*` functions filled, and **nothing else** --
+the 0xb4 bytes are a raw `sysdep_malloc` with no constructor.  Each call then
+fills eight scalars unconditionally and three further halves under
+`modulosEncoderPresent`, `prefilterPrecoderPresent` and
+`constellationPresent`, which are themselves copied from the message BEFORE
+they are tested (`src/pump/v90/V92ParamsInfo.c`'s head has the measurement).
+So a second call is gated on what the first left behind.
+
+Immediately after arm 0x2d's call, .text+0xeae3 tests `cmpb $0x0,0x255e(%esi)`
+-- byte +0x12 of the message block, which `V92CPUnPck.h` names `extendEu` --
+and where it is non-zero sets `V92Phase4Modulator + 0x1bc` to 1 before calling
+`recivedCP()`.  Where it is zero the store is skipped and `recivedCP()` is
+called anyway.  Arm 0x2e has no such test and goes straight to
+`recivedCPtag()`.
+
+#### THE CONTRAST, WHICH IS THE POINT
+
+|  | V.92 | V.90 |
+|---|---|---|
+| the block | `V92ParamsInfo`, 0xb4 bytes | `V90MappingParams`, 0x650 bytes |
+| where it lives | HEAP, `V92Modem::mappingParams` | EMBEDDED in `V90Modem` at +0x18 and +0x668 |
+| initialised by a constructor? | **no** -- raw `sysdep_malloc(0xb4)` | **no** -- 7520 |
+| its unpacker | `V92setParamsInfoFromCPUnPck` | `setParamsInfoFromCPUnPck` |
+| that unpacker's callers | **TWO**, both in a live entry point | **ZERO**, in the whole object |
+| how the modulator gets it | constructor argument 6 | constructor arguments 6 and 7 |
+
+**The row that says "that unpacker's callers" says exactly what was
+measured and no more.**  Two relocations name `V92setParamsInfoFromCPUnPck`
+and zero name `setParamsInfoFromCPUnPck`; that is a count of CALLS TO THE
+UNPACKER, not a claim that no other function in the object writes either
+block.  7520 did the harder bound on the V.90 side and enumerated every
+candidate writer; the V.92 side has had no such sweep and is not asserted to
+have had one.
+
+Both sides allocate the block without constructing it and both rely on an
+unpacker to fill it.  The difference is not the design; it is that one
+unpacker is called from `runPcmModem` on two demodulator events and the other
+is called from nowhere.  **That is the whole of 7520's blocker, stated in the
+form that makes it actionable**: a V.90 digital bring-up needs the equivalent
+of these two arms, and the object does not contain them.
+
+What it does NOT say is that the vendor's V.90 branch is broken.  7520's own
+caveat still stands -- the block could be intended to arrive from the host, or
+from one of the eleven unwritten `V90Modulator` phase edges.  Supplying the
+call is a decision about behaviour the blob does not exhibit, so it is the
+repo owner's and was deliberately not taken.
+
+======================================================================
+
+### 7572. `V92CPUnPck` and `V90CP` are the same structure, modelled twice from opposite ends -- thirteen landmarks agree, including which flag gates which block
+
+Reading 7571's second argument settled something neither header knows.
+
+`include/dsplib/V92CPUnPck.h` says the block is "INLINE in `VPcmFloModem`, at
++0x254c", which is right, and stops there.  `VPcmFloModem` embeds a `V90Modem`
+at **+0x1758**, and `include/dsplib/V90Modem.h` declares `V90CP cp;` at
+**+0x0df4** of it.  0x1758 + 0xdf4 = **0x254c**.  The two declarations name the
+same bytes.
+
+They were derived from opposite ends and have never been compared:
+`V90CP.h`'s layout came from `V90CP::infoToBits` (0x52230) and
+`::evaluateInfo` (0x519f0), which build and re-read the bit vector;
+`V92CPUnPck.h`'s field NAMES came from `V92setParamsInfoFromCPUnPck`'s
+thirty-one format strings, which are the author's own words.  Set them side by
+side:
+
+| offset | `V92CPUnPck` (format strings) | `V90CP` (infoToBits / evaluateInfo) |
+|---|---|---|
+| +0x000 | `pad_00[4]`, "not read by the unpacker" | the short-form flag, `bits[0x12]` |
+| +0x004 | `modulosEncoderPresent` | whole-word flag, gates the +0x018 block |
+| +0x008 | `prefilterPrecoderPresent` | whole-word flag, gates +0x048/+0x058 |
+| +0x00c | `constellationPresent` | whole-word flag, gates +0xc58 onward |
+| +0x010 | `drn`, `signed char` | five bits, `movsbl`, SIGNED |
+| +0x011 | `trellisState` | two bits |
+| +0x012 | `extendEu` | one bit |
+| +0x013 | pad, "touched by nothing" | one bit, in both message forms |
+| +0x014 | `prefilterGain`, `unsigned int` | sixteen bits, `movzwl`, UNSIGNED |
+| +0x018..+0x044 | `M[12]` | six frames of two eight-bit values, stride 8 |
+| +0x048..+0x054 | the four filter lengths | four counts, `shr`, unsigned |
+| +0x058/358/658/958 | four coefficient arrays, 384 shorts | four lists of shorts, 0x300 each |
+| +0xc58 | `LC[6]` | six counts, two to a frame |
+| +0xc70 | `indexConstel[6]` | six four-bit values |
+| +0xc88..+0xc9c | six constellation POINTERS | six 0x200 buffers, malloc'd in order |
+
+**THE GATING IS THE CLINCHER AND NOT THE OFFSETS.**  Coincident offsets can be
+argued about; what cannot is that the three `*Present` words at +0x04, +0x08
+and +0x0c gate exactly the three regions -- the moduli, the filter
+coefficients, and everything from +0xc58 -- that `V90CP`'s three whole-word
+flags at the same offsets gate on the way OUT.  `V90CP.h` spells its side out
+as "+0x0004 the six pairs at +0x0018, +0x0008 the four counted lists at
++0x0048, +0x000c everything from +0xc58 on", written from `infoToBits`; the
+V.92 unpacker gates `M[]`, the four lengths with their coefficient arrays, and
+`LC`/`indexConstel`/the six constellations on the same three words in the same
+order.  Two independent readers, one writing the message and one reading it
+back, agreeing three for three on which flag owns which block.
+
+**AND THE SHORT DECLARATION ENDS EXACTLY WHERE THE MESSAGE DOES.**
+`V92CPUnPck`'s last field is `const6` at +0xc9c, so it ends at **+0xca0** --
+and +0xca0 is precisely where `V90CP`'s post-message fields begin: `V90CP.h`
+has +0x0ca0 as "the short form's payload" and +0x0ca4 as the detector state
+`resetDetector` zeroes.  So the unpacker reads the message-carrying prefix and
+stops at its last byte.  That is why `V92CPUnPck.h` could say "nothing bounds
+it above" and be right about its own evidence while the bound existed all
+along in the other header.
+
+**Two disagreements, and both are informative rather than fatal:**
+
+- **+0x013.**  `V92CPUnPck` calls it alignment because its unpacker never
+  reads it; `V90CP` has it as a real bit that `infoToBits` emits in BOTH
+  message forms.  A field one reader ignores is not a field that is not there,
+  and `V90CP` is the one with the evidence.
+- **+0x014, and this one is a genuine conflict.**  The unpacker loads a full
+  32-bit `prefilterGain` (`push %eax` with %eax zeroed, then `fildll`, which
+  is the unsigned-to-float idiom); `infoToBits` loads sixteen bits with
+  `movzwl`.  Both readings are unsigned and they agree over every value below
+  65536.  Nothing here settles it and it is not settled here.
+
+**WHAT IS NOT DONE, DELIBERATELY.**  The two are not merged.  `V90CP` is
+0x3bc0 bytes and `V92CPUnPck`'s declaration ends at 0xca0, so replacing one
+with the other is a change to two headers that nineteen files reach, and it is
+exactly the shape of the `V90Parameters` trap CLAUDE.md keeps as history --
+allocate the short one, use the long one, under-allocate by 0x2f20 bytes and
+pass every test not run under a checking allocator.
+
+**There is no live hazard today, and that was checked rather than assumed.**
+Nothing under `src/` declares, allocates or takes the size of a
+`V92CPUnPck`; the only object of that type in the tree is the `static` in
+`test/unit/t_v92unpck.c`, which is the fixture's own storage and is never
+handed to anything that thinks it is a `V90CP`.
+
+**That fixture is where this will bite first, so it is named here.**
+`t_v92unpck.c` seeds `sizeof(cp)` bytes of a `static struct V92CPUnPck` --
+**0xca0** -- where every call site in the object hands the unpacker a
+**0x3bc0**-byte `V90CP`.  Every trial in that suite therefore runs against a
+source object about a quarter of the real one, and it is sound only because
+the reader stops at +0xc9c and the fixture's own seeding stops there too.  The
+moment the declaration is extended -- which is exactly what closing this
+finding means -- the fixture's storage and its seeding have to grow with it or
+the suite starts reading past its own object.  7572 is what a future reader
+will consult before touching either, which is why it says so.  `tools/onedef.py` is not
+violated either -- these are two type NAMES, not two definitions of one name,
+so the gate cannot see this and never could.
+
+The gain that is available immediately and costs nothing: **`V90CP.h`'s
+`+0x004`, `+0x008`, `+0x00c`, `+0x010`, `+0x011`, `+0x012`, `+0x048`, `+0xc58`
+and `+0xc70` can take the author's own names** off `V92CPUnPck.h`'s format
+strings, which is CLAUDE.md's rank-1 evidence and better than the offset names
+they carry now.  That is a rename in another batch's file and is left to it.
+
+======================================================================
+
+### 7573. A delegated branch's tip is a reading at ONE INSTANT, and an amended checkpoint can rewrite `src/` under a merge you have already validated
+
+This cost a merge that was correct when it was checked, correct when it was
+made, and wrong by the time the agent that produced it reported.
+
+The batch's second half, `VPcmFloModem::runPcmModem`, was delegated to an
+agent in its own worktree on branch `recon/vpcmflo-runpcmmodem`.  This tree's
+convention -- and this project's own memory of it -- is that **agents keep ONE
+rolling WIP checkpoint and amend it**, which is a good convention and is not
+what went wrong.  What went wrong is that a reader outside the agent cannot
+tell an amendment from a rewrite, and `git merge-tree` answers about the SHA
+you hand it and not about the branch.
+
+The sequence, all four steps taken in good faith:
+
+| | tip | what was done with it |
+|---|---|---|
+| 1 | `006dbcb3` "WIP: ..." | diffstat read, to plan the merge |
+| 2 | `d8102a5d` | `git merge-tree --write-tree` dry run: one conflict, `docs/coverage.md` |
+| 3 | `30c54b34` | MERGED, `make phase` run on the result: **245 passed / 0 failed, exit 0** |
+| 4 | `ea9b651a` | the agent's report arrives, naming this SHA |
+
+`d8102a5d` and `30c54b34` are byte-identical trees -- `git diff --stat`
+between them is empty -- so step 3 looked like step 2's dry run and was.  **The
+last amendment was not cosmetic**: `git diff --stat 30c54b34 ea9b651a` is
+`src/pump/v90/VPcmFloModem.cpp | 6 +++---` plus the test and the suite.  Six
+lines of the reconstruction itself, and a mutation set recorded against source
+that was no longer in the tree.
+
+**THE GREEN GATE IS WHAT MAKES THIS WORTH RECORDING.**  `make phase` passed at
+245/0 on the merge of `30c54b34`.  It was measuring a real, coherent, tested
+tree -- just not the one the agent was going to stand behind.  No gate in this
+tree can catch that, because there is nothing wrong with what it measured.
+The only signal was the SHA in the report not matching the SHA in the history,
+and that is a comparison nobody runs by default.
+
+It also produced a wrong RECORD, which is the part that outlives the merge.
+The superseded suite read 95 mutations, 84 caught, **11 NOT caught**; the final
+one reads 88 caught, **7 NOT caught**.  A note had already been written into
+`test/mutations/vpcmrunpcm.json` naming eleven rows and grouping them -- from
+verdicts that were, by then, describing nobody's tree.
+
+#### What to do instead, and it is cheap
+
+- **Compare the SHA in the report against the SHA in your history**, always.
+  One `git merge-base --is-ancestor <reported> HEAD` is the whole check.
+- **Do not merge a tip labelled `WIP`.**  That was got right here and is worth
+  keeping: a rolling checkpoint is by convention not a claim that anything
+  passed.  But a non-WIP subject is not a promise that the agent has finished
+  either -- `30c54b34` had a full commit message and its own claim of
+  `make phase` green.
+- **Wait for the agent's REPORT, not for its branch to stop looking like a
+  WIP.**  The report is the only artefact that says "this is the version I
+  stand behind".  A branch watcher cannot say it, and the one used here in
+  fact fired a false alarm of its own: it sampled the branch during a
+  `reset`-and-recommit and reported "0 commit(s)", which read exactly like the
+  work having been lost.
+- **Redo the merge from your own last commit rather than layering a second
+  one.**  `ea9b651a` is not a descendant of `30c54b34`, so merging it on top
+  would have left the history carrying two rewrites of one commit and a
+  three-way resolution between them.  `git reset --hard` to this branch's own
+  last commit and one clean merge is what the history should show, and is what
+  it does show.
+- **`git rerere` will helpfully re-apply the resolution you no longer want.**
+  The redone merge resolved `docs/coverage.md` "using previous resolution" --
+  the regenerated file from the SUPERSEDED merge, with that tree's byte counts
+  in it.  Regenerating rather than accepting is what CLAUDE.md's finding 700
+  already says about `--ours`, and it applies to a remembered resolution just
+  as much as to a chosen one.

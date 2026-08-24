@@ -180,8 +180,8 @@ main(void)
 	 * proves nothing: a guard that fired because the symbol was null is
 	 * only interesting if the symbol really is null.
 	 */
-	diff_eq_int("runPcmModem is unresolved",
-		    _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_ == 0, 1,
+	diff_eq_int("runPcmModem is now DEFINED, so the four are three",
+		    _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_ != 0, 1,
 		    0);
 	diff_eq_int("v90RunDemodulator is unresolved",
 		    _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_ == 0, 1, 0);
