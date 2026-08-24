@@ -41,3 +41,7 @@ docs/worklist.md
 # is the object under reconstruction, not a build product.
 !ref/**
 testbench/linemodels/*.png
+
+# the digital-termination experiment (test/experiment/), which is not a
+# make phase tier and whose objects must not land where objtree.py globs
+build-exp/

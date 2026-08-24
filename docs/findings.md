@@ -80968,3 +80968,363 @@ rollup: 12,334 bytes and 78 symbols down to 9,321 and 77, which is the same
 3,013 and the same 1 seen from the other side.  That is the bracket this
 function was counted against before it was written, and its dropping one
 place in a list sorted by size is the whole of the rest of the diff.
+
+### 7620. The V.90 digital side CONSTRUCTS, on our source and on the blob's, and every field of the choice is now measured rather than read
+
+Reserved block for this batch: **7620-7629**.  Every branch this repository
+knows about was swept for its highest `### <n>.` heading, refs and remotes
+together: `master` and this branch are at **7587**, the three other agent
+worktrees at 7549, 7460 and 7432, `feature/digital-termination` and
+`review/v34-anon-anchor-repair` at 7002, and nothing anywhere is above 7587.
+The block starts at 7620 rather than at 7588 because CLAUDE.md asks for a gap
+and because 7570-7579 is a reserved block whose 7574-7579 were left unwritten.
+
+**THIS BATCH IS AN EXPERIMENT AND NOTHING IT PRODUCED IS IN `src/`,
+`include/` OR `tools/`.**  The whole of it is `test/experiment/`, which is
+invisible to `make phase` -- the root Makefile globs `test/unit/t_*.c[pp]` and
+names `test/interop/`'s files one by one, and nothing reaches a third
+directory -- and its objects go to `build-exp/`, which is not `build/src`,
+`build/repro` or `build-cov` and therefore not a directory `tools/objtree.py`
+globs (findings 3055, 3110, 3111).  The root Makefile was not edited.
+
+#### What was run
+
+`test/experiment/x_v90digital.cpp` calls
+
+	VPCMXF_Create(1, &v34obj, params, 10 /* ms */, 3)
+
+where `src/pump/v90/vpcm.c:674` passes a literal `0`.  `VPCMXF_Create`'s side
+is `(arg0 == 0)`, so a non-zero first argument gives `V90ModemSide` 0, which
+`V90SessionFlag.h` established selects the MODULATOR at +0x00.  The binary
+links `$(OBJ_REPRO)`, `$(HARNESS_OBJ)` and the renamed reference object, so
+`ref_VPCMXF_Create(1, ...)` -- the VENDOR'S own digital constructor, callable
+because the symbol is `extern "C"` -- runs beside ours on every probe.  That
+is 7000's correction of 702 cashed a second time: a path the shipped modem
+never entered is as callable as any other.
+
+Every arm runs in a `fork()`ed child that writes its measurements into a
+shared page, because several arms below are EXPECTED to fault and a run that
+died at the first would report the rest as silence -- 7573's rule that an
+aborted check prints what a passing one prints.  The runner is fire-checked
+against a child that returns normally and a child that dereferences NULL on
+purpose, and refuses to go on unless it tells them apart.
+
+#### Milestone 1: it constructs, and the two sides differ exactly as designed
+
+| | DIGITAL (`arg0 = 1`) | analogue (`arg0 = 0`) |
+|---|--:|--:|
+| `V90ModemSide` | **0** | 1 |
+| `V90Modem::modulator` | **non-NULL** | NULL |
+| `V90Modem::demodulator` | **NULL** | non-NULL |
+| `V90Modulator::nofSymbols` | **80** | n/a |
+| `V90BitsToSymbol::nofSymbols` | 5,240 | n/a |
+| `sysdep_malloc` calls | **52** | 133 |
+| bytes allocated | **91,296** | 233,220 |
+| live after `VPCMXF_Delete` | 0 | 0 |
+| bad frees | 0 | 0 |
+
+**Our numbers and the blob's are identical in every cell**, which is what
+makes this a statement about the vendor's branch rather than about the
+reconstruction.
+
+80 is the scaling 7000 predicted and it is worth restating because it is a
+trap for anyone driving this: `VPCMXF_Create` multiplies its `durationMs` by
+**8.0** on the digital arm and **9.6** on the analogue one, and the product
+becomes `V90Modulator::nofSymbols`, the block size every `progress` call is
+driven at.  10 ms is 80 symbols digital and 96 analogue.  Driving 96 into the
+digital modem overruns `symbolBuf`, which is allocated at two bytes a symbol
+for 80.
+
+**The digital graph is 39% of the analogue one by bytes** -- 91 KB against
+233 KB -- which is the receive chain's equaliser, pre-filter, echo canceller,
+constellation designer and resampler not being built.
+
+**AND THE MAPPING BLOCK IS UNTOUCHED BY THE CONSTRUCTOR, executed rather than
+read.**  Finding 7520 established from the disassembly that
+`V90Modem::V90Modem` does not construct `V90MappingParams`.  After
+construction, on both sides, `word_0`, `constellationSize[0]` and `shaperSR`
+all read **0xa5a5a5a5** -- `HARNESS_MALLOC_FILL`, the harness allocator's
+deliberate non-zero pattern.  The block holds the allocation's fill and
+nothing else.
+
+### 7621. Driven, the digital modulator emits a well-formed phase 3 signal and then stays there for ever
+
+Milestone 2.  `V90Modem::progress` forwards to `V90Modulator::progress` on the
+digital arm, and both are reconstructed and differentially tested (7520), so
+what this adds is that they run on an object `VPCMXF_Create` built rather than
+on one a fixture stood up.
+
+| driven | our source | the blob |
+|---|---|---|
+| state 0 (silence), 4 blocks of 80 | 0 non-zero of 320, range [0, 0] | identical |
+| state 1 after `enterPhase3()` | **213 non-zero of 320**, range [-4092, +4092], 0 NaN | identical |
+
+`V90Modulator::progress` closes with `out[i] = symbolBuf[i]`, so the float
+buffer holds PCM CODEWORD values and not line samples; +-4092 is a plausible
+linear excursion for a mu-law codeword set and the run carries no NaN and no
+infinity.
+
+**THE PHASE MACHINE DOES NOT ADVANCE ON ITS OWN, and that is the sharp
+result.**  Driven for **400 blocks -- 32,000 symbols, four seconds of an 8 kHz
+downstream** -- from `enterPhase3()` with nothing else poked, the modulator
+raised event code 0 three hundred and ninety-eight times, code 1 once, code 2
+once, and **its state never left 1**.  `progress`'s inner phase-3 arm moves to
+phase 4 only when the phase 3 modulator raises event **6**, and in four
+seconds of free running it never did.
+
+That is not a defect: `V90Modulator` has seventeen members and fourteen of
+them write the three state words, and nothing inside the class calls any of
+the eleven phase edges (`V90Modulator.cpp`'s own comment, checked over all
+seventeen).  Each edge is an entry point for a driver above the class.  What
+the measurement establishes is that **a digital modem left to run is a phase 3
+transmitter and nothing more** -- every advance is somebody else's call, and
+7623 is about who that somebody was supposed to be.
+
+`V90Modem::reset(unsigned int)` (.text+0x199a0), the object's only caller of
+`V90Modulator::reset`, is still unwritten here; its closure is **10 symbols /
+1,588 bytes**.  The experiment calls `V90Modulator::reset` directly instead,
+which is stated rather than worked around.
+
+### 7622. The mapping-params blocker's symptom is FILL-DEPENDENT, and one harness-side call to the callerless unpacker removes it completely
+
+Milestone 3, and it is the one the batch was for.  7520 found that the digital
+transmit chain reads a `V90MappingParams` block nothing on that side writes;
+7570 found the writer, `setParamsInfoFromCPUnPck`, byte-close and with zero
+relocations naming it in 1.2 MB.  Neither could say what the absence DOES,
+because both sides of a differential test read the same uninitialised storage
+and agree.
+
+**The block was filled with three controlled patterns and the chain run on
+each, on our source and on the blob's.**  The chain is
+`V90BitsToSymbol::reset` -> `V90Mapper::reset`, which is the only route by
+which the mapper ever reads the block; the harness calls it directly, standing
+in for the driver that would have (7623).
+
+| fill | outcome, OURS | outcome, the BLOB |
+|---|---|---|
+| `0x00` | runs; `bitsPerFrame` **0**, `signBitGroups` 0, `signBitGroupSize` 0, `nofBitsForNextTime` **0** | identical |
+| `0xa5` (the allocation's own) | **SIGSEGV** in `V90Mapper::reset` | **SIGSEGV**, same place |
+| `0xff` | **SIGSEGV** in `V90Mapper::reset` | **SIGSEGV**, same place |
+
+**THE SYMPTOM DEPENDS ON THE FILL, WHICH IS THE ANSWER.**  A block that
+something initialised would give the same result whatever was in it
+beforehand.  These give three different results, and the one that a real
+allocation produces is a fault.
+
+The fault is exact rather than approximate.  `V90Mapper::reset` runs
+
+	for (j = 0; j < constellationSize[i]; j++)
+
+into a 128-entry row, `constellationSize` is `unsigned int`, and the value
+copied out of the unwritten block is 0xa5a5a5a5 -- **2,779,096,485
+iterations**.  That is 7520's "a wild index says nothing initialises the
+block", executed.
+
+The `0x00` arm is the other half of 7520's dichotomy and it is worth its own
+sentence: it does NOT fault, because `constellationSize` is zero, the fill
+loop runs no iterations and the tail-fill zeroes the row.  The modem then runs
+with `bitsPerFrame` 0 and a constellation of zeroes, and asks for zero bits a
+block for ever.  **A zero-filled heap would have made this look like a working
+modem that never carries data**, which is the plausible-but-wrong outcome, and
+it is the reason the harness allocator's non-zero pattern exists.
+
+#### The harness-side call changes the answer completely
+
+The same six runs, with `setParamsInfoFromCPUnPck(block, &cp)` called from the
+harness -- **not from `src/`; no caller was added** -- against a plausible
+`V90CPUnPck` before the chain is reset:
+
+| fill | outcome, both sides |
+|---|---|
+| `0x00` | runs; `bitsPerFrame` **42**, `signBitsPerFrame` 3, `signBitGroups` 3, `signBitGroupSize` 2, `nofBitsForNextTime` **588** |
+| `0xa5` | identical |
+| `0xff` | identical |
+
+**Fill-INDEPENDENT, and the three now agree** -- which is exactly the shape a
+block with a writer has.  The single callerless function overwrites every
+field the chain reads, and the hand-poked control (`plausible_mapping`, 42
+bits to a six-symbol frame) reaches the same `bitsPerFrame` 42 and the same
+588 bits a block, with the data phase emitting over [-31100, +30076].
+
+So the answer to "would supplying the call have been enough" is **yes, for
+this chain**: the missing piece is a CALL and not a body.  588 bits per 80
+symbols at 8 kHz is 58,800 bit/s, which is 42 bits to a six-symbol frame --
+V.90's 56 kbit/s frame with the block-size rounding the converter carries.
+
+#### The writer sweep, with a denominator, over the RECONSTRUCTION this time
+
+7520 bounded the writers by mangling and 7570 found the hole in that bound --
+`extern "C"` symbols have no mangling to grep.  This bounds it the other way,
+over source rather than over symbols.  Every field
+`include/dsplib/V90MappingParams.h` declares (**12** of them) was searched for
+as an assignment target anywhere under `src/`: **78 assignments**, and they
+are in exactly three files.
+
+| file | reached from |
+|---|---|
+| `V90ConstellationDesigner.cpp` (6 members) | `V90Demodulator`, which the digital side never constructs |
+| `V90TRN2Designer.cpp` (2 members) | `V90Demodulator::exitPhase3`, likewise |
+| `V90MappingParamsInt.cpp` | `setParamsInfoFromCPUnPck`, **callerless** |
+
+Not one is in `V90Modulator.cpp`, `V90Modem.cpp`, `V90ModemCtor.cpp`,
+`V90Phase4Modulator.cpp`, `V90BitsToSymbol.cpp`, `V90Mapper.cpp`,
+`VPcmFloModem.cpp`, `VPcmXfCreate.cpp` or `vpcm.c`.
+
+**THAT CLOSES BOTH ESCAPE HATCHES 7520 LEFT OPEN.**  7520 declined to call the
+vendor's branch broken because the block "could be intended to arrive from the
+host (`vpcm.c`), or from one of the eleven unwritten `V90Modulator` phase
+edges, of which `exitRi` is the one that calls `setMappingParams`".  All
+eleven edges are now written -- `closure.py --missing V90Modulator` is **0
+symbols, 0 bytes**, against 7520's 13 / 1,706 and 7000's 27 / 11,628 -- and
+`exitRi` READS the block (`mappingParams->word_0`, into the CP or the MP) and
+hands the POINTER to `setMappingParams`; it writes nothing into it.  And
+`vpcm.c` does not appear in the sweep at all.
+
+**THE BOUND OF THIS SWEEP, stated because 7520's was overrun once already.**
+It measures the RECONSTRUCTION, which is 75.1% of the object by bytes, so a
+writer inside a symbol nobody has written yet is outside it.  What makes it
+worth quoting anyway is that the closure of the digital transmit chain is now
+zero bytes unwritten: on this path there is no unwritten symbol left to hide
+in.
+
+### 7623. NEITHER V.PCM DRIVER CAN BE ENTERED ON A DIGITAL INSTANCE, and that is 7581's constraint one level up and much stronger than it
+
+7581 measured that `v90RunDemodulator`'s jump table ends at 0x2b, that
+`V92setParamsInfoFromCPUnPck`'s two callers are `runPcmModem`'s arms 0x2d and
+0x2e, and concluded that supplying the V.90 call would need a new table entry
+and therefore an event code the digital demodulator has never raised.  **The
+constraint held, and the reason is blunter than the table.**
+
+Each driver was called on a freshly constructed modem of each side, on our
+source and on the blob's:
+
+| instance | driver | ours | blob |
+|---|---|---|---|
+| **DIGITAL** | `v90RunDemodulator` | **SIGSEGV** | **SIGSEGV** |
+| **DIGITAL** | `runPcmModem`, as constructed | returns 0 | returns 0 |
+| **DIGITAL** | `runPcmModem`, `info0Layout = 1` | **SIGSEGV** | **SIGSEGV** |
+| analogue | `v90RunDemodulator` | returns 0 | returns 0 |
+| analogue | `runPcmModem`, either | returns 0 | returns 0 |
+
+**The middle row is why the third exists.**  `runPcmModem`'s fourth statement
+is `if (info0Layout == 0) return ret;` at .text+0xe470, and a constructed
+modem has that field at zero -- so "it did not fault" on a virgin object says
+nothing about the load twelve instructions later.  Setting the field so the
+function reaches its own second jump table makes it fault like the other.  A
+probe that stopped at the middle row would have reported the opposite result,
+which is finding 134's argument arriving inside this batch.
+
+#### What the fault IS
+
+Both drivers dispatch on `this->modem.demodulator->word_3c`.  `demodulator` is
+`V90Modem + 0x04`, the pointer the constructor writes on side **1** and leaves
+NULL on side 0.  So the switch loads a field of an object the digital side
+never constructs, with no guard -- `V90Modem.h` already records that
+`V90Modem::progress` "dereferences a pointer the other arm's constructor set
+to NULL, with no guard", and this is the same shape two levels up, in the
+functions that would have to CALL it.
+
+**So there is not merely no ARM for the missing call: there is no READER.**
+7581 said supplying the V.90 unpacker's call would need a new entry in a
+44-entry table.  What this adds is that the table is indexed by a field of
+`V90Demodulator`, and on the digital side there is no `V90Demodulator` at all
+-- so the whole dispatch, not one arm of it, is unreachable.  The digital
+modulator's own event word is a DIFFERENT field, `V90Modulator + 0x34`, and
+over 32,000 symbols it raised 0, 1 and 2 (7621).  Nothing carries those to
+either table.
+
+**A digital termination therefore does not need a table entry.  It needs a
+driver**, and the object contains neither.
+
+### 7624. Loopback: a digital instance against an analogue one, both ours, and what it cannot prove
+
+Milestone 4.
+
+	VPCMXF_Create(1, ...)  ->  V90Modem::progress  ->  float[80]
+	                       ->  VPCMXF_Create(0, ...)::v90RunDemodulator
+
+Eight blocks.  It ran to the end, leaked nothing, and:
+
+- **496 non-zero codewords** were emitted by the digital modulator over the
+  eight blocks;
+- the analogue demodulator's event word `word_3c` **moved on 3 of the 8
+  blocks**, from the 0xa5a5a5a5 a fresh allocation leaves it at, and finished
+  at 0;
+- the digital modulator finished in state 1, event code 0 -- still phase 3,
+  for 7621's reason;
+- `V90Demodulator::inPhase3` finished at 0xa5a5a5a5, i.e. the analogue side
+  has an uninitialised field of its own on this path.
+
+**THREE LIMITATIONS, and they are stated before the result is used for
+anything.**
+
+1. **Both sides are our source**, so a defect they share is invisible.  A
+   reversed bit order, or a CRC taken over the wrong extent, would train
+   happily against itself.  This proves function, never conformance.  The
+   `ref_` arm elsewhere in this batch narrows that to "any defect ours and the
+   blob share", which is a smaller hole and still not a wire test.
+2. **The rates do not match.**  `VPCMXF_Create` itself says so: the digital
+   arm is 8 kHz and 80 symbols a block, the analogue arm 9600 Hz and 96.  A
+   real path has a codec and the client's resampler between them.
+3. **There is no channel and no codec.**  `V90Modulator::progress` writes
+   codeword values into the float buffer; the analogue demodulator is fed
+   those numbers directly.
+
+So what the loopback establishes is that the two halves can be clocked against
+each other without faulting and that the receiving side reacts to what the
+transmitter emits.  It is not evidence that a V.90 session would train, and no
+part of this batch is.
+
+### 7625. Was the vendor's digital branch finished?  The machinery was; the wiring was not
+
+701 warned that "dead vendor branches are often unfinished" and 702 declined to
+guess.  This batch is the first evidence either way, and it points both ways
+at once -- which is itself the finding, because the two halves it splits into
+are not the same kind of thing.
+
+**FINISHED, and the evidence is positive rather than an absence:**
+
+- Every one of `V90Modulator`'s seventeen members exists in the object and
+  `closure.py --missing V90Modulator` is **0 symbols, 0 bytes**.  It is a
+  complete phase machine -- entry, both training phases, the data phase, DIL
+  exit, CP acknowledge in both polarities, rate renegotiation.
+- Constructed on side 0 it builds 52 allocations and 91 KB and tears down with
+  nothing live and no bad free, on the BLOB as well as on ours.  A
+  half-written branch does not usually balance its allocator.
+- Driven in phase 3 it emits a bounded, NaN-free, 213-of-320-non-zero signal
+  and the blob agrees with our reconstruction sample for sample.
+- Given a filled mapping block it enters the data phase and emits at 588 bits
+  per 80-symbol block, which is 42 bits to a six-symbol frame -- the arithmetic
+  of a real 56 kbit/s V.90 session.
+
+**NOT FINISHED, and both items are one level ABOVE `V90Modulator`:**
+
+- **The block the chain reads has no reachable writer.**  The function that
+  writes it exists, is 622 bytes, and has zero relocations naming it in 1.2 MB
+  (7570).  Supplying that one call from the harness makes the data phase work
+  (7622).
+- **Neither function that drives a V.PCM session can be entered on a digital
+  instance.**  Both fault on `modem.demodulator->word_3c`, and the digital
+  constructor sets `demodulator` NULL (7623).
+
+Both gaps are in `VPcmFloModem`, and both are exactly what a digital PRODUCT
+would have had to add: a caller for the unpacker, and a driver whose dispatch
+is not the analogue demodulator's event word.  The transmit chain below them
+looks like code that was written and then never wired up -- which is a
+different state from code that was abandoned half-written, and the two are
+distinguishable precisely because the closure is zero bytes and the allocator
+balances.
+
+**WHAT THIS DOES NOT ESTABLISH.**  That the emitted signal is CORRECT.  Every
+comparison here is our source against the blob, which settles that the
+reconstruction is faithful and says nothing about whether the vendor's dead
+branch would train a real analogue client.  7000's transport constraint is
+also untouched: 56k downstream is codeword-exact by construction, and over SIP
+that needs end-to-end G.711 with no transcoding, no level adjustment and no
+packet-loss concealment.  Nothing in this batch went near a call.
+
+**AND NO CALL WAS ADDED TO `src/`, which was the batch's contract.**  Supplying
+the unpacker's caller, or a digital driver, is new behaviour with no blob
+behaviour to compare against -- 7570's and 7581's reason, and it stays the
+repo owner's decision.  What changed is that the decision now has a measured
+cost on both sides of it.
