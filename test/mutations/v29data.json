@@ -79,37 +79,37 @@
  },
  {
   "label": "the write cursor is not written back, so a caller zeroing across calls overwrites the same slots",
-  "find": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING))->widx = widx;",
+  "find": "\tfp->ring.widx = widx;",
   "replace": "\t(void)widx;"
  },
  {
   "label": "the write cursor is written back into the read cursor",
-  "find": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING))->widx = widx;",
-  "replace": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING))->ridx = widx;"
+  "find": "\tfp->ring.widx = widx;",
+  "replace": "\tfp->ring.ridx = widx;"
  },
  {
   "label": "the shaper runs before the rails are zeroed rather than after",
   "find": "\tfor (i = 0; i < count; i++) {\n\t\tshort next;",
-  "replace": "\tproduced = FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\t\tFIELD(fp, V29FP_PPS),\n\t\t\t\t  ring, out, count);\n\tfor (i = 0; i < count; i++) {\n\t\tshort next;"
+  "replace": "\tproduced = FPM_PPS_filter(&fp->pps, ring, out, count);\n\tfor (i = 0; i < count; i++) {\n\t\tshort next;"
  },
  {
   "label": "the shaper is taken from V.17's offset rather than V.29's",
-  "find": "\tproduced = FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\t\tFIELD(fp, V29FP_PPS),\n\t\t\t\t  ring, out, count);",
-  "replace": "\tproduced = FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\t\tFIELD(fp, 0x48),\n\t\t\t\t  ring, out, count);"
+  "find": "\tproduced = FPM_PPS_filter(&fp->pps, ring, out, count);",
+  "replace": "\tproduced = FPM_PPS_filter((struct fpm_pps *)(void *)&fp->smc, ring, out, count);"
  },
  {
   "label": "the ring is taken four bytes above the transmitter's block",
-  "find": "\tring = (struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING);",
-  "replace": "\tring = (struct fpm_smc_ring *)(void *)FIELD(fp, V29FP_SMC_RING + 4);"
+  "find": "\tring = &fp->ring;",
+  "replace": "\tring = (struct fpm_smc_ring *)(void *)((unsigned char *)&fp->ring + 4);"
  },
  {
   "label": "the transmitter's block is taken from the instance offset V.17 uses",
-  "find": "\tfp = FIELD_PTR(modem, V29TX_OBJ_FP);\n\tring =",
-  "replace": "\tfp = FIELD_PTR(modem, 0x28);\n\tring ="
+  "find": "\tfp = V29TX(modem);\n\tring =",
+  "replace": "\tfp = *(struct v29tx **)(void *)((unsigned char *)(modem) + 0x28);\n\tring ="
  },
  {
   "label": "the shaper is handed the sample count rather than the symbol count",
-  "find": "\t\t\t\t  ring, out, count);",
-  "replace": "\t\t\t\t  ring, out, (unsigned short)(count * 3));"
+  "find": "\tproduced = FPM_PPS_filter(&fp->pps, ring, out, count);",
+  "replace": "\tproduced = FPM_PPS_filter(&fp->pps, ring, out, (unsigned short)(count * 3));"
  }
 ]
