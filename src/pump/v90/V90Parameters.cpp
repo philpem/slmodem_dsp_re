@@ -935,8 +935,8 @@ V90Parameters::init()
  */
 V90Parameters::V90Parameters(_tagModemParameters *mp)
 {
-	initSession();
 	modemParams = mp;
+	initSession();
 	init();
 }
 

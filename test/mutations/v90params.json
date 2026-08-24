@@ -171,13 +171,13 @@
  },
  {
   "label": "the constructor does not call initSession",
-  "find": "\tinitSession();\n\tmodemParams = mp;",
+  "find": "\tmodemParams = mp;\n\tinitSession();",
   "replace": "\tmodemParams = mp;"
  },
  {
   "label": "the constructor calls setToDefault instead of init",
-  "find": "\tinitSession();\n\tmodemParams = mp;\n\tinit();",
-  "replace": "\tinitSession();\n\tmodemParams = mp;\n\tsetToDefault();"
+  "find": "\tmodemParams = mp;\n\tinitSession();\n\tinit();",
+  "replace": "\tmodemParams = mp;\n\tinitSession();\n\tsetToDefault();"
  },
  {
   "label": "the destructor is not empty",
