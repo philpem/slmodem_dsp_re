@@ -143,5 +143,121 @@
   "label": "reset: extraSymbolsPending is cleared rather than set",
   "find": "\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 1;\n}\n\nvoid\nV90BitsToSymbol::resetNoSpectral",
   "replace": "\tsymbolsBlockSize = 0;\n\textraSymbolsPending = 0;\n}\n\nvoid\nV90BitsToSymbol::resetNoSpectral"
+ },
+ {
+  "_": [
+   "V90BitsToSymbol::process(unsigned char *, unsigned int), the FILL, and it",
+   "is driven by t_v90modchain and not by t_v90btsproc: its live arm calls",
+   "mapper->process on its first statement, so it needs a real constructed",
+   "V90Mapper behind the pointer rather than the invented address that",
+   "binary installs.",
+   "",
+   "FOUR ANCHORS REACH BACK TO THE SIGNATURE.  The SIZE_NOT_SET arm and the",
+   "pending-flag tail are written out VERBATIM in both overloads -- one",
+   "status alphabet, one message -- so a find taken from inside either run",
+   "matches twice and is rejected.  The five anchors in v90btsproc.json that",
+   "quoted those lines were extended for the same reason when this function",
+   "landed.",
+   "",
+   "NOT HERE: turning `if (extraSymbolsPending) extraSymbolsPending = 0;`",
+   "into an unconditional store.  It writes the same byte on every input the",
+   "flag can hold and no test can separate the two; what holds the object's",
+   "spelling is the `cmpb $0x0,0x20(%ebx) ; je` at 0x2fcb6.  Finding 7430."
+  ]
+ },
+ {
+  "label": "fill: the guard reads symbolsDone, not the block size",
+  "find": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {",
+  "replace": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsDone == 0) {"
+ },
+ {
+  "label": "fill: an unset block size answers 2",
+  "find": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;",
+  "replace": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 2;"
+ },
+ {
+  "label": "fill: the overflow report answers 1",
+  "find": "\t\t\tstatus = 2;",
+  "replace": "\t\t\tstatus = 1;"
+ },
+ {
+  "label": "fill: the overflow report answers 3, the other overload's code",
+  "find": "\t\t\tstatus = 2;",
+  "replace": "\t\t\tstatus = 3;"
+ },
+ {
+  "label": "fill: the size-not-set arm announces BUFFER_OVERFLOW",
+  "find": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");",
+  "replace": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, BUFFER_OVERFLOW\"\n\t\t\t\t\t     \"\\r\\n\");"
+ },
+ {
+  "label": "fill: the overflow arm announces SIZE_NOT_SET",
+  "find": "\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_OVERFLOW\\r\\n\");",
+  "replace": "\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"SIZE_NOT_SET\\r\\n\");"
+ },
+ {
+  "label": "fill: SIZE_NOT_SET is announced below the debug gate",
+  "find": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)",
+  "replace": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 0)"
+ },
+ {
+  "label": "fill: BUFFER_OVERFLOW is announced below the debug gate",
+  "find": "\t\t\tstatus = 2;\n\t\t\tif (dsplibs_debug_level > 1)",
+  "replace": "\t\t\tstatus = 2;\n\t\t\tif (dsplibs_debug_level > 0)"
+ },
+ {
+  "label": "fill: the symbols go to the front of the buffer",
+  "find": "\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);",
+  "replace": "\t\tmapper->process(bits, nofBits, symbols, nofOut);"
+ },
+ {
+  "label": "fill: the mapper is given no bits",
+  "find": "\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);",
+  "replace": "\t\tmapper->process(bits, 0, symbols + symbolsDone, nofOut);"
+ },
+ {
+  "label": "fill: symbolsDone is replaced rather than advanced",
+  "find": "\t\tsymbolsDone += nofOut;",
+  "replace": "\t\tsymbolsDone = nofOut;"
+ },
+ {
+  "label": "fill: symbolsDone is not advanced at all",
+  "find": "\t\tsymbolsDone += nofOut;",
+  "replace": ""
+ },
+ {
+  "label": "fill: the capacity test is not strict",
+  "find": "\t\tif (symbolsDone > nofSymbols) {",
+  "replace": "\t\tif (symbolsDone >= nofSymbols) {"
+ },
+ {
+  "label": "fill: the capacity tested is the block size",
+  "find": "\t\tif (symbolsDone > nofSymbols) {",
+  "replace": "\t\tif (symbolsDone > symbolsBlockSize) {"
+ },
+ {
+  "label": "fill: the clamp is to the capacity, not the block size",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;",
+  "replace": "\t\t\tsymbolsDone = nofSymbols;"
+ },
+ {
+  "label": "fill: the clamp is to zero",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;",
+  "replace": "\t\t\tsymbolsDone = 0;"
+ },
+ {
+  "label": "fill: the overflow is reported and not clamped",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}",
+  "replace": "\t\t}"
+ },
+ {
+  "label": "fill: the pending flag is left alone",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;\n\n\treturn status;",
+  "replace": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\treturn status;"
+ },
+ {
+  "label": "fill: the pending flag is set rather than cleared",
+  "find": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;\n\n\treturn status;",
+  "replace": "\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t}\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 1;\n\n\treturn status;"
  }
 ]

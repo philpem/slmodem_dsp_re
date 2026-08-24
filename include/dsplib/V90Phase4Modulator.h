@@ -2,9 +2,9 @@
  * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
  *
  * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, of which THIRTY-ONE are written in src/pump/v90/V90Phase4Modulator.cpp
- * -- everything except `reset`, `setMappingParams`, `generateSymbol`, the six
- * `generate*` sequence sources and the two symbol pumps.
+ * code, of which THIRTY-TWO are written in src/pump/v90/V90Phase4Modulator.cpp
+ * -- everything except `reset`, `generateSymbol`, the six `generate*`
+ * sequence sources and the two symbol pumps.
  *
  * NOT POLYMORPHIC: `~V90Phase4Modulator` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -308,6 +308,21 @@ public:
 	void setRdRtSymbols(V90MappingParams *);
 	void setRfSymbols(V90MappingParams *);
 	void setNextStateAfterTRN2d(Phase4ModulatorState);
+
+	/*
+	 * `setMappingParams` -- 96 bytes at .text+0x2d120, and `void`
+	 * BECAUSE THE OBJECT TAIL-JUMPS OUT OF IT.  Its last act on the live
+	 * path is `jmp V90BitsToSymbol::setSymbolsBlockSize`, whose answer it
+	 * therefore returns by accident, and its null path `ret`s with %eax
+	 * holding whatever was in it.  A function returning a value would
+	 * have to agree with itself across the two and this one does not --
+	 * the same reading `V90Mapper::process` records for its own epilogue.
+	 *
+	 * IT DOES NOT STORE THE ARGUMENT ANYWHERE.  `mappingParams` at +0x4c
+	 * and `mappingParams2` at +0x50 are the constructor's and are left
+	 * alone; the block is passed through to the converter and forgotten.
+	 */
+	void setMappingParams(V90MappingParams *);
 
 	void resetBeforRRN();
 	void resetRRNSecondSection();

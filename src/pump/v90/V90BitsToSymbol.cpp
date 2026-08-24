@@ -241,6 +241,81 @@ V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)
 
 /*
  * ===========================================================================
+ * `V90BitsToSymbol::process(unsigned char *, unsigned int)` -- 180 bytes at
+ * 0x2fc90.  THE FILL, where the overload above is the drain.
+ *
+ * ONE CALL AND FOUR FIELD ACCESSES.  The bits are handed straight to the
+ * mapper this class owns, together with a write pointer `symbols +
+ * symbolsDone` -- `mov 0x10(%ebx),%eax ; mov 0x8(%ebx),%edx ; lea
+ * (%edx,%eax,2),%ecx` -- and the address of a stack local for the count the
+ * mapper produced.  `symbolsDone` then advances by that count.  So the two
+ * overloads share `symbols` and `symbolsDone` and run in opposite
+ * directions: this one appends, the other one hands out a block and shifts
+ * the remainder down.
+ *
+ * THE STATUS IS 2 HERE AND 3 THERE, and the strings are why.  The object's
+ * three messages are SIZE_NOT_SET at 0x85b4, BUFFER_OVERFLOW at 0x85ec and
+ * BUFFER_UNDERFLOW at 0x8624; this function references the first two and the
+ * other overload the first and the third.  0 remains the path with no
+ * message.
+ *
+ * THE OVERFLOW TEST IS AGAINST `nofSymbols` AND THE CLAMP IS TO
+ * `symbolsBlockSize`, which are two different fields and not a transcription
+ * slip: `cmp 0xc(%ebx),%eax ; jbe` compares the new `symbolsDone` against the
+ * BUFFER's capacity, and `mov 0x1c(%ebx),%eax ; mov %eax,0x10(%ebx)` on the
+ * failing arm sets `symbolsDone` to the BLOCK size.  It is also written after
+ * the store of the sum -- the blob stores `%eax` to +0x10 between the compare
+ * and the branch -- so the overflowing value is briefly in the field and then
+ * replaced.
+ *
+ * NOTHING IN THIS FUNCTION BOUNDS THE MAPPER'S WRITE.  The symbols are
+ * already in the buffer by the time the capacity is looked at, so status 2 is
+ * a report and not a guard, and no sequence of `reset` and `process` over a
+ * properly constructed object can raise it without the mapper having already
+ * written past the `2 * nofSymbols` allocation.  That is what makes it a
+ * poked state in the fixture rather than a driven one -- finding 7430, the
+ * same shape as 7422 and 7423.
+ *
+ * `if (extraSymbolsPending) extraSymbolsPending = 0;` IS THE OBJECT'S HERE
+ * TOO, `cmpb $0x0,0x20(%ebx) ; je ; movb $0x0`, and it is on the common path
+ * of all three arms exactly as in the other overload.
+ * ===========================================================================
+ */
+unsigned int
+V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)
+{
+	unsigned int status = 0;
+
+	if (symbolsBlockSize == 0) {
+		status = 1;
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V90BitsToSymbol - error: "
+					     "process called, SIZE_NOT_SET"
+					     "\r\n");
+	} else {
+		unsigned int nofOut;
+
+		mapper->process(bits, nofBits, symbols + symbolsDone, nofOut);
+
+		symbolsDone += nofOut;
+		if (symbolsDone > nofSymbols) {
+			status = 2;
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf("V90BitsToSymbol - "
+						     "error: process called, "
+						     "BUFFER_OVERFLOW\r\n");
+			symbolsDone = symbolsBlockSize;
+		}
+	}
+
+	if (extraSymbolsPending)
+		extraSymbolsPending = 0;
+
+	return status;
+}
+
+/*
+ * ===========================================================================
  * `V90BitsToSymbol::reset` -- 108 bytes at 0x2f8d0
  * `V90BitsToSymbol::resetNoSpectral` -- 58 bytes at 0x2f940
  *

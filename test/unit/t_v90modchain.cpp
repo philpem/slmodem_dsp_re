@@ -60,6 +60,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90BitsToSymbol.h"
 #include "dsplib/V90CP.h"
@@ -2711,6 +2712,704 @@ run_mod_dtor(const char *name, mod_ctor our_c, mod_ctor ref_c, dtor our_d,
 	return diff_end();
 }
 
+/* ------------- V90BitsToSymbol::process(unsigned char *, unsigned int) */
+
+extern "C" {
+extern unsigned int ref_dsplibs_debug_level;
+
+unsigned int our_bts_fill(void *, unsigned char *, unsigned int)
+	asm("_ZN15V90BitsToSymbol7processEPhj");
+unsigned int ref_bts_fill(void *, unsigned char *, unsigned int)
+	asm("ref__ZN15V90BitsToSymbol7processEPhj");
+
+void our_p4m_setmp(void *, V90MappingParams *)
+	asm("_ZN18V90Phase4Modulator16setMappingParamsEP16V90MappingParams");
+void ref_p4m_setmp(void *, V90MappingParams *)
+	asm("ref__ZN18V90Phase4Modulator16setMappingParamsEP16V90MappingParams");
+}
+
+/*
+ * BOTH LEVELS MOVE TOGETHER OR THE TWO SIDES TAKE DIFFERENT BRANCHES for a
+ * reason that has nothing to do with the modem.  Every gate in the object is
+ * `> 1`, so a sweep that only ever uses 0 and 2 cannot tell it from `> 0`;
+ * these two groups run 0, 1 and 2.
+ */
+static void
+set_level(unsigned int lvl)
+{
+	dsplibs_debug_level = lvl;
+	ref_dsplibs_debug_level = lvl;
+}
+
+/*
+ * WHAT THIS OVERLOAD IS, AND WHY IT NEEDS THE CHAIN AND NOT A FAKE POINTER.
+ * `t_v90btsproc` drives the other two arithmetic members over an object whose
+ * `mapper` and `params` are invented addresses, because nothing it tests
+ * dereferences either.  This one calls `mapper->process` on the first
+ * statement of its live arm, so the mapper has to be a real constructed
+ * V90Mapper with a real spectral shaper behind it -- which is what this
+ * fixture already builds.
+ *
+ * THE SYMBOL BUFFER IS HEAP AND IS SEEDED BY HAND.  The constructor allocates
+ * `2 * nofSymbols` bytes and leaves them as the allocator found them, so the
+ * two sides' buffers hold two different lots of rubbish and an untouched tail
+ * would not compare.  Both are filled with the SAME bytes after construction
+ * and before every call, and the record of what was put there is what says
+ * "nothing was written" on the arm that writes nothing.
+ *
+ * THREE THINGS ONLY A SECOND CALL CAN SEE.  On the first call after a reset
+ * `symbolsDone` is zero, so `symbols + symbolsDone` is `symbols`, and
+ * `symbolsDone += nofOut` is `symbolsDone = nofOut`.  Every case therefore
+ * makes three appending calls with no reset between them and counts the ones
+ * that started from a non-zero `symbolsDone`.
+ */
+#define FILL_N		0x100u			/* symbols each side owns  */
+#define FILL_BYTES	(2u * FILL_N)
+
+static unsigned char fill_seed[FILL_BYTES];
+static unsigned char fill_obj_pre[BTS_SIZE];
+static unsigned char fill_map_pre[MAPPER_SIZE];
+
+static void
+seed_symbols(int mode)
+{
+	fill((unsigned char *)slot_ptr(bts_a, 0x08),
+	     (unsigned char *)slot_ptr(bts_b, 0x08), fill_seed, FILL_BYTES,
+	     mode);
+}
+
+static void
+compare_symbols(const char *what, long tag)
+{
+	diff_eq_obj_(__FILE__, __LINE__, what, "short[]",
+		     slot_ptr(bts_a, 0x08), slot_ptr(bts_b, 0x08),
+		     (size_t)FILL_BYTES, tag);
+}
+
+static void
+poke_block_size(unsigned int blk)
+{
+	memcpy(bts_a + 0x1c, &blk, sizeof(blk));
+	memcpy(bts_b + 0x1c, &blk, sizeof(blk));
+}
+
+static int
+run_bts_fill(void)
+{
+	int trial, ci;
+	long saw_size_not_set = 0, saw_carry = 0, saw_grow = 0;
+	long saw_pending_set = 0, saw_pending_clear = 0, saw_announced = 0;
+
+	diff_begin("V90BitsToSymbol::process(unsigned char *, unsigned int)");
+
+	for (trial = 0; trial < NTRIAL; trial++)
+		for (ci = 0; ci < NPROC; ci++) {
+		const struct proc_case *c = &proc_cases[ci];
+		unsigned int frame = proc_frame_bits(c);
+		unsigned int blk = 7u + (unsigned int)ci;
+		unsigned int lvl = (unsigned int)(trial % 3);
+		long tag = (long)(ci * 100 + trial);
+		unsigned char *mapper_a, *mapper_b;
+		unsigned int ra, rb;
+		int call;
+
+		if (!proc_case_safe(c))
+			continue;
+
+		seed_trial(trial);
+		build_mp_proc(c, trial & 1);
+		harness_alloc_reset();
+
+		our_bts_c1(bts_a, FILL_N, PARAMS);
+		ref_bts_c1(bts_b, FILL_N, PARAMS);
+
+		mapper_a = (unsigned char *)slot_ptr(bts_a, 0x00);
+		mapper_b = (unsigned char *)slot_ptr(bts_b, 0x00);
+
+		our_bts_reset(bts_a, RST_MP, c->pcm);
+		ref_bts_reset(bts_b, RST_MP, c->pcm);
+
+		seed_symbols(trial & 3);
+		set_level(lvl);
+
+		/*
+		 * THE SIZE-NOT-SET ARM, driven where `reset` leaves it rather
+		 * than by poking: `reset` clears `symbolsBlockSize`, so the
+		 * first call after one is always this arm.  It must not reach
+		 * the mapper at all, which is asserted absolutely -- the
+		 * mapper is compared against its own bytes from before the
+		 * call, not merely against the blob's.
+		 */
+		memcpy(fill_obj_pre, bts_a, BTS_SIZE);
+		memcpy(fill_map_pre, mapper_a, MAPPER_SIZE);
+		fill_bits(4u * frame, 0);
+
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		ra = our_bts_fill(bts_a, proc_bits, 4u * frame);
+		rb = ref_bts_fill(bts_b, proc_bits, 4u * frame);
+		dsplib_debug_capture_on = 0;
+		live_refresh();
+		saw_size_not_set++;
+
+		diff_eq_int("the statuses match the blob (case %ld)", (int)ra,
+			    (int)rb, tag);
+		diff_eq_int("an unset block size answers 1 (case %ld)",
+			    (int)ra, 1, tag);
+		diff_eq_int("the transcripts match (case %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		if (lvl > 1) {
+			diff_eq_int("the blob said SIZE_NOT_SET (case %ld)",
+				    strstr(dsplib_debug_capture_text(1),
+					   "SIZE_NOT_SET") != 0, 1, tag);
+			diff_eq_int("and did not say BUFFER_OVERFLOW "
+				    "(case %ld)",
+				    strstr(dsplib_debug_capture_text(1),
+					   "BUFFER_OVERFLOW") == 0, 1, tag);
+			saw_announced++;
+		} else {
+			diff_eq_int("nothing is printed below the gate "
+				    "(case %ld)",
+				    (int)dsplib_debug_capture_lines(1), 0, tag);
+		}
+		compare_bts("after the unset-size call", bts_a, bts_b, tag);
+		compare_mapper("its mapper, not run", mapper_a, mapper_b, tag);
+		diff_eq_int("the mapper was not entered (case %ld)",
+			    memcmp(fill_map_pre, mapper_a, MAPPER_SIZE) == 0,
+			    1, tag);
+		diff_eq_int("nothing but the pending flag moved (case %ld)",
+			    memcmp(fill_obj_pre, bts_a, 0x20) == 0, 1, tag);
+		diff_eq_int("the pending flag was cleared (case %ld)",
+			    (int)peek(bts_a, 0x20, 1), 0, tag);
+		diff_eq_int("no symbol was written (case %ld)",
+			    memcmp(slot_ptr(bts_a, 0x08), fill_seed,
+				   FILL_BYTES) == 0, 1, tag);
+		saw_pending_set++;
+
+		/*
+		 * THE APPENDING ARM.  Three calls, no reset between them, and
+		 * the lengths are not multiples of the frame -- the mapper
+		 * carries a part-filled frame in its own buffer, so a call
+		 * that ends mid-frame must leave `symbolsDone` where it can
+		 * be picked up.
+		 */
+		poke_block_size(blk);
+
+		for (call = 0; call < 3; call++) {
+			static const unsigned int mul[3] = { 1u, 3u, 2u };
+			static const unsigned int add[3] = { 0u, 1u, 3u };
+			unsigned int nb = mul[call] * frame + add[call];
+			unsigned int done_before, pend_before;
+			int allocs, frees;
+
+			if (nb > PROC_BITS)
+				nb = PROC_BITS;
+
+			fill_bits(nb, (trial & 3) == 3);
+			seed_symbols((trial + call) & 3);
+			done_before = peek(bts_a, 0x10, 4);
+			pend_before = peek(bts_a, 0x20, 1);
+			allocs = harness_alloc.allocs;
+			frees = harness_alloc.frees;
+
+			dsplib_debug_capture_reset();
+			dsplib_debug_capture_on = 1;
+			ra = our_bts_fill(bts_a, proc_bits, nb);
+			rb = ref_bts_fill(bts_b, proc_bits, nb);
+			dsplib_debug_capture_on = 0;
+
+			allocs = harness_alloc.allocs - allocs;
+			frees = harness_alloc.frees - frees;
+			live_refresh();
+
+			diff_eq_int("the statuses match the blob (case %ld)",
+				    (int)ra, (int)rb, tag);
+			diff_eq_int("a set block size answers 0 (case %ld)",
+				    (int)ra, 0, tag);
+			diff_eq_int("the silent path printed nothing "
+				    "(case %ld)",
+				    (int)dsplib_debug_capture_lines(1), 0, tag);
+			compare_bts("after the fill", bts_a, bts_b, tag);
+			compare_mapper("the mapper it ran", mapper_a, mapper_b,
+				       tag);
+			compare_symbols("the symbols it appended", tag);
+			diff_eq_int("nothing stored past the object "
+				    "(case %ld)",
+				    guard_intact(bts_a, bts_b, bts_seed,
+						 BTS_SIZE, BTS_SLOT), 1, tag);
+			diff_eq_int("the block size was left alone (case %ld)",
+				    (int)peek(bts_a, 0x1c, 4), (int)blk, tag);
+			diff_eq_int("nofSymbols was left alone (case %ld)",
+				    (int)peek(bts_a, 0x0c, 4), (int)FILL_N,
+				    tag);
+			diff_eq_int("symbolsDone never goes backwards "
+				    "(case %ld)",
+				    peek(bts_a, 0x10, 4) >= done_before, 1,
+				    tag);
+			diff_eq_int("the appends stayed inside the buffer "
+				    "(case %ld)",
+				    peek(bts_a, 0x10, 4) <= FILL_N, 1, tag);
+			diff_eq_int("the fill allocated nothing (case %ld)",
+				    allocs, 0, tag);
+			diff_eq_int("the fill freed nothing (case %ld)", frees,
+				    0, tag);
+			diff_eq_int("the pending flag stays clear (case %ld)",
+				    (int)peek(bts_a, 0x20, 1), 0, tag);
+
+			if (peek(bts_a, 0x10, 4) > done_before)
+				saw_grow++;
+			if (done_before != 0u)
+				saw_carry++;
+			if (pend_before == 0u)
+				saw_pending_clear++;
+		}
+
+		our_bts_d1(bts_a);
+		ref_bts_d1(bts_b);
+		diff_eq_int("nothing left allocated (case %ld)",
+			    harness_alloc.live, 0, tag);
+		}
+
+	set_level(0);
+
+	diff_eq_int("the size-not-set arm was driven (%ld calls)",
+		    saw_size_not_set > 0, 1, saw_size_not_set);
+	diff_eq_int("a message was captured above the gate (%ld calls)",
+		    saw_announced > 0, 1, saw_announced);
+	diff_eq_int("symbols were appended (%ld calls)", saw_grow > 0, 1,
+		    saw_grow);
+	diff_eq_int("an append started from a non-zero symbolsDone "
+		    "(%ld calls)", saw_carry > 0, 1, saw_carry);
+	diff_eq_int("the pending flag was found set (%ld calls)",
+		    saw_pending_set > 0, 1, saw_pending_set);
+	diff_eq_int("and found already clear (%ld calls)",
+		    saw_pending_clear > 0, 1, saw_pending_clear);
+
+	return diff_end();
+}
+
+/*
+ * THE OVERFLOW ARM NO CONSTRUCTED OBJECT CAN REACH, and finding 7430 is why
+ * it is poked rather than driven -- the same shape as 7422 and 7423 in
+ * `V90Mapper::process`.
+ *
+ * `symbolsDone > nofSymbols` is tested AFTER the mapper has already written
+ * `nofOut` symbols at `symbols + symbolsDone`, and the buffer is exactly
+ * `2 * nofSymbols` bytes.  So no sequence of `reset` and `process` can raise
+ * status 2 without the mapper having written outside the allocation first:
+ * the status is a report and not a guard.  What is poked is `nofSymbols`
+ * ALONE, downwards, on both sides, over a buffer built for 0x100 symbols --
+ * so the writes stay inside real storage while the capacity the function
+ * compares against is one the object could not have.
+ *
+ * THE BOUNDARY IS DRIVEN AS WELL AS THE FAILURE, and that is what the
+ * three-phase shape is for.  Phase one measures how many symbols this case
+ * and this bit string actually produce; phase two sets `nofSymbols` to
+ * exactly that and requires status 0, which is the only thing that separates
+ * the object's `>` from a `>=`; phase three sets it one lower and requires
+ * status 2.
+ *
+ * THE CLAMP IS TO `symbolsBlockSize` AND NOT TO `nofSymbols`, so the two are
+ * kept apart by construction -- `blk` is `done + 5` and the capacity is
+ * `done - 1` -- and the resulting `symbolsDone` is asserted absolutely.  With
+ * the two equal, `symbolsDone = nofSymbols` would pass.
+ */
+static int
+run_bts_fill_overflow(void)
+{
+	int trial, ci;
+	long saw_overflow = 0, saw_boundary = 0, saw_announced = 0;
+
+	diff_begin("V90BitsToSymbol::process, the overflow report");
+
+	for (trial = 0; trial < NTRIAL; trial++)
+		for (ci = 0; ci < NPROC; ci++) {
+		const struct proc_case *c = &proc_cases[ci];
+		unsigned int frame = proc_frame_bits(c);
+		unsigned int lvl = (unsigned int)(trial % 3);
+		long tag = (long)(ci * 100 + trial);
+		unsigned int done, blk, cap, ra, rb;
+		unsigned char *mapper_a, *mapper_b;
+		int phase;
+
+		if (!proc_case_safe(c))
+			continue;
+
+		seed_trial(trial);
+		build_mp_proc(c, trial & 1);
+		fill_bits(4u * frame, trial & 1);
+
+		/* ---- phase one: how many symbols does this case make? */
+		harness_alloc_reset();
+		our_bts_c1(bts_a, FILL_N, PARAMS);
+		ref_bts_c1(bts_b, FILL_N, PARAMS);
+		our_bts_reset(bts_a, RST_MP, c->pcm);
+		ref_bts_reset(bts_b, RST_MP, c->pcm);
+		seed_symbols(trial & 3);
+		poke_block_size(1u);
+		set_level(0);
+		ra = our_bts_fill(bts_a, proc_bits, 4u * frame);
+		rb = ref_bts_fill(bts_b, proc_bits, 4u * frame);
+		live_refresh();
+		diff_eq_int("the measuring call agrees (case %ld)", (int)ra,
+			    (int)rb, tag);
+		diff_eq_int("the measuring call did not overflow (case %ld)",
+			    (int)ra, 0, tag);
+		done = peek(bts_a, 0x10, 4);
+		diff_eq_int("the two sides made the same count (case %ld)",
+			    (int)done, (int)peek(bts_b, 0x10, 4), tag);
+		our_bts_d1(bts_a);
+		ref_bts_d1(bts_b);
+
+		/*
+		 * A case that made nothing could say nothing about the
+		 * boundary -- `done - 1` would wrap and `done` would be the
+		 * capacity the object already has -- so it is REQUIRED rather
+		 * than skipped.  Written as a skip it was a check that could
+		 * not fail guarding a branch nothing reaches: the heaviest
+		 * priming in `proc_cases` is `shaperSR` 1 with `shaperId` 3,
+		 * which swallows eighteen symbols, and four frames still
+		 * leave six.
+		 */
+		diff_eq_int("the case made symbols to overflow with "
+			    "(case %ld)", done >= 2u, 1, tag);
+
+		blk = done + 5u;
+
+		for (phase = 0; phase < 2; phase++) {
+			cap = phase ? done - 1u : done;
+
+			fill(bts_a, bts_b, bts_seed, BTS_SLOT,
+			     (trial + phase) & 3);
+			harness_alloc_reset();
+			our_bts_c1(bts_a, FILL_N, PARAMS);
+			ref_bts_c1(bts_b, FILL_N, PARAMS);
+			mapper_a = (unsigned char *)slot_ptr(bts_a, 0x00);
+			mapper_b = (unsigned char *)slot_ptr(bts_b, 0x00);
+			our_bts_reset(bts_a, RST_MP, c->pcm);
+			ref_bts_reset(bts_b, RST_MP, c->pcm);
+			seed_symbols((trial + phase) & 3);
+			poke_block_size(blk);
+
+			memcpy(bts_a + 0x0c, &cap, sizeof(cap));
+			memcpy(bts_b + 0x0c, &cap, sizeof(cap));
+
+			diff_eq_int("the clamp target differs from the "
+				    "capacity (case %ld)", blk != cap, 1, tag);
+			diff_eq_int("and from the count and from zero "
+				    "(case %ld)",
+				    blk != done && blk != 0u, 1, tag);
+
+			set_level(lvl);
+			dsplib_debug_capture_reset();
+			dsplib_debug_capture_on = 1;
+			ra = our_bts_fill(bts_a, proc_bits, 4u * frame);
+			rb = ref_bts_fill(bts_b, proc_bits, 4u * frame);
+			dsplib_debug_capture_on = 0;
+			live_refresh();
+
+			diff_eq_int("the statuses match the blob (case %ld)",
+				    (int)ra, (int)rb, tag);
+			diff_eq_int("the transcripts match (case %ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+			compare_bts("after the overflow test", bts_a, bts_b,
+				    tag);
+			compare_mapper("its mapper", mapper_a, mapper_b, tag);
+			compare_symbols("the symbols it wrote anyway", tag);
+			diff_eq_int("nothing stored past the object "
+				    "(case %ld)",
+				    guard_intact(bts_a, bts_b, bts_seed,
+						 BTS_SIZE, BTS_SLOT), 1, tag);
+
+			if (phase == 0) {
+				diff_eq_int("exactly filling the buffer is "
+					    "NOT an overflow (case %ld)",
+					    (int)ra, 0, tag);
+				diff_eq_int("and symbolsDone is the count "
+					    "(case %ld)",
+					    (int)peek(bts_a, 0x10, 4),
+					    (int)done, tag);
+				diff_eq_int("and nothing was printed "
+					    "(case %ld)",
+					    (int)dsplib_debug_capture_lines(1),
+					    0, tag);
+				saw_boundary++;
+			} else {
+				diff_eq_int("one symbol too many answers 2 "
+					    "(case %ld)", (int)ra, 2, tag);
+				diff_eq_int("symbolsDone is clamped to the "
+					    "BLOCK size (case %ld)",
+					    (int)peek(bts_a, 0x10, 4),
+					    (int)blk, tag);
+				if (lvl > 1) {
+					diff_eq_int("the blob said "
+						    "BUFFER_OVERFLOW "
+						    "(case %ld)",
+						    strstr(
+						      dsplib_debug_capture_text(
+							1),
+						      "BUFFER_OVERFLOW") != 0,
+						    1, tag);
+					diff_eq_int("and did not say "
+						    "SIZE_NOT_SET (case %ld)",
+						    strstr(
+						      dsplib_debug_capture_text(
+							1),
+						      "SIZE_NOT_SET") == 0, 1,
+						    tag);
+					saw_announced++;
+				} else {
+					diff_eq_int("nothing is printed below "
+						    "the gate (case %ld)",
+						    (int)
+						    dsplib_debug_capture_lines(
+							1), 0, tag);
+				}
+				saw_overflow++;
+			}
+
+			our_bts_d1(bts_a);
+			ref_bts_d1(bts_b);
+			diff_eq_int("nothing left allocated (case %ld)",
+				    harness_alloc.live, 0, tag);
+		}
+		}
+
+	set_level(0);
+
+	diff_eq_int("the exact-fit boundary was driven (%ld cases)",
+		    saw_boundary > 0, 1, saw_boundary);
+	diff_eq_int("the overflow arm was driven (%ld cases)",
+		    saw_overflow > 0, 1, saw_overflow);
+	diff_eq_int("BUFFER_OVERFLOW was captured (%ld cases)",
+		    saw_announced > 0, 1, saw_announced);
+
+	return diff_end();
+}
+
+/* ------------------------ V90Phase4Modulator::setMappingParams */
+
+/*
+ * WHAT MAKES THIS ONE TESTABLE IS THE CONVERTER IT OWNS.  The function stores
+ * nothing in the modulator: it hands the block and the companding law to
+ * `bitsToSymbol->reset` and then asks for a one-symbol block, so everything
+ * it does is in another object.  The OWNED arm of the constructor is the one
+ * driven, because a SUPPLIED converter is one shared instance and the second
+ * side's call would run over the first side's result.
+ *
+ * `pcmType` AT +0x38 IS POKED BECAUSE THE CONSTRUCTOR DOES NOT WRITE IT --
+ * `V90Phase4Modulator::reset` does, and that member is not written yet.  Both
+ * enumerators are driven, so a body that passed a constant, or read the
+ * neighbouring word, reaches the mapper with the other G.711 law and the
+ * whole constellation differs.
+ *
+ * THE BLOCK IS NOT ONE OF THE MODULATOR'S OWN.  `mappingParams` at +0x4c and
+ * `mappingParams2` at +0x50 are filled with two OTHER valid blocks for the
+ * duration of this group, so passing either of them instead of the argument
+ * is caught by the resulting `bitsPerFrame` rather than by a fault.
+ *
+ * THE SENTINELS ARE FINDING 7105's, twice over: the converter's constructor
+ * writes `symbolsDone`, `symbolsBlockSize` and `extraSymbolsPending` with
+ * exactly the values `reset` writes, and the mapper's does the same for nine
+ * of its own words.  Both are poked between construction and the call.
+ */
+static unsigned char smp_pre_a[P4M_SLOT];
+static unsigned char smp_pre_b[P4M_SLOT];
+static unsigned char smp_bts_pre[BTS_SIZE];
+static unsigned char smp_map_pre[MAPPER_SIZE];
+
+static int
+run_p4m_setmp(void)
+{
+	int trial, ci;
+	long saw_alaw = 0, saw_ulaw = 0, saw_null_msg = 0, saw_null_quiet = 0;
+
+	diff_begin("V90Phase4Modulator::setMappingParams");
+
+	for (trial = 0; trial < NTRIAL; trial++)
+		for (ci = 0; ci < NRESET; ci++) {
+		const struct reset_case *c = &reset_cases[ci];
+		unsigned int flag = flagv[trial & 7];
+		unsigned int arg8 = arg8v[(trial + 3) & 7];
+		unsigned int pcm = (unsigned int)((trial + ci) & 1);
+		unsigned int lvl = (unsigned int)(trial % 3);
+		long tag = (long)(ci * 100 + trial);
+		unsigned char *bts_o_a, *bts_o_b, *map_o_a, *map_o_b;
+
+		seed_trial(trial);
+		harness_alloc_reset();
+
+		/* Two other valid blocks, then the one under test. */
+		build_mp(&reset_cases[(ci + 3) % NRESET], 0);
+		memcpy(mpsa_store, rst_mp, sizeof(mpsa_store));
+		build_mp(&reset_cases[(ci + 5) % NRESET], 0);
+		memcpy(mpsb_store, rst_mp, sizeof(mpsb_store));
+		build_mp(c, trial & 1);
+
+		/*
+		 * AND, not OR: with `||` this passes as soon as the argument
+		 * differs from EITHER of them, which is exactly the state
+		 * that makes the two "the modulator's own block is used"
+		 * mutations uncatchable.  It holds today because `ci`,
+		 * `(ci + 3) % 8` and `(ci + 5) % 8` never collide and all
+		 * eight cases carry a different `word0`; the point of the
+		 * check is that an edit to `reset_cases` cannot break that
+		 * silently.
+		 */
+		diff_eq_int("the argument is not one of the modulator's own "
+			    "blocks (case %ld)",
+			    RST_MP->word_0 != MPS_A->word_0
+			    && RST_MP->word_0 != MPS_B->word_0, 1, tag);
+
+		our_p4m_c1(p4m_a, PARAMS, flag, 0, MP, MPS_A, MPS_B, CP, arg8);
+		ref_p4m_c1(p4m_b, PARAMS, flag, 0, MP, MPS_A, MPS_B, CP, arg8);
+
+		bts_o_a = (unsigned char *)slot_ptr(p4m_a, 0x0044);
+		bts_o_b = (unsigned char *)slot_ptr(p4m_b, 0x0044);
+		diff_eq_int("the constructor built a converter (case %ld)",
+			    bts_o_a != 0 && bts_o_b != 0, 1, tag);
+		if (bts_o_a == 0 || bts_o_b == 0)
+			continue;
+		map_o_a = (unsigned char *)slot_ptr(bts_o_a, 0x00);
+		map_o_b = (unsigned char *)slot_ptr(bts_o_b, 0x00);
+
+		memcpy(p4m_a + 0x0038, &pcm, sizeof(pcm));
+		memcpy(p4m_b + 0x0038, &pcm, sizeof(pcm));
+
+		poke_bts(bts_o_a);
+		poke_bts(bts_o_b);
+		poke_fields(map_o_a);
+		poke_fields(map_o_b);
+
+		memcpy(smp_pre_a, p4m_a, P4M_SLOT);
+		memcpy(smp_pre_b, p4m_b, P4M_SLOT);
+		memcpy(smp_bts_pre, bts_o_a, BTS_SIZE);
+		memcpy(smp_map_pre, map_o_a, MAPPER_SIZE);
+
+		set_level(lvl);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		our_p4m_setmp(p4m_a, RST_MP);
+		ref_p4m_setmp(p4m_b, RST_MP);
+		dsplib_debug_capture_on = 0;
+		live_refresh();
+
+		diff_eq_int("the transcripts match (case %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		diff_eq_int("the live path printed nothing (case %ld)",
+			    (int)dsplib_debug_capture_lines(1), 0, tag);
+
+		compare_p4m("after setMappingParams", p4m_a, p4m_b, 1, tag);
+		compare_bts("the converter it drives", bts_o_a, bts_o_b, tag);
+		compare_mapper("the converter's mapper", map_o_a, map_o_b,
+			       tag);
+		diff_eq_int("nothing stored past the modulator (case %ld)",
+			    guard_intact(p4m_a, p4m_b, p4m_seed, P4M_SIZE,
+					 P4M_SLOT), 1, tag);
+
+		/*
+		 * THE MODULATOR ITSELF DID NOT MOVE, made per side against
+		 * its own bytes: two sides agreeing on a field neither wrote
+		 * is not evidence that neither wrote it.
+		 */
+		diff_eq_int("the modulator stored nothing (case %ld)",
+			    memcmp(smp_pre_a, p4m_a, P4M_SLOT) == 0, 1, tag);
+		diff_eq_int("ref stored nothing either (case %ld)",
+			    memcmp(smp_pre_b, p4m_b, P4M_SLOT) == 0, 1, tag);
+		diff_eq_int("the converter moved (case %ld)",
+			    memcmp(smp_bts_pre, bts_o_a, BTS_SIZE) != 0, 1,
+			    tag);
+		diff_eq_int("its mapper moved (case %ld)",
+			    memcmp(smp_map_pre, map_o_a, MAPPER_SIZE) != 0, 1,
+			    tag);
+
+		/* What the two calls left, absolutely. */
+		diff_eq_int("the block size is ONE symbol (case %ld)",
+			    (int)peek(bts_o_a, 0x1c, 4), 1, tag);
+		diff_eq_int("bitsPerFrame is the ARGUMENT's first word "
+			    "(case %ld)", (int)peek(bts_o_a, 0x14, 4),
+			    (int)c->word0, tag);
+		diff_eq_int("extraSymbols is 6 * shaperId / shaperSR "
+			    "(case %ld)", (int)peek(bts_o_a, 0x18, 4),
+			    (int)bts_expected_extra(c), tag);
+		diff_eq_int("symbolsDone was cleared (case %ld)",
+			    (int)peek(bts_o_a, 0x10, 4), 0, tag);
+		diff_eq_int("the pending flag was set (case %ld)",
+			    (int)peek(bts_o_a, 0x20, 1), 1, tag);
+		diff_eq_int("the mapper got the same block (case %ld)",
+			    (int)peek(map_o_a, 0x04, 4), (int)c->word0, tag);
+
+		if (pcm)
+			saw_alaw++;
+		else
+			saw_ulaw++;
+
+		/*
+		 * THE NULL ARM: a message and nothing else, over the object
+		 * the live path has just filled in.
+		 */
+		memcpy(smp_pre_a, p4m_a, P4M_SLOT);
+		memcpy(smp_bts_pre, bts_o_a, BTS_SIZE);
+		memcpy(smp_map_pre, map_o_a, MAPPER_SIZE);
+
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		our_p4m_setmp(p4m_a, 0);
+		ref_p4m_setmp(p4m_b, 0);
+		dsplib_debug_capture_on = 0;
+		live_refresh();
+
+		diff_eq_int("the null transcripts match (case %ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		if (lvl > 1) {
+			diff_eq_int("the blob announced the null block "
+				    "(case %ld)",
+				    strstr(dsplib_debug_capture_text(1),
+					   "Null mappingParams") != 0, 1, tag);
+			saw_null_msg++;
+		} else {
+			diff_eq_int("nothing is printed below the gate "
+				    "(case %ld)",
+				    (int)dsplib_debug_capture_lines(1), 0, tag);
+			saw_null_quiet++;
+		}
+		diff_eq_int("the null path stored nothing in the modulator "
+			    "(case %ld)",
+			    memcmp(smp_pre_a, p4m_a, P4M_SLOT) == 0, 1, tag);
+		diff_eq_int("nor in the converter (case %ld)",
+			    memcmp(smp_bts_pre, bts_o_a, BTS_SIZE) == 0, 1,
+			    tag);
+		diff_eq_int("nor in its mapper (case %ld)",
+			    memcmp(smp_map_pre, map_o_a, MAPPER_SIZE) == 0, 1,
+			    tag);
+		compare_p4m("after the null call", p4m_a, p4m_b, 1, tag);
+		compare_bts("the converter, untouched", bts_o_a, bts_o_b, tag);
+		compare_mapper("its mapper, untouched", map_o_a, map_o_b, tag);
+
+		our_p4m_d1(p4m_a);
+		ref_p4m_d1(p4m_b);
+		diff_eq_int("nothing left allocated (case %ld)",
+			    harness_alloc.live, 0, tag);
+		}
+
+	set_level(0);
+
+	diff_eq_int("A-law was driven (%ld cases)", saw_alaw > 0, 1, saw_alaw);
+	diff_eq_int("mu-law was driven (%ld cases)", saw_ulaw > 0, 1,
+		    saw_ulaw);
+	diff_eq_int("the null message was captured (%ld cases)",
+		    saw_null_msg > 0, 1, saw_null_msg);
+	diff_eq_int("and gated off (%ld cases)", saw_null_quiet > 0, 1,
+		    saw_null_quiet);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2759,6 +3458,8 @@ main(void)
 	rc |= run_bts_reset("V90BitsToSymbol::resetNoSpectral",
 			    our_bts_resetns, ref_bts_resetns, 0);
 	rc |= run_bts_reset_div();
+	rc |= run_bts_fill();
+	rc |= run_bts_fill_overflow();
 
 	rc |= run_p4m_ctor("V90Phase4Modulator (C1, converter supplied)",
 			   our_p4m_c1, ref_p4m_c1, our_p4m_d1, ref_p4m_d1, 1);
@@ -2772,6 +3473,8 @@ main(void)
 			   our_p4m_c1, ref_p4m_c1, our_p4m_d1, ref_p4m_d1);
 	rc |= run_p4m_dtor("V90Phase4Modulator::~V90Phase4Modulator (D2)",
 			   our_p4m_c2, ref_p4m_c2, our_p4m_d2, ref_p4m_d2);
+
+	rc |= run_p4m_setmp();
 
 	rc |= run_mod_ctor("V90Modulator::V90Modulator (C1)", our_mod_c1,
 			   ref_mod_c1, our_mod_d1, ref_mod_d1);

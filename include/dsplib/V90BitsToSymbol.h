@@ -1,8 +1,12 @@
 /*
  * V90BitsToSymbol.h -- the V.90 downstream bit-to-symbol converter.
  *
- * Reconstructed from dsplibs.o.  Eight members and 1,532 bytes of code, of
- * which the constructor and the destructor are written here.
+ * Reconstructed from dsplibs.o.  NINE members and 1,672 bytes of code,
+ * counting each of the duplicated constructor and destructor symbols once;
+ * EIGHT of the nine and 1,188 of the bytes are written.  The one that is not
+ * is `process(unsigned char *, unsigned int &, short *)`, 484 bytes at
+ * 0x2faa0.  (This sentence used to say "eight members and 1,532 bytes"; both
+ * halves were wrong, and `nm -S -C` is where the figures above come from.)
  *
  * NOT POLYMORPHIC: `~V90BitsToSymbol` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -73,21 +77,32 @@ public:
 	 * the first into the second and into `process`, and emits no `call`
 	 * in either.
 	 *
-	 * `process` hands out one block of symbols, shifts whatever is left
-	 * over down to the front, writes the next bit demand through its
-	 * reference parameter and answers a STATUS: 0 silently, 1 when
-	 * `symbolsBlockSize` is zero and 3 when there were not enough symbols
-	 * ready.  The two non-zero values are the object's own words --
-	 * "SIZE_NOT_SET" and "BUFFER_UNDERFLOW" in the two messages -- and 0
-	 * is the one with no message.
+	 * `process(unsigned int &, short *)` hands out one block of symbols,
+	 * shifts whatever is left over down to the front, writes the next bit
+	 * demand through its reference parameter and answers a STATUS: 0
+	 * silently, 1 when `symbolsBlockSize` is zero and 3 when there were
+	 * not enough symbols ready.  The two non-zero values are the object's
+	 * own words -- "SIZE_NOT_SET" and "BUFFER_UNDERFLOW" in the two
+	 * messages -- and 0 is the one with no message.
 	 *
-	 * The other two `process` overloads are NOT written: each needs
-	 * something unwritten, and one unwritten callee fails every
-	 * differential binary rather than only its own.
+	 * `process(unsigned char *, unsigned int)` IS THE OTHER DIRECTION AND
+	 * SHARES THAT ALPHABET.  It is the FILL: the bits go to the mapper,
+	 * the symbols the mapper makes are appended to `symbols` at
+	 * `symbolsDone`, and the answer is 0, 1 for the very same
+	 * "SIZE_NOT_SET" message, or **2** for "BUFFER_OVERFLOW" -- the third
+	 * of the three strings at .rodata.str1.4+0x85b4, +0x85ec and +0x8624,
+	 * and the one the other overload never raises.  So the class has one
+	 * status alphabet, 1 SIZE_NOT_SET / 2 BUFFER_OVERFLOW / 3
+	 * BUFFER_UNDERFLOW, and each overload can reach the two its own
+	 * direction can hit.
+	 *
+	 * THE THIRD OVERLOAD, `(unsigned char *, unsigned int &, short *)` at
+	 * 0x2faa0, IS NOT WRITTEN.
 	 */
 	unsigned int nofBitsForNextTime();
 	unsigned int setSymbolsBlockSize(unsigned int blockSize);
 	unsigned int process(unsigned int &nofBits, short *outSymbols);
+	unsigned int process(unsigned char *bits, unsigned int nofBits);
 
 	/*
 	 * BOTH RESETS ARE THE MAPPER'S OWN, PLUS WHAT THIS CLASS ADDS.  The

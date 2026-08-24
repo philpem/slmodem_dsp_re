@@ -3,11 +3,13 @@
  * symbol tables, the six symbol readers, the fifteen state-machine edges and
  * the two data pumps.
  *
- * Reconstructed from dsplibs.o.  THIRTY-ONE of the class's forty-three
- * members.  The twelve that are NOT here are `reset`, `setMappingParams`,
- * `generateSymbol`, the six `generate*` sequence sources, `generateV90Symbol`
- * and `generateV92Symbol` -- the last two are 2,235 and 3,922 bytes and are
+ * Reconstructed from dsplibs.o.  THIRTY-TWO of the class's forty-three
+ * members.  The eleven that are NOT here are `reset`, `generateSymbol`, the
+ * six `generate*` sequence sources, `generateV90Symbol` and
+ * `generateV92Symbol` -- the last two are 2,235 and 3,922 bytes and are
  * where the state machine is dispatched rather than edged.
+ * `setMappingParams` used to be on that list and is now written, below
+ * `setSessionFlag`.
  * `include/dsplib/V90Phase4Modulator.h` carries the object map, the 0x2fac
  * size, the ownership argument and `Phase4ModulatorState`.
  *
@@ -168,6 +170,43 @@ void
 V90Phase4Modulator::setSessionFlag(unsigned int flag)
 {
 	sessionFlag = flag;
+}
+
+/*
+ * ===========================================================================
+ * `V90Phase4Modulator::setMappingParams` -- 96 bytes at .text+0x2d120.
+ *
+ * A NULL CHECK AND TWO CALLS INTO THE CONVERTER.  A usable block is handed to
+ * `bitsToSymbol->reset(mp, pcmType)` -- the companding law comes out of +0x38
+ * and not out of the argument -- and then the block size is set to ONE
+ * symbol.  Both calls go through the pointer at +0x44, and the object RELOADS
+ * it after the first call (`mov 0x44(%ebx),%ecx` at +0x2d13b, `mov
+ * 0x44(%ebx),%eax` at +0x2d14f) rather than keeping it, which is what GCC
+ * does for two calls through a member it cannot prove the first did not move.
+ *
+ * THE ONE IS A LITERAL AND NOT A COUNT.  `mov $0x1,%edx` into the outgoing
+ * slot; nothing in the class is read to form it.  What comes back from
+ * `setSymbolsBlockSize` -- the bit demand for that one symbol -- is dropped,
+ * and the sibling call is how the object drops it.
+ *
+ * THE NULL PATH IS A MESSAGE AND NOTHING ELSE: no store, no call into the
+ * converter, and the same `dsplibs_debug_level > 1` gate as everywhere else.
+ * The string is the author's own words for what a null block means here.
+ * ===========================================================================
+ */
+void
+V90Phase4Modulator::setMappingParams(V90MappingParams *mp)
+{
+	if (mp == 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V90Phase4Modulator: ERROR: Null "
+					     "mappingParams @ setMappingParams"
+					     "\r\n");
+		return;
+	}
+
+	bitsToSymbol->reset(mp, pcmType);
+	bitsToSymbol->setSymbolsBlockSize(1);
 }
 
 /*
