@@ -1928,7 +1928,7 @@ run_progress(void)
 	int pi, ci, trial = 0;
 	int sawCode5 = 0, sawCode7 = 0, sawCode8 = 0, sawCode9 = 0;
 	int sawSilence = 0, sawData = 0, sawIllegal = 0, sawLimit = 0;
-	int sawFilter = 0, sawNoFilter = 0, sawOffPrime = 0;
+	int sawFilter = 0, sawNoFilter = 0, sawOffPrime = 0, sawLevel2 = 0;
 
 	diff_begin("V92Modulator::progress");
 
@@ -2014,6 +2014,8 @@ run_progress(void)
 		unsigned int na = 0xa5a5a5a5u, nb = 0xa5a5a5a5u;
 		unsigned int i;
 		int call, s;
+		int lvl2 = (pi == 4 || pi == 8 || pi == 9 || pi == 10
+			    || pi == 11);
 
 		filter_override = ci;
 		build(trial);
@@ -2103,6 +2105,28 @@ run_progress(void)
 			prog_bits_b[i] = v;
 		}
 
+		/*
+		 * FIVE ROWS RUN AT LEVEL 2, and they are the five that reach a
+		 * diagnostic `progress` owns: "Enter phase4" on the code 8
+		 * row, "Illegal state" on the two illegal ones and
+		 * "Queue is Empty/Full !!!" on the two queue ones.  The level
+		 * changes nothing but the messages -- every state comparison
+		 * below still runs -- and without it `debugcov.py` counts three
+		 * sites in this file that never execute, which is three claims
+		 * about the object's text with no trial behind them.
+		 *
+		 * The TEXT is compared only where the row does not descend into
+		 * the transmit chain: the code 8 row reaches `V92CP::
+		 * infoToBits`, which prints heap addresses, and the two sides'
+		 * modulators are two allocations.  The LINE COUNT compares
+		 * everywhere.
+		 */
+		if (lvl2) {
+			dsplib_debug_capture_on = 1;
+			dsplib_debug_capture_reset();
+			set_level(2);
+		}
+
 		for (call = 0; call < 2; call++) {
 			for (i = 0; i < PROG_SAMPLES + 16u; i++) {
 				prog_out_a[i] = PROG_WIPE;
@@ -2134,6 +2158,25 @@ run_progress(void)
 			    && progs[pi].nSamples != 0u
 			    && queue_count(0) != M(0)->queuePrime)
 				sawOffPrime = 1;
+		}
+
+		if (lvl2) {
+			set_level(0);
+			dsplib_debug_capture_on = 0;
+			diff_eq_int("the transcripts are the same length "
+				    "(trial %ld)",
+				    (int)dsplib_debug_capture_lines(0),
+				    (int)dsplib_debug_capture_lines(1), trial);
+			diff_eq_int("and something was printed (trial %ld)",
+				    dsplib_debug_capture_lines(0) > 0u, 1,
+				    trial);
+			if (pi != 4)
+				diff_eq_int("and they say the same thing "
+					    "(trial %ld)",
+					    strcmp(dsplib_debug_capture_text(0),
+						   dsplib_debug_capture_text(1))
+					    == 0, 1, trial);
+			sawLevel2 = 1;
 		}
 
 		/* What each row was for, checked absolutely. */
@@ -2267,6 +2310,7 @@ run_progress(void)
 	 * four arms' expression the same store.
 	 */
 	diff_eq_int("the queue left its primed level", sawOffPrime, 1, 0);
+	diff_eq_int("five rows ran at level 2", sawLevel2, 1, 0);
 	diff_eq_int("progress trials run", trial, NPROG * 2, 0);
 
 	return diff_end();

@@ -78784,10 +78784,20 @@ there is nothing for a mutation to separate: the grid drives phase 9 and
 phase -1 so that both stores execute, and a mutant of the arm fails on both.
 
 `t_v92modstate.cpp` gained `run_progress` (twelve rows x filter x two calls,
-1,194 checks) and `run_initiate` (579); `run_debug` grew from ten diagnostics
-to fifteen, which is what took `debugcov.py`'s "never execute" count for this
-file back down.  `t_v92modem.cpp` gained `run_reset_progress` (4,215) and
+1,223 checks) and `run_initiate` (579); `run_debug` grew from ten diagnostics
+to fifteen.  `t_v92modem.cpp` gained `run_reset_progress` (4,215) and
 `run_debug_rp` (25).
+
+**EVERY DEBUG SITE THESE SIX FUNCTIONS ADD IS DRIVEN, and getting there took
+two passes.**  `debugcov.py` counted five sites in `V92Modulator.cpp` that
+never execute the moment the batch compiled, because every new runner drives
+its subject at level 0.  `run_debug` now reaches `enterPhase4`'s message and
+both arms of each `initiate` member, and `run_progress` re-runs five of its
+twelve rows at level 2 -- the code 8 row for "Enter phase4", the two illegal
+ones for "Illegal state" and the two queue ones for
+"Queue is Empty/Full !!!".  The file is off the list entirely.  A message with
+no trial behind it is a claim about the object's text with nothing testing it,
+which is finding 134's argument about the whole tier.
 
 ### 7541. initiateRRN and initiateFPE are one function four differences apart, and the sharpest is four levels down
 
