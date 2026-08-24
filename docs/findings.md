@@ -77723,6 +77723,15 @@ say the STRUCTURE does -- no statement missing, none extra, nothing factored
 differently.  It is finding 7460's call-inventory argument in its strongest
 form.
 
+`compare.py --ratchet` agrees and shows the split: **`compared 986->1209,
+identical 350->486, same_size 71->90`**, two symbols gained, one into the
+IDENTICAL set and one into SAME SIZE, DIFFERENT INSTRUCTIONS.  The identical
+one is the modulator's; the demodulator's lands in `samesize.py`'s bucket,
+which is the sharp slice CLAUDE.md describes -- same byte count means nothing
+is missing and nothing is extra, and what is left is the scheduler's.  7460's
+canary check holds too: adding two functions to two translation units moved no
+other symbol out of either set.
+
 ### 7471. THE MODULATOR'S COMPANDING EXPANSION HAS NO CAST, AND `P4M_LEVEL`'s DOES -- THE OBJECT SEPARATES THEM
 
 `V90Phase4Modulator.cpp` already carries `P4M_LEVEL`, which spells the same two
