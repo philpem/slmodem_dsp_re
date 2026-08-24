@@ -79638,3 +79638,180 @@ of the `6` downwards is not.
 **No call was added and none should be.**  Supplying one would be new code
 with no blob behaviour to compare against, which is not reconstruction.  The
 differential test reaches it directly.
+
+======================================================================
+
+### 7571. `runPcmModem`'s two calls to `V92setParamsInfoFromCPUnPck`: the V.92 mapping block has a reachable writer where the V.90 one does not, and this is the contrast 7520 needs
+
+The batch that wrote 7570 was asked for this description rather than for a
+call site, and **no call was added to the V.90 unpacker.**  This finding is
+about the V.92 twin, which already has two, so that the two sides can be put
+beside each other.  The reconstruction of `VPcmFloModem::runPcmModem` itself
+(.text+0xe430, 2,041 bytes) is a separate piece of work reported alongside
+this one; what is below is measured from the object and is independent of it.
+
+#### Where the two calls are
+
+Both are arms of the SECOND of `runPcmModem`'s two jump tables.  The selector
+is read at .text+0xe4fc:
+
+	mov  0x175c(%esi),%ecx	  the embedded V90Modem's `demodulator`
+	mov  0x3c(%ecx),%eax	  the demodulator's event word
+	cmp  $0x35,%eax
+	ja   0xe5f0		  the common join
+	jmp  *0x4c0(,%eax,4)	  54 entries, .rodata:0x4c0..0x598
+
+`this + 0x1758` is the embedded `V90Modem` and `+0x04` of it is
+`demodulator`, so `this + 0x175c` is that pointer; the switch is on
+`V90Demodulator + 0x3c`.  Two of the 54 arms call the unpacker:
+
+| arm | .rodata slot | entry | the call | what follows |
+|---|---|---|---|---|
+| **0x2d** | 0x574 | 0xeacb | 0xeade | `V92Phase4Modulator::recivedCP()` |
+| **0x2e** | 0x578 | 0xeb14 | 0xeb27 | `V92Phase4Modulator::recivedCPtag()` |
+
+**These are the ONLY two references to the symbol in the object.**
+`objdump -dr | grep R_386_PC32.*etParamsInfo` over the whole 1.2 MB gives
+exactly two rows, both `V92setParamsInfoFromCPUnPck` and both inside
+`runPcmModem`.  Neither `setParamsInfoFromCPUnPck` nor
+`setParamsInfoFromV92CPUnPck` appears at all.
+
+#### What each is passed, and what those two addresses are
+
+Both calls pass the same two arguments, built the same way:
+
+	lea  0x254c(%esi),%ecx		argument 2
+	mov  0x6bc4(%esi),%eax		argument 1
+	push ; push ; call V92setParamsInfoFromCPUnPck
+
+- **Argument 1, `*(this + 0x6bc4)`, is `V92Modem::mappingParams`.**  The
+  `V92Modem` is embedded at `+0x6124` and 0x6bc4 - 0x6124 is 0xaa0;
+  `include/dsplib/V92Modem.h` records that slot as `sysdep_malloc(0xb4)` with
+  **no constructor after it**, followed by `V92createConstellations` and
+  `V92createFilterCoefficients`, and identifies it as `struct V92ParamsInfo`
+  (`sizeof` 0xb4) by way of being `V92Modulator`'s constructor's sixth
+  argument, whose mangling spells it `V92MappingParams *` (finding 1321).
+- **Argument 2, `this + 0x254c`, is the received CP message block**, and see
+  7572: it is the storage of `V90Modem::cp`.
+
+#### What is filled by the time the modulator reads it
+
+`V92Modem::mappingParams` is handed to `V92Modulator`'s constructor as its
+sixth argument, so the modulator holds the pointer from construction and reads
+whatever is behind it.  On entry to the first of these two calls it holds:
+the ten pointers the two `V92create*` functions filled, and **nothing else** --
+the 0xb4 bytes are a raw `sysdep_malloc` with no constructor.  Each call then
+fills eight scalars unconditionally and three further halves under
+`modulosEncoderPresent`, `prefilterPrecoderPresent` and
+`constellationPresent`, which are themselves copied from the message BEFORE
+they are tested (`src/pump/v90/V92ParamsInfo.c`'s head has the measurement).
+So a second call is gated on what the first left behind.
+
+Immediately after arm 0x2d's call, .text+0xeae3 tests `cmpb $0x0,0x255e(%esi)`
+-- byte +0x12 of the message block, which `V92CPUnPck.h` names `extendEu` --
+and where it is non-zero sets `V92Phase4Modulator + 0x1bc` to 1 before calling
+`recivedCP()`.  Where it is zero the store is skipped and `recivedCP()` is
+called anyway.  Arm 0x2e has no such test and goes straight to
+`recivedCPtag()`.
+
+#### THE CONTRAST, WHICH IS THE POINT
+
+|  | V.92 | V.90 |
+|---|---|---|
+| the block | `V92ParamsInfo`, 0xb4 bytes | `V90MappingParams`, 0x650 bytes |
+| where it lives | HEAP, `V92Modem::mappingParams` | EMBEDDED in `V90Modem` at +0x18 and +0x668 |
+| initialised by a constructor? | **no** -- raw `sysdep_malloc(0xb4)` | **no** -- 7520 |
+| who writes it | `V92setParamsInfoFromCPUnPck` | `setParamsInfoFromCPUnPck` |
+| how many callers | **TWO**, both in a live entry point | **ZERO**, in the whole object |
+| how the modulator gets it | constructor argument 6 | constructor arguments 6 and 7 |
+
+Both sides allocate the block without constructing it and both rely entirely
+on an unpacker to fill it.  The difference is not the design; it is that one
+unpacker is called from `runPcmModem` on two demodulator events and the other
+is called from nowhere.  **That is the whole of 7520's blocker, stated in the
+form that makes it actionable**: a V.90 digital bring-up needs the equivalent
+of these two arms, and the object does not contain them.
+
+What it does NOT say is that the vendor's V.90 branch is broken.  7520's own
+caveat still stands -- the block could be intended to arrive from the host, or
+from one of the eleven unwritten `V90Modulator` phase edges.  Supplying the
+call is a decision about behaviour the blob does not exhibit, so it is the
+repo owner's and was deliberately not taken.
+
+======================================================================
+
+### 7572. `V92CPUnPck` and `V90CP` are the same structure, modelled twice from opposite ends -- thirteen landmarks agree, including which flag gates which block
+
+Reading 7571's second argument settled something neither header knows.
+
+`include/dsplib/V92CPUnPck.h` says the block is "INLINE in `VPcmFloModem`, at
++0x254c", which is right, and stops there.  `VPcmFloModem` embeds a `V90Modem`
+at **+0x1758**, and `include/dsplib/V90Modem.h` declares `V90CP cp;` at
+**+0x0df4** of it.  0x1758 + 0xdf4 = **0x254c**.  The two declarations name the
+same bytes.
+
+They were derived from opposite ends and have never been compared:
+`V90CP.h`'s layout came from `V90CP::infoToBits` (0x52230) and
+`::evaluateInfo` (0x519f0), which build and re-read the bit vector;
+`V92CPUnPck.h`'s field NAMES came from `V92setParamsInfoFromCPUnPck`'s
+thirty-one format strings, which are the author's own words.  Set them side by
+side:
+
+| offset | `V92CPUnPck` (format strings) | `V90CP` (infoToBits / evaluateInfo) |
+|---|---|---|
+| +0x000 | `pad_00[4]`, "not read by the unpacker" | the short-form flag, `bits[0x12]` |
+| +0x004 | `modulosEncoderPresent` | whole-word flag, gates the +0x018 block |
+| +0x008 | `prefilterPrecoderPresent` | whole-word flag, gates +0x048/+0x058 |
+| +0x00c | `constellationPresent` | whole-word flag, gates +0xc58 onward |
+| +0x010 | `drn`, `signed char` | five bits, `movsbl`, SIGNED |
+| +0x011 | `trellisState` | two bits |
+| +0x012 | `extendEu` | one bit |
+| +0x013 | pad, "touched by nothing" | one bit, in both message forms |
+| +0x014 | `prefilterGain`, `unsigned int` | sixteen bits, `movzwl`, UNSIGNED |
+| +0x018..+0x044 | `M[12]` | six frames of two eight-bit values, stride 8 |
+| +0x048..+0x054 | the four filter lengths | four counts, `shr`, unsigned |
+| +0x058/358/658/958 | four coefficient arrays, 384 shorts | four lists of shorts, 0x300 each |
+| +0xc58 | `LC[6]` | six counts, two to a frame |
+| +0xc70 | `indexConstel[6]` | six four-bit values |
+| +0xc88..+0xc9c | six constellation POINTERS | six 0x200 buffers, malloc'd in order |
+
+**THE GATING IS THE CLINCHER AND NOT THE OFFSETS.**  Coincident offsets can be
+argued about; what cannot is that the three `*Present` words at +0x04, +0x08
+and +0x0c gate exactly the three regions -- the moduli, the filter
+coefficients, and everything from +0xc58 -- that `V90CP`'s three whole-word
+flags at the same offsets gate on the way OUT.  Two independent readers, one
+writing the message and one reading it back, agreeing on which flag owns which
+block.
+
+**Two disagreements, and both are informative rather than fatal:**
+
+- **+0x013.**  `V92CPUnPck` calls it alignment because its unpacker never
+  reads it; `V90CP` has it as a real bit that `infoToBits` emits in BOTH
+  message forms.  A field one reader ignores is not a field that is not there,
+  and `V90CP` is the one with the evidence.
+- **+0x014, and this one is a genuine conflict.**  The unpacker loads a full
+  32-bit `prefilterGain` (`push %eax` with %eax zeroed, then `fildll`, which
+  is the unsigned-to-float idiom); `infoToBits` loads sixteen bits with
+  `movzwl`.  Both readings are unsigned and they agree over every value below
+  65536.  Nothing here settles it and it is not settled here.
+
+**WHAT IS NOT DONE, DELIBERATELY.**  The two are not merged.  `V90CP` is
+0x3bc0 bytes and `V92CPUnPck`'s declaration ends at 0xca0, so replacing one
+with the other is a change to two headers that nineteen files reach, and it is
+exactly the shape of the `V90Parameters` trap CLAUDE.md keeps as history --
+allocate the short one, use the long one, under-allocate by 0x2f20 bytes and
+pass every test not run under a checking allocator.
+
+**There is no live hazard today, and that was checked rather than assumed.**
+Nothing under `src/` declares, allocates or takes the size of a
+`V92CPUnPck`; the only object of that type in the tree is the `static` in
+`test/unit/t_v92unpck.c`, which is the fixture's own storage and is never
+handed to anything that thinks it is a `V90CP`.  `tools/onedef.py` is not
+violated either -- these are two type NAMES, not two definitions of one name,
+so the gate cannot see this and never could.
+
+The gain that is available immediately and costs nothing: **`V90CP.h`'s
+`+0x004`, `+0x008`, `+0x00c`, `+0x010`, `+0x011`, `+0x012`, `+0x048`, `+0xc58`
+and `+0xc70` can take the author's own names** off `V92CPUnPck.h`'s format
+strings, which is CLAUDE.md's rank-1 evidence and better than the offset names
+they carry now.  That is a rename in another batch's file and is left to it.
