@@ -81247,3 +81247,66 @@ compare the two mutants.
 The last line matters on its own: uniqueness at HEAD would be satisfied just
 as well by an anchor that had drifted onto the `qcLineVerification`
 occurrence, and that is the wrong-repair 7521 warns `anchorcheck` cannot see.
+
+### 7606. The unwritten boundary below `VPcmV34Progress` is now EMPTY, and `t_vpcmguard` loses the two groups whose premise that was
+
+`t_vpcmguard` existed to watch a guard **stop**.  `VPcmV34Progress` called
+seven symbols nobody had reconstructed and `v34pcmmain.cpp` carries a weak
+declaration plus a `v34pcm_notwritten` guard for each; this binary put the
+V.34 object into status 4 -- line verification, the one arm of the seventeen
+whose only unwritten callee was `VPcmFloModem::qcLineVerification` -- forked,
+called `vpcm_run`, and required the child to have died of SIGABRT.  Findings
+985 and 987, and gates.md's argument for why it has to be watched rather than
+reasoned about.
+
+`qcLineVerification` and `vPcmResetPhase3Modem` are the last two of the seven.
+**All seven are written**, so every guard below `VPcmV34Progress` is
+unreachable and there is nothing in the tree for a fork to watch abort.
+
+**THIS IS THE FAILURE THIS BATCH WAS MOST LIKELY TO BE SURPRISED BY, and it is
+worth naming as a shape.**  `v34pcmmain.cpp` defines `DSPLIB_VPCMFLO_UNWRITTEN`
+before including `VPcmFloModem.h`, so its declarations of all four entry points
+are weak **there**; until this batch, two of them resolved to zero and the
+pointer test skipped the call.  Writing a member therefore changed which branch
+an already-passing test took, in a file the batch never opened.  `make phase`
+on the `src/`-only commit -- before a single new fixture existed -- is what
+attributed it: **245 passed, 1 failed, and the one is `t_vpcmguard` at exit
+139**, two assertions inverted and a SIGSEGV where a SIGABRT was expected.  Run
+that build first when a batch makes a weak symbol resolve.
+
+**Two of the three groups are deleted rather than weakened.**  A group whose
+premise has ceased to hold does not become a better test by being made to
+pass, and there is no other unresolved callee to re-point it at.  What
+survives:
+
+* **all twelve symbols asserted PRESENT** -- the five `VPcmV34*` entry points
+  and the seven below them -- through WEAK declarations, which is what keeps
+  the comparison a comparison (finding 985: a plain declaration lets GCC fold
+  `f != 0` to true and every assertion goes vacuous).  The attribute no longer
+  saves a link; stopping the fold is now its whole job.
+* **the soft path driven end to end**, with `v34pcm_unwritten()` required to
+  report `V34PCM_WRITTEN` afterwards.  That is the old watch turned the right
+  way up: if any of the seven ever stops being linked, its guard fires on that
+  very call, the recorder takes its code, and this reads non-WRITTEN.  It is
+  the assertion `V34PCM_UNWRITTEN_QCLINE` used to be, with the expected value
+  moved.
+
+**The third group had to be given a session that survives a real call.**  It
+used to reach a guard that returned 0 without touching the hand-built object;
+it now reaches `qcLineVerification`, which dereferences `modem` and then
+`modem.demodulator->word_3c` before anything else.  So the session gets a
+`V90ModemSide` of 2 -- outside {0, 1}, the arm that fans out to neither half
+-- and a zeroed block for `demodulator` to point at.  `word_3c` is then 0, the
+dispatch takes its default, `qcVerifyState` is 0 so the silence half runs, and
+the member returns 0: **the same 0 the guard returned**, so `f0004`, both queue
+counts and the echo-history assertion are unchanged.  That is
+`t_v90rundemod.cpp`'s `side = 2` device used for the same reason -- keep the
+real demodulator out of a binary that is not about it.
+
+**The machinery in `src/pump/v34/v34pcmmain.cpp` is now dead code and is
+RETAINED.**  Four `v34pcm_notwritten` call sites, the recorder and the abort:
+none can fire.  Retiring them would bring `v34pcmmain.cpp` closer to the object
+-- the author wrote unconditional calls -- but it is a change to a file this
+batch had no other reason to open, it would take the recorder that the
+surviving assertion reads with it, and mutation anchors in four suites sit in
+that file.  Named here as the next pass's work rather than done half way.
