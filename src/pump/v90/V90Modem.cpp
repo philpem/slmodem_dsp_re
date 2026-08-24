@@ -1,11 +1,13 @@
 /*
- * V90Modem.cpp -- `V90Modem::printTitle`, 0x19400, 0xd2 = 210 bytes.
+ * V90Modem.cpp -- `V90Modem::printTitle`, 0x19400, 0xd2 = 210 bytes, and
+ * `V90Modem::progress`, 0x19ad0, 0xbc = 188 bytes.
  *
- * The original translation unit is `V90Modem.cpp`, STT_FILE #31, and this
- * file holds the one member of it that has been reconstructed.  Everything
- * else in that TU -- the constructor at 0x194e0, the destructors, `progress`,
- * `reset` -- is still missing, and include/dsplib/V90Modem.h says at length
- * why the class declaration there is not an object map.
+ * The original translation unit is `V90Modem.cpp`, STT_FILE #31.  The
+ * constructor and the destructors live in src/pump/v90/V90ModemCtor.cpp; what
+ * is still missing from the TU is `V90Modem::reset` (0x199a0), which is the
+ * object's ONLY caller of `V90Modulator::reset` -- so until it is written,
+ * nothing this tree builds can put the modulator's `state` into a defined
+ * condition.
  *
  * THE SOURCE ORDER IS NOT THE DISASSEMBLY ORDER.  GCC split the body on the
  * first `dsplibs_debug_level` test and put the gated block at the END of the
@@ -44,6 +46,16 @@
 
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
+
+/*
+ * `progress` DEREFERENCES BOTH SIDE POINTERS, so this translation unit is one
+ * of the ones V90Modem.h's forward-declaration note has in mind: it needs both
+ * complete types and includes them itself rather than putting them in the
+ * header, which is included by VPcmFloModem.h and would decide the question
+ * for every user of that (findings 1112 and 1325).
+ */
+#include "dsplib/V90Demodulator.h"
+#include "dsplib/V90Modulator.h"
 
 /*
  * .rodata.str1.4+0x416c.  Fifty-seven asterisks and a CRLF; counted from the
@@ -91,4 +103,50 @@ V90Modem::printTitle()
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(V90_BANNER);
+}
+
+/*
+ * ===========================================================================
+ * `V90Modem::progress` -- .text+0x19ad0, 188 bytes
+ *
+ * THE SIDE SWITCH AND NOTHING ELSE.  188 bytes of which 150 are the three
+ * arms' argument shuffles: the frame is set up, `side` is loaded once from
+ * +0x49bc, and each arm writes the four incoming words back into the same
+ * stack slots it found them in before tail-JUMPING to its callee.  That is
+ * what GCC emits for a sibling call whose argument list is the caller's own,
+ * and it is why all three exits are `jmp` and none is `call`.
+ *
+ * THE SWITCH IS THE CONSTRUCTOR'S, INSTRUCTION FOR INSTRUCTION.  `test %edx,
+ * %edx ; je` then `dec %edx ; je` then fall through, over an UNSIGNED
+ * `V90ModemSide` -- the same three-way shape V90ModemCtor.cpp has and the
+ * same one the destructor's `cmpl $0x1 ; jbe` range test agrees with.
+ *
+ * `V90Modem::progress` DOES NOT RESET ITS SIDE OBJECT.  Neither arm touches
+ * anything but the pointer it forwards through, so the state every one of
+ * these calls depends on -- `V90Modulator::state`, `symbolCount`, `eventCode`
+ * -- is whatever the last `reset` and the last phase edge left.  The caller
+ * of `V90Modulator::reset` is `V90Modem::reset`, in this same translation
+ * unit and not written; the member that first sets `state` to 1 is
+ * `V90Modulator::enterPhase3`, also not written.  Finding 7520.
+ * ===========================================================================
+ */
+void
+V90Modem::progress(int *bits, unsigned int &nofBits, float *samples,
+		   unsigned int nofSymbols)
+{
+	switch (side) {
+	case V90_MODEM_SIDE_DIGITAL:
+		modulator->progress(bits, nofBits, samples, nofSymbols);
+		break;
+
+	case V90_MODEM_SIDE_ANALOG:
+		demodulator->progress(bits, nofBits, samples, nofSymbols);
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modem progress: Illegal "
+					     "modemSide\r\n");
+		break;
+	}
 }

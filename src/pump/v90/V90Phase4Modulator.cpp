@@ -1827,3 +1827,29 @@ V90Phase4Modulator::generateV92Symbol()
 
 	return symbol;
 }
+
+/*
+ * ===========================================================================
+ * `V90Phase4Modulator::generateSymbol` -- .text+0x2f600, 45 bytes
+ *
+ * THE SMALLEST MEMBER OF THE CLASS AND THE ONLY ONE ITS CALLER USES.
+ * `V90Modulator::progress` calls this and neither pump directly, in both of
+ * its phase 4 arms, so this fork is where the session flag decides which
+ * modulation a V.90 call transmits.  `reset` makes the same fork for its
+ * warm-up loop and reloads the flag on every iteration; here it is read once
+ * and the whole function is that test plus two calls.
+ *
+ * NOT A TAIL JUMP, and that is the return type.  0x2f610 and 0x2f623 are
+ * `call`s followed by `cwtl`, where a forward to a callee of the same type
+ * would be a `jmp`: the widening is work done after the callee returns, so
+ * the caller's type is wider than the callee's.  See V90Phase4Modulator.h.
+ * ===========================================================================
+ */
+int
+V90Phase4Modulator::generateSymbol()
+{
+	if (sessionFlag)
+		return generateV92Symbol();
+
+	return generateV90Symbol();
+}

@@ -2,10 +2,19 @@
  * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
  *
  * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, of which THIRTY-FIVE are written in
- * src/pump/v90/V90Phase4Modulator.cpp -- everything except
- * `generateSymbol` and the six `generate*` sequence sources.  Both symbol
- * pumps and `reset` are now among them.
+ * code, of which THIRTY-SIX are written in
+ * src/pump/v90/V90Phase4Modulator.cpp -- `grep -c '^V90Phase4Modulator::'`
+ * is where that number comes from, so it can be re-measured rather than
+ * believed.  Both symbol pumps, `reset` and `generateSymbol` (finding 7520,
+ * the newest) are among them.
+ *
+ * This paragraph used to end "everything except `generateSymbol` and the six
+ * `generate*` sequence sources", and that clause was ALREADY STALE before
+ * 7520 -- `generateRdRt`, `generateRdRtNot`, `generateRf`, `generateRi` and
+ * both `generateDataSymbolBefore*` are defined in the .cpp today.  It is
+ * removed rather than re-derived: 7520 owns `generateSymbol` and not the
+ * exception list, and a count with a command beside it is worth more than a
+ * list with nothing behind it (findings 6100, 6103).
  *
  * NOT POLYMORPHIC: `~V90Phase4Modulator` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -77,7 +86,8 @@
  *
  * THE ARGUMENT THAT +0x0078 IS ONE ARRAY.  Over the class's whole extent --
  * .text+0x2c5a0..+0x2f72f, all forty-five symbols, `reset` at +0x2f630+0xff
- * being the last -- there are exactly eleven distinct memory displacements in
+ * being the last and `generateSymbol` at +0x2f600 the second last -- there are
+ * exactly eleven distinct memory displacements in
  * [+0x78, +0x2f58) on ANY base register, and this holds without tracking which
  * register carries `this`, so no register-tracking bug can weaken it:
  *
@@ -350,6 +360,22 @@ public:
 	short generateV90Symbol();
 	short generateV92Symbol();
 
+	/*
+	 * `generateSymbol` -- .text+0x2f600, 45 bytes.  The dispatcher over
+	 * the two above, and `sessionFlag` at +0x0000 is the whole body:
+	 * nonzero takes V.92, zero takes V.90.  It is the same fork `reset`
+	 * makes for its warm-up loop, so the two agree on which pump this
+	 * object drives.
+	 *
+	 * `int` AND NOT `short`, from the `cwtl` at 0x2f615 and 0x2f628: the
+	 * callees are declared `short` above, so the widening is the RETURN
+	 * conversion and not a leftover.  `V90Phase3Modulator::generateSymbol`
+	 * is the same shape and reads the same way -- and unlike that one,
+	 * this pair is instruction-exact, because that header declares its own
+	 * two pumps `int` and so emits the extension twice.
+	 */
+	int generateSymbol();
+
 	void setRdRtSymbols(V90MappingParams *);
 	void setRfSymbols(V90MappingParams *);
 	void setNextStateAfterTRN2d(Phase4ModulatorState);
@@ -422,6 +448,14 @@ public:
 	 * the meaning is not established here.  `unsigned int` is the stores'
 	 * width; the name stays the offset's.  It was `pad_000c[4]` until the
 	 * pumps were written.
+	 *
+	 * THE READER IS NOW KNOWN AND IS STILL OUTSIDE THIS CLASS:
+	 * `V90Modulator::progress` copies it into `V90Modulator::eventCode`
+	 * after every `generateSymbol`, ignoring zero, and acts on the 7 --
+	 * phase 4 terminated, so enter the data phase.  The name stays here
+	 * because `V90Modulator` is where the value is INTERPRETED, and one
+	 * caller reading one value does not establish what the other three
+	 * stores mean.  Finding 7520.
 	 */
 	unsigned int word_000c;
 

@@ -1,0 +1,40 @@
+[
+ {
+  "_": [
+   "V90Modem::progress -- the side switch and nothing else.  What can go",
+   "wrong is the arm chosen and the arguments forwarded, so these move",
+   "one or the other.  t_v90modprog drives sides 0, 1 and two illegal",
+   "values, and the analog arm runs a real V90Demodulator."
+  ]
+ },
+ {
+  "label": "the two arms are swapped",
+  "find": "\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tmodulator->progress(bits, nofBits, samples, nofSymbols);\n\t\tbreak;\n\n\tcase V90_MODEM_SIDE_ANALOG:\n\t\tdemodulator->progress(bits, nofBits, samples, nofSymbols);",
+  "replace": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tmodulator->progress(bits, nofBits, samples, nofSymbols);\n\t\tbreak;\n\n\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tdemodulator->progress(bits, nofBits, samples, nofSymbols);"
+ },
+ {
+  "label": "the digital arm forwards no symbols",
+  "find": "\t\tmodulator->progress(bits, nofBits, samples, nofSymbols);",
+  "replace": "\t\tmodulator->progress(bits, nofBits, samples, 0);"
+ },
+ {
+  "label": "the digital arm forwards the sample buffer as the bit vector",
+  "find": "\t\tmodulator->progress(bits, nofBits, samples, nofSymbols);",
+  "replace": "\t\tmodulator->progress((int *)samples, nofBits, samples, nofSymbols);"
+ },
+ {
+  "label": "the analog arm forwards no symbols",
+  "find": "\t\tdemodulator->progress(bits, nofBits, samples, nofSymbols);",
+  "replace": "\t\tdemodulator->progress(bits, nofBits, samples, 0);"
+ },
+ {
+  "label": "an illegal side falls through to the modulator",
+  "find": "\tdefault:\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t\tbreak;",
+  "replace": "\tdefault:\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t\tmodulator->progress(bits, nofBits, samples, nofSymbols);\n\t\tbreak;"
+ },
+ {
+  "label": "the illegal-side report is not gated",
+  "find": "\tdefault:\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t\tbreak;",
+  "replace": "\tdefault:\n\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t\tbreak;"
+ }
+]

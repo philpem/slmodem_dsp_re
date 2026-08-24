@@ -188,6 +188,31 @@ public:
 	 */
 	void printTitle();
 
+	/*
+	 * `progress` -- .text+0x19ad0, 188 bytes.  The whole body is the
+	 * `side` switch: it forwards its four arguments unchanged to
+	 * `V90Modulator::progress` on the digital arm and to
+	 * `V90Demodulator::progress` on the analogue one, and prints
+	 * "Illegal modemSide" on anything else.
+	 *
+	 * BOTH LIVE ARMS ARE TAIL JUMPS -- `jmp`, not `call`, at 0x19b3b and
+	 * 0x19b65 -- so this function's return type IS the two callees', and
+	 * both of those are `void`.  The default arm tail-jumps to
+	 * `dsplibs_debug_printf`, whose `int` is therefore returned by
+	 * accident on that path alone; a function that really returned a value
+	 * would have to agree with itself across the three and this one does
+	 * not.
+	 *
+	 * IT DEREFERENCES A POINTER THE OTHER ARM'S CONSTRUCTOR SET TO NULL,
+	 * with no guard.  `side` is the only thing that keeps the two apart,
+	 * and the constructor writes the two consistently -- but any value
+	 * outside {0, 1} leaves BOTH untouched (see the note above) and this
+	 * function's default arm is then the only thing standing between a
+	 * seeded object and a wild call.
+	 */
+	void progress(int *bits, unsigned int &nofBits, float *samples,
+		      unsigned int nofSymbols);
+
 	void setSessionFlag(unsigned int flag);
 
 	/* --- data members; the mangling never carries one (finding 226) --- */

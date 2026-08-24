@@ -1,0 +1,30 @@
+[
+ {
+  "_": [
+   "V90Phase4Modulator::generateSymbol -- 45 bytes, one test and two",
+   "calls.  t_v90modprog drives both sessionFlag values on a state where",
+   "the two pumps DIFFER: 0x1c is in generateV92Symbol's jump table and",
+   "past the end of generateV90Symbol's."
+  ]
+ },
+ {
+  "label": "the session-flag fork is inverted",
+  "find": "V90Phase4Modulator::generateSymbol()\n{\n\tif (sessionFlag)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();",
+  "replace": "V90Phase4Modulator::generateSymbol()\n{\n\tif (!sessionFlag)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();"
+ },
+ {
+  "label": "it is always the V.90 pump",
+  "find": "V90Phase4Modulator::generateSymbol()\n{\n\tif (sessionFlag)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();",
+  "replace": "V90Phase4Modulator::generateSymbol()\n{\n\treturn generateV90Symbol();"
+ },
+ {
+  "label": "it is always the V.92 pump",
+  "find": "V90Phase4Modulator::generateSymbol()\n{\n\tif (sessionFlag)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();",
+  "replace": "V90Phase4Modulator::generateSymbol()\n{\n\treturn generateV92Symbol();"
+ },
+ {
+  "label": "the fork is on the phase 4 state, not the session flag",
+  "find": "V90Phase4Modulator::generateSymbol()\n{\n\tif (sessionFlag)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();",
+  "replace": "V90Phase4Modulator::generateSymbol()\n{\n\tif (state)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();"
+ }
+]
