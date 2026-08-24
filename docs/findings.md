@@ -80419,3 +80419,384 @@ verdicts that were, by then, describing nobody's tree.
   in it.  Regenerating rather than accepting is what CLAUDE.md's finding 700
   already says about `--ours`, and it applies to a remembered resolution just
   as much as to a chosen one.
+
+======================================================================
+
+### 7580. `VPcmFloModem::v90RunDemodulator` is 584 instructions against the blob's 584, and the two places it would have been shipped wrong are both one token
+
+Reserved block for this batch: **7580-7589**.  `master` is at **7573** and the
+previous batch reserved 7570-7579 while landing only 7570-7573, so the block
+starts clear of the six that batch may still use.  Every branch was checked
+and the highest number anywhere in the repository is 7573.
+
+`VPcmFloModem::v90RunDemodulator(float *, unsigned int, int *, int *)`
+(.text+0xd860, **0xbc5 = 3,013 bytes**) is reconstructed in
+`src/pump/v90/VPcmFloModem.cpp`, beside the `runPcmModem` that landed with
+finding 7571.  With it, both of the class's entry points exist and the
+analogue V.90 receive path runs end to end.
+
+#### The numbers
+
+`tools/instrcount.py` reads **584 ours against 584 the blob's, 3,013 bytes
+against 3,013** -- an exact match on both counts, which the sibling does not
+have (450 against 446, 2,034 against 2,041).
+
+A mnemonic-for-mnemonic diff of the two 584-instruction sequences leaves
+**one difference, at two sites, and it is scheduling**: the two calls to
+`VPcmV34SetV90RateReneg` build the same two arguments in a different
+interleave.  The object itself is not consistent between its own two copies
+either -- arm 0x22 loads `flags_173a[1]` before `connectionEvaluator` and arm
+0x23 the other way round, from one source -- which is what settles it as the
+scheduler rather than a source order.  CLAUDE.md's free column.
+
+**TWO SOURCE SHAPES WERE FORCED BY THE CODEGEN**, and both were found by
+diffing rather than argued:
+
+- **The phase 4 demodulator must not be held in a local.**  Written as
+  `p4d = modem.demodulator->phase4Demodulator;` before the MPnot arm's
+  three-way test, GCC 3.4.2 hoists the load above the two flag tests that
+  precede it; the object loads it lazily, inside the conjunction, at 0xd9b8
+  and only after `connectionEvaluator->word_90` has already failed to be
+  zero.  Spelling the two dereferences out in the condition reproduces the
+  object exactly.
+- **The round trip must be compared without a local either.**  `cmp
+  0x368(%edx),%eax ; ja` at 0xdcf8 is the memory operand as SOURCE; a local
+  `rtd` assigned before the `if` gave `cmp %eax,0x368(%edx) ; jb`, which is
+  the same predicate with the operands swapped.  Finding 2301's shape, and
+  the repair is to write the comparison as one expression.
+
+#### THE TWO PLACES IT WOULD HAVE BEEN SHIPPED WRONG
+
+Both are named because the brief for this batch named the failure mode --
+two functions in one class that look alike until a constant differs -- and
+both turned out to be real.
+
+**1.  DISPATCH 1's CASE 3 HAS THE OPPOSITE POLARITY TO `runPcmModem`'s.**
+The two arms read the same three things in the same order.  In `runPcmModem`
+at 0xe6b9:
+
+	mov 0x6120(%esi),%edx ; test %edx,%edx ; je 0xe6cf     -> ret = 2
+
+and here at 0xda18:
+
+	mov 0x6120(%ebx),%eax ; test %eax,%eax ; je 0xda46     -> byte_6118 = 4, ret = 3
+
+So a session with no INFO0 layout selected takes the plain exit there and the
+RETRAIN exit here.  The surrounding twelve instructions are the same, the
+three loads are the same, and the two functions are one `!` apart.  A suite
+that compared the object against its own pieces would score them
+interchangeable; only the branch target parts them.  The source reads
+
+	if (info0Layout == 0
+	    || (modem.demodulator->inPhase3 == 4
+		&& modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0)) {
+
+and `t_v90rundemod` trials all four corners of the three tests, because three
+of them agree between the two readings and only `layout == 0` parts them.
+
+**2.  ARMS 0x1a AND 0x1b ARE MP AND MPnot, AND THEY DIFFER IN FOUR TOKENS.**
+Both copy the decoded message out for the V.34 interface and then build CPnot
+into `bitVector` out of `mappingParamsAlt`.  The differences:
+
+| | 0x1a, MP | 0x1b, MPnot |
+|---|---|---|
+| `V90CPPacker`'s fourth argument | `flag_173e` (0xe0e3) | literal 0 (0xe2a0) |
+| the diagnostic | "on MP receive" | "on MPnot receive" |
+| after `setTerminateCpFlag(1)` | nothing | test `SENSITIVE_ISP_DETECTED` |
+| the `terminateCp != 0` case | nothing | an else arm |
+
+Nothing about the two blocks' size, shape or call sequence separates them.
+The fourth argument is `cleardown`, which `V90CPpck.h` records as replacing
+the five data-rate bits with zero, so it is observable -- but only against a
+seeded mapping block, which is why the fixture seeds one.
+
+#### SEVEN MEMBERS ARE INLINED INTO IT, AND THEIR SYMBOLS ARE NOT CLAIMED
+
+Each is a `T` symbol of its own with **no incoming relocation anywhere in the
+object**, and each one's body appears open-coded inside `v90RunDemodulator`
+between one and three times -- which is what a call the compiler inlined looks
+like, since the out-of-line copy is emitted for a non-inline member whether
+anything reaches it or not.
+
+	d110  setTerminateJaFlag(unsigned char)           45 B
+	d140  setTerminateCpFlag(unsigned char)           45 B
+	d170  setTerminateCpNotFlag(unsigned char)        45 B
+	d1a0  setMinNofTransmitSequences(unsigned short)  26 B
+	d1c0  setNofBitsPhase4(unsigned int)              56 B
+	d200  resetBitPointer()                           51 B
+	d5a0  copyMpInfoForInterface()                   183 B
+
+They are written as `inline` members, so the CODE is reconstructed and the
+451 bytes of out-of-line symbol are not claimed.  That is 7570's move for
+`setConstellationMask` translated to members, and it was checked rather than
+assumed: `nm` on the period build's object shows **one** symbol from this
+work, `_ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_`, and no weak or local
+copy of any of the seven.  Dropping the `inline` claims them and costs seven
+differential tests this batch was not scoped to write.
+
+**THREE OF THE SEVEN ARE WHY THREE IDIOMS ARE THE CALLEE'S AND NOT THE
+CALLER'S**, which is the part a reader would otherwise get wrong:
+
+- `cmp $0x1 ; sbb ; and $0xfe ; add $0x4` appears at three call sites and is
+  `setNofBitsPhase4`'s own body -- `cmpl $0x1,0x8(%esp)` in the out-of-line
+  copy is a test on the ARGUMENT SLOT.  So the callers pass a raw
+  constellation code and the callee turns it into 2 or 4 bits a symbol.  7570
+  declined this idiom as integer if-conversion in the free column; it does
+  not arise here, because the period compiler reproduces the `sbb` form
+  exactly from `(constel == 0) ? 2 : 4`.
+- `setMinNofTransmitSequences` ZEROES THE COUNTER TOO.  That is why +0x7dd4
+  and +0x7dd6 are always seen written together and why no caller has to say
+  so.
+- `resetBitPointer` is six stores, not one, and does NOT touch
+  `minNofTransmitSequences` -- which is why the two arms that want it at 1
+  call the setter afterwards, and why the object stores 0 to +0x7dd4 once
+  rather than twice on those paths.
+
+#### The differential test
+
+`test/unit/t_v90rundemod.cpp` is a new binary.  It is `t_vpcmrunpcm.cpp`'s
+apparatus -- both sides built by `VPCMXF_Create`, the comparison surface
+discovered by walking every word that is a live allocation base on BOTH
+sides, and the three-way rule for a differing word -- with this function's own
+axes.  A binary of its own rather than more trials in `t_vpcmrunpcm` because
+a mutation set over `VPcmFloModem.cpp` scored by ONE binary cannot tell which
+of the two functions a row belongs to; `suites.json` already maps four sets
+over this file to four binaries for exactly that reason.
+
+`V90Modem::side` is held at 2, outside {0, 1}, so `V90Demodulator::progress`
+never runs.  t_vpcmrunpcm's header carries the argument and the first reason
+decides: `V90Equalizer::process` is a `gccdiverge.json` entry, a declared
+binary cannot carry a mutation suite (findings 2157 and 3002), and driving
+the real demodulator would drag that divergence into this binary.
+
+#### THIRTEEN ANCHORS IN `vpcmrunpcm.json` BROKE THE MOMENT THIS ARM LANDED
+
+This was predicted before a line was written and it happened exactly as
+predicted: arm 0x1f's six `v34BaudAllow` stores, `byte_6118 = 2; ret = 1;`,
+the `unnamed_0003 |= CFG_FLAG3_RETRAIN` line, the phase-2 guard and the two
+`VPcmV34Indicate*RRN` calls are TEXTUALLY IDENTICAL between the two
+functions.  `anchorcheck.py` reported thirteen rows as `matches 2 time(s)`,
+which `mutate.py` scores UNUSABLE -- and UNUSABLE reads as CAUGHT while
+testing nothing.  7521's shape.
+
+`tools/reanchor.py` could not repair them: it disambiguates on a macro PREFIX
+and there is none here, so with no prefix it reads STUCK, which is the honest
+answer.  The repair was mechanical and is 7521's rule kept rather than
+claimed:
+
+- the occurrence INSIDE `runPcmModem` is chosen by file offset, and the
+  repair refuses if the short anchor's occurrence is not unique in that range;
+- the anchor grows a whole line at a time, alternately below then above,
+  until it matches once;
+- **and then both spellings are applied and the two resulting files compared
+  byte for byte.**  All thirteen passed that check before anything was
+  written, which is the step `anchorcheck` cannot see and 7521 says must be
+  taken anyway.
+
+`anchorcheck.py` is clean afterwards: 191 suites, 8,625 mutations, 0 anchors
+matching other than exactly once.
+
+======================================================================
+
+### 7581. The analogue V.90 driver CANNOT hold the orphaned unpacker's call, and that is a property of its jump table rather than an observation about its arms
+
+7570 left `setParamsInfoFromCPUnPck` callerless and 7571 put the V.92 twin's
+two callers beside it.  This function is the last piece of the V.90 receive
+path, so "does the analogue side call the V.90 unpacker" is now answerable
+rather than open, and the answer is stronger than "no call was found".
+
+**The two tables do not overlap where the call would have to be.**
+`runPcmModem` dispatches on `V90Demodulator + 0x3c` over **0x00..0x35**, 54
+entries at `.rodata+0x4c0`, and the two calls to `V92setParamsInfoFromCPUnPck`
+are arms **0x2d** and **0x2e**.  `v90RunDemodulator` dispatches on the SAME
+field over **0x00..0x2b**, 44 entries at `.rodata+0x3fc`, and 0x2b is its
+last.  0x2d and 0x2e are 0x2b + 2 and 0x2b + 3: **past the end of this
+function's table**, where the `ja` at 0xd8ca sends control straight to the
+epilogue.
+
+So there is no arm here that could hold the call without the table growing by
+at least three entries.  The absence is structural, and it is measured off
+the two `.rodata` tables rather than inferred from reading 23 arms.
+
+**AND THE SAME EVENT CODE MEANS DIFFERENT THINGS IN THE TWO TABLES**, which
+is what stops anyone reading across.  0x16 is "end of CPt" for the V.92
+driver and `byte_6118 = 2; ret = 1;` here; 0x1a, 0x1b, 0x28 and 0x2a are live
+arms here and the V.92 table's default; 0x14, 0x24, 0x25, 0x27 and everything
+from 0x2c up are live there and dead or absent here.  The field is one
+demodulator event word with two readers and two vocabularies.
+
+**No call was added and none should be**, for 7570's reason and 7571's: it
+would be new code with no blob behaviour to compare against.  What this
+finding adds is that supplying one on the V.90 side is not a one-line change
+to an existing arm -- it is a new table entry, which means the digital
+demodulator would have to raise an event code this table has never carried.
+That is a larger decision than 7520 or 7570 could see, and it stays the repo
+owner's.
+
+======================================================================
+
+### 7582. Arm 0x1f IS `setV34BaudForV34()`, byte for byte, and `runPcmModem`'s comment saying otherwise is retracted
+
+`src/pump/v90/VPcmFloModem.cpp`'s comment on `runPcmModem`'s case 0x1f reads
+that the six stores there "are not either of `setV34BaudForV90`'s or
+`setV34BaudForV34`'s: index 1 is barred and index 5 is allowed, which is the
+opposite of both".
+
+That is wrong, and the disassembly is three lines:
+
+	d4c0 <setV34BaudForV34>:          1, 0, 1, 1, 1, 1
+	d490 <setV34BaudForV90>:          1, 0, 1, 1, 1, 0
+	dd62 (this function, arm 0x1f):   1, 0, 1, 1, 1, 1
+
+`setV34BaudForV34` IS 1,0,1,1,1,1.  Index 1 is barred in BOTH setters -- and
+in `getUinfoValue`, `enterPhase3`, `externalReset` and `internalReset` too, as
+`VPcmFloModem.h` already records -- so "index 1 is barred" was never a
+difference between the arm and the setters.  The only difference between the
+two setters is the LAST entry, which the header also already records, and the
+arm matches the one that allows it.
+
+`v90RunDemodulator`'s arm 0x1f is therefore written as `setV34BaudForV34();`
+and the period compiler inlines it to the object's six `movb` exactly.
+
+**`runPcmModem`'s six stores are NOT changed by this batch.**  They are the
+same six bytes and the same behaviour either way, so no test can move; what
+would move is that function's codegen if the inline did not happen, and
+re-measuring it is that arm's owner's to do.  The comment is retracted here
+rather than edited there, on 4342's rule -- a retraction that says what it
+retracts is worth more than a silently corrected sentence.
+
+**AND IT RETIRES HALF OF A SEPARATE CLAIM.**  `VPcmFloModem.h` says of the two
+setters that nobody in the object calls either, and that they are therefore
+"the out-of-line copies of something whose every call site was inlined, or of
+an interface the build does not use".  The first limb is now the answer for
+`setV34BaudForV34`: its call site is arm 0x1f, inlined.  `setV34BaudForV90`
+still has none found.
+
+======================================================================
+
+### 7583. `flags_173a[2]` is the local-rate-renegotiation latch, and a remote report that follows our own request is swallowed once
+
+Arms 0x22 and 0x23 are this end asking for a rate renegotiation and the far
+end asking, and they share eleven instructions.  The byte at +0x173c -- the
+third of the three `enterPhase3` clears as a run -- is what makes them
+asymmetric:
+
+- arm 0x22 (0xdb3d) sets it to 1 immediately before `VPcmV34IndicateLocalRRN`;
+- arm 0x23 (0xdecd) TESTS it first, and where it is set clears it and returns
+  without doing anything else -- no `VPcmV34SetV90RateReneg`, no
+  `setNofBitsPhase4`, no `VPcmV34IndicateRemoteRRN`, no
+  `V90Demodulator::indicateRemoteRateReneg`, no `byte_6118`.
+
+So the far end's echo of a renegotiation we ourselves started is absorbed
+exactly once, and the latch is one-shot.
+
+The other three differences between the two arms, for the record: the
+diagnostics are "requested" and "detected"; 0x22 calls
+`VPcmV34IndicateLocalRRN` and 0x23 `VPcmV34IndicateRemoteRRN`; and 0x23
+additionally calls `V90Demodulator::indicateRemoteRateReneg` at 0xdac7, which
+0x22 jumps past into the shared tail at 0xdacc.
+
+**THE FIELD IS NOT RENAMED AND THE ARRAY IS NOT SPLIT.**  `flags_173a` is
+cleared as a run of three by `enterPhase3`, `externalReset` and
+`VPcmXfCreate`, and the batch that wrote `runPcmModem` recorded that as its
+reason for keeping the offset name; elements [0] and [1] are `trainConstel`
+and `rrnConstel` from that function's own format string, which are names for
+two thirds of an array whose third element is this.  Splitting it is a change
+to a declaration four functions share and it is not this batch's.  What is
+established is the BEHAVIOUR, and it is here rather than in a name.
+
+======================================================================
+
+### 7584. The `V90Phase4Demodulator` duplicate is a WALL and not a smell: it made the fuller header un-includable, and two fields were carved out of the partial model instead
+
+`tools/onedef.py` carries exactly one duplicate and this is it: a partial
+model in `include/dsplib/V90SessionFlag.h` -- `sessionFlag`, a pad, and an
+embedded `V90Phase4Modulator` at +0x50 -- beside the fuller class in
+`include/dsplib/V90Phase4Demodulator.h`.
+
+`v90RunDemodulator`'s MPnot arm reads that class's +0x3c and +0x38 (0xd9b8).
+`VPcmFloModem.cpp` already has the partial model, through `VPcmFloModem.h`
+and `V90SessionFlag.h`, so adding `#include "dsplib/V90Phase4Demodulator.h"`
+is a **redefinition the compiler rejects outright**.  That is worth recording
+precisely because CLAUDE.md's account of this hazard is that it fails
+SILENTLY: the two definitions had never met in one translation unit before,
+and the moment they did the build stopped rather than picking one.  Silent is
+the general case; loud is what happens when both headers reach the same
+`#include` list.
+
+What was done is the smallest thing that is not a lie: `pad_04[0x4c]` became
+`pad_04[0x34]`, `int_0038`, `int_003c`, `pad_40[0x10]`, with the same
+offsets, the same spelling and the same derivation the fuller header already
+carries (`resetBeforRRN` and `detectRRN` set both to 1, `reset` sets +0x38 to
+1 and +0x3c to 0).  **The two definitions now agree on more, not less**, and
+the entry in `onedef.py` is unchanged.
+
+**THE REAL REPAIR AND WHAT IT COSTS, so the next batch does not have to
+measure it again.**  Delete the class from `V90SessionFlag.h` and include the
+fuller header there.  The blast radius was measured:
+
+- `V90Phase4Demodulator.h` includes `Scrambler.h`, `V90Phase4Modulator.h` and
+  `V90RDetector.h` and none of those reaches `V90SessionFlag.h`, so there is
+  no include cycle to break.
+- Only four translation units include `V90SessionFlag.h` directly, plus
+  everything that includes `VPcmFloModem.h`.  **None of them takes
+  `sizeof(V90Phase4Demodulator)`**; the sites that do are
+  `V90Phase4Demodulator.cpp`'s own `== 0x351c` assertion,
+  `V90Demodulator.cpp`'s `sysdep_malloc`, and three test files, all of which
+  already see the fuller header.
+- So the repair changes `sizeof` from 0x2ffc to 0x351c in the translation
+  units that see the partial model, and no allocation in any of them uses it.
+
+It was not taken here because it is a change to a header ten translation
+units reach, on a branch scoped to one function, and because a `sizeof` that
+moves is the `V90Parameters` trap's own shape even when the direction is
+right.  It is the tree's last known ODR hazard and removing it is progress.
+
+======================================================================
+
+### 7585. `copyMpInfoForInterface` names the block at +0x1744, and `getMPrecvdBits` is the reader that types it
+
+`VPcmFloModem.h` had `pad_1744[0x14]` -- twenty bytes between `sweepCounter`
+and the embedded `V90Modem`, with nothing known about them.  Three things
+settle the whole span, and none of them is adjacency:
+
+1. **THE WRITER'S NAME IS THE OBJECT'S OWN.**
+   `VPcmFloModem::copyMpInfoForInterface` (.text+0xd5a0, 183 bytes) is the
+   only thing in the object that stores there, and its entire body is
+   thirteen field-at-a-time copies out of `modem.mp` -- the `V90MP` embedded
+   at +0x2428, which is 0x1758 + 0xcd0 and is where `V90Modem.h` already puts
+   it.
+2. **THE SOURCE FIELDS ARE ALREADY NAMED**, by `V90MP::bitsToInfo`'s own
+   diagnostics: `Type`, `Rate`, `Trellis`, `NonLin`, `Shaping`, `CPack`,
+   `rateMask`, and the six `h` halves.  Every displacement lines up, in
+   order, at the same widths.
+3. **AND THERE IS A READER, WHICH IS WHAT TYPES THEM.**
+   `getMPrecvdBits(tagV34Object *)` (.text+0x9250) reaches this object as the
+   V.34 object's `p3548` (`mov 0x3548(%eax),%ebp` at 0x9266) and re-encodes
+   the block into the V.34 side's MP word: `setne` on the type byte for bit
+   0, `Rate & 0xf` shifted to bit 6, `Trellis & 3` shifted to bit 11, then
+   `NonLin`, `Shaping` at 0x4000 and `CPack` at 0x8000 -- the same six
+   discriminators in the same order.  It loads the six bytes with
+   `movsbw`/`movsbl`, which is where `char` comes from, and the seven halves
+   with `movzwl`.
+
+So the span is `mpType`, `mpRate`, `mpTrellis`, `mpNonLin`, `mpShaping`,
+`mpCPack`, `mpRateMask`, `mpH1Real`, `mpH1Imag`, `mpH2Real`, `mpH2Imag`,
+`mpH3Real`, `mpH3Imag`, and the "for the interface" in the writer's name is
+`getMPrecvdBits`.
+
+**ONE FIELD IS NOT A PLAIN COPY.**  `mpRateMask` is
+`movswl 0x242e(%eax),%edx ; add %edx,%edx` at 0xd5ec, so it holds
+`mp.rateMask * 2` -- the same fourteen bits one place to the left, which is
+the alignment `getMPrecvdBits` then ORs 0x8000 into.  The name is the source
+field's and the doubling is in the comment rather than spelled into the name,
+which is 3120's rule: `rateMaskX2` would be a name every future reader has to
+decode, and `rateMask` with the derivation beside it is what the field holds.
+
+**THE `movswl` IS FORCED AND THE OTHER TWELVE LOADS ARE NOT.**  The six bytes
+are read `movzbl` and the six halves `movzwl`, but only the low 8 or 16 bits
+of each survive into the store, so the extension is finding 614's free column
+and says nothing about either type.  `mpRateMask`'s load is the exception,
+because the doubling happens on the widened value: a `movzwl` there would
+give a different answer for any rate mask with bit 15 set.  `t_v90rundemod`
+seeds one negative rate mask for exactly that reason.

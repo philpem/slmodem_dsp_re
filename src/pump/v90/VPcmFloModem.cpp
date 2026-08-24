@@ -1612,7 +1612,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	case 0x1f:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmFloModem (V90): "
-					     "drop to V34 requested !!\r\n");
+					     "drop to V34 requested !! \r\n");
 		flag_173d = 1;
 		ret = 7;
 		setV34BaudForV34();
