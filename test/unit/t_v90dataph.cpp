@@ -292,7 +292,7 @@ setup(int trial, const struct trial_args *t)
 		d->mappingParamsAlt = (V90MappingParams *)mpar[side];
 
 		d->inPhase3 = t->latch;
-		d->word_294 = t->quick;
+		d->quickConnect = t->quick;
 		d->byte_280 = (unsigned char)t->enabled;
 
 		/*

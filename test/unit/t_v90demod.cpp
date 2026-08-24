@@ -304,8 +304,8 @@ run_observable(void)
 	t.blockByte = 0;
 	t.eia6 = 0;
 	setup(35, &t);
-	D(0)->word_294 = 0x1234abcdu;
-	D(1)->word_294 = 0x1234abcdu;
+	D(0)->quickConnect = 0x1234abcdu;
+	D(1)->quickConnect = 0x1234abcdu;
 	D(0)->enterPhase3();
 	ref_enterPhase3(D(1));
 	teardown();
@@ -676,9 +676,9 @@ run_reset(void)
 					diff_eq_int("byte_280 (%ld)",
 						    (long)D(1)->byte_280, 0,
 						    tag);
-					diff_eq_int("word_294 = quickConnect "
+					diff_eq_int("quickConnect = quickConnect "
 						    "(%ld)",
-						    (long)D(1)->word_294,
+						    (long)D(1)->quickConnect,
 						    (long)quick, tag);
 					/*
 					 * The store into ANOTHER object, and

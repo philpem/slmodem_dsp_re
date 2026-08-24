@@ -104,7 +104,23 @@ struct tagV90AdditionalCPinfo {
 	 */
 	unsigned int word_10;			/* +0x10                  */
 
-	unsigned char pad_14[4];		/* +0x14 not modelled     */
+	/*
+	 * +0x14  TWO OF `pad_14`'s FOUR BYTES, and `V90Demodulator::
+	 * exitPhase3` is the writer that carved them out:
+	 * `mov 0x48(%esi),%ebx ; mov %bx,0x14(%ecx)` at 0x1bc43, a whole-word
+	 * load of `V90Parameters::ANALOG_RATE_MASK` narrowed to a SIXTEEN-BIT
+	 * store.  So the width is forced and the value's origin is
+	 * recoverable.
+	 *
+	 * IT KEEPS AN OFFSET NAME, deliberately, and on this file's own
+	 * stated terms: nothing in the object READS it, so "the analog rate
+	 * mask" is where the four bytes came from and not what the field is
+	 * for -- exactly the adjacency the paragraph above declines for the
+	 * five dwords.  CLAUDE.md's 3120 rule; the derivation is here instead
+	 * of in a name every later reader would believe.
+	 */
+	short short_14;				/* +0x14                  */
+	unsigned char pad_16[2];		/* +0x16 not modelled     */
 };
 
 #endif /* DSPLIB_TAGV90ADDITIONALCPINFO_H */

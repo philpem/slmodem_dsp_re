@@ -896,7 +896,7 @@ static const struct hole hole_v[] = {
 	{ 0x288, 4, "word_288" },
 	{ 0x28c, 4, "word_28c" },
 	{ 0x290, 4, "word_290" },
-	{ 0x294, 4, "word_294" }
+	{ 0x294, 4, "quickConnect" }
 };
 
 #define NHOLE ((int)(sizeof(hole_v) / sizeof(hole_v[0])))

@@ -95,8 +95,8 @@
  {
   "label": "enterDataPhase: the two study lengths are swapped",
   "fn": "enterDataPhase",
-  "find": "\tdemapper->resetLinearMappStudy(word_294 != 0 ? 12600u : 30000u);",
-  "replace": "\tdemapper->resetLinearMappStudy(word_294 != 0 ? 30000u : 12600u);"
+  "find": "\tdemapper->resetLinearMappStudy(quickConnect != 0 ? 12600u : 30000u);",
+  "replace": "\tdemapper->resetLinearMappStudy(quickConnect != 0 ? 30000u : 12600u);"
  },
  {
   "label": "enterDataPhase: the study is left disabled",

@@ -125,7 +125,7 @@ DEM_OFF(byte_280,		0x280, byte280);
 DEM_OFF(word_288,		0x288, word288);
 DEM_OFF(word_28c,		0x28c, word28c);
 DEM_OFF(word_290,		0x290, word290);
-DEM_OFF(word_294,		0x294, word294);
+DEM_OFF(quickConnect,		0x294, quickconnect);
 
 /*
  * `getBitRate` multiplies `mappingParamsAlt`'s FIRST word, and nothing in
@@ -305,7 +305,7 @@ V90Demodulator::enterPhase3()
 	 * AFTER the reset, which has just zeroed this very field.  The order
 	 * is the whole content of the store.
 	 */
-	phase3Demodulator->word_410 = word_294;
+	phase3Demodulator->word_410 = quickConnect;
 
 	equalizer->enterPhase3();
 
@@ -653,6 +653,143 @@ V90Demodulator::enterPhase4()
 }
 
 /*
+ * `V90Parameters` +0x048.  `tools/vparse.py` gives the author's own name for
+ * it; the index spelling is this file's convention (see PARAMS_TIMING_OFFSET
+ * above) and not a statement that the named map is unavailable.
+ */
+#define PARAMS_ANALOG_RATE_MASK	(0x048 / 4)
+
+/*
+ * exitPhase3 -- 768 bytes at 0x1bb50, and the hand-over from phase 3 to phase
+ * 4.  Six things happen in one straight line with two conditionals in it: the
+ * TRN1d RMS ratio is reported and copied into the additional-CP record, the
+ * DIL is ended, phase 4 is entered IF phase 3 terminated, the TRN2
+ * constellations are designed, the design's failure raises a delayed retrain,
+ * and the phase 4 demodulator is reset.
+ *
+ * THE LATCH IS `== 1` AND NOT `!= 0`, exactly as `enterPhase3`'s is
+ * (`cmpl $0x1,0x34(%edi); je` at 0x1bb67, with the JE going INTO the body):
+ * this member does its work only from state 1, and `enterChannelVerification`
+ * puts the object in state 5 where a `!= 0` reading would let it through.
+ *
+ * `enterPhase4()` IS CALLED, NOT REPEATED.  0x1bdd0..0x1be1d is that member's
+ * 110 bytes instruction for instruction -- the `inPhase3 == 2` test, the
+ * gated "enter Phase 4" line, the `word_44 += word_38` accumulation and the
+ * `lea 0x28230(%edx,%edx,4)` deadline -- inlined by `-O3
+ * -finline-functions`.  Its idempotence test can never fail HERE, because the
+ * only way in is `inPhase3 == 1`; it is still the callee's test and not a
+ * dead branch of this function.
+ *
+ * AND THE EQUALISER IS ENTERED IN THE SAME ARM, WHICH THE INLINING HIDES.
+ * `je 1be1e` at 0x1bdd4 -- the idempotence test's TAKEN edge -- lands on
+ * `mov 0x1d8(%edi),%edx ; call V90Equalizer::enterPhase4` and not on the join
+ * with the common tail, so both arms of `inPhase3 == 2` converge on that call
+ * and it is the second statement of the `word_30 == 0x14` block rather than
+ * part of the member that was inlined.  The first draft of this function
+ * missed it and read as complete: the branch structure, every store and every
+ * other call agreed, and what said otherwise was the instruction COUNT, 174
+ * against 186.
+ *
+ * THE THREE PRINTED NUMBERS NEVER REACH MEMORY, so the transcript is their
+ * only witness.  The sign character is the branchless `0x2d - 2*CF` form
+ * `sessionTermination` documents at length, and it compares the field that
+ * was JUST STORED rather than the local -- `mov 0x20(%edi),%ecx ; fcomps
+ * 0x8(%ecx)` at 0x1bc00, a reload of both the pointer and the value.  The
+ * magnitude is `(int)fabsf` of the LOCAL and the fraction is scaled by
+ * `1.0e8f` out of `.rodata.cst4+0x11c` (read, not inferred from `%08d`).
+ *
+ * THE TWELVE-ARGUMENT DESIGN CALL IS FOUR VIEWS OF ONE OBJECT.  Arguments 2
+ * to 5 are `autoDigitalImpDetector` plus 0, 0x600, 0xd00 and 0x2800 -- the
+ * four per-code tables `V90AutoDigitalImpDetector.h` already names -- built
+ * as `add $0x2800,%edx` on four separate reloads of the same pointer, which
+ * is what an array member's address looks like and not four pointers being
+ * carried.  Arguments 6, 7 and 8 are three scalars out of the tail of the
+ * same object, and argument 9 is `getMaxUcode()`, which returns the address
+ * of a fifth (`maxUcode[6]` at +0xa956).  So five of the twelve are that one
+ * detector, and the designer never sees the object itself.
+ *
+ * ARGUMENT 12 IS AN EMBEDDED FIELD AND WAS THE ONE THING THE CALL COULD HAVE
+ * GOT WRONG.  `mov 0x238(%edi),%ebx` is `spectralVerifier.word_28` --
+ * +0x210 + 0x28 -- and it is loaded BEFORE the two intervening calls and
+ * stashed at 0x40(%esp), which is what a value read early and used late looks
+ * like.  It is the `V90SpecialSpectralConditions` the verifier detected, so
+ * the detector's answer reaches the constellation designer through this
+ * member and through nothing else.
+ *
+ * `sessionFlag` PICKS THE LOOKAHEAD AND NOTHING ELSE HERE.  Non-zero takes
+ * `jdV92`, zero takes `jd`, and both members return an `unsigned char` which
+ * the call widens with `movzbl`.
+ *
+ * THE FAILURE ARM RAISES A DELAYED RETRAIN.  A zero from `V90TRN2Design`
+ * stores 1 into `connectionEvaluator->word_78` and prints, at level > 1,
+ * "V90Demodulator::exitPhase3() delayedRetrainRequest !!!" -- which is the
+ * author's own name for that slot and the third function to touch the pair.
+ * See V90ConnectionEvaluator.h for why the field is not renamed here.
+ */
+void
+V90Demodulator::exitPhase3()
+{
+	float ratio;
+	int whole, frac;
+
+	if (inPhase3 != 1)
+		return;
+
+	ratio = trn1dRmsRatio;
+	additionalCPinfo->float_08 = ratio;
+	additionalCPinfo->word_00 = 0;
+	additionalCPinfo->word_04 = 0;
+
+	whole = (int)ratio;
+	frac = (int)((ratio - (float)whole) * 1.0e8f);
+	edprintf("V90Demodulator: TRN1d RMS Ratio = %c%d.%08d\r\n",
+		 !(0.0f >= additionalCPinfo->float_08) ? '+' : '-',
+		 (int)__builtin_fabsf(ratio),
+		 (frac < 0) ? -frac : frac);
+
+	additionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;
+	additionalCPinfo->word_10 = 0;
+	additionalCPinfo->short_14 =
+	    (short)V90PW(params)[PARAMS_ANALOG_RATE_MASK];
+
+	phase3Demodulator->exitDIL();
+
+	if (phase3Demodulator->word_30 == 0x14) {
+		enterPhase4();
+		equalizer->enterPhase4();
+	}
+
+	trn2Designer->setNofUcodesInTrn2(
+	    (short)autoDigitalImpDetector->isThereAnyAltRbsPhase());
+
+	if (trn2Designer->V90TRN2Design(
+		mappingParams,
+		autoDigitalImpDetector->linMapp,
+		autoDigitalImpDetector->linMappAlt,
+		autoDigitalImpDetector->byte_0d00,
+		autoDigitalImpDetector->short_2800,
+		autoDigitalImpDetector->pcmType,
+		(PcmType)autoDigitalImpDetector->int_a960,
+		autoDigitalImpDetector->unSuspectedPhase,
+		phase3Demodulator->getMaxUcode(),
+		sessionFlag != 0 ? jdV92->getMaxLookahead()
+				 : jd->getMaxLookahead(),
+		(unsigned char)(phase2Info->maxTxPower + 1),
+		(V90SpecialSpectralConditions)spectralVerifier.word_28) == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Demodulator::exitPhase3() "
+					     "delayedRetrainRequest !!!\r\n");
+		connectionEvaluator->word_78 = 1;
+	}
+
+	edprintf("V90Demodulator: TRN2d spectral parameters:\r\n");
+	displaySpectralParams(mappingParams);
+
+	phase4Demodulator->reset(phase2Info->Uinfo,
+				 (Phase4DemodulatorState)0, 0, quickConnect);
+}
+
+/*
  * enterDataPhase -- 322 bytes.  State 3, and the point at which the linear
  * mapping study is armed for the data phase.
  *
@@ -664,8 +801,8 @@ V90Demodulator::enterPhase4()
  *
  * and NEITHER line carries a relocation, which is the whole of finding 245's
  * point: they are the integers 12600 and 30000 and not offsets into
- * `.rodata`.  12600 when `word_294` is set and 30000 when it is not, and
- * `word_294` is what `reset` stored `quickConnect` into -- so a quick connect
+ * `.rodata`.  12600 when `quickConnect` is set and 30000 when it is not, and
+ * `quickConnect` is what `reset` stored `quickConnect` into -- so a quick connect
  * studies for the shorter run.  That reading is the field's provenance and
  * not this function's, which only picks between two numbers.
  *
@@ -695,7 +832,7 @@ V90Demodulator::enterDataPhase()
 		dsplibs_debug_printf("V90Demodulator: enter Data Phase, "
 				     "Rate = %d [bps]\r\n", getBitRate());
 
-	demapper->resetLinearMappStudy(word_294 != 0 ? 12600u : 30000u);
+	demapper->resetLinearMappStudy(quickConnect != 0 ? 12600u : 30000u);
 	demapper->linearMappStudyEnabled = 1;
 
 	if (DSPLIB_DEBUG_ON())
@@ -1040,7 +1177,7 @@ V90Demodulator::reset(unsigned int quickConnect)
 	word_260 = 0;
 	word_278 = 0;
 	byte_280 = 0;
-	word_294 = quickConnect;
+	quickConnect = quickConnect;
 
 	equalizer->quickConnect = quickConnect;
 }

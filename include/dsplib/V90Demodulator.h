@@ -208,6 +208,17 @@ public:
 	void enterPhase4();
 
 	/*
+	 * `exitPhase3` -- .text+0x1bb50, 768 bytes, and `void` for the same
+	 * reason the five above are: the two exits are a bare `ret` with
+	 * nothing loaded into `%eax` on either path.  It is the phase 3 to
+	 * phase 4 hand-over: it reports the TRN1d RMS ratio, fills three
+	 * fields of the additional-CP record, ends the DIL, enters phase 4
+	 * where phase 3 terminated, designs the TRN2 constellations and
+	 * resets the phase 4 demodulator.
+	 */
+	void exitPhase3();
+
+	/*
 	 * Fills the caller's six-element array with
 	 * `V90AutoDigitalImpDetector::byte_280c`, one word per frame phase.
 	 * `unsigned int *` is the mangling's (`Pj`); the count is the loop's
@@ -229,7 +240,6 @@ public:
 	 * mangled, so `void` here is want of evidence.
 	 */
 	void progress(int *, unsigned int &, float *, unsigned int);
-	void exitPhase3();
 	void reset(unsigned int);
 	void enterChannelVerification(short, short);
 	void reInit();
@@ -435,8 +445,20 @@ public:
 	 * phase 3 and phase 4 demodulators. */
 	V90AutoDigitalImpDetector *autoDigitalImpDetector;
 
-	unsigned char pad_240[4];	/* +0x240 nothing reconstructed
-					 *        reads it                   */
+	/*
+	 * +0x240  WAS `pad_240[4]`, "nothing reconstructed reads it", and
+	 * `exitPhase3` both READS it and NAMES it.  `flds 0x240(%edi)` at
+	 * 0x1bb81 is the only access anywhere in the object, and the value
+	 * goes straight into the `%c%d.%08d` triple of
+	 *
+	 *     "V90Demodulator: TRN1d RMS Ratio = %c%d.%08d\r\n"
+	 *
+	 * so the WIDTH and the TYPE are the load's and the NAME is the
+	 * author's own -- CLAUDE.md's evidence rule 1, the strongest kind
+	 * there is.  Nothing in the object WRITES it, which is consistent
+	 * with `progress` being unwritten and is not evidence either way.
+	 */
+	float trn1dRmsRatio;		/* +0x240                            */
 
 	/*
 	 * +0x244 .. +0x25c  FIVE HEAP BLOCKS, ALL SIZED FROM THE
@@ -504,11 +526,23 @@ public:
 	unsigned int word_290;
 
 	/*
-	 * +0x294  Copied into `phase3Demodulator->word_410` AFTER
+	 * +0x294  WAS `word_294`, and TWO INDEPENDENT DERIVATIONS name it.
+	 * `V90Demodulator::reset(unsigned int quickConnect)` stores its
+	 * argument here and into `equalizer->quickConnect` in the same
+	 * breath -- a field this tree already names -- and `exitPhase3`
+	 * hands it to `V90Phase4Demodulator::reset` as that member's fourth
+	 * argument, which lands in `V90Phase4Demodulator::quickConnect`,
+	 * named in finding 7472 from the format string that prints it.
+	 * Neither reading knew about the other, which is what took this off
+	 * usage inference and onto CLAUDE.md's rule 2.
+	 *
+	 * It is also copied into `phase3Demodulator->word_410` AFTER
 	 * `V90Phase3Demodulator::reset` has zeroed that field, which is the
-	 * one place the two members of wave 2 interact observably.
+	 * one place the two members of wave 2 interact observably, and
+	 * `enterDataPhase` picks the shorter linear-mapping study when it is
+	 * set.
 	 */
-	unsigned int word_294;
+	unsigned int quickConnect;
 };
 
 #endif /* DSPLIB_V90DEMODULATOR_H */
