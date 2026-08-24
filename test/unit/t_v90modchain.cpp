@@ -4256,9 +4256,27 @@ run_p4m_reset(const char *name, p4m_reset ours, p4m_reset theirs, long base)
 			continue;
 
 		setup_pump((int)trial, ci, st, cnt_i, variant);
-		for (s = 0; s < 2; s++)
-			((V90Phase4Modulator *)(void *)(s ? p4m_b : p4m_a))->
-			    sessionFlag = (unsigned int)flag;
+		for (s = 0; s < 2; s++) {
+			V90Phase4Modulator *m = (V90Phase4Modulator *)(void *)
+			    (s ? p4m_b : p4m_a);
+
+			m->sessionFlag = (unsigned int)flag;
+			/*
+			 * THREE SENTINELS `setup_pump` DOES NOT PLANT, and
+			 * they are finding 7105's shape a third time: it
+			 * leaves +0x20, +0x2f9c and +0x2fa0 at ZERO, which is
+			 * what `reset` stores, so dropping any of those three
+			 * stores moved nothing and all three mutations
+			 * survived against correct code.  They are planted
+			 * here rather than in `setup_pump` because the pump
+			 * grid's own verdicts depend on that function and this
+			 * is not its claim.  All three are cleared before the
+			 * loop runs, so the pumps see what they always saw.
+			 */
+			m->word_0020 = 0xb1u + (unsigned int)trial;
+			m->word_2f9c = 0xb2u + (unsigned int)trial;
+			m->word_2fa0 = 0xb3u + (unsigned int)trial;
+		}
 		memcpy(pre_b, p4m_b, P4M_SIZE);
 		memcpy(pump_map_pre, slot_ptr(bts_a, 0x00), MAPPER_SIZE);
 

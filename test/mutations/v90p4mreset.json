@@ -1,0 +1,217 @@
+[
+ {
+  "_": [
+   "V90Phase4Modulator::reset, against t_v90modchain's run_p4m_reset.",
+   "",
+   "The function is sixteen stores, one G.711 expansion, one call into the",
+   "scrambler and a loop, so the claims worth attacking are WHICH field each",
+   "store reaches, WHICH of the five arguments it takes, WHICH companding",
+   "constant each arm of the expansion uses, and -- the two an object",
+   "comparison alone cannot see -- that `Scrambler::reset(0)` is called with",
+   "a zero, and that the loop picks its pump from `sessionFlag`.",
+   "",
+   "EVERY ANCHOR IS EXTENDED BACKWARDS UNTIL IT MATCHES ONCE, which findings",
+   "7432 and 7459 are about: eleven of the twenty-one stores are spelled",
+   "identically in `resetBeforRRN`, `resetRRNSecondSection`,",
+   "`enterRepeatedCPd`, `recivedCPtag` and `recivedSUVtag`, and an anchor",
+   "written naively would name whichever the file happens to hold first.",
+   "The lines unique to this function are `pcmType = law;`,",
+   "`word_0040 = arg5;`, `state = st;`, the `codeLevel` expression, the",
+   "`scrambler.reset(0);` and the loop, so each anchor below reaches one of",
+   "them.",
+   "",
+   "FOUR MUTATIONS ADD A STORE RATHER THAN REMOVING ONE.  `reset` must leave",
+   "+0x34, both bit vectors, both counts and the two sequence lengths",
+   "exactly as it found them, and only a mutation that WRITES one of them",
+   "can fail on that claim."
+  ]
+ },
+
+ {
+  "label": "reset: +0x38 takes argument one and not a constant",
+  "find": "\tpcmType = law;\n\tword_0040 = arg5;",
+  "replace": "\tpcmType = PCM_TYPE_MU_LAW;\n\tword_0040 = arg5;"
+ },
+ {
+  "label": "reset: +0x40 takes argument FIVE and not argument four",
+  "find": "\tword_0040 = arg5;\n\tsymbolCount = 0;",
+  "replace": "\tword_0040 = nofSymbols;\n\tsymbolCount = 0;"
+ },
+ {
+  "label": "reset: +0x40 is written at all",
+  "find": "\tpcmType = law;\n\tword_0040 = arg5;\n\tsymbolCount = 0;",
+  "replace": "\tpcmType = law;\n\tsymbolCount = 0;"
+ },
+ {
+  "label": "reset: the symbol counter is cleared",
+  "find": "\tword_0040 = arg5;\n\tsymbolCount = 0;\n\tstate = st;",
+  "replace": "\tword_0040 = arg5;\n\tstate = st;"
+ },
+ {
+  "label": "reset: +0x04 takes argument three and not a constant",
+  "find": "\tsymbolCount = 0;\n\tstate = st;",
+  "replace": "\tsymbolCount = 0;\n\tstate = P4M_STATE_RI;"
+ },
+ {
+  "label": "reset: +0x0c is cleared",
+  "find": "\tstate = st;\n\tword_000c = 0;",
+  "replace": "\tstate = st;"
+ },
+ {
+  "label": "reset: the companding test chooses A-law on NON-zero",
+  "find": "\tcodeLevel = (law != PCM_TYPE_MU_LAW)",
+  "replace": "\tcodeLevel = (law == PCM_TYPE_MU_LAW)"
+ },
+ {
+  "label": "reset: the A-law arm toggles against 0xd5",
+  "find": "\t    ? (short)alaw2linear((code & 0x7f) ^ 0xd5)",
+  "replace": "\t    ? (short)alaw2linear((code & 0x7f) ^ 0xff)"
+ },
+ {
+  "label": "reset: the mu-law arm complements the seven low bits",
+  "find": "\t    : (short)ulaw2linear((code & 0x7f) ^ 0xff);",
+  "replace": "\t    : (short)ulaw2linear((code & 0x7f) ^ 0xd5);"
+ },
+ {
+  "label": "reset: the A-law arm masks to SEVEN bits",
+  "find": "\t    ? (short)alaw2linear((code & 0x7f) ^ 0xd5)",
+  "replace": "\t    ? (short)alaw2linear((code & 0xff) ^ 0xd5)"
+ },
+ {
+  "label": "reset: the mu-law arm masks to SEVEN bits",
+  "find": "\t    : (short)ulaw2linear((code & 0x7f) ^ 0xff);",
+  "replace": "\t    : (short)ulaw2linear((code & 0xff) ^ 0xff);"
+ },
+ {
+  "label": "reset: the two expansions are not swapped",
+  "find": "\t    ? (short)alaw2linear((code & 0x7f) ^ 0xd5)\n\t    : (short)ulaw2linear((code & 0x7f) ^ 0xff);",
+  "replace": "\t    ? (short)ulaw2linear((code & 0x7f) ^ 0xff)\n\t    : (short)alaw2linear((code & 0x7f) ^ 0xd5);"
+ },
+ {
+  "label": "reset: the scrambler is reseeded at all",
+  "find": "\tscrambler.reset(0);\n\n\tbyte_0014 = 0;",
+  "replace": "\tbyte_0014 = 0;"
+ },
+ {
+  "label": "reset: the scrambler is reseeded with ZERO",
+  "find": "\tscrambler.reset(0);\n\n\tbyte_0014 = 0;\n\tword_0024 = 0;\n\tword_0028 = 0;",
+  "replace": "\tscrambler.reset(1);\n\n\tbyte_0014 = 0;\n\tword_0024 = 0;\n\tword_0028 = 0;"
+ },
+ {
+  "label": "reset: +0x14 is cleared",
+  "find": "\tscrambler.reset(0);\n\n\tbyte_0014 = 0;\n\tword_0024 = 0;",
+  "replace": "\tscrambler.reset(0);\n\n\tword_0024 = 0;"
+ },
+ {
+  "label": "reset: +0x24 is cleared, not set to one as resetBeforRRN does",
+  "find": "\tbyte_0014 = 0;\n\tword_0024 = 0;",
+  "replace": "\tbyte_0014 = 0;\n\tword_0024 = 1;"
+ },
+ {
+  "label": "reset: +0x28 is cleared",
+  "find": "\tword_0024 = 0;\n\tword_0028 = 0;\n\tword_002c = 0;",
+  "replace": "\tword_0024 = 0;\n\tword_002c = 0;"
+ },
+ {
+  "label": "reset: +0x2c is cleared",
+  "find": "\tword_0024 = 0;\n\tword_0028 = 0;\n\tword_002c = 0;\n\tnextStateAfterTRN2d",
+  "replace": "\tword_0024 = 0;\n\tword_0028 = 0;\n\tnextStateAfterTRN2d"
+ },
+ {
+  "label": "reset: the TRN2d successor follows sessionFlag and is not a constant",
+  "find": "\tnextStateAfterTRN2d = sessionFlag != 0 ? P4M_STATE_SUVD : P4M_STATE_MP;",
+  "replace": "\tnextStateAfterTRN2d = P4M_STATE_MP;"
+ },
+ {
+  "label": "reset: the TRN2d successor's two arms are not swapped",
+  "find": "\tnextStateAfterTRN2d = sessionFlag != 0 ? P4M_STATE_SUVD : P4M_STATE_MP;",
+  "replace": "\tnextStateAfterTRN2d = sessionFlag != 0 ? P4M_STATE_MP : P4M_STATE_SUVD;"
+ },
+ {
+  "label": "reset: the TRN2d successor reads sessionFlag and not the state",
+  "find": "\tnextStateAfterTRN2d = sessionFlag != 0 ? P4M_STATE_SUVD : P4M_STATE_MP;",
+  "replace": "\tnextStateAfterTRN2d = st != 0 ? P4M_STATE_SUVD : P4M_STATE_MP;"
+ },
+ {
+  "label": "reset: +0x2f9c is cleared",
+  "find": "P4M_STATE_MP;\n\tword_2f9c = 0;\n\tword_2fa0 = 0;",
+  "replace": "P4M_STATE_MP;\n\tword_2fa0 = 0;"
+ },
+ {
+  "label": "reset: +0x2fa0 is cleared",
+  "find": "P4M_STATE_MP;\n\tword_2f9c = 0;\n\tword_2fa0 = 0;\n\tword_0030 = 0;",
+  "replace": "P4M_STATE_MP;\n\tword_2f9c = 0;\n\tword_0030 = 0;"
+ },
+ {
+  "label": "reset: +0x30 is cleared, not set to one as resetRRNSecondSection does",
+  "find": "\tword_2fa0 = 0;\n\tword_0030 = 0;",
+  "replace": "\tword_2fa0 = 0;\n\tword_0030 = 1;"
+ },
+ {
+  "label": "reset: +0x18 is cleared",
+  "find": "\tword_0030 = 0;\n\tword_0018 = 0;\n\tbyte_001c = 0;",
+  "replace": "\tword_0030 = 0;\n\tbyte_001c = 0;"
+ },
+ {
+  "label": "reset: +0x1c is cleared",
+  "find": "\tword_0018 = 0;\n\tbyte_001c = 0;\n\tword_0020 = 0;",
+  "replace": "\tword_0018 = 0;\n\tword_0020 = 0;"
+ },
+ {
+  "label": "reset: +0x20 is cleared",
+  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
+  "replace": "\tbyte_001c = 0;"
+ },
+
+ {
+  "label": "reset: +0x34 is NOT written, unlike resetBeforRRN's",
+  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
+  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tword_0034 = 0;"
+ },
+ {
+  "label": "reset: the deadline at +0x2f64 is NOT written",
+  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
+  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tword_2f64 = 0;"
+ },
+ {
+  "label": "reset: the MP sequence length is NOT recomputed",
+  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
+  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tmpSequenceSymbols = 0;"
+ },
+ {
+  "label": "reset: the CP sequence length is NOT recomputed",
+  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
+  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tcpSequenceSymbols = 0;"
+ },
+
+ {
+  "label": "reset: the pump loop runs nofSymbols times and not never",
+  "find": "\tfor (i = 0; i < nofSymbols; i++) {",
+  "replace": "\tfor (i = 0; i < 0u; i++) {"
+ },
+ {
+  "label": "reset: the pump loop's bound is argument four and not argument five",
+  "find": "\tfor (i = 0; i < nofSymbols; i++) {",
+  "replace": "\tfor (i = 0; i < arg5; i++) {"
+ },
+ {
+  "label": "reset: the pump loop's bound is strict",
+  "find": "\tfor (i = 0; i < nofSymbols; i++) {",
+  "replace": "\tfor (i = 0; i <= nofSymbols; i++) {"
+ },
+ {
+  "label": "reset: the loop picks its pump from sessionFlag, not from the state",
+  "find": "\t\tif (sessionFlag != 0)\n\t\t\tgenerateV92Symbol();",
+  "replace": "\t\tif (st != 0)\n\t\t\tgenerateV92Symbol();"
+ },
+ {
+  "label": "reset: the two pumps are not swapped",
+  "find": "\t\tif (sessionFlag != 0)\n\t\t\tgenerateV92Symbol();\n\t\telse\n\t\t\tgenerateV90Symbol();",
+  "replace": "\t\tif (sessionFlag != 0)\n\t\t\tgenerateV90Symbol();\n\t\telse\n\t\t\tgenerateV92Symbol();"
+ },
+ {
+  "label": "reset: the V.92 arm is the non-zero one",
+  "find": "\t\tif (sessionFlag != 0)\n\t\t\tgenerateV92Symbol();",
+  "replace": "\t\tif (sessionFlag == 0)\n\t\t\tgenerateV92Symbol();"
+ }
+]

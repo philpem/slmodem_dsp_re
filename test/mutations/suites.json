@@ -719,5 +719,9 @@
  "v90p4msym": [
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90modchain"
+ ],
+ "v90p4mreset": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90modchain"
  ]
 }
