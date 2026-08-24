@@ -115,6 +115,8 @@ void ref_bts_reset(void *self, V90MappingParams *mp, int pcm)
 	asm("ref__ZN15V90BitsToSymbol5resetEP16V90MappingParams7PcmType");
 unsigned int ref_bts_setblock(void *self, unsigned int n)
 	asm("ref__ZN15V90BitsToSymbol19setSymbolsBlockSizeEj");
+void ref_p4m_setmapping(void *self, V90MappingParams *mp)
+	asm("ref__ZN18V90Phase4Modulator16setMappingParamsEP16V90MappingParams");
 void ref_setPhaseIIinfo(void *self, int *info0, int rtd)
 	asm("ref__ZN12VPcmFloModem14setPhaseIIinfoEPii");
 int ref_v90RunDemodulator(void *self, float *in, unsigned int n, int *rxbits,
@@ -170,6 +172,7 @@ struct probe_in {
 	int		unpack;		/* call setParamsInfoFromCPUnPck   */
 	int		blocks;		/* how many `progress` calls       */
 	int		reach;		/* how far to drive the phases     */
+	int		viaSetMapping;	/* enter the chain at its real head */
 	int		which;		/* which driver the driver probe runs */
 	int		forceDispatch;	/* past runPcmModem's early return  */
 	int		faultOnPurpose;	/* the fire check                  */
@@ -618,12 +621,33 @@ probe_run(const struct probe_in *in, struct probe_out *o)
 		 * looks at the block.
 		 */
 		STAGE(o, 5);
-		if (in->useBlob)
+		if (in->viaSetMapping) {
+			/*
+			 * THE CHAIN'S REAL HEAD.  7520 names it as
+			 * `V90Phase4Modulator::setMappingParams` ->
+			 * `V90BitsToSymbol::reset` -> `V90Mapper::reset`, and
+			 * entering at the second link leaves two differences
+			 * a caveat would have had to carry instead: the
+			 * `PcmType` comes from the phase 4 modulator's own
+			 * field rather than from the harness, and the head
+			 * sets the block size to 1 before anything else does.
+			 * Both are driven here so the two entries can be
+			 * compared rather than assumed equivalent.
+			 */
+			mod->phase4Modulator->pcmType = PCM_TYPE_MU_LAW;
+			if (in->useBlob)
+				ref_p4m_setmapping(mod->phase4Modulator,
+						   &m->mappingParamsAlt);
+			else
+				mod->phase4Modulator->setMappingParams(
+				    &m->mappingParamsAlt);
+		} else if (in->useBlob) {
 			ref_bts_reset(mod->bitsToSymbol, &m->mappingParamsAlt,
 				      PCM_TYPE_MU_LAW);
-		else
+		} else {
 			mod->bitsToSymbol->reset(&m->mappingParamsAlt,
 						 PCM_TYPE_MU_LAW);
+		}
 		STAGE(o, 6);
 		o->v[8] = (long)mod->bitsToSymbol->mapper->bitsPerFrame;
 		o->v[9] = (long)mod->bitsToSymbol->bitsPerFrame;
@@ -1148,6 +1172,7 @@ main(void)
 		    { REACH_PHASE3,   "state 1, phase 3 after enterPhase3()" },
 		};
 		unsigned s;
+		int ran = 0;
 
 		for (s = 0; s < sizeof steps / sizeof steps[0]; s++) {
 			int side;
@@ -1180,9 +1205,15 @@ main(void)
 				       shared->v[24],
 				       4 * (int)shared->v[2], shared->v[25],
 				       shared->f[0], shared->f[1]);
+				ran++;
 			}
 		}
-		must(1, "both arms of state 0 and state 1 were driven");
+		/*
+		 * COUNTED, not asserted true.  A `must(1, ...)` here would
+		 * print "yes" whether or not any arm ran, which is 7626's own
+		 * subject and would be a poor advertisement for it.
+		 */
+		must(ran == 4, "all four (step x side) arms ran to the end");
 	}
 
 	/* --------------------------------------------------- milestone 3 */
@@ -1253,6 +1284,41 @@ main(void)
 				report_run(&in);
 			must(w.done == 1,
 			     "the data phase runs when the block is filled");
+		}
+
+		/*
+		 * AND THE SAME TWO ARMS ENTERED AT THE CHAIN'S REAL HEAD.
+		 * Everything above calls `V90BitsToSymbol::reset` directly,
+		 * which is the SECOND link of the chain 7520 names.  These
+		 * two go through `V90Phase4Modulator::setMappingParams`, the
+		 * first, so the claim does not have to carry a caveat about
+		 * the link that was skipped.
+		 */
+		printf("\n    --- the chain entered at its real head, "
+		       "V90Phase4Modulator::setMappingParams ---\n");
+		for (side = 0; side < 2; side++) {
+			char buf[96];
+			int u;
+
+			for (u = 0; u < 2; u++) {
+				memset(&in, 0, sizeof in);
+				in.digitalSide = 1;
+				in.useBlob = side;
+				in.mode = 3;
+				in.blocks = 32;
+				in.reach = REACH_DATA;
+				in.fill = 0xa5;
+				in.unpack = u;
+				in.viaSetMapping = 1;
+				w = probe(probe_run, &in);
+				verdict_str(&w, buf, sizeof buf);
+				printf("      fill 0xa5, %-24s %-4s: %s\n",
+				       u ? "unpacker called"
+					 : "as the ctor left it",
+				       side ? "BLOB" : "ours", buf);
+				if (w.done)
+					report_run(&in);
+			}
 		}
 	}
 
@@ -1365,8 +1431,8 @@ main(void)
 		       "input %s\n        reach the demodulator's state.\n",
 		       seqdiff ? "DIFFERENT" : "identical",
 		       seqdiff ? "does" : "does NOT");
-		must(1, "the negative control ran and both arms were "
-			"compared");
+		must(moved[0] >= 0 && moved[1] >= 0,
+		     "BOTH loopback arms ran, so the control is a comparison");
 	}
 
 	/* ------------------------------- the event-code vocabulary (7581) */
