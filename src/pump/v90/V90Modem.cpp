@@ -140,10 +140,30 @@ V90Modem::printTitle()
  * the descriptor and differ on the demodulator, and only a fixture that
  * drives `PROBING_MODE` non-zero can tell.
  *
- * WHY THE MASKED PATH HAS NO `mov $0x1` OF ITS OWN.  The join at 0x19a28 is
- * the `else` half of `qcFlag ? 1 : 0`, so GCC has already proved `qcFlag` is
- * zero there and reuses the constant.  That is a consequence of the source
- * below and not an extra statement in it.
+ * THE `DilType` SELECT IS AN `if`/`else` AND NOT A TERNARY, AND THAT IS
+ * MEASURED RATHER THAN PREFERRED.  Both spellings mean the same thing and
+ * GCC 3.4.2 compiles them differently, so the object can tell them apart:
+ *
+ *   ternary    xor %edx,%edx ; test %esi,%esi ; setne %dl      3 instructions
+ *   if/else    test %esi,%esi ; mov $0x1,%eax ; jne ; xor %eax,%eax
+ *
+ * and the object's 0x19a1f..0x19a28 is the second, byte for byte.  The
+ * ternary version came out at 59 instructions against the blob's 60 and the
+ * if/else at 61; the count alone would have preferred the wrong one, and what
+ * decides is that the four instructions match.  CLAUDE.md's forced column.
+ *
+ * WHAT THE REMAINING +1 IS, and it is the compiler's free choice.  The masked
+ * path ends `xor %eax,%eax ; jmp` in ours and plain `jmp` in the object,
+ * because the object CROSS-JUMPS it into the `else` arm's own `xor` at
+ * 0x19a28 where ours materialises a second copy.  Both paths reach
+ * `mov %eax,0x4(%esp)` with `%eax` zero and every instruction either side is
+ * identical; it is basic-block placement, which is 617's free column, and it
+ * is not chased.
+ *
+ * WHY EITHER OF THEM CAN FOLD THE MASKED PATH AT ALL: `qcFlag = 0` is a real
+ * assignment to the variable, so on that path the compiler has already proved
+ * the select's condition false.  That is a consequence of the source below
+ * and not an extra statement in it.
  *
  * `printTitle()` RUNS ON EVERY SIDE, including the illegal one, because it is
  * called at 0x199bf before `side` is loaded at 0x199c4.
@@ -152,6 +172,8 @@ V90Modem::printTitle()
 void
 V90Modem::reset(unsigned int qcFlag)
 {
+	DilType dilType;
+
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V90Modem Reset, qcFlag = %d\r\n",
 				     qcFlag);
@@ -170,8 +192,12 @@ V90Modem::reset(unsigned int qcFlag)
 			qcFlag = 0;
 		}
 
-		setDilDescriptor(dil, qcFlag ? DIL_TYPE_ADI_QC
-					     : DIL_TYPE_ADI);
+		if (qcFlag)
+			dilType = DIL_TYPE_ADI_QC;
+		else
+			dilType = DIL_TYPE_ADI;
+
+		setDilDescriptor(dil, dilType);
 		demodulator->reset(qcFlag);
 		break;
 
