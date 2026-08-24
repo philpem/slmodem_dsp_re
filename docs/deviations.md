@@ -3501,7 +3501,21 @@ reachable caller today.
 
 ## D94 🐛 the V.8 CM/JM collector checks its bound after the read
 
-*Task #98 sweep, from fix list §6.5. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
+*Task #98 sweep, from fix list §6.5. **Reachability: REACHABLE FROM A CONFORMANT PEER -- upgraded 2026-08-24 from "needs a caller or configuration nothing validates".** Status: CONFIRMED. Fix class: a bound, host-side; NOT YET WRITTEN.*
+
+**THE UPGRADE, FROM THE RECOMMENDATION RATHER THAN FROM A GUESS.**
+`docs/deviation-triage.md` establishes that no clause caps what this collector
+must accept: V.8 §5.2 permits "any number of extension octets" and §6.6 permits
+multiple concatenated NS blocks, so a 255-octet NS block alone expands to about
+408 octets against a fifteen-word array. The peer does not have to be hostile
+or even unusual -- it has to be verbose, and the Recommendation allows it. That
+is a different class of entry from "a malformed peer could", and it is why this
+is one of the two the triage put at the top.
+
+**What is still true from the original note:** it does not fire in normal
+operation, because every fifteen-word message begins with the marker and the
+marker resets `fdbc` to 1. The defect needs a stream that stops sending the
+marker, which §5.2 and §6.6 between them permit.*
 
 **Finding 73.** At 0x78070 the collector reads `word[fdbc]` and only *then*
 tests `fdbc <= 14`. `word[]` has fifteen entries, so `fdbc == 15` reads the CRC
@@ -5236,7 +5250,19 @@ Neither way of forcing the symbols out is right: an out-of-line definition canno
 
 ## D256 🐛 `addReceivedSampleToStorage` has no bound on the store index
 
-*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::addReceivedSampleToStorage` (blob 0x41ff0, 149 bytes). **Reachability: unmeasured** -- no caller is written yet, so how many samples a phase is offered per session is not established here. Status: `unmeasured`. Fix class: none proposed.*
+*Batch of 2026-08-11, from `V90AutoDigitalImpDetector::addReceivedSampleToStorage` (blob 0x41ff0, 149 bytes). **Reachability: REACHABLE FROM A CONFORMANT PEER -- upgraded 2026-08-24 from "unmeasured".** Status: CONFIRMED. Fix class: a bound; NOT YET WRITTEN.*
+
+**THE UPGRADE.** The original note said no caller was written, so how many
+samples a phase is offered was not established. The SPEC establishes it without
+needing the caller: V.90 §9.3.2.10 gives the analogue modem **5000 ms** to stop
+the DIL, which is about **6,667 samples per phase** at 8 kHz against a row of
+**2,110**. The overrun begins around **1.6 s**, well inside the window the
+Recommendation permits, with the peer REQUIRED to keep sending until told to
+stop. So this fires on a conformant exchange that merely takes its time, not on
+a malformed one.
+
+**The 2,111th sample writes into the next phase's row**, and a phase offered
+enough of them walks off the end of the 43,440-byte object.*
 
 **Finding 1363.** The method stores at `sampleStore[phase][int_9100[phase]]` and then increments `int_9100[phase]`, and there is no comparison against 0x83e -- or against anything else -- in the whole method. The row is 2,110 shorts; the 2,111th sample offered to a phase writes into the next phase's row, and a phase offered enough of them walks off the end of the 43,440-byte object entirely. Reproduced without a check, because adding one would be a different function. `t_v90adid` keeps the index inside the row deliberately and says so at the call site: a test that let it run away would be scribbling over its own memory rather than measuring the object's.
 
