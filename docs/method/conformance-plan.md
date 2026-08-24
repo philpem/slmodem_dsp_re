@@ -22,14 +22,16 @@ can recompute each of them rather than take it.
 | named as NOT worth doing | **24** | §7, numbered R1–R24 |
 | clauses about code nobody has written | **16** | §7, numbered L1–L16 |
 | already covered | **2** | Table 16/V.90 (7413); D920 (6800) |
-| candidate non-conformances found while surveying | **8** | §8, N1–N8 |
-| retrofit backlog, in landed symbols | **112** of 1,204 | §9 |
+| candidate non-conformances found while surveying | **7** | §8, N1–N7 |
+| plus one comment defect, where the code is right | **1** | §8, N8 |
+| retrofit backlog, in landed symbols | **112** of 1,204 | §9, enumerated in the appendix |
 
 The 21 blocks touch **24 fixtures, 22 of which already exist**; the two new ones
 are named in §6.
 
-Two Recommendations carry published known-answers this tree can use today, and
-a third carries one it cannot.
+**Four Recommendations in the corpus carry a published known-answer. Two of the
+four judge code that exists today**; the other two are waiting on functions
+nobody has written.
 
 ---
 
@@ -99,9 +101,15 @@ obtained except from the object.
 
 ## 3. Do any of the Recommendations carry usable known-answers?
 
-**YES — three, of which two judge code that exists today.** Finding 7413
-recorded that V.34 and V.90 carry no test vector *for the CRC*, and that is
-still true of the CRC. It is not true of the corpus.
+**YES — four, of which two judge code that exists today.** Finding 7413 recorded
+that V.34 and V.90 carry no test vector *for the CRC*, and that is still true of
+the CRC. It is not true of the corpus.
+
+**Three of the four are the strong form** — the Recommendation prints the
+numbers an implementation must produce: §3.1 and §3.2 judge landed code, §3.3
+does not. **The fourth is the weaker but equally decisive form**: a table the
+spec *both derives and tabulates*, so the table checks itself against its own
+algorithm (§3.4, and nothing implements it).
 
 ### 3.1 Table 17/V.34 — the probing tones. USABLE NOW.
 
@@ -820,3 +828,68 @@ rather than letting a reader assume the number is ITU's.
 declared unmeasured. D250 is the only one of 232 bug-marked entries that earned
 a fix, and it earned it by having the correct value derivable four independent
 ways.
+
+---
+
+## Appendix — the 112, enumerated
+
+§9's total is the only headline number that is not read off a numbered list in
+the body, so the list is here. Names are as they appear in `src/`. Anyone
+re-deriving the count should re-derive this enumeration rather than carry the
+total forward.
+
+**CRC extent and seeding — 19.** `V90CP::calcCRC`, `V90CP::resetCRC`,
+`V90CP::evaluateCRC`, `V92CP::calcCRC`, `V92CP::resetCRC`, `V92CP::evaluateCRC`,
+`V90Jd::unPackData`, `v90jd_crc_bits`, `V92Jd::packJdData`,
+`V92Jd::packJdPhaseData`, `V92Jd::unPackJdData`, `V92Jd::unPackJdPhaseData`,
+`v92jd_crc_bits`, `DILdescriptorPacker::DILdescriptorPacker`, `dilCrcBit` (V.90),
+`V92DILdescriptorPacker::V92DILdescriptorPacker`, `dilCrcBit` (V.92),
+`calculateDilLength`, `getbit`. — `v8_crc` is deliberately not here; see R12.
+
+**V.90/V.92 message field layout — 30.** `V90CP::infoToBits`,
+`V90CP::bitsToInfo`, `V90CP::evaluateInfo`, `V90CP::getBitVector`,
+`V90CP::calcSequenceLength`, `V92CP::infoToBits`, `V92CP::bitsToInfo`,
+`V92CP::evaluateInfo`, `V92CP::getBitVector`, `V92CP::setSUV`,
+`V90MP::infoToBits`, `V90MP::bitsToInfo`, `V90MP::evaluateInfo`,
+`V90MP::getBitVector`, `V90Jd::getBitVector`, `V90Jd::unPackReset`,
+`V90Jd::getRatesMask`, `V90Jd::getConstelationSize`, `V90Jd::getMaxLookahead`,
+`V92Jd::getJdBitVector`, `V92Jd::getJdPhaseBitVector`, `V92Jd::unPackJdReset`,
+`V92Jd::unPackJdPhaseReset`, `V92Jd::getJdPhase`, `V92Jd::getRatesMask`,
+`V92Jd::getConstelationSize`, `V92Jd::getMaxLookahead`,
+`getConstellationMask`, `getCodecConstellationMask`,
+`setV92CPpckFromParamsInfo`.
+
+**V.34 and V.8 message field layout — 22.** `V34SetINFO0dBits`,
+`V34SetINFO0aBits`, `V34SetINFO1aBits`, `V34GiveINFO0dBits`,
+`V34GiveINFO1aBits`, `initTxSequence`, `ext_word`, `v8_getbit`, `V8GetMessage`,
+`V8SetMessage`, `charFlip`, `selected_sequence`, `rx_sequence`,
+`rebuildJMSequence`, `V8UpdateModemParameters`, `evaluateRxJMSequence`,
+`match_extension`, `ext_expected`, `emit_extension`, `emit_extension_words`,
+`v8_hs_message_done`, `v8_hs_collect`.
+
+**Derivable constants, V.34/V.90/V.92 — 28.** `probe[64]` (data),
+`v34tx1_xmit`'s `TX_L1` arm, `scrambleGPC`, `scrambleGPA`, `descrambleGPC`,
+`descrambleGPA`, `preinitdigital`, `Scrambler::Scrambler`, `Scrambler::process`,
+`Descrambler::Descrambler`, `Descrambler::process`, `ModulusEncoder::progress`,
+`ModulusDecoder::progress`, `V90Demodulator::getBitRate`, the `drn + 17` site in
+`V92createConstellations`, `V90ConstellationPower::averagePowerLimits` (data),
+`V90ConstellationPower::getPower`,
+`V90ConstellationPower::getPowerIndexForPower`,
+`V90Phase3Modulator::codeSegmentsBoundriesLookupTable` (data),
+`V90Phase3Modulator::resetDILGenerator`, `V90SpectralShaper`'s frame geometry,
+`V90SpectralShaper::applyFrameAction`, `ParallelDifferentialEncoder::process`,
+`ParallelDifferentialDecoder::process`, `ulaw2linear`, `alaw2linear`,
+`linear2ulaw`, `linear2alaw`.
+
+**Derivable constants, V.8 and V.25 — 13.** `v8_ansaminit`, `v8_ansamgenerate`,
+`v8_phase_rev_detect`, `v8_V21_Init`'s channel assignment, `deadline`,
+`v8_handshak`'s `TX_ANSAM` arm, `v8_hs_cj`'s CJ count, `v8hs.c`'s CJ
+transmitter, `FPM_TONE_CFG` (data), `FPM_TONE_generate`, `v23modem`'s answering
+sequence, the `CALLING_TONE_*` constants (data), `GenerateCallingTone`.
+
+**Six of the 112 are data symbols** rather than functions: `probe`,
+`averagePowerLimits`, `codeSegmentsBoundriesLookupTable`, `FPM_TONE_CFG` and the
+`CALLING_TONE_*` group. The other 106 are functions.
+
+**Not in the list, because they are already covered:** `V90MP::calcCRC` and
+`V90MP::evaluateCRC`.
