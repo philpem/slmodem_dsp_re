@@ -88,8 +88,10 @@
  },
  {
   "label": "the demodulator is never told to enter phase 3",
-  "find": "\tmodem.demodulator->enterPhase3();\n",
-  "replace": ""
+  "find": "\n\n\tmodem.demodulator->enterPhase3();\n",
+  "replace": "\n",
+  "fn": "enterPhase3",
+  "note": "Anchor carries the blank line above it.  `runPcmModem`'s V.90 fallback arm makes the same call one indent deeper, so the bare one-line anchor matched twice and the mutation became UNUSABLE -- which does not fail a run.  Same shape as the `getUinfoValue` entry in vpcmflomodem.json."
  },
  {
   "label": "the packer is handed a descriptor one byte further on",

@@ -1,0 +1,491 @@
+[
+ {
+  "label": "VPcmFloModem::runPcmModem.  Run it with: tools/mutate.py --suite vpcmrunpcm"
+ },
+ {
+  "label": "NOTE: the source is shared with the vpcmflomodem, vpcmep3 and v34diagflo",
+  "why": "sets.  Four sets over one file, one binary each; suites.json maps one name to one source and one binary, and none of the other three drives runPcmModem at all."
+ },
+
+ {
+  "label": "the master gate is inverted: the body runs when info0Layout is zero",
+  "find": "\tif (info0Layout == 0)\t\t/* 0xe470 */\n\t\treturn ret;",
+  "replace": "\tif (info0Layout != 0)\t\t/* 0xe470 */\n\t\treturn ret;"
+ },
+ {
+  "label": "the master gate returns 0 rather than what the first table seeded",
+  "find": "\tif (info0Layout == 0)\t\t/* 0xe470 */\n\t\treturn ret;",
+  "replace": "\tif (info0Layout == 0)\t\t/* 0xe470 */\n\t\treturn 0;"
+ },
+ {
+  "label": "byte_6118 0 and 1 do not share an arm",
+  "find": "\tcase 0:\t\t\t\t/* 0xe6a0 */\n\tcase 1:\n\t\tret = 0;",
+  "replace": "\tcase 0:\n\t\tret = 0;\n\t\tbreak;\n\tcase 1:\n\t\tret = 1;"
+ },
+ {
+  "label": "byte_6118 == 2 seeds 2 rather than 1",
+  "find": "\tcase 2:\t\t\t\t/* 0xe6ab */\n\t\tret = 1;",
+  "replace": "\tcase 2:\t\t\t\t/* 0xe6ab */\n\t\tret = 2;"
+ },
+ {
+  "label": "byte_6118 == 4 seeds 2 rather than 3",
+  "find": "\tcase 4:\t\t\t\t/* 0xe460, and it falls through */\n\t\tret = 3;",
+  "replace": "\tcase 4:\t\t\t\t/* 0xe460, and it falls through */\n\t\tret = 2;"
+ },
+ {
+  "label": "the rate-reneg arm tests phase 3 rather than phase 4",
+  "find": "\t\t    && modem.demodulator->inPhase3 == 4\n",
+  "replace": "\t\t    && modem.demodulator->inPhase3 == 3\n"
+ },
+ {
+  "label": "the rate-reneg arm ignores the parameter block",
+  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {",
+  "replace": "\t\t    ) {"
+ },
+ {
+  "label": "the rate-reneg arm does not latch byte_6118",
+  "find": "\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;",
+  "replace": "\t\t\tret = 3;"
+ },
+ {
+  "label": "the rate-reneg arm latches 3 rather than 4",
+  "find": "\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;",
+  "replace": "\t\t\tbyte_6118 = 3;\n\t\t\tret = 3;"
+ },
+ {
+  "label": "the rate-reneg arm's other exit seeds 3 rather than 2",
+  "find": "\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;",
+  "replace": "\t\t} else {\n\t\t\tret = 3;\n\t\t}\n\t\tbreak;"
+ },
+
+ {
+  "label": "the echo sentinel ramp runs past 0xb1",
+  "find": "\t\tif (word_7f64 != VPCM_EC_RAMP_SENTINEL)\n\t\t\tword_7f64++;",
+  "replace": "\t\tword_7f64++;"
+ },
+ {
+  "label": "the ramp value is stored before the step, not after",
+  "find": "\t\tif (word_7f64 != VPCM_EC_RAMP_SENTINEL)\n\t\t\tword_7f64++;\n\t\trx[0] = (float)word_7f64;",
+  "replace": "\t\trx[0] = (float)word_7f64;\n\t\tif (word_7f64 != VPCM_EC_RAMP_SENTINEL)\n\t\t\tword_7f64++;"
+ },
+ {
+  "label": "the ramp mode is 0x20, one below the object's",
+  "find": "#define VPCM_EC_RAMP_MODE\t0x21",
+  "replace": "#define VPCM_EC_RAMP_MODE\t0x20"
+ },
+ {
+  "label": "the sentinel is 176 rather than 177",
+  "find": "#define VPCM_EC_RAMP_SENTINEL\t0xb1",
+  "replace": "#define VPCM_EC_RAMP_SENTINEL\t0xb0"
+ },
+ {
+  "label": "the non-ramp arm leaves the receive buffer's first sample alone",
+  "find": "\t} else {\t\t\t\t\t\t/* 0xe48b */\n\t\trx[0] = 0.0f;\n\t}",
+  "replace": "\t}"
+ },
+ {
+  "label": "the echo canceller is given the transmit block, not the line signal",
+  "find": "\techoCanceller.process(in, rx, n);",
+  "replace": "\techoCanceller.process(out, rx, n);"
+ },
+ {
+  "label": "the echo canceller writes over the caller's buffer",
+  "find": "\techoCanceller.process(in, rx, n);",
+  "replace": "\techoCanceller.process(in, out, n);"
+ },
+ {
+  "label": "the receive buffer is +0x6bd0 rather than +0x6c0c",
+  "find": "\tfloat *rx = (float *)block_6c0c;",
+  "replace": "\tfloat *rx = (float *)&echoCanceller;"
+ },
+ {
+  "label": "the demodulator's timing offset is not negated for the transmitter",
+  "find": "\t    -modem.demodulator->resampler.getTimingOffsetPPM();",
+  "replace": "\t    modem.demodulator->resampler.getTimingOffsetPPM();"
+ },
+ {
+  "label": "the timing offset lands in resamplerPhaseOffset, not float_28",
+  "find": "\tv92modem.modulator->float_28 =\n\t    -modem.demodulator->resampler.getTimingOffsetPPM();",
+  "replace": "\tv92modem.modulator->resamplerPhaseOffset =\n\t    -modem.demodulator->resampler.getTimingOffsetPPM();"
+ },
+
+ {
+  "label": "the silence arm does not stop the Ja transmission",
+  "find": "\t\tv92modem.modulator->exitJa();",
+  "replace": ""
+ },
+ {
+  "label": "the silence-on arm seeds 1 rather than 0",
+  "find": "\t\tbyte_6118 = 1;\n\t\tret = 0;\n\t\tv92modem.modulator->exitJa();",
+  "replace": "\t\tbyte_6118 = 1;\n\t\tret = 1;\n\t\tv92modem.modulator->exitJa();"
+ },
+ {
+  "label": "the silence-off arm leaves the mode at the ramp value",
+  "find": "\t\tword_7f60 = 1;\n\t\tword_7f64 = VPCM_EC_RAMP_START;",
+  "replace": "\t\tword_7f60 = VPCM_EC_RAMP_MODE;\n\t\tword_7f64 = VPCM_EC_RAMP_START;"
+ },
+ {
+  "label": "the ramp starts at zero rather than 0xaa",
+  "find": "#define VPCM_EC_RAMP_START\t0xaa",
+  "replace": "#define VPCM_EC_RAMP_START\t0x00"
+ },
+ {
+  "label": "Jd's two constellation sizes are handed over the other way round",
+  "find": "\t\tv92modem.modulator->byte_0c = flags_173a[0];\n\t\tv92modem.modulator->byte_0d = flags_173a[1];",
+  "replace": "\t\tv92modem.modulator->byte_0c = flags_173a[1];\n\t\tv92modem.modulator->byte_0d = flags_173a[0];"
+ },
+ {
+  "label": "getConstelationSize is given its two outputs the other way round",
+  "find": "\t\tmodem.jd92->getConstelationSize(&flags_173a[0],\n\t\t\t\t\t\t&flags_173a[1]);",
+  "replace": "\t\tmodem.jd92->getConstelationSize(&flags_173a[1],\n\t\t\t\t\t\t&flags_173a[0]);"
+ },
+ {
+  "label": "the Jd phase is not installed in the transmitter's resampler",
+  "find": "\t\tv92modem.modulator->resamplerPhaseOffset =\n\t\t    modem.jd92->getJdPhase();",
+  "replace": ""
+ },
+ {
+  "label": "the Jd arm does not leave the SU second",
+  "find": "\t\tv92modem.modulator->exitSuSecond();",
+  "replace": ""
+ },
+ {
+  "label": "the retrain bit is cleared whatever the phase 2 bit says",
+  "find": "\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;"
+ },
+ {
+  "label": "the phase 2 test is the wrong way round",
+  "find": "\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n",
+  "replace": "\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) != 0)\n"
+ },
+ {
+  "label": "the bit cleared is the phase 2 one, not the retrain one",
+  "find": "\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_PHASE2;"
+ },
+
+ {
+  "label": "TRN1u packs the CP message from the ALTERNATE mapping block",
+  "find": "\t\tsetV92CPpckFromParamsInfo(&modem.mappingParams,\n\t\t\t\t\t  &modem.additionalCPinfo,\n\t\t\t\t\t  v92modem.cp);\n\t\tv92modem.modulator->exitTRN1uSecond();",
+  "replace": "\t\tsetV92CPpckFromParamsInfo(&modem.mappingParamsAlt,\n\t\t\t\t\t  &modem.additionalCPinfo,\n\t\t\t\t\t  v92modem.cp);\n\t\tv92modem.modulator->exitTRN1uSecond();"
+ },
+ {
+  "label": "TRN2u packs the CP message from the FIRST mapping block",
+  "find": "\t\tsetV92CPpckFromParamsInfo(&modem.mappingParamsAlt,\n\t\t\t\t\t  &modem.additionalCPinfo,\n\t\t\t\t\t  v92modem.cp);",
+  "replace": "\t\tsetV92CPpckFromParamsInfo(&modem.mappingParams,\n\t\t\t\t\t  &modem.additionalCPinfo,\n\t\t\t\t\t  v92modem.cp);"
+ },
+ {
+  "label": "TRN1u does not leave the second",
+  "find": "\t\tv92modem.modulator->exitTRN1uSecond();",
+  "replace": ""
+ },
+ {
+  "label": "the CPt arm does not latch byte_6118",
+  "find": "\tcase 0x16:\n\t\tbyte_6118 = 2;\n\t\tret = 1;",
+  "replace": "\tcase 0x16:\n\t\tret = 1;"
+ },
+ {
+  "label": "the CPt arm seeds 2 rather than 1",
+  "find": "\tcase 0x16:\n\t\tbyte_6118 = 2;\n\t\tret = 1;",
+  "replace": "\tcase 0x16:\n\t\tbyte_6118 = 2;\n\t\tret = 2;"
+ },
+ {
+  "label": "the CPt arm sets the retrain bit whatever byte_6119 says",
+  "find": "\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;",
+  "replace": "\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;"
+ },
+ {
+  "label": "the CPt arm's flag test is inverted",
+  "find": "\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=",
+  "replace": "\t\tif (byte_6119 == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |="
+ },
+ {
+  "label": "the retrain arm seeds 3 rather than 2",
+  "find": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;",
+  "replace": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 3;"
+ },
+ {
+  "label": "the retrain arm latches 2 rather than 3",
+  "find": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;",
+  "replace": "\tcase 0x1e:\n\t\tbyte_6118 = 2;\n\t\tret = 2;"
+ },
+ {
+  "label": "the retrain arm does not set the retrain bit",
+  "find": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;\n\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;",
+  "replace": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;"
+ },
+ {
+  "label": "the V.34 fallback arm does not raise flag_173d",
+  "find": "\t\tflag_173d = 1;\n\t\tret = 7;",
+  "replace": "\t\tret = 7;"
+ },
+ {
+  "label": "the V.34 fallback arm seeds 6 rather than 7",
+  "find": "\t\tflag_173d = 1;\n\t\tret = 7;",
+  "replace": "\t\tflag_173d = 1;\n\t\tret = 6;"
+ },
+ {
+  "label": "the fallback arm allows the second baud as well",
+  "find": "\t\tv34BaudAllow[0] = 1;\n\t\tv34BaudAllow[1] = 0;\n\t\tv34BaudAllow[2] = 1;",
+  "replace": "\t\tv34BaudAllow[0] = 1;\n\t\tv34BaudAllow[1] = 1;\n\t\tv34BaudAllow[2] = 1;"
+ },
+ {
+  "label": "the fallback arm bars the fastest baud, as enterPhase3 does",
+  "find": "\t\tv34BaudAllow[4] = 1;\n\t\tv34BaudAllow[5] = 1;\n\t\tbreak;",
+  "replace": "\t\tv34BaudAllow[4] = 1;\n\t\tv34BaudAllow[5] = 0;\n\t\tbreak;"
+ },
+ {
+  "label": "0x20 seeds 5 rather than 6",
+  "find": "\tcase 0x20:\t\t\t/* 0xea4b */\n\t\tret = 6;",
+  "replace": "\tcase 0x20:\t\t\t/* 0xea4b */\n\t\tret = 5;"
+ },
+ {
+  "label": "0x15 and 0x21 do not share an arm",
+  "find": "\tcase 0x15:\t\t\t/* 0xe786 */\n\tcase 0x21:\n\t\tret = 5;",
+  "replace": "\tcase 0x15:\t\t\t/* 0xe786 */\n\t\tret = 5;\n\t\tbreak;\n\tcase 0x21:\n\t\tret = 6;"
+ },
+ {
+  "label": "local rate reneg indicates a REMOTE one",
+  "find": "\t\tVPcmV34IndicateLocalRRN(v34Object);",
+  "replace": "\t\tVPcmV34IndicateRemoteRRN(v34Object);"
+ },
+ {
+  "label": "remote rate reneg indicates a LOCAL one",
+  "find": "\t\tVPcmV34IndicateRemoteRRN(v34Object);",
+  "replace": "\t\tVPcmV34IndicateLocalRRN(v34Object);"
+ },
+ {
+  "label": "the local rate-reneg arm starts RRN whatever phase it is in",
+  "find": "\t\tif (v92modem.modulator->phase == V92MOD_PHASE_DATA) {\n\t\t\tv92modem.modulator->initiateRRN();\n\t\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t\t    modem.demodulator->connectionEvaluator->word_90;\n\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);",
+  "replace": "\t\tv92modem.modulator->initiateRRN();\n\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t    modem.demodulator->connectionEvaluator->word_90;\n\t\tVPcmV34IndicateLocalRRN(v34Object);"
+ },
+ {
+  "label": "the rate-reneg threshold does not reach the phase 4 modulator",
+  "find": "\t\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t\t    modem.demodulator->connectionEvaluator->word_90;\n\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);",
+  "replace": "\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);"
+ },
+ {
+  "label": "the FPE arm starts FPE whatever phase it is in",
+  "find": "\t\tif (v92modem.modulator->phase == V92MOD_PHASE_DATA)\n\t\t\tv92modem.modulator->initiateFPE();",
+  "replace": "\t\tv92modem.modulator->initiateFPE();"
+ },
+ {
+  "label": "the FPE arm tests phase 2 rather than phase 3",
+  "find": "\t\tif (v92modem.modulator->phase == V92MOD_PHASE_DATA)\n\t\t\tv92modem.modulator->initiateFPE();",
+  "replace": "\t\tif (v92modem.modulator->phase == V92MOD_PHASE_4)\n\t\t\tv92modem.modulator->initiateFPE();"
+ },
+ {
+  "label": "0x24 and 0x25 do not share an arm",
+  "find": "\tcase 0x24:\n\tcase 0x25:\n\t\tbyte_6118 = 2;",
+  "replace": "\tcase 0x24:\n\t\tbreak;\n\tcase 0x25:\n\t\tbyte_6118 = 2;"
+ },
+ {
+  "label": "the FPE arm does not latch byte_6118",
+  "find": "\tcase 0x24:\n\tcase 0x25:\n\t\tbyte_6118 = 2;\n\t\tret = 1;",
+  "replace": "\tcase 0x24:\n\tcase 0x25:\n\t\tret = 1;"
+ },
+ {
+  "label": "the remote-retrain arm seeds 6 rather than 5",
+  "find": "\tcase 0x26:\t\t\t/* 0xea1d */\n\t\tret = 5;",
+  "replace": "\tcase 0x26:\t\t\t/* 0xea1d */\n\t\tret = 6;"
+ },
+ {
+  "label": "the remote-retrain arm does not tell the V.34 shell",
+  "find": "\t\tVPcmV34SetIndicationOfRemoteRetrain(v34Object);",
+  "replace": ""
+ },
+ {
+  "label": "0x2b seeds 7 rather than 8",
+  "find": "\tcase 0x2b:\n\t\tret = 8;",
+  "replace": "\tcase 0x2b:\n\t\tret = 7;"
+ },
+ {
+  "label": "0x2b does not log the timing offset",
+  "find": "\tcase 0x2b:\n\t\tret = 8;\n\t\tVPcmV34LogTimingOffset(v34Object,\n\t\t    (short)(modem.demodulator->resampler.getTimingOffsetPPM()\n\t\t\t    * VPCM_TIMING_LOG_SCALE));\n\t\tbreak;",
+  "replace": "\tcase 0x2b:\n\t\tret = 8;\n\t\tbreak;"
+ },
+ {
+  "label": "the timing offset is logged in whole ppm rather than tenths",
+  "find": "#define VPCM_TIMING_LOG_SCALE\t10.0f",
+  "replace": "#define VPCM_TIMING_LOG_SCALE\t1.0f"
+ },
+ {
+  "label": "the timing offset is truncated to int rather than to short",
+  "find": "\tcase 0x2b:\n\t\tret = 8;\n\t\tVPcmV34LogTimingOffset(v34Object,\n\t\t    (short)(modem.demodulator->resampler.getTimingOffsetPPM()",
+  "replace": "\tcase 0x2b:\n\t\tret = 8;\n\t\tVPcmV34LogTimingOffset(v34Object,\n\t\t    (short)(int)(modem.demodulator->resampler.getTimingOffsetPPM()"
+ },
+
+ {
+  "label": "the CP arm and the tagged CP arm are the other way round",
+  "find": "\t\tif (((struct V92CPUnPck *)&modem.cp)->extendEu != 0)\n\t\t\tv92modem.modulator->phase4Modulator->e2uExtended = 1;\n\t\tv92modem.modulator->phase4Modulator->recivedCP();",
+  "replace": "\t\tv92modem.modulator->phase4Modulator->recivedCP();"
+ },
+ {
+  "label": "the extendEu test is inverted",
+  "find": "\t\tif (((struct V92CPUnPck *)&modem.cp)->extendEu != 0)\n",
+  "replace": "\t\tif (((struct V92CPUnPck *)&modem.cp)->extendEu == 0)\n"
+ },
+ {
+  "label": "extendEu sets the flag to 0 rather than 1",
+  "find": "\t\t\tv92modem.modulator->phase4Modulator->e2uExtended = 1;",
+  "replace": "\t\t\tv92modem.modulator->phase4Modulator->e2uExtended = 0;"
+ },
+ {
+  "label": "the tagged CP arm tests extendEu too",
+  "find": "\t\tv92modem.modulator->phase4Modulator->recivedCPtag();",
+  "replace": "\t\tif (((struct V92CPUnPck *)&modem.cp)->extendEu != 0)\n\t\t\tv92modem.modulator->phase4Modulator->e2uExtended = 1;\n\t\tv92modem.modulator->phase4Modulator->recivedCPtag();"
+ },
+ {
+  "label": "the unpacker is given the ALTERNATE mapping block's target",
+  "find": "\tcase 0x2e:\n\t\tV92setParamsInfoFromCPUnPck(\n\t\t    (struct V92ParamsInfo *)v92modem.mappingParams,\n\t\t    (struct V92CPUnPck *)&modem.cp);",
+  "replace": "\tcase 0x2e:\n\t\tV92setParamsInfoFromCPUnPck(\n\t\t    (struct V92ParamsInfo *)v92modem.mappingParams,\n\t\t    (struct V92CPUnPck *)&modem.mappingParams);"
+ },
+ {
+  "label": "the tagged CP arm does not run the unpacker",
+  "find": "\tcase 0x2e:\n\t\tV92setParamsInfoFromCPUnPck(\n\t\t    (struct V92ParamsInfo *)v92modem.mappingParams,\n\t\t    (struct V92CPUnPck *)&modem.cp);\n\t\tv92modem.modulator->phase4Modulator->recivedCPtag();",
+  "replace": "\tcase 0x2e:\n\t\tv92modem.modulator->phase4Modulator->recivedCPtag();"
+ },
+ {
+  "label": "the silent-RRN SUV arm sets two sections rather than one",
+  "find": "\tcase 0x31:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;",
+  "replace": "\tcase 0x31:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 2;"
+ },
+ {
+  "label": "the silent-RRN SUV arm reads the CP counter at the wrong offset",
+  "find": "\tcase 0x31:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_38 =\n\t\t    modem.demodulator->cp->word_ca0;",
+  "replace": "\tcase 0x31:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_38 =\n\t\t    modem.demodulator->cp->word_ca4;"
+ },
+ {
+  "label": "the tagged silent-RRN SUV arm does not set the length",
+  "find": "\tcase 0x33:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_38 =\n\t\t    modem.demodulator->cp->word_ca0;",
+  "replace": "\tcase 0x33:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;"
+ },
+ {
+  "label": "the CP length lands in word_34, not word_38",
+  "find": "\tcase 0x33:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_38 =",
+  "replace": "\tcase 0x33:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_34 ="
+ },
+ {
+  "label": "the SUV arm and the tagged SUV arm are swapped",
+  "find": "\tcase 0x2f:\t\t\t/* 0xeb42 */\n\t\tv92modem.modulator->phase4Modulator->recivedSUV();",
+  "replace": "\tcase 0x2f:\t\t\t/* 0xeb42 */\n\t\tv92modem.modulator->phase4Modulator->recivedSUVtag();"
+ },
+ {
+  "label": "the two part-two silence arms are swapped",
+  "find": "\tcase 0x32:\t\t\t/* 0xea35 */\n\t\tv92modem.modulator->phase4Modulator\n\t\t    ->recivedPartTwoSilenceRrnSUV();",
+  "replace": "\tcase 0x32:\t\t\t/* 0xea35 */\n\t\tv92modem.modulator->phase4Modulator\n\t\t    ->recivedPartTwoSilenceRrnSUVtag();"
+ },
+ {
+  "label": "0x35 calls recivedEd rather than recivedFirstRrnEd",
+  "find": "\tcase 0x35:\t\t\t/* 0xe8fd */\n\t\tv92modem.modulator->phase4Modulator->recivedFirstRrnEd();",
+  "replace": "\tcase 0x35:\t\t\t/* 0xe8fd */\n\t\tv92modem.modulator->phase4Modulator->recivedEd();"
+ },
+ {
+  "label": "0x1c calls recivedFirstRrnEd rather than recivedEd",
+  "find": "\tcase 0x1c:\t\t\t/* 0xe8b0 */\n\t\tv92modem.modulator->phase4Modulator->recivedEd();",
+  "replace": "\tcase 0x1c:\t\t\t/* 0xe8b0 */\n\t\tv92modem.modulator->phase4Modulator->recivedFirstRrnEd();"
+ },
+ {
+  "label": "0x27 calls recivedSUV rather than recivedRt",
+  "find": "\tcase 0x27:\t\t\t/* 0xe7a5 */\n\t\tv92modem.modulator->phase4Modulator->recivedRt();",
+  "replace": "\tcase 0x27:\t\t\t/* 0xe7a5 */\n\t\tv92modem.modulator->phase4Modulator->recivedSUV();"
+ },
+
+ {
+  "label": "the transmit block is scaled by a half rather than by 0.4",
+  "find": "#define VPCM_TX_SCALE\t\t0.4f",
+  "replace": "#define VPCM_TX_SCALE\t\t0.5f"
+ },
+ {
+  "label": "the transmit block is not scaled at all",
+  "find": "\tfor (i = 0; i < n; i++)\n\t\tout[i] *= VPCM_TX_SCALE;",
+  "replace": ""
+ },
+ {
+  "label": "the scaling loop stops one short",
+  "find": "\tfor (i = 0; i < n; i++)\n\t\tout[i] *= VPCM_TX_SCALE;",
+  "replace": "\tfor (i = 0; i + 1 < n; i++)\n\t\tout[i] *= VPCM_TX_SCALE;"
+ },
+ {
+  "label": "the scaling runs after the echo history absorbs the block",
+  "find": "\tfor (i = 0; i < n; i++)\n\t\tout[i] *= VPCM_TX_SCALE;\n\n\techoCanceller.updateEchoHistory(out, n);",
+  "replace": "\techoCanceller.updateEchoHistory(out, n);\n\tfor (i = 0; i < n; i++)\n\t\tout[i] *= VPCM_TX_SCALE;"
+ },
+ {
+  "label": "the echo history is fed the line signal rather than the transmit block",
+  "find": "\techoCanceller.updateEchoHistory(out, n);",
+  "replace": "\techoCanceller.updateEchoHistory(in, n);"
+ },
+ {
+  "label": "the echo history is not updated",
+  "find": "\techoCanceller.updateEchoHistory(out, n);",
+  "replace": ""
+ },
+
+ {
+  "label": "the transmitter's status is read unsigned, so {2,3,10} reorders",
+  "find": "\tevent = (int)v92modem.modulator->word_34;",
+  "replace": "\tevent = (int)(v92modem.modulator->word_34 + 1);"
+ },
+ {
+  "label": "status 2 does not latch byte_6118",
+  "find": "\tcase 2:\n\t\tbyte_6118 = 1;\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tcase 2:\n\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "status 2 latches 2 rather than 1",
+  "find": "\tcase 2:\n\t\tbyte_6118 = 1;\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tcase 2:\n\t\tbyte_6118 = 2;\n\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "status 2 freezes the canceller instead of starting it",
+  "find": "\t\techoCanceller.setState(V92_ECHO_COUNT_DELAY);",
+  "replace": "\t\techoCanceller.setState(V92_ECHO_FILTER_ONLY);"
+ },
+ {
+  "label": "status 3 starts the canceller instead of freezing it",
+  "find": "\t\techoCanceller.setState(V92_ECHO_FILTER_ONLY);",
+  "replace": "\t\techoCanceller.setState(V92_ECHO_COUNT_DELAY);"
+ },
+ {
+  "label": "status 3 does not hand the receiver back to phase 3",
+  "find": "\t\techoCanceller.setState(V92_ECHO_FILTER_ONLY);\n\t\tmodem.demodulator->enterPhase3();",
+  "replace": "\t\techoCanceller.setState(V92_ECHO_FILTER_ONLY);"
+ },
+ {
+  "label": "the fallback test is against 0x21 rather than 0x20",
+  "find": "\t\tif (modem.demodulator->word_3c == 0x20) {",
+  "replace": "\t\tif (modem.demodulator->word_3c == 0x21) {"
+ },
+ {
+  "label": "the fallback returns 5 rather than 6",
+  "find": "\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t\t \"request...\\r\\n\");\n\t\t\tret = 6;",
+  "replace": "\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t\t \"request...\\r\\n\");\n\t\t\tret = 5;"
+ },
+ {
+  "label": "the fallback code is returned whatever the receiver answered",
+  "find": "\t\tif (modem.demodulator->word_3c == 0x20) {\n\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t\t \"request...\\r\\n\");\n\t\t\tret = 6;\n\t\t}",
+  "replace": "\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t \"request...\\r\\n\");\n\t\tret = 6;"
+ },
+ {
+  "label": "status 10 latches 2 rather than 3",
+  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;",
+  "replace": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 2;"
+ },
+ {
+  "label": "status 10 is 9",
+  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;",
+  "replace": "\tcase 9:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;"
+ },
+ {
+  "label": "every status above 3 latches byte_6118",
+  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;\n\t\tbreak;\n\n\tdefault:\n\t\tbreak;\n\t}\n\n\treturn ret;",
+  "replace": "\tdefault:\n\t\tif (event > 3)\n\t\t\tbyte_6118 = 3;\n\t\tbreak;\n\t}\n\n\treturn ret;"
+ },
+ {
+  "label": "the seeded return value is discarded at the end",
+  "find": "\treturn ret;\t\t\t/* 0xe530 */",
+  "replace": "\treturn 0;\t\t\t/* 0xe530 */"
+ }
+]
