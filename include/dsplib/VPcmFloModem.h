@@ -2,8 +2,13 @@
  * VPcmFloModem.h -- the V.90/V.92 modem's face to the V.34 handshake.
  *
  * Reconstructed from dsplibs.o.  The class has twenty-six members in the blob
- * and this tree writes SIX of them: `getUinfoValue`, `setPhaseIIinfo`,
- * `getV90CpBits`, `getV90JaBits`, `setPcmSessionType` and `enterPhase3`.
+ * and this tree writes SIX of them out of line -- `getUinfoValue`,
+ * `setPhaseIIinfo`, `getV90CpBits`, `getV90JaBits`, `setPcmSessionType` and
+ * `enterPhase3` -- plus `externalReset`, the two `setV34BaudFor*`, the three
+ * visual diagnostics, and both entry points, `runPcmModem` and
+ * `v90RunDemodulator`.  Seven more are reconstructed as `inline` bodies that
+ * the two entry points inline exactly as the object does; see the block that
+ * lists them below.
  * Everything else is left undeclared rather than declared-and-undefined,
  * because nothing here calls it and a declaration nobody needs is a claim
  * nobody checked.
@@ -214,6 +219,42 @@ public:
 	void setV34BaudForV34();
 
 	/*
+	 * --- SEVEN MEMBERS `v90RunDemodulator` INLINES ----------------------
+	 *
+	 * Each is a `T` symbol of its own in the blob with NO incoming
+	 * relocation anywhere in the object, and each one's body appears
+	 * open-coded inside `v90RunDemodulator` -- which is what a call the
+	 * compiler inlined looks like, since the out-of-line copy has to be
+	 * emitted for a non-inline member whether anything reaches it or not.
+	 *
+	 *   d110  setTerminateJaFlag(unsigned char)          45 B
+	 *   d140  setTerminateCpFlag(unsigned char)          45 B
+	 *   d170  setTerminateCpNotFlag(unsigned char)       45 B
+	 *   d1a0  setMinNofTransmitSequences(unsigned short) 26 B
+	 *   d1c0  setNofBitsPhase4(unsigned int)             56 B
+	 *   d200  resetBitPointer()                          51 B
+	 *   d5a0  copyMpInfoForInterface()                  183 B
+	 *
+	 * THEY ARE DEFINED `inline` IN THE .cpp AND THEIR SYMBOLS ARE
+	 * THEREFORE NOT CLAIMED.  That is 7570's move for
+	 * `setConstellationMask` translated to members: the CODE is
+	 * reconstructed -- it is what the three MP/CP arms and the two
+	 * rate-renegotiation arms are made of -- and the 451 bytes of
+	 * out-of-line symbol are a further seven differential tests this
+	 * batch was not scoped to write.  Drop the `inline` in
+	 * src/pump/v90/VPcmFloModem.cpp to claim them, and expect coverage to
+	 * gain 451 bytes and seven symbols that this batch's arithmetic does
+	 * not account for.
+	 */
+	void setTerminateJaFlag(unsigned char v);
+	void setTerminateCpFlag(unsigned char v);
+	void setTerminateCpNotFlag(unsigned char v);
+	void setMinNofTransmitSequences(unsigned short n);
+	void setNofBitsPhase4(unsigned int constel);
+	void resetBitPointer();
+	void copyMpInfoForInterface();
+
+	/*
 	 * --- THE THREE VISUAL DIAGNOSTICS -----------------------------------
 	 *
 	 * `VPcmV34GetVisualDiagnostics` dispatches to these three for a PCM
@@ -420,7 +461,51 @@ public:
 	 * from it rather than stored in it.
 	 */
 	int sweepCounter;				/* +0x1740         */
-	unsigned char pad_1744[0x1758 - 0x1744];	/* +0x1744         */
+
+	/*
+	 * +0x1744 .. +0x1757  THE RECEIVED MP MESSAGE, KEPT FOR THE V.34
+	 * INTERFACE.  This span WAS `pad_1744`.
+	 *
+	 * THE WRITER NAMES IT.  `VPcmFloModem::copyMpInfoForInterface`
+	 * (.text+0xd5a0, 183 bytes) is the only thing in the object that
+	 * stores here, its name is the object's own out of the mangling, and
+	 * its whole body is thirteen field-at-a-time copies out of
+	 * `modem.mp` -- the `V90MP` embedded at +0x2428.  Every displacement
+	 * lines up with a field `include/dsplib/V90MP.h` already names from
+	 * `bitsToInfo`'s own diagnostics, in order and at the same widths, so
+	 * the names below are the SOURCE fields' names carried across a copy
+	 * rather than adjacency.
+	 *
+	 * AND THERE IS A READER, WHICH IS WHAT TYPES THEM.
+	 * `getMPrecvdBits(tagV34Object *)` (.text+0x9250) reaches this object
+	 * as `v34obj->p3548` and re-encodes the block into the V.34 side's MP
+	 * word: `setne` on `mpType` for bit 0, `mpRate & 0xf` shifted to bit
+	 * 6, `mpTrellis & 3` shifted to bit 11, `mpNonLin`, `mpShaping` at
+	 * 0x4000 and `mpCPack` at 0x8000 -- the same six discriminators
+	 * V90MP.h records, tested in the same order.  It loads the six bytes
+	 * with `movsbw`/`movsbl`, which is where `char` comes from, and the
+	 * seven halves with `movzwl`.
+	 *
+	 * ONE FIELD IS NOT A PLAIN COPY.  `mpRateMask` is
+	 * `movswl 0x242e ; add %ecx,%ecx`, so it holds `mp.rateMask * 2` --
+	 * the same fourteen bits one place to the left, which is the
+	 * alignment `getMPrecvdBits` then ORs 0x8000 into.  The name is the
+	 * source field's and the doubling is stated here rather than spelled
+	 * into the name.
+	 */
+	char mpType;			/* +0x1744  V90MP::Type      */
+	char mpRate;			/* +0x1745  V90MP::Rate      */
+	char mpTrellis;			/* +0x1746  V90MP::Trellis   */
+	char mpNonLin;			/* +0x1747  V90MP::NonLin    */
+	char mpShaping;			/* +0x1748  V90MP::Shaping   */
+	char mpCPack;			/* +0x1749  V90MP::CPack     */
+	short mpRateMask;		/* +0x174a  V90MP::rateMask * 2 */
+	short mpH1Real;			/* +0x174c  V90MP::h1Real    */
+	short mpH1Imag;			/* +0x174e  V90MP::h1Imag    */
+	short mpH2Real;			/* +0x1750  V90MP::h2Real    */
+	short mpH2Imag;			/* +0x1752  V90MP::h2Imag    */
+	short mpH3Real;			/* +0x1754  V90MP::h3Real    */
+	short mpH3Imag;			/* +0x1756  V90MP::h3Imag    */
 
 	/*
 	 * +0x1758  The V90Modem, EMBEDDED.  See the file comment for the

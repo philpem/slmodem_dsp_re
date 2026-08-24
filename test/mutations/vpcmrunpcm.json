@@ -47,18 +47,18 @@
  },
  {
   "label": "the rate-reneg arm does not latch byte_6118",
-  "find": "\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;",
-  "replace": "\t\t\tret = 3;"
+  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
+  "replace": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tret = 3;\n\t\t} else {\n"
  },
  {
   "label": "the rate-reneg arm latches 3 rather than 4",
-  "find": "\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;",
-  "replace": "\t\t\tbyte_6118 = 3;\n\t\t\tret = 3;"
+  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
+  "replace": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tbyte_6118 = 3;\n\t\t\tret = 3;\n\t\t} else {\n"
  },
  {
   "label": "the rate-reneg arm's other exit seeds 3 rather than 2",
-  "find": "\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;",
-  "replace": "\t\t} else {\n\t\t\tret = 3;\n\t\t}\n\t\tbreak;"
+  "find": "\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xe460, and it falls through */\n",
+  "replace": "\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 3;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xe460, and it falls through */\n"
  },
  {
   "label": "the echo sentinel ramp runs past 0xb1",
@@ -152,18 +152,18 @@
  },
  {
   "label": "the retrain bit is cleared whatever the phase 2 bit says",
-  "find": "\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;",
-  "replace": "\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;"
+  "find": "\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n",
+  "replace": "\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n"
  },
  {
   "label": "the phase 2 test is the wrong way round",
-  "find": "\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n",
-  "replace": "\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) != 0)\n"
+  "find": "\t\tv92modem.modulator->exitSuSecond();\n\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n",
+  "replace": "\t\tv92modem.modulator->exitSuSecond();\n\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) != 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n"
  },
  {
   "label": "the bit cleared is the phase 2 one, not the retrain one",
-  "find": "\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;",
-  "replace": "\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_PHASE2;"
+  "find": "\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n",
+  "replace": "\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_PHASE2;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n"
  },
  {
   "label": "TRN1u packs the CP message from the ALTERNATE mapping block",
@@ -192,13 +192,13 @@
  },
  {
   "label": "the CPt arm sets the retrain bit whatever byte_6119 says",
-  "find": "\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;",
-  "replace": "\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;"
+  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n",
+  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n"
  },
  {
   "label": "the CPt arm's flag test is inverted",
-  "find": "\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=",
-  "replace": "\t\tif (byte_6119 == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |="
+  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n",
+  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tif (byte_6119 == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n"
  },
  {
   "label": "the retrain arm seeds 3 rather than 2",
@@ -217,13 +217,13 @@
  },
  {
   "label": "the V.34 fallback arm does not raise flag_173d",
-  "find": "\t\tflag_173d = 1;\n\t\tret = 7;",
-  "replace": "\t\tret = 7;"
+  "find": "\t\tflag_173d = 1;\n\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n",
+  "replace": "\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n"
  },
  {
   "label": "the V.34 fallback arm seeds 6 rather than 7",
-  "find": "\t\tflag_173d = 1;\n\t\tret = 7;",
-  "replace": "\t\tflag_173d = 1;\n\t\tret = 6;"
+  "find": "\t\tflag_173d = 1;\n\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n",
+  "replace": "\t\tflag_173d = 1;\n\t\tret = 6;\n\t\tv34BaudAllow[0] = 1;\n"
  },
  {
   "label": "the fallback arm allows the second baud as well",
@@ -247,13 +247,13 @@
  },
  {
   "label": "local rate reneg indicates a REMOTE one",
-  "find": "\t\tVPcmV34IndicateLocalRRN(v34Object);",
-  "replace": "\t\tVPcmV34IndicateRemoteRRN(v34Object);"
+  "find": "\t\tVPcmV34IndicateLocalRRN(v34Object);\n\t\tbreak;\n",
+  "replace": "\t\tVPcmV34IndicateRemoteRRN(v34Object);\n\t\tbreak;\n"
  },
  {
   "label": "remote rate reneg indicates a LOCAL one",
-  "find": "\t\tVPcmV34IndicateRemoteRRN(v34Object);",
-  "replace": "\t\tVPcmV34IndicateLocalRRN(v34Object);"
+  "find": "\t\tVPcmV34IndicateRemoteRRN(v34Object);\n\t\tbreak;\n",
+  "replace": "\t\tVPcmV34IndicateLocalRRN(v34Object);\n\t\tbreak;\n"
  },
  {
   "label": "the local rate-reneg arm starts RRN whatever phase it is in",
@@ -292,8 +292,8 @@
  },
  {
   "label": "the remote-retrain arm does not tell the V.34 shell",
-  "find": "\t\tVPcmV34SetIndicationOfRemoteRetrain(v34Object);",
-  "replace": ""
+  "find": "\tcase 0x26:\t\t\t/* 0xea1d */\n\t\tret = 5;\n\t\tVPcmV34SetIndicationOfRemoteRetrain(v34Object);\n\t\tbreak;\n\n",
+  "replace": "\tcase 0x26:\t\t\t/* 0xea1d */\n\t\tret = 5;\n\n\t\tbreak;\n\n"
  },
  {
   "label": "0x2b seeds 7 rather than 8",

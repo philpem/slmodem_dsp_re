@@ -62,6 +62,23 @@
 #include "dsplib/ResamplerTimingOffset.h"
 #include "dsplib/V90ConnectionEvaluator.h"
 #include "dsplib/V90CP.h"
+/*
+ * `v90RunDemodulator` needs three more complete types than `runPcmModem` did:
+ * the V.90 CP encoder's prototype, the V.90 Jd detector it asks for the two
+ * constellation codes, and the decoded MP message it copies out for the V.34
+ * interface.
+ *
+ * THE FOURTH IT NEEDS IS `V90Phase4Demodulator` AND IT MUST NOT BE INCLUDED
+ * HERE.  That class is `tools/onedef.py`'s one carried duplicate, and the
+ * definition this translation unit already has is V90SessionFlag.h's partial
+ * model, arriving through VPcmFloModem.h.  Including the fuller header
+ * alongside it is a redefinition the compiler rejects outright, so the two
+ * fields the MPnot arm reads were carved out of that model's own pad instead;
+ * V90SessionFlag.h says so at the site.
+ */
+#include "dsplib/V90CPpck.h"
+#include "dsplib/V90Jd.h"
+#include "dsplib/V90MP.h"
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V92CPUnPck.h"
 #include "dsplib/V92Jd.h"
@@ -978,6 +995,746 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
 }
 
 /*
+ * `_tagModemParameters::unnamed_0003`, and the two bits BOTH entry points
+ * touch.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
+ * reached the other way round -- that file gets there as `obj->pac3c + 3` and
+ * these two as `modem.ptr_49b4->modemParams->unnamed_0003`, and they are the
+ * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
+ * `v90RateRenegSilence` clears again after printing "disabling SAS detector
+ * on silence".
+ *
+ * `v90RunDemodulator` sets the retrain bit at three sites (arms 0x03, 0x17
+ * and 0x1e), clears it at one (arm 0x08, under the phase-2 guard), and
+ * `runPcmModem` does the same two things once each.
+ */
+#define CFG_FLAG3_PHASE2	0x02
+#define CFG_FLAG3_RETRAIN	0x04
+
+/*
+ * ===========================================================================
+ * SEVEN SMALL MEMBERS `v90RunDemodulator` INLINES
+ * ===========================================================================
+ *
+ * Each is its own `T` symbol in the blob and NONE of them has an incoming
+ * relocation anywhere in the object, so every call site the author wrote was
+ * inlined and only the out-of-line copy survives to be named.  Each body
+ * below is that out-of-line copy read instruction for instruction, and each
+ * one appears open-coded inside `v90RunDemodulator` between one and three
+ * times.
+ *
+ * THEY ARE `inline` HERE AND THEIR SYMBOLS ARE NOT CLAIMED, which is finding
+ * 7570's move for `setConstellationMask` and `setCodecConstellationMask`
+ * carried over to members: writing the symbols is 451 further bytes with
+ * seven differential tests of their own, and this batch is scoped to one.
+ * `include/dsplib/VPcmFloModem.h` says what dropping the `inline` costs.
+ *
+ * WHY THEY ARE FUNCTIONS AND NOT OPEN-CODED HERE TOO.  The alternative
+ * spelling -- the same statements written out at each of the fourteen sites
+ * -- compiles to the same instructions, so no test can separate the two.
+ * What separates them is that the object HAS the seven symbols, at the sizes
+ * above, with bodies that are these statements and nothing else; that is the
+ * author's own factoring, recoverable from the blob, and it is the same class
+ * of evidence 7570's `setDataBitRateInline` rests on.
+ */
+
+/*
+ * d110, d140, d170 -- 45 bytes each, and byte-identical bar the destination
+ * and the string.  Note the SHAPE: the store happens first and unconditionally,
+ * the diagnostic is a tail call, and the argument is re-widened from the byte
+ * that was just stored (`movzbl %dl,%eax`), not reloaded.
+ */
+inline void
+VPcmFloModem::setTerminateJaFlag(unsigned char v)
+{
+	terminateJa = v;			/* +0x7dce */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Ja Flag set to %d\r\n", v);
+}
+
+inline void
+VPcmFloModem::setTerminateCpFlag(unsigned char v)
+{
+	terminateCp = v;			/* +0x7dcf */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CP Flag set to %d\r\n", v);
+}
+
+inline void
+VPcmFloModem::setTerminateCpNotFlag(unsigned char v)
+{
+	terminateCpNot = v;			/* +0x7dd0 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CPnot Flag set to %d\r\n", v);
+}
+
+/*
+ * d1a0, 26 bytes.  IT ZEROES THE COUNTER TOO, which is the whole reason the
+ * two halves at +0x7dd4 and +0x7dd6 are always seen written together: the
+ * setter is `nofTransmitSequences = 0` followed by the assignment its name
+ * describes, and no caller has to say so.
+ */
+inline void
+VPcmFloModem::setMinNofTransmitSequences(unsigned short n)
+{
+	nofTransmitSequences = 0;		/* +0x7dd4 */
+	minNofTransmitSequences = n;		/* +0x7dd6 */
+}
+
+/*
+ * d1c0, 56 bytes.  THE CONDITIONAL IS THE CALLEE'S, NOT THE CALLER'S, and
+ * that is what the out-of-line copy settles: `cmpl $0x1,0x8(%esp)` is a test
+ * on the ARGUMENT SLOT, so the three sites in `v90RunDemodulator` that carry
+ * this `sbb`/`and $0xfe`/`add $0x4` sequence are passing a raw constellation
+ * code and this body is turning it into a bit count.
+ *
+ * The comparison is UNSIGNED (`cmpl $1` with `sbb`, giving -1 below one and 0
+ * at or above), which is `unsigned int` in the mangling -- `Ej`.  Zero means
+ * the four-point constellation and two bits a symbol; anything else means
+ * sixteen points and four, which is what the Jd diagnostic's own
+ * "(0 = 4 points / 1 = 16 points)" says.
+ */
+inline void
+VPcmFloModem::setNofBitsPhase4(unsigned int constel)
+{
+	nofBitsPerSymbol = (constel == 0) ? 2 : 4;	/* +0x7dd2 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "SetNofBitsPhase4 - nof bits each call = %d\r\n",
+		    nofBitsPerSymbol);
+}
+
+/*
+ * d200, 51 bytes.  Six stores and no read, and the name is the object's own;
+ * what it resets is the whole transmit bookkeeping and not just the pointer.
+ * Note that it does NOT touch `minNofTransmitSequences`, which is why the two
+ * arms that want it at 1 call `setMinNofTransmitSequences` afterwards.
+ */
+inline void
+VPcmFloModem::resetBitPointer()
+{
+	bitPointer = 0;				/* +0x1738 */
+	terminateJa = 0;			/* +0x7dce */
+	terminateCp = 0;			/* +0x7dcf */
+	terminateCpNot = 0;			/* +0x7dd0 */
+	cpNotLoaded = 0;			/* +0x7dd1 */
+	nofTransmitSequences = 0;		/* +0x7dd4 */
+}
+
+/*
+ * d5a0, 183 bytes.  Thirteen fields of the decoded MP message out of
+ * `modem.mp` and into the block at +0x1744 that `getMPrecvdBits` reads back;
+ * include/dsplib/VPcmFloModem.h carries the derivation of every name and of
+ * the one doubling.
+ *
+ * THE SIX BYTES ARE READ `movzbl` AND THE SIX HALVES `movzwl`, where the
+ * source fields are `char` and `short`.  Only the low 8 or 16 bits of each
+ * load survive into the store, so the extension is in CLAUDE.md's free column
+ * (finding 614) and says nothing about either type; `mpRateMask` is the
+ * exception and it is the one field whose load IS forced, `movswl`, because
+ * the doubling is done on the widened value.
+ */
+inline void
+VPcmFloModem::copyMpInfoForInterface()
+{
+	mpType = modem.mp.Type;
+	mpRate = modem.mp.Rate;
+	mpTrellis = modem.mp.Trellis;
+	mpNonLin = modem.mp.NonLin;
+	mpShaping = modem.mp.Shaping;
+	mpCPack = modem.mp.CPack;
+	mpRateMask = (short)(modem.mp.rateMask * 2);
+	mpH1Real = modem.mp.h1Real;
+	mpH1Imag = modem.mp.h1Imag;
+	mpH2Real = modem.mp.h2Real;
+	mpH2Imag = modem.mp.h2Imag;
+	mpH3Real = modem.mp.h3Real;
+	mpH3Imag = modem.mp.h3Imag;
+}
+
+/*
+ * ===========================================================================
+ * `VPcmFloModem::v90RunDemodulator` -- .text+0xd860, 0xbc5 = 3,013 bytes
+ * ===========================================================================
+ *
+ * ONE BLOCK OF SAMPLES THROUGH A V.90 SESSION'S RECEIVER, and it is the
+ * ANALOGUE end: the modem it drives is the embedded `V90Modem`, whose
+ * `progress` fans out to `V90Demodulator::progress` on this side.
+ * `VPcmV34Progress` turns the small code it returns into a new `f0004`, the
+ * same way it does for `runPcmModem`.
+ *
+ * ===========================================================================
+ * WHAT THIS DOES THAT `runPcmModem` DOES NOT, AND VICE VERSA
+ * ===========================================================================
+ *
+ * The two are the class's two entry points and they look alike for about
+ * fifteen instructions.  They are not the same function and four of the
+ * differences are load-bearing:
+ *
+ *   - THERE IS NO TRANSMIT HALF HERE.  `runPcmModem` runs the echo canceller,
+ *     `V92Modem::progress`, the 0.4f output scaling, `updateEchoHistory` and
+ *     a third dispatch on the modulator's `word_34`.  This function calls
+ *     `V90Modem::progress` and nothing else: it takes `float *in` and no
+ *     `out`, and the mangling says so (`PfjPiS1_` against `PfS0_jPiS1_S1_S1_`).
+ *   - THERE IS NO `info0Layout` MASTER GATE.  `runPcmModem` returns dispatch
+ *     1's seed without touching anything when +0x6120 is zero (`test`/`je` at
+ *     0xe470).  Here `V90Modem::progress` is called unconditionally at 0xd8b9
+ *     and `info0Layout` is read at ONE site only, inside dispatch 1's case 3.
+ *   - AND AT THAT SITE THE POLARITY IS THE OTHER WAY ROUND.  See the comment
+ *     on case 3 below; this is the difference the two functions were most
+ *     likely to be shipped wrong on.
+ *   - THE EVENT TABLE IS SHORTER AND IT IS A DIFFERENT TABLE.  0x00..0x2b, 44
+ *     entries at .rodata+0x3fc, against `runPcmModem`'s 0x00..0x35, 54 entries
+ *     at .rodata+0x4c0.  Twenty-three of the 44 are live here.  No case label
+ *     means the same thing in both: 0x16 is "end of CPt" for the V.92 driver
+ *     and "byte_6118 = 2, return 1" here, and the arms this function's own
+ *     table sends somewhere are 0x1a, 0x1b, 0x28 and 0x2a, which the V.92
+ *     table sends to its default.
+ *
+ * THE RETURN SET IS {0, 1, 2, 3, 5, 7, 8}.  6 is `runPcmModem`'s alone -- it
+ * is the V.90 fallback report out of dispatch 3, and there is no dispatch 3
+ * here.  4 is in neither.
+ *
+ * ===========================================================================
+ * THE SHAPE IS TWO DISPATCHES
+ * ===========================================================================
+ *
+ *   1. `byte_6118`, 0..4, the jump table at .rodata+0x3e8 -- five entries,
+ *      `[0]` and `[1]` sharing an arm, `[4]` entering `[3]`'s tail one store
+ *      in.  It runs BEFORE anything else, its only job is to seed the return
+ *      value, and nothing above 4 is an error: the `ja` at 0xd875 falls
+ *      straight through to the join with the return still 0.
+ *   2. `modem.demodulator->word_3c`, 0..0x2b, the jump table at .rodata+0x3fc
+ *      -- 44 entries of which 21 are the shared default at 0xda10, which is
+ *      the epilogue itself.  This is the demodulator reporting what it just
+ *      saw on the line; finding 7571 is where that field's role was
+ *      established, from `runPcmModem`'s 54-arm dispatch on the same word.
+ *
+ * THE RETURN VALUE LIVES IN A REGISTER, %esi, cleared by the `xor` at 0xd861
+ * before the prologue is even finished, where `runPcmModem` keeps its in a
+ * stack slot.  That is register allocation and free; what is not free is that
+ * every store to it is written below where the object stores it.
+ *
+ * ===========================================================================
+ * WHAT `V90CPPacker` IS CALLED FOR, AND FIVE TIMES WITH FOUR SHAPES
+ * ===========================================================================
+ *
+ * This is the analogue side's CP encoder -- V.90 section 9.4.2.3 -- and
+ * finding 7000 records that it is a FREE function outside the `V90CP` class,
+ * which is why a caller map over that class never found it.  Every call takes
+ * (`V90MappingParams *`, `tagV90AdditionalCPinfo *`, `short *`, `int`) and
+ * returns the length in symbols, and the five sites differ in all four:
+ *
+ *   arm    params           info.word_00  destination        the clear flag
+ *   0x12   mappingParams    left alone    cpBitVector        0
+ *   0x19   mappingParamsAlt 0             cpBitVector        flag_173e
+ *   0x2a   mappingParamsAlt 0, and +0x10  cpBitVector        flag_173e
+ *   0x1a   mappingParamsAlt 1             bitVector          flag_173e
+ *   0x1b   mappingParamsAlt 1             bitVector          0
+ *
+ * The two destinations are the two vectors `getV90CpBits` and `getV90JaBits`
+ * transmit from, and the two lengths that receive the result are their two
+ * counters: `cpNofBits` at +0x7dcc for the first three and `nofBits` at
+ * +0x1736 for the last two.  So "which vector" and "which length" travel
+ * together and a swap of either is visible.
+ *
+ * THE V.90 MAPPING BLOCK'S UNPACKER IS NOT CALLED FROM HERE AND THAT IS
+ * MEASURED, NOT OBSERVED.  `setParamsInfoFromCPUnPck` is finding 7570's
+ * orphan; its V.92 twin has exactly two callers and both are arms 0x2d and
+ * 0x2e of `runPcmModem`'s table, which is 0x2b + 2 and 0x2b + 3 -- PAST THE
+ * END of this function's 44-entry table.  There is no arm here that could
+ * hold the call without the table growing, so the absence is a property of
+ * the dispatch and not of what this function happens to do.  Finding 7581.
+ *
+ * ===========================================================================
+ * DEBUG GATES ARE PER SITE
+ * ===========================================================================
+ *
+ * Nineteen `cmpl $0x1,dsplibs_debug_level` in 3,013 bytes, each re-reading
+ * the level; src/pump/v90/V92ParamsInfo.c's head is this tree's worked
+ * statement of why they are not collapsed.  Five more diagnostics go through
+ * `edprintf`, which gates itself.
+ */
+
+/*
+ * `flds`/`fmuls` .rodata.cst4+0x28 -- 0x41200000, and `runPcmModem` has its
+ * own copy of the same value at +0x2c.  GCC 3.4.2 emits the constant pool per
+ * FUNCTION, so two uses of 10.0f in one translation unit are two entries;
+ * .rodata.cst4's order (0x28 before 0x2c) agrees with .text's (0xd860 before
+ * 0xe430), which is why this definition is placed here in the file.
+ */
+#define VPCM_V90_TIMING_LOG_SCALE	10.0f
+
+int
+VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
+				int *nrx)
+{
+	unsigned char *cfgFlags;
+	unsigned char silenceScr;
+	int ret = 0;
+
+	switch (byte_6118) {
+	case 0:				/* 0xda57 */
+	case 1:
+		ret = 0;
+		break;
+
+	case 2:				/* 0xd880 */
+		ret = 1;
+		break;
+
+	/*
+	 * 0xda18, AND THE POLARITY IS THE OPPOSITE OF `runPcmModem`'s CASE 3.
+	 *
+	 * Both arms read the same three things in the same order.  There:
+	 *
+	 *     e6b9  mov 0x6120(%esi),%edx ; test %edx,%edx ; je 0xe6cf
+	 *
+	 * and 0xe6cf sets the return to 2.  Here:
+	 *
+	 *     da18  mov 0x6120(%ebx),%eax ; test %eax,%eax ; je 0xda46
+	 *
+	 * and 0xda46 sets `byte_6118` to 4 and the return to 3.  So a session
+	 * with no INFO0 layout selected takes the RETRAIN exit here and the
+	 * plain one there, and the two functions are one `!` apart at a site
+	 * where the surrounding twelve instructions are the same.  Neither a
+	 * mnemonic comparison nor a suite that scored the two functions
+	 * against each other could tell them apart; only the branch target
+	 * does.
+	 */
+	case 3:
+		if (info0Layout == 0
+		    || (modem.demodulator->inPhase3 == 4
+			&& modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0)) {
+			byte_6118 = 4;
+			ret = 3;
+		} else {
+			ret = 2;
+		}
+		break;
+
+	case 4:				/* 0xda4d, and it is 3's tail */
+		ret = 3;
+		break;
+
+	default:
+		break;
+	}
+
+	/* 0xd890.  Unconditional; there is no gate in front of it. */
+	modem.progress(rxbits, *(unsigned int *)nrx, in, n);
+
+	switch (modem.demodulator->word_3c) {
+	/*
+	 * 0xde38.  SD detected: stop sending Ja and report nothing this
+	 * block.  The two `edprintf` messages of arms 1 and 2 are the object's
+	 * own names for the two outcomes.
+	 */
+	case 0x01:
+		byte_6118 = 1;
+		ret = 0;
+		edprintf("VPcmFloModem (V90): DemodSdDetected\r\n");
+		setTerminateJaFlag(1);
+		break;
+
+	case 0x02:			/* 0xdd91 */
+		edprintf("VPcmFloModem (V90): DemodSdNotDetected\r\n");
+		break;
+
+	/*
+	 * 0xde1a.  TRN1d has started.  `byte_6119` is the same "the retrain
+	 * bit has to go back on" latch `runPcmModem`'s CPt arm uses, and arm
+	 * 0x1e below is what sets it.
+	 */
+	case 0x03:
+		if (byte_6119 != 0) {
+			edprintf("VPcmFloModem (V90): ON Start TRN1d "
+				 "restoring SAS detector\n");
+			modem.ptr_49b4->modemParams->unnamed_0003 |=
+			    CFG_FLAG3_RETRAIN;
+		}
+		break;
+
+	/*
+	 * 0xdcab.  Jd detected.  The two constellation codes come out of the
+	 * V.90 Jd detector (`modem.jd`, +0x0c of the V90Modem -- NOT `jd92`
+	 * at +0x10, which is what `runPcmModem`'s Jd arm reads), the training
+	 * one sets the phase 4 bit count, and both are announced upward.
+	 *
+	 * THE SILENCE-SCR BIT IS A PARAMETER THAT THE MEASURED ROUND TRIP CAN
+	 * OVERRIDE, and both names in that sentence are the object's own:
+	 * `V90Parameters::SILENCE_SCR` and
+	 * `::MINIMUM_RTD_FOR_NON_SILENCE_SCR`, with the diagnostic between
+	 * them spelling out why.
+	 *
+	 * TWO CONVERSIONS ARE FORCED HERE.  `SILENCE_SCR` is an `int` read
+	 * with `movzbl` (0xdce0) because the local it lands in is the
+	 * `unsigned char` `V34XF_IndicateJdReceived` takes, and the round trip
+	 * is compared with `ja` (0xdcfe) -- UNSIGNED, where two `int`s give
+	 * `jg`.  V90Phase2Info.h's +0x04 says the field really is unsigned and
+	 * that the tree keeps the `int` spelling with the cast at the use
+	 * site (finding 4903); this is a use site.
+	 */
+	case 0x06:
+		modem.jd->getConstelationSize(&flags_173a[0], &flags_173a[1]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "VPcmFloModem (V90): Train constellation : %d  "
+			    "RRN constellation : %d "
+			    "(0 = 4 points / 1 = 16 points)\r\n",
+			    flags_173a[0], flags_173a[1]);
+
+		silenceScr = (unsigned char)modem.ptr_49b4->SILENCE_SCR;
+		if (silenceScr != 0
+		    && (unsigned int)modem.phase2Info->rtd
+		       > (unsigned int)
+			 modem.ptr_49b4->MINIMUM_RTD_FOR_NON_SILENCE_SCR) {
+			edprintf("VPcmFloModem (V90): phase3 SCR set to NOT "
+				 "silence, due to RTD %d\r\n",
+				 (unsigned int)modem.phase2Info->rtd);
+			silenceScr = 0;
+		}
+
+		setNofBitsPhase4(flags_173a[0]);
+		V34XF_IndicateJdReceived(v34Object, flags_173a[0], silenceScr);
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_V90_TIMING_LOG_SCALE));
+		break;
+
+	/*
+	 * 0xdc8b.  The same clear of the retrain bit `runPcmModem`'s Jd arm
+	 * ends with, on its own here and under the same phase-2 guard.
+	 */
+	case 0x08:
+		cfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;
+		if ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)
+			*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;
+		break;
+
+	/*
+	 * 0xdbfc.  DIL received: tell the V.34 shell, then build CPt out of
+	 * the FIRST mapping block into the CP vector and start the sequence
+	 * again.  This is the only `V90CPPacker` site that leaves
+	 * `additionalCPinfo.word_00` alone.
+	 */
+	case 0x12:
+		V34XF_IndicateDilReceived(v34Object, flags_173a[0]);
+		cpNofBits = V90CPPacker(&modem.mappingParams,
+					&modem.additionalCPinfo,
+					cpBitVector, 0);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): Building "
+			    "CPt, CPt length = %d\r\n", cpNofBits);
+		resetBitPointer();
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_V90_TIMING_LOG_SCALE));
+		break;
+
+	case 0x15:			/* 0xdbd9 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): "
+					     "DemodPhase3Error !!! \r\n");
+		ret = 5;
+		break;
+
+	case 0x16:			/* 0xdacc */
+		byte_6118 = 2;
+		ret = 1;
+		break;
+
+	/*
+	 * 0xe131.  Stop sending CPnot, and put the retrain bit back if the
+	 * data phase has been reached once.
+	 */
+	case 0x17:
+		setTerminateCpNotFlag(1);
+		if (byte_6119 != 0)
+			modem.ptr_49b4->modemParams->unnamed_0003 |=
+			    CFG_FLAG3_RETRAIN;
+		break;
+
+	/*
+	 * 0xdf74.  End of TRN2d: build CP out of the ALT mapping block and
+	 * restart the sequence with one transmission required.
+	 */
+	case 0x19:
+		modem.additionalCPinfo.word_00 = 0;
+		cpNofBits = V90CPPacker(&modem.mappingParamsAlt,
+					&modem.additionalCPinfo,
+					cpBitVector, flag_173e);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): Building "
+			    "CP, CP length = %d (clr=%d)\r\n",
+			    cpNofBits, flag_173e);
+		resetBitPointer();
+		setMinNofTransmitSequences(1);
+		V34XF_IndicateTrn2dReceived(v34Object);
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_V90_TIMING_LOG_SCALE));
+		break;
+
+	/*
+	 * 0xe006 and 0xd8d7.  MP AND MPnot, AND THEY ARE THE PAIR THIS
+	 * FUNCTION IS MOST LIKELY TO BE SHIPPED WRONG ON.
+	 *
+	 * Both copy the decoded message out for the V.34 interface and then
+	 * build CPnot into `bitVector`.  Four things differ and every one of
+	 * them is one token:
+	 *
+	 *   - the clear flag handed to the packer is `flag_173e` for MP and a
+	 *     literal 0 for MPnot (0xe0e3 against 0xe2a0);
+	 *   - the diagnostic says "on MP receive" or "on MPnot receive";
+	 *   - MPnot goes on to test `SENSITIVE_ISP_DETECTED` and terminate
+	 *     CPnot where it is set; MP does not;
+	 *   - MPnot has an ELSE arm and MP does not.
+	 *
+	 * Nothing about the two blocks' size, shape or call sequence separates
+	 * them, which is exactly the failure mode CLAUDE.md records for the MP
+	 * CRC pair and for `initiateRRN`/`initiateFPE`.
+	 */
+	case 0x1a:
+		copyMpInfoForInterface();
+		if (terminateCp == 0) {
+			modem.additionalCPinfo.word_00 = 1;
+			nofBits = V90CPPacker(&modem.mappingParamsAlt,
+					      &modem.additionalCPinfo,
+					      bitVector, flag_173e);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFloModem (V90): "
+				    "Building CPnot on MP receive, CPnot "
+				    "length = %d\r\n", nofBits);
+			setTerminateCpFlag(1);
+		}
+		break;
+
+	/*
+	 * 0xd8d7.  MPnot.  THE ELSE ARM IS WHERE CPnot IS GIVEN UP, and its
+	 * three-way test is the same conjunction `V90Demodulator::enterRRN`
+	 * records as the moment a rate renegotiation is real -- the connection
+	 * evaluator's counter and the phase 4 demodulator's pair at +0x3c and
+	 * +0x38, in that order.  Here it is negated: CPnot is terminated
+	 * unless all three say a renegotiation is under way.
+	 *
+	 * The two `setTerminateCpNotFlag(1); setMinNofTransmitSequences(1);`
+	 * tails are one block in the object, entered from both paths
+	 * (`jmp 0xd9d9` at 0xe302), which is GCC cross-jumping two copies of
+	 * the same two statements.
+	 */
+	case 0x1b:
+		copyMpInfoForInterface();
+		if (terminateCp == 0) {
+			modem.additionalCPinfo.word_00 = 1;
+			nofBits = V90CPPacker(&modem.mappingParamsAlt,
+					      &modem.additionalCPinfo,
+					      bitVector, 0);
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFloModem (V90): "
+				    "Building CPnot on MPnot receive, CPnot "
+				    "length = %d\r\n", nofBits);
+			setTerminateCpFlag(1);
+			if (modem.ptr_49b4->SENSITIVE_ISP_DETECTED != 0) {
+				edprintf("VPcmFloModem (V90): on sensitive "
+					 "ISP, after one CPnot supposed to "
+					 "move to E...\r\n");
+				setTerminateCpNotFlag(1);
+				setMinNofTransmitSequences(1);
+			}
+		} else {
+			if (cpNotLoaded != 0 && terminateCpNot == 0
+			    && (modem.demodulator->connectionEvaluator->word_90
+				    == 0
+				|| modem.demodulator->phase4Demodulator
+				       ->int_003c == 0
+				|| modem.demodulator->phase4Demodulator
+				       ->int_0038 == 0)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmFloModem (V90): Going to "
+					    "terminate CPnot...\r\n");
+				setTerminateCpNotFlag(1);
+				setMinNofTransmitSequences(1);
+			}
+		}
+		break;
+
+	/*
+	 * 0xddc0.  Ed received.  `flag_173e` -- the same byte three of the
+	 * packer calls hand across as the clear flag -- is what turns this
+	 * into a cleardown report rather than a silent one.
+	 */
+	case 0x1c:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): "
+					     "Ed Received !!!\r\n");
+		setTerminateCpNotFlag(1);
+		setMinNofTransmitSequences(1);
+		if (flag_173e != 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFloModem (V90): "
+				    "Indicating Cleardown !\r\n");
+			ret = 8;
+		}
+		break;
+
+	case 0x1d:			/* 0xdda2 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): "
+					     "Phase4 terminated.\r\n");
+		break;
+
+	/*
+	 * 0xde7b.  The data phase.  `byte_6119` is raised here and nowhere
+	 * else in this function, and arms 0x03 and 0x17 are its two readers.
+	 */
+	case 0x1e:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): "
+					     "Enter Data Phase\r\n");
+		byte_6118 = 3;
+		ret = 2;
+		byte_6119 = 1;
+		modem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_V90_TIMING_LOG_SCALE));
+		break;
+
+	/*
+	 * 0xdd49.  V.34 fallback, AND THE SIX STORES ARE
+	 * `setV34BaudForV34`'s, byte for byte (.text+0xd4c0).  The comment on
+	 * `runPcmModem`'s case 0x1f says its identical six "are not either of
+	 * `setV34BaudForV90`'s or `setV34BaudForV34`'s"; that is wrong and
+	 * finding 7582 retracts it.  1,0,1,1,1,1 IS the V.34 setter, and it
+	 * is the V.90 one that ends in a zero.
+	 */
+	case 0x1f:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): "
+					     "drop to V34 requested !!\r\n");
+		flag_173d = 1;
+		ret = 7;
+		setV34BaudForV34();
+		break;
+
+	case 0x21:			/* 0xdb53 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): "
+					     "retrain requested !!\r\n");
+		ret = 5;
+		break;
+
+	/*
+	 * 0xdae7 and 0xdecd.  THE TWO RATE-RENEGOTIATION ARMS: 0x22 is this
+	 * end asking and 0x23 is the far end asking.  They share eleven
+	 * instructions and differ in four things:
+	 *
+	 *   - 0x22 raises `flags_173a[2]`; 0x23 tests it, and where it is set
+	 *     clears it and does nothing else.  So a remote report that
+	 *     follows our own request is swallowed once.
+	 *   - the diagnostics are "requested" and "detected";
+	 *   - 0x22 calls `VPcmV34IndicateLocalRRN`, 0x23
+	 *     `VPcmV34IndicateRemoteRRN`;
+	 *   - 0x23 additionally calls `V90Demodulator::indicateRemoteRateReneg`
+	 *     (0xdac7), which 0x22 jumps past.
+	 *
+	 * `flags_173a[2]` KEEPS ITS OFFSET NAME.  What is established is the
+	 * latch's behaviour, which is recorded in finding 7583; the array is
+	 * cleared as a run of three by `enterPhase3`, `externalReset` and
+	 * `VPcmXfCreate`, and splitting it is not this batch's change.
+	 *
+	 * The `short` cast on the evaluator's counter is FORCED: 0xda78 and
+	 * 0xdb01 are `movswl 0x90(...)`, sixteen bits sign-extended, where the
+	 * field is a whole word -- which is what `VPcmV34SetV90RateReneg`'s
+	 * `short rrn_type` parameter costs.
+	 */
+	case 0x22:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): rate "
+			    "renegotiation requested !!\r\n");
+		VPcmV34SetV90RateReneg(v34Object,
+		    (short)modem.demodulator->connectionEvaluator->word_90,
+		    flags_173a[1]);
+		setNofBitsPhase4(flags_173a[1]);
+		flags_173a[2] = 1;
+		VPcmV34IndicateLocalRRN(v34Object);
+		byte_6118 = 2;
+		ret = 1;
+		break;
+
+	case 0x23:
+		if (flags_173a[2] != 0) {
+			flags_173a[2] = 0;
+		} else {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFloModem (V90): "
+				    "rate renegotiation detected !!\r\n");
+			VPcmV34SetV90RateReneg(v34Object,
+			    (short)modem.demodulator->connectionEvaluator
+				       ->word_90,
+			    flags_173a[1]);
+			setNofBitsPhase4(flags_173a[1]);
+			VPcmV34IndicateRemoteRRN(v34Object);
+			modem.demodulator->indicateRemoteRateReneg();
+			byte_6118 = 2;
+			ret = 1;
+		}
+		break;
+
+	case 0x26:			/* 0xdeac */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): "
+					     "energy drop detected !!\r\n");
+		ret = 5;
+		VPcmV34SetIndicationOfRemoteRetrain(v34Object);
+		break;
+
+	case 0x28:			/* 0xe15f */
+		edprintf("VPcmFloModem (V90): restoring SAS detector "
+			 "(RtNot)\n");
+		modem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
+		break;
+
+	/*
+	 * 0xdee6.  Rebuild CP after a silent rate renegotiation.  It is arm
+	 * 0x19's block with two differences: `additionalCPinfo.word_10` --
+	 * the flag `V90Demodulator::enterRRN` raises when it decides a
+	 * renegotiation is real -- is cleared as well, and neither
+	 * `setMinNofTransmitSequences` nor the timing-offset line is here.
+	 */
+	case 0x2a:
+		modem.additionalCPinfo.word_00 = 0;
+		modem.additionalCPinfo.word_10 = 0;
+		cpNofBits = V90CPPacker(&modem.mappingParamsAlt,
+					&modem.additionalCPinfo,
+					cpBitVector, flag_173e);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): Rebuilding "
+			    "CP after silence rrn, CP length = %d\r\n",
+			    cpNofBits);
+		resetBitPointer();
+		V34XF_IndicateTrn2dReceived(v34Object);
+		break;
+
+	case 0x2b:			/* 0xdb6a */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmFloModem (V90): terminate "
+					     "session requested !!\r\n");
+		ret = 8;
+		VPcmV34LogTimingOffset(v34Object,
+		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
+			    * VPCM_V90_TIMING_LOG_SCALE));
+		break;
+
+	default:			/* 0xda10, and 21 of the 44 entries */
+		break;
+	}
+
+	return ret;			/* 0xda13 */
+}
+
+/*
  * ===========================================================================
  * `VPcmFloModem::runPcmModem` -- .text+0xe430, 0x7f9 = 2,041 bytes
  * ===========================================================================
@@ -1031,18 +1788,6 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
  * are not collapsed.  The sixth diagnostic, at 0xe726, goes through
  * `edprintf`, which gates itself.
  */
-
-/*
- * `_tagModemParameters::unnamed_0003`, and the two bits this function
- * touches.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
- * reached the other way round -- that file gets there as `obj->pac3c + 3` and
- * this one as `modem.ptr_49b4->modemParams->unnamed_0003`, and they are the
- * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
- * `v90RateRenegSilence` clears again after printing "disabling SAS detector
- * on silence".
- */
-#define CFG_FLAG3_PHASE2	0x02
-#define CFG_FLAG3_RETRAIN	0x04
 
 /*
  * `flds 0x30` in .rodata.cst4 -- 0x3ecccccd.  Every transmitted sample is

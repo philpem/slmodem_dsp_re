@@ -93,7 +93,27 @@ public:
 	void setSessionFlag(unsigned int flag);
 
 	unsigned int sessionFlag;		/* +0x00                  */
-	unsigned char pad_04[0x4c];		/* +0x04 not modelled     */
+	unsigned char pad_04[0x34];		/* +0x04 not modelled     */
+
+	/*
+	 * +0x38 and +0x3c  THE PAIR, carved out of `pad_04` because
+	 * `VPcmFloModem::v90RunDemodulator`'s MPnot arm reads both and this
+	 * partial model is the definition that reaches that translation unit.
+	 * Same offsets, same spelling and same derivation as
+	 * include/dsplib/V90Phase4Demodulator.h's, which is the fuller model:
+	 * always written together, `resetBeforRRN` and `detectRRN` set both to
+	 * 1 and `reset` sets +0x38 to 1 and +0x3c to 0.
+	 *
+	 * THIS IS THE DUPLICATE `tools/onedef.py` CARRIES, AND CARVING A PAD
+	 * IN ONE HALF OF IT MAKES THE TWO AGREE ON MORE, NOT LESS.  The right
+	 * repair is still to delete this class and include the fuller header;
+	 * finding 7584 says what that costs and why this batch did not take
+	 * it.
+	 */
+	int int_0038;
+	int int_003c;
+
+	unsigned char pad_40[0x10];		/* +0x40 not modelled     */
 	V90Phase4Modulator phase4Modulator;	/* +0x50 embedded, 0x2fac */
 };
 
