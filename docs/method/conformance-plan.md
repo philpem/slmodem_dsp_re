@@ -11,17 +11,22 @@ The tier has exactly ONE instance today — `V90MP`'s CRC pair against
 `run_mp_crc_spec`, 1,084 checks (finding 7413). Grepping all 242 files of
 `test/unit/` for a Recommendation reference returns that file and nothing else.
 
-**Headline numbers.**
+**Headline numbers.** One *pairing* is one clause-to-site row, and every count
+below is read off a numbered list in the section named beside it — so a reader
+can recompute each of them rather than take it.
 
-| | |
-|---|--:|
-| clause-to-site pairings examined | **58** |
-| worth doing | **21** — ten first, eleven queued |
-| named as NOT worth doing | **21** |
-| clauses about code nobody has written | **14** |
-| already covered | 2 |
-| candidate non-conformances found while surveying | **8** |
-| retrofit backlog, in landed symbols | **113** of 1,204 |
+| | | where |
+|---|--:|---|
+| clause-to-site pairings examined | **63** | the sum of the four rows below |
+| worth doing | **21** — ten first, eleven queued | §5.1, §5.2, numbered 1–21 |
+| named as NOT worth doing | **24** | §7, numbered R1–R24 |
+| clauses about code nobody has written | **16** | §7, numbered L1–L16 |
+| already covered | **2** | Table 16/V.90 (7413); D920 (6800) |
+| candidate non-conformances found while surveying | **8** | §8, N1–N8 |
+| retrofit backlog, in landed symbols | **112** of 1,204 | §9 |
+
+The 21 blocks touch **24 fixtures, 22 of which already exist**; the two new ones
+are named in §6.
 
 Two Recommendations carry published known-answers this tree can use today, and
 a third carries one it cannot.
@@ -242,7 +247,7 @@ clause fixes four things:
 | 5 | `v92jd_crc_bits` + its extent | `src/pump/v90/V92Jd.cpp` | 27/V.92 | `t_v92jd.cpp` | no |
 | 6 | `dilCrcBit` + its extent | `src/pump/v90/DILdescriptorPacker.cpp` | 12/V.90 | `t_dilpack.cpp` | no |
 | 7 | `dilCrcBit` + its extent | `src/pump/v90/V92DILdescriptorPacker.cpp` | 20/V.92 | `t_v92dilpack.cpp` | no |
-| 8 | `v8_crc` | `src/v8/v8util.c` | — | `t_v8util.c` | no, and see §7 |
+| 8 | `v8_crc` | `src/v8/v8util.c` | none — see R12 | `t_v8util.c` | not testable |
 | 9 | `getbit`'s fold | `src/pump/v34/v34hshak.c`, `v34hstx1.cpp` | 14–16/V.34 | `t_v34hstx1.c` | no |
 
 Sites 1–7 are the **reflected** spelling: feedback `crc[0] ^ bit` into stage 15,
@@ -261,6 +266,16 @@ the polynomial and the emission direction are settled by algebra and need no
 test at any of the nine sites.** What is not settled by algebra, and differs at
 every one of them, is the EXTENT: which bit index the register starts at, which
 it stops at, and which indices are skipped as framing.
+
+**Site 8 is the one exception, and it is why §9 counts nineteen CRC symbols and
+not twenty.** `v8_crc` really is the same register — `v34hshak.c:2926` says so
+and the code agrees — so 10.1.2.3.2/V.34 governs its polynomial and its
+seeding, and those are the two things the algebra above has already settled.
+What it has no clause for is an EXTENT: **V.8 defines no CRC over CM or JM**,
+and `crc_enable` is 0 on both the CM path (`src/v8/v8seq.c:165`) and the JM path
+(`src/v8/v8jm.c:751`), so on the V.8 signals it covers nothing. Nothing is left
+to test, and it is excluded from §9's count rather than carried as work that can
+never be done.
 
 ### 4.2 The message layout tables — extent and direction
 
@@ -419,8 +434,12 @@ a fixture that already existed.
 because it brings a Makefile target, a `ref_` declaration block, a seeded slot
 with a guard past the object, and a mutation suite with it.
 
-**Nineteen of the twenty-one items extend an existing fixture.** The two
-exceptions:
+**The 21 items touch 24 fixtures, and 22 of the 24 already exist** — every
+filename in §5 was checked against `ls test/unit/`. Some items span more than
+one: item 6 covers `t_v8hs.c`, `t_v23modem.c` and `t_fpm_tone.c`, item 4 covers
+`t_v8jm.c` and `t_v8util.c`, and item 16 covers `t_v90demod.cpp` and
+`t_v92unpck.c`. **Nineteen of the twenty-one items need no new file at all.**
+The two exceptions:
 
 - **Item 3.** The MP pair lives in one file and the CP pair does not.
   `V90CP::calcCRC` is driven from `test/unit/t_v90cpleaf.cpp` and
@@ -434,10 +453,12 @@ exceptions:
 - **Item 21.** A spectral measurement needs an FFT harness `t_v8sig.c` does not
   have. It is in §5.2 rather than §5.1 for that reason alone.
 
-Item 6 has a smaller version of the same problem: the CJ acceptance counter
-lives behind `static` functions in `src/v8/v8hsrx.c` that no fixture reaches
-directly. Driving it through `V8Process` inside `t_v8hs.c` is cheaper than
-exporting anything, and is the route to take.
+**Item 6 is not a third exception, but it has a reach problem worth costing.**
+The CJ acceptance counter lives behind `static` functions in
+`src/v8/v8hsrx.c` that no fixture reaches directly. Driving it through
+`V8Process` inside the existing `t_v8hs.c` is cheaper than exporting anything,
+and is the route to take — no new file, but budget the extra half-day for
+getting the state machine into the right state.
 
 Two costs the line count hides:
 
@@ -459,108 +480,131 @@ the new fixture. **Call it two working weeks for the first ten.**
 
 ## 7. What would NOT be tested, and why
 
-Twenty-one pairings were reached and rejected. A plan that proposes testing
-everything is not a plan.
+A plan that proposes testing everything is not a plan. **Twenty-four pairings
+were reached and rejected (R1–R24), and sixteen more are clauses about code
+nobody has written (L1–L16).** Both lists are numbered so the headline counts
+can be recomputed, and so the next survey can cite a row rather than re-derive
+it.
 
-**Already settled, so a test would restate rather than decide**
+### Already settled, so a test would restate rather than decide
 
-- *The CRC polynomial and its emission direction, at all nine sites.* §4.1: the
-  two spellings are one register under `u_i = r_(15-i)`, and both emit matching
-  wire bits. Algebra, not a test.
-- *10.1.2.3.2's "output starting with bit 0"* at each `infoToBits`. Finding 7413
-  settled it for MP against Table 16 and the same algebra transfers; only the
-  POSITION the CRC is written to varies, and that is covered by each site's
-  extent.
-- *V.25 2.1's calling tone.* 1083.7 Hz against *"1300 Hz ± 15 Hz"*, 0.72 s on
-  and 2.10 s off against *"not less than 0.5 s and not more than 0.7 s"* and
-  *"not less than 1.5 s and not more than 2.0 s"*, and not a sine at all. All of
-  it is already carried as D11, D12, D13 and D82 and asserted by
-  `t_callingtone`. Nothing to add.
+- **R1** — 10.1.2.3.2/V.34's polynomial and emission direction, at all nine
+  sites. §4.1: the two spellings are one register under `u_i = r_(15-i)` and
+  both emit matching wire bits. Algebra, not a test.
+- **R2** — 10.1.2.3.2's *"output the contents … starting with bit 0"* at each
+  `infoToBits`. Finding 7413 settled it for MP against Table 16 and the same
+  algebra transfers; only the POSITION the CRC is written to varies, and that
+  is covered by each site's extent.
+- **R3** — 2.2/V.25's *"1300 Hz ± 15 Hz"* against `CALLING_TONE_STEP`. Already
+  D82 and D11: 1083.7 Hz at 8 kHz, because all three constants encode 9600.
+- **R4** — 2.1/V.25's *"ON … not less than 0.5 s and not more than 0.7 s and
+  OFF … not less than 1.5 s and not more than 2.0 s"* against
+  `CALLING_TONE_ON`/`_OFF`. Already D82 and D12: 0.72 s and 2.10 s.
+- **R5** — the calling tone's shape and level. Already D11 and D13, and
+  `t_callingtone` asserts them.
 
-**The differential tier already pins it, and no independent derivation exists**
+### The differential tier already pins it, and no independent derivation exists
 
-- *V.34 Table 1 (symbol rates), Table 2 (carrier frequencies), Tables 3 and 4
-  (α, β, γ).* Held against the blob's own tables; no extent, no direction.
-- *V.34 Tables 14/15/16 (INFO0, INFO1c, INFO1a).* Worth a later look, but the
-  handshake-layer bit maps are pinned by `t_v34info.c`, `t_v34info1d.c` and
-  `t_v34info1a.cpp`, and no field was found whose position the spec states and
-  the code derives differently.
-- *V.21's mark and space frequencies* (980/1180/1650/1850). V.21's constants,
-  not V.8's. The *channel assignment* is in scope and is item 6's neighbour; the
-  frequencies are not.
-- *`V8_HS_DRAIN_BLOCKS`, `V8_RX_SETTLE_BLOCKS`, `V8_AGC_BLOCKS`, the detector
-  coefficient table.* No spec-derivable correct value.
-- *`v8_crc`.* **Neither V.8 nor V.25 defines a CRC**, so the polynomial can only
-  be read off the object; and `crc_enable` is 0 on both the CM and the JM path,
-  so it is dead for V.8 signals. It appears in §4.1's table because it is the
-  same register as `getbit`'s, not because V.8 asks for one.
-- *DTMF row and column frequencies, and the dial-string parser.* 1.1/V.25 puts
-  automatic calling in V.25 bis and V.25 ter, and the frequencies are Q.23.
+- **R6** — Table 1/V.34, symbol rates, against `v34hshak.c`'s tables.
+- **R7** — Table 2/V.34, carrier frequencies, same.
+- **R8** — Tables 3 and 4/V.34, the α, β and γ parameters, same. All three are
+  held against the blob's own tables; no extent, no direction, and the values
+  are reachable only by reading the object.
+- **R9** — Tables 14, 15 and 16/V.34 (INFO0, INFO1c, INFO1a) against
+  `v34info.c` and `v34info1a.cpp`. Worth a later look, but the handshake-layer
+  bit maps are pinned by `t_v34info.c`, `t_v34info1d.c` and `t_v34info1a.cpp`,
+  and no field was found whose position the spec states and the code derives
+  differently.
+- **R10** — V.21's mark and space frequencies (980/1180/1650/1850) in
+  `src/v8/v8v21.c`. V.21's constants, not V.8's. The *channel assignment* is in
+  scope and is part of item 6; the frequencies are not.
+- **R11** — `V8_HS_DRAIN_BLOCKS`, `V8_RX_SETTLE_BLOCKS`, `V8_AGC_BLOCKS` and
+  the V.8 detector coefficient table. No spec-derivable correct value.
+- **R12** — `v8_crc`'s polynomial and extent. See §4.1: the register is
+  10.1.2.3.2/V.34's and the algebra has already settled it, but **V.8 defines
+  no CRC over CM or JM** and `crc_enable` is 0 on both paths, so there is no
+  extent clause to test against.
+- **R13** — DTMF row and column frequencies, and the dial-string parser.
+  1.1/V.25 puts automatic calling in V.25 bis and V.25 ter, and the frequencies
+  are Q.23.
 
-**The spec leaves it to the implementation**
+### The spec leaves it to the implementation
 
-- *`Scrambler`/`Descrambler` store order, temporaries, `shr` against `sar`.* No
-  clause; already recorded as unobservable.
-- *Filter designs, the equalizer, AGC, timing recovery, the pre-emphasis
-  ladder.* V.34 and V.90 specify what goes on the line, not how a receiver gets
-  there. A test against "the standard" here is a test against somebody's taste.
-- *11/V.25, inhibiting the 2100 Hz detector* — *"the detector **may** be
-  inhibited"*, *"It is **suggested** that…"*.
-- *The NOTE under Table 15/V.90* — *"The actions that a digital modem takes when
-  a constellation set is found to have an average power above the appropriate
-  limit are a national matter and are beyond the scope of this
+- **R14** — `Scrambler`/`Descrambler` store order, temporaries, `shr` against
+  `sar`. No clause; already recorded as unobservable.
+- **R15** — filter designs, the equalizer, AGC, timing recovery, the
+  pre-emphasis ladder. V.34 and V.90 specify what goes on the line, not how a
+  receiver gets there. A test against "the standard" here is a test against
+  somebody's taste.
+- **R16** — clause 11/V.25, inhibiting the 2100 Hz detector: *"the detector
+  **may** be inhibited"*, *"It is **suggested** that…"*.
+- **R17** — the NOTE under Table 15/V.90: *"The actions that a digital modem
+  takes when a constellation set is found to have an average power above the
+  appropriate limit are a national matter and are beyond the scope of this
   Recommendation."*
-- *V.25 Cor. 1's whole substantive content* — *"there is a **potential** for
-  failure to connect if the phase reversal option of answer tone is not used"*.
-  Advisory. `v23modem.c` sets `rev_period = 0` and `v8_ansaminit` sets its
-  enable to 1; a test can pin the *choice* but cannot call either wrong.
-- *3.9 and 5/V.25's DTE/DCE sequencing* (100–600 ms recognition, the 1.8–2.5 s
-  silent interval, the response delays). This library does not own the line
-  sequence.
+- **R18** — V.25 Cor. 1's whole substantive content: *"there is a **potential**
+  for failure to connect if the phase reversal option of answer tone is not
+  used"*. Advisory. `v23modem.c` sets `rev_period = 0` and `v8_ansaminit` sets
+  its enable to 1; a test can pin the *choice* but cannot call either wrong.
+- **R19** — 3.9 and 5/V.25's DTE/DCE sequencing (100–600 ms recognition, the
+  1.8–2.5 s silent interval, the response delays). This library does not own
+  the line sequence.
 
-**A failure would tell us nothing actionable**
+### A failure would tell us nothing actionable
 
-- *`ModulusCoder`'s signed 64-bit accumulator.* Divergence needs K ≥ 64; V.90's
-  K tops out at 39.
-- *`evaluateCRC` reading outside `bits[]`* for +0x119 values the class never
-  writes. Finding 7411 disposed of this: bounded read, cannot leave the object.
-- *`initTxSequence`'s one-past-the-end write* at `src/v8/v8seq.c:143`, reachable
-  only with both extension fields plus PCM, which `v8dp.c` never asks for. Not
-  one of the three shapes; a bounds question, not a conformance one.
+- **R20** — `ModulusCoder`'s signed 64-bit accumulator. Divergence needs
+  K ≥ 64; V.90's K tops out at 39.
+- **R21** — `evaluateCRC` reading outside `bits[]` for +0x119 values the class
+  never writes. Finding 7411 disposed of this: bounded read, cannot leave the
+  object.
+- **R22** — `initTxSequence`'s one-past-the-end write at `src/v8/v8seq.c:143`,
+  reachable only with both extension fields plus PCM, which `v8dp.c` never asks
+  for. A bounds question, not one of the three shapes.
 
-**Looks checkable and is not — the two traps worth writing down**
+### Looks checkable and is not — the two traps worth writing down
 
-- *Table 1/V.90's µ-law/A-law pairing against `alaw2ulaw` / `ulaw2alaw`.* The
-  two halves of Table 1 are two independent ladders indexed by Ucode, not an
-  amplitude correspondence: Ucode 0 is µ-law linear 0 and A-law linear 8, Ucode
-  1 is 8 and 24. G.711's code-to-code tables map by nearest amplitude, a
-  different question. **Measured: the two disagree at 79 of 128 Ucodes**, and
-  that is correct behaviour on both sides. A test built on the obvious reading
-  would have failed 79 times and indicted nothing.
-- *10.1.3.8/V.34's rotation direction* (*"rotating that point clockwise by
-  In·90 degrees"*) against `vect16`/`vect4`. Derivable in principle and **not
-  judgeable from the tables alone**: the sign convention of the stored imaginary
-  part and the index packing are both unpinned, and the decoded points are not
-  origin-centred. It needs `v34hstx1.cpp`'s transmit path read first. Named
-  rather than attempted.
+- **R23** — Table 1/V.90's µ-law/A-law pairing against `alaw2ulaw` /
+  `ulaw2alaw`. The two halves of Table 1 are two independent ladders indexed by
+  Ucode, not an amplitude correspondence: Ucode 0 is µ-law linear 0 and A-law
+  linear 8, Ucode 1 is 8 and 24. G.711's code-to-code tables map by nearest
+  amplitude, a different question. **Measured here: the two disagree at 79 of
+  128 Ucodes**, and that is correct behaviour on both sides. A test built on
+  the obvious reading would have failed 79 times and indicted nothing.
+- **R24** — 10.1.3.8/V.34's rotation direction (*"rotating that point clockwise
+  by In·90 degrees"*) against `vect16`/`vect4`. Derivable in principle and
+  **not judgeable from the tables alone**: the sign convention of the stored
+  imaginary part and the index packing are both unpinned, and the decoded
+  points are not origin-centred. It needs `v34hstx1.cpp`'s transmit path read
+  first. Named rather than attempted.
 
-**Clauses about code nobody has written — fourteen, listed so they are not
-re-derived**
+### Clauses about code nobody has written
 
-V.34 8.2/Table 8 (SWP) and 8.3/Table 9 (AMP); V.34 clause 9 with Table 10
-(K, M, L), Table 11, Table 12 (bit inversion) and Table 13 ([Y4..Y1]) — the
-precoder, trellis encoder and shell mapper; V.34 Tables 20/21/23/24 (MP and MPh
-layouts — there is no `V34MP` class, and `t_v34mp.cpp` tests handshake framing,
-not the clause-10.1.3.9 bit layout); V.34 Annex A Table A.10, the precode-CRC
-superframe (*"The 16-bit CRC is computed by applying the three complex precode
-coefficients to the 16-bit CRC generator (see 10.1.2.3.2)"* — a clean deferral
-to the same generator, shapes 1 and 2, and no code); V.92 Table 33 (T1 timeout),
-Table 32/MH and Tables 25/28/29 (RM) — the modem-on-hold path is absent; Tables
-7–10/V.92 (ANSpcm), §3.3; V.8 Table 8's non-standard-information field layout
-(`ext1`/`ext2` are raw octet arrays supplied by the caller); V.8 7.1's signal CI
-(neither transmitted nor detected, and 7.1 makes detection optional); and V.8
-8.1.1–8.1.2's Te and 75 ± 5 ms silence, for which no implementing constant could
-be found.
+Not candidates. Listed so they are not re-derived, and so that whoever
+reconstructs the function knows the oracle is already located.
+
+| | clause | what it would judge |
+|---|---|---|
+| **L1** | 8.2, Table 8/V.34 | b and SWP per data rate and symbol rate — self-checking, §3.4 |
+| **L2** | 8.3, Table 9/V.34 | AMP per symbol rate — self-checking, §3.4 |
+| **L3** | 9.x, Table 10/V.34 | mapping parameters K, M, L |
+| **L4** | 9.x, Table 11/V.34 | sequence of operations for mapper, precoder, trellis encoder |
+| **L5** | 9.x, Table 12/V.34 | bit inversion patterns |
+| **L6** | 9.x, Table 13/V.34 | the table for [Y4(m), Y3(m), Y2(m), Y1(m)] |
+| **L7** | Tables 20, 21/V.34 | MP Type 0 and Type 1 bit layouts — there is no `V34MP` class, and `t_v34mp.cpp` tests handshake framing, not the clause-10.1.3.9 layout |
+| **L8** | Tables 22, 23, 24/V.34 | INFOh and MPh |
+| **L9** | Annex A, Table A.10/V.34 | the precode-CRC superframe — *"The 16-bit CRC is computed by applying the three complex precode coefficients to the 16-bit CRC generator (see 10.1.2.3.2)"*, a clean deferral to the same register, shapes 1 and 2 |
+| **L10** | Table 33/V.92 | encoding of timeout period T1 |
+| **L11** | Table 32/V.92 and Amd. 1 | the MH sequences |
+| **L12** | Tables 25, 28, 29/V.92 | the RM symbol pattern and TRN2u mapping |
+| **L13** | Tables 7–10/V.92 | the ANSpcm sequences — the corpus's best known-answer, §3.3 |
+| **L14** | Table 8/V.8 | the non-standard-information field layout; `ext1`/`ext2` are raw octet arrays supplied by the caller |
+| **L15** | 7.1/V.8 | signal CI and its cadence — neither transmitted nor detected, and 7.1 makes detection optional |
+| **L16** | 8.1.1, 8.1.2/V.8 | Te ≥ 0.5 s (≥ 1 s with echo-canceller disabling) and the 75 ± 5 ms silence — no implementing constant could be found |
+
+L1 through L9 are one cause: **the V.34 primary-channel framing and mapping
+chain is not reconstructed, only the handshake.** L10 through L12 are another:
+the modem-on-hold path is absent.
+
 
 ---
 
@@ -577,13 +621,15 @@ reproduces the object faithfully at each site, which is exactly why no existing
 tier can see them.
 
 **N1 — JM's PSTN-access b5 is a constant where the clause is an "if and only
-if".** 7.4/V.8: *"Bit b5 is set to ONE if and only if the corresponding bit (b5)
+if".** *(From the delegated V.8 survey; the line and the constant were not
+re-read here.)* 7.4/V.8: *"Bit b5 is set to ONE if and only if the corresponding bit (b5)
 is set to ONE in the received CM."* `rebuildJMSequence` writes the fixed
 `V8_SEQ_TAIL_B = 0x161` at `src/v8/v8jm.c:727` and never inspects the received
 access0. A CM from a DCE on a cellular connection (b5 = 1) gets a JM with b5 = 0.
 Both sides emit the same constant.
 
-**N2 — CJ is accepted after two octets, not three.** 8.2.3/V.8: *"JM
+**N2 — CJ is accepted after two octets, not three.** *(From the delegated V.8
+survey; the counter's entry value was traced there, not here.)* 8.2.3/V.8: *"JM
 transmission shall continue until signal CJ is detected and **all 3 octets** of
 CJ have been received."* `V8_HS_CJ_COUNT = 2` at `src/v8/v8hsrx.c:164`, with
 `fdb6` zero on entry from `v8_hs_message_done`, so the counter fires on the
@@ -591,14 +637,15 @@ second sync. JM stops one octet early. The *transmitter* is correct — three
 octets of `0x001`, `nbits = 30`.
 
 **N3 — the ANSam envelope is 15.234 Hz against a ± 0.1 Hz tolerance, and no
-integer step can fix it.** 7.2/V.8: *"amplitude-modulated by a sinewave at
+integer step can fix it.** *(Verified here.)* 7.2/V.8: *"amplitude-modulated by a sinewave at
 15 ± 0.1 Hz."* `tone.f04 = 0x1a` = 26 over a 14-bit accumulator at 9600 Hz gives
 `26/16384 × 9600 = 15.234 Hz`; 25 gives 14.648. Granularity is 0.586 Hz, so the
 deviation is **structural, not a transcription slip**. `src/v8/v8sig.c:27` and
 the inline copy at `src/v8/v8hs.c:166`. Verified during this survey.
 
 **N4 — the phase-reversal detector's window is narrower than the transmit
-tolerance the spec permits.** 7.2/V.8: *"phase reversals at an interval of
+tolerance the spec permits.** *(From the delegated V.8 survey; the millisecond
+scaling was derived there, not here.)* 7.2/V.8: *"phase reversals at an interval of
 450 ± 25 ms"*; 2.3/V.25: *"at intervals of 425 to 475 ms."* The test at
 `src/v8/v8sig.c:441` accepts [431, 469] ms. Stated precisely: the clauses
 constrain the *transmitter*, so the finding is that the detector does not cover
@@ -606,19 +653,34 @@ the tolerance a conformant remote is allowed to use. Our own transmitter is
 exactly 450.0 ms and conformant.
 
 **N5 — the V.21-availability bit can never be cleared, because the mask includes
-the stop bit.** 5.1/V.8 fixes every octet as *"preceded by a start-bit (ZERO),
-and followed by a stop-bit (ONE)"*, and Table 4 item 12 puts V.21 availability
-at modn2 b7. `V8UpdateModemParameters` tests `if ((f & 3) == 0) out->b1 &= 0xdf;`
-on the **raw** third modulation word at `src/v8/v8jm.c:279-280`. Word bit 1 is
-b7; **word bit 0 is the stop bit, which 5.1 fixes at ONE**, so `f & 3` is never
-zero and V.21 availability is never withdrawn. Verified during this survey, and
-the internal evidence is strong: the block immediately above takes
-`f = word[i] >> 1`, shifting the stop bit out before testing, and the transmit
-side encodes V.21 at word bit 1. It should read `f & 2`. A textbook shape-1
-defect — the operation includes a field the spec excludes — and not recorded in
-`docs/deviations.md`.
+the stop bit.** *(Verified here, and the fix confirmed against the transmit
+side.)* 5.1/V.8 fixes every octet as *"preceded by a start-bit (ZERO), and
+followed by a stop-bit (ONE)"*, and Table 4/V.8 item 12 puts V.21 availability
+at modn2 b7. `V8UpdateModemParameters` tests
+`if ((f & 3) == 0) out->b1 &= 0xdf;` on the **raw** third modulation word at
+`src/v8/v8jm.c:279-280`. Word bit 1 is b7; **word bit 0 is the stop bit, which
+5.1 fixes at ONE**, so `f & 3` is never zero and V.21 availability is never
+withdrawn from the reported menu.
 
-**N6 — ANSam is transmitted for 12 s against a 5 ± 1 s clause.** 8.2.2/V.8:
+**The fix is `f & 2`, and the same file proves it.** `initTxSequence` builds
+modn2 as `(cm->b1 & 0x10 ? 0x51 : 0x11) | (cm->b1 & 0x20 ? 0x13 : 0)`
+(`src/v8/v8seq.c:115-116`): over the base `0x11`, `cm->b1` bit 4 adds word bit 6
+and `cm->b1` bit 5 adds word bit 1. So the round trip is
+`cm->b1` bit 5 ↔ word bit 1 ↔ b7 ↔ Table 4 item 12, V.21 — and the reader's
+mask must be word bit 1 alone.
+
+**The obvious alternative reading is wrong and worth ruling out**, because it
+changes what the defect is. The block immediately above takes
+`f = word[i] >> 1`, so it is tempting to call the missing shift the defect —
+but under the raw reading the *other* test on this word, `f & 0x40`, is word
+bit 6 = b2 = Table 4 item 10, V.23 duplex, which is a real information bit and
+matches `cm->b1` bit 4 exactly. The raw indexing is therefore deliberate and
+correct for modn2, whose two tested bits happen to sit at word bits 6 and 1;
+only the `& 3` is wrong. A textbook shape-1 defect — the operation includes a
+field the spec excludes — and not recorded in `docs/deviations.md`.
+
+**N6 — ANSam is transmitted for 12 s against a 5 ± 1 s clause.** *(From the
+delegated V.8 survey; `deadline()`'s arithmetic was traced there, not here.)* 8.2.2/V.8:
 *"If not terminated by the receipt of CM or a suitable sigC, ANSam shall be
 transmitted for a period of 5 ± 1 s."* `cfg.timeout_a = 0x0c`
 (`src/v8/v8dp.c:84`) through `deadline()` gives 12 × 2400 four-sample blocks =
@@ -626,6 +688,7 @@ transmitted for a period of 5 ± 1 s."* `cfg.timeout_a = 0x0c`
 could pass 5 — but the library's own datapump passes 12.
 
 **N7 — the post-answer-tone silence is 50 ms nominal against 75 ± 20 ms.**
+*(Verified here.)*
 4.4/V.25: *"At the end of the transmission of the answering tone, the DCE shall
 provide a silent period for 75 ± 20 ms."* `V23_SILENCE_DIVISOR = 20` gives
 8000/20 = 400 samples = 50 ms, below the window's 55 ms floor. It is carried
@@ -636,7 +699,7 @@ because the delivered timing does conform; what does not is the nominal figure,
 and whether that matters depends on a frame size the library does not fix.
 
 **N8 — two source comments describe the ANSam envelope depth as five percent
-and it is twenty.** `include/dsplib/v8.h:844` says `/* Q14: 0.05 */` and
+and it is twenty.** *(From the delegated V.8 survey.)* `include/dsplib/v8.h:844` says `/* Q14: 0.05 */` and
 `src/v8/v8sig.c:264` says *"modulates its amplitude by five percent either
 way"*. `0xccd`/`0x4000` is 0.2000, and 7.2/V.8 wants *"between (0.8 ± 0.01) and
 (1.2 ± 0.01) times its average amplitude"* — which the code hits exactly. **The
@@ -696,21 +759,21 @@ clause exists about it" would catch almost every V.90 function and mean nothing.
 
 | family | shape | symbols |
 |---|:-:|--:|
-| CRC extent and seeding — the nine sites of §4.1 | 1 | 20 |
+| CRC extent and seeding — eight of the nine sites of §4.1 (not `v8_crc`, R12) | 1 | 19 |
 | V.90/V.92 message field layout — CP, MP, Jd, DIL | 1, 2 | 30 |
 | V.34 and V.8 message field layout — INFO, CM, JM, CJ | 1, 2 | 22 |
 | Derivable constants — V.34/V.90/V.92 | 3 | 28 |
 | Derivable constants — V.8 ANSam and the V.25 tones | 3 | 13 |
-| **total** | | **113** |
+| **total** | | **112** |
 
-**113 landed symbols of the 1,204 this tree has translated, or 9.4%**, on top of
+**112 landed symbols of the 1,204 this tree has translated, or 9.3%**, on top of
 the 2 already covered (`V90MP::calcCRC` and `V90MP::evaluateCRC`). That is the
 size of the backlog.
 
 Three things to read with it:
 
-- **It is a count of symbols, not of tests.** The 113 collapse into the 21 spec
-  blocks of §5, in 19 fixtures, because one block judges a whole class: 1,084
+- **It is a count of symbols, not of tests.** The 112 collapse into the 21 spec
+  blocks of §5, touching 24 fixtures, because one block judges a whole class: 1,084
   checks over `V90MP` covered two symbols and would have covered five had the
   class had five. §5 is the actionable list; 113 is the size of what it covers.
 - **It is a floor, not a ceiling**, and the reason is §2: source presence was
@@ -720,6 +783,11 @@ Three things to read with it:
   of the twenty-one already have a candidate non-conformance attached before
   anyone has written a line of test — N1 through N7 across items 1, 4 and 6.
   That is the number that should decide whether §5.2 gets written at all.
+
+The list behind the table is `docs/method/conformance-plan.md`'s only count
+that cannot be read off a section here: it was built by enumerating the symbols
+family by family out of `src/`, and if it is ever re-derived the enumeration
+should be re-derived with it rather than the total carried forward.
 
 ---
 
