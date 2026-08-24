@@ -94,6 +94,19 @@
 #include "dsplib/V90BitsToSymbol.h"
 #include "dsplib/V90Demapper.h"
 #include "dsplib/V90Phase4Demodulator.h"
+/*
+ * `V90Demodulator::exitPhase3` is the last section of this file, and these
+ * three are what it needs beyond what the phase 4 receiver already brings.
+ * V90Demodulator.h supplies V90Equalizer, V90Phase3Demodulator, V90Resampler,
+ * V90SpectralVerifier, V90Phase2Info, V90Jd and V92Jd with it; the paragraph
+ * that header carries about CLAIMING `DSPLIB_V90PARAMETERS_H` is history and
+ * not a live restriction -- V90PreFilter.h INCLUDES the named map since task
+ * #116, this file uses `PARAMS->TRN2D_DD_LENGTH` and friends throughout, and
+ * the two coexist.
+ */
+#include "dsplib/V90Demodulator.h"
+#include "dsplib/V90TRN2Designer.h"
+#include "dsplib/tagV90AdditionalCPinfo.h"
 
 extern "C" {
 extern unsigned int ref_dsplibs_debug_level;
@@ -1593,6 +1606,579 @@ run_p4d_reset(void)
 	return diff_end();
 }
 
+/* ==================================== V90Demodulator::exitPhase3 ========== */
+
+/*
+ * exitPhase3 lives HERE and not in `t_v90demod.cpp` or `t_v90dataph.cpp`, and
+ * the reason is its LAST statement rather than its first.  The member's own
+ * fields hang off `V90Demodulator`, which both of those files build; what it
+ * ends with is `phase4Demodulator->reset(...)`, and that reset reseeds two
+ * `V90RDetector`s, resets the CP or the MP, hands the mapping block to the
+ * demapper AND to an embedded `V90Phase4Modulator` whose converter owns a
+ * `V90Mapper` and a `Scrambler` on the heap.  A seeded 0x351c block with three
+ * planted pointers is a segfault, not a trial.  All of that apparatus is
+ * already here -- `setup`, `rd_construct`, `rd_compare` and `rd_destruct` were
+ * built for `V90Phase4Demodulator::reset` in the batch immediately before this
+ * one -- so this file grows the SHALLOW half (a demodulator, a phase 3
+ * demodulator, an equaliser, a designer, an additional-CP record and the two
+ * Jd messages) instead of the deep one.
+ *
+ * WHAT IS PER SIDE AND WHAT IS SHARED, and the rule behind the split.
+ * Anything `exitPhase3` WRITES has to exist twice or be restored between the
+ * two calls, or the blob's run reads what our run left behind.  Four of the
+ * objects it writes are peers this file already shares -- the parameter block
+ * (`setNofUcodesInTrn2` stores into it), the mapping block (the designer
+ * rewrites it), the detector (`V90TRN2Design` walks `maxUcode[]` DOWN through
+ * the pointer `getMaxUcode` hands it) and the connection evaluator (the
+ * delayed retrain request) -- and all four are snapshotted after our call,
+ * restored, and compared against what the blob's call leaves.  That is
+ * `t_v90equ`'s arena and it is why those four need no second copy.  The
+ * demodulator, the phase 3 demodulator, the equaliser with its two
+ * coefficient arrays, the designer and the additional-CP record are per side.
+ *
+ * THE EQUALISER IS WIRED THE WAY THE CONSTRUCTOR WIRES IT, which matters for
+ * one claim: `resampler` is `&D(side)->resampler` and `spectralVerifier` is
+ * `&D(side)->spectralVerifier`, the demodulator's OWN embedded subobjects, so
+ * the `V90SpecialSpectralConditions` this function reads at +0x238 and the one
+ * `V90Equalizer::enterPhase4` reads for its DFE-clear arm are the same word
+ * rather than two planted copies.  `mmxMode` is held at 0: the fixed-point
+ * arrays are `t_v90equ`'s to drive and a NULL one here would be a crash.
+ *
+ * THE SIX AXES, and every one of them has a counter that must fire:
+ *
+ *   - `inPhase3`, swept over 0, 1, 2, 5 and 0xffffffff.  ONE of those five
+ *     does the work.  Testing it as `!= 0` instead of `== 1` is a live
+ *     mutation because `enterChannelVerification` leaves the object at 5.
+ *   - `phase3Demodulator->word_30`, 0x14 or not, which is the phase 4 entry.
+ *     `exitDIL` is what sets it to 0x14 in the field, so the sweep drives the
+ *     modulator's state into and away from the terminating arm as well as
+ *     planting the word directly.
+ *   - the equaliser's `state`, 2 or not: 2 is `V90Equalizer::enterPhase4`'s
+ *     own early return, so both the deep body and the cheap one are seen.
+ *   - `sessionFlag`, which picks `jdV92->getMaxLookahead()` over `jd`'s.  The
+ *     two message blocks hold DIFFERENT lookahead bits, so the choice has an
+ *     observable; without that the two calls are interchangeable.
+ *   - `trn1dRmsRatio`, over positive, negative, EXACTLY ZERO, a magnitude
+ *     under one and one with eight significant fractional digits.  Its three
+ *     printed numbers never reach memory, so the transcript is their only
+ *     witness -- and zero is the only value that separates `> 0` from `>= 0`
+ *     in the branchless sign character.
+ *   - the design outcome.  `V90TRN2Design` must return both 0 and non-zero or
+ *     the delayed-retrain arm, one of the four strings and the store into the
+ *     connection evaluator are all dead.  The table shape and
+ *     `nofUcodesInTrn2` move it across the boundary and `sawOk`/`sawFail`
+ *     count both.
+ *
+ * plus `dsplibs_debug_level` at 0, 1 and 2, because "delayedRetrainRequest"
+ * is behind `> 1` and the two `edprintf` lines are behind `> 0`.
+ *
+ * THE DETECTOR'S TABLES ARE RE-PLANTED AND THAT IS NOT DECORATION.  `setup`
+ * gives `linMapp` a DESCENDING run for the demapper's benefit;
+ * `V90TRN2Design` walks `topUcode[k]` down while the companded level is over
+ * its ceiling and has no floor, so a descending table never terminates and
+ * runs off the row.  The ascending shape with a zero at entry 0 is
+ * `t_v90trn2design`'s and is what bounds the walk.
+ *
+ * WHAT THIS FIXTURE CANNOT PRESENT, said here rather than written as a
+ * mutation that cannot fail: the inlined `enterPhase4()`'s own `inPhase3 == 2`
+ * early return.  The only way into this member is `inPhase3 == 1`, so that
+ * test never takes its taken edge here; it is exercised where it belongs, by
+ * `t_v90dataph.cpp`'s latch sweep over the out-of-line member.
+ */
+
+extern "C" {
+void ref_dem_exitphase3(void *)
+	asm("ref__ZN14V90Demodulator10exitPhase3Ev");
+}
+
+#define X3_DEM_SLOT	((unsigned)sizeof(V90Demodulator) + 64u)
+#define X3_P3D_SLOT	((unsigned)sizeof(V90Phase3Demodulator) + 64u)
+#define X3_ACP_SLOT	((unsigned)sizeof(tagV90AdditionalCPinfo) + 64u)
+#define X3_DES_SLOT	((unsigned)sizeof(V90TRN2Designer) + 64u)
+#define X3_EQU_SLOT	((unsigned)sizeof(V90Equalizer) + 64u)
+#define X3_PH2_SLOT	((unsigned)sizeof(V90Phase2Info) + 32u)
+#define X3_COEFS	24u
+
+static unsigned char x3_dem[2][X3_DEM_SLOT] __attribute__((aligned(8)));
+static unsigned char x3_p3d[2][X3_P3D_SLOT] __attribute__((aligned(8)));
+static unsigned char x3_acp[2][X3_ACP_SLOT] __attribute__((aligned(8)));
+static unsigned char x3_des[2][X3_DES_SLOT] __attribute__((aligned(8)));
+static unsigned char x3_equ[2][X3_EQU_SLOT] __attribute__((aligned(8)));
+static float x3_le[2][X3_COEFS];
+static float x3_dfe[2][X3_COEFS];
+static unsigned char x3_cmp[2][X3_DEM_SLOT];
+
+/* Read-only, so one copy: both demodulators hold the same pointer. */
+static unsigned char x3_ph2[X3_PH2_SLOT] __attribute__((aligned(8)));
+static unsigned char x3_jd[sizeof(V90Jd)] __attribute__((aligned(8)));
+static unsigned char x3_jd92[sizeof(V92Jd)] __attribute__((aligned(8)));
+
+/* The arena: shared, written, snapshotted and restored between the calls. */
+static unsigned char x3_parm_pre[sizeof parm_s];
+static unsigned char x3_mapp_pre[sizeof mapp1_s];
+static unsigned char x3_adi_pre[sizeof adi_s];
+static unsigned char x3_ce_pre[sizeof ce_s];
+static unsigned char x3_parm_post[sizeof parm_s];
+static unsigned char x3_mapp_post[sizeof mapp1_s];
+static unsigned char x3_adi_post[sizeof adi_s];
+static unsigned char x3_ce_post[sizeof ce_s];
+
+#define X3_D(s)		((V90Demodulator *)x3_dem[s])
+#define X3_P3D(s)	((V90Phase3Demodulator *)x3_p3d[s])
+#define X3_ACP(s)	((tagV90AdditionalCPinfo *)x3_acp[s])
+#define X3_DES(s)	((V90TRN2Designer *)x3_des[s])
+#define X3_EQU(s)	((V90Equalizer *)x3_equ[s])
+#define X3_PH2		((V90Phase2Info *)x3_ph2)
+
+/*
+ * The demodulator's five per-side pointer words, and the equaliser's four.
+ * Everything else in both objects points at a shared peer and therefore holds
+ * the SAME value on both sides, which is a comparison rather than a hole.
+ */
+static const unsigned x3_dem_skip[] = {
+	0x01cu, 0x020u, 0x1d8u, 0x1dcu, 0x1e0u, ~0u
+};
+static const unsigned x3_equ_skip[] = { 0x00u, 0x14u, 0x40u, 0x58u, ~0u };
+static const unsigned x3_des_skip[] = { 0x04u, ~0u };
+
+static void
+x3_arena_save(void)
+{
+	memcpy(x3_parm_pre, parm_s, sizeof parm_s);
+	memcpy(x3_mapp_pre, mapp1_s, sizeof mapp1_s);
+	memcpy(x3_adi_pre, adi_s, sizeof adi_s);
+	memcpy(x3_ce_pre, ce_s, sizeof ce_s);
+}
+
+static void
+x3_arena_switch(void)
+{
+	memcpy(x3_parm_post, parm_s, sizeof parm_s);
+	memcpy(x3_mapp_post, mapp1_s, sizeof mapp1_s);
+	memcpy(x3_adi_post, adi_s, sizeof adi_s);
+	memcpy(x3_ce_post, ce_s, sizeof ce_s);
+	memcpy(parm_s, x3_parm_pre, sizeof parm_s);
+	memcpy(mapp1_s, x3_mapp_pre, sizeof mapp1_s);
+	memcpy(adi_s, x3_adi_pre, sizeof adi_s);
+	memcpy(ce_s, x3_ce_pre, sizeof ce_s);
+}
+
+static void
+x3_arena_compare(long tag)
+{
+	diff_eq_obj_(__FILE__, __LINE__, "the parameter block after exitPhase3",
+		     "V90Parameters", x3_parm_post, parm_s, sizeof parm_s, tag);
+	diff_eq_obj_(__FILE__, __LINE__, "the mapping block after exitPhase3",
+		     "V90MappingParams", x3_mapp_post, mapp1_s,
+		     sizeof mapp1_s, tag);
+	diff_eq_obj_(__FILE__, __LINE__, "the detector after exitPhase3",
+		     "V90AutoDigitalImpDetector", x3_adi_post, adi_s,
+		     sizeof adi_s, tag);
+	diff_eq_obj_(__FILE__, __LINE__, "the evaluator after exitPhase3",
+		     "V90ConnectionEvaluator", x3_ce_post, ce_s, sizeof ce_s,
+		     tag);
+}
+
+/*
+ * The ascending per-code tables `V90TRN2Design` needs, with a zero at entry 0
+ * of every row so the unbounded `topUcode` walk terminates.
+ */
+static void
+x3_tables(int shape, unsigned lf)
+{
+	int k, i;
+
+	for (k = 0; k < V90ADID_PHASES; k++) {
+		int step = 4 + shape * 13 + k;
+
+		for (i = 0; i < V90ADID_CODES; i++) {
+			int v = i * step + (i * i) / (2 + (shape & 3));
+
+			ADI->linMapp[k][i] = (short)v;
+			ADI->linMappAlt[k][i] = (short)(v - (i & 7));
+			ADI->byte_0d00[k][i] =
+				(unsigned char)(((i * 7 + k) % 5) != 0);
+		}
+		ADI->linMapp[k][0] = 0;
+		ADI->linMappAlt[k][0] = 0;
+		ADI->short_2800[k] = (short)((lf >> k) & 1u);
+		ADI->maxUcode[k] = (unsigned char)(96u + ((lf >> k) & 31u));
+	}
+}
+
+static int
+run_exit_phase3(void)
+{
+	static const unsigned int latch_v[] = { 0u, 1u, 2u, 5u, 0xffffffffu };
+	static const float ratio_v[] = {
+		0.0f, 2.5f, -2.5f, 0.75f, -0.75f, 12345.6789f, -0.00390625f,
+		137.03125f
+	};
+	static const int nof_v[] = { 1, 2, 3, 4, 7, 8, 10, 13, 21 };
+	long trial = 60000;
+	int li, w30, eqs, sf, ri;
+	int sawEarly = 0, sawLate = 0;
+	int sawEnter = 0, sawSkip = 0;
+	int sawEquDeep = 0, sawEquEarly = 0;
+	int sawJd = 0, sawJd92 = 0;
+	int sawOk = 0, sawFail = 0;
+	int sawPlus = 0, sawMinus = 0, sawZero = 0;
+	int sawLevel[3];
+	int printed = 0, gated = 0, latchDiff = 0;
+	static unsigned char earlyDem[X3_DEM_SLOT];
+	static char earlyText[8192];
+	int haveEarly = 0;
+
+	sawLevel[0] = sawLevel[1] = sawLevel[2] = 0;
+
+	diff_begin("V90Demodulator::exitPhase3");
+
+	for (li = 0; li < 5; li++)
+	 for (w30 = 0; w30 < 2; w30++)
+	  for (eqs = 0; eqs < 2; eqs++)
+	   for (sf = 0; sf < 2; sf++)
+	    for (ri = 0; ri < 8; ri++) {
+		int mode = (int)(trial % 4);
+		int lvl = (int)(trial % 3);
+		int shape = (int)(trial % 6);
+		int nof = nof_v[trial % 9];
+		int cond = (int)(trial % 4);
+		unsigned lf = 0x1234u + 0x9e37u * (unsigned)trial;
+		unsigned int qc = (trial & 8) ? (0x2000u + (unsigned)(trial & 0xff))
+					      : 0u;
+		short got;
+		int s;
+
+		setup((int)trial, mode);
+		x3_tables(shape, lf);
+
+		/* What the phase 4 reset at the end of the member needs. */
+		PARAMS->TRN2D_QC_DD_LENGTH = 0x310 + (int)(trial & 0x1f);
+		PARAMS->TRN2D_DD_LENGTH = 0x480 + (int)(trial & 0x1f);
+		PARAMS->PHASE4_R_DETECTION_LENGTH = 0x2a0 + (int)(trial & 0x3f);
+		PARAMS->SD_DETECTOR_DETECTION_COUNTER_THRESHOLD = 0x1b30;
+
+		/*
+		 * What the designer needs.  `unnamed_080` is what
+		 * `setNofUcodesInTrn2` copies over `nofUcodesInTrn2` when its
+		 * argument is non-zero, so the two are planted to DIFFERENT
+		 * values -- otherwise "the copy was made" has no witness.
+		 */
+		PARAMS->nofUcodesInTrn2 = nof;
+		PARAMS->unnamed_080 = nof + 1 + (int)(trial % 5);
+		PARAMS->maxUcode = 60 + (int)(trial % 40);
+		PARAMS->unnamed_360 = (trial % 7) == 0 ? 0x100
+				    : (trial % 7) == 1 ? 0 : (int)(trial % 7);
+		PARAMS->SPECTRAL_SHAPER_A1 = 1.5f;
+		PARAMS->SPECTRAL_SHAPER_A2 = -0.25f;
+		PARAMS->SPECTRAL_SHAPER_B1 = 0.75f;
+		PARAMS->SPECTRAL_SHAPER_B2 = 0.125f;
+		PARAMS->SPECTRAL_SHAPER_SR = 3 + (int)(trial % 4);
+		PARAMS->SPECTRAL_SHAPER_ID = 5 + (int)(trial % 9);
+		PARAMS->GERMAN_PBX_SPECTRAL_SHAPER_A1 = -1.5f;
+		PARAMS->GERMAN_PBX_SPECTRAL_SHAPER_A2 = 0.25f;
+		PARAMS->GERMAN_PBX_SPECTRAL_SHAPER_B1 = -0.75f;
+		PARAMS->GERMAN_PBX_SPECTRAL_SHAPER_B2 = -0.125f;
+		PARAMS->GERMAN_PBX_SPECTRAL_SHAPER_SR = 2 + (int)(trial % 5);
+		PARAMS->GERMAN_PBX_SPECTRAL_SHAPER_ID = 3 + (int)(trial % 11);
+
+		/*
+		 * `additionalCPinfo`'s sixteen-bit slot comes from here, and
+		 * it MOVES, so a dropped store cannot pass by holding the
+		 * value it was going to be given.
+		 */
+		PARAMS->ANALOG_RATE_MASK = (int)(0x51a30000u +
+						 (unsigned)(trial & 0x7fff));
+
+		ADI->pcmType = (PcmType)((trial & 4) ? 1 : 0);
+		ADI->int_a960 = (int)(0x0a960000u + (unsigned)(trial & 0xff));
+		ADI->unSuspectedPhase = (short)(trial * 977);
+
+		fill(x3_ph2, X3_PH2_SLOT, lf ^ 0x2f1u);
+		fill(x3_jd, (unsigned)sizeof x3_jd, lf ^ 0x915u);
+		fill(x3_jd92, (unsigned)sizeof x3_jd92, lf ^ 0x66du);
+		X3_PH2->rtd = 0x1234 + (int)(trial & 0x3ff);
+		X3_PH2->Uinfo = (unsigned char)(trial * 11u + 3u);
+		X3_PH2->maxTxPower = (unsigned char)(trial % 21);
+		/*
+		 * DIFFERENT LOOKAHEADS.  `getMaxLookahead` is bits 30 and 31
+		 * of each message, so the two blocks are planted to answer 1
+		 * and 2 -- if they agreed, `sessionFlag` choosing between
+		 * them would have no observable at all.
+		 */
+		((V90Jd *)x3_jd)->bits[30] = 1;
+		((V90Jd *)x3_jd)->bits[31] = 0;
+		((V92Jd *)x3_jd92)->bits[30] = 0;
+		((V92Jd *)x3_jd92)->bits[31] = 1;
+
+		rd_construct((int)(trial & 1));
+
+		for (s = 0; s < 2; s++) {
+			V90Demodulator *d = X3_D(s);
+			V90Equalizer *e = X3_EQU(s);
+			unsigned int k;
+
+			fill(x3_dem[s], X3_DEM_SLOT, lf ^ 0x3b7u);
+			fill(x3_p3d[s], X3_P3D_SLOT, lf ^ 0x4c1u);
+			fill(x3_acp[s], X3_ACP_SLOT, lf ^ 0x5d9u);
+			fill(x3_des[s], X3_DES_SLOT, lf ^ 0x6e3u);
+			fill(x3_equ[s], X3_EQU_SLOT, lf ^ 0x7f5u);
+			for (k = 0; k < X3_COEFS; k++) {
+				x3_le[s][k] = (float)((int)k - 9) * 0.0625f;
+				x3_dfe[s][k] =
+				    (float)((int)((k * 13u) % 41u) - 17)
+				    * 0.03125f;
+			}
+
+			d->phase2Info = X3_PH2;
+			d->jd = (V90Jd *)x3_jd;
+			d->jdV92 = (V92Jd *)x3_jd92;
+			d->mappingParams = MAPP1;
+			d->mappingParamsAlt = MAPP2;
+			d->trn2Designer = X3_DES(s);
+			d->additionalCPinfo = X3_ACP(s);
+			d->params = PARAMS;
+			d->sessionFlag = sf ? (0x8000u + (unsigned)trial) : 0u;
+			d->inPhase3 = latch_v[li];
+			d->equalizer = e;
+			d->phase3Demodulator = X3_P3D(s);
+			d->phase4Demodulator = &P4D(s);
+			d->connectionEvaluator = CEV;
+			d->autoDigitalImpDetector = ADI;
+			d->trn1dRmsRatio = ratio_v[ri];
+			d->quickConnect = qc;
+			d->spectralVerifier.word_28 = (unsigned int)cond;
+			d->resampler.params = PARAMS;
+			d->resampler.ppmScale = 4.0f;
+			d->resampler.timingOffset = 1.25e-5f *
+			    (float)(int)((trial % 7) - 3);
+			d->resampler.bllState = (V90BllState)
+			    ((trial & 2) ? V90_BLL_FROZEN
+					 : V90_BLL_STEADY_STATE);
+			d->resampler.stateSamples = 0x11223344u;
+			d->resampler.countStateSamples = 0x55667788u;
+
+			X3_DES(s)->params = PARAMS;
+			X3_DES(s)->power = &d->constellationPower;
+
+			X3_P3D(s)->autoDigitalImpDetector = ADI;
+			X3_P3D(s)->params = PARAMS;
+			X3_P3D(s)->word_30 = w30 ? 0x14u
+						 : (0x30u + (unsigned)trial);
+			/*
+			 * `exitDIL` runs the modulator's own exit only from
+			 * seven states, and the terminating arm is what puts
+			 * 0x14 into `word_30` in the field.  Both are driven:
+			 * the state moves with the trial and the word is
+			 * planted on top of whatever `exitDIL` leaves.
+			 */
+			X3_P3D(s)->state = (Phase3DemodulatorState)
+			    (int)(trial % 18);
+			X3_P3D(s)->word_2c = 0x2c000000u + (unsigned)trial;
+			X3_P3D(s)->phase3Modulator.state =
+			    (Phase3ModulatorState)(int)((trial / 3) % 12);
+			X3_P3D(s)->phase3Modulator.symbolCount =
+			    (unsigned int)(trial & 3);
+			X3_P3D(s)->phase3Modulator.segmentPos =
+			    (unsigned int)((trial >> 2) & 1);
+			X3_P3D(s)->phase3Modulator.eventCode = 0;
+
+			e->resampler = &d->resampler;
+			e->spectralVerifier = &d->spectralVerifier;
+			e->params = PARAMS;
+			e->linearEquCoefs = x3_le[s];
+			e->dfeCoefs = x3_dfe[s];
+			e->linearEquLength = X3_COEFS;
+			e->dfeLength = X3_COEFS;
+			e->word_1c = X3_COEFS;
+			e->state = eqs ? V90EQU_STATE_PHASE4
+				       : (int)(1 + trial % 5);
+			e->stateCount = 0x5c5c0000 + (int)(trial & 0xff);
+			e->mmxMode = 0;
+			e->mmxArraysPresent = 0;
+			e->linearEquBeta = 0.25f;
+			e->dfeBeta = -0.125f;
+			e->meanErrorCount = 17u;
+			e->meanErrorFull = 1u;
+			e->maxLeCoefValue = 1.0f;
+			e->minLeCoefValue = 0.0f;
+			e->maxDfeCoefValue = 1.0f;
+			e->minDfeCoefValue = 0.0f;
+			e->linearEquMmxConversionFactor = 1024.0f;
+			e->dfeMmxConversionFactor = 256.0f;
+
+			P4D(s).sessionFlag = (unsigned int)(trial & 1);
+			P4D(s).autoDigitalImpDetector = ADI;
+			/* 7105: sentinels over what `reset` stores 0 or 1 in. */
+			P4D(s).uint_34fc = 0xc1c1c100u + (unsigned int)trial;
+			P4D(s).linearMappStudyStart = 0xc2c2c200u +
+						      (unsigned int)trial;
+			P4D(s).quickConnect = 0xc3c3c300u +
+					      (unsigned int)trial;
+			P4D(s).trn2dDDLength = 0xc4c4c400u +
+					       (unsigned int)trial;
+		}
+
+		/*
+		 * The delayed retrain request is a store of ONE, so the slot
+		 * is planted away from one -- the fill never produces a zero
+		 * byte, but 1 is a value it could hold.
+		 */
+		CEV->word_78 = 0xd7d70000u + (unsigned int)trial;
+
+		x3_arena_save();
+		set_level((unsigned)lvl);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		X3_D(0)->exitPhase3();
+		x3_arena_switch();
+		ref_dem_exitphase3(x3_dem[1]);
+		dsplib_debug_capture_on = 0;
+		sawLevel[lvl]++;
+
+		scrub(x3_cmp[0], x3_dem[0], X3_DEM_SLOT, x3_dem_skip);
+		scrub(x3_cmp[1], x3_dem[1], X3_DEM_SLOT, x3_dem_skip);
+		diff_eq_obj_(__FILE__, __LINE__, "after exitPhase3",
+			     "V90Demodulator", x3_cmp[0], x3_cmp[1],
+			     X3_DEM_SLOT, trial);
+		diff_eq_obj_(__FILE__, __LINE__, "the additional CP record",
+			     "tagV90AdditionalCPinfo", x3_acp[0], x3_acp[1],
+			     X3_ACP_SLOT, trial);
+		diff_eq_obj_(__FILE__, __LINE__, "the phase 3 demodulator",
+			     "V90Phase3Demodulator", x3_p3d[0], x3_p3d[1],
+			     X3_P3D_SLOT, trial);
+		scrub(x3_cmp[0], x3_equ[0], X3_EQU_SLOT, x3_equ_skip);
+		scrub(x3_cmp[1], x3_equ[1], X3_EQU_SLOT, x3_equ_skip);
+		diff_eq_obj_(__FILE__, __LINE__, "the equaliser",
+			     "V90Equalizer", x3_cmp[0], x3_cmp[1],
+			     X3_EQU_SLOT, trial);
+		diff_eq_int("the equaliser's coefficients (%ld)",
+			    memcmp(x3_le[0], x3_le[1], sizeof x3_le[0]) == 0 &&
+			    memcmp(x3_dfe[0], x3_dfe[1], sizeof x3_dfe[0]) == 0,
+			    1, trial);
+		scrub(x3_cmp[0], x3_des[0], X3_DES_SLOT, x3_des_skip);
+		scrub(x3_cmp[1], x3_des[1], X3_DES_SLOT, x3_des_skip);
+		diff_eq_obj_(__FILE__, __LINE__, "the designer",
+			     "V90TRN2Designer", x3_cmp[0], x3_cmp[1],
+			     X3_DES_SLOT, trial);
+		x3_arena_compare(trial);
+		rd_compare("the phase 4 receiver after exitPhase3", trial);
+		diff_eq_int("transcript (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    trial);
+
+		/*
+		 * THE LATCH, BY VALUE AND NOT ONLY BY AGREEMENT.  Two runs
+		 * agreeing cannot tell "it returned early" from "it did the
+		 * work"; the object left behind by `inPhase3 == 1` has to
+		 * DIFFER from the one every other value leaves.
+		 */
+		if (latch_v[li] == 1u) {
+			sawLate++;
+		} else {
+			sawEarly++;
+			diff_eq_int("the early exit stored nothing (%ld)",
+				    memcmp(x3_acp[0], x3_acp[1],
+					   X3_ACP_SLOT) == 0 &&
+				    dsplib_debug_capture_lines(1) == 0, 1,
+				    trial);
+			if (!haveEarly) {
+				memcpy(earlyDem, x3_dem[1], X3_DEM_SLOT);
+				strncpy(earlyText,
+					dsplib_debug_capture_text(1),
+					sizeof earlyText - 1);
+				earlyText[sizeof earlyText - 1] = '\0';
+				haveEarly = 1;
+			}
+		}
+		if (latch_v[li] == 1u && haveEarly &&
+		    memcmp(earlyDem, x3_dem[1], X3_DEM_SLOT) != 0)
+			latchDiff++;
+
+		if (latch_v[li] == 1u) {
+			got = *(const short *)&x3_acp[1][0x14];
+			diff_eq_int("the analog rate mask reached +0x14 "
+				    "(%ld)",
+				    (long)got,
+				    (long)(short)PARAMS->ANALOG_RATE_MASK,
+				    trial);
+			diff_eq_int("the detector's word reached +0x0c (%ld)",
+				    (long)X3_ACP(1)->word_0c,
+				    (long)ADI->int_a960, trial);
+			diff_eq_int("the phase 4 demodulator took the "
+				    "quick-connect flag (%ld)",
+				    (long)P4D(1).quickConnect, (long)qc,
+				    trial);
+			diff_eq_int("and its ucode came from the Phase 2 "
+				    "record (%ld)",
+				    (long)P4D(1).ucode,
+				    (long)X3_PH2->Uinfo, trial);
+
+			if (w30) {
+				sawEnter++;
+				diff_eq_int("phase 4 was entered (%ld)",
+					    (long)X3_D(1)->inPhase3, 2, trial);
+				if (eqs)
+					sawEquEarly++;
+				else
+					sawEquDeep++;
+			} else {
+				sawSkip++;
+				diff_eq_int("phase 4 was NOT entered (%ld)",
+					    (long)X3_D(1)->inPhase3, 1, trial);
+			}
+			if (sf)
+				sawJd92++;
+			else
+				sawJd++;
+			if (CEV->word_78 == 1u)
+				sawFail++;
+			else
+				sawOk++;
+			if (dsplib_debug_capture_lines(1) > 0)
+				printed++;
+			if (lvl == 2 && CEV->word_78 == 1u)
+				gated++;
+			if (ratio_v[ri] > 0.0f)
+				sawPlus++;
+			else if (ratio_v[ri] < 0.0f)
+				sawMinus++;
+			else
+				sawZero++;
+		}
+
+		rd_destruct();
+		diff_eq_int("nothing left allocated (%ld)", harness_alloc.live,
+			    0, trial);
+		trial++;
+	    }
+
+	diff_eq_int("the latch returned early somewhere", sawEarly > 0, 1, 0);
+	diff_eq_int("and did the work somewhere", sawLate > 0, 1, 0);
+	diff_eq_int("and the two left different objects", latchDiff > 0, 1, 0);
+	diff_eq_int("phase 4 was entered somewhere", sawEnter > 0, 1, 0);
+	diff_eq_int("and skipped somewhere", sawSkip > 0, 1, 0);
+	diff_eq_int("the equaliser ran its body somewhere", sawEquDeep > 0, 1,
+		    0);
+	diff_eq_int("and took its early out somewhere", sawEquEarly > 0, 1, 0);
+	diff_eq_int("the V.90 lookahead was read somewhere", sawJd > 0, 1, 0);
+	diff_eq_int("the V.92 lookahead was read somewhere", sawJd92 > 0, 1, 0);
+	diff_eq_int("the design succeeded somewhere", sawOk > 0, 1, 0);
+	diff_eq_int("and failed somewhere", sawFail > 0, 1, 0);
+	diff_eq_int("a positive ratio was printed", sawPlus > 0, 1, 0);
+	diff_eq_int("a negative one too", sawMinus > 0, 1, 0);
+	diff_eq_int("and exactly zero", sawZero > 0, 1, 0);
+	diff_eq_int("something was printed", printed > 0, 1, 0);
+	diff_eq_int("the gated line had a level to appear at", gated > 0, 1, 0);
+	diff_eq_int("level 0 was driven", sawLevel[0] > 0, 1, 0);
+	diff_eq_int("level 1 was driven", sawLevel[1] > 0, 1, 0);
+	diff_eq_int("level 2 was driven", sawLevel[2] > 0, 1, 0);
+
+	set_level(0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1602,6 +2188,7 @@ main(void)
 	rc |= run_sweep(1);
 	rc |= run_getdecision();
 	rc |= run_p4d_reset();
+	rc |= run_exit_phase3();
 
 	return rc;
 }

@@ -727,5 +727,9 @@
  "v90p4dreset": [
   "src/pump/v90/V90Phase4Demodulator.cpp",
   "build/test/t_v90p4ddec"
+ ],
+ "v90exit3": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90p4ddec"
  ]
 }

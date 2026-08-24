@@ -1,0 +1,316 @@
+[
+ {
+  "_": [
+   "V90Demodulator::exitPhase3, against t_v90p4ddec's run_exit_phase3.",
+   "",
+   "768 bytes: a latch, a three-number diagnostic that never reaches memory,",
+   "four stores into the additional-CP record, the DIL exit, a phase 4 entry",
+   "that is TWO calls rather than one, a twelve-argument constellation design,",
+   "the delayed-retrain arm its failure raises, and the phase 4 demodulator's",
+   "own reset.  What is worth attacking is WHICH field each store reaches,",
+   "WHICH of the twelve arguments each expression becomes, and WHICH of the",
+   "two members the phase 4 arm calls -- the shape is a long argument list, so",
+   "an argument taken from the neighbouring field is the failure mode that",
+   "would otherwise pass every eye.",
+   "",
+   "WHAT HAS NO POSSIBLE WITNESS HERE, and is therefore NOT written as a",
+   "mutation that could never fail (finding 6000's principle applied before",
+   "the fact, as 7474 did for the phase 4 reset's two guards):",
+   "",
+   "  * the inlined `enterPhase4()`'s own `inPhase3 == 2` early return.  The",
+   "    only way into this member is `inPhase3 == 1`, so that test never takes",
+   "    its taken edge from here.  t_v90dataph's latch sweep owns it.",
+   "",
+   "  * `additionalCPinfo->word_00 = 0` and `word_04 = 0` EXCHANGED.  Both",
+   "    store the same constant into two adjacent words, so the swap is an",
+   "    equivalent mutant over every input.  Dropping either one is not, and",
+   "    both drops are below.",
+   "",
+   "  * the sign character reading `additionalCPinfo->float_08` rather than",
+   "    the local `ratio`.  The store two lines above makes them the same",
+   "    value, so the two spellings can only be told apart by the codegen",
+   "    tier -- the object RELOADS both the pointer and the float at 0x1bc00,",
+   "    which is what the field spelling emits and the local does not."
+  ]
+ },
+
+ {
+  "label": "the phase 3 latch is a test for non-zero rather than for exactly 1",
+  "find": "\tif (inPhase3 != 1)\n\t\treturn;\n\n\tratio = trn1dRmsRatio;",
+  "replace": "\tif (inPhase3 == 0)\n\t\treturn;\n\n\tratio = trn1dRmsRatio;"
+ },
+ {
+  "label": "the latch reads the session flag instead of the state",
+  "find": "\tif (inPhase3 != 1)\n\t\treturn;\n\n\tratio = trn1dRmsRatio;",
+  "replace": "\tif (sessionFlag != 1)\n\t\treturn;\n\n\tratio = trn1dRmsRatio;"
+ },
+ {
+  "label": "the RMS ratio is never copied into the additional CP record",
+  "find": "\tadditionalCPinfo->float_08 = ratio;\n\tadditionalCPinfo->word_00 = 0;",
+  "replace": "\tadditionalCPinfo->word_00 = 0;"
+ },
+ {
+  "label": "the ratio is copied to +0x0c rather than to the float at +0x08",
+  "find": "\tadditionalCPinfo->float_08 = ratio;\n\tadditionalCPinfo->word_00 = 0;",
+  "replace": "\tadditionalCPinfo->word_0c = (unsigned int)ratio;\n\tadditionalCPinfo->word_00 = 0;"
+ },
+ {
+  "label": "+0x00 is left as it was found",
+  "find": "\tadditionalCPinfo->word_00 = 0;\n\tadditionalCPinfo->word_04 = 0;",
+  "replace": "\tadditionalCPinfo->word_04 = 0;"
+ },
+ {
+  "label": "+0x04 is left as it was found",
+  "find": "\tadditionalCPinfo->word_00 = 0;\n\tadditionalCPinfo->word_04 = 0;",
+  "replace": "\tadditionalCPinfo->word_00 = 0;"
+ },
+ {
+  "label": "+0x00 is cleared twice and +0x04 not at all",
+  "find": "\tadditionalCPinfo->word_00 = 0;\n\tadditionalCPinfo->word_04 = 0;",
+  "replace": "\tadditionalCPinfo->word_00 = 0;\n\tadditionalCPinfo->word_00 = 0;"
+ },
+ {
+  "label": "the sign character prints '+' for a ratio of exactly zero",
+  "find": "\t\t !(0.0f >= additionalCPinfo->float_08) ? '+' : '-',",
+  "replace": "\t\t !(0.0f > additionalCPinfo->float_08) ? '+' : '-',"
+ },
+ {
+  "label": "the sign character is the wrong way round",
+  "find": "\t\t !(0.0f >= additionalCPinfo->float_08) ? '+' : '-',",
+  "replace": "\t\t (0.0f >= additionalCPinfo->float_08) ? '+' : '-',"
+ },
+ {
+  "label": "the magnitude is the signed ratio and not its absolute value",
+  "find": "\t\t (int)__builtin_fabsf(ratio),\n\t\t (frac < 0) ? -frac : frac);",
+  "replace": "\t\t (int)ratio,\n\t\t (frac < 0) ? -frac : frac);"
+ },
+ {
+  "label": "the fraction keeps its sign",
+  "find": "\t\t (int)__builtin_fabsf(ratio),\n\t\t (frac < 0) ? -frac : frac);",
+  "replace": "\t\t (int)__builtin_fabsf(ratio),\n\t\t frac);"
+ },
+ {
+  "label": "the fraction is scaled by 1e7 and not by 1e8",
+  "find": "\tfrac = (int)((ratio - (float)whole) * 1.0e8f);",
+  "replace": "\tfrac = (int)((ratio - (float)whole) * 1.0e7f);"
+ },
+ {
+  "label": "the fraction is the whole ratio rather than what is left of it",
+  "find": "\twhole = (int)ratio;\n\tfrac = (int)((ratio - (float)whole) * 1.0e8f);",
+  "replace": "\twhole = 0;\n\tfrac = (int)((ratio - (float)whole) * 1.0e8f);"
+ },
+ {
+  "label": "+0x0c takes the detector's companding law rather than its +0xa960",
+  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;",
+  "replace": "\tadditionalCPinfo->word_0c = (unsigned int)autoDigitalImpDetector->pcmType;"
+ },
+ {
+  "label": "+0x0c is left as it was found",
+  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;\n\tadditionalCPinfo->word_10 = 0;",
+  "replace": "\tadditionalCPinfo->word_10 = 0;"
+ },
+ {
+  "label": "+0x10 is left as it was found",
+  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;\n\tadditionalCPinfo->word_10 = 0;",
+  "replace": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;"
+ },
+ {
+  "label": "the sixteen-bit slot at +0x14 takes the parameter at +0x4c",
+  "find": "\t    (short)V90PW(params)[PARAMS_ANALOG_RATE_MASK];",
+  "replace": "\t    (short)V90PW(params)[PARAMS_ANALOG_RATE_MASK + 1];"
+ },
+ {
+  "label": "+0x14 is left as it was found",
+  "find": "\tadditionalCPinfo->short_14 =\n\t    (short)V90PW(params)[PARAMS_ANALOG_RATE_MASK];",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the DIL is not ended",
+  "find": "\tphase3Demodulator->exitDIL();\n",
+  "replace": ""
+ },
+ {
+  "label": "phase 4 is entered whenever phase 3 has NOT terminated",
+  "find": "\tif (phase3Demodulator->word_30 == 0x14) {",
+  "replace": "\tif (phase3Demodulator->word_30 != 0x14) {"
+ },
+ {
+  "label": "the terminating value is 0x13 and not 0x14",
+  "find": "\tif (phase3Demodulator->word_30 == 0x14) {",
+  "replace": "\tif (phase3Demodulator->word_30 == 0x13) {"
+ },
+ {
+  "label": "the test is on the phase 3 state rather than on +0x30",
+  "find": "\tif (phase3Demodulator->word_30 == 0x14) {",
+  "replace": "\tif (phase3Demodulator->state == 0x14) {"
+ },
+ {
+  "label": "the demodulator does not enter phase 4 itself",
+  "find": "\t\tenterPhase4();\n\t\tequalizer->enterPhase4();",
+  "replace": "\t\tequalizer->enterPhase4();"
+ },
+ {
+  "label": "the equaliser is not told about phase 4",
+  "find": "\t\tenterPhase4();\n\t\tequalizer->enterPhase4();",
+  "replace": "\t\tenterPhase4();"
+ },
+ {
+  "label": "the equaliser is entered before the demodulator",
+  "find": "\t\tenterPhase4();\n\t\tequalizer->enterPhase4();",
+  "replace": "\t\tequalizer->enterPhase4();\n\t\tenterPhase4();"
+ },
+ {
+  "label": "the two entries are unconditional",
+  "find": "\tif (phase3Demodulator->word_30 == 0x14) {\n\t\tenterPhase4();\n\t\tequalizer->enterPhase4();\n\t}",
+  "replace": "\tenterPhase4();\n\tequalizer->enterPhase4();"
+ },
+ {
+  "label": "the alt-RBS answer is not narrowed to sixteen bits",
+  "find": "\t    (short)autoDigitalImpDetector->isThereAnyAltRbsPhase());",
+  "replace": "\t    autoDigitalImpDetector->isThereAnyAltRbsPhase());",
+  "equivalent": true,
+  "why": "The blob narrows with `cwtl` at 0x1bc70 and the argument is declared `short`, so the cast is the object's and belongs in the source.  It cannot change a value: `V90AutoDigitalImpDetector::isThereAnyAltRbsPhase` answers 0 or 1 out of a register zeroed on entry (V90AutoDigitalImpDetector.h says so and t_v90adid drives it), so its high half-word is always zero and `(short)` is the identity over the WHOLE of its range.  No input to THIS function can separate the two spellings -- the separation would have to come from the callee returning something it cannot return.  Finding 293 recorded the same shape for `(short)preFilter.isV90WithEia6()` in `enterPhase3`, and the reason it is written here rather than left out is that reason: a reader who deletes the cast has to be able to find out why it is there."
+ },
+ {
+  "label": "the TRN2 ucode count is set from a constant rather than from the detector",
+  "find": "\ttrn2Designer->setNofUcodesInTrn2(\n\t    (short)autoDigitalImpDetector->isThereAnyAltRbsPhase());",
+  "replace": "\ttrn2Designer->setNofUcodesInTrn2(1);"
+ },
+ {
+  "label": "the TRN2 ucode count is not set at all",
+  "find": "\ttrn2Designer->setNofUcodesInTrn2(\n\t    (short)autoDigitalImpDetector->isThereAnyAltRbsPhase());\n",
+  "replace": ""
+ },
+ {
+  "label": "the design is given the alternate mapping block",
+  "find": "\tif (trn2Designer->V90TRN2Design(\n\t\tmappingParams,",
+  "replace": "\tif (trn2Designer->V90TRN2Design(\n\t\tmappingParamsAlt,"
+ },
+ {
+  "label": "the two linear mapping tables are exchanged",
+  "find": "\t\tautoDigitalImpDetector->linMapp,\n\t\tautoDigitalImpDetector->linMappAlt,",
+  "replace": "\t\tautoDigitalImpDetector->linMappAlt,\n\t\tautoDigitalImpDetector->linMapp,"
+ },
+ {
+  "label": "the design is given the second phase's rows",
+  "find": "\t\tautoDigitalImpDetector->linMapp,\n\t\tautoDigitalImpDetector->linMappAlt,",
+  "replace": "\t\tautoDigitalImpDetector->linMapp + 1,\n\t\tautoDigitalImpDetector->linMappAlt,"
+ },
+ {
+  "label": "the allow table is the one at +0x2800 and the dMin table the one at +0xd00",
+  "find": "\t\tautoDigitalImpDetector->byte_0d00,\n\t\tautoDigitalImpDetector->short_2800,",
+  "replace": "\t\t(unsigned char (*)[128])autoDigitalImpDetector->short_2800,\n\t\t(short *)autoDigitalImpDetector->byte_0d00,"
+ },
+ {
+  "label": "the two PcmType arguments are exchanged",
+  "find": "\t\tautoDigitalImpDetector->pcmType,\n\t\t(PcmType)autoDigitalImpDetector->int_a960,",
+  "replace": "\t\t(PcmType)autoDigitalImpDetector->int_a960,\n\t\tautoDigitalImpDetector->pcmType,"
+ },
+ {
+  "label": "the eighth argument is the maximum ucode rather than the unsuspected phase",
+  "find": "\t\tautoDigitalImpDetector->unSuspectedPhase,\n\t\tphase3Demodulator->getMaxUcode(),",
+  "replace": "\t\t(short)autoDigitalImpDetector->maxUcode[0],\n\t\tphase3Demodulator->getMaxUcode(),",
+  "equivalent": true,
+  "why": "Argument 8 is the one V90TRN2Designer.h calls `unused`: `V90TRN2Design` stores it at +0x120 of its frame and never reads it back, which t_v90trn2design turned from a claim about a listing into a measurement by sweeping the argument and asserting that nothing changes.  So no value passed here can be observed anywhere, and the only thing that fixes WHICH field the object reads into it is the disassembly -- `movswl 0xa968(%edx),%ecx` at 0x1bcc3, `unSuspectedPhase` and not `maxUcode`.  Written down rather than deleted, because the next reader will otherwise wonder why a dead argument is spelled so carefully."
+ },
+ {
+  "label": "the top ucode array is the detector's own rather than the one phase 3 hands over",
+  "find": "\t\tphase3Demodulator->getMaxUcode(),\n\t\tsessionFlag != 0 ? jdV92->getMaxLookahead()",
+  "replace": "\t\t(unsigned char *)autoDigitalImpDetector->byte_0d00,\n\t\tsessionFlag != 0 ? jdV92->getMaxLookahead()"
+ },
+ {
+  "label": "the session flag picks the lookahead the other way round",
+  "find": "\t\tsessionFlag != 0 ? jdV92->getMaxLookahead()\n\t\t\t\t : jd->getMaxLookahead(),",
+  "replace": "\t\tsessionFlag != 0 ? jd->getMaxLookahead()\n\t\t\t\t : jdV92->getMaxLookahead(),"
+ },
+ {
+  "label": "the lookahead always comes from the V.90 message",
+  "find": "\t\tsessionFlag != 0 ? jdV92->getMaxLookahead()\n\t\t\t\t : jd->getMaxLookahead(),",
+  "replace": "\t\tjd->getMaxLookahead(),"
+ },
+ {
+  "label": "the transmit index is the Phase 2 record's value and not one past it",
+  "find": "\t\t(unsigned char)(phase2Info->maxTxPower + 1),",
+  "replace": "\t\t(unsigned char)phase2Info->maxTxPower,"
+ },
+ {
+  "label": "the transmit index comes from Uinfo rather than from the power",
+  "find": "\t\t(unsigned char)(phase2Info->maxTxPower + 1),",
+  "replace": "\t\t(unsigned char)(phase2Info->Uinfo + 1),"
+ },
+ {
+  "label": "the spectral condition is never passed on",
+  "find": "\t\t(V90SpecialSpectralConditions)spectralVerifier.word_28) == 0) {",
+  "replace": "\t\tV90_SPECTRAL_NONE) == 0) {"
+ },
+ {
+  "label": "the spectral condition comes from the verifier's three-state instead",
+  "find": "\t\t(V90SpecialSpectralConditions)spectralVerifier.word_28) == 0) {",
+  "replace": "\t\t(V90SpecialSpectralConditions)spectralVerifier.accumulating) == 0) {"
+ },
+ {
+  "label": "the delayed retrain is raised when the design SUCCEEDS",
+  "find": "\t\t(V90SpecialSpectralConditions)spectralVerifier.word_28) == 0) {",
+  "replace": "\t\t(V90SpecialSpectralConditions)spectralVerifier.word_28) != 0) {"
+ },
+ {
+  "label": "the delayed retrain request is cleared rather than raised",
+  "find": "\t\tconnectionEvaluator->word_78 = 1;",
+  "replace": "\t\tconnectionEvaluator->word_78 = 0;"
+ },
+ {
+  "label": "the delayed retrain request is never raised",
+  "find": "\t\tconnectionEvaluator->word_78 = 1;\n",
+  "replace": ""
+ },
+ {
+  "label": "the delayed retrain request lands in the acknowledgement slot",
+  "find": "\t\tconnectionEvaluator->word_78 = 1;",
+  "replace": "\t\tconnectionEvaluator->word_7c = 1;"
+ },
+ {
+  "label": "the delayed retrain line is printed unconditionally",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Demodulator::exitPhase3() \"",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90Demodulator::exitPhase3() \""
+ },
+ {
+  "label": "the spectral parameter dump names the alternate block",
+  "find": "\tdisplaySpectralParams(mappingParams);",
+  "replace": "\tdisplaySpectralParams(mappingParamsAlt);"
+ },
+ {
+  "label": "the spectral parameters are not dumped",
+  "find": "\tdisplaySpectralParams(mappingParams);\n",
+  "replace": ""
+ },
+ {
+  "label": "the TRN2d heading is not printed",
+  "find": "\tedprintf(\"V90Demodulator: TRN2d spectral parameters:\\r\\n\");\n",
+  "replace": ""
+ },
+ {
+  "label": "the phase 4 demodulator's ucode comes from the transmit power",
+  "find": "\tphase4Demodulator->reset(phase2Info->Uinfo,",
+  "replace": "\tphase4Demodulator->reset(phase2Info->maxTxPower,"
+ },
+ {
+  "label": "the phase 4 demodulator is reset into WaitForRiNot",
+  "find": "\t\t\t\t (Phase4DemodulatorState)0, 0, quickConnect);",
+  "replace": "\t\t\t\t (Phase4DemodulatorState)1, 0, quickConnect);"
+ },
+ {
+  "label": "the trip count and the quick-connect flag are exchanged",
+  "find": "\t\t\t\t (Phase4DemodulatorState)0, 0, quickConnect);",
+  "replace": "\t\t\t\t (Phase4DemodulatorState)0, quickConnect, 0);"
+ },
+ {
+  "label": "the quick-connect flag is not passed on",
+  "find": "\t\t\t\t (Phase4DemodulatorState)0, 0, quickConnect);",
+  "replace": "\t\t\t\t (Phase4DemodulatorState)0, 0, 0);"
+ },
+ {
+  "label": "the phase 4 demodulator is never reset",
+  "find": "\tphase4Demodulator->reset(phase2Info->Uinfo,\n\t\t\t\t (Phase4DemodulatorState)0, 0, quickConnect);\n",
+  "replace": ""
+ }
+]
