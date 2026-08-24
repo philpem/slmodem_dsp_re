@@ -270,7 +270,7 @@ V90Modulator::reset()
  * for it was a jump-table slot.  The name is NOT taken here: promoting it is
  * a change to a 1,829-line file this batch does not own, and the message
  * belongs to `V90Modulator` rather than to the state's own class.  Recorded
- * in finding 7514 as evidence available to whoever does own it.
+ * in finding 7520 as evidence available to whoever does own it.
  *
  * THE TWO MESSAGES ARE `edprintf` AND ARE NOT GATED.  0x1a321 is a bare
  * `call` with no `cmpl $0x1,dsplibs_debug_level` in front of it, unlike the

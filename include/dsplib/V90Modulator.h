@@ -2,8 +2,12 @@
  * V90Modulator.h -- the V.90 downstream modulator, the top of the chain.
  *
  * Reconstructed from dsplibs.o.  Seventeen members and 3,354 bytes of code, of
- * which the constructor, the destructor and `setSessionFlag` are written;
- * `progress`, `reset` and the twelve phase transitions are not.
+ * which the constructor, the destructor, `setSessionFlag`, `reset`,
+ * `progress` and `initiateRRN` are written; the eleven remaining phase
+ * transitions -- `enterPhase3`, `enterPhase4`, `enterDataPhase`, `exitJd`,
+ * `exitJdPhase`, `exitDIL`, `exitRi`, `acknowledgeCPReception`,
+ * `acknowledgeCPNotReception`, `acknowledgeEReception` and `initiateFPE` --
+ * are not.
  *
  * WHERE THIS CLASS USED TO LIVE.  A partial map -- `pad_00[0x28]`,
  * `sessionFlag`, `pad_2c[0x0c]`, then the two modulator pointers -- was
@@ -49,7 +53,7 @@
  * used to say the names stayed offset-derived because "the roles below are
  * read out of `progress`, which is not written yet, and a role that has not
  * been reproduced is not a name".  `progress` and `initiateRRN` are written
- * (finding 7514), so the condition that clause set is discharged:
+ * (finding 7520), so the condition that clause set is discharged:
  *
  *   - +0x2c `state`.  The object's own word: the `default` arm of `progress`'s
  *     switch prints "V90Modulator progress: Illegal state".  1 is phase 3, 2

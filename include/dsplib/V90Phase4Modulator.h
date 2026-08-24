@@ -445,7 +445,7 @@ public:
 	 * phase 4 terminated, so enter the data phase.  The name stays here
 	 * because `V90Modulator` is where the value is INTERPRETED, and one
 	 * caller reading one value does not establish what the other three
-	 * stores mean.  Finding 7514.
+	 * stores mean.  Finding 7520.
 	 */
 	unsigned int word_000c;
 

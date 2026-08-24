@@ -1,11 +1,12 @@
 /*
- * V90Modem.cpp -- `V90Modem::printTitle`, 0x19400, 0xd2 = 210 bytes.
+ * V90Modem.cpp -- `V90Modem::printTitle`, 0x19400, 0xd2 = 210 bytes, and
+ * `V90Modem::progress`, 0x19ad0, 0xbc = 188 bytes.
  *
- * The original translation unit is `V90Modem.cpp`, STT_FILE #31, and this
- * file holds the one member of it that has been reconstructed.  Everything
- * else in that TU -- the constructor at 0x194e0, the destructors, `progress`,
- * `reset` -- is still missing, and include/dsplib/V90Modem.h says at length
- * why the class declaration there is not an object map.
+ * The original translation unit is `V90Modem.cpp`, STT_FILE #31.  The
+ * constructor and the destructors live in src/pump/v90/V90ModemCtor.cpp; what
+ * is still missing from the TU is `V90Modem::reset`, which is the member that
+ * calls `V90Modulator::reset` and is therefore the digital side's only route
+ * to a defined `state`.
  *
  * THE SOURCE ORDER IS NOT THE DISASSEMBLY ORDER.  GCC split the body on the
  * first `dsplibs_debug_level` test and put the gated block at the END of the
@@ -124,7 +125,7 @@ V90Modem::printTitle()
  * depends on -- `V90Modulator::state`, `symbolCount`, `eventCode` -- is
  * whatever the last `reset` left, and this class has no member that calls
  * one.  On the digital arm that reset is `vPcmResetPhase3Modem`'s, which is
- * outside this translation unit and is not written yet.  Finding 7514.
+ * outside this translation unit and is not written yet.  Finding 7520.
  * ===========================================================================
  */
 void

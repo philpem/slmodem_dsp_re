@@ -7,7 +7,7 @@
  * said "eight members and 1,532 bytes", where both halves were wrong, and it
  * then said eight of nine were written with `process(unsigned char *,
  * unsigned int &, short *)` -- 484 bytes at 0x2faa0 -- outstanding.  That one
- * is finding 7514's; `nm -S -C` is where the figures come from.
+ * is finding 7520's; `nm -S -C` is where the figures come from.
  *
  * NOT POLYMORPHIC: `~V90BitsToSymbol` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -96,7 +96,7 @@ public:
 	 * status alphabet, 1 SIZE_NOT_SET / 2 BUFFER_OVERFLOW / 3
 	 * BUFFER_UNDERFLOW, and each overload can reach the two its own
 	 * direction can hit.  (That third address read +0x8624 here and in the
-	 * .cpp until finding 7514 checked it: 0x8624 is the "\r\n" INSIDE the
+	 * .cpp until finding 7520 checked it: 0x8624 is the "\r\n" INSIDE the
 	 * BUFFER_OVERFLOW string, which ends at 0x8626 and pads to 0x8628.)
 	 *
 	 * THE THIRD OVERLOAD, `(unsigned char *, unsigned int &, short *)` at
