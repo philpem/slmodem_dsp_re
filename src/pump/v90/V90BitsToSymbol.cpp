@@ -255,7 +255,7 @@ V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)
  *
  * THE STATUS IS 2 HERE AND 3 THERE, and the strings are why.  The object's
  * three messages are SIZE_NOT_SET at 0x85b4, BUFFER_OVERFLOW at 0x85ec and
- * BUFFER_UNDERFLOW at 0x8624; this function references the first two and the
+ * BUFFER_UNDERFLOW at 0x8628; this function references the first two and the
  * other overload the first and the third.  0 remains the path with no
  * message.
  *
@@ -306,6 +306,103 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)
 						     "BUFFER_OVERFLOW\r\n");
 			symbolsDone = symbolsBlockSize;
 		}
+	}
+
+	if (extraSymbolsPending)
+		extraSymbolsPending = 0;
+
+	return status;
+}
+
+/*
+ * ===========================================================================
+ * `V90BitsToSymbol::process(unsigned char *, unsigned int &, short *)` -- 484
+ * bytes at 0x2faa0.  THE THIRD OVERLOAD, and the one the transmit chain
+ * actually calls: `V90Modulator::progress`'s data phase relocates against
+ * `_ZN15V90BitsToSymbol7processEPhRjPs` and against neither sibling.
+ *
+ * IT IS THE FILL AND THE DRAIN IN ONE CALL and it is NOT a composition of the
+ * other two.  Written as `process(bits, nofBits); return process(nofBits,
+ * outSymbols);` the statuses would be wrong -- the drain's underflow test
+ * would run after the fill's overflow clamp had already forced `symbolsDone`
+ * up to `symbolsBlockSize`, so status 3 could never be reached and status 2
+ * would be reported by a call that also had to report 3.  Here the three are
+ * exclusive arms of one `if`/`else` over the SAME post-fill `symbolsDone`, so
+ * this is the only member of the class that can answer any of the three.
+ *
+ * THE ARM ORDER IS THE OBJECT'S.  0x2fb50 compares the new `symbolsDone`
+ * against `symbolsBlockSize` FIRST and takes the underflow arm below it;
+ * `nofSymbols` -- the buffer's capacity -- is only looked at on the arm where
+ * a whole block is ready.  So a short fill is diagnosed before an overrun,
+ * which is why an underflowing call never reports 2 however far past the
+ * allocation the mapper wrote.
+ *
+ * THE OVERFLOW CLAMP RELOADS `symbolsBlockSize` ACROSS THE PRINTF -- `mov
+ * 0x1c(%ebp),%edi` at 0x2fc6b, after the call, where the pre-print value is
+ * still in the same register.  The compiler cannot prove `dsplibs_debug_printf`
+ * leaves `*this` alone.  Nothing about the source changes; it is worth
+ * recording only because the reload is what makes the store at 0x2fc22 read
+ * as `symbolsDone = symbolsBlockSize` rather than as a spilled temporary.
+ *
+ * `nofBitsForNextTime` IS INLINED HERE and is a `call` in `V90Modulator::
+ * progress`, which is the same split the written siblings show: 0x2fbc1
+ * onwards is the reciprocal divide and both of its arms, with no `call`
+ * anywhere between the mapper and the return.
+ *
+ * THE UNDERFLOW ARM EMPTIES THE BUFFER, and then the shared shift loop runs
+ * over the zero it just stored, moving nothing.  Two stores to +0x10 on that
+ * path, exactly as the `(unsigned int &, short *)` sibling has -- and the
+ * compiler's `xor %ebx,%ebx` for the second is constant propagation and not a
+ * missing statement.
+ * ===========================================================================
+ */
+unsigned int
+V90BitsToSymbol::process(unsigned char *bits, unsigned int &nofBits,
+			 short *outSymbols)
+{
+	unsigned int status = 0;
+
+	if (symbolsBlockSize == 0) {
+		status = 1;
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V90BitsToSymbol - error: "
+					     "process called, SIZE_NOT_SET"
+					     "\r\n");
+	} else {
+		unsigned int i, kept, nofOut;
+
+		mapper->process(bits, nofBits, symbols + symbolsDone, nofOut);
+
+		symbolsDone += nofOut;
+
+		if (symbolsDone < symbolsBlockSize) {
+			status = 3;
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf("V90BitsToSymbol - "
+						     "error: process called, "
+						     "BUFFER_UNDERFLOW\r\n");
+			for (i = 0; i < symbolsDone; i++)
+				outSymbols[i] = symbols[i];
+			symbolsDone = 0;
+		} else {
+			if (symbolsDone > nofSymbols) {
+				status = 2;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "V90BitsToSymbol - error: process "
+					    "called, BUFFER_OVERFLOW\r\n");
+				symbolsDone = symbolsBlockSize;
+			}
+			for (i = 0; i < symbolsBlockSize; i++)
+				outSymbols[i] = symbols[i];
+		}
+
+		kept = 0;
+		for (i = symbolsBlockSize; i < symbolsDone; i++)
+			symbols[kept++] = symbols[i];
+		symbolsDone = kept;
+
+		nofBits = nofBitsForNextTime();
 	}
 
 	if (extraSymbolsPending)

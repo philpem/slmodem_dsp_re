@@ -2,11 +2,12 @@
  * V90BitsToSymbol.h -- the V.90 downstream bit-to-symbol converter.
  *
  * Reconstructed from dsplibs.o.  NINE members and 1,672 bytes of code,
- * counting each of the duplicated constructor and destructor symbols once;
- * EIGHT of the nine and 1,188 of the bytes are written.  The one that is not
- * is `process(unsigned char *, unsigned int &, short *)`, 484 bytes at
- * 0x2faa0.  (This sentence used to say "eight members and 1,532 bytes"; both
- * halves were wrong, and `nm -S -C` is where the figures above come from.)
+ * counting each of the duplicated constructor and destructor symbols once,
+ * and ALL NINE ARE NOW WRITTEN.  This sentence has been wrong twice: it once
+ * said "eight members and 1,532 bytes", where both halves were wrong, and it
+ * then said eight of nine were written with `process(unsigned char *,
+ * unsigned int &, short *)` -- 484 bytes at 0x2faa0 -- outstanding.  That one
+ * is finding 7514's; `nm -S -C` is where the figures come from.
  *
  * NOT POLYMORPHIC: `~V90BitsToSymbol` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -90,19 +91,29 @@ public:
 	 * the symbols the mapper makes are appended to `symbols` at
 	 * `symbolsDone`, and the answer is 0, 1 for the very same
 	 * "SIZE_NOT_SET" message, or **2** for "BUFFER_OVERFLOW" -- the third
-	 * of the three strings at .rodata.str1.4+0x85b4, +0x85ec and +0x8624,
+	 * of the three strings at .rodata.str1.4+0x85b4, +0x85ec and +0x8628,
 	 * and the one the other overload never raises.  So the class has one
 	 * status alphabet, 1 SIZE_NOT_SET / 2 BUFFER_OVERFLOW / 3
 	 * BUFFER_UNDERFLOW, and each overload can reach the two its own
-	 * direction can hit.
+	 * direction can hit.  (That third address read +0x8624 here and in the
+	 * .cpp until finding 7514 checked it: 0x8624 is the "\r\n" INSIDE the
+	 * BUFFER_OVERFLOW string, which ends at 0x8626 and pads to 0x8628.)
 	 *
 	 * THE THIRD OVERLOAD, `(unsigned char *, unsigned int &, short *)` at
-	 * 0x2faa0, IS NOT WRITTEN.
+	 * 0x2faa0, IS THE FILL AND THE DRAIN IN ONE CALL, and it is the only
+	 * one of the three the transmit chain reaches:
+	 * `V90Modulator::progress`'s data phase calls exactly this mangling,
+	 * `_ZN15V90BitsToSymbol7processEPhRjPs`.  It is not a composition of
+	 * the other two -- it can raise ALL THREE statuses, where each sibling
+	 * reaches only two, and its underflow arm hands out what it has and
+	 * then empties the buffer.
 	 */
 	unsigned int nofBitsForNextTime();
 	unsigned int setSymbolsBlockSize(unsigned int blockSize);
 	unsigned int process(unsigned int &nofBits, short *outSymbols);
 	unsigned int process(unsigned char *bits, unsigned int nofBits);
+	unsigned int process(unsigned char *bits, unsigned int &nofBits,
+			     short *outSymbols);
 
 	/*
 	 * BOTH RESETS ARE THE MAPPER'S OWN, PLUS WHAT THIS CLASS ADDS.  The

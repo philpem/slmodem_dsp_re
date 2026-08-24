@@ -43,17 +43,40 @@
  * +0x2c..+0x37 ARE THREE WORDS AND `reset` IS WHAT ESTABLISHES IT.  They were
  * `pad_2c[0x0c]` while only the constructor was written; `reset` stores a
  * separate `movl $0x0` into each of +0x2c, +0x30 and +0x34 (0x1a532, 0x1a539,
- * 0x1a540), which fixes the width at four bytes and the count at three.  The
- * NAMES stay offset-derived: the roles below are read out of `progress`,
- * which is not written yet, and a role that has not been reproduced is not a
- * name (CLAUDE.md, "naming something wrongly is worse than leaving it
- * padded").
+ * 0x1a540), which fixes the width at four bytes and the count at three.
  *
- * WHAT THE CONSTRUCTOR DOES NOT TOUCH is +0x2c..+0x37, which `progress` uses
- * as three separate words: a state at +0x2c that it compares against 2 and 3,
- * a running count at +0x30, and a step at +0x34 that it sets to 0, 6, 7, 8 and
- * 9.  They are left `pad_` because three words a constructor never writes are
- * `reset`'s business and `reset` is not written here.
+ * THEY NOW HAVE NAMES, AND `progress` IS WHAT EARNED THEM.  This paragraph
+ * used to say the names stayed offset-derived because "the roles below are
+ * read out of `progress`, which is not written yet, and a role that has not
+ * been reproduced is not a name".  `progress` and `initiateRRN` are written
+ * (finding 7514), so the condition that clause set is discharged:
+ *
+ *   - +0x2c `state`.  The object's own word: the `default` arm of `progress`'s
+ *     switch prints "V90Modulator progress: Illegal state".  1 is phase 3, 2
+ *     is phase 4, 3 is the data phase and 0 emits silence.  It is `int` and
+ *     not `unsigned int`, which is MEASURED: the switch at 0x1a848 is
+ *     `cmp $0x1 ; je ; jle`, and a `jle` is the signed decision tree -- an
+ *     unsigned selector gives `jbe` there.  Nothing else in the class compares
+ *     it with anything but `==`, so this one site is the whole evidence and it
+ *     is enough.
+ *   - +0x30 `symbolCount`.  `progress` adds its symbol count to it on entry
+ *     and every state transition clears it, so it counts symbols since the
+ *     state was entered -- exactly `V90Phase3Modulator::symbolCount` (+0x018)
+ *     and `V90Phase4Modulator::symbolCount` (+0x0008), which sit in the same
+ *     relative position in their own triples.  It stays UNSIGNED: 0x1aab2
+ *     compares it against `V90Parameters::DEBUG_DIGITAL_MODEM_INITIATE_RRN_
+ *     TIME`, which is declared `int`, and the object's `jbe` is unsigned --
+ *     so the unsignedness has to come from this side of the comparison.
+ *   - +0x34 `eventCode`.  Every value in it is COPIED OUT OF a field already
+ *     named that: `V90Phase3Modulator::eventCode` (+0x01c), whose header says
+ *     "the caller's per-symbol notification and nothing reads it here", and
+ *     `V90Phase4Modulator::word_000c` (+0x000c), whose header says "what reads
+ *     it is outside this class".  `progress` is that caller and that reader.
+ *     It acts on 6 (phase 3 terminated -> enter phase 4) and 7 (phase 4
+ *     terminated -> enter the data phase) and sets 8 and 9 of its own.
+ *
+ * The constructor still does not touch any of the three; `reset` is what
+ * clears them, and `progress` is undefined before the first `reset`.
  *
  * Data member names are invented; the mangling never carries one (finding
  * 226).  `sessionFlag`, `phase3Modulator` and `phase4Modulator` keep the names
@@ -96,6 +119,29 @@ public:
 	 */
 	void reset();
 
+	/*
+	 * `progress` -- .text+0x1a820, 780 bytes.  The transmit chain's whole
+	 * per-block entry point and the only thing `V90Modem::progress` calls
+	 * on the digital side.  `void` because no path arranges %eax and the
+	 * caller tail-JUMPS to it, so its return type is this one; the twin
+	 * `V90Demodulator::progress` reads the same way.
+	 *
+	 * One switch over `state` and a shared tail that widens the finished
+	 * `symbolBuf` into the caller's `float *`.  `bits` is only touched in
+	 * the data phase, where it goes straight to the scrambler.
+	 */
+	void progress(int *bits, unsigned int &nofBits, float *out,
+		      unsigned int nofSymbols);
+
+	/*
+	 * `initiateRRN` -- .text+0x1a2c0, 308 bytes.  Rate renegotiation:
+	 * leave the data phase for phase 4 and rebuild the phase 4 modulator
+	 * around a one-symbol block.  Returns 0 when it acted and -1 when
+	 * `state` was not 3 -- both are `mov $imm,%eax` before the shared
+	 * epilogue, so the return type is real and not a leftover.
+	 */
+	int initiateRRN();
+
 	/* Defined in src/pump/v90/V90SessionFlag.cpp. */
 	void setSessionFlag(unsigned int flag);
 
@@ -111,16 +157,26 @@ public:
 	V90CP *cp;				/* +0x20 argument 9       */
 	V90Parameters *params;			/* +0x24 argument 11      */
 	unsigned int sessionFlag;		/* +0x28 argument 12      */
-	unsigned int word_2c;			/* +0x2c reset clears     */
-	unsigned int word_30;			/* +0x30 reset clears     */
-	unsigned int word_34;			/* +0x34 reset clears     */
+	int state;				/* +0x2c reset clears     */
+	unsigned int symbolCount;		/* +0x30 reset clears     */
+	unsigned int eventCode;			/* +0x34 reset clears     */
 	V90Phase3Modulator *phase3Modulator;	/* +0x38 owned, 0x398     */
 	V90Phase4Modulator *phase4Modulator;	/* +0x3c owned, 0x2fac    */
 	V90BitsToSymbol *bitsToSymbol;		/* +0x40 owned, 0x24      */
 	Scrambler<int, unsigned char> scrambler; /* +0x44 32 bytes        */
 	unsigned int nofSymbols;		/* +0x64 argument 1       */
 	short *symbolBuf;			/* +0x68 2 per symbol     */
-	void *frameBuf;				/* +0x6c 8 per symbol     */
+
+	/*
+	 * +0x6c, 8 bytes per symbol.  WAS `void *`, and the type is forced
+	 * rather than chosen: `progress` hands it to
+	 * `Scrambler<int,unsigned char>::process` as its `unsigned char *`
+	 * output and to `V90BitsToSymbol::process` as its `unsigned char *`
+	 * input, and C++ converts neither from `void *` without a cast.  One
+	 * scrambled BIT PER BYTE, which is what makes 8 per symbol the right
+	 * size -- `V90Mapper::process` reads the same buffer a byte to a bit.
+	 */
+	unsigned char *frameBuf;		/* +0x6c 8 per symbol     */
 };
 
 #endif /* DSPLIB_V90MODULATOR_H */

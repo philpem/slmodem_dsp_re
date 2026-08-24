@@ -46,6 +46,16 @@
 #include "dsplib/encode.h"
 
 /*
+ * `progress` DEREFERENCES BOTH SIDE POINTERS, so this translation unit is one
+ * of the ones V90Modem.h's forward-declaration note has in mind: it needs both
+ * complete types and includes them itself rather than putting them in the
+ * header, which is included by VPcmFloModem.h and would decide the question
+ * for every user of that (findings 1112 and 1325).
+ */
+#include "dsplib/V90Demodulator.h"
+#include "dsplib/V90Modulator.h"
+
+/*
  * .rodata.str1.4+0x416c.  Fifty-seven asterisks and a CRLF; counted from the
  * hex dump rather than typed until it looked right.
  */
@@ -91,4 +101,49 @@ V90Modem::printTitle()
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(V90_BANNER);
+}
+
+/*
+ * ===========================================================================
+ * `V90Modem::progress` -- .text+0x19ad0, 188 bytes
+ *
+ * THE SIDE SWITCH AND NOTHING ELSE.  188 bytes of which 150 are the three
+ * arms' argument shuffles: the frame is set up, `side` is loaded once from
+ * +0x49bc, and each arm writes the four incoming words back into the same
+ * stack slots it found them in before tail-JUMPING to its callee.  That is
+ * what GCC emits for a sibling call whose argument list is the caller's own,
+ * and it is why all three exits are `jmp` and none is `call`.
+ *
+ * THE SWITCH IS THE CONSTRUCTOR'S, INSTRUCTION FOR INSTRUCTION.  `test %edx,
+ * %edx ; je` then `dec %edx ; je` then fall through, over an UNSIGNED
+ * `V90ModemSide` -- the same three-way shape V90ModemCtor.cpp has and the
+ * same one the destructor's `cmpl $0x1 ; jbe` range test agrees with.
+ *
+ * `V90Modem` DOES NOT RESET ITS SIDE OBJECT.  Neither arm touches anything
+ * but the pointer it forwards through, so the state every one of these calls
+ * depends on -- `V90Modulator::state`, `symbolCount`, `eventCode` -- is
+ * whatever the last `reset` left, and this class has no member that calls
+ * one.  On the digital arm that reset is `vPcmResetPhase3Modem`'s, which is
+ * outside this translation unit and is not written yet.  Finding 7514.
+ * ===========================================================================
+ */
+void
+V90Modem::progress(int *bits, unsigned int &nofBits, float *samples,
+		   unsigned int nofSymbols)
+{
+	switch (side) {
+	case V90_MODEM_SIDE_DIGITAL:
+		modulator->progress(bits, nofBits, samples, nofSymbols);
+		break;
+
+	case V90_MODEM_SIDE_ANALOG:
+		demodulator->progress(bits, nofBits, samples, nofSymbols);
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modem progress: Illegal "
+					     "modemSide\r\n");
+		break;
+	}
 }

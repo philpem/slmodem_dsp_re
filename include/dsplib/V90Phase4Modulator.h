@@ -350,6 +350,22 @@ public:
 	short generateV90Symbol();
 	short generateV92Symbol();
 
+	/*
+	 * `generateSymbol` -- .text+0x2f600, 45 bytes.  The dispatcher over
+	 * the two above, and `sessionFlag` at +0x0000 is the whole body:
+	 * nonzero takes V.92, zero takes V.90.  It is the same fork `reset`
+	 * makes for its warm-up loop, so the two agree on which pump this
+	 * object drives.
+	 *
+	 * `int` AND NOT `short`, from the `cwtl` at 0x2f615 and 0x2f628: the
+	 * callees are declared `short` above, so the widening is the RETURN
+	 * conversion and not a leftover.  `V90Phase3Modulator::generateSymbol`
+	 * is the same shape and reads the same way -- and unlike that one,
+	 * this pair is instruction-exact, because that header declares its own
+	 * two pumps `int` and so emits the extension twice.
+	 */
+	int generateSymbol();
+
 	void setRdRtSymbols(V90MappingParams *);
 	void setRfSymbols(V90MappingParams *);
 	void setNextStateAfterTRN2d(Phase4ModulatorState);
@@ -422,6 +438,14 @@ public:
 	 * the meaning is not established here.  `unsigned int` is the stores'
 	 * width; the name stays the offset's.  It was `pad_000c[4]` until the
 	 * pumps were written.
+	 *
+	 * THE READER IS NOW KNOWN AND IS STILL OUTSIDE THIS CLASS:
+	 * `V90Modulator::progress` copies it into `V90Modulator::eventCode`
+	 * after every `generateSymbol`, ignoring zero, and acts on the 7 --
+	 * phase 4 terminated, so enter the data phase.  The name stays here
+	 * because `V90Modulator` is where the value is INTERPRETED, and one
+	 * caller reading one value does not establish what the other three
+	 * stores mean.  Finding 7514.
 	 */
 	unsigned int word_000c;
 

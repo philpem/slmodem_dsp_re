@@ -567,11 +567,11 @@ run_mod_reset(void)
 
 			/* And the three words, at their absolute offsets. */
 			diff_eq_int("the blob cleared +0x2c (%ld)",
-				    (long)MOD_B.word_2c, 0, tag);
+				    (long)MOD_B.state, 0, tag);
 			diff_eq_int("the blob cleared +0x30 (%ld)",
-				    (long)MOD_B.word_30, 0, tag);
+				    (long)MOD_B.symbolCount, 0, tag);
 			diff_eq_int("the blob cleared +0x34 (%ld)",
-				    (long)MOD_B.word_34, 0, tag);
+				    (long)MOD_B.eventCode, 0, tag);
 
 			/*
 			 * AND THE SEED WAS NOT ZERO, so "cleared" is a

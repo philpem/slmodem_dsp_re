@@ -41,9 +41,17 @@
 #include <stddef.h>
 
 #include "dsplib/debug.h"
+#include "dsplib/encode.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90BitsToSymbol.h"
+#include "dsplib/V90CP.h"
+#include "dsplib/V90Mapper.h"
+#include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Modulator.h"
+#include "dsplib/V90MP.h"
+#include "dsplib/V90Parameters.h"
+#include "dsplib/V90Phase2Info.h"
+#include "dsplib/V90Phase3Modulator.h"
 #include "dsplib/V90Phase4Modulator.h"
 
 extern "C" {
@@ -99,9 +107,9 @@ V90MOD_OFF(sessionFlag,		0x28, flag);
 V90MOD_OFF(phase3Modulator,	0x38, p3mod);
 V90MOD_OFF(phase4Modulator,	0x3c, p4mod);
 V90MOD_OFF(bitsToSymbol,	0x40, bts);
-V90MOD_OFF(word_2c,		0x2c, word2c);
-V90MOD_OFF(word_30,		0x30, word30);
-V90MOD_OFF(word_34,		0x34, word34);
+V90MOD_OFF(state,		0x2c, state);
+V90MOD_OFF(symbolCount,		0x30, symcount);
+V90MOD_OFF(eventCode,		0x34, eventcode);
 V90MOD_OFF(scrambler,		0x44, scrambler);
 V90MOD_OFF(nofSymbols,		0x64, nofsym);
 V90MOD_OFF(symbolBuf,		0x68, symbuf);
@@ -144,7 +152,7 @@ V90Modulator::V90Modulator(unsigned int n, V90Phase2Info *p2, V90Jd *jdArg,
 	nofSymbols = n;
 
 	symbolBuf = (short *)sysdep_malloc(2 * n);
-	frameBuf = sysdep_malloc(8 * n);
+	frameBuf = (unsigned char *)sysdep_malloc(8 * n);
 
 	bts = (V90BitsToSymbol *)sysdep_malloc(sizeof(V90BitsToSymbol));
 	v90mod_bts_ctor(bts, 2 * n + n + 0x1388, params);
@@ -228,7 +236,293 @@ V90Modulator::reset()
 
 	scrambler.reset(0);
 
-	word_2c = 0;
-	word_30 = 0;
-	word_34 = 0;
+	state = 0;
+	symbolCount = 0;
+	eventCode = 0;
+}
+
+/*
+ * ===========================================================================
+ * V90Modulator::initiateRRN -- .text+0x1a2c0, 308 bytes
+ *
+ * RATE RENEGOTIATION, REQUESTED FROM OUTSIDE.  The only approved state is the
+ * data phase; from anywhere else this answers -1 and does nothing, which is
+ * what the second message calls "requested but NOT approved".  The two
+ * returns are `mov $0x0,%eax` at 0x1a38f and `mov $0xffffffff,%eax` at
+ * 0x1a3da and 0x1a3ed -- both arranged, so the `int` is real.
+ *
+ * IT IS ALSO CALLED FROM `progress`, on the data phase's own timer, so the
+ * `state != 3` guard is not dead there either: `progress` reaches it only
+ * from `case 3`, and every other caller is outside this object.
+ *
+ * THE BLOCK SIZE GOES TO ONE AND THE ANSWER IS ASKED FOR TWICE.
+ * `setSymbolsBlockSize` RETURNS `nofBitsForNextTime()` -- the blob inlines
+ * the whole of the second into the first (V90BitsToSymbol.cpp) -- and this
+ * function then calls `nofBitsForNextTime` separately anyway, at 0x1a2fd and
+ * 0x1a308.  Two calls, two `call` relocations, and the first one's result is
+ * dropped on the floor.  That is the object's and it is written that way.
+ *
+ * WHICH PHASE 4 STATE IS CHOSEN BY THAT ANSWER, and the two messages name
+ * both: nonzero -- bits still owed for the block just sized -- enters
+ * `RdModulation`, and zero enters `DataToRdModulation`.  Those are the
+ * object's words for 0x15 and 0x14, and 0x14 is the enumerator
+ * `V90Phase4Modulator.h` deliberately left unnamed because the only evidence
+ * for it was a jump-table slot.  The name is NOT taken here: promoting it is
+ * a change to a 1,829-line file this batch does not own, and the message
+ * belongs to `V90Modulator` rather than to the state's own class.  Recorded
+ * in finding 7514 as evidence available to whoever does own it.
+ *
+ * THE TWO MESSAGES ARE `edprintf` AND ARE NOT GATED.  0x1a321 is a bare
+ * `call` with no `cmpl $0x1,dsplibs_debug_level` in front of it, unlike the
+ * two `dsplibs_debug_printf` sites at either end of the function.  So a real
+ * session prints these two whatever the level is.
+ *
+ * THE CP/MP FORK IS `sessionFlag` AND IT PICKS THE MESSAGE CLASS.  Nonzero
+ * (V.92) clears `V90CP::byte_13` -- bits[0x21] -- and re-encodes the CP;
+ * zero (V.90) clears `V90MP::CPack`, the MP/MPnot discriminator, and
+ * re-encodes the MP.  Two fields at two different offsets in two different
+ * classes, each cleared immediately before its own `infoToBits`.
+ * ===========================================================================
+ */
+int
+V90Modulator::initiateRRN()
+{
+	Phase4ModulatorState p4state;
+
+	if (state != 3) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator: RRN requested but "
+					     "NOT approved\r\n");
+		return -1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: RRN requested, enter "
+				     "Phase 4\r\n");
+
+	state = 2;
+	symbolCount = 0;
+
+	bitsToSymbol->setSymbolsBlockSize(1);
+
+	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		edprintf("V90Modulator: Phase4Modulator state initialized to "
+			 "RdModulation\r\n");
+		p4state = P4M_STATE_RD;
+	} else {
+		edprintf("V90Modulator: Phase4Modulator state initialized to "
+			 "DataToRdModulation\r\n");
+		p4state = P4M_STATE_UNNAMED_14;
+	}
+
+	phase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,
+			       p4state, 0, phase2Info->rtd);
+
+	eventCode = 0;
+
+	phase4Modulator->resetBeforRRN();
+	phase4Modulator->setRdRtSymbols(mappingParams2);
+
+	if (sessionFlag) {
+		cp->byte_13 = 0;
+		cp->infoToBits();
+	} else {
+		mp->CPack = 0;
+		mp->infoToBits();
+	}
+
+	return 0;
+}
+
+/*
+ * ===========================================================================
+ * V90Modulator::progress -- .text+0x1a820, 780 bytes
+ *
+ * THE TRANSMIT CHAIN'S PER-BLOCK ENTRY POINT.  One switch over `state`, four
+ * live arms and a default, and a shared tail that widens `symbolBuf` into the
+ * caller's `float *`.  `void`: every arm reaches the same epilogue at 0x1a89c
+ * and none of them arranges %eax, and `V90Modem::progress` tail-JUMPS here,
+ * so whatever this returns is what that returns.
+ *
+ * THE SWITCH SELECTOR IS SIGNED and that is the one thing about this function
+ * a behavioural test can only see through a negative state.  0x1a848 is
+ * `cmp $0x1,%eax ; je ; jle`, and the `jle` arm then does
+ * `test %eax,%eax ; jne <default>` -- so a NEGATIVE state is the default and
+ * 0 is the silence arm.  With an `unsigned int` member GCC emits `jbe` there
+ * and folds the two into one edge.  See V90Modulator.h.
+ *
+ * `state == 1` IS RE-TESTED INSIDE THE PHASE 3 LOOP, and it is not redundant:
+ * the phase 3 arm can move the state to 2 part way through a block, and the
+ * remaining symbols of that same block then come from the phase 4 modulator.
+ * The object reloads +0x2c at 0x1a8da on every iteration, which is what a
+ * compiler that cannot see across `generateSymbol` has to do -- but the
+ * SOURCE has to contain the test for the arm to exist at all.
+ *
+ * THE TWO EVENT FIELDS ARE READ THROUGH SEPARATE MEMBER LOADS.  `mov 0x3c
+ * (%ebx),%edx` after the call and then `mov 0xc(%edx),%eax`, rather than the
+ * pointer being kept across it: the callee may have moved it.  Same in the
+ * phase 3 arm with +0x38 and +0x1c.
+ *
+ * THE RATE MESSAGE READS `bitsToSymbol->mapper->bitsPerFrame`, TWO LEVELS
+ * DOWN, AND NOT `bitsToSymbol->bitsPerFrame`.  0x1aae8 is `mov 0x40(%ebx),
+ * %edx ; mov (%edx),%eax ; imul $0x1f40,0x4(%eax),%esi`: +0x40 is the
+ * converter, +0x00 of that is its mapper, +0x04 of that is the mapper's own
+ * `bitsPerFrame`.  The converter has a field of the same name at ITS +0x14
+ * and both are seeded from the mapping parameters' first word, so in any
+ * naturally reset object the two hold the same number and the wrong one
+ * passes every test.  test/unit/t_v90modprog.cpp drives them apart on
+ * purpose.
+ *
+ * THE RATE ITSELF is `0.5f + (float)(8000 * bitsPerFrame) * (1.0f / 6.0f)`
+ * truncated to `unsigned int`: six symbols to a frame at 8 kHz, and the 0.5
+ * makes the truncation a round.  Every part of that spelling is forced.
+ * `imul $0x1f40` then `push $0 ; push %esi ; fildll` is an INTEGER product
+ * widened as UNSIGNED, so the multiply by 8000 is integer and the operand is
+ * unsigned; `fmuls` against 0x3e2aaaab is a multiply by the float nearest 1/6
+ * and not a divide by 6.0f, which GCC cannot introduce; and `fistpll` into
+ * eight bytes with the low word taken is float -> `unsigned int`, where a
+ * cast to `int` emits `fistpl`.
+ *
+ * THE PRINTF ARGUMENT IS GUARDED BY A TEST THAT IS ALWAYS TRUE.  `state` was
+ * just set to 3 eight instructions earlier, and 0x1a9ea tests it against 3
+ * again and passes 0 if it fails.  `setSymbolsBlockSize` sits between the
+ * store and the test and might alias `*this`, so the compiler cannot fold it
+ * -- but that only explains why the test SURVIVES, not why it is there, and
+ * the source must contain it.
+ *
+ * WHAT IT DOES NOT DO IS CLEAR `symbolBuf` OUTSIDE THE SILENCE ARM.  The
+ * float tail always copies `nofSymbols` entries out of it, so an arm that
+ * wrote fewer than it hands out leaves the previous block's symbols in the
+ * gap.  Only `case 0` fills the whole buffer; `case 3` writes whatever
+ * `V90BitsToSymbol::process` handed out, which is `symbolsBlockSize` and not
+ * this call's `n`.  That is the object's behaviour, reproduced.
+ * ===========================================================================
+ */
+void
+V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
+		       unsigned int n)
+{
+	unsigned int i;
+
+	symbolCount += n;
+	eventCode = 0;
+
+	switch (state) {
+	case 0:
+		/*
+		 * Silence.  The whole buffer, not `symbolsBlockSize` of it.
+		 */
+		for (i = 0; i < n; i++)
+			symbolBuf[i] = 0;
+		nofBits = 0;
+		break;
+
+	case 1:
+		for (i = 0; i < n; i++) {
+			if (state == 1) {
+				symbolBuf[i] =
+				    (short)phase3Modulator->generateSymbol();
+
+				if (phase3Modulator->eventCode != 0)
+					eventCode = phase3Modulator->eventCode;
+
+				if (eventCode == 6 && state != 2) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "V90Modulator: enter "
+						    "Phase 4\r\n");
+
+					phase4Modulator->reset(
+					    (PcmType)phase2Info->pcmType,
+					    phase2Info->Uinfo, P4M_STATE_RI, 0,
+					    phase2Info->rtd);
+
+					state = 2;
+					symbolCount = 0;
+					eventCode = 0;
+				}
+			} else {
+				symbolBuf[i] =
+				    (short)phase4Modulator->generateSymbol();
+
+				if (phase4Modulator->word_000c != 0)
+					eventCode = phase4Modulator->word_000c;
+			}
+		}
+		nofBits = 0;
+		break;
+
+	case 2:
+		for (i = 0; i < n; i++) {
+			symbolBuf[i] =
+			    (short)phase4Modulator->generateSymbol();
+
+			if (phase4Modulator->word_000c != 0)
+				eventCode = phase4Modulator->word_000c;
+		}
+
+		if (eventCode != 7) {
+			nofBits = 0;
+			break;
+		}
+
+		if (state != 3) {
+			edprintf("V90Modulator: Data Phase spectral "
+				 "parameters:\r\n");
+			displaySpectralParams(mappingParams2);
+
+			state = 3;
+			symbolCount = 0;
+			eventCode = 8;
+
+			bitsToSymbol->setSymbolsBlockSize(nofSymbols);
+
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V90Modulator: enter Data Phase, "
+				    "Rate = %d [bps]\r\n",
+				    state == 3
+					? (unsigned int)(0.5f +
+					      (8000 *
+					       bitsToSymbol->mapper->
+						   bitsPerFrame) *
+					      (1.0f / 6.0f))
+					: 0u);
+		}
+
+		nofBits = bitsToSymbol->nofBitsForNextTime();
+		break;
+
+	case 3:
+		scrambler.process(bits, frameBuf, nofBits);
+		bitsToSymbol->process(frameBuf, nofBits, symbolBuf);
+
+		/*
+		 * THE COMPARISON IS UNSIGNED AND THE CAST IS WHAT MAKES IT
+		 * SAY SO.  0x1aab2 is `cmp %ecx,0x30(%ebx) ; jbe`, and the
+		 * parameter is declared `int` -- so the unsignedness comes
+		 * from `symbolCount`, and C++'s usual arithmetic conversions
+		 * would produce exactly this with no cast at all.  It is
+		 * spelled because `-Wsign-compare` is on and a warning here
+		 * would read as a defect rather than as the object's own
+		 * shape; the cast is the conversion the language already
+		 * performs and moves no instruction.  Finding 4903's rule.
+		 */
+		if (params->DEBUG_DIGITAL_MODEM_INITIATE_RRN &&
+		    symbolCount > (unsigned int)
+			params->DEBUG_DIGITAL_MODEM_INITIATE_RRN_TIME) {
+			initiateRRN();
+			eventCode = 9;
+		}
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator progress: Illegal "
+					     "state\r\n");
+		break;
+	}
+
+	for (i = 0; i < n; i++)
+		out[i] = symbolBuf[i];
 }
