@@ -48,7 +48,7 @@
 #include "harness.h"
 #include "dsplib/debug.h"
 #include "dsplib/V90AutoDigitalImpDetector.h"
-#include "dsplib/V90Dil.h"
+#include "dsplib/V90DilDescriptorSettings.h"
 
 extern "C" {
 void ref_reset(void *self, int ucode, int law, int altRbs)

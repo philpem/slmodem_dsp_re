@@ -52,7 +52,7 @@
 /*
  * For `PcmType`, which `getPower`'s mangling names (`7PcmType`) and which
  * therefore cannot be spelled any other way here.  Included, never edited --
- * the same arrangement `V90Dil.h` makes for the same enum.
+ * the same arrangement `V90DilDescriptorSettings.h` makes for the same enum.
  */
 #include "dsplib/V90Phase3Modulator.h"
 

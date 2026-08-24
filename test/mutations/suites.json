@@ -397,7 +397,7 @@
   "build/test/t_v90demprog"
  ],
  "v90dil": [
-  "src/pump/v90/V90Dil.cpp",
+  "src/pump/v90/V90DilDescriptorSettings.cpp",
   "build/test/t_v90adid"
  ],
  "v90eqdata": [

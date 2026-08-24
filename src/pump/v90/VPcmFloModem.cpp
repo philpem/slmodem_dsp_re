@@ -121,10 +121,10 @@ VPCM_OFF(byte_6118,		0x6118, byte6118);
 VPCM_OFF(byte_6119,		0x6119, byte6119);
 VPCM_OFF(info0Layout,		0x6120, layout);
 VPCM_OFF(v92modem.parameters,	0x6128, v92params);
-VPCM_OFF(word_6f98,		0x6f98, word6f98);
-VPCM_OFF(word_6fac,		0x6fac, word6fac);
-VPCM_OFF(word_6fb0,		0x6fb0, word6fb0);
-VPCM_OFF(word_6fb4,		0x6fb4, word6fb4);
+VPCM_OFF(qcVerifyState,		0x6f98, qcstate);
+VPCM_OFF(qcSampleCount,		0x6fac, qcsamples);
+VPCM_OFF(qcTerminateRequested,	0x6fb0, qcterm);
+VPCM_OFF(verificationStatus,	0x6fb4, verifstatus);
 VPCM_OFF(v92modem.phase2Info,	0x612c, p92);
 VPCM_OFF(cpBitVector,		0x6fbc, cpbitvec);
 VPCM_OFF(cpNofBits,		0x7dcc, cpnofbits);
@@ -612,6 +612,93 @@ VPcmFloModem::getUinfoValue(short skipProbe)
  * are to memory the gate does not read, and the branch is taken once they are
  * all done.  Written here in the order the object performs them.
  */
+/*
+ * `_tagModemParameters::unnamed_0003`, and the two bits BOTH entry points
+ * touch.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
+ * reached the other way round -- that file gets there as `obj->pac3c + 3` and
+ * these two as `modem.ptr_49b4->modemParams->unnamed_0003`, and they are the
+ * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
+ * `v90RateRenegSilence` clears again after printing "disabling SAS detector
+ * on silence".
+ *
+ * `v90RunDemodulator` sets the retrain bit at three sites (arms 0x03, 0x17
+ * and 0x1e), clears it at one (arm 0x08, under the phase-2 guard), and
+ * `runPcmModem` does the same two things once each.  `vPcmResetPhase3Modem`
+ * below is a FOURTH clearer, and the reason the block moved up the file from
+ * beside `v90RunDemodulator` is that it is now the first user.
+ */
+#define CFG_FLAG3_PHASE2	0x02
+#define CFG_FLAG3_RETRAIN	0x04
+
+/*
+ * ===========================================================================
+ * `vPcmResetPhase3Modem` -- .text+0xf200, 0x95 = 149 bytes
+ * ===========================================================================
+ *
+ * ONE OF THE FOUR MEMBERS `VPcmV34Progress` CALLS AND NOTHING ELSE DOES, and
+ * the only one of the four that returns nothing -- VPcmFloModem.h's note on
+ * the group has the argument.  It puts the V.90 half back to the state a
+ * phase 3 can start from, and it is a straight line: no branch, no loop, one
+ * `V90Parameters::init`, four `reset`s and six stores.
+ *
+ * IT RESETS THE MODEM WITH `qcFlag` ZERO, UNCONDITIONALLY.  `xor %eax,%eax`
+ * at 0xf23a into the second argument slot -- there is no test of
+ * `pcmSessionType`, of `qcFlags` or of anything else, and this is the ONLY
+ * caller of `V90Modem::reset` in the whole object.  So the quick-connect DIL
+ * descriptor is never selected from here; `V90Modem::reset`'s `qcFlag` arm
+ * is reachable only from the blob's own callers of that member.
+ *
+ * BUT `setSessionFlag` IS CALLED WITH `pcmSessionType`, which is not
+ * constant, and it is called BEFORE `reset`.  The two argument shapes are
+ * next to each other in the disassembly (0xf22e and 0xf242) and are easy to
+ * read as one; a reconstruction that passed the session type to both, or
+ * zero to both, agrees with the object on every store either makes and
+ * differs on the modulator/demodulator the reset reaches.
+ *
+ * `V90Parameters::init` REBUILDS THE WHOLE PARAMETER BLOCK -- `setToDefault`,
+ * then the parameter file if there is one, then `loadModemParamsData` -- so
+ * every V.90 tunable goes back to its default here and not just the phase 3
+ * ones.  It is called on `modem.ptr_49b4`, the block the V90Modem owns.
+ *
+ * THE LAST TWO STORES ARE THE HAND-BACK TO THE V.34 SIDE.  `CFG_FLAG3_RETRAIN`
+ * is cleared out of `_tagModemParameters::unnamed_0003` -- `andb $0xfb,0x3
+ * (%edx)` at 0xf27e, through TWO pointers, `modem.ptr_49b4->modemParams` --
+ * which withdraws any retrain this session had asked for, and `byte_6118` is
+ * set to 1, which is the dispatch value `runPcmModem` and `v90RunDemodulator`
+ * both read first and both turn into a return of 1.
+ *
+ * AND `+0x6fa4` IS NOT A WORD OF ITS OWN -- it is `sineWave.phase`, the third
+ * of the four `Tparam`s of the `SineWave<float, float>` embedded at +0x6f9c,
+ * and 0x6f9c + 8 is 0x6fa4.  The store is an integer `mov $0x0`, which is
+ * what GCC emits for `= 0.0f` because the bit pattern is zero, so nothing in
+ * the instruction says "float" and only the field map does.  It restarts the
+ * TONEq oscillator, which `qcLineVerification` is the only caller of.
+ *
+ * ORDER.  0xf277's `mov $0x0,%eax` is a second zero register, not a store,
+ * and 0xf271 and 0xf282 write `word_7f60` and `sineWave.phase` from two
+ * different registers holding the same zero.  Written below in the order the
+ * object performs them; nothing here reads anything else here, so the order
+ * is not observable and is not claimed to be forced.
+ */
+void
+VPcmFloModem::vPcmResetPhase3Modem()
+{
+	sweepCounter = 0;			/* +0x1740 */
+
+	modem.ptr_49b4->init();
+	modem.setSessionFlag((unsigned int)pcmSessionType);
+	modem.reset(0);
+	v92modem.reset();
+	echoCanceller.reset();
+
+	word_7f64 = 0;
+	word_7f60 = 0;
+	modem.ptr_49b4->modemParams->unnamed_0003 &=
+	    (unsigned char)~CFG_FLAG3_RETRAIN;
+	sineWave.phase = 0.0f;
+	byte_6118 = 1;
+}
+
 void
 VPcmFloModem::enterPhase3()
 {
@@ -720,10 +807,10 @@ VPcmFloModem::externalReset()
 
 	byte_6118 = 0;
 	byte_6119 = 0;
-	word_6f98 = 0;
-	word_6fb0 = 0;
-	word_6fac = 0;
-	word_6fb4 = 0;
+	qcVerifyState = 0;
+	qcTerminateRequested = 0;
+	qcSampleCount = 0;
+	verificationStatus = 0;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -993,22 +1080,6 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
 
 	return n;
 }
-
-/*
- * `_tagModemParameters::unnamed_0003`, and the two bits BOTH entry points
- * touch.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
- * reached the other way round -- that file gets there as `obj->pac3c + 3` and
- * these two as `modem.ptr_49b4->modemParams->unnamed_0003`, and they are the
- * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
- * `v90RateRenegSilence` clears again after printing "disabling SAS detector
- * on silence".
- *
- * `v90RunDemodulator` sets the retrain bit at three sites (arms 0x03, 0x17
- * and 0x1e), clears it at one (arm 0x08, under the phase-2 guard), and
- * `runPcmModem` does the same two things once each.
- */
-#define CFG_FLAG3_PHASE2	0x02
-#define CFG_FLAG3_RETRAIN	0x04
 
 /*
  * ===========================================================================
@@ -2217,4 +2288,209 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	}
 
 	return ret;			/* 0xe530 */
+}
+
+/*
+ * ===========================================================================
+ * `VPcmFloModem::qcLineVerification` -- .text+0xf750, 0x30b = 779 bytes
+ * ===========================================================================
+ *
+ * THE THIRD OF THE CLASS'S THREE `VPcmV34Progress` ENTRY POINTS, and the one
+ * that runs during quick connect's LINE VERIFICATION period: the analogue
+ * modem listens to the ANSpcm the far end is dropping, then transmits a tone
+ * -- the object calls it TONEq -- for at least 50 ms, then 40 ms of silence,
+ * and reports 1 exactly once when that is over.  `v34pcmmain.cpp` turns the 1
+ * into "Line verification period completed !!!" and decides short or full
+ * phase 2 on `verificationStatus`.
+ *
+ * ITS CLOSURE IS ITSELF ALONE.  Every one of its four callees --
+ * `V90Modem::progress`, `SineWave<float,float>::generate`,
+ * `V90Phase3Demodulator::enterWaitForANSpcmDrop` and `dsplibs_debug_printf`
+ * -- was already written, which is why it could be landed beside a batch it
+ * shares no code with.
+ *
+ * ===========================================================================
+ * IT HAS `runPcmModem`'s SIGNATURE AND USES SIX OF THE SEVEN
+ * ===========================================================================
+ *
+ * `PfS0_jPiS1_S1_S1_`, the same mangling, so the header declares the same
+ * seven parameters.  `txbits` IS NEVER READ: there is no reference to
+ * `0x48(%esp)` anywhere in the 779 bytes.  That is not a hazard and not a
+ * defect -- it is what an entry point with a fixed argument list looks like
+ * when one of the entries has nothing to say -- but it does mean no mutation
+ * can ever be caught on it, and finding 7604 records that rather than leaving
+ * a fixture looking incomplete.
+ *
+ * `nrx` IS PASSED TO `V90Modem::progress` AS ITS `unsigned int &` and then
+ * OVERWRITTEN WITH ZERO before the return, exactly as `*nbits` is.  So the
+ * bit count the demodulator hands back is discarded on every path, and a test
+ * that watched `*nrx` for evidence that `progress` ran would be watching the
+ * one word this function guarantees is zero.  Use the demodulator's own state
+ * instead.
+ *
+ * ===========================================================================
+ * THE TWO EVENT CODES, AND THE COMMON TAIL THEY BOTH FALL INTO
+ * ===========================================================================
+ *
+ * The dispatch is `modem.demodulator->word_3c` again -- finding 7571's field,
+ * `v90RunDemodulator`'s 44-arm table and `runPcmModem`'s 54-arm one -- but
+ * here it is TWO `cmp`s and no table, and both codes are past the end of
+ * either of those tables: 0x3a and 0x3b against 0x2b and 0x35.  They are this
+ * period's alone.
+ *
+ *   0x3a  the ANSpcm demodulation finished normally.  Copy the verification
+ *         status out of the phase 3 demodulator, start TONEq with NO
+ *         termination pending, and put the phase 3 demodulator into
+ *         `enterWaitForANSpcmDrop`.
+ *   0x3b  the ANSpcm drop was detected.  If TONEq is already running this is
+ *         the request to stop it -- honoured at once if 50 ms have passed and
+ *         latched otherwise.  If it is NOT running, the object says so
+ *         ("...with no verification completion status !!!") and starts TONEq
+ *         anyway, with the termination already latched.
+ *
+ * WHY THE 0x3b/RUNNING/EXPIRED ARM REPEATS THE TAIL'S OWN ENDING.  It prints
+ * the same message and makes the same two stores as the `qcTerminateRequested`
+ * test below, and then falls into the SILENCE half rather than the tone half
+ * -- 0xf95f jumps to 0xf7d3, past the `qcVerifyState == 1` test, because the
+ * store it just made settles that test.  So the two sites are two source
+ * statements and not one: after this one the buffer is zeroed, after the
+ * other one it has just been filled.
+ *
+ * THE TWO CONSTANTS ARE THE OBJECT'S MESSAGE.  "still bellow 50mS" (the
+ * author's spelling) beside `cmp $0x1df` gives 480 samples = 50 ms, and the
+ * sample rate that makes that true, 9600 Hz, is the one the constructor
+ * builds this class's `SineWave` with.  The silence is `mov $0xfffffe80` --
+ * -384, so 40 ms at the same rate, counted UP through zero, which is why
+ * `qcSampleCount` has to be signed.
+ *
+ * EIGHT DEBUG GATES, ALL `> 1`, each re-reading the level.  A sweep over
+ * {0, 2} cannot separate `> 1` from `> 0`; `t_v90modchain`'s three-level
+ * sweep is the shape this needs.
+ * ===========================================================================
+ */
+
+/* 0xf89d and 0xf931: `cmp $0x1df`, and the message beside it says 50 ms. */
+#define QC_TONEQ_MIN_SAMPLES	480
+
+/* 0xf8b5 and 0xf944: `mov $0xfffffe80`, 40 ms at the same 9600 Hz. */
+#define QC_SILENCE_SAMPLES	384
+
+int
+VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
+				 int *rxbits, int *nrx, int *txbits,
+				 int *nbits)
+{
+	unsigned int i;
+	int ret = 0;
+
+	(void)txbits;			/* never read; see the file comment */
+
+	modem.progress(rxbits, *(unsigned int *)nrx, in, n);
+
+	qcSampleCount += (int)n;
+
+	switch (modem.demodulator->word_3c) {
+	case 0x3a:			/* 0xf8d0 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "VPcmFloModem (QC LineVerify): ANSpcm demod over "
+			    "(after %d samples), start TONEq...\r\n",
+			    qcSampleCount);
+
+		verificationStatus =
+		    modem.demodulator->phase3Demodulator->verificationStatus;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "VPcmFloModem (QC LineVerify): Channel "
+			    "verification status is: %d\r\n",
+			    verificationStatus);
+
+		qcVerifyState = 1;
+		qcTerminateRequested = 0;
+		qcSampleCount = 0;
+		modem.demodulator->phase3Demodulator
+		    ->enterWaitForANSpcmDrop();
+		break;
+
+	case 0x3b:			/* 0xf819 */
+		if (qcVerifyState == 1) {
+			if (qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmFloModem (QC LineVerify): "
+					    "TONEq mod over (after %d "
+					    "samples), tx silence...\r\n",
+					    qcSampleCount);
+
+				qcSampleCount = -QC_SILENCE_SAMPLES;
+				qcVerifyState = 2;
+			} else {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "VPcmFloModem (QC LineVerify): "
+					    "TONEq termination requested, "
+					    "still bellow 50mS (nof samples "
+					    "= %d)...\r\n", qcSampleCount);
+
+				qcTerminateRequested = 1;
+			}
+		} else {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmFloModem (QC LineVerify): got ANSpcm "
+				    "drop detection, with no verification "
+				    "completion status !!!\r\n");
+
+			verificationStatus = modem.demodulator
+			    ->phase3Demodulator->verificationStatus;
+
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmFloModem (QC LineVerify): "
+				    "demodulator verification status is "
+				    "%d\r\n", verificationStatus);
+
+			qcSampleCount = 0;
+			qcVerifyState = 1;
+			qcTerminateRequested = 1;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	if (qcVerifyState == 1) {	/* 0xf873 */
+		sineWave.generate(out, n);
+
+		if (qcTerminateRequested
+		    && qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmFloModem (QC LineVerify): TONEq mod "
+				    "over (after %d samples), tx "
+				    "silence...\r\n", qcSampleCount);
+
+			qcSampleCount = -QC_SILENCE_SAMPLES;
+			qcVerifyState = 2;
+		}
+	} else {			/* 0xf7d3 */
+		for (i = 0; i < n; i++)
+			out[i] = 0.0f;
+
+		if (qcVerifyState == 2 && qcSampleCount >= 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VPcmFloModem (QC LineVerify): Silence "
+				    "after TONEq over, move to phase2...\r\n");
+
+			ret = 1;
+		}
+	}
+
+	*nrx = 0;			/* 0xf7f9 */
+	*nbits = 0;			/* 0xf7ff */
+
+	return ret;
 }

@@ -205,7 +205,7 @@
  },
  {
   "label": "the last of the four words after the sine wave is not cleared",
-  "find": "\tword_6fb4 = 0;",
+  "find": "\tverificationStatus = 0;",
   "replace": "\t(void)0;"
  },
  {

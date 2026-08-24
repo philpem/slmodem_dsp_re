@@ -281,10 +281,24 @@ public:
 	unsigned long getDFE(int_complex *points, unsigned long maxCount);
 
 	/*
-	 * --- FOUR MEMBERS THIS TREE HAS NOT WRITTEN --------------------------
+	 * --- THE FOUR `VPcmV34Progress` ENTRY POINTS, AND ALL FOUR ARE NOW
+	 * --- WRITTEN --------------------------------------------------------
 	 *
-	 * `VPcmV34Progress` calls all four and nothing else does, so they are
-	 * declared here and defined nowhere.  They are marked WEAK in the one
+	 * This block used to be headed "FOUR MEMBERS THIS TREE HAS NOT
+	 * WRITTEN".  `runPcmModem` and `v90RunDemodulator` were written first,
+	 * and `qcLineVerification` and `vPcmResetPhase3Modem` close the set --
+	 * all four are in src/pump/v90/VPcmFloModem.cpp.
+	 *
+	 * THE WEAK ARRANGEMENT BELOW STAYS AND IS NOW A NO-OP THAT COSTS
+	 * NOTHING.  A weak DECLARATION whose symbol is defined at link time
+	 * resolves to the definition, so `v34pcmmain.cpp`'s guard now passes
+	 * at every one of the four sites and the calls happen -- which is what
+	 * the blob does unconditionally.  Removing the macro would be a change
+	 * to the one translation unit that has to keep working if a future
+	 * split ever takes a member back out, so it is left alone.
+	 *
+	 * `VPcmV34Progress` calls all four and nothing else does.  They are
+	 * marked WEAK in the one
 	 * translation unit that calls them -- `src/pump/v34/v34pcmmain.cpp`
 	 * defines `DSPLIB_VPCMFLO_UNWRITTEN` before including this file -- so
 	 * the reference resolves to zero rather than failing the link of all
@@ -294,7 +308,8 @@ public:
 	 * length; the rule is the same one, one level further down.
 	 *
 	 * A TU that DEFINES one of these must not define the macro, or the
-	 * definition itself becomes weak.
+	 * definition itself becomes weak.  src/pump/v90/VPcmFloModem.cpp,
+	 * which now defines all four, does not.
 	 *
 	 * The signatures are the manglings and nothing else:
 	 *
@@ -601,9 +616,53 @@ public:
 	 * +0x6f98, +0x6fac, +0x6fb0, +0x6fb4  Four words `externalReset`
 	 * zeroes and the constructor zeroes again, and the only four things
 	 * either touches between the V.92 modem and the CP bit vector.
-	 * Nothing reconstructed reads any of them, so they are offset-named.
+	 *
+	 * THEY WERE `word_6f98`, `word_6fac`, `word_6fb0` AND `word_6fb4`,
+	 * and the paragraph here used to end "nothing reconstructed reads any
+	 * of them, so they are offset-named".  Something does now:
+	 * `qcLineVerification` is the ONLY member of this class that reads or
+	 * writes any of the four, and it is all four together -- they are the
+	 * whole state of the quick-connect line-verification period and of
+	 * nothing else.  Its seven `dsplibs_debug_printf` messages, all
+	 * prefixed `"VPcmFloModem (QC LineVerify): "`, are what name them.
+	 * Finding 7603.
+	 *
+	 * `qcVerifyState` -- +0x6f98, three values and no more:
+	 *
+	 *     0  waiting for the ANSpcm demodulation to finish
+	 *     1  transmitting TONEq          "...start TONEq..."
+	 *     2  transmitting silence after it   "...tx silence..."
+	 *
+	 * and the period ends -- `qcLineVerification` returns 1, its only
+	 * non-zero return -- out of state 2 with "Silence after TONEq over,
+	 * move to phase2...".  The value set is the object's; the word
+	 * "state" is inference over three arms and is labelled as such.
+	 *
+	 * `qcSampleCount` -- +0x6fac, AND IT IS `int`.  Forced twice over:
+	 * `jle` at 0xf8a2 and 0xf931 against 0x1df, and `js` at 0xf96c, where
+	 * an unsigned count would be `jbe` and could not be negative at all.
+	 * It has to be signed because the silence period is spelled as a
+	 * NEGATIVE count -- 0xfffffe80, -384 -- that counts up to zero.  The
+	 * function's own messages print it with `%d` and call it "samples".
+	 *
+	 * `qcTerminateRequested` -- +0x6fb0, a 0/1 latch.  The TONEq ends when
+	 * this is set AND 480 samples have gone by; the message at the site
+	 * that sets it is "TONEq termination requested, still bellow 50mS",
+	 * which is also where the two constants come from.  480 samples is
+	 * 50 ms at the 9600 Hz this class's `SineWave` is built for, and the
+	 * -384 above is 40 ms at the same rate.
+	 *
+	 * `verificationStatus` -- +0x6fb4, a COPY of
+	 * `V90Phase3Demodulator::verificationStatus`, which this tree already
+	 * names that.  It is taken with a `movzwl`, so the SOURCE is sixteen
+	 * bits wide even though the field it comes out of is declared 32
+	 * (V90Phase3Demodulator.h) and the word here is 32; the 32-bit result
+	 * is stored, so this is CLAUDE.md's forced column and not 614's free
+	 * one.  `v34pcmmain.cpp` is the reader: it compares `local_short`
+	 * against this word to decide "short phase2 due to same line
+	 * verification".
 	 */
-	unsigned int word_6f98;				/* +0x6f98         */
+	unsigned int qcVerifyState;			/* +0x6f98         */
 
 	/*
 	 * +0x6f9c  A SineWave<float, float>, EMBEDDED and 16 bytes -- four
@@ -615,9 +674,9 @@ public:
 	 */
 	SineWave<float, float> sineWave;
 
-	unsigned int word_6fac;				/* +0x6fac         */
-	unsigned int word_6fb0;				/* +0x6fb0         */
-	unsigned int word_6fb4;				/* +0x6fb4         */
+	int qcSampleCount;				/* +0x6fac         */
+	unsigned int qcTerminateRequested;		/* +0x6fb0         */
+	unsigned int verificationStatus;		/* +0x6fb4         */
 	unsigned char pad_6fb8[0x6fbc - 0x6fb8];	/* +0x6fb8         */
 
 	/*

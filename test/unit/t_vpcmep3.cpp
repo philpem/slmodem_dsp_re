@@ -692,10 +692,10 @@ run_externalreset(void)
 				diff_eq_int("minNofTransmitSequences (%ld)",
 					    (long)V(1)->minNofTransmitSequences,
 					    1, tag);
-				diff_eq_int("word_6f98 (%ld)",
-					    (long)V(1)->word_6f98, 0, tag);
-				diff_eq_int("word_6fb4 (%ld)",
-					    (long)V(1)->word_6fb4, 0, tag);
+				diff_eq_int("qcVerifyState (%ld)",
+					    (long)V(1)->qcVerifyState, 0, tag);
+				diff_eq_int("verificationStatus (%ld)",
+					    (long)V(1)->verificationStatus, 0, tag);
 				diff_eq_int("byte_6118 (%ld)",
 					    (long)V(1)->byte_6118, 0, tag);
 
