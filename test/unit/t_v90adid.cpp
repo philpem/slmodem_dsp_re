@@ -65,6 +65,15 @@ unsigned int ref_calculateDilLength(void *dil, int law)
 	asm("ref__Z18calculateDilLengthP19tagV90DILdescriptor7PcmType");
 
 /*
+ * `void`, because the two exits do not agree on %eax -- the ADI arm tail-jumps
+ * to `edprintf` and the ADI_QC arm calls it and returns.  The `DilType` is
+ * declared `int` for the reason the block above gives: a promoted argument
+ * slot is four bytes whatever the enum's base.
+ */
+void ref_setDilDescriptor(void *d, int type)
+	asm("ref__Z16setDilDescriptorP19tagV90DILdescriptor7DilType");
+
+/*
  * The sixteen processing methods.  Scalar parameters are `int` for the same
  * reason as above -- a promoted argument slot is four bytes whatever the
  * declared type -- but a `float` parameter is NOT promoted in a prototyped
@@ -547,6 +556,323 @@ run_calculatedillength(void)
 	diff_eq_int("some length is nonzero", nonzero, 1, 0);
 	diff_eq_int("the length is not the same on every trial", distinct, 1,
 		    0);
+
+	return diff_end();
+}
+
+/*
+ * ==========================================================================
+ * `setDilDescriptor` -- .text+0x31c60, 0x131 = 305 bytes
+ * ==========================================================================
+ *
+ * Five copies and three scalars out of eight two-row tables, and the whole
+ * difficulty of testing it is that MOST OF WHAT IT DOES IS NOT WRITE.
+ *
+ * THE DESCRIPTOR IS SEEDED WITH NON-ZERO BYTES AND NEVER ZEROED, and here
+ * that is not the usual finding-230 hygiene but the only way the central
+ * claim is observable at all.  `seq1` is filled to `seq1Length`, `seq2` to
+ * `seq2Length` and `dilCode` to `dilCount`; the rest of all three arrays
+ * keeps whatever it held (finding 7602).  Under `DIL_TYPE_ADI_QC` that is 68
+ * bytes of each pattern array and 112 ucode slots -- and every table entry at
+ * those indices is a ZERO, so over a zeroed descriptor "not written" and
+ * "written zero" are the same bytes and the claim cannot fail.  The seed
+ * therefore maps a zero byte to 0xa5 rather than emitting it.
+ *
+ * AND THE TAIL IS CHECKED TWICE, THE SECOND TIME WITHOUT THE SEED.  A tail
+ * that survives a seed still only says the loop stopped somewhere at or below
+ * the count.  The second half below calls ADI and then ADI_QC on the SAME
+ * descriptor and requires `seq1[60..119]` to be exactly what the ADI arm put
+ * there -- 60 bytes of a DIFFERENT table row, which no bound except 60 leaves
+ * standing -- and then calls them the other way round and requires the same
+ * 60 to have been overwritten.  That is the count driving the extent, in both
+ * directions, against a witness the fixture did not choose.
+ *
+ * A `DilType` OUTSIDE {0, 1} IS NOT DRIVEN, and the .cpp says why: every
+ * index is `type` scaled by the row width with no bound check, so a type of 2
+ * reads past all eight tables into whatever `.data` holds next -- the blob's
+ * layout for the blob's copy and GCC's for ours.  Such a fixture would be
+ * measuring section placement.
+ *
+ * THE DEBUG SWEEP IS {0, 1, 2}.  Both messages go through `edprintf`, which
+ * gates itself on `dsplibs_debug_level > 1`, so a sweep over {0, 2} could not
+ * tell that gate from `> 0`.
+ *
+ * WHAT NO FIXTURE HERE CAN CATCH, named rather than left as a silent hole:
+ * `TO`'s two rows are byte-for-byte identical and so are `REF`'s, `N` is
+ * {144, 144}, and `Lsp` and `Ltp` are the SAME pair {120, 60}.  So a
+ * row-selection defect on `TO`, `REF` or `N`, and a swap of `Lsp` for `Ltp`,
+ * are equivalent mutants by construction; test/mutations/v90dil.json carries
+ * them as such rather than as uncaught rows.
+ */
+
+/*
+ * The two rows of `H` and `REF` and the three counts, spelled out here so
+ * that the assertions below are claims about the OBJECT rather than about the
+ * reconstruction agreeing with itself.
+ */
+static const unsigned char dil_H[2][8] = {
+	{  19,  39,  39,  39,  39,  39,  39,  19 },
+	{   9,  19,  19,  19,  19,  19,  19,   9 }
+};
+static const unsigned char dil_REF[2][8] = {
+	{  78,  78,  78,  78,  78,  78,  78,  25 },
+	{  78,  78,  78,  78,  78,  78,  78,  25 }
+};
+static const unsigned char dil_N[2] = { 144, 144 };
+static const unsigned char dil_L[2] = { 120, 60 };
+
+#define DIL_GUARD	64
+#define DIL_SLOT	((int)sizeof(tagV90DILdescriptor) + DIL_GUARD)
+
+static unsigned char dilA[DIL_SLOT] __attribute__((aligned(8)));
+static unsigned char dilB[DIL_SLOT] __attribute__((aligned(8)));
+static unsigned char dilS[DIL_SLOT];
+
+#define DA	((tagV90DILdescriptor *)dilA)
+#define DB	((tagV90DILdescriptor *)dilB)
+#define DS	((const tagV90DILdescriptor *)dilS)
+
+static void
+dil_seed_pair(int trial)
+{
+	int i;
+
+	lfsr_state = 0x77a1u + 0x9e37u * (unsigned)trial;
+	for (i = 0; i < DIL_SLOT; i++) {
+		unsigned char v = next_byte();
+
+		/* Never zero; see the group comment. */
+		dilS[i] = v != 0 ? v : (unsigned char)0xa5;
+	}
+	memcpy(dilA, dilS, DIL_SLOT);
+	memcpy(dilB, dilS, DIL_SLOT);
+}
+
+static void
+dil_fire(int type)
+{
+	dsplib_debug_capture_reset();
+	setDilDescriptor(DA, (DilType)type);
+	ref_setDilDescriptor(dilB, type);
+}
+
+static void
+dil_compare(long tag)
+{
+	diff_eq_obj_(__FILE__, __LINE__, "after setDilDescriptor",
+		     "the descriptor and the guard past it", dilA, dilB,
+		     (size_t)DIL_SLOT, tag);
+	diff_eq_int("transcript line count (%ld)",
+		    (long)dsplib_debug_capture_lines(0),
+		    (long)dsplib_debug_capture_lines(1), tag);
+	diff_eq_int("transcript text (%ld)",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+}
+
+static int
+run_setdildescriptor(void)
+{
+	static unsigned char midB[DIL_SLOT];
+	static char adiText[8192], qcText[8192];
+	int trial, type, lvl, i;
+	int seen[8];
+	int quiet = 0, loud = 0;
+	int tailWitness = 0;
+
+	diff_begin("setDilDescriptor");
+
+	for (i = 0; i < 8; i++)
+		seen[i] = 0;
+
+	dsplib_debug_capture_on = 1;
+	adiText[0] = qcText[0] = '\0';
+
+	for (lvl = 0; lvl <= 2; lvl++) {
+		dsplibs_debug_level = ref_dsplibs_debug_level = (unsigned)lvl;
+
+		for (trial = 0; trial < 12; trial++)
+			for (type = 0; type <= 1; type++) {
+				long tag = (long)lvl * 1000 + trial * 2 + type;
+				unsigned int n = dil_N[type];
+				unsigned int l = dil_L[type];
+
+				dil_seed_pair(trial * 2 + type);
+				dil_fire(type);
+				dil_compare(tag);
+
+				/*
+				 * THE GUARD, against the SEED and not against
+				 * the other side: both were seeded alike, so a
+				 * store past the end that both made would
+				 * compare equal.
+				 */
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "nothing is stored past the "
+					     "descriptor", "the guard",
+					     dilB + sizeof(tagV90DILdescriptor),
+					     dilS + sizeof(tagV90DILdescriptor),
+					     DIL_GUARD, tag);
+
+				/* The three counts, by value, on the blob's side. */
+				diff_eq_int("dilCount (%ld)", (long)DB->dilCount,
+					    (long)dil_N[type], tag);
+				diff_eq_int("seq1Length (%ld)",
+					    (long)DB->seq1Length,
+					    (long)dil_L[type], tag);
+				diff_eq_int("seq2Length (%ld)",
+					    (long)DB->seq2Length,
+					    (long)dil_L[type], tag);
+
+				/*
+				 * `H` and `REF`, the only two arrays written
+				 * unconditionally -- `cmp $0x7,%edx; jbe` and
+				 * no reloaded bound.  `H`'s two rows DIFFER,
+				 * so this carries the row-selection claim;
+				 * `REF`'s do not, and the group comment says
+				 * so.
+				 */
+				for (i = 0; i < 8; i++) {
+					diff_eq_int("segmentSize[%ld]",
+						    (long)DB->segmentSize[i],
+						    (long)dil_H[type][i],
+						    (long)i);
+					diff_eq_int("segmentCode[%ld]",
+						    (long)DB->segmentCode[i],
+						    (long)dil_REF[type][i],
+						    (long)i);
+				}
+
+				/* THE THREE TAILS.  Finding 7602. */
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "seq1 past seq1Length is left "
+					     "alone", "seq1 tail",
+					     DB->seq1 + l, DS->seq1 + l,
+					     128u - l, tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "seq2 past seq2Length is left "
+					     "alone", "seq2 tail",
+					     DB->seq2 + l, DS->seq2 + l,
+					     128u - l, tag);
+				diff_eq_obj_(__FILE__, __LINE__,
+					     "dilCode past dilCount is left "
+					     "alone", "dilCode tail",
+					     DB->dilCode + n, DS->dilCode + n,
+					     256u - n, tag);
+
+				/*
+				 * ANTI-VACUITY, per region: a store agrees for
+				 * the right reason only where what it replaced
+				 * was different.  Eight regions, each of which
+				 * has to have been seen to change.
+				 */
+				if (DS->dilCount != DB->dilCount)
+					seen[0] = 1;
+				if (DS->seq1Length != DB->seq1Length)
+					seen[1] = 1;
+				if (DS->seq2Length != DB->seq2Length)
+					seen[2] = 1;
+				if (memcmp(DS->seq1, DB->seq1, l) != 0)
+					seen[3] = 1;
+				if (memcmp(DS->seq2, DB->seq2, l) != 0)
+					seen[4] = 1;
+				if (memcmp(DS->dilCode, DB->dilCode, n) != 0)
+					seen[5] = 1;
+				if (memcmp(DS->segmentSize, DB->segmentSize, 8)
+				    != 0)
+					seen[6] = 1;
+				if (memcmp(DS->segmentCode, DB->segmentCode, 8)
+				    != 0)
+					seen[7] = 1;
+
+				/*
+				 * AND THE TAILS ARE NOT VACUOUS EITHER: what
+				 * stands there must differ from the zero every
+				 * table holds at those indices, or "left
+				 * alone" and "written from the table" are the
+				 * same bytes.
+				 */
+				for (i = (int)l; i < 128; i++)
+					if (DB->seq1[i] != 0
+					    && DB->seq2[i] != 0)
+						tailWitness = 1;
+
+				if (dsplib_debug_capture_lines(1) == 0)
+					quiet++;
+				else
+					loud++;
+
+				if (lvl == 2) {
+					if (type == 0)
+						strcpy(adiText,
+						       dsplib_debug_capture_text(1));
+					else
+						strcpy(qcText,
+						       dsplib_debug_capture_text(1));
+				}
+			}
+	}
+
+	for (i = 0; i < 8; i++)
+		diff_eq_int("region %ld was observably written", seen[i], 1,
+			    (long)i);
+	diff_eq_int("the tails hold something no table would have put there",
+		    tailWitness, 1, 0);
+	diff_eq_int("both arms of the edprintf gate were taken",
+		    quiet > 0 && loud > 0, 1, 0);
+	diff_eq_int("the two DilTypes print DIFFERENT messages",
+		    adiText[0] != '\0' && qcText[0] != '\0'
+		    && strcmp(adiText, qcText) != 0, 1, 0);
+
+	/*
+	 * ==================================================================
+	 * THE SAME DESCRIPTOR TWICE, WHICH IS THE TAIL CLAIM WITHOUT THE SEED
+	 * ==================================================================
+	 */
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
+
+	dil_seed_pair(101);
+	dil_fire(0);
+	dil_compare(9000);
+	memcpy(midB, dilB, DIL_SLOT);
+
+	dil_fire(1);
+	dil_compare(9001);
+
+	diff_eq_int("ADI_QC leaves ADI's seq1[60..119] standing",
+		    memcmp(DB->seq1 + 60,
+			   ((tagV90DILdescriptor *)midB)->seq1 + 60, 60), 0,
+		    0);
+	diff_eq_int("...and ADI's seq2[60..119] too",
+		    memcmp(DB->seq2 + 60,
+			   ((tagV90DILdescriptor *)midB)->seq2 + 60, 60), 0,
+		    0);
+	/*
+	 * AND THAT WITNESS IS NOT THE SEED.  Had ADI left those 60 bytes alone
+	 * as well, the two checks above would hold vacuously.
+	 */
+	diff_eq_int("the surviving span is ADI's and not the seed's",
+		    memcmp(((tagV90DILdescriptor *)midB)->seq1 + 60,
+			   DS->seq1 + 60, 60) != 0, 1, 0);
+
+	dil_seed_pair(102);
+	dil_fire(1);
+	dil_compare(9002);
+	memcpy(midB, dilB, DIL_SLOT);
+
+	dil_fire(0);
+	dil_compare(9003);
+
+	diff_eq_int("ADI overwrites ADI_QC's seq1[60..119]",
+		    memcmp(DB->seq1 + 60,
+			   ((tagV90DILdescriptor *)midB)->seq1 + 60, 60) != 0,
+		    1, 0);
+	diff_eq_int("...and dilCode is written to 144 either way",
+		    memcmp(DB->dilCode,
+			   ((tagV90DILdescriptor *)midB)->dilCode, 144), 0, 0);
+
+	dsplib_debug_capture_on = 0;
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0u;
 
 	return diff_end();
 }
@@ -5397,6 +5723,7 @@ main(void)
 	rc |= run_resetlinearmapping();
 	rc |= run_reset();
 	rc |= run_calculatedillength();
+	rc |= run_setdildescriptor();
 	rc |= run_setters();
 	rc |= run_clears();
 	rc |= run_accumulate();
