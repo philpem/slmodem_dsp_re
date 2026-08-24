@@ -56,8 +56,8 @@
  },
  {
   "label": "ctor: the frame buffer is four bytes per symbol, not eight",
-  "find": "\tframeBuf = sysdep_malloc(8 * n);",
-  "replace": "\tframeBuf = sysdep_malloc(4 * n);"
+  "find": "\tframeBuf = (unsigned char *)sysdep_malloc(8 * n);",
+  "replace": "\tframeBuf = (unsigned char *)sysdep_malloc(4 * n);"
  },
  {
   "label": "ctor: the converter takes 2n + 0x1388 symbols, not 3n",
