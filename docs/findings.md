@@ -79664,7 +79664,26 @@ base commit's 243 -- one new binary, `t_v90unpck`, and nothing else moved.
 0 unusable, 2 equivalent, 0 miscounted**, recorded by `mutsnap.py --update`.
 The two equivalent rows are both the dead clamp and both carry the argument.
 
-**THREE OF THOSE ANCHORS BROKE MID-BATCH AND `anchorcheck` CAUGHT IT**, which
+**SHOWN TO FIRE, and the ritual itself has a trap worth naming.**  Three
+defects were injected into `src/` and each turned a different slice red:
+the codec loop's else arm reading the codec bitmaps rather than the ordinary
+ones, **182 of 1,083**; the bitmap selected by `i` rather than through
+`distinctIndex`, **40**; the long rate arm adding 8 rather than 0x14, **64**.
+Reverted immediately, and the suite is green after each.
+
+A fourth -- the byte counting UP within a word rather than down -- **printed
+no verdict at all, and the reason is the trap**: `make one` runs
+`anchorcheck.py` BEFORE it builds, the injected defect was textually the same
+edit as two of this suite's own mutation rows, so their `find` stopped
+matching and the gate refused before the test ever ran.  A fire check that
+aborts prints exactly what a fire check that fails to fire prints, which is
+finding 134's argument arriving inside the ritual meant to satisfy it.  **That
+defect is covered anyway and by the right tool**: `v90unpck`'s rows "the
+ordinary helper counts the byte up within a word rather than down" and its
+codec twin are that exact mutation, and both are `caught (test)`.  Inject a
+defect that no anchor quotes, or run the binary directly.
+
+**THREE MUTATION ANCHORS BROKE MID-BATCH AND `anchorcheck` CAUGHT IT**, which
 is 7521's lesson being paid rather than re-learned.  Reshaping the tail into
 `setDataBitRateInline` (below) deleted the three lines the rate rows quoted;
 `anchorcheck.py` reported them as `matches 0 time(s)` and `mutate.py` would
