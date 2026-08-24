@@ -70,8 +70,26 @@
 #include "dsplib/V92Jd.h"
 
 /*
- * THE RESAMPLER AT +0x094 IS A `V90Resampler` AND HAS TO BE DECLARED AS ONE,
- * and that is what the guard claim below is for.
+ * THE GUARD CLAIM THIS BLOCK DESCRIBED IS GONE, AND EVERY PARAGRAPH BELOW
+ * ABOUT IT IS HISTORY.  It said this header `#define`d
+ * `DSPLIB_V90PARAMETERS_H` for itself so that the named `V90Parameters` map
+ * could never arrive, and that a translation unit wanting the named map had
+ * to spell its accesses as indices.  Both stopped being true at task #116:
+ * `V90PreFilter.h` INCLUDES `V90Parameters.h` rather than defining a second,
+ * smaller `V90Parameters`, this file defines the guard nowhere, and there is
+ * one definition of the class in the tree at 0x558 bytes.
+ *
+ * IT IS MEASURED AND NOT ARGUED.  `test/unit/t_v90p4ddec.cpp` includes this
+ * header beside `V90Parameters.h` and reads `PARAMS->TRN2D_DD_LENGTH`,
+ * `PARAMS->PHASE4_R_DETECTION_LENGTH` and a dozen more named fields in the
+ * same translation unit, and `make phase` is green.  The block below is kept
+ * because the RESAMPLER half of it is live and because the failure mode it
+ * describes cost real time; read it for that and not for a restriction to
+ * work around.  CLAUDE.md's own rule about a paragraph that states a live
+ * defect -- check it against the tool before repeating it -- and finding
+ * 6402's shape a second time.
+ *
+ * THE RESAMPLER AT +0x094 IS A `V90Resampler` AND HAS TO BE DECLARED AS ONE.
  *
  * It used to be modelled as its `ResamplerTimingOffset` base plus 0x68 bytes
  * of `pad_`, which was enough while nothing here had a lifecycle: no

@@ -77965,3 +77965,238 @@ caught, 0 unusable, 0 equivalent** against `t_v90modchain`; `v90p4dreset` is
 `t_v90p4ddec`.  Driving `reset`'s loop also took `v90p4ddec` from 59 caught of
 74 to 61, which is two claims about the decision members that only their
 CALLER could present.
+
+### 7480. `exitPhase3` MAKES TWO CALLS WHERE THE INLINING SHOWS ONE, AND ONLY THE INSTRUCTION COUNT SAID SO
+
+`V90Demodulator::exitPhase3` is `.text+0x1bb50`, 768 bytes, and its phase 4 arm
+is
+
+    1bc58:  cmpl $0x14,0x30(%eax)     ; phase3Demodulator->word_30
+    1bc5c:  je   1bdd0
+    ...
+    1bdd0:  cmpl $0x2,0x34(%edi)      ; inPhase3
+    1bdd4:  je   1be1e
+    1bdd6..1be1d                      ; V90Demodulator::enterPhase4's body
+    1be1e:  mov  0x1d8(%edi),%edx
+    1be24:  call V90Equalizer::enterPhase4
+    1be2c:  jmp  1bc62
+
+0x1bdd0..0x1be1d is `V90Demodulator::enterPhase4` (0x1b2b0, 110 bytes) inlined
+instruction for instruction -- the idempotence test, the gated "enter Phase 4"
+line, `word_44 += word_38` and the `lea 0x28230(%edx,%edx,4)` deadline.  **What
+is easy to miss is where the idempotence test's TAKEN edge goes**: not to the
+join with the common tail but to `equalizer->enterPhase4()`, so the source is
+
+    if (phase3Demodulator->word_30 == 0x14) {
+            enterPhase4();
+            equalizer->enterPhase4();
+    }
+
+and the second call belongs to `exitPhase3` rather than to the member that was
+inlined into it.
+
+**The first version of this function missed it and read as finished.**  Every
+branch matched, every store matched, all thirteen other calls matched in order,
+and the differential fixture did not exist yet to disagree.  What said
+otherwise was one number: 174 instructions from GCC 3.4.2 against the blob's
+186, where the accounted difference should have been nine.  Adding the call
+took it to 177 against 186 and closed the residual exactly -- seven for the
+callee-saved registers (the blob spills four to stack slots where ours pushes
+two, twelve `mov`s against six `push`/`pop`) and two for the x87 schedule
+around the fractional part, where the blob spells `flds`+`fmulp` and `fsubp`
+and ours spells `fmuls` and `fsubr`.  720 bytes against 768, and nothing else.
+
+**So the codegen tier caught a defect the differential tier had no fixture for
+yet**, which is 7460's call-inventory argument arriving one step earlier than
+usual: count the instructions BEFORE building the test, because at that point
+the count is the only witness there is.
+
+### 7481. THREE NAMES `exitPhase3` FORCES, AND ONE IT DECLINES
+
+**`V90Demodulator` +0x240 is `float trn1dRmsRatio`, and it is rule 1.**  The
+header had `pad_240[4]`, "nothing reconstructed reads it".  `flds 0x240(%edi)`
+at 0x1bb81 is the object's only access to those four bytes anywhere, and the
+value it loads becomes the `%c%d.%08d` triple of
+
+    "V90Demodulator: TRN1d RMS Ratio = %c%d.%08d\r\n"
+
+so the width and the type are the load's and the name is the author's own.
+Nothing WRITES it, which is consistent with `progress` being unwritten and is
+evidence for nothing.
+
+**`tagV90AdditionalCPinfo` +0x14 is two bytes wide and keeps its offset name.**
+`mov 0x48(%esi),%ebx ; mov %bx,0x14(%ecx)` at 0x1bc43 is a whole-word load of
+`V90Parameters::ANALOG_RATE_MASK` narrowed to a sixteen-bit store, so
+`pad_14[4]` becomes `short short_14; unsigned char pad_16[2];`.  **It is NOT
+called `analogRateMask`**, and that is this header's own stated policy rather
+than timidity: nothing in the object reads the field, so the parameter's name
+says where the four bytes came from and not what the slot is for, which is
+exactly the adjacency that file declines for its other five members.  3120's
+rule; the derivation is in the comment.
+
+**`V90Demodulator` +0x294 is `quickConnect`, and TWO INDEPENDENT DERIVATIONS
+are why the rename happened here rather than being declined too.**
+`V90Demodulator::reset(unsigned int quickConnect)` stores its argument into
+this slot and into `equalizer->quickConnect` in the same breath, and
+`exitPhase3` hands the same slot to `V90Phase4Demodulator::reset` as that
+member's fourth argument -- which finding 7472 named `quickConnect` from the
+format string that prints it.  Neither reading knew about the other.  Eleven
+references over five files and two mutation sets moved with it; `make refs`
+reports 0 anchors matching other than exactly once and the suite reports 0
+unusable, which is 7476's fourth case checked rather than hoped for.
+
+**And one paragraph of `V90Demodulator.h` was simply out of date.**  It said
+the header CLAIMS `DSPLIB_V90PARAMETERS_H` for itself so that the named
+`V90Parameters` map can never arrive, and that a translation unit wanting named
+fields must spell them as indices.  Neither has been true since task #116:
+`V90PreFilter.h` includes `V90Parameters.h`, no file defines that guard but
+`V90Parameters.h`, and `t_v90p4ddec.cpp` now includes this header beside the
+named map and reads `PARAMS->TRN2D_DD_LENGTH` in the same translation unit with
+`make phase` green.  Measured, not argued -- 6402's shape a second time, and
+the reason CLAUDE.md says to check a paragraph that states a live defect
+against the tool.
+
+### 7482. THE TWELVE-ARGUMENT DESIGN CALL IS FIVE VIEWS OF ONE OBJECT AND ONE VALUE READ EARLY
+
+`V90TRN2Designer::V90TRN2Design` takes twelve arguments and `exitPhase3` is the
+object's only caller.  Five of the twelve are `autoDigitalImpDetector`:
+
+    arg2  adid + 0x0000    short (*)[128]          linMapp
+    arg3  adid + 0x0600    short (*)[128]          linMappAlt
+    arg4  adid + 0x0d00    unsigned char (*)[128]  byte_0d00
+    arg5  adid + 0x2800    short *                 short_2800
+    arg9  getMaxUcode()    unsigned char *         adid->maxUcode[6] at +0xa956
+
+and three more are scalars out of the same object's tail (`pcmType` at +0xa95c,
+`int_a960`, `unSuspectedPhase` at +0xa968, the last with a `movswl`).  **The
+four table arguments are built as four separate reloads of the same pointer
+with an `add $imm` on each** -- 0x1bcf6, 0x1bd06, 0x1bd16 and 0x1bd26 -- which
+is what an array MEMBER's address looks like and not four pointers being
+carried around.  The designer never sees the detector itself, and
+`getMaxUcode()` is the fifth view arriving through phase 3 rather than
+directly.
+
+**Argument 12 is an EMBEDDED field and is the one the call could most easily
+have got wrong.**  `mov 0x238(%edi),%ebx` is `spectralVerifier.word_28` --
++0x210 plus 0x28, the `V90SpecialSpectralConditions` the verifier detected --
+and it is loaded at 0x1bc83, BEFORE the two intervening calls, and stashed at
+`0x40(%esp)` until the argument list is built.  A value read early and used
+late is a hint worth acting on: it says the expression is a plain load of a
+field and not the result of anything the intervening calls could change.
+
+Argument 10 is the only place `V90Demodulator::sessionFlag` is read in this
+function: non-zero takes `jdV92->getMaxLookahead()`, zero takes `jd`'s, and
+both return `unsigned char` which the call widens with `movzbl`.
+
+### 7483. `exitPhase3`'s FIXTURE IS CHOSEN BY ITS LAST STATEMENT, NOT ITS FIRST
+
+Three files could have hosted it and the brief named two of them.
+`t_v90demod.cpp` and `t_v90dataph.cpp` both build a `V90Demodulator`, and
+`exitPhase3`'s own fields hang off that object -- which is the argument for
+either of them and it is the wrong argument.  **The member ENDS with
+`phase4Demodulator->reset(...)`, and that reset (7477) reseeds two
+`V90RDetector`s, resets the CP or the MP, hands the mapping block to the
+demapper AND to an embedded `V90Phase4Modulator` whose converter owns a
+`V90Mapper` and a `Scrambler` on the heap.**  Neither of those two files plants
+a byte inside their 0x351c block; running the reset over a seeded one is a
+segfault, not a trial.
+
+So it went into `t_v90p4ddec.cpp`, whose `setup`, `rd_construct`, `rd_compare`
+and `rd_destruct` were built for that very reset in the batch immediately
+before this one, and the SHALLOW half was added there instead: a
+`V90Demodulator`, a `V90Phase3Demodulator`, an equaliser, a designer, an
+additional-CP record and the two Jd messages.  The arithmetic is roughly 60
+lines of new wiring against roughly 250 the other way round.
+
+**The per-side / shared split is decided by what the member WRITES, and four of
+the objects it writes are peers this file deliberately shares.**  The parameter
+block (`setNofUcodesInTrn2` stores into it), the mapping block (the designer
+rewrites it), the detector (`V90TRN2Design` walks `maxUcode[]` DOWN through the
+pointer `getMaxUcode` hands it) and the connection evaluator are snapshotted
+after our call, restored, and compared against what the blob's call leaves --
+`t_v90equ`'s arena, which is why none of them needs a second copy or a pointer
+word blanked out of the comparison.  Only six objects are per side.
+
+**Two things had to be re-planted and one of them would have been a crash.**
+`setup` gives `linMapp` a DESCENDING run because that is what the demapper
+wants; `V90TRN2Design` walks `topUcode[k]` down while the companded level is
+over its ceiling and **has no floor**, so a descending table never terminates,
+wraps the `unsigned char` and reads off the row.  The ascending shape with a
+zero at entry 0 is `t_v90trn2design`'s and is what bounds the walk.  The two Jd
+messages also had to be planted to answer DIFFERENT lookaheads (1 and 2, out of
+bits 30 and 31 of each) -- with equal answers, `sessionFlag` choosing between
+them has no observable at all and the mutation that swaps the two calls
+survives.
+
+Counts: `v90exit3` is **55 mutations, 53 caught, 0 NOT caught, 0 unusable, 2
+equivalent** against `t_v90p4ddec`, and the binary's own two suites did NOT
+move -- `v90p4ddec` stayed at 61 caught of 74 and `v90p4dreset` at 54 of 54.
+**That is a result and not an omission**: `exitPhase3` calls the phase 4 reset
+with `nofSamples == 0`, so the decision loop those thirteen uncaught claims
+live behind never runs, and every argument shape it presents is one
+`run_p4d_reset` already sweeps.  A caller adds verdicts only where it reaches
+something the callee's own grid cannot, which 7477 measured the other way round
+when driving `reset`'s loop took `v90p4ddec` from 59 to 61.
+
+### 7484. TWO OF `exitPhase3`'s CLAIMS ARE EQUIVALENT BY AN ARGUMENT ABOUT THE CODE, NOT UNTESTED
+
+Both survived the first mutation run and neither is a gap in the fixture.
+
+**`(short)autoDigitalImpDetector->isThereAnyAltRbsPhase()`.**  The blob narrows
+with `cwtl` at 0x1bc70 and `setNofUcodesInTrn2` takes a `short`, so the cast is
+the object's and belongs in the source.  It can never change a value:
+`isThereAnyAltRbsPhase` answers 0 or 1 out of a register zeroed on entry, so
+its high half-word is always zero and `(short)` is the identity over the WHOLE
+of its range.  Separating the two spellings would need the callee to return
+something it cannot return.  Finding 293 recorded the same shape for
+`(short)preFilter.isV90WithEia6()` in `enterPhase3`.
+
+**Argument 8 of `V90TRN2Design`.**  It is the one `V90TRN2Designer.h` calls
+`unused`: the design stores it at +0x120 of its own frame and never reads it
+back, which `t_v90trn2design` turned from a claim about a listing into a
+measurement by sweeping the argument and asserting nothing changes.  So no
+value passed here is observable anywhere, and the only thing that fixes WHICH
+field the object reads into it is `movswl 0xa968(%edx),%ecx` at 0x1bcc3.
+
+Both are written into `test/mutations/v90exit3.json` as `"equivalent": true`
+with the argument in `why`, rather than deleted -- the tree's rule that "we
+tried this and it survived for a reason" beats an absent entry, which reads as
+nobody having thought of it.
+
+**A third claim has no witness and is NOT written as a mutation at all**, which
+is 7474's move made before the fact: the inlined `enterPhase4()`'s own
+`inPhase3 == 2` early return.  The only way into `exitPhase3` is
+`inPhase3 == 1`, so that test never takes its taken edge from here; a mutation
+on it would be caught by `t_v90dataph`'s latch sweep over the out-of-line
+member and credited to the wrong function.
+
+### 7485. `V90ConnectionEvaluator` +0x78 GAINS THE AUTHOR'S OWN WORD AND KEEPS ITS OFFSET NAME
+
+`exitPhase3` is the fourth function in the tree to touch the +0x78/+0x7c pair
+and the first to NAME it.  When `V90TRN2Design` returns zero the member does
+
+    1bd47:  cmpl $0x1,dsplibs_debug_level
+    1bd4e:  mov  0x20c(%edi),%esi
+    1bd54:  movl $0x1,0x78(%esi)
+    1bd5b:  ja   1be3f  ->  "V90Demodulator::exitPhase3()
+                             delayedRetrainRequest !!!"
+
+-- the store of 1 and the string adjacent, which is CLAUDE.md's evidence rule 1
+and agrees with `evaluatePhase4`'s "Initiating retrain (delayed)..." reached
+from the same slot and with `getV90CpBits` copying +0x78 into +0x7c.  The pair
+is a delayed retrain REQUEST and its acknowledgement, and now the request half
+has the author's word for it.
+
+**The rename is still not made, and the reason is coordination and not
+evidence.**  `word_78` is spelled 45 times across nine files; `V90Equalizer`
+has a DIFFERENT member of the same name at its own +0x78, so a mechanical
+rename is unsafe; and `VPcmFloModem.cpp` plus two mutation sets refer to this
+one by its offset name and belong to other work.  The evidence is recorded in
+`V90ConnectionEvaluator.h` so that the pass owning those files can make it in
+one move.  Naming it wrongly is worse than leaving it padded, and naming it
+RIGHT in one file out of nine is worse still.
+
+The store itself is fully tested: `word_78 = 0`, the store dropped, and the
+store landing in +0x7c are three separate mutations and all three are caught,
+with the evaluator planted away from 1 every trial so that "a store of one"
+cannot pass by finding a one already there.

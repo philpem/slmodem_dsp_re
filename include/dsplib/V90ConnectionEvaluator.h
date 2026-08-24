@@ -362,8 +362,27 @@ public:
 	 * either slot.  The pair is a request and its acknowledgement, which is
 	 * why `getV90CpBits` copying one to the other arms it.
 	 *
-	 * THE NAMES ARE NOT CHANGED: `VPcmFloModem.cpp` refers to both by their
-	 * offset names and belongs to other work.
+	 * AND A FOURTH FUNCTION SUPPLIES THE AUTHOR'S OWN WORD FOR +0x78.
+	 * `V90Demodulator::exitPhase3` raises the request -- `movl $0x1,
+	 * 0x78(%esi)` at 0x1bd54 -- when `V90TRN2Design` cannot design the
+	 * TRN2 constellations, and the `dsplibs_debug_printf` beside that
+	 * store is
+	 *
+	 *     "V90Demodulator::exitPhase3() delayedRetrainRequest !!!"
+	 *
+	 * which is CLAUDE.md's evidence rule 1 and names the slot exactly:
+	 * the request half of the pair is `delayedRetrainRequest`.  It agrees
+	 * with `evaluatePhase4`'s "Initiating retrain (delayed)..." reached
+	 * from the same slot.
+	 *
+	 * THE NAMES ARE STILL NOT CHANGED, and the reason is coordination
+	 * rather than evidence.  `word_78` is spelled 45 times across nine
+	 * files, `V90Equalizer` has a DIFFERENT member of the same name at
+	 * its own +0x78, and `VPcmFloModem.cpp` and two mutation sets refer
+	 * to this one by its offset name and belong to other work.  A rename
+	 * here would be a nine-file edit whose only checkable part is that
+	 * nothing broke.  The evidence is recorded so that the pass which
+	 * owns those files can make it in one move; finding 7485.
 	 */
 	unsigned int word_78;		/* +0x78 copied to word_7c           */
 	unsigned int word_7c;		/* +0x7c                             */

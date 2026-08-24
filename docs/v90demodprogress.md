@@ -48,15 +48,15 @@ GREEN**: both `V90BitsToSymbol` resets, `V90Mapper::process`,
     V90Phase4Modulator::generateV92Symbol          DONE   3,922 B
     V90Phase4Modulator::reset                     DONE     255 B
     V90Phase4Demodulator::reset                   DONE     504 B
-    V90Demodulator::exitPhase3                                   768 B
+    V90Demodulator::exitPhase3                    DONE     768 B
     V90Demodulator::progress                                   7,276 B
 
-**THE TWO PUMPS AND BOTH `reset`s ARE WRITTEN AND DIFFERENTIALLY GREEN**,
-6,916 bytes of the batch's remaining 16,853, and what is left is
-`V90Demodulator::exitPhase3` (768 B) and `V90Demodulator::progress` (7,276 B).
-Findings 7450-7460 for the pumps -- 7450 has the two jump tables and 7452 the
-seven places the V.92 pump genuinely differs from the V.90 one -- and
-7470-7477 for the two resets.
+**THE TWO PUMPS, BOTH `reset`s AND `exitPhase3` ARE WRITTEN AND DIFFERENTIALLY
+GREEN**, 7,684 bytes of the batch's remaining 16,853, and **the only thing left
+in the batch is `V90Demodulator::progress` itself** (7,276 B).  Findings
+7450-7460 for the pumps -- 7450 has the two jump tables and 7452 the seven
+places the V.92 pump genuinely differs from the V.90 one -- 7470-7477 for the
+two resets, and 7480-7485 for `exitPhase3`.
 
 **BOTH `reset`s COME OUT OF GCC 3.4.2 AT THE BLOB'S OWN SIZE**, 255 and 504
 bytes, the modulator's byte for byte and the demodulator's instruction for
@@ -91,6 +91,61 @@ time.
 
 The remaining `process` overload, `(unsigned char *, unsigned int &, short *)`
 at 0x2faa0, is 484 bytes and is NOT in this batch's closure.
+
+## What `V90Demodulator::exitPhase3` turned out to be
+
+768 bytes at 0x1bb50, the hand-over from phase 3 to phase 4, and one straight
+line with two conditionals in it: the TRN1d RMS ratio reported through
+`%c%d.%08d` and copied into `tagV90AdditionalCPinfo` along with three more
+stores, `V90Phase3Demodulator::exitDIL`, the phase 4 entry when phase 3
+terminated, `setNofUcodesInTrn2`, the twelve-argument `V90TRN2Design`, the
+delayed retrain its failure raises, `displaySpectralParams`, and
+`phase4Demodulator->reset(Uinfo, 0, 0, quickConnect)`.
+
+**IT MAKES TWO CALLS IN THE PHASE 4 ARM AND THE INLINING HIDES ONE.**
+`V90Demodulator::enterPhase4` is inlined at 0x1bdd0 and its idempotence test's
+TAKEN edge lands on `equalizer->enterPhase4()` -- so the source is
+`{ enterPhase4(); equalizer->enterPhase4(); }` and not one call.  The first
+draft missed it with every branch, store and other call agreeing; what said
+otherwise was 174 instructions against the blob's 186.  Finding 7480, and the
+lesson is to count instructions before building the fixture, because until the
+fixture exists the count is the only witness.
+
+**THE LATCH IS `== 1`, NOT `!= 0`**, and that matters because
+`enterChannelVerification` leaves the object at 5.
+
+**THE TWELVE-ARGUMENT DESIGN CALL IS FIVE VIEWS OF ONE DETECTOR** -- four
+tables reached as `adid + 0`, `+0x600`, `+0xd00` and `+0x2800`, plus
+`getMaxUcode()` returning `&adid->maxUcode[0]` through phase 3 -- three more
+scalars out of the same object's tail, and one EMBEDDED field,
+`spectralVerifier.word_28` at +0x238, read early and stashed across two calls.
+Finding 7482.
+
+**Three header corrections fell out**: `V90Demodulator` +0x240 is
+`float trn1dRmsRatio` (the format string names it), `tagV90AdditionalCPinfo`
++0x14 is a `short` and not four bytes of pad, and +0x294 is `quickConnect` on
+two independent derivations.  A fourth is a retraction: `V90Demodulator.h`'s
+paragraph about CLAIMING `DSPLIB_V90PARAMETERS_H` has been history since task
+#116 and a translation unit may hold this header and the NAMED `V90Parameters`
+map together -- which `t_v90p4ddec.cpp` now does.  Finding 7481.
+
+### Its test is in `t_v90p4ddec` and the reason is the LAST statement
+
+Not `t_v90demod` and not `t_v90dataph`, although both build a `V90Demodulator`.
+`exitPhase3` ends in `phase4Demodulator->reset(...)`, which needs the whole
+phase 4 receiver -- demapper, CP, MP, descrambler, the embedded modulator, its
+converter and the mapper under it -- and `t_v90p4ddec` is where that was built
+for the previous batch.  Sixty lines of shallow wiring there against about two
+hundred and fifty of deep wiring anywhere else.  What the member WRITES decides
+per-side against shared: four peers it writes (the parameter block, the mapping
+block, the detector and the connection evaluator) are snapshotted, restored and
+compared rather than duplicated.  Finding 7483.
+
+Counts: **`v90exit3` is 55 mutations, 53 caught, 0 NOT caught, 0 unusable, 2
+equivalent.**  The binary's own two suites did not move -- `v90p4ddec` 61 of 74,
+`v90p4dreset` 54 of 54 -- because `exitPhase3` calls the phase 4 reset with a
+trip count of zero and presents no argument shape `run_p4d_reset` does not
+already sweep.
 
 ## What the two symbol pumps turned out to be
 
