@@ -65,7 +65,7 @@
  {
   "label": "process answers 2 rather than 3 for BUFFER_UNDERFLOW",
   "find": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;",
-  "replace": "\t\tunsigned int i, kept;\n\t\t\tstatus = 2;"
+  "replace": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 2;"
  },
  {
   "label": "process has its two error messages swapped",
@@ -80,14 +80,14 @@
  {
   "label": "process does not clear symbolsDone on the underflow arm",
   "find": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
-  "replace": "\t\tunsigned int i, kept;\n\t\t\t\toutSymbols[i] = symbols[i];",
+  "replace": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];",
   "equivalent": true,
   "why": "EXPECTED UNCAUGHT, and it is a property of the arithmetic rather than a gap in the sweep.  On the underflow arm `symbolsDone < symbolsBlockSize`, so the leftover shift `for (i = symbolsBlockSize; i < symbolsDone; i++)` cannot run whether the zero was stored or not, `kept` stays 0, and `symbolsDone = kept` writes the same zero four lines later.  The store is in the reconstruction because the blob has `movl $0x0,0x10(%ebp)` at 0x2fded and then `mov %ebx,0x10(%ebp)` at 0x2fe1e -- two stores to +0x10 on one path -- and because it is what lets the compiler constant-propagate the loop bound to the `xor %esi,%esi` at 0x2fdf4.  So this one line rests on the instructions and not on the suite."
  },
  {
   "label": "process copies out a whole block on the underflow arm",
   "find": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)",
-  "replace": "\t\tunsigned int i, kept;\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)"
+  "replace": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)"
  },
  {
   "label": "process copies out everything ready rather than one block",
@@ -97,32 +97,32 @@
  {
   "label": "process shifts the whole buffer down rather than the leftover",
   "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)",
-  "replace": "\t\t} else {\n\t\tfor (i = 0; i < symbolsDone; i++)"
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = 0; i < symbolsDone; i++)"
  },
  {
   "label": "process does not record how much was kept",
   "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;",
-  "replace": "\t\t} else {\n\t\t\tsymbols[kept++] = symbols[i];"
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];"
  },
  {
   "label": "process does not write the next bit demand",
   "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n\t\tnofBits = nofBitsForNextTime();",
-  "replace": "\t\t} else {\n"
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n"
  },
  {
   "label": "process does not clear the pending flag",
   "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;\n\n\treturn status;",
-  "replace": "\t\t} else {\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\treturn status;"
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\treturn status;"
  },
  {
   "label": "process clears the pending flag before it counts the bits",
   "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;",
-  "replace": "\t\t} else {\n\t\tif (extraSymbolsPending)\n\t\t\textraSymbolsPending = 0;\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;"
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n\t\tif (extraSymbolsPending)\n\t\t\textraSymbolsPending = 0;\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;"
  },
  {
   "label": "process treats an exactly-filled block as an underflow",
   "find": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {",
-  "replace": "\t\tunsigned int i, kept;\n\t\tif (symbolsDone <= symbolsBlockSize) {"
+  "replace": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone <= symbolsBlockSize) {"
  },
  {
   "label": "process tests symbolsDone where the object tests the block size",
@@ -132,6 +132,6 @@
  {
   "label": "process leaves the pending flag alone on the size-not-set path",
   "find": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;",
-  "replace": "\t\t} else {\n\t\tnofBits = nofBitsForNextTime();\n\n\t\tif (extraSymbolsPending)\n\t\t\textraSymbolsPending = 0;\n\t}"
+  "replace": "\t\t} else {\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t}\n\n\t\tkept = 0;\n\t\tfor (i = symbolsBlockSize; i < symbolsDone; i++)\n\t\t\tsymbols[kept++] = symbols[i];\n\t\tsymbolsDone = kept;\n\n\t\tnofBits = nofBitsForNextTime();\n\n\t\tif (extraSymbolsPending)\n\t\t\textraSymbolsPending = 0;\n\t}"
  }
 ]

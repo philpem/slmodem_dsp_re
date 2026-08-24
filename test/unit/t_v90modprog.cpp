@@ -1055,6 +1055,22 @@ run_mod_progress(void)
 			silent = 1;
 		}
 
+		/*
+		 * THE REFERENCE PARAMETER, COMPARED ACROSS THE SIDES AND NOT
+		 * ONLY AGAINST A CONSTANT.  Every arm below asserted what the
+		 * BLOB answered and three of the four never looked at ours,
+		 * so `nofBits = 0` in the phase 3 arm and
+		 * `nofBits = nofBitsForNextTime()` at the data phase's entry
+		 * could both be deleted from `src/` with every trial still
+		 * green -- the mutation suite is what found that, which is
+		 * what a mutation suite is for.  The four writing arms are
+		 * states 0..3; the default arm writes nothing and each side
+		 * has to keep its own distinct seed, which is asserted there.
+		 */
+		if (t->state >= 0 && t->state <= 3)
+			diff_eq_int("the two answer the same demand (%ld)",
+				    (long)nb[0], (long)nb[1], tag);
+
 		if (t->state == 0) {
 			unsigned int i;
 			const short *sb = MOD(1)->symbolBuf;
@@ -1526,6 +1542,21 @@ static const struct btrial btrial_v[] = {
 	{  6u,  6u,  400u,   0u, 0, 0 },	/* nothing to fill          */
 	{  4u, 18u,   20u, 168u, 1, 2 },	/* capacity: BUFFER_OVERFLOW*/
 	{  4u, 18u,   20u, 168u, 0, 0 },	/* ... quietly              */
+	/*
+	 * THE CAPACITY BOUNDARY.  The object's test is `symbolsDone >
+	 * nofSymbols`, and every other capacity trial is far enough past the
+	 * limit that `>` and `>=` agree on all of them.  Landing EXACTLY on
+	 * `nofSymbols` is the only input that separates the two, and how many
+	 * symbols the mapper returns for a given bit count is not something
+	 * this fixture can predict -- `V90Mapper::process`'s priming
+	 * countdown suppresses whole frames -- so the sweep approaches the
+	 * limit from several starting points and one of them lands on it.
+	 * The mutation `the capacity test is not strict` in
+	 * test/mutations/v90modprogbts.json is what says whether it did.
+	 */
+	{  6u, 14u,   20u,  42u, 1, 1 },	/* capacity boundary, -6    */
+	{  6u, 18u,   20u,  42u, 0, 0 },	/* ... exactly ON it        */
+	{  6u, 20u,   20u,  42u, 1, 0 },	/* ... -0                   */
 	{ 12u,  0u,  400u, 504u, 1, 1 },	/* a long fill              */
 	{  1u,  0u,  400u,  42u, 0, 0 }		/* the phase 4 block size   */
 };

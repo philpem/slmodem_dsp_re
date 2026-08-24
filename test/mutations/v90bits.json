@@ -208,22 +208,22 @@
  {
   "label": "fill: the symbols go to the front of the buffer",
   "find": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);",
-  "replace": "\t\tunsigned int nofOut;\n\t\tmapper->process(bits, nofBits, symbols, nofOut);"
+  "replace": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, nofBits, symbols, nofOut);"
  },
  {
   "label": "fill: the mapper is given no bits",
   "find": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);",
-  "replace": "\t\tunsigned int nofOut;\n\t\tmapper->process(bits, 0, symbols + symbolsDone, nofOut);"
+  "replace": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, 0, symbols + symbolsDone, nofOut);"
  },
  {
   "label": "fill: symbolsDone is replaced rather than advanced",
   "find": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);\n\n\t\tsymbolsDone += nofOut;",
-  "replace": "\t\tunsigned int nofOut;\n\t\tsymbolsDone = nofOut;"
+  "replace": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);\n\n\t\tsymbolsDone = nofOut;"
  },
  {
   "label": "fill: symbolsDone is not advanced at all",
   "find": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);\n\n\t\tsymbolsDone += nofOut;",
-  "replace": "\t\tunsigned int nofOut;\n"
+  "replace": "\t\tunsigned int nofOut;\n\n\t\tmapper->process(bits, nofBits, symbols + symbolsDone, nofOut);\n\n"
  },
  {
   "label": "fill: the capacity test is not strict",

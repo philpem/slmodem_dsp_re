@@ -32,7 +32,9 @@
  {
   "label": "the underflow arm does not empty the buffer",
   "find": "\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
-  "replace": "\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];"
+  "replace": "\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and it is the arithmetic rather than a gap in the sweep -- the same argument the `(unsigned int &, short *)` sibling's suite records for its own copy of this store.  On the underflow arm `symbolsDone < symbolsBlockSize`, so the shared leftover shift `for (i = symbolsBlockSize; i < symbolsDone; i++)` cannot run whether the zero was stored or not, `kept` stays 0, and `symbolsDone = kept` writes the same zero five lines later.  The store is in the reconstruction because the blob has `movl $0x0,0x10(%ebp)` at 0x2fb8d and then `mov %ebx,0x10(%ebp)` at 0x2fbbe -- two stores to +0x10 on one path -- and because it is what lets the compiler constant-propagate the shift's bound.  So this line rests on the instructions and not on the suite."
  },
  {
   "label": "the ready arm hands out what is ready, not a block",
@@ -62,7 +64,9 @@
  {
   "label": "the overflow clamp is to zero",
   "find": "\t\t\t\tsymbolsDone = symbolsBlockSize;\n\t\t\t}",
-  "replace": "\t\t\t\tsymbolsDone = 0;\n\t\t\t}"
+  "replace": "\t\t\t\tsymbolsDone = 0;\n\t\t\t}",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, AND THE REASON IS SPECIFIC TO THIS OVERLOAD.  The clamp's value reaches exactly two things: the shift loop's upper bound and `symbolsDone` afterwards.  Clamping to `symbolsBlockSize` makes the shift run from `symbolsBlockSize` to `symbolsBlockSize` and clamping to 0 makes it run from `symbolsBlockSize` down to 0; both are empty, both leave `kept` at 0, and `symbolsDone = kept` then writes 0 either way.  The copy-out above uses `symbolsBlockSize` and not `symbolsDone`, so it does not see the difference either.  In the FILL sibling `process(unsigned char *, unsigned int)` the same clamp IS observable, because that overload returns with no shift after it -- and test/mutations/v90bits.json's `the clamp is to zero` is caught there.  What holds the value here is the blob's `mov 0x1c(%ebp),%edi` at 0x2fc6b followed by `mov %edi,0x10(%ebp)` at 0x2fc22, and the fact that the two overloads must agree about a field they share."
  },
  {
   "label": "the mapper is given no bits",
