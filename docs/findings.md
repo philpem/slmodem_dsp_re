@@ -80818,45 +80818,45 @@ and from the source fields' own declarations, not from this function.
 
 ======================================================================
 
-### 7586. `docs/coverage.md` on master understates `tested` by two orders of magnitude, because it was generated from a build tree whose TEST objects were not there
+### 7586. `coverage.py`'s `tested` half globs `build/test` WITHOUT `objtree.py`, so regenerating the file from a half-built tree reports 1.2% where the truth is 99.9%
 
-Regenerating the file after this batch moved two numbers, and only one of
-them is this batch's:
+**THIS FINDING FIRST SAID SOMETHING FALSE AND THE CORRECTION IS THE FINDING.**
+It was written as "`docs/coverage.md` on master understates `tested` by two
+orders of magnitude", from a working-tree diff that showed
 
-	translated  74.7% -> 75.1%   548,726 -> 551,739 bytes, 1,239 -> 1,240 symbols
-	tested       1.2% -> 99.9%     6,615 -> 550,936 bytes, 8 -> 1,224 of them
+	tested   1.2%   6,615 bytes, 8 of 1239   ->   99.9%   550,936 bytes, 1,224 of 1240
 
-The first is exactly `v90RunDemodulator`: **+3,013 bytes and +1 symbol**, which
-is the whole of what this batch claims and is what the seven `inline` members
-being unclaimed buys (finding 7580).
+Master's committed file says **99.9%, 547,923 bytes, 1,223 of 1,239**.  The
+1.2% was never master's: it was a regeneration THIS BATCH made from its own
+half-built tree, and the diff was read against that intermediate file rather
+than against `git show master:docs/coverage.md`.  CLAUDE.md's own rule --
+when a paragraph states a COUNT, check it against the tool before repeating
+it -- caught it, one commit later, from `git diff master..HEAD`.
 
-**THE SECOND IS NOT A MEASUREMENT OF ANYTHING THIS BATCH DID.**
+**THE HAZARD UNDERNEATH IT IS REAL AND IS WHY THIS IS KEPT.**
 `tools/coverage.py`'s `tested_symbols` walks `build/test/**/*.o` and counts
-every undefined `ref_*` it finds; with the test objects absent it finds
-nothing and reports a share of the translated tree near zero.  Master's
-committed file says `8 of 1239`, and eight is about what the two
-`INTEROP_BY_NAME` sources contribute on their own -- so the run that produced
-it had essentially no test objects on disk.  This tree's regeneration ran
-after `make phase` had built all 246 of them, so it reads 1,224.
+every undefined `ref_*` it finds.  It does NOT go through
+`tools/objtree.py`, which is what findings 3055, 3110 and 3111 installed in
+front of the seven tools that learn what we have WRITTEN by globbing an
+object directory -- `coverage.py` among them -- and which refuses on an empty
+tree and warns on a partial one.  So `coverage.py`'s `translated` half is
+guarded and its `tested` half is not.
 
-**IT IS `objtree.py`'s HAZARD IN THE ONE DIRECTORY `objtree.py` DOES NOT
-GUARD.**  Findings 3055, 3110 and 3111 are seven tools that learned what we
-had WRITTEN by globbing an object directory that had stopped being filled, and
-the repair was to route all seven through `tools/objtree.py`, which refuses on
-an empty tree and warns on a partial one.  `coverage.py` is one of the seven
-and its `translated` half goes through that gate -- but its `tested` half
-globs `build/test` directly, and nothing checks that.  A number that reads
-1.2% where the truth is 99.9% is the same defect one denominator over.
+What that costs is exactly what was observed: a `make phase` that dies at
+`run-t_vpcmguard` before the remaining test objects are built still runs
+`make coverage`, and the regenerated file reports **8 of 1,239 tested** with
+no warning of any kind.  Eight is about what the two `INTEROP_BY_NAME`
+sources contribute on their own, which is to say the walk found essentially
+nothing and said so as a percentage.
 
-**WHAT IS NOT DONE HERE.**  No change to `coverage.py`.  The right repair is
-for `tested_symbols` to refuse, or at least warn, on a `build/test` holding
-fewer objects than there are test sources -- which is exactly what
-`objtree.py` already does for `build/repro` -- and that is a change to a tool
-seven other numbers depend on, on a branch scoped to one function.  The
-regenerated file is committed because it is the honest reading of a complete
-tree and because leaving it would keep the wrong number in the record; this
-finding is what stops the next reader diffing the two and concluding that
-1,216 symbols gained a test in one batch.
+**WHAT IS NOT DONE HERE.**  No change to `coverage.py`.  The repair is for
+`tested_symbols` to refuse, or at least warn, on a `build/test` holding fewer
+objects than there are test sources -- which is what `objtree.py` already
+does one directory over -- and that is a change to a tool seven other numbers
+depend on, on a branch scoped to one function.  What IS in the record is that
+`docs/coverage.md` must be regenerated from a COMPLETE `make phase` and never
+from a failed one, and that a `tested` figure far from the last committed one
+is a symptom of the tree rather than of the work.
 
 ======================================================================
 
@@ -80956,5 +80956,15 @@ sixteen-bit field, and one bit of a byte outside the modem entirely.
 which is right only because the seven members it inlines are `inline` and
 claim no blob symbol -- checked on BOTH compilers, since GCC 13 could have
 emitted a weak comdat copy of an `inline` member it declined to inline and
-did not.  `docs/coverage.md`'s other moved number is finding 7586's and is
-not this batch's.
+did not.
+
+`tested` moves from 1,223 of 1,239 to 1,224 of 1,240 and stays at 99.9%,
+which is the new binary and nothing else.  Finding 7586 is what an
+INTERMEDIATE regeneration of the same file said instead, and why the file
+must only ever be regenerated from a `make phase` that finished.
+
+The other lines that move are `VPcmV34Main.cpp`'s row in the unwritten
+rollup: 12,334 bytes and 78 symbols down to 9,321 and 77, which is the same
+3,013 and the same 1 seen from the other side.  That is the bracket this
+function was counted against before it was written, and its dropping one
+place in a list sorted by size is the whole of the rest of the diff.
