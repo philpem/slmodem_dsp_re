@@ -79895,9 +79895,22 @@ side:
 argued about; what cannot is that the three `*Present` words at +0x04, +0x08
 and +0x0c gate exactly the three regions -- the moduli, the filter
 coefficients, and everything from +0xc58 -- that `V90CP`'s three whole-word
-flags at the same offsets gate on the way OUT.  Two independent readers, one
-writing the message and one reading it back, agreeing on which flag owns which
-block.
+flags at the same offsets gate on the way OUT.  `V90CP.h` spells its side out
+as "+0x0004 the six pairs at +0x0018, +0x0008 the four counted lists at
++0x0048, +0x000c everything from +0xc58 on", written from `infoToBits`; the
+V.92 unpacker gates `M[]`, the four lengths with their coefficient arrays, and
+`LC`/`indexConstel`/the six constellations on the same three words in the same
+order.  Two independent readers, one writing the message and one reading it
+back, agreeing three for three on which flag owns which block.
+
+**AND THE SHORT DECLARATION ENDS EXACTLY WHERE THE MESSAGE DOES.**
+`V92CPUnPck`'s last field is `const6` at +0xc9c, so it ends at **+0xca0** --
+and +0xca0 is precisely where `V90CP`'s post-message fields begin: `V90CP.h`
+has +0x0ca0 as "the short form's payload" and +0x0ca4 as the detector state
+`resetDetector` zeroes.  So the unpacker reads the message-carrying prefix and
+stops at its last byte.  That is why `V92CPUnPck.h` could say "nothing bounds
+it above" and be right about its own evidence while the bound existed all
+along in the other header.
 
 **Two disagreements, and both are informative rather than fatal:**
 
