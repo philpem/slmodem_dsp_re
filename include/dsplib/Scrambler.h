@@ -211,25 +211,11 @@ public:
 	 * history at `pOut`, in that order.  The blob stores `out[i]` first and
 	 * `*pOut` second, which is only observable if the caller aims `out`
 	 * into the history; it is reproduced rather than tidied.
+	 *
+	 * DECLARED HERE AND DEFINED BELOW, for `reset`'s reason and on the same
+	 * evidence.  See the block at the foot of this file.
 	 */
-	void process(const T *in, I *out, unsigned int n)
-	{
-		unsigned int i;
-
-		for (i = 0; i < n; i++) {
-			T *p = pOut;
-			I r = (I)(in[i] ^ *pTap1 ^ *pTap2);
-
-			pTap1--;
-			pTap2--;
-			out[i] = r;
-			*p = (T)r;
-			if (--pOut < pLimit) {
-				resetHistoryIndexes();
-				copyHistoryTail();
-			}
-		}
-	}
+	void process(const T *in, I *out, unsigned int n);
 
 	/*
 	 * `process` with an all-ones input and with an all-zeros one, each
@@ -452,6 +438,51 @@ public:
  * make.  This brings the two templates into line with each other and with the
  * object.
  */
+/*
+ * ---------------------------------------------------------------------------
+ * AND THE BULK `process` GOES WITH IT, ON THE SAME EVIDENCE
+ *
+ * `_ZN9ScramblerIihE7processEPKiPhj` and `_ZN9ScramblerIhhE7processEPKhPhj`
+ * are real weak symbols in the blob with THREE and SIXTEEN `R_386_PC32` call
+ * sites respectively -- nineteen calls the original compiler chose to make.
+ * With the body in the class body ours had **zero**: implicitly `inline`, so
+ * GCC 3.4.2 inlined it at every one of the nineteen and still emitted the weak
+ * symbol because it could not prove nobody needed the address.
+ *
+ * `V92Modulator::progress` is where that was found.  Its data-phase arm is one
+ * `scrambler.process(bits, buf_88, nbits)`, and the function came out 355
+ * instructions against the object's 298 with the CALL COUNT one SHORT -- 18
+ * against 19 -- which is finding 7480's rule reading exactly right: an excess
+ * of instructions with a missing call is an inlining difference and not a
+ * missing statement.
+ *
+ * `Descrambler`'s bulk `process` STAYS IN THE CLASS BODY, and that is the same
+ * evidence read the other way: the blob carries no
+ * `Descrambler<...>::process(const ...)` symbol at all, so moving it out would
+ * make us emit a weak symbol the original does not have.  The two templates
+ * differ here because the object says they differ.
+ * ---------------------------------------------------------------------------
+ */
+template <class T, class I>
+void Scrambler<T, I>::process(const T *in, I *out, unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		T *p = pOut;
+		I r = (I)(in[i] ^ *pTap1 ^ *pTap2);
+
+		pTap1--;
+		pTap2--;
+		out[i] = r;
+		*p = (T)r;
+		if (--pOut < pLimit) {
+			resetHistoryIndexes();
+			copyHistoryTail();
+		}
+	}
+}
+
 template <class T, class I>
 void Scrambler<T, I>::reset(T value)
 {

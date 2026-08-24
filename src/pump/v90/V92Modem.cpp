@@ -5,7 +5,15 @@
  *                        tagV90DILdescriptor *, V92ComputationalMode)
  *                                       .text+0x13d30 (C1), +0x13ec0 (C2)
  *     V92Modem::~V92Modem()             .text+0x13a80 (D1), +0x13990 (D2)
+ *     V92Modem::progress(int *, unsigned int &, float *, unsigned int)
+ *                                       .text+0x13b70, 0x79 = 121 bytes
  *     V92Modem::printTitle()            .text+0x13bf0, 0xac = 172 bytes
+ *     V92Modem::reset()                 .text+0x13ca0, 0x8a = 138 bytes
+ *
+ * ALL SIX SYMBOLS OF THE CLASS.  `reset` and `progress` are the class's whole
+ * run-time surface and both are three-arm switches on `modemSide` that forward
+ * to the modulator; everything else the object does at run time it does one
+ * level down.
  *
  * The original translation unit is `V92Modem.cpp`, STT_FILE #25.
  * include/dsplib/V92Modem.h carries the object map, the 0xaac the two
@@ -75,6 +83,7 @@
 #include "dsplib/sysdep.h"
 
 #include "dsplib/V92CP.h"
+#include "dsplib/V92DILdescriptorPacker.h"
 #include "dsplib/V92Modulator.h"
 #include "dsplib/V92ParamsInfo.h"
 #include "dsplib/V92Parameters.h"
@@ -336,4 +345,106 @@ V92Modem::printTitle()
 	edprintf("V92Modem Version Description:\r\n");
 	edprintf("%s\r\n", "Memory cleanups + dil descriptor crash fix");
 	edprintf(V92_BANNER);
+}
+
+/*
+ * ===========================================================================
+ * V92Modem::reset (.text+0x13ca0, 138 bytes)
+ *
+ * The same three-arm switch on `modemSide` the constructor and the destructor
+ * carry, with the banner reprinted in front of it.  `printTitle` runs on EVERY
+ * side, including the illegal one -- it is above the switch, not inside the
+ * analog arm.
+ *
+ * THE ANALOG ARM IS THREE STATEMENTS AND THE LAST IS A TAIL CALL:
+ *
+ *     V92DILdescriptorPacker(dil, ja + 4, (int *)ja)
+ *     modulator->reset()
+ *     modulator->enterPhase3()
+ *
+ * and `modulator` is RE-READ from +0x000 before each of the last two
+ * (`mov (%ebx),%edx` at +0x13d11, `mov (%ebx),%eax` at +0x13d1b), which is
+ * what a member access through `this` compiles to across a call that might
+ * alias it.
+ *
+ * THE TWO POINTERS INTO `ja` ARE +0x010 AND +0x00c, in that argument order:
+ * `lea 0x10(%ebx),%eax` goes to the packer's `unsigned char *` and
+ * `lea 0xc(%ebx),%edx` to its `int *`.  That is V92Ja's `bitCount` at its own
+ * +0x000 and its byte vector at +0x004, and it is what pins the `V92Ja` to
+ * +0x00c from the second direction -- see the header.
+ *
+ * THE DIGITAL ARM DOES NOTHING AT ALL, which on the shipped configuration is
+ * the whole point: the digital side has no `V92Modulator` to reset because it
+ * never built one.
+ * ===========================================================================
+ */
+void
+V92Modem::reset()
+{
+	/* .rodata.str1.1+0xa74. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modem Reset\r\n");
+
+	printTitle();
+
+	switch (modemSide) {
+	case V92_MODEM_SIDE_DIGITAL:
+		break;
+
+	case V92_MODEM_SIDE_ANALOG:
+		V92DILdescriptorPacker(dil, ja + 4, (int *)ja);
+		modulator->reset();
+		modulator->enterPhase3();
+		break;
+
+	default:
+		/* .rodata.str1.4+0x35a0, and a TAIL CALL as the constructor's
+		 * illegal arm is. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V92Modem Reset: Illegal modemSide\r\n");
+		break;
+	}
+}
+
+/*
+ * ===========================================================================
+ * V92Modem::progress (.text+0x13b70, 121 bytes)
+ *
+ * 121 bytes of which 15 do anything: the switch, and a forward of all four
+ * arguments to the modulator.  There is no banner here and no `printTitle`.
+ *
+ * THE ANALOG ARM IS A TAIL CALL WITH THE ARGUMENTS LEFT WHERE THEY ARE --
+ * `mov (%eax),%eax; mov %eax,0x10(%esp); jmp V92Modulator::progress` at
+ * +0x13bd0 -- so only `this` is rewritten and the other four stay in the
+ * caller's own slots.  That is what says the two signatures are identical and
+ * in the same order, and it is also what says both return `void`.
+ *
+ * THE DIGITAL ARM RETURNS WITHOUT SO MUCH AS A MESSAGE, which is not an
+ * oversight: `vpcm_create` passes NULL to `VPCMXF_Create` and that selects the
+ * DEMODULATOR, so it is the V.90 side that is dead in the shipped object.  V.92
+ * upstream PCM has the ANALOGUE client transmitting, so this arm is the live
+ * one here and the empty digital arm is the counterpart of the V.90 file's
+ * empty analogue one.
+ * ===========================================================================
+ */
+void
+V92Modem::progress(int *bits, unsigned int &nbits, float *out,
+		   unsigned int nSamples)
+{
+	switch (modemSide) {
+	case V92_MODEM_SIDE_DIGITAL:
+		break;
+
+	case V92_MODEM_SIDE_ANALOG:
+		modulator->progress(bits, nbits, out, nSamples);
+		break;
+
+	default:
+		/* .rodata.str1.4+0x3478. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V92Modem progress: Illegal modemSide\r\n");
+		break;
+	}
 }

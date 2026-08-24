@@ -45,8 +45,8 @@
  },
  {
   "label": "the third buffer carries the same ten elements of slack as its neighbours",
-  "find": "\tbuf_88 = sysdep_malloc(blockSize * 8);",
-  "replace": "\tbuf_88 = sysdep_malloc((blockSize + V92MOD_BUF_SLACK) * 8);"
+  "find": "\tbuf_88 = (unsigned char *)sysdep_malloc(blockSize * 8);",
+  "replace": "\tbuf_88 = (unsigned char *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK) * 8);"
  },
  {
   "label": "the fourth buffer is sized from the block rather than from the argument",

@@ -8144,9 +8144,15 @@ past the end of the block therefore asks `Resampler::resample` for about four
 billion input samples out of a buffer of `blockSize + 10` floats.  Its input
 pointer, `resampleIn + resamplerPhaseChangeAt`, is already past the end by then.
 
-`progress` is the only writer of the pair and is unwritten, so whether the
-condition is reachable is not settled here; nothing in the 662 bytes bounds it
-either way.
+`progress` is the only writer of the pair AND IT IS NOW WRITTEN, which settles
+the reachability the other way: it stores `resamplerPhaseChangeAt = i` from
+inside `for (i = 0; i < blockRemaining; i++)`, so the split point it stages is
+always strictly less than the block length that was current when it was staged.
+Nothing in `mkResampledSignal`'s own 662 bytes bounds it, and nothing has to as
+long as the pair is only ever set from there -- but `blockRemaining` is
+RECOMPUTED by every call of `progress`, so a change staged in one block and
+applied against a shorter later one is still not excluded by anything either
+function does.  Finding 7540.
 
 Reproduced with no guard added, and NOT DRIVEN: `t_v92modstate.cpp` keeps the
 split point in `0 .. blockRemaining`.  A trial past it walks off both sides'
