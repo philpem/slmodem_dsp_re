@@ -2,9 +2,10 @@
  * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
  *
  * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, of which THIRTY-TWO are written in src/pump/v90/V90Phase4Modulator.cpp
- * -- everything except `reset`, `generateSymbol`, the six `generate*`
- * sequence sources and the two symbol pumps.
+ * code, of which THIRTY-FOUR are written in
+ * src/pump/v90/V90Phase4Modulator.cpp -- everything except `reset`,
+ * `generateSymbol` and the six `generate*` sequence sources.  Both symbol
+ * pumps are now among them.
  *
  * NOT POLYMORPHIC: `~V90Phase4Modulator` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -203,11 +204,18 @@ class V90Parameters;
  * SUVd is what carries it, and `recivedSUV()` acting only when the field is 5
  * agrees.
  *
- * 0x14, 0x1c and 0x1f ARE ABSENT DELIBERATELY.  No member of the class stores
- * or compares them, so whether the original's enumeration had them is not
- * something this object can be asked.  A C++ enumeration does not have to be
- * contiguous and inventing three enumerators to make it look tidy would be
- * inventing three names.
+ * 0x14 AND 0x1c ARE HERE NOW, AND 0x1f IS STILL ABSENT.  This paragraph used
+ * to say all three were absent because "no member of the class stores or
+ * compares them", and the two symbol pumps disprove it for two of the three:
+ * `generateV90Symbol`'s jump table at `.rodata+0xa94` runs 0x00..0x1b and
+ * `generateV92Symbol`'s at +0xb04 runs 0x00..0x1e, and the entry at 0x14 in
+ * both -- and at 0x1c in the second -- is a distinct arm rather than the
+ * default edge.  A jump-table slot that is not the default IS a `case` label,
+ * so the enumeration has those two.  0x1f is past the end of the larger table
+ * and nothing else in the class mentions it, so it stays out.
+ *
+ * A C++ enumeration does not have to be contiguous and inventing an
+ * enumerator to make it look tidy would be inventing a name.
  *
  * THE BASE IS PINNED SIGNED, AND THAT IS MEASURED.  `recivedCPtag`,
  * `recivedSUVtag` and `recivedE2u` all dispatch with `cmp $0x5,%eax ; je ;
@@ -241,6 +249,13 @@ enum Phase4ModulatorState {
 	P4M_STATE_B1D = 0x11,		/* "enter B1d @ %d"                */
 	P4M_STATE_TERMINATED = 0x12,	/* "Phase4 Terminated @ %d"        */
 	P4M_STATE_UNNAMED_13 = 0x13,	/* both symbol pumps, no message   */
+	/*
+	 * 0x14  Both pumps dispatch it to `generateDataSymbolBeforeRRN`, and
+	 * that member is where the "enter Rd @ %d" message and the move to
+	 * 0x15 live.  Naming the state for the member would be one inferential
+	 * step past what the dispatch proves, so it keeps the offset (3120).
+	 */
+	P4M_STATE_UNNAMED_14 = 0x14,
 	P4M_STATE_RD = 0x15,		/* "enter Rd @ %d"                 */
 	P4M_STATE_RD_NOT = 0x16,	/* "enter RdNot @ %d"              */
 	P4M_STATE_UNNAMED_17 = 0x17,	/* tested by `exitSilence`, never  */
@@ -248,6 +263,13 @@ enum Phase4ModulatorState {
 	P4M_STATE_UNNAMED_19 = 0x19,	/* `exitSilence`'s non-boundary arm*/
 	P4M_STATE_RT = 0x1a,		/* "enter Rt @ %d"                 */
 	P4M_STATE_RT_NOT = 0x1b,	/* "enter RtNot @ %d"              */
+	/*
+	 * 0x1c  `generateV92Symbol` alone, and the V.90 pump's table stops one
+	 * short of it.  It dispatches to `generateDataSymbolBeforeFPE`, which
+	 * carries the "enter Rf @ %d" message and the move to 0x1d.  Same
+	 * reading and same restraint as 0x14 above.
+	 */
+	P4M_STATE_UNNAMED_1C = 0x1c,
 	P4M_STATE_RF = 0x1d,		/* "enter Rf @ %d"                 */
 	P4M_STATE_RF_NOT = 0x1e,	/* "enter RfNot @ %d"              */
 	P4M_STATE_BASE_PIN = -0x7fffffff - 1	/* ours; pins the base     */
@@ -304,6 +326,14 @@ public:
 	short generateRiNot();
 	short generateDataSymbolBeforeFPE();
 	short generateDataSymbolBeforeRRN();
+
+	/*
+	 * The two symbol pumps.  One `switch` over `state` each, and the
+	 * source is in src/pump/v90/V90Phase4Modulator.cpp with the jump
+	 * tables' addresses and what they prove about the case labels.
+	 */
+	short generateV90Symbol();
+	short generateV92Symbol();
 
 	void setRdRtSymbols(V90MappingParams *);
 	void setRfSymbols(V90MappingParams *);
@@ -366,7 +396,19 @@ public:
 	 */
 	unsigned int symbolCount;
 
-	unsigned char pad_000c[4];		/* +0x000c reset zeroes it */
+	/*
+	 * +0x000c  WRITTEN BY THREE MEMBERS AND READ BY NONE OF THE
+	 * FORTY-FIVE.  `reset` zeroes it; both symbol pumps zero it on entry,
+	 * before the state is dispatched, and then set it to 7 on the
+	 * "Phase4 Terminated" arm -- and `generateV92Symbol` alone sets it to
+	 * 4 on both exits from TRN2d.  Four `movl` sites over the class's
+	 * whole extent and not one `0xc(%` load anywhere in
+	 * .text+0x2c5a0..+0x2f730, so what reads it is outside this class and
+	 * the meaning is not established here.  `unsigned int` is the stores'
+	 * width; the name stays the offset's.  It was `pad_000c[4]` until the
+	 * pumps were written.
+	 */
+	unsigned int word_000c;
 
 	/*
 	 * +0x0010  `setNextStateAfterTRN2d`'s whole body is `mov %edx,0x10
