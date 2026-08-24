@@ -80793,10 +80793,25 @@ field's and the doubling is in the comment rather than spelled into the name,
 which is 3120's rule: `rateMaskX2` would be a name every future reader has to
 decode, and `rateMask` with the derivation beside it is what the field holds.
 
-**THE `movswl` IS FORCED AND THE OTHER TWELVE LOADS ARE NOT.**  The six bytes
-are read `movzbl` and the six halves `movzwl`, but only the low 8 or 16 bits
-of each survive into the store, so the extension is finding 614's free column
-and says nothing about either type.  `mpRateMask`'s load is the exception,
-because the doubling happens on the widened value: a `movzwl` there would
-give a different answer for any rate mask with bit 15 set.  `t_v90rundemod`
-seeds one negative rate mask for exactly that reason.
+**NOT ONE OF THE THIRTEEN LOADS IS FORCED, AND THIS PARAGRAPH SAID THE
+OPPOSITE UNTIL THE MUTATION SET CORRECTED IT.**  It read "THE `movswl` IS
+FORCED AND THE OTHER TWELVE LOADS ARE NOT", on the argument that
+`mpRateMask`'s doubling happens on the widened value so a `movzwl` there would
+answer differently for a rate mask with bit 15 set.  That is wrong.  The store
+is sixteen bits, `(short)(x * 2)` keeps only the low sixteen bits of the
+product, and those depend only on the low sixteen bits of `x` -- so the
+extension is discarded at every one of the thirteen sites and all thirteen are
+finding 614's free column.
+
+The correction came from the row `copyMpInfoForInterface reads the rate mask
+UNSIGNED before doubling` coming back NOT CAUGHT against a fixture that seeds
+a NEGATIVE rate mask on purpose.  The obvious reading of an uncaught row is a
+weak fixture; here the fixture was right and the claim was wrong, and the row
+is registered `equivalent` with the argument rather than deleted.  4342's
+rule: a retraction that says what it retracts is worth more than a corrected
+sentence.
+
+What the six `movzbl` and seven `movzwl` loads do still establish is the
+WIDTH, which is what makes the thirteen fields thirteen rather than a memcpy;
+their SIGN comes from `getMPrecvdBits`'s `movsbw`/`movsbl` on the six bytes
+and from the source fields' own declarations, not from this function.

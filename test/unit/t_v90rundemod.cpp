@@ -77,6 +77,7 @@
 #include "dsplib/V90ConnectionEvaluator.h"
 #include "dsplib/V90Demodulator.h"
 #include "dsplib/V90MappingParams.h"
+#include "dsplib/V90Jd.h"
 #include "dsplib/V90MP.h"
 #include "dsplib/V90Parameters.h"
 #include "dsplib/V90Phase2Info.h"
@@ -147,6 +148,9 @@ typedef char v90rd_is_0x7f68[(sizeof(VPcmFloModem) == FLO_SIZE) ? 1 : -1];
 #define OFF_TERMCP	0x7dcf		/* cmpb $0x0,0x7dcf, 0xd951  */
 #define OFF_TERMCPNOT	0x7dd0		/* cmpb $0x0,0x7dd0, 0xd99f  */
 #define OFF_CPNOTLOADED	0x7dd1		/* cmpb $0x0,0x7dd1, 0xd996  */
+#define OFF_BITPOINTER	0x1738		/* resetBitPointer, 0xdc58   */
+#define OFF_NTXSEQ	0x7dd4		/* resetBitPointer, 0xdc74   */
+#define OFF_MINTXSEQ	0x7dd6		/* setMinNofTransmitSequences */
 
 /* Inside V90Demodulator; include/dsplib/V90Demodulator.h. */
 #define DEM_INPHASE3	0x34
@@ -627,6 +631,32 @@ static const struct trial trial_v[] = {
 	{ "0x12, clear irrelevant", 0, 1, 4, 1, 0x12, 1, 0, 0, 0, 1,
 	  0, 0, 0, 0, 1, 0x40, 0x20, 0, 0, 0x8b, 0, 0.0015f, 1 },
 
+	/*
+	 * THE FOUR AXES THE MUTATION SET ASKED FOR, each named with the row
+	 * that was uncaught without it.
+	 */
+	/* `the data-phase arm does not raise byte_6119`. */
+	{ "0x1e, no 6119",	0, 1, 4, 1, 0x1e, 0, 0, 0, 0, 1,
+	  0, 0, 0, 0, 1, 0x40, 0x20, 0 TAIL },
+	/*
+	 * `the Jd arm takes the silence flag as a truth value rather than a
+	 * byte`.  0x100 is non-zero and its LOW BYTE is zero, which is the
+	 * only shape that parts a truncation from a test against zero.
+	 */
+	{ "0x06, silence 0x100", 0, 1, 4, 1, 0x06, 1, 0, 0, 0, 1,
+	  0, 0, 0, 0, 0x100, 0x40, 0x20, 0 TAIL },
+	/*
+	 * `the rate-reneg arms take the evaluator's counter whole rather than
+	 * as a short`.  0x10000 is non-zero and its low SIXTEEN bits are
+	 * zero, so `VPcmV34SetV90RateReneg` sees 0 through the narrowing the
+	 * object does and 0x10000 through any wider one -- and it assigns
+	 * `v90_receiver` 11 or 15 on exactly that test.
+	 */
+	{ "0x22, word_90 low half zero", 0, 1, 4, 1, 0x22, 1, 0, 0, 0, 1,
+	  0x10000, 0, 0, 0, 1, 0x40, 0x20, 0 TAIL },
+	{ "0x23, word_90 low half zero", 0, 1, 4, 1, 0x23, 1, 0, 0, 0, 1,
+	  0x10000, 0, 0, 0, 1, 0x40, 0x20, 0 TAIL },
+
 	/* Arm 0x1c's cleardown report, both ways. */
 	{ "0x1c, no cleardown",	0, 1, 4, 1, 0x1c, 1, 0, 0, 0, 1,
 	  0, 0, 0, 0, 1, 0x40, 0x20, 0, 0, 0x8b, 0, 0.0015f, 1 },
@@ -863,10 +893,38 @@ poke(int s, const struct trial *t)
 	o[OFF_CPNOTLOADED] = t->cpNotLoaded;
 	o[OFF_FLAGS173A + 0] = 1;	/* trainConstel, and non-zero    */
 	o[OFF_FLAGS173A + 1] = 0;	/* rrnConstel                    */
+	/*
+	 * NONE OF THESE THREE IS AT THE VALUE ITS WRITER WRITES.  A store of
+	 * 0 over a 0 is a store no comparison can see, and the mutation set
+	 * said so: `resetBitPointer does not reset the bit pointer`,
+	 * `setMinNofTransmitSequences does not zero the counter` and the two
+	 * arms that require one transmission were all uncaught until these
+	 * three were seeded away from 0, 0 and 1.
+	 */
+	*(unsigned short *)(o + OFF_BITPOINTER) = 0x1d9;
+	*(unsigned short *)(o + OFF_NTXSEQ) = 0x2b;
+	*(unsigned short *)(o + OFF_MINTXSEQ) = 0x37;
 	o[OFF_FLAGS173A + 2] = t->f173a2;
 	o[OFF_FLAG173D] = 0;
 	o[OFF_FLAG173E] = t->f173e;
 	MPARAMS(s)->unnamed_0003 = t->cfg3;
+
+	/*
+	 * `V90Jd::getConstelationSize` returns `bits[28]` and `bits[29]`, and
+	 * arm 0x06 sends the first upward twice -- once to
+	 * `setNofBitsPhase4` and once to `V34XF_IndicateJdReceived`.  With
+	 * the two EQUAL, swapping them and choosing the wrong one of them are
+	 * both invisible, which is what the mutation set reported.  They are
+	 * driven off `mpTag` rather than off an axis of their own because
+	 * every trial already carries one.
+	 */
+	{
+		V90Jd *jd;
+
+		memcpy(&jd, o + OFF_JD, sizeof jd);
+		jd->bits[28] = (unsigned char)(t->mpTag != 2);
+		jd->bits[29] = (unsigned char)(t->mpTag != 1);
+	}
 
 	seed_mapping(o + OFF_MAPPING, 1);
 	seed_mapping(o + OFF_MAPPINGALT, 2);

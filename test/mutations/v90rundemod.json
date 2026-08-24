@@ -281,9 +281,9 @@
   "replace": "\t\tVPcmV34IndicateLocalRRN(v34Object);"
  },
  {
-  "label": "the local rate-reneg arm narrows the evaluator's counter to a BYTE",
+  "label": "the local rate-reneg arm takes the evaluator's counter WHOLE",
   "find": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    (short)modem.demodulator->connectionEvaluator->word_90,\n\t\t    flags_173a[1]);\n\t\tsetNofBitsPhase4(flags_173a[1]);\n\t\tflags_173a[2] = 1;",
-  "replace": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    (signed char)modem.demodulator->connectionEvaluator->word_90,\n\t\t    flags_173a[1]);\n\t\tsetNofBitsPhase4(flags_173a[1]);\n\t\tflags_173a[2] = 1;"
+  "replace": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    modem.demodulator->connectionEvaluator->word_90,\n\t\t    flags_173a[1]);\n\t\tsetNofBitsPhase4(flags_173a[1]);\n\t\tflags_173a[2] = 1;"
  },
  {
   "label": "the local rate-reneg arm sizes phase 4 off the TRAINING constellation",
@@ -378,7 +378,9 @@
  {
   "label": "copyMpInfoForInterface reads the rate mask UNSIGNED before doubling",
   "find": "\tmpRateMask = (short)(modem.mp.rateMask * 2);\n",
-  "replace": "\tmpRateMask = (short)((unsigned short)modem.mp.rateMask * 2);\n"
+  "replace": "\tmpRateMask = (short)((unsigned short)modem.mp.rateMask * 2);\n",
+  "equivalent": true,
+  "why": "EQUIVALENT, and the argument is the reason finding 7585 was corrected. `(short)(x * 2)` keeps only the low sixteen bits of `x * 2`, and those depend only on the low sixteen bits of `x` -- so the extension the load uses is discarded and `movswl` against `movzwl` at 0xd5ec is finding 614's free column after all.  The row is kept rather than deleted because the claim it makes is the one 7585 first got wrong."
  },
  {
   "label": "copyMpInfoForInterface swaps the two h1 halves",
