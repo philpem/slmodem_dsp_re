@@ -81067,7 +81067,9 @@ infinity.
 **THE PHASE MACHINE DOES NOT ADVANCE ON ITS OWN, and that is the sharp
 result.**  Driven for **400 blocks -- 32,000 symbols, four seconds of an 8 kHz
 downstream** -- from `enterPhase3()` with nothing else poked, **the modulator
-finished every block still in state 1**.
+was still in state 1 when the run ended**.  The state is read once, after the
+loop, and that is enough: `progress` moves 1 -> 2 -> 3 and never back, so a
+final reading of 1 proves the machine never advanced in ANY of the 400 blocks.
 
 The histogram beside that is the BLOCK-TERMINAL event code and is stated as
 such, because the probe samples `V90Modulator::eventCode` once a block and two
@@ -81161,11 +81163,47 @@ harness -- **not from `src/`; no caller was added** -- against a plausible
 **Fill-INDEPENDENT, and the three now agree** -- which is exactly the shape a
 block with a writer has.  The single callerless function overwrites every
 field the chain reads, and the hand-poked control (`plausible_mapping`, 42
-bits to a six-symbol frame) reaches the same numbers, with the data phase
-emitting over **[-32124, +32124]** and no NaN.
+bits to a six-symbol frame) reaches **the same four derived scalars and the
+same bit sequence**, with the data phase emitting over **[-32124, +32124]**
+and no NaN.
+
+**"The same" is scoped deliberately.**  The two do NOT produce the same
+symbols and should not: `plausible_mapping` fills the constellations
+`0x11 + 3j + 7i` and the unpacker unpacks all-ones bitmaps into strictly
+descending byte order, 127 down to 0 (7570).  The non-zero counts over 32
+blocks differ accordingly -- 2,545 against 2,552 -- while `bitsPerFrame`,
+`signBitsPerFrame`, `signBitGroups`, `signBitGroupSize` and the per-block bit
+request are identical.  What the unpacker restores is the CONFIGURATION, and
+that is the claim.
+
+#### THE CHAIN WAS ALSO ENTERED AT ITS REAL HEAD, so no caveat is carried
+
+7520 names the chain as `V90Phase4Modulator::setMappingParams` ->
+`V90BitsToSymbol::reset` -> `V90Mapper::reset`, and everything above enters at
+the SECOND link.  That is not free: `setMappingParams` (96 bytes,
+.text+0x2d120) is a null guard, then `bitsToSymbol->reset(mp, pcmType)` with
+the PHASE 4 MODULATOR's own `pcmType` rather than one the harness chose, then
+`setSymbolsBlockSize(1)`.  Two differences, either of which could have made
+the result an artefact of where the probe cut in.
+
+Driven both ways at fill `0xa5`, with and without the unpacker, on both sides:
+**identical on every number, including the faulting address.**  Without the
+unpacker both entries die at the same heap address; with it both reach 42 /
+3 / 3 / 2, the same 588/546 sequence, the same 561.8 mean and the same 2,545
+non-zero samples over [-32124, +32124].  So `setMappingParams` is a pure
+forward for this question, measured rather than assumed, and the sections
+above stand as written.
 
 So the answer to "would supplying the call have been enough" is **yes, for
 this chain**: the missing piece is a CALL and not a body.
+
+**AND "THIS CHAIN" IS THE WHOLE SCOPE, which is worth spelling out because the
+headline invites more.**  The data phase demonstrated here was ENTERED by the
+harness writing `state = 3`, not trained into: 7621 measures that a digital
+modulator left running never leaves phase 3, and 7623 measures that neither
+function which would have advanced it can be entered at all.  Supplying the
+unpacker's call unblocks the mapper and the converter.  It does not make the
+modem train.
 
 #### THE RATE IS A MEAN AND NOT A BLOCK, AND THAT IS NOT PEDANTRY
 
@@ -81427,12 +81465,21 @@ statement no test in this tree measures.
 | "`runPcmModem` faults at the dispatch" | it faults at +0xdc, the resampler read one statement earlier; the dispatch is +0x3c and that is the OTHER driver | an `SA_SIGINFO` handler recording `si_addr` |
 | "the receiving side reacts to what the transmitter emits" | the movement COUNT is 3 either way, signal or silence | a negative control that zeroes the link after the modulator fills it |
 | "213 / 640 non-zero samples" as evidence of output | on the zero-fill arm every one of them is `symbolBuf`'s untouched 0xa5a5, which is -23131 | printing the RANGE beside the count |
+| the chain "reads the block" | the probe entered at the chain's SECOND link, skipping `setMappingParams`, which supplies the `PcmType` and an intervening block size | driving both entries and comparing -- they agree, so the claim survived, but it was not measured until it was |
+| "0 harness assertion(s) failed" | two rows were `must(1, ...)`, which print "yes" whether or not any arm ran | counting the arms that reached their own end and asserting the count |
 
-**The common shape is a scalar standing in for a distribution.**  One block's
-bit request for a rate, one stage number for a fault site, one movement count
-for a sequence, one non-zero count for a signal.  Each was fixed by making the
-instrument report more of what it already had -- the sequence, the address,
-the control arm, the range -- and not by arguing about the number.
+**The common shape of the first four is a scalar standing in for a
+distribution.**  One block's bit request for a rate, one stage number for a
+fault site, one movement count for a sequence, one non-zero count for a
+signal.  Each was fixed by making the instrument report more of what it
+already had -- the sequence, the address, the control arm, the range -- and
+not by arguing about the number.
+
+The last two are a different fault and are kept in the same table because they
+were found in the same pass: an instrument that did not reach as far as its
+claim, and an assertion that could not fail.  The second is CLAUDE.md's dead
+detector in the purest form there is, and it was sitting in the same commit
+range as this finding.
 
 That is CLAUDE.md's "a detector must report its denominator" arriving in a
 form it does not name: **the denominator of a scalar is the spread it was
