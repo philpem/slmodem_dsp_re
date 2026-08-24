@@ -71,6 +71,13 @@ extern "C" {
  */
 #include "dsplib/V90MappingParams.h"
 
+/*
+ * And this one, for the same reason again: the header forward-declares
+ * `V90MP` because it only ever holds a pointer, and `progress` reads six of
+ * its fields for the "'Problematic' ISP Modem" signature test.
+ */
+#include "dsplib/V90MP.h"
+
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
 #define DEM_OFF(field, off, tag) \
@@ -1088,6 +1095,912 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
 	edprintf("-------------------------\r\n");
 	edprintf("RBS : %d (%d%d%d%d%d%d)\r\n", results->rbsPattern,
 		 rbs[0], rbs[1], rbs[2], rbs[3], rbs[4], rbs[5]);
+}
+
+/*
+ * ===========================================================================
+ * progress -- the receive session, one buffer of samples at a time
+ * ===========================================================================
+ *
+ * `.text+0x1ca90`, 0x1c6c = 7,276 bytes, 1,698 instructions and 129 calls: the
+ * largest function in this reconstruction and the last of the
+ * `V90Demodulator::progress` batch.  It is the whole receive chain --
+ * prefilter, AGC, resampler, equaliser -- followed by a state machine over
+ * FOUR dispatch tables, and it is the only caller of most of what the batch
+ * before it wrote.
+ *
+ * THE FOUR TABLES ARE THE MAP, and each was read with `tools/tabdump.py`
+ * rather than inferred from the branch layout:
+ *
+ *     .rodata+0x69c   5 entries   switch (inPhase3)          0 .. 4
+ *     .rodata+0x6b0   6 entries   switch (evaluateConnection())
+ *     .rodata+0x6c8  22 entries   switch (word_3c)        0x00 .. 0x15
+ *     .rodata+0x720  29 entries   switch (word_3c)        0x19 .. 0x35
+ *
+ * so `inPhase3` selects the PHASE and `word_3c` the state within it: the
+ * 0x6c8 table is reached only from `inPhase3 == 1` (phase 3) and the 0x720
+ * table only from `inPhase3 == 2` (phase 4).  The two are disjoint in value
+ * as well as in reach, which is why one field carries both.
+ *
+ * `word_3c` IS THE EQUALISER'S ANSWER AND KEEPS ITS OFFSET NAME.  Every call
+ * begins `word_3c = equalizer->stateCount`, and `V90Equalizer::process` is
+ * what puts 0x23, 0x25 and the rest there -- so the field is an event code
+ * rather than a count, and this member is the only reader of it in the
+ * object.  Naming it would be one inferential step past what the object
+ * proves, which is 3120's rule and 7453's precedent (`P4M_STATE_UNNAMED_14`):
+ * the strings below name ARMS, not state values, and no string names a
+ * number.  The dispatch is written in the case labels and that is the record.
+ *
+ * FOUR OF ITS OWN CLASS'S MEMBERS ARE CALLED AND TWO ARE INLINED, and which
+ * is which is the compiler's business rather than the source's.
+ * `enterDataSteadyState`, `enterRRN`, `enterDataPhase` and `exitPhase3` are
+ * out-of-line calls in the blob; `enterPhase4` (0x1dc76) and `enterFPE`
+ * (0x1d418) appear inlined instruction for instruction, idempotence test and
+ * gated string included.  Both spellings are the same source -- a call --
+ * and finding 7480 is why that is worth stating: at this size the instruction
+ * COUNT is the only completeness check there is, and a member that inlines on
+ * one side and not the other moves it without moving any behaviour.
+ *
+ * WHAT THE COMMON TAIL DOES, and it runs whatever the phase.  Two independent
+ * print-period counters (`word_284`/`word_288` for the error energy and
+ * `word_28c`/`word_290` for the timing offset) and, when `word_40` is set,
+ * the energy-drop detector: `agc.level` under
+ * `ENERGY_DROP_DETECTOR_THRESHOLD` for `NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN`
+ * samples raises a remote retrain.  The exit is then one of three counters --
+ * `word_264` for 0x23, `word_268` for 0x1f..0x21 and `word_26c` for 0x26 --
+ * incremented on the way out, and the return value is not set on any path.
+ *
+ * THE TIMING-OFFSET LINE CALLS `getTimingOffsetPPM` FOUR TIMES and that is
+ * the source and not an artefact: the value is a call rather than a variable,
+ * so each of the four spellings in the statement is its own call, and GCC's
+ * right-to-left argument evaluation is what puts the fractional part's two
+ * first.  The `%c%d.%03d` shape itself is `exitPhase3`'s, reused unchanged.
+ *
+ * THE `V90MP` SIGNATURE TEST IS SIX FIELD COMPARISONS AND THREE INSTRUCTIONS.
+ * `mp->Trellis == 0 && mp->NonLin == 0` is one `cmpw $0x0,0x2(%eax)` and each
+ * of the three `h` pairs is one 32-bit `test`, because `fold_truthop` merges
+ * comparisons of ADJACENT fields against zero into one wider load.  Written
+ * field by field, which is what the object's own widths say the author wrote.
+ *
+ * ONE HEADER CORRECTION FALLS OUT: `V90Demodulator` +0x274 was `pad_274[4]`,
+ * "nothing reads it".  This member both writes it (from
+ * `equalizer->meanErrorEnergyMean`, when Ed arrives on a silence RRN) and
+ * reads it back (as the constellation designer's third argument, the `f` of
+ * its mangling), so it is four bytes and a `float`.  It keeps the offset name:
+ * what it holds is "the mean error at the moment the redesign was armed", and
+ * that is a role bounded by two sites rather than a meaning the object states.
+ */
+
+/*
+ * SIX PARAMETER SLOTS THIS MEMBER READS AS `float` WHERE V90Parameters.h
+ * DECLARES THEM `int`, and the object's own load width is what says so:
+ * `flds` at 0x1deb2 (+0x06c), 0x1def6 (+0x070) and 0x1d2ce (+0x328), and a
+ * bare 32-bit `mov` at 0x1e06d, 0x1e079 and 0x1e085 that lands in three slots
+ * the header already types `float` (+0x18c, +0x190, +0x194).  A `mov` between
+ * two `float`s is a copy; the same statement written between an `int` and a
+ * `float` is a CONVERSION and two more instructions, so the view is forced
+ * rather than cosmetic.  Reaching them through the union is how this file
+ * avoids retyping a shared header that half the object's constructors take a
+ * pointer to; the names stay `unnamed_` because nothing here says what they
+ * hold.
+ */
+#define PARAMS_UNNAMED_06C	(0x06c / 4)	/* float */
+#define PARAMS_UNNAMED_070	(0x070 / 4)	/* float */
+#define PARAMS_UNNAMED_1B0	(0x1b0 / 4)	/* float */
+#define PARAMS_UNNAMED_1B4	(0x1b4 / 4)	/* float */
+#define PARAMS_UNNAMED_1B8	(0x1b8 / 4)	/* float */
+#define PARAMS_UNNAMED_328	(0x328 / 4)	/* float */
+
+/* `_tagModemParameters::connectionType`; MODEM_CLOCK_DEVIATION's neighbour. */
+#define MODEM_CONNECTION_TYPE	(0x048 / 4)
+
+void
+V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
+			 unsigned int nofIn)
+{
+	int *modemParams;
+	V90BllState bllState;
+	int bllSamples;
+	unsigned int prevRate;
+	float cur, avg, pdSnr;
+	int verdict, whole, frac, whole2, frac2;
+
+	word_38 += nofIn;
+
+	preFilter.fir.process(in, (float *)array_244, nofIn);
+	agc.process((const float *)array_244, (float *)array_244, nofIn);
+	resampler.resample((const float *)array_244, nofIn,
+			   (float *)array_248, word_24c);
+	equalizer->process((float *)array_248, word_24c, (short *)array_250,
+			   (float *)array_254, word_258);
+
+	word_3c = equalizer->stateCount;
+
+	switch (inPhase3) {
+	case 0:
+		nofOut = 0;
+		break;
+
+	/* ------------------------------------------------ phase 3 ------- */
+	case 1:
+		nofOut = 0;
+
+		if (spectralVerifier.process(in, nofIn) != 0) {
+			switch (spectralVerifier.word_28) {
+			case 0:
+				autoDigitalImpDetector->setConnectionType(0);
+				modemParams =
+				    *(int *const *)&V90PB(params)[0];
+				modemParams[MODEM_CONNECTION_TYPE] = 0;
+				break;
+
+			case 1:
+				preFilter.setFilter((unsigned int)
+				    params->GERMAN_ISDN_NT1_BOX_FILTER_GAIN);
+				edprintf("V90Demodulator: PreFilter adjusted "
+					 "to: %d\r\n", preFilter.gain);
+				params->LINEAR_EQU_DATA_BETA =
+				    params->GERMAN_ISDN_NT1_LINEAR_EQU_DATA_BETA;
+				autoDigitalImpDetector->setConnectionType(1);
+				modemParams =
+				    *(int *const *)&V90PB(params)[0];
+				modemParams[MODEM_CONNECTION_TYPE] = 1;
+				break;
+
+			case 2:
+				preFilter.setFilter((unsigned int)
+				    params->GERMAN_PBX_PRE_FILTER_GAIN);
+				edprintf("V90Demodulator: PreFilter adjusted "
+					 "to: %d\r\n", preFilter.gain);
+				params->LINEAR_EQU_DATA_BETA =
+				    params->GERMAN_PBX_LINEAR_EQU_DATA_BETA;
+				params->DFE_DATA_BETA =
+				    params->GERMAN_PBX_DFE_DATA_BETA;
+				params->GERMAN_PBX_LINEAR_EQU_DIL_BETA =
+				    V90PF(params)[PARAMS_UNNAMED_1B0];
+				params->GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA =
+				    V90PF(params)[PARAMS_UNNAMED_1B4];
+				params->GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA =
+				    V90PF(params)[PARAMS_UNNAMED_1B8];
+				autoDigitalImpDetector->setConnectionType(2);
+				modemParams =
+				    *(int *const *)&V90PB(params)[0];
+				modemParams[MODEM_CONNECTION_TYPE] = 2;
+				break;
+
+			case 3:
+				if (preFilter.isV90WithEia6() != 0) {
+					edprintf("V90Demodulator: Severe Codec "
+						 "conditions were detected due "
+						 "to EIA6 loop type...\r\n");
+				} else if (params->
+				    ENABLE_DROP_2_V34_ON_SEVERE_CODEC != 0) {
+					edprintf("V90Demodulator: Severe Codec "
+						 "conditions were detected NOT "
+						 "on EIA6, initiating drop 2 "
+						 "V34...\r\n");
+					word_3c = 0x1f;
+				} else {
+					edprintf("V90Demodulator: Severe Codec "
+						 "conditions were detected NOT "
+						 "on EIA6, drop is masked, "
+						 "doing nothing...\r\n");
+				}
+				break;
+
+			default:
+				edprintf("V90Demodulator: !!! ERROR !!! : "
+					 "Spectral Verifier returned illegal "
+					 "value !!!\r\n");
+				break;
+			}
+		}
+
+		switch (word_3c) {
+		case 0x01:
+			if (preFilter.getV90Capability() == 0) {
+				word_3c = 0x1f;
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V90Demodulator: Request FallBack "
+					    "to V.34 due to line "
+					    "conditions\r\n");
+			}
+			break;
+
+		case 0x03:
+			spectralVerifier.startAccumulation();
+			if (quickConnect != 0) {
+				word_40 = 1;
+			} else {
+				agc.alpha = params->AGC_K;
+				edprintf("V90Demodulator: Agc Activated\r\n");
+			}
+			break;
+
+		case 0x04:
+			if (quickConnect == 0)
+				resampler.setBllState(V90_BLL_SLOW, 1);
+			break;
+
+		case 0x05:
+		case 0x06:
+			if (params->PROBING_MODE == 0) {
+				if (quickConnect != 0) {
+					if (autoDigitalImpDetector->
+					    isThereAnyAltRbsPhase() != 0) {
+						connectionEvaluator->short_b2 =
+						    1;
+						edprintf("V90Demodulator: "
+							 "setAltRbsDetectedOnQC "
+							 "was called !!!\r\n");
+					}
+					edprintf("V90Demodulator: "
+						 "connectionEvaluator of TRN1d "
+						 "is NOT ENABLED due to quick "
+						 "connect...\r\n");
+				} else {
+					connectionEvaluator->word_88 = 1;
+					connectionEvaluator->word_74 = 0;
+					connectionEvaluator->word_70 = 0.0f;
+					edprintf("V90Demodulator: enabling "
+						 "connectionEvaluator of "
+						 "TRN1d\r\n");
+				}
+			}
+			break;
+
+		case 0x08:
+			if (params->PROBING_MODE == 0) {
+				connectionEvaluator->word_84 = 0;
+				connectionEvaluator->word_88 = 0;
+				connectionEvaluator->word_74 = 0;
+				connectionEvaluator->word_70 = 0.0f;
+				edprintf("V90Demodulator: disabling "
+					 "connectionEvaluator of Phase3\r\n");
+			}
+			edprintf("V90Demodulator: Jd maxLookAhead = %d\r\n",
+				 sessionFlag != 0 ? jdV92->getMaxLookahead()
+						  : jd->getMaxLookahead());
+			if (params->PROBING_MODE != 0)
+				resampler.setBllState(V90_BLL_FROZEN, 1);
+			else
+				resampler.setBllState(V90_BLL_DIL, 1);
+			break;
+
+		case 0x11:
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90Demodulator: Dil study "
+						     "Terminated. Enter error "
+						     "relaxation period.\n");
+			phase3Demodulator->setDigitalImairmentsInfo();
+
+			trn1dRmsRatio = autoDigitalImpDetector->padGain;
+			agc.gain = agc.gain / trn1dRmsRatio;
+
+			whole = (int)agc.gain;
+			frac = (int)((agc.gain - (float)whole) * 1.0e6f);
+			edprintf("V90Demodulator: Agc Gain = %c%d.%06d\r\n",
+				 !(0.0f >= agc.gain) ? '+' : '-',
+				 (int)__builtin_fabsf(agc.gain),
+				 (frac < 0) ? -frac : frac);
+
+			phase3Demodulator->byte_3f9 = 1;
+			connectionEvaluator->word_84 = 0;
+			connectionEvaluator->word_88 = 0;
+			connectionEvaluator->word_74 = 0;
+			connectionEvaluator->word_70 = 0.0f;
+			break;
+
+		case 0x12:
+			exitPhase3();
+			break;
+
+		case 0x13:
+			if (params->PROBING_MODE != 0) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("--------------"
+					    "---------------------------------"
+					    "----------------\r\n");
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("V90Demodulator: "
+					    "tearing down connection, probing "
+					    "mode ended...\r\n");
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("--------------"
+					    "---------------------------------"
+					    "----------------\r\n");
+				word_3c = 0x2b;
+			}
+			break;
+
+		case 0x14:
+			enterPhase4();
+			break;
+
+		case 0x15:
+			verdict = connectionEvaluator->indicateLocalRetrain();
+			if (verdict == 4)
+				word_3c = 0x21;
+			else if (verdict == 5)
+				word_3c = quickConnect != 0 ? 0x21 : 0x1f;
+			break;
+
+		default:
+			break;
+		}
+
+		/*
+		 * THE BLL LADDER.  Six independent tests over one reading of
+		 * the resampler's state -- the object loads `bllState` and
+		 * `stateSamples` ONCE at 0x1d11b and 0x1d121 and never reloads
+		 * them across the four `setBllState` calls, while it DOES
+		 * reload `quickConnect` after every one of them (0x1d4ad,
+		 * 0x1df92, 0x1dfbb, 0x1dfe4).  That asymmetry is the whole
+		 * evidence for the two locals: a call cannot touch a local,
+		 * and it can touch an `unsigned int` member that its own
+		 * `unsigned int` stores may alias.  `stateSamples` is `int`
+		 * here because every comparison against it is a SIGNED `jl`.
+		 */
+		bllState = resampler.bllState;
+		bllSamples = (int)resampler.stateSamples;
+
+		if (quickConnect == 0 && bllState == V90_BLL_INITIAL &&
+		    params->BLL_TRN1D_INITIAL_TO_FAST_DURATION < bllSamples)
+			resampler.setBllState(V90_BLL_FAST, 1);
+		if (quickConnect == 0 && bllState == V90_BLL_FAST &&
+		    params->BLL_TRN1D_FAST_TO_SLOW_DURATION < bllSamples)
+			resampler.setBllState(V90_BLL_MEDIUM, 1);
+		if (quickConnect == 0 && bllState == V90_BLL_SLOW &&
+		    params->unnamed_100 < bllSamples)
+			resampler.setBllState(V90_BLL_SLOW2, 1);
+		if (quickConnect != 0 && bllState == V90_BLL_TRN1_QC_INITIAL &&
+		    params->unnamed_104 < bllSamples)
+			resampler.setBllState(V90_BLL_TRN1_QC_FAST, 1);
+		if (quickConnect != 0 && bllState == V90_BLL_TRN1_QC_FAST &&
+		    params->unnamed_108 < bllSamples)
+			resampler.setBllState(V90_BLL_TRN1_QC_MEDIUM, 1);
+		if (quickConnect != 0 && bllState == V90_BLL_TRN1_QC_MEDIUM &&
+		    params->unnamed_10c < bllSamples)
+			resampler.setBllState(V90_BLL_TRN1_QC_SLOW, 1);
+
+		/*
+		 * THE AGC FREEZE, and the exact-1.0 test is Agc.h's own
+		 * statement of what "already frozen" means.
+		 */
+		if (phase3Demodulator->state == 3 &&
+		    params->AGC_ADAPTATION_DURATION <
+			(int)phase3Demodulator->word_2c &&
+		    agc.alpha != 1.0f) {
+			agc.freeze();
+			edprintf("V90Demodulator: Agc Frozen\r\n");
+
+			whole = (int)agc.level;
+			frac = (int)((agc.level - (float)whole) * 1.0e2f);
+			edprintf("V90Demodulator: Agc Energy = %c%d.%02d\r\n",
+				 !(0.0f >= agc.level) ? '+' : '-',
+				 (int)__builtin_fabsf(agc.level),
+				 (frac < 0) ? -frac : frac);
+
+			whole = (int)agc.gain;
+			frac = (int)((agc.gain - (float)whole) * 1.0e6f);
+			edprintf("V90Demodulator: Agc Gain = %c%d.%06d\r\n",
+				 !(0.0f >= agc.gain) ? '+' : '-',
+				 (int)__builtin_fabsf(agc.gain),
+				 (frac < 0) ? -frac : frac);
+
+			if (quickConnect == 0) {
+				if (preFilter.isV90WithEia6() == 0)
+					resampler.adjustHalfBaudBpfGain(
+					    agc.gain);
+			}
+			word_40 = 1;
+
+			if (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {
+				if (V90PF(params)[PARAMS_UNNAMED_06C] * 0.85 >
+				    agc.gain) {
+					phase3Demodulator->short_400 = 1;
+				} else {
+					equalizer->short_08 = (short)
+					    ((short)((1.0f - agc.gain /
+					      V90PF(params)[PARAMS_UNNAMED_06C])
+						     * 250.0f) + 1);
+				}
+				phase3Demodulator->byte_3f8 = 0x74;
+
+				if (agc.gain <
+				    V90PF(params)[PARAMS_UNNAMED_070]) {
+					params->unnamed_300 -=
+					    params->unnamed_304;
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "V90Demodulator: Agc Gain "
+						    "very low > Setting DIL "
+						    "extreme overflow "
+						    "protection !!!\r\n");
+				} else if (DSPLIB_DEBUG_ON()) {
+					dsplibs_debug_printf(
+					    "V90Demodulator: Agc Gain low > "
+					    "Setting DIL overflow protection "
+					    "!!!\r\n");
+				}
+			} else {
+				phase3Demodulator->byte_3f8 = 0x74;
+			}
+
+			edprintf("V90Demodulator: Dil max ucode = %d\n",
+				 phase3Demodulator->byte_3f8);
+		}
+
+		verdict = connectionEvaluator->evaluatePhase3();
+		if (verdict == 4)
+			word_3c = 0x21;
+		else if (verdict == 5)
+			word_3c = quickConnect != 0 ? 0x21 : 0x1f;
+		break;
+
+	/* ------------------------------------------------ phase 4 ------- */
+	case 2:
+		nofOut = 0;
+
+		word_44 += nofIn;
+		if (word_44 > word_48) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90Demodulator: Phase4 "
+						     "TimeOut\r\n");
+
+			if (connectionEvaluator->word_90 != 0 &&
+			    phase4Demodulator->int_003c != 0 &&
+			    codecType != (__tHardwareCodecTypes__)4) {
+				edprintf("V90Demodulator: Silence rrn not "
+					 "finished on platform other then USB, "
+					 "masking silence rrn...\r\n");
+				params->RRN_SILENCE_REQUESTED = 0;
+			}
+			params->SENSITIVE_ISP_DETECTED = 1;
+			params->SILENCE_SCR = 0;
+			edprintf("V90Demodulator: On phase4 timeout: Assuming "
+				 "Sensitive ISP - use non-silence & 6dB up & "
+				 "maixmal rate 12000 for next time...\r\n");
+
+			verdict = connectionEvaluator->indicateLocalRetrain();
+			if (verdict == 4)
+				word_3c = 0x21;
+			else if (verdict == 5)
+				word_3c = quickConnect != 0 ? 0x21 : 0x1f;
+		}
+
+		switch (word_3c) {
+		case 0x19:
+			pdSnr = equalizer->calcMeanErrorStatistics();
+
+			if (connectionEvaluator->word_90 != 0 &&
+			    phase4Demodulator->int_003c != 0) {
+				edprintf("V90Demodulator: Constellation design "
+					 "on silence rrn...\r\n");
+				additionalCPinfo->word_04 = 1;
+				if (sessionFlag != 0)
+					phase4Demodulator->enterWaitForCP();
+				else
+					phase4Demodulator->enterWaitForMP();
+				break;
+			}
+
+			if (preFilter.isV90WithEia6() != 0)
+				pdSnr = 0.0f;
+
+			verdict = connectionEvaluator->
+			    evaluateMeanErrorStdPhase4(
+				pdSnr, equalizer->meanErrorEnergyMean);
+			if (verdict == 4) {
+				word_3c = 0x21;
+				break;
+			}
+			if (verdict == 5) {
+				word_3c = quickConnect != 0 ? 0x21 : 0x1f;
+				break;
+			}
+
+			if (quickConnect != 0 &&
+			    constellationDesigner->word_24 == 0)
+				pdSnr = V90PF(params)[PARAMS_UNNAMED_328] *
+					equalizer->meanErrorEnergyMean;
+			else
+				pdSnr = equalizer->meanErrorEnergyMean;
+
+			verdict = constellationDesigner->process(
+			    sessionFlag != 0 ? jdV92->getMaxLookahead()
+					     : jd->getMaxLookahead(),
+			    autoDigitalImpDetector,
+			    pdSnr,
+			    sessionFlag != 0 ? jdV92->getRatesMask()
+					     : jd->getRatesMask(),
+			    mappingParamsAlt,
+			    autoDigitalImpDetector->linMapp,
+			    autoDigitalImpDetector->linMappAlt,
+			    autoDigitalImpDetector->short_2800,
+			    autoDigitalImpDetector->byte_280c,
+			    phase3Demodulator->getMaxUcode(),
+			    (unsigned char)(phase2Info->maxTxPower + 1),
+			    codecType,
+			    connectionEvaluator->word_94,
+			    (V90SpecialSpectralConditions)
+				spectralVerifier.word_28);
+
+			connectionEvaluator->enableRrnDown =
+			    params->ENABLE_RRN_DOWN;
+			connectionEvaluator->enableRrnUp = params->ENABLE_RRN_UP;
+			byte_280 = 1;
+
+			if (verdict != 1) {
+				edprintf("V90Demodulator: Data Phase spectral "
+					 "parameters:\r\n");
+				displaySpectralParams(mappingParamsAlt);
+				additionalCPinfo->word_04 = 1;
+				if (sessionFlag != 0)
+					phase4Demodulator->enterWaitForCP();
+				else
+					phase4Demodulator->enterWaitForMP();
+				connectionEvaluator->
+				    updateCurrentConstellationData(
+					constellationDesigner->short_0a,
+					constellationDesigner->float_18,
+					constellationDesigner->float_1c,
+					constellationDesigner->float_20);
+			} else {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("V90Demodulator: "
+					    "connection design error, "
+					    "initiating retrain\r\n");
+				if (connectionEvaluator->
+				    indicateLocalRetrain() == 5)
+					word_3c = quickConnect != 0 ? 0x21
+								    : 0x1f;
+				else
+					word_3c = 0x26;
+			}
+			break;
+
+		case 0x1a:
+		case 0x1b:
+			if (phase4Demodulator->state != P4D_STATE_WAIT_FOR_MP)
+				break;
+
+			if (params->MASK_RRN_SILENCE_ON_PROBLEMATIC_ISP != 0 &&
+			    params->RRN_SILENCE_REQUESTED != 0 &&
+			    mp->Trellis == 0 && mp->NonLin == 0 &&
+			    mp->Shaping == 0 && mp->Type == 1 &&
+			    mp->h1Real == 0 && mp->h1Imag == 0 &&
+			    mp->h2Real == 0 && mp->h2Imag == 0 &&
+			    mp->h3Real == 0 && mp->h3Imag == 0) {
+				edprintf("###############################"
+					 "###############################"
+					 "###############\r\n");
+				if (codecType == (__tHardwareCodecTypes__)4) {
+					params->MAX_NOF_V90_RETRAINS = 150;
+					edprintf("V90Demodulator: 'Problematic' "
+						 "ISP Modem detected on USB. "
+						 "Masking drop to V34 "
+						 "(MAX_NOF_V90_RETRAINS = "
+						 "%d)...\r\n",
+						 params->MAX_NOF_V90_RETRAINS);
+					connectionEvaluator->word_94 = 1;
+				} else {
+					params->RRN_SILENCE_REQUESTED = 0;
+					edprintf("V90Demodulator: 'Problematic' "
+						 "ISP Modem detected NOT on "
+						 "USB. Masking Silence "
+						 "RRN...\r\n");
+				}
+				edprintf("###############################"
+					 "###############################"
+					 "###############\r\n");
+			}
+			edprintf("V90Demodulator: Silence RRN is not masked "
+				 "(silence flag = %d)\r\n",
+				 params->RRN_SILENCE_REQUESTED);
+			phase4Demodulator->enterWaitForEd();
+			break;
+
+		case 0x1c:
+			if (connectionEvaluator->word_90 != 0 &&
+			    phase4Demodulator->int_003c != 0 &&
+			    phase4Demodulator->int_0038 != 0) {
+				edprintf("V90Demodulator: freezing timing on "
+					 "silence rrn...\r\n");
+				resampler.setBllState(V90_BLL_FROZEN, 1);
+				word_40 = 0;
+
+				cur = equalizer->meanErrorEnergyCurrent;
+				avg = equalizer->meanErrorEnergyMean;
+				whole = (int)cur;
+				frac = (int)((cur - (float)whole) * 1.0e4f);
+				whole2 = (int)avg;
+				frac2 = (int)((avg - (float)whole2) * 1.0e4f);
+				edprintf("V90Demodulator: Ed received on "
+					 "Silence RRN... current Mean Error = "
+					 "%c%d.%04d,    average Mean Error = "
+					 "%c%d.%04d\r\n",
+					 !(0.0f >= cur) ? '+' : '-',
+					 (int)__builtin_fabsf(cur),
+					 (frac < 0) ? -frac : frac,
+					 !(0.0f >= avg) ? '+' : '-',
+					 (int)__builtin_fabsf(avg),
+					 (frac2 < 0) ? -frac2 : frac2);
+
+				float_274 = equalizer->meanErrorEnergyMean;
+			}
+			word_270 = 1;
+			break;
+
+		case 0x1d:
+			enterDataPhase();
+			demapper->process((unsigned char *)array_25c, nofOut);
+			descrambler.process((const unsigned char *)array_25c,
+					    out, nofOut);
+			break;
+
+		case 0x28:
+			edprintf("V90Demodulator: RtNot detected.\r\n");
+			resampler.setBllState(V90_BLL_TRN2, 1);
+			word_40 = 1;
+			break;
+
+		case 0x2a:
+			prevRate = (unsigned int)
+			    (mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)
+			     + 0.5f);
+			edprintf("V90Demodulator: on silence RRN redesign, "
+				 "prevRate = %d\r\n", prevRate);
+
+			if (connectionEvaluator->word_98 != 0) {
+				constellationDesigner->word_48 = 3;
+				edprintf("V90Demodulator: FORCED rate down on "
+					 "silence rrn\r\n");
+			} else if (phase4Demodulator->int_3510 != 0 &&
+				   (unsigned int)
+				   params->MIN_RATE_FOR_SILENCE_RRN_KEEP_RATE >=
+				   prevRate) {
+				constellationDesigner->word_48 = 1;
+				edprintf("V90Demodulator: keeping rate on "
+					 "silence rrn\r\n");
+			} else if (params->
+			    DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2) {
+				constellationDesigner->word_48 = 1;
+				edprintf("V90Demodulator: FORCED keep rate on "
+					 "silence rrn\r\n");
+			} else {
+				constellationDesigner->word_48 = 3;
+				edprintf("V90Demodulator: one rate down on "
+					 "silence rrn\r\n");
+			}
+
+			cur = equalizer->meanErrorEnergyCurrent;
+			avg = equalizer->meanErrorEnergyMean;
+			whole = (int)cur;
+			frac = (int)((cur - (float)whole) * 1.0e4f);
+			whole2 = (int)avg;
+			frac2 = (int)((avg - (float)whole2) * 1.0e4f);
+			edprintf("V90Demodulator: about to redesign... current "
+				 "Mean Error = %c%d.%04d,    average Mean "
+				 "Error = %c%d.%04d\r\n",
+				 !(0.0f >= cur) ? '+' : '-',
+				 (int)__builtin_fabsf(cur),
+				 (frac < 0) ? -frac : frac,
+				 !(0.0f >= avg) ? '+' : '-',
+				 (int)__builtin_fabsf(avg),
+				 (frac2 < 0) ? -frac2 : frac2);
+
+			verdict = constellationDesigner->process(
+			    sessionFlag != 0 ? jdV92->getMaxLookahead()
+					     : jd->getMaxLookahead(),
+			    autoDigitalImpDetector,
+			    float_274,
+			    sessionFlag != 0 ? jdV92->getRatesMask()
+					     : jd->getRatesMask(),
+			    mappingParamsAlt,
+			    autoDigitalImpDetector->linMapp,
+			    autoDigitalImpDetector->linMappAlt,
+			    autoDigitalImpDetector->short_2800,
+			    autoDigitalImpDetector->byte_280c,
+			    phase3Demodulator->getMaxUcode(),
+			    (unsigned char)(phase2Info->maxTxPower + 1),
+			    codecType,
+			    connectionEvaluator->word_94,
+			    (V90SpecialSpectralConditions)
+				spectralVerifier.word_28);
+
+			connectionEvaluator->enableRrnDown =
+			    params->ENABLE_RRN_DOWN;
+			connectionEvaluator->enableRrnUp = params->ENABLE_RRN_UP;
+			byte_280 = 1;
+
+			if (verdict == 1) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("V90Demodulator: "
+					    "connection design error, "
+					    "initiating retrain\r\n");
+				if (connectionEvaluator->
+				    indicateLocalRetrain() == 5)
+					word_3c = quickConnect != 0 ? 0x21
+								    : 0x1f;
+				else
+					word_3c = 0x26;
+			}
+			connectionEvaluator->updateCurrentConstellationData(
+			    constellationDesigner->short_0a,
+			    constellationDesigner->float_18,
+			    constellationDesigner->float_1c,
+			    constellationDesigner->float_20);
+			break;
+
+		case 0x31:
+		case 0x33:
+			word_270 = 1;
+			break;
+
+		case 0x35:
+			edprintf("V90Demodulator: freezing timing on silence "
+				 "rrn...\r\n");
+			resampler.setBllState(V90_BLL_FROZEN, 1);
+			word_40 = 0;
+			break;
+
+		default:
+			break;
+		}
+
+		verdict = connectionEvaluator->evaluatePhase4(
+		    equalizer->ph4MeanErrorEnergyBeforeToAfterUpdateRatio);
+		if (verdict == 4)
+			word_3c = 0x21;
+		else if (verdict == 5)
+			word_3c = quickConnect != 0 ? 0x21 : 0x1f;
+		break;
+
+	/* ------------------------------------------------ data ---------- */
+	case 3:
+		if (word_38 >= (unsigned int)
+		    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)
+			enterDataSteadyState();
+		/* FALLTHROUGH -- 0x1cf01 falls into 0x1cf10 */
+
+	case 4:
+		demapper->process((unsigned char *)array_25c, nofOut);
+		descrambler.process((const unsigned char *)array_25c, out,
+				    nofOut);
+
+		if (word_3c == 0x23)
+			enterRRN();
+		if (word_3c == 0x25)
+			enterFPE();
+
+		switch (connectionEvaluator->evaluateConnection()) {
+		case 1:
+			word_3c = 0x22;
+			constellationDesigner->word_48 = 2;
+			equalizer->restoreEqualizerToFloat();
+			break;
+		case 2:
+			if (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2)
+				constellationDesigner->word_48 = 1;
+			else
+				constellationDesigner->word_48 = 3;
+			word_3c = 0x22;
+			equalizer->restoreEqualizerToFloat();
+			break;
+		case 3:
+			constellationDesigner->word_48 = 0;
+			word_3c = 0x22;
+			equalizer->restoreEqualizerToFloat();
+			break;
+		case 4:
+			word_3c = 0x21;
+			break;
+		case 5:
+			word_3c = 0x1f;
+			break;
+		default:
+			break;
+		}
+
+		if (sessionFlag != 0 && (word_3c == 0x22 || word_3c == 0x23)) {
+			phase4Demodulator->resetBeforRRN();
+			phase4Demodulator->int_0040 =
+			    connectionEvaluator->word_90;
+			demapper->linearMappStudyEnabled = 0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90Demodulator: disable "
+				    "linear mapping study in data\n");
+		}
+		break;
+	}
+
+	/* ------------------------------------------------ common tail --- */
+	if (word_40 != 0) {
+		if (agc.level < params->ENERGY_DROP_DETECTOR_THRESHOLD) {
+			word_27c += nofIn;
+			if (word_27c >= (unsigned int)
+			    params->NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("--------------"
+					    "---------------------------------"
+					    "--------------\r\n");
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("V90Demodulator: "
+					    "REMOTE RETRAIN - Energy Drop "
+					    "detected\r\n");
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf("--------------"
+					    "---------------------------------"
+					    "--------------\r\n");
+
+				if (connectionEvaluator->
+				    indicateRemoteRetrain() == 5) {
+					if (quickConnect != 0 &&
+					    (int)inPhase3 <= 2)
+						word_3c = 0x21;
+					else
+						word_3c = 0x1f;
+				} else {
+					word_3c = 0x26;
+				}
+			}
+		} else {
+			word_27c = 0;
+		}
+	}
+
+	if (word_284 + nofIn < word_288) {
+		word_284 += nofIn;
+	} else {
+		word_284 = 0;
+		if (DSPLIB_DEBUG_ON()) {
+			cur = equalizer->meanErrorEnergyCurrent;
+			whole = (int)cur;
+			frac = (int)((cur - (float)whole) * 1.0e3f);
+			dsplibs_debug_printf("V90Demodulator: Error Energy = "
+					     "%c%d.%03d\r\n",
+					     !(0.0f >= cur) ? '+' : '-',
+					     (int)__builtin_fabsf(cur),
+					     (frac < 0) ? -frac : frac);
+		}
+	}
+
+	if (word_28c + nofIn < word_290) {
+		word_28c += nofIn;
+	} else {
+		word_28c = 0;
+		if (DSPLIB_DEBUG_ON()) {
+			frac = (int)((resampler.getTimingOffsetPPM() -
+				      (float)(int)resampler.getTimingOffsetPPM())
+				     * 1.0e3f);
+			dsplibs_debug_printf("V90Demodulator: Timing Offset "
+			    "[ppm]  = %c%d.%03d\r\n",
+			    !(0.0f >= resampler.getTimingOffsetPPM()) ? '+'
+								     : '-',
+			    (int)__builtin_fabsf(resampler.getTimingOffsetPPM()),
+			    (frac < 0) ? -frac : frac);
+		}
+	}
+
+	word_260 = (word_260 + word_258) % 6;
+
+	switch (word_3c) {
+	case 0x1f:
+	case 0x20:
+	case 0x21:
+		word_268++;
+		break;
+	case 0x23:
+		word_264++;
+		break;
+	case 0x26:
+		word_26c++;
+		break;
+	default:
+		break;
+	}
 }
 
 /*
