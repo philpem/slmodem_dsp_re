@@ -77345,3 +77345,61 @@ declaration below (one).
 gate working: an unusable mutation does not fail a run (finding 347), so
 without the anchor check the five would have gone on being counted as caught
 while testing nothing.
+
+======================================================================
+
+### 7440. Statement-order recovery is exhausted: seven functions found, and the search is now provably dry
+
+`CarrierDetectB103` was `same size, bytes differ` because the object loads
+`+0x8` before `+0x4` and we loaded `+0x4` first. `&` is commutative and both
+operands are plain loads, so no differential test can separate the two
+spellings — but only one makes GCC 3.4.2 emit the object's order, and swapping
+them made the function byte-identical. That is finding 617's acceptance test in
+full: **full identity, operands included**, which is what separates recovering
+the author's source from permuting ours until the compiler agrees.
+
+Seven functions came out of pursuing that, all accepted only on an exact byte
+match and none on "closer":
+
+| function | what moved |
+|---|---|
+| `CarrierDetectB103` | the two operands of a commutative `&` |
+| `DeleteV23Modem` | shares the header; came with it |
+| `V90SpectralVerifier::reset` | the two zero stores |
+| `V92Transmitter::C1` / `C2` | zero the one-byte buffer, THEN store the pointer |
+| `V90Parameters::C1` | `modemParams = mp` hoisted above `initSession()` |
+
+Grade 0 went **393 to 400** and same-size-different-bytes 170 to 126.
+
+#### The search is dry, and this is the measurement that says so
+
+    for every same-size, non-alpha-equal function:
+        try every single transposition of two instructions in OUR stream
+        does it then match the blob?
+
+**83 functions scanned, 10 skipped as too long, exactly ONE hit** — and it is
+`ScrambleDataV22`, which is already known and already declined. Its swap is
+between the `FIELD_PTR` load and an argument store for a tail call under
+`-maccumulate-outgoing-args`: two different constructs, neither of them a
+statement, so there is nothing in the source to reorder. Restructuring the
+expression until GCC agrees is the thing 617 forbids.
+
+**So do not re-run this search.** What is left in the 126 needs different
+instructions, not the same ones differently ordered.
+
+#### Two things it taught that outlast it
+
+**Take the baseline BEFORE the edit.** `V90Parameters` was declined a day
+earlier on the reasoning that hoisting the assignment "can only change what
+`initSession` sees". `initSession` does not read `modemParams`, the object
+stores `+0x00` between the two stores it is inlined into, and the hoist gives
+byte identity. A guess about semantics stood where one grep would have settled
+it. Separately, `v29data`'s modelling was measured only after the change until
+the originals were restored to get a baseline — which then showed the change
+was codegen-neutral, a result the first measurement could not have produced.
+
+**A clone pair can differ from ITSELF.** `V90Parameters`'s C1 and C2 are GCC's
+two copies of one constructor and the blob's differ in `%ecx` against `%edx`,
+same instructions and same operands. One source cannot match both, C2 scores
+grade 1, and the object is its own proof that register allocation is the free
+choice `byteident`'s grade 1 says it is.
