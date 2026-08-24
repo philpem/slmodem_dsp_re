@@ -21,9 +21,9 @@ the tree as a whole.
 | 504 | `V90Phase4Demodulator::reset` |
 | 404 | `V90Mapper::resetNoSpectral` -- WRITTEN |
 | 255 | `V90Phase4Modulator::reset` |
-| 180 | `V90BitsToSymbol::process(unsigned char *, unsigned int)` |
+| 180 | `V90BitsToSymbol::process(unsigned char *, unsigned int)` -- WRITTEN |
 | 108 | `V90BitsToSymbol::reset` -- WRITTEN |
-| 96 | `V90Phase4Modulator::setMappingParams` |
+| 96 | `V90Phase4Modulator::setMappingParams` -- WRITTEN |
 | 58 | `V90BitsToSymbol::resetNoSpectral` -- WRITTEN |
 
 **Nothing can be landed alone.** Every test binary links all of `$(OBJ)`, so one
@@ -34,23 +34,31 @@ the batch is the unit.
 **The order is bottom-up**, and the bottom is the two `V90Mapper` resets:
 their four callees -- `alaw2linear`, `ulaw2linear`, `V90SpectralShaper::reset`
 and `::resetSSFilter` -- were all written, so they were the only members of the
-batch that could be started. **FOUR MORE ARE NOW WRITTEN AND DIFFERENTIALLY
-GREEN**: both `V90BitsToSymbol` resets and `V90Mapper::process`, whose closure
-was itself alone once the mapper resets landed.
+batch that could be started. **SIX MORE ARE NOW WRITTEN AND DIFFERENTIALLY
+GREEN**: both `V90BitsToSymbol` resets, `V90Mapper::process`,
+`V90BitsToSymbol::process(unsigned char *, unsigned int)` and
+`V90Phase4Modulator::setMappingParams`.
 
     V90Mapper::{resetNoSpectral, reset}     DONE         -> unblocked
     V90BitsToSymbol::{resetNoSpectral, reset}    DONE
     V90Mapper::process                           DONE
-    V90BitsToSymbol::process(unsigned char *, unsigned int)   180 B
-    V90Phase4Modulator::{setMappingParams, reset}
+    V90BitsToSymbol::process(unsigned char *, unsigned int)   DONE
+    V90Phase4Modulator::setMappingParams          DONE
+    V90Phase4Modulator::reset                                    255 B
     V90Phase4Modulator::{generateV90Symbol, generateV92Symbol}   6,157 B
     V90Phase4Demodulator::reset
     V90Demodulator::exitPhase3
     V90Demodulator::progress
 
-`V90BitsToSymbol::process(unsigned char *, unsigned int)` is the next rung and
-is 180 bytes; the other overload, `process(unsigned int &, short *)`, was
-already written.
+**`setMappingParams` IS AT `.text+0x2d120` AND IS 96 BYTES**, which the table
+above always said and a task brief did not: `0x30310` is inside
+`V90Mapper::reset`. `nm -S -C` on the blob is what settles an address, every
+time.
+
+The two just landed clear the way to `generateV90Symbol` and
+`generateV92Symbol`, 6,157 bytes and the bulk of what is left. The remaining
+`process` overload, `(unsigned char *, unsigned int &, short *)` at 0x2faa0, is
+484 bytes and is NOT in this batch's closure.
 
 ## Two object-map corrections that fall out of the mapper resets
 
@@ -206,6 +214,32 @@ and both are poked by hand rather than left unclaimed: the unconditional
 arrives over-full. A third, the strictness of the `<` between the second and
 third countdown arms, needs a `shaperSR` that does not divide six.
 
+## What `V90BitsToSymbol::process(unsigned char *, unsigned int)` turned out to be
+
+The FILL, where the other written overload is the drain, and the class has ONE
+status alphabet: **1 SIZE_NOT_SET, 2 BUFFER_OVERFLOW, 3 BUFFER_UNDERFLOW**, 0
+silent. This one raises 1 and 2, the other 1 and 3, and the object's three
+`.rodata` messages are what say so. The body hands the bits to
+`mapper->process` with a write pointer of `symbols + symbolsDone`, advances
+`symbolsDone` by the count that comes back, and reports 2 -- clamping
+`symbolsDone` to `symbolsBlockSize`, not to `nofSymbols` -- when the sum
+exceeds `nofSymbols`.
+
+**Status 2 is a report and not a guard**: the mapper has already written by the
+time the capacity is looked at, so no `reset`/`process` sequence can raise it
+without the write having gone outside the allocation. Finding 7430; the
+fixture pokes `nofSymbols` down and drives the exact-fit boundary as well as
+the failure.
+
+## What `V90Phase4Modulator::setMappingParams` turned out to be
+
+A null check and two calls into the converter at +0x44: `reset(mp, pcmType)`
+with the companding law taken from +0x38 and not from the argument, then
+`setSymbolsBlockSize(1)` as a sibling call whose answer is dropped. It stores
+NOTHING in the modulator -- `mappingParams` and `mappingParams2` are left as the
+constructor set them -- and is `void` because the two exits do not agree on
+`%eax`. Finding 7431.
+
 ## The fixture
 
 `test/unit/t_v90modchain.cpp` already builds `V90Mapper`, `V90BitsToSymbol`,
@@ -213,3 +247,17 @@ third countdown arms, needs a `shaperSR` that does not divide six.
 zeroed storage, with the allocator-pointer substitution this class needs
 (`mapper` at `+0x00` is owned). Extend it rather than starting a fixture: the
 hard part -- constructing both sides by symbol through `asm()` labels -- is done.
+
+Three things it grew for the two functions above, each of which the next batch
+will want:
+
+- **The debug transcript**, `dsplib_debug_capture_*` with `dsplibs_debug_level`
+  and `ref_dsplibs_debug_level` moved together over 0, 1 and 2. Three levels
+  and not two: `> 1` and `> 0` differ at exactly one value.
+- **A seeded heap buffer.** `V90BitsToSymbol::symbols` is `sysdep_malloc`'d and
+  left as the allocator found it, so the two sides' buffers hold two different
+  lots of rubbish; both are filled with the same bytes after construction and
+  the record of what was put there is what says "nothing was written".
+- **The OWNED arm for anything that drives the converter.** A supplied
+  `V90BitsToSymbol` is one shared instance and the second side's call runs over
+  the first side's result.

@@ -59,8 +59,8 @@
  },
  {
   "label": "process answers 2 rather than 1 for SIZE_NOT_SET",
-  "find": "\t\tstatus = 1;",
-  "replace": "\t\tstatus = 2;"
+  "find": "V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;",
+  "replace": "V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 2;"
  },
  {
   "label": "process answers 2 rather than 3 for BUFFER_UNDERFLOW",
@@ -69,13 +69,13 @@
  },
  {
   "label": "process has its two error messages swapped",
-  "find": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");",
-  "replace": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");"
+  "find": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept;",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept;"
  },
  {
   "label": "process announces SIZE_NOT_SET below the debug gate too",
-  "find": "\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"",
-  "replace": "\t\tif (dsplibs_debug_level > 0)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \""
+  "find": "V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)",
+  "replace": "V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 0)"
  },
  {
   "label": "process does not clear symbolsDone on the underflow arm",
@@ -111,8 +111,8 @@
  },
  {
   "label": "process does not clear the pending flag",
-  "find": "\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;\n\n\treturn status;",
-  "replace": "\treturn status;"
+  "find": "\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\tif (extraSymbolsPending)\n\t\textraSymbolsPending = 0;\n\n\treturn status;",
+  "replace": "\t\tnofBits = nofBitsForNextTime();\n\t}\n\n\treturn status;"
  },
  {
   "label": "process clears the pending flag before it counts the bits",
@@ -126,8 +126,8 @@
  },
  {
   "label": "process tests symbolsDone where the object tests the block size",
-  "find": "\tif (symbolsBlockSize == 0) {",
-  "replace": "\tif (symbolsDone == 0) {"
+  "find": "V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {",
+  "replace": "V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsDone == 0) {"
  },
  {
   "label": "process leaves the pending flag alone on the size-not-set path",

@@ -77192,3 +77192,156 @@ differentially: `6u - 12u` is 0xfffffffa and nothing else is.
 
 `test/mutations/v90mapper.json` carries the counted-inside-the-loop spelling as
 a mutation, so the poke is not merely present but shown to be load-bearing.
+
+### 7430. `V90BitsToSymbol` HAS ONE STATUS ALPHABET ACROSS TWO OVERLOADS, AND THE THIRD `.rodata` STRING IS WHAT SETTLES IT
+
+`V90BitsToSymbol::process(unsigned char *, unsigned int)`, 180 bytes at
+`.text+0x2fc90`, is the FILL to `process(unsigned int &, short *)`'s drain, and
+it answers **2**. The header had recorded 1 and 3 for the other overload and
+left the middle value unexplained; the object carries three messages, in
+address order
+
+    .rodata.str1.4+0x85b4  "V90BitsToSymbol - error: process called, SIZE_NOT_SET\r\n"
+    .rodata.str1.4+0x85ec  "V90BitsToSymbol - error: process called, BUFFER_OVERFLOW\r\n"
+    .rodata.str1.4+0x8624  "V90BitsToSymbol - error: process called, BUFFER_UNDERFLOW\r\n"
+
+and this function references the first two while the other references the first
+and the third. So the class's codes are **1 SIZE_NOT_SET, 2 BUFFER_OVERFLOW,
+3 BUFFER_UNDERFLOW**, 0 is the path with no message, and each overload can
+raise the two its own direction can hit. The strings are the author's own
+words and this is finding 604's evidence class, not inference.
+
+The body is one call and four field accesses:
+
+    2fca1:  8b 4b 1c     mov  0x1c(%ebx),%ecx   symbolsBlockSize
+    2fca4:  85 c9        test %ecx,%ecx         zero -> status 1, no mapper
+    ...
+    2fce8:  8b 43 10     mov  0x10(%ebx),%eax   symbolsDone
+    2fceb:  8b 53 08     mov  0x8(%ebx),%edx    symbols
+    2fcee:  8d 0c 42     lea  (%edx,%eax,2),%ecx        symbols + symbolsDone
+    2fd0a:  e8 ..        call V90Mapper::process(Ph,j,Ps,Rj)
+    2fd0f:  8b 44 24 20  mov  0x20(%esp),%eax   the count it wrote back
+    2fd16:  01 d0        add  %edx,%eax         symbolsDone += nofOut
+    2fd18:  3b 43 0c     cmp  0xc(%ebx),%eax    against nofSymbols
+    2fd1b:  89 43 10     mov  %eax,0x10(%ebx)   stored BEFORE the branch
+    2fd1e:  76 96        jbe  ...               <= is not an overflow
+    2fd2e:  8b 43 1c     mov  0x1c(%ebx),%eax
+    2fd31:  89 43 10     mov  %eax,0x10(%ebx)   symbolsDone = symbolsBlockSize
+
+**The test is against `nofSymbols` and the clamp is to `symbolsBlockSize`**,
+which are two different fields and not a transcription slip; and the sum is
+stored to +0x10 between the compare and the branch, so the overflowing value is
+briefly in the field and then replaced.
+
+**STATUS 2 IS UNREACHABLE OVER ANY CONSTRUCTED OBJECT, and it is the same
+shape as 7422 and 7423 one class up.** The mapper has already written `nofOut`
+symbols at `symbols + symbolsDone` by the time the capacity is looked at, and
+the buffer is exactly `2 * nofSymbols` bytes, so nothing can raise the status
+without the mapper having written outside the allocation first: it is a report
+and not a guard. `t_v90modchain`'s `run_bts_fill_overflow` therefore pokes
+`nofSymbols` ALONE, downwards, on both sides, over a buffer built for 0x100
+symbols -- the writes stay inside real storage while the capacity compared
+against is one the object could not have had.
+
+**The boundary is driven as well as the failure.** Phase one measures how many
+symbols a case and a bit string actually produce; phase two sets `nofSymbols`
+to exactly that and requires status 0, which is the only thing separating the
+object's `jbe` from a `jb`; phase three sets it one lower and requires status 2
+with `symbolsDone` clamped. The clamp target is held at `done + 5` while the
+capacity is `done - 1`, because with the two equal a clamp to `nofSymbols`
+would pass.
+
+`if (extraSymbolsPending) extraSymbolsPending = 0;` is the object's here too --
+`cmpb $0x0,0x20(%ebx) ; je ; movb $0x0` at 0x2fcb6, on the common path of all
+three arms -- and turning it into an unconditional store is NOT registered as a
+mutation, because it writes the same byte on every value the flag can hold.
+Only the instructions say otherwise. That is 7423's shape a third time, and it
+is recorded rather than left as a gap.
+
+`test/mutations/v90bits.json` gains 19 for this function, all caught -- 25 to
+44.  (Counted as entries carrying a `label`; the `"_"` note in each suite is
+not a mutation and the first draft of this paragraph counted it as one.)
+
+**AND IT COMES OUT BYTE FOR BYTE.** `byteident.py --list-exact` on GCC 3.4.2
+exact at `-O3` lists `_ZN15V90BitsToSymbol7processEPhj` at 180 bytes, so this
+is grade 0 -- the same bytes in the same places as the blob's -- and
+`V92BitsToSymbol`'s same-named overload beside it is the other 180.  That is a
+confirmation the differential tier cannot give: it says the ORDER of the two
+stores to +0x10, the reload of `mapper`, and the sibling structure of the two
+`if`s are the original's and not merely equivalent to it.
+
+### 7431. `V90Phase4Modulator::setMappingParams` STORES NOTHING IN THE MODULATOR, AND IS `void` BECAUSE THE OBJECT TAIL-JUMPS OUT OF IT
+
+96 bytes at `.text+0x2d120`, and the task that commissioned it named
+`.text+0x30310` -- which is inside `V90Mapper::reset`. `nm -S -C` is what
+settled the address and the size, and the batch table in
+`docs/v90demodprogress.md` already had the right figure.
+
+    2d12c:  85 d2        test %edx,%edx                mp
+    2d130:  8b 43 38     mov  0x38(%ebx),%eax          pcmType
+    2d13b:  8b 4b 44     mov  0x44(%ebx),%ecx          bitsToSymbol
+    2d141:  e8 ..        call V90BitsToSymbol::reset(P16V90MappingParams,7PcmType)
+    2d146:  ba 01 ..     mov  $0x1,%edx                one symbol
+    2d14f:  8b 43 44     mov  0x44(%ebx),%eax          RELOADED
+    2d15a:  e9 ..        jmp  V90BitsToSymbol::setSymbolsBlockSize
+
+The return type is `void` **because the epilogue does not agree with itself**:
+the live path is a sibling call to `setSymbolsBlockSize`, so it returns that
+function's `%eax` by accident, and the null path `ret`s with `%eax` holding
+whatever was in it. That is the same argument `V90Mapper::process`'s own
+epilogue carries, and it is the only evidence there is -- the mangling never
+names a return type.
+
+The argument is passed through and **forgotten**: `mappingParams` at +0x4c and
+`mappingParams2` at +0x50 are the constructor's and are not touched, and
+nothing else in the modulator moves either. The fixture asserts that
+absolutely, per side, against the object's own bytes from before the call --
+two sides agreeing on a field neither wrote is not evidence that neither wrote
+it.
+
+**THE FIXTURE DRIVES THE OWNED ARM OF THE CONSTRUCTOR, NOT THE SUPPLIED ONE.**
+`t_v90modchain` shares one `V90BitsToSymbol` between the two sides when the
+third constructor argument is non-null, which is right for comparing a borrowed
+pointer and wrong here: the second side's call would run over the first side's
+result. A null third argument makes each side build its own converter and its
+own mapper, which is what `setMappingParams` needs.
+
+Two things had to be arranged rather than seeded. `pcmType` at +0x38 is written
+by `V90Phase4Modulator::reset`, which is not written yet, so the constructor
+leaves it as the seed found it -- both enumerators are poked in turn, which is
+what makes a body that passed a constant reach the mapper with the other G.711
+law. And `mappingParams`/`mappingParams2` are filled with two OTHER VALID
+mapping blocks for the duration of the group, so passing either of them instead
+of the argument is caught by the resulting `bitsPerFrame` rather than by a
+fault in a wild read.
+
+`test/mutations/v90p4mctor.json` gains 12, all caught -- 20 to 32.
+
+`compare.py` puts the symbol in the IDENTICAL MNEMONIC SEQUENCES set at
+exactly the blob's 96 bytes, so nothing is missing and nothing is extra; it is
+NOT in `byteident.py --list-exact`, which leaves register allocation or
+scheduling between the two and is 614's free column. Not chased.
+
+### 7432. FIVE MUTATION ANCHORS BROKE ON A FUNCTION THAT WAS ADDED, NOT RENAMED, BECAUSE THE NEW BODY REPEATS THE OLD ONE VERBATIM
+
+The rule this tree carries is that anchors break on RENAMES and on losing
+UNIQUENESS, not on new fields. This is the second half of it happening with no
+rename anywhere: writing `process(unsigned char *, unsigned int)` into
+`V90BitsToSymbol.cpp` cost five anchors in `v90btsproc.json` --
+`\t\tstatus = 1;`, the SIZE_NOT_SET `dsplibs_debug_printf`, the
+`dsplibs_debug_level > 1` line above it, `if (symbolsBlockSize == 0) {` and the
+`if (extraSymbolsPending)` tail -- every one of which had been unique and now
+matched twice.
+
+It is not a coincidence and it will happen again in this class: the two
+overloads share one status alphabet and one message, so the object writes the
+SIZE_NOT_SET arm and the pending-flag tail out twice, and any `find` taken from
+inside either run matches both. The repair is `v90mapper.json`'s for the two
+`V90Mapper` resets -- extend the anchor to the nearest line that DIFFERS -- and
+here that is the signature above (four of them) or the `} else {` and its first
+declaration below (one).
+
+`make refs` reported all five as `NOT UNIQUE` and exited non-zero, which is the
+gate working: an unusable mutation does not fail a run (finding 347), so
+without the anchor check the five would have gone on being counted as caught
+while testing nothing.

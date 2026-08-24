@@ -107,5 +107,80 @@
   "label": "dtor: the pointer is nulled afterwards, which the blob does not do",
   "find": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
   "replace": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);\n\t\tbitsToSymbol = 0;"
+ },
+ {
+  "_": [
+   "V90Phase4Modulator::setMappingParams, 96 bytes at .text+0x2d120, driven",
+   "by t_v90modchain's own group over the OWNED arm of the constructor -- a",
+   "supplied converter is one shared instance and the second side's call",
+   "would run over the first side's result.",
+   "",
+   "The function stores nothing in the modulator, so every mutation below is",
+   "caught in another object: the converter at +0x44 or the mapper it owns.",
+   "`pcmType` at +0x38 is poked because the constructor does not write it.",
+   "",
+   "A mutation that lets a null block through reaches V90Mapper::reset with",
+   "a null pointer and dies, which is still a failing run."
+  ]
+ },
+ {
+  "label": "setMappingParams: the modulator's own block is used",
+  "find": "\tbitsToSymbol->reset(mp, pcmType);",
+  "replace": "\tbitsToSymbol->reset(mappingParams, pcmType);"
+ },
+ {
+  "label": "setMappingParams: the second block is used",
+  "find": "\tbitsToSymbol->reset(mp, pcmType);",
+  "replace": "\tbitsToSymbol->reset(mappingParams2, pcmType);"
+ },
+ {
+  "label": "setMappingParams: the law is always mu-law",
+  "find": "\tbitsToSymbol->reset(mp, pcmType);",
+  "replace": "\tbitsToSymbol->reset(mp, PCM_TYPE_MU_LAW);"
+ },
+ {
+  "label": "setMappingParams: the law is always A-law",
+  "find": "\tbitsToSymbol->reset(mp, pcmType);",
+  "replace": "\tbitsToSymbol->reset(mp, PCM_TYPE_A_LAW);"
+ },
+ {
+  "label": "setMappingParams: the converter gets the no-spectral reset",
+  "find": "\tbitsToSymbol->reset(mp, pcmType);",
+  "replace": "\tbitsToSymbol->resetNoSpectral(mp, pcmType);"
+ },
+ {
+  "label": "setMappingParams: the block is never sized",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);",
+  "replace": ""
+ },
+ {
+  "label": "setMappingParams: the block is two symbols",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(2);"
+ },
+ {
+  "label": "setMappingParams: the block is zero symbols",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(0);"
+ },
+ {
+  "label": "setMappingParams: the two calls are the wrong way round",
+  "find": "\tbitsToSymbol->reset(mp, pcmType);\n\tbitsToSymbol->setSymbolsBlockSize(1);",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\tbitsToSymbol->reset(mp, pcmType);"
+ },
+ {
+  "label": "setMappingParams: the null guard is inverted",
+  "find": "\tif (mp == 0) {",
+  "replace": "\tif (mp != 0) {"
+ },
+ {
+  "label": "setMappingParams: the null block is announced below the gate",
+  "find": "\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)",
+  "replace": "\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 0)"
+ },
+ {
+  "label": "setMappingParams: the null block gets the wrong message",
+  "find": "\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: ERROR: Null \"\n\t\t\t\t\t     \"mappingParams @ setMappingParams\"\n\t\t\t\t\t     \"\\r\\n\");",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: enter \"\n\t\t\t\t\t     \"repeatedCPd @ %d\\r\\n\", 0);"
  }
 ]
