@@ -4374,11 +4374,20 @@ run_p4m_reset(const char *name, p4m_reset ours, p4m_reset theirs, long base)
 		}
 
 		/*
-		 * BLOB AGAINST BLOB: the same trial with `sessionFlag` clear
+		 * BLOB AGAINST BLOB, AND IT IS AN ANTI-VACUITY CHECK RATHER
+		 * THAN A COMPARISON.  The same trial with `sessionFlag` clear
 		 * and set must leave two different objects or two different
-		 * transcripts once the loop runs.  That is the only check here
-		 * that can fail on "the two pumps are swapped", because both
-		 * sides of a differential comparison would swap together.
+		 * transcripts once the loop runs -- which says the `sessionFlag`
+		 * AXIS is real, that the object's two pumps are distinguishable
+		 * at all, and so that a sweep over that axis is measuring
+		 * something.  It is 3509's argument and not 7458's.
+		 *
+		 * IT IS NOT WHAT CATCHES "THE TWO PUMPS ARE SWAPPED", and an
+		 * earlier version of this comment said it was.  `mutate.py`
+		 * patches `src/` and the blob is fixed, so a swap makes OUR
+		 * side run the other pump while the blob runs the right one
+		 * and the ordinary differential comparison fails.  Both swap
+		 * mutations are caught by `compare_pump`.
 		 */
 		if (flag == 0) {
 			memcpy(flag0, p4m_b, P4M_SIZE);

@@ -77804,11 +77804,21 @@ Three stores against two.  Both take the group size out of `mappingParams1` and
 give it to whichever message record the session uses; only the V.92 arm keeps a
 copy at +0x34fc, and the V.90 arm leaves that word exactly as it found it.
 
-**A differential grid cannot see the asymmetry on its own** -- both sides would
-omit the store together -- so `t_v90p4ddec`'s `run_p4d_reset` plants a sentinel
-over +0x34fc before every trial and asserts BY VALUE on the blob's side that it
-holds the group size under V.92 and the sentinel under V.90.  Both mutations
-are caught: dropping the store, and adding it to the other arm.
+`t_v90p4ddec`'s `run_p4d_reset` plants a sentinel over +0x34fc before every
+trial and asserts BY VALUE on the blob's side that it holds the group size
+under V.92 and the sentinel under V.90.  Both mutations are caught -- dropping
+the store, and adding it to the other arm.
+
+**What the by-value assertion adds is not the catching**, and a first draft of
+this paragraph claimed it was, on the reasoning that "a differential grid
+cannot see the asymmetry because both sides would omit the store together".
+That is wrong and it is worth writing down why, because the same mistake is
+easy to make about every blob-against-blob check in the tree: `mutate.py`
+patches `src/` and the blob is FIXED, so a mutation only ever moves one side
+and the ordinary comparison fails.  What the sentinel and the by-value
+assertion buy is t_v90rxctor's argument instead -- two runs agreeing cannot
+tell "stored correctly" from "both sides equally wrong", and only a check
+against an expected VALUE can.
 
 **The V.92 arm loads `mappingParams1->word_0` ONCE and stores it twice**, `mov
 (%ecx),%edx` at 0x27883 feeding both 0x27885 and 0x2788b.  Written as two

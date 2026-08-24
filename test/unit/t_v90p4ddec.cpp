@@ -1541,12 +1541,23 @@ run_p4d_reset(void)
 		}
 
 		/*
-		 * BLOB AGAINST BLOB: the same trial with `sessionFlag` clear
+		 * BLOB AGAINST BLOB, AND IT IS AN ANTI-VACUITY CHECK RATHER
+		 * THAN A COMPARISON.  The same trial with `sessionFlag` clear
 		 * and set must leave two different objects or two different
-		 * transcripts.  It is the only check here that can fail on
-		 * "the two decision members are swapped" or "the CP and MP
-		 * arms are swapped", because a differential comparison swaps
-		 * on both sides at once.
+		 * transcripts, which says the `sessionFlag` AXIS is real --
+		 * that the object's two arms are distinguishable at all, so
+		 * that sweeping it measures something.  3509's argument.
+		 *
+		 * IT IS NOT WHAT CATCHES "THE TWO DECISION MEMBERS ARE
+		 * SWAPPED", and an earlier version of this comment said it
+		 * was.  `mutate.py` patches `src/` and the blob is fixed, so a
+		 * swap makes OUR side call the other member while the blob
+		 * calls the right one, and the ordinary differential
+		 * comparison fails; both swap mutations are caught there.
+		 * Nor does this counter isolate the LOOP: `sessionFlag` also
+		 * picks the CP arm over the MP arm, and that arm writes
+		 * +0x34fc, so the two settings differ whether the loop ran or
+		 * not.  `pumped` is the counter that speaks for the loop.
 		 */
 		if (flag == 0) {
 			memcpy(flag0, p4d_s[1], P4D_SLOT);
