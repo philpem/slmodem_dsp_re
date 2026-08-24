@@ -82,6 +82,8 @@
 #include "dsplib/V90Phase2Info.h"
 #include "dsplib/V90Resampler.h"
 #include "dsplib/tagV90AdditionalCPinfo.h"
+/* `V34_SHELL_TX`, the two shell contexts' spacing; see is_static_install. */
+#include "dsplib/v34shell.h"
 #include "dsplib/VPcmFloModem.h"
 
 extern "C" {
@@ -342,6 +344,51 @@ static long words_static;
 static int nregion_last;
 
 /*
+ * Which arm the trial being compared is driving.  A failure report that names
+ * only a trial index makes the reader count rows to find out what was being
+ * driven, which is exactly the step that gets skipped.
+ */
+static unsigned cur_w3c;
+static const char *cur_what = "";
+static long words_unresolved;
+
+/*
+ * THE FOUR WORDS THAT ARE EXCUSED BY NAME, AND WHY BY NAME.
+ *
+ * Arms 0x22 and 0x23 call `VPcmV34SetV90RateReneg`, which calls
+ * `preinitdigital`, which installs FOUR STATIC ADDRESSES into the V.34
+ * object -- one `conv` table and one `scramble` function pointer in each of
+ * the two shell contexts, at +0xa28 and +0xe48 and again `V34_SHELL_TX`
+ * (0x1be0) further on.  Our side holds an address in our build and the blob's
+ * side holds one in its own copy, and nothing can pair those up: they are not
+ * inside any discovered allocation, so `locate` answers -1 for both.
+ *
+ * The claim that is left is that BOTH sides wrote the word or NEITHER did,
+ * which is what these four assert.
+ *
+ * THEY ARE NAMED RATHER THAN INFERRED, and t_vpcmrunpcm.cpp's header is the
+ * reason: a general rule -- "a differing word neither side can resolve is a
+ * static pointer" -- silently swallowed seven real mutations there, because a
+ * pair of wrong small integers is indistinguishable from a pair of addresses.
+ * There is no property of a WORD that separates the two cases; only knowing
+ * which field it is does.  Finding 7521's shape.
+ */
+#define V34_SHELL_CONV		0x0a28
+#define V34_SHELL_SCRAMBLE	0x0e48
+#define V34OBJ_REGION		1	/* add_region's second call, below */
+
+static int
+is_static_install(int r, unsigned off)
+{
+	if (r != V34OBJ_REGION)
+		return 0;
+	return off == V34_SHELL_CONV
+	    || off == V34_SHELL_SCRAMBLE
+	    || off == V34_SHELL_CONV + V34_SHELL_TX
+	    || off == V34_SHELL_SCRAMBLE + V34_SHELL_TX;
+}
+
+/*
  * The three cases, and t_vpcmrunpcm.cpp's argument for each.  This file meets
  * only two of them: there is no `V92Phase4Modulator::pattern` here, because
  * nothing this function reaches installs a static table, so a differing word
@@ -385,6 +432,10 @@ compare_regions(long trial)
 			} else if (pva != pvb && va == pva && vb == pvb) {
 				bad = 0;
 				words_static++;
+			} else if (is_static_install(r, i)) {
+				bad = (va != pva) != (vb != pvb);
+				if (!bad)
+					words_unresolved++;
 			} else {
 				bad = 1;
 			}
@@ -392,11 +443,12 @@ compare_regions(long trial)
 			diff_eq_int("region %ld word", bad, 0, (long)r);
 			if (bad && reported < 8) {
 				reported++;
-				printf("    trial %ld region %d offset %u: "
+				printf("    trial %ld (%s, word_3c 0x%02x) "
+				       "region %d offset %u: "
 				       "ours 0x%08x (was 0x%08x) blob 0x%08x "
 				       "(was 0x%08x) ka %d/%u kb %d/%u\n",
-				       trial, r, i, va, pva, vb, pvb,
-				       ka, oa, kb, ob);
+				       trial, cur_what, cur_w3c, r, i,
+				       va, pva, vb, pvb, ka, oa, kb, ob);
 				fflush(stdout);
 			}
 		}
@@ -449,7 +501,13 @@ struct trial {
  * trip below the threshold, and the timing offset small enough that
  * `ppm * 10` stays inside a short.
  */
-#define TAIL	, 0x8b, 0, 0.0015f, 1
+/*
+ * `f173e`, `cfg3`, `level`, `timingOffset`, `mpTag`.  0x89 has BOTH of
+ * `CFG_FLAG3_PHASE2` and `CFG_FLAG3_RETRAIN` clear, so the three arms that
+ * raise the retrain bit move it from 0 to 1 and are visible; the two rows
+ * that drive arm 0x08's clear supply 0xff and 0xfd instead.
+ */
+#define TAIL	, 0, 0x89, 0, 0.0015f, 1
 #define D(w)	{ "word_3c", 0, 1, 4, 1, (w), 1, 0, 0, 0, 1, \
 		  0, 0, 0, 0, 1, 0x40, 0x20, 0 TAIL }
 
@@ -910,6 +968,8 @@ run(void)
 			    trial);
 		snapshot();
 		nregion_last = nreg;
+		cur_w3c = t->w3c;
+		cur_what = t->what;
 
 		allocs = harness_alloc.allocs;
 
@@ -946,11 +1006,22 @@ run(void)
 	}
 
 	printf("    surface: %d regions, %ld words equal, %ld corresponding "
-	       "pointer pairs, %ld borrowed tables untouched\n",
-	       nregion_last, words_equal, words_corresponded, words_static);
+	       "pointer pairs, %ld borrowed tables untouched, %ld static "
+	       "installs\n",
+	       nregion_last, words_equal, words_corresponded, words_static,
+	       words_unresolved);
 	diff_eq_int("the exempt classes are a minority of the surface",
-		    (words_corresponded + words_static) * 20 < words_equal,
-		    1, 0);
+		    (words_corresponded + words_static + words_unresolved) * 20
+		    < words_equal, 1, 0);
+	/*
+	 * AND THE FOUR NAMED WORDS MUST ACTUALLY FIRE.  An exemption nobody
+	 * reaches is an exemption nobody has measured, and it would go on
+	 * excusing whatever landed on those offsets later.  Arms 0x22 and
+	 * 0x23 are trialled seven times between the explicit rows and the
+	 * sweep, so the count is four per such trial and never zero.
+	 */
+	diff_eq_int("the named static installs were reached",
+		    words_unresolved > 0, 1, 0);
 
 	rc = diff_end();
 	return rc;
