@@ -78959,6 +78959,94 @@ What remains before a digital session can be attempted is `V90Modem::reset`,
 `exitDIL`, `exitRi`, `acknowledgeCPReception`, `acknowledgeCPNotReception`,
 `acknowledgeEReception` and `initiateFPE`.
 
+#### What was measured, and what was poked rather than reached
+
+`test/unit/t_v90modprog.cpp`, seven groups and **6,342 checks**: 3,411 on
+`V90Modulator::progress`, 74 on its data-phase rate message, 304 on
+`initiateRRN`, 635 on the `process` overload, 503 on `generateSymbol`, 1,355
+on `V90Modem::progress` and 60 on its analogue arm. `make phase` exits 0 and
+**`make period` is 243 passed / 0 failed**, against `master`'s 242 / 0 -- the
+one new binary and nothing else moved. The modern build carries the same
+thirteen declared GCC-13 divergences as before and none of them is this
+batch's. `make coverage` reads **73.8%, 542,374 bytes, 1,218 symbols**
+translated, against 73.6% at `cb79a04a`.
+
+`tools/closure.py --missing _ZN8V90Modem8progressEPiRjPfj` is now **0 symbols,
+0 bytes**, and `--missing V90Modulator` is **13 symbols / 1,706 bytes** --
+exactly the residue 7001 predicted would be left when the shared part was
+done.
+
+**A whole `V90Modem` is built on each side**, which is the cheapest real chain:
+its constructor allocates fourteen objects including the `V90Modulator` and
+everything under it, and `V90MP`, `V90CP` and both `V90MappingParams` are
+EMBEDDED in it -- which matters, because `initiateRRN` writes `V90CP::byte_13`
+and `V90MP::CPack` and a shared block would have each side overwriting the
+other's evidence.
+
+The ranges are a real digital session's where they can be: `nofSymbols` = 80,
+a 10 ms block at 8 kHz, with `progress` called at n = 80, n = 24 and n = 0;
+both `sessionFlag` values; a plausible V.90 mapping set (42 bits to a
+six-symbol frame, `shaperSR` 3) poked in before anything resets from it,
+because the constructor leaves that block at its allocation's fill and
+`V90Mapper::process` then indexes wildly.
+
+**What is POKED rather than reached, stated rather than implied:** `state` = 1,
+because no member of the class ever writes it (above); the phase 3 modulator's
+DIL cursors, so one more symbol terminates it and the mid-block move to phase 4
+happens; the phase 4 modulator's terminal `symbolCount`, so `B1D` reaches
+0x120; `V90Parameters::DEBUG_DIGITAL_MODEM_INITIATE_RRN{,_TIME}`; and the
+converter's counters for the `process` sweep. Negative states (-1, -99) and
+states 4 and 9 are poked too, and the negative one is not optional: it is the
+only input that can tell `int` from `unsigned int` at 0x1a848.
+
+**Shown to fire.** Inverting `nofBitsForNextTime`'s `extraSymbolsPending` test
+in `src/` turns 7 of the 526 `process` checks red, with our side answering 84
+where the blob answers 42 -- so each side reaches its OWN callees, the `ref_`
+renaming is doing its job, and no trial is vacuous. Reverted immediately.
+
+**91 mutations over four suites**, because `mutate.py` takes one source per
+suite and these five live in four files, all four against `t_v90modprog`:
+
+| suite | source | mutations | caught | uncaught | unusable | equivalent |
+|---|---|--:|--:|--:|--:|--:|
+| `v90modprog` | `V90Modulator.cpp` | 61 | 57 | 1 | 0 | 3 |
+| `v90modprogbts` | `V90BitsToSymbol.cpp` | 20 | 18 | 0 | 0 | 2 |
+| `v90modprogmodem` | `V90Modem.cpp` | 6 | 6 | 0 | 0 | 0 |
+| `v90modprogp4m` | `V90Phase4Modulator.cpp` | 4 | 4 | 0 | 0 | 0 |
+
+**The suite found a hole the test could not see.** Three of `progress`'s four
+writing arms asserted only what the BLOB answered through the reference
+parameter and never looked at ours, so `nofBits = 0` in the phase 3 arm and
+`nofBits = nofBitsForNextTime()` at the data phase's entry could BOTH have been
+deleted from `src/` with every trial green. One added cross-side comparison,
+guarded to the four arms that write it, closes both.
+
+The capacity boundary needed measuring rather than guessing: the object's test
+is `symbolsDone > nofSymbols` and every trial sat far enough past the limit
+that `>` and `>=` agreed. How many symbols the mapper returns for a given bit
+count is not predictable from the fixture -- `V90Mapper::process`'s priming
+countdown suppresses whole frames -- so it was instrumented once: 42 bits is
+TWO symbols out of this configuration, and the sweep now approaches 20 from 14,
+18 and 20.
+
+The five equivalent rows are all the same shape and all argued from the
+instructions: the unsigned/signed switch selector (a codegen question, not a
+behavioural one), the phase 3 exit's `state != 2` guard and the rate message's
+`state == 3` guard (both always true where they are evaluated, both emitted
+because a call sits between the store and the test), and two in the `process`
+overload where the shared leftover shift normalises the value -- the underflow
+arm's `symbolsDone = 0` and the overflow clamp's `symbolsBlockSize`. **That
+second pair is worth its own sentence: the same clamp IS observable in the FILL
+sibling, which returns with no shift after it, and `v90bits`'s own `the clamp
+is to zero` is caught there.** So the value is held by the two overloads having
+to agree about a field they share, not by this test.
+
+The one uncaught row -- `the phase 3 arm copies the event code even when it is
+zero` -- is named in the suite's own note with what reaching it would need: a
+non-zero phase 3 event that is NOT 6, since 6 moves the state and every symbol
+after it goes to the other inner arm. It is not declared equivalent, because
+the guard is observable in principle and the gap is in the sweep.
+
 #### Names available to whoever owns `V90Phase4Modulator.h` next
 
 `initiateRRN`'s two ungated messages are rule-1 evidence for an enumerator that
@@ -78970,3 +79058,78 @@ jump-table slot. It is NOT promoted here -- the message belongs to
 `V90Modulator` rather than to the state's own class, and the change would touch
 an 1,829-line file this batch does not own -- but the evidence now exists and
 should not have to be re-derived.
+
+======================================================================
+
+### 7521. Extending a mutation anchor is a two-sided edit, and `anchorcheck` cannot see the half that goes wrong
+
+A companion to 7520 and to 7002, and it is a defect this session INTRODUCED
+and then found.
+
+Adding `V90BitsToSymbol::process(unsigned char *, unsigned int &, short *)`
+detached 22 mutation anchors. Twenty-one of them were 7432's shape -- the new
+overload repeats body text the two written siblings already have, so anchors
+that matched once now matched twice -- and one was 7481's -- `frameBuf`
+retyped to `unsigned char *` left `the frame buffer is four bytes per symbol`
+matching nothing.
+
+7002's mechanical repair is to grow `find` BACKWARDS a line at a time until it
+is unique. **The half that is easy to get wrong is that `replace` has to grow
+by the SAME text**, and a script that grows `find` in a loop while prepending
+only the FINAL line to `replace` produces a mutant with every intermediate line
+deleted. That is what the first repair did.
+
+#### The two ways it goes wrong, and only one of them is loud
+
+    suite        anchors  extended >1 line  result before the fix
+    v90btsproc        11                 9  17 caught, 9 UNUSABLE
+    v90bits           10                 4  44 caught, 0 unusable
+
+**The `v90bits` row is the dangerous one.** Nine of `v90btsproc`'s mutants did
+not compile, and `mutate.py` says so -- an unusable count is visible and CLAUDE.md
+already treats any non-zero one as a defect in the suite. Four of `v90bits`'s
+corrupted mutants DID compile, because the lines the repair dropped happened to
+leave valid C++, and they were killed. The suite reported **44 of 44 caught**
+with nothing unusual anywhere: four mutations that no longer describe what
+their label says, scored as evidence for a claim they do not test.
+
+**`anchorcheck.py` cannot catch either.** It checks that `find` matches exactly
+once, and it did -- in both the correct and the corrupted version. The
+corruption is entirely in `replace`, which the checker does not model against
+the source at all. `mutsnap.py` cannot catch it either: it hashes the JSON, and
+a changed JSON is exactly what a repair is.
+
+**Only running the suites catches it**, which is the discipline 7002 already
+states in its own words -- "`anchorcheck` proves an anchor MATCHES; what a
+mutation is for is that applying it makes a test fail" -- and which this
+session initially skipped because `anchorcheck` came back clean and 22 anchors
+felt mechanical.
+
+#### What to do
+
+- **Re-run every suite whose anchors an edit touched.** Not the ones whose
+  SOURCE changed -- that is every suite in the tree and is what the snapshot's
+  staleness is for -- but the ones whose JSON you rewrote.
+- **Verify a repair by re-deriving the mutant**, not by re-running the checker:
+  apply `find` -> `replace` to the source in the repair script itself and
+  require the result to differ from the original in exactly one place. That is
+  three lines and it would have failed loudly on the first attempt.
+- **Grow both strings in the same statement.** The corrected loop is
+
+        find = prefix + find
+        repl = prefix + repl          # the fix
+
+  inside the search, rather than `repl` being touched once at the exit.
+
+- **Extend from the occurrence inside the RIGHT function.** A second, separate
+  hazard when a file has overloads: growing from the file's FIRST occurrence
+  makes the anchor unique and pins it to whichever overload comes first, which
+  for `V90BitsToSymbol.cpp` is not the one the label names. The repair has to
+  choose its starting occurrence inside the target definition's byte range and
+  check the winning candidate is still there. `tools/anchorcheck.py`'s
+  "lands in an arm their label does not name" check is the same idea one level
+  finer and does not cover this case.
+
+After the corrected repair: `v90bits` 44 caught / 0 unusable, `v90btsproc` 25
+caught + 1 equivalent / 0 unusable, `v90modulator` 26 caught / 0 unusable, and
+`anchorcheck` clean at 188 suites and 8,362 mutations.
