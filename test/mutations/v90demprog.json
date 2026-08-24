@@ -1,0 +1,545 @@
+[
+ {
+  "_": [
+   "V90Demodulator::progress, against t_v90demprog's run_progress.",
+   "",
+   "7,276 bytes and four dispatch tables: `inPhase3` picks the phase, and",
+   "`word_3c` -- which the member copies out of `equalizer->stateCount` on",
+   "entry -- picks the state within it.",
+   "",
+   "26 CAUGHT AND 74 NOT CAUGHT, AND THE 74 ARE KEPT ON PURPOSE.  They are not",
+   "unusable and they are not equivalent: each compiles, each runs, and each",
+   "produced a real verdict against a GREEN baseline.  What they say is that",
+   "this fixture cannot present the `word_3c` arms, and 7484's rule is that",
+   "'we tried this and it survived for a reason' beats an absent entry, which",
+   "reads as nobody having thought of it.  Deleting them would leave a suite",
+   "reading 26 of 26 -- a headline that looks perfect because its denominator",
+   "was removed, which is the one shape CLAUDE.md spends four paragraphs on.",
+   "Finding 6000 does NOT license the deletion: that rule is about a DECLARED",
+   "binary, which cannot score a suite at all; this baseline exits zero.",
+   "",
+   "WHY THE ARMS CANNOT BE PRESENTED, and it is the equaliser rather than the",
+   "source.  `V90Equalizer::process` runs between any poke and `progress`'s",
+   "read: it sets `stateCount = 0` on entry and refills it from",
+   "`phase3Demod->word_30` or `phase4Demod->int_0028`, both of which its own",
+   "`getDecision` call has already rewritten.  The sweep therefore takes",
+   "whichever arm the receive chain produced -- three distinct ones of the",
+   "thirty-one the two tables dispatch -- identically on both sides.  Driving",
+   "the rest means walking the equaliser to each of its events, which is",
+   "`t_v90equproc`'s object.  Finding 7513, which also records what happened",
+   "when the equaliser WAS wired deep enough to take its PHASE3 arm.",
+   "",
+   "WHAT IS PROSE IN FINDING 7512 RATHER THAN A MUTATION HERE:",
+   "",
+   "  * the `(int)inPhase3 > 2` cast in the remote-retrain arm.  The object",
+   "    compares with a SIGNED `jg` on a field the header declares",
+   "    `unsigned int`; over the 0, 1, 2, 3 and 5 the class can reach the two",
+   "    readings agree for every value, so codegen is the only evidence and",
+   "    no differential test can fail on it.  613's shape.",
+   "",
+   "  * the two `phase3Demodulator->byte_3f8 = 0x74;` stores.  They may be two",
+   "    different named constants in the original that happen to be equal;",
+   "    nothing in the object separates them."
+  ]
+ },
+ {
+  "label": "the input sample count is not accumulated into word_38",
+  "find": "\tword_38 += nofIn;",
+  "replace": "\tword_38 = nofIn;"
+ },
+ {
+  "label": "the prefilter writes over its own input rather than into +0x244",
+  "find": "preFilter.fir.process(in, (float *)array_244, nofIn);",
+  "replace": "preFilter.fir.process(in, in, nofIn);"
+ },
+ {
+  "label": "the AGC runs over the resampler's output, not the prefilter's",
+  "find": "agc.process((const float *)array_244, (float *)array_244, nofIn);",
+  "replace": "agc.process((const float *)array_248, (float *)array_244, nofIn);"
+ },
+ {
+  "label": "the resampler reads the prefilter's block, not the equaliser's",
+  "find": "resampler.resample((const float *)array_244, nofIn,",
+  "replace": "resampler.resample((const float *)array_250, nofIn,"
+ },
+ {
+  "label": "the resampler is given the input count, not its own output count",
+  "find": "resampler.resample((const float *)array_244, nofIn,\n\t\t\t   (float *)array_248, word_24c);",
+  "replace": "resampler.resample((const float *)array_244, word_24c,\n\t\t\t   (float *)array_248, word_24c);"
+ },
+ {
+  "label": "the equaliser is given the resampler's count and not the caller's",
+  "find": "equalizer->process((float *)array_248, word_24c, (short *)array_250,",
+  "replace": "equalizer->process((float *)array_248, nofIn, (short *)array_250,"
+ },
+ {
+  "label": "the equaliser's soft output goes to +0x254 and the hard one to +0x250",
+  "find": "(float *)array_254, word_258);",
+  "replace": "(float *)array_250, word_258);"
+ },
+ {
+  "label": "word_3c is the equaliser's stateCount, not its state",
+  "find": "\tword_3c = equalizer->stateCount;",
+  "replace": "\tword_3c = equalizer->state;"
+ },
+ {
+  "label": "word_3c is READ from the equaliser and not left as it was found",
+  "find": "\tword_3c = equalizer->stateCount;\n",
+  "replace": ""
+ },
+ {
+  "label": "phase 3 is latch 1 and not latch 2",
+  "find": "\tcase 1:\n\t\tnofOut = 0;\n\n\t\tif (spectralVerifier.process",
+  "replace": "\tcase 6:\n\t\tnofOut = 0;\n\n\t\tif (spectralVerifier.process"
+ },
+ {
+  "label": "the data-steady-state entry is guarded on word_38, not word_44",
+  "find": "\t\tif (word_38 >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)",
+  "replace": "\t\tif (word_44 >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)"
+ },
+ {
+  "label": "the data-steady-state deadline is >=, not >",
+  "find": "if (word_38 >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)",
+  "replace": "if (word_38 > (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)"
+ },
+ {
+  "label": "case 3 falls through into case 4 rather than breaking",
+  "find": "\t\t/* FALLTHROUGH -- 0x1cf01 falls into 0x1cf10 */\n",
+  "replace": "\t\tbreak;\n"
+ },
+ {
+  "label": "the demapper is handed +0x25c and not +0x254",
+  "find": "\t\tdemapper->process((unsigned char *)array_25c, nofOut);\n\t\tdescrambler.process((const unsigned char *)array_25c, out,",
+  "replace": "\t\tdemapper->process((unsigned char *)array_254, nofOut);\n\t\tdescrambler.process((const unsigned char *)array_25c, out,"
+ },
+ {
+  "label": "the descrambler reads what the demapper wrote, not the equaliser's block",
+  "find": "\t\tdescrambler.process((const unsigned char *)array_25c, out,\n\t\t\t\t    nofOut);",
+  "replace": "\t\tdescrambler.process((const unsigned char *)array_250, out,\n\t\t\t\t    nofOut);"
+ },
+ {
+  "label": "the RRN entry is state 0x23 and not 0x22",
+  "find": "\t\tif (word_3c == 0x23)\n\t\t\tenterRRN();",
+  "replace": "\t\tif (word_3c == 0x22)\n\t\t\tenterRRN();"
+ },
+ {
+  "label": "the FPE entry is state 0x25 and not 0x26",
+  "find": "\t\tif (word_3c == 0x25)\n\t\t\tenterFPE();",
+  "replace": "\t\tif (word_3c == 0x26)\n\t\t\tenterFPE();"
+ },
+ {
+  "label": "the RRN entry is made at all",
+  "find": "\t\tif (word_3c == 0x23)\n\t\t\tenterRRN();\n",
+  "replace": ""
+ },
+ {
+  "label": "the FPE entry is made at all",
+  "find": "\t\tif (word_3c == 0x25)\n\t\t\tenterFPE();\n",
+  "replace": ""
+ },
+ {
+  "label": "evaluateConnection's rate-up arm sets the designer's flag to 2",
+  "find": "\t\tcase 1:\n\t\t\tword_3c = 0x22;\n\t\t\tconstellationDesigner->word_48 = 2;",
+  "replace": "\t\tcase 1:\n\t\t\tword_3c = 0x22;\n\t\t\tconstellationDesigner->word_48 = 3;"
+ },
+ {
+  "label": "evaluateConnection's rate-up arm restores the equaliser to float",
+  "find": "\t\t\tconstellationDesigner->word_48 = 2;\n\t\t\tequalizer->restoreEqualizerToFloat();\n",
+  "replace": "\t\t\tconstellationDesigner->word_48 = 2;\n"
+ },
+ {
+  "label": "the rate-down arm reads DEBUG_CONNECTION_EVALUATOR_RATE_DOWN and not 2",
+  "find": "\t\t\tif (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2)\n\t\t\t\tconstellationDesigner->word_48 = 1;\n\t\t\telse\n\t\t\t\tconstellationDesigner->word_48 = 3;",
+  "replace": "\t\t\tif (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 3)\n\t\t\t\tconstellationDesigner->word_48 = 1;\n\t\t\telse\n\t\t\t\tconstellationDesigner->word_48 = 3;"
+ },
+ {
+  "label": "the retrain arm is verdict 4 and the fallback verdict 5",
+  "find": "\t\tcase 4:\n\t\t\tword_3c = 0x21;\n\t\t\tbreak;\n\t\tcase 5:\n\t\t\tword_3c = 0x1f;",
+  "replace": "\t\tcase 4:\n\t\t\tword_3c = 0x1f;\n\t\t\tbreak;\n\t\tcase 5:\n\t\t\tword_3c = 0x21;"
+ },
+ {
+  "label": "the RRN preparation is gated on sessionFlag",
+  "find": "\t\tif (sessionFlag != 0 && (word_3c == 0x22 || word_3c == 0x23)) {",
+  "replace": "\t\tif ((word_3c == 0x22 || word_3c == 0x23)) {"
+ },
+ {
+  "label": "the RRN preparation covers 0x22 and 0x23 and not 0x22 alone",
+  "find": "if (sessionFlag != 0 && (word_3c == 0x22 || word_3c == 0x23)) {",
+  "replace": "if (sessionFlag != 0 && (word_3c == 0x22)) {"
+ },
+ {
+  "label": "the phase 4 half takes the evaluator's +0x90",
+  "find": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->word_90;",
+  "replace": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->word_94;"
+ },
+ {
+  "label": "the linear mapping study is disabled in data",
+  "find": "\t\t\tdemapper->linearMappStudyEnabled = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "resetBeforRRN is called on the phase 4 demodulator",
+  "find": "\t\t\tphase4Demodulator->resetBeforRRN();\n",
+  "replace": ""
+ },
+ {
+  "label": "the V.34 fallback is raised when the capability is ZERO",
+  "find": "\t\t\tif (preFilter.getV90Capability() == 0) {",
+  "replace": "\t\t\tif (preFilter.getV90Capability() != 0) {"
+ },
+ {
+  "label": "the V.34 fallback state is 0x1f",
+  "find": "\t\t\tif (preFilter.getV90Capability() == 0) {\n\t\t\t\tword_3c = 0x1f;",
+  "replace": "\t\t\tif (preFilter.getV90Capability() == 0) {\n\t\t\t\tword_3c = 0x21;"
+ },
+ {
+  "label": "the spectral accumulation is started",
+  "find": "\t\t\tspectralVerifier.startAccumulation();\n",
+  "replace": ""
+ },
+ {
+  "label": "the quick-connect arm sets word_40 rather than arming the AGC",
+  "find": "\t\t\tif (quickConnect != 0) {\n\t\t\t\tword_40 = 1;",
+  "replace": "\t\t\tif (quickConnect == 0) {\n\t\t\t\tword_40 = 1;"
+ },
+ {
+  "label": "the AGC is armed from AGC_K",
+  "find": "\t\t\t\tagc.alpha = params->AGC_K;",
+  "replace": "\t\t\t\tagc.alpha = params->AGC_NOMINAL_ENERGY;"
+ },
+ {
+  "label": "state 4 moves the loop to SLOW and not to FAST",
+  "find": "\t\t\tif (quickConnect == 0)\n\t\t\t\tresampler.setBllState(V90_BLL_SLOW, 1);",
+  "replace": "\t\t\tif (quickConnect == 0)\n\t\t\t\tresampler.setBllState(V90_BLL_FAST, 1);"
+ },
+ {
+  "label": "state 4's loop move is skipped on a quick connect",
+  "find": "\t\t\tif (quickConnect == 0)\n\t\t\t\tresampler.setBllState(V90_BLL_SLOW, 1);",
+  "replace": "\t\t\tif (quickConnect != 0)\n\t\t\t\tresampler.setBllState(V90_BLL_SLOW, 1);"
+ },
+ {
+  "label": "the TRN1d evaluator is enabled only outside probing mode",
+  "find": "\t\t\tif (params->PROBING_MODE == 0) {\n\t\t\t\tif (quickConnect != 0) {",
+  "replace": "\t\t\tif (params->PROBING_MODE != 0) {\n\t\t\t\tif (quickConnect != 0) {"
+ },
+ {
+  "label": "enabling the TRN1d evaluator writes ONE into +0x88",
+  "find": "\t\t\t\t\tconnectionEvaluator->word_88 = 1;",
+  "replace": "\t\t\t\t\tconnectionEvaluator->word_88 = 0;"
+ },
+ {
+  "label": "enabling the TRN1d evaluator clears its average as well as its count",
+  "find": "\t\t\t\t\tconnectionEvaluator->word_70 = 0.0f;\n\t\t\t\t\tedprintf(\"V90Demodulator: enabling \"",
+  "replace": "\t\t\t\t\tedprintf(\"V90Demodulator: enabling \""
+ },
+ {
+  "label": "the alt-RBS flag is a store of ONE into +0xb2",
+  "find": "\t\t\t\t\t\tconnectionEvaluator->short_b2 =\n\t\t\t\t\t\t    1;",
+  "replace": "\t\t\t\t\t\tconnectionEvaluator->short_b2 =\n\t\t\t\t\t\t    0;"
+ },
+ {
+  "label": "the phase 3 evaluator is disabled inside probing mode, not outside it",
+  "find": "\t\t\tif (params->PROBING_MODE == 0) {\n\t\t\t\tconnectionEvaluator->word_84 = 0;",
+  "replace": "\t\t\tif (params->PROBING_MODE != 0) {\n\t\t\t\tconnectionEvaluator->word_84 = 0;"
+ },
+ {
+  "label": "the lookahead comes from the V.92 message when sessionFlag is set",
+  "find": "\t\t\t\t sessionFlag != 0 ? jdV92->getMaxLookahead()\n\t\t\t\t\t\t  : jd->getMaxLookahead());",
+  "replace": "\t\t\t\t sessionFlag == 0 ? jdV92->getMaxLookahead()\n\t\t\t\t\t\t  : jd->getMaxLookahead());"
+ },
+ {
+  "label": "probing mode freezes the loop and the DIL state drives it",
+  "find": "\t\t\tif (params->PROBING_MODE != 0)\n\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\telse\n\t\t\t\tresampler.setBllState(V90_BLL_DIL, 1);",
+  "replace": "\t\t\tif (params->PROBING_MODE != 0)\n\t\t\t\tresampler.setBllState(V90_BLL_DIL, 1);\n\t\t\telse\n\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);"
+ },
+ {
+  "label": "the TRN1d ratio comes from the detector's padGain",
+  "find": "\t\t\ttrn1dRmsRatio = autoDigitalImpDetector->padGain;",
+  "replace": "\t\t\ttrn1dRmsRatio = autoDigitalImpDetector->float_a950;"
+ },
+ {
+  "label": "the AGC gain is DIVIDED by the ratio",
+  "find": "\t\t\tagc.gain = agc.gain / trn1dRmsRatio;",
+  "replace": "\t\t\tagc.gain = agc.gain * trn1dRmsRatio;"
+ },
+ {
+  "label": "the ratio is stored as well as used",
+  "find": "\t\t\ttrn1dRmsRatio = autoDigitalImpDetector->padGain;\n\t\t\tagc.gain = agc.gain / trn1dRmsRatio;",
+  "replace": "\t\t\tagc.gain = agc.gain / autoDigitalImpDetector->padGain;"
+ },
+ {
+  "label": "the error relaxation period sets the phase 3 flag at +0x3f9",
+  "find": "\t\t\tphase3Demodulator->byte_3f9 = 1;",
+  "replace": "\t\t\tphase3Demodulator->byte_3f9 = 0;"
+ },
+ {
+  "label": "the probing teardown state is 0x2b",
+  "find": "\t\t\t\tword_3c = 0x2b;",
+  "replace": "\t\t\t\tword_3c = 0x2c;"
+ },
+ {
+  "label": "state 0x14 enters phase 4",
+  "find": "\t\tcase 0x14:\n\t\t\tenterPhase4();\n\t\t\tbreak;",
+  "replace": "\t\tcase 0x14:\n\t\t\tbreak;"
+ },
+ {
+  "label": "state 0x15's local retrain distinguishes verdict 4 from verdict 5",
+  "find": "\t\tcase 0x15:\n\t\t\tverdict = connectionEvaluator->indicateLocalRetrain();\n\t\t\tif (verdict == 4)\n\t\t\t\tword_3c = 0x21;\n\t\t\telse if (verdict == 5)\n\t\t\t\tword_3c = quickConnect != 0 ? 0x21 : 0x1f;",
+  "replace": "\t\tcase 0x15:\n\t\t\tverdict = connectionEvaluator->indicateLocalRetrain();\n\t\t\tif (verdict == 5)\n\t\t\t\tword_3c = 0x21;\n\t\t\telse if (verdict == 4)\n\t\t\t\tword_3c = quickConnect != 0 ? 0x21 : 0x1f;"
+ },
+ {
+  "label": "the BLL state and sample count are read ONCE, before the ladder",
+  "find": "\t\tbllState = resampler.bllState;\n\t\tbllSamples = (int)resampler.stateSamples;",
+  "replace": "\t\tbllState = resampler.bllState;\n\t\tbllSamples = (int)resampler.countStateSamples;"
+ },
+ {
+  "label": "the INITIAL-to-FAST step is gated on the INITIAL state",
+  "find": "if (quickConnect == 0 && bllState == V90_BLL_INITIAL &&",
+  "replace": "if (quickConnect == 0 && bllState == V90_BLL_FAST &&"
+ },
+ {
+  "label": "the INITIAL-to-FAST step lands on FAST",
+  "find": "\t\t    params->BLL_TRN1D_INITIAL_TO_FAST_DURATION < bllSamples)\n\t\t\tresampler.setBllState(V90_BLL_FAST, 1);",
+  "replace": "\t\t    params->BLL_TRN1D_INITIAL_TO_FAST_DURATION < bllSamples)\n\t\t\tresampler.setBllState(V90_BLL_MEDIUM, 1);"
+ },
+ {
+  "label": "the FAST-to-SLOW step uses its own duration",
+  "find": "\t\t    params->BLL_TRN1D_FAST_TO_SLOW_DURATION < bllSamples)",
+  "replace": "\t\t    params->BLL_TRN1D_INITIAL_TO_FAST_DURATION < bllSamples)"
+ },
+ {
+  "label": "the first three ladder steps are for a NON quick connect",
+  "find": "\t\tif (quickConnect == 0 && bllState == V90_BLL_SLOW &&",
+  "replace": "\t\tif (quickConnect != 0 && bllState == V90_BLL_SLOW &&"
+ },
+ {
+  "label": "the last three ladder steps are for a QUICK connect",
+  "find": "\t\tif (quickConnect != 0 && bllState == V90_BLL_TRN1_QC_INITIAL &&",
+  "replace": "\t\tif (quickConnect == 0 && bllState == V90_BLL_TRN1_QC_INITIAL &&"
+ },
+ {
+  "label": "the ladder's comparison is strict",
+  "find": "\t\t    params->unnamed_10c < bllSamples)",
+  "replace": "\t\t    params->unnamed_10c <= bllSamples)"
+ },
+ {
+  "label": "the AGC freeze is gated on phase 3 state 3",
+  "find": "\t\tif (phase3Demodulator->state == 3 &&",
+  "replace": "\t\tif (phase3Demodulator->state == 4 &&"
+ },
+ {
+  "label": "the AGC freeze deadline is the adaptation duration against +0x2c",
+  "find": "\t\t    params->AGC_ADAPTATION_DURATION <\n\t\t\t(int)phase3Demodulator->word_2c &&",
+  "replace": "\t\t    params->AGC_ADAPTATION_DURATION >\n\t\t\t(int)phase3Demodulator->word_2c &&"
+ },
+ {
+  "label": "the AGC is not frozen twice",
+  "find": "\t\t    agc.alpha != 1.0f) {",
+  "replace": "\t\t    agc.alpha == 1.0f) {"
+ },
+ {
+  "label": "freezing the AGC arms the energy-drop detector",
+  "find": "\t\t\tword_40 = 1;\n\n\t\t\tif (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {",
+  "replace": "\t\t\tif (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {"
+ },
+ {
+  "label": "the half-baud gain is adjusted only when EIA6 is absent",
+  "find": "\t\t\t\tif (preFilter.isV90WithEia6() == 0)",
+  "replace": "\t\t\t\tif (preFilter.isV90WithEia6() != 0)"
+ },
+ {
+  "label": "the overflow protection compares the gain against +0x06c",
+  "find": "\t\t\tif (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {",
+  "replace": "\t\t\tif (V90PF(params)[PARAMS_UNNAMED_070] > agc.gain) {"
+ },
+ {
+  "label": "the extreme overflow protection subtracts +0x304 from +0x300",
+  "find": "\t\t\t\t\tparams->unnamed_300 -=\n\t\t\t\t\t    params->unnamed_304;",
+  "replace": "\t\t\t\t\tparams->unnamed_300 +=\n\t\t\t\t\t    params->unnamed_304;"
+ },
+ {
+  "label": "the DIL ceiling is 0x74 on the deep arm",
+  "find": "\t\t\t\tphase3Demodulator->byte_3f8 = 0x74;\n\n\t\t\t\tif (agc.gain <",
+  "replace": "\t\t\t\tphase3Demodulator->byte_3f8 = 0x73;\n\n\t\t\t\tif (agc.gain <"
+ },
+ {
+  "label": "the DIL ceiling is set on the shallow arm too",
+  "find": "\t\t\t} else {\n\t\t\t\tphase3Demodulator->byte_3f8 = 0x74;\n\t\t\t}",
+  "replace": "\t\t\t} else {\n\t\t\t}"
+ },
+ {
+  "label": "the phase 4 deadline accumulates the input count",
+  "find": "\t\tword_44 += nofIn;\n\t\tif (word_44 > word_48) {",
+  "replace": "\t\tword_44 = nofIn;\n\t\tif (word_44 > word_48) {"
+ },
+ {
+  "label": "the phase 4 deadline is strict",
+  "find": "\t\tword_44 += nofIn;\n\t\tif (word_44 > word_48) {",
+  "replace": "\t\tword_44 += nofIn;\n\t\tif (word_44 >= word_48) {"
+ },
+ {
+  "label": "the timeout marks the ISP sensitive",
+  "find": "\t\t\tparams->SENSITIVE_ISP_DETECTED = 1;",
+  "replace": "\t\t\tparams->SENSITIVE_ISP_DETECTED = 0;"
+ },
+ {
+  "label": "the timeout clears the silence scrambler request",
+  "find": "\t\t\tparams->SILENCE_SCR = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "the silence-rrn mask is off USB and not on it",
+  "find": "\t\t\t    codecType != (__tHardwareCodecTypes__)4) {",
+  "replace": "\t\t\t    codecType == (__tHardwareCodecTypes__)4) {"
+ },
+ {
+  "label": "the Ed arm is reached only from the WaitForMP state",
+  "find": "\t\t\tif (phase4Demodulator->state != P4D_STATE_WAIT_FOR_MP)",
+  "replace": "\t\t\tif (phase4Demodulator->state != P4D_STATE_WAIT_FOR_ED)"
+ },
+ {
+  "label": "the problematic-ISP signature wants Type 1",
+  "find": "\t\t\t    mp->Shaping == 0 && mp->Type == 1 &&",
+  "replace": "\t\t\t    mp->Shaping == 0 && mp->Type == 2 &&"
+ },
+ {
+  "label": "the problematic-ISP signature wants all three h pairs zero",
+  "find": "\t\t\t    mp->h3Real == 0 && mp->h3Imag == 0) {",
+  "replace": "\t\t\t    mp->h3Real == 0) {"
+ },
+ {
+  "label": "the USB arm raises MAX_NOF_V90_RETRAINS to 150",
+  "find": "\t\t\t\t\tparams->MAX_NOF_V90_RETRAINS = 150;",
+  "replace": "\t\t\t\t\tparams->MAX_NOF_V90_RETRAINS = 15;"
+ },
+ {
+  "label": "the USB arm marks the evaluator at +0x94",
+  "find": "\t\t\t\t\tconnectionEvaluator->word_94 = 1;",
+  "replace": "\t\t\t\t\tconnectionEvaluator->word_94 = 0;"
+ },
+ {
+  "label": "the non-USB arm clears the silence request",
+  "find": "\t\t\t\t\tparams->RRN_SILENCE_REQUESTED = 0;\n\t\t\t\t\tedprintf(\"V90Demodulator: 'Problematic' \"\n\t\t\t\t\t\t \"ISP Modem detected NOT on \"",
+  "replace": "\t\t\t\t\tedprintf(\"V90Demodulator: 'Problematic' \"\n\t\t\t\t\t\t \"ISP Modem detected NOT on \""
+ },
+ {
+  "label": "the Ed state is entered whatever the signature said",
+  "find": "\t\t\tphase4Demodulator->enterWaitForEd();\n\t\t\tbreak;",
+  "replace": "\t\t\tbreak;"
+ },
+ {
+  "label": "the silence-RRN Ed arm needs all three flags",
+  "find": "\t\t\tif (connectionEvaluator->word_90 != 0 &&\n\t\t\t    phase4Demodulator->int_003c != 0 &&\n\t\t\t    phase4Demodulator->int_0038 != 0) {",
+  "replace": "\t\t\tif (connectionEvaluator->word_90 != 0 &&\n\t\t\t    phase4Demodulator->int_003c != 0) {"
+ },
+ {
+  "label": "the silence-RRN Ed arm freezes the timing loop",
+  "find": "\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\t\tword_40 = 0;",
+  "replace": "\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\t\tword_40 = 1;"
+ },
+ {
+  "label": "the redesign trigger keeps the mean error at +0x274",
+  "find": "\t\t\t\tfloat_274 = equalizer->meanErrorEnergyMean;",
+  "replace": "\t\t\t\tfloat_274 = equalizer->meanErrorEnergyCurrent;"
+ },
+ {
+  "label": "state 0x1c raises word_270 whichever arm it took",
+  "find": "\t\t\tword_270 = 1;\n\t\t\tbreak;\n\n\t\tcase 0x1d:",
+  "replace": "\t\t\tbreak;\n\n\t\tcase 0x1d:"
+ },
+ {
+  "label": "state 0x1d enters the data phase",
+  "find": "\t\t\tenterDataPhase();\n\t\t\tdemapper->process",
+  "replace": "\t\t\tdemapper->process"
+ },
+ {
+  "label": "RtNot moves the loop to TRN2",
+  "find": "\t\t\tresampler.setBllState(V90_BLL_TRN2, 1);\n\t\t\tword_40 = 1;",
+  "replace": "\t\t\tresampler.setBllState(V90_BLL_TRN2, 1);\n\t\t\tword_40 = 0;"
+ },
+ {
+  "label": "state 0x35 clears the energy-drop arm rather than setting it",
+  "find": "\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\tword_40 = 0;\n\t\t\tbreak;\n\n\t\tdefault:",
+  "replace": "\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\tword_40 = 1;\n\t\t\tbreak;\n\n\t\tdefault:"
+ },
+ {
+  "label": "phase 4 ends on evaluatePhase4 and its before/after ratio",
+  "find": "\t\tverdict = connectionEvaluator->evaluatePhase4(\n\t\t    equalizer->ph4MeanErrorEnergyBeforeToAfterUpdateRatio);",
+  "replace": "\t\tverdict = connectionEvaluator->evaluatePhase4(\n\t\t    equalizer->meanErrorEnergyMean);"
+ },
+ {
+  "label": "phase 3 ends on evaluatePhase3",
+  "find": "\t\tverdict = connectionEvaluator->evaluatePhase3();\n",
+  "replace": "\t\tverdict = 0;\n"
+ },
+ {
+  "label": "the energy-drop detector runs only when word_40 is set",
+  "find": "\tif (word_40 != 0) {\n\t\tif (agc.level <",
+  "replace": "\tif (word_40 == 0) {\n\t\tif (agc.level <"
+ },
+ {
+  "label": "the energy-drop detector compares the AGC LEVEL",
+  "find": "\t\tif (agc.level < params->ENERGY_DROP_DETECTOR_THRESHOLD) {",
+  "replace": "\t\tif (agc.gain < params->ENERGY_DROP_DETECTOR_THRESHOLD) {"
+ },
+ {
+  "label": "the quiet run is accumulated and not restarted",
+  "find": "\t\t\tword_27c += nofIn;",
+  "replace": "\t\t\tword_27c = nofIn;"
+ },
+ {
+  "label": "the quiet run is cleared when the energy comes back",
+  "find": "\t\t} else {\n\t\t\tword_27c = 0;\n\t\t}",
+  "replace": "\t\t} else {\n\t\t}"
+ },
+ {
+  "label": "the remote retrain's quick-connect arm also wants a phase at or below 2",
+  "find": "\t\t\t\t\tif (quickConnect != 0 &&\n\t\t\t\t\t    (int)inPhase3 <= 2)",
+  "replace": "\t\t\t\t\tif (quickConnect != 0)"
+ },
+ {
+  "label": "a verdict other than 5 leaves 0x26 behind",
+  "find": "\t\t\t\t} else {\n\t\t\t\t\tword_3c = 0x26;\n\t\t\t\t}",
+  "replace": "\t\t\t\t} else {\n\t\t\t\t\tword_3c = 0x21;\n\t\t\t\t}"
+ },
+ {
+  "label": "the error-energy period counter is compared against +0x288",
+  "find": "\tif (word_284 + nofIn < word_288) {",
+  "replace": "\tif (word_284 + nofIn < word_290) {"
+ },
+ {
+  "label": "the error-energy counter is cleared when the period closes",
+  "find": "\t\tword_284 = 0;\n\t\tif (DSPLIB_DEBUG_ON()) {\n\t\t\tcur =",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON()) {\n\t\t\tcur ="
+ },
+ {
+  "label": "the timing-offset period counter is its own pair",
+  "find": "\tif (word_28c + nofIn < word_290) {",
+  "replace": "\tif (word_28c + nofIn < word_288) {"
+ },
+ {
+  "label": "the frame phase advances by the equaliser's output count",
+  "find": "\tword_260 = (word_260 + word_258) % 6;",
+  "replace": "\tword_260 = (word_260 + word_24c) % 6;"
+ },
+ {
+  "label": "the frame phase wraps at six",
+  "find": "\tword_260 = (word_260 + word_258) % 6;",
+  "replace": "\tword_260 = (word_260 + word_258) % 5;"
+ },
+ {
+  "label": "the RRN counter is +0x264 and the retrain counter +0x268",
+  "find": "\tcase 0x23:\n\t\tword_264++;\n\t\tbreak;",
+  "replace": "\tcase 0x23:\n\t\tword_268++;\n\t\tbreak;"
+ },
+ {
+  "label": "the retrain counter covers 0x1f to 0x21",
+  "find": "\tcase 0x1f:\n\tcase 0x20:\n\tcase 0x21:\n\t\tword_268++;",
+  "replace": "\tcase 0x1f:\n\tcase 0x20:\n\t\tword_268++;"
+ },
+ {
+  "label": "the fallback counter is +0x26c",
+  "find": "\tcase 0x26:\n\t\tword_26c++;\n\t\tbreak;",
+  "replace": "\tcase 0x26:\n\t\tword_264++;\n\t\tbreak;"
+ }
+]

@@ -524,7 +524,25 @@ public:
 	unsigned int word_268;		/* +0x268 zeroed by the constructor  */
 	unsigned int word_26c;		/* +0x26c zeroed by the constructor  */
 	unsigned int word_270;		/* +0x270 zeroed by reset            */
-	unsigned char pad_274[4];	/* +0x274 nothing reads it           */
+
+	/*
+	 * +0x274  WAS `pad_274[4]`, "nothing reads it", and `progress` both
+	 * writes it and reads it back.  It takes
+	 * `equalizer->meanErrorEnergyMean` at 0x1e5dd -- on the arm where Ed
+	 * arrives while a silence RRN is outstanding -- and it is the
+	 * constellation designer's THIRD argument at 0x1d82f, which that
+	 * member's mangling spells `f`.  So the width is the store's, the type
+	 * is the callee's (CLAUDE.md rule 2), and those two sites are the only
+	 * accesses anywhere in the object.
+	 *
+	 * IT KEEPS THE OFFSET NAME.  What the pair of sites bounds is the
+	 * ROLE -- "the mean error as it stood when the redesign was armed" --
+	 * and not a meaning the object states: no diagnostic prints it, no
+	 * other member touches it, and the designer's own parameter is a
+	 * general pdSNR slot that the other call site fills from a different
+	 * expression entirely.  3120's rule.
+	 */
+	float float_274;		/* +0x274                            */
 	unsigned int word_278;		/* +0x278 zeroed by the constructor  */
 	unsigned int word_27c;		/* +0x27c zeroed by the constructor  */
 

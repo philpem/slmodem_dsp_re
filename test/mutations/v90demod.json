@@ -97,8 +97,8 @@
  },
  {
   "label": "the evaluator's +0x84 is left alone",
-  "find": "\tconnectionEvaluator->word_84 = 0;\n",
-  "replace": ""
+  "find": "\tconnectionEvaluator->word_74 = 0;\n\tconnectionEvaluator->word_84 = 0;\n",
+  "replace": "\tconnectionEvaluator->word_74 = 0;\n"
  },
  {
   "label": "the evaluator is reached through +0x208",
@@ -283,7 +283,6 @@
   "find": "\t\t\t\t \"EVALUATION DISABLED !\\n\");",
   "replace": "\t\t\t\t \"EVALUATION DISABLED !\\r\\n\");"
  },
-
  {
   "label": "sessionTermination: the mean's sign is the ordered test, so a NaN prints '-'",
   "why": "0x1ac3a is `sbb %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax` after `fldz; fcomps mean`, which is 0x2d - 2*CF with the ZERO in %st(0); FCOM sets CF for less-than AND for unordered, so the object prints '+' for an unordered mean.  This is the spelling the tree carried until finding 2410 and it agrees on every ordered value, so pattern 9 of `st_value` is the only thing that kills it.",

@@ -222,7 +222,7 @@
  },
  {
   "label": "indicateRemoteRateReneg: the designer's flag is cleared",
-  "find": "\tconstellationDesigner->word_48 = 1;",
-  "replace": "\tconstellationDesigner->word_48 = 0;"
+  "find": "\tconnectionEvaluator->indicateRemoteRateReneg();\n\tconstellationDesigner->word_48 = 1;",
+  "replace": "\tconnectionEvaluator->indicateRemoteRateReneg();\n\tconstellationDesigner->word_48 = 0;"
  }
 ]
