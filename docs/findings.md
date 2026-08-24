@@ -81066,11 +81066,17 @@ infinity.
 
 **THE PHASE MACHINE DOES NOT ADVANCE ON ITS OWN, and that is the sharp
 result.**  Driven for **400 blocks -- 32,000 symbols, four seconds of an 8 kHz
-downstream** -- from `enterPhase3()` with nothing else poked, the modulator
-raised event code 0 three hundred and ninety-eight times, code 1 once, code 2
-once, and **its state never left 1**.  `progress`'s inner phase-3 arm moves to
-phase 4 only when the phase 3 modulator raises event **6**, and in four
-seconds of free running it never did.
+downstream** -- from `enterPhase3()` with nothing else poked, **the modulator
+finished every block still in state 1**.
+
+The histogram beside that is the BLOCK-TERMINAL event code and is stated as
+such, because the probe samples `V90Modulator::eventCode` once a block and two
+non-zero events inside one block collapse to one: it was 0 in 398 of the 400
+blocks, 1 in one and 2 in one.  **The state is the stronger evidence and does
+not depend on the sampling rate at all**: `progress`'s inner phase-3 arm
+handles event **6** INLINE -- it resets the phase 4 modulator and sets
+`state = 2` in the same iteration -- so a run that ends in state 1 is direct
+proof that 6 was never raised, whatever a per-block sample would have shown.
 
 That is not a defect: `V90Modulator` has seventeen members and fourteen of
 them write the three state words, and nothing inside the class calls any of
@@ -81102,9 +81108,14 @@ in for the driver that would have (7623).
 
 | fill | outcome, OURS | outcome, the BLOB |
 |---|---|---|
-| `0x00` | runs; `bitsPerFrame` **0**, `signBitGroups` 0, `signBitGroupSize` 0, `nofBitsForNextTime` **0** | identical |
-| `0xa5` (the allocation's own) | **SIGSEGV** in `V90Mapper::reset` | **SIGSEGV**, same place |
-| `0xff` | **SIGSEGV** in `V90Mapper::reset` | **SIGSEGV**, same place |
+| `0x00` | runs; `bitsPerFrame` **0**, `signBitGroups` 0, `signBitGroupSize` 0, asks for **0 bits** every block for ever | identical |
+| `0xa5` (the allocation's own) | **SIGSEGV** in `V90Mapper::reset`, at a heap address far past the object | **SIGSEGV**, same address |
+| `0xff` | **SIGSEGV** in `V90Mapper::reset` | **SIGSEGV**, same address |
+
+The faulting address is recorded rather than inferred: the probe installs an
+`SA_SIGINFO` handler, keeps `si_addr` and re-raises, so a fault names a SITE
+and not a stage.  Both fills fault at the same address, several megabytes past
+the modem, which is where a runaway `for` writing 2-byte entries arrives.
 
 **THE SYMPTOM DEPENDS ON THE FILL, WHICH IS THE ANSWER.**  A block that
 something initialised would give the same result whatever was in it
@@ -81128,6 +81139,13 @@ block for ever.  **A zero-filled heap would have made this look like a working
 modem that never carries data**, which is the plausible-but-wrong outcome, and
 it is the reason the harness allocator's non-zero pattern exists.
 
+**AND ITS 2,560 "NON-ZERO SAMPLES" ARE NOT OUTPUT**, which is why the probe
+prints a RANGE beside every count.  With zero bits requested,
+`V90BitsToSymbol::process` writes nothing and `symbolBuf` keeps its 0xa5a5
+allocation fill; read as a `short` that is -23131, and the range on that arm
+is exactly `[-23131, -23131]` -- one value, 2,560 times.  A count alone cannot
+tell an emitting modem from a silent one over uninitialised storage.
+
 #### The harness-side call changes the answer completely
 
 The same six runs, with `setParamsInfoFromCPUnPck(block, &cp)` called from the
@@ -81136,20 +81154,39 @@ harness -- **not from `src/`; no caller was added** -- against a plausible
 
 | fill | outcome, both sides |
 |---|---|
-| `0x00` | runs; `bitsPerFrame` **42**, `signBitsPerFrame` 3, `signBitGroups` 3, `signBitGroupSize` 2, `nofBitsForNextTime` **588** |
+| `0x00` | runs; `bitsPerFrame` **42**, `signBitsPerFrame` 3, `signBitGroups` 3, `signBitGroupSize` 2 |
 | `0xa5` | identical |
 | `0xff` | identical |
 
 **Fill-INDEPENDENT, and the three now agree** -- which is exactly the shape a
 block with a writer has.  The single callerless function overwrites every
 field the chain reads, and the hand-poked control (`plausible_mapping`, 42
-bits to a six-symbol frame) reaches the same `bitsPerFrame` 42 and the same
-588 bits a block, with the data phase emitting over [-31100, +30076].
+bits to a six-symbol frame) reaches the same numbers, with the data phase
+emitting over **[-32124, +32124]** and no NaN.
 
 So the answer to "would supplying the call have been enough" is **yes, for
-this chain**: the missing piece is a CALL and not a body.  588 bits per 80
-symbols at 8 kHz is 58,800 bit/s, which is 42 bits to a six-symbol frame --
-V.90's 56 kbit/s frame with the block-size rounding the converter carries.
+this chain**: the missing piece is a CALL and not a body.
+
+#### THE RATE IS A MEAN AND NOT A BLOCK, AND THAT IS NOT PEDANTRY
+
+An earlier draft of this finding read "588 bits per 80 symbols at 8 kHz is
+58,800 bit/s", and it was wrong twice over -- the arithmetic and the premise.
+`V90BitsToSymbol::nofBitsForNextTime` hands out WHOLE six-symbol frames, and
+an 80-symbol block is 13 1/3 of them, so no single block's request is a rate.
+Over 32 blocks the sequence is
+
+	588 588 546 546 588 546 546 588 ...
+
+which is 14 frames and 13 frames interleaved -- 588 = 14 x 42, 546 = 13 x 42 --
+and the mean is **561.8 bits a block, 56,175 bit/s**, converging on the
+**56,000 bit/s** that 42 bits to a six-symbol frame at 8,000 symbols a second
+gives.  The interleave is the converter's frame-boundary rounding and it is a
+property of the digital transmit chain nobody had measured; the number to
+quote for the rate is 56,000, and the number to quote for a block is the
+sequence.
+
+**A single reading was a whole frame above the mean**, which is exactly how
+far wrong a finding built on one sample of a quantised quantity goes.
 
 #### The writer sweep, with a denominator, over the RECONSTRUCTION this time
 
@@ -81200,11 +81237,17 @@ source and on the blob's:
 
 | instance | driver | ours | blob |
 |---|---|---|---|
-| **DIGITAL** | `v90RunDemodulator` | **SIGSEGV** | **SIGSEGV** |
+| **DIGITAL** | `v90RunDemodulator` | **SIGSEGV at 0x3c** | **SIGSEGV at 0x3c** |
 | **DIGITAL** | `runPcmModem`, as constructed | returns 0 | returns 0 |
-| **DIGITAL** | `runPcmModem`, `info0Layout = 1` | **SIGSEGV** | **SIGSEGV** |
+| **DIGITAL** | `runPcmModem`, `info0Layout = 1` | **SIGSEGV at 0xdc** | **SIGSEGV at 0xdc** |
 | analogue | `v90RunDemodulator` | returns 0 | returns 0 |
 | analogue | `runPcmModem`, either | returns 0 | returns 0 |
+
+**THE ADDRESSES ARE MEASURED, AND ONE OF THEM IS NOT WHERE THIS FINDING FIRST
+SAID IT WAS.**  An `SA_SIGINFO` handler in the child keeps `si_addr` and
+re-raises.  A draft of this finding asserted that both faults were the
+dispatch; the addresses say otherwise, and the difference is the point of
+recording them.
 
 **The middle row is why the third exists.**  `runPcmModem`'s fourth statement
 is `if (info0Layout == 0) return ret;` at .text+0xe470, and a constructed
@@ -81214,15 +81257,33 @@ function reaches its own second jump table makes it fault like the other.  A
 probe that stopped at the middle row would have reported the opposite result,
 which is finding 134's argument arriving inside this batch.
 
-#### What the fault IS
+#### What each fault IS, and they are two different sites
 
-Both drivers dispatch on `this->modem.demodulator->word_3c`.  `demodulator` is
-`V90Modem + 0x04`, the pointer the constructor writes on side **1** and leaves
-NULL on side 0.  So the switch loads a field of an object the digital side
-never constructs, with no guard -- `V90Modem.h` already records that
-`V90Modem::progress` "dereferences a pointer the other arm's constructor set
-to NULL, with no guard", and this is the same shape two levels up, in the
-functions that would have to CALL it.
+`demodulator` is `V90Modem + 0x04`, the pointer the constructor writes on side
+**1** and leaves NULL on side 0.  Both faults are dereferences of it and
+neither is guarded, but they are not the same statement:
+
+- **`v90RunDemodulator` faults at exactly `0x3c`**, which is
+  `switch (modem.demodulator->word_3c)` -- the dispatch itself, the 44-entry
+  table 7581 measured.  A read of +0x3c through a null pointer can be nothing
+  else.
+- **`runPcmModem` faults at `0xdc`, which is NOT the dispatch.**  It is
+  `v92modem.modulator->float_28 = -modem.demodulator->resampler.
+  getTimingOffsetPPM()`, one statement EARLIER: `V90Demodulator::resampler` is
+  at +0x094 and the timing field `getTimingOffsetPPM` reads is +0x48 inside
+  it, and 0x94 + 0x48 is 0xdc.
+
+**AND `runPcmModem` GETS AS FAR AS DRIVING THE DIGITAL MODULATOR FIRST.**
+Between the `info0Layout` guard and the fault it runs
+`echoCanceller.process(in, rx, n)` and then `modem.progress(rxbits, *nrx, rx,
+n)` -- which on this instance is `V90Modulator::progress`, the digital
+transmit chain, and it returns normally.  So the driver is not repelled at the
+door: it calls the digital modem's own `progress`, and dies on the very next
+statement because that statement reads a receiver that does not exist.
+
+`V90Modem.h` already records that `V90Modem::progress` "dereferences a pointer
+the other arm's constructor set to NULL, with no guard".  This is the same
+shape one level up, in both of the functions that would have to CALL it.
 
 **So there is not merely no ARM for the missing call: there is no READER.**
 7581 said supplying the V.90 unpacker's call would need a new entry in a
@@ -81243,19 +81304,34 @@ Milestone 4.
 	VPCMXF_Create(1, ...)  ->  V90Modem::progress  ->  float[80]
 	                       ->  VPCMXF_Create(0, ...)::v90RunDemodulator
 
-Eight blocks.  It ran to the end, leaked nothing, and:
+Eight blocks, and **a negative control that runs the identical eight with the
+link buffer zeroed after the modulator has filled it** -- so the demodulator
+sees silence and everything else about the run is the same.  That control is
+the whole reason the result below can be stated at all, and it fired.
 
-- **496 non-zero codewords** were emitted by the digital modulator over the
-  eight blocks;
-- the analogue demodulator's event word `word_3c` **moved on 3 of the 8
-  blocks**, from the 0xa5a5a5a5 a fresh allocation leaves it at, and finished
-  at 0;
-- the digital modulator finished in state 1, event code 0 -- still phase 3,
-  for 7621's reason;
-- `V90Demodulator::inPhase3` finished at 0xa5a5a5a5, i.e. the analogue side
-  has an uninitialised field of its own on this path.
+|  | the modulator's output | SILENCE |
+|---|---|---|
+| non-zero codewords emitted | 496 | 496 (then discarded) |
+| `word_3c` movements over 8 blocks | **3** | **3** |
+| `word_3c` after each block | 0 0 0 0 38 38 **0 0** | 0 0 0 0 38 38 **38 33** |
+| `V90Demodulator::inPhase3` at the end | 0xa5a5a5a5 | 0xa5a5a5a5 |
 
-**THREE LIMITATIONS, and they are stated before the result is used for
+**THE COUNT AND THE SEQUENCE DISAGREE, AND ONLY THE SEQUENCE IS EVIDENCE.**
+The number of movements is identical whether the demodulator is fed the
+digital modulator's codewords or nothing at all, so "its event word moved
+three times" was never a reaction to the signal -- it is the demodulator's own
+state machine turning over.  A first draft of this finding said the receiving
+side "reacts to what the transmitter emits" on exactly that count, and it had
+no support.
+
+What DOES separate the two arms is the sequence: the runs diverge from block 7
+and finish at 0 against 33.  So the input reaches the demodulator's state; the
+count simply cannot show it.
+
+The digital modulator finished in state 1 with event code 0 -- still phase 3,
+for 7621's reason -- in both arms.
+
+**FOUR LIMITATIONS, and they are stated before the result is used for
 anything.**
 
 1. **Both sides are our source**, so a defect they share is invisible.  A
@@ -81269,11 +81345,17 @@ anything.**
 3. **There is no channel and no codec.**  `V90Modulator::progress` writes
    codeword values into the float buffer; the analogue demodulator is fed
    those numbers directly.
+4. **THE ANALOGUE SIDE WAS NEVER RESET.**  Only `setPhaseIIinfo` was called on
+   it; `V90Demodulator::inPhase3` finished at 0xa5a5a5a5 in both arms, which
+   is the allocation fill, so the receiver ran on uninitialised state
+   throughout.  It is the mirror of the digital side's own blocker and it is
+   not the same question -- the analogue side HAS a driver that would have
+   reset it, and this experiment did not run one.
 
 So what the loopback establishes is that the two halves can be clocked against
-each other without faulting and that the receiving side reacts to what the
-transmitter emits.  It is not evidence that a V.90 session would train, and no
-part of this batch is.
+each other without faulting, and that the digital modulator's output reaches
+the analogue demodulator's state.  It is not evidence that a V.90 session
+would train, and no part of this batch is.
 
 ### 7625. Was the vendor's digital branch finished?  The machinery was; the wiring was not
 
@@ -81293,9 +81375,12 @@ are not the same kind of thing.
   half-written branch does not usually balance its allocator.
 - Driven in phase 3 it emits a bounded, NaN-free, 213-of-320-non-zero signal
   and the blob agrees with our reconstruction sample for sample.
-- Given a filled mapping block it enters the data phase and emits at 588 bits
-  per 80-symbol block, which is 42 bits to a six-symbol frame -- the arithmetic
-  of a real 56 kbit/s V.90 session.
+- Given a filled mapping block it enters the data phase and emits over
+  [-32124, +32124] with no NaN, asking for a mean of 561.8 bits per 80-symbol
+  block over 32 blocks -- **56,175 bit/s converging on 56,000**, which is 42
+  bits to a six-symbol frame at 8 kHz.  That is the arithmetic of a real V.90
+  session, and the 588/546 interleave under it is the converter's own
+  frame-boundary rounding.
 
 **NOT FINISHED, and both items are one level ABOVE `V90Modulator`:**
 
@@ -81328,3 +81413,30 @@ the unpacker's caller, or a digital driver, is new behaviour with no blob
 behaviour to compare against -- 7570's and 7581's reason, and it stays the
 repo owner's decision.  What changed is that the decision now has a measured
 cost on both sides of it.
+
+### 7626. Four numbers in this batch's first draft were wrong, and each was caught by a change to the APPARATUS rather than by rereading the finding
+
+Recorded because the shape repeats and because the first draft was written,
+committed and read as finished.  None of the four would have failed any gate:
+`make phase` was green at 246/0 before and after, and every one of them is a
+statement no test in this tree measures.
+
+| the claim | what was wrong | what caught it |
+|---|---|---|
+| "588 bits a block is 58,800 bit/s" | both the arithmetic (588/80 x 8000 is 58,800 and 42 bits a six-symbol frame is 56,000) and the premise: the converter hands out WHOLE frames and 80 symbols is 13 1/3 of them, so no block is a rate | printing the SEQUENCE and running 32 blocks instead of 2 |
+| "`runPcmModem` faults at the dispatch" | it faults at +0xdc, the resampler read one statement earlier; the dispatch is +0x3c and that is the OTHER driver | an `SA_SIGINFO` handler recording `si_addr` |
+| "the receiving side reacts to what the transmitter emits" | the movement COUNT is 3 either way, signal or silence | a negative control that zeroes the link after the modulator fills it |
+| "213 / 640 non-zero samples" as evidence of output | on the zero-fill arm every one of them is `symbolBuf`'s untouched 0xa5a5, which is -23131 | printing the RANGE beside the count |
+
+**The common shape is a scalar standing in for a distribution.**  One block's
+bit request for a rate, one stage number for a fault site, one movement count
+for a sequence, one non-zero count for a signal.  Each was fixed by making the
+instrument report more of what it already had -- the sequence, the address,
+the control arm, the range -- and not by arguing about the number.
+
+That is CLAUDE.md's "a detector must report its denominator" arriving in a
+form it does not name: **the denominator of a scalar is the spread it was
+drawn from**, and a probe that prints the scalar without it will support
+whichever reading its author already had.  The probe RUNNER here was
+fire-checked before any of this and the fire check passed; what had no control
+was every detector hanging off it.
