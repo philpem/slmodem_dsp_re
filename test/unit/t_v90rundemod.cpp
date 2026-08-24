@@ -671,10 +671,11 @@ static const struct trial trial_v[] = {
 	{ "0x23, latch set",	0, 1, 4, 1, 0x23, 1, 0, 0, 0, 1,
 	  0x5a3c1, 0, 0, 0, 1, 0x40, 0x20, 1 TAIL },
 	/*
-	 * `word_90` NEGATIVE IN ITS LOW SIXTEEN BITS.  The two calls to
-	 * `VPcmV34SetV90RateReneg` narrow it with `movswl`, so a value whose
-	 * bit 15 is set is what separates a sixteen-bit sign extension from a
-	 * whole-word copy or a zero one.
+	 * `word_90` WITH BIT 15 SET.  The two calls to
+	 * `VPcmV34SetV90RateReneg` narrow it to a `short`, and the callee
+	 * tests only for zero, so what a bit-15 value drives is the narrowing
+	 * having happened at all rather than its sign; the "low half zero"
+	 * row below is the one that separates the two widths.
 	 */
 	{ "0x23, word_90 negative", 0, 1, 4, 1, 0x23, 1, 0, 0, 0, 1,
 	  0x1298a3, 0, 0, 0, 1, 0x40, 0x20, 0 TAIL },
@@ -831,8 +832,15 @@ seed_cpinfo(unsigned char *blk)
  * `copyMpInfoForInterface` measurable: with two source fields equal, a copy
  * that read the wrong one would land on the right value anyway.  `rateMask`
  * is non-zero and not a palindrome under doubling, so the `add %ecx,%ecx` is
- * visible too, and it is negative in one of the tags because the load is
- * `movswl` and a whole-word or zero-extending read would part company there.
+ * visible too.
+ *
+ * ONE TAG'S RATE MASK IS NEGATIVE AND IT PROVES NOTHING ABOUT THE LOAD.  It
+ * was seeded that way to separate the object's `movswl` from a `movzwl`, and
+ * the mutation set answered that no seeding can: the store is sixteen bits,
+ * so only the low sixteen bits of the source can reach it and the extension
+ * is discarded.  The value is kept because a negative one is still a
+ * different value from the other two tags', and finding 7585 carries the
+ * retraction.
  */
 static void
 seed_mp(unsigned char *blk, int tag)

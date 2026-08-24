@@ -1126,12 +1126,21 @@ VPcmFloModem::resetBitPointer()
  * include/dsplib/VPcmFloModem.h carries the derivation of every name and of
  * the one doubling.
  *
- * THE SIX BYTES ARE READ `movzbl` AND THE SIX HALVES `movzwl`, where the
- * source fields are `char` and `short`.  Only the low 8 or 16 bits of each
- * load survive into the store, so the extension is in CLAUDE.md's free column
- * (finding 614) and says nothing about either type; `mpRateMask` is the
- * exception and it is the one field whose load IS forced, `movswl`, because
- * the doubling is done on the widened value.
+ * NOT ONE OF THE THIRTEEN LOADS IS FORCED, INCLUDING `mpRateMask`'s.  The six
+ * bytes are read `movzbl`, the six halves `movzwl` and the rate mask
+ * `movswl`, but every store is 8 or 16 bits wide, so only the low 8 or 16
+ * bits of each load can reach memory: the extension is CLAUDE.md's free
+ * column (finding 614) at all thirteen sites.
+ *
+ * THIS COMMENT SAID THE OPPOSITE AND THE MUTATION SET CORRECTED IT.  It read
+ * "`mpRateMask` is the exception and it is the one field whose load IS
+ * forced, `movswl`, because the doubling is done on the widened value" -- but
+ * `(short)(x * 2)` keeps only the low sixteen bits of the product, and those
+ * depend only on the low sixteen bits of `x`.  The row
+ * `copyMpInfoForInterface reads the rate mask UNSIGNED before doubling` came
+ * back NOT CAUGHT against a fixture that seeds a negative rate mask ON
+ * PURPOSE, which is what a wrong claim looks like from the outside rather
+ * than a weak trial.  Findings 7585 and 6103.
  */
 inline void
 VPcmFloModem::copyMpInfoForInterface()
@@ -1644,10 +1653,16 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * cleared as a run of three by `enterPhase3`, `externalReset` and
 	 * `VPcmXfCreate`, and splitting it is not this batch's change.
 	 *
-	 * The `short` cast on the evaluator's counter is FORCED: 0xda78 and
-	 * 0xdb01 are `movswl 0x90(...)`, sixteen bits sign-extended, where the
-	 * field is a whole word -- which is what `VPcmV34SetV90RateReneg`'s
-	 * `short rrn_type` parameter costs.
+	 * THE NARROWING IS FORCED AND THE CAST THAT SPELLS IT IS NOT.  0xda78
+	 * and 0xdb01 are `movswl 0x90(...)`, sixteen bits sign-extended, where
+	 * the field is a whole word; that is what `VPcmV34SetV90RateReneg`'s
+	 * `short rrn_type` parameter costs, and v34pcmif.h's prototype
+	 * performs exactly the same conversion whether or not the call site
+	 * says so.  The `(short)` below is therefore DOCUMENTARY -- the
+	 * mutation set proved it, by scoring its removal `equivalent` -- and
+	 * it is kept because the narrowing is the interesting thing about
+	 * this argument and a reader should not have to open another header
+	 * to see it.
 	 */
 	case 0x22:
 		if (DSPLIB_DEBUG_ON())

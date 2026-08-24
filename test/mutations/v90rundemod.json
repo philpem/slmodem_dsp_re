@@ -283,7 +283,9 @@
  {
   "label": "the local rate-reneg arm takes the evaluator's counter WHOLE",
   "find": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    (short)modem.demodulator->connectionEvaluator->word_90,\n\t\t    flags_173a[1]);\n\t\tsetNofBitsPhase4(flags_173a[1]);\n\t\tflags_173a[2] = 1;",
-  "replace": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    modem.demodulator->connectionEvaluator->word_90,\n\t\t    flags_173a[1]);\n\t\tsetNofBitsPhase4(flags_173a[1]);\n\t\tflags_173a[2] = 1;"
+  "replace": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    modem.demodulator->connectionEvaluator->word_90,\n\t\t    flags_173a[1]);\n\t\tsetNofBitsPhase4(flags_173a[1]);\n\t\tflags_173a[2] = 1;",
+  "equivalent": true,
+  "why": "EQUIVALENT, and it says something about the source rather than about the fixture.  `VPcmV34SetV90RateReneg`'s second parameter is declared `short` in include/dsplib/v34pcmif.h, so the prototype performs the narrowing whether or not the call site spells it -- removing the `(short)` changes no instruction.  What IS driven, by the trial `0x22, word_90 low half zero`, is that the narrowing happens at all: 0x10000 is non-zero and its low sixteen bits are not, and the callee assigns `v90_receiver` 11 or 15 on exactly that test."
  },
  {
   "label": "the local rate-reneg arm sizes phase 4 off the TRAINING constellation",
@@ -396,5 +398,9 @@
   "label": "copyMpInfoForInterface does not copy the third h pair's imaginary half",
   "find": "\tmpH3Real = modem.mp.h3Real;\n\tmpH3Imag = modem.mp.h3Imag;",
   "replace": "\tmpH3Real = modem.mp.h3Real;"
+ },
+ {
+  "label": "NOTE: ONE ROW IS UNCAUGHT AND IT IS NAMED HERE WITH ITS REASON RATHER THAN LEFT AS A COUNT.",
+  "why": "77 mutations, 74 caught, 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted.  The one is `the demodulator is run with the wrong sample count`, and it is STRUCTURALLY uncatchable in this binary rather than a gap more trials would close: t_v90rundemod holds `V90Modem::side` at 2 so that `V90Demodulator::progress` never runs, which is what keeps `V90Equalizer::process`'s gccdiverge entry out of this binary and lets it carry a mutation suite at all (findings 2157 and 3002).  With the fan-out off, `V90Modem::progress` reads none of its four arguments and any corruption of them is invisible.  Closing it means driving the real demodulator, which costs this whole suite; the file's own header states that trade and this row is what makes the cost visible in the numbers."
  }
 ]
