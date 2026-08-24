@@ -1,0 +1,104 @@
+[
+ {
+  "_": [
+   "V90Phase3Modulator::exitJd (.text+0x2ad80, 88 bytes) and ::exitJdPhase",
+   "(+0x2ade0, 70), against t_v90modprog.  The file's other members belong to",
+   "suite `v90p3mod` against t_v90p3mod, which drives neither of these.",
+   "THE STATE GUARDS NEED THE DIRECT GROUP AND NOT THE WRAPPERS.",
+   "`V90Modulator::exitJd` tests the same field against the same value before",
+   "it calls, so through that path the callee's own guard is true every time;",
+   "`run_p3exits` calls both members directly over all sixteen states, which",
+   "is what makes the two `is guarded on` rows killable."
+  ]
+ },
+ {
+  "label": "the Jd exit is guarded on JdPhase",
+  "find": "V90Phase3Modulator::exitJd()\n{\n\tif (state != P3M_STATE_JD)",
+  "replace": "V90Phase3Modulator::exitJd()\n{\n\tif (state != P3M_STATE_JD_PHASE)"
+ },
+ {
+  "label": "the Jd exit acts with nothing sent",
+  "find": "V90Phase3Modulator::exitJd()\n{\n\tif (state != P3M_STATE_JD)\n\t\treturn;\n\tif (symbolCount == 0)\n\t\treturn;\n",
+  "replace": "V90Phase3Modulator::exitJd()\n{\n\tif (state != P3M_STATE_JD)\n\t\treturn;\n"
+ },
+ {
+  "label": "the Jd exit ignores the state",
+  "find": "V90Phase3Modulator::exitJd()\n{\n\tif (state != P3M_STATE_JD)\n\t\treturn;\n",
+  "replace": "V90Phase3Modulator::exitJd()\n{\n"
+ },
+ {
+  "label": "the Jd exit's repetition is 71 symbols",
+  "find": "\tif (symbolCount % 72u == 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "replace": "\tif (symbolCount % 71u == 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
+ },
+ {
+  "label": "the Jd exit's boundary test is inverted",
+  "find": "\tif (symbolCount % 72u == 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "replace": "\tif (symbolCount % 72u != 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
+ },
+ {
+  "label": "the Jd exit's boundary arm does not restart the count",
+  "find": "\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "replace": "\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
+ },
+ {
+  "label": "the Jd exit's boundary fork is inverted",
+  "find": "\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "replace": "\t\tstate = sessionFlag ? P3M_STATE_JD_NOT : P3M_STATE_JD_PHASE;"
+ },
+ {
+  "label": "the Jd exit's boundary arm ignores the session flag",
+  "find": "\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "replace": "\t\tstate = P3M_STATE_JD_NOT;"
+ },
+ {
+  "label": "the Jd exit's mid-repetition fork is inverted",
+  "find": "\t\tstate = sessionFlag ? P3M_STATE_V92JD_END : P3M_STATE_JD_END;",
+  "replace": "\t\tstate = sessionFlag ? P3M_STATE_JD_END : P3M_STATE_V92JD_END;"
+ },
+ {
+  "label": "the Jd exit's mid-repetition arm ignores the session flag",
+  "find": "\t\tstate = sessionFlag ? P3M_STATE_V92JD_END : P3M_STATE_JD_END;",
+  "replace": "\t\tstate = P3M_STATE_JD_END;"
+ },
+ {
+  "label": "the Jd exit clears the count on both arms",
+  "find": "\t} else {\n\t\tstate = sessionFlag ? P3M_STATE_V92JD_END : P3M_STATE_JD_END;\n\t}",
+  "replace": "\t} else {\n\t\tstate = sessionFlag ? P3M_STATE_V92JD_END : P3M_STATE_JD_END;\n\t\tsymbolCount = 0;\n\t}"
+ },
+ {
+  "label": "the JdPhase exit is guarded on Jd",
+  "find": "V90Phase3Modulator::exitJdPhase()\n{\n\tif (state != P3M_STATE_JD_PHASE)",
+  "replace": "V90Phase3Modulator::exitJdPhase()\n{\n\tif (state != P3M_STATE_JD)"
+ },
+ {
+  "label": "the JdPhase exit acts with nothing sent",
+  "find": "V90Phase3Modulator::exitJdPhase()\n{\n\tif (state != P3M_STATE_JD_PHASE)\n\t\treturn;\n\tif (symbolCount == 0)\n\t\treturn;\n",
+  "replace": "V90Phase3Modulator::exitJdPhase()\n{\n\tif (state != P3M_STATE_JD_PHASE)\n\t\treturn;\n"
+ },
+ {
+  "label": "the JdPhase exit's repetition is 71 symbols",
+  "find": "\tif (symbolCount % 72u == 0) {\n\t\tstate = P3M_STATE_JD_NOT;",
+  "replace": "\tif (symbolCount % 71u == 0) {\n\t\tstate = P3M_STATE_JD_NOT;"
+ },
+ {
+  "label": "the JdPhase exit's arms are swapped",
+  "find": "\tif (symbolCount % 72u == 0) {\n\t\tstate = P3M_STATE_JD_NOT;\n\t\tsymbolCount = 0;\n\t} else {\n\t\tstate = P3M_STATE_JD_PHASE_END;\n\t}",
+  "replace": "\tif (symbolCount % 72u == 0) {\n\t\tstate = P3M_STATE_JD_PHASE_END;\n\t\tsymbolCount = 0;\n\t} else {\n\t\tstate = P3M_STATE_JD_NOT;\n\t}"
+ },
+ {
+  "label": "the JdPhase exit does not restart the count",
+  "find": "\t\tstate = P3M_STATE_JD_NOT;\n\t\tsymbolCount = 0;",
+  "replace": "\t\tstate = P3M_STATE_JD_NOT;"
+ },
+ {
+  "label": "the JdPhase exit forks on the session flag as well",
+  "find": "\t\tstate = P3M_STATE_JD_NOT;\n\t\tsymbolCount = 0;",
+  "replace": "\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;\n\t\tsymbolCount = 0;"
+ },
+ {
+  "label": "the JdPhase exit's mid arm terminates instead",
+  "find": "\t\tstate = P3M_STATE_JD_PHASE_END;",
+  "replace": "\t\tstate = P3M_STATE_TERMINATED;"
+ }
+]

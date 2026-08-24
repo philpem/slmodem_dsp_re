@@ -243,6 +243,376 @@ V90Modulator::reset()
 
 /*
  * ===========================================================================
+ * THE ELEVEN PHASE EDGES, in the order the object lays them out:
+ * .text+0x19d70 through +0x1a2b5, then `initiateFPE` at +0x1a400 after
+ * `initiateRRN`.
+ *
+ * NOTHING IN THIS CLASS CALLS ANY OF THEM, checked over all SEVENTEEN members
+ * and not over the five that happened to be written first -- which is the
+ * mistake finding 7520 recorded against itself.  `progress` open-codes the
+ * phase-3-to-4 move rather than calling `enterPhase4`; none of the eleven
+ * calls a sibling; and `setSessionFlag`, the one member a range disassembly of
+ * this span misses because it lives in V90SessionFlag.cpp, relocates only
+ * against the two sub-modulators' own `setSessionFlag` (0x19d50 and 0x19d6b).
+ * So each of the eleven is a separate entry point for whatever above this
+ * class reads the far end.
+ *
+ * THE GATED MESSAGES ARE `dsplibs_debug_printf` AND THE SPECTRAL ONES ARE
+ * `edprintf`, per site, exactly as `reset` and `initiateRRN` already split
+ * them.  The spectral group prints at every level because `edprintf` tests
+ * the level after formatting; a `cmpl $0x1,dsplibs_debug_level` in front of a
+ * call is the other kind.  Both kinds appear inside single functions here --
+ * `exitRi`, `enterDataPhase` and `initiateFPE` each carry one of each.
+ * ===========================================================================
+ */
+
+/*
+ * ENTER PHASE 3 -- .text+0x19d70, 130 bytes.  Idempotent: already being in
+ * phase 3 is the whole guard, and the object tests it before the message so a
+ * repeated entry is silent as well as inert.
+ *
+ * THE PHASE 3 MODULATOR IS REBUILT FROM `phase2Info` AND THE THREE SEQUENCE
+ * OBJECTS.  Its fourth argument -- `nSymbols`, the warm-up count `reset`'s
+ * trailing loop generates immediately -- is ZERO here, so nothing is emitted
+ * inside the reset; the eighth is `phase2Info->rtd`, which lands in
+ * `timeoutBase` and is what both phase 3 timeouts are measured from.
+ *
+ * The starting state is `P3M_STATE_SD`, which is 0 and is also what a fresh
+ * object holds; the object still passes it explicitly (`xor %ecx,%ecx` into
+ * 0xc(%esp) at 0x19dab).
+ */
+void
+V90Modulator::enterPhase3()
+{
+	if (state == 1)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator enter Phase 3\r\n");
+
+	phase3Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,
+			       P3M_STATE_SD, 0, jd, v92Jd, dil,
+			       phase2Info->rtd);
+
+	state = 1;
+	symbolCount = 0;
+	eventCode = 0;
+}
+
+/*
+ * LEAVE Jd -- .text+0x19e00, 68 bytes -- and LEAVE JdPhase, +0x19e50, the
+ * same 68.  Near-twins, and the two differences are the guard value and which
+ * member of the phase 3 modulator is called.
+ *
+ * THE GUARD IS THE SUB-MODULATOR'S STATE AND THE CALLEE RE-TESTS IT.  Both
+ * `V90Phase3Modulator::exitJd` and `::exitJdPhase` open with the same
+ * comparison, so through this path the callee's guard can never be false --
+ * which is why the fixture also drives those two directly.
+ *
+ * `eventCode` is cleared AFTER the call and unconditionally within the arm:
+ * `movl $0x0,0x34(%ebx)` at 0x19e27 sits on the path both the gated and the
+ * ungated entry reach.
+ */
+void
+V90Modulator::exitJd()
+{
+	if (phase3Modulator->state != P3M_STATE_JD)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: exit Jd\r\n");
+
+	phase3Modulator->exitJd();
+	eventCode = 0;
+}
+
+void
+V90Modulator::exitJdPhase()
+{
+	if (phase3Modulator->state != P3M_STATE_JD_PHASE)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: exit JdPhase\r\n");
+
+	phase3Modulator->exitJdPhase();
+	eventCode = 0;
+}
+
+/*
+ * LEAVE Ri -- .text+0x19ea0, 169 bytes.  The widest of the edges and the only
+ * member of the class that reads `mappingParams` (+0x10) rather than
+ * `mappingParams2` (+0x14).  Every load in this function is `0x10(%ebx)`:
+ * 0x19eca for `setMappingParams`, 0x19ee8 for `displaySpectralParams`,
+ * 0x19ef3 for the message argument, and 0x19f0f / 0x19f22 for the store.
+ * `progress`, `initiateRRN`, `enterDataPhase` and `initiateFPE` all take the
+ * other one.
+ *
+ * SO THE TWO SIDES OF THE Ri EXIT ARE NOT SPELLED THE SAME.  Phase 4's
+ * TRN2d/MP half is configured from block 6 here; the data phase and both
+ * renegotiation edges take block 7.  Nothing in the object says why, and this
+ * reconstruction does not invent a reason -- but a fixture whose two blocks
+ * hold the same numbers cannot see the difference at all, so t_v90modprog.cpp
+ * gives them different first words before it calls this.
+ *
+ * THE MESSAGE AND THE STORE CARRY THE SAME VALUE, `mappingParams->word_0`,
+ * which is the block's bit count per frame.  "TRN2d D = %d" prints it; the
+ * store puts it in the message object's `calcSequenceLength` divisor, so the
+ * MP or CP sequence is padded out to a whole number of frames.  Which object
+ * gets it is `sessionFlag`'s fork, the same fork `initiateRRN` makes and with
+ * the same polarity: nonzero is V.92 and writes the `V90CP`, zero is V.90 and
+ * writes the `V90MP`.
+ *
+ * The three field names stay as their own headers have them.  `word_3ba8`,
+ * `word_114` and `word_0` are each already commented with their role; what
+ * this edge adds is where the value comes from, which is recorded in the
+ * finding rather than by renaming three fields in three files this batch does
+ * not own.
+ */
+void
+V90Modulator::exitRi()
+{
+	if (phase4Modulator->state != P4M_STATE_RI)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: exit Ri\r\n");
+
+	phase4Modulator->exitRi();
+	eventCode = 0;
+
+	phase4Modulator->setMappingParams(mappingParams);
+
+	edprintf("V90Modulator: TRN2d spectral parameters:\r\n");
+	displaySpectralParams(mappingParams);
+	edprintf("V90Modulator: TRN2d D = %d\r\n", mappingParams->word_0);
+
+	if (sessionFlag)
+		cp->word_3ba8 = mappingParams->word_0;
+	else
+		mp->word_114 = mappingParams->word_0;
+}
+
+/*
+ * CP RECEIVED -- .text+0x19f50, 110 bytes.
+ *
+ * THE MP IS RE-ENCODED BEFORE ANY STATE IS LOOKED AT.  `CPack` goes to 1 --
+ * the acknowledge bit, bits[0x21] of the packed message -- and `infoToBits`
+ * runs, both unconditionally; only then is the phase 4 state consulted.  So a
+ * CP arriving in the wrong state still changes what this modem transmits next
+ * time it sends an MP, which is the object's behaviour and not obviously
+ * intended.
+ *
+ * `setNextStateAfterTRN2d(P4M_STATE_MP_NOT)` is likewise unconditional, and
+ * it is a store into the phase 4 modulator's +0x10 that only takes effect if
+ * TRN2d is still to come.
+ */
+void
+V90Modulator::acknowledgeCPReception()
+{
+	mp->CPack = 1;
+	mp->infoToBits();
+
+	phase4Modulator->setNextStateAfterTRN2d(P4M_STATE_MP_NOT);
+
+	if (phase4Modulator->state != P4M_STATE_MP)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: exit MP due to CP "
+				     "reception\r\n");
+
+	phase4Modulator->exitMP();
+	eventCode = 0;
+}
+
+/*
+ * CPnot RECEIVED -- .text+0x19fc0, 167 bytes -- and E RECEIVED, +0x1a070,
+ * 110.  Two chains over the phase 4 state, and the ORDER the object tests
+ * them in is the source's: 0x19fce compares 0x0e, then 0x04, then 0x0d, and
+ * 0x1a07e compares 0x0e then 0x0d.  Neither order is sorted, so neither is a
+ * switch's decision tree; they are `else if` chains written the way they are
+ * read here.
+ *
+ * THE 0x0d ARM IS A DELAY, NOT AN EXIT.  `byte_0014 = 1` and a message; the
+ * state is left alone and `eventCode` is NOT cleared.  0x0d is
+ * `V90Phase4Modulator.h`'s "`exitMP`'s non-boundary arm" -- MP has been left
+ * but the symbol count has not reached a repetition boundary yet -- so the
+ * request is recorded for whoever crosses that boundary.  It is also the only
+ * arm whose whole effect is one byte: below the gate nothing else happens,
+ * which is what makes both debug levels load-bearing for it.
+ *
+ * The two functions share the 0x0e arm exactly and share the 0x0d arm apart
+ * from its message.  `acknowledgeCPNotReception` has the third arm, 0x04,
+ * which re-encodes the MP first -- the same two statements
+ * `acknowledgeCPReception` opens with, and here they are inside a case.
+ */
+void
+V90Modulator::acknowledgeCPNotReception()
+{
+	if (phase4Modulator->state == P4M_STATE_MP_NOT) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator: exit MPNot due to "
+					     "CPNot reception\r\n");
+
+		phase4Modulator->exitMPNot();
+		eventCode = 0;
+	} else if (phase4Modulator->state == P4M_STATE_MP) {
+		mp->CPack = 1;
+		mp->infoToBits();
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator: exit MP due to "
+					     "CPNot reception\r\n");
+
+		phase4Modulator->exitMP();
+		eventCode = 0;
+	} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {
+		phase4Modulator->byte_0014 = 1;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator: setting delayed "
+					     "MPNot exit due to CPNot "
+					     "reception\r\n");
+	}
+}
+
+void
+V90Modulator::acknowledgeEReception()
+{
+	if (phase4Modulator->state == P4M_STATE_MP_NOT) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator: exit MPNot due to "
+					     "E reception\r\n");
+
+		phase4Modulator->exitMPNot();
+		eventCode = 0;
+	} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {
+		phase4Modulator->byte_0014 = 1;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator: setting delayed "
+					     "MPNot exit due to E "
+					     "reception\r\n");
+	}
+}
+
+/*
+ * ENTER THE DATA PHASE -- .text+0x1a0e0, 190 bytes.  The same eight
+ * statements `progress`'s phase 4 arm reaches when the phase terminates, with
+ * an idempotence guard in front of them: the block at 0x1a0ee..0x1a14d and
+ * the one at 0x1a9a1..0x1aa00 are the same code twice in the object, not a
+ * shared helper, and this reconstruction does not make them one.
+ *
+ * Every part of the rate expression is forced and the derivation is in
+ * `progress`'s comment: `bitsToSymbol->mapper->bitsPerFrame` two levels down
+ * and not the converter's same-named field, an INTEGER multiply by 8000
+ * widened unsigned, a multiply by the float nearest 1/6 rather than a divide,
+ * and `fistpll` with the low word taken, which is a conversion to
+ * `unsigned int`.
+ *
+ * THE TERNARY IS ALWAYS TRUE WHERE IT IS EVALUATED, for the reason it is in
+ * `progress`: `setSymbolsBlockSize` sits between the store and the test and
+ * may alias `*this`, so the compiler cannot fold it -- but that explains why
+ * the test survives, not why it is there, and the source has to contain it.
+ */
+void
+V90Modulator::enterDataPhase()
+{
+	if (state == 3)
+		return;
+
+	edprintf("V90Modulator: Data Phase spectral parameters:\r\n");
+	displaySpectralParams(mappingParams2);
+
+	state = 3;
+	symbolCount = 0;
+	eventCode = 8;
+
+	bitsToSymbol->setSymbolsBlockSize(nofSymbols);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: enter Data Phase, "
+				     "Rate = %d [bps]\r\n",
+				     state == 3
+					 ? (unsigned int)(0.5f +
+					       (8000 *
+						bitsToSymbol->mapper->
+						    bitsPerFrame) *
+					       (1.0f / 6.0f))
+					 : 0u);
+}
+
+/*
+ * ENTER PHASE 4 -- .text+0x1a1a0, 110 bytes.  Idempotent on `state == 2`, and
+ * its body is the third copy of the phase 4 entry: `progress`'s inner arm and
+ * `exitDIL`'s tail are the other two, all three with the same message, the
+ * same `reset` arguments and the same three closing stores.
+ *
+ * `P4M_STATE_RI` is 0 and `reset`'s fourth argument is 0 as well; the object
+ * stores both explicitly (`xor %eax,%eax` and `xor %ecx,%ecx` at 0x1a1b9 and
+ * 0x1a1c6).  Ri is the first thing the digital modem sends in phase 4.
+ */
+void
+V90Modulator::enterPhase4()
+{
+	if (state == 2)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: enter Phase 4\r\n");
+
+	phase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,
+			       P4M_STATE_RI, 0, phase2Info->rtd);
+
+	state = 2;
+	symbolCount = 0;
+	eventCode = 0;
+}
+
+/*
+ * LEAVE DIL -- .text+0x1a210, 166 bytes.  Two halves: the exit itself, and
+ * then a conditional move into phase 4 that the exit may have earned.
+ *
+ * THE SECOND HALF TESTS THE SUB-MODULATOR'S OWN `eventCode`, NOT OURS.
+ * 0x1a237 reloads +0x38 and reads `0x1c(%eax)`, and 6 is the value
+ * `V90Phase3Modulator::exitDIL` writes when the DIL sequence really ends
+ * (it leaves the event alone on its DIL_END arm).  Nothing copies that event
+ * into `V90Modulator::eventCode`; this member only ever writes a zero there,
+ * and only on the phase 4 path.
+ *
+ * `state != 2` is then the same second guard `progress`'s phase 3 arm uses,
+ * and for the same reason: the move into phase 4 must not be made twice.
+ */
+void
+V90Modulator::exitDIL()
+{
+	if (phase3Modulator->state != P3M_STATE_DIL)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: exit DIL\r\n");
+
+	phase3Modulator->exitDIL();
+
+	if (phase3Modulator->eventCode != 6)
+		return;
+	if (state == 2)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: enter Phase 4\r\n");
+
+	phase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,
+			       P4M_STATE_RI, 0, phase2Info->rtd);
+
+	state = 2;
+	symbolCount = 0;
+	eventCode = 0;
+}
+
+/*
+ * ===========================================================================
  * V90Modulator::initiateRRN -- .text+0x1a2c0, 308 bytes
  *
  * RATE RENEGOTIATION, REQUESTED FROM OUTSIDE.  The only approved state is the
@@ -330,6 +700,87 @@ V90Modulator::initiateRRN()
 		mp->CPack = 0;
 		mp->infoToBits();
 	}
+
+	return 0;
+}
+
+/*
+ * ===========================================================================
+ * V90Modulator::initiateFPE -- .text+0x1a400, 260 bytes
+ *
+ * FAST PHASE EXCHANGE, and `initiateRRN` FOUR DIFFERENCES AWAY.  Same guard,
+ * same two returns, same block-size-to-one and the same question asked of
+ * `nofBitsForNextTime`, and then:
+ *
+ *   - the two states are 0x1d and 0x1c, where RRN picks 0x15 and 0x14;
+ *   - there is NO `resetBeforRRN` and no member of that shape at all;
+ *   - the mapping block goes to `setRfSymbols`, where RRN uses
+ *     `setRdRtSymbols`;
+ *   - THE CP IS RE-ENCODED UNCONDITIONALLY.  RRN forks on `sessionFlag` and
+ *     touches the `V90MP` on the V.90 arm; this one clears `V90CP::byte_13`
+ *     and calls `V90CP::infoToBits` on every path, so a V.90 session's MP is
+ *     never touched by an FPE.  0x1a4a7 has no test in front of it.
+ *
+ * V.92's own pair is the same shape one modulation up (finding 7541), and it
+ * has a fifth difference this one does not: no store into the modulus
+ * encoder.
+ *
+ * WHICH STATE THE BIT COUNT CHOOSES, and the two messages name both:
+ * NON-ZERO -- nothing banked in the converter -- enters `RfModulation`,
+ * 0x1d, which is already `P4M_STATE_RF`; ZERO enters "DataToRfModulation",
+ * which is 0x1c and which `V90Phase4Modulator.h` calls
+ * `P4M_STATE_UNNAMED_1C`.  That enumerator is NOT promoted here, on the same
+ * two grounds finding 7520 gave for 0x14: the message belongs to this class
+ * rather than to the state's own, and the rename is a change to an
+ * 1,829-line file this batch does not own.  The evidence is recorded so it
+ * does not have to be re-derived.
+ *
+ * `symbolCount` IS CLEARED AND `eventCode` IS NOT, until after the reset --
+ * 0x1a42c and 0x1a48e, with the whole of `setSymbolsBlockSize`,
+ * `nofBitsForNextTime`, the message and `V90Phase4Modulator::reset` between
+ * them.  `initiateRRN` sequences its three the same way.
+ * ===========================================================================
+ */
+int
+V90Modulator::initiateFPE()
+{
+	Phase4ModulatorState p4state;
+
+	if (state != 3) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90Modulator: FPE requested but "
+					     "NOT approved\r\n");
+		return -1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Modulator: FPE requested, enter "
+				     "Phase 4\r\n");
+
+	state = 2;
+	symbolCount = 0;
+
+	bitsToSymbol->setSymbolsBlockSize(1);
+
+	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		edprintf("V90Modulator: Phase4Modulator state initialized to "
+			 "RfModulation\r\n");
+		p4state = P4M_STATE_RF;
+	} else {
+		edprintf("V90Modulator: Phase4Modulator state initialized to "
+			 "DataToRfModulation\r\n");
+		p4state = P4M_STATE_UNNAMED_1C;
+	}
+
+	phase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,
+			       p4state, 0, phase2Info->rtd);
+
+	eventCode = 0;
+
+	phase4Modulator->setRfSymbols(mappingParams2);
+
+	cp->byte_13 = 0;
+	cp->infoToBits();
 
 	return 0;
 }

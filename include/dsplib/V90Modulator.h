@@ -1,13 +1,12 @@
 /*
  * V90Modulator.h -- the V.90 downstream modulator, the top of the chain.
  *
- * Reconstructed from dsplibs.o.  Seventeen members and 3,354 bytes of code, of
- * which the constructor, the destructor, `setSessionFlag`, `reset`,
- * `progress` and `initiateRRN` are written; the eleven remaining phase
+ * Reconstructed from dsplibs.o.  Seventeen members and 3,354 bytes of code,
+ * and the class is now COMPLETE: the constructor, the destructor,
+ * `setSessionFlag`, `reset`, `progress`, `initiateRRN` and the eleven phase
  * transitions -- `enterPhase3`, `enterPhase4`, `enterDataPhase`, `exitJd`,
  * `exitJdPhase`, `exitDIL`, `exitRi`, `acknowledgeCPReception`,
- * `acknowledgeCPNotReception`, `acknowledgeEReception` and `initiateFPE` --
- * are not.
+ * `acknowledgeCPNotReception`, `acknowledgeEReception` and `initiateFPE`.
  *
  * WHERE THIS CLASS USED TO LIVE.  A partial map -- `pad_00[0x28]`,
  * `sessionFlag`, `pad_2c[0x0c]`, then the two modulator pointers -- was
@@ -136,6 +135,57 @@ public:
 	 */
 	void progress(int *bits, unsigned int &nofBits, float *out,
 		      unsigned int nofSymbols);
+
+	/*
+	 * THE ELEVEN PHASE EDGES -- .text+0x19d70..+0x1a2b5 and +0x1a400,
+	 * 1,548 bytes.  Every one of them is called from OUTSIDE this class:
+	 * no member of `V90Modulator` relocates against any of them -- checked
+	 * over all seventeen, `setSessionFlag` in its other file included --
+	 * and `progress` open-codes the phase-3-to-4 move rather than calling
+	 * `enterPhase4`.  So they are the digital modem's control surface,
+	 * driven by whatever reads the far end's messages.
+	 *
+	 * They fall into three shapes:
+	 *
+	 *   - `enter*` -- idempotent.  Each opens `if (state == <its own>)
+	 *     return;`, so entering a phase twice does nothing the second time.
+	 *   - `exit*` and `acknowledge*` -- guarded on the SUB-MODULATOR's
+	 *     state, not on ours, and every one of them that acts clears
+	 *     `eventCode`.  Nothing else in the class is written by five of
+	 *     the six.
+	 *   - `initiateFPE` -- the only one that answers, and `initiateRRN`'s
+	 *     twin; see its own comment.
+	 *
+	 * `exitRi` IS THE ONE THAT READS `mappingParams` (+0x10).  Every other
+	 * member of the class that reaches a mapping block reads
+	 * `mappingParams2` (+0x14) -- `progress`, `initiateRRN`,
+	 * `enterDataPhase` and `initiateFPE` all do.  The two blocks are
+	 * separate storage in `V90Modem` (+0x18 and +0x668) and a body that
+	 * takes the wrong one is invisible to any fixture whose two blocks
+	 * agree, which is why t_v90modprog.cpp drives their first words apart
+	 * before this edge is called.
+	 */
+	void enterPhase3();
+	void enterPhase4();
+	void enterDataPhase();
+	void exitJd();
+	void exitJdPhase();
+	void exitDIL();
+	void exitRi();
+	void acknowledgeCPReception();
+	void acknowledgeCPNotReception();
+	void acknowledgeEReception();
+
+	/*
+	 * `initiateFPE` -- .text+0x1a400, 260 bytes.  Fast phase exchange, and
+	 * `initiateRRN` with four differences: the two phase 4 states are
+	 * 0x1d/0x1c rather than 0x15/0x14, there is no `resetBeforRRN`, the
+	 * mapping block goes to `setRfSymbols` rather than `setRdRtSymbols`,
+	 * and the CP is re-encoded UNCONDITIONALLY -- no `sessionFlag` fork,
+	 * so a V.90 session's `V90MP` is never touched by this edge.
+	 * `int` for the same reason `initiateRRN` is.
+	 */
+	int initiateFPE();
 
 	/*
 	 * `initiateRRN` -- .text+0x1a2c0, 308 bytes.  Rate renegotiation:

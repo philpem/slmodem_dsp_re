@@ -208,13 +208,13 @@
  },
  {
   "label": "initiateRRN approves phase 4 rather than the data phase",
-  "find": "\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n",
-  "replace": "\tif (state != 2) {\n\t\tif (DSPLIB_DEBUG_ON())\n"
+  "find": "V90Modulator::initiateRRN()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n",
+  "replace": "V90Modulator::initiateRRN()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 2) {\n\t\tif (DSPLIB_DEBUG_ON())\n"
  },
  {
   "label": "initiateRRN answers zero when it refused",
-  "find": "\t\treturn -1;\n",
-  "replace": "\t\treturn 0;\n"
+  "find": "\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn -1;\n",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn 0;\n"
  },
  {
   "label": "the refusal message is not gated",
@@ -228,28 +228,28 @@
  },
  {
   "label": "initiateRRN enters the data phase rather than phase 4",
-  "find": "\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
-  "replace": "\tstate = 3;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
+  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 3;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
  },
  {
   "label": "initiateRRN does not restart the symbol count",
-  "find": "\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
-  "replace": "\tstate = 2;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
+  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
  },
  {
   "label": "the renegotiation block is zero symbols",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(0);\n"
+  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(0);\n"
  },
  {
   "label": "the renegotiation block size is never set",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n",
-  "replace": ""
+  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n"
  },
  {
   "label": "the two phase 4 states are chosen the other way round",
-  "find": "\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n",
-  "replace": "\tif (bitsToSymbol->nofBitsForNextTime() == 0) {\n"
+  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() == 0) {\n"
  },
  {
   "label": "the two initialisation messages are swapped",
@@ -263,13 +263,13 @@
  },
  {
   "label": "the phase 4 reset is given a zero companding code",
-  "find": "\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n",
-  "replace": "\tphase4Modulator->reset((PcmType)phase2Info->pcmType, 0,\n"
+  "find": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n",
+  "replace": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, 0,\n"
  },
  {
   "label": "the phase 4 reset is given a warm-up loop",
-  "find": "\t\t\t       p4state, 0, phase2Info->rtd);\n",
-  "replace": "\t\t\t       p4state, 1, phase2Info->rtd);\n"
+  "find": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       p4state, 0, phase2Info->rtd);\n",
+  "replace": "\t\tp4state = P4M_STATE_UNNAMED_14;\n\t}\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       p4state, 1, phase2Info->rtd);\n"
  },
  {
   "label": "initiateRRN does not clear the event code",
@@ -315,5 +315,337 @@
   "label": "initiateRRN answers minus one when it acted",
   "find": "\t}\n\n\treturn 0;\n}\n",
   "replace": "\t}\n\n\treturn -1;\n}\n"
+ },
+ {
+  "_": [
+   "The eleven V90Modulator phase edges -- .text+0x19d70..+0x1a2b5 and",
+   "+0x1a400, 1,548 bytes -- against t_v90modprog's `run_edges` group.  The",
+   "file's other members (progress, initiateRRN, reset, the constructor) are",
+   "mutated by the entries above and by suite `v90modulator` against",
+   "t_v90modchain; one suite is one SOURCE, so the two V90Phase3Modulator",
+   "exits under these edges are suite `v90modprogp3m` against the same binary.",
+   "THE Ri ROWS ARE THE ONES WORTH KNOWING ABOUT.  `exitRi` is the class's",
+   "only reader of `mappingParams` (+0x10) and every other member reads",
+   "`mappingParams2` (+0x14); the four rows that swap them are killed only",
+   "because the fixture puts a DIFFERENT bit count in block 6 first.  With the",
+   "two blocks agreeing -- which is what `plausible_mapping` alone leaves --",
+   "both sides read the same number out of the same place and the mutation is",
+   "invisible to the differential tier."
+  ]
+ },
+ {
+  "label": "enterPhase3 is guarded on phase 4",
+  "find": "V90Modulator::enterPhase3()\n{\n\tif (state == 1)\n\t\treturn;",
+  "replace": "V90Modulator::enterPhase3()\n{\n\tif (state == 2)\n\t\treturn;"
+ },
+ {
+  "label": "enterPhase3 is not idempotent",
+  "find": "V90Modulator::enterPhase3()\n{\n\tif (state == 1)\n\t\treturn;\n",
+  "replace": "V90Modulator::enterPhase3()\n{\n"
+ },
+ {
+  "label": "enterPhase3 leaves the state alone",
+  "find": "\tstate = 1;\n\tsymbolCount = 0;\n\teventCode = 0;",
+  "replace": "\tsymbolCount = 0;\n\teventCode = 0;"
+ },
+ {
+  "label": "enterPhase3 does not restart the symbol count",
+  "find": "\tstate = 1;\n\tsymbolCount = 0;\n\teventCode = 0;",
+  "replace": "\tstate = 1;\n\teventCode = 0;"
+ },
+ {
+  "label": "the phase 3 reset starts in SdNot",
+  "find": "\tphase3Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P3M_STATE_SD, 0, jd, v92Jd, dil,\n\t\t\t       phase2Info->rtd);",
+  "replace": "\tphase3Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P3M_STATE_SD_NOT, 0, jd, v92Jd, dil,\n\t\t\t       phase2Info->rtd);"
+ },
+ {
+  "label": "the phase 3 reset is given a warm-up loop",
+  "find": "\tphase3Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P3M_STATE_SD, 0, jd, v92Jd, dil,\n\t\t\t       phase2Info->rtd);",
+  "replace": "\tphase3Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P3M_STATE_SD, 1, jd, v92Jd, dil,\n\t\t\t       phase2Info->rtd);"
+ },
+ {
+  "label": "the phase 3 reset gets no timeout base",
+  "find": "\tphase3Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P3M_STATE_SD, 0, jd, v92Jd, dil,\n\t\t\t       phase2Info->rtd);",
+  "replace": "\tphase3Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P3M_STATE_SD, 0, jd, v92Jd, dil,\n\t\t\t       0);"
+ },
+ {
+  "label": "the Jd exit is guarded on JdPhase",
+  "find": "V90Modulator::exitJd()\n{\n\tif (phase3Modulator->state != P3M_STATE_JD)",
+  "replace": "V90Modulator::exitJd()\n{\n\tif (phase3Modulator->state != P3M_STATE_JD_PHASE)"
+ },
+ {
+  "label": "the Jd exit is not guarded at all",
+  "find": "V90Modulator::exitJd()\n{\n\tif (phase3Modulator->state != P3M_STATE_JD)\n\t\treturn;\n",
+  "replace": "V90Modulator::exitJd()\n{\n"
+ },
+ {
+  "label": "the Jd exit does not clear the event",
+  "find": "\tphase3Modulator->exitJd();\n\teventCode = 0;",
+  "replace": "\tphase3Modulator->exitJd();"
+ },
+ {
+  "label": "the JdPhase exit is guarded on Jd",
+  "find": "V90Modulator::exitJdPhase()\n{\n\tif (phase3Modulator->state != P3M_STATE_JD_PHASE)",
+  "replace": "V90Modulator::exitJdPhase()\n{\n\tif (phase3Modulator->state != P3M_STATE_JD)"
+ },
+ {
+  "label": "the JdPhase exit calls the Jd one",
+  "find": "\tphase3Modulator->exitJdPhase();\n\teventCode = 0;",
+  "replace": "\tphase3Modulator->exitJd();\n\teventCode = 0;"
+ },
+ {
+  "label": "the JdPhase exit does not clear the event",
+  "find": "\tphase3Modulator->exitJdPhase();\n\teventCode = 0;",
+  "replace": "\tphase3Modulator->exitJdPhase();"
+ },
+ {
+  "label": "the Ri exit is guarded on MP",
+  "find": "V90Modulator::exitRi()\n{\n\tif (phase4Modulator->state != P4M_STATE_RI)",
+  "replace": "V90Modulator::exitRi()\n{\n\tif (phase4Modulator->state != P4M_STATE_MP)"
+ },
+ {
+  "label": "the Ri exit does not clear the event",
+  "find": "\tphase4Modulator->exitRi();\n\teventCode = 0;",
+  "replace": "\tphase4Modulator->exitRi();"
+ },
+ {
+  "label": "the Ri exit configures phase 4 from the OTHER mapping block",
+  "find": "\tphase4Modulator->setMappingParams(mappingParams);",
+  "replace": "\tphase4Modulator->setMappingParams(mappingParams2);"
+ },
+ {
+  "label": "the Ri exit displays the other mapping block",
+  "find": "\tdisplaySpectralParams(mappingParams);\n",
+  "replace": "\tdisplaySpectralParams(mappingParams2);\n"
+ },
+ {
+  "label": "the Ri exit's D message reads the other block",
+  "find": "\tedprintf(\"V90Modulator: TRN2d D = %d\\r\\n\", mappingParams->word_0);",
+  "replace": "\tedprintf(\"V90Modulator: TRN2d D = %d\\r\\n\", mappingParams2->word_0);"
+ },
+ {
+  "label": "the Ri exit's session fork is inverted",
+  "find": "\tif (sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;",
+  "replace": "\tif (!sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;"
+ },
+ {
+  "label": "the Ri exit stores the other block's word in the MP",
+  "find": "\t\tmp->word_114 = mappingParams->word_0;",
+  "replace": "\t\tmp->word_114 = mappingParams2->word_0;"
+ },
+ {
+  "label": "the Ri exit writes the MP on both arms",
+  "find": "\tif (sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;\n\telse\n\t\tmp->word_114 = mappingParams->word_0;",
+  "replace": "\tmp->word_114 = mappingParams->word_0;"
+ },
+ {
+  "label": "the CP acknowledge does not set the ack bit",
+  "find": "V90Modulator::acknowledgeCPReception()\n{\n\tmp->CPack = 1;\n",
+  "replace": "V90Modulator::acknowledgeCPReception()\n{\n"
+ },
+ {
+  "label": "the CP acknowledge clears the ack bit",
+  "find": "V90Modulator::acknowledgeCPReception()\n{\n\tmp->CPack = 1;",
+  "replace": "V90Modulator::acknowledgeCPReception()\n{\n\tmp->CPack = 0;"
+ },
+ {
+  "label": "the CP acknowledge does not re-encode the MP",
+  "find": "V90Modulator::acknowledgeCPReception()\n{\n\tmp->CPack = 1;\n\tmp->infoToBits();\n",
+  "replace": "V90Modulator::acknowledgeCPReception()\n{\n\tmp->CPack = 1;\n"
+ },
+ {
+  "label": "TRN2d is told to hand on to MP rather than MPNot",
+  "find": "\tphase4Modulator->setNextStateAfterTRN2d(P4M_STATE_MP_NOT);",
+  "replace": "\tphase4Modulator->setNextStateAfterTRN2d(P4M_STATE_MP);"
+ },
+ {
+  "label": "the TRN2d successor is never set",
+  "find": "\tphase4Modulator->setNextStateAfterTRN2d(P4M_STATE_MP_NOT);\n\n",
+  "replace": ""
+ },
+ {
+  "label": "the CP acknowledge is guarded on MPNot",
+  "find": "\tif (phase4Modulator->state != P4M_STATE_MP)\n\t\treturn;",
+  "replace": "\tif (phase4Modulator->state != P4M_STATE_MP_NOT)\n\t\treturn;"
+ },
+ {
+  "label": "the CP acknowledge does not exit MP",
+  "find": "\tphase4Modulator->exitMP();\n\teventCode = 0;\n}",
+  "replace": "\teventCode = 0;\n}"
+ },
+ {
+  "label": "the CPnot chain opens on MP rather than MPNot",
+  "find": "V90Modulator::acknowledgeCPNotReception()\n{\n\tif (phase4Modulator->state == P4M_STATE_MP_NOT) {",
+  "replace": "V90Modulator::acknowledgeCPNotReception()\n{\n\tif (phase4Modulator->state == P4M_STATE_MP) {"
+ },
+ {
+  "label": "the CPnot MP arm does not re-encode the MP",
+  "find": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n\t\tmp->CPack = 1;\n\t\tmp->infoToBits();\n",
+  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n\t\tmp->CPack = 1;\n"
+ },
+ {
+  "label": "the CPnot MP arm leaves the ack bit alone",
+  "find": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n\t\tmp->CPack = 1;\n",
+  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n"
+ },
+ {
+  "label": "the CPnot delayed arm is on the wrong state",
+  "find": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
+  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0F) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
+ },
+ {
+  "label": "the CPnot delayed arm records nothing",
+  "find": "\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
+ },
+ {
+  "label": "the CPnot delayed arm clears the flag instead",
+  "find": "\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
+  "replace": "\t\tphase4Modulator->byte_0014 = 0;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
+ },
+ {
+  "label": "the E acknowledge opens on MP rather than MPNot",
+  "find": "V90Modulator::acknowledgeEReception()\n{\n\tif (phase4Modulator->state == P4M_STATE_MP_NOT) {",
+  "replace": "V90Modulator::acknowledgeEReception()\n{\n\tif (phase4Modulator->state == P4M_STATE_MP) {"
+ },
+ {
+  "label": "the E acknowledge's delayed arm records nothing",
+  "find": "\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \""
+ },
+ {
+  "label": "the E acknowledge's delayed arm is on the wrong state",
+  "find": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
+  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \""
+ },
+ {
+  "label": "the data phase entry is not idempotent",
+  "find": "V90Modulator::enterDataPhase()\n{\n\tif (state == 3)\n\t\treturn;\n",
+  "replace": "V90Modulator::enterDataPhase()\n{\n"
+ },
+ {
+  "label": "the data phase entry raises the wrong event",
+  "find": "\tstate = 3;\n\tsymbolCount = 0;\n\teventCode = 8;",
+  "replace": "\tstate = 3;\n\tsymbolCount = 0;\n\teventCode = 9;"
+ },
+ {
+  "label": "the data phase entry does not restart the count",
+  "find": "\tstate = 3;\n\tsymbolCount = 0;\n\teventCode = 8;",
+  "replace": "\tstate = 3;\n\teventCode = 8;"
+ },
+ {
+  "label": "the data phase block is one symbol",
+  "find": "\teventCode = 8;\n\n\tbitsToSymbol->setSymbolsBlockSize(nofSymbols);",
+  "replace": "\teventCode = 8;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);"
+ },
+ {
+  "label": "the data phase entry displays the other mapping block",
+  "find": "\tdisplaySpectralParams(mappingParams2);\n\n\tstate = 3;",
+  "replace": "\tdisplaySpectralParams(mappingParams);\n\n\tstate = 3;"
+ },
+ {
+  "label": "phase 4 entry is not idempotent",
+  "find": "V90Modulator::enterPhase4()\n{\n\tif (state == 2)\n\t\treturn;\n",
+  "replace": "V90Modulator::enterPhase4()\n{\n"
+ },
+ {
+  "label": "phase 4 entry starts in RiNot",
+  "find": "V90Modulator::enterPhase4()\n{\n\tif (state == 2)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modulator: enter Phase 4\\r\\n\");\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P4M_STATE_RI, 0, phase2Info->rtd);",
+  "replace": "V90Modulator::enterPhase4()\n{\n\tif (state == 2)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modulator: enter Phase 4\\r\\n\");\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P4M_STATE_RI_NOT, 0, phase2Info->rtd);"
+ },
+ {
+  "label": "phase 4 entry gives the reset a warm-up loop",
+  "find": "V90Modulator::enterPhase4()\n{\n\tif (state == 2)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modulator: enter Phase 4\\r\\n\");\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P4M_STATE_RI, 0, phase2Info->rtd);",
+  "replace": "V90Modulator::enterPhase4()\n{\n\tif (state == 2)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modulator: enter Phase 4\\r\\n\");\n\n\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n\t\t\t       P4M_STATE_RI, 1, phase2Info->rtd);"
+ },
+ {
+  "label": "the DIL exit is guarded on DIL_END",
+  "find": "V90Modulator::exitDIL()\n{\n\tif (phase3Modulator->state != P3M_STATE_DIL)",
+  "replace": "V90Modulator::exitDIL()\n{\n\tif (phase3Modulator->state != P3M_STATE_DIL_END)"
+ },
+ {
+  "label": "the DIL exit acts on any event",
+  "find": "\tif (phase3Modulator->eventCode != 6)\n\t\treturn;\n",
+  "replace": ""
+ },
+ {
+  "label": "the DIL exit reads our own event code",
+  "find": "\tif (phase3Modulator->eventCode != 6)",
+  "replace": "\tif (eventCode != 6)"
+ },
+ {
+  "label": "the DIL exit enters phase 4 a second time",
+  "find": "\tif (phase3Modulator->eventCode != 6)\n\t\treturn;\n\tif (state == 2)\n\t\treturn;\n",
+  "replace": "\tif (phase3Modulator->eventCode != 6)\n\t\treturn;\n"
+ },
+ {
+  "label": "the DIL exit does not call the phase 3 one",
+  "find": "\tphase3Modulator->exitDIL();\n\n\tif (phase3Modulator->eventCode != 6)",
+  "replace": "\tif (phase3Modulator->eventCode != 6)"
+ },
+ {
+  "label": "the FPE guard approves phase 4",
+  "find": "V90Modulator::initiateFPE()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 3) {",
+  "replace": "V90Modulator::initiateFPE()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 2) {"
+ },
+ {
+  "label": "the FPE answers zero when it refused",
+  "find": "V90Modulator::initiateFPE()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: FPE requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn -1;",
+  "replace": "V90Modulator::initiateFPE()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: FPE requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn 0;"
+ },
+ {
+  "label": "the FPE enters the data phase rather than phase 4",
+  "find": "\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
+  "replace": "\tstate = 3;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
+ },
+ {
+  "label": "the FPE block is the whole symbol count",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(nofSymbols);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
+ },
+ {
+  "label": "the FPE's two phase 4 states are chosen the other way round",
+  "find": "\t\tp4state = P4M_STATE_RF;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRfModulation\\r\\n\");\n\t\tp4state = P4M_STATE_UNNAMED_1C;",
+  "replace": "\t\tp4state = P4M_STATE_UNNAMED_1C;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRfModulation\\r\\n\");\n\t\tp4state = P4M_STATE_RF;"
+ },
+ {
+  "label": "the FPE reuses the RRN states",
+  "find": "\t\tp4state = P4M_STATE_RF;",
+  "replace": "\t\tp4state = P4M_STATE_RD;"
+ },
+ {
+  "label": "the FPE bit count is tested the other way",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() == 0) {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RfModulation\\r\\n\");"
+ },
+ {
+  "label": "the FPE sets the Rd/Rt symbols",
+  "find": "\tphase4Modulator->setRfSymbols(mappingParams2);",
+  "replace": "\tphase4Modulator->setRdRtSymbols(mappingParams2);"
+ },
+ {
+  "label": "the FPE takes the other mapping block",
+  "find": "\tphase4Modulator->setRfSymbols(mappingParams2);",
+  "replace": "\tphase4Modulator->setRfSymbols(mappingParams);"
+ },
+ {
+  "label": "the FPE does not clear the event",
+  "find": "\teventCode = 0;\n\n\tphase4Modulator->setRfSymbols(mappingParams2);",
+  "replace": "\tphase4Modulator->setRfSymbols(mappingParams2);"
+ },
+ {
+  "label": "the FPE forks on the session flag the way RRN does",
+  "find": "\tcp->byte_13 = 0;\n\tcp->infoToBits();\n\n\treturn 0;",
+  "replace": "\tif (sessionFlag) {\n\t\tcp->byte_13 = 0;\n\t\tcp->infoToBits();\n\t}\n\n\treturn 0;"
+ },
+ {
+  "label": "the FPE does not clear the CP tag",
+  "find": "\tcp->byte_13 = 0;\n\tcp->infoToBits();\n\n\treturn 0;",
+  "replace": "\tcp->infoToBits();\n\n\treturn 0;"
+ },
+ {
+  "label": "the FPE does not re-encode the CP",
+  "find": "\tcp->byte_13 = 0;\n\tcp->infoToBits();\n\n\treturn 0;",
+  "replace": "\tcp->byte_13 = 0;\n\n\treturn 0;"
  }
 ]

@@ -865,6 +865,75 @@ V90Phase3Modulator::generateSymbol()
 }
 
 /*
+ * LEAVE Jd -- .text+0x2ad80, 88 bytes -- and LEAVE JdPhase, +0x2ade0, 70.
+ * The two exits `V90Modulator::exitJd` and `::exitJdPhase` call, and the same
+ * shape as `exitDIL` above: guard on the state, guard on nothing having been
+ * sent yet, and then a boundary test that chooses between running the current
+ * repetition out and handing straight on.
+ *
+ * THE BOUNDARY IS THE 72-SYMBOL REPETITION, which is `generateV90Symbol`'s
+ * and `generateV92Symbol`'s own -- both already spell it `symbolCount % 72u
+ * == 0`, and the object divides by 72 the same way here (0x38e38e39, `mul`,
+ * `shr $4`, then times 9 times 8).  Off a boundary the state goes to the
+ * matching "_END" state, which keeps emitting the same thing until the count
+ * reaches one; on a boundary the repetition is already whole and the next
+ * state starts at once.
+ *
+ * `exitJd` FORKS ON `sessionFlag` AND `exitJdPhase` DOES NOT, because
+ * JdPhase is a V.92 state and has only one successor:
+ *
+ *              off a boundary            on a boundary
+ *   exitJd     V.90 -> JD_END (7)        V.90 -> JD_NOT (8)
+ *              V.92 -> V92JD_END (4)     V.92 -> JD_PHASE (5)
+ *   exitJdPhase       JD_PHASE_END (6)          JD_NOT (8)
+ *
+ * so under V.90 the boundary case skips JD_END entirely and starts JdNot, and
+ * under V.92 it skips V92JD_END and starts JdPhase.  The object's
+ * `cmp $0x1 ; sbb ; and $0x3 ; add $imm` is GCC's if-conversion of the
+ * conditional, not something the source spells.
+ *
+ * THE TWO CLEAR `symbolCount` ON OPPOSITE SIDES OF THE STATE STORE.  `exitJd`
+ * writes the count first (0x2adad) and the state second (0x2adc1);
+ * `exitJdPhase` writes the state first (0x2ae0d) and the count second
+ * (0x2ae14).  Each is written its own way; unifying them would be tidying the
+ * object rather than reproducing it.
+ *
+ * NEITHER TOUCHES `eventCode`.  `exitDIL` is the only one of the four exits
+ * that raises an event, and it raises it only when phase 3 is over.
+ */
+void
+V90Phase3Modulator::exitJd()
+{
+	if (state != P3M_STATE_JD)
+		return;
+	if (symbolCount == 0)
+		return;
+
+	if (symbolCount % 72u == 0) {
+		symbolCount = 0;
+		state = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;
+	} else {
+		state = sessionFlag ? P3M_STATE_V92JD_END : P3M_STATE_JD_END;
+	}
+}
+
+void
+V90Phase3Modulator::exitJdPhase()
+{
+	if (state != P3M_STATE_JD_PHASE)
+		return;
+	if (symbolCount == 0)
+		return;
+
+	if (symbolCount % 72u == 0) {
+		state = P3M_STATE_JD_NOT;
+		symbolCount = 0;
+	} else {
+		state = P3M_STATE_JD_PHASE_END;
+	}
+}
+
+/*
  * LEAVE THE DIL STATE, and only from the DIL state: three guards before
  * anything is written, in this order, and the object tests them one at a
  * time rather than as a conjunction.

@@ -79469,3 +79469,368 @@ nothing.  "progress forwards on the digital side rather than the analog one"
 renamed one `case` label to a value the switch already had; rewritten to swap
 BOTH labels.  `t_v92modem`'s suite is 50 of 50 with `unusable` at zero, and that
 zero is the check that matters.
+
+======================================================================
+
+### 7560. `V90Modulator` is complete: the eleven phase edges, and the Ri exit reads the OTHER mapping block
+
+Reserved block for this batch: **7560-7569**. The highest number on any ref is
+7549 (`master` and `origin/master`); the two sibling worktree branches sit at
+7460 and 7432, so the block starts ten clear of all of them rather than at
+7550.
+
+Thirteen symbols, 1,706 bytes, and they are the whole of
+`closure.py --missing V90Modulator`:
+
+| symbol | .text | bytes |
+|---|---|--:|
+| `V90Modulator::initiateFPE()` | 0x1a400 | 260 |
+| `V90Modulator::enterDataPhase()` | 0x1a0e0 | 190 |
+| `V90Modulator::exitRi()` | 0x19ea0 | 169 |
+| `V90Modulator::acknowledgeCPNotReception()` | 0x19fc0 | 167 |
+| `V90Modulator::exitDIL()` | 0x1a210 | 166 |
+| `V90Modulator::enterPhase3()` | 0x19d70 | 130 |
+| `V90Modulator::enterPhase4()` | 0x1a1a0 | 110 |
+| `V90Modulator::acknowledgeEReception()` | 0x1a070 | 110 |
+| `V90Modulator::acknowledgeCPReception()` | 0x19f50 | 110 |
+| `V90Phase3Modulator::exitJd()` | 0x2ad80 | 88 |
+| `V90Phase3Modulator::exitJdPhase()` | 0x2ade0 | 70 |
+| `V90Modulator::exitJdPhase()` | 0x19e50 | 68 |
+| `V90Modulator::exitJd()` | 0x19e00 | 68 |
+
+`tools/closure.py --missing V90Modulator` is now **0 symbols, 0 bytes**, and
+the class is seventeen of seventeen members. This is the digital side's
+transmit chain -- the branch `VPCMXF_Create` selects on a non-NULL first
+argument and which `vpcm_create` never passes (701, 702) -- and every one of
+the thirteen is driven differentially against the blob through `ref_` aliases,
+which is 7000's correction of 702 cashed a second time.
+
+#### NOTHING IN THE CLASS CALLS ANY OF THE ELEVEN
+
+Checked from the object over ALL SEVENTEEN members and not a subset, which is
+the trap 7520 recorded against itself and this finding cites: no `V90Modulator`
+member carries a relocation to any of the eleven. `progress` open-codes the
+phase-3-to-4 move rather than calling `enterPhase4` -- 0x1a905's inline copy of
+the message, the `reset` and the three closing stores; none of the eleven calls
+a sibling; and the seventeenth, `setSessionFlag` at 0x19d30, is the one that
+lives in another file and so is easy to leave out of a range disassembly -- its
+only two relocations are `V90Phase3Modulator::setSessionFlag` and
+`V90Phase4Modulator::setSessionFlag`, the sub-modulators' own. So the eleven
+are the digital modem's
+CONTROL SURFACE, entered from whatever above this class reads the far end's
+messages, and each one is a root rather than a step in a chain. That is why the
+fixture drives them one at a time.
+
+They are three shapes. The three `enter*` open `if (state == <its own>)
+return;` and are idempotent. The six `exit*`/`acknowledge*` are guarded on a
+SUB-MODULATOR's state rather than on ours, and every one that acts clears
+`eventCode` and writes nothing else of ours. `initiateFPE` is the only one that
+answers.
+
+#### `exitRi` IS THE CLASS'S ONLY READER OF `mappingParams`
+
+This is the finding that a differential test cannot reach on its own, and it
+is the reason the fixture gained `split_blocks`.
+
+`V90Modulator` holds two mapping-block pointers -- `mappingParams` at +0x10
+(constructor argument 6) and `mappingParams2` at +0x14 (argument 7) -- which
+`V90Modem` fills with its two EMBEDDED blocks at +0x18 and +0x668. Every
+written member that reaches a block reads +0x14: `progress`'s rate message,
+`initiateRRN`'s `setRdRtSymbols`, `enterDataPhase`'s `displaySpectralParams`,
+`initiateFPE`'s `setRfSymbols`. **`exitRi` reads +0x10, at all five of its
+sites** -- 0x19eca into `setMappingParams`, 0x19ee8 into
+`displaySpectralParams`, 0x19ef3 for the "TRN2d D = %d" argument, and 0x19f0f
+/ 0x19f22 for the store. So phase 4's TRN2d/MP half is configured from block 6
+and the data phase and both renegotiation edges take block 7.
+
+Nothing in the object says why, and no reason is invented here. What matters is
+that **both sides of a differential trial read the same storage through the
+same wrong pointer and agree**, so this is 7520's `bitsPerFrame`-twin hazard
+one level up: `t_v90modprog.cpp` now gives block 6 a different first word
+(36 bits to a frame, 48000 bit/s -- a real V.90 rate) and a different spectral
+A1 before it calls the edge, and asserts the result against those CONSTANTS
+rather than only across the two sides. Four mutations that swap the two
+pointers are killed only by that; with `plausible_mapping` alone they all
+survive.
+
+#### THE MAPPING BLOCK STILL HAS NO WRITER ON THE DIGITAL SIDE -- 7520's BLOCKER STANDS
+
+7520 bounded this over all thirty symbols whose mangling names a
+`V90MappingParams *` and named ONE candidate for the block arriving from
+somewhere: "one of the eleven unwritten `V90Modulator` phase edges, of which
+`exitRi` is the one that calls `setMappingParams`". **That candidate is now
+examined and it is closed.** All three block-touching calls in these thirteen
+are readers, and 7520's own table already has each of them in its "the rest are
+readers" row:
+
+| call | in | what it does with the block |
+|---|---|---|
+| `V90Phase4Modulator::setMappingParams` | `exitRi` | hands it to `V90BitsToSymbol::reset` and sizes the block to one -- reads |
+| `V90Phase4Modulator::setRfSymbols` | `initiateFPE` | reads `constellation[k][0]` six times, writes twelve shorts of ITS OWN |
+| `displaySpectralParams` | `exitRi`, `enterDataPhase` | six `edprintf`s and no store |
+
+`exitRi`'s only STORE out of the block is the other way round -- it copies
+`mappingParams->word_0` INTO the message object, `V90CP::word_3ba8` under V.92
+and `V90MP::word_114` under V.90, each being that class's
+`calcSequenceLength` divisor. So the MP or CP sequence is padded out to a whole
+number of frames. That is a fact ABOUT the block, not a write TO it.
+
+**So the answer is NO, and it is a no rather than a not-yet.** With
+`V90Modulator` complete, every symbol that can write a `V90MappingParams` is
+still `V90Demodulator`-reachable or callerless, and on a digital build
+`V90Modem::demodulator` is NULL. A V.90 digital-termination bring-up must get
+the block from outside the object -- the host (`vpcm.c`), or code that does not
+exist in this blob. Nothing in this batch changes 7520's bound and it is not
+re-derived here.
+
+#### THE TWO PHASE 3 EXITS, AND THE 72-SYMBOL REPETITION
+
+`V90Phase3Modulator::exitJd` and `::exitJdPhase` are the callees of the two
+`V90Modulator` wrappers of the same names. Same shape as `exitDIL`: guard on
+the state, guard on nothing having been sent, then a boundary test.
+
+              off a boundary            on a boundary
+    exitJd     V.90 -> JD_END (7)        V.90 -> JD_NOT (8)
+               V.92 -> V92JD_END (4)     V.92 -> JD_PHASE (5)
+    exitJdPhase       JD_PHASE_END (6)          JD_NOT (8)
+
+The boundary is `symbolCount % 72u == 0`, which is `generateV90Symbol`'s and
+`generateV92Symbol`'s own and already spelled that way three times in the file.
+**`exitJd` forks on `sessionFlag` and `exitJdPhase` does not**, because JdPhase
+is a V.92 state with one successor; the object's `cmp $0x1 ; sbb ; and $0x3 ;
+add $imm` is GCC's if-conversion of the conditional and is written as a
+conditional (2411's free column). Neither touches `eventCode`.
+
+**THE TWO CLEAR `symbolCount` ON OPPOSITE SIDES OF THE STATE STORE** -- `exitJd`
+count first (0x2adad) and state second (0x2adc1), `exitJdPhase` state first
+(0x2ae0d) and count second (0x2ae14) -- and each is written its own way. Two
+mutations turn on it.
+
+**The wrapper cannot reach either callee's first guard.**
+`V90Modulator::exitJd` tests `phase3Modulator->state != P3M_STATE_JD` and the
+callee then tests the same field against the same value, so on that path the
+callee's guard is true every time and deleting it changes nothing. The fixture
+therefore also calls both members DIRECTLY over all sixteen states of the enum;
+without that, two mutation rows are unkillable and the tree would carry them as
+evidence for a claim nothing tests.
+
+#### INSTRUCTION COUNTS: TEN OF THIRTEEN EXACT, AND EXACT ON BYTES TOO
+
+`tools/instrcount.py`, padding-free, against GCC 3.4.2 exact at `-O3`:
+
+| symbol | ours | blob | our bytes | blob bytes |
+|---|--:|--:|--:|--:|
+| `V90Modulator::exitRi` | 48 | 48 | 169 | 169 |
+| `::acknowledgeCPNotReception` | 50 | 50 | 167 | 167 |
+| `::exitDIL` | 47 | 47 | 166 | 166 |
+| `::enterPhase3` | 36 | 36 | 130 | 130 |
+| `::enterPhase4` | 31 | 31 | 110 | 110 |
+| `::acknowledgeEReception` | 34 | 34 | 110 | 110 |
+| `::acknowledgeCPReception` | 32 | 32 | 110 | 110 |
+| `::exitJdPhase` | 21 | 21 | 68 | 68 |
+| `::exitJd` | 21 | 21 | 68 | 68 |
+| `V90Phase3Modulator::exitJdPhase` | 25 | 25 | 70 | 70 |
+| `::enterDataPhase` | 49 | **50** | 188 | 190 |
+| `V90Phase3Modulator::exitJd` | 34 | **35** | 88 | 88 |
+| `::initiateFPE` | 68 | **67** | 266 | 260 |
+
+**The three gaps are all accounted for and none is a missing call.** The
+relocation multisets were listed on both sides:
+
+- **`enterDataPhase` is IDENTICAL on relocations** (9 and 9) and its -1/-2 is
+  7520's already-recorded operand order, in the second copy of the same
+  expression: the blob loads 0.5 with `flds` and closes with `faddp` (2
+  instructions, 8 bytes), our source spells `0.5f + (...)` and GCC emits
+  `fadds` (1, 6). Same operation, same rounding, the compiler's choice.
+- **`V90Phase3Modulator::exitJd` is the same 88 bytes** and the only difference
+  is that the blob duplicates `pop %ebx ; ret` in its second arm where we
+  `jmp` to the shared one. A tail-merge decision, and the exact mirror of the
+  one 7520 recorded in `initiateRRN` -- there the blob cross-jumped and we
+  duplicated; here it is the other way round. Free either way, and the byte
+  count is identical because `jmp rel8` and `pop ; ret` are both two bytes.
+- **`initiateFPE`'s multiset differs in exactly one entry, `edprintf` 2 against
+  1**, which is 7520's `initiateRRN` cross-jump again: 0x1a4c1 sets the state
+  register and jumps to the single `call` at 0x1a45d, and we emit both call
+  sites. The rest of the +6 bytes is the blob saving %esi and sharing one
+  epilogue across all three returns where ours duplicates it once.
+
+**The measuring script had to be fixed before any of that was true.** Its first
+version matched the reloc line with the instruction-address regex, so every
+relocation was swallowed, both multisets came out EMPTY, and it printed
+`multisets IDENTICAL` -- 2400's dead detector in a scratch tool. It now refuses
+on an empty multiset and prints the count on the verdict line.
+
+#### `initiateFPE` IS `initiateRRN` FOUR DIFFERENCES AWAY
+
+Same guard, same two returns, same `setSymbolsBlockSize(1)` and the same
+question asked of `nofBitsForNextTime`. Then: the states are 0x1d and 0x1c
+rather than 0x15 and 0x14; there is no `resetBeforRRN` or anything of that
+shape; the block goes to `setRfSymbols` rather than `setRdRtSymbols`; and
+**the CP is re-encoded unconditionally** -- `initiateRRN` forks on
+`sessionFlag` and touches the `V90MP` on the V.90 arm, while 0x1a4a7 has no
+test in front of it, so a V.90 session's MP is never touched by an FPE. V.92's
+own pair (7541) is the same shape with a fifth difference this one does not
+have.
+
+**0x1c NOW HAS A MESSAGE AND IS STILL NOT PROMOTED.** "Phase4Modulator state
+initialized to **DataToRfModulation**" precedes `state = 0x1c` exactly as
+7520's "DataToRdModulation" precedes 0x14, so both of
+`V90Phase4Modulator.h`'s two unnamed enumerators now have rule-1 evidence.
+Neither is renamed here, on 7520's two grounds unchanged: the message belongs
+to `V90Modulator` rather than to the state's own class, and the rename is a
+change to an 1,829-line file this batch does not own. Recorded so it does not
+have to be re-derived a third time.
+
+#### WHAT WAS REACHED, AND WHAT IS STILL POKED
+
+7520 had to poke `V90Modulator::state` to 1, 2 and 3 because no written member
+of the class wrote it. **All four values are now REACHED by calling the member
+that writes them** -- `enterPhase3` for 1, `enterPhase4`/`exitDIL`/`initiateFPE`
+for 2, `enterDataPhase` for 3, `reset` for 0 -- and the trials that do so are
+new rather than retrofitted onto `progress`'s 3,411 committed checks.
+
+Still poked, and stated rather than implied: the state each edge is entered
+FROM, which no edge can produce for itself; the sub-modulators' states, which
+belong to the symbol pumps; `V90Phase4Modulator::mpSequenceSymbols`, forced to
+24 symbols -- four six-symbol frames, a plausible MP repetition -- so that both
+arms of `exitMP` and `exitMPNot` are reachable; and `V90MP::CPack` forced to
+zero before the acknowledge edges, which is the opposite of a realistic seed
+and is done because `plausible_mp` leaves it at the value those edges STORE.
+The two negative-state and state-4/7 trials are poked too and a session could
+not present them.
+
+`V90Modem::reset` (0x199a0) and `vPcmResetPhase3Modem` remain unwritten, so a
+digital session still cannot be started from the object's own entry points.
+Those and the mapping block above are what a bring-up hits next.
+
+#### WHAT WAS MEASURED
+
+`test/unit/t_v90modprog.cpp` gains two groups and **4,043 checks**: 1,746 on
+the eleven edges over 53 trials, and 2,297 on the two phase 3 exits driven
+directly over 16 states x 6 symbol counts x 2 members x both session flags.
+The binary is **10,385 checks** against 7520's 6,342. `make phase` exits 0.
+
+**`make period` is 243 passed / 0 failed, unmoved from `master`.** That is not
+a count that failed to move for a bad reason: `period` counts BINARIES, and
+this batch extended an existing one rather than adding one. The check count
+inside it is what moved, by 4,043. The modern build carries the same thirteen
+declared GCC-13 divergences as before and none of them is this batch's; the
+phase boundary reports 34,118/36,008 `src/` lines over 174 files, 962 debug
+sites and 35 anchored deviation sites, and exits 0.
+
+`make coverage` reads **74.3%, 546,063 bytes, 1,237 symbols** translated,
+against 74.1% and 1,224 symbols at `9f074dee` -- thirteen symbols and 1,706
+bytes, which is the batch exactly.
+
+**Shown to fire.** Inverting the 72-boundary test in
+`V90Phase3Modulator::exitJd` turns checks red in BOTH new groups with the two
+sides disagreeing -- our side answering state 7 where the blob answers 8, and
+symbol count 0 where the blob says 1 -- so each side reaches its own callee
+through the `ref_` renaming and no trial is vacuous. Reverted immediately.
+
+Mutations, three suites over two sources:
+
+| suite | source | mutations | caught | uncaught | unusable | equivalent |
+|---|---|--:|--:|--:|--:|--:|
+| `v90modprog` | `V90Modulator.cpp` | 124 | 120 | 1 | 0 | 3 |
+| `v90modprogp3m` | `V90Phase3Modulator.cpp` | 18 | 18 | 0 | 0 | 0 |
+| `v90modulator` | `V90Modulator.cpp` (t_v90modchain) | 26 | 26 | 0 | 0 | 0 |
+
+`v90modprogp3m` is new: a suite is one SOURCE, and `v90p3mod` points
+`V90Phase3Modulator.cpp` at `t_v90p3mod`, which drives neither of these two
+members. The 63 new `v90modprog` rows are appended to the existing suite rather
+than registered as a second one over the same pair. The one uncaught row is
+7520's own and is unchanged -- "the phase 3 arm copies the event code even when
+it is zero", named in the suite's note with what reaching it would need.
+
+======================================================================
+
+### 7561. Four claims the differential tier could not fail on, and the mutation suite found all four
+
+Every one of these had green trials over it and none of them tested what its
+label said. They are one shape -- **an assertion whose expected value the
+fixture had already put there** -- and they are worth listing because three of
+the four are invisible to any amount of staring at `src/`.
+
+| the mutation that survived | why the trials could not see it |
+|---|---|
+| the CP acknowledge does not set the ack bit | `plausible_mp` leaves `V90MP::CPack` at **1**, which is the value both acknowledge edges STORE. The store wrote what was already there. |
+| the CPnot MP arm leaves the ack bit alone | the same seed, in the other member |
+| the CP acknowledge does not exit MP | `V90Phase4Modulator::exitMP` opens `if (state == MP && symbolCount != 0)`, and `setup_phase4` goes through `reset`, which sets `symbolCount` to **zero**. The call was made and did nothing. |
+| the Ri exit / data phase entry displays the OTHER mapping block | `displaySpectralParams` prints `shaperSR`, `shaperId` and four coefficients -- and `plausible_mapping` gives the two embedded blocks IDENTICAL values for all six. It differentiates the CONSTELLATIONS, which this function never reads. |
+
+The fixes are all in the fixture: `CPack` seeded to 0, `mpSequenceSymbols`
+forced to 24 with `symbolCount` driven both onto and off a repetition boundary,
+and `split_blocks` giving block 6 a different `word_0` AND a different
+`shaperA1`. All four rows are now caught.
+
+**The third one is the sharpest, because the call was really made.** A trial
+that calls a function whose guard is false is not a trial of that function, and
+nothing in a region comparison says so: both sides did nothing, identically,
+and every check passed. 7105's "a seeded fixture is not enough where something
+zeroes the seed" is the same defect with `reset` doing the zeroing one level
+down.
+
+**And the fourth is 7520's `bitsPerFrame` twin exactly.** Two objects of the
+same type whose interesting field agrees is a fixture that cannot tell them
+apart, and the fix is always the same: drive apart the field the code under
+test actually reads, which is not necessarily the field the previous batch
+drove apart. `plausible_mapping` already had a `tag` argument for precisely
+this purpose and it moved the wrong bytes for these two members.
+
+None of the four is a defect in `src/`. All four are a suite that would have
+reported a green wall over an untested claim, which is what `mutate.py` exists
+to prevent and what four green differential groups did not.
+
+======================================================================
+
+### 7562. Nine anchors, one mutation that did not compile, and a repair script that checked itself
+
+7521's shape a second time, with its own advice applied from the start.
+
+**NINE ANCHORS LOST UNIQUENESS**, all in `v90modprog` and all labelled
+`initiateRRN`, because `initiateFPE` repeats its text for eight lines (7541).
+Seven matched twice; "the phase 4 reset is given a zero companding code"
+matched FOUR times, having also gained `enterPhase4` and `exitDIL`.
+
+The repair followed 7521's four rules and the script ENFORCED them rather than
+intending them:
+
+- `find` and `repl` grow by the same prefix in the same statement;
+- the seed occurrence is chosen inside the TARGET definition's byte range,
+  found by scanning `^V90Modulator::(\w+)\(` for the enclosing member -- growing
+  from the file's first occurrence would have pinned seven of the nine to
+  `initiateFPE`, whose name is not in their labels;
+- **the mutant is RE-DERIVED**: the script computes what the short anchor would
+  have produced at the seed, then requires `src.replace(grown_find, grown_repl,
+  1)` to equal it exactly. That is a stronger check than 7521's "differs in one
+  place" and it is what a wrong `repl` cannot survive;
+- and the whole-file JSON round-trip was verified byte-identical before
+  anything was written, so the diff is 18 lines and not 700.
+
+Then the suites whose JSON was rewritten were re-run, which is the half 7521
+says `anchorcheck` cannot do: `v90modprog` 120 of 124 with 0 unusable.
+`anchorcheck` is clean at 189 suites and **8,504** mutations. That figure is
+the run AFTER the deleted row below, and the first draft of this paragraph
+quoted 8,505 -- the total from before the deletion the next paragraph
+describes. CLAUDE.md's rule about re-reading a COUNT off the tool applies to a
+finding's own working, not only to inherited numbers.
+
+**ONE NEW MUTATION DID NOT COMPILE AND WAS DELETED RATHER THAN FIXED.** "the
+phase 3 reset is given the V.92 Jd as the V.90 one" swapped a `V90Jd *`
+argument for a `V92Jd *`; C++ rejects it, and `mutate.py` scores a mutant that
+fails to build as CAUGHT while testing nothing. It is 7549's row again and it
+was caught by reading the `unusable` column, which was 1 on the first run of
+the suite and is 0 now. **A non-zero `unusable` is the only thing that makes
+this class visible**, and it is why the first run of a new suite has to be read
+line by line rather than by its caught total.
+
+The authoring script now applies the same three checks to every NEW row as the
+repair script does to a grown one -- unique, `find != replace`, exactly one
+contiguous run -- so uniqueness failures were reported at authoring time rather
+than by the gate. It caught three: the data-phase block size (a single-tab
+anchor that is a substring of `progress`'s triple-tab one) and two in the
+`initiateRRN`/`initiateFPE` common stretch, each of which had to run on to the
+"RfModulation" message that separates the twins.
+
+A `x = x;` scan (7481) over all 471 sources and headers is clean at zero.

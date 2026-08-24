@@ -469,8 +469,18 @@ public:
 	 */
 	Phase4ModulatorState nextStateAfterTRN2d;
 
-	unsigned char byte_0014;		/* +0x0014 `movb $0x0` in  */
-	unsigned char pad_0015[3];		/*   reset; nothing else   */
+	/*
+	 * +0x0014  `reset` clears it and nothing in THIS class writes it
+	 * again.  What sets it is outside: `V90Modulator::acknowledgeCPNot
+	 * Reception` and `::acknowledgeEReception` both store 1 here on their
+	 * 0x0d arm -- "setting delayed MPNot exit", by their own messages --
+	 * so it is a request recorded while the state machine is off a
+	 * repetition boundary.  This paragraph used to say "nothing else";
+	 * that was true of the members then written and is not true of the
+	 * object.
+	 */
+	unsigned char byte_0014;
+	unsigned char pad_0015[3];
 
 	/*
 	 * +0x0018 and +0x001c  Written together and only ever to zero, by

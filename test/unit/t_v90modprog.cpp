@@ -169,6 +169,36 @@ unsigned int ref_bts_process3(void *self, unsigned char *bits,
 int ref_p4m_gensym(void *self)
 	asm("ref__ZN18V90Phase4Modulator14generateSymbolEv");
 
+/*
+ * THE ELEVEN PHASE EDGES, blob side, and the two `V90Phase3Modulator` exits
+ * under them.  The last two are declared here as well as reached through
+ * their wrappers, because the wrapper tests the SAME state the callee tests:
+ * `V90Modulator::exitJd` returns early on anything but `P3M_STATE_JD`, so
+ * `V90Phase3Modulator::exitJd`'s own guard can never be false on that path
+ * and only a direct call can drive it.
+ */
+void ref_mod_enterp3(void *self) asm("ref__ZN12V90Modulator11enterPhase3Ev");
+void ref_mod_enterp4(void *self) asm("ref__ZN12V90Modulator11enterPhase4Ev");
+void ref_mod_enterdata(void *self)
+	asm("ref__ZN12V90Modulator14enterDataPhaseEv");
+void ref_mod_exitjd(void *self) asm("ref__ZN12V90Modulator6exitJdEv");
+void ref_mod_exitjdphase(void *self)
+	asm("ref__ZN12V90Modulator11exitJdPhaseEv");
+void ref_mod_exitdil(void *self) asm("ref__ZN12V90Modulator7exitDILEv");
+void ref_mod_exitri(void *self) asm("ref__ZN12V90Modulator6exitRiEv");
+void ref_mod_ackcp(void *self)
+	asm("ref__ZN12V90Modulator22acknowledgeCPReceptionEv");
+void ref_mod_ackcpnot(void *self)
+	asm("ref__ZN12V90Modulator25acknowledgeCPNotReceptionEv");
+void ref_mod_acke(void *self)
+	asm("ref__ZN12V90Modulator21acknowledgeEReceptionEv");
+int ref_mod_initiatefpe(void *self)
+	asm("ref__ZN12V90Modulator11initiateFPEEv");
+
+void ref_p3m_exitjd(void *self) asm("ref__ZN18V90Phase3Modulator6exitJdEv");
+void ref_p3m_exitjdphase(void *self)
+	asm("ref__ZN18V90Phase3Modulator11exitJdPhaseEv");
+
 /* The setup members, blob side.  See the file comment. */
 void ref_mod_reset(void *self) asm("ref__ZN12V90Modulator5resetEv");
 void ref_bts_reset(void *self, void *mp, int pcm)
@@ -209,6 +239,22 @@ typedef char v90modprog_modem_is_0x49c0[(sizeof(V90Modem) == MODEM_SIZE)
 /* The two `bitsPerFrame` values the rate-message trial drives apart. */
 #define BPF_MAPPER	42u			/* 8000 * 42 / 6 = 56000    */
 #define BPF_BTS		48u			/* 8000 * 48 / 6 = 64000    */
+/*
+ * AND THE ONE THE Ri EXIT'S BLOCK IS DRIVEN TO.  `V90Modulator::exitRi` is
+ * the class's only reader of `mappingParams` (+0x10); every other member
+ * reads `mappingParams2` (+0x14).  `plausible_mapping` gives both embedded
+ * blocks the same first word, so a body taking the wrong pointer would agree
+ * with the blob on every trial -- both sides would read the same number out
+ * of the same place.  The Ri trials therefore put a DIFFERENT bit count in
+ * block 6 before the call and assert the result against this constant rather
+ * than only across the two sides.
+ *
+ * 36 bits to a six-symbol frame is 48000 bit/s, which is a real V.90 rate,
+ * and it is BELOW 42 on purpose: `plausible_mapping`'s own lower bound is
+ * that the six constellation sizes must multiply past 2**(bpf - 3), and
+ * lowering the count only loosens that.
+ */
+#define BPF_RI		36u			/* 8000 * 36 / 6 = 48000    */
 
 static unsigned char mobj[2][MODEM_SLOT] __attribute__((aligned(8)));
 static unsigned char sown[MODEM_SLOT];		/* the seed, for the guard  */
@@ -2045,6 +2091,670 @@ run_analog_arm(void)
 	return diff_end();
 }
 
+/* ================================================ the eleven phase edges */
+
+/*
+ * THE CONTROL SURFACE, driven one edge at a time.  None of the eleven is
+ * called from inside `V90Modulator`, so there is no chain to run: each trial
+ * puts the graph into a state a digital session could really be in, calls one
+ * edge on each side, and compares everything.
+ *
+ * WHAT IS REACHED RATHER THAN POKED, now that the eleven exist.  Finding
+ * 7520 had to poke `V90Modulator::state` to 1, 2 and 3 because no written
+ * member of the class wrote it; `enterPhase3`, `enterPhase4`/`exitDIL`/
+ * `initiateFPE` and `enterDataPhase` respectively are those members, and the
+ * trials below reach all four values by CALLING them.  What is still poked is
+ * the state each edge is entered FROM -- an edge's own precondition cannot be
+ * produced by the edge itself -- and the sub-modulators' states, which belong
+ * to the symbol pumps rather than to this class.
+ */
+enum edge_id {
+	E_ENTER_P3 = 0, E_ENTER_P4, E_ENTER_DATA, E_EXIT_JD, E_EXIT_JDPHASE,
+	E_EXIT_DIL, E_EXIT_RI, E_ACK_CP, E_ACK_CPNOT, E_ACK_E, E_INIT_FPE,
+	E_COUNT
+};
+
+static int edge_reached[E_COUNT];
+
+static int
+call_edge(int s, int e)
+{
+	V90Modulator *m = MOD(s);
+
+	if (s == 0) {
+		switch (e) {
+		case E_ENTER_P3:	m->enterPhase3();		break;
+		case E_ENTER_P4:	m->enterPhase4();		break;
+		case E_ENTER_DATA:	m->enterDataPhase();		break;
+		case E_EXIT_JD:		m->exitJd();			break;
+		case E_EXIT_JDPHASE:	m->exitJdPhase();		break;
+		case E_EXIT_DIL:	m->exitDIL();			break;
+		case E_EXIT_RI:		m->exitRi();			break;
+		case E_ACK_CP:		m->acknowledgeCPReception();	break;
+		case E_ACK_CPNOT:	m->acknowledgeCPNotReception();	break;
+		case E_ACK_E:		m->acknowledgeEReception();	break;
+		case E_INIT_FPE:	return m->initiateFPE();
+		}
+		return 0;
+	}
+
+	switch (e) {
+	case E_ENTER_P3:	ref_mod_enterp3(m);		break;
+	case E_ENTER_P4:	ref_mod_enterp4(m);		break;
+	case E_ENTER_DATA:	ref_mod_enterdata(m);		break;
+	case E_EXIT_JD:		ref_mod_exitjd(m);		break;
+	case E_EXIT_JDPHASE:	ref_mod_exitjdphase(m);		break;
+	case E_EXIT_DIL:	ref_mod_exitdil(m);		break;
+	case E_EXIT_RI:		ref_mod_exitri(m);		break;
+	case E_ACK_CP:		ref_mod_ackcp(m);		break;
+	case E_ACK_CPNOT:	ref_mod_ackcpnot(m);		break;
+	case E_ACK_E:		ref_mod_acke(m);		break;
+	case E_INIT_FPE:	return ref_mod_initiatefpe(m);
+	}
+	return 0;
+}
+
+struct etrial {
+	const char	*name;
+	int		edge;
+	int		state;		/* poked into V90Modulator::state  */
+	int		p3state;	/* -1 keeps setup_phase3's own     */
+	unsigned int	p3count;	/* V90Phase3Modulator::symbolCount */
+	int		p3fire;		/* setup_phase3's argument         */
+	int		p4state;	/* -1 means 0x00                   */
+	unsigned int	done;		/* the converter's symbolsDone     */
+	unsigned int	lvl;
+	unsigned int	flag;		/* sessionFlag at construction     */
+	/*
+	 * `split` drives the two embedded mapping blocks apart -- see BPF_RI
+	 * and `split_blocks` -- and is what makes an edge reaching for the
+	 * wrong one of the pair visible at all.
+	 */
+	int		split;
+	/*
+	 * `mpc` seeds `V90Phase4Modulator::symbolCount` against a known MP
+	 * repetition: 0 leaves `reset`'s zero, 1 lands on the repetition
+	 * boundary and 2 lands one symbol past it.  BOTH `exitMP` and
+	 * `exitMPNot` open with `symbolCount != 0`, so at the reset's zero
+	 * they are no-ops and an acknowledge that never called them would
+	 * pass every trial.
+	 */
+	int		mpc;
+};
+
+/* A real MP repetition is a whole number of six-symbol frames; 24 is four. */
+#define MP_SEQ_SYMBOLS	24u
+
+/*
+ * The two embedded blocks, driven apart in the two fields the edges under
+ * test actually read out of them: the first word, which `exitRi` copies into
+ * the message object and which seeds every `bitsPerFrame`, and the spectral
+ * shaper's A1, which is one of the six numbers `displaySpectralParams`
+ * prints.  `plausible_mapping` gives the pair different CONSTELLATIONS and
+ * identical everything else, and neither of those two edges reads a
+ * constellation -- so without this an edge taking the wrong pointer agrees
+ * with the blob on every trial.
+ */
+static void
+split_blocks(int s)
+{
+	MODEM(s)->mappingParams.word_0 = BPF_RI;
+	MODEM(s)->mappingParams.shaperA1 = 0.375f;
+}
+
+static const struct etrial etrial_v[] = {
+	/* name                       edge          st  p3st p3cnt p3f p4st done lvl flag sp mpc */
+	{ "enter phase 3 from silence", E_ENTER_P3,   0,  -1,    5, -1,  -1, 0, 2, 0, 0, 0 },
+	{ "enter phase 3, silent",      E_ENTER_P3,   0,  -1,    5, -1,  -1, 0, 0, 1, 0, 0 },
+	{ "enter phase 3 twice",        E_ENTER_P3,   1,  -1,    5, -1,  -1, 0, 2, 0, 0, 0 },
+	{ "enter phase 3 from data",    E_ENTER_P3,   3,  -1,    5, -1,  -1, 0, 0, 0, 0, 0 },
+	{ "enter phase 4 from 3",       E_ENTER_P4,   1,  -1,    5, -1,  -1, 0, 2, 0, 0, 0 },
+	{ "enter phase 4, silent",      E_ENTER_P4,   1,  -1,    5, -1,  -1, 0, 0, 1, 0, 0 },
+	{ "enter phase 4 twice",        E_ENTER_P4,   2,  -1,    5, -1,  -1, 0, 2, 0, 0, 0 },
+	{ "enter data from phase 4",    E_ENTER_DATA, 2,  -1,    5, -1,  -1, 0, 2, 0, 1, 0 },
+	{ "enter data, silent",         E_ENTER_DATA, 2,  -1,    5, -1,  -1, 0, 0, 1, 1, 0 },
+	{ "enter data twice",           E_ENTER_DATA, 3,  -1,    5, -1,  -1, 0, 2, 0, 1, 0 },
+	/*
+	 * THE Jd EXITS AND THE 72-SYMBOL REPETITION.  144 and 72 are on a
+	 * boundary and 100, 37 and 5 are not; 0 is the callee's second guard,
+	 * which IS reachable through the wrapper even though its state guard
+	 * is not.  Both `sessionFlag` arms, because `exitJd` forks on it.
+	 */
+	{ "exit Jd on a boundary",      E_EXIT_JD,    1, P3M_STATE_JD, 144, -1, -1, 0, 2, 0, 0, 0 },
+	{ "exit Jd mid-repetition",     E_EXIT_JD,    1, P3M_STATE_JD, 100, -1, -1, 0, 0, 0, 0, 0 },
+	{ "exit Jd on a boundary, 92",  E_EXIT_JD,    1, P3M_STATE_JD,  72, -1, -1, 0, 2, 1, 0, 0 },
+	{ "exit Jd mid-repetition, 92", E_EXIT_JD,    1, P3M_STATE_JD,   5, -1, -1, 0, 0, 1, 0, 0 },
+	{ "exit Jd with nothing sent",  E_EXIT_JD,    1, P3M_STATE_JD,   0, -1, -1, 0, 2, 0, 0, 0 },
+	{ "exit Jd in the wrong state", E_EXIT_JD,    1, P3M_STATE_TRN1D, 8, -1, -1, 0, 2, 0, 0, 0 },
+	{ "exit JdPhase on a boundary", E_EXIT_JDPHASE, 1, P3M_STATE_JD_PHASE, 216, -1, -1, 0, 2, 1, 0, 0 },
+	{ "exit JdPhase mid-repetition",E_EXIT_JDPHASE, 1, P3M_STATE_JD_PHASE,  37, -1, -1, 0, 0, 1, 0, 0 },
+	{ "exit JdPhase, nothing sent", E_EXIT_JDPHASE, 1, P3M_STATE_JD_PHASE,   0, -1, -1, 0, 0, 1, 0, 0 },
+	{ "exit JdPhase, wrong state",  E_EXIT_JDPHASE, 1, P3M_STATE_JD,        40, -1, -1, 0, 2, 1, 0, 0 },
+	/*
+	 * `p3fire` of -1 puts `segmentPos` at zero, which is what makes
+	 * `V90Phase3Modulator::exitDIL` end the phase and raise event 6; a
+	 * non-negative one leaves the segment mid-run, so the DIL_END arm is
+	 * taken and no event is raised.
+	 */
+	{ "exit DIL, sequence over",    E_EXIT_DIL,   1, P3M_STATE_DIL,  9, -1, -1, 0, 2, 0, 0, 0 },
+	{ "exit DIL, sequence over, 92",E_EXIT_DIL,   1, P3M_STATE_DIL,  9, -1, -1, 0, 0, 1, 0, 0 },
+	{ "exit DIL, segment runs on",  E_EXIT_DIL,   1, P3M_STATE_DIL,  9,  3, -1, 0, 0, 0, 0, 0 },
+	{ "exit DIL, already phase 4",  E_EXIT_DIL,   2, P3M_STATE_DIL,  9, -1, -1, 0, 2, 0, 0, 0 },
+	{ "exit DIL in the wrong state",E_EXIT_DIL,   1, P3M_STATE_JD_NOT, 9, -1, -1, 0, 0, 0, 0, 0 },
+	/* The Ri exit's own block is driven apart; see `split_blocks`. */
+	{ "exit Ri",                    E_EXIT_RI,    2,  -1,    5, -1, 0x00, 0, 2, 0, 1, 0 },
+	{ "exit Ri, V.92",              E_EXIT_RI,    2,  -1,    5, -1, 0x00, 0, 0, 1, 1, 0 },
+	{ "exit Ri in the wrong state", E_EXIT_RI,    2,  -1,    5, -1, 0x03, 0, 2, 0, 1, 0 },
+	{ "CP received in MP",          E_ACK_CP,     2,  -1,    5, -1, 0x04, 0, 2, 0, 0, 2 },
+	{ "CP received on a boundary",  E_ACK_CP,     2,  -1,    5, -1, 0x04, 0, 2, 0, 0, 1 },
+	{ "CP received in MP, silent",  E_ACK_CP,     2,  -1,    5, -1, 0x04, 0, 0, 1, 0, 2 },
+	{ "CP received elsewhere",      E_ACK_CP,     2,  -1,    5, -1, 0x03, 0, 2, 0, 0, 2 },
+	{ "CPnot in MPNot",             E_ACK_CPNOT,  2,  -1,    5, -1, 0x0e, 0, 2, 0, 0, 2 },
+	{ "CPnot in MPNot on a bound",  E_ACK_CPNOT,  2,  -1,    5, -1, 0x0e, 0, 2, 0, 0, 1 },
+	{ "CPnot in MPNot, silent",     E_ACK_CPNOT,  2,  -1,    5, -1, 0x0e, 0, 0, 1, 0, 2 },
+	{ "CPnot in MP",                E_ACK_CPNOT,  2,  -1,    5, -1, 0x04, 0, 2, 0, 0, 2 },
+	{ "CPnot in MP on a boundary",  E_ACK_CPNOT,  2,  -1,    5, -1, 0x04, 0, 2, 0, 0, 1 },
+	{ "CPnot off a boundary",       E_ACK_CPNOT,  2,  -1,    5, -1, 0x0d, 0, 2, 0, 0, 2 },
+	{ "CPnot off a boundary,silent",E_ACK_CPNOT,  2,  -1,    5, -1, 0x0d, 0, 0, 1, 0, 2 },
+	{ "CPnot elsewhere",            E_ACK_CPNOT,  2,  -1,    5, -1, 0x07, 0, 0, 0, 0, 2 },
+	{ "E in MPNot",                 E_ACK_E,      2,  -1,    5, -1, 0x0e, 0, 2, 0, 0, 2 },
+	{ "E in MPNot on a boundary",   E_ACK_E,      2,  -1,    5, -1, 0x0e, 0, 2, 0, 0, 1 },
+	{ "E in MPNot, silent",         E_ACK_E,      2,  -1,    5, -1, 0x0e, 0, 0, 1, 0, 2 },
+	{ "E off a boundary",           E_ACK_E,      2,  -1,    5, -1, 0x0d, 0, 2, 0, 0, 2 },
+	{ "E off a boundary, silent",   E_ACK_E,      2,  -1,    5, -1, 0x0d, 0, 0, 1, 0, 2 },
+	{ "E elsewhere",                E_ACK_E,      2,  -1,    5, -1, 0x04, 0, 2, 0, 0, 2 },
+	{ "FPE approved, bits owed",    E_INIT_FPE,   3,  -1,    5, -1, 0x00, 0, 0, 0, 1, 0 },
+	{ "FPE approved, nothing owed", E_INIT_FPE,   3,  -1,    5, -1, 0x00, 4, 2, 0, 1, 0 },
+	{ "FPE approved, V.92",         E_INIT_FPE,   3,  -1,    5, -1, 0x00, 0, 2, 1, 1, 0 },
+	{ "FPE approved, nothing, 92",  E_INIT_FPE,   3,  -1,    5, -1, 0x00, 4, 0, 1, 1, 0 },
+	{ "FPE refused in silence",     E_INIT_FPE,   0,  -1,    5, -1, 0x00, 0, 2, 0, 1, 0 },
+	{ "FPE refused in phase 4",     E_INIT_FPE,   2,  -1,    5, -1, 0x00, 0, 0, 1, 1, 0 },
+	{ "FPE refused, negative",      E_INIT_FPE,  -1,  -1,    5, -1, 0x00, 0, 2, 0, 1, 0 }
+};
+
+#define NETRIAL	((int)(sizeof(etrial_v) / sizeof(etrial_v[0])))
+
+/* The two FPE state messages, kept for the same reason `initiateRRN` keeps
+ * its two: the capture stays encoded, so what is compared is that the blob's
+ * two transcripts differ and neither is empty. */
+static char fpe_owed[RRN_TEXT];
+static char fpe_nothing[RRN_TEXT];
+
+static int
+run_edges(void)
+{
+	int trial, i;
+	int spoke = 0, silent = 0, v90arm = 0, v92arm = 0;
+	int fpe_ok = 0, fpe_no = 0, ri_split = 0;
+	int jdbound = 0, jdmid = 0, dilend = 0, dilrun = 0, delayed = 0;
+	int mpseen[2];
+
+	mpseen[0] = mpseen[1] = 0;
+
+	diff_begin("V90Modulator, the eleven phase edges");
+
+	for (i = 0; i < E_COUNT; i++)
+		edge_reached[i] = 0;
+
+	for (trial = 0; trial < NETRIAL; trial++) {
+		const struct etrial *t = &etrial_v[trial];
+		long tag = 7700 + trial;
+		int ra, rb, s;
+		unsigned int mp114_pre, cp3ba8_pre;
+
+		build_pair(1200 + trial, 0, t->flag, BPF_MAPPER);
+		setup_common(trial + 5);
+		setup_phase3(t->p3fire);
+		setup_phase4(t->p4state < 0 ? 0x00 : t->p4state, -1);
+
+		for (s = 0; s < 2; s++) {
+			MOD(s)->state = t->state;
+			MOD(s)->symbolCount = SYMCOUNT_SEED;
+			MOD(s)->eventCode = EVENTCODE_SEED;
+			BTS(s)->symbolsDone = t->done;
+			if (t->p3state >= 0)
+				P3M(s)->state = (Phase3ModulatorState)t->p3state;
+			P3M(s)->symbolCount = t->p3count;
+			if (t->split)
+				split_blocks(s);
+			if (t->mpc) {
+				P4M(s)->mpSequenceSymbols = MP_SEQ_SYMBOLS;
+				P4M(s)->symbolCount = (t->mpc == 1)
+				    ? MP_SEQ_SYMBOLS
+				    : MP_SEQ_SYMBOLS + 1u;
+			}
+			/*
+			 * THE ACK BIT STARTS CLEAR.  `plausible_mp` leaves
+			 * `CPack` at 1, which is the value both acknowledge
+			 * edges STORE -- so with the seed left alone the store
+			 * writes what was already there and deleting it passes
+			 * every trial.
+			 */
+			MODEM(s)->mp.CPack = 0;
+		}
+
+		/*
+		 * The two words the Ri exit writes, BEFORE it runs.  Neither
+		 * starts at zero -- `plausible_mp` and `plausible_cp` fill
+		 * them -- so "nothing was written" has to be said against what
+		 * was there, not against a constant.
+		 */
+		mp114_pre = MODEM(1)->mp.word_114;
+		cp3ba8_pre = MODEM(1)->cp.word_3ba8;
+
+		compare_graph("before the edge", 0, tag);
+
+		set_level(t->lvl);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		ra = call_edge(0, t->edge);
+		rb = call_edge(1, t->edge);
+		dsplib_debug_capture_on = 0;
+		set_level(0);
+
+		diff_eq_int("the answers match (%ld)", (long)ra, (long)rb, tag);
+		diff_eq_int("the transcripts match (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		compare_graph("after the edge", 0, tag);
+
+		/*
+		 * The cross-side comparisons above are the oracle.  What
+		 * follows names the arm each trial reached, so a mutation that
+		 * moves one is reported by what it broke rather than as an
+		 * anonymous region difference -- and, for the Ri exit, so that
+		 * a claim the blob CANNOT settle is still asserted.
+		 */
+		edge_reached[t->edge] = 1;
+		if (t->lvl > 1)
+			spoke = 1;
+		else
+			silent = 1;
+		if (t->flag != 0)
+			v92arm = 1;
+		else
+			v90arm = 1;
+
+		switch (t->edge) {
+		case E_ENTER_P3:
+			diff_eq_int("phase 3 is entered and stays entered "
+				    "(%ld)", (long)MOD(1)->state, 1, tag);
+			if (t->state != 1) {
+				diff_eq_int("the phase 3 modulator restarted "
+					    "(%ld)",
+					    (long)P3M(1)->symbolCount, 0, tag);
+				diff_eq_int("and the modulator's count did "
+					    "too (%ld)",
+					    (long)MOD(1)->symbolCount, 0, tag);
+			} else {
+				diff_eq_int("a repeat entry moved nothing "
+					    "(%ld)", (long)MOD(1)->symbolCount,
+					    (long)SYMCOUNT_SEED, tag);
+			}
+			break;
+
+		case E_ENTER_P4:
+			diff_eq_int("phase 4 is entered (%ld)",
+				    (long)MOD(1)->state, 2, tag);
+			if (t->state != 2) {
+				diff_eq_int("the phase 4 modulator is in Ri "
+					    "(%ld)", (long)P4M(1)->state, 0x00,
+					    tag);
+				diff_eq_int("the count restarted (%ld)",
+					    (long)MOD(1)->symbolCount, 0, tag);
+			}
+			break;
+
+		case E_ENTER_DATA:
+			diff_eq_int("the data phase is entered (%ld)",
+				    (long)MOD(1)->state, 3, tag);
+			if (t->state != 3) {
+				diff_eq_int("the event code says so (%ld)",
+					    (long)MOD(1)->eventCode, 8, tag);
+				diff_eq_int("the block is the whole symbol "
+					    "count (%ld)",
+					    (long)BTS(1)->symbolsBlockSize,
+					    (long)NOFSYM, tag);
+			} else {
+				diff_eq_int("a repeat entry left the event "
+					    "alone (%ld)", (long)MOD(1)->eventCode,
+					    (long)EVENTCODE_SEED, tag);
+			}
+			break;
+
+		case E_EXIT_JD:
+		case E_EXIT_JDPHASE:
+			if (t->p3state == (t->edge == E_EXIT_JD
+					   ? P3M_STATE_JD : P3M_STATE_JD_PHASE)
+			    && t->p3count != 0) {
+				diff_eq_int("the phase 3 state moved on (%ld)",
+					    (long)(P3M(1)->state != t->p3state),
+					    1, tag);
+				diff_eq_int("and the event was cleared (%ld)",
+					    (long)MOD(1)->eventCode, 0, tag);
+				if (t->p3count % 72u == 0)
+					jdbound = 1;
+				else
+					jdmid = 1;
+			} else {
+				diff_eq_int("a guard that fails moves nothing "
+					    "(%ld)", (long)P3M(1)->state,
+					    (long)P3M(0)->state, tag);
+			}
+			break;
+
+		case E_EXIT_DIL:
+			if (t->p3state == P3M_STATE_DIL && t->p3fire < 0) {
+				dilend = 1;
+				diff_eq_int("the DIL sequence terminated "
+					    "(%ld)", (long)P3M(1)->state,
+					    (long)P3M_STATE_TERMINATED, tag);
+				diff_eq_int("phase 4 is entered on event 6 "
+					    "(%ld)", (long)MOD(1)->state, 2,
+					    tag);
+			} else if (t->p3state == P3M_STATE_DIL) {
+				dilrun = 1;
+				diff_eq_int("the segment runs on (%ld)",
+					    (long)P3M(1)->state,
+					    (long)P3M_STATE_DIL_END, tag);
+				diff_eq_int("and phase 4 is not entered (%ld)",
+					    (long)MOD(1)->state,
+					    (long)t->state, tag);
+			}
+			break;
+
+		case E_EXIT_RI:
+			if (t->p4state == 0x00) {
+				ri_split = 1;
+				/*
+				 * THE ONE CLAIM THE BLOB CANNOT SETTLE.  Both
+				 * sides would agree reading either pointer, so
+				 * these compare against BPF_RI -- the value
+				 * that is in block 6 and NOT in block 7.
+				 */
+				diff_eq_int("the Ri exit read mappingParams "
+					    "and not mappingParams2 (%ld)",
+					    (long)MAPPER(1)->bitsPerFrame,
+					    (long)BPF_RI, tag);
+				if (t->flag != 0)
+					diff_eq_int("V.92 puts the frame size "
+						    "in the CP (%ld)",
+						    (long)MODEM(1)->cp.word_3ba8,
+						    (long)BPF_RI, tag);
+				else
+					diff_eq_int("V.90 puts the frame size "
+						    "in the MP (%ld)",
+						    (long)MODEM(1)->mp.word_114,
+						    (long)BPF_RI, tag);
+				diff_eq_int("and the event was cleared (%ld)",
+					    (long)MOD(1)->eventCode, 0, tag);
+			} else {
+				diff_eq_int("a state that is not Ri leaves "
+					    "the MP divisor (%ld)",
+					    (long)MODEM(1)->mp.word_114,
+					    (long)mp114_pre, tag);
+				diff_eq_int("and the CP one (%ld)",
+					    (long)MODEM(1)->cp.word_3ba8,
+					    (long)cp3ba8_pre, tag);
+				diff_eq_int("and neither is the block's word "
+					    "(%ld)",
+					    (long)(MODEM(1)->mp.word_114
+						   != BPF_RI), 1, tag);
+			}
+			break;
+
+		case E_ACK_CP:
+			diff_eq_int("the MP is acknowledged whatever the "
+				    "state (%ld)", (long)MODEM(1)->mp.CPack, 1,
+				    tag);
+			diff_eq_int("and TRN2d is told to hand on to MPNot "
+				    "(%ld)", (long)P4M(1)->nextStateAfterTRN2d,
+				    0x0e, tag);
+			if (t->p4state == 0x04) {
+				/*
+				 * `exitMP` really ran: off a repetition
+				 * boundary it parks at 0x0d, on one it enters
+				 * MPNot and restarts the count.
+				 */
+				mpseen[t->mpc == 1] = 1;
+				diff_eq_int("MP was left (%ld)",
+					    (long)P4M(1)->state,
+					    t->mpc == 1 ? 0x0e : 0x0d, tag);
+			}
+			break;
+
+		case E_ACK_CPNOT:
+		case E_ACK_E:
+			if (t->p4state == 0x0d) {
+				delayed = 1;
+				diff_eq_int("the delayed exit is recorded "
+					    "(%ld)", (long)P4M(1)->byte_0014, 1,
+					    tag);
+				diff_eq_int("and nothing else moved (%ld)",
+					    (long)MOD(1)->eventCode,
+					    (long)EVENTCODE_SEED, tag);
+			} else if (t->p4state == 0x0e || (t->edge == E_ACK_CPNOT
+							  && t->p4state == 0x04)) {
+				diff_eq_int("the exit cleared the event (%ld)",
+					    (long)MOD(1)->eventCode, 0, tag);
+				diff_eq_int("and no delay was recorded (%ld)",
+					    (long)P4M(1)->byte_0014, 0, tag);
+			} else {
+				diff_eq_int("an unmatched state does nothing "
+					    "(%ld)", (long)MOD(1)->eventCode,
+					    (long)EVENTCODE_SEED, tag);
+			}
+			break;
+
+		case E_INIT_FPE:
+			if (t->state == 3) {
+				fpe_ok = 1;
+				diff_eq_int("FPE is approved (%ld)", (long)rb,
+					    0, tag);
+				diff_eq_int("phase 4 is re-entered (%ld)",
+					    (long)MOD(1)->state, 2, tag);
+				diff_eq_int("the block went to one (%ld)",
+					    (long)BTS(1)->symbolsBlockSize, 1,
+					    tag);
+				/*
+				 * NO `sessionFlag` FORK: the CP is re-encoded
+				 * on both arms, so `V90MP::CPack` keeps the
+				 * 1 `plausible_mp` put there whatever the
+				 * flag.  That is the whole difference from
+				 * `initiateRRN` on this line.
+				 */
+				diff_eq_int("the CP tag is always cleared "
+					    "(%ld)", (long)MODEM(1)->cp.byte_13,
+					    0, tag);
+				diff_eq_int("and the MP is never touched "
+					    "(%ld)", (long)MODEM(1)->mp.CPack,
+					    0, tag);
+				if (t->done == 0) {
+					diff_eq_int("bits owed enters "
+						    "RfModulation (%ld)",
+						    (long)P4M(1)->state, 0x1d,
+						    tag);
+					keep_text(fpe_owed,
+					    dsplib_debug_capture_text(1));
+				} else {
+					diff_eq_int("nothing owed enters "
+						    "DataToRfModulation (%ld)",
+						    (long)P4M(1)->state, 0x1c,
+						    tag);
+					keep_text(fpe_nothing,
+					    dsplib_debug_capture_text(1));
+				}
+			} else {
+				fpe_no = 1;
+				diff_eq_int("FPE is refused (%ld)", (long)rb,
+					    -1, tag);
+				diff_eq_int("and nothing moved (%ld)",
+					    (long)MOD(1)->state, (long)t->state,
+					    tag);
+				diff_eq_int("and the CP tag is untouched "
+					    "(%ld)", (long)MODEM(1)->cp.byte_13,
+					    1, tag);
+			}
+			break;
+		}
+
+		destroy_pair(0, tag);
+	}
+
+	for (i = 0; i < E_COUNT; i++)
+		diff_eq_int("edge %ld was driven", edge_reached[i], 1, (long)i);
+	diff_eq_int("the gate was tried open", spoke, 1, 0);
+	diff_eq_int("the gate was tried shut", silent, 1, 0);
+	diff_eq_int("the V.90 arm was reached", v90arm, 1, 0);
+	diff_eq_int("the V.92 arm was reached", v92arm, 1, 0);
+	diff_eq_int("an FPE was approved", fpe_ok, 1, 0);
+	diff_eq_int("an FPE was refused", fpe_no, 1, 0);
+	diff_eq_int("the Ri exit was driven with the two blocks apart",
+		    ri_split, 1, 0);
+	diff_eq_int("a Jd exit landed on a repetition boundary", jdbound, 1, 0);
+	diff_eq_int("a Jd exit landed off one", jdmid, 1, 0);
+	diff_eq_int("the DIL sequence was ended", dilend, 1, 0);
+	diff_eq_int("and was left running", dilrun, 1, 0);
+	diff_eq_int("a delayed MPNot exit was recorded", delayed, 1, 0);
+	diff_eq_int("an MP exit landed off a repetition boundary", mpseen[0], 1,
+		    0);
+	diff_eq_int("and one landed on one", mpseen[1], 1, 0);
+	diff_eq_int("the blob said something on the approved FPE path",
+		    (int)(strlen(fpe_owed) > 0), 1, 0);
+	diff_eq_int("the two FPE states carry two different messages",
+		    strcmp(fpe_owed, fpe_nothing) != 0, 1, 0);
+	return diff_end();
+}
+
+/* ============ V90Phase3Modulator::exitJd and ::exitJdPhase, driven directly */
+
+/*
+ * THE WRAPPER CANNOT REACH THESE TWO FUNCTIONS' FIRST GUARD.
+ * `V90Modulator::exitJd` returns unless the phase 3 state is already
+ * `P3M_STATE_JD`, and `V90Phase3Modulator::exitJd` then tests the same field
+ * against the same value -- so through that path the callee's guard is true
+ * every time and deleting it would change nothing.  The same holds for the
+ * JdPhase pair at state 5.  This group calls both members directly, over
+ * every state the enum has, so the guard is driven false fifteen times out
+ * of sixteen.
+ *
+ * The counts straddle the 72-symbol repetition from both sides: 71 and 72,
+ * 143 and 144 in the shape of 0 and 100, with 0 for the second guard.  Both
+ * `sessionFlag` values, because `exitJd` forks on it and `exitJdPhase` does
+ * not -- which is itself a claim, and the flag sweep is what tests it.
+ */
+static const unsigned int p3count_v[] = { 0u, 1u, 71u, 72u, 100u, 144u };
+
+#define NP3COUNT ((int)(sizeof(p3count_v) / sizeof(p3count_v[0])))
+
+static int
+run_p3exits(void)
+{
+	int flag, st, c, which;
+	int acted = 0, refused = 0, bound = 0, mid = 0, forked = 0;
+
+	diff_begin("V90Phase3Modulator::exitJd and ::exitJdPhase");
+
+	for (flag = 0; flag < 2; flag++) {
+		long base = 7900 + 1000 * flag;
+
+		build_pair(1400 + flag, 0, (unsigned int)flag, BPF_MAPPER);
+		setup_common(flag + 11);
+		setup_phase3(-1);
+		setup_phase4(0x00, -1);
+
+		for (which = 0; which < 2; which++) {
+			for (st = 0; st < 16; st++) {
+				for (c = 0; c < NP3COUNT; c++) {
+					long tag = base + 100 * which + 6 * st
+						   + c;
+					int s;
+					int before;
+
+					for (s = 0; s < 2; s++) {
+						P3M(s)->state =
+						    (Phase3ModulatorState)st;
+						P3M(s)->symbolCount =
+						    p3count_v[c];
+						P3M(s)->eventCode =
+						    EVENTCODE_SEED;
+					}
+
+					before = st;
+
+					if (which == 0) {
+						P3M(0)->exitJd();
+						ref_p3m_exitjd(P3M(1));
+					} else {
+						P3M(0)->exitJdPhase();
+						ref_p3m_exitjdphase(P3M(1));
+					}
+
+					cmp_region("after the phase 3 exit",
+						   "V90Phase3Modulator",
+						   P3M(0), P3M(1), 0x398, tag);
+					diff_eq_int("the states agree (%ld)",
+						    (long)P3M(0)->state,
+						    (long)P3M(1)->state, tag);
+					diff_eq_int("the counts agree (%ld)",
+						    (long)P3M(0)->symbolCount,
+						    (long)P3M(1)->symbolCount,
+						    tag);
+					/*
+					 * NEITHER MEMBER TOUCHES THE EVENT.
+					 * `exitDIL` is the only one of the
+					 * four exits that raises one, and
+					 * this is where that is asserted.
+					 */
+					diff_eq_int("the event code is left "
+						    "alone (%ld)",
+						    (long)P3M(1)->eventCode,
+						    (long)EVENTCODE_SEED, tag);
+
+					if (st == (which == 0
+						   ? P3M_STATE_JD
+						   : P3M_STATE_JD_PHASE)
+					    && p3count_v[c] != 0) {
+						acted = 1;
+						if (p3count_v[c] % 72u == 0)
+							bound = 1;
+						else
+							mid = 1;
+						if (which == 0 && flag != 0)
+							forked = 1;
+						diff_eq_int("the state moved "
+							    "(%ld)",
+							    (long)(P3M(1)->state
+								   != before),
+							    1, tag);
+					} else {
+						refused = 1;
+						diff_eq_int("a failed guard "
+							    "moves nothing "
+							    "(%ld)",
+							    (long)P3M(1)->state,
+							    (long)before, tag);
+						diff_eq_int("and leaves the "
+							    "count (%ld)",
+							    (long)P3M(1)->symbolCount,
+							    (long)p3count_v[c],
+							    tag);
+					}
+				}
+			}
+		}
+
+		destroy_pair(0, base);
+	}
+
+	diff_eq_int("an exit acted", acted, 1, 0);
+	diff_eq_int("an exit was refused", refused, 1, 0);
+	diff_eq_int("a repetition boundary was hit", bound, 1, 0);
+	diff_eq_int("and missed", mid, 1, 0);
+	diff_eq_int("the V.92 fork of exitJd was driven", forked, 1, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2057,6 +2767,8 @@ main(void)
 	rc |= run_p4_gensym();
 	rc |= run_modem_progress();
 	rc |= run_analog_arm();
+	rc |= run_edges();
+	rc |= run_p3exits();
 
 	return rc;
 }

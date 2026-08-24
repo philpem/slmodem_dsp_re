@@ -448,6 +448,10 @@
   "src/pump/v90/V90Modem.cpp",
   "build/test/t_v90modprog"
  ],
+ "v90modprogp3m": [
+  "src/pump/v90/V90Phase3Modulator.cpp",
+  "build/test/t_v90modprog"
+ ],
  "v90modprogp4m": [
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90modprog"
