@@ -6,7 +6,10 @@
   "label": "NOTE: the source is shared with the vpcmflomodem, vpcmep3 and v34diagflo",
   "why": "sets.  Four sets over one file, one binary each; suites.json maps one name to one source and one binary, and none of the other three drives runPcmModem at all."
  },
-
+ {
+  "label": "NOTE: SEVEN ROWS ARE UNCAUGHT, AND EACH IS NAMED HERE WITH ITS REASON RATHER THAN LEFT AS A COUNT.",
+  "why": "95 mutations, 88 caught, 7 NOT caught, 0 unusable, 0 equivalent.  NONE IS REGISTERED `equivalent`, deliberately, so the count stays honest -- one of the seven is argued below to be equivalent to any MEMORY comparison, which is a narrower claim than equivalent.  The seven, and what each would need. (1) `the ramp value is stored before the step, not after` needs a non-zero echo-canceller coefficient set: with a zeroed filter the sentinel arm and the FILTER_ONLY arm both produce out[i] = in[i].  (2) `the non-ramp arm leaves the receive buffer's first sample alone` -- the constructor memsets block_6c0c, so rx[0] is already 0.0f and the store is a no-op; needs a trial that pre-loads 177.0f there.  (3, 4, 5) `the silence arm does not stop the Ja transmission`, `the Jd arm does not leave the SU second` and `TRN1u does not leave the second` -- exitJa, exitSuSecond and exitTRN1uSecond are each guarded on a sub-modulator state the fixture leaves at the constructor's value.  (6) `the FPE arm starts FPE whatever phase it is in` (and its rate-renegotiation twin) -- initiateFPE and initiateRRN return -1 at once when phase != V92MOD_PHASE_DATA and print only above level 1, so at level 0 nothing they do reaches memory.  (7) `the fallback test is against 0x21 rather than 0x20` is EQUIVALENT TO ANY MEMORY COMPARISON, and that is exactly why it is not registered equivalent: reaching the fallback needs word_3c == 0x20 at the RE-READ, which needs enterPhase3 to take its early return, which means the first read saw 0x20 too and arm 0x20 has already set the return to 6.  The two readings part company only in the edprintf transcript, which this tier does not compare.  THE SET HAS ALREADY PAID FOR ITSELF THREE TIMES OVER THIS BINARY, which is the reading these seven should be given -- a named list for the next batch, not rows argued away.  It caught a pointer-excusal rule swallowing seven real mutations, because byte_6118 shares a word with two bytes the constructor leaves uninitialised and a mutant latching the wrong value was indistinguishable from a pair of addresses; twelve V92Phase4Modulator members being called and observing nothing, because every one returns early unless five gates are right (7458's shape); and every timing-offset trial saturating, because getTimingOffsetPPM puts a whole-number offset in the millions and fistps answers the x87 indefinite for ppm*10 and ppm*1 alike."
+ },
  {
   "label": "the master gate is inverted: the body runs when info0Layout is zero",
   "find": "\tif (info0Layout == 0)\t\t/* 0xe470 */\n\t\treturn ret;",
@@ -57,7 +60,6 @@
   "find": "\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;",
   "replace": "\t\t} else {\n\t\t\tret = 3;\n\t\t}\n\t\tbreak;"
  },
-
  {
   "label": "the echo sentinel ramp runs past 0xb1",
   "find": "\t\tif (word_7f64 != VPCM_EC_RAMP_SENTINEL)\n\t\t\tword_7f64++;",
@@ -108,7 +110,6 @@
   "find": "\tv92modem.modulator->float_28 =\n\t    -modem.demodulator->resampler.getTimingOffsetPPM();",
   "replace": "\tv92modem.modulator->resamplerPhaseOffset =\n\t    -modem.demodulator->resampler.getTimingOffsetPPM();"
  },
-
  {
   "label": "the silence arm does not stop the Ja transmission",
   "find": "\t\tv92modem.modulator->exitJa();",
@@ -164,7 +165,6 @@
   "find": "\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;",
   "replace": "\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_PHASE2;"
  },
-
  {
   "label": "TRN1u packs the CP message from the ALTERNATE mapping block",
   "find": "\t\tsetV92CPpckFromParamsInfo(&modem.mappingParams,\n\t\t\t\t\t  &modem.additionalCPinfo,\n\t\t\t\t\t  v92modem.cp);\n\t\tv92modem.modulator->exitTRN1uSecond();",
@@ -315,7 +315,6 @@
   "find": "\tcase 0x2b:\n\t\tret = 8;\n\t\tVPcmV34LogTimingOffset(v34Object,\n\t\t    (short)(modem.demodulator->resampler.getTimingOffsetPPM()",
   "replace": "\tcase 0x2b:\n\t\tret = 8;\n\t\tVPcmV34LogTimingOffset(v34Object,\n\t\t    (short)(int)(modem.demodulator->resampler.getTimingOffsetPPM()"
  },
-
  {
   "label": "the CP arm and the tagged CP arm are the other way round",
   "find": "\t\tif (((struct V92CPUnPck *)&modem.cp)->extendEu != 0)\n\t\t\tv92modem.modulator->phase4Modulator->e2uExtended = 1;\n\t\tv92modem.modulator->phase4Modulator->recivedCP();",
@@ -391,7 +390,6 @@
   "find": "\tcase 0x27:\t\t\t/* 0xe7a5 */\n\t\tv92modem.modulator->phase4Modulator->recivedRt();",
   "replace": "\tcase 0x27:\t\t\t/* 0xe7a5 */\n\t\tv92modem.modulator->phase4Modulator->recivedSUV();"
  },
-
  {
   "label": "the transmit block is scaled by a half rather than by 0.4",
   "find": "#define VPCM_TX_SCALE\t\t0.4f",
@@ -422,7 +420,6 @@
   "find": "\techoCanceller.updateEchoHistory(out, n);",
   "replace": ""
  },
-
  {
   "label": "the transmitter's status is read unsigned, so {2,3,10} reorders",
   "find": "\tevent = (int)v92modem.modulator->word_34;",

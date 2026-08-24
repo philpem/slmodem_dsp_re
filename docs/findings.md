@@ -79982,3 +79982,75 @@ The gain that is available immediately and costs nothing: **`V90CP.h`'s
 and `+0xc70` can take the author's own names** off `V92CPUnPck.h`'s format
 strings, which is CLAUDE.md's rank-1 evidence and better than the offset names
 they carry now.  That is a rename in another batch's file and is left to it.
+
+======================================================================
+
+### 7573. A delegated branch's tip is a reading at ONE INSTANT, and an amended checkpoint can rewrite `src/` under a merge you have already validated
+
+This cost a merge that was correct when it was checked, correct when it was
+made, and wrong by the time the agent that produced it reported.
+
+The batch's second half, `VPcmFloModem::runPcmModem`, was delegated to an
+agent in its own worktree on branch `recon/vpcmflo-runpcmmodem`.  This tree's
+convention -- and this project's own memory of it -- is that **agents keep ONE
+rolling WIP checkpoint and amend it**, which is a good convention and is not
+what went wrong.  What went wrong is that a reader outside the agent cannot
+tell an amendment from a rewrite, and `git merge-tree` answers about the SHA
+you hand it and not about the branch.
+
+The sequence, all four steps taken in good faith:
+
+| | tip | what was done with it |
+|---|---|---|
+| 1 | `006dbcb3` "WIP: ..." | diffstat read, to plan the merge |
+| 2 | `d8102a5d` | `git merge-tree --write-tree` dry run: one conflict, `docs/coverage.md` |
+| 3 | `30c54b34` | MERGED, `make phase` run on the result: **245 passed / 0 failed, exit 0** |
+| 4 | `ea9b651a` | the agent's report arrives, naming this SHA |
+
+`d8102a5d` and `30c54b34` are byte-identical trees -- `git diff --stat`
+between them is empty -- so step 3 looked like step 2's dry run and was.  **The
+last amendment was not cosmetic**: `git diff --stat 30c54b34 ea9b651a` is
+`src/pump/v90/VPcmFloModem.cpp | 6 +++---` plus the test and the suite.  Six
+lines of the reconstruction itself, and a mutation set recorded against source
+that was no longer in the tree.
+
+**THE GREEN GATE IS WHAT MAKES THIS WORTH RECORDING.**  `make phase` passed at
+245/0 on the merge of `30c54b34`.  It was measuring a real, coherent, tested
+tree -- just not the one the agent was going to stand behind.  No gate in this
+tree can catch that, because there is nothing wrong with what it measured.
+The only signal was the SHA in the report not matching the SHA in the history,
+and that is a comparison nobody runs by default.
+
+It also produced a wrong RECORD, which is the part that outlives the merge.
+The superseded suite read 95 mutations, 84 caught, **11 NOT caught**; the final
+one reads 88 caught, **7 NOT caught**.  A note had already been written into
+`test/mutations/vpcmrunpcm.json` naming eleven rows and grouping them -- from
+verdicts that were, by then, describing nobody's tree.
+
+#### What to do instead, and it is cheap
+
+- **Compare the SHA in the report against the SHA in your history**, always.
+  One `git merge-base --is-ancestor <reported> HEAD` is the whole check.
+- **Do not merge a tip labelled `WIP`.**  That was got right here and is worth
+  keeping: a rolling checkpoint is by convention not a claim that anything
+  passed.  But a non-WIP subject is not a promise that the agent has finished
+  either -- `30c54b34` had a full commit message and its own claim of
+  `make phase` green.
+- **Wait for the agent's REPORT, not for its branch to stop looking like a
+  WIP.**  The report is the only artefact that says "this is the version I
+  stand behind".  A branch watcher cannot say it, and the one used here in
+  fact fired a false alarm of its own: it sampled the branch during a
+  `reset`-and-recommit and reported "0 commit(s)", which read exactly like the
+  work having been lost.
+- **Redo the merge from your own last commit rather than layering a second
+  one.**  `ea9b651a` is not a descendant of `30c54b34`, so merging it on top
+  would have left the history carrying two rewrites of one commit and a
+  three-way resolution between them.  `git reset --hard` to this branch's own
+  last commit and one clean merge is what the history should show, and is what
+  it does show.
+- **`git rerere` will helpfully re-apply the resolution you no longer want.**
+  The redone merge resolved `docs/coverage.md` "using previous resolution" --
+  the regenerated file from the SUPERSEDED merge, with that tree's byte counts
+  in it.  Regenerating rather than accepting is what CLAUDE.md's finding 700
+  already says about `--ours`, and it applies to a remembered resolution just
+  as much as to a chosen one.
