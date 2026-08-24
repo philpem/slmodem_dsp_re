@@ -5370,7 +5370,7 @@
    }
   },
   "v90dataph": {
-   "key": "935ce0acb09a319f7b06e2a11d9e5e34eae3af6ddea43b257097cb3267ad4011",
+   "key": "0a5324c1a227bb7aeb238be8d65e2f3393807a1b730daeaa3a62bd93eb936785",
    "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "enterDataPhase: the BLL enters the wrong state": "caught",
@@ -5648,7 +5648,7 @@
    }
   },
   "v90demod": {
-   "key": "9298b2a9a41dece0f1540f66ef100b8dd20901be94de74c64103c31c35fa6052",
+   "key": "e7a20cb6e1098a00453e705a3c4dffe61236fa373448cc59dfca5ec7905b3772",
    "summary": "59 mutations: 56 caught (56 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x280 is cleared as a word": "caught",
@@ -5771,7 +5771,7 @@
    }
   },
   "v90exit3": {
-   "key": "6a3d1928779a56ab38bbfd9331f7ca8136ec0a58086aa9d3d1b031315f2b1840",
+   "key": "b82e63e58d9c928d7d69da44f070588f0261df63444bd5b06fb780cf90a99cf0",
    "summary": "55 mutations: 53 caught (53 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x00 is cleared twice and +0x04 not at all": "caught",
@@ -6396,7 +6396,7 @@
    }
   },
   "v90p4ddec": {
-   "key": "e1f0ee085e250344ae295434e5b1b277245a1295a08631ad74f5396dae8eda93",
+   "key": "0358af6b7bae0bd45009a54decaca6d729355de0e2c4bf090d692ca545a60fa6",
    "summary": "74 mutations: 61 caught (61 by test, 0 by strings), 13 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "B1d counts the ones rather than the zeros": "caught",
@@ -6512,7 +6512,7 @@
    }
   },
   "v90p4dreset": {
-   "key": "89e916c1bbefdbaf0072a5b9cd1cffb232504ec8f492fcf685229591bab8f594",
+   "key": "d5ca51e394160eddfff87dd980e4aec098071b7539a56f31c9e80f06897c2020",
    "summary": "54 mutations: 54 caught (54 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reset: +0x08 takes argument one and not a constant": "caught",

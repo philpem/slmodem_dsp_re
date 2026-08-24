@@ -1707,6 +1707,18 @@ static unsigned char x3_equ[2][X3_EQU_SLOT] __attribute__((aligned(8)));
 static float x3_le[2][X3_COEFS];
 static float x3_dfe[2][X3_COEFS];
 static unsigned char x3_cmp[2][X3_DEM_SLOT];
+/*
+ * The additional-CP record as it stood BEFORE the call, on the blob's side.
+ * This is what turns "the latch returned early" into an observation: two runs
+ * agreeing cannot tell an early return from the whole method, and comparing
+ * one trial's object against ANOTHER trial's cannot either -- the seed moves
+ * with the trial, so a memcmp across trials differs whatever the function did.
+ * Five stores always land on the late path and none on the early one, so the
+ * before/after of THIS object is the discriminator and the demodulator's own
+ * bytes are not (with `word_30 != 0x14` and the design failing, `exitPhase3`
+ * can leave every field of `V90Demodulator` exactly as it found it).
+ */
+static unsigned char x3_acp_pre[X3_ACP_SLOT];
 
 /* Read-only, so one copy: both demodulators hold the same pointer. */
 static unsigned char x3_ph2[X3_PH2_SLOT] __attribute__((aligned(8)));
@@ -1825,9 +1837,6 @@ run_exit_phase3(void)
 	int sawPlus = 0, sawMinus = 0, sawZero = 0;
 	int sawLevel[3];
 	int printed = 0, gated = 0, latchDiff = 0;
-	static unsigned char earlyDem[X3_DEM_SLOT];
-	static char earlyText[8192];
-	int haveEarly = 0;
 
 	sawLevel[0] = sawLevel[1] = sawLevel[2] = 0;
 
@@ -2026,6 +2035,7 @@ run_exit_phase3(void)
 		 */
 		CEV->word_78 = 0xd7d70000u + (unsigned int)trial;
 
+		memcpy(x3_acp_pre, x3_acp[1], X3_ACP_SLOT);
 		x3_arena_save();
 		set_level((unsigned)lvl);
 		dsplib_debug_capture_reset();
@@ -2069,32 +2079,26 @@ run_exit_phase3(void)
 			    trial);
 
 		/*
-		 * THE LATCH, BY VALUE AND NOT ONLY BY AGREEMENT.  Two runs
-		 * agreeing cannot tell "it returned early" from "it did the
-		 * work"; the object left behind by `inPhase3 == 1` has to
-		 * DIFFER from the one every other value leaves.
+		 * THE LATCH, AGAINST WHAT WAS THERE BEFORE THE CALL.  Two
+		 * runs agreeing cannot tell "it returned early" from "it did
+		 * the work", and neither can one trial's object compared
+		 * against another's -- the fill moves with the trial, so a
+		 * memcmp across trials differs whatever the function did.
+		 * What separates the two is the SAME object before and after,
+		 * which is why `x3_acp_pre` is taken above.
 		 */
 		if (latch_v[li] == 1u) {
 			sawLate++;
+			if (memcmp(x3_acp_pre, x3_acp[1], X3_ACP_SLOT) != 0)
+				latchDiff++;
 		} else {
 			sawEarly++;
-			diff_eq_int("the early exit stored nothing (%ld)",
-				    memcmp(x3_acp[0], x3_acp[1],
+			diff_eq_int("the early exit changed nothing (%ld)",
+				    memcmp(x3_acp_pre, x3_acp[1],
 					   X3_ACP_SLOT) == 0 &&
 				    dsplib_debug_capture_lines(1) == 0, 1,
 				    trial);
-			if (!haveEarly) {
-				memcpy(earlyDem, x3_dem[1], X3_DEM_SLOT);
-				strncpy(earlyText,
-					dsplib_debug_capture_text(1),
-					sizeof earlyText - 1);
-				earlyText[sizeof earlyText - 1] = '\0';
-				haveEarly = 1;
-			}
 		}
-		if (latch_v[li] == 1u && haveEarly &&
-		    memcmp(earlyDem, x3_dem[1], X3_DEM_SLOT) != 0)
-			latchDiff++;
 
 		if (latch_v[li] == 1u) {
 			got = *(const short *)&x3_acp[1][0x14];
@@ -2156,7 +2160,8 @@ run_exit_phase3(void)
 
 	diff_eq_int("the latch returned early somewhere", sawEarly > 0, 1, 0);
 	diff_eq_int("and did the work somewhere", sawLate > 0, 1, 0);
-	diff_eq_int("and the two left different objects", latchDiff > 0, 1, 0);
+	diff_eq_int("and the late path moved the record it returned early "
+		    "without touching", latchDiff > 0, 1, 0);
 	diff_eq_int("phase 4 was entered somewhere", sawEnter > 0, 1, 0);
 	diff_eq_int("and skipped somewhere", sawSkip > 0, 1, 0);
 	diff_eq_int("the equaliser ran its body somewhere", sawEquDeep > 0, 1,

@@ -78072,6 +78072,14 @@ the `unusable` column says so; this is the other half, and no column says
 anything at all.  The check is a grep for `<newname> = <newname>` and for the
 new name in every parameter list of the class, and it takes one command.
 
+**BOTH TOUCHED SUITES WERE RE-RUN RATHER THAN LEFT ON `anchorcheck`'s WORD.**
+Every anchor still matching exactly once is necessary and not sufficient, and
+the file also gained a behavioural fix after those anchors were last exercised.
+`v90demod` is 59 mutations, 56 caught, 2 NOT caught, 0 unusable, 1 equivalent
+and `v90dataph` is 39 of 39 with 0 unusable -- both identical to what master
+recorded, so the rename cost nothing and gained nothing there.  The two
+uncaught are finding 293's pair and predate this batch.
+
 **And one paragraph of `V90Demodulator.h` was simply out of date.**  It said
 the header CLAIMS `DSPLIB_V90PARAMETERS_H` for itself so that the named
 `V90Parameters` map can never arrive, and that a translation unit wanting named
@@ -78154,6 +78162,20 @@ messages also had to be planted to answer DIFFERENT lookaheads (1 and 2, out of
 bits 30 and 31 of each) -- with equal answers, `sessionFlag` choosing between
 them has no observable at all and the mutation that swaps the two calls
 survives.
+
+**THE LATCH'S OWN WITNESS WAS WRONG IN ITS FIRST FORM AND THE COMMENT BESIDE
+IT SAID SO IN BOLD.**  It captured one trial's demodulator on the early path
+and compared a later trial's against it, requiring them to differ -- which the
+seed guarantees, because `fill` is keyed on the trial number and the two trials
+are 64 apart.  A check that cannot fail with the claim written out next to it
+is 3055's shape at its purest.  The discriminator is the SAME object before and
+after the call, and it has to be the additional-CP record rather than the
+demodulator: with `word_30 != 0x14` and the design failing, `exitPhase3` can
+leave every field of `V90Demodulator` exactly as it found it, while its five
+stores into the CP record always land.  The sibling check that the early exit
+"stored nothing" had the same defect from the other direction -- it compared
+the two SIDES, which start from an identical fill and so agree whatever
+happens; it now compares against the before-image too.
 
 Counts: `v90exit3` is **55 mutations, 53 caught, 0 NOT caught, 0 unusable, 2
 equivalent** against `t_v90p4ddec`, and the binary's own two suites did NOT
