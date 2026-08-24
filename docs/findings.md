@@ -76589,3 +76589,89 @@ records why file position cannot do it. So "0-10s" is SIP setup, ringing and
 early training mixed together, and the training window proper is probably the
 10-30s buckets at ~0.086/s. A CONNECT-anchored split would sharpen this and
 needs the anchor work. 76 series, one bench, one ATA, one period of time.
+
+### 6920. #110's PRE-REGISTERED BENCH TEST FAILS ON BOTH FAR ENDS — AND THE EXCLUSIONS ARE MORE INTERESTING THAN THE RATES
+
+The digital-termination mode (task #110, findings 1212/1214) was tested against
+its own pre-registration, `testbench/records/dt110-PREREG.txt`, written and
+committed before the first call of the confirmatory batch. 80 calls: 20 matched
+pairs against the Courier (1902) and 20 against the Oli'Net (1903), arms
+interleaved, ONE binary with `DSPLIB_V34_DIGITAL_TERM` the only difference.
+
+**THE PRIMARY OUTCOME FAILS.**
+
+    far end   usable   on / off / tied   sign p
+    Courier    16/20      11 / 4 / 1     0.119
+    Oli'Net    11/20       8 / 2 / 1     0.109
+    pooled     27/40      19 / 6 / 2     0.015   (SECONDARY, declared in advance)
+
+The pre-registration named the falsification condition in advance: *"A sign
+test that does not reach p < 0.05 on EITHER far end."* Neither did. **On its
+own stated terms the claim is not established.**
+
+**THE POOLED RESULT IS NOT THE HEADLINE AND IS NOT ALLOWED TO BECOME ONE.**
+It reaches p=0.015 and it was declared SECONDARY before the data existed,
+precisely so it could not be promoted when the primary disappointed. The
+exploratory run's p=0.057 came from a pooling chosen AFTER seeing both batches;
+writing the status down in advance is the only thing separating this from that.
+
+**THE EXCLUSIONS ARE THE RESULT.** 13 of 40 pairs were lost to a non-connect in
+one arm or the other, and they are NOT symmetric:
+
+    Oli'Net exclusions: 9 of 20 pairs, and SIX of the nine were the MODE arm
+                        failing to connect, three the control.
+    connect fraction:   Courier 18/20 both arms
+                        Oli'Net 16/20 off against 15/20 on
+
+**So the rate comparison is conditioned on connecting, and the mode may be
+paying for its rate with connection reliability.** A test on survivors flatters
+a treatment that helps the calls it does not kill. That is a collider, and it
+is the same defect `docs/v34-rate-collapse.md` sec 7 already confesses to in
+its own replication -- "the exclusion criterion is outcome-adjacent" -- so this
+investigation has now made the same mistake twice with different code.
+
+The exclusion rule was fixed in advance and is doing exactly what it was
+written to do. The rule is not the problem; the OUTCOME is. A rate test needs
+an exclusion rule and therefore inherits the collider, and no amount of n fixes
+that.
+
+**WHAT SURVIVES.** The direction is real and has now reproduced six times:
+exploratory Courier 6/1/1, exploratory Oli'Net 5/2/0, confirmatory Courier
+11/4/1, confirmatory Oli'Net 8/2/1, and both pooled analyses. Median receive
+rate rises in every batch (12000->16800 and 14400->19200 here). Not one of the
+per-far-end tests reaches significance. A consistent direction across six
+underpowered tests is a reason to keep looking, not a result.
+
+**THE NEXT OUTCOME IS CONNECT SUCCESS, NOT RATE.** It needs no exclusion rule,
+so it has no collider -- and on the Oli'Net numbers it currently runs AGAINST
+the mode. That is the honest test of whether this mode is a good idea, and it
+is the one nobody has run.
+
+**THE MODE STAYS DEFAULT-OFF**, which is where it has been since it was written
+and where an unproven benefit belongs.
+
+### 6921. THIRTEEN NON-CONNECTS IN FORTY PAIRS — THE BENCH IS LESS STABLE THAN THE ARCHIVE AND #130 IS IN THE WAY
+
+Recorded separately from 6920 because it is about the apparatus, not the mode,
+and it limits everything measured on this bench until it is understood.
+
+The confirmatory batch lost 13 of 40 pairs to a call that did not connect in
+one arm. That is far worse than the archive's norm -- 1927's six-pair
+hardware-to-hardware matrix was six of six clean, and the ab149 batches ran at
+22-24 of 24. Nothing about the mode explains the CONTROL arm's failures, and
+there were seven of those.
+
+**AND `connect` STILL CONFLATES THREE DIFFERENT FAILURES**, one of which is the
+bench's own -- that is task #130, still open, and it is now directly in the way
+of the measurement 6920 says to do next. A connect-success outcome cannot be
+trusted while a connect failure might be the harness, the PBX or the datapump
+and nothing distinguishes them.
+
+**#131 IS THE CHEAP HALF OF THE FIX.** Recording S86 (call failure reason) on
+every call costs one AT read and would separate at least the far end's account
+of why a call dropped from our own. It has been open a long time on the grounds
+that nothing needed it. Something needs it now.
+
+Note for whoever picks this up: the Courier does NOT implement S86 -- `ATS86?`
+returns ERROR on that unit -- so #131 is satisfiable on the Oli'Net and the
+SupraExpress only, and the Courier needs a different question.
