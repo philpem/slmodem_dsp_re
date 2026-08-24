@@ -1673,9 +1673,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    mp->h1Real == 0 && mp->h1Imag == 0 &&
 			    mp->h2Real == 0 && mp->h2Imag == 0 &&
 			    mp->h3Real == 0 && mp->h3Imag == 0) {
-				edprintf("###############################"
-					 "###############################"
-					 "###############\r\n");
+				edprintf("###########################################################################\r\n");
 				if (codecType == (__tHardwareCodecTypes__)4) {
 					params->MAX_NOF_V90_RETRAINS = 150;
 					edprintf("V90Demodulator: 'Problematic' "
@@ -1692,9 +1690,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 						 "USB. Masking Silence "
 						 "RRN...\r\n");
 				}
-				edprintf("###############################"
-					 "###############################"
-					 "###############\r\n");
+				edprintf("###########################################################################\r\n");
 			}
 			edprintf("V90Demodulator: Silence RRN is not masked "
 				 "(silence flag = %d)\r\n",

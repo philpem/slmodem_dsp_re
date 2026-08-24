@@ -1,61 +1,60 @@
 [
- {
-  "label": "V90Demodulator::getBitRate.  Run it with: tools/mutate.py --suite v90getbitrate.  EVERY MUTATION BELOW MUST LIE INSIDE getBitRate: V90Demodulator.cpp also holds enterPhase3, reInit, reset and enterChannelVerification, and the v90demod suite maps the same file to the same binary for those.  `byte_280 = 0;` appears verbatim inside reset, so the gate's anchors carry the `if (` and the `== 0` that reset's assignment does not have.  A mutation that landed in a sibling would read a verdict at a claim nobody made -- finding 432."
- },
-
- {
-  "label": "the gate is gone: every call computes a rate, including the ones made before there is one",
-  "find": "\tif (byte_280 == 0)\n\t\treturn 0;",
-  "replace": "\tif (0)\n\t\treturn 0;"
- },
- {
-  "label": "the gate is a SIGNED byte tested > 0, so 0x80 and 0xff close it",
-  "find": "\tif (byte_280 == 0)",
-  "replace": "\tif ((signed char)byte_280 <= 0)"
- },
- {
-  "label": "the count is read through mappingParams at +0x14, not mappingParamsAlt at +0x18",
-  "find": "mappingParamsAlt->word_0 * 8000u",
-  "replace": "mappingParams->word_0 * 8000u"
- },
- {
-  "label": "the product is SIGNED going into the conversion -- fildl rather than fildll off a zeroed high word",
-  "find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
-  "replace": "\treturn (unsigned int)((int)(mappingParamsAlt->word_0 * 8000u)\n\t\t\t      * (1.0f / 6.0f) + 0.5f);"
- },
- {
-  "label": "the rounding is dropped: n*8000/6 truncates instead",
-  "find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
-  "replace": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.0f);"
- },
- {
-  "label": "the granularity is the V.92 upstream one, 8000/12, not the V.90 downstream 8000/6",
-  "find": "mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)",
-  "replace": "mappingParamsAlt->word_0 * 8000u * (1.0f / 12.0f)"
- },
- {
-  "label": "the sample rate is 7200 rather than 8000",
-  "find": "mappingParamsAlt->word_0 * 8000u",
-  "replace": "mappingParamsAlt->word_0 * 7200u"
- },
- {
-  "label": "THE NEXT ONE WAS FILED AS EQUIVALENT AND IT IS NOT, and the runner said so on the first pass -- `RECORDED AS EQUIVALENT AND CAUGHT ANYWAY`.  The argument was that the object's four-byte flds/fmuls out of .rodata.cst4 against an eight-byte fldl/fmull out of .rodata.cst8 is an ENCODING difference, and that with everything evaluated in 80-bit x87 registers the two constants are too close to separate.  The second half is arithmetic and it is wrong: the nearest float to 1/6 is high by 5e-9 RELATIVE, and this function multiplies it by a product that reaches 4.3e9, so the absolute error reaches ELEVEN -- far more than the one count an integer truncation can hide.  At word_0 = 268435 the float spelling gives 357913344 and the double one 357913333.  The sweep already carried that input, for the signedness claim, and it separates this too.  Kept as the worked example of tiers.md's rule that an equivalence argument is a claim about the harness and has to be checked against it rather than reasoned about -- this note is a note and not a label so that it PRINTS on every run, which is where the next person meets it."
- },
- {
-  "label": "the reciprocal is a DOUBLE -- observable, see the note above",
-  "find": "* 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
-  "replace": "* 8000u * (1.0 / 6.0)\n\t\t\t      + 0.5);"
- },
- {
-  "label": "THE READ IS A DRAIN: the count is consumed, and only the object comparison can see it",
-  "find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
-  "replace": "\t{\n\t\tunsigned int r = (unsigned int)(mappingParamsAlt->word_0\n\t\t\t\t\t\t* 8000u * (1.0f / 6.0f)\n\t\t\t\t\t\t+ 0.5f);\n\n\t\tmappingParamsAlt->word_0 = 0;\n\t\treturn r;\n\t}"
- },
- {
-  "label": "the return is (int), so the object's 64-bit fistpll becomes a 32-bit fistpl",
-  "find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)",
-  "replace": "\treturn (unsigned int)(int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)",
-  "equivalent": true,
-  "why": "The SAME kind of claim, and the sharper case of it, because this one is what the header's return type was derived from.  `fistpll` with the low half taken is the float-to-unsigned-int idiom and `fistpl` is the float-to-int one; the two disagree only for values at or above 2^31.  The value here is at most (2^32-1)*(1/6)+0.5, which is 715827882 -- so no input this function can be given reaches the disagreement, and no differential test ever will.  The evidence for `unsigned int` is the store WIDTH in the object at 0x1b919 and the pair of test compilations recorded beside the function, both of which are tier 3."
- }
+	{
+		"label": "V90Demodulator::getBitRate.  Run it with: tools/mutate.py --suite v90getbitrate.  EVERY MUTATION BELOW MUST LIE INSIDE getBitRate: V90Demodulator.cpp also holds enterPhase3, reInit, reset and enterChannelVerification, and the v90demod suite maps the same file to the same binary for those.  `byte_280 = 0;` appears verbatim inside reset, so the gate's anchors carry the `if (` and the `== 0` that reset's assignment does not have.  A mutation that landed in a sibling would read a verdict at a claim nobody made -- finding 432."
+	},
+	{
+		"label": "the gate is gone: every call computes a rate, including the ones made before there is one",
+		"find": "\tif (byte_280 == 0)\n\t\treturn 0;",
+		"replace": "\tif (0)\n\t\treturn 0;"
+	},
+	{
+		"label": "the gate is a SIGNED byte tested > 0, so 0x80 and 0xff close it",
+		"find": "\tif (byte_280 == 0)",
+		"replace": "\tif ((signed char)byte_280 <= 0)"
+	},
+	{
+		"label": "the count is read through mappingParams at +0x14, not mappingParamsAlt at +0x18",
+		"find": "return (unsigned int)(mappingParamsAlt->word_0 * 8000u",
+		"replace": "return (unsigned int)(mappingParams->word_0 * 8000u"
+	},
+	{
+		"label": "the product is SIGNED going into the conversion -- fildl rather than fildll off a zeroed high word",
+		"find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
+		"replace": "\treturn (unsigned int)((int)(mappingParamsAlt->word_0 * 8000u)\n\t\t\t      * (1.0f / 6.0f) + 0.5f);"
+	},
+	{
+		"label": "the rounding is dropped: n*8000/6 truncates instead",
+		"find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
+		"replace": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.0f);"
+	},
+	{
+		"label": "the granularity is the V.92 upstream one, 8000/12, not the V.90 downstream 8000/6",
+		"find": "return (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)",
+		"replace": "return (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 12.0f)"
+	},
+	{
+		"label": "the sample rate is 7200 rather than 8000",
+		"find": "return (unsigned int)(mappingParamsAlt->word_0 * 8000u",
+		"replace": "return (unsigned int)(mappingParamsAlt->word_0 * 7200u"
+	},
+	{
+		"label": "THE NEXT ONE WAS FILED AS EQUIVALENT AND IT IS NOT, and the runner said so on the first pass -- `RECORDED AS EQUIVALENT AND CAUGHT ANYWAY`.  The argument was that the object's four-byte flds/fmuls out of .rodata.cst4 against an eight-byte fldl/fmull out of .rodata.cst8 is an ENCODING difference, and that with everything evaluated in 80-bit x87 registers the two constants are too close to separate.  The second half is arithmetic and it is wrong: the nearest float to 1/6 is high by 5e-9 RELATIVE, and this function multiplies it by a product that reaches 4.3e9, so the absolute error reaches ELEVEN -- far more than the one count an integer truncation can hide.  At word_0 = 268435 the float spelling gives 357913344 and the double one 357913333.  The sweep already carried that input, for the signedness claim, and it separates this too.  Kept as the worked example of tiers.md's rule that an equivalence argument is a claim about the harness and has to be checked against it rather than reasoned about -- this note is a note and not a label so that it PRINTS on every run, which is where the next person meets it."
+	},
+	{
+		"label": "the reciprocal is a DOUBLE -- observable, see the note above",
+		"find": "* 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
+		"replace": "* 8000u * (1.0 / 6.0)\n\t\t\t      + 0.5);"
+	},
+	{
+		"label": "THE READ IS A DRAIN: the count is consumed, and only the object comparison can see it",
+		"find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)\n\t\t\t      + 0.5f);",
+		"replace": "\t{\n\t\tunsigned int r = (unsigned int)(mappingParamsAlt->word_0\n\t\t\t\t\t\t* 8000u * (1.0f / 6.0f)\n\t\t\t\t\t\t+ 0.5f);\n\n\t\tmappingParamsAlt->word_0 = 0;\n\t\treturn r;\n\t}"
+	},
+	{
+		"label": "the return is (int), so the object's 64-bit fistpll becomes a 32-bit fistpl",
+		"find": "\treturn (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)",
+		"replace": "\treturn (unsigned int)(int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)",
+		"equivalent": true,
+		"why": "The SAME kind of claim, and the sharper case of it, because this one is what the header's return type was derived from.  `fistpll` with the low half taken is the float-to-unsigned-int idiom and `fistpl` is the float-to-int one; the two disagree only for values at or above 2^31.  The value here is at most (2^32-1)*(1/6)+0.5, which is 715827882 -- so no input this function can be given reaches the disagreement, and no differential test ever will.  The evidence for `unsigned int` is the store WIDTH in the object at 0x1b919 and the pair of test compilations recorded beside the function, both of which are tier 3."
+	}
 ]
