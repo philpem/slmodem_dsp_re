@@ -544,6 +544,10 @@
   "src/pump/v90/ResamplerTimingOffset.cpp",
   "build/test/t_v90leaves"
  ],
+ "v90rundemod": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_v90rundemod"
+ ],
  "v90sbe": [
   "src/pump/v90/V90SignBitsExtractor.cpp",
   "build/test/t_v90leaves"
