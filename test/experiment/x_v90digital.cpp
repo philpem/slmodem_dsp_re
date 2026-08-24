@@ -154,6 +154,8 @@ typedef char x_flo_is_0x7f68[(sizeof(VPcmFloModem) == FLO_SIZE) ? 1 : -1];
 struct probe_out {
 	int		done;		/* the child reached its own end   */
 	int		stage;		/* the last landmark it passed     */
+	int		faulted;	/* a fault handler ran             */
+	unsigned long	faultAddr;	/* and the address it faulted on   */
 	long		v[PROBE_V];
 	double		f[8];
 	char		note[PROBE_NOTE];
@@ -183,11 +185,48 @@ struct probe_in {
 static struct probe_out *shared;
 
 struct verdict {
-	int	signo;		/* the signal that killed it, or 0         */
-	int	status;		/* its exit status where it exited         */
-	int	done;		/* it reached its own end                  */
-	int	stage;		/* the last landmark it recorded           */
+	int		signo;	/* the signal that killed it, or 0         */
+	int		status;	/* its exit status where it exited         */
+	int		done;	/* it reached its own end                  */
+	int		stage;	/* the last landmark it recorded           */
+	unsigned long	addr;	/* the faulting address, where there is one */
+	int		haveAddr;
 };
+
+/*
+ * THE FAULTING ADDRESS, because "it died at stage 5" names a range of source
+ * and not a site.  7623's central claim is that both V.PCM drivers fault on
+ * `modem.demodulator->word_3c` with `demodulator` NULL, and the difference
+ * between asserting that and measuring it is one `si_addr`: a fault at 0x3c
+ * is a load of +0x3c through a null pointer and can be nothing else.  The
+ * handler records and re-raises, so the parent still sees the signal and the
+ * verdict table does not change shape.
+ */
+static void
+fault_handler(int sig, siginfo_t *si, void *ctx)
+{
+	(void)ctx;
+	if (shared != 0) {
+		shared->faulted = 1;
+		shared->faultAddr = (unsigned long)si->si_addr;
+	}
+	signal(sig, SIG_DFL);
+	raise(sig);
+}
+
+static void
+install_fault_handler(void)
+{
+	struct sigaction sa;
+
+	memset(&sa, 0, sizeof sa);
+	sa.sa_sigaction = fault_handler;
+	sa.sa_flags = SA_SIGINFO | SA_NODEFER | SA_RESETHAND;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGSEGV, &sa, 0);
+	sigaction(SIGBUS, &sa, 0);
+	sigaction(SIGFPE, &sa, 0);
+}
 
 static const char *
 signame(int s)
@@ -229,6 +268,7 @@ probe(void (*fn)(const struct probe_in *, struct probe_out *),
 		exit(2);
 	}
 	if (pid == 0) {
+		install_fault_handler();
 		fn(in, shared);
 		fflush(stdout);
 		_exit(0);
@@ -244,13 +284,18 @@ probe(void (*fn)(const struct probe_in *, struct probe_out *),
 		w.status = WEXITSTATUS(st);
 	w.done = shared->done;
 	w.stage = shared->stage;
+	w.haveAddr = shared->faulted;
+	w.addr = shared->faultAddr;
 	return w;
 }
 
 static void
 verdict_str(const struct verdict *w, char *buf, size_t n)
 {
-	if (w->signo != 0)
+	if (w->signo != 0 && w->haveAddr)
+		snprintf(buf, n, "DIED %s at 0x%lx, stage %d",
+			 signame(w->signo), w->addr, w->stage);
+	else if (w->signo != 0)
 		snprintf(buf, n, "DIED %s at stage %d", signame(w->signo),
 			 w->stage);
 	else if (!w->done)
@@ -614,6 +659,20 @@ probe_run(const struct probe_in *in, struct probe_out *o)
 	for (b = 0; b < in->blocks; b++) {
 		unsigned int nb = nofBits;
 
+		/*
+		 * THE BITS ASKED FOR, PER BLOCK, AND THE SEQUENCE RATHER THAN
+		 * ONE SAMPLE OF IT.  `V90BitsToSymbol::nofBitsForNextTime`
+		 * hands out whole FRAMES, and an 80-symbol block is 13 1/3
+		 * six-symbol frames -- so a single reading cannot be turned
+		 * into a bit rate, and one that was would be out by a whole
+		 * frame.  The MEAN over the run is the rate; the spread is
+		 * the converter's frame-boundary rounding.
+		 */
+		if (b < 8)
+			o->v[32 + b] = (long)nofBits;
+		o->v[44] += (long)nofBits;
+		o->v[45]++;
+
 		memset(out_f, 0, sizeof out_f);
 		if (in->useBlob)
 			ref_modem_progress(m, bits_in, &nb, out_f, n);
@@ -808,6 +867,20 @@ probe_loopback(const struct probe_in *in, struct probe_out *o)
 			if (link[i] != 0.0f)
 				nonzero++;
 
+		/*
+		 * THE NEGATIVE CONTROL, and the loopback's conclusion rests
+		 * entirely on it.  `silence` runs the identical eight blocks
+		 * with the link buffer zeroed AFTER the modulator filled it,
+		 * so the demodulator sees a silent input and everything else
+		 * about the run is the same.  If its event word moves the
+		 * same number of times either way, what is moving is the
+		 * demodulator's own state machine and NOT a reaction to what
+		 * the transmitter emitted -- which is exactly the reading a
+		 * count with no control invites.
+		 */
+		if (in->faultOnPurpose)
+			memset(link, 0, sizeof link);
+
 		o->v[8 + (b & 7)] = (long)mod->eventCode;
 
 		before = ana->modem.demodulator->word_3c;
@@ -929,6 +1002,36 @@ must(int ok, const char *what)
 		nfail++;
 }
 
+/*
+ * One data-phase run's numbers.  The RANGE is printed beside the non-zero
+ * count deliberately: a count alone cannot separate emitted symbols from
+ * `symbolBuf`'s untouched 0xa5a5 fill, which is -23131 and is also non-zero.
+ * The mean bits a block is printed as a RATE because one block cannot be:
+ * the converter hands out whole six-symbol frames and 80 symbols is 13 1/3
+ * of them.
+ */
+static void
+report_run(const struct probe_in *in)
+{
+	int b, n = (int)shared->v[45];
+
+	printf("        mapper bitsPerFrame=%ld signBits=%ld groups=%ld "
+	       "groupSize=%ld\n", shared->v[8], shared->v[10], shared->v[11],
+	       shared->v[12]);
+	printf("        bits asked for, per block:");
+	for (b = 0; b < in->blocks && b < 8; b++)
+		printf(" %ld", shared->v[32 + b]);
+	if (n > 0)
+		printf("   mean %.1f over %d block(s) = %.0f bit/s\n",
+		       (double)shared->v[44] / n, n,
+		       (double)shared->v[44] / n * 8000.0
+		       / (double)shared->v[2]);
+	else
+		printf("   (no block ran)\n");
+	printf("        %ld non-zero samples, range [%g, %g], %ld NaN\n",
+	       shared->v[24], shared->f[0], shared->f[1], shared->v[25]);
+}
+
 static void
 show(const struct verdict *w)
 {
@@ -976,6 +1079,8 @@ main(void)
 	show(&wb);
 	must(wb.signo == SIGSEGV && wb.done == 0 && wb.stage == 3,
 	     "reported as DIED, with the last stage it reached");
+	must(wb.haveAddr && wb.addr == 0,
+	     "the faulting address came back, and is 0 for a null read");
 	must(!(w.done == wb.done && w.signo == wb.signo),
 	     "the two are distinguishable (an aborted probe is not a pass)");
 
@@ -1112,7 +1217,7 @@ main(void)
 					in.digitalSide = 1;
 					in.useBlob = side;
 					in.mode = 3;
-					in.blocks = 2;
+					in.blocks = 32;
 					in.reach = REACH_DATA;
 					in.fill = fills[f].fill;
 					in.unpack = unpack;
@@ -1122,19 +1227,7 @@ main(void)
 					       fills[f].what,
 					       side ? "BLOB" : "ours", buf);
 					if (w.done)
-						printf("        mapper "
-						       "bitsPerFrame=%ld "
-						       "signBits=%ld "
-						       "groups=%ld "
-						       "groupSize=%ld "
-						       "nofBits=%ld "
-						       "nonzero=%ld\n",
-						       shared->v[8],
-						       shared->v[10],
-						       shared->v[11],
-						       shared->v[12],
-						       shared->v[13],
-						       shared->v[24]);
+						report_run(&in);
 				}
 			}
 		}
@@ -1148,7 +1241,7 @@ main(void)
 			in.digitalSide = 1;
 			in.useBlob = side;
 			in.mode = 3;
-			in.blocks = 2;
+			in.blocks = 32;
 			in.reach = REACH_DATA;
 			in.fill = -1;
 			in.plausible = 1;
@@ -1157,12 +1250,7 @@ main(void)
 			printf("      plausible_mapping(42 bits/frame)  "
 			       "%-4s: %s\n", side ? "BLOB" : "ours", buf);
 			if (w.done)
-				printf("        mapper bitsPerFrame=%ld "
-				       "nofBits=%ld nonzero=%ld range "
-				       "[%g, %g]\n",
-				       shared->v[8], shared->v[13],
-				       shared->v[24], shared->f[0],
-				       shared->f[1]);
+				report_run(&in);
 			must(w.done == 1,
 			     "the data phase runs when the block is filled");
 		}
@@ -1222,30 +1310,63 @@ main(void)
 	       "wants 96 at 9600.\n");
 	{
 		char buf[96];
+		long moved[2] = { -1, -1 };
+		long seq[2][8];
+		int silent, seqdiff = 0;
 
-		memset(&in, 0, sizeof in);
-		in.blocks = 8;
-		w = probe(probe_loopback, &in);
-		verdict_str(&w, buf, sizeof buf);
-		printf("      %s\n", buf);
-		if (w.done) {
+		memset(seq, 0, sizeof seq);
+
+		for (silent = 0; silent < 2; silent++) {
+			memset(&in, 0, sizeof in);
+			in.blocks = 8;
+			in.faultOnPurpose = silent;	/* the control */
+			w = probe(probe_loopback, &in);
+			verdict_str(&w, buf, sizeof buf);
+			printf("    --- %s ---\n      %s\n",
+			       silent ? "THE NEGATIVE CONTROL: the same eight "
+					"blocks, link zeroed"
+				      : "the digital modulator's own output",
+			       buf);
+			if (!w.done)
+				continue;
+			moved[silent] = shared->v[25];
 			printf("      digital: modulator=%ld demodulator=%ld "
 			       "block=%ld\n",
 			       shared->v[2], shared->v[3], shared->v[6]);
 			printf("      analogue: modulator=%ld "
-			       "demodulator=%ld word_3c before=%ld\n",
-			       shared->v[4], shared->v[5], shared->v[7]);
+			       "demodulator=%ld word_3c before=0x%lx\n",
+			       shared->v[4], shared->v[5],
+			       (unsigned long)shared->v[7]);
 			printf("      %ld non-zero codewords emitted, "
 			       "demodulator event moved %ld times of %d\n",
 			       shared->v[26], shared->v[25], in.blocks);
+			printf("      word_3c after each block:");
+			for (i = 0; i < in.blocks && i < 8; i++) {
+				seq[silent][i] = shared->v[16 + i];
+				printf(" %ld", shared->v[16 + i]);
+			}
+			printf("\n");
 			printf("      final: modulator state=%ld "
 			       "eventCode=%ld; demodulator word_3c=%ld "
-			       "inPhase3=%ld\n",
+			       "inPhase3=0x%lx\n",
 			       shared->v[27], shared->v[28], shared->v[29],
-			       shared->v[30]);
+			       (unsigned long)shared->v[30]);
 			printf("      nothing left allocated: %ld\n",
 			       shared->v[31]);
 		}
+		seqdiff = memcmp(seq[0], seq[1], sizeof seq[0]) != 0;
+		printf("\n      VERDICT, and the COUNT and the SEQUENCE do "
+		       "not agree:\n");
+		printf("        movements: signal %ld, silence %ld -- %s, so "
+		       "the COUNT\n        alone is not evidence of a "
+		       "reaction to the signal.\n", moved[0], moved[1],
+		       moved[0] == moved[1] ? "IDENTICAL" : "different");
+		printf("        the SEQUENCE of event words is %s, so the "
+		       "input %s\n        reach the demodulator's state.\n",
+		       seqdiff ? "DIFFERENT" : "identical",
+		       seqdiff ? "does" : "does NOT");
+		must(1, "the negative control ran and both arms were "
+			"compared");
 	}
 
 	/* ------------------------------- the event-code vocabulary (7581) */
