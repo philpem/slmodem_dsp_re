@@ -46,15 +46,43 @@ GREEN**: both `V90BitsToSymbol` resets, `V90Mapper::process`,
     V90Phase4Modulator::setMappingParams          DONE
     V90Phase4Modulator::generateV90Symbol          DONE   2,235 B
     V90Phase4Modulator::generateV92Symbol          DONE   3,922 B
-    V90Phase4Modulator::reset                                    255 B
-    V90Phase4Demodulator::reset                                  504 B
+    V90Phase4Modulator::reset                     DONE     255 B
+    V90Phase4Demodulator::reset                   DONE     504 B
     V90Demodulator::exitPhase3                                   768 B
     V90Demodulator::progress                                   7,276 B
 
-**THE TWO PUMPS ARE WRITTEN AND DIFFERENTIALLY GREEN**, 6,157 bytes of the
-batch's remaining 16,853, and what is left is the four in the tail above.
-Findings 7450-7460; `docs/findings.md` 7450 has the two jump tables and 7452
-the seven places the V.92 pump genuinely differs from the V.90 one.
+**THE TWO PUMPS AND BOTH `reset`s ARE WRITTEN AND DIFFERENTIALLY GREEN**,
+6,916 bytes of the batch's remaining 16,853, and what is left is
+`V90Demodulator::exitPhase3` (768 B) and `V90Demodulator::progress` (7,276 B).
+Findings 7450-7460 for the pumps -- 7450 has the two jump tables and 7452 the
+seven places the V.92 pump genuinely differs from the V.90 one -- and
+7470-7477 for the two resets.
+
+**BOTH `reset`s COME OUT OF GCC 3.4.2 AT THE BLOB'S OWN SIZE**, 255 and 504
+bytes, the modulator's byte for byte and the demodulator's instruction for
+instruction with two free scheduling permutations.  That is the structural
+check the pumps could not make (7460), and it is finding 7470.
+
+`V90Phase4Modulator::reset` is 255 bytes of sixteen stores, one G.711
+expansion with NO cast (7471 -- the class's own `P4M_LEVEL` macro has one and
+must not be reused here), one `Scrambler<h,h>::reset(0)` and a loop that runs
+whichever pump `sessionFlag` selects, `nofSymbols` times.  Everything the
+edges maintain is put back; every field describing a MESSAGE is left alone.
+
+`V90Phase4Demodulator::reset` is 504 bytes and is the whole receiver's entry
+point: eleven scalars, both `V90RDetector`s from
+`(PHASE4_R_DETECTION_LENGTH, 0x18)`, the CP under V.92 or the MP under V.90,
+the demapper, the embedded modulator's own `reset` into TRN2d and its
+`setMappingParams`, two diagnostics at two different gates, and a loop over
+`getV92Decision` or `getV90Decision`.  The two session arms differ in exactly
+one store -- +0x34fc, V.92's alone (7473) -- and the demapper's double guard
+is untestable because both pointers are dereferenced unconditionally in the
+same function (7474).
+
+Its test is in `t_v90p4ddec` and not in a fixture of its own, because that is
+where the demapper, the descrambler, the CP and the MP are already planted
+well enough for the decision members to run: a home that could not drive the
+loop would leave "the two decision members are swapped" with no witness.
 
 **`setMappingParams` IS AT `.text+0x2d120` AND IS 96 BYTES**, which the table
 above always said and a task brief did not: `0x30310` is inside
@@ -83,6 +111,15 @@ redundant `cmpl $0xe,0x4(%esi)` at +0x2e0a4 is the evidence for (7451).
 `unsigned int` written by three members and read by none of the forty-five, and
 the enumeration gains 0x14 and 0x1c, which the header had said were absent
 because nothing stored or compared them. Both keep offset names. Finding 7453.
+
+**WHAT THE TWO RESETS RETIRED FROM THE PUMP GRID'S PLANTING IS ONE THING AND
+IT IS THE HEADLINE ONE.**  7454 says no member of `V90Phase4Modulator` can put
+the object into state 0x0f, 0x14 or 0x1c; `reset`'s third argument is a
+`Phase4ModulatorState` stored unexamined, so all thirty-two states are now
+reachable through a public member and `run_p4m_reset` drives them that way.
+Nothing else in 7454's list can be retired -- `reset` forces zero where the
+grid needs a range -- and `setup_pump` was left alone rather than rewired, so
+the pump grid re-ran unchanged at 169 caught of 171.  Finding 7475.
 
 Three things the fixture had to be given beyond a seed, each of which read as a
 defect in `src/` first: the drain writes whole symbols into a ONE-`short` slot,

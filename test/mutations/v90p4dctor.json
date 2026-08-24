@@ -68,9 +68,9 @@
   "replace": "\tsessionFlag = (unsigned int)(long)par;\n\tparams = par;"
  },
  {
-  "label": "the constructor also clears the word at +0x08",
+  "label": "the constructor also clears the ucode byte at +0x08",
   "find": "\tautoDigitalImpDetector = adid;\n}",
-  "replace": "\tautoDigitalImpDetector = adid;\n\t*(unsigned int *)pad_0008 = 0;\n}"
+  "replace": "\tautoDigitalImpDetector = adid;\n\tucode = 0;\n}"
  },
  {
   "label": "the destructor clears the demapper pointer",

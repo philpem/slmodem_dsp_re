@@ -6313,12 +6313,12 @@
    }
   },
   "v90p4dctor": {
-   "key": "36a6a1e1dcf72db4392de7db6ec83448d232837836c67de8bd6976e3e4cd584e",
+   "key": "a2a9a0e6795ac8ea671a68f5fea4cb2ddff495fb888e07f2329151ee9b2122e2",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the CP and MP records land in each other's fields": "caught",
     "the connection evaluator lands where the detector belongs": "caught",
-    "the constructor also clears the word at +0x08": "caught",
+    "the constructor also clears the ucode byte at +0x08": "caught",
     "the demapper and the descrambler land in each other's fields": "caught",
     "the destructor clears the demapper pointer": "caught",
     "the destructor clears the session flag, volatile so it survives": "caught",
@@ -6335,8 +6335,8 @@
    }
   },
   "v90p4ddec": {
-   "key": "f1052539de9bb4aa2466040315e9e7cbc15b0ae5baf7f42610ec4ba8ad2c593a",
-   "summary": "74 mutations: 59 caught (59 by test, 0 by strings), 15 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "9cefb34e71c8ddabcb5da648cfed19b801af0f56615af3bde203189933ec3127",
+   "summary": "74 mutations: 61 caught (61 by test, 0 by strings), 13 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "B1d counts the ones rather than the zeros": "caught",
     "B1d does not clear the Ed flag": "caught",
@@ -6367,13 +6367,13 @@
     "the Ed gate takes any of its three conditions": "caught",
     "the MP arm answers to the MPnot code": "uncaught",
     "the MP arm reports MPnot": "uncaught",
-    "the Rd detector is given the sample rather than the decision": "uncaught",
+    "the Rd detector is given the sample rather than the decision": "caught",
     "the RdNot arm does not clear the CP type byte": "caught",
     "the RdNot arm hands the MP record the second mapping block": "caught",
     "the RdNot arm resets the demapper on the second block": "caught",
     "the RdNot arm takes the QC length": "caught",
     "the RfNot arm hands the CP record the first mapping block": "caught",
-    "the RfNot arm is fed the sample": "uncaught",
+    "the RfNot arm is fed the sample": "caught",
     "the Ri arm detects RNot rather than R": "caught",
     "the Ri arm does not clear the count": "caught",
     "the Ri arm records the RiNot progress code": "caught",
@@ -6415,7 +6415,7 @@
    }
   },
   "v90p4dleaf": {
-   "key": "ba91d06ae6ffca2fe9ec9e85f954c80b3e59cc85d54de1b3269576e5d2409e1f",
+   "key": "8e0c2a57847ae3ff2ff73a98e83307a6ec2bdab9c449ee61d95a58f57cf556bc",
    "summary": "30 mutations: 30 caught (30 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "detectFPE announces FPE twice": "caught",
@@ -6448,6 +6448,66 @@
     "resetRRNDetector reads the phase 4 detection length, +0x294": "caught",
     "resetRRNDetector resets the two detectors the other way round": "caught",
     "resetRRNDetector swaps the first detector's two counts": "caught"
+   }
+  },
+  "v90p4dreset": {
+   "key": "4eb606e2ccfa04f6aaea3b8d293ca24effd0e9e0cf743ac2a591a7b552d2fa4b",
+   "summary": "54 mutations: 54 caught (54 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "reset: +0x08 takes argument one and not a constant": "caught",
+    "reset: +0x20 takes argument two and not a constant": "caught",
+    "reset: +0x28 is cleared": "caught",
+    "reset: +0x34 is written at all": "caught",
+    "reset: +0x34 takes argument four": "caught",
+    "reset: +0x34fc is written on the CP arm": "caught",
+    "reset: +0x3510 is cleared": "caught",
+    "reset: +0x3518 is cleared": "caught",
+    "reset: +0x3518 is cleared and not set to the RiNot arm's value": "caught",
+    "reset: +0x38 is set to ONE, not cleared like its twin": "caught",
+    "reset: +0x3c is CLEARED where resetBeforRRN sets it": "caught",
+    "reset: +0x40 is cleared": "caught",
+    "reset: +0x44 is cleared": "caught",
+    "reset: +0x48 is cleared": "caught",
+    "reset: the CP arm is the NON-zero one": "caught",
+    "reset: the CP arm reads mappingParams1, not mappingParams2": "caught",
+    "reset: the CP is reset at all": "caught",
+    "reset: the CP's group size is written": "caught",
+    "reset: the DD length is chosen and not constant": "caught",
+    "reset: the MP arm does NOT write +0x34fc": "caught",
+    "reset: the MP arm reads mappingParams1, not mappingParams2": "caught",
+    "reset: the MP is reset at all": "caught",
+    "reset: the MP's group size is written": "caught",
+    "reset: the V.92 member is the non-zero one": "caught",
+    "reset: the byte at +0x30 is cleared": "caught",
+    "reset: the choice is made on quickConnect and not on sessionFlag": "caught",
+    "reset: the decision loop runs nofSamples times and not never": "caught",
+    "reset: the decision loop's bound is argument three, not four": "caught",
+    "reset: the decision loop's bound is strict": "caught",
+    "reset: the decision members are handed a ZERO sample": "caught",
+    "reset: the demapper gets mappingParams1, not mappingParams2": "caught",
+    "reset: the demapper gets reset and not resetNoSpectral": "caught",
+    "reset: the demapper is reset at all": "caught",
+    "reset: the detector length is PHASE4_R_DETECTION_LENGTH": "caught",
+    "reset: the first detector is reset at all": "caught",
+    "reset: the first detector's two arguments are not swapped": "caught",
+    "reset: the literal second argument is 0x18": "caught",
+    "reset: the modulator gets mappingParams1, not mappingParams2": "caught",
+    "reset: the modulator is given a trip count of ZERO": "caught",
+    "reset: the modulator is put into TRN2d": "caught",
+    "reset: the modulator's code is this class's own ucode": "caught",
+    "reset: the modulator's fifth argument is ZERO": "caught",
+    "reset: the modulator's law comes from the detector": "caught",
+    "reset: the modulator's mapping block is set": "caught",
+    "reset: the non-quickConnect length is TRN2D_DD_LENGTH, not the RRN one": "caught",
+    "reset: the quickConnect line is behind level > 1": "caught",
+    "reset: the quickConnect line prints +0x34": "caught",
+    "reset: the sample count is cleared": "caught",
+    "reset: the second detector gets the same pair as the first": "caught",
+    "reset: the second detector is reset at all": "caught",
+    "reset: the trn2dDDLength line is printed at all": "caught",
+    "reset: the trn2dDDLength line reports the field": "caught",
+    "reset: the two DD lengths are not swapped": "caught",
+    "reset: the two decision members are not swapped": "caught"
    }
   },
   "v90p4mctor": {
@@ -6759,7 +6819,7 @@
    }
   },
   "v90p4mtab": {
-   "key": "5e7a04898c214c9cfb3e91cabd84979162cfbf2712ac9e63ded159aed6b02388",
+   "key": "279686c43bedb18d5a7e040a164afc7f28c568a893d785bed7a503267bb1a4b3",
    "summary": "43 mutations: 43 caught (43 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "P4M_LEVEL: A-law inverts rather than xors 0xd5": "caught",

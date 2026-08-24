@@ -77698,3 +77698,251 @@ deliberately outside `make phase` so the gate cannot see that.
 IDENTICAL set before the pumps were written -- and it is still there.  The
 ratchet run is `ratchet OK -- gained: compared 986->1207, identical 350->485,
 same_size 71->89`.
+
+### 7470. BOTH PHASE 4 `reset`s COME OUT OF GCC 3.4.2 AT THE BLOB'S OWN SIZE, AND ONE OF THEM BYTE FOR BYTE
+
+`V90Phase4Modulator::reset` is `.text+0x2f630`, 0xff = 255 bytes, and the
+period toolchain emits **255 bytes whose every instruction, operand and
+alignment nop matches** -- the only textual difference in the whole listing is
+that objdump renders the blob's padding as thirteen `nop`s where ours is one
+`lea 0x0(%esi,%eiz,1),%esi`, which is the same filler spelled by the same
+assembler for a differently-placed `.p2align`.  For a function with two calls,
+a branchless `sbb` idiom and a loop, that is grade 0 on `byteident.py`'s scale.
+
+`V90Phase4Demodulator::reset` is `.text+0x277c0`, 0x1f8 = 504 bytes, and ours
+is **504 bytes and 144 instructions against the blob's 504 and 144**, the
+sequence differing only by two scheduling permutations inside straight-line
+runs -- a `mov`/`movl` pair moved two slots in the prologue, and the argument
+setup before the call to `V90Phase4Modulator::reset` reordered.  Register
+allocation differs at seven sites and nothing else does.  Both are CLAUDE.md's
+free column and nothing was permuted to chase either.
+
+**What that is worth is a check the differential tier cannot make.**  A grid
+over five arguments says the behaviour agrees; the sizes agreeing to the byte
+say the STRUCTURE does -- no statement missing, none extra, nothing factored
+differently.  It is finding 7460's call-inventory argument in its strongest
+form.
+
+### 7471. THE MODULATOR'S COMPANDING EXPANSION HAS NO CAST, AND `P4M_LEVEL`'s DOES -- THE OBJECT SEPARATES THEM
+
+`V90Phase4Modulator.cpp` already carries `P4M_LEVEL`, which spells the same two
+G.711 conversions `setRdRtSymbols` and `setRfSymbols` use:
+
+    (short)ulaw2linear((unsigned char)((m->constellation[k][0] & 0x7f) ^ 0xff))
+
+and its comment records that GCC emits an 8-bit `not` for the mu-law arm.
+Reusing it in `reset` is the obvious move and it is WRONG, and the object says
+so in five bytes.  `reset`'s two arms are
+
+    2f670:  83 e0 7f           and $0x7f,%eax
+    2f673:  35 d5 00 00 00     xor $0xd5,%eax        ; A-law
+    2f719:  83 e2 7f           and $0x7f,%edx
+    2f71c:  81 f2 ff 00 00 00  xor $0xff,%edx        ; mu-law
+
+-- a full-word immediate, no truncation to `unsigned char` anywhere, and the
+value pushed as a 32-bit slot.  So the argument reaches `ulaw2linear` as an
+`int` and the source at THIS site has no cast, where the source at the other
+two does.  Written without it, our `reset` reproduces both arms exactly.
+
+The general point is CLAUDE.md's forced/free rule applied to a WIDTH rather
+than a signedness: a narrowing the compiler was TOLD to do leaves an
+instruction, and one it merely could have done does not.  One class writes one
+conversion two ways, so "the tree already has a macro for this" is not evidence
+about any particular site.
+
+### 7472. `V90Phase4Demodulator` GAINS TWO NAMES AND LOSES A `pad_`, ALL THREE FORCED BY `reset`
+
+Three corrections to `include/dsplib/V90Phase4Demodulator.h`, and the shape is
+7453's: fields the CONSTRUCTION PATH could say nothing about, settled the
+moment the function that writes them was read.
+
+**+0x0008 is `ucode`, one byte, not `pad_0008[4]`.**  The header said it was
+"NOT WRITTEN BY THE CONSTRUCTOR and reached by nothing reconstructed here".
+`reset` writes it -- `mov %cl,0x8(%esi)` at 0x277ec, argument one, typed `h` by
+the mangling -- and the object's only read of it, `movzbl 0x8(%esi),%eax` at
+0x278ec, feeds the embedded `V90Phase4Modulator::reset`'s own second argument,
+which `V90Phase4Modulator.h` already documents as the G.711 code whose linear
+expansion becomes `codeLevel`.  So the meaning comes from the callee (CLAUDE.md
+rule 2) and the spelling is the one this tree already uses for the same byte in
+the same role, `V90Phase3Demodulator::ucode`.
+
+**+0x0034 is `quickConnect`, and that is rule 1.**  `reset` prints exactly this
+field: `mov 0x34(%esi),%ebx` at 0x279a0 into `"V90Phase4Demodulator: reset
+called, quickConnect indication is %d\r\n"` (`.rodata.str1.4+0x6cdc`).  It is
+corroborated by what the flag selects -- `TRN2D_QC_DD_LENGTH` when set and
+`TRN2D_DD_LENGTH` when clear -- and QC in the parameter's own name is the same
+abbreviation.  The rename touched five files and six mutation anchors;
+`uint_0034` appears nowhere now.
+
+**+0x34fc is `unsigned int uint_34fc` and keeps the offset name.**  Its width
+was "that function's to settle" and the function settles it at four (`movl`).
+Its VALUE is `mappingParams1->word_0`, the same word handed to the CP as its
+group size in the same breath -- but one store with no reader anywhere in the
+object does not decide between "a shadow of the group size" and "the frame
+width `V90Mapper` and `V90BitsToSymbol` take that same field to be", so 3120's
+ruling applies.
+
+### 7473. THE DEMODULATOR RESET'S TWO SESSION ARMS DIFFER IN EXACTLY ONE STORE, AND IT IS THE V.92 ONE THAT HAS IT
+
+`V90Phase4Demodulator::reset`'s `sessionFlag` branch reads as a mirror pair and
+is not one:
+
+    V.92 (0x27872):  cp->reset();  uint_34fc = mp1->word_0;
+                                   cp->word_3ba8 = mp1->word_0;
+    V.90 (0x27982):  mp->reset();  mp->word_114  = mp1->word_0;
+
+Three stores against two.  Both take the group size out of `mappingParams1` and
+give it to whichever message record the session uses; only the V.92 arm keeps a
+copy at +0x34fc, and the V.90 arm leaves that word exactly as it found it.
+
+**A differential grid cannot see the asymmetry on its own** -- both sides would
+omit the store together -- so `t_v90p4ddec`'s `run_p4d_reset` plants a sentinel
+over +0x34fc before every trial and asserts BY VALUE on the blob's side that it
+holds the group size under V.92 and the sentinel under V.90.  Both mutations
+are caught: dropping the store, and adding it to the other arm.
+
+**The V.92 arm loads `mappingParams1->word_0` ONCE and stores it twice**, `mov
+(%ecx),%edx` at 0x27883 feeding both 0x27885 and 0x2788b.  Written as two
+independent reads, GCC RELOADS -- the store to `this->uint_34fc` is an
+`unsigned int` write that may alias an `unsigned int` read, and strict aliasing
+cannot help when the types match -- and emits an extra `mov (%ecx),%ebx`, which
+was the one instruction separating our first version from the object.  The
+local is the object's, measured and not tidied.
+
+### 7474. TWO OF THE DEMODULATOR RESET'S CLAIMS HAVE NO POSSIBLE WITNESS, AND THE REASON IS INSIDE THE FUNCTION
+
+`demapper->reset(mappingParams1)` is guarded twice --
+
+    27891:  test %ecx,%ecx   ; mappingParams1
+    2789b:  test %eax,%eax   ; autoDigitalImpDetector
+
+-- and NEITHER guard can be presented, because the same function dereferences
+both pointers unconditionally: `mappingParams1->word_0` is read on both arms of
+the session branch BEFORE the guard, and `autoDigitalImpDetector->pcmType`
+after it.  A null value for either is a segfault, not a trial, so a mutation
+dropping either test is equivalent over every object this class can be given.
+They are NOT written into `test/mutations/v90p4dreset.json` -- finding 6000's
+principle, that a verdict which can never be recorded is worse than an absent
+one, applied before the fact rather than after.
+
+**The second dereference is the object's own and reads as a defect until it is
+traced.**  On the arm where the ADID guard REJECTS, GCC threads the jump
+straight past the reload at 0x278c0 into 0x278c6 -- it knows the register
+already holds zero -- and 0x278d5's `mov 0xa95c(%eax),%ecx` reads through a
+null pointer.  That is jump threading over source which guards on a pointer it
+then trusts; writing the guard any other way emits the reload and moves the
+codegen away from the blob.  Recorded so the next reader does not "fix" it.
+
+### 7475. WRITING `reset` RETIRES THE HEAD OF 7454 AND NONE OF ITS BODY, AND THE HEAD IS THE PART THAT MATTERED
+
+7454 says: "`V90Phase4Modulator::reset` is still unwritten, so no member of this
+class can put the object into state 0x0f or 0x14 or 0x1c at all".  **That
+sentence is now false, and it is the only one that is.**  `reset`'s third
+argument is a `Phase4ModulatorState` stored into +0x04 unexamined -- `mov
+0x2c(%esp),%edx ; mov %edx,0x4(%esi)` -- so every one of the thirty-two states
+the two jump tables dispatch is reachable by calling a public member with it.
+`t_v90modchain`'s `run_p4m_reset` does exactly that: it sweeps all thirty-two
+as `reset`'s argument and then lets `reset`'s own loop dispatch them.
+
+Everything else 7454 lists stays poked, and not for want of trying:
+
+- `symbolCount` -- `reset` forces zero and the grid needs 0x17, 0x11f, 0x17f,
+  0x3e7b, 0x95e..0x960 and 0xffffffff.  No sequence of calls reaches those: the
+  machine takes 15,996 symbols to leave TRN2d.
+- `nextStateAfterTRN2d` -- `reset` yields 4 or 5 and nothing else; the grid
+  needs `P4M_STATE_MP_NOT`.
+- `byte_0014`, `word_0018`, `byte_001c`, `word_0024`, `word_002c`, `word_0030`
+  -- `reset` forces zero and both values are driven.
+- `word_0028` must stay non-zero for the +0x28/+0x2c alias discrimination
+  (7458), and `reset` clears it.
+- `word_0034` -- `reset` never touches it; only `resetBeforRRN` does.
+- `mpBits`, `cpBits`, both counts, both sequence lengths, `word_2f64` and both
+  symbol tables -- outside `reset` entirely, which is itself something the new
+  test asserts.
+
+`pcmType`, `word_0040`, `codeLevel`, `word_0020`, `word_2f9c` and `word_2fa0`
+COULD be retired -- they are arguments one and five, the G.711 image of
+argument two, and three stores of zero -- and `setup_pump` was deliberately
+left alone all the same.  Its verdicts are the pump grid's 171 mutations and
+this batch has no claim needing them moved; the retirement is demonstrated
+where it belongs, in the function's own test.  **The pump grid re-ran
+unchanged: 171 mutations, 169 caught, 0 NOT caught, 0 unusable, 2 equivalent.**
+
+**Three of those six had to be planted the OTHER way instead.**  `word_0020`,
+`word_2f9c` and `word_2fa0` are left at ZERO by `setup_pump`, which is what
+`reset` stores, so all three "is this store made" mutations survived against
+correct code -- 3 NOT CAUGHT of 37 on the suite's first run, and finding 7105's
+shape a third time.  `run_p4m_reset` writes a trial-dependent sentinel over each
+after `setup_pump` and before the call, and all three are caught.
+
+### 7476. FOUR MORE ANCHORS LOST UNIQUENESS TO A `reset`, WHICH IS 7432 AND 7459 A THIRD TIME
+
+`make refs` failed twice in this batch, both times the moment a file compiled
+and neither time because anything was renamed:
+
+- `v90p4mtab: resetBeforRRN: +0x2c is left as it was found` -- one anchor,
+  `word_0028 = 0;` followed by `word_002c = 0;`, which
+  `V90Phase4Modulator::reset` now also spells.
+- `v90p4dleaf`, three anchors -- `int_0044 = 0;`, `int_0048 = 0;` and
+  `uchar_0030 = 0;` in `resetBeforRRN`, all three of which
+  `V90Phase4Demodulator::reset` spells in the same order.
+
+**Nothing in `src/` was touched.**  Each anchor was extended BACKWARDS inside
+the member its label names until it matched exactly once -- one line for the
+modulator's (`word_0024 = 1;`, which only `resetBeforRRN` has) and one for the
+demodulator's three (`int_003c = 1;`, likewise).  The same walk was applied in
+advance to both new suites, twenty of whose anchors would have matched
+elsewhere in their file in the naive one-line form.
+
+The pattern is three for three, so it is a rule rather than an observation: **a
+`reset` is the function most likely to break an anchor, because its body is the
+union of what every partial reset in the class does.**  Extending the anchor to
+reach a line unique to its own member is the repair, every time.
+
+A fourth broke differently and is worth separating: `v90p4dctor`'s "the
+constructor also clears the word at +0x08" injected a store through
+`pad_0008`, and `pad_0008` stopped existing when 7472 named it.  That mutation
+then scored **UNUSABLE** -- it does not compile, and a suite whose `unusable`
+column nobody reads would have counted a claim as tested while testing nothing.
+Renaming a field breaks every mutation that names it, and only that column says
+so.
+
+### 7477. THE TWO PHASE 4 `reset`s AGREE ON FIVE THINGS AND DIVERGE ON THREE, AND THE DIVERGENCES ARE THE INTERESTING PART
+
+Written together, the pair is one shape:
+
+- a run of scalar stores, argument-fed or constant, with everything the class
+  OWNS put back and everything describing a MESSAGE left alone;
+- one thing borrowed from a peer and expanded -- `alaw2linear`/`ulaw2linear` in
+  the modulator, `V90RDetector::reset` twice in the demodulator;
+- a `sessionFlag` decision made once, branchlessly in the modulator
+  (`cmp $0x1 ; sbb %eax,%eax ; add $0x5,%eax`) and as a real branch in the
+  demodulator;
+- a trailing loop over an argument that reaches no field, running the member
+  `sessionFlag` selects;
+- and in both loops `sessionFlag` is RELOADED inside the back edge, because
+  either callee may store through `this`.
+
+Three divergences, and each is a claim a test had to be built for:
+
+1. **The demodulator prints and the modulator does not.**  Two lines at two
+   different gates -- `dsplibs_debug_level > 1` for the `quickConnect` line and
+   a bare `edprintf` for the `trn2dDDLength` one -- so its fixture sweeps three
+   levels and compares transcripts.  The modulator's `reset` has no string of
+   its own and needs the sweep only because its loop runs the pumps.
+2. **The modulator's loop counts SYMBOLS and the demodulator's SAMPLES.**  Same
+   construction, different units: one call to a pump emits a symbol, one call
+   to a decision member consumes a sample.  Both are the fourth positional
+   argument of their own signature and neither reaches memory.
+3. **The demodulator's reset RESETS THE MODULATOR** -- state 3, trip count
+   zero, fifth argument zero, law from `autoDigitalImpDetector->pcmType`, code
+   from its own `ucode`.  So the 759-byte closure is one of these functions
+   calling the other, and the trip count being zero is why the demodulator's
+   reset emits no symbol.
+
+Counts, for the record: `v90p4mreset` is **37 mutations, 37 caught, 0 NOT
+caught, 0 unusable, 0 equivalent** against `t_v90modchain`; `v90p4dreset` is
+**54 mutations, 54 caught, 0 NOT caught, 0 unusable, 0 equivalent** against
+`t_v90p4ddec`.  Driving `reset`'s loop also took `v90p4ddec` from 59 caught of
+74 to 61, which is two claims about the decision members that only their
+CALLER could present.

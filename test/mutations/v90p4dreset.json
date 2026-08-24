@@ -1,0 +1,303 @@
+[
+ {
+  "_": [
+   "V90Phase4Demodulator::reset, against t_v90p4ddec's run_p4d_reset.",
+   "",
+   "Eleven stores, seven calls, two diagnostics and a loop.  The claims worth",
+   "attacking are WHICH field each store reaches and WHICH of the four",
+   "arguments it takes; WHICH record the session flag resets and the ONE",
+   "asymmetry between those two arms; WHICH block the demapper and the",
+   "converter are given; WHICH parameter `quickConnect` selects; and WHICH",
+   "decision member the loop runs.",
+   "",
+   "ANCHORS ARE EXTENDED BACKWARDS UNTIL THEY MATCH ONCE (findings 7432 and",
+   "7459).  Six of the eleven stores are spelled identically in",
+   "`resetBeforRRN`, `detectRRN`, `detectFPE` and the three `enterWaitFor*`,",
+   "and both `state = ...; countInState = 0;` pairs appear a dozen times in",
+   "the two decision members.  The lines unique to `reset` are `ucode =",
+   "code;`, `int_3510 = 0;`, the two `rDetector*.reset(` calls,",
+   "`quickConnect = quickConnectArg;`, the `groupSize` triple, the",
+   "`phase4Modulator.` pair and the loop.",
+   "",
+   "TWO CLAIMS ARE DELIBERATELY NOT ATTACKED HERE, and the reason is that no",
+   "input can present them.  The demapper's reset is guarded on",
+   "`mappingParams1` and on `autoDigitalImpDetector`, and BOTH pointers are",
+   "dereferenced unconditionally elsewhere in the same function -- the first",
+   "at `mappingParams1->word_0` before the guard, the second at",
+   "`autoDigitalImpDetector->pcmType` after it -- so a null value for either",
+   "is a segfault and not a trial.  A mutation dropping either test is",
+   "EQUIVALENT over every object this class can be given, and one is not",
+   "written rather than written and excused."
+  ]
+ },
+ {
+  "label": "reset: +0x28 is cleared",
+  "find": "\tint_0028 = 0;\n\tint_3510 = 0;",
+  "replace": "\tint_3510 = 0;"
+ },
+ {
+  "label": "reset: +0x3510 is cleared",
+  "find": "\tint_0028 = 0;\n\tint_3510 = 0;\n\tucode = code;",
+  "replace": "\tint_0028 = 0;\n\tucode = code;"
+ },
+ {
+  "label": "reset: +0x08 takes argument one and not a constant",
+  "find": "\tucode = code;",
+  "replace": "\tucode = 0;"
+ },
+ {
+  "label": "reset: the sample count is cleared",
+  "find": "\tucode = code;\n\tcountInState = 0;\n\tint_0038 = 1;",
+  "replace": "\tucode = code;\n\tint_0038 = 1;"
+ },
+ {
+  "label": "reset: +0x38 is set to ONE, not cleared like its twin",
+  "find": "\tcountInState = 0;\n\tint_0038 = 1;",
+  "replace": "\tcountInState = 0;\n\tint_0038 = 0;"
+ },
+ {
+  "label": "reset: +0x20 takes argument two and not a constant",
+  "find": "\tint_0038 = 1;\n\tstate = st;",
+  "replace": "\tint_0038 = 1;\n\tstate = P4D_STATE_WAIT_FOR_RI;"
+ },
+ {
+  "label": "reset: +0x3c is CLEARED where resetBeforRRN sets it",
+  "find": "\tstate = st;\n\tint_003c = 0;",
+  "replace": "\tstate = st;\n\tint_003c = 1;"
+ },
+ {
+  "label": "reset: +0x40 is cleared",
+  "find": "\tint_003c = 0;\n\tint_0040 = 0;\n\tint_0044 = 0;",
+  "replace": "\tint_003c = 0;\n\tint_0044 = 0;"
+ },
+ {
+  "label": "reset: +0x44 is cleared",
+  "find": "\tint_0040 = 0;\n\tint_0044 = 0;\n\tint_0048 = 0;",
+  "replace": "\tint_0040 = 0;\n\tint_0048 = 0;"
+ },
+ {
+  "label": "reset: +0x48 is cleared",
+  "find": "\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;\n\n\trDetector1",
+  "replace": "\tint_0044 = 0;\n\tuchar_0030 = 0;\n\n\trDetector1"
+ },
+ {
+  "label": "reset: the byte at +0x30 is cleared",
+  "find": "\tint_0048 = 0;\n\tuchar_0030 = 0;\n\n\trDetector1",
+  "replace": "\tint_0048 = 0;\n\n\trDetector1"
+ },
+ {
+  "label": "reset: the first detector is reset at all",
+  "find": "\trDetector1.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);\n",
+  "replace": ""
+ },
+ {
+  "label": "reset: the second detector is reset at all",
+  "find": "\trDetector2.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);\n",
+  "replace": ""
+ },
+ {
+  "label": "reset: the first detector's two arguments are not swapped",
+  "find": "\trDetector1.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);",
+  "replace": "\trDetector1.reset(0x18, (unsigned int)params->PHASE4_R_DETECTION_LENGTH);"
+ },
+ {
+  "label": "reset: the second detector gets the same pair as the first",
+  "find": "\trDetector2.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);",
+  "replace": "\trDetector2.reset((unsigned int)params->RRN_R_DETECTION_LENGTH, 0x18);"
+ },
+ {
+  "label": "reset: the literal second argument is 0x18",
+  "find": "\trDetector1.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);",
+  "replace": "\trDetector1.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0xc);"
+ },
+ {
+  "label": "reset: the detector length is PHASE4_R_DETECTION_LENGTH",
+  "find": "\trDetector1.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);\n\trDetector2.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);",
+  "replace": "\trDetector1.reset((unsigned int)params->SD_DETECTOR_DETECTION_COUNTER_THRESHOLD, 0x18);\n\trDetector2.reset((unsigned int)params->SD_DETECTOR_DETECTION_COUNTER_THRESHOLD, 0x18);"
+ },
+ {
+  "label": "reset: +0x34 takes argument four",
+  "find": "\tquickConnect = quickConnectArg;",
+  "replace": "\tquickConnect = 0;"
+ },
+ {
+  "label": "reset: +0x34 is written at all",
+  "find": "\tquickConnect = quickConnectArg;\n",
+  "replace": ""
+ },
+ {
+  "label": "reset: the CP arm is the NON-zero one",
+  "find": "\tquickConnect = quickConnectArg;\n\n\tif (sessionFlag != 0) {",
+  "replace": "\tquickConnect = quickConnectArg;\n\n\tif (sessionFlag == 0) {"
+ },
+ {
+  "label": "reset: the CP is reset at all",
+  "find": "\t\tcp->reset();\n\t\tgroupSize = mappingParams1->word_0;",
+  "replace": "\t\tgroupSize = mappingParams1->word_0;"
+ },
+ {
+  "label": "reset: +0x34fc is written on the CP arm",
+  "find": "\t\tuint_34fc = groupSize;\n\t\tcp->word_3ba8 = groupSize;",
+  "replace": "\t\tcp->word_3ba8 = groupSize;"
+ },
+ {
+  "label": "reset: the CP's group size is written",
+  "find": "\t\tuint_34fc = groupSize;\n\t\tcp->word_3ba8 = groupSize;",
+  "replace": "\t\tuint_34fc = groupSize;"
+ },
+ {
+  "label": "reset: the CP arm reads mappingParams1, not mappingParams2",
+  "find": "\t\tgroupSize = mappingParams1->word_0;",
+  "replace": "\t\tgroupSize = mappingParams2->word_0;"
+ },
+ {
+  "label": "reset: the MP is reset at all",
+  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
+  "replace": "\t\tmp->word_114 = mappingParams1->word_0;"
+ },
+ {
+  "label": "reset: the MP's group size is written",
+  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
+  "replace": "\t\tmp->reset();"
+ },
+ {
+  "label": "reset: the MP arm reads mappingParams1, not mappingParams2",
+  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
+  "replace": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams2->word_0;"
+ },
+ {
+  "label": "reset: the MP arm does NOT write +0x34fc",
+  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
+  "replace": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;\n\t\tuint_34fc = mappingParams1->word_0;"
+ },
+ {
+  "label": "reset: the demapper is reset at all",
+  "find": "\t\tdemapper->reset(mappingParams1);",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "reset: the demapper gets mappingParams1, not mappingParams2",
+  "find": "\t\tdemapper->reset(mappingParams1);",
+  "replace": "\t\tdemapper->reset(mappingParams2);"
+ },
+ {
+  "label": "reset: the demapper gets reset and not resetNoSpectral",
+  "find": "\t\tdemapper->reset(mappingParams1);",
+  "replace": "\t\tdemapper->resetNoSpectral(mappingParams1);"
+ },
+ {
+  "label": "reset: +0x3518 is cleared",
+  "find": "\tlinearMappStudyStart = 0;\n",
+  "replace": ""
+ },
+ {
+  "label": "reset: +0x3518 is cleared and not set to the RiNot arm's value",
+  "find": "\tlinearMappStudyStart = 0;",
+  "replace": "\tlinearMappStudyStart = 0x258;"
+ },
+ {
+  "label": "reset: the modulator's law comes from the detector",
+  "find": "\tphase4Modulator.reset(autoDigitalImpDetector->pcmType, ucode,",
+  "replace": "\tphase4Modulator.reset(PCM_TYPE_MU_LAW, ucode,"
+ },
+ {
+  "label": "reset: the modulator's code is this class's own ucode",
+  "find": "\tphase4Modulator.reset(autoDigitalImpDetector->pcmType, ucode,",
+  "replace": "\tphase4Modulator.reset(autoDigitalImpDetector->pcmType, 0,"
+ },
+ {
+  "label": "reset: the modulator is put into TRN2d",
+  "find": "\t\t\t      P4M_STATE_TRN2D, 0, 0);",
+  "replace": "\t\t\t      P4M_STATE_RI, 0, 0);"
+ },
+ {
+  "label": "reset: the modulator is given a trip count of ZERO",
+  "find": "\t\t\t      P4M_STATE_TRN2D, 0, 0);",
+  "replace": "\t\t\t      P4M_STATE_TRN2D, 1, 0);"
+ },
+ {
+  "label": "reset: the modulator's fifth argument is ZERO",
+  "find": "\t\t\t      P4M_STATE_TRN2D, 0, 0);",
+  "replace": "\t\t\t      P4M_STATE_TRN2D, 0, 1);"
+ },
+ {
+  "label": "reset: the modulator's mapping block is set",
+  "find": "\tphase4Modulator.setMappingParams(mappingParams1);\n",
+  "replace": ""
+ },
+ {
+  "label": "reset: the modulator gets mappingParams1, not mappingParams2",
+  "find": "\tphase4Modulator.setMappingParams(mappingParams1);",
+  "replace": "\tphase4Modulator.setMappingParams(mappingParams2);"
+ },
+ {
+  "label": "reset: the quickConnect line is behind level > 1",
+  "find": "\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"V90Phase4Demodulator: reset called, \"",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"V90Phase4Demodulator: reset called, \""
+ },
+ {
+  "label": "reset: the quickConnect line prints +0x34",
+  "find": "\t\t\t\t     \"quickConnect indication is %d\\r\\n\",\n\t\t\t\t     quickConnect);",
+  "replace": "\t\t\t\t     \"quickConnect indication is %d\\r\\n\",\n\t\t\t\t     (unsigned int)state);"
+ },
+ {
+  "label": "reset: the two DD lengths are not swapped",
+  "find": "\ttrn2dDDLength = quickConnect != 0\n\t    ? (unsigned int)params->TRN2D_QC_DD_LENGTH\n\t    : (unsigned int)params->TRN2D_DD_LENGTH;",
+  "replace": "\ttrn2dDDLength = quickConnect != 0\n\t    ? (unsigned int)params->TRN2D_DD_LENGTH\n\t    : (unsigned int)params->TRN2D_QC_DD_LENGTH;"
+ },
+ {
+  "label": "reset: the DD length is chosen and not constant",
+  "find": "\ttrn2dDDLength = quickConnect != 0\n\t    ? (unsigned int)params->TRN2D_QC_DD_LENGTH\n\t    : (unsigned int)params->TRN2D_DD_LENGTH;",
+  "replace": "\ttrn2dDDLength = (unsigned int)params->TRN2D_QC_DD_LENGTH;"
+ },
+ {
+  "label": "reset: the non-quickConnect length is TRN2D_DD_LENGTH, not the RRN one",
+  "find": "\t    : (unsigned int)params->TRN2D_DD_LENGTH;",
+  "replace": "\t    : (unsigned int)params->RRN_TRN2D_DD_LENGTH;"
+ },
+ {
+  "label": "reset: the choice is made on quickConnect and not on sessionFlag",
+  "find": "\ttrn2dDDLength = quickConnect != 0\n\t    ? (unsigned int)params->TRN2D_QC_DD_LENGTH",
+  "replace": "\ttrn2dDDLength = sessionFlag != 0\n\t    ? (unsigned int)params->TRN2D_QC_DD_LENGTH"
+ },
+ {
+  "label": "reset: the trn2dDDLength line reports the field",
+  "find": "\tedprintf(\"V90Phase4Demodulator: trn2dDDLength = %d symbols\\r\\n\",\n\t\t trn2dDDLength);",
+  "replace": "\tedprintf(\"V90Phase4Demodulator: trn2dDDLength = %d symbols\\r\\n\",\n\t\t countInState);"
+ },
+ {
+  "label": "reset: the trn2dDDLength line is printed at all",
+  "find": "\tedprintf(\"V90Phase4Demodulator: trn2dDDLength = %d symbols\\r\\n\",\n\t\t trn2dDDLength);\n",
+  "replace": ""
+ },
+ {
+  "label": "reset: the decision loop runs nofSamples times and not never",
+  "find": "\tfor (i = 0; i < nofSamples; i++) {",
+  "replace": "\tfor (i = 0; i < 0u; i++) {"
+ },
+ {
+  "label": "reset: the decision loop's bound is argument three, not four",
+  "find": "\tfor (i = 0; i < nofSamples; i++) {",
+  "replace": "\tfor (i = 0; i < quickConnectArg; i++) {"
+ },
+ {
+  "label": "reset: the decision loop's bound is strict",
+  "find": "\tfor (i = 0; i < nofSamples; i++) {",
+  "replace": "\tfor (i = 0; i <= nofSamples; i++) {"
+ },
+ {
+  "label": "reset: the two decision members are not swapped",
+  "find": "\t\tif (sessionFlag != 0)\n\t\t\tgetV92Decision(0);\n\t\telse\n\t\t\tgetV90Decision(0);",
+  "replace": "\t\tif (sessionFlag != 0)\n\t\t\tgetV90Decision(0);\n\t\telse\n\t\t\tgetV92Decision(0);"
+ },
+ {
+  "label": "reset: the V.92 member is the non-zero one",
+  "find": "\t\tif (sessionFlag != 0)\n\t\t\tgetV92Decision(0);",
+  "replace": "\t\tif (sessionFlag == 0)\n\t\t\tgetV92Decision(0);"
+ },
+ {
+  "label": "reset: the decision members are handed a ZERO sample",
+  "find": "\t\t\tgetV92Decision(0);\n\t\telse\n\t\t\tgetV90Decision(0);",
+  "replace": "\t\t\tgetV92Decision(1);\n\t\telse\n\t\t\tgetV90Decision(1);"
+ }
+]
