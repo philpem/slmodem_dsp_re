@@ -79660,9 +79660,19 @@ differential test reaches it directly.
 `make phase` exits 0.  `make period` is **244 passed / 0 failed** against the
 base commit's 243 -- one new binary, `t_v90unpck`, and nothing else moved.
 `t_v90unpck` is 1,098 checks in two groups, 15 of them offset assertions.
-`test/mutations/v90unpck.json` is **25 mutations: 23 caught, 0 NOT caught,
+`test/mutations/v90unpck.json` is **26 mutations: 24 caught, 0 NOT caught,
 0 unusable, 2 equivalent, 0 miscounted**, recorded by `mutsnap.py --update`.
 The two equivalent rows are both the dead clamp and both carry the argument.
+
+**THREE OF THOSE ANCHORS BROKE MID-BATCH AND `anchorcheck` CAUGHT IT**, which
+is 7521's lesson being paid rather than re-learned.  Reshaping the tail into
+`setDataBitRateInline` (below) deleted the three lines the rate rows quoted;
+`anchorcheck.py` reported them as `matches 0 time(s)` and `mutate.py` would
+have scored them UNUSABLE, which reads as CAUGHT while testing nothing.  They
+were re-anchored on the helper's own text -- checked unique against
+`getDataBitRate`'s near-identical `if (islong != 0)` -- and the suite re-run
+from scratch rather than trusted.  **A suite is not re-recorded across a
+source reshape; it is re-run.**
 
 `make coverage` reads **74.2%, 544,979 bytes, 1,225 symbols** against
 **74.1%, 544,357 bytes, 1,224 symbols** at the base commit: **+1 symbol and
@@ -79673,21 +79683,55 @@ to claim `setConstellationMask` and `setCodecConstellationMask`, coverage
 gains a further 256 bytes and two symbols, and this arithmetic will not
 explain itself.
 
-The instruction count is **185 ours against 200 the blob's**, 613 bytes
+The instruction count is **183 ours against 200 the blob's**, 606 bytes
 against 622, with **zero calls on both sides** -- the three inlined helper
 calls are inlined by our compiler exactly as they are by the original's, which
-is the check that the `static` spelling is not hiding a missing call.  The
-whole of the -15 is the `which < 6 ? which : 0` clamp: the blob emits
+is the check that the `static` spelling is not hiding a missing call.  Six of
+the -17 are the `which < 6 ? which : 0` clamp: the blob emits
 `cmp $0x6 ; setl ; neg ; and` and GCC gives us `cmp $0x5 ; jle ; xor` at each
-of the three sites.  The already-committed `getConstellationMask` and
+of the three sites, which is -2 apiece.  The rest is the blob's loop
+alignment, which `instrcount.py` counts and which 7520 already records as
+noise at this scale -- `mov %esi,%esi` at .text+0x33787 and the `jmp 0x33840`
+at +0x33831 are two of them.  **The gap SHRANK at every step that moved a
+source shape toward the object and the count still reads further away**, which
+is why 7480's rule is about CALLS and not about the total: calls are 0 on both
+sides and every named instruction is accounted for.
+The already-committed `getConstellationMask` and
 `getCodecConstellationMask` carry the same -2 each at 130 bytes on both sides,
 so this is the tree's existing state for the idiom and not something this
 batch introduced.  It was NOT chased further: permuting source until the
 compiler if-converts is fitting the compiler, which CLAUDE.md puts in the free
 column.
 
-**One source shape WAS forced by the codegen and is worth recording**, because
-it is the difference between a faithful transcription and a plausible one.
+#### TWO source shapes were FORCED by the codegen, and both were measured
+
+These are the difference between a faithful transcription and a plausible one,
+and neither is visible to any test: the two spellings agree on every input in
+both cases.  Each was found by diffing our instructions against the object's
+and each was confirmed by the change moving us TOWARD the object rather than
+by argument.
+
+**1.  THE TAIL IS `setDataBitRate` INLINED, NOT AN OPEN-CODED `if`.**
+`setDataBitRate` (.text+0x33690, 28 bytes) is a fourth unwritten symbol in this
+file's bracket and is the exact inverse of `getDataBitRate`:
+`params->word_0 = rate + 0x14` or `+ 8` on a flag.  The object's tail is its
+body.  What separates a call from an open-coded `if` is **when the rate is
+loaded**: the object loads it ONCE before the test (`mov 0x14(%ecx),%edx` at
+.text+0x338f2, then `test %esi,%esi`) and adds with `lea` in each arm, because
+a function argument has to be evaluated before the call.  Written as
+`if (flag) p->word_0 = cp->dataBitRate + 0x14; else ... + 8;` GCC 3.4.2 SINKS
+the load into both arms and uses `add` -- and that is measured, not argued:
+it is what this file emitted before the call form was tried.  With the call
+form our tail is **byte-identical to the object's, registers included**
+(`mov 0x34(%esp),%ebx ; lea 0x14(%edx),%edi ; mov %edi,(%ebx)` and
+`lea 0x8(%edx),%eax ; mov 0x34(%esp),%edx ; mov %eax,(%edx)`).  That is 617's
+full-text acceptance test, passed.
+
+So `setParamsInfoFromCPUnPck` inlines **four** calls to **three** of this
+file's other symbols, and reproducing it means writing all three.  They are
+`static` here for the reason the section above gives.
+
+**2.  THE LENGTH IS HELD THROUGH A POINTER.**
 Written as `params->constellation[c][params->constellationSize[c]]`, GCC keeps
 the length in a register across the byte store -- it can see that two distinct
 FIELDS of one struct do not overlap.  The object re-reads it (`mov (%esi),%edx`

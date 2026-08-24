@@ -46,18 +46,23 @@
  },
  {
   "label": "the long rate arm adds 8 rather than 0x14",
-  "find": "\t\tparams->word_0 = cp->dataBitRate + 0x14;",
-  "replace": "\t\tparams->word_0 = cp->dataBitRate + 8;"
+  "find": "\t\tparams->word_0 = (unsigned int)(rate + 0x14);",
+  "replace": "\t\tparams->word_0 = (unsigned int)(rate + 8);"
  },
  {
   "label": "the short rate arm adds 0x14 rather than 8",
-  "find": "\telse\n\t\tparams->word_0 = cp->dataBitRate + 8;",
-  "replace": "\telse\n\t\tparams->word_0 = cp->dataBitRate + 0x14;"
+  "find": "\telse\n\t\tparams->word_0 = (unsigned int)(rate + 8);",
+  "replace": "\telse\n\t\tparams->word_0 = (unsigned int)(rate + 0x14);"
  },
  {
   "label": "the islong flag is tested the other way round",
-  "find": "\tif (cp->info->word_04 != 0)\n\t\tparams->word_0 = cp->dataBitRate + 0x14;",
-  "replace": "\tif (cp->info->word_04 == 0)\n\t\tparams->word_0 = cp->dataBitRate + 0x14;"
+  "find": "\tif (islong != 0)\n\t\tparams->word_0 = (unsigned int)(rate + 0x14);",
+  "replace": "\tif (islong == 0)\n\t\tparams->word_0 = (unsigned int)(rate + 0x14);"
+ },
+ {
+  "label": "the rate setter is handed the gate byte as its islong flag",
+  "find": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->codecConstellationPresent,\n\t\t\t     (int)cp->dataBitRate);"
  },
 
  {

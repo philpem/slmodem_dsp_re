@@ -7673,8 +7673,8 @@
    }
   },
   "v90unpck": {
-   "key": "aac0b51ae237e64c485575132f6f1b38ecb3f1fdbbde8560c2e6341ab6692ab9",
-   "summary": "25 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "08f854930ce7ac6230127ff271cc56048006a8046cbd714df5ea7e2b5df58ac5",
+   "summary": "26 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "distinctIndex is copied for five constellations rather than six": "caught",
     "shaperA1 and shaperA2 are copied from each other's source": "caught",
@@ -7699,6 +7699,7 @@
     "the ordinary helper's clamp is at 3 rather than 6": "caught",
     "the ordinary helper's word stride is 32 rather than 16": "caught",
     "the ordinary loop selects its bitmap by i rather than through distinctIndex": "caught",
+    "the rate setter is handed the gate byte as its islong flag": "caught",
     "the short rate arm adds 0x14 rather than 8": "caught",
     "word_61c gets the gate byte whole rather than an exact 0 or 1": "caught"
    }

@@ -43,19 +43,24 @@
  * -- and the name similarity is exactly the trap `tools/tumap.py` exists to
  * avoid.
  *
- * THE FIRST TWO OF THOSE FOUR ARE THIS FILE'S OWN INLINED HELPER.  The two
- * `static` functions below are `setConstellationMask` and
- * `setCodecConstellationMask` -- the same body, with the register and
- * stack-slot allocation each inline site forces rather than the standalone
- * function's -- because `setParamsInfoFromCPUnPck` calls them three times
- * between them and the compiler inlines all three.  The INNER LOOP is
- * byte-identical to the object's at every one of the three sites, from the
- * `test $0x1,%cl` to the `jns` that closes the word loop; the setup around it
- * is the same operations in different registers, which is the allocator's.
- * They are `static` and not `extern "C"`
- * because writing the two GLOBALS is a separate 256 bytes of reconstruction
- * with its own differential test, which this batch did not take on; whoever
- * takes it can delete the `static` and the two calls become the object's own.
+ * THREE OF THOSE FOUR ARE BODIES `setParamsInfoFromCPUnPck` INLINES, and are
+ * written below as `static` helpers.  `setConstellationMask` and
+ * `setCodecConstellationMask` are called three times between them and
+ * `setDataBitRate` once, and GCC 3.4.2 inlines all four calls exactly as the
+ * original's compiler did -- `tools/dis.py` finds no relocation naming any of
+ * the three from inside the function, and our object has none either.
+ *
+ * The two mask helpers are the same body with the register and stack-slot
+ * allocation each inline site forces rather than the standalone function's;
+ * their INNER LOOP is byte-identical to the object's at all three sites, from
+ * the `test $0x1,%cl` to the `jns` that closes the word loop.  The rate
+ * setter's inlined body is byte-identical to the object's outright, registers
+ * included.
+ *
+ * They are `static` and not `extern "C"` because writing the three GLOBALS is
+ * a separate 284 bytes of reconstruction with differential tests of their
+ * own, which this batch did not take on; whoever takes it can delete the
+ * `static` and the four calls become the object's own.
  *
  * WHAT `getConstellationsIndex` DOES, and the one thing about it worth
  * pausing over.  It walks constellations 1 to 5 looking for an earlier one
@@ -360,6 +365,46 @@ getDataBitRate(V90MappingParams *params, int islong)
 }
 
 /*
+ * `setDataBitRate` (.text+0x33690, 28 bytes), as the STATIC helper
+ * `setParamsInfoFromCPUnPck` inlines rather than as the global.
+ *
+ * The exact inverse of `getDataBitRate` above and the same two constants:
+ *
+ *	mov  0x8(%esp),%ecx	  islong
+ *	mov  0x4(%esp),%edx	  the block
+ *	mov  0xc(%esp),%eax	  the rate
+ *	test %ecx,%ecx
+ *	je   .Lshort
+ *	add  $0x14,%eax  ;  mov %eax,(%edx)  ;  ret
+ *   .Lshort:
+ *	add  $0x8,%eax   ;  mov %eax,(%edx)  ;  ret
+ *
+ * TWO CONSTANTS AND NOT ONE EXPRESSION, exactly as in the getter.
+ *
+ * THAT IT IS A CALL AND NOT AN OPEN-CODED `if` IS MEASURED, and it is the
+ * same class of measurement as the mask helper's `int which`.  The object
+ * loads the rate ONCE, before the test (`mov 0x14(%ecx),%edx` at
+ * .text+0x338f2, then `test %esi,%esi`), and adds with `lea` in each arm.
+ * Written as `if (flag) p->word_0 = rate + 0x14; else p->word_0 = rate + 8;`
+ * GCC 3.4.2 SINKS the load into both arms and uses `add` -- measured, not
+ * assumed: that is what this file emitted before the call form was tried.  A
+ * function argument has to be evaluated before the call, so the call form is
+ * what produces one load, and with it our tail is the object's instruction
+ * for instruction.
+ *
+ * `static` for the same reason as the two mask helpers: the global is 28
+ * further bytes with a differential test of its own and is not claimed here.
+ */
+static void
+setDataBitRateInline(V90MappingParams *params, int islong, int rate)
+{
+	if (islong != 0)
+		params->word_0 = (unsigned int)(rate + 0x14);
+	else
+		params->word_0 = (unsigned int)(rate + 8);
+}
+
+/*
  * ===========================================================================
  * setParamsInfoFromCPUnPck (.text+0x336b0, 622 bytes)
  * ===========================================================================
@@ -454,10 +499,8 @@ setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp)
 			    cp->constellationMask[cp->distinctIndex[i]]);
 	}
 
-	if (cp->info->word_04 != 0)
-		params->word_0 = cp->dataBitRate + 0x14;
-	else
-		params->word_0 = cp->dataBitRate + 8;
+	setDataBitRateInline(params, (int)cp->info->word_04,
+			     (int)cp->dataBitRate);
 }
 
 /*
