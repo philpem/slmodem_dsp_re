@@ -158,7 +158,7 @@ main(void)
 		in[i] = (short)(i * 37 - 500);
 
 	diff_begin("all five VPcmV34* entry points are WRITTEN, and of the "
-		   "seven below them four are not");
+		   "seven below them three are not");
 	/*
 	 * ALL FIVE ARE NOW DEFINED, two in `src/pump/v34/v34pcmif.c` and
 	 * three in `src/pump/v34/v34pcmmain.cpp`, and this block is where
@@ -183,8 +183,18 @@ main(void)
 	diff_eq_int("runPcmModem is now DEFINED, so the four are three",
 		    _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_ != 0, 1,
 		    0);
-	diff_eq_int("v90RunDemodulator is unresolved",
-		    _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_ == 0, 1, 0);
+	/*
+	 * AND `v90RunDemodulator` IS DEFINED TOO, so the three are two.  It
+	 * is `VPcmFloModem`'s other entry point (.text+0xd860, 3,013 bytes),
+	 * reconstructed in src/pump/v90/VPcmFloModem.cpp with
+	 * test/unit/t_v90rundemod.cpp against the blob; finding 7580.  The
+	 * assertion is INVERTED rather than deleted, for the same reason the
+	 * five above are asserted at all: the guard surface is the claim, and
+	 * a symbol silently dropping out of it is exactly what this file
+	 * exists to notice.
+	 */
+	diff_eq_int("v90RunDemodulator is now DEFINED, so the three are two",
+		    _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_ != 0, 1, 0);
 	diff_eq_int("qcLineVerification is unresolved",
 		    _ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_
 		    == 0, 1, 0);
