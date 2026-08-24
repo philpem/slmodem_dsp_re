@@ -7498,8 +7498,8 @@
    }
   },
   "v90rundemod": {
-   "key": "7f415df99bae241fe4e7ca5c4f58480e2efb9d75409e52dceaa552d6d0108ec6",
-   "summary": "77 mutations: 74 caught (74 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "d9b5d281722406a79a6ebf2a5e016e608cfe6d101c53c1a37e45470181c9370a",
+   "summary": "77 mutations: 74 caught (74 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "MP: the gate is inverted": "caught",
     "MP: the message is not copied out for the interface": "caught",
@@ -7568,7 +7568,7 @@
     "the local rate-reneg arm does not raise the latch": "caught",
     "the local rate-reneg arm indicates a REMOTE one": "caught",
     "the local rate-reneg arm sizes phase 4 off the TRAINING constellation": "caught",
-    "the local rate-reneg arm takes the evaluator's counter WHOLE": "uncaught",
+    "the local rate-reneg arm takes the evaluator's counter WHOLE": "equivalent",
     "the phase 2 test is the wrong way round": "caught",
     "the phase 3 error arm seeds 6 rather than 5": "caught",
     "the remote rate-reneg arm does not consume the latch": "caught",
