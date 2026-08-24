@@ -133,8 +133,8 @@ V90SpectralVerifier::reset()
 {
 	edprintf("V90SpectralVerifier: Reset\r\n");
 
-	accumCount = 0;
 	accumulating = 0;
+	accumCount = 0;
 	word_28 = 0;
 }
 

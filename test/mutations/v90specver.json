@@ -59,10 +59,10 @@
   "replace": "\tsysdep_free(buf_18);"},
 
  {"label": "reset leaves the running flag alone",
-  "find": "\taccumCount = 0;\n\taccumulating = 0;\n\tword_28 = 0;",
+  "find": "\taccumulating = 0;\n\taccumCount = 0;\n\tword_28 = 0;",
   "replace": "\taccumCount = 0;\n\tword_28 = 0;"},
 
  {"label": "reset clears the transform length instead of the counter",
-  "find": "\taccumCount = 0;\n\taccumulating = 0;\n\tword_28 = 0;",
-  "replace": "\tfftLength = 0;\n\taccumulating = 0;\n\tword_28 = 0;"}
+  "find": "\taccumulating = 0;\n\taccumCount = 0;\n\tword_28 = 0;",
+  "replace": "\taccumulating = 0;\n\tfftLength = 0;\n\tword_28 = 0;"}
 ]

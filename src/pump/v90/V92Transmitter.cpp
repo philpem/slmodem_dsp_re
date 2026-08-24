@@ -135,8 +135,9 @@ V92Transmitter::V92Transmitter()
 	v92tx_moduluscoder_ctor(p);
 	modulusEncoder = (V92ModulusEncoder *)p;
 
-	byte_58 = (unsigned char *)sysdep_malloc(1);
-	*byte_58 = 0;
+	p = sysdep_malloc(1);
+	*(unsigned char *)p = 0;
+	byte_58 = (unsigned char *)p;
 
 	p = sysdep_malloc(sizeof(V92ConvolutionEncoder));
 	v92tx_convcoder_ctor(p);

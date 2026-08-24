@@ -20,13 +20,13 @@
  },
  {
   "label": "the one-byte buffer is allocated and not cleared",
-  "find": "\tbyte_58 = (unsigned char *)sysdep_malloc(1);\n\t*byte_58 = 0;",
-  "replace": "\tbyte_58 = (unsigned char *)sysdep_malloc(1);"
+  "find": "\tp = sysdep_malloc(1);\n\t*(unsigned char *)p = 0;\n\tbyte_58 = (unsigned char *)p;",
+  "replace": "\tp = sysdep_malloc(1);"
  },
  {
   "label": "the one-byte buffer is a word",
-  "find": "\tbyte_58 = (unsigned char *)sysdep_malloc(1);",
-  "replace": "\tbyte_58 = (unsigned char *)sysdep_malloc(4);"
+  "find": "\tp = sysdep_malloc(1);",
+  "replace": "\tp = sysdep_malloc(4);"
  },
  {
   "label": "the modulus encoder is given the pre-filter's size",
