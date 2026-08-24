@@ -272,15 +272,36 @@ public:
 	 * that widens is one whose own result is `int`, so `getDecision`
 	 * does.  Nothing else in the object separates the three.
 	 *
-	 * The rest of the class -- `reset`, `trn2dKnownDemod`,
-	 * `setSessionFlag` and the rest -- is declared nowhere yet and
-	 * belongs to whichever batch writes it.  `trn2dKnownDemod` is blocked
-	 * on `V90Phase4Modulator` and `V90SpectralShaper`, neither of which
-	 * is written.
+	 * The rest of the class -- `trn2dKnownDemod`, `setSessionFlag` and
+	 * the rest -- is declared nowhere yet and belongs to whichever batch
+	 * writes it.  `trn2dKnownDemod` is blocked on `V90SpectralShaper`,
+	 * which is not written.  `reset` used to head that list and is now
+	 * below.
 	 */
 	int getDecision(short sample);
 	short getV90Decision(short sample);
 	short getV92Decision(short sample);
+
+	/*
+	 * `reset` -- .text+0x277c0, 504 bytes, and the WHOLE receiver's
+	 * entry point: it puts the eleven scalars back, reseeds both
+	 * `V90RDetector`s, resets whichever of the CP and the MP the session
+	 * uses, hands the mapping block to the demapper and to the embedded
+	 * modulator, and then runs the decision member `sessionFlag` selects
+	 * `nofSamples` times.
+	 *
+	 * ALL FOUR ARGUMENT TYPES ARE THE MANGLING'S,
+	 * `_ZN20V90Phase4Demodulator5resetEh22Phase4DemodulatorStatejj`, and
+	 * the second is what proves `Phase4DemodulatorState` exists as a
+	 * namespace-scope type at all (see the enum above).  `void` is the
+	 * return: neither exit sets `%eax`.
+	 *
+	 * THE THIRD ARGUMENT IS A TRIP COUNT AND REACHES NO FIELD, exactly as
+	 * `V90Phase4Modulator::reset`'s fourth does; the fourth lands in
+	 * `quickConnect`.
+	 */
+	void reset(unsigned char code, Phase4DemodulatorState st,
+		   unsigned int nofSamples, unsigned int quickConnectArg);
 
 	/*
 	 * Data members are public for the reason V90Jd.h gives: the original's
@@ -302,11 +323,23 @@ public:
 	V90Parameters *params;
 
 	/*
-	 * +0x0008  NOT WRITTEN BY THE CONSTRUCTOR and reached by nothing
-	 * reconstructed here.  It is a gap in the map, not a claim that the
-	 * object has one.
+	 * +0x0008  THE G.711 CODE THE PHASE 4 MODULATOR IS TO SEND, and it
+	 * was `pad_0008[4]` until `reset` was written -- which is finding
+	 * 7453's shape in the other class: the constructor does not touch it,
+	 * so the construction path could say nothing about it at all.
+	 *
+	 * ONE BYTE, not four: `mov %cl,0x8(%esi)` at 0x277ec, `reset`'s FIRST
+	 * argument, which the mangling types `h`.  The only read anywhere is
+	 * `movzbl 0x8(%esi),%eax` at 0x278ec, feeding the embedded
+	 * `V90Phase4Modulator::reset`'s own second argument -- typed `h` by
+	 * ITS mangling and documented there as the code whose linear
+	 * expansion becomes `codeLevel`.  So the meaning is the callee's
+	 * (CLAUDE.md's evidence order, rule 2) and the name is the one this
+	 * tree already uses for the same byte in the same role:
+	 * `V90Phase3Demodulator::ucode`.
 	 */
-	unsigned char pad_0008[4];
+	unsigned char ucode;
+	unsigned char pad_0009[3];	/* +0x009  alignment before +0x0c  */
 
 	/* +0x000c  The constructor's FIRST argument. */
 	V90MappingParams *mappingParams1;
@@ -327,8 +360,8 @@ public:
 	 * +0x0020 .. +0x004f  THE STATE BLOCK.  The construction path does
 	 * not reach it -- the constructor writes nothing here -- so every
 	 * offset and width below is read off the seven members this batch
-	 * wrote plus `reset`, which is not written and was read for its store
-	 * widths alone.  Signedness is NOT established for the `int_NNNN`
+	 * wrote plus `reset`, which IS now written and which supplied the
+	 * store widths.  Signedness is NOT established for the `int_NNNN`
 	 * ones: `movl $0x0` and `movl $0x1` encode a width and nothing else,
 	 * which is the same bound V90RDetector.h states for its own fields.
 	 */
@@ -413,10 +446,27 @@ public:
 	unsigned char pad_0031[3];	/* +0x31  alignment before +0x34   */
 
 	/*
-	 * +0x0034  `reset`'s FOURTH argument, which the mangling types
-	 * `unsigned int` (`...jj`, and this is the second of the two).
+	 * +0x0034  `quickConnect`, AND THE NAME IS THE AUTHOR'S OWN.  It is
+	 * `reset`'s FOURTH argument, which the mangling types `unsigned int`
+	 * (`...jj`, and this is the second of the two), and `reset` prints
+	 * exactly this field:
+	 *
+	 *     279a0:  8b 5e 34         mov 0x34(%esi),%ebx
+	 *     279a3:  c7 04 24 dc 6c   movl $0x6cdc,(%esp)
+	 *        "V90Phase4Demodulator: reset called, quickConnect
+	 *         indication is %d\r\n"
+	 *
+	 * -- one load and the format string that reports it, which is the
+	 * strongest evidence this project recognises (CLAUDE.md, rule 1).
+	 * It is CORROBORATED by what the flag then selects: non-zero takes
+	 * `V90Parameters::TRN2D_QC_DD_LENGTH` into `trn2dDDLength` and zero
+	 * takes `TRN2D_DD_LENGTH`, and the QC in the first parameter's own
+	 * name is the same abbreviation.  It was `uint_0034` until `reset`
+	 * was written; the two decision members' RiNot arms, which choose
+	 * between the two linear-mapping study lengths on it, are the other
+	 * two readers.
 	 */
-	unsigned int uint_0034;
+	unsigned int quickConnect;
 
 	/*
 	 * +0x0038 and +0x003c  A PAIR, always written together.
@@ -521,10 +571,24 @@ public:
 	V90ConnectionEvaluator *connectionEvaluator;
 
 	/*
-	 * +0x34fc  NOT MODELLED.  `reset` writes it and nothing in this batch
-	 * reaches it, so its width is that function's to settle.
+	 * +0x34fc  MODELLED, UNNAMED, and the width is now settled: `movl`,
+	 * four bytes.  `reset` writes it on the V.92 arm ALONE --
+	 * `mov %edx,0x34fc(%esi)` at 0x27885, where `%edx` is
+	 * `mappingParams1->word_0` -- and the V.90 arm, twenty-five bytes
+	 * further down, stores the same value into `mp->word_114` and leaves
+	 * this field exactly as it found it.  Nothing else in the object
+	 * reaches it.
+	 *
+	 * What the value IS is bounded and not established.  The same word
+	 * goes into `V90CP::word_3ba8` in the same breath, and both V90CP.h
+	 * and V90MP.h call their copy "`calcSequenceLength`'s divisor: the
+	 * group size" -- so this is a shadow of the group size the CP was
+	 * just given.  Whether the class keeps it as that, or as the frame
+	 * width `V90Mapper` and `V90BitsToSymbol` take the same
+	 * `V90MappingParams::word_0` to be, is not decidable from one store
+	 * with no reader, so the name stays the offset's (3120).
 	 */
-	unsigned char pad_34fc[4];
+	unsigned int uint_34fc;
 
 	/*
 	 * +0x3500 and +0x3504  THE B1d BIT COUNTERS, and the names are the

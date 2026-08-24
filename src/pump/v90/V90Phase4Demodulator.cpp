@@ -37,6 +37,7 @@
 #include "dsplib/V90ConnectionEvaluator.h"
 #include "dsplib/V90CP.h"
 #include "dsplib/V90MP.h"
+#include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/V90Demapper.h"
 #include "dsplib/V90Phase4Demodulator.h"
 
@@ -54,6 +55,7 @@
 
 P4D_OFF(sessionFlag,		0x0000, sessionflag);
 P4D_OFF(params,			0x0004, params);
+P4D_OFF(ucode,			0x0008, ucode);
 P4D_OFF(mappingParams1,		0x000c, mp1);
 P4D_OFF(mappingParams2,		0x0010, mp2);
 P4D_OFF(cp,			0x0014, cp);
@@ -73,7 +75,7 @@ P4D_OFF(countInState,		0x0024, countinstate);
 P4D_OFF(int_0028,		0x0028, i28);
 P4D_OFF(trn2dDDLength,		0x002c, trn2dddlen);
 P4D_OFF(uchar_0030,		0x0030, u30);
-P4D_OFF(uint_0034,		0x0034, u34);
+P4D_OFF(quickConnect,		0x0034, u34);
 P4D_OFF(int_0038,		0x0038, i38);
 P4D_OFF(int_003c,		0x003c, i3c);
 P4D_OFF(int_0040,		0x0040, i40);
@@ -90,6 +92,7 @@ P4D_OFF(uint_004c,		0x004c, u4c);
  */
 P4D_OFF(bits,			0x305c, bits);
 P4D_OFF(nbits,			0x34f4, nbits);
+P4D_OFF(uint_34fc,		0x34fc, u34fc);
 P4D_OFF(b1dZeros,		0x3500, b1dzeros);
 P4D_OFF(b1dBits,		0x3504, b1dbits);
 P4D_OFF(errorEnergyBeforeEC,	0x3508, eebefore);
@@ -588,7 +591,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			state = P4D_STATE_TRN2D_KNOWN_DATA;
 			countInState = 0;
 			int_0028 = 0x17;
-			if (uint_0034 != 0) {
+			if (quickConnect != 0) {
 				demapper->resetLinearMappStudy(0x960);
 				linearMappStudyStart = 0x258;
 			} else {
@@ -1012,7 +1015,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			state = P4D_STATE_TRN2D_KNOWN_DATA;
 			countInState = 0;
 			int_0028 = 0x17;
-			if (uint_0034 != 0) {
+			if (quickConnect != 0) {
 				demapper->resetLinearMappStudy(0x960);
 				linearMappStudyStart = 0x258;
 			} else {
@@ -1397,4 +1400,134 @@ V90Phase4Demodulator::getV92Decision(short sample)
 	}
 
 	return decision;
+}
+
+/*
+ * ===========================================================================
+ * `V90Phase4Demodulator::reset` -- .text+0x277c0, 504 bytes.
+ *
+ * THE WHOLE RECEIVER'S ENTRY POINT, and its closure is the batch: eleven
+ * scalars, both `V90RDetector`s, one of the CP and the MP, the demapper, the
+ * embedded modulator's own `reset` and `setMappingParams`, and then a loop
+ * over the decision member `sessionFlag` selects.
+ *
+ * THE ORDER ACROSS THE CALLS IS THE OBJECT'S AND IS NOT FREE.  GCC cannot
+ * move a store through `this` across an opaque call in either direction, so
+ * the calls are fenceposts and the sequence below is what the object's
+ * interleaving proves.  `linearMappStudyStart = 0` at +0x278cf sits BEFORE
+ * the modulator's `reset` and after the demapper's, which is a real
+ * constraint and not a preference.  Inside each run the schedule is GCC's.
+ *
+ * WHICH MESSAGE RECORD IS RESET IS THE SESSION'S, AND THE TWO ARMS ARE NOT
+ * MIRROR IMAGES.  Under V.92 the CP is reset, its group size is taken from
+ * `mappingParams1->word_0`, AND the same word is kept at +0x34fc; under V.90
+ * the MP is reset and its group size taken the same way, and +0x34fc is left
+ * exactly as it was found.  One store, on one arm -- 0x27885 against
+ * 0x27995 -- and it is the only asymmetry between them.
+ *
+ * THE DEMAPPER'S RESET IS DOUBLY GUARDED and the ORDER of the two tests is
+ * the object's: `test %ecx,%ecx` on `mappingParams1` at 0x27891 and only then
+ * `test %eax,%eax` on `autoDigitalImpDetector` at 0x2789b.
+ *
+ * AND THE DETECTOR IS THEN DEREFERENCED UNCONDITIONALLY, which is the object
+ * and not a defect here.  On the arm where the guard rejected, GCC threads
+ * the jump straight past the reload at 0x278c0 into 0x278c6 -- it knows the
+ * register already holds zero -- and 0x278d5's `mov 0xa95c(%eax),%ecx` reads
+ * through it.  So the original's source guards the demapper call on a pointer
+ * it then trusts; writing the guard any other way would emit the reload.
+ *
+ * `V90RDetector::reset` TAKES THE SAME PAIR TWICE.  Both detectors get
+ * `(params->PHASE4_R_DETECTION_LENGTH, 0x18)`, and nothing in the source
+ * tells them apart -- V90Phase4Demodulator.h says the same of the
+ * constructor's two calls.
+ *
+ * THE MODULATOR IS RESET INTO TRN2d WITH NOTHING TO PUMP: state 3, trip count
+ * zero and a fifth argument of zero, with the companding law taken from
+ * `autoDigitalImpDetector->pcmType` and the code from this class's own
+ * `ucode` -- which `reset` stored eight instructions earlier and reloads,
+ * `movzbl 0x8(%esi)` at 0x278ec.
+ *
+ * TWO DIAGNOSTICS, AT TWO DIFFERENT GATES.  The `quickConnect` line is behind
+ * `dsplibs_debug_level > 1` and comes FIRST; the `trn2dDDLength` line is an
+ * unconditional `edprintf` and comes after the field it reports has been
+ * assigned.  Between them they are what names both fields (CLAUDE.md's rule
+ * 1); the parameter the flag selects, `TRN2D_QC_DD_LENGTH`, carries the same
+ * abbreviation the string does.
+ *
+ * THE LOOP RELOADS `sessionFlag` EVERY ITERATION, `mov (%esi),%edi` at
+ * 0x27958 inside the back edge, for the reason the modulator's own loop does:
+ * either decision member may store through `this`.
+ * ===========================================================================
+ */
+void
+V90Phase4Demodulator::reset(unsigned char code, Phase4DemodulatorState st,
+			    unsigned int nofSamples,
+			    unsigned int quickConnectArg)
+{
+	unsigned int i;
+
+	int_0028 = 0;
+	int_3510 = 0;
+	ucode = code;
+	countInState = 0;
+	int_0038 = 1;
+	state = st;
+	int_003c = 0;
+	int_0040 = 0;
+	int_0044 = 0;
+	int_0048 = 0;
+	uchar_0030 = 0;
+
+	rDetector1.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);
+	rDetector2.reset((unsigned int)params->PHASE4_R_DETECTION_LENGTH, 0x18);
+
+	quickConnect = quickConnectArg;
+
+	if (sessionFlag != 0) {
+		/*
+		 * ONE LOAD, TWO STORES, and the local is the object's rather
+		 * than a tidying: `mov (%ecx),%edx` at 0x27883 feeds both
+		 * 0x27885 and 0x2788b.  Written as two independent reads of
+		 * `mappingParams1->word_0`, GCC reloads for the second --
+		 * the store to `this->uint_34fc` is an `unsigned int` write
+		 * that may alias an `unsigned int` read -- and emits an extra
+		 * `mov (%ecx),%ebx`.  Measured, not assumed.
+		 */
+		unsigned int groupSize;
+
+		cp->reset();
+		groupSize = mappingParams1->word_0;
+		uint_34fc = groupSize;
+		cp->word_3ba8 = groupSize;
+	} else {
+		mp->reset();
+		mp->word_114 = mappingParams1->word_0;
+	}
+
+	if (mappingParams1 != 0 && autoDigitalImpDetector != 0)
+		demapper->reset(mappingParams1);
+
+	linearMappStudyStart = 0;
+
+	phase4Modulator.reset(autoDigitalImpDetector->pcmType, ucode,
+			      P4M_STATE_TRN2D, 0, 0);
+	phase4Modulator.setMappingParams(mappingParams1);
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("V90Phase4Demodulator: reset called, "
+				     "quickConnect indication is %d\r\n",
+				     quickConnect);
+
+	trn2dDDLength = quickConnect != 0
+	    ? (unsigned int)params->TRN2D_QC_DD_LENGTH
+	    : (unsigned int)params->TRN2D_DD_LENGTH;
+	edprintf("V90Phase4Demodulator: trn2dDDLength = %d symbols\r\n",
+		 trn2dDDLength);
+
+	for (i = 0; i < nofSamples; i++) {
+		if (sessionFlag != 0)
+			getV92Decision(0);
+		else
+			getV90Decision(0);
+	}
 }

@@ -91,6 +91,7 @@
 #include "dsplib/V90AutoDigitalImpDetector.h"
 #include "dsplib/V90CP.h"
 #include "dsplib/V90MP.h"
+#include "dsplib/V90BitsToSymbol.h"
 #include "dsplib/V90Demapper.h"
 #include "dsplib/V90Phase4Demodulator.h"
 
@@ -456,6 +457,8 @@ setup(int trial, int mode)
  * The four-way comparison.  `n` bounds the demodulator itself; the 64 bytes
  * past it are the guard.
  */
+static void compare_peers(long tag);
+
 static void
 compare_all(const char *what, long tag)
 {
@@ -474,6 +477,19 @@ compare_all(const char *what, long tag)
 			    memcmp(p4d_s[s] + n, p4d_seed + n,
 				   P4D_SLOT - n) == 0, 1, tag);
 
+	compare_peers(tag);
+}
+
+/*
+ * The four split peers and the two per-side arrays under the demapper, split
+ * out of `compare_all` so that `run_p4d_reset` can make the same claims about
+ * them under a DIFFERENT comparison of the demodulator itself -- that one has
+ * to canonicalise the embedded modulator's two heap words, which no other
+ * test in this file constructs.
+ */
+static void
+compare_peers(long tag)
+{
 	scrub(dem_cmp[0], dem_s[0], DEM_SLOT, dem_skip);
 	scrub(dem_cmp[1], dem_s[1], DEM_SLOT, dem_skip);
 	diff_eq_obj_(__FILE__, __LINE__, "the demapper", "V90Demapper",
@@ -645,7 +661,7 @@ run_one(int v92, int state, int arm, int phase, int trial, int mode,
 
 		d->state = (Phase4DemodulatorState)state;
 		d->sessionFlag = v92 ? 1u : 0u;
-		d->uint_0034 = (unsigned)(phase & 1);
+		d->quickConnect = (unsigned)(phase & 1);
 		d->int_0038 = (phase & 1) ? 1 : 0;
 		d->int_003c = (phase & 2) ? 1 : 0;
 		d->int_0040 = (phase & 4) ? 1 : 0;
@@ -1045,6 +1061,527 @@ run_getdecision(void)
 	return diff_end();
 }
 
+/* ------------------------------------- V90Phase4Demodulator::reset -------
+ *
+ * 504 bytes at .text+0x277c0, and it is this class's entry point: eleven
+ * scalars, both `V90RDetector`s, one of the CP and the MP, the demapper, the
+ * embedded modulator's own `reset` and `setMappingParams`, two diagnostics
+ * behind two different gates, and then a loop that runs the decision member
+ * `sessionFlag` selects `nofSamples` times.
+ *
+ * IT LIVES HERE BECAUSE THE LOOP DOES.  Every other home for it -- a fixture
+ * of its own, or t_v90rxctor, which already constructs this class -- would
+ * have had to leave `nofSamples` at zero, because driving the loop means
+ * driving `getV90Decision` and `getV92Decision` for real over a demapper, a
+ * descrambler, a CP and an MP that are all in a usable state.  This file is
+ * where all four of those are planted, and the two decision members are the
+ * two things `reset` selects between, so a `nofSamples` of zero would leave
+ * "the two arms are swapped" with no witness at all.
+ *
+ * WHAT THIS FILE'S `setup` DOES NOT PROVIDE, AND WHY IT IS CONSTRUCTED AND
+ * NOT PLANTED.  `reset` reaches two things the decision members never do:
+ * `Scrambler<h,h>::reset(0)` on the modulator embedded at +0x50, whose
+ * history is a HEAP allocation the modulator's constructor makes, and
+ * `V90BitsToSymbol::reset` through `setMappingParams`, which runs a whole
+ * `V90Mapper` underneath it.  Planting that chain by hand is a longer and
+ * more fragile thing than running the two constructors that build it, both of
+ * which are already differentially green in t_v90modchain -- so the converter
+ * and the embedded modulator are CONSTRUCTED, per side, over the seeded
+ * block, with the arguments V90Phase4Demodulator's own constructor uses and
+ * the two mapping blocks in the order it crosses them (finding 1301).  The
+ * one deliberate difference is that the converter is SUPPLIED rather than
+ * left for the modulator to allocate: the ownership flag is not this
+ * function's claim and a supplied converter is one allocation fewer to mask.
+ *
+ * THE HISTORY IS DIRTIED AFTER CONSTRUCTION AND BEFORE THE CALL, which is
+ * finding 7457: the allocator hands back zeroed memory and `reset(0)` writes
+ * zeros, so without a non-zero pattern the call moves nothing any comparison
+ * can see, and both "drop the call" and "seed with one" survive.
+ *
+ * FOUR AXES, INDEPENDENT BY CONSTRUCTION, per finding 7458:
+ *
+ *   - `sessionFlag`, which picks the CP arm over the MP arm AND the decision
+ *     member the loop runs;
+ *   - `quickConnect`, which picks `TRN2D_QC_DD_LENGTH` over `TRN2D_DD_LENGTH`
+ *     -- two parameters planted to two different values, without which that
+ *     choice has no observable at all;
+ *   - `nofSamples`, 0, 1 or 2;
+ *   - the debug level, 0, 1 and 2, because the `quickConnect` line is behind
+ *     `> 1` and `edprintf` is behind `> 0`, and those differ at exactly one
+ *     value.
+ *
+ * They are four nested loops and share no bit with one another or with the
+ * state, which is the sweep's outermost axis.
+ *
+ * `PHASE4_R_DETECTION_LENGTH` IS PLANTED AWAY FROM 0x18 and its neighbours
+ * are planted to different values again, so "the two detector arguments are
+ * swapped" and "it reads +0x298" both have somewhere to land.
+ */
+
+extern "C" {
+void ref_p4d_reset(void *, unsigned char, Phase4DemodulatorState,
+		   unsigned int, unsigned int)
+	asm("ref__ZN20V90Phase4Demodulator5resetEh22Phase4DemodulatorStatejj");
+
+void our_bts_c1(void *, unsigned int, V90Parameters *)
+	asm("_ZN15V90BitsToSymbolC1EjP13V90Parameters");
+void ref_bts_c1(void *, unsigned int, V90Parameters *)
+	asm("ref__ZN15V90BitsToSymbolC1EjP13V90Parameters");
+void our_bts_d1(void *) asm("_ZN15V90BitsToSymbolD1Ev");
+void ref_bts_d1(void *) asm("ref__ZN15V90BitsToSymbolD1Ev");
+
+#define RD_P4M_MANGLE(v) \
+	"_ZN18V90Phase4ModulatorC" #v "EP13V90ParametersjP15V90BitsToSymbol" \
+	"P5V90MPP16V90MappingParamsS7_P5V90CPj"
+
+void our_p4m_c1(void *, V90Parameters *, unsigned int, V90BitsToSymbol *,
+		V90MP *, V90MappingParams *, V90MappingParams *, V90CP *,
+		unsigned int) asm(RD_P4M_MANGLE(1));
+void ref_p4m_c1(void *, V90Parameters *, unsigned int, V90BitsToSymbol *,
+		V90MP *, V90MappingParams *, V90MappingParams *, V90CP *,
+		unsigned int) asm("ref_" RD_P4M_MANGLE(1));
+void our_p4m_d1(void *) asm("_ZN18V90Phase4ModulatorD1Ev");
+void ref_p4m_d1(void *) asm("ref__ZN18V90Phase4ModulatorD1Ev");
+}
+
+#define RD_BTS_SIZE	0x24u
+#define RD_MAP_SIZE	0x704u
+#define RD_BTS_N	0x40u			/* symbols the converter owns */
+
+/* The embedded modulator, and the two words of it that hold allocations. */
+#define RD_P4M_BASE	0x0050u
+#define RD_P4M_BTS	(RD_P4M_BASE + 0x0044u)		/* the converter   */
+#define RD_P4M_SCRAM	(RD_P4M_BASE + 0x0058u)		/* the scrambler   */
+
+/* The V90SpectralShaper embedded in V90Mapper: +0x68c, 0x6c bytes. */
+#define RD_SHAPER_LO	0x68cu
+#define RD_SHAPER_HI	0x6f8u
+
+static unsigned char bts_s[2][RD_BTS_SIZE] __attribute__((aligned(8)));
+static unsigned char rd_cmp[2][P4D_SLOT];
+static unsigned char rd_map[2][RD_MAP_SIZE];
+
+/* The live allocation set, for finding a heap pointer by value. */
+#define RD_MAXLIVE	64
+static void *rd_live[RD_MAXLIVE];
+static int rd_nlive;
+
+static int
+rd_word_is_live(const unsigned char *w)
+{
+	void *p;
+	int i;
+
+	memcpy(&p, w, sizeof(p));
+	if (p == 0)
+		return 0;
+	for (i = 0; i < rd_nlive; i++)
+		if (rd_live[i] == p)
+			return 1;
+	return 0;
+}
+
+static void
+rd_mask_word(unsigned char *a, unsigned char *b, unsigned off)
+{
+	memset(a + off, 0x5a, sizeof(void *));
+	memset(b + off, 0x5a, sizeof(void *));
+}
+
+static void
+rd_mask_live(unsigned char *a, unsigned char *b, unsigned lo, unsigned hi)
+{
+	unsigned o;
+
+	for (o = lo; o + sizeof(void *) <= hi; o += sizeof(void *))
+		if (rd_word_is_live(a + o) && rd_word_is_live(b + o))
+			rd_mask_word(a, b, o);
+}
+
+/*
+ * An embedded Scrambler, WITHOUT losing what is in it: the six derived
+ * pointers become distances from `pLimit` and only the base is masked, so a
+ * tap at the wrong distance still differs.  t_v90modchain's `canon_scrambler`
+ * with the same argument and for the same reason.
+ */
+static void
+rd_canon_scrambler(unsigned char *o, unsigned base)
+{
+	unsigned int lim, v, i;
+
+	memcpy(&lim, o + base, sizeof(lim));
+	for (i = 1; i < 7; i++) {
+		memcpy(&v, o + base + 4 * i, sizeof(v));
+		v -= lim;
+		memcpy(o + base + 4 * i, &v, sizeof(v));
+	}
+	memset(o + base, 0x5a, sizeof(void *));
+}
+
+static void *
+rd_slot_ptr(const unsigned char *o, unsigned off)
+{
+	void *p;
+
+	memcpy(&p, o + off, sizeof(p));
+	return p;
+}
+
+/*
+ * Build the converter and the embedded modulator, per side, over the block
+ * `setup` has just seeded, and then dirty the scrambler's history.
+ */
+static void
+rd_construct(int flag)
+{
+	int s;
+
+	harness_alloc_reset();
+	our_bts_c1(bts_s[0], RD_BTS_N, PARAMS);
+	ref_bts_c1(bts_s[1], RD_BTS_N, PARAMS);
+
+	/*
+	 * The demodulator's own constructor's arguments for the embedded
+	 * modulator, mapping blocks crossed (1301), with the converter
+	 * supplied rather than owned.
+	 */
+	our_p4m_c1(p4d_s[0] + RD_P4M_BASE, PARAMS, (unsigned int)flag,
+		   (V90BitsToSymbol *)(void *)bts_s[0], (V90MP *)0, MAPP2,
+		   MAPP1, (V90CP *)0, 0xcu);
+	ref_p4m_c1(p4d_s[1] + RD_P4M_BASE, PARAMS, (unsigned int)flag,
+		   (V90BitsToSymbol *)(void *)bts_s[1], (V90MP *)0, MAPP2,
+		   MAPP1, (V90CP *)0, 0xcu);
+
+	for (s = 0; s < 2; s++) {
+		unsigned char *o = p4d_s[s] + RD_P4M_SCRAM;
+		unsigned char *lim = (unsigned char *)rd_slot_ptr(o, 0);
+		unsigned char *t2 = (unsigned char *)rd_slot_ptr(o, 0x0c);
+
+		memset(lim, 0xa5, (size_t)(t2 - lim) + 1);
+	}
+}
+
+static void
+rd_destruct(void)
+{
+	our_p4m_d1(p4d_s[0] + RD_P4M_BASE);
+	ref_p4m_d1(p4d_s[1] + RD_P4M_BASE);
+	our_bts_d1(bts_s[0]);
+	ref_bts_d1(bts_s[1]);
+}
+
+/*
+ * The demodulator, its four split peers (through this file's own
+ * `compare_all`), the converter and the mapper under it.
+ */
+static void
+rd_compare(const char *what, long tag)
+{
+	unsigned n = (unsigned)sizeof(V90Phase4Demodulator);
+	int s;
+
+	rd_nlive = harness_alloc_live_set(rd_live, RD_MAXLIVE);
+	if (rd_nlive > RD_MAXLIVE)
+		rd_nlive = RD_MAXLIVE;
+
+	scrub(rd_cmp[0], p4d_s[0], P4D_SLOT, p4d_skip);
+	scrub(rd_cmp[1], p4d_s[1], P4D_SLOT, p4d_skip);
+	rd_mask_word(rd_cmp[0], rd_cmp[1], RD_P4M_BTS);
+	rd_canon_scrambler(rd_cmp[0], RD_P4M_SCRAM);
+	rd_canon_scrambler(rd_cmp[1], RD_P4M_SCRAM);
+	diff_eq_obj_(__FILE__, __LINE__, what, "V90Phase4Demodulator",
+		     rd_cmp[0], rd_cmp[1], n, tag);
+	for (s = 0; s < 2; s++)
+		diff_eq_int("the guard past the demodulator held (%ld)",
+			    memcmp(p4d_s[s] + n, p4d_seed + n,
+				   P4D_SLOT - n) == 0, 1, tag);
+
+	/*
+	 * THE CONVERTER IS WHERE `setMappingParams` LANDS, and it is outside
+	 * the object: `bitsPerFrame` is `mappingParams1->word_0`, so passing
+	 * the other block -- which this file plants at a different value --
+	 * fails here and nowhere else.
+	 */
+	memcpy(rd_cmp[0], bts_s[0], RD_BTS_SIZE);
+	memcpy(rd_cmp[1], bts_s[1], RD_BTS_SIZE);
+	rd_mask_word(rd_cmp[0], rd_cmp[1], 0x00);
+	rd_mask_word(rd_cmp[0], rd_cmp[1], 0x08);
+	diff_eq_obj_(__FILE__, __LINE__, "the converter", "V90BitsToSymbol",
+		     rd_cmp[0], rd_cmp[1], (size_t)RD_BTS_SIZE, tag);
+
+	memcpy(rd_map[0], rd_slot_ptr(bts_s[0], 0x00), RD_MAP_SIZE);
+	memcpy(rd_map[1], rd_slot_ptr(bts_s[1], 0x00), RD_MAP_SIZE);
+	rd_mask_word(rd_map[0], rd_map[1], 0x018);
+	rd_mask_live(rd_map[0], rd_map[1], RD_SHAPER_LO, RD_SHAPER_HI);
+	diff_eq_obj_(__FILE__, __LINE__, "the mapper under the converter",
+		     "V90Mapper", rd_map[0], rd_map[1], (size_t)RD_MAP_SIZE,
+		     tag);
+
+	/* The scrambler's history, which lives outside the object (7457). */
+	{
+		const unsigned char *sa = p4d_s[0] + RD_P4M_SCRAM;
+		const unsigned char *sb = p4d_s[1] + RD_P4M_SCRAM;
+		const unsigned char *la = (const unsigned char *)
+					  rd_slot_ptr(sa, 0);
+		const unsigned char *lb = (const unsigned char *)
+					  rd_slot_ptr(sb, 0);
+		const unsigned char *ta = (const unsigned char *)
+					  rd_slot_ptr(sa, 0x0c);
+
+		diff_eq_int("the scrambler's history (%ld)",
+			    memcmp(la, lb, (size_t)(ta - la) + 1) == 0, 1, tag);
+	}
+}
+
+#define RD_NSTATE	0x12
+
+static int
+run_p4d_reset(void)
+{
+	long trial = 40000;
+	int st, flag, qc, nof, lvl;
+	int printed = 0, gated = 0, pumped = 0, qcsplit = 0, dirty = 0;
+	int cparm = 0, mparm = 0, flagdiff = 0, rlen = 0;
+	unsigned int qclen = 0, ddlen = 0;
+	static unsigned char cp_pre[CP_SLOT], mp_pre[MP_SLOT];
+	static unsigned char dem_pre[DEM_SLOT];
+	static unsigned char flag0[P4D_SLOT];
+	static char flag0_text[8192];
+
+	diff_begin("V90Phase4Demodulator::reset");
+
+	for (st = 0; st < RD_NSTATE; st++)
+	 for (flag = 0; flag < 2; flag++)
+	  for (qc = 0; qc < 2; qc++)
+	   for (nof = 0; nof < 3; nof++)
+	    for (lvl = 0; lvl < 3; lvl++) {
+		int mode = (int)(trial % 4);
+		unsigned char code = (unsigned char)(0x37u * (unsigned)trial);
+		unsigned int qcarg = qc ? (0x1000u + (unsigned)(trial & 0xff))
+					: 0u;
+		Phase4DemodulatorState want = (Phase4DemodulatorState)st;
+		int s;
+
+		setup((int)trial, mode);
+
+		/*
+		 * THE TWO LENGTHS `quickConnect` CHOOSES BETWEEN, and the
+		 * third that neither arm may take.  `setup` already plants
+		 * RRN_TRN2D_DD_LENGTH, which is what the RdNot arms use.
+		 */
+		qclen = 0x310u + (unsigned int)(trial & 0x1f);
+		ddlen = 0x480u + (unsigned int)(trial & 0x1f);
+		PARAMS->TRN2D_QC_DD_LENGTH = (int)qclen;
+		PARAMS->TRN2D_DD_LENGTH = (int)ddlen;
+
+		/*
+		 * The detector length, away from 0x18 and from its
+		 * neighbours, so neither a swapped argument pair nor a
+		 * misread displacement can agree by accident.
+		 */
+		PARAMS->PHASE4_R_DETECTION_LENGTH = 0x2a0 + (int)(trial & 0x3f);
+		PARAMS->SD_DETECTOR_DETECTION_COUNTER_THRESHOLD = 0x1b30;
+
+		/*
+		 * The mapping blocks have to be usable by `V90Mapper::reset`,
+		 * which `setMappingParams` reaches: a pseudorandom `shaperId`
+		 * or `shaperSR` is a spectral shaper built out of rubbish and
+		 * a divisor that may be zero.  The coefficients are exact
+		 * binary fractions so the two builds' arithmetic cannot
+		 * differ in a last bit.
+		 */
+		MAPP1->shaperSR = 2;
+		MAPP1->shaperId = 1;
+		MAPP2->shaperSR = 3;
+		MAPP2->shaperId = 2;
+		MAPP1->shaperA1 = 0.5f;
+		MAPP1->shaperA2 = -0.25f;
+		MAPP1->shaperB1 = 0.125f;
+		MAPP1->shaperB2 = -0.0625f;
+		MAPP2->shaperA1 = -0.75f;
+		MAPP2->shaperA2 = 0.375f;
+		MAPP2->shaperB1 = -0.1875f;
+		MAPP2->shaperB2 = 0.03125f;
+
+		/* Both companding laws, on an axis of their own. */
+		ADI->pcmType = (PcmType)((trial & 4) ? 1 : 0);
+
+		rd_construct(flag);
+
+		for (s = 0; s < 2; s++) {
+			V90Phase4Demodulator *d = &P4D(s);
+
+			d->sessionFlag = (unsigned int)flag;
+			d->autoDigitalImpDetector = ADI;
+			/*
+			 * SENTINELS OVER WHAT `reset` STORES A ZERO OR A ONE
+			 * INTO.  `setup` seeds with varied bytes, so most of
+			 * these already differ; these four are the ones the
+			 * modulator's construction or this file's planting
+			 * would otherwise have left holding the value `reset`
+			 * is about to write.
+			 */
+			d->uint_34fc = 0xc1c1c100u + (unsigned int)trial;
+			d->linearMappStudyStart = 0xc2c2c200u +
+						  (unsigned int)trial;
+			d->quickConnect = 0xc3c3c300u + (unsigned int)trial;
+			d->trn2dDDLength = 0xc4c4c400u + (unsigned int)trial;
+		}
+
+		memcpy(cp_pre, cp_s[1], CP_SLOT);
+		memcpy(mp_pre, mp_s[1], MP_SLOT);
+		memcpy(dem_pre, dem_s[1], DEM_SLOT);
+
+		set_level((unsigned)lvl);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		P4D(0).reset(code, want, (unsigned int)nof, qcarg);
+		ref_p4d_reset(p4d_s[1], code, want, (unsigned int)nof, qcarg);
+		dsplib_debug_capture_on = 0;
+		set_level(0);
+
+		rd_compare("after reset", trial);
+		compare_peers(trial);
+
+		diff_eq_int("the transcripts agreed (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    trial);
+
+		/*
+		 * BY VALUE ON THE BLOB'S SIDE.  Two runs agreeing cannot tell
+		 * "stored correctly" from "both sides equally wrong".
+		 */
+		diff_eq_int("ucode took argument one (%ld)",
+			    (long)P4D(1).ucode, (long)code, trial);
+		diff_eq_int("quickConnect took argument four (%ld)",
+			    (long)P4D(1).quickConnect, (long)qcarg, trial);
+		diff_eq_int("trn2dDDLength followed quickConnect (%ld)",
+			    (long)P4D(1).trn2dDDLength,
+			    (long)(qc ? qclen : ddlen), trial);
+		diff_eq_int("+0x38 was set to one (%ld)", (long)P4D(1).int_0038,
+			    1L, trial);
+		diff_eq_int("linearMappStudyStart was cleared (%ld)",
+			    (long)P4D(1).linearMappStudyStart, 0L, trial);
+		/*
+		 * BOTH DETECTORS TAKE THE SAME PAIR, and the pair is
+		 * (parameter, literal) and not the other way round.  The
+		 * rounding `V90RDetector::reset` applies is that function's
+		 * and is not restated here; what is asserted is that the
+		 * literal survives it -- 0x18 is a multiple of both 6 and 12
+		 * -- and that the other slot moves with the parameter, which
+		 * the counter below is the denominator for.
+		 */
+		diff_eq_int("the two detectors took the same first argument "
+			    "(%ld)", (long)P4D(1).rDetector1.int_04,
+			    (long)P4D(1).rDetector2.int_04, trial);
+		diff_eq_int("the first detector took the literal 0x18 (%ld)",
+			    (long)P4D(1).rDetector1.int_08, 0x18L, trial);
+		diff_eq_int("the second detector took the literal 0x18 (%ld)",
+			    (long)P4D(1).rDetector2.int_08, 0x18L, trial);
+		if (P4D(1).rDetector1.int_04 != 0x18)
+			rlen++;
+
+		/*
+		 * THE ONE ASYMMETRY BETWEEN THE TWO SESSION ARMS: +0x34fc is
+		 * written under V.92 and left alone under V.90.
+		 */
+		if (flag) {
+			diff_eq_int("+0x34fc took the group size (%ld)",
+				    (long)P4D(1).uint_34fc,
+				    (long)MAPP1->word_0, trial);
+			diff_eq_int("the CP took the group size (%ld)",
+				    (long)CPR(1).word_3ba8,
+				    (long)MAPP1->word_0, trial);
+			if (memcmp(cp_pre, cp_s[1], CP_SLOT) != 0)
+				cparm++;
+		} else {
+			diff_eq_int("+0x34fc was left alone (%ld)",
+				    (long)P4D(1).uint_34fc,
+				    (long)(0xc1c1c100u + (unsigned int)trial),
+				    trial);
+			diff_eq_int("the MP took the group size (%ld)",
+				    (long)MPR(1).word_114,
+				    (long)MAPP1->word_0, trial);
+			if (memcmp(mp_pre, mp_s[1], MP_SLOT) != 0)
+				mparm++;
+		}
+
+		if (memcmp(dem_pre, dem_s[1], DEM_SLOT) != 0)
+			qcsplit++;
+
+		if (nof > 0 && P4D(1).countInState != 0u)
+			pumped++;
+
+		/* The history is no longer all 0xa5, so `reset(0)` ran. */
+		{
+			const unsigned char *sb = p4d_s[1] + RD_P4M_SCRAM;
+			const unsigned char *lb = (const unsigned char *)
+						  rd_slot_ptr(sb, 0);
+			const unsigned char *tb = (const unsigned char *)
+						  rd_slot_ptr(sb, 0x0c);
+			unsigned int n = (unsigned int)(tb - lb) + 1u;
+			unsigned int i;
+			int moved = 0;
+
+			for (i = 0; i < n; i++)
+				if (lb[i] != 0xa5)
+					moved = 1;
+			diff_eq_int("the modulator's history was reseeded "
+				    "(%ld)", moved, 1, trial);
+			if (moved)
+				dirty++;
+		}
+
+		if (dsplib_debug_capture_text(1)[0] != '\0') {
+			printed++;
+			if (lvl > 1 &&
+			    dsplib_debug_capture_lines(1) > 1)
+				gated++;
+		}
+
+		/*
+		 * BLOB AGAINST BLOB: the same trial with `sessionFlag` clear
+		 * and set must leave two different objects or two different
+		 * transcripts.  It is the only check here that can fail on
+		 * "the two decision members are swapped" or "the CP and MP
+		 * arms are swapped", because a differential comparison swaps
+		 * on both sides at once.
+		 */
+		if (flag == 0) {
+			memcpy(flag0, p4d_s[1], P4D_SLOT);
+			strncpy(flag0_text, dsplib_debug_capture_text(1),
+				sizeof flag0_text - 1);
+			flag0_text[sizeof flag0_text - 1] = '\0';
+		} else if (memcmp(flag0, p4d_s[1], P4D_SLOT) != 0 ||
+			   strcmp(flag0_text,
+				  dsplib_debug_capture_text(1)) != 0) {
+			flagdiff++;
+		}
+
+		rd_destruct();
+		diff_eq_int("nothing left allocated (%ld)", harness_alloc.live,
+			    0, trial);
+		trial++;
+	    }
+
+	diff_eq_int("the detector length came from the parameter", rlen > 0,
+		    1, 0);
+	diff_eq_int("something was printed", printed > 0, 1, 0);
+	diff_eq_int("and the raised level added a line", gated > 0, 1, 0);
+	diff_eq_int("the decision loop ran", pumped > 0, 1, 0);
+	diff_eq_int("the CP arm moved the CP record", cparm > 0, 1, 0);
+	diff_eq_int("the MP arm moved the MP record", mparm > 0, 1, 0);
+	diff_eq_int("the demapper was reset", qcsplit > 0, 1, 0);
+	diff_eq_int("the modulator's history was reseeded somewhere",
+		    dirty > 0, 1, 0);
+	diff_eq_int("the two session flags took different arms",
+		    flagdiff > 0, 1, 0);
+
+	set_level(0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1053,6 +1590,7 @@ main(void)
 	rc |= run_sweep(0);
 	rc |= run_sweep(1);
 	rc |= run_getdecision();
+	rc |= run_p4d_reset();
 
 	return rc;
 }

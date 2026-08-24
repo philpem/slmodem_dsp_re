@@ -64,18 +64,18 @@
  },
  {
   "label": "resetBeforRRN clears +0x40 as `reset` does",
-  "find": "\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;",
-  "replace": "\tint_0040 = 0;\n\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;"
+  "find": "\tint_003c = 1;\n\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;",
+  "replace": "\tint_003c = 1;\n\tint_0040 = 0;\n\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;"
  },
  {
   "label": "resetBeforRRN does not clear the byte at +0x30",
-  "find": "\tint_0048 = 0;\n\tuchar_0030 = 0;",
-  "replace": "\tint_0048 = 0;"
+  "find": "\tint_003c = 1;\n\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;",
+  "replace": "\tint_003c = 1;\n\tint_0044 = 0;\n\tint_0048 = 0;"
  },
  {
   "label": "resetBeforRRN clears the count as `reset` does",
-  "find": "\tint_0048 = 0;\n\tuchar_0030 = 0;",
-  "replace": "\tint_0048 = 0;\n\tuchar_0030 = 0;\n\tcountInState = 0;"
+  "find": "\tint_003c = 1;\n\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;",
+  "replace": "\tint_003c = 1;\n\tint_0044 = 0;\n\tint_0048 = 0;\n\tuchar_0030 = 0;\n\tcountInState = 0;"
  },
  {
   "label": "detectRRN detects on the second R detector",

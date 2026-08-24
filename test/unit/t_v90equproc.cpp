@@ -1461,7 +1461,7 @@ run_p4_arms(void)
 					d->int_0040 = 1;
 					d->int_0044 = 1;
 					d->int_0048 = 0;
-					d->uint_0034 = 0u;
+					d->quickConnect = 0u;
 					d->uint_004c = 0u;
 					d->errorEnergyBeforeEC = 4.0f;
 					d->errorEnergyAfterEC = 1.0f;
@@ -1790,7 +1790,7 @@ run_data_arm(void)
 					d->int_0040 = 1;
 					d->int_0044 = 1;
 					d->int_0048 = 0;
-					d->uint_0034 = 0u;
+					d->quickConnect = 0u;
 					d->uint_004c = 0u;
 					arm_r(&d->rDetector1,
 					      which == 1 ? 1 + dly : 0, 0x60);
@@ -2050,7 +2050,7 @@ run_reconvert_wide(void)
 			d->int_0040 = 1;
 			d->int_0044 = 1;
 			d->int_0048 = 0;
-			d->uint_0034 = 0u;
+			d->quickConnect = 0u;
 			d->uint_004c = 0u;
 			arm_rnot(&d->rDetector1, 0, 0x60);
 			arm_rfnot(&d->rDetector2, 0, 0x60);

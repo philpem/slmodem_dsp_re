@@ -324,7 +324,7 @@ run_p4d_resetbeforrrn(void)
 		P4DA->countInState = P4DB->countInState = 0x7a550000 + trial;
 		P4DA->int_0028 = P4DB->int_0028 = 0x7a660000 + trial;
 		P4DA->int_0040 = P4DB->int_0040 = 0x7a770000 + trial;
-		P4DA->uint_0034 = P4DB->uint_0034 = 0x7a880000u + trial;
+		P4DA->quickConnect = P4DB->quickConnect = 0x7a880000u + trial;
 		P4DA->trn2dDDLength = P4DB->trn2dDDLength = 0x7a990000u + trial;
 		P4DA->state = P4DB->state = P4D_STATE_WAIT_FOR_MP;
 
@@ -350,7 +350,7 @@ run_p4d_resetbeforrrn(void)
 		diff_eq_int("+0x40 kept its seed (%ld)", (long)P4DB->int_0040,
 			    0x7a770000 + trial, tag);
 		diff_eq_int("+0x34 kept its seed (%ld)",
-			    (long)P4DB->uint_0034, (long)(0x7a880000u + trial),
+			    (long)P4DB->quickConnect, (long)(0x7a880000u + trial),
 			    tag);
 		diff_eq_int("the state was not touched (%ld)",
 			    (long)P4DB->state, (long)P4D_STATE_WAIT_FOR_MP,
