@@ -187,8 +187,8 @@
  },
  {
   "label": "resetBeforRRN: +0x2c is left as it was found",
-  "find": "\tword_0028 = 0;\n\tword_002c = 0;",
-  "replace": "\tword_0028 = 0;"
+  "find": "\tword_0024 = 1;\n\tword_0028 = 0;\n\tword_002c = 0;",
+  "replace": "\tword_0024 = 1;\n\tword_0028 = 0;"
  },
 
  {

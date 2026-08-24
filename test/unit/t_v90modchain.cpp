@@ -61,6 +61,10 @@
 
 #include "harness.h"
 #include "dsplib/debug.h"
+/* `pcm.h` has no linkage guard of its own; same wrapper as the .cpp uses. */
+extern "C" {
+#include "dsplib/pcm.h"
+}
 #include "dsplib/sysdep.h"
 #include "dsplib/V90BitsToSymbol.h"
 #include "dsplib/V90CP.h"
@@ -4125,6 +4129,270 @@ run_pump_null(const char *name, pump ours, pump theirs, long base)
 	return diff_end();
 }
 
+/* ------------------------------------------ V90Phase4Modulator::reset ---
+ *
+ * 255 bytes at .text+0x2f630: sixteen stores, one G.711 expansion, one
+ * `Scrambler<h,h>::reset(0)` and a loop that runs one of the two symbol pumps
+ * `nofSymbols` times.
+ *
+ * IT REUSES `setup_pump` WHOLE, and that is the point rather than a saving.
+ * The loop's callees are the two pumps, so everything the pump grid had to
+ * build to call one of them safely -- a converter constructed, `reset` and
+ * WARMED past the mapper's priming countdown (7456), a block size inside the
+ * one-`short` drain slot (7455), a planted MP and two planted CPs, a dirtied
+ * scrambler history (7457) -- is exactly what this needs, and `compare_pump`
+ * already compares all five places the work lands.
+ *
+ * WHAT `setup_pump` PLANTS IS NOW PART OF THE TEST RATHER THAN A SUBSTITUTE
+ * FOR IT.  `reset` overwrites `state`, `symbolCount` and eleven flags, so the
+ * planted values are the sentinels that make those stores visible -- a
+ * `symbolCount` of 0x3e7b going to zero is a store, where zero over zero is
+ * not.  And the fields `reset` must NOT touch are planted too, which is what
+ * the unchanged-region check below rests on.
+ *
+ * THREE AXES ARE INDEPENDENT BY CONSTRUCTION, per finding 7458:
+ *
+ *   - `flag` is `sessionFlag`, which selects the pump and seeds
+ *     `nextStateAfterTRN2d`;
+ *   - `nof` is the trip count, 0, 1 or 2;
+ *   - `lvl` is the debug level, 0, 1 or 2 -- three and not two, because
+ *     `> 1` and `> 0` differ at exactly one value.
+ *
+ * They are three nested loops and share no bit with each other or with the
+ * state.  A level derived from the state would have driven each arm's
+ * transition at one level only, which is 7458 exactly.
+ *
+ * THE STATE ARGUMENT IS THE SWEEP, AND IT RETIRES PART OF 7454.  `reset`
+ * takes a `Phase4ModulatorState` and stores it unexamined, so 0x0f, 0x14 and
+ * 0x1c -- which 7454 records as unreachable by any member of the class -- are
+ * reached HERE by calling `reset`, and the pump that follows dispatches them
+ * for real.  `setup_pump`'s poke of `state` is still made, one call earlier,
+ * because it is what makes the store to +0x04 observable.
+ *
+ * WHAT AN OBJECT COMPARISON CANNOT SEE IS ASSERTED BY VALUE ON THE BLOB'S
+ * SIDE, which makes each of these a property of the object rather than of two
+ * runs agreeing: `nextStateAfterTRN2d` is 4 or 5 by `sessionFlag`,
+ * `word_0040` is argument five, `state` is argument three when nothing
+ * pumped, and `codeLevel` is the G.711 image of argument two.
+ */
+
+extern "C" {
+void our_p4m_reset(void *, PcmType, unsigned char, Phase4ModulatorState,
+		   unsigned int, unsigned int)
+	asm("_ZN18V90Phase4Modulator5resetE7PcmTypeh20Phase4ModulatorStatejj");
+void ref_p4m_reset(void *, PcmType, unsigned char, Phase4ModulatorState,
+		   unsigned int, unsigned int)
+	asm("ref__ZN18V90Phase4Modulator5resetE7PcmTypeh20Phase4ModulatorState"
+	    "jj");
+}
+
+typedef void (*p4m_reset)(void *, PcmType, unsigned char,
+			  Phase4ModulatorState, unsigned int, unsigned int);
+
+/*
+ * The three runs `reset` must leave exactly as it found them, and they are
+ * contiguous in the object so a `memcmp` against a snapshot of the SAME side
+ * states it: +0x34 (which only `resetBeforRRN` writes), the five borrowed
+ * pointers at +0x44, the whole scrambled-bit buffer, and the message block
+ * from `mpBits` to `ctorArg8` -- both vectors, both counts, both sequence
+ * lengths, `word_2f64` and the two symbol tables.
+ */
+#define P4M_KEEP1_LO	0x0034u
+#define P4M_KEEP1_HI	0x0038u
+#define P4M_KEEP2_LO	0x0044u
+#define P4M_KEEP2_HI	0x0058u
+#define P4M_KEEP3_LO	0x0078u
+#define P4M_KEEP3_HI	0x2f98u
+
+static int
+p4m_kept(const unsigned char *before, const unsigned char *after)
+{
+	return memcmp(before + P4M_KEEP1_LO, after + P4M_KEEP1_LO,
+		      P4M_KEEP1_HI - P4M_KEEP1_LO) == 0
+	    && memcmp(before + P4M_KEEP2_LO, after + P4M_KEEP2_LO,
+		      P4M_KEEP2_HI - P4M_KEEP2_LO) == 0
+	    && memcmp(before + P4M_KEEP3_LO, after + P4M_KEEP3_LO,
+		      P4M_KEEP3_HI - P4M_KEEP3_LO) == 0;
+}
+
+/* The G.711 image the object builds, spelled out rather than shared. */
+static short
+p4m_expect_level(PcmType law, unsigned char code)
+{
+	if (law != PCM_TYPE_MU_LAW)
+		return (short)alaw2linear((unsigned char)((code & 0x7f) ^ 0xd5));
+	return (short)ulaw2linear((unsigned char)((code & 0x7f) ^ 0xff));
+}
+
+static int
+run_p4m_reset(const char *name, p4m_reset ours, p4m_reset theirs, long base)
+{
+	long trial = base;
+	int st, flag, nof, lvl;
+	int printed = 0, pumped = 0, kept = 0, levels = 0, dirty = 0;
+	int flagdiff = 0;
+	unsigned char pre_b[P4M_SIZE];
+	unsigned char flag0[P4M_SIZE];
+	char flag0_text[4096];
+
+	diff_begin(name);
+
+	for (st = 0; st < NPUMPSTATE; st++)
+		for (flag = 0; flag < 2; flag++)
+			for (nof = 0; nof < 3; nof++)
+				for (lvl = 0; lvl < 3; lvl++) {
+		int ci = (int)((trial + st) % NPROC);
+		int cnt_i = (st + nof + lvl) % NPUMPCOUNT;
+		int variant = (int)(trial % 32);
+		PcmType law = ((trial >> 1) & 1) ? PCM_TYPE_A_LAW
+						 : PCM_TYPE_MU_LAW;
+		unsigned char code = (unsigned char)(0x37u * (unsigned)trial);
+		unsigned int arg5 = 0x5a00u + (unsigned int)(trial & 0xff);
+		Phase4ModulatorState want = (Phase4ModulatorState)st;
+		V90Phase4Modulator *mb;
+		int s;
+
+		if (!proc_case_safe(&proc_cases[ci]))
+			continue;
+
+		setup_pump((int)trial, ci, st, cnt_i, variant);
+		for (s = 0; s < 2; s++)
+			((V90Phase4Modulator *)(void *)(s ? p4m_b : p4m_a))->
+			    sessionFlag = (unsigned int)flag;
+		memcpy(pre_b, p4m_b, P4M_SIZE);
+		memcpy(pump_map_pre, slot_ptr(bts_a, 0x00), MAPPER_SIZE);
+
+		set_level((unsigned int)lvl);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		ours(p4m_a, law, code, want, (unsigned int)nof, arg5);
+		theirs(p4m_b, law, code, want, (unsigned int)nof, arg5);
+		dsplib_debug_capture_on = 0;
+		set_level(0);
+		live_refresh();
+
+		compare_pump(name, trial);
+
+		mb = (V90Phase4Modulator *)(void *)p4m_b;
+
+		/*
+		 * BY VALUE ON THE BLOB'S SIDE.  Two runs agreeing cannot tell
+		 * "stored correctly" from "both sides equally wrong", and
+		 * three of these four are arguments that would otherwise only
+		 * be visible as "some word changed".
+		 */
+		diff_eq_int("word_0040 took argument five (%ld)",
+			    (long)mb->word_0040, (long)arg5, trial);
+		diff_eq_int("nextStateAfterTRN2d followed sessionFlag (%ld)",
+			    (long)mb->nextStateAfterTRN2d,
+			    flag ? (long)P4M_STATE_SUVD : (long)P4M_STATE_MP,
+			    trial);
+		diff_eq_int("codeLevel is the G.711 image (%ld)",
+			    (long)mb->codeLevel,
+			    (long)p4m_expect_level(law, code), trial);
+		diff_eq_int("pcmType took argument one (%ld)", (long)mb->pcmType,
+			    (long)law, trial);
+		if (nof == 0) {
+			diff_eq_int("state took argument three (%ld)",
+				    (long)mb->state, (long)st, trial);
+			diff_eq_int("symbolCount was cleared (%ld)",
+				    (long)mb->symbolCount, 0L, trial);
+			diff_eq_int("word_000c was cleared (%ld)",
+				    (long)mb->word_000c, 0L, trial);
+			diff_eq_int("the message block was untouched (%ld)",
+				    p4m_kept(pre_b, p4m_b), 1, trial);
+			diff_eq_int("the mapper was untouched (%ld)",
+				    memcmp(pump_map_pre,
+					   slot_ptr(bts_a, 0x00),
+					   MAPPER_SIZE) == 0, 1, trial);
+			if (p4m_kept(pre_b, p4m_b))
+				kept++;
+		} else if (memcmp(pre_b + 0x04, p4m_b + 0x04, 4) != 0 ||
+			   mb->symbolCount != 0u) {
+			pumped++;
+		}
+
+		/*
+		 * THE HISTORY IS OUTSIDE THE OBJECT (7457) AND `reset(0)` IS
+		 * THE ONLY THING IN THIS FUNCTION THAT REACHES IT.  Neither
+		 * this member nor -- at `nofSymbols` zero -- anything it calls
+		 * runs `Scrambler::process`, so the buffer never reaches
+		 * `scrambledBits` and comparing the two objects says nothing
+		 * about it.  `setup_pump` wrote 0xa5 over both sides' history
+		 * after construction; that it is no longer 0xa5 is what says
+		 * the call happened, and `compare_pump` is what says the two
+		 * sides wrote the same thing.
+		 */
+		{
+			const unsigned char *sb = (const unsigned char *)p4m_b +
+						  P4M_SCRAMBLER;
+			const unsigned char *lb = (const unsigned char *)
+						  slot_ptr(sb, 0);
+			const unsigned char *tb = (const unsigned char *)
+						  slot_ptr(sb, 0x0c);
+			unsigned int n = (unsigned int)(tb - lb) + 1u;
+			unsigned int i;
+			int moved = 0;
+
+			/*
+			 * `Scrambler::reset` fills from `pInitOut + 1`, not the
+			 * whole span, so "no 0xa5 survives" is the wrong claim
+			 * and was the first spelling of this check.  What says
+			 * the call happened is that ANY of the 0xa5 went.
+			 */
+			for (i = 0; i < n; i++)
+				if (lb[i] != 0xa5)
+					moved = 1;
+			if (moved)
+				dirty++;
+			diff_eq_int("the scrambler history was reseeded (%ld)",
+				    moved, 1, trial);
+		}
+
+		if (dsplib_debug_capture_text(0)[0] != '\0') {
+			printed++;
+			if (lvl > 0)
+				levels++;
+		}
+
+		/*
+		 * BLOB AGAINST BLOB: the same trial with `sessionFlag` clear
+		 * and set must leave two different objects or two different
+		 * transcripts once the loop runs.  That is the only check here
+		 * that can fail on "the two pumps are swapped", because both
+		 * sides of a differential comparison would swap together.
+		 */
+		if (flag == 0) {
+			memcpy(flag0, p4m_b, P4M_SIZE);
+			strncpy(flag0_text, dsplib_debug_capture_text(1),
+				sizeof flag0_text - 1);
+			flag0_text[sizeof flag0_text - 1] = '\0';
+		} else if (nof > 0 &&
+			   (memcmp(flag0, p4m_b, P4M_SIZE) != 0 ||
+			    strcmp(flag0_text,
+				   dsplib_debug_capture_text(1)) != 0)) {
+			flagdiff++;
+		}
+
+		teardown_pump();
+		diff_eq_int("nothing left allocated (%ld)", harness_alloc.live,
+			    0, trial);
+		trial++;
+				}
+
+	diff_eq_int("something was printed (%ld)", printed > 0, 1, trial);
+	diff_eq_int("and at a raised level (%ld)", levels > 0, 1, trial);
+	diff_eq_int("the pump loop ran (%ld)", pumped > 0, 1, trial);
+	diff_eq_int("a zero trip count changed nothing outside (%ld)",
+		    kept > 0, 1, trial);
+	diff_eq_int("the scrambler history was reseeded somewhere (%ld)",
+		    dirty > 0, 1, trial);
+	diff_eq_int("the two session flags took different pumps (%ld)",
+		    flagdiff > 0, 1, trial);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -4199,6 +4467,9 @@ main(void)
 			    our_p4m_genv90, ref_p4m_genv90, 900000L);
 	rc |= run_pump_null("generateV92Symbol, the null-guarded arms",
 			    our_p4m_genv92, ref_p4m_genv92, 910000L);
+
+	rc |= run_p4m_reset("V90Phase4Modulator::reset", our_p4m_reset,
+			    ref_p4m_reset, 920000L);
 
 	rc |= run_mod_ctor("V90Modulator::V90Modulator (C1)", our_mod_c1,
 			   ref_mod_c1, our_mod_d1, ref_mod_d1);

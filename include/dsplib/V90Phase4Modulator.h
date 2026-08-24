@@ -2,10 +2,10 @@
  * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
  *
  * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, of which THIRTY-FOUR are written in
- * src/pump/v90/V90Phase4Modulator.cpp -- everything except `reset`,
+ * code, of which THIRTY-FIVE are written in
+ * src/pump/v90/V90Phase4Modulator.cpp -- everything except
  * `generateSymbol` and the six `generate*` sequence sources.  Both symbol
- * pumps are now among them.
+ * pumps and `reset` are now among them.
  *
  * NOT POLYMORPHIC: `~V90Phase4Modulator` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -310,6 +310,21 @@ public:
 			   unsigned int ctorArg8);
 	~V90Phase4Modulator();
 	void setSessionFlag(unsigned int);
+
+	/*
+	 * `reset` -- .text+0x2f630, 255 bytes.  FOUR OF THE FIVE ARGUMENT
+	 * TYPES ARE THE MANGLING'S
+	 * (`...5resetE7PcmTypeh20Phase4ModulatorStatejj`), and `void` is the
+	 * return because neither exit sets `%eax`.
+	 *
+	 * THE FOURTH ARGUMENT IS A TRIP COUNT AND REACHES NO FIELD.  It is
+	 * the bound of a loop that calls `generateV92Symbol` or
+	 * `generateV90Symbol` -- chosen by `sessionFlag`, RELOADED from the
+	 * object on every iteration, because either callee may move it.  The
+	 * fifth lands in `word_0040` and is not otherwise touched.
+	 */
+	void reset(PcmType law, unsigned char code, Phase4ModulatorState st,
+		   unsigned int nofSymbols, unsigned int arg5);
 
 	/*
 	 * The twenty-eight members of src/pump/v90/V90Phase4Modulator.cpp's

@@ -174,6 +174,90 @@ V90Phase4Modulator::setSessionFlag(unsigned int flag)
 
 /*
  * ===========================================================================
+ * `V90Phase4Modulator::reset` -- .text+0x2f630, 255 bytes.
+ *
+ * SIXTEEN STORES, ONE G.711 EXPANSION, ONE CALL INTO THE SCRAMBLER AND A
+ * PUMP LOOP.  Everything the state machine's edges maintain is put back:
+ * `symbolCount` and `word_000c` to zero, the five flags at +0x14..+0x20, the
+ * four at +0x24..+0x30 -- but NOT +0x34, which only `resetBeforRRN` writes --
+ * and the two latches at +0x2f9c and +0x2fa0.  What it does NOT touch is
+ * every field that describes a MESSAGE: `mpBits`, `cpBits`, both counts, both
+ * sequence lengths, `word_2f64` and the two symbol tables are the
+ * constructor's and the edges', and a `reset` leaves them exactly as it found
+ * them.
+ *
+ * THE ORDER ACROSS THE CALLS IS THE OBJECT'S AND IS NOT FREE.  GCC may not
+ * move a store through `this` across an opaque call in either direction, so
+ * the three fenceposts partition the body:
+ *
+ *     +0x38, +0x40, +0x08, +0x04, +0x0c   before alaw2linear/ulaw2linear
+ *     +0x3c                                between it and Scrambler::reset
+ *     the eleven zero/flag stores          after Scrambler::reset
+ *
+ * Inside each run the interleaving is the scheduler's and nothing here was
+ * permuted to chase it.
+ *
+ * THE COMPANDING EXPANSION HAS NO CAST, AND THAT IS MEASURED RATHER THAN
+ * COPIED FROM `P4M_LEVEL`.  Both arms are 32-bit: `and $0x7f,%eax ; xor
+ * $0xd5,%eax` at +0x2f670 and `and $0x7f,%edx ; xor $0xff,%edx` --
+ * `81 f2 ff 00 00 00`, a full-word immediate -- at +0x2f719.  The macro's
+ * mu-law arm truncates to `unsigned char` first and GCC emits an 8-bit `not`
+ * for it there; here it does not, so the argument reaches `ulaw2linear` as an
+ * `int` and the source cannot carry the cast.  Same two conversions, two
+ * different spellings, and the object is what separates them.
+ *
+ * `nextStateAfterTRN2d` IS SEEDED FROM `sessionFlag`, branchlessly:
+ * `cmp $0x1,%edx ; sbb %eax,%eax ; add $0x5,%eax` is 4 when the flag is zero
+ * and 5 when it is not -- MP under V.90 and SUVd under V.92, which are
+ * exactly the two states TRN2d hands on to (finding 7452's second item).
+ *
+ * THE LOOP RELOADS `sessionFlag` EVERY ITERATION.  `mov (%esi),%edx` at
+ * +0x2f6fd is inside the back edge, not above it: either pump may store
+ * through `this`, so the compiler must re-read the selector.  Writing the
+ * test outside the loop would be a different program.
+ * ===========================================================================
+ */
+void
+V90Phase4Modulator::reset(PcmType law, unsigned char code,
+			  Phase4ModulatorState st, unsigned int nofSymbols,
+			  unsigned int arg5)
+{
+	unsigned int i;
+
+	pcmType = law;
+	word_0040 = arg5;
+	symbolCount = 0;
+	state = st;
+	word_000c = 0;
+
+	codeLevel = (law != PCM_TYPE_MU_LAW)
+	    ? (short)alaw2linear((code & 0x7f) ^ 0xd5)
+	    : (short)ulaw2linear((code & 0x7f) ^ 0xff);
+
+	scrambler.reset(0);
+
+	byte_0014 = 0;
+	word_0024 = 0;
+	word_0028 = 0;
+	word_002c = 0;
+	nextStateAfterTRN2d = sessionFlag != 0 ? P4M_STATE_SUVD : P4M_STATE_MP;
+	word_2f9c = 0;
+	word_2fa0 = 0;
+	word_0030 = 0;
+	word_0018 = 0;
+	byte_001c = 0;
+	word_0020 = 0;
+
+	for (i = 0; i < nofSymbols; i++) {
+		if (sessionFlag != 0)
+			generateV92Symbol();
+		else
+			generateV90Symbol();
+	}
+}
+
+/*
+ * ===========================================================================
  * `V90Phase4Modulator::setMappingParams` -- 96 bytes at .text+0x2d120.
  *
  * A NULL CHECK AND TWO CALLS INTO THE CONVERTER.  A usable block is handed to
