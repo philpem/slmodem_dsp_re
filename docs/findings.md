@@ -80815,3 +80815,146 @@ What the six `movzbl` and seven `movzwl` loads do still establish is the
 WIDTH, which is what makes the thirteen fields thirteen rather than a memcpy;
 their SIGN comes from `getMPrecvdBits`'s `movsbw`/`movsbl` on the six bytes
 and from the source fields' own declarations, not from this function.
+
+======================================================================
+
+### 7586. `docs/coverage.md` on master understates `tested` by two orders of magnitude, because it was generated from a build tree whose TEST objects were not there
+
+Regenerating the file after this batch moved two numbers, and only one of
+them is this batch's:
+
+	translated  74.7% -> 75.1%   548,726 -> 551,739 bytes, 1,239 -> 1,240 symbols
+	tested       1.2% -> 99.9%     6,615 -> 550,936 bytes, 8 -> 1,224 of them
+
+The first is exactly `v90RunDemodulator`: **+3,013 bytes and +1 symbol**, which
+is the whole of what this batch claims and is what the seven `inline` members
+being unclaimed buys (finding 7580).
+
+**THE SECOND IS NOT A MEASUREMENT OF ANYTHING THIS BATCH DID.**
+`tools/coverage.py`'s `tested_symbols` walks `build/test/**/*.o` and counts
+every undefined `ref_*` it finds; with the test objects absent it finds
+nothing and reports a share of the translated tree near zero.  Master's
+committed file says `8 of 1239`, and eight is about what the two
+`INTEROP_BY_NAME` sources contribute on their own -- so the run that produced
+it had essentially no test objects on disk.  This tree's regeneration ran
+after `make phase` had built all 246 of them, so it reads 1,224.
+
+**IT IS `objtree.py`'s HAZARD IN THE ONE DIRECTORY `objtree.py` DOES NOT
+GUARD.**  Findings 3055, 3110 and 3111 are seven tools that learned what we
+had WRITTEN by globbing an object directory that had stopped being filled, and
+the repair was to route all seven through `tools/objtree.py`, which refuses on
+an empty tree and warns on a partial one.  `coverage.py` is one of the seven
+and its `translated` half goes through that gate -- but its `tested` half
+globs `build/test` directly, and nothing checks that.  A number that reads
+1.2% where the truth is 99.9% is the same defect one denominator over.
+
+**WHAT IS NOT DONE HERE.**  No change to `coverage.py`.  The right repair is
+for `tested_symbols` to refuse, or at least warn, on a `build/test` holding
+fewer objects than there are test sources -- which is exactly what
+`objtree.py` already does for `build/repro` -- and that is a change to a tool
+seven other numbers depend on, on a branch scoped to one function.  The
+regenerated file is committed because it is the honest reading of a complete
+tree and because leaving it would keep the wrong number in the record; this
+finding is what stops the next reader diffing the two and concluding that
+1,216 symbols gained a test in one batch.
+
+======================================================================
+
+### 7587. The numbers `v90RunDemodulator` landed at, and the three fire checks that show its suite can go red
+
+Finding 7580 is the reconstruction; this is what the tiers said about it, kept
+separate so that a later reader can quote a count without reading the
+argument.
+
+#### `make phase`, exit 0
+
+	period differential: 246 passed, 0 failed
+	debug sites: 63 of 989 never execute, over 174 file(s) with coverage data
+	             suite line coverage over src/ 94.8% (34633/36524)
+	deviation sites: 21 of 35 anchored in a fully-covered function, ... over 28 entries
+	phase boundary: differential, 64-bit, interop, coverage and debug sites all OK
+
+**246 AND NOT 245, and the +1 is `t_v90rundemod`.**  The base commit
+`0257d7b5` is 245; the new binary is the only thing added to the tier and
+nothing else moved.  Writing the trials into `t_vpcmrunpcm` instead would have
+left the count at 245, which is why the binary is separate: a mutation set
+over `VPcmFloModem.cpp` scored by one binary cannot say which of the file's
+two entry points a row belongs to.
+
+`t_v90rundemod` itself is **95,714 checks in the differential group and 16 in
+the return-set group**, over 268 trials -- 133 explicit and 135 swept.
+
+#### The mutation suite
+
+`test/mutations/v90rundemod.json`, recorded by `mutsnap.py --update`:
+
+	77 mutations: 74 caught (74 by test, 0 by strings), 1 NOT caught,
+	0 unusable, 2 equivalent, 0 MIScounted
+
+**ZERO UNUSABLE, which is the number CLAUDE.md says to read first** -- a
+mutant that fails to compile scores as CAUGHT while testing nothing.
+
+**TWELVE ROWS WERE UNCAUGHT ON THE FIRST RUN AND TEN OF THEM WERE THE
+FIXTURE'S FAULT, WHICH IS THE POINT OF RUNNING IT.**  Four axes closed nine of
+the ten and all four are finding 7458's shape -- a value that is constant for
+every trial proves nothing:
+
+- **Three fields were at the value their writer writes.**  `bitPointer` 0,
+  `nofTransmitSequences` 0 and `minNofTransmitSequences` 1 are what the
+  constructor leaves, so `resetBitPointer`'s clear of the first, the second
+  setter's clear of the second, and both arms that set the third to 1 were
+  stores of a value over itself.  Seeded to 0x1d9, 0x2b and 0x37.
+- **`V90Jd::getConstelationSize` returned the same value twice.**  It reads
+  `bits[28]` and `bits[29]`, both zero on a constructed Jd, so swapping the
+  two pointers and choosing the wrong one of the two results were both
+  invisible.  Driven off the trial's `mpTag` so that they differ.
+- **`SILENCE_SCR` was never a value whose low byte is zero.**  0x100 is what
+  parts an `(unsigned char)` truncation from a test against zero.
+- **`connectionEvaluator->word_90` was never a value whose low SIXTEEN bits
+  are zero.**  0x10000 is what parts a `short` narrowing from a wider one,
+  and `VPcmV34SetV90RateReneg` assigns `v90_receiver` 11 or 15 on exactly
+  that test.
+
+The tenth and eleventh were not the fixture's fault and are registered
+`equivalent` with their arguments: the `(short)` cast at the two
+rate-renegotiation call sites is DOCUMENTARY, because v34pcmif.h's prototype
+performs the same conversion; and `copyMpInfoForInterface`'s `movswl` is free,
+which is finding 7585's retraction.
+
+The twelfth is the one still uncaught, named in the JSON rather than left as a
+count: **`the demodulator is run with the wrong sample count` is structurally
+uncatchable in this binary**, because `V90Modem::side` is held at 2 so that
+`V90Demodulator::progress` never runs, and with the fan-out off the callee
+reads none of its four arguments.  Closing it means driving the real
+demodulator, which drags `V90Equalizer::process`'s `gccdiverge` entry into
+this binary and costs the whole suite (2157, 3002).
+
+#### SHOWN TO FIRE, and NOT through `make one`
+
+7573's trap is aimed straight at a suite that quotes nearly every line of its
+function: almost any injected defect destroys an anchor, `anchorcheck` reports
+`matches 0 time(s)`, and `make one` refuses BEFORE building while printing
+nothing -- which is indistinguishable from a check that failed to fire.  So
+all three injections were built and run directly, and each one's **object
+mtime was compared before and after** to prove the build actually happened:
+
+| injected defect | rebuilt | red |
+|---|---|---|
+| arm 0x2a packs into `bitVector`, not `cpBitVector` | yes | **1,068 of 96,782** |
+| `copyMpInfoForInterface` copies `h2Real` into `mpH2Imag` | yes | **22 of 95,736** |
+| arm 0x28 does not restore the SAS detector | yes | **4 of 95,718** |
+
+Reverted immediately and green after each: 95,714 + 16 checks, exit 0.  The
+three were chosen to hit different slices -- a whole packed bit vector, one
+sixteen-bit field, and one bit of a byte outside the modem entirely.
+
+#### Coverage
+
+	translated  74.7% -> 75.1%   548,726 -> 551,739 bytes, 1,239 -> 1,240 symbols
+
+**+3,013 bytes and +1 symbol, exactly this symbol's size and nothing else**,
+which is right only because the seven members it inlines are `inline` and
+claim no blob symbol -- checked on BOTH compilers, since GCC 13 could have
+emitted a weak comdat copy of an `inline` member it declined to inline and
+did not.  `docs/coverage.md`'s other moved number is finding 7586's and is
+not this batch's.
