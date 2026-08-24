@@ -30,8 +30,8 @@
  },
  {
   "label": "the title is not printed at all",
-  "find": "\tprintTitle();\n",
-  "replace": ""
+  "find": "\tprintTitle();\n\n\tmodemSide = side;",
+  "replace": "\n\tmodemSide = side;"
  },
  {
   "label": "the modem side is not stored",
@@ -90,8 +90,8 @@
  },
  {
   "label": "the two sides are exchanged: the digital one builds the modulator",
-  "find": "\tcase V92_MODEM_SIDE_DIGITAL:",
-  "replace": "\tcase V92_MODEM_SIDE_ANALOG + 1:"
+  "find": "\tcase V92_MODEM_SIDE_DIGITAL:\n\t\tmodulator = 0;",
+  "replace": "\tcase V92_MODEM_SIDE_ANALOG + 1:\n\t\tmodulator = 0;"
  },
  {
   "label": "the digital side leaves the modulator pointer alone instead of nulling it",
@@ -207,5 +207,50 @@
   "label": "the phase 2 info is nulled before it is freed rather than after",
   "find": "\t\tsysdep_free(phase2Info);\n\t\tphase2Info = 0;",
   "replace": "\t\tphase2Info = 0;\n\t\tsysdep_free(phase2Info);"
+ },
+ {
+  "label": "reset packs the descriptor before printing the title",
+  "find": "\tprintTitle();\n\n\tswitch (modemSide) {",
+  "replace": "\tswitch (modemSide) {"
+ },
+ {
+  "label": "reset hands the packer the two halves of the V92Ja the other way round",
+  "find": "\t\tV92DILdescriptorPacker(dil, ja + 4, (int *)ja);",
+  "replace": "\t\tV92DILdescriptorPacker(dil, ja, (int *)(ja + 4));"
+ },
+ {
+  "label": "reset packs the descriptor into the vector's own base",
+  "find": "\t\tV92DILdescriptorPacker(dil, ja + 4, (int *)ja);\n",
+  "replace": "\t\tV92DILdescriptorPacker(dil, ja + 8, (int *)ja);\n"
+ },
+ {
+  "label": "reset does not take the modulator to phase 3",
+  "find": "\t\tmodulator->reset();\n\t\tmodulator->enterPhase3();",
+  "replace": "\t\tmodulator->reset();"
+ },
+ {
+  "label": "reset enters phase 3 before resetting the modulator",
+  "find": "\t\tmodulator->reset();\n\t\tmodulator->enterPhase3();\n",
+  "replace": "\t\tmodulator->enterPhase3();\n\t\tmodulator->reset();\n"
+ },
+ {
+  "label": "reset works on the digital side and does nothing on the analog one",
+  "find": "\tswitch (modemSide) {\n\tcase V92_MODEM_SIDE_DIGITAL:\n\t\tbreak;\n\n\tcase V92_MODEM_SIDE_ANALOG:\n\t\tV92DILdescriptorPacker(dil, ja + 4, (int *)ja);",
+  "replace": "\tswitch (modemSide) {\n\tcase V92_MODEM_SIDE_ANALOG:\n\t\tbreak;\n\n\tcase V92_MODEM_SIDE_DIGITAL:\n\t\tV92DILdescriptorPacker(dil, ja + 4, (int *)ja);"
+ },
+ {
+  "label": "progress forwards on the digital side rather than the analog one",
+  "find": "\tcase V92_MODEM_SIDE_DIGITAL:\n\t\tbreak;\n\n\tcase V92_MODEM_SIDE_ANALOG:\n\t\tmodulator->progress(bits, nbits, out, nSamples);",
+  "replace": "\tcase V92_MODEM_SIDE_ANALOG:\n\t\tbreak;\n\n\tcase V92_MODEM_SIDE_DIGITAL:\n\t\tmodulator->progress(bits, nbits, out, nSamples);"
+ },
+ {
+  "label": "progress swaps the modulator's first two arguments",
+  "find": "\t\tmodulator->progress(bits, nbits, out, nSamples);",
+  "replace": "\t\tmodulator->progress((int *)out, nSamples, (float *)bits, nbits);"
+ },
+ {
+  "label": "progress hands the modulator the sample count as a symbol count",
+  "find": "\t\tmodulator->progress(bits, nbits, out, nSamples);\n",
+  "replace": "\t\tmodulator->progress(bits, nbits, out, nSamples / 2u);\n"
  }
 ]

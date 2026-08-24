@@ -135,6 +135,30 @@ public:
 	 */
 	void printTitle();
 
+	/*
+	 * .text+0x13ca0, 0x8a = 138 bytes, and .text+0x13b70, 0x79 = 121.
+	 *
+	 * BOTH ARE THE SAME THREE-ARM SWITCH ON `modemSide` AND BOTH ARMS OF
+	 * INTEREST ARE THE ANALOG ONE, which is what makes this pair live code
+	 * on the shipped configuration where the V.90 modulator chain is dead:
+	 * V.92's upstream PCM is the analogue client transmitting, so the side
+	 * that owns a `V92Modulator` is the side that has one to drive.
+	 *
+	 * The digital arm of each returns having done nothing at all -- no
+	 * message, no store -- and the illegal arm prints and returns.  `reset`
+	 * calls `printTitle` on EVERY side, before the switch.
+	 *
+	 * `progress`'s four argument types are the mangling's; its return type
+	 * is measured `void`, and so is `reset`'s -- the analog arm of each is a
+	 * TAIL CALL into the modulator (`jmp _ZN12V92Modulator11enterPhase3Ev`
+	 * at +0x13d25, `jmp _ZN12V92Modulator8progressEPiRjPfj` at +0x13be4),
+	 * which would forward a return value if there were one, and the two
+	 * callees have none.
+	 */
+	void reset();
+	void progress(int *bits, unsigned int &nbits, float *out,
+		      unsigned int nSamples);
+
 	/* Public for `offsetof`; one access section, as everywhere here. */
 
 	/*

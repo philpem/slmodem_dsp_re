@@ -219,6 +219,30 @@ enum V92Phase4ModulatorState {
 #define V92P4M_STATE_TRN2U_SECOND	23
 #define V92P4M_STATE_TERMINATED		28
 
+/*
+ * TWO MORE, AND THEY COME FROM OUTSIDE THIS CLASS.  `V92Modulator::initiateRRN`
+ * and `::initiateFPE` choose the state they hand `reset` and print which one
+ * they chose on the instruction that loads it:
+ *
+ *   18  "V92Modulator: Phase4Modulator state initialized to
+ *        DataToRuModulation"                  :0x363c, then `mov $0x12,%esi`
+ *   25  "V92Modulator: Phase4Modulator state initialized to
+ *        DataToRmModulation"                  :0x3728, then `mov $0x19,%esi`
+ *
+ * The same two members name 19 and 26 the same way -- "RuModulation" and
+ * "RmModulation" -- which is the SECOND string to land on each of those, and
+ * both agree with the "enter Ru @ %d" and "enter Rm @ %d" the arms themselves
+ * print.  So 18 and 25 are the states the modulator enters when it still has
+ * DATA to finish before the renegotiation signal starts, and 19 and 26 are the
+ * signals proper.  Same evidence tier as the thirteen above; the messages
+ * belong to V92Modulator.cpp and the codes belong here.
+ *
+ * That leaves 0, 1, 4, 6, 8, 9, 11, 20, 24, 27 and 29 bare, and 7, 14, 21, 22
+ * as the switch's holes.
+ */
+#define V92P4M_STATE_DATA_TO_RU		18
+#define V92P4M_STATE_DATA_TO_RM		25
+
 class V92Phase4Modulator {
 public:
 	V92Phase4Modulator(V92Parameters *params, V92BitsToSymbol *bitsToSymbol,

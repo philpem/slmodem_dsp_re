@@ -32,7 +32,27 @@
  * subtraction, not `(wr - rd) + size`; algebraically the same and that is the
  * form the object uses.
  *
- * No `space()` is inlined anywhere, so its spelling is unknown.
+ * `isEmpty()` and `isFull()` ARE THE ORIGINAL'S TOO, and the second one is
+ * where a `space()` would have shown itself.  `V92Modulator::progress` closes
+ * with the pair, short-circuited, at 0x14d97:
+ *
+ *     14d97:  39 d3       cmp %edx,%ebx        rd == wr, and no division
+ *     14d99:  74 16       je  <the message>
+ *     ...     count() ...
+ *     14dac:  29 d5       sub %edx,%ebp        size - count()
+ *     14dae:  4d          dec %ebp             - 1
+ *     14daf:  75 10       jne <return>         != 0 -> not full
+ *
+ * so BOTH SPELLINGS ARE FORCED rather than chosen.  `isEmpty()` is `rd == wr`
+ * and not `count() == 0`, which would have emitted the `div`; `isFull()` is
+ * `size - count() - 1 == 0` and not `count() == size - 1`, which would have
+ * emitted `lea -1(%ebp); cmp` instead of `sub; dec`.  The message printed on
+ * the joint arm is the author's own name for the pair --
+ * "V92Modulator: Queue is Empty/Full !!!".
+ *
+ * A `space()` returning `size - count() - 1` is what `isFull()` tests against
+ * zero; whether the author spelled that separate function is still not
+ * recoverable, because nothing calls it on its own.
  */
 
 #ifndef DSPLIB_QUEUE_H
@@ -68,6 +88,22 @@ public:
 	__attribute__((always_inline)) unsigned count() const
 	{
 		return (unsigned)((wr + size) - rd) % size;
+	}
+
+	/*
+	 * `always_inline` for `count()`'s reason, and the only call site of
+	 * either is `V92Modulator::progress`'s closing test.  See the file
+	 * comment for why each is spelled the way it is; both spellings are
+	 * the object's and neither is a tidier equivalent.
+	 */
+	__attribute__((always_inline)) int isEmpty() const
+	{
+		return rd == wr;
+	}
+
+	__attribute__((always_inline)) int isFull() const
+	{
+		return size - count() - 1 == 0;
 	}
 
 private:

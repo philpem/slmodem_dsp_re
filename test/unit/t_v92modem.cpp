@@ -110,6 +110,13 @@ void ref_c2(void *, unsigned, void *, unsigned, void *, unsigned)
 void ref_d1(void *) asm("ref__ZN8V92ModemD1Ev");
 void ref_d2(void *) asm("ref__ZN8V92ModemD2Ev");
 
+void our_reset(void *) asm("_ZN8V92Modem5resetEv");
+void ref_reset(void *) asm("ref__ZN8V92Modem5resetEv");
+void our_progress(void *, int *, unsigned int *, float *, unsigned int)
+	asm("_ZN8V92Modem8progressEPiRjPfj");
+void ref_progress(void *, int *, unsigned int *, float *, unsigned int)
+	asm("ref__ZN8V92Modem8progressEPiRjPfj");
+
 extern unsigned int dsplibs_debug_level;
 extern unsigned int ref_dsplibs_debug_level;
 }
@@ -833,6 +840,299 @@ run_debug(const char *name, ctor_fn our_ctor, ctor_fn ref_ctor,
 	return diff_end();
 }
 
+/* ------------------------------------------------------------------ */
+/* reset and progress                                                   */
+/* ------------------------------------------------------------------ */
+
+/*
+ * THE TWO RUN-TIME MEMBERS, and both are three-arm switches that forward to the
+ * modulator.  What makes them testable here rather than in t_v92modstate.cpp is
+ * that this fixture gives EACH SIDE ITS OWN GRAPH -- its own V92Modulator, its
+ * own V92CP, its own 2,704-byte V92Ja -- so a store made through any of them is
+ * two different bytes and compares.  The modulator's own fixture shares those
+ * arguments deliberately and cannot see through them.
+ *
+ * `reset`'s ANALOG ARM WRITES THE V92Ja, which is the anti-vacuity guard the
+ * constructor's own trials use the other way round: the constructor leaves all
+ * 2,704 bytes at the seed and `reset` must not, because
+ * `V92DILdescriptorPacker(dil, ja + 4, (int *)ja)` packs the descriptor into
+ * it.  Both facts are checked, on the same span, in the same file.
+ *
+ * `progress` IS DRIVEN AFTER `reset`, so the analog side is in phase 3 with a
+ * phase 3 modulator that has been reset over a packed `ja` -- which is the
+ * only state any caller can reach it in.  The digital and illegal arms are
+ * driven over a modem that has no modulator at all, which is the check that
+ * neither arm dereferences +0x000.
+ */
+#define PROG_SAMPLES	48u
+#define PROG_BITS	64u
+
+static int prog_bits_a[PROG_BITS], prog_bits_b[PROG_BITS];
+static float prog_out_a[PROG_SAMPLES + 16u], prog_out_b[PROG_SAMPLES + 16u];
+
+#define PROG_WIPE	-3000.0f
+
+static void
+prog_fill(int trial)
+{
+	unsigned lfsr = 0x77abu + 0x9e37u * (unsigned)trial;
+	unsigned i;
+
+	for (i = 0; i < PROG_BITS; i++) {
+		int v = (int)(lfsr_step(&lfsr) & 1u);
+
+		prog_bits_a[i] = v;
+		prog_bits_b[i] = v;
+	}
+	for (i = 0; i < PROG_SAMPLES + 16u; i++) {
+		prog_out_a[i] = PROG_WIPE;
+		prog_out_b[i] = PROG_WIPE;
+	}
+}
+
+static int
+run_reset_progress(void)
+{
+	int trial;
+	int saw_digital = 0, saw_analog = 0, saw_illegal = 0;
+	int ja_moved = 0, out_moved = 0;
+
+	diff_begin("V92Modem::reset and ::progress against the blob");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned side = trial_side(trial);
+		unsigned mode = trial_mode(trial);
+		unsigned int na = 0xa5a5a5a5u, nb = 0xa5a5a5a5u;
+
+		seed(trial);
+		harness_alloc_reset();
+		our_c1(ours, side, arg_mp_raw, PROG_SAMPLES, arg_dil, mode);
+		ref_c1(theirs, side, arg_mp_raw, PROG_SAMPLES, arg_dil, mode);
+
+		our_reset(ours);
+		ref_reset(theirs);
+
+		compare(side, "after reset", trial);
+		subobject_compare(trial);
+		diff_eq_int("reset stored nothing past the object (trial %ld)",
+			    guard_intact(), 1, trial);
+
+		if (side == (unsigned)V92_MODEM_SIDE_ANALOG) {
+			V92Modem *m = (V92Modem *)(void *)ours;
+			V92Modem *r = (V92Modem *)(void *)theirs;
+
+			saw_analog = 1;
+			/*
+			 * The packer wrote the descriptor into the V92Ja: the
+			 * span the constructor leaves alone entirely.  A `reset`
+			 * that dropped the call, or aimed it at the wrong two
+			 * offsets, leaves the seed here.
+			 */
+			diff_eq_int("reset packed the descriptor into the V92Ja "
+				    "(trial %ld)",
+				    memcmp(ours + OFF_JA, sown + OFF_JA,
+					   V92_MODEM_JA_BYTES) != 0, 1, trial);
+			ja_moved = 1;
+			diff_eq_int("reset took the modulator to phase 3 "
+				    "(trial %ld)", m->modulator->phase,
+				    V92MOD_PHASE_3, trial);
+			diff_eq_int("and the blob's went there too (trial %ld)",
+				    r->modulator->phase, V92MOD_PHASE_3, trial);
+			/*
+			 * The modulator's SCALARS, in the two runs that hold
+			 * them: +0x00..+0x0f is the three counts and the two
+			 * flag bytes, +0x24..+0x3f is the phase machine and the
+			 * pending resampler change.  Everything between and
+			 * after is a pointer at a per-side allocation and can
+			 * never agree -- t_v92modstate.cpp compares those by
+			 * sharing the arguments instead.
+			 */
+			diff_eq_int("the modulators' counts agree (trial %ld)",
+				    memcmp((const unsigned char *)m->modulator,
+					   (const unsigned char *)r->modulator,
+					   0x10) == 0, 1, trial);
+			diff_eq_int("and their phase machines agree (trial %ld)",
+				    memcmp((const unsigned char *)m->modulator
+					   + 0x24,
+					   (const unsigned char *)r->modulator
+					   + 0x24, 0x1c) == 0, 1, trial);
+		} else {
+			/*
+			 * NEITHER OTHER ARM TOUCHES THE V92Ja, and that is the
+			 * whole of what the digital arm does: nothing.
+			 */
+			diff_eq_int("the other arms leave the V92Ja alone "
+				    "(trial %ld)",
+				    memcmp(ours + OFF_JA, sown + OFF_JA,
+					   V92_MODEM_JA_BYTES) == 0, 1, trial);
+			if (side == (unsigned)V92_MODEM_SIDE_DIGITAL)
+				saw_digital = 1;
+			else
+				saw_illegal = 1;
+		}
+
+		/*
+		 * `progress`, twice.  The SECOND call is the one that matters
+		 * for the modulator underneath: the first moves the queue off
+		 * the level `reset` primed it to, and the occupancy term is
+		 * what the whole block size is computed from.
+		 */
+		prog_fill(trial);
+		our_progress(ours, prog_bits_a, &na, prog_out_a, PROG_SAMPLES);
+		ref_progress(theirs, prog_bits_b, &nb, prog_out_b,
+			     PROG_SAMPLES);
+
+		diff_eq_int("the bit count agrees (trial %ld)", (int)na, (int)nb,
+			    trial);
+		diff_eq_int("the samples agree (trial %ld)",
+			    memcmp(prog_out_a, prog_out_b, sizeof(prog_out_a))
+			    == 0, 1, trial);
+		diff_eq_int("the input words agree (trial %ld)",
+			    memcmp(prog_bits_a, prog_bits_b,
+				   sizeof(prog_bits_a)) == 0, 1, trial);
+
+		our_progress(ours, prog_bits_a, &na, prog_out_a, PROG_SAMPLES);
+		ref_progress(theirs, prog_bits_b, &nb, prog_out_b,
+			     PROG_SAMPLES);
+
+		diff_eq_int("the bit count agrees on the second call "
+			    "(trial %ld)", (int)na, (int)nb, trial);
+		diff_eq_int("the samples agree on the second call (trial %ld)",
+			    memcmp(prog_out_a, prog_out_b, sizeof(prog_out_a))
+			    == 0, 1, trial);
+
+		compare(side, "after progress", trial);
+		subobject_compare(trial);
+		diff_eq_int("progress stored nothing past the object "
+			    "(trial %ld)", guard_intact(), 1, trial);
+
+		if (side == (unsigned)V92_MODEM_SIDE_ANALOG) {
+			unsigned i;
+
+			/*
+			 * SOMETHING CAME OUT.  The wipe is a value the chain
+			 * cannot produce, so a `progress` that forwarded
+			 * nothing leaves it in place and this fails -- which is
+			 * the check the digital arm inverts.
+			 */
+			for (i = 0; i < PROG_SAMPLES; i++)
+				if (prog_out_a[i] != PROG_WIPE)
+					out_moved = 1;
+			diff_eq_int("the analog arm filled the buffer "
+				    "(trial %ld)", out_moved, 1, trial);
+		} else {
+			diff_eq_int("the other arms wrote no samples "
+				    "(trial %ld)",
+				    prog_out_a[0] == PROG_WIPE, 1, trial);
+			diff_eq_int("nor did the blob's (trial %ld)",
+				    prog_out_b[0] == PROG_WIPE, 1, trial);
+			diff_eq_int("and left the bit count alone (trial %ld)",
+				    na == 0xa5a5a5a5u, 1, trial);
+		}
+
+		disarm_modulator(side);
+		our_d1(ours);
+		ref_d1(theirs);
+		diff_eq_int("nothing left allocated (trial %ld)",
+			    harness_alloc.live, 0, trial);
+	}
+
+	diff_eq_int("the digital arm was driven", saw_digital, 1, 0);
+	diff_eq_int("the analog arm was driven", saw_analog, 1, 0);
+	diff_eq_int("the illegal arm was driven", saw_illegal, 1, 0);
+	diff_eq_int("the V92Ja was packed at least once", ja_moved, 1, 0);
+	diff_eq_int("samples came out at least once", out_moved, 1, 0);
+
+	return diff_end();
+}
+
+/*
+ * THE TRANSCRIPT OF THE TWO RUN-TIME MEMBERS, and it is not decoration.
+ * `reset` calls `printTitle` and `printTitle` writes nothing but text, so a
+ * `reset` that dropped the call is invisible to every state comparison in this
+ * file -- exactly as it is for the constructor, which is why THAT has a
+ * transcript run too.  The same trial covers the two "Illegal modemSide"
+ * messages, which are the whole of what either member does on the third arm.
+ */
+static int
+run_debug_rp(void)
+{
+	int trial, saw = 0, sawIllegal = 0;
+
+	diff_begin("V92Modem::reset and ::progress at level 2");
+
+	for (trial = 0; trial < 6; trial++) {
+		unsigned side = trial_side(trial);
+		unsigned int na = 0u, nb = 0u;
+		unsigned lines_a, lines_b;
+		const char *ta, *tb;
+
+		seed(trial);
+		harness_alloc_reset();
+		our_c1(ours, side, arg_mp_raw, PROG_SAMPLES, arg_dil,
+		       trial_mode(trial));
+		ref_c1(theirs, side, arg_mp_raw, PROG_SAMPLES, arg_dil,
+		       trial_mode(trial));
+
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = 2u;
+		ref_dsplibs_debug_level = 2u;
+
+		our_reset(ours);
+		ref_reset(theirs);
+		prog_fill(trial);
+		our_progress(ours, prog_bits_a, &na, prog_out_a, PROG_SAMPLES);
+		ref_progress(theirs, prog_bits_b, &nb, prog_out_b,
+			     PROG_SAMPLES);
+
+		dsplibs_debug_level = 0u;
+		ref_dsplibs_debug_level = 0u;
+		dsplib_debug_capture_on = 0;
+
+		ta = dsplib_debug_capture_text(0);
+		tb = dsplib_debug_capture_text(1);
+		lines_a = dsplib_debug_capture_lines(0);
+		lines_b = dsplib_debug_capture_lines(1);
+
+		diff_eq_int("transcript line count, side 0x%lx", (long)lines_a,
+			    (long)lines_b, (long)side);
+		/*
+		 * THE TEXT IS COMPARED ON EVERY SIDE BUT THE ANALOG ONE, and
+		 * that exception is the fixture's arrangement rather than a
+		 * difference in the code.  The analog `reset` reaches
+		 * `V92DILdescriptorPacker`, which prints
+		 * "## Debug: pParamObj address = %X" and two more lines like
+		 * it; each side has its own allocations, so those three lines
+		 * hold two different heap addresses and can never agree.  The
+		 * LINE COUNT still does, and it is what the `printTitle` claim
+		 * needs -- dropping that call removes seven lines whatever the
+		 * side.
+		 */
+		if (side != (unsigned)V92_MODEM_SIDE_ANALOG)
+			diff_eq_int("transcript text, side 0x%lx",
+				    strcmp(ta, tb) == 0, 1, (long)side);
+		diff_eq_int("we printed something, side 0x%lx", lines_a > 0, 1,
+			    (long)side);
+		diff_eq_int("the blob printed too, side 0x%lx", lines_b > 0, 1,
+			    (long)side);
+		if (lines_a > 0u)
+			saw = 1;
+		if (side != (unsigned)V92_MODEM_SIDE_DIGITAL
+		    && side != (unsigned)V92_MODEM_SIDE_ANALOG)
+			sawIllegal = 1;
+
+		disarm_modulator(side);
+		our_d1(ours);
+		ref_d1(theirs);
+	}
+
+	diff_eq_int("something was printed at all", saw, 1, 0);
+	diff_eq_int("the illegal arm was driven at level 2", sawIllegal, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -853,6 +1153,8 @@ main(void)
 			our_c1, ref_c1, our_d1, ref_d1);
 	rc |= run_debug("V92Modem construction and destruction at level 2 "
 			"(C2/D2)", our_c2, ref_c2, our_d2, ref_d2);
+	rc |= run_reset_progress();
+	rc |= run_debug_rp();
 
 	return rc;
 }

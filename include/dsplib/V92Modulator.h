@@ -2,18 +2,15 @@
  * V92Modulator.h -- the V.92 upstream modulator: the object that owns the
  * whole transmit graph.
  *
- * Reconstructed from dsplibs.o.  The class has eighteen symbols; FOURTEEN of
- * them are written in src/pump/v90/V92Modulator.cpp -- the constructor (C1 at
- * .text+0x15120 and C2 at +0x15400, 734 bytes each), the destructor (D2 at
+ * Reconstructed from dsplibs.o.  The class has eighteen symbols and ALL
+ * EIGHTEEN are written in src/pump/v90/V92Modulator.cpp -- the constructor (C1
+ * at .text+0x15120 and C2 at +0x15400, 734 bytes each), the destructor (D2 at
  * +0x14050 and D1 at +0x14250, 503 bytes each), `reset`, the four `exit*`
- * members, `enterPhase3`, `enterDataPhase`, `exitCPt`, `getV92TxFilterDelay`
- * and `mkResampledSignal`.
+ * members, `enterPhase3`, `enterPhase4`, `enterDataPhase`, `exitCPt`,
+ * `getV92TxFilterDelay`, `mkResampledSignal`, `initiateRRN`, `initiateFPE`
+ * and `progress`, the last of which is 1,075 bytes on its own.
  *
- * FOUR ARE STILL UNWRITTEN and are declared here with the signatures the
- * mangling gives: `enterPhase4`, `initiateRRN`, `initiateFPE` and `progress`,
- * the last of which is 1,075 bytes on its own.
- *
- * SO THE MAP BELOW IS ALMOST THE WHOLE OBJECT.  The two words the first pass
+ * SO THE MAP BELOW IS THE WHOLE OBJECT.  The two words the first pass
  * could not name are named now, by `mkResampledSignal`: +0x3c is the sample
  * index a resampler phase change takes effect at, and +0x24 is the phase step
  * itself -- and +0x24 is the one word NO MEMBER OF THIS CLASS WRITES.  See the
@@ -44,8 +41,10 @@
  * `mkResampledSignal` once the change has been applied.
  *
  * **+0x24 IS READ BY `mkResampledSignal` AND WRITTEN BY NOTHING IN THE CLASS.**
- * All eighteen symbols were swept for a store to it and there is none:
- * `progress`'s four `0x24(%esp)` are its own frame, not the object.  So the
+ * All eighteen symbols were swept for a store to it and there is none, and
+ * `progress` -- the last of the eighteen to be written -- confirms it rather
+ * than closing it: its four `0x24(%esp)` are the frame slot holding the `n`
+ * reference parameter, not the object's +0x24.  So the
  * `resamplerPhaseChange == 2` arm adds an UNINITIALISED float to the
  * resampler's phase unless something outside the class has filled the word
  * first.  Reproduced with no initialisation added -- docs/deviations.md D800.
@@ -165,10 +164,22 @@ template <class T> class Queue;
  *     "V92Modulator: enter Phase 4"      ->  2    enterPhase4, +0x148f9
  *     "V92Modulator:enter  Data Phase:"  ->  3    enterDataPhase, +0x1494a
  *
- * `initiateRRN` and `initiateFPE` also store 2, from a guard on 3.  Zero is
- * what `reset` does NOT store -- nothing clears this field -- so the value out
- * of the constructor is whatever `sysdep_malloc` left.
+ * `initiateRRN` and `initiateFPE` also store 2, from a guard on 3, and
+ * `progress` stores both 2 and 3 -- by CALLING `enterPhase4` and
+ * `enterDataPhase`, which GCC inlines at both sites; see the .cpp.
+ *
+ * ZERO IS THE FOURTH VALUE AND IT IS `reset`'S.  It is named for the member
+ * that stores it and for nothing else: `progress` carries an arm for it that
+ * fills the symbol block with zeros, which is a reading of the arm and not of
+ * the name, so the name stays the factual one.
+ *
+ * THE FIELD IS A SIGNED `int` AND THAT IS FORCED.  `progress` lowers its
+ * five-way dispatch as `cmp $0x1,%edx; je; jle` at .text+0x14c9e -- a SIGNED
+ * branch, which GCC cannot emit for an unsigned switch value; an unsigned one
+ * would have been `jbe`.  Every other member compares it for equality only, so
+ * nothing else in the class could have settled it.
  */
+#define V92MOD_PHASE_RESET	0
 #define V92MOD_PHASE_3		1
 #define V92MOD_PHASE_4		2
 #define V92MOD_PHASE_DATA	3
@@ -206,6 +217,21 @@ template <class T> class Queue;
  */
 #define V92MOD_TX_FILTER_DELAY	18
 
+/*
+ * THE ONE `word_34` CODE THIS CLASS ORIGINATES, and it is named the way the
+ * phase codes are: `progress` prints "V92Modulator: Queue is Empty/Full !!!"
+ * (.rodata.str1.4+0x3880) and the very next instruction stores 1
+ * (.text+0x14dba).  The author's own words for the condition.
+ *
+ * EVERY OTHER NON-ZERO VALUE THE FIELD HOLDS IS COPIED IN FROM A SUB-MODULATOR
+ * -- `V92Phase3Modulator::eventCode` or `V92Phase4Modulator::word_0c` -- so
+ * those codes belong to those classes' alphabets and are NOT respelled here.
+ * `progress` compares against 5, 7, 8 and 9 as bare numbers for that reason,
+ * with the transition each one is beside the comparison.  10 is
+ * `enterDataPhase`'s and is likewise written where it is stored.
+ */
+#define V92MOD_STATUS_QUEUE_LIMIT	1
+
 class V92Modulator {
 public:
 	V92Modulator(unsigned int nSamples, V92Phase2Info *phase2Info,
@@ -214,13 +240,14 @@ public:
 	~V92Modulator();
 
 	/*
-	 * Written.  Argument types are the mangling's and exact; return types
-	 * are not mangled, so `void` on these ten is MEASURED -- each leaves
+	 * Argument types are the mangling's and exact; return types are not
+	 * mangled, so `void` on these twelve is MEASURED -- each leaves
 	 * nothing in %eax -- and `getV92TxFilterDelay`'s `int` is measured the
 	 * other way, 21 bytes ending in a value in %eax.
 	 */
 	void reset();
 	void enterPhase3();
+	void enterPhase4();
 	void enterDataPhase();
 	void exitJa();
 	void exitSilence();
@@ -231,13 +258,22 @@ public:
 	int getV92TxFilterDelay() const;
 
 	/*
-	 * Declared, not defined.  `void` here means "not established" rather
-	 * than "measured".
+	 * `progress` is `void` on the same measurement: nothing sets %eax on
+	 * any path into its epilogue at .text+0x14dc1.
 	 */
-	void enterPhase4();
-	void initiateRRN();
-	void initiateFPE();
-	void progress(int *a, unsigned int &b, float *c, unsigned int d);
+	void progress(int *bits, unsigned int &nbits, float *out,
+		      unsigned int nSamples);
+
+	/*
+	 * THE TWO REQUESTS RETURN A STATUS AND THAT IS MEASURED, not the usual
+	 * "nothing said".  Both converge on one epilogue with `xor %eax,%eax`
+	 * on the approved path (.text+0x14736, +0x14852) and
+	 * `mov $0xffffffff,%eax` on the guard failure (+0x1476a, +0x1477d,
+	 * +0x1488a, +0x1489d), so a value is deliberately produced on every
+	 * path and 0/-1 makes it signed.  Nothing in the object calls either.
+	 */
+	int initiateRRN();
+	int initiateFPE();
 
 	/* Public for `offsetof`; one access section, as everywhere here. */
 
@@ -305,24 +341,41 @@ public:
 	/*
 	 * +0x2c  WHICH PHASE IS RUNNING -- 1, 2 or 3, and each of the three is
 	 * named by the message printed on the instruction before the store.
-	 * See the `V92MOD_PHASE_*` block above.  Every `enter*` member returns
-	 * early when it is already at its own value, so each transition happens
-	 * at most once, and `mkResampledSignal` takes its split path only in
-	 * phase 3.  Cleared by `reset`.
+	 * See the `V92MOD_PHASE_*` block above, including why the type is
+	 * SIGNED.  Every `enter*` member returns early when it is already at
+	 * its own value, so each transition happens at most once, and
+	 * `mkResampledSignal` takes its split path only in phase 3.  Cleared by
+	 * `reset`.
 	 */
-	unsigned int phase;
+	int phase;
 
-	/* +0x30  Cleared by `reset`, `enterPhase3`, `enterPhase4` and
-	 * `enterDataPhase`.  Nothing written reads it. */
+	/*
+	 * +0x30  Cleared by `reset`, `enterPhase3`, `enterPhase4` and
+	 * `enterDataPhase`, and ADDED TO by `progress` -- `add %edi,0x30(%esi)`
+	 * at .text+0x14c80, where %edi is the symbol count the call was asked
+	 * for.  So it accumulates symbols since the last phase transition.
+	 * NOTHING IN THE OBJECT READS IT, which is why the name stays an
+	 * offset: what the count is for is not recoverable from a write-only
+	 * field.
+	 */
 	unsigned int word_30;
 
 	/*
-	 * +0x34  Cleared by `reset`, by both `enter` members, and by all five
-	 * `exit` members; set to 10 by `enterDataPhase` and to nothing else by
-	 * anything written.  `V92Phase4Modulator.h`'s note on its own +0x0c
-	 * reads `progress` latching that field into this one, so this is a
-	 * status code the layer above consumes -- but `progress` is unwritten,
-	 * so what the codes MEAN is not established and the offset name stays.
+	 * +0x34  Cleared by `reset`, by all three `enter` members, by all five
+	 * `exit` members and by both `initiate` members; set to 10 by
+	 * `enterDataPhase`.
+	 *
+	 * `progress` IS WHAT IT IS FOR.  It clears the field on entry, latches
+	 * `V92Phase3Modulator::eventCode` or `V92Phase4Modulator::word_0c` into
+	 * it once per symbol, and then dispatches on ITS OWN COPY: 5 and 7 stage
+	 * a resampler phase change at that symbol, 8 enters phase 4, 9 enters
+	 * the data phase, and 1 is written on the way out when the queue is
+	 * empty or full.  So it is a per-block status, produced here and read by
+	 * the layer above.
+	 *
+	 * ONLY THE 1 IS THIS CLASS'S OWN CODE; see `V92MOD_STATUS_QUEUE_LIMIT`
+	 * for why the others are left as bare numbers and why the field keeps an
+	 * offset name.
 	 */
 	unsigned int word_34;
 
@@ -400,12 +453,23 @@ public:
 	float *resampleOut;
 
 	/*
-	 * +0x88  `blockSize * 8` bytes: `shl $0x3` and no slack.  The element
-	 * width is NOT established -- eight bytes each, or two four-byte ones
-	 * per block element, are the same instruction -- so this stays a
-	 * `void *` and the .cpp allocates the byte count the object computes.
+	 * +0x88  THE SCRAMBLED BIT BLOCK, `blockSize * 8` bytes: `shl $0x3` and
+	 * no slack, so eight BYTES per block element.
+	 *
+	 * The element type is the CALLEES' and not a reading of the shift.
+	 * `progress`'s data-phase arm passes it twice --
+	 * `Scrambler<int, unsigned char>::process(const int *, unsigned char *,
+	 * unsigned)` at .text+0x15005 and `V92BitsToSymbol::process(unsigned
+	 * char *, unsigned int &, short *)` at +0x15029 -- and the mangling
+	 * spells both parameters `unsigned char *`.  CLAUDE.md's second evidence
+	 * tier arriving, exactly as it did for +0x80.  It was a `void *` while
+	 * nothing had read it.
+	 *
+	 * Eight bytes per block element is then eight BITS per symbol, which is
+	 * what the scrambler unpacks each input word into; the .cpp still
+	 * allocates the byte count the object computes.
 	 */
-	void *buf_88;
+	unsigned char *buf_88;
 
 	/*
 	 * +0x8c  WHERE THE SECOND SEGMENT IS RESAMPLED TO, `(nSamples + 10) * 4`

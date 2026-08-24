@@ -40,8 +40,8 @@
  },
  {
   "label": "enterPhase3's last argument is the PCM type rather than the round-trip delay",
-  "find": "\t\t\t       (unsigned int)phase2Info->rtd);",
-  "replace": "\t\t\t       (unsigned int)phase2Info->pcmType);"
+  "find": "0, ja, dil,\n\t\t\t       (unsigned int)phase2Info->rtd);",
+  "replace": "0, ja, dil,\n\t\t\t       (unsigned int)phase2Info->pcmType);"
  },
  {
   "label": "enterPhase3 takes the phase to 3",
@@ -352,5 +352,267 @@
   "label": "the two setPhase messages are exchanged",
   "find": "\t\t\t    \"V92Modulator: setPhase = 0.5\\r\\n\");",
   "replace": "\t\t\t    \"V92Modulator: setPhase = %c%d.%05d\\r\\n\");"
+ },
+ {
+  "label": "enterPhase4's guard tests phase 3 instead of phase 4",
+  "find": "\tif (phase == V92MOD_PHASE_4)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modulator: enter Phase 4\\r\\n\");",
+  "replace": "\tif (phase == V92MOD_PHASE_3)\n\t\treturn;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V92Modulator: enter Phase 4\\r\\n\");"
+ },
+ {
+  "label": "enterPhase4 hands the phase 4 modulator byte_0d, not byte_0c",
+  "find": "\tphase4Modulator->reset(4000, byte_0c, V92P4M_RESET_STATE_ZERO, 0,",
+  "replace": "\tphase4Modulator->reset(4000, byte_0d, V92P4M_RESET_STATE_ZERO, 0,"
+ },
+ {
+  "label": "enterPhase4 asks for one symbol rather than none",
+  "find": "\tphase4Modulator->reset(4000, byte_0c, V92P4M_RESET_STATE_ZERO, 0,\n\t\t\t       (unsigned int)phase2Info->rtd);",
+  "replace": "\tphase4Modulator->reset(4000, byte_0c, V92P4M_RESET_STATE_ZERO, 1,\n\t\t\t       (unsigned int)phase2Info->rtd);"
+ },
+ {
+  "label": "enterPhase4 leaves the running count alone",
+  "find": "\tphase = V92MOD_PHASE_4;\n\tword_30 = 0;\n\tword_34 = 0;\n}",
+  "replace": "\tphase = V92MOD_PHASE_4;\n\tword_34 = 0;\n}"
+ },
+ {
+  "label": "initiateRRN approves from any phase but the data one",
+  "find": "\tif (phase != V92MOD_PHASE_DATA) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modulator: RRN requested but NOT approved\\r\\n\");",
+  "replace": "\tif (phase == V92MOD_PHASE_DATA) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V92Modulator: RRN requested but NOT approved\\r\\n\");"
+ },
+ {
+  "label": "initiateRRN's refusal reports success",
+  "find": "\t\t\t    \"V92Modulator: RRN requested but NOT approved\\r\\n\");\n\t\treturn -1;",
+  "replace": "\t\t\t    \"V92Modulator: RRN requested but NOT approved\\r\\n\");\n\t\treturn 0;"
+ },
+ {
+  "label": "initiateRRN's two states are exchanged",
+  "find": "\t\tstate = V92P4M_STATE_RU;\n\t} else {",
+  "replace": "\t\tstate = V92P4M_STATE_DATA_TO_RU;\n\t} else {"
+ },
+ {
+  "label": "initiateRRN hands the phase 4 modulator byte_0c, not byte_0d",
+  "find": "\tphase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,\n\t\t\t       (unsigned int)phase2Info->rtd);\n\tword_34 = 0;\n\tphase4Modulator->resetBeforRRN();",
+  "replace": "\tphase4Modulator->reset(4000, byte_0c, (V92Phase4ModulatorState)state, 0,\n\t\t\t       (unsigned int)phase2Info->rtd);\n\tword_34 = 0;\n\tphase4Modulator->resetBeforRRN();"
+ },
+ {
+  "label": "initiateRRN calls the FPE reset -- the two bodies swapped",
+  "find": "\tphase4Modulator->resetBeforRRN();",
+  "replace": "\tphase4Modulator->resetBeforFPE();"
+ },
+ {
+  "label": "initiateRRN does not clear the CP's bit 33",
+  "find": "\tphase4Modulator->resetBeforRRN();\n\tcp->byte_04 = 0;\n\tcp->infoToBits();",
+  "replace": "\tphase4Modulator->resetBeforRRN();\n\tcp->infoToBits();"
+ },
+ {
+  "label": "initiateRRN arms the modulus encoder, which is FPE's store",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\tbitsToSymbol->transmitter->modulusEncoder->field_50 = 1;\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation\\r\\n\");"
+ },
+ {
+  "label": "initiateRRN asks for a whole block rather than one symbol",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(blockSize);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\tedprintf(\"V92Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RuModulation"
+ },
+ {
+  "label": "initiateFPE's two states are exchanged",
+  "find": "\t\tstate = V92P4M_STATE_RM;\n\t} else {",
+  "replace": "\t\tstate = V92P4M_STATE_DATA_TO_RM;\n\t} else {"
+ },
+ {
+  "label": "initiateFPE does not arm the modulus encoder",
+  "find": "\tbitsToSymbol->transmitter->modulusEncoder->field_50 = 1;",
+  "replace": "\t(void)bitsToSymbol->transmitter->modulusEncoder->field_50;"
+ },
+ {
+  "label": "initiateFPE arms the modulus encoder with the wrong value",
+  "find": "\tbitsToSymbol->transmitter->modulusEncoder->field_50 = 1;\n",
+  "replace": "\tbitsToSymbol->transmitter->modulusEncoder->field_50 = 2;\n"
+ },
+ {
+  "label": "initiateFPE calls the RRN reset -- the two bodies swapped",
+  "find": "\tphase4Modulator->resetBeforFPE();",
+  "replace": "\tphase4Modulator->resetBeforRRN();"
+ },
+ {
+  "label": "initiateFPE takes the phase to the data phase rather than to 4",
+  "find": "\t\t    \"V92Modulator: FPE requested, enter Phase 4\\r\\n\");\n\n\tphase = V92MOD_PHASE_4;",
+  "replace": "\t\t    \"V92Modulator: FPE requested, enter Phase 4\\r\\n\");\n\n\tphase = V92MOD_PHASE_DATA;"
+ },
+ {
+  "label": "progress derives the symbol count from six fifths, not five sixths",
+  "find": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)\n\t\t\t   + 0.5f);",
+  "replace": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_DEN / V92MOD_RATE_NUM)\n\t\t\t   + 0.5f);"
+ },
+ {
+  "label": "progress rounds the symbol count down",
+  "find": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)\n\t\t\t   + 0.5f);\n",
+  "replace": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN));\n"
+ },
+ {
+  "label": "progress accumulates the sample count rather than the symbol count",
+  "find": "\tword_34 = 0;\n\tword_30 += n;",
+  "replace": "\tword_34 = 0;\n\tword_30 += nSamples;"
+ },
+ {
+  "label": "progress overwrites the running count instead of adding to it",
+  "find": "\tword_30 += n;\n",
+  "replace": "\tword_30 = n;\n"
+ },
+ {
+  "label": "progress does not clear the status on entry",
+  "find": "\tword_34 = 0;\n\tword_30 += n;\n",
+  "replace": "\tword_30 += n;\n"
+ },
+ {
+  "label": "the wanted block ignores what the queue already holds",
+  "find": "\twant = queuePrime - queue->count() + n;",
+  "replace": "\twant = queuePrime + n;"
+ },
+ {
+  "label": "the wanted block adds the queue's occupancy rather than subtracting it",
+  "find": "\twant = queuePrime - queue->count() + n;\n",
+  "replace": "\twant = queuePrime + queue->count() + n;\n"
+ },
+ {
+  "label": "the silence arm sizes its block the way the other four do",
+  "find": "\tcase V92MOD_PHASE_RESET:\n\t\tblockRemaining = n;",
+  "replace": "\tcase V92MOD_PHASE_RESET:\n\t\tblockRemaining = want;"
+ },
+ {
+  "label": "the silence arm leaves the symbol block alone",
+  "find": "\t\tfor (i = 0; i < blockRemaining; i++)\n\t\t\tbuf_7c[i] = 0;\n\t\tnbits = 0;",
+  "replace": "\t\tnbits = 0;"
+ },
+ {
+  "label": "the silence arm reports the incoming bit count back",
+  "find": "\t\t\tbuf_7c[i] = 0;\n\t\tnbits = 0;",
+  "replace": "\t\t\tbuf_7c[i] = 0;"
+ },
+ {
+  "label": "the phase 3 arm tests the phase once rather than once a symbol",
+  "find": "\t\tfor (i = 0; i < blockRemaining; i++) {\n\t\t\tif (phase == V92MOD_PHASE_3) {",
+  "replace": "\t\tfor (i = 0; i < blockRemaining; i++) {\n\t\t\tif (V92MOD_PHASE_3 == V92MOD_PHASE_3) {"
+ },
+ {
+  "label": "the phase 3 arm latches the event code even when it is zero",
+  "find": "\t\t\t\tif (phase3Modulator->eventCode != 0) {\n\t\t\t\t\tword_34 = phase3Modulator->eventCode;",
+  "replace": "\t\t\t\t{\n\t\t\t\t\tword_34 = phase3Modulator->eventCode;"
+ },
+ {
+  "label": "the two resampler phase changes are exchanged",
+  "find": "\t\t\t\t\tif (word_34 == 5) {\n\t\t\t\t\t\tresamplerPhaseChange =\n\t\t\t\t\t\t    V92MOD_PHASECHG_HALF;",
+  "replace": "\t\t\t\t\tif (word_34 == 5) {\n\t\t\t\t\t\tresamplerPhaseChange =\n\t\t\t\t\t\t    V92MOD_PHASECHG_OFFSET;"
+ },
+ {
+  "label": "the phase change is staged at the start of the block, not at the symbol",
+  "find": "\t\t\t\t\t\t    V92MOD_PHASECHG_HALF;\n\t\t\t\t\t\tresamplerPhaseChangeAt = i;",
+  "replace": "\t\t\t\t\t\t    V92MOD_PHASECHG_HALF;\n\t\t\t\t\t\tresamplerPhaseChangeAt = 0;"
+ },
+ {
+  "label": "the offset phase change is staged at the start of the block",
+  "find": "\t\t\t\t\t\t    V92MOD_PHASECHG_OFFSET;\n\t\t\t\t\t\tresamplerPhaseChangeAt = i;",
+  "replace": "\t\t\t\t\t\t    V92MOD_PHASECHG_OFFSET;\n\t\t\t\t\t\tresamplerPhaseChangeAt = 0;"
+ },
+ {
+  "label": "phase 4 is entered on event code 9 rather than 8",
+  "find": "\t\t\t\tif (word_34 == 8) {\n\t\t\t\t\tenterPhase4();",
+  "replace": "\t\t\t\tif (word_34 == 9) {\n\t\t\t\t\tenterPhase4();"
+ },
+ {
+  "label": "the phase 4 arm does not latch the sub-modulator's status",
+  "find": "\t\t\tbuf_7c[i] = (short)\n\t\t\t    phase4Modulator->generateSymbol();\n\t\t\tif (phase4Modulator->word_0c != 0)\n\t\t\t\tword_34 = phase4Modulator->word_0c;\n\t\t}\n\t\tif (word_34 == 9) {",
+  "replace": "\t\t\tbuf_7c[i] = (short)\n\t\t\t    phase4Modulator->generateSymbol();\n\t\t}\n\t\tif (word_34 == 9) {"
+ },
+ {
+  "label": "the data phase is entered on status 8 rather than 9",
+  "find": "\t\tif (word_34 == 9) {\n\t\t\tenterDataPhase();",
+  "replace": "\t\tif (word_34 == 8) {\n\t\t\tenterDataPhase();"
+ },
+ {
+  "label": "the data phase transition does not report the bit count back",
+  "find": "\t\t\tenterDataPhase();\n\t\t\tnbits = bitsToSymbol->nofBitsForNextTime();",
+  "replace": "\t\t\tenterDataPhase();\n\t\t\tnbits = 0;",
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and the reason is a fact about `progress` rather than a gap in the fixture.  The arm assigns `nbits` and then falls into the tail, where `if (phase == V92MOD_PHASE_DATA) nbits = bitsToSymbol->setSymbolsBlockSize(blockRemaining)` overwrites it -- and `enterDataPhase`, two lines above, is exactly what has just made `phase` the data phase.  So the store is dead on every path that reaches it and no test can ever see it.  It is in the reconstruction because .text+0x14f6a..+0x14f73 makes the call and stores the result through the reference, and for no other reason."
+ },
+ {
+  "label": "the data arm scrambles into the symbol block rather than the bit block",
+  "find": "\t\tscrambler.process(bits, buf_88, nbits);",
+  "replace": "\t\tscrambler.process(bits, (unsigned char *)buf_7c, nbits);"
+ },
+ {
+  "label": "the data arm hands the bit-to-symbol stage the unscrambled words",
+  "find": "\t\tbitsToSymbol->process(buf_88, nbits, buf_7c);",
+  "replace": "\t\tbitsToSymbol->process((unsigned char *)bits, nbits, buf_7c);"
+ },
+ {
+  "label": "the two data-phase calls are the other way round",
+  "find": "\t\tscrambler.process(bits, buf_88, nbits);\n\t\tbitsToSymbol->process(buf_88, nbits, buf_7c);",
+  "replace": "\t\tbitsToSymbol->process(buf_88, nbits, buf_7c);\n\t\tscrambler.process(bits, buf_88, nbits);"
+ },
+ {
+  "label": "the resampler is fed the symbol block unconverted",
+  "find": "\tfor (i = 0; i < blockRemaining; i++)\n\t\tresampleIn[i] = (float)buf_7c[i];",
+  "replace": "\tfor (i = 0; i < blockRemaining; i++)\n\t\tresampleIn[i] = (float)i;"
+ },
+ {
+  "label": "the resampler is given the whole block rather than what is left of it",
+  "find": "\tfor (i = 0; i < blockRemaining; i++)\n\t\tresampleIn[i] = (float)buf_7c[i];\n",
+  "replace": "\tfor (i = 0; i < blockSize; i++)\n\t\tresampleIn[i] = (float)buf_7c[i];\n"
+ },
+ {
+  "label": "the timing offset handed to the resampler is the phase offset",
+  "find": "\tresampler->setTimingOffset(float_28);",
+  "replace": "\tresampler->setTimingOffset(resamplerPhaseOffset);"
+ },
+ {
+  "label": "the shaping filter is applied when the parameter says not to",
+  "find": "\tif (params->V92_APPLY_TX_SHAPING_FILTER)\n\t\ttxFilter->process(resampleOut, resampleOut, nOut);",
+  "replace": "\tif (!params->V92_APPLY_TX_SHAPING_FILTER)\n\t\ttxFilter->process(resampleOut, resampleOut, nOut);"
+ },
+ {
+  "label": "the shaping filter writes to the split scratch instead of in place",
+  "find": "\t\ttxFilter->process(resampleOut, resampleOut, nOut);",
+  "replace": "\t\ttxFilter->process(resampleOut, resampleTail, nOut);"
+ },
+ {
+  "label": "the queue is written the whole block rather than what came out",
+  "find": "\tqueue->write(resampleOut, nOut);",
+  "replace": "\tqueue->write(resampleOut, blockRemaining);"
+ },
+ {
+  "label": "the caller is handed as many samples as came out of the resampler",
+  "find": "\tqueue->read(out, nSamples);",
+  "replace": "\tqueue->read(out, nOut);"
+ },
+ {
+  "label": "the closing block size is derived from the argument, not from blockSize",
+  "find": "\tblockRemaining = queuePrime - queue->count() + blockSize;",
+  "replace": "\tblockRemaining = queuePrime - queue->count() + n;"
+ },
+ {
+  "label": "the bit count is reported in every phase, not only the data one",
+  "find": "\tif (phase == V92MOD_PHASE_DATA)\n\t\tnbits = bitsToSymbol->setSymbolsBlockSize(blockRemaining);",
+  "replace": "\tnbits = bitsToSymbol->setSymbolsBlockSize(blockRemaining);"
+ },
+ {
+  "label": "the closing block size handed on is the constructor's, not the running one",
+  "find": "\t\tnbits = bitsToSymbol->setSymbolsBlockSize(blockRemaining);",
+  "replace": "\t\tnbits = bitsToSymbol->setSymbolsBlockSize(blockSize);"
+ },
+ {
+  "label": "the queue limit is raised on an empty queue only",
+  "find": "\tif (queue->isEmpty() || queue->isFull()) {",
+  "replace": "\tif (queue->isEmpty()) {"
+ },
+ {
+  "label": "the queue limit is raised on a full queue only",
+  "find": "\tif (queue->isEmpty() || queue->isFull()) {\n",
+  "replace": "\tif (queue->isFull()) {\n"
+ },
+ {
+  "label": "the queue limit clears the status rather than raising it",
+  "find": "\t\tword_34 = V92MOD_STATUS_QUEUE_LIMIT;",
+  "replace": "\t\tword_34 = 0;"
  }
 ]

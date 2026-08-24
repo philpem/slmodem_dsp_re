@@ -135,23 +135,23 @@
   },
   {
     "label": "process(bulk): the intermediate is T, not I -- finding 870, <i,h>",
-    "find": "\t\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\tout[i] = r;\n\t\t\t*p = (T)r;",
-    "replace": "\t\t\tT r = (T)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\tout[i] = r;\n\t\t\t*p = (T)r;"
+    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tT r = (T)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;"
   },
   {
     "label": "process(bulk): the far tap is not in the XOR",
-    "find": "\t\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\tout[i] = r;\n\t\t\t*p = (T)r;",
-    "replace": "\t\t\tI r = (I)(in[i] ^ *pTap1);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\tout[i] = r;\n\t\t\t*p = (T)r;"
+    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tI r = (I)(in[i] ^ *pTap1);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;"
   },
   {
     "label": "process(bulk): the history is not written",
-    "find": "\t\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\tout[i] = r;\n\t\t\t*p = (T)r;",
-    "replace": "\t\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\tout[i] = r;\n\t\t\t(void)p;"
+    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t(void)p;"
   },
   {
     "label": "process(bulk): the history is written before the destination",
-    "find": "\t\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\tout[i] = r;\n\t\t\t*p = (T)r;",
-    "replace": "\t\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\t\tpTap1--;\n\t\t\tpTap2--;\n\t\t\t*p = (T)r;\n\t\t\tout[i] = r;",
+    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*p = (T)r;\n\t\tout[i] = r;",
     "equivalent": true,
     "why": "The two destinations are distinct objects in every fixture -- the history is the object's own buffer and `out` is a separate array -- and where a caller could make them overlap both stores carry the same value `r`, so the order cannot be observed.  It is reproduced because the blob emits it in that order, not because a test can see it."
   },

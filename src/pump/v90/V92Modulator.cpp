@@ -2,9 +2,9 @@
  * V92Modulator.cpp -- the V.92 upstream modulator: the object that owns the
  * whole transmit graph, and the phase machine that drives it.
  *
- * Reconstructed from dsplibs.o.  FOURTEEN of the class's eighteen symbols,
- * 3,890 bytes -- 2,474 in the two constructor and two destructor variants and
- * 1,416 in the ten members:
+ * Reconstructed from dsplibs.o.  ALL EIGHTEEN of the class's symbols,
+ * 5,614 bytes -- 2,474 in the two constructor and two destructor variants and
+ * 3,140 in the fourteen members:
  *
  *     V92Modulator::V92Modulator(unsigned, V92Phase2Info *, V92Ja *,
  *         tagV90DILdescriptor *, V92CP *, V92MappingParams *,
@@ -17,17 +17,18 @@
  *     exitSuSecond                  +0x14590    68 B
  *     exitTRN1uSecond               +0x145e0    68 B
  *     exitCPt                       +0x14630    80 B
+ *     initiateRRN                   +0x14680   260 B
+ *     initiateFPE                   +0x14790   276 B
+ *     enterPhase4                   +0x148b0   113 B
  *     enterDataPhase                +0x14930    69 B
  *     mkResampledSignal             +0x14980   662 B
+ *     progress                      +0x14c20 1,075 B
  *     reset                         +0x15060   186 B
  *
  * Each constructor and destructor pair is byte-identical bar register
  * allocation; GCC emits both from one definition.
  * `include/dsplib/V92Modulator.h` carries the object map, the 0x90 the
  * allocation gives, the eleven owned pieces and the one word nobody writes.
- *
- * STILL UNWRITTEN: `enterPhase4` (113 B), `initiateRRN` (260),
- * `initiateFPE` (276) and `progress` (1,075).
  *
  * THE CONSTRUCTOR ENDS BY CALLING `reset()`, and that it is INLINED there is
  * measured rather than assumed: `V92Modulator::reset` is its own 186-byte
@@ -39,13 +40,26 @@
  * print.  Finding 1283.  `V92Phase3Modulator`'s constructor calls its own
  * `reset` the same way, and is the precedent this file now follows.
  *
- * THE PHASE MACHINE, which the ten members below are the whole of.  `phase`
- * is 0 out of `reset`, and three members move it:
+ * THE PHASE MACHINE, which the fourteen members below are the whole of.
+ * `phase` is 0 out of `reset`, and three members move it:
  *
  *     enterPhase3     -> 1, and resets the phase 3 modulator
- *     enterPhase4     -> 2  (unwritten)
+ *     enterPhase4     -> 2, and resets the phase 4 modulator
  *     enterDataPhase  -> 3, and hands the block size to the bit-to-symbol
  *                          stage
+ *
+ * THE ONLY CALLER OF TWO OF THE THREE IS `progress`, and it makes both
+ * transitions from inside its own symbol loop: on the phase 3 modulator's
+ * event code 8 it enters phase 4, and on the phase 4 modulator's code 9 it
+ * enters the data phase.  So the machine drives itself once `enterPhase3` has
+ * started it, and the outside only has to keep calling `progress`.  Both calls
+ * are INLINED in the object and are still calls; see `progress`.
+ *
+ * `initiateRRN` and `initiateFPE` are the two requests that go the other way:
+ * they take a modulator that has REACHED the data phase back to phase 4 for a
+ * rate renegotiation, and refuse from anywhere else.  Nothing in the object
+ * calls either, so they are the class's outward-facing surface along with
+ * `progress` itself.
  *
  * The five `exit*` members are a different shape: each is a REQUEST that is
  * ignored unless the sub-modulator it forwards to is in the one state that
@@ -82,10 +96,13 @@ extern "C" {
 
 #include "dsplib/V92Modulator.h"
 #include "dsplib/V92BitsToSymbol.h"
+#include "dsplib/V92CP.h"
+#include "dsplib/V92ModulusEncoder.h"
 #include "dsplib/V92Parameters.h"
 #include "dsplib/V92Phase2Info.h"
 #include "dsplib/V92Phase3Modulator.h"
 #include "dsplib/V92Phase4Modulator.h"
+#include "dsplib/V92Transmitter.h"
 #include "dsplib/ResamplerTimingOffset.h"
 #include "dsplib/Queue.h"
 #include "dsplib/FloatFIR.h"
@@ -285,7 +302,7 @@ V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
 					* sizeof(short));
 	resampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)
 					    * sizeof(float));
-	buf_88 = sysdep_malloc(blockSize * 8);
+	buf_88 = (unsigned char *)sysdep_malloc(blockSize * 8);
 	resampleOut = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)
 					     * sizeof(float));
 	resampleTail = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)
@@ -437,6 +454,48 @@ V92Modulator::enterPhase3()
 
 /*
  * ===========================================================================
+ * V92Modulator::enterPhase4 (.text+0x148b0, 113 bytes)
+ *
+ * `enterPhase3`'s shape with the PHASE 4 modulator as its subject and one
+ * statement fewer: no `resamplerPhaseChange` clear.  A no-op if `phase` is
+ * already 2, and the guard is again before the diagnostic.
+ *
+ * THE FIVE ARGUMENTS ARE THE OBJECT'S.  4000 is the amplitude; `byte_0c` is
+ * the bit count, zero-extended (`movzbl 0xc(%ebx)`); the state is a literal
+ * ZERO, which is one of the fifteen `V92Phase4Modulator` codes nothing names
+ * and is why `V92Phase4ModulatorState` carries that one enumerator and no
+ * others; the symbol count is zero; and the last is `phase2Info->rtd` in the
+ * same slot `enterPhase3` puts it in.
+ *
+ * IT IS `byte_0c` HERE AND `byte_0d` IN THE TWO `initiate` MEMBERS, which is
+ * the only thing separating the three call sites' argument lists.  Neither
+ * byte is written by anything but `reset`, which clears both.
+ *
+ * THIS BODY IS ALSO INSIDE `progress`, and as a CALL that GCC inlined rather
+ * than as a repeated statement -- .text+0x14e78..+0x14ecb is this function
+ * with the same guard, the same message and the same five arguments, and the
+ * guard's early exit lands on the join of the statement that FOLLOWS the call.
+ * See `progress`.
+ * ===========================================================================
+ */
+void
+V92Modulator::enterPhase4()
+{
+	if (phase == V92MOD_PHASE_4)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modulator: enter Phase 4\r\n");
+
+	phase4Modulator->reset(4000, byte_0c, V92P4M_RESET_STATE_ZERO, 0,
+			       (unsigned int)phase2Info->rtd);
+	phase = V92MOD_PHASE_4;
+	word_30 = 0;
+	word_34 = 0;
+}
+
+/*
+ * ===========================================================================
  * V92Modulator::enterDataPhase (.text+0x14930, 69 bytes)
  *
  * Enter the data phase: tell the bit-to-symbol stage how many symbols a block
@@ -472,6 +531,161 @@ V92Modulator::enterDataPhase()
 	word_30 = 0;
 	word_34 = 10;
 	bitsToSymbol->setSymbolsBlockSize(blockSize);
+}
+
+/*
+ * ===========================================================================
+ * V92Modulator::initiateRRN (.text+0x14680, 260 bytes)
+ * V92Modulator::initiateFPE (.text+0x14790, 276 bytes)
+ *
+ * THE TWO V.92 UPSTREAM RENEGOTIATION REQUESTS, and they are the same function
+ * with four differences.  Both are ASKED FOR FROM OUTSIDE -- nothing in the
+ * object calls either -- and both refuse unless the modulator is in the data
+ * phase, which is the whole of the "approved" in their own messages:
+ *
+ *     if (phase != 3) { print "... requested but NOT approved"; return -1; }
+ *     print "... requested, enter Phase 4"
+ *     phase = 2 ; word_30 = 0
+ *     bitsToSymbol->setSymbolsBlockSize(1)
+ *     <FPE only: the modulus encoder's selector goes to 1>
+ *     state = bitsToSymbol->nofBitsForNextTime() ? <signal> : <data-to-signal>
+ *     phase4Modulator->reset(4000, byte_0d, state, 0, phase2Info->rtd)
+ *     word_34 = 0
+ *     phase4Modulator->resetBefor<RRN|FPE>()
+ *     cp->byte_04 = 0
+ *     cp->infoToBits()
+ *     return 0
+ *
+ * THE FOUR DIFFERENCES, and nothing else in 536 bytes separates them:
+ *
+ *   1. the two state codes -- 18/19 for RRN, 25/26 for FPE
+ *   2. `resetBeforRRN` against `resetBeforFPE`
+ *   3. FPE writes `bitsToSymbol->transmitter->modulusEncoder->field_50 = 1`
+ *      and RRN does not, three levels down through pointers
+ *   4. the four messages
+ *
+ * The third is the one no fixture sees by accident: it is a store into a
+ * fourth-level sub-object, so a suite that compares only the modulator and its
+ * own pieces scores the two bodies as interchangeable.  t_v92modstate.cpp
+ * compares the modulus encoder for that reason and the mutation set swaps the
+ * two bodies to prove it.
+ *
+ * THEY TAKE THE PHASE TO 4 WITHOUT CALLING `enterPhase4`, and that is measured
+ * rather than a reading: `enterPhase4` would have reset the phase 4 modulator
+ * with `byte_0c` and state ZERO, and these reset it with `byte_0d` and a state
+ * chosen from the bit count.  The three stores that follow are the same three
+ * that function ends with, in the same order, and that is all they share.
+ *
+ * THE RETURN IS A STATUS AND `int` IS MEASURED -- see V92Modulator.h.  `0` is
+ * `xor %eax,%eax` at +0x14736 and +0x14852; `-1` is a full
+ * `mov $0xffffffff,%eax`, twice in each function because the debug gate splits
+ * the refusal path.
+ *
+ * WHICH WAY ROUND THE BIT COUNT GOES, and it is the opposite of the obvious
+ * reading.  `setSymbolsBlockSize(1)` has just set the block to ONE symbol, so
+ * `nofBitsForNextTime` returns zero exactly when the bit-to-symbol stage
+ * already has that symbol banked -- `symbolsDone >= symbolsBlockSize`.
+ *
+ *     != 0   nothing banked   ->  RuModulation / RmModulation, state 19 / 26
+ *     == 0   data in flight   ->  DataToRuModulation / DataToRmModulation,
+ *                                 state 18 / 25
+ *
+ * so a NON-ZERO count starts the renegotiation signal at once and a ZERO one
+ * enters the state that finishes the data first.  The names are the object's
+ * own, from the four messages; which arm each belongs to is the `jne` at
+ * .text+0x146cf and +0x147eb.  The fixture drives both, and got this backwards
+ * first time round.
+ * ===========================================================================
+ */
+int
+V92Modulator::initiateRRN()
+{
+	int state;
+
+	if (phase != V92MOD_PHASE_DATA) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V92Modulator: RRN requested but NOT approved\r\n");
+		return -1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V92Modulator: RRN requested, enter Phase 4\r\n");
+
+	phase = V92MOD_PHASE_4;
+	word_30 = 0;
+	bitsToSymbol->setSymbolsBlockSize(1);
+
+	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		edprintf("V92Modulator: Phase4Modulator state initialized to "
+			 "RuModulation\r\n");
+		state = V92P4M_STATE_RU;
+	} else {
+		edprintf("V92Modulator: Phase4Modulator state initialized to "
+			 "DataToRuModulation\r\n");
+		state = V92P4M_STATE_DATA_TO_RU;
+	}
+
+	phase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,
+			       (unsigned int)phase2Info->rtd);
+	word_34 = 0;
+	phase4Modulator->resetBeforRRN();
+	cp->byte_04 = 0;
+	cp->infoToBits();
+
+	return 0;
+}
+
+int
+V92Modulator::initiateFPE()
+{
+	int state;
+
+	if (phase != V92MOD_PHASE_DATA) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V92Modulator: FPE requested but NOT approved\r\n");
+		return -1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V92Modulator: FPE requested, enter Phase 4\r\n");
+
+	phase = V92MOD_PHASE_4;
+	word_30 = 0;
+	bitsToSymbol->setSymbolsBlockSize(1);
+
+	/*
+	 * THE ONE STORE THAT IS NOT IN `initiateRRN`, and it goes three levels
+	 * down: `mov 0x4c(%ebx),%edx; mov (%edx),%ecx; mov 0x48(%ecx),%eax;
+	 * movl $0x1,0x50(%eax)` at .text+0x147d2.  +0x50 is
+	 * `V92ModulusEncoder::progress`'s own selector, so this switches the
+	 * encoder into the mode the FPE signal needs before a symbol is asked
+	 * for.  It sits BETWEEN the block-size call and the bit-count call,
+	 * which is where the object puts it.
+	 */
+	bitsToSymbol->transmitter->modulusEncoder->field_50 = 1;
+
+	if (bitsToSymbol->nofBitsForNextTime() != 0) {
+		edprintf("V92Modulator: Phase4Modulator state initialized to "
+			 "RmModulation\r\n");
+		state = V92P4M_STATE_RM;
+	} else {
+		edprintf("V92Modulator: Phase4Modulator state initialized to "
+			 "DataToRmModulation\r\n");
+		state = V92P4M_STATE_DATA_TO_RM;
+	}
+
+	phase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,
+			       (unsigned int)phase2Info->rtd);
+	word_34 = 0;
+	phase4Modulator->resetBeforFPE();
+	cp->byte_04 = 0;
+	cp->infoToBits();
+
+	return 0;
 }
 
 /*
@@ -786,4 +1000,241 @@ V92Modulator::mkResampledSignal(unsigned int &n)
 
 	resamplerPhaseChange = V92MOD_PHASECHG_NONE;
 	resamplerPhaseChangeAt = 0;
+}
+
+/*
+ * ===========================================================================
+ * V92Modulator::progress (.text+0x14c20, 1,075 bytes) -- ONE BLOCK OF UPSTREAM
+ *
+ * The function the other seventeen exist for.  Given `nSamples` of output to
+ * fill, it works out how many SYMBOLS that is, generates them from whichever
+ * sub-modulator the phase selects, resamples them up to the sample rate,
+ * pushes them through the queue and hands `nSamples` back out of it.
+ *
+ * The four arguments are the mangling's:
+ *
+ *     bits     the data-phase arm's input words, `Scrambler<int,h>::process`'s
+ *              `const int *`
+ *     nbits    IN for the data phase, OUT for everything else, and the one
+ *              thing the caller is told besides `word_34`
+ *     out      where `nSamples` floats are handed back
+ *     nSamples how many of them, and the ONLY thing the symbol count is
+ *              derived from
+ *
+ * ---------------------------------------------------------------------------
+ * THE SYMBOL COUNT IS THE CONSTRUCTOR'S EXPRESSION AGAIN
+ *
+ *     n = (unsigned)(nSamples * 5/6 + 0.5f)
+ *
+ * -- the same `fildll` / `fmuls 0x3f555555` / `fadds 0.5f` / truncating
+ * `fistpll` the constructor uses for `blockSize`, from its own slot of the
+ * constant pool (.rodata.cst4+0xc0 rather than +0xc8; three copies of the pair
+ * are in the section).  So `progress` re-derives per call what the constructor
+ * derived once, and the two agree only when the caller asks for the size the
+ * modulator was built for.
+ *
+ * ---------------------------------------------------------------------------
+ * HOW MANY SYMBOLS TO MAKE: THE QUEUE DECIDES, EXCEPT AT PHASE ZERO
+ *
+ *     blockRemaining = queuePrime - queue->count() + n
+ *
+ * `queuePrime` is the level `reset` primes the queue to, so the expression is
+ * "what it takes to put the queue back where it started, plus this block".
+ * It is computed BEFORE the dispatch and on every path -- the object's `div`
+ * at +0x14c92 is above the switch, and GCC does not speculate a division past
+ * a branch, so the source computes it unconditionally and that is why it is a
+ * local here.
+ *
+ * PHASE ZERO IS THE EXCEPTION and uses `n` flat, then fills the symbol block
+ * with silence.  Straight after a `reset` the queue is at exactly `queuePrime`
+ * and the two expressions agree, which is what makes that arm invisible to a
+ * fixture that only ever calls `progress` once -- see t_v92modstate.cpp.
+ *
+ * ---------------------------------------------------------------------------
+ * THE FIVE ARMS
+ *
+ *   0  silence: `buf_7c[0 .. blockRemaining) = 0`, and `nbits = 0`.
+ *
+ *   1  phase 3, and the arm re-tests `phase` ON EVERY SYMBOL -- the object
+ *      reloads +0x2c at the top of each iteration (+0x14e3b) because the
+ *      body can move it.  Each symbol latches `phase3Modulator->eventCode`
+ *      into `word_34` and then acts on three of its codes:
+ *
+ *          5  entering SuSecond      -> stage a HALF-sample phase change
+ *          7  entering TRN1uSecond   -> stage the OFFSET phase change
+ *          8  entering End           -> enterPhase4()
+ *
+ *      and the sample index the code arrived at is what `resamplerPhaseChangeAt`
+ *      is set to, so `mkResampledSignal` splits the block exactly there.  That
+ *      is the whole reason that function has a split path.  The three codes are
+ *      V92Phase3Modulator's alphabet and stay bare numbers here; its own
+ *      `generateSymbol` writes them the same way.
+ *
+ *      Once code 8 has fired, `phase` is 2 and every REMAINING symbol of the
+ *      same block comes from the phase 4 modulator instead -- which is what the
+ *      per-symbol reload buys and why this is one loop and not two.
+ *
+ *   2  phase 4: symbols from the phase 4 modulator, latching its `word_0c`.
+ *      Code 9 at the end of the block enters the data phase and then reports
+ *      the bit count the next call has to bring; anything else reports zero.
+ *
+ *   3  data: scramble the caller's words into `buf_88` and let the
+ *      bit-to-symbol stage turn them into `buf_7c`.  `nbits` is IN here and
+ *      the callee writes it back out.
+ *
+ *   default: print, and fall into the tail with `nbits` untouched.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TAIL, WHICH EVERY ARM JOINS
+ *
+ *     resampleIn[i] = (float)buf_7c[i]                 for blockRemaining
+ *     resampler->setTimingOffset(float_28)
+ *     mkResampledSignal(nOut)
+ *     if (params->V92_APPLY_TX_SHAPING_FILTER)
+ *             txFilter->process(resampleOut, resampleOut, nOut)   in place
+ *     queue->write(resampleOut, nOut)
+ *     queue->read(out, nSamples)
+ *     blockRemaining = queuePrime - queue->count() + blockSize
+ *     if (phase == 3) nbits = bitsToSymbol->setSymbolsBlockSize(blockRemaining)
+ *     if (queue->isEmpty() || queue->isFull()) { print; word_34 = 1; }
+ *
+ * THE SECOND OCCUPANCY EXPRESSION ADDS `blockSize` AND NOT `n`, from +0x00 and
+ * not from the argument (`mov (%esi),%ebx` at +0x14d79).  The two differ
+ * whenever the caller asks for a block the modulator was not built for, and
+ * that difference is the object's.
+ *
+ * `float_28` REACHES `setTimingOffset(float ppm)`, which is the callee typing
+ * it: the word `reset` clears is a timing offset in parts per million and the
+ * resampler scales it by `ppmScale * 1e-6f`.  The name is left as the offset it
+ * was -- three mutation entries and an anchor key on the current spelling and
+ * nothing in these five functions needs it changed.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO CALLS THE OBJECT INLINED, AND THEY ARE CALLS
+ *
+ * `enterPhase4()` at +0x14e78 and `enterDataPhase()` at +0x14f2c are those
+ * functions' bodies, guard included, with the guard's early exit landing on the
+ * join of the NEXT statement rather than on a shared tail.  Both are their own
+ * symbols elsewhere in the object, so GCC emitted each twice, and both are
+ * written here as the calls they are.  Writing either out longhand would put a
+ * second spelling of a phase transition in the tree and would not change a byte
+ * of what the compiler emits.
+ * ===========================================================================
+ */
+void
+V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
+		       unsigned int nSamples)
+{
+	unsigned int n;
+	unsigned int want;
+	unsigned int nOut;
+	unsigned int i;
+
+	n = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)
+			   + 0.5f);
+
+	word_34 = 0;
+	word_30 += n;
+
+	want = queuePrime - queue->count() + n;
+
+	switch (phase) {
+	case V92MOD_PHASE_RESET:
+		blockRemaining = n;
+		for (i = 0; i < blockRemaining; i++)
+			buf_7c[i] = 0;
+		nbits = 0;
+		break;
+
+	case V92MOD_PHASE_3:
+		blockRemaining = want;
+		for (i = 0; i < blockRemaining; i++) {
+			if (phase == V92MOD_PHASE_3) {
+				buf_7c[i] = (short)
+				    phase3Modulator->generateSymbol();
+				if (phase3Modulator->eventCode != 0) {
+					word_34 = phase3Modulator->eventCode;
+					/* entering SuSecond */
+					if (word_34 == 5) {
+						resamplerPhaseChange =
+						    V92MOD_PHASECHG_HALF;
+						resamplerPhaseChangeAt = i;
+					/* entering TRN1uSecond */
+					} else if (word_34 == 7) {
+						resamplerPhaseChange =
+						    V92MOD_PHASECHG_OFFSET;
+						resamplerPhaseChangeAt = i;
+					}
+				}
+				/* entering End */
+				if (word_34 == 8) {
+					enterPhase4();
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "V92Modulator progress: "
+						    "Enter phase4\r\n");
+				}
+			} else {
+				buf_7c[i] = (short)
+				    phase4Modulator->generateSymbol();
+				if (phase4Modulator->word_0c != 0)
+					word_34 = phase4Modulator->word_0c;
+			}
+		}
+		nbits = 0;
+		break;
+
+	case V92MOD_PHASE_4:
+		blockRemaining = want;
+		for (i = 0; i < blockRemaining; i++) {
+			buf_7c[i] = (short)
+			    phase4Modulator->generateSymbol();
+			if (phase4Modulator->word_0c != 0)
+				word_34 = phase4Modulator->word_0c;
+		}
+		if (word_34 == 9) {
+			enterDataPhase();
+			nbits = bitsToSymbol->nofBitsForNextTime();
+		} else {
+			nbits = 0;
+		}
+		break;
+
+	case V92MOD_PHASE_DATA:
+		blockRemaining = want;
+		scrambler.process(bits, buf_88, nbits);
+		bitsToSymbol->process(buf_88, nbits, buf_7c);
+		break;
+
+	default:
+		blockRemaining = want;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V92Modulator progress: Illegal state\r\n");
+		break;
+	}
+
+	for (i = 0; i < blockRemaining; i++)
+		resampleIn[i] = (float)buf_7c[i];
+
+	resampler->setTimingOffset(float_28);
+	mkResampledSignal(nOut);
+
+	if (params->V92_APPLY_TX_SHAPING_FILTER)
+		txFilter->process(resampleOut, resampleOut, nOut);
+
+	queue->write(resampleOut, nOut);
+	queue->read(out, nSamples);
+
+	blockRemaining = queuePrime - queue->count() + blockSize;
+
+	if (phase == V92MOD_PHASE_DATA)
+		nbits = bitsToSymbol->setSymbolsBlockSize(blockRemaining);
+
+	if (queue->isEmpty() || queue->isFull()) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V92Modulator: Queue is Empty/Full !!!\r\n");
+		word_34 = V92MOD_STATUS_QUEUE_LIMIT;
+	}
 }
