@@ -78727,3 +78727,246 @@ were with a different member of the same file rather than within one class.
 spells.  **Nothing in `src/` was touched**: each was extended BACKWARDS into
 the member its label names -- one line for the first two, and `return
 (unsigned int)(` for the three rate ones -- until it matched exactly once.
+
+
+======================================================================
+
+### 7520. `V90Modem::progress`'s closure: the digital transmit chain runs, and the mapping block it reads has no writer on that side
+
+Reserved block for this batch: **7520-7529**. `master` was at 7513 and two
+sibling worktree branches sit at 7513 and 7460, so the block starts clear of
+all three rather than at 7514 -- which three source comments briefly cited
+before this was written.
+
+Five functions, 1,805 bytes, and they are exactly the transitive closure of
+`V90Modem::progress`:
+
+| symbol | .text | bytes |
+|---|---|--:|
+| `V90Modulator::progress(int *, unsigned int &, float *, unsigned int)` | 0x1a820 | 780 |
+| `V90BitsToSymbol::process(unsigned char *, unsigned int &, short *)` | 0x2faa0 | 484 |
+| `V90Modulator::initiateRRN()` | 0x1a2c0 | 308 |
+| `V90Modem::progress(int *, unsigned int &, float *, unsigned int)` | 0x19ad0 | 188 |
+| `V90Phase4Modulator::generateSymbol()` | 0x2f600 | 45 |
+
+This is the branch `VPCMXF_Create` selects on a non-NULL first argument and
+which `vpcm_create` never passes (701, 702). 7000 corrected 702's claim that a
+path the vendor never executed has no tier-1 oracle, and this batch is that
+correction cashed: every one of the five is driven differentially against the
+blob, through `ref_` aliases, with no part of the shipped modem involved.
+
+#### The overload trap, settled from the object rather than the name
+
+`V90BitsToSymbol::process` has three overloads and two were already written.
+The one here is `_ZN15V90BitsToSymbol7processEPhRjPs`, and the binding was
+checked twice from the objects and never from the declaration:
+`tools/dis.py` shows `V90Modulator::progress` relocating against exactly that
+mangling at 0x1aa96, and `nm build/repro/pump/v90/V90Modulator.o` shows our
+own translation unit carrying `U _ZN15V90BitsToSymbol7processEPhRjPs` and
+neither sibling.
+
+**It is not a composition of the two written siblings**, which is what makes
+it a third function rather than a wrapper. It fills through
+`V90Mapper::process` and then drains, and it is the only member of the class
+that can raise all three of the status alphabet -- 1 SIZE_NOT_SET, 2
+BUFFER_OVERFLOW, 3 BUFFER_UNDERFLOW. Written as `process(bits, nofBits);
+return process(nofBits, out);` the underflow arm would be unreachable, because
+the fill's overflow clamp forces `symbolsDone` up to `symbolsBlockSize` before
+the drain's underflow test could run.
+
+The arm ORDER is the object's and is the sharp part: 0x2fb50 tests
+`symbolsDone < symbolsBlockSize` FIRST, and only the arm where a whole block is
+ready goes on to look at `nofSymbols`. So an underflowing call can never report
+2 however far past the allocation the mapper wrote.
+
+**One address in the record was wrong and is corrected.** `V90BitsToSymbol.h`
+and `.cpp` both said BUFFER_UNDERFLOW was at `.rodata.str1.4+0x8624`. It is at
++0x8628; 0x8624 is the "\r\n" inside the BUFFER_OVERFLOW string, which ends at
+0x8626 and pads to 0x8628.
+
+#### Three fields earned their names, and one of them changed type
+
+`V90Modulator+0x2c..+0x37` were `word_2c`, `word_30`, `word_34`, and
+`V90Modulator.h` said in terms that they would keep offset names until
+`progress` was written because "a role that has not been reproduced is not a
+name". That condition is now discharged:
+
+- **`state`** (+0x2c) is the object's own word: the `default` arm of
+  `progress`'s switch prints "V90Modulator progress: Illegal state". 0 emits
+  silence, 1 is phase 3, 2 is phase 4, 3 is the data phase.
+- **`symbolCount`** (+0x30) is incremented by the block size on entry and
+  cleared at every transition, and it is what the RRN timer is compared
+  against.
+- **`eventCode`** (+0x34) is copied out of `V90Phase3Modulator::eventCode` and
+  `V90Phase4Modulator::word_000c`, whose own headers say respectively that it
+  is "the caller's per-symbol notification" and that "what reads it is outside
+  this class". `progress` is that caller and that reader.
+
+The three sit in the same order and the same relative positions as
+`V90Phase3Modulator`'s `state`/`symbolCount`/`eventCode` at +0x014/+0x018/+0x01c
+and `V90Phase4Modulator`'s at +0x0004/+0x0008/+0x000c. That is a third,
+structural agreement on top of the message and the copy.
+
+**AND `state` IS SIGNED WHERE `symbolCount` IS NOT, which is measured at two
+sites and is exactly the kind of asymmetry a later tidy-up would erase.**
+0x1a848 is `cmp $0x1,%eax ; je ; jle` -- a `jle` is the signed decision tree,
+and an `unsigned int` selector gives `jbe` and folds the two edges into one.
+0x1aab2 is `cmp %ecx,0x30(%ebx) ; jbe`, an unsigned compare against
+`V90Parameters::DEBUG_DIGITAL_MODEM_INITIATE_RRN_TIME` -- which is declared
+`int`, so the unsignedness has to come from `symbolCount`. `int` and
+`unsigned int`, one field apart.
+
+`frameBuf` (+0x6c) also changed, from `void *` to `unsigned char *`, and that
+one is forced rather than inferred: `progress` hands it to
+`Scrambler<int,unsigned char>::process` as its `unsigned char *` output and to
+`V90BitsToSymbol::process` as its `unsigned char *` input, and C++ converts
+from `void *` to neither without a cast.
+
+The rename touched `include/dsplib/V90Modulator.h`, `V90Modulator.cpp`'s
+`reset` and offset assertions, and three lines of `test/unit/t_v90shapereset.cpp`.
+No mutation JSON referenced any of the three, so 7002's thirty-three detached
+anchors have no analogue here; `make refs` and a grep for `x = x;` (7481) were
+both run and are clean. `V92Modulator`'s twin fields at +0x30 and +0x34 keep
+their offset names deliberately: its own `progress` is unwritten, so the
+evidence that named these does not exist for those.
+
+#### Instruction counts: four exact, and the fifth's gap is identified
+
+`tools/instrcount.py` counts alignment padding, which is noise at this scale,
+so the table below is padding-free and adds the call count, which is the check
+that matters (7480: a gap is a missing call until proven otherwise).
+
+| symbol | ours | blob | calls ours/blob |
+|---|--:|--:|---|
+| `V90BitsToSymbol::process` | 134 | 134 | 4 / 4 |
+| `V90Phase4Modulator::generateSymbol` | 16 | 16 | 2 / 2 |
+| `V90Modem::progress` | 50 | 50 | 1 / 0 |
+| `V90Modulator::initiateRRN` | 81 | 78 | 11 / 10 |
+| `V90Modulator::progress` | 264 | 209 | 13 / 14 |
+
+- **`process` and `generateSymbol` are exact**, and byte-exact too: 484 and 45
+  bytes on both sides.
+- **`V90Modem::progress` is exact on the count** and differs only in that the
+  blob tail-JUMPS to `dsplibs_debug_printf` on its default arm where we `call`
+  and return. All three of the blob's exits are sibling calls and its frame is
+  0xc; ours sibcalls the two live arms and not the diagnostic, so its frame is
+  0x2c. Same instruction count either way, and no behaviour rides on it.
+- **`initiateRRN` is +3 and +1 call because the blob CROSS-JUMPS its two
+  `edprintf` sites into one** -- 0x1a39e sets the state register and jumps to
+  the single `call` at 0x1a321. Ours emits both call sites. A tail-merge
+  decision, free by CLAUDE.md's rule.
+- **`V90Modulator::progress` is +55 and MINUS one call, and the missing call is
+  named.** Listing both sides' relocation targets gives identical multisets --
+  3 `dsplibs_debug_printf`, 2 `V90Phase4Modulator::generateSymbol`, and one
+  each of `V90Phase4Modulator::reset`, `V90Phase3Modulator::generateSymbol`,
+  `V90BitsToSymbol::process(PhRjPs)`, `setSymbolsBlockSize`,
+  `nofBitsForNextTime`, `V90Modulator::initiateRRN`, `edprintf` and
+  `displaySpectralParams` -- **except for
+  `_ZN9ScramblerIihE7processEPKiPhj`, which our build inlines and the blob
+  calls.** The +55 instructions are its body. That is a property of
+  `include/dsplib/Scrambler.h` and not of this batch: the blob's own copy is a
+  WEAK `.gnu.linkonce.t.` instantiation, so it was an inline candidate for the
+  original compiler too and was not taken, and the same excess is already
+  carried by committed work -- `V90Demodulator::progress` is +430 and
+  `V90Phase4Modulator::generateV92Symbol` is +546.
+
+#### The rate message reads a field that has a same-named twin one level up
+
+`progress`'s data-phase entry prints "V90Modulator: enter Data Phase, Rate =
+%d [bps]" and computes the rate from **`bitsToSymbol->mapper->bitsPerFrame`**
+(+0x40 -> +0x00 -> +0x04), not from `bitsToSymbol->bitsPerFrame` (+0x14).
+Both fields exist, both are called `bitsPerFrame` in this tree's headers, and
+both are seeded from `V90MappingParams::word_0` by their own class's `reset` --
+**so in any naturally reset object they hold the same number and a body reading
+the wrong one passes every trial.** The fixture drives them apart on purpose.
+
+The arithmetic is forced at every step. `imul $0x1f40,0x4(%eax),%esi` then
+`push $0 ; push %esi ; fildll` is an INTEGER multiply by 8000 widened as
+UNSIGNED; `fmuls` against 0x3e2aaaab is a multiply by the float nearest 1/6 and
+not a divide by 6.0f, which GCC will not introduce; `flds` of 0.5 comes FIRST,
+so the source is `0.5f + ...`; and `fistpll` into eight bytes with the low word
+taken is a conversion to `unsigned int`, where a cast to `int` emits `fistpl`.
+Six symbols to a frame at 8 kHz, with the 0.5 making the truncation a round.
+
+#### THE DIGITAL SIDE HAS NO WRITER FOR THE MAPPING BLOCK IT READS
+
+This is the thing a differential test can never surface, because both sides
+read the same uninitialised storage and agree.
+
+`V90Modulator::progress` reads `mappingParams2` (+0x14) through
+`displaySpectralParams`, and phase 4 reaches the same block through
+`V90Phase4Modulator::setMappingParams` -> `V90BitsToSymbol::reset` ->
+`V90Mapper::reset`, which is what fills `bitsPerFrame`, `constellationSize[]`
+and the six constellations. The block itself is embedded in `V90Modem` at
++0x18 and +0x668 and is passed to both side objects as arguments 6 and 7.
+**`V90Modem::V90Modem` does not construct it** -- `V90MappingParams` has no
+constructor call anywhere in that function -- so on entry it holds whatever the
+allocation held.
+
+The measurement is bounded and the bound is stated rather than implied.
+`nm ref/slmodemd/dsplibs.o | grep 16V90MappingParams` gives **30 symbols whose
+MANGLING names a `V90MappingParams *`**; that is the population, and a writer
+that never takes one as a parameter is outside it. Of the 30, every one that
+can write the block is analogue-reachable or has no caller at all:
+
+| writer | reached from |
+|---|---|
+| `V90ConstellationDesigner` (8 members) | `V90Demodulator::{ctor,reset,progress,dtor}` and, through the same object, `VPcmV34Create`, `VPcmV34InitiateRetrain`, `VPcmV34SetMinMaxBitRates` |
+| `V90TRN2Designer::V90TRN2Design` | `V90Demodulator::exitPhase3` |
+| `V90TRN2Designer::setTrn2DummyConstel` | **no relocation anywhere in the object** |
+| `V90CPPacker` | `VPcmFloModem::v90RunDemodulator` (7001's analogue-side CP builder) |
+| `V90ConstellationPower::calcModulusParameters` | `V90ConstellationPower::getPower` |
+
+The rest are readers: both `V90Mapper` resets, both `V90BitsToSymbol` resets,
+both `V90Demapper` resets, `V90Phase4Modulator::{setMappingParams,
+setRdRtSymbols,setRfSymbols}`, and four constructors that only store the
+pointer.
+
+`constellationDesigner` is a pointer member of `V90Demodulator`, allocated by
+that class's constructor. **On a digital build `V90Modem::demodulator` is NULL
+and no designer is ever constructed, so no symbol in the object that takes a
+`V90MappingParams *` and can write one is reachable.**
+
+Two things this is NOT. It is not a defect in the reconstruction: the blob does
+the same and the differential tier proves it. And it is not proof the vendor's
+branch is broken -- the mapping block could be intended to arrive from the host
+(`vpcm.c`), or from one of the eleven unwritten `V90Modulator` phase edges, of
+which `exitRi` is the one that calls `setMappingParams`. What it IS is the
+first thing a V.90 digital-termination bring-up will hit, and the reason the
+fixture pokes a plausible V.90 mapping set before any `reset` that reads one
+rather than letting the seed through.
+
+Two smaller members of the same shape:
+
+- **`V90Modulator::state` is never set to 1 by any member of the class.**
+  `reset` sets 0, `progress` sets 2 and 3, `initiateRRN` sets 2. Entry to
+  phase 3 comes from outside, and the only caller of `V90Modulator::reset` in
+  the object is `V90Modem::reset` (0x199a0), which is still unwritten. So a
+  digital session cannot start until that member and `vPcmResetPhase3Modem`
+  exist, and the fixture has to poke `state = 1` rather than reach it.
+- **`V90ConstellationDesigner::spectralDesign` has no relocation anywhere in
+  the object** -- orphaned exactly as `V90Modulator` is, and on the other side
+  of the same wall.
+
+#### What is left of the digital branch
+
+7000 costed it at 27 symbols / 11,628 bytes and 7001 put 13 symbols / 1,706
+bytes of that outside the analogue client's own closure. These five are 1,805
+bytes of the first figure and they close the whole of `V90Modem::progress`.
+What remains before a digital session can be attempted is `V90Modem::reset`,
+`vPcmResetPhase3Modem` and the eleven `V90Modulator` phase edges --
+`enterPhase3`, `enterPhase4`, `enterDataPhase`, `exitJd`, `exitJdPhase`,
+`exitDIL`, `exitRi`, `acknowledgeCPReception`, `acknowledgeCPNotReception`,
+`acknowledgeEReception` and `initiateFPE`.
+
+#### Names available to whoever owns `V90Phase4Modulator.h` next
+
+`initiateRRN`'s two ungated messages are rule-1 evidence for an enumerator that
+header deliberately left unnamed: "Phase4Modulator state initialized to
+**DataToRdModulation**" precedes `state = 0x14`, and "... to **RdModulation**"
+precedes `state = 0x15`. 0x15 is already `P4M_STATE_RD`; 0x14 is
+`P4M_STATE_UNNAMED_14`, left that way because the only evidence for it was a
+jump-table slot. It is NOT promoted here -- the message belongs to
+`V90Modulator` rather than to the state's own class, and the change would touch
+an 1,829-line file this batch does not own -- but the evidence now exists and
+should not have to be re-derived.
