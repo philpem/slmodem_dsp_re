@@ -584,6 +584,10 @@
   "src/pump/v90/V90TRN2Designer.cpp",
   "build/test/t_v90trn2design"
  ],
+ "v90unpck": [
+  "src/pump/v90/V90MappingParamsInt.cpp",
+  "build/test/t_v90unpck"
+ ],
  "v92alloc": [
   "src/pump/v90/V92ParamsInfo.c",
   "build/test/t_v92alloc"

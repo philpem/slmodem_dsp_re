@@ -7672,6 +7672,37 @@
     "the two spectral shaper arms are exchanged": "caught"
    }
   },
+  "v90unpck": {
+   "key": "52468409c51adb0259ca307d1878966717aabce076085d14a623d8732e57e4ef",
+   "summary": "25 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "distinctIndex is copied for five constellations rather than six": "caught",
+    "shaperA1 and shaperA2 are copied from each other's source": "caught",
+    "the codec helper counts the byte up within a word rather than down": "caught",
+    "the codec helper does not reset the length before filling": "caught",
+    "the codec helper keeps its own length rather than sharing the one word": "caught",
+    "the codec helper scans the eight words upward rather than downward": "caught",
+    "the codec helper writes the ordinary table": "caught",
+    "the codec helper's clamp admits 6 as well": "equivalent",
+    "the codec loop selects its bitmap by i rather than through distinctIndex": "caught",
+    "the codec loop's else arm reads the codec bitmaps rather than the ordinary ones": "caught",
+    "the codec loop's set arm reads the ordinary bitmaps": "caught",
+    "the gate is tested the other way round": "caught",
+    "the islong flag is tested the other way round": "caught",
+    "the long rate arm adds 8 rather than 0x14": "caught",
+    "the ordinary helper counts the byte up within a word rather than down": "caught",
+    "the ordinary helper does not reset the length before filling": "caught",
+    "the ordinary helper scans the eight words upward rather than downward": "caught",
+    "the ordinary helper tests the top bit rather than the bottom one": "caught",
+    "the ordinary helper writes the codec table": "caught",
+    "the ordinary helper's clamp admits 6 as well": "equivalent",
+    "the ordinary helper's clamp is at 3 rather than 6": "caught",
+    "the ordinary helper's word stride is 32 rather than 16": "caught",
+    "the ordinary loop selects its bitmap by i rather than through distinctIndex": "caught",
+    "the short rate arm adds 0x14 rather than 8": "caught",
+    "word_61c gets the gate byte whole rather than an exact 0 or 1": "caught"
+   }
+  },
   "v92alloc": {
    "key": "99d3a7f8a1bf65b4a9490ef576ce56785b16a1885f6d393ada656882a4c98a89",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",

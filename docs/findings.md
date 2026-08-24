@@ -79469,3 +79469,172 @@ nothing.  "progress forwards on the digital side rather than the analog one"
 renamed one `case` label to a value the switch already had; rewritten to swap
 BOTH labels.  `t_v92modem`'s suite is 50 of 50 with `unusable` at zero, and that
 zero is the check that matters.
+
+======================================================================
+
+### 7570. The orphaned V.90 CP unpacker IS the writer 7520 could not find, and it is `extern "C"`, which is why the bound missed it
+
+Reserved block for this batch: **7570-7579**.  `master` was at **7562** when
+this was written -- not 7549, which is where this branch's base commit
+`9f074dee` leaves it and what the batch was briefed with -- and four sibling
+worktree branches sit at 7549, 7460, 7432 and 7002.  The block starts clear of
+all of them rather than at 7563, on the same reasoning 7520 gives for its own.
+
+`setParamsInfoFromCPUnPck` (.text+0x336b0, **622 bytes**, `nm -S` confirmed) is
+reconstructed in `src/pump/v90/V90MappingParamsInt.cpp`, with its source
+structure in the new `include/dsplib/V90CPUnPck.h`, and **it is still
+callerless** -- see the last section, which measures that rather than asserting
+it.
+
+#### What it writes, against what 7520 said had no writer
+
+7520's closing section is titled "THE DIGITAL SIDE HAS NO WRITER FOR THE
+MAPPING BLOCK IT READS", and the block is `V90MappingParams`.  This function
+writes essentially the whole of it:
+
+| destination | from |
+|---|---|
+| `word_0` (+0x000) | `cp->dataBitRate` plus 0x14 or plus 8 |
+| `constellation[6][128]` (+0x004) | the six occupancy bitmaps at `cp+0x3a` |
+| `codecConstellation[6][128]` (+0x304) | `cp+0x9c`, or `cp+0x3a` again |
+| `constellationSize[6]` (+0x604) | the populations, written twice (below) |
+| `word_61c` (+0x61c) | `cp->codecConstellationPresent != 0`, exactly 0 or 1 |
+| `shaperSR`..`shaperB2` (+0x620..+0x634) | `cp+0x18`..`cp+0x2c`, six whole words |
+| `distinctIndex[6]` (+0x638) | `cp+0x31`, six bytes widened |
+
+That is every member `include/dsplib/V90MappingParams.h` declares.  The only
+thing it does not do is allocate the block.
+
+**7520's BOUND HAD A HOLE, AND THE HOLE HAS A NAME.**  7520 measured its
+population as "**30 symbols whose MANGLING names a `V90MappingParams *`**", and
+said in terms that "a writer that never takes one as a parameter is outside
+it".  This function DOES take one -- it is the first argument -- and it was
+still outside the population, because it is `extern "C"` and therefore has no
+mangled name for `nm | grep 16V90MappingParams` to find.  Six of this file's
+symbols are in the same position (`getConstellationsIndex`,
+`getConstellationMask`, `getCodecConstellationMask`, `getDataBitRate`,
+`setV92CPpckFromParamsInfo`, `displaySpectralParams`), and so are
+`setConstellationMask`, `setCodecConstellationMask`, `setDataBitRate` and
+`setParamsInfoFromV92CPUnPck`.
+
+This is the same shape as the mistake 7520 itself chose to keep in the record
+-- a claim about a population derived from a subset of it -- and it is kept
+here for the same reason.  **7520's CONCLUSION IS NOT OVERTURNED.**  What it
+was really measuring is reachability, and reachability is untouched: the writer
+exists, and it has no caller.
+
+**AND THERE ARE TWO ORPHANED WRITERS, NOT ONE.**
+`setParamsInfoFromV92CPUnPck` (.text+0x33c60, 601 bytes, also zero
+relocations) writes the SAME `V90MappingParams` layout -- the same +0x604,
++0x61c, +0x620, +0x638 and the same two byte tables -- from a `V92CP` instead.
+Its displacements are `V92CP::char_01`, `byte_2`, `byte_24`, `word_28`,
+`short_42` and `short_a2` field for field, which is what identifies its source
+type; it is the exact inverse of `setV92CPpckFromParamsInfo`, already written
+in this file.  It is NOT written by this batch and remains the obvious next
+622-byte-class piece of the same question.
+
+#### THE SOURCE TYPE IS NOT A `V90CP`, AND THAT WAS CHECKED
+
+The name invites the reading and the V.92 sibling supports it, so it was
+tested rather than assumed.  Three disagreements, of which the third settles
+it:
+
+- `V90CP+0x014` is sixteen bits read `movzwl`; this function reads a full
+  32-bit word at +0x14.
+- `V90CP+0x018` is six frames of two eight-bit values on an 8-byte stride;
+  this function reads six consecutive 32-bit words from +0x18.
+- **The decisive one.**  This function loads a POINTER from +0x0fc and
+  dereferences its +0x04 (`mov 0xfc(%ecx),%ebp ; mov 0x4(%ebp),%esi` at
+  .text+0x338ec).  `V90CP+0x0fc` is in the middle of the 0x300-byte `short`
+  array at +0x058, so on a `V90CP` that would take two coefficient shorts and
+  dereference them.
+
+So the source is a structure with exactly one reader in the object and no
+writer, and `include/dsplib/V90CPUnPck.h` says so at the top: the layout rests
+on one orphaned function's displacements and nothing corroborates it.  What
+the header does have is rank-2 evidence for most of the NAMES, because every
+field is copied into a destination that is already named -- the six spectral
+words into `shaperSR`..`shaperB2`, the six bytes into `distinctIndex`, and the
+32-bit word at +0x14 into `word_0` by the exact inverse of `getDataBitRate`.
+The pointer at +0x0fc is a `tagV90AdditionalCPinfo *` because its `word_04` is
+tested for precisely what `V90CPPacker` passes as `getDataBitRate`'s `islong`
+at .text+0x3c996.
+
+`codecConstellationPresent` (+0x030) is the one name that is rank 3, usage
+inference, and the header says so.
+
+**AND THE TWO BITMAP ARRAYS DO NOT ABUT, WHERE THE V.92 TWIN'S DO.**
+0xa2 - 0x42 = 0x60 = 6 * 16 exactly in `setParamsInfoFromV92CPUnPck`'s source,
+so `V92CP`'s two blocks are adjacent.  0x9c - 0x3a = 0x62 here, so **two bytes
+sit between them that nothing reads**.  It is not alignment: two `short` arrays
+need none between them, and the trailing pointer would land on a multiple of
+four either way.  `pad_9a[2]`.
+
+#### What the function does, and the three things a test has to separate
+
+Four steps, and only the third is conditional.  The gate is re-read from the
+SOURCE on every iteration (`cmpb $0x0,0x30(%ecx)` at .text+0x337c5, inside the
+loop the back edge at +0x338e2 closes), which is the OPPOSITE of
+`V92setParamsInfoFromCPUnPck`, whose three gates read back the copies it has
+just made in the DESTINATION.  So a caller that scribbled on `word_61c`
+between two calls would change nothing here and would change everything there.
+
+- **With the gate CLEAR the codec tables are not skipped**; they are unpacked
+  from the ORDINARY bitmaps.  Same source, other destination.  A fixture that
+  only ever set the gate could not tell the two destination bases apart (0x4
+  against 0x304); one that only ever cleared it could not see a wrong source
+  base in the else arm.
+- **`constellationSize` ENDS UP DESCRIBING THE CODEC TABLE.**  Both halves
+  store to the same word (`0x604(%ebx)` at .text+0x337ff and at +0x3388e), so
+  the second zeroes and refills what the first wrote.  When the two bitmaps
+  have different populations the first table keeps entries past the length that
+  nothing will read.  With equal populations that is invisible, which is why
+  the fixture carries cases whose two arrays differ in WEIGHT and asserts that
+  at least one trial did.
+- **The bitmap ordering is the sharp part.**  Eight `short` scanned from
+  `mask[7]` down to `mask[0]`, bit 0 first within each word and the emitted
+  byte counting DOWN from `j * 16 + 15`.  So bit `b` of word `j` becomes byte
+  `j * 16 + (15 - b)`, and the table comes out in strictly DESCENDING byte
+  order, 127 down to 0.  128 possible entries into a 128-byte table: an
+  all-ones bitmap fills one constellation exactly and cannot overrun it.
+
+#### The two 128-byte globals are the same body, and are deliberately NOT claimed
+
+`setConstellationMask` (.text+0x33570) and `setCodecConstellationMask`
+(+0x335f0) exist as `T` symbols and are byte-for-byte the inlined body this
+function uses three times.  They are written here as two `static` helpers, so
+their code is reconstructed and their SYMBOLS are not: writing the globals is
+a further 256 bytes with a differential test of their own, and the batch was
+scoped to one symbol.  Delete the `static` and add two prototypes to claim
+them.
+
+**THAT IT IS A CALL AND NOT THREE OPEN-CODED LOOPS IS MEASURED, NOT PREFERRED**,
+and the measurement is finding 5821's, made on `setV92CPpckFromParamsInfo` in
+this same file.  The three loops count with an UNSIGNED variable --
+`cmpl $0x5,(%esp) ; jbe` at .text+0x338de -- and each inlined body then clamps
+that same variable with a SIGNED test, `cmp $0x6,%ebp ; setl` at .text+0x3373c,
++0x337e0 and +0x33872.  One variable cannot be compared both ways; a call whose
+argument is `(int)i` can, because the bound is the caller's and the clamp is
+the callee's.
+
+**AND THE CLAMP IS DEAD IN THIS CALLER**, which is stated rather than left to
+be discovered: `which` is the loop counter, the loop runs 0..5, so
+`which < 6 ? which : 0` always yields `which`.  It is reachable only through
+the two globals.  A mutation of the `<` is therefore equivalent and a mutation
+of the `6` downwards is not.
+
+#### It is still callerless, and that is measured
+
+- `readelf -r ref/slmodemd/dsplibs.o` finds **zero relocations of any type**
+  naming `setParamsInfoFromCPUnPck` anywhere in the object.
+- `python3 tools/closure.py --missing setParamsInfoFromCPUnPck` is **1 symbol,
+  622 bytes -- itself**.
+- `grep -rn setParamsInfoFromCPUnPck src/` finds the definition and nothing
+  else; the only other references in the tree are the header's declaration,
+  the test, and this finding.
+- `nm build/repro/pump/v90/V90MappingParamsInt.o` defines it and no object
+  under `build/` holds an undefined reference to it.
+
+**No call was added and none should be.**  Supplying one would be new code
+with no blob behaviour to compare against, which is not reconstruction.  The
+differential test reaches it directly.

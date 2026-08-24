@@ -15,6 +15,7 @@
  *   0x33450  130  getConstellationMask
  *   0x334e0  130  getCodecConstellationMask
  *   0x33670   24  getDataBitRate
+ *   0x336b0  622  setParamsInfoFromCPUnPck
  *   0x33920  822  setV92CPpckFromParamsInfo
  *   0x33ec0  619  displaySpectralParams
  *
@@ -31,15 +32,25 @@
  * and every one of them is `edprintf` or a string.  Their own blocks below
  * carry the evidence.
  *
- * FIVE MORE SYMBOLS ARE IN THE SAME BRACKET AND ARE NOT WRITTEN:
+ * FOUR MORE SYMBOLS ARE IN THE SAME BRACKET AND ARE NOT WRITTEN:
  * `setConstellationMask` (0x33570), `setCodecConstellationMask` (0x335f0),
- * `setDataBitRate` (0x33690),
- * `setParamsInfoFromCPUnPck` (0x336b0) and `setParamsInfoFromV92CPUnPck`
- * (0x33c60).  `getDataBitRate` used to be a sixth and is now written, below.
- * The last two are NOT `src/pump/v90/V92ParamsInfo.c`'s -- that
+ * `setDataBitRate` (0x33690) and `setParamsInfoFromV92CPUnPck`
+ * (0x33c60).  `getDataBitRate` used to be a fifth and `setParamsInfoFromCPUnPck`
+ * a sixth; both are now written, below.
+ * `setParamsInfoFromCPUnPck` and `setParamsInfoFromV92CPUnPck` are NOT
+ * `src/pump/v90/V92ParamsInfo.c`'s -- that
  * file's `V92setParamsInfoFromCPUnPck` is a different symbol at .text+0x12f00
  * -- and the name similarity is exactly the trap `tools/tumap.py` exists to
  * avoid.
+ *
+ * THE FIRST TWO OF THOSE FOUR ARE THIS FILE'S OWN INLINED HELPER.  The two
+ * `static` functions below reproduce `setConstellationMask` and
+ * `setCodecConstellationMask` instruction for instruction, because
+ * `setParamsInfoFromCPUnPck` calls them three times between them and the
+ * compiler inlines all three.  They are `static` and not `extern "C"`
+ * because writing the two GLOBALS is a separate 256 bytes of reconstruction
+ * with its own differential test, which this batch did not take on; whoever
+ * takes it can delete the `static` and the two calls become the object's own.
  *
  * WHAT `getConstellationsIndex` DOES, and the one thing about it worth
  * pausing over.  It walks constellations 1 to 5 looking for an earlier one
@@ -67,6 +78,7 @@
 
 #include "dsplib/V90MappingParams.h"
 
+#include "dsplib/V90CPUnPck.h"
 #include "dsplib/V92CP.h"
 #include "dsplib/encode.h"
 #include "dsplib/tagV90AdditionalCPinfo.h"
@@ -189,6 +201,120 @@ getCodecConstellationMask(V90MappingParams *params, int which, short *mask)
 
 /*
  * ===========================================================================
+ * setConstellationMask (.text+0x33570, 128 bytes) and
+ * setCodecConstellationMask (.text+0x335f0, 128 bytes), as the STATIC helper
+ * `setParamsInfoFromCPUnPck` inlines rather than as the two globals.
+ * ===========================================================================
+ *
+ * The exact inverse of `getConstellationMask` above: that one turns a table
+ * of bytes into an occupancy bitmap, and this one turns a bitmap back into
+ * the table, rewriting the length as it goes.
+ *
+ * WHY THEY ARE `static` AND NOT THE OBJECT'S TWO GLOBALS.  Both globals
+ * exist, at the addresses in the heading, and both are `T`.  This batch was
+ * scoped to `setParamsInfoFromCPUnPck`, which INLINES all three of its calls
+ * to them -- the object holds no relocation naming either symbol from inside
+ * it, and `tools/closure.py --missing setParamsInfoFromCPUnPck` is one symbol,
+ * itself.  So the two bodies are needed here and the two globals are not, and
+ * writing the globals is 256 further bytes with a differential test of their
+ * own.  `static` is the honest spelling of that: the code is the object's,
+ * the symbol is not claimed.  Delete the `static` and add a prototype to
+ * V90MappingParams.h to claim them.
+ *
+ * THE `int which` IS THE FORCED PART AND IS WHY THIS IS A FUNCTION AT ALL.
+ * `setParamsInfoFromCPUnPck`'s three loops count with an UNSIGNED variable --
+ * `cmpl $0x5,(%esp) ; jbe` at .text+0x338de -- and each inlined body then
+ * clamps that same variable with a SIGNED test, `cmp $0x6,%ebp ; setl` at
+ * .text+0x3373c, +0x337e0 and +0x33872.  One variable cannot be compared both
+ * ways; a CALL whose argument is `(int)i` can, because the bound is the
+ * caller's and the clamp is the callee's.  That is finding 5821's measurement,
+ * made on `setV92CPpckFromParamsInfo` in this same file, and it is what says
+ * the author wrote a call here rather than three open-coded loops.
+ *
+ * WHAT THE BITMAP MEANS.  Eight `short`, scanned from `mask[7]` down to
+ * `mask[0]`, and within each word bit 0 first with the emitted byte counting
+ * DOWN from `j * 16 + 15`.  So the byte written for bit `b` of word `j` is
+ * `j * 16 + (15 - b)`, the most significant bit of word 7 is byte 127, and
+ * the table comes out in strictly DESCENDING byte order.  The whole sequence
+ * is 128 possible entries into a 128-byte table, so an all-ones bitmap fills
+ * one constellation exactly and cannot overrun it.
+ *
+ * `movswl` on the word and `sar` on the shift, so the working copy is a
+ * SIGNED 32-bit value; the top bit therefore replicates, which is invisible
+ * because the loop stops after sixteen tests either way.  The sum is added in
+ * an 8-bit register (`mov %edi,%eax ; add %bl,%al`), which is the cast to
+ * `unsigned char`; 112 + 15 is 127 so it never wraps, and that arm of the
+ * cast is unobservable rather than tested.
+ *
+ * THE LENGTH IS A MEMORY LVALUE THROUGHOUT, and that is forced rather than
+ * stylistic: the object re-reads it before the store (`mov (%esi),%edx`) and
+ * increments it in place afterwards (`incl (%esi)`), because the byte just
+ * written could have BEEN it -- the table and the length are in the same
+ * object and a long enough table reaches the length array.  Caching it in a
+ * register would be a different function on exactly the inputs that overrun.
+ */
+static void
+setConstellationMaskInline(V90MappingParams *params, int which,
+			   const short *mask)
+{
+	unsigned int c = (unsigned int)(which < 6 ? which : 0);
+	unsigned char *table = params->constellation[c];
+	unsigned int *size = &params->constellationSize[c];
+	int j, k;
+
+	*size = 0;
+
+	for (j = 7; j >= 0; j--) {
+		int v = mask[j];
+
+		for (k = 15; k >= 0; k--) {
+			if ((v & 1) != 0) {
+				table[*size] = (unsigned char)(j * 16 + k);
+				(*size)++;
+			}
+			v >>= 1;
+		}
+	}
+}
+
+/*
+ * The same over the second table, and the ONE difference is the destination
+ * base -- 0x4 against 0x304.  The length it writes is the SAME word, so a
+ * call to this one after a call to the other leaves
+ * `constellationSize[which]` describing the CODEC table and not the first
+ * one.  See `setParamsInfoFromCPUnPck`, which does exactly that.
+ *
+ * Written out twice for the reason `getConstellationMask` and
+ * `getCodecConstellationMask` are: the object holds two 128-byte functions
+ * that are byte-identical apart from that displacement, and does not share a
+ * helper between them.
+ */
+static void
+setCodecConstellationMaskInline(V90MappingParams *params, int which,
+				const short *mask)
+{
+	unsigned int c = (unsigned int)(which < 6 ? which : 0);
+	unsigned char *table = params->codecConstellation[c];
+	unsigned int *size = &params->constellationSize[c];
+	int j, k;
+
+	*size = 0;
+
+	for (j = 7; j >= 0; j--) {
+		int v = mask[j];
+
+		for (k = 15; k >= 0; k--) {
+			if ((v & 1) != 0) {
+				table[*size] = (unsigned char)(j * 16 + k);
+				(*size)++;
+			}
+			v >>= 1;
+		}
+	}
+}
+
+/*
+ * ===========================================================================
  * getDataBitRate (.text+0x33670, 24 bytes)
  * ===========================================================================
  *
@@ -226,6 +352,107 @@ getDataBitRate(V90MappingParams *params, int islong)
 		return (int)params->word_0 - 0x14;
 
 	return (int)params->word_0 - 8;
+}
+
+/*
+ * ===========================================================================
+ * setParamsInfoFromCPUnPck (.text+0x336b0, 622 bytes)
+ * ===========================================================================
+ *
+ * Fill a `V90MappingParams` from an unpacked V.90 CP message.  It is the
+ * inverse of `setV92CPpckFromParamsInfo` below, over the V.90 message instead
+ * of the V.92 one, and `setParamsInfoFromV92CPUnPck` (.text+0x33c60, still
+ * unwritten) is the third corner: same destination, `V92CP` as the source.
+ *
+ * ---------------------------------------------------------------------------
+ * IT HAS NO CALLER, AND THAT IS THE POINT RATHER THAN AN OVERSIGHT.
+ * `readelf -r` finds ZERO relocations naming this symbol anywhere in the
+ * 1.2 MB object -- not a call, not a data reference, nothing.  It is
+ * reconstructed here and left exactly that way: **nothing in this tree calls
+ * it and nothing should be made to**.  Supplying a call site would be new
+ * code with no blob behaviour to compare against, which is not
+ * reconstruction.  The differential test drives it directly.
+ *
+ * WHY IT MATTERS ANYWAY.  Finding 7520 established that the V.90 DIGITAL side
+ * has no reachable writer for the `V90MappingParams` block
+ * `V90Modulator::progress` reads, bounded over the thirty symbols whose
+ * MANGLING names a `V90MappingParams *`.  This function writes essentially
+ * that whole block -- `word_0`, both 6 x 128 byte tables, `constellationSize`,
+ * `word_61c`, the six shaper words and `distinctIndex` -- and it was outside
+ * 7520's population by construction, because it is `extern "C"` and has no
+ * mangled name to be found by.  So the writer exists; what it does not have
+ * is a caller.  See finding 7570.
+ * ---------------------------------------------------------------------------
+ *
+ * FOUR STEPS, AND ONLY THE THIRD IS CONDITIONAL.
+ *
+ *   1. Seven scalars, copied with no arithmetic.  The gate byte becomes an
+ *      exact 0 or 1 in `word_61c` (`cmpb $0x0 ; setne`), and the six spectral
+ *      words go across whole.
+ *   2. `distinctIndex[0..5]`, widened from bytes.  A separate loop from 3:
+ *      the object closes it at .text+0x3371e and opens the next at +0x33720.
+ *   3. The six constellations, then the six codec constellations.  ONE flag
+ *      selects the codec source and it is re-read on every iteration
+ *      (.text+0x337c5, inside the loop the back edge at +0x338e2 closes), so
+ *      the `if` is inside the loop and not around it.  With the flag CLEAR
+ *      the codec tables are unpacked from the ORDINARY bitmaps -- the same
+ *      source, the other destination -- rather than being skipped.
+ *   4. `word_0`, the data bit rate plus 0x14 or plus 8, the exact inverse of
+ *      `getDataBitRate` above.
+ *
+ * THE FLAG IS READ FROM THE SOURCE AND NOT FROM WHAT STEP 1 WROTE, which is
+ * the opposite of `V92setParamsInfoFromCPUnPck` (src/pump/v90/V92ParamsInfo.c,
+ * whose head records that its three gates read back the DESTINATION's copies).
+ * Here .text+0x337c5 is `cmpb $0x0,0x30(%ecx)` with %ecx reloaded from the
+ * second argument, so a caller that scribbled on `params->word_61c` between
+ * two calls would change nothing.
+ *
+ * `constellationSize` ENDS UP DESCRIBING THE CODEC TABLE.  Step 3's second
+ * half zeroes and refills the SAME length word the first half just wrote
+ * (.text+0x337ff and +0x3388e both store to `0x604(%ebx)`), so when the two
+ * bitmaps differ in population the first table keeps entries past the length
+ * that nothing will read.  With the flag clear the two bitmaps are the same
+ * bitmap and the counts agree, which is why this needs a fixture that sets
+ * the flag and gives the two bitmaps different weights.
+ *
+ * THE SIX `distinctIndex` BYTES ARE READ TWICE, once into the destination and
+ * once per loop as the bitmap selector, and the second read is from the
+ * SOURCE (`movzbl 0x31(%ebp,%ecx,1)` with %ecx the CP block).  Nothing masks
+ * or bounds them; see include/dsplib/V90CPUnPck.h.
+ */
+extern "C" void
+setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp)
+{
+	unsigned int i;
+
+	params->shaperSR = cp->shaperSR;
+	params->shaperId = cp->shaperId;
+	params->shaperA1 = cp->shaperA1;
+	params->shaperA2 = cp->shaperA2;
+	params->shaperB1 = cp->shaperB1;
+	params->shaperB2 = cp->shaperB2;
+	params->word_61c = (cp->codecConstellationPresent != 0);
+
+	for (i = 0; i < V90_CPUNPCK_CONSTELS; i++)
+		params->distinctIndex[i] = cp->distinctIndex[i];
+
+	for (i = 0; i < V90_CPUNPCK_CONSTELS; i++)
+		setConstellationMaskInline(params, (int)i,
+			cp->constellationMask[cp->distinctIndex[i]]);
+
+	for (i = 0; i < V90_CPUNPCK_CONSTELS; i++) {
+		if (cp->codecConstellationPresent != 0)
+			setCodecConstellationMaskInline(params, (int)i,
+			    cp->codecConstellationMask[cp->distinctIndex[i]]);
+		else
+			setCodecConstellationMaskInline(params, (int)i,
+			    cp->constellationMask[cp->distinctIndex[i]]);
+	}
+
+	if (cp->info->word_04 != 0)
+		params->word_0 = cp->dataBitRate + 0x14;
+	else
+		params->word_0 = cp->dataBitRate + 8;
 }
 
 /*

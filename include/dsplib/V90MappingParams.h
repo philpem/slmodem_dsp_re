@@ -80,6 +80,7 @@
 
 class V92CP;
 struct tagV90AdditionalCPinfo;
+struct V90CPUnPck;
 
 class V90MappingParams {
 public:
@@ -197,6 +198,19 @@ void getCodecConstellationMask(V90MappingParams *params, int which,
  * symbol in the whole object.  See the .cpp.
  */
 int getDataBitRate(V90MappingParams *params, int islong);
+
+/*
+ * Fill this block from an unpacked V.90 CP message.  It writes `word_0`, both
+ * byte tables, `constellationSize`, `word_61c`, the six shaper words and
+ * `distinctIndex` -- essentially the whole block.
+ *
+ * **IT HAS NO CALLER IN THE OBJECT AND MUST NOT BE GIVEN ONE HERE.**  Zero
+ * relocations of any kind name the symbol in the whole of dsplibs.o, so a
+ * call added by this reconstruction would be new behaviour with nothing to
+ * compare it against.  It is declared so that its differential test can reach
+ * it and for no other reason.  See the .cpp and finding 7570.
+ */
+void setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp);
 
 /*
  * Fill a `V92CP` from this block and the record beside it.  The two source

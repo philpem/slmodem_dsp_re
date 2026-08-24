@@ -1,0 +1,137 @@
+[
+ {
+  "label": "NOTE: this set covers setParamsInfoFromCPUnPck and the two static helpers it inlines, and NOTHING ELSE in src/pump/v90/V90MappingParamsInt.cpp.  The file's other six members are the v90mapint suite's, against t_v90cmask; the two suites share a source and have different binaries, which is the shape v90modprog and v90modulator already have over V90Modulator.cpp.",
+  "note": "The two helpers are near-identical bodies and every anchor below therefore quotes the line that separates them -- `params->constellation[c]` against `params->codecConstellation[c]` -- rather than the loop text, which appears twice.  tools/anchorcheck.py is what proves that; finding 7521 is why it is not taken on trust."
+ },
+
+ {
+  "label": "the codec loop's else arm reads the codec bitmaps rather than the ordinary ones",
+  "find": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);"
+ },
+ {
+  "label": "the codec loop's set arm reads the ordinary bitmaps",
+  "find": "\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);"
+ },
+ {
+  "label": "the gate is tested the other way round",
+  "find": "\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,",
+  "replace": "\t\tif (cp->codecConstellationPresent == 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,"
+ },
+ {
+  "label": "the ordinary loop selects its bitmap by i rather than through distinctIndex",
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\tcp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\tcp->constellationMask[i]);"
+ },
+ {
+  "label": "the codec loop selects its bitmap by i rather than through distinctIndex",
+  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[i]);"
+ },
+ {
+  "label": "distinctIndex is copied for five constellations rather than six",
+  "find": "\tfor (i = 0; i < V90_CPUNPCK_CONSTELS; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];",
+  "replace": "\tfor (i = 0; i < V90_CPUNPCK_CONSTELS - 1; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];"
+ },
+ {
+  "label": "word_61c gets the gate byte whole rather than an exact 0 or 1",
+  "find": "\tparams->word_61c = (cp->codecConstellationPresent != 0);",
+  "replace": "\tparams->word_61c = cp->codecConstellationPresent;"
+ },
+ {
+  "label": "shaperA1 and shaperA2 are copied from each other's source",
+  "find": "\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;",
+  "replace": "\tparams->shaperA1 = cp->shaperA2;\n\tparams->shaperA2 = cp->shaperA1;"
+ },
+ {
+  "label": "the long rate arm adds 8 rather than 0x14",
+  "find": "\t\tparams->word_0 = cp->dataBitRate + 0x14;",
+  "replace": "\t\tparams->word_0 = cp->dataBitRate + 8;"
+ },
+ {
+  "label": "the short rate arm adds 0x14 rather than 8",
+  "find": "\telse\n\t\tparams->word_0 = cp->dataBitRate + 8;",
+  "replace": "\telse\n\t\tparams->word_0 = cp->dataBitRate + 0x14;"
+ },
+ {
+  "label": "the islong flag is tested the other way round",
+  "find": "\tif (cp->info->word_04 != 0)\n\t\tparams->word_0 = cp->dataBitRate + 0x14;",
+  "replace": "\tif (cp->info->word_04 == 0)\n\t\tparams->word_0 = cp->dataBitRate + 0x14;"
+ },
+
+ {
+  "label": "the ordinary helper writes the codec table",
+  "find": "\tunsigned char *table = params->constellation[c];",
+  "replace": "\tunsigned char *table = params->codecConstellation[c];"
+ },
+ {
+  "label": "the codec helper writes the ordinary table",
+  "find": "\tunsigned char *table = params->codecConstellation[c];",
+  "replace": "\tunsigned char *table = params->constellation[c];"
+ },
+ {
+  "label": "the ordinary helper does not reset the length before filling",
+  "find": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;",
+  "replace": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n"
+ },
+ {
+  "label": "the codec helper does not reset the length before filling",
+  "find": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;",
+  "replace": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n"
+ },
+ {
+  "label": "the codec helper keeps its own length rather than sharing the one word",
+  "find": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int *size = &params->constellationSize[c];",
+  "replace": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int scratch;\n\tunsigned int *size = &scratch;"
+ },
+ {
+  "label": "the ordinary helper scans the eight words upward rather than downward",
+  "find": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {",
+  "replace": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 0; j <= 7; j++) {"
+ },
+ {
+  "label": "the codec helper scans the eight words upward rather than downward",
+  "find": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {",
+  "replace": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 0; j <= 7; j++) {"
+ },
+ {
+  "label": "the ordinary helper counts the byte up within a word rather than down",
+  "find": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 1) != 0) {\n\t\t\t\ttable[*size] = (unsigned char)(j * 16 + k);",
+  "replace": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 1) != 0) {\n\t\t\t\ttable[*size] = (unsigned char)(j * 16\n\t\t\t\t\t\t\t      + (15 - k));"
+ },
+ {
+  "label": "the codec helper counts the byte up within a word rather than down",
+  "find": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 1) != 0) {\n\t\t\t\ttable[*size] = (unsigned char)(j * 16 + k);",
+  "replace": "\tunsigned char *table = params->codecConstellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 1) != 0) {\n\t\t\t\ttable[*size] = (unsigned char)(j * 16\n\t\t\t\t\t\t\t      + (15 - k));"
+ },
+ {
+  "label": "the ordinary helper's word stride is 32 rather than 16",
+  "find": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 1) != 0) {\n\t\t\t\ttable[*size] = (unsigned char)(j * 16 + k);\n\t\t\t\t(*size)++;\n\t\t\t}\n\t\t\tv >>= 1;",
+  "replace": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 1) != 0) {\n\t\t\t\ttable[*size] = (unsigned char)(j * 32 + k);\n\t\t\t\t(*size)++;\n\t\t\t}\n\t\t\tv >>= 1;"
+ },
+ {
+  "label": "the ordinary helper tests the top bit rather than the bottom one",
+  "find": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 1) != 0) {",
+  "replace": "\tunsigned char *table = params->constellation[c];\n\tunsigned int *size = &params->constellationSize[c];\n\tint j, k;\n\n\t*size = 0;\n\n\tfor (j = 7; j >= 0; j--) {\n\t\tint v = mask[j];\n\n\t\tfor (k = 15; k >= 0; k--) {\n\t\t\tif ((v & 2) != 0) {"
+ },
+ {
+  "label": "the ordinary helper's clamp is at 3 rather than 6",
+  "find": "\tunsigned int c = (unsigned int)(which < 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
+  "replace": "\tunsigned int c = (unsigned int)(which < 3 ? which : 0);\n\tunsigned char *table = params->constellation[c];"
+ },
+ {
+  "label": "the ordinary helper's clamp admits 6 as well",
+  "find": "\tunsigned int c = (unsigned int)(which < 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
+  "replace": "\tunsigned int c = (unsigned int)(which <= 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
+  "equivalent": true,
+  "why": "THE CLAMP IS DEAD IN THE ONLY CALLER THIS TREE HAS.  setParamsInfoFromCPUnPck passes (int)i from three loops that run 0..5, so `which < 6` and `which <= 6` select the same arm for every argument the helper can receive, and so does every other predicate true over 0..5.  The clamp is reachable only through the object's own setConstellationMask (.text+0x33570) and setCodecConstellationMask (+0x335f0), which are the two GLOBALS this batch deliberately did not claim -- see the .cpp.  The row that moves the boundary DOWN, to 3, is NOT equivalent and is the one above: it changes the answer for i = 3, 4 and 5.  The object's own evidence for the clamp is the SIGNED `cmp $0x6 ; setl` against the caller's UNSIGNED `jbe`, which is a codegen fact and not one this tier can see (finding 5821)."
+ },
+ {
+  "label": "the codec helper's clamp admits 6 as well",
+  "find": "\tunsigned int c = (unsigned int)(which < 6 ? which : 0);\n\tunsigned char *table = params->codecConstellation[c];",
+  "replace": "\tunsigned int c = (unsigned int)(which <= 6 ? which : 0);\n\tunsigned char *table = params->codecConstellation[c];",
+  "equivalent": true,
+  "why": "The same argument as the row above, over the other helper.  Its caller's loop also runs 0..5."
+ }
+]
