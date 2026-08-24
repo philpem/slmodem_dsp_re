@@ -82,13 +82,23 @@ TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits, short *out,
  * is literally `and %ecx,%eax`.  Both are set to 0 or 1 by the receiver, so
  * the two agree in practice; reproduced as written because nothing guarantees
  * it stays that way.
+ *
+ * THE OPERAND ORDER IS THE OBJECT'S AND IT WAS RECOVERED, NOT GUESSED.  `&`
+ * is commutative and both operands are plain loads, so `rx_tone & rx_energy`
+ * and `rx_energy & rx_tone` compute the same answer and no differential test
+ * can separate them -- but the object loads +0x8 before +0x4, and only one of
+ * the two spellings makes GCC 3.4.2 do that.  Written the other way round
+ * this function was `same size, bytes differ`; written this way it is
+ * BYTE-IDENTICAL to the object.  That is finding 617's acceptance test --
+ * full identity, operands included -- and it passes, so this is the source
+ * the author wrote rather than a permutation that happened to fit.
  */
 int
 CarrierDetectB103(struct b103fp *fp)
 {
 	struct b103_dsp *dsp = fp->dsp;
 
-	return dsp->rx_tone & dsp->rx_energy;
+	return dsp->rx_energy & dsp->rx_tone;
 }
 
 /*

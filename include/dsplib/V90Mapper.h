@@ -116,6 +116,22 @@
  *     the only reader is the tail that copies it to the caller's `short *`.
  *     So it is the frame as it leaves this class.  Evidence class 3.
  *
+ *     WHAT THE SHAPER ARM PUTS THERE IS NOW SETTLED, and it is class 2 rather
+ *     than 3: `V90SpectralShaper::process` is reconstructed, and its body ends
+ *     `for (i = 0; i < blockLength; i++) out[i] = delayLine[i];` -- so `out`
+ *     receives the OLDEST frame in the line, one that entered
+ *     `windowLength / blockLength` frames ago and whose polarity
+ *     `advanceTrellis()` may since have flipped.  It is not this frame's
+ *     signed levels.
+ *
+ *     THE NAME STAYS GENERIC ANYWAY, and deliberately: the OTHER arm writes
+ *     `samples[k] = signs[k] ? levels[k] : -levels[k]`, which IS this frame's
+ *     signed levels.  One field, two producers, two different things -- so a
+ *     shaper-specific name like `shapedFrame` would be exactly wrong half the
+ *     time.  This is the `history_2aa8_index` case from the V.34 anonymous-
+ *     field review: where two paths fill one slot, the generic name is the
+ *     accurate one and the specific name is a lie about the other path.
+ *
  * ---------------------------------------------------------------------------
  * Data member names are invented unless said otherwise; the mangling never
  * carries one (finding 226).
