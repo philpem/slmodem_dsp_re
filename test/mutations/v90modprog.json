@@ -1,0 +1,319 @@
+[
+ {
+  "note": "V90Modulator::progress (780 bytes at 0x1a820) and V90Modulator::initiateRRN (308 bytes at 0x1a2c0), against t_v90modprog.  ONE SUITE REACHES ONE SOURCE FILE: tools/mutate.py takes a single `source` from suites.json -- the manifest loader refuses an entry that is not exactly [source, binary] and the runner reads that one file -- so the other three members of V90Modem::progress's closure (V90BitsToSymbol::process(unsigned char *, unsigned int &, short *), V90Modem::progress and V90Phase4Modulator::generateSymbol) live in three other files and would each need a suite of their own pointed at this same binary, which is what t_v90modchain already has five of.  All three are DRIVEN by t_v90modprog and counted in its denominators; they are simply not mutated here."
+ },
+ {
+  "note": "NOT here: making V90Modulator::state unsigned.  That is a change to include/dsplib/V90Modulator.h and not to this file, and the object's `cmp $0x1 ; je ; jle` at 0x1a848 is the whole evidence for the signedness -- a behavioural test sees it only through a negative state, which t_v90modprog drives, and a mutation of the DECLARATION belongs to whichever suite owns that header."
+ },
+ {
+  "label": "progress replaces the symbol count rather than adding to it",
+  "find": "\tsymbolCount += n;\n\teventCode = 0;\n",
+  "replace": "\tsymbolCount = n;\n\teventCode = 0;\n"
+ },
+ {
+  "label": "progress does not count the block at all",
+  "find": "\tsymbolCount += n;\n\teventCode = 0;\n",
+  "replace": "\teventCode = 0;\n"
+ },
+ {
+  "label": "progress does not clear the event code on entry",
+  "find": "\tsymbolCount += n;\n\teventCode = 0;\n",
+  "replace": "\tsymbolCount += n;\n"
+ },
+ {
+  "label": "the switch selector is read as unsigned",
+  "find": "\tswitch (state) {\n\tcase 0:",
+  "replace": "\tswitch ((unsigned int)state) {\n\tcase 0:",
+  "equivalent": true,
+  "why": "The four case labels are 0..3 and every other value takes the default arm under both readings: a negative int becomes a value above 2**31 as unsigned and still matches no label.  What separates them is the CODE the compiler is forced to emit -- the object's signed `jle` at 0x1a848 against the `jbe` an unsigned selector gives -- which is the codegen tier's question and not this one's."
+ },
+ {
+  "label": "the silence arm clears the whole buffer rather than the block",
+  "find": "\t\tfor (i = 0; i < n; i++)\n\t\t\tsymbolBuf[i] = 0;\n",
+  "replace": "\t\tfor (i = 0; i < nofSymbols; i++)\n\t\t\tsymbolBuf[i] = 0;\n"
+ },
+ {
+  "label": "the silence arm does not answer zero bits",
+  "find": "\t\t\tsymbolBuf[i] = 0;\n\t\tnofBits = 0;\n\t\tbreak;\n",
+  "replace": "\t\t\tsymbolBuf[i] = 0;\n\t\tbreak;\n"
+ },
+ {
+  "label": "the phase 3 arm never re-tests the state",
+  "find": "\t\t\tif (state == 1) {\n",
+  "replace": "\t\t\tif (1) {\n"
+ },
+ {
+  "label": "the phase 3 arm always takes the phase 4 branch",
+  "find": "\t\t\tif (state == 1) {\n",
+  "replace": "\t\t\tif (0) {\n"
+ },
+ {
+  "label": "the phase 3 arm copies the event code even when it is zero",
+  "find": "\t\t\t\tif (phase3Modulator->eventCode != 0)\n\t\t\t\t\teventCode = phase3Modulator->eventCode;\n",
+  "replace": "\t\t\t\teventCode = phase3Modulator->eventCode;\n"
+ },
+ {
+  "label": "phase 3 ends on the wrong event code",
+  "find": "\t\t\t\tif (eventCode == 6 && state != 2) {\n",
+  "replace": "\t\t\t\tif (eventCode == 7 && state != 2) {\n"
+ },
+ {
+  "label": "the phase 3 exit drops its state guard",
+  "find": "\t\t\t\tif (eventCode == 6 && state != 2) {\n",
+  "replace": "\t\t\t\tif (eventCode == 6) {\n",
+  "equivalent": true,
+  "why": "The test sits inside `if (state == 1)`, which the loop re-reads from the member on every iteration (the object reloads +0x2c at 0x1a8da), so `state` is 1 wherever this line is evaluated and `state != 2` is true every time.  The object emits it -- `cmpl $0x2,0x2c(%ebx) ; je` at 0x1a905 -- because it cannot prove `V90Phase3Modulator::generateSymbol` left `*this` alone, and the source has to contain it for it to be there."
+ },
+ {
+  "label": "phase 3 hands on to the wrong phase 4 state",
+  "find": "\t\t\t\t\t    phase2Info->Uinfo, P4M_STATE_RI, 0,\n",
+  "replace": "\t\t\t\t\t    phase2Info->Uinfo, P4M_STATE_RI_NOT, 0,\n"
+ },
+ {
+  "label": "phase 3 hands on with a warm-up symbol",
+  "find": "\t\t\t\t\t    phase2Info->Uinfo, P4M_STATE_RI, 0,\n",
+  "replace": "\t\t\t\t\t    phase2Info->Uinfo, P4M_STATE_RI, 1,\n"
+ },
+ {
+  "label": "entering phase 4 does not restart the symbol count",
+  "find": "\t\t\t\t\tstate = 2;\n\t\t\t\t\tsymbolCount = 0;\n\t\t\t\t\teventCode = 0;\n",
+  "replace": "\t\t\t\t\tstate = 2;\n\t\t\t\t\teventCode = 0;\n"
+ },
+ {
+  "label": "entering phase 4 leaves the event code set",
+  "find": "\t\t\t\t\tstate = 2;\n\t\t\t\t\tsymbolCount = 0;\n\t\t\t\t\teventCode = 0;\n",
+  "replace": "\t\t\t\t\tstate = 2;\n\t\t\t\t\tsymbolCount = 0;\n"
+ },
+ {
+  "label": "entering phase 4 goes to the data phase instead",
+  "find": "\t\t\t\t\tstate = 2;\n\t\t\t\t\tsymbolCount = 0;\n\t\t\t\t\teventCode = 0;\n",
+  "replace": "\t\t\t\t\tstate = 3;\n\t\t\t\t\tsymbolCount = 0;\n\t\t\t\t\teventCode = 0;\n"
+ },
+ {
+  "label": "the phase 3 arm does not answer zero bits",
+  "find": "\t\t}\n\t\tnofBits = 0;\n\t\tbreak;\n\n\tcase 2:",
+  "replace": "\t\t}\n\t\tbreak;\n\n\tcase 2:"
+ },
+ {
+  "label": "the phase 4 arm copies the event code even when it is zero",
+  "find": "\t\t\tif (phase4Modulator->word_000c != 0)\n\t\t\t\teventCode = phase4Modulator->word_000c;\n",
+  "replace": "\t\t\teventCode = phase4Modulator->word_000c;\n"
+ },
+ {
+  "label": "the phase 4 arm ends on the wrong event code",
+  "find": "\t\tif (eventCode != 7) {\n",
+  "replace": "\t\tif (eventCode != 8) {\n"
+ },
+ {
+  "label": "the data phase entry tests the wrong state",
+  "find": "\t\tif (state != 3) {\n\t\t\tedprintf(",
+  "replace": "\t\tif (state != 2) {\n\t\t\tedprintf("
+ },
+ {
+  "label": "entering the data phase does not move the state",
+  "find": "\t\t\tstate = 3;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 8;\n",
+  "replace": "\t\t\tstate = 2;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 8;\n"
+ },
+ {
+  "label": "entering the data phase reports the RRN event code",
+  "find": "\t\t\tstate = 3;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 8;\n",
+  "replace": "\t\t\tstate = 3;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 9;\n"
+ },
+ {
+  "label": "entering the data phase does not restart the symbol count",
+  "find": "\t\t\tstate = 3;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 8;\n",
+  "replace": "\t\t\tstate = 3;\n\t\t\teventCode = 8;\n"
+ },
+ {
+  "label": "the data phase block is the call's length and not the modem's",
+  "find": "\t\t\tbitsToSymbol->setSymbolsBlockSize(nofSymbols);\n",
+  "replace": "\t\t\tbitsToSymbol->setSymbolsBlockSize(n);\n"
+ },
+ {
+  "label": "the rate reads the CONVERTER's bitsPerFrame and not the mapper's",
+  "find": "\t\t\t\t\t       bitsToSymbol->mapper->\n\t\t\t\t\t\t   bitsPerFrame) *\n",
+  "replace": "\t\t\t\t\t       bitsToSymbol->\n\t\t\t\t\t\t   bitsPerFrame) *\n"
+ },
+ {
+  "label": "the rate is computed at four thousand symbols a second",
+  "find": "\t\t\t\t\t      (8000 *\n",
+  "replace": "\t\t\t\t\t      (4000 *\n"
+ },
+ {
+  "label": "the rate counts twelve symbols to the frame",
+  "find": "\t\t\t\t\t      (1.0f / 6.0f))\n",
+  "replace": "\t\t\t\t\t      (1.0f / 12.0f))\n"
+ },
+ {
+  "label": "the rate truncates where the object rounds",
+  "find": "\t\t\t\t\t? (unsigned int)(0.5f +\n",
+  "replace": "\t\t\t\t\t? (unsigned int)(0.0f +\n"
+ },
+ {
+  "label": "the rate message's always-true guard is dropped",
+  "find": "\t\t\t\t    state == 3\n\t\t\t\t\t? (unsigned int)(0.5f +\n",
+  "replace": "\t\t\t\t    1\n\t\t\t\t\t? (unsigned int)(0.5f +\n",
+  "equivalent": true,
+  "why": "`state` is stored as 3 eight instructions earlier in the same arm and nothing between the store and the test can change it, so the test is true whenever it is evaluated and the `: 0u` arm is unreachable.  The object emits it at 0x1a9ea because `V90BitsToSymbol::setSymbolsBlockSize` sits between the store and the test and might alias `*this`; that explains why the test survives compilation, and the source has to contain it for it to be there at all."
+ },
+ {
+  "label": "the data phase does not answer the next demand",
+  "find": "\t\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\t\tbreak;\n",
+  "replace": "\t\tbreak;\n"
+ },
+ {
+  "label": "the scrambler is given the modem's block length and not the demand",
+  "find": "\t\tscrambler.process(bits, frameBuf, nofBits);\n",
+  "replace": "\t\tscrambler.process(bits, frameBuf, nofSymbols);\n"
+ },
+ {
+  "label": "the data phase never converts its bits to symbols",
+  "find": "\t\tbitsToSymbol->process(frameBuf, nofBits, symbolBuf);\n",
+  "replace": ""
+ },
+ {
+  "label": "the RRN timer fires ON the deadline rather than past it",
+  "find": "\t\t    symbolCount > (unsigned int)\n",
+  "replace": "\t\t    symbolCount >= (unsigned int)\n"
+ },
+ {
+  "label": "the RRN timer is not gated on the debug flag",
+  "find": "\t\tif (params->DEBUG_DIGITAL_MODEM_INITIATE_RRN &&\n\t\t    symbolCount > (unsigned int)\n",
+  "replace": "\t\tif (symbolCount > (unsigned int)\n"
+ },
+ {
+  "label": "the RRN event is reported before the renegotiation runs",
+  "find": "\t\t\tinitiateRRN();\n\t\t\teventCode = 9;\n",
+  "replace": "\t\t\teventCode = 9;\n\t\t\tinitiateRRN();\n"
+ },
+ {
+  "label": "the RRN event code is the data phase's",
+  "find": "\t\t\tinitiateRRN();\n\t\t\teventCode = 9;\n",
+  "replace": "\t\t\tinitiateRRN();\n\t\t\teventCode = 8;\n"
+ },
+ {
+  "label": "the illegal-state message is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator progress: Illegal \"\n",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90Modulator progress: Illegal \"\n"
+ },
+ {
+  "label": "the float tail widens the whole buffer rather than the block",
+  "find": "\tfor (i = 0; i < n; i++)\n\t\tout[i] = symbolBuf[i];\n",
+  "replace": "\tfor (i = 0; i < nofSymbols; i++)\n\t\tout[i] = symbolBuf[i];\n"
+ },
+ {
+  "label": "the float tail is dropped",
+  "find": "\tfor (i = 0; i < n; i++)\n\t\tout[i] = symbolBuf[i];\n",
+  "replace": ""
+ },
+ {
+  "label": "initiateRRN approves phase 4 rather than the data phase",
+  "find": "\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n",
+  "replace": "\tif (state != 2) {\n\t\tif (DSPLIB_DEBUG_ON())\n"
+ },
+ {
+  "label": "initiateRRN answers zero when it refused",
+  "find": "\t\treturn -1;\n",
+  "replace": "\t\treturn 0;\n"
+ },
+ {
+  "label": "the refusal message is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n",
+  "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n"
+ },
+ {
+  "label": "the approval message is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n",
+  "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n"
+ },
+ {
+  "label": "initiateRRN enters the data phase rather than phase 4",
+  "find": "\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "\tstate = 3;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
+ },
+ {
+  "label": "initiateRRN does not restart the symbol count",
+  "find": "\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "\tstate = 2;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
+ },
+ {
+  "label": "the renegotiation block is zero symbols",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": "\tbitsToSymbol->setSymbolsBlockSize(0);\n"
+ },
+ {
+  "label": "the renegotiation block size is never set",
+  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "replace": ""
+ },
+ {
+  "label": "the two phase 4 states are chosen the other way round",
+  "find": "\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n",
+  "replace": "\tif (bitsToSymbol->nofBitsForNextTime() == 0) {\n"
+ },
+ {
+  "label": "the two initialisation messages are swapped",
+  "find": "\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_RD;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_UNNAMED_14;\n",
+  "replace": "\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"DataToRdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_RD;\n\t} else {\n\t\tedprintf(\"V90Modulator: Phase4Modulator state initialized to \"\n\t\t\t \"RdModulation\\r\\n\");\n\t\tp4state = P4M_STATE_UNNAMED_14;\n"
+ },
+ {
+  "label": "both arms choose RdModulation",
+  "find": "\t\tp4state = P4M_STATE_UNNAMED_14;\n",
+  "replace": "\t\tp4state = P4M_STATE_RD;\n"
+ },
+ {
+  "label": "the phase 4 reset is given a zero companding code",
+  "find": "\tphase4Modulator->reset((PcmType)phase2Info->pcmType, phase2Info->Uinfo,\n",
+  "replace": "\tphase4Modulator->reset((PcmType)phase2Info->pcmType, 0,\n"
+ },
+ {
+  "label": "the phase 4 reset is given a warm-up loop",
+  "find": "\t\t\t       p4state, 0, phase2Info->rtd);\n",
+  "replace": "\t\t\t       p4state, 1, phase2Info->rtd);\n"
+ },
+ {
+  "label": "initiateRRN does not clear the event code",
+  "find": "\teventCode = 0;\n\n\tphase4Modulator->resetBeforRRN();\n",
+  "replace": "\tphase4Modulator->resetBeforRRN();\n"
+ },
+ {
+  "label": "the renegotiation preparation is skipped",
+  "find": "\tphase4Modulator->resetBeforRRN();\n",
+  "replace": ""
+ },
+ {
+  "label": "the Rd/Rt symbols come from the wrong mapping block",
+  "find": "\tphase4Modulator->setRdRtSymbols(mappingParams2);\n",
+  "replace": "\tphase4Modulator->setRdRtSymbols(mappingParams);\n"
+ },
+ {
+  "label": "the session flag's two arms are swapped",
+  "find": "\tif (sessionFlag) {\n\t\tcp->byte_13 = 0;\n\t\tcp->infoToBits();\n\t} else {\n\t\tmp->CPack = 0;\n\t\tmp->infoToBits();\n\t}\n",
+  "replace": "\tif (sessionFlag) {\n\t\tmp->CPack = 0;\n\t\tmp->infoToBits();\n\t} else {\n\t\tcp->byte_13 = 0;\n\t\tcp->infoToBits();\n\t}\n"
+ },
+ {
+  "label": "the CP tag is not cleared",
+  "find": "\t\tcp->byte_13 = 0;\n\t\tcp->infoToBits();\n",
+  "replace": "\t\tcp->infoToBits();\n"
+ },
+ {
+  "label": "the CP is not re-encoded",
+  "find": "\t\tcp->byte_13 = 0;\n\t\tcp->infoToBits();\n",
+  "replace": "\t\tcp->byte_13 = 0;\n"
+ },
+ {
+  "label": "CPack is not cleared",
+  "find": "\t\tmp->CPack = 0;\n\t\tmp->infoToBits();\n",
+  "replace": "\t\tmp->infoToBits();\n"
+ },
+ {
+  "label": "the MP is not re-encoded",
+  "find": "\t\tmp->CPack = 0;\n\t\tmp->infoToBits();\n",
+  "replace": "\t\tmp->CPack = 0;\n"
+ },
+ {
+  "label": "initiateRRN answers minus one when it acted",
+  "find": "\t}\n\n\treturn 0;\n}\n",
+  "replace": "\t}\n\n\treturn -1;\n}\n"
+ }
+]
