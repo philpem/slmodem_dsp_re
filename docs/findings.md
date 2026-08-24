@@ -78011,6 +78011,15 @@ yet**, which is 7460's call-inventory argument arriving one step earlier than
 usual: count the instructions BEFORE building the test, because at that point
 the count is the only witness there is.
 
+`compare.py --ratchet` records the shape of the result: **`compared
+986->1210, identical 350->486, same_size 71->90`** -- one symbol gained on the
+COMPARED count and neither of the other two buckets moved, because 720 bytes
+is not 768 and `mov` against `push` is not the same mnemonic.  The instruction
+COUNT is the sharper instrument here than either bucket, and it is not one
+`compare.py` reports; it was taken by hand off `dis.py` and `objdump`.  A
+future pass that wants this check mechanised should count instructions per
+symbol, not bytes and not bucket membership.
+
 ### 7481. THREE NAMES `exitPhase3` FORCES, AND ONE IT DECLINES
 
 **`V90Demodulator` +0x240 is `float trn1dRmsRatio`, and it is rule 1.**  The
