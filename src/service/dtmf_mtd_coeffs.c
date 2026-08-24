@@ -58,6 +58,34 @@ const short MTD3_COEF_9600[5] = { -13271, 16384, 25023, -27804, 16384 };
 const short MTD4_COEF_9600[5] = { -13271, 16384, 24073, -26747, 16384 };
 const short MTD5_COEF_9600[5] = { -13271, 16384, 20731, -23034, 16384 };
 const short MTD6_COEF_9600[5] = { -13271, 16384, 18917, -21019, 16384 };
-/* b1 = -21143 is the object's; the design gives -18613.  D250. */
+/*
+ * D250, and the ONE deviation in this file with a fix behind the define.
+ *
+ * `b1 = -21143` puts this notch's ZEROS at 1328.45 Hz while its `a1 = 16751`
+ * keeps its POLES at 1477.04, and a biquad whose zeros and poles are 150 Hz
+ * apart is not a notch at either frequency.  Every other table in the bank
+ * matches its own `a1` to within 0.1 Hz (finding 1413).
+ *
+ * IT FIRES, AND THE CONSEQUENCE IS MEASURED, not argued: at 9600 Hz eleven of
+ * the sixteen DTMF pairs come back with the wrong high-group tone, and all
+ * eleven are 1477 Hz chosen when absent or missed when present (finding
+ * 1416).  At 8000 Hz all sixteen decode.
+ *
+ * -18613 IS DERIVED, NOT GUESSED, which is the test this fix had to pass
+ * before it was worth making.  The bank's own design rule is
+ * `b1 = -round(2 cos(w0) * 2^14)`, and at 9600 Hz with w0 = 2*pi*1477/9600
+ * that is -18613.  Four independent routes agree on it: the design rule, the
+ * fifteen sibling tables that follow it, this table's own `a1` read back
+ * through `a1 = round(1.8 cos(w0) * 2^14)`, and the 8000 Hz twin scaled to
+ * this rate.  The object's -21143 is not a bit flip of it, not a digit
+ * transposition, and not the right coefficient for 1477 Hz at 7200, 8000 or
+ * 9600 (-9114, -13085, -18613).  No mechanism is proposed and none is needed:
+ * what the right value is does not depend on knowing how the wrong one
+ * arrived.
+ */
+#ifdef DSPLIB_REPRODUCE_BUGS
 const short MTD7_COEF_9600[5] = { -13271, 16384, 16751, -21143, 16384 };
+#else
+const short MTD7_COEF_9600[5] = { -13271, 16384, 16751, -18613, 16384 };
+#endif
 const short MTD8_COEF_9600[5] = { -13271, 16384, 14190, -15768, 16384 };

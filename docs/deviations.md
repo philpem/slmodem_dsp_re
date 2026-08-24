@@ -5259,7 +5259,31 @@ Neither way of forcing the symbols out is right: an out-of-line definition canno
 **Finding 1366.** The histogram increment is `movzwl 0x8b00(%edi,%ecx,2)` with `ecx = phase * 128 + code`, and `code` is the full `unsigned char` argument. The array is 6 x 128 shorts ending at +0x9100, which is `int_9100[0]` -- the sample-store index of phase 0. So a phase of 5 with a code of 128 increments the low half of phase 0's store index instead of a histogram bin, and codes 128..139 reach all six of those indices. The effect compounds: the corrupted index is what the NEXT sample stores at, and D256 says nothing bounds it. Both sides do it identically and `t_v90adid` compares them doing it, in `run_accumulate`, where the whole byte is swept one call at a time. The forty-block sequence masks the code to seven bits instead, and says why at the line that does it -- an index of 65,777 leaves the object, and a test that follows it there measures nothing.
 ## D250 🐛 `MTD7_COEF_9600`'s numerator puts the notch's zeros at 1328 Hz while its poles stay at 1477
 
-*Batch of 2026-08-11, from `MTD7_COEF_9600` (blob .data 0x0078da, 10 bytes), element 3. **Reachability: FIRES, and it is MEASURED** -- at 9600 Hz eleven of the sixteen DTMF pairs come back with the wrong high-group tone, and every one of the eleven is 1477 Hz being chosen when absent or missed when present. At 8000 Hz all sixteen decode. Finding 1416. Status: `unmeasured`. Fix class: none proposed.*
+*Batch of 2026-08-11, from `MTD7_COEF_9600` (blob .data 0x0078da, 10 bytes), element 3. **Reachability: FIRES, and it is MEASURED** -- at 9600 Hz eleven of the sixteen DTMF pairs come back with the wrong high-group tone, and every one of the eleven is 1477 Hz being chosen when absent or missed when present. At 8000 Hz all sixteen decode. Finding 1416. Status: **FIXED behind `DSPLIB_REPRODUCE_BUGS`, 2026-08-24**. Fix class: a corrected constant.*
+
+**THE FIX, AND WHY THIS ENTRY EARNED ONE WHERE THE OTHER THIRTEEN OF ITS FAMILY
+DID NOT.** `docs/deviation-triage.md`'s discriminator for the *defect,
+reachable, no fix warranted* class is whether the CORRECT value can be derived
+independently of the wrong one. Here it can, four ways over: the bank's own
+design rule `b1 = -round(2 cos(w0) * 2^14)` gives -18613 at 9600 Hz for 1477
+Hz; the fifteen sibling tables all follow that rule; this table's own `a1` read
+back through `a1 = round(1.8 cos(w0) * 2^14)` gives the same w0; and the 8000
+Hz twin scaled to this rate agrees. D302 passed that test and D451 failed it;
+this one passes it four times, which is why it is the single fix the triage
+recommended out of 232 bug-marked entries.
+
+`src/service/dtmf_mtd_coeffs.c` carries the constant behind the define, in the
+`src/dsp/fpm_div.c` shape. Both of finding 6810's checks hold: the reproduce
+build's object is unchanged, and the default build's DIFFERS -- which is the
+half that catches a fix that is not actually live. `make phase` exit 0, 241
+passed / 0 failed.
+
+**What is NOT claimed.** Nothing drives the fixed build, so no test asserts
+that the corrected coefficient decodes all sixteen pairs at 9600 Hz; what is
+asserted is the object's behaviour with the object's value, exactly as before.
+The fix's benefit rests on finding 1413's derivation and 1416's measurement of
+the defect, not on an experiment with the fix in place. Say so before quoting
+it as a repair.*
 
 **Finding 1413.** Every one of the sixteen tables is a notch with `b1 = -round(2 cos(w0) * 2^14)` matching its own `a1 = round(1.8 cos(w0) * 2^14)` to within 0.1 Hz. This one does not: `a1 = 16751` is 1477.04 Hz and `b1 = -21143` is 1328.45 Hz, where the design gives -18613. A biquad whose zeros and poles are 150 Hz apart is not a notch at either frequency, so the 1477 Hz section of the 9600 Hz bank has a materially different response from its 8000 Hz twin. Reproduced byte for byte; `test/unit/t_dtmfrx.c` compares the table against the object's own `ref_MTD7_COEF_9600` AND asserts the count of mis-decoded pairs at each rate, so the consequence is held to as well as the bytes. No mechanism is proposed -- the value is not a bit flip of -18613, not a digit transposition of it, and and not the right coefficient for 1477 Hz at any rate this library uses (7200 gives -9114, 8000 gives -13085, 9600 gives -18613).
 
