@@ -79730,6 +79730,18 @@ is read at .text+0xe4fc:
 | **0x2d** | 0x574 | 0xeacb | 0xeade | `V92Phase4Modulator::recivedCP()` |
 | **0x2e** | 0x578 | 0xeb14 | 0xeb27 | `V92Phase4Modulator::recivedCPtag()` |
 
+**AND THAT SELECTOR IS A FIELD THIS TREE CURRENTLY CALLS `word_3c`.**
+`include/dsplib/V90Demodulator.h` has +0x03c as "modelled, unnamed", on the
+evidence that `enterPhase3` clears it and its one failure exit sets it to 0x20.
+`runPcmModem` is the reader that was missing: it is a 54-arm dispatch on this
+word, and 0x20 is one of the arms (it sets the return to 6).  So the field is
+the demodulator's EVENT CODE -- what it reports upward for the modem's driver
+to act on -- and that is a much stronger derivation than the one the name
+rests on now.  **It is NOT renamed here**: V90Demodulator.h is another batch's
+file and the reconstruction of `runPcmModem` is a separate piece of work, so
+the evidence is recorded and left for whoever owns that header next, exactly
+as 7520 did with `P4M_STATE_UNNAMED_14`.
+
 **These are the ONLY two references to the symbol in the object.**
 `objdump -dr | grep R_386_PC32.*etParamsInfo` over the whole 1.2 MB gives
 exactly two rows, both `V92setParamsInfoFromCPUnPck` and both inside
