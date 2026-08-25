@@ -523,13 +523,35 @@ void Scrambler<T, I>::process(const T *in, I *out, unsigned int n)
 	}
 }
 
+/*
+ * THE MASK IS COMPUTED AFTER THE CALL, AND THAT IS THE WHOLE OF THE
+ * DIFFERENCE -- five symbols closed on it.  With `bit` initialised in its
+ * declaration it is live ACROSS `resetHistoryIndexes()`, so GCC 3.4.2 must
+ * park it in a callee-saved register and pays a `push`/`pop` pair for it;
+ * ours spent `%esi` (and for `<h,i>` spilled the byte to `0x7(%esp)`).  The
+ * object reads `value` back off its incoming stack slot AFTER the call and
+ * masks into a caller-saved register -- `mov 0x14(%esp),%ecx ... and
+ * $0x1,%ecx` for `<i,i>` -- so nothing of it crosses the call.
+ *
+ * Eight spellings compiled, THREE distinct emissions.  Four reach the
+ * object: `bit` declared mid-block after the call, `bit` declared then
+ * assigned after it, the cast dropped, and masking `value` in place.  They
+ * emit the SAME BYTES, so what is decoded is the POSITION of the mask
+ * relative to the call and not which of those four the author typed; the
+ * two that mask inside the loop body do NOT match, which is what makes the
+ * hoist part of the decoded fact rather than an assumption.  The form below
+ * is chosen for this file's declarations-at-the-top style only.
+ *
+ * Finding 7863.
+ */
 template <class T, class I>
 void Scrambler<T, I>::reset(T value)
 {
-	T bit = (T)(value & 1);
+	T bit;
 	T *p;
 
 	resetHistoryIndexes();
+	bit = (T)(value & 1);
 	for (p = pInitOut + 1; p <= pInitTap2; p++)
 		*p = bit;
 }
@@ -537,10 +559,11 @@ void Scrambler<T, I>::reset(T value)
 template <class T, class I>
 void Descrambler<T, I>::reset(T value)
 {
-	T bit = (T)(value & 1);
+	T bit;
 	T *p;
 
 	resetHistoryIndexes();
+	bit = (T)(value & 1);
 	for (p = pInitOut + 1; p <= pInitTap2; p++)
 		*p = bit;
 }

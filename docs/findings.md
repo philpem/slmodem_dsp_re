@@ -88310,3 +88310,161 @@ CAUGHT; the suite is 36 mutations, 33 caught, 0 not caught, 3 equivalent.
 The "one element short" mutation is spelt `while (n-- > 1)` and not `--n`,
 because a bare pre-decrement on an unsigned counter wraps at `tailLength == 0`
 and would hang the runner rather than fail it.
+
+### 7863. `Scrambler::reset`: THE MASK IS COMPUTED AFTER THE CALL, NOT IN THE DECLARATION -- FIVE SYMBOLS EXACT, AND THE DOMAIN HAS FOUR PREIMAGES
+
+This is 7862's residual and it only became legible once the call was there,
+which is the argument for taking a lever's partial result and re-measuring
+rather than filing it as a decline: with `resetHistoryIndexes` inlined, the
+whole prologue was rescheduled and there was nothing to read.
+
+    ours   mov this / mov 0x14(%esp),%esi / mov %ebx,(%esp)
+           and $0x1,%esi / call ..._19resetHistoryIndexesEv
+    blob   mov this / mov %ebx,(%esp) / call ..._19resetHistoryIndexesEv
+           mov 0x14(%esp),%ecx / mov 0x4(%ebx),%eax / mov 0xc(%ebx),%edx
+           and $0x1,%ecx
+
+`T bit = (T)(value & 1);` in the DECLARATION makes `bit` live across the
+call, so GCC 3.4.2 has to hold it in a callee-saved register and buys a
+`push`/`pop` pair to do it -- and in `Descrambler<h,i>` it did worse, spilling
+the byte to `0x7(%esp)` and reloading it in the loop. The object reads `value`
+back off its own incoming argument slot AFTER the call, so nothing crosses it
+and a caller-saved register does.
+
+**EIGHT SPELLINGS COMPILED, THREE DISTINCT EMISSIONS**, run to completion
+before any cell was read:
+
+    A  T bit = (T)(value & 1);  before the call        committed; no change
+    H  value = (T)(value & 1);  before the call        same emission as A
+    C  *p = (T)(value & 1)      masked in the loop     no change
+    G  *p = value & 1           masked in the loop     no change
+    B  T bit declared after the call                   MATCHES
+    D  T bit; ... bit = (T)(value & 1); after          MATCHES
+    E  value = (T)(value & 1); after the call          MATCHES
+    F  T bit; ... bit = value & 1; after (no cast)     MATCHES
+
+**Four preimages, so rule 0's middle case: what is decoded is a FACT and not
+a spelling.** The fact is the mask's POSITION -- after the call and hoisted
+out of the loop. C and G, which mask inside the loop body, do not match, so
+the hoist is measured rather than assumed; and B/D/E/F emit the same bytes,
+so the cast and whether the author reused the parameter are not observable.
+`D` is committed for this file's declarations-at-the-top style, and that
+choice carries no evidence.
+
+**Tree-wide SET diff, both directions:**
+
+    EXACT     524 -> 529  + Descrambler<h,i>::reset, Descrambler<i,i>::reset,
+                            Scrambler<h,i>::reset, Scrambler<i,h>::reset,
+                            Scrambler<h,i>::C1
+    REGALLOC   31 ->  33  + Scrambler<h,h>::reset, Scrambler<h,h>::C1
+    BYTES      74 ->  70
+    SIZE      614 -> 611
+    grade 0-or-1  560 -> 567
+
+Nothing lost. The two constructors moved as BYSTANDERS -- they tail-call
+`reset(0)` and neither was edited. `Scrambler<h,h>` is the one instantiation
+that stops at REGALLOC; its residual is a register choice, not a statement.
+
+Four more mutation anchors moved and were re-anchored; all four CAUGHT, suite
+36 / 33 caught / 0 not caught / 3 equivalent.
+
+### 7864. 7827's INSIDE-THE-FUNCTION ROUTE, TESTED ON THE REGALLOC BUCKET OUTSIDE V.90: A MEASURED NO, AND TWO OF THE FOUR ARE STRUCTURALLY BOUNDED
+
+The brief for this pass asked specifically whether 7827 -- fix an EXPOSED
+symbol EARLY in a file and its successors may go exact for free -- works on
+the REGALLOC symbols outside V.90. **It does not, and three separate reasons
+came out of it, only one of which was anticipated.**
+
+The eight REGALLOC symbols in that span, all in files ALREADY at the blob's
+`nm -n` order, so lever 3 had nothing positional to offer any of them:
+
+    toneiir.c        _iir_filter_create        idx 5 of 8
+    DiffCoder.cpp    ParallelDiffDecoder<h>::reset   idx 3 of 15
+                     ParallelDiffEncoder<h>::reset   idx 9
+                     ParallelDiffEncoder<h>::C1      idx 11
+    FloatFIR.cpp     FloatFIR::reset           idx 1 of 8
+    fpm_ecc.c        FPM_ECC_free              idx 2 of 3
+    v34filters.c     V34EqualizerCleanUp       idx 16 of 26
+    v8dp.c           dp_v8_exit                idx 3 of 4
+
+**The `-fno-peephole2` certificate clears NONE of them** -- two EXPOSED
+(`dp_v8_exit` on `ecx`, `V34EqualizerCleanUp` on `eax`/`ecx`/`edx`), six
+UNDECIDED, zero CLEARED -- so the route is live in principle for all eight and
+the negative below is not the certificate's.
+
+**1. A SIZE FIX THAT DOES NOT CHANGE THE SCRATCH IS A NO-OP FOR THE
+SUCCESSOR, and this is the general lesson.** `dp_v8_init` (idx 2) was closed
+from SIZE to REGALLOC by 7860 -- one real instruction added -- and
+`dp_v8_exit` (idx 3) did not move by a byte, because `dp_v8_init` went on
+taking the same scratch (`%edx`) it took before. 3b's cursor advances as
+`search_ofs' = f(search_ofs, live set)`, so **7827 fires only when the
+upstream fix changes WHICH REGISTER the split consumes**, never merely
+because the upstream symbol got better. Screen on the scratch register, not
+on the bucket.
+
+**2. `v8dp.c` IS BOUNDED BY A TRANSLATION-UNIT BOUNDARY WE CHOSE.** The blob's
+emission ranks over that span are 120, 121, **122**, 123, 124 and rank 122 is
+`v8_process` -- which the original emitted between `v8_delete` and
+`dp_v8_init`, and which THIS RECONSTRUCTION put in `src/v8/v8proc.c`. 590
+bytes of the original's cursor history are in another file of ours, so the
+state arriving at `dp_v8_init` cannot be reproduced by any edit inside
+`v8dp.c`. Both of that file's REGALLOC residuals are bounded, not open.
+It is lever 3a's question 2 -- "is the blob's span YOURS?" -- answering NO
+for a reason that is ours rather than the original's.
+
+**3. `DiffCoder.cpp` CANNOT BE EVALUATED POSITIONALLY AT ALL, AND WE EMIT
+FOUR BODIES THE ORIGINAL DID NOT.** Every one of its fifteen symbols is a
+COMDAT weak in its own `.gnu.linkonce.t.*` at address 0, so `nm -n` gives a
+tie-break and not an emission order -- refinement.md's "two regions are not
+reachable by definition order at all". And the blob defines EIGHT
+`ParallelDifferential*` symbols where we define TWELVE: it has no `C2Ej` and
+no `D2Ev` for either class. **The blob is not short of clones in general** --
+64 `C2E` and 52 `D2Ev` over the whole object -- it is short of them for the
+TEMPLATE classes, which is what implicit instantiation from use produces and
+what `template class X<T>;` does not. `DiffCoder.cpp` uses the whole-class
+form, which is exactly what `Scrambler.h`'s own comment warns against, and
+`Scrambler.cpp`'s member-by-member form does not avoid it either (10 such
+symbols). So four extra bodies sit in our TU consuming cursor state the
+original's never spent.
+
+    idx 3   upstream is indices 0, 1, 2 and all three are EXACT, so the
+            cursor arriving at it is provably the blob's -- and it is STILL
+            REGALLOC.  7827 answered in the negative from data alone, with
+            no compile: the difference there is not the cursor.
+    idx 9, 11  downstream of the extra C2/D2 bodies; not reproducible.
+
+**Not attempted, and why:** the upstream candidates in the other three files
+are large -- `FloatFIR::process` at 244 differing bytes of 287, `FPM_ECC_cancel`
+at -178, `toneiir_progress` at -449 -- so each is a reconstruction task rather
+than a refinement one, and none of them is the cheap test 7827 promises.
+`toneiir_create` (idx 0, +4 instructions padding-stripped) is the one
+remaining honest test of the route in this span and this pass did not reach
+it; it is the next thing to try, not a decline.
+
+### 7865. THE BRIEF'S "SIZE NEAR MISSES" WERE SORTED BY SIZE, NOT BY DELTA, AND THE LIST IS UNUSABLE AS A WORKLIST
+
+Recorded so the next pass does not re-derive it. This pass was handed seven
+SIZE symbols as "the closest", quoted as `398 B GenericIIR<f,d>::process`,
+`392 B FloatARMA::process`, `393 B V92Modem C1/C2`, `392 B V8SetMessage`,
+`392 B txmit`, `389 B chkForceBaudRate`, `387 B V90SpectralShaper::applyAction`.
+Those figures are the symbols' BLOB SIZES and the list is the top of a
+descending sort under a 400-byte cut. Their actual deltas are
+
+    GenericIIR<f,d>::process(f)   -99      V92Modem C1/C2   -40
+    FloatARMA::process(f)         +16      V8SetMessage     +20
+    txmit                         -32      chkForceBaudRate  -5
+    V90SpectralShaper::applyAction +1
+
+-- so six of the seven are the FARTHEST from closing among small symbols, and
+`GenericIIR<f,d>::process(const float *, float *, unsigned)` at blob 584
+against ours 96 is not a refinement target at all. **SIZE has no "differing
+byte" column**, which is what `--why` and the bucket listings sort on
+elsewhere, so a size-ordered listing reads as a closeness-ordered one and
+nothing in the tooling says otherwise. Sort SIZE by `abs(ours - blob)` after
+`instrcount.py`'s padding strip, and quote the delta beside the size.
+
+The real near misses in that span are ±1 to ±3 bytes and none of them was in
+the brief: `FPM_rms` +1, `V34EchoEstimateDelayLineEnergy` +1,
+`V34TimingFiltersInit` -1, `Descrambler<i,i>::copyHistoryTail` -1 (closed
+here by 7861), `v8_crc` -1, `Dual_TONE_create` +2, `notch` -2,
+`linear2ulaw` +2.

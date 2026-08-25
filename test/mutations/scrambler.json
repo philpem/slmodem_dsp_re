@@ -100,23 +100,23 @@
   },
   {
     "label": "reset: two bits of the argument reach the buffer",
-    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 1);\n\tT *p;\n\n\tresetHistoryIndexes();\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
-    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 3);\n\tT *p;\n\n\tresetHistoryIndexes();\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n"
+    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 1);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
+    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 3);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n"
   },
   {
     "label": "reset: the fill stops one short of pInitTap2",
-    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 1);\n\tT *p;\n\n\tresetHistoryIndexes();\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
-    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 1);\n\tT *p;\n\n\tresetHistoryIndexes();\n\tfor (p = pInitOut + 1; p < pInitTap2; p++)\n\t\t*p = bit;\n}\n"
+    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 1);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
+    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 1);\n\tfor (p = pInitOut + 1; p < pInitTap2; p++)\n\t\t*p = bit;\n}\n"
   },
   {
     "label": "reset: the fill starts at pInitOut",
-    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 1);\n\tT *p;\n\n\tresetHistoryIndexes();\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
-    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 1);\n\tT *p;\n\n\tresetHistoryIndexes();\n\tfor (p = pInitOut; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n"
+    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 1);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
+    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 1);\n\tfor (p = pInitOut; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n"
   },
   {
     "label": "reset: the cursors are not put back first",
-    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 1);\n\tT *p;\n\n\tresetHistoryIndexes();\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
-    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit = (T)(value & 1);\n\tT *p;\n\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n"
+    "find": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 1);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n",
+    "replace": "void Scrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tbit = (T)(value & 1);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n"
   },
   {
     "label": "process(T): the far tap is not in the XOR (<h,h>, <h,i>)",
