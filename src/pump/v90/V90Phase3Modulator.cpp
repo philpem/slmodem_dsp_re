@@ -338,14 +338,51 @@ updateCodeSegment(V90Phase3Modulator *m)
  * symbol has to exist whether or not anything reaches it.  Measured rather
  * than assumed, with tools/instrcount.py over the period toolchain -- the
  * generators are 560 and 696 instructions before this change and 560 and 696
- * after it, unchanged to the instruction.
+ * after it, unchanged to the instruction, and the standalone copy appears
+ * beside them at 98 against the blob's 117.
  *
- * NOTHING CALLS IT, IN THE BLOB OR HERE, AND NOTHING MAY BE ADDED THAT DOES.
- * `tools/relocscan.py` finds zero relocations of any kind naming
- * `_ZN18V90Phase3Modulator11generateDILEv` in the 1.2 MB object, and zero in
- * ours.  A source call the compiler declined to inline would appear as
- * exactly such a relocation, so that one measurement is both the callerless
- * proof and the proof that the inlining shape is the object's.
+ * NOTHING CALLS IT, IN THE BLOB OR IN THE PERIOD BUILD, AND NOTHING MAY BE
+ * ADDED THAT DOES.  `readelf -rW` over the 1.2 MB object finds ZERO
+ * relocations of any kind naming `_ZN18V90Phase3Modulator11generateDILEv`,
+ * against two naming `generateV90Symbol`, which is what shows the
+ * measurement can fire at all; the period object is zero as well.  A source
+ * call the compiler declined to inline would appear as exactly such a
+ * relocation, so that one measurement is both the callerless proof and the
+ * proof that the inlining shape is the object's.
+ *
+ * THE MODERN BUILD MAKES THE OTHER CHOICE AND THAT IS NOT A DEFECT.  GCC 13
+ * at -O2 declines to inline it and leaves four `call` relocations in
+ * build/repro; the differential tier is green either way, because the
+ * inlining decision changes no behaviour.  The compiler that decides the
+ * SHAPE is the period one, and it agrees with the blob.
+ *
+ * THE 19-INSTRUCTION GAP IS ACCOUNTED FOR AND IS NOT A MISSING CALL --
+ * instrcount.py's standing reading, and worth writing down because that is
+ * the failure it exists to catch.  Each side has exactly TWO `call`s and
+ * THREE relocations, so nothing is missing.
+ *
+ * THIRTEEN of the nineteen are alignment padding counted inside `st_size`:
+ * the blob carries seventeen filler instructions (three `lea 0x0(%e_,%eiz,1)`
+ * forms, one `lea 0x0(%esi),%esi` and thirteen `nop`s, most of them ahead of
+ * the search loop at 0x2b1f0) against four in ours.  Real instructions are
+ * 100 against 94.
+ *
+ * THE REMAINING SIX are one shape, seen three times: the blob re-reads what
+ * ours keeps.  It evaluates `seq2[seq2Index] == 0` twice, once for the branch
+ * at 0x2b08c and once for the `sete` at 0x2b0af, where ours computes the flag
+ * once; it re-reads `seq1Index` and `seq2Index` out of the object after the
+ * companding call (0x2b0dd, 0x2b0fc) where ours spills the two locals to the
+ * stack; and its ternary branches out to a tail at 0x2b180 that repeats four
+ * instructions ours reaches by falling through.
+ *
+ * The re-reads are a FORCED difference and a real observation about the
+ * original's source: a memory read cannot be moved across an opaque call in
+ * either direction, so the author's code reads those members after the
+ * companding call rather than caching them in locals as `i1` and `i2` do
+ * here.  It is left as it stands because this body is the one the
+ * differential tier has already proved, and rewriting it would move the two
+ * generators' counts and with them the evidence above.  Worth a pass of its
+ * own; it is a codegen-tier gain and no test can see it.
  *
  * THE RETURN TYPE IS `int`, AND ONLY THE INSTRUCTIONS SAY SO.  A mangled name
  * carries the parameter types and not the return type, so `...generateDILEv`

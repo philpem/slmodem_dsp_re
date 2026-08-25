@@ -5929,7 +5929,7 @@
    }
   },
   "v90dilgen": {
-   "key": "afcdc626da1ff7d0e0386fd8ef8a9cf557a5a87413133ef52d5ecc42188f3841",
+   "key": "17766f89556c4d05fd4b11b6a3d30b3c2f09e07f72d533187236bf4fa599e499",
    "summary": "64 mutations: 62 caught (62 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "A-law tests for A-law rather than for not-mu-law": "caught",

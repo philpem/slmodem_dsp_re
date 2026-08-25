@@ -412,8 +412,8 @@ setDataBitRateInline(V90MappingParams *params, int islong, int rate)
  *
  * Fill a `V90MappingParams` from an unpacked V.90 CP message.  It is the
  * inverse of `setV92CPpckFromParamsInfo` below, over the V.90 message instead
- * of the V.92 one, and `setParamsInfoFromV92CPUnPck` (.text+0x33c60, still
- * unwritten) is the third corner: same destination, `V92CP` as the source.
+ * of the V.92 one, and `setParamsInfoFromV92CPUnPck` (.text+0x33c60, written
+ * below) is the third corner: same destination, `V92CP` as the source.
  *
  * ---------------------------------------------------------------------------
  * IT HAS NO CALLER, AND THAT IS THE POINT RATHER THAN AN OVERSIGHT.
