@@ -184,6 +184,25 @@ holding 24 of the 32 remaining REGALLOC and 88 of the 94 BYTES. Two regions
 are not reachable by definition order at all: the head, where templates and
 clones interleave, and the cgraph tail.
 
+**THAT IS A RULE ABOUT PICKING A FILE, NOT A PREDICTION ABOUT A SYMBOL, and
+wave 6 falsified the second half.** Five more files, **7 gained and 0 lost**,
+and two of the seven were in BYTES rather than REGALLOC: `V90Parameters::
+loadParams` and `V90Equalizer::enterChannelVerification`, neither of them a
+target. So keep aiming whole files at REGALLOC, and do not skip a BYTES symbol
+inside one. Wave 6's per-shape yield is 7796's again -- **plain 7, twin 0,
+clone 0** -- and the one file whose only targets were a C1/C2 pair
+(`V90Demapper.cpp`) lost a symbol and was reverted. Finding 7810.
+
+**A FILE-SCOPE `static` THAT CALLS A MEMBER FUNCTION SETS THAT MEMBER'S
+EMISSION SLOT, so it is the exception to "statics live above".** Wave 6's
+`V90AutoDigitalImpDetector.cpp` stopped at 23 of 34 with `isAltRbs` emitted at
+index 0 against the blob's 10; the cause was `adid_recheckAltRbs`, a helper
+THIS RECONSTRUCTION introduced, sitting at the top of the file with
+`o->isAltRbs(...)` in its body. Moving that one helper below its own first user
+took the file to 34 of 34. The object inlines the call, so the original had no
+such edge -- our factoring was setting the order. Check for it whenever a
+reorder lands short by a single symbol sitting at index 0. Finding 7811.
+
 **Two traps, both hit while doing it.** An `#endif` travelled with a moved
 chunk twice and STILL COMPILED, silently enlarging an
 `#if __SIZEOF_POINTER__ == 4` region over live code -- `compilers.md`'s V3,
@@ -191,6 +210,24 @@ which fails open. And a macro placed beside its first user ends up below it
 after a move. Rule now in the files: macros and file-scope statics live ABOVE
 the definitions. Any tool doing this must refuse to write unless the line
 multiset is unchanged, which is what proves a permutation is a permutation.
+
+**AND THE MECHANICAL CHECK FOR BOTH IS ONE THING, WITH TWO WAYS OF BEING
+DEAD.** Compare the SORTED MULTISET of preprocessed non-blank lines against
+`HEAD`, **under both `-D__SIZEOF_POINTER__=4` and `-D__SIZEOF_POINTER__=8`**:
+
+- Run the period arm alone and it does not fire at all. An injected `#endif`
+  moved 40 lines down `V90Equalizer.cpp` passed, exit 0 -- enlarging a region
+  whose guard is TRUE swallows live code without deleting a line. V3 is that
+  the predefine is absent under 3.4.2, so **only the FALSE arm shows it**, and
+  the real build uses the other one.
+- Compare COUNTS rather than the multiset and it misses the macro trap
+  entirely: three of wave 6's files came out with a macro below its first user
+  at 1781 preprocessed lines against 1781. An identifier used before its
+  `#define` is not expanded, so the line survives with different text -- and
+  that is not always a compile error, so wave 5's loud case is not the general
+  shape.
+
+Shown firing on both injections and clean on everything committed. Finding 7812.
 
 ### 4. File-scope declaration order
 

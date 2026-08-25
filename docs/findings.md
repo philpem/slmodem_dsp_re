@@ -85491,3 +85491,158 @@ unless the file's line multiset is unchanged, so no edit hid inside a reorder.
 
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7781 and two sibling
 worktrees were writing concurrently; expect to renumber at merge.
+
+### 7810. EMISSION ORDER, WAVE 6: SEVEN MORE SYMBOLS OVER FIVE FILES, AND A BYTES-BUCKET CLOSURE THAT 7796 SAID DOES NOT HAPPEN
+
+Six translation units were permuted into the blob's `nm -n` emission order,
+aimed at the ten REGALLOC symbols 7796 left in them.  Over the tree:
+
+    grade 0   467 -> 474  (37.3% -> 37.9%)     REGALLOC  34 -> 29
+    grade 0-or-1  506 -> 508                   BYTES     94 -> 92
+                                               SIZE     648 -> 648
+
+**7 gained, 0 lost, and it is the exact SET that was diffed** -- `--list-exact`
+before and after, seven `>` lines and no `<`.  `make phase J=4` green, period
+differential 251 passed / 0 failed.  `anchorcheck.py` 198 suites, 8,959
+mutations, **0 anchors matching other than exactly once and none detached**, so
+unlike wave 5 nothing needed re-pointing: a definition-order permutation moves
+whole functions, and every `find` still occurs exactly once.
+
+**THE PER-FILE LEDGER.**  (a) closed, (b) bytes moved but did not close,
+(c) nothing at all, (d) reverted.
+
+    V90Equalizer.cpp          order  1/29 -> 27/29
+                              (a) ALL THREE targets --
+                                  resetMeanErrorEnergyDiagnostics,
+                                  zeroLinearEquCoefs, zeroDfeCoefs -- plus
+                                  enterChannelVerification, which was not a
+                                  target and came out of BYTES
+                              (c) reset, 446 differing before and after
+    V90AutoDigitalImpDetector.cpp  order 4/34 -> 34/34
+                              (a) updateUrefAlt
+                              (c) applyPadGainToLinMapp, 1 differing byte
+                                  before and after
+    V90ConstellationDesigner.cpp   order 8/24 -> 24/24
+                              (a) realK, the only target
+    V90Parameters.cpp         order  0/9 -> 7/9
+                              (a) loadParams -- NOT the target, and out of
+                                  the BYTES bucket
+                              (c) C2, 4 differing bytes before and after
+    VPcmFloModem.cpp          order  3/16 -> 16/16
+                              (c) NOTHING.  setPcmSessionType 5 differing
+                                  bytes before and after, and the order was
+                                  fully achieved, so this is a real null
+    V90Demapper.cpp           (d) REVERTED.  Order 0/13 -> 9/13 and
+                                  `V90DemapperD2Ev` went EXACT -> not, gaining
+                                  nothing.  Both targets were the C1/C2 clone
+                                  pair, which is the region 7796 names as not
+                                  reachable by definition order
+
+**ALL SEVEN CLOSURES ARE PLAIN NON-CLONE FUNCTIONS.**  Checked rather than
+assumed: `zeroLinearEquCoefs`/`zeroDfeCoefs` and `updateUref`/`updateUrefAlt`
+read as twin pairs from their names and are NOT -- the bodies differ field for
+field, and 7772's twin is a CHARACTER-IDENTICAL body.  Per-shape yield over
+this wave: **plain 7, twin 0, clone 0**, which is 7796's ratio again.
+
+**AND A BYTES-BUCKET SYMBOL CLOSED, WHICH 7796 MEASURED AT 0 OF 9.**
+`V90Parameters::loadParams` and `V90Equalizer::enterChannelVerification` were
+both in BYTES, not REGALLOC, and both went EXACT.  7796's "aim at REGALLOC,
+not BYTES" is about where to aim a whole FILE and it survives -- 4 of this
+wave's 7 are REGALLOC closures in files aimed at REGALLOC -- but "a BYTES
+symbol does not close" is now falsified.  Note which claim is which: the file
+selection rule stands, the per-symbol prediction does not.
+
+**THE FOUR THAT STAYED OPEN DID NOT MOVE AT ALL, AND THAT WAS MEASURED BOTH
+WAYS.**  Master's five files were restored, those five TUs recompiled, and the
+tree measured back to exactly 467/34/94/648 with an identical exact set --
+so the A/B is real and not a stale object.  Against that baseline:
+
+    V90Parameters::C2                 4 differing bytes -> 4
+    V90Equalizer::reset             446 differing bytes -> 446
+    ..ImpDetector::applyPadGainToLinMapp  1 -> 1
+    VPcmFloModem::setPcmSessionType       5 -> 5
+
+Every one is byte-for-byte what it was.  `--why` on all four: the grade-0
+verdict is BYTES and the grade-1 verdict is ACCEPT for three of them (so they
+are REGALLOC and the rejection is positional only); `V90Equalizer::reset` is
+the exception, grade 1 REJECT, and it is the function this pass was told not
+to chase.  **It did not move**, which is the thing worth recording: a whole-file
+reorder around a function coupled through register pressure to an open defect
+left it identical.
+
+**V90Parameters's C1 WAS ALREADY EXACT AND C2 IS NOT**, at 4 differing bytes,
+with the file's other seven slots now matching the blob.  That is 7796's
+"which of C1/C2 comes first is not reachable" showing up as the whole residual
+of a file: 7 of 9 slots right, and the two that are wrong are the clone pair's
+internal order.
+
+### 7811. A FILE-SCOPE STATIC THAT CALLS A MEMBER DRAGS THAT MEMBER TO THE HEAD OF THE EMISSION ORDER -- OUR FACTORING, NOT THE AUTHOR'S
+
+`V90AutoDigitalImpDetector.cpp` reordered to the blob's order reached **23 of
+34** slots and stopped.  One symbol was wrong and everything downstream of it
+was shifted by one: `isAltRbs` was emitted at index **0** and the blob puts it
+at **10**; indices 11 to 33 already agreed.
+
+The cause is a helper this reconstruction introduced.  `adid_recheckAltRbs` is
+a file-scope `static` sitting near the top of the file -- where wave 5's rule
+puts statics -- and its body contains `o->isAltRbs(...)`.  That reference
+creates `isAltRbs`'s cgraph node early, and 7796's model then emits it first.
+Moving that ONE helper down to just above its own first user took the file to
+**34 of 34**.
+
+The source comment beside the call site already said the object **inlines**
+`isAltRbs` there, so the original had no such helper and no such edge.  This is
+therefore a case where our factoring, not the author's source, sets the
+emission order -- and it is invisible until the order is checked, because the
+file compiled and ran identically either way.
+
+**IT CHANGED NO BYTES.**  23 of 34 and 34 of 34 produce the identical exact
+set: `updateUrefAlt` closed at both, `applyPadGainToLinMapp` stayed at 1
+differing byte at both.  So this finding is about the MEASUREMENT, not a gain
+-- 7796's gate is that "a file that changed nothing is only evidence if the
+order was actually achieved", and without this the file's null result on
+`applyPadGainToLinMapp` would not have been evidence of anything.  The 34/34
+version is what is committed, for that reason.
+
+**THE RULE THIS ADDS TO WAVE 5's.**  Macros and file-scope statics live ABOVE
+the definitions -- *except* a static that CALLS a member function, which must
+go below that member, because its position decides the member's.  Check for
+one whenever a reorder lands short and the shortfall is a single symbol at
+index 0.
+
+### 7812. THE `#endif` TRAP'S DETECTOR HAS TO RUN BOTH ARMS OF THE GUARD, AND A LINE COUNT CANNOT SEE THE MACRO TRAP AT ALL
+
+Wave 5 caught both preprocessor traps by INSPECTING THE DIFF for moved `#`
+lines.  This pass tried to mechanise that and the first two attempts were dead
+detectors, in the shape finding 134 is about.
+
+**ATTEMPT 1, AND IT DID NOT FIRE.**  Preprocess the file before and after and
+compare, with the period flag set: `-D__SIZEOF_POINTER__=4`.  An `#endif` was
+injected 40 lines down `V90Equalizer.cpp` -- wave 5's exact defect -- and the
+check passed, exit 0.  Of course it did: with the guard TRUE, enlarging the
+region swallows live code **without removing a single line**.  V3 is that the
+predefine does not exist on GCC 3.4.2, so the guard reads `#if 0` and the
+region VANISHES -- **it is the FALSE arm that shows the swallowed code**, and
+the arm the real build uses is the one that cannot see it.  Run with
+`-D__SIZEOF_POINTER__=8` as well and the same injection reports
+`HEAD 3305 now 3297`, exit 1.  Restored, both arms clean.
+
+**ATTEMPT 2, AND A COUNT CANNOT SEE THE OTHER TRAP.**  `V90AutoDigitalImpDetector.cpp`
+and two more files came out of the permutation with a macro below its first
+user, and **the preprocessed line count was identical either way**: 1781 and
+1781.  An identifier used before its `#define` is simply not expanded, so the
+line survives with different text.  Comparing the sorted line MULTISET catches
+it and a count never can.  This trap is also SILENT -- an unexpanded macro is
+not always a compile error -- which is why wave 5's `V90P4M_RI_PERIOD` case
+being loud should not be read as the general shape.
+
+So the check that is worth keeping is: **the sorted multiset of preprocessed
+non-blank lines, against HEAD, under BOTH `__SIZEOF_POINTER__=4` and `=8`.**
+It fires on an injected moved `#endif` and on a macro left below its user, and
+it is clean on every file this wave committed.  Four macro blocks in
+`V90AutoDigitalImpDetector.cpp`, three in `V90ConstellationDesigner.cpp`,
+twelve in `VPcmFloModem.cpp` and two in `V90Equalizer.cpp` were hoisted above
+the definitions on its evidence.
+
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7796 and a sibling
+worktree was writing concurrently; expect to renumber at merge.
