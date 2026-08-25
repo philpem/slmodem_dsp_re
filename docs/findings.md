@@ -85492,10 +85492,11 @@ unless the file's line multiset is unchanged, so no edit hid inside a reorder.
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7781 and two sibling
 worktrees were writing concurrently; expect to renumber at merge.
 
-### 7810. EMISSION ORDER, WAVE 6: SEVEN MORE SYMBOLS OVER FIVE FILES, AND A BYTES-BUCKET CLOSURE THAT 7796 SAID DOES NOT HAPPEN
+### 7810. EMISSION ORDER, WAVE 6: SEVEN MORE SYMBOLS, FIVE OF THE TEN TARGETS, AND TWO FILES REVERTED -- ONE FOR A LOSS AND ONE FOR ITS PRICE
 
 Six translation units were permuted into the blob's `nm -n` emission order,
-aimed at the ten REGALLOC symbols 7796 left in them.  Over the tree:
+aimed at the ten REGALLOC symbols 7796 left in them.  **Four are kept and two
+are reverted.**  Over the tree, with the two reverts in place:
 
     grade 0   467 -> 474  (37.3% -> 37.9%)     REGALLOC  34 -> 29
     grade 0-or-1  506 -> 508                   BYTES     94 -> 92
@@ -85528,15 +85529,26 @@ whole functions, and every `find` still occurs exactly once.
                               (a) loadParams -- NOT the target, and out of
                                   the BYTES bucket
                               (c) C2, 4 differing bytes before and after
-    VPcmFloModem.cpp          order  3/16 -> 16/16
+    VPcmFloModem.cpp          order  3/16 -> 16/16, then REVERTED
                               (c) NOTHING.  setPcmSessionType 5 differing
-                                  bytes before and after, and the order was
-                                  fully achieved, so this is a real null
+                                  bytes before and after, and the order WAS
+                                  fully achieved, so this is a real null and
+                                  not an unachieved one
     V90Demapper.cpp           (d) REVERTED.  Order 0/13 -> 9/13 and
                                   `V90DemapperD2Ev` went EXACT -> not, gaining
                                   nothing.  Both targets were the C1/C2 clone
                                   pair, which is the region 7796 names as not
                                   reachable by definition order
+
+**`VPcmFloModem.cpp` WAS REVERTED THOUGH IT LOST NOTHING, AND THE REASON IS
+THE PRICE RATHER THAN THE GRADE.**  Reaching 16 of 16 took **twelve macro
+blocks hoisted** on top of the permutation -- the largest diff of the six
+files -- and bought zero symbols; the tree measures 474 with it reverted, which
+is how that is known rather than assumed.  7796 kept its neutral files
+(`V92Modem.cpp`, `V92Modulator.cpp`) and those were reorder-only.  A permanent
+change to how a file reads needs something on the other side of it.  **The
+measurement is the deliverable here**: the order is achievable and achieving it
+pays nothing, so the next wave should not spend the file again.
 
 **ALL SEVEN CLOSURES ARE PLAIN NON-CLONE FUNCTIONS.**  Checked rather than
 assumed: `zeroLinearEquCoefs`/`zeroDfeCoefs` and `updateUref`/`updateUrefAlt`
@@ -85544,13 +85556,19 @@ read as twin pairs from their names and are NOT -- the bodies differ field for
 field, and 7772's twin is a CHARACTER-IDENTICAL body.  Per-shape yield over
 this wave: **plain 7, twin 0, clone 0**, which is 7796's ratio again.
 
-**AND A BYTES-BUCKET SYMBOL CLOSED, WHICH 7796 MEASURED AT 0 OF 9.**
+**A BYTES-BUCKET SYMBOL CAN CLOSE AS COLLATERAL, AND THAT IS A CORRECTION TO
+HOW A WAVE'S YIELD IS COUNTED, NOT TO WHERE TO AIM.**
 `V90Parameters::loadParams` and `V90Equalizer::enterChannelVerification` were
-both in BYTES, not REGALLOC, and both went EXACT.  7796's "aim at REGALLOC,
-not BYTES" is about where to aim a whole FILE and it survives -- 4 of this
-wave's 7 are REGALLOC closures in files aimed at REGALLOC -- but "a BYTES
-symbol does not close" is now falsified.  Note which claim is which: the file
-selection rule stands, the per-symbol prediction does not.
+both in BYTES rather than REGALLOC and both went EXACT -- **and neither was a
+target.**  They were bystanders in files aimed at REGALLOC.  7796's "0 of 9
+BYTES" counted CANDIDATES AIMED AT, and this wave aimed no file at a BYTES
+bucket, so that claim is untested here and **not** falsified: keep aiming
+whole files at REGALLOC.  What changes is the arithmetic afterwards.  The
+buckets settle it exactly -- REGALLOC 34 -> 29 and BYTES 94 -> 92 -- so **5 of
+the 7 are REGALLOC and all five are targets, and the 2 BYTES closures are both
+bystanders.**  Of the ten targets this wave was given, five closed.  A ledger
+counting only targets would have read 5 and the wave delivered 7, so count the
+file's whole set, in both directions.
 
 **THE FOUR THAT STAYED OPEN DID NOT MOVE AT ALL, AND THAT WAS MEASURED BOTH
 WAYS.**  Master's five files were restored, those five TUs recompiled, and the
@@ -85640,9 +85658,10 @@ So the check that is worth keeping is: **the sorted multiset of preprocessed
 non-blank lines, against HEAD, under BOTH `__SIZEOF_POINTER__=4` and `=8`.**
 It fires on an injected moved `#endif` and on a macro left below its user, and
 it is clean on every file this wave committed.  Four macro blocks in
-`V90AutoDigitalImpDetector.cpp`, three in `V90ConstellationDesigner.cpp`,
-twelve in `VPcmFloModem.cpp` and two in `V90Equalizer.cpp` were hoisted above
-the definitions on its evidence.
+`V90AutoDigitalImpDetector.cpp`, three in `V90ConstellationDesigner.cpp` and
+two in `V90Equalizer.cpp` were hoisted above the definitions on its evidence;
+`VPcmFloModem.cpp` needed **twelve**, which is most of why that file was
+reverted rather than kept for a null.
 
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7796 and a sibling
 worktree was writing concurrently; expect to renumber at merge.

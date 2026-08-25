@@ -184,14 +184,23 @@ holding 24 of the 32 remaining REGALLOC and 88 of the 94 BYTES. Two regions
 are not reachable by definition order at all: the head, where templates and
 clones interleave, and the cgraph tail.
 
-**THAT IS A RULE ABOUT PICKING A FILE, NOT A PREDICTION ABOUT A SYMBOL, and
-wave 6 falsified the second half.** Five more files, **7 gained and 0 lost**,
-and two of the seven were in BYTES rather than REGALLOC: `V90Parameters::
-loadParams` and `V90Equalizer::enterChannelVerification`, neither of them a
-target. So keep aiming whole files at REGALLOC, and do not skip a BYTES symbol
-inside one. Wave 6's per-shape yield is 7796's again -- **plain 7, twin 0,
-clone 0** -- and the one file whose only targets were a C1/C2 pair
-(`V90Demapper.cpp`) lost a symbol and was reverted. Finding 7810.
+**THAT RULE IS ABOUT PICKING A FILE, AND WAVE 6 DID NOT TEST IT -- WHAT IT
+CORRECTS IS HOW YOU COUNT THE YIELD AFTERWARDS.** Four files kept, **7 gained
+and 0 lost**, and the buckets settle where they came from: REGALLOC 34 -> 29
+and BYTES 94 -> 92, so **5 are REGALLOC and all five were targets, and the 2
+BYTES closures were bystanders nobody aimed at** (`V90Parameters::loadParams`,
+`V90Equalizer::enterChannelVerification`). Five of the ten targets closed, so a
+ledger counting only targets reads 5 against a real 7. Keep aiming whole files
+at REGALLOC; count the whole set, both directions. Wave 6's per-shape yield is
+7796's again -- **plain 7, twin 0, clone 0** -- and the one file whose only
+targets were a C1/C2 pair (`V90Demapper.cpp`) lost a symbol and was reverted.
+
+**A NULL RESULT CAN COST TOO MUCH TO KEEP.** `VPcmFloModem.cpp` reached 16 of
+16 and gained nothing, and reverting it left the tree at 474 -- but reaching it
+had taken twelve macro blocks hoisted on top of the permutation. 7796's kept
+neutral files were reorder-only. The measurement is the deliverable: record
+that the order is achievable and pays nothing, and do not keep the diff.
+Findings 7810 and 7811.
 
 **A FILE-SCOPE `static` THAT CALLS A MEMBER FUNCTION SETS THAT MEMBER'S
 EMISSION SLOT, so it is the exception to "statics live above".** Wave 6's
