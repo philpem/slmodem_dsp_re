@@ -81,6 +81,17 @@ emission order, or width and signedness. The lens is most useful on a **SIZE**
 symbol, where it converts an apparently structural difference into an
 arithmetic one; on a BYTES symbol it is close to redundant with the bucket.
 
+**TWO CENSUSES EXIST AND THEY USE DIFFERENT TAXONOMIES; RECONCILE THEM BEFORE
+QUOTING EITHER.** F7986 bucketed 29 rows of the V.90 cluster and found **22
+with every bucket agreeing**; F8000 censused 47 rows of the DSP/V.34 span and
+found the strictest class -- texts equal as a multiset, order differs -- true
+of **three**. They do not disagree. F7986's "every bucket agreeing" is
+F8000's `OPERANDS` + `PERMUTATION` (mnemonic multiset equal), which is 27 of
+47 there against 22 of 29 here. **The rate varies by span** -- roughly
+three-quarters in the V.90 cluster, a little over half in DSP/V.34 -- so
+neither number is the tree's, and the census is worth re-running per worklist
+rather than inherited.
+
 Bucketing measured on one cluster: of 29 reachable `+0` rows, **22 have every
 bucket agreeing** -- genuinely encoding only -- and **7 cancel**. None of the
 seven had an x87 imbalance, which is the bucket that carried F7960's wrong
