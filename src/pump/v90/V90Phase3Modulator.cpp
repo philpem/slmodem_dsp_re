@@ -216,9 +216,16 @@ V90Phase3Modulator::resetDILGenerator(const tagV90DILdescriptor *d)
  * symbol generators rather than calling them, which is why those two are 1790
  * and 2044 bytes of otherwise repetitive code.  They are file-static
  * functions here rather than the methods they correspond to for the reason
- * docs/v90cpp.md gives: defining a method whose callers are not written yet
- * re-opens the link closure for the whole test suite, and only the five
- * methods of batch 2 may be defined.  Nothing outside this file needs them.
+ * docs/v90cpp.md gives: defining a method whose callees are not written yet
+ * re-opens the link closure for the whole test suite.  Nothing outside this
+ * file needs them.
+ *
+ * `generateDIL` IS NO LONGER ONE OF THEM.  It is a real method, defined
+ * below, because its three relocations -- `linear2alaw`, `linear2ulaw` and
+ * `codeSegmentsBoundriesLookupTable` -- all exist, so defining it CLOSES the
+ * link rather than re-opening it.  `updateCodeSegmentPointer` stays a static
+ * (`updateCodeSegment`) because the blob inlines it into `generateDIL` and
+ * claiming its own symbol is a separate piece of work.
  * ===========================================================================
  */
 
@@ -314,8 +321,85 @@ updateCodeSegment(V90Phase3Modulator *m)
 }
 
 /*
- * `generateDIL`, inlined: one symbol of the digital impairment learning
- * sequence, and the four cursors it steps.
+ * ===========================================================================
+ * `V90Phase3Modulator::generateDIL` -- .text+0x2b070, 0x1aa = 426 bytes.
+ *
+ * One symbol of the digital impairment learning sequence, and the four
+ * cursors it steps.
+ *
+ * IT IS A METHOD HERE AND WAS THE FILE-STATIC `dilSymbol` BEFORE, and the
+ * difference is the whole point of claiming it.  The blob carries
+ * `generateDIL` as a `T` symbol AND inlines the identical body into
+ * `generateV90Symbol` and `generateV92Symbol` rather than calling it -- the
+ * same treatment `generateSd`, `generateJd` and the rest get.  Defining the
+ * method in this translation unit and calling it from the two generators is
+ * what reproduces both halves of that: GCC 3.4.2 at -O3 inlines it at all
+ * four call sites, and still emits the out-of-line copy because an external
+ * symbol has to exist whether or not anything reaches it.  Measured rather
+ * than assumed, with tools/instrcount.py over the period toolchain -- the
+ * generators are 560 and 696 instructions before this change and 560 and 696
+ * after it, unchanged to the instruction, and the standalone copy appears
+ * beside them at 98 against the blob's 117.
+ *
+ * NOTHING CALLS IT, IN THE BLOB OR IN THE PERIOD BUILD, AND NOTHING MAY BE
+ * ADDED THAT DOES.  `readelf -rW` over the 1.2 MB object finds ZERO
+ * relocations of any kind naming `_ZN18V90Phase3Modulator11generateDILEv`,
+ * against two naming `generateV90Symbol`, which is what shows the
+ * measurement can fire at all; the period object is zero as well.  A source
+ * call the compiler declined to inline would appear as exactly such a
+ * relocation, so that one measurement is both the callerless proof and the
+ * proof that the inlining shape is the object's.
+ *
+ * THE MODERN BUILD MAKES THE OTHER CHOICE AND THAT IS NOT A DEFECT.  GCC 13
+ * at -O2 declines to inline it and leaves four `call` relocations in
+ * build/repro; the differential tier is green either way, because the
+ * inlining decision changes no behaviour.  The compiler that decides the
+ * SHAPE is the period one, and it agrees with the blob.
+ *
+ * THE 19-INSTRUCTION GAP IS ACCOUNTED FOR AND IS NOT A MISSING CALL --
+ * instrcount.py's standing reading, and worth writing down because that is
+ * the failure it exists to catch.  Each side has exactly TWO `call`s and
+ * THREE relocations, so nothing is missing.
+ *
+ * THIRTEEN of the nineteen are alignment padding counted inside `st_size`:
+ * the blob carries seventeen filler instructions (three `lea 0x0(%e_,%eiz,1)`
+ * forms, one `lea 0x0(%esi),%esi` and thirteen `nop`s, most of them ahead of
+ * the search loop at 0x2b1f0) against four in ours.  Real instructions are
+ * 100 against 94.
+ *
+ * THE REMAINING SIX are one shape, seen three times: the blob re-reads what
+ * ours keeps.  It evaluates `seq2[seq2Index] == 0` twice, once for the branch
+ * at 0x2b08c and once for the `sete` at 0x2b0af, where ours computes the flag
+ * once; it re-reads `seq1Index` and `seq2Index` out of the object after the
+ * companding call (0x2b0dd, 0x2b0fc) where ours spills the two locals to the
+ * stack; and its ternary branches out to a tail at 0x2b180 that repeats four
+ * instructions ours reaches by falling through.
+ *
+ * The re-reads are a FORCED difference and a real observation about the
+ * original's source: a memory read cannot be moved across an opaque call in
+ * either direction, so the author's code reads those members after the
+ * companding call rather than caching them in locals as `i1` and `i2` do
+ * here.  It is left as it stands because this body is the one the
+ * differential tier has already proved, and rewriting it would move the two
+ * generators' counts and with them the evidence above.  Worth a pass of its
+ * own; it is a codegen-tier gain and no test can see it.
+ *
+ * THE RETURN TYPE IS `int`, AND ONLY THE INSTRUCTIONS SAY SO.  A mangled name
+ * carries the parameter types and not the return type, so `...generateDILEv`
+ * settles nothing.  The two loads that build the value are `movswl` --
+ * 0x188(%ebx,%esi,2) for `dilLevel[dilIndex]` and 0x178(%ebx,%edx,2) for
+ * `segmentLevel[segmentIndex]` -- and those are NOT evidence: the upper half
+ * of a load feeding a `short` is free either way, and finding 614 is the
+ * standing ruling against reading anything into it.  What IS forced is the
+ * re-extension after the negation, `neg %ecx ; movswl %cx,%edi` at 0x2b10f.
+ * Truncating the negated value to sixteen bits is demanded by `short level`
+ * however the function returns; widening it back to thirty-two is demanded
+ * only if a 32-bit consumer wants it, and its only consumer is the
+ * `mov %edi,%eax` at both `ret`s.  Under a `short` return the upper half of
+ * %eax is dead and that extension would not be emitted.  It is the same
+ * argument on the same evidence that the header already records for
+ * `generateV90Symbol` and `generateV92Symbol`, whose every path ends
+ * `movswl %si,%esi ; mov %esi,%eax`.
  *
  * `seq2` chooses the level -- a zero there means this symbol carries the
  * segment's own boundary level rather than the DIL entry's -- and `seq1`
@@ -324,57 +408,66 @@ updateCodeSegment(V90Phase3Modulator *m)
  * sequence's length rather than at 256, and a length of zero therefore never
  * wraps them, which is the object's behaviour and is preserved.
  *
+ * The two companding arms are two of the symbol's three relocations: mu-law
+ * goes through `linear2ulaw` and is complemented (`not %al`), anything else
+ * goes through `linear2alaw` and is exclusive-ored with 0xd5.  The third is
+ * `codeSegmentsBoundriesLookupTable`, reached because
+ * `updateCodeSegmentPointer` is inlined into the restart arm -- its own
+ * symbol is not among the relocations, which is what says it is inlined and
+ * not called.
+ *
  * Reaching `segmentLength[segmentIndex]` restarts the segment: all three
  * cursors go to zero, `dilIndex` advances modulo `dilCount`, and the segment
  * index is recomputed from the new level.  `segmentIndex` can be 8 -- one
  * past the end of both eight-element arrays -- which is what the object's own
  * search produces when no boundary matches; the reads that follow land inside
  * the object either way and are reproduced rather than corrected.
+ * ===========================================================================
  */
-static short
-dilSymbol(V90Phase3Modulator *m)
+int
+V90Phase3Modulator::generateDIL()
 {
-	unsigned char i1 = m->seq1Index;
-	unsigned char i2 = m->seq2Index;
-	int fromSegment = (m->seq2[i2] == 0);
-	unsigned short code = (unsigned short)m->dilLevel[m->dilIndex];
+	unsigned char i1 = seq1Index;
+	unsigned char i2 = seq2Index;
+	int fromSegment = (seq2[i2] == 0);
+	unsigned short code = (unsigned short)dilLevel[dilIndex];
 	unsigned char next1, next2;
 	unsigned int pos;
 	short level;
 
-	level = fromSegment ? m->segmentLevel[m->segmentIndex]
-			    : m->dilLevel[m->dilIndex];
-	m->usingSegmentLevel = (short)fromSegment;
+	level = fromSegment ? segmentLevel[segmentIndex]
+			    : dilLevel[dilIndex];
+	usingSegmentLevel = (short)fromSegment;
 
-	if (m->pcmType != PCM_TYPE_MU_LAW)
-		m->dilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);
+	if (pcmType != PCM_TYPE_MU_LAW)
+		dilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);
 	else
-		m->dilPcmCode = (unsigned char)~linear2ulaw((int)code);
+		dilPcmCode = (unsigned char)~linear2ulaw((int)code);
 
 	next2 = (unsigned char)(i2 + 1);
-	if (next2 == m->seq2Length)
+	if (next2 == seq2Length)
 		next2 = 0;
 
-	if (m->seq1[i1] == 0)
+	if (seq1[i1] == 0)
 		level = (short)-level;
 
 	next1 = (unsigned char)(i1 + 1);
-	if (next1 == m->seq1Length)
+	if (next1 == seq1Length)
 		next1 = 0;
 
-	pos = m->segmentPos + 1u;
-	if (pos == m->segmentLength[m->segmentIndex]) {
-		m->segmentPos = 0;
-		m->seq2Index = 0;
-		m->seq1Index = 0;
-		m->dilIndex = (unsigned char)(m->dilIndex + 1);
-		if (m->dilIndex == m->dilCount)
-			m->dilIndex = 0;
-		updateCodeSegment(m);
+	pos = segmentPos + 1u;
+	if (pos == segmentLength[segmentIndex]) {
+		segmentPos = 0;
+		seq2Index = 0;
+		seq1Index = 0;
+		dilIndex = (unsigned char)(dilIndex + 1);
+		if (dilIndex == dilCount)
+			dilIndex = 0;
+		updateCodeSegment(this);
 	} else {
-		m->seq1Index = next1;
-		m->segmentPos = pos;
-		m->seq2Index = next2;
+		seq1Index = next1;
+		segmentPos = pos;
+		seq2Index = next2;
 	}
 
 	return level;
@@ -497,7 +590,7 @@ V90Phase3Modulator::generateV90Symbol()
 
 	case P3M_STATE_DIL:
 		eventCode = 0;
-		sample = dilSymbol(this);
+		sample = generateDIL();
 		if (symbolCount == timeoutBase + 40000u) {
 			state = P3M_STATE_DIL_TIMEOUT;
 			symbolCount = 0;
@@ -507,7 +600,7 @@ V90Phase3Modulator::generateV90Symbol()
 
 	case P3M_STATE_DIL_END:
 		eventCode = 0;
-		sample = dilSymbol(this);
+		sample = generateDIL();
 		if (segmentPos == 0) {
 			edprintf("V90Phase3Modulator: Phase3 Terminated "
 				 "@ %d\r\n", (int)symbolCount);
@@ -660,7 +753,7 @@ V90Phase3Modulator::generateV92Symbol()
 
 	case P3M_STATE_DIL:
 		eventCode = 0;
-		sample = dilSymbol(this);
+		sample = generateDIL();
 		if (symbolCount == timeoutBase + 40000u) {
 			state = P3M_STATE_DIL_TIMEOUT;
 			symbolCount = 0;
@@ -670,7 +763,7 @@ V90Phase3Modulator::generateV92Symbol()
 
 	case P3M_STATE_DIL_END:
 		eventCode = 0;
-		sample = dilSymbol(this);
+		sample = generateDIL();
 		if (segmentPos == 0) {
 			edprintf("V90Phase3Modulator: Phase3 Terminated "
 				 "@ %d\r\n", (int)symbolCount);

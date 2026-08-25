@@ -1,0 +1,358 @@
+[
+ {
+  "_": [
+   "V90Phase3Modulator::generateDIL and the boundary search it inlines,",
+   "against t_v90dilgen.",
+   "",
+   "THE SYMBOL IS CALLERLESS IN THE BLOB -- zero relocations name it -- so",
+   "the only thing that can score these rows is a test that calls the `ref_`",
+   "alias directly.  t_v90dilgen does; t_v90p3mod reaches the same code only",
+   "through the two generators that inline it, which is why this set is",
+   "registered against the new binary and not against that one.",
+   "",
+   "`updateCodeSegment` is the file-static standing in for the blob's inlined",
+   "`updateCodeSegmentPointer`.  Its rows are here rather than in v90p3mod",
+   "because generateDIL is now its only caller: grep the file for",
+   "`updateCodeSegment(` and there is one call site.  Its anchors carry the",
+   "`m->` prefix, which is what keeps them distinct from the textually",
+   "identical search at the end of `resetDILGenerator`.",
+   "",
+   "The return type is not mangled and `int` is a claim derived from the",
+   "object's `neg %ecx ; movswl %cx,%edi ; mov %edi,%eax`, so it gets rows of",
+   "its own: a narrower return and a wider intermediate both change bits the",
+   "low sixteen cannot show, and the test compares all thirty-two."
+  ]
+ },
+
+ {
+  "label": "the symbol is returned unsigned, not sign-extended",
+  "find": "\t\tseq2Index = next2;\n\t}\n\n\treturn level;",
+  "replace": "\t\tseq2Index = next2;\n\t}\n\n\treturn (unsigned short)level;"
+ },
+ {
+  "label": "the symbol is truncated to a byte on the way out",
+  "find": "\t\tseq2Index = next2;\n\t}\n\n\treturn level;",
+  "replace": "\t\tseq2Index = next2;\n\t}\n\n\treturn (signed char)level;"
+ },
+ {
+  "label": "the negation is not taken modulo 2**16",
+  "equivalent": true,
+  "why": "EQUIVALENT, and the argument is about the code rather than about the test.  Widening the DECLARATION alone cannot change a value: every assignment to `level` is already a `short` -- `segmentLevel[...]`, `dilLevel[...]` and the explicitly cast `(short)-level` -- so an `int level` holds exactly the values a `short level` holds, and `return level` returns the same number.  The 16-bit wrap the object encodes as `neg %ecx ; movswl %cx,%edi` lives in the CAST, not in the declaration; the row `the negated level is not wrapped back into sixteen bits` moves the value that the cast protects and IS caught.",
+  "find": "\tunsigned int pos;\n\tshort level;",
+  "replace": "\tunsigned int pos;\n\tint level;"
+ },
+ {
+  "label": "the negated level is not wrapped back into sixteen bits",
+  "find": "\tif (seq1[i1] == 0)\n\t\tlevel = (short)-level;\n\n\tnext1 = (unsigned char)(i1 + 1);",
+  "replace": "\tif (seq1[i1] == 0) {\n\t\tif (level == -32768) {\n\t\t\tseq1Index = next1;\n\t\t\treturn 32768;\n\t\t}\n\t\tlevel = (short)-level;\n\t}\n\n\tnext1 = (unsigned char)(i1 + 1);"
+ },
+ {
+  "label": "the level is loaded through an unsigned short",
+  "find": "\tunsigned int pos;\n\tshort level;",
+  "replace": "\tunsigned int pos;\n\tunsigned short level;"
+ },
+
+ {
+  "label": "seq2 selects the entry level, not the segment level",
+  "find": "\tint fromSegment = (seq2[i2] == 0);",
+  "replace": "\tint fromSegment = (seq2[i2] != 0);"
+ },
+ {
+  "label": "seq2 is indexed by the seq1 cursor",
+  "find": "\tint fromSegment = (seq2[i2] == 0);",
+  "replace": "\tint fromSegment = (seq2[i1] == 0);"
+ },
+ {
+  "label": "the two level sources are swapped",
+  "find": "\tlevel = fromSegment ? segmentLevel[segmentIndex]\n\t\t\t    : dilLevel[dilIndex];",
+  "replace": "\tlevel = fromSegment ? dilLevel[dilIndex]\n\t\t\t    : segmentLevel[segmentIndex];"
+ },
+ {
+  "label": "the segment level is taken from the DIL cursor",
+  "find": "\tlevel = fromSegment ? segmentLevel[segmentIndex]\n\t\t\t    : dilLevel[dilIndex];",
+  "replace": "\tlevel = fromSegment ? segmentLevel[dilIndex]\n\t\t\t    : dilLevel[dilIndex];"
+ },
+ {
+  "label": "the entry level is taken from the segment cursor",
+  "find": "\tlevel = fromSegment ? segmentLevel[segmentIndex]\n\t\t\t    : dilLevel[dilIndex];",
+  "replace": "\tlevel = fromSegment ? segmentLevel[segmentIndex]\n\t\t\t    : dilLevel[segmentIndex];"
+ },
+ {
+  "label": "usingSegmentLevel records the inverse",
+  "find": "\tusingSegmentLevel = (short)fromSegment;",
+  "replace": "\tusingSegmentLevel = (short)!fromSegment;"
+ },
+ {
+  "label": "usingSegmentLevel is not written",
+  "find": "\tusingSegmentLevel = (short)fromSegment;",
+  "replace": "\t(void)0;"
+ },
+
+ {
+  "label": "the PCM code follows the level rather than the DIL entry",
+  "find": "\tunsigned short code = (unsigned short)dilLevel[dilIndex];",
+  "replace": "\tunsigned short code = (unsigned short)segmentLevel[segmentIndex];"
+ },
+ {
+  "label": "the level is sign-extended into the companding call",
+  "find": "\tunsigned short code = (unsigned short)dilLevel[dilIndex];",
+  "replace": "\tshort code = dilLevel[dilIndex];"
+ },
+ {
+  "label": "the two companding laws are the other way round",
+  "find": "\tif (pcmType != PCM_TYPE_MU_LAW)\n\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);",
+  "replace": "\tif (pcmType == PCM_TYPE_MU_LAW)\n\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);"
+ },
+ {
+  "label": "A-law tests for A-law rather than for not-mu-law",
+  "find": "\tif (pcmType != PCM_TYPE_MU_LAW)\n\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);",
+  "replace": "\tif (pcmType == PCM_TYPE_A_LAW)\n\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);"
+ },
+ {
+  "label": "the A-law code is exclusive-ored with 0xff, not 0xd5",
+  "find": "\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);",
+  "replace": "\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xff);"
+ },
+ {
+  "label": "the A-law code is stored uncomplemented",
+  "find": "\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);",
+  "replace": "\t\tdilPcmCode = (unsigned char)linear2alaw((int)code);"
+ },
+ {
+  "label": "the mu-law code is stored uncomplemented",
+  "find": "\t\tdilPcmCode = (unsigned char)~linear2ulaw((int)code);",
+  "replace": "\t\tdilPcmCode = (unsigned char)linear2ulaw((int)code);"
+ },
+ {
+  "label": "the mu-law code is exclusive-ored with 0xd5 like A-law",
+  "find": "\t\tdilPcmCode = (unsigned char)~linear2ulaw((int)code);",
+  "replace": "\t\tdilPcmCode = (unsigned char)(linear2ulaw((int)code) ^ 0xd5);"
+ },
+ {
+  "label": "both laws go through linear2ulaw",
+  "find": "\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);",
+  "replace": "\t\tdilPcmCode = (unsigned char)(linear2ulaw((int)code) ^ 0xd5);"
+ },
+ {
+  "label": "dilPcmCode is not written",
+  "find": "\tif (pcmType != PCM_TYPE_MU_LAW)\n\t\tdilPcmCode = (unsigned char)(linear2alaw((int)code) ^ 0xd5);\n\telse\n\t\tdilPcmCode = (unsigned char)~linear2ulaw((int)code);",
+  "replace": "\t(void)code;"
+ },
+
+ {
+  "label": "seq1 chooses the sign the other way round",
+  "find": "\tif (seq1[i1] == 0)\n\t\tlevel = (short)-level;",
+  "replace": "\tif (seq1[i1] != 0)\n\t\tlevel = (short)-level;"
+ },
+ {
+  "label": "seq1 is indexed by the seq2 cursor",
+  "find": "\tif (seq1[i1] == 0)\n\t\tlevel = (short)-level;",
+  "replace": "\tif (seq1[i2] == 0)\n\t\tlevel = (short)-level;"
+ },
+ {
+  "label": "the sign flip is a complement, not a negation",
+  "find": "\tif (seq1[i1] == 0)\n\t\tlevel = (short)-level;",
+  "replace": "\tif (seq1[i1] == 0)\n\t\tlevel = (short)~level;"
+ },
+ {
+  "label": "the sign is never applied",
+  "find": "\tif (seq1[i1] == 0)\n\t\tlevel = (short)-level;",
+  "replace": "\tif (0)\n\t\tlevel = (short)-level;"
+ },
+
+ {
+  "label": "the seq2 cursor advances by two",
+  "find": "\tnext2 = (unsigned char)(i2 + 1);",
+  "replace": "\tnext2 = (unsigned char)(i2 + 2);"
+ },
+ {
+  "label": "the seq2 cursor wraps at or past its length, not on it",
+  "find": "\tif (next2 == seq2Length)\n\t\tnext2 = 0;",
+  "replace": "\tif (next2 >= seq2Length)\n\t\tnext2 = 0;"
+ },
+ {
+  "label": "the seq2 cursor wraps on seq1Length",
+  "find": "\tif (next2 == seq2Length)\n\t\tnext2 = 0;",
+  "replace": "\tif (next2 == seq1Length)\n\t\tnext2 = 0;"
+ },
+ {
+  "label": "the seq2 cursor wraps to one",
+  "find": "\tif (next2 == seq2Length)\n\t\tnext2 = 0;",
+  "replace": "\tif (next2 == seq2Length)\n\t\tnext2 = 1;"
+ },
+ {
+  "label": "the seq1 cursor advances by two",
+  "find": "\tnext1 = (unsigned char)(i1 + 1);",
+  "replace": "\tnext1 = (unsigned char)(i1 + 2);"
+ },
+ {
+  "label": "the seq1 cursor wraps at or past its length, not on it",
+  "find": "\tif (next1 == seq1Length)\n\t\tnext1 = 0;",
+  "replace": "\tif (next1 >= seq1Length)\n\t\tnext1 = 0;"
+ },
+ {
+  "label": "the seq1 cursor wraps on seq2Length",
+  "find": "\tif (next1 == seq1Length)\n\t\tnext1 = 0;",
+  "replace": "\tif (next1 == seq2Length)\n\t\tnext1 = 0;"
+ },
+
+ {
+  "label": "the segment position is compared before it is advanced",
+  "find": "\tpos = segmentPos + 1u;",
+  "replace": "\tpos = segmentPos;"
+ },
+ {
+  "label": "the segment position advances by two",
+  "find": "\tpos = segmentPos + 1u;",
+  "replace": "\tpos = segmentPos + 2u;"
+ },
+ {
+  "label": "the segment ends at or past its length, not on it",
+  "find": "\tif (pos == segmentLength[segmentIndex]) {",
+  "replace": "\tif (pos >= segmentLength[segmentIndex]) {"
+ },
+ {
+  "label": "the segment length is indexed by the DIL cursor",
+  "find": "\tif (pos == segmentLength[segmentIndex]) {",
+  "replace": "\tif (pos == segmentLength[dilIndex]) {"
+ },
+ {
+  "label": "the restart leaves segmentPos where it was",
+  "find": "\t\tsegmentPos = 0;\n\t\tseq2Index = 0;\n\t\tseq1Index = 0;",
+  "replace": "\t\tsegmentPos = pos;\n\t\tseq2Index = 0;\n\t\tseq1Index = 0;"
+ },
+ {
+  "label": "the restart does not rewind seq1Index",
+  "find": "\t\tsegmentPos = 0;\n\t\tseq2Index = 0;\n\t\tseq1Index = 0;",
+  "replace": "\t\tsegmentPos = 0;\n\t\tseq2Index = 0;"
+ },
+ {
+  "label": "the restart does not rewind seq2Index",
+  "find": "\t\tsegmentPos = 0;\n\t\tseq2Index = 0;\n\t\tseq1Index = 0;",
+  "replace": "\t\tsegmentPos = 0;\n\t\tseq1Index = 0;"
+ },
+ {
+  "label": "the restart steps the cursors on rather than rewinding them",
+  "find": "\t\tsegmentPos = 0;\n\t\tseq2Index = 0;\n\t\tseq1Index = 0;",
+  "replace": "\t\tsegmentPos = 0;\n\t\tseq2Index = next2;\n\t\tseq1Index = next1;"
+ },
+ {
+  "label": "the DIL cursor advances by two",
+  "find": "\t\tdilIndex = (unsigned char)(dilIndex + 1);",
+  "replace": "\t\tdilIndex = (unsigned char)(dilIndex + 2);"
+ },
+ {
+  "label": "the DIL cursor does not advance",
+  "find": "\t\tdilIndex = (unsigned char)(dilIndex + 1);",
+  "replace": "\t\tdilIndex = (unsigned char)(dilIndex);"
+ },
+ {
+  "label": "the DIL cursor wraps at or past dilCount, not on it",
+  "find": "\t\tif (dilIndex == dilCount)\n\t\t\tdilIndex = 0;",
+  "replace": "\t\tif (dilIndex >= dilCount)\n\t\t\tdilIndex = 0;"
+ },
+ {
+  "label": "the DIL cursor never wraps",
+  "find": "\t\tif (dilIndex == dilCount)\n\t\t\tdilIndex = 0;",
+  "replace": "\t\tif (0)\n\t\t\tdilIndex = 0;"
+ },
+ {
+  "label": "the DIL cursor wraps on seq1Length",
+  "find": "\t\tif (dilIndex == dilCount)\n\t\t\tdilIndex = 0;",
+  "replace": "\t\tif (dilIndex == seq1Length)\n\t\t\tdilIndex = 0;"
+ },
+ {
+  "label": "the segment index is not recomputed on a restart",
+  "find": "\t\t\tdilIndex = 0;\n\t\tupdateCodeSegment(this);",
+  "replace": "\t\t\tdilIndex = 0;"
+ },
+ {
+  "label": "the segment index is recomputed on every symbol",
+  "find": "\t} else {\n\t\tseq1Index = next1;\n\t\tsegmentPos = pos;\n\t\tseq2Index = next2;\n\t}",
+  "replace": "\t} else {\n\t\tseq1Index = next1;\n\t\tsegmentPos = pos;\n\t\tseq2Index = next2;\n\t\tupdateCodeSegment(this);\n\t}"
+ },
+ {
+  "label": "the mid-segment arm does not store seq1Index",
+  "find": "\t} else {\n\t\tseq1Index = next1;\n\t\tsegmentPos = pos;\n\t\tseq2Index = next2;\n\t}",
+  "replace": "\t} else {\n\t\tsegmentPos = pos;\n\t\tseq2Index = next2;\n\t}"
+ },
+ {
+  "label": "the mid-segment arm does not store seq2Index",
+  "find": "\t} else {\n\t\tseq1Index = next1;\n\t\tsegmentPos = pos;\n\t\tseq2Index = next2;\n\t}",
+  "replace": "\t} else {\n\t\tseq1Index = next1;\n\t\tsegmentPos = pos;\n\t}"
+ },
+ {
+  "label": "the mid-segment arm does not store segmentPos",
+  "find": "\t} else {\n\t\tseq1Index = next1;\n\t\tsegmentPos = pos;\n\t\tseq2Index = next2;\n\t}",
+  "replace": "\t} else {\n\t\tseq1Index = next1;\n\t\tseq2Index = next2;\n\t}"
+ },
+ {
+  "label": "the two sequence cursors are stored into each other",
+  "find": "\t} else {\n\t\tseq1Index = next1;\n\t\tsegmentPos = pos;\n\t\tseq2Index = next2;\n\t}",
+  "replace": "\t} else {\n\t\tseq1Index = next2;\n\t\tsegmentPos = pos;\n\t\tseq2Index = next1;\n\t}"
+ },
+
+ {
+  "label": "the boundary search reads the level as a signed short",
+  "find": "\tunsigned int level =\n\t    (unsigned int)(unsigned short)m->dilLevel[m->dilIndex];",
+  "replace": "\tunsigned int level =\n\t    (unsigned int)(int)m->dilLevel[m->dilIndex];"
+ },
+ {
+  "label": "the boundary search reads the segment level, not the DIL level",
+  "find": "\tunsigned int level =\n\t    (unsigned int)(unsigned short)m->dilLevel[m->dilIndex];",
+  "replace": "\tunsigned int level =\n\t    (unsigned int)(unsigned short)m->segmentLevel[m->segmentIndex];"
+ },
+ {
+  "label": "the boundary compare is unsigned",
+  "equivalent": true,
+  "why": "EQUIVALENT over every value the operands can take, which is why the object's `jle` is a codegen fact and not a behavioural one (the finding-613 class).  `level` is a sixteen-bit ZERO extension, so it is 0..65535 and non-negative in thirty-two bits; every entry of the table is 124..32768 and positive.  Signed and unsigned comparison differ only when one operand has its top bit set, and neither ever does, so the two spellings agree over the whole domain.  The row that DOES bite is `the boundary search reads the level as a signed short`, which makes the level negative and is caught.",
+  "find": "\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable\n\t\t\t[(int)m->pcmType][i])",
+  "replace": "\t\tif (level <=\n\t\t    (unsigned int)V90Phase3Modulator::codeSegmentsBoundriesLookupTable\n\t\t\t[(int)m->pcmType][i])"
+ },
+ {
+  "label": "the boundary compare excludes the boundary itself",
+  "find": "\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable\n\t\t\t[(int)m->pcmType][i])",
+  "replace": "\t\tif ((int)level <\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable\n\t\t\t[(int)m->pcmType][i])"
+ },
+ {
+  "label": "the boundary row is the other law's",
+  "find": "\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable\n\t\t\t[(int)m->pcmType][i])",
+  "replace": "\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable\n\t\t\t[1 - (int)m->pcmType][i])"
+ },
+ {
+  "label": "the search stops one boundary short",
+  "find": "\tfor (i = 0; i <= 7; i++) {\n\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable",
+  "replace": "\tfor (i = 0; i <= 6; i++) {\n\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable"
+ },
+ {
+  "label": "the search runs one boundary past the row",
+  "find": "\tfor (i = 0; i <= 7; i++) {\n\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable",
+  "replace": "\tfor (i = 0; i <= 8; i++) {\n\t\tif ((int)level <=\n\t\t    V90Phase3Modulator::codeSegmentsBoundriesLookupTable"
+ },
+ {
+  "label": "the search clamps its answer to the last row entry",
+  "find": "\tm->segmentIndex = (unsigned char)i;",
+  "replace": "\tm->segmentIndex = (unsigned char)(i > 7 ? 7 : i);"
+ },
+
+ {
+  "label": "the mu-law row's last boundary is 32636 + 128",
+  "find": "\t{   124,   380,   892,  1916,  3964,  8060, 16252, 32636 },",
+  "replace": "\t{   124,   380,   892,  1916,  3964,  8060, 16252, 32764 },"
+ },
+ {
+  "label": "the mu-law row starts at 128, not 124",
+  "find": "\t{   124,   380,   892,  1916,  3964,  8060, 16252, 32636 },",
+  "replace": "\t{   128,   380,   892,  1916,  3964,  8060, 16252, 32636 },"
+ },
+ {
+  "label": "the A-law row's last boundary is 32767, not 32768",
+  "find": "\t{   256,   512,  1024,  2048,  4096,  8192, 16384, 32768 }",
+  "replace": "\t{   256,   512,  1024,  2048,  4096,  8192, 16384, 32767 }"
+ },
+ {
+  "label": "the two boundary rows are swapped",
+  "find": "\t{   124,   380,   892,  1916,  3964,  8060, 16252, 32636 },\n\t{   256,   512,  1024,  2048,  4096,  8192, 16384, 32768 }",
+  "replace": "\t{   256,   512,  1024,  2048,  4096,  8192, 16384, 32768 },\n\t{   124,   380,   892,  1916,  3964,  8060, 16252, 32636 }"
+ }
+]

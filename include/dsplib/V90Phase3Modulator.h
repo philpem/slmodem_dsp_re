@@ -13,13 +13,20 @@
  * displacement is not a size (finding 229's last section); the .cpp asserts
  * both the size and every offset below.
  *
- * Twenty-three members are declared and SEVEN are defined -- `setSessionFlag`,
- * `resetDILGenerator`, `generateV90Symbol`, `generateV92Symbol`, `reset`, and
- * now the constructor and the destructor.
+ * Twenty-three members are declared and TWELVE are defined -- count them in
+ * the .cpp rather than here, because this sentence has gone stale once
+ * already (it read SEVEN while eleven were defined): `setSessionFlag`,
+ * `resetDILGenerator`, `reset`, `generateV90Symbol`, `generateV92Symbol`,
+ * `generateSymbol`, `generateDIL`, `exitDIL`, `exitJd`, `exitJdPhase`, the
+ * constructor and the destructor.
  * Everything else is declared for the record and deliberately left undefined,
  * because defining a method whose callees are not written breaks the link for
  * the entire test suite (docs/v90cpp.md).  Nothing defined here calls an
  * undefined one.
+ *
+ * `generateDIL` IS THE ONE DEFINED MEMBER WITH NO CALLER IN THE OBJECT, and
+ * that is deliberate on the vendor's part rather than an accident of ours;
+ * see its declaration below.
  *
  * THE SCRAMBLER IS A SUBOBJECT, NOT A POINTER.  `reset` takes the address of
  * `this + 0x20` and passes it to `Scrambler<unsigned char, int>::reset`, and
@@ -235,10 +242,29 @@ public:
 	void exitDIL();
 
 	/*
+	 * `generateDIL` IS DEFINED, and it is the one member of this class
+	 * that is defined without being called.  The blob has it as a `T`
+	 * symbol that nothing reaches -- zero relocations name it anywhere in
+	 * the 1.2 MB object -- while inlining the same body into the two
+	 * symbol generators, and .cpp reproduces both halves by defining the
+	 * method and calling it from the generators, where GCC inlines it.
+	 * NO CALLER AND NO DISPATCH ARM MAY BE ADDED: a call the compiler
+	 * declined to inline would put a relocation on the symbol that the
+	 * object does not have.
+	 *
+	 * `int` for the reason `generateV90Symbol` is, and the .cpp carries
+	 * the derivation: the value is a `short` throughout -- the negation is
+	 * taken modulo 2**16 -- and is then widened back to thirty-two bits
+	 * by `movswl %cx,%edi` for the `mov %edi,%eax` that returns it.  A
+	 * `short` return leaves the upper half of %eax dead and would not
+	 * need that widening.
+	 */
+	int generateDIL();
+
+	/*
 	 * Declared, not defined -- see the file comment.  A return type is not
 	 * mangled, so it is unknown for all of them.
 	 */
-	void generateDIL();
 	void generateSd();
 	void generateSdNot();
 	void generateJd();

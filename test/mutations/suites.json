@@ -775,5 +775,9 @@
  "vpcmxfterm": [
   "src/pump/v90/VPcmXfTerm.cpp",
   "build/test/t_v90demod"
+ ],
+ "v90dilgen": [
+  "src/pump/v90/V90Phase3Modulator.cpp",
+  "build/test/t_v90dilgen"
  ]
 }
