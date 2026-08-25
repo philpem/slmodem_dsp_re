@@ -225,6 +225,18 @@ V92Modem::~V92Modem()
  * caller's own slots.  That is what says the two signatures are identical and
  * in the same order, and it is also what says both return `void`.
  *
+ * AND THE SHAPE BELOW IS AN `if`/`else if` CHAIN, NOT A `switch`, BECAUSE THE
+ * OBJECT'S TAIL JUMP SAYS SO.  Both spellings compile to the same test
+ * sequence -- `test %edx,%edx; je` then `dec %edx; je`, the empty arm first --
+ * so the branches cannot tell them apart.  The CALLS can: under GCC 3.4.2 at
+ * these flags a `break` out of a `switch` puts the `dsplibs_debug_printf` call
+ * out of tail position and it is emitted as a `call` with a 0x2c frame, where
+ * the chain below leaves it in tail position and it becomes
+ * `jmp dsplibs_debug_printf` with the object's own 0xc frame.  The object has
+ * the `jmp`.  Five spellings were compiled: `switch` with `break`, `switch`
+ * with `return`, `switch` with the `default` arm first, `switch` calling
+ * `edprintf`, and this chain; only the chain emits the jump.  Finding F7982.
+ *
  * THE DIGITAL ARM RETURNS WITHOUT SO MUCH AS A MESSAGE, which is not an
  * oversight: `vpcm_create` passes NULL to `VPCMXF_Create` and that selects the
  * DEMODULATOR, so it is the V.90 side that is dead in the shipped object.  V.92
@@ -237,20 +249,14 @@ void
 V92Modem::progress(int *bits, unsigned int &nbits, float *out,
 		   unsigned int nSamples)
 {
-	switch (modemSide) {
-	case V92_MODEM_SIDE_DIGITAL:
-		break;
-
-	case V92_MODEM_SIDE_ANALOG:
+	if (modemSide == V92_MODEM_SIDE_DIGITAL) {
+	} else if (modemSide == V92_MODEM_SIDE_ANALOG) {
 		modulator->progress(bits, nbits, out, nSamples);
-		break;
-
-	default:
+	} else {
 		/* .rodata.str1.4+0x3478. */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V92Modem progress: Illegal modemSide\r\n");
-		break;
 	}
 }
 

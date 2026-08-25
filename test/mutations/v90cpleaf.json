@@ -87,7 +87,7 @@
  },
  {
   "label": "calcSequenceLength always rounds up",
-  "find": "\tif (quot * group == total)\n\t\tword_3bac = quot * group;\n\telse\n\t\tword_3bac = (quot + 1) * group;\n}",
+  "find": "\tif (group * quot == total)\n\t\tword_3bac = group * quot;\n\telse\n\t\tword_3bac = (quot + 1) * group;\n}",
   "replace": "\tword_3bac = (quot + 1) * group;\n}"
  },
  {

@@ -220,6 +220,16 @@ V90Modem::reset(unsigned int qcFlag)
  * what GCC emits for a sibling call whose argument list is the caller's own,
  * and it is why all three exits are `jmp` and none is `call`.
  *
+ * WHICH IS WHY THE ARMS ARE AN `if`/`else if` CHAIN AND NOT A `switch`.  This
+ * was a `switch` and it emitted two `jmp`s and a `call`: a `break` out of a
+ * `switch` puts the `dsplibs_debug_printf` in the default arm out of tail
+ * position under GCC 3.4.2, and the frame grows from the object's 0xc to 0x2c
+ * to hold the outgoing argument.  The chain below emits all three `jmp`s and
+ * the 0xc frame.  It is still 172 bytes against the object's 188 -- the four
+ * `mov`s at 0x19af1..0x19b04 that write the incoming words back into their own
+ * slots are ones GCC elides for us, and that residual is not understood -- but
+ * the exits are now the object's.  Findings F7982 and F7983.
+ *
  * THE SWITCH IS THE CONSTRUCTOR'S, INSTRUCTION FOR INSTRUCTION.  `test %edx,
  * %edx ; je` then `dec %edx ; je` then fall through, over an UNSIGNED
  * `V90ModemSide` -- the same three-way shape V90ModemCtor.cpp has and the
@@ -238,19 +248,13 @@ void
 V90Modem::progress(int *bits, unsigned int &nofBits, float *samples,
 		   unsigned int nofSymbols)
 {
-	switch (side) {
-	case V90_MODEM_SIDE_DIGITAL:
+	if (side == V90_MODEM_SIDE_DIGITAL) {
 		modulator->progress(bits, nofBits, samples, nofSymbols);
-		break;
-
-	case V90_MODEM_SIDE_ANALOG:
+	} else if (side == V90_MODEM_SIDE_ANALOG) {
 		demodulator->progress(bits, nofBits, samples, nofSymbols);
-		break;
-
-	default:
+	} else {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Modem progress: Illegal "
 					     "modemSide\r\n");
-		break;
 	}
 }
