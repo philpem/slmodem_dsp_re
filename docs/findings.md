@@ -81360,3 +81360,106 @@ shape -- an agent that measured the tree rather than believing its brief.
 The two mutation rows that remove the casts are now in
 `test/mutations/vpcmqcline.json`; before the fix they could not exist, because
 the mutant would have been the shipped source.
+
+### 7608. The numbers the twelve-symbol batch landed at, and what the `VPcmV34Main.cpp +72` span reads now
+
+Twelve symbols, **2,516 bytes**, every address and size confirmed with
+`nm -S` against `ref/slmodemd/dsplibs.o` before anything was written:
+
+	0000f750  0x30b  779  VPcmFloModem::qcLineVerification(float*, float*,
+	                          unsigned int, int*, int*, int*, int*)
+	00031c60  0x131  305  setDilDescriptor(tagV90DILdescriptor*, DilType)
+	000199a0  0x0dd  221  V90Modem::reset(unsigned int)
+	0000f200  0x095  149  VPcmFloModem::vPcmResetPhase3Modem()
+	                1454  four functions
+	00000480  512  TO      00000680   16  H      00000690    2  N
+	00000692   16  REF     000006c0  256  TP     000007c0  256  SP
+	000008c0    2  Ltp     000008c2    2  Lsp
+	                1062  eight LOCAL `.data` objects
+
+`closure.py --missing` agrees exactly: `qcLineVerification` closes over itself
+alone at 779, and `vPcmResetPhase3Modem` over 11 symbols and 1,737 bytes --
+the other three functions and all eight tables.  779 + 1,737 = 2,516.
+
+#### `make phase`
+
+	baseline (9ddfc5bc)   period differential: 246 passed, 0 failed   exit 0
+	final                 period differential: 247 passed, 0 failed   exit 0
+	phase boundary: differential, 64-bit, interop, coverage and debug sites all OK
+	                measured: 34739/36636 src/ lines over 174 file(s),
+	                          1001 debug sites, 35 anchored deviation sites
+
+**The count moved by exactly one and the one is a BINARY, not a check.**
+`period_inner.sh` counts one per test binary; this batch added `t_vpcmqcline`
+and extended three existing fixtures in place, so three of the four functions
+move no count at all.  Their checks are inside `t_v90adid`, `t_v90modemctor`
+and `t_vpcmqcline`'s own groups.
+
+#### Instruction counts against the blob's
+
+	              ours   blob   ourbytes   blobbytes
+	qcLineVerification     159    159        779         779   exact
+	setDilDescriptor        86     86        305         305   exact
+	vPcmResetPhase3Modem    38     38        149         149   exact
+	V90Modem::reset         61     60        222         221   +1, explained
+
+Three of four are exact in BOTH columns -- same instruction count and the same
+byte count, which is a stronger statement than either alone.  The fourth is
+`+1` and the excess is named rather than left open: the masked probing path
+ends `xor %eax,%eax ; jmp` in ours and a bare `jmp` in the object, because the
+object CROSS-JUMPS it into the `else` arm's own `xor` at 0x19a28 where ours
+materialises a second copy.  Every instruction either side is identical and
+both reach `mov %eax,0x4(%esp)` with `%eax` zero; it is basic-block placement,
+617's free column.  **An excess and not a gap, which is the benign direction**
+(7480).
+
+`qcLineVerification`'s byte column is the one that earned its keep: it read
+777 against 779 until the two `(unsigned short)` casts of finding 7607 went
+in, and the instruction column was exact and wrong the whole time.
+
+#### Coverage
+
+	translated  75.1% -> 75.3%   551,739 -> 553,193 bytes, 1,240 -> 1,244 symbols
+
+**+1,454 bytes and +4 symbols, exactly the four functions and nothing else.**
+The 1,062 bytes of tables do not appear because `coverage.py` counts `.text`.
+
+#### Mutation suites
+
+	vpcmqcline      60 mutations: 60 caught, 0 NOT caught, 0 unusable, 0 equivalent
+	v90dil          47 mutations: 42 caught, 0 NOT caught, 0 unusable, 5 equivalent
+	v90modemreset   20 mutations: 19 caught, 0 NOT caught, 0 unusable, 1 equivalent
+
+`v90dil` was 33 and is 47.  **The six equivalents are pre-declared with
+reasons rather than discovered**, and every one of them is a consequence of
+7602: `TO`'s two rows are byte-identical, `REF`'s are identical, `N` is
+`{144, 144}` and `Lsp` and `Ltp` are the SAME pair `{120, 60}` -- so four
+row-selection and bound mutations cannot be caught by any fixture, whatever it
+drives.  The sixth is `V90Modem::reset`: masking the variable and writing
+`demodulator->reset(PROBING_MODE ? 0 : qcFlag)` are the same program.
+
+#### The span
+
+	tools/service.py: read 200 object(s) from build/src/ (200 source file(s) under src/)
+	DATA MODE  100 symbols  44264 bytes      (was 104 and 45718)
+	DATA, by span:  `VPcmV34Main.cpp +72` IS NOT LISTED
+
+**-4 symbols and -1,454 bytes, and the span is gone from the DATA list
+entirely.**  The denominator is quoted beside it because a zero from an empty
+or partial object tree is finding 3055's failure mode; four stale
+`V90Dil.o` objects left by the rename had to be deleted first, and until they
+were, `objtree` read 201 objects for 200 sources.
+
+**TWO THINGS A READER WHO RUNS THE TOOL MUST NOT BE SURPRISED BY.**
+
+1. `VPcmV34Main.cpp +72` still appears under **"no entry point reaches it"**,
+   holding 24 symbols including `calculateDilLength(DilType, PcmType)` and
+   `getSegmentPointer`.  The brief's claim is about the DATA-mode span, and
+   that is the one at zero.
+2. **`VPcmV34Main.cpp +72` is a `tumap` BRACKET, not a translation unit.**
+   `tumap.py` recovers hard `.text` extents for only 19 of 283 TUs and reports
+   the rest as a shared bracket named after its nearest anchor, so a symbol
+   filed under that label is not from `VPcmV34Main.cpp`.  Finding 7600 names
+   the real file for four of them, `V90DilDescriptorSettings.cpp`, and the two
+   sitting side by side in a report is the bracket and the TU, not a
+   contradiction.

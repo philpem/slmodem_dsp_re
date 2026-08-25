@@ -1,5 +1,18 @@
 # `V90Demodulator::progress`: the batch, the order, and what is already decoded
 
+> **THE `VPcmV34Main.cpp +72` DATA-MODE SPAN IS NOW EMPTY.**  The twelve
+> symbols after this one -- `VPcmFloModem::qcLineVerification`,
+> `setDilDescriptor`, `V90Modem::reset`, `VPcmFloModem::vPcmResetPhase3Modem`
+> and the eight DIL tables `TO`, `SP`, `TP`, `H`, `REF`, `Lsp`, `Ltp` and `N`,
+> 2,516 bytes in all -- are written and differentially green, and
+> `tools/service.py` no longer lists that span under DATA at all.  With them
+> the four `VPcmV34Progress` entry points are complete and the unwritten
+> boundary below it is closed (finding 7606).  Findings **7600-7608**; 7607 is
+> the one to read first, a `movzwl` this tree's own header had recorded and
+> whose `src/` shipped without it.  What remains under that bracket label is
+> 24 symbols that **no entry point reaches**, among them
+> `calculateDilLength(DilType, PcmType)` and `getSegmentPointer`.
+
 `.text+0x1ca90`, **7,276 bytes**, 1,700 instructions, 44 distinct callees. The
 largest unwritten function in the V.90/V.92 span and the one everything else in
 that span waits on. This is the working record; `docs/plan.md` is the order for
