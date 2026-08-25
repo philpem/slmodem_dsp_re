@@ -82699,3 +82699,267 @@ the report is the only artefact that says what an agent stands behind** -- and
 here the branch it was told to use was not even the branch it was on.  A
 parent that reads a sibling's branch tip, or trusts a worktree path it did not
 verify from inside, is reading something nobody claimed.
+
+---
+
+### 7760. Nineteen refinement candidates across seven V.90/V.92 files: eight register allocation, eleven statement order, and not one defect
+
+7630's refinement worklist -- same size, same instruction sequence, different
+bytes -- assigned nineteen symbols in seven files to this pass.  **All
+nineteen are the free column.  There is no width, no signedness, no wrong
+immediate and no wrong displacement anywhere in the batch**, and no source
+byte was changed.  `byteident.py` grade 0 is **419 of 1251 (33.5%) before and
+419 after**, measured at `06da0c38` on GCC 3.4.2 exact.
+
+    src/pump/v90/V92Phase4Modulator.cpp     7 symbols   777 B
+    src/pump/v90/ModulusCoder.cpp           4           212 B
+    src/pump/v90/V90Phase4Demodulator.cpp   2           450 B
+    src/pump/v90/V90Demapper.cpp            2           386 B
+    src/pump/v90/V92ModulusEncoder.cpp      2           192 B
+    src/pump/v90/V92Mapper.cpp              1            56 B
+    src/pump/v90/V90SignBitsExtractor.cpp   1            44 B
+
+Nineteen symbols are **fourteen distinct bodies**: five of the seven files
+contribute a `C1`/`C2` constructor pair that is one body emitted twice, and
+`ModulusEncoder`'s constructor and `ModulusDecoder`'s are byte for byte each
+other's, which is the object's own claim and already recorded in the source.
+
+#### The discriminator, and the first version of it was unsound
+
+Take `byteident.py`'s own `insns()` -- which already normalises relocated
+operands by target and branch targets to function-relative -- and replace each
+register by a token.  Then:
+
+    same sequence, position for position      -> REGISTER ALLOCATION
+    same MULTISET, different order            -> STATEMENT ORDER
+    neither                                   -> a content difference:
+                                                 an immediate, a displacement
+                                                 or an operand width
+
+**The first version blanked every register to one token and that hides the
+exact defect this pass exists to find.**  `objdump` prints both a 16-bit and a
+32-bit register store as `mov`, so `mov %ax,0x4(%ebx)` and `mov %eax,0x4(%ebx)`
+would have compared EQUAL and a 613-family width error would have been
+classified free.  The token is now the register's WIDTH CLASS -- `%r8`, `%r16`,
+`%r32` -- so the two do not compare equal.  Re-run with the fix, the partition
+did not move: 8 / 11 / 0 either way.  It is recorded because the clean result
+was reached twice and only the second run was entitled to it.
+
+#### The eight that are register allocation
+
+Every mnemonic, immediate, displacement, relocation target and register WIDTH
+is identical in the same position; only register NAMES differ.  That is
+CLAUDE.md's free column verbatim.
+
+    V92Phase4Modulator::setMappingParams
+    V92Phase4Modulator::generateDataSymbolBeforeRRN
+    V92Phase4Modulator::exitCPt        V92Phase4Modulator::recivedCP
+    V92Phase4Modulator::recivedEd      V92Phase4Modulator::recivedRt
+    V92Mapper::reset                   V90SignBitsExtractor::V90SignBitsExtractor
+
+The largest is `recivedRt` at 251 bytes and four differing bytes: the blob
+holds a zero in `%edx` and the reloaded `cp` in `%eax` across
+`V92CP::infoToBits`, we hold them the other way round, and nothing else in the
+function differs.  The smallest is `V90SignBitsExtractor`'s constructor, whose
+two differing bytes are the constant 6 travelling to the stack in `%ecx`
+rather than `%edx`.
+
+**THE CLASSIFIER DOES NOT PIN THE FRAME REGISTERS AND `alpha_equal` DOES, so
+say why these eight are safe rather than inheriting the gap.**  Folding
+`%esp`/`%ebp` into `%r32` with the general registers means a swap between a
+frame register and a general one would read as REGISTER-ONLY, where
+`alpha_equal` rejects it on principle -- "the frame is not a free choice".
+The property that matters is not "the function never touches `%esp`" -- every
+argument setup does, and the first draft of this paragraph claimed otherwise
+and was wrong.  It is that no frame register is RENAMED: at every position, a
+frame register on one side is the same frame register on the other.  Measured
+directly over the eight: **57 frame-register operands, 0 renamed.**  So the
+gap is closed by measurement rather than by the six that happen to be
+`alpha_equal=True` -- but it is closed HERE and not in the classifier, and
+**anyone reusing it on a fresh batch must run that check themselves.**
+
+#### The eleven that are statement order
+
+Same multiset of instructions, different order.  Six bodies:
+
+    ModulusDecoder::ModulusDecoder / ModulusEncoder::ModulusEncoder
+        7 independent `movl $0x0` -- blob 0x18 down to 0x00, ours 0x00 up
+    V92ModulusEncoder::V92ModulusEncoder
+        13 of them -- blob 0x48 down to 0x18, ours 0x18 up
+    V90Demapper::V90Demapper
+        8 of them -- blob 0x2c down to 0x04, ours 0x04 up
+    V92Phase4Modulator::resetBeforRRN
+        two of them, swapped: 2 bytes of 81
+    V90Phase4Demodulator::V90Phase4Demodulator
+        not a reversal -- 15 of 58 positions, loads and stores interleaved
+
+#### The check that makes "free" a measurement rather than a shrug
+
+A matching instruction MULTISET does not prove the two functions store the same
+values in the same places.  Loads and stores are separate instructions paired
+through a register, and the classifier blanks registers -- so a blob that puts
+argument A in field X and a build that puts argument A in field Y have the same
+multiset.  A symbolic walk was run over both bodies instead, carrying a value
+per register through loads, moves, zero idioms and the call-clobber boundary,
+and reporting `{destination: value}`:
+
+**All fourteen bodies have an IDENTICAL value-to-destination map.**  For
+`V90Phase4Demodulator`'s constructor -- the largest of the batch at 53
+differing bytes -- that is eleven argument-to-field assignments, `0x00`,
+`0x04`, `0x0c`, `0x10`, `0x14`, `0x18`, `0x1c`, `0x3054`, `0x3058`, `0x34f8`
+and `0x3514`, each fed from the same stack argument on both sides, with only
+the emission order differing.  Without that check the multiset result would
+have been consistent with a genuinely mis-wired constructor.
+
+The one map the walk reported as differing is its OWN limit and is named as
+such: in `recivedEd` it does not model `sbb`, so the value written to `+0x1b8`
+falls back to the register name and reads `%ecx` against `%edx`.  The
+position-for-position classifier had already proved that function
+register-only, which is the stronger statement.
+
+#### Reconciling this list against a fresh `byteident.py` run
+
+The nineteen come from the RAW `verdict()` bucket.  `byteident.py`'s printed
+`BYTES` count is taken AFTER grade-1 promotion, so a fresh run buckets only
+thirteen of these nineteen as `BYTES` and the other six as `REGALLOC`.  Both
+numbers are right; they answer different questions.  7630's own "78 of 132" is
+the raw figure, and anyone reconciling a worklist against the printed bucket
+will come up short by exactly the grade-1 set.  See 7762 -- the promotion
+itself undercounts.
+
+---
+
+### 7761. The store order in these constructors is NOT recoverable, the natural experiment says it is, and the natural experiment is selection-biased
+
+This is the reasoning that nearly turned 7760's eleven order-only bodies into
+eleven source edits.  It is written out because every step of it looked sound
+and the conclusion was wrong.
+
+**The hypothesis.**  Four of the six order-only bodies are an exact REVERSAL: a
+contiguous run of independent `movl $0x0` stores, blob descending, ours
+ascending.  Our `ModulusEncoder::ModulusEncoder` is a member-initialiser list.
+C++ executes a member-initialiser list in DECLARATION order, and declaration
+order is ascending offset order -- so a member-initialiser list *cannot* emit
+descending, and the object's descending run would prove the author wrote a
+constructor BODY.  That is a source-construct recovery with a reason in the
+object, not a permutation, and it would have been legitimate.
+
+**The survey that appeared to confirm it.**  The premise needs GCC 3.4.2 at
+these flags to preserve the source order of such a run.  Rather than a
+synthetic probe, the tree's own verified corpus was measured: every symbol
+already at grade 0 containing a run of three or more constant stores through
+one base.  **28 runs -- 15 ascending, 5 descending, 8 mixed -- every direction
+the source has, the object reproduces.**  `V90Mapper::V90Mapper` is
+byte-identical and its body is written in descending offset order,
+`0x14, 0x10, 0x0c, 0x08, 0x04`, matching the blob exactly; `V90RDetector::
+reset` is written ascending and emits ascending; eight MIXED runs come out
+byte-identical in orders no scheduler would invent.  It reads as decisive.
+
+**IT CANNOT BOUND ITS OWN FAILURE RATE, BECAUSE THE SAMPLE IS CONDITIONED ON
+THE OUTCOME.**  A grade-0 function was selected *because* our bytes equal the
+blob's.  Its source order therefore MUST equal its emitted order -- that is
+what byte identity means.  The 28 observations are real as far as they go: our
+source order and the object's emitted order can be read off separately and they
+agree.  What the sample cannot contain is a case where the relationship FAILED,
+so however many functions it walks it can never say how often that happens --
+and "how often does it fail" was the entire question.  **It is findings 134,
+2400 and 3111's dead detector wearing a new costume**: a check whose population
+excludes its own failures, presented as a check that passed, with a denominator
+of 28 making it look strong.  The denominator is the part that made it
+convincing.
+
+**The counterexample is in this batch, and it takes one line of source.**
+`V92Phase4Modulator::resetBeforRRN` is written
+
+    word_1c4 = 0;
+    word_1c0 = 0;
+
+-- offsets asserted at compile time by `V92P4M_OFF(word_1c0, 0x1c0)` and
+`V92P4M_OFF(word_1c4, 0x1c4)` in the same file -- which is the OBJECT'S OWN
+ORDER, `mov %edx,0x1c4(%eax)` before `mov %ecx,0x1c0(%eax)`.  GCC 3.4.2 at
+these flags emits them **SWAPPED**, and those two bytes are the whole
+difference in an 81-byte function.  The compiler sank the load of `cp` between
+them and the register assignment followed.
+
+So the premise is false, and that is finding 617's `toneiir_reset` ruling --
+"GCC does NOT simply preserve it; our source is already in the object's order
+and the compiler reorders ours" -- with a cleaner witness, two adjacent
+independent stores whose source is verbatim the object's sequence.
+
+**BE EXACT ABOUT WHAT THAT WITNESS ESTABLISHES, because this finding's whole
+subject is a claim outrunning its evidence.**  It is NOT "store order at `-O3`
+is always the scheduler's".  In `resetBeforRRN` the compiler had a REASON to
+reorder -- it sank the load of `cp` between the two stores and the register
+assignment followed -- and nothing in that case speaks to a bare uninterrupted
+run of seven `movl $0x0` with no competing load.  What is established is only
+this: **GCC 3.4.2 at these flags demonstrably reorders adjacent independent
+stores when it has a scheduling reason to, so the premise required to read the
+object's order as the author's is false.**
+
+**So the four reversals are UNEXPLAINED, not accounted for.**  Whether this
+compiler reverses a bare run is not settled here.  The disposition is that
+acting on them is UNLICENSED -- the evidence that would license it has been
+withdrawn -- and that is a weaker statement than knowing why they differ.
+Anyone reopening this should start by settling the bare-run case on a
+population sampled by SOURCE order, not by agreement.
+
+**What follows for the four reversals.**  Nothing may be concluded from the
+direction, so the mem-init-versus-body reading is unpinnable and the eleven
+bodies are recorded, not chased.  `src/pump/v90/ModulusCoder.cpp` already says
+"GCC is free to emit it either way" and **that comment is correct and stands**
+-- but it is a bare assertion with no measurement behind it, and it was very
+nearly overturned by a survey with a denominator of 28.  It survived because a
+counterexample was looked for in the batch's own source, not because the
+survey was read carefully.
+
+The general rule this leaves: **to test whether a compiler preserves something,
+you must sample on the SOURCE property and observe the OBJECT, never sample on
+agreement between them.**  Every check whose population is "the things that
+already match" is measuring its own selection.
+
+---
+
+### 7762. `byteident.py`'s grade 1 undercounts, and the cause is a range-ending idiom its own docstring documents and its code does not implement
+
+Two of 7760's eight register-only bodies -- proved pure renamings position for
+position, every immediate, displacement and operand width identical -- are
+REJECTED by `alpha_equal` and so never reach grade 1.  Traced to the
+instruction:
+
+    recivedEd, insn 29    blob `sbb %ecx,%ecx`   ours `sbb %edx,%edx`
+    recivedRt, insn 49    blob `xor %edx,%edx`   ours `xor %eax,%eax`
+
+Both are the same defect and it is in the definition-idiom clause.
+
+**One: `sbb r,r` is not in the set.**  The clause admits only `xor` and `sub`
+(`mx in ("xor", "sub")`).  `sbb %ecx,%ecx` computes `-CF` and its result does
+not depend on `%ecx`, so it ends the live range exactly as `xor r,r` does -- it
+is half of the `cmp $1; sbb r,r; add $k` if-conversion idiom that finding 2411
+records the object using freely.  Read as a USE, its stale binding contradicts
+the rename and the function is rejected.
+
+**Two: the idiom is broken even where it IS admitted.**  For a recognised
+definition the code strips only the DESTINATION -- `ux = fx[:-1]` -- and for
+`xor %edx,%edx` the two operands are the same register, so the SOURCE `%edx`
+survives into the use list and is bound against the OUTGOING map before the
+rebind ever runs.  The idiom therefore fails precisely when the register is
+being renamed, which is the only situation it exists to handle.  That is why
+`recivedRt` bails at an instruction the tool believes it handles.
+
+The docstring says the range "lapses" on "the `xor r,r` idiom".  **The comment
+carries a derivation the code does not implement** -- finding 6100's shape, and
+7607's, in the tool that adjudicates 7630's whole worklist.
+
+**NOT FIXED HERE, deliberately.**  `alpha_equal` is a LOOSENING: widening it is
+the direction that risks certifying different code as equivalent, which is why
+six of its eight `--self-test` cases are things it must still REJECT.  A change
+needs that self-test extended and the fire/quiet injection ritual CLAUDE.md
+requires of any detector, and it is not this pass's brief -- a pass should not
+widen the tool that grades it.  Recorded with the two instruction indices so
+the fix is a small job for whoever takes it.
+
+**What it costs today.**  Grade 1 is understated by an unknown amount and by at
+least two symbols; the `REGALLOC` bucket is the promotion that decides which of
+the 132 printed `BYTES` entries are already explained, so the printed `BYTES`
+count is correspondingly overstated.  Neither affects grade 0, which is the
+acceptance test and is measured directly.
