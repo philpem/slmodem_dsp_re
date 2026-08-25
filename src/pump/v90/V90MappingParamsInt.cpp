@@ -17,6 +17,7 @@
  *   0x33670   24  getDataBitRate
  *   0x336b0  622  setParamsInfoFromCPUnPck
  *   0x33920  822  setV92CPpckFromParamsInfo
+ *   0x33c60  601  setParamsInfoFromV92CPUnPck
  *   0x33ec0  619  displaySpectralParams
  *
  * All six are UNMANGLED `T` symbols, so the original declared them
@@ -32,23 +33,23 @@
  * and every one of them is `edprintf` or a string.  Their own blocks below
  * carry the evidence.
  *
- * FOUR MORE SYMBOLS ARE IN THE SAME BRACKET AND ARE NOT WRITTEN:
- * `setConstellationMask` (0x33570), `setCodecConstellationMask` (0x335f0),
- * `setDataBitRate` (0x33690) and `setParamsInfoFromV92CPUnPck`
- * (0x33c60).  `getDataBitRate` used to be a fifth and `setParamsInfoFromCPUnPck`
- * a sixth; both are now written, below.
+ * THREE MORE SYMBOLS ARE IN THE SAME BRACKET AND ARE NOT WRITTEN:
+ * `setConstellationMask` (0x33570), `setCodecConstellationMask` (0x335f0) and
+ * `setDataBitRate` (0x33690).  `getDataBitRate` used to be a fourth,
+ * `setParamsInfoFromCPUnPck` a fifth and `setParamsInfoFromV92CPUnPck`
+ * (0x33c60) a sixth; all three are now written, below.
  * `setParamsInfoFromCPUnPck` and `setParamsInfoFromV92CPUnPck` are NOT
  * `src/pump/v90/V92ParamsInfo.c`'s -- that
  * file's `V92setParamsInfoFromCPUnPck` is a different symbol at .text+0x12f00
  * -- and the name similarity is exactly the trap `tools/tumap.py` exists to
  * avoid.
  *
- * THREE OF THOSE FOUR ARE BODIES `setParamsInfoFromCPUnPck` INLINES, and are
- * written below as `static` helpers.  `setConstellationMask` and
- * `setCodecConstellationMask` are called three times between them and
- * `setDataBitRate` once, and GCC 3.4.2 inlines all four calls exactly as the
- * original's compiler did -- `tools/dis.py` finds no relocation naming any of
- * the three from inside the function, and our object has none either.
+ * ALL THREE ARE BODIES `setParamsInfoFromCPUnPck` INLINES, and are written
+ * below as `static` helpers.  `setParamsInfoFromV92CPUnPck` inlines the same
+ * three, so between them the two unpackers hold six mask bodies and two rate
+ * bodies, and GCC 3.4.2 inlines all eight calls exactly as the original's
+ * compiler did -- `tools/dis.py` finds no relocation naming any of the three
+ * from inside either function, and our object has none either.
  *
  * The two mask helpers are the same body with the register and stack-slot
  * allocation each inline site forces rather than the standalone function's;
@@ -411,8 +412,8 @@ setDataBitRateInline(V90MappingParams *params, int islong, int rate)
  *
  * Fill a `V90MappingParams` from an unpacked V.90 CP message.  It is the
  * inverse of `setV92CPpckFromParamsInfo` below, over the V.90 message instead
- * of the V.92 one, and `setParamsInfoFromV92CPUnPck` (.text+0x33c60, still
- * unwritten) is the third corner: same destination, `V92CP` as the source.
+ * of the V.92 one, and `setParamsInfoFromV92CPUnPck` (.text+0x33c60, written
+ * below) is the third corner: same destination, `V92CP` as the source.
  *
  * ---------------------------------------------------------------------------
  * IT HAS NO CALLER, AND THAT IS THE POINT RATHER THAN AN OVERSIGHT.
@@ -620,6 +621,189 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
 		cp->char_02 = (signed char)(params->word_0 - 0x14);
 	else
 		cp->char_02 = (signed char)(params->word_0 - 8);
+}
+
+/*
+ * ===========================================================================
+ * setParamsInfoFromV92CPUnPck (.text+0x33c60, 601 bytes)
+ * ===========================================================================
+ *
+ * The third corner of the same triangle: `setParamsInfoFromCPUnPck` fills a
+ * `V90MappingParams` from the V.90 message, `setV92CPpckFromParamsInfo` fills
+ * a `V92CP` from the block, and this one fills the block from a `V92CP`.  It
+ * writes exactly the members the V.90 unpacker writes -- +0x000, +0x604,
+ * +0x61c, +0x620..+0x634, +0x638 and the two 6 x 128 byte tables -- and is the
+ * inverse of `setV92CPpckFromParamsInfo` above field for field.
+ *
+ * ---------------------------------------------------------------------------
+ * IT HAS NO CALLER, EXACTLY AS THE V.90 TWIN HAS NONE.  `readelf -r` finds
+ * ZERO relocations of any type naming this symbol anywhere in the 1.2 MB
+ * object, and `tools/dis.py` over 0x33c60..0x33eb9 prints no relocation banner,
+ * so the range holds no call and no data reference either.  The two
+ * relocations in the object whose name looks like this one's are
+ * `V92setParamsInfoFromCPUnPck`'s -- a DIFFERENT symbol at .text+0x12f00,
+ * 2,695 bytes, called twice from `VPcmFloModem::runPcmModem` (finding 7571).
+ * **No call is added here and none should be.**  The differential test reaches
+ * it directly.
+ * ---------------------------------------------------------------------------
+ *
+ * THE SOURCE TYPE IS A `V92CP`, AND IT WAS CHECKED RATHER THAN ASSUMED.
+ * Twelve distinct displacements are formed off the second argument and every
+ * one of them lands on a member `include/dsplib/V92CP.h` already declares, at
+ * the width the object reads it:
+ *
+ *	+0x01	`char_01`	`cmpb $0x0,0x1(%esi)`, the rate gate
+ *	+0x02	`char_02`	`movsbl 0x2(%esi),%eax`, SIGNED
+ *	+0x08	`word_08`	`mov 0x8(%edx),%ebx`   -> `shaperSR`
+ *	+0x0c	`word_0c`	                       -> `shaperId`
+ *	+0x14	`flt_14`	                       -> `shaperA1`
+ *	+0x18	`flt_18`	                       -> `shaperA2`
+ *	+0x1c	`flt_1c`	                       -> `shaperB1`
+ *	+0x20	`flt_20`	                       -> `shaperB2`
+ *	+0x24	`byte_24`	`cmpb $0x0,0x24(%edx)`, the codec gate
+ *	+0x28	`word_28[6]`	`mov 0x28(%edi,%edx,4)`, a FOUR-byte stride
+ *	+0x42	`short_42[6][8]` `lea 0x42(%ebx,%ecx,1)` with %ebx = k << 4
+ *	+0xa2	`short_a2[6][8]` `lea 0xa2(%edi,%ecx,1)`, the same shape
+ *
+ * so NO NEW TYPE IS DECLARED and none is needed.  The corroboration is that
+ * this is `setV92CPpckFromParamsInfo` run backwards through the same twelve
+ * fields -- that function's source is a `V92CP` because its two call sites in
+ * `runPcmModem` pass `*(V92CP **)(this + 0x6bc8)`, which is `V92Modem::cp` --
+ * and the two agree on every field, every width and both constants.
+ *
+ * **AND THAT IS NOT FINDING 7572's TRAP IN A NEW COSTUME**, which was checked
+ * rather than waved away.  7572 records that `V90CP` and `V92CPUnPck` are two
+ * NAMES FOR ONE STRUCTURE -- the 0xca0-byte message block inline at
+ * `VPcmFloModem+0x254c`, which is `V90Modem::cp`.  `V92CP` is a different
+ * object: 0x918 bytes, `sysdep_malloc`'d and constructed by `V92Modem::V92Modem`,
+ * reached as `V92Modem::cp`, and its layout has nothing in common with that
+ * one at any offset used here (+0x28 is six four-byte entries where the
+ * message block has `M[12]`; +0x42 and +0xa2 are two mask blocks where the
+ * message block has four 384-short coefficient arrays).  This function's
+ * displacements fit `V92CP` and do not fit the other, so naming `V92CP` here
+ * adds no third spelling of anything.
+ *
+ * ---------------------------------------------------------------------------
+ * FIVE STEPS, AND ONLY THE FOURTH IS CONDITIONAL.
+ *
+ *   1. Six spectral words copied whole, plus the gate byte turned into an
+ *      exact 0 or 1 in `word_61c` (`cmpb $0x0,0x24(%edx) ; setne`).  The six
+ *      are `setV92CPpckFromParamsInfo`'s six read the other way round, and the
+ *      four `float` copies are `movl` at both ends, which is what GCC emits
+ *      for a float assignment (finding 5820) rather than evidence that the
+ *      author copied words.
+ *   2. `distinctIndex[0..5]`, and it is a FOUR-BYTE COPY here where the V.90
+ *      twin widens a byte: `mov 0x28(%edi,%edx,4),%esi ; mov
+ *      %esi,0x638(%ecx,%edx,4)`.  A separate loop from 3 -- the object closes
+ *      it at .text+0x33ccd and opens the next at +0x33ccf.
+ *   3. The six constellations, each from `cp->short_42[cp->word_28[i]]`.
+ *   4. The six codec constellations.  ONE gate selects the source and it is
+ *      re-read from the SOURCE on every iteration: .text+0x33d71 reloads the
+ *      CP pointer and +0x33d75 is `cmpb $0x0,0x24(%ecx)`, both INSIDE the loop
+ *      the back edge at +0x33e82 closes.  So the `if` is inside the loop and
+ *      not around it, and a caller that scribbled on `params->word_61c`
+ *      between two calls would change nothing -- which is the V.90 twin's
+ *      behaviour and the OPPOSITE of `V92setParamsInfoFromCPUnPck`, whose
+ *      three gates read back the DESTINATION's copies.
+ *      With the gate CLEAR the codec tables are NOT skipped: they are unpacked
+ *      from the ORDINARY bitmaps at +0x42 (`lea 0x42(%ebx,%edi,1)` at
+ *      .text+0x33e14) into the CODEC destination at +0x304 (`lea
+ *      0x304(%edx,%esi,1)` at +0x33e3c).  Same source, other destination.
+ *   5. `word_0`, `char_02` plus 0x14 or plus 8.
+ *
+ * THE SELECTOR IS `word_28` AND NOT `i`, and the two are the same only by
+ * accident.  `setV92CPpckFromParamsInfo` fills `cp->word_28` with
+ * `getConstellationsIndex`'s GROUP NUMBERS and writes group g's bitmap into
+ * `short_42[g]`; so constellation i's bitmap is at `short_42[word_28[i]]`, and
+ * that is what the object reads.  The address is built
+ * `mov 0x28(%ecx,%ebp,4),%ebx ; shl $0x4,%ebx ; lea 0x42(%ebx,%ecx,1)` -- a
+ * sixteen-byte stride, which is `short[8]`, the row length `V92CP.h` derives
+ * from the packer's `add $0x10,%edi`.
+ *
+ * `constellationSize` ENDS UP DESCRIBING THE CODEC TABLE, for the same reason
+ * it does in the V.90 twin: step 4's helper zeroes and refills the SAME length
+ * word step 3 wrote (`mov %ecx,0x604(%ebx)` at .text+0x33d03 and again at
+ * +0x33dae and +0x33e36).  When the two bitmaps differ in population the first
+ * table keeps entries past the length that nothing will read.  With equal
+ * populations that is invisible, which is why the fixture carries cases whose
+ * two arrays differ in WEIGHT and asserts that at least one trial did.
+ *
+ * THE TWO BITMAP ARRAYS ABUT, WHERE THE V.90 TWIN'S DO NOT.  0xa2 - 0x42 =
+ * 0x60 = 6 * 16 exactly, so `V92CP`'s two blocks are adjacent and
+ * `V92CP.h` declares them so; the V.90 message has 0x9c - 0x3a = 0x62 and two
+ * bytes between them that nothing reads (`pad_9a[2]`, finding 7570).
+ *
+ * THE BITMAP ORDERING IS THE V.90 TWIN'S, INSTRUCTION FOR INSTRUCTION.  Eight
+ * `short` scanned from `mask[7]` down to `mask[0]` (`mov $0x7` then `decl ;
+ * jns`), bit 0 first within each word (`test $0x1,%cl ; sar $1,%ecx`), and the
+ * emitted byte counting DOWN from `j * 16 + 15` (`mov $0xf,%ebx ; dec %ebx ;
+ * jns`, the sum formed `mov %edi,%eax ; add %bl,%al`).  So bit `b` of word `j`
+ * becomes byte `j * 16 + (15 - b)` and the table comes out in strictly
+ * DESCENDING byte order, 127 down to 0.  All three inlined sites are the same
+ * body as the V.90 twin's three, so the two helpers below are reused unchanged.
+ *
+ * THAT THE THREE MASK BODIES ARE CALLS AND NOT OPEN-CODED LOOPS IS THE SAME
+ * MEASUREMENT 7570 MADE, and it reproduces here exactly.  The three loops count
+ * with an UNSIGNED variable -- `cmpl $0x5,0x4(%esp) ; jbe` at .text+0x33d5f and
+ * `cmpl $0x5,(%esp) ; jbe` at +0x33e7e -- and each inlined body then clamps
+ * that same variable with a SIGNED test, `cmp $0x6,%ebp ; setl` at
+ * .text+0x33cea, +0x33d8f and +0x33e11.  One variable cannot be compared both
+ * ways; a call whose argument is `(int)i` can, because the bound is the
+ * caller's and the clamp is the callee's.  And the clamp is DEAD in this caller
+ * too: `which` is the loop counter and the loop runs 0..5.
+ *
+ * THE TAIL IS `setDataBitRate` INLINED TOO, AND THAT IS MEASURED HERE RATHER
+ * THAN CARRIED OVER FROM 7570.  The discriminator is WHERE THE RATE IS LOADED,
+ * and it had to be re-measured because the V.90 twin's rate is a 32-bit `mov`
+ * and this one is a `movsbl` of a `signed char`, which the compiler might well
+ * hoist differently.  The object loads it ONCE, at .text+0x33e90, between the
+ * `cmpb` and the `je`, because a function argument is evaluated before the
+ * call.  Both spellings were compiled on the period compiler:
+ *
+ *	call form      cmpb $0x0,0x1(%ebp) ; movsbl 0x2(%ebp),%eax ; je
+ *	               ... add $0x14,%eax ... / ... add $0x8,%eax ...
+ *	               ONE load, and the whole tail is the object's
+ *	               instruction for instruction, operands included
+ *	open-coded if  cmpb $0x0,0x1(%ecx) ; je ; movsbl 0x2(%ecx),%eax ...
+ *	               / movsbl 0x2(%ebp),%eax ...
+ *	               TWO loads, one SUNK into each arm
+ *
+ * so the object cannot have been written as an `if` here.  The byte compare is
+ * NOT the discriminator -- both spellings emit `cmpb $0x0` against memory, and
+ * the `(int)` on the argument does not force a `movsbl`+`test`.  Nothing
+ * observable rides on this: the two spellings agree on every input, which is
+ * why it is settled from the object's instructions and from nowhere else.
+ */
+extern "C" void
+setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp)
+{
+	unsigned int i;
+
+	params->shaperSR = (int)cp->word_08;
+	params->shaperId = cp->word_0c;
+	params->shaperA1 = cp->flt_14;
+	params->shaperA2 = cp->flt_18;
+	params->shaperB1 = cp->flt_1c;
+	params->shaperB2 = cp->flt_20;
+	params->word_61c = (cp->byte_24 != 0);
+
+	for (i = 0; i < V90_CONSTELLATIONS; i++)
+		params->distinctIndex[i] = cp->word_28[i];
+
+	for (i = 0; i < V90_CONSTELLATIONS; i++)
+		setConstellationMaskInline(params, (int)i,
+					   cp->short_42[cp->word_28[i]]);
+
+	for (i = 0; i < V90_CONSTELLATIONS; i++) {
+		if (cp->byte_24 != 0)
+			setCodecConstellationMaskInline(params, (int)i,
+			    cp->short_a2[cp->word_28[i]]);
+		else
+			setCodecConstellationMaskInline(params, (int)i,
+			    cp->short_42[cp->word_28[i]]);
+	}
+
+	setDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);
 }
 
 /*

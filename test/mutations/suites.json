@@ -656,6 +656,10 @@
   "src/pump/v90/V92Parameters.cpp",
   "build/test/t_v90loadparams"
  ],
+ "v92mpunpck": [
+  "src/pump/v90/V90MappingParamsInt.cpp",
+  "build/test/t_v92mpunpck"
+ ],
  "v92mapper": [
   "src/pump/v90/V92Mapper.cpp",
   "build/test/t_v92convmapper"
