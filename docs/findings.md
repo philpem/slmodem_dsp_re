@@ -86037,7 +86037,7 @@ header exits 1 against the floor.  0.4 s over the whole tree.
 
 ======================================================================
 
-### 7820. THE V.90 BYTES CLUSTER: FOUR CLOSED ON STATEMENT ORDER, AND THREE OF THE FOUR DECODE A FACT RATHER THAN AN ORDER
+### 7805. THE V.90 BYTES CLUSTER: FOUR CLOSED ON STATEMENT ORDER, AND THREE OF THE FOUR DECODE A FACT RATHER THAN AN ORDER
 
 Fifteen symbols in five files, 5,685 bytes, every one of them in `byteident`'s
 BYTES bucket at the start -- so nothing here is missing and nothing is extra
@@ -86083,13 +86083,13 @@ in twelve minutes -- and it must be validated before it is believed: the model
 below was checked to reproduce our committed object's thirteen instructions
 exactly from our committed source order before any cell of it was read.
 
-Each closure's domain and which side of rule 0 it falls on is in 7821, 7822 and
-7826; 7823 and 7824 are the two measured negatives, and the eleven that did not
-close are in 7825.
+Each closure's domain and which side of rule 0 it falls on is in 7806, 7807 and
+7811; 7808 and 7809 are the two measured negatives, and the eleven that did not
+close are in 7810.
 
 ======================================================================
 
-### 7821. `spectralDesign`: TWO STAGES, AND THE SECOND IS A UNIQUE PREIMAGE OF 720 -- `shaperSR` IS WRITTEN BEFORE `shaperA1`
+### 7806. `spectralDesign`: TWO STAGES, AND THE SECOND IS A UNIQUE PREIMAGE OF 720 -- `shaperSR` IS WRITTEN BEFORE `shaperA1`
 
 74 differing bytes of 188, 44 instructions against 44, and 7778 had already
 named the structural difference: the blob loads `this->mappingParams`
@@ -86156,7 +86156,7 @@ no store permutation repairs.
 
 ======================================================================
 
-### 7822. `V90ConstellationDesigner`'s CONSTRUCTOR PAIR: ALL 40,320 ORDERS COMPILED, 6,624 DISTINCT EMISSIONS, THIRTEEN PREIMAGES -- A FACT, AND THE FACT IS THAT ONE BYTE STORE FOLLOWS BOTH POINTER STORES
+### 7807. `V90ConstellationDesigner`'s CONSTRUCTOR PAIR: ALL 40,320 ORDERS COMPILED, 6,624 DISTINCT EMISSIONS, THIRTEEN PREIMAGES -- A FACT, AND THE FACT IS THAT ONE BYTE STORE FOLLOWS BOTH POINTER STORES
 
 34 differing bytes of 54 on both clones, 13 instructions against 13, rejected
 at row 2 -- blob `mov 0x10(%esp),%edx` against our `movb $0x16,0x38(%eax)`,
@@ -86191,12 +86191,12 @@ and are equally exact.  Nothing in the object separates the three, so the
 comment in the source says which part is evidence and which part is ours.
 
 **The clone pair moved together, both C1 and C2, at no extra cost** -- which is
-what a body-level difference does and is worth contrasting with 7823, where a
+what a body-level difference does and is worth contrasting with 7808, where a
 clone pair's difference was NOT a body-level one and did not move at all.
 
 ======================================================================
 
-### 7823. `V90Phase4Demodulator`: THE CARRIED `onedef.py` DUPLICATE MEASURED RATHER THAN BELIEVED, AND THE FILE'S EMISSION ORDER IS ACHIEVABLE, EXACT, AND WORTH NOTHING
+### 7808. `V90Phase4Demodulator`: THE CARRIED `onedef.py` DUPLICATE MEASURED RATHER THAN BELIEVED, AND THE FILE'S EMISSION ORDER IS ACHIEVABLE, EXACT, AND WORTH NOTHING
 
 7795 left the C1/C2 pair -- 53 differing bytes of 225 each, 58 instructions
 against 58, no padding on either side, rejected at row 34 on
@@ -86268,11 +86268,11 @@ not BYTES files" -- this file has no REGALLOC symbol at all.
 
 ======================================================================
 
-### 7824. `V90Phase4Demodulator::reset`: 5,151 CELLS, 54 DISTINCT VERDICTS, NO PREIMAGE -- SO IT IS NOT THE OPENING BLOCK'S STATEMENT ORDER
+### 7809. `V90Phase4Demodulator::reset`: 5,151 CELLS, 54 DISTINCT VERDICTS, NO PREIMAGE -- SO IT IS NOT THE OPENING BLOCK'S STATEMENT ORDER
 
 136 differing bytes of 504, 130 code instructions against 130, rejected at row
 8, `movl` against `mov`.  The function opens with eleven independent scalar
-stores and -- 7820's pattern -- our source order is already the blob's
+stores and -- 7805's pattern -- our source order is already the blob's
 emission order, so the compiler is permuting ours and the preimage is what is
 wanted.
 
@@ -86306,7 +86306,7 @@ claim that 11! contains no preimage.
 
 ======================================================================
 
-### 7825. THE ELEVEN THAT ARE LEFT IN THE V.90 BYTES CLUSTER, WITH `alpha_equal`'s OWN REJECTION ROW AND THE PADDING-STRIPPED INSTRUCTION COUNTS
+### 7810. THE ELEVEN THAT ARE LEFT IN THE V.90 BYTES CLUSTER, WITH `alpha_equal`'s OWN REJECTION ROW AND THE PADDING-STRIPPED INSTRUCTION COUNTS
 
 **Every row and count below was RE-TAKEN on the tree as committed**, on a
 `build/tc_out` rebuilt after the four edits -- not carried over from the
@@ -86408,19 +86408,19 @@ batch edited; all **71 anchors still resolve, each exactly once**:
 The two whose own functions were edited were then re-run live rather than
 inferred: `v90cdctor` **8 of 8 caught**, and `vpcmxfcreate` **21 caught, 0 NOT
 caught, 3 equivalent**, which is its recorded snapshot to the row -- including
-"the bit pointer is not reset", whose anchor sits on the very statement 7826
+"the bit pointer is not reset", whose anchor sits on the very statement 7811
 moved.  `spectralDesign` has no mutation of its own in any set, and the six
 stores it reorders are to six distinct fields, so no observation of memory
 could separate the orders in any case; the second tier is the only thing that
 can see it, and that is the whole point of the closure.
 
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7804 and a sibling
-worktree 7811 when this was written; 7820 onwards was chosen to leave room.
+worktree 7811 when this was written; 7805 onwards was chosen to leave room.
 Expect to renumber at merge.
 
 ======================================================================
 
-### 7826. `VPCMXF_Create`: THE PREIMAGE IS A RUN OF SIX CONSECUTIVE SLOTS WITH SHARP EDGES, SO `bitPointer` IS WRITTEN AFTER THE CP BIT COUNTERS AND THE SLOT INSIDE THE RUN IS NOT RECOVERABLE
+### 7811. `VPCMXF_Create`: THE PREIMAGE IS A RUN OF SIX CONSECUTIVE SLOTS WITH SHARP EDGES, SO `bitPointer` IS WRITTEN AFTER THE CP BIT COUNTERS AND THE SLOT INSIDE THE RUN IS NOT RECOVERABLE
 
 28 differing bytes of 495, 120 instructions against 120, and this symbol had
 never been through a refinement pass -- it is not in 7778's eleven, 7788's
@@ -86437,7 +86437,7 @@ EMISSION order, `%ax` then `%si` then `%cx`, on both sides:
     blob   ... 173a, [1738 %ax], 173b..173e, 217..21c, [1736 %si], [7dcc %cx], 7dce ...
     ours   ... 173a, [7dcc %ax], [1738 %si], 173b..173e, 217..21c, [1736 %cx], 7dce ...
 
-Every other store is in the same place.  Our source order was 7820's pattern
+Every other store is in the same place.  Our source order was 7805's pattern
 again -- it already reads as the blob's emission order, `bitPointer` second --
 and the compiler hoisted the `cpNofBits` store past it.
 
