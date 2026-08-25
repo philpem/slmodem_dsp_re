@@ -137,8 +137,8 @@
  },
  {
   "label": "recivedPartTwoSilenceRrnSUV: the latch is not set",
-  "find": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t\tword_2fa0 = 1;\n\t\t}\n\t}\n}\n\n/*\n * recivedFirstSUVuPartTwoRrn",
-  "replace": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t}\n\t}\n}\n\n/*\n * recivedFirstSUVuPartTwoRrn"
+  "find": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t\tword_2fa0 = 1;\n\t\t}\n\t}\n}\n\n/*\n * recivedCP -- .text+0x2cb20",
+  "replace": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t}\n\t}\n}\n\n/*\n * recivedCP -- .text+0x2cb20"
  },
  {
   "label": "recivedFirstSUVuPartTwoRrn: the silence arm runs the CP branch's guard",
@@ -247,8 +247,8 @@
  },
  {
   "label": "recivedFirstRrnE2u: the latch is only raised on a boundary",
-  "find": "\t\t\tstate = P4M_STATE_UNNAMED_0A;\n\t\t}\n\t\tword_0020 = 1;\n\t}\n}\n\n/*\n * recivedPartOneSilenceRrnSUVtag",
-  "replace": "\t\t\tstate = P4M_STATE_UNNAMED_0A;\n\t\t}\n\t}\n}\n\n/*\n * recivedPartOneSilenceRrnSUVtag"
+  "find": "\t\t\tstate = P4M_STATE_UNNAMED_0A;\n\t\t}\n\t\tword_0020 = 1;\n\t}\n}\n\n/* exitSilence -- .text+0x2ce90",
+  "replace": "\t\t\tstate = P4M_STATE_UNNAMED_0A;\n\t\t}\n\t}\n}\n\n/* exitSilence -- .text+0x2ce90"
  },
  {
   "label": "recivedFirstRrnE2u: off a boundary it enters the CPd waiting state",
